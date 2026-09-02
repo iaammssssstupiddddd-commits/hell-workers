@@ -113,9 +113,9 @@ python scripts/sync_external_assets.py \
 - `fonts/` と `shaders/` には触れない
 
 Wall production asset-set v2だけは、staging全体を対象にする上記legacy modeではなくmanifest allowlist modeを使う。
-`--manifest`と`--selection`は必ず組で指定し、candidate manifestの全artifact / report / license / source hashと
-tool commitを検証した後、`core`のexact 8 file、または`optional:normal`の1 fileだけを明示したasset rootへ
-コピーする。manifest外のfileをcopy / deleteせず、symlinkやroot外pathも拒否する。
+`--manifest`と`--selection core`は必ず組で指定し、art-approved final manifestの全artifact / report / license /
+source hashとtool commitを検証した後、normalを含まないexact 8 fileだけを明示したasset rootへコピーする。
+manifest外のfileをcopy / deleteせず、symlinkやroot外pathも拒否する。
 
 ```bash
 ASSET_ROOT="${HELL_WORKERS_ASSET_ROOT:-$HOME/Sync/hell-workers-assets}"
@@ -123,14 +123,33 @@ ASSET_ROOT="${HELL_WORKERS_ASSET_ROOT:-$HOME/Sync/hell-workers-assets}"
 python3 scripts/sync_external_assets.py \
   --source "$ASSET_ROOT/staging/exports" \
   --dest "$VALIDATION_WORKTREE/assets" \
-  --manifest "$ASSET_ROOT/staging/reports/wall-production-v1.asset-set.json" \
+  --manifest "$ASSET_ROOT/staging/reports/wall-production-v1.asset-set-final.json" \
   --selection core \
   --dry-run
 ```
 
-`optional:normal`は`normal_decision=pending`のcandidateだけで利用できる。manifest modeでは
-`--delete-missing`を併用できない。release / final manifestの同期にはgeneration-scoped promotion receiptが必要なため、
-receipt対応が完了するまではfail closedで拒否する。primary / canonicalへcandidateを直接同期しない。
+pending candidateと`optional:normal`は同期対象にしない。manifest modeでは`--delete-missing`を併用できない。
+isolated candidate projectionはfinal payloadをreceiptなしで隔離検証するためだけに使い、primary / canonicalへ
+直接同期しない。release projectionはgeneration-scoped promotion receiptを必須とする。
+
+art承認後はpending manifestを上書きせず、normalを除いたtexture reportを新規作成してから新generationを封印する。
+`seal_wall_final.py`はcleanなruntime subject、元candidate manifest hash、lit選定画像hash、ユーザー承認UTCを結び、
+`normal_decision=rejected`、`art_review.status=art_approved`、core 8 / optional 0を強制する。
+
+```bash
+python3 tools/blender_ai_workflow/scripts/validate_wall_textures.py \
+  --texture-root "$ASSET_ROOT/staging/exports/textures/buildings/wall" \
+  --report "$ASSET_ROOT/staging/reports/wall-production-v1.textures-final.json" \
+  --normal-decision rejected
+
+python3 tools/blender_ai_workflow/scripts/seal_wall_final.py \
+  --asset-root "$ASSET_ROOT" --repo "$VALIDATION_WORKTREE" \
+  --candidate-manifest "$ASSET_ROOT/staging/reports/wall-production-v1.asset-set.json" \
+  --texture-report "$ASSET_ROOT/staging/reports/wall-production-v1.textures-final.json" \
+  --approval "$ASSET_ROOT/staging/reports/wall-production-v1-art-review.json" \
+  --generation '<NEW_GENERATION>' --created-at-utc '<UTC>' \
+  --output "$ASSET_ROOT/staging/reports/wall-production-v1.asset-set-final.json"
+```
 
 ### Wall v2 canonical generation
 
@@ -153,9 +172,9 @@ Bevy loaderは非canonical JSON、unknown field、path / role / byte length / SH
 asset rootから一度だけ読み直して照合する。
 
 candidate authorityは通常起動では常にfallbackで、primary / canonicalへ配置しない。隔離validation worktreeだけが
-`HW_WALL_CANDIDATE=1`を設定できる。M2では6 GLBの`Mesh0/Primitive0`、albedo、emissive、2 shared production materialを
-有限poolへloadするが、既存Wall entityへは適用せず、all-or-nothing aggregateを`Eligible`まで進めるだけである。
-optional normalは別revisionで追跡し、missing / failedでもproduction core readinessを変えない。
+`HW_WALL_CANDIDATE=1`を設定できる。runtime loaderは`art_approved`かつnormal判定済みのfinal payloadだけを受理し、
+6 GLBの`Mesh0/Primitive0`、albedo、emissive、2 shared lit production materialを有限poolへloadする。
+pending review、optional normal、manifest identity opt-in不一致はfail closedとする。
 
 ## 6. 競合回避ルール
 

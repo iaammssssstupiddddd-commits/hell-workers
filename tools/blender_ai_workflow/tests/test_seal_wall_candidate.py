@@ -11,12 +11,22 @@ from pathlib import Path
 
 WORKFLOW_ROOT = Path(__file__).resolve().parents[1]
 SCRIPT_PATH = WORKFLOW_ROOT / "scripts/seal_wall_candidate.py"
+FINAL_SCRIPT_PATH = WORKFLOW_ROOT / "scripts/seal_wall_final.py"
 
 
 def load_sealer():
     spec = importlib.util.spec_from_file_location("seal_wall_candidate", SCRIPT_PATH)
     if spec is None or spec.loader is None:
         raise RuntimeError("cannot load seal_wall_candidate.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def load_final_sealer():
+    spec = importlib.util.spec_from_file_location("seal_wall_final", FINAL_SCRIPT_PATH)
+    if spec is None or spec.loader is None:
+        raise RuntimeError("cannot load seal_wall_final.py")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -219,12 +229,95 @@ class SealWallCandidateTests(unittest.TestCase):
             with self.assertRaisesRegex(self.sealer.SealError, "repository is dirty"):
                 fixture.seal(self.sealer)
 
+
+class SealWallFinalTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.candidate_sealer = load_sealer()
+        cls.final_sealer = load_final_sealer()
+
+    def test_final_rejects_normal_and_binds_user_approval(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = CandidateFixture(Path(directory), self.candidate_sealer)
+            candidate = fixture.seal(self.candidate_sealer)
+            candidate_path = fixture.reports_root / "wall-production-v1.asset-set.json"
+            self.candidate_sealer.write_json_atomic(candidate_path, candidate)
+            candidate_hash = digest(candidate_path)
+            texture_report = write_json(
+                fixture.reports_root / "wall-production-v1.textures-final.json",
+                {
+                    "schema_version": 1,
+                    "status": "pass",
+                    "asset_set_id": "wall-production-v1",
+                    "normal_decision": "rejected",
+                    "textures": {
+                        role: {
+                            "path": f"wall_{role}.png",
+                            "bytes": candidate["production"]["core"][index]["bytes"],
+                            "sha256": candidate["production"]["core"][index]["sha256"],
+                            "width": 1024,
+                            "height": 1024,
+                            "mode": "RGB",
+                        }
+                        for role, index in (("albedo", 6), ("emissive", 7))
+                    },
+                    "emissive": {},
+                    "albedo_mean_rgb": [0.0, 0.0, 0.0],
+                },
+            )
+            approval = write_json(
+                fixture.reports_root / "wall-production-v1-art-review.json",
+                {
+                    "schema_version": 1,
+                    "asset_set_id": "wall-production-v1",
+                    "asset_set_generation": 1,
+                    "manifest_sha256": candidate_hash,
+                    "normal_decision": "rejected_by_missing_mesh_tangents",
+                    "decision": "lit_approved",
+                    "comparisons": {
+                        "lit": {"job": "lit-job", "screenshot_sha256": "a" * 64}
+                    },
+                    "approval": {
+                        "approved_at_utc": "2026-09-02T11:27:00Z",
+                        "approved_by": "user",
+                        "selection": "lit",
+                        "selected_job": "lit-job",
+                        "selected_screenshot_sha256": "a" * 64,
+                    },
+                },
+            )
+            final = self.final_sealer.seal_final(
+                asset_root=fixture.asset_root,
+                repo=fixture.repo,
+                candidate_manifest_path=candidate_path,
+                texture_report_path=texture_report,
+                approval_path=approval,
+                generation=2,
+                created_at_utc="2026-09-02T11:30:00Z",
+                reviewer="user",
+                notes="lit approved",
+            )
+            output = fixture.reports_root / "wall-production-v1.asset-set-final.json"
+            self.candidate_sealer.write_json_atomic(output, final)
+            report = self.candidate_sealer.manifest_validator.validate_manifest(
+                output,
+                mode="final",
+                blend_root=fixture.blend_root,
+                exports_root=fixture.exports_root,
+                reports_root=fixture.reports_root,
+                licenses_root=fixture.licenses_root,
+                repo=fixture.repo,
+            )
+            self.assertEqual(report["normal_decision"], "rejected")
+            self.assertEqual(report["core_files"], 8)
+            self.assertEqual(report["optional_files"], 0)
+
     def test_missing_closed_set_report_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            fixture = CandidateFixture(Path(directory), self.sealer)
+            fixture = CandidateFixture(Path(directory), self.candidate_sealer)
             (fixture.reports_root / "wall_cross.post-export.json").unlink()
-            with self.assertRaisesRegex(self.sealer.SealError, "is absent"):
-                fixture.seal(self.sealer)
+            with self.assertRaisesRegex(self.candidate_sealer.SealError, "is absent"):
+                fixture.seal(self.candidate_sealer)
 
 
 if __name__ == "__main__":

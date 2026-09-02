@@ -253,28 +253,22 @@ visual reference only: it does not replace the registered historical P02
 artifact, the 12-run Wall Capture baseline, or the separate RenderDoc
 draw-group gate. Revalidate with `verify --job-root <job-root>`.
 
-For the M4 production-asset comparison, first provision the sealed candidate
-projection and its exact core allowlist into a clean validation worktree. Plan
-the two one-axis observations separately:
+After M4 art approval, provision the final art-approved candidate projection
+and its exact core allowlist into a clean validation worktree. Plan the fixed-lit
+gallery observation:
 
 ```bash
 PYTHONDONTWRITEBYTECODE=1 python3 \
   .codex/skills/hell-workers-run-native-acceptance/scripts/wall_art_acceptance.py \
-  plan --repo "$VALIDATION_WORKTREE" --adapter Intel --comparison lit
-
-PYTHONDONTWRITEBYTECODE=1 python3 \
-  .codex/skills/hell-workers-run-native-acceptance/scripts/wall_art_acceptance.py \
-  plan --repo "$VALIDATION_WORKTREE" --adapter Intel --comparison unlit
+  plan --repo "$VALIDATION_WORKTREE" --adapter Intel --candidate
 ```
 
-Run the returned direct `kitty` commands sequentially. Each comparison must
-bind the isolated-candidate generation and manifest hash at plan and run time,
-then prove the normal `wall-density-v1` production route contains exactly 96
-production Walls, no fallback Walls, all six mesh handles, and every topology
-mask six times. The `unlit` control is accepted only in a profiling build with
-the candidate and actual-window keys present; it is not a release or player
-setting. Revalidate each bundle with `verify --job-root <job-root>` and present
-both client-window PNGs to the user before selecting a winner.
+Run the returned direct `kitty` command. It binds the isolated-candidate
+generation and manifest hash at plan and run time, rejects pending review and
+optional normal data, proves the material is lit, and verifies that the normal
+`wall-density-v1` production route contains exactly 96 production Walls, no
+fallback Walls, all six mesh handles, and every topology mask six times.
+Revalidate the bundle with `verify --job-root <job-root>`.
 
 ## Run the Wall color-calibration pair
 

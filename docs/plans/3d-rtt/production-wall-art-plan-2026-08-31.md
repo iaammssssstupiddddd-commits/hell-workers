@@ -868,8 +868,14 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   asset-view `d6720d3b…`、High / DPI 1 / standard zoom 1.0、96 production / fallback 0、6 mesh、16 mask各6件、
   UI root 0 visible、connector visual 192 hidden / 0 visibleである。画像SHA-256はlit `b5c8e49a…`、unlit
   `b34ffb09…`、全画面normalized MAE `0.00242271`、96 px subject ROI MAE `0.00300869`、litのROI平均は
-  unlitより`0.767216`高い。directional shadingと紫emissive要件を保持するlitを推奨し、ユーザー選定待ちとする。
+  unlitより`0.767216`高い。directional shadingと紫emissive要件を保持するlitを推奨した。
   完全な設定・locator・hashはstaging report `wall-production-v1-art-review.json`へ保存した。
+- ユーザーは2026-09-02にlit画像`wall-art-20260902T072458Z-7debdcc8/current-wall.png`を採用した。
+  art review artifactを`decision=lit_approved`へ更新し、選定画像SHA-256 `b5c8e49a…`、承認UTC、normalの
+  tangent不在によるrejectを封印した。artifact SHA-256は`477f4176…`である。
+- 採用後cleanupでは通常／release／isolated final候補をlit固定とし、`HW_WALL_ART_COMPARISON`、unlit debug material、
+  pending optional normalのruntime load / readiness / allowlist経路を撤去した。final candidate galleryはplayer-facing toggleを
+  持たず、`art_approved`・normal判定済みmanifestとexact generation/hash opt-inだけを受理する。
 
 - 変更内容:
   - M3のproduction spawn / WorldMap / presentation routeを使う専用wall-art gallery scenarioを `bevy_app`へ追加する。`visual_test`の独自meshを使わない。
@@ -890,12 +896,12 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
 - 完了条件:
   - [x] OCIO gateがconfig path / hash、runtime version、`fallback=false`を陽性証明し、Blender referenceとBevy client capture内の4 base-color patchが固定ROI / exposure / sRGB→Lab変換で`Delta E 2000`平均`<= 2.0`、各patch`<= 3.0`である。emissive sanity patchも別predicateでpassする。
   - [x] normal technical gateがcandidate-only hash、linear load、UV0、`+Y`方向predicateと全6 meshのtangent有無を証明した。全mesh tangent不在を明示的technical failureとしてnormalをrejectし、画像A/Bや「差なし」判定へ進めていない。
-  - [ ] candidateごとの画像、hash、設定、観察結果が保存され、同じ仮説を無目的に再調整していない。
-  - [ ] lit / unlitを先に一軸比較し、lit winnerにだけnormal一軸比較を行っている。中間candidateへ9 case / full lifecycleを掛けておらず、交絡した比較artifactを採用根拠にしていない。
-  - [ ] ユーザーがproduction cameraで最終候補を承認している。
-  - [ ] baked lineworkで不合格なら別outline提案を作り、本計画を無理に完了扱いしていない。
+  - [x] candidateごとの画像、hash、設定、観察結果が保存され、同じ仮説を無目的に再調整していない。
+  - [x] lit / unlitを先に一軸比較し、normal technical gate不合格後はnormal画像比較を行っていない。中間candidateへ9 case / full lifecycleを掛けておらず、交絡した比較artifactを採用根拠にしていない。
+  - [x] ユーザーがproduction cameraで最終候補を承認している。
+  - [x] texture-baked lineworkが承認され、別outline提案を不要と判断している。
   - [ ] 9.6 wu straight E-W wallがstandardで全投影高0.90 tile、装飾最大でも1.00 tile以内である。`tile_rtt_px = 14`では内部色、最大zoom-out 5のHighでは内部色1 px以上、Medium / Lowではfinal compositeの無穴・無断線・無flicker silhouetteを全回転で満たす。
-  - [ ] 比較用normal / toggle / debug materialを採用結果に従い撤去している。
+  - [x] 比較用normal / toggle / debug materialを採用結果に従い撤去している。
   - [ ] M4 final asset generationが`normal_decision`、M1 tool commit、M4 runtime subject commit、art approval hashをpendingなしで封印し、選定時payloadと一致する。新generationのmanifest / projection、allowlist、M2 readiness、M3 activation / world-replace focused gateを再実行している。
   - [ ] A/B harness commitと採用後final commitの前にそれぞれHelp impact decisionを完了し、各対象diff、およびcommitはするがpush / canonical promoteはしない境界を提示してユーザーの明示承認を得ている。未承認なら該当native phaseを開始しない。
 - 変更候補:
@@ -1316,3 +1322,4 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
 | `2026-09-02` | `Codex` | clean validation worktreeのsealed 6 GLBをmanifest hash付きで再decodeし、9.6 wu共通port、12.8 wu corridor union、216〜240 triangle、16 mask回転、Bevy実loaderをpassしてM3を完了 |
 | `2026-09-02` | `Codex` | M4 preflightでsealed OCIO artifactをbyte-identical再検証。normal textureのlinear/+Yはpassしたが全6 GLBのtangent不在をtechnical failureとしてnormal A/Bをrejectし、lit/unlit比較だけを次段に残した |
 | `2026-09-02` | `Codex` | M4 lit/unlit比較用に既存N=96 production fixtureをgallery化し、16 mask×6、6 mesh、fallback 0、candidate identity、material modeをexact sidecarへ追加。profiling/candidate/actual-window限定toggleとfail-closed launcherを実装し、ユーザーからharness commit後のnative開始承認を得た |
+| `2026-09-02` | `Codex` | ユーザーが最終lit画像を採用。art approval artifactを確定し、比較unlit materialとpending optional normal経路を撤去、lit固定のart-approved candidate projection / sealing / gallery契約へ更新した |

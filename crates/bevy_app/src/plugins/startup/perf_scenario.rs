@@ -188,7 +188,7 @@ pub(crate) use save_transaction::{
 };
 #[cfg(feature = "profiling")]
 pub(crate) use wall_actual_window::{
-    WallActualWindowAcceptance, prepare_wall_actual_window_comparison_view_system,
+    WallActualWindowAcceptance, prepare_wall_actual_window_gallery_view_system,
     publish_wall_actual_window_probe_status_system,
 };
 #[cfg(feature = "profiling")]

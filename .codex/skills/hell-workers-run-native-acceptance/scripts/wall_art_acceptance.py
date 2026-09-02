@@ -22,7 +22,7 @@ import wall_density_acceptance as density
 
 SCHEMA_VERSION = 1
 PROFILE = "wall-art-current-calibration-v1"
-CANDIDATE_PROFILE = "wall-art-candidate-comparison-v1"
+CANDIDATE_PROFILE = "wall-art-approved-candidate-v1"
 PHASE = "current-wall"
 SEED = 20_260_901
 WINDOW_WIDTH = 1280
@@ -117,8 +117,8 @@ def require_number(value: Any, label: str) -> float:
     return number
 
 
-def profile_name(comparison: str | None) -> str:
-    return CANDIDATE_PROFILE if comparison is not None else PROFILE
+def profile_name(candidate: bool) -> str:
+    return CANDIDATE_PROFILE if candidate else PROFILE
 
 
 def candidate_identity(repo: Path) -> dict[str, Any]:
@@ -132,9 +132,16 @@ def candidate_identity(repo: Path) -> dict[str, Any]:
         value.get("authority") == "isolated_candidate",
         "Wall candidate authority differs",
     )
+    generation = value.get("asset_set_generation")
     native.require(
-        value.get("asset_set_generation") == 1,
+        type(generation) is int and generation > 0,
         "Wall candidate generation differs",
+    )
+    native.require(
+        value.get("normal_decision") == "rejected"
+        and value.get("review_status") == "art_approved"
+        and value.get("candidate_normal") is None,
+        "Wall candidate is not the approved normal-free payload",
     )
     digest = value.get("manifest_sha256")
     native.require(
@@ -143,13 +150,13 @@ def candidate_identity(repo: Path) -> dict[str, Any]:
     )
     return {
         "authority": "isolated_candidate",
-        "asset_set_generation": 1,
+        "asset_set_generation": generation,
         "manifest_sha256": digest,
     }
 
 
 def validate_probe_status(
-    value: Any, *, nonce: str, comparison: str | None = None
+    value: Any, *, nonce: str, candidate: bool = False
 ) -> dict[str, Any]:
     fields = {
         "schema_version",
@@ -162,7 +169,7 @@ def validate_probe_status(
         "render",
         "probe",
     }
-    if comparison is not None:
+    if candidate:
         fields.update({"gallery", "capture_view"})
     status = require_object(
         value,
@@ -237,16 +244,16 @@ def validate_probe_status(
         "backend": "vulkan",
         "render3d": "visible",
         "rtt_quality": "high",
-        "camera_scale": 1.0 if comparison is not None else 5.0,
-        "fallback_mesh_resident": comparison is None,
+        "camera_scale": 1.0 if candidate else 5.0,
+        "fallback_mesh_resident": not candidate,
     }
     native.require(render == expected_render, "Wall calibration render contract differs")
-    if comparison is not None:
+    if candidate:
         gallery = require_object(
             status["gallery"],
-            "Wall comparison gallery",
+            "Wall approved candidate gallery",
             {
-                "comparison",
+                "lighting",
                 "asset_set_generation",
                 "authority",
                 "manifest_sha256",
@@ -261,21 +268,20 @@ def validate_probe_status(
                 "mask_counts",
             },
         )
+        native.require(gallery["lighting"] == "lit", "Wall lighting mode differs")
         native.require(
-            gallery["comparison"] == comparison, "Wall comparison mode differs"
-        )
-        native.require(
-            gallery["asset_set_generation"] == 1,
-            "Wall comparison generation differs",
+            type(gallery["asset_set_generation"]) is int
+            and gallery["asset_set_generation"] > 0,
+            "Wall candidate generation differs",
         )
         native.require(
             gallery["authority"] == "isolated_candidate",
-            "Wall comparison authority differs",
+            "Wall candidate authority differs",
         )
         native.require(
             isinstance(gallery["manifest_sha256"], str)
             and re.fullmatch(r"[0-9a-f]{64}", gallery["manifest_sha256"]),
-            "Wall comparison manifest hash is invalid",
+            "Wall candidate manifest hash is invalid",
         )
         native.require(
             gallery["layout_checksum"] == fixture["layout_checksum"]
@@ -286,15 +292,15 @@ def validate_probe_status(
             and gallery["fallback_count"] == 0
             and gallery["distinct_meshes"] == 6
             and gallery["distinct_materials"] == 1,
-            "Wall comparison gallery residency differs",
+            "Wall candidate gallery residency differs",
         )
         native.require(
             gallery["mask_counts"] == {f"{mask:04b}": 6 for mask in range(16)},
-            "Wall comparison mask coverage differs",
+            "Wall candidate mask coverage differs",
         )
         capture_view = require_object(
             status["capture_view"],
-            "Wall comparison capture view",
+            "Wall candidate capture view",
             {
                 "focus",
                 "hidden_ui_roots",
@@ -310,7 +316,7 @@ def validate_probe_status(
             and capture_view["visible_ui_roots"] == 0
             and capture_view["hidden_connector_visuals"] == 192
             and capture_view["visible_connector_visuals"] == 0,
-            "Wall comparison capture view differs",
+            "Wall candidate capture view differs",
         )
     probe = require_object(
         status["probe"],
@@ -335,7 +341,7 @@ def validate_probe_status(
     )
     min_x, min_y, max_x, max_y = (
         (0, 0, WINDOW_WIDTH, WINDOW_HEIGHT)
-        if comparison is not None
+        if candidate
         else CAPTURE_REGION
     )
     native.require(
@@ -529,7 +535,7 @@ def run_calibration(
     subject_commit: str,
     source_fingerprint: str,
     state: dict[str, Any],
-    comparison: str | None,
+    candidate_mode: bool,
     candidate: dict[str, Any] | None,
 ) -> dict[str, Any]:
     status_path = root / "probe-status.json"
@@ -545,11 +551,10 @@ def run_calibration(
             "HW_WALL_ART_SESSION_NONCE": nonce,
         }
     )
-    if comparison is not None:
-        native.require(candidate is not None, "Wall comparison identity is absent")
+    if candidate_mode:
+        native.require(candidate is not None, "Wall candidate identity is absent")
         environment.update(
             {
-                "HW_WALL_ART_COMPARISON": comparison,
                 "HW_WALL_CANDIDATE": "1",
                 "HW_WALL_CANDIDATE_GENERATION": str(
                     candidate["asset_set_generation"]
@@ -590,9 +595,7 @@ def run_calibration(
                         raise native.AcceptanceError(
                             f"Wall production probe failed: {value.get('reason')}"
                         )
-                    status = validate_probe_status(
-                        value, nonce=nonce, comparison=comparison
-                    )
+                    status = validate_probe_status(value, nonce=nonce, candidate=candidate_mode)
                     evidence = capture_client_window(
                         screenshot, root_pid=process.pid, status=status
                     )
@@ -635,8 +638,8 @@ def run_calibration(
     observation = {
         "schema_version": SCHEMA_VERSION,
         "status": "pass",
-        "profile": profile_name(comparison),
-        "comparison": comparison,
+        "profile": profile_name(candidate_mode),
+        "candidate": candidate_mode,
         "candidate_identity": candidate,
         "probe_status": captured_status,
         "screenshot": screenshot_evidence,
@@ -648,14 +651,11 @@ def run_calibration(
 
 def verify_root(root: Path) -> dict[str, Any]:
     manifest = native.read_json(root / "manifest.json")
-    comparison = manifest.get("comparison")
-    native.require(
-        comparison is None or comparison in {"lit", "unlit"},
-        "Wall comparison mode is invalid",
-    )
+    candidate_mode = manifest.get("candidate")
+    native.require(type(candidate_mode) is bool, "Wall candidate mode is invalid")
     candidate = manifest.get("candidate_identity")
     native.require(
-        manifest.get("profile") == profile_name(comparison),
+        manifest.get("profile") == profile_name(candidate_mode),
         "Wall manifest profile differs",
     )
     native.require(
@@ -679,7 +679,7 @@ def verify_root(root: Path) -> dict[str, Any]:
         density.asset_view_fingerprint(repo) == manifest["asset_view_fingerprint"],
         "Wall asset view changed",
     )
-    if comparison is None:
+    if not candidate_mode:
         native.require(candidate is None, "Fallback calibration has candidate identity")
     else:
         native.require(
@@ -691,15 +691,15 @@ def verify_root(root: Path) -> dict[str, Any]:
     status = validate_probe_status(
         observation.get("probe_status"),
         nonce=observation["probe_status"]["session_nonce"],
-        comparison=comparison,
+        candidate=candidate_mode,
     )
     native.require(
-        observation.get("profile") == profile_name(comparison)
-        and observation.get("comparison") == comparison
+        observation.get("profile") == profile_name(candidate_mode)
+        and observation.get("candidate") == candidate_mode
         and observation.get("candidate_identity") == candidate,
         "Wall observation identity differs",
     )
-    if comparison is not None:
+    if candidate_mode:
         native.require(
             status["gallery"]["manifest_sha256"] == candidate["manifest_sha256"]
             and status["gallery"]["asset_set_generation"]
@@ -741,8 +741,8 @@ def verify_root(root: Path) -> dict[str, Any]:
     return {
         "schema_version": SCHEMA_VERSION,
         "status": "pass",
-        "profile": profile_name(comparison),
-        "comparison": comparison,
+        "profile": profile_name(candidate_mode),
+        "candidate": candidate_mode,
         "root": str(root),
         "screenshots": 1,
     }
@@ -757,7 +757,7 @@ def plan(args: argparse.Namespace) -> int:
         for path in density.missing_runtime_assets(repo)
     )
     candidate: dict[str, Any] | None = None
-    if args.comparison is not None:
+    if args.candidate:
         try:
             candidate = candidate_identity(repo)
         except native.AcceptanceError as error:
@@ -803,11 +803,10 @@ def plan(args: argparse.Namespace) -> int:
         "--adapter",
         args.adapter,
     ]
-    if args.comparison is not None and candidate is not None:
+    if args.candidate and candidate is not None:
         command.extend(
             [
-                "--comparison",
-                args.comparison,
+                "--candidate",
                 "--candidate-generation",
                 str(candidate["asset_set_generation"]),
                 "--candidate-manifest-sha256",
@@ -818,8 +817,8 @@ def plan(args: argparse.Namespace) -> int:
         {
             "schema_version": SCHEMA_VERSION,
             "status": "ready" if not failures else "blocked",
-            "profile": profile_name(args.comparison),
-            "comparison": args.comparison,
+            "profile": profile_name(args.candidate),
+            "candidate": args.candidate,
             "candidate_identity": candidate,
             "job_root": str(root),
             "subject_commit": subject,
@@ -864,7 +863,7 @@ def run(args: argparse.Namespace) -> int:
         "Wall asset view changed",
     )
     candidate: dict[str, Any] | None = None
-    if args.comparison is None:
+    if not args.candidate:
         native.require(
             args.candidate_generation is None
             and args.candidate_manifest_sha256 is None,
@@ -884,8 +883,8 @@ def run(args: argparse.Namespace) -> int:
     state: dict[str, Any] = {
         "schema_version": SCHEMA_VERSION,
         "status": "running",
-        "profile": profile_name(args.comparison),
-        "comparison": args.comparison,
+        "profile": profile_name(args.candidate),
+        "candidate": args.candidate,
         "candidate_identity": candidate,
         "subject_commit": args.subject_commit,
         "source_fingerprint": args.source_fingerprint,
@@ -922,14 +921,14 @@ def run(args: argparse.Namespace) -> int:
             subject_commit=args.subject_commit,
             source_fingerprint=args.source_fingerprint,
             state=state,
-            comparison=args.comparison,
+            candidate_mode=args.candidate,
             candidate=candidate,
         )
         manifest = {
             "schema_version": SCHEMA_VERSION,
             "status": "pass",
-            "profile": profile_name(args.comparison),
-            "comparison": args.comparison,
+            "profile": profile_name(args.candidate),
+            "candidate": args.candidate,
             "candidate_identity": candidate,
             "repo": str(repo),
             "subject_commit": args.subject_commit,
@@ -1028,8 +1027,8 @@ def self_test() -> int:
         "height": 96,
     }
     candidate_status["gallery"] = {
-        "comparison": "lit",
-        "asset_set_generation": 1,
+        "lighting": "lit",
+        "asset_set_generation": 2,
         "authority": "isolated_candidate",
         "manifest_sha256": "b" * 64,
         "layout_checksum": "a" * 64,
@@ -1049,9 +1048,14 @@ def self_test() -> int:
         "hidden_connector_visuals": 192,
         "visible_connector_visuals": 0,
     }
-    validate_probe_status(candidate_status, nonce=nonce, comparison="lit")
-    candidate_status["gallery"]["comparison"] = "unlit"
-    validate_probe_status(candidate_status, nonce=nonce, comparison="unlit")
+    validate_probe_status(candidate_status, nonce=nonce, candidate=True)
+    candidate_status["gallery"]["lighting"] = "unlit"
+    try:
+        validate_probe_status(candidate_status, nonce=nonce, candidate=True)
+    except native.AcceptanceError:
+        pass
+    else:
+        raise native.AcceptanceError("Wall gallery accepted the removed unlit mode")
     native.require(
         acknowledgement(status)["generation"] == 1, "Wall acknowledgement differs"
     )
@@ -1072,7 +1076,7 @@ def parser() -> argparse.ArgumentParser:
     plan_parser.add_argument("--repo", required=True)
     plan_parser.add_argument("--job-root")
     plan_parser.add_argument("--adapter", default="Intel")
-    plan_parser.add_argument("--comparison", choices=("lit", "unlit"))
+    plan_parser.add_argument("--candidate", action="store_true")
     run_parser = commands.add_parser("run")
     for name in (
         "repo",
@@ -1084,7 +1088,7 @@ def parser() -> argparse.ArgumentParser:
         "adapter",
     ):
         run_parser.add_argument("--" + name.replace("_", "-"), required=True)
-    run_parser.add_argument("--comparison", choices=("lit", "unlit"))
+    run_parser.add_argument("--candidate", action="store_true")
     run_parser.add_argument("--candidate-generation")
     run_parser.add_argument("--candidate-manifest-sha256")
     for name in ("status", "verify"):

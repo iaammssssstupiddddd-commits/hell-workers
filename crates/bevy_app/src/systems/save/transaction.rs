@@ -817,7 +817,6 @@ mod tests {
                 albedo: default(),
                 emissive: default(),
                 normal: None,
-                candidate_normal: None,
             }),
         };
         let production_materials = ProductionWallMaterialPool {

@@ -11,7 +11,7 @@
 ## 1. 全体方針
 
 本作のアートスタイルは **「手描き感の強いラフなベクターイラスト（Rough Vector Sketch）」** で統一する。
-3Dモデルを使用する場合も、Unlit + アウトライン + ポスタライズ処理によって **「体積のある存在に見えない」** 2Dイラスト的外見を担保する。
+3Dモデルを使用する場合も、assetごとにnative受入で確定したlightingとtexture-baked lineworkを使い、**「体積のある存在に見えない」** 2Dイラスト的外見を担保する。
 
 > 判断基準: 「これは3Dモデルである」と感じられるかどうかではなく、「平面的なイラストとして成立しているか」で合否を判断する。
 
@@ -116,6 +116,9 @@ shared Rectangle mesh
 | 石の凹凸・鉄バンド・トゲ込み外形 | 各arm中心線から局所横断`±6.4 wu`、全幅最大`12.8 wu = 0.40 tile`。junctionで交差する別armの長さは厚さへ数えない |
 | Wall同士の接続port | cell境界で公称厚`9.6 wu`の同一profileへ戻す |
 | cell内余白 | 公称面から各側`11.2 wu`。装飾最大時も各側`9.6 wu`を残す |
+| lighting | `TopDownStructuralMaterial`のlit経路。directional shadingと紫emissiveを保持し、比較用unlit materialは本番へ残さない |
+| 輪郭 | texture-baked lineworkを採用。Wall専用screen-space outline rendererは追加しない |
+| normal map | 不採用。候補GLB 6種にtangentがないためtechnical gateで終了し、production coreはalbedo＋emissiveの2 textureとする |
 
 現行59°CameraとRtT縦補正後は、画面縦軸への寄与が
 `-world_z + 0.6 × world_y`となる。高さ32 wuの壁は正面が19.2 px相当、公称上面が

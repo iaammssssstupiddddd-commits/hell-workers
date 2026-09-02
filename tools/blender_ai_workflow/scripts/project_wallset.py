@@ -38,31 +38,29 @@ def project_candidate(manifest_path: Path) -> dict[str, Any]:
         isinstance(manifest, dict)
         and manifest.get("schema_version") == 2
         and manifest.get("asset_set_id") == "wall-production-v1"
-        and manifest.get("manifest_mode") == "candidate"
-        and manifest.get("normal_decision") == "pending",
+        and manifest.get("manifest_mode") == "final"
+        and manifest.get("normal_decision") in {"adopted", "rejected"}
+        and manifest.get("art_review", {}).get("status") == "art_approved",
         "candidate manifest identity differs",
     )
     core = manifest.get("production", {}).get("core")
     optional = manifest.get("production", {}).get("optional")
+    expected_length = 9 if manifest["normal_decision"] == "adopted" else 8
     require(
-        isinstance(core, list) and len(core) == 8, "candidate core inventory differs"
+        isinstance(core, list) and len(core) == expected_length,
+        "candidate core inventory differs",
     )
-    require(
-        isinstance(optional, list)
-        and len(optional) == 1
-        and optional[0].get("role") == "texture:normal",
-        "candidate normal inventory differs",
-    )
+    require(optional == [], "candidate optional inventory must be empty")
     return {
         "schema_version": 1,
         "asset_set_id": "wall-production-v1",
         "asset_set_generation": manifest["asset_set_generation"],
         "authority": "isolated_candidate",
         "manifest_sha256": validator.sha256(manifest_path),
-        "normal_decision": "pending",
-        "review_status": "candidate",
+        "normal_decision": manifest["normal_decision"],
+        "review_status": "art_approved",
         "core": core,
-        "candidate_normal": optional[0],
+        "candidate_normal": None,
         "receipt": None,
     }
 
@@ -88,7 +86,7 @@ def project_release(manifest_path: Path, receipt_path: Path) -> dict[str, Any]:
         and manifest.get("asset_set_id") == "wall-production-v1"
         and manifest.get("manifest_mode") == "final"
         and manifest.get("normal_decision") in {"adopted", "rejected"}
-        and manifest.get("art_review", {}).get("review_status") == "art_approved",
+        and manifest.get("art_review", {}).get("status") == "art_approved",
         "release manifest identity differs",
     )
     core = manifest.get("production", {}).get("core")
@@ -230,7 +228,7 @@ def build_parser() -> argparse.ArgumentParser:
 def main() -> int:
     args = build_parser().parse_args()
     manifest_path = args.manifest.resolve()
-    mode = "candidate" if args.authority == "isolated_candidate" else "final"
+    mode = "final"
     validator.validate_manifest(
         manifest_path,
         mode=mode,

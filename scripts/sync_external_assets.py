@@ -51,7 +51,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--selection",
-        choices=("core", "optional:normal"),
+        choices=("core",),
         help="Manifest inventory to copy. Requires --manifest.",
     )
     return parser.parse_args()
@@ -133,17 +133,9 @@ def ensure_safe_destination(dest_root: Path, relative: Path) -> Path:
 def selected_manifest_records(
     manifest: dict[str, Any], selection: str
 ) -> Iterable[dict[str, str]]:
-    if selection == "core":
-        return manifest["production"]["core"]
-    if manifest["normal_decision"] != "pending":
-        raise ValueError("optional:normal is available only for a pending candidate")
-    records = manifest["production"]["optional"]
-    if (
-        len(records) != 1
-        or records[0]["path"] != "textures/buildings/wall/wall_normal.png"
-    ):
-        raise ValueError("optional:normal inventory differs")
-    return records
+    if selection != "core":
+        raise ValueError("Only the approved core inventory may be synchronized")
+    return manifest["production"]["core"]
 
 
 def sync_manifest_assets(
@@ -164,16 +156,16 @@ def sync_manifest_assets(
     validator = load_wall_manifest_validator()
     manifest = validator.read_json(manifest_path)
     mode = manifest.get("manifest_mode") if isinstance(manifest, dict) else None
-    if mode != "candidate":
+    if mode != "final":
         raise ValueError(
-            "Manifest sync currently accepts candidate mode only; release requires a promotion receipt"
+            "Manifest sync accepts only a final art-approved candidate; release requires a promotion receipt"
         )
 
     staging_root = source_root.parent
     external_root = staging_root.parent
     validation = validator.validate_manifest(
         manifest_path,
-        mode="candidate",
+        mode="final",
         blend_root=staging_root / "blend",
         exports_root=source_root,
         reports_root=staging_root / "reports",

@@ -329,7 +329,6 @@ mod tests {
             albedo: Handle::default(),
             emissive: Handle::default(),
             normal: None,
-            candidate_normal: None,
         };
         let production_assets = ProductionWallAssetPool {
             manifest: Handle::default(),

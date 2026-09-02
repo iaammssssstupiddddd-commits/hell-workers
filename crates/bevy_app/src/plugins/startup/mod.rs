@@ -324,7 +324,7 @@ impl Plugin for StartupPlugin {
                 app.add_systems(
                     Update,
                     (
-                        perf_scenario::prepare_wall_actual_window_comparison_view_system,
+                        perf_scenario::prepare_wall_actual_window_gallery_view_system,
                         perf_scenario::publish_wall_actual_window_probe_status_system,
                     )
                         .chain()

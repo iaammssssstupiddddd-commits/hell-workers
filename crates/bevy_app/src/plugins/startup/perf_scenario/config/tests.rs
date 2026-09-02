@@ -13,15 +13,6 @@ fn renderdoc_capture_requires_its_dedicated_feature() {
 }
 
 #[test]
-fn wall_art_comparison_is_actual_window_only_and_fail_closed() {
-    assert!(super::validate_wall_art_comparison(None, false).is_ok());
-    assert!(super::validate_wall_art_comparison(Some("lit"), true).is_ok());
-    assert!(super::validate_wall_art_comparison(Some("unlit"), true).is_ok());
-    assert!(super::validate_wall_art_comparison(Some("lit"), false).is_err());
-    assert!(super::validate_wall_art_comparison(Some("invalid"), true).is_err());
-}
-
-#[test]
 fn random_streams_are_stable_and_independent() {
     let config = PerfScenarioConfig {
         enabled: true,

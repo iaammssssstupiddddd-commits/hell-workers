@@ -48,15 +48,14 @@ class WallsetProjectionTests(unittest.TestCase):
         payload = {
             "schema_version": 2,
             "asset_set_id": "wall-production-v1",
-            "manifest_mode": "candidate",
+            "manifest_mode": "final",
             "asset_set_generation": 3,
-            "normal_decision": "pending",
+            "normal_decision": "rejected",
             "production": {
                 "core": core,
-                "optional": [
-                    record("textures/buildings/wall/wall_normal.png", "texture:normal")
-                ],
+                "optional": [],
             },
+            "art_review": {"status": "art_approved"},
         }
         path = root / "candidate.json"
         path.write_text(json.dumps(payload), encoding="utf-8")
@@ -72,18 +71,19 @@ class WallsetProjectionTests(unittest.TestCase):
             )
             self.assertEqual(projection["asset_set_generation"], 3)
             self.assertEqual(projection["authority"], "isolated_candidate")
-            self.assertEqual(projection["review_status"], "candidate")
+            self.assertEqual(projection["review_status"], "art_approved")
             self.assertEqual(
                 projection["manifest_sha256"],
                 hashlib.sha256(manifest.read_bytes()).hexdigest(),
             )
             self.assertEqual(len(projection["core"]), 8)
 
-    def test_rejected_or_adopted_manifest_is_not_candidate_projection(self) -> None:
+    def test_pending_manifest_is_not_candidate_projection(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             manifest = self.manifest(Path(directory))
             payload = json.loads(manifest.read_text())
-            payload["normal_decision"] = "adopted"
+            payload["manifest_mode"] = "candidate"
+            payload["normal_decision"] = "pending"
             manifest.write_text(json.dumps(payload), encoding="utf-8")
             with self.assertRaisesRegex(
                 self.projector.ProjectionError, "identity differs"
@@ -111,7 +111,7 @@ class WallsetProjectionTests(unittest.TestCase):
             payload["manifest_mode"] = "final"
             payload["normal_decision"] = "rejected"
             payload["production"]["optional"] = []
-            payload["art_review"] = {"review_status": "art_approved"}
+            payload["art_review"] = {"status": "art_approved"}
             manifest.write_text(json.dumps(payload), encoding="utf-8")
             manifest_hash = hashlib.sha256(manifest.read_bytes()).hexdigest()
             receipt_payload = {
@@ -164,7 +164,7 @@ class WallsetProjectionTests(unittest.TestCase):
             payload["manifest_mode"] = "final"
             payload["normal_decision"] = "rejected"
             payload["production"]["optional"] = []
-            payload["art_review"] = {"review_status": "art_approved"}
+            payload["art_review"] = {"status": "art_approved"}
             manifest.write_text(json.dumps(payload), encoding="utf-8")
             receipt = root / "promotion-receipt.json"
             receipt.write_bytes(

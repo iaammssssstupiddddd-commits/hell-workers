@@ -164,21 +164,21 @@ operatorにはglobal scale propertyがないため、正式exportは`--geometry-
 `render-wall-reference-board`はM0と同じOCIO陽性configを強制し、59.036° Orthographicで6 familyを描画します。
 OCIO fallback時はreference reportをpassにしません。
 
-production Wall v2は上記legacy同期ではなく、candidate manifestに封印されたexact allowlistを隔離worktreeへ
+production Wall v2は上記legacy同期ではなく、art-approved final manifestに封印されたexact allowlistを隔離worktreeへ
 provisionします。`--dest`は必ず対象worktreeのasset rootまで明示し、最初に同じ引数の`--dry-run`を確認します。
 
 ```bash
 python3 scripts/sync_external_assets.py \
   --source "$ASSET_ROOT/staging/exports" \
   --dest "$VALIDATION_WORKTREE/assets" \
-  --manifest "$ASSET_ROOT/staging/reports/wall-production-v1.asset-set.json" \
+  --manifest "$ASSET_ROOT/staging/reports/wall-production-v1.asset-set-final.json" \
   --selection core \
   --dry-run
 ```
 
-この候補経路はmanifest外のfileとoptional normalをcoreへ混ぜず、primary / canonicalを同期先にしません。
-normal A/Bだけは同じcandidate generationから`--selection optional:normal`を別途使います。final manifestは
-promotion receipt対応が完了するまでこの同期コマンドでは拒否されます。
+この候補経路はmanifest外のfileと不採用normalをcoreへ混ぜず、primary / canonicalを同期先にしません。
+pending candidateはruntime projection / allowlist同期のどちらも拒否します。release projectionとcanonical昇格は
+別途generation-scoped promotion receiptを要求します。
 
 外部workspaceを初期化・検査するコマンドは次の通りです。既存generic v1 templateは`--no-clobber`で保持され、
 Wall v2の`generations/`、`authority/`、`quarantine/`だけが追加されます。

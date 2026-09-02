@@ -42,7 +42,11 @@ const ACK_TIMEOUT: Duration = Duration::from_secs(15);
 const SETTLE_FRAMES: u32 = 3;
 const ROI_HALF_SIZE: u32 = 48;
 const CAPTURE_REGION: (u32, u32, u32, u32) = (320, 40, 516, 674);
-const COMPARISON_CAMERA_SCALE: f32 = 1.0;
+const GALLERY_CAMERA_SCALE: f32 = 1.0;
+
+fn candidate_gallery_requested() -> bool {
+    std::env::var("HW_WALL_CANDIDATE").as_deref() == Ok("1")
+}
 
 #[derive(Resource)]
 pub(crate) struct WallActualWindowAcceptance {
@@ -148,18 +152,13 @@ pub(crate) struct WallActualWindowViewParams<'w, 's> {
     connector_visuals: Query<'w, 's, (&'static PerfFixtureMarker, &'static mut Visibility)>,
 }
 
-pub(crate) fn prepare_wall_actual_window_comparison_view_system(
+pub(crate) fn prepare_wall_actual_window_gallery_view_system(
     config: Res<PerfScenarioConfig>,
     fixture: Res<WallDensityFixtureState>,
     acceptance: Res<WallActualWindowAcceptance>,
     mut params: WallActualWindowViewParams,
 ) {
-    if !acceptance.enabled(&config, &fixture)
-        || !matches!(
-            std::env::var("HW_WALL_ART_COMPARISON").as_deref(),
-            Ok("lit" | "unlit")
-        )
-    {
+    if !acceptance.enabled(&config, &fixture) || !candidate_gallery_requested() {
         return;
     }
     let Some(subject) = fixture.actual_window_subject() else {
@@ -171,7 +170,7 @@ pub(crate) fn prepare_wall_actual_window_comparison_view_system(
     let world = hw_world::WorldMap::grid_to_world(subject.grid.0, subject.grid.1);
     camera.translation.x = world.x;
     camera.translation.y = world.y;
-    camera.scale = Vec3::new(COMPARISON_CAMERA_SCALE, COMPARISON_CAMERA_SCALE, 1.0);
+    camera.scale = Vec3::new(GALLERY_CAMERA_SCALE, GALLERY_CAMERA_SCALE, 1.0);
     for mut node in &mut params.ui_roots {
         node.display = Display::None;
     }
@@ -310,9 +309,9 @@ fn build_status(
     if *visibility == Visibility::Hidden || !inherited_visibility.get() {
         return Err("wall actual-window subject is hidden".to_string());
     }
-    let comparison = std::env::var("HW_WALL_ART_COMPARISON").ok();
-    let expected_camera_scale = if comparison.is_some() {
-        COMPARISON_CAMERA_SCALE
+    let candidate_gallery = candidate_gallery_requested();
+    let expected_camera_scale = if candidate_gallery {
+        GALLERY_CAMERA_SCALE
     } else {
         CAMERA_SCALE
     };
@@ -325,17 +324,17 @@ fn build_status(
             orthographic.scale
         ));
     }
-    let gallery = if let Some(comparison) = comparison.as_deref() {
+    let gallery = if candidate_gallery {
         let main_camera = params
             .main_camera
             .single()
-            .map_err(|_| "wall comparison requires one MainCamera".to_string())?;
+            .map_err(|_| "wall gallery requires one MainCamera".to_string())?;
         let subject_world = hw_world::WorldMap::grid_to_world(subject.grid.0, subject.grid.1);
         if main_camera.translation.x != subject_world.x
             || main_camera.translation.y != subject_world.y
-            || main_camera.scale != Vec3::new(COMPARISON_CAMERA_SCALE, COMPARISON_CAMERA_SCALE, 1.0)
+            || main_camera.scale != Vec3::new(GALLERY_CAMERA_SCALE, GALLERY_CAMERA_SCALE, 1.0)
         {
-            return Err("wall comparison MainCamera focus differs".to_string());
+            return Err("wall gallery MainCamera focus differs".to_string());
         }
         let evidence = fixture.renderdoc_evidence()?;
         let hidden_ui_roots = params.ui_roots.iter().count();
@@ -345,7 +344,7 @@ fn build_status(
                 .iter()
                 .any(|node| node.display != Display::None)
         {
-            return Err("wall comparison view retained visible UI roots".to_string());
+            return Err("wall gallery view retained visible UI roots".to_string());
         }
         let hidden_connector_visuals = params
             .connector_visuals
@@ -365,15 +364,15 @@ fn build_status(
             .count();
         if hidden_connector_visuals != evidence.connector_count || visible_connector_visuals != 0 {
             return Err(format!(
-                "wall comparison connector visibility differs: hidden={hidden_connector_visuals}/{}, visible={visible_connector_visuals}/0",
+                "wall gallery connector visibility differs: hidden={hidden_connector_visuals}/{}, visible={visible_connector_visuals}/0",
                 evidence.connector_count
             ));
         }
         if presentation.mode != Wall3dPresentationMode::Production {
-            return Err("wall comparison subject is not in production mode".to_string());
+            return Err("wall gallery subject is not in production mode".to_string());
         }
         if mesh.0.id() == params.handles.wall_mesh.id() {
-            return Err("wall comparison subject retained the fallback mesh".to_string());
+            return Err("wall gallery subject retained the fallback mesh".to_string());
         }
         let targets: HashSet<_> = evidence.target_entities.iter().copied().collect();
         let mut production_count = 0usize;
@@ -393,9 +392,9 @@ fn build_status(
             let value = params
                 .materials
                 .get(&material.0)
-                .ok_or_else(|| "wall comparison material is not resident".to_string())?;
-            if value.base.unlit != (comparison == "unlit") {
-                return Err("wall comparison material lighting mode differs".to_string());
+                .ok_or_else(|| "wall gallery material is not resident".to_string())?;
+            if value.base.unlit {
+                return Err("wall gallery material is unexpectedly unlit".to_string());
             }
         }
         if production_count != evidence.target_wall_count
@@ -404,7 +403,7 @@ fn build_status(
             || material_ids.len() != 1
         {
             return Err(format!(
-                "wall comparison gallery residency differs: production={production_count}/{}, fallback={fallback_count}/0, meshes={}/6, materials={}/1",
+                "wall gallery residency differs: production={production_count}/{}, fallback={fallback_count}/0, meshes={}/6, materials={}/1",
                 evidence.target_wall_count,
                 mesh_ids.len(),
                 material_ids.len(),
@@ -414,7 +413,7 @@ fn build_status(
             .production_assets
             .resolved
             .as_ref()
-            .ok_or_else(|| "wall comparison production asset pool is unresolved".to_string())?;
+            .ok_or_else(|| "wall gallery production asset pool is unresolved".to_string())?;
         let WallProductionActivationState::ReadyToApply {
             asset_set_generation,
             authority,
@@ -422,16 +421,16 @@ fn build_status(
             ..
         } = &params.activation.state
         else {
-            return Err("wall comparison activation is not ready".to_string());
+            return Err("wall gallery activation is not ready".to_string());
         };
         if resolved.identity.asset_set_generation != *asset_set_generation
             || resolved.identity.authority != *authority
             || resolved.identity.manifest_sha256 != *manifest_sha256
         {
-            return Err("wall comparison activation identity differs".to_string());
+            return Err("wall gallery activation identity differs".to_string());
         }
         Some(json!({
-            "comparison": comparison,
+            "lighting": "lit",
             "asset_set_generation": asset_set_generation,
             "authority": authority,
             "manifest_sha256": manifest_sha256,
@@ -466,7 +465,7 @@ fn build_status(
     .ok_or_else(|| "wall actual-window subject cannot be projected into the client".to_string())?;
     let roi = roi_around_point(center, ROI_HALF_SIZE, physical_width, physical_height)
         .ok_or_else(|| "wall actual-window ROI lies outside the client".to_string())?;
-    let capture_region = if comparison.is_some() {
+    let capture_region = if candidate_gallery {
         (0, 0, physical_width, physical_height)
     } else {
         CAPTURE_REGION
@@ -665,12 +664,12 @@ mod tests {
     }
 
     #[test]
-    fn comparison_view_uses_standard_zoom_and_subject_center() {
+    fn gallery_view_uses_standard_zoom_and_subject_center() {
         let world = hw_world::WorldMap::grid_to_world(22, 17);
         let mut camera = Transform::from_xyz(1.0, 2.0, 3.0);
         camera.translation.x = world.x;
         camera.translation.y = world.y;
-        camera.scale = Vec3::new(COMPARISON_CAMERA_SCALE, COMPARISON_CAMERA_SCALE, 1.0);
+        camera.scale = Vec3::new(GALLERY_CAMERA_SCALE, GALLERY_CAMERA_SCALE, 1.0);
         assert_eq!(camera.translation, Vec3::new(-880.0, -1040.0, 3.0));
         assert_eq!(camera.scale, Vec3::ONE);
     }

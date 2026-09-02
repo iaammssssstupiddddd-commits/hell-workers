@@ -37,6 +37,7 @@ class ManifestAssetSyncTests(unittest.TestCase):
         fixture = self.fixture_module.AssetSetFixture(staging_root, self.validator)
         fixture.licenses_root.rename(external_root / "licenses")
         fixture.licenses_root = external_root / "licenses"
+        fixture.make_final(normal="rejected")
         return fixture, external_root
 
     def test_core_sync_copies_only_eight_manifest_files(self) -> None:
@@ -69,27 +70,13 @@ class ManifestAssetSyncTests(unittest.TestCase):
                 )
             self.assertEqual(external_root.name, "external")
 
-    def test_optional_sync_copies_only_pending_normal(self) -> None:
+    def test_optional_normal_selection_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             fixture, _ = self.make_fixture(directory)
-            dest_root = Path(directory) / "repo-assets"
-            copied = self.sync.sync_manifest_assets(
-                source_root=fixture.exports_root,
-                dest_root=dest_root,
-                manifest_path=fixture.manifest_path,
-                selection="optional:normal",
-                dry_run=False,
-                repo=None,
-            )
-            self.assertEqual(copied, 1)
-            self.assertEqual(
-                [
-                    path.relative_to(dest_root).as_posix()
-                    for path in dest_root.rglob("*")
-                    if path.is_file()
-                ],
-                [self.validator.TEXTURES["normal"]],
-            )
+            with self.assertRaisesRegex(ValueError, "approved core"):
+                self.sync.selected_manifest_records(
+                    fixture.manifest, "optional:normal"
+                )
 
     def test_dry_run_does_not_create_destination(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -122,20 +109,6 @@ class ManifestAssetSyncTests(unittest.TestCase):
                     repo=None,
                 )
             self.assertFalse(dest_root.exists())
-
-    def test_final_manifest_requires_future_receipt_path(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            fixture, _ = self.make_fixture(directory)
-            fixture.make_final(normal="rejected")
-            with self.assertRaisesRegex(ValueError, "promotion receipt"):
-                self.sync.sync_manifest_assets(
-                    source_root=fixture.exports_root,
-                    dest_root=Path(directory) / "repo-assets",
-                    manifest_path=fixture.manifest_path,
-                    selection="core",
-                    dry_run=True,
-                    repo=None,
-                )
 
     def test_destination_symlink_escape_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

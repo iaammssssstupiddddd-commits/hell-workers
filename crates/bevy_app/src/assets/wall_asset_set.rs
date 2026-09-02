@@ -56,14 +56,6 @@ pub enum WallArtReviewStatus {
     Candidate,
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub enum WallCandidateNormalVerification {
-    Failed,
-    #[default]
-    NotChecked,
-    Verified,
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct WallAssetFileRecord {
@@ -94,8 +86,6 @@ pub struct WallAssetSetManifest {
     pub receipt: Option<WallAssetReceiptRecord>,
     pub review_status: WallArtReviewStatus,
     pub schema_version: u32,
-    #[serde(skip)]
-    pub candidate_normal_verification: WallCandidateNormalVerification,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -272,18 +262,25 @@ pub fn decode_canonical_wallset(
     match manifest.authority {
         WallAssetAuthority::IsolatedCandidate => {
             contract(
-                manifest.normal_decision == WallNormalDecision::Pending,
+                manifest.normal_decision != WallNormalDecision::Pending,
                 "candidate normal decision differs",
             )?;
             contract(
-                manifest.review_status == WallArtReviewStatus::Candidate,
+                manifest.review_status == WallArtReviewStatus::ArtApproved,
                 "candidate review status differs",
             )?;
             contract(manifest.receipt.is_none(), "candidate receipt must be null")?;
-            let candidate_normal = manifest.candidate_normal.as_ref().ok_or_else(|| {
-                WallAssetSetLoadError::Contract("candidate normal is absent".into())
-            })?;
-            validate_record(candidate_normal, NORMAL_PATH, "texture:normal")?;
+            contract(
+                manifest.candidate_normal.is_none(),
+                "candidate normal must be null",
+            )?;
+            if manifest.normal_decision == WallNormalDecision::Adopted {
+                let record = manifest
+                    .core
+                    .last()
+                    .expect("adopted core length checked above");
+                validate_record(record, NORMAL_PATH, "texture:normal")?;
+            }
         }
         WallAssetAuthority::ReleaseApproved => {
             contract(
@@ -438,7 +435,7 @@ impl AssetLoader for WallAssetSetLoader {
     ) -> Result<Self::Asset, Self::Error> {
         let mut bytes = Vec::new();
         reader.read_to_end(&mut bytes).await?;
-        let mut manifest = decode_canonical_wallset(&bytes)?;
+        let manifest = decode_canonical_wallset(&bytes)?;
         if let Some(receipt) = &manifest.receipt {
             let payload = load_context
                 .read_asset_bytes(receipt.path.clone())
@@ -468,18 +465,6 @@ impl AssetLoader for WallAssetSetLoader {
                 digest == record.sha256,
                 format!("{} actual bytes hash differs", record.path),
             )?;
-        }
-        if let Some(record) = &manifest.candidate_normal {
-            manifest.candidate_normal_verification =
-                match load_context.read_asset_bytes(record.path.clone()).await {
-                    Ok(payload)
-                        if payload.len() as u64 == record.bytes
-                            && format!("{:x}", Sha256::digest(&payload)) == record.sha256 =>
-                    {
-                        WallCandidateNormalVerification::Verified
-                    }
-                    Ok(_) | Err(_) => WallCandidateNormalVerification::Failed,
-                };
         }
         Ok(manifest)
     }
@@ -513,7 +498,6 @@ pub struct ResolvedProductionWallAssets {
     pub albedo: Handle<Image>,
     pub emissive: Handle<Image>,
     pub normal: Option<Handle<Image>>,
-    pub candidate_normal: Option<Handle<Image>>,
 }
 
 #[derive(Resource, Clone)]
@@ -555,21 +539,11 @@ pub enum WallAssetReadinessState {
     },
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum WallOptionalAssetState {
-    NotPresent,
-    Loading,
-    Ready,
-    Failed,
-}
-
 #[derive(Resource, Debug, Clone, PartialEq, Eq)]
 pub struct WallAssetReadiness {
     pub session_id: u64,
     pub activation_revision: u64,
     pub state: WallAssetReadinessState,
-    pub candidate_normal: WallOptionalAssetState,
-    pub candidate_normal_revision: u64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -614,8 +588,6 @@ impl Default for WallAssetReadiness {
             session_id: NEXT_SESSION_ID.fetch_add(1, Ordering::Relaxed),
             activation_revision: 0,
             state: WallAssetReadinessState::Loading,
-            candidate_normal: WallOptionalAssetState::Loading,
-            candidate_normal_revision: 0,
         }
     }
 }
@@ -665,25 +637,6 @@ fn required_load_state(
         Some(LoadState::Loaded) => RequiredLoadState::Ready,
         Some(LoadState::Failed(_)) => RequiredLoadState::Failed,
         Some(LoadState::NotLoaded | LoadState::Loading) | None => RequiredLoadState::Loading,
-    }
-}
-
-fn optional_asset_state(
-    verification: Option<WallCandidateNormalVerification>,
-    load_state: Option<RequiredLoadState>,
-) -> WallOptionalAssetState {
-    match (verification, load_state) {
-        (Some(WallCandidateNormalVerification::Failed), _) => WallOptionalAssetState::Failed,
-        (Some(WallCandidateNormalVerification::Verified), Some(RequiredLoadState::Ready)) => {
-            WallOptionalAssetState::Ready
-        }
-        (Some(WallCandidateNormalVerification::Verified), Some(RequiredLoadState::Failed)) => {
-            WallOptionalAssetState::Failed
-        }
-        (Some(WallCandidateNormalVerification::Verified), Some(RequiredLoadState::Loading))
-        | (Some(WallCandidateNormalVerification::NotChecked), Some(_))
-        | (None, Some(_)) => WallOptionalAssetState::Loading,
-        (_, None) => WallOptionalAssetState::NotPresent,
     }
 }
 
@@ -740,14 +693,6 @@ fn resolve_asset_handles(
             .from_asset(record.path.clone()),
         )
     });
-    let candidate_normal = manifest.candidate_normal.as_ref().map(|record| {
-        asset_server
-            .load_builder()
-            .with_settings(|settings: &mut bevy::image::ImageLoaderSettings| {
-                settings.is_srgb = false;
-            })
-            .load(record.path.clone())
-    });
     let normal = (manifest.normal_decision == WallNormalDecision::Adopted).then(|| {
         asset_server
             .load_builder()
@@ -762,7 +707,6 @@ fn resolve_asset_handles(
         albedo: asset_server.load(record_by_role(manifest, "texture:albedo").path.clone()),
         emissive: asset_server.load(record_by_role(manifest, "texture:emissive").path.clone()),
         normal,
-        candidate_normal,
     }
 }
 
@@ -779,7 +723,6 @@ fn initialize_material_handles(
     complete.base.emissive = LinearRgba::WHITE;
     complete.base.emissive_texture = Some(assets.emissive.clone());
     complete.base.normal_map_texture = assets.normal.clone();
-    complete.base.unlit = wall_art_unlit_control_requested(&assets.identity);
     let complete = structural_materials.add(complete);
 
     let mut provisional =
@@ -788,7 +731,6 @@ fn initialize_material_handles(
     provisional.base.emissive = LinearRgba::WHITE;
     provisional.base.emissive_texture = Some(assets.emissive.clone());
     provisional.base.normal_map_texture = assets.normal.clone();
-    provisional.base.unlit = wall_art_unlit_control_requested(&assets.identity);
     let provisional =
         structural_materials.add(with_topdown_alpha_mode(provisional, AlphaMode::Blend));
 
@@ -797,33 +739,6 @@ fn initialize_material_handles(
         complete: Some(complete),
         provisional: Some(provisional),
     }
-}
-
-fn wall_art_unlit_control_requested(identity: &WallAssetSetIdentity) -> bool {
-    #[cfg(feature = "profiling")]
-    {
-        return wall_art_unlit_control_requested_for(
-            identity,
-            std::env::var("HW_WALL_ART_ACTUAL_WINDOW").as_deref() == Ok("1"),
-            std::env::var("HW_WALL_ART_COMPARISON").ok().as_deref(),
-        );
-    }
-    #[cfg(not(feature = "profiling"))]
-    {
-        let _ = identity;
-        false
-    }
-}
-
-#[cfg(feature = "profiling")]
-fn wall_art_unlit_control_requested_for(
-    identity: &WallAssetSetIdentity,
-    actual_window: bool,
-    comparison: Option<&str>,
-) -> bool {
-    identity.authority == WallAssetAuthority::IsolatedCandidate
-        && actual_window
-        && comparison == Some("unlit")
 }
 
 fn refresh_material_handles(
@@ -848,15 +763,10 @@ fn refresh_material_handles(
 fn apply_readiness_transition(
     readiness: &mut WallAssetReadiness,
     next_state: WallAssetReadinessState,
-    next_normal: WallOptionalAssetState,
 ) {
     if readiness.state != next_state {
         readiness.state = next_state;
         readiness.activation_revision = readiness.activation_revision.wrapping_add(1);
-    }
-    if readiness.candidate_normal != next_normal {
-        readiness.candidate_normal = next_normal;
-        readiness.candidate_normal_revision = readiness.candidate_normal_revision.wrapping_add(1);
     }
 }
 
@@ -979,14 +889,7 @@ pub fn update_wall_asset_readiness_system(
                 )
         }));
     let next_state = aggregate_state(&params.policy, manifest, required);
-    let candidate_normal_load = resolved
-        .and_then(|assets| assets.candidate_normal.as_ref())
-        .map(|handle| required_load_state(&params.asset_server, handle.id()));
-    let next_normal = optional_asset_state(
-        manifest.map(|value| value.candidate_normal_verification),
-        candidate_normal_load,
-    );
-    apply_readiness_transition(&mut readiness, next_state, next_normal);
+    apply_readiness_transition(&mut readiness, next_state);
     refresh_production_activation(&mut activation, &readiness);
 }
 
@@ -1017,17 +920,16 @@ mod tests {
             asset_set_generation: 1,
             asset_set_id: ASSET_SET_ID.to_string(),
             authority: WallAssetAuthority::IsolatedCandidate,
-            candidate_normal: Some(record(NORMAL_PATH, "texture:normal")),
+            candidate_normal: None,
             core: CORE_INVENTORY
                 .iter()
                 .map(|(path, role)| record(path, role))
                 .collect(),
             manifest_sha256: "b".repeat(64),
-            normal_decision: WallNormalDecision::Pending,
+            normal_decision: WallNormalDecision::Rejected,
             receipt: None,
-            review_status: WallArtReviewStatus::Candidate,
+            review_status: WallArtReviewStatus::ArtApproved,
             schema_version: 1,
-            candidate_normal_verification: WallCandidateNormalVerification::NotChecked,
         }
     }
 
@@ -1050,7 +952,6 @@ mod tests {
             }),
             review_status: WallArtReviewStatus::ArtApproved,
             schema_version: 1,
-            candidate_normal_verification: WallCandidateNormalVerification::NotChecked,
         }
     }
 
@@ -1176,6 +1077,16 @@ mod tests {
     }
 
     #[test]
+    fn pending_art_candidate_is_rejected_after_review_closes() {
+        let mut manifest = fixture();
+        manifest.normal_decision = WallNormalDecision::Pending;
+        manifest.review_status = WallArtReviewStatus::Candidate;
+        manifest.candidate_normal = Some(record(NORMAL_PATH, "texture:normal"));
+        let error = decode_canonical_wallset(&encoded(&manifest)).unwrap_err();
+        assert!(error.to_string().contains("normal decision differs"));
+    }
+
+    #[test]
     fn aggregate_is_all_or_nothing_and_candidate_gated() {
         let manifest = fixture();
         let states = [RequiredLoadState::Ready; 9];
@@ -1224,41 +1135,26 @@ mod tests {
         let mut readiness = WallAssetReadiness::default();
         let session_id = readiness.session_id;
 
-        apply_readiness_transition(
-            &mut readiness,
-            WallAssetReadinessState::Loading,
-            WallOptionalAssetState::Loading,
-        );
+        apply_readiness_transition(&mut readiness, WallAssetReadinessState::Loading);
         assert_eq!(readiness.activation_revision, 0);
-        assert_eq!(readiness.candidate_normal_revision, 0);
 
         apply_readiness_transition(
             &mut readiness,
             WallAssetReadinessState::Fallback(WallAssetFallbackReason::CandidateDisabled),
-            WallOptionalAssetState::Loading,
         );
         assert_eq!(readiness.activation_revision, 1);
-        assert_eq!(readiness.candidate_normal_revision, 0);
 
-        apply_readiness_transition(
-            &mut readiness,
-            eligible.clone(),
-            WallOptionalAssetState::Ready,
-        );
+        apply_readiness_transition(&mut readiness, eligible.clone());
         assert_eq!(readiness.activation_revision, 2);
-        assert_eq!(readiness.candidate_normal_revision, 1);
 
-        apply_readiness_transition(&mut readiness, eligible, WallOptionalAssetState::Ready);
+        apply_readiness_transition(&mut readiness, eligible);
         assert_eq!(readiness.activation_revision, 2);
-        assert_eq!(readiness.candidate_normal_revision, 1);
 
         apply_readiness_transition(
             &mut readiness,
             WallAssetReadinessState::Fallback(WallAssetFallbackReason::LoadFailed),
-            WallOptionalAssetState::Failed,
         );
         assert_eq!(readiness.activation_revision, 3);
-        assert_eq!(readiness.candidate_normal_revision, 2);
         assert_eq!(readiness.session_id, session_id);
     }
 
@@ -1326,7 +1222,6 @@ mod tests {
             albedo: albedo.clone(),
             emissive: emissive.clone(),
             normal: Some(normal.clone()),
-            candidate_normal: None,
         };
 
         assert!(refresh_material_handles(
@@ -1347,6 +1242,7 @@ mod tests {
             assert_eq!(material.base.base_color_texture.as_ref(), Some(&albedo));
             assert_eq!(material.base.emissive_texture.as_ref(), Some(&emissive));
             assert_eq!(material.base.normal_map_texture.as_ref(), Some(&normal));
+            assert!(!material.base.unlit);
             assert_eq!(
                 material.extension.indoor_light_field.as_ref(),
                 Some(&indoor_light)
@@ -1393,59 +1289,6 @@ mod tests {
         assert_ne!(pool.provisional.as_ref(), Some(&first_provisional));
     }
 
-    #[test]
-    fn optional_normal_revision_is_separate_from_production_activation() {
-        let mut readiness = WallAssetReadiness {
-            state: WallAssetReadinessState::Eligible {
-                asset_set_generation: 1,
-                authority: WallAssetAuthority::IsolatedCandidate,
-                manifest_sha256: "b".repeat(64),
-            },
-            activation_revision: 4,
-            candidate_normal: WallOptionalAssetState::Failed,
-            candidate_normal_revision: 2,
-            ..Default::default()
-        };
-
-        let next_normal = WallOptionalAssetState::Ready;
-        if readiness.candidate_normal != next_normal {
-            readiness.candidate_normal = next_normal;
-            readiness.candidate_normal_revision =
-                readiness.candidate_normal_revision.wrapping_add(1);
-        }
-        assert_eq!(readiness.activation_revision, 4);
-        assert_eq!(readiness.candidate_normal_revision, 3);
-    }
-
-    #[test]
-    fn optional_normal_requires_both_verified_bytes_and_a_loaded_image() {
-        assert_eq!(
-            optional_asset_state(
-                Some(WallCandidateNormalVerification::Verified),
-                Some(RequiredLoadState::Ready)
-            ),
-            WallOptionalAssetState::Ready
-        );
-        assert_eq!(
-            optional_asset_state(
-                Some(WallCandidateNormalVerification::Failed),
-                Some(RequiredLoadState::Ready)
-            ),
-            WallOptionalAssetState::Failed
-        );
-        assert_eq!(
-            optional_asset_state(
-                Some(WallCandidateNormalVerification::Verified),
-                Some(RequiredLoadState::Loading)
-            ),
-            WallOptionalAssetState::Loading
-        );
-        assert_eq!(
-            optional_asset_state(None, None),
-            WallOptionalAssetState::NotPresent
-        );
-    }
-
     struct TestAssetRoot(PathBuf);
 
     impl TestAssetRoot {
@@ -1480,11 +1323,6 @@ mod tests {
             record.bytes = payload.len() as u64;
             record.sha256 = format!("{:x}", Sha256::digest(payload.as_bytes()));
         }
-        root.write(NORMAL_PATH, b"optional-normal");
-        let candidate_normal = manifest.candidate_normal.as_mut().unwrap();
-        candidate_normal.bytes = 15;
-        candidate_normal.sha256 = format!("{:x}", Sha256::digest(b"optional-normal"));
-        manifest.candidate_normal_verification = WallCandidateNormalVerification::Verified;
         root.write(WALLSET_PATH, &encoded(&manifest));
         manifest
     }
@@ -1582,13 +1420,7 @@ mod tests {
                 .chain([
                     server.load_state(assets.albedo.id()),
                     server.load_state(assets.emissive.id()),
-                ])
-                .chain(
-                    assets
-                        .candidate_normal
-                        .iter()
-                        .map(|handle| server.load_state(handle.id())),
-                );
+                ]);
             if states
                 .clone()
                 .all(|state| matches!(state, LoadState::Loaded))
@@ -1623,12 +1455,6 @@ mod tests {
                     server.get_load_states(assets.emissive.id()),
                 ),
             ])
-            .chain(assets.candidate_normal.iter().map(|handle| {
-                (
-                    server.get_path(handle.id()).map(|path| path.to_string()),
-                    server.get_load_states(handle.id()),
-                )
-            }))
             .collect();
         panic!("isolated Wall assets did not become ready: {diagnostics:?}");
     }
@@ -1655,10 +1481,6 @@ mod tests {
             .get(&wallset)
             .unwrap()
             .clone();
-        assert_eq!(
-            manifest.candidate_normal_verification,
-            WallCandidateNormalVerification::Verified
-        );
         let assets = resolve_asset_handles(app.world().resource::<AssetServer>(), &manifest);
         wait_for_required_assets(&mut app, &assets);
 
@@ -1711,7 +1533,6 @@ mod tests {
             }
         ));
         assert_eq!(eligible.activation_revision, 2);
-        assert_eq!(eligible.candidate_normal, WallOptionalAssetState::Ready);
         assert_eq!(
             app.world().resource::<WallProductionActivation>().state,
             WallProductionActivationState::Fallback(
@@ -1792,19 +1613,6 @@ mod tests {
                 .format,
             bevy::render::render_resource::TextureFormat::Rgba8UnormSrgb
         );
-        assert_eq!(
-            images
-                .get(
-                    assets
-                        .candidate_normal
-                        .as_ref()
-                        .expect("candidate normal handle is absent"),
-                )
-                .expect("loaded candidate normal Image is absent")
-                .texture_descriptor
-                .format,
-            bevy::render::render_resource::TextureFormat::Rgba8Unorm
-        );
     }
 
     #[test]
@@ -1842,55 +1650,6 @@ mod tests {
             wait_for_terminal_load(&mut app, &handle),
             LoadState::Failed(_)
         ));
-    }
-
-    #[test]
-    fn missing_candidate_normal_does_not_fail_production_manifest() {
-        let root = TestAssetRoot::new();
-        let manifest = disk_fixture(&root);
-        fs::remove_file(root.0.join(NORMAL_PATH)).unwrap();
-        let mut app = loader_app(&root.0);
-        let handle = app
-            .world()
-            .resource::<AssetServer>()
-            .load::<WallAssetSetManifest>(WALLSET_PATH);
-        assert!(matches!(
-            wait_for_terminal_load(&mut app, &handle),
-            LoadState::Loaded
-        ));
-        assert_eq!(
-            app.world()
-                .resource::<Assets<WallAssetSetManifest>>()
-                .get(&handle)
-                .unwrap()
-                .candidate_normal_verification,
-            WallCandidateNormalVerification::Failed
-        );
-        assert_eq!(manifest.asset_set_generation, 1);
-    }
-
-    #[test]
-    fn changed_candidate_normal_is_failed_without_blocking_core() {
-        let root = TestAssetRoot::new();
-        disk_fixture(&root);
-        root.write(NORMAL_PATH, b"tampered-normal");
-        let mut app = loader_app(&root.0);
-        let handle = app
-            .world()
-            .resource::<AssetServer>()
-            .load::<WallAssetSetManifest>(WALLSET_PATH);
-        assert!(matches!(
-            wait_for_terminal_load(&mut app, &handle),
-            LoadState::Loaded
-        ));
-        assert_eq!(
-            app.world()
-                .resource::<Assets<WallAssetSetManifest>>()
-                .get(&handle)
-                .unwrap()
-                .candidate_normal_verification,
-            WallCandidateNormalVerification::Failed
-        );
     }
 
     #[test]
@@ -2021,32 +1780,5 @@ mod tests {
         receipt.manifest_sha256 = "f".repeat(64);
         let error = decode_canonical_receipt(&encoded_receipt(&receipt), &manifest).unwrap_err();
         assert!(error.to_string().contains("payload binding differs"));
-    }
-
-    #[cfg(feature = "profiling")]
-    #[test]
-    fn unlit_comparison_requires_candidate_and_actual_window() {
-        let candidate = WallAssetSetIdentity::from(&fixture());
-        let release = WallAssetSetIdentity::from(&release_fixture());
-        assert!(wall_art_unlit_control_requested_for(
-            &candidate,
-            true,
-            Some("unlit")
-        ));
-        assert!(!wall_art_unlit_control_requested_for(
-            &candidate,
-            false,
-            Some("unlit")
-        ));
-        assert!(!wall_art_unlit_control_requested_for(
-            &candidate,
-            true,
-            Some("lit")
-        ));
-        assert!(!wall_art_unlit_control_requested_for(
-            &release,
-            true,
-            Some("unlit")
-        ));
     }
 }

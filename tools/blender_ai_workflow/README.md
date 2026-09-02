@@ -23,6 +23,7 @@ Hell Workers の AI 支援 Blender 編集を、staging 限定・検証付きで�
 | `scripts/validate_wall_textures.py` | shared textureとoptional +Y normal candidateをpixel検証 |
 | `scripts/verify_wall_rebuild.py` | 6 GLBとpost-export構造値の独立rebuild一致を検証 |
 | `scripts/seal_wall_candidate.py` | clean Git主体と外部stagingのclosed setからcandidate manifest v2を封印 |
+| `scripts/seal_wall_final.py` | 承認artifactとclean runtime subjectをnormalなしの新しいfinal generationへ封印 |
 | `scripts/project_wallset.py` | 検証済みmanifestからcanonical runtime `.wallset` JSONを生成 |
 | `scripts/promote_asset_set.py` | Wall final generationのplan / apply / recover / rollback transaction |
 | `bin/workflow-smoke` | deterministic `.blend` / PNG / GLB / reports を生成 |
@@ -84,15 +85,15 @@ python3 tools/blender_ai_workflow/scripts/validate_asset_set_manifest.py \
 validatorはmanifestの`tool_commit` / `tool_tree`を指定repoのHEADと照合します。templateは必要fieldを示すための
 未封印雛形であり、空hashのまま検証を通るサンプルではありません。
 
-候補を隔離worktreeへprovisionする時は、repository側の同期scriptをmanifest modeで使います。
-`core`はexact 8 file、`optional:normal`はpending候補のnormal 1 fileだけを扱います。manifest外file、symlink、
-`--delete-missing`併用、promotion receipt未対応のfinal manifestは拒否されます。
+承認済み候補を隔離worktreeへprovisionする時は、repository側の同期scriptをmanifest modeで使います。
+`core`のexact 8 fileだけを扱い、pending candidate、optional normal、manifest外file、symlink、
+`--delete-missing`併用を拒否します。
 
 ```bash
 python3 scripts/sync_external_assets.py \
   --source "$ASSET_ROOT/staging/exports" \
   --dest "$VALIDATION_WORKTREE/assets" \
-  --manifest "$ASSET_ROOT/staging/reports/wall-production-v1.asset-set.json" \
+  --manifest "$ASSET_ROOT/staging/reports/wall-production-v1.asset-set-final.json" \
   --selection core \
   --dry-run
 ```
@@ -103,7 +104,7 @@ preimage、manifest / payload hash、単調generation、asset root、root外snap
 
 ```bash
 python3 tools/blender_ai_workflow/scripts/promote_asset_set.py plan \
-  --manifest "$ASSET_ROOT/staging/reports/wall-production-v1.asset-set.json" \
+  --manifest "$ASSET_ROOT/staging/reports/wall-production-v1.asset-set-final.json" \
   --asset-root "$ASSET_ROOT" \
   --snapshot "$SNAPSHOT_ROOT/wall-production-v1-preimage.json" \
   --output "$ASSET_ROOT/staging/reports/wall-production-v1.promotion-plan.json"
