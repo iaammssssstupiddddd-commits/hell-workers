@@ -50,13 +50,13 @@ pub(crate) struct WallDensityPresentationParams<'w, 's> {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub(crate) struct WallDensityPresentationEvidence {
     schema_version: u32,
-    expected_mode: &'static str,
+    pub(super) expected_mode: &'static str,
     phase: &'static str,
     target_wall_count: usize,
     visual_count: usize,
     production_count: usize,
     fallback_count: usize,
-    active_mesh_count: usize,
+    pub(super) active_mesh_count: usize,
     active_material_count: usize,
     active_mesh_material_pair_count: usize,
     resident_production_mesh_count: usize,
@@ -74,9 +74,9 @@ pub(crate) struct WallDensityPresentationEvidence {
     readiness_revision: u64,
     decision_revision: u64,
     presentation_revision: u64,
-    asset_set_generation: u64,
-    authority: crate::assets::wall_asset_set::WallAssetAuthority,
-    manifest_sha256: String,
+    pub(super) asset_set_generation: u64,
+    pub(super) authority: crate::assets::wall_asset_set::WallAssetAuthority,
+    pub(super) manifest_sha256: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

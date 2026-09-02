@@ -7,7 +7,7 @@
 | 計画ID | `production-wall-art-plan-2026-08-31` |
 | ステータス | `In Progress (M5)` |
 | 作成日 | `2026-08-31` |
-| 最終更新日 | `2026-09-02` |
+| 最終更新日 | `2026-09-03` |
 | 作成者 | `Codex` |
 | 親計画 | [`asset-milestones-2026-03-17.md`](asset-milestones-2026-03-17.md) の `MS-Asset-Pipeline` / `MS-Asset-Build-A` |
 | 関連提案 | [`billboard-camera-angle-proposal-2026-03-16.md`](../../proposals/3d-rtt/archived/billboard-camera-angle-proposal-2026-03-16.md)（4形状案の履歴。本計画では孤立／端の意味を満たす6形状へ補完する） |
@@ -987,6 +987,23 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   Door connector mirror初期化22行の差がある。この既知差を無視してbyte-identicalと主張しない。baseline比較は
   `35f1f6e3`へこのfixture-only修正だけを載せたclean派生subjectを作り、finalとdensity profile / fixture / contractを
   byte-identicalにした上で再採取する。元のM0 artifactは履歴基準として保持するが、この比較の直接baselineには流用しない。
+- M0 `35f1f6e3`へ上記22行だけを適用したclean派生subject `0241d3b9`を作成し、density helper / fixture / contractを
+  final側とbyte-identicalにした。final generation 2と同じasset view `ebeb81af…`を配置したactual-window job
+  `wall-density-20260902T190707Z-b8e81f70`は12 / 12 run valid、当時の凍結verifierによる独立verifyもpassした。
+  M0 p95 / p99中央値はcompleted N `11.895858 / 16.078749 ms`、4N `16.063391 / 17.250262 ms`、
+  provisional N `11.051377 / 16.423798 ms`、4N `16.173516 / 17.376066 ms`である。
+- 通常の`perf.py compare`は2 clean worktreeの正しい`BEVY_ASSET_ROOT`絶対path差を拒否したため、既存sessionや
+  requested environmentを改変せず、offline `wall-cross-subject-performance-v1`を追加した。両job自身の凍結verifier、
+  byte-identicalな3 density file、同一asset view / actual adapter / matrixと、asset root以外の環境完全一致を先に検証する。
+  `wall-m5-cross-subject-0241d3b9-vs-991392b8`は4 CSVの独立verifyがpassし、completed N / 4Nのp95
+  `-22.313% / +0.852%`、p99 `-37.737% / +0.816%`、provisionalのp95
+  `-13.160% / +0.924%`、p99 `-37.360% / +0.681%`で全8値が`+5%`以内だった。
+- 続くfinal RenderDoc準備で、M0 helperがfallback Cuboidの単一index数だけをdraw identityに使い、candidate authorityも
+  有効化しない経路不成立を確認した。productionをfallbackとして採取せず、runtime checkpoint schema 2へactive mesh
+  index数集合、index数別instance合計、active mesh数、presentation / candidate identityを追加した。extractorは同じ
+  color+depth passの分布と全owner総数をexact検査し、launcherは`--candidate`とbinary / environment二重鍵を結ぶ。
+  このprofiling-only source変更でもsource fingerprintは更新されるため、`991392b8`の9 case / 24 run / cross比較は
+  履歴passとして保持し、新clean subjectからM5の3 legを再採取してから最終checkを閉じる。
 
 - 変更内容:
   - M4で完成・commit済みのwall-art gallery / fail-closed profileを変更せず、final commitのclean validation worktreeで実行する。code / launcher / predicate修正が必要になった時点でartifactを無効化してM4へ戻り、final commit承認からやり直す。
@@ -1004,7 +1021,7 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   - `crates/bevy_app/src/plugins/startup/perf_scenario/`
   - `docs/rendering-performance.md`
 - 完了条件:
-  - [x] 9 caseのclient-window PNGとsidecarがfresh source / asset fingerprintに対してfail-closedでpassする。
+  - [ ] 9 caseのclient-window PNGとsidecarがfresh source / asset fingerprintに対してfail-closedでpassする。
   - [ ] 全16 mask、Door接続、完成／仮設、追加／撤去、completion、depth、loadが画像とstateの両方でpassする。
   - [ ] 全family / rotationのWall–Wall portが9.6 wuの同一profileで連続し、各armの局所横断で連続壁体が9.6 wu未満へ細らず、装飾が12.8 wu envelopeとcell AABBを越えない。最遠zoom-outではHighの内部色1 px以上、Medium / Lowのfinal composite silhouette連続を満たす。
   - [x] registered historical P02 artifactのimmutable locator / hashがoffline再検証でpassし、current-sourceのwall depth、
@@ -1021,8 +1038,8 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   - 専用profileの `plan` が返すdirect `kitty` launcherだけを実行し、15〜30秒間隔でstatusをpollする。
   - `PYTHONDONTWRITEBYTECODE=1 python3 .codex/skills/hell-workers-run-native-acceptance/scripts/wall_art_acceptance.py plan --repo "$VALIDATION_WORKTREE" --adapter Intel --candidate --matrix`
   - `PYTHONDONTWRITEBYTECODE=1 python3 .codex/skills/hell-workers-run-native-acceptance/scripts/wall_production_performance_acceptance.py plan --repo "$VALIDATION_WORKTREE" --adapter Intel`
-  - `python3 scripts/perf.py compare --baseline <m0-session> --candidate <final-production-session> --metric p95 --max-regression-pct 5 --min-runs 3 --output <sealed-artifacts>/baseline-vs-production-p95.csv`
-  - `python3 scripts/perf.py compare --baseline <m0-session> --candidate <final-production-session> --metric p99 --max-regression-pct 5 --min-runs 3 --output <sealed-artifacts>/baseline-vs-production-p99.csv`
+  - `PYTHONDONTWRITEBYTECODE=1 python3 .codex/skills/hell-workers-run-native-acceptance/scripts/wall_cross_subject_performance_acceptance.py seal --baseline-job "$M0_JOB" --production-job "$FINAL_JOB" --output "$CROSS_SUBJECT_ROOT"`
+  - `PYTHONDONTWRITEBYTECODE=1 python3 .codex/skills/hell-workers-run-native-acceptance/scripts/wall_renderdoc_acceptance.py plan --repo "$VALIDATION_WORKTREE" --adapter Intel --candidate`
   - `python3 scripts/perf.py compare --baseline <final-force-fallback-session> --candidate <final-production-session> --metric p95 --max-regression-pct 5 --min-runs 3 --output <sealed-artifacts>/force-fallback-vs-production-p95.csv`
   - `python3 scripts/perf.py compare --baseline <final-force-fallback-session> --candidate <final-production-session> --metric p99 --max-regression-pct 5 --min-runs 3 --output <sealed-artifacts>/force-fallback-vs-production-p99.csv`
   - `python3 scripts/dev.py verify`

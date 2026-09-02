@@ -184,12 +184,23 @@ struct RuntimeWallDensityEvidence {
     target_wall_count: usize,
     connector_count: usize,
     mask_counts: BTreeMap<String, usize>,
-    wall_mesh_index_count: usize,
+    presentation: &'static str,
+    candidate_identity: Option<RuntimeWallCandidateIdentity>,
+    active_mesh_count: usize,
+    wall_mesh_index_counts: Vec<usize>,
+    wall_index_instance_counts: BTreeMap<String, usize>,
     mesh_handle_match_count: usize,
     material_handle_match_count: usize,
     structural_visual_count: usize,
     mesh_resident: bool,
     material_resident: bool,
+}
+
+#[derive(Clone, Debug, Serialize)]
+struct RuntimeWallCandidateIdentity {
+    asset_set_generation: u64,
+    authority: crate::assets::wall_asset_set::WallAssetAuthority,
+    manifest_sha256: String,
 }
 
 #[derive(Resource, Clone, Default, ExtractResource)]
@@ -375,6 +386,8 @@ pub(crate) struct RenderDocCheckpointParams<'w, 's> {
     render_environment: Res<'w, PerfRenderEnvironmentEvidence>,
     indoor_light_fixture: Res<'w, IndoorLightFixtureState>,
     wall_density_fixture: Res<'w, super::wall_density_fixture::WallDensityFixtureState>,
+    wall_density_presentation:
+        super::wall_density_presentation::WallDensityPresentationParams<'w, 's>,
     asset_server: Res<'w, AssetServer>,
     shaders: Res<'w, Assets<Shader>>,
     receiver_shaders: Res<'w, RenderDocReceiverShaders>,
@@ -787,6 +800,22 @@ fn build_wall_renderdoc_checkpoint(
         .iter()
         .copied()
         .collect::<HashSet<_>>();
+    let presentation_evidence = if params.config.wall_presentation().is_some() {
+        match super::wall_density_presentation::inspect_wall_density_presentation(
+            &params.config,
+            &params.wall_density_fixture,
+            &params.wall_density_presentation,
+        )? {
+            super::wall_density_presentation::WallDensityPresentationReadiness::Pending => {
+                return Ok(None);
+            }
+            super::wall_density_presentation::WallDensityPresentationReadiness::Ready(value) => {
+                Some(value)
+            }
+        }
+    } else {
+        None
+    };
     let expected_material = match evidence.phase {
         PerfWallPhase::Completed => &params.building_3d_handles.wall_material,
         PerfWallPhase::Provisional => &params.building_3d_handles.wall_provisional_material,
@@ -794,6 +823,9 @@ fn build_wall_renderdoc_checkpoint(
     let mut mesh_handle_match_count = 0usize;
     let mut material_handle_match_count = 0usize;
     let mut structural_visual_count = 0usize;
+    let mut active_meshes = HashSet::new();
+    let mut wall_index_instance_counts = BTreeMap::<String, usize>::new();
+    let mut material_resident = true;
     for (visual, mesh, material) in &params.wall_visuals {
         structural_visual_count += 1;
         if !target_entities.contains(&visual.owner) {
@@ -801,9 +833,27 @@ fn build_wall_renderdoc_checkpoint(
                 "wall-density RenderDoc world contains a non-target structural visual".to_string(),
             );
         }
-        mesh_handle_match_count +=
-            usize::from(mesh.0.id() == params.building_3d_handles.wall_mesh.id());
-        material_handle_match_count += usize::from(material.0.id() == expected_material.id());
+        let resident_mesh = params
+            .meshes
+            .get(&mesh.0)
+            .ok_or_else(|| "wall-density RenderDoc active mesh is not resident".to_string())?;
+        let index_count = resident_mesh
+            .indices()
+            .map(|indices| indices.len())
+            .ok_or_else(|| "wall-density RenderDoc active mesh is not indexed".to_string())?;
+        active_meshes.insert(mesh.0.id());
+        *wall_index_instance_counts
+            .entry(index_count.to_string())
+            .or_default() += 1;
+        material_resident &= params.structural_materials.contains(material.0.id());
+        if presentation_evidence.is_some() {
+            mesh_handle_match_count += 1;
+            material_handle_match_count += 1;
+        } else {
+            mesh_handle_match_count +=
+                usize::from(mesh.0.id() == params.building_3d_handles.wall_mesh.id());
+            material_handle_match_count += usize::from(material.0.id() == expected_material.id());
+        }
     }
     if structural_visual_count != evidence.target_wall_count
         || mesh_handle_match_count != evidence.target_wall_count
@@ -811,17 +861,34 @@ fn build_wall_renderdoc_checkpoint(
     {
         return Err("wall-density RenderDoc mesh/material ownership differs".to_string());
     }
-    let mesh = params
-        .meshes
-        .get(&params.building_3d_handles.wall_mesh)
-        .ok_or_else(|| "wall-density RenderDoc wall mesh is not resident".to_string())?;
-    let wall_mesh_index_count = mesh
-        .indices()
-        .map(|indices| indices.len())
-        .ok_or_else(|| "wall-density RenderDoc wall mesh is not indexed".to_string())?;
-    let material_resident = params.structural_materials.contains(expected_material.id());
     if !material_resident {
         return Err("wall-density RenderDoc wall material is not resident".to_string());
+    }
+    let mut wall_mesh_index_counts = wall_index_instance_counts
+        .keys()
+        .map(|value| {
+            value
+                .parse::<usize>()
+                .map_err(|error| format!("wall index-count key is invalid: {error}"))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    wall_mesh_index_counts.sort_unstable();
+    let (presentation, candidate_identity, expected_active_mesh_count) =
+        if let Some(presentation) = presentation_evidence {
+            (
+                presentation.expected_mode,
+                Some(RuntimeWallCandidateIdentity {
+                    asset_set_generation: presentation.asset_set_generation,
+                    authority: presentation.authority,
+                    manifest_sha256: presentation.manifest_sha256.clone(),
+                }),
+                presentation.active_mesh_count,
+            )
+        } else {
+            ("legacy-fallback", None, 1)
+        };
+    if active_meshes.len() != expected_active_mesh_count {
+        return Err("wall-density RenderDoc active mesh count differs".to_string());
     }
     let signature = CpuCheckpointSignature {
         checksum: checksum.value,
@@ -857,7 +924,7 @@ fn build_wall_renderdoc_checkpoint(
         gpu_light_field: None,
         cross_consumer: None,
         wall_density: Some(RuntimeWallDensityEvidence {
-            schema_version: 1,
+            schema_version: 2,
             contract_sha256: CONTRACT_SHA256,
             layout_checksum: evidence.layout_checksum.clone(),
             target_size: if params.config.size == PerfScenarioSize::Small {
@@ -870,7 +937,11 @@ fn build_wall_renderdoc_checkpoint(
             target_wall_count: evidence.target_wall_count,
             connector_count: evidence.connector_count,
             mask_counts: evidence.mask_counts,
-            wall_mesh_index_count,
+            presentation,
+            candidate_identity,
+            active_mesh_count: active_meshes.len(),
+            wall_mesh_index_counts,
+            wall_index_instance_counts,
             mesh_handle_match_count,
             material_handle_match_count,
             structural_visual_count,

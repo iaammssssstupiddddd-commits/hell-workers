@@ -15,6 +15,8 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import native_acceptance as native  # noqa: E402
+import wall_art_acceptance as art  # noqa: E402
+import wall_density_acceptance as density  # noqa: E402
 
 
 SCHEMA_VERSION = 1
@@ -130,8 +132,9 @@ def capture_command(
     template: Path,
     size: str,
     phase: str,
+    candidate: bool,
 ) -> list[str]:
-    return [
+    command = [
         tools["renderdoccmd"],
         "capture",
         "--capture-file",
@@ -179,6 +182,9 @@ def capture_command(
         "high",
         "--perf-renderdoc-capture",
     ]
+    if candidate:
+        command.extend(["--perf-wall-presentation", "production"])
+    return command
 
 
 def replay_command(tools: dict[str, Any], capture: Path) -> list[str]:
@@ -186,9 +192,21 @@ def replay_command(tools: dict[str, Any], capture: Path) -> list[str]:
 
 
 def capture_environment(
-    *, repo: Path, case_root: Path, tools: dict[str, Any], template: Path
+    *,
+    repo: Path,
+    case_root: Path,
+    tools: dict[str, Any],
+    template: Path,
+    candidate: dict[str, Any] | None,
 ) -> dict[str, str]:
     environment = os.environ.copy()
+    for key in (
+        "HW_WALL_CANDIDATE",
+        "HW_WALL_CANDIDATE_GENERATION",
+        "HW_WALL_CANDIDATE_MANIFEST_SHA256",
+        "HW_WALL_PERF_PRESENTATION",
+    ):
+        environment.pop(key, None)
     environment.update(
         {
             "BEVY_ASSET_ROOT": str(repo),
@@ -204,6 +222,17 @@ def capture_environment(
             "TEMP": str(case_root),
         }
     )
+    if candidate is not None:
+        environment.update(
+            {
+                "HW_WALL_CANDIDATE": "1",
+                "HW_WALL_CANDIDATE_GENERATION": str(
+                    candidate["asset_set_generation"]
+                ),
+                "HW_WALL_CANDIDATE_MANIFEST_SHA256": candidate["manifest_sha256"],
+                "HW_WALL_PERF_PRESENTATION": "production",
+            }
+        )
     return environment
 
 
@@ -240,6 +269,7 @@ def validate_extraction(
     size: str,
     phase: str,
     wall_module: Any,
+    candidate: dict[str, Any] | None,
 ) -> dict[str, Any]:
     extraction = native.read_json(extraction_path)
     checkpoint = wall_module._validate_checkpoint(native.read_json(checkpoint_path))
@@ -284,21 +314,45 @@ def validate_extraction(
         "draw_group_count",
         "rendered_instance_count",
         "checkpointed_owner_count",
-        "wall_mesh_index_count",
         "direct_scene_target_write",
         "draws",
     }
+    wall = checkpoint["wall_density"]
+    if wall["schema_version"] == 1:
+        required_group_keys.add("wall_mesh_index_count")
+    else:
+        required_group_keys.update(
+            {"wall_mesh_index_counts", "index_instance_counts"}
+        )
     native.require(set(group) == required_group_keys, "wall draw-group keys differ")
     native.require(
         isinstance(group["draws"], list)
         and group["draws"]
         and group["draw_group_count"] == len(group["draws"])
         and group["checkpointed_owner_count"] == TARGET_COUNTS[size]
-        and group["wall_mesh_index_count"]
-        == checkpoint["wall_density"]["wall_mesh_index_count"]
         and 0 < group["rendered_instance_count"] <= TARGET_COUNTS[size],
         "wall draw-group counts differ",
     )
+    if wall["schema_version"] == 1:
+        native.require(
+            candidate is None
+            and group["wall_mesh_index_count"] == wall["wall_mesh_index_count"],
+            "legacy wall draw-group identity differs",
+        )
+    else:
+        native.require(
+            group["wall_mesh_index_counts"] == wall["wall_mesh_index_counts"]
+            and group["index_instance_counts"] == wall["wall_index_instance_counts"]
+            and group["rendered_instance_count"] == TARGET_COUNTS[size],
+            "wall mesh-set draw-group identity differs",
+        )
+        if candidate is not None:
+            native.require(
+                wall["presentation"] == "production"
+                and wall["candidate_identity"] == candidate
+                and wall["active_mesh_count"] == 6,
+                "wall production RenderDoc identity differs",
+            )
     draw_keys = {
         "pass_id",
         "event_id",
@@ -318,7 +372,12 @@ def validate_extraction(
             and set(draw) == draw_keys
             and draw["pass_id"] == group["pass_id"]
             and draw["indexed"] is True
-            and draw["num_indices"] == group["wall_mesh_index_count"]
+            and draw["num_indices"]
+            in (
+                [group["wall_mesh_index_count"]]
+                if wall["schema_version"] == 1
+                else group["wall_mesh_index_counts"]
+            )
             and isinstance(draw["num_instances"], int)
             and not isinstance(draw["num_instances"], bool)
             and draw["num_instances"] > 0
@@ -367,6 +426,7 @@ def verify_case(
     phase: str,
     renderdoc_module: Any,
     wall_module: Any,
+    candidate: dict[str, Any] | None,
 ) -> dict[str, Any]:
     capture = locate_capture(case_root / "raw")
     checkpoint = case_root / "runtime" / "renderdoc-checkpoint.json"
@@ -379,6 +439,7 @@ def verify_case(
         size=size,
         phase=phase,
         wall_module=wall_module,
+        candidate=candidate,
     )
     validate_extraction(
         extraction_path=replay,
@@ -387,6 +448,7 @@ def verify_case(
         size=size,
         phase=phase,
         wall_module=wall_module,
+        candidate=candidate,
     )
     native.require(
         normalized_extraction_digest(renderdoc_module, extraction)
@@ -399,6 +461,7 @@ def verify_case(
         "size": size,
         "phase": phase,
         "target_wall_count": TARGET_COUNTS[size],
+        "presentation": "production" if candidate is not None else "legacy-fallback",
         "draw_group_count": group["draw_group_count"],
         "rendered_instance_count": group["rendered_instance_count"],
         "capture": {"path": str(capture), "bytes": capture.stat().st_size, "sha256": sha256(capture)},
@@ -454,6 +517,17 @@ def verify_root(
         "wall RenderDoc manifest identity differs",
     )
     repo = native.validate_repo(manifest.get("repo", ""))
+    candidate = manifest.get("candidate_identity")
+    if candidate is not None:
+        native.require(
+            isinstance(candidate, dict) and candidate == art.candidate_identity(repo),
+            "wall RenderDoc candidate identity changed",
+        )
+        native.require(
+            manifest.get("asset_view_fingerprint")
+            == density.asset_view_fingerprint(repo),
+            "wall RenderDoc asset view changed",
+        )
     for observed, expected, label in (
         (manifest.get("subject_commit"), subject_commit, "subject commit"),
         (manifest.get("source_fingerprint"), source_fingerprint, "source fingerprint"),
@@ -498,6 +572,7 @@ def verify_root(
                     phase=phase,
                     renderdoc_module=renderdoc_module,
                     wall_module=wall_module,
+                    candidate=candidate,
                 )
             )
     native.require(cases == manifest["cases"], "wall RenderDoc case evidence differs")
@@ -521,9 +596,14 @@ def plan(args: argparse.Namespace) -> int:
     subject = native.git_subject(repo)
     source = native.source_fingerprint(repo)
     harness = native.native_harness_fingerprint(repo)
+    candidate = None
+    assets = None
     try:
         assert_clean(repo, subject)
         tools = resolve_tools(args, repo)
+        if args.candidate:
+            candidate = art.candidate_identity(repo)
+            assets = density.asset_view_fingerprint(repo)
     except Exception as error:
         failures.append(str(error))
         tools = None
@@ -562,6 +642,17 @@ def plan(args: argparse.Namespace) -> int:
             "--renderdoc-library",
             tools["renderdoc_library"],
         ]
+        if candidate is not None:
+            command.extend(
+                [
+                    "--candidate-generation",
+                    str(candidate["asset_set_generation"]),
+                    "--candidate-manifest-sha256",
+                    candidate["manifest_sha256"],
+                    "--asset-view-fingerprint",
+                    assets,
+                ]
+            )
     native.print_json(
         {
             "schema_version": SCHEMA_VERSION,
@@ -572,6 +663,8 @@ def plan(args: argparse.Namespace) -> int:
             "source_fingerprint": source,
             "harness_fingerprint": harness,
             "adapter": args.adapter,
+            "candidate_identity": candidate,
+            "asset_view_fingerprint": assets,
             "failures": failures,
             "resources": resources,
             "tools": tools,
@@ -599,6 +692,28 @@ def run(args: argparse.Namespace) -> int:
     native.require(native.native_harness_fingerprint(repo) == args.harness_fingerprint, "harness changed")
     assert_clean(repo, args.subject_commit)
     native.require(not missing_runtime_assets(repo), "runtime assets are missing")
+    candidate_arguments = (
+        args.candidate_generation,
+        args.candidate_manifest_sha256,
+        args.asset_view_fingerprint,
+    )
+    native.require(
+        all(value is None for value in candidate_arguments)
+        or all(value is not None for value in candidate_arguments),
+        "wall RenderDoc candidate arguments must be provided together",
+    )
+    candidate = None
+    if args.candidate_generation is not None:
+        candidate = art.candidate_identity(repo)
+        native.require(
+            int(args.candidate_generation) == candidate["asset_set_generation"]
+            and args.candidate_manifest_sha256 == candidate["manifest_sha256"],
+            "planned wall RenderDoc candidate changed",
+        )
+        native.require(
+            args.asset_view_fingerprint == density.asset_view_fingerprint(repo),
+            "planned wall RenderDoc asset view changed",
+        )
     tools = resolve_tools(args, repo)
     native.require(args.adapter == "Intel", "wall RenderDoc profile currently seals the Intel adapter")
     root = Path(args.job_root).resolve()
@@ -611,6 +726,8 @@ def run(args: argparse.Namespace) -> int:
         "subject_commit": args.subject_commit,
         "source_fingerprint": args.source_fingerprint,
         "harness_fingerprint": args.harness_fingerprint,
+        "candidate_identity": candidate,
+        "asset_view_fingerprint": args.asset_view_fingerprint,
         "started_at": native.utc_now(),
         "current_stage": None,
         "child_pid": None,
@@ -653,11 +770,26 @@ def run(args: argparse.Namespace) -> int:
                 raw.mkdir(parents=True)
                 runtime.mkdir()
                 template = raw / "wall-density"
-                case_environment = capture_environment(repo=repo, case_root=case_root, tools=tools, template=template)
+                case_environment = capture_environment(
+                    repo=repo,
+                    case_root=case_root,
+                    tools=tools,
+                    template=template,
+                    candidate=candidate,
+                )
                 case_environment["WGPU_ADAPTER_NAME"] = args.adapter
                 native.run_command(
                     f"capture-{phase}-{size}",
-                    capture_command(repo=repo, binary=binary, tools=tools, runtime=runtime, template=template, size=size, phase=phase),
+                    capture_command(
+                        repo=repo,
+                        binary=binary,
+                        tools=tools,
+                        runtime=runtime,
+                        template=template,
+                        size=size,
+                        phase=phase,
+                        candidate=candidate is not None,
+                    ),
                     repo=repo,
                     env=case_environment,
                     log_path=case_root / "capture.log",
@@ -703,7 +835,15 @@ def run(args: argparse.Namespace) -> int:
                     + (problems[0] if problems else ""),
                 )
                 cases.append(
-                    verify_case(repo=repo, case_root=case_root, size=size, phase=phase, renderdoc_module=renderdoc_module, wall_module=wall_module)
+                    verify_case(
+                        repo=repo,
+                        case_root=case_root,
+                        size=size,
+                        phase=phase,
+                        renderdoc_module=renderdoc_module,
+                        wall_module=wall_module,
+                        candidate=candidate,
+                    )
                 )
         predicates = validate_predicates(cases)
         native.require(native.source_fingerprint(repo) == args.source_fingerprint, "source changed after captures")
@@ -716,6 +856,8 @@ def run(args: argparse.Namespace) -> int:
             "source_fingerprint": args.source_fingerprint,
             "harness_fingerprint": args.harness_fingerprint,
             "adapter": args.adapter,
+            "candidate_identity": candidate,
+            "asset_view_fingerprint": args.asset_view_fingerprint,
             "binary_sha256": capsule_manifest.binary_sha256,
             "tools": tools,
             "cases": cases,
@@ -751,8 +893,13 @@ def self_test() -> int:
         template=Path("/job/raw/wall-density"),
         size="small",
         phase="completed",
+        candidate=True,
     )
-    native.require(command.count("--perf-renderdoc-capture") == 1, "capture flag differs")
+    native.require(
+        command.count("--perf-renderdoc-capture") == 1
+        and command[command.index("--perf-wall-presentation") + 1] == "production",
+        "capture flags differ",
+    )
     native.print_json({"schema_version": 1, "status": "pass", "profile": PROFILE})
     return 0
 
@@ -764,6 +911,7 @@ def parser() -> argparse.ArgumentParser:
     plan_parser.add_argument("--repo", required=True)
     plan_parser.add_argument("--job-root")
     plan_parser.add_argument("--adapter", default="Intel")
+    plan_parser.add_argument("--candidate", action="store_true")
     for name in ("renderdoccmd", "qrenderdoc", "renderdoc-library"):
         plan_parser.add_argument(f"--{name}")
     run_parser = commands.add_parser("run")
@@ -773,6 +921,9 @@ def parser() -> argparse.ArgumentParser:
     run_parser.add_argument("--source-fingerprint", required=True)
     run_parser.add_argument("--harness-fingerprint", required=True)
     run_parser.add_argument("--adapter", default="Intel")
+    run_parser.add_argument("--candidate-generation")
+    run_parser.add_argument("--candidate-manifest-sha256")
+    run_parser.add_argument("--asset-view-fingerprint")
     for name in ("renderdoccmd", "qrenderdoc", "renderdoc-library"):
         run_parser.add_argument(f"--{name}", required=True)
     status_parser = commands.add_parser("status")
@@ -794,6 +945,21 @@ def main() -> int:
             (args.harness_fingerprint, "harness fingerprint", 64),
         ):
             native.require(re.fullmatch(f"[0-9a-f]{{{length}}}", value) is not None, f"invalid {label}")
+        if args.candidate_generation is not None:
+            native.require(
+                args.candidate_generation.isdigit()
+                and int(args.candidate_generation) > 0,
+                "invalid candidate generation",
+            )
+            for value, label in (
+                (args.candidate_manifest_sha256, "candidate manifest"),
+                (args.asset_view_fingerprint, "asset-view fingerprint"),
+            ):
+                native.require(
+                    isinstance(value, str)
+                    and re.fullmatch("[0-9a-f]{64}", value) is not None,
+                    f"invalid {label}",
+                )
         return run(args)
     if args.command == "status":
         job = native.read_json(Path(args.job_root).resolve() / "job.json")

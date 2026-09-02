@@ -89,6 +89,25 @@ p95回帰が`+0.451% / +0.438%`、p99が`+0.910% / +0.540%`、provisionalのp95�
 24 runと4比較の独立verify対象は
 `target/native-acceptance/wall-production-performance-20260902T173804Z-3f6bc903`である。
 
+M0対productionのcross-subject比較は、M0 `35f1f6e3`へDoor connector fixture修正だけを載せた
+派生subject `0241d3b9`を使う。density helper / Rust fixture / JSON contractのSHA-256はそれぞれ
+`104584a6…` / `26200bab…` / `7b32f4e0…`でproduction側とbyte-identical、asset viewも
+`ebeb81af…`で一致する。`wall-cross-subject-performance-v1`は両job自身の凍結verifierを再実行し、
+絶対pathである`BEVY_ASSET_ROOT`だけを正規化して、他のrequested environment、actual adapter、matrixを
+厳密比較する。`0241d3b9`対`991392b8`の履歴比較ではcompleted N / 4Nのp95が
+`-22.313% / +0.852%`、p99が`-37.737% / +0.816%`、provisionalのp95が
+`-13.160% / +0.924%`、p99が`-37.360% / +0.681%`で全件passした。sealed capsuleは
+`wall-m5-cross-subject-0241d3b9-vs-991392b8`である。後述のproduction RenderDoc checkpoint v2が
+source fingerprintを更新したため、この値は経路成立を示す履歴証拠として保持し、最終M5判定は新subjectの
+production sessionから再比較する。
+
+production WallのRenderDoc checkpointはschema 2を使い、単一fallback Cuboidのindex数ではなく、
+active mesh index数集合とindex数ごとの期待instance合計、active mesh数、presentation mode、candidate identityを
+記録する。extractorは同じcolor+depth passから集合に属するdrawだけを抽出し、index/instance分布とowner総数が
+checkpointへexact一致しないcaptureを拒否する。launcherの`--candidate`はcandidate generation / manifest / asset viewと
+`--perf-wall-presentation production` / `HW_WALL_PERF_PRESENTATION=production`を対にする。これにより6 familyのうち
+同じindex数を持つmeshを正しく集約しながら、fallbackや無関係drawをproduction draw-groupへ数えない。
+
 ### P06 shared Light Field runtime inventory
 
 P06はPoint／Spot Lightや追加shadow map／local-light passを生成せず、P01の単一Scene RtTとP02のTopDown presentationを維持する。CPU fieldは1つのlinear RGBA8 `Image`へrevision単位でuploadされ、Terrain 3 pipelineとstructural 1 pipelineはそれぞれtexture／samplerを1組だけbindする。Wall／Doorのper-instance sampling anchorは`MeshTag`にあり、material handle数はLamp数・Building数に比例しない。

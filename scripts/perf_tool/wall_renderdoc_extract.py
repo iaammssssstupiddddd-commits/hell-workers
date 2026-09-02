@@ -96,7 +96,7 @@ def _validate_checkpoint(value: Any) -> dict[str, Any]:
         raise RuntimeError("wall runtime checkpoint identity differs from schema v1")
 
     wall = value["wall_density"]
-    wall_keys = {
+    wall_v1_keys = {
         "schema_version",
         "contract_sha256",
         "layout_checksum",
@@ -113,8 +113,21 @@ def _validate_checkpoint(value: Any) -> dict[str, Any]:
         "mesh_resident",
         "material_resident",
     }
-    if not isinstance(wall, dict) or set(wall) != wall_keys:
-        raise RuntimeError("wall runtime evidence keys differ from schema v1")
+    wall_v2_keys = wall_v1_keys - {"wall_mesh_index_count"} | {
+        "presentation",
+        "candidate_identity",
+        "active_mesh_count",
+        "wall_mesh_index_counts",
+        "wall_index_instance_counts",
+    }
+    if not isinstance(wall, dict) or (
+        wall.get("schema_version") == 1
+        and set(wall) != wall_v1_keys
+        or wall.get("schema_version") == 2
+        and set(wall) != wall_v2_keys
+        or wall.get("schema_version") not in {1, 2}
+    ):
+        raise RuntimeError("wall runtime evidence keys differ from its schema")
     expected_by_size = {
         "small": ("N", 96, 192, 6),
         "medium": ("4N", 384, 768, 24),
@@ -126,14 +139,12 @@ def _validate_checkpoint(value: Any) -> dict[str, Any]:
     target_size, target_count, connector_count, mask_repetitions = expected
     expected_masks = {f"{mask:04b}": mask_repetitions for mask in range(16)}
     if (
-        wall["schema_version"] != 1
-        or wall["contract_sha256"] != CONTRACT_SHA256
+        wall["contract_sha256"] != CONTRACT_SHA256
         or not _is_sha256(wall["layout_checksum"])
         or wall["target_size"] != target_size
         or wall["target_wall_count"] != target_count
         or wall["connector_count"] != connector_count
         or wall["mask_counts"] != expected_masks
-        or not _is_uint(wall["wall_mesh_index_count"], positive=True)
         or wall["mesh_handle_match_count"] != target_count
         or wall["material_handle_match_count"] != target_count
         or wall["structural_visual_count"] != target_count
@@ -141,6 +152,39 @@ def _validate_checkpoint(value: Any) -> dict[str, Any]:
         or wall["material_resident"] is not True
     ):
         raise RuntimeError("wall runtime evidence differs from its frozen fixture")
+    if wall["schema_version"] == 1:
+        if not _is_uint(wall["wall_mesh_index_count"], positive=True):
+            raise RuntimeError("wall runtime mesh index count is invalid")
+    else:
+        index_counts = wall["wall_mesh_index_counts"]
+        instance_counts = wall["wall_index_instance_counts"]
+        candidate = wall["candidate_identity"]
+        if (
+            wall["presentation"] not in {"legacy-fallback", "fallback-control", "production"}
+            or not isinstance(index_counts, list)
+            or not index_counts
+            or index_counts != sorted(set(index_counts))
+            or not all(_is_uint(count, positive=True) for count in index_counts)
+            or not isinstance(instance_counts, dict)
+            or set(instance_counts) != {str(count) for count in index_counts}
+            or not all(_is_uint(count, positive=True) for count in instance_counts.values())
+            or sum(instance_counts.values()) != target_count
+            or not _is_uint(wall["active_mesh_count"], positive=True)
+        ):
+            raise RuntimeError("wall runtime mesh-set evidence is invalid")
+        if wall["presentation"] == "production":
+            if (
+                wall["active_mesh_count"] != 6
+                or not isinstance(candidate, dict)
+                or set(candidate)
+                != {"asset_set_generation", "authority", "manifest_sha256"}
+                or not _is_uint(candidate["asset_set_generation"], positive=True)
+                or candidate["authority"] != "isolated_candidate"
+                or not _is_sha256(candidate["manifest_sha256"])
+            ):
+                raise RuntimeError("wall production candidate evidence is invalid")
+        elif wall["active_mesh_count"] != 1:
+            raise RuntimeError("wall fallback active mesh evidence is invalid")
     if value["stage_id"] != f"wall-density-{wall['perf_size']}-{phase}":
         raise RuntimeError("wall runtime stage differs from its fixture evidence")
 
@@ -297,14 +341,16 @@ def _select_wall_draw_group(
     draws: list[dict[str, Any]],
     *,
     scene_target_resource_id: str,
-    wall_mesh_index_count: int,
+    wall_mesh_index_counts: list[int],
     target_wall_count: int,
+    expected_index_instance_counts: dict[str, int] | None = None,
 ) -> dict[str, Any]:
+    index_count_set = set(wall_mesh_index_counts)
     candidates_by_pass: dict[str, list[dict[str, Any]]] = {}
     for draw in draws:
         if (
             draw["indexed"] is True
-            and draw["num_indices"] == wall_mesh_index_count
+            and draw["num_indices"] in index_count_set
             and draw["num_instances"] > 0
             and bool(draw["color_resource_ids"])
             and draw["depth_resource_id"] is not None
@@ -325,7 +371,7 @@ def _select_wall_draw_group(
                 "fragment_shader_present": draw["fragment_shader_present"],
             }
             for draw in draws
-            if draw["num_indices"] == wall_mesh_index_count
+            if draw["num_indices"] in index_count_set
             or scene_target_resource_id in draw["color_resource_ids"]
         ][:64]
         raise RuntimeError(
@@ -335,22 +381,41 @@ def _select_wall_draw_group(
         )
     pass_id, candidates = next(iter(candidates_by_pass.items()))
     rendered_instance_count = sum(draw["num_instances"] for draw in candidates)
-    if rendered_instance_count > target_wall_count:
+    if expected_index_instance_counts is None and rendered_instance_count > target_wall_count:
         raise RuntimeError(
             "wall draw group renders more instances than the checkpointed wall owners"
         )
-    return {
+    actual_index_instance_counts: dict[str, int] = {}
+    for draw in candidates:
+        key = str(draw["num_indices"])
+        actual_index_instance_counts[key] = (
+            actual_index_instance_counts.get(key, 0) + draw["num_instances"]
+        )
+    if (
+        expected_index_instance_counts is not None
+        and actual_index_instance_counts != expected_index_instance_counts
+    ):
+        raise RuntimeError(
+            "wall draw-group index/instance distribution differs from the checkpoint"
+        )
+    result = {
         "pass_id": pass_id,
         "draw_group_count": len(candidates),
         "rendered_instance_count": rendered_instance_count,
         "checkpointed_owner_count": target_wall_count,
-        "wall_mesh_index_count": wall_mesh_index_count,
+        "wall_mesh_index_counts": wall_mesh_index_counts,
+        "index_instance_counts": actual_index_instance_counts,
         "direct_scene_target_write": all(
             scene_target_resource_id in draw["color_resource_ids"]
             for draw in candidates
         ),
         "draws": candidates,
     }
+    if len(wall_mesh_index_counts) == 1 and expected_index_instance_counts is None:
+        result["wall_mesh_index_count"] = wall_mesh_index_counts[0]
+        del result["wall_mesh_index_counts"]
+        del result["index_instance_counts"]
+    return result
 
 
 def _extract(rd: Any, controller: Any, checkpoint: dict[str, Any]) -> dict[str, Any]:
@@ -408,12 +473,21 @@ def _extract(rd: Any, controller: Any, checkpoint: dict[str, Any]) -> dict[str, 
         int(action.eventId) for action in flattened if int(action.eventId) > 0
     }
     wall = checkpoint["wall_density"]
-    wall_draw_group = _select_wall_draw_group(
-        draws,
-        scene_target_resource_id=scene_target_resource_id,
-        wall_mesh_index_count=wall["wall_mesh_index_count"],
-        target_wall_count=wall["target_wall_count"],
-    )
+    if wall["schema_version"] == 1:
+        wall_draw_group = _select_wall_draw_group(
+            draws,
+            scene_target_resource_id=scene_target_resource_id,
+            wall_mesh_index_counts=[wall["wall_mesh_index_count"]],
+            target_wall_count=wall["target_wall_count"],
+        )
+    else:
+        wall_draw_group = _select_wall_draw_group(
+            draws,
+            scene_target_resource_id=scene_target_resource_id,
+            wall_mesh_index_counts=wall["wall_mesh_index_counts"],
+            target_wall_count=wall["target_wall_count"],
+            expected_index_instance_counts=wall["wall_index_instance_counts"],
+        )
     return {
         "schema_version": SCHEMA_VERSION,
         "contract_id": CONTRACT_ID,
@@ -545,7 +619,7 @@ def self_test() -> int:
     selected = _select_wall_draw_group(
         draws,
         scene_target_resource_id="ResourceId::7",
-        wall_mesh_index_count=36,
+        wall_mesh_index_counts=[36],
         target_wall_count=96,
     )
     if selected["pass_id"] != "pass-0001" or selected["draw_group_count"] != 1:
@@ -560,11 +634,60 @@ def self_test() -> int:
     selected = _select_wall_draw_group(
         indirect_scene_draws,
         scene_target_resource_id="ResourceId::7",
-        wall_mesh_index_count=36,
+        wall_mesh_index_counts=[36],
         target_wall_count=96,
     )
     if selected["direct_scene_target_write"] is not False:
         raise RuntimeError("wall intermediate-color main-pass selection regressed")
+    production_wall = {
+        key: value for key, value in wall.items() if key != "wall_mesh_index_count"
+    }
+    production_wall.update(
+        {
+            "schema_version": 2,
+            "presentation": "production",
+            "candidate_identity": {
+                "asset_set_generation": 2,
+                "authority": "isolated_candidate",
+                "manifest_sha256": "c" * 64,
+            },
+            "active_mesh_count": 6,
+            "wall_mesh_index_counts": [648, 720],
+            "wall_index_instance_counts": {"648": 30, "720": 66},
+        }
+    )
+    production_checkpoint = {**checkpoint, "wall_density": production_wall}
+    if _validate_checkpoint(production_checkpoint) is not production_checkpoint:
+        raise RuntimeError("wall production checkpoint schema validation regressed")
+    production_draws = [
+        {**draws[0], "num_indices": 648, "num_instances": 30},
+        {**draws[0], "event_id": 11, "num_indices": 720, "num_instances": 66},
+    ]
+    selected = _select_wall_draw_group(
+        production_draws,
+        scene_target_resource_id="ResourceId::7",
+        wall_mesh_index_counts=[648, 720],
+        target_wall_count=96,
+        expected_index_instance_counts={"648": 30, "720": 66},
+    )
+    if (
+        selected["draw_group_count"] != 2
+        or selected["rendered_instance_count"] != 96
+        or selected["index_instance_counts"] != {"648": 30, "720": 66}
+    ):
+        raise RuntimeError("wall production draw selection regressed")
+    try:
+        _select_wall_draw_group(
+            production_draws,
+            scene_target_resource_id="ResourceId::7",
+            wall_mesh_index_counts=[648, 720],
+            target_wall_count=96,
+            expected_index_instance_counts={"648": 31, "720": 65},
+        )
+    except RuntimeError:
+        pass
+    else:
+        raise RuntimeError("wall production draw selection accepted wrong instances")
 
     class ActionFlags(IntFlag):
         BeginPass = 1

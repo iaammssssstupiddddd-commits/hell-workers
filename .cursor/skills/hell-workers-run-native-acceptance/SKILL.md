@@ -236,6 +236,15 @@ RDC, and two normalized replays. It accepts completed walls only when
 the 12-run wall-density frame-time matrix. Revalidate a completed bundle with
 `verify --job-root <job-root>`.
 
+For the M5 final-production draw gate, use the same profile with `--candidate`
+from the clean candidate worktree. The planned launcher then pairs candidate
+generation and manifest authority with `--perf-wall-presentation production` /
+`HW_WALL_PERF_PRESENTATION=production`. The runtime checkpoint must report the
+six active production meshes, candidate identity, and the exact expected
+instance total for each active mesh index count. The extractor accepts all six
+families in one color+depth pass and rejects missing owners, unrelated matching
+draws, fallback presentation, or a changed candidate asset view.
+
 ## Run the final Wall production performance pair
 
 After the approved candidate projection is provisioned in a clean validation
@@ -266,6 +275,26 @@ distribution, candidate identity, and the 350-triangle limit. The profile then
 runs p95 and p99 comparisons for both phases and fails when any production
 median is more than 5% above the fallback control. Revalidate with `verify
 --job-root <job-root>`.
+
+For the separate M0-subject versus final-production comparison, first run each
+job's own frozen verifier from its recorded worktree. Then create a new output
+root containing only an empty `sealed-artifacts/` directory and seal the
+cross-worktree comparison:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 \
+  .codex/skills/hell-workers-run-native-acceptance/scripts/wall_cross_subject_performance_acceptance.py \
+  seal --baseline-job "$M0_JOB" --production-job "$FINAL_JOB" \
+  --output "$CROSS_SUBJECT_ROOT"
+```
+
+This verifier permits only the necessary absolute `BEVY_ASSET_ROOT` difference
+between the two clean worktrees. It requires matching asset-view fingerprints,
+actual adapter and all other requested environment values, exact matrices,
+three valid runs, and byte-identical density helper, Rust fixture, and JSON
+contract. It reruns both historical frozen verifiers before producing four
+completed/provisional p95/p99 CSVs, each gated at +5%. Revalidate the sealed
+capsule with `verify --root <cross-subject-root>`.
 
 ## Run the current Wall actual-window calibration
 
@@ -532,6 +561,14 @@ PYTHONDONTWRITEBYTECODE=1 python3 \
   self-test
 PYTHONDONTWRITEBYTECODE=1 python3 \
   .codex/skills/hell-workers-run-native-acceptance/scripts/wall_production_performance_acceptance.py \
+  self-test
+PYTHONDONTWRITEBYTECODE=1 python3 \
+  .codex/skills/hell-workers-run-native-acceptance/scripts/wall_renderdoc_acceptance.py \
+  self-test
+PYTHONDONTWRITEBYTECODE=1 python3 scripts/perf_tool/wall_renderdoc_extract.py \
+  --self-test
+PYTHONDONTWRITEBYTECODE=1 python3 \
+  .codex/skills/hell-workers-run-native-acceptance/scripts/wall_cross_subject_performance_acceptance.py \
   self-test
 python3 scripts/check_agent_rules.py
 ```
