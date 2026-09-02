@@ -950,6 +950,17 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   この時点ではRust profiling configが同じHigh / DPI 1.0固定条件を保持していたためsidecar生成前に終了した。そこで
   launcher環境、`perf.py`から渡すbinary flag、Rust configを`HW_WALL_ART_MATRIX=1` / `--perf-wall-art-matrix`で対にし、
   profiling feature内でも専用matrixだけがexact 9組を受理する。通常起動、formal density、single-case条件は不変とする。
+- runtime contract commit `926a3530`のfresh matrix job
+  `target/native-acceptance/wall-art-20260902T153723Z-b52a734e`はIntel Arc / Mesa 26.1.6 / Vulkan / X11で
+  High / Medium / Low × DPI 1.0 / 1.5 / 2.0の全9 caseを完了し、status `valid`、独立offline verify `pass`となった。
+  subject `926a3530`、source `1d9f3c68…`、harness `c364a4ad…`、asset view `ebeb81af…`、binary
+  `52e6f525…`で、全caseが1280×720、lit、generation 2、production 96 / fallback 0、distinct mesh 6 / material 1、
+  connector visual 192 hidden / 0 visibleを満たす。全9 client PNGを目視し、品質／DPI固有のWall欠落、断線、黒抜け、
+  fallback混在がないことを確認した。
+- `tools/blender_ai_workflow/scripts/verify_wall_reference_locators.py`を再実行し、registered historical P02
+  subject `6ea0bf99` / attempt `54d85a63-e237-4501-a0d0-33c1d0a29f3b` / Capture SHA-256 `38561b2a…`と、
+  分離済みcurrent fallback Wall locatorを改変なしでoffline `pass`した。currentのRender3d visibleは9 case sidecar、
+  completion bounce / depth-preserving transform / exactly-oneは既存focused testと全体verifyでpassしている。
 
 - 変更内容:
   - M4で完成・commit済みのwall-art gallery / fail-closed profileを変更せず、final commitのclean validation worktreeで実行する。code / launcher / predicate修正が必要になった時点でartifactを無効化してM4へ戻り、final commit承認からやり直す。
@@ -965,10 +976,10 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   - `crates/bevy_app/src/plugins/startup/perf_scenario/`
   - `docs/rendering-performance.md`
 - 完了条件:
-  - [ ] 9 caseのclient-window PNGとsidecarがfresh source / asset fingerprintに対してfail-closedでpassする。
+  - [x] 9 caseのclient-window PNGとsidecarがfresh source / asset fingerprintに対してfail-closedでpassする。
   - [ ] 全16 mask、Door接続、完成／仮設、追加／撤去、completion、depth、loadが画像とstateの両方でpassする。
   - [ ] 全family / rotationのWall–Wall portが9.6 wuの同一profileで連続し、各armの局所横断で連続壁体が9.6 wu未満へ細らず、装飾が12.8 wu envelopeとcell AABBを越えない。最遠zoom-outではHighの内部色1 px以上、Medium / Lowのfinal composite silhouette連続を満たす。
-  - [ ] registered historical P02 artifactのimmutable locator / hashがoffline再検証でpassし、current-sourceのwall depth、
+  - [x] registered historical P02 artifactのimmutable locator / hashがoffline再検証でpassし、current-sourceのwall depth、
     completion bounce、Render3d visible、exactly-oneはWall専用profile / focused testでpassする。P08 sourceをP02 selectorへ偽装しない。
   - [ ] production resident mesh 6、active production material 2、finite total pool mesh 7 / material 4、steady phaseのfallback active 0、world-replace transitionのfallback-only 1 frame、全phase mixed 0、各mesh 350 triangles以下、distinct production mesh/material組合せ12以下である。
   - [ ] M0 baseline commitとfinal commitのclean worktreeが同一のfinal asset viewとbyte-identicalなdensity profile / fixture / contractを使い、N=96 / 4N=384、seed、warm-up / measure、3-run集約のいずれにもdriftがない。
@@ -1334,7 +1345,13 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
 - M5 Wall matrix再実行:
   `target/native-acceptance/wall-art-20260902T153105Z-6723db42`はRust config側の同固定条件を検出してinvalid。
   launcher / Python / Rustの専用authorizationを対にし、次commit / fingerprintで再実行する（2026-09-02）。
-- 未解決エラー: なし。M5の9 case Wall matrix、性能比較、RenderDoc再採取は未実行であり、完了条件として残る。
+- M5 Wall matrix確定:
+  `target/native-acceptance/wall-art-20260902T153723Z-b52a734e`は9/9 case、status / offline verifyともpass。
+  全caseでlit generation 2、production 96 / fallback 0、6 mesh / 1 materialを確認し、全PNG目視完了（2026-09-02）。
+- M5 historical P02 locator:
+  registered subject `6ea0bf99` / attempt `54d85a63-e237-4501-a0d0-33c1d0a29f3b`のindex、ledger、formal、
+  RenderDoc payloadをcurrent P08へ読み替えずoffline verify `pass`（2026-09-02）。
+- 未解決エラー: なし。M5の性能比較、RenderDoc再採取、phase / loadを含む拡張回帰は未実行であり、完了条件として残る。
 
 ### Definition of Done
 
@@ -1350,7 +1367,7 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
 - [ ] rust-analyzer workspace diagnosticsが0件である。
 - [x] `python3 scripts/dev.py cargo -- clippy --workspace --all-targets -- -D warnings`が成功する。
 - [x] `python3 scripts/dev.py verify`が成功する。
-- [ ] 専用wall-art 9 case native profileとregistered historical P02 artifactのoffline検証がfail-closedで成功する。
+- [x] 専用wall-art 9 case native profileとregistered historical P02 artifactのoffline検証がfail-closedで成功する。
 - [ ] plan lifecycleを閉じ、恒久仕様へ引継ぎ済みである。
 
 ## 10. 更新履歴
@@ -1379,3 +1396,5 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
 | `2026-09-02` | `Codex` | final generation 2を封印し、実asset loaderと固定lit actual-window単一caseをpass。current P08 subjectでhistorical P02を再実行できない既知境界を再確認し、current-source M5用の9 case Wall matrixを追加した |
 | `2026-09-02` | `Codex` | Wall matrix初回はHigh / DPI 1.0完了後にperf入口のsingle-case固定条件でfail-closed。formal / single-case契約を維持したまま、Wall native helper専用authorizationで9 caseを許可するよう分離した |
 | `2026-09-02` | `Codex` | 再実行でRust profiling configにも同じ固定条件があると確認。専用matrixのlauncher環境・Python引数・binary引数を対にし、通常／formal／single-caseを広げず9組だけを許可した |
+| `2026-09-02` | `Codex` | subject `926a3530`でcurrent-source Wall matrixを再実行し、High / Medium / Low × DPI 1.0 / 1.5 / 2.0の9/9 case、sidecar、client PNG、offline verifyをpassした |
+| `2026-09-02` | `Codex` | registered historical P02 locatorを再検証し、subject `6ea0bf99`のindex / SHA ledger / formal / RenderDoc payloadをcurrent P08へ読み替えずoffline passした |
