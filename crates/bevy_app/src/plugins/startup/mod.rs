@@ -323,7 +323,11 @@ impl Plugin for StartupPlugin {
             if wall_actual_window_requested {
                 app.add_systems(
                     Update,
-                    perf_scenario::publish_wall_actual_window_probe_status_system
+                    (
+                        perf_scenario::prepare_wall_actual_window_comparison_view_system,
+                        perf_scenario::publish_wall_actual_window_probe_status_system,
+                    )
+                        .chain()
                         .in_set(PerfScenarioSet::Capture)
                         .before(perf_scenario::drive_perf_capture_system),
                 );

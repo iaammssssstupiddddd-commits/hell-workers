@@ -14,6 +14,7 @@ use bevy::pbr::MeshMaterial3d;
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 use hw_core::constants::topdown_rtt_vertical_compensation;
+use hw_ui::camera::MainCamera;
 use hw_visual::TopDownStructuralMaterial;
 use hw_visual::visual3d::{Building3dVisual, Wall3dPresentationMode, Wall3dPresentationState};
 use serde_json::{Value, json};
@@ -40,6 +41,7 @@ const ACK_TIMEOUT: Duration = Duration::from_secs(15);
 const SETTLE_FRAMES: u32 = 3;
 const ROI_HALF_SIZE: u32 = 48;
 const CAPTURE_REGION: (u32, u32, u32, u32) = (320, 40, 516, 674);
+const COMPARISON_CAMERA_SCALE: f32 = 1.0;
 
 #[derive(Resource)]
 pub(crate) struct WallActualWindowAcceptance {
@@ -139,9 +141,55 @@ type WallVisualQuery<'w, 's> = Query<
 >;
 
 #[derive(bevy::ecs::system::SystemParam)]
+pub(crate) struct WallActualWindowViewParams<'w, 's> {
+    main_camera: Query<'w, 's, &'static mut Transform, (With<MainCamera>, Without<Camera3dRtt>)>,
+    ui_roots: Query<'w, 's, &'static mut Node, Without<ChildOf>>,
+}
+
+pub(crate) fn prepare_wall_actual_window_comparison_view_system(
+    config: Res<PerfScenarioConfig>,
+    fixture: Res<WallDensityFixtureState>,
+    acceptance: Res<WallActualWindowAcceptance>,
+    mut params: WallActualWindowViewParams,
+) {
+    if !acceptance.enabled(&config, &fixture)
+        || !matches!(
+            std::env::var("HW_WALL_ART_COMPARISON").as_deref(),
+            Ok("lit" | "unlit")
+        )
+    {
+        return;
+    }
+    let Some(subject) = fixture.actual_window_subject() else {
+        return;
+    };
+    let Ok(mut camera) = params.main_camera.single_mut() else {
+        return;
+    };
+    let world = hw_world::WorldMap::grid_to_world(subject.grid.0, subject.grid.1);
+    camera.translation.x = world.x;
+    camera.translation.y = world.y;
+    camera.scale = Vec3::new(COMPARISON_CAMERA_SCALE, COMPARISON_CAMERA_SCALE, 1.0);
+    for mut node in &mut params.ui_roots {
+        node.display = Display::None;
+    }
+}
+
+#[derive(bevy::ecs::system::SystemParam)]
 pub(crate) struct WallActualWindowParams<'w, 's> {
     window: Query<'w, 's, &'static Window, With<PrimaryWindow>>,
-    camera: Query<'w, 's, (&'static Camera, &'static GlobalTransform), With<Camera3dRtt>>,
+    camera: Query<
+        'w,
+        's,
+        (
+            &'static Camera,
+            &'static Projection,
+            &'static GlobalTransform,
+        ),
+        With<Camera3dRtt>,
+    >,
+    main_camera: Query<'w, 's, &'static Transform, (With<MainCamera>, Without<Camera3dRtt>)>,
+    ui_roots: Query<'w, 's, &'static Node, Without<ChildOf>>,
     visuals: WallVisualQuery<'w, 's>,
     meshes: Res<'w, Assets<Mesh>>,
     materials: Res<'w, Assets<TopDownStructuralMaterial>>,
@@ -230,7 +278,7 @@ fn build_status(
     if physical_width == 0 || physical_height == 0 {
         return Err("wall actual-window client has zero physical extent".to_string());
     }
-    let (camera, camera_transform) = params
+    let (camera, projection, camera_transform) = params
         .camera
         .single()
         .map_err(|_| "wall actual-window probe requires one Camera3dRtt".to_string())?;
@@ -255,7 +303,41 @@ fn build_status(
         return Err("wall actual-window subject is hidden".to_string());
     }
     let comparison = std::env::var("HW_WALL_ART_COMPARISON").ok();
+    let expected_camera_scale = if comparison.is_some() {
+        COMPARISON_CAMERA_SCALE
+    } else {
+        CAMERA_SCALE
+    };
+    let Projection::Orthographic(orthographic) = projection else {
+        return Err("wall actual-window Camera3dRtt is not orthographic".to_string());
+    };
+    if (orthographic.scale - expected_camera_scale).abs() > f32::EPSILON {
+        return Err(format!(
+            "wall actual-window camera scale differs: expected {expected_camera_scale}, got {}",
+            orthographic.scale
+        ));
+    }
     let gallery = if let Some(comparison) = comparison.as_deref() {
+        let main_camera = params
+            .main_camera
+            .single()
+            .map_err(|_| "wall comparison requires one MainCamera".to_string())?;
+        let subject_world = hw_world::WorldMap::grid_to_world(subject.grid.0, subject.grid.1);
+        if main_camera.translation.x != subject_world.x
+            || main_camera.translation.y != subject_world.y
+            || main_camera.scale != Vec3::new(COMPARISON_CAMERA_SCALE, COMPARISON_CAMERA_SCALE, 1.0)
+        {
+            return Err("wall comparison MainCamera focus differs".to_string());
+        }
+        let hidden_ui_roots = params.ui_roots.iter().count();
+        if hidden_ui_roots == 0
+            || params
+                .ui_roots
+                .iter()
+                .any(|node| node.display != Display::None)
+        {
+            return Err("wall comparison view retained visible UI roots".to_string());
+        }
         if presentation.mode != Wall3dPresentationMode::Production {
             return Err("wall comparison subject is not in production mode".to_string());
         }
@@ -354,7 +436,12 @@ fn build_status(
     .ok_or_else(|| "wall actual-window subject cannot be projected into the client".to_string())?;
     let roi = roi_around_point(center, ROI_HALF_SIZE, physical_width, physical_height)
         .ok_or_else(|| "wall actual-window ROI lies outside the client".to_string())?;
-    if !roi_inside_capture_region(roi) {
+    let capture_region = if comparison.is_some() {
+        (0, 0, physical_width, physical_height)
+    } else {
+        CAPTURE_REGION
+    };
+    if !roi_inside_capture_region(roi, capture_region) {
         return Err("wall actual-window ROI overlaps fixed UI chrome".to_string());
     }
     let quality = config
@@ -388,7 +475,7 @@ fn build_status(
             "backend": "vulkan",
             "render3d": "visible",
             "rtt_quality": quality.as_str(),
-            "camera_scale": CAMERA_SCALE,
+            "camera_scale": expected_camera_scale,
             "fallback_mesh_resident": true,
         },
         "probe": {
@@ -402,7 +489,13 @@ fn build_status(
         },
     });
     if let Some(gallery) = gallery {
+        let hidden_ui_roots = params.ui_roots.iter().count();
         status["gallery"] = gallery;
+        status["capture_view"] = json!({
+            "focus": "subject",
+            "hidden_ui_roots": hidden_ui_roots,
+            "visible_ui_roots": 0,
+        });
         status["render"]["fallback_mesh_resident"] = json!(false);
     }
     Ok(status)
@@ -462,9 +555,12 @@ fn roi_around_point(
     ))
 }
 
-fn roi_inside_capture_region(roi: (u32, u32, u32, u32)) -> bool {
+fn roi_inside_capture_region(
+    roi: (u32, u32, u32, u32),
+    capture_region: (u32, u32, u32, u32),
+) -> bool {
     let (x, y, width, height) = roi;
-    let (min_x, min_y, max_x, max_y) = CAPTURE_REGION;
+    let (min_x, min_y, max_x, max_y) = capture_region;
     x >= min_x
         && y >= min_y
         && x.checked_add(width).is_some_and(|right| right <= max_x)
@@ -510,8 +606,32 @@ mod tests {
             Some((16, 16, 96, 96))
         );
         assert_eq!(roi_around_point(Vec2::new(20.0, 64.0), 48, 1280, 720), None);
-        assert!(roi_inside_capture_region((416, 532, 96, 96)));
-        assert!(!roi_inside_capture_region((288, 614, 96, 96)));
-        assert!(!roi_inside_capture_region((512, 532, 96, 96)));
+        assert!(roi_inside_capture_region(
+            (416, 532, 96, 96),
+            CAPTURE_REGION
+        ));
+        assert!(!roi_inside_capture_region(
+            (288, 614, 96, 96),
+            CAPTURE_REGION
+        ));
+        assert!(!roi_inside_capture_region(
+            (512, 532, 96, 96),
+            CAPTURE_REGION
+        ));
+        assert!(roi_inside_capture_region(
+            (592, 302, 96, 96),
+            (0, 0, 1280, 720)
+        ));
+    }
+
+    #[test]
+    fn comparison_view_uses_standard_zoom_and_subject_center() {
+        let world = hw_world::WorldMap::grid_to_world(22, 17);
+        let mut camera = Transform::from_xyz(1.0, 2.0, 3.0);
+        camera.translation.x = world.x;
+        camera.translation.y = world.y;
+        camera.scale = Vec3::new(COMPARISON_CAMERA_SCALE, COMPARISON_CAMERA_SCALE, 1.0);
+        assert_eq!(camera.translation, Vec3::new(-880.0, -1040.0, 3.0));
+        assert_eq!(camera.scale, Vec3::ONE);
     }
 }

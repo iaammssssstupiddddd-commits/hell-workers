@@ -163,7 +163,7 @@ def validate_probe_status(
         "probe",
     }
     if comparison is not None:
-        fields.add("gallery")
+        fields.update({"gallery", "capture_view"})
     status = require_object(
         value,
         "Wall calibration status",
@@ -237,7 +237,7 @@ def validate_probe_status(
         "backend": "vulkan",
         "render3d": "visible",
         "rtt_quality": "high",
-        "camera_scale": 5.0,
+        "camera_scale": 1.0 if comparison is not None else 5.0,
         "fallback_mesh_resident": comparison is None,
     }
     native.require(render == expected_render, "Wall calibration render contract differs")
@@ -292,6 +292,18 @@ def validate_probe_status(
             gallery["mask_counts"] == {f"{mask:04b}": 6 for mask in range(16)},
             "Wall comparison mask coverage differs",
         )
+        capture_view = require_object(
+            status["capture_view"],
+            "Wall comparison capture view",
+            {"focus", "hidden_ui_roots", "visible_ui_roots"},
+        )
+        native.require(
+            capture_view["focus"] == "subject"
+            and type(capture_view["hidden_ui_roots"]) is int
+            and capture_view["hidden_ui_roots"] > 0
+            and capture_view["visible_ui_roots"] == 0,
+            "Wall comparison capture view differs",
+        )
     probe = require_object(
         status["probe"],
         "Wall calibration probe",
@@ -313,7 +325,11 @@ def validate_probe_status(
         and roi["y"] + roi["height"] <= WINDOW_HEIGHT,
         "Wall ROI is invalid",
     )
-    min_x, min_y, max_x, max_y = CAPTURE_REGION
+    min_x, min_y, max_x, max_y = (
+        (0, 0, WINDOW_WIDTH, WINDOW_HEIGHT)
+        if comparison is not None
+        else CAPTURE_REGION
+    )
     native.require(
         roi["x"] >= min_x
         and roi["y"] >= min_y
@@ -994,7 +1010,15 @@ def self_test() -> int:
     }
     validate_probe_status(status, nonce=nonce)
     candidate_status = json.loads(json.dumps(status))
+    candidate_status["render"]["camera_scale"] = 1.0
     candidate_status["render"]["fallback_mesh_resident"] = False
+    candidate_status["probe"]["viewport_center"] = {"x": 640.0, "y": 350.0}
+    candidate_status["probe"]["roi"] = {
+        "x": 592,
+        "y": 302,
+        "width": 96,
+        "height": 96,
+    }
     candidate_status["gallery"] = {
         "comparison": "lit",
         "asset_set_generation": 1,
@@ -1009,6 +1033,11 @@ def self_test() -> int:
         "distinct_meshes": 6,
         "distinct_materials": 1,
         "mask_counts": {f"{mask:04b}": 6 for mask in range(16)},
+    }
+    candidate_status["capture_view"] = {
+        "focus": "subject",
+        "hidden_ui_roots": 7,
+        "visible_ui_roots": 0,
     }
     validate_probe_status(candidate_status, nonce=nonce, comparison="lit")
     candidate_status["gallery"]["comparison"] = "unlit"

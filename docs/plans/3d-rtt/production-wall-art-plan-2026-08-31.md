@@ -852,6 +852,14 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   ではなくfixture connectorのvisual mirror初期値がproduction topology ingressへ届いていないことを確定した。
   durable Door `Blueprint`からproduction `blueprint_visual_state()`を生成して同時挿入し、同じ経路で16 maskを解決する。
   2件のinvalid jobと画像は比較証拠へ流用しない。
+- connector修正commit `e792b710`では、candidate coreだけのasset viewに通常起動用texture/fontとmanifest pendingの
+  optional normalが不足していた2 runを警告ゼロgateでfail-closedとした。primaryとbyte-identicalな通常runtime assetを
+  非上書きで補い、optional normalはmanifest allowlist syncをdry-run後に実行した。最終candidate authorityはgeneration 1 / manifest
+  `d90f05c8…`のまま、完全asset-view fingerprintは`d6720d3b…`となった。
+- 完全asset viewのlit `wall-art-20260902T063714Z-f47631e1`とunlit
+  `wall-art-20260902T063830Z-4ad652e2`は96 production / fallback 0 / 6 mesh / 16 mask各6件とoffline verifyをpassしたが、
+  captureはpause UIに覆われ、lit側だけprofiling panelも表示され、camera scaleもstandard 1.0でなく5.0だったためart比較には
+  採用しない。比較profileだけsubject中心・scale 1.0・top-level UI root 0 visibleをstatusとoffline verifierで固定して再撮影する。
 
 - 変更内容:
   - M3のproduction spawn / WorldMap / presentation routeを使う専用wall-art gallery scenarioを `bevy_app`へ追加する。`visual_test`の独自meshを使わない。
