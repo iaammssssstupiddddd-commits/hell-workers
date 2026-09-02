@@ -5,7 +5,7 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `production-wall-art-plan-2026-08-31` |
-| ステータス | `In Progress (M3)` |
+| ステータス | `In Progress (M4)` |
 | 作成日 | `2026-08-31` |
 | 最終更新日 | `2026-09-02` |
 | 作成者 | `Codex` |
@@ -761,7 +761,7 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
 - 同commitで完成／仮設の切替がmesh family / topology rotation / transform / owner-derived `MeshTag`を維持してshared materialだけを
   交換すること、owner rotation / scaleとtopology quarter turnが合成されること、Door add / removeを実producerが同frameの3D familyへ
   反映することを固定した。rehydrate shellはexactly-one fallback visualを正しいlocal / `GlobalTransform`で生成する。
-  multi-tile施工の全phase進行、実save/load / rollback / recovery-onlyとの統合testは未完了である。
+  multi-tile施工の全phase進行、実save/load / rollback / recovery-onlyとの統合testは後続M3 batchで完了した。
 - `54359061`でnormal / Instant Buildの2 tile配置を実`apply_wall_placement`とBuilding visual mirror observerから同じtopology routeへ通し、
   normalは施工tileだけ、Instant Buildは各Wallのexactly-one 3D visualだけを生成することを固定した。framing前の施工tile単独とframing後の
   施工tile＋spawn済みprovisional Wallを実cancellation systemで撤去し、同じframeの`PostUpdate`で隣接Wallがisolatedへ戻る。
@@ -779,6 +779,12 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   local / `GlobalTransform`と正しいworld位置を持つ。次の`PostUpdate`でexact asset identityと再構築済みtopologyを満たした全Wallが
   production-onlyへ一括復帰し、presentation topologyとownerのmask / family / rotationが一致する。その次のsteady frameは
   resolution revision不変で、旧Wall / visual Entityは残らない。
+- clean validation worktree `staging/validation/wall-runtime-473d922c/worktree`のsealed generation 1を現行geometry
+  contract SHA-256 `0c13f5a2084dd60e6e4634d3f6b5ddaee33b6e90273c2cc4876eab0b76f6c563`で再検証した。
+  6 GLBはmanifest hashと一致し、全armのcore / `8.01, 12.0, 15.99 wu` port collar断面がsolid、port幅
+  `-4.8..+4.8 wu`、Y `-16..+16 wu`で共通、junctionはactive corridor union、isolatedは中心2軸でpassした。
+  全vertexは12.8 wu ornament corridor / 32 wu cell envelope内、各mesh 216〜240 triangles、UV0ありである。
+  現行Bevy実loader ignored gateとsealed geometry fixtureの16 mask / quarter-turn exhaustive testもpassし、M3を完了した。
 
 - 変更内容:
   - mask計算と `WallMeshFamily + QuarterTurns` resolverをpure functionへ抽出し、16件のexhaustive table testを追加する。
@@ -798,7 +804,7 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   - `crates/bevy_app/src/plugins/startup/perf_scenario/`
 - 完了条件:
   - [x] 16 mask、Door接続、canonical rotationがtable-driven testで全件合格する。
-  - [ ] 全family / quarter turnのport collarで中心bandと接続portの半幅4.8 wu以上、局所横断の装飾半幅6.4 wu以下が不変で、Wall–Wall境界にgap / overlapがない。junctionはactive arm unionとして別判定する。
+  - [x] 全family / quarter turnのport collarで中心bandと接続portの半幅4.8 wu以上、局所横断の装飾半幅6.4 wu以下が不変で、Wall–Wall境界にgap / overlapがない。junctionはactive arm unionとして別判定する。
   - [x] `Update`内のwall / door / blueprint追加・撤去・cancelが、同frameの後続`PostUpdate`で対象と4近傍だけを更新する。
   - [x] 複数tile siteの配置→framing→`FramedProvisional`→完成と、framing前／後cancelで、全gridのconnectorとtile visual targetが欠落・重複しない。
   - [x] site / tile / spawned wallが同一gridに一時共存しても接続数1へcoalesceされ、GLBはspawned Wallだけにexactly oneである。
@@ -807,7 +813,7 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   - [x] `WallAssetReadinessSet -> WallTopologyResolveSet -> ApplyDeferred -> WallPresentationApplySet`が`TransformSystems::Propagate`より前に実行され、final transform / tag compositionもapply内で完了する。owner移動 / owner回転ではlocal / `GlobalTransform`と`MeshTag`が同frame更新され、completion bounceやtransform syncでtopology回転が消えず、topology quarter turnだけではowner-derived tagが変化しない。
   - [x] save/load後にexactly-one visualと同一mask / family / rotationが復元される。
   - [x] normal load、rollback、recovery-only、連続2回resetの全world replacement testで、`Last` rehydrate frameは全wall fallbackかつlocal / `GlobalTransform`が正しいworld位置、次frame rebuild後は全wall production、mixed frame 0、旧`Entity`参照0、index rebuild 1回、重複contributor 0である。
-  - [ ] asset `Eligible`からの初回有効化、同frame spawn、synthetic failure、restart後回復の各activation revisionで既存／新規wallが同じmodeへ一括収束する。creation-time fallback / tag初期化以外にpresentation apply外の`Mesh3d` / wall material / wall transform / `MeshTag` mutationがなく、既存generic writerがWallを除外している。
+  - [x] asset `Eligible`からの初回有効化、同frame spawn、synthetic failure、restart後回復の各activation revisionで既存／新規wallが同じmodeへ一括収束する。creation-time fallback / tag初期化以外にpresentation apply外の`Mesh3d` / wall material / wall transform / `MeshTag` mutationがなく、既存generic writerがWallを除外している。
   - [x] steady stateのtopology再計算とmesh writeが0件である。
   - [x] M3のplayer-visible routeについてHelp impact decisionを完了し、必要なHelp更新を同じbatchへ含めてから完了を報告する。
 - 検証:
@@ -996,7 +1002,7 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
 
 ### 現在地
 
-- 進捗: `M0〜M2完了、M3実装中`
+- 進捗: `M0〜M3完了、M4未着手`
 - 完了済み:
   - current active wall経路、2D connection system、material / transform / MeshTag、save rehydrate、external asset workflowを棚卸し済み。
   - 6 mesh / 16 mask、finite pool、fallback、native受入の実装境界を本書で固定済み。
@@ -1019,7 +1025,7 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   - `116d1ff9`で`ReadyToApply`と同frameの新規WallもM3 apply前はfallback bundleをexactly oneで維持するtestをpassし、
     batchごとのHelp impact decisionを完了してM2を閉じた。
   - M3のcanonical `(N,S,W,E)` maskと6 family / quarter turn resolverを`819ca26d`で実装し、completed Door connectorの
-    実経路を`4a728b06`で固定済み。3D mesh適用は未着手。
+    実経路を`4a728b06`で固定済み。後続M3 batchで3D mesh適用と全lifecycle統合まで完了した。
   - `5f59d8b3`でbidirectional connector index、resolved `WallTopologyState`、bounded old/new dirty、Building＋Blueprint
     coalesce、steady 0-write、world-replace full rebuildを実装済み。2D consumerは同じresolved maskへ移行した。
   - registered historical P02とcurrent fallback actual-windowを`wall-reference-locators-v1`で分離し、
@@ -1033,16 +1039,13 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   - final subject `35f1f6e3`から色校正、Capture 12 run、RenderDoc 4 caseを再採取し、全artifactの独立verifyをpass。
     M0のsource / harness / asset viewを同じfingerprintへ凍結済み。
 - 未完了:
-  - M3のPostUpdate schedule、3D consumer、atomic presentation apply、world-replace用のroot / leaf reset分担、`PlacementFeedbackSet::Commit`からのnormal / Instant Build配置、
-    framing前後cancel、owner移動・回転、完成material-only遷移、completion bounceのfocused integration testは実装済み。
-    deconstructionの同frame topology更新、multi-tile phase progression、normal load / rollback / recovery-onlyの実transaction統合も実装済み。
-    M3で残るのは実candidate 6 meshに対するport collar / envelope geometry gateである。
-    production assetはcanonical / primary `assets/`へまだ書き込んでおらず、通常gameplayのWallはfallbackのままである。
+  - M4のlit / unlitとoptional normalの順次native A/B、全16 mask / lifecycle gallery、ユーザーの主観目視承認。
+  - production assetはcanonical / primary `assets/`へまだ書き込んでおらず、通常gameplayのWallはfallbackのままである。
 
 ### 次のAIが最初にやること
 
-1. clean validation worktreeの実candidate 6 meshへport collar / junction union / 9.6 wu nominal / 12.8 wu envelope gateを実行し、
-   M3最後のgeometry条件を閉じる。runtime lifecycleとworld replacementは完了済み。
+1. M4のcandidate identity / OCIO陽性proof / native launcher preflightを固定し、lit / unlitの一軸A/Bから開始する。
+   optional normal比較はlit winner確定後だけ行い、canonical / primary assetへはまだ書き込まない。
 
 ### ブロッカー/注意点
 
@@ -1183,6 +1186,11 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   `python3 scripts/dev.py cargo -- test -p hw_visual wall_connection --lib`は`pass (8 tests, 2026-09-02)`、
   `fallback_wall_spawn_has_exactly_one_visual_mesh_material_and_tag`と
   `rehydrated_wall_starts_in_visible_fallback_at_its_world_position`は各`pass (1 test, 2026-09-02)`。
+- M3 sealed candidate geometry gate: validation worktreeの6 GLBを`validate_wall_glb`で直接decodeし全familyが`pass`。
+  manifest SHA-256一致、port collar `-4.8..+4.8 wu`、Y `-16..+16 wu`、corridor union / isolated中心断面、
+  216〜240 triangles、UV0を確認した。`all_sixteen_masks_match_the_sealed_geometry_fixture`と
+  `HW_WALL_ASSET_TEST_ROOT=<isolated-assets> ... isolated_candidate_loads_six_real_primitives_with_valid_runtime_bounds -- --ignored --exact`
+  も各`pass (1 test, 2026-09-02)`。
 - M3 atomic presentation実装後 `python3 scripts/dev.py check`と
   `python3 scripts/dev.py cargo -- clippy --workspace --all-targets -- -D warnings`: `pass (2026-09-02)`。
 - M3 atomic presentation batchのHelp実経路判断: `No impact`。壁のmesh / material / rotation選択だけを変更し、
@@ -1253,3 +1261,4 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
 | `2026-09-02` | `Codex` | 2 tile siteをframing spawn、coating transition、completionまで実system chainで通し、exactly-one visualと相互topologyが完成後も維持されることを固定した |
 | `2026-09-02` | `Codex` | normal / rollback / recovery-onlyの実world replacementをrehydrate fallbackから次frame production一括復帰まで検証し、旧Entity 0・single rebuild・steady 0-writeを固定した |
 | `2026-09-02` | `Codex` | shebang付き検証script 2件のGit modeを100755へ修正し、P02 Wall bounce testをWall専用presentation owner経路へ移行。check、0-warning Clippy、全体verifyをpassした |
+| `2026-09-02` | `Codex` | clean validation worktreeのsealed 6 GLBをmanifest hash付きで再decodeし、9.6 wu共通port、12.8 wu corridor union、216〜240 triangle、16 mask回転、Bevy実loaderをpassしてM3を完了 |
