@@ -1004,6 +1004,25 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   color+depth passの分布と全owner総数をexact検査し、launcherは`--candidate`とbinary / environment二重鍵を結ぶ。
   このprofiling-only source変更でもsource fingerprintは更新されるため、`991392b8`の9 case / 24 run / cross比較は
   履歴passとして保持し、新clean subjectからM5の3 legを再採取してから最終checkを閉じる。
+- clean final subject `ef5f2b8b`、source `e0e888e8…`、harness `2e6b234c…`、asset view `ebeb81af…`の
+  fresh matrix job `wall-art-20260902T210312Z-2ab3b1c9`は、Intel Arc / Mesa 26.1.6 / Vulkan / X11で
+  High / Medium / Low × DPI 1.0 / 1.5 / 2.0の9 / 9 caseを完了し、独立offline verifyもpassした。全PNGを目視し、
+  production 96 / fallback 0、distinct mesh 6 / material 1、connector visual 192 hidden / 0 visibleと、品質低下時の
+  silhouette連続を確認した。fixture / focused testと合わせ、16 mask、lifecycle、9.6 / 12.8 wu geometry契約をfresh subjectへ
+  再接続した。
+- 同subjectのRenderDoc job `wall-renderdoc-20260902T200533Z-c3f9b66d`はcompleted Nの2 replayを完了し、
+  active mesh 6、owner 96、draw group 6、index別instance `648:30 / 720:66`のexact一致を得た。しかしcompleted 4Nの
+  1回目replayがGPU fence待ちのまま600秒timeoutとなった。build cache済み・GPU process解放後のfresh再試行
+  `wall-renderdoc-20260902T204607Z-30b0d6c5`も同じcase / replayで600秒timeoutとなったため、一時的な初回build負荷仮説は
+  打ち切った。kernel logにGPU hang / resetはなく、両artifactをinvalidのまま保持する。4 case predicateは未合格である。
+- 同subjectのfresh performance job `wall-production-performance-20260902T213112Z-837efcb8`は24 / 24 runをvalid採取したが、
+  completed N p99がfallback `9.905611 ms`対production `10.506062 ms`（`+6.062%`）で`+5%` gateを超えた。
+  他のcompleted 3指標とdiagnostic上のprovisional 4指標はgate内だったが、manifest生成前にfail-closedとなった。
+  load average低下後の1回限りのfresh再測定 `wall-production-performance-20260902T221218Z-96e4b21b`も24 / 24 runをvalid採取し、
+  completed N p95がfallback `9.171164 ms`対production `14.011493 ms`（`+52.778%`）で再失敗した。production Nの
+  run 2 / 3にはそれぞれ約8.3 / 9.9秒の連続tail-latency区間があり、p50は`+3.957%`、completed 4N p95 / p99は
+  `-0.078% / +0.468%`だった。単一外れ値仮説は打ち切り、閾値変更やartifact合格扱いを行わない。valid production
+  manifestがないためM0 cross-subject再封印も開始しない。
 
 - 変更内容:
   - M4で完成・commit済みのwall-art gallery / fail-closed profileを変更せず、final commitのclean validation worktreeで実行する。code / launcher / predicate修正が必要になった時点でartifactを無効化してM4へ戻り、final commit承認からやり直す。
@@ -1021,19 +1040,19 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   - `crates/bevy_app/src/plugins/startup/perf_scenario/`
   - `docs/rendering-performance.md`
 - 完了条件:
-  - [ ] 9 caseのclient-window PNGとsidecarがfresh source / asset fingerprintに対してfail-closedでpassする。
-  - [ ] 全16 mask、Door接続、完成／仮設、追加／撤去、completion、depth、loadが画像とstateの両方でpassする。
-  - [ ] 全family / rotationのWall–Wall portが9.6 wuの同一profileで連続し、各armの局所横断で連続壁体が9.6 wu未満へ細らず、装飾が12.8 wu envelopeとcell AABBを越えない。最遠zoom-outではHighの内部色1 px以上、Medium / Lowのfinal composite silhouette連続を満たす。
+  - [x] 9 caseのclient-window PNGとsidecarがfresh source / asset fingerprintに対してfail-closedでpassする。
+  - [x] 全16 mask、Door接続、完成／仮設、追加／撤去、completion、depth、loadが画像とstateの両方でpassする。
+  - [x] 全family / rotationのWall–Wall portが9.6 wuの同一profileで連続し、各armの局所横断で連続壁体が9.6 wu未満へ細らず、装飾が12.8 wu envelopeとcell AABBを越えない。最遠zoom-outではHighの内部色1 px以上、Medium / Lowのfinal composite silhouette連続を満たす。
   - [x] registered historical P02 artifactのimmutable locator / hashがoffline再検証でpassし、current-sourceのwall depth、
     completion bounce、Render3d visible、exactly-oneはWall専用profile / focused testでpassする。P08 sourceをP02 selectorへ偽装しない。
-  - [ ] production resident mesh 6、active production material 2、finite total pool mesh 7 / material 4、steady phaseのfallback active 0、world-replace transitionのfallback-only 1 frame、全phase mixed 0、各mesh 350 triangles以下、distinct production mesh/material組合せ12以下である。
-  - [ ] M0 baseline commitとfinal commitのclean worktreeが同一のfinal asset viewとbyte-identicalなdensity profile / fixture / contractを使い、N=96 / 4N=384、seed、warm-up / measure、3-run集約のいずれにもdriftがない。
+  - [x] production resident mesh 6、active production material 2、finite total pool mesh 7 / material 4、steady phaseのfallback active 0、world-replace transitionのfallback-only 1 frame、全phase mixed 0、各mesh 350 triangles以下、distinct production mesh/material組合せ12以下である。
+  - [x] M0 baseline commitとfinal commitのclean worktreeが同一のfinal asset viewとbyte-identicalなdensity profile / fixture / contractを使い、N=96 / 4N=384、seed、warm-up / measure、3-run集約のいずれにもdriftがない。
   - [ ] baseline対production、final `force-fallback`対productionのcompleted / provisional Capture p95 / p99中央値がそれぞれ`+5%`以内で、全run valid、MAD併記である。
   - [ ] RenderDoc上のcompleted wall main-passが`D_N <= 6`、`D_4N <= 6`、`D_4N = D_N`、provisional sorted phaseが`D_4N <= 4 * D_N + 6`を満たす。
-  - [ ] native実行中のcode / profile / predicate変更が0で、source fingerprintはM4 final commitと一致する。修正が発生したrunを合格artifactへ流用していない。
-  - [ ] manifestはM4のpendingなしfinal generationと一致し、M1 candidate generationやA/B用optional集合のartifactをfinal証拠へ混ぜていない。validation worktreeはadopted core 9またはrejected core 8だけを含む。
+  - [x] native実行中のcode / profile / predicate変更が0で、source fingerprintはM4 final commitと一致する。修正が発生したrunを合格artifactへ流用していない。
+  - [x] manifestはM4のpendingなしfinal generationと一致し、M1 candidate generationやA/B用optional集合のartifactをfinal証拠へ混ぜていない。validation worktreeはadopted core 9またはrejected core 8だけを含む。
   - [ ] compare開始前に空の`<sealed-artifacts>` directoryを作り、4つの固有CSVと各SHA-256を保存している。既定`comparison.csv`へ上書きしていない。
-  - [ ] adapter / backend / window backendがartifactに記録され、headless結果をrenderer証拠にしていない。
+  - [x] adapter / backend / window backendがartifactに記録され、headless結果をrenderer証拠にしていない。
 - 検証:
   - 専用profileの `plan` が返すdirect `kitty` launcherだけを実行し、15〜30秒間隔でstatusをpollする。
   - `PYTHONDONTWRITEBYTECODE=1 python3 .codex/skills/hell-workers-run-native-acceptance/scripts/wall_art_acceptance.py plan --repo "$VALIDATION_WORKTREE" --adapter Intel --candidate --matrix`

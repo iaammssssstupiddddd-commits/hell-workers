@@ -88,6 +88,13 @@ p95回帰が`+0.451% / +0.438%`、p99が`+0.910% / +0.540%`、provisionalのp95�
 `+2.031% / +0.987%`、p99が`+1.134% / +0.369%`となり、全ケースが`+5%` gateを通過した。
 24 runと4比較の独立verify対象は
 `target/native-acceptance/wall-production-performance-20260902T173804Z-3f6bc903`である。
+この値は`991392b8`の履歴passである。current final subject `ef5f2b8b`ではfresh job
+`wall-production-performance-20260902T213112Z-837efcb8`が24 / 24 valid runを採ったものの、completed N p99が
+fallback `9.905611 ms`対production `10.506062 ms`（`+6.062%`）でfail-closedとなった。load安定後の再測定
+`wall-production-performance-20260902T221218Z-96e4b21b`も24 / 24 valid runを採ったが、completed N p95が
+`9.171164 ms`対`14.011493 ms`（`+52.778%`）で再失敗した。後者のproduction Nではrun 2 / 3に約8.3 / 9.9秒の
+連続stutter区間があり、p50は`+3.957%`、completed 4N p95 / p99は`-0.078% / +0.468%`だった。
+単一外れ値として合格扱いせず、current subjectの同一binary performance gateとM0 cross-subject再封印は未完了とする。
 
 M0対productionのcross-subject比較は、M0 `35f1f6e3`へDoor connector fixture修正だけを載せた
 派生subject `0241d3b9`を使う。density helper / Rust fixture / JSON contractのSHA-256はそれぞれ
@@ -107,6 +114,16 @@ active mesh index数集合とindex数ごとの期待instance合計、active mesh
 checkpointへexact一致しないcaptureを拒否する。launcherの`--candidate`はcandidate generation / manifest / asset viewと
 `--perf-wall-presentation production` / `HW_WALL_PERF_PRESENTATION=production`を対にする。これにより6 familyのうち
 同じindex数を持つmeshを正しく集約しながら、fallbackや無関係drawをproduction draw-groupへ数えない。
+`ef5f2b8b`のfresh job `wall-renderdoc-20260902T200533Z-c3f9b66d`はcompleted Nでactive mesh 6、owner 96、
+draw group 6、index別instance `648:30 / 720:66`をexact一致させたが、completed 4Nの1回目replayがGPU fence待ちで
+600秒timeoutとなった。build cache済みの再試行`wall-renderdoc-20260902T204607Z-30b0d6c5`も同じ箇所でtimeoutし、
+kernel logにGPU hang / resetは記録されなかった。両jobはinvalidのまま保持し、4 caseのformal draw predicateは未合格である。
+
+current final subjectのactual-window matrixは
+`wall-art-20260902T210312Z-2ab3b1c9`である。High / Medium / Low × DPI 1.0 / 1.5 / 2.0の9 / 9 caseが
+Intel Arc / Mesa 26.1.6 / Vulkan / X11でpassし、独立offline verifyも9 screenshotを再検証した。全caseで
+production 96 / fallback 0、distinct mesh 6 / material 1、connector visual 192 hidden / 0 visibleであり、全PNGの目視でも
+品質／DPI固有の欠落、断線、黒抜け、fallback混在はない。
 
 ### P06 shared Light Field runtime inventory
 
