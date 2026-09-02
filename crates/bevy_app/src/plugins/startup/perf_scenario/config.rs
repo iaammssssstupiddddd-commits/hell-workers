@@ -812,6 +812,8 @@ impl PerfScenarioConfig {
             ));
         }
         let wall_actual_window = wall_actual_window_flag && wall_actual_window_environment;
+        let wall_art_comparison = env::var("HW_WALL_ART_COMPARISON").ok();
+        validate_wall_art_comparison(wall_art_comparison.as_deref(), wall_actual_window)?;
         let wall_color_actual_window_flag = has_flag(&args, "--perf-wall-color-actual-window");
         let wall_color_actual_window_environment =
             env::var("HW_WALL_COLOR_ACTUAL_WINDOW").is_ok_and(|value| value == "1");
@@ -1203,6 +1205,24 @@ fn wall_density_durations_match(actual_window: bool, warmup_secs: f32, measure_s
         (30.0, 60.0)
     };
     (warmup_secs, measure_secs) == expected
+}
+
+fn validate_wall_art_comparison(
+    comparison: Option<&str>,
+    wall_actual_window: bool,
+) -> Result<(), PerfScenarioConfigError> {
+    if comparison.is_some() && !wall_actual_window {
+        return Err(PerfScenarioConfigError(
+            "HW_WALL_ART_COMPARISON is reserved for the paired Wall actual-window profile"
+                .to_string(),
+        ));
+    }
+    if comparison.is_some_and(|value| !matches!(value, "lit" | "unlit")) {
+        return Err(PerfScenarioConfigError(
+            "HW_WALL_ART_COMPARISON must be lit|unlit".to_string(),
+        ));
+    }
+    Ok(())
 }
 
 #[cfg(feature = "profiling-renderdoc")]

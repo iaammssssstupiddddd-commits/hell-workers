@@ -5,14 +5,17 @@
 //! `wall-density-v1` fixture and publishes one ACK-held projection ROI for a
 //! native client-window capture.
 
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use bevy::mesh::{Mesh, Mesh3d};
+use bevy::pbr::MeshMaterial3d;
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 use hw_core::constants::topdown_rtt_vertical_compensation;
-use hw_visual::visual3d::Building3dVisual;
+use hw_visual::TopDownStructuralMaterial;
+use hw_visual::visual3d::{Building3dVisual, Wall3dPresentationMode, Wall3dPresentationState};
 use serde_json::{Value, json};
 
 use super::config::{PerfRenderMode, PerfScenarioConfig};
@@ -20,6 +23,9 @@ use super::wall_density_fixture::{
     CAMERA_SCALE, CONTRACT_ID, CONTRACT_SHA256, WallDensityFixtureState,
 };
 use super::{PerfScenarioSize, PerfWallPhase, PerfWorkload};
+use crate::assets::wall_asset_set::{
+    ProductionWallAssetPool, WallProductionActivation, WallProductionActivationState,
+};
 use crate::plugins::startup::{Building3dHandles, Camera3dRtt};
 
 const ACCEPTANCE_ENV: &str = "HW_WALL_ART_ACTUAL_WINDOW";
@@ -124,6 +130,8 @@ type WallVisualQuery<'w, 's> = Query<
     (
         &'static Building3dVisual,
         &'static Mesh3d,
+        &'static MeshMaterial3d<TopDownStructuralMaterial>,
+        &'static Wall3dPresentationState,
         &'static GlobalTransform,
         &'static Visibility,
         &'static InheritedVisibility,
@@ -136,7 +144,10 @@ pub(crate) struct WallActualWindowParams<'w, 's> {
     camera: Query<'w, 's, (&'static Camera, &'static GlobalTransform), With<Camera3dRtt>>,
     visuals: WallVisualQuery<'w, 's>,
     meshes: Res<'w, Assets<Mesh>>,
+    materials: Res<'w, Assets<TopDownStructuralMaterial>>,
     handles: Res<'w, Building3dHandles>,
+    production_assets: Res<'w, ProductionWallAssetPool>,
+    activation: Res<'w, WallProductionActivation>,
 }
 
 pub(crate) fn publish_wall_actual_window_probe_status_system(
@@ -223,24 +234,111 @@ fn build_status(
         .camera
         .single()
         .map_err(|_| "wall actual-window probe requires one Camera3dRtt".to_string())?;
-    let (mesh, visual_transform, visibility, inherited_visibility) = params
-        .visuals
-        .iter()
-        .find_map(|(visual, mesh, transform, visibility, inherited)| {
-            (visual.owner == subject.entity).then_some((mesh, transform, visibility, inherited))
-        })
-        .ok_or_else(|| "wall actual-window subject has no production 3D visual".to_string())?;
+    let (mesh, _material, presentation, visual_transform, visibility, inherited_visibility) =
+        params
+            .visuals
+            .iter()
+            .find_map(
+                |(visual, mesh, material, presentation, transform, visibility, inherited)| {
+                    (visual.owner == subject.entity).then_some((
+                        mesh,
+                        material,
+                        presentation,
+                        transform,
+                        visibility,
+                        inherited,
+                    ))
+                },
+            )
+            .ok_or_else(|| "wall actual-window subject has no production 3D visual".to_string())?;
     if *visibility == Visibility::Hidden || !inherited_visibility.get() {
         return Err("wall actual-window subject is hidden".to_string());
     }
-    if mesh.0.id() != params.handles.wall_mesh.id() {
-        return Err(
-            "wall actual-window subject does not use the production fallback mesh".to_string(),
-        );
-    }
-    if !params.meshes.contains(params.handles.wall_mesh.id()) {
-        return Err("production fallback Wall mesh is not resident".to_string());
-    }
+    let comparison = std::env::var("HW_WALL_ART_COMPARISON").ok();
+    let gallery = if let Some(comparison) = comparison.as_deref() {
+        if presentation.mode != Wall3dPresentationMode::Production {
+            return Err("wall comparison subject is not in production mode".to_string());
+        }
+        if mesh.0.id() == params.handles.wall_mesh.id() {
+            return Err("wall comparison subject retained the fallback mesh".to_string());
+        }
+        let evidence = fixture.renderdoc_evidence()?;
+        let targets: HashSet<_> = evidence.target_entities.iter().copied().collect();
+        let mut production_count = 0usize;
+        let mut fallback_count = 0usize;
+        let mut mesh_ids = HashSet::new();
+        let mut material_ids = HashSet::new();
+        for (visual, mesh, material, state, _, _, _) in &params.visuals {
+            if !targets.contains(&visual.owner) {
+                continue;
+            }
+            match state.mode {
+                Wall3dPresentationMode::Production => production_count += 1,
+                Wall3dPresentationMode::Fallback => fallback_count += 1,
+            }
+            mesh_ids.insert(mesh.0.id());
+            material_ids.insert(material.0.id());
+            let value = params
+                .materials
+                .get(&material.0)
+                .ok_or_else(|| "wall comparison material is not resident".to_string())?;
+            if value.base.unlit != (comparison == "unlit") {
+                return Err("wall comparison material lighting mode differs".to_string());
+            }
+        }
+        if production_count != evidence.target_wall_count
+            || fallback_count != 0
+            || mesh_ids.len() != 6
+            || material_ids.len() != 1
+        {
+            return Err("wall comparison gallery residency differs".to_string());
+        }
+        let resolved = params
+            .production_assets
+            .resolved
+            .as_ref()
+            .ok_or_else(|| "wall comparison production asset pool is unresolved".to_string())?;
+        let WallProductionActivationState::ReadyToApply {
+            asset_set_generation,
+            authority,
+            manifest_sha256,
+            ..
+        } = &params.activation.state
+        else {
+            return Err("wall comparison activation is not ready".to_string());
+        };
+        if resolved.identity.asset_set_generation != *asset_set_generation
+            || resolved.identity.authority != *authority
+            || resolved.identity.manifest_sha256 != *manifest_sha256
+        {
+            return Err("wall comparison activation identity differs".to_string());
+        }
+        Some(json!({
+            "comparison": comparison,
+            "asset_set_generation": asset_set_generation,
+            "authority": authority,
+            "manifest_sha256": manifest_sha256,
+            "layout_checksum": evidence.layout_checksum,
+            "wall_phase": evidence.phase.as_str(),
+            "target_wall_count": evidence.target_wall_count,
+            "connector_count": evidence.connector_count,
+            "production_count": production_count,
+            "fallback_count": fallback_count,
+            "distinct_meshes": mesh_ids.len(),
+            "distinct_materials": material_ids.len(),
+            "mask_counts": evidence.mask_counts,
+        }))
+    } else {
+        if mesh.0.id() != params.handles.wall_mesh.id() {
+            return Err(
+                "wall actual-window subject does not use the production fallback mesh".to_string(),
+            );
+        }
+        if !params.meshes.contains(params.handles.wall_mesh.id()) {
+            return Err("production fallback Wall mesh is not resident".to_string());
+        }
+        None
+    };
     let center = project_client_point(
         camera,
         camera_transform,
@@ -260,7 +358,7 @@ fn build_status(
     let scale_factor = config
         .requested_window_scale_factor()
         .ok_or_else(|| "wall actual-window scale factor is absent".to_string())?;
-    Ok(json!({
+    let mut status = json!({
         "schema_version": STATUS_SCHEMA_VERSION,
         "status": "ready",
         "session_nonce": nonce,
@@ -297,7 +395,12 @@ fn build_status(
                 "z": visual_transform.translation().z,
             },
         },
-    }))
+    });
+    if let Some(gallery) = gallery {
+        status["gallery"] = gallery;
+        status["render"]["fallback_mesh_resident"] = json!(false);
+    }
+    Ok(status)
 }
 
 fn failure_status(acceptance: &WallActualWindowAcceptance, reason: &str) -> Value {

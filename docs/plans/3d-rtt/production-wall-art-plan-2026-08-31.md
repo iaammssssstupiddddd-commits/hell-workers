@@ -836,8 +836,15 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
 - candidate normal textureはsealed texture reportでlinear sampling / OpenGL `+Y`、vector length / positive Zをpassするが、
   6 GLB全てに`TANGENT` attributeがないためnormal A/Bのtechnical gateはfailと判定した。「差なし」には分類せず、
   generation 1のpending manifestは変更しない。M4 finalの新generationでは`normal_decision=rejected`として封印する。
-- lit / unlit A/B用gallery / launcher diffとnative captureは未着手。planの明示承認gateに従い、harness diffを
-  check / clippy / verify / Help review後に提示し、承認を得るまでnative phaseを開始しない。
+- lit / unlit A/B用gallery / launcherを実装した。M3 production routeのN=96 fixtureをそのまま使い、16 maskを
+  各6件、6 mesh、production 96 / fallback 0、manifest identity、layout checksum、material lighting modeを
+  game-owned statusとoffline verifierの双方でexact検証する。`unlit`はprofiling + isolated candidate +
+  actual-window + exact comparison値の全条件が揃う場合だけ有効で、通常／release経路には入らない。
+- M0 current fallback profileのschemaと挙動は維持し、candidate比較だけを別profile identityで追加した。
+  未知comparison、actual-window未併用、plan後のcandidate generation / manifest hash driftはfail-closedにする。
+- ユーザーは2026-09-02にscoped harness実装と、そのcommit後のclean candidate worktreeでのnative lit / unlit
+  capture開始を明示承認した。check / clippy / verify / Help reviewを完了してharness commitを作るまで、候補assetを
+  primaryへprovisionせずnative phaseを開始しない。
 
 - 変更内容:
   - M3のproduction spawn / WorldMap / presentation routeを使う専用wall-art gallery scenarioを `bevy_app`へ追加する。`visual_test`の独自meshを使わない。
@@ -1058,9 +1065,10 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
 
 ### 次のAIが最初にやること
 
-1. M4のlit / unlit一軸A/B用gallery / fail-closed launcherを実装し、check / clippy / verify / Help review後の
-   diffをユーザーへ提示する。明示承認後だけclean candidate worktreeでnative captureを開始する。
-   normalはtechnical reject済みなので比較せず、canonical / primary assetへはまだ書き込まない。
+1. M4のlit / unlit一軸A/B用gallery / fail-closed launcherのcheck / clippy / verify / Help reviewを終え、
+   scoped commitを作る。承認済みのため、そのclean candidate worktreeでnative lit / unlit captureを開始する。
+   normalはtechnical reject済みなので比較せず、canonical / primary assetへはまだ書き込まない。2枚のclient
+   captureとexact sidecarをユーザーへ提示し、production cameraでのwinner承認を待つ。
 
 ### ブロッカー/注意点
 
@@ -1282,3 +1290,4 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
 | `2026-09-02` | `Codex` | shebang付き検証script 2件のGit modeを100755へ修正し、P02 Wall bounce testをWall専用presentation owner経路へ移行。check、0-warning Clippy、全体verifyをpassした |
 | `2026-09-02` | `Codex` | clean validation worktreeのsealed 6 GLBをmanifest hash付きで再decodeし、9.6 wu共通port、12.8 wu corridor union、216〜240 triangle、16 mask回転、Bevy実loaderをpassしてM3を完了 |
 | `2026-09-02` | `Codex` | M4 preflightでsealed OCIO artifactをbyte-identical再検証。normal textureのlinear/+Yはpassしたが全6 GLBのtangent不在をtechnical failureとしてnormal A/Bをrejectし、lit/unlit比較だけを次段に残した |
+| `2026-09-02` | `Codex` | M4 lit/unlit比較用に既存N=96 production fixtureをgallery化し、16 mask×6、6 mesh、fallback 0、candidate identity、material modeをexact sidecarへ追加。profiling/candidate/actual-window限定toggleとfail-closed launcherを実装し、ユーザーからharness commit後のnative開始承認を得た |

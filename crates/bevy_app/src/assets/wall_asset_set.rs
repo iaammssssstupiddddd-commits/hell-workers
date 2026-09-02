@@ -779,6 +779,7 @@ fn initialize_material_handles(
     complete.base.emissive = LinearRgba::WHITE;
     complete.base.emissive_texture = Some(assets.emissive.clone());
     complete.base.normal_map_texture = assets.normal.clone();
+    complete.base.unlit = wall_art_unlit_control_requested(&assets.identity);
     let complete = structural_materials.add(complete);
 
     let mut provisional =
@@ -787,6 +788,7 @@ fn initialize_material_handles(
     provisional.base.emissive = LinearRgba::WHITE;
     provisional.base.emissive_texture = Some(assets.emissive.clone());
     provisional.base.normal_map_texture = assets.normal.clone();
+    provisional.base.unlit = wall_art_unlit_control_requested(&assets.identity);
     let provisional =
         structural_materials.add(with_topdown_alpha_mode(provisional, AlphaMode::Blend));
 
@@ -795,6 +797,33 @@ fn initialize_material_handles(
         complete: Some(complete),
         provisional: Some(provisional),
     }
+}
+
+fn wall_art_unlit_control_requested(identity: &WallAssetSetIdentity) -> bool {
+    #[cfg(feature = "profiling")]
+    {
+        return wall_art_unlit_control_requested_for(
+            identity,
+            std::env::var("HW_WALL_ART_ACTUAL_WINDOW").as_deref() == Ok("1"),
+            std::env::var("HW_WALL_ART_COMPARISON").ok().as_deref(),
+        );
+    }
+    #[cfg(not(feature = "profiling"))]
+    {
+        let _ = identity;
+        false
+    }
+}
+
+#[cfg(feature = "profiling")]
+fn wall_art_unlit_control_requested_for(
+    identity: &WallAssetSetIdentity,
+    actual_window: bool,
+    comparison: Option<&str>,
+) -> bool {
+    identity.authority == WallAssetAuthority::IsolatedCandidate
+        && actual_window
+        && comparison == Some("unlit")
 }
 
 fn refresh_material_handles(
@@ -1992,5 +2021,32 @@ mod tests {
         receipt.manifest_sha256 = "f".repeat(64);
         let error = decode_canonical_receipt(&encoded_receipt(&receipt), &manifest).unwrap_err();
         assert!(error.to_string().contains("payload binding differs"));
+    }
+
+    #[cfg(feature = "profiling")]
+    #[test]
+    fn unlit_comparison_requires_candidate_and_actual_window() {
+        let candidate = WallAssetSetIdentity::from(&fixture());
+        let release = WallAssetSetIdentity::from(&release_fixture());
+        assert!(wall_art_unlit_control_requested_for(
+            &candidate,
+            true,
+            Some("unlit")
+        ));
+        assert!(!wall_art_unlit_control_requested_for(
+            &candidate,
+            false,
+            Some("unlit")
+        ));
+        assert!(!wall_art_unlit_control_requested_for(
+            &candidate,
+            true,
+            Some("lit")
+        ));
+        assert!(!wall_art_unlit_control_requested_for(
+            &release,
+            true,
+            Some("unlit")
+        ));
     }
 }
