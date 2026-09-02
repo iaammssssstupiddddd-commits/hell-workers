@@ -157,7 +157,7 @@ PYTHONDONTWRITEBYTECODE=1 python3 \
 
 ## Run the P02 actual-window presentation matrix
 
-For the P02 TopDown subject, run the dedicated production-fixture matrix in
+For the historical P02 TopDown subject, run the dedicated production-fixture matrix in
 addition to S0/S1/formal. It launches the game-owned `indoor-light/p02/static`
 fixture for High/Medium/Low × DPI 1.0/1.5/2.0 × Render3d visible/hidden and
 captures only the X11 client owned by the launched process tree:
@@ -168,7 +168,11 @@ PYTHONDONTWRITEBYTECODE=1 python3 \
   plan --repo "$PWD" --adapter Intel
 ```
 
-Run only the returned direct `kitty` command. The v9 validator requires all 18
+Do not use this frozen profile against a current P08-or-later subject: its
+historical Door / Tank / MudMixer mirror inventory is intentionally different.
+Run only the returned direct `kitty` command. This helper has no `status`
+subcommand, so poll the bounded `status`, `heartbeat_at`, `current_case`, and
+`cases_completed` fields in `<job-root>/job.json` every 15–30 seconds. The v9 validator requires all 18
 cases and ten phase-tagged bounded client-window PNGs per case. Its 30-second
 measurement window leaves time for every ACK-held storyboard phase after the
 normal warm-up. Rust holds each
@@ -269,6 +273,20 @@ optional normal data, proves the material is lit, and verifies that the normal
 `wall-density-v1` production route contains exactly 96 production Walls, no
 fallback Walls, all six mesh handles, and every topology mask six times.
 Revalidate the bundle with `verify --job-root <job-root>`.
+
+For the M5 current-source quality/DPI gate, keep the same approved candidate
+and use the Wall-specific 9-case matrix instead of the frozen P02 selector:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 \
+  .codex/skills/hell-workers-run-native-acceptance/scripts/wall_art_acceptance.py \
+  plan --repo "$VALIDATION_WORKTREE" --adapter Intel --candidate --matrix
+```
+
+This runs High/Medium/Low × DPI 1.0/1.5/2.0 sequentially. Each case owns a
+distinct process, nonce/ACK, raw performance bundle, and X11 client PNG. Poll
+the returned `status --job-root <job-root>` command and revalidate all nine
+cases with `verify --job-root <job-root>`.
 
 ## Run the Wall color-calibration pair
 

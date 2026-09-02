@@ -5,7 +5,7 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `production-wall-art-plan-2026-08-31` |
-| ステータス | `In Progress (M4)` |
+| ステータス | `In Progress (M5)` |
 | 作成日 | `2026-08-31` |
 | 最終更新日 | `2026-09-02` |
 | 作成者 | `Codex` |
@@ -876,6 +876,17 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
 - 採用後cleanupでは通常／release／isolated final候補をlit固定とし、`HW_WALL_ART_COMPARISON`、unlit debug material、
   pending optional normalのruntime load / readiness / allowlist経路を撤去した。final candidate galleryはplayer-facing toggleを
   持たず、`art_approved`・normal判定済みmanifestとexact generation/hash opt-inだけを受理する。
+- cleanup commit `df5c4dc5`をruntime subjectとして、pendingなしfinal generation 2を
+  `normal_decision=rejected` / `review_status=art_approved`で封印した。asset-set manifest SHA-256は
+  `04555ddea56feee93337ff3a3abbaec9019be06007c62866dac3888de424a3d6`、isolated projection SHA-256は
+  `8370c278c5c0b4749007cc1a1b5146f2388c98364eba42350a3c5c1bd8818075`、coreは6 GLB＋albedo＋emissiveの8 fileで
+  optional normalは0である。追補commit `f787be1a`ではignored実asset loader testのgeneration固定値をmanifest実値へ変更し、
+  generation 2の6 primitive、runtime bounds、lit material準備、Eligible→ReadyToApplyを`1 passed`で再検証した。
+- final fixed-lit actual-window job
+  `target/native-acceptance/wall-art-20260902T143128Z-a98b763e`はsubject `f787be1a`、Intel Arc / Vulkan / X11、
+  High / DPI 1.0でstatus / offline verifyともpassした。candidate generation 2、lit、production 96 / fallback 0、
+  distinct mesh 6、16 mask各6、connector visual 192 hidden / 0 visibleをsidecarで確認し、client PNG SHA-256は
+  `fae394ed2afaf6210a285209588dfd41f4bfbe83dbc42013cfe262794a11f4ba`である。
 
 - 変更内容:
   - M3のproduction spawn / WorldMap / presentation routeを使う専用wall-art gallery scenarioを `bevy_app`へ追加する。`visual_test`の独自meshを使わない。
@@ -902,8 +913,8 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   - [x] texture-baked lineworkが承認され、別outline提案を不要と判断している。
   - [ ] 9.6 wu straight E-W wallがstandardで全投影高0.90 tile、装飾最大でも1.00 tile以内である。`tile_rtt_px = 14`では内部色、最大zoom-out 5のHighでは内部色1 px以上、Medium / Lowではfinal compositeの無穴・無断線・無flicker silhouetteを全回転で満たす。
   - [x] 比較用normal / toggle / debug materialを採用結果に従い撤去している。
-  - [ ] M4 final asset generationが`normal_decision`、M1 tool commit、M4 runtime subject commit、art approval hashをpendingなしで封印し、選定時payloadと一致する。新generationのmanifest / projection、allowlist、M2 readiness、M3 activation / world-replace focused gateを再実行している。
-  - [ ] A/B harness commitと採用後final commitの前にそれぞれHelp impact decisionを完了し、各対象diff、およびcommitはするがpush / canonical promoteはしない境界を提示してユーザーの明示承認を得ている。未承認なら該当native phaseを開始しない。
+  - [x] M4 final asset generationが`normal_decision`、M1 tool commit、M4 runtime subject commit、art approval hashをpendingなしで封印し、選定時payloadと一致する。新generationのmanifest / projection、allowlist、M2 readiness、M3 activation / world-replace focused gateを再実行している。
+  - [x] A/B harness commitと採用後final commitの前にそれぞれHelp impact decisionを完了し、各対象diff、およびcommitはするがpush / canonical promoteはしない境界を提示してユーザーの明示承認を得ている。
 - 変更候補:
   - `crates/bevy_app/src/plugins/startup/perf_scenario/`
   - `.codex/skills/hell-workers-run-native-acceptance/scripts/wall_art_acceptance.py`（M0 calibration profileへgallery / art phaseを追加）
@@ -915,12 +926,28 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
 
 ### M5: 専用actual-window、P02回帰、性能を閉じる
 
+実装状況（2026-09-02）:
+
+- final fixed-lit単一caseは上記M4最終jobでpassした。一方、現行`wall_art_acceptance.py`は1 case固定で、
+  このM5が要求するHigh / Medium / Low × DPI 1.0 / 1.5 / 2.0の9 case実行を未実装だったため、
+  `--candidate --matrix`を追加した。各caseを別process、nonce / ACK、X11 client PNG、raw performance bundleへ分離し、
+  job statusとoffline verifierはexact 9 case / screenshot hash / quality / scale factorを再計算する。
+- current subject `f787be1a`でhistorical P02 v9を試行したjob
+  `target/native-acceptance/p02-presentation-20260902T150153Z-1caa5981`は、最初のHigh / DPI 1 / visible caseで
+  既知のlegacy Door child Sprite契約を検出してfail-closedとなった。semantic state / WorldMap owner / passabilityは一致し、
+  P08 active Structural3dは子Sprite 0である。M0で既に打ち切った同じ仮説なので、frozen P02 validatorの緩和やmirror復元は行わず、
+  invalid artifactをM5証拠へ流用しない。current-source回帰はWall専用9 case、historical P02は登録済みimmutable locatorの
+  offline整合検査で閉じる。
+- 9 case harnessを追加したため、先に得た単一case jobはM4の固定lit / asset identity証拠として保持するが、M5 matrix合格には
+  流用しない。harness commitと新source / harness fingerprintを確定してからclean validation worktreeを更新し、9 caseを新規実行する。
+
 - 変更内容:
   - M4で完成・commit済みのwall-art gallery / fail-closed profileを変更せず、final commitのclean validation worktreeで実行する。code / launcher / predicate修正が必要になった時点でartifactを無効化してM4へ戻り、final commit承認からやり直す。
   - 性能用にはM0 baseline commitとM4 final commitから別々のclean worktreeを作り、同じfinal asset viewをexact copyする。full / wall-set / non-wallの3 hash、freeze済みdensity profile / Rust fixture / measurement contract hash、adapter / backend / windowを一致させる。baseline binaryは追加wall fileを参照しなくてもasset view自体はfinalと同じにする。
   - gallery 1枚に、孤立、4端、2直線、4corner、4T、cross、Door隣接を配置し、完成列と仮設列を比較できるようにする。
   - phaseを追加／撤去、仮設→完成bounce、Soul front/back、save/load rehydrate、standard / farthest player zoomに分け、launcher ACKをasset-set identityとprocess-local session / activation revisionの両方へ結んだclient-window captureを作る。
-  - High / Medium / Low × DPI 1.0 / 1.5 / 2.0のGPU-visible 9 caseを専用profileで検証し、既存P02 18 case matrixも回帰として再実行する。
+  - High / Medium / Low × DPI 1.0 / 1.5 / 2.0のGPU-visible 9 caseをcurrent-source専用profileで検証する。historical P02の
+    18 case matrixはP02当時のsource / legacy mirror inventoryにのみ再実行可能であり、登録済みimmutable artifactをoffline検証する。
   - sidecarでsource fingerprint、3 asset hash、manifest authority / asset-set generation、session / activation revision、6 GLB / texture hash、load state、phase別fallback count、mask / family / rotation、owner / visual exact count、active / total mesh / material IDs、triangles、distinct mesh/material組合せ、geometry report hashと9.6 / 12.8 wu契約を検証する。steady productionはfallback 0、world-replace transitionだけは全owner fallbackの1 frameを許し、mixed countは全phase 0とする。
   - M0 baseline commit対final production、およびfinal commit内のprofile-only `force-fallback` control対productionを、`wall-density-v1`のcompleted / provisional各N / 4Nで実行する。各runのp95 / p99を先に求め、3 valid runの中央値で両比較とも`<= +5%`を要求し、MADを併記する。
   - bounded RenderDoc captureではcompleted opaqueのwall main-passを抽出し、`D_N <= 6`、`D_4N <= 6`、`D_4N = D_N`を要求する。provisional transparentは別sorted phaseで`D_4N <= 4 * D_N + 6`を要求し、count / normalized slopeを別artifactへ記録する。
@@ -931,7 +958,8 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   - [ ] 9 caseのclient-window PNGとsidecarがfresh source / asset fingerprintに対してfail-closedでpassする。
   - [ ] 全16 mask、Door接続、完成／仮設、追加／撤去、completion、depth、loadが画像とstateの両方でpassする。
   - [ ] 全family / rotationのWall–Wall portが9.6 wuの同一profileで連続し、各armの局所横断で連続壁体が9.6 wu未満へ細らず、装飾が12.8 wu envelopeとcell AABBを越えない。最遠zoom-outではHighの内部色1 px以上、Medium / Lowのfinal composite silhouette連続を満たす。
-  - [ ] existing P02 matrixがwall depth、completion bounce、Render3d visible/hidden、exactly-oneを含め全件passする。
+  - [ ] registered historical P02 artifactのimmutable locator / hashがoffline再検証でpassし、current-sourceのwall depth、
+    completion bounce、Render3d visible、exactly-oneはWall専用profile / focused testでpassする。P08 sourceをP02 selectorへ偽装しない。
   - [ ] production resident mesh 6、active production material 2、finite total pool mesh 7 / material 4、steady phaseのfallback active 0、world-replace transitionのfallback-only 1 frame、全phase mixed 0、各mesh 350 triangles以下、distinct production mesh/material組合せ12以下である。
   - [ ] M0 baseline commitとfinal commitのclean worktreeが同一のfinal asset viewとbyte-identicalなdensity profile / fixture / contractを使い、N=96 / 4N=384、seed、warm-up / measure、3-run集約のいずれにもdriftがない。
   - [ ] baseline対production、final `force-fallback`対productionのcompleted / provisional Capture p95 / p99中央値がそれぞれ`+5%`以内で、全run valid、MAD併記である。
@@ -942,7 +970,7 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   - [ ] adapter / backend / window backendがartifactに記録され、headless結果をrenderer証拠にしていない。
 - 検証:
   - 専用profileの `plan` が返すdirect `kitty` launcherだけを実行し、15〜30秒間隔でstatusをpollする。
-  - `PYTHONDONTWRITEBYTECODE=1 python3 .codex/skills/hell-workers-run-native-acceptance/scripts/p02_presentation_acceptance.py plan --repo "$PWD" --adapter Intel`
+  - `PYTHONDONTWRITEBYTECODE=1 python3 .codex/skills/hell-workers-run-native-acceptance/scripts/wall_art_acceptance.py plan --repo "$VALIDATION_WORKTREE" --adapter Intel --candidate --matrix`
   - `python3 scripts/perf.py compare --baseline <m0-session> --candidate <final-production-session> --metric p95 --max-regression-pct 5 --min-runs 3 --output <sealed-artifacts>/baseline-vs-production-p95.csv`
   - `python3 scripts/perf.py compare --baseline <m0-session> --candidate <final-production-session> --metric p99 --max-regression-pct 5 --min-runs 3 --output <sealed-artifacts>/baseline-vs-production-p99.csv`
   - `python3 scripts/perf.py compare --baseline <final-force-fallback-session> --candidate <final-production-session> --metric p95 --max-regression-pct 5 --min-runs 3 --output <sealed-artifacts>/force-fallback-vs-production-p95.csv`
@@ -1281,7 +1309,16 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
 - M0初期batchのHelp実経路判断: `No impact`。開発用fixture / calibration tooling / test / docsだけで、
   通常ゲームの入力、表示、建築成立条件、runtime data、プレイヤー向け文言は不変（`HELL_WORKERS_DIFF_BASE=HEAD`でgate pass）。
 - 初期M0 toolingはユーザー指示により`06826fd2`へ中間commit済み。ただしCapture harnessを含む凍結済みbaseline commitではない。
-- 未解決エラー: なし。M0のOCIO、reference locator、orientation / boundsとM3のrepository hygiene / profiling test回帰は解消済み。
+- M4 final generation 2実asset loader:
+  `assets::wall_asset_set::tests::isolated_candidate_loads_six_real_primitives_with_valid_runtime_bounds`は
+  `1 passed / 622 filtered`。試験のgeneration 1固定をmanifest実値へ修正したcommitは`f787be1a`（2026-09-02）。
+- M4 final fixed-lit actual-window:
+  `target/native-acceptance/wall-art-20260902T143128Z-a98b763e`はstatus `valid`、独立verify `pass`、
+  screenshot `fae394ed…`、Intel Arc / Mesa 26.1.6 / Vulkan / X11、generation 2、production 96 / fallback 0（2026-09-02）。
+- M5 historical P02 current-source誤用確認:
+  `target/native-acceptance/p02-presentation-20260902T150153Z-1caa5981`は既知のlegacy Door mirror条件で最初のcaseを
+  fail-closed。M0の同仮説を再調整せず、current-source 9 case Wall matrixとregistered historical locatorへ分離（2026-09-02）。
+- 未解決エラー: なし。M5の9 case Wall matrix、性能比較、RenderDoc再採取は未実行であり、完了条件として残る。
 
 ### Definition of Done
 
@@ -1297,7 +1334,7 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
 - [ ] rust-analyzer workspace diagnosticsが0件である。
 - [x] `python3 scripts/dev.py cargo -- clippy --workspace --all-targets -- -D warnings`が成功する。
 - [x] `python3 scripts/dev.py verify`が成功する。
-- [ ] 専用wall-art native profileと既存P02 matrixがfail-closedで成功する。
+- [ ] 専用wall-art 9 case native profileとregistered historical P02 artifactのoffline検証がfail-closedで成功する。
 - [ ] plan lifecycleを閉じ、恒久仕様へ引継ぎ済みである。
 
 ## 10. 更新履歴
@@ -1323,3 +1360,4 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
 | `2026-09-02` | `Codex` | M4 preflightでsealed OCIO artifactをbyte-identical再検証。normal textureのlinear/+Yはpassしたが全6 GLBのtangent不在をtechnical failureとしてnormal A/Bをrejectし、lit/unlit比較だけを次段に残した |
 | `2026-09-02` | `Codex` | M4 lit/unlit比較用に既存N=96 production fixtureをgallery化し、16 mask×6、6 mesh、fallback 0、candidate identity、material modeをexact sidecarへ追加。profiling/candidate/actual-window限定toggleとfail-closed launcherを実装し、ユーザーからharness commit後のnative開始承認を得た |
 | `2026-09-02` | `Codex` | ユーザーが最終lit画像を採用。art approval artifactを確定し、比較unlit materialとpending optional normal経路を撤去、lit固定のart-approved candidate projection / sealing / gallery契約へ更新した |
+| `2026-09-02` | `Codex` | final generation 2を封印し、実asset loaderと固定lit actual-window単一caseをpass。current P08 subjectでhistorical P02を再実行できない既知境界を再確認し、current-source M5用の9 case Wall matrixを追加した |

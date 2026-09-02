@@ -65,6 +65,12 @@ X11 clientから、Door Open / Closed / Locked、Soul前 / 後、Bridge、Wall b
 `RenderLayers`交差、期待mesh / material handle、asset registry在籍をsource側でfail-closedに確認する。desktop全体や独立
 `visual_test`の画像だけではP02受入にならない。
 
+この18 case profileはP02当時のsourceとlegacy structural mirror inventoryを含む凍結契約である。P08以降の
+`Structural3d`はDoor / Tank / MudMixerもowner-linked 3D visual exactly one、子Sprite 0へ移行済みなので、現行sourceを
+P02 selectorへ渡して期待表を緩和しない。現行Wallの品質／DPI回帰は`wall-art-approved-candidate-matrix-v1`が所有し、
+High / Medium / Low × DPI 1.0 / 1.5 / 2.0を9つの逐次X11 client captureとして検証する。historical P02は登録済み
+immutable artifactのhashとlocatorをoffline再検証する。
+
 ### P06 shared Light Field runtime inventory
 
 P06はPoint／Spot Lightや追加shadow map／local-light passを生成せず、P01の単一Scene RtTとP02のTopDown presentationを維持する。CPU fieldは1つのlinear RGBA8 `Image`へrevision単位でuploadされ、Terrain 3 pipelineとstructural 1 pipelineはそれぞれtexture／samplerを1組だけbindする。Wall／Doorのper-instance sampling anchorは`MeshTag`にあり、material handle数はLamp数・Building数に比例しない。

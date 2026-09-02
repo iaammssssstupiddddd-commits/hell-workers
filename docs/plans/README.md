@@ -29,7 +29,7 @@
 | [3d-rtt/asset-milestones-2026-03-17.md](3d-rtt/asset-milestones-2026-03-17.md) | 進行中（建築・terrain track継続、Soul GLB runtime trackはSuperseded） | アセット作成マイルストーン |
 | [3d-rtt/lighting-visual-plan-2026-04-04.md](3d-rtt/lighting-visual-plan-2026-04-04.md) | Superseded | Outdoor Lamp のローカル照明で Soul / 建物に落ちる影を追加する計画 |
 | [3d-rtt/milestone-roadmap.md](3d-rtt/milestone-roadmap.md) | Superseded（完了済み実装の履歴。未完項目は凍結） | 3D-RtT 移行ロードマップ |
-| [3d-rtt/production-wall-art-plan-2026-08-31.md](3d-rtt/production-wall-art-plan-2026-08-31.md) | In Progress (M4) | active 3D wallをRough Vector Sketchの本番assetへ置き換え、制作・接続・実機受入・canonical昇格を一つの経路で閉じる計画。 |
+| [3d-rtt/production-wall-art-plan-2026-08-31.md](3d-rtt/production-wall-art-plan-2026-08-31.md) | In Progress (M5) | active 3D wallをRough Vector Sketchの本番assetへ置き換え、制作・接続・実機受入・canonical昇格を一つの経路で閉じる計画。 |
 | [3d-rtt/single-scene-light-field/00-baseline-gates-plan-2026-08-03.md](3d-rtt/single-scene-light-field/00-baseline-gates-plan-2026-08-03.md) | Completed | Audit、Capture、Memory、RenderDocのbaselineと数値gateを実装前に固定するP00。 |
 | [3d-rtt/single-scene-light-field/01-single-scene-rtt-plan-2026-08-03.md](3d-rtt/single-scene-light-field/01-single-scene-rtt-plan-2026-08-03.md) | Completed | Soul mask target／camera／proxyを撤去し、Scene RtT 1枚へ移行するP01。 |
 | [3d-rtt/single-scene-light-field/02-topdown-presentation-plan-2026-08-03.md](3d-rtt/single-scene-light-field/02-topdown-presentation-plan-2026-08-03.md) | Completed | Door実経路、TopDown camera、Building分類、Soul billboard／Familiar前景を統合するP02。 |

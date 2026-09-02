@@ -23,6 +23,7 @@ import wall_density_acceptance as density
 SCHEMA_VERSION = 1
 PROFILE = "wall-art-current-calibration-v1"
 CANDIDATE_PROFILE = "wall-art-approved-candidate-v1"
+MATRIX_PROFILE = "wall-art-approved-candidate-matrix-v1"
 PHASE = "current-wall"
 SEED = 20_260_901
 WINDOW_WIDTH = 1280
@@ -34,6 +35,8 @@ MEASURE_SECONDS = 10.0
 RUN_TIMEOUT_SECONDS = 120.0
 POLL_SECONDS = 0.10
 SCREENSHOT = "current-wall.png"
+MATRIX_QUALITIES = ("high", "medium", "low")
+MATRIX_SCALE_FACTORS = (1.0, 1.5, 2.0)
 CONTRACT_PATH = Path(__file__).resolve().parents[4] / density.CONTRACT_RELATIVE
 
 
@@ -48,7 +51,26 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def calibration_command(repo: Path, root: Path, adapter: str) -> list[str]:
+def matrix_cases() -> list[dict[str, Any]]:
+    return [
+        {
+            "id": f"quality-{quality}-dpi-{str(scale_factor).replace('.', 'p')}",
+            "quality": quality,
+            "scale_factor": scale_factor,
+        }
+        for quality in MATRIX_QUALITIES
+        for scale_factor in MATRIX_SCALE_FACTORS
+    ]
+
+
+def calibration_command(
+    repo: Path,
+    root: Path,
+    adapter: str,
+    *,
+    quality: str = "high",
+    scale_factor: float = WINDOW_SCALE_FACTOR,
+) -> list[str]:
     return [
         "python3",
         "scripts/perf.py",
@@ -87,9 +109,9 @@ def calibration_command(repo: Path, root: Path, adapter: str) -> list[str]:
         "--window-height",
         str(WINDOW_HEIGHT),
         "--window-scale-factor",
-        str(WINDOW_SCALE_FACTOR),
+        str(scale_factor),
         "--rtt-quality",
-        "high",
+        quality,
         "--instrumentation",
         "capture",
         "--binary",
@@ -117,7 +139,10 @@ def require_number(value: Any, label: str) -> float:
     return number
 
 
-def profile_name(candidate: bool) -> str:
+def profile_name(candidate: bool, matrix: bool = False) -> str:
+    if matrix:
+        native.require(candidate, "Wall matrix requires candidate mode")
+        return MATRIX_PROFILE
     return CANDIDATE_PROFILE if candidate else PROFILE
 
 
@@ -156,7 +181,12 @@ def candidate_identity(repo: Path) -> dict[str, Any]:
 
 
 def validate_probe_status(
-    value: Any, *, nonce: str, candidate: bool = False
+    value: Any,
+    *,
+    nonce: str,
+    candidate: bool = False,
+    quality: str = "high",
+    scale_factor: float = WINDOW_SCALE_FACTOR,
 ) -> dict[str, Any]:
     fields = {
         "schema_version",
@@ -225,7 +255,7 @@ def validate_probe_status(
         == {
             "physical_width": WINDOW_WIDTH,
             "physical_height": WINDOW_HEIGHT,
-            "scale_factor": WINDOW_SCALE_FACTOR,
+            "scale_factor": scale_factor,
         },
         "Wall calibration window differs",
     )
@@ -243,7 +273,7 @@ def validate_probe_status(
     expected_render = {
         "backend": "vulkan",
         "render3d": "visible",
-        "rtt_quality": "high",
+        "rtt_quality": quality,
         "camera_scale": 1.0 if candidate else 5.0,
         "fallback_mesh_resident": not candidate,
     }
@@ -457,6 +487,8 @@ def verify_performance(
     subject_commit: str,
     source_fingerprint: str,
     binary_sha256: str,
+    quality: str = "high",
+    scale_factor: float = WINDOW_SCALE_FACTOR,
 ) -> dict[str, Any]:
     Case, validate_run = density.load_perf_modules(repo)
     case = Case("wall-density", "small", "gpu", SEED, 0, 0, wall_phase="completed")
@@ -480,8 +512,8 @@ def verify_performance(
         expected_present_mode="novsync",
         expected_window_width=WINDOW_WIDTH,
         expected_window_height=WINDOW_HEIGHT,
-        expected_window_scale_factor=WINDOW_SCALE_FACTOR,
-        expected_rtt_quality="high",
+        expected_window_scale_factor=scale_factor,
+        expected_rtt_quality=quality,
     )
     native.require(
         validation.valid,
@@ -537,7 +569,12 @@ def run_calibration(
     state: dict[str, Any],
     candidate_mode: bool,
     candidate: dict[str, Any] | None,
+    matrix_mode: bool = False,
+    quality: str = "high",
+    scale_factor: float = WINDOW_SCALE_FACTOR,
+    job_file: Path | None = None,
 ) -> dict[str, Any]:
+    job_file = job_file or root / "job.json"
     status_path = root / "probe-status.json"
     ack_path = root / "probe-ack.json"
     screenshot = root / SCREENSHOT
@@ -562,10 +599,16 @@ def run_calibration(
                 "HW_WALL_CANDIDATE_MANIFEST_SHA256": candidate["manifest_sha256"],
             }
         )
-    command = calibration_command(repo, root, adapter)
+    command = calibration_command(
+        repo,
+        root,
+        adapter,
+        quality=quality,
+        scale_factor=scale_factor,
+    )
     state.update({"current_stage": "capture"})
     state.setdefault("commands", []).append({"stage": "capture", "argv": command})
-    native.atomic_write_json(root / "job.json", state)
+    native.atomic_write_json(job_file, state)
     deadline = time.monotonic() + RUN_TIMEOUT_SECONDS
     captured_status: dict[str, Any] | None = None
     screenshot_evidence: dict[str, Any] | None = None
@@ -582,7 +625,7 @@ def run_calibration(
             pass_fds=native.activity_pass_fds(os.environ),
         )
         state["child_pid"] = process.pid
-        native.atomic_write_json(root / "job.json", state)
+        native.atomic_write_json(job_file, state)
         try:
             while process.poll() is None:
                 if (
@@ -595,7 +638,13 @@ def run_calibration(
                         raise native.AcceptanceError(
                             f"Wall production probe failed: {value.get('reason')}"
                         )
-                    status = validate_probe_status(value, nonce=nonce, candidate=candidate_mode)
+                    status = validate_probe_status(
+                        value,
+                        nonce=nonce,
+                        candidate=candidate_mode,
+                        quality=quality,
+                        scale_factor=scale_factor,
+                    )
                     evidence = capture_client_window(
                         screenshot, root_pid=process.pid, status=status
                     )
@@ -607,7 +656,7 @@ def run_calibration(
                     native.stop_command_process(process)
                     raise native.AcceptanceError("Wall calibration capture timed out")
                 state["heartbeat_at"] = native.utc_now()
-                native.atomic_write_json(root / "job.json", state)
+                native.atomic_write_json(job_file, state)
                 time.sleep(POLL_SECONDS)
             returncode = process.wait()
         finally:
@@ -621,6 +670,8 @@ def run_calibration(
         captured_status is not None and screenshot_evidence is not None,
         "Wall calibration PNG was not captured",
     )
+    state["child_pid"] = None
+    native.atomic_write_json(job_file, state)
     status_path.unlink(missing_ok=True)
     performance = verify_performance(
         repo=repo,
@@ -629,6 +680,8 @@ def run_calibration(
         subject_commit=subject_commit,
         source_fingerprint=source_fingerprint,
         binary_sha256=sha256(binary),
+        quality=quality,
+        scale_factor=scale_factor,
     )
     native.require(
         performance["fixture"]["layout_checksum"]
@@ -638,9 +691,11 @@ def run_calibration(
     observation = {
         "schema_version": SCHEMA_VERSION,
         "status": "pass",
-        "profile": profile_name(candidate_mode),
+        "profile": profile_name(candidate_mode, matrix_mode),
         "candidate": candidate_mode,
         "candidate_identity": candidate,
+        "quality": quality,
+        "scale_factor": scale_factor,
         "probe_status": captured_status,
         "screenshot": screenshot_evidence,
         "performance": performance,
@@ -649,54 +704,31 @@ def run_calibration(
     return observation
 
 
-def verify_root(root: Path) -> dict[str, Any]:
-    manifest = native.read_json(root / "manifest.json")
-    candidate_mode = manifest.get("candidate")
-    native.require(type(candidate_mode) is bool, "Wall candidate mode is invalid")
-    candidate = manifest.get("candidate_identity")
-    native.require(
-        manifest.get("profile") == profile_name(candidate_mode),
-        "Wall manifest profile differs",
-    )
-    native.require(
-        manifest.get("schema_version") == SCHEMA_VERSION, "Wall manifest schema differs"
-    )
-    native.require(
-        manifest.get("status") == "pass",
-        "Wall manifest is invalid",
-    )
-    repo = native.validate_repo(manifest["repo"])
-    density.assert_fully_clean(repo, manifest["subject_commit"])
-    native.require(
-        native.source_fingerprint(repo) == manifest["source_fingerprint"],
-        "Wall source changed",
-    )
-    native.require(
-        native.native_harness_fingerprint(repo) == manifest["harness_fingerprint"],
-        "Wall harness changed",
-    )
-    native.require(
-        density.asset_view_fingerprint(repo) == manifest["asset_view_fingerprint"],
-        "Wall asset view changed",
-    )
-    if not candidate_mode:
-        native.require(candidate is None, "Fallback calibration has candidate identity")
-    else:
-        native.require(
-            candidate == candidate_identity(repo), "Wall candidate identity changed"
-        )
-    binary = repo / "target/profiling/bevy_app"
-    native.require(sha256(binary) == manifest["binary_sha256"], "Wall binary changed")
+def verify_observation(
+    *,
+    root: Path,
+    repo: Path,
+    manifest: dict[str, Any],
+    candidate_mode: bool,
+    candidate: dict[str, Any] | None,
+    matrix_mode: bool,
+    quality: str,
+    scale_factor: float,
+) -> dict[str, Any]:
     observation = native.read_json(root / "observation.json")
     status = validate_probe_status(
         observation.get("probe_status"),
         nonce=observation["probe_status"]["session_nonce"],
         candidate=candidate_mode,
+        quality=quality,
+        scale_factor=scale_factor,
     )
     native.require(
-        observation.get("profile") == profile_name(candidate_mode)
+        observation.get("profile") == profile_name(candidate_mode, matrix_mode)
         and observation.get("candidate") == candidate_mode
-        and observation.get("candidate_identity") == candidate,
+        and observation.get("candidate_identity") == candidate
+        and observation.get("quality", "high") == quality
+        and observation.get("scale_factor", WINDOW_SCALE_FACTOR) == scale_factor,
         "Wall observation identity differs",
     )
     if candidate_mode:
@@ -728,6 +760,8 @@ def verify_root(root: Path) -> dict[str, Any]:
         subject_commit=manifest["subject_commit"],
         source_fingerprint=manifest["source_fingerprint"],
         binary_sha256=manifest["binary_sha256"],
+        quality=quality,
+        scale_factor=scale_factor,
     )
     native.require(
         performance == observation.get("performance"),
@@ -738,13 +772,88 @@ def verify_root(root: Path) -> dict[str, Any]:
         == status["fixture"]["layout_checksum"],
         "Wall fixture link differs",
     )
+    return observation
+
+
+def verify_root(root: Path) -> dict[str, Any]:
+    manifest = native.read_json(root / "manifest.json")
+    candidate_mode = manifest.get("candidate")
+    native.require(type(candidate_mode) is bool, "Wall candidate mode is invalid")
+    matrix_mode = manifest.get("matrix", False)
+    native.require(type(matrix_mode) is bool, "Wall matrix mode is invalid")
+    candidate = manifest.get("candidate_identity")
+    native.require(
+        manifest.get("profile") == profile_name(candidate_mode, matrix_mode),
+        "Wall manifest profile differs",
+    )
+    native.require(
+        manifest.get("schema_version") == SCHEMA_VERSION, "Wall manifest schema differs"
+    )
+    native.require(
+        manifest.get("status") == "pass",
+        "Wall manifest is invalid",
+    )
+    repo = native.validate_repo(manifest["repo"])
+    density.assert_fully_clean(repo, manifest["subject_commit"])
+    native.require(
+        native.source_fingerprint(repo) == manifest["source_fingerprint"],
+        "Wall source changed",
+    )
+    native.require(
+        native.native_harness_fingerprint(repo) == manifest["harness_fingerprint"],
+        "Wall harness changed",
+    )
+    native.require(
+        density.asset_view_fingerprint(repo) == manifest["asset_view_fingerprint"],
+        "Wall asset view changed",
+    )
+    if not candidate_mode:
+        native.require(candidate is None, "Fallback calibration has candidate identity")
+    else:
+        native.require(
+            candidate == candidate_identity(repo), "Wall candidate identity changed"
+        )
+    binary = repo / "target/profiling/bevy_app"
+    native.require(sha256(binary) == manifest["binary_sha256"], "Wall binary changed")
+    specs = matrix_cases() if matrix_mode else [
+        {"id": "single", "quality": "high", "scale_factor": WINDOW_SCALE_FACTOR}
+    ]
+    if matrix_mode:
+        native.require(
+            manifest.get("cases") == specs,
+            "Wall matrix case contract differs",
+        )
+    screenshot_hashes: dict[str, str] = {}
+    for spec in specs:
+        case_root = root / "cases" / spec["id"] if matrix_mode else root
+        observation = verify_observation(
+            root=case_root,
+            repo=repo,
+            manifest=manifest,
+            candidate_mode=candidate_mode,
+            candidate=candidate,
+            matrix_mode=matrix_mode,
+            quality=spec["quality"],
+            scale_factor=spec["scale_factor"],
+        )
+        screenshot_hashes[spec["id"]] = observation["screenshot"]["sha256"]
+    if matrix_mode:
+        native.require(
+            manifest.get("screenshot_sha256") == screenshot_hashes,
+            "Wall matrix screenshot hashes differ",
+        )
+    else:
+        native.require(
+            manifest.get("screenshot_sha256") == screenshot_hashes["single"],
+            "Wall screenshot manifest hash differs",
+        )
     return {
         "schema_version": SCHEMA_VERSION,
         "status": "pass",
-        "profile": profile_name(candidate_mode),
+        "profile": profile_name(candidate_mode, matrix_mode),
         "candidate": candidate_mode,
         "root": str(root),
-        "screenshots": 1,
+        "screenshots": len(specs),
     }
 
 
@@ -757,6 +866,8 @@ def plan(args: argparse.Namespace) -> int:
         for path in density.missing_runtime_assets(repo)
     )
     candidate: dict[str, Any] | None = None
+    if args.matrix and not args.candidate:
+        failures.append("Wall matrix requires --candidate")
     if args.candidate:
         try:
             candidate = candidate_identity(repo)
@@ -813,12 +924,15 @@ def plan(args: argparse.Namespace) -> int:
                 candidate["manifest_sha256"],
             ]
         )
+    if args.matrix:
+        command.append("--matrix")
     native.print_json(
         {
             "schema_version": SCHEMA_VERSION,
             "status": "ready" if not failures else "blocked",
-            "profile": profile_name(args.candidate),
+            "profile": MATRIX_PROFILE if args.matrix else profile_name(args.candidate),
             "candidate": args.candidate,
+            "matrix": args.matrix,
             "candidate_identity": candidate,
             "job_root": str(root),
             "subject_commit": subject,
@@ -829,10 +943,25 @@ def plan(args: argparse.Namespace) -> int:
             "failures": failures,
             "resources": resources,
             "launcher_command": command,
+            "status_command": [
+                "python3",
+                str(Path(__file__).resolve()),
+                "status",
+                "--job-root",
+                str(root),
+            ],
+            "verify_command": [
+                "python3",
+                str(Path(__file__).resolve()),
+                "verify",
+                "--job-root",
+                str(root),
+            ],
             "execution_contract": {
                 "actual_window_required": True,
                 "capture_scope": native.SAVE_CATALOG_CAPTURE_SCOPE,
-                "screenshots": 1,
+                "screenshots": len(matrix_cases()) if args.matrix else 1,
+                "cases": matrix_cases() if args.matrix else None,
             },
         }
     )
@@ -859,6 +988,10 @@ def run(args: argparse.Namespace) -> int:
     )
     density.assert_fully_clean(repo, args.subject_commit)
     native.require(
+        not args.matrix or args.candidate,
+        "Wall matrix requires candidate mode",
+    )
+    native.require(
         density.asset_view_fingerprint(repo) == args.asset_view_fingerprint,
         "Wall asset view changed",
     )
@@ -883,8 +1016,9 @@ def run(args: argparse.Namespace) -> int:
     state: dict[str, Any] = {
         "schema_version": SCHEMA_VERSION,
         "status": "running",
-        "profile": profile_name(args.candidate),
+        "profile": profile_name(args.candidate, args.matrix),
         "candidate": args.candidate,
+        "matrix": args.matrix,
         "candidate_identity": candidate,
         "subject_commit": args.subject_commit,
         "source_fingerprint": args.source_fingerprint,
@@ -913,22 +1047,43 @@ def run(args: argparse.Namespace) -> int:
             binary.is_file() and not binary.is_symlink(),
             "Wall profiling binary is missing",
         )
-        observation = run_calibration(
-            repo=repo,
-            root=root,
-            binary=binary,
-            adapter=args.adapter,
-            subject_commit=args.subject_commit,
-            source_fingerprint=args.source_fingerprint,
-            state=state,
-            candidate_mode=args.candidate,
-            candidate=candidate,
-        )
+        specs = matrix_cases() if args.matrix else [
+            {"id": "single", "quality": "high", "scale_factor": WINDOW_SCALE_FACTOR}
+        ]
+        observations: dict[str, dict[str, Any]] = {}
+        for index, spec in enumerate(specs):
+            case_root = root / "cases" / spec["id"] if args.matrix else root
+            case_root.mkdir(parents=True, exist_ok=not args.matrix)
+            state.update(
+                {
+                    "current_case": spec["id"],
+                    "cases_completed": index,
+                }
+            )
+            native.atomic_write_json(root / "job.json", state)
+            observations[spec["id"]] = run_calibration(
+                repo=repo,
+                root=case_root,
+                binary=binary,
+                adapter=args.adapter,
+                subject_commit=args.subject_commit,
+                source_fingerprint=args.source_fingerprint,
+                state=state,
+                candidate_mode=args.candidate,
+                candidate=candidate,
+                matrix_mode=args.matrix,
+                quality=spec["quality"],
+                scale_factor=spec["scale_factor"],
+                job_file=root / "job.json",
+            )
+            state["cases_completed"] = index + 1
+            native.atomic_write_json(root / "job.json", state)
         manifest = {
             "schema_version": SCHEMA_VERSION,
             "status": "pass",
-            "profile": profile_name(args.candidate),
+            "profile": profile_name(args.candidate, args.matrix),
             "candidate": args.candidate,
+            "matrix": args.matrix,
             "candidate_identity": candidate,
             "repo": str(repo),
             "subject_commit": args.subject_commit,
@@ -937,7 +1092,15 @@ def run(args: argparse.Namespace) -> int:
             "asset_view_fingerprint": args.asset_view_fingerprint,
             "adapter": args.adapter,
             "binary_sha256": sha256(binary),
-            "screenshot_sha256": observation["screenshot"]["sha256"],
+            "screenshot_sha256": (
+                {
+                    spec["id"]: observations[spec["id"]]["screenshot"]["sha256"]
+                    for spec in specs
+                }
+                if args.matrix
+                else observations["single"]["screenshot"]["sha256"]
+            ),
+            "cases": specs if args.matrix else None,
             "completed_at": native.utc_now(),
         }
         native.atomic_write_json(root / "manifest.json", manifest)
@@ -982,6 +1145,27 @@ def self_test() -> int:
     native.require(
         "--wall-actual-window" in command,
         "Wall calibration command lacks its single-case contract",
+    )
+    cases = matrix_cases()
+    native.require(
+        len(cases) == 9
+        and cases[0]
+        == {"id": "quality-high-dpi-1p0", "quality": "high", "scale_factor": 1.0}
+        and cases[-1]
+        == {"id": "quality-low-dpi-2p0", "quality": "low", "scale_factor": 2.0},
+        "Wall matrix case contract differs",
+    )
+    matrix_command = calibration_command(
+        Path("/repo"),
+        Path("/artifact"),
+        "Intel",
+        quality="low",
+        scale_factor=2.0,
+    )
+    native.require(
+        matrix_command[matrix_command.index("--rtt-quality") + 1] == "low"
+        and matrix_command[matrix_command.index("--window-scale-factor") + 1] == "2.0",
+        "Wall matrix command differs",
     )
     nonce = "0123456789abcdef0123456789abcdef"
     fixture_hash = density.sha256(CONTRACT_PATH)
@@ -1049,6 +1233,17 @@ def self_test() -> int:
         "visible_connector_visuals": 0,
     }
     validate_probe_status(candidate_status, nonce=nonce, candidate=True)
+    for case in cases:
+        matrix_status = json.loads(json.dumps(candidate_status))
+        matrix_status["window"]["scale_factor"] = case["scale_factor"]
+        matrix_status["render"]["rtt_quality"] = case["quality"]
+        validate_probe_status(
+            matrix_status,
+            nonce=nonce,
+            candidate=True,
+            quality=case["quality"],
+            scale_factor=case["scale_factor"],
+        )
     candidate_status["gallery"]["lighting"] = "unlit"
     try:
         validate_probe_status(candidate_status, nonce=nonce, candidate=True)
@@ -1063,7 +1258,7 @@ def self_test() -> int:
         {
             "schema_version": SCHEMA_VERSION,
             "status": "pass",
-            "profiles": [PROFILE, CANDIDATE_PROFILE],
+            "profiles": [PROFILE, CANDIDATE_PROFILE, MATRIX_PROFILE],
         }
     )
     return 0
@@ -1077,6 +1272,7 @@ def parser() -> argparse.ArgumentParser:
     plan_parser.add_argument("--job-root")
     plan_parser.add_argument("--adapter", default="Intel")
     plan_parser.add_argument("--candidate", action="store_true")
+    plan_parser.add_argument("--matrix", action="store_true")
     run_parser = commands.add_parser("run")
     for name in (
         "repo",
@@ -1089,6 +1285,7 @@ def parser() -> argparse.ArgumentParser:
     ):
         run_parser.add_argument("--" + name.replace("_", "-"), required=True)
     run_parser.add_argument("--candidate", action="store_true")
+    run_parser.add_argument("--matrix", action="store_true")
     run_parser.add_argument("--candidate-generation")
     run_parser.add_argument("--candidate-manifest-sha256")
     for name in ("status", "verify"):
