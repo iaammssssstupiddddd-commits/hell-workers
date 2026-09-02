@@ -295,13 +295,21 @@ def validate_probe_status(
         capture_view = require_object(
             status["capture_view"],
             "Wall comparison capture view",
-            {"focus", "hidden_ui_roots", "visible_ui_roots"},
+            {
+                "focus",
+                "hidden_ui_roots",
+                "visible_ui_roots",
+                "hidden_connector_visuals",
+                "visible_connector_visuals",
+            },
         )
         native.require(
             capture_view["focus"] == "subject"
             and type(capture_view["hidden_ui_roots"]) is int
             and capture_view["hidden_ui_roots"] > 0
-            and capture_view["visible_ui_roots"] == 0,
+            and capture_view["visible_ui_roots"] == 0
+            and capture_view["hidden_connector_visuals"] == 192
+            and capture_view["visible_connector_visuals"] == 0,
             "Wall comparison capture view differs",
         )
     probe = require_object(
@@ -1038,6 +1046,8 @@ def self_test() -> int:
         "focus": "subject",
         "hidden_ui_roots": 7,
         "visible_ui_roots": 0,
+        "hidden_connector_visuals": 192,
+        "visible_connector_visuals": 0,
     }
     validate_probe_status(candidate_status, nonce=nonce, comparison="lit")
     candidate_status["gallery"]["comparison"] = "unlit"

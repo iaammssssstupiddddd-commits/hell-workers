@@ -20,6 +20,7 @@ use hw_visual::visual3d::{Building3dVisual, Wall3dPresentationMode, Wall3dPresen
 use serde_json::{Value, json};
 
 use super::config::{PerfRenderMode, PerfScenarioConfig};
+use super::fixture::{PerfFixtureKind, PerfFixtureMarker};
 use super::wall_density_fixture::{
     CAMERA_SCALE, CONTRACT_ID, CONTRACT_SHA256, WallDensityFixtureState,
 };
@@ -144,6 +145,7 @@ type WallVisualQuery<'w, 's> = Query<
 pub(crate) struct WallActualWindowViewParams<'w, 's> {
     main_camera: Query<'w, 's, &'static mut Transform, (With<MainCamera>, Without<Camera3dRtt>)>,
     ui_roots: Query<'w, 's, &'static mut Node, Without<ChildOf>>,
+    connector_visuals: Query<'w, 's, (&'static PerfFixtureMarker, &'static mut Visibility)>,
 }
 
 pub(crate) fn prepare_wall_actual_window_comparison_view_system(
@@ -173,6 +175,11 @@ pub(crate) fn prepare_wall_actual_window_comparison_view_system(
     for mut node in &mut params.ui_roots {
         node.display = Display::None;
     }
+    for (marker, mut visibility) in &mut params.connector_visuals {
+        if marker.kind == PerfFixtureKind::WallDensityConnector {
+            *visibility = Visibility::Hidden;
+        }
+    }
 }
 
 #[derive(bevy::ecs::system::SystemParam)]
@@ -190,6 +197,7 @@ pub(crate) struct WallActualWindowParams<'w, 's> {
     >,
     main_camera: Query<'w, 's, &'static Transform, (With<MainCamera>, Without<Camera3dRtt>)>,
     ui_roots: Query<'w, 's, &'static Node, Without<ChildOf>>,
+    connector_visuals: Query<'w, 's, (&'static PerfFixtureMarker, &'static Visibility)>,
     visuals: WallVisualQuery<'w, 's>,
     meshes: Res<'w, Assets<Mesh>>,
     materials: Res<'w, Assets<TopDownStructuralMaterial>>,
@@ -329,6 +337,7 @@ fn build_status(
         {
             return Err("wall comparison MainCamera focus differs".to_string());
         }
+        let evidence = fixture.renderdoc_evidence()?;
         let hidden_ui_roots = params.ui_roots.iter().count();
         if hidden_ui_roots == 0
             || params
@@ -338,13 +347,34 @@ fn build_status(
         {
             return Err("wall comparison view retained visible UI roots".to_string());
         }
+        let hidden_connector_visuals = params
+            .connector_visuals
+            .iter()
+            .filter(|(marker, visibility)| {
+                marker.kind == PerfFixtureKind::WallDensityConnector
+                    && **visibility == Visibility::Hidden
+            })
+            .count();
+        let visible_connector_visuals = params
+            .connector_visuals
+            .iter()
+            .filter(|(marker, visibility)| {
+                marker.kind == PerfFixtureKind::WallDensityConnector
+                    && **visibility != Visibility::Hidden
+            })
+            .count();
+        if hidden_connector_visuals != evidence.connector_count || visible_connector_visuals != 0 {
+            return Err(format!(
+                "wall comparison connector visibility differs: hidden={hidden_connector_visuals}/{}, visible={visible_connector_visuals}/0",
+                evidence.connector_count
+            ));
+        }
         if presentation.mode != Wall3dPresentationMode::Production {
             return Err("wall comparison subject is not in production mode".to_string());
         }
         if mesh.0.id() == params.handles.wall_mesh.id() {
             return Err("wall comparison subject retained the fallback mesh".to_string());
         }
-        let evidence = fixture.renderdoc_evidence()?;
         let targets: HashSet<_> = evidence.target_entities.iter().copied().collect();
         let mut production_count = 0usize;
         let mut fallback_count = 0usize;
@@ -490,11 +520,21 @@ fn build_status(
     });
     if let Some(gallery) = gallery {
         let hidden_ui_roots = params.ui_roots.iter().count();
+        let hidden_connector_visuals = params
+            .connector_visuals
+            .iter()
+            .filter(|(marker, visibility)| {
+                marker.kind == PerfFixtureKind::WallDensityConnector
+                    && **visibility == Visibility::Hidden
+            })
+            .count();
         status["gallery"] = gallery;
         status["capture_view"] = json!({
             "focus": "subject",
             "hidden_ui_roots": hidden_ui_roots,
             "visible_ui_roots": 0,
+            "hidden_connector_visuals": hidden_connector_visuals,
+            "visible_connector_visuals": 0,
         });
         status["render"]["fallback_mesh_resident"] = json!(false);
     }

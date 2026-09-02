@@ -860,6 +860,9 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   `wall-art-20260902T063830Z-4ad652e2`は96 production / fallback 0 / 6 mesh / 16 mask各6件とoffline verifyをpassしたが、
   captureはpause UIに覆われ、lit側だけprofiling panelも表示され、camera scaleもstandard 1.0でなく5.0だったためart比較には
   採用しない。比較profileだけsubject中心・scale 1.0・top-level UI root 0 visibleをstatusとoffline verifierで固定して再撮影する。
+- view修正commit `ee4defe2`のfocused lit `wall-art-20260902T065809Z-a5ff5829`はstandard zoom / UI抑制と全gallery
+  stateをpassしたが、topologyを作るDoor Blueprintの施工sprite / task progressが壁を覆ったためart比較へ採用しない。
+  connectorの論理Blueprint / visual mirrorは維持したまま比較時だけ192 visual subtreeをHiddenにし、0 visibleをsidecarで要求する。
 
 - 変更内容:
   - M3のproduction spawn / WorldMap / presentation routeを使う専用wall-art gallery scenarioを `bevy_app`へ追加する。`visual_test`の独自meshを使わない。
