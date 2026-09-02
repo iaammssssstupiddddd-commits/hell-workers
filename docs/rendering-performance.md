@@ -83,6 +83,11 @@ Wall art actual-window profileからは指定できない。completed / provisio
 同一final binaryのfallback-control比p95 / p99中央値を各`+5%`以内で判定する。
 production provisionalは半透明albedoとshared light fieldを保ちつつ、transparent passのtexture sampleを抑えるため
 emissive textureをbindしない。completedだけが承認済みemissive textureを使用する。
+subject `991392b8`のIntel Arc / Mesa 26.1.6 / Vulkan / X11実測では、completed N / 4Nの
+p95回帰が`+0.451% / +0.438%`、p99が`+0.910% / +0.540%`、provisionalのp95が
+`+2.031% / +0.987%`、p99が`+1.134% / +0.369%`となり、全ケースが`+5%` gateを通過した。
+24 runと4比較の独立verify対象は
+`target/native-acceptance/wall-production-performance-20260902T173804Z-3f6bc903`である。
 
 ### P06 shared Light Field runtime inventory
 

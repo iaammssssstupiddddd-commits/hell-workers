@@ -319,6 +319,12 @@ N=96 / 4N=384を各3 run、30秒warm-up＋60秒measureで採る。各runは既�
 profileはphase別p95 / p99比較CSVを固有名で保存し、production中央値がfallback-controlより5%を超えると
 job全体をinvalidにする。
 
+subject `991392b8`の正式job
+`target/native-acceptance/wall-production-performance-20260902T173804Z-3f6bc903`は24 runと4比較を完走し、
+独立verifyも`status=pass`となった。全8比較行の最大回帰はprovisional N p95の`+2.031%`である。
+manifest SHA-256は`1d0ba117fcc755f303d29c170a7389777dcedc9b678f51f91dd4fb70badf3de1`、binary SHA-256は
+`200234f59cdd8d74df629b95d954c39403396873233abbb4d77836618dbe1443`である。
+
 resource preflightはnative recipe開始時に`MemAvailable` 10 GiBと実際のCargo target filesystem空き15 GiBを要求する。16 GiB以上ではCargo 2 job、未満では1 jobとし、`CARGO_INCREMENTAL=0`を固定する。各build / game / capture / replay stageの開始直前には`MemAvailable` 8 GiBを要求し、admission snapshotをartifactへ記録する。この8 GiBはstage開始ゲートであり、開始後に`MemAvailable`が一時的に8 GiBを下回ったことだけを理由に実行中processを停止しない。swapの使用量はmanifestへ診断情報として記録するが、RAMの下限を満たす場合の開始条件にはしない。Linuxで`MemAvailable`を読めない場合はstage開始を拒否する。helperは親環境の`CARGO_TARGET_DIR`を無視してworkspace `target/`へ、`TMPDIR` / `TMP` / `TEMP`を`target/.native-acceptance-tmp`へ固定し、`CARGO_HOME` / `RUSTUP_HOME`は安全な永続overrideだけを保持してtmpfs指定をaccount既定cacheへ戻す。job rootも`target/native-acceptance/`へ生成する。formal RenderDocのraw capture / replay workは`target/native-acceptance/renderdoc-foundation/<uuid>/`に置き、成功時だけscratchを削除する。失敗時はpartial raw、log、checkpoint、failure reasonを同じUUIDに保持する。capture/replay childは各600秒、RD0 outerは1,920秒、formal RenderDoc outerは1,320秒を上限とし、owned process groupをTERM→KILL→reapしてorphanを拒否する。capture前とRDC copy前には`max(15 GiB, 2 × RDC bytes + 1 GiB)`の同一filesystem空きを要求する。`/tmp`またはmemory-backed filesystemのjob / artifactを、default path・明示pathともに解決済みsymlink/mountまで検査して拒否し、残存`/tmp/hell-workers-*-target`はサイズを出して停止するが自動削除しない。`scripts/perf.py`と`scripts/dev.py`も同じくworkspace target・disk temporary・toolchain cache・最大2 Cargo jobsへ正規化し、Cargo compilationは`MemAvailable` 8 GiB未満では開始しない。Tracy capture / csvexportとRenderDocの子processもこのtemporary環境を継承する。通常のMemory受入はnative allocator + GNU timeを使い、Cargo/game/Capture/Memoryは並列化しない。artifactやCargo cacheの自動削除、別target directory、routineな`cargo clean`、`nice` / `ionice` / CPU affinityは行わない。
 
 native formalのproduction subject fingerprintと起動・監視harness fingerprintは別に封印する。Python native helper、build coordination、Cargo runtime guardだけを変更した場合、同じclean validation worktreeとworkspace `target/`を再利用し、既存Rust binaryやvalid S0/S1を不要にfull rebuildしない。asset fingerprintはmtimeではなく内容をhashする。Cargo profile、feature、toolchain、Rust/Cargo source、または測定結果validatorの変更は証拠の意味を変えるため、該当capsuleを再build / 再検証する。

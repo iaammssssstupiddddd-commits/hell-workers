@@ -975,6 +975,14 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   同じalbedo / emissiveを使いながらN p95 `-8.827%`であり、transparent provisionalだけに残る追加sampleを切り分ける。
   完成壁のemissiveは維持し、建築途中だけemissive textureを外してalbedo＋shared light field＋Blendを維持する仮説を一度だけ
   再計測する。改善しなければこの仮説を打ち切り、閾値を緩和しない。
+- 最適化subject `991392b8`のfresh job
+  `target/native-acceptance/wall-production-performance-20260902T173804Z-3f6bc903`は全24 runと4比較を完走し、
+  独立verifyも`status=pass`となった。completedはN / 4Nのp95が`+0.451% / +0.438%`、p99が
+  `+0.910% / +0.540%`、provisionalはp95が`+2.031% / +0.987%`、p99が`+1.134% / +0.369%`で、
+  全8行が`+5%`以内である。source `f5c24842…`、harness `7da8d338…`、asset view `ebeb81af…`、binary
+  `200234f5…`、manifest SHA-256 `1d0ba117fcc755f303d29c170a7389777dcedc9b678f51f91dd4fb70badf3de1`を封印した。
+  初回invalidは削除・合格扱いせず、建築途中emissive sample仮説の失敗証拠として保持する。同一final binary内の
+  fallback-control比較はこれでpassした。
 - M0最終subject `35f1f6e3`と現行の`wall_density_fixture.rs`には、後続commit `e792b710`で入った
   Door connector mirror初期化22行の差がある。この既知差を無視してbyte-identicalと主張しない。baseline比較は
   `35f1f6e3`へこのfixture-only修正だけを載せたclean派生subjectを作り、finalとdensity profile / fixture / contractを
