@@ -68,10 +68,11 @@ def calibration_command(
     root: Path,
     adapter: str,
     *,
+    matrix_mode: bool = False,
     quality: str = "high",
     scale_factor: float = WINDOW_SCALE_FACTOR,
 ) -> list[str]:
-    return [
+    command = [
         "python3",
         "scripts/perf.py",
         "run",
@@ -124,6 +125,9 @@ def calibration_command(
         "--timeout-secs",
         str(int(RUN_TIMEOUT_SECONDS)),
     ]
+    if matrix_mode:
+        command.append("--wall-art-matrix")
+    return command
 
 
 def require_object(value: Any, label: str, fields: set[str]) -> dict[str, Any]:
@@ -603,6 +607,7 @@ def run_calibration(
         repo,
         root,
         adapter,
+        matrix_mode=matrix_mode,
         quality=quality,
         scale_factor=scale_factor,
     )
@@ -1159,6 +1164,7 @@ def self_test() -> int:
         Path("/repo"),
         Path("/artifact"),
         "Intel",
+        matrix_mode=True,
         quality="low",
         scale_factor=2.0,
     )
@@ -1166,6 +1172,11 @@ def self_test() -> int:
         matrix_command[matrix_command.index("--rtt-quality") + 1] == "low"
         and matrix_command[matrix_command.index("--window-scale-factor") + 1] == "2.0",
         "Wall matrix command differs",
+    )
+    native.require(
+        "--wall-art-matrix" in matrix_command
+        and "--wall-art-matrix" not in command,
+        "Wall matrix authorization flag differs",
     )
     nonce = "0123456789abcdef0123456789abcdef"
     fixture_hash = density.sha256(CONTRACT_PATH)

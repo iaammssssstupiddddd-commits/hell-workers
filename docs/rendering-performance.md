@@ -69,7 +69,8 @@ X11 clientから、Door Open / Closed / Locked、Soul前 / 後、Bridge、Wall b
 `Structural3d`はDoor / Tank / MudMixerもowner-linked 3D visual exactly one、子Sprite 0へ移行済みなので、現行sourceを
 P02 selectorへ渡して期待表を緩和しない。現行Wallの品質／DPI回帰は`wall-art-approved-candidate-matrix-v1`が所有し、
 High / Medium / Low × DPI 1.0 / 1.5 / 2.0を9つの逐次X11 client captureとして検証する。historical P02は登録済み
-immutable artifactのhashとlocatorをoffline再検証する。
+immutable artifactのhashとlocatorをoffline再検証する。`perf.py`側の内部`--wall-art-matrix` authorizationは
+Wall native helperだけが付与し、通常のsingle-case校正とformal densityの固定quality / DPI契約は変更しない。
 
 ### P06 shared Light Field runtime inventory
 

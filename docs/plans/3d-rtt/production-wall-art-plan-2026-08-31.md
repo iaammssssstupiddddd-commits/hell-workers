@@ -940,6 +940,11 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   offline整合検査で閉じる。
 - 9 case harnessを追加したため、先に得た単一case jobはM4の固定lit / asset identity証拠として保持するが、M5 matrix合格には
   流用しない。harness commitと新source / harness fingerprintを確定してからclean validation worktreeを更新し、9 caseを新規実行する。
+- harness commit `add2e162`の初回matrix job
+  `target/native-acceptance/wall-art-20260902T152521Z-8d678312`はHigh / DPI 1.0を完了後、High / DPI 1.5の入口で
+  `perf.py`の既存single-case固定条件によりfail-closedとなった。描画結果によるfailureではない。このartifactを無効のまま保持し、
+  formal densityとsingle-caseのHigh / DPI 1.0契約を緩和せず、Wall helperだけが渡す内部`--wall-art-matrix` authorizationで
+  3品質×3 DPIを許可するよう分離した。新commit / fingerprintで全9 caseを最初から再実行する。
 
 - 変更内容:
   - M4で完成・commit済みのwall-art gallery / fail-closed profileを変更せず、final commitのclean validation worktreeで実行する。code / launcher / predicate修正が必要になった時点でartifactを無効化してM4へ戻り、final commit承認からやり直す。
@@ -1318,6 +1323,9 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
 - M5 historical P02 current-source誤用確認:
   `target/native-acceptance/p02-presentation-20260902T150153Z-1caa5981`は既知のlegacy Door mirror条件で最初のcaseを
   fail-closed。M0の同仮説を再調整せず、current-source 9 case Wall matrixとregistered historical locatorへ分離（2026-09-02）。
+- M5 Wall matrix初回:
+  `target/native-acceptance/wall-art-20260902T152521Z-8d678312`はHigh / DPI 1.0後、既存single-case CLI契約が
+  High / DPI 1.5を拒否してinvalid。描画値調整へ進まず、専用authorization flagへ入口を分離（2026-09-02）。
 - 未解決エラー: なし。M5の9 case Wall matrix、性能比較、RenderDoc再採取は未実行であり、完了条件として残る。
 
 ### Definition of Done
@@ -1361,3 +1369,4 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
 | `2026-09-02` | `Codex` | M4 lit/unlit比較用に既存N=96 production fixtureをgallery化し、16 mask×6、6 mesh、fallback 0、candidate identity、material modeをexact sidecarへ追加。profiling/candidate/actual-window限定toggleとfail-closed launcherを実装し、ユーザーからharness commit後のnative開始承認を得た |
 | `2026-09-02` | `Codex` | ユーザーが最終lit画像を採用。art approval artifactを確定し、比較unlit materialとpending optional normal経路を撤去、lit固定のart-approved candidate projection / sealing / gallery契約へ更新した |
 | `2026-09-02` | `Codex` | final generation 2を封印し、実asset loaderと固定lit actual-window単一caseをpass。current P08 subjectでhistorical P02を再実行できない既知境界を再確認し、current-source M5用の9 case Wall matrixを追加した |
+| `2026-09-02` | `Codex` | Wall matrix初回はHigh / DPI 1.0完了後にperf入口のsingle-case固定条件でfail-closed。formal / single-case契約を維持したまま、Wall native helper専用authorizationで9 caseを許可するよう分離した |

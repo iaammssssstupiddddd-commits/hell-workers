@@ -54,6 +54,14 @@ def add_run_arguments(
             "for the fail-closed native acceptance launcher"
         ),
     )
+    parser.add_argument(
+        "--wall-art-matrix",
+        action="store_true",
+        help=(
+            "authorize the Wall art High/Medium/Low x DPI 1.0/1.5/2.0 matrix; "
+            "requires --wall-actual-window and the fail-closed native acceptance launcher"
+        ),
+    )
     parser.add_argument("--stage", choices=RTT_LIGHT_STAGES)
     parser.add_argument("--lane", choices=RTT_LIGHT_LANES)
     parser.add_argument("--sizes", default="medium", help="comma-separated: small,medium,large")
@@ -444,6 +452,8 @@ def validate_arguments(args: argparse.Namespace) -> None:
     if args.workload == "wall-density":
         if args.wall_actual_window and args.wall_color_actual_window:
             raise ValueError("Wall actual-window profiles are mutually exclusive")
+        if args.wall_art_matrix and not args.wall_actual_window:
+            raise ValueError("--wall-art-matrix requires --wall-actual-window")
         wall_actual_window = args.wall_actual_window or args.wall_color_actual_window
         if args.command != "run":
             raise ValueError("wall-density is only available through perf.py run")
@@ -477,14 +487,23 @@ def validate_arguments(args: argparse.Namespace) -> None:
             raise ValueError("wall-density requires --window-backend x11")
         if args.backend != "vulkan" or args.present_mode != "novsync":
             raise ValueError("wall-density requires --backend vulkan --present-mode novsync")
-        if (
-            args.window_width != 1280
-            or args.window_height != 720
-            or args.window_scale_factor != 1.0
-            or args.rtt_quality != "high"
-        ):
+        if args.window_width != 1280 or args.window_height != 720:
             raise ValueError(
-                "wall-density requires 1280x720, scale factor 1.0, and RtT quality high"
+                "wall-density requires a 1280x720 physical window"
+            )
+        if args.wall_art_matrix:
+            if args.window_scale_factor not in {1.0, 1.5, 2.0} or args.rtt_quality not in {
+                "high",
+                "medium",
+                "low",
+            }:
+                raise ValueError(
+                    "wall-density Wall art matrix requires scale factor 1.0|1.5|2.0 "
+                    "and RtT quality high|medium|low"
+                )
+        elif args.window_scale_factor != 1.0 or args.rtt_quality != "high":
+            raise ValueError(
+                "wall-density requires scale factor 1.0 and RtT quality high"
             )
         if args.instrumentation != "capture":
             raise ValueError("wall-density frame-time runs require --instrumentation capture")
@@ -506,6 +525,8 @@ def validate_arguments(args: argparse.Namespace) -> None:
         raise ValueError("--wall-actual-window is reserved for --workload wall-density")
     if args.wall_color_actual_window:
         raise ValueError("--wall-color-actual-window is reserved for --workload wall-density")
+    if args.wall_art_matrix:
+        raise ValueError("--wall-art-matrix is reserved for --workload wall-density")
     if args.workload == "dream-ui-burst":
         if args.command not in {"run", "audit"}:
             raise ValueError("dream-ui-burst is available through perf.py run or audit")

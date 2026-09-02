@@ -3439,6 +3439,27 @@ def self_test() -> int:
             ]
         )
         validate_arguments(wall_actual_args)
+        wall_matrix_args = build_parser().parse_args(
+            [
+                "run", "--workload", "wall-density", "--wall-phase", "completed",
+                "--wall-actual-window", "--wall-art-matrix", "--sizes", "small",
+                "--renders", "gpu", "--seed", "20260901", "--repeat", "1",
+                "--preflight-runs", "0", "--souls", "0", "--familiars", "0",
+                "--window-backend", "x11", "--backend", "vulkan",
+                "--present-mode", "novsync", "--window-width", "1280",
+                "--window-height", "720", "--window-scale-factor", "1.5",
+                "--rtt-quality", "medium", "--warmup-secs", "10",
+                "--measure-secs", "10", "--dry-run",
+            ]
+        )
+        validate_arguments(wall_matrix_args)
+        wall_matrix_args.wall_art_matrix = False
+        try:
+            validate_arguments(wall_matrix_args)
+        except ValueError as error:
+            assert "scale factor 1.0 and RtT quality high" in str(error)
+        else:
+            raise AssertionError("unscoped Wall art matrix arguments unexpectedly passed")
         wall_color_args = build_parser().parse_args(
             [
                 "run", "--workload", "wall-density", "--wall-phase", "completed",
