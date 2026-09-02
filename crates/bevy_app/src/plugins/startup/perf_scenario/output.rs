@@ -459,6 +459,44 @@ pub(super) fn write_wall_density_fixture_sidecars(
 }
 
 #[cfg(feature = "profiling")]
+pub(super) fn write_wall_density_presentation_sidecar(
+    config: &PerfScenarioConfig,
+    initial: Option<&super::wall_density_presentation::WallDensityPresentationEvidence>,
+    final_evidence: Option<&super::wall_density_presentation::WallDensityPresentationEvidence>,
+) -> std::io::Result<()> {
+    if config.wall_presentation().is_none() {
+        if initial.is_some() || final_evidence.is_some() {
+            return Err(std::io::Error::other(
+                "Wall presentation evidence exists without a formal selection",
+            ));
+        }
+        return Ok(());
+    }
+    let initial = initial.ok_or_else(|| {
+        std::io::Error::other("formal Wall capture has no initial presentation evidence")
+    })?;
+    let final_evidence = final_evidence.ok_or_else(|| {
+        std::io::Error::other("formal Wall capture has no final presentation evidence")
+    })?;
+    let directory = perf_output_directory(config);
+    std::fs::create_dir_all(&directory)?;
+    let path = directory.join("wall_density_presentation.json");
+    if path.exists() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::AlreadyExists,
+            format!(
+                "wall-density presentation sidecar already exists at {}",
+                path.display()
+            ),
+        ));
+    }
+    let sidecar = super::wall_density_presentation::presentation_sidecar(initial, final_evidence)
+        .map_err(std::io::Error::other)?;
+    let bytes = serde_json::to_vec_pretty(&sidecar).map_err(std::io::Error::other)?;
+    std::fs::write(path, bytes)
+}
+
+#[cfg(feature = "profiling")]
 pub(super) fn write_render_inventory(
     config: &PerfScenarioConfig,
     inventory: &PerfRenderInventory,

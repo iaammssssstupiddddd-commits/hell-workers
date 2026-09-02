@@ -222,13 +222,14 @@ type PatchQuery<'w, 's> = Query<
         &'static InheritedVisibility,
     ),
 >;
+type DefaultUiCameraQuery<'w, 's> =
+    Query<'w, 's, Entity, (With<Camera2d>, With<MainCamera>, With<IsDefaultUiCamera>)>;
 
 #[derive(bevy::ecs::system::SystemParam)]
 pub(crate) struct WallColorActualWindowParams<'w, 's> {
     window: Query<'w, 's, &'static Window, With<PrimaryWindow>>,
     camera: Query<'w, 's, (&'static Camera, &'static RenderLayers), With<WallColorCamera>>,
-    default_ui_camera:
-        Query<'w, 's, Entity, (With<Camera2d>, With<MainCamera>, With<IsDefaultUiCamera>)>,
+    default_ui_camera: DefaultUiCameraQuery<'w, 's>,
     patches: PatchQuery<'w, 's>,
 }
 

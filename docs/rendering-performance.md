@@ -72,6 +72,16 @@ High / Medium / Low × DPI 1.0 / 1.5 / 2.0を9つの逐次X11 client captureと�
 immutable artifactのhashとlocatorをoffline再検証する。`perf.py`側の内部`--wall-art-matrix` authorizationは
 Wall native helperだけが付与し、通常のsingle-case校正とformal densityの固定quality / DPI契約は変更しない。
 
+本番Wallの正式frame比較は`wall-production-performance-v1`が所有する。凍結済み
+`wall-density-v1`のlayout sidecarへ上書きせず、追加の`wall_density_presentation.json`で
+計測開始時と終了時の表示状態を結ぶ。`production`は候補generation / manifest hashと
+`ReadyToApply`、全targetのproduction一括収束を要求する。`fallback-control`は同じbinaryから候補認可を除き、
+`CandidateDisabled`と全target fallbackを要求する。両modeともproduction 6 mesh / 2 material、fallback
+1 mesh / 2 materialのresident pool、family / rotation分布、350 triangle上限が成立してからwarm-upへ進む。
+binaryの`--perf-wall-presentation`とlauncherの`HW_WALL_PERF_PRESENTATION`は同値の二重鍵であり、通常runや
+Wall art actual-window profileからは指定できない。completed / provisionalのN=96 / 4N=384を各3 run採り、
+同一final binaryのfallback-control比p95 / p99中央値を各`+5%`以内で判定する。
+
 ### P06 shared Light Field runtime inventory
 
 P06はPoint／Spot Lightや追加shadow map／local-light passを生成せず、P01の単一Scene RtTとP02のTopDown presentationを維持する。CPU fieldは1つのlinear RGBA8 `Image`へrevision単位でuploadされ、Terrain 3 pipelineとstructural 1 pipelineはそれぞれtexture／samplerを1組だけbindする。Wall／Doorのper-instance sampling anchorは`MeshTag`にあり、material handle数はLamp数・Building数に比例しない。

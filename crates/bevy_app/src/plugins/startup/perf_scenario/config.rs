@@ -72,6 +72,29 @@ pub enum PerfWallPhase {
     Provisional,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PerfWallPresentation {
+    Production,
+    FallbackControl,
+}
+
+impl PerfWallPresentation {
+    fn parse(value: &str) -> Option<Self> {
+        match value {
+            "production" => Some(Self::Production),
+            "fallback-control" => Some(Self::FallbackControl),
+            _ => None,
+        }
+    }
+
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Production => "production",
+            Self::FallbackControl => "fallback-control",
+        }
+    }
+}
+
 impl PerfWallPhase {
     fn parse(value: &str) -> Option<Self> {
         match value {
@@ -505,6 +528,7 @@ pub struct PerfScenarioConfig {
     rtt_light: Option<PerfRttLightSelection>,
     behavior_case: Option<PerfBehaviorCase>,
     wall_phase: Option<PerfWallPhase>,
+    wall_presentation: Option<PerfWallPresentation>,
     window_width: Option<u32>,
     window_height: Option<u32>,
     window_scale_factor: Option<f32>,
@@ -802,6 +826,23 @@ impl PerfScenarioConfig {
             }
             None => None,
         };
+        let wall_presentation_flag = value_from_args(&args, "--perf-wall-presentation")?;
+        let wall_presentation_environment = env::var("HW_WALL_PERF_PRESENTATION").ok();
+        if wall_presentation_flag != wall_presentation_environment {
+            return Err(PerfScenarioConfigError(
+                "--perf-wall-presentation and HW_WALL_PERF_PRESENTATION must be paired and equal"
+                    .to_string(),
+            ));
+        }
+        let wall_presentation = wall_presentation_flag
+            .map(|value| {
+                PerfWallPresentation::parse(&value).ok_or_else(|| {
+                    PerfScenarioConfigError(format!(
+                        "--perf-wall-presentation must be production|fallback-control; got '{value}'"
+                    ))
+                })
+            })
+            .transpose()?;
         let wall_actual_window_flag = has_flag(&args, "--perf-wall-actual-window");
         let wall_actual_window_environment =
             env::var("HW_WALL_ART_ACTUAL_WINDOW").is_ok_and(|value| value == "1");
@@ -850,6 +891,17 @@ impl PerfScenarioConfig {
         {
             return Err(PerfScenarioConfigError(
                 "Wall actual-window calibration requires wall-density/small/completed".to_string(),
+            ));
+        }
+        if wall_presentation.is_some()
+            && (workload != PerfWorkload::WallDensity
+                || wall_actual_window
+                || wall_color_actual_window
+                || wall_art_matrix)
+        {
+            return Err(PerfScenarioConfigError(
+                "Wall performance presentation selection is reserved for the formal wall-density profile"
+                    .to_string(),
             ));
         }
         match rtt_light.map(PerfRttLightSelection::lane) {
@@ -1010,6 +1062,7 @@ impl PerfScenarioConfig {
             rtt_light,
             behavior_case,
             wall_phase,
+            wall_presentation,
             window_width,
             window_height,
             window_scale_factor,
@@ -1058,6 +1111,10 @@ impl PerfScenarioConfig {
 
     pub const fn wall_phase(&self) -> Option<PerfWallPhase> {
         self.wall_phase
+    }
+
+    pub const fn wall_presentation(&self) -> Option<PerfWallPresentation> {
+        self.wall_presentation
     }
 
     pub const fn requested_window_scale_factor(&self) -> Option<f32> {
@@ -1421,6 +1478,7 @@ impl Default for PerfScenarioConfig {
             rtt_light: None,
             behavior_case: None,
             wall_phase: None,
+            wall_presentation: None,
             window_width: None,
             window_height: None,
             window_scale_factor: None,

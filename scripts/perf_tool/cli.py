@@ -120,6 +120,11 @@ def _run_suite(args: argparse.Namespace) -> int:
                     if case.wall_phase is None
                     else f" --perf-wall-phase {case.wall_phase}"
                 )
+                + (
+                    ""
+                    if args.wall_presentation is None
+                    else f" --perf-wall-presentation {args.wall_presentation}"
+                )
             )
         return 0
 

@@ -961,6 +961,16 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   subject `6ea0bf99` / attempt `54d85a63-e237-4501-a0d0-33c1d0a29f3b` / Capture SHA-256 `38561b2a…`と、
   分離済みcurrent fallback Wall locatorを改変なしでoffline `pass`した。currentのRender3d visibleは9 case sidecar、
   completion bounce / depth-preserving transform / exactly-oneは既存focused testと全体verifyでpassしている。
+- M5正式Capture用に、凍結済み`wall_density_acceptance.py` / `wall_density_fixture.rs` / `wall-density-v1.json`を
+  変更しない追加profile `wall_production_performance_acceptance.py`と
+  `wall_density_presentation.rs`を実装した。binary flag / launcher環境の二重鍵で`production`と
+  `fallback-control`を分離し、候補assetのload・activation・全owner一括収束後だけ30秒warm-upを開始する。
+  各runの追加sidecarは初期／終了の同一性、production 6 mesh / 2 material、fallback 1 mesh / 2 material、
+  7 / 4有限pool、350 triangle上限、family / rotation分布、candidate identityを検査する。実機24 runは未採取である。
+- M0最終subject `35f1f6e3`と現行の`wall_density_fixture.rs`には、後続commit `e792b710`で入った
+  Door connector mirror初期化22行の差がある。この既知差を無視してbyte-identicalと主張しない。baseline比較は
+  `35f1f6e3`へこのfixture-only修正だけを載せたclean派生subjectを作り、finalとdensity profile / fixture / contractを
+  byte-identicalにした上で再採取する。元のM0 artifactは履歴基準として保持するが、この比較の直接baselineには流用しない。
 
 - 変更内容:
   - M4で完成・commit済みのwall-art gallery / fail-closed profileを変更せず、final commitのclean validation worktreeで実行する。code / launcher / predicate修正が必要になった時点でartifactを無効化してM4へ戻り、final commit承認からやり直す。
@@ -971,6 +981,8 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
     18 case matrixはP02当時のsource / legacy mirror inventoryにのみ再実行可能であり、登録済みimmutable artifactをoffline検証する。
   - sidecarでsource fingerprint、3 asset hash、manifest authority / asset-set generation、session / activation revision、6 GLB / texture hash、load state、phase別fallback count、mask / family / rotation、owner / visual exact count、active / total mesh / material IDs、triangles、distinct mesh/material組合せ、geometry report hashと9.6 / 12.8 wu契約を検証する。steady productionはfallback 0、world-replace transitionだけは全owner fallbackの1 frameを許し、mixed countは全phase 0とする。
   - M0 baseline commit対final production、およびfinal commit内のprofile-only `force-fallback` control対productionを、`wall-density-v1`のcompleted / provisional各N / 4Nで実行する。各runのp95 / p99を先に求め、3 valid runの中央値で両比較とも`<= +5%`を要求し、MADを併記する。
+    M0側は`35f1f6e3`のproduct treeへ`e792b710`のfixture-only connector mirror修正だけを載せたclean派生subjectとし、
+    product差分を混ぜずに現行fixture bytesへ揃える。
   - bounded RenderDoc captureではcompleted opaqueのwall main-passを抽出し、`D_N <= 6`、`D_4N <= 6`、`D_4N = D_N`を要求する。provisional transparentは別sorted phaseで`D_4N <= 4 * D_N + 6`を要求し、count / normalized slopeを別artifactへ記録する。
 - 変更候補:
   - `crates/bevy_app/src/plugins/startup/perf_scenario/`
@@ -992,6 +1004,7 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
 - 検証:
   - 専用profileの `plan` が返すdirect `kitty` launcherだけを実行し、15〜30秒間隔でstatusをpollする。
   - `PYTHONDONTWRITEBYTECODE=1 python3 .codex/skills/hell-workers-run-native-acceptance/scripts/wall_art_acceptance.py plan --repo "$VALIDATION_WORKTREE" --adapter Intel --candidate --matrix`
+  - `PYTHONDONTWRITEBYTECODE=1 python3 .codex/skills/hell-workers-run-native-acceptance/scripts/wall_production_performance_acceptance.py plan --repo "$VALIDATION_WORKTREE" --adapter Intel`
   - `python3 scripts/perf.py compare --baseline <m0-session> --candidate <final-production-session> --metric p95 --max-regression-pct 5 --min-runs 3 --output <sealed-artifacts>/baseline-vs-production-p95.csv`
   - `python3 scripts/perf.py compare --baseline <m0-session> --candidate <final-production-session> --metric p99 --max-regression-pct 5 --min-runs 3 --output <sealed-artifacts>/baseline-vs-production-p99.csv`
   - `python3 scripts/perf.py compare --baseline <final-force-fallback-session> --candidate <final-production-session> --metric p95 --max-regression-pct 5 --min-runs 3 --output <sealed-artifacts>/force-fallback-vs-production-p95.csv`

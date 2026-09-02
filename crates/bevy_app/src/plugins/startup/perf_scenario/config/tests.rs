@@ -34,6 +34,7 @@ fn random_streams_are_stable_and_independent() {
         rtt_light: None,
         behavior_case: None,
         wall_phase: None,
+        wall_presentation: None,
         window_width: None,
         window_height: None,
         window_scale_factor: None,
@@ -210,6 +211,27 @@ fn wall_density_phase_names_are_explicit() {
     assert_eq!(super::PerfWallPhase::parse("mixed"), None);
     assert_eq!(super::PerfWallPhase::Completed.as_str(), "completed");
     assert_eq!(super::PerfWallPhase::Provisional.as_str(), "provisional");
+}
+
+#[test]
+fn wall_density_presentation_names_are_explicit() {
+    assert_eq!(
+        super::PerfWallPresentation::parse("production"),
+        Some(super::PerfWallPresentation::Production)
+    );
+    assert_eq!(
+        super::PerfWallPresentation::parse("fallback-control"),
+        Some(super::PerfWallPresentation::FallbackControl)
+    );
+    assert_eq!(super::PerfWallPresentation::parse("fallback"), None);
+    assert_eq!(
+        super::PerfWallPresentation::Production.as_str(),
+        "production"
+    );
+    assert_eq!(
+        super::PerfWallPresentation::FallbackControl.as_str(),
+        "fallback-control"
+    );
 }
 
 #[test]

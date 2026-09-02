@@ -41,6 +41,7 @@ MEASUREMENT_HARNESS_FILES = (
     ".codex/skills/hell-workers-run-native-acceptance/scripts/wall_art_acceptance.py",
     ".codex/skills/hell-workers-run-native-acceptance/scripts/wall_color_acceptance.py",
     ".codex/skills/hell-workers-run-native-acceptance/scripts/wall_density_acceptance.py",
+    ".codex/skills/hell-workers-run-native-acceptance/scripts/wall_production_performance_acceptance.py",
     ".codex/skills/hell-workers-run-native-acceptance/scripts/wall_renderdoc_acceptance.py",
     "scripts/build_coordination.py",
     "scripts/cargo_runtime.py",
@@ -984,6 +985,8 @@ def run_one(
         command.extend(["--perf-behavior-case", case.behavior_case])
     if case.wall_phase is not None:
         command.extend(["--perf-wall-phase", case.wall_phase])
+    if args.wall_presentation is not None:
+        command.extend(["--perf-wall-presentation", args.wall_presentation])
     if args.wall_actual_window:
         command.append("--perf-wall-actual-window")
     if args.wall_art_matrix:

@@ -125,6 +125,8 @@ mod wall_color_actual_window;
 #[cfg(feature = "profiling")]
 mod wall_density_fixture;
 #[cfg(feature = "profiling")]
+mod wall_density_presentation;
+#[cfg(feature = "profiling")]
 mod workload_driver;
 
 #[cfg(feature = "profiling")]
@@ -138,7 +140,7 @@ pub(crate) use capture_driver::{drive_perf_capture_system, start_perf_capture_sy
 pub(crate) use config::PerfDashboardMode;
 pub use config::{
     PerfFamiliarPolicyMode, PerfOperationDialogMode, PerfRenderMode, PerfScenarioConfig,
-    PerfScenarioRandomStreams, PerfScenarioSize, PerfWallPhase, PerfWorkload,
+    PerfScenarioRandomStreams, PerfScenarioSize, PerfWallPhase, PerfWallPresentation, PerfWorkload,
 };
 #[cfg(feature = "profiling")]
 pub(crate) use config::{
@@ -223,8 +225,11 @@ use output::{
     PerfCaptureWriteInput, fnv1a, fnv1a_bytes, write_deconstruction_fixture_sidecar,
     write_determinism_audit, write_dream_ui_metrics, write_indoor_light_fixture_sidecars,
     write_p02_presentation_sidecar, write_perf_capture, write_render_inventory,
-    write_wall_density_fixture_sidecars, write_window_observation,
+    write_wall_density_fixture_sidecars, write_wall_density_presentation_sidecar,
+    write_window_observation,
 };
+#[cfg(feature = "profiling")]
+use wall_density_presentation::{WallDensityPresentationEvidence, WallDensityPresentationParams};
 
 #[cfg(feature = "profiling")]
 #[derive(Resource, Default)]
@@ -252,6 +257,7 @@ pub(crate) struct PerfCapture {
     memory_measurement: crate::profiling_allocator::MemoryMeasurement,
     save_transaction_sample: Option<crate::systems::save::SaveTransactionSample>,
     save_transaction_kind: String,
+    wall_density_presentation: Option<WallDensityPresentationEvidence>,
 }
 
 #[cfg(feature = "profiling")]
@@ -690,6 +696,8 @@ pub(crate) struct PerfCaptureStartParams<'w, 's> {
     rtt_runtime: Res<'w, RttRuntime>,
     quality: Res<'w, QualitySettings>,
     render_environment: Res<'w, PerfRenderEnvironmentEvidence>,
+    wall_density_fixture: Res<'w, WallDensityFixtureState>,
+    wall_density_presentation: WallDensityPresentationParams<'w, 's>,
 }
 
 #[cfg(feature = "profiling")]
@@ -727,4 +735,5 @@ pub(crate) struct PerfCaptureParams<'w, 's> {
     rtt_runtime: Res<'w, RttRuntime>,
     quality: Res<'w, QualitySettings>,
     render_environment: Res<'w, PerfRenderEnvironmentEvidence>,
+    wall_density_presentation: WallDensityPresentationParams<'w, 's>,
 }

@@ -39,6 +39,14 @@ def add_run_arguments(
     parser.add_argument("--contract", choices=sorted(CONTRACT_FILES))
     parser.add_argument("--wall-phase", choices=["completed", "provisional"])
     parser.add_argument(
+        "--wall-presentation",
+        choices=["production", "fallback-control"],
+        help=(
+            "select the M5 formal Wall presentation; requires the paired "
+            "HW_WALL_PERF_PRESENTATION environment owned by native acceptance"
+        ),
+    )
+    parser.add_argument(
         "--wall-actual-window",
         action="store_true",
         help=(
@@ -455,6 +463,12 @@ def validate_arguments(args: argparse.Namespace) -> None:
         if args.wall_art_matrix and not args.wall_actual_window:
             raise ValueError("--wall-art-matrix requires --wall-actual-window")
         wall_actual_window = args.wall_actual_window or args.wall_color_actual_window
+        if args.wall_presentation is not None and (
+            wall_actual_window or args.wall_art_matrix
+        ):
+            raise ValueError(
+                "--wall-presentation is reserved for formal wall-density runs"
+            )
         if args.command != "run":
             raise ValueError("wall-density is only available through perf.py run")
         if selected_rtt_light:
@@ -521,6 +535,8 @@ def validate_arguments(args: argparse.Namespace) -> None:
         return
     if args.wall_phase is not None:
         raise ValueError("--wall-phase is reserved for --workload wall-density")
+    if args.wall_presentation is not None:
+        raise ValueError("--wall-presentation is reserved for --workload wall-density")
     if args.wall_actual_window:
         raise ValueError("--wall-actual-window is reserved for --workload wall-density")
     if args.wall_color_actual_window:

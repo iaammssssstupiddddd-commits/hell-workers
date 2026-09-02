@@ -15,7 +15,7 @@ mod visual_handles;
 pub(crate) use asset_catalog::create_game_assets;
 pub use perf_scenario::{
     PerfFamiliarPolicyMode, PerfOperationDialogMode, PerfRenderMode, PerfScenarioConfig,
-    PerfScenarioRandomStreams, PerfScenarioSize, PerfWallPhase, PerfWorkload,
+    PerfScenarioRandomStreams, PerfScenarioSize, PerfWallPhase, PerfWallPresentation, PerfWorkload,
 };
 #[cfg(feature = "profiling")]
 pub(crate) use perf_scenario::{

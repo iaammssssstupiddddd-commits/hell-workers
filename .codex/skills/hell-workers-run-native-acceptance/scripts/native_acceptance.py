@@ -94,6 +94,7 @@ NATIVE_HARNESS_FILES = (
     ".codex/skills/hell-workers-run-native-acceptance/scripts/wall_art_acceptance.py",
     ".codex/skills/hell-workers-run-native-acceptance/scripts/wall_color_acceptance.py",
     ".codex/skills/hell-workers-run-native-acceptance/scripts/wall_density_acceptance.py",
+    ".codex/skills/hell-workers-run-native-acceptance/scripts/wall_production_performance_acceptance.py",
     ".codex/skills/hell-workers-run-native-acceptance/scripts/wall_renderdoc_acceptance.py",
     "scripts/build_coordination.py",
     "scripts/cargo_runtime.py",

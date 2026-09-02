@@ -34,6 +34,35 @@ pub(crate) fn start_perf_capture_system(
         return;
     }
 
+    let wall_density_presentation = if params.config.wall_presentation().is_some() {
+        match wall_density_presentation::inspect_wall_density_presentation(
+            &params.config,
+            &params.wall_density_fixture,
+            &params.wall_density_presentation,
+        ) {
+            Ok(wall_density_presentation::WallDensityPresentationReadiness::Pending) => {
+                if !capture.fixture_wait_reported {
+                    eprintln!(
+                        "PERF_CAPTURE: waiting for the requested Wall presentation to become stable"
+                    );
+                    capture.fixture_wait_reported = true;
+                }
+                return;
+            }
+            Ok(wall_density_presentation::WallDensityPresentationReadiness::Ready(evidence)) => {
+                Some(*evidence)
+            }
+            Err(reason) => {
+                error!("PERF_CAPTURE: invalid Wall presentation: {reason}");
+                capture.phase = PerfCapturePhase::Finished;
+                exit.write(AppExit::error());
+                return;
+            }
+        }
+    } else {
+        None
+    };
+
     let initial_checksum = calculate_checksum(&params.checksum_queries);
     let expected_souls = params.config.soul_count as usize;
     let expected_familiars = params.config.familiar_count as usize;
@@ -90,6 +119,7 @@ pub(crate) fn start_perf_capture_system(
         &params.quality,
         render_environment.as_ref(),
     ));
+    capture.wall_density_presentation = wall_density_presentation;
     if params.config.uses_fixed_timesteps() {
         // Fixture setup may intentionally run production simulation before the
         // audit boundary (P08 primes one slow-light consumer step). Keep the
@@ -352,6 +382,8 @@ pub(crate) fn drive_perf_capture_system(
                 &params.quality,
                 render_environment.as_ref(),
             );
+            let final_wall_density_presentation =
+                final_wall_density_presentation(&params.config, &params);
             let capture_result = if params.config.uses_fixed_timesteps() {
                 write_determinism_audit(
                     &params.config,
@@ -423,6 +455,12 @@ pub(crate) fn drive_perf_capture_system(
                 }
             };
             let result = capture_result.and_then(|()| {
+                final_wall_density_presentation
+                    .as_ref()
+                    .map(|_| ())
+                    .map_err(|error| std::io::Error::other(error.to_string()))
+            });
+            let result = result.and_then(|()| {
                 #[cfg(feature = "profiling-memory")]
                 if params.config.workload == PerfWorkload::SaveTransaction {
                     super::output::write_save_transaction_memory_csv(
@@ -457,6 +495,17 @@ pub(crate) fn drive_perf_capture_system(
                 write_wall_density_fixture_sidecars(&params.config, &params.wall_density_fixture)
             });
             let result = result.and_then(|()| {
+                let final_evidence = final_wall_density_presentation
+                    .as_ref()
+                    .ok()
+                    .and_then(Option::as_ref);
+                write_wall_density_presentation_sidecar(
+                    &params.config,
+                    capture.wall_density_presentation.as_ref(),
+                    final_evidence,
+                )
+            });
+            let result = result.and_then(|()| {
                 write_p02_presentation_sidecar(
                     &params.config,
                     calculate_p02_presentation(&params.checksum_queries),
@@ -483,6 +532,29 @@ pub(crate) fn drive_perf_capture_system(
             }
         }
         PerfCapturePhase::Finished => {}
+    }
+}
+
+fn final_wall_density_presentation(
+    config: &PerfScenarioConfig,
+    params: &PerfCaptureParams<'_, '_>,
+) -> std::io::Result<Option<WallDensityPresentationEvidence>> {
+    if config.wall_presentation().is_none() {
+        return Ok(None);
+    }
+    match wall_density_presentation::inspect_wall_density_presentation(
+        config,
+        &params.wall_density_fixture,
+        &params.wall_density_presentation,
+    )
+    .map_err(std::io::Error::other)?
+    {
+        wall_density_presentation::WallDensityPresentationReadiness::Pending => Err(
+            std::io::Error::other("Wall presentation became pending before capture flush"),
+        ),
+        wall_density_presentation::WallDensityPresentationReadiness::Ready(evidence) => {
+            Ok(Some(*evidence))
+        }
     }
 }
 

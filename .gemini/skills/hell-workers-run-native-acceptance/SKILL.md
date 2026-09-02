@@ -236,6 +236,37 @@ RDC, and two normalized replays. It accepts completed walls only when
 the 12-run wall-density frame-time matrix. Revalidate a completed bundle with
 `verify --job-root <job-root>`.
 
+## Run the final Wall production performance pair
+
+After the approved candidate projection is provisioned in a clean validation
+worktree, use the M5-only profile to compare production against an explicit
+same-binary fallback control without changing the frozen M0 density helper or
+fixture:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 \
+  .codex/skills/hell-workers-run-native-acceptance/scripts/wall_production_performance_acceptance.py \
+  plan --repo "$VALIDATION_WORKTREE" --adapter Intel
+```
+
+Run only the returned direct `kitty` command and poll `status --job-root
+<job-root>` every 15–30 seconds. The profile builds one `profiling` binary and
+runs fallback-control then production sequentially for completed / provisional
+N=96 and 4N=384, three 30/60-second runs per case (24 actual-window processes).
+The binary flag and `HW_WALL_PERF_PRESENTATION` must be paired. Production also
+requires the exact approved candidate generation and manifest hash; the control
+scrubs candidate authorization and requires `CandidateDisabled`, so a loading,
+failed, mixed, or accidentally-production state cannot enter warm-up.
+
+Every run writes an additive `wall_density_presentation.json` while preserving
+the frozen wall-density sidecars. It proves stable initial/final mode, exact
+owner and visual counts, six resident production meshes, two production plus
+two fallback materials, one fallback mesh, lit production materials, topology
+distribution, candidate identity, and the 350-triangle limit. The profile then
+runs p95 and p99 comparisons for both phases and fails when any production
+median is more than 5% above the fallback control. Revalidate with `verify
+--job-root <job-root>`.
+
 ## Run the current Wall actual-window calibration
 
 Use the Wall calibration profile to capture the current production fallback
@@ -498,6 +529,9 @@ After changing the Skill or helper, run:
 ```bash
 PYTHONDONTWRITEBYTECODE=1 python3 \
   .codex/skills/hell-workers-run-native-acceptance/scripts/native_acceptance.py \
+  self-test
+PYTHONDONTWRITEBYTECODE=1 python3 \
+  .codex/skills/hell-workers-run-native-acceptance/scripts/wall_production_performance_acceptance.py \
   self-test
 python3 scripts/check_agent_rules.py
 ```
