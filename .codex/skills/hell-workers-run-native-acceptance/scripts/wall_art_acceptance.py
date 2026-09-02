@@ -603,6 +603,8 @@ def run_calibration(
                 "HW_WALL_CANDIDATE_MANIFEST_SHA256": candidate["manifest_sha256"],
             }
         )
+    if matrix_mode:
+        environment["HW_WALL_ART_MATRIX"] = "1"
     command = calibration_command(
         repo,
         root,

@@ -945,6 +945,11 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   `perf.py`の既存single-case固定条件によりfail-closedとなった。描画結果によるfailureではない。このartifactを無効のまま保持し、
   formal densityとsingle-caseのHigh / DPI 1.0契約を緩和せず、Wall helperだけが渡す内部`--wall-art-matrix` authorizationで
   3品質×3 DPIを許可するよう分離した。新commit / fingerprintで全9 caseを最初から再実行する。
+- Python入口を分離したcommit `50ec1c43`の再実行job
+  `target/native-acceptance/wall-art-20260902T153105Z-6723db42`もHigh / DPI 1.0完了後にHigh / DPI 1.5でinvalidとなったが、
+  この時点ではRust profiling configが同じHigh / DPI 1.0固定条件を保持していたためsidecar生成前に終了した。そこで
+  launcher環境、`perf.py`から渡すbinary flag、Rust configを`HW_WALL_ART_MATRIX=1` / `--perf-wall-art-matrix`で対にし、
+  profiling feature内でも専用matrixだけがexact 9組を受理する。通常起動、formal density、single-case条件は不変とする。
 
 - 変更内容:
   - M4で完成・commit済みのwall-art gallery / fail-closed profileを変更せず、final commitのclean validation worktreeで実行する。code / launcher / predicate修正が必要になった時点でartifactを無効化してM4へ戻り、final commit承認からやり直す。
@@ -1326,6 +1331,9 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
 - M5 Wall matrix初回:
   `target/native-acceptance/wall-art-20260902T152521Z-8d678312`はHigh / DPI 1.0後、既存single-case CLI契約が
   High / DPI 1.5を拒否してinvalid。描画値調整へ進まず、専用authorization flagへ入口を分離（2026-09-02）。
+- M5 Wall matrix再実行:
+  `target/native-acceptance/wall-art-20260902T153105Z-6723db42`はRust config側の同固定条件を検出してinvalid。
+  launcher / Python / Rustの専用authorizationを対にし、次commit / fingerprintで再実行する（2026-09-02）。
 - 未解決エラー: なし。M5の9 case Wall matrix、性能比較、RenderDoc再採取は未実行であり、完了条件として残る。
 
 ### Definition of Done
@@ -1370,3 +1378,4 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
 | `2026-09-02` | `Codex` | ユーザーが最終lit画像を採用。art approval artifactを確定し、比較unlit materialとpending optional normal経路を撤去、lit固定のart-approved candidate projection / sealing / gallery契約へ更新した |
 | `2026-09-02` | `Codex` | final generation 2を封印し、実asset loaderと固定lit actual-window単一caseをpass。current P08 subjectでhistorical P02を再実行できない既知境界を再確認し、current-source M5用の9 case Wall matrixを追加した |
 | `2026-09-02` | `Codex` | Wall matrix初回はHigh / DPI 1.0完了後にperf入口のsingle-case固定条件でfail-closed。formal / single-case契約を維持したまま、Wall native helper専用authorizationで9 caseを許可するよう分離した |
+| `2026-09-02` | `Codex` | 再実行でRust profiling configにも同じ固定条件があると確認。専用matrixのlauncher環境・Python引数・binary引数を対にし、通常／formal／single-caseを広げず9組だけを許可した |

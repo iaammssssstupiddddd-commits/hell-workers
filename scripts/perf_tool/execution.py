@@ -986,6 +986,8 @@ def run_one(
         command.extend(["--perf-wall-phase", case.wall_phase])
     if args.wall_actual_window:
         command.append("--perf-wall-actual-window")
+    if args.wall_art_matrix:
+        command.append("--perf-wall-art-matrix")
     if args.wall_color_actual_window:
         command.append("--perf-wall-color-actual-window")
     if args.capture_kind == "frame-time":

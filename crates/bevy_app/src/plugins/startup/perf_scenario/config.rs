@@ -812,6 +812,20 @@ impl PerfScenarioConfig {
             ));
         }
         let wall_actual_window = wall_actual_window_flag && wall_actual_window_environment;
+        let wall_art_matrix_flag = has_flag(&args, "--perf-wall-art-matrix");
+        let wall_art_matrix_environment =
+            env::var("HW_WALL_ART_MATRIX").is_ok_and(|value| value == "1");
+        if wall_art_matrix_flag != wall_art_matrix_environment {
+            return Err(PerfScenarioConfigError(
+                "--perf-wall-art-matrix and HW_WALL_ART_MATRIX=1 must be paired".to_string(),
+            ));
+        }
+        let wall_art_matrix = wall_art_matrix_flag && wall_art_matrix_environment;
+        if wall_art_matrix && !wall_actual_window {
+            return Err(PerfScenarioConfigError(
+                "Wall art matrix requires the current-Wall actual-window profile".to_string(),
+            ));
+        }
         let wall_color_actual_window_flag = has_flag(&args, "--perf-wall-color-actual-window");
         let wall_color_actual_window_environment =
             env::var("HW_WALL_COLOR_ACTUAL_WINDOW").is_ok_and(|value| value == "1");
@@ -927,6 +941,13 @@ impl PerfScenarioConfig {
                 }),
                 None => None,
             };
+        let wall_window_contract = wall_density_window_contract_matches(
+            wall_art_matrix,
+            window_width,
+            window_height,
+            window_scale_factor,
+            rtt_quality,
+        );
         if workload == PerfWorkload::WallDensity
             && (!matches!(size, PerfScenarioSize::Small | PerfScenarioSize::Medium)
                 || render_mode != PerfRenderMode::Gpu
@@ -943,13 +964,10 @@ impl PerfScenarioConfig {
                     measure_secs,
                 )
                 || output_dir.is_none()
-                || window_width != Some(1280)
-                || window_height != Some(720)
-                || window_scale_factor != Some(1.0)
-                || rtt_quality != Some(RttQualityPreset::High))
+                || !wall_window_contract)
         {
             return Err(PerfScenarioConfigError(
-                "wall-density requires small|medium/gpu/realtime, zero actors, seed 20260901, its formal 30s/60s or paired actual-window 10s/10s duration, an output directory, baseline policies, and exact 1280x720/scale-1/high window contract"
+                "wall-density requires small|medium/gpu/realtime, zero actors, seed 20260901, its formal 30s/60s or paired actual-window 10s/10s duration, an output directory, baseline policies, and the authorized 1280x720 quality/DPI window contract"
                     .to_string(),
             ));
         }
@@ -1203,6 +1221,27 @@ fn wall_density_durations_match(actual_window: bool, warmup_secs: f32, measure_s
         (30.0, 60.0)
     };
     (warmup_secs, measure_secs) == expected
+}
+
+fn wall_density_window_contract_matches(
+    art_matrix: bool,
+    width: Option<u32>,
+    height: Option<u32>,
+    scale_factor: Option<f32>,
+    quality: Option<RttQualityPreset>,
+) -> bool {
+    if width != Some(1280) || height != Some(720) {
+        return false;
+    }
+    if art_matrix {
+        scale_factor.is_some_and(|scale| [1.0, 1.5, 2.0].contains(&scale))
+            && matches!(
+                quality,
+                Some(RttQualityPreset::High | RttQualityPreset::Medium | RttQualityPreset::Low)
+            )
+    } else {
+        scale_factor == Some(1.0) && quality == Some(RttQualityPreset::High)
+    }
 }
 
 #[cfg(feature = "profiling-renderdoc")]

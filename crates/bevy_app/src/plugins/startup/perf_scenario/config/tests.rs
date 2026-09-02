@@ -1,7 +1,8 @@
 use super::{
     DEFAULT_FIXED_AUDIT_TICKS, DEFAULT_FIXED_STEP_HZ, DEFAULT_FIXED_WARMUP_TICKS, PerfClockMode,
-    PerfRandomStream, PerfScenarioConfig, splitmix64,
+    PerfRandomStream, PerfScenarioConfig, splitmix64, wall_density_window_contract_matches,
 };
+use hw_core::quality::RttQualityPreset;
 
 #[test]
 fn renderdoc_capture_requires_its_dedicated_feature() {
@@ -217,6 +218,46 @@ fn wall_density_actual_window_has_a_distinct_duration_contract() {
     assert!(!super::wall_density_durations_match(false, 10.0, 10.0));
     assert!(super::wall_density_durations_match(true, 10.0, 10.0));
     assert!(!super::wall_density_durations_match(true, 30.0, 60.0));
+}
+
+#[test]
+fn wall_art_matrix_has_a_scoped_quality_and_dpi_contract() {
+    assert!(wall_density_window_contract_matches(
+        false,
+        Some(1280),
+        Some(720),
+        Some(1.0),
+        Some(RttQualityPreset::High),
+    ));
+    assert!(!wall_density_window_contract_matches(
+        false,
+        Some(1280),
+        Some(720),
+        Some(1.5),
+        Some(RttQualityPreset::High),
+    ));
+    for quality in [
+        RttQualityPreset::High,
+        RttQualityPreset::Medium,
+        RttQualityPreset::Low,
+    ] {
+        for scale_factor in [1.0, 1.5, 2.0] {
+            assert!(wall_density_window_contract_matches(
+                true,
+                Some(1280),
+                Some(720),
+                Some(scale_factor),
+                Some(quality),
+            ));
+        }
+    }
+    assert!(!wall_density_window_contract_matches(
+        true,
+        Some(1280),
+        Some(720),
+        Some(1.25),
+        Some(RttQualityPreset::Medium),
+    ));
 }
 
 #[test]
