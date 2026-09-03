@@ -8,6 +8,7 @@ import csv
 import os
 import re
 import sys
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
@@ -17,8 +18,8 @@ import wall_art_acceptance as art  # noqa: E402
 import wall_density_acceptance as density  # noqa: E402
 
 
-SCHEMA_VERSION = 1
-PROFILE = "wall-production-performance-v1"
+SCHEMA_VERSION = 2
+PROFILE = "wall-production-performance-v2"
 PRESENTATIONS = ("fallback-control", "production")
 EXPECTED_FAMILY_MULTIPLIERS = {
     "isolated": 1,
@@ -34,6 +35,7 @@ CANDIDATE_ENV_KEYS = (
     "HW_WALL_CANDIDATE_GENERATION",
     "HW_WALL_CANDIDATE_MANIFEST_SHA256",
 )
+CAPTURE_ENV_KEYS = (*CANDIDATE_ENV_KEYS, "HW_WALL_PERF_PRESENTATION")
 
 
 def presentation_command(
@@ -66,6 +68,53 @@ def presentation_environment(
             }
         )
     return environment
+
+
+def capture_schedule() -> list[dict[str, Any]]:
+    """Pair controls with production while counterbalancing which mode runs first."""
+    schedule = []
+    sequence = 0
+    for run_number in range(1, density.REPEAT + 1):
+        for phase_index, phase in enumerate(density.PHASES):
+            for size_index, size in enumerate(density.SIZES):
+                fallback_first = (run_number + phase_index + size_index) % 2 == 1
+                presentations = (
+                    PRESENTATIONS if fallback_first else tuple(reversed(PRESENTATIONS))
+                )
+                for presentation in presentations:
+                    sequence += 1
+                    schedule.append(
+                        {
+                            "sequence": sequence,
+                            "presentation": presentation,
+                            "phase": phase,
+                            "size": size,
+                            "run": run_number,
+                        }
+                    )
+    return schedule
+
+
+@contextmanager
+def selected_presentation_environment(
+    presentation: str, candidate: dict[str, Any]
+):
+    replacement = presentation_environment(presentation, candidate)
+    previous = {key: os.environ.get(key) for key in CAPTURE_ENV_KEYS}
+    try:
+        for key in CAPTURE_ENV_KEYS:
+            value = replacement.get(key)
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+        yield
+    finally:
+        for key, value in previous.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
 
 
 def expected_distribution(
@@ -213,6 +262,42 @@ def comparison_command(
     ]
 
 
+def interleaved_command(
+    *,
+    repo: Path,
+    root: Path,
+    subject_commit: str,
+    source_fingerprint: str,
+    harness_fingerprint: str,
+    asset_view_fingerprint: str,
+    candidate: dict[str, Any],
+    adapter: str,
+) -> list[str]:
+    return [
+        "python3",
+        str(Path(__file__).resolve()),
+        "capture-interleaved",
+        "--repo",
+        str(repo),
+        "--job-root",
+        str(root),
+        "--subject-commit",
+        subject_commit,
+        "--source-fingerprint",
+        source_fingerprint,
+        "--harness-fingerprint",
+        harness_fingerprint,
+        "--asset-view-fingerprint",
+        asset_view_fingerprint,
+        "--candidate-generation",
+        str(candidate["asset_set_generation"]),
+        "--candidate-manifest-sha256",
+        candidate["manifest_sha256"],
+        "--adapter",
+        adapter,
+    ]
+
+
 def comparison_evidence(path: Path, *, phase: str, metric: str) -> dict[str, Any]:
     native.require(path.is_file() and not path.is_symlink(), "Wall comparison is absent")
     with path.open(newline="", encoding="utf-8") as handle:
@@ -248,6 +333,158 @@ def comparison_evidence(path: Path, *, phase: str, metric: str) -> dict[str, Any
         "sha256": density.sha256(path),
         "rows": rows,
     }
+
+
+def capture_order_evidence(path: Path) -> dict[str, Any]:
+    value = native.read_json(path)
+    native.require(
+        set(value) == {"schema_version", "profile", "status", "schedule", "completed"}
+        and value["schema_version"] == SCHEMA_VERSION
+        and value["profile"] == PROFILE
+        and value["status"] == "pass"
+        and value["schedule"] == capture_schedule(),
+        "Wall production capture order differs",
+    )
+    completed = value["completed"]
+    native.require(
+        isinstance(completed, list) and len(completed) == len(value["schedule"]),
+        "Wall production capture completion count differs",
+    )
+    for expected, observed in zip(value["schedule"], completed, strict=True):
+        native.require(
+            isinstance(observed, dict)
+            and set(observed) == {*expected, "started_at", "completed_at"}
+            and all(observed[key] == expected[key] for key in expected)
+            and isinstance(observed["started_at"], str)
+            and isinstance(observed["completed_at"], str),
+            "Wall production completed capture order differs",
+        )
+    return {
+        "file": path.name,
+        "sha256": density.sha256(path),
+        "runs": len(completed),
+        "pairing": "adjacent-counterbalanced",
+    }
+
+
+def load_interleaved_modules(repo: Path) -> tuple[Any, Any, Any, Any, Any]:
+    scripts = str(repo / "scripts")
+    if scripts not in sys.path:
+        sys.path.insert(0, scripts)
+    from perf_tool.arguments import build_parser, validate_arguments
+    from perf_tool.execution import prepare_session, run_one
+    from perf_tool.model import Case
+    from perf_tool.summary import summarize_session
+
+    return build_parser, validate_arguments, prepare_session, run_one, (Case, summarize_session)
+
+
+def capture_interleaved(args: argparse.Namespace) -> int:
+    repo = native.validate_repo(args.repo)
+    native.require(native.git_subject(repo) == args.subject_commit, "Wall subject changed")
+    native.require(
+        native.source_fingerprint(repo) == args.source_fingerprint,
+        "Wall source changed before interleaved capture",
+    )
+    native.require(
+        native.native_harness_fingerprint(repo) == args.harness_fingerprint,
+        "Wall harness changed before interleaved capture",
+    )
+    density.assert_fully_clean(repo, args.subject_commit)
+    native.require(
+        density.asset_view_fingerprint(repo) == args.asset_view_fingerprint,
+        "Wall asset view changed before interleaved capture",
+    )
+    candidate = art.candidate_identity(repo)
+    native.require(
+        int(args.candidate_generation) == candidate["asset_set_generation"]
+        and args.candidate_manifest_sha256 == candidate["manifest_sha256"],
+        "Wall candidate changed before interleaved capture",
+    )
+    binary = repo / "target/profiling/bevy_app"
+    native.require(binary.is_file() and not binary.is_symlink(), "profiling binary missing")
+    root = Path(args.job_root).resolve()
+    native.require(root.is_dir() and not root.is_symlink(), "Wall job root is unavailable")
+
+    build_parser, validate_arguments, prepare_session, run_one, loaded = (
+        load_interleaved_modules(repo)
+    )
+    Case, summarize_session = loaded
+    sessions: dict[tuple[str, str], tuple[Any, Path, dict[str, Any]]] = {}
+    for presentation in PRESENTATIONS:
+        for phase in density.PHASES:
+            command = presentation_command(
+                repo, root / presentation, presentation, phase, args.adapter
+            )
+            perf_args = build_parser().parse_args(command[2:])
+            cases = {
+                size: Case(
+                    "wall-density",
+                    size,
+                    "gpu",
+                    density.SEED,
+                    0,
+                    0,
+                    wall_phase=phase,
+                )
+                for size in density.SIZES
+            }
+            with selected_presentation_environment(presentation, candidate):
+                validate_arguments(perf_args)
+                session = prepare_session(
+                    perf_args,
+                    binary,
+                    list(cases.values()),
+                    args.source_fingerprint,
+                )
+            sessions[(presentation, phase)] = (perf_args, session, cases)
+
+    order_path = root / "capture-order.json"
+    order = {
+        "schema_version": SCHEMA_VERSION,
+        "profile": PROFILE,
+        "status": "running",
+        "schedule": capture_schedule(),
+        "completed": [],
+    }
+    native.atomic_write_json(order_path, order)
+    for scheduled in order["schedule"]:
+        presentation = scheduled["presentation"]
+        phase = scheduled["phase"]
+        perf_args, session, cases = sessions[(presentation, phase)]
+        native.require(
+            native.source_fingerprint(repo) == args.source_fingerprint,
+            "source changed before Wall capture",
+        )
+        native.require(
+            density.asset_view_fingerprint(repo) == args.asset_view_fingerprint,
+            "asset view changed before Wall capture",
+        )
+        completed = {**scheduled, "started_at": native.utc_now()}
+        with selected_presentation_environment(presentation, candidate):
+            validation = run_one(
+                args=perf_args,
+                binary=binary,
+                session_dir=session,
+                case=cases[scheduled["size"]],
+                run_number=scheduled["run"],
+                preflight=False,
+            )
+        native.require(
+            validation.valid,
+            "Wall interleaved capture failed raw validation: "
+            + "; ".join(validation.reasons),
+        )
+        completed["completed_at"] = native.utc_now()
+        order["completed"].append(completed)
+        native.atomic_write_json(order_path, order)
+
+    for _, session, _ in sessions.values():
+        native.require(summarize_session(session), "Wall performance session is invalid")
+    order["status"] = "pass"
+    native.atomic_write_json(order_path, order)
+    native.print_json(capture_order_evidence(order_path))
+    return 0
 
 
 def verify_root(root: Path) -> dict[str, Any]:
@@ -309,6 +546,11 @@ def verify_root(root: Path) -> dict[str, Any]:
                 )
             )
             native.require(entry == recalculated, "Wall presentation session differs")
+    native.require(
+        manifest.get("capture_order")
+        == capture_order_evidence(root / "capture-order.json"),
+        "Wall production capture-order evidence changed",
+    )
     recorded_comparisons = manifest.get("comparisons")
     native.require(
         isinstance(recorded_comparisons, list)
@@ -424,6 +666,7 @@ def plan(args: argparse.Namespace) -> int:
                 "parallel_game_processes": 1,
                 "capture_runs": 24,
                 "comparisons": 4,
+                "pairing": "adjacent-counterbalanced",
             },
         }
     )
@@ -489,37 +732,32 @@ def run(args: argparse.Namespace) -> int:
         binary = repo / "target/profiling/bevy_app"
         native.require(binary.is_file() and not binary.is_symlink(), "profiling binary missing")
         binary_hash = density.sha256(binary)
+        command = interleaved_command(
+            repo=repo,
+            root=root,
+            subject_commit=args.subject_commit,
+            source_fingerprint=args.source_fingerprint,
+            harness_fingerprint=args.harness_fingerprint,
+            asset_view_fingerprint=args.asset_view_fingerprint,
+            candidate=candidate,
+            adapter=args.adapter,
+        )
+        state["commands"].append({"stage": "capture-interleaved", "argv": command})
+        native.run_command(
+            "capture-interleaved",
+            command,
+            repo=repo,
+            env=os.environ.copy(),
+            log_path=root / "capture-interleaved.log",
+            job_file=root / "job.json",
+            state=state,
+            timeout_seconds=density.RUN_TIMEOUT_SECONDS * len(capture_schedule()) + 600.0,
+        )
         sessions: dict[str, list[dict[str, Any]]] = {}
         for presentation in PRESENTATIONS:
             entries = []
-            environment = presentation_environment(presentation, candidate)
             for phase in density.PHASES:
-                native.require(
-                    native.source_fingerprint(repo) == args.source_fingerprint,
-                    "source changed before Wall capture",
-                )
-                native.require(
-                    density.asset_view_fingerprint(repo) == args.asset_view_fingerprint,
-                    "asset view changed before Wall capture",
-                )
-                session_root = root / presentation
-                command = presentation_command(
-                    repo, session_root, presentation, phase, args.adapter
-                )
-                state["commands"].append(
-                    {"stage": f"capture-{presentation}-{phase}", "argv": command}
-                )
-                native.run_command(
-                    f"capture-{presentation}-{phase}",
-                    command,
-                    repo=repo,
-                    env=environment,
-                    log_path=root / f"capture-{presentation}-{phase}.log",
-                    job_file=root / "job.json",
-                    state=state,
-                    timeout_seconds=density.RUN_TIMEOUT_SECONDS,
-                )
-                session = session_root / "sessions" / phase
+                session = root / presentation / "sessions" / phase
                 entry = density.verify_session(
                     repo=repo,
                     session=session,
@@ -541,6 +779,7 @@ def run(args: argparse.Namespace) -> int:
                 )
                 entries.append(entry)
             sessions[presentation] = entries
+        capture_order = capture_order_evidence(root / "capture-order.json")
         comparisons = root / "comparisons"
         comparisons.mkdir()
         comparison_results = []
@@ -578,6 +817,7 @@ def run(args: argparse.Namespace) -> int:
             "adapter": args.adapter,
             "binary_sha256": binary_hash,
             "sessions": sessions,
+            "capture_order": capture_order,
             "comparisons": comparison_results,
             "completed_at": native.utc_now(),
         }
@@ -627,6 +867,24 @@ def self_test() -> int:
         command[command.index("--wall-presentation") + 1] == "production",
         "Wall presentation command is not explicit",
     )
+    build_parser, validate_arguments, _, _, _ = load_interleaved_modules(Path.cwd())
+    perf_args = build_parser().parse_args(command[2:])
+    with selected_presentation_environment("production", candidate):
+        validate_arguments(perf_args)
+    schedule = capture_schedule()
+    native.require(len(schedule) == 24, "Wall capture schedule length differs")
+    for first, second in zip(schedule[::2], schedule[1::2], strict=True):
+        native.require(
+            (first["phase"], first["size"], first["run"])
+            == (second["phase"], second["size"], second["run"])
+            and {first["presentation"], second["presentation"]} == set(PRESENTATIONS),
+            "Wall control and production captures are not adjacent pairs",
+        )
+    first_modes = [entry["presentation"] for entry in schedule[::2]]
+    native.require(
+        first_modes.count("fallback-control") == first_modes.count("production") == 6,
+        "Wall capture pair order is not counterbalanced",
+    )
     native.print_json(
         {"schema_version": SCHEMA_VERSION, "status": "pass", "profile": PROFILE}
     )
@@ -641,15 +899,17 @@ def parser() -> argparse.ArgumentParser:
     plan_parser.add_argument("--job-root")
     plan_parser.add_argument("--adapter", default="Intel")
     run_parser = commands.add_parser("run")
-    run_parser.add_argument("--repo", required=True)
-    run_parser.add_argument("--job-root", required=True)
-    run_parser.add_argument("--subject-commit", required=True)
-    run_parser.add_argument("--source-fingerprint", required=True)
-    run_parser.add_argument("--harness-fingerprint", required=True)
-    run_parser.add_argument("--asset-view-fingerprint", required=True)
-    run_parser.add_argument("--candidate-generation", required=True)
-    run_parser.add_argument("--candidate-manifest-sha256", required=True)
-    run_parser.add_argument("--adapter", default="Intel")
+    capture_parser = commands.add_parser("capture-interleaved")
+    for command_parser in (run_parser, capture_parser):
+        command_parser.add_argument("--repo", required=True)
+        command_parser.add_argument("--job-root", required=True)
+        command_parser.add_argument("--subject-commit", required=True)
+        command_parser.add_argument("--source-fingerprint", required=True)
+        command_parser.add_argument("--harness-fingerprint", required=True)
+        command_parser.add_argument("--asset-view-fingerprint", required=True)
+        command_parser.add_argument("--candidate-generation", required=True)
+        command_parser.add_argument("--candidate-manifest-sha256", required=True)
+        command_parser.add_argument("--adapter", default="Intel")
     status_parser = commands.add_parser("status")
     status_parser.add_argument("--job-root", required=True)
     verify_parser = commands.add_parser("verify")
@@ -662,7 +922,7 @@ def main() -> int:
     args = parser().parse_args()
     if args.command == "plan":
         return plan(args)
-    if args.command == "run":
+    if args.command in {"run", "capture-interleaved"}:
         for value, label, length in (
             (args.subject_commit, "subject commit", 40),
             (args.source_fingerprint, "source fingerprint", 64),
@@ -674,7 +934,7 @@ def main() -> int:
                 re.fullmatch(f"[0-9a-f]{{{length}}}", value) is not None,
                 f"invalid {label}",
             )
-        return run(args)
+        return run(args) if args.command == "run" else capture_interleaved(args)
     if args.command == "status":
         return status(args)
     if args.command == "verify":

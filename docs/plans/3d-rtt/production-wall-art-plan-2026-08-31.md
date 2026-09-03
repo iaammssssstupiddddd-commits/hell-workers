@@ -1044,6 +1044,32 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   0 visibleを満たし、PNG SHA-256は`3989015e…`である。generation 2の採用画像に対するnormalized MAEは全画面
   `0.00293811`、中央96 px ROI `0.01901325`で、目視上のsilhouette、lit shading、紫emissiveを維持する。manifest世代が
   変わったため旧承認は流用せず、このfresh PNGへの明示承認後にのみpendingなしfinal generationを再封印する。
+- ユーザーは2026-09-03に上記generation 3のPNG SHA-256 `3989015e…`を「OKです」と明示承認した。
+  art review artifactをgeneration 3 / manifest `8b41a825…` / subject `2fbb713f` / screenshotへ再結合し、承認UTC
+  `2026-09-03T12:26:51Z`、artifact SHA-256 `2892f0a8…`を記録した。この承認はart選定であり、canonical
+  promote承認には流用しない。
+- 承認artifactを含むpendingなしfinal generation 4を`normal_decision=rejected` /
+  `review_status=art_approved`で再封印した。final manifest SHA-256は`7ecdfbb0…`、coreは6 GLB＋albedo＋
+  emissiveの8 file、isolated projection SHA-256は`76f7d448…`である。canonical generation 2とprimary runtime
+  assetは変更していない。
+- current subject `48f790bf`のclean validation worktreeへgeneration 4の8 coreだけをprovisionし、fresh matrix job
+  `wall-art-20260903T122914Z-4dd4d822`をIntel Arc / Vulkan / X11で実行した。High / Medium / Low × DPI
+  1.0 / 1.5 / 2.0の9 / 9 caseがstatus `valid`、独立offline verify `pass`となり、全caseでproduction 96 /
+  fallback 0、distinct mesh 6 / material 1、16 mask各6件、connector visual 192 hidden / 0 visibleを満たした。
+  9枚を目視し、品質／DPI固有のWall欠落、fallback混在、黒抜け、輪郭断線がないことを確認した。
+- 同一subject / generation 4のperformance job `wall-production-performance-20260903T131432Z-78414216`は24 / 24 runを
+  valid採取したが、最初のcompleted p95比較でfail-closedとなった。completed 4Nはp95 / p99が
+  `-36.922% / -21.823%`、provisional Nは`-67.614% / -65.788%`、4Nは`-64.760% / -62.194%`と改善したが、
+  completed Nだけがp95 `+190.461%`、p99 `+213.020%`で`+5%`gateを超えた。manifestは生成されず、独立
+  verifyもmissing manifestを検出してinvalidである。閾値を変更せず、「共線分割だけがtail-latencyの原因」
+  という仮説はこの1回で打ち切った。presentation sidecarはinitial / final同一で、revision、mesh、material、
+  transformの定常再適用は否定できた。一方、helperは対照側12 runを全て先に、production側12 runを
+  全て後に固定実行し、run内の連続tail区間がcompleted Nの一方だけへ偏った。invalid artifactを合格扱いせず、
+  実draw経路をRenderDocで確認した後、計測順序とcompleted material経路を切り分ける。
+- 上記の固定順を計測実装の欠陥として修正し、formal profileを`wall-production-performance-v2`へ更新した。
+  v2は各`phase × size × run`でfallback-control / productionを隣接pairにし、pairの先行modeを交互にする。
+  24 runの予定順と実完了順は`capture-order.json`へ記録し、独立verifyで完全一致を要求する。これにより
+  grouped v1のinvalid値をruntime回帰の根拠へ流用せず、同一時間帯の比較でcompleted emissive経路を再評価する。
 
 - 変更内容:
   - M4で完成・commit済みのwall-art gallery / fail-closed profileを変更せず、final commitのclean validation worktreeで実行する。code / launcher / predicate修正が必要になった時点でartifactを無効化してM4へ戻り、final commit承認からやり直す。
@@ -1061,7 +1087,7 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   - `crates/bevy_app/src/plugins/startup/perf_scenario/`
   - `docs/rendering-performance.md`
 - 完了条件:
-  - [ ] 9 caseのclient-window PNGとsidecarがfresh source / asset fingerprintに対してfail-closedでpassする。
+  - [x] 9 caseのclient-window PNGとsidecarがfresh source / asset fingerprintに対してfail-closedでpassする。
   - [ ] 全16 mask、Door接続、完成／仮設、追加／撤去、completion、depth、loadが画像とstateの両方でpassする。
   - [ ] 全family / rotationのWall–Wall portが9.6 wuの同一profileで連続し、各armの局所横断で連続壁体が9.6 wu未満へ細らず、装飾が12.8 wu envelopeとcell AABBを越えない。最遠zoom-outではHighの内部色1 px以上、Medium / Lowのfinal composite silhouette連続を満たす。
   - [x] registered historical P02 artifactのimmutable locator / hashがoffline再検証でpassし、current-sourceのwall depth、
@@ -1071,7 +1097,7 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   - [ ] baseline対production、final `force-fallback`対productionのcompleted / provisional Capture p95 / p99中央値がそれぞれ`+5%`以内で、全run valid、MAD併記である。
   - [ ] RenderDoc上のcompleted wall main-passが`D_N <= 6`、`D_4N <= 6`、`D_4N = D_N`、provisional sorted phaseが`D_4N <= 4 * D_N + 6`を満たす。
   - [ ] native実行中のcode / profile / predicate変更が0で、source fingerprintはM4 final commitと一致する。修正が発生したrunを合格artifactへ流用していない。
-  - [ ] manifestはM4のpendingなしfinal generationと一致し、M1 candidate generationやA/B用optional集合のartifactをfinal証拠へ混ぜていない。validation worktreeはadopted core 9またはrejected core 8だけを含む。
+  - [x] manifestはM4のpendingなしfinal generationと一致し、M1 candidate generationやA/B用optional集合のartifactをfinal証拠へ混ぜていない。validation worktreeはadopted core 9またはrejected core 8だけを含む。
   - [ ] compare開始前に空の`<sealed-artifacts>` directoryを作り、4つの固有CSVと各SHA-256を保存している。既定`comparison.csv`へ上書きしていない。
   - [x] adapter / backend / window backendがartifactに記録され、headless結果をrenderer証拠にしていない。
 - 検証:

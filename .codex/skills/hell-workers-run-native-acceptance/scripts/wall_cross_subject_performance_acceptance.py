@@ -251,7 +251,7 @@ def collect_inputs(
         "baseline job is not a passing wall-density capture",
     )
     require(
-        production_manifest.get("profile") == "wall-production-performance-v1"
+        production_manifest.get("profile") == "wall-production-performance-v2"
         and production_manifest.get("status") == "pass",
         "production job is not a passing Wall production pair",
     )

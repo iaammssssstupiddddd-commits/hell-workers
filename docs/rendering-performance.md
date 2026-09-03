@@ -72,7 +72,7 @@ High / Medium / Low × DPI 1.0 / 1.5 / 2.0を9つの逐次X11 client captureと�
 immutable artifactのhashとlocatorをoffline再検証する。`perf.py`側の内部`--wall-art-matrix` authorizationは
 Wall native helperだけが付与し、通常のsingle-case校正とformal densityの固定quality / DPI契約は変更しない。
 
-本番Wallの正式frame比較は`wall-production-performance-v1`が所有する。凍結済み
+本番Wallの正式frame比較は`wall-production-performance-v2`が所有する。凍結済み
 `wall-density-v1`のlayout sidecarへ上書きせず、追加の`wall_density_presentation.json`で
 計測開始時と終了時の表示状態を結ぶ。`production`は候補generation / manifest hashと
 `ReadyToApply`、全targetのproduction一括収束を要求する。`fallback-control`は同じbinaryから候補認可を除き、
@@ -80,10 +80,12 @@ Wall native helperだけが付与し、通常のsingle-case校正とformal densi
 1 mesh / 2 materialのresident pool、family / rotation分布、350 triangle上限が成立してからwarm-upへ進む。
 binaryの`--perf-wall-presentation`とlauncherの`HW_WALL_PERF_PRESENTATION`は同値の二重鍵であり、通常runや
 Wall art actual-window profileからは指定できない。completed / provisionalのN=96 / 4N=384を各3 run採り、
-同一final binaryのfallback-control比p95 / p99中央値を各`+5%`以内で判定する。
+同一final binaryのfallback-control比p95 / p99中央値を各`+5%`以内で判定する。v2は各
+`phase × size × run`のfallback-control / productionを隣接実行し、先行modeをpair間で交互にする。
+全24 runの予定順と完了順を`capture-order.json`へ固定し、片側を全件先に測る時間帯バイアスを拒否する。
 production provisionalは半透明albedoとshared light fieldを保ちつつ、transparent passのtexture sampleを抑えるため
 emissive textureをbindしない。completedだけが承認済みemissive textureを使用する。
-subject `991392b8`のIntel Arc / Mesa 26.1.6 / Vulkan / X11実測では、completed N / 4Nの
+旧v1 subject `991392b8`のIntel Arc / Mesa 26.1.6 / Vulkan / X11実測では、completed N / 4Nの
 p95回帰が`+0.451% / +0.438%`、p99が`+0.910% / +0.540%`、provisionalのp95が
 `+2.031% / +0.987%`、p99が`+1.134% / +0.369%`となり、全ケースが`+5%` gateを通過した。
 24 runと4比較の独立verify対象は
