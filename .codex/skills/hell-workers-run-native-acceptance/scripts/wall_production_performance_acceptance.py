@@ -19,6 +19,9 @@ import wall_density_acceptance as density  # noqa: E402
 
 
 SCHEMA_VERSION = 2
+# The runtime sidecar carries its own frozen schema from
+# `wall_density_presentation.rs`; it is not versioned with this profile.
+PRESENTATION_SIDECAR_SCHEMA_VERSION = 1
 PROFILE = "wall-production-performance-v2"
 PRESENTATIONS = ("fallback-control", "production")
 EXPECTED_FAMILY_MULTIPLIERS = {
@@ -139,7 +142,8 @@ def verify_presentation_sidecar(
         "Wall presentation sidecar fields differ",
     )
     native.require(
-        value["schema_version"] == SCHEMA_VERSION and value["stable"] is True,
+        value["schema_version"] == PRESENTATION_SIDECAR_SCHEMA_VERSION
+        and value["stable"] is True,
         "Wall presentation sidecar is not stable",
     )
     initial = value["initial"]
@@ -149,7 +153,7 @@ def verify_presentation_sidecar(
     )
     target_count = 96 if size == "small" else 384
     native.require(
-        initial.get("schema_version") == SCHEMA_VERSION
+        initial.get("schema_version") == PRESENTATION_SIDECAR_SCHEMA_VERSION
         and initial.get("expected_mode") == presentation
         and initial.get("phase") == phase
         and initial.get("target_wall_count") == target_count
