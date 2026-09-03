@@ -39,6 +39,19 @@ CANDIDATE_ENV_KEYS = (
     "HW_WALL_CANDIDATE_MANIFEST_SHA256",
 )
 CAPTURE_ENV_KEYS = (*CANDIDATE_ENV_KEYS, "HW_WALL_PERF_PRESENTATION")
+# A window the desktop compositor paces presents exactly at the display frame
+# clock, so p95 / p99 stop describing wall cost: job
+# `wall-production-performance-20260903T164122Z-3b424e6f` measured 8041 frames
+# at a 7.43 ms median in its first run and then 3601 frames at 16.63 ms for
+# every later run while single frames still finished in 7.60 ms. Every valid
+# historical capture stayed unpaced. This rejects the paced regime itself and
+# leaves the `+5%` acceptance thresholds untouched.
+DISPLAY_FRAME_CLOCK_HZ = 60.0
+FRAME_CLOCK_FPS_TOLERANCE = 1.0
+FRAME_CLOCK_P50_TOLERANCE_MS = 0.5
+# The three runs of one cell are captured minutes apart, so a mid-session
+# regime flip has to fail even when each run is individually unpaced.
+MAX_CELL_P50_SPREAD = 1.25
 
 
 def presentation_command(
@@ -96,6 +109,62 @@ def capture_schedule() -> list[dict[str, Any]]:
                         }
                     )
     return schedule
+
+
+def frame_regime(samples: int, p50_ms: float) -> dict[str, Any]:
+    """Describe whether a run was paced by the display instead of by the wall."""
+    fps = samples / density.MEASURE_SECONDS
+    period_ms = 1000.0 / DISPLAY_FRAME_CLOCK_HZ
+    return {
+        "samples": samples,
+        "p50_ms": p50_ms,
+        "fps": round(fps, 3),
+        "display_paced": (
+            abs(fps - DISPLAY_FRAME_CLOCK_HZ) <= FRAME_CLOCK_FPS_TOLERANCE
+            and abs(p50_ms - period_ms) <= FRAME_CLOCK_P50_TOLERANCE_MS
+        ),
+    }
+
+
+def run_frame_regime(session: Path, case_identifier: str, run_number: int) -> dict[str, Any]:
+    run_dir = density.locate_run(session, case_identifier, run_number)
+    summary = run_dir / "data" / "summary.csv"
+    native.require(
+        summary.is_file() and not summary.is_symlink(), "Wall run summary is absent"
+    )
+    with summary.open(newline="", encoding="utf-8") as handle:
+        rows = list(csv.DictReader(handle))
+    native.require(len(rows) == 1, "Wall run summary is not a single case")
+    try:
+        samples = int(rows[0]["samples"])
+        p50_ms = float(rows[0]["p50_ms"])
+    except (KeyError, TypeError, ValueError) as error:
+        raise native.AcceptanceError("Wall run summary lacks frame metrics") from error
+    return frame_regime(samples, p50_ms)
+
+
+def require_unpaced(regime: dict[str, Any], scheduled: dict[str, Any]) -> None:
+    native.require(
+        regime["display_paced"] is False,
+        "Wall capture ran at the display frame clock instead of free running "
+        f"({scheduled['presentation']}/{scheduled['phase']}/{scheduled['size']}"
+        f"/run{scheduled['run']}: {regime['samples']} frames, "
+        f"{regime['fps']} fps, p50 {regime['p50_ms']} ms). Frame times describe "
+        "the compositor, not the wall; capture again in an unpaced regime.",
+    )
+
+
+def require_stable_cell(cell: tuple[str, str, str], regimes: list[dict[str, Any]]) -> None:
+    medians = [regime["p50_ms"] for regime in regimes]
+    lowest = min(medians)
+    native.require(lowest > 0.0, "Wall capture reported a non-positive median")
+    spread = max(medians) / lowest
+    native.require(
+        spread <= MAX_CELL_P50_SPREAD,
+        "Wall capture regime changed between the runs of "
+        f"{'/'.join(cell)} (p50 medians {medians}, spread {spread:.3f} exceeds "
+        f"{MAX_CELL_P50_SPREAD})",
+    )
 
 
 @contextmanager
@@ -339,7 +408,34 @@ def comparison_evidence(path: Path, *, phase: str, metric: str) -> dict[str, Any
     }
 
 
-def capture_order_evidence(path: Path) -> dict[str, Any]:
+def case_identifiers(repo: Path, phase: str) -> dict[str, str]:
+    Case, _ = density.load_perf_modules(repo)
+    return {
+        size: Case(
+            "wall-density", size, "gpu", density.SEED, 0, 0, wall_phase=phase
+        ).identifier
+        for size in density.SIZES
+    }
+
+
+def session_index(
+    repo: Path, root: Path
+) -> dict[tuple[str, str], tuple[Path, dict[str, str]]]:
+    return {
+        (presentation, phase): (
+            root / presentation / "sessions" / phase,
+            case_identifiers(repo, phase),
+        )
+        for presentation in PRESENTATIONS
+        for phase in density.PHASES
+    }
+
+
+def capture_order_evidence(
+    path: Path,
+    *,
+    sessions: dict[tuple[str, str], tuple[Path, dict[str, str]]] | None = None,
+) -> dict[str, Any]:
     value = native.read_json(path)
     native.require(
         set(value) == {"schema_version", "profile", "status", "schedule", "completed"}
@@ -354,20 +450,50 @@ def capture_order_evidence(path: Path) -> dict[str, Any]:
         isinstance(completed, list) and len(completed) == len(value["schedule"]),
         "Wall production capture completion count differs",
     )
+    cells: dict[tuple[str, str, str], list[dict[str, Any]]] = {}
     for expected, observed in zip(value["schedule"], completed, strict=True):
         native.require(
             isinstance(observed, dict)
-            and set(observed) == {*expected, "started_at", "completed_at"}
+            and set(observed) == {*expected, "started_at", "completed_at", "regime"}
             and all(observed[key] == expected[key] for key in expected)
             and isinstance(observed["started_at"], str)
             and isinstance(observed["completed_at"], str),
             "Wall production completed capture order differs",
         )
+        regime = observed["regime"]
+        native.require(
+            isinstance(regime, dict)
+            and set(regime) == {"samples", "p50_ms", "fps", "display_paced"}
+            and regime == frame_regime(regime["samples"], regime["p50_ms"]),
+            "Wall production capture regime is not self-consistent",
+        )
+        if sessions is not None:
+            session, identifiers = sessions[
+                (observed["presentation"], observed["phase"])
+            ]
+            native.require(
+                run_frame_regime(
+                    session, identifiers[observed["size"]], observed["run"]
+                )
+                == regime,
+                "Wall production capture regime differs from the raw run artifacts",
+            )
+        require_unpaced(regime, observed)
+        cells.setdefault(
+            (observed["presentation"], observed["phase"], observed["size"]), []
+        ).append(regime)
+    for cell, regimes in cells.items():
+        native.require(
+            len(regimes) == density.REPEAT, "Wall production capture cell is incomplete"
+        )
+        require_stable_cell(cell, regimes)
     return {
         "file": path.name,
         "sha256": density.sha256(path),
         "runs": len(completed),
         "pairing": "adjacent-counterbalanced",
+        "regime": "unpaced",
+        "slowest_fps": min(entry["regime"]["fps"] for entry in completed),
     }
 
 
@@ -479,15 +605,30 @@ def capture_interleaved(args: argparse.Namespace) -> int:
             "Wall interleaved capture failed raw validation: "
             + "; ".join(validation.reasons),
         )
+        regime = run_frame_regime(
+            session, cases[scheduled["size"]].identifier, scheduled["run"]
+        )
+        require_unpaced(regime, scheduled)
         completed["completed_at"] = native.utc_now()
+        completed["regime"] = regime
         order["completed"].append(completed)
         native.atomic_write_json(order_path, order)
+        cell = (presentation, phase, scheduled["size"])
+        observed = [
+            entry["regime"]
+            for entry in order["completed"]
+            if (entry["presentation"], entry["phase"], entry["size"]) == cell
+        ]
+        if len(observed) == density.REPEAT:
+            require_stable_cell(cell, observed)
 
     for _, session, _ in sessions.values():
         native.require(summarize_session(session), "Wall performance session is invalid")
     order["status"] = "pass"
     native.atomic_write_json(order_path, order)
-    native.print_json(capture_order_evidence(order_path))
+    native.print_json(
+        capture_order_evidence(order_path, sessions=session_index(repo, root))
+    )
     return 0
 
 
@@ -552,7 +693,9 @@ def verify_root(root: Path) -> dict[str, Any]:
             native.require(entry == recalculated, "Wall presentation session differs")
     native.require(
         manifest.get("capture_order")
-        == capture_order_evidence(root / "capture-order.json"),
+        == capture_order_evidence(
+            root / "capture-order.json", sessions=session_index(repo, root)
+        ),
         "Wall production capture-order evidence changed",
     )
     recorded_comparisons = manifest.get("comparisons")
@@ -783,7 +926,9 @@ def run(args: argparse.Namespace) -> int:
                 )
                 entries.append(entry)
             sessions[presentation] = entries
-        capture_order = capture_order_evidence(root / "capture-order.json")
+        capture_order = capture_order_evidence(
+            root / "capture-order.json", sessions=session_index(repo, root)
+        )
         comparisons = root / "comparisons"
         comparisons.mkdir()
         comparison_results = []
@@ -889,6 +1034,30 @@ def self_test() -> int:
         first_modes.count("fallback-control") == first_modes.count("production") == 6,
         "Wall capture pair order is not counterbalanced",
     )
+    # Observed regimes: a free running capture and the 60 Hz paced capture that
+    # replaced it inside job `wall-production-performance-20260903T164122Z-3b424e6f`.
+    free_running = frame_regime(8041, 7.43)
+    paced = frame_regime(3601, 16.63)
+    native.require(
+        free_running["display_paced"] is False and paced["display_paced"] is True,
+        "Wall frame regime does not separate free running from display paced",
+    )
+    scheduled = schedule[0]
+    require_unpaced(free_running, scheduled)
+    try:
+        require_unpaced(paced, scheduled)
+    except native.AcceptanceError:
+        pass
+    else:
+        raise native.AcceptanceError("Wall display paced capture was accepted")
+    cell = ("production", "completed", "small")
+    require_stable_cell(cell, [free_running, frame_regime(7900, 7.60)])
+    try:
+        require_stable_cell(cell, [free_running, paced])
+    except native.AcceptanceError:
+        pass
+    else:
+        raise native.AcceptanceError("Wall mid-session regime flip was accepted")
     native.print_json(
         {"schema_version": SCHEMA_VERSION, "status": "pass", "profile": PROFILE}
     )
