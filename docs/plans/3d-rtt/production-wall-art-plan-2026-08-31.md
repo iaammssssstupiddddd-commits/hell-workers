@@ -1028,6 +1028,22 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   そのため各mesh 216〜240 trianglesのうち大部分は表示へ寄与しない。M4を再開し、この分割だけを除去して
   24〜72 trianglesへ下げた新generationを作る。材質、texture、9.6 / 12.8 wu geometry、fixture、性能閾値は同時に
   変更しない。新generationでtail-latencyとRenderDoc 4Nが改善しなければ、この仮説は一度で打ち切る。
+- 実装修正commit `5152778d`からgeneration 3 candidateを再生成し、isolated / end / straight / corner / t_junction / crossを
+  それぞれ`24 / 24 / 24 / 36 / 48 / 72` trianglesへ削減した。6 GLBのscene gate、Khronos validator、post-export geometry、
+  texture、manifest、二重生成のdeterministic rebuildは全件passし、candidate manifest SHA-256は
+  `8b41a825daf84a15e331cc9e3839702151f3d88ba13c528c4aad24c98862f073`である。既存generation 2 finalとcanonical runtimeは
+  変更していない。
+- cleanup後のfinal helperはart-approved manifestだけを受理し、旧M4 helperはasset generationを`1`へ固定していたため、
+  承認前generation 3を再レビューできなかった。旧M4 subjectへ72-triangle契約と、正のcandidate generationをplan時の
+  exact manifest hashへ結合するだけの隔離検証branch `2fbb713f`を作成した。初回job
+  `wall-art-20260903T010924Z-4a9f75c9`はgeneration 3の96 production / fallback 0 / 6 mesh / 16 maskを描画できたが、
+  Wall以外の通常runtime asset不足をログgateが検出してinvalidとした。画像やstatusを合格証拠へ流用しない。
+- 完全runtime asset viewを非上書きで補完したfresh lit job `wall-art-20260903T013625Z-b954997d`はIntel Arc / Mesa 26.1.6 /
+  Vulkan / X11でstatus `valid`、独立offline verify `pass`となった。generation 3、manifest `8b41a825…`、asset-view
+  `4e8cd152…`、production 96 / fallback 0、distinct mesh 6 / material 1、16 mask各6件、connector visual 192 hidden /
+  0 visibleを満たし、PNG SHA-256は`3989015e…`である。generation 2の採用画像に対するnormalized MAEは全画面
+  `0.00293811`、中央96 px ROI `0.01901325`で、目視上のsilhouette、lit shading、紫emissiveを維持する。manifest世代が
+  変わったため旧承認は流用せず、このfresh PNGへの明示承認後にのみpendingなしfinal generationを再封印する。
 
 - 変更内容:
   - M4で完成・commit済みのwall-art gallery / fail-closed profileを変更せず、final commitのclean validation worktreeで実行する。code / launcher / predicate修正が必要になった時点でartifactを無効化してM4へ戻り、final commit承認からやり直す。
