@@ -18,17 +18,14 @@ FAMILIES = {
     "isolated": {
         "collection": "Wall_Isolated",
         "outline": ((-0.15, -0.15), (0.15, -0.15), (0.15, 0.15), (-0.15, 0.15)),
-        "edge_subdivisions": 10,
     },
     "end": {
         "collection": "Wall_End",
         "outline": ((-0.15, -0.15), (0.15, -0.15), (0.15, 0.5), (-0.15, 0.5)),
-        "edge_subdivisions": 10,
     },
     "straight": {
         "collection": "Wall_Straight",
         "outline": ((-0.15, -0.5), (0.15, -0.5), (0.15, 0.5), (-0.15, 0.5)),
-        "edge_subdivisions": 10,
     },
     "corner": {
         "collection": "Wall_Corner",
@@ -40,7 +37,6 @@ FAMILIES = {
             (-0.15, 0.15),
             (-0.5, 0.15),
         ),
-        "edge_subdivisions": 6,
     },
     "t_junction": {
         "collection": "Wall_TJunction",
@@ -54,7 +50,6 @@ FAMILIES = {
             (-0.15, 0.15),
             (-0.5, 0.15),
         ),
-        "edge_subdivisions": 5,
     },
     "cross": {
         "collection": "Wall_Cross",
@@ -72,7 +67,6 @@ FAMILIES = {
             (-0.15, 0.15),
             (-0.5, 0.15),
         ),
-        "edge_subdivisions": 3,
     },
 }
 
@@ -86,23 +80,6 @@ def clear_scene() -> None:
         bpy.data.meshes.remove(mesh)
     for material in list(bpy.data.materials):
         bpy.data.materials.remove(material)
-
-
-def subdivided_outline(
-    outline: tuple[tuple[float, float], ...], subdivisions: int
-) -> list[tuple[float, float]]:
-    points: list[tuple[float, float]] = []
-    for index, first in enumerate(outline):
-        second = outline[(index + 1) % len(outline)]
-        for step in range(subdivisions):
-            ratio = step / subdivisions
-            points.append(
-                (
-                    first[0] + (second[0] - first[0]) * ratio,
-                    first[1] + (second[1] - first[1]) * ratio,
-                )
-            )
-    return points
 
 
 def atlas_uv(kind: str, x: float, y: float, z: float) -> tuple[float, float]:
@@ -119,7 +96,9 @@ def create_prism(
     material: bpy.types.Material,
 ) -> bpy.types.Object:
     definition = FAMILIES[family]
-    outline = subdivided_outline(definition["outline"], definition["edge_subdivisions"])
+    # Every authored segment is straight and uses one atlas surface. Extra
+    # collinear vertices do not alter either the silhouette or interpolated UVs.
+    outline = list(definition["outline"])
     count = len(outline)
     vertices = [(x, y, -0.5) for x, y in outline]
     vertices.extend((x, y, 0.0) for x, y in outline)
@@ -152,7 +131,7 @@ def create_prism(
     mesh.update(calc_edges=True)
     uv_layer = mesh.uv_layers.new(name="UVMap")
     for polygon, (kind, ordinal) in zip(mesh.polygons, face_kinds, strict=True):
-        edge_group = ordinal // definition["edge_subdivisions"]
+        edge_group = ordinal
         surface = "stone"
         if kind == "side_lower" and edge_group % 4 == 2:
             surface = "purple"

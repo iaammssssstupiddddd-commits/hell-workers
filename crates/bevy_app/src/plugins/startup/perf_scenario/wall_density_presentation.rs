@@ -22,7 +22,7 @@ use crate::assets::wall_asset_set::{
 use crate::plugins::startup::Building3dHandles;
 
 const SIDECAR_SCHEMA_VERSION: u32 = 1;
-const MAX_TRIANGLES_PER_PRODUCTION_MESH: usize = 350;
+const MAX_TRIANGLES_PER_PRODUCTION_MESH: usize = 72;
 
 type WallPresentationQuery<'w, 's> = Query<
     'w,

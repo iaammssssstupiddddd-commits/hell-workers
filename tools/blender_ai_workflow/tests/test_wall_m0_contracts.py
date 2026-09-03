@@ -72,6 +72,11 @@ class WallGeometryContractTests(unittest.TestCase):
         self.assertEqual(payload["bounds"]["local_min"], [-16.0, -16.0, -16.0])
         self.assertEqual(payload["bounds"]["local_max"], [16.0, 16.0, 16.0])
 
+    def test_geometry_contract_rejects_redundant_edge_subdivision(self) -> None:
+        mesh = self.payload["mesh_contract"]
+        self.assertEqual(mesh["target_triangle_range_per_mesh"], [24, 72])
+        self.assertEqual(mesh["hard_triangle_cap_per_mesh"], 72)
+
     def test_bounds_contract_distinguishes_envelope_pivot_and_placement(self) -> None:
         bounds = self.payload["bounds"]
         self.assertEqual(bounds["contract_kind"], "maximum_cell_envelope")

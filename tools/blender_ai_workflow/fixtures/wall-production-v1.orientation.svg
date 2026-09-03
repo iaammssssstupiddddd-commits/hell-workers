@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="960" height="840" viewBox="0 0 960 840"
-  data-contract-id="wall-production-v1" data-contract-sha256="0c13f5a2084dd60e6e4634d3f6b5ddaee33b6e90273c2cc4876eab0b76f6c563">
+  data-contract-id="wall-production-v1" data-contract-sha256="d4090f72646856ced07e148feffccdc169cf865691b92fd7f4dc4f7d8ab61dd7">
   <title>Wall production v1 canonical orientation and bounds</title>
   <desc>Top-view canonical family arms use N=-Z, E=+X. Positive quarter turns about +Y are counterclockwise and map N to W. Side view fixes the centered local pivot and placement height.</desc>
   <style>

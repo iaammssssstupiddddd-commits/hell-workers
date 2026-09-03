@@ -42,11 +42,12 @@ validate-wall-glb <input.glb> <family> <report-name.json>
 `--collection`はM1 wall asset専用のopt-in selectorです。exact collectionがunknown / empty、または
 render-enabled meshが1個でなければexport前に失敗します。指定しない既存scene全体の検査・export contractは
 変更しません。collection export後はKhronos validatorに加えて`validate-wall-glb`を実行し、GLBのJSON / BINを
-直接decodeして1 node / 1 mesh / 1 primitive、identity node、UV0、tangent有無、embedded image 0、350 triangle
+直接decodeして1 node / 1 mesh / 1 primitive、identity node、UV0、tangent有無、embedded image 0、72 triangle
 cap、raw Y `-16..+16 wu`、9.6 wu port profile、12.8 wu corridor unionを検証します。
 
 production Wall sceneは各familyを1 tile単位、9.6 / 32 = 0.30 tile厚、上下`-0.5..+0.5 tile`でauthoringし、
-上下2つのside material bandを持つ216〜240 trianglesへ決定的に分割します。正式exportだけはscene gate後のin-memory mesh copyへ
+上下2つのside material bandを持つ24〜72 trianglesへ決定的に分割します。直線辺の共線分割はsilhouetteとUV補間を
+変えずGPU負荷だけを増やすため生成しません。正式exportだけはscene gate後のin-memory mesh copyへ
 `--geometry-scale 32 --materials-mode placeholder`を適用し、object transformをidentityのままraw wuへbakeします。
 Blender 5.1.1のglTF operatorにglobal scale propertyがないため、このopt-in頂点bakeを使います。既存exportの
 既定はscale 1 / material exportのままです。
@@ -57,7 +58,7 @@ tools/blender_ai_workflow/bin/render-wall-reference-board
 tools/blender_ai_workflow/bin/export-staging-glb \
   "$ASSET_ROOT/staging/blend/wall-production-v1.blend" \
   models/buildings/wall/wall_isolated.glb \
-  350 \
+  72 \
   --collection Wall_Isolated \
   --geometry-scale 32 \
   --materials-mode placeholder

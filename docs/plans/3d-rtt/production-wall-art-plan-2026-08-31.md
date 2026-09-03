@@ -32,7 +32,7 @@ canonical asset昇格までを一つの閉じた作業列として具体化す�
 | normal map | なしから開始し、native A/Bを一度だけ行う。差が採用基準を満たさなければ「なし」で確定する |
 | outline / unlit | texture-baked linework＋現行stylized directional shadowを第一候補とする。`base.unlit`比較は同じmaterial型内で行い、global outline rendererは本計画へ混在させない |
 | asset障害 | 6 meshとshared textureが全てresidentかつtopology consumerが有効になるまで、既存procedural `Cuboid`＋solid-color material pairをall-or-nothing fallbackとして表示する。透明化、一部だけの切替、読込だけを根拠にした本番化は禁止 |
-| 性能上限 | 各GLB 150〜350 triangles、production mesh 6＋fallback mesh 1、active production material 2＋fallback pair 2、production mesh/material組合せ上限12。実draw callとframe値はnative計測で判定 |
+| 性能上限 | 各GLB 24〜72 triangles、production mesh 6＋fallback mesh 1、active production material 2＋fallback pair 2、production mesh/material組合せ上限12。実draw callとframe値はnative計測で判定 |
 | 正本昇格 | stagingで全gateを通した後、ユーザーの明示承認を得てから外部canonical `source/` / `exports/`へ昇格する |
 
 次は独立した停止ゲートであり、検査が通るまで後段の意味を縮小して解釈しない。
@@ -72,7 +72,7 @@ M4で比較するのは上表の未決事項だけである。壁厚、6 family�
   - wall ownerごとに `Building3dVisual` / `Mesh3d` / materialがexactly one、`MeshTag`は論理root gridを保持する。
   - 全6 meshの接続portが幅9.6 wuの同一profile、各armの局所横断で連続壁体が9.6 wu以上、装飾込み外形が12.8 wu以下で、quarter turn後も同じ契約を満たす。
   - native wall galleryで全16形状、完成／仮設、Door隣接、前後depth、completion bounce、load、撤去更新が実画像とsidecarの両方で合格する。
-  - resident production mesh handleは6、active production material handleは2、fallback使用0、各mesh 350 triangles以下、production mesh/material組合せ12以下を満たす。fallbackを含む総poolもmesh 7 / material 4で有限である。
+  - resident production mesh handleは6、active production material handleは2、fallback使用0、各mesh 72 triangles以下、production mesh/material組合せ12以下を満たす。fallbackを含む総poolもmesh 7 / material 4で有限である。
   - M0の`wall-density-v1` Cuboid baselineとM5 production、およびM5内の`force-fallback` controlとproductionを、各run内percentileを先に求めた3 valid runの中央値で比較し、Capture p95 / p99をそれぞれ`+5%`以内にする。completed opaque wallの`N` / `4N`ではM0で凍結したwall main-pass draw-group上限を満たし、provisional transparentはsorted phaseとして別計測する。
   - ユーザーがproduction camera上の見た目を承認し、外部asset manifestとrepo runtime mirrorのSHA-256が一致する。
 
@@ -109,7 +109,7 @@ M4で比較するのは上表の未決事項だけである。壁厚、6 family�
 | asset | repo外canonical generation storeは新規環境として空から開始。repo内の旧2D wall画像はruntime reference | stagingから最初のimmutable generationを作り、manifest、validator、recover / rollback、明示promoteを完結 |
 | material | `TopDownStructuralMaterial`はPBR/prepass/depth/shadow契約を持つ。Light Field handleはbindするが現fragmentでは意図的にsampleしない | 契約を壊さずalbedo / emissiveを接続し、flat illustration成立方法をnative比較で確定 |
 | art | `art-style-criteria.md`は壁デザインを確定、normal / outline詳細はPoC待ち | 比較条件、打切り条件、ユーザー承認artifactを定義 |
-| performance | current壁は完成／仮設各1 batch。現行文書の壁予算は150〜350 triangles | 6 mesh×2 materialの上限12 handle組合せとactual draw callを計測・記録 |
+| performance | generation 2は見た目を変えない共線分割で216〜240 trianglesを生成していた | 共線分割を除去して24〜72 trianglesへ固定し、6 mesh×2 materialの上限12 handle組合せとactual draw callを計測・記録 |
 
 ### 3.1 保持するruntime契約
 
@@ -180,7 +180,7 @@ visible body 9.6 wu以上、局所外形12.8 wu以下を別fixtureにする。
 1. `docs/art-style-criteria.md`と`docs/world_lore.md`をreferenceの正本にし、production cameraの水平から約59度、Orthographicで判断する。
 2. 石積み、筆跡、暗茶のwobbly line、錆色、紫裂け目の大部分はshared albedo / emissiveへ焼き込み、top silhouetteに影響する鉄バンドとトゲだけをgeometryにする。
 3. 裂け目はemissive surfaceとして読ませるが、周辺を照らすlight entityは作らない。紫以外の明るい暖色を増やさない。
-4. 6 meshは各1 mesh / 1 primitive、共通UV atlas、material slot増加なしとする。targetは150〜250 triangles、hard capは350 trianglesとする。
+4. 6 meshは各1 mesh / 1 primitive、共通UV atlas、material slot増加なしとする。直線辺の共線分割はsilhouette、surface分類、UV補間を変えないため禁止し、target / hard capは24〜72 trianglesとする。
 5. authoring sceneでは1 tileを1 Blender unitとし、高さ1.00、公称・連続最小厚0.30、装飾外形上限0.40、接続port半幅0.15で制作する。export専用objectへ32倍scaleを適用して頂点へbakeし、node transformをidentityにする。direct primitive handleはglTF node transformを使わないため、raw runtime Meshのlocal AABBはX/Zを`[-16, 16]`以内、Y min / maxを`-16 / +16`、originを中心に固定する。runtimeのbase scaleは1のまま、通常transformのY=`TILE_SIZE * 0.5`で底面がgroundに接する。
 6. shared textureはまず最大1024×1024のalbedo / emissive 1組とする。variant別textureを増やさず、解像不足がnative画像で証明された場合だけ予算を再決定する。
 
@@ -1023,6 +1023,11 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   run 2 / 3にはそれぞれ約8.3 / 9.9秒の連続tail-latency区間があり、p50は`+3.957%`、completed 4N p95 / p99は
   `-0.078% / +0.468%`だった。単一外れ値仮説は打ち切り、閾値変更やartifact合格扱いを行わない。valid production
   manifestがないためM0 cross-subject再封印も開始しない。
+- hardware起因として再試行する方針を撤回し、generation 2の実装を再監査した。scene generatorは各輪郭の直線辺を
+  3〜10分割していたが、分割点はsilhouette、atlas surface分類、線形UV補間のいずれも変えず、全て共線である。
+  そのため各mesh 216〜240 trianglesのうち大部分は表示へ寄与しない。M4を再開し、この分割だけを除去して
+  24〜72 trianglesへ下げた新generationを作る。材質、texture、9.6 / 12.8 wu geometry、fixture、性能閾値は同時に
+  変更しない。新generationでtail-latencyとRenderDoc 4Nが改善しなければ、この仮説は一度で打ち切る。
 
 - 変更内容:
   - M4で完成・commit済みのwall-art gallery / fail-closed profileを変更せず、final commitのclean validation worktreeで実行する。code / launcher / predicate修正が必要になった時点でartifactを無効化してM4へ戻り、final commit承認からやり直す。
@@ -1040,17 +1045,17 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   - `crates/bevy_app/src/plugins/startup/perf_scenario/`
   - `docs/rendering-performance.md`
 - 完了条件:
-  - [x] 9 caseのclient-window PNGとsidecarがfresh source / asset fingerprintに対してfail-closedでpassする。
-  - [x] 全16 mask、Door接続、完成／仮設、追加／撤去、completion、depth、loadが画像とstateの両方でpassする。
-  - [x] 全family / rotationのWall–Wall portが9.6 wuの同一profileで連続し、各armの局所横断で連続壁体が9.6 wu未満へ細らず、装飾が12.8 wu envelopeとcell AABBを越えない。最遠zoom-outではHighの内部色1 px以上、Medium / Lowのfinal composite silhouette連続を満たす。
+  - [ ] 9 caseのclient-window PNGとsidecarがfresh source / asset fingerprintに対してfail-closedでpassする。
+  - [ ] 全16 mask、Door接続、完成／仮設、追加／撤去、completion、depth、loadが画像とstateの両方でpassする。
+  - [ ] 全family / rotationのWall–Wall portが9.6 wuの同一profileで連続し、各armの局所横断で連続壁体が9.6 wu未満へ細らず、装飾が12.8 wu envelopeとcell AABBを越えない。最遠zoom-outではHighの内部色1 px以上、Medium / Lowのfinal composite silhouette連続を満たす。
   - [x] registered historical P02 artifactのimmutable locator / hashがoffline再検証でpassし、current-sourceのwall depth、
     completion bounce、Render3d visible、exactly-oneはWall専用profile / focused testでpassする。P08 sourceをP02 selectorへ偽装しない。
-  - [x] production resident mesh 6、active production material 2、finite total pool mesh 7 / material 4、steady phaseのfallback active 0、world-replace transitionのfallback-only 1 frame、全phase mixed 0、各mesh 350 triangles以下、distinct production mesh/material組合せ12以下である。
+  - [ ] production resident mesh 6、active production material 2、finite total pool mesh 7 / material 4、steady phaseのfallback active 0、world-replace transitionのfallback-only 1 frame、全phase mixed 0、各mesh 72 triangles以下、distinct production mesh/material組合せ12以下である。
   - [x] M0 baseline commitとfinal commitのclean worktreeが同一のfinal asset viewとbyte-identicalなdensity profile / fixture / contractを使い、N=96 / 4N=384、seed、warm-up / measure、3-run集約のいずれにもdriftがない。
   - [ ] baseline対production、final `force-fallback`対productionのcompleted / provisional Capture p95 / p99中央値がそれぞれ`+5%`以内で、全run valid、MAD併記である。
   - [ ] RenderDoc上のcompleted wall main-passが`D_N <= 6`、`D_4N <= 6`、`D_4N = D_N`、provisional sorted phaseが`D_4N <= 4 * D_N + 6`を満たす。
-  - [x] native実行中のcode / profile / predicate変更が0で、source fingerprintはM4 final commitと一致する。修正が発生したrunを合格artifactへ流用していない。
-  - [x] manifestはM4のpendingなしfinal generationと一致し、M1 candidate generationやA/B用optional集合のartifactをfinal証拠へ混ぜていない。validation worktreeはadopted core 9またはrejected core 8だけを含む。
+  - [ ] native実行中のcode / profile / predicate変更が0で、source fingerprintはM4 final commitと一致する。修正が発生したrunを合格artifactへ流用していない。
+  - [ ] manifestはM4のpendingなしfinal generationと一致し、M1 candidate generationやA/B用optional集合のartifactをfinal証拠へ混ぜていない。validation worktreeはadopted core 9またはrejected core 8だけを含む。
   - [ ] compare開始前に空の`<sealed-artifacts>` directoryを作り、4つの固有CSVと各SHA-256を保存している。既定`comparison.csv`へ上書きしていない。
   - [x] adapter / backend / window backendがartifactに記録され、headless結果をrenderer証拠にしていない。
 - 検証:
@@ -1118,7 +1123,7 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
 | material | finite handle ID test | 完成／仮設列 | geometry不変、materialだけ遷移 |
 | depth / shadow | MeshTag / render layer invariant | Soul front/back、地面shadow | P02契約を維持 |
 | asset failure | missing / one-failed / late-ready / unauthorized / restart test | failure smoke | 全wall fallback、消失／mixedなし。通常buildのfailed回復はrestart-only |
-| asset production | manifest authority / hash / load state / bounds / tri | 9 case | promotion receipt承認済みまたはprofile明示candidate asset-set identityの6 mesh＋採用textureがGPU描画済み、fallback 0、350 tri以下 |
+| asset production | manifest authority / hash / load state / bounds / tri | 9 case | promotion receipt承認済みまたはprofile明示candidate asset-set identityの6 mesh＋採用textureがGPU描画済み、fallback 0、72 tri以下 |
 | performance | `wall-density-v1` checksum、steady-state writes、handle / pair count | 3-run Capture / RenderDoc | topology write 0、production mesh 6、active material 2、total pool 7 / 4、pair 12以下、baseline / control比p95 / p99中央値`<= +5%`。completedは`D_N,D_4N<=6`かつ同数、transparentは`D_4N<=4D_N+6` |
 | art / color | candidate metadata、OCIO / CIEDE2000 verifier | OCIO-valid client PNG | config path / hashと`fallback=false`を証明し、順次A/Bの勝者をRough Vector Sketchとしてユーザー承認 |
 
@@ -1137,7 +1142,7 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
 | promote中にprocess kill / 電源断 | 固定pathが旧新混在しmanifestと不一致 | immutable generationとreceiptをfsyncし、directory rename後にstore親もfsyncしてから、唯一のactive pointerをfile fsync→rename→親fsyncで切替。全kill pointのrecover / rollback testを必須化 |
 | ignored staging assetが通常起動へ紛れ込む | 未承認generationを本番表示 | 通常起動はart-approved payload＋approved promotion receiptのprojectionだけ、candidateは隔離profileのexact identity opt-inだけを許可 |
 | validation assetがprimaryやtracked shaderを汚す | formal subjectとasset証拠が一致しない | clean worktree内のignored assetだけへmanifest allowlistでoverlayし、tracked hash / git clean / 3 asset hashを毎run確認 |
-| 鉄トゲや石目をgeometry化しすぎる | triangle / silhouette noise / batch増 | silhouette-critical部だけgeometry、detailはshared texture、350 tri hard cap |
+| 鉄トゲや石目をgeometry化しすぎる | triangle / silhouette noise / batch増 | silhouette-critical部だけgeometry、detailはshared texture、72 tri hard cap |
 | 壁厚が細すぎて遠景で輪郭だけになる | 石積みの塗りと接続が消える | Highの最大zoom-out 5で内部色1 px以上から9.6 wuを固定し、14 px/tile / Lowをactual-window受入へ含める |
 | 壁厚や装飾が太すぎて箱へ戻る | Rough Vector Sketchの平面感と隣tileの読解性が低下 | 公称9.6 wu、装飾12.8 wuをvalidatorで上限化し、straight E-Wの横断silhouetteだけを対象に縦補正後の全投影高を通常0.90 tile / 最大1.00 tile以内にする |
 | 細いvisual脇が歩ける空間に見える | 32 wu cell全体を塞ぐgameplayと見た目が食い違う | 11.2 wuは建築cell内余白と明記し、placement / selection maskとgalleryでblocked cellを同時表示する |
@@ -1220,7 +1225,7 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
 - Blender同梱OCIO config `2.5` / runtime `2.4.2` mismatchは残るためdefault configで色承認しない。
   壁5 patchはsealed profile 2.1 config＋`--require-ocio-positive`だけを正式経路とする。
 - `source/` / `exports/`が空なのは新規authoring baselineとして正常で、repo GLBを偽のBlender原本へ逆変換しない。
-- parent planの100 triangle / active `build_progress` / Light Field目視条件は現runtimeとずれている。壁の実行基準は本書の350 triangle cap、現行施工mask / material transition、Light Field未sample維持とする。
+- parent planの100 triangle / active `build_progress` / Light Field目視条件は現runtimeとずれている。壁の実行基準は本書の72 triangle cap、現行施工mask / material transition、Light Field未sample維持とする。
 - native受入は `hell-workers-run-native-acceptance` Skillのdirect `kitty` launcherとfail-closed artifact監視を使う。GUI権限をユーザーへ繰り返し依頼しない。
 - functionality、code、runtime dataを変更したら完了報告前に必ず `hell-workers-review-help-impact` Skillを使う。gate passだけでreview済みにしない。
 - agentを使う場合はread-only explore / code-reviewに限定し、file editはmain agentが `apply_patch`で行う。
@@ -1422,7 +1427,7 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
 
 - [ ] M0〜M6の全完了条件を満たす。
 - [ ] 全16 topologyと全production lifecycleがunit / integration / actual-windowで合格する。
-- [ ] 6 production mesh、active production material 2、finite total pool mesh 7 / material 4、steady fallback 0、world-replace fallback-only 1 frame、mixed 0、350 triangles / mesh以下、mesh/material組合せ12以下を証拠化する。
+- [ ] 6 production mesh、active production material 2、finite total pool mesh 7 / material 4、steady fallback 0、world-replace fallback-only 1 frame、mixed 0、72 triangles / mesh以下、mesh/material組合せ12以下を証拠化する。
 - [ ] 全16 maskを6 mesh＋該当quarter turnへ写像した全caseで、各armの局所横断における公称・連続最小厚9.6 wu、装飾外形12.8 wu以下、境界port同一profileを自動検査し、standard / 14 px per tile / 最大zoom-out 5の品質別基準で目視合格する。
 - [ ] `wall-density-v1`のN=96 / 4N=384、3 valid run中央値でbaseline / control比Capture p95 / p99 `<= +5%`、completed `D_N,D_4N<=6`かつ同数、provisional `D_4N<=4D_N+6`を証拠化する。
 - [ ] OCIO config path / hash、runtime version、`fallback=false`、offline CIEDE2000再検証が有効なclient captureでユーザーが本番アートを承認する。

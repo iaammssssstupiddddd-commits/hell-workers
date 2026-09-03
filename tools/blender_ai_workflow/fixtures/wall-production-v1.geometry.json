@@ -160,12 +160,12 @@
       "t_junction",
       "cross"
     ],
-    "hard_triangle_cap_per_mesh": 350,
+    "hard_triangle_cap_per_mesh": 72,
     "meshes_per_glb": 1,
     "primitives_per_mesh": 1,
     "target_triangle_range_per_mesh": [
-      150,
-      250
+      24,
+      72
     ],
     "texture_budget": {
       "height": 1024,

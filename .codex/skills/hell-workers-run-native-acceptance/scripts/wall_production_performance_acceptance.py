@@ -133,7 +133,7 @@ def verify_presentation_sidecar(
     native.require(
         isinstance(triangles, list)
         and len(triangles) == 6
-        and all(type(value) is int and 0 < value <= 350 for value in triangles)
+        and all(type(value) is int and 0 < value <= 72 for value in triangles)
         and initial.get("max_production_mesh_triangles") == max(triangles),
         "Wall production triangle budget differs",
     )
