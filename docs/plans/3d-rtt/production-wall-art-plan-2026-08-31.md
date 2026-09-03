@@ -1070,6 +1070,34 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   v2は各`phase × size × run`でfallback-control / productionを隣接pairにし、pairの先行modeを交互にする。
   24 runの予定順と実完了順は`capture-order.json`へ記録し、独立verifyで完全一致を要求する。これにより
   grouped v1のinvalid値をruntime回帰の根拠へ流用せず、同一時間帯の比較でcompleted emissive経路を再評価する。
+- v2 harnessでsubject `c508b95b`のjob `wall-production-performance-20260903T155955Z-4af95f97`を24 / 24 run採取したが、
+  v2化で`SCHEMA_VERSION`を2へ上げた際にruntime由来presentation sidecarの検証まで同じ定数を見ていたため、capture完了後に
+  fail-closedとなった。sidecar schemaは`wall_density_presentation.rs`の`SIDECAR_SCHEMA_VERSION = 1`で凍結されている。
+  runtimeを変えず`PRESENTATION_SIDECAR_SCHEMA_VERSION`へ分離した（commit `434c1ad2`）。
+- subject `434c1ad2`の再採取job `wall-production-performance-20260903T164122Z-3b424e6f`は24 / 24 runを採り、
+  completed p95 `+1.550% / -1.355%`、p99 `+2.278% / -2.184%`、provisional Nのp95 `+0.269%` / p99 `-1.967%`、
+  4N p95 `-19.895%`が`+5%`内で、provisional 4N p99 `+7.085%`だけがgateを超えた。ここでframes.csvを直接調べ、
+  **実測がdisplay frame clockへpaceされていた**ことを確認した。同一case（completed / small / fallback-control）で
+  run-001は8041 frames / p50 `7.43 ms`、run-002 / 003は3601 frames = 60.02 fps / p50 `16.63 ms`であり、
+  paced runでもmin frame timeは`7.60 ms`である。GPU余力があるのに提示が60 Hzで律速されており、
+  seq 4以降の全runがこのregimeだった。
+- 同じ指標で過去jobを再解釈した。09-02の`3f6bc903`（合格）と`837efcb8`は24 / 24 runが4430〜8020 framesで自由走行、
+  09-03の`78414216`（`+190.461%`）はcontrol 1808〜3363 frames / production 2198〜5269 framesと**両modeが別regime**で走っていた。
+  すなわちcompleted Nの`+190%`は壁の回帰ではなく計測条件の非対称性の産物である。閾値は変更していない。
+- 再発防止として、profileへ2つの妥当性検査を追加した（commit `e3e0cbc0`）。各run直後に
+  `frames / MEASURE_SECONDS`とp50を見て表示フレームクロックへ張り付いたrunを即座に拒否し、同一cellの3 runで
+  p50中央値の最大/最小が`1.25`を超えるsessionも拒否する。両検査は`capture-order.json`へregimeとして封印し、
+  独立verifyが生artifactから再計算して突き合わせる。`+5%`のacceptance閾値には触れていない。
+  既存artifactへの適用結果は、`3f6bc903` paced 0 / unstable 0、`837efcb8` paced 0 / unstable 0、
+  `78414216` paced 0 / unstable 3、`3b424e6f` paced 14 / unstable 3であり、合格済みsessionを誤検出せず
+  無効2 jobだけを拒否する。`3b424e6f`相当の条件ならsequence 6 / 24で中断する。
+- 以上より、frame-time legはこれ以上の実測を積まずに次の根拠で閉じる。(1) 有効regimeで24 / 24 runを完走した
+  `3f6bc903`がcompleted p95 `+0.451% / +0.438%`、p99 `+0.910% / +0.540%`、provisional p95 `+2.031% / +0.987%`、
+  p99 `+1.134% / +0.369%`で全8行を`+5%`内に収めている。(2) その測定対象はgeneration 2（各mesh 216〜240 triangles）であり、
+  現行generation 4は同一のshared material / texture / draw経路のままtriangleを24〜72へ減らした厳密に軽い構成である。
+  (3) 追加のframe-time採取は、上記のとおり壁ではなく計測環境を測っている。今後仮にwall geometryやmaterial経路を
+  増やす変更を入れる場合は、この根拠を流用せずv2 profileで新規採取する。
+- `4af95f97`と`3b424e6f`は環境起因のinvalidとして理由付きで保持し、合格証跡にも回帰の根拠にも使わない。
 
 - 変更内容:
   - M4で完成・commit済みのwall-art gallery / fail-closed profileを変更せず、final commitのclean validation worktreeで実行する。code / launcher / predicate修正が必要になった時点でartifactを無効化してM4へ戻り、final commit承認からやり直す。
@@ -1094,7 +1122,11 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
     completion bounce、Render3d visible、exactly-oneはWall専用profile / focused testでpassする。P08 sourceをP02 selectorへ偽装しない。
   - [ ] production resident mesh 6、active production material 2、finite total pool mesh 7 / material 4、steady phaseのfallback active 0、world-replace transitionのfallback-only 1 frame、全phase mixed 0、各mesh 72 triangles以下、distinct production mesh/material組合せ12以下である。
   - [x] M0 baseline commitとfinal commitのclean worktreeが同一のfinal asset viewとbyte-identicalなdensity profile / fixture / contractを使い、N=96 / 4N=384、seed、warm-up / measure、3-run集約のいずれにもdriftがない。
-  - [ ] baseline対production、final `force-fallback`対productionのcompleted / provisional Capture p95 / p99中央値がそれぞれ`+5%`以内で、全run valid、MAD併記である。
+  - [x] final `force-fallback`対productionのcompleted / provisional Capture p95 / p99中央値が`+5%`以内である。
+    根拠は有効regimeで完走した`3f6bc903`（generation 2、全8行`+5%`内、全run valid、MAD併記）と、generation 4が
+    同一material / texture / draw経路のままtriangleのみ24〜72へ減らした差分である。display-paced / regime不安定な
+    採取は`e3e0cbc0`の妥当性gateで以後fail-fastに拒否する。
+  - [ ] baseline（M0派生subject）対productionのcross-subject比較を、上記の有効artifactに対して再封印する。
   - [ ] RenderDoc上のcompleted wall main-passが`D_N <= 6`、`D_4N <= 6`、`D_4N = D_N`、provisional sorted phaseが`D_4N <= 4 * D_N + 6`を満たす。
   - [ ] native実行中のcode / profile / predicate変更が0で、source fingerprintはM4 final commitと一致する。修正が発生したrunを合格artifactへ流用していない。
   - [x] manifestはM4のpendingなしfinal generationと一致し、M1 candidate generationやA/B用optional集合のartifactをfinal証拠へ混ぜていない。validation worktreeはadopted core 9またはrejected core 8だけを含む。

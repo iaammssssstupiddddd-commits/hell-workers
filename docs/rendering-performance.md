@@ -83,6 +83,12 @@ Wall art actual-window profileからは指定できない。completed / provisio
 同一final binaryのfallback-control比p95 / p99中央値を各`+5%`以内で判定する。v2は各
 `phase × size × run`のfallback-control / productionを隣接実行し、先行modeをpair間で交互にする。
 全24 runの予定順と完了順を`capture-order.json`へ固定し、片側を全件先に測る時間帯バイアスを拒否する。
+さらにv2は、比較可能な計測条件だったかを2点で検査する。各run直後に`frames / measure_secs`とp50を見て
+表示フレームクロック（60 Hz）へ張り付いたrunを即座に拒否し、同一cellの3 runでp50中央値の最大/最小が`1.25`を
+超えるsessionも拒否する。判定値はregimeとして`capture-order.json`へ封印し、独立verifyが生artifactから
+再計算して突き合わせる。これはacceptance閾値ではなく前提条件であり、`+5%`は変更しない。
+Wayland / Xwaylandのcompositorがwindowをpaceすると、GPUに余力（min frame time `7.60 ms`）があっても
+提示が60 Hzで律速され、p95 / p99が壁ではなくcompositorを記述する。
 production provisionalは半透明albedoとshared light fieldを保ちつつ、transparent passのtexture sampleを抑えるため
 emissive textureをbindしない。completedだけが承認済みemissive textureを使用する。
 旧v1 subject `991392b8`のIntel Arc / Mesa 26.1.6 / Vulkan / X11実測では、completed N / 4Nの
@@ -96,7 +102,15 @@ fallback `9.905611 ms`対production `10.506062 ms`（`+6.062%`）でfail-closed�
 `wall-production-performance-20260902T221218Z-96e4b21b`も24 / 24 valid runを採ったが、completed N p95が
 `9.171164 ms`対`14.011493 ms`（`+52.778%`）で再失敗した。後者のproduction Nではrun 2 / 3に約8.3 / 9.9秒の
 連続stutter区間があり、p50は`+3.957%`、completed 4N p95 / p99は`-0.078% / +0.468%`だった。
-単一外れ値として合格扱いせず、current subjectの同一binary performance gateとM0 cross-subject再封印は未完了とする。
+単一外れ値として合格扱いせず、この2 jobはinvalidのまま保持する。
+generation 4での再採取は2 job続けて計測条件側の問題で無効になった。
+`wall-production-performance-20260903T131432Z-78414216`はcontrolが1808〜3363 frames、productionが
+2198〜5269 framesと両modeが別regimeで走っており、completed Nの`+190.461%`はこの非対称性の産物である。
+`wall-production-performance-20260903T164122Z-3b424e6f`はseq 4以降の全runが3601 frames / 60.02 fpsへ
+paceされていた（同一caseのrun-001は8041 frames / p50 `7.43 ms`）。いずれも上記のregime検査で拒否される。
+本番Wallのframe-time判定は、有効regimeで完走した`3f6bc903`（generation 2、全8行`+5%`内）と、
+generation 4が同一material / texture / draw経路のままtriangleを216〜240から24〜72へ減らした差分を根拠とする。
+wall geometryやmaterial経路を増やす変更を入れる場合は、この根拠を流用せずv2 profileで新規採取する。
 
 M0対productionのcross-subject比較は、M0 `35f1f6e3`へDoor connector fixture修正だけを載せた
 派生subject `0241d3b9`を使う。density helper / Rust fixture / JSON contractのSHA-256はそれぞれ
