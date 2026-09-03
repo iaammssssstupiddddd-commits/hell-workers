@@ -30,7 +30,10 @@ WINDOW_WIDTH = 1280
 WINDOW_HEIGHT = 720
 WINDOW_SCALE_FACTOR = 1.0
 CAPTURE_TIMEOUT_SECONDS = 600.0
-REPLAY_TIMEOUT_SECONDS = 600.0
+# Replaying a ~550 MB capture takes about 300 s at N=96 and 828 s at 4N=384 on
+# the Intel Arc workstation, so the former 600 s limit cut off every 4N replay
+# and looked like a GPU hang. Keep a wide margin over the measured 4N cost.
+REPLAY_TIMEOUT_SECONDS = 2400.0
 RENDERDOC_PROFILE = "profiling-renderdoc"
 RENDERDOC_FEATURES = "profiling-renderdoc"
 EXTRACTOR_RELATIVE = "scripts/perf_tool/wall_renderdoc_extract.py"

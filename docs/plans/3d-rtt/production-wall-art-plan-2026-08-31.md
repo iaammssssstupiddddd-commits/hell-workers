@@ -1098,6 +1098,36 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   (3) 追加のframe-time採取は、上記のとおり壁ではなく計測環境を測っている。今後仮にwall geometryやmaterial経路を
   増やす変更を入れる場合は、この根拠を流用せずv2 profileで新規採取する。
 - `4af95f97`と`3b424e6f`は環境起因のinvalidとして理由付きで保持し、合格証跡にも回帰の根拠にも使わない。
+- generation 4のasset-set契約をoffline再検証した。`wall-production-v1.asset-set-final.json`（SHA-256 `7ecdfbb0…`、
+  `manifest_mode=final`、`normal_decision=rejected`、`art_review.status=art_approved` / 承認UTC `2026-09-03T12:26:51Z`）から
+  6 GLB、各meshのexport / khronos / post-export report、8 core file、texture report、art review artifact、
+  source `.blend`（SHA-256 `a7dd0c65…`）まで43件のhash bindingを再計算し、全件一致した。
+- 6 meshのpost-export geometryは全て`status=pass`で、mesh 1 / primitive 1、embedded image 0、identity node transform、
+  triangle `24 / 24 / 24 / 36 / 48 / 72`（上限72以内）、raw local boundsはX/Z `[-16, 16]`内・Y `-16..16`である。
+  port collarのslice（`|s| = 8.01 / 12.0 / 15.99 wu`）は`isolated`を除く全familyの全armで局所横断が厳密に
+  `[-4.8, +4.8] wu = 9.6 wu`であり、6 familyが同一port profileを共有し、12.8 wu envelopeとcell AABBを越えない。
+  `isolated`もX/Z断面が`±4.8 wu`である。これによりWall–Wall portの連続性はrotationに依らず成立する。
+- state側のlifecycle契約は既存のfocused testが覆う。`wall_presentation.rs`は原子的apply / steady write 0、
+  activation遷移の一度きりrefresh、完成時のmaterialのみ交換、owner transformとtopology回転の合成と`MeshTag`、
+  completion bounceのglobal propagation、同一frameでのdeferred topology到達、実producerでのDoor追加・撤去、
+  identity不一致のfail-closedとworld reset冪等性を検証する。`wall_connection.rs`は16 mask全件のsealed fixture一致、
+  canonical mask順、Door connector、connector移動、blueprint / tile / spawned wallのcoalesce、連続world resetを
+  検証する。save/loadは`rehydrated_wall_starts_in_visible_fallback_at_its_world_position`が担う。
+- RenderDocのcompleted 4N replay timeoutは、GPU hangではなくharnessの`REPLAY_TIMEOUT_SECONDS = 600`不足だった。
+  generation 4 job `wall-renderdoc-20260903T140336Z-8d1f5b02`が残した4N capture（561 MB）を同じextractorで
+  診断replayしたところ、828秒（`2026-09-03T17:41:47Z`→`17:55:35Z`）でexit 0となりextractionを生成した。
+  N=96 captureの実測は約300秒である。この実測に基づき`REPLAY_TIMEOUT_SECONDS`を2400秒へ広げた。
+  「GPU fence待ちのhang」という従来の解釈は取り下げる。
+- 同診断の抽出結果は、completedのwall main-passで`draw_group_count`がN=96 / 4N=384とも6、
+  `rendered_instance_count`がそれぞれ96 / 384でcheckpointed ownerと一致し、`direct_scene_target_write=false`、
+  index countは`72 / 108 / 144 / 216`（triangle `24 / 36 / 48 / 72`）の6 mesh、各groupのinstanceが
+  `24→96`、`6→24`、`24→96`、`12→48`、`24→96`とNから4Nで正確に4倍になる。すなわち
+  `D_N = D_4N = 6 <= 6`が実render上で成立し、追加draw無しのinstancingである。ただしこれはlauncher外の
+  診断であり、formal artifactにはしない。修正済みtimeoutでprovisionalを含む4 caseを正式採取する。
+- したがってM5で未取得の実画像証跡は、(a) 最遠zoom-out（camera scale 5）でのHigh内部色1 px以上と
+  Medium / Lowのsilhouette連続、(b) 追加・撤去、仮設→完成bounce、Soul前後depth、save/load rehydrateの
+  phase別client capture、の2点に絞られる。現行`wall_art_acceptance.py`はcandidate matrixをcamera scale 1.0の
+  単一gallery phaseに固定しており、どちらもharness追加が必要である。
 
 - 変更内容:
   - M4で完成・commit済みのwall-art gallery / fail-closed profileを変更せず、final commitのclean validation worktreeで実行する。code / launcher / predicate修正が必要になった時点でartifactを無効化してM4へ戻り、final commit承認からやり直す。
