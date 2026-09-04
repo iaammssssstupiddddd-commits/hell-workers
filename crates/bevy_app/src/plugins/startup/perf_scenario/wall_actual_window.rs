@@ -46,12 +46,13 @@ const GALLERY_CAMERA_SCALE: f32 = 1.0;
 /// `PanCamera`'s farthest zoom-out, where the 9.6 wu wall body is the thinnest
 /// the player can ever see it.
 const GALLERY_FARTHEST_CAMERA_SCALE: f32 = 5.0;
-/// Half-height of the profile band sampled across a straight E-W wall run. The
-/// wall is under 2 px wide at the farthest zoom, so the band only has to hold
-/// the wall plus terrain on both sides.
-const STRAIGHT_PROBE_HALF_HEIGHT: u32 = 8;
-/// Half-width of that band, kept short enough to stay on one straight specimen.
-const STRAIGHT_PROBE_HALF_WIDTH: u32 = 12;
+/// Terrain margin kept above and below the sampled wall band, in pixels. The
+/// band itself is derived from the projected cell so it never reaches past the
+/// specimen, which the fixture keeps unconnected from its neighbours.
+const STRAIGHT_PROBE_TERRAIN_MARGIN: u32 = 4;
+/// Smallest half-extent worth sampling; below this the band cannot hold both
+/// the wall and the terrain rows it is judged against.
+const STRAIGHT_PROBE_MIN_HALF_WIDTH: u32 = 2;
 /// `(N, S, W, E)` connection mask of the straight east-west specimen.
 const STRAIGHT_EAST_WEST_MASK: u8 = 0b0011;
 
@@ -643,10 +644,25 @@ fn straight_probe(
         projection.physical_height,
     )
     .ok_or_else(|| "wall gallery straight specimen cannot be projected".to_string())?;
+    let cell_edge = project_client_point(
+        projection.camera,
+        projection.camera_transform,
+        transform.translation() + Vec3::new(hw_core::constants::TILE_SIZE * 0.5, 0.0, 0.0),
+        projection.physical_width,
+        projection.physical_height,
+    )
+    .ok_or_else(|| "wall gallery straight cell edge cannot be projected".to_string())?;
+    let half_width = (cell_edge.x - center.x).abs().floor() as u32;
+    if half_width < STRAIGHT_PROBE_MIN_HALF_WIDTH {
+        return Err(format!(
+            "wall gallery straight specimen spans only {half_width} px per half cell"
+        ));
+    }
+    let half_height = half_width + STRAIGHT_PROBE_TERRAIN_MARGIN;
     let roi = roi_around_point_with_extent(
         center,
-        STRAIGHT_PROBE_HALF_WIDTH,
-        STRAIGHT_PROBE_HALF_HEIGHT,
+        half_width,
+        half_height,
         projection.physical_width,
         projection.physical_height,
     )
@@ -660,6 +676,7 @@ fn straight_probe(
         "mask": format!("{:04b}", straight.mask),
         "viewport_center": {"x": center.x, "y": center.y},
         "roi": {"x": roi.0, "y": roi.1, "width": roi.2, "height": roi.3},
+        "terrain_margin": STRAIGHT_PROBE_TERRAIN_MARGIN,
     }))
 }
 
@@ -773,24 +790,22 @@ mod tests {
 
     #[test]
     fn straight_probe_band_spans_the_wall_and_its_terrain() {
+        // One 32 wu cell is 6.4 px wide at the farthest zoom, so the band is
+        // three pixels per half cell plus the terrain margin.
+        let half_width = 3;
+        let half_height = half_width + STRAIGHT_PROBE_TERRAIN_MARGIN;
         let roi = roi_around_point_with_extent(
             Vec2::new(640.0, 360.0),
-            STRAIGHT_PROBE_HALF_WIDTH,
-            STRAIGHT_PROBE_HALF_HEIGHT,
+            half_width,
+            half_height,
             1280,
             720,
         )
         .expect("straight band fits the client");
-        assert_eq!(roi, (628, 352, 24, 16));
+        assert_eq!(roi, (637, 353, 6, 14));
         assert!(roi_inside_capture_region(roi, (0, 0, 1280, 720)));
         assert_eq!(
-            roi_around_point_with_extent(
-                Vec2::new(4.0, 360.0),
-                STRAIGHT_PROBE_HALF_WIDTH,
-                STRAIGHT_PROBE_HALF_HEIGHT,
-                1280,
-                720,
-            ),
+            roi_around_point_with_extent(Vec2::new(2.0, 360.0), half_width, half_height, 1280, 720),
             None
         );
     }

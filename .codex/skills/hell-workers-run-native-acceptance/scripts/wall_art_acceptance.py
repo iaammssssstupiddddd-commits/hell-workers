@@ -30,7 +30,6 @@ ZOOM_MODES = ("standard", "farthest")
 # fixed colour: a wall column counts as visible when its darkest pixel is at
 # least this many standard deviations below the terrain rows of the same band.
 STRAIGHT_CONTRAST_SIGMA = 3.0
-STRAIGHT_TERRAIN_ROWS = 3
 PHASE = "current-wall"
 SEED = 20_260_901
 WINDOW_WIDTH = 1280
@@ -415,7 +414,11 @@ def validate_straight_probe(value: Any) -> None:
     straight = require_object(
         value,
         "Wall straight probe",
-        {"ordinal", "grid", "mask", "viewport_center", "roi"},
+        {"ordinal", "grid", "mask", "viewport_center", "roi", "terrain_margin"},
+    )
+    margin = straight["terrain_margin"]
+    native.require(
+        type(margin) is int and margin >= 1, "Wall straight terrain margin is invalid"
     )
     native.require(
         straight["mask"] == "0011",
@@ -439,7 +442,7 @@ def validate_straight_probe(value: Any) -> None:
     native.require(
         all(type(roi[key]) is int for key in roi)
         and roi["width"] > 0
-        and roi["height"] >= 2 * STRAIGHT_TERRAIN_ROWS + 2
+        and roi["height"] >= 2 * margin + 2
         and roi["x"] >= 0
         and roi["y"] >= 0
         and roi["x"] + roi["width"] <= WINDOW_WIDTH
@@ -455,7 +458,9 @@ def straight_run_evidence(image: Image, status: dict[str, Any]) -> dict[str, Any
     terrain rows of the same ROI rather than against a fixed colour.
     """
     width, _height, pixels = image
-    roi = status["probe"]["straight"]["roi"]
+    straight = status["probe"]["straight"]
+    roi = straight["roi"]
+    margin = straight["terrain_margin"]
 
     def luminance(x: int, y: int) -> float:
         offset = (y * width + x) * 3
@@ -467,12 +472,12 @@ def straight_run_evidence(image: Image, status: dict[str, Any]) -> dict[str, Any
     terrain = [
         luminance(x, y)
         for x in columns
-        for y in list(rows)[:STRAIGHT_TERRAIN_ROWS] + list(rows)[-STRAIGHT_TERRAIN_ROWS:]
+        for y in list(rows)[:margin] + list(rows)[-margin:]
     ]
     mean = sum(terrain) / len(terrain)
     deviation = math.sqrt(sum((value - mean) ** 2 for value in terrain) / len(terrain))
     floor = max(deviation, 1.0)
-    interior = list(rows)[STRAIGHT_TERRAIN_ROWS:-STRAIGHT_TERRAIN_ROWS]
+    interior = list(rows)[margin:-margin]
     scores = []
     for x in columns:
         darkest = min(luminance(x, y) for y in interior)
@@ -1328,7 +1333,8 @@ def self_test() -> int:
         "grid": [7, 17],
         "mask": "0011",
         "viewport_center": {"x": 640.0, "y": 360.0},
-        "roi": {"x": 628, "y": 352, "width": 24, "height": 16},
+        "roi": {"x": 637, "y": 353, "width": 6, "height": 14},
+        "terrain_margin": 4,
     }
     validate_straight_probe(straight)
     try:
@@ -1354,7 +1360,7 @@ def self_test() -> int:
     probe_status = {"probe": {"straight": straight}}
     evidence = straight_run_evidence(synthetic(True), probe_status)
     native.require(
-        evidence["columns"] == 24 and evidence["weakest_column_sigma"] >= 3.0,
+        evidence["columns"] == 6 and evidence["weakest_column_sigma"] >= 3.0,
         "Wall straight run evidence differs",
     )
     try:
