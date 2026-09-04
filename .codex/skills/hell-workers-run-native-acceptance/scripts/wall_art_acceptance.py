@@ -24,6 +24,13 @@ SCHEMA_VERSION = 1
 PROFILE = "wall-art-current-calibration-v1"
 CANDIDATE_PROFILE = "wall-art-approved-candidate-v1"
 MATRIX_PROFILE = "wall-art-approved-candidate-matrix-v1"
+FARTHEST_PROFILE = "wall-art-approved-candidate-farthest-zoom-v1"
+ZOOM_MODES = ("standard", "farthest")
+# The straight-run band is judged against the terrain it sits on instead of a
+# fixed colour: a wall column counts as visible when its darkest pixel is at
+# least this many standard deviations below the terrain rows of the same band.
+STRAIGHT_CONTRAST_SIGMA = 3.0
+STRAIGHT_TERRAIN_ROWS = 3
 PHASE = "current-wall"
 SEED = 20_260_901
 WINDOW_WIDTH = 1280
@@ -71,6 +78,7 @@ def calibration_command(
     matrix_mode: bool = False,
     quality: str = "high",
     scale_factor: float = WINDOW_SCALE_FACTOR,
+    zoom: str = "standard",
 ) -> list[str]:
     command = [
         "python3",
@@ -127,6 +135,8 @@ def calibration_command(
     ]
     if matrix_mode:
         command.append("--wall-art-matrix")
+    if zoom != "standard":
+        command.extend(["--wall-art-zoom", zoom])
     return command
 
 
@@ -143,10 +153,11 @@ def require_number(value: Any, label: str) -> float:
     return number
 
 
-def profile_name(candidate: bool, matrix: bool = False) -> str:
+def profile_name(candidate: bool, matrix: bool = False, zoom: str = "standard") -> str:
     if matrix:
         native.require(candidate, "Wall matrix requires candidate mode")
-        return MATRIX_PROFILE
+        return FARTHEST_PROFILE if zoom == "farthest" else MATRIX_PROFILE
+    native.require(zoom == "standard", "Wall zoom selection requires the matrix profile")
     return CANDIDATE_PROFILE if candidate else PROFILE
 
 
@@ -191,6 +202,7 @@ def validate_probe_status(
     candidate: bool = False,
     quality: str = "high",
     scale_factor: float = WINDOW_SCALE_FACTOR,
+    zoom: str = "standard",
 ) -> dict[str, Any]:
     fields = {
         "schema_version",
@@ -274,11 +286,12 @@ def validate_probe_status(
             "fallback_mesh_resident",
         },
     )
+    gallery_camera_scale = 5.0 if zoom == "farthest" else 1.0
     expected_render = {
         "backend": "vulkan",
         "render3d": "visible",
         "rtt_quality": quality,
-        "camera_scale": 1.0 if candidate else 5.0,
+        "camera_scale": gallery_camera_scale if candidate else 5.0,
         "fallback_mesh_resident": not candidate,
     }
     native.require(render == expected_render, "Wall calibration render contract differs")
@@ -352,11 +365,16 @@ def validate_probe_status(
             and capture_view["visible_connector_visuals"] == 0,
             "Wall candidate capture view differs",
         )
+    probe_fields = {"viewport_center", "roi", "world_position"}
+    if zoom == "farthest":
+        probe_fields.add("straight")
     probe = require_object(
         status["probe"],
         "Wall calibration probe",
-        {"viewport_center", "roi", "world_position"},
+        probe_fields,
     )
+    if zoom == "farthest":
+        validate_straight_probe(probe["straight"])
     center = require_object(
         probe["viewport_center"], "Wall viewport center", {"x", "y"}
     )
@@ -391,6 +409,88 @@ def validate_probe_status(
     for axis in ("x", "y", "z"):
         require_number(world[axis], f"Wall world position {axis}")
     return status
+
+
+def validate_straight_probe(value: Any) -> None:
+    straight = require_object(
+        value,
+        "Wall straight probe",
+        {"ordinal", "grid", "mask", "viewport_center", "roi"},
+    )
+    native.require(
+        straight["mask"] == "0011",
+        "Wall straight probe is not the east-west specimen",
+    )
+    native.require(
+        type(straight["ordinal"]) is int
+        and isinstance(straight["grid"], list)
+        and len(straight["grid"]) == 2
+        and all(type(value) is int for value in straight["grid"]),
+        "Wall straight probe identity is invalid",
+    )
+    center = require_object(
+        straight["viewport_center"], "Wall straight viewport center", {"x", "y"}
+    )
+    require_number(center["x"], "Wall straight viewport center x")
+    require_number(center["y"], "Wall straight viewport center y")
+    roi = require_object(
+        straight["roi"], "Wall straight ROI", {"x", "y", "width", "height"}
+    )
+    native.require(
+        all(type(roi[key]) is int for key in roi)
+        and roi["width"] > 0
+        and roi["height"] >= 2 * STRAIGHT_TERRAIN_ROWS + 2
+        and roi["x"] >= 0
+        and roi["y"] >= 0
+        and roi["x"] + roi["width"] <= WINDOW_WIDTH
+        and roi["y"] + roi["height"] <= WINDOW_HEIGHT,
+        "Wall straight ROI is invalid",
+    )
+
+
+def straight_run_evidence(image: Image, status: dict[str, Any]) -> dict[str, Any]:
+    """Measure whether the thinnest wall run stays visible at the farthest zoom.
+
+    The wall is under two pixels wide there, so the band is judged against the
+    terrain rows of the same ROI rather than against a fixed colour.
+    """
+    width, _height, pixels = image
+    roi = status["probe"]["straight"]["roi"]
+
+    def luminance(x: int, y: int) -> float:
+        offset = (y * width + x) * 3
+        red, green, blue = pixels[offset : offset + 3]
+        return 0.2126 * red + 0.7152 * green + 0.0722 * blue
+
+    columns = range(roi["x"], roi["x"] + roi["width"])
+    rows = range(roi["y"], roi["y"] + roi["height"])
+    terrain = [
+        luminance(x, y)
+        for x in columns
+        for y in list(rows)[:STRAIGHT_TERRAIN_ROWS] + list(rows)[-STRAIGHT_TERRAIN_ROWS:]
+    ]
+    mean = sum(terrain) / len(terrain)
+    deviation = math.sqrt(sum((value - mean) ** 2 for value in terrain) / len(terrain))
+    floor = max(deviation, 1.0)
+    interior = list(rows)[STRAIGHT_TERRAIN_ROWS:-STRAIGHT_TERRAIN_ROWS]
+    scores = []
+    for x in columns:
+        darkest = min(luminance(x, y) for y in interior)
+        scores.append((mean - darkest) / floor)
+    weakest = min(scores)
+    native.require(
+        weakest >= STRAIGHT_CONTRAST_SIGMA,
+        "Wall straight run is not continuously visible at the farthest zoom: "
+        f"weakest column is {weakest:.2f} sigma below terrain "
+        f"(mean {mean:.2f}, deviation {deviation:.2f})",
+    )
+    return {
+        "columns": len(scores),
+        "terrain_mean": round(mean, 6),
+        "terrain_standard_deviation": round(deviation, 6),
+        "weakest_column_sigma": round(weakest, 6),
+        "median_column_sigma": round(sorted(scores)[len(scores) // 2], 6),
+    }
 
 
 def read_image(path: Path) -> Image:
@@ -432,7 +532,7 @@ def image_evidence(image: Image, status: dict[str, Any]) -> dict[str, Any]:
 
 
 def capture_client_window(
-    destination: Path, *, root_pid: int, status: dict[str, Any]
+    destination: Path, *, root_pid: int, status: dict[str, Any], zoom: str = "standard"
 ) -> dict[str, Any] | None:
     candidates = native.x11_client_windows_for_process_tree(root_pid)
     if not candidates:
@@ -463,6 +563,8 @@ def capture_client_window(
         return None
     image = read_image(destination)
     evidence = image_evidence(image, status)
+    if zoom == "farthest":
+        evidence["straight_run"] = straight_run_evidence(image, status)
     return {
         "file": destination.name,
         "sha256": sha256(destination),
@@ -576,6 +678,7 @@ def run_calibration(
     matrix_mode: bool = False,
     quality: str = "high",
     scale_factor: float = WINDOW_SCALE_FACTOR,
+    zoom: str = "standard",
     job_file: Path | None = None,
 ) -> dict[str, Any]:
     job_file = job_file or root / "job.json"
@@ -605,6 +708,8 @@ def run_calibration(
         )
     if matrix_mode:
         environment["HW_WALL_ART_MATRIX"] = "1"
+    if zoom != "standard":
+        environment["HW_WALL_ART_ZOOM"] = zoom
     command = calibration_command(
         repo,
         root,
@@ -612,6 +717,7 @@ def run_calibration(
         matrix_mode=matrix_mode,
         quality=quality,
         scale_factor=scale_factor,
+        zoom=zoom,
     )
     state.update({"current_stage": "capture"})
     state.setdefault("commands", []).append({"stage": "capture", "argv": command})
@@ -651,9 +757,13 @@ def run_calibration(
                         candidate=candidate_mode,
                         quality=quality,
                         scale_factor=scale_factor,
+                        zoom=zoom,
                     )
                     evidence = capture_client_window(
-                        screenshot, root_pid=process.pid, status=status
+                        screenshot,
+                        root_pid=process.pid,
+                        status=status,
+                        zoom=zoom,
                     )
                     if evidence is not None:
                         native.atomic_write_json(ack_path, acknowledgement(status))
@@ -698,7 +808,7 @@ def run_calibration(
     observation = {
         "schema_version": SCHEMA_VERSION,
         "status": "pass",
-        "profile": profile_name(candidate_mode, matrix_mode),
+        "profile": profile_name(candidate_mode, matrix_mode, zoom),
         "candidate": candidate_mode,
         "candidate_identity": candidate,
         "quality": quality,
@@ -718,6 +828,7 @@ def verify_observation(
     manifest: dict[str, Any],
     candidate_mode: bool,
     candidate: dict[str, Any] | None,
+    zoom: str = "standard",
     matrix_mode: bool,
     quality: str,
     scale_factor: float,
@@ -729,9 +840,10 @@ def verify_observation(
         candidate=candidate_mode,
         quality=quality,
         scale_factor=scale_factor,
+        zoom=zoom,
     )
     native.require(
-        observation.get("profile") == profile_name(candidate_mode, matrix_mode)
+        observation.get("profile") == profile_name(candidate_mode, matrix_mode, zoom)
         and observation.get("candidate") == candidate_mode
         and observation.get("candidate_identity") == candidate
         and observation.get("quality", "high") == quality
@@ -756,7 +868,10 @@ def verify_observation(
         sha256(root / SCREENSHOT) == screenshot.get("sha256"),
         "Wall screenshot hash differs",
     )
-    for field, value in image_evidence(image, status).items():
+    recalculated = image_evidence(image, status)
+    if zoom == "farthest":
+        recalculated["straight_run"] = straight_run_evidence(image, status)
+    for field, value in recalculated.items():
         native.require(
             screenshot.get(field) == value, f"Wall screenshot {field} differs"
         )
@@ -788,9 +903,11 @@ def verify_root(root: Path) -> dict[str, Any]:
     native.require(type(candidate_mode) is bool, "Wall candidate mode is invalid")
     matrix_mode = manifest.get("matrix", False)
     native.require(type(matrix_mode) is bool, "Wall matrix mode is invalid")
+    zoom = manifest.get("zoom", "standard")
+    native.require(zoom in ZOOM_MODES, "Wall zoom mode is invalid")
     candidate = manifest.get("candidate_identity")
     native.require(
-        manifest.get("profile") == profile_name(candidate_mode, matrix_mode),
+        manifest.get("profile") == profile_name(candidate_mode, matrix_mode, zoom),
         "Wall manifest profile differs",
     )
     native.require(
@@ -840,6 +957,7 @@ def verify_root(root: Path) -> dict[str, Any]:
             candidate_mode=candidate_mode,
             candidate=candidate,
             matrix_mode=matrix_mode,
+            zoom=zoom,
             quality=spec["quality"],
             scale_factor=spec["scale_factor"],
         )
@@ -933,13 +1051,16 @@ def plan(args: argparse.Namespace) -> int:
         )
     if args.matrix:
         command.append("--matrix")
+    if args.zoom != "standard":
+        command.extend(["--zoom", args.zoom])
     native.print_json(
         {
             "schema_version": SCHEMA_VERSION,
             "status": "ready" if not failures else "blocked",
-            "profile": MATRIX_PROFILE if args.matrix else profile_name(args.candidate),
+            "profile": profile_name(args.candidate, args.matrix, args.zoom),
             "candidate": args.candidate,
             "matrix": args.matrix,
+            "zoom": args.zoom,
             "candidate_identity": candidate,
             "job_root": str(root),
             "subject_commit": subject,
@@ -1023,9 +1144,10 @@ def run(args: argparse.Namespace) -> int:
     state: dict[str, Any] = {
         "schema_version": SCHEMA_VERSION,
         "status": "running",
-        "profile": profile_name(args.candidate, args.matrix),
+        "profile": profile_name(args.candidate, args.matrix, args.zoom),
         "candidate": args.candidate,
         "matrix": args.matrix,
+        "zoom": args.zoom,
         "candidate_identity": candidate,
         "subject_commit": args.subject_commit,
         "source_fingerprint": args.source_fingerprint,
@@ -1081,6 +1203,7 @@ def run(args: argparse.Namespace) -> int:
                 matrix_mode=args.matrix,
                 quality=spec["quality"],
                 scale_factor=spec["scale_factor"],
+                zoom=args.zoom,
                 job_file=root / "job.json",
             )
             state["cases_completed"] = index + 1
@@ -1088,9 +1211,10 @@ def run(args: argparse.Namespace) -> int:
         manifest = {
             "schema_version": SCHEMA_VERSION,
             "status": "pass",
-            "profile": profile_name(args.candidate, args.matrix),
+            "profile": profile_name(args.candidate, args.matrix, args.zoom),
             "candidate": args.candidate,
             "matrix": args.matrix,
+            "zoom": args.zoom,
             "candidate_identity": candidate,
             "repo": str(repo),
             "subject_commit": args.subject_commit,
@@ -1180,6 +1304,65 @@ def self_test() -> int:
         and "--wall-art-matrix" not in command,
         "Wall matrix authorization flag differs",
     )
+    farthest_command = calibration_command(
+        Path("/repo"),
+        Path("/artifact"),
+        "Intel",
+        matrix_mode=True,
+        quality="high",
+        scale_factor=1.0,
+        zoom="farthest",
+    )
+    native.require(
+        farthest_command[farthest_command.index("--wall-art-zoom") + 1] == "farthest"
+        and "--wall-art-zoom" not in matrix_command,
+        "Wall farthest zoom authorization flag differs",
+    )
+    native.require(
+        profile_name(True, True, "farthest") == FARTHEST_PROFILE
+        and profile_name(True, True) == MATRIX_PROFILE,
+        "Wall farthest zoom profile differs",
+    )
+    straight = {
+        "ordinal": 3,
+        "grid": [7, 17],
+        "mask": "0011",
+        "viewport_center": {"x": 640.0, "y": 360.0},
+        "roi": {"x": 628, "y": 352, "width": 24, "height": 16},
+    }
+    validate_straight_probe(straight)
+    try:
+        validate_straight_probe({**straight, "mask": "1100"})
+    except native.AcceptanceError:
+        pass
+    else:
+        raise native.AcceptanceError("Wall straight probe accepted a north-south mask")
+    # A dark two-pixel run over noisy terrain must pass, and the same terrain
+    # without the run must fail.
+    def synthetic(with_wall: bool) -> Image:
+        width, height = WINDOW_WIDTH, WINDOW_HEIGHT
+        pixels = bytearray(width * height * 3)
+        for y in range(height):
+            for x in range(width):
+                offset = (y * width + x) * 3
+                base = 90 + ((x * 7 + y * 13) % 9)
+                wall_row = with_wall and 359 <= y <= 360
+                value = 12 if wall_row else base
+                pixels[offset : offset + 3] = bytes((value, value, value))
+        return width, height, bytes(pixels)
+
+    probe_status = {"probe": {"straight": straight}}
+    evidence = straight_run_evidence(synthetic(True), probe_status)
+    native.require(
+        evidence["columns"] == 24 and evidence["weakest_column_sigma"] >= 3.0,
+        "Wall straight run evidence differs",
+    )
+    try:
+        straight_run_evidence(synthetic(False), probe_status)
+    except native.AcceptanceError:
+        pass
+    else:
+        raise native.AcceptanceError("Wall straight run accepted terrain without a wall")
     nonce = "0123456789abcdef0123456789abcdef"
     fixture_hash = density.sha256(CONTRACT_PATH)
     status = {
@@ -1271,7 +1454,7 @@ def self_test() -> int:
         {
             "schema_version": SCHEMA_VERSION,
             "status": "pass",
-            "profiles": [PROFILE, CANDIDATE_PROFILE, MATRIX_PROFILE],
+            "profiles": [PROFILE, CANDIDATE_PROFILE, MATRIX_PROFILE, FARTHEST_PROFILE],
         }
     )
     return 0
@@ -1286,6 +1469,7 @@ def parser() -> argparse.ArgumentParser:
     plan_parser.add_argument("--adapter", default="Intel")
     plan_parser.add_argument("--candidate", action="store_true")
     plan_parser.add_argument("--matrix", action="store_true")
+    plan_parser.add_argument("--zoom", choices=ZOOM_MODES, default="standard")
     run_parser = commands.add_parser("run")
     for name in (
         "repo",
@@ -1299,6 +1483,7 @@ def parser() -> argparse.ArgumentParser:
         run_parser.add_argument("--" + name.replace("_", "-"), required=True)
     run_parser.add_argument("--candidate", action="store_true")
     run_parser.add_argument("--matrix", action="store_true")
+    run_parser.add_argument("--zoom", choices=ZOOM_MODES, default="standard")
     run_parser.add_argument("--candidate-generation")
     run_parser.add_argument("--candidate-manifest-sha256")
     for name in ("status", "verify"):

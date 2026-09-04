@@ -283,6 +283,19 @@ fn wall_art_matrix_has_a_scoped_quality_and_dpi_contract() {
 }
 
 #[test]
+fn wall_art_zoom_requires_paired_keys_and_the_actual_window_profile() {
+    assert_eq!(super::wall_art_zoom_selection(None, None, false), Ok(false));
+    assert_eq!(
+        super::wall_art_zoom_selection(Some("farthest"), Some("farthest"), true),
+        Ok(true)
+    );
+    assert!(super::wall_art_zoom_selection(Some("farthest"), None, true).is_err());
+    assert!(super::wall_art_zoom_selection(None, Some("farthest"), true).is_err());
+    assert!(super::wall_art_zoom_selection(Some("standard"), Some("standard"), true).is_err());
+    assert!(super::wall_art_zoom_selection(Some("farthest"), Some("farthest"), false).is_err());
+}
+
+#[test]
 fn familiar_policy_and_dialog_modes_are_explicit() {
     assert_eq!(
         super::PerfFamiliarPolicyMode::parse("baseline"),

@@ -70,6 +70,15 @@ def add_run_arguments(
             "requires --wall-actual-window and the fail-closed native acceptance launcher"
         ),
     )
+    parser.add_argument(
+        "--wall-art-zoom",
+        choices=("standard", "farthest"),
+        default="standard",
+        help=(
+            "select the Wall art gallery zoom; farthest matches the player's "
+            "widest zoom-out and requires --wall-art-matrix"
+        ),
+    )
     parser.add_argument("--stage", choices=RTT_LIGHT_STAGES)
     parser.add_argument("--lane", choices=RTT_LIGHT_LANES)
     parser.add_argument("--sizes", default="medium", help="comma-separated: small,medium,large")
@@ -462,6 +471,8 @@ def validate_arguments(args: argparse.Namespace) -> None:
             raise ValueError("Wall actual-window profiles are mutually exclusive")
         if args.wall_art_matrix and not args.wall_actual_window:
             raise ValueError("--wall-art-matrix requires --wall-actual-window")
+        if args.wall_art_zoom != "standard" and not args.wall_art_matrix:
+            raise ValueError("--wall-art-zoom farthest requires --wall-art-matrix")
         wall_actual_window = args.wall_actual_window or args.wall_color_actual_window
         if args.wall_presentation is not None and (
             wall_actual_window or args.wall_art_matrix
@@ -543,6 +554,8 @@ def validate_arguments(args: argparse.Namespace) -> None:
         raise ValueError("--wall-color-actual-window is reserved for --workload wall-density")
     if args.wall_art_matrix:
         raise ValueError("--wall-art-matrix is reserved for --workload wall-density")
+    if args.wall_art_zoom != "standard":
+        raise ValueError("--wall-art-zoom is reserved for --workload wall-density")
     if args.workload == "dream-ui-burst":
         if args.command not in {"run", "audit"}:
             raise ValueError("dream-ui-burst is available through perf.py run or audit")

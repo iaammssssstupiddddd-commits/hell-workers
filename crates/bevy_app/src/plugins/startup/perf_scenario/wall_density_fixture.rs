@@ -143,14 +143,24 @@ pub(super) struct WallDensityRenderDocEvidence {
 
 impl WallDensityFixtureState {
     pub(super) fn actual_window_subject(&self) -> Option<WallDensityProbeSubject<'_>> {
+        self.probe_subject(|specimen| specimen.ordinal == ACTUAL_WINDOW_SUBJECT_ORDINAL)
+    }
+
+    /// Lowest-ordinal specimen carrying `mask`, used to sample one straight run
+    /// across its wall body.
+    pub(super) fn mask_subject(&self, mask: u8) -> Option<WallDensityProbeSubject<'_>> {
+        self.probe_subject(|specimen| specimen.mask == mask)
+    }
+
+    fn probe_subject(
+        &self,
+        select: impl Fn(&SpecimenSpec) -> bool,
+    ) -> Option<WallDensityProbeSubject<'_>> {
         let layout = self
             .layout
             .as_ref()
             .filter(|_| self.phase == WallDensityFixturePhase::Ready)?;
-        let specimen = layout
-            .specimens
-            .iter()
-            .find(|specimen| specimen.ordinal == ACTUAL_WINDOW_SUBJECT_ORDINAL)?;
+        let specimen = layout.specimens.iter().find(|specimen| select(specimen))?;
         Some(WallDensityProbeSubject {
             entity: specimen.wall?,
             ordinal: specimen.ordinal,

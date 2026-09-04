@@ -43,9 +43,32 @@ const SETTLE_FRAMES: u32 = 3;
 const ROI_HALF_SIZE: u32 = 48;
 const CAPTURE_REGION: (u32, u32, u32, u32) = (320, 40, 516, 674);
 const GALLERY_CAMERA_SCALE: f32 = 1.0;
+/// `PanCamera`'s farthest zoom-out, where the 9.6 wu wall body is the thinnest
+/// the player can ever see it.
+const GALLERY_FARTHEST_CAMERA_SCALE: f32 = 5.0;
+/// Half-height of the profile band sampled across a straight E-W wall run. The
+/// wall is under 2 px wide at the farthest zoom, so the band only has to hold
+/// the wall plus terrain on both sides.
+const STRAIGHT_PROBE_HALF_HEIGHT: u32 = 8;
+/// Half-width of that band, kept short enough to stay on one straight specimen.
+const STRAIGHT_PROBE_HALF_WIDTH: u32 = 12;
+/// `(N, S, W, E)` connection mask of the straight east-west specimen.
+const STRAIGHT_EAST_WEST_MASK: u8 = 0b0011;
 
 fn candidate_gallery_requested() -> bool {
     std::env::var("HW_WALL_CANDIDATE").as_deref() == Ok("1")
+}
+
+fn farthest_zoom_requested() -> bool {
+    std::env::var("HW_WALL_ART_ZOOM").as_deref() == Ok("farthest")
+}
+
+fn gallery_camera_scale() -> f32 {
+    if farthest_zoom_requested() {
+        GALLERY_FARTHEST_CAMERA_SCALE
+    } else {
+        GALLERY_CAMERA_SCALE
+    }
 }
 
 #[derive(Resource)]
@@ -170,7 +193,8 @@ pub(crate) fn prepare_wall_actual_window_gallery_view_system(
     let world = hw_world::WorldMap::grid_to_world(subject.grid.0, subject.grid.1);
     camera.translation.x = world.x;
     camera.translation.y = world.y;
-    camera.scale = Vec3::new(GALLERY_CAMERA_SCALE, GALLERY_CAMERA_SCALE, 1.0);
+    let gallery_scale = gallery_camera_scale();
+    camera.scale = Vec3::new(gallery_scale, gallery_scale, 1.0);
     for mut node in &mut params.ui_roots {
         node.display = Display::None;
     }
@@ -311,7 +335,7 @@ fn build_status(
     }
     let candidate_gallery = candidate_gallery_requested();
     let expected_camera_scale = if candidate_gallery {
-        GALLERY_CAMERA_SCALE
+        gallery_camera_scale()
     } else {
         CAMERA_SCALE
     };
@@ -332,7 +356,7 @@ fn build_status(
         let subject_world = hw_world::WorldMap::grid_to_world(subject.grid.0, subject.grid.1);
         if main_camera.translation.x != subject_world.x
             || main_camera.translation.y != subject_world.y
-            || main_camera.scale != Vec3::new(GALLERY_CAMERA_SCALE, GALLERY_CAMERA_SCALE, 1.0)
+            || main_camera.scale != Vec3::new(expected_camera_scale, expected_camera_scale, 1.0)
         {
             return Err("wall gallery MainCamera focus differs".to_string());
         }
@@ -517,6 +541,19 @@ fn build_status(
             },
         },
     });
+    if candidate_gallery && farthest_zoom_requested() {
+        status["probe"]["straight"] = straight_probe(
+            fixture,
+            params,
+            &ClientProjection {
+                camera,
+                camera_transform,
+                physical_width,
+                physical_height,
+                capture_region,
+            },
+        )?;
+    }
     if let Some(gallery) = gallery {
         let hidden_ui_roots = params.ui_roots.iter().count();
         let hidden_connector_visuals = params
@@ -572,25 +609,96 @@ fn project_client_point(
     (center_x.is_finite() && center_y.is_finite()).then_some(Vec2::new(center_x, center_y))
 }
 
+/// Publishes the band the offline verifier samples across one straight
+/// east-west wall, so the farthest zoom-out can be judged on the thinnest run
+/// the player ever sees instead of on the isolated subject alone.
+struct ClientProjection<'a> {
+    camera: &'a Camera,
+    camera_transform: &'a GlobalTransform,
+    physical_width: u32,
+    physical_height: u32,
+    capture_region: (u32, u32, u32, u32),
+}
+
+fn straight_probe(
+    fixture: &WallDensityFixtureState,
+    params: &WallActualWindowParams,
+    projection: &ClientProjection,
+) -> Result<Value, String> {
+    let straight = fixture
+        .mask_subject(STRAIGHT_EAST_WEST_MASK)
+        .ok_or_else(|| "wall gallery has no straight east-west specimen".to_string())?;
+    let transform = params
+        .visuals
+        .iter()
+        .find_map(|(visual, _, _, _, transform, _, _)| {
+            (visual.owner == straight.entity).then_some(transform)
+        })
+        .ok_or_else(|| "wall gallery straight specimen has no 3D visual".to_string())?;
+    let center = project_client_point(
+        projection.camera,
+        projection.camera_transform,
+        transform.translation(),
+        projection.physical_width,
+        projection.physical_height,
+    )
+    .ok_or_else(|| "wall gallery straight specimen cannot be projected".to_string())?;
+    let roi = roi_around_point_with_extent(
+        center,
+        STRAIGHT_PROBE_HALF_WIDTH,
+        STRAIGHT_PROBE_HALF_HEIGHT,
+        projection.physical_width,
+        projection.physical_height,
+    )
+    .ok_or_else(|| "wall gallery straight ROI lies outside the client".to_string())?;
+    if !roi_inside_capture_region(roi, projection.capture_region) {
+        return Err("wall gallery straight ROI overlaps fixed UI chrome".to_string());
+    }
+    Ok(json!({
+        "ordinal": straight.ordinal,
+        "grid": [straight.grid.0, straight.grid.1],
+        "mask": format!("{:04b}", straight.mask),
+        "viewport_center": {"x": center.x, "y": center.y},
+        "roi": {"x": roi.0, "y": roi.1, "width": roi.2, "height": roi.3},
+    }))
+}
+
 fn roi_around_point(
     center: Vec2,
     half_size: u32,
     physical_width: u32,
     physical_height: u32,
 ) -> Option<(u32, u32, u32, u32)> {
-    let half = half_size as f32;
-    if center.x < half
-        || center.y < half
-        || center.x + half > physical_width as f32
-        || center.y + half > physical_height as f32
+    roi_around_point_with_extent(
+        center,
+        half_size,
+        half_size,
+        physical_width,
+        physical_height,
+    )
+}
+
+fn roi_around_point_with_extent(
+    center: Vec2,
+    half_width: u32,
+    half_height: u32,
+    physical_width: u32,
+    physical_height: u32,
+) -> Option<(u32, u32, u32, u32)> {
+    let half_x = half_width as f32;
+    let half_y = half_height as f32;
+    if center.x < half_x
+        || center.y < half_y
+        || center.x + half_x > physical_width as f32
+        || center.y + half_y > physical_height as f32
     {
         return None;
     }
     Some((
-        (center.x - half).round() as u32,
-        (center.y - half).round() as u32,
-        half_size * 2,
-        half_size * 2,
+        (center.x - half_x).round() as u32,
+        (center.y - half_y).round() as u32,
+        half_width * 2,
+        half_height * 2,
     ))
 }
 
@@ -661,6 +769,30 @@ mod tests {
             (592, 302, 96, 96),
             (0, 0, 1280, 720)
         ));
+    }
+
+    #[test]
+    fn straight_probe_band_spans_the_wall_and_its_terrain() {
+        let roi = roi_around_point_with_extent(
+            Vec2::new(640.0, 360.0),
+            STRAIGHT_PROBE_HALF_WIDTH,
+            STRAIGHT_PROBE_HALF_HEIGHT,
+            1280,
+            720,
+        )
+        .expect("straight band fits the client");
+        assert_eq!(roi, (628, 352, 24, 16));
+        assert!(roi_inside_capture_region(roi, (0, 0, 1280, 720)));
+        assert_eq!(
+            roi_around_point_with_extent(
+                Vec2::new(4.0, 360.0),
+                STRAIGHT_PROBE_HALF_WIDTH,
+                STRAIGHT_PROBE_HALF_HEIGHT,
+                1280,
+                720,
+            ),
+            None
+        );
     }
 
     #[test]

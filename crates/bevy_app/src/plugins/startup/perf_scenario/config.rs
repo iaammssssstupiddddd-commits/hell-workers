@@ -542,6 +542,34 @@ pub struct PerfScenarioConfig {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PerfScenarioConfigError(String);
 
+/// Validates the paired Wall art zoom keys. The farthest zoom-out is the only
+/// selectable value; its absence keeps the standard gallery zoom.
+pub(super) fn wall_art_zoom_selection(
+    flag: Option<&str>,
+    environment: Option<&str>,
+    wall_actual_window: bool,
+) -> Result<bool, PerfScenarioConfigError> {
+    if flag != environment {
+        return Err(PerfScenarioConfigError(
+            "--perf-wall-art-zoom and HW_WALL_ART_ZOOM must be paired".to_string(),
+        ));
+    }
+    let Some(zoom) = flag else {
+        return Ok(false);
+    };
+    if zoom != "farthest" {
+        return Err(PerfScenarioConfigError(format!(
+            "--perf-wall-art-zoom must be farthest when present; got '{zoom}'"
+        )));
+    }
+    if !wall_actual_window {
+        return Err(PerfScenarioConfigError(
+            "Wall art zoom requires the current-Wall actual-window profile".to_string(),
+        ));
+    }
+    Ok(true)
+}
+
 impl fmt::Display for PerfScenarioConfigError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str(&self.0)
@@ -867,6 +895,11 @@ impl PerfScenarioConfig {
                 "Wall art matrix requires the current-Wall actual-window profile".to_string(),
             ));
         }
+        wall_art_zoom_selection(
+            value_from_args(&args, "--perf-wall-art-zoom")?.as_deref(),
+            env::var("HW_WALL_ART_ZOOM").ok().as_deref(),
+            wall_actual_window,
+        )?;
         let wall_color_actual_window_flag = has_flag(&args, "--perf-wall-color-actual-window");
         let wall_color_actual_window_environment =
             env::var("HW_WALL_COLOR_ACTUAL_WINDOW").is_ok_and(|value| value == "1");
