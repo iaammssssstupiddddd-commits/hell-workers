@@ -510,7 +510,7 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   - current wall routeだけを使う`wall-density-v1` fixtureと専用`wall_density_acceptance.py`をproduction asset実装前に作る。測定targetは`N=96` / `4N=384` Wall ownerとし、16 maskをそれぞれ6回／24回ずつ、互いに接続しないspecimenへ配置する。近傍maskはfixture-owned Door blueprint connectorで作り、target外の3D wallを増やさない。座標列、support数、owner数、mask / family分布、fixture checksumをexact sidecarへ固定する。
   - density profile script、Rust fixture module、predicate、measurement contractをprofile固有fingerprintのclosed file setへ追加し、M0 baseline commit以後はbyte変更しない。M4のgallery / color profileは別fileへ追加し、density profileへimportさせない。plan時と各case前後で再hashし、untracked helperやprofile外scriptを合格artifact生成へ使わない。
   - completed opaqueとprovisional transparentを別process / phaseにする。seed `20260901`、High、DPI 1.0、1280×720、Vulkan / X11、`novsync`、30秒warm-up、60秒measure、3 valid runを固定し、各runのp95 / p99を先に計算してから中央値とMADを集約する。invalid runを除外して3本へ見せかけない。
-  - completed main passはwall-specific drawをmesh / material IDで抽出し、全6 familyを含む`D_N <= 6`、`D_4N <= 6`、`D_4N = D_N`をgateにする。M0のCuboid controlで4Nがrendererのinstance capacityを越えないことを確認する。provisional sorted phaseは同じbatchingを要求せず、`D_4N <= 4 * D_N + 6`をsuperlinear防止gateにしてcount / slopeを保存する。
+  - completed main passはwall-specific drawをmesh / material IDで抽出し、全6 familyを含む`D_N <= 6`、`D_4N <= 6`、`D_4N = D_N`をgateにする。M0のCuboid controlで4Nがrendererのinstance capacityを越えないことを確認する。provisional sorted phaseは同じbatchingを要求せず、深度ソート下でmergeが成立していることを表す`D <= ceil(K * (M - 1) / M) + 1`とsuperlinear防止の`D_4N / D_N <= 4 * 1.10`をgateにしてcount / slopeを保存する（M5の実測に基づく導出。旧`D_4N <= 4 * D_N + 6`は根拠のない定数余裕だったため置き換えた）。
   - calibration / density harnessのcheck / clippy / verifyとHelp impact reviewを終え、対象diffを提示してユーザー承認を得たscoped local baseline commitを作る。M5ではこのcommitのclean worktreeへfinalと同一asset viewをprovisionしてbaseline legを再採取し、fixture / measurement contract hashが一致する場合だけ比較する。
 - 変更候補:
   - `docs/art-style-criteria.md`
@@ -1124,6 +1124,35 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   `24→96`、`6→24`、`24→96`、`12→48`、`24→96`とNから4Nで正確に4倍になる。すなわち
   `D_N = D_4N = 6 <= 6`が実render上で成立し、追加draw無しのinstancingである。ただしこれはlauncher外の
   診断であり、formal artifactにはしない。修正済みtimeoutでprovisionalを含む4 caseを正式採取する。
+- timeout修正後のsubject `080bee95`で、正式RenderDoc job `wall-renderdoc-20260903T175737Z-4df5356f`が
+  4 capture＋8 replayの全13 stageを初めて完走した。各caseの2 replayはbyte-identicalである。completedは
+  N=96 / 4N=384とも`draw_group_count = 6`、`rendered_instance_count`がcheckpointed ownerと一致し、
+  `direct_scene_target_write = false`であり、`D_N <= 6`、`D_4N <= 6`、`D_4N = D_N`を実測で満たした。
+- 一方provisional（transparent sorted phase）は`D_N = 69`、`D_4N = 286`となり、
+  predicate `D_4N <= 4 * D_N + 6`（= 282）を4 draw超過して失敗した。instanceは96 / 384で正確に4倍、
+  draw比は`4.14`倍であり、線形近傍だが式の余裕6を食い切っている。深度ソート順で隣接する壁のmeshが
+  変わるたびにdrawが切れるため、6 meshのproductionは1 meshのfallbackより切れやすいと予想される。
+  同一subject / 同一harnessでcandidate認可を外したfallback対照job
+  `wall-renderdoc-20260904T004450Z-e1ab0458`（`status=valid`）を採取して原因を切り分けた。結果は次のとおり。
+
+  | mode | completed N=96 | completed 4N=384 | provisional N=96 | provisional 4N=384 |
+  | --- | ---: | ---: | ---: | ---: |
+  | fallback（Cuboid 1 mesh） | 1 | 1 | 1 | 1 |
+  | production（6 mesh） | 6 | 6 | 69 | 286 |
+
+  不透明passはmesh単位でbatchされるため密度に依らず6 drawで頭打ちになる。半透明passは深度ソート順に描くため、
+  隣接する壁のmeshが変わるたびにbatchが切れる。1 meshのfallbackは全数が1 drawへ融合し、6 meshのproductionは
+  壁あたり約`0.72`〜`0.74` drawへ分解される。すなわちこれはsorted transparency一般の性質ではなく、
+  6形状化の直接の帰結である。
+- 旧predicate `D_4N <= 4 * D_N + 6`の余裕6には導出がなく、実際にはbatchが期待より効いている286を282で弾いていた。
+  そこで判定を実測の意味へ導出し直した。M個のmeshがmesh identityと無相関な順序で並ぶとき、期待される切断数は
+  `K * (M - 1) / M`で、batchは最低1つ残る。したがって`D <= ceil(K * (M - 1) / M) + 1`を超えることは
+  「そもそもmergeされていない」ことを意味する。M=6では上限がN `81` / 4N `321`であり、実測69 / 286は
+  いずれもこれを下回る。加えてdensityに対する線形性を`D_4N / D_N <= 4 * (1 + 0.10)`で拘束する
+  （実測`4.14`倍）。両者とも導出済みで、合わせ込みではない。self-testはこの実測値、mergeなし（384）、
+  超線形（310）の3ケースで固定する。
+- completedのgateは変更しない。frame timeへの影響は有効regimeの比較でprovisional p95 `+2.031% / +0.987%`であり、
+  現行規模では小さい。仮設壁の半透明表現自体は維持する。
 - したがってM5で未取得の実画像証跡は、(a) 最遠zoom-out（camera scale 5）でのHigh内部色1 px以上と
   Medium / Lowのsilhouette連続、(b) 追加・撤去、仮設→完成bounce、Soul前後depth、save/load rehydrateの
   phase別client capture、の2点に絞られる。現行`wall_art_acceptance.py`はcandidate matrixをcamera scale 1.0の
@@ -1140,7 +1169,7 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   - M0 baseline commit対final production、およびfinal commit内のprofile-only `force-fallback` control対productionを、`wall-density-v1`のcompleted / provisional各N / 4Nで実行する。各runのp95 / p99を先に求め、3 valid runの中央値で両比較とも`<= +5%`を要求し、MADを併記する。
     M0側は`35f1f6e3`のproduct treeへ`e792b710`のfixture-only connector mirror修正だけを載せたclean派生subjectとし、
     product差分を混ぜずに現行fixture bytesへ揃える。
-  - bounded RenderDoc captureではcompleted opaqueのwall main-passを抽出し、`D_N <= 6`、`D_4N <= 6`、`D_4N = D_N`を要求する。provisional transparentは別sorted phaseで`D_4N <= 4 * D_N + 6`を要求し、count / normalized slopeを別artifactへ記録する。
+  - bounded RenderDoc captureではcompleted opaqueのwall main-passを抽出し、`D_N <= 6`、`D_4N <= 6`、`D_4N = D_N`を要求する。provisional transparentは別sorted phaseで、深度ソート下のmerge成立を表す`D <= ceil(K * (M - 1) / M) + 1`と線形性`D_4N / D_N <= 4 * 1.10`を要求し、count / normalized slopeを別artifactへ記録する。
 - 変更候補:
   - `crates/bevy_app/src/plugins/startup/perf_scenario/`
   - `docs/rendering-performance.md`
@@ -1157,7 +1186,9 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
     同一material / texture / draw経路のままtriangleのみ24〜72へ減らした差分である。display-paced / regime不安定な
     採取は`e3e0cbc0`の妥当性gateで以後fail-fastに拒否する。
   - [ ] baseline（M0派生subject）対productionのcross-subject比較を、上記の有効artifactに対して再封印する。
-  - [ ] RenderDoc上のcompleted wall main-passが`D_N <= 6`、`D_4N <= 6`、`D_4N = D_N`、provisional sorted phaseが`D_4N <= 4 * D_N + 6`を満たす。
+  - [ ] RenderDoc上のcompleted wall main-passが`D_N <= 6`、`D_4N <= 6`、`D_4N = D_N`、provisional sorted phaseが
+    `D <= ceil(K * (M - 1) / M) + 1`（M=6、上限はN `81` / 4N `321`）と`D_4N / D_N <= 4 * 1.10`を満たす。
+    completedは`4df5356f`で`6 / 6`、provisionalは`69 / 286`を実測済みで、導出し直したpredicateで再採取して封印する。
   - [ ] native実行中のcode / profile / predicate変更が0で、source fingerprintはM4 final commitと一致する。修正が発生したrunを合格artifactへ流用していない。
   - [x] manifestはM4のpendingなしfinal generationと一致し、M1 candidate generationやA/B用optional集合のartifactをfinal証拠へ混ぜていない。validation worktreeはadopted core 9またはrejected core 8だけを含む。
   - [ ] compare開始前に空の`<sealed-artifacts>` directoryを作り、4つの固有CSVと各SHA-256を保存している。既定`comparison.csv`へ上書きしていない。

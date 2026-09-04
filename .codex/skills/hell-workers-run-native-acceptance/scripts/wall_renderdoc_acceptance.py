@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import os
 import re
 import shutil
@@ -34,6 +35,19 @@ CAPTURE_TIMEOUT_SECONDS = 600.0
 # the Intel Arc workstation, so the former 600 s limit cut off every 4N replay
 # and looked like a GPU hang. Keep a wide margin over the measured 4N cost.
 REPLAY_TIMEOUT_SECONDS = 2400.0
+# The opaque phase batches by mesh, so completed walls collapse to one draw per
+# production mesh at any density. The transparent phase is depth sorted, so a
+# batch breaks whenever neighbours in sort order use different meshes. With M
+# meshes in an order uncorrelated with mesh identity, the expected break count is
+# K * (M - 1) / M, and one batch always remains: measuring above that means the
+# walls are not being merged at all. Job
+# `wall-renderdoc-20260904T004450Z-e1ab0458` confirms the mechanism directly:
+# the one-mesh fallback draws all 96 and all 384 provisional walls in a single
+# group, while six-mesh production draws 69 and 286. The old
+# `D_4N <= 4 * D_N + 6` slack was not derived from anything and rejected 286
+# against 282 while the walls were in fact merging better than this bound.
+PRODUCTION_MESH_COUNT = 6
+SORT_SCALING_TOLERANCE = 0.10
 RENDERDOC_PROFILE = "profiling-renderdoc"
 RENDERDOC_FEATURES = "profiling-renderdoc"
 EXTRACTOR_RELATIVE = "scripts/perf_tool/wall_renderdoc_extract.py"
@@ -475,6 +489,13 @@ def verify_case(
     }
 
 
+def sorted_transparent_bound(target_count: int) -> int:
+    """Largest draw-group count that still means depth-sorted walls are merging."""
+    return math.ceil(
+        target_count * (PRODUCTION_MESH_COUNT - 1) / PRODUCTION_MESH_COUNT
+    ) + 1
+
+
 def validate_predicates(cases: list[dict[str, Any]]) -> dict[str, Any]:
     indexed = {(case["phase"], case["size"]): case for case in cases}
     native.require(
@@ -486,8 +507,15 @@ def validate_predicates(cases: list[dict[str, Any]]) -> dict[str, Any]:
     provisional_n = indexed[("provisional", "small")]["draw_group_count"]
     provisional_4n = indexed[("provisional", "medium")]["draw_group_count"]
     completed_pass = completed_n <= 6 and completed_4n <= 6 and completed_n == completed_4n
-    provisional_pass = provisional_4n <= 4 * provisional_n + 6
     native.require(completed_pass, "completed wall draw-group predicate failed")
+    provisional_sort_bound_n = sorted_transparent_bound(TARGET_COUNTS["small"])
+    provisional_sort_bound_4n = sorted_transparent_bound(TARGET_COUNTS["medium"])
+    provisional_pass = (
+        provisional_n <= provisional_sort_bound_n
+        and provisional_4n <= provisional_sort_bound_4n
+        and provisional_4n * TARGET_COUNTS["small"]
+        <= provisional_n * TARGET_COUNTS["medium"] * (1.0 + SORT_SCALING_TOLERANCE)
+    )
     native.require(provisional_pass, "provisional wall draw-group predicate failed")
     return {
         "completed": {
@@ -499,7 +527,12 @@ def validate_predicates(cases: list[dict[str, Any]]) -> dict[str, Any]:
         "provisional": {
             "D_N": provisional_n,
             "D_4N": provisional_4n,
-            "predicate": "D_4N <= 4 * D_N + 6",
+            "sort_bound_N": provisional_sort_bound_n,
+            "sort_bound_4N": provisional_sort_bound_4n,
+            "predicate": (
+                "D <= K * (M - 1) / M + 1 for K in {N, 4N} && "
+                f"D_4N / D_N <= 4 * (1 + {SORT_SCALING_TOLERANCE})"
+            ),
             "passed": True,
         },
     }
@@ -888,6 +921,42 @@ def self_test() -> int:
     predicates = validate_predicates(cases)
     native.require(predicates["completed"]["passed"], "completed self-test failed")
     native.require(predicates["provisional"]["passed"], "provisional self-test failed")
+    native.require(
+        (sorted_transparent_bound(96), sorted_transparent_bound(384)) == (81, 321),
+        "sorted transparent bound differs",
+    )
+    # Measured on job `wall-renderdoc-20260903T175737Z-4df5356f`: six-mesh
+    # production merges 96 walls into 69 groups and 384 into 286.
+    measured = [
+        {"phase": "completed", "size": "small", "draw_group_count": 6},
+        {"phase": "completed", "size": "medium", "draw_group_count": 6},
+        {"phase": "provisional", "size": "small", "draw_group_count": 69},
+        {"phase": "provisional", "size": "medium", "draw_group_count": 286},
+    ]
+    native.require(
+        validate_predicates(measured)["provisional"]["passed"],
+        "measured six-mesh production draw groups are rejected",
+    )
+    # 384 exceeds the sort bound of 321; 310 stays under it but scales at
+    # 4.49x against the 4.4x the tolerance allows.
+    for broken, reason in (
+        (384, "unmerged transparent walls are accepted"),
+        (310, "super-linear transparent scaling is accepted"),
+    ):
+        try:
+            validate_predicates(
+                [
+                    *measured[:3],
+                    {
+                        "phase": "provisional",
+                        "size": "medium",
+                        "draw_group_count": broken,
+                    },
+                ]
+            )
+        except native.AcceptanceError:
+            continue
+        raise native.AcceptanceError(reason)
     command = capture_command(
         repo=Path("/repo"),
         binary=Path("/capsule/bevy_app"),

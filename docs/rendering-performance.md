@@ -133,7 +133,19 @@ checkpointへexact一致しないcaptureを拒否する。launcherの`--candidat
 `ef5f2b8b`のfresh job `wall-renderdoc-20260902T200533Z-c3f9b66d`はcompleted Nでactive mesh 6、owner 96、
 draw group 6、index別instance `648:30 / 720:66`をexact一致させたが、completed 4Nの1回目replayがGPU fence待ちで
 600秒timeoutとなった。build cache済みの再試行`wall-renderdoc-20260902T204607Z-30b0d6c5`も同じ箇所でtimeoutし、
-kernel logにGPU hang / resetは記録されなかった。両jobはinvalidのまま保持し、4 caseのformal draw predicateは未合格である。
+kernel logにGPU hang / resetは記録されなかった。両jobはinvalidのまま保持する。
+このtimeoutはGPU hangではなくharness側の`REPLAY_TIMEOUT_SECONDS = 600`不足だった。~550 MB captureのreplayは
+N=96で約300秒、4N=384で828秒を要するため、上限を2400秒へ広げてから4 caseが初めて完走した。
+subject `080bee95`のjob `wall-renderdoc-20260903T175737Z-4df5356f`はcompletedがN / 4Nとも
+`draw group 6`、rendered instanceが96 / 384でcheckpointed ownerと一致し、`D_N <= 6` / `D_4N <= 6` /
+`D_4N = D_N`を満たした。provisionalは`69 / 286`である。同一subjectでcandidate認可を外したfallback対照job
+`wall-renderdoc-20260904T004450Z-e1ab0458`は全4 caseが`draw group 1`であり、半透明の分解が1 meshでは起きず
+6 meshで起きることを示す。不透明passはmesh単位でbatchされて密度に依らず6 drawで頭打ちになるのに対し、
+半透明passは深度ソート順に描くため隣接する壁のmeshが変わるたびにbatchが切れる。
+そこでprovisional predicateを`D <= ceil(K * (M - 1) / M) + 1`（M=6、上限はN `81` / 4N `321`）と
+`D_4N / D_N <= 4 * 1.10`へ導出し直した。前者はmesh identityと無相関な順序での期待切断数を上限にしたもので、
+これを超えることはmergeが成立していないことを意味する。旧`D_4N <= 4 * D_N + 6`の定数余裕6には導出がなく、
+mergeが期待より効いている286を282で弾いていた。
 
 current final subjectのactual-window matrixは
 `wall-art-20260902T210312Z-2ab3b1c9`である。High / Medium / Low × DPI 1.0 / 1.5 / 2.0の9 / 9 caseが
