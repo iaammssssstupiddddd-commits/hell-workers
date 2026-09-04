@@ -1153,6 +1153,10 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   超線形（310）の3ケースで固定する。
 - completedのgateは変更しない。frame timeへの影響は有効regimeの比較でprovisional p95 `+2.031% / +0.987%`であり、
   現行規模では小さい。仮設壁の半透明表現自体は維持する。
+- 導出し直したpredicateでsubject `48743206`から再採取したjob `wall-renderdoc-20260904T153035Z-e91b1bb9`は
+  `status=valid`で封印され、独立verifyも`pass`となった。completed `D_N = D_4N = 6`、provisional
+  `D_N = 69 <= 81` / `D_4N = 286 <= 321`、比`4.14 <= 4.4`であり、4 caseとも`presentation=production`、
+  rendered instanceは96 / 384でcheckpointed ownerと一致する。M5のRenderDoc構造gateはこれで閉じた。
 - したがってM5で未取得の実画像証跡は、(a) 最遠zoom-out（camera scale 5）でのHigh内部色1 px以上と
   Medium / Lowのsilhouette連続、(b) 追加・撤去、仮設→完成bounce、Soul前後depth、save/load rehydrateの
   phase別client capture、の2点に絞られる。現行`wall_art_acceptance.py`はcandidate matrixをcamera scale 1.0の
@@ -1186,9 +1190,10 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
     同一material / texture / draw経路のままtriangleのみ24〜72へ減らした差分である。display-paced / regime不安定な
     採取は`e3e0cbc0`の妥当性gateで以後fail-fastに拒否する。
   - [ ] baseline（M0派生subject）対productionのcross-subject比較を、上記の有効artifactに対して再封印する。
-  - [ ] RenderDoc上のcompleted wall main-passが`D_N <= 6`、`D_4N <= 6`、`D_4N = D_N`、provisional sorted phaseが
+  - [x] RenderDoc上のcompleted wall main-passが`D_N <= 6`、`D_4N <= 6`、`D_4N = D_N`、provisional sorted phaseが
     `D <= ceil(K * (M - 1) / M) + 1`（M=6、上限はN `81` / 4N `321`）と`D_4N / D_N <= 4 * 1.10`を満たす。
-    completedは`4df5356f`で`6 / 6`、provisionalは`69 / 286`を実測済みで、導出し直したpredicateで再採取して封印する。
+    subject `48743206`のjob `wall-renderdoc-20260904T153035Z-e91b1bb9`が`status=valid`で封印され、独立verifyも
+    `pass`となった。completed `6 / 6`、provisional `69 / 286`、instanceは96 / 384でcheckpointed ownerと一致する。
   - [ ] native実行中のcode / profile / predicate変更が0で、source fingerprintはM4 final commitと一致する。修正が発生したrunを合格artifactへ流用していない。
   - [x] manifestはM4のpendingなしfinal generationと一致し、M1 candidate generationやA/B用optional集合のartifactをfinal証拠へ混ぜていない。validation worktreeはadopted core 9またはrejected core 8だけを含む。
   - [ ] compare開始前に空の`<sealed-artifacts>` directoryを作り、4つの固有CSVと各SHA-256を保存している。既定`comparison.csv`へ上書きしていない。

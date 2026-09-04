@@ -146,6 +146,9 @@ subject `080bee95`のjob `wall-renderdoc-20260903T175737Z-4df5356f`はcompleted�
 `D_4N / D_N <= 4 * 1.10`へ導出し直した。前者はmesh identityと無相関な順序での期待切断数を上限にしたもので、
 これを超えることはmergeが成立していないことを意味する。旧`D_4N <= 4 * D_N + 6`の定数余裕6には導出がなく、
 mergeが期待より効いている286を282で弾いていた。
+導出後のsubject `48743206`のjob `wall-renderdoc-20260904T153035Z-e91b1bb9`は`status=valid`で封印され、
+独立verifyも`pass`となった。completed `D_N = D_4N = 6`、provisional `69 <= 81` / `286 <= 321`、比`4.14 <= 4.4`で、
+4 caseとも`presentation=production`、rendered instanceは96 / 384である。
 
 current final subjectのactual-window matrixは
 `wall-art-20260902T210312Z-2ab3b1c9`である。High / Medium / Low × DPI 1.0 / 1.5 / 2.0の9 / 9 caseが
