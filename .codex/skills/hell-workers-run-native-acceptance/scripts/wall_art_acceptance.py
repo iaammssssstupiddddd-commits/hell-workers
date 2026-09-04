@@ -980,8 +980,9 @@ def verify_root(root: Path) -> dict[str, Any]:
     return {
         "schema_version": SCHEMA_VERSION,
         "status": "pass",
-        "profile": profile_name(candidate_mode, matrix_mode),
+        "profile": profile_name(candidate_mode, matrix_mode, zoom),
         "candidate": candidate_mode,
+        "zoom": zoom,
         "root": str(root),
         "screenshots": len(specs),
     }

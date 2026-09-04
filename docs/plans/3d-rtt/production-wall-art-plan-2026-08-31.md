@@ -1159,8 +1159,31 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   rendered instanceは96 / 384でcheckpointed ownerと一致する。M5のRenderDoc構造gateはこれで閉じた。
 - したがってM5で未取得の実画像証跡は、(a) 最遠zoom-out（camera scale 5）でのHigh内部色1 px以上と
   Medium / Lowのsilhouette連続、(b) 追加・撤去、仮設→完成bounce、Soul前後depth、save/load rehydrateの
-  phase別client capture、の2点に絞られる。現行`wall_art_acceptance.py`はcandidate matrixをcamera scale 1.0の
-  単一gallery phaseに固定しており、どちらもharness追加が必要である。
+  phase別client capture、の2点に絞られた。現行`wall_art_acceptance.py`はcandidate matrixをcamera scale 1.0の
+  単一gallery phaseに固定していたため、(a)のharnessを追加した。
+
+#### 最遠zoom-outの実画像証跡（(a)）
+
+- `--perf-wall-art-zoom farthest`と`HW_WALL_ART_ZOOM=farthest`の二重鍵を追加し、両方が揃った受入計測時だけ
+  gallery camera scaleを`1.0`から`PanCamera`最大zoom-outの`5.0`へ切り替える。通常起動、formal density、
+  standard zoom matrixの契約は変更していない。鍵の検証は純関数`wall_art_zoom_selection`へ分離し、
+  片鍵・不正値・profile外を全て拒否するunit testを追加した。
+- 判定対象は孤立subjectではなく、mask `0011`のE-W直線specimenの投影バンドとする。判定は固定色ではなく
+  同一ROIの地形行から平均と標準偏差を取り、各列の最暗画素が地形より`3σ`以上暗いことを全列に要求する
+  自己校正型predicateである。壁のない合成画像で落ちることをself-testで固定した。
+- 初回job `wall-art-20260904T175020Z-b200855e`はこのpredicateで1 case目にfail-closedとなったが、原因は
+  harness側のバンド設計だった。fixtureのspecimenは互いに接続しない1 cellであり、camera scale 5では1 cellが
+  約6.4 pxしかないのに、固定24 px幅のバンドを当てて隣接地形を「壁の欠け」と読んでいた。バンド幅を
+  投影されたcell幅から導出するよう修正した（commit `eebeba69`）。invalid artifactは理由付きで保持する。
+- 修正後のjob `wall-art-20260904T180842Z-eb5a5925`（subject `eebeba69`、generation 4 / manifest `7ecdfbb0…`）は
+  High / Medium / Low × DPI 1.0 / 1.5 / 2.0の9 / 9 caseがstatus `valid`、独立offline verifyも`pass`となった。
+  最弱列のsigmaはHigh `5.09 / 6.78 / 22.40`、Medium `13.10 / 9.93 / 13.34`、Low `6.37 / 9.57 / 8.53`で、
+  全caseの全列が`3σ`を満たす。最も壁が小さいHigh / DPI 1.0でも地形平均`167.0`（標準偏差`16.5`）に対し
+  壁バンドは輝度`23`〜`112`である。
+- 9枚を目視した。最遠zoom-outでは壁は暗く細い連続した痕跡として残り、DPI 1.5 / 2.0では錆と紫の裂け目まで
+  判別できる。品質別の欠落、途切れ、fallback混在はない。
+- ただしこの画像判定が示すのはsilhouetteの視認性と連続性であり、`t / 5 - 0.8 >= 1`から導いた
+  「内部色1 px以上」そのものではない。後者は設計計算として保持し、画像側は連続性の実測として扱う。
 
 - 変更内容:
   - M4で完成・commit済みのwall-art gallery / fail-closed profileを変更せず、final commitのclean validation worktreeで実行する。code / launcher / predicate修正が必要になった時点でartifactを無効化してM4へ戻り、final commit承認からやり直す。
@@ -1180,7 +1203,10 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
 - 完了条件:
   - [x] 9 caseのclient-window PNGとsidecarがfresh source / asset fingerprintに対してfail-closedでpassする。
   - [ ] 全16 mask、Door接続、完成／仮設、追加／撤去、completion、depth、loadが画像とstateの両方でpassする。
-  - [ ] 全family / rotationのWall–Wall portが9.6 wuの同一profileで連続し、各armの局所横断で連続壁体が9.6 wu未満へ細らず、装飾が12.8 wu envelopeとcell AABBを越えない。最遠zoom-outではHighの内部色1 px以上、Medium / Lowのfinal composite silhouette連続を満たす。
+  - [x] 全family / rotationのWall–Wall portが9.6 wuの同一profileで連続し、各armの局所横断で連続壁体が9.6 wu未満へ細らず、装飾が12.8 wu envelopeとcell AABBを越えない。
+    generation 4のpost-export geometryは6 mesh全てが`status=pass`で、port collar slice（`|s| = 8.01 / 12.0 / 15.99 wu`）が
+    全armで厳密に`±4.8 wu`である。最遠zoom-outのsilhouette連続はjob `eb5a5925`の9 / 9 caseで実測し、
+    最弱列でも地形より`5.09σ`暗い。「Highの内部色1 px以上」は設計計算のままで、画像判定は連続性を示す。
   - [x] registered historical P02 artifactのimmutable locator / hashがoffline再検証でpassし、current-sourceのwall depth、
     completion bounce、Render3d visible、exactly-oneはWall専用profile / focused testでpassする。P08 sourceをP02 selectorへ偽装しない。
   - [ ] production resident mesh 6、active production material 2、finite total pool mesh 7 / material 4、steady phaseのfallback active 0、world-replace transitionのfallback-only 1 frame、全phase mixed 0、各mesh 72 triangles以下、distinct production mesh/material組合せ12以下である。

@@ -150,6 +150,15 @@ mergeが期待より効いている286を282で弾いていた。
 独立verifyも`pass`となった。completed `D_N = D_4N = 6`、provisional `69 <= 81` / `286 <= 321`、比`4.14 <= 4.4`で、
 4 caseとも`presentation=production`、rendered instanceは96 / 384である。
 
+最遠zoom-outの視認性は`wall-art-approved-candidate-farthest-zoom-v1`が所有する。
+`--perf-wall-art-zoom farthest`と`HW_WALL_ART_ZOOM=farthest`の二重鍵が揃った受入計測時だけ、gallery camera scaleを
+`PanCamera`最大zoom-outの`5.0`にする。通常起動、formal density、standard zoom matrixの契約は変更しない。
+判定はmask `0011`のE-W直線specimenの投影バンドで行い、固定色ではなく同一ROIの地形行から平均と標準偏差を取り、
+各列の最暗画素が地形より`3σ`以上暗いことを全列へ要求する。バンド幅は投影されたcell幅から導く（specimenは
+互いに接続しない1 cellで、camera scale 5では約6.4 pxしかない）。subject `eebeba69`のjob
+`wall-art-20260904T180842Z-eb5a5925`は9 / 9 caseがvalidで独立verifyもpassし、最弱列のsigmaはHigh
+`5.09 / 6.78 / 22.40`、Medium `13.10 / 9.93 / 13.34`、Low `6.37 / 9.57 / 8.53`である。
+
 current final subjectのactual-window matrixは
 `wall-art-20260902T210312Z-2ab3b1c9`である。High / Medium / Low × DPI 1.0 / 1.5 / 2.0の9 / 9 caseが
 Intel Arc / Mesa 26.1.6 / Vulkan / X11でpassし、独立offline verifyも9 screenshotを再検証した。全caseで
