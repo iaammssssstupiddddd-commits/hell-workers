@@ -188,7 +188,7 @@ terminal state は `TaskExecutionContext` の内部状態で一度だけ確定�
 `OnTaskCompleted` と presentation `TaskCompletedVisualMessage` を発行する。
 inventory 不整合等の先頭ガードは `unassign_task` を経由する（`AbortedRetryable` 相当、完了イベントなし）。
 
-root owner transactionは`terminalize_exact_tasks`へworker、expected identity、task expectation、完了/中断種別を渡す。
+root owner transactionは`hw_soul_ai::prepare_owner_task_terminals`でbatch全体をpreflightしてから、`terminalize_exact_tasks`へworker、expected identity、task expectation、完了/中断種別を渡す。
 全requestを先に検証し、exact task/identityのmissing/mismatch、unsafeなTransform欠損、duplicateが1件でもあれば
 batch全体を変更しない。適用時は通常の`unassign_task`を同期実行して`AssignedTask`、予約、`WorkingOn`、
 `TaskWorkers`、identityを解放し、runtime `Path`だけが欠落しているworkerはdefault shellを補う。

@@ -389,13 +389,12 @@ pub(crate) fn register_completed_floors(
 #[cfg(test)]
 mod tests {
     use super::{CuringFootprint, collect_curing_soul_candidates, register_completed_floors};
+    use crate::interface::selection::placement_geometry::building_geometry;
     use crate::world::map::{WorldMap, WorldMapRef};
     use bevy::prelude::*;
     use hw_jobs::BuildingType;
     use hw_spatial::{SpatialGrid, SpatialGridOps};
-    use hw_ui::selection::{
-        BuildingPlacementContext, building_geometry, validate_building_placement,
-    };
+    use hw_ui::selection::{BuildingPlacementContext, validate_building_placement};
 
     #[test]
     fn curing_candidates_are_local_and_stably_deduplicated() {

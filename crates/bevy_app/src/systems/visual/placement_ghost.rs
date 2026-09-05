@@ -11,10 +11,14 @@ use hw_ui::camera::MainCamera;
 use hw_ui::components::UiInputState;
 use hw_ui::selection::{
     BuildingPlacementContext, PlacementFeedbackState, TANK_NEARBY_BUCKET_STORAGE_TILES,
-    bucket_storage_geometry, building_geometry, building_occupied_grids, building_size,
-    building_spawn_pos, validate_bucket_storage_placement, validate_building_placement,
+    validate_bucket_storage_placement, validate_building_placement,
 };
 use hw_world::zones::{Site, Yard};
+
+use crate::interface::selection::placement_geometry::{
+    bucket_storage_geometry, building_geometry, building_occupied_grids, building_size,
+    building_spawn_pos,
+};
 
 #[derive(Component)]
 pub struct PlacementGhost;

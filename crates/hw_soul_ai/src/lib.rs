@@ -9,7 +9,8 @@ pub use soul_ai::SoulAiCorePlugin;
 pub use soul_ai::decide::drifting::{DriftingDecisionTimer, drifting_decision_system};
 pub use soul_ai::decide::work::auto_build_diagnostics::BlueprintAutoBuildDiagnostics;
 pub use soul_ai::execute::external_task_terminal::{
-    ExactTaskExpectation, ExactTaskTerminalDisposition, ExactTaskTerminalOutcome,
-    ExactTaskTerminalRequest, ExactTaskTerminalResult, terminalize_exact_tasks,
+    CompletingExactTask, ExactTaskExpectation, ExactTaskTerminalDisposition,
+    ExactTaskTerminalOutcome, ExactTaskTerminalRequest, ExactTaskTerminalResult,
+    OwnerTaskTerminalPreflightError, prepare_owner_task_terminals, terminalize_exact_tasks,
 };
 pub use soul_ai::helpers::work::{SoulDropCtx, is_soul_available_for_work, unassign_task};

@@ -5,7 +5,9 @@ use crate::app_contexts::{CompanionPlacementKind, CompanionPlacementState};
 use crate::assets::GameAssets;
 use crate::world::map::{RIVER_Y_MIN, WorldMap};
 use bevy::prelude::*;
-use hw_ui::selection::{PlacementRejectReason, PlacementTileRejection, building_occupied_grids};
+use hw_ui::selection::{PlacementRejectReason, PlacementTileRejection};
+
+use super::super::placement_geometry::building_occupied_grids;
 
 /// Handles the companion placement flow when `companion_state` is active.
 /// Returns `true` if the flow consumed the click (caller should `return`).

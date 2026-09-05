@@ -30,6 +30,8 @@ Perceive / Decide / Execute / Update の各フェーズでの行動選択・タ�
 dashboard blocker は両方の current/complete snapshot が揃う場合だけ確定する。管理済み Blueprint は auto-build の
 適用外で Familiar producer だけを使い、auto-build snapshot は world replacement で破棄する。
 
+外部ownerがexact taskを終了する場合は`prepare_owner_task_terminals`でbatch全体のidentity・task・runtime contextを先に検証し、成功したrequestだけを`terminalize_exact_tasks`へ渡す。deconstructionとSoul Spa cancellationはこのcrate-owned preflightを共有する。
+
 ## ⚠️ unassign_task の契約
 
 タスクを中断・放棄・完了する**全経路**で `soul_ai::helpers::work::unassign_task` を呼ぶこと。

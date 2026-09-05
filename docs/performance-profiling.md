@@ -1,6 +1,6 @@
 # パフォーマンス計測
 
-ランタイム最適化の比較は、`scripts/perf.py` を唯一の入口にする。このファイルは後方互換CLI shimであり、実装は `scripts/perf_tool/` の引数解析・実行・artifact・policy・集約・比較モジュールへ分割されている。runnerは profiling binary を計測外で一度だけbuildし、runごとに隔離したCSV・log・実行環境を保存してから、CSV契約、実GPU、ログ健全性、反復のcheckpointを検証する。正式artifactは`target/perf-runs/`、短縮smokeとnative acceptance jobは`target/native-acceptance/`または`target/perf-runs/`へ置く。`/tmp`は小さいlock以外に使わず、Cargo target、compiler temporary、binary、trace、session artifactを置かない。どちらもcommitしない。
+ランタイム最適化の比較は、`scripts/perf.py` を唯一の入口にする。このファイルは後方互換CLI shimであり、実装は `scripts/perf_tool/` の引数解析・実行・artifact・policy・集約・比較モジュールへ分割されている。各moduleは所有元から必要な名前だけをimportし、`artifact_io.py`がCSV/JSON/hashの共通I/O、`artifact_readers/`がSave transaction・deconstruction・lighting・Wallのschema readerを所有する。`fixtures.py`はfixture生成だけを持ち、assertion corpusを持つ`selftest.py`は`self-test` commandでだけ遅延importされる。runnerは profiling binary を計測外で一度だけbuildし、runごとに隔離したCSV・log・実行環境を保存してから、CSV契約、実GPU、ログ健全性、反復のcheckpointを検証する。正式artifactは`target/perf-runs/`、短縮smokeとnative acceptance jobは`target/native-acceptance/`または`target/perf-runs/`へ置く。`/tmp`は小さいlock以外に使わず、Cargo target、compiler temporary、binary、trace、session artifactを置かない。どちらもcommitしない。
 
 interactive Cargoとは `target/.cargo-activity.lock` を共有し、performance recipe全体は
 exclusive leaseを保持する。lease取得に失敗した場合はCargo/game/RenderDoc childを起動せず、

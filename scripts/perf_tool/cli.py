@@ -1,7 +1,29 @@
 from __future__ import annotations
 
-from .fixtures import *
+import argparse
+import json
+import sys
+from pathlib import Path
+
+from .arguments import build_parser, validate_arguments
+from .artifacts import write_json
+from .compare import compare_dashboard_modes, compare_sessions
+from .execution import (
+    build_binary,
+    prepare_session,
+    require_cargo_memory,
+    run_one,
+    source_fingerprint,
+    validate_requested_output,
+)
+from .model import Case, REPO_ROOT, parse_csv_list
+from .rtt_light_contract import (
+    build_fixture_layout,
+    contract_fingerprints,
+    load_rtt_light_contract,
+)
 from .rtt_light_bundle import finalize_attempt, verify_attempt, verify_baseline
+from .summary import summarize_session
 
 try:
     from scripts.build_coordination import acquire_activity
@@ -187,6 +209,8 @@ def main() -> int:
             report = verify_baseline(Path(args.baseline))
             print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
             return 0
+        from .selftest import self_test
+
         return self_test()
     except (OSError, RuntimeError, ValueError, json.JSONDecodeError) as error:
         print(f"perf.py: {error}", file=sys.stderr)

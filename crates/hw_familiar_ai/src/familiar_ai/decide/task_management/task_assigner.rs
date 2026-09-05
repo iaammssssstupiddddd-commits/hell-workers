@@ -3,41 +3,19 @@
 use bevy::prelude::*;
 use hw_core::area::TaskArea;
 use hw_core::logistics::{ResourceSourceKey, ResourceType};
-use hw_core::relationships::{CommandedBy, ParticipatingIn};
-use hw_core::soul::{DamnedSoul, Destination, IdleState, Path};
 use hw_energy::constants::DREAM_GENERATE_ASSIGN_THRESHOLD;
-use hw_jobs::AssignedTask;
 use hw_jobs::WorkType;
 use hw_logistics::tile_index::TileSiteIndex;
-use hw_logistics::types::Inventory;
 use std::collections::HashMap;
 use std::collections::HashSet;
 
+use crate::familiar_ai::decide::query_types::FamiliarSoulQuery;
 use crate::familiar_ai::decide::task_management::context::ConstructionSitePositions;
 use crate::familiar_ai::decide::task_management::{
     CandidateRejectReason, FamiliarTaskAssignmentQueries, IncomingDeliverySnapshot,
     TaskAssignmentAttempt,
 };
 use hw_core::events::ResourceReservationOp;
-
-/// Familiar AI が扱うソウルの標準クエリ型
-pub type FamiliarSoulQuery<'w, 's> = Query<
-    'w,
-    's,
-    (
-        Entity,
-        &'static Transform,
-        &'static DamnedSoul,
-        &'static mut AssignedTask,
-        &'static mut Destination,
-        &'static mut Path,
-        &'static IdleState,
-        Option<&'static mut Inventory>,
-        Option<&'static CommandedBy>,
-        Option<&'static ParticipatingIn>,
-    ),
-    Without<hw_core::familiar::Familiar>,
->;
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct CachedSourceItem {
@@ -160,7 +138,7 @@ pub fn assign_task_to_worker(
     shadow: &mut ReservationShadow,
 ) -> TaskAssignmentAttempt {
     let Ok((_, _, soul, _assigned_task, _dest, _path, idle, _, uc_opt, _participating_opt)) =
-        q_souls.get_mut(ctx.worker_entity)
+        q_souls.get(ctx.worker_entity)
     else {
         warn!("ASSIGN: Worker {:?} not found in query", ctx.worker_entity);
         return TaskAssignmentAttempt::Rejected(CandidateRejectReason::NoEligibleFamiliar);

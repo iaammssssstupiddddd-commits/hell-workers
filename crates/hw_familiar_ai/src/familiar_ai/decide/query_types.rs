@@ -95,7 +95,8 @@ pub type FamiliarStateQuery<'w, 's> = Query<
 
 /// 使い魔AIが扱うソウルの標準クエリ型
 ///
-/// タスク委譲・分隊管理・task_management など full-fat アクセスが必要な箇所で使用する。
+/// タスク委譲・分隊管理・task_management で共有する読み取りクエリ。
+/// `Destination` / `Path` は対象集合を維持するため必須のままとする。
 pub type FamiliarSoulQuery<'w, 's> = Query<
     'w,
     's,
@@ -103,11 +104,11 @@ pub type FamiliarSoulQuery<'w, 's> = Query<
         Entity,
         &'static Transform,
         &'static DamnedSoul,
-        &'static mut AssignedTask,
-        &'static mut Destination,
-        &'static mut Path,
+        &'static AssignedTask,
+        &'static Destination,
+        &'static Path,
         &'static IdleState,
-        Option<&'static mut Inventory>,
+        Option<&'static Inventory>,
         Option<&'static CommandedBy>,
         Option<&'static ParticipatingIn>,
     ),

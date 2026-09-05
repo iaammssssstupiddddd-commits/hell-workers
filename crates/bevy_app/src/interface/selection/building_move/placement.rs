@@ -2,9 +2,10 @@ use crate::systems::jobs::BuildingType;
 use crate::world::map::{WorldMap, WorldMapRef};
 use bevy::prelude::*;
 use hw_ui::selection::{
-    PlacementValidation, TANK_NEARBY_BUCKET_STORAGE_TILES, bucket_storage_geometry,
-    move_occupied_grids, validate_moved_bucket_storage_placement,
+    PlacementValidation, TANK_NEARBY_BUCKET_STORAGE_TILES, validate_moved_bucket_storage_placement,
 };
+
+use super::super::placement_geometry::{bucket_storage_geometry, move_occupied_grids};
 
 pub(crate) fn validate_tank_companion_for_move(
     world_map: &WorldMap,

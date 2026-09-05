@@ -1,28 +1,30 @@
-//! Shared preflight for root-owned transactions that remove task references.
-
 use std::collections::HashSet;
 
 use bevy::prelude::*;
 use hw_core::relationships::{TaskWorkers, WorkingOn};
 use hw_jobs::{ActiveTaskIdentity, AssignedTask};
-use hw_soul_ai::{ExactTaskExpectation, ExactTaskTerminalDisposition, ExactTaskTerminalRequest};
+
+use super::{ExactTaskExpectation, ExactTaskTerminalDisposition, ExactTaskTerminalRequest};
 
 #[derive(Debug, Clone, Copy)]
-pub(crate) struct CompletingExactTask {
+pub struct CompletingExactTask {
     pub worker: Entity,
     pub identity: ActiveTaskIdentity,
     pub expectation: ExactTaskExpectation,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct OwnerTaskTerminalPreflightError;
+
 /// Snapshots every worker whose task shell references an owner that will be
-/// removed. The returned exact requests are safe to apply as one all-or-none
-/// batch through `terminalize_exact_tasks`.
-pub(crate) fn prepare_owner_task_terminals(
+/// removed. The returned exact requests still pass through the live,
+/// all-or-none validation in `terminalize_exact_tasks` before mutation.
+pub fn prepare_owner_task_terminals(
     world: &mut World,
     cleanup_references: &[Entity],
     completing: Option<CompletingExactTask>,
     preserve_loaded_carriers: &[Entity],
-) -> Result<Vec<ExactTaskTerminalRequest>, ()> {
+) -> Result<Vec<ExactTaskTerminalRequest>, OwnerTaskTerminalPreflightError> {
     let mut query = world.query::<(
         Entity,
         &AssignedTask,
@@ -42,7 +44,7 @@ pub(crate) fn prepare_owner_task_terminals(
             continue;
         };
         let Some(identity) = identity.copied() else {
-            return Err(());
+            return Err(OwnerTaskTerminalPreflightError);
         };
         let is_completing = completing.is_some_and(|completing| completing.worker == worker);
         let preserve_wheelbarrow_cargo = !is_completing
@@ -86,7 +88,7 @@ pub(crate) fn prepare_owner_task_terminals(
                 .iter()
                 .any(|worker| !request_workers.contains(worker))
         {
-            return Err(());
+            return Err(OwnerTaskTerminalPreflightError);
         }
     }
     if let Some(completing) = completing
@@ -100,7 +102,7 @@ pub(crate) fn prepare_owner_task_terminals(
                 .find(|terminal| terminal.worker == completing.worker)
                 .is_none_or(|terminal| terminal.expected_identity != completing.identity))
     {
-        return Err(());
+        return Err(OwnerTaskTerminalPreflightError);
     }
 
     Ok(requests)

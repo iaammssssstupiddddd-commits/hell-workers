@@ -82,7 +82,7 @@
 | ファイル | 内容 |
 |---|---|
 | `intent.rs` | `SelectionIntent` 型 |
-| `placement.rs` | 建設配置バリデーション・ジオメトリ計算 |
+| `placement.rs` | 建設配置のtyped validator、feedback、world座標を受け取るUI-only表示geometry。建物shapeは`hw_jobs`、grid/world投影はrootが所有 |
 
 `selection/` は `SelectedEntity` / `HoveredEntity` / `SelectionIndicator` を `hw_core::selection` から re-export し、
 despawn 後の参照掃除を行う `cleanup_selection_references_system` と配置判定 helper を持つ。

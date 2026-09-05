@@ -17,6 +17,7 @@ use bevy::prelude::*;
 use hw_core::logistics::ResourceType;
 use std::collections::HashMap;
 
+pub use crate::familiar_ai::decide::query_types::FamiliarSoulQuery;
 pub use context::{
     ConstructionSitePositions, DesignationAccess, FamiliarStorageAccess,
     FamiliarTaskAssignmentQueries, ReservationAccess, TaskAssignmentReadAccess,
@@ -31,7 +32,6 @@ pub use diagnostics::{
 pub use policy::take_source_selector_scan_snapshot;
 pub use profiling_metrics::{CandidatePipelinePerfSnapshot, take_candidate_pipeline_perf_snapshot};
 pub use task_assigner::AssignTaskContext;
-pub use task_assigner::FamiliarSoulQuery;
 pub use task_assigner::ReservationShadow;
 pub use task_assigner::assign_task_to_worker;
 pub(crate) use task_assigner::{CachedSourceItem, SourceSelectorFrameCache};

@@ -1,7 +1,9 @@
 mod blueprint;
 mod consolidation;
+mod construction_mud;
 mod demand;
 mod direct_collect;
+mod dispatch;
 mod floor;
 mod lease_validation;
 mod mixer;
@@ -33,77 +35,69 @@ pub fn assign_haul(
     construction_sites: &impl ConstructionSitePositions,
     shadow: &mut ReservationShadow,
 ) -> TaskAssignmentAttempt {
-    if blueprint::assign_haul_to_blueprint(task_pos, already_commanded, ctx, queries, shadow) {
-        return TaskAssignmentAttempt::Submitted;
-    }
+    let Some(route) = queries
+        .transport_requests
+        .get(ctx.task_entity)
+        .ok()
+        .and_then(|request| dispatch::route_haul_kind(request.kind))
+    else {
+        debug!(
+            "ASSIGN: Haul task {:?} is not a supported transport request candidate",
+            ctx.task_entity
+        );
+        return TaskAssignmentAttempt::Rejected(CandidateRejectReason::MissingResourceOrSource);
+    };
 
-    if let Some(ok) =
-        returns::assign_return_bucket(task_pos, already_commanded, ctx, queries, shadow)
-    {
-        return assignment_from_haul_result(ok);
-    }
-
-    if let Some(ok) =
-        returns::assign_return_wheelbarrow(task_pos, already_commanded, ctx, queries, shadow)
-    {
-        return assignment_from_haul_result(ok);
-    }
-
-    if provisional_wall::assign_haul_to_provisional_wall(
-        task_pos,
-        already_commanded,
-        ctx,
-        queries,
-        shadow,
-    ) {
-        return TaskAssignmentAttempt::Submitted;
-    }
-
-    if floor::assign_haul_to_floor_construction(
-        task_pos,
-        already_commanded,
-        ctx,
-        queries,
-        construction_sites,
-        shadow,
-    ) {
-        return TaskAssignmentAttempt::Submitted;
-    }
-
-    if wall::assign_haul_to_wall_construction(
-        task_pos,
-        already_commanded,
-        ctx,
-        queries,
-        construction_sites,
-        shadow,
-    ) {
-        return TaskAssignmentAttempt::Submitted;
-    }
-
-    if soul_spa::assign_haul_to_soul_spa(task_pos, already_commanded, ctx, queries, shadow) {
-        return TaskAssignmentAttempt::Submitted;
-    }
-
-    if stockpile::assign_haul_to_stockpile(task_pos, already_commanded, ctx, queries, shadow) {
-        return TaskAssignmentAttempt::Submitted;
-    }
-
-    if consolidation::assign_consolidation_to_stockpile(
-        task_pos,
-        already_commanded,
-        ctx,
-        queries,
-        shadow,
-    ) {
-        return TaskAssignmentAttempt::Submitted;
-    }
-
-    debug!(
-        "ASSIGN: Haul task {:?} is not a valid transport request candidate",
-        ctx.task_entity
-    );
-    TaskAssignmentAttempt::Rejected(CandidateRejectReason::MissingResourceOrSource)
+    let submitted = match route {
+        dispatch::HaulRoute::Blueprint => {
+            blueprint::assign_haul_to_blueprint(task_pos, already_commanded, ctx, queries, shadow)
+        }
+        dispatch::HaulRoute::ReturnBucket => {
+            returns::assign_return_bucket(task_pos, already_commanded, ctx, queries, shadow)
+                .unwrap_or(false)
+        }
+        dispatch::HaulRoute::ReturnWheelbarrow => {
+            returns::assign_return_wheelbarrow(task_pos, already_commanded, ctx, queries, shadow)
+                .unwrap_or(false)
+        }
+        dispatch::HaulRoute::ProvisionalWall => provisional_wall::assign_haul_to_provisional_wall(
+            task_pos,
+            already_commanded,
+            ctx,
+            queries,
+            shadow,
+        ),
+        dispatch::HaulRoute::FloorConstruction => floor::assign_haul_to_floor_construction(
+            task_pos,
+            already_commanded,
+            ctx,
+            queries,
+            construction_sites,
+            shadow,
+        ),
+        dispatch::HaulRoute::WallConstruction => wall::assign_haul_to_wall_construction(
+            task_pos,
+            already_commanded,
+            ctx,
+            queries,
+            construction_sites,
+            shadow,
+        ),
+        dispatch::HaulRoute::SoulSpa => {
+            soul_spa::assign_haul_to_soul_spa(task_pos, already_commanded, ctx, queries, shadow)
+        }
+        dispatch::HaulRoute::Stockpile => {
+            stockpile::assign_haul_to_stockpile(task_pos, already_commanded, ctx, queries, shadow)
+        }
+        dispatch::HaulRoute::Consolidation => consolidation::assign_consolidation_to_stockpile(
+            task_pos,
+            already_commanded,
+            ctx,
+            queries,
+            shadow,
+        ),
+    };
+    assignment_from_haul_result(submitted)
 }
 
 fn assignment_from_haul_result(submitted: bool) -> TaskAssignmentAttempt {

@@ -49,13 +49,21 @@ impl WorldReadApi for TestWorld {
     }
 }
 
+fn geometry_with_tiles(occupied_grids: Vec<(i32, i32)>) -> PlacementGeometry {
+    PlacementGeometry {
+        occupied_grids,
+        draw_pos: Vec2::ZERO,
+        size: Vec2::ZERO,
+    }
+}
+
 #[test]
 fn door_requires_adjacent_wall_pair() {
     let mut world = TestWorld::default();
     world.bounds.insert((0, 0));
     world.walkable.insert((0, 0));
 
-    let geometry = building_geometry(BuildingType::Door, (0, 0), 0);
+    let geometry = geometry_with_tiles(vec![(0, 0)]);
     let ctx = BuildingPlacementContext {
         world: &world,
         in_site: true,
@@ -77,7 +85,7 @@ fn structure_requires_site() {
     world.bounds.insert((0, 0));
     world.walkable.insert((0, 0));
 
-    let geometry = building_geometry(BuildingType::Wall, (0, 0), 0);
+    let geometry = geometry_with_tiles(vec![(0, 0)]);
     let ctx = BuildingPlacementContext {
         world: &world,
         in_site: false,
@@ -102,7 +110,7 @@ fn bridge_rejects_non_building_obstacle_on_river() {
     // have a WorldMap building owner.
     world.raw_obstacles.insert((0, 0));
 
-    let geometry = building_geometry(BuildingType::Bridge, (0, 0), 0);
+    let geometry = geometry_with_tiles(vec![(0, 0)]);
     let ctx = BuildingPlacementContext {
         world: &world,
         in_site: true,
@@ -128,7 +136,7 @@ fn moved_bucket_storage_allows_existing_owned_stockpile() {
     world.stockpiles.insert((2, 0));
     world.stockpiles.insert((3, 0));
 
-    let geometry = bucket_storage_geometry((2, 0));
+    let geometry = geometry_with_tiles(vec![(2, 0), (3, 0)]);
     let validation = validate_moved_bucket_storage_placement(
         &world,
         &geometry,
@@ -148,7 +156,7 @@ fn bucket_storage_rejects_parent_footprint_overlap_during_preview() {
         world.bounds.insert(grid);
         world.walkable.insert(grid);
     }
-    let geometry = bucket_storage_geometry((0, 0));
+    let geometry = geometry_with_tiles(vec![(0, 0), (1, 0)]);
 
     let validation = validate_bucket_storage_placement(
         &world,
@@ -419,17 +427,4 @@ fn explicit_commit_failure_releases_same_anchor_feedback_blocker() {
         blocked_anchor,
     );
     assert!(state.live.is_some());
-}
-
-#[test]
-fn soul_spa_geometry_matches_its_spawn_footprint() {
-    let geometry = building_geometry(BuildingType::SoulSpa, (10, 10), 0);
-    assert_eq!(
-        geometry.occupied_grids,
-        vec![(10, 10), (11, 10), (10, 9), (11, 9)]
-    );
-    assert_eq!(
-        geometry.size,
-        Vec2::splat(hw_core::constants::TILE_SIZE * 2.0)
-    );
 }

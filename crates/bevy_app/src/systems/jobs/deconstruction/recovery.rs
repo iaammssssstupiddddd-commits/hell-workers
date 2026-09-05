@@ -3,11 +3,15 @@
 use std::collections::{HashMap, HashSet};
 
 use bevy::prelude::*;
-use hw_core::constants::{MUD_MIXER_CAPACITY, MUD_MIXER_MUD_CAPACITY, Z_ITEM_PICKUP};
+use hw_core::constants::Z_ITEM_PICKUP;
 use hw_core::relationships::{DeliveringTo, LoadedIn, ParkedAt, PushedBy, StoredIn};
 use hw_jobs::mud_mixer::{MudMixerStorage, StoredByMixer};
 use hw_jobs::{Building, BuildingType, DeconstructionPending, DeconstructionSalvage, MovePlanned};
 use hw_logistics::construction_helpers::ResourceItemVisualHandles;
+use hw_logistics::deconstruction::volatile_recovery::{
+    VolatileMixerIncrement as MixerIncrement, VolatileMixerStorage as MixerStorageSnapshot,
+    VolatileMudTransfer as MudTransfer, VolatileRecoveryCandidate, allocate_volatile_recovery,
+};
 use hw_logistics::types::{BelongsTo, BucketStorage, ResourceItem, Wheelbarrow};
 use hw_logistics::zone::Stockpile;
 use hw_logistics::{Inventory, ResourceType, build_recovery_placement_plan};
@@ -96,37 +100,6 @@ pub(super) struct LoadedItemRecovery {
 }
 
 #[derive(Debug)]
-pub(super) struct MudTransfer {
-    pub entity: Entity,
-    pub receiver: Entity,
-}
-
-#[derive(Debug, Clone, Copy)]
-pub(super) struct MixerIncrement {
-    pub receiver: Entity,
-    pub expected: MixerStorageSnapshot,
-    pub sand: u32,
-    pub mud: u32,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) struct MixerStorageSnapshot {
-    pub sand: u32,
-    pub rock: u32,
-    pub mud: u32,
-}
-
-impl From<&MudMixerStorage> for MixerStorageSnapshot {
-    fn from(storage: &MudMixerStorage) -> Self {
-        Self {
-            sand: storage.sand,
-            rock: storage.rock,
-            mud: storage.mud,
-        }
-    }
-}
-
-#[derive(Debug)]
 pub(super) struct SpawnedRecoveryItem {
     pub resource_type: ResourceType,
     pub position: Vec2,
@@ -148,6 +121,14 @@ struct MixerCandidate {
     entity: Entity,
     grid: (i32, i32),
     storage: MixerStorageSnapshot,
+}
+
+fn mixer_storage_snapshot(storage: &MudMixerStorage) -> MixerStorageSnapshot {
+    MixerStorageSnapshot {
+        sand: storage.sand,
+        rock: storage.rock,
+        mud: storage.mud,
+    }
 }
 
 pub(super) fn prepare_facility_recovery(
@@ -221,7 +202,7 @@ pub(super) fn prepare_facility_recovery(
         let storage = world
             .get::<MudMixerStorage>(target)
             .ok_or(RecoveryPlanFailure::OwnerMismatch)?;
-        let snapshot = MixerStorageSnapshot::from(storage);
+        let snapshot = mixer_storage_snapshot(storage);
         let stored_mud_count = mud_entities
             .iter()
             .filter(|entity| {
@@ -244,8 +225,17 @@ pub(super) fn prepare_facility_recovery(
     let (mixer_increments, mud_transfers) = if sand_total == 0 && mud_entities.is_empty() {
         (Vec::new(), Vec::new())
     } else {
-        let mut candidates = collect_mixer_candidates(world, target, anchor)?;
-        allocate_volatile_recovery(&mut candidates, sand_total, &mud_entities)?
+        let candidates = collect_mixer_candidates(world, target, anchor)?;
+        let ordered_candidates = candidates
+            .iter()
+            .map(|candidate| VolatileRecoveryCandidate {
+                receiver: candidate.entity,
+                storage: candidate.storage,
+            })
+            .collect::<Vec<_>>();
+        let plan = allocate_volatile_recovery(&ordered_candidates, sand_total, &mud_entities)
+            .ok_or(RecoveryPlanFailure::NoSafeRecovery)?;
+        (plan.increments, plan.mud_transfers)
     };
 
     let mut spawned_resource_types = Vec::new();
@@ -550,7 +540,7 @@ fn collect_mixer_candidates(
             .then_some(MixerCandidate {
                 entity,
                 grid: WorldMap::world_to_grid(transform.translation.truncate()),
-                storage: MixerStorageSnapshot::from(storage),
+                storage: mixer_storage_snapshot(storage),
             })
         })
         .collect::<Vec<_>>();
@@ -587,69 +577,6 @@ fn collect_mixer_candidates(
     Ok(candidates)
 }
 
-fn allocate_volatile_recovery(
-    candidates: &mut [MixerCandidate],
-    mut sand_remaining: u32,
-    mud_entities: &[Entity],
-) -> Result<(Vec<MixerIncrement>, Vec<MudTransfer>), RecoveryPlanFailure> {
-    let mut increments = HashMap::<Entity, (MixerStorageSnapshot, u32, u32)>::new();
-    for candidate in candidates.iter_mut() {
-        let capacity = MUD_MIXER_CAPACITY.saturating_sub(candidate.storage.sand);
-        let amount = sand_remaining.min(capacity);
-        if amount > 0 {
-            increments.insert(candidate.entity, (candidate.storage, amount, 0));
-            candidate.storage.sand += amount;
-            sand_remaining -= amount;
-        }
-        if sand_remaining == 0 {
-            break;
-        }
-    }
-    if sand_remaining > 0 {
-        return Err(RecoveryPlanFailure::NoSafeRecovery);
-    }
-
-    let mut mud_transfers = Vec::with_capacity(mud_entities.len());
-    let mut mud_index = 0;
-    for candidate in candidates.iter_mut() {
-        let capacity = MUD_MIXER_MUD_CAPACITY.saturating_sub(candidate.storage.mud);
-        let remaining = (mud_entities.len() - mud_index) as u32;
-        let amount = remaining.min(capacity);
-        if amount > 0 {
-            let entry = increments
-                .entry(candidate.entity)
-                .or_insert((candidate.storage, 0, 0));
-            entry.2 += amount;
-            candidate.storage.mud += amount;
-            for &entity in &mud_entities[mud_index..mud_index + amount as usize] {
-                mud_transfers.push(MudTransfer {
-                    entity,
-                    receiver: candidate.entity,
-                });
-            }
-            mud_index += amount as usize;
-        }
-        if mud_index == mud_entities.len() {
-            break;
-        }
-    }
-    if mud_index != mud_entities.len() {
-        return Err(RecoveryPlanFailure::NoSafeRecovery);
-    }
-
-    let mut mixer_increments = increments
-        .into_iter()
-        .map(|(receiver, (expected, sand, mud))| MixerIncrement {
-            receiver,
-            expected,
-            sand,
-            mud,
-        })
-        .collect::<Vec<_>>();
-    mixer_increments.sort_unstable_by_key(|increment| increment.receiver.to_bits());
-    Ok((mixer_increments, mud_transfers))
-}
-
 pub(super) fn recovery_plan_still_matches(
     world: &World,
     plan: &FacilityRecoveryPlan,
@@ -658,14 +585,14 @@ pub(super) fn recovery_plan_still_matches(
     if let Some(expected) = plan.expected_target_mixer
         && world
             .get::<MudMixerStorage>(target)
-            .is_none_or(|storage| MixerStorageSnapshot::from(storage) != expected)
+            .is_none_or(|storage| mixer_storage_snapshot(storage) != expected)
     {
         return false;
     }
     plan.mixer_increments.iter().all(|increment| {
         world
             .get::<MudMixerStorage>(increment.receiver)
-            .is_some_and(|storage| MixerStorageSnapshot::from(storage) == increment.expected)
+            .is_some_and(|storage| mixer_storage_snapshot(storage) == increment.expected)
     }) && plan.ground_items.iter().all(|item| {
         world
             .get::<ResourceItem>(item.entity)
@@ -696,7 +623,7 @@ pub(super) fn apply_facility_recovery(world: &mut World, plan: &FacilityRecovery
         let mut storage = world
             .get_mut::<MudMixerStorage>(increment.receiver)
             .expect("prevalidated recovery receiver disappeared");
-        debug_assert_eq!(MixerStorageSnapshot::from(&*storage), increment.expected);
+        debug_assert_eq!(mixer_storage_snapshot(&storage), increment.expected);
         storage.sand += increment.sand;
         storage.mud += increment.mud;
     }

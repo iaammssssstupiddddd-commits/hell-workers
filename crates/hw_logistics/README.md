@@ -25,6 +25,7 @@
 | `construction_helpers.rs` | `ResourceItemVisualHandles`, `spawn_refund_items` — 建設キャンセル返却 helper |
 | `plugin.rs` | `LogisticsPlugin` — `apply_reservation_requests_system` のプラグイン登録 |
 | `manual_haul_selector.rs` | 手動運搬選定ロジック。managed cell は共通 `NewInbound` evaluator と reservation shadow、特殊 bucket storage は既存専用規則を使用 |
+| `deconstruction/volatile_recovery.rs` | 解体時のSand/Mudを既存Mixer容量へ割り当てる非ECS pure plan。rootがlive snapshotとexclusive applyを担当 |
 | `spatial_sync.rs` | `ResourceSpatialGrid`・`StockpileSpatialGrid`・`TransportRequestSpatialGrid` 更新システム |
 | `visual_sync.rs` | `WheelbarrowMarker`・`InventoryItemVisual` 等の visual mirror 同期 Observer |
 | `transport_request/` | 輸送要求の完全なライフサイクル（下表参照） |

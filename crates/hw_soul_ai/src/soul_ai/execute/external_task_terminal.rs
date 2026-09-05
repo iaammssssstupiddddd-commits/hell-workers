@@ -1,5 +1,11 @@
 //! Exact-identity task terminalization for root-owned world transactions.
 
+mod preflight;
+
+pub use preflight::{
+    CompletingExactTask, OwnerTaskTerminalPreflightError, prepare_owner_task_terminals,
+};
+
 use std::collections::HashSet;
 
 use bevy::ecs::system::SystemState;

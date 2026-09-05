@@ -18,9 +18,10 @@ use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use bevy::time::Real;
 use hw_ui::camera::MainCamera;
-use hw_ui::selection::{PlacementFeedbackState, PlacementTileRejection, building_spawn_pos};
+use hw_ui::selection::{PlacementFeedbackState, PlacementTileRejection};
 use hw_world::zones::{Site, Yard};
 
+use super::placement_geometry::building_spawn_pos;
 use companion::make_companion_placement;
 use flow::handle_companion_flow;
 #[cfg(feature = "profiling")]

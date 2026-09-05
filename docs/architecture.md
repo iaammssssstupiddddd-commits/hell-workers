@@ -175,7 +175,9 @@ owner cancellationはAI phase外の`TaskOwnerCancellationSet::Cancel → Flush`�
 - cancel/completionと`Building3dHandles`依存の`wall_framed_tile_spawn_system`は`bevy_app`に残す。
 - Floor/Wall cancelはroot `construction_cancellation`の共通worker release／request／refund primitiveを使い、
   tile snapshotとWallのspawned-wall cleanup差だけを各ownerに残す。deconstruction finalizerはexclusive entryを維持し、
-  deterministic intakeとtyped outcome publicationをprivate `finalizer/{protocol,outcome}.rs`へ分離する。
+  deterministic intake、preflight、commit、failure cleanup、typed outcome publicationをprivate
+  `finalizer/{protocol,preflight,commit,failure,outcome}.rs`へ分離する。exact-task batch preflightは`hw_soul_ai`、
+  volatile Mixer容量配賦は`hw_logistics`が所有し、rootはlive world snapshotと複数crateをまたぐ原子的applyを担当する。
 - `AssignedTask` 側の worker オペレーション型（`ReinforceFloorPhase`, `PourFloorPhase`, `FrameWallPhase`, `CoatWallPhase`）は、現時点では「実行者視点の進捗」を表す独立型として維持する。
 - `hw_jobs::construction` 側の tile state は「サイト/タイルごとの状態」を表現し、AssignedTask phase は「魂がそのタスク内でどの段階にいるか」を表現する。
 - 今回の抽出では型を統合せず、2 系統の enum は役割分離したまま保持し、境界を越えた参照だけを `pub use` レイヤーで標準化する。
@@ -448,7 +450,7 @@ P02 production は Soul を `ActorBillboard3d` 1 entity / owner で Scene RtT �
 - `UiInputCapture` を持つ Save / Load / Recovery catalog とその確認、Help / Settings / Pause / OperationDialog の root は viewport 全体を
   `FocusPolicy::Block + Pickable::default()` で覆う。構造用 `UiRoot` / `UiMountSlot` は
   `FocusPolicy::Pass + Pickable::IGNORE` とし、通常時の world picking を遮らない。
-- capture rootは`Save / Load / Recovery catalog（確認を含む） > Help > Settings > Pause > OperationDialog`と入力priorityが一致する
+- capture rootは`Save / Load / Recovery catalog（確認を含む） > Help > Settings > Pause > OperationDialog`と入力priorityが一致する。menu buttonとkeyboardのopen要求はrootのpure admission snapshotを共有し、RecoveryFailed時のLoad限定、既存overlay、operation targetの成立条件を同じ規則で判定する。
   `GlobalZIndex`を共通定数から使用する。Helpは独立した`HelpPanelState`を持ち、背景`MenuState`とactive modeを
   保持する。通常時だけ`HelpPauseGuard`がpauseを所有し、close/world replacement時に所有したpauseだけを解除する。
 - capture 開始時は未確定 Area/Zone/Dream gesture と Entity List drag/resize を rollback/reset する。
@@ -500,8 +502,9 @@ roster relationshipを直接変更しない。
 | --- | --- | --- |
 | state resource | `hw_core::selection` + `hw_ui::selection` | `SelectedEntity`, `HoveredEntity`, `SelectionIndicator` は `hw_core` 所有、`cleanup_selection_references_system` は `hw_ui::selection` |
 | shared 型・validation | `hw_ui::selection::placement` | `PlacementRejectReason`（14分類）, `PlacementValidation`, `PlacementTileRejection`, `PlacementFeedbackState`, `AreaPlacementPlan`, `PlacementGeometry`, `WorldReadApi`, `BuildingPlacementContext` |
-| placement geometry API | `hw_ui::selection::placement` | `building_geometry`, `building_occupied_grids`, `building_spawn_pos`, `building_size`, `bucket_storage_geometry`, `validate_building_placement`, `validate_bucket_storage_placement` |
-| move geometry API | `hw_ui::selection::placement` | `move_anchor_grid`, `move_occupied_grids`, `move_spawn_pos`, `validate_moved_building_placement`, `validate_moved_bucket_storage_placement` |
+| building shape contract | `hw_jobs::placement_geometry` | 全`BuildingType`のordered relative tiles、anchor基準、tile単位の中心補正・寸法 |
+| root world projection | `bevy_app::interface::selection::placement_geometry` | `building_geometry`, `building_occupied_grids`, `building_spawn_pos`, `building_size`, `existing_movable_building_anchor`, move投影、BucketStorageのgrid→world変換 |
+| placement validation API | `hw_ui::selection::placement` | `PlacementGeometry`, `bucket_storage_geometry(anchor_world)`, `validate_building_placement`, `validate_bucket_storage_placement`, move validator |
 | floor / wall validation | `hw_ui::selection::placement` | `build_area_placement_plan`, `validate_area_size`, `validate_wall_area`, `validate_floor_tile`, `validate_wall_tile` |
 | selection intent | `hw_ui::selection::intent` | `SelectionIntent`, `OpenWorldContextMenu` |
 | pointer candidate | `hw_core::selection` | screen-space distance、Direct/Snapped、stable ordering、`WorldPointerTarget` |
@@ -509,7 +512,7 @@ roster relationshipを直接変更しない。
 
 - `SelectedEntity` / `HoveredEntity` / `SelectionIndicator` は cross-crate で共有される interaction state として `hw_core::selection` に置き、`hw_ui::selection` は cleanup と placement validation の公開面を担う。`Commands`/`WorldMapWrite`/`NextState<PlayMode>` は使わない。
 - `update_selection_indicator` とFamiliar destination markerの実装本体は `hw_visual` にある。選択更新と同フレームで反映するためroot `Interface`フェーズで登録し、Building系は`WorldMap::snapshot_owner`からfootprintを再計算する。
-- `hw_ui::selection::placement` は building placement/move/SoulSpa/area placement の geometry, typed validation, live/recent feedback共通ロジックを保持する。`crates/bevy_app/src/interface/selection/building_place/placement.rs`・`building_move/preview.rs`・`building_move/click_handlers.rs`・`floor_place/validation.rs`・`soul_spa_place/mod.rs`・`crates/bevy_app/src/systems/visual/placement_ghost.rs` が共有する。内部は private submodule に分離済み: `geometry.rs`（座標変換・形状計算）/ `validation.rs`（配置可否判定）/ `tests.rs`。`placement.rs` root はファサード + 共有型定義のみ。
+- `hw_ui::selection::placement` は typed validation、live/recent feedbackとworld座標を受け取るUI-only BucketStorage表示を保持する。建物形状は`hw_jobs`、`WorldMap`を使う投影はrootの`placement_geometry`が所有し、新設・移動・SoulSpa・ghost・save rehydrate・profiling fixtureが同じ投影を使う。旧Transformからmove anchorを復元する半tile補正と新cursorの直接`world_to_grid`は別関数として維持する。
 - `building_move/geometry.rs` は hw_ui 移動に伴い削除済み。`building_move/placement.rs` は bucket storage 所有グリッド解決だけを持つ薄い adapter で、判定本体は `validate_moved_bucket_storage_placement` を使う。
 - floor/wall の tile reject reason と tile validation は `hw_ui::selection::placement` に共通化済み。rootの`build_floor_placement_plan` / `build_wall_placement_plan`がpreviewとcommitの両方で同じ`AreaPlacementPlan`を再構築し、有効タイルが1件以上なら部分採用する。`WorldMap` → `WorldReadApi` の adapter は `crates/bevy_app/src/world/map/mod.rs` の `WorldMapRef<'a>` 一箇所に集約済み（旧来の各ファイルのローカルラッパーは削除済み）。
 - `handle_mouse_input` は共通resolverの候補をpress時にlatchし、5 logical px以内のreleaseだけを`SelectionIntent`へ変換する。Mouse Drag Panはproject-owned adapterがslop超過分から適用し、dependency `PanCamera`のmouse observerは無効、keyboard panとwheel zoomだけを維持する。詳細は[world-selection.md](world-selection.md)。

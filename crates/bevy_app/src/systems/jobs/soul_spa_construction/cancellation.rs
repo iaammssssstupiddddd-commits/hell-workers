@@ -14,13 +14,15 @@ use hw_logistics::transport_request::{
     transport_requests_referencing_removed_owners,
 };
 use hw_logistics::{ResourceType, SharedResourceCache};
-use hw_soul_ai::{ExactTaskTerminalRequest, ExactTaskTerminalResult, terminalize_exact_tasks};
+use hw_soul_ai::{
+    ExactTaskTerminalRequest, ExactTaskTerminalResult, prepare_owner_task_terminals,
+    terminalize_exact_tasks,
+};
 use hw_visual::Building3dVisual;
 use hw_world::map::WorldMapOwnerSnapshot;
 use hw_world::{RoomDetectionState, WorldMap};
 
 use crate::systems::energy::grid_recalc::EnergyUpdateDirty;
-use crate::systems::jobs::exact_task_cleanup::prepare_owner_task_terminals;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct TileSnapshot {
@@ -137,7 +139,7 @@ fn prepare_cancellation(
     cleanup_references.sort_unstable_by_key(|entity| entity.to_bits());
     cleanup_references.dedup();
     let terminal_requests = prepare_owner_task_terminals(world, &cleanup_references, None, &[])
-        .map_err(|()| SoulSpaConstructionCancelResult::ActiveTaskMismatch)?;
+        .map_err(|_| SoulSpaConstructionCancelResult::ActiveTaskMismatch)?;
 
     Ok(PreparedCancellation {
         center,

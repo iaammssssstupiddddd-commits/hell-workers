@@ -10,9 +10,10 @@ pub(crate) use spawn::spawn_soul_spa;
 use crate::systems::jobs::BuildingType;
 use crate::world::map::{RIVER_Y_MIN, WorldMap, WorldMapRef};
 use hw_ui::selection::{
-    BuildingPlacementContext, PlacementGeometry, PlacementValidation, building_geometry,
-    validate_building_placement,
+    BuildingPlacementContext, PlacementGeometry, PlacementValidation, validate_building_placement,
 };
+
+use super::placement_geometry::building_geometry;
 
 pub(crate) fn validate_soul_spa_placement(
     world_map: &WorldMap,

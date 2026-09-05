@@ -1,11 +1,12 @@
 use bevy::prelude::*;
-use hw_core::logistics::{ResourceType, WheelbarrowDestination};
+use hw_core::logistics::ResourceType;
 
 use super::super::super::builders::{
-    WheelbarrowCollectSpec, WheelbarrowHaulSpec, issue_collect_bone_with_wheelbarrow_to_floor,
+    WheelbarrowCollectSpec, issue_collect_bone_with_wheelbarrow_to_floor,
     issue_haul_to_stockpile_with_source, issue_haul_with_wheelbarrow,
 };
 use super::super::super::validator::resolve_haul_to_floor_construction_inputs;
+use super::construction_mud::{ConstructionMudInput, select_construction_mud_haul};
 use super::demand;
 use super::direct_collect;
 use super::source_selector;
@@ -54,64 +55,23 @@ pub fn assign_haul_to_floor_construction(
     }
 
     if resource_type == ResourceType::StasisMud {
-        let max_items =
-            remaining_needed.min(hw_core::constants::WHEELBARROW_CAPACITY as u32) as usize;
-        let mut item_sources = source_selector::collect_nearby_items_for_wheelbarrow(
-            resource_type,
-            site_pos,
-            max_items,
+        let Some(spec) = select_construction_mud_haul(
+            ConstructionMudInput {
+                site: site_entity,
+                site_pos,
+                remaining_needed,
+            },
             queries,
             shadow,
             ctx.resource_grid,
-        );
-        if item_sources.is_empty() {
-            item_sources = source_selector::collect_items_for_wheelbarrow_unbounded(
-                resource_type,
-                site_pos,
-                max_items,
-                queries,
-                shadow,
-                ctx.resource_grid,
-            );
-        }
-        if item_sources.is_empty() {
+        ) else {
             debug!(
-                "ASSIGN: Floor request {:?} has no available {:?} source",
-                ctx.task_entity, resource_type
-            );
-            return false;
-        }
-
-        let source_pos = item_sources
-            .iter()
-            .map(|(_, pos)| *pos)
-            .reduce(|a, b| a + b)
-            .expect("item_sources is non-empty: checked above")
-            / item_sources.len() as f32;
-
-        let Some(wheelbarrow) = wheelbarrow::find_nearest_wheelbarrow(source_pos, queries, shadow)
-        else {
-            debug!(
-                "ASSIGN: Floor request {:?} has no available wheelbarrow for {:?}",
+                "ASSIGN: Floor request {:?} has no available source or wheelbarrow for {:?}",
                 ctx.task_entity, resource_type
             );
             return false;
         };
-
-        let item_entities = item_sources.into_iter().map(|(entity, _)| entity).collect();
-        issue_haul_with_wheelbarrow(
-            WheelbarrowHaulSpec {
-                wheelbarrow,
-                source_pos,
-                destination: WheelbarrowDestination::Stockpile(site_entity),
-                items: item_entities,
-            },
-            site_pos,
-            already_commanded,
-            ctx,
-            queries,
-            shadow,
-        );
+        issue_haul_with_wheelbarrow(spec, site_pos, already_commanded, ctx, queries, shadow);
         return true;
     }
 

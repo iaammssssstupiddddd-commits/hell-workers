@@ -5,6 +5,7 @@ pub mod events;
 pub mod lifecycle;
 pub mod model;
 pub mod mud_mixer;
+pub mod placement_geometry;
 pub mod refine_activity;
 pub mod tasks;
 pub mod visual_sync;
@@ -42,6 +43,7 @@ pub use model::{
 };
 pub use mud_mixer::StoredByMixer;
 pub use mud_mixer::TargetMixer;
+pub use placement_geometry::{BuildingAnchorBasis, BuildingShape, building_shape};
 pub use refine_activity::{RefineActivityIndex, sync_refine_activity_index_system};
 pub use tasks::{
     ActiveTaskIdentity, AssignedTask, BucketTransportData, BucketTransportDestination,

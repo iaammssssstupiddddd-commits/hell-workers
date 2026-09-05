@@ -9,6 +9,7 @@ use hw_ui::components::{
 };
 use hw_ui::help::{HelpPanel, HelpPanelState};
 
+use super::capture_admission::{CaptureOpenAction, CaptureOpenSnapshot, opening_capture};
 use super::{InputAction, InputOverlay, ResolvedInputFrame};
 use crate::entities::familiar::Familiar;
 use crate::interface::ui::list::reset_entity_list_drag_state;
@@ -235,49 +236,33 @@ fn capture_request_for_menu_action(
     action: MenuAction,
     params: &CaptureRequestParams<'_, '_>,
 ) -> Option<(InputOverlay, Option<Entity>)> {
-    match action {
-        MenuAction::OpenHelp { .. }
-            if *params.save_recovery != SaveRecoveryMode::RecoveryFailed
-                && !params.help_state.open =>
-        {
-            Some((InputOverlay::Help, None))
+    let action = match action {
+        MenuAction::OpenHelp { .. } => CaptureOpenAction::Help,
+        MenuAction::SaveGame => CaptureOpenAction::Save,
+        MenuAction::RequestLoadGame => CaptureOpenAction::Load,
+        MenuAction::ToggleSettings => CaptureOpenAction::Settings,
+        MenuAction::TogglePause | MenuAction::SetTimeSpeed(TimeSpeed::Paused) => {
+            CaptureOpenAction::Pause
         }
-        MenuAction::SaveGame if *params.save_recovery != SaveRecoveryMode::RecoveryFailed => {
-            Some((InputOverlay::SaveCatalog, None))
-        }
-        MenuAction::RequestLoadGame => {
-            let overlay = if *params.save_recovery == SaveRecoveryMode::RecoveryFailed {
-                InputOverlay::RecoveryLoadCatalog
-            } else {
-                InputOverlay::LoadCatalog
-            };
-            Some((overlay, None))
-        }
-        MenuAction::ToggleSettings
-            if *params.save_recovery != SaveRecoveryMode::RecoveryFailed
-                && *params.menu_state != MenuState::Settings =>
-        {
-            Some((InputOverlay::Settings, None))
-        }
-        MenuAction::TogglePause
-            if *params.save_recovery != SaveRecoveryMode::RecoveryFailed
-                && !params.time.is_paused() =>
-        {
-            Some((InputOverlay::Pause, None))
-        }
-        MenuAction::SetTimeSpeed(TimeSpeed::Paused)
-            if *params.save_recovery != SaveRecoveryMode::RecoveryFailed
-                && !params.time.is_paused() =>
-        {
-            Some((InputOverlay::Pause, None))
-        }
-        MenuAction::OpenOperationDialog { target, .. }
-            if *params.save_recovery != SaveRecoveryMode::RecoveryFailed
-                && params.familiars.get(target).is_ok() =>
-        {
-            Some((InputOverlay::OperationDialog, Some(target)))
-        }
-        _ => None,
+        MenuAction::OpenOperationDialog { target, .. } => CaptureOpenAction::Operation(target),
+        _ => return None,
+    };
+    opening_capture(action, capture_open_snapshot(params, action))
+}
+
+fn capture_open_snapshot(
+    params: &CaptureRequestParams<'_, '_>,
+    action: CaptureOpenAction,
+) -> CaptureOpenSnapshot {
+    CaptureOpenSnapshot {
+        recovery_failed: *params.save_recovery == SaveRecoveryMode::RecoveryFailed,
+        help_open: params.help_state.open,
+        settings_open: *params.menu_state == MenuState::Settings,
+        simulation_paused: params.time.is_paused(),
+        operation_target_is_familiar: match action {
+            CaptureOpenAction::Operation(target) => params.familiars.get(target).is_ok(),
+            _ => false,
+        },
     }
 }
 
@@ -326,39 +311,26 @@ pub(crate) fn request_capture_from_resolved_actions_system(
     mut resolved_frame: ResMut<ResolvedInputFrame>,
     mut params: CaptureRequestParams,
 ) {
-    let recovery_failed = *params.save_recovery == SaveRecoveryMode::RecoveryFailed;
-    let overlay = if resolved_frame.contains(InputAction::SaveGame)
-        && *params.save_recovery != SaveRecoveryMode::RecoveryFailed
-    {
-        Some(InputOverlay::SaveCatalog)
-    } else if resolved_frame.contains(InputAction::RequestLoadGame) {
-        Some(
-            if *params.save_recovery == SaveRecoveryMode::RecoveryFailed {
-                InputOverlay::RecoveryLoadCatalog
-            } else {
-                InputOverlay::LoadCatalog
-            },
-        )
-    } else if resolved_frame.contains(InputAction::OpenHelp)
-        && !recovery_failed
-        && !params.help_state.open
-    {
-        Some(InputOverlay::Help)
-    } else if (resolved_frame.contains(InputAction::TogglePause)
-        || resolved_frame.contains(InputAction::TimePaused))
-        && !recovery_failed
-        && !params.time.is_paused()
-    {
-        Some(InputOverlay::Pause)
-    } else {
-        None
-    };
+    let opening = [
+        (InputAction::SaveGame, CaptureOpenAction::Save),
+        (InputAction::RequestLoadGame, CaptureOpenAction::Load),
+        (InputAction::OpenHelp, CaptureOpenAction::Help),
+        (InputAction::TogglePause, CaptureOpenAction::Pause),
+        (InputAction::TimePaused, CaptureOpenAction::Pause),
+    ]
+    .into_iter()
+    .find_map(|(input, action)| {
+        resolved_frame
+            .contains(input)
+            .then(|| opening_capture(action, capture_open_snapshot(&params, action)))
+            .flatten()
+    });
 
-    if let Some(overlay) = overlay
+    if let Some((overlay, target)) = opening
         && begin_world_input_capture(
             overlay,
             None,
-            None,
+            target,
             &params.roots,
             &params.save_catalog_ui,
             &mut params.pending,

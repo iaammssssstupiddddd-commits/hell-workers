@@ -3,7 +3,7 @@
 //! 純粋なアルゴリズムは [`crate::room_detection`] に定義されている。
 //! 本モジュールはそれらを ECS クエリと接続する adapter 層。
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 use bevy::ecs::lifecycle::{Add, Remove};
 use bevy::prelude::*;
@@ -16,6 +16,10 @@ use crate::room_detection::{
     RoomOverlayTile, RoomTileLookup, RoomTileSignature, RoomValidationState, build_detection_input,
     detect_rooms, room_is_valid_against_input,
 };
+
+mod lookup;
+
+use lookup::RoomLookupBuilder;
 
 type ChangedBuildingQuery<'w, 's> = Query<
     'w,
@@ -118,8 +122,7 @@ fn rebuild_rooms(
         commands.entity(room_entity).try_despawn();
     }
 
-    let mut tile_to_room = HashMap::new();
-    let mut boundary_to_rooms = HashMap::new();
+    let mut lookup_builder = RoomLookupBuilder::default();
     for (index, detected) in detected_rooms.into_iter().enumerate() {
         let DetectedRoom {
             tiles,
@@ -129,15 +132,8 @@ fn rebuild_rooms(
         } = detected;
         let tile_count = tiles.len();
         let tile_signature = RoomTileSignature::from_tiles(&tiles);
-        let room_tiles_for_lookup = tiles.clone();
-
         let room_entity = commands.spawn_empty().id();
-        insert_room_boundaries(
-            &mut boundary_to_rooms,
-            room_entity,
-            &wall_tiles,
-            &door_tiles,
-        );
+        lookup_builder.add(room_entity, &tiles, &wall_tiles, &door_tiles);
 
         commands.entity(room_entity).insert((
             Room {
@@ -153,14 +149,9 @@ fn rebuild_rooms(
             Visibility::Visible,
             Name::new(format!("Room #{}", index + 1)),
         ));
-
-        for tile in room_tiles_for_lookup {
-            tile_to_room.insert(tile, room_entity);
-        }
     }
 
-    room_tile_lookup.replace(tile_to_room);
-    room_boundary_lookup.boundary_to_rooms = boundary_to_rooms;
+    lookup_builder.publish(room_tile_lookup, room_boundary_lookup);
     detection_state.dirty_tiles.clear();
 }
 
@@ -185,33 +176,14 @@ pub fn validate_rooms_system(mut p: ValidateRoomsParams) {
         return;
     }
 
-    let tiles: Vec<RoomDetectionBuildingTile> = p
-        .q_buildings
-        .iter()
-        .map(|(_entity, building, transform)| {
-            let grid = WorldMap::world_to_grid(transform.translation.truncate());
-            RoomDetectionBuildingTile {
-                grid,
-                role: building.kind.room_detection_role(building.is_provisional),
-            }
-        })
-        .collect();
+    let tiles = collect_building_tiles(&p.q_buildings);
 
     let input = build_detection_input(&tiles);
-    let mut tile_to_room = HashMap::new();
-    let mut boundary_to_rooms = HashMap::new();
+    let mut lookup_builder = RoomLookupBuilder::default();
 
     for (room_entity, room) in p.q_rooms.iter() {
         if room_is_valid_against_input(&room.tiles, &input) {
-            for &tile in &room.tiles {
-                tile_to_room.insert(tile, room_entity);
-            }
-            insert_room_boundaries(
-                &mut boundary_to_rooms,
-                room_entity,
-                &room.wall_tiles,
-                &room.door_tiles,
-            );
+            lookup_builder.add(room_entity, &room.tiles, &room.wall_tiles, &room.door_tiles);
             continue;
         }
 
@@ -224,8 +196,7 @@ pub fn validate_rooms_system(mut p: ValidateRoomsParams) {
         p.commands.entity(room_entity).try_despawn();
     }
 
-    p.room_tile_lookup.replace(tile_to_room);
-    p.room_boundary_lookup.boundary_to_rooms = boundary_to_rooms;
+    lookup_builder.publish(&mut p.room_tile_lookup, &mut p.room_boundary_lookup);
 }
 
 fn collect_building_tiles(
@@ -241,20 +212,6 @@ fn collect_building_tiles(
             }
         })
         .collect()
-}
-
-fn insert_room_boundaries(
-    lookup: &mut HashMap<(i32, i32), Vec<Entity>>,
-    room_entity: Entity,
-    wall_tiles: &[(i32, i32)],
-    door_tiles: &[(i32, i32)],
-) {
-    for grid in wall_tiles.iter().chain(door_tiles) {
-        let rooms = lookup.entry(*grid).or_default();
-        rooms.push(room_entity);
-        rooms.sort_unstable_by_key(|entity| entity.to_bits());
-        rooms.dedup();
-    }
 }
 
 // ---------------------------------------------------------------------------
@@ -453,26 +410,5 @@ pub fn sync_room_overlay_tiles_system(
                 }
             }
         });
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn shared_boundary_lookup_keeps_both_rooms_once() {
-        let mut world = World::new();
-        let first = world.spawn_empty().id();
-        let second = world.spawn_empty().id();
-        let mut lookup = HashMap::new();
-
-        insert_room_boundaries(&mut lookup, second, &[(5, 5)], &[]);
-        insert_room_boundaries(&mut lookup, first, &[(5, 5)], &[]);
-        insert_room_boundaries(&mut lookup, first, &[(5, 5)], &[]);
-
-        let mut expected = vec![first, second];
-        expected.sort_unstable_by_key(|entity| entity.to_bits());
-        assert_eq!(lookup.get(&(5, 5)), Some(&expected));
     }
 }

@@ -1149,7 +1149,8 @@ fn static_phase_camera_target(phase: ProbePhase) -> Vec2 {
 /// placement geometry. In particular, a Bridge's logical anchor controls its
 /// river footprint while its root and 3D visual are centered over that span.
 fn fixture_building_draw_position(kind: BuildingType, anchor: (i32, i32)) -> Vec2 {
-    hw_ui::selection::building_geometry(kind, anchor, RIVER_Y_MIN).draw_pos
+    crate::interface::selection::placement_geometry::building_geometry(kind, anchor, RIVER_Y_MIN)
+        .draw_pos
 }
 
 fn is_fixture_building_root(
@@ -1480,7 +1481,7 @@ mod tests {
         let draw_position = fixture_building_draw_position(BuildingType::Bridge, BRIDGE_PROBE_GRID);
         assert_eq!(
             draw_position,
-            hw_ui::selection::building_geometry(
+            crate::interface::selection::placement_geometry::building_geometry(
                 BuildingType::Bridge,
                 BRIDGE_PROBE_GRID,
                 RIVER_Y_MIN,

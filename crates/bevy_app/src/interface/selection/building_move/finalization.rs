@@ -11,8 +11,8 @@ use crate::world::map::WorldMap;
 use bevy::prelude::*;
 use hw_core::constants::TILE_SIZE;
 use hw_soul_ai::unassign_task;
-use hw_ui::selection::{move_occupied_grids, move_spawn_pos};
 
+use super::super::placement_geometry::{move_occupied_grids, move_spawn_pos};
 use super::context::{MoveOpCtx, SoulTaskQuery};
 
 pub(super) fn finalize_move_request(

@@ -10,11 +10,11 @@ use hw_core::constants::TILE_SIZE;
 use hw_core::game_state::PlayMode;
 use hw_ui::camera::MainCamera;
 use hw_ui::components::UiInputState;
-use hw_ui::selection::{
-    PlacementFeedbackState, move_anchor_grid, move_occupied_grids, move_spawn_pos,
-    validate_moved_building_placement,
-};
+use hw_ui::selection::{PlacementFeedbackState, validate_moved_building_placement};
 
+use super::super::placement_geometry::{
+    existing_movable_building_anchor, move_occupied_grids, move_spawn_pos,
+};
 use super::placement::validate_tank_companion_for_move;
 
 type MoveBuildingQuery<'w, 's> = Query<
@@ -119,7 +119,8 @@ pub fn building_move_preview_system(
         && active_companion.kind == CompanionPlacementKind::BucketStorage
         && pending.building == target_entity
     {
-        let old_anchor = move_anchor_grid(building.kind, transform.translation.truncate());
+        let old_anchor =
+            existing_movable_building_anchor(building.kind, transform.translation.truncate());
         let old_occupied = move_occupied_grids(building.kind, old_anchor);
         let destination_occupied = move_occupied_grids(building.kind, pending.destination_grid);
         let parent_validation = validate_moved_building_placement(
@@ -174,7 +175,8 @@ pub fn building_move_preview_system(
 
     despawn_partner_ghost(&mut commands, &q_partner_ghost);
 
-    let old_anchor = move_anchor_grid(building.kind, transform.translation.truncate());
+    let old_anchor =
+        existing_movable_building_anchor(building.kind, transform.translation.truncate());
     let old_occupied = move_occupied_grids(building.kind, old_anchor);
     let destination_occupied = move_occupied_grids(building.kind, destination_grid);
     let validation = validate_moved_building_placement(

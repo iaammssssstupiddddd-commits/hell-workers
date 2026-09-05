@@ -752,7 +752,12 @@ impl IndoorLightLayout {
             return Vec::new();
         }
         let geometry = |kind, anchor| {
-            hw_ui::selection::building_geometry(kind, anchor, RIVER_Y_MIN).occupied_grids
+            crate::interface::selection::placement_geometry::building_geometry(
+                kind,
+                anchor,
+                RIVER_Y_MIN,
+            )
+            .occupied_grids
         };
         let canonical = |kind, anchor, source, ordinal, route| ShowcaseSpec {
             kind,
@@ -1074,8 +1079,11 @@ pub(super) fn begin_indoor_light_fixture(
     commands.insert_resource(IndoorLightCrossConsumerObservation::default());
     let layout = IndoorLightLayout::build(config.size);
     for spa in &layout.spas {
-        let geometry =
-            hw_ui::selection::building_geometry(BuildingType::SoulSpa, spa.anchor, RIVER_Y_MIN);
+        let geometry = crate::interface::selection::placement_geometry::building_geometry(
+            BuildingType::SoulSpa,
+            spa.anchor,
+            RIVER_Y_MIN,
+        );
         if geometry.occupied_grids != spa.tiles {
             fail_fixture(
                 state,
@@ -1240,8 +1248,11 @@ pub(super) fn begin_indoor_light_fixture(
         .spas
         .iter()
         .map(|spa| {
-            let geometry =
-                hw_ui::selection::building_geometry(BuildingType::SoulSpa, spa.anchor, RIVER_Y_MIN);
+            let geometry = crate::interface::selection::placement_geometry::building_geometry(
+                BuildingType::SoulSpa,
+                spa.anchor,
+                RIVER_Y_MIN,
+            );
             let (site, tiles) = spawn_soul_spa(
                 commands,
                 world_map,
@@ -1275,7 +1286,8 @@ fn spawn_completed_blueprint(
     kind: BuildingType,
     grid: (i32, i32),
 ) -> Entity {
-    let geometry = hw_ui::selection::building_geometry(kind, grid, RIVER_Y_MIN);
+    let geometry =
+        crate::interface::selection::placement_geometry::building_geometry(kind, grid, RIVER_Y_MIN);
     let mut blueprint = Blueprint::new(kind, geometry.occupied_grids.clone());
     for (resource, required) in blueprint.required_materials.clone() {
         blueprint.deliver_material(resource, required);
@@ -1767,7 +1779,12 @@ fn validate_observed_fixture(
 ) -> Result<(IndoorLightFixtureObservation, IndoorLightAuditEntities), String> {
     let layout = &fixture.layout;
     let exact_building = |kind, anchor| -> Result<&ObservedBuilding, String> {
-        let draw_pos = hw_ui::selection::building_geometry(kind, anchor, RIVER_Y_MIN).draw_pos;
+        let draw_pos = crate::interface::selection::placement_geometry::building_geometry(
+            kind,
+            anchor,
+            RIVER_Y_MIN,
+        )
+        .draw_pos;
         let matches = buildings
             .iter()
             .filter(|building| building.kind == kind && building.draw_pos == draw_pos)

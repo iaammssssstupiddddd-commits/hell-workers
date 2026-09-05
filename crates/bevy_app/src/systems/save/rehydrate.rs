@@ -26,6 +26,7 @@ use crate::systems::jobs::attach_building_shell;
 use crate::systems::jobs::floor_construction::CuringFootprint;
 use crate::world::map::{Tile, WorldMap};
 
+use crate::interface::selection::placement_geometry::building_size;
 use hw_core::area::TaskArea;
 use hw_core::constants::TILE_SIZE;
 use hw_core::familiar::{
@@ -56,7 +57,6 @@ use hw_jobs::{
 use hw_logistics::tile_index::TileSiteIndex;
 use hw_logistics::zone::{Stockpile, StockpilePolicy};
 use hw_logistics::{BelongsTo, BucketStorage, PendingBelongsToBlueprint, ResourceItem};
-use hw_ui::selection::building_size;
 use hw_visual::ActorBillboardOwnerCache;
 use hw_visual::blueprint::{BlueprintVisual, BuildingBounceEffect};
 use hw_visual::visual3d::{ActorBillboard3d, Building3dVisual};

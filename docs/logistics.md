@@ -498,7 +498,11 @@ WheelbarrowLease {
 #### 5.2.5 lease のライフサイクル
 
 - **付与**: 仲裁システム（Arbitrate フェーズ）が `WheelbarrowLease` を insert。
-- **消費**: `assign_haul` が lease を読み取り `HaulWithWheelbarrow` タスクを発行。割り当て後は request の state が Pending でなくなるため、次フレームの仲裁で自動的に対象外。
+- **消費**: `assign_haul` は13種の`TransportRequestKind`をprivateなexhaustive dispatchへ一度だけ通し、対応routeだけが既存handlerへ進む。`BatchWheelbarrow`と専用外側routeを持つMixer/Water系は従来どおりこの入口で拒否する。lease を使うrouteは`HaulWithWheelbarrow`タスクを発行し、割り当て後は request の state が Pending でなくなるため、次フレームの仲裁で自動的に対象外。
+
+Floor / WallのStasisMud搬入は共通のpure selectorを使う。需要と猫車容量の小さい方を上限にし、nearby収集が空の場合だけunbounded fallbackへ進み、候補順・重心・猫車選択と`Stockpile(site)` destinationを共通化する。FloorのBone fallbackとWallのWood選択は各routeが所有する。
+
+解体時のMudMixer volatile inventory回収は`hw_logistics::deconstruction::volatile_recovery`がsand優先・mud item順・候補容量のpure配賦を返す。root transactionはlive snapshotを組み立て、配賦不能ならworldを変更せず拒否し、成功時だけ再検証済みplanを適用する。
 - **失効/無効化**: 仲裁システムが毎フレーム `lease_until < now`、手押し車消失、有効 item 数不足をチェックして remove。
 - **request close**: `transport_request_anchor_cleanup_system` が request を閉じる際に `WheelbarrowLease` も除去。
 - **world load**: leaseとpending時刻は保存せず、全requestを`Pending`へ戻した後に次のArbitrateで再計算する。

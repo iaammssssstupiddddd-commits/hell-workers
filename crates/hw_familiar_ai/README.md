@@ -18,6 +18,8 @@ Perceive / Decide / Execute の各フェーズでの状態遷移・タスク探�
 | `familiar_ai/decide/task_management/policy_score.rs` | base worker score後にtransport / Familiarのscalar contributionを合成する共有no-clamp score helper |
 | `familiar_ai/decide/task_management/diagnostics.rs` | typed rejection、Familiar-local 1票reducer、latest-only `FamiliarTaskCandidateDiagnostics` |
 | `familiar_ai/decide/task_management/validator/deconstruction.rs` | live ECSから共有`DeconstructionAssignmentFacts`を組み立てるcandidate境界 |
+
+Soul候補の正本Queryは`decide/query_types.rs::FamiliarSoulQuery`である。task/path/inventoryはread-only accessとし、`task_assigner`は候補選定だけを行い、変更は既存のassignment applyへ集約する。Haul入口は`policy/haul/dispatch.rs`で全request kindを分類し、Floor/WallのStasisMud source・猫車選択は`construction_mud.rs`の同じpure selectorを使う。
 | `familiar_ai/settings.rs` | Familiar settings request / outcome、target単位FIFO replay、operation / policyのatomic commitとroster release |
 | `familiar_ai/execute/` | 決定結果の ECS への反映 |
 

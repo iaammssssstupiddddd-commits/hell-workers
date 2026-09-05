@@ -159,7 +159,7 @@ callers は `hw_familiar_ai::*` の完全パスを直接参照する。
 - `decide/mod.rs`・`helpers/mod.rs`・`decide/state_handlers/`・`decide/squad.rs`・`decide/recruitment.rs` 等 → `hw_familiar_ai::familiar_ai::decide::*`
 - `perceive/state_detection` submodule → `hw_familiar_ai::familiar_ai::perceive::state_detection::*`
 - `execute/mod.rs`（`encouragement_apply_system` / `squad_visual_system` / `max_soul_visual_system` 等）→ `FamiliarAiCorePlugin` が直接登録済み
-- `helpers/mod.rs`（`FamiliarStateQuery` / `FamiliarSoulQuery` 等）→ `hw_familiar_ai::familiar_ai::decide::query_types`
+- `helpers/mod.rs`（`FamiliarStateQuery` / `FamiliarSoulQuery` 等）→ `hw_familiar_ai::familiar_ai::decide::query_types`。`FamiliarSoulQuery`は`AssignedTask` / `Destination` / `Path` / optional `Inventory`をread-onlyで取得し、assignmentの書き込みはapply経路だけが行う。
 - `update/mod.rs` → `hw_familiar_ai` 直接
 
 **設計メモ**

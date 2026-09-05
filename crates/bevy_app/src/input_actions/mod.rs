@@ -1,6 +1,7 @@
 mod bindings;
 mod cancel;
 mod capture;
+mod capture_admission;
 mod context;
 mod key_labels;
 mod model;

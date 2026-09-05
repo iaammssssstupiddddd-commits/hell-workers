@@ -67,6 +67,8 @@ Open/Closed Door は walkability topology を変えないため cache を再構�
 
 `RuntimePathSearchBudget` はruntime用のResourceで、hard limitと現在phaseのceilingを持つ。budgeted facadeは`PathSearchResult::{Found, Unreachable, Deferred}`を返す。`Deferred`はbudget不足であり、到達不能ではない。inputの事前条件でcore A*を起動しない場合は枠を使わず`Unreachable`を返す。resourceは`SoulAiCorePlugin`が`PreUpdate`でresetし、rootのworld replacement resetもdefaultへ戻す。
 
+Room detectionとvalidationは同じbuilding tile collectorを使い、`room_systems::lookup::RoomLookupBuilder`がfloor owner lookupとsorted/deduplicated boundary lookupを一括構築してpublishする。lookupはsaveせず、再検出とworld replacementで置換・resetする。
+
 ActorのSoul再探索、escapeの経路距離判定、task execution、bucket routing はこのfacadeを使用する。runtime側は `PathSearchCaller` を実際に枠をclaimする subsystem ごとに指定し、`Deferred`を到達不能へ変換してはならない。mapgen validation と unit test だけが crate 内 raw API を使用できる。
 
 ### PathGoalPolicy トレイト

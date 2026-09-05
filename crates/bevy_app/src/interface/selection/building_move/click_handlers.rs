@@ -5,11 +5,11 @@ use crate::systems::jobs::BuildingType;
 use crate::world::map::{WorldMapRef, WorldMapWrite};
 use bevy::prelude::*;
 use hw_core::constants::TILE_SIZE;
-use hw_ui::selection::{
-    PlacementTileRejection, move_anchor_grid, move_occupied_grids, move_spawn_pos,
-    validate_moved_building_placement,
-};
+use hw_ui::selection::{PlacementTileRejection, validate_moved_building_placement};
 
+use super::super::placement_geometry::{
+    existing_movable_building_anchor, move_occupied_grids, move_spawn_pos,
+};
 use super::context::{COMPANION_PLACEMENT_RADIUS_TILES, MoveOpCtx, MoveStateCtx};
 use super::finalization::finalize_move_request;
 use super::placement::validate_tank_companion_for_move;
@@ -46,7 +46,8 @@ pub(super) fn handle_companion_click(
         st.move_placement_state.0 = None;
         return Ok(());
     }
-    let old_anchor = move_anchor_grid(building.kind, transform.translation.truncate());
+    let old_anchor =
+        existing_movable_building_anchor(building.kind, transform.translation.truncate());
     let old_occupied = move_occupied_grids(building.kind, old_anchor);
     let destination_occupied = move_occupied_grids(building.kind, pending.destination_grid);
     let parent_validation = validate_moved_building_placement(
@@ -96,7 +97,8 @@ pub(super) fn handle_initial_click(
     building: &crate::systems::jobs::Building,
     transform: &Transform,
 ) -> Result<(), PlacementTileRejection> {
-    let old_anchor = move_anchor_grid(building.kind, transform.translation.truncate());
+    let old_anchor =
+        existing_movable_building_anchor(building.kind, transform.translation.truncate());
     let old_occupied = move_occupied_grids(building.kind, old_anchor);
     let destination_occupied = move_occupied_grids(building.kind, destination_grid);
     let validation = validate_moved_building_placement(

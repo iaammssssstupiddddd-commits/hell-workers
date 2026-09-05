@@ -1,6 +1,8 @@
 //! Pure placement planning for resources recovered during deconstruction.
 
 use bevy::prelude::*;
+
+pub mod volatile_recovery;
 use hw_core::constants::{MAP_HEIGHT, MAP_WIDTH, TILE_SIZE};
 use hw_world::WorldMap;
 

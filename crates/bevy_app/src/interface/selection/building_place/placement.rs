@@ -7,9 +7,11 @@ use hw_core::constants::*;
 use hw_core::visual_mirror::construction::BlueprintVisualState;
 use hw_ui::selection::{
     BuildingPlacementContext, PlacementGeometry, PlacementTileRejection, PlacementValidation,
-    TANK_NEARBY_BUCKET_STORAGE_TILES, bucket_storage_geometry, building_geometry,
-    validate_bucket_storage_placement, validate_building_placement,
+    TANK_NEARBY_BUCKET_STORAGE_TILES, validate_bucket_storage_placement,
+    validate_building_placement,
 };
+
+use super::super::placement_geometry::{bucket_storage_geometry, building_geometry};
 
 type PlaceBlueprintResult = Result<(Entity, Vec<(i32, i32)>, Vec2), PlacementTileRejection>;
 

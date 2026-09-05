@@ -3,10 +3,7 @@ mod geometry;
 mod tests;
 mod validation;
 
-pub use self::geometry::{
-    bucket_storage_geometry, building_geometry, building_occupied_grids, building_size,
-    building_spawn_pos, grid_is_nearby, move_anchor_grid, move_occupied_grids, move_spawn_pos,
-};
+pub use self::geometry::{bucket_storage_geometry, grid_is_nearby};
 pub use self::validation::{
     validate_area_size, validate_bucket_storage_placement, validate_building_placement,
     validate_floor_tile, validate_moved_bucket_storage_placement,

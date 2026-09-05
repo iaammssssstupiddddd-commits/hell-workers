@@ -60,7 +60,7 @@ pub fn soul_spa_place_input_system(
     };
 
     let anchor = WorldMap::world_to_grid(world_pos);
-    let candidate_geometry = hw_ui::selection::building_geometry(
+    let candidate_geometry = super::super::placement_geometry::building_geometry(
         crate::systems::jobs::BuildingType::SoulSpa,
         anchor,
         crate::world::map::RIVER_Y_MIN,

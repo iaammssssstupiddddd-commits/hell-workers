@@ -4,6 +4,7 @@ mod floor_place;
 mod hit_test;
 mod input;
 mod mode;
+pub(crate) mod placement_geometry;
 pub(crate) mod soul_spa_place;
 mod state {
     pub use hw_core::selection::{HoveredEntity, SelectedEntity, SelectionIndicator};
