@@ -540,8 +540,20 @@ baseline.
   those distinct measurements.
 - Do not apply `nice`, `ionice`, or CPU affinity to formal measurements; they
   change the timing conditions.
-- Do not automatically delete artifacts or caches. If capacity is low, report
-  exact directory sizes and ask for a separate cleanup decision.
+- Do not delete artifacts or caches mid-track. While a milestone is open, its
+  jobs are the only way to re-verify what has been accepted so far.
+- Do dispose of them when the track closes. A validation worktree costs tens of
+  gigabytes, most of it a Rust `target/` with no audit value, and old artifacts
+  can never serve as evidence for a later subject: this harness requires a fresh
+  run against the current fingerprint. Leaving them behind buys nothing and cost
+  120 GB across the 2026-09 wall track.
+- At close, keep the small sealed records and drop the rest. Copy each job's
+  `manifest.json`, comparison CSVs and any approved screenshot into a capsule
+  directory beside the asset set, record the hashes in the closing document, then
+  remove the validation worktrees with `git worktree remove` and delete the
+  branches they used. Report the reclaimed size in the closing report.
+- Report exact directory sizes before removing anything, and ask when a worktree
+  belongs to a track you did not close yourself.
 
 ## Report the result
 

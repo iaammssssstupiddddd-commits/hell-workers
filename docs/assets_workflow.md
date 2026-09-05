@@ -189,6 +189,12 @@ promoted generationがそれ自身のrootだけで`validate_manifest`を通る�
 `generations/.quarantine-<GEN>-<理由>-<UTC>`へ退避してから、修正したtoolで同じpayload manifestを再applyする。
 active pointerが指していないgenerationは削除せず、監査のために隔離のまま残す。
 
+validation worktreeは作業場であって成果物ではない。trackを閉じたら、各jobの`manifest.json`、比較CSV、
+承認画像だけを`staging/validation/<capsule>/`のような小さなdirectoryへ残し、worktree本体は
+`git worktree remove`で削除して使っていたbranchも消す。worktree 1つはRustの`target/`込みで10 GB規模になり、
+過去のartifactは後続subjectの証拠に使えない（harnessはfingerprintが一致するfresh runを要求する）ため、
+残しても容量を消費するだけである。
+
 ### Wall runtime projection
 
 検証済みasset-set manifest v2は、そのままruntimeへ読ませず、`project_wallset.py`で

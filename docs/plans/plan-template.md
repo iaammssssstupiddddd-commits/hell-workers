@@ -137,6 +137,8 @@
 - [ ] `python3 scripts/dev.py check` が成功
 - [ ] `python3 scripts/dev.py cargo -- clippy --workspace --all-targets -- -D warnings` が成功
 - [ ] `python3 scripts/dev.py cargo -- test --workspace` が成功
+- [ ] 受入artifactとvalidation worktreeを棚卸しし、封印済みhashと承認画像だけを小さなcapsuleへ残して
+      worktree・branchを削除した（`git worktree list`と`du -sh`の結果、回収容量を本書へ記録する）
 
 ## 10. 更新履歴
 

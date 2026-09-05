@@ -106,6 +106,12 @@ Create an implementation plan in `docs/plans/` when:
    - If successful: Delete plan file or move to archive
    - If relevant for future: Document in `docs/architecture.md` or system-specific docs
    - Plans are temporary working documents, not permanent documentation
+   - Dispose of the workspaces the plan created. Keep each acceptance job's
+     `manifest.json`, comparison CSVs and approved screenshots in a small capsule,
+     record their hashes in the closing document, then `git worktree remove` every
+     validation worktree and delete the branches they used. A worktree carries a
+     Rust `target/` of tens of gigabytes, and old artifacts cannot serve as
+     evidence for a later subject. Report the reclaimed size.
 
 #### Index Maintenance
 - After adding, moving, or deleting a plan/proposal, run `python3 scripts/dev.py docs --write` and review both generated indexes.
