@@ -14,6 +14,7 @@ Hell-Workers における建築システムの基礎実装について説明し�
 | `Building` | 完成した建物。`is_provisional` (仮設) フラグを持つ。`Sprite` は直接持たず、子エンティティ（`VisualLayerKind`）が保持する |
 | `VisualLayerKind` | 必要な `Building` だけが持つ子ビジュアルレイヤー種別（`hw_visual::layer`）。`Foreground2d` は可視 `Sprite` 子を持つ。`Structural3d` は独立した `Building3dVisual` だけをactive presentationとし、2D子を生成しない。 |
 | `ProvisionalWall` | 仮設壁のアップグレード状態（`mud_delivered`）を保持 |
+| Wall の3D表示 | 接続maskから`isolated` / `end` / `straight` / `corner` / `t_junction` / `cross`の6共有GLBとY軸quarter turnを決定する。仮設と完成は同一mesh / topologyで、完成時はshared material handleだけを交換する。asset setは`assets/manifests/wall-production-v1.wallset`が指す昇格済みgenerationで、欠落時は`Cuboid`のfallbackへ一括で落ちる |
 | `WallConstructionSite` | 壁の建設サイト（`Framing -> Coating` フェーズ、`material_center`、進捗カウンタを保持） |
 | `WallTileBlueprint` | 壁1タイルの建設状態（`wood_delivered` / `mud_delivered` / `spawned_wall`）を保持 |
 | `BuildingType` | 建物の種類（下表参照） |

@@ -195,6 +195,9 @@ def build_payload(
         report_records.extend(mesh["reports"].values())
     report_records.extend(report["file"] for report in manifest["set_reports"])
     report_records.append(manifest["art_review"]["artifact"])
+    # The manifest also points at the texture validation report, so a generation
+    # without it cannot be validated on its own.
+    report_records.append(manifest["texture_report"])
     for record in report_records:
         entries.append(
             file_entry(

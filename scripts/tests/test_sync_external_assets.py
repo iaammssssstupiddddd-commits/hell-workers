@@ -10,6 +10,9 @@ SYNC_SCRIPT = PROJECT_ROOT / "scripts/sync_external_assets.py"
 ASSET_FIXTURE_SCRIPT = (
     PROJECT_ROOT / "tools/blender_ai_workflow/tests/test_asset_set_manifest.py"
 )
+PROMOTION_TEST_SCRIPT = (
+    PROJECT_ROOT / "tools/blender_ai_workflow/tests/test_asset_set_promotion.py"
+)
 
 
 def load_module(name: str, path: Path):
@@ -39,6 +42,84 @@ class ManifestAssetSyncTests(unittest.TestCase):
         fixture.licenses_root = external_root / "licenses"
         fixture.make_final(normal="rejected")
         return fixture, external_root
+
+    def promoted_generation(self, directory: str):
+        promotion_tests = load_module("promotion_fixture", PROMOTION_TEST_SCRIPT)
+        promotion = load_module("promote_asset_set", promotion_tests.PROMOTION_SCRIPT)
+        fixture = promotion_tests.PromotionFixture(
+            Path(directory) / "promotion", promotion, self.fixture_module
+        )
+        fixture.apply()
+        generation = fixture.asset_root / "generations/1"
+        return generation, fixture
+
+    def test_released_generation_lands_where_the_projection_names_it(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            generation, _ = self.promoted_generation(directory)
+            dest_root = Path(directory) / "repo-assets"
+
+            copied = self.sync.sync_manifest_assets(
+                source_root=generation / "exports",
+                dest_root=dest_root,
+                manifest_path=generation / "manifest/wall-production-v1.asset-set.json",
+                selection="core",
+                dry_run=False,
+                repo=None,
+                receipt_path=generation / "authority/promotion-receipt.json",
+            )
+
+            self.assertEqual(copied, 8)
+            meshes = sorted(
+                str(path.relative_to(dest_root))
+                for path in dest_root.rglob("*.glb")
+            )
+            self.assertEqual(
+                meshes,
+                [
+                    f"wall_sets/1/models/wall_{name}.glb"
+                    for name in (
+                        "corner",
+                        "cross",
+                        "end",
+                        "isolated",
+                        "straight",
+                        "t_junction",
+                    )
+                ],
+            )
+            self.assertTrue(
+                (dest_root / "wall_sets/1/textures/buildings/wall/wall_albedo.png").is_file()
+            )
+            self.assertFalse((dest_root / "models").exists())
+
+    def test_released_generation_requires_its_own_receipt(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            generation, fixture = self.promoted_generation(directory)
+            dest_root = Path(directory) / "repo-assets"
+            manifest_path = generation / "manifest/wall-production-v1.asset-set.json"
+
+            with self.assertRaises(ValueError):
+                self.sync.sync_manifest_assets(
+                    source_root=generation / "exports",
+                    dest_root=dest_root,
+                    manifest_path=manifest_path,
+                    selection="core",
+                    dry_run=True,
+                    repo=None,
+                )
+
+            foreign = Path(directory) / "foreign-receipt.json"
+            foreign.write_text('{"manifest_sha256":"0"}\n', encoding="utf-8")
+            with self.assertRaises(ValueError):
+                self.sync.sync_manifest_assets(
+                    source_root=generation / "exports",
+                    dest_root=dest_root,
+                    manifest_path=manifest_path,
+                    selection="core",
+                    dry_run=True,
+                    repo=None,
+                    receipt_path=foreign,
+                )
 
     def test_core_sync_copies_only_eight_manifest_files(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

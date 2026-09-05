@@ -122,6 +122,26 @@ class AssetSetPromotionTests(unittest.TestCase):
                 fixture.asset_root, plan, fixture.plan_path
             )
 
+    def test_promoted_generation_validates_on_its_own(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = PromotionFixture(
+                Path(directory), self.promotion, self.fixture_module
+            )
+            fixture.apply()
+            generation = fixture.asset_root / "generations/1"
+            validator = self.promotion.load_manifest_validator()
+            # Every file the manifest points at has to travel with it, or the
+            # canonical generation cannot be re-validated after promotion.
+            validator.validate_manifest(
+                generation / "manifest/wall-production-v1.asset-set.json",
+                mode="final",
+                blend_root=generation / "source/blender",
+                exports_root=generation / "exports",
+                reports_root=generation / "reports",
+                licenses_root=generation / "licenses",
+                repo=None,
+            )
+
     def test_source_tamper_after_plan_is_rejected_before_snapshot(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             fixture = PromotionFixture(

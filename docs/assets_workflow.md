@@ -132,6 +132,25 @@ pending candidateと`optional:normal`は同期対象にしない。manifest mode
 isolated candidate projectionはfinal payloadをreceiptなしで隔離検証するためだけに使い、primary / canonicalへ
 直接同期しない。release projectionはgeneration-scoped promotion receiptを必須とする。
 
+canonicalへ昇格した後のprimary同期は、同じmanifest allowlistに`--receipt`を加えたrelease modeで行う。
+manifestが`generations/<GEN>/manifest/`にある場合は`--receipt`を必須とし、receiptのmanifest hash / generationと
+active pointerの三点一致を検証してからcopyする。配置先は`project_wallset.py`の`runtime_path`をそのまま使い、
+`assets/wall_sets/<GEN>/models/<mesh>.glb`と`assets/wall_sets/<GEN>/textures/...`へ落とす。staging候補の
+manifest-relative配置とは別であり、release projectionが名指すpathと必ず一致する。
+
+```bash
+python3 scripts/sync_external_assets.py \
+  --source "$ASSET_ROOT/generations/<GEN>/exports" \
+  --dest "$PWD/assets" \
+  --manifest "$ASSET_ROOT/generations/<GEN>/manifest/wall-production-v1.asset-set.json" \
+  --receipt "$ASSET_ROOT/generations/<GEN>/authority/promotion-receipt.json" \
+  --selection core \
+  --dry-run
+```
+
+同期後はreceiptを`assets/wall_sets/<GEN>/authority/promotion-receipt.json`へ置き、唯一のmutable runtime authorityである
+`assets/manifests/wall-production-v1.wallset`をtemporary file→fsync→atomic rename→親directory fsyncで最後に切り替える。
+
 art承認後はpending manifestを上書きせず、normalを除いたtexture reportを新規作成してから新generationを封印する。
 `seal_wall_final.py`はcleanなruntime subject、元candidate manifest hash、lit選定画像hash、ユーザー承認UTCを結び、
 `normal_decision=rejected`、`art_review.status=art_approved`、core 8 / optional 0を強制する。
@@ -162,6 +181,10 @@ final manifestの昇格は`promote_asset_set.py plan`でcurrent pointer preimage
 世代payloadとimmutable receiptを完全にfsync・renameしてから、最後に`authority/wall-production-v1.active.json`だけを
 atomic replaceする。中断時の`recover`とpreimageへ戻す`rollback`は既定read-onlyで、`--apply`時も世代を削除せず
 `quarantine/`へ移す。generation番号とreceipt IDは再利用しない。
+payloadにはmanifestが指す全fileを含める。core 8 file、per-mesh export / khronos / post-export / scene report、
+set report、art review artifact、texture validation report、source `.blend`、license、manifest本体である。
+1つでも欠けると昇格後のgenerationを単体でvalidatorへかけられないため、回帰testで
+promoted generationがそれ自身のrootだけで`validate_manifest`を通ることを固定している。
 
 ### Wall runtime projection
 

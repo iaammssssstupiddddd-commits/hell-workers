@@ -826,8 +826,10 @@ AIが実行できるterminal commandをユーザーへ手作業として転嫁�
     GCP/TRELLIS固有の承認済み歴史資料は今回 `N/A` とした。
 - 未着手/進行中:
   - M3／G3は完了。新しいproduction assetごとに同じpoint-in-time backup契約を適用する。
-  - M4は現PC向け基盤だけ完了し、新規canonical assetの制作・目視受入は未着手。
-  - M5／M6は未着手。旧Blender PC待ちはなく、最初の制作assetを決めればM4へ進める。
+  - M4は完了。現PCで制作した最初のcanonical assetは壁の`wall-production-v1` generation 4であり、
+    ユーザーの目視承認（`2026-09-03T12:26:51Z`）とcanonical昇格まで到達した。詳細は
+    [`3d-rtt/production-wall-art-plan-2026-08-31.md`](3d-rtt/production-wall-art-plan-2026-08-31.md)。
+  - M5／M6は未着手。次のcanonical assetを決めれば同じ制作・受入・昇格経路を再利用できる。
 
 ### 次の担当
 
@@ -963,6 +965,7 @@ AI:
 | `2026-09-01` | `Codex` | 壁5 patch限定のsealed OCIO profile 2.1 configを追加し、runtime 2.4.2のvalidation、active cache ID一致、fallbackなしを診断。default configの一般authoring制約は維持 |
 | `2026-08-01` | `Codex` | ユーザー判断により旧Blender PCからの資産／設定引継ぎを廃止。このPCを唯一の新規authoring hostとし、M3を空workspace基準化、M4を新規canonical asset制作へ再定義 |
 | `2026-08-01` | `Codex` | ユーザー判断により内蔵disk暗号化をM2／G2の受け入れ条件そのものから削除。既完了の自動受け入れ結果に基づき、development-only G2を`PASS`へ更新 |
+| `2026-09-05` | `Claude` | 壁の本番アートを現PCで制作・受入し、canonical generation 4として昇格。M4の新規canonical asset制作・目視受入を完了扱いにした |
 | `2026-08-01` | `Codex` | 外部M1台帳から正しい現在地を復元し、新PC M2のfresh clone、WIP隔離復元、toolchain、MCP実query、GitHub、Vulkan、portable pathを受入。当初はLUKS欠落をG2 blockとして記録したが、上記のユーザー判断で解消 |
 | `2026-08-01` | `Codex` | 現PCのBlender/MCP/validator先行基盤とfocused検証結果を記録。当初は旧原本回収待ちとしたが、上記の新規構築判断で解消。OCIOは未解決 |
 | `2026-07-29` | `Codex` | ユーザー用Start Here、全source PCのM0／M1、M0〜M6担当分担、固定成果物、AI引継ぎprompt／報告契約を追加 |

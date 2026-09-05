@@ -123,8 +123,10 @@ shared Rectangle mesh
 現行59°CameraとRtT縦補正後は、画面縦軸への寄与が
 `-world_z + 0.6 × world_y`となる。高さ32 wuの壁は正面が19.2 px相当、公称上面が
 9.6 px相当となり、straight E-W壁の全投影高は28.8 px（`0.90 tile`）。装飾最大でも
-32 px（`1.00 tile`）を超えず、現行32 wu厚Cuboidの51.2 px（`1.60 tile`）から
-箱状の占有感を除ける。
+32 px（`1.00 tile`）を超えず、旧32 wu厚Cuboidの51.2 px（`1.60 tile`）から
+箱状の占有感を除ける。この基準の本番Wallはasset set `wall-production-v1` generation 4として
+canonicalへ昇格済みであり、通常起動のWallは6共有GLB（triangle `24 / 24 / 24 / 36 / 48 / 72`）と
+shared albedo / emissiveで描画される。
 
 また、High・標準zoomで片側2 pxのtexture-baked lineを基準にすると、現行最大zoom-out factor 5では
 公称厚が1.92 px、両側線が合計0.8 px、内部の塗りが1.12 px残る。塗りを1 px以上残す

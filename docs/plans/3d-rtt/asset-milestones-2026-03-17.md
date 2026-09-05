@@ -1,7 +1,7 @@
 # アセット作成マイルストーン
 
 作成日: 2026-03-17
-最終更新: 2026-09-01（壁の本番アート化詳細計画を実行gateまで具体化）
+最終更新: 2026-09-05（壁の本番アートをcanonical generation 4へ昇格）
 ステータス: 進行中（建築・terrain track継続、Soul GLB runtime trackはSuperseded）
 
 ---
@@ -11,6 +11,12 @@
 単一Scene RtT移行計画と連動するアセット制作のマイルストーン。旧Phase 3の完了履歴は`docs/plans/3d-rtt/milestone-roadmap.md`と`archived/phase3-implementation-plan-2026-03-16.md`に保存する。
 
 > **2026-08-03 方針変更:** Soul visible GLB固定、billboard廃止、全BuildingTypeのGLB化、section view用LOD0を新規作業の前提にしない。Soul GLB / animation / face atlasは完了履歴とfallback assetとして保持し、runtime表示は[`single-scene-rtt-indoor-light-field-migration-plan-2026-08-03.md`](single-scene-rtt-indoor-light-field-migration-plan-2026-08-03.md) M2の共有unlit billboardで再評価する。建築trackは同計画のpresentation mappingで`Structural3d`に分類された種類だけを対象に継続する。
+
+> **2026-09-05 壁track完了:** `MS-Asset-Build-A`の壁は本番アートへ置換済みである。asset set
+> `wall-production-v1` generation 4（manifest SHA-256 `7ecdfbb0…`）がcanonical generation storeへ昇格し、
+> repo runtime mirrorと`assets/manifests/wall-production-v1.wallset`のrelease projectionまで同期済みである。
+> 制作・受入の恒久仕様は`docs/assets_workflow.md`、`docs/art-style-criteria.md`、
+> `docs/rendering-performance.md`、`docs/building.md`にある。
 
 > **2026-08-31 壁track詳細化:** `MS-Asset-Pipeline`から`MS-Asset-Build-A`の制作、runtime接続、16接続形状、実機受入、canonical昇格は[`production-wall-art-plan-2026-08-31.md`](production-wall-art-plan-2026-08-31.md)を正本とする。下記の旧PoC条件と矛盾する場合は詳細計画を優先する。
 
