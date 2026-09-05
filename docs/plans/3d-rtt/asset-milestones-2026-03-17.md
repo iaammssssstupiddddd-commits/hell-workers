@@ -18,7 +18,7 @@
 > 制作・受入の恒久仕様は`docs/assets_workflow.md`、`docs/art-style-criteria.md`、
 > `docs/rendering-performance.md`、`docs/building.md`にある。
 
-> **2026-08-31 壁track詳細化:** `MS-Asset-Pipeline`から`MS-Asset-Build-A`の制作、runtime接続、16接続形状、実機受入、canonical昇格は[`production-wall-art-plan-2026-08-31.md`](production-wall-art-plan-2026-08-31.md)を正本とする。下記の旧PoC条件と矛盾する場合は詳細計画を優先する。
+> **2026-08-31 壁track詳細化:** `MS-Asset-Pipeline`から`MS-Asset-Build-A`の制作、runtime接続、16接続形状、実機受入、canonical昇格は[`production-wall-art-plan-2026-08-31.md`](archived/production-wall-art-plan-2026-08-31.md)を正本とする。下記の旧PoC条件と矛盾する場合は詳細計画を優先する。
 
 **基本方針**:
 - Soul GLB / AnimationGraph / face atlasは既存成果物として保持するが、新規runtime拡張は行わない。通常表示は共有unlit billboard PoCを正本候補とし、失敗時だけvisible GLB 1系統へfallbackする
@@ -33,7 +33,7 @@
 | Soul GLB / AnimationGraph / P1 clips / face atlas | ✅ 既存runtime成果物 | P02 billboardのfallback / animation sourceとしてのみ再利用を判断 |
 | `section_material.wgsl` / TerrainSurfaceMaterial / 3 LOD | ✅ 既存実装 | P00 baselineとP06 Light Field接続でTopDown表示を再受入 |
 | Familiar | ✅ 2D foregroundを維持 | 3D化しない。Wall depthが必要になった場合だけ別判断でbillboardへ移す |
-| 建築 GLB pipeline / wall PoC / `Structural3d` BuildingType | ❌ 未着手 | [`production-wall-art-plan-2026-08-31.md`](production-wall-art-plan-2026-08-31.md) M0〜M6でPipeline / Build-Aを閉じてからBuild-Bへ進む |
+| 建築 GLB pipeline / wall PoC / `Structural3d` BuildingType | ❌ 未着手 | [`production-wall-art-plan-2026-08-31.md`](archived/production-wall-art-plan-2026-08-31.md) M0〜M6でPipeline / Build-Aを閉じてからBuild-Bへ進む |
 
 `assets/` のバイナリは外部同期・gitignore 運用のため、「ファイル制作」と「コード側 runtime 接続」を分けて判定する。コード側の正は HEAD、バイナリ受入は外部 asset manifest と実機読込で確認する。
 
@@ -320,7 +320,7 @@ Familiar は Soul の本実装と表示方式再検討（MS-3-Fam-R）後に要�
 
 > **依存**: MS-P3-Pre-C（Camera3d 角度確定後。入力画像の撮影角度が定まる）
 > **ブロック先**: MS-Asset-Build-A
-> **詳細実行計画**: [`production-wall-art-plan-2026-08-31.md`](production-wall-art-plan-2026-08-31.md) M0〜M1
+> **詳細実行計画**: [`production-wall-art-plan-2026-08-31.md`](archived/production-wall-art-plan-2026-08-31.md) M0〜M1
 
 **やること**:
 1. TRELLIS.2 / TripoSR の動作環境を確認する
@@ -346,7 +346,7 @@ Familiar は Soul の本実装と表示方式再検討（MS-3-Fam-R）後に要�
 
 > **依存**: MS-Asset-Pipeline 完了・MS-Asset-0 完了
 > **ブロック先**: 建築visual quality、MS-Asset-Build-B、新PC移行計画M4の最初のcanonical asset受入（P02 / P06のruntime契約は完了済み）
-> **詳細実行計画**: [`production-wall-art-plan-2026-08-31.md`](production-wall-art-plan-2026-08-31.md) M2〜M6。本節は成果物一覧だけを保持する。
+> **詳細実行計画**: [`production-wall-art-plan-2026-08-31.md`](archived/production-wall-art-plan-2026-08-31.md) M2〜M6。本節は成果物一覧だけを保持する。
 
 `billboard-camera-angle-proposal` §7 の4形状案へ孤立・端を補い、16接続maskの意味を形状で保持する6バリアントを制作する。
 

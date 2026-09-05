@@ -5,13 +5,21 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `production-wall-art-plan-2026-08-31` |
-| ステータス | `In Progress (M5)` |
+| ステータス | `Closed (2026-09-05)` |
 | 作成日 | `2026-08-31` |
-| 最終更新日 | `2026-09-03` |
+| 最終更新日 | `2026-09-05` |
 | 作成者 | `Codex` |
 | 親計画 | [`asset-milestones-2026-03-17.md`](asset-milestones-2026-03-17.md) の `MS-Asset-Pipeline` / `MS-Asset-Build-A` |
 | 関連提案 | [`billboard-camera-angle-proposal-2026-03-16.md`](../../proposals/3d-rtt/archived/billboard-camera-angle-proposal-2026-03-16.md)（4形状案の履歴。本計画では孤立／端の意味を満たす6形状へ補完する） |
 | 関連Issue/PR | `N/A` |
+
+> **2026-09-05 close:** 本計画は完了した。asset set `wall-production-v1` generation 4
+> （manifest SHA-256 `7ecdfbb0…`）がcanonical generation storeとrepo runtime mirrorへ昇格し、
+> 通常起動と同じrelease authorityでのactual-window受入も合格した。恒久仕様は
+> [`../../art-style-criteria.md`](../../art-style-criteria.md)、[`../../assets_workflow.md`](../../assets_workflow.md)、
+> [`../../building.md`](../../building.md)、[`../../rendering-performance.md`](../../rendering-performance.md)にある。
+> 未取得の証跡はWallのsave/load actual-window captureだけで、その扱いは`rendering-performance.md`へ移した。
+> 本書は経緯の記録として保持する。
 
 本書は、現在の茶色い `Cuboid` プレースホルダーを本番壁へ置き換えるための詳細実行計画である。
 親計画の壁PoCについて、アート制作、6 GLBから16接続maskへの写像、runtime lifecycle、実機受入、

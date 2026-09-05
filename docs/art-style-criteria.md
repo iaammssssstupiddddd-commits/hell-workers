@@ -4,7 +4,7 @@
 ステータス: 確定済み項目あり / PoC待ち項目あり
 
 関連: `docs/world_lore.md` §6.2〜6.3 / `docs/plans/3d-rtt/asset-milestones-2026-03-17.md` MS-Asset-0 /
-[`production-wall-art-plan-2026-08-31.md`](plans/3d-rtt/production-wall-art-plan-2026-08-31.md)
+[`production-wall-art-plan-2026-08-31.md`](plans/3d-rtt/archived/production-wall-art-plan-2026-08-31.md)
 
 ---
 

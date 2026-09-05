@@ -185,6 +185,9 @@ payloadにはmanifestが指す全fileを含める。core 8 file、per-mesh expor
 set report、art review artifact、texture validation report、source `.blend`、license、manifest本体である。
 1つでも欠けると昇格後のgenerationを単体でvalidatorへかけられないため、回帰testで
 promoted generationがそれ自身のrootだけで`validate_manifest`を通ることを固定している。
+不完全なgenerationを昇格させてしまった場合は、pointerを`rollback`で戻し、当該generationを
+`generations/.quarantine-<GEN>-<理由>-<UTC>`へ退避してから、修正したtoolで同じpayload manifestを再applyする。
+active pointerが指していないgenerationは削除せず、監査のために隔離のまま残す。
 
 ### Wall runtime projection
 

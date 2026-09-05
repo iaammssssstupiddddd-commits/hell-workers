@@ -1,6 +1,6 @@
 # Plans Index
 
-`docs/plans` の文書ステータス一覧（更新日: 2026-09-02）。
+`docs/plans` の文書ステータス一覧（更新日: 2026-09-05）。
 
 ## 新規計画書の作り方
 
@@ -29,7 +29,6 @@
 | [3d-rtt/asset-milestones-2026-03-17.md](3d-rtt/asset-milestones-2026-03-17.md) | 進行中（建築・terrain track継続、Soul GLB runtime trackはSuperseded） | アセット作成マイルストーン |
 | [3d-rtt/lighting-visual-plan-2026-04-04.md](3d-rtt/lighting-visual-plan-2026-04-04.md) | Superseded | Outdoor Lamp のローカル照明で Soul / 建物に落ちる影を追加する計画 |
 | [3d-rtt/milestone-roadmap.md](3d-rtt/milestone-roadmap.md) | Superseded（完了済み実装の履歴。未完項目は凍結） | 3D-RtT 移行ロードマップ |
-| [3d-rtt/production-wall-art-plan-2026-08-31.md](3d-rtt/production-wall-art-plan-2026-08-31.md) | In Progress (M5) | active 3D wallをRough Vector Sketchの本番assetへ置き換え、制作・接続・実機受入・canonical昇格を一つの経路で閉じる計画。 |
 | [3d-rtt/single-scene-light-field/00-baseline-gates-plan-2026-08-03.md](3d-rtt/single-scene-light-field/00-baseline-gates-plan-2026-08-03.md) | Completed | Audit、Capture、Memory、RenderDocのbaselineと数値gateを実装前に固定するP00。 |
 | [3d-rtt/single-scene-light-field/01-single-scene-rtt-plan-2026-08-03.md](3d-rtt/single-scene-light-field/01-single-scene-rtt-plan-2026-08-03.md) | Completed | Soul mask target／camera／proxyを撤去し、Scene RtT 1枚へ移行するP01。 |
 | [3d-rtt/single-scene-light-field/02-topdown-presentation-plan-2026-08-03.md](3d-rtt/single-scene-light-field/02-topdown-presentation-plan-2026-08-03.md) | Completed | Door実経路、TopDown camera、Building分類、Soul billboard／Familiar前景を統合するP02。 |
@@ -66,6 +65,7 @@
 | [3d-rtt/archived/phase2-implementation-review.md](3d-rtt/archived/phase2-implementation-review.md) | Archived | Phase 2 実装計画 レビュー |
 | [3d-rtt/archived/phase3-implementation-plan-2026-03-16.md](3d-rtt/archived/phase3-implementation-plan-2026-03-16.md) | Archived | Phase 3 実装計画 |
 | [3d-rtt/archived/phase3-ms-p3-pre-c-plan.md](3d-rtt/archived/phase3-ms-p3-pre-c-plan.md) | Archived | Phase 3 着手前基盤整備計画 (MS-2C〜MS-P3-Pre-C) |
+| [3d-rtt/archived/production-wall-art-plan-2026-08-31.md](3d-rtt/archived/production-wall-art-plan-2026-08-31.md) | Archived | active 3D wallのRough Vector Sketch本番assetへの置換と、制作からruntime受入までの一貫した経路の計画。 |
 | [3d-rtt/archived/terrain-visual-reassessment-2026-04-05.md](3d-rtt/archived/terrain-visual-reassessment-2026-04-05.md) | Archived | 地形ビジュアル再検討メモ（2026-04-05） |
 | [3d-rtt/archived/wfc-ms0-invariant-spec.md](3d-rtt/archived/wfc-ms0-invariant-spec.md) | Archived | MS-WFC-0: 生成 invariant 仕様化 |
 | [3d-rtt/archived/wfc-ms1-anchor-data-model.md](3d-rtt/archived/wfc-ms1-anchor-data-model.md) | Archived | MS-WFC-1: 固定アンカー定義と生成結果モデル化 |

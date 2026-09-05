@@ -146,6 +146,19 @@ subject `080bee95`のjob `wall-renderdoc-20260903T175737Z-4df5356f`はcompleted�
 `D_4N / D_N <= 4 * 1.10`へ導出し直した。前者はmesh identityと無相関な順序での期待切断数を上限にしたもので、
 これを超えることはmergeが成立していないことを意味する。旧`D_4N <= 4 * D_N + 6`の定数余裕6には導出がなく、
 mergeが期待より効いている286を282で弾いていた。
+本番Wallの受入profileは4つある。`wall-art-approved-candidate-matrix-v1`（隔離candidateの標準zoom 9 case）、
+`wall-art-approved-candidate-farthest-zoom-v1`（同じ9 caseを最遠zoom-outで撮り、直線specimenの連続性を判定）、
+`wall-renderdoc-v1`（draw group構造）、`wall-art-released-generation-v1`（昇格後に通常起動と同じ
+release authorityで撮る9 case）である。最後のprofileは`--candidate` opt-inを使わず、gallery viewだけを
+`HW_WALL_ART_GALLERY=1`で要求し、projectionが指すreceiptをrepo実体とgeneration receiptへ突き合わせる。
+subject `45af5355`のjob `wall-art-20260905T115042Z-9572a891`が9 / 9 case validで、全caseが
+`authority=release_approved`、generation 4、production 96 / fallback 0、`fallback_mesh_resident=false`である。
+
+Wallのsave/load表示にはactual-window証跡がない。rehydrate後にfallbackで可視化されること、world replace後に
+一括でproductionへ戻ることは`rehydrated_wall_starts_in_visible_fallback_at_its_world_position`と
+`wall_presentation.rs`のfocused testが担保する。画像側の証跡が必要になった時点で、save/load phaseを持つ
+actual-window scenarioを追加する。
+
 導出後のsubject `48743206`のjob `wall-renderdoc-20260904T153035Z-e91b1bb9`は`status=valid`で封印され、
 独立verifyも`pass`となった。completed `D_N = D_4N = 6`、provisional `69 <= 81` / `286 <= 321`、比`4.14 <= 4.4`で、
 4 caseとも`presentation=production`、rendered instanceは96 / 384である。
@@ -373,7 +386,7 @@ micropolygon 下限（1 tri ≥ 4 px²）× カリング率（可視率 35%）�
 
 | 建築物 | 可視 tri概算 | 逆算値 (÷0.35) | 制作予算 |
 |---|---:|---:|---:|
-| 壁 1×1 | [本番壁計画](plans/3d-rtt/production-wall-art-plan-2026-08-31.md)で判定 | — | **150〜250 tri目標 / 350 tri hard cap** |
+| 壁 1×1 | [本番壁計画](plans/3d-rtt/archived/production-wall-art-plan-2026-08-31.md)で判定 | — | **150〜250 tri目標 / 350 tri hard cap** |
 | 設備 1×1 | ~420 | ~1,200 | **~1,300 tri** |
 | 設備 2×2 | ~1,350 | ~3,860 | **~4,100 tri** |
 

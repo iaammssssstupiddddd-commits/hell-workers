@@ -828,7 +828,7 @@ AIが実行できるterminal commandをユーザーへ手作業として転嫁�
   - M3／G3は完了。新しいproduction assetごとに同じpoint-in-time backup契約を適用する。
   - M4は完了。現PCで制作した最初のcanonical assetは壁の`wall-production-v1` generation 4であり、
     ユーザーの目視承認（`2026-09-03T12:26:51Z`）とcanonical昇格まで到達した。詳細は
-    [`3d-rtt/production-wall-art-plan-2026-08-31.md`](3d-rtt/production-wall-art-plan-2026-08-31.md)。
+    [`3d-rtt/production-wall-art-plan-2026-08-31.md`](3d-rtt/archived/production-wall-art-plan-2026-08-31.md)。
   - M5／M6は未着手。次のcanonical assetを決めれば同じ制作・受入・昇格経路を再利用できる。
 
 ### 次の担当
