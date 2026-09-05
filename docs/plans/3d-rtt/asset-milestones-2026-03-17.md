@@ -1,7 +1,7 @@
 # アセット作成マイルストーン
 
 作成日: 2026-03-17
-最終更新: 2026-09-05（壁の本番アートをcanonical generation 4へ昇格）
+最終更新: 2026-09-06（仮設型枠・両開きDoorの計画をセルフレビューし、共通受入順を具体化）
 ステータス: 進行中（建築・terrain track継続、Soul GLB runtime trackはSuperseded）
 
 ---
@@ -17,6 +17,15 @@
 > repo runtime mirrorと`assets/manifests/wall-production-v1.wallset`のrelease projectionまで同期済みである。
 > 制作・受入の恒久仕様は`docs/assets_workflow.md`、`docs/art-style-criteria.md`、
 > `docs/rendering-performance.md`、`docs/building.md`にある。
+
+> **2026-09-05 後続アート計画（Draft）:**
+> 仮設段階の木材表現は[仮設壁の木製型枠化計画](provisional-wall-formwork-plan-2026-09-05.md)、
+> Build-BのDoorは[ドアの本番ビジュアル化計画](production-door-art-plan-2026-09-05.md)で扱う。
+> 型枠は「仮設／完成で同じmeshを使う」現行契約の改定、Doorは固定枠・両開きの3状態・向き・Wall portとの
+> seamを対象とする。2026-09-06のセルフレビューで部材寸法、Doorの2軸PNGとpulse同期、旧schema互換、
+> 承認前previewを具体化した。共通C0でbaseline基盤を先に作り、両runtimeを同一subjectへ統合後、
+> 単独M3→共通J1→各releaseの順に受け入れる。旧PoCの未着手表記は新計画の進捗ではない。
+> 両計画は未実装であり、以下の旧PoC checklistを新しい実装の完了条件として使わない。
 
 > **2026-08-31 壁track詳細化:** `MS-Asset-Pipeline`から`MS-Asset-Build-A`の制作、runtime接続、16接続形状、実機受入、canonical昇格は[`production-wall-art-plan-2026-08-31.md`](archived/production-wall-art-plan-2026-08-31.md)を正本とする。下記の旧PoC条件と矛盾する場合は詳細計画を優先する。
 
@@ -394,7 +403,7 @@ Familiar は Soul の本実装と表示方式再検討（MS-3-Fam-R）後に要�
 | ファイル | BuildingType | 備考 |
 | --- | --- | --- |
 | `assets/wall_sets/<GEN>/models/wall_*.glb` | Wall | 接続バリアントは Build-A の6形状を使用。active `.wallset` projectionから参照 |
-| `assets/models/door.glb` | Door | open / closed の2状態 |
+| `assets/door_sets/<GEN>/models/door_{closed,open,locked}.glb`（実装予定） | Door | [本番ドア計画](production-door-art-plan-2026-09-05.md)で固定枠＋両開き3状態、両軸preview、runtime pathを具体化。M0で寸法・接続・baselineをfixture化 |
 | `assets/models/floor.glb` | Floor | 石畳。薄い slab で可 |
 | `assets/models/tank.glb` | Tank | empty / half / full は material または子 mesh で表現 |
 | `assets/models/mud_mixer.glb` | MudMixer | 稼働アニメーションを後付け可能にする |

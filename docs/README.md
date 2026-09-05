@@ -59,6 +59,8 @@
 - [development-infra/rust-analyzer-mcp.md](development-infra/rust-analyzer-mcp.md): 複数エージェントでrust-analyzer MCP backendを共有するadapter、idle解放、IDE側の常駐コスト削減設定。
 - [linux-setup.md](linux-setup.md): Linux ネイティブ環境でのビルド・実行セットアップ手順。
 - [plans/README.md](plans/README.md): フェーズ分割した実装計画ドキュメント。
+- [plans/3d-rtt/provisional-wall-formwork-plan-2026-09-05.md](plans/3d-rtt/provisional-wall-formwork-plan-2026-09-05.md): 木材を使う仮設壁の型枠表現、段階別mesh切替、混在接続・実機受入の計画。
+- [plans/3d-rtt/production-door-art-plan-2026-09-05.md](plans/3d-rtt/production-door-art-plan-2026-09-05.md): 木・骨の両開きドア、固定枠と開閉／施錠の3状態、2軸preview・壁との接続・実機受入の計画。
 - [plans/archive/save-rehydration-registry-plan-2026-08-03.md](plans/archive/save-rehydration-registry-plan-2026-08-03.md): Track C3 のロード前検証、phase-aware 再構築 registry、通常ロード／rollback共通化の完了記録。
 - [plans/archive/building-deconstruction-plan-2026-08-03.md](plans/archive/building-deconstruction-plan-2026-08-03.md): Track C1 の一般建築物解体、固定資源回収、owner-safe cleanup の完了記録。
 - [plans/archive/save-catalog-autosave-plan-2026-08-03.md](plans/archive/save-catalog-autosave-plan-2026-08-03.md): Track C2 の手動セーブスロット、catalog、世代オートセーブ計画（archive）。
