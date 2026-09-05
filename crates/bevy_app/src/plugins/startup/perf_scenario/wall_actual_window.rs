@@ -56,8 +56,13 @@ const STRAIGHT_PROBE_MIN_HALF_WIDTH: u32 = 2;
 /// `(N, S, W, E)` connection mask of the straight east-west specimen.
 const STRAIGHT_EAST_WEST_MASK: u8 = 0b0011;
 
+/// The gallery view is the acceptance presentation: it frames the fixture,
+/// hides UI and connector visuals, and reports production residency. It is
+/// requested by the isolated candidate opt-in or, once a generation is
+/// released, by the post-promote profile that runs without that opt-in.
 fn candidate_gallery_requested() -> bool {
     std::env::var("HW_WALL_CANDIDATE").as_deref() == Ok("1")
+        || std::env::var("HW_WALL_ART_GALLERY").as_deref() == Ok("1")
 }
 
 fn farthest_zoom_requested() -> bool {

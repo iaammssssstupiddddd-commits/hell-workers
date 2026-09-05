@@ -25,6 +25,8 @@ PROFILE = "wall-art-current-calibration-v1"
 CANDIDATE_PROFILE = "wall-art-approved-candidate-v1"
 MATRIX_PROFILE = "wall-art-approved-candidate-matrix-v1"
 FARTHEST_PROFILE = "wall-art-approved-candidate-farthest-zoom-v1"
+RELEASE_PROFILE = "wall-art-released-generation-v1"
+AUTHORITIES = ("isolated_candidate", "release_approved")
 ZOOM_MODES = ("standard", "farthest")
 # The straight-run band is judged against the terrain it sits on instead of a
 # fixed colour: a wall column counts as visible when its darkest pixel is at
@@ -152,7 +154,18 @@ def require_number(value: Any, label: str) -> float:
     return number
 
 
-def profile_name(candidate: bool, matrix: bool = False, zoom: str = "standard") -> str:
+def profile_name(
+    candidate: bool,
+    matrix: bool = False,
+    zoom: str = "standard",
+    authority: str = "isolated_candidate",
+) -> str:
+    if authority == "release_approved":
+        native.require(
+            candidate and matrix and zoom == "standard",
+            "Wall release profile is the standard-zoom matrix",
+        )
+        return RELEASE_PROFILE
     if matrix:
         native.require(candidate, "Wall matrix requires candidate mode")
         return FARTHEST_PROFILE if zoom == "farthest" else MATRIX_PROFILE
@@ -160,7 +173,14 @@ def profile_name(candidate: bool, matrix: bool = False, zoom: str = "standard") 
     return CANDIDATE_PROFILE if candidate else PROFILE
 
 
-def candidate_identity(repo: Path) -> dict[str, Any]:
+def candidate_identity(
+    repo: Path, *, authority: str = "isolated_candidate"
+) -> dict[str, Any]:
+    """Read the runtime projection this repository is allowed to activate.
+
+    The isolated candidate is opt-in per launch; a released generation is the
+    normal startup authority and carries a promotion receipt.
+    """
     path = repo / "assets/manifests/wall-production-v1.wallset"
     native.require(
         path.is_file() and not path.is_symlink(),
@@ -168,9 +188,33 @@ def candidate_identity(repo: Path) -> dict[str, Any]:
     )
     value = native.read_json(path)
     native.require(
-        value.get("authority") == "isolated_candidate",
+        value.get("authority") == authority,
         "Wall candidate authority differs",
     )
+    if authority == "release_approved":
+        receipt = value.get("receipt")
+        native.require(
+            isinstance(receipt, dict)
+            and set(receipt) == {"bytes", "path", "sha256"},
+            "Wall release receipt reference differs",
+        )
+        receipt_path = repo / "assets" / receipt["path"]
+        native.require(
+            receipt_path.is_file() and not receipt_path.is_symlink(),
+            "Wall release receipt is absent from the repository",
+        )
+        native.require(
+            sha256(receipt_path) == receipt["sha256"]
+            and receipt_path.stat().st_size == receipt["bytes"],
+            "Wall release receipt bytes differ",
+        )
+        sealed = native.read_json(receipt_path)
+        native.require(
+            sealed.get("manifest_sha256") == value.get("manifest_sha256")
+            and sealed.get("asset_set_generation")
+            == value.get("asset_set_generation"),
+            "Wall release receipt describes another generation",
+        )
     generation = value.get("asset_set_generation")
     native.require(
         type(generation) is int and generation > 0,
@@ -188,7 +232,7 @@ def candidate_identity(repo: Path) -> dict[str, Any]:
         "Wall candidate manifest hash is invalid",
     )
     return {
-        "authority": "isolated_candidate",
+        "authority": authority,
         "asset_set_generation": generation,
         "manifest_sha256": digest,
     }
@@ -321,7 +365,7 @@ def validate_probe_status(
             "Wall candidate generation differs",
         )
         native.require(
-            gallery["authority"] == "isolated_candidate",
+            gallery["authority"] in AUTHORITIES,
             "Wall candidate authority differs",
         )
         native.require(
@@ -702,15 +746,20 @@ def run_calibration(
     )
     if candidate_mode:
         native.require(candidate is not None, "Wall candidate identity is absent")
-        environment.update(
-            {
-                "HW_WALL_CANDIDATE": "1",
-                "HW_WALL_CANDIDATE_GENERATION": str(
-                    candidate["asset_set_generation"]
-                ),
-                "HW_WALL_CANDIDATE_MANIFEST_SHA256": candidate["manifest_sha256"],
-            }
-        )
+        if candidate["authority"] == "release_approved":
+            # A released generation is the normal startup authority, so the run
+            # only asks for the gallery view and never opts a candidate in.
+            environment["HW_WALL_ART_GALLERY"] = "1"
+        else:
+            environment.update(
+                {
+                    "HW_WALL_CANDIDATE": "1",
+                    "HW_WALL_CANDIDATE_GENERATION": str(
+                        candidate["asset_set_generation"]
+                    ),
+                    "HW_WALL_CANDIDATE_MANIFEST_SHA256": candidate["manifest_sha256"],
+                }
+            )
     if matrix_mode:
         environment["HW_WALL_ART_MATRIX"] = "1"
     if zoom != "standard":
@@ -910,9 +959,12 @@ def verify_root(root: Path) -> dict[str, Any]:
     native.require(type(matrix_mode) is bool, "Wall matrix mode is invalid")
     zoom = manifest.get("zoom", "standard")
     native.require(zoom in ZOOM_MODES, "Wall zoom mode is invalid")
+    authority = manifest.get("authority", "isolated_candidate")
+    native.require(authority in AUTHORITIES, "Wall authority is invalid")
     candidate = manifest.get("candidate_identity")
     native.require(
-        manifest.get("profile") == profile_name(candidate_mode, matrix_mode, zoom),
+        manifest.get("profile")
+        == profile_name(candidate_mode, matrix_mode, zoom, authority),
         "Wall manifest profile differs",
     )
     native.require(
@@ -940,7 +992,8 @@ def verify_root(root: Path) -> dict[str, Any]:
         native.require(candidate is None, "Fallback calibration has candidate identity")
     else:
         native.require(
-            candidate == candidate_identity(repo), "Wall candidate identity changed"
+            candidate == candidate_identity(repo, authority=authority),
+            "Wall candidate identity changed",
         )
     binary = repo / "target/profiling/bevy_app"
     native.require(sha256(binary) == manifest["binary_sha256"], "Wall binary changed")
@@ -980,9 +1033,10 @@ def verify_root(root: Path) -> dict[str, Any]:
     return {
         "schema_version": SCHEMA_VERSION,
         "status": "pass",
-        "profile": profile_name(candidate_mode, matrix_mode, zoom),
+        "profile": profile_name(candidate_mode, matrix_mode, zoom, authority),
         "candidate": candidate_mode,
         "zoom": zoom,
+        "authority": authority,
         "root": str(root),
         "screenshots": len(specs),
     }
@@ -997,11 +1051,14 @@ def plan(args: argparse.Namespace) -> int:
         for path in density.missing_runtime_assets(repo)
     )
     candidate: dict[str, Any] | None = None
+    authority = "release_approved" if args.release else "isolated_candidate"
     if args.matrix and not args.candidate:
         failures.append("Wall matrix requires --candidate")
+    if args.release and not (args.candidate and args.matrix):
+        failures.append("Wall release run is the standard-zoom candidate matrix")
     if args.candidate:
         try:
-            candidate = candidate_identity(repo)
+            candidate = candidate_identity(repo, authority=authority)
         except native.AcceptanceError as error:
             failures.append(str(error))
     subject = native.git_subject(repo)
@@ -1059,14 +1116,19 @@ def plan(args: argparse.Namespace) -> int:
         command.append("--matrix")
     if args.zoom != "standard":
         command.extend(["--zoom", args.zoom])
+    if args.release:
+        command.append("--release")
     native.print_json(
         {
             "schema_version": SCHEMA_VERSION,
             "status": "ready" if not failures else "blocked",
-            "profile": profile_name(args.candidate, args.matrix, args.zoom),
+            "profile": profile_name(
+                args.candidate, args.matrix, args.zoom, authority
+            ),
             "candidate": args.candidate,
             "matrix": args.matrix,
             "zoom": args.zoom,
+            "authority": authority,
             "candidate_identity": candidate,
             "job_root": str(root),
             "subject_commit": subject,
@@ -1125,6 +1187,11 @@ def run(args: argparse.Namespace) -> int:
         not args.matrix or args.candidate,
         "Wall matrix requires candidate mode",
     )
+    authority = "release_approved" if args.release else "isolated_candidate"
+    native.require(
+        not args.release or (args.candidate and args.matrix),
+        "Wall release run is the standard-zoom candidate matrix",
+    )
     native.require(
         density.asset_view_fingerprint(repo) == args.asset_view_fingerprint,
         "Wall asset view changed",
@@ -1137,7 +1204,7 @@ def run(args: argparse.Namespace) -> int:
             "Fallback calibration received candidate identity",
         )
     else:
-        candidate = candidate_identity(repo)
+        candidate = candidate_identity(repo, authority=authority)
         native.require(
             args.candidate_generation is not None
             and int(args.candidate_generation) == candidate["asset_set_generation"]
@@ -1150,10 +1217,11 @@ def run(args: argparse.Namespace) -> int:
     state: dict[str, Any] = {
         "schema_version": SCHEMA_VERSION,
         "status": "running",
-        "profile": profile_name(args.candidate, args.matrix, args.zoom),
+        "profile": profile_name(args.candidate, args.matrix, args.zoom, authority),
         "candidate": args.candidate,
         "matrix": args.matrix,
         "zoom": args.zoom,
+        "authority": authority,
         "candidate_identity": candidate,
         "subject_commit": args.subject_commit,
         "source_fingerprint": args.source_fingerprint,
@@ -1217,10 +1285,11 @@ def run(args: argparse.Namespace) -> int:
         manifest = {
             "schema_version": SCHEMA_VERSION,
             "status": "pass",
-            "profile": profile_name(args.candidate, args.matrix, args.zoom),
+            "profile": profile_name(args.candidate, args.matrix, args.zoom, authority),
             "candidate": args.candidate,
             "matrix": args.matrix,
             "zoom": args.zoom,
+            "authority": authority,
             "candidate_identity": candidate,
             "repo": str(repo),
             "subject_commit": args.subject_commit,
@@ -1329,6 +1398,16 @@ def self_test() -> int:
         and profile_name(True, True) == MATRIX_PROFILE,
         "Wall farthest zoom profile differs",
     )
+    native.require(
+        profile_name(True, True, "standard", "release_approved") == RELEASE_PROFILE,
+        "Wall release profile differs",
+    )
+    for candidate_mode, matrix, zoom in ((False, False, "standard"), (True, True, "farthest")):
+        try:
+            profile_name(candidate_mode, matrix, zoom, "release_approved")
+        except native.AcceptanceError:
+            continue
+        raise native.AcceptanceError("Wall release profile accepted another shape")
     straight = {
         "ordinal": 3,
         "grid": [7, 17],
@@ -1461,7 +1540,13 @@ def self_test() -> int:
         {
             "schema_version": SCHEMA_VERSION,
             "status": "pass",
-            "profiles": [PROFILE, CANDIDATE_PROFILE, MATRIX_PROFILE, FARTHEST_PROFILE],
+            "profiles": [
+                PROFILE,
+                CANDIDATE_PROFILE,
+                MATRIX_PROFILE,
+                FARTHEST_PROFILE,
+                RELEASE_PROFILE,
+            ],
         }
     )
     return 0
@@ -1477,6 +1562,7 @@ def parser() -> argparse.ArgumentParser:
     plan_parser.add_argument("--candidate", action="store_true")
     plan_parser.add_argument("--matrix", action="store_true")
     plan_parser.add_argument("--zoom", choices=ZOOM_MODES, default="standard")
+    plan_parser.add_argument("--release", action="store_true")
     run_parser = commands.add_parser("run")
     for name in (
         "repo",
@@ -1491,6 +1577,7 @@ def parser() -> argparse.ArgumentParser:
     run_parser.add_argument("--candidate", action="store_true")
     run_parser.add_argument("--matrix", action="store_true")
     run_parser.add_argument("--zoom", choices=ZOOM_MODES, default="standard")
+    run_parser.add_argument("--release", action="store_true")
     run_parser.add_argument("--candidate-generation")
     run_parser.add_argument("--candidate-manifest-sha256")
     for name in ("status", "verify"):
