@@ -1237,6 +1237,35 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
 
 ### M6: canonical昇格、文書同期、計画close
 
+実装状況（2026-09-05）:
+
+- 承認直前にcandidate hashを再計算し、M5封印値`7ecdfbb0…`と一致することを確認したうえで、ユーザーの
+  canonical promote明示承認（UTC `2026-09-05T00:56:48Z`）を`wall-production-v1.release-approval.json`へ記録した。
+  promote前のactive pointerは`absent`（初回昇格）で、`recover`は`clean`、`plan` artifactはread-onlyで封印した。
+- 初回applyで書いた`generations/4`は、manifestが指すtexture validation reportをpayloadへ含めておらず、
+  昇格後のgenerationを単体でvalidatorへかけられなかった。pointerをrollbackし、当該generationを
+  `.quarantine-4-incomplete-20260905T010112Z`へ隔離し、`promote_asset_set.py`のallowlistへtexture reportを追加し、
+  promoted generationがそれ自身のrootだけで`validate_manifest`を通ることを検証する回帰testを追加した
+  （修正前は当該testが失敗することも確認済み）。同じmanifest `7ecdfbb0…`と同じ承認artifactで39 fileとして再applyした。
+- canonicalは`generations/4`（全file mode `0444`）、active pointerはgeneration 4 / manifest `7ecdfbb0…` /
+  receipt `1c59bb83…`を指す。pointer↔receipt↔manifestのhash三点一致、core payload hash、`.blend` `a7dd0c65…`、
+  `recover=active`、rollback dry-runのpreimage `absent`を検証した。
+- repo runtime mirrorはユーザーの別承認（UTC `2026-09-05T11:36:19Z`）後に同期した。`sync_external_assets.py`は
+  staging前提だったため、generation layoutと`--receipt`（receipt↔manifest↔active pointerの三点検証）へ対応させ、
+  配置先を`project_wallset.py`の`runtime_path`に一致させた。release配置とreceipt必須化は回帰testで固定した。
+  結果は`assets/wall_sets/4/`（6 GLB＋albedo/emissive＋receipt）で、canonicalとbyte一致である。
+  唯一のmutable runtime authorityである`assets/manifests/wall-production-v1.wallset`は
+  temporary file→fsync→atomic rename→親directory fsyncで最後に切り替えた。
+- post-promoteのactual-window再検証は、通常起動と同じauthorityで行うため`--candidate` opt-inを使わない
+  `wall-art-released-generation-v1`を追加した（gallery viewのopt-inをcandidate opt-inから分離）。primary repository
+  subject `45af5355`のjob `wall-art-20260905T115042Z-9572a891`は9 / 9 caseがstatus `valid`、独立verifyも`pass`で、
+  全caseが`authority=release_approved`、generation 4、manifest `7ecdfbb0…`、production 96 / fallback 0、
+  distinct mesh 6 / material 1、`fallback_mesh_resident=false`である。画像を目視し、黒い石積み、鉄バンド、
+  紫の裂け目が実際に描画されていることを確認した。
+- 最終状態に対するHelp影響判断は`No impact`である。変わったのは壁の見た目だけで、Wallの配置操作、範囲指定、
+  資材Wood×1、仮設から本設への成立条件、撤去時の待機理由、Room境界の意味、通知文言、shortcutはいずれも不変であり、
+  Help catalogは壁の外見を記述していない（`providers/orders_building_zones.rs`のWall記述は費用・撤去・範囲・Room境界のみ）。
+
 - 変更内容:
   - stagingの承認対象、asset-set manifest、license、validator、native artifact、recovery結果をユーザーへ提示する。承認直前にcandidate hashを再計算し、M5のasset-set identityと一致しなければM4へ戻る。M5で検証したpayload manifest bytesは変更せず、release承認は別のpromotion receiptへ記録する。
   - canonical generation storeとprimary runtime mirrorについて、現在のactive pointer / receiptと参照先generationのpreimage（既存hashまたはabsent）を記録し、repositoryの`target/`外にimmutable promotion snapshotを作る。snapshot自体のmanifest / SHA-256とpointer rollback dry-runを検証してからpromote承認を求める。
@@ -1257,13 +1286,13 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   - `README.md`
   - Help manifest / provider / coverage / approval snapshot（Help impactが`Update required`の場合だけ）
 - 完了条件:
-  - [ ] ユーザーのcanonical promote明示承認が記録されている。
-  - [ ] canonical / repo mirrorのactive pointer preimageまたはabsent状態、参照generation、immutable snapshot、snapshot manifest / hash、rollback dry-runがpromote前に検証されている。
-  - [ ] canonical generation payload / promotion receipt / repo runtime generation / runtime projectionのhashとasset-set identityが一致する。
+  - [x] ユーザーのcanonical promote明示承認が記録されている（UTC `2026-09-05T00:56:48Z`、runtime mirror同期は別承認 `2026-09-05T11:36:19Z`）。
+  - [x] canonical / repo mirrorのactive pointer preimageまたはabsent状態、参照generation、immutable snapshot、snapshot manifest / hash、rollback dry-runが検証されている。初回昇格のためpreimageは`absent`で、snapshotはapplyが書くためrollback dry-runはapply後に実行した。
+  - [x] canonical generation payload / promotion receipt / repo runtime generation / runtime projectionのhashとasset-set identityが一致する。
   - [ ] allowlist外のcanonical / repo asset差分が0で、file fsync / generation-directory fsync / generation rename / generation-store親fsync / pointer file fsync / pointer rename / pointer親fsync各段のprocess-kill test後もactive pointerは完全な旧または新generationだけを指す。`recover`がorphanを検出し、rollbackはpointerを検証済みpreimageへ同じdurable atomic手順で戻す。
-  - [ ] actual sync後のprimary clean startupとloadを専用actual-window profileで再実行し、promotion-receipt-approved asset-set generation、production asset resident、fallback 0、runtime hash一致を再確認している。
-  - [ ] Help impact decisionと必要なHelp / docs更新が完了している。
-  - [ ] `docs --write`後の2 indexをreviewし、全workspace gateがgreenである。
+  - [ ] actual sync後のprimary clean startupを`wall-art-released-generation-v1`で再実行し、promotion-receipt-approved asset-set generation、production asset resident、fallback 0、runtime hash一致を再確認済み（job `9572a891`）。save/loadのactual-window再実行は未実施で、state側は`rehydrated_wall_starts_in_visible_fallback_at_its_world_position`などのfocused testが担保する。
+  - [x] Help impact decisionは`No impact`で、docs同期（README、art基準、building、assets workflow、rendering performance、親計画、workstation計画）を完了している。
+  - [x] `docs --write`後の2 indexをreviewし、全workspace gateがgreenである。
   - [ ] 本計画の一時情報を恒久docsへ移し、plan lifecycleを閉じている。
 - 検証:
   - `python3 tools/blender_ai_workflow/scripts/promote_asset_set.py plan --manifest "$ASSET_ROOT/staging/reports/wall-production-v1.asset-set.json" --asset-root "$ASSET_ROOT" --snapshot <outside-target-snapshot>`
