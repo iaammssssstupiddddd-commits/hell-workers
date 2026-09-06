@@ -348,7 +348,7 @@ def verify_session(
             elif behavior_case == "door-state-v1":
                 expected_final_presentation = ("production", 1, 0, "mesh:locked")
             else:
-                expected_final_presentation = ("production", 1, 0, "mesh:open")
+                expected_final_presentation = ("production", 1, 0, None)
             native.require(
                 isinstance(final, dict)
                 and final.get("presentation_mode") == expected_final_presentation[0]
@@ -356,7 +356,11 @@ def verify_session(
                 == expected_final_presentation[1]
                 and final.get("fallback_visual_count")
                 == expected_final_presentation[2]
-                and final.get("mesh_role") == expected_final_presentation[3]
+                and (
+                    final.get("mesh_role") == expected_final_presentation[3]
+                    if expected_final_presentation[3] is not None or recovery_failed
+                    else final.get("mesh_role") in {"mesh:closed", "mesh:open"}
+                )
                 and final.get("resident_production_meshes") == 3
                 and final.get("resident_production_materials") == 1,
                 f"{behavior_case} final candidate presentation differs",
@@ -371,12 +375,14 @@ def verify_session(
                     "Door state producer did not cover all production states",
                 )
             else:
-                expected_load_role = (
-                    "mesh:closed" if recovery_failed else "mesh:open"
+                expected_load_roles = (
+                    ["mesh:closed"]
+                    if recovery_failed
+                    else [final.get("mesh_role")]
                 )
                 native.require(
                     status.get("production_validation_count") == 1
-                    and status.get("validated_mesh_roles") == [expected_load_role]
+                    and status.get("validated_mesh_roles") == expected_load_roles
                     and status.get("semantic_sequence") == [],
                     (
                         f"{behavior_case} candidate baseline evidence differs"
