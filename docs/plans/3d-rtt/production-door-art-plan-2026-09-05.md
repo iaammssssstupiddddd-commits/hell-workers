@@ -13,7 +13,7 @@
 | 関連計画 | [仮設壁の木製型枠化](provisional-wall-formwork-plan-2026-09-05.md)、[完了済み本番壁計画](archived/production-wall-art-plan-2026-08-31.md) |
 | 関連提案 / Issue / PR | `N/A` |
 
-本書は実装中の計画である。M0〜M2の技術候補と実行時接続を実装し、M3の初回ArtPreviewを受けた形状改訂を進めている。調査基点は `57a488e1`。
+本書は実装中の計画である。M0〜M2の技術候補と実行時接続を実装し、M3の初回ArtPreviewを受けた形状改訂と実機再撮影まで進めている。調査基点は `57a488e1`。
 完了済みWall計画から引き継ぐ範囲は、Doorの枠・戸当たり・向き・Wallの9.6 wu portとの継ぎ目である。
 
 ## 0. セルフレビューで修正した点
@@ -378,8 +378,8 @@ Help impact review Skillで建築／ドアの実説明を読み、色表示へ�
 
 ### 現在地
 
-- 進捗: 実装 `70%`。M0のgeometry/全16mask、M1のtechnical candidate、M2の3D/2D adapterとPostUpdate境界、M3a用6状態galleryを実装済み。初回ArtPreviewのユーザーレビューを受け、上枠の薄型化とOpen leafの68°化を原本へ反映中。
-- 次の作業: 変更後のtechnical candidateをclean validation worktreeへ再provisionし、6状態を実機再撮影して上枠とOpenの識別性を再判断する。承認後に正式candidate、Soul通過、J1、releaseを行う。
+- 進捗: 実装 `75%`。M0のgeometry/全16mask、M1のtechnical candidate、M2の3D/2D adapterとPostUpdate境界、M3a用6状態galleryを実装済み。初回ArtPreviewのユーザーレビューを受け、上枠の薄型化とOpen leafの68°化を原本へ反映し、generation 2で実機再撮影した。
+- 次の作業: generation 2のArtPreviewについてユーザーの見た目判断を受ける。承認後に正式candidate、Soul通過、J1、releaseを行う。
 - 仮設壁M0とport契約を先に共有。Doorの制作・既存石壁との接続は型枠release待ちにしない。joint受入は双方のruntime接続後。
 - 3 mesh方式は現在の瞬時状態切替に合わせる判断。スムーズな開閉を追加する場合はこの選択を再検討する。
 - セルフレビューで片開きから両開きへ変更し、初回ArtPreview後に完全90°から68°へ改訂した。Open leaf AABBはfixture値であり、全Soul状態・両軸の実画面通過を承認済みとしない。
@@ -399,7 +399,8 @@ Help impact review Skillで建築／ドアの実説明を読み、色表示へ�
 - 文書gate: `python3 scripts/dev.py docs --check` / `git diff --check` はpass。
 - Help gate: `python3 scripts/check_help_impact.py` は既存HEADのproduction差分（diff base `1dc5aa5f`以降）に新しいHelp判断がないためfail。今回の計画差分は文書のみで、この既存差分の判断は変更していない。
 - 初回ArtPreview: production 6 / fallback 0をIntel Arc・Vulkan・X11・1280×720で確認。上枠の太さとOpen識別性のユーザー指摘により未承認。
-- 形状改訂: GLB/Khronos/texture gateと状態別Blender review renderを通過。変更後の実ゲームArtPreview再撮影は未実施。
+- 形状改訂: GLB/Khronos/texture gateと状態別Blender review renderを通過。commit `32e4f2f4`、candidate generation 2（manifest SHA256 `6a6af6064052fb1c1715b9e36fb9e8a10eff4e60b3569279490c4fad40519375`）をclean validation worktreeへ固定した。
+- 変更後ArtPreview: Intel Arc・Vulkan・X11・1280×720でproduction 6 / fallback 0を確認。ゲーム所有statusはACK後17秒を越えて`ready`を維持し、画像・sidecar・binaryのhashを `target/native-acceptance/door-art-preview-32e4f2f4-v2-r3/manifest.json` に記録した。性能値は採取・主張しない。
 - ブロッカー: 変更後ArtPreviewの目視承認。正式candidate / releaseは承認前に進めない。
 
 ### Definition of Done
@@ -418,3 +419,4 @@ Help impact review Skillで建築／ドアの実説明を読み、色表示へ�
 | `2026-09-06` | `Codex` | セルフレビュー。両開き寸法、Soul alpha幅と通過gate、2軸PNG/pulse、法線tagとPostUpdate ordering、core 6、共通C0/J1・数値受入を具体化 |
 | `2026-09-06` | `Codex` | M0〜M2実装。3状態GLB・共有albedo・EW/NS preview、Door専用asset authority、全16mask resolver、2D/3D同期、PostUpdate境界、6状態ArtPreview galleryを追加 |
 | `2026-09-06` | `Codex` | 初回ArtPreview指摘を反映。上枠を高さ1.6 wu・奥行7.2 wuへ薄型化し、Open leafと付属金具を68°の蝶番姿勢へ変更 |
+| `2026-09-06` | `Codex` | generation 2を実機再撮影。EWで両扉面と中央開口、NSで閉扉輪郭から張り出す扉面を確認し、ユーザー承認待ちへ移行 |
