@@ -1161,7 +1161,10 @@ pub(crate) fn observe_perf_behavior_system(mut params: BehaviorObserveParams) {
                     fail_behavior(&mut params.capture, &reason, &mut params.exit);
                     return;
                 }
-                if isolated_candidate_door_evidence_requested() == Ok(true) {
+                let door_validation_step = if recovery_failed { 0 } else { 5 };
+                if step == door_validation_step
+                    && isolated_candidate_door_evidence_requested() == Ok(true)
+                {
                     let Some(door_entity) = params
                         .world_map
                         .door_entity(SMALL_DOOR_GRID.0, SMALL_DOOR_GRID.1)
@@ -1474,16 +1477,6 @@ fn write_door_behavior_evidence(params: &BehaviorObserveParams) -> std::io::Resu
         .behavior_case()
         .ok_or_else(|| std::io::Error::other("Door behavior case is absent"))?;
     let status_path = status_root.join(format!("{}-{}.json", case.as_str(), std::process::id()));
-    let door_entity = params
-        .world_map
-        .door_entity(SMALL_DOOR_GRID.0, SMALL_DOOR_GRID.1)
-        .ok_or_else(|| std::io::Error::other("canonical Door is absent at behavior flush"))?;
-    let door = params.door_components.get(door_entity).map_err(|_| {
-        std::io::Error::other("canonical Door component is absent at behavior flush")
-    })?;
-    let final_mesh_role =
-        validate_isolated_candidate_door_presentation(params, door_entity, door.state)
-            .map_err(std::io::Error::other)?;
     let identity = match &params.door_readiness.state {
         DoorAssetReadinessState::Eligible(identity) => identity,
         _ => {
@@ -1506,11 +1499,42 @@ fn write_door_behavior_evidence(params: &BehaviorObserveParams) -> std::io::Resu
             mode.is_some_and(|mode| *mode == Door3dPresentationMode::Fallback)
         })
         .count();
-    if (production_visual_count, fallback_visual_count) != (1, 0) {
+    let recovery_failed = case == PerfBehaviorCase::LoadRecoveryFailedV1;
+    let expected_visual_counts = if recovery_failed { (0, 0) } else { (1, 0) };
+    if (production_visual_count, fallback_visual_count) != expected_visual_counts {
         return Err(std::io::Error::other(format!(
-            "Door behavior visual counts differ: production/fallback={production_visual_count}/{fallback_visual_count}"
+            "Door behavior visual counts differ: expected production/fallback={}/{}, got {production_visual_count}/{fallback_visual_count}",
+            expected_visual_counts.0, expected_visual_counts.1,
         )));
     }
+    let door = params
+        .world_map
+        .door_entity(SMALL_DOOR_GRID.0, SMALL_DOOR_GRID.1)
+        .and_then(|entity| {
+            params
+                .door_components
+                .get(entity)
+                .ok()
+                .map(|door| (entity, door))
+        });
+    let (final_semantic_state, final_mesh_role, final_presentation_mode) = if recovery_failed {
+        (
+            door.map(|(_, door)| door_state_name(door.state)),
+            None,
+            "absent_fail_dark",
+        )
+    } else {
+        let (door_entity, door) = door
+            .ok_or_else(|| std::io::Error::other("canonical Door is absent at behavior flush"))?;
+        let mesh_role =
+            validate_isolated_candidate_door_presentation(params, door_entity, door.state)
+                .map_err(std::io::Error::other)?;
+        (
+            Some(door_state_name(door.state)),
+            Some(mesh_role),
+            "production",
+        )
+    };
     let expected_validation_count = if case == PerfBehaviorCase::DoorStateV1 {
         5
     } else {
@@ -1557,9 +1581,9 @@ fn write_door_behavior_evidence(params: &BehaviorObserveParams) -> std::io::Resu
         "semantic_sequence": semantic_sequence,
         "final": {
             "grid": [SMALL_DOOR_GRID.0, SMALL_DOOR_GRID.1],
-            "semantic_state": door_state_name(door.state),
+            "semantic_state": final_semantic_state,
             "mesh_role": final_mesh_role,
-            "presentation_mode": "production",
+            "presentation_mode": final_presentation_mode,
             "production_visual_count": production_visual_count,
             "fallback_visual_count": fallback_visual_count,
             "resident_production_meshes": 3,

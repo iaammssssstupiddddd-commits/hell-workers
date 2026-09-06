@@ -342,14 +342,23 @@ def verify_session(
                 f"{behavior_case} candidate identity differs",
             )
             final = status.get("final")
+            recovery_failed = behavior_case == "load-recovery-failed-v1"
+            expected_final_presentation = (
+                ("absent_fail_dark", 0, 0, None)
+                if recovery_failed
+                else ("production", 1, 0, "mesh:closed")
+            )
             native.require(
                 isinstance(final, dict)
-                and final.get("presentation_mode") == "production"
-                and final.get("production_visual_count") == 1
-                and final.get("fallback_visual_count") == 0
+                and final.get("presentation_mode") == expected_final_presentation[0]
+                and final.get("production_visual_count")
+                == expected_final_presentation[1]
+                and final.get("fallback_visual_count")
+                == expected_final_presentation[2]
+                and final.get("mesh_role") == expected_final_presentation[3]
                 and final.get("resident_production_meshes") == 3
                 and final.get("resident_production_materials") == 1,
-                f"{behavior_case} final production presentation differs",
+                f"{behavior_case} final candidate presentation differs",
             )
             if behavior_case == "door-state-v1":
                 native.require(
@@ -365,7 +374,11 @@ def verify_session(
                     status.get("production_validation_count") == 1
                     and status.get("validated_mesh_roles") == ["mesh:closed"]
                     and status.get("semantic_sequence") == [],
-                    f"{behavior_case} candidate rebind evidence differs",
+                    (
+                        f"{behavior_case} candidate baseline evidence differs"
+                        if recovery_failed
+                        else f"{behavior_case} candidate rebind evidence differs"
+                    ),
                 )
             statuses.append(
                 {
