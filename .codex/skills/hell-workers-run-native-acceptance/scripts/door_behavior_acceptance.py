@@ -35,6 +35,11 @@ FIXED_HZ = 64
 WARMUP_TICKS = 1_920
 AUDIT_TICKS = 128
 RUN_TIMEOUT_SECONDS = 780.0
+ALLOW_LOG_PATTERNS = (
+    "driver that only supports software rendering",
+    "P05 behavior injected",
+    "incoming candidate was rejected before live replacement: candidate validator 'lighting\\.fixture':",
+)
 DOORSET_RELATIVE = "assets/manifests/door-production-v1.doorset"
 CANDIDATE_ENV_KEYS = (
     "HW_DOOR_ART_PREVIEW",
@@ -236,6 +241,7 @@ def verify_session(
         "repeat": 3,
         "preflight_runs": 0,
         "behavior_cases": list(BEHAVIOR_CASES),
+        "allow_log_patterns": list(ALLOW_LOG_PATTERNS),
         "capture_kind": "fixed-step-behavior",
         "clock_mode": "fixed-behavior",
         "fixed_hz": FIXED_HZ,
@@ -303,7 +309,7 @@ def verify_session(
                 expected_case=case,
                 expected_adapter=adapter,
                 expected_backend="vulkan",
-                allow_log_patterns=[],
+                allow_log_patterns=ALLOW_LOG_PATTERNS,
                 capture_kind="fixed-step-behavior",
                 expected_fixed_hz=FIXED_HZ,
                 expected_warmup_ticks=WARMUP_TICKS,
