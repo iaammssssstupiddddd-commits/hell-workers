@@ -27,6 +27,23 @@ def require(condition: bool, message: str) -> None:
         raise DoorContractError(message)
 
 
+def axis_range(points: list[list[float]], axis: int) -> tuple[float, float]:
+    values = [point[axis] for point in points]
+    return min(values), max(values)
+
+
+def require_range(
+    actual: tuple[float, float],
+    expected: list[float],
+    tolerance: float,
+    label: str,
+) -> None:
+    require(
+        all(abs(left - right) <= tolerance for left, right in zip(actual, expected, strict=True)),
+        f"{label} differs: {actual} != {tuple(expected)}",
+    )
+
+
 def validate(path: Path, state: str, contract_path: Path) -> dict[str, object]:
     contract = json.loads(contract_path.read_text(encoding="utf-8"))
     require(contract.get("asset_set_id") == "door-production-v1", "contract identity differs")
@@ -67,7 +84,35 @@ def validate(path: Path, state: str, contract_path: Path) -> dict[str, object]:
     require(abs(bounds["min_y"] + 16.0) <= tolerance, "Door minimum Y differs")
     require(abs(bounds["max_y"] - 16.0) <= tolerance, "Door maximum Y differs")
     require(bounds["min_z"] >= -7.5 and bounds["max_z"] <= 10.0, "Door depth envelope differs")
-    frame_points = sorted(tuple(round(value, 5) for value in point) for point in positions[:24])
+    frame = contract["frame"]
+    # glTF exports each authored box as 24 positions because the six UV faces
+    # intentionally do not share vertices.
+    frame_parts = (positions[0:24], positions[24:48], positions[48:72])
+    for index, jamb in enumerate(frame_parts[:2]):
+        require_range(
+            axis_range(jamb, 0),
+            frame["jamb_x_ranges_wu"][index],
+            tolerance,
+            f"Door jamb {index} X range",
+        )
+        require_range(
+            axis_range(jamb, 2),
+            frame["jamb_z_range_wu"],
+            tolerance,
+            f"Door jamb {index} Z range",
+        )
+    top = frame_parts[2]
+    require_range(axis_range(top, 0), frame["top_x_range_wu"], tolerance, "Door top frame X range")
+    require_range(axis_range(top, 1), frame["top_y_range_wu"], tolerance, "Door top frame Y range")
+    require_range(axis_range(top, 2), frame["top_z_range_wu"], tolerance, "Door top frame Z range")
+    if state == "open":
+        open_leaf = contract["open_leaf_envelope_wu"]
+        left_leaf, right_leaf = positions[72:96], positions[96:120]
+        require_range(axis_range(left_leaf, 0), open_leaf["left_x"], tolerance, "Door open left leaf X range")
+        require_range(axis_range(right_leaf, 0), open_leaf["right_x"], tolerance, "Door open right leaf X range")
+        for label, leaf in (("left", left_leaf), ("right", right_leaf)):
+            require_range(axis_range(leaf, 2), open_leaf["z"], tolerance, f"Door open {label} leaf Z range")
+    frame_points = sorted(tuple(round(value, 5) for value in point) for point in positions[:72])
     frame_sha256 = hashlib.sha256(
         json.dumps(frame_points, separators=(",", ":")).encode()
     ).hexdigest()

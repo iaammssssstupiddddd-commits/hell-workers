@@ -13,7 +13,7 @@
 | 関連計画 | [仮設壁の木製型枠化](provisional-wall-formwork-plan-2026-09-05.md)、[完了済み本番壁計画](archived/production-wall-art-plan-2026-08-31.md) |
 | 関連提案 / Issue / PR | `N/A` |
 
-本書は実装中の計画である。M0〜M2の技術候補と実行時接続を実装し、M3のArtPreview実機受入前まで進行している。調査基点は `57a488e1`。
+本書は実装中の計画である。M0〜M2の技術候補と実行時接続を実装し、M3の初回ArtPreviewを受けた形状改訂を進めている。調査基点は `57a488e1`。
 完了済みWall計画から引き継ぐ範囲は、Doorの枠・戸当たり・向き・Wallの9.6 wu portとの継ぎ目である。
 
 ## 0. セルフレビューで修正した点
@@ -26,6 +26,7 @@
 | MeshTagの方向を壁線と取り違える恐れ | EWは面法線North=0、NSはWest=3と固定。Open角度を使わない |
 | 未承認候補の確認・baseline・joint受入の順序が曖昧 | 型枠計画§4.4の共通C0・封印前の統合freeze・preview・単独M3・J1へ統一。asset viewを専用worktreeへ固定 |
 | 「loadと同frame」を要求するとLastでのworld置換と矛盾 | world置換後の最初のpresentation frameから再構成し、pause中も進める |
+| 初回ArtPreviewで上枠が太く、Openが板厚だけに見える | 上枠を高さ1.6 wu・奥行7.2 wuへ縮小し、leafと付属金具を68°へ揃えて木製面と中央開口を同時に見せる |
 
 寸法・予算は制作と検証に使う新契約であり、アート・実機合格を先取りするものではない。
 
@@ -78,7 +79,7 @@
 | 状態 | 扉・枠・施錠部 | 視覚上の合格条件 |
 | --- | --- | --- |
 | Closed | 固定枠に左右2枚の厚板leafが収まり、中央の閂は外れている | 壁と違う出入口と分かり、開いた通路には見えない |
-| Open | 枠はClosedと同位置、左右leafを各蝶番から90°開く | 中央の地面と通過するSoulが見え、枠が一緒に回らない |
+| Open | 枠はClosedと同位置、左右leafと付属金具を各蝶番から68°開く | 扉面が板厚だけにならず、中央の地面と開いた姿勢が同時に見え、枠が一緒に回らない |
 | Locked | Closedと同じleaf姿勢、中央を結ぶ骨の閂が掛かる | 主材を全面赤色にしなくてもClosedと区別できる |
 
 アートはRough Vector Sketch。粗い板目・歪んだ輪郭・暗い太線・骨色の塗り分けを使い、
@@ -109,14 +110,14 @@ Blenderの1 tile原本を32倍bakeする規約を使い、変換誤差の許容�
 | 部位 | X / Y / Zの範囲・回転 |
 | --- | --- |
 | 左右jamb | X`[-16,-13.6]` / `[13.6,16]`、Y`[-16,16]`、Z`[-4.8,4.8]` |
-| 上枠 | X`[-13.6,13.6]`、Y`[12.8,16]`、Z`[-4.8,4.8]`。閉じた下枠は作らない |
+| 上枠 | X`[-13.6,13.6]`、Y`[14.4,16]`、Z`[-3.6,3.6]`。高さ1.6 wu・奥行7.2 wuでjambより細くし、閉じた下枠は作らない |
 | 閉じた左右leaf | X`[-13.2,-0.2]` / `[0.2,13.2]`、Y`[-15.2,11.2]`、Z`[-5.6,-3.2]` |
-| 蝶番 | 左X=-13.2 / 右X=13.2、Z=-3.2の垂直軸。Openは左-Y90°、右+Y90° |
-| Open AABB | 左X`[-13.2,-10.8]`、右X`[10.8,13.2]`、両者Z`[-3.2,9.8]`。Yは閉状態と同じ |
+| 蝶番 | 左X=-13.2 / 右X=13.2、Z=-3.2の垂直軸。Openは左-Y68°、右+Y68° |
+| Open leaf AABB | 左X`[-13.2,-6.104873]`、右X`[6.104873,13.2]`、両者Z`[-4.099056,8.85339]`。Yは閉状態と同じ |
 | 接続・隙間 | Wall portはcell境界X=±16・Z±4.8。leaf/jamb間0.4、左右leaf間0.4、leaf上端/上枠間1.6、接地余裕0.8 wu |
 | 施錠の形 | 中央の骨閂はLocked meshだけ。Open/Closedの骨・金具はleafの外形内に収め、Openの中央空間へ装飾を追加しない |
 
-開口は27.2×28.8 wu、Open時の中央の空きは21.6 wu。両leafはjambと重ならずcell内に収まる。
+開口は27.2×28.8 wu。Open時は中央の地面を見せつつ、左右leafの木製面が正面投影に残る68°を採用する。両leafはjambと重ならずcell内に収まる。
 閉状態の意図した0.4 wu隙間を「Wall接続の穴」と取り違えない。Wall―jamb seamは隙間0を検査する。
 基本構成は枠3材・leaf2材で60 triangles。補強、蝶番、Lockedの閂を加えて各240以下とする。
 部材数を増やす前にtextureで表現できる箇所を選び、全状態の固定枠は実頂点位置の一致を検証する。
@@ -377,11 +378,11 @@ Help impact review Skillで建築／ドアの実説明を読み、色表示へ�
 
 ### 現在地
 
-- 進捗: 実装 `65%`。M0のgeometry/全16mask、M1のtechnical candidate、M2の3D/2D adapterとPostUpdate境界、M3a用6状態galleryを実装済み。
-- 次の作業: clean validation worktreeへArtPreviewをprovisionし、`door-production-art-preview-v1`で6状態を実機撮影してユーザー判断へ渡す。承認後に正式candidate、Soul通過、J1、releaseを行う。
+- 進捗: 実装 `70%`。M0のgeometry/全16mask、M1のtechnical candidate、M2の3D/2D adapterとPostUpdate境界、M3a用6状態galleryを実装済み。初回ArtPreviewのユーザーレビューを受け、上枠の薄型化とOpen leafの68°化を原本へ反映中。
+- 次の作業: 変更後のtechnical candidateをclean validation worktreeへ再provisionし、6状態を実機再撮影して上枠とOpenの識別性を再判断する。承認後に正式candidate、Soul通過、J1、releaseを行う。
 - 仮設壁M0とport契約を先に共有。Doorの制作・既存石壁との接続は型枠release待ちにしない。joint受入は双方のruntime接続後。
 - 3 mesh方式は現在の瞬時状態切替に合わせる判断。スムーズな開閉を追加する場合はこの選択を再検討する。
-- セルフレビューで片開きから両開きへ変更した。21.6 wuのOpen中央幅は計算値であり、全Soul状態・両軸の実画面通過を承認済みとしない。
+- セルフレビューで片開きから両開きへ変更し、初回ArtPreview後に完全90°から68°へ改訂した。Open leaf AABBはfixture値であり、全Soul状態・両軸の実画面通過を承認済みとしない。
 - 本番asset実体は外部stagingのtechnical candidate generation 1にあり、通常起動では無効。Door専用sealer/projector/provisionerとgallery sidecarを使い、Wall専用manifestへ混ぜない。
 
 ### 参照必須ファイル
@@ -397,8 +398,9 @@ Help impact review Skillで建築／ドアの実説明を読み、色表示へ�
 - セルフレビュー: `2026-09-06`。§0の指摘を計画へ反映。実装・アセット制作・native起動は行っていない。
 - 文書gate: `python3 scripts/dev.py docs --check` / `git diff --check` はpass。
 - Help gate: `python3 scripts/check_help_impact.py` は既存HEADのproduction差分（diff base `1dc5aa5f`以降）に新しいHelp判断がないためfail。今回の計画差分は文書のみで、この既存差分の判断は変更していない。
-- check / Clippy / workspace test / 実機受入: 未実施（実装未着手）。
-- ブロッカー: 計画作成上はなし。候補の目視・release判断はM3/M4で具体物とともに扱う。
+- 初回ArtPreview: production 6 / fallback 0をIntel Arc・Vulkan・X11・1280×720で確認。上枠の太さとOpen識別性のユーザー指摘により未承認。
+- 形状改訂: GLB/Khronos/texture gateと状態別Blender review renderを通過。変更後の実ゲームArtPreview再撮影は未実施。
+- ブロッカー: 変更後ArtPreviewの目視承認。正式candidate / releaseは承認前に進めない。
 
 ### Definition of Done
 
@@ -415,3 +417,4 @@ Help impact review Skillで建築／ドアの実説明を読み、色表示へ�
 | `2026-09-05` | `Codex` | 木・骨の意匠、固定枠＋3状態mesh、向きと開き範囲、runtime・実機・releaseの計画を作成 |
 | `2026-09-06` | `Codex` | セルフレビュー。両開き寸法、Soul alpha幅と通過gate、2軸PNG/pulse、法線tagとPostUpdate ordering、core 6、共通C0/J1・数値受入を具体化 |
 | `2026-09-06` | `Codex` | M0〜M2実装。3状態GLB・共有albedo・EW/NS preview、Door専用asset authority、全16mask resolver、2D/3D同期、PostUpdate境界、6状態ArtPreview galleryを追加 |
+| `2026-09-06` | `Codex` | 初回ArtPreview指摘を反映。上枠を高さ1.6 wu・奥行7.2 wuへ薄型化し、Open leafと付属金具を68°の蝶番姿勢へ変更 |

@@ -1,4 +1,4 @@
-"""Render deterministic EW/NS Door preview PNGs from the Closed source mesh."""
+"""Render deterministic runtime and state-review Door preview PNGs."""
 
 from __future__ import annotations
 
@@ -27,11 +27,16 @@ def look_at(camera: bpy.types.Object, target: Vector) -> None:
     camera.rotation_euler = (target - camera.location).to_track_quat("-Z", "Y").to_euler()
 
 
-def configure_scene() -> bpy.types.Object:
-    scene = bpy.context.scene
+def select_state(state: str) -> bpy.types.Object:
+    selected = f"Door_{state.title()}"
     for collection in bpy.data.collections:
-        collection.hide_render = collection.name != "Door_Closed"
-    door = next(obj for obj in bpy.data.collections["Door_Closed"].objects if obj.type == "MESH")
+        if collection.name.startswith("Door_"):
+            collection.hide_render = collection.name != selected
+    return next(obj for obj in bpy.data.collections[selected].objects if obj.type == "MESH")
+
+
+def configure_scene() -> None:
+    scene = bpy.context.scene
     scene.render.engine = "BLENDER_EEVEE"
     scene.render.resolution_x = 256
     scene.render.resolution_y = 256
@@ -70,7 +75,6 @@ def configure_scene() -> bpy.types.Object:
     scene.collection.objects.link(fill)
     fill.location = Vector((3.0, 1.5, 2.5))
     look_at(fill, Vector((0.0, 0.0, 0.0)))
-    return door
 
 
 def render(path: Path, door: bpy.types.Object, rotation: float) -> dict[str, object]:
@@ -92,11 +96,21 @@ def main() -> None:
         raise RuntimeError("Door previews require positive OCIO evidence")
     output = root / "staging/exports/textures/buildings/door"
     output.mkdir(parents=True, exist_ok=True)
-    door = configure_scene()
+    configure_scene()
+    door = select_state("closed")
     previews = {
         "ew": render(output / "door_preview_ew.png", door, 0.0),
         "ns": render(output / "door_preview_ns.png", door, math.pi / 2.0),
     }
+    review_output = root / "staging/reviews/door-production-v1"
+    review_output.mkdir(parents=True, exist_ok=True)
+    review_previews = {}
+    for state in ("closed", "open", "locked"):
+        door = select_state(state)
+        review_previews[state] = {
+            "ew": render(review_output / f"door_{state}_ew.png", door, 0.0),
+            "ns": render(review_output / f"door_{state}_ns.png", door, math.pi / 2.0),
+        }
     report = root / "staging/reports/door-production-v1.previews.json"
     report.write_text(
         json.dumps(
@@ -105,6 +119,7 @@ def main() -> None:
                 "asset_set_id": "door-production-v1",
                 "ocio": ocio,
                 "previews": previews,
+                "review_previews": review_previews,
                 "schema_version": 1,
                 "status": "rendered",
             },

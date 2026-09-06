@@ -17,6 +17,22 @@ import validate_door_manifest as manifest_validator
 import validate_door_textures as texture_validator
 
 
+class DoorGeometryRevisionTests(unittest.TestCase):
+    def test_thin_top_frame_and_readable_open_angle_are_frozen(self) -> None:
+        contract = json.loads(
+            (WORKFLOW_ROOT / "fixtures/door-production-v1.geometry.json").read_text(
+                encoding="utf-8"
+            )
+        )
+
+        self.assertEqual(contract["frame"]["top_y_range_wu"], [14.4, 16.0])
+        self.assertEqual(contract["frame"]["top_z_range_wu"], [-3.6, 3.6])
+        self.assertEqual(contract["open_leaf_envelope_wu"]["angle_degrees"], 68.0)
+        self.assertEqual(
+            contract["open_leaf_envelope_wu"]["z"], [-4.099056, 8.85339]
+        )
+
+
 class DoorTextureTests(unittest.TestCase):
     def test_exact_opaque_albedo_and_distinct_safe_previews_pass(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import math
 import sys
 from pathlib import Path
 
@@ -25,6 +26,7 @@ UV_REGIONS = {
     "bone": (0.04, 0.54, 0.48, 0.96),
     "iron": (0.54, 0.04, 0.96, 0.48),
 }
+OPEN_LEAF_ANGLE_DEGREES = 68.0
 
 
 def clear_scene() -> None:
@@ -108,17 +110,79 @@ def create_material(root: Path) -> bpy.types.Material:
 def add_frame(vertices, faces, regions) -> None:
     add_box(vertices, faces, regions, (-14.8, 0.0, 0.0), (2.4, 32.0, 9.6), "wood")
     add_box(vertices, faces, regions, (14.8, 0.0, 0.0), (2.4, 32.0, 9.6), "wood")
-    add_box(vertices, faces, regions, (0.0, 14.4, 0.0), (27.2, 3.2, 9.6), "bone")
+    add_box(vertices, faces, regions, (0.0, 15.2, 0.0), (27.2, 1.6, 7.2), "bone")
+
+
+def add_hinged_box(
+    vertices,
+    faces,
+    regions,
+    *,
+    hinge_x: float,
+    local_x: float,
+    local_z: float,
+    center_y: float,
+    dimensions_wu: tuple[float, float, float],
+    angle_degrees: float,
+    region: str,
+) -> None:
+    angle = math.radians(angle_degrees)
+    center_x = hinge_x + math.cos(angle) * local_x + math.sin(angle) * local_z
+    center_z = -math.sin(angle) * local_x + math.cos(angle) * local_z - 3.2
+    add_box(
+        vertices,
+        faces,
+        regions,
+        (center_x, center_y, center_z),
+        dimensions_wu,
+        region,
+        Matrix.Rotation(angle, 4, "Z"),
+    )
 
 
 def add_hardware(vertices, faces, regions, *, opened: bool) -> None:
     if opened:
-        for x in (-12.7, 12.7):
+        for hinge_x, direction, angle in (
+            (-13.2, 1.0, -OPEN_LEAF_ANGLE_DEGREES),
+            (13.2, -1.0, OPEN_LEAF_ANGLE_DEGREES),
+        ):
             for y in (-7.0, 5.0):
-                add_box(vertices, faces, regions, (x, y, -3.7), (1.0, 4.0, 0.8), "iron")
-        for x in (-12.2, 12.2):
-            add_box(vertices, faces, regions, (x, -2.0, 3.3), (0.8, 20.0, 3.0), "bone")
-            add_box(vertices, faces, regions, (x, 0.0, 8.8), (1.6, 1.6, 1.6), "iron")
+                add_hinged_box(
+                    vertices,
+                    faces,
+                    regions,
+                    hinge_x=hinge_x,
+                    local_x=direction * 0.5,
+                    local_z=-1.8,
+                    center_y=y,
+                    dimensions_wu=(1.0, 4.0, 0.8),
+                    angle_degrees=angle,
+                    region="iron",
+                )
+            add_hinged_box(
+                vertices,
+                faces,
+                regions,
+                hinge_x=hinge_x,
+                local_x=direction * 6.2,
+                local_z=-2.8,
+                center_y=-2.0,
+                dimensions_wu=(2.2, 20.0, 0.8),
+                angle_degrees=angle,
+                region="bone",
+            )
+            add_hinged_box(
+                vertices,
+                faces,
+                regions,
+                hinge_x=hinge_x,
+                local_x=direction * 11.0,
+                local_z=-2.9,
+                center_y=0.0,
+                dimensions_wu=(1.8, 1.8, 1.6),
+                angle_degrees=angle,
+                region="iron",
+            )
     else:
         for x in (-13.25, 13.25):
             for y in (-7.0, 5.0):
@@ -136,8 +200,22 @@ def create_state(state: str, collection: bpy.types.Collection, material: bpy.typ
     add_frame(vertices, faces, regions)
     opened = state == "open"
     if opened:
-        add_box(vertices, faces, regions, (-12.0, -2.0, 3.3), (2.4, 26.4, 13.0), "wood")
-        add_box(vertices, faces, regions, (12.0, -2.0, 3.3), (2.4, 26.4, 13.0), "wood")
+        for hinge_x, direction, angle in (
+            (-13.2, 1.0, -OPEN_LEAF_ANGLE_DEGREES),
+            (13.2, -1.0, OPEN_LEAF_ANGLE_DEGREES),
+        ):
+            add_hinged_box(
+                vertices,
+                faces,
+                regions,
+                hinge_x=hinge_x,
+                local_x=direction * 6.5,
+                local_z=-1.2,
+                center_y=-2.0,
+                dimensions_wu=(13.0, 26.4, 2.4),
+                angle_degrees=angle,
+                region="wood",
+            )
     else:
         add_box(vertices, faces, regions, (-6.7, -2.0, -4.4), (13.0, 26.4, 2.4), "wood")
         add_box(vertices, faces, regions, (6.7, -2.0, -4.4), (13.0, 26.4, 2.4), "wood")
@@ -189,6 +267,10 @@ def main() -> None:
             "blend": str(blend_path),
             "blend_sha256": hashlib.sha256(blend_path.read_bytes()).hexdigest(),
             "blender_version": bpy.app.version_string,
+            "geometry_revision": {
+                "open_leaf_angle_degrees": OPEN_LEAF_ANGLE_DEGREES,
+                "top_frame_dimensions_wu": [27.2, 1.6, 7.2],
+            },
             "schema_version": 1,
             "states": created,
             "status": "created",

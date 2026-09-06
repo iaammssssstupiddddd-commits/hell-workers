@@ -148,7 +148,7 @@ family別triangle数は`60 / 60 / 108 / 108 / 156 / 204`、上限は240とする
 
 #### Door production geometry contract（候補実装済み・未release）
 
-Doorは高さ32 wu、左右jambの外端X=`±16`、前後Z=`±4.8`をWall portへ合わせた固定枠と、左右2枚の木製leafを持つ。Closed / Open / Lockedは各1 node・1 mesh・1 primitiveの共有GLBで、triangle数は`156 / 156 / 168`、上限240。Openは枠を動かさず左右leafだけを外側へ90°開き、中央21.6 wuを空ける。Lockedだけが中央を跨ぐ骨の閂を持つ。
+Doorは高さ32 wu、左右jambの外端X=`±16`、前後Z=`±4.8`をWall portへ合わせた固定枠と、左右2枚の木製leafを持つ。上枠はY=`[14.4,16.0]`の1.6 wu、奥行7.2 wuとし、jambより細いシルエットを保つ。Closed / Open / Lockedは各1 node・1 mesh・1 primitiveの共有GLBで、triangle数は`156 / 156 / 168`、上限240。Openは枠を動かさず左右leafと付属金具だけを各蝶番から68°開き、正面投影で扉面と中央開口を同時に読める形にする。Lockedだけが中央を跨ぐ骨の閂を持つ。
 
 共有albedoは512×512・完全Opaque、emissive / normalなし。黒ずんだ厚板、風化した骨、少量の錆鉄をRough Vector Sketchの太いbaked lineworkで描く。EW/NS previewは同じClosed原本から59°正射影で256×256 RGBAへ固定レンダーし、pixel anchor `(128,192)`を64×64 logical canvasへ対応させる。technical generation 1は`art_preview` authorityだけで有効であり、ユーザーの実画面判断、正式candidate、Wall型枠とのjoint受入、releaseが終わるまで通常Doorはprocedural fallbackを使う。
 
