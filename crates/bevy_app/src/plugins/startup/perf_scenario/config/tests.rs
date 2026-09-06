@@ -243,6 +243,36 @@ fn wall_density_actual_window_has_a_distinct_duration_contract() {
 }
 
 #[test]
+fn wall_formwork_preview_is_the_only_provisional_actual_window_profile() {
+    use super::PerfWallPhase;
+
+    assert!(super::wall_actual_window_phase_matches(
+        true,
+        false,
+        false,
+        Some(PerfWallPhase::Completed),
+    ));
+    assert!(!super::wall_actual_window_phase_matches(
+        true,
+        false,
+        false,
+        Some(PerfWallPhase::Provisional),
+    ));
+    assert!(super::wall_actual_window_phase_matches(
+        true,
+        false,
+        true,
+        Some(PerfWallPhase::Provisional),
+    ));
+    assert!(!super::wall_actual_window_phase_matches(
+        false,
+        true,
+        true,
+        Some(PerfWallPhase::Provisional),
+    ));
+}
+
+#[test]
 fn wall_art_matrix_has_a_scoped_quality_and_dpi_contract() {
     assert!(wall_density_window_contract_matches(
         false,

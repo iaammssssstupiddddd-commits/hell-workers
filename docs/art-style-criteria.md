@@ -135,6 +135,17 @@ zoom上限、Camera角度、wall LODのいずれかを変更する場合は、�
 1 pxの数値gateはHighにだけ適用し、Medium / Lowの最大zoom-outは最終compositeで切れない
 anti-aliased silhouetteを定性的に確認する。Lowの内部色を物理1 pxと主張しない。
 
+#### Wall provisional formwork contract（候補実装済み・未release）
+
+仮設Wall用のruntime wallset v2は、本設6 familyと同じ接続mask・quarter turn・中心anchorを使い、
+別の木製型枠6 GLBを選ぶ。中心支柱、上下横桟、端半支柱、筋交いをgeometryで構成し、板間の空隙を
+半透明ではなく実形状で示す。木材albedoは512×512・完全Opaque・normal / emissiveなしである。
+family別triangle数は`60 / 60 / 108 / 108 / 156 / 204`、上限は240とする。
+
+技術candidate generation 5は`art_preview` authority専用で、通常起動、正式candidate、promotionでは
+受理されない。ゲーム所有windowでの目視判断とDoor側M2統合後の正式受入を終えるまで、generation 4の
+通常release表示は変更しない。
+
 ### 5.2 地形テクスチャ LOD 基準（確定済み）
 
 地形は 3D チャンクメッシュ + RtT 経路で描画される。マテリアルは `tile_rtt_px`（RtT 上での 1 タイル見かけサイズ）を基準に切り替わる。

@@ -14,7 +14,7 @@ Hell-Workers における建築システムの基礎実装について説明し�
 | `Building` | 完成した建物。`is_provisional` (仮設) フラグを持つ。`Sprite` は直接持たず、子エンティティ（`VisualLayerKind`）が保持する |
 | `VisualLayerKind` | 必要な `Building` だけが持つ子ビジュアルレイヤー種別（`hw_visual::layer`）。`Foreground2d` は可視 `Sprite` 子を持つ。`Structural3d` は独立した `Building3dVisual` だけをactive presentationとし、2D子を生成しない。 |
 | `ProvisionalWall` | 仮設壁のアップグレード状態（`mud_delivered`）を保持 |
-| Wall の3D表示 | 接続maskから`isolated` / `end` / `straight` / `corner` / `t_junction` / `cross`の6共有GLBとY軸quarter turnを決定する。仮設と完成は同一mesh / topologyで、完成時はshared material handleだけを交換する。asset setは`assets/manifests/wall-production-v1.wallset`が指す昇格済みgenerationで、欠落時は`Cuboid`のfallbackへ一括で落ちる |
+| Wall の3D表示 | 接続maskから`isolated` / `end` / `straight` / `corner` / `t_junction` / `cross`の6 familyとY軸quarter turnを決定する。runtime wallset v2では仮設に木製型枠6 GLB、本設に石壁6 GLBを使い、タイル完成時に同じowner / topologyのmeshとmaterialを同時交換する。旧v1は従来どおり同一meshを共有する。asset setが欠落・不整合なら`Cuboid`のfallbackへ一括で落ちる |
 | `WallConstructionSite` | 壁の建設サイト（`Framing -> Coating` フェーズ、`material_center`、進捗カウンタを保持） |
 | `WallTileBlueprint` | 壁1タイルの建設状態（`wood_delivered` / `mud_delivered` / `spawned_wall`）を保持 |
 | `BuildingType` | 建物の種類（下表参照） |
@@ -190,7 +190,7 @@ cleanup側はこのsnapshot取得後にもcurrent ownerを照合し、別owner�
 2.  **仮設フラグ**: `Building` コンポーネントの `is_provisional` が `true` になります。
 3.  **資材搬入**: 新仕様の壁サイトでは `TransportRequestKind::DeliverToWallConstruction` がフェーズに応じて `Wood` / `StasisMud` を自動搬入します（`DeliverToProvisionalWall` は legacy 壁のみ）。
 4.  **作業タスク**: `WorkType::FrameWallTile`（木材フレーミング）と `WorkType::CoatWall`（タイル塗布）で段階実行します。
-5.  **視覚表現**: 仮設状態の壁は警告色オーバーレイで表示され、`CoatWall` 完了で通常見た目へ戻ります。
+5.  **視覚表現**: runtime wallset v2の仮設壁は、黒ずんだ木の支柱・横桟・筋交いを持つOpaqueな型枠で表示されます。`CoatWall`が各タイルを完了すると、同じownerのmeshとmaterialが石壁へ同時に切り替わります。旧wallset v1とfallbackは従来の半透明表現を維持します。
 6.  **本設化完了**: `CoatWall` 完了時に `Building.is_provisional = false` となり、`ProvisionalWall` が削除されます。
 
 `AssignedTask::Build` は以下の `BuildPhase` を持ちます：
@@ -371,7 +371,7 @@ Floorのactive presentationは1タイルの`Plane3d`で、既存の`textures/ter
 
 | スポーン箇所 | タイミング |
 |:---|:---|
-| `wall_framed_tile_spawn_system`（`wall_construction/phase_transition.rs`） | Framing 完了時に仮設Wall shellを生成（`wall_provisional_material`）。Coating完了時に同じownerを恒久materialへpromoteし、その時点でfresh `BuildingBounceEffect` を開始する。 |
+| `wall_framed_tile_spawn_system`（`wall_construction/phase_transition.rs`） | Framing 完了時に仮設Wall shellを生成（`wall_provisional_material`）。Coating完了時に同じownerを本設へpromoteし、presentationが段階別mesh / materialを同時交換してfresh `BuildingBounceEffect` を開始する。 |
 | `floor_construction_completion_system`（`floor_construction/completion.rs`） | 養生完了後の Floor Building 生成と同時にスポーン（`floor_mesh`/`floor_material`）|
 | `spawn_completed_building`（`building_completion/spawn.rs`） | Blueprint 完成時の Building 生成と同時にスポーン |
 

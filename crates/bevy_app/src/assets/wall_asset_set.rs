@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 const ASSET_SET_ID: &str = "wall-production-v1";
-const CORE_INVENTORY: [(&str, &str); 8] = [
+const COMPLETED_CORE_INVENTORY: [(&str, &str); 8] = [
     ("models/buildings/wall/wall_isolated.glb", "mesh:isolated"),
     ("models/buildings/wall/wall_end.glb", "mesh:end"),
     ("models/buildings/wall/wall_straight.glb", "mesh:straight"),
@@ -30,6 +30,33 @@ const CORE_INVENTORY: [(&str, &str); 8] = [
         "texture:emissive",
     ),
 ];
+const FORMWORK_MESH_INVENTORY: [(&str, &str); 6] = [
+    (
+        "models/buildings/wall/wall_formwork_isolated.glb",
+        "mesh:formwork:isolated",
+    ),
+    (
+        "models/buildings/wall/wall_formwork_end.glb",
+        "mesh:formwork:end",
+    ),
+    (
+        "models/buildings/wall/wall_formwork_straight.glb",
+        "mesh:formwork:straight",
+    ),
+    (
+        "models/buildings/wall/wall_formwork_corner.glb",
+        "mesh:formwork:corner",
+    ),
+    (
+        "models/buildings/wall/wall_formwork_t_junction.glb",
+        "mesh:formwork:t_junction",
+    ),
+    (
+        "models/buildings/wall/wall_formwork_cross.glb",
+        "mesh:formwork:cross",
+    ),
+];
+const FORMWORK_ALBEDO_PATH: &str = "textures/buildings/wall/wall_formwork_albedo.png";
 const NORMAL_PATH: &str = "textures/buildings/wall/wall_normal.png";
 const WALLSET_PATH: &str = "manifests/wall-production-v1.wallset";
 static NEXT_SESSION_ID: AtomicU64 = AtomicU64::new(1);
@@ -37,6 +64,7 @@ static NEXT_SESSION_ID: AtomicU64 = AtomicU64::new(1);
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum WallAssetAuthority {
+    ArtPreview,
     IsolatedCandidate,
     ReleaseApproved,
 }
@@ -52,6 +80,7 @@ pub enum WallNormalDecision {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum WallArtReviewStatus {
+    ArtPreview,
     ArtApproved,
     Candidate,
 }
@@ -229,7 +258,10 @@ pub fn decode_canonical_wallset(
     let mut canonical = serde_json::to_vec(&manifest)?;
     canonical.push(b'\n');
     contract(bytes == canonical, "JSON bytes are not canonical")?;
-    contract(manifest.schema_version == 1, "schema version differs")?;
+    contract(
+        matches!(manifest.schema_version, 1 | 2),
+        "schema version differs",
+    )?;
     contract(
         manifest.asset_set_id == ASSET_SET_ID,
         "asset-set id differs",
@@ -242,17 +274,43 @@ pub fn decode_canonical_wallset(
         valid_sha256(&manifest.manifest_sha256),
         "manifest hash differs",
     )?;
-    let expected_core_len = match manifest.normal_decision {
-        WallNormalDecision::Adopted => CORE_INVENTORY.len() + 1,
-        WallNormalDecision::Pending | WallNormalDecision::Rejected => CORE_INVENTORY.len(),
+    let expected_core_len = match (manifest.schema_version, manifest.normal_decision) {
+        (1, WallNormalDecision::Adopted) => COMPLETED_CORE_INVENTORY.len() + 1,
+        (1, WallNormalDecision::Pending | WallNormalDecision::Rejected) => {
+            COMPLETED_CORE_INVENTORY.len()
+        }
+        (2, WallNormalDecision::Rejected) => {
+            COMPLETED_CORE_INVENTORY.len() + FORMWORK_MESH_INVENTORY.len() + 1
+        }
+        (2, WallNormalDecision::Pending | WallNormalDecision::Adopted) => {
+            return Err(WallAssetSetLoadError::Contract(
+                "formwork schema requires rejected normal decision".into(),
+            ));
+        }
+        _ => unreachable!("schema version checked above"),
     };
     contract(
         manifest.core.len() == expected_core_len,
         "core inventory length differs",
     )?;
-    for (record, (path, role)) in manifest.core.iter().zip(CORE_INVENTORY) {
+    let inventory = COMPLETED_CORE_INVENTORY
+        .iter()
+        .copied()
+        .chain(
+            (manifest.schema_version == 2)
+                .then_some(FORMWORK_MESH_INVENTORY.iter().copied())
+                .into_iter()
+                .flatten(),
+        )
+        .chain(
+            (manifest.schema_version == 2)
+                .then_some((FORMWORK_ALBEDO_PATH, "texture:formwork_albedo")),
+        );
+    for (record, (path, role)) in manifest.core.iter().zip(inventory) {
         let expected_path = match manifest.authority {
-            WallAssetAuthority::IsolatedCandidate => path.to_string(),
+            WallAssetAuthority::ArtPreview | WallAssetAuthority::IsolatedCandidate => {
+                path.to_string()
+            }
             WallAssetAuthority::ReleaseApproved => {
                 runtime_core_path(manifest.asset_set_generation, path, role)
             }
@@ -260,6 +318,28 @@ pub fn decode_canonical_wallset(
         validate_record(record, &expected_path, role)?;
     }
     match manifest.authority {
+        WallAssetAuthority::ArtPreview => {
+            contract(
+                manifest.schema_version == 2,
+                "art preview requires formwork schema",
+            )?;
+            contract(
+                manifest.normal_decision == WallNormalDecision::Rejected,
+                "art preview normal decision differs",
+            )?;
+            contract(
+                manifest.review_status == WallArtReviewStatus::ArtPreview,
+                "art preview review status differs",
+            )?;
+            contract(
+                manifest.receipt.is_none(),
+                "art preview receipt must be null",
+            )?;
+            contract(
+                manifest.candidate_normal.is_none(),
+                "art preview candidate normal must be null",
+            )?;
+        }
         WallAssetAuthority::IsolatedCandidate => {
             contract(
                 manifest.normal_decision != WallNormalDecision::Pending,
@@ -495,7 +575,9 @@ impl From<&WallAssetSetManifest> for WallAssetSetIdentity {
 pub struct ResolvedProductionWallAssets {
     pub identity: WallAssetSetIdentity,
     pub meshes: [Handle<Mesh>; 6],
+    pub formwork_meshes: Option<[Handle<Mesh>; 6]>,
     pub albedo: Handle<Image>,
+    pub formwork_albedo: Option<Handle<Image>>,
     pub emissive: Handle<Image>,
     pub normal: Option<Handle<Image>>,
 }
@@ -594,13 +676,17 @@ impl Default for WallAssetReadiness {
 
 #[derive(Resource, Debug, Clone, PartialEq, Eq)]
 pub struct WallAssetCandidatePolicy {
+    pub allow_art_preview: bool,
     pub allowed_generation: Option<u64>,
     pub allowed_manifest_sha256: Option<String>,
 }
 
 impl Default for WallAssetCandidatePolicy {
     fn default() -> Self {
-        let enabled = std::env::var_os("HW_WALL_CANDIDATE").is_some_and(|value| value == "1");
+        let allow_art_preview = cfg!(feature = "profiling")
+            && std::env::var_os("HW_WALL_ART_PREVIEW").is_some_and(|value| value == "1");
+        let enabled = allow_art_preview
+            || std::env::var_os("HW_WALL_CANDIDATE").is_some_and(|value| value == "1");
         let generation = std::env::var("HW_WALL_CANDIDATE_GENERATION")
             .ok()
             .and_then(|value| value.parse::<u64>().ok())
@@ -609,6 +695,7 @@ impl Default for WallAssetCandidatePolicy {
             .ok()
             .filter(|value| valid_sha256(value));
         Self {
+            allow_art_preview,
             allowed_generation: enabled.then_some(generation).flatten(),
             allowed_manifest_sha256: enabled.then_some(manifest_sha256).flatten(),
         }
@@ -617,7 +704,8 @@ impl Default for WallAssetCandidatePolicy {
 
 impl WallAssetCandidatePolicy {
     fn allows(&self, manifest: &WallAssetSetManifest) -> bool {
-        self.allowed_generation == Some(manifest.asset_set_generation)
+        (manifest.authority != WallAssetAuthority::ArtPreview || self.allow_art_preview)
+            && self.allowed_generation == Some(manifest.asset_set_generation)
             && self.allowed_manifest_sha256.as_deref() == Some(&manifest.manifest_sha256)
     }
 }
@@ -659,7 +747,7 @@ fn aggregate_state(
         return WallAssetReadinessState::Loading;
     }
     let manifest = manifest.expect("manifest presence checked above");
-    if manifest.authority == WallAssetAuthority::IsolatedCandidate
+    if manifest.authority != WallAssetAuthority::ReleaseApproved
         && !candidate_policy.allows(manifest)
     {
         return WallAssetReadinessState::Fallback(WallAssetFallbackReason::CandidateDisabled);
@@ -684,7 +772,7 @@ fn resolve_asset_handles(
     manifest: &WallAssetSetManifest,
 ) -> ResolvedProductionWallAssets {
     let meshes = std::array::from_fn(|index| {
-        let record = record_by_role(manifest, CORE_INVENTORY[index].1);
+        let record = record_by_role(manifest, COMPLETED_CORE_INVENTORY[index].1);
         asset_server.load(
             GltfAssetLabel::Primitive {
                 mesh: 0,
@@ -701,10 +789,30 @@ fn resolve_asset_handles(
             })
             .load(record_by_role(manifest, "texture:normal").path.clone())
     });
+    let formwork_meshes = (manifest.schema_version == 2).then(|| {
+        std::array::from_fn(|index| {
+            let record = record_by_role(manifest, FORMWORK_MESH_INVENTORY[index].1);
+            asset_server.load(
+                GltfAssetLabel::Primitive {
+                    mesh: 0,
+                    primitive: 0,
+                }
+                .from_asset(record.path.clone()),
+            )
+        })
+    });
     ResolvedProductionWallAssets {
         identity: manifest.into(),
         meshes,
+        formwork_meshes,
         albedo: asset_server.load(record_by_role(manifest, "texture:albedo").path.clone()),
+        formwork_albedo: (manifest.schema_version == 2).then(|| {
+            asset_server.load(
+                record_by_role(manifest, "texture:formwork_albedo")
+                    .path
+                    .clone(),
+            )
+        }),
         emissive: asset_server.load(record_by_role(manifest, "texture:emissive").path.clone()),
         normal,
     }
@@ -725,12 +833,22 @@ fn initialize_material_handles(
     complete.base.normal_map_texture = assets.normal.clone();
     let complete = structural_materials.add(complete);
 
-    let mut provisional =
-        make_topdown_structural_material(LinearRgba::new(1.0, 1.0, 1.0, 0.9), indoor_light_field);
-    provisional.base.base_color_texture = Some(assets.albedo.clone());
-    provisional.base.normal_map_texture = assets.normal.clone();
-    let provisional =
-        structural_materials.add(with_topdown_alpha_mode(provisional, AlphaMode::Blend));
+    let mut provisional = make_topdown_structural_material(LinearRgba::WHITE, indoor_light_field);
+    provisional.base.base_color_texture = assets
+        .formwork_albedo
+        .clone()
+        .or_else(|| Some(assets.albedo.clone()));
+    provisional.base.normal_map_texture = assets
+        .formwork_albedo
+        .is_none()
+        .then(|| assets.normal.clone())
+        .flatten();
+    let provisional = if assets.formwork_albedo.is_some() {
+        structural_materials.add(provisional)
+    } else {
+        provisional.base.base_color = Color::linear_rgba(1.0, 1.0, 1.0, 0.9);
+        structural_materials.add(with_topdown_alpha_mode(provisional, AlphaMode::Blend))
+    };
 
     ProductionWallMaterialPool {
         identity: Some(assets.identity.clone()),
@@ -875,10 +993,23 @@ pub fn update_wall_asset_readiness_system(
                 .meshes
                 .iter()
                 .map(|handle| required_load_state(&params.asset_server, handle.id()))
+                .chain(
+                    assets
+                        .formwork_meshes
+                        .iter()
+                        .flatten()
+                        .map(|handle| required_load_state(&params.asset_server, handle.id())),
+                )
                 .chain([
                     required_load_state(&params.asset_server, assets.albedo.id()),
                     required_load_state(&params.asset_server, assets.emissive.id()),
                 ])
+                .chain(
+                    assets
+                        .formwork_albedo
+                        .iter()
+                        .map(|handle| required_load_state(&params.asset_server, handle.id())),
+                )
                 .chain(
                     assets
                         .normal
@@ -919,7 +1050,7 @@ mod tests {
             asset_set_id: ASSET_SET_ID.to_string(),
             authority: WallAssetAuthority::IsolatedCandidate,
             candidate_normal: None,
-            core: CORE_INVENTORY
+            core: COMPLETED_CORE_INVENTORY
                 .iter()
                 .map(|(path, role)| record(path, role))
                 .collect(),
@@ -931,13 +1062,34 @@ mod tests {
         }
     }
 
+    fn formwork_fixture() -> WallAssetSetManifest {
+        let mut manifest = fixture();
+        manifest.schema_version = 2;
+        manifest.core.extend(
+            FORMWORK_MESH_INVENTORY
+                .iter()
+                .map(|(path, role)| record(path, role)),
+        );
+        manifest
+            .core
+            .push(record(FORMWORK_ALBEDO_PATH, "texture:formwork_albedo"));
+        manifest
+    }
+
+    fn formwork_preview_fixture() -> WallAssetSetManifest {
+        let mut manifest = formwork_fixture();
+        manifest.authority = WallAssetAuthority::ArtPreview;
+        manifest.review_status = WallArtReviewStatus::ArtPreview;
+        manifest
+    }
+
     fn release_fixture() -> WallAssetSetManifest {
         WallAssetSetManifest {
             asset_set_generation: 7,
             asset_set_id: ASSET_SET_ID.to_string(),
             authority: WallAssetAuthority::ReleaseApproved,
             candidate_normal: None,
-            core: CORE_INVENTORY
+            core: COMPLETED_CORE_INVENTORY
                 .iter()
                 .map(|(path, role)| record(&runtime_core_path(7, path, role), role))
                 .collect(),
@@ -1001,6 +1153,7 @@ mod tests {
 
     fn candidate_policy(manifest: Option<&WallAssetSetManifest>) -> WallAssetCandidatePolicy {
         WallAssetCandidatePolicy {
+            allow_art_preview: false,
             allowed_generation: manifest.map(|value| value.asset_set_generation),
             allowed_manifest_sha256: manifest.map(|value| value.manifest_sha256.clone()),
         }
@@ -1019,6 +1172,41 @@ mod tests {
             decode_canonical_wallset(&encoded(&manifest)).unwrap(),
             manifest
         );
+    }
+
+    #[test]
+    fn canonical_formwork_candidate_passes_with_closed_inventory() {
+        let manifest = formwork_fixture();
+        assert_eq!(
+            decode_canonical_wallset(&encoded(&manifest)).unwrap(),
+            manifest
+        );
+    }
+
+    #[test]
+    fn canonical_art_preview_passes_only_for_formwork_schema() {
+        let manifest = formwork_preview_fixture();
+        assert_eq!(
+            decode_canonical_wallset(&encoded(&manifest)).unwrap(),
+            manifest
+        );
+
+        let mut legacy = fixture();
+        legacy.authority = WallAssetAuthority::ArtPreview;
+        legacy.review_status = WallArtReviewStatus::ArtPreview;
+        let error = decode_canonical_wallset(&encoded(&legacy)).unwrap_err();
+        assert!(error.to_string().contains("requires formwork schema"));
+    }
+
+    #[test]
+    fn formwork_schema_rejects_missing_role_and_adopted_normal() {
+        let mut missing = formwork_fixture();
+        missing.core.pop();
+        assert!(decode_canonical_wallset(&encoded(&missing)).is_err());
+
+        let mut adopted = formwork_fixture();
+        adopted.normal_decision = WallNormalDecision::Adopted;
+        assert!(decode_canonical_wallset(&encoded(&adopted)).is_err());
     }
 
     #[test]
@@ -1106,6 +1294,18 @@ mod tests {
         release.authority = WallAssetAuthority::ReleaseApproved;
         assert!(matches!(
             aggregate_state(&candidate_policy(None), Some(&release), states),
+            WallAssetReadinessState::Eligible { .. }
+        ));
+
+        let preview = formwork_preview_fixture();
+        assert_eq!(
+            aggregate_state(&candidate_policy(Some(&preview)), Some(&preview), states),
+            WallAssetReadinessState::Fallback(WallAssetFallbackReason::CandidateDisabled)
+        );
+        let mut preview_policy = candidate_policy(Some(&preview));
+        preview_policy.allow_art_preview = true;
+        assert!(matches!(
+            aggregate_state(&preview_policy, Some(&preview), states),
             WallAssetReadinessState::Eligible { .. }
         ));
         let mut missing = states;
@@ -1217,7 +1417,9 @@ mod tests {
         let mut assets = ResolvedProductionWallAssets {
             identity: WallAssetSetIdentity::from(&fixture()),
             meshes: std::array::from_fn(|_| Handle::default()),
+            formwork_meshes: None,
             albedo: albedo.clone(),
+            formwork_albedo: None,
             emissive: emissive.clone(),
             normal: Some(normal.clone()),
         };
@@ -1298,6 +1500,35 @@ mod tests {
         assert!(materials.get(&first_provisional).is_none());
         assert_ne!(pool.complete.as_ref(), Some(&first_complete));
         assert_ne!(pool.provisional.as_ref(), Some(&first_provisional));
+    }
+
+    #[test]
+    fn formwork_material_is_opaque_and_uses_its_own_albedo() {
+        let mut images = Assets::<Image>::default();
+        let formwork_albedo = images.add(Image::default());
+        let indoor_light = images.add(Image::default());
+        let mut materials = Assets::<TopDownStructuralMaterial>::default();
+        let assets = ResolvedProductionWallAssets {
+            identity: WallAssetSetIdentity::from(&formwork_fixture()),
+            meshes: std::array::from_fn(|_| Handle::default()),
+            formwork_meshes: Some(std::array::from_fn(|_| Handle::default())),
+            albedo: images.add(Image::default()),
+            formwork_albedo: Some(formwork_albedo.clone()),
+            emissive: images.add(Image::default()),
+            normal: None,
+        };
+
+        let pool = initialize_material_handles(&assets, indoor_light, &mut materials);
+        let provisional = materials
+            .get(pool.provisional.as_ref().expect("formwork material"))
+            .expect("resident formwork material");
+        assert_eq!(
+            provisional.base.base_color_texture.as_ref(),
+            Some(&formwork_albedo)
+        );
+        assert_eq!(provisional.base.alpha_mode, AlphaMode::Opaque);
+        assert!(provisional.base.normal_map_texture.is_none());
+        assert!(provisional.base.emissive_texture.is_none());
     }
 
     struct TestAssetRoot(PathBuf);
@@ -1509,6 +1740,7 @@ mod tests {
         app.world_mut()
             .insert_resource(ProductionWallMaterialPool::default());
         app.world_mut().insert_resource(WallAssetCandidatePolicy {
+            allow_art_preview: false,
             allowed_generation: None,
             allowed_manifest_sha256: None,
         });

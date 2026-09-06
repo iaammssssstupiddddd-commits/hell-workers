@@ -814,7 +814,9 @@ mod tests {
             resolved: Some(ResolvedProductionWallAssets {
                 identity: identity.clone(),
                 meshes: std::array::from_fn(|_| Handle::default()),
+                formwork_meshes: Some(std::array::from_fn(|_| Handle::default())),
                 albedo: default(),
+                formwork_albedo: Some(default()),
                 emissive: default(),
                 normal: None,
             }),

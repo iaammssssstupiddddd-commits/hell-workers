@@ -881,6 +881,7 @@ impl PerfScenarioConfig {
             ));
         }
         let wall_actual_window = wall_actual_window_flag && wall_actual_window_environment;
+        let wall_art_preview = env::var("HW_WALL_ART_PREVIEW").is_ok_and(|value| value == "1");
         let wall_art_matrix_flag = has_flag(&args, "--perf-wall-art-matrix");
         let wall_art_matrix_environment =
             env::var("HW_WALL_ART_MATRIX").is_ok_and(|value| value == "1");
@@ -917,13 +918,27 @@ impl PerfScenarioConfig {
                     .to_string(),
             ));
         }
+        if wall_art_preview
+            && (!wall_actual_window || wall_phase != Some(PerfWallPhase::Provisional))
+        {
+            return Err(PerfScenarioConfigError(
+                "Wall art preview requires the provisional current-Wall actual-window profile"
+                    .to_string(),
+            ));
+        }
         if (wall_actual_window || wall_color_actual_window)
             && (workload != PerfWorkload::WallDensity
                 || size != PerfScenarioSize::Small
-                || wall_phase != Some(PerfWallPhase::Completed))
+                || !wall_actual_window_phase_matches(
+                    wall_actual_window,
+                    wall_color_actual_window,
+                    wall_art_preview,
+                    wall_phase,
+                ))
         {
             return Err(PerfScenarioConfigError(
-                "Wall actual-window calibration requires wall-density/small/completed".to_string(),
+                "Wall actual-window calibration requires wall-density/small and its authorized phase"
+                    .to_string(),
             ));
         }
         if wall_presentation.is_some()
@@ -1311,6 +1326,20 @@ fn wall_density_durations_match(actual_window: bool, warmup_secs: f32, measure_s
         (30.0, 60.0)
     };
     (warmup_secs, measure_secs) == expected
+}
+
+const fn wall_actual_window_phase_matches(
+    wall_actual_window: bool,
+    wall_color_actual_window: bool,
+    art_preview: bool,
+    phase: Option<PerfWallPhase>,
+) -> bool {
+    if wall_color_actual_window {
+        return matches!(phase, Some(PerfWallPhase::Completed));
+    }
+    wall_actual_window
+        && (matches!(phase, Some(PerfWallPhase::Completed))
+            || (art_preview && matches!(phase, Some(PerfWallPhase::Provisional))))
 }
 
 fn wall_density_window_contract_matches(

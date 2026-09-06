@@ -62,7 +62,17 @@ const STRAIGHT_EAST_WEST_MASK: u8 = 0b0011;
 /// released, by the post-promote profile that runs without that opt-in.
 fn candidate_gallery_requested() -> bool {
     std::env::var("HW_WALL_CANDIDATE").as_deref() == Ok("1")
+        || art_preview_requested()
         || std::env::var("HW_WALL_ART_GALLERY").as_deref() == Ok("1")
+}
+
+fn art_preview_requested() -> bool {
+    std::env::var("HW_WALL_ART_PREVIEW").as_deref() == Ok("1")
+}
+
+const fn accepted_wall_phase(phase: Option<PerfWallPhase>, art_preview: bool) -> bool {
+    matches!(phase, Some(PerfWallPhase::Completed))
+        || (art_preview && matches!(phase, Some(PerfWallPhase::Provisional)))
 }
 
 fn farthest_zoom_requested() -> bool {
@@ -123,7 +133,7 @@ impl WallActualWindowAcceptance {
             && config.enabled()
             && config.workload == PerfWorkload::WallDensity
             && config.size == PerfScenarioSize::Small
-            && config.wall_phase() == Some(PerfWallPhase::Completed)
+            && accepted_wall_phase(config.wall_phase(), art_preview_requested())
             && config.render_mode == PerfRenderMode::Gpu
             && fixture.actual_window_subject().is_some()
     }
@@ -580,6 +590,9 @@ fn build_status(
         });
         status["render"]["fallback_mesh_resident"] = json!(false);
     }
+    if art_preview_requested() {
+        status["evidence_kind"] = json!("art_preview");
+    }
     Ok(status)
 }
 
@@ -751,6 +764,17 @@ fn write_status(path: &Path, value: &Value) -> std::io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn provisional_actual_window_requires_explicit_art_preview() {
+        assert!(accepted_wall_phase(Some(PerfWallPhase::Completed), false));
+        assert!(!accepted_wall_phase(
+            Some(PerfWallPhase::Provisional),
+            false
+        ));
+        assert!(accepted_wall_phase(Some(PerfWallPhase::Provisional), true));
+        assert!(!accepted_wall_phase(None, true));
+    }
 
     #[test]
     fn acknowledgement_is_bound_to_nonce_phase_and_generation() {

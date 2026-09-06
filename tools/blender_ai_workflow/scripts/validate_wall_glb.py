@@ -286,6 +286,71 @@ def validate_corridor_envelope(
         require(inside, "mesh vertex exceeds the union of active ornament corridors")
 
 
+def validate_formwork_geometry(
+    positions: list[tuple[float, ...]],
+    triangles: list[tuple[int, int, int]],
+    family: str,
+    arms: list[str],
+    tolerance: float,
+) -> list[dict[str, Any]]:
+    expected_triangles = {
+        "isolated": 60,
+        "end": 60,
+        "straight": 108,
+        "corner": 108,
+        "t_junction": 156,
+        "cross": 204,
+    }
+    require(
+        len(triangles) == expected_triangles[family],
+        "formwork family triangle count differs",
+    )
+    if not arms:
+        require(
+            all(abs(point[0]) <= 6.4 + tolerance and abs(point[2]) <= 6.4 + tolerance for point in positions),
+            "isolated formwork exceeds its 12.8 wu square",
+        )
+        return []
+
+    observations: list[dict[str, Any]] = []
+    for direction in arms:
+        boundary = [
+            point
+            for point in positions
+            if abs(direction_coordinates(point, direction)[0] - 16.0) <= tolerance
+        ]
+        require(boundary, f"{direction} formwork port does not reach the cell boundary")
+        transverse = [direction_coordinates(point, direction)[1] for point in boundary]
+        vertical = [point[1] for point in boundary]
+        require(
+            abs(min(transverse) + 4.8) <= tolerance
+            and abs(max(transverse) - 4.8) <= tolerance,
+            f"{direction} formwork port width differs",
+        )
+        require(
+            abs(min(vertical) + 16.0) <= tolerance
+            and abs(max(vertical) - 16.0) <= tolerance,
+            f"{direction} formwork terminal post height differs",
+        )
+        gap_segments = cross_section_segments(
+            positions, triangles, direction, 8.4, tolerance
+        )
+        gap_crossings = horizontal_crossings(gap_segments, 0.0, tolerance)
+        require(
+            not section_contains(gap_crossings, 4.0, tolerance),
+            f"{direction} formwork has no mid-height construction gap",
+        )
+        observations.append(
+            {
+                "direction": direction,
+                "gap_probe": {"axial_wu": 8.4, "t_wu": 4.0, "y_wu": 0.0},
+                "port_max_t_wu": round(max(transverse), 6),
+                "port_min_t_wu": round(min(transverse), 6),
+            }
+        )
+    return observations
+
+
 def validate_wall_glb(path: Path, family: str, contract_path: Path = DEFAULT_CONTRACT) -> dict[str, Any]:
     contract = load_contract(contract_path)
     families = {
@@ -388,7 +453,13 @@ def validate_wall_glb(path: Path, family: str, contract_path: Path = DEFAULT_CON
     half_envelope = contract["geometry"]["ornament_envelope_width_wu"] / 2.0
     validate_corridor_envelope(positions, arms, half_envelope, tolerance)
     sections: list[dict[str, Any]] = []
-    if arms:
+    formwork_ports: list[dict[str, Any]] = []
+    is_formwork = contract["mesh_contract"].get("profile") == "formwork"
+    if is_formwork:
+        formwork_ports = validate_formwork_geometry(
+            positions, triangles, family, arms, tolerance
+        )
+    elif arms:
         for direction in arms:
             for axial in (*CORE_AXIAL_SAMPLES, *PROFILE_AXIAL_SAMPLES):
                 sections.append(
@@ -447,6 +518,7 @@ def validate_wall_glb(path: Path, family: str, contract_path: Path = DEFAULT_CON
         "node_transform": contract["bounds"]["node_transform"],
         "arms": arms,
         "cross_sections": sections,
+        "formwork_ports": formwork_ports,
     }
 
 

@@ -212,11 +212,16 @@ pub fn apply_wall_presentation_system(
                     .as_ref()
                     .expect("bound complete Wall material")
             };
-            (
-                &resolved.meshes[production_mesh_index(topology.resolved.family)],
-                next_material,
-                Wall3dPresentationMode::Production,
-            )
+            let mesh_index = production_mesh_index(topology.resolved.family);
+            let next_mesh = if building.is_provisional {
+                resolved
+                    .formwork_meshes
+                    .as_ref()
+                    .map_or(&resolved.meshes[mesh_index], |meshes| &meshes[mesh_index])
+            } else {
+                &resolved.meshes[mesh_index]
+            };
+            (next_mesh, next_material, Wall3dPresentationMode::Production)
         } else {
             let next_material = if building.is_provisional {
                 &fallback.wall_provisional_material
@@ -282,6 +287,7 @@ mod tests {
         visual: Entity,
         fallback_mesh: Handle<Mesh>,
         production_meshes: [Handle<Mesh>; 6],
+        formwork_meshes: [Handle<Mesh>; 6],
         complete_material: Handle<TopDownStructuralMaterial>,
         provisional_material: Handle<TopDownStructuralMaterial>,
     }
@@ -312,6 +318,8 @@ mod tests {
         let fallback_mesh = meshes.add(Cuboid::new(32.0, 32.0, 32.0));
         let production_meshes =
             std::array::from_fn(|index| meshes.add(Cuboid::new(9.6 + index as f32, 32.0, 32.0)));
+        let formwork_meshes =
+            std::array::from_fn(|index| meshes.add(Cuboid::new(4.8 + index as f32, 32.0, 32.0)));
         let mut materials = Assets::<TopDownStructuralMaterial>::default();
         let fallback_material = materials.add(TopDownStructuralMaterial::default());
         let fallback_provisional_material = materials.add(TopDownStructuralMaterial::default());
@@ -326,7 +334,9 @@ mod tests {
         let resolved = ResolvedProductionWallAssets {
             identity: identity(),
             meshes: production_meshes.clone(),
+            formwork_meshes: Some(formwork_meshes.clone()),
             albedo: Handle::default(),
+            formwork_albedo: Some(Handle::default()),
             emissive: Handle::default(),
             normal: None,
         };
@@ -388,6 +398,7 @@ mod tests {
             visual,
             fallback_mesh,
             production_meshes,
+            formwork_meshes,
             complete_material,
             provisional_material,
         }
@@ -462,7 +473,7 @@ mod tests {
         fixture.app.update();
         assert_eq!(
             fixture.app.world().get::<Mesh3d>(fixture.visual).unwrap().0,
-            fixture.production_meshes[2]
+            fixture.formwork_meshes[2]
         );
         assert_eq!(
             fixture
@@ -596,7 +607,7 @@ mod tests {
     }
 
     #[test]
-    fn completion_transition_changes_only_the_shared_material() {
+    fn completion_transition_changes_mesh_and_material_without_replacing_owner_or_visual() {
         let mut fixture = make_fixture(add_apply_to_update);
         fixture.app.update();
 
@@ -632,9 +643,13 @@ mod tests {
             .is_provisional = true;
         fixture.app.update();
 
-        assert_eq!(
+        assert_ne!(
             fixture.app.world().get::<Mesh3d>(fixture.visual).unwrap().0,
             mesh
+        );
+        assert_eq!(
+            fixture.app.world().get::<Mesh3d>(fixture.visual).unwrap().0,
+            fixture.formwork_meshes[3]
         );
         assert_eq!(
             *fixture

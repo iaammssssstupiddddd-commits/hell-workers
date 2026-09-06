@@ -5,7 +5,7 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `provisional-wall-formwork-plan-2026-09-05` |
-| ステータス | `Draft` |
+| ステータス | `In Progress — M3aアート承認済み、M3b正式封印待ち` |
 | 作成日 | `2026-09-05` |
 | 最終更新日 | `2026-09-06` |
 | 作成者 | `Codex` |
@@ -13,7 +13,7 @@
 | 関連計画 | [ドアの本番ビジュアル化](production-door-art-plan-2026-09-05.md)、[完了済み本番壁計画](archived/production-wall-art-plan-2026-08-31.md) |
 | 関連提案 / Issue / PR | `N/A` |
 
-本書は計画であり、実装・アセット制作・実機受入は未着手。調査基点は `57a488e1`。
+本書は実装追跡中。候補tooling・6 family・runtime接続を実装し、M3aのArtPreviewはユーザー承認済み。調査基点は `57a488e1`。
 完了済み壁trackを再開せず、現在の石壁を基準に仮設段階の表現を改修する。
 
 ## 0. セルフレビューで修正した点
@@ -266,7 +266,8 @@ viewも正式jobのtreeへ上書きしない。追加treeの作成前に実使�
 - 変更内容: M0で整備したprofileでM3aのpreview比較・候補封印、M3bの正式candidate受入を順に実施する。
 - 対象: root `plugins/startup/perf_scenario/`、native acceptance helper、`scripts/perf_tool/`の対応validator。
 - 完了条件:
-  - [ ] §7の画像・状態・性能の各gateが成立し、木製型枠の最終候補を目視確認できる。
+  - [x] M3aのゲーム所有window ArtPreviewを独立verifyし、木製型枠の方向性をユーザーが承認。候補manifest `f11eb5ef…`、PNG `86a5d643…`、回答「OKです」をapproval artifact `6250d7bd…`へ結んだ。
+  - [ ] §7の正式画像・状態・性能の各gateが成立し、木製型枠の最終candidateを確認できる。
   - [ ] 新inventoryの検証が実resident handlesに一致し、旧completed-only galleryを仮設受入に代用していない。
   - [ ] `art_preview`ではない正式candidateの証拠を封印し、単独M3を完了。相手のM3完了を前提にしない。
 - 検証: `hell-workers-run-native-acceptance` Skillの専用scenario・direct `kitty` launcher・独立artifact verify。
@@ -380,8 +381,8 @@ Update required / 理由付きNo impactをその時点で判断する。
 
 ### 現在地
 
-- 進捗: 実装 `0%`。現状調査と計画作成のみ完了。
-- 次の作業: M0。§4.1の寸法を新fixtureへ、§4.3の2 source/version契約をvalidatorへ落とし、共通C0のpreview・before採取を実装する。
+- 進捗: M1/W2の中核を実装。schema v3候補、runtime wallset v2、6 family GLB、Opaque木材albedo、tile単位mesh/material切替、ArtPreview authorityが動作する。M3aはgeneration 5の技術候補とゲーム所有window PNGに対してユーザー承認済みで、approval artifactも封印済み。通常releaseはgeneration 4のまま。M0の正式before比較、M2の全lifecycle監査、M3b以降は未完。
+- 次の作業: Door M2との統合freezeとclean commitを確定し、承認済みbytesを新generationのfinal manifestへ封印する。その正式candidateでM3b、続いてDoor単独M3、J1、M4を行う。現在のArtPreviewを正式passへ読み替えない。
 - ドアはM0の共通port確定後に制作を並行可能。Rust・tooling編集はmain agentが順に行い、joint受入は両方のruntime接続後。
 - 240 triangles・core 15 file・§7の予算は採用した新設計値。現在のreleaseの実測・アート承認値として扱わない。
 
@@ -398,8 +399,8 @@ Update required / 理由付きNo impactをその時点で判断する。
 - セルフレビュー: `2026-09-06`。§0の指摘を計画へ反映。実装・アセット制作・native起動は行っていない。
 - 文書gate: `python3 scripts/dev.py docs --check` / `git diff --check` はpass。
 - Help gate: `python3 scripts/check_help_impact.py` は既存HEADのproduction差分（diff base `1dc5aa5f`以降）に新しいHelp判断がないためfail。今回の計画差分は文書のみで、この既存差分の判断は変更していない。
-- check / Clippy / workspace test / 実機受入: 未実施（実装未着手）。
-- ブロッカー: 計画作成上はなし。最終アートと昇格の判断は候補制作・実機確認後に扱う。
+- 局所検証: formwork tooling 33 tests、wall asset-set 24 pass / 1 external-view ignored、presentation 9 tests、profiling限定phase testがpass。full check / Clippy / verifyはM3a確定前の最終差分で実施する。
+- ブロッカー: M3aのアート判断は解消。正式封印前のDoor M2統合とclean commitが未完。preview成功を正式passへ読み替えない。
 
 ### Definition of Done
 
@@ -415,3 +416,5 @@ Update required / 理由付きNo impactをその時点で判断する。
 | --- | --- | --- |
 | `2026-09-05` | `Codex` | 木製型枠を推奨し、段階別mesh・後継asset契約・tile完成・実機受入を計画化 |
 | `2026-09-06` | `Codex` | セルフレビュー。部材寸法と三角形予算、2 source/schema互換、承認前preview、baseline前倒し、J1、数値gate・10回loadを具体化 |
+| `2026-09-06` | `Codex` | M1/W2中核のtooling・型枠6 family・runtime schema v2・段階別表示・ArtPreview経路を実装。通常releaseは未変更 |
+| `2026-09-06` | `Codex` | ユーザーがM3a ArtPreviewを「OKです」で承認。候補・実機job・PNG hashをapproval artifactへ封印し、final seal / isolated-candidate projection toolingを追加。通常releaseは未変更 |

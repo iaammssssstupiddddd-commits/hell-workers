@@ -23,6 +23,7 @@ use crate::plugins::startup::Building3dHandles;
 
 const SIDECAR_SCHEMA_VERSION: u32 = 1;
 const MAX_TRIANGLES_PER_PRODUCTION_MESH: usize = 72;
+const MAX_TRIANGLES_PER_FORMWORK_MESH: usize = 240;
 
 type WallPresentationQuery<'w, 's> = Query<
     'w,
@@ -235,13 +236,22 @@ pub(crate) fn inspect_wall_density_presentation(
         }
     }
     .ok_or_else(|| "expected Wall material is absent".to_string())?;
-    let expected_meshes = match expected {
-        PerfWallPresentation::Production => resolved
+    let expected_meshes = match (expected, evidence.phase) {
+        (PerfWallPresentation::Production, PerfWallPhase::Provisional) => resolved
+            .formwork_meshes
+            .as_ref()
+            .unwrap_or(&resolved.meshes)
+            .iter()
+            .map(|handle| handle.id())
+            .collect::<HashSet<_>>(),
+        (PerfWallPresentation::Production, PerfWallPhase::Completed) => resolved
             .meshes
             .iter()
             .map(|handle| handle.id())
             .collect::<HashSet<_>>(),
-        PerfWallPresentation::FallbackControl => HashSet::from([params.fallback.wall_mesh.id()]),
+        (PerfWallPresentation::FallbackControl, _) => {
+            HashSet::from([params.fallback.wall_mesh.id()])
+        }
     };
     if !active_meshes.iter().all(|id| expected_meshes.contains(id))
         || active_materials != HashSet::from([expected_material.id()])
@@ -252,6 +262,7 @@ pub(crate) fn inspect_wall_density_presentation(
     let production_mesh_triangles = resolved
         .meshes
         .iter()
+        .chain(resolved.formwork_meshes.iter().flatten())
         .map(|handle| {
             let mesh = params
                 .meshes
@@ -267,7 +278,12 @@ pub(crate) fn inspect_wall_density_presentation(
         })
         .collect::<Result<Vec<_>, String>>()?;
     let max_triangles = production_mesh_triangles.iter().copied().max().unwrap_or(0);
-    if max_triangles > MAX_TRIANGLES_PER_PRODUCTION_MESH {
+    let max_triangle_budget = if resolved.formwork_meshes.is_some() {
+        MAX_TRIANGLES_PER_FORMWORK_MESH
+    } else {
+        MAX_TRIANGLES_PER_PRODUCTION_MESH
+    };
+    if max_triangles > max_triangle_budget {
         return Err(format!(
             "production Wall mesh exceeds triangle budget: {max_triangles}"
         ));
@@ -292,6 +308,7 @@ pub(crate) fn inspect_wall_density_presentation(
     let resident_production_mesh_count = resolved
         .meshes
         .iter()
+        .chain(resolved.formwork_meshes.iter().flatten())
         .filter(|handle| params.meshes.contains(handle.id()))
         .count();
     let production_materials_lit = production_material_handles.iter().all(|handle| {
@@ -302,6 +319,7 @@ pub(crate) fn inspect_wall_density_presentation(
     let total_wall_mesh_pool_count = resolved
         .meshes
         .iter()
+        .chain(resolved.formwork_meshes.iter().flatten())
         .map(|handle| handle.id())
         .chain(std::iter::once(params.fallback.wall_mesh.id()))
         .collect::<HashSet<_>>()
@@ -316,11 +334,16 @@ pub(crate) fn inspect_wall_density_presentation(
         ])
         .collect::<HashSet<_>>()
         .len();
-    if resident_production_mesh_count != 6
+    let expected_production_mesh_count = if resolved.formwork_meshes.is_some() {
+        12
+    } else {
+        6
+    };
+    if resident_production_mesh_count != expected_production_mesh_count
         || resident_production_material_count != 2
         || resident_fallback_mesh_count != 1
         || resident_fallback_material_count != 2
-        || total_wall_mesh_pool_count != 7
+        || total_wall_mesh_pool_count != expected_production_mesh_count + 1
         || total_wall_material_pool_count != 4
         || !production_materials_lit
     {

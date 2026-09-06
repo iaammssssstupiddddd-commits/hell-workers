@@ -1,0 +1,74 @@
+{
+  "asset_set_id": "wall-production-v1",
+  "authoring": {
+    "blender_units_per_tile": 1.0,
+    "export_scale": 32.0,
+    "runtime_base_scale": 1.0
+  },
+  "bounds": {
+    "contract_kind": "formwork_cell_envelope",
+    "local_max": [16.0, 16.0, 16.0],
+    "local_min": [-16.0, -16.0, -16.0],
+    "node_transform": {
+      "rotation_xyzw": [0.0, 0.0, 0.0, 1.0],
+      "scale": [1.0, 1.0, 1.0],
+      "translation": [0.0, 0.0, 0.0]
+    },
+    "origin": [0.0, 0.0, 0.0],
+    "pivot_semantics": "cell_center_and_half_height_before_placement",
+    "placement_center_y_wu": 16.0,
+    "required_vertical_min_max_wu": [-16.0, 16.0],
+    "world_y_after_placement": [0.0, 32.0]
+  },
+  "canonical_orientation": {
+    "canonical_families": [
+      {"arms": [], "family": "isolated", "mask": "0000"},
+      {"arms": ["N"], "family": "end", "mask": "1000"},
+      {"arms": ["N", "S"], "family": "straight", "mask": "1100"},
+      {"arms": ["N", "W"], "family": "corner", "mask": "1010"},
+      {"arms": ["N", "S", "W"], "family": "t_junction", "mask": "1110"},
+      {"arms": ["N", "S", "W", "E"], "family": "cross", "mask": "1111"}
+    ],
+    "direction_cycle_positive_quarter_turn": ["N", "W", "S", "E"],
+    "positive_quarter_turn_axis": "+Y",
+    "positive_quarter_turn_degrees": 90,
+    "positive_quarter_turn_top_view": "counterclockwise",
+    "world_direction_vectors": {
+      "E": [1.0, 0.0, 0.0],
+      "N": [0.0, 0.0, -1.0],
+      "S": [0.0, 0.0, 1.0],
+      "W": [-1.0, 0.0, 0.0]
+    }
+  },
+  "formwork": {
+    "brace_thickness_wu": 1.6,
+    "brace_width_wu": 2.4,
+    "center_post_half_width_wu": 2.4,
+    "isolated_half_envelope_wu": 6.4,
+    "rail_axial_min_max_wu": [2.4, 14.4],
+    "rail_vertical_ranges_wu": [[-12.8, -9.6], [9.6, 12.8]],
+    "terminal_post_axial_min_max_wu": [14.4, 16.0]
+  },
+  "geometry": {
+    "absolute_tolerance_wu": 0.01,
+    "height_wu": 32.0,
+    "ornament_envelope_width_wu": 12.8,
+    "port_half_width_wu": 4.8,
+    "port_width_wu": 9.6,
+    "tile_size_wu": 32.0
+  },
+  "mesh_contract": {
+    "embedded_images": 0,
+    "families": ["isolated", "end", "straight", "corner", "t_junction", "cross"],
+    "hard_triangle_cap_per_mesh": 240,
+    "meshes_per_glb": 1,
+    "primitives_per_mesh": 1,
+    "profile": "formwork",
+    "texture_budget": {
+      "height": 512,
+      "shared_roles": ["formwork_albedo"],
+      "width": 512
+    }
+  },
+  "schema_version": 1
+}

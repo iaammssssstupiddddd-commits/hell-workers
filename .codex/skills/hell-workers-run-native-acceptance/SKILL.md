@@ -317,6 +317,22 @@ visual reference only: it does not replace the registered historical P02
 artifact, the 12-run Wall Capture baseline, or the separate RenderDoc
 draw-group gate. Revalidate with `verify --job-root <job-root>`.
 
+For an unapproved Wall formwork visual, first provision its exact 15-file
+allowlist and `authority=art_preview` runtime projection into a dedicated clean
+validation worktree. Then use the single-case preview profile:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 \
+  .codex/skills/hell-workers-run-native-acceptance/scripts/wall_art_acceptance.py \
+  plan --repo "$VALIDATION_WORKTREE" --adapter Intel --candidate --art-preview
+```
+
+This is a profiling-only provisional-phase observation. It requires runtime
+schema 2, explicit generation and manifest-hash opt-in, and records
+`evidence_kind=art_preview` in the job, observation, probe, and manifest.
+Never treat this result as art approval, formal candidate acceptance,
+performance baseline evidence, or promotion authority.
+
 After M4 art approval, provision the final art-approved candidate projection
 and its exact core allowlist into a clean validation worktree. Plan the fixed-lit
 gallery observation:

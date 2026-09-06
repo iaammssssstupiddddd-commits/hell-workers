@@ -112,7 +112,7 @@ python scripts/sync_external_assets.py \
 - `--delete-missing` 指定時のみ、コピー元に存在しない同期対象ファイルを `assets/` から削除する
 - `fonts/` と `shaders/` には触れない
 
-Wall production asset-set v2だけは、staging全体を対象にする上記legacy modeではなくmanifest allowlist modeを使う。
+Wall production asset-set v2は、staging全体を対象にする上記legacy modeではなくmanifest allowlist modeを使う。
 `--manifest`と`--selection core`は必ず組で指定し、art-approved final manifestの全artifact / report / license /
 source hashとtool commitを検証した後、normalを含まないexact 8 fileだけを明示したasset rootへコピーする。
 manifest外のfileをcopy / deleteせず、symlinkやroot外pathも拒否する。
@@ -131,6 +131,25 @@ python3 scripts/sync_external_assets.py \
 pending candidateと`optional:normal`は同期対象にしない。manifest modeでは`--delete-missing`を併用できない。
 isolated candidate projectionはfinal payloadをreceiptなしで隔離検証するためだけに使い、primary / canonicalへ
 直接同期しない。release projectionはgeneration-scoped promotion receiptを必須とする。
+
+仮設Wallのauthoring v3は、既存generation 4の完成Wall 8 fileをhash不変で再利用し、
+`mesh:formwork:<family>` 6 fileと`texture:formwork_albedo` 1 fileを加えたexact 15 fileを持つ。
+未承認bytesは`project_wall_formwork_preview.py`でruntime wallset v2へ投影し、profiling buildかつ
+`HW_WALL_ART_PREVIEW=1`、generation、manifest hashの三点一致時だけ読み込める。projectionは
+`authority=art_preview` / `review_status=art_preview` / receiptなしで、正式candidate・release・promotionの
+代用にはならない。`provision_wall_formwork_preview.py`は外部`staging/validation/`配下の新規viewだけへ
+allowlistを固定し、異なる既存bytesの上書きを拒否する。
+
+ユーザーがゲーム所有windowのArtPreviewを承認したら、`record_wall_formwork_approval.py`で技術候補manifest、
+`wall-formwork-art-preview-v1`のvalid job、PNGの実bytes、subject/source/harness/asset-view fingerprint、承認UTC、
+ユーザー文言を`wall-formwork-v1.art-approval.json`へ結ぶ。failed job、別candidate、標準zoom以外、または
+`evidence_kind=art_preview`でない入力は拒否する。このartifactはアート判断の記録であり、単独では
+`isolated_candidate`やrelease authorityを与えない。
+
+Door M2を含むclean runtime subjectが確定した後、`seal_wall_formwork_final.py`が承認済みcandidateを新generationの
+authoring v3 final manifestへ封印する。`project_wall_formwork_candidate.py`はそのfinalだけをruntime schema v2の
+`authority=isolated_candidate`へ投影する。正式candidateは`art_review.status=art_approved`、exact 15 core、
+`normal_decision=rejected`、receiptなしを要求し、ArtPreview projectionを正式受入へ流用しない。
 
 canonicalへ昇格した後のprimary同期は、同じmanifest allowlistに`--receipt`を加えたrelease modeで行う。
 manifestが`generations/<GEN>/manifest/`にある場合は`--receipt`を必須とし、receiptのmanifest hash / generationと
@@ -197,15 +216,16 @@ validation worktreeは作業場であって成果物ではない。trackを閉�
 
 ### Wall runtime projection
 
-検証済みasset-set manifest v2は、そのままruntimeへ読ませず、`project_wallset.py`で
+検証済みasset-set manifestは、そのままruntimeへ読ませず、projection toolで
 `assets/manifests/wall-production-v1.wallset`へcanonical JSON projectionする。projectionはasset-set generation、
 元manifest SHA-256、authority、exact core inventoryを保持し、key順・空白・末尾改行を含むbyte表現を固定する。
-Bevy loaderは非canonical JSON、unknown field、path / role / byte length / SHA-256違反を拒否し、core 8 fileのactual bytesを
+Bevy loaderはruntime schema v1 / v2を区別し、非canonical JSON、unknown field、path / role / byte length / SHA-256違反を拒否する。v1ではcore 8 file、v2ではcore 15 fileのactual bytesを
 asset rootから一度だけ読み直して照合する。
 
 candidate authorityは通常起動では常にfallbackで、primary / canonicalへ配置しない。隔離validation worktreeだけが
 `HW_WALL_CANDIDATE=1`を設定できる。runtime loaderは`art_approved`かつnormal判定済みのfinal payloadだけを受理し、
-6 GLBの`Mesh0/Primitive0`、albedo、emissive、2 shared lit production materialを有限poolへloadする。
+v1は6 GLBの`Mesh0/Primitive0`、albedo、emissive、2 shared lit production materialを有限poolへloadする。
+v2は完成6 GLBに型枠6 GLBと型枠albedoを加え、仮設はOpaqueな専用material、本設は既存materialを使う。
 pending review、optional normal、manifest identity opt-in不一致はfail closedとする。
 
 ## 6. 競合回避ルール
