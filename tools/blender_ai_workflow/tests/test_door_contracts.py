@@ -51,6 +51,10 @@ class DoorGeometryRevisionTests(unittest.TestCase):
                 "locked": {"triangles": 216},
             },
         )
+        self.assertEqual(
+            manifest_validator.STATES,
+            {"closed": 204, "open": 204, "locked": 216},
+        )
 
 
 class DoorTextureTests(unittest.TestCase):

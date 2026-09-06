@@ -10,7 +10,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 
 ASSET_SET_ID = "door-production-v1"
-STATES = {"closed": 156, "open": 156, "locked": 168}
+STATES = {"closed": 204, "open": 204, "locked": 216}
 CORE = [
     ("models/buildings/door/door_closed.glb", "mesh:closed"),
     ("models/buildings/door/door_open.glb", "mesh:open"),
@@ -155,4 +155,3 @@ def validate_manifest(
     else:
         require(source["runtime_subject"] == "pending", "candidate runtime subject differs")
     return {"asset_set_generation": manifest["asset_set_generation"], "manifest_sha256": sha256(manifest_path), "status": "pass"}
-
