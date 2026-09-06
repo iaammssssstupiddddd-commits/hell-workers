@@ -26,12 +26,15 @@ use crate::plugins::startup::{Building3dHandles, Camera3dRtt};
 use crate::systems::jobs::spawn_building_3d_visual;
 use crate::systems::visual::building3d_cleanup::DoorPresentationSyncSet;
 
+use super::fixture::PerfFixtureMarker;
+
 const REQUEST_ENV: &str = "HW_DOOR_ART_ACTUAL_WINDOW";
 const STATUS_ENV: &str = "HW_DOOR_ART_STATUS_PATH";
 const ACK_ENV: &str = "HW_DOOR_ART_ACK_PATH";
 const NONCE_ENV: &str = "HW_DOOR_ART_SESSION_NONCE";
 const PHASE: &str = "door-gallery";
 const GENERATION: u32 = 1;
+const GALLERY_CAMERA_SCALE: f32 = 0.5;
 const SETTLE: Duration = Duration::from_millis(1_600);
 const ACK_TIMEOUT: Duration = Duration::from_secs(15);
 
@@ -187,6 +190,7 @@ pub(crate) fn setup_door_actual_window_gallery_system(
 pub(crate) struct DoorGalleryViewParams<'w, 's> {
     main_camera: Query<'w, 's, &'static mut Transform, (With<MainCamera>, Without<Camera3dRtt>)>,
     ui_roots: Query<'w, 's, &'static mut Node, Without<ChildOf>>,
+    fixture_roots: Query<'w, 's, &'static mut Visibility, With<PerfFixtureMarker>>,
 }
 
 pub(crate) fn prepare_door_actual_window_gallery_view_system(
@@ -200,10 +204,13 @@ pub(crate) fn prepare_door_actual_window_gallery_view_system(
         let center = hw_world::WorldMap::grid_to_world(18, 16);
         camera.translation.x = center.x;
         camera.translation.y = center.y;
-        camera.scale = Vec3::new(1.5, 1.5, 1.0);
+        camera.scale = Vec3::new(GALLERY_CAMERA_SCALE, GALLERY_CAMERA_SCALE, 1.0);
     }
     for mut node in &mut params.ui_roots {
         node.display = Display::None;
+    }
+    for mut visibility in &mut params.fixture_roots {
+        *visibility = Visibility::Hidden;
     }
 }
 
