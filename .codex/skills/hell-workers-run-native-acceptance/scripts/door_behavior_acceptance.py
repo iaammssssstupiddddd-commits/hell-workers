@@ -343,11 +343,12 @@ def verify_session(
             )
             final = status.get("final")
             recovery_failed = behavior_case == "load-recovery-failed-v1"
-            expected_final_presentation = (
-                ("absent_fail_dark", 0, 0, None)
-                if recovery_failed
-                else ("production", 1, 0, "mesh:closed")
-            )
+            if recovery_failed:
+                expected_final_presentation = ("absent_fail_dark", 0, 0, None)
+            elif behavior_case == "door-state-v1":
+                expected_final_presentation = ("production", 1, 0, "mesh:locked")
+            else:
+                expected_final_presentation = ("production", 1, 0, "mesh:closed")
             native.require(
                 isinstance(final, dict)
                 and final.get("presentation_mode") == expected_final_presentation[0]
