@@ -60,6 +60,7 @@ ENV_KEYS = (
     "HW_DOOR_ART_STATUS_PATH",
     "HW_DOOR_ART_ACK_PATH",
     "HW_DOOR_ART_SESSION_NONCE",
+    "BEVY_ASSET_ROOT",
     "HW_WINDOW_BACKEND",
     "HW_PRESENT_MODE",
     "WGPU_BACKEND",
@@ -149,6 +150,16 @@ def gallery_command(
         "--perf-rtt-quality",
         quality,
     ]
+
+
+def gallery_environment(repo: Path, adapter: str) -> dict[str, str]:
+    return {
+        "BEVY_ASSET_ROOT": str(repo),
+        "HW_WINDOW_BACKEND": "x11",
+        "HW_PRESENT_MODE": "novsync",
+        "WGPU_BACKEND": "vulkan",
+        "WGPU_ADAPTER_NAME": adapter,
+    }
 
 
 def require_object(value: Any, label: str, fields: set[str]) -> dict[str, Any]:
@@ -557,6 +568,7 @@ def run_case(
     environment = os.environ.copy()
     for key in ENV_KEYS:
         environment.pop(key, None)
+    environment.update(gallery_environment(repo, adapter))
     environment.update(
         {
             "HW_DOOR_CANDIDATE": "1",
@@ -566,10 +578,6 @@ def run_case(
             "HW_DOOR_ART_STATUS_PATH": str(status_path),
             "HW_DOOR_ART_ACK_PATH": str(ack_path),
             "HW_DOOR_ART_SESSION_NONCE": nonce,
-            "HW_WINDOW_BACKEND": "x11",
-            "HW_PRESENT_MODE": "novsync",
-            "WGPU_BACKEND": "vulkan",
-            "WGPU_ADAPTER_NAME": adapter,
         }
     )
     command = gallery_command(repo, root, quality=quality, scale_factor=scale_factor)
@@ -971,6 +979,17 @@ def self_test() -> int:
         and "--wall-phase" not in command
         and command[command.index("--spawn-familiars") + 1] == "1",
         "Door quality command does not satisfy the minimal gather carrier",
+    )
+    native.require(
+        gallery_environment(Path("/repo"), "Intel")
+        == {
+            "BEVY_ASSET_ROOT": "/repo",
+            "HW_WINDOW_BACKEND": "x11",
+            "HW_PRESENT_MODE": "novsync",
+            "WGPU_BACKEND": "vulkan",
+            "WGPU_ADAPTER_NAME": "Intel",
+        },
+        "Door quality environment differs",
     )
     nonce = "0123456789abcdef0123456789abcdef"
     targets = []
