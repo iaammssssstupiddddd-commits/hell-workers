@@ -4,15 +4,16 @@
 from __future__ import annotations
 
 import argparse
+import csv
 import hashlib
 import json
 import math
 import os
+import re
 import secrets
 import subprocess
 import sys
 import time
-from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
@@ -59,6 +60,10 @@ ENV_KEYS = (
     "HW_DOOR_ART_STATUS_PATH",
     "HW_DOOR_ART_ACK_PATH",
     "HW_DOOR_ART_SESSION_NONCE",
+    "HW_WINDOW_BACKEND",
+    "HW_PRESENT_MODE",
+    "WGPU_BACKEND",
+    "WGPU_ADAPTER_NAME",
 )
 
 Image = tuple[int, int, bytes]
@@ -102,60 +107,47 @@ def build_command() -> list[str]:
 def gallery_command(
     repo: Path,
     root: Path,
-    adapter: str,
     *,
     quality: str,
     scale_factor: float,
 ) -> list[str]:
     return [
-        "python3",
-        "scripts/perf.py",
-        "run",
-        "--workload",
-        "gather",
-        "--sizes",
-        "small",
-        "--renders",
-        "gpu",
-        "--seed",
-        str(SEED),
-        "--repeat",
-        "1",
-        "--preflight-runs",
-        "0",
-        "--souls",
-        "0",
-        "--familiars",
-        "1",
-        "--output",
-        str(root / "performance"),
-        "--adapter",
-        adapter,
-        "--backend",
-        "vulkan",
-        "--window-backend",
-        "x11",
-        "--present-mode",
-        "novsync",
-        "--window-width",
-        str(WINDOW_WIDTH),
-        "--window-height",
-        str(WINDOW_HEIGHT),
-        "--window-scale-factor",
-        str(scale_factor),
-        "--rtt-quality",
-        quality,
-        "--instrumentation",
-        "capture",
-        "--binary",
         str(repo / "target/profiling/bevy_app"),
-        "--skip-build",
-        "--warmup-secs",
+        "--perf-scenario",
+        "--perf-seed",
+        str(SEED),
+        "--perf-size",
+        "small",
+        "--perf-workload",
+        "gather",
+        "--perf-render",
+        "gpu",
+        "--perf-clock",
+        "realtime",
+        "--perf-familiar-policy",
+        "baseline",
+        "--perf-operation-dialog",
+        "hidden",
+        "--perf-dashboard",
+        "hidden",
+        "--perf-output-dir",
+        str(root / "data"),
+        "--perf-warmup-secs",
         str(WARMUP_SECONDS),
-        "--measure-secs",
+        "--perf-measure-secs",
         str(MEASURE_SECONDS),
-        "--timeout-secs",
-        str(int(RUN_TIMEOUT_SECONDS)),
+        "--spawn-souls",
+        "0",
+        "--spawn-familiars",
+        "1",
+        "--perf-window-width",
+        str(WINDOW_WIDTH),
+        "--perf-window-height",
+        str(WINDOW_HEIGHT),
+        "--perf-window-scale-factor",
+        str(scale_factor),
+        "--perf-rtt-quality",
+        quality,
     ]
 
 
@@ -410,60 +402,142 @@ def acknowledgement(status: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def verify_performance(
+def read_single_csv(path: Path, label: str) -> dict[str, str]:
+    native.require(path.is_file() and not path.is_symlink(), f"{label} is absent")
+    with path.open(newline="", encoding="utf-8") as handle:
+        rows = list(csv.DictReader(handle))
+    native.require(len(rows) == 1, f"{label} must contain one row")
+    return rows[0]
+
+
+def verify_measurement(
     *,
-    repo: Path,
-    output: Path,
+    root: Path,
     adapter: str,
-    subject_commit: str,
-    source_fingerprint: str,
-    binary_sha256: str,
     quality: str,
     scale_factor: float,
 ) -> dict[str, Any]:
-    Case, validate_run = density.load_perf_modules(repo)
-    case = Case("gather", "small", "gpu", SEED, 0, 1)
-    run_dir = output / "cases" / case.identifier / "run-001"
-    metadata = native.read_json(run_dir / "run-metadata.json")
-    native.require(metadata.get("case") == asdict(case), "Door gallery case metadata differs")
-    native.require(metadata.get("returncode") == 0, "Door gallery process failed")
-    validation = validate_run(
-        run_dir,
-        returncode=0,
-        expected_case=case,
-        expected_adapter=adapter,
-        expected_backend="vulkan",
-        allow_log_patterns=[],
-        capture_kind="frame-time",
-        expected_warmup_secs=WARMUP_SECONDS,
-        expected_measure_secs=MEASURE_SECONDS,
-        expected_window_backend="x11",
-        expected_present_mode="novsync",
-        expected_window_width=WINDOW_WIDTH,
-        expected_window_height=WINDOW_HEIGHT,
-        expected_window_scale_factor=scale_factor,
-        expected_rtt_quality=quality,
+    log_path = root / "capture.log"
+    native.require(log_path.is_file() and not log_path.is_symlink(), "Door capture log is absent")
+    log = log_path.read_text(encoding="utf-8")
+    native.require(
+        "PERF_CAPTURE: phase=warmup" in log
+        and "PERF_CAPTURE: phase=measure" in log
+        and "PERF_CAPTURE: wrote " in log,
+        "Door capture did not complete its Real Time measurement",
     )
     native.require(
-        validation.valid,
-        "Door gallery raw performance validation failed: " + "; ".join(validation.reasons),
+        re.search(r"\b(?:WARN|ERROR)\b|bevy_ecs::error::handler", log) is None,
+        "Door capture log contains an unexpected warning or error",
+    )
+    adapters = re.findall(
+        r'AdapterInfo \{ name: "([^"]+)".*?driver: "([^"]*)", '
+        r'driver_info: "([^"]*)", backend: ([A-Za-z0-9_]+)',
+        log,
+    )
+    native.require(len(adapters) == 1, "Door capture adapter evidence differs")
+    adapter_name, driver, driver_info, backend = adapters[0]
+    native.require(
+        adapter.casefold() in adapter_name.casefold() and backend.casefold() == "vulkan",
+        "Door capture used another adapter or backend",
+    )
+    data = root / "data"
+    summary = read_single_csv(data / "summary.csv", "Door summary.csv")
+    native.require(
+        summary.get("schema_version") == "11"
+        and summary.get("seed") == str(SEED)
+        and summary.get("workload") == "gather"
+        and summary.get("size") == "small"
+        and summary.get("render") == "gpu"
+        and summary.get("configured_souls") == "0"
+        and summary.get("configured_familiars") == "1",
+        "Door measurement summary identity differs",
     )
     native.require(
-        native.read_json(run_dir / "validation.json") == validation.to_json(),
-        "Door gallery stored validation differs",
+        summary.get("initial_souls")
+        == summary.get("warmup_souls")
+        == summary.get("measure_end_souls")
+        == "0"
+        and summary.get("initial_familiars")
+        == summary.get("warmup_familiars")
+        == summary.get("measure_end_familiars")
+        == "1"
+        and summary.get("initial_designations")
+        == summary.get("warmup_designations")
+        == summary.get("measure_end_designations")
+        and summary.get("initial_state_checksum")
+        == summary.get("warmup_state_checksum")
+        == summary.get("measure_end_state_checksum"),
+        "Door static measurement checksum changed",
     )
-    manifest = native.read_json(output / "manifest.json")
-    native.require(manifest.get("status") == "valid", "Door gallery performance is invalid")
-    native.require(manifest.get("git", {}).get("commit") == subject_commit, "Door subject differs")
-    native.require(manifest.get("git", {}).get("dirty_paths") == [], "Door run recorded dirty paths")
     native.require(
-        manifest.get("source", {}).get("fingerprint_start") == source_fingerprint
-        and manifest.get("source", {}).get("fingerprint_end") == source_fingerprint
-        and manifest.get("source", {}).get("unchanged") is True,
-        "Door source provenance differs",
+        float(summary["warmup_virtual_secs"]) == 0.0
+        and float(summary["measure_virtual_secs"]) == 0.0
+        and float(summary["warmup_real_secs"]) >= WARMUP_SECONDS
+        and float(summary["measure_real_secs"]) >= MEASURE_SECONDS
+        and int(summary["samples"]) > 0,
+        "Door measurement timing contract differs",
     )
-    native.require(manifest.get("binary", {}).get("sha256") == binary_sha256, "Door binary differs")
-    return {"case_id": case.identifier, "validation": validation.to_json()}
+    window = read_single_csv(data / "window.csv", "Door window.csv")
+    expected_window = {
+        "physical_width": str(WINDOW_WIDTH),
+        "physical_height": str(WINDOW_HEIGHT),
+        "scale_factor": f"{scale_factor:.6f}",
+        "rtt_quality": quality,
+        "resolved_window_backend": "x11",
+        "adapter_backend": "vulkan",
+        "requested_present_mode": "auto_no_vsync",
+        "end_physical_width": str(WINDOW_WIDTH),
+        "end_physical_height": str(WINDOW_HEIGHT),
+        "end_scale_factor": f"{scale_factor:.6f}",
+        "end_rtt_quality": quality,
+        "end_resolved_window_backend": "x11",
+        "end_adapter_backend": "vulkan",
+        "end_requested_present_mode": "auto_no_vsync",
+    }
+    native.require(
+        all(window.get(field) == expected for field, expected in expected_window.items())
+        and adapter.casefold() in window.get("adapter_name", "").casefold()
+        and window.get("adapter_name") == window.get("end_adapter_name"),
+        "Door measurement window or adapter changed",
+    )
+    frames_path = data / "frames.csv"
+    native.require(
+        frames_path.is_file() and not frames_path.is_symlink(),
+        "Door frames.csv is absent",
+    )
+    with frames_path.open(newline="", encoding="utf-8") as handle:
+        frames = list(csv.DictReader(handle))
+    native.require(
+        len(frames) == int(summary["samples"])
+        and all(
+            math.isfinite(float(row["frame_time_ms"]))
+            and float(row["frame_time_ms"]) > 0.0
+            for row in frames
+        ),
+        "Door frame samples differ",
+    )
+    files = (
+        "frames.csv",
+        "scene_roots.csv",
+        "spatial_query_metrics.csv",
+        "summary.csv",
+        "window.csv",
+    )
+    return {
+        "kind": "visual-carrier-real-time",
+        "adapter": {
+            "name": adapter_name,
+            "driver": driver,
+            "driver_info": driver_info,
+            "backend": backend,
+        },
+        "samples": int(summary["samples"]),
+        "warmup_real_secs": float(summary["warmup_real_secs"]),
+        "measure_real_secs": float(summary["measure_real_secs"]),
+        "state_checksum": summary["initial_state_checksum"],
+        "files_sha256": {name: sha256(data / name) for name in files},
+    }
 
 
 def run_case(
@@ -473,9 +547,6 @@ def run_case(
     job_file: Path,
     state: dict[str, Any],
     adapter: str,
-    subject_commit: str,
-    source_fingerprint: str,
-    binary_sha256: str,
     candidate: dict[str, Any],
     quality: str,
     scale_factor: float,
@@ -495,11 +566,13 @@ def run_case(
             "HW_DOOR_ART_STATUS_PATH": str(status_path),
             "HW_DOOR_ART_ACK_PATH": str(ack_path),
             "HW_DOOR_ART_SESSION_NONCE": nonce,
+            "HW_WINDOW_BACKEND": "x11",
+            "HW_PRESENT_MODE": "novsync",
+            "WGPU_BACKEND": "vulkan",
+            "WGPU_ADAPTER_NAME": adapter,
         }
     )
-    command = gallery_command(
-        repo, root, adapter, quality=quality, scale_factor=scale_factor
-    )
+    command = gallery_command(repo, root, quality=quality, scale_factor=scale_factor)
     state.setdefault("commands", []).append({"stage": "capture", "argv": command})
     state["current_stage"] = "capture"
     native.atomic_write_json(job_file, state)
@@ -561,13 +634,9 @@ def run_case(
     native.require(len(observations) == 2, "Door gallery did not capture both zoom checkpoints")
     state["child_pid"] = None
     native.atomic_write_json(job_file, state)
-    performance = verify_performance(
-        repo=repo,
-        output=root / "performance",
+    measurement = verify_measurement(
+        root=root,
         adapter=adapter,
-        subject_commit=subject_commit,
-        source_fingerprint=source_fingerprint,
-        binary_sha256=binary_sha256,
         quality=quality,
         scale_factor=scale_factor,
     )
@@ -579,15 +648,13 @@ def run_case(
         "scale_factor": scale_factor,
         "session_nonce": nonce,
         "checkpoints": observations,
-        "performance": performance,
+        "measurement": measurement,
     }
     native.atomic_write_json(root / "observation.json", observation)
     return observation
 
 
-def verify_case(
-    *, root: Path, repo: Path, manifest: dict[str, Any], spec: dict[str, Any]
-) -> dict[str, Any]:
+def verify_case(*, root: Path, manifest: dict[str, Any], spec: dict[str, Any]) -> dict[str, Any]:
     observation = native.read_json(root / "observation.json")
     native.require(
         observation.get("schema_version") == SCHEMA_VERSION
@@ -622,17 +689,16 @@ def verify_case(
             "Door screenshot evidence differs",
         )
         hashes[expected["zoom"]] = screenshot["sha256"]
-    performance = verify_performance(
-        repo=repo,
-        output=root / "performance",
+    measurement = verify_measurement(
+        root=root,
         adapter=manifest["adapter"],
-        subject_commit=manifest["subject_commit"],
-        source_fingerprint=manifest["source_fingerprint"],
-        binary_sha256=manifest["binary_sha256"],
         quality=spec["quality"],
         scale_factor=spec["scale_factor"],
     )
-    native.require(performance == observation.get("performance"), "Door performance evidence differs")
+    native.require(
+        measurement == observation.get("measurement"),
+        "Door measurement evidence differs",
+    )
     return {"screenshots": hashes}
 
 
@@ -662,7 +728,7 @@ def verify_root(root: Path) -> dict[str, Any]:
     native.require(manifest.get("cases") == specs, "Door quality matrix differs")
     hashes: dict[str, Any] = {}
     for spec in specs:
-        result = verify_case(root=root / "cases" / spec["id"], repo=repo, manifest=manifest, spec=spec)
+        result = verify_case(root=root / "cases" / spec["id"], manifest=manifest, spec=spec)
         hashes[spec["id"]] = result["screenshots"]
     native.require(manifest.get("screenshot_sha256") == hashes, "Door screenshot hashes differ")
     return {
@@ -819,9 +885,6 @@ def run(args: argparse.Namespace) -> int:
                 job_file=job_file,
                 state=state,
                 adapter=args.adapter,
-                subject_commit=args.subject_commit,
-                source_fingerprint=args.source_fingerprint,
-                binary_sha256=binary_hash,
                 candidate=candidate,
                 quality=spec["quality"],
                 scale_factor=spec["scale_factor"],
@@ -894,18 +957,19 @@ def self_test() -> int:
         "Door checkpoint contract differs",
     )
     command = gallery_command(
-        Path("/repo"), Path("/artifact"), "Intel", quality="low", scale_factor=2.0
+        Path("/repo"), Path("/artifact"), quality="low", scale_factor=2.0
     )
     native.require(
-        command[command.index("--rtt-quality") + 1] == "low"
-        and command[command.index("--window-scale-factor") + 1] == "2.0"
-        and command[command.index("--window-backend") + 1] == "x11",
+        command[0] == "/repo/target/profiling/bevy_app"
+        and command[command.index("--perf-rtt-quality") + 1] == "low"
+        and command[command.index("--perf-window-scale-factor") + 1] == "2.0"
+        and command[command.index("--perf-output-dir") + 1] == "/artifact/data",
         "Door quality command differs",
     )
     native.require(
-        command[command.index("--workload") + 1] == "gather"
+        command[command.index("--perf-workload") + 1] == "gather"
         and "--wall-phase" not in command
-        and command[command.index("--familiars") + 1] == "1",
+        and command[command.index("--spawn-familiars") + 1] == "1",
         "Door quality command does not satisfy the minimal gather carrier",
     )
     nonce = "0123456789abcdef0123456789abcdef"

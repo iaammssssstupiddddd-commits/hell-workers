@@ -258,7 +258,13 @@ Each process publishes and ACK-holds both the standard and farthest zoom
 checkpoint, producing 18 client-window PNGs. The verifier binds each PNG to
 the candidate identity, source/harness/binary/asset fingerprints, Vulkan
 adapter, requested quality/DPI, six production Door state/axis targets, zero
-fallback visuals, projected target ROIs, and state-cue pixel differences.
+fallback visuals, projected target ROIs, and state-cue pixel differences. Each
+process also runs a Door-specific 10-second warmup plus 10-second Real Time
+measurement while Virtual Time stays paused. The verifier requires an unchanged
+scene checksum, matching X11/Vulkan/window/quality/DPI evidence, finite positive
+frame samples, and hashes for the raw measurement CSVs. Do not substitute the
+generic gameplay performance validator: a paused visual carrier intentionally
+has zero gameplay spatial queries and zero elapsed Virtual Time.
 Revalidate the finished bundle with `verify --job-root <job-root>`.
 
 This profile is visual evidence only. It does not satisfy the Door density
