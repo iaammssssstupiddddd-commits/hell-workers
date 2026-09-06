@@ -83,7 +83,17 @@ def validate(path: Path, state: str, contract_path: Path) -> dict[str, object]:
     require(abs(bounds["max_x"] - 16.0) <= tolerance, "Door maximum X differs")
     require(abs(bounds["min_y"] + 16.0) <= tolerance, "Door minimum Y differs")
     require(abs(bounds["max_y"] - 16.0) <= tolerance, "Door maximum Y differs")
-    require(bounds["min_z"] >= -7.5 and bounds["max_z"] <= 10.0, "Door depth envelope differs")
+    if state == "open":
+        open_leaf = contract["open_leaf_envelope_wu"]
+        minimum_depth = min(open_leaf["left_z"][0], open_leaf["right_z"][0]) - tolerance
+        maximum_depth = max(4.8, open_leaf["left_z"][1], open_leaf["right_z"][1]) + tolerance
+    else:
+        minimum_depth = -7.5
+        maximum_depth = 10.0
+    require(
+        bounds["min_z"] >= minimum_depth and bounds["max_z"] <= maximum_depth,
+        "Door depth envelope differs",
+    )
     frame = contract["frame"]
     # glTF exports each authored box as 24 positions because the six UV faces
     # intentionally do not share vertices.
@@ -106,12 +116,16 @@ def validate(path: Path, state: str, contract_path: Path) -> dict[str, object]:
     require_range(axis_range(top, 1), frame["top_y_range_wu"], tolerance, "Door top frame Y range")
     require_range(axis_range(top, 2), frame["top_z_range_wu"], tolerance, "Door top frame Z range")
     if state == "open":
-        open_leaf = contract["open_leaf_envelope_wu"]
         left_leaf, right_leaf = positions[72:96], positions[96:120]
         require_range(axis_range(left_leaf, 0), open_leaf["left_x"], tolerance, "Door open left leaf X range")
         require_range(axis_range(right_leaf, 0), open_leaf["right_x"], tolerance, "Door open right leaf X range")
         for label, leaf in (("left", left_leaf), ("right", right_leaf)):
-            require_range(axis_range(leaf, 2), open_leaf["z"], tolerance, f"Door open {label} leaf Z range")
+            require_range(
+                axis_range(leaf, 2),
+                open_leaf[f"{label}_z"],
+                tolerance,
+                f"Door open {label} leaf Z range",
+            )
     frame_points = sorted(tuple(round(value, 5) for value in point) for point in positions[:72])
     frame_sha256 = hashlib.sha256(
         json.dumps(frame_points, separators=(",", ":")).encode()

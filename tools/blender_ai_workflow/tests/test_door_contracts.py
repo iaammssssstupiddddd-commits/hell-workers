@@ -27,9 +27,21 @@ class DoorGeometryRevisionTests(unittest.TestCase):
 
         self.assertEqual(contract["frame"]["top_y_range_wu"], [14.4, 16.0])
         self.assertEqual(contract["frame"]["top_z_range_wu"], [-3.6, 3.6])
-        self.assertEqual(contract["open_leaf_envelope_wu"]["angle_degrees"], 68.0)
         self.assertEqual(
-            contract["open_leaf_envelope_wu"]["z"], [-4.099056, 8.85339]
+            contract["open_leaf_envelope_wu"]["swing_angles_degrees"],
+            {"left": -68.0, "right": -68.0},
+        )
+        self.assertEqual(
+            contract["open_leaf_envelope_wu"]["left_x"], [-13.2, -6.104873]
+        )
+        self.assertEqual(
+            contract["open_leaf_envelope_wu"]["right_x"], [8.330114, 15.425241]
+        )
+        self.assertEqual(
+            contract["open_leaf_envelope_wu"]["left_z"], [-4.099056, 8.853391]
+        )
+        self.assertEqual(
+            contract["open_leaf_envelope_wu"]["right_z"], [-16.152447, -3.2]
         )
 
 

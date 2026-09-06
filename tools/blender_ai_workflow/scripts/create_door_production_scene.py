@@ -27,6 +27,10 @@ UV_REGIONS = {
     "iron": (0.54, 0.04, 0.96, 0.48),
 }
 OPEN_LEAF_ANGLE_DEGREES = 68.0
+OPEN_LEAF_POSES = (
+    (-13.2, 1.0, -OPEN_LEAF_ANGLE_DEGREES),
+    (13.2, -1.0, -OPEN_LEAF_ANGLE_DEGREES),
+)
 
 
 def clear_scene() -> None:
@@ -142,10 +146,7 @@ def add_hinged_box(
 
 def add_hardware(vertices, faces, regions, *, opened: bool) -> None:
     if opened:
-        for hinge_x, direction, angle in (
-            (-13.2, 1.0, -OPEN_LEAF_ANGLE_DEGREES),
-            (13.2, -1.0, OPEN_LEAF_ANGLE_DEGREES),
-        ):
+        for hinge_x, direction, angle in OPEN_LEAF_POSES:
             for y in (-7.0, 5.0):
                 add_hinged_box(
                     vertices,
@@ -200,10 +201,7 @@ def create_state(state: str, collection: bpy.types.Collection, material: bpy.typ
     add_frame(vertices, faces, regions)
     opened = state == "open"
     if opened:
-        for hinge_x, direction, angle in (
-            (-13.2, 1.0, -OPEN_LEAF_ANGLE_DEGREES),
-            (13.2, -1.0, OPEN_LEAF_ANGLE_DEGREES),
-        ):
+        for hinge_x, direction, angle in OPEN_LEAF_POSES:
             add_hinged_box(
                 vertices,
                 faces,
@@ -268,7 +266,7 @@ def main() -> None:
             "blend_sha256": hashlib.sha256(blend_path.read_bytes()).hexdigest(),
             "blender_version": bpy.app.version_string,
             "geometry_revision": {
-                "open_leaf_angle_degrees": OPEN_LEAF_ANGLE_DEGREES,
+                "open_leaf_angles_degrees": [pose[2] for pose in OPEN_LEAF_POSES],
                 "top_frame_dimensions_wu": [27.2, 1.6, 7.2],
             },
             "schema_version": 1,
