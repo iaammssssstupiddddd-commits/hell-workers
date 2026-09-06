@@ -239,6 +239,31 @@ the finished bundle with `verify --job-root <job-root>`.
 This profile closes only the Door behavior/load leg. It does not replace the
 Door quality/DPI gallery, density Capture comparison, or Memory evidence.
 
+## Run the Door quality/DPI gallery
+
+After the behavior leg passes for an approved isolated candidate, run the
+current-source `door-art-v1` image matrix from the same clean validation
+worktree:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 \
+  .codex/skills/hell-workers-run-native-acceptance/scripts/door_art_acceptance.py \
+  plan --repo "$VALIDATION_WORKTREE" --adapter Intel
+```
+
+Execute only the returned direct `kitty` command and poll `status --job-root
+<job-root>` every 15–30 seconds. The profile builds one Capture-flavor binary,
+then runs High/Medium/Low × DPI 1.0/1.5/2.0 as nine sequential X11 processes.
+Each process publishes and ACK-holds both the standard and farthest zoom
+checkpoint, producing 18 client-window PNGs. The verifier binds each PNG to
+the candidate identity, source/harness/binary/asset fingerprints, Vulkan
+adapter, requested quality/DPI, six production Door state/axis targets, zero
+fallback visuals, projected target ROIs, and state-cue pixel differences.
+Revalidate the finished bundle with `verify --job-root <job-root>`.
+
+This profile is visual evidence only. It does not satisfy the Door density
+Capture comparison, native Memory, lifecycle, or joint Wall/Door gate.
+
 ## Run the wall-density RenderDoc matrix
 
 Use the separate wall RenderDoc profile for the M0 draw-group gate. It captures
@@ -611,6 +636,9 @@ After changing the Skill or helper, run:
 ```bash
 PYTHONDONTWRITEBYTECODE=1 python3 \
   .codex/skills/hell-workers-run-native-acceptance/scripts/native_acceptance.py \
+  self-test
+PYTHONDONTWRITEBYTECODE=1 python3 \
+  .codex/skills/hell-workers-run-native-acceptance/scripts/door_art_acceptance.py \
   self-test
 PYTHONDONTWRITEBYTECODE=1 python3 \
   .codex/skills/hell-workers-run-native-acceptance/scripts/wall_production_performance_acceptance.py \

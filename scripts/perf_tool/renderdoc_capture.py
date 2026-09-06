@@ -57,10 +57,13 @@ SOURCE_PREFIXES = ("crates/", "scripts/perf_tool/")
 ASSET_PREFIX = "assets/"
 MEASUREMENT_HARNESS_FILES = (
     ".codex/skills/hell-workers-run-native-acceptance/scripts/native_acceptance.py",
+    ".codex/skills/hell-workers-run-native-acceptance/scripts/door_art_acceptance.py",
+    ".codex/skills/hell-workers-run-native-acceptance/scripts/door_behavior_acceptance.py",
     ".codex/skills/hell-workers-run-native-acceptance/scripts/p02_presentation_acceptance.py",
     ".codex/skills/hell-workers-run-native-acceptance/scripts/wall_art_acceptance.py",
     ".codex/skills/hell-workers-run-native-acceptance/scripts/wall_color_acceptance.py",
     ".codex/skills/hell-workers-run-native-acceptance/scripts/wall_density_acceptance.py",
+    ".codex/skills/hell-workers-run-native-acceptance/scripts/wall_production_performance_acceptance.py",
     ".codex/skills/hell-workers-run-native-acceptance/scripts/wall_renderdoc_acceptance.py",
     "scripts/build_coordination.py",
     "scripts/cargo_runtime.py",
