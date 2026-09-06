@@ -1161,52 +1161,50 @@ pub(crate) fn observe_perf_behavior_system(mut params: BehaviorObserveParams) {
                     fail_behavior(&mut params.capture, &reason, &mut params.exit);
                     return;
                 }
-                let door_validation_step = if recovery_failed { 0 } else { 5 };
-                if step == door_validation_step
-                    && isolated_candidate_door_evidence_requested() == Ok(true)
-                {
-                    let Some(door_entity) = params
-                        .world_map
-                        .door_entity(SMALL_DOOR_GRID.0, SMALL_DOOR_GRID.1)
-                    else {
-                        fail_behavior(
-                            &mut params.capture,
-                            "loaded fixture has no canonical Door for candidate presentation validation",
-                            &mut params.exit,
-                        );
+            }
+            let door_validation_step = if recovery_failed { 0 } else { 5 };
+            if step == door_validation_step
+                && isolated_candidate_door_evidence_requested() == Ok(true)
+            {
+                let Some(door_entity) = params
+                    .world_map
+                    .door_entity(SMALL_DOOR_GRID.0, SMALL_DOOR_GRID.1)
+                else {
+                    fail_behavior(
+                        &mut params.capture,
+                        "loaded fixture has no canonical Door for candidate presentation validation",
+                        &mut params.exit,
+                    );
+                    return;
+                };
+                let Ok(door) = params.door_components.get(door_entity) else {
+                    fail_behavior(
+                        &mut params.capture,
+                        "loaded canonical Door has no semantic component",
+                        &mut params.exit,
+                    );
+                    return;
+                };
+                match validate_isolated_candidate_door_presentation(
+                    &params,
+                    door_entity,
+                    door.state,
+                ) {
+                    Ok(mesh_role) => {
+                        params.capture.door_production_validation_count = params
+                            .capture
+                            .door_production_validation_count
+                            .saturating_add(1);
+                        params.capture.door_production_mesh_roles.insert(mesh_role);
+                    }
+                    Err(reason) if params.capture.load_wait_updates < 128 => {
+                        params.capture.load_wait_updates += 1;
+                        debug!("PERF_BEHAVIOR: waiting for Door candidate presentation: {reason}");
                         return;
-                    };
-                    let Ok(door) = params.door_components.get(door_entity) else {
-                        fail_behavior(
-                            &mut params.capture,
-                            "loaded canonical Door has no semantic component",
-                            &mut params.exit,
-                        );
+                    }
+                    Err(reason) => {
+                        fail_behavior(&mut params.capture, &reason, &mut params.exit);
                         return;
-                    };
-                    match validate_isolated_candidate_door_presentation(
-                        &params,
-                        door_entity,
-                        door.state,
-                    ) {
-                        Ok(mesh_role) => {
-                            params.capture.door_production_validation_count = params
-                                .capture
-                                .door_production_validation_count
-                                .saturating_add(1);
-                            params.capture.door_production_mesh_roles.insert(mesh_role);
-                        }
-                        Err(reason) if params.capture.load_wait_updates < 128 => {
-                            params.capture.load_wait_updates += 1;
-                            debug!(
-                                "PERF_BEHAVIOR: waiting for Door candidate presentation: {reason}"
-                            );
-                            return;
-                        }
-                        Err(reason) => {
-                            fail_behavior(&mut params.capture, &reason, &mut params.exit);
-                            return;
-                        }
                     }
                 }
             }
