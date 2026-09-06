@@ -1205,18 +1205,24 @@ impl PerfScenarioConfig {
                 .is_some_and(|selection| selection.lane() != "behavior")
     }
 
-    /// 静的 light fixture の描画計測中はゲーム simulation を進めない。
+    /// 静的 light fixture / Door gallery の描画計測中はゲーム simulation を進めない。
     ///
     /// 計測窓そのものは `Time<Real>` で進める。これにより Soul/Familiar AI が
     /// showcase building の bucket 等を運ぶことなく、同一 scene topology を
     /// Capture / Memory / RenderDoc で共有できる。
-    pub const fn keeps_virtual_time_paused_during_capture(&self) -> bool {
+    pub fn keeps_virtual_time_paused_during_capture(&self) -> bool {
+        #[cfg(feature = "profiling")]
+        let door_gallery_requested =
+            super::door_actual_window::DoorActualWindowAcceptance::requested_from_environment();
+        #[cfg(not(feature = "profiling"))]
+        let door_gallery_requested = false;
+
         self.enabled
             && !self.uses_fixed_timesteps()
-            && matches!(
+            && (matches!(
                 self.workload,
                 PerfWorkload::IndoorLight | PerfWorkload::WallDensity
-            )
+            ) || door_gallery_requested)
     }
 
     /// Wall-density owns the logical contents of its measurement world.
