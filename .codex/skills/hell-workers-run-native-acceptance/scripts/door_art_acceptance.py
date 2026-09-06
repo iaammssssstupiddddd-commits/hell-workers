@@ -112,7 +112,9 @@ def gallery_command(
         "scripts/perf.py",
         "run",
         "--workload",
-        "gather",
+        "wall-density",
+        "--wall-phase",
+        "completed",
         "--sizes",
         "small",
         "--renders",
@@ -126,7 +128,7 @@ def gallery_command(
         "--souls",
         "0",
         "--familiars",
-        "1",
+        "0",
         "--output",
         str(root / "performance"),
         "--adapter",
@@ -422,7 +424,7 @@ def verify_performance(
     scale_factor: float,
 ) -> dict[str, Any]:
     Case, validate_run = density.load_perf_modules(repo)
-    case = Case("gather", "small", "gpu", SEED, 0, 1)
+    case = Case("wall-density", "small", "gpu", SEED, 0, 0, wall_phase="completed")
     run_dir = output / "cases" / case.identifier / "run-001"
     metadata = native.read_json(run_dir / "run-metadata.json")
     native.require(metadata.get("case") == asdict(case), "Door gallery case metadata differs")
@@ -903,8 +905,10 @@ def self_test() -> int:
         "Door quality command differs",
     )
     native.require(
-        command[command.index("--familiars") + 1] == "1",
-        "Door quality command does not satisfy gather fixture setup",
+        command[command.index("--workload") + 1] == "wall-density"
+        and command[command.index("--wall-phase") + 1] == "completed"
+        and command[command.index("--familiars") + 1] == "0",
+        "Door quality command does not use the frozen static carrier",
     )
     nonce = "0123456789abcdef0123456789abcdef"
     targets = []
