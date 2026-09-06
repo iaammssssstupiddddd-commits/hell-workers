@@ -382,12 +382,12 @@ Help impact review Skillで建築／ドアの実説明を読み、色表示へ�
 
 ### 現在地
 
-- 進捗: 実装 `78%`。M0のgeometry/全16mask、M1のtechnical candidate、M2の3D/2D adapterとPostUpdate境界、M3a用6状態galleryを実装済み。左右同方向・同角度の78°を保ち、NSで扉面方向を示す骨補強を追加中。
-- 次の作業: generation 5を再封印し、EW/NSの6状態を実機再撮影してユーザー判断へ渡す。承認後に正式candidate、Soul通過、J1、releaseを行う。
+- 進捗: 実装 `80%`。M0のgeometry/全16mask、M1のtechnical candidate、M2の3D/2D adapterとPostUpdate境界、M3a用6状態galleryを実装済み。左右同方向・同角度の78°と骨補強を持つgeneration 5を実機撮影済み。
+- 次の作業: generation 5のEW/NS 6状態をユーザー判断へ渡す。承認後に正式candidate、Soul通過、J1、releaseを行う。
 - 仮設壁M0とport契約を先に共有。Doorの制作・既存石壁との接続は型枠release待ちにしない。joint受入は双方のruntime接続後。
 - 3 mesh方式は現在の瞬時状態切替に合わせる判断。スムーズな開閉を追加する場合はこの選択を再検討する。
 - セルフレビューで片開きから両開きへ変更し、初回ArtPreview後に完全90°から68°、NS識別性の再指摘後に同方向・同角度の78°へ改訂した。Open leaf AABBはfixture値であり、全Soul状態・両軸の実画面通過を承認済みとしない。
-- 本番asset実体は外部stagingでgeneration 5として再封印予定であり、通常起動では無効。Door専用sealer/projector/provisionerとgallery sidecarを使い、Wall専用manifestへ混ぜない。
+- 本番asset実体は外部stagingでgeneration 5（manifest SHA256 `63a428e0d7f2e8bda20bac871cc27fabcfd1edb13f00edd5d79765bc5b218638`）として封印済みであり、通常起動では無効。Door専用sealer/projector/provisionerとgallery sidecarを使い、Wall専用manifestへ混ぜない。
 
 ### 参照必須ファイル
 
@@ -409,6 +409,7 @@ Help impact review Skillで建築／ドアの実説明を読み、色表示へ�
 - generation 3レビュー: NS投影を分離するため左右leafを前後反対側へ振り分けたが、通常の両開きではないとのユーザー指摘により不採用。左右の開度差も採用しない。
 - generation 4レビュー: 左右を同じ側へ同じ78°で対称に戻したが、実機NS投影では片側の扉面が枠と同化したため未承認。角度だけの調整を打ち切る。
 - generation 5改訂: 左右同方向・同角度・対称を維持し、各leafの上下2本の骨補強を扉面方向の形状手掛かりとして追加する。
+- generation 5 ArtPreview: Intel Arc・Vulkan・X11・1280×720でproduction 6 / fallback 0を確認。ACKは`ready`から0.53秒で完了し、17秒後も`ready`を維持した。画像・sidecar・binaryは `target/native-acceptance/door-art-preview-aaed33a7-v5/manifest.json`（SHA256 `926c009171fc63da9d41a8e86c94acd1ba742a3aaa1be168a54fd91a6fc898a0`）へ記録し、性能値は採取・主張しない。
 - ブロッカー: generation 5 ArtPreviewの目視承認。正式candidate / releaseは承認前に進めない。
 
 ### Definition of Done
@@ -431,3 +432,4 @@ Help impact review Skillで建築／ドアの実説明を読み、色表示へ�
 | `2026-09-06` | `Codex` | generation 2のNS識別性指摘を反映。左右leafの同方向重なりを、前後反対側へ振り分ける68°開扉へ変更 |
 | `2026-09-06` | `Codex` | generation 3の不自然な開き方を不採用。左右同方向・同角度・対称を明文化し、共通78°でNSの張り出しと開口を両立するgeneration 4へ改訂 |
 | `2026-09-06` | `Codex` | generation 4実機セルフレビューで角度だけではNS識別性が不足と判定。開き方を変えず、扉面と連動する横向き骨補強を加えるgeneration 5へ移行 |
+| `2026-09-06` | `Codex` | generation 5を実機撮影。両開きの同方向・同角度・対称を維持し、EW/NS 6状態のproduction表示と骨補強を確認してユーザー承認待ちへ移行 |
