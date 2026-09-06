@@ -1473,7 +1473,7 @@ fn write_door_behavior_evidence(params: &BehaviorObserveParams) -> std::io::Resu
         .config
         .behavior_case()
         .ok_or_else(|| std::io::Error::other("Door behavior case is absent"))?;
-    let status_path = status_root.join(format!("{}.json", case.as_str()));
+    let status_path = status_root.join(format!("{}-{}.json", case.as_str(), std::process::id()));
     let door_entity = params
         .world_map
         .door_entity(SMALL_DOOR_GRID.0, SMALL_DOOR_GRID.1)

@@ -31,9 +31,6 @@ BEHAVIOR_CASES = (
     "load-recovery-failed-v1",
     "load-duplicate-reset-v1",
 )
-WINDOW_WIDTH = 1280
-WINDOW_HEIGHT = 720
-WINDOW_SCALE_FACTOR = 1.0
 FIXED_HZ = 64
 WARMUP_TICKS = 1_920
 AUDIT_TICKS = 128
@@ -179,7 +176,7 @@ def behavior_command(repo: Path, root: Path, adapter: str) -> list[str]:
         "--seed",
         str(SEED),
         "--repeat",
-        "1",
+        "3",
         "--preflight-runs",
         "0",
         "--behavior-cases",
@@ -191,15 +188,9 @@ def behavior_command(repo: Path, root: Path, adapter: str) -> list[str]:
         "--backend",
         "vulkan",
         "--window-backend",
-        "x11",
+        "headless",
         "--present-mode",
         "novsync",
-        "--window-width",
-        str(WINDOW_WIDTH),
-        "--window-height",
-        str(WINDOW_HEIGHT),
-        "--window-scale-factor",
-        str(WINDOW_SCALE_FACTOR),
         "--rtt-quality",
         "high",
         "--instrumentation",
@@ -242,7 +233,7 @@ def verify_session(
         "sizes": ["small"],
         "renders": ["cpu"],
         "seed": SEED,
-        "repeat": 1,
+        "repeat": 3,
         "preflight_runs": 0,
         "behavior_cases": list(BEHAVIOR_CASES),
         "capture_kind": "fixed-step-behavior",
@@ -250,9 +241,9 @@ def verify_session(
         "fixed_hz": FIXED_HZ,
         "warmup_ticks": WARMUP_TICKS,
         "audit_ticks": AUDIT_TICKS,
-        "window_width": WINDOW_WIDTH,
-        "window_height": WINDOW_HEIGHT,
-        "window_scale_factor": WINDOW_SCALE_FACTOR,
+        "window_width": None,
+        "window_height": None,
+        "window_scale_factor": None,
         "rtt_quality": "high",
     }
     for field, expected in expected_matrix.items():
@@ -282,9 +273,9 @@ def verify_session(
     )
     statuses: list[dict[str, Any]] = []
     status_root = root / "door-status"
+    status_paths = sorted(path for path in status_root.iterdir() if path.is_file())
     native.require(
-        sorted(path.name for path in status_root.iterdir())
-        == sorted(f"{case}.json" for case in BEHAVIOR_CASES),
+        len(status_paths) == len(BEHAVIOR_CASES) * 3,
         "Door behavior status inventory differs",
     )
     for behavior_case in BEHAVIOR_CASES:
@@ -297,92 +288,94 @@ def verify_session(
             None,
             behavior_case=behavior_case,
         )
-        run_dir = session / "cases" / case.identifier / "run-001"
-        metadata = native.read_json(run_dir / "run-metadata.json")
-        native.require(metadata.get("case") == asdict(case), f"{behavior_case} metadata differs")
-        native.require(metadata.get("returncode") == 0, f"{behavior_case} process failed")
-        validation = validate_run(
-            run_dir,
-            returncode=0,
-            expected_case=case,
-            expected_adapter=adapter,
-            expected_backend="vulkan",
-            allow_log_patterns=[],
-            capture_kind="fixed-step-behavior",
-            expected_fixed_hz=FIXED_HZ,
-            expected_warmup_ticks=WARMUP_TICKS,
-            expected_audit_ticks=AUDIT_TICKS,
-            expected_window_backend="x11",
-            expected_present_mode="novsync",
-            expected_window_width=WINDOW_WIDTH,
-            expected_window_height=WINDOW_HEIGHT,
-            expected_window_scale_factor=WINDOW_SCALE_FACTOR,
-            expected_rtt_quality="high",
-            expected_contract="rtt-light-v1",
-            expected_stage="p08",
-            expected_lane="behavior",
-        )
-        native.require(
-            native.read_json(run_dir / "validation.json") == validation.to_json(),
-            f"{behavior_case} stored validation differs",
-        )
-        native.require(
-            validation.valid,
-            f"{behavior_case} raw validation failed: {'; '.join(validation.reasons)}",
-        )
-        status_path = status_root / f"{behavior_case}.json"
-        status = native.read_json(status_path)
-        native.require(
-            status.get("schema") == "door-art-v1-behavior"
-            and status.get("schema_version") == 1
-            and status.get("status") == "valid"
-            and status.get("session_nonce") == nonce
-            and status.get("case_id") == behavior_case,
-            f"{behavior_case} Door status identity differs",
-        )
-        expected_identity = {
-            "asset_set_generation": candidate["asset_set_generation"],
-            "authority": "isolated_candidate",
-            "manifest_sha256": candidate["manifest_sha256"],
-        }
-        native.require(
-            status.get("candidate_identity") == expected_identity,
-            f"{behavior_case} candidate identity differs",
-        )
-        final = status.get("final")
-        native.require(
-            isinstance(final, dict)
-            and final.get("presentation_mode") == "production"
-            and final.get("production_visual_count") == 1
-            and final.get("fallback_visual_count") == 0
-            and final.get("resident_production_meshes") == 3
-            and final.get("resident_production_materials") == 1,
-            f"{behavior_case} final production presentation differs",
-        )
-        if behavior_case == "door-state-v1":
-            native.require(
-                status.get("production_validation_count") == 5
-                and status.get("validated_mesh_roles")
-                == ["mesh:closed", "mesh:locked", "mesh:open"]
-                and status.get("semantic_sequence")
-                == ["closed", "open", "open", "locked", "locked"],
-                "Door state producer did not cover all production states",
+        case_status_paths = [
+            path for path in status_paths if path.name.startswith(f"{behavior_case}-")
+        ]
+        native.require(len(case_status_paths) == 3, f"{behavior_case} status count differs")
+        for run_number, status_path in zip(range(1, 4), case_status_paths, strict=True):
+            run_dir = session / "cases" / case.identifier / f"run-{run_number:03d}"
+            metadata = native.read_json(run_dir / "run-metadata.json")
+            native.require(metadata.get("case") == asdict(case), f"{behavior_case} metadata differs")
+            native.require(metadata.get("returncode") == 0, f"{behavior_case} process failed")
+            validation = validate_run(
+                run_dir,
+                returncode=0,
+                expected_case=case,
+                expected_adapter=adapter,
+                expected_backend="vulkan",
+                allow_log_patterns=[],
+                capture_kind="fixed-step-behavior",
+                expected_fixed_hz=FIXED_HZ,
+                expected_warmup_ticks=WARMUP_TICKS,
+                expected_audit_ticks=AUDIT_TICKS,
+                expected_window_backend="headless",
+                expected_present_mode="novsync",
+                expected_rtt_quality="high",
+                expected_contract="rtt-light-v1",
+                expected_stage="p08",
+                expected_lane="behavior",
             )
-        else:
             native.require(
-                status.get("production_validation_count") == 1
-                and status.get("validated_mesh_roles") == ["mesh:closed"]
-                and status.get("semantic_sequence") == [],
-                f"{behavior_case} candidate rebind evidence differs",
+                native.read_json(run_dir / "validation.json") == validation.to_json(),
+                f"{behavior_case} stored validation differs",
             )
-        statuses.append(
-            {
-                "case_id": behavior_case,
-                "status_sha256": sha256(status_path),
-                "timeline_rows": len(validation.timeline or []),
-                "world_epoch": final.get("world_epoch"),
+            native.require(
+                validation.valid,
+                f"{behavior_case} raw validation failed: {'; '.join(validation.reasons)}",
+            )
+            status = native.read_json(status_path)
+            native.require(
+                status.get("schema") == "door-art-v1-behavior"
+                and status.get("schema_version") == 1
+                and status.get("status") == "valid"
+                and status.get("session_nonce") == nonce
+                and status.get("case_id") == behavior_case,
+                f"{behavior_case} Door status identity differs",
+            )
+            expected_identity = {
+                "asset_set_generation": candidate["asset_set_generation"],
+                "authority": "isolated_candidate",
+                "manifest_sha256": candidate["manifest_sha256"],
             }
-        )
+            native.require(
+                status.get("candidate_identity") == expected_identity,
+                f"{behavior_case} candidate identity differs",
+            )
+            final = status.get("final")
+            native.require(
+                isinstance(final, dict)
+                and final.get("presentation_mode") == "production"
+                and final.get("production_visual_count") == 1
+                and final.get("fallback_visual_count") == 0
+                and final.get("resident_production_meshes") == 3
+                and final.get("resident_production_materials") == 1,
+                f"{behavior_case} final production presentation differs",
+            )
+            if behavior_case == "door-state-v1":
+                native.require(
+                    status.get("production_validation_count") == 5
+                    and status.get("validated_mesh_roles")
+                    == ["mesh:closed", "mesh:locked", "mesh:open"]
+                    and status.get("semantic_sequence")
+                    == ["closed", "open", "open", "locked", "locked"],
+                    "Door state producer did not cover all production states",
+                )
+            else:
+                native.require(
+                    status.get("production_validation_count") == 1
+                    and status.get("validated_mesh_roles") == ["mesh:closed"]
+                    and status.get("semantic_sequence") == [],
+                    f"{behavior_case} candidate rebind evidence differs",
+                )
+            statuses.append(
+                {
+                    "case_id": behavior_case,
+                    "run": run_number,
+                    "status_sha256": sha256(status_path),
+                    "timeline_rows": len(validation.timeline or []),
+                    "world_epoch": final.get("world_epoch"),
+                }
+            )
     return {
         "session": str(session),
         "session_sha256": session_digest(session),
@@ -521,7 +514,7 @@ def plan(args: argparse.Namespace) -> int:
             "resources": resources,
             "launcher_command": command,
             "execution_contract": {
-                "actual_window_required": True,
+                "actual_window_required": False,
                 "parallel_game_processes": 1,
                 "behavior_cases": len(BEHAVIOR_CASES),
                 "presentation": "isolated-candidate",
@@ -665,8 +658,12 @@ def self_test() -> int:
         "Door behavior command case order differs",
     )
     native.require(
-        command[command.index("--window-backend") + 1] == "x11",
-        "Door behavior command is not X11",
+        command[command.index("--window-backend") + 1] == "headless",
+        "Door behavior command is not deterministic headless",
+    )
+    native.require(
+        command[command.index("--repeat") + 1] == "3",
+        "Door behavior command does not preserve the frozen P08 repeat count",
     )
     native.print_json({"schema_version": SCHEMA_VERSION, "status": "pass", "profile": PROFILE})
     return 0

@@ -227,7 +227,7 @@ PYTHONDONTWRITEBYTECODE=1 python3 \
 
 Execute only the returned direct `kitty` command and poll `status --job-root
 <job-root>` every 15–30 seconds. The profile builds one fresh Capture-flavor
-binary and runs the exact P08 behavior inventory sequentially: Soul-triggered
+binary and runs the exact P08 deterministic-headless behavior inventory sequentially: Soul-triggered
 open, pause-time UI lock, normal load, preflight rejection, rollback, recovery,
 recovery failure, and duplicate-reset recovery. Each game process must bind the
 same `IsolatedCandidate` generation and manifest hash, use the matching
