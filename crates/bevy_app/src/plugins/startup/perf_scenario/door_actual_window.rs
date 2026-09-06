@@ -190,7 +190,18 @@ pub(crate) fn setup_door_actual_window_gallery_system(
 pub(crate) struct DoorGalleryViewParams<'w, 's> {
     main_camera: Query<'w, 's, &'static mut Transform, (With<MainCamera>, Without<Camera3dRtt>)>,
     ui_roots: Query<'w, 's, &'static mut Node, Without<ChildOf>>,
-    fixture_roots: Query<'w, 's, &'static mut Visibility, With<PerfFixtureMarker>>,
+    fixture_roots: Query<
+        'w,
+        's,
+        &'static mut Visibility,
+        (With<PerfFixtureMarker>, Without<Building3dVisual>),
+    >,
+    building_visuals: Query<
+        'w,
+        's,
+        (&'static Building3dVisual, &'static mut Visibility),
+        Without<PerfFixtureMarker>,
+    >,
 }
 
 pub(crate) fn prepare_door_actual_window_gallery_view_system(
@@ -211,6 +222,15 @@ pub(crate) fn prepare_door_actual_window_gallery_view_system(
     }
     for mut visibility in &mut params.fixture_roots {
         *visibility = Visibility::Hidden;
+    }
+    for (visual, mut visibility) in &mut params.building_visuals {
+        if !acceptance
+            .targets
+            .iter()
+            .any(|target| target.owner == visual.owner)
+        {
+            *visibility = Visibility::Hidden;
+        }
     }
 }
 
