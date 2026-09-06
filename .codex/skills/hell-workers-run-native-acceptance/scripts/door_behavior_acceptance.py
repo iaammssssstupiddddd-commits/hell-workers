@@ -348,7 +348,7 @@ def verify_session(
             elif behavior_case == "door-state-v1":
                 expected_final_presentation = ("production", 1, 0, "mesh:locked")
             else:
-                expected_final_presentation = ("production", 1, 0, "mesh:closed")
+                expected_final_presentation = ("production", 1, 0, "mesh:open")
             native.require(
                 isinstance(final, dict)
                 and final.get("presentation_mode") == expected_final_presentation[0]
@@ -371,9 +371,12 @@ def verify_session(
                     "Door state producer did not cover all production states",
                 )
             else:
+                expected_load_role = (
+                    "mesh:closed" if recovery_failed else "mesh:open"
+                )
                 native.require(
                     status.get("production_validation_count") == 1
-                    and status.get("validated_mesh_roles") == ["mesh:closed"]
+                    and status.get("validated_mesh_roles") == [expected_load_role]
                     and status.get("semantic_sequence") == [],
                     (
                         f"{behavior_case} candidate baseline evidence differs"
