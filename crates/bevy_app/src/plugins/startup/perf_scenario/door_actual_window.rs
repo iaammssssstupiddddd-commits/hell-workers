@@ -241,11 +241,13 @@ pub(crate) struct DoorGalleryViewParams<'w, 's> {
 
 pub(crate) fn prepare_door_actual_window_gallery_view_system(
     acceptance: Res<DoorActualWindowAcceptance>,
+    mut virtual_time: ResMut<Time<Virtual>>,
     mut params: DoorGalleryViewParams,
 ) {
     if !acceptance.enabled() || acceptance.targets.is_empty() {
         return;
     }
+    virtual_time.pause();
     if let Ok(mut camera) = params.main_camera.single_mut() {
         let center = hw_world::WorldMap::grid_to_world(18, 16);
         camera.translation.x = center.x;
