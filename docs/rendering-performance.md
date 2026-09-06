@@ -159,6 +159,8 @@ Wallのsave/load表示にはactual-window証跡がない。rehydrate後にfallba
 `wall_presentation.rs`のfocused testが担保する。画像側の証跡が必要になった時点で、save/load phaseを持つ
 actual-window scenarioを追加する。
 
+Door production候補のruntime poolは3状態mesh＋1 shared material、albedo 1＋EW/NS preview 2で、owner数に比例してcloneしない。候補galleryはClosed / Open / Locked×EW / NSの6 ownerを通常の`Building3dVisual` consumerへ通し、production 6 / fallback 0、状態別mesh、解決軸、candidate identityを`TransformSystems::Propagate`後のsidecarへ記録してからX11 client captureを許可する。このgalleryは`evidence_kind=art_preview`であり、通常起動や正式performance baselineの証拠には使わない。
+
 導出後のsubject `48743206`のjob `wall-renderdoc-20260904T153035Z-e91b1bb9`は`status=valid`で封印され、
 独立verifyも`pass`となった。completed `D_N = D_4N = 6`、provisional `69 <= 81` / `286 <= 321`、比`4.14 <= 4.4`で、
 4 caseとも`presentation=production`、rendered instanceは96 / 384である。

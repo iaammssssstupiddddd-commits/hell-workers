@@ -146,6 +146,12 @@ family別triangle数は`60 / 60 / 108 / 108 / 156 / 204`、上限は240とする
 受理されない。ゲーム所有windowでの目視判断とDoor側M2統合後の正式受入を終えるまで、generation 4の
 通常release表示は変更しない。
 
+#### Door production geometry contract（候補実装済み・未release）
+
+Doorは高さ32 wu、左右jambの外端X=`±16`、前後Z=`±4.8`をWall portへ合わせた固定枠と、左右2枚の木製leafを持つ。Closed / Open / Lockedは各1 node・1 mesh・1 primitiveの共有GLBで、triangle数は`156 / 156 / 168`、上限240。Openは枠を動かさず左右leafだけを外側へ90°開き、中央21.6 wuを空ける。Lockedだけが中央を跨ぐ骨の閂を持つ。
+
+共有albedoは512×512・完全Opaque、emissive / normalなし。黒ずんだ厚板、風化した骨、少量の錆鉄をRough Vector Sketchの太いbaked lineworkで描く。EW/NS previewは同じClosed原本から59°正射影で256×256 RGBAへ固定レンダーし、pixel anchor `(128,192)`を64×64 logical canvasへ対応させる。technical generation 1は`art_preview` authorityだけで有効であり、ユーザーの実画面判断、正式candidate、Wall型枠とのjoint受入、releaseが終わるまで通常Doorはprocedural fallbackを使う。
+
 ### 5.2 地形テクスチャ LOD 基準（確定済み）
 
 地形は 3D チャンクメッシュ + RtT 経路で描画される。マテリアルは `tile_rtt_px`（RtT 上での 1 タイル見かけサイズ）を基準に切り替わる。

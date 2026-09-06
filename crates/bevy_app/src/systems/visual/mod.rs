@@ -8,6 +8,7 @@
 pub mod actor_billboard;
 pub mod building3d_cleanup;
 pub mod camera_sync;
+pub mod door_preview;
 pub mod placement_ghost;
 pub mod soul_animation;
 pub mod task_area_visual;

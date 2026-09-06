@@ -9,10 +9,15 @@ pub mod wall_construction;
 use bevy::prelude::SystemSet;
 
 pub use blueprint_cancellation::blueprint_cancellation_system;
+#[cfg(feature = "profiling")]
+pub(crate) use building_completion::spawn_building_3d_visual;
 pub use building_completion::{BuildingCompletionSet, building_completion_system};
 #[cfg(feature = "profiling")]
 pub(crate) use building_completion::{RenderPresentationClass, presentation_class};
-pub(crate) use building_completion::{attach_building_shell, structural_light_anchor_mesh_tag};
+pub(crate) use building_completion::{
+    attach_building_shell, structural_light_anchor_mesh_tag,
+    structural_light_anchor_mesh_tag_with_direction,
+};
 #[cfg(feature = "profiling")]
 pub(crate) use deconstruction::DeconstructionPerfMetrics;
 pub(crate) use deconstruction::deconstruction_hover_preview_system;

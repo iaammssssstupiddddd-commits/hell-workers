@@ -69,7 +69,7 @@ auto-build を適用外にする。各 blocker record は代表理由が使っ�
 `PreActor` / `PostActor`はpause gate外のtransaction境界である。P04ではInterfaceがenqueueしたmanual Door requestを次Updateの`PreActor`で適用し、unpaused `Actor`のauto Door / movement確定後に`PostActor`で室内Light Fieldをcollect/rebuildする。VisualのDoor presentationは同じUpdateのCPU field rebuild後を観測する。
 
 Wallの接続と3D presentationは、全`Update` writerの後に
-`PostUpdate::WallAssetReadinessSet → WallTopologyResolveSet → ApplyDeferred → WallPresentationApplySet → TransformSystems::Propagate`
+`PostUpdate::WallAssetReadinessSet → WallTopologyResolveSet → ApplyDeferred → DoorAssetReadinessSet → DoorPresentationSyncSet → WallPresentationApplySet → TransformSystems::Propagate`
 の順で確定する。`hw_visual`はBuilding / Blueprint / `WallTileVisualMirror` contributorをcoalesceする差分topology indexとresolved
 `WallTopologyState`を所有し、root `bevy_app`はasset authorityとowner→3D visual index、production / fallbackの
 atomic applyを所有する。spawn / rehydrate時のfallback bundle、owner由来`MeshTag`、local / `GlobalTransform`初期化を
@@ -77,6 +77,8 @@ creation-time例外とし、spawn後のWall `Mesh3d` / material / composed trans
 generic building transform / material writerはWallを対象にしない。world replacementではleaf hookがtopology indexを
 full-rebuild待ちへ戻し、root hookがactivationとvisual owner indexをfallbackへ戻すため、`Last`のrehydrate frameは
 fallbackの正しいworld位置を保ち、次の`PostUpdate`でのみproductionへ再収束する。
+
+Door presentationはsemantic `Door.state`へ書き戻さず、readonly topology maskからEW/NSを導く。同じ`DoorPresentationSyncSet`が3Dの状態mesh/material/transform/`MeshTag`と、Door Blueprint root・pulse child・placement ghostのpreview画像/anchorを更新する。asset setは3 mesh・1 material・albedo・2 previewが同一identityでresidentになるまで一括fallbackし、profiling observerもこのPostUpdate consumerの後でだけ読む。save/loadは軸・handle・authorityを永続化しない。
 
 keyboard action は `crates/bevy_app/src/input_actions/` で一元解決する。
 F5/F9/V、B/Z/Space/Digit1-4、Familiar command、context 別 Escape、AreaEdit、Tab、P/O、

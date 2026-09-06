@@ -136,6 +136,19 @@ impl WallTopologyIndex {
         !self.full_rebuild_requested
     }
 
+    /// Returns the current four-neighbor connector mask without consuming the
+    /// Wall resolver's dirty set. Door presentation uses this read-only view.
+    pub fn connection_mask(&self, grid: Grid) -> Option<WallConnectionMask> {
+        self.has_connector(grid).then(|| {
+            WallConnectionMask::from_neighbors(
+                self.has_connector((grid.0, grid.1 + 1)),
+                self.has_connector((grid.0, grid.1 - 1)),
+                self.has_connector((grid.0 - 1, grid.1)),
+                self.has_connector((grid.0 + 1, grid.1)),
+            )
+        })
+    }
+
     fn replace_source(
         &mut self,
         entity: Entity,

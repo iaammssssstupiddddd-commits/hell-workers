@@ -151,6 +151,10 @@ authoring v3 final manifestへ封印する。`project_wall_formwork_candidate.py
 `authority=isolated_candidate`へ投影する。正式candidateは`art_review.status=art_approved`、exact 15 core、
 `normal_decision=rejected`、receiptなしを要求し、ArtPreview projectionを正式受入へ流用しない。
 
+DoorはWall manifestと分離したauthoring/runtime schema v1を使う。`seal_door_candidate.py`は3 GLB、shared albedo、EW/NS previewのexact 6 coreと、scene/export/Khronos/post-export/texture/OCIO report、Blender原本、geometry fixture、imagegen prompt、license、tool source fingerprintをtechnical candidateへ封印する。`project_door_preview.py`はcandidateだけを`authority=art_preview` / `review_status=art_preview` / receiptなしの`manifests/door-production-v1.doorset`へ投影する。
+
+`provision_door_preview.py`は外部`staging/validation/`配下の新規asset viewへexact 6 fileだけをcopyし、異なる既存byteを上書きしない。profiling buildで`HW_DOOR_ART_PREVIEW=1`、generation、authoring manifest SHA-256の三点が一致した場合だけ有効になる。通常起動、正式candidate、releaseのauthorityにはならない。Door初回releaseのrollback先は旧generationではなくprocedural fallbackである。
+
 canonicalへ昇格した後のprimary同期は、同じmanifest allowlistに`--receipt`を加えたrelease modeで行う。
 manifestが`generations/<GEN>/manifest/`にある場合は`--receipt`を必須とし、receiptのmanifest hash / generationと
 active pointerの三点一致を検証してからcopyする。配置先は`project_wallset.py`の`runtime_path`をそのまま使い、

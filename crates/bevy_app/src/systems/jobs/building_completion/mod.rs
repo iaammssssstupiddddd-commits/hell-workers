@@ -5,6 +5,7 @@ pub(crate) mod spawn;
 pub(crate) use spawn::{RenderPresentationClass, presentation_class};
 pub(crate) use spawn::{
     attach_building_shell, spawn_building_3d_visual, structural_light_anchor_mesh_tag,
+    structural_light_anchor_mesh_tag_with_direction,
 };
 
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]

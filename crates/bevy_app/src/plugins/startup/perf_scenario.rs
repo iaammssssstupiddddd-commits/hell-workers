@@ -105,6 +105,8 @@ mod consumer_core_driver;
 #[cfg(feature = "profiling")]
 mod deconstruction_fixture;
 #[cfg(feature = "profiling")]
+mod door_actual_window;
+#[cfg(feature = "profiling")]
 mod field_core_driver;
 #[cfg(feature = "profiling")]
 mod fixture;
@@ -154,6 +156,10 @@ pub(crate) use consumer_core_driver::{ConsumerCoreDriverState, run_consumer_core
 #[cfg(feature = "profiling")]
 pub(crate) use deconstruction_fixture::{
     DeconstructionPerfFixtureState, drive_deconstruction_perf_workload_system,
+};
+#[cfg(feature = "profiling")]
+pub(crate) use door_actual_window::{
+    DoorActualWindowAcceptance, configure_door_actual_window_probe,
 };
 #[cfg(feature = "profiling")]
 pub(crate) use field_core_driver::{FieldCoreDriverState, run_field_core_driver_system};

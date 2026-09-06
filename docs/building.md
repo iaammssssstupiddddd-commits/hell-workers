@@ -15,6 +15,7 @@ Hell-Workers における建築システムの基礎実装について説明し�
 | `VisualLayerKind` | 必要な `Building` だけが持つ子ビジュアルレイヤー種別（`hw_visual::layer`）。`Foreground2d` は可視 `Sprite` 子を持つ。`Structural3d` は独立した `Building3dVisual` だけをactive presentationとし、2D子を生成しない。 |
 | `ProvisionalWall` | 仮設壁のアップグレード状態（`mud_delivered`）を保持 |
 | Wall の3D表示 | 接続maskから`isolated` / `end` / `straight` / `corner` / `t_junction` / `cross`の6 familyとY軸quarter turnを決定する。runtime wallset v2では仮設に木製型枠6 GLB、本設に石壁6 GLBを使い、タイル完成時に同じowner / topologyのmeshとmaterialを同時交換する。旧v1は従来どおり同一meshを共有する。asset setが欠落・不整合なら`Cuboid`のfallbackへ一括で落ちる |
+| Door の3D表示 | `WallTopologyIndex`のreadonly接続maskからEWを優先してEW/NS軸を決め、Closed / Open / Lockedの共有meshを交換する。6-file doorsetが同一identityでreadyになった場合だけ木・骨の両開きproductionへ切り替え、欠落・未承認・世代不一致では旧Cuboidと旧PNGを維持する |
 | `WallConstructionSite` | 壁の建設サイト（`Framing -> Coating` フェーズ、`material_center`、進捗カウンタを保持） |
 | `WallTileBlueprint` | 壁1タイルの建設状態（`wood_delivered` / `mud_delivered` / `spawned_wall`）を保持 |
 | `BuildingType` | 建物の種類（下表参照） |
@@ -365,7 +366,9 @@ Structural3d のときだけ Building3dVisual エンティティ（独立。Buil
 
 ### Building3dVisual スポーン
 
-`Building3dVisual { owner: Entity }` は `Structural3d` Buildingとは独立した3Dビジュアルで、XZ 平面上に独立スポーンする（Building の子エンティティではない）。ownerの移動・Z回転・完成bounce scaleは共通transform resolverで追従する。Doorは追加で`Door3dVisual`を持ち、Closed / Open / Lockedを状態別shared materialとhinge transformへ同期する。
+`Building3dVisual { owner: Entity }` は `Structural3d` Buildingとは独立した3Dビジュアルで、XZ 平面上に独立スポーンする（Building の子エンティティではない）。ownerの移動・Z回転・完成bounce scaleは共通transform resolverで追従する。Doorは追加で`Door3dVisual`を持つ。fallbackはClosed / Open / Lockedを状態別shared materialとhinge transformへ同期し、productionは固定枠を含む状態別meshを同じroot位置で交換する。
+
+Doorの表示軸はN/S/W/E=`8/4/2/1`の接続maskで、E+WがあればEW、なければN+SがあればNS、それ以外はEWへ決定的にfallbackする。EWの`MeshTag`法線はNorth、NSはWestであり、Open leaf先端をsampling anchorにしない。設計図、Building中のpulse child、配置ghostも同じresolverを使い、production previewでは256px画像の`(128,192)`をrootへ合わせる64×64 logical canvasを使う。saveには派生軸やasset handleを保存せず、rehydrate後の最初のpresentation frameに近傍とauthorityから再構成する。
 
 Floorのactive presentationは1タイルの`Plane3d`で、既存の`textures/terrain/mud_floor.png`を共有マテリアルから参照する。3D側の高さにも`Z_BUILDING_FLOOR`（0.05）を使い、`y=0`の地形面との深度競合を避ける。spawn時とowner transform同期時は同じ高さresolverを通す。
 

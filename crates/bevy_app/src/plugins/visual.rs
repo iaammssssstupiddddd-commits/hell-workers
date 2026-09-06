@@ -1,5 +1,8 @@
 //! ビジュアル関連のプラグイン
 
+use crate::assets::door_asset_set::{
+    DoorAssetCandidatePolicy, DoorAssetReadiness, update_door_asset_readiness_system,
+};
 use crate::assets::wall_asset_set::{
     WallAssetCandidatePolicy, WallAssetReadiness, WallProductionActivation,
     finalize_wall_production_activation_system, update_wall_asset_readiness_system,
@@ -25,6 +28,7 @@ use crate::systems::visual::building3d_cleanup::{
     sync_door_presentation_system, sync_structural_presentation_state_system,
 };
 use crate::systems::visual::camera_sync::sync_camera3d_system;
+use crate::systems::visual::door_preview::sync_door_preview_system;
 use crate::systems::visual::indoor_light_texture::{
     IndoorLightUploadSet, reset_indoor_light_texture_for_world_replace,
     upload_indoor_light_texture_system,
@@ -57,6 +61,9 @@ pub struct WallAssetReadinessSet;
 #[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct WallPresentationApplySet;
 
+#[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct DoorAssetReadinessSet;
+
 type MainRttCameraQuery<'w, 's> = Query<'w, 's, &'static mut Camera, With<Camera3dRtt>>;
 type RttDirectionalLightQuery<'w, 's> =
     Query<'w, 's, &'static mut DirectionalLight, With<RttDirectionalLight>>;
@@ -68,15 +75,9 @@ pub struct VisualPlugin;
 fn configure_indoor_light_visual_schedule(app: &mut App) {
     app.configure_sets(
         Update,
-        (
-            IndoorLightUploadSet
-                .in_set(GameSystemSet::Visual)
-                .after(IndoorLightingRebuildSet),
-            DoorPresentationSyncSet
-                .in_set(GameSystemSet::Visual)
-                .after(IndoorLightUploadSet),
-        )
-            .chain(),
+        IndoorLightUploadSet
+            .in_set(GameSystemSet::Visual)
+            .after(IndoorLightingRebuildSet),
     );
 }
 
@@ -110,6 +111,8 @@ impl Plugin for VisualPlugin {
         app.init_resource::<WallAssetReadiness>();
         app.init_resource::<WallProductionActivation>();
         app.init_resource::<Wall3dVisualOwnerIndex>();
+        app.init_resource::<DoorAssetCandidatePolicy>();
+        app.init_resource::<DoorAssetReadiness>();
         app.init_resource::<TerrainLodMetrics>();
         app.init_resource::<TerrainLodState>();
 
@@ -120,6 +123,8 @@ impl Plugin for VisualPlugin {
             (
                 WallAssetReadinessSet,
                 hw_visual::wall_connection::WallTopologyResolveSet,
+                DoorAssetReadinessSet,
+                DoorPresentationSyncSet,
                 WallPresentationApplySet,
             )
                 .chain()
@@ -145,6 +150,10 @@ impl Plugin for VisualPlugin {
         app.add_systems(
             PostUpdate,
             update_wall_asset_readiness_system.in_set(WallAssetReadinessSet),
+        );
+        app.add_systems(
+            PostUpdate,
+            update_door_asset_readiness_system.in_set(DoorAssetReadinessSet),
         );
         app.add_systems(
             Update,
@@ -247,11 +256,8 @@ impl Plugin for VisualPlugin {
                 .in_set(GameSystemSet::Visual),
         );
         app.add_systems(
-            Update,
-            sync_door_presentation_system
-                .after(hw_spatial::door_auto_open_nearby_system)
-                .after(hw_spatial::door_auto_close_nearby_system)
-                .after(crate::systems::lighting::consume_door_lock_toggle_requests_system)
+            PostUpdate,
+            (sync_door_presentation_system, sync_door_preview_system)
                 .in_set(DoorPresentationSyncSet),
         );
         app.add_systems(
@@ -473,14 +479,22 @@ mod tests {
     #[test]
     fn visual_sets_upload_the_current_field_before_door_presentation() {
         let mut app = App::new();
-        app.init_resource::<ScheduleTrace>().add_systems(
-            Update,
-            (
-                trace_rebuild.in_set(IndoorLightingRebuildSet),
-                trace_upload.in_set(IndoorLightUploadSet),
+        app.init_resource::<ScheduleTrace>()
+            .add_systems(
+                Update,
+                (
+                    trace_rebuild.in_set(IndoorLightingRebuildSet),
+                    trace_upload.in_set(IndoorLightUploadSet),
+                ),
+            )
+            .add_systems(
+                PostUpdate,
                 trace_door_presentation.in_set(DoorPresentationSyncSet),
-            ),
-        );
+            )
+            .configure_sets(
+                PostUpdate,
+                DoorPresentationSyncSet.before(TransformSystems::Propagate),
+            );
         configure_indoor_light_visual_schedule(&mut app);
 
         app.update();

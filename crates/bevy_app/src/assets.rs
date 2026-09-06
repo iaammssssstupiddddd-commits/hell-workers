@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 use hw_ui::setup::UiAssets;
 
+pub mod door_asset_set;
 pub mod wall_asset_set;
 
 impl UiAssets for GameAssets {

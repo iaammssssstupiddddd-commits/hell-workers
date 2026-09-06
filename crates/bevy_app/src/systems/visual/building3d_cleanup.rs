@@ -3,8 +3,14 @@
 //! - Building が削除された時、対応する Building3dVisual エンティティを despawn する。
 //! - Building が仮設→本設に遷移した時、Building3dVisual のマテリアルを通常色に差し替える。
 
+use crate::assets::door_asset_set::{
+    DoorAssetReadiness, DoorAssetReadinessState, ProductionDoorAssetPool,
+    ProductionDoorMaterialPool,
+};
 use crate::plugins::startup::Building3dHandles;
-use crate::systems::jobs::structural_light_anchor_mesh_tag;
+use crate::systems::jobs::{
+    structural_light_anchor_mesh_tag, structural_light_anchor_mesh_tag_with_direction,
+};
 use bevy::ecs::entity::EntityHashMap;
 use bevy::mesh::MeshTag;
 use bevy::prelude::*;
@@ -15,8 +21,11 @@ use hw_core::world::DoorState;
 use hw_jobs::{Building, BuildingType, Door};
 use hw_visual::TopDownStructuralMaterial;
 use hw_visual::visual3d::{
-    Building3dVisual, Door3dVisual, DoorPresentationState, StructuralPresentationState,
+    Building3dVisual, Door3dPresentationMode, Door3dVisual, DoorPresentationAxis,
+    DoorPresentationState, StructuralPresentationState, resolve_door_presentation_axis,
 };
+use hw_visual::wall_connection::WallTopologyIndex;
+use hw_world::WorldMap;
 /// Stable boundary used by profiling and future Light Field consumers. Door
 /// domain writers run earlier; observers must run after this set.
 #[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -231,6 +240,9 @@ type DoorVisualQuery<'w, 's> = Query<
     (
         &'static Building3dVisual,
         &'static mut DoorPresentationState,
+        &'static mut DoorPresentationAxis,
+        &'static mut Door3dPresentationMode,
+        &'static mut Mesh3d,
         &'static mut Transform,
         &'static mut MeshMaterial3d<TopDownStructuralMaterial>,
         &'static mut MeshTag,
@@ -238,26 +250,96 @@ type DoorVisualQuery<'w, 's> = Query<
     Without<Door>,
 >;
 
+#[derive(bevy::ecs::system::SystemParam)]
+pub struct DoorPresentationAssets<'w> {
+    fallback: Res<'w, Building3dHandles>,
+    production: Res<'w, ProductionDoorAssetPool>,
+    production_material: Res<'w, ProductionDoorMaterialPool>,
+    readiness: Res<'w, DoorAssetReadiness>,
+    topology: Res<'w, WallTopologyIndex>,
+}
+
 /// Synchronizes the active 3D leaf from the root `Door`. This system never
 /// writes semantic state or `WorldMap`.
 pub fn sync_door_presentation_system(
     owners: DoorOwnerQuery,
     mut visuals: DoorVisualQuery,
-    handles_3d: Res<Building3dHandles>,
+    assets: DoorPresentationAssets,
 ) {
-    for (visual, mut observed_state, mut transform, mut material, mut mesh_tag) in &mut visuals {
+    for (
+        visual,
+        mut observed_state,
+        mut observed_axis,
+        mut observed_mode,
+        mut mesh,
+        mut transform,
+        mut material,
+        mut mesh_tag,
+    ) in &mut visuals
+    {
         let Ok((door, owner_transform)) = owners.get(visual.owner) else {
             continue;
         };
         let next_state = presentation_state(door.state);
-        let next_transform = door_visual_transform(owner_transform, next_state);
-        let next_material = match next_state {
-            DoorPresentationState::Closed => &handles_3d.door_closed_material,
-            DoorPresentationState::Open => &handles_3d.door_open_material,
-            DoorPresentationState::Locked => &handles_3d.door_locked_material,
+        let grid = WorldMap::world_to_grid(owner_transform.translation.truncate());
+        let next_axis = assets
+            .topology
+            .connection_mask(grid)
+            .map(resolve_door_presentation_axis)
+            .unwrap_or_default();
+        let production = match (
+            &assets.readiness.state,
+            assets.production.resolved.as_ref(),
+            assets.production_material.material.as_ref(),
+        ) {
+            (
+                DoorAssetReadinessState::Eligible(identity),
+                Some(production),
+                Some(production_material),
+            ) if &production.identity == identity
+                && assets.production_material.identity.as_ref() == Some(identity) =>
+            {
+                Some((production, production_material))
+            }
+            _ => None,
         };
+        let (next_mode, next_mesh, next_material, next_transform) =
+            if let Some((production, production_material)) = production {
+                let index = match next_state {
+                    DoorPresentationState::Closed => 0,
+                    DoorPresentationState::Open => 1,
+                    DoorPresentationState::Locked => 2,
+                };
+                (
+                    Door3dPresentationMode::Production,
+                    &production.meshes[index],
+                    production_material,
+                    production_door_visual_transform(owner_transform, next_axis),
+                )
+            } else {
+                let fallback_material = match next_state {
+                    DoorPresentationState::Closed => &assets.fallback.door_closed_material,
+                    DoorPresentationState::Open => &assets.fallback.door_open_material,
+                    DoorPresentationState::Locked => &assets.fallback.door_locked_material,
+                };
+                (
+                    Door3dPresentationMode::Fallback,
+                    &assets.fallback.door_mesh,
+                    fallback_material,
+                    fallback_door_visual_transform(owner_transform, next_state),
+                )
+            };
         if *observed_state != next_state {
             *observed_state = next_state;
+        }
+        if *observed_axis != next_axis {
+            *observed_axis = next_axis;
+        }
+        if *observed_mode != next_mode {
+            *observed_mode = next_mode;
+        }
+        if mesh.0 != *next_mesh {
+            mesh.0 = next_mesh.clone();
         }
         if *transform != next_transform {
             *transform = next_transform;
@@ -265,9 +347,11 @@ pub fn sync_door_presentation_system(
         if material.0 != *next_material {
             material.0 = next_material.clone();
         }
-        if let Some(next_tag) =
-            structural_light_anchor_mesh_tag(BuildingType::Door, owner_transform)
-            && *mesh_tag != next_tag
+        if let Some(next_tag) = structural_light_anchor_mesh_tag_with_direction(
+            BuildingType::Door,
+            owner_transform,
+            next_axis.mesh_tag_direction(),
+        ) && *mesh_tag != next_tag
         {
             *mesh_tag = next_tag;
         }
@@ -282,7 +366,7 @@ fn presentation_state(value: DoorState) -> DoorPresentationState {
     }
 }
 
-fn door_visual_transform(owner: &Transform, state: DoorPresentationState) -> Transform {
+fn fallback_door_visual_transform(owner: &Transform, state: DoorPresentationState) -> Transform {
     let pos2d = owner.translation.truncate();
     let mut transform = Transform::from_xyz(pos2d.x, TILE_SIZE * 0.25, -pos2d.y)
         .with_rotation(Quat::from_rotation_y(
@@ -300,6 +384,15 @@ fn door_visual_transform(owner: &Transform, state: DoorPresentationState) -> Tra
     transform
 }
 
+fn production_door_visual_transform(owner: &Transform, axis: DoorPresentationAxis) -> Transform {
+    let pos2d = owner.translation.truncate();
+    Transform::from_xyz(pos2d.x, TILE_SIZE * 0.5, -pos2d.y)
+        .with_rotation(Quat::from_rotation_y(
+            f32::from(axis.quarter_turns_y().get()) * std::f32::consts::FRAC_PI_2,
+        ))
+        .with_scale(Vec3::splat(owner.scale.x))
+}
+
 #[cfg(test)]
 mod door_tests {
     use super::*;
@@ -307,13 +400,34 @@ mod door_tests {
     #[test]
     fn open_leaf_has_distinct_hinged_transform() {
         let owner = Transform::from_xyz(10.0, 20.0, 0.0);
-        let closed = door_visual_transform(&owner, DoorPresentationState::Closed);
-        let open = door_visual_transform(&owner, DoorPresentationState::Open);
-        let locked = door_visual_transform(&owner, DoorPresentationState::Locked);
+        let closed = fallback_door_visual_transform(&owner, DoorPresentationState::Closed);
+        let open = fallback_door_visual_transform(&owner, DoorPresentationState::Open);
+        let locked = fallback_door_visual_transform(&owner, DoorPresentationState::Locked);
 
         assert_ne!(open.translation, closed.translation);
         assert_ne!(open.rotation, closed.rotation);
         assert_eq!(locked, closed);
+    }
+
+    #[test]
+    fn production_frame_transform_is_state_independent_and_axis_owned() {
+        let owner = Transform::from_xyz(10.0, 20.0, 0.0)
+            .with_rotation(Quat::from_rotation_z(0.7))
+            .with_scale(Vec3::splat(1.15));
+        let east_west = production_door_visual_transform(&owner, DoorPresentationAxis::EastWest);
+        let north_south =
+            production_door_visual_transform(&owner, DoorPresentationAxis::NorthSouth);
+
+        assert_eq!(
+            east_west.translation,
+            Vec3::new(10.0, TILE_SIZE * 0.5, -20.0)
+        );
+        assert_eq!(east_west.scale, Vec3::splat(1.15));
+        assert_eq!(east_west.rotation, Quat::IDENTITY);
+        assert_eq!(
+            north_south.rotation,
+            Quat::from_rotation_y(std::f32::consts::FRAC_PI_2)
+        );
     }
 
     #[test]

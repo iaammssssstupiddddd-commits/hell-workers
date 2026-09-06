@@ -6,8 +6,8 @@ use bevy::prelude::*;
 use hw_core::constants::{TILE_SIZE, Z_BUILDING_FLOOR, Z_BUILDING_STRUCT};
 use hw_visual::layer::VisualLayerKind;
 use hw_visual::visual3d::{
-    Building3dVisual, Door3dVisual, DoorPresentationState, StructuralPresentationState,
-    Wall3dPresentationState,
+    Building3dVisual, Door3dPresentationMode, Door3dVisual, DoorPresentationAxis,
+    DoorPresentationState, StructuralPresentationState, Wall3dPresentationState,
 };
 use hw_world::WorldMap;
 
@@ -19,6 +19,22 @@ const LIGHT_ANCHOR_POLICY_DOOR: u32 = 2;
 pub(crate) fn structural_light_anchor_mesh_tag(
     kind: BuildingType,
     owner: &Transform,
+) -> Option<MeshTag> {
+    let local_north = owner.rotation * Vec3::Y;
+    let direction = if local_north.x.abs() > local_north.y.abs() {
+        if local_north.x >= 0.0 { 1 } else { 3 }
+    } else if local_north.y >= 0.0 {
+        0
+    } else {
+        2
+    };
+    structural_light_anchor_mesh_tag_with_direction(kind, owner, direction)
+}
+
+pub(crate) fn structural_light_anchor_mesh_tag_with_direction(
+    kind: BuildingType,
+    owner: &Transform,
+    direction: u32,
 ) -> Option<MeshTag> {
     let policy = match kind {
         BuildingType::Wall => LIGHT_ANCHOR_POLICY_WALL,
@@ -33,14 +49,9 @@ pub(crate) fn structural_light_anchor_mesh_tag(
         return None;
     }
 
-    let local_north = owner.rotation * Vec3::Y;
-    let direction = if local_north.x.abs() > local_north.y.abs() {
-        if local_north.x >= 0.0 { 1 } else { 3 }
-    } else if local_north.y >= 0.0 {
-        0
-    } else {
-        2
-    };
+    if direction > 3 {
+        return None;
+    }
     Some(MeshTag(
         LIGHT_ANCHOR_PRESENT
             | grid_x
@@ -259,6 +270,8 @@ pub(crate) fn spawn_building_3d_visual(
                 Building3dVisual { owner },
                 Door3dVisual { owner },
                 DoorPresentationState::Closed,
+                DoorPresentationAxis::EastWest,
+                Door3dPresentationMode::Fallback,
                 structural_light_anchor_mesh_tag(kind, &owner_transform)
                     .expect("Door grid anchor fits MeshTag"),
                 Name::new(format!("Building3dVisual ({:?})", kind)),

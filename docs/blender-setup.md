@@ -164,6 +164,8 @@ operatorにはglobal scale propertyがないため、正式exportは`--geometry-
 `render-wall-reference-board`はM0と同じOCIO陽性configを強制し、59.036° Orthographicで6 familyを描画します。
 OCIO fallback時はreference reportをpassにしません。
 
+production Doorは`create-door-production-scene`で`Door_Closed` / `Door_Open` / `Door_Locked`を同じ原本へ生成し、`validate-door-glb`で単一node/mesh/primitive、状態別triangle数、固定枠signature、Open envelopeを検査します。`render-door-previews`はnetworkを切り、repositoryの`wall-calibration-v2.ocio`が陽性である場合だけEW/NSの固定canvasを出力します。`validate-door-textures`は512px Opaque albedo、256px RGBA preview、安全bbox、両軸hash差を検査します。
+
 production Wall v2は上記legacy同期ではなく、art-approved final manifestに封印されたexact allowlistを隔離worktreeへ
 provisionします。`--dest`は必ず対象worktreeのasset rootまで明示し、最初に同じ引数の`--dry-run`を確認します。
 

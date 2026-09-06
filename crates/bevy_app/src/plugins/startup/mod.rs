@@ -67,6 +67,8 @@ impl Plugin for StartupPlugin {
     fn build(&self, app: &mut App) {
         app.init_asset::<crate::assets::wall_asset_set::WallAssetSetManifest>()
             .init_asset_loader::<crate::assets::wall_asset_set::WallAssetSetLoader>()
+            .init_asset::<crate::assets::door_asset_set::DoorAssetSetManifest>()
+            .init_asset_loader::<crate::assets::door_asset_set::DoorAssetSetLoader>()
             .init_resource::<WorldMap>()
             .register_type::<QualitySettings>()
             .register_type::<RttQualityPreset>()
@@ -135,6 +137,8 @@ impl Plugin for StartupPlugin {
                 perf_scenario::P02ActualWindowAcceptance::requested_from_environment();
             let wall_actual_window_requested =
                 perf_scenario::WallActualWindowAcceptance::requested_from_environment();
+            let door_actual_window_requested =
+                perf_scenario::DoorActualWindowAcceptance::requested_from_environment();
             let wall_color_actual_window_requested =
                 perf_scenario::WallColorActualWindowAcceptance::requested_from_environment();
             if p02_actual_window_requested {
@@ -142,6 +146,10 @@ impl Plugin for StartupPlugin {
             }
             if wall_actual_window_requested {
                 app.init_resource::<perf_scenario::WallActualWindowAcceptance>();
+            }
+            if door_actual_window_requested {
+                app.init_resource::<perf_scenario::DoorActualWindowAcceptance>();
+                perf_scenario::configure_door_actual_window_probe(app);
             }
             if wall_color_actual_window_requested {
                 app.init_resource::<perf_scenario::WallColorActualWindowAcceptance>();
@@ -243,7 +251,7 @@ impl Plugin for StartupPlugin {
                     PerfScenarioSet::Capture.after(GameSystemSet::Interface),
                 )
                 .add_systems(
-                    Update,
+                    PostUpdate,
                     perf_scenario::validate_indoor_light_fixture_system
                         .in_set(PerfScenarioSet::Capture)
                         .after(
@@ -363,18 +371,7 @@ impl Plugin for StartupPlugin {
                 perf_scenario::poll_renderdoc_capture_system.in_set(PerfScenarioSet::Capture),
             );
             app.add_systems(
-                Update,
-                // Re-run the production presentation consumer at the
-                // profiling observer boundary. This makes the behavior
-                // artifact independent of renderer visibility while keeping
-                // the observed state and mutation owner identical to runtime.
-                crate::systems::visual::building3d_cleanup::sync_door_presentation_system
-                    .in_set(PerfScenarioSet::Capture)
-                    .before(perf_scenario::observe_perf_behavior_system)
-                    .run_if(is_fixed_step_behavior),
-            )
-            .add_systems(
-                Update,
+                PostUpdate,
                 perf_scenario::observe_perf_behavior_system
                     .in_set(PerfScenarioSet::Capture)
                     .after(crate::systems::visual::building3d_cleanup::DoorPresentationSyncSet)

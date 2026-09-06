@@ -1,6 +1,7 @@
 //! GameAssets から hw_visual のハンドルリソースを初期化するシステム
 
 use crate::assets::GameAssets;
+use crate::assets::door_asset_set::{ProductionDoorAssetPool, ProductionDoorMaterialPool};
 use crate::assets::wall_asset_set::{ProductionWallAssetPool, ProductionWallMaterialPool};
 use bevy::camera::visibility::RenderLayers;
 use bevy::ecs::system::SystemParam;
@@ -259,6 +260,7 @@ pub fn init_visual_handles(mut params: InitVisualHandlesParams) {
 
     let indoor_light_field = params.indoor_light_texture.handle().clone();
     let production_wall_assets = ProductionWallAssetPool::load(&params.asset_server);
+    let production_door_assets = ProductionDoorAssetPool::load(&params.asset_server);
     let wall_provisional_material = structural_materials.add(with_topdown_alpha_mode(
         make_topdown_structural_material(
             LinearRgba::new(0.95, 0.72, 0.45, 0.9),
@@ -329,6 +331,8 @@ pub fn init_visual_handles(mut params: InitVisualHandlesParams) {
 
     commands.insert_resource(production_wall_assets);
     commands.insert_resource(ProductionWallMaterialPool::default());
+    commands.insert_resource(production_door_assets);
+    commands.insert_resource(ProductionDoorMaterialPool::default());
 
     commands.insert_resource(Building3dHandles {
         wall_mesh,

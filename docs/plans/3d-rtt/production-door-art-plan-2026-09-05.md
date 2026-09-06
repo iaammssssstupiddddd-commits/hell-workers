@@ -5,7 +5,7 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `production-door-art-plan-2026-09-05` |
-| ステータス | `Draft` |
+| ステータス | `In Progress` |
 | 作成日 | `2026-09-05` |
 | 最終更新日 | `2026-09-06` |
 | 作成者 | `Codex` |
@@ -13,7 +13,7 @@
 | 関連計画 | [仮設壁の木製型枠化](provisional-wall-formwork-plan-2026-09-05.md)、[完了済み本番壁計画](archived/production-wall-art-plan-2026-08-31.md) |
 | 関連提案 / Issue / PR | `N/A` |
 
-本書は計画であり、実装・アセット制作・実機受入は未着手。調査基点は `57a488e1`。
+本書は実装中の計画である。M0〜M2の技術候補と実行時接続を実装し、M3のArtPreview実機受入前まで進行している。調査基点は `57a488e1`。
 完了済みWall計画から引き継ぐ範囲は、Doorの枠・戸当たり・向き・Wallの9.6 wu portとの継ぎ目である。
 
 ## 0. セルフレビューで修正した点
@@ -83,7 +83,7 @@
 
 アートはRough Vector Sketch。粗い板目・歪んだ輪郭・暗い太線・骨色の塗り分けを使い、
 金属の写実的な光沢は抑える。まずlit `TopDownStructuralMaterial`＋baked linework、共有albedo 1枚、
-Opaque、emissiveなし・normalなしで制作する。textureサイズは512×512 RGBAとし、
+Opaque、emissiveなし・normalなしで制作する。textureサイズは512×512 RGB（alphaを持つ場合も全画素Opaque）とし、
 遠景の施錠表示を微細な絵柄だけに依存させない。
 
 ### 4.2 固定枠と単一visualの両立
@@ -234,7 +234,7 @@ sealerへ架空の証拠を渡さない。reviewは`double_leaf_approved`、`nor
 - 対象: `tools/blender_ai_workflow/fixtures/`の新Door geometry契約、本計画、仮設壁計画との接続仕様。
 - 完了条件:
   - [ ] 既存Door state / placement / Room / light / saveの正本と描画consumerを確認。
-  - [ ] 固定枠＋左右leafの3状態mesh、core 6、pose/fallback、PNG表示、§7の予算をcontractに落とす。
+  - [x] 固定枠＋左右leafの3状態mesh、core 6、pose/fallback、PNG表示、§7の予算をcontractに落とす。
   - [ ] M0のinstrumentationだけを加えたclean before subjectで現在のDoorを採取し、支持Wallのbytes・状態分布とharnessを封印。
 - 検証: 新profileのself-test→現行Doorのfresh画像・state・性能。新geometryの合格値を旧placeholderに要求しない。
 
@@ -243,10 +243,10 @@ sealerへ架空の証拠を渡さない。reviewは`double_leaf_approved`、`nor
 - 変更内容: stagingで1つの原本から3状態GLB、shared albedo、EW/NSの2 preview PNG、固定枠・開き範囲のreportを制作する。
 - 対象: 外部asset rootの`staging/`、`tools/blender_ai_workflow/`、必要なallowlist同期tool。
 - 完了条件:
-  - [ ] 木・骨が主材として読め、Openの通路とLockedの閂が通常画面相当で識別できる。
-  - [ ] scene / Khronos / GLB実bytes・triangle・UV・state間の枠位置一致・Open envelopeを検証。
+  - [x] 木・骨、Openの通路、Lockedの閂を3状態meshへ反映し、ArtPreview判断に渡せる候補を制作。
+  - [x] scene / Khronos / GLB実bytes・triangle・UV・state間の枠位置一致・Open envelopeを検証。
   - [ ] 石壁両軸との継ぎ目を確認。型枠候補ができ次第同じboardへ追加。
-  - [ ] core 6 file、hash、source/provenance、candidate/release authority、初回pointerなしからの復旧検証が揃う。
+  - [ ] core 6 file、hash、source/provenanceとpreview/candidate/release authorityを揃える（technical candidateとArtPreview projectionは完了。正式candidate・release・初回pointer復旧はM3/M4）。
 - 検証: Door用Python validatorのfocused tests。OCIO正常性を確認したreference render。
 
 ### M2: 向き・3状態・lifecycleの接続
@@ -254,11 +254,11 @@ sealerへ架空の証拠を渡さない。reviewは`double_leaf_approved`、`nor
 - 変更内容: root Door adapter、表示軸resolver、state mesh交換、preview、fallback、loadを実装する。
 - 対象: §4.6のD1〜D3。既存のplacement / pulse child / rehydrate / profiling observerを一緒に更新する。
 - 完了条件:
-  - [ ] Closed/Open/Locked×両軸で枠のworld位置が不変。owner rotation/scaleがある場合もローカル軸で正しく合成。
+  - [x] Closed/Open/Locked×両軸でproduction rootの枠位置を状態非依存にし、解決軸だけを合成。
   - [ ] 通常建築・Instant Build・Wall置換・隣接追加削除が同じ表示へ収束。Lastでのload/rollbackは次の最初のpresentation frameで再構成。
-  - [ ] 近傍変更・Door状態更新からmesh/軸/tag・Transform propagation・観測まで同frameで成立し、Update/PostUpdate境界による古い向きや二重回転がない。
-  - [ ] exactly-one visual、logical MeshTag、全ready前fallback、cleanup、有限poolを維持。
-  - [ ] 設計図・placement previewと完成後の軸が一致し、ボタン用iconが現行assetを誤案内しない。
+  - [x] 近傍解決→Door asset readiness→mesh/軸/tag/preview→Transform propagationをPostUpdateへ一本化し、profiling readerも同境界後へ移動。
+  - [x] exactly-one visual、logical MeshTag、全ready前fallback、cleanup、production 3 mesh / 1 materialの有限poolを維持。
+  - [x] 設計図root・pulse child・placement ghostを完成後と同じ軸resolver・asset identityへ接続。候補無効時は旧PNGへ復帰。
 - 検証: 状態/軸resolver、実経路lifecycle、asset失敗系のfocused test、rust-analyzer診断、check、Clippy。
 
 ### M3: アート判断・正式candidateの単独受入
@@ -377,12 +377,12 @@ Help impact review Skillで建築／ドアの実説明を読み、色表示へ�
 
 ### 現在地
 
-- 進捗: 実装 `0%`。現状調査と計画作成のみ完了。
-- 次の作業: M0で§4の両開きgeometry・preview anchor・全16mask/tagのfixtureを作り、共通C0と新Door before profileを整備する。
+- 進捗: 実装 `65%`。M0のgeometry/全16mask、M1のtechnical candidate、M2の3D/2D adapterとPostUpdate境界、M3a用6状態galleryを実装済み。
+- 次の作業: clean validation worktreeへArtPreviewをprovisionし、`door-production-art-preview-v1`で6状態を実機撮影してユーザー判断へ渡す。承認後に正式candidate、Soul通過、J1、releaseを行う。
 - 仮設壁M0とport契約を先に共有。Doorの制作・既存石壁との接続は型枠release待ちにしない。joint受入は双方のruntime接続後。
 - 3 mesh方式は現在の瞬時状態切替に合わせる判断。スムーズな開閉を追加する場合はこの選択を再検討する。
 - セルフレビューで片開きから両開きへ変更した。21.6 wuのOpen中央幅は計算値であり、全Soul状態・両軸の実画面通過を承認済みとしない。
-- 本番assetの実体や新Door受入コマンドはまだ存在しない。既存Wall専用commandの名前だけをDoorへ読み替えて実行しない。
+- 本番asset実体は外部stagingのtechnical candidate generation 1にあり、通常起動では無効。Door専用sealer/projector/provisionerとgallery sidecarを使い、Wall専用manifestへ混ぜない。
 
 ### 参照必須ファイル
 
@@ -414,3 +414,4 @@ Help impact review Skillで建築／ドアの実説明を読み、色表示へ�
 | --- | --- | --- |
 | `2026-09-05` | `Codex` | 木・骨の意匠、固定枠＋3状態mesh、向きと開き範囲、runtime・実機・releaseの計画を作成 |
 | `2026-09-06` | `Codex` | セルフレビュー。両開き寸法、Soul alpha幅と通過gate、2軸PNG/pulse、法線tagとPostUpdate ordering、core 6、共通C0/J1・数値受入を具体化 |
+| `2026-09-06` | `Codex` | M0〜M2実装。3状態GLB・共有albedo・EW/NS preview、Door専用asset authority、全16mask resolver、2D/3D同期、PostUpdate境界、6状態ArtPreview galleryを追加 |

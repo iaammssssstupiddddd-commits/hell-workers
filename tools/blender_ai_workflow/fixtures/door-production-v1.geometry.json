@@ -1,0 +1,23 @@
+{
+  "asset_set_id": "door-production-v1",
+  "cell_half_extent_wu": 16.0,
+  "frame": {
+    "jamb_x_ranges_wu": [[-16.0, -13.6], [13.6, 16.0]],
+    "top_x_range_wu": [-13.6, 13.6],
+    "top_y_range_wu": [12.8, 16.0],
+    "z_range_wu": [-4.8, 4.8]
+  },
+  "open_leaf_envelope_wu": {
+    "left_x": [-13.2, -10.8],
+    "right_x": [10.8, 13.2],
+    "z": [-3.2, 9.8]
+  },
+  "schema_version": 1,
+  "states": {
+    "closed": {"triangles": 156},
+    "open": {"triangles": 156},
+    "locked": {"triangles": 168}
+  },
+  "tolerance_wu": 0.01,
+  "triangle_cap": 240
+}
