@@ -397,7 +397,7 @@ Help impact review Skillで建築／ドアの実説明を読み、色表示へ�
 - 計画作成: `2026-09-05`。Rust / runtime asset変更なし。
 - セルフレビュー: `2026-09-06`。§0の指摘を計画へ反映。実装・アセット制作・native起動は行っていない。
 - 文書gate: `python3 scripts/dev.py docs --check` / `git diff --check` はpass。
-- Help gate: `python3 scripts/check_help_impact.py` は既存HEADのproduction差分（diff base `1dc5aa5f`以降）に新しいHelp判断がないためfail。今回の計画差分は文書のみで、この既存差分の判断は変更していない。
+- Help gate: Door形状候補は通常起動から隔離されたArtPreview用で、入力・建築条件・Doorの意味状態・UI/Help文言・操作手順を変えないため`No impact`。commit `32e4f2f4`へ理由付きtrailerを記録し、`python3 scripts/dev.py verify`をpass。
 - 初回ArtPreview: production 6 / fallback 0をIntel Arc・Vulkan・X11・1280×720で確認。上枠の太さとOpen識別性のユーザー指摘により未承認。
 - 形状改訂: GLB/Khronos/texture gateと状態別Blender review renderを通過。commit `32e4f2f4`、candidate generation 2（manifest SHA256 `6a6af6064052fb1c1715b9e36fb9e8a10eff4e60b3569279490c4fad40519375`）をclean validation worktreeへ固定した。
 - 変更後ArtPreview: Intel Arc・Vulkan・X11・1280×720でproduction 6 / fallback 0を確認。ゲーム所有statusはACK後17秒を越えて`ready`を維持し、画像・sidecar・binaryのhashを `target/native-acceptance/door-art-preview-32e4f2f4-v2-r3/manifest.json` に記録した。性能値は採取・主張しない。
