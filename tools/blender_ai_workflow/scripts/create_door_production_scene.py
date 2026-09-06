@@ -172,6 +172,19 @@ def add_hardware(vertices, faces, regions, *, opened: bool) -> None:
                 angle_degrees=angle,
                 region="bone",
             )
+            for y in (-9.0, 5.0):
+                add_hinged_box(
+                    vertices,
+                    faces,
+                    regions,
+                    hinge_x=hinge_x,
+                    local_x=direction * 6.5,
+                    local_z=-2.8,
+                    center_y=y,
+                    dimensions_wu=(10.0, 2.4, 0.8),
+                    angle_degrees=angle,
+                    region="bone",
+                )
             add_hinged_box(
                 vertices,
                 faces,
@@ -190,6 +203,9 @@ def add_hardware(vertices, faces, regions, *, opened: bool) -> None:
                 add_box(vertices, faces, regions, (x, y, -6.0), (1.0, 4.0, 0.8), "iron")
         for x in (-7.0, 7.0):
             add_box(vertices, faces, regions, (x, -2.0, -6.0), (3.0, 20.0, 0.8), "bone")
+        for x in (-6.7, 6.7):
+            for y in (-9.0, 5.0):
+                add_box(vertices, faces, regions, (x, y, -6.0), (10.0, 2.4, 0.8), "bone")
         for x in (-1.5, 1.5):
             add_box(vertices, faces, regions, (x, 0.0, -6.4), (1.6, 1.6, 1.6), "iron")
 

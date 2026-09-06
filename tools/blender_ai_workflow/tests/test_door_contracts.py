@@ -43,6 +43,14 @@ class DoorGeometryRevisionTests(unittest.TestCase):
         self.assertEqual(
             contract["open_leaf_envelope_wu"]["right_z"], [-3.698988, 9.515919]
         )
+        self.assertEqual(
+            contract["states"],
+            {
+                "closed": {"triangles": 204},
+                "open": {"triangles": 204},
+                "locked": {"triangles": 216},
+            },
+        )
 
 
 class DoorTextureTests(unittest.TestCase):

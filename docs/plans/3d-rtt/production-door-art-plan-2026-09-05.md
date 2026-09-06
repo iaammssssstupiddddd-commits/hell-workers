@@ -27,7 +27,7 @@
 | 未承認候補の確認・baseline・joint受入の順序が曖昧 | 型枠計画§4.4の共通C0・封印前の統合freeze・preview・単独M3・J1へ統一。asset viewを専用worktreeへ固定 |
 | 「loadと同frame」を要求するとLastでのworld置換と矛盾 | world置換後の最初のpresentation frameから再構成し、pause中も進める |
 | 初回ArtPreviewで上枠が太く、Openが板厚だけに見える | 上枠を高さ1.6 wu・奥行7.2 wuへ縮小し、leafと付属金具を68°へ揃えて木製面と中央開口を同時に見せる |
-| generation 2でもNS配置のOpenが片側の張り出しに留まる | 両開きの同方向・同角度・左右対称を維持し、共通開度を78°へ深くしてNS投影の張り出しと中央開口を増やす |
+| generation 2でもNS配置のOpenが片側の張り出しに留まる | 両開きの同方向・同角度・左右対称を維持し、共通開度を78°へ深くした上で扉面の骨補強線を投影方向の手掛かりにする |
 | generation 3の左右を前後反対側へ振る案は両開きとして不自然 | generation 3は不採用。左右を同じ側へ同じ角度で開く物理契約を明記し、開度差も禁止する |
 
 寸法・予算は制作と検証に使う新契約であり、アート・実機合格を先取りするものではない。
@@ -88,6 +88,8 @@
 金属の写実的な光沢は抑える。まずlit `TopDownStructuralMaterial`＋baked linework、共有albedo 1枚、
 Opaque、emissiveなし・normalなしで制作する。textureサイズは512×512 RGB（alphaを持つ場合も全画素Opaque）とし、
 遠景の施錠表示を微細な絵柄だけに依存させない。
+左右leafは上下2本ずつの横向き骨補強を持ち、Closed / Open / Lockedで同じ部材を維持する。
+Openでは補強もleafと同じ蝶番から回し、NS投影で扉面の向きを読む形状手掛かりにする。
 
 ### 4.2 固定枠と単一visualの両立
 
@@ -121,7 +123,7 @@ Blenderの1 tile原本を32倍bakeする規約を使い、変換誤差の許容�
 
 開口は27.2×28.8 wu。Open時は中央の地面を見せつつ、左右leafの木製面がEW/NSの両投影に残る共通78°を採用する。中央の平面投影開口は約20.99 wuで、両leafは同じ奥側Z=9.515919まで張り出し、Xは固定枠の内側へ収める。
 閉状態の意図した0.4 wu隙間を「Wall接続の穴」と取り違えない。Wall―jamb seamは隙間0を検査する。
-基本構成は枠3材・leaf2材で60 triangles。補強、蝶番、Lockedの閂を加えて各240以下とする。
+基本構成は枠3材・leaf2材で60 triangles。補強、蝶番、Lockedの閂を加え、状態別`204 / 204 / 216` trianglesとして各240以下とする。
 部材数を増やす前にtextureで表現できる箇所を選び、全状態の固定枠は実頂点位置の一致を検証する。
 
 **この寸法だけではSoulの通過表示を合格にしない。** 現行billboard幅28.8 wuと
@@ -380,12 +382,12 @@ Help impact review Skillで建築／ドアの実説明を読み、色表示へ�
 
 ### 現在地
 
-- 進捗: 実装 `78%`。M0のgeometry/全16mask、M1のtechnical candidate、M2の3D/2D adapterとPostUpdate境界、M3a用6状態galleryを実装済み。不自然だったgeneration 3を棄却し、左右同方向・同角度の78°へ改訂中。
-- 次の作業: generation 4を再封印し、EW/NSの6状態を実機再撮影してユーザー判断へ渡す。承認後に正式candidate、Soul通過、J1、releaseを行う。
+- 進捗: 実装 `78%`。M0のgeometry/全16mask、M1のtechnical candidate、M2の3D/2D adapterとPostUpdate境界、M3a用6状態galleryを実装済み。左右同方向・同角度の78°を保ち、NSで扉面方向を示す骨補強を追加中。
+- 次の作業: generation 5を再封印し、EW/NSの6状態を実機再撮影してユーザー判断へ渡す。承認後に正式candidate、Soul通過、J1、releaseを行う。
 - 仮設壁M0とport契約を先に共有。Doorの制作・既存石壁との接続は型枠release待ちにしない。joint受入は双方のruntime接続後。
 - 3 mesh方式は現在の瞬時状態切替に合わせる判断。スムーズな開閉を追加する場合はこの選択を再検討する。
 - セルフレビューで片開きから両開きへ変更し、初回ArtPreview後に完全90°から68°、NS識別性の再指摘後に同方向・同角度の78°へ改訂した。Open leaf AABBはfixture値であり、全Soul状態・両軸の実画面通過を承認済みとしない。
-- 本番asset実体は外部stagingでgeneration 4として再封印予定であり、通常起動では無効。Door専用sealer/projector/provisionerとgallery sidecarを使い、Wall専用manifestへ混ぜない。
+- 本番asset実体は外部stagingでgeneration 5として再封印予定であり、通常起動では無効。Door専用sealer/projector/provisionerとgallery sidecarを使い、Wall専用manifestへ混ぜない。
 
 ### 参照必須ファイル
 
@@ -405,8 +407,9 @@ Help impact review Skillで建築／ドアの実説明を読み、色表示へ�
 - 変更後ArtPreview: Intel Arc・Vulkan・X11・1280×720でproduction 6 / fallback 0を確認。ゲーム所有statusはACK後17秒を越えて`ready`を維持し、画像・sidecar・binaryのhashを `target/native-acceptance/door-art-preview-32e4f2f4-v2-r3/manifest.json` に記録した。性能値は採取・主張しない。
 - generation 2レビュー: EW Openは改善したが、NS Openは同じ前後側へ重なって見えるとのユーザー指摘により未承認。
 - generation 3レビュー: NS投影を分離するため左右leafを前後反対側へ振り分けたが、通常の両開きではないとのユーザー指摘により不採用。左右の開度差も採用しない。
-- generation 4改訂: 左右を同じ側へ同じ78°で対称に開く。Blender両軸reviewで中央開口とNSの張り出しを確認し、再封印・実機確認へ進む。
-- ブロッカー: generation 4 ArtPreviewの目視承認。正式candidate / releaseは承認前に進めない。
+- generation 4レビュー: 左右を同じ側へ同じ78°で対称に戻したが、実機NS投影では片側の扉面が枠と同化したため未承認。角度だけの調整を打ち切る。
+- generation 5改訂: 左右同方向・同角度・対称を維持し、各leafの上下2本の骨補強を扉面方向の形状手掛かりとして追加する。
+- ブロッカー: generation 5 ArtPreviewの目視承認。正式candidate / releaseは承認前に進めない。
 
 ### Definition of Done
 
@@ -427,3 +430,4 @@ Help impact review Skillで建築／ドアの実説明を読み、色表示へ�
 | `2026-09-06` | `Codex` | generation 2を実機再撮影。EWで両扉面と中央開口、NSで閉扉輪郭から張り出す扉面を確認し、ユーザー承認待ちへ移行 |
 | `2026-09-06` | `Codex` | generation 2のNS識別性指摘を反映。左右leafの同方向重なりを、前後反対側へ振り分ける68°開扉へ変更 |
 | `2026-09-06` | `Codex` | generation 3の不自然な開き方を不採用。左右同方向・同角度・対称を明文化し、共通78°でNSの張り出しと開口を両立するgeneration 4へ改訂 |
+| `2026-09-06` | `Codex` | generation 4実機セルフレビューで角度だけではNS識別性が不足と判定。開き方を変えず、扉面と連動する横向き骨補強を加えるgeneration 5へ移行 |

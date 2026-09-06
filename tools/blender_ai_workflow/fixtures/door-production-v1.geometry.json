@@ -17,9 +17,9 @@
   },
   "schema_version": 1,
   "states": {
-    "closed": {"triangles": 156},
-    "open": {"triangles": 156},
-    "locked": {"triangles": 168}
+    "closed": {"triangles": 204},
+    "open": {"triangles": 204},
+    "locked": {"triangles": 216}
   },
   "tolerance_wu": 0.01,
   "triangle_cap": 240
