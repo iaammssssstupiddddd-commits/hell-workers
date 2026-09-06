@@ -155,6 +155,18 @@ DoorはWall manifestと分離したauthoring/runtime schema v1を使う。`seal_
 
 `provision_door_preview.py`は外部`staging/validation/`配下の新規asset viewへexact 6 fileだけをcopyし、異なる既存byteを上書きしない。profiling buildで`HW_DOOR_ART_PREVIEW=1`、generation、authoring manifest SHA-256の三点が一致した場合だけ有効になる。通常起動、正式candidate、releaseのauthorityにはならない。Door初回releaseのrollback先は旧generationではなくprocedural fallbackである。
 
+ゲーム所有windowのDoor ArtPreviewをユーザーが承認したら、`record_door_approval.py`がtechnical candidate、
+clean subject、production 6 / fallback 0、X11/Vulkan、capture・review crop・status/ACKの実bytes hashと
+承認UTC・承認文言を`double_leaf_approved` artifactへ結ぶ。別candidate、dirty subject、fallback混入、
+または`evidence_kind=art_preview`でない証拠は拒否する。このartifactだけでは通常authorityを変更しない。
+
+`seal_door_final.py`は承認済みbytesをclean runtime subjectへ結び直した新generationのauthoring finalを作る。
+`project_door_candidate.py`は`manifest_mode=final`、`art_review.status=double_leaf_approved`、exact 6 core、
+`normal_decision=not_used_by_design`だけをreceiptなしの`authority=isolated_candidate`へ投影する。
+`provision_door_candidate.py`はそのprojectionを外部`staging/validation/`配下へ固定し、
+`HW_DOOR_CANDIDATE=1`とgeneration / manifest hashが一致する隔離検証だけで有効にする。
+ArtPreviewの成功はこの正式candidate受入へ読み替えない。
+
 canonicalへ昇格した後のprimary同期は、同じmanifest allowlistに`--receipt`を加えたrelease modeで行う。
 manifestが`generations/<GEN>/manifest/`にある場合は`--receipt`を必須とし、receiptのmanifest hash / generationと
 active pointerの三点一致を検証してからcopyする。配置先は`project_wallset.py`の`runtime_path`をそのまま使い、

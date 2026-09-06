@@ -1,4 +1,4 @@
-//! Profiling-only actual-window gallery for the unapproved production Door.
+//! Profiling-only actual-window gallery for production Door asset acceptance.
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -20,7 +20,7 @@ use hw_visual::visual3d::{
 use serde_json::{Value, json};
 
 use crate::assets::door_asset_set::{
-    DoorAssetReadiness, DoorAssetReadinessState, ProductionDoorAssetPool,
+    DoorAssetAuthority, DoorAssetReadiness, DoorAssetReadinessState, ProductionDoorAssetPool,
 };
 use crate::plugins::startup::{Building3dHandles, Camera3dRtt};
 use crate::systems::jobs::spawn_building_3d_visual;
@@ -350,13 +350,18 @@ fn build_status(
         .window
         .single()
         .map_err(|_| "Door gallery requires one primary window".to_string())?;
+    let evidence_kind = match identity.authority {
+        DoorAssetAuthority::ArtPreview => "art_preview",
+        DoorAssetAuthority::IsolatedCandidate => "isolated_candidate",
+        DoorAssetAuthority::ReleaseApproved => "release_approved",
+    };
     Ok(json!({
         "schema_version": 1,
         "status": "ready",
         "phase": PHASE,
         "generation": GENERATION,
         "session_nonce": acceptance.nonce,
-        "evidence_kind": "art_preview",
+        "evidence_kind": evidence_kind,
         "window": {"width": window.physical_width(), "height": window.physical_height()},
         "candidate_identity": {
             "asset_set_generation": identity.asset_set_generation,
