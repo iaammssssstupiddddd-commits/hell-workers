@@ -382,8 +382,8 @@ Help impact review Skillで建築／ドアの実説明を読み、色表示へ�
 
 ### 現在地
 
-- 進捗: 実装 `83%`。M0のgeometry/全16mask、M1のtechnical candidate、M2の3D/2D adapterとPostUpdate境界、M3a用6状態galleryを実装済み。左右同方向・同角度の78°と骨補強を持つgeneration 5をユーザーが実機画像で承認し、candidate manifest・capture・crop・status/ACKのhashをapproval artifactへ封印済み。
-- 次の作業: 承認済みbytesをclean runtime subjectのauthoring finalへ封印し、preview無効のisolated candidateでDoor単独M3bを行う。その後にSoul通過、共通J1、releaseを行う。
+- 進捗: 実装 `86%`。M0のgeometry/全16mask、M1のtechnical candidate、M2の3D/2D adapterとPostUpdate境界、M3aを完了。承認済みgeneration 5 bytesをclean subject `49c43e0f`のgeneration 6 authoring finalへ封印し、preview無効のisolated candidateでEW/NS 6状態の実機visual legまで通過した。
+- 次の作業: isolated candidateで実producerを通すSoul通過・施錠・load lifecycle、quality/DPI、Capture/Memoryを採取してDoor単独M3bを閉じる。その後に共通J1、releaseを行う。
 - 仮設壁M0とport契約を先に共有。Doorの制作・既存石壁との接続は型枠release待ちにしない。joint受入は双方のruntime接続後。
 - 3 mesh方式は現在の瞬時状態切替に合わせる判断。スムーズな開閉を追加する場合はこの選択を再検討する。
 - セルフレビューで片開きから両開きへ変更し、初回ArtPreview後に完全90°から68°、NS識別性の再指摘後に同方向・同角度の78°へ改訂した。Open leaf AABBはfixture値であり、全Soul状態・両軸の実画面通過を承認済みとしない。
@@ -411,7 +411,8 @@ Help impact review Skillで建築／ドアの実説明を読み、色表示へ�
 - generation 5改訂: 左右同方向・同角度・対称を維持し、各leafの上下2本の骨補強を扉面方向の形状手掛かりとして追加する。
 - generation 5 ArtPreview: Intel Arc・Vulkan・X11・1280×720でproduction 6 / fallback 0を確認。ACKは`ready`から0.53秒で完了し、17秒後も`ready`を維持した。画像・sidecar・binaryは `target/native-acceptance/door-art-preview-aaed33a7-v5/manifest.json`（SHA256 `926c009171fc63da9d41a8e86c94acd1ba742a3aaa1be168a54fd91a6fc898a0`）へ記録し、性能値は採取・主張しない。
 - generation 5承認: ユーザー回答「OKです」をcandidate manifest SHA256 `63a428e0d7f2e8bda20bac871cc27fabcfd1edb13f00edd5d79765bc5b218638`、capture SHA256 `62ce9380e5e4e083f3fea125965d1da44785ee2b07ce70edf6d7a3e750db23e2`、review crop SHA256 `f2ab99b9d4d233103f0294b3124f5c9b73977b360e847cc96ecb29094698a6b2`へ結び、approval artifact SHA256 `7db1849ff53121623016cc65d269a603cd8f98a0ee1ea7f515edf01e8221755f`として封印した。
-- ブロッカー: ArtPreviewの目視承認は解消。正式candidateの単独M3b、Soul通過、Wall単独M3との共通J1が未完であり、releaseは行わない。
+- generation 6正式candidate: authoring final SHA256 `4f2b795f596fbd30c84a16588a873f889c158a5f87b9d6357d7233c13de38448`、runtime locator SHA256 `6c4752242d207a66c628ea0891731f5512cc813542fc176a7fdc2fe3b2d24883`。Intel Arc・Vulkan・X11・1280×720で`authority=IsolatedCandidate`、production 6 / fallback 0を確認し、visual leg manifest SHA256 `7bca23820055836169e29f9931bfe09df134a839ae35d67ad803514ee84cc4d9`へ封印した。最初の試行は共通asset不足でACK timeoutとなり失敗jobを保持し、共通assetを追加して候補6 fileとlocatorのhash不変を再確認後に再試行した。
+- ブロッカー: ArtPreview承認と正式candidate visual legは解消。実producerによるSoul通過・施錠・load、quality/DPI、Capture/Memory、Wall単独M3との共通J1が未完であり、releaseは行わない。
 
 ### Definition of Done
 
@@ -435,3 +436,4 @@ Help impact review Skillで建築／ドアの実説明を読み、色表示へ�
 | `2026-09-06` | `Codex` | generation 4実機セルフレビューで角度だけではNS識別性が不足と判定。開き方を変えず、扉面と連動する横向き骨補強を加えるgeneration 5へ移行 |
 | `2026-09-06` | `Codex` | generation 5を実機撮影。両開きの同方向・同角度・対称を維持し、EW/NS 6状態のproduction表示と骨補強を確認してユーザー承認待ちへ移行 |
 | `2026-09-06` | `Codex` | ユーザーがgeneration 5 ArtPreviewを「OKです」で承認。候補・実機job・capture/crop・status/ACK hashをapproval artifactへ封印し、正式candidate用のfail-closed projectionを追加 |
+| `2026-09-06` | `Codex` | 承認済みbytesをgeneration 6 finalへ封印。isolated candidateの実機6状態でproduction 6 / fallback 0を確認し、visual legのみ合格。Soul/lifecycle/性能を未採取のためM3b全体は継続 |
