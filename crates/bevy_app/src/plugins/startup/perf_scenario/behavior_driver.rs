@@ -1,9 +1,12 @@
 use std::collections::BTreeSet;
 use std::fs::OpenOptions;
 use std::io::Write;
+use std::path::PathBuf;
 
 use bevy::app::AppExit;
 use bevy::ecs::system::SystemParam;
+use bevy::mesh::Mesh3d;
+use bevy::pbr::MeshMaterial3d;
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 use hw_core::WorldEpoch;
@@ -13,6 +16,10 @@ use hw_ui::UiIntent;
 use hw_world::{Room, Yard};
 use serde_json::json;
 
+use crate::assets::door_asset_set::{
+    DoorAssetAuthority, DoorAssetReadiness, DoorAssetReadinessState, ProductionDoorAssetPool,
+    ProductionDoorMaterialPool,
+};
 use crate::systems::lighting::{
     IndoorLightConsumerMetrics, IndoorLightingLifecycleProbe, LightingFixtureMount,
     RoomIlluminationState, read_indoor_light_snapshot,
@@ -23,6 +30,8 @@ use crate::systems::save::{
     manual_save_request, normal_load_request, recovery_load_request,
 };
 use crate::systems::visual::indoor_light_texture::IndoorLightTexture;
+use hw_visual::TopDownStructuralMaterial;
+use hw_visual::visual3d::Door3dPresentationMode;
 
 use super::indoor_light_fixture::IndoorLightFixturePhase;
 use super::output::{
@@ -32,6 +41,10 @@ use super::*;
 
 const BEHAVIOR_TIMEOUT_UPDATES: u64 = 512;
 const SMALL_DOOR_GRID: (i32, i32) = (19, 27);
+const DOOR_PRESENTATION_ENV: &str = "HW_DOOR_BEHAVIOR_PRESENTATION";
+const DOOR_STATUS_ROOT_ENV: &str = "HW_DOOR_BEHAVIOR_STATUS_ROOT";
+const DOOR_NONCE_ENV: &str = "HW_DOOR_BEHAVIOR_NONCE";
+const DOOR_PRESENTATION_ISOLATED_CANDIDATE: &str = "isolated-candidate";
 
 #[derive(Resource, Default)]
 pub(crate) struct PerfBehaviorCapture {
@@ -58,6 +71,8 @@ pub(crate) struct PerfBehaviorCapture {
     initial_reset_count: u64,
     initial_wake_count: u64,
     old_epoch_read_attempted: bool,
+    door_production_validation_count: u32,
+    door_production_mesh_roles: BTreeSet<&'static str>,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -235,6 +250,7 @@ pub(crate) struct BehaviorDriveParams<'w, 's> {
     primary_window: Query<'w, 's, &'static Window, With<PrimaryWindow>>,
     rtt_runtime: Res<'w, RttRuntime>,
     quality: Res<'w, QualitySettings>,
+    door_readiness: Res<'w, DoorAssetReadiness>,
     exit: MessageWriter<'w, AppExit>,
 }
 
@@ -306,6 +322,28 @@ pub(crate) fn drive_perf_behavior_system(mut params: BehaviorDriveParams) {
     if params.capture.phase == BehaviorPhase::WaitingForFixture {
         if !params.applied.complete() || params.fixture.phase != IndoorLightFixturePhase::Ready {
             return;
+        }
+        match isolated_candidate_door_evidence_requested() {
+            Ok(true) => match &params.door_readiness.state {
+                DoorAssetReadinessState::Loading => return,
+                DoorAssetReadinessState::Eligible(identity)
+                    if identity.authority == DoorAssetAuthority::IsolatedCandidate => {}
+                other => {
+                    fail_behavior(
+                        &mut params.capture,
+                        &format!(
+                            "Door isolated-candidate behavior requires eligible candidate assets; got {other:?}"
+                        ),
+                        &mut params.exit,
+                    );
+                    return;
+                }
+            },
+            Ok(false) => {}
+            Err(reason) => {
+                fail_behavior(&mut params.capture, &reason, &mut params.exit);
+                return;
+            }
         }
         if params
             .config
@@ -642,8 +680,14 @@ pub(crate) struct BehaviorObserveParams<'w, 's> {
         (
             &'static Building3dVisual,
             Option<&'static DoorPresentationState>,
+            Option<&'static Door3dPresentationMode>,
+            Option<&'static Mesh3d>,
+            Option<&'static MeshMaterial3d<TopDownStructuralMaterial>>,
         ),
     >,
+    door_readiness: Res<'w, DoorAssetReadiness>,
+    production_door_assets: Res<'w, ProductionDoorAssetPool>,
+    production_door_materials: Res<'w, ProductionDoorMaterialPool>,
     door_components: Query<'w, 's, &'static Door>,
     door_handles: Res<'w, DoorVisualHandles>,
     buildings: Query<'w, 's, (Entity, &'static Building, &'static Transform)>,
@@ -720,7 +764,7 @@ pub(crate) fn observe_perf_behavior_system(mut params: BehaviorObserveParams) {
             let owner_3d_visuals = params
                 .building_3d_visuals
                 .iter()
-                .filter(|(visual, _)| visual.owner == door_entity)
+                .filter(|(visual, ..)| visual.owner == door_entity)
                 .collect::<Vec<_>>();
             if building.kind != BuildingType::Door
                 || WorldMap::world_to_grid(transform.translation.truncate()) != SMALL_DOOR_GRID
@@ -790,6 +834,25 @@ pub(crate) fn observe_perf_behavior_system(mut params: BehaviorObserveParams) {
                     &mut params.exit,
                 );
                 return;
+            }
+            if isolated_candidate_door_evidence_requested() == Ok(true) {
+                match validate_isolated_candidate_door_presentation(
+                    &params,
+                    door_entity,
+                    door.state,
+                ) {
+                    Ok(mesh_role) => {
+                        params.capture.door_production_validation_count = params
+                            .capture
+                            .door_production_validation_count
+                            .saturating_add(1);
+                        params.capture.door_production_mesh_roles.insert(mesh_role);
+                    }
+                    Err(reason) => {
+                        fail_behavior(&mut params.capture, &reason, &mut params.exit);
+                        return;
+                    }
+                }
             }
             let intents = [
                 "observe-initial",
@@ -1098,6 +1161,51 @@ pub(crate) fn observe_perf_behavior_system(mut params: BehaviorObserveParams) {
                     fail_behavior(&mut params.capture, &reason, &mut params.exit);
                     return;
                 }
+                if isolated_candidate_door_evidence_requested() == Ok(true) {
+                    let Some(door_entity) = params
+                        .world_map
+                        .door_entity(SMALL_DOOR_GRID.0, SMALL_DOOR_GRID.1)
+                    else {
+                        fail_behavior(
+                            &mut params.capture,
+                            "loaded fixture has no canonical Door for candidate presentation validation",
+                            &mut params.exit,
+                        );
+                        return;
+                    };
+                    let Ok(door) = params.door_components.get(door_entity) else {
+                        fail_behavior(
+                            &mut params.capture,
+                            "loaded canonical Door has no semantic component",
+                            &mut params.exit,
+                        );
+                        return;
+                    };
+                    match validate_isolated_candidate_door_presentation(
+                        &params,
+                        door_entity,
+                        door.state,
+                    ) {
+                        Ok(mesh_role) => {
+                            params.capture.door_production_validation_count = params
+                                .capture
+                                .door_production_validation_count
+                                .saturating_add(1);
+                            params.capture.door_production_mesh_roles.insert(mesh_role);
+                        }
+                        Err(reason) if params.capture.load_wait_updates < 128 => {
+                            params.capture.load_wait_updates += 1;
+                            debug!(
+                                "PERF_BEHAVIOR: waiting for Door candidate presentation: {reason}"
+                            );
+                            return;
+                        }
+                        Err(reason) => {
+                            fail_behavior(&mut params.capture, &reason, &mut params.exit);
+                            return;
+                        }
+                    }
+                }
             }
             append_row(
                 &mut params.capture,
@@ -1227,7 +1335,8 @@ pub(crate) fn observe_perf_behavior_system(mut params: BehaviorObserveParams) {
                 .then_some(params.capture.initial_room_tiles.as_slice()),
             None,
         )
-    });
+    })
+    .and_then(|()| write_door_behavior_evidence(&params));
     params.capture.phase = BehaviorPhase::Finished;
     match result {
         Ok(()) => {
@@ -1242,6 +1351,234 @@ pub(crate) fn observe_perf_behavior_system(mut params: BehaviorObserveParams) {
             params.exit.write(AppExit::error());
         }
     }
+}
+
+fn isolated_candidate_door_evidence_requested() -> Result<bool, String> {
+    let presentation = std::env::var(DOOR_PRESENTATION_ENV).ok();
+    let status_root = std::env::var_os(DOOR_STATUS_ROOT_ENV);
+    let nonce = std::env::var(DOOR_NONCE_ENV).ok();
+    match presentation.as_deref() {
+        None if status_root.is_none() && nonce.is_none() => Ok(false),
+        None => Err(format!(
+            "{DOOR_STATUS_ROOT_ENV} and {DOOR_NONCE_ENV} require {DOOR_PRESENTATION_ENV}"
+        )),
+        Some(DOOR_PRESENTATION_ISOLATED_CANDIDATE) => {
+            let root = status_root
+                .map(PathBuf::from)
+                .filter(|path| path.is_absolute() && path.is_dir())
+                .ok_or_else(|| {
+                    format!("{DOOR_STATUS_ROOT_ENV} must be an existing absolute directory")
+                })?;
+            if root.is_symlink() {
+                return Err(format!("{DOOR_STATUS_ROOT_ENV} must not be a symlink"));
+            }
+            let nonce = nonce.filter(|value| {
+                value.len() == 32 && value.bytes().all(|byte| byte.is_ascii_hexdigit())
+            });
+            if nonce.is_none() {
+                return Err(format!(
+                    "{DOOR_NONCE_ENV} must contain exactly 32 hexadecimal characters"
+                ));
+            }
+            Ok(true)
+        }
+        Some(other) => Err(format!(
+            "{DOOR_PRESENTATION_ENV} must be {DOOR_PRESENTATION_ISOLATED_CANDIDATE}; got '{other}'"
+        )),
+    }
+}
+
+fn validate_isolated_candidate_door_presentation(
+    params: &BehaviorObserveParams,
+    door_entity: Entity,
+    semantic_state: DoorState,
+) -> Result<&'static str, String> {
+    let identity = match &params.door_readiness.state {
+        DoorAssetReadinessState::Eligible(identity)
+            if identity.authority == DoorAssetAuthority::IsolatedCandidate =>
+        {
+            identity
+        }
+        other => {
+            return Err(format!(
+                "Door candidate presentation is not eligible: {other:?}"
+            ));
+        }
+    };
+    let resolved = params
+        .production_door_assets
+        .resolved
+        .as_ref()
+        .filter(|resolved| &resolved.identity == identity)
+        .ok_or_else(|| "Door production mesh pool identity differs".to_string())?;
+    let material = params
+        .production_door_materials
+        .material
+        .as_ref()
+        .filter(|_| params.production_door_materials.identity.as_ref() == Some(identity))
+        .ok_or_else(|| "Door production material pool identity differs".to_string())?;
+    let matches = params
+        .building_3d_visuals
+        .iter()
+        .filter(|(visual, ..)| visual.owner == door_entity)
+        .collect::<Vec<_>>();
+    if matches.len() != 1 {
+        return Err(format!(
+            "Door candidate owner has {} 3D visual roots, expected 1",
+            matches.len()
+        ));
+    }
+    let (_, presentation_state, mode, mesh, active_material) = matches[0];
+    let presentation_state = presentation_state
+        .ok_or_else(|| "Door candidate visual has no presentation state".to_string())?;
+    let mode = mode.ok_or_else(|| "Door candidate visual has no presentation mode".to_string())?;
+    let mesh = mesh.ok_or_else(|| "Door candidate visual has no mesh".to_string())?;
+    let active_material = active_material
+        .ok_or_else(|| "Door candidate visual has no structural material".to_string())?;
+    let (expected_presentation, mesh_index, mesh_role) = match semantic_state {
+        DoorState::Closed => (DoorPresentationState::Closed, 0, "mesh:closed"),
+        DoorState::Open => (DoorPresentationState::Open, 1, "mesh:open"),
+        DoorState::Locked => (DoorPresentationState::Locked, 2, "mesh:locked"),
+    };
+    if *presentation_state != expected_presentation {
+        return Err(format!(
+            "Door candidate semantic/presentation state differs: {semantic_state:?}/{presentation_state:?}"
+        ));
+    }
+    if *mode != Door3dPresentationMode::Production {
+        return Err(format!(
+            "Door candidate presentation mode is {mode:?}, expected Production"
+        ));
+    }
+    if mesh.0 != resolved.meshes[mesh_index] {
+        return Err(format!("Door candidate {mesh_role} handle differs"));
+    }
+    if active_material.0 != *material {
+        return Err("Door candidate production material handle differs".to_string());
+    }
+    Ok(mesh_role)
+}
+
+fn write_door_behavior_evidence(params: &BehaviorObserveParams) -> std::io::Result<()> {
+    if !isolated_candidate_door_evidence_requested().map_err(std::io::Error::other)? {
+        return Ok(());
+    }
+    let status_root = PathBuf::from(
+        std::env::var_os(DOOR_STATUS_ROOT_ENV)
+            .ok_or_else(|| std::io::Error::other("Door behavior status root is absent"))?,
+    );
+    let nonce = std::env::var(DOOR_NONCE_ENV)
+        .map_err(|_| std::io::Error::other("Door behavior nonce is absent"))?;
+    let case = params
+        .config
+        .behavior_case()
+        .ok_or_else(|| std::io::Error::other("Door behavior case is absent"))?;
+    let status_path = status_root.join(format!("{}.json", case.as_str()));
+    let door_entity = params
+        .world_map
+        .door_entity(SMALL_DOOR_GRID.0, SMALL_DOOR_GRID.1)
+        .ok_or_else(|| std::io::Error::other("canonical Door is absent at behavior flush"))?;
+    let door = params.door_components.get(door_entity).map_err(|_| {
+        std::io::Error::other("canonical Door component is absent at behavior flush")
+    })?;
+    let final_mesh_role =
+        validate_isolated_candidate_door_presentation(params, door_entity, door.state)
+            .map_err(std::io::Error::other)?;
+    let identity = match &params.door_readiness.state {
+        DoorAssetReadinessState::Eligible(identity) => identity,
+        _ => {
+            return Err(std::io::Error::other(
+                "Door candidate identity vanished at flush",
+            ));
+        }
+    };
+    let production_visual_count = params
+        .building_3d_visuals
+        .iter()
+        .filter(|(_, _, mode, _, _)| {
+            mode.is_some_and(|mode| *mode == Door3dPresentationMode::Production)
+        })
+        .count();
+    let fallback_visual_count = params
+        .building_3d_visuals
+        .iter()
+        .filter(|(_, _, mode, _, _)| {
+            mode.is_some_and(|mode| *mode == Door3dPresentationMode::Fallback)
+        })
+        .count();
+    if (production_visual_count, fallback_visual_count) != (1, 0) {
+        return Err(std::io::Error::other(format!(
+            "Door behavior visual counts differ: production/fallback={production_visual_count}/{fallback_visual_count}"
+        )));
+    }
+    let expected_validation_count = if case == PerfBehaviorCase::DoorStateV1 {
+        5
+    } else {
+        1
+    };
+    if params.capture.door_production_validation_count != expected_validation_count {
+        return Err(std::io::Error::other(format!(
+            "Door production validation count differs: expected {expected_validation_count}, got {}",
+            params.capture.door_production_validation_count
+        )));
+    }
+    if case == PerfBehaviorCase::DoorStateV1
+        && params.capture.door_production_mesh_roles
+            != BTreeSet::from(["mesh:closed", "mesh:open", "mesh:locked"])
+    {
+        return Err(std::io::Error::other(
+            "Door state behavior did not validate all three production meshes",
+        ));
+    }
+    let semantic_sequence = params
+        .capture
+        .rows
+        .iter()
+        .filter_map(|row| row.semantic_state)
+        .collect::<Vec<_>>();
+    let body = json!({
+        "schema": "door-art-v1-behavior",
+        "schema_version": 1,
+        "status": "valid",
+        "session_nonce": nonce,
+        "case_id": case.as_str(),
+        "candidate_identity": {
+            "asset_set_generation": identity.asset_set_generation,
+            "authority": "isolated_candidate",
+            "manifest_sha256": identity.manifest_sha256.clone(),
+        },
+        "production_validation_count": params.capture.door_production_validation_count,
+        "validated_mesh_roles": params
+            .capture
+            .door_production_mesh_roles
+            .iter()
+            .copied()
+            .collect::<Vec<_>>(),
+        "semantic_sequence": semantic_sequence,
+        "final": {
+            "grid": [SMALL_DOOR_GRID.0, SMALL_DOOR_GRID.1],
+            "semantic_state": door_state_name(door.state),
+            "mesh_role": final_mesh_role,
+            "presentation_mode": "production",
+            "production_visual_count": production_visual_count,
+            "fallback_visual_count": fallback_visual_count,
+            "resident_production_meshes": 3,
+            "resident_production_materials": 1,
+            "world_epoch": params.world_epoch.get(),
+        },
+    });
+    if !status_root.is_dir() || status_root.is_symlink() {
+        return Err(std::io::Error::other(
+            "Door behavior status root is unavailable at flush",
+        ));
+    }
+    let mut file = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&status_path)?;
+    serde_json::to_writer_pretty(&mut file, &body)?;
+    file.write_all(b"\n")?;
+    file.sync_all()
 }
 
 fn finalize_behavior_runtime(

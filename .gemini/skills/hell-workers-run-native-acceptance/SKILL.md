@@ -214,6 +214,31 @@ reports `draw_groups=not-collected`; it does not satisfy the Wall M0 RenderDoc
 draw-group gate until that separate evidence is added. Revalidate a completed
 Capture bundle with `verify --job-root <job-root>`.
 
+## Run the Door isolated-candidate behavior leg
+
+After provisioning an approved Door candidate into a clean dedicated validation
+worktree, run the production Door producer and load-rebind profile:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 \
+  .codex/skills/hell-workers-run-native-acceptance/scripts/door_behavior_acceptance.py \
+  plan --repo "$VALIDATION_WORKTREE" --adapter Intel
+```
+
+Execute only the returned direct `kitty` command and poll `status --job-root
+<job-root>` every 15–30 seconds. The profile builds one fresh Capture-flavor
+binary and runs the exact P08 behavior inventory sequentially: Soul-triggered
+open, pause-time UI lock, normal load, preflight rejection, rollback, recovery,
+recovery failure, and duplicate-reset recovery. Each game process must bind the
+same `IsolatedCandidate` generation and manifest hash, use the matching
+production state mesh and shared material, and finish with one production Door
+visual and zero fallback Door visuals. The game-owned evidence is written to a
+nonce-bound per-case status file outside the frozen P08 data schema. Revalidate
+the finished bundle with `verify --job-root <job-root>`.
+
+This profile closes only the Door behavior/load leg. It does not replace the
+Door quality/DPI gallery, density Capture comparison, or Memory evidence.
+
 ## Run the wall-density RenderDoc matrix
 
 Use the separate wall RenderDoc profile for the M0 draw-group gate. It captures
