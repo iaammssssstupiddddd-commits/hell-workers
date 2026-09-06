@@ -18,7 +18,7 @@ import validate_door_textures as texture_validator
 
 
 class DoorGeometryRevisionTests(unittest.TestCase):
-    def test_thin_top_frame_and_readable_open_angle_are_frozen(self) -> None:
+    def test_thin_top_frame_and_symmetric_open_pose_are_frozen(self) -> None:
         contract = json.loads(
             (WORKFLOW_ROOT / "fixtures/door-production-v1.geometry.json").read_text(
                 encoding="utf-8"
@@ -29,19 +29,19 @@ class DoorGeometryRevisionTests(unittest.TestCase):
         self.assertEqual(contract["frame"]["top_z_range_wu"], [-3.6, 3.6])
         self.assertEqual(
             contract["open_leaf_envelope_wu"]["swing_angles_degrees"],
-            {"left": -68.0, "right": -68.0},
+            {"left": -78.0, "right": 78.0},
         )
         self.assertEqual(
-            contract["open_leaf_envelope_wu"]["left_x"], [-13.2, -6.104873]
+            contract["open_leaf_envelope_wu"]["left_x"], [-13.2, -8.149594]
         )
         self.assertEqual(
-            contract["open_leaf_envelope_wu"]["right_x"], [8.330114, 15.425241]
+            contract["open_leaf_envelope_wu"]["right_x"], [8.149594, 13.2]
         )
         self.assertEqual(
-            contract["open_leaf_envelope_wu"]["left_z"], [-4.099056, 8.853391]
+            contract["open_leaf_envelope_wu"]["left_z"], [-3.698988, 9.515919]
         )
         self.assertEqual(
-            contract["open_leaf_envelope_wu"]["right_z"], [-16.152447, -3.2]
+            contract["open_leaf_envelope_wu"]["right_z"], [-3.698988, 9.515919]
         )
 
 

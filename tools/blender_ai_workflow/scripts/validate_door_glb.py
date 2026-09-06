@@ -83,10 +83,25 @@ def validate(path: Path, state: str, contract_path: Path) -> dict[str, object]:
     require(abs(bounds["max_x"] - 16.0) <= tolerance, "Door maximum X differs")
     require(abs(bounds["min_y"] + 16.0) <= tolerance, "Door minimum Y differs")
     require(abs(bounds["max_y"] - 16.0) <= tolerance, "Door maximum Y differs")
+    frame = contract["frame"]
     if state == "open":
         open_leaf = contract["open_leaf_envelope_wu"]
-        minimum_depth = min(open_leaf["left_z"][0], open_leaf["right_z"][0]) - tolerance
-        maximum_depth = max(4.8, open_leaf["left_z"][1], open_leaf["right_z"][1]) + tolerance
+        minimum_depth = (
+            min(
+                frame["jamb_z_range_wu"][0],
+                open_leaf["left_z"][0],
+                open_leaf["right_z"][0],
+            )
+            - tolerance
+        )
+        maximum_depth = (
+            max(
+                frame["jamb_z_range_wu"][1],
+                open_leaf["left_z"][1],
+                open_leaf["right_z"][1],
+            )
+            + tolerance
+        )
     else:
         minimum_depth = -7.5
         maximum_depth = 10.0
@@ -94,7 +109,6 @@ def validate(path: Path, state: str, contract_path: Path) -> dict[str, object]:
         bounds["min_z"] >= minimum_depth and bounds["max_z"] <= maximum_depth,
         "Door depth envelope differs",
     )
-    frame = contract["frame"]
     # glTF exports each authored box as 24 positions because the six UV faces
     # intentionally do not share vertices.
     frame_parts = (positions[0:24], positions[24:48], positions[48:72])
