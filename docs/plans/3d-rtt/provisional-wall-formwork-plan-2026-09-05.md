@@ -416,6 +416,33 @@ manifest / Capture result / Memory resultのSHA-256は順に
 最初のgeneration 9試行は非対象Door locator欠落を実行開始後に検出してinvalidとなった。この経路をplan / run / matrix /
 verifyのbuild前preflightへ移し、generation 10で最初から採り直した。失敗jobもtrack完了まで保存する。
 
+### 7.5 W-G01混在galleryの証跡（generation 10）
+
+subject `99362a37bc5d5757d4b6a492572e53aa135e6320`へgeneration 10のisolated candidateを固定し、
+Intel Arc / Vulkan / X11、1280×720で標準／最大zoom-outの正式matrixを採取した。両jobともHigh / Medium / Low ×
+DPI 1.0 / 1.5 / 2.0の9 / 9 caseがvalidで、記録worktreeの同一helperによる独立`verify`もpassした。
+candidate manifest SHA-256は`734a2a06940287ea63047f4aaa4e57a8c32aa61cd64899d74f20959e0a8e29d1`、
+asset-view / source / harness fingerprintは順に
+`becb0697cfe6d2ead21e841cd510830e65863ba66de872607b85cdb5b893e378`、
+`f611dc19e1bbc4aff4a080b012e326934505dd1a7f2b571a32de9a6bdf7bfe1f`、
+`a8a1c65f5ff99b831817776497aea663e25cb9edb91c330981e55f202d6943ea`で、両jobのbinary SHA-256は
+`71752c63d0a79d487682913ca292174f76d507dbd07f8f6d0eab9e5a23a32911`で一致する。
+
+| profile / job | 結果 | manifest SHA-256 | 9 PNG相対path/hash一覧のSHA-256 |
+| --- | --- | --- | --- |
+| `wall-formwork-gallery-v2` / `wall-art-20260907T234134Z-5d7129e9` | 9/9 valid、独立verify pass | `495e93a1c84828125a084a7048e4e8ced661a271a9cd9f399892bcccd1b9da79` | `03b99965b478121f05a7222e4151512fc82b084d8b7e9b9ad72fa45dcdce2d31` |
+| `wall-formwork-gallery-v2-farthest` / `wall-art-20260907T234551Z-b744f69c` | 9/9 valid、独立verify pass | `56dbd1ef196fe230add50e48f2ce369d3573bd86144676f52ee7c97b48254d8c` | `df114499630c6607bf363e491c81a19f9686269bbd30995807c29af418d3934b` |
+
+各caseは凍結mixed 384 ownerに画像専用の直接接続pair 2本を加え、仮設192／本設192、各phase全16 mask、
+完成6＋型枠6 mesh、2 material、production 386 / fallback 0を固定した。`ActorBillboard3d` 2体は別々のWallと
+同じcamera ray上で仮設Wallの前／本設Wallの後ろとなり、投影中心差0 pxをstatusで確認した。代表画像の目視でも
+標準倍率で木枠の開放部と完成石壁を識別でき、最大zoom-outのLow / DPI 1.0を含め骨組みの列が残ることを確認した。
+
+先行invalid試行は、非対象Door locator不足、Soul billboardとconnectorの`Visibility` Query競合、現行billboardに対する
+旧3-proxy期待、offline verifyのmixed→provisional誤選択をそれぞれ一度で切り分けた。各経路にpreflight、`SystemState`
+回帰、明示validator契約、phase選択self-testを追加し、修正後subjectで18 caseを最初から採り直した。invalid artifactは
+track完了まで保持し、正式2 jobへ読み替えない。
+
 native実行はSkillのdirect `kitty` launcher、repository lock、RAM/disk preflightと逐次buildを使う。
 本計画の新profileには`plan / status / verify / self-test`を実装してから利用し、未実装のcommandを
 既存helper名へ読み替えない。statusは15〜30秒ごとに確認し、source/asset drift・timeout・画像欠落はfailとする。
@@ -442,8 +469,8 @@ Update required / 理由付きNo impactをその時点で判断する。
 - W-L02中核: site Coatは同じowner / visual Entityのまま仮設material→本設materialへ遷移し、legacy Coatは`Entity::PLACEHOLDER`分岐のtask producerが既存Wall rootを保持したまま`Building.is_provisional`をfalseへ変え、次のDone frameでtaskを完了することを固定した。Instant Buildは最初から本設materialを持つexactly-one visualを生成する。Framing前cancel、仮設後cancel、完成Wall撤去ではconnectorとowner-linked visualが残らないこともproduction回帰テストで確認した。native storyboardは未完。
 - W-L03中核: 仮設1 / 本設1の混在saveをnormal loadで10回反復し、各回のfallback→production復帰、phase保持、owner / visual数、完成6＋型枠6 mesh / 2 material poolの上限を固定した。同じ候補をrollback / recovery-onlyでも検証した。native sidecarの採取は未完。
 - W-A01 / W-A02中核: readinessの`Eligible → LoadFailed → Eligible`で仮設／本設の全Wallが同一Updateにproduction→fallback→productionへ切り替わることと、新→旧→新generationの往復でactive mesh/material handleが世代混在しないことをproduction回帰テストで固定した。欠落assetと世代切替のnative storyboardは未完。
-- W-G01 harness: 凍結済みmixed 4Nの仮設192／本設192で各phase全16 maskを固定し、画像専用の仮設／本設E-W直接接続pair、完成6＋型枠6 mesh、段階別2 material、Soul 2体のfront / behind camera depthを同一gallery statusへ追加した。旧v1証跡を再ラベルせずprofileをv2化した。実機18 PNGの採取は未完。
-- 次の作業: 同じcandidate bytesでW-G01 v2の標準／最大zoom-out matrixを実機採取し、その後W-L01〜L03 / W-A01〜A02の実機storyboardを実装・採取する。Door側の単独gate後にJ1、M4へ進み、production回帰テストだけを実機合格へ読み替えない。
+- W-G01: 凍結済みmixed 4Nの仮設192／本設192、画像専用E-W直接接続pair、完成6＋型枠6 mesh、段階別2 material、Soul 2体のfront / behind camera depthを同一galleryへ固定した。subject `99362a37`の標準／最大zoom-out正式matrixは18/18 validで、両独立verifyと代表画像目視も完了した。旧v1証跡は再ラベルしていない。
+- 次の作業: W-L01〜L03 / W-A01〜A02の実機storyboardを実装・採取する。Door側の単独gate後にJ1、M4へ進み、production回帰テストだけを実機合格へ読み替えない。
 - ドアはM0の共通port確定後に制作を並行可能。Rust・tooling編集はmain agentが順に行い、joint受入は両方のruntime接続後。
 - 240 triangles・core 15 file・§7の予算は採用した新設計値。現在のreleaseの実測・アート承認値として扱わない。
 

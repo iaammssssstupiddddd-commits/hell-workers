@@ -330,6 +330,14 @@ subject `3c0f7c67`・generation 8の正式実績は、標準
 asset-view fingerprint `ad63f1c334c91335851d06aa1b64be76b7ce08da903e53ab425c4f7938e4cc98`を共有する。
 画像jobの10秒warm-up / 10秒measureは画面証跡のための実行であり、下記の30/60秒Capture・Memory判定には使わない。
 
+現行W-G01 mixed profileはsubject `99362a37`・generation 10で標準job
+`wall-art-20260907T234134Z-5d7129e9`と最大zoom-out job `wall-art-20260907T234551Z-b744f69c`を実行し、
+各9/9 valid・独立verify passとなった。両jobはcandidate manifest SHA-256
+`734a2a06940287ea63047f4aaa4e57a8c32aa61cd64899d74f20959e0a8e29d1`、asset-view fingerprint
+`becb0697cfe6d2ead21e841cd510830e65863ba66de872607b85cdb5b893e378`、harness fingerprint
+`a8a1c65f5ff99b831817776497aea663e25cb9edb91c330981e55f202d6943ea`を共有する。これは旧generation 8の
+provisional-only履歴を置換せず、混在pair、phase別全mask、Soul前後depthを追加で閉じる証跡である。
+
 壁M5の同一binary内performance比較は、承認済みcandidateを配置したclean validation worktreeから
 `wall_production_performance_acceptance.py plan --repo "$VALIDATION_WORKTREE" --adapter Intel`で計画する。
 返されたdirect launcherは`fallback-control`と`production`を順番に実行し、completed / provisionalの
