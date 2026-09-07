@@ -319,7 +319,9 @@ W-G01の正式画像は`wall-formwork-gallery-v2`（標準zoom）と
 仮設／本設各192と各phase全16 mask、完成6＋型枠6 mesh、段階別2 material、production 386 / fallback 0、
 E/W直接接続pair、Soul 2体のfront / behind depthのすべてが成立しなければ無効である。追加pair 2本は画像契約だけに属し、
 凍結済み`wall-formwork-density-v1` sidecarの384 ownerへ算入しない。completed phaseのWall matrixや旧provisional-only
-`wall-formwork-v1`は回帰／履歴証跡であり、W-G01の正式画像には代用しない。
+`wall-formwork-v1`は回帰／履歴証跡であり、W-G01の正式画像には代用しない。明示的なformwork acceptance時だけ共通performance
+validatorは置換済みlegacy Soul / mask / shadow proxyを0として検証し、実際の`ActorBillboard3d` 2体のowner、可視性、同一camera ray、
+front / behind関係はW-G01専用statusで別途必須にする。historical `current` stageのlegacy proxy期待値は変更しない。
 
 subject `3c0f7c67`・generation 8の正式実績は、標準
 `wall-art-20260907T031245Z-d7fea076`と最大zoom-out

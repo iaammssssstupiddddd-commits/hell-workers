@@ -1531,6 +1531,38 @@ def self_test() -> int:
             for reason in current_gpu_validation.reasons
         )
 
+        for filename in ("scene_roots.csv", "render_inventory.csv"):
+            path = p01_gpu_root / "data" / filename
+            with path.open(newline="", encoding="utf-8") as handle:
+                reader = csv.DictReader(handle)
+                fieldnames = reader.fieldnames
+                rows = list(reader)
+            assert fieldnames is not None and len(rows) == 1
+            for column in (
+                "soul_proxy_3d",
+                "soul_mask_proxy_3d",
+                "soul_shadow_proxy_3d",
+                "familiar_proxy_3d",
+            ):
+                rows[0][column] = "0"
+            with path.open("w", newline="", encoding="utf-8") as handle:
+                writer = csv.DictWriter(handle, fieldnames=fieldnames)
+                writer.writeheader()
+                writer.writerows(rows)
+        actor_billboard_validation = validate_run(
+            p01_gpu_root,
+            returncode=0,
+            expected_case=p01_gpu_case,
+            expected_adapter="Test",
+            expected_backend="vulkan",
+            allow_log_patterns=[],
+            expected_contract="rtt-light-v1",
+            expected_stage="p01",
+            expected_lane="static",
+            expected_actor_billboard_presentation=True,
+        )
+        assert actor_billboard_validation.valid, actor_billboard_validation.reasons
+
         p02_root = root / "indoor-realtime-p02-gpu"
         write_fixture_run(
             p02_root,

@@ -1257,6 +1257,7 @@ def run_one(
         expected_contract=args.contract,
         expected_stage=args.stage,
         expected_lane=args.lane,
+        expected_actor_billboard_presentation=args.wall_formwork_acceptance,
     )
     frame_samples = None
     if validation.summary is not None:

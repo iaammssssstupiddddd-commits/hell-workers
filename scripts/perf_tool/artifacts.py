@@ -1534,6 +1534,7 @@ def validate_run(
     expected_contract: str | None = None,
     expected_stage: str | None = None,
     expected_lane: str | None = None,
+    expected_actor_billboard_presentation: bool = False,
 ) -> Validation:
     reasons: list[str] = []
     data_dir = run_dir / "data"
@@ -2026,7 +2027,15 @@ def validate_run(
         except (KeyError, ValueError):
             reasons.append("summary initial population is invalid for scene root validation")
         else:
-            if expected_stage in {"p02", "p03", "p04", "p05", "p06", "p07", "p08"}:
+            if expected_actor_billboard_presentation or expected_stage in {
+                "p02",
+                "p03",
+                "p04",
+                "p05",
+                "p06",
+                "p07",
+                "p08",
+            }:
                 # P02 replaces the legacy Soul proxy family with
                 # ActorBillboard3d and keeps Familiar presentation in the 2D
                 # foreground pass. Their counts are validated by the P02
