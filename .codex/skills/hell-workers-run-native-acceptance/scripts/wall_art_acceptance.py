@@ -861,6 +861,7 @@ def verify_performance(
         expected_window_height=WINDOW_HEIGHT,
         expected_window_scale_factor=scale_factor,
         expected_rtt_quality=quality,
+        expected_actor_billboard_presentation=wall_phase == "mixed",
     )
     native.require(
         validation.valid,
