@@ -439,7 +439,8 @@ Update required / 理由付きNo impactをその時点で判断する。
 - 進捗: M1/W2の中核を実装。schema v3候補、runtime wallset v2、6 family GLB、Opaque木材albedo、tile単位mesh/material切替、ArtPreview authorityが動作する。M3aはgeneration 5の技術候補とゲーム所有window PNGに対してユーザー承認済み。generation 8の正式画像18/18、generation 10のCapture 18/18とMemory 6/6、および各独立verifyが合格した。通常releaseはgeneration 4のまま。
 - W-L01中核: 2 tileを仮設2→仮設1/本設1→本設2へ遷移させ、phase別mesh/materialとowner / visual Entityの同一性、visual root非増殖をproduction回帰テストで固定した。native storyboardの採取は未完。
 - W-L03中核: 仮設1 / 本設1の混在saveをnormal loadで10回反復し、各回のfallback→production復帰、phase保持、owner / visual数、完成6＋型枠6 mesh / 2 material poolの上限を固定した。同じ候補をrollback / recovery-onlyでも検証した。native sidecarの採取は未完。
-- 次の作業: 同じcandidate bytesを使い、W-G01の混在gallery・Soul depthとW-L01 / W-L03の実機storyboard、W-L02 / W-A01〜A02のstateful storyboardを実装・採取する。Door側の単独gate後にJ1、M4へ進み、production回帰テストだけを実機合格へ読み替えない。
+- W-A01 / W-A02中核: readinessの`Eligible → LoadFailed → Eligible`で仮設／本設の全Wallが同一Updateにproduction→fallback→productionへ切り替わることと、新→旧→新generationの往復でactive mesh/material handleが世代混在しないことをproduction回帰テストで固定した。欠落assetと世代切替のnative storyboardは未完。
+- 次の作業: 同じcandidate bytesを使い、W-G01の混在gallery・Soul depthとW-L01 / W-L03 / W-A01〜A02の実機storyboard、W-L02のstateful storyboardを実装・採取する。Door側の単独gate後にJ1、M4へ進み、production回帰テストだけを実機合格へ読み替えない。
 - ドアはM0の共通port確定後に制作を並行可能。Rust・tooling編集はmain agentが順に行い、joint受入は両方のruntime接続後。
 - 240 triangles・core 15 file・§7の予算は採用した新設計値。現在のreleaseの実測・アート承認値として扱わない。
 
@@ -483,3 +484,4 @@ Update required / 理由付きNo impactをその時点で判断する。
 | `2026-09-07` | `Codex` | subject `8bb004e7`・Wall generation 10でIntel Arc / Vulkan / X11のCapture 18・Memory 6を正式採取し、24/24 validと独立verifyを記録。generation 9で判明した非対象Door欠落をbuild前preflightへ移した |
 | `2026-09-07` | `Codex` | W-L01の2 tile仮設→混在→本設遷移をproduction回帰テストへ追加。phase別mesh/materialとowner / visual Entity同一性、root非増殖を固定し、native storyboardは未完として分離 |
 | `2026-09-08` | `Codex` | W-L03のworld replacement回帰を仮設／本設の混在saveへ拡張。normal load 10反復とrollback / recovery-onlyでfallback→production、phase、visual数、有限poolを検証し、native sidecarは未完として分離 |
+| `2026-09-08` | `Codex` | W-A01 / W-A02の中核として、asset失敗／復帰の全Wall atomic切替と新→旧→新generation往復時のactive handle非混在をproduction回帰テストへ追加。native storyboardは未完として分離 |

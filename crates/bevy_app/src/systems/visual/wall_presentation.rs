@@ -263,6 +263,7 @@ mod tests {
     use std::collections::HashSet;
     use std::time::Duration;
 
+    use bevy::asset::uuid::Uuid;
     use bevy::transform::{TransformPlugin, TransformSystems};
     use hw_core::visual_mirror::building::{BuildingTypeVisual, BuildingVisualState};
     use hw_visual::blueprint::{BuildingBounceEffect, building_bounce_animation_system};
@@ -274,8 +275,9 @@ mod tests {
 
     use super::*;
     use crate::assets::wall_asset_set::{
-        ResolvedProductionWallAssets, WallAssetAuthority, WallAssetReadiness,
-        WallAssetReadinessState, WallAssetSetIdentity, finalize_wall_production_activation_system,
+        ResolvedProductionWallAssets, WallAssetAuthority, WallAssetFallbackReason,
+        WallAssetReadiness, WallAssetReadinessState, WallAssetSetIdentity,
+        finalize_wall_production_activation_system,
     };
     use crate::plugins::visual::{WallAssetReadinessSet, WallPresentationApplySet};
 
@@ -407,6 +409,10 @@ mod tests {
 
     fn add_apply_to_update(app: &mut App) {
         app.add_systems(Update, apply_wall_presentation_system);
+    }
+
+    fn uuid_handle<T: Asset>(value: u128) -> Handle<T> {
+        Uuid::from_u128(value).into()
     }
 
     #[test]
@@ -604,6 +610,382 @@ mod tests {
                 .resource::<Wall3dVisualOwnerIndex>()
                 .visual_writes,
             writes_before_fallback + 2
+        );
+    }
+
+    #[test]
+    fn asset_failure_and_recovery_switch_every_wall_atomically() {
+        let mut fixture = make_fixture(add_production_topology_chain);
+        let provisional_owner = fixture
+            .app
+            .world_mut()
+            .spawn((
+                Building {
+                    kind: BuildingType::Wall,
+                    is_provisional: true,
+                },
+                Transform::from_xyz(160.0, 64.0, 0.0),
+                WallTopologyState {
+                    grid: (5, 2),
+                    mask: WallConnectionMask::from_neighbors(false, false, false, true),
+                    resolved: ResolvedWallTopology {
+                        family: WallMeshFamily::End,
+                        quarter_turns_y: QuarterTurns::THREE,
+                    },
+                    revision: 1,
+                },
+            ))
+            .id();
+        let provisional_visual = fixture
+            .app
+            .world_mut()
+            .spawn((
+                Building3dVisual {
+                    owner: provisional_owner,
+                },
+                Wall3dPresentationState::default(),
+                Mesh3d(fixture.fallback_mesh.clone()),
+                MeshMaterial3d(fixture.complete_material.clone()),
+                Transform::default(),
+                MeshTag(0),
+            ))
+            .id();
+
+        fixture.app.update();
+        assert_eq!(
+            fixture.app.world().get::<Mesh3d>(fixture.visual).unwrap().0,
+            fixture.production_meshes[3]
+        );
+        assert_eq!(
+            fixture
+                .app
+                .world()
+                .get::<Mesh3d>(provisional_visual)
+                .unwrap()
+                .0,
+            fixture.formwork_meshes[1]
+        );
+        let ready_revision = fixture
+            .app
+            .world()
+            .resource::<WallProductionActivation>()
+            .decision_revision;
+
+        {
+            let mut readiness = fixture.app.world_mut().resource_mut::<WallAssetReadiness>();
+            readiness.activation_revision += 1;
+            readiness.state =
+                WallAssetReadinessState::Fallback(WallAssetFallbackReason::LoadFailed);
+        }
+        fixture.app.update();
+
+        assert_eq!(
+            fixture
+                .app
+                .world()
+                .resource::<WallProductionActivation>()
+                .state,
+            WallProductionActivationState::Fallback(WallProductionFallbackReason::LoadFailed)
+        );
+        assert_eq!(
+            fixture
+                .app
+                .world()
+                .resource::<WallProductionActivation>()
+                .decision_revision,
+            ready_revision + 1
+        );
+        for visual in [fixture.visual, provisional_visual] {
+            assert_eq!(
+                fixture.app.world().get::<Mesh3d>(visual).unwrap().0,
+                fixture.fallback_mesh
+            );
+            assert_eq!(
+                fixture
+                    .app
+                    .world()
+                    .get::<Wall3dPresentationState>(visual)
+                    .unwrap()
+                    .mode,
+                Wall3dPresentationMode::Fallback
+            );
+        }
+
+        {
+            let mut readiness = fixture.app.world_mut().resource_mut::<WallAssetReadiness>();
+            readiness.activation_revision += 1;
+            readiness.state = WallAssetReadinessState::Eligible {
+                asset_set_generation: GENERATION,
+                authority: WallAssetAuthority::IsolatedCandidate,
+                manifest_sha256: MANIFEST_SHA256.to_string(),
+            };
+        }
+        fixture.app.update();
+
+        assert!(matches!(
+            fixture
+                .app
+                .world()
+                .resource::<WallProductionActivation>()
+                .state,
+            WallProductionActivationState::ReadyToApply { .. }
+        ));
+        assert_eq!(
+            fixture.app.world().get::<Mesh3d>(fixture.visual).unwrap().0,
+            fixture.production_meshes[3]
+        );
+        assert_eq!(
+            fixture
+                .app
+                .world()
+                .get::<Mesh3d>(provisional_visual)
+                .unwrap()
+                .0,
+            fixture.formwork_meshes[1]
+        );
+        for visual in [fixture.visual, provisional_visual] {
+            assert_eq!(
+                fixture
+                    .app
+                    .world()
+                    .get::<Wall3dPresentationState>(visual)
+                    .unwrap()
+                    .mode,
+                Wall3dPresentationMode::Production
+            );
+        }
+    }
+
+    #[test]
+    fn generation_switches_never_mix_active_wall_handles() {
+        let mut fixture = make_fixture(add_apply_to_update);
+        fixture
+            .app
+            .world_mut()
+            .get_mut::<Building>(fixture.owner)
+            .unwrap()
+            .is_provisional = true;
+        let completed_owner = fixture
+            .app
+            .world_mut()
+            .spawn((
+                Building {
+                    kind: BuildingType::Wall,
+                    is_provisional: false,
+                },
+                Transform::from_xyz(160.0, 64.0, 0.0),
+                WallTopologyState {
+                    grid: (5, 2),
+                    mask: WallConnectionMask::from_neighbors(false, false, false, true),
+                    resolved: ResolvedWallTopology {
+                        family: WallMeshFamily::End,
+                        quarter_turns_y: QuarterTurns::THREE,
+                    },
+                    revision: 1,
+                },
+            ))
+            .id();
+        let completed_visual = fixture
+            .app
+            .world_mut()
+            .spawn((
+                Building3dVisual {
+                    owner: completed_owner,
+                },
+                Wall3dPresentationState::default(),
+                Mesh3d(fixture.fallback_mesh.clone()),
+                MeshMaterial3d(fixture.complete_material.clone()),
+                Transform::default(),
+                MeshTag(0),
+            ))
+            .id();
+        fixture.app.update();
+
+        let next_identity = WallAssetSetIdentity {
+            asset_set_generation: GENERATION + 1,
+            authority: WallAssetAuthority::IsolatedCandidate,
+            manifest_sha256: "next-presentation-test-manifest".to_string(),
+        };
+        let next_completed = std::array::from_fn(|index| uuid_handle(100 + index as u128));
+        let next_formwork = std::array::from_fn(|index| uuid_handle(200 + index as u128));
+        let next_complete_material = uuid_handle(300);
+        let next_provisional_material = uuid_handle(301);
+
+        let set_generation =
+            |app: &mut App,
+             identity: WallAssetSetIdentity,
+             completed: [Handle<Mesh>; 6],
+             formwork: [Handle<Mesh>; 6],
+             complete_material: Handle<TopDownStructuralMaterial>,
+             provisional_material: Handle<TopDownStructuralMaterial>| {
+                app.world_mut()
+                    .resource_mut::<ProductionWallAssetPool>()
+                    .resolved = Some(ResolvedProductionWallAssets {
+                    identity: identity.clone(),
+                    meshes: completed,
+                    formwork_meshes: Some(formwork),
+                    albedo: Handle::default(),
+                    formwork_albedo: Some(Handle::default()),
+                    emissive: Handle::default(),
+                    normal: None,
+                });
+                *app.world_mut().resource_mut::<ProductionWallMaterialPool>() =
+                    ProductionWallMaterialPool {
+                        identity: Some(identity.clone()),
+                        complete: Some(complete_material),
+                        provisional: Some(provisional_material),
+                    };
+                let mut activation = app.world_mut().resource_mut::<WallProductionActivation>();
+                activation.decision_revision += 1;
+                activation.state = WallProductionActivationState::ReadyToApply {
+                    asset_set_generation: identity.asset_set_generation,
+                    authority: identity.authority,
+                    manifest_sha256: identity.manifest_sha256,
+                    asset_activation_revision: activation.decision_revision,
+                };
+            };
+
+        set_generation(
+            &mut fixture.app,
+            next_identity.clone(),
+            next_completed.clone(),
+            next_formwork.clone(),
+            next_complete_material.clone(),
+            next_provisional_material.clone(),
+        );
+        fixture.app.update();
+        assert_eq!(
+            fixture.app.world().get::<Mesh3d>(fixture.visual).unwrap().0,
+            next_formwork[3]
+        );
+        assert_eq!(
+            fixture
+                .app
+                .world()
+                .get::<Mesh3d>(completed_visual)
+                .unwrap()
+                .0,
+            next_completed[1]
+        );
+        assert_eq!(
+            fixture
+                .app
+                .world()
+                .get::<MeshMaterial3d<TopDownStructuralMaterial>>(fixture.visual)
+                .unwrap()
+                .0,
+            next_provisional_material
+        );
+        assert_eq!(
+            fixture
+                .app
+                .world()
+                .get::<MeshMaterial3d<TopDownStructuralMaterial>>(completed_visual)
+                .unwrap()
+                .0,
+            next_complete_material
+        );
+
+        set_generation(
+            &mut fixture.app,
+            identity(),
+            fixture.production_meshes.clone(),
+            fixture.formwork_meshes.clone(),
+            fixture.complete_material.clone(),
+            fixture.provisional_material.clone(),
+        );
+        fixture.app.update();
+        assert_eq!(
+            fixture.app.world().get::<Mesh3d>(fixture.visual).unwrap().0,
+            fixture.formwork_meshes[3]
+        );
+        assert_eq!(
+            fixture
+                .app
+                .world()
+                .get::<Mesh3d>(completed_visual)
+                .unwrap()
+                .0,
+            fixture.production_meshes[1]
+        );
+        assert_eq!(
+            fixture
+                .app
+                .world()
+                .get::<MeshMaterial3d<TopDownStructuralMaterial>>(fixture.visual)
+                .unwrap()
+                .0,
+            fixture.provisional_material
+        );
+        assert_eq!(
+            fixture
+                .app
+                .world()
+                .get::<MeshMaterial3d<TopDownStructuralMaterial>>(completed_visual)
+                .unwrap()
+                .0,
+            fixture.complete_material
+        );
+
+        set_generation(
+            &mut fixture.app,
+            next_identity.clone(),
+            next_completed.clone(),
+            next_formwork.clone(),
+            next_complete_material.clone(),
+            next_provisional_material.clone(),
+        );
+        fixture.app.update();
+        assert_eq!(
+            fixture.app.world().get::<Mesh3d>(fixture.visual).unwrap().0,
+            next_formwork[3]
+        );
+        assert_eq!(
+            fixture
+                .app
+                .world()
+                .get::<Mesh3d>(completed_visual)
+                .unwrap()
+                .0,
+            next_completed[1]
+        );
+        assert_eq!(
+            fixture
+                .app
+                .world()
+                .get::<MeshMaterial3d<TopDownStructuralMaterial>>(fixture.visual)
+                .unwrap()
+                .0,
+            next_provisional_material
+        );
+        assert_eq!(
+            fixture
+                .app
+                .world()
+                .get::<MeshMaterial3d<TopDownStructuralMaterial>>(completed_visual)
+                .unwrap()
+                .0,
+            next_complete_material
+        );
+        let active_assets = fixture
+            .app
+            .world()
+            .resource::<ProductionWallAssetPool>()
+            .resolved
+            .as_ref()
+            .unwrap();
+        assert_eq!(active_assets.identity, next_identity);
+        assert_eq!(active_assets.meshes, next_completed);
+        assert_eq!(active_assets.formwork_meshes.as_ref(), Some(&next_formwork));
+        let active_materials = fixture.app.world().resource::<ProductionWallMaterialPool>();
+        assert_eq!(active_materials.identity.as_ref(), Some(&next_identity));
+        assert_eq!(
+            active_materials.complete.as_ref(),
+            Some(&next_complete_material)
+        );
+        assert_eq!(
+            active_materials.provisional.as_ref(),
+            Some(&next_provisional_material)
         );
     }
 
