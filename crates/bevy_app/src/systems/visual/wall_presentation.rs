@@ -260,6 +260,7 @@ pub fn apply_wall_presentation_system(
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashSet;
     use std::time::Duration;
 
     use bevy::transform::{TransformPlugin, TransformSystems};
@@ -679,6 +680,160 @@ mod tests {
                 .unwrap()
                 .0,
             fixture.provisional_material
+        );
+    }
+
+    #[test]
+    fn two_tile_site_transitions_from_formwork_through_mixed_to_completed_in_place() {
+        let mut fixture = make_fixture(add_apply_to_update);
+        fixture
+            .app
+            .world_mut()
+            .get_mut::<Building>(fixture.owner)
+            .unwrap()
+            .is_provisional = true;
+        let second_owner = fixture
+            .app
+            .world_mut()
+            .spawn((
+                Building {
+                    kind: BuildingType::Wall,
+                    is_provisional: true,
+                },
+                Transform::from_xyz(64.0, 64.0, 0.0),
+                WallTopologyState {
+                    grid: (2, 2),
+                    mask: WallConnectionMask::from_neighbors(false, false, false, true),
+                    resolved: ResolvedWallTopology {
+                        family: WallMeshFamily::End,
+                        quarter_turns_y: QuarterTurns::THREE,
+                    },
+                    revision: 1,
+                },
+            ))
+            .id();
+        let second_visual = fixture
+            .app
+            .world_mut()
+            .spawn((
+                Building3dVisual {
+                    owner: second_owner,
+                },
+                Wall3dPresentationState::default(),
+                Mesh3d(fixture.fallback_mesh.clone()),
+                MeshMaterial3d(fixture.complete_material.clone()),
+                Transform::default(),
+                MeshTag(0),
+            ))
+            .id();
+        let owner_ids = [fixture.owner, second_owner];
+        let visual_ids = [fixture.visual, second_visual];
+
+        fixture.app.update();
+        assert_eq!(
+            fixture.app.world().get::<Mesh3d>(fixture.visual).unwrap().0,
+            fixture.formwork_meshes[3]
+        );
+        assert_eq!(
+            fixture.app.world().get::<Mesh3d>(second_visual).unwrap().0,
+            fixture.formwork_meshes[1]
+        );
+        for visual in visual_ids {
+            assert_eq!(
+                fixture
+                    .app
+                    .world()
+                    .get::<MeshMaterial3d<TopDownStructuralMaterial>>(visual)
+                    .unwrap()
+                    .0,
+                fixture.provisional_material
+            );
+            assert_eq!(
+                fixture
+                    .app
+                    .world()
+                    .get::<Wall3dPresentationState>(visual)
+                    .unwrap()
+                    .mode,
+                Wall3dPresentationMode::Production
+            );
+        }
+
+        fixture
+            .app
+            .world_mut()
+            .get_mut::<Building>(fixture.owner)
+            .unwrap()
+            .is_provisional = false;
+        fixture.app.update();
+        assert_eq!(
+            fixture.app.world().get::<Mesh3d>(fixture.visual).unwrap().0,
+            fixture.production_meshes[3]
+        );
+        assert_eq!(
+            fixture.app.world().get::<Mesh3d>(second_visual).unwrap().0,
+            fixture.formwork_meshes[1]
+        );
+        assert_eq!(
+            fixture
+                .app
+                .world()
+                .get::<MeshMaterial3d<TopDownStructuralMaterial>>(fixture.visual)
+                .unwrap()
+                .0,
+            fixture.complete_material
+        );
+        assert_eq!(
+            fixture
+                .app
+                .world()
+                .get::<MeshMaterial3d<TopDownStructuralMaterial>>(second_visual)
+                .unwrap()
+                .0,
+            fixture.provisional_material
+        );
+
+        fixture
+            .app
+            .world_mut()
+            .get_mut::<Building>(second_owner)
+            .unwrap()
+            .is_provisional = false;
+        fixture.app.update();
+        assert_eq!(
+            fixture.app.world().get::<Mesh3d>(fixture.visual).unwrap().0,
+            fixture.production_meshes[3]
+        );
+        assert_eq!(
+            fixture.app.world().get::<Mesh3d>(second_visual).unwrap().0,
+            fixture.production_meshes[1]
+        );
+        for visual in visual_ids {
+            assert_eq!(
+                fixture
+                    .app
+                    .world()
+                    .get::<MeshMaterial3d<TopDownStructuralMaterial>>(visual)
+                    .unwrap()
+                    .0,
+                fixture.complete_material
+            );
+        }
+
+        for owner in owner_ids {
+            assert!(fixture.app.world().get_entity(owner).is_ok());
+        }
+        for visual in visual_ids {
+            assert!(fixture.app.world().get_entity(visual).is_ok());
+        }
+        let mut visuals = fixture.app.world_mut().query::<&Building3dVisual>();
+        assert_eq!(visuals.iter(fixture.app.world()).count(), 2);
+        assert_eq!(
+            visuals
+                .iter(fixture.app.world())
+                .map(|visual| visual.owner)
+                .collect::<HashSet<_>>(),
+            HashSet::from(owner_ids)
         );
     }
 
