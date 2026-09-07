@@ -79,6 +79,14 @@ game process内で検査する。標準／最大zoom-outを各9 case採るため
 型枠合格へ読み替えない。最大zoom-outの型枠は最小6 px幅になるため、完成石壁の全列`3σ`契約とは分け、
 中央値が`3σ`以上かつ地形と混ざるraster列を最大1列だけ許す。2列以上の欠落はfailとする。
 
+この契約によるgeneration 8の正式実績は、subject `3c0f7c67`の標準job
+`wall-art-20260907T031245Z-d7fea076`と最大zoom-out job
+`wall-art-20260907T032953Z-d83fa1ba`で、いずれも9/9 validかつ独立verify passである。
+最大zoom-out Low / DPI 1.0を含む18枚すべてが同じcandidate manifest
+`244b522deea6f9b3744360a77ce90c94cff179220fd10def4690a2a2e7db04d0`、asset-view
+`ad63f1c334c91335851d06aa1b64be76b7ce08da903e53ab425c4f7938e4cc98`に結ばれている。
+completed-onlyの補助matrixや、画像採取時の短時間frame値は型枠の性能合格へ算入しない。
+
 本番Wallの正式frame比較は`wall-production-performance-v2`が所有する。凍結済み
 `wall-density-v1`のlayout sidecarへ上書きせず、追加の`wall_density_presentation.json`で
 計測開始時と終了時の表示状態を結ぶ。`production`は候補generation / manifest hashと

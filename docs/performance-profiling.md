@@ -319,6 +319,13 @@ wall visual、12-run Capture、RenderDoc draw-group evidenceの代用にしな�
 全16 mask、formwork mesh 6種、Opaque material、production 96 / fallback 0のすべてが成立しなければ無効である。
 completed phaseのWall matrixは完成壁の回帰証跡であり、型枠の正式画像には代用しない。
 
+subject `3c0f7c67`・generation 8の正式実績は、標準
+`wall-art-20260907T031245Z-d7fea076`と最大zoom-out
+`wall-art-20260907T032953Z-d83fa1ba`が各9/9 validで、独立verifyもpassした。
+両jobはcandidate manifest SHA-256 `244b522deea6f9b3744360a77ce90c94cff179220fd10def4690a2a2e7db04d0`と
+asset-view fingerprint `ad63f1c334c91335851d06aa1b64be76b7ce08da903e53ab425c4f7938e4cc98`を共有する。
+画像jobの10秒warm-up / 10秒measureは画面証跡のための実行であり、下記の30/60秒Capture・Memory判定には使わない。
+
 壁M5の同一binary内performance比較は、承認済みcandidateを配置したclean validation worktreeから
 `wall_production_performance_acceptance.py plan --repo "$VALIDATION_WORKTREE" --adapter Intel`で計画する。
 返されたdirect launcherは`fallback-control`と`production`を順番に実行し、completed / provisionalの

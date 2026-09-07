@@ -5,15 +5,16 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `provisional-wall-formwork-plan-2026-09-05` |
-| ステータス | `In Progress — M3aアート承認済み、M3b正式封印待ち` |
+| ステータス | `In Progress — M3b正式画像18/18合格、lifecycle・性能・Memory待ち` |
 | 作成日 | `2026-09-05` |
-| 最終更新日 | `2026-09-06` |
+| 最終更新日 | `2026-09-07` |
 | 作成者 | `Codex` |
 | 親計画 | [アセット作成マイルストーン](asset-milestones-2026-03-17.md)（Build-Aの仮設表現を追加改修） |
 | 関連計画 | [ドアの本番ビジュアル化](production-door-art-plan-2026-09-05.md)、[完了済み本番壁計画](archived/production-wall-art-plan-2026-08-31.md) |
 | 関連提案 / Issue / PR | `N/A` |
 
-本書は実装追跡中。候補tooling・6 family・runtime接続を実装し、M3aのArtPreviewはユーザー承認済み。調査基点は `57a488e1`。
+本書は実装追跡中。候補tooling・6 family・runtime接続を実装し、M3aのArtPreviewはユーザー承認済み。
+subject `3c0f7c67`とgeneration 8の隔離candidateでM3b正式画像18枚も合格した。調査基点は `57a488e1`。
 完了済み壁trackを再開せず、現在の石壁を基準に仮設段階の表現を改修する。
 
 ## 0. セルフレビューで修正した点
@@ -267,6 +268,7 @@ viewも正式jobのtreeへ上書きしない。追加treeの作成前に実使�
 - 対象: root `plugins/startup/perf_scenario/`、native acceptance helper、`scripts/perf_tool/`の対応validator。
 - 完了条件:
   - [x] M3aのゲーム所有window ArtPreviewを独立verifyし、木製型枠の方向性をユーザーが承認。候補manifest `f11eb5ef…`、PNG `86a5d643…`、回答「OKです」をapproval artifact `6250d7bd…`へ結んだ。
+  - [x] M3b正式画像を同一subject・同一candidateで標準9 case＋最大zoom-out 9 case採取し、両jobを独立verify。詳細は§7.3。
   - [ ] §7の正式画像・状態・性能の各gateが成立し、木製型枠の最終candidateを確認できる。
   - [ ] 新inventoryの検証が実resident handlesに一致し、旧completed-only galleryを仮設受入に代用していない。
   - [ ] `art_preview`ではない正式candidateの証拠を封印し、単独M3を完了。相手のM3完了を前提にしない。
@@ -317,7 +319,7 @@ headless、Blender render、`visual_test`だけでは実機合格にしない。
 
 ### 7.1 ケースと観測点
 
-新profile名は`wall-formwork-v1`とする（実装予定）。既存`wall-density-v1`やcompleted-only galleryの
+新profile名は`wall-formwork-v1`とし、標準／最大zoom-outの正式画像profileを実装済み。既存`wall-density-v1`やcompleted-only galleryの
 凍結fixture・過去sidecarを変更せず、新しい状態別inventoryを持つ。
 
 | ID | setup / 操作 | 観測する結果 |
@@ -360,6 +362,30 @@ target数96 / 384、mask反復6 / 24、接続用Door blueprint数192 / 768。con
 接続部の背景の露出、frame間の変化、シルエットの連続性を検証する。固定RGB値で木材を合格させない。
 performance比較は新profileのbefore/afterだけで行い、gallery・previewの短時間frame値を混ぜない。
 
+### 7.3 M3b正式画像の証跡（generation 8）
+
+subject `3c0f7c673e65946584e6e20fe97648dc8f54334b`へ、承認済みbytesをgeneration 8の
+isolated candidateとして固定した。authoring final manifest SHA-256は
+`244b522deea6f9b3744360a77ce90c94cff179220fd10def4690a2a2e7db04d0`、asset-view fingerprintは
+`ad63f1c334c91335851d06aa1b64be76b7ce08da903e53ab425c4f7938e4cc98`である。両jobは
+source fingerprint `649e0b255dfa5c2a8393b906eaf27294ee6536e9ffef0a3bc4da3d3d50bf778a`と
+harness fingerprint `a0d88a6dd4d77757844a6f910737e8ad8be833eca2a83366111e573c90bd037d`も一致する。
+
+| profile / job | 結果 | manifest SHA-256 | 9 PNG相対path/hash一覧のSHA-256 |
+| --- | --- | --- | --- |
+| `wall-formwork-v1` / `wall-art-20260907T031245Z-d7fea076` | 9/9 valid、独立verify pass | `0aa1e081067137fea21057047e91d3e7f169aaa5dd449e150141130d4d33575d` | `612c8ecb95541d999321c68773663763f8f1ef2271666f3a14cf7442bbe839b9` |
+| `wall-formwork-v1-farthest` / `wall-art-20260907T032953Z-d83fa1ba` | 9/9 valid、独立verify pass | `5db4a2ee8cbcfe4b9daec74dc835e024d595e60c63434f72eacae02a4f8e79b8` | `39a227eaa4c88ae4a8cf620288a3467a5b82f13d3ae1fe5ffe177a07362c45b5` |
+
+先行するcompleted-only補助回帰`wall-art-20260907T022328Z-41b24ffd`（subject `e010355f`）も
+9/9 validだが、仮設型枠の証拠には算入しない。subject `e163a067`の最遠job
+`wall-art-20260907T030652Z-01574e9d`はLow / DPI 1.0の最弱直線列が`2.74σ`となりinvalidである。
+6 px幅のうち5列は`3σ`以上だったため、骨組みが消失したのではなく片側のterrain-mixed raster edgeと診断した。
+型枠だけを「中央値`3σ`以上、terrain-mixed列は最大1列」に分離し、2列欠落を拒否するself-testを追加した上で、
+generation 8の両jobを最初から採り直した。失敗jobはtrack完了まで保存する。
+
+この証跡が閉じるのは§7の正式画像だけである。W-G01の混在gallery・Soul前後depth、W-L01〜L03、
+W-A01〜A02、Capture 18 runs、Memory 6 runs、J1、release受入は引き続き未完とする。
+
 native実行はSkillのdirect `kitty` launcher、repository lock、RAM/disk preflightと逐次buildを使う。
 本計画の新profileには`plan / status / verify / self-test`を実装してから利用し、未実装のcommandを
 既存helper名へ読み替えない。statusは15〜30秒ごとに確認し、source/asset drift・timeout・画像欠落はfailとする。
@@ -381,8 +407,8 @@ Update required / 理由付きNo impactをその時点で判断する。
 
 ### 現在地
 
-- 進捗: M1/W2の中核を実装。schema v3候補、runtime wallset v2、6 family GLB、Opaque木材albedo、tile単位mesh/material切替、ArtPreview authorityが動作する。M3aはgeneration 5の技術候補とゲーム所有window PNGに対してユーザー承認済みで、approval artifactも封印済み。通常releaseはgeneration 4のまま。M0の正式before比較、M2の全lifecycle監査、M3b以降は未完。
-- 次の作業: clean統合subject `49c43e0f`に対して承認済みWall bytesを新generationのfinal manifestへ封印し、Wall単独M3bを行う。Doorは同subjectのgeneration 6 isolated candidate visual legまで完了済みで、残る単独gate後にJ1、M4を行う。現在のArtPreviewを正式passへ読み替えない。
+- 進捗: M1/W2の中核を実装。schema v3候補、runtime wallset v2、6 family GLB、Opaque木材albedo、tile単位mesh/material切替、ArtPreview authorityが動作する。M3aはgeneration 5の技術候補とゲーム所有window PNGに対してユーザー承認済み。generation 8の正式candidateをsubject `3c0f7c67`へ固定し、標準／最大zoom-outの正式画像18/18と独立verifyが合格した。通常releaseはgeneration 4のまま。
+- 次の作業: 同じcandidate identityを使い、混在gallery・Soul depthとW-L01〜L03 / W-A01〜A02のstateful storyboardを実装・採取する。その後に§7.2の専用Capture 18 runsとMemory 6 runsをbefore/afterで完了し、Door側の単独gate後にJ1、M4へ進む。短時間の画像captureを性能合格へ読み替えない。
 - ドアはM0の共通port確定後に制作を並行可能。Rust・tooling編集はmain agentが順に行い、joint受入は両方のruntime接続後。
 - 240 triangles・core 15 file・§7の予算は採用した新設計値。現在のreleaseの実測・アート承認値として扱わない。
 
@@ -397,10 +423,10 @@ Update required / 理由付きNo impactをその時点で判断する。
 
 - 計画作成: `2026-09-05`。Rust / runtime asset変更なし。
 - セルフレビュー: `2026-09-06`。§0の指摘を計画へ反映。実装・アセット制作・native起動は行っていない。
-- 文書gate: `python3 scripts/dev.py docs --check` / `git diff --check` はpass。
-- Help gate: `python3 scripts/check_help_impact.py` は既存HEADのproduction差分（diff base `1dc5aa5f`以降）に新しいHelp判断がないためfail。今回の計画差分は文書のみで、この既存差分の判断は変更していない。
-- 局所検証: formwork tooling 33 tests、wall asset-set 24 pass / 1 external-view ignored、presentation 9 tests、profiling限定phase testがpass。full check / Clippy / verifyはM3a確定前の最終差分で実施する。
-- ブロッカー: M3aのアート判断とDoor M2統合は解消。Wall final封印と両trackの単独M3b残件が未完であり、preview成功やDoor visual legだけを正式passへ読み替えない。
+- 文書gate: `python3 scripts/dev.py docs --write`で索引を同期後、`docs --check` / `git diff --check`がpass。
+- Help gate: `No impact`。正式画像証跡と未完了gateの文書化だけで、入力、ゲームプレイ、表示ロジック、UI文言、Help coverage、release authorityは不変。理由付き`check_help_impact.py`がpass。
+- 最終検証: `wall_art_acceptance.py self-test`、`scripts/perf.py self-test`、`python3 scripts/dev.py check`、全workspace testとClippy `-D warnings`を含む`python3 scripts/dev.py verify`がpass。
+- ブロッカー: Wall final封印と正式画像は解消。Wallのstateful lifecycle・Capture・Memory、Door単独残件、J1が未完であり、画像18枚だけで単独M3全体を完了扱いにしない。
 
 ### Definition of Done
 
@@ -420,3 +446,4 @@ Update required / 理由付きNo impactをその時点で判断する。
 | `2026-09-06` | `Codex` | ユーザーがM3a ArtPreviewを「OKです」で承認。候補・実機job・PNG hashをapproval artifactへ封印し、final seal / isolated-candidate projection toolingを追加。通常releaseは未変更 |
 | `2026-09-06` | `Codex` | Door generation 5もArtPreview承認済みとなり、Door M2統合とDoor専用approval/final/candidate toolingを共通freezeへ追加。両trackとも正式M3b前で通常releaseは未変更 |
 | `2026-09-06` | `Codex` | clean統合subject `49c43e0f`でDoor generation 6 finalを封印し、isolated candidateの実機visual legを通過。Wall finalと両単独M3b残件、J1前のため通常releaseは未変更 |
+| `2026-09-07` | `Codex` | subject `3c0f7c67`・Wall generation 8で正式画像profileを標準／最大zoom-out各9 case実行し、18/18 validと独立verifyを記録。stateful lifecycle・Capture・Memory・J1・releaseは未完 |
