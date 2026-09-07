@@ -27,8 +27,8 @@ MATRIX_PROFILE = "wall-art-approved-candidate-matrix-v1"
 FARTHEST_PROFILE = "wall-art-approved-candidate-farthest-zoom-v1"
 RELEASE_PROFILE = "wall-art-released-generation-v1"
 ART_PREVIEW_PROFILE = "wall-formwork-art-preview-v1"
-FORMWORK_MATRIX_PROFILE = "wall-formwork-v1"
-FORMWORK_FARTHEST_PROFILE = "wall-formwork-v1-farthest"
+FORMWORK_MATRIX_PROFILE = "wall-formwork-gallery-v2"
+FORMWORK_FARTHEST_PROFILE = "wall-formwork-gallery-v2-farthest"
 AUTHORITIES = ("art_preview", "isolated_candidate", "release_approved")
 FORMWORK_PREVIEW_ROLES = (
     "mesh:isolated",
@@ -66,6 +66,10 @@ SCREENSHOT = "current-wall.png"
 MATRIX_QUALITIES = ("high", "medium", "low")
 MATRIX_SCALE_FACTORS = (1.0, 1.5, 2.0)
 CONTRACT_PATH = Path(__file__).resolve().parents[4] / density.CONTRACT_RELATIVE
+FORMWORK_CONTRACT_PATH = (
+    Path(__file__).resolve().parents[4]
+    / "tools/blender_ai_workflow/fixtures/wall-formwork-density-v1.json"
+)
 
 
 Image = tuple[int, int, bytes]
@@ -112,7 +116,7 @@ def calibration_command(
         wall_phase,
         "--wall-actual-window",
         "--sizes",
-        "small",
+        "medium" if wall_phase == "mixed" else "small",
         "--renders",
         "gpu",
         "--seed",
@@ -122,7 +126,7 @@ def calibration_command(
         "--preflight-runs",
         "0",
         "--souls",
-        "0",
+        "2" if wall_phase == "mixed" else "0",
         "--familiars",
         "0",
         "--output",
@@ -361,9 +365,14 @@ def validate_probe_status(
             "subject_mask",
         },
     )
-    native.require(fixture["contract_id"] == "wall-density-v1", "Wall contract differs")
+    expected_phase = "provisional" if art_preview else "mixed" if formwork else "completed"
+    expected_contract_id = (
+        "wall-formwork-density-v1" if formwork else "wall-density-v1"
+    )
+    expected_contract_path = FORMWORK_CONTRACT_PATH if formwork else CONTRACT_PATH
+    native.require(fixture["contract_id"] == expected_contract_id, "Wall contract differs")
     native.require(
-        fixture["contract_sha256"] == density.sha256(CONTRACT_PATH),
+        fixture["contract_sha256"] == density.sha256(expected_contract_path),
         "Wall contract hash differs",
     )
     native.require(
@@ -372,9 +381,8 @@ def validate_probe_status(
         "Wall layout checksum is invalid",
     )
     native.require(
-        fixture["target_size"] == "N"
-        and fixture["wall_phase"]
-        == ("provisional" if art_preview or formwork else "completed")
+        fixture["target_size"] == ("4N" if formwork else "N")
+        and fixture["wall_phase"] == expected_phase
         and fixture["subject_ordinal"] == 64
         and fixture["subject_grid"] == [22, 17]
         and fixture["subject_mask"] == "0000",
@@ -415,24 +423,37 @@ def validate_probe_status(
     }
     native.require(render == expected_render, "Wall calibration render contract differs")
     if candidate:
+        gallery_fields = {
+            "lighting",
+            "asset_set_generation",
+            "authority",
+            "manifest_sha256",
+            "layout_checksum",
+            "wall_phase",
+            "target_wall_count",
+            "connector_count",
+            "production_count",
+            "fallback_count",
+            "distinct_meshes",
+            "distinct_materials",
+            "mask_counts",
+        }
+        if formwork:
+            gallery_fields.update(
+                {
+                    "completed_wall_count",
+                    "provisional_wall_count",
+                    "gallery_wall_count",
+                    "completed_mask_counts",
+                    "provisional_mask_counts",
+                    "mixed_pair",
+                    "soul_depth",
+                }
+            )
         gallery = require_object(
             status["gallery"],
             "Wall approved candidate gallery",
-            {
-                "lighting",
-                "asset_set_generation",
-                "authority",
-                "manifest_sha256",
-                "layout_checksum",
-                "wall_phase",
-                "target_wall_count",
-                "connector_count",
-                "production_count",
-                "fallback_count",
-                "distinct_meshes",
-                "distinct_materials",
-                "mask_counts",
-            },
+            gallery_fields,
         )
         native.require(gallery["lighting"] == "lit", "Wall lighting mode differs")
         native.require(
@@ -451,20 +472,35 @@ def validate_probe_status(
         )
         native.require(
             gallery["layout_checksum"] == fixture["layout_checksum"]
-            and gallery["wall_phase"]
-            == ("provisional" if art_preview or formwork else "completed")
-            and gallery["target_wall_count"] == 96
-            and gallery["connector_count"] == 192
-            and gallery["production_count"] == 96
+            and gallery["wall_phase"] == expected_phase
+            and gallery["target_wall_count"] == (384 if formwork else 96)
+            and gallery["connector_count"] == (768 if formwork else 192)
+            and gallery["production_count"] == (386 if formwork else 96)
             and gallery["fallback_count"] == 0
-            and gallery["distinct_meshes"] == 6
-            and gallery["distinct_materials"] == 1,
+            and gallery["distinct_meshes"] == (12 if formwork else 6)
+            and gallery["distinct_materials"] == (2 if formwork else 1),
             "Wall candidate gallery residency differs",
         )
         native.require(
-            gallery["mask_counts"] == {f"{mask:04b}": 6 for mask in range(16)},
+            gallery["mask_counts"]
+            == {
+                f"{mask:04b}": 24 if formwork else 6
+                for mask in range(16)
+            },
             "Wall candidate mask coverage differs",
         )
+        if formwork:
+            expected_phase_masks = {f"{mask:04b}": 12 for mask in range(16)}
+            native.require(
+                gallery["completed_wall_count"] == 192
+                and gallery["provisional_wall_count"] == 192
+                and gallery["gallery_wall_count"] == 386
+                and gallery["completed_mask_counts"] == expected_phase_masks
+                and gallery["provisional_mask_counts"] == expected_phase_masks,
+                "Wall mixed gallery phase coverage differs",
+            )
+            validate_mixed_pair(gallery["mixed_pair"])
+            validate_soul_depth(gallery["soul_depth"])
         capture_view = require_object(
             status["capture_view"],
             "Wall candidate capture view",
@@ -481,7 +517,7 @@ def validate_probe_status(
             and type(capture_view["hidden_ui_roots"]) is int
             and capture_view["hidden_ui_roots"] > 0
             and capture_view["visible_ui_roots"] == 0
-            and capture_view["hidden_connector_visuals"] == 192
+            and capture_view["hidden_connector_visuals"] == (768 if formwork else 192)
             and capture_view["visible_connector_visuals"] == 0,
             "Wall candidate capture view differs",
         )
@@ -529,6 +565,57 @@ def validate_probe_status(
     for axis in ("x", "y", "z"):
         require_number(world[axis], f"Wall world position {axis}")
     return status
+
+
+def validate_mixed_pair(value: Any) -> None:
+    native.require(
+        isinstance(value, list) and len(value) == 2,
+        "Wall mixed gallery pair must contain exactly two members",
+    )
+    expected = (
+        {"grid": [20, 15], "phase": "provisional", "mask": "0001", "family": "end", "quarter_turns_y": 3},
+        {"grid": [21, 15], "phase": "completed", "mask": "0010", "family": "end", "quarter_turns_y": 1},
+    )
+    native.require(tuple(value) == expected, "Wall mixed gallery pair differs")
+
+
+def validate_soul_depth(value: Any) -> None:
+    native.require(
+        isinstance(value, list) and len(value) == 2,
+        "Wall Soul depth gallery must contain exactly two probes",
+    )
+    expected = (([22, 17], "provisional", "front"), ([22, 22], "completed", "behind"))
+    for probe, (grid, phase, relation) in zip(value, expected, strict=True):
+        record = require_object(
+            probe,
+            "Wall Soul depth probe",
+            {
+                "wall_grid",
+                "wall_phase",
+                "relation",
+                "wall_depth",
+                "soul_depth",
+                "center_distance",
+                "wall_center",
+                "soul_center",
+            },
+        )
+        wall_depth = require_number(record["wall_depth"], "Wall depth")
+        soul_depth = require_number(record["soul_depth"], "Soul depth")
+        distance = require_number(record["center_distance"], "Soul center distance")
+        native.require(
+            record["wall_grid"] == grid
+            and record["wall_phase"] == phase
+            and record["relation"] == relation
+            and distance <= 0.5
+            and ((relation == "front" and soul_depth < wall_depth)
+                 or (relation == "behind" and soul_depth > wall_depth)),
+            "Wall Soul depth relation differs",
+        )
+        for label in ("wall_center", "soul_center"):
+            point = require_object(record[label], label, {"x", "y"})
+            require_number(point["x"], f"{label} x")
+            require_number(point["y"], f"{label} y")
 
 
 def validate_straight_probe(value: Any) -> None:
@@ -605,7 +692,7 @@ def straight_run_evidence(image: Image, status: dict[str, Any]) -> dict[str, Any
         scores.append((mean - darkest) / floor)
     weakest = min(scores)
     median = sorted(scores)[len(scores) // 2]
-    formwork = status.get("fixture", {}).get("wall_phase") == "provisional"
+    formwork = status.get("fixture", {}).get("wall_phase") in {"provisional", "mixed"}
     visible_columns = sum(score >= STRAIGHT_CONTRAST_SIGMA for score in scores)
     required_visible_columns = len(scores) - 1 if formwork else len(scores)
     native.require(
@@ -743,7 +830,15 @@ def verify_performance(
     wall_phase: str = "completed",
 ) -> dict[str, Any]:
     Case, validate_run = density.load_perf_modules(repo)
-    case = Case("wall-density", "small", "gpu", SEED, 0, 0, wall_phase=wall_phase)
+    case = Case(
+        "wall-density",
+        "medium" if wall_phase == "mixed" else "small",
+        "gpu",
+        SEED,
+        2 if wall_phase == "mixed" else 0,
+        0,
+        wall_phase=wall_phase,
+    )
     run_dir = output / "cases" / case.identifier / "run-001"
     metadata = native.read_json(run_dir / "run-metadata.json")
     native.require(
@@ -875,7 +970,9 @@ def run_calibration(
         quality=quality,
         scale_factor=scale_factor,
         zoom=zoom,
-        wall_phase="provisional" if authority == "art_preview" or formwork else "completed",
+        wall_phase=(
+            "provisional" if authority == "art_preview" else "mixed" if formwork else "completed"
+        ),
     )
     if formwork:
         command.append("--wall-formwork-acceptance")
@@ -961,7 +1058,9 @@ def run_calibration(
         binary_sha256=sha256(binary),
         quality=quality,
         scale_factor=scale_factor,
-        wall_phase="provisional" if authority == "art_preview" or formwork else "completed",
+        wall_phase=(
+            "provisional" if authority == "art_preview" else "mixed" if formwork else "completed"
+        ),
     )
     native.require(
         performance["fixture"]["layout_checksum"]
@@ -1752,7 +1851,72 @@ def self_test() -> int:
     )
     formwork_status = json.loads(json.dumps(preview_status))
     formwork_status.pop("evidence_kind")
+    formwork_status["fixture"]["contract_id"] = "wall-formwork-density-v1"
+    formwork_status["fixture"]["contract_sha256"] = density.sha256(
+        FORMWORK_CONTRACT_PATH
+    )
+    formwork_status["fixture"]["target_size"] = "4N"
+    formwork_status["fixture"]["wall_phase"] = "mixed"
     formwork_status["gallery"]["authority"] = "isolated_candidate"
+    formwork_status["gallery"].update(
+        {
+            "wall_phase": "mixed",
+            "target_wall_count": 384,
+            "completed_wall_count": 192,
+            "provisional_wall_count": 192,
+            "gallery_wall_count": 386,
+            "connector_count": 768,
+            "production_count": 386,
+            "distinct_meshes": 12,
+            "distinct_materials": 2,
+            "mask_counts": {f"{mask:04b}": 24 for mask in range(16)},
+            "completed_mask_counts": {
+                f"{mask:04b}": 12 for mask in range(16)
+            },
+            "provisional_mask_counts": {
+                f"{mask:04b}": 12 for mask in range(16)
+            },
+            "mixed_pair": [
+                {
+                    "grid": [20, 15],
+                    "phase": "provisional",
+                    "mask": "0001",
+                    "family": "end",
+                    "quarter_turns_y": 3,
+                },
+                {
+                    "grid": [21, 15],
+                    "phase": "completed",
+                    "mask": "0010",
+                    "family": "end",
+                    "quarter_turns_y": 1,
+                },
+            ],
+            "soul_depth": [
+                {
+                    "wall_grid": [22, 17],
+                    "wall_phase": "provisional",
+                    "relation": "front",
+                    "wall_depth": 0.5,
+                    "soul_depth": 0.4,
+                    "center_distance": 0.0,
+                    "wall_center": {"x": 640.0, "y": 350.0},
+                    "soul_center": {"x": 640.0, "y": 350.0},
+                },
+                {
+                    "wall_grid": [22, 22],
+                    "wall_phase": "completed",
+                    "relation": "behind",
+                    "wall_depth": 0.5,
+                    "soul_depth": 0.6,
+                    "center_distance": 0.0,
+                    "wall_center": {"x": 640.0, "y": 300.0},
+                    "soul_center": {"x": 640.0, "y": 300.0},
+                },
+            ],
+        }
+    )
+    formwork_status["capture_view"]["hidden_connector_visuals"] = 768
     validate_probe_status(
         formwork_status,
         nonce=nonce,

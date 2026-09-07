@@ -152,17 +152,21 @@ authoring v3 final manifestへ封印する。`project_wall_formwork_candidate.py
 `normal_decision=rejected`、receiptなしを要求し、ArtPreview projectionを正式受入へ流用しない。
 `provision_wall_formwork_candidate.py`はこのfinalだけを外部`staging/validation/`配下の新規viewへコピーし、
 異なる既存bytesやlocatorの上書きを拒否する。
-provision後の正式画像は`wall_art_acceptance.py`の`--candidate --matrix --formwork`を標準zoomと
-`--zoom farthest`で各1 job実行する。profileはそれぞれ`wall-formwork-v1` / `wall-formwork-v1-farthest`で、
-`art_preview`を受理せず、provisional 96 ownerがexact 15 core由来のformwork mesh 6種とOpaque materialへ
-全件収束してfallback 0であることを検証する。完成Wall用matrixのpassはこの検査の代用にしない。
+provision後のW-G01正式画像は`wall_art_acceptance.py`の`--candidate --matrix --formwork`を標準zoomと
+`--zoom farthest`で各1 job実行する。profileはそれぞれ`wall-formwork-gallery-v2` /
+`wall-formwork-gallery-v2-farthest`で、`art_preview`を受理しない。凍結済みmixed 4N fixtureの
+仮設192／本設192（各phase・全16 maskを12回ずつ）へ直接接続した仮設／本設pair 2本を加え、
+exact 15 core由来の完成6＋型枠6 mesh、段階別2 material、production 386 / fallback 0を検証する。
+さらにSoul 2体を別々のWallと同じcamera rayへ置き、仮設Wallの前／本設Wallの後ろというdepth関係を
+statusで固定してからcaptureを許可する。完成Wall用matrixや旧provisional-only v1のpassはこの検査の代用にしない。
 
-generation 8の正式candidateはsubject `3c0f7c67`で標準job
+generation 8のprovisional-only v1正式candidateはsubject `3c0f7c67`で標準job
 `wall-art-20260907T031245Z-d7fea076`と最大zoom-out job
 `wall-art-20260907T032953Z-d83fa1ba`を実行し、各9/9 valid・独立verify passとなった。
 final manifest SHA-256は`244b522deea6f9b3744360a77ce90c94cff179220fd10def4690a2a2e7db04d0`、
 asset-view fingerprintは`ad63f1c334c91335851d06aa1b64be76b7ce08da903e53ab425c4f7938e4cc98`である。
-これは正式画像gateの証跡であり、lifecycle、Capture、Memory、promotion receiptを満たすものではない。
+これは当時の型枠単独画像gateの履歴証跡であり、W-G01 v2の混在pair／Soul depth、lifecycle、
+Capture、Memory、promotion receiptを満たすものではない。
 
 DoorはWall manifestと分離したauthoring/runtime schema v1を使う。`seal_door_candidate.py`は3 GLB、shared albedo、EW/NS previewのexact 6 coreと、scene/export/Khronos/post-export/texture/OCIO report、Blender原本、geometry fixture、imagegen prompt、license、tool source fingerprintをtechnical candidateへ封印する。`project_door_preview.py`はcandidateだけを`authority=art_preview` / `review_status=art_preview` / receiptなしの`manifests/door-production-v1.doorset`へ投影する。
 

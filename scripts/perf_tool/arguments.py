@@ -509,9 +509,9 @@ def validate_arguments(args: argparse.Namespace) -> None:
             raise ValueError(
                 "--wall-formwork-acceptance requires --wall-actual-window and --wall-art-matrix"
             )
-        if args.wall_formwork_acceptance and args.wall_phase != "provisional":
+        if args.wall_formwork_acceptance and args.wall_phase != "mixed":
             raise ValueError(
-                "--wall-formwork-acceptance requires --wall-phase provisional"
+                "--wall-formwork-acceptance requires --wall-phase mixed"
             )
         if args.wall_art_zoom != "standard" and not args.wall_art_matrix:
             raise ValueError("--wall-art-zoom farthest requires --wall-art-matrix")
@@ -531,15 +531,19 @@ def validate_arguments(args: argparse.Namespace) -> None:
                 "wall-density requires --wall-phase completed|provisional|mixed"
             )
         if args.wall_phase == "mixed" and (
-            wall_actual_window or args.wall_presentation is None
+            (wall_actual_window and not args.wall_formwork_acceptance)
+            or (not wall_actual_window and args.wall_presentation is None)
         ):
             raise ValueError(
                 "wall-density mixed requires the formal --wall-presentation path"
             )
         if wall_actual_window:
-            if sizes != ["small"] or renders != ["gpu"]:
+            expected_actual_size = (
+                ["medium"] if args.wall_formwork_acceptance else ["small"]
+            )
+            if sizes != expected_actual_size or renders != ["gpu"]:
                 raise ValueError(
-                    "wall-density actual-window requires --sizes small --renders gpu"
+                    "wall-density actual-window requires its profile size and --renders gpu"
                 )
         elif args.wall_phase == "mixed" and (
             sizes != ["medium"] or renders != ["gpu"]
@@ -605,8 +609,11 @@ def validate_arguments(args: argparse.Namespace) -> None:
                 "wall-density requires familiar policy baseline, operation dialog hidden, "
                 "and dashboard hidden"
             )
-        if args.souls != 0 or args.familiars != 0:
-            raise ValueError("wall-density requires --souls 0 --familiars 0")
+        expected_souls = 2 if args.wall_formwork_acceptance else 0
+        if args.souls != expected_souls or args.familiars != 0:
+            raise ValueError(
+                f"wall-density requires --souls {expected_souls} --familiars 0"
+            )
         return
     if args.wall_phase is not None:
         raise ValueError("--wall-phase is reserved for --workload wall-density")

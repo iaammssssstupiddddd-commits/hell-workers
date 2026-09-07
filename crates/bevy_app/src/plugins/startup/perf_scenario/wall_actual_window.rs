@@ -13,20 +13,25 @@ use bevy::mesh::{Mesh, Mesh3d};
 use bevy::pbr::MeshMaterial3d;
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
-use hw_core::constants::topdown_rtt_vertical_compensation;
+use hw_core::constants::{TILE_SIZE, topdown_rtt_vertical_compensation};
 use hw_ui::camera::MainCamera;
 use hw_visual::TopDownStructuralMaterial;
-use hw_visual::visual3d::{Building3dVisual, Wall3dPresentationMode, Wall3dPresentationState};
+use hw_visual::visual3d::{
+    ActorBillboard3d, Building3dVisual, Wall3dPresentationMode, Wall3dPresentationState,
+};
+use hw_visual::wall_connection::{WallConnectionMask, resolve_wall_topology};
 use serde_json::{Value, json};
 
 use super::config::{PerfRenderMode, PerfScenarioConfig};
 use super::fixture::{PerfFixtureKind, PerfFixtureMarker};
 use super::wall_density_fixture::{
-    CAMERA_SCALE, CONTRACT_ID, CONTRACT_SHA256, WallDensityFixtureState,
+    CAMERA_SCALE, CONTRACT_ID, CONTRACT_SHA256, FORMWORK_CONTRACT_ID, FORMWORK_CONTRACT_SHA256,
+    WallDensityFixtureState,
 };
 use super::{PerfScenarioSize, PerfWallPhase, PerfWorkload};
 use crate::assets::wall_asset_set::{
-    ProductionWallAssetPool, WallProductionActivation, WallProductionActivationState,
+    ProductionWallAssetPool, ProductionWallMaterialPool, WallProductionActivation,
+    WallProductionActivationState,
 };
 use crate::plugins::startup::{Building3dHandles, Camera3dRtt};
 
@@ -55,6 +60,8 @@ const STRAIGHT_PROBE_TERRAIN_MARGIN: u32 = 4;
 const STRAIGHT_PROBE_MIN_HALF_WIDTH: u32 = 2;
 /// `(N, S, W, E)` connection mask of the straight east-west specimen.
 const STRAIGHT_EAST_WEST_MASK: u8 = 0b0011;
+const SOUL_DEPTH_RAY_OFFSET: f32 = TILE_SIZE * 1.5;
+const SOUL_DEPTH_MAX_CENTER_DISTANCE: f32 = 0.5;
 
 /// The gallery view is the acceptance presentation: it frames the fixture,
 /// hides UI and connector visuals, and reports production residency. It is
@@ -80,8 +87,8 @@ const fn accepted_wall_phase(
     formwork_acceptance: bool,
 ) -> bool {
     matches!(phase, Some(PerfWallPhase::Completed))
-        || ((art_preview || formwork_acceptance)
-            && matches!(phase, Some(PerfWallPhase::Provisional)))
+        || (art_preview && matches!(phase, Some(PerfWallPhase::Provisional)))
+        || (formwork_acceptance && matches!(phase, Some(PerfWallPhase::Mixed)))
 }
 
 fn farthest_zoom_requested() -> bool {
@@ -141,7 +148,8 @@ impl WallActualWindowAcceptance {
             && !self.failed
             && config.enabled()
             && config.workload == PerfWorkload::WallDensity
-            && config.size == PerfScenarioSize::Small
+            && (config.size == PerfScenarioSize::Small
+                || (formwork_acceptance_requested() && config.size == PerfScenarioSize::Medium))
             && accepted_wall_phase(
                 config.wall_phase(),
                 art_preview_requested(),
@@ -199,7 +207,33 @@ type WallVisualQuery<'w, 's> = Query<
 
 #[derive(bevy::ecs::system::SystemParam)]
 pub(crate) struct WallActualWindowViewParams<'w, 's> {
-    main_camera: Query<'w, 's, &'static mut Transform, (With<MainCamera>, Without<Camera3dRtt>)>,
+    main_camera: Query<
+        'w,
+        's,
+        &'static mut Transform,
+        (
+            With<MainCamera>,
+            Without<Camera3dRtt>,
+            Without<ActorBillboard3d>,
+        ),
+    >,
+    camera_3d: Query<'w, 's, (&'static Camera, &'static GlobalTransform), With<Camera3dRtt>>,
+    wall_visuals: Query<
+        'w,
+        's,
+        (&'static Building3dVisual, &'static GlobalTransform),
+        Without<ActorBillboard3d>,
+    >,
+    billboards: Query<
+        'w,
+        's,
+        (
+            &'static ActorBillboard3d,
+            &'static mut Transform,
+            &'static mut Visibility,
+        ),
+        (Without<MainCamera>, Without<Building3dVisual>),
+    >,
     ui_roots: Query<'w, 's, &'static mut Node, Without<ChildOf>>,
     connector_visuals: Query<'w, 's, (&'static PerfFixtureMarker, &'static mut Visibility)>,
 }
@@ -232,6 +266,90 @@ pub(crate) fn prepare_wall_actual_window_gallery_view_system(
             *visibility = Visibility::Hidden;
         }
     }
+    if formwork_acceptance_requested() {
+        prepare_soul_depth_gallery(
+            &fixture,
+            &params.camera_3d,
+            &params.wall_visuals,
+            &mut params.billboards,
+        );
+    }
+}
+
+fn prepare_soul_depth_gallery(
+    fixture: &WallDensityFixtureState,
+    camera_3d: &Query<(&Camera, &GlobalTransform), With<Camera3dRtt>>,
+    wall_visuals: &Query<(&Building3dVisual, &GlobalTransform), Without<ActorBillboard3d>>,
+    billboards: &mut Query<
+        (&ActorBillboard3d, &mut Transform, &mut Visibility),
+        (Without<MainCamera>, Without<Building3dVisual>),
+    >,
+) {
+    for (_, _, mut visibility) in billboards.iter_mut() {
+        *visibility = Visibility::Hidden;
+    }
+    let Some(subjects) = fixture.soul_depth_subjects() else {
+        return;
+    };
+    let Ok((camera, camera_transform)) = camera_3d.single() else {
+        return;
+    };
+    let mut owners = billboards
+        .iter_mut()
+        .map(|(billboard, _, _)| billboard.owner)
+        .collect::<Vec<_>>();
+    owners.sort_unstable_by_key(|entity| entity.to_bits());
+    if owners.len() != subjects.len() {
+        return;
+    }
+    for (index, (wall, _, _)) in subjects.into_iter().enumerate() {
+        let Some(wall_position) = wall_visuals.iter().find_map(|(visual, transform)| {
+            (visual.owner == wall).then_some(transform.translation())
+        }) else {
+            return;
+        };
+        let Some(position) =
+            soul_depth_position(camera, camera_transform, wall_position, index == 0)
+        else {
+            return;
+        };
+        for (billboard, mut transform, mut visibility) in billboards.iter_mut() {
+            if billboard.owner == owners[index] {
+                transform.translation = position;
+                *visibility = Visibility::Visible;
+            }
+        }
+    }
+}
+
+fn soul_depth_position(
+    camera: &Camera,
+    camera_transform: &GlobalTransform,
+    wall_position: Vec3,
+    front: bool,
+) -> Option<Vec3> {
+    let wall_view = camera
+        .world_to_viewport_with_depth(camera_transform, wall_position)
+        .ok()?;
+    [
+        wall_position - camera_transform.forward().as_vec3() * SOUL_DEPTH_RAY_OFFSET,
+        wall_position + camera_transform.forward().as_vec3() * SOUL_DEPTH_RAY_OFFSET,
+    ]
+    .into_iter()
+    .filter_map(|position| {
+        let view = camera
+            .world_to_viewport_with_depth(camera_transform, position)
+            .ok()?;
+        let relation_matches = if front {
+            view.z < wall_view.z
+        } else {
+            view.z > wall_view.z
+        };
+        relation_matches.then_some((view.truncate().distance(wall_view.truncate()), position))
+    })
+    .filter(|(distance, _)| *distance <= SOUL_DEPTH_MAX_CENTER_DISTANCE)
+    .min_by(|left, right| left.0.total_cmp(&right.0))
+    .map(|(_, position)| position)
 }
 
 #[derive(bevy::ecs::system::SystemParam)]
@@ -251,10 +369,21 @@ pub(crate) struct WallActualWindowParams<'w, 's> {
     ui_roots: Query<'w, 's, &'static Node, Without<ChildOf>>,
     connector_visuals: Query<'w, 's, (&'static PerfFixtureMarker, &'static Visibility)>,
     visuals: WallVisualQuery<'w, 's>,
+    billboards: Query<
+        'w,
+        's,
+        (
+            &'static ActorBillboard3d,
+            &'static GlobalTransform,
+            &'static Visibility,
+            &'static InheritedVisibility,
+        ),
+    >,
     meshes: Res<'w, Assets<Mesh>>,
     materials: Res<'w, Assets<TopDownStructuralMaterial>>,
     handles: Res<'w, Building3dHandles>,
     production_assets: Res<'w, ProductionWallAssetPool>,
+    production_materials: Res<'w, ProductionWallMaterialPool>,
     activation: Res<'w, WallProductionActivation>,
 }
 
@@ -450,49 +579,103 @@ fn build_status(
                 return Err("wall gallery material is unexpectedly unlit".to_string());
             }
         }
-        if production_count != evidence.target_wall_count
-            || fallback_count != 0
-            || mesh_ids.len() != 6
-            || material_ids.len() != 1
-        {
-            return Err(format!(
-                "wall gallery residency differs: production={production_count}/{}, fallback={fallback_count}/0, meshes={}/6, materials={}/1",
-                evidence.target_wall_count,
-                mesh_ids.len(),
-                material_ids.len(),
-            ));
-        }
         let resolved = params
             .production_assets
             .resolved
             .as_ref()
             .ok_or_else(|| "wall gallery production asset pool is unresolved".to_string())?;
-        let expected_meshes = match evidence.phase {
-            PerfWallPhase::Completed => &resolved.meshes,
-            PerfWallPhase::Provisional => resolved.formwork_meshes.as_ref().ok_or_else(|| {
-                "wall formwork gallery has no formwork mesh inventory".to_string()
-            })?,
-            PerfWallPhase::Mixed => {
-                return Err("wall actual-window gallery does not accept mixed density".to_string());
-            }
+        let formwork_meshes = resolved.formwork_meshes.as_ref();
+        let expected_mesh_ids = match evidence.phase {
+            PerfWallPhase::Completed => resolved
+                .meshes
+                .iter()
+                .map(|handle| handle.id())
+                .collect::<HashSet<_>>(),
+            PerfWallPhase::Provisional => formwork_meshes
+                .ok_or_else(|| "wall formwork gallery has no formwork mesh inventory".to_string())?
+                .iter()
+                .map(|handle| handle.id())
+                .collect(),
+            PerfWallPhase::Mixed => resolved
+                .meshes
+                .iter()
+                .chain(formwork_meshes.ok_or_else(|| {
+                    "wall mixed gallery has no formwork mesh inventory".to_string()
+                })?)
+                .map(|handle| handle.id())
+                .collect(),
         };
-        let expected_mesh_ids = expected_meshes
-            .iter()
-            .map(|handle| handle.id())
-            .collect::<HashSet<_>>();
-        if !mesh_ids.iter().all(|id| expected_mesh_ids.contains(id)) {
+        let complete_material = params
+            .production_materials
+            .complete
+            .as_ref()
+            .ok_or_else(|| "wall gallery completed material is unresolved".to_string())?;
+        let expected_material_ids = match evidence.phase {
+            PerfWallPhase::Completed => HashSet::from([complete_material.id()]),
+            PerfWallPhase::Provisional => HashSet::from([params
+                .production_materials
+                .provisional
+                .as_ref()
+                .ok_or_else(|| "wall gallery provisional material is unresolved".to_string())?
+                .id()]),
+            PerfWallPhase::Mixed => HashSet::from([
+                complete_material.id(),
+                params
+                    .production_materials
+                    .provisional
+                    .as_ref()
+                    .ok_or_else(|| "wall gallery provisional material is unresolved".to_string())?
+                    .id(),
+            ]),
+        };
+        if mesh_ids != expected_mesh_ids || material_ids != expected_material_ids {
             return Err("wall gallery uses meshes from another construction phase".to_string());
         }
-        if evidence.phase == PerfWallPhase::Provisional {
-            for (_, _, material, _, _, _, _) in &params.visuals {
-                let value = params
-                    .materials
-                    .get(&material.0)
-                    .ok_or_else(|| "wall formwork material is not resident".to_string())?;
-                if value.base.alpha_mode != AlphaMode::Opaque {
-                    return Err("wall formwork gallery material is not opaque".to_string());
-                }
+        if evidence.phase != PerfWallPhase::Completed {
+            let provisional_material = params
+                .production_materials
+                .provisional
+                .as_ref()
+                .ok_or_else(|| "wall gallery provisional material is unresolved".to_string())?;
+            let formwork_material = params
+                .materials
+                .get(provisional_material)
+                .ok_or_else(|| "wall formwork material is not resident".to_string())?;
+            if formwork_material.base.alpha_mode != AlphaMode::Opaque {
+                return Err("wall formwork gallery material is not opaque".to_string());
             }
+        }
+        let expected_target_count = evidence.target_entities.len();
+        if production_count != expected_target_count || fallback_count != 0 {
+            return Err(format!(
+                "wall gallery residency differs: production={production_count}/{expected_target_count}, fallback={fallback_count}/0"
+            ));
+        }
+        let mixed_pair = match evidence.phase {
+            PerfWallPhase::Mixed => Some(validate_mixed_gallery_pair(&evidence, &params.visuals)?),
+            PerfWallPhase::Completed | PerfWallPhase::Provisional => {
+                if evidence.mixed_gallery_pair.is_some() {
+                    return Err("non-mixed wall gallery retained a mixed pair".to_string());
+                }
+                None
+            }
+        };
+        let soul_depth = match evidence.phase {
+            PerfWallPhase::Mixed => Some(validate_soul_depth_gallery(
+                fixture,
+                params,
+                camera,
+                camera_transform,
+                physical_width,
+                physical_height,
+            )?),
+            PerfWallPhase::Completed | PerfWallPhase::Provisional => None,
+        };
+        if evidence.phase == PerfWallPhase::Mixed
+            && (evidence.completed_mask_counts.len() != 16
+                || evidence.provisional_mask_counts.len() != 16)
+        {
+            return Err("wall mixed gallery does not cover all masks in both phases".to_string());
         }
         let WallProductionActivationState::ReadyToApply {
             asset_set_generation,
@@ -509,7 +692,7 @@ fn build_status(
         {
             return Err("wall gallery activation identity differs".to_string());
         }
-        Some(json!({
+        let mut gallery = json!({
             "lighting": "lit",
             "asset_set_generation": asset_set_generation,
             "authority": authority,
@@ -523,7 +706,17 @@ fn build_status(
             "distinct_meshes": mesh_ids.len(),
             "distinct_materials": material_ids.len(),
             "mask_counts": evidence.mask_counts,
-        }))
+        });
+        if evidence.phase == PerfWallPhase::Mixed {
+            gallery["completed_wall_count"] = json!(evidence.completed_wall_count);
+            gallery["provisional_wall_count"] = json!(evidence.provisional_wall_count);
+            gallery["gallery_wall_count"] = json!(expected_target_count);
+            gallery["completed_mask_counts"] = json!(evidence.completed_mask_counts);
+            gallery["provisional_mask_counts"] = json!(evidence.provisional_mask_counts);
+            gallery["mixed_pair"] = mixed_pair.expect("mixed gallery pair was validated");
+            gallery["soul_depth"] = soul_depth.expect("mixed gallery Soul depth was validated");
+        }
+        Some(gallery)
     } else {
         if mesh.0.id() != params.handles.wall_mesh.id() {
             return Err(
@@ -559,6 +752,12 @@ fn build_status(
     let scale_factor = config
         .requested_window_scale_factor()
         .ok_or_else(|| "wall actual-window scale factor is absent".to_string())?;
+    let (contract_id, contract_sha256, target_size) = match subject.phase {
+        PerfWallPhase::Mixed => (FORMWORK_CONTRACT_ID, FORMWORK_CONTRACT_SHA256, "4N"),
+        PerfWallPhase::Completed | PerfWallPhase::Provisional => {
+            (CONTRACT_ID, CONTRACT_SHA256, "N")
+        }
+    };
     let mut status = json!({
         "schema_version": STATUS_SCHEMA_VERSION,
         "status": "ready",
@@ -566,10 +765,10 @@ fn build_status(
         "phase": PHASE_ID,
         "generation": GENERATION,
         "fixture": {
-            "contract_id": CONTRACT_ID,
-            "contract_sha256": CONTRACT_SHA256,
+            "contract_id": contract_id,
+            "contract_sha256": contract_sha256,
             "layout_checksum": subject.layout_checksum,
-            "target_size": "N",
+            "target_size": target_size,
             "wall_phase": subject.phase.as_str(),
             "subject_ordinal": subject.ordinal,
             "subject_grid": [subject.grid.0, subject.grid.1],
@@ -645,6 +844,142 @@ fn failure_status(acceptance: &WallActualWindowAcceptance, reason: &str) -> Valu
         "generation": GENERATION,
         "reason": reason,
     })
+}
+
+fn validate_mixed_gallery_pair(
+    evidence: &super::wall_density_fixture::WallDensityRenderDocEvidence,
+    visuals: &WallVisualQuery,
+) -> Result<Value, String> {
+    let pair = evidence
+        .mixed_gallery_pair
+        .ok_or_else(|| "wall mixed gallery has no direct phase-crossing pair".to_string())?;
+    if pair[1].1 != (pair[0].1.0 + 1, pair[0].1.1) || !pair[0].2 || pair[1].2 {
+        return Err("wall mixed gallery pair placement or phase differs".to_string());
+    }
+    let expected = [
+        resolve_wall_topology(WallConnectionMask::from_neighbors(
+            false, false, false, true,
+        )),
+        resolve_wall_topology(WallConnectionMask::from_neighbors(
+            false, false, true, false,
+        )),
+    ];
+    let mut records = Vec::with_capacity(pair.len());
+    for (index, (entity, grid, is_provisional)) in pair.into_iter().enumerate() {
+        let (_, _, _, state, _, visibility, inherited_visibility) = visuals
+            .iter()
+            .find(|(visual, ..)| visual.owner == entity)
+            .ok_or_else(|| "wall mixed gallery pair visual is missing".to_string())?;
+        if state.mode != Wall3dPresentationMode::Production
+            || state.topology != expected[index]
+            || *visibility == Visibility::Hidden
+            || !inherited_visibility.get()
+        {
+            return Err("wall mixed gallery pair presentation differs".to_string());
+        }
+        records.push(json!({
+            "grid": [grid.0, grid.1],
+            "phase": if is_provisional { "provisional" } else { "completed" },
+            "mask": if index == 0 { "0001" } else { "0010" },
+            "family": "end",
+            "quarter_turns_y": state.topology.quarter_turns_y.get(),
+        }));
+    }
+    Ok(Value::Array(records))
+}
+
+fn validate_soul_depth_gallery(
+    fixture: &WallDensityFixtureState,
+    params: &WallActualWindowParams,
+    camera: &Camera,
+    camera_transform: &GlobalTransform,
+    physical_width: u32,
+    physical_height: u32,
+) -> Result<Value, String> {
+    let subjects = fixture
+        .soul_depth_subjects()
+        .ok_or_else(|| "wall mixed gallery has no Soul depth subjects".to_string())?;
+    let mut owners = params
+        .billboards
+        .iter()
+        .map(|(billboard, ..)| billboard.owner)
+        .collect::<Vec<_>>();
+    owners.sort_unstable_by_key(|entity| entity.to_bits());
+    if owners.len() != subjects.len() {
+        return Err(format!(
+            "wall mixed gallery has {} Soul billboards, expected {}",
+            owners.len(),
+            subjects.len()
+        ));
+    }
+    let mut records = Vec::with_capacity(subjects.len());
+    for (index, (wall, grid, is_provisional)) in subjects.into_iter().enumerate() {
+        let wall_position = params
+            .visuals
+            .iter()
+            .find_map(|(visual, _, _, _, transform, _, _)| {
+                (visual.owner == wall).then_some(transform.translation())
+            })
+            .ok_or_else(|| "wall mixed gallery Soul target is missing".to_string())?;
+        let (_, soul_transform, visibility, inherited_visibility) = params
+            .billboards
+            .iter()
+            .find(|(billboard, ..)| billboard.owner == owners[index])
+            .ok_or_else(|| "wall mixed gallery Soul billboard is missing".to_string())?;
+        if *visibility == Visibility::Hidden || !inherited_visibility.get() {
+            return Err("wall mixed gallery Soul billboard is hidden".to_string());
+        }
+        let wall_view = camera
+            .world_to_viewport_with_depth(camera_transform, wall_position)
+            .map_err(|error| format!("cannot project Wall Soul-depth target: {error}"))?;
+        let soul_view = camera
+            .world_to_viewport_with_depth(camera_transform, soul_transform.translation())
+            .map_err(|error| format!("cannot project Wall gallery Soul: {error}"))?;
+        let wall_center = project_client_point(
+            camera,
+            camera_transform,
+            wall_position,
+            physical_width,
+            physical_height,
+        )
+        .ok_or_else(|| "Wall Soul-depth center is outside the client".to_string())?;
+        let soul_center = project_client_point(
+            camera,
+            camera_transform,
+            soul_transform.translation(),
+            physical_width,
+            physical_height,
+        )
+        .ok_or_else(|| "Soul depth center is outside the client".to_string())?;
+        let center_distance = wall_center.distance(soul_center);
+        if center_distance > SOUL_DEPTH_MAX_CENTER_DISTANCE {
+            return Err(format!(
+                "wall mixed gallery Soul center distance is {center_distance:.3}px"
+            ));
+        }
+        let relation = if soul_view.z < wall_view.z {
+            "front"
+        } else {
+            "behind"
+        };
+        let expected_relation = if index == 0 { "front" } else { "behind" };
+        if relation != expected_relation {
+            return Err(format!(
+                "wall mixed gallery Soul is {relation}, expected {expected_relation}"
+            ));
+        }
+        records.push(json!({
+            "wall_grid": [grid.0, grid.1],
+            "wall_phase": if is_provisional { "provisional" } else { "completed" },
+            "relation": relation,
+            "wall_depth": wall_view.z,
+            "soul_depth": soul_view.z,
+            "center_distance": center_distance,
+            "wall_center": {"x": wall_center.x, "y": wall_center.y},
+            "soul_center": {"x": soul_center.x, "y": soul_center.y},
+        }));
+    }
+    Ok(Value::Array(records))
 }
 
 fn project_client_point(
@@ -806,7 +1141,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn provisional_actual_window_requires_explicit_art_preview() {
+    fn provisional_and_mixed_actual_windows_require_their_own_profiles() {
         assert!(accepted_wall_phase(
             Some(PerfWallPhase::Completed),
             false,
@@ -822,10 +1157,16 @@ mod tests {
             true,
             false
         ));
-        assert!(accepted_wall_phase(
+        assert!(!accepted_wall_phase(
             Some(PerfWallPhase::Provisional),
             false,
             true
+        ));
+        assert!(accepted_wall_phase(Some(PerfWallPhase::Mixed), false, true));
+        assert!(!accepted_wall_phase(
+            Some(PerfWallPhase::Mixed),
+            true,
+            false
         ));
         assert!(!accepted_wall_phase(None, true, false));
     }

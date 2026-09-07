@@ -275,7 +275,7 @@ fn wall_density_actual_window_has_a_distinct_duration_contract() {
 }
 
 #[test]
-fn wall_formwork_profiles_are_the_only_provisional_actual_window_profiles() {
+fn wall_formwork_gallery_is_the_only_mixed_actual_window_profile() {
     use super::PerfWallPhase;
 
     assert!(super::wall_actual_window_phase_matches(
@@ -300,6 +300,13 @@ fn wall_formwork_profiles_are_the_only_provisional_actual_window_profiles() {
         Some(PerfWallPhase::Provisional),
     ));
     assert!(super::wall_actual_window_phase_matches(
+        true,
+        false,
+        false,
+        true,
+        Some(PerfWallPhase::Mixed),
+    ));
+    assert!(!super::wall_actual_window_phase_matches(
         true,
         false,
         false,

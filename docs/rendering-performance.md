@@ -72,11 +72,13 @@ High / Medium / Low × DPI 1.0 / 1.5 / 2.0を9つの逐次X11 client captureと�
 immutable artifactのhashとlocatorをoffline再検証する。`perf.py`側の内部`--wall-art-matrix` authorizationは
 Wall native helperだけが付与し、通常のsingle-case校正とformal densityの固定quality / DPI契約は変更しない。
 
-承認済みprovisional Wallは別の`wall-formwork-v1` / `wall-formwork-v1-farthest`が所有する。
+W-G01の承認済みWall比較は別の`wall-formwork-gallery-v2` / `wall-formwork-gallery-v2-farthest`が所有する。
 `--perf-wall-formwork-acceptance`と`HW_WALL_FORMWORK_ACCEPTANCE=1`が揃ったschema 2の隔離candidateだけを許可し、
-active handleが完成Wallではなく6つのformwork mesh集合に属することと、木材materialがOpaqueであることを
-game process内で検査する。標準／最大zoom-outを各9 case採るため正式画像は18枚であり、completed-only galleryを
-型枠合格へ読み替えない。最大zoom-outの型枠は最小6 px幅になるため、完成石壁の全列`3σ`契約とは分け、
+mixed 384の仮設／本設がそれぞれ全16 maskを覆い、完成6＋型枠6 mesh、段階別2 materialへ収束することを
+game process内で検査する。追加した直接接続pairはE/WのEnd topology、Soul 2体は仮設Wallの前／本設Wallの後ろを
+camera depthでfail-closed検証し、凍結済み性能sidecarの384 ownerには混ぜない。標準／最大zoom-outを各9 case採るため
+正式画像は18枚であり、completed-only galleryや旧provisional-only v1をW-G01合格へ読み替えない。
+最大zoom-outの型枠は最小6 px幅になるため、完成石壁の全列`3σ`契約とは分け、
 中央値が`3σ`以上かつ地形と混ざるraster列を最大1列だけ許す。2列以上の欠落はfailとする。
 
 この契約によるgeneration 8の正式実績は、subject `3c0f7c67`の標準job

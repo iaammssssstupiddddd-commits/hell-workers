@@ -2881,11 +2881,11 @@ def self_test() -> int:
         validate_arguments(wall_matrix_args)
         wall_formwork_args = build_parser().parse_args(
             [
-                "run", "--workload", "wall-density", "--wall-phase", "provisional",
+                "run", "--workload", "wall-density", "--wall-phase", "mixed",
                 "--wall-actual-window", "--wall-art-matrix",
-                "--wall-formwork-acceptance", "--sizes", "small",
+                "--wall-formwork-acceptance", "--sizes", "medium",
                 "--renders", "gpu", "--seed", "20260901", "--repeat", "1",
-                "--preflight-runs", "0", "--souls", "0", "--familiars", "0",
+                "--preflight-runs", "0", "--souls", "2", "--familiars", "0",
                 "--window-backend", "x11", "--backend", "vulkan",
                 "--present-mode", "novsync", "--window-width", "1280",
                 "--window-height", "720", "--window-scale-factor", "1.5",

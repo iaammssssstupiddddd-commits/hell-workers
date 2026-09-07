@@ -319,8 +319,9 @@ headless、Blender render、`visual_test`だけでは実機合格にしない。
 
 ### 7.1 ケースと観測点
 
-新profile名は`wall-formwork-v1`とし、標準／最大zoom-outの正式画像profileを実装済み。既存`wall-density-v1`やcompleted-only galleryの
-凍結fixture・過去sidecarを変更せず、新しい状態別inventoryを持つ。
+W-G01の新profile名は`wall-formwork-gallery-v2` / `wall-formwork-gallery-v2-farthest`とし、
+標準／最大zoom-outの正式画像profileを実装済み。既存`wall-density-v1`、`wall-formwork-density-v1`、
+completed-only gallery、provisional-only v1の凍結fixture・過去sidecarを変更せず、新しい混在状態別inventoryを持つ。
 
 | ID | setup / 操作 | 観測する結果 |
 | --- | --- | --- |
@@ -383,7 +384,7 @@ harness fingerprint `a0d88a6dd4d77757844a6f910737e8ad8be833eca2a83366111e573c90b
 型枠だけを「中央値`3σ`以上、terrain-mixed列は最大1列」に分離し、2列欠落を拒否するself-testを追加した上で、
 generation 8の両jobを最初から採り直した。失敗jobはtrack完了まで保存する。
 
-この証跡が閉じるのは§7の正式画像だけである。W-G01の混在gallery・Soul前後depth、W-L01〜L03、
+この証跡が閉じるのは旧provisional-only v1の正式画像だけである。W-G01 v2の混在gallery・Soul前後depth、W-L01〜L03、
 W-A01〜A02、J1、release受入は引き続き未完とする。Capture / Memoryは§7.4で別に閉じた。
 
 ### 7.4 M3b性能・Memoryの証跡（generation 10）
@@ -441,7 +442,8 @@ Update required / 理由付きNo impactをその時点で判断する。
 - W-L02中核: site Coatは同じowner / visual Entityのまま仮設material→本設materialへ遷移し、legacy Coatは`Entity::PLACEHOLDER`分岐のtask producerが既存Wall rootを保持したまま`Building.is_provisional`をfalseへ変え、次のDone frameでtaskを完了することを固定した。Instant Buildは最初から本設materialを持つexactly-one visualを生成する。Framing前cancel、仮設後cancel、完成Wall撤去ではconnectorとowner-linked visualが残らないこともproduction回帰テストで確認した。native storyboardは未完。
 - W-L03中核: 仮設1 / 本設1の混在saveをnormal loadで10回反復し、各回のfallback→production復帰、phase保持、owner / visual数、完成6＋型枠6 mesh / 2 material poolの上限を固定した。同じ候補をrollback / recovery-onlyでも検証した。native sidecarの採取は未完。
 - W-A01 / W-A02中核: readinessの`Eligible → LoadFailed → Eligible`で仮設／本設の全Wallが同一Updateにproduction→fallback→productionへ切り替わることと、新→旧→新generationの往復でactive mesh/material handleが世代混在しないことをproduction回帰テストで固定した。欠落assetと世代切替のnative storyboardは未完。
-- 次の作業: 同じcandidate bytesを使ってW-G01の混在gallery・Soul depthとW-L01〜L03 / W-A01〜A02の実機storyboardを実装・採取する。Door側の単独gate後にJ1、M4へ進み、production回帰テストだけを実機合格へ読み替えない。
+- W-G01 harness: 凍結済みmixed 4Nの仮設192／本設192で各phase全16 maskを固定し、画像専用の仮設／本設E-W直接接続pair、完成6＋型枠6 mesh、段階別2 material、Soul 2体のfront / behind camera depthを同一gallery statusへ追加した。旧v1証跡を再ラベルせずprofileをv2化した。実機18 PNGの採取は未完。
+- 次の作業: 同じcandidate bytesでW-G01 v2の標準／最大zoom-out matrixを実機採取し、その後W-L01〜L03 / W-A01〜A02の実機storyboardを実装・採取する。Door側の単独gate後にJ1、M4へ進み、production回帰テストだけを実機合格へ読み替えない。
 - ドアはM0の共通port確定後に制作を並行可能。Rust・tooling編集はmain agentが順に行い、joint受入は両方のruntime接続後。
 - 240 triangles・core 15 file・§7の予算は採用した新設計値。現在のreleaseの実測・アート承認値として扱わない。
 
@@ -488,3 +490,4 @@ Update required / 理由付きNo impactをその時点で判断する。
 | `2026-09-08` | `Codex` | W-A01 / W-A02の中核として、asset失敗／復帰の全Wall atomic切替と新→旧→新generation往復時のactive handle非混在をproduction回帰テストへ追加。native storyboardは未完として分離 |
 | `2026-09-08` | `Codex` | W-L02の中核の一部としてsite Coat / Instant Buildのphase別materialとexactly-one visual、Framing前／仮設後cancel・完成Wall撤去後のconnector / owner-linked visual不残存をproduction回帰テストへ追加。legacy Coatとnative storyboardは未完として分離 |
 | `2026-09-08` | `Codex` | legacy Coatの`Entity::PLACEHOLDER` task producerが既存Wall rootを本設化してからDoneを完了する回帰を追加し、W-L02のproduction中核を閉じた。native storyboardは未完として分離 |
+| `2026-09-08` | `Codex` | W-G01用`wall-formwork-gallery-v2`を実装。mixed 4Nの段階別16 mask、画像専用の仮設／本設直接接続pair、12 mesh / 2 material、Soul前後depthを同一statusでfail-closed検証する。旧v1画像は履歴のまま残し、v2実機matrixは未採取 |

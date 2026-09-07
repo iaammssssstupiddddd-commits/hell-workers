@@ -37,7 +37,9 @@ const GRID_STRIDE: (i32, i32) = (5, 5);
 const GRID_COLUMNS: usize = 20;
 pub(super) const CAMERA_SCALE: f32 = 5.0;
 pub(super) const ACTUAL_WINDOW_SUBJECT_ORDINAL: u32 = 64;
+const COMPLETED_SOUL_DEPTH_SUBJECT_ORDINAL: u32 = 84;
 const MASK_COUNT: usize = 16;
+const MIXED_GALLERY_PAIR_GRIDS: [(i32, i32); 2] = [(20, 15), (21, 15)];
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(super) enum WallDensityFixturePhase {
@@ -69,6 +71,12 @@ struct WallDensityLayout {
     phase: PerfWallPhase,
     specimens: Vec<SpecimenSpec>,
     layout_checksum: String,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct MixedGalleryPair {
+    provisional: Entity,
+    completed: Entity,
 }
 
 impl WallDensityLayout {
@@ -133,12 +141,23 @@ impl WallDensityLayout {
             .count();
         (self.specimens.len() - provisional, provisional)
     }
+
+    fn phase_mask_counts(&self, provisional: bool) -> BTreeMap<String, usize> {
+        let mut counts = BTreeMap::new();
+        for specimen in &self.specimens {
+            if self.is_provisional(specimen.ordinal) == provisional {
+                *counts.entry(format!("{:04b}", specimen.mask)).or_default() += 1;
+            }
+        }
+        counts
+    }
 }
 
 #[derive(Resource, Default)]
 pub(crate) struct WallDensityFixtureState {
     pub(super) phase: WallDensityFixturePhase,
     layout: Option<WallDensityLayout>,
+    mixed_gallery_pair: Option<MixedGalleryPair>,
     pub(super) failure: Option<String>,
 }
 
@@ -153,6 +172,7 @@ pub(super) struct WallDensityProbeSubject<'a> {
 
 pub(super) struct WallDensityRenderDocEvidence {
     pub(super) target_entities: Vec<Entity>,
+    pub(super) mixed_gallery_pair: Option<[(Entity, (i32, i32), bool); 2]>,
     pub(super) layout_checksum: String,
     pub(super) phase: PerfWallPhase,
     pub(super) target_wall_count: usize,
@@ -160,6 +180,8 @@ pub(super) struct WallDensityRenderDocEvidence {
     pub(super) provisional_wall_count: usize,
     pub(super) connector_count: usize,
     pub(super) mask_counts: BTreeMap<String, usize>,
+    pub(super) completed_mask_counts: BTreeMap<String, usize>,
+    pub(super) provisional_mask_counts: BTreeMap<String, usize>,
 }
 
 impl WallDensityFixtureState {
@@ -171,6 +193,26 @@ impl WallDensityFixtureState {
     /// across its wall body.
     pub(super) fn mask_subject(&self, mask: u8) -> Option<WallDensityProbeSubject<'_>> {
         self.probe_subject(|specimen| specimen.mask == mask)
+    }
+
+    pub(super) fn soul_depth_subjects(&self) -> Option<[(Entity, (i32, i32), bool); 2]> {
+        let layout = self.layout.as_ref().filter(|layout| {
+            self.phase == WallDensityFixturePhase::Ready && layout.phase == PerfWallPhase::Mixed
+        })?;
+        let subject = |ordinal| {
+            let specimen = layout
+                .specimens
+                .iter()
+                .find(|specimen| specimen.ordinal == ordinal)?;
+            Some((
+                specimen.wall?,
+                specimen.grid,
+                layout.is_provisional(specimen.ordinal),
+            ))
+        };
+        let provisional = subject(ACTUAL_WINDOW_SUBJECT_ORDINAL)?;
+        let completed = subject(COMPLETED_SOUL_DEPTH_SUBJECT_ORDINAL)?;
+        (provisional.2 && !completed.2).then_some([provisional, completed])
     }
 
     fn probe_subject(
@@ -271,7 +313,7 @@ impl WallDensityFixtureState {
             .layout
             .as_ref()
             .ok_or_else(|| "wall-density Ready state has no layout".to_string())?;
-        let target_entities = layout
+        let mut target_entities = layout
             .specimens
             .iter()
             .map(|specimen| {
@@ -283,9 +325,22 @@ impl WallDensityFixtureState {
                 })
             })
             .collect::<Result<Vec<_>, _>>()?;
+        let mixed_gallery_pair = self.mixed_gallery_pair.map(|pair| {
+            [
+                (pair.provisional, MIXED_GALLERY_PAIR_GRIDS[0], true),
+                (pair.completed, MIXED_GALLERY_PAIR_GRIDS[1], false),
+            ]
+        });
+        target_entities.extend(
+            mixed_gallery_pair
+                .iter()
+                .flatten()
+                .map(|(entity, _, _)| *entity),
+        );
         let (completed_wall_count, provisional_wall_count) = layout.phase_counts();
         Ok(WallDensityRenderDocEvidence {
             target_entities,
+            mixed_gallery_pair,
             layout_checksum: layout.layout_checksum.clone(),
             phase: layout.phase,
             target_wall_count: layout.specimens.len(),
@@ -293,6 +348,8 @@ impl WallDensityFixtureState {
             provisional_wall_count,
             connector_count: layout.connector_count(),
             mask_counts: layout.mask_counts(),
+            completed_mask_counts: layout.phase_mask_counts(false),
+            provisional_mask_counts: layout.phase_mask_counts(true),
         })
     }
 }
@@ -369,7 +426,19 @@ pub(super) fn begin_wall_density_fixture(
             *entity_slot = Some(connector_entity);
         }
     }
+    let mixed_gallery_pair = if formwork_gallery_requested(phase) {
+        match spawn_mixed_gallery_pair(commands, world_map, handles_3d) {
+            Ok(pair) => Some(pair),
+            Err(reason) => {
+                fail_fixture(state, exit, reason);
+                return;
+            }
+        }
+    } else {
+        None
+    };
     state.layout = Some(layout);
+    state.mixed_gallery_pair = mixed_gallery_pair;
     state.failure = None;
     state.phase = WallDensityFixturePhase::Spawned;
 }
@@ -416,6 +485,41 @@ fn spawn_door_blueprint_connector(
     entity
 }
 
+fn formwork_gallery_requested(phase: PerfWallPhase) -> bool {
+    phase == PerfWallPhase::Mixed
+        && std::env::var("HW_WALL_FORMWORK_ACCEPTANCE").as_deref() == Ok("1")
+}
+
+fn spawn_mixed_gallery_pair(
+    commands: &mut Commands,
+    world_map: &mut WorldMapWrite,
+    handles_3d: &Building3dHandles,
+) -> Result<MixedGalleryPair, String> {
+    for grid in MIXED_GALLERY_PAIR_GRIDS {
+        if world_map.has_building(grid) {
+            return Err(format!(
+                "wall formwork gallery pair cell {grid:?} already has a logical building"
+            ));
+        }
+    }
+    let provisional = spawn_wall_shell(commands, handles_3d, MIXED_GALLERY_PAIR_GRIDS[0], true);
+    world_map.reserve_building_footprint(
+        BuildingType::Wall,
+        provisional,
+        std::iter::once(MIXED_GALLERY_PAIR_GRIDS[0]),
+    );
+    let completed = spawn_wall_shell(commands, handles_3d, MIXED_GALLERY_PAIR_GRIDS[1], false);
+    world_map.reserve_building_footprint(
+        BuildingType::Wall,
+        completed,
+        std::iter::once(MIXED_GALLERY_PAIR_GRIDS[1]),
+    );
+    Ok(MixedGalleryPair {
+        provisional,
+        completed,
+    })
+}
+
 fn door_connector_blueprint(grid: (i32, i32)) -> (Blueprint, BlueprintVisualState) {
     let blueprint = Blueprint::new(BuildingType::Door, vec![grid]);
     let visual_state = hw_jobs::visual_sync::blueprint_visual_state(&blueprint);
@@ -444,6 +548,7 @@ pub(crate) fn validate_wall_density_fixture_system(mut params: WallDensityValida
     }
     let result = validate_live_fixture(
         params.state.layout.as_ref(),
+        params.state.mixed_gallery_pair,
         params.world_map.as_ref(),
         &params.q_walls,
         &params.q_visuals,
@@ -461,6 +566,7 @@ pub(crate) fn validate_wall_density_fixture_system(mut params: WallDensityValida
 
 fn validate_live_fixture(
     layout: Option<&WallDensityLayout>,
+    mixed_gallery_pair: Option<MixedGalleryPair>,
     world_map: &WorldMap,
     q_walls: &Query<(&Building, &Transform)>,
     q_visuals: &Query<(&Building3dVisual, &Mesh3d)>,
@@ -526,6 +632,30 @@ fn validate_live_fixture(
                     "wall-density target {} connector {} differs from its Door blueprint contract",
                     specimen.ordinal, connector.direction
                 ));
+            }
+        }
+    }
+    if let Some(pair) = mixed_gallery_pair {
+        for (entity, grid, is_provisional) in [
+            (pair.provisional, MIXED_GALLERY_PAIR_GRIDS[0], true),
+            (pair.completed, MIXED_GALLERY_PAIR_GRIDS[1], false),
+        ] {
+            let (building, transform) = q_walls
+                .get(entity)
+                .map_err(|_| "wall formwork gallery pair member is missing".to_string())?;
+            if building.kind != BuildingType::Wall
+                || building.is_provisional != is_provisional
+                || WorldMap::world_to_grid(transform.translation.truncate()) != grid
+                || world_map.building_entity(grid) != Some(entity)
+                || q_visuals
+                    .iter()
+                    .filter(|(visual, _)| visual.owner == entity)
+                    .count()
+                    != 1
+            {
+                return Err(
+                    "wall formwork gallery pair differs from its production contract".to_string(),
+                );
             }
         }
     }
@@ -746,6 +876,50 @@ mod tests {
             assert_eq!(provisional, 12);
             assert_eq!(specimens.count() - provisional, 12);
         }
+        assert_eq!(
+            layout.phase_mask_counts(false),
+            layout.phase_mask_counts(true)
+        );
+    }
+
+    #[test]
+    fn mixed_gallery_evidence_keeps_density_targets_and_adds_two_depth_subjects() {
+        let mut layout = WallDensityLayout::build(PerfScenarioSize::Medium, PerfWallPhase::Mixed);
+        for specimen in &mut layout.specimens {
+            specimen.wall = Some(Entity::from_bits(u64::from(specimen.ordinal) + 1));
+        }
+        let pair = MixedGalleryPair {
+            provisional: Entity::from_bits(1_001),
+            completed: Entity::from_bits(1_002),
+        };
+        let state = WallDensityFixtureState {
+            phase: WallDensityFixturePhase::Ready,
+            layout: Some(layout),
+            mixed_gallery_pair: Some(pair),
+            failure: None,
+        };
+
+        assert_eq!(
+            state.soul_depth_subjects(),
+            Some([
+                (Entity::from_bits(65), (22, 17), true),
+                (Entity::from_bits(85), (22, 22), false),
+            ])
+        );
+        let evidence = state.renderdoc_evidence().unwrap();
+        assert_eq!(evidence.target_wall_count, 384);
+        assert_eq!(evidence.target_entities.len(), 386);
+        assert_eq!(evidence.completed_wall_count, 192);
+        assert_eq!(evidence.provisional_wall_count, 192);
+        assert_eq!(evidence.completed_mask_counts.len(), 16);
+        assert_eq!(evidence.provisional_mask_counts.len(), 16);
+        assert_eq!(
+            evidence.mixed_gallery_pair,
+            Some([
+                (pair.provisional, (20, 15), true),
+                (pair.completed, (21, 15), false),
+            ])
+        );
     }
 
     #[test]
@@ -765,6 +939,7 @@ mod tests {
         let state = WallDensityFixtureState {
             phase: WallDensityFixturePhase::Ready,
             layout: Some(layout),
+            mixed_gallery_pair: None,
             failure: None,
         };
 

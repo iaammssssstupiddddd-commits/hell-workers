@@ -961,10 +961,10 @@ impl PerfScenarioConfig {
                 || !wall_art_matrix
                 || wall_art_preview
                 || !wall_candidate_requested
-                || wall_phase != Some(PerfWallPhase::Provisional))
+                || wall_phase != Some(PerfWallPhase::Mixed))
         {
             return Err(PerfScenarioConfigError(
-                "Wall formwork acceptance requires the formal isolated-candidate provisional current-Wall matrix"
+                "Wall formwork acceptance requires the formal isolated-candidate mixed current-Wall matrix"
                     .to_string(),
             ));
         }
@@ -1000,7 +1000,12 @@ impl PerfScenarioConfig {
         }
         if (wall_actual_window || wall_color_actual_window)
             && (workload != PerfWorkload::WallDensity
-                || size != PerfScenarioSize::Small
+                || size
+                    != if wall_formwork_acceptance {
+                        PerfScenarioSize::Medium
+                    } else {
+                        PerfScenarioSize::Small
+                    }
                 || !wall_actual_window_phase_matches(
                     wall_actual_window,
                     wall_color_actual_window,
@@ -1026,6 +1031,7 @@ impl PerfScenarioConfig {
             ));
         }
         if wall_phase == Some(PerfWallPhase::Mixed)
+            && !wall_formwork_acceptance
             && (wall_presentation.is_none() || size != PerfScenarioSize::Medium)
         {
             return Err(PerfScenarioConfigError(
@@ -1138,7 +1144,7 @@ impl PerfScenarioConfig {
         if workload == PerfWorkload::WallDensity
             && (!matches!(size, PerfScenarioSize::Small | PerfScenarioSize::Medium)
                 || render_mode != PerfRenderMode::Gpu
-                || soul_count != 0
+                || soul_count != if wall_formwork_acceptance { 2 } else { 0 }
                 || familiar_count != 0
                 || !matches!(familiar_policy_mode, PerfFamiliarPolicyMode::Baseline)
                 || !matches!(operation_dialog_mode, PerfOperationDialogMode::Hidden)
@@ -1466,8 +1472,8 @@ const fn wall_actual_window_phase_matches(
     }
     wall_actual_window
         && (matches!(phase, Some(PerfWallPhase::Completed))
-            || ((art_preview || formwork_acceptance)
-                && matches!(phase, Some(PerfWallPhase::Provisional))))
+            || (art_preview && matches!(phase, Some(PerfWallPhase::Provisional)))
+            || (formwork_acceptance && matches!(phase, Some(PerfWallPhase::Mixed))))
 }
 
 fn wall_density_window_contract_matches(
