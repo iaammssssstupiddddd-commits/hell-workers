@@ -95,6 +95,14 @@ def add_run_arguments(
         ),
     )
     parser.add_argument(
+        "--wall-formwork-acceptance",
+        action="store_true",
+        help=(
+            "authorize the approved provisional Wall formwork gallery; requires "
+            "--wall-actual-window and the paired native-acceptance environment"
+        ),
+    )
+    parser.add_argument(
         "--wall-art-zoom",
         choices=("standard", "farthest"),
         default="standard",
@@ -495,6 +503,16 @@ def validate_arguments(args: argparse.Namespace) -> None:
             raise ValueError("Wall actual-window profiles are mutually exclusive")
         if args.wall_art_matrix and not args.wall_actual_window:
             raise ValueError("--wall-art-matrix requires --wall-actual-window")
+        if args.wall_formwork_acceptance and (
+            not args.wall_actual_window or not args.wall_art_matrix
+        ):
+            raise ValueError(
+                "--wall-formwork-acceptance requires --wall-actual-window and --wall-art-matrix"
+            )
+        if args.wall_formwork_acceptance and args.wall_phase != "provisional":
+            raise ValueError(
+                "--wall-formwork-acceptance requires --wall-phase provisional"
+            )
         if args.wall_art_zoom != "standard" and not args.wall_art_matrix:
             raise ValueError("--wall-art-zoom farthest requires --wall-art-matrix")
         wall_actual_window = args.wall_actual_window or args.wall_color_actual_window
@@ -578,6 +596,10 @@ def validate_arguments(args: argparse.Namespace) -> None:
         raise ValueError("--wall-color-actual-window is reserved for --workload wall-density")
     if args.wall_art_matrix:
         raise ValueError("--wall-art-matrix is reserved for --workload wall-density")
+    if args.wall_formwork_acceptance:
+        raise ValueError(
+            "--wall-formwork-acceptance is reserved for --workload wall-density"
+        )
     if args.wall_art_zoom != "standard":
         raise ValueError("--wall-art-zoom is reserved for --workload wall-density")
     if args.workload == "door-density":

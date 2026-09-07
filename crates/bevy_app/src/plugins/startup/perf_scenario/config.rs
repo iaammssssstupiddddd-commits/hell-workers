@@ -940,6 +940,31 @@ impl PerfScenarioConfig {
                 "Wall art matrix requires the current-Wall actual-window profile".to_string(),
             ));
         }
+        let wall_formwork_acceptance_flag = has_flag(&args, "--perf-wall-formwork-acceptance");
+        let wall_formwork_acceptance_environment =
+            env::var("HW_WALL_FORMWORK_ACCEPTANCE").is_ok_and(|value| value == "1");
+        if wall_formwork_acceptance_flag != wall_formwork_acceptance_environment {
+            return Err(PerfScenarioConfigError(
+                "--perf-wall-formwork-acceptance and HW_WALL_FORMWORK_ACCEPTANCE=1 must be paired"
+                    .to_string(),
+            ));
+        }
+        let wall_formwork_acceptance =
+            wall_formwork_acceptance_flag && wall_formwork_acceptance_environment;
+        let wall_candidate_requested =
+            env::var("HW_WALL_CANDIDATE").is_ok_and(|value| value == "1");
+        if wall_formwork_acceptance
+            && (!wall_actual_window
+                || !wall_art_matrix
+                || wall_art_preview
+                || !wall_candidate_requested
+                || wall_phase != Some(PerfWallPhase::Provisional))
+        {
+            return Err(PerfScenarioConfigError(
+                "Wall formwork acceptance requires the formal isolated-candidate provisional current-Wall matrix"
+                    .to_string(),
+            ));
+        }
         wall_art_zoom_selection(
             value_from_args(&args, "--perf-wall-art-zoom")?.as_deref(),
             env::var("HW_WALL_ART_ZOOM").ok().as_deref(),
@@ -977,6 +1002,7 @@ impl PerfScenarioConfig {
                     wall_actual_window,
                     wall_color_actual_window,
                     wall_art_preview,
+                    wall_formwork_acceptance,
                     wall_phase,
                 ))
         {
@@ -1421,6 +1447,7 @@ const fn wall_actual_window_phase_matches(
     wall_actual_window: bool,
     wall_color_actual_window: bool,
     art_preview: bool,
+    formwork_acceptance: bool,
     phase: Option<PerfWallPhase>,
 ) -> bool {
     if wall_color_actual_window {
@@ -1428,7 +1455,8 @@ const fn wall_actual_window_phase_matches(
     }
     wall_actual_window
         && (matches!(phase, Some(PerfWallPhase::Completed))
-            || (art_preview && matches!(phase, Some(PerfWallPhase::Provisional))))
+            || ((art_preview || formwork_acceptance)
+                && matches!(phase, Some(PerfWallPhase::Provisional))))
 }
 
 fn wall_density_window_contract_matches(

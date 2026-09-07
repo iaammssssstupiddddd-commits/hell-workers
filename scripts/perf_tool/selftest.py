@@ -2878,6 +2878,28 @@ def self_test() -> int:
             ]
         )
         validate_arguments(wall_matrix_args)
+        wall_formwork_args = build_parser().parse_args(
+            [
+                "run", "--workload", "wall-density", "--wall-phase", "provisional",
+                "--wall-actual-window", "--wall-art-matrix",
+                "--wall-formwork-acceptance", "--sizes", "small",
+                "--renders", "gpu", "--seed", "20260901", "--repeat", "1",
+                "--preflight-runs", "0", "--souls", "0", "--familiars", "0",
+                "--window-backend", "x11", "--backend", "vulkan",
+                "--present-mode", "novsync", "--window-width", "1280",
+                "--window-height", "720", "--window-scale-factor", "1.5",
+                "--rtt-quality", "medium", "--warmup-secs", "10",
+                "--measure-secs", "10", "--dry-run",
+            ]
+        )
+        validate_arguments(wall_formwork_args)
+        wall_formwork_args.wall_art_matrix = False
+        try:
+            validate_arguments(wall_formwork_args)
+        except ValueError as error:
+            assert "requires --wall-actual-window and --wall-art-matrix" in str(error)
+        else:
+            raise AssertionError("unscoped Wall formwork acceptance unexpectedly passed")
         wall_matrix_args.wall_art_matrix = False
         try:
             validate_arguments(wall_matrix_args)

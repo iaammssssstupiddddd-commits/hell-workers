@@ -27,6 +27,8 @@ MATRIX_PROFILE = "wall-art-approved-candidate-matrix-v1"
 FARTHEST_PROFILE = "wall-art-approved-candidate-farthest-zoom-v1"
 RELEASE_PROFILE = "wall-art-released-generation-v1"
 ART_PREVIEW_PROFILE = "wall-formwork-art-preview-v1"
+FORMWORK_MATRIX_PROFILE = "wall-formwork-v1"
+FORMWORK_FARTHEST_PROFILE = "wall-formwork-v1-farthest"
 AUTHORITIES = ("art_preview", "isolated_candidate", "release_approved")
 FORMWORK_PREVIEW_ROLES = (
     "mesh:isolated",
@@ -178,6 +180,7 @@ def profile_name(
     matrix: bool = False,
     zoom: str = "standard",
     authority: str = "isolated_candidate",
+    formwork: bool = False,
 ) -> str:
     if authority == "art_preview":
         native.require(
@@ -185,6 +188,16 @@ def profile_name(
             "Wall art preview is a single standard-zoom candidate run",
         )
         return ART_PREVIEW_PROFILE
+    if formwork:
+        native.require(
+            candidate and matrix and authority == "isolated_candidate",
+            "Wall formwork acceptance is an isolated candidate matrix",
+        )
+        return (
+            FORMWORK_FARTHEST_PROFILE
+            if zoom == "farthest"
+            else FORMWORK_MATRIX_PROFILE
+        )
     if authority == "release_approved":
         native.require(
             candidate and matrix and zoom == "standard",
@@ -199,7 +212,10 @@ def profile_name(
 
 
 def candidate_identity(
-    repo: Path, *, authority: str = "isolated_candidate"
+    repo: Path,
+    *,
+    authority: str = "isolated_candidate",
+    require_formwork: bool = False,
 ) -> dict[str, Any]:
     """Read the runtime projection this repository is allowed to activate.
 
@@ -265,6 +281,17 @@ def candidate_identity(
             and value.get("candidate_normal") is None,
             "Wall candidate is not the approved normal-free payload",
         )
+    if require_formwork:
+        core = value.get("core")
+        native.require(
+            authority == "isolated_candidate"
+            and value.get("schema_version") == 2
+            and isinstance(core, list)
+            and all(isinstance(record, dict) for record in core)
+            and tuple(record.get("role") for record in core)
+            == FORMWORK_PREVIEW_ROLES,
+            "Wall formwork candidate is not the closed schema-v2 inventory",
+        )
     digest = value.get("manifest_sha256")
     native.require(
         isinstance(digest, str) and re.fullmatch(r"[0-9a-f]{64}", digest),
@@ -286,6 +313,7 @@ def validate_probe_status(
     scale_factor: float = WINDOW_SCALE_FACTOR,
     zoom: str = "standard",
     art_preview: bool = False,
+    formwork: bool = False,
 ) -> dict[str, Any]:
     fields = {
         "schema_version",
@@ -345,7 +373,8 @@ def validate_probe_status(
     )
     native.require(
         fixture["target_size"] == "N"
-        and fixture["wall_phase"] == ("provisional" if art_preview else "completed")
+        and fixture["wall_phase"]
+        == ("provisional" if art_preview or formwork else "completed")
         and fixture["subject_ordinal"] == 64
         and fixture["subject_grid"] == [22, 17]
         and fixture["subject_mask"] == "0000",
@@ -422,7 +451,8 @@ def validate_probe_status(
         )
         native.require(
             gallery["layout_checksum"] == fixture["layout_checksum"]
-            and gallery["wall_phase"] == ("provisional" if art_preview else "completed")
+            and gallery["wall_phase"]
+            == ("provisional" if art_preview or formwork else "completed")
             and gallery["target_wall_count"] == 96
             and gallery["connector_count"] == 192
             and gallery["production_count"] == 96
@@ -777,6 +807,7 @@ def run_calibration(
     scale_factor: float = WINDOW_SCALE_FACTOR,
     zoom: str = "standard",
     authority: str = "isolated_candidate",
+    formwork: bool = False,
     job_file: Path | None = None,
 ) -> dict[str, Any]:
     job_file = job_file or root / "job.json"
@@ -813,6 +844,8 @@ def run_calibration(
                 environment["HW_WALL_ART_PREVIEW"] = "1"
     if matrix_mode:
         environment["HW_WALL_ART_MATRIX"] = "1"
+    if formwork:
+        environment["HW_WALL_FORMWORK_ACCEPTANCE"] = "1"
     if zoom != "standard":
         environment["HW_WALL_ART_ZOOM"] = zoom
     command = calibration_command(
@@ -823,8 +856,10 @@ def run_calibration(
         quality=quality,
         scale_factor=scale_factor,
         zoom=zoom,
-        wall_phase="provisional" if authority == "art_preview" else "completed",
+        wall_phase="provisional" if authority == "art_preview" or formwork else "completed",
     )
+    if formwork:
+        command.append("--wall-formwork-acceptance")
     state.update({"current_stage": "capture"})
     state.setdefault("commands", []).append({"stage": "capture", "argv": command})
     native.atomic_write_json(job_file, state)
@@ -865,6 +900,7 @@ def run_calibration(
                         scale_factor=scale_factor,
                         zoom=zoom,
                         art_preview=authority == "art_preview",
+                        formwork=formwork,
                     )
                     evidence = capture_client_window(
                         screenshot,
@@ -906,7 +942,7 @@ def run_calibration(
         binary_sha256=sha256(binary),
         quality=quality,
         scale_factor=scale_factor,
-        wall_phase="provisional" if authority == "art_preview" else "completed",
+        wall_phase="provisional" if authority == "art_preview" or formwork else "completed",
     )
     native.require(
         performance["fixture"]["layout_checksum"]
@@ -916,8 +952,9 @@ def run_calibration(
     observation = {
         "schema_version": SCHEMA_VERSION,
         "status": "pass",
-        "profile": profile_name(candidate_mode, matrix_mode, zoom, authority),
+        "profile": profile_name(candidate_mode, matrix_mode, zoom, authority, formwork),
         "evidence_kind": "art_preview" if authority == "art_preview" else "formal",
+        "formwork": formwork,
         "candidate": candidate_mode,
         "candidate_identity": candidate,
         "quality": quality,
@@ -942,6 +979,7 @@ def verify_observation(
     quality: str,
     scale_factor: float,
     authority: str,
+    formwork: bool,
 ) -> dict[str, Any]:
     observation = native.read_json(root / "observation.json")
     status = validate_probe_status(
@@ -952,14 +990,16 @@ def verify_observation(
         scale_factor=scale_factor,
         zoom=zoom,
         art_preview=authority == "art_preview",
+        formwork=formwork,
     )
     native.require(
         observation.get("profile")
-        == profile_name(candidate_mode, matrix_mode, zoom, authority)
+        == profile_name(candidate_mode, matrix_mode, zoom, authority, formwork)
         and observation.get("candidate") == candidate_mode
         and observation.get("candidate_identity") == candidate
         and observation.get("evidence_kind")
         == ("art_preview" if authority == "art_preview" else "formal")
+        and observation.get("formwork", False) == formwork
         and observation.get("quality", "high") == quality
         and observation.get("scale_factor", WINDOW_SCALE_FACTOR) == scale_factor,
         "Wall observation identity differs",
@@ -998,7 +1038,7 @@ def verify_observation(
         binary_sha256=manifest["binary_sha256"],
         quality=quality,
         scale_factor=scale_factor,
-        wall_phase="provisional" if authority == "art_preview" else "completed",
+        wall_phase="provisional" if authority == "art_preview" or formwork else "completed",
     )
     native.require(
         performance == observation.get("performance"),
@@ -1021,6 +1061,8 @@ def verify_root(root: Path) -> dict[str, Any]:
     zoom = manifest.get("zoom", "standard")
     native.require(zoom in ZOOM_MODES, "Wall zoom mode is invalid")
     authority = manifest.get("authority", "isolated_candidate")
+    formwork = manifest.get("formwork", False)
+    native.require(type(formwork) is bool, "Wall formwork mode is invalid")
     native.require(authority in AUTHORITIES, "Wall authority is invalid")
     native.require(
         manifest.get("evidence_kind")
@@ -1030,7 +1072,7 @@ def verify_root(root: Path) -> dict[str, Any]:
     candidate = manifest.get("candidate_identity")
     native.require(
         manifest.get("profile")
-        == profile_name(candidate_mode, matrix_mode, zoom, authority),
+        == profile_name(candidate_mode, matrix_mode, zoom, authority, formwork),
         "Wall manifest profile differs",
     )
     native.require(
@@ -1058,7 +1100,10 @@ def verify_root(root: Path) -> dict[str, Any]:
         native.require(candidate is None, "Fallback calibration has candidate identity")
     else:
         native.require(
-            candidate == candidate_identity(repo, authority=authority),
+            candidate
+            == candidate_identity(
+                repo, authority=authority, require_formwork=formwork
+            ),
             "Wall candidate identity changed",
         )
     binary = repo / "target/profiling/bevy_app"
@@ -1085,6 +1130,7 @@ def verify_root(root: Path) -> dict[str, Any]:
             quality=spec["quality"],
             scale_factor=spec["scale_factor"],
             authority=authority,
+            formwork=formwork,
         )
         screenshot_hashes[spec["id"]] = observation["screenshot"]["sha256"]
     if matrix_mode:
@@ -1100,8 +1146,9 @@ def verify_root(root: Path) -> dict[str, Any]:
     return {
         "schema_version": SCHEMA_VERSION,
         "status": "pass",
-        "profile": profile_name(candidate_mode, matrix_mode, zoom, authority),
+        "profile": profile_name(candidate_mode, matrix_mode, zoom, authority, formwork),
         "candidate": candidate_mode,
+        "formwork": formwork,
         "zoom": zoom,
         "authority": authority,
         "evidence_kind": "art_preview" if authority == "art_preview" else "formal",
@@ -1130,13 +1177,19 @@ def plan(args: argparse.Namespace) -> int:
         failures.append("Wall art preview requires --candidate")
     if args.art_preview and (args.matrix or args.release or args.zoom != "standard"):
         failures.append("Wall art preview is one standard-zoom non-release run")
+    if args.formwork and not (args.candidate and args.matrix):
+        failures.append("Wall formwork acceptance is a candidate matrix")
+    if args.formwork and (args.art_preview or args.release):
+        failures.append("Wall formwork acceptance is neither preview nor release")
     if args.matrix and not args.candidate:
         failures.append("Wall matrix requires --candidate")
     if args.release and not (args.candidate and args.matrix):
         failures.append("Wall release run is the standard-zoom candidate matrix")
     if args.candidate:
         try:
-            candidate = candidate_identity(repo, authority=authority)
+            candidate = candidate_identity(
+                repo, authority=authority, require_formwork=args.formwork
+            )
         except native.AcceptanceError as error:
             failures.append(str(error))
     subject = native.git_subject(repo)
@@ -1198,17 +1251,20 @@ def plan(args: argparse.Namespace) -> int:
         command.append("--release")
     if args.art_preview:
         command.append("--art-preview")
+    if args.formwork:
+        command.append("--formwork")
     native.print_json(
         {
             "schema_version": SCHEMA_VERSION,
             "status": "ready" if not failures else "blocked",
             "profile": profile_name(
-                args.candidate, args.matrix, args.zoom, authority
+                args.candidate, args.matrix, args.zoom, authority, args.formwork
             ),
             "candidate": args.candidate,
             "matrix": args.matrix,
             "zoom": args.zoom,
             "authority": authority,
+            "formwork": args.formwork,
             "candidate_identity": candidate,
             "job_root": str(root),
             "subject_commit": subject,
@@ -1280,6 +1336,16 @@ def run(args: argparse.Namespace) -> int:
         "Wall art preview is one standard-zoom candidate run",
     )
     native.require(
+        not args.formwork
+        or (
+            args.candidate
+            and args.matrix
+            and not args.art_preview
+            and not args.release
+        ),
+        "Wall formwork acceptance is an isolated candidate matrix",
+    )
+    native.require(
         not args.release or (args.candidate and args.matrix),
         "Wall release run is the standard-zoom candidate matrix",
     )
@@ -1295,7 +1361,9 @@ def run(args: argparse.Namespace) -> int:
             "Fallback calibration received candidate identity",
         )
     else:
-        candidate = candidate_identity(repo, authority=authority)
+        candidate = candidate_identity(
+            repo, authority=authority, require_formwork=args.formwork
+        )
         native.require(
             args.candidate_generation is not None
             and int(args.candidate_generation) == candidate["asset_set_generation"]
@@ -1308,11 +1376,14 @@ def run(args: argparse.Namespace) -> int:
     state: dict[str, Any] = {
         "schema_version": SCHEMA_VERSION,
         "status": "running",
-        "profile": profile_name(args.candidate, args.matrix, args.zoom, authority),
+        "profile": profile_name(
+            args.candidate, args.matrix, args.zoom, authority, args.formwork
+        ),
         "candidate": args.candidate,
         "matrix": args.matrix,
         "zoom": args.zoom,
         "authority": authority,
+        "formwork": args.formwork,
         "evidence_kind": "art_preview" if args.art_preview else "formal",
         "candidate_identity": candidate,
         "subject_commit": args.subject_commit,
@@ -1371,6 +1442,7 @@ def run(args: argparse.Namespace) -> int:
                 scale_factor=spec["scale_factor"],
                 zoom=args.zoom,
                 authority=authority,
+                formwork=args.formwork,
                 job_file=root / "job.json",
             )
             state["cases_completed"] = index + 1
@@ -1378,11 +1450,14 @@ def run(args: argparse.Namespace) -> int:
         manifest = {
             "schema_version": SCHEMA_VERSION,
             "status": "pass",
-            "profile": profile_name(args.candidate, args.matrix, args.zoom, authority),
+            "profile": profile_name(
+                args.candidate, args.matrix, args.zoom, authority, args.formwork
+            ),
             "candidate": args.candidate,
             "matrix": args.matrix,
             "zoom": args.zoom,
             "authority": authority,
+            "formwork": args.formwork,
             "evidence_kind": "art_preview" if args.art_preview else "formal",
             "candidate_identity": candidate,
             "repo": str(repo),
@@ -1500,6 +1575,13 @@ def self_test() -> int:
         profile_name(True, False, "standard", "art_preview")
         == ART_PREVIEW_PROFILE,
         "Wall art preview profile differs",
+    )
+    native.require(
+        profile_name(True, True, "standard", "isolated_candidate", True)
+        == FORMWORK_MATRIX_PROFILE
+        and profile_name(True, True, "farthest", "isolated_candidate", True)
+        == FORMWORK_FARTHEST_PROFILE,
+        "Wall formwork profile differs",
     )
     for candidate_mode, matrix, zoom in ((False, False, "standard"), (True, True, "farthest")):
         try:
@@ -1625,6 +1707,15 @@ def self_test() -> int:
         candidate=True,
         art_preview=True,
     )
+    formwork_status = json.loads(json.dumps(preview_status))
+    formwork_status.pop("evidence_kind")
+    formwork_status["gallery"]["authority"] = "isolated_candidate"
+    validate_probe_status(
+        formwork_status,
+        nonce=nonce,
+        candidate=True,
+        formwork=True,
+    )
     for case in cases:
         matrix_status = json.loads(json.dumps(candidate_status))
         matrix_status["window"]["scale_factor"] = case["scale_factor"]
@@ -1657,6 +1748,8 @@ def self_test() -> int:
                 FARTHEST_PROFILE,
                 RELEASE_PROFILE,
                 ART_PREVIEW_PROFILE,
+                FORMWORK_MATRIX_PROFILE,
+                FORMWORK_FARTHEST_PROFILE,
             ],
         }
     )
@@ -1675,6 +1768,7 @@ def parser() -> argparse.ArgumentParser:
     plan_parser.add_argument("--zoom", choices=ZOOM_MODES, default="standard")
     plan_parser.add_argument("--release", action="store_true")
     plan_parser.add_argument("--art-preview", action="store_true")
+    plan_parser.add_argument("--formwork", action="store_true")
     run_parser = commands.add_parser("run")
     for name in (
         "repo",
@@ -1691,6 +1785,7 @@ def parser() -> argparse.ArgumentParser:
     run_parser.add_argument("--zoom", choices=ZOOM_MODES, default="standard")
     run_parser.add_argument("--release", action="store_true")
     run_parser.add_argument("--art-preview", action="store_true")
+    run_parser.add_argument("--formwork", action="store_true")
     run_parser.add_argument("--candidate-generation")
     run_parser.add_argument("--candidate-manifest-sha256")
     for name in ("status", "verify"):

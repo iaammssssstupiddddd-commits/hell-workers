@@ -152,6 +152,10 @@ authoring v3 final manifestへ封印する。`project_wall_formwork_candidate.py
 `normal_decision=rejected`、receiptなしを要求し、ArtPreview projectionを正式受入へ流用しない。
 `provision_wall_formwork_candidate.py`はこのfinalだけを外部`staging/validation/`配下の新規viewへコピーし、
 異なる既存bytesやlocatorの上書きを拒否する。
+provision後の正式画像は`wall_art_acceptance.py`の`--candidate --matrix --formwork`を標準zoomと
+`--zoom farthest`で各1 job実行する。profileはそれぞれ`wall-formwork-v1` / `wall-formwork-v1-farthest`で、
+`art_preview`を受理せず、provisional 96 ownerがexact 15 core由来のformwork mesh 6種とOpaque materialへ
+全件収束してfallback 0であることを検証する。完成Wall用matrixのpassはこの検査の代用にしない。
 
 DoorはWall manifestと分離したauthoring/runtime schema v1を使う。`seal_door_candidate.py`は3 GLB、shared albedo、EW/NS previewのexact 6 coreと、scene/export/Khronos/post-export/texture/OCIO report、Blender原本、geometry fixture、imagegen prompt、license、tool source fingerprintをtechnical candidateへ封印する。`project_door_preview.py`はcandidateだけを`authority=art_preview` / `review_status=art_preview` / receiptなしの`manifests/door-production-v1.doorset`へ投影する。
 

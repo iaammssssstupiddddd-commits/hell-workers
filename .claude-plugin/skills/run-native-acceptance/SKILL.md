@@ -415,6 +415,29 @@ schema 2, explicit generation and manifest-hash opt-in, and records
 Never treat this result as art approval, formal candidate acceptance,
 performance baseline evidence, or promotion authority.
 
+After art approval, provision the final `authority=isolated_candidate`,
+`review_status=art_approved` schema-2 projection and exact 15-file allowlist
+into a clean validation worktree. Capture the provisional formwork at the
+standard and farthest player zooms as two separate formal matrices:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 \
+  .codex/skills/hell-workers-run-native-acceptance/scripts/wall_art_acceptance.py \
+  plan --repo "$VALIDATION_WORKTREE" --adapter Intel \
+  --candidate --matrix --formwork
+PYTHONDONTWRITEBYTECODE=1 python3 \
+  .codex/skills/hell-workers-run-native-acceptance/scripts/wall_art_acceptance.py \
+  plan --repo "$VALIDATION_WORKTREE" --adapter Intel \
+  --candidate --matrix --formwork --zoom farthest
+```
+
+Run only each returned direct `kitty` command, sequentially. Together these
+produce 18 game-owned client PNGs for High/Medium/Low × DPI 1.0/1.5/2.0. The
+profile requires the provisional phase, all 16 topology masks, six active
+formwork meshes from the formwork inventory, an opaque material, zero fallback
+Walls, and the planned candidate generation/hash. A completed-phase candidate
+gallery is useful regression evidence but cannot satisfy formwork acceptance.
+
 After M4 art approval, provision the final art-approved candidate projection
 and its exact core allowlist into a clean validation worktree. Plan the fixed-lit
 gallery observation:

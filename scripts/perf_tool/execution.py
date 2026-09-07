@@ -1015,6 +1015,8 @@ def run_one(
         command.append("--perf-wall-actual-window")
     if args.wall_art_matrix:
         command.append("--perf-wall-art-matrix")
+    if args.wall_formwork_acceptance:
+        command.append("--perf-wall-formwork-acceptance")
     if args.wall_art_zoom != "standard":
         command.extend(["--perf-wall-art-zoom", args.wall_art_zoom])
     if args.wall_color_actual_window:

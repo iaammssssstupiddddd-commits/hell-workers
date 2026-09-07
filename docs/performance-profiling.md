@@ -310,6 +310,15 @@ PNG、metadata、OCIO proof、contract、source / harness / binary /
 asset fingerprints、performance sidecarのいずれかが変われば`verify`は失敗する。この色artifactはcurrent
 wall visual、12-run Capture、RenderDoc draw-group evidenceの代用にしない。
 
+承認済み木製型枠の正式画像は`wall-formwork-v1`（標準zoom）と
+`wall-formwork-v1-farthest`（最大zoom-out）の2 jobで採る。どちらも
+`wall_art_acceptance.py plan --candidate --matrix --formwork`を入口とし、後者だけ
+`--zoom farthest`を加える。各jobはHigh / Medium / Low × DPI 1.0 / 1.5 / 2.0の9 processを直列実行するため、
+合計18枚のゲーム所有X11 client PNGになる。`--wall-formwork-acceptance`と
+`HW_WALL_FORMWORK_ACCEPTANCE=1`の二重鍵、provisional phase、schema 2のexact 15 core、候補generation/hash、
+全16 mask、formwork mesh 6種、Opaque material、production 96 / fallback 0のすべてが成立しなければ無効である。
+completed phaseのWall matrixは完成壁の回帰証跡であり、型枠の正式画像には代用しない。
+
 壁M5の同一binary内performance比較は、承認済みcandidateを配置したclean validation worktreeから
 `wall_production_performance_acceptance.py plan --repo "$VALIDATION_WORKTREE" --adapter Intel`で計画する。
 返されたdirect launcherは`fallback-control`と`production`を順番に実行し、completed / provisionalの

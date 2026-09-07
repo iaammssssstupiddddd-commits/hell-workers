@@ -70,9 +70,18 @@ fn art_preview_requested() -> bool {
     std::env::var("HW_WALL_ART_PREVIEW").as_deref() == Ok("1")
 }
 
-const fn accepted_wall_phase(phase: Option<PerfWallPhase>, art_preview: bool) -> bool {
+fn formwork_acceptance_requested() -> bool {
+    std::env::var("HW_WALL_FORMWORK_ACCEPTANCE").as_deref() == Ok("1")
+}
+
+const fn accepted_wall_phase(
+    phase: Option<PerfWallPhase>,
+    art_preview: bool,
+    formwork_acceptance: bool,
+) -> bool {
     matches!(phase, Some(PerfWallPhase::Completed))
-        || (art_preview && matches!(phase, Some(PerfWallPhase::Provisional)))
+        || ((art_preview || formwork_acceptance)
+            && matches!(phase, Some(PerfWallPhase::Provisional)))
 }
 
 fn farthest_zoom_requested() -> bool {
@@ -133,7 +142,11 @@ impl WallActualWindowAcceptance {
             && config.enabled()
             && config.workload == PerfWorkload::WallDensity
             && config.size == PerfScenarioSize::Small
-            && accepted_wall_phase(config.wall_phase(), art_preview_requested())
+            && accepted_wall_phase(
+                config.wall_phase(),
+                art_preview_requested(),
+                formwork_acceptance_requested(),
+            )
             && config.render_mode == PerfRenderMode::Gpu
             && fixture.actual_window_subject().is_some()
     }
@@ -454,6 +467,30 @@ fn build_status(
             .resolved
             .as_ref()
             .ok_or_else(|| "wall gallery production asset pool is unresolved".to_string())?;
+        let expected_meshes = match evidence.phase {
+            PerfWallPhase::Completed => &resolved.meshes,
+            PerfWallPhase::Provisional => resolved.formwork_meshes.as_ref().ok_or_else(|| {
+                "wall formwork gallery has no formwork mesh inventory".to_string()
+            })?,
+        };
+        let expected_mesh_ids = expected_meshes
+            .iter()
+            .map(|handle| handle.id())
+            .collect::<HashSet<_>>();
+        if !mesh_ids.iter().all(|id| expected_mesh_ids.contains(id)) {
+            return Err("wall gallery uses meshes from another construction phase".to_string());
+        }
+        if evidence.phase == PerfWallPhase::Provisional {
+            for (_, _, material, _, _, _, _) in &params.visuals {
+                let value = params
+                    .materials
+                    .get(&material.0)
+                    .ok_or_else(|| "wall formwork material is not resident".to_string())?;
+                if value.base.alpha_mode != AlphaMode::Opaque {
+                    return Err("wall formwork gallery material is not opaque".to_string());
+                }
+            }
+        }
         let WallProductionActivationState::ReadyToApply {
             asset_set_generation,
             authority,
@@ -767,13 +804,27 @@ mod tests {
 
     #[test]
     fn provisional_actual_window_requires_explicit_art_preview() {
-        assert!(accepted_wall_phase(Some(PerfWallPhase::Completed), false));
-        assert!(!accepted_wall_phase(
-            Some(PerfWallPhase::Provisional),
+        assert!(accepted_wall_phase(
+            Some(PerfWallPhase::Completed),
+            false,
             false
         ));
-        assert!(accepted_wall_phase(Some(PerfWallPhase::Provisional), true));
-        assert!(!accepted_wall_phase(None, true));
+        assert!(!accepted_wall_phase(
+            Some(PerfWallPhase::Provisional),
+            false,
+            false
+        ));
+        assert!(accepted_wall_phase(
+            Some(PerfWallPhase::Provisional),
+            true,
+            false
+        ));
+        assert!(accepted_wall_phase(
+            Some(PerfWallPhase::Provisional),
+            false,
+            true
+        ));
+        assert!(!accepted_wall_phase(None, true, false));
     }
 
     #[test]
