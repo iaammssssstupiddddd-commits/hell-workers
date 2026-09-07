@@ -76,7 +76,8 @@ Wall native helperだけが付与し、通常のsingle-case校正とformal densi
 `--perf-wall-formwork-acceptance`と`HW_WALL_FORMWORK_ACCEPTANCE=1`が揃ったschema 2の隔離candidateだけを許可し、
 active handleが完成Wallではなく6つのformwork mesh集合に属することと、木材materialがOpaqueであることを
 game process内で検査する。標準／最大zoom-outを各9 case採るため正式画像は18枚であり、completed-only galleryを
-型枠合格へ読み替えない。
+型枠合格へ読み替えない。最大zoom-outの型枠は最小6 px幅になるため、完成石壁の全列`3σ`契約とは分け、
+中央値が`3σ`以上かつ地形と混ざるraster列を最大1列だけ許す。2列以上の欠落はfailとする。
 
 本番Wallの正式frame比較は`wall-production-performance-v2`が所有する。凍結済み
 `wall-density-v1`のlayout sidecarへ上書きせず、追加の`wall_density_presentation.json`で

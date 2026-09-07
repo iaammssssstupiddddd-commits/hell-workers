@@ -437,6 +437,9 @@ profile requires the provisional phase, all 16 topology masks, six active
 formwork meshes from the formwork inventory, an opaque material, zero fallback
 Walls, and the planned candidate generation/hash. A completed-phase candidate
 gallery is useful regression evidence but cannot satisfy formwork acceptance.
+At the farthest zoom, completed Walls retain the all-column `3 sigma` contrast
+gate. Skeletal formwork additionally requires median contrast of `3 sigma` and
+allows at most one terrain-mixed raster column; two missing columns fail.
 
 After M4 art approval, provision the final art-approved candidate projection
 and its exact core allowlist into a clean validation worktree. Plan the fixed-lit

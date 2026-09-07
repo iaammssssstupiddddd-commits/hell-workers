@@ -604,19 +604,38 @@ def straight_run_evidence(image: Image, status: dict[str, Any]) -> dict[str, Any
         darkest = min(luminance(x, y) for y in interior)
         scores.append((mean - darkest) / floor)
     weakest = min(scores)
+    median = sorted(scores)[len(scores) // 2]
+    formwork = status.get("fixture", {}).get("wall_phase") == "provisional"
+    visible_columns = sum(score >= STRAIGHT_CONTRAST_SIGMA for score in scores)
+    required_visible_columns = len(scores) - 1 if formwork else len(scores)
     native.require(
-        weakest >= STRAIGHT_CONTRAST_SIGMA,
+        visible_columns >= required_visible_columns
+        and (not formwork or median >= STRAIGHT_CONTRAST_SIGMA),
         "Wall straight run is not continuously visible at the farthest zoom: "
-        f"weakest column is {weakest:.2f} sigma below terrain "
+        f"{visible_columns}/{required_visible_columns} required columns reach "
+        f"{STRAIGHT_CONTRAST_SIGMA:.0f} sigma; weakest is {weakest:.2f} and "
+        f"median is {median:.2f} sigma below terrain "
         f"(mean {mean:.2f}, deviation {deviation:.2f})",
     )
-    return {
+    evidence = {
         "columns": len(scores),
         "terrain_mean": round(mean, 6),
         "terrain_standard_deviation": round(deviation, 6),
         "weakest_column_sigma": round(weakest, 6),
-        "median_column_sigma": round(sorted(scores)[len(scores) // 2], 6),
+        "median_column_sigma": round(median, 6),
     }
+    if formwork:
+        # At the minimum six-pixel projection, one skeletal formwork edge can
+        # share a raster column with terrain. Requiring every other column and
+        # the median to clear the same contrast threshold tolerates only that
+        # one-pixel projection ambiguity; two missing columns still fail.
+        evidence.update(
+            {
+                "visible_columns": visible_columns,
+                "required_visible_columns": required_visible_columns,
+            }
+        )
+    return evidence
 
 
 def read_image(path: Path) -> Image:
@@ -1606,14 +1625,18 @@ def self_test() -> int:
         raise native.AcceptanceError("Wall straight probe accepted a north-south mask")
     # A dark two-pixel run over noisy terrain must pass, and the same terrain
     # without the run must fail.
-    def synthetic(with_wall: bool) -> Image:
+    def synthetic(with_wall: bool, missing_columns: int = 0) -> Image:
         width, height = WINDOW_WIDTH, WINDOW_HEIGHT
         pixels = bytearray(width * height * 3)
         for y in range(height):
             for x in range(width):
                 offset = (y * width + x) * 3
                 base = 90 + ((x * 7 + y * 13) % 9)
-                wall_row = with_wall and 359 <= y <= 360
+                wall_row = (
+                    with_wall
+                    and 359 <= y <= 360
+                    and x >= straight["roi"]["x"] + missing_columns
+                )
                 value = 12 if wall_row else base
                 pixels[offset : offset + 3] = bytes((value, value, value))
         return width, height, bytes(pixels)
@@ -1630,6 +1653,26 @@ def self_test() -> int:
         pass
     else:
         raise native.AcceptanceError("Wall straight run accepted terrain without a wall")
+    formwork_probe_status = {
+        "fixture": {"wall_phase": "provisional"},
+        "probe": {"straight": straight},
+    }
+    formwork_evidence = straight_run_evidence(
+        synthetic(True, missing_columns=1), formwork_probe_status
+    )
+    native.require(
+        formwork_evidence["visible_columns"] == 5
+        and formwork_evidence["required_visible_columns"] == 5,
+        "Wall formwork one-column raster tolerance differs",
+    )
+    try:
+        straight_run_evidence(
+            synthetic(True, missing_columns=2), formwork_probe_status
+        )
+    except native.AcceptanceError:
+        pass
+    else:
+        raise native.AcceptanceError("Wall formwork accepted two missing raster columns")
     nonce = "0123456789abcdef0123456789abcdef"
     fixture_hash = density.sha256(CONTRACT_PATH)
     status = {
