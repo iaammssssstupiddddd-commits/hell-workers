@@ -3556,6 +3556,100 @@ def self_test() -> int:
             "wall_density_layout.csv rows differ from the frozen row-major layout"
         ]
 
+        from .artifact_readers.door import (
+            expected_layout_checksum,
+            read_door_density_sidecars,
+        )
+        from .model import DOOR_DENSITY_LAYOUT_COLUMNS
+
+        door_data = root / "door-density-sidecars"
+        door_data.mkdir()
+        door_case = Case("door-density", "small", "gpu", 20_260_906, 0, 0)
+        assert measurement_duration_clock(door_case.workload) == ("real", True)
+        presentation = {
+            "expected_mode": "fallback-control",
+            "target_door_count": 32,
+            "support_wall_count": 64,
+            "visual_count": 32,
+            "production_count": 0,
+            "fallback_count": 32,
+            "active_mesh_count": 1,
+            "active_material_count": 3,
+            "resident_production_mesh_count": 3,
+            "resident_production_material_count": 1,
+            "resident_fallback_mesh_count": 1,
+            "resident_fallback_material_count": 3,
+            "resident_production_image_count": 3,
+            "state_counts": {"closed": 11, "open": 11, "locked": 10},
+            "axis_counts": {"east_west": 16, "north_south": 16},
+            "session_id": 1,
+            "readiness_revision": 1,
+            "asset_set_generation": 6,
+            "authority": "isolated_candidate",
+            "manifest_sha256": "a" * 64,
+        }
+        write_json(
+            door_data / "door_density_fixture.json",
+            {
+                "schema_version": 1,
+                "contract_id": "door-density-v1",
+                "contract_sha256": "30319cb86471a18a338de3941ee1103646078737c91844bebe7ae40134e95928",
+                "layout_checksum": expected_layout_checksum(32),
+                "target_size": "N",
+                "perf_size": "small",
+                "target_door_count": 32,
+                "support_wall_count": 64,
+                "grid": {"origin": [12, 12], "stride": [5, 5], "columns": 8},
+                "camera_scale": 5.0,
+                "stable": True,
+                "initial": presentation,
+                "final": presentation,
+            },
+        )
+        door_rows: list[dict[str, str]] = []
+        support_ordinal = 0
+        for ordinal in range(32):
+            grid_x = 12 + (ordinal % 8) * 5
+            grid_y = 12 + (ordinal // 8) * 5
+            axis = "east_west" if ordinal % 2 == 0 else "north_south"
+            state = ("closed", "open", "locked")[ordinal % 3]
+            common = {
+                "schema_version": "1",
+                "target_ordinal": str(ordinal),
+                "axis": axis,
+                "state": state,
+            }
+            door_rows.append(common | {
+                "record_kind": "target",
+                "ordinal": str(ordinal),
+                "grid_x": str(grid_x),
+                "grid_y": str(grid_y),
+            })
+            supports = (
+                ((grid_x - 1, grid_y), (grid_x + 1, grid_y))
+                if axis == "east_west"
+                else ((grid_x, grid_y - 1), (grid_x, grid_y + 1))
+            )
+            for support_x, support_y in supports:
+                door_rows.append(common | {
+                    "record_kind": "support",
+                    "ordinal": str(support_ordinal),
+                    "grid_x": str(support_x),
+                    "grid_y": str(support_y),
+                })
+                support_ordinal += 1
+        with (door_data / "door_density_layout.csv").open(
+            "w", newline="", encoding="utf-8"
+        ) as handle:
+            writer = csv.DictWriter(handle, fieldnames=DOOR_DENSITY_LAYOUT_COLUMNS)
+            writer.writeheader()
+            writer.writerows(door_rows)
+        door_fixture, parsed_door_rows, door_errors = read_door_density_sidecars(
+            door_data, expected_case=door_case
+        )
+        assert not door_errors
+        assert door_fixture is not None and parsed_door_rows == door_rows
+
         from .renderdoc_foundation import run_self_test as renderdoc_foundation_self_test
 
         renderdoc_foundation_self_test()

@@ -12,6 +12,7 @@ from .lighting import (
 )
 from .save_transaction import read_save_transaction
 from .wall import read_wall_density_sidecars
+from .door import read_door_density_sidecars
 
 __all__ = [
     "expected_indoor_light_fixture_row",
@@ -24,4 +25,5 @@ __all__ = [
     "read_indoor_light_sidecars",
     "read_save_transaction",
     "read_wall_density_sidecars",
+    "read_door_density_sidecars",
 ]

@@ -135,6 +135,16 @@ WALL_DENSITY_LAYOUT_COLUMNS = (
     "direction",
     "phase",
 )
+DOOR_DENSITY_LAYOUT_COLUMNS = (
+    "schema_version",
+    "record_kind",
+    "ordinal",
+    "target_ordinal",
+    "grid_x",
+    "grid_y",
+    "axis",
+    "state",
+)
 WALL_DENSITY_CASES = {
     ("small", "completed"): (
         "N", 96, 192, 6,
@@ -612,6 +622,8 @@ class Validation:
     dream_ui_metrics: dict[str, str] | None = None
     wall_density_fixture: dict[str, Any] | None = None
     wall_density_layout: list[dict[str, str]] | None = None
+    door_density_fixture: dict[str, Any] | None = None
+    door_density_layout: list[dict[str, str]] | None = None
     timeline: list[dict[str, Any]] | None = None
     behavior_save_artifact: dict[str, Any] | None = None
     profile_artifact: dict[str, Any] | None = None
@@ -643,6 +655,8 @@ class Validation:
             "dream_ui_metrics": self.dream_ui_metrics,
             "wall_density_fixture": self.wall_density_fixture,
             "wall_density_layout": self.wall_density_layout,
+            "door_density_fixture": self.door_density_fixture,
+            "door_density_layout": self.door_density_layout,
             "timeline": self.timeline,
             "behavior_save_artifact": self.behavior_save_artifact,
             "profile_artifact": self.profile_artifact,

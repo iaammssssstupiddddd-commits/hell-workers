@@ -72,6 +72,7 @@ from .artifact_readers import (
     read_indoor_light_sidecars,
     read_save_transaction,
     read_wall_density_sidecars,
+    read_door_density_sidecars,
 )
 
 from .rtt_light_contract import (
@@ -1506,7 +1507,7 @@ def read_behavior_timeline(
 
 def measurement_duration_clock(workload: str) -> tuple[str, bool]:
     """Return the advancing capture clock and whether virtual time must stay frozen."""
-    pauses_virtual_time = workload in {"indoor-light", "wall-density"}
+    pauses_virtual_time = workload in {"indoor-light", "wall-density", "door-density"}
     return ("real" if pauses_virtual_time else "virtual"), pauses_virtual_time
 
 
@@ -1555,6 +1556,8 @@ def validate_run(
     dream_ui_metrics = None
     wall_density_fixture = None
     wall_density_layout = None
+    door_density_fixture = None
+    door_density_layout = None
     timeline = None
     behavior_save_artifact = None
     if capture_kind in {"field-core", "consumer-core"}:
@@ -1583,6 +1586,10 @@ def validate_run(
         data_dir / "wall_density_fixture.json",
         data_dir / "wall_density_layout.csv",
     )
+    door_density_paths = (
+        data_dir / "door_density_fixture.json",
+        data_dir / "door_density_layout.csv",
+    )
     if expected_case.workload == "wall-density":
         if capture_kind != "frame-time":
             reasons.append("wall-density validation requires a frame-time capture")
@@ -1592,6 +1599,13 @@ def validate_run(
             wall_density_errors,
         ) = read_wall_density_sidecars(data_dir, expected_case=expected_case)
         reasons.extend(wall_density_errors)
+    elif expected_case.workload == "door-density":
+        (
+            door_density_fixture,
+            door_density_layout,
+            door_density_errors,
+        ) = read_door_density_sidecars(data_dir, expected_case=expected_case)
+        reasons.extend(door_density_errors)
     elif expected_case.workload == "indoor-light" and capture_kind == "consumer-core":
         if (
             expected_contract != "rtt-light-v1"
@@ -1688,6 +1702,13 @@ def validate_run(
             reasons.append(
                 "non-wall-density workload must not write wall-density sidecars: "
                 + ", ".join(unexpected_wall_sidecars)
+            )
+    if expected_case.workload != "door-density":
+        unexpected_door_sidecars = [path.name for path in door_density_paths if path.exists()]
+        if unexpected_door_sidecars:
+            reasons.append(
+                "non-door-density workload must not write door-density sidecars: "
+                + ", ".join(unexpected_door_sidecars)
             )
 
     p02_sidecar = data_dir / "p02_presentation.csv"
@@ -2181,6 +2202,8 @@ def validate_run(
         dream_ui_metrics=dream_ui_metrics,
         wall_density_fixture=wall_density_fixture,
         wall_density_layout=wall_density_layout,
+        door_density_fixture=door_density_fixture,
+        door_density_layout=door_density_layout,
         timeline=timeline,
         behavior_save_artifact=behavior_save_artifact,
         profile_artifact=None,

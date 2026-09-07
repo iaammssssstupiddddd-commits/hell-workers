@@ -49,6 +49,7 @@ def add_run_arguments(
             "deconstruction",
             "save-transaction",
             "wall-density",
+            "door-density",
         ],
     )
     parser.add_argument("--contract", choices=sorted(CONTRACT_FILES))
@@ -59,6 +60,14 @@ def add_run_arguments(
         help=(
             "select the M5 formal Wall presentation; requires the paired "
             "HW_WALL_PERF_PRESENTATION environment owned by native acceptance"
+        ),
+    )
+    parser.add_argument(
+        "--door-presentation",
+        choices=["production", "fallback-control"],
+        help=(
+            "select the formal Door-density presentation; requires the paired "
+            "HW_DOOR_PERF_PRESENTATION environment owned by native acceptance"
         ),
     )
     parser.add_argument(
@@ -571,6 +580,45 @@ def validate_arguments(args: argparse.Namespace) -> None:
         raise ValueError("--wall-art-matrix is reserved for --workload wall-density")
     if args.wall_art_zoom != "standard":
         raise ValueError("--wall-art-zoom is reserved for --workload wall-density")
+    if args.workload == "door-density":
+        if args.command != "run":
+            raise ValueError("door-density is only available through perf.py run")
+        if selected_rtt_light:
+            raise ValueError("door-density does not accept an RtT-light contract selection")
+        if args.door_presentation not in {"production", "fallback-control"}:
+            raise ValueError("door-density requires --door-presentation")
+        expected_sizes = ["small", "medium"] if args.instrumentation == "capture" else ["medium"]
+        if sizes != expected_sizes or renders != ["gpu"]:
+            raise ValueError(
+                "door-density requires --sizes small,medium for Capture or medium for Memory, and --renders gpu"
+            )
+        if args.instrumentation not in {"capture", "memory"}:
+            raise ValueError("door-density requires --instrumentation capture or memory")
+        if args.seed != 20_260_906:
+            raise ValueError("door-density requires --seed 20260906")
+        if args.repeat != 3 or args.preflight_runs != 0:
+            raise ValueError("door-density requires --repeat 3 --preflight-runs 0")
+        if args.warmup_secs != 30.0 or args.measure_secs != 60.0:
+            raise ValueError("door-density requires --warmup-secs 30 --measure-secs 60")
+        if args.window_backend != "x11":
+            raise ValueError("door-density requires --window-backend x11")
+        if args.backend != "vulkan" or args.present_mode != "novsync":
+            raise ValueError("door-density requires --backend vulkan --present-mode novsync")
+        if args.window_width != 1280 or args.window_height != 720:
+            raise ValueError("door-density requires a 1280x720 physical window")
+        if args.window_scale_factor != 1.0 or args.rtt_quality != "high":
+            raise ValueError("door-density requires scale factor 1.0 and RtT quality high")
+        if (
+            familiar_policies != ["baseline"]
+            or operation_dialog_modes != ["hidden"]
+            or dashboard_modes != ["hidden"]
+            or args.souls != 0
+            or args.familiars != 0
+        ):
+            raise ValueError("door-density requires zero actors and baseline hidden UI policies")
+        return
+    if args.door_presentation is not None:
+        raise ValueError("--door-presentation is reserved for --workload door-density")
     if args.workload == "dream-ui-burst":
         if args.command not in {"run", "audit"}:
             raise ValueError("dream-ui-burst is available through perf.py run or audit")

@@ -35,6 +35,7 @@ fn random_streams_are_stable_and_independent() {
         behavior_case: None,
         wall_phase: None,
         wall_presentation: None,
+        door_presentation: None,
         window_width: None,
         window_height: None,
         window_scale_factor: None,
@@ -183,7 +184,12 @@ fn every_enabled_fixture_freezes_until_the_initial_checkpoint() {
     config.workload = super::PerfWorkload::WallDensity;
     assert!(config.freezes_fixture_setup());
     assert!(config.keeps_virtual_time_paused_during_capture());
-    assert!(config.uses_isolated_wall_density_world());
+    assert!(config.uses_isolated_density_world());
+
+    config.workload = super::PerfWorkload::DoorDensity;
+    assert!(config.freezes_fixture_setup());
+    assert!(config.keeps_virtual_time_paused_during_capture());
+    assert!(config.uses_isolated_density_world());
 
     config.workload = super::PerfWorkload::Gather;
     config.clock_mode = PerfClockMode::Realtime;
@@ -195,7 +201,7 @@ fn every_enabled_fixture_freezes_until_the_initial_checkpoint() {
     config.enabled = false;
     assert!(!config.freezes_fixture_setup());
     assert!(!config.keeps_virtual_time_paused_during_capture());
-    assert!(!config.uses_isolated_wall_density_world());
+    assert!(!config.uses_isolated_density_world());
 }
 
 #[test]
@@ -230,6 +236,27 @@ fn wall_density_presentation_names_are_explicit() {
     );
     assert_eq!(
         super::PerfWallPresentation::FallbackControl.as_str(),
+        "fallback-control"
+    );
+}
+
+#[test]
+fn door_density_presentation_names_are_explicit() {
+    assert_eq!(
+        super::PerfDoorPresentation::parse("production"),
+        Some(super::PerfDoorPresentation::Production)
+    );
+    assert_eq!(
+        super::PerfDoorPresentation::parse("fallback-control"),
+        Some(super::PerfDoorPresentation::FallbackControl)
+    );
+    assert_eq!(super::PerfDoorPresentation::parse("fallback"), None);
+    assert_eq!(
+        super::PerfDoorPresentation::Production.as_str(),
+        "production"
+    );
+    assert_eq!(
+        super::PerfDoorPresentation::FallbackControl.as_str(),
         "fallback-control"
     );
 }

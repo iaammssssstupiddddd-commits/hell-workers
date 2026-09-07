@@ -57,6 +57,7 @@ MEASUREMENT_HARNESS_FILES = (
     ".codex/skills/hell-workers-run-native-acceptance/scripts/native_acceptance.py",
     ".codex/skills/hell-workers-run-native-acceptance/scripts/door_art_acceptance.py",
     ".codex/skills/hell-workers-run-native-acceptance/scripts/door_behavior_acceptance.py",
+    ".codex/skills/hell-workers-run-native-acceptance/scripts/door_density_acceptance.py",
     ".codex/skills/hell-workers-run-native-acceptance/scripts/p02_presentation_acceptance.py",
     ".codex/skills/hell-workers-run-native-acceptance/scripts/wall_art_acceptance.py",
     ".codex/skills/hell-workers-run-native-acceptance/scripts/wall_color_acceptance.py",
@@ -590,6 +591,7 @@ def prepare_session(
             )
         ),
         "wall_phase": args.wall_phase,
+        "door_presentation": args.door_presentation,
         "capture_kind": args.capture_kind,
         "clock_mode": args.clock_mode,
         "warmup_checksum_policy": getattr(args, "warmup_checksum_policy", None),
@@ -1007,6 +1009,8 @@ def run_one(
         command.extend(["--perf-wall-phase", case.wall_phase])
     if args.wall_presentation is not None:
         command.extend(["--perf-wall-presentation", args.wall_presentation])
+    if args.door_presentation is not None:
+        command.extend(["--perf-door-presentation", args.door_presentation])
     if args.wall_actual_window:
         command.append("--perf-wall-actual-window")
     if args.wall_art_matrix:

@@ -268,7 +268,33 @@ has zero gameplay spatial queries and zero elapsed Virtual Time.
 Revalidate the finished bundle with `verify --job-root <job-root>`.
 
 This profile is visual evidence only. It does not satisfy the Door density
-Capture comparison, native Memory, lifecycle, or joint Wall/Door gate.
+Capture or Memory gates.
+
+## Run the Door density Capture and Memory comparison
+
+After the Door behavior and quality legs pass for the same approved isolated
+candidate, run the frozen `door-density-v1` profile from the clean validation
+worktree:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 \
+  .codex/skills/hell-workers-run-native-acceptance/scripts/door_density_acceptance.py \
+  plan --repo "$VALIDATION_WORKTREE" --adapter Intel
+```
+
+Execute only the returned direct `kitty` command and poll `status --job-root
+<job-root>` every 15–30 seconds. The helper first builds and completes Capture,
+then builds and completes Memory; game processes are always sequential. Capture
+uses N=32 and 4N=128 for 12 adjacent, counterbalanced fallback-control/production
+runs. Memory uses 4N for six paired runs. Every run freezes Virtual Time, measures
+30 seconds warmup plus 60 seconds with Real Time, and independently validates the
+exact Door/state/axis/support-Wall layout, finite production/fallback asset pool,
+candidate identity, X11/Vulkan/High/DPI-1 window, and allocator accounting.
+
+The final comparison requires production p95 and p99 medians within +5% of the
+same-binary fallback control, max RSS median within +5%, and peak live bytes
+median within +4 MiB. MAD is retained beside every median. Revalidate a finished
+bundle with `verify --job-root <job-root>`.
 
 ## Run the wall-density RenderDoc matrix
 
@@ -645,6 +671,9 @@ PYTHONDONTWRITEBYTECODE=1 python3 \
   self-test
 PYTHONDONTWRITEBYTECODE=1 python3 \
   .codex/skills/hell-workers-run-native-acceptance/scripts/door_art_acceptance.py \
+  self-test
+PYTHONDONTWRITEBYTECODE=1 python3 \
+  .codex/skills/hell-workers-run-native-acceptance/scripts/door_density_acceptance.py \
   self-test
 PYTHONDONTWRITEBYTECODE=1 python3 \
   .codex/skills/hell-workers-run-native-acceptance/scripts/wall_production_performance_acceptance.py \

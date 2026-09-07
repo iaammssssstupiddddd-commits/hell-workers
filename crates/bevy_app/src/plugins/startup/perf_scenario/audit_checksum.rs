@@ -296,7 +296,9 @@ pub(super) fn collect_audit_actor_records(
             | PerfFixtureKind::DashboardDesignation
             | PerfFixtureKind::DreamUiBurst
             | PerfFixtureKind::WallDensityTarget
-            | PerfFixtureKind::WallDensityConnector => {}
+            | PerfFixtureKind::WallDensityConnector
+            | PerfFixtureKind::DoorDensityTarget
+            | PerfFixtureKind::DoorDensitySupport => {}
         }
         records.push(PerfAuditActorRecord {
             actor_kind: "fixture",

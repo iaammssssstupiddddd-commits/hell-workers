@@ -54,6 +54,8 @@ pub(super) enum PerfFixtureKind {
     DreamUiBurst,
     WallDensityTarget,
     WallDensityConnector,
+    DoorDensityTarget,
+    DoorDensitySupport,
 }
 
 #[cfg(feature = "profiling")]
@@ -72,6 +74,8 @@ impl PerfFixtureKind {
             Self::DreamUiBurst => 9,
             Self::WallDensityTarget => 10,
             Self::WallDensityConnector => 11,
+            Self::DoorDensityTarget => 12,
+            Self::DoorDensitySupport => 13,
         }
     }
 }
@@ -149,6 +153,7 @@ pub struct PerfWorkloadSetupParams<'w, 's> {
         ResMut<'w, super::deconstruction_fixture::DeconstructionPerfFixtureState>,
     indoor_light: ResMut<'w, super::indoor_light_fixture::IndoorLightFixtureState>,
     wall_density: ResMut<'w, super::wall_density_fixture::WallDensityFixtureState>,
+    door_density: ResMut<'w, super::door_density_fixture::DoorDensityFixtureState>,
     q_main_camera: PerfMainCameraQuery<'w, 's>,
     exit: MessageWriter<'w, AppExit>,
 }
@@ -205,6 +210,7 @@ fn setup_perf_workload_if_needed(params: PerfWorkloadSetupParams) {
         mut deconstruction_fixture,
         mut indoor_light,
         mut wall_density,
+        mut door_density,
         mut q_main_camera,
         mut exit,
     } = params;
@@ -228,6 +234,21 @@ fn setup_perf_workload_if_needed(params: PerfWorkloadSetupParams) {
                 state: &mut wall_density,
                 world_map: &mut world_map,
                 game_assets: &game_assets,
+                handles_3d: &handles_3d,
+                q_main_camera: &mut q_main_camera,
+                exit: &mut exit,
+            },
+        );
+        return;
+    }
+
+    if config.workload == PerfWorkload::DoorDensity {
+        super::door_density_fixture::begin_door_density_fixture(
+            &config,
+            super::door_density_fixture::DoorDensitySetupContext {
+                commands: &mut commands,
+                state: &mut door_density,
+                world_map: &mut world_map,
                 handles_3d: &handles_3d,
                 q_main_camera: &mut q_main_camera,
                 exit: &mut exit,
@@ -385,6 +406,9 @@ fn configure_perf_workload(
         }
         PerfWorkload::WallDensity => {
             unreachable!("wall-density uses the production-wall fixture pipeline")
+        }
+        PerfWorkload::DoorDensity => {
+            unreachable!("door-density uses the production-Door fixture pipeline")
         }
         PerfWorkload::Deconstruction => deconstruction_fixture::configure_deconstruction_fixture(
             commands,

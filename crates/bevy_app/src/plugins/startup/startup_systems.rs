@@ -49,11 +49,11 @@ pub(super) fn initial_resource_spawner_timed(
     mut regrowth: ResMut<RegrowthManager>,
     perf_config: Res<PerfScenarioConfig>,
 ) {
-    if perf_config.uses_isolated_wall_density_world() {
+    if perf_config.uses_isolated_density_world() {
         regrowth.zones.clear();
         regrowth.last_regrowth_day = 0;
         info!(
-            "PERF_SCENARIO: wall-density omitted normal initial resources, facilities, and regrowth targets"
+            "PERF_SCENARIO: density fixture omitted normal initial resources, facilities, and regrowth targets"
         );
         return;
     }

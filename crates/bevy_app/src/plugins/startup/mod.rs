@@ -159,6 +159,7 @@ impl Plugin for StartupPlugin {
                 .init_resource::<perf_scenario::DeconstructionPerfFixtureState>()
                 .init_resource::<perf_scenario::IndoorLightFixtureState>()
                 .init_resource::<perf_scenario::WallDensityFixtureState>()
+                .init_resource::<perf_scenario::DoorDensityFixtureState>()
                 .init_resource::<perf_scenario::PerfBehaviorCapture>()
                 .init_resource::<crate::systems::save::PerfLoadFaultInjection>()
                 .init_resource::<perf_scenario::FieldCoreDriverState>()
@@ -238,6 +239,14 @@ impl Plugin for StartupPlugin {
                     Update,
                     perf_scenario::validate_wall_density_fixture_system
                         .in_set(PerfScenarioSet::IndoorSettle),
+                )
+                .add_systems(
+                    PostUpdate,
+                    perf_scenario::validate_door_density_fixture_system
+                        .in_set(PerfScenarioSet::Capture)
+                        .after(
+                            crate::systems::visual::building3d_cleanup::DoorPresentationSyncSet,
+                        ),
                 )
                 .add_systems(
                     Update,

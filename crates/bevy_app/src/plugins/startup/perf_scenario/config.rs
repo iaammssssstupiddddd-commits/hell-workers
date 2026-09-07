@@ -24,6 +24,7 @@ pub enum PerfWorkload {
     DreamUiBurst,
     IndoorLight,
     WallDensity,
+    DoorDensity,
     Deconstruction,
     SaveTransaction,
 }
@@ -39,6 +40,7 @@ impl PerfWorkload {
             "dream-ui-burst" => Some(Self::DreamUiBurst),
             "indoor-light" => Some(Self::IndoorLight),
             "wall-density" => Some(Self::WallDensity),
+            "door-density" => Some(Self::DoorDensity),
             "deconstruction" => Some(Self::Deconstruction),
             "save-transaction" => Some(Self::SaveTransaction),
             _ => None,
@@ -55,6 +57,7 @@ impl PerfWorkload {
             Self::DreamUiBurst => "dream-ui-burst",
             Self::IndoorLight => "indoor-light",
             Self::WallDensity => "wall-density",
+            Self::DoorDensity => "door-density",
             Self::Deconstruction => "deconstruction",
             Self::SaveTransaction => "save-transaction",
         }
@@ -76,6 +79,29 @@ pub enum PerfWallPhase {
 pub enum PerfWallPresentation {
     Production,
     FallbackControl,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PerfDoorPresentation {
+    Production,
+    FallbackControl,
+}
+
+impl PerfDoorPresentation {
+    fn parse(value: &str) -> Option<Self> {
+        match value {
+            "production" => Some(Self::Production),
+            "fallback-control" => Some(Self::FallbackControl),
+            _ => None,
+        }
+    }
+
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Production => "production",
+            Self::FallbackControl => "fallback-control",
+        }
+    }
 }
 
 impl PerfWallPresentation {
@@ -529,6 +555,7 @@ pub struct PerfScenarioConfig {
     behavior_case: Option<PerfBehaviorCase>,
     wall_phase: Option<PerfWallPhase>,
     wall_presentation: Option<PerfWallPresentation>,
+    door_presentation: Option<PerfDoorPresentation>,
     window_width: Option<u32>,
     window_height: Option<u32>,
     window_scale_factor: Option<f32>,
@@ -598,7 +625,7 @@ impl PerfScenarioConfig {
         let workload = parse_value_or_default(
             value_from_args_or_env(&args, "--perf-workload", "HW_PERF_WORKLOAD")?,
             "--perf-workload",
-            "gather|path-door|construction|ui-gpu|task-dashboard|dream-ui-burst|indoor-light|wall-density|deconstruction|save-transaction",
+            "gather|path-door|construction|ui-gpu|task-dashboard|dream-ui-burst|indoor-light|wall-density|door-density|deconstruction|save-transaction",
             PerfWorkload::parse,
             PerfWorkload::Gather,
         )?;
@@ -871,6 +898,23 @@ impl PerfScenarioConfig {
                 })
             })
             .transpose()?;
+        let door_presentation_flag = value_from_args(&args, "--perf-door-presentation")?;
+        let door_presentation_environment = env::var("HW_DOOR_PERF_PRESENTATION").ok();
+        if door_presentation_flag != door_presentation_environment {
+            return Err(PerfScenarioConfigError(
+                "--perf-door-presentation and HW_DOOR_PERF_PRESENTATION must be paired and equal"
+                    .to_string(),
+            ));
+        }
+        let door_presentation = door_presentation_flag
+            .map(|value| {
+                PerfDoorPresentation::parse(&value).ok_or_else(|| {
+                    PerfScenarioConfigError(format!(
+                        "--perf-door-presentation must be production|fallback-control; got '{value}'"
+                    ))
+                })
+            })
+            .transpose()?;
         let wall_actual_window_flag = has_flag(&args, "--perf-wall-actual-window");
         let wall_actual_window_environment =
             env::var("HW_WALL_ART_ACTUAL_WINDOW").is_ok_and(|value| value == "1");
@@ -949,6 +993,12 @@ impl PerfScenarioConfig {
         {
             return Err(PerfScenarioConfigError(
                 "Wall performance presentation selection is reserved for the formal wall-density profile"
+                    .to_string(),
+            ));
+        }
+        if door_presentation.is_some() && workload != PerfWorkload::DoorDensity {
+            return Err(PerfScenarioConfigError(
+                "Door performance presentation selection is reserved for the formal door-density profile"
                     .to_string(),
             ));
         }
@@ -1071,6 +1121,30 @@ impl PerfScenarioConfig {
                     .to_string(),
             ));
         }
+        if workload == PerfWorkload::DoorDensity
+            && (!matches!(size, PerfScenarioSize::Small | PerfScenarioSize::Medium)
+                || render_mode != PerfRenderMode::Gpu
+                || soul_count != 0
+                || familiar_count != 0
+                || !matches!(familiar_policy_mode, PerfFamiliarPolicyMode::Baseline)
+                || !matches!(operation_dialog_mode, PerfOperationDialogMode::Hidden)
+                || !matches!(dashboard_mode, PerfDashboardMode::Hidden)
+                || !matches!(clock_mode, PerfClockMode::Realtime)
+                || master_seed != 20_260_906
+                || warmup_secs != 30.0
+                || measure_secs != 60.0
+                || output_dir.is_none()
+                || door_presentation.is_none()
+                || window_width != Some(1280)
+                || window_height != Some(720)
+                || window_scale_factor != Some(1.0)
+                || rtt_quality != Some(RttQualityPreset::High))
+        {
+            return Err(PerfScenarioConfigError(
+                "door-density requires small|medium/gpu/realtime, zero actors, seed 20260906, formal 30s/60s duration, a production|fallback-control presentation, an output directory, baseline policies, and the exact 1280x720/high/DPI-1 window contract"
+                    .to_string(),
+            ));
+        }
         #[cfg(feature = "profiling-renderdoc")]
         if renderdoc_capture
             && workload != PerfWorkload::WallDensity
@@ -1111,6 +1185,7 @@ impl PerfScenarioConfig {
             behavior_case,
             wall_phase,
             wall_presentation,
+            door_presentation,
             window_width,
             window_height,
             window_scale_factor,
@@ -1163,6 +1238,10 @@ impl PerfScenarioConfig {
 
     pub const fn wall_presentation(&self) -> Option<PerfWallPresentation> {
         self.wall_presentation
+    }
+
+    pub const fn door_presentation(&self) -> Option<PerfDoorPresentation> {
+        self.door_presentation
     }
 
     pub const fn requested_window_scale_factor(&self) -> Option<f32> {
@@ -1221,17 +1300,21 @@ impl PerfScenarioConfig {
             && !self.uses_fixed_timesteps()
             && (matches!(
                 self.workload,
-                PerfWorkload::IndoorLight | PerfWorkload::WallDensity
+                PerfWorkload::IndoorLight | PerfWorkload::WallDensity | PerfWorkload::DoorDensity
             ) || door_gallery_requested)
     }
 
-    /// Wall-density owns the logical contents of its measurement world.
+    /// Density fixtures own the logical contents of their measurement world.
     ///
     /// Terrain and renderer startup still run, but the normal generated trees,
     /// rocks, facilities, and regrowth targets must not reserve cells or add
     /// unrelated draw work before the fixed wall fixture is installed.
-    pub const fn uses_isolated_wall_density_world(&self) -> bool {
-        self.enabled && matches!(self.workload, PerfWorkload::WallDensity)
+    pub const fn uses_isolated_density_world(&self) -> bool {
+        self.enabled
+            && matches!(
+                self.workload,
+                PerfWorkload::WallDensity | PerfWorkload::DoorDensity
+            )
     }
 
     pub fn is_field_core(&self) -> bool {
@@ -1547,6 +1630,7 @@ impl Default for PerfScenarioConfig {
             behavior_case: None,
             wall_phase: None,
             wall_presentation: None,
+            door_presentation: None,
             window_width: None,
             window_height: None,
             window_scale_factor: None,

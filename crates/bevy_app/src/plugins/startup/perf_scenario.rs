@@ -107,6 +107,8 @@ mod deconstruction_fixture;
 #[cfg(feature = "profiling")]
 mod door_actual_window;
 #[cfg(feature = "profiling")]
+mod door_density_fixture;
+#[cfg(feature = "profiling")]
 mod field_core_driver;
 #[cfg(feature = "profiling")]
 mod fixture;
@@ -160,6 +162,10 @@ pub(crate) use deconstruction_fixture::{
 #[cfg(feature = "profiling")]
 pub(crate) use door_actual_window::{
     DoorActualWindowAcceptance, configure_door_actual_window_probe,
+};
+#[cfg(feature = "profiling")]
+pub(crate) use door_density_fixture::{
+    DoorDensityFixtureState, validate_door_density_fixture_system,
 };
 #[cfg(feature = "profiling")]
 pub(crate) use field_core_driver::{FieldCoreDriverState, run_field_core_driver_system};
@@ -229,10 +235,10 @@ use fixture::{PerfFixtureKind, PerfFixtureMarker};
 #[cfg(feature = "profiling")]
 use output::{
     PerfCaptureWriteInput, fnv1a, fnv1a_bytes, write_deconstruction_fixture_sidecar,
-    write_determinism_audit, write_dream_ui_metrics, write_indoor_light_fixture_sidecars,
-    write_p02_presentation_sidecar, write_perf_capture, write_render_inventory,
-    write_wall_density_fixture_sidecars, write_wall_density_presentation_sidecar,
-    write_window_observation,
+    write_determinism_audit, write_door_density_fixture_sidecars, write_dream_ui_metrics,
+    write_indoor_light_fixture_sidecars, write_p02_presentation_sidecar, write_perf_capture,
+    write_render_inventory, write_wall_density_fixture_sidecars,
+    write_wall_density_presentation_sidecar, write_window_observation,
 };
 #[cfg(feature = "profiling")]
 use wall_density_presentation::{WallDensityPresentationEvidence, WallDensityPresentationParams};
@@ -713,6 +719,7 @@ pub(crate) struct PerfCaptureParams<'w, 's> {
     deconstruction_fixture: Res<'w, DeconstructionPerfFixtureState>,
     indoor_light_fixture: Res<'w, IndoorLightFixtureState>,
     wall_density_fixture: Res<'w, WallDensityFixtureState>,
+    door_density_fixture: Res<'w, DoorDensityFixtureState>,
     indoor_light_runtime: Res<'w, crate::systems::lighting::IndoorLightRuntime>,
     indoor_light_texture: Res<'w, crate::systems::visual::indoor_light_texture::IndoorLightTexture>,
     room_lookup: Res<'w, hw_world::RoomTileLookup>,

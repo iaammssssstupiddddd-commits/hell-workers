@@ -91,6 +91,13 @@ Wayland / Xwaylandのcompositorがwindowをpaceすると、GPUに余力（min fr
 提示が60 Hzで律速され、p95 / p99が壁ではなくcompositorを記述する。
 production provisionalは半透明albedoとshared light fieldを保ちつつ、transparent passのtexture sampleを抑えるため
 emissive textureをbindしない。completedだけが承認済みemissive textureを使用する。
+
+本番Doorの静的密度比較は`door-density-v1`を使う。N=32 / 4N=128 Doorと64 / 256 completed support Wallを
+同一layoutへ固定し、EW/NSとClosed/Open/Lockedを均等に近い分布で保持する。productionとfallback-controlは
+同じbinaryを使用し、Doorだけをproduction 3 mesh＋共有1 materialまたはfallback共有1 mesh＋状態別3 materialへ
+切り替える。`door_density_fixture.json`は開始／終了の同一性、候補identity、active/resident pool、3 production imageを、
+`door_density_layout.csv`は全Doorと支持Wallのgrid・軸・状態を記録する。Captureはp95/p99の`+5%`、Memoryは
+max RSSの`+5%`とpeak live bytesの`+4 MiB`を上限とし、Virtual Time停止中のReal Time計測として扱う。
 旧v1 subject `991392b8`のIntel Arc / Mesa 26.1.6 / Vulkan / X11実測では、completed N / 4Nの
 p95回帰が`+0.451% / +0.438%`、p99が`+0.910% / +0.540%`、provisionalのp95が
 `+2.031% / +0.987%`、p99が`+1.134% / +0.369%`となり、全ケースが`+5%` gateを通過した。

@@ -459,6 +459,33 @@ pub(super) fn write_wall_density_fixture_sidecars(
 }
 
 #[cfg(feature = "profiling")]
+pub(super) fn write_door_density_fixture_sidecars(
+    config: &PerfScenarioConfig,
+    state: &super::door_density_fixture::DoorDensityFixtureState,
+) -> std::io::Result<()> {
+    if config.workload != PerfWorkload::DoorDensity {
+        return Ok(());
+    }
+    let directory = perf_output_directory(config);
+    std::fs::create_dir_all(&directory)?;
+    let summary_path = directory.join("door_density_fixture.json");
+    let layout_path = directory.join("door_density_layout.csv");
+    if summary_path.exists() || layout_path.exists() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::AlreadyExists,
+            format!(
+                "door-density fixture sidecar already exists in {}",
+                directory.display()
+            ),
+        ));
+    }
+    let (summary, layout) = state.sidecars().map_err(std::io::Error::other)?;
+    let summary_bytes = serde_json::to_vec_pretty(&summary).map_err(std::io::Error::other)?;
+    std::fs::write(summary_path, summary_bytes)?;
+    std::fs::write(layout_path, layout)
+}
+
+#[cfg(feature = "profiling")]
 pub(super) fn write_wall_density_presentation_sidecar(
     config: &PerfScenarioConfig,
     initial: Option<&super::wall_density_presentation::WallDensityPresentationEvidence>,

@@ -319,6 +319,19 @@ N=96 / 4N=384を各3 run、30秒warm-up＋60秒measureで採る。各runは既�
 profileはphase別p95 / p99比較CSVを固有名で保存し、production中央値がfallback-controlより5%を超えると
 job全体をinvalidにする。
 
+Door本番表示の性能比較は`door-density-v1`専用profileが所有する。fixtureはseed `20260906`、
+8列・5 cell間隔でN=32 / 4N=128のDoorを並べ、偶数ordinalをEW、奇数をNS、`i % 3`を
+Closed / Open / Lockedとする。各Doorの軸方向の両隣に完成Wallを置くため、支持Wallは64 / 256で固定される。
+`--perf-door-presentation`と`HW_DOOR_PERF_PRESENTATION`は同値の二重鍵で、productionは候補generation / manifest、
+fallback-controlは同一binaryの`CandidateDisabled`へ束縛する。全targetのexactly-one visual、3状態・両軸分布、
+production 3 mesh / 1 material、fallback 1 mesh / 3 material、albedo＋preview 3 imageが揃うまでwarm-upを開始しない。
+
+専用helper `door_density_acceptance.py`はCapture build→12 runs→Memory build→6 runsを直列実行する。
+各before/after pairは隣接させ、先行modeを交互にする。全runは1280×720、High、DPI 1、Vulkan/X11/novsync、
+30秒warm-up＋60秒measureで、Virtual Timeを停止しReal Timeだけを進める。Captureはp95 / p99中央値を
+fallback-control比`+5%`以内、Memoryはmax RSS中央値`+5%`以内、peak live bytes中央値`+4 MiB`以内かつ
+accounting error 0で判定し、各中央値のMAD、順序、raw sidecar hashをartifactへ保持する。
+
 subject `991392b8`の正式job
 `target/native-acceptance/wall-production-performance-20260902T173804Z-3f6bc903`は24 runと4比較を完走し、
 独立verifyも`status=pass`となった。全8比較行の最大回帰はprovisional N p95の`+2.031%`である。
