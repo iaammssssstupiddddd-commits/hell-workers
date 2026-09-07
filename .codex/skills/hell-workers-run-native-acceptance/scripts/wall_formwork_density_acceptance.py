@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import door_behavior_acceptance as door_behavior  # noqa: E402
 import native_acceptance as native  # noqa: E402
 import wall_art_acceptance as art  # noqa: E402
 import wall_density_acceptance as density  # noqa: E402
@@ -240,6 +241,7 @@ def run_matrix(args: argparse.Namespace) -> int:
     )
     candidate = art.candidate_identity(repo, require_formwork=True)
     native.require(candidate == args.candidate_identity, "Wall candidate changed")
+    door_behavior.candidate_identity(repo)
     inventory = wallperf.runtime_inventory_contract(repo, candidate)
     native.require(inventory["runtime_schema_version"] == 2, "Wall formwork runtime schema differs")
     binary = repo / "target/profiling/bevy_app"
@@ -533,6 +535,7 @@ def verify_root(root: Path) -> dict[str, Any]:
         and art.candidate_identity(repo, require_formwork=True) == manifest["candidate_identity"],
         "Wall formwork density provenance changed",
     )
+    door_behavior.candidate_identity(repo)
     candidate = manifest["candidate_identity"]
     inventory = wallperf.runtime_inventory_contract(repo, candidate)
     native.require(
@@ -643,6 +646,10 @@ def plan(args: argparse.Namespace) -> int:
         wallperf.runtime_inventory_contract(repo, candidate)
     except native.AcceptanceError as error:
         failures.append(str(error))
+    try:
+        door_behavior.candidate_identity(repo)
+    except native.AcceptanceError as error:
+        failures.append(f"Wall formwork non-target Door view is invalid: {error}")
     subject = native.git_subject(repo)
     source = native.source_fingerprint(repo)
     harness = native.native_harness_fingerprint(repo)
@@ -707,6 +714,7 @@ def run(args: argparse.Namespace) -> int:
     native.require(density.asset_view_fingerprint(repo) == args.asset_view_fingerprint, "Wall asset view changed")
     candidate = art.candidate_identity(repo, require_formwork=True)
     native.require(candidate == args.candidate_identity, "Wall candidate changed")
+    door_behavior.candidate_identity(repo)
     root = Path(args.job_root).resolve()
     native.require(not root.exists(), f"job root already exists: {root}")
     root.mkdir(parents=True)

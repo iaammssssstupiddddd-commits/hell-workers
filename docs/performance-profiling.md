@@ -342,6 +342,8 @@ job全体をinvalidにする。
 `wall-density-v1`を変更せず、`tools/blender_ai_workflow/fixtures/wall-formwork-density-v1.json`を
 追加契約として使う。provisional N=96 / 4N=384とmixed 4N=384をCaptureで各presentation 3 run、
 mixed 4N=384をMemoryで各presentation 3 run採るため、実行数はCapture 18、Memory 6である。
+plan preflightは非対象Doorのisolated-candidate locatorと6 coreも実bytesまで検証する。Door候補の認可envは
+与えないため表示はfallbackのままだが、manifestやcore欠落によるasset-server errorをbuild前に拒否する。
 mixedはordinalの16件単位でphaseを交互にし、全384件を仮設192／本設192、各maskを仮設12／本設12へ
 固定する。fallback-controlとproductionは同じinstrumentation binaryで隣接実行し、pairごとに先行modeを
 交互にする。Capture 18件を完了してからMemory binaryをbuildし、両instrumentationを並行実行しない。

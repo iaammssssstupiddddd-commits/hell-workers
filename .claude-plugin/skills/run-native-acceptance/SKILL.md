@@ -370,6 +370,9 @@ PYTHONDONTWRITEBYTECODE=1 python3 \
 
 Run only the returned direct `kitty` command. It builds Capture, completes all
 18 Capture processes, then builds Memory and completes all six Memory processes.
+Plan preflight also requires the non-target Door locator and all six Door core
+files to be valid; runtime keeps that Door candidate unauthorized and therefore
+on fallback, but missing files must not become Bevy asset-server errors.
 Each fallback-control / production pair is adjacent and counterbalanced. Capture
 covers provisional N=96, provisional 4N=384, and mixed 4N=384; Memory covers
 mixed 4N only. The mixed contract has 192 provisional and 192 completed walls,
