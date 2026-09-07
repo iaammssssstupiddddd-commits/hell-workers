@@ -181,7 +181,8 @@ def main() -> int:
             temporary.unlink()
     print(
         "WALL_FORMWORK_FINAL "
-        f"status=pass generation={generation} manifest_sha256={validation['manifest_sha256']}"
+        f"status=pass generation={args.generation} "
+        f"manifest_sha256={validation['manifest_sha256']}"
     )
     return 0
 
