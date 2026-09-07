@@ -890,25 +890,41 @@ mod tests {
         app
     }
 
-    fn spawn_persisted_wall(world: &mut World, grid: (i32, i32)) -> Entity {
+    fn spawn_persisted_wall(world: &mut World, grid: (i32, i32), is_provisional: bool) -> Entity {
         world
             .spawn((
                 Building {
                     kind: BuildingType::Wall,
-                    is_provisional: false,
+                    is_provisional,
                 },
                 Transform::from_translation(WorldMap::grid_to_world(grid.0, grid.1).extend(0.0)),
             ))
             .id()
     }
 
-    fn wall_replacement_candidate(grids: &[(i32, i32)], seconds: f32) -> DynamicWorld {
+    fn wall_replacement_candidate(walls: &[((i32, i32), bool)], seconds: f32) -> DynamicWorld {
         let mut source = app_with_save_schema();
         insert_persisted_resources(source.world_mut(), seconds);
-        for &grid in grids {
-            spawn_persisted_wall(source.world_mut(), grid);
+        for &(grid, is_provisional) in walls {
+            spawn_persisted_wall(source.world_mut(), grid, is_provisional);
         }
         capture_from_app(&mut source)
+    }
+
+    fn wall_phase_rows(world: &mut World) -> Vec<((i32, i32), bool)> {
+        let mut query = world.query::<(&Building, &Transform)>();
+        let mut rows = query
+            .iter(world)
+            .filter(|(building, _)| building.kind == BuildingType::Wall)
+            .map(|(building, transform)| {
+                (
+                    WorldMap::world_to_grid(transform.translation.truncate()),
+                    building.is_provisional,
+                )
+            })
+            .collect::<Vec<_>>();
+        rows.sort_unstable_by_key(|(grid, _)| *grid);
+        rows
     }
 
     fn wall_visual_rows(
@@ -993,6 +1009,32 @@ mod tests {
                 .resolution_revision,
             revision,
             "world replacement must rebuild topology exactly once"
+        );
+    }
+
+    fn assert_wall_asset_pool_is_bounded(app: &App) {
+        let assets = app
+            .world()
+            .resource::<crate::assets::wall_asset_set::ProductionWallAssetPool>();
+        let resolved = assets.resolved.as_ref().expect("resolved Wall asset pool");
+        assert_eq!(resolved.meshes.len(), 6);
+        assert_eq!(
+            resolved
+                .formwork_meshes
+                .as_ref()
+                .expect("resolved formwork mesh pool")
+                .len(),
+            6
+        );
+        let materials = app
+            .world()
+            .resource::<crate::assets::wall_asset_set::ProductionWallMaterialPool>();
+        assert_eq!(
+            [materials.complete.as_ref(), materials.provisional.as_ref()]
+                .into_iter()
+                .flatten()
+                .count(),
+            2
         );
     }
 
@@ -1453,17 +1495,17 @@ mod tests {
     }
 
     #[test]
-    fn wall_presentation_recovers_atomically_after_normal_rollback_and_recovery_replacement() {
+    fn mixed_wall_presentation_recovers_after_normal_rollback_and_recovery_replacement() {
         let plan = ResolvedRehydratePlan::with_step_for_test(
             "wall.presentation",
             rehydrate_presentation_shells_for_test,
         );
-        let incoming_grids = [(30, 30), (31, 30)];
-        let incoming = wall_replacement_candidate(&incoming_grids, 2.0);
+        let incoming_walls = [((30, 30), true), ((31, 30), false)];
+        let incoming = wall_replacement_candidate(&incoming_walls, 2.0);
 
         let mut normal = app_with_wall_replacement_runtime();
         insert_persisted_resources(normal.world_mut(), 1.0);
-        let old_normal_wall = spawn_persisted_wall(normal.world_mut(), (5, 5));
+        let old_normal_wall = spawn_persisted_wall(normal.world_mut(), (5, 5), false);
         rehydrate_presentation_shells_for_test(normal.world_mut());
         normal.world_mut().flush();
         normal.update();
@@ -1471,15 +1513,22 @@ mod tests {
         let type_registry = normal.world().resource::<AppTypeRegistry>().clone();
         let registry = type_registry.read();
 
-        replace_persisted_world(normal.world_mut(), &incoming, &registry, &plan).unwrap();
-        assert!(normal.world().get_entity(old_normal_wall).is_err());
-        assert!(normal.world().get_entity(old_normal_visual).is_err());
-        assert_fallback_then_production(&mut normal, incoming_grids.len());
+        for repetition in 0..10 {
+            replace_persisted_world(normal.world_mut(), &incoming, &registry, &plan).unwrap();
+            if repetition == 0 {
+                assert!(normal.world().get_entity(old_normal_wall).is_err());
+                assert!(normal.world().get_entity(old_normal_visual).is_err());
+            }
+            assert_eq!(wall_phase_rows(normal.world_mut()), incoming_walls);
+            assert_fallback_then_production(&mut normal, incoming_walls.len());
+            assert_eq!(wall_phase_rows(normal.world_mut()), incoming_walls);
+            assert_wall_asset_pool_is_bounded(&normal);
+        }
 
         let mut rollback = app_with_wall_replacement_runtime();
         insert_persisted_resources(rollback.world_mut(), 3.0);
         let rollback_grid = (8, 9);
-        let old_rollback_wall = spawn_persisted_wall(rollback.world_mut(), rollback_grid);
+        let old_rollback_wall = spawn_persisted_wall(rollback.world_mut(), rollback_grid, false);
         rehydrate_presentation_shells_for_test(rollback.world_mut());
         rollback.world_mut().flush();
         rollback.update();
@@ -1500,6 +1549,10 @@ mod tests {
         assert!(matches!(result, Err(CommitError::Recovered { .. })));
         assert!(rollback.world().get_entity(old_rollback_wall).is_err());
         assert_fallback_then_production(&mut rollback, 1);
+        assert_eq!(
+            wall_phase_rows(rollback.world_mut()),
+            [(rollback_grid, false)]
+        );
         let restored_wall = wall_visual_rows(rollback.world_mut())[0].1;
         assert_eq!(
             rollback
@@ -1512,7 +1565,7 @@ mod tests {
 
         let mut recovery = app_with_wall_replacement_runtime();
         insert_persisted_resources(recovery.world_mut(), 4.0);
-        spawn_persisted_wall(recovery.world_mut(), (11, 11));
+        spawn_persisted_wall(recovery.world_mut(), (11, 11), false);
         rehydrate_presentation_shells_for_test(recovery.world_mut());
         recovery.world_mut().flush();
         recovery.update();
@@ -1526,7 +1579,9 @@ mod tests {
             *recovery.world().resource::<SaveRecoveryMode>(),
             SaveRecoveryMode::Healthy
         );
-        assert_fallback_then_production(&mut recovery, incoming_grids.len());
+        assert_eq!(wall_phase_rows(recovery.world_mut()), incoming_walls);
+        assert_fallback_then_production(&mut recovery, incoming_walls.len());
+        assert_eq!(wall_phase_rows(recovery.world_mut()), incoming_walls);
         let mut masks = wall_visual_rows(recovery.world_mut())
             .into_iter()
             .map(|(_, owner, ..)| {
