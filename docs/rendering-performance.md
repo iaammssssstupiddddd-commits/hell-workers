@@ -94,6 +94,8 @@ completed-onlyの補助matrixや、画像採取時の短時間frame値は型枠�
 `CandidateDisabled`と全target fallbackを要求する。旧schemaではproduction 6 mesh、新しい型枠schemaでは完成6＋型枠6の
 production 12 mesh、いずれもproduction 2 material、fallback 1 mesh / 2 materialのresident poolを要求する。
 family / rotation分布と、完成mesh 72 tri・型枠mesh 240 triの上限が成立してからwarm-upへ進む。
+Pythonの独立再検証もruntime wallsetのexact inventoryを読み、schema 1の6件とschema 2の12件を分岐する。
+schema 2でも先頭の完成6件は72 tri以下のまま、後半の型枠6件だけを240 tri以下とする。
 binaryの`--perf-wall-presentation`とlauncherの`HW_WALL_PERF_PRESENTATION`は同値の二重鍵であり、通常runや
 Wall art actual-window profileからは指定できない。completed / provisionalのN=96 / 4N=384を各3 run採り、
 同一final binaryのfallback-control比p95 / p99中央値を各`+5%`以内で判定する。v2は各

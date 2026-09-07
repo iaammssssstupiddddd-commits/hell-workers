@@ -332,6 +332,9 @@ asset-view fingerprint `ad63f1c334c91335851d06aa1b64be76b7ce08da903e53ab425c4f79
 N=96 / 4N=384を各3 run、30秒warm-up＋60秒measureで採る。各runは既存
 `wall_density_fixture.json` / `wall_density_layout.csv`に加えて`wall_density_presentation.json`を持ち、
 指定modeへの全owner収束、candidate identity、resident poolとtriangle上限が開始／終了で同一でなければ無効になる。
+offline verifierはruntime wallsetのexact role列からschemaを解決し、schema 1は完成6 meshを各72 tri以下、
+schema 2は完成6 meshを各72 tri以下＋型枠6 meshを各240 tri以下として別々に検査する。
+型枠追加を理由に完成mesh側の上限を240へ広げず、欠落・余分・順序違いのinventoryを拒否する。
 profileはphase別p95 / p99比較CSVを固有名で保存し、production中央値がfallback-controlより5%を超えると
 job全体をinvalidにする。
 

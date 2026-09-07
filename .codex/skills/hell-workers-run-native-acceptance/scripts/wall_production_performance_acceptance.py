@@ -52,6 +52,73 @@ FRAME_CLOCK_P50_TOLERANCE_MS = 0.5
 # The three runs of one cell are captured minutes apart, so a mid-session
 # regime flip has to fail even when each run is individually unpaced.
 MAX_CELL_P50_SPREAD = 1.25
+COMPLETED_CORE_ROLES = (
+    "mesh:isolated",
+    "mesh:end",
+    "mesh:straight",
+    "mesh:corner",
+    "mesh:t_junction",
+    "mesh:cross",
+    "texture:albedo",
+    "texture:emissive",
+)
+
+
+def inventory_contract(schema_version: Any, roles: tuple[Any, ...]) -> dict[str, Any]:
+    if schema_version == 1:
+        native.require(
+            roles == COMPLETED_CORE_ROLES,
+            "Wall schema-v1 performance inventory is not closed",
+        )
+        return {
+            "runtime_schema_version": 1,
+            "production_mesh_count": 6,
+            "triangle_budgets": [72] * 6,
+        }
+    native.require(
+        schema_version == 2 and roles == art.FORMWORK_PREVIEW_ROLES,
+        "Wall schema-v2 performance inventory is not the closed formwork set",
+    )
+    return {
+        "runtime_schema_version": 2,
+        "production_mesh_count": 12,
+        "triangle_budgets": [72] * 6 + [240] * 6,
+    }
+
+
+def runtime_inventory_contract(
+    repo: Path, candidate: dict[str, Any]
+) -> dict[str, Any]:
+    """Resolve the finite mesh contract from the pinned runtime projection."""
+    wallset = native.read_json(repo / "assets/manifests/wall-production-v1.wallset")
+    core = wallset.get("core")
+    native.require(
+        wallset.get("authority") == candidate["authority"]
+        and wallset.get("asset_set_generation")
+        == candidate["asset_set_generation"]
+        and wallset.get("manifest_sha256") == candidate["manifest_sha256"]
+        and isinstance(core, list)
+        and all(isinstance(record, dict) for record in core),
+        "Wall performance runtime projection differs from its candidate identity",
+    )
+    roles = tuple(record.get("role") for record in core)
+    return inventory_contract(wallset.get("schema_version"), roles)
+
+
+def require_triangle_inventory(
+    triangles: Any, maximum: Any, inventory: dict[str, Any]
+) -> None:
+    triangle_budgets = inventory["triangle_budgets"]
+    native.require(
+        isinstance(triangles, list)
+        and len(triangles) == len(triangle_budgets)
+        and all(
+            type(value) is int and 0 < value <= budget
+            for value, budget in zip(triangles, triangle_budgets, strict=True)
+        )
+        and maximum == max(triangles),
+        "Wall production triangle budget differs",
+    )
 
 
 def presentation_command(
@@ -204,6 +271,7 @@ def verify_presentation_sidecar(
     phase: str,
     size: str,
     candidate: dict[str, Any],
+    inventory: dict[str, Any],
 ) -> dict[str, Any]:
     value = native.read_json(path)
     native.require(
@@ -242,22 +310,22 @@ def verify_presentation_sidecar(
         "Wall presentation active residency differs",
     )
     native.require(
-        initial.get("resident_production_mesh_count") == 6
+        initial.get("resident_production_mesh_count")
+        == inventory["production_mesh_count"]
         and initial.get("resident_production_material_count") == 2
         and initial.get("resident_fallback_mesh_count") == 1
         and initial.get("resident_fallback_material_count") == 2
-        and initial.get("total_wall_mesh_pool_count") == 7
+        and initial.get("total_wall_mesh_pool_count")
+        == inventory["production_mesh_count"] + 1
         and initial.get("total_wall_material_pool_count") == 4
         and initial.get("production_materials_lit") is True,
         "Wall presentation finite pool differs",
     )
     triangles = initial.get("production_mesh_triangles")
-    native.require(
-        isinstance(triangles, list)
-        and len(triangles) == 6
-        and all(type(value) is int and 0 < value <= 72 for value in triangles)
-        and initial.get("max_production_mesh_triangles") == max(triangles),
-        "Wall production triangle budget differs",
+    require_triangle_inventory(
+        triangles,
+        initial.get("max_production_mesh_triangles"),
+        inventory,
     )
     native.require(
         initial.get("family_counts")
@@ -294,6 +362,7 @@ def verify_session_presentations(
     candidate: dict[str, Any],
 ) -> list[dict[str, Any]]:
     Case, _ = density.load_perf_modules(repo)
+    inventory = runtime_inventory_contract(repo, candidate)
     sidecars = []
     for size in density.SIZES:
         case = Case(
@@ -308,6 +377,7 @@ def verify_session_presentations(
                     phase=phase,
                     size=size,
                     candidate=candidate,
+                    inventory=inventory,
                 )
             )
     return sidecars
@@ -1034,6 +1104,42 @@ def self_test() -> int:
         first_modes.count("fallback-control") == first_modes.count("production") == 6,
         "Wall capture pair order is not counterbalanced",
     )
+    schema_v1 = inventory_contract(1, COMPLETED_CORE_ROLES)
+    schema_v2 = inventory_contract(2, art.FORMWORK_PREVIEW_ROLES)
+    native.require(
+        schema_v1["production_mesh_count"] == len(schema_v1["triangle_budgets"])
+        and schema_v2["production_mesh_count"]
+        == len(schema_v2["triangle_budgets"])
+        and max(schema_v1["triangle_budgets"]) == 72
+        and schema_v2["triangle_budgets"][:6] == [72] * 6
+        and schema_v2["triangle_budgets"][6:] == [240] * 6,
+        "Wall runtime inventory budgets differ",
+    )
+    require_triangle_inventory([72] * 6, 72, schema_v1)
+    require_triangle_inventory([72] * 6 + [240] * 6, 240, schema_v2)
+    for invalid_triangles, invalid_maximum in (
+        ([73] + [72] * 5 + [240] * 6, 240),
+        ([72] * 6 + [241] + [240] * 5, 241),
+        ([72] * 6 + [240] * 5, 240),
+        ([72] * 6 + [240] * 6, 239),
+    ):
+        try:
+            require_triangle_inventory(invalid_triangles, invalid_maximum, schema_v2)
+        except native.AcceptanceError:
+            pass
+        else:
+            raise native.AcceptanceError("Wall invalid triangle inventory was accepted")
+    for schema_version, roles in (
+        (1, COMPLETED_CORE_ROLES[:-1]),
+        (2, art.FORMWORK_PREVIEW_ROLES[:-1]),
+        (3, art.FORMWORK_PREVIEW_ROLES),
+    ):
+        try:
+            inventory_contract(schema_version, roles)
+        except native.AcceptanceError:
+            pass
+        else:
+            raise native.AcceptanceError("Wall open runtime inventory was accepted")
     # Observed regimes: a free running capture and the 60 Hz paced capture that
     # replaced it inside job `wall-production-performance-20260903T164122Z-3b424e6f`.
     free_running = frame_regime(8041, 7.43)

@@ -408,7 +408,7 @@ Update required / 理由付きNo impactをその時点で判断する。
 ### 現在地
 
 - 進捗: M1/W2の中核を実装。schema v3候補、runtime wallset v2、6 family GLB、Opaque木材albedo、tile単位mesh/material切替、ArtPreview authorityが動作する。M3aはgeneration 5の技術候補とゲーム所有window PNGに対してユーザー承認済み。generation 8の正式candidateをsubject `3c0f7c67`へ固定し、標準／最大zoom-outの正式画像18/18と独立verifyが合格した。通常releaseはgeneration 4のまま。
-- 次の作業: 同じcandidate identityを使い、混在gallery・Soul depthとW-L01〜L03 / W-A01〜A02のstateful storyboardを実装・採取する。その後に§7.2の専用Capture 18 runsとMemory 6 runsをbefore/afterで完了し、Door側の単独gate後にJ1、M4へ進む。短時間の画像captureを性能合格へ読み替えない。
+- 次の作業: 同じcandidate bytesを使い、混在gallery・Soul depthとW-L01〜L03 / W-A01〜A02のstateful storyboardを実装・採取する。性能ランナーのschema 2 resident検証は実装済みなので、続いて混在384とMemoryを専用matrixへ追加し、§7.2のCapture 18 runsとMemory 6 runsをbefore/afterで完了する。Door側の単独gate後にJ1、M4へ進み、短時間の画像captureを性能合格へ読み替えない。
 - ドアはM0の共通port確定後に制作を並行可能。Rust・tooling編集はmain agentが順に行い、joint受入は両方のruntime接続後。
 - 240 triangles・core 15 file・§7の予算は採用した新設計値。現在のreleaseの実測・アート承認値として扱わない。
 
@@ -447,3 +447,4 @@ Update required / 理由付きNo impactをその時点で判断する。
 | `2026-09-06` | `Codex` | Door generation 5もArtPreview承認済みとなり、Door M2統合とDoor専用approval/final/candidate toolingを共通freezeへ追加。両trackとも正式M3b前で通常releaseは未変更 |
 | `2026-09-06` | `Codex` | clean統合subject `49c43e0f`でDoor generation 6 finalを封印し、isolated candidateの実機visual legを通過。Wall finalと両単独M3b残件、J1前のため通常releaseは未変更 |
 | `2026-09-07` | `Codex` | subject `3c0f7c67`・Wall generation 8で正式画像profileを標準／最大zoom-out各9 case実行し、18/18 validと独立verifyを記録。stateful lifecycle・Capture・Memory・J1・releaseは未完 |
+| `2026-09-07` | `Codex` | 正式性能ランナーの旧6 mesh固定をschema別exact inventoryへ修正。schema 2でも完成6件は72 tri、型枠6件だけ240 triを適用し、性能採取前のresident再検証を実装 |
