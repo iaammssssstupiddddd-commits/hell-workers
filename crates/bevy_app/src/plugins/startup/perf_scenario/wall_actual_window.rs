@@ -232,7 +232,11 @@ pub(crate) struct WallActualWindowViewParams<'w, 's> {
             &'static mut Transform,
             &'static mut Visibility,
         ),
-        (Without<MainCamera>, Without<Building3dVisual>),
+        (
+            Without<MainCamera>,
+            Without<Building3dVisual>,
+            Without<PerfFixtureMarker>,
+        ),
     >,
     ui_roots: Query<'w, 's, &'static mut Node, Without<ChildOf>>,
     connector_visuals: Query<'w, 's, (&'static PerfFixtureMarker, &'static mut Visibility)>,
@@ -282,7 +286,11 @@ fn prepare_soul_depth_gallery(
     wall_visuals: &Query<(&Building3dVisual, &GlobalTransform), Without<ActorBillboard3d>>,
     billboards: &mut Query<
         (&ActorBillboard3d, &mut Transform, &mut Visibility),
-        (Without<MainCamera>, Without<Building3dVisual>),
+        (
+            Without<MainCamera>,
+            Without<Building3dVisual>,
+            Without<PerfFixtureMarker>,
+        ),
     >,
 ) {
     for (_, _, mut visibility) in billboards.iter_mut() {
@@ -1138,7 +1146,15 @@ fn write_status(path: &Path, value: &Value) -> std::io::Result<()> {
 
 #[cfg(test)]
 mod tests {
+    use bevy::ecs::system::SystemState;
+
     use super::*;
+
+    #[test]
+    fn gallery_view_queries_have_disjoint_mutable_visibility_access() {
+        let mut world = World::new();
+        let _state = SystemState::<WallActualWindowViewParams>::new(&mut world);
+    }
 
     #[test]
     fn provisional_and_mixed_actual_windows_require_their_own_profiles() {
