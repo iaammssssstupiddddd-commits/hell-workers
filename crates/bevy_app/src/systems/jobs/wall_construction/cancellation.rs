@@ -162,11 +162,12 @@ mod tests {
     use hw_core::visual_mirror::building::{BuildingTypeVisual, BuildingVisualState};
     use hw_core::visual_mirror::construction::WallTileVisualMirror;
     use hw_jobs::construction::{WallConstructionSite, WallTileBlueprint};
-    use hw_jobs::{FrameWallPhase, FrameWallTileData};
+    use hw_jobs::{Building, BuildingType, FrameWallPhase, FrameWallTileData};
     use hw_logistics::SharedResourceCache;
     use hw_logistics::transport_request::{
         TransportPriority, TransportRequest, TransportRequestKind,
     };
+    use hw_visual::Building3dVisual;
     use hw_visual::wall_connection::{
         WallConnectionDirty, WallConnectionMask, WallTopologyIndex, WallTopologyState,
         wall_connections_system,
@@ -316,7 +317,13 @@ mod tests {
                 .add_message::<OnTaskAbandoned>()
                 .add_systems(
                     Update,
-                    (wall_construction_cancellation_system, ApplyDeferred).chain(),
+                    (
+                        wall_construction_cancellation_system,
+                        ApplyDeferred,
+                        crate::systems::visual::building3d_cleanup::cleanup_building_3d_visuals_system,
+                        ApplyDeferred,
+                    )
+                        .chain(),
                 )
                 .add_systems(PostUpdate, (wall_connections_system, ApplyDeferred).chain());
 
@@ -349,6 +356,10 @@ mod tests {
             let spawned_wall = with_spawned_wall.then(|| {
                 app.world_mut()
                     .spawn((
+                        Building {
+                            kind: BuildingType::Wall,
+                            is_provisional: true,
+                        },
                         Transform::from_translation(
                             crate::world::map::WorldMap::grid_to_world(
                                 construction_grid.0,
@@ -363,6 +374,8 @@ mod tests {
                     ))
                     .id()
             });
+            let spawned_visual =
+                spawned_wall.map(|owner| app.world_mut().spawn(Building3dVisual { owner }).id());
             let mut tile = WallTileBlueprint::new(site, construction_grid);
             tile.spawned_wall = spawned_wall;
             let tile_entity = app
@@ -403,6 +416,9 @@ mod tests {
             assert!(app.world().get_entity(tile_entity).is_err());
             if let Some(wall) = spawned_wall {
                 assert!(app.world().get_entity(wall).is_err());
+            }
+            if let Some(visual) = spawned_visual {
+                assert!(app.world().get_entity(visual).is_err());
             }
             assert_eq!(
                 app.world().get::<WallTopologyState>(target).unwrap().mask,

@@ -954,9 +954,25 @@ fn wall_commit_removes_the_connector_in_the_same_post_update() {
         .init_resource::<WallTopologyIndex>()
         .add_observer(hw_jobs::visual_sync::on_building_added_sync_visual)
         .add_systems(Update, hw_jobs::visual_sync::sync_building_visual_system)
+        .add_systems(
+            Update,
+            (
+                ApplyDeferred,
+                crate::systems::visual::building3d_cleanup::cleanup_building_3d_visuals_system,
+                ApplyDeferred,
+            )
+                .chain()
+                .after(DeconstructionFinalizerSet::Finalize),
+        )
         .add_systems(PostUpdate, (wall_connections_system, ApplyDeferred).chain());
 
     let (fixture, footprint) = spawn_structure_fixture(&mut app, BuildingType::Wall);
+    let target_visual = app
+        .world_mut()
+        .spawn(Building3dVisual {
+            owner: fixture.target,
+        })
+        .id();
     let target_grid = footprint[0];
     let neighbor_grid = (target_grid.0, target_grid.1 - 1);
     let neighbor = app
@@ -982,6 +998,7 @@ fn wall_commit_removes_the_connector_in_the_same_post_update() {
     app.update();
 
     assert!(app.world().get_entity(fixture.target).is_err());
+    assert!(app.world().get_entity(target_visual).is_err());
     assert_eq!(
         app.world().get::<WallTopologyState>(neighbor).unwrap().mask,
         WallConnectionMask::from_neighbors(false, false, false, false),

@@ -120,8 +120,11 @@ mod tests {
     use crate::input_actions::InputModifiers;
     use crate::systems::jobs::wall_construction::wall_construction_completion_system;
     use crate::test_support::{empty_building_3d_handles, minimal_app};
+    use bevy::asset::uuid::Uuid;
+    use bevy::pbr::MeshMaterial3d;
     use hw_core::area::TaskArea;
     use hw_logistics::tile_index::{TileSiteIndex, sync_wall_tile_site_index_system};
+    use hw_visual::{Building3dVisual, TopDownStructuralMaterial};
 
     #[derive(Resource, Default)]
     struct SpawnCounts {
@@ -141,10 +144,15 @@ mod tests {
     #[test]
     fn instant_build_completes_a_new_indexed_wall_site() {
         let mut app = App::new();
+        let mut handles = empty_building_3d_handles();
+        let complete_material: Handle<TopDownStructuralMaterial> = Uuid::from_u128(1).into();
+        let provisional_material: Handle<TopDownStructuralMaterial> = Uuid::from_u128(2).into();
+        handles.wall_material = complete_material.clone();
+        handles.wall_provisional_material = provisional_material.clone();
         app.init_resource::<crate::DebugInstantBuild>()
             .init_resource::<crate::world::map::WorldMap>()
             .init_resource::<TileSiteIndex>()
-            .insert_resource(empty_building_3d_handles())
+            .insert_resource(handles)
             .add_systems(
                 Update,
                 (
@@ -192,6 +200,22 @@ mod tests {
         assert_eq!(building.kind, BuildingType::Wall);
         assert!(!building.is_provisional);
         assert!(app.world().get::<BuildingBounceEffect>(wall).is_some());
+        let visuals = {
+            let world = app.world_mut();
+            let mut query = world.query::<(
+                Entity,
+                &Building3dVisual,
+                &MeshMaterial3d<TopDownStructuralMaterial>,
+            )>();
+            query
+                .iter(world)
+                .filter(|(_, visual, _)| visual.owner == wall)
+                .map(|(entity, _, material)| (entity, material.0.clone()))
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(visuals.len(), 1);
+        assert_eq!(visuals[0].1, complete_material);
+        assert_ne!(visuals[0].1, provisional_material);
     }
 
     #[test]

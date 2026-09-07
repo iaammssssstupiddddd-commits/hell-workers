@@ -85,27 +85,47 @@ pub(crate) fn spawn_wall_shell(
 
 #[cfg(test)]
 mod tests {
+    use bevy::asset::uuid::Uuid;
     use bevy::ecs::schedule::ApplyDeferred;
+    use bevy::pbr::MeshMaterial3d;
     use hw_core::area::TaskArea;
     use hw_core::visual_mirror::construction::WallTileVisualMirror;
     use hw_logistics::tile_index::TileSiteIndex;
-    use hw_visual::Building3dVisual;
     use hw_visual::blueprint::BuildingBounceEffect;
     use hw_visual::wall_connection::{
         WallConnectionDirty, WallConnectionMask, WallTopologyIndex, WallTopologyState,
         wall_connections_system,
     };
+    use hw_visual::{Building3dVisual, TopDownStructuralMaterial};
 
     use super::*;
+    use crate::assets::wall_asset_set::{
+        ProductionWallAssetPool, ProductionWallMaterialPool, WallProductionActivation,
+    };
+    use crate::systems::visual::wall_presentation::{
+        Wall3dVisualOwnerIndex, apply_wall_presentation_system,
+    };
 
     #[test]
     fn two_tile_site_keeps_exact_topology_through_framing_and_completion() {
         let mut app = App::new();
+        let mut handles = crate::test_support::empty_building_3d_handles();
+        let complete_material: Handle<TopDownStructuralMaterial> = Uuid::from_u128(1).into();
+        let provisional_material: Handle<TopDownStructuralMaterial> = Uuid::from_u128(2).into();
+        handles.wall_material = complete_material.clone();
+        handles.wall_provisional_material = provisional_material.clone();
         app.add_plugins(MinimalPlugins)
             .init_resource::<WorldMap>()
             .init_resource::<TileSiteIndex>()
-            .insert_resource(crate::test_support::empty_building_3d_handles())
+            .insert_resource(handles)
             .insert_resource(crate::test_support::empty_wall_visual_handles())
+            .insert_resource(ProductionWallAssetPool {
+                manifest: Handle::default(),
+                resolved: None,
+            })
+            .init_resource::<ProductionWallMaterialPool>()
+            .init_resource::<WallProductionActivation>()
+            .init_resource::<Wall3dVisualOwnerIndex>()
             .init_resource::<WallConnectionDirty>()
             .init_resource::<WallTopologyIndex>()
             .add_observer(hw_jobs::visual_sync::on_building_added_sync_visual)
@@ -119,7 +139,15 @@ mod tests {
                 )
                     .chain(),
             )
-            .add_systems(PostUpdate, (wall_connections_system, ApplyDeferred).chain());
+            .add_systems(
+                PostUpdate,
+                (
+                    wall_connections_system,
+                    ApplyDeferred,
+                    apply_wall_presentation_system,
+                )
+                    .chain(),
+            );
 
         let grids = [(20, 20), (21, 20)];
         let mut site = WallConstructionSite::new(
@@ -183,20 +211,33 @@ mod tests {
             app.world().get::<WallTopologyState>(walls[1]).unwrap().mask,
             WallConnectionMask::from_neighbors(false, false, true, false)
         );
-        for wall in &walls {
-            let building = app.world().get::<Building>(*wall).unwrap();
-            assert!(building.is_provisional);
-            assert!(app.world().get::<ProvisionalWall>(*wall).is_some());
-            let visual_count = {
-                let world = app.world_mut();
-                let mut query = world.query::<&Building3dVisual>();
-                query
-                    .iter(world)
-                    .filter(|visual| visual.owner == *wall)
-                    .count()
-            };
-            assert_eq!(visual_count, 1);
-        }
+        let visual_entities = walls
+            .iter()
+            .map(|wall| {
+                let building = app.world().get::<Building>(*wall).unwrap();
+                assert!(building.is_provisional);
+                assert!(app.world().get::<ProvisionalWall>(*wall).is_some());
+                let visual_entities = {
+                    let world = app.world_mut();
+                    let mut query = world.query::<(Entity, &Building3dVisual)>();
+                    query
+                        .iter(world)
+                        .filter(|(_, link)| link.owner == *wall)
+                        .map(|(entity, _)| entity)
+                        .collect::<Vec<_>>()
+                };
+                assert_eq!(visual_entities.len(), 1);
+                let visual = visual_entities[0];
+                assert_eq!(
+                    app.world()
+                        .get::<MeshMaterial3d<TopDownStructuralMaterial>>(visual)
+                        .unwrap()
+                        .0,
+                    provisional_material
+                );
+                visual
+            })
+            .collect::<Vec<_>>();
 
         {
             let mut site = app
@@ -220,11 +261,28 @@ mod tests {
                 .iter()
                 .all(|entity| app.world().get_entity(*entity).is_err())
         );
-        for (index, wall) in walls.into_iter().enumerate() {
+        for (index, (wall, visual)) in walls.into_iter().zip(visual_entities).enumerate() {
             let building = app.world().get::<Building>(wall).unwrap();
             assert!(!building.is_provisional);
             assert!(app.world().get::<ProvisionalWall>(wall).is_none());
             assert!(app.world().get::<BuildingBounceEffect>(wall).is_some());
+            let current_visuals = {
+                let world = app.world_mut();
+                let mut query = world.query::<(Entity, &Building3dVisual)>();
+                query
+                    .iter(world)
+                    .filter(|(_, link)| link.owner == wall)
+                    .map(|(entity, _)| entity)
+                    .collect::<Vec<_>>()
+            };
+            assert_eq!(current_visuals, vec![visual]);
+            assert_eq!(
+                app.world()
+                    .get::<MeshMaterial3d<TopDownStructuralMaterial>>(visual)
+                    .unwrap()
+                    .0,
+                complete_material
+            );
             let expected_mask = if index == 0 {
                 WallConnectionMask::from_neighbors(false, false, false, true)
             } else {
