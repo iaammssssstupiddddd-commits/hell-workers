@@ -17,6 +17,7 @@ sys.path.insert(0, str(SCRIPTS_ROOT))
 
 import project_wall_formwork_preview as projector
 import project_wall_formwork_candidate as candidate_projector
+import provision_wall_formwork_candidate as candidate_provisioner
 import provision_wall_formwork_preview as provisioner
 import record_wall_formwork_approval as approval_recorder
 import seal_wall_formwork_final as final_sealer
@@ -248,7 +249,7 @@ class WallFormworkManifestTests(unittest.TestCase):
     def test_verified_preview_records_approval_and_projects_final_candidate(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            manifest, payload, _ = self.fixture(root)
+            manifest, payload, roots = self.fixture(root)
             job_root = root / "acceptance/wall-formwork-preview-test"
             job_root.mkdir(parents=True)
             screenshot = job_root / "current-wall.png"
@@ -304,12 +305,37 @@ class WallFormworkManifestTests(unittest.TestCase):
             payload["manifest_mode"] = "final"
             payload["asset_set_generation"] = 6
             payload["art_review"] = {"status": "art_approved"}
+            payload["source"]["runtime_subject"] = "e" * 40
+            payload["source"]["working_tree_diff_sha256"] = "0" * 64
             manifest.write_text(json.dumps(payload), encoding="utf-8")
             runtime = candidate_projector.project(manifest)
             self.assertEqual(runtime["schema_version"], 2)
             self.assertEqual(runtime["authority"], "isolated_candidate")
             self.assertEqual(runtime["review_status"], "art_approved")
             self.assertEqual(len(runtime["core"]), 15)
+
+            asset_root = root / "asset-root"
+            shutil.copytree(roots["exports"], asset_root / "staging/exports")
+            shutil.copytree(roots["reports"], asset_root / "staging/reports")
+            shutil.copytree(roots["blend"], asset_root / "staging/blend")
+            shutil.copytree(roots["licenses"], asset_root / "licenses")
+            staged_manifest = asset_root / "staging/reports/candidate.json"
+            staged_completed = asset_root / "staging/reports/completed.json"
+            shutil.copy2(roots["completed"], staged_completed)
+            destination = asset_root / "staging/validation/formwork-final"
+            receipt = candidate_provisioner.provision(
+                asset_root=asset_root,
+                manifest_path=staged_manifest,
+                completed_manifest_path=staged_completed,
+                destination=destination,
+            )
+            self.assertEqual(receipt["authority"], "isolated_candidate")
+            self.assertEqual(receipt["manifest_sha256"], digest(staged_manifest))
+            locator = json.loads(
+                (destination / "assets/manifests/wall-production-v1.wallset").read_text()
+            )
+            self.assertEqual(locator["authority"], "isolated_candidate")
+            self.assertEqual(len(locator["core"]), 15)
 
     def test_preview_approval_rejects_failed_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

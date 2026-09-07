@@ -150,6 +150,8 @@ Door M2を含むclean runtime subjectが確定した後、`seal_wall_formwork_fi
 authoring v3 final manifestへ封印する。`project_wall_formwork_candidate.py`はそのfinalだけをruntime schema v2の
 `authority=isolated_candidate`へ投影する。正式candidateは`art_review.status=art_approved`、exact 15 core、
 `normal_decision=rejected`、receiptなしを要求し、ArtPreview projectionを正式受入へ流用しない。
+`provision_wall_formwork_candidate.py`はこのfinalだけを外部`staging/validation/`配下の新規viewへコピーし、
+異なる既存bytesやlocatorの上書きを拒否する。
 
 DoorはWall manifestと分離したauthoring/runtime schema v1を使う。`seal_door_candidate.py`は3 GLB、shared albedo、EW/NS previewのexact 6 coreと、scene/export/Khronos/post-export/texture/OCIO report、Blender原本、geometry fixture、imagegen prompt、license、tool source fingerprintをtechnical candidateへ封印する。`project_door_preview.py`はcandidateだけを`authority=art_preview` / `review_status=art_preview` / receiptなしの`manifests/door-production-v1.doorset`へ投影する。
 
