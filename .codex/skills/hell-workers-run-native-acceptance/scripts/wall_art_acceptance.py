@@ -215,6 +215,12 @@ def profile_name(
     return CANDIDATE_PROFILE if candidate else PROFILE
 
 
+def performance_wall_phase(authority: str, formwork: bool) -> str:
+    if authority == "art_preview":
+        return "provisional"
+    return "mixed" if formwork else "completed"
+
+
 def candidate_identity(
     repo: Path,
     *,
@@ -971,9 +977,7 @@ def run_calibration(
         quality=quality,
         scale_factor=scale_factor,
         zoom=zoom,
-        wall_phase=(
-            "provisional" if authority == "art_preview" else "mixed" if formwork else "completed"
-        ),
+        wall_phase=performance_wall_phase(authority, formwork),
     )
     if formwork:
         command.append("--wall-formwork-acceptance")
@@ -1157,7 +1161,7 @@ def verify_observation(
         binary_sha256=manifest["binary_sha256"],
         quality=quality,
         scale_factor=scale_factor,
-        wall_phase="provisional" if authority == "art_preview" or formwork else "completed",
+        wall_phase=performance_wall_phase(authority, formwork),
     )
     native.require(
         performance == observation.get("performance"),
@@ -1635,6 +1639,12 @@ def verify(args: argparse.Namespace) -> int:
 
 
 def self_test() -> int:
+    native.require(
+        performance_wall_phase("art_preview", False) == "provisional"
+        and performance_wall_phase("isolated_candidate", True) == "mixed"
+        and performance_wall_phase("isolated_candidate", False) == "completed",
+        "Wall performance phase selection differs",
+    )
     command = calibration_command(Path("/repo"), Path("/artifact"), "Intel")
     native.require(
         "--wall-actual-window" in command,
