@@ -214,7 +214,7 @@ def verify_fixture(
         isinstance(evidence, dict)
         and evidence.get("expected_mode") == presentation
         and evidence.get("asset_set_generation") == candidate["asset_set_generation"]
-        and evidence.get("authority") == candidate["authority"]
+        and evidence.get("authority") == "isolated_candidate"
         and evidence.get("manifest_sha256") == candidate["manifest_sha256"],
         "Door density presentation identity differs",
     )
@@ -674,7 +674,11 @@ def status(args: argparse.Namespace) -> int:
 
 
 def self_test() -> int:
-    candidate = {"authority": "isolated_candidate", "asset_set_generation": 6, "manifest_sha256": "a" * 64}
+    candidate = {
+        "asset_set_generation": 6,
+        "manifest_sha256": "a" * 64,
+        "locator_sha256": "b" * 64,
+    }
     production = presentation_environment("production", candidate)
     fallback = presentation_environment("fallback-control", candidate)
     native.require(
