@@ -13,7 +13,7 @@
 | 関連計画 | [仮設壁の木製型枠化](provisional-wall-formwork-plan-2026-09-05.md)、[完了済み本番壁計画](archived/production-wall-art-plan-2026-08-31.md) |
 | 関連提案 / Issue / PR | `N/A` |
 
-本書は実装中の計画である。M0〜M2の技術候補と実行時接続を実装し、M3の初回ArtPreviewを受けた形状改訂と実機再撮影まで進めている。調査基点は `57a488e1`。
+本書は実装中の計画である。M0〜M2の技術候補と実行時接続を実装し、M3のアート承認、正式candidate、behavior、quality/DPI、Door densityの単独受入まで完了した。調査基点は `57a488e1`。
 完了済みWall計画から引き継ぐ範囲は、Doorの枠・戸当たり・向き・Wallの9.6 wu portとの継ぎ目である。
 
 ## 0. セルフレビューで修正した点
@@ -272,9 +272,9 @@ sealerへ架空の証拠を渡さない。reviewは`double_leaf_approved`、`nor
 - 前提: 最終承認preview・封印を行うM3aの前に両M2のコードを同じclean subjectへ統合・freezeする。Doorの制作・探索previewは先行可能で、相手のM3完了やreleaseを待たない。単独M3とJ1は同じcommitでも異なるasset viewなので、共通手順§4.4の専用worktreeを使う。
 - 対象: root `plugins/startup/perf_scenario/`、native acceptance helper、必要な`perf_tool`のvalidator。
 - 完了条件:
-  - [ ] §7の操作・画像・状態・resource gateが合格し、最終アート候補を比較できる。
-  - [ ] Door単独は既存本設壁で受入を完了し、相手のM3完了を待たない。両単独M3後の共通J1へ渡す。
-  - [ ] 既存P02の旧色material predicateやhistorical mirror列を流用して合格にしていない。
+  - [x] §7の操作・画像・状態・resource gateが合格し、最終アート候補を比較できる。
+  - [x] Door単独は既存本設壁で受入を完了し、相手のM3完了を待たない。両単独M3後の共通J1へ渡す。
+  - [x] 既存P02の旧色material predicateやhistorical mirror列を流用して合格にしていない。
 - 検証: `hell-workers-run-native-acceptance` Skillの専用scenarioとdirect `kitty` launcher、独立artifact verify。
 
 ### J1: 型枠との共通受入
@@ -330,8 +330,8 @@ headlessと`visual_test`は補助検証であり、actual-windowの代替にし�
 
 新profile名は`door-art-v1`（画像・操作）と`door-density-v1`（性能）とする。画像は
 `door-art-v1-quality`と`door-art-v1-behavior`へ分離して`plan / status / verify / self-test`を実装済み。
-性能profileは未実装であり、M0で同じcommand surfaceを揃える。baselineの旧Doorは旧material/pose、新Doorは
-新mesh/枠位置と、同じprofile内でsubject role別の期待値を持たせる。
+性能profileは`door-density-v1`として実装済み。同一binaryでfallback-controlを旧表示相当、productionを
+新mesh/枠位置として二重鍵で切り替え、subject role別の期待値を持たせる。
 
 | ID | setup / 操作 | 観測する結果 |
 | --- | --- | --- |
@@ -383,8 +383,8 @@ Help impact review Skillで建築／ドアの実説明を読み、色表示へ�
 
 ### 現在地
 
-- 進捗: 実装 `97%`。M0のgeometry/全16mask、M1のtechnical candidate、M2の3D/2D adapterとPostUpdate境界、M3aを完了。承認済みgeneration 5 bytesをclean subject `49c43e0f`のgeneration 6 authoring finalへ封印し、preview無効のisolated candidateでEW/NS 6状態の実機visual leg、7 behavior case×3 runs、High/Medium/Low × DPI 1.0/1.5/2.0 × 2 zoomの品質受入まで通過した。Door densityのproduction/fallback二重鍵、N/4N fixture、sidecar、Capture→Memory直列launcherも実装済み。
-- 次の作業: clean validation worktreeでDoor density 12 Capture / 6 Memoryを正式採取し、Door単独M3bを閉じる。その後に共通J1、releaseを行う。behavior/quality受入は再採取せず、正式jobと保持中の失敗jobを比較証跡に使う。
+- 進捗: 実装 `98%`。M0のgeometry/全16mask、M1のtechnical candidate、M2の3D/2D adapterとPostUpdate境界、Door単独M3を完了。承認済みgeneration 5 bytesをgeneration 6 authoring finalへ封印し、preview無効のisolated candidateでEW/NS 6状態の実機visual leg、7 behavior case×3 runs、High/Medium/Low × DPI 1.0/1.5/2.0 × 2 zoomの品質受入、Door density Capture 12 / Memory 6 runsまで通過した。
+- 次の作業: 仮設壁単独M3の完了後、同じsubjectと両asset hashを固定した共通J1を実行し、通常releaseへ進む。Doorのbehavior/quality/density受入は再採取せず、正式jobと保持中の失敗jobを比較証跡に使う。
 - 仮設壁M0とport契約を先に共有。Doorの制作・既存石壁との接続は型枠release待ちにしない。joint受入は双方のruntime接続後。
 - 3 mesh方式は現在の瞬時状態切替に合わせる判断。スムーズな開閉を追加する場合はこの選択を再検討する。
 - セルフレビューで片開きから両開きへ変更し、初回ArtPreview後に完全90°から68°、NS識別性の再指摘後に同方向・同角度の78°へ改訂した。Open leaf AABBはfixture値であり、全Soul状態・両軸の実画面通過を承認済みとしない。
@@ -416,10 +416,11 @@ Help impact review Skillで建築／ドアの実説明を読み、色表示へ�
 - behavior受入基盤: `2026-09-07`に`door-art-v1-behavior`を追加。既存P08の7 behavior case×3 runsを変えず、専用opt-in時のみ`IsolatedCandidate` identity、semantic state対応のproduction mesh、共有material、production 1 / fallback 0を各processでfail-closed検証する。case別statusは共通nonceとprocess IDへ結び、既存P08 data schema外へ保存するためhistorical artifact契約は不変。runner self-testとprofiling feature compileはpass。初回jobはP08のheadless/repeat契約に対してX11/repeat 1を要求したためgame起動前にfail-closed停止し、artifactを保持。固定P08契約へ合わせた正式native採取は次項。
 - behavior正式native受入: clean validation worktreeのsubject `6d5ea2f9`、generation 6 candidate、source fingerprint `2af90c49929f2c5c44fb63e7eb089c07c70eb7496e9cc7f780499aa005ca711b`、harness fingerprint `27ae31a90d2aed7334b4633df8fb7ecff2468554e3521d3afee1f87483e914d0`で`door-behavior-20260906T183549Z-0895f5ad`を採取。Door state、通常load、preflight reject、rollback、recovery-only、recovery-failed、duplicate-resetを各3 runs、計21 runsでpassした。通常・復旧成功系は観測semanticとproduction mesh/materialの一致およびproduction 1 / fallback 0、recovery-failedは破壊前Closed candidateと終端fail-darkのproduction 0 / fallback 0を検証した。job manifest SHA256 `209af7220b17ca3b6a47b7e08b861f2f5eeaa3d9eeb54f48b38aecebbcf69ae4`、session manifest `610d9c4a029a859188a73bba507b19bbd9aa5c705bef4f37366f0a823cef2762`、matrix `4e35402fb5ef468c2baedb82e54c65cf396cad2c31f87279263b05b4cde0c4a9`、report `1a0fb40b639b56013f085b3f178db2298e929e954f4e8d1eb4b81ed0a9ed53fb`。独立`verify`もpassし、残存game process 0を確認した。
 - quality/DPI正式native受入: clean validation worktreeのsubject `d386ce15`、generation 6 candidate、source fingerprint `e36c4c4f5a540357a6e912e2cdb7a8525c7251719ea6947afd22295d4842fdb6`、harness fingerprint `c14e34e41473554cea3226ff5d874f8459b5cc852665614ae10135615175ebeb`で`door-art-20260906T194753Z-91779207`を採取。High/Medium/Low × DPI 1.0/1.5/2.0の9 processを逐次実行し、各processで標準zoomと最大zoom-outをgeneration 1/2のnonce/ACKへ固定した。18枚のX11 client PNGはIntel Arc・Vulkan、candidate/source/harness/binary/asset fingerprints、EW/NS×Closed/Open/Lockedのproduction 6 / fallback 0、投影ROI、状態差pixel観測に合格。各processはVirtual Time 0秒、Real Time warmup/measure各10秒以上、state checksum `61b970fb92f5bb75`不変、正の有限frame sampleを記録し、生CSV hashも封印した。独立`verify`は9 case / 18 screenshotでpass。job manifest SHA256 `aeab8e7f7cb2badc1752a069aafec9ac98965ce21d9af6a42d2026f7f3e5de8c`、High/DPI 1.0の標準/遠景PNG SHA256 `978d50062e5cee52470926d9404f4e1375a6180eb466c4125ccde7ea192baf14` / `3e3fb0906b17dc17d7d7062f344f1820cccf2315429a3ea8713559da45adb9e6`、Low/DPI 2.0は`c282eb3709798546f3f6e4277e59139da25e376bfbc71ffdd97f1113385941f6` / `b1895cb71d99ed4e771148bcd001279cbafc7e57a3923d41fba6fb8a991c41b1`。
-- Door density受入基盤: `door-density-v1`を実装。N=32 / 4N=128、EW/NS、Closed/Open/Locked、completed support Wall 64 / 256をisolated worldへ固定し、production/fallback-controlのexactly-one表示、候補identity、production 3 mesh / 1 material、fallback 1 mesh / 3 material、3 imageを開始前と終了まで検証する。専用launcherはCapture 12 runsを完了してからMemory 6 runsをbuildし、隣接counterbalance、p95/p99・RSS・peak live bytesの中央値/MADと閾値をfail-closed比較する。Rust fixture test、perf.py self-test、launcher self-test、Skill quick validationはpass。正式native artifactは未採取。
+- Door density正式native受入: clean validation worktreeのsubject `addc9004`、generation 6 candidate、source fingerprint `af2c8406df5e48caba5ebd8f0e7d3499a5d5404e401b4a5401ce0576bd295cd2`、harness fingerprint `2c8394881ced2cdebac285b626e7a89947d122d1a2b021f3f90ea677583a5820`で`door-density-20260907T005953Z-fc28520e`を採取。Intel Arc / Mesa 26.1.6 / Vulkan / X11でCapture 12 runs、Memory 6 runs、6比較がpassし、独立verifyもpass、残存game process 0を確認した。N / 4Nのproduction p95中央値は`8.422408 / 9.035349 ms`、p99は`8.942271 / 9.791256 ms`、4Nのmax RSSは`1,282,448 KiB`、peak liveは`632,176,800 bytes`。job manifest SHA256 `18c60504c47ec4120fed5bf5f9827fb4e906dccc93b8e884d50a9c92878cbf4f`、Capture / Memory result SHA256 `22a938ac42773769ff086d85ea151c5ff82b8f4af3085f75d477b43c30a6c40d` / `f6bad34d598a656d6191264a496f7567e17a5bc5a3de7788222b9fc36d590ef6`。正式jobは4.4 MiBで、track close時のcapsule化までvalidation worktreeに保持する。
+- Door density失敗job保持: `door-density-20260907T004517Z-5a7aa916`はfixtureが返した固定`authority`を候補identity APIの不存在キーから検証しようとして最初のrun後に停止した。runnerを実API形状へ修正してself-test / checkを通し、別jobで全matrixを再採取した。失敗jobを成功扱いせず、track closeまで保持する。
 - quality/DPI失敗job保持: `door-art-20260906T185340Z-1604770a`（0 Familiarでgather fixture未成立）、`door-art-20260906T190850Z-437a2c6d`（gallery pause前にOpenが自動閉扉）、`door-art-20260906T191033Z-edd6329c`（wall-density carrierの固定matrix違反で起動前停止）、`door-art-20260906T191239Z-bb1c8205`（pause後に汎用runnerのVirtual Time warmupが進行せずtimeout）、`door-art-20260906T192737Z-7d30d9b0`（静止fixtureを汎用gameplay validatorがzero query/Virtual Timeとして拒否）、`door-art-20260906T194625Z-1a72eb13`（直接起動時の`BEVY_ASSET_ROOT`欠落）を成功jobと同じworktreeに保持する。最後の2件から、汎用性能gateを緩和せずDoor専用Real Time validatorと明示asset rootを使う現契約へ確定した。
 - 失敗job保持: `door-behavior-20260906T170630Z-952adc7b`（P08 backend/repeat契約違反）、`door-behavior-20260906T173316Z-6c17f870`（recovery-failedを通常rebind扱い）、`door-behavior-20260906T175052Z-e55cf022`（到達不能なbaseline observer）、`door-behavior-20260906T181055Z-87886a8f`・`door-behavior-20260906T182844Z-6dc51b2b`・`door-behavior-20260906T183035Z-8f8d34b8`・`door-behavior-20260906T183230Z-1cc267d4`（集約器の固定role／log policy誤り）を成功jobと同じworktreeに保持する。成功jobのcapsule化まではworktreeを削除しない。
-- ブロッカー: ArtPreview承認、正式candidate visual leg、候補紐付きbehavior matrix、quality/DPIは解消。Door density Capture/Memory、Wall単独M3との共通J1が未完であり、releaseは行わない。
+- ブロッカー: Door単独M3は解消。仮設壁単独M3との共通J1が未完であり、releaseは行わない。Door validation worktreeはbehavior / quality / densityの正式jobと失敗jobを保持するため、track close前には削除しない。
 
 ### Definition of Done
 
@@ -448,3 +449,4 @@ Help impact review Skillで建築／ドアの実説明を読み、色表示へ�
 | `2026-09-07` | `Codex` | `door-art-v1-quality`を実装。9 quality/DPI processの各々で標準／最大zoom-outを同一processの2段階nonce/ACKへ結び、18 client PNGと状態別投影ROIをfail-closed検証する受入基盤を追加 |
 | `2026-09-07` | `Codex` | generation 6 candidateのHigh/Medium/Low × DPI 1.0/1.5/2.0をIntel Arc・Vulkan・X11で正式採取。9 process / 18 PNG、状態差pixel、静止checksum、Real Time測定、生CSV hashと独立verifyをpass |
 | `2026-09-07` | `Codex` | `door-density-v1`を実装。N/4N Door＋completed support Wall、production/fallback pool sidecar、Real Time固定fixture、Capture 12→Memory 6の直列・隣接counterbalance launcherと中央値/MAD閾値検証を追加 |
+| `2026-09-07` | `Codex` | generation 6 candidateのDoor densityをIntel Arc / Vulkan / X11で正式採取。Capture 12 / Memory 6 runs、6比較と独立verifyをpassし、Door単独M3を完了 |

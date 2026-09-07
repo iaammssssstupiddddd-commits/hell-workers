@@ -332,6 +332,16 @@ production 3 mesh / 1 material、fallback 1 mesh / 3 material、albedo＋preview
 fallback-control比`+5%`以内、Memoryはmax RSS中央値`+5%`以内、peak live bytes中央値`+4 MiB`以内かつ
 accounting error 0で判定し、各中央値のMAD、順序、raw sidecar hashをartifactへ保持する。
 
+subject `addc9004`の正式job
+`target/native-acceptance/door-density-20260907T005953Z-fc28520e`はIntel Arc / Mesa 26.1.6 /
+Vulkan / X11でCapture 12 runs、Memory 6 runs、6比較を完走し、独立verifyもpassした。production中央値は
+N p95 `8.422408 ms` / p99 `8.942271 ms`、4N p95 `9.035349 ms` / p99 `9.791256 ms`、
+4N max RSS `1,282,448 KiB`、peak live `632,176,800 bytes`で、対応するfallback-control中央値に対する
+回帰率は順に`+0.714% / -0.830% / +1.613% / +1.714% / -6.601% / +0.011%`となり全件passした。
+job manifest SHA-256は`18c60504c47ec4120fed5bf5f9827fb4e906dccc93b8e884d50a9c92878cbf4f`、
+Capture / Memory result SHA-256は`22a938ac42773769ff086d85ea151c5ff82b8f4af3085f75d477b43c30a6c40d` /
+`f6bad34d598a656d6191264a496f7567e17a5bc5a3de7788222b9fc36d590ef6`である。
+
 subject `991392b8`の正式job
 `target/native-acceptance/wall-production-performance-20260902T173804Z-3f6bc903`は24 runと4比較を完走し、
 独立verifyも`status=pass`となった。全8比較行の最大回帰はprovisional N p95の`+2.031%`である。

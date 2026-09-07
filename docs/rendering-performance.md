@@ -98,6 +98,11 @@ emissive textureをbindしない。completedだけが承認済みemissive textur
 切り替える。`door_density_fixture.json`は開始／終了の同一性、候補identity、active/resident pool、3 production imageを、
 `door_density_layout.csv`は全Doorと支持Wallのgrid・軸・状態を記録する。Captureはp95/p99の`+5%`、Memoryは
 max RSSの`+5%`とpeak live bytesの`+4 MiB`を上限とし、Virtual Time停止中のReal Time計測として扱う。
+subject `addc9004`の正式job `door-density-20260907T005953Z-fc28520e`はIntel Arc / Mesa 26.1.6 /
+Vulkan / X11でCapture 12 runsとMemory 6 runsを完走し、独立verifyもpassした。production中央値は
+fallback-control比で、Nのp95 / p99が`+0.714% / -0.830%`、4Nが`+1.613% / +1.714%`だった。
+4N Memoryはmax RSSが`-6.601%`、peak live bytesが`+70,902 bytes`で、6比較すべてが上限内である。
+このprofileは静止Door表示の比較であり、開閉操作やload成立の証拠には使わない。
 旧v1 subject `991392b8`のIntel Arc / Mesa 26.1.6 / Vulkan / X11実測では、completed N / 4Nの
 p95回帰が`+0.451% / +0.438%`、p99が`+0.910% / +0.540%`、provisionalのp95が
 `+2.031% / +0.987%`、p99が`+1.134% / +0.369%`となり、全ケースが`+5%` gateを通過した。
