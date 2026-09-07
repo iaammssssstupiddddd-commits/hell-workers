@@ -1,4 +1,82 @@
 use super::*;
+use hw_jobs::{Building, CoatWallData, CoatWallPhase, ProvisionalWall};
+
+#[test]
+fn legacy_coat_promotes_the_existing_wall_root_before_task_completion() {
+    let mut app = task_execution_test_app();
+    let assignment = app.world_mut().spawn_empty().id();
+    let wall = app
+        .world_mut()
+        .spawn((
+            Transform::default(),
+            Building {
+                kind: BuildingType::Wall,
+                is_provisional: true,
+            },
+            ProvisionalWall {
+                mud_delivered: true,
+            },
+        ))
+        .id();
+    let soul = spawn_task_execution_soul(
+        app.world_mut(),
+        AssignedTask::CoatWall(CoatWallData {
+            tile: wall,
+            site: Entity::PLACEHOLDER,
+            wall,
+            phase: CoatWallPhase::Coating { progress_bp: 9_999 },
+        }),
+    );
+    app.world_mut().entity_mut(soul).insert((
+        ActiveTaskIdentity::new(assignment, wall, WorkType::CoatWall),
+        WorkingOn(wall),
+    ));
+
+    app.update();
+
+    let building = app
+        .world()
+        .get::<Building>(wall)
+        .expect("legacy Coat must preserve its Wall root");
+    assert!(!building.is_provisional);
+    assert!(app.world().get::<ProvisionalWall>(wall).is_none());
+    assert!(matches!(
+        app.world().get::<AssignedTask>(soul),
+        Some(AssignedTask::CoatWall(CoatWallData {
+            tile,
+            site,
+            wall: task_wall,
+            phase: CoatWallPhase::Done,
+        })) if *tile == wall && *site == Entity::PLACEHOLDER && *task_wall == wall
+    ));
+    assert!(
+        app.world()
+            .resource::<TaskNotificationReceipts>()
+            .completed_domain
+            .is_empty(),
+        "promotion precedes the terminal Done frame"
+    );
+
+    app.update();
+
+    assert!(matches!(
+        app.world().get::<AssignedTask>(soul),
+        Some(AssignedTask::None)
+    ));
+    assert!(app.world().get::<ActiveTaskIdentity>(soul).is_none());
+    assert!(app.world().get::<WorkingOn>(soul).is_none());
+    assert_eq!(
+        app.world()
+            .resource::<TaskNotificationReceipts>()
+            .completed_domain,
+        vec![OnTaskCompleted {
+            entity: soul,
+            assignment_entity: assignment,
+            current_target_entity: wall,
+            current_work_type: WorkType::CoatWall,
+        }]
+    );
+}
 
 #[test]
 fn normal_completion_publishes_matching_assignment_and_current_identity() {
