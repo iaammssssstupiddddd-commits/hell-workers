@@ -5,7 +5,7 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `provisional-wall-formwork-plan-2026-09-05` |
-| ステータス | `In Progress — M3b正式画像18/18合格、性能・Memory runner実装済み／実機とlifecycle待ち` |
+| ステータス | `In Progress — M3b正式画像18/18、Capture 18/18、Memory 6/6合格／lifecycle・J1待ち` |
 | 作成日 | `2026-09-05` |
 | 最終更新日 | `2026-09-07` |
 | 作成者 | `Codex` |
@@ -384,7 +384,36 @@ harness fingerprint `a0d88a6dd4d77757844a6f910737e8ad8be833eca2a83366111e573c90b
 generation 8の両jobを最初から採り直した。失敗jobはtrack完了まで保存する。
 
 この証跡が閉じるのは§7の正式画像だけである。W-G01の混在gallery・Soul前後depth、W-L01〜L03、
-W-A01〜A02、Capture 18 runs、Memory 6 runs、J1、release受入は引き続き未完とする。
+W-A01〜A02、J1、release受入は引き続き未完とする。Capture / Memoryは§7.4で別に閉じた。
+
+### 7.4 M3b性能・Memoryの証跡（generation 10）
+
+subject `8bb004e7985dc5428348d111b416dbf958d128f2`とgeneration 10のisolated candidateを固定し、
+Intel Arc / Vulkan / X11、1280×720、High、DPI 1、immediate presentで正式job
+`wall-formwork-density-20260907T151655Z-35eef90a`を実行した。Capture 18 / 18とMemory 6 / 6がvalidで、
+独立`verify`もpassした。candidate manifest SHA-256は
+`734a2a06940287ea63047f4aaa4e57a8c32aa61cd64899d74f20959e0a8e29d1`、asset-view / source / harness
+fingerprintは順に`becb0697cfe6d2ead21e841cd510830e65863ba66de872607b85cdb5b893e378`、
+`2b31468034a4f08f1705ae71bf46512e8b1dcc6bb5b14e2cc265b56e6f6ad4f2`、
+`04eed7d50369517e9c54eac745fb1d8a201ee9f587cb7deaef9245ba5db60140`である。
+
+| case / metric | fallback中央値 | production中央値 | 差 | 結果 |
+| --- | ---: | ---: | ---: | --- |
+| provisional 96 / p95 | 9.426943 ms | 9.248062 ms | -1.898% | pass |
+| provisional 96 / p99 | 10.260355 ms | 9.943983 ms | -3.083% | pass |
+| provisional 384 / p95 | 16.241659 ms | 16.219445 ms | -0.137% | pass |
+| provisional 384 / p99 | 17.506656 ms | 17.449946 ms | -0.324% | pass |
+| mixed 384 / p95 | 16.157502 ms | 16.182783 ms | +0.156% | pass |
+| mixed 384 / p99 | 17.391257 ms | 17.434654 ms | +0.250% | pass |
+| mixed 384 / max RSS | 1,430,088 KiB | 1,339,400 KiB | -6.341% | pass |
+| mixed 384 / peak live | 665,926,330 bytes | 665,867,492 bytes | -0.009% | pass |
+
+manifest / Capture result / Memory resultのSHA-256は順に
+`26416748d862a24359b34a6536f2b5c97e551c301afcf930f6a801ecdc8ca0a2`、
+`259db705b8db17117e226354d8639af5c77365aa45c5f614341a805ddd8e279a`、
+`24fab503fabe8093a11a826610394baea75636a7520745d8c8126047def9017a`である。
+最初のgeneration 9試行は非対象Door locator欠落を実行開始後に検出してinvalidとなった。この経路をplan / run / matrix /
+verifyのbuild前preflightへ移し、generation 10で最初から採り直した。失敗jobもtrack完了まで保存する。
 
 native実行はSkillのdirect `kitty` launcher、repository lock、RAM/disk preflightと逐次buildを使う。
 本計画の新profileには`plan / status / verify / self-test`を実装してから利用し、未実装のcommandを
@@ -407,8 +436,8 @@ Update required / 理由付きNo impactをその時点で判断する。
 
 ### 現在地
 
-- 進捗: M1/W2の中核を実装。schema v3候補、runtime wallset v2、6 family GLB、Opaque木材albedo、tile単位mesh/material切替、ArtPreview authorityが動作する。M3aはgeneration 5の技術候補とゲーム所有window PNGに対してユーザー承認済み。generation 8の正式candidateをsubject `3c0f7c67`へ固定し、標準／最大zoom-outの正式画像18/18と独立verifyが合格した。通常releaseはgeneration 4のまま。
-- 次の作業: 同じcandidate bytesを使い、新しいclean subjectで`wall-formwork-density-v1`のCapture 18 runsとMemory 6 runsを実機採取し独立verifyする。専用runner、混在384 fixture、phase別active inventory、順序・比較・raw再検証は実装済み。並行して混在gallery・Soul depthとW-L01〜L03 / W-A01〜A02のstateful storyboardを実装・採取する。Door側の単独gate後にJ1、M4へ進み、短時間の画像captureを性能合格へ読み替えない。
+- 進捗: M1/W2の中核を実装。schema v3候補、runtime wallset v2、6 family GLB、Opaque木材albedo、tile単位mesh/material切替、ArtPreview authorityが動作する。M3aはgeneration 5の技術候補とゲーム所有window PNGに対してユーザー承認済み。generation 8の正式画像18/18、generation 10のCapture 18/18とMemory 6/6、および各独立verifyが合格した。通常releaseはgeneration 4のまま。
+- 次の作業: 同じcandidate bytesを使い、W-G01の混在gallery・Soul depthとW-L01〜L03 / W-A01〜A02のstateful storyboardを実装・採取する。Door側の単独gate後にJ1、M4へ進み、性能jobのMemory値をload反復のasset-pool安定性へ読み替えない。
 - ドアはM0の共通port確定後に制作を並行可能。Rust・tooling編集はmain agentが順に行い、joint受入は両方のruntime接続後。
 - 240 triangles・core 15 file・§7の予算は採用した新設計値。現在のreleaseの実測・アート承認値として扱わない。
 
@@ -424,9 +453,9 @@ Update required / 理由付きNo impactをその時点で判断する。
 - 計画作成: `2026-09-05`。Rust / runtime asset変更なし。
 - セルフレビュー: `2026-09-06`。§0の指摘を計画へ反映。実装・アセット制作・native起動は行っていない。
 - 文書gate: `python3 scripts/dev.py docs --write`で索引を同期後、`docs --check` / `git diff --check`がpass。
-- Help gate: `No impact`。正式画像証跡と未完了gateの文書化だけで、入力、ゲームプレイ、表示ロジック、UI文言、Help coverage、release authorityは不変。理由付き`check_help_impact.py`がpass。
-- 最終検証: `wall_art_acceptance.py self-test`、`scripts/perf.py self-test`、`python3 scripts/dev.py check`、全workspace testとClippy `-D warnings`を含む`python3 scripts/dev.py verify`がpass。
-- ブロッカー: Wall final封印と正式画像は解消。Wallのstateful lifecycle・Capture・Memory、Door単独残件、J1が未完であり、画像18枚だけで単独M3全体を完了扱いにしない。
+- Help gate: `No impact`。性能受入基盤・非対象asset preflight・証跡文書の追加だけで、通常の入力、ゲームプレイ、表示ロジック、UI文言、Help coverage、release authorityは不変。理由付き`check_help_impact.py`がpass。
+- 最終検証: `wall_formwork_density_acceptance.py self-test / verify`、`scripts/perf.py self-test`、`python3 scripts/dev.py check`、全workspace testとClippy `-D warnings`を含む`python3 scripts/dev.py verify`がpass。
+- ブロッカー: Wall final封印・正式画像・性能・Memoryは解消。Wallのstateful lifecycle、混在gallery / Soul depth、Door単独残件、J1が未完であり、Wall単独M3全体はまだ完了扱いにしない。
 
 ### Definition of Done
 
@@ -449,3 +478,4 @@ Update required / 理由付きNo impactをその時点で判断する。
 | `2026-09-07` | `Codex` | subject `3c0f7c67`・Wall generation 8で正式画像profileを標準／最大zoom-out各9 case実行し、18/18 validと独立verifyを記録。stateful lifecycle・Capture・Memory・J1・releaseは未完 |
 | `2026-09-07` | `Codex` | 正式性能ランナーの旧6 mesh固定をschema別exact inventoryへ修正。schema 2でも完成6件は72 tri、型枠6件だけ240 triを適用し、性能採取前のresident再検証を実装 |
 | `2026-09-07` | `Codex` | 凍結済み旧density契約と分離した`wall-formwork-density-v1`、仮設／本設の混在384、Capture 18＋Memory 6の逐次・隣接counterbalance runner、raw artifactまで辿る独立verifyを実装。実機値は未取得 |
+| `2026-09-07` | `Codex` | subject `8bb004e7`・Wall generation 10でIntel Arc / Vulkan / X11のCapture 18・Memory 6を正式採取し、24/24 validと独立verifyを記録。generation 9で判明した非対象Door欠落をbuild前preflightへ移した |

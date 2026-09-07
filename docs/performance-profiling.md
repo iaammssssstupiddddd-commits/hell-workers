@@ -357,6 +357,14 @@ fallback-control中央値`+4 MiB`以内とする。専用helper
 順序、raw CSV / Memory artifactから再計算した値、presentation sidecar、session tree hash、比較CSVを
 再検証する。
 
+2026-09-07、subject `8bb004e7985dc5428348d111b416dbf958d128f2`、generation 10をIntel Arc / Vulkan / X11で
+正式採取し、Capture 18 / 18、Memory 6 / 6と独立verifyがpassした。productionの最大正方向差はmixed 384の
+p99 `+0.250%`、max RSSは`-6.341%`、peak live bytesは`-0.009%`だった。job
+`wall-formwork-density-20260907T151655Z-35eef90a`のmanifest / Capture result / Memory result SHA-256は
+`26416748d862a24359b34a6536f2b5c97e551c301afcf930f6a801ecdc8ca0a2` /
+`259db705b8db17117e226354d8639af5c77365aa45c5f614341a805ddd8e279a` /
+`24fab503fabe8093a11a826610394baea75636a7520745d8c8126047def9017a`である。
+
 Door本番表示の性能比較は`door-density-v1`専用profileが所有する。fixtureはseed `20260906`、
 8列・5 cell間隔でN=32 / 4N=128のDoorを並べ、偶数ordinalをEW、奇数をNS、`i % 3`を
 Closed / Open / Lockedとする。各Doorの軸方向の両隣に完成Wallを置くため、支持Wallは64 / 256で固定される。

@@ -119,6 +119,12 @@ fallbackでは1 meshとphase別2 material／2 pairをexactに要求する。全1
 peak live bytesは`+4 MiB`を上限とし、Memory accounting error 0、非display-paced Capture、cell内regime安定を
 比較前提にする。画像profileの短時間frame値やcompleted-onlyの旧性能profileをこのgateへ代用しない。
 
+2026-09-07の正式job `wall-formwork-density-20260907T151655Z-35eef90a`は、subject `8bb004e7`・
+generation 10・Intel Arc / Vulkan / X11でCapture 18 / 18、Memory 6 / 6と独立verifyをpassした。
+productionの最大正方向frame差はmixed p99の`+0.250%`、max RSS差は`-6.341%`、peak live bytes差は
+`-0.009%`で、8比較すべてが上限内である。これは静的密度とallocatorの単独gateだけを閉じ、load反復・
+状態遷移・J1・release受入の代用にはしない。
+
 本番Doorの静的密度比較は`door-density-v1`を使う。N=32 / 4N=128 Doorと64 / 256 completed support Wallを
 同一layoutへ固定し、EW/NSとClosed/Open/Lockedを均等に近い分布で保持する。productionとfallback-controlは
 同じbinaryを使用し、Doorだけをproduction 3 mesh＋共有1 materialまたはfallback共有1 mesh＋状態別3 materialへ
