@@ -472,6 +472,9 @@ fn build_status(
             PerfWallPhase::Provisional => resolved.formwork_meshes.as_ref().ok_or_else(|| {
                 "wall formwork gallery has no formwork mesh inventory".to_string()
             })?,
+            PerfWallPhase::Mixed => {
+                return Err("wall actual-window gallery does not accept mixed density".to_string());
+            }
         };
         let expected_mesh_ids = expected_meshes
             .iter()

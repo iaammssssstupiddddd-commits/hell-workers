@@ -1,0 +1,67 @@
+{
+  "case": {
+    "completed_wall_count": 192,
+    "connector_count": 768,
+    "mask_repetitions": 24,
+    "perf_size": "medium",
+    "provisional_wall_count": 192,
+    "target_wall_count": 384,
+    "target_size": "4N"
+  },
+  "contract_id": "wall-formwork-density-v1",
+  "environment": {
+    "adapter": "Intel",
+    "backend": "vulkan",
+    "capture_runs_per_presentation": 3,
+    "dpi": 1.0,
+    "measure_seconds": 60,
+    "memory_runs_per_presentation": 3,
+    "present_mode": "novsync",
+    "quality": "high",
+    "seed": 20260901,
+    "warmup_seconds": 30,
+    "window_backend": "x11",
+    "window_height": 720,
+    "window_width": 1280
+  },
+  "fixture": {
+    "camera_scale": 5.0,
+    "connector_kind": "door_blueprint",
+    "grid_layout": {
+      "columns": 20,
+      "origin": [
+        2,
+        2
+      ],
+      "row_major": true,
+      "stride": [
+        5,
+        5
+      ]
+    },
+    "mask_assignment": "target_ordinal_modulo_16",
+    "phase_assignment": "provisional_when_floor(target_ordinal_div_16)_mod_2_equals_0",
+    "phase_counts_per_mask": {
+      "completed": 12,
+      "provisional": 12
+    },
+    "specimens_must_not_connect": true,
+    "target_kind": "wall"
+  },
+  "measurement": {
+    "capture_metrics": [
+      "p95",
+      "p99"
+    ],
+    "memory_metrics": [
+      "max_rss",
+      "peak_live_bytes"
+    ],
+    "phase": "mixed",
+    "presentations": [
+      "fallback-control",
+      "production"
+    ]
+  },
+  "schema_version": 1
+}

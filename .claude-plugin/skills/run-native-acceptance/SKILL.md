@@ -351,11 +351,33 @@ failed, mixed, or accidentally-production state cannot enter warm-up.
 
 Every run writes an additive `wall_density_presentation.json` while preserving
 the frozen wall-density sidecars. It proves stable initial/final mode, exact
-owner and visual counts, six resident production meshes, two production plus
-two fallback materials, one fallback mesh, lit production materials, topology
-distribution, candidate identity, and the 350-triangle limit. The profile then
+owner and visual counts, schema-1 six-mesh or schema-2 twelve-mesh production
+inventory, two production plus two fallback materials, one fallback mesh, lit
+production materials, topology distribution, candidate identity, completed-mesh
+72-triangle limits, and schema-2 formwork-mesh 240-triangle limits. The profile then
 runs p95 and p99 comparisons for both phases and fails when any production
 median is more than 5% above the fallback control. Revalidate with `verify
+--job-root <job-root>`.
+
+For the formwork-specific performance and allocator gate, use the dedicated
+schema-2 profile from the clean isolated-candidate worktree:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 \
+  .codex/skills/hell-workers-run-native-acceptance/scripts/wall_formwork_density_acceptance.py \
+  plan --repo "$VALIDATION_WORKTREE" --adapter Intel
+```
+
+Run only the returned direct `kitty` command. It builds Capture, completes all
+18 Capture processes, then builds Memory and completes all six Memory processes.
+Each fallback-control / production pair is adjacent and counterbalanced. Capture
+covers provisional N=96, provisional 4N=384, and mixed 4N=384; Memory covers
+mixed 4N only. The mixed contract has 192 provisional and 192 completed walls,
+with 12 of each phase for every one of the 16 masks. Production must use all 12
+schema-2 meshes and both materials; fallback must use one mesh and both phase
+materials. Capture p95/p99 and max RSS medians are limited to fallback +5%, peak
+live bytes to fallback +4 MiB, with zero allocator accounting errors. Revalidate
+all order, sidecar, raw metric, tree-hash, and comparison evidence with `verify
 --job-root <job-root>`.
 
 For the separate M0-subject versus final-production comparison, first run each
@@ -703,6 +725,9 @@ PYTHONDONTWRITEBYTECODE=1 python3 \
   self-test
 PYTHONDONTWRITEBYTECODE=1 python3 \
   .codex/skills/hell-workers-run-native-acceptance/scripts/wall_production_performance_acceptance.py \
+  self-test
+PYTHONDONTWRITEBYTECODE=1 python3 \
+  .codex/skills/hell-workers-run-native-acceptance/scripts/wall_formwork_density_acceptance.py \
   self-test
 PYTHONDONTWRITEBYTECODE=1 python3 \
   .codex/skills/hell-workers-run-native-acceptance/scripts/wall_renderdoc_acceptance.py \

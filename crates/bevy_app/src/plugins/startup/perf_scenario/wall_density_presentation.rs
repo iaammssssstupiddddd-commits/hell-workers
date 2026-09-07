@@ -54,6 +54,8 @@ pub(crate) struct WallDensityPresentationEvidence {
     pub(super) expected_mode: &'static str,
     phase: &'static str,
     target_wall_count: usize,
+    completed_wall_count: usize,
+    provisional_wall_count: usize,
     visual_count: usize,
     production_count: usize,
     fallback_count: usize,
@@ -221,21 +223,38 @@ pub(crate) fn inspect_wall_density_presentation(
         _ => {}
     }
 
-    let expected_material = match (expected, evidence.phase) {
+    let production_complete_material = params
+        .production_materials
+        .complete
+        .as_ref()
+        .ok_or_else(|| "completed production Wall material is absent".to_string())?;
+    let production_provisional_material = params
+        .production_materials
+        .provisional
+        .as_ref()
+        .ok_or_else(|| "provisional production Wall material is absent".to_string())?;
+    let expected_materials = match (expected, evidence.phase) {
         (PerfWallPresentation::Production, PerfWallPhase::Completed) => {
-            params.production_materials.complete.as_ref()
+            HashSet::from([production_complete_material.id()])
         }
         (PerfWallPresentation::Production, PerfWallPhase::Provisional) => {
-            params.production_materials.provisional.as_ref()
+            HashSet::from([production_provisional_material.id()])
         }
+        (PerfWallPresentation::Production, PerfWallPhase::Mixed) => HashSet::from([
+            production_complete_material.id(),
+            production_provisional_material.id(),
+        ]),
         (PerfWallPresentation::FallbackControl, PerfWallPhase::Completed) => {
-            Some(&params.fallback.wall_material)
+            HashSet::from([params.fallback.wall_material.id()])
         }
         (PerfWallPresentation::FallbackControl, PerfWallPhase::Provisional) => {
-            Some(&params.fallback.wall_provisional_material)
+            HashSet::from([params.fallback.wall_provisional_material.id()])
         }
-    }
-    .ok_or_else(|| "expected Wall material is absent".to_string())?;
+        (PerfWallPresentation::FallbackControl, PerfWallPhase::Mixed) => HashSet::from([
+            params.fallback.wall_material.id(),
+            params.fallback.wall_provisional_material.id(),
+        ]),
+    };
     let expected_meshes = match (expected, evidence.phase) {
         (PerfWallPresentation::Production, PerfWallPhase::Provisional) => resolved
             .formwork_meshes
@@ -249,13 +268,22 @@ pub(crate) fn inspect_wall_density_presentation(
             .iter()
             .map(|handle| handle.id())
             .collect::<HashSet<_>>(),
+        (PerfWallPresentation::Production, PerfWallPhase::Mixed) => {
+            let formwork = resolved.formwork_meshes.as_ref().ok_or_else(|| {
+                "mixed Wall presentation requires the formwork mesh inventory".to_string()
+            })?;
+            resolved
+                .meshes
+                .iter()
+                .chain(formwork)
+                .map(|handle| handle.id())
+                .collect::<HashSet<_>>()
+        }
         (PerfWallPresentation::FallbackControl, _) => {
             HashSet::from([params.fallback.wall_mesh.id()])
         }
     };
-    if !active_meshes.iter().all(|id| expected_meshes.contains(id))
-        || active_materials != HashSet::from([expected_material.id()])
-    {
+    if active_meshes != expected_meshes || active_materials != expected_materials {
         return Err("Wall presentation active handles differ".to_string());
     }
 
@@ -277,17 +305,21 @@ pub(crate) fn inspect_wall_density_presentation(
             Ok(index_count / 3)
         })
         .collect::<Result<Vec<_>, String>>()?;
-    let max_triangles = production_mesh_triangles.iter().copied().max().unwrap_or(0);
-    let max_triangle_budget = if resolved.formwork_meshes.is_some() {
-        MAX_TRIANGLES_PER_FORMWORK_MESH
-    } else {
-        MAX_TRIANGLES_PER_PRODUCTION_MESH
-    };
-    if max_triangles > max_triangle_budget {
-        return Err(format!(
-            "production Wall mesh exceeds triangle budget: {max_triangles}"
-        ));
+    let completed_triangles = &production_mesh_triangles[..resolved.meshes.len()];
+    if completed_triangles
+        .iter()
+        .any(|triangles| *triangles > MAX_TRIANGLES_PER_PRODUCTION_MESH)
+    {
+        return Err("completed production Wall mesh exceeds triangle budget".to_string());
     }
+    let formwork_triangles = &production_mesh_triangles[resolved.meshes.len()..];
+    if formwork_triangles
+        .iter()
+        .any(|triangles| *triangles > MAX_TRIANGLES_PER_FORMWORK_MESH)
+    {
+        return Err("formwork production Wall mesh exceeds triangle budget".to_string());
+    }
+    let max_triangles = production_mesh_triangles.iter().copied().max().unwrap_or(0);
     let production_material_handles = [
         params.production_materials.complete.as_ref(),
         params.production_materials.provisional.as_ref(),
@@ -359,6 +391,8 @@ pub(crate) fn inspect_wall_density_presentation(
             expected_mode: expected.as_str(),
             phase: evidence.phase.as_str(),
             target_wall_count: expected_count,
+            completed_wall_count: evidence.completed_wall_count,
+            provisional_wall_count: evidence.provisional_wall_count,
             visual_count: structural_visual_count,
             production_count,
             fallback_count,
@@ -416,11 +450,13 @@ const fn family_name(family: WallMeshFamily) -> &'static str {
 #[cfg(test)]
 const fn expected_active_counts(
     presentation: PerfWallPresentation,
-    _phase: PerfWallPhase,
-) -> (usize, usize) {
-    match presentation {
-        PerfWallPresentation::Production => (6, 1),
-        PerfWallPresentation::FallbackControl => (1, 1),
+    phase: PerfWallPhase,
+) -> (usize, usize, usize) {
+    match (presentation, phase) {
+        (PerfWallPresentation::Production, PerfWallPhase::Mixed) => (12, 2, 12),
+        (PerfWallPresentation::Production, _) => (6, 1, 6),
+        (PerfWallPresentation::FallbackControl, PerfWallPhase::Mixed) => (1, 2, 2),
+        (PerfWallPresentation::FallbackControl, _) => (1, 1, 1),
     }
 }
 
@@ -433,12 +469,20 @@ mod tests {
         for phase in [PerfWallPhase::Completed, PerfWallPhase::Provisional] {
             assert_eq!(
                 expected_active_counts(PerfWallPresentation::Production, phase),
-                (6, 1)
+                (6, 1, 6)
             );
             assert_eq!(
                 expected_active_counts(PerfWallPresentation::FallbackControl, phase),
-                (1, 1)
+                (1, 1, 1)
             );
         }
+        assert_eq!(
+            expected_active_counts(PerfWallPresentation::Production, PerfWallPhase::Mixed),
+            (12, 2, 12)
+        );
+        assert_eq!(
+            expected_active_counts(PerfWallPresentation::FallbackControl, PerfWallPhase::Mixed),
+            (1, 2, 2)
+        );
     }
 }

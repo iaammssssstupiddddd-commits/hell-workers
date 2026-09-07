@@ -50,6 +50,7 @@ SOURCE_FILES = {
     "tools/blender_ai_workflow/fixtures/wall-calibration-v2.ocio",
     "tools/blender_ai_workflow/fixtures/wall-color-calibration-v1.json",
     "tools/blender_ai_workflow/fixtures/wall-density-v1.json",
+    "tools/blender_ai_workflow/fixtures/wall-formwork-density-v1.json",
     "tools/blender_ai_workflow/scripts/render_color_calibration.py",
     "tools/blender_ai_workflow/scripts/verify_color_calibration.py",
 }
@@ -64,6 +65,7 @@ MEASUREMENT_HARNESS_FILES = (
     ".codex/skills/hell-workers-run-native-acceptance/scripts/wall_art_acceptance.py",
     ".codex/skills/hell-workers-run-native-acceptance/scripts/wall_color_acceptance.py",
     ".codex/skills/hell-workers-run-native-acceptance/scripts/wall_density_acceptance.py",
+    ".codex/skills/hell-workers-run-native-acceptance/scripts/wall_formwork_density_acceptance.py",
     ".codex/skills/hell-workers-run-native-acceptance/scripts/wall_production_performance_acceptance.py",
     ".codex/skills/hell-workers-run-native-acceptance/scripts/wall_renderdoc_acceptance.py",
     "scripts/build_coordination.py",

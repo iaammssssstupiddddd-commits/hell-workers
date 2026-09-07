@@ -289,23 +289,40 @@ def verify_presentation_sidecar(
         "Wall presentation changed during capture",
     )
     target_count = 96 if size == "small" else 384
+    expected_completed = 0 if phase == "provisional" else target_count
+    expected_provisional = target_count if phase == "provisional" else 0
+    if phase == "mixed":
+        expected_completed = expected_provisional = target_count // 2
     native.require(
         initial.get("schema_version") == PRESENTATION_SIDECAR_SCHEMA_VERSION
         and initial.get("expected_mode") == presentation
         and initial.get("phase") == phase
         and initial.get("target_wall_count") == target_count
+        and initial.get("completed_wall_count") == expected_completed
+        and initial.get("provisional_wall_count") == expected_provisional
         and initial.get("visual_count") == target_count,
         "Wall presentation fixture identity differs",
     )
     expected_production = target_count if presentation == "production" else 0
     expected_fallback = target_count if presentation == "fallback-control" else 0
-    expected_active_meshes = 6 if presentation == "production" else 1
-    expected_active_pairs = 6 if presentation == "production" else 1
+    mixed = phase == "mixed"
+    if mixed:
+        native.require(
+            inventory["runtime_schema_version"] == 2 and size == "medium",
+            "Wall mixed presentation is not the schema-v2 4N contract",
+        )
+    expected_active_materials = 2 if mixed else 1
+    if presentation == "production":
+        expected_active_meshes = 12 if mixed else 6
+        expected_active_pairs = expected_active_meshes
+    else:
+        expected_active_meshes = 1
+        expected_active_pairs = 2 if mixed else 1
     native.require(
         initial.get("production_count") == expected_production
         and initial.get("fallback_count") == expected_fallback
         and initial.get("active_mesh_count") == expected_active_meshes
-        and initial.get("active_material_count") == 1
+        and initial.get("active_material_count") == expected_active_materials
         and initial.get("active_mesh_material_pair_count") == expected_active_pairs,
         "Wall presentation active residency differs",
     )

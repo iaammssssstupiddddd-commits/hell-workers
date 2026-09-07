@@ -21,6 +21,7 @@ from .fixtures import (
     WALL_DENSITY_CASES,
     WALL_DENSITY_CONTRACT_SHA256,
     WALL_DENSITY_LAYOUT_COLUMNS,
+    WALL_FORMWORK_DENSITY_CONTRACT_SHA256,
     WINDOW_COLUMNS,
     WINDOW_SCHEMA_VERSION,
     argparse,
@@ -2900,6 +2901,28 @@ def self_test() -> int:
             assert "requires --wall-actual-window and --wall-art-matrix" in str(error)
         else:
             raise AssertionError("unscoped Wall formwork acceptance unexpectedly passed")
+        wall_mixed_memory_args = build_parser().parse_args(
+            [
+                "run", "--workload", "wall-density", "--wall-phase", "mixed",
+                "--wall-presentation", "production", "--sizes", "medium",
+                "--renders", "gpu", "--seed", "20260901", "--repeat", "3",
+                "--preflight-runs", "0", "--souls", "0", "--familiars", "0",
+                "--window-backend", "x11", "--backend", "vulkan",
+                "--present-mode", "novsync", "--window-width", "1280",
+                "--window-height", "720", "--window-scale-factor", "1.0",
+                "--rtt-quality", "high", "--warmup-secs", "30",
+                "--measure-secs", "60", "--instrumentation", "memory",
+                "--dry-run",
+            ]
+        )
+        validate_arguments(wall_mixed_memory_args)
+        wall_mixed_memory_args.wall_presentation = None
+        try:
+            validate_arguments(wall_mixed_memory_args)
+        except ValueError as error:
+            assert "mixed requires the formal --wall-presentation path" in str(error)
+        else:
+            raise AssertionError("unscoped Wall mixed Memory unexpectedly passed")
         wall_matrix_args.wall_art_matrix = False
         try:
             validate_arguments(wall_matrix_args)
@@ -3501,6 +3524,10 @@ def self_test() -> int:
             "wall-density", "small", "gpu", 20_260_901, None, None,
             wall_phase="provisional",
         ).identifier
+        assert Case(
+            "wall-density", "medium", "gpu", 20_260_901, None, None,
+            wall_phase="mixed",
+        ).identifier == "wall-density-medium-gpu-seed-20260901-wall-mixed"
         write_json(
             wall_data / "wall_density_fixture.json",
             {
@@ -3577,6 +3604,76 @@ def self_test() -> int:
         assert wall_errors == [
             "wall_density_layout.csv rows differ from the frozen row-major layout"
         ]
+
+        mixed_wall_data = root / "wall-formwork-density-sidecars"
+        mixed_wall_data.mkdir()
+        mixed_wall_case = Case(
+            "wall-density", "medium", "gpu", 20_260_901, None, None,
+            wall_phase="mixed",
+        )
+        write_json(
+            mixed_wall_data / "wall_density_fixture.json",
+            {
+                "schema_version": 1,
+                "contract_id": "wall-formwork-density-v1",
+                "contract_sha256": WALL_FORMWORK_DENSITY_CONTRACT_SHA256,
+                "layout_checksum": WALL_DENSITY_CASES[("medium", "mixed")][4],
+                "target_size": "4N",
+                "perf_size": "medium",
+                "phase": "mixed",
+                "target_wall_count": 384,
+                "connector_count": 768,
+                "mask_counts": {f"{mask:04b}": 24 for mask in range(16)},
+                "grid": {"origin": [2, 2], "stride": [5, 5], "columns": 20},
+                "camera_scale": 5.0,
+            },
+        )
+        mixed_rows: list[dict[str, str]] = []
+        connector_ordinal = 0
+        for ordinal in range(384):
+            grid_x = 2 + (ordinal % 20) * 5
+            grid_y = 2 + (ordinal // 20) * 5
+            mask = ordinal % 16
+            common = {
+                "schema_version": "1",
+                "target_ordinal": str(ordinal),
+                "mask": f"{mask:04b}",
+                "phase": "mixed",
+            }
+            mixed_rows.append(common | {
+                "record_kind": "target",
+                "ordinal": str(ordinal),
+                "grid_x": str(grid_x),
+                "grid_y": str(grid_y),
+                "direction": "",
+            })
+            for bit, direction, offset_x, offset_y in (
+                (0b1000, "N", 0, 1),
+                (0b0100, "S", 0, -1),
+                (0b0010, "W", -1, 0),
+                (0b0001, "E", 1, 0),
+            ):
+                if mask & bit == 0:
+                    continue
+                mixed_rows.append(common | {
+                    "record_kind": "connector",
+                    "ordinal": str(connector_ordinal),
+                    "grid_x": str(grid_x + offset_x),
+                    "grid_y": str(grid_y + offset_y),
+                    "direction": direction,
+                })
+                connector_ordinal += 1
+        with (mixed_wall_data / "wall_density_layout.csv").open(
+            "w", newline="", encoding="utf-8"
+        ) as handle:
+            writer = csv.DictWriter(handle, fieldnames=WALL_DENSITY_LAYOUT_COLUMNS)
+            writer.writeheader()
+            writer.writerows(mixed_rows)
+        mixed_fixture, parsed_mixed_rows, mixed_errors = read_wall_density_sidecars(
+            mixed_wall_data, expected_case=mixed_wall_case,
+        )
+        assert not mixed_errors
+        assert mixed_fixture is not None and parsed_mixed_rows == mixed_rows
 
         from .artifact_readers.door import (
             expected_layout_checksum,

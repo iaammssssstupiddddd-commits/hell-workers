@@ -819,6 +819,9 @@ fn build_wall_renderdoc_checkpoint(
     let expected_material = match evidence.phase {
         PerfWallPhase::Completed => &params.building_3d_handles.wall_material,
         PerfWallPhase::Provisional => &params.building_3d_handles.wall_provisional_material,
+        PerfWallPhase::Mixed => {
+            return Err("wall-density RenderDoc does not accept mixed phase".to_string());
+        }
     };
     let mut mesh_handle_match_count = 0usize;
     let mut material_handle_match_count = 0usize;
@@ -954,8 +957,7 @@ fn build_wall_renderdoc_checkpoint(
             fixture_checksum: evidence.layout_checksum,
             rooms: 0,
             completed_floors: 0,
-            completed_walls: usize::from(evidence.phase == PerfWallPhase::Completed)
-                * evidence.target_wall_count,
+            completed_walls: evidence.completed_wall_count,
             doors: 0,
             supplied_lamp_candidates: 0,
             unsupplied_lamp_candidates: 0,

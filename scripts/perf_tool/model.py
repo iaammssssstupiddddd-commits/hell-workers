@@ -124,6 +124,9 @@ DREAM_UI_METRICS_COLUMNS = (
 WALL_DENSITY_CONTRACT_SHA256 = (
     "7b32f4e0ecd9cdb9223cde1b7f5aae93460e3ec861b2e3ae0e1eb2e2b87419c8"
 )
+WALL_FORMWORK_DENSITY_CONTRACT_SHA256 = (
+    "fe3c9d2c953f08af5cbc9bedefbbdbfd5074c130f4aa76577679b50926998115"
+)
 WALL_DENSITY_LAYOUT_COLUMNS = (
     "schema_version",
     "record_kind",
@@ -161,6 +164,10 @@ WALL_DENSITY_CASES = {
     ("medium", "provisional"): (
         "4N", 384, 768, 24,
         "9587bebc53d564b3e0d6ccbdea176c6c0c2b4165ffcafbd4caed82887a399c90",
+    ),
+    ("medium", "mixed"): (
+        "4N", 384, 768, 24,
+        "32e559d4ec6c7bd2e6a641d0f32c1b7fa3936b15d7e9c095fecdb589d88efe4a",
     ),
 }
 DECONSTRUCTION_FIXTURE_COLUMNS = (

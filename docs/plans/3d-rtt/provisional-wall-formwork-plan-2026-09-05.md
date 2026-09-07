@@ -5,7 +5,7 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `provisional-wall-formwork-plan-2026-09-05` |
-| ステータス | `In Progress — M3b正式画像18/18合格、lifecycle・性能・Memory待ち` |
+| ステータス | `In Progress — M3b正式画像18/18合格、性能・Memory runner実装済み／実機とlifecycle待ち` |
 | 作成日 | `2026-09-05` |
 | 最終更新日 | `2026-09-07` |
 | 作成者 | `Codex` |
@@ -342,7 +342,7 @@ load後のEntity IDは保存前との一致を要求せず、そのworldのowner
 - 比較許可差分は対象productionコード・asset inventory・対象authoring/projection toolingに限定して台帳へ列挙する。計測器やlayoutが変わったらbeforeも採り直す。旧cross-subject helperの全asset-view一致条件をそのまま使わない。
 - 画像はHigh/Medium/Low × DPI 1/1.5/2の9 process。各process内で標準/最大zoom-outを別nonce/ACK checkpointとして採り、最低18 PNG。状態galleryを同じ画面へ含め、quality×個別状態の直積を作らない。
 - lifecycleはHigh/DPI 1で各track1 storyboard process。10回loadと失敗系はここまたはfocused auditで検証し、性能measureには混ぜない。
-- CaptureはHigh/DPI 1、Vulkan/X11、同一実adapter、novsyncで30秒warm-up/60秒measure、各case・各subject3 runs。Wallは3 case×2 subjects×3＝18 runs。Doorは2 case×2×3＝12 runs。
+- CaptureはHigh/DPI 1、Vulkan/X11、同一実adapter、novsyncで30秒warm-up/60秒measure、各case・各presentation3 runs。Wallは3 case×2 presentations×3＝18 runs。Doorは2 case×2×3＝12 runs。
 - 各runのp95/p99をraw framesから計算してから3 runの中央値・MADを比較する。各中央値+5%以内。失敗runを都合よく除外せず、再測定理由と全attemptを残す。
 - 本設のみの追加性能caseは共通renderer/material実装を変更した場合に実施する。本設8 fileのhash不変とgallery回帰は常時必須。
 - MemoryはWall混在384、Door128の最大caseについてbefore/after各3 runs、同じ30/60秒。Capture検証後に別Memory binaryを逐次build/runする。計12 Memory runsで、Memoryのframe timeは性能比較に使わない。
@@ -408,7 +408,7 @@ Update required / 理由付きNo impactをその時点で判断する。
 ### 現在地
 
 - 進捗: M1/W2の中核を実装。schema v3候補、runtime wallset v2、6 family GLB、Opaque木材albedo、tile単位mesh/material切替、ArtPreview authorityが動作する。M3aはgeneration 5の技術候補とゲーム所有window PNGに対してユーザー承認済み。generation 8の正式candidateをsubject `3c0f7c67`へ固定し、標準／最大zoom-outの正式画像18/18と独立verifyが合格した。通常releaseはgeneration 4のまま。
-- 次の作業: 同じcandidate bytesを使い、混在gallery・Soul depthとW-L01〜L03 / W-A01〜A02のstateful storyboardを実装・採取する。性能ランナーのschema 2 resident検証は実装済みなので、続いて混在384とMemoryを専用matrixへ追加し、§7.2のCapture 18 runsとMemory 6 runsをbefore/afterで完了する。Door側の単独gate後にJ1、M4へ進み、短時間の画像captureを性能合格へ読み替えない。
+- 次の作業: 同じcandidate bytesを使い、新しいclean subjectで`wall-formwork-density-v1`のCapture 18 runsとMemory 6 runsを実機採取し独立verifyする。専用runner、混在384 fixture、phase別active inventory、順序・比較・raw再検証は実装済み。並行して混在gallery・Soul depthとW-L01〜L03 / W-A01〜A02のstateful storyboardを実装・採取する。Door側の単独gate後にJ1、M4へ進み、短時間の画像captureを性能合格へ読み替えない。
 - ドアはM0の共通port確定後に制作を並行可能。Rust・tooling編集はmain agentが順に行い、joint受入は両方のruntime接続後。
 - 240 triangles・core 15 file・§7の予算は採用した新設計値。現在のreleaseの実測・アート承認値として扱わない。
 
@@ -448,3 +448,4 @@ Update required / 理由付きNo impactをその時点で判断する。
 | `2026-09-06` | `Codex` | clean統合subject `49c43e0f`でDoor generation 6 finalを封印し、isolated candidateの実機visual legを通過。Wall finalと両単独M3b残件、J1前のため通常releaseは未変更 |
 | `2026-09-07` | `Codex` | subject `3c0f7c67`・Wall generation 8で正式画像profileを標準／最大zoom-out各9 case実行し、18/18 validと独立verifyを記録。stateful lifecycle・Capture・Memory・J1・releaseは未完 |
 | `2026-09-07` | `Codex` | 正式性能ランナーの旧6 mesh固定をschema別exact inventoryへ修正。schema 2でも完成6件は72 tri、型枠6件だけ240 triを適用し、性能採取前のresident再検証を実装 |
+| `2026-09-07` | `Codex` | 凍結済み旧density契約と分離した`wall-formwork-density-v1`、仮設／本設の混在384、Capture 18＋Memory 6の逐次・隣接counterbalance runner、raw artifactまで辿る独立verifyを実装。実機値は未取得 |

@@ -53,7 +53,7 @@ def add_run_arguments(
         ],
     )
     parser.add_argument("--contract", choices=sorted(CONTRACT_FILES))
-    parser.add_argument("--wall-phase", choices=["completed", "provisional"])
+    parser.add_argument("--wall-phase", choices=["completed", "provisional", "mixed"])
     parser.add_argument(
         "--wall-presentation",
         choices=["production", "fallback-control"],
@@ -526,14 +526,30 @@ def validate_arguments(args: argparse.Namespace) -> None:
             raise ValueError("wall-density is only available through perf.py run")
         if selected_rtt_light:
             raise ValueError("wall-density does not accept an RtT-light contract selection")
-        if args.wall_phase not in {"completed", "provisional"}:
-            raise ValueError("wall-density requires --wall-phase completed|provisional")
+        if args.wall_phase not in {"completed", "provisional", "mixed"}:
+            raise ValueError(
+                "wall-density requires --wall-phase completed|provisional|mixed"
+            )
+        if args.wall_phase == "mixed" and (
+            wall_actual_window or args.wall_presentation is None
+        ):
+            raise ValueError(
+                "wall-density mixed requires the formal --wall-presentation path"
+            )
         if wall_actual_window:
             if sizes != ["small"] or renders != ["gpu"]:
                 raise ValueError(
                     "wall-density actual-window requires --sizes small --renders gpu"
                 )
-        elif sizes != ["small", "medium"] or renders != ["gpu"]:
+        elif args.wall_phase == "mixed" and (
+            sizes != ["medium"] or renders != ["gpu"]
+        ):
+            raise ValueError(
+                "wall-density mixed requires --sizes medium --renders gpu"
+            )
+        elif args.wall_phase != "mixed" and (
+            sizes != ["small", "medium"] or renders != ["gpu"]
+        ):
             raise ValueError("wall-density requires --sizes small,medium --renders gpu")
         if args.seed != 20_260_901:
             raise ValueError("wall-density requires --seed 20260901")
@@ -572,8 +588,14 @@ def validate_arguments(args: argparse.Namespace) -> None:
             raise ValueError(
                 "wall-density requires scale factor 1.0 and RtT quality high"
             )
-        if args.instrumentation != "capture":
-            raise ValueError("wall-density frame-time runs require --instrumentation capture")
+        if args.instrumentation != "capture" and not (
+            args.instrumentation == "memory"
+            and args.wall_phase == "mixed"
+            and args.wall_presentation is not None
+        ):
+            raise ValueError(
+                "wall-density requires Capture, except formal mixed Memory runs"
+            )
         if (
             familiar_policies != ["baseline"]
             or operation_dialog_modes != ["hidden"]

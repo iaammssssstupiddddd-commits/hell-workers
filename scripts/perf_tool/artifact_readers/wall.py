@@ -7,7 +7,7 @@ from typing import Any
 from ..artifact_io import read_exact_csv_rows, sha256
 from ..model import (
     Case, REPO_ROOT, WALL_DENSITY_CASES, WALL_DENSITY_CONTRACT_SHA256,
-    WALL_DENSITY_LAYOUT_COLUMNS,
+    WALL_DENSITY_LAYOUT_COLUMNS, WALL_FORMWORK_DENSITY_CONTRACT_SHA256,
 )
 
 def read_wall_density_sidecars(
@@ -23,11 +23,21 @@ def read_wall_density_sidecars(
         return None, None, ["wall-density case size/phase is outside the frozen matrix"]
     target_size, target_count, connector_count, repetitions, layout_checksum = expected
 
-    contract_path = REPO_ROOT / "tools/blender_ai_workflow/fixtures/wall-density-v1.json"
+    mixed = phase == "mixed"
+    contract_id = "wall-formwork-density-v1" if mixed else "wall-density-v1"
+    contract_sha256 = (
+        WALL_FORMWORK_DENSITY_CONTRACT_SHA256
+        if mixed
+        else WALL_DENSITY_CONTRACT_SHA256
+    )
+    contract_name = (
+        "wall-formwork-density-v1.json" if mixed else "wall-density-v1.json"
+    )
+    contract_path = REPO_ROOT / "tools/blender_ai_workflow/fixtures" / contract_name
     if not contract_path.is_file():
         errors.append("wall-density contract file is missing")
-    elif sha256(contract_path) != WALL_DENSITY_CONTRACT_SHA256:
-        errors.append("wall-density contract hash differs from the frozen M0 contract")
+    elif sha256(contract_path) != contract_sha256:
+        errors.append("wall-density contract hash differs from its frozen contract")
 
     summary_path = data_dir / "wall_density_fixture.json"
     try:
@@ -43,8 +53,8 @@ def read_wall_density_sidecars(
         return None, None, errors + ["wall_density_fixture.json keys differ from schema v1"]
     expected_fixture = {
         "schema_version": 1,
-        "contract_id": "wall-density-v1",
-        "contract_sha256": WALL_DENSITY_CONTRACT_SHA256,
+        "contract_id": contract_id,
+        "contract_sha256": contract_sha256,
         "layout_checksum": layout_checksum,
         "target_size": target_size,
         "perf_size": expected_case.size,

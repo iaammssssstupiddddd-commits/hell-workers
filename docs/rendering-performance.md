@@ -110,6 +110,15 @@ Wayland / Xwaylandのcompositorがwindowをpaceすると、GPUに余力（min fr
 production provisionalは半透明albedoとshared light fieldを保ちつつ、transparent passのtexture sampleを抑えるため
 emissive textureをbindしない。completedだけが承認済みemissive textureを使用する。
 
+木製型枠の単独性能gateは、凍結済み`wall-density-v1`とは別の
+`wall-formwork-density-v1`を使う。Captureはprovisional N=96 / 4N=384とmixed 4N=384を、Memoryは
+mixed 4Nだけをfallback-control / production各3 runで測る。mixed 384は仮設192／本設192で、16 mask
+それぞれが仮設12／本設12となる。productionでは完成6＋型枠6のactive mesh/material pairと2 material、
+fallbackでは1 meshとphase別2 material／2 pairをexactに要求する。全18 Captureの後にMemory binaryをbuildして
+6 Memoryを実行し、各pairは隣接かつ先行modeを交互にする。p95 / p99とmax RSSはfallback中央値`+5%`、
+peak live bytesは`+4 MiB`を上限とし、Memory accounting error 0、非display-paced Capture、cell内regime安定を
+比較前提にする。画像profileの短時間frame値やcompleted-onlyの旧性能profileをこのgateへ代用しない。
+
 本番Doorの静的密度比較は`door-density-v1`を使う。N=32 / 4N=128 Doorと64 / 256 completed support Wallを
 同一layoutへ固定し、EW/NSとClosed/Open/Lockedを均等に近い分布で保持する。productionとfallback-controlは
 同じbinaryを使用し、Doorだけをproduction 3 mesh＋共有1 materialまたはfallback共有1 mesh＋状態別3 materialへ

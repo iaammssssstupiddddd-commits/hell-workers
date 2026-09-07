@@ -73,6 +73,7 @@ impl PerfWorkload {
 pub enum PerfWallPhase {
     Completed,
     Provisional,
+    Mixed,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -126,6 +127,7 @@ impl PerfWallPhase {
         match value {
             "completed" => Some(Self::Completed),
             "provisional" => Some(Self::Provisional),
+            "mixed" => Some(Self::Mixed),
             _ => None,
         }
     }
@@ -134,6 +136,7 @@ impl PerfWallPhase {
         match self {
             Self::Completed => "completed",
             Self::Provisional => "provisional",
+            Self::Mixed => "mixed",
         }
     }
 }
@@ -864,7 +867,7 @@ impl PerfScenarioConfig {
             Some(value) if workload == PerfWorkload::WallDensity => {
                 Some(PerfWallPhase::parse(&value).ok_or_else(|| {
                     PerfScenarioConfigError(format!(
-                        "--perf-wall-phase must be completed|provisional; got '{value}'"
+                        "--perf-wall-phase must be completed|provisional|mixed; got '{value}'"
                     ))
                 })?)
             }
@@ -875,7 +878,7 @@ impl PerfScenarioConfig {
             }
             None if workload == PerfWorkload::WallDensity => {
                 return Err(PerfScenarioConfigError(
-                    "--perf-workload wall-density requires --perf-wall-phase completed|provisional"
+                    "--perf-workload wall-density requires --perf-wall-phase completed|provisional|mixed"
                         .to_string(),
                 ));
             }
@@ -1019,6 +1022,14 @@ impl PerfScenarioConfig {
         {
             return Err(PerfScenarioConfigError(
                 "Wall performance presentation selection is reserved for the formal wall-density profile"
+                    .to_string(),
+            ));
+        }
+        if wall_phase == Some(PerfWallPhase::Mixed)
+            && (wall_presentation.is_none() || size != PerfScenarioSize::Medium)
+        {
+            return Err(PerfScenarioConfigError(
+                "Wall mixed density requires the formal performance presentation and medium size"
                     .to_string(),
             ));
         }

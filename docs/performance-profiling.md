@@ -338,6 +338,23 @@ schema 2は完成6 meshを各72 tri以下＋型枠6 meshを各240 tri以下と�
 profileはphase別p95 / p99比較CSVを固有名で保存し、production中央値がfallback-controlより5%を超えると
 job全体をinvalidにする。
 
+木製型枠の単独性能・allocator受入は`wall-formwork-density-v1`が所有する。既存の
+`wall-density-v1`を変更せず、`tools/blender_ai_workflow/fixtures/wall-formwork-density-v1.json`を
+追加契約として使う。provisional N=96 / 4N=384とmixed 4N=384をCaptureで各presentation 3 run、
+mixed 4N=384をMemoryで各presentation 3 run採るため、実行数はCapture 18、Memory 6である。
+mixedはordinalの16件単位でphaseを交互にし、全384件を仮設192／本設192、各maskを仮設12／本設12へ
+固定する。fallback-controlとproductionは同じinstrumentation binaryで隣接実行し、pairごとに先行modeを
+交互にする。Capture 18件を完了してからMemory binaryをbuildし、両instrumentationを並行実行しない。
+
+productionのmixedはschema 2の完成6＋型枠6 mesh、2 material、12 active pairを要求し、fallbackは
+1 mesh、2 material、2 active pairを要求する。初期／終了sidecarのphase別owner数とactive setが一致し、
+Captureが非display-pacedかつ同一cellで安定し、Memoryのallocator accounting errorが0の場合だけ比較する。
+p95 / p99とmax RSSのproduction中央値はfallback-control中央値`+5%`以内、peak live bytesは
+fallback-control中央値`+4 MiB`以内とする。専用helper
+`.codex/skills/hell-workers-run-native-acceptance/scripts/wall_formwork_density_acceptance.py`の独立`verify`は、
+順序、raw CSV / Memory artifactから再計算した値、presentation sidecar、session tree hash、比較CSVを
+再検証する。
+
 Door本番表示の性能比較は`door-density-v1`専用profileが所有する。fixtureはseed `20260906`、
 8列・5 cell間隔でN=32 / 4N=128のDoorを並べ、偶数ordinalをEW、奇数をNS、`i % 3`を
 Closed / Open / Lockedとする。各Doorの軸方向の両隣に完成Wallを置くため、支持Wallは64 / 256で固定される。

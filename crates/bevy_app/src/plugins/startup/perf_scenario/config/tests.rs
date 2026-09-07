@@ -214,9 +214,14 @@ fn wall_density_phase_names_are_explicit() {
         super::PerfWallPhase::parse("provisional"),
         Some(super::PerfWallPhase::Provisional)
     );
-    assert_eq!(super::PerfWallPhase::parse("mixed"), None);
+    assert_eq!(
+        super::PerfWallPhase::parse("mixed"),
+        Some(super::PerfWallPhase::Mixed)
+    );
+    assert_eq!(super::PerfWallPhase::parse("unknown"), None);
     assert_eq!(super::PerfWallPhase::Completed.as_str(), "completed");
     assert_eq!(super::PerfWallPhase::Provisional.as_str(), "provisional");
+    assert_eq!(super::PerfWallPhase::Mixed.as_str(), "mixed");
 }
 
 #[test]

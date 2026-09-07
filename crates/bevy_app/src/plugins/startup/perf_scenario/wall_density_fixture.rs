@@ -25,6 +25,12 @@ pub(super) const CONTRACT_BYTES: &[u8] =
     include_bytes!("../../../../../../tools/blender_ai_workflow/fixtures/wall-density-v1.json");
 pub(super) const CONTRACT_SHA256: &str =
     "7b32f4e0ecd9cdb9223cde1b7f5aae93460e3ec861b2e3ae0e1eb2e2b87419c8";
+pub(super) const FORMWORK_CONTRACT_ID: &str = "wall-formwork-density-v1";
+pub(super) const FORMWORK_CONTRACT_BYTES: &[u8] = include_bytes!(
+    "../../../../../../tools/blender_ai_workflow/fixtures/wall-formwork-density-v1.json"
+);
+pub(super) const FORMWORK_CONTRACT_SHA256: &str =
+    "fe3c9d2c953f08af5cbc9bedefbbdbfd5074c130f4aa76577679b50926998115";
 
 const GRID_ORIGIN: (i32, i32) = (2, 2);
 const GRID_STRIDE: (i32, i32) = (5, 5);
@@ -114,6 +120,19 @@ impl WallDensityLayout {
         }
         counts
     }
+
+    fn is_provisional(&self, ordinal: u32) -> bool {
+        is_provisional_phase(self.phase, ordinal)
+    }
+
+    fn phase_counts(&self) -> (usize, usize) {
+        let provisional = self
+            .specimens
+            .iter()
+            .filter(|specimen| self.is_provisional(specimen.ordinal))
+            .count();
+        (self.specimens.len() - provisional, provisional)
+    }
 }
 
 #[derive(Resource, Default)]
@@ -137,6 +156,8 @@ pub(super) struct WallDensityRenderDocEvidence {
     pub(super) layout_checksum: String,
     pub(super) phase: PerfWallPhase,
     pub(super) target_wall_count: usize,
+    pub(super) completed_wall_count: usize,
+    pub(super) provisional_wall_count: usize,
     pub(super) connector_count: usize,
     pub(super) mask_counts: BTreeMap<String, usize>,
 }
@@ -182,15 +203,17 @@ impl WallDensityFixtureState {
             .layout
             .as_ref()
             .ok_or_else(|| "wall-density Ready state has no layout".to_string())?;
-        let contract_sha256 = contract_sha256();
-        if contract_sha256 != CONTRACT_SHA256 {
+        let (contract_id, contract_bytes, expected_contract_sha256) =
+            contract_for_phase(layout.phase);
+        let contract_sha256 = contract_sha256(contract_bytes);
+        if contract_sha256 != expected_contract_sha256 {
             return Err(format!(
                 "wall-density embedded contract hash changed: {contract_sha256}"
             ));
         }
         let summary = serde_json::json!({
             "schema_version": 1,
-            "contract_id": CONTRACT_ID,
+            "contract_id": contract_id,
             "contract_sha256": contract_sha256,
             "layout_checksum": layout.layout_checksum,
             "target_size": target_size_name(layout.size),
@@ -260,11 +283,14 @@ impl WallDensityFixtureState {
                 })
             })
             .collect::<Result<Vec<_>, _>>()?;
+        let (completed_wall_count, provisional_wall_count) = layout.phase_counts();
         Ok(WallDensityRenderDocEvidence {
             target_entities,
             layout_checksum: layout.layout_checksum.clone(),
             phase: layout.phase,
             target_wall_count: layout.specimens.len(),
+            completed_wall_count,
+            provisional_wall_count,
             connector_count: layout.connector_count(),
             mask_counts: layout.mask_counts(),
         })
@@ -319,12 +345,8 @@ pub(super) fn begin_wall_density_fixture(
     camera_transform.scale = Vec3::new(CAMERA_SCALE, CAMERA_SCALE, 1.0);
 
     for specimen in &mut layout.specimens {
-        let wall = spawn_wall_shell(
-            commands,
-            handles_3d,
-            specimen.grid,
-            phase == PerfWallPhase::Provisional,
-        );
+        let is_provisional = is_provisional_phase(phase, specimen.ordinal);
+        let wall = spawn_wall_shell(commands, handles_3d, specimen.grid, is_provisional);
         commands.entity(wall).insert(PerfFixtureMarker {
             kind: PerfFixtureKind::WallDensityTarget,
             ordinal: specimen.ordinal,
@@ -463,7 +485,7 @@ fn validate_live_fixture(
             .get(wall)
             .map_err(|_| format!("wall-density target {} is missing", specimen.ordinal))?;
         if building.kind != BuildingType::Wall
-            || building.is_provisional != (layout.phase == PerfWallPhase::Provisional)
+            || building.is_provisional != layout.is_provisional(specimen.ordinal)
             || WorldMap::world_to_grid(transform.translation.truncate()) != specimen.grid
             || world_map.building_entity(specimen.grid) != Some(wall)
         {
@@ -568,13 +590,39 @@ fn target_size_name(size: PerfScenarioSize) -> &'static str {
     }
 }
 
+const fn is_provisional_phase(phase: PerfWallPhase, ordinal: u32) -> bool {
+    match phase {
+        PerfWallPhase::Completed => false,
+        PerfWallPhase::Provisional => true,
+        PerfWallPhase::Mixed => (ordinal / 16).is_multiple_of(2),
+    }
+}
+
+const fn contract_for_phase(phase: PerfWallPhase) -> (&'static str, &'static [u8], &'static str) {
+    match phase {
+        PerfWallPhase::Completed | PerfWallPhase::Provisional => {
+            (CONTRACT_ID, CONTRACT_BYTES, CONTRACT_SHA256)
+        }
+        PerfWallPhase::Mixed => (
+            FORMWORK_CONTRACT_ID,
+            FORMWORK_CONTRACT_BYTES,
+            FORMWORK_CONTRACT_SHA256,
+        ),
+    }
+}
+
 fn calculate_layout_checksum(
     size: PerfScenarioSize,
     phase: PerfWallPhase,
     specimens: &[SpecimenSpec],
 ) -> String {
     let mut digest = Sha256::new();
-    digest.update(b"wall-density-v1-layout-v1\0");
+    digest.update(match phase {
+        PerfWallPhase::Completed | PerfWallPhase::Provisional => {
+            b"wall-density-v1-layout-v1\0".as_slice()
+        }
+        PerfWallPhase::Mixed => b"wall-formwork-density-v1-layout-v1\0".as_slice(),
+    });
     digest.update(target_size_name(size).as_bytes());
     digest.update([0]);
     digest.update(phase.as_str().as_bytes());
@@ -595,8 +643,8 @@ fn calculate_layout_checksum(
     format!("{:x}", digest.finalize())
 }
 
-fn contract_sha256() -> String {
-    format!("{:x}", Sha256::digest(CONTRACT_BYTES))
+fn contract_sha256(bytes: &[u8]) -> String {
+    format!("{:x}", Sha256::digest(bytes))
 }
 
 fn fail_fixture(
@@ -651,6 +699,8 @@ mod tests {
                 .layout_checksum,
             WallDensityLayout::build(PerfScenarioSize::Medium, PerfWallPhase::Provisional)
                 .layout_checksum,
+            WallDensityLayout::build(PerfScenarioSize::Medium, PerfWallPhase::Mixed)
+                .layout_checksum,
         ];
         assert_eq!(
             checksums,
@@ -659,13 +709,43 @@ mod tests {
                 "436cf15c38d26909d22dc36bfcc1118bcc04ba0aeb499b6308080e80172e6788",
                 "bea0ceea470cb3e409bd17113b4b89923c81c9114f967f9019f765c9d4b7b642",
                 "9587bebc53d564b3e0d6ccbdea176c6c0c2b4165ffcafbd4caed82887a399c90",
+                "32e559d4ec6c7bd2e6a641d0f32c1b7fa3936b15d7e9c095fecdb589d88efe4a",
             ]
         );
     }
 
     #[test]
     fn embedded_contract_hash_is_frozen() {
-        assert_eq!(contract_sha256(), CONTRACT_SHA256);
+        assert_eq!(contract_sha256(CONTRACT_BYTES), CONTRACT_SHA256);
+        assert_eq!(
+            contract_sha256(FORMWORK_CONTRACT_BYTES),
+            FORMWORK_CONTRACT_SHA256
+        );
+    }
+
+    #[test]
+    fn mixed_layout_balances_each_mask_across_both_phases() {
+        let layout = WallDensityLayout::build(PerfScenarioSize::Medium, PerfWallPhase::Mixed);
+        let provisional = layout
+            .specimens
+            .iter()
+            .filter(|specimen| layout.is_provisional(specimen.ordinal))
+            .count();
+        assert_eq!(provisional, 192);
+        assert_eq!(layout.specimens.len() - provisional, 192);
+        for mask in 0..MASK_COUNT {
+            let mask = u8::try_from(mask).unwrap();
+            let specimens = layout
+                .specimens
+                .iter()
+                .filter(|specimen| specimen.mask == mask);
+            let provisional = specimens
+                .clone()
+                .filter(|specimen| layout.is_provisional(specimen.ordinal))
+                .count();
+            assert_eq!(provisional, 12);
+            assert_eq!(specimens.count() - provisional, 12);
+        }
     }
 
     #[test]
