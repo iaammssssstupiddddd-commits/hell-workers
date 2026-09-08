@@ -355,6 +355,13 @@ asset-view fingerprint `ad63f1c334c91335851d06aa1b64be76b7ce08da903e53ab425c4f79
 `a8a1c65f5ff99b831817776497aea663e25cb9edb91c330981e55f202d6943ea`を共有する。これは旧generation 8の
 provisional-only履歴を置換せず、混在pair、phase別全mask、Soul前後depthを追加で閉じる証跡である。
 
+W-L01 lifecycleはsubject `9746f3b0`・generation 10のjob
+`wall-art-20260908T002455Z-80c2f593`で1 process / 3 checkpointがvalidとなり、独立verifyもpassした。
+manifest SHA-256は`8753e6e9f830efb178de549269ee77cc09e08c530ec4b2f2a50e5ac60a65c5cf`、
+3 PNG相対path/hash一覧のSHA-256は`a760a401ebe67be1e734ccf1a1556ee262680c97ebca83748216625ecfa0ed5a`である。
+2組のowner / visual Entity IDは全phaseで不変で、中央pairが型枠2→混在→本設2へ変わることをstatusと画像の
+両方で確認した。このjobはW-L02 / W-L03 / W-A01 / W-A02の代用にはしない。
+
 壁M5の同一binary内performance比較は、承認済みcandidateを配置したclean validation worktreeから
 `wall_production_performance_acceptance.py plan --repo "$VALIDATION_WORKTREE" --adapter Intel`で計画する。
 返されたdirect launcherは`fallback-control`と`production`を順番に実行し、completed / provisionalの

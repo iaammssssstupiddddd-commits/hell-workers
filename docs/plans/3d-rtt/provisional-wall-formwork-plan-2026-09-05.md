@@ -443,6 +443,27 @@ asset-view / source / harness fingerprintは順に
 回帰、明示validator契約、phase選択self-testを追加し、修正後subjectで18 caseを最初から採り直した。invalid artifactは
 track完了まで保持し、正式2 jobへ読み替えない。
 
+### 7.6 W-L01 lifecycle storyboardの証跡（generation 10）
+
+subject `9746f3b0f7aa63b8d6ce92d453d88caeae1469e3`、generation 10のisolated candidate、
+Intel Arc / Vulkan / X11、1280×720、High / DPI 1で、正式job
+`wall-art-20260908T002455Z-80c2f593`を1 process実行した。`wall-lifecycle-framed`、
+`wall-lifecycle-mixed`、`wall-lifecycle-completed`の3 nonce/ACK checkpointと3 PNGがvalidで、同じ
+validation worktreeのhelperによる独立`verify`もpassした。manifest SHA-256は
+`8753e6e9f830efb178de549269ee77cc09e08c530ec4b2f2a50e5ac60a65c5cf`、3 PNG相対path/hash一覧の
+SHA-256は`a760a401ebe67be1e734ccf1a1556ee262680c97ebca83748216625ecfa0ed5a`である。
+
+candidate manifest / asset-view / source / harness / binary SHA-256は順に
+`734a2a06940287ea63047f4aaa4e57a8c32aa61cd64899d74f20959e0a8e29d1`、
+`becb0697cfe6d2ead21e841cd510830e65863ba66de872607b85cdb5b893e378`、
+`ac34f0c5663cb52d3865a8b6e553326ea4706e55fd054b544437ef506be1157f`、
+`aa244ea1e49933460eb061145de4f85629db156d3c567175ceca368721cabf93`、
+`96a17443b09a545862f3a951cb2670a966690b83267439d74ed3695c1a218ded`である。2 owner / visual Entity IDは
+全checkpointでそれぞれ`4294964989 / 4294964988`、`4294964987 / 4294964986`のまま変わらず、
+phase別mesh/material roleだけが型枠2→型枠1・本設1→本設2へ切り替わった。3画像の目視でも中央pairの
+木枠／石壁の置換を確認した。これによりW-L01のnative表示継続性を閉じるが、W-L02 / W-L03 / W-A01 / W-A02は
+引き続き別のfocused audit / storyboardを必要とする。
+
 native実行はSkillのdirect `kitty` launcher、repository lock、RAM/disk preflightと逐次buildを使う。
 本計画の新profileには`plan / status / verify / self-test`を実装してから利用し、未実装のcommandを
 既存helper名へ読み替えない。statusは15〜30秒ごとに確認し、source/asset drift・timeout・画像欠落はfailとする。
@@ -465,12 +486,12 @@ Update required / 理由付きNo impactをその時点で判断する。
 ### 現在地
 
 - 進捗: M1/W2の中核を実装。schema v3候補、runtime wallset v2、6 family GLB、Opaque木材albedo、tile単位mesh/material切替、ArtPreview authorityが動作する。M3aはgeneration 5の技術候補とゲーム所有window PNGに対してユーザー承認済み。generation 8の正式画像18/18、generation 10のCapture 18/18とMemory 6/6、および各独立verifyが合格した。通常releaseはgeneration 4のまま。
-- W-L01中核: 2 tileを仮設2→仮設1/本設1→本設2へ遷移させ、phase別mesh/materialとowner / visual Entityの同一性、visual root非増殖をproduction回帰テストで固定した。承認済みcandidateの同じ2 tile pairを3 nonce/ACK checkpointで進める`wall-formwork-lifecycle-v1`も実装し、owner / visual ID、mesh/material role、3 PNGを同一processへ結ぶ。clean subjectでのnative storyboard採取は未完。
+- W-L01完了: 2 tileを仮設2→仮設1/本設1→本設2へ遷移させ、phase別mesh/materialとowner / visual Entityの同一性、visual root非増殖をproduction回帰テストで固定した。`wall-formwork-lifecycle-v1`の1 process / 3 checkpointもvalid・独立verify passで、owner / visual ID不変と3 PNGを§7.6へ記録した。
 - W-L02中核: site Coatは同じowner / visual Entityのまま仮設material→本設materialへ遷移し、legacy Coatは`Entity::PLACEHOLDER`分岐のtask producerが既存Wall rootを保持したまま`Building.is_provisional`をfalseへ変え、次のDone frameでtaskを完了することを固定した。Instant Buildは最初から本設materialを持つexactly-one visualを生成する。Framing前cancel、仮設後cancel、完成Wall撤去ではconnectorとowner-linked visualが残らないこともproduction回帰テストで確認した。native storyboardは未完。
 - W-L03中核: 仮設1 / 本設1の混在saveをnormal loadで10回反復し、各回のfallback→production復帰、phase保持、owner / visual数、完成6＋型枠6 mesh / 2 material poolの上限を固定した。同じ候補をrollback / recovery-onlyでも検証した。native sidecarの採取は未完。
 - W-A01 / W-A02中核: readinessの`Eligible → LoadFailed → Eligible`で仮設／本設の全Wallが同一Updateにproduction→fallback→productionへ切り替わることと、新→旧→新generationの往復でactive mesh/material handleが世代混在しないことをproduction回帰テストで固定した。欠落assetと世代切替のnative storyboardは未完。
 - W-G01: 凍結済みmixed 4Nの仮設192／本設192、画像専用E-W直接接続pair、完成6＋型枠6 mesh、段階別2 material、Soul 2体のfront / behind camera depthを同一galleryへ固定した。subject `99362a37`の標準／最大zoom-out正式matrixは18/18 validで、両独立verifyと代表画像目視も完了した。旧v1証跡は再ラベルしていない。
-- 次の作業: W-L01〜L03 / W-A01〜A02の実機storyboardを実装・採取する。Door側の単独gate後にJ1、M4へ進み、production回帰テストだけを実機合格へ読み替えない。
+- 次の作業: W-L02〜L03 / W-A01〜A02のfocused audit / 実機storyboardを実装・採取する。Door側の単独gate後にJ1、M4へ進み、production回帰テストだけを実機合格へ読み替えない。
 - ドアはM0の共通port確定後に制作を並行可能。Rust・tooling編集はmain agentが順に行い、joint受入は両方のruntime接続後。
 - 240 triangles・core 15 file・§7の予算は採用した新設計値。現在のreleaseの実測・アート承認値として扱わない。
 
@@ -519,3 +540,4 @@ Update required / 理由付きNo impactをその時点で判断する。
 | `2026-09-08` | `Codex` | legacy Coatの`Entity::PLACEHOLDER` task producerが既存Wall rootを本設化してからDoneを完了する回帰を追加し、W-L02のproduction中核を閉じた。native storyboardは未完として分離 |
 | `2026-09-08` | `Codex` | W-G01用`wall-formwork-gallery-v2`を実装。mixed 4Nの段階別16 mask、画像専用の仮設／本設直接接続pair、12 mesh / 2 material、Soul前後depthを同一statusでfail-closed検証する。旧v1画像は履歴のまま残し、v2実機matrixは未採取 |
 | `2026-09-08` | `Codex` | W-L01用`wall-formwork-lifecycle-v1`を実装。同じ2 tile pairを型枠2→混在→本設2の3 checkpointへ進め、owner / visual Entity不変、phase別mesh/material role、nonce/ACK付き3 PNGを1 processで検証する。native採取はclean commit後に分離 |
+| `2026-09-08` | `Codex` | subject `9746f3b0`でW-L01 lifecycleを正式採取。1 process / 3 checkpointがvalid・独立verify passとなり、同じowner / visual IDのまま型枠2→混在→本設2へ切り替わる3 PNGを§7.6へ封印 |
