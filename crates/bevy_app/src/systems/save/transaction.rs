@@ -1504,6 +1504,7 @@ mod tests {
         let incoming = wall_replacement_candidate(&incoming_walls, 2.0);
 
         let mut normal = app_with_wall_replacement_runtime();
+        normal.world_mut().resource_mut::<Time<Virtual>>().pause();
         insert_persisted_resources(normal.world_mut(), 1.0);
         let old_normal_wall = spawn_persisted_wall(normal.world_mut(), (5, 5), false);
         rehydrate_presentation_shells_for_test(normal.world_mut());
@@ -1521,11 +1522,13 @@ mod tests {
             }
             assert_eq!(wall_phase_rows(normal.world_mut()), incoming_walls);
             assert_fallback_then_production(&mut normal, incoming_walls.len());
+            assert!(normal.world().resource::<Time<Virtual>>().is_paused());
             assert_eq!(wall_phase_rows(normal.world_mut()), incoming_walls);
             assert_wall_asset_pool_is_bounded(&normal);
         }
 
         let mut rollback = app_with_wall_replacement_runtime();
+        rollback.world_mut().resource_mut::<Time<Virtual>>().pause();
         insert_persisted_resources(rollback.world_mut(), 3.0);
         let rollback_grid = (8, 9);
         let old_rollback_wall = spawn_persisted_wall(rollback.world_mut(), rollback_grid, false);
@@ -1547,12 +1550,15 @@ mod tests {
             },
         );
         assert!(matches!(result, Err(CommitError::Recovered { .. })));
+        assert!(rollback.world().resource::<Time<Virtual>>().is_paused());
         assert!(rollback.world().get_entity(old_rollback_wall).is_err());
         assert_fallback_then_production(&mut rollback, 1);
+        assert!(rollback.world().resource::<Time<Virtual>>().is_paused());
         assert_eq!(
             wall_phase_rows(rollback.world_mut()),
             [(rollback_grid, false)]
         );
+        assert_wall_asset_pool_is_bounded(&rollback);
         let restored_wall = wall_visual_rows(rollback.world_mut())[0].1;
         assert_eq!(
             rollback
@@ -1564,6 +1570,7 @@ mod tests {
         );
 
         let mut recovery = app_with_wall_replacement_runtime();
+        recovery.world_mut().resource_mut::<Time<Virtual>>().pause();
         insert_persisted_resources(recovery.world_mut(), 4.0);
         spawn_persisted_wall(recovery.world_mut(), (11, 11), false);
         rehydrate_presentation_shells_for_test(recovery.world_mut());
@@ -1581,7 +1588,9 @@ mod tests {
         );
         assert_eq!(wall_phase_rows(recovery.world_mut()), incoming_walls);
         assert_fallback_then_production(&mut recovery, incoming_walls.len());
+        assert!(recovery.world().resource::<Time<Virtual>>().is_paused());
         assert_eq!(wall_phase_rows(recovery.world_mut()), incoming_walls);
+        assert_wall_asset_pool_is_bounded(&recovery);
         let mut masks = wall_visual_rows(recovery.world_mut())
             .into_iter()
             .map(|(_, owner, ..)| {
