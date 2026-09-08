@@ -466,6 +466,26 @@ At the farthest zoom, completed Walls retain the all-column `3 sigma` contrast
 gate. Skeletal formwork additionally requires median contrast of `3 sigma` and
 allows at most one terrain-mixed raster column; two missing columns fail.
 
+For the W-L01 two-tile lifecycle storyboard, keep the same clean approved
+isolated-candidate worktree and plan one High / DPI 1 process:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 \
+  .codex/skills/hell-workers-run-native-acceptance/scripts/wall_art_acceptance.py \
+  plan --repo "$VALIDATION_WORKTREE" --adapter Intel \
+  --candidate --formwork --lifecycle
+```
+
+Run only the returned direct `kitty` command and poll `status --job-root
+<job-root>`. One process ACK-holds `wall-lifecycle-framed`,
+`wall-lifecycle-mixed`, and `wall-lifecycle-completed` and captures three X11
+client PNGs. The verifier requires the same two owner and owner-linked visual
+Entity IDs across all checkpoints, the expected formwork/completed mesh and
+material roles, production presentation, candidate identity, and raw mixed-4N
+performance evidence. It closes only W-L01 presentation continuity; it does
+not substitute for cancel, legacy, Instant Build, load-loop, or asset-failure
+audits.
+
 After M4 art approval, provision the final art-approved candidate projection
 and its exact core allowlist into a clean validation worktree. Plan the fixed-lit
 gallery observation:

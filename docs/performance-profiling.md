@@ -323,6 +323,23 @@ E/W直接接続pair、Soul 2体のfront / behind depthのすべてが成立し�
 validatorは置換済みlegacy Soul / mask / shadow proxyを0として検証し、実際の`ActorBillboard3d` 2体のowner、可視性、同一camera ray、
 front / behind関係はW-G01専用statusで別途必須にする。historical `current` stageのlegacy proxy期待値は変更しない。
 
+W-L01の実画面遷移は、同じ承認済みisolated candidateからHigh / DPI 1固定の
+`wall-formwork-lifecycle-v1`を1 processだけ実行する。
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 \
+  .codex/skills/hell-workers-run-native-acceptance/scripts/wall_art_acceptance.py \
+  plan --repo "$VALIDATION_WORKTREE" --adapter Intel \
+  --candidate --formwork --lifecycle
+```
+
+同じE/W直接接続pairを`wall-lifecycle-framed`（型枠2）、`wall-lifecycle-mixed`（型枠1／本設1）、
+`wall-lifecycle-completed`（本設2）の3 nonce/ACK checkpointへ進める。各statusはowner Entity、
+owner-linked visual Entity、grid、mesh/material role、production modeを記録し、offline verifyは3 checkpoint間で
+owner / visual IDが不変であることと3 PNGのhashを再計算する。背景のmixed 4N inventory、candidate identity、
+Vulkan/X11 client scope、raw performance sidecarもW-G01と同じfail-closed条件を維持する。このstoryboardは
+W-L01の表示遷移証拠であり、W-L02のcancel/legacy/Instant BuildやW-L03のload反復を代用しない。
+
 subject `3c0f7c67`・generation 8の正式実績は、標準
 `wall-art-20260907T031245Z-d7fea076`と最大zoom-out
 `wall-art-20260907T032953Z-d83fa1ba`が各9/9 validで、独立verifyもpassした。

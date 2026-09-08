@@ -185,6 +185,14 @@ pub(super) struct WallDensityRenderDocEvidence {
 }
 
 impl WallDensityFixtureState {
+    pub(super) fn mixed_gallery_pair(&self) -> Option<[(Entity, (i32, i32)); 2]> {
+        let pair = self.mixed_gallery_pair?;
+        Some([
+            (pair.provisional, MIXED_GALLERY_PAIR_GRIDS[0]),
+            (pair.completed, MIXED_GALLERY_PAIR_GRIDS[1]),
+        ])
+    }
+
     pub(super) fn actual_window_subject(&self) -> Option<WallDensityProbeSubject<'_>> {
         self.probe_subject(|specimen| specimen.ordinal == ACTUAL_WINDOW_SUBJECT_ORDINAL)
     }

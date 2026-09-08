@@ -14,6 +14,7 @@ use bevy::pbr::MeshMaterial3d;
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 use hw_core::constants::{TILE_SIZE, topdown_rtt_vertical_compensation};
+use hw_jobs::{Building, ProvisionalWall};
 use hw_ui::camera::MainCamera;
 use hw_visual::TopDownStructuralMaterial;
 use hw_visual::visual3d::{
@@ -39,6 +40,7 @@ const ACCEPTANCE_ENV: &str = "HW_WALL_ART_ACTUAL_WINDOW";
 const STATUS_PATH_ENV: &str = "HW_WALL_ART_STATUS_PATH";
 const ACK_PATH_ENV: &str = "HW_WALL_ART_ACK_PATH";
 const SESSION_NONCE_ENV: &str = "HW_WALL_ART_SESSION_NONCE";
+const LIFECYCLE_ENV: &str = "HW_WALL_FORMWORK_LIFECYCLE";
 const STATUS_SCHEMA_VERSION: u32 = 1;
 const PHASE_ID: &str = "current-wall";
 const GENERATION: u32 = 1;
@@ -63,6 +65,31 @@ const STRAIGHT_EAST_WEST_MASK: u8 = 0b0011;
 const SOUL_DEPTH_RAY_OFFSET: f32 = TILE_SIZE * 1.5;
 const SOUL_DEPTH_MAX_CENTER_DISTANCE: f32 = 0.5;
 
+#[derive(Clone, Copy)]
+struct WallLifecycleCheckpoint {
+    phase: &'static str,
+    generation: u32,
+    provisional: [bool; 2],
+}
+
+const LIFECYCLE_CHECKPOINTS: [WallLifecycleCheckpoint; 3] = [
+    WallLifecycleCheckpoint {
+        phase: "wall-lifecycle-framed",
+        generation: 1,
+        provisional: [true, true],
+    },
+    WallLifecycleCheckpoint {
+        phase: "wall-lifecycle-mixed",
+        generation: 2,
+        provisional: [true, false],
+    },
+    WallLifecycleCheckpoint {
+        phase: "wall-lifecycle-completed",
+        generation: 3,
+        provisional: [false, false],
+    },
+];
+
 /// The gallery view is the acceptance presentation: it frames the fixture,
 /// hides UI and connector visuals, and reports production residency. It is
 /// requested by the isolated candidate opt-in or, once a generation is
@@ -79,6 +106,10 @@ fn art_preview_requested() -> bool {
 
 fn formwork_acceptance_requested() -> bool {
     std::env::var("HW_WALL_FORMWORK_ACCEPTANCE").as_deref() == Ok("1")
+}
+
+fn lifecycle_requested() -> bool {
+    std::env::var(LIFECYCLE_ENV).as_deref() == Ok("1")
 }
 
 const fn accepted_wall_phase(
@@ -109,6 +140,7 @@ pub(crate) struct WallActualWindowAcceptance {
     status_path: Option<PathBuf>,
     ack_path: Option<PathBuf>,
     session_nonce: Option<String>,
+    checkpoint_index: usize,
     started_at: Option<Duration>,
     published_at: Option<Duration>,
     settled_frames: u32,
@@ -125,6 +157,7 @@ impl Default for WallActualWindowAcceptance {
             session_nonce: std::env::var(SESSION_NONCE_ENV)
                 .ok()
                 .filter(|value| is_session_nonce(value)),
+            checkpoint_index: 0,
             started_at: None,
             published_at: None,
             settled_frames: 0,
@@ -169,7 +202,17 @@ impl WallActualWindowAcceptance {
         let Ok(value) = serde_json::from_slice::<Value>(&bytes) else {
             return false;
         };
-        acknowledgement_matches(&value, nonce)
+        let (phase, generation) = self.checkpoint_identity();
+        acknowledgement_matches(&value, nonce, phase, generation)
+    }
+
+    fn checkpoint_identity(&self) -> (&'static str, u32) {
+        if lifecycle_requested() {
+            let checkpoint = LIFECYCLE_CHECKPOINTS[self.checkpoint_index];
+            (checkpoint.phase, checkpoint.generation)
+        } else {
+            (PHASE_ID, GENERATION)
+        }
     }
 }
 
@@ -183,18 +226,19 @@ fn is_session_nonce(value: &str) -> bool {
     value.len() == 32 && value.bytes().all(|byte| byte.is_ascii_hexdigit())
 }
 
-fn acknowledgement_matches(value: &Value, nonce: &str) -> bool {
+fn acknowledgement_matches(value: &Value, nonce: &str, phase: &str, generation: u32) -> bool {
     value.get("schema_version").and_then(Value::as_u64) == Some(STATUS_SCHEMA_VERSION.into())
         && value.get("status").and_then(Value::as_str) == Some("captured")
         && value.get("session_nonce").and_then(Value::as_str) == Some(nonce)
-        && value.get("phase").and_then(Value::as_str) == Some(PHASE_ID)
-        && value.get("generation").and_then(Value::as_u64) == Some(GENERATION.into())
+        && value.get("phase").and_then(Value::as_str) == Some(phase)
+        && value.get("generation").and_then(Value::as_u64) == Some(generation.into())
 }
 
 type WallVisualQuery<'w, 's> = Query<
     'w,
     's,
     (
+        Entity,
         &'static Building3dVisual,
         &'static Mesh3d,
         &'static MeshMaterial3d<TopDownStructuralMaterial>,
@@ -207,6 +251,8 @@ type WallVisualQuery<'w, 's> = Query<
 
 #[derive(bevy::ecs::system::SystemParam)]
 pub(crate) struct WallActualWindowViewParams<'w, 's> {
+    commands: Commands<'w, 's>,
+    wall_owners: Query<'w, 's, &'static mut Building>,
     main_camera: Query<
         'w,
         's,
@@ -257,7 +303,37 @@ pub(crate) fn prepare_wall_actual_window_gallery_view_system(
     let Ok(mut camera) = params.main_camera.single_mut() else {
         return;
     };
-    let world = hw_world::WorldMap::grid_to_world(subject.grid.0, subject.grid.1);
+    let lifecycle_pair = lifecycle_requested()
+        .then(|| fixture.mixed_gallery_pair())
+        .flatten();
+    if let Some(pair) = lifecycle_pair {
+        let checkpoint = LIFECYCLE_CHECKPOINTS[acceptance.checkpoint_index];
+        for (index, (owner, _)) in pair.into_iter().enumerate() {
+            let Ok(mut building) = params.wall_owners.get_mut(owner) else {
+                continue;
+            };
+            let provisional = checkpoint.provisional[index];
+            if building.is_provisional != provisional {
+                building.is_provisional = provisional;
+                if provisional {
+                    params
+                        .commands
+                        .entity(owner)
+                        .insert(ProvisionalWall::default());
+                } else {
+                    params.commands.entity(owner).remove::<ProvisionalWall>();
+                }
+            }
+        }
+    }
+    let world = lifecycle_pair.map_or_else(
+        || hw_world::WorldMap::grid_to_world(subject.grid.0, subject.grid.1),
+        |pair| {
+            let left = hw_world::WorldMap::grid_to_world(pair[0].1.0, pair[0].1.1);
+            let right = hw_world::WorldMap::grid_to_world(pair[1].1.0, pair[1].1.1);
+            (left + right) * 0.5
+        },
+    );
     camera.translation.x = world.x;
     camera.translation.y = world.y;
     let gallery_scale = gallery_camera_scale();
@@ -376,6 +452,7 @@ pub(crate) struct WallActualWindowParams<'w, 's> {
     main_camera: Query<'w, 's, &'static Transform, (With<MainCamera>, Without<Camera3dRtt>)>,
     ui_roots: Query<'w, 's, &'static Node, Without<ChildOf>>,
     connector_visuals: Query<'w, 's, (&'static PerfFixtureMarker, &'static Visibility)>,
+    wall_owners: Query<'w, 's, (&'static Building, Option<&'static ProvisionalWall>)>,
     visuals: WallVisualQuery<'w, 's>,
     billboards: Query<
         'w,
@@ -411,7 +488,19 @@ pub(crate) fn publish_wall_actual_window_probe_status_system(
 
     if let Some(published_at) = acceptance.published_at {
         if acceptance.acknowledgement_matches() {
-            acceptance.completed = true;
+            if lifecycle_requested()
+                && acceptance.checkpoint_index + 1 < LIFECYCLE_CHECKPOINTS.len()
+            {
+                acceptance.checkpoint_index += 1;
+                acceptance.started_at = Some(now);
+                acceptance.published_at = None;
+                acceptance.settled_frames = 0;
+                if let Some(path) = acceptance.status_path.as_deref() {
+                    let _ = std::fs::remove_file(path);
+                }
+            } else {
+                acceptance.completed = true;
+            }
             return;
         }
         if now.saturating_sub(published_at) < ACK_TIMEOUT {
@@ -479,13 +568,23 @@ fn build_status(
         .camera
         .single()
         .map_err(|_| "wall actual-window probe requires one Camera3dRtt".to_string())?;
-    let (mesh, _material, presentation, visual_transform, visibility, inherited_visibility) =
+    let (_, mesh, _material, presentation, visual_transform, visibility, inherited_visibility) =
         params
             .visuals
             .iter()
             .find_map(
-                |(visual, mesh, material, presentation, transform, visibility, inherited)| {
+                |(
+                    entity,
+                    visual,
+                    mesh,
+                    material,
+                    presentation,
+                    transform,
+                    visibility,
+                    inherited,
+                )| {
                     (visual.owner == subject.entity).then_some((
+                        entity,
                         mesh,
                         material,
                         presentation,
@@ -514,12 +613,22 @@ fn build_status(
             orthographic.scale
         ));
     }
+    let lifecycle_pair = lifecycle_requested()
+        .then(|| fixture.mixed_gallery_pair())
+        .flatten();
     let gallery = if candidate_gallery {
         let main_camera = params
             .main_camera
             .single()
             .map_err(|_| "wall gallery requires one MainCamera".to_string())?;
-        let subject_world = hw_world::WorldMap::grid_to_world(subject.grid.0, subject.grid.1);
+        let subject_world = lifecycle_pair.map_or_else(
+            || hw_world::WorldMap::grid_to_world(subject.grid.0, subject.grid.1),
+            |pair| {
+                let left = hw_world::WorldMap::grid_to_world(pair[0].1.0, pair[0].1.1);
+                let right = hw_world::WorldMap::grid_to_world(pair[1].1.0, pair[1].1.1);
+                (left + right) * 0.5
+            },
+        );
         if main_camera.translation.x != subject_world.x
             || main_camera.translation.y != subject_world.y
             || main_camera.scale != Vec3::new(expected_camera_scale, expected_camera_scale, 1.0)
@@ -569,7 +678,7 @@ fn build_status(
         let mut fallback_count = 0usize;
         let mut mesh_ids = HashSet::new();
         let mut material_ids = HashSet::new();
-        for (visual, mesh, material, state, _, _, _) in &params.visuals {
+        for (_, visual, mesh, material, state, _, _, _) in &params.visuals {
             if !targets.contains(&visual.owner) {
                 continue;
             }
@@ -660,7 +769,13 @@ fn build_status(
             ));
         }
         let mixed_pair = match evidence.phase {
-            PerfWallPhase::Mixed => Some(validate_mixed_gallery_pair(&evidence, &params.visuals)?),
+            PerfWallPhase::Mixed => Some(validate_mixed_gallery_pair(
+                &evidence,
+                &params.visuals,
+                &params.wall_owners,
+                lifecycle_requested()
+                    .then_some(LIFECYCLE_CHECKPOINTS[acceptance.checkpoint_index].provisional),
+            )?),
             PerfWallPhase::Completed | PerfWallPhase::Provisional => {
                 if evidence.mixed_gallery_pair.is_some() {
                     return Err("non-mixed wall gallery retained a mixed pair".to_string());
@@ -829,7 +944,7 @@ fn build_status(
             .count();
         status["gallery"] = gallery;
         status["capture_view"] = json!({
-            "focus": "subject",
+            "focus": if lifecycle_requested() { "lifecycle_pair" } else { "subject" },
             "hidden_ui_roots": hidden_ui_roots,
             "visible_ui_roots": 0,
             "hidden_connector_visuals": hidden_connector_visuals,
@@ -840,16 +955,28 @@ fn build_status(
     if art_preview_requested() {
         status["evidence_kind"] = json!("art_preview");
     }
+    let (phase, generation) = acceptance.checkpoint_identity();
+    status["phase"] = json!(phase);
+    status["generation"] = json!(generation);
+    if lifecycle_requested() {
+        status["lifecycle"] = build_lifecycle_evidence(
+            fixture,
+            params,
+            LIFECYCLE_CHECKPOINTS[acceptance.checkpoint_index],
+            acceptance.checkpoint_index,
+        )?;
+    }
     Ok(status)
 }
 
 fn failure_status(acceptance: &WallActualWindowAcceptance, reason: &str) -> Value {
+    let (phase, generation) = acceptance.checkpoint_identity();
     json!({
         "schema_version": STATUS_SCHEMA_VERSION,
         "status": "failed",
         "session_nonce": acceptance.session_nonce.as_deref().unwrap_or(""),
-        "phase": PHASE_ID,
-        "generation": GENERATION,
+        "phase": phase,
+        "generation": generation,
         "reason": reason,
     })
 }
@@ -857,6 +984,8 @@ fn failure_status(acceptance: &WallActualWindowAcceptance, reason: &str) -> Valu
 fn validate_mixed_gallery_pair(
     evidence: &super::wall_density_fixture::WallDensityRenderDocEvidence,
     visuals: &WallVisualQuery,
+    owners: &Query<(&Building, Option<&ProvisionalWall>)>,
+    lifecycle_phases: Option<[bool; 2]>,
 ) -> Result<Value, String> {
     let pair = evidence
         .mixed_gallery_pair
@@ -873,10 +1002,19 @@ fn validate_mixed_gallery_pair(
         )),
     ];
     let mut records = Vec::with_capacity(pair.len());
-    for (index, (entity, grid, is_provisional)) in pair.into_iter().enumerate() {
-        let (_, _, _, state, _, visibility, inherited_visibility) = visuals
+    for (index, (entity, grid, fixture_provisional)) in pair.into_iter().enumerate() {
+        let is_provisional = lifecycle_phases
+            .map(|phases| phases[index])
+            .unwrap_or(fixture_provisional);
+        let (building, marker) = owners
+            .get(entity)
+            .map_err(|_| "wall mixed gallery pair owner is missing".to_string())?;
+        if building.is_provisional != is_provisional || marker.is_some() != is_provisional {
+            return Err("wall mixed gallery pair owner phase differs".to_string());
+        }
+        let (_, _, _, _, state, _, visibility, inherited_visibility) = visuals
             .iter()
-            .find(|(visual, ..)| visual.owner == entity)
+            .find(|(_, visual, ..)| visual.owner == entity)
             .ok_or_else(|| "wall mixed gallery pair visual is missing".to_string())?;
         if state.mode != Wall3dPresentationMode::Production
             || state.topology != expected[index]
@@ -894,6 +1032,85 @@ fn validate_mixed_gallery_pair(
         }));
     }
     Ok(Value::Array(records))
+}
+
+fn build_lifecycle_evidence(
+    fixture: &WallDensityFixtureState,
+    params: &WallActualWindowParams,
+    checkpoint: WallLifecycleCheckpoint,
+    checkpoint_index: usize,
+) -> Result<Value, String> {
+    let pair = fixture
+        .mixed_gallery_pair()
+        .ok_or_else(|| "wall lifecycle pair is missing".to_string())?;
+    let resolved = params
+        .production_assets
+        .resolved
+        .as_ref()
+        .ok_or_else(|| "wall lifecycle production pool is unresolved".to_string())?;
+    let formwork = resolved
+        .formwork_meshes
+        .as_ref()
+        .ok_or_else(|| "wall lifecycle formwork pool is unresolved".to_string())?;
+    let mut records = Vec::with_capacity(pair.len());
+    for (index, (owner, grid)) in pair.into_iter().enumerate() {
+        let provisional = checkpoint.provisional[index];
+        let matches = params
+            .visuals
+            .iter()
+            .filter(|(_, visual, ..)| visual.owner == owner)
+            .collect::<Vec<_>>();
+        if matches.len() != 1 {
+            return Err(format!(
+                "wall lifecycle owner {owner:?} has {} visuals",
+                matches.len()
+            ));
+        }
+        let (visual_entity, _, mesh, material, state, _, visibility, inherited) = matches[0];
+        let expected_topology = if index == 0 {
+            resolve_wall_topology(WallConnectionMask::from_neighbors(
+                false, false, false, true,
+            ))
+        } else {
+            resolve_wall_topology(WallConnectionMask::from_neighbors(
+                false, false, true, false,
+            ))
+        };
+        let expected_mesh = if provisional {
+            &formwork[1]
+        } else {
+            &resolved.meshes[1]
+        };
+        let expected_material = if provisional {
+            params.production_materials.provisional.as_ref()
+        } else {
+            params.production_materials.complete.as_ref()
+        }
+        .ok_or_else(|| "wall lifecycle material is unresolved".to_string())?;
+        if state.mode != Wall3dPresentationMode::Production
+            || state.topology != expected_topology
+            || mesh.0 != *expected_mesh
+            || material.0 != *expected_material
+            || *visibility == Visibility::Hidden
+            || !inherited.get()
+        {
+            return Err(format!("wall lifecycle presentation at {grid:?} differs"));
+        }
+        records.push(json!({
+            "owner_entity": owner.to_bits(),
+            "visual_entity": visual_entity.to_bits(),
+            "grid": [grid.0, grid.1],
+            "phase": if provisional { "provisional" } else { "completed" },
+            "presentation": "production",
+            "mesh_role": if provisional { "formwork:end" } else { "completed:end" },
+            "material_role": if provisional { "provisional" } else { "complete" },
+        }));
+    }
+    Ok(json!({
+        "checkpoint_index": checkpoint_index,
+        "checkpoint_count": LIFECYCLE_CHECKPOINTS.len(),
+        "pair": records,
+    }))
 }
 
 fn validate_soul_depth_gallery(
@@ -925,7 +1142,7 @@ fn validate_soul_depth_gallery(
         let wall_position = params
             .visuals
             .iter()
-            .find_map(|(visual, _, _, _, transform, _, _)| {
+            .find_map(|(_, visual, _, _, _, transform, _, _)| {
                 (visual.owner == wall).then_some(transform.translation())
             })
             .ok_or_else(|| "wall mixed gallery Soul target is missing".to_string())?;
@@ -1033,7 +1250,7 @@ fn straight_probe(
     let transform = params
         .visuals
         .iter()
-        .find_map(|(visual, _, _, _, transform, _, _)| {
+        .find_map(|(_, visual, _, _, _, transform, _, _)| {
             (visual.owner == straight.entity).then_some(transform)
         })
         .ok_or_else(|| "wall gallery straight specimen has no 3D visual".to_string())?;
@@ -1197,10 +1414,34 @@ mod tests {
             "phase": PHASE_ID,
             "generation": GENERATION,
         });
-        assert!(acknowledgement_matches(&valid, nonce));
+        assert!(acknowledgement_matches(&valid, nonce, PHASE_ID, GENERATION));
         let mut wrong_generation = valid.clone();
         wrong_generation["generation"] = json!(2);
-        assert!(!acknowledgement_matches(&wrong_generation, nonce));
+        assert!(!acknowledgement_matches(
+            &wrong_generation,
+            nonce,
+            PHASE_ID,
+            GENERATION
+        ));
+        let lifecycle = json!({
+            "schema_version": STATUS_SCHEMA_VERSION,
+            "status": "captured",
+            "session_nonce": nonce,
+            "phase": LIFECYCLE_CHECKPOINTS[1].phase,
+            "generation": LIFECYCLE_CHECKPOINTS[1].generation,
+        });
+        assert!(acknowledgement_matches(
+            &lifecycle,
+            nonce,
+            LIFECYCLE_CHECKPOINTS[1].phase,
+            LIFECYCLE_CHECKPOINTS[1].generation,
+        ));
+        assert!(!acknowledgement_matches(
+            &lifecycle,
+            nonce,
+            LIFECYCLE_CHECKPOINTS[0].phase,
+            LIFECYCLE_CHECKPOINTS[0].generation,
+        ));
     }
 
     #[test]

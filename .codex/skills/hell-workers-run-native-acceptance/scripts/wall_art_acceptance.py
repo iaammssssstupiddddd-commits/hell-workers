@@ -29,6 +29,7 @@ RELEASE_PROFILE = "wall-art-released-generation-v1"
 ART_PREVIEW_PROFILE = "wall-formwork-art-preview-v1"
 FORMWORK_MATRIX_PROFILE = "wall-formwork-gallery-v2"
 FORMWORK_FARTHEST_PROFILE = "wall-formwork-gallery-v2-farthest"
+FORMWORK_LIFECYCLE_PROFILE = "wall-formwork-lifecycle-v1"
 AUTHORITIES = ("art_preview", "isolated_candidate", "release_approved")
 FORMWORK_PREVIEW_ROLES = (
     "mesh:isolated",
@@ -48,6 +49,11 @@ FORMWORK_PREVIEW_ROLES = (
     "texture:formwork_albedo",
 )
 ZOOM_MODES = ("standard", "farthest")
+LIFECYCLE_CHECKPOINTS = (
+    {"phase": "wall-lifecycle-framed", "generation": 1, "phases": ("provisional", "provisional")},
+    {"phase": "wall-lifecycle-mixed", "generation": 2, "phases": ("provisional", "completed")},
+    {"phase": "wall-lifecycle-completed", "generation": 3, "phases": ("completed", "completed")},
+)
 # The straight-run band is judged against the terrain it sits on instead of a
 # fixed colour: a wall column counts as visible when its darkest pixel is at
 # least this many standard deviations below the terrain rows of the same band.
@@ -185,6 +191,7 @@ def profile_name(
     zoom: str = "standard",
     authority: str = "isolated_candidate",
     formwork: bool = False,
+    lifecycle: bool = False,
 ) -> str:
     if authority == "art_preview":
         native.require(
@@ -192,6 +199,16 @@ def profile_name(
             "Wall art preview is a single standard-zoom candidate run",
         )
         return ART_PREVIEW_PROFILE
+    if lifecycle:
+        native.require(
+            candidate
+            and not matrix
+            and zoom == "standard"
+            and authority == "isolated_candidate"
+            and formwork,
+            "Wall lifecycle is one standard isolated-candidate formwork process",
+        )
+        return FORMWORK_LIFECYCLE_PROFILE
     if formwork:
         native.require(
             candidate and matrix and authority == "isolated_candidate",
@@ -324,6 +341,7 @@ def validate_probe_status(
     zoom: str = "standard",
     art_preview: bool = False,
     formwork: bool = False,
+    lifecycle_checkpoint: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     fields = {
         "schema_version",
@@ -340,6 +358,8 @@ def validate_probe_status(
         fields.update({"gallery", "capture_view"})
     if art_preview:
         fields.add("evidence_kind")
+    if lifecycle_checkpoint is not None:
+        fields.add("lifecycle")
     status = require_object(
         value,
         "Wall calibration status",
@@ -350,8 +370,19 @@ def validate_probe_status(
     )
     native.require(status["status"] == "ready", "Wall calibration probe is not ready")
     native.require(status["session_nonce"] == nonce, "Wall calibration nonce differs")
-    native.require(status["phase"] == PHASE, "Wall calibration phase differs")
-    native.require(status["generation"] == 1, "Wall calibration generation differs")
+    expected_status_phase = (
+        lifecycle_checkpoint["phase"] if lifecycle_checkpoint is not None else PHASE
+    )
+    expected_generation = (
+        lifecycle_checkpoint["generation"] if lifecycle_checkpoint is not None else 1
+    )
+    native.require(
+        status["phase"] == expected_status_phase, "Wall calibration phase differs"
+    )
+    native.require(
+        status["generation"] == expected_generation,
+        "Wall calibration generation differs",
+    )
     if art_preview:
         native.require(
             status["evidence_kind"] == "art_preview",
@@ -505,7 +536,12 @@ def validate_probe_status(
                 and gallery["provisional_mask_counts"] == expected_phase_masks,
                 "Wall mixed gallery phase coverage differs",
             )
-            validate_mixed_pair(gallery["mixed_pair"])
+            validate_mixed_pair(
+                gallery["mixed_pair"],
+                None
+                if lifecycle_checkpoint is None
+                else lifecycle_checkpoint["phases"],
+            )
             validate_soul_depth(gallery["soul_depth"])
         capture_view = require_object(
             status["capture_view"],
@@ -519,13 +555,18 @@ def validate_probe_status(
             },
         )
         native.require(
-            capture_view["focus"] == "subject"
+            capture_view["focus"]
+            == ("lifecycle_pair" if lifecycle_checkpoint is not None else "subject")
             and type(capture_view["hidden_ui_roots"]) is int
             and capture_view["hidden_ui_roots"] > 0
             and capture_view["visible_ui_roots"] == 0
             and capture_view["hidden_connector_visuals"] == (768 if formwork else 192)
             and capture_view["visible_connector_visuals"] == 0,
             "Wall candidate capture view differs",
+        )
+    if lifecycle_checkpoint is not None:
+        validate_lifecycle_evidence(
+            status["lifecycle"], lifecycle_checkpoint, expected_generation - 1
         )
     probe_fields = {"viewport_center", "roi", "world_position"}
     if zoom == "farthest":
@@ -573,16 +614,75 @@ def validate_probe_status(
     return status
 
 
-def validate_mixed_pair(value: Any) -> None:
+def validate_mixed_pair(
+    value: Any, phases: tuple[str, str] | None = None
+) -> None:
     native.require(
         isinstance(value, list) and len(value) == 2,
         "Wall mixed gallery pair must contain exactly two members",
     )
+    phases = phases or ("provisional", "completed")
     expected = (
-        {"grid": [20, 15], "phase": "provisional", "mask": "0001", "family": "end", "quarter_turns_y": 3},
-        {"grid": [21, 15], "phase": "completed", "mask": "0010", "family": "end", "quarter_turns_y": 1},
+        {"grid": [20, 15], "phase": phases[0], "mask": "0001", "family": "end", "quarter_turns_y": 3},
+        {"grid": [21, 15], "phase": phases[1], "mask": "0010", "family": "end", "quarter_turns_y": 1},
     )
     native.require(tuple(value) == expected, "Wall mixed gallery pair differs")
+
+
+def validate_lifecycle_evidence(
+    value: Any, checkpoint: dict[str, Any], checkpoint_index: int
+) -> tuple[tuple[int, int], ...]:
+    lifecycle = require_object(
+        value,
+        "Wall lifecycle evidence",
+        {"checkpoint_index", "checkpoint_count", "pair"},
+    )
+    native.require(
+        lifecycle["checkpoint_index"] == checkpoint_index
+        and lifecycle["checkpoint_count"] == len(LIFECYCLE_CHECKPOINTS),
+        "Wall lifecycle checkpoint index differs",
+    )
+    pair = lifecycle["pair"]
+    native.require(
+        isinstance(pair, list) and len(pair) == 2,
+        "Wall lifecycle pair must contain exactly two members",
+    )
+    identities: list[tuple[int, int]] = []
+    for index, record_value in enumerate(pair):
+        record = require_object(
+            record_value,
+            "Wall lifecycle member",
+            {
+                "owner_entity",
+                "visual_entity",
+                "grid",
+                "phase",
+                "presentation",
+                "mesh_role",
+                "material_role",
+            },
+        )
+        phase = checkpoint["phases"][index]
+        native.require(
+            type(record["owner_entity"]) is int
+            and record["owner_entity"] > 0
+            and type(record["visual_entity"]) is int
+            and record["visual_entity"] > 0
+            and record["grid"] == ([20, 15] if index == 0 else [21, 15])
+            and record["phase"] == phase
+            and record["presentation"] == "production"
+            and record["mesh_role"]
+            == ("formwork:end" if phase == "provisional" else "completed:end")
+            and record["material_role"]
+            == ("provisional" if phase == "provisional" else "complete"),
+            "Wall lifecycle member differs",
+        )
+        identities.append((record["owner_entity"], record["visual_entity"]))
+    native.require(
+        len(set(identities)) == 2,
+        "Wall lifecycle owner/visual identities are not distinct",
+    )
+    return tuple(identities)
 
 
 def validate_soul_depth(value: Any) -> None:
@@ -929,6 +1029,7 @@ def run_calibration(
     zoom: str = "standard",
     authority: str = "isolated_candidate",
     formwork: bool = False,
+    lifecycle: bool = False,
     job_file: Path | None = None,
 ) -> dict[str, Any]:
     job_file = job_file or root / "job.json"
@@ -963,17 +1064,19 @@ def run_calibration(
             )
             if candidate["authority"] == "art_preview":
                 environment["HW_WALL_ART_PREVIEW"] = "1"
-    if matrix_mode:
+    if matrix_mode or lifecycle:
         environment["HW_WALL_ART_MATRIX"] = "1"
     if formwork:
         environment["HW_WALL_FORMWORK_ACCEPTANCE"] = "1"
+    if lifecycle:
+        environment["HW_WALL_FORMWORK_LIFECYCLE"] = "1"
     if zoom != "standard":
         environment["HW_WALL_ART_ZOOM"] = zoom
     command = calibration_command(
         repo,
         root,
         adapter,
-        matrix_mode=matrix_mode,
+        matrix_mode=matrix_mode or lifecycle,
         quality=quality,
         scale_factor=scale_factor,
         zoom=zoom,
@@ -985,8 +1088,11 @@ def run_calibration(
     state.setdefault("commands", []).append({"stage": "capture", "argv": command})
     native.atomic_write_json(job_file, state)
     deadline = time.monotonic() + RUN_TIMEOUT_SECONDS
-    captured_status: dict[str, Any] | None = None
-    screenshot_evidence: dict[str, Any] | None = None
+    captured_statuses: list[dict[str, Any]] = []
+    screenshot_evidence: list[dict[str, Any]] = []
+    checkpoints: tuple[dict[str, Any] | None, ...] = (
+        tuple(LIFECYCLE_CHECKPOINTS) if lifecycle else (None,)
+    )
     log_path = root / "capture.log"
     with log_path.open("w", encoding="utf-8") as log:
         process = subprocess.Popen(
@@ -1006,13 +1112,27 @@ def run_calibration(
                 if (
                     status_path.is_file()
                     and not status_path.is_symlink()
-                    and captured_status is None
+                    and len(captured_statuses) < len(checkpoints)
                 ):
                     value = native.read_json(status_path)
                     if isinstance(value, dict) and value.get("status") == "failed":
                         raise native.AcceptanceError(
                             f"Wall production probe failed: {value.get('reason')}"
                         )
+                    checkpoint = checkpoints[len(captured_statuses)]
+                    if checkpoint is not None and (
+                        value.get("phase") != checkpoint["phase"]
+                        or value.get("generation") != checkpoint["generation"]
+                    ):
+                        if time.monotonic() >= deadline:
+                            native.stop_command_process(process)
+                            raise native.AcceptanceError(
+                                "Wall lifecycle checkpoint timed out"
+                            )
+                        state["heartbeat_at"] = native.utc_now()
+                        native.atomic_write_json(job_file, state)
+                        time.sleep(POLL_SECONDS)
+                        continue
                     status = validate_probe_status(
                         value,
                         nonce=nonce,
@@ -1022,17 +1142,23 @@ def run_calibration(
                         zoom=zoom,
                         art_preview=authority == "art_preview",
                         formwork=formwork,
+                        lifecycle_checkpoint=checkpoint,
+                    )
+                    destination = (
+                        root / f"{checkpoint['phase']}.png"
+                        if checkpoint is not None
+                        else screenshot
                     )
                     evidence = capture_client_window(
-                        screenshot,
+                        destination,
                         root_pid=process.pid,
                         status=status,
                         zoom=zoom,
                     )
                     if evidence is not None:
                         native.atomic_write_json(ack_path, acknowledgement(status))
-                        captured_status = status
-                        screenshot_evidence = evidence
+                        captured_statuses.append(status)
+                        screenshot_evidence.append(evidence)
                 if time.monotonic() >= deadline:
                     native.stop_command_process(process)
                     raise native.AcceptanceError("Wall calibration capture timed out")
@@ -1048,7 +1174,8 @@ def run_calibration(
         returncode == 0, f"Wall calibration process exited with {returncode}"
     )
     native.require(
-        captured_status is not None and screenshot_evidence is not None,
+        len(captured_statuses) == len(checkpoints)
+        and len(screenshot_evidence) == len(checkpoints),
         "Wall calibration PNG was not captured",
     )
     state["child_pid"] = None
@@ -1069,21 +1196,43 @@ def run_calibration(
     )
     native.require(
         performance["fixture"]["layout_checksum"]
-        == captured_status["fixture"]["layout_checksum"],
+        == captured_statuses[-1]["fixture"]["layout_checksum"],
         "Wall PNG fixture checksum differs from raw performance evidence",
     )
+    if lifecycle:
+        identities = [
+            validate_lifecycle_evidence(status["lifecycle"], checkpoint, index)
+            for index, (status, checkpoint) in enumerate(
+                zip(captured_statuses, LIFECYCLE_CHECKPOINTS, strict=True)
+            )
+        ]
+        native.require(
+            all(identity == identities[0] for identity in identities[1:]),
+            "Wall lifecycle replaced an owner or visual entity",
+        )
     observation = {
         "schema_version": SCHEMA_VERSION,
         "status": "pass",
-        "profile": profile_name(candidate_mode, matrix_mode, zoom, authority, formwork),
+        "profile": profile_name(
+            candidate_mode, matrix_mode, zoom, authority, formwork, lifecycle
+        ),
         "evidence_kind": "art_preview" if authority == "art_preview" else "formal",
         "formwork": formwork,
+        "lifecycle": lifecycle,
         "candidate": candidate_mode,
         "candidate_identity": candidate,
         "quality": quality,
         "scale_factor": scale_factor,
-        "probe_status": captured_status,
-        "screenshot": screenshot_evidence,
+        "probe_status": captured_statuses[-1],
+        "screenshot": screenshot_evidence[-1],
+        "storyboard": [
+            {"probe_status": status, "screenshot": evidence}
+            for status, evidence in zip(
+                captured_statuses, screenshot_evidence, strict=True
+            )
+        ]
+        if lifecycle
+        else None,
         "performance": performance,
     }
     native.atomic_write_json(root / "observation.json", observation)
@@ -1103,26 +1252,80 @@ def verify_observation(
     scale_factor: float,
     authority: str,
     formwork: bool,
+    lifecycle: bool,
 ) -> dict[str, Any]:
     observation = native.read_json(root / "observation.json")
-    status = validate_probe_status(
-        observation.get("probe_status"),
-        nonce=observation["probe_status"]["session_nonce"],
-        candidate=candidate_mode,
-        quality=quality,
-        scale_factor=scale_factor,
-        zoom=zoom,
-        art_preview=authority == "art_preview",
-        formwork=formwork,
+    storyboard = observation.get("storyboard")
+    entries = storyboard if lifecycle else [
+        {
+            "probe_status": observation.get("probe_status"),
+            "screenshot": observation.get("screenshot"),
+        }
+    ]
+    native.require(
+        isinstance(entries, list)
+        and len(entries) == (len(LIFECYCLE_CHECKPOINTS) if lifecycle else 1),
+        "Wall storyboard contract differs",
     )
+    statuses: list[dict[str, Any]] = []
+    identities: list[tuple[tuple[int, int], ...]] = []
+    for index, entry in enumerate(entries):
+        checkpoint = LIFECYCLE_CHECKPOINTS[index] if lifecycle else None
+        status_value = entry.get("probe_status")
+        status = validate_probe_status(
+            status_value,
+            nonce=status_value["session_nonce"],
+            candidate=candidate_mode,
+            quality=quality,
+            scale_factor=scale_factor,
+            zoom=zoom,
+            art_preview=authority == "art_preview",
+            formwork=formwork,
+            lifecycle_checkpoint=checkpoint,
+        )
+        statuses.append(status)
+        if checkpoint is not None:
+            identities.append(
+                validate_lifecycle_evidence(status["lifecycle"], checkpoint, index)
+            )
+        screenshot = entry.get("screenshot")
+        expected_file = (
+            f"{checkpoint['phase']}.png" if checkpoint is not None else SCREENSHOT
+        )
+        native.require(
+            isinstance(screenshot, dict) and screenshot.get("file") == expected_file,
+            "Wall screenshot evidence differs",
+        )
+        image_path = root / expected_file
+        image = read_image(image_path)
+        native.require(
+            sha256(image_path) == screenshot.get("sha256"),
+            "Wall screenshot hash differs",
+        )
+        recalculated = image_evidence(image, status)
+        if zoom == "farthest":
+            recalculated["straight_run"] = straight_run_evidence(image, status)
+        for field, value in recalculated.items():
+            native.require(
+                screenshot.get(field) == value, f"Wall screenshot {field} differs"
+            )
+    if lifecycle:
+        native.require(
+            all(identity == identities[0] for identity in identities[1:]),
+            "Wall lifecycle owner/visual identity changed",
+        )
+    status = statuses[-1]
     native.require(
         observation.get("profile")
-        == profile_name(candidate_mode, matrix_mode, zoom, authority, formwork)
+        == profile_name(
+            candidate_mode, matrix_mode, zoom, authority, formwork, lifecycle
+        )
         and observation.get("candidate") == candidate_mode
         and observation.get("candidate_identity") == candidate
         and observation.get("evidence_kind")
         == ("art_preview" if authority == "art_preview" else "formal")
         and observation.get("formwork", False) == formwork
+        and observation.get("lifecycle", False) == lifecycle
         and observation.get("quality", "high") == quality
         and observation.get("scale_factor", WINDOW_SCALE_FACTOR) == scale_factor,
         "Wall observation identity differs",
@@ -1134,23 +1337,6 @@ def verify_observation(
             == candidate["asset_set_generation"]
             and status["gallery"]["authority"] == candidate["authority"],
             "Wall runtime candidate identity differs",
-        )
-    screenshot = observation.get("screenshot")
-    native.require(
-        isinstance(screenshot, dict) and screenshot.get("file") == SCREENSHOT,
-        "Wall screenshot evidence differs",
-    )
-    image = read_image(root / SCREENSHOT)
-    native.require(
-        sha256(root / SCREENSHOT) == screenshot.get("sha256"),
-        "Wall screenshot hash differs",
-    )
-    recalculated = image_evidence(image, status)
-    if zoom == "farthest":
-        recalculated["straight_run"] = straight_run_evidence(image, status)
-    for field, value in recalculated.items():
-        native.require(
-            screenshot.get(field) == value, f"Wall screenshot {field} differs"
         )
     performance = verify_performance(
         repo=repo,
@@ -1186,6 +1372,8 @@ def verify_root(root: Path) -> dict[str, Any]:
     authority = manifest.get("authority", "isolated_candidate")
     formwork = manifest.get("formwork", False)
     native.require(type(formwork) is bool, "Wall formwork mode is invalid")
+    lifecycle = manifest.get("lifecycle", False)
+    native.require(type(lifecycle) is bool, "Wall lifecycle mode is invalid")
     native.require(authority in AUTHORITIES, "Wall authority is invalid")
     native.require(
         manifest.get("evidence_kind")
@@ -1195,7 +1383,9 @@ def verify_root(root: Path) -> dict[str, Any]:
     candidate = manifest.get("candidate_identity")
     native.require(
         manifest.get("profile")
-        == profile_name(candidate_mode, matrix_mode, zoom, authority, formwork),
+        == profile_name(
+            candidate_mode, matrix_mode, zoom, authority, formwork, lifecycle
+        ),
         "Wall manifest profile differs",
     )
     native.require(
@@ -1239,7 +1429,7 @@ def verify_root(root: Path) -> dict[str, Any]:
             manifest.get("cases") == specs,
             "Wall matrix case contract differs",
         )
-    screenshot_hashes: dict[str, str] = {}
+    screenshot_hashes: dict[str, Any] = {}
     for spec in specs:
         case_root = root / "cases" / spec["id"] if matrix_mode else root
         observation = verify_observation(
@@ -1254,8 +1444,16 @@ def verify_root(root: Path) -> dict[str, Any]:
             scale_factor=spec["scale_factor"],
             authority=authority,
             formwork=formwork,
+            lifecycle=lifecycle,
         )
-        screenshot_hashes[spec["id"]] = observation["screenshot"]["sha256"]
+        screenshot_hashes[spec["id"]] = (
+            {
+                entry["probe_status"]["phase"]: entry["screenshot"]["sha256"]
+                for entry in observation["storyboard"]
+            }
+            if lifecycle
+            else observation["screenshot"]["sha256"]
+        )
     if matrix_mode:
         native.require(
             manifest.get("screenshot_sha256") == screenshot_hashes,
@@ -1269,14 +1467,17 @@ def verify_root(root: Path) -> dict[str, Any]:
     return {
         "schema_version": SCHEMA_VERSION,
         "status": "pass",
-        "profile": profile_name(candidate_mode, matrix_mode, zoom, authority, formwork),
+        "profile": profile_name(
+            candidate_mode, matrix_mode, zoom, authority, formwork, lifecycle
+        ),
         "candidate": candidate_mode,
         "formwork": formwork,
+        "lifecycle": lifecycle,
         "zoom": zoom,
         "authority": authority,
         "evidence_kind": "art_preview" if authority == "art_preview" else "formal",
         "root": str(root),
-        "screenshots": len(specs),
+        "screenshots": len(LIFECYCLE_CHECKPOINTS) if lifecycle else len(specs),
     }
 
 
@@ -1300,8 +1501,14 @@ def plan(args: argparse.Namespace) -> int:
         failures.append("Wall art preview requires --candidate")
     if args.art_preview and (args.matrix or args.release or args.zoom != "standard"):
         failures.append("Wall art preview is one standard-zoom non-release run")
-    if args.formwork and not (args.candidate and args.matrix):
-        failures.append("Wall formwork acceptance is a candidate matrix")
+    if args.lifecycle and not (args.candidate and args.formwork):
+        failures.append("Wall lifecycle requires candidate formwork mode")
+    if args.lifecycle and (args.matrix or args.zoom != "standard"):
+        failures.append("Wall lifecycle is one standard-zoom process")
+    if args.formwork and not (
+        args.candidate and (args.matrix or args.lifecycle)
+    ):
+        failures.append("Wall formwork acceptance is a candidate matrix or lifecycle")
     if args.formwork and (args.art_preview or args.release):
         failures.append("Wall formwork acceptance is neither preview nor release")
     if args.matrix and not args.candidate:
@@ -1376,18 +1583,26 @@ def plan(args: argparse.Namespace) -> int:
         command.append("--art-preview")
     if args.formwork:
         command.append("--formwork")
+    if args.lifecycle:
+        command.append("--lifecycle")
     native.print_json(
         {
             "schema_version": SCHEMA_VERSION,
             "status": "ready" if not failures else "blocked",
             "profile": profile_name(
-                args.candidate, args.matrix, args.zoom, authority, args.formwork
+                args.candidate,
+                args.matrix,
+                args.zoom,
+                authority,
+                args.formwork,
+                args.lifecycle,
             ),
             "candidate": args.candidate,
             "matrix": args.matrix,
             "zoom": args.zoom,
             "authority": authority,
             "formwork": args.formwork,
+            "lifecycle": args.lifecycle,
             "candidate_identity": candidate,
             "job_root": str(root),
             "subject_commit": subject,
@@ -1415,7 +1630,13 @@ def plan(args: argparse.Namespace) -> int:
             "execution_contract": {
                 "actual_window_required": True,
                 "capture_scope": native.SAVE_CATALOG_CAPTURE_SCOPE,
-                "screenshots": len(matrix_cases()) if args.matrix else 1,
+                "screenshots": (
+                    len(LIFECYCLE_CHECKPOINTS)
+                    if args.lifecycle
+                    else len(matrix_cases())
+                    if args.matrix
+                    else 1
+                ),
                 "cases": matrix_cases() if args.matrix else None,
             },
         }
@@ -1462,11 +1683,21 @@ def run(args: argparse.Namespace) -> int:
         not args.formwork
         or (
             args.candidate
-            and args.matrix
+            and (args.matrix or args.lifecycle)
             and not args.art_preview
             and not args.release
         ),
-        "Wall formwork acceptance is an isolated candidate matrix",
+        "Wall formwork acceptance is an isolated candidate matrix or lifecycle",
+    )
+    native.require(
+        not args.lifecycle
+        or (
+            args.candidate
+            and args.formwork
+            and not args.matrix
+            and args.zoom == "standard"
+        ),
+        "Wall lifecycle is one standard isolated-candidate formwork process",
     )
     native.require(
         not args.release or (args.candidate and args.matrix),
@@ -1500,13 +1731,19 @@ def run(args: argparse.Namespace) -> int:
         "schema_version": SCHEMA_VERSION,
         "status": "running",
         "profile": profile_name(
-            args.candidate, args.matrix, args.zoom, authority, args.formwork
+            args.candidate,
+            args.matrix,
+            args.zoom,
+            authority,
+            args.formwork,
+            args.lifecycle,
         ),
         "candidate": args.candidate,
         "matrix": args.matrix,
         "zoom": args.zoom,
         "authority": authority,
         "formwork": args.formwork,
+        "lifecycle": args.lifecycle,
         "evidence_kind": "art_preview" if args.art_preview else "formal",
         "candidate_identity": candidate,
         "subject_commit": args.subject_commit,
@@ -1566,6 +1803,7 @@ def run(args: argparse.Namespace) -> int:
                 zoom=args.zoom,
                 authority=authority,
                 formwork=args.formwork,
+                lifecycle=args.lifecycle,
                 job_file=root / "job.json",
             )
             state["cases_completed"] = index + 1
@@ -1574,13 +1812,19 @@ def run(args: argparse.Namespace) -> int:
             "schema_version": SCHEMA_VERSION,
             "status": "pass",
             "profile": profile_name(
-                args.candidate, args.matrix, args.zoom, authority, args.formwork
+                args.candidate,
+                args.matrix,
+                args.zoom,
+                authority,
+                args.formwork,
+                args.lifecycle,
             ),
             "candidate": args.candidate,
             "matrix": args.matrix,
             "zoom": args.zoom,
             "authority": authority,
             "formwork": args.formwork,
+            "lifecycle": args.lifecycle,
             "evidence_kind": "art_preview" if args.art_preview else "formal",
             "candidate_identity": candidate,
             "repo": str(repo),
@@ -1596,6 +1840,11 @@ def run(args: argparse.Namespace) -> int:
                     for spec in specs
                 }
                 if args.matrix
+                else {
+                    entry["probe_status"]["phase"]: entry["screenshot"]["sha256"]
+                    for entry in observations["single"]["storyboard"]
+                }
+                if args.lifecycle
                 else observations["single"]["screenshot"]["sha256"]
             ),
             "cases": specs if args.matrix else None,
@@ -1712,6 +1961,65 @@ def self_test() -> int:
         == FORMWORK_FARTHEST_PROFILE,
         "Wall formwork profile differs",
     )
+    native.require(
+        profile_name(
+            True, False, "standard", "isolated_candidate", True, True
+        )
+        == FORMWORK_LIFECYCLE_PROFILE,
+        "Wall lifecycle profile differs",
+    )
+    lifecycle_identity: tuple[tuple[int, int], ...] | None = None
+    for index, checkpoint in enumerate(LIFECYCLE_CHECKPOINTS):
+        phases = checkpoint["phases"]
+        identity = validate_lifecycle_evidence(
+            {
+                "checkpoint_index": index,
+                "checkpoint_count": len(LIFECYCLE_CHECKPOINTS),
+                "pair": [
+                    {
+                        "owner_entity": 101,
+                        "visual_entity": 201,
+                        "grid": [20, 15],
+                        "phase": phases[0],
+                        "presentation": "production",
+                        "mesh_role": (
+                            "formwork:end"
+                            if phases[0] == "provisional"
+                            else "completed:end"
+                        ),
+                        "material_role": (
+                            "provisional"
+                            if phases[0] == "provisional"
+                            else "complete"
+                        ),
+                    },
+                    {
+                        "owner_entity": 102,
+                        "visual_entity": 202,
+                        "grid": [21, 15],
+                        "phase": phases[1],
+                        "presentation": "production",
+                        "mesh_role": (
+                            "formwork:end"
+                            if phases[1] == "provisional"
+                            else "completed:end"
+                        ),
+                        "material_role": (
+                            "provisional"
+                            if phases[1] == "provisional"
+                            else "complete"
+                        ),
+                    },
+                ],
+            },
+            checkpoint,
+            index,
+        )
+        lifecycle_identity = lifecycle_identity or identity
+        native.require(
+            identity == lifecycle_identity,
+            "Wall lifecycle self-test identity changed",
+        )
     for candidate_mode, matrix, zoom in ((False, False, "standard"), (True, True, "farthest")):
         try:
             profile_name(candidate_mode, matrix, zoom, "release_approved")
@@ -1968,6 +2276,7 @@ def self_test() -> int:
                 ART_PREVIEW_PROFILE,
                 FORMWORK_MATRIX_PROFILE,
                 FORMWORK_FARTHEST_PROFILE,
+                FORMWORK_LIFECYCLE_PROFILE,
             ],
         }
     )
@@ -1987,6 +2296,7 @@ def parser() -> argparse.ArgumentParser:
     plan_parser.add_argument("--release", action="store_true")
     plan_parser.add_argument("--art-preview", action="store_true")
     plan_parser.add_argument("--formwork", action="store_true")
+    plan_parser.add_argument("--lifecycle", action="store_true")
     run_parser = commands.add_parser("run")
     for name in (
         "repo",
@@ -2004,6 +2314,7 @@ def parser() -> argparse.ArgumentParser:
     run_parser.add_argument("--release", action="store_true")
     run_parser.add_argument("--art-preview", action="store_true")
     run_parser.add_argument("--formwork", action="store_true")
+    run_parser.add_argument("--lifecycle", action="store_true")
     run_parser.add_argument("--candidate-generation")
     run_parser.add_argument("--candidate-manifest-sha256")
     for name in ("status", "verify"):

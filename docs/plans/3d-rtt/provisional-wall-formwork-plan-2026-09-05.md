@@ -465,7 +465,7 @@ Update required / 理由付きNo impactをその時点で判断する。
 ### 現在地
 
 - 進捗: M1/W2の中核を実装。schema v3候補、runtime wallset v2、6 family GLB、Opaque木材albedo、tile単位mesh/material切替、ArtPreview authorityが動作する。M3aはgeneration 5の技術候補とゲーム所有window PNGに対してユーザー承認済み。generation 8の正式画像18/18、generation 10のCapture 18/18とMemory 6/6、および各独立verifyが合格した。通常releaseはgeneration 4のまま。
-- W-L01中核: 2 tileを仮設2→仮設1/本設1→本設2へ遷移させ、phase別mesh/materialとowner / visual Entityの同一性、visual root非増殖をproduction回帰テストで固定した。native storyboardの採取は未完。
+- W-L01中核: 2 tileを仮設2→仮設1/本設1→本設2へ遷移させ、phase別mesh/materialとowner / visual Entityの同一性、visual root非増殖をproduction回帰テストで固定した。承認済みcandidateの同じ2 tile pairを3 nonce/ACK checkpointで進める`wall-formwork-lifecycle-v1`も実装し、owner / visual ID、mesh/material role、3 PNGを同一processへ結ぶ。clean subjectでのnative storyboard採取は未完。
 - W-L02中核: site Coatは同じowner / visual Entityのまま仮設material→本設materialへ遷移し、legacy Coatは`Entity::PLACEHOLDER`分岐のtask producerが既存Wall rootを保持したまま`Building.is_provisional`をfalseへ変え、次のDone frameでtaskを完了することを固定した。Instant Buildは最初から本設materialを持つexactly-one visualを生成する。Framing前cancel、仮設後cancel、完成Wall撤去ではconnectorとowner-linked visualが残らないこともproduction回帰テストで確認した。native storyboardは未完。
 - W-L03中核: 仮設1 / 本設1の混在saveをnormal loadで10回反復し、各回のfallback→production復帰、phase保持、owner / visual数、完成6＋型枠6 mesh / 2 material poolの上限を固定した。同じ候補をrollback / recovery-onlyでも検証した。native sidecarの採取は未完。
 - W-A01 / W-A02中核: readinessの`Eligible → LoadFailed → Eligible`で仮設／本設の全Wallが同一Updateにproduction→fallback→productionへ切り替わることと、新→旧→新generationの往復でactive mesh/material handleが世代混在しないことをproduction回帰テストで固定した。欠落assetと世代切替のnative storyboardは未完。
@@ -518,3 +518,4 @@ Update required / 理由付きNo impactをその時点で判断する。
 | `2026-09-08` | `Codex` | W-L02の中核の一部としてsite Coat / Instant Buildのphase別materialとexactly-one visual、Framing前／仮設後cancel・完成Wall撤去後のconnector / owner-linked visual不残存をproduction回帰テストへ追加。legacy Coatとnative storyboardは未完として分離 |
 | `2026-09-08` | `Codex` | legacy Coatの`Entity::PLACEHOLDER` task producerが既存Wall rootを本設化してからDoneを完了する回帰を追加し、W-L02のproduction中核を閉じた。native storyboardは未完として分離 |
 | `2026-09-08` | `Codex` | W-G01用`wall-formwork-gallery-v2`を実装。mixed 4Nの段階別16 mask、画像専用の仮設／本設直接接続pair、12 mesh / 2 material、Soul前後depthを同一statusでfail-closed検証する。旧v1画像は履歴のまま残し、v2実機matrixは未採取 |
+| `2026-09-08` | `Codex` | W-L01用`wall-formwork-lifecycle-v1`を実装。同じ2 tile pairを型枠2→混在→本設2の3 checkpointへ進め、owner / visual Entity不変、phase別mesh/material role、nonce/ACK付き3 PNGを1 processで検証する。native採取はclean commit後に分離 |
