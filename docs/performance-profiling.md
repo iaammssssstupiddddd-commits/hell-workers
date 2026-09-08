@@ -370,6 +370,14 @@ exact-name focused auditした。site Coat、Instant Build、Framing前／木枠
 このauditは各経路のowner存続／削除、phase別presentation、exactly-one visual、connector不残存を閉じる。
 画素証拠への読み替えはせず、木枠→本設の見た目はW-L01のactual-window 3 checkpointが担当する。
 
+W-L03はsubject `c5c525c3`で
+`systems::save::transaction::tests::mixed_wall_presentation_recovers_after_normal_rollback_and_recovery_replacement`
+をexact-name focused auditし、1/1 passした。`Time<Virtual>`をpauseしたまま混在Wall saveを通常load 10回、
+post-write失敗からのrollback、recovery-onlyへ適用し、各経路でpause維持、rehydrate直後のfallback、次の
+`PostUpdate`でproduction復帰、仮設／本設phase、exact visual数、完成6＋型枠6 mesh／2 material pool上限を
+検証した。test binary SHA-256は`7d65eded37b7890f7258f0432c4ce3b35ed05ea381299621f49a2f62d364d30a`。
+これもheadless correctness証拠であり、W-L01 actual-windowの画素証拠を置換しない。
+
 壁M5の同一binary内performance比較は、承認済みcandidateを配置したclean validation worktreeから
 `wall_production_performance_acceptance.py plan --repo "$VALIDATION_WORKTREE" --adapter Intel`で計画する。
 返されたdirect launcherは`fallback-control`と`production`を順番に実行し、completed / provisionalの
