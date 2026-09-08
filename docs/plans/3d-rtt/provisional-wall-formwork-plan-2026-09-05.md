@@ -5,9 +5,9 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `provisional-wall-formwork-plan-2026-09-05` |
-| ステータス | `In Progress — M3b正式画像18/18、Capture 18/18、Memory 6/6合格／lifecycle・J1待ち` |
+| ステータス | `In Progress — M3b正式画像・性能、W-L01〜L02合格／W-L03・asset失敗系・J1待ち` |
 | 作成日 | `2026-09-05` |
-| 最終更新日 | `2026-09-07` |
+| 最終更新日 | `2026-09-08` |
 | 作成者 | `Codex` |
 | 親計画 | [アセット作成マイルストーン](asset-milestones-2026-03-17.md)（Build-Aの仮設表現を追加改修） |
 | 関連計画 | [ドアの本番ビジュアル化](production-door-art-plan-2026-09-05.md)、[完了済み本番壁計画](archived/production-wall-art-plan-2026-08-31.md) |
@@ -461,8 +461,28 @@ candidate manifest / asset-view / source / harness / binary SHA-256は順に
 `96a17443b09a545862f3a951cb2670a966690b83267439d74ed3695c1a218ded`である。2 owner / visual Entity IDは
 全checkpointでそれぞれ`4294964989 / 4294964988`、`4294964987 / 4294964986`のまま変わらず、
 phase別mesh/material roleだけが型枠2→型枠1・本設1→本設2へ切り替わった。3画像の目視でも中央pairの
-木枠／石壁の置換を確認した。これによりW-L01のnative表示継続性を閉じるが、W-L02 / W-L03 / W-A01 / W-A02は
+木枠／石壁の置換を確認した。これによりW-L01のnative表示継続性を閉じるが、W-L03 / W-A01 / W-A02は
 引き続き別のfocused audit / storyboardを必要とする。
+
+### 7.7 W-L02 domain lifecycle focused audit
+
+subject `d8fb28b05151a2783c12f7663b056762dcd37339`のclean primary worktreeで、次の本番経路を
+`python3 scripts/dev.py cargo -- test ... -- --exact --nocapture`により個別実行した。各filterは実行対象
+1 test、pass 1、fail 0であり、0 testの成功は受け入れていない。
+
+| 経路 | exact test |
+| --- | --- |
+| site Coat、owner / visual同一性、型枠→本設 | `systems::jobs::wall_construction::phase_transition::tests::two_tile_site_keeps_exact_topology_through_framing_and_completion` |
+| Instant Build、本設exactly-one visual | `plugins::interface_debug::tests::instant_build_completes_a_new_indexed_wall_site` |
+| Framing前／木枠後cancel | `systems::jobs::wall_construction::cancellation::tests::cancellation_removes_pre_and_post_framing_connectors_in_the_same_frame` |
+| 完成壁撤去 | `systems::jobs::deconstruction::tests::wall_commit_removes_the_connector_in_the_same_post_update` |
+| legacy Coat、既存Wall root存続 | `soul_ai::execute::task_execution_system::tests::completion::legacy_coat_promotes_the_existing_wall_root_before_task_completion` |
+
+`bevy_app` test binary SHA-256は
+`cd2b36b507280784d516e40bfd87e4c0d5bf173e95bd66c0de1f34ac26f9c0cd`、`hw_soul_ai`は
+`068440c687aae6c8cea15c72e4550aedbc22b8da44b39eae76506e1cc29ac8ba`である。W-L02は消失を含む
+domain結果をこのauditで、型枠／本設の実画面をW-L01の3 checkpointで分担して閉じる。headless testを
+画素証拠とは扱わず、cancelを一律owner despawnと仮定せずにconnectorとowner-linked visualの最終状態を検証した。
 
 native実行はSkillのdirect `kitty` launcher、repository lock、RAM/disk preflightと逐次buildを使う。
 本計画の新profileには`plan / status / verify / self-test`を実装してから利用し、未実装のcommandを
@@ -487,11 +507,11 @@ Update required / 理由付きNo impactをその時点で判断する。
 
 - 進捗: M1/W2の中核を実装。schema v3候補、runtime wallset v2、6 family GLB、Opaque木材albedo、tile単位mesh/material切替、ArtPreview authorityが動作する。M3aはgeneration 5の技術候補とゲーム所有window PNGに対してユーザー承認済み。generation 8の正式画像18/18、generation 10のCapture 18/18とMemory 6/6、および各独立verifyが合格した。通常releaseはgeneration 4のまま。
 - W-L01完了: 2 tileを仮設2→仮設1/本設1→本設2へ遷移させ、phase別mesh/materialとowner / visual Entityの同一性、visual root非増殖をproduction回帰テストで固定した。`wall-formwork-lifecycle-v1`の1 process / 3 checkpointもvalid・独立verify passで、owner / visual ID不変と3 PNGを§7.6へ記録した。
-- W-L02中核: site Coatは同じowner / visual Entityのまま仮設material→本設materialへ遷移し、legacy Coatは`Entity::PLACEHOLDER`分岐のtask producerが既存Wall rootを保持したまま`Building.is_provisional`をfalseへ変え、次のDone frameでtaskを完了することを固定した。Instant Buildは最初から本設materialを持つexactly-one visualを生成する。Framing前cancel、仮設後cancel、完成Wall撤去ではconnectorとowner-linked visualが残らないこともproduction回帰テストで確認した。native storyboardは未完。
+- W-L02完了: site Coatは同じowner / visual Entityのまま仮設material→本設materialへ遷移し、legacy Coatは`Entity::PLACEHOLDER`分岐のtask producerが既存Wall rootを保持したまま`Building.is_provisional`をfalseへ変え、次のDone frameでtaskを完了することを固定した。Instant Buildは最初から本設materialを持つexactly-one visualを生成する。Framing前cancel、仮設後cancel、完成Wall撤去ではconnectorとowner-linked visualが残らない。subject `d8fb28b0`のexact focused audit 5/5 passとW-L01 actual-window証拠の分担を§7.7に記録した。
 - W-L03中核: 仮設1 / 本設1の混在saveをnormal loadで10回反復し、各回のfallback→production復帰、phase保持、owner / visual数、完成6＋型枠6 mesh / 2 material poolの上限を固定した。同じ候補をrollback / recovery-onlyでも検証した。native sidecarの採取は未完。
 - W-A01 / W-A02中核: readinessの`Eligible → LoadFailed → Eligible`で仮設／本設の全Wallが同一Updateにproduction→fallback→productionへ切り替わることと、新→旧→新generationの往復でactive mesh/material handleが世代混在しないことをproduction回帰テストで固定した。欠落assetと世代切替のnative storyboardは未完。
 - W-G01: 凍結済みmixed 4Nの仮設192／本設192、画像専用E-W直接接続pair、完成6＋型枠6 mesh、段階別2 material、Soul 2体のfront / behind camera depthを同一galleryへ固定した。subject `99362a37`の標準／最大zoom-out正式matrixは18/18 validで、両独立verifyと代表画像目視も完了した。旧v1証跡は再ラベルしていない。
-- 次の作業: W-L02〜L03 / W-A01〜A02のfocused audit / 実機storyboardを実装・採取する。Door側の単独gate後にJ1、M4へ進み、production回帰テストだけを実機合格へ読み替えない。
+- 次の作業: W-L03 / W-A01〜A02のfocused audit / 実機storyboardを実装・採取する。Door側の単独gate後にJ1、M4へ進み、production回帰テストだけを実機合格へ読み替えない。
 - ドアはM0の共通port確定後に制作を並行可能。Rust・tooling編集はmain agentが順に行い、joint受入は両方のruntime接続後。
 - 240 triangles・core 15 file・§7の予算は採用した新設計値。現在のreleaseの実測・アート承認値として扱わない。
 
@@ -541,3 +561,4 @@ Update required / 理由付きNo impactをその時点で判断する。
 | `2026-09-08` | `Codex` | W-G01用`wall-formwork-gallery-v2`を実装。mixed 4Nの段階別16 mask、画像専用の仮設／本設直接接続pair、12 mesh / 2 material、Soul前後depthを同一statusでfail-closed検証する。旧v1画像は履歴のまま残し、v2実機matrixは未採取 |
 | `2026-09-08` | `Codex` | W-L01用`wall-formwork-lifecycle-v1`を実装。同じ2 tile pairを型枠2→混在→本設2の3 checkpointへ進め、owner / visual Entity不変、phase別mesh/material role、nonce/ACK付き3 PNGを1 processで検証する。native採取はclean commit後に分離 |
 | `2026-09-08` | `Codex` | subject `9746f3b0`でW-L01 lifecycleを正式採取。1 process / 3 checkpointがvalid・独立verify passとなり、同じowner / visual IDのまま型枠2→混在→本設2へ切り替わる3 PNGを§7.6へ封印 |
+| `2026-09-08` | `Codex` | subject `d8fb28b0`でW-L02の本番経路5件をexact focused auditし5/5 pass。site / legacy Coat、Instant Build、Framing前／木枠後cancel、完成壁撤去をW-L01実画面証拠と分担して閉じた |

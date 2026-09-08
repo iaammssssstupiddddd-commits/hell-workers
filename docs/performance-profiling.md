@@ -362,6 +362,14 @@ manifest SHA-256は`8753e6e9f830efb178de549269ee77cc09e08c530ec4b2f2a50e5ac60a65
 2組のowner / visual Entity IDは全phaseで不変で、中央pairが型枠2→混在→本設2へ変わることをstatusと画像の
 両方で確認した。このjobはW-L02 / W-L03 / W-A01 / W-A02の代用にはしない。
 
+W-L02は、上記W-L01の実画面証拠に対し、subject `d8fb28b0`のclean primary worktreeで本番経路を
+exact-name focused auditした。site Coat、Instant Build、Framing前／木枠後cancel、完成壁撤去の
+`bevy_app` 4 testとlegacy Coatの`hw_soul_ai` 1 testはすべて1/1 passした。テストbinary SHA-256は
+`bevy_app`が`cd2b36b507280784d516e40bfd87e4c0d5bf173e95bd66c0de1f34ac26f9c0cd`、
+`hw_soul_ai`が`068440c687aae6c8cea15c72e4550aedbc22b8da44b39eae76506e1cc29ac8ba`である。
+このauditは各経路のowner存続／削除、phase別presentation、exactly-one visual、connector不残存を閉じる。
+画素証拠への読み替えはせず、木枠→本設の見た目はW-L01のactual-window 3 checkpointが担当する。
+
 壁M5の同一binary内performance比較は、承認済みcandidateを配置したclean validation worktreeから
 `wall_production_performance_acceptance.py plan --repo "$VALIDATION_WORKTREE" --adapter Intel`で計画する。
 返されたdirect launcherは`fallback-control`と`production`を順番に実行し、completed / provisionalの
