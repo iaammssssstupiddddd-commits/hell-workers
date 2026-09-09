@@ -61,7 +61,9 @@ class RustAnalyzerMcpStdioAdapterTests(unittest.TestCase):
             {
                 "HELL_WORKERS_RA_MCP_RUNTIME_DIR": str(self.root / "runtime"),
                 "HELL_WORKERS_RA_MCP_BACKEND_IDLE_SECONDS": "0.25",
-                "HELL_WORKERS_RA_MCP_DAEMON_IDLE_SECONDS": "0.25",
+                # Keep the backend restart fast while leaving enough startup
+                # time for both proxy processes to register with the daemon.
+                "HELL_WORKERS_RA_MCP_DAEMON_IDLE_SECONDS": "1.0",
                 "FAKE_MCP_COUNTER": str(self.counter),
             }
         )
