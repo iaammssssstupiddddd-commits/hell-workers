@@ -261,9 +261,9 @@ pub fn apply_wall_presentation_system(
 #[cfg(test)]
 mod tests {
     use std::collections::HashSet;
+    use std::sync::Arc;
     use std::time::Duration;
 
-    use bevy::asset::uuid::Uuid;
     use bevy::transform::{TransformPlugin, TransformSystems};
     use hw_core::visual_mirror::building::{BuildingTypeVisual, BuildingVisualState};
     use hw_visual::blueprint::{BuildingBounceEffect, building_bounce_animation_system};
@@ -411,8 +411,11 @@ mod tests {
         app.add_systems(Update, apply_wall_presentation_system);
     }
 
-    fn uuid_handle<T: Asset>(value: u128) -> Handle<T> {
-        Uuid::from_u128(value).into()
+    fn assert_only_local_strong_reference<T: Asset>(handle: &Handle<T>) {
+        let Handle::Strong(handle) = handle else {
+            panic!("generation lifetime audit requires a strong asset handle");
+        };
+        assert_eq!(Arc::strong_count(handle), 1);
     }
 
     #[test]
@@ -614,7 +617,7 @@ mod tests {
     }
 
     #[test]
-    fn asset_failure_and_recovery_switch_every_wall_atomically() {
+    fn asset_delay_failure_and_recovery_switch_every_wall_atomically() {
         let mut fixture = make_fixture(add_production_topology_chain);
         let provisional_owner = fixture
             .app
@@ -674,6 +677,45 @@ mod tests {
         {
             let mut readiness = fixture.app.world_mut().resource_mut::<WallAssetReadiness>();
             readiness.activation_revision += 1;
+            readiness.state = WallAssetReadinessState::Loading;
+        }
+        fixture.app.update();
+
+        assert_eq!(
+            fixture
+                .app
+                .world()
+                .resource::<WallProductionActivation>()
+                .state,
+            WallProductionActivationState::Fallback(WallProductionFallbackReason::Loading)
+        );
+        assert_eq!(
+            fixture
+                .app
+                .world()
+                .resource::<WallProductionActivation>()
+                .decision_revision,
+            ready_revision + 1
+        );
+        for visual in [fixture.visual, provisional_visual] {
+            assert_eq!(
+                fixture.app.world().get::<Mesh3d>(visual).unwrap().0,
+                fixture.fallback_mesh
+            );
+            assert_eq!(
+                fixture
+                    .app
+                    .world()
+                    .get::<Wall3dPresentationState>(visual)
+                    .unwrap()
+                    .mode,
+                Wall3dPresentationMode::Fallback
+            );
+        }
+
+        {
+            let mut readiness = fixture.app.world_mut().resource_mut::<WallAssetReadiness>();
+            readiness.activation_revision += 1;
             readiness.state =
                 WallAssetReadinessState::Fallback(WallAssetFallbackReason::LoadFailed);
         }
@@ -693,7 +735,7 @@ mod tests {
                 .world()
                 .resource::<WallProductionActivation>()
                 .decision_revision,
-            ready_revision + 1
+            ready_revision + 2
         );
         for visual in [fixture.visual, provisional_visual] {
             assert_eq!(
@@ -806,10 +848,17 @@ mod tests {
             authority: WallAssetAuthority::IsolatedCandidate,
             manifest_sha256: "next-presentation-test-manifest".to_string(),
         };
-        let next_completed = std::array::from_fn(|index| uuid_handle(100 + index as u128));
-        let next_formwork = std::array::from_fn(|index| uuid_handle(200 + index as u128));
-        let next_complete_material = uuid_handle(300);
-        let next_provisional_material = uuid_handle(301);
+        let mut next_mesh_assets = Assets::<Mesh>::default();
+        let next_completed = std::array::from_fn(|index| {
+            next_mesh_assets.add(Cuboid::new(20.0 + index as f32, 32.0, 32.0))
+        });
+        let next_formwork = std::array::from_fn(|index| {
+            next_mesh_assets.add(Cuboid::new(10.0 + index as f32, 32.0, 32.0))
+        });
+        let mut next_material_assets = Assets::<TopDownStructuralMaterial>::default();
+        let next_complete_material = next_material_assets.add(TopDownStructuralMaterial::default());
+        let next_provisional_material =
+            next_material_assets.add(TopDownStructuralMaterial::default());
 
         let set_generation =
             |app: &mut App,
@@ -885,6 +934,15 @@ mod tests {
                 .0,
             next_complete_material
         );
+        for handle in fixture
+            .production_meshes
+            .iter()
+            .chain(&fixture.formwork_meshes)
+        {
+            assert_only_local_strong_reference(handle);
+        }
+        assert_only_local_strong_reference(&fixture.complete_material);
+        assert_only_local_strong_reference(&fixture.provisional_material);
 
         set_generation(
             &mut fixture.app,
@@ -926,6 +984,11 @@ mod tests {
                 .0,
             fixture.complete_material
         );
+        for handle in next_completed.iter().chain(&next_formwork) {
+            assert_only_local_strong_reference(handle);
+        }
+        assert_only_local_strong_reference(&next_complete_material);
+        assert_only_local_strong_reference(&next_provisional_material);
 
         set_generation(
             &mut fixture.app,
@@ -987,6 +1050,15 @@ mod tests {
             active_materials.provisional.as_ref(),
             Some(&next_provisional_material)
         );
+        for handle in fixture
+            .production_meshes
+            .iter()
+            .chain(&fixture.formwork_meshes)
+        {
+            assert_only_local_strong_reference(handle);
+        }
+        assert_only_local_strong_reference(&fixture.complete_material);
+        assert_only_local_strong_reference(&fixture.provisional_material);
     }
 
     #[test]
@@ -1533,8 +1605,42 @@ mod tests {
     }
 
     #[test]
-    fn identity_mismatch_fails_closed_and_world_reset_is_idempotent() {
+    fn identity_mismatch_fails_every_wall_closed_and_world_reset_is_idempotent() {
         let mut fixture = make_fixture(add_apply_to_update);
+        let provisional_owner = fixture
+            .app
+            .world_mut()
+            .spawn((
+                Building {
+                    kind: BuildingType::Wall,
+                    is_provisional: true,
+                },
+                Transform::from_xyz(160.0, 64.0, 0.0),
+                WallTopologyState {
+                    grid: (5, 2),
+                    mask: WallConnectionMask::from_neighbors(false, false, false, true),
+                    resolved: ResolvedWallTopology {
+                        family: WallMeshFamily::End,
+                        quarter_turns_y: QuarterTurns::THREE,
+                    },
+                    revision: 1,
+                },
+            ))
+            .id();
+        let provisional_visual = fixture
+            .app
+            .world_mut()
+            .spawn((
+                Building3dVisual {
+                    owner: provisional_owner,
+                },
+                Wall3dPresentationState::default(),
+                Mesh3d(fixture.fallback_mesh.clone()),
+                MeshMaterial3d(fixture.complete_material.clone()),
+                Transform::default(),
+                MeshTag(0),
+            ))
+            .id();
         fixture
             .app
             .world_mut()
@@ -1545,10 +1651,57 @@ mod tests {
         });
 
         fixture.app.update();
+        for visual in [fixture.visual, provisional_visual] {
+            assert_eq!(
+                fixture.app.world().get::<Mesh3d>(visual).unwrap().0,
+                fixture.fallback_mesh
+            );
+            assert_eq!(
+                fixture
+                    .app
+                    .world()
+                    .get::<Wall3dPresentationState>(visual)
+                    .unwrap()
+                    .mode,
+                Wall3dPresentationMode::Fallback
+            );
+        }
+
+        fixture
+            .app
+            .world_mut()
+            .resource_mut::<ProductionWallMaterialPool>()
+            .identity = Some(identity());
+        fixture
+            .app
+            .world_mut()
+            .resource_mut::<WallProductionActivation>()
+            .decision_revision += 1;
+        fixture.app.update();
         assert_eq!(
             fixture.app.world().get::<Mesh3d>(fixture.visual).unwrap().0,
-            fixture.fallback_mesh
+            fixture.production_meshes[3]
         );
+        assert_eq!(
+            fixture
+                .app
+                .world()
+                .get::<Mesh3d>(provisional_visual)
+                .unwrap()
+                .0,
+            fixture.formwork_meshes[1]
+        );
+        for visual in [fixture.visual, provisional_visual] {
+            assert_eq!(
+                fixture
+                    .app
+                    .world()
+                    .get::<Wall3dPresentationState>(visual)
+                    .unwrap()
+                    .mode,
+                Wall3dPresentationMode::Production
+            );
+        }
 
         let revision = fixture
             .app

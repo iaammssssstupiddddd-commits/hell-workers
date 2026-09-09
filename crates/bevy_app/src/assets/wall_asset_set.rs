@@ -1558,7 +1558,13 @@ mod tests {
     }
 
     fn disk_fixture(root: &TestAssetRoot) -> WallAssetSetManifest {
-        let mut manifest = fixture();
+        disk_candidate_fixture_from(root, fixture())
+    }
+
+    fn disk_candidate_fixture_from(
+        root: &TestAssetRoot,
+        mut manifest: WallAssetSetManifest,
+    ) -> WallAssetSetManifest {
         for (ordinal, record) in manifest.core.iter_mut().enumerate() {
             let payload = format!("core-payload-{ordinal}");
             root.write(&record.path, payload.as_bytes());
@@ -1891,6 +1897,55 @@ mod tests {
             .load::<WallAssetSetManifest>(WALLSET_PATH);
         assert!(matches!(
             wait_for_terminal_load(&mut app, &handle),
+            LoadState::Failed(_)
+        ));
+    }
+
+    #[test]
+    fn formwork_loader_rejects_missing_mesh_and_changed_albedo() {
+        let missing_root = TestAssetRoot::new();
+        let missing_manifest = disk_candidate_fixture_from(&missing_root, formwork_fixture());
+        let missing_index = COMPLETED_CORE_INVENTORY.len();
+        let missing_mesh = &missing_manifest.core[missing_index];
+        assert_eq!(missing_mesh.role, "mesh:formwork:isolated");
+        fs::remove_file(missing_root.0.join(&missing_mesh.path)).unwrap();
+
+        let mut failed_app = loader_app(&missing_root.0);
+        let failed_handle = failed_app
+            .world()
+            .resource::<AssetServer>()
+            .load::<WallAssetSetManifest>(WALLSET_PATH);
+        assert!(matches!(
+            wait_for_terminal_load(&mut failed_app, &failed_handle),
+            LoadState::Failed(_)
+        ));
+
+        missing_root.write(
+            &missing_mesh.path,
+            format!("core-payload-{missing_index}").as_bytes(),
+        );
+        let mut recovered_app = loader_app(&missing_root.0);
+        let recovered_handle = recovered_app
+            .world()
+            .resource::<AssetServer>()
+            .load::<WallAssetSetManifest>(WALLSET_PATH);
+        assert!(matches!(
+            wait_for_terminal_load(&mut recovered_app, &recovered_handle),
+            LoadState::Loaded
+        ));
+
+        let changed_root = TestAssetRoot::new();
+        let changed_manifest = disk_candidate_fixture_from(&changed_root, formwork_fixture());
+        let formwork_albedo = changed_manifest.core.last().unwrap();
+        assert_eq!(formwork_albedo.role, "texture:formwork_albedo");
+        changed_root.write(&formwork_albedo.path, b"tampered");
+        let mut changed_app = loader_app(&changed_root.0);
+        let changed_handle = changed_app
+            .world()
+            .resource::<AssetServer>()
+            .load::<WallAssetSetManifest>(WALLSET_PATH);
+        assert!(matches!(
+            wait_for_terminal_load(&mut changed_app, &changed_handle),
             LoadState::Failed(_)
         ));
     }
