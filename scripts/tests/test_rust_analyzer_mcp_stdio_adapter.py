@@ -111,7 +111,15 @@ class RustAnalyzerMcpStdioAdapterTests(unittest.TestCase):
         ready, _, _ = select.select([process.stdout], [], [], 5.0)
         self.assertTrue(ready, "shared MCP proxy did not return a response within five seconds")
         line = process.stdout.readline()
-        self.assertTrue(line, "shared MCP proxy closed its response stream")
+        if not line:
+            return_code = process.poll()
+            stderr = b""
+            if return_code is not None and process.stderr is not None:
+                stderr = process.stderr.read()
+            self.fail(
+                "shared MCP proxy closed its response stream "
+                f"(return_code={return_code}, stderr={stderr.decode(errors='replace')!r})"
+            )
         return json.loads(line)
 
     def _start_count(self) -> int:
