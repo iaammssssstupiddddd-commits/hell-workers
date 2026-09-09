@@ -378,6 +378,21 @@ post-write失敗からのrollback、recovery-onlyへ適用し、各経路でpaus
 検証した。test binary SHA-256は`7d65eded37b7890f7258f0432c4ce3b35ed05ea381299621f49a2f62d364d30a`。
 これもheadless correctness証拠であり、W-L01 actual-windowの画素証拠を置換しない。
 
+W-A01 / W-A02はsubject `0162580736aa326bacde87ce5430e026a203cf29`のclean primary worktreeで、
+asset loader 3件とpresentation 3件をexact-name focused auditし、6/6 passした。各filterは対象1 test、
+pass 1、fail 0で、test binary SHA-256は
+`ef230119db3afdb04cc74731a88c58dec7cf05d9befa672fb40856a7f2983726`である。W-A01ではv2型枠の
+実ファイルを用い、`mesh:formwork:isolated`欠落、復元後のfresh app load、
+`texture:formwork_albedo`改変、必須role欠落、旧normal混入、aggregateのall-or-nothing判定を検証した。
+runtime側は仮設／本設Wallを同時に置き、`Eligible → Loading → LoadFailed → Eligible`とmesh/materialの
+identity不一致／復旧で、同じUpdateに全Wallがfallbackまたはproductionへ揃うことを確認した。
+
+W-A02では仮設／本設Wallを新→旧v2→新の2 generation間で往復させ、各settle後のactive mesh 12件と
+material 2件が同一identityだけを参照することを検証した。非active generationの各strong handleはテストが
+所有する1参照だけに戻るため、runtime poolやvisual Entityが旧世代を保持しない。このfocused auditは
+failure / recoveryと参照寿命のcorrectness証拠であり、fallbackや木枠／本設の画素証拠には読み替えない。
+木枠／本設のactual-window表示はW-L01の3 checkpointが担当する。
+
 壁M5の同一binary内performance比較は、承認済みcandidateを配置したclean validation worktreeから
 `wall_production_performance_acceptance.py plan --repo "$VALIDATION_WORKTREE" --adapter Intel`で計画する。
 返されたdirect launcherは`fallback-control`と`production`を順番に実行し、completed / provisionalの

@@ -462,7 +462,7 @@ candidate manifest / asset-view / source / harness / binary SHA-256は順に
 全checkpointでそれぞれ`4294964989 / 4294964988`、`4294964987 / 4294964986`のまま変わらず、
 phase別mesh/material roleだけが型枠2→型枠1・本設1→本設2へ切り替わった。3画像の目視でも中央pairの
 木枠／石壁の置換を確認した。これによりW-L01のnative表示継続性を閉じるが、W-A01 / W-A02は
-引き続き別のfocused audit / storyboardを必要とする。
+引き続き別のfailure / generation focused auditを必要とする。
 
 ### 7.7 W-L02 domain lifecycle focused audit
 
@@ -498,6 +498,34 @@ exactly one per ownerで、次の`PostUpdate`後はproductionへ一括復帰し�
 検証する。これによりW-L03 correctnessを閉じるが、actual-windowの木枠／本設画素はW-L01、世代参照の上限は
 W-A02の責務として分離する。
 
+### 7.9 W-A01 / W-A02 asset failure and generation focused audit
+
+subject `0162580736aa326bacde87ce5430e026a203cf29`のclean primary worktreeで、次の6 testを
+`python3 scripts/dev.py cargo -- test ... -- --exact --nocapture`により個別実行した。各filterは対象1 test、
+pass 1、fail 0であり、0 testの成功は受け入れていない。test binary SHA-256は
+`ef230119db3afdb04cc74731a88c58dec7cf05d9befa672fb40856a7f2983726`である。
+
+| 責務 | exact test |
+| --- | --- |
+| v2型枠mesh欠落、fresh app復旧、型枠albedo hash不一致 | `assets::wall_asset_set::tests::formwork_loader_rejects_missing_mesh_and_changed_albedo` |
+| v2必須role欠落、旧normal inventory混入のschema reject | `assets::wall_asset_set::tests::formwork_schema_rejects_missing_role_and_adopted_normal` |
+| candidate gateとasset aggregateのall-or-nothing | `assets::wall_asset_set::tests::aggregate_is_all_or_nothing_and_candidate_gated` |
+| `Loading`／`LoadFailed`／復旧時の仮設・本設全Wall atomic切替 | `systems::visual::wall_presentation::tests::asset_delay_failure_and_recovery_switch_every_wall_atomically` |
+| mesh/material identity不一致時の全Wall fail-closedと復旧 | `systems::visual::wall_presentation::tests::identity_mismatch_fails_every_wall_closed_and_world_reset_is_idempotent` |
+| 新→旧v2→新generationの同一identity切替と非active強参照解放 | `systems::visual::wall_presentation::tests::generation_switches_never_mix_active_wall_handles` |
+
+W-A01は実ファイルloaderのformal rejectとruntime表示のfail-closedを分離して検証する。欠落した
+`mesh:formwork:isolated`を復元しても失敗済みappを再利用せず、fresh appで全core readyになった時だけloadを
+成功させる。runtimeでは仮設／本設を含む全Wallが同じUpdateでfallbackへ揃い、全assetとidentityが復旧した
+時だけproductionへ一括復帰する。W-A02は切替入力を旧／新の2 generationに限定し、各settle後にactive poolと
+両phase visualが同じidentityのmesh/materialだけを持つこと、および非active generationの全mesh/material
+strong handleがtest-localの1参照だけへ戻ることを固定した。したがってruntime retained generationはactive 1、
+切替中に関与するgenerationは最大2で、settle後の旧参照は0である。
+
+このauditはfailure / recoveryとgeneration lifetimeのheadless correctness証拠である。新しいpixel証拠とは扱わず、
+型枠／本設のactual-window表示は§7.6のW-L01 3 checkpointを参照する。asset失敗を画面演出として承認する要件は
+ないため、W-A01 / W-A02のためだけの追加native storyboardは作らない。
+
 native実行はSkillのdirect `kitty` launcher、repository lock、RAM/disk preflightと逐次buildを使う。
 本計画の新profileには`plan / status / verify / self-test`を実装してから利用し、未実装のcommandを
 既存helper名へ読み替えない。statusは15〜30秒ごとに確認し、source/asset drift・timeout・画像欠落はfailとする。
@@ -519,13 +547,13 @@ Update required / 理由付きNo impactをその時点で判断する。
 
 ### 現在地
 
-- 進捗: M1/W2の中核を実装。schema v3候補、runtime wallset v2、6 family GLB、Opaque木材albedo、tile単位mesh/material切替、ArtPreview authorityが動作する。M3aはgeneration 5の技術候補とゲーム所有window PNGに対してユーザー承認済み。generation 8の正式画像18/18、generation 10のCapture 18/18とMemory 6/6、および各独立verifyが合格した。通常releaseはgeneration 4のまま。
+- 進捗: M1/W2の中核を実装。schema v3候補、runtime wallset v2、6 family GLB、Opaque木材albedo、tile単位mesh/material切替、ArtPreview authorityが動作する。M3aはgeneration 5の技術候補とゲーム所有window PNGに対してユーザー承認済み。generation 8の正式画像18/18、generation 10のCapture 18/18とMemory 6/6、および各独立verifyが合格した。W-L01〜L03とW-A01〜A02も閉じ、通常releaseはgeneration 4のまま。
 - W-L01完了: 2 tileを仮設2→仮設1/本設1→本設2へ遷移させ、phase別mesh/materialとowner / visual Entityの同一性、visual root非増殖をproduction回帰テストで固定した。`wall-formwork-lifecycle-v1`の1 process / 3 checkpointもvalid・独立verify passで、owner / visual ID不変と3 PNGを§7.6へ記録した。
 - W-L02完了: site Coatは同じowner / visual Entityのまま仮設material→本設materialへ遷移し、legacy Coatは`Entity::PLACEHOLDER`分岐のtask producerが既存Wall rootを保持したまま`Building.is_provisional`をfalseへ変え、次のDone frameでtaskを完了することを固定した。Instant Buildは最初から本設materialを持つexactly-one visualを生成する。Framing前cancel、仮設後cancel、完成Wall撤去ではconnectorとowner-linked visualが残らない。subject `d8fb28b0`のexact focused audit 5/5 passとW-L01 actual-window証拠の分担を§7.7に記録した。
 - W-L03完了: 仮設1 / 本設1の混在saveをpause中のnormal loadで10回反復し、各回のfallback→production復帰、phase保持、owner / visual数、完成6＋型枠6 mesh / 2 material poolの上限を固定した。同じ候補をrollback / recovery-onlyでも検証し、subject `c5c525c3`のexact focused audit 1/1 passを§7.8に記録した。
-- W-A01 / W-A02中核: readinessの`Eligible → LoadFailed → Eligible`で仮設／本設の全Wallが同一Updateにproduction→fallback→productionへ切り替わることと、新→旧→新generationの往復でactive mesh/material handleが世代混在しないことをproduction回帰テストで固定した。欠落assetと世代切替のnative storyboardは未完。
+- W-A01 / W-A02完了: v2型枠mesh欠落／復元、型枠albedo hash不一致、schema／aggregate reject、`Eligible → Loading → LoadFailed → Eligible`、mixed identityをformal loaderとruntime回帰へ分けて固定した。新→旧v2→新generationでは仮設／本設のactive handleが同一identityへ揃い、settle後に非active mesh/materialのruntime強参照が残らない。subject `01625807`のexact focused audit 6/6 passを§7.9に記録し、actual-window画素はW-L01と分担した。
 - W-G01: 凍結済みmixed 4Nの仮設192／本設192、画像専用E-W直接接続pair、完成6＋型枠6 mesh、段階別2 material、Soul 2体のfront / behind camera depthを同一galleryへ固定した。subject `99362a37`の標準／最大zoom-out正式matrixは18/18 validで、両独立verifyと代表画像目視も完了した。旧v1証跡は再ラベルしていない。
-- 次の作業: W-A01〜A02のasset失敗／世代切替focused audit / 実機storyboardを実装・採取する。Door側の単独gate後にJ1、M4へ進み、production回帰テストだけを実機合格へ読み替えない。
+- 次の作業: Door側の単独gate後にJ1、M4、release受入へ進む。Wallのfailure / generation auditだけをrelease合格へ読み替えず、通常release generation 4を維持する。
 - ドアはM0の共通port確定後に制作を並行可能。Rust・tooling編集はmain agentが順に行い、joint受入は両方のruntime接続後。
 - 240 triangles・core 15 file・§7の予算は採用した新設計値。現在のreleaseの実測・アート承認値として扱わない。
 
@@ -543,7 +571,7 @@ Update required / 理由付きNo impactをその時点で判断する。
 - 文書gate: `python3 scripts/dev.py docs --write`で索引を同期後、`docs --check` / `git diff --check`がpass。
 - Help gate: `No impact`。性能受入基盤・非対象asset preflight・証跡文書の追加だけで、通常の入力、ゲームプレイ、表示ロジック、UI文言、Help coverage、release authorityは不変。理由付き`check_help_impact.py`がpass。
 - 最終検証: `wall_formwork_density_acceptance.py self-test / verify`、`scripts/perf.py self-test`、`python3 scripts/dev.py check`、全workspace testとClippy `-D warnings`を含む`python3 scripts/dev.py verify`がpass。
-- ブロッカー: Wall final封印・正式画像・性能・Memoryは解消。Wallのstateful lifecycle、混在gallery / Soul depth、Door単独残件、J1が未完であり、Wall単独M3全体はまだ完了扱いにしない。
+- ブロッカー: Wall final封印・正式画像・性能・Memory・混在gallery / Soul depth・stateful lifecycle・asset failure / generation auditは解消。Door単独残件、J1、M4、release受入が未完であり、通常releaseは変更しない。
 
 ### Definition of Done
 
@@ -577,3 +605,4 @@ Update required / 理由付きNo impactをその時点で判断する。
 | `2026-09-08` | `Codex` | subject `9746f3b0`でW-L01 lifecycleを正式採取。1 process / 3 checkpointがvalid・独立verify passとなり、同じowner / visual IDのまま型枠2→混在→本設2へ切り替わる3 PNGを§7.6へ封印 |
 | `2026-09-08` | `Codex` | subject `d8fb28b0`でW-L02の本番経路5件をexact focused auditし5/5 pass。site / legacy Coat、Instant Build、Framing前／木枠後cancel、完成壁撤去をW-L01実画面証拠と分担して閉じた |
 | `2026-09-08` | `Codex` | W-L03の混在Wall world-replacement回帰をpause条件へ拡張。subject `c5c525c3`で通常load 10回、rollback、recovery-onlyのfallback→production、phase / visual / pool安定性をexact focused auditし1/1 pass |
+| `2026-09-09` | `Codex` | subject `01625807`でW-A01 / W-A02の実asset欠落／hash不一致／schema混入、全Wall atomic fallback / recovery、新→旧v2→新generationと非active強参照解放をexact focused auditし6/6 pass |
