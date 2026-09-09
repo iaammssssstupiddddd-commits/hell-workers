@@ -61,9 +61,7 @@ class RustAnalyzerMcpStdioAdapterTests(unittest.TestCase):
             {
                 "HELL_WORKERS_RA_MCP_RUNTIME_DIR": str(self.root / "runtime"),
                 "HELL_WORKERS_RA_MCP_BACKEND_IDLE_SECONDS": "0.25",
-                # Keep the backend restart fast while leaving enough startup
-                # time for both proxy processes to register with the daemon.
-                "HELL_WORKERS_RA_MCP_DAEMON_IDLE_SECONDS": "1.0",
+                "HELL_WORKERS_RA_MCP_DAEMON_IDLE_SECONDS": "0.25",
                 "FAKE_MCP_COUNTER": str(self.counter),
             }
         )
@@ -111,15 +109,7 @@ class RustAnalyzerMcpStdioAdapterTests(unittest.TestCase):
         ready, _, _ = select.select([process.stdout], [], [], 5.0)
         self.assertTrue(ready, "shared MCP proxy did not return a response within five seconds")
         line = process.stdout.readline()
-        if not line:
-            return_code = process.poll()
-            stderr = b""
-            if return_code is not None and process.stderr is not None:
-                stderr = process.stderr.read()
-            self.fail(
-                "shared MCP proxy closed its response stream "
-                f"(return_code={return_code}, stderr={stderr.decode(errors='replace')!r})"
-            )
+        self.assertTrue(line, "shared MCP proxy closed its response stream")
         return json.loads(line)
 
     def _start_count(self) -> int:
