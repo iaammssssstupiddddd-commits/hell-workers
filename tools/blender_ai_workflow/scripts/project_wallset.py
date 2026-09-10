@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -14,6 +15,7 @@ if str(SCRIPT_ROOT) not in sys.path:
 
 import validate_asset_set_manifest as validator
 import promote_asset_set as promotion
+import asset_release_manifest as release_manifest
 
 
 class ProjectionError(RuntimeError):
@@ -36,7 +38,7 @@ def project_candidate(manifest_path: Path) -> dict[str, Any]:
     manifest = validator.read_json(manifest_path)
     require(
         isinstance(manifest, dict)
-        and manifest.get("schema_version") == 2
+        and manifest.get("schema_version") in {2, 3}
         and manifest.get("asset_set_id") == "wall-production-v1"
         and manifest.get("manifest_mode") == "final"
         and manifest.get("normal_decision") in {"adopted", "rejected"}
@@ -45,14 +47,16 @@ def project_candidate(manifest_path: Path) -> dict[str, Any]:
     )
     core = manifest.get("production", {}).get("core")
     optional = manifest.get("production", {}).get("optional")
-    expected_length = 9 if manifest["normal_decision"] == "adopted" else 8
+    formwork = manifest["schema_version"] == 3
+    require(not formwork or manifest["normal_decision"] == "rejected", "formwork normal decision differs")
+    expected_length = 15 if formwork else 9 if manifest["normal_decision"] == "adopted" else 8
     require(
         isinstance(core, list) and len(core) == expected_length,
         "candidate core inventory differs",
     )
     require(optional == [], "candidate optional inventory must be empty")
     return {
-        "schema_version": 1,
+        "schema_version": 2 if formwork else 1,
         "asset_set_id": "wall-production-v1",
         "asset_set_generation": manifest["asset_set_generation"],
         "authority": "isolated_candidate",
@@ -74,29 +78,15 @@ def runtime_path(generation: int, record: dict[str, Any]) -> str:
     return (Path("wall_sets") / str(generation) / relative).as_posix()
 
 
-def project_release(manifest_path: Path, receipt_path: Path) -> dict[str, Any]:
+def validate_release_receipt(
+    manifest_path: Path, receipt_path: Path, asset_id: str
+) -> dict[str, Any]:
     require(
         receipt_path.is_file() and not receipt_path.is_symlink(),
         "release receipt is absent",
     )
     manifest = validator.read_json(manifest_path)
-    require(
-        isinstance(manifest, dict)
-        and manifest.get("schema_version") == 2
-        and manifest.get("asset_set_id") == "wall-production-v1"
-        and manifest.get("manifest_mode") == "final"
-        and manifest.get("normal_decision") in {"adopted", "rejected"}
-        and manifest.get("art_review", {}).get("status") == "art_approved",
-        "release manifest identity differs",
-    )
-    core = manifest.get("production", {}).get("core")
-    optional = manifest.get("production", {}).get("optional")
-    expected_length = 9 if manifest["normal_decision"] == "adopted" else 8
-    require(
-        isinstance(core, list) and len(core) == expected_length,
-        "release core inventory differs",
-    )
-    require(optional == [], "release optional inventory must be empty")
+    require(manifest.get("asset_set_id") == asset_id, "release manifest identity differs")
     generation = manifest["asset_set_generation"]
     manifest_hash = validator.sha256(manifest_path)
     receipt_bytes = receipt_path.read_bytes()
@@ -105,12 +95,12 @@ def project_release(manifest_path: Path, receipt_path: Path) -> dict[str, Any]:
         isinstance(receipt, dict)
         and set(receipt) == promotion.RECEIPT_FIELDS
         and receipt.get("schema_version") == 1
-        and receipt.get("asset_set_id") == "wall-production-v1"
+        and receipt.get("asset_set_id") == asset_id
         and receipt.get("asset_set_generation") == generation
         and receipt.get("manifest_sha256") == manifest_hash
         and receipt.get("new_active")
         == {
-            "asset_set_id": "wall-production-v1",
+            "asset_set_id": asset_id,
             "asset_set_generation": generation,
             "manifest_sha256": manifest_hash,
         },
@@ -125,7 +115,8 @@ def project_release(manifest_path: Path, receipt_path: Path) -> dict[str, Any]:
             for field in ("manifest_sha256", "promotion_plan_sha256")
         )
         and all(
-            isinstance(receipt[field], str) and len(receipt[field]) == 40
+            isinstance(receipt[field], str)
+            and re.fullmatch(r"[0-9a-f]{40}", receipt[field]) is not None
             for field in ("tool_commit", "tool_tree")
         ),
         "release receipt authority fields differ",
@@ -182,20 +173,23 @@ def project_release(manifest_path: Path, receipt_path: Path) -> dict[str, Any]:
         receipt_bytes == canonical_bytes(receipt),
         "release receipt is not canonical JSON",
     )
+    return receipt
+
+
+def project_release(manifest_path: Path, receipt_path: Path) -> dict[str, Any]:
+    candidate = project_candidate(manifest_path)
+    validate_release_receipt(manifest_path, receipt_path, candidate["asset_set_id"])
+    generation = candidate["asset_set_generation"]
     projected_core = [
-        {**record, "path": runtime_path(generation, record)} for record in core
+        {**record, "path": runtime_path(generation, record)} for record in candidate["core"]
     ]
     return {
-        "schema_version": 1,
-        "asset_set_id": "wall-production-v1",
-        "asset_set_generation": generation,
+        **candidate,
         "authority": "release_approved",
-        "manifest_sha256": manifest_hash,
-        "normal_decision": manifest["normal_decision"],
         "core": projected_core,
         "candidate_normal": None,
         "receipt": {
-            "bytes": len(receipt_bytes),
+            "bytes": receipt_path.stat().st_size,
             "path": (
                 Path("wall_sets")
                 / str(generation)
@@ -228,14 +222,14 @@ def build_parser() -> argparse.ArgumentParser:
 def main() -> int:
     args = build_parser().parse_args()
     manifest_path = args.manifest.resolve()
-    mode = "final"
-    validator.validate_manifest(
+    release_manifest.validate(
         manifest_path,
-        mode=mode,
-        blend_root=args.blend_root.resolve(),
-        exports_root=args.exports_root.resolve(),
-        reports_root=args.reports_root.resolve(),
-        licenses_root=args.licenses_root.resolve(),
+        roots={
+            "blend_root": args.blend_root.resolve(),
+            "exports_root": args.exports_root.resolve(),
+            "reports_root": args.reports_root.resolve(),
+            "licenses_root": args.licenses_root.resolve(),
+        },
         repo=args.repo.resolve(),
     )
     if args.authority == "isolated_candidate":

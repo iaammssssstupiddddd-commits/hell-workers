@@ -14,7 +14,7 @@ from typing import Any
 ALLOWED_TOP_LEVEL_DIRS = ("textures", "models", "audio")
 # A promoted asset set lands in its own generation directory, which the runtime
 # projection names; the mirror sweep below never walks it.
-ALLOWED_MANIFEST_TOP_LEVEL_DIRS = (*ALLOWED_TOP_LEVEL_DIRS, "wall_sets")
+ALLOWED_MANIFEST_TOP_LEVEL_DIRS = (*ALLOWED_TOP_LEVEL_DIRS, "wall_sets", "door_sets")
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 WALL_MANIFEST_VALIDATOR = (
     PROJECT_ROOT / "tools/blender_ai_workflow/scripts/validate_asset_set_manifest.py"
@@ -50,7 +50,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--manifest",
         type=Path,
-        help="Wall asset-set manifest v2. Requires --selection and copies only its exact allowlist.",
+        help="Final Wall v2/v3 or Door manifest. Requires --selection; copies only the exact allowlist.",
     )
     parser.add_argument(
         "--selection",
@@ -180,16 +180,27 @@ def load_wallset_projector() -> ModuleType:
 
 def validate_receipt(receipt_path: Path, manifest_path: Path, validator) -> dict:
     """Bind the receipt to this generation, its manifest bytes and its pointer."""
+    projector = load_wallset_projector()
+    promotion = projector.promotion
+    release = projector.release_manifest
+    manifest = validator.read_json(manifest_path)
+    asset_id, _version = release.identity(manifest)
     receipt = validator.read_json(receipt_path)
     manifest_hash = sha256(manifest_path)
     generation_root = manifest_path.parent.parent
-    asset_root = generation_root.parent.parent
+    generation_directory = release.generation_directory(asset_id)
+    asset_root = generation_root.parents[len(generation_directory.parts)]
+    if generation_root != asset_root / generation_directory / str(manifest["asset_set_generation"]):
+        raise ValueError("Promotion generation path differs from asset namespace")
+    if receipt_path != generation_root / "authority/promotion-receipt.json":
+        raise ValueError("Promotion receipt path differs from its generation")
     if receipt.get("manifest_sha256") != manifest_hash:
         raise ValueError("Promotion receipt does not describe this manifest")
     if str(receipt.get("asset_set_generation")) != generation_root.name:
         raise ValueError("Promotion receipt generation differs from its directory")
-    pointer_path = asset_root / "authority" / "wall-production-v1.active.json"
-    pointer = validator.read_json(pointer_path)
+    projector.validate_release_receipt(manifest_path, receipt_path, asset_id)
+    pointer_path = asset_root / release.active_pointer(asset_id)
+    pointer = promotion.validate_pointer(promotion.read_canonical_json(pointer_path, "active pointer"), asset_id)
     if (
         pointer.get("manifest_sha256") != manifest_hash
         or pointer.get("asset_set_generation") != receipt.get("asset_set_generation")
@@ -238,21 +249,18 @@ def sync_manifest_assets(
         raise ValueError("A promoted generation requires --receipt")
     else:
         validate_receipt(receipt_path, manifest_path, validator)
-    validation = validator.validate_manifest(
-        manifest_path,
-        mode="final",
-        blend_root=roots["blend_root"],
-        exports_root=roots["exports_root"],
-        reports_root=roots["reports_root"],
-        licenses_root=roots["licenses_root"],
-        repo=repo,
-    )
+    projector = load_wallset_projector()
+    release = projector.release_manifest
+    validation = release.validate(manifest_path, roots={key: value for key, value in roots.items() if key != "generation_root"}, repo=repo)
     records = selected_manifest_records(manifest, selection)
     # A released generation keeps its own directory in the repository so the
     # runtime projection can name one immutable generation, while a staging
     # candidate keeps the manifest-relative layout. The destination has to be
     # the projector's own mapping, not a copy of its shape.
-    projector = load_wallset_projector()
+    if manifest["asset_set_id"] == release.DOOR_ID:
+        import project_doorset
+
+        projector = project_doorset
     generation = manifest["asset_set_generation"]
 
     def destination_for(record: dict) -> Path:
@@ -260,9 +268,7 @@ def sync_manifest_assets(
             return Path(record["path"])
         return Path(projector.runtime_path(generation, record))
 
-    if not dry_run:
-        dest_root.mkdir(parents=True, exist_ok=True)
-    copied = 0
+    copies: list[tuple[Path, Path, str]] = []
     for record in records:
         relative = destination_for(record)
         source_file = source_root / record["path"]
@@ -270,22 +276,28 @@ def sync_manifest_assets(
         needs_copy = (
             not destination.is_file() or sha256(destination) != record["sha256"]
         )
+        if receipt_path is not None and destination.exists() and needs_copy:
+            raise ValueError(f"Immutable release destination bytes differ: {destination}")
         if not needs_copy:
             continue
+        copies.append((source_file, destination, record["sha256"]))
+
+    # Preflight the entire inventory before creating even the first destination.
+    # A conflict late in the list must not leave a partially populated release.
+    for source_file, destination, expected_hash in copies:
         print(f"COPY {source_file} -> {destination}")
         if not dry_run:
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(source_file, destination)
-            if sha256(destination) != record["sha256"]:
+            if sha256(destination) != expected_hash:
                 raise OSError(f"Copied asset hash differs: {destination}")
-        copied += 1
     print(
         "MANIFEST "
         f"asset_set_id={validation['asset_set_id']} "
         f"generation={validation['asset_set_generation']} "
         f"sha256={validation['manifest_sha256']} selection={selection}"
     )
-    return copied
+    return len(copies)
 
 
 def delete_missing_files(source_top: Path, dest_top: Path, dry_run: bool) -> int:

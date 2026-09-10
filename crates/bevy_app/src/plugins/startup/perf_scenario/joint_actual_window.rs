@@ -2,9 +2,9 @@
 //!
 //! This profiling-only scene uses normal `Building` roots, the shared
 //! `WallTopologyIndex`, and the production Wall/Door presentation systems. It
-//! holds three ACK-bound checkpoints in one process: provisional formwork at
-//! the Door seam, completion in place, and a support relocation that changes a
-//! Door axis without replacing its owner or visual.
+//! holds six ACK-bound checkpoints, including real support teardown/recreation
+//! and a paused normal save/load through the Last dispatcher. The construction
+//! preview consumes the same production topology and asset pool.
 
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -14,12 +14,14 @@ use bevy::camera::visibility::RenderLayers;
 use bevy::mesh::Mesh3d;
 use bevy::pbr::MeshMaterial3d;
 use bevy::prelude::*;
+use bevy::sprite::Anchor;
 use bevy::transform::TransformSystems;
 use bevy::window::PrimaryWindow;
 use hw_core::constants::topdown_rtt_vertical_compensation;
 use hw_core::visual_mirror::building::{BuildingTypeVisual, BuildingVisualState};
 use hw_core::world::DoorState;
-use hw_jobs::{Building, BuildingType, Door, ProvisionalWall};
+use hw_core::{SaveSlotId, WorldEpoch};
+use hw_jobs::{Blueprint, Building, BuildingType, Door, ProvisionalWall};
 use hw_ui::camera::MainCamera;
 use hw_visual::TopDownStructuralMaterial;
 use hw_visual::visual3d::{
@@ -42,6 +44,10 @@ use crate::plugins::startup::{Building3dHandles, Camera3dRtt};
 use crate::plugins::visual::WallPresentationApplySet;
 use crate::systems::jobs::spawn_building_3d_visual;
 use crate::systems::jobs::wall_construction::spawn_wall_shell;
+use crate::systems::save::{
+    SaveLoadOperation, SaveLoadOutcome, SaveLoadResult, SaveLoadState, SavePath, SaveStorageRoot,
+    manual_save_request, normal_load_request,
+};
 use crate::systems::visual::building3d_cleanup::DoorPresentationSyncSet;
 
 use super::PerfScenarioConfig;
@@ -51,27 +57,42 @@ const REQUEST_ENV: &str = "HW_WALL_DOOR_JOINT_ACTUAL_WINDOW";
 const STATUS_ENV: &str = "HW_WALL_DOOR_JOINT_STATUS_PATH";
 const ACK_ENV: &str = "HW_WALL_DOOR_JOINT_ACK_PATH";
 const NONCE_ENV: &str = "HW_WALL_DOOR_JOINT_SESSION_NONCE";
-const STATUS_SCHEMA_VERSION: u32 = 1;
+const STATUS_SCHEMA_VERSION: u32 = 2;
 const SETTLE: Duration = Duration::from_millis(1_600);
 const ACK_TIMEOUT: Duration = Duration::from_secs(15);
 const CAMERA_SCALE: f32 = 1.0;
-const CAMERA_GRID_CENTER: (i32, i32) = (27, 44);
+const CAMERA_GRID_CENTER: (i32, i32) = (27, 47);
+const PREVIEW_GRID: (i32, i32) = (14, 50);
+const PERSISTENT_FORMWORK_GRID: (i32, i32) = (25, 51);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum JointCheckpoint {
     Framed,
     Completed,
     SupportChanged,
+    SupportRemoved,
+    SupportRestored,
+    Loaded,
 }
 
 impl JointCheckpoint {
-    const ALL: [Self; 3] = [Self::Framed, Self::Completed, Self::SupportChanged];
+    const ALL: [Self; 6] = [
+        Self::Framed,
+        Self::Completed,
+        Self::SupportChanged,
+        Self::SupportRemoved,
+        Self::SupportRestored,
+        Self::Loaded,
+    ];
 
     const fn phase(self) -> &'static str {
         match self {
             Self::Framed => "wall-door-joint-framed",
             Self::Completed => "wall-door-joint-completed",
             Self::SupportChanged => "wall-door-joint-support-changed",
+            Self::SupportRemoved => "wall-door-joint-support-removed",
+            Self::SupportRestored => "wall-door-joint-support-restored",
+            Self::Loaded => "wall-door-joint-loaded",
         }
     }
 
@@ -80,6 +101,9 @@ impl JointCheckpoint {
             Self::Framed => 1,
             Self::Completed => 2,
             Self::SupportChanged => 3,
+            Self::SupportRemoved => 4,
+            Self::SupportRestored => 5,
+            Self::Loaded => 6,
         }
     }
 }
@@ -113,6 +137,10 @@ pub(crate) struct WallDoorJointActualWindowAcceptance {
     published_at: Option<Duration>,
     completed: bool,
     failed: bool,
+    preview: Option<Entity>,
+    load_operation: Option<SaveLoadOperation>,
+    initial_epoch: Option<u64>,
+    loaded_epoch: Option<u64>,
 }
 
 impl Default for WallDoorJointActualWindowAcceptance {
@@ -132,6 +160,10 @@ impl Default for WallDoorJointActualWindowAcceptance {
             published_at: None,
             completed: false,
             failed: false,
+            preview: None,
+            load_operation: None,
+            initial_epoch: None,
+            loaded_epoch: None,
         }
     }
 }
@@ -333,12 +365,70 @@ pub(crate) fn setup_wall_door_joint_gallery_system(
             false,
         ));
     }
+    for (grid, state) in [((38, 50), DoorState::Closed), ((38, 51), DoorState::Open)] {
+        acceptance.doors.push(spawn_door(
+            &mut commands,
+            &mut world_map,
+            &handles,
+            grid,
+            state,
+            DoorPresentationAxis::NorthSouth,
+        ));
+    }
+    acceptance.doors.push(spawn_door(
+        &mut commands,
+        &mut world_map,
+        &handles,
+        (26, 50),
+        DoorState::Open,
+        DoorPresentationAxis::EastWest,
+    ));
+    for grid in [
+        (38, 49),
+        (38, 52),
+        (25, 50),
+        (27, 50),
+        PERSISTENT_FORMWORK_GRID,
+        (13, 50),
+        (15, 50),
+    ] {
+        acceptance.walls.push(spawn_wall(
+            &mut commands,
+            &mut world_map,
+            &handles,
+            grid,
+            grid == PERSISTENT_FORMWORK_GRID,
+        ));
+    }
+    let position = WorldMap::grid_to_world(PREVIEW_GRID.0, PREVIEW_GRID.1);
+    let blueprint = Blueprint::new(BuildingType::Door, vec![PREVIEW_GRID]);
+    let mirror = hw_jobs::visual_sync::blueprint_visual_state(&blueprint);
+    let preview = commands
+        .spawn((
+            blueprint,
+            mirror,
+            Sprite::default(),
+            Anchor::CENTER,
+            Transform::from_xyz(position.x, position.y, 10.0),
+            Visibility::Inherited,
+            Name::new("Joint Door construction preview"),
+        ))
+        .id();
+    world_map.reserve_building_footprint(BuildingType::Door, preview, [PREVIEW_GRID]);
+    acceptance.preview = Some(preview);
 }
 
 #[derive(bevy::ecs::system::SystemParam)]
 pub(crate) struct JointDriveParams<'w, 's> {
     commands: Commands<'w, 's>,
-    buildings: Query<'w, 's, (&'static mut Building, &'static mut Transform)>,
+    buildings: Query<'w, 's, (Entity, &'static mut Building, &'static mut Transform)>,
+    blueprints: Query<'w, 's, (Entity, &'static Blueprint)>,
+    handles: Res<'w, Building3dHandles>,
+    epoch: Res<'w, WorldEpoch>,
+    save_state: ResMut<'w, SaveLoadState>,
+    save_root: ResMut<'w, SaveStorageRoot>,
+    save_path: ResMut<'w, SavePath>,
+    outcomes: MessageReader<'w, 's, SaveLoadOutcome>,
     world_map: WorldMapWrite<'w>,
     exit: MessageWriter<'w, AppExit>,
 }
@@ -349,7 +439,12 @@ pub(crate) fn drive_wall_door_joint_checkpoint_system(
     mut params: JointDriveParams,
     mut acceptance: ResMut<WallDoorJointActualWindowAcceptance>,
 ) {
-    if !acceptance.enabled(&config) || acceptance.doors.len() != 6 {
+    if !acceptance.enabled(&config) || acceptance.doors.len() != 9 {
+        return;
+    }
+    acceptance.initial_epoch.get_or_insert(params.epoch.get());
+    if acceptance.load_operation.is_some() {
+        drive_joint_load(&mut params, &mut acceptance, time.elapsed());
         return;
     }
     let Some(published) = acceptance.published_at else {
@@ -366,10 +461,10 @@ pub(crate) fn drive_wall_door_joint_checkpoint_system(
     match acceptance.checkpoint() {
         JointCheckpoint::Framed => {
             for wall in &acceptance.walls {
-                if !wall.initially_provisional {
+                if !wall.initially_provisional || wall.grid == PERSISTENT_FORMWORK_GRID {
                     continue;
                 }
-                let Ok((mut building, _)) = params.buildings.get_mut(wall.owner) else {
+                let Ok((_, mut building, _)) = params.buildings.get_mut(wall.owner) else {
                     publish_failure(
                         &mut acceptance,
                         "formwork owner disappeared before completion",
@@ -394,7 +489,7 @@ pub(crate) fn drive_wall_door_joint_checkpoint_system(
                 params
                     .world_map
                     .release_building_footprint_if_owned(wall.owner, std::iter::once(wall.grid));
-                let Ok((_, mut transform)) = params.buildings.get_mut(wall.owner) else {
+                let Ok((_, _, mut transform)) = params.buildings.get_mut(wall.owner) else {
                     publish_failure(
                         &mut acceptance,
                         "support owner disappeared before relocation",
@@ -411,8 +506,68 @@ pub(crate) fn drive_wall_door_joint_checkpoint_system(
                 );
                 wall.grid = new_grid;
             }
+            for (index, grid) in [(15, (14, 49)), (16, (14, 51))] {
+                let wall = &mut acceptance.walls[index];
+                params
+                    .world_map
+                    .release_building_footprint_if_owned(wall.owner, [wall.grid]);
+                let Ok((_, _, mut transform)) = params.buildings.get_mut(wall.owner) else {
+                    publish_failure(&mut acceptance, "preview support disappeared");
+                    return;
+                };
+                let position = WorldMap::grid_to_world(grid.0, grid.1);
+                transform.translation.x = position.x;
+                transform.translation.y = position.y;
+                params
+                    .world_map
+                    .reserve_building_footprint(BuildingType::Wall, wall.owner, [grid]);
+                wall.grid = grid;
+            }
         }
         JointCheckpoint::SupportChanged => {
+            let wall = acceptance.walls.remove(1);
+            params
+                .world_map
+                .release_building_footprint_if_owned(wall.owner, [wall.grid]);
+            params.commands.entity(wall.owner).despawn();
+        }
+        JointCheckpoint::SupportRemoved => {
+            let wall = spawn_wall(
+                &mut params.commands,
+                &mut params.world_map,
+                &params.handles,
+                (14, 45),
+                false,
+            );
+            acceptance.walls.insert(1, wall);
+        }
+        JointCheckpoint::SupportRestored => {
+            let root = acceptance
+                .status_path
+                .as_ref()
+                .expect("enabled probe path")
+                .parent()
+                .expect("absolute probe parent")
+                .join("joint-save");
+            if root.exists() || std::fs::create_dir(&root).is_err() {
+                publish_failure(
+                    &mut acceptance,
+                    "joint private save directory is unavailable",
+                );
+                return;
+            }
+            *params.save_root = SaveStorageRoot::new(root.clone());
+            *params.save_path = SavePath::new(root.join(SaveSlotId::Manual1.canonical_file_name()));
+            if !params
+                .save_state
+                .try_set(manual_save_request(SaveSlotId::Manual1, 1))
+            {
+                publish_failure(&mut acceptance, "joint save dispatcher is busy");
+                return;
+            }
+            acceptance.load_operation = Some(SaveLoadOperation::Save);
+        }
+        JointCheckpoint::Loaded => {
             if let Some(path) = acceptance.status_path.as_deref() {
                 let checkpoint = acceptance.checkpoint();
                 if write_json(
@@ -439,6 +594,93 @@ pub(crate) fn drive_wall_door_joint_checkpoint_system(
     acceptance.checkpoint_index += 1;
     acceptance.started_at = Some(now);
     acceptance.published_at = None;
+}
+
+fn drive_joint_load(
+    params: &mut JointDriveParams,
+    acceptance: &mut WallDoorJointActualWindowAcceptance,
+    now: Duration,
+) {
+    let outcomes: Vec<_> = params.outcomes.read().cloned().collect();
+    let Some(operation) = acceptance.load_operation else {
+        return;
+    };
+    let Some(outcome) = outcomes
+        .iter()
+        .find(|outcome| outcome.operation == operation)
+    else {
+        return;
+    };
+    if outcome.result != SaveLoadResult::Succeeded {
+        publish_failure(
+            acceptance,
+            &format!("joint {operation:?} failed: {:?}", outcome.result),
+        );
+        return;
+    }
+    if operation == SaveLoadOperation::Save {
+        if !params
+            .save_state
+            .try_set(normal_load_request(SaveSlotId::Manual1, 1))
+        {
+            publish_failure(acceptance, "joint load dispatcher is busy");
+            return;
+        }
+        acceptance.load_operation = Some(SaveLoadOperation::Load);
+        return;
+    }
+    if acceptance.initial_epoch.map(|epoch| epoch + 1) != Some(params.epoch.get()) {
+        publish_failure(
+            acceptance,
+            "joint normal load did not replace exactly one world",
+        );
+        return;
+    }
+    // Old Entity IDs are invalid now. Match durable roles and coordinates before
+    // any presentation consumer sees the acceptance target collection again.
+    for (owner, grid, kind) in acceptance
+        .doors
+        .iter_mut()
+        .map(|target| (&mut target.owner, target.grid, BuildingType::Door))
+        .chain(
+            acceptance
+                .walls
+                .iter_mut()
+                .map(|target| (&mut target.owner, target.grid, BuildingType::Wall)),
+        )
+    {
+        let matches: Vec<_> = params
+            .buildings
+            .iter()
+            .filter(|(_, building, transform)| {
+                building.kind == kind
+                    && WorldMap::world_to_grid(transform.translation.truncate()) == grid
+            })
+            .map(|(entity, ..)| entity)
+            .collect();
+        if matches.len() != 1 || matches[0] == *owner {
+            acceptance.failed = true;
+            break;
+        }
+        *owner = matches[0];
+    }
+    let previews: Vec<_> = params
+        .blueprints
+        .iter()
+        .filter(|(_, blueprint)| {
+            blueprint.kind == BuildingType::Door && blueprint.occupied_grids == [PREVIEW_GRID]
+        })
+        .map(|(entity, _)| entity)
+        .collect();
+    if acceptance.failed || previews.len() != 1 || Some(previews[0]) == acceptance.preview {
+        publish_failure(acceptance, "joint loaded target rebind differs");
+        return;
+    }
+    acceptance.preview = Some(previews[0]);
+    acceptance.visual_entities = None;
+    acceptance.loaded_epoch = Some(params.epoch.get());
+    acceptance.load_operation = None;
+    acceptance.started_at = Some(now);
 }
 
 #[derive(bevy::ecs::system::SystemParam)]
@@ -517,11 +759,37 @@ type WallVisualQuery<'w, 's> = Query<
     ),
 >;
 
+type JointPreviewQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        &'static Sprite,
+        &'static Anchor,
+        &'static GlobalTransform,
+        &'static InheritedVisibility,
+    ),
+    With<Blueprint>,
+>;
+type JointMainCameraQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        &'static Transform,
+        &'static Camera,
+        &'static GlobalTransform,
+    ),
+    (With<MainCamera>, Without<Camera3dRtt>),
+>;
+
 #[derive(bevy::ecs::system::SystemParam)]
 pub(crate) struct JointProbeParams<'w, 's> {
+    world_map: Res<'w, WorldMap>,
     window: Query<'w, 's, &'static Window, With<PrimaryWindow>>,
     camera: Query<'w, 's, (&'static Camera, &'static GlobalTransform), With<Camera3dRtt>>,
-    main_camera: Query<'w, 's, &'static Transform, (With<MainCamera>, Without<Camera3dRtt>)>,
+    main_camera: JointMainCameraQuery<'w, 's>,
+    previews: JointPreviewQuery<'w, 's>,
+    epoch: Res<'w, WorldEpoch>,
+    images: Res<'w, Assets<Image>>,
     buildings: Query<'w, 's, (&'static Building, &'static Transform)>,
     visibility: Query<
         'w,
@@ -554,7 +822,8 @@ pub(crate) fn publish_wall_door_joint_status_system(
     mut acceptance: ResMut<WallDoorJointActualWindowAcceptance>,
 ) {
     if !acceptance.enabled(&config)
-        || acceptance.doors.len() != 6
+        || acceptance.doors.len() != 9
+        || acceptance.load_operation.is_some()
         || acceptance.published_at.is_some()
     {
         return;
@@ -612,6 +881,7 @@ fn inspect_joint(
         .iter()
         .map(|target| target.grid)
         .chain(acceptance.walls.iter().map(|target| target.grid))
+        .chain([PREVIEW_GRID])
         .collect();
     let door_identity = match &params.door_readiness.state {
         DoorAssetReadinessState::Eligible(identity) => identity,
@@ -668,6 +938,16 @@ fn inspect_joint(
     let mut visual_entities = HashMap::new();
     let mut observations = Vec::new();
     for target in &acceptance.doors {
+        let (building, transform) = params
+            .buildings
+            .get(target.owner)
+            .map_err(|_| "joint Door owner is missing")?;
+        if building.kind != BuildingType::Door
+            || WorldMap::world_to_grid(transform.translation.truncate()) != target.grid
+            || params.world_map.building_entity(target.grid) != Some(target.owner)
+        {
+            return Err("joint Door durable position or ownership differs".to_string());
+        }
         let matches = params
             .door_visuals
             .iter()
@@ -682,8 +962,12 @@ fn inspect_joint(
             visual_entity,
             &params.handles.render_layers,
         )?;
-        let expected_axis = if matches!(checkpoint, JointCheckpoint::SupportChanged)
-            && target.owner == acceptance.doors[0].owner
+        let expected_axis = if matches!(
+            checkpoint,
+            JointCheckpoint::SupportChanged
+                | JointCheckpoint::SupportRestored
+                | JointCheckpoint::Loaded
+        ) && target.owner == acceptance.doors[0].owner
         {
             DoorPresentationAxis::NorthSouth
         } else {
@@ -719,12 +1003,17 @@ fn inspect_joint(
         ));
     }
     for target in &acceptance.walls {
-        let (building, _) = params
+        let (building, owner_transform) = params
             .buildings
             .get(target.owner)
             .map_err(|_| format!("Wall {:?} owner is missing", target.grid))?;
-        let provisional = expected_provisional && target.initially_provisional;
-        if building.kind != BuildingType::Wall || building.is_provisional != provisional {
+        let provisional = target.initially_provisional
+            && (expected_provisional || target.grid == PERSISTENT_FORMWORK_GRID);
+        if building.kind != BuildingType::Wall
+            || building.is_provisional != provisional
+            || WorldMap::world_to_grid(owner_transform.translation.truncate()) != target.grid
+            || params.world_map.building_entity(target.grid) != Some(target.owner)
+        {
             return Err(format!("Wall {:?} lifecycle state differs", target.grid));
         }
         let matches = params
@@ -783,13 +1072,16 @@ fn inspect_joint(
             }),
         ));
     }
-    if let Some(initial) = &acceptance.visual_entities {
-        if initial != &visual_entities {
-            return Err("joint owner/visual identity changed between checkpoints".to_string());
-        }
-    } else {
-        acceptance.visual_entities = Some(visual_entities);
+    if let Some(initial) = &acceptance.visual_entities
+        && initial.iter().any(|(owner, visual)| {
+            visual_entities
+                .get(owner)
+                .is_some_and(|next| next != visual)
+        })
+    {
+        return Err("joint owner/visual identity changed between checkpoints".to_string());
     }
+    acceptance.visual_entities = Some(visual_entities);
 
     let window = params
         .window
@@ -801,7 +1093,7 @@ fn inspect_joint(
         .map_err(|_| "joint gallery requires one Camera3dRtt".to_string())?;
     let width = window.physical_width();
     let height = window.physical_height();
-    let projected = observations
+    let mut projected = observations
         .iter()
         .map(|(grid, world, identity)| {
             project_client_point(camera, camera_transform, *world, width, height)
@@ -812,7 +1104,7 @@ fn inspect_joint(
         })
         .collect::<Result<Vec<_>, _>>()?;
     let center = WorldMap::grid_to_world(CAMERA_GRID_CENTER.0, CAMERA_GRID_CENTER.1);
-    let main_camera = params
+    let (main_camera, camera2d, camera2d_transform) = params
         .main_camera
         .single()
         .map_err(|_| "joint gallery requires one MainCamera".to_string())?;
@@ -822,6 +1114,46 @@ fn inspect_joint(
     {
         return Err("joint gallery camera differs".to_string());
     }
+    let preview = acceptance.preview.ok_or("joint preview owner is missing")?;
+    let (sprite, anchor, transform, visibility) = params
+        .previews
+        .get(preview)
+        .map_err(|_| "joint preview shell is missing")?;
+    let preview_axis = if matches!(
+        checkpoint,
+        JointCheckpoint::Framed | JointCheckpoint::Completed
+    ) {
+        DoorPresentationAxis::EastWest
+    } else {
+        DoorPresentationAxis::NorthSouth
+    };
+    let preview_image = match preview_axis {
+        DoorPresentationAxis::EastWest => &door_assets.preview_ew,
+        DoorPresentationAxis::NorthSouth => &door_assets.preview_ns,
+    };
+    if &sprite.image != preview_image
+        || !params.images.contains(preview_image.id())
+        || sprite.custom_size != Some(Vec2::splat(64.0))
+        || *anchor != Anchor(Vec2::new(0.0, -0.25))
+        || !visibility.get()
+    {
+        return Err("joint construction preview asset, anchor or visibility differs".to_string());
+    }
+    let point = camera2d
+        .world_to_viewport(camera2d_transform, transform.translation())
+        .map_err(|_| "joint preview cannot be projected")?;
+    if point.x < 20.0
+        || point.x >= width as f32 - 20.0
+        || point.y < 20.0
+        || point.y >= height as f32 - 20.0
+    {
+        return Err("joint preview is outside client".to_string());
+    }
+    projected.push(
+        json!({"grid": [PREVIEW_GRID.0, PREVIEW_GRID.1], "x": point.x, "y": point.y,
+        "identity": {"kind": "preview", "owner": preview.to_bits().to_string(),
+            "visual": preview.to_bits().to_string(), "axis": format!("{preview_axis:?}")}}),
+    );
 
     Ok(json!({
         "schema_version": STATUS_SCHEMA_VERSION,
@@ -829,6 +1161,8 @@ fn inspect_joint(
         "phase": checkpoint.phase(),
         "generation": checkpoint.generation(),
         "session_nonce": acceptance.nonce,
+        "world_epoch": params.epoch.get(),
+        "paused_load_complete": acceptance.loaded_epoch == Some(params.epoch.get()),
         "window": {"width": width, "height": height, "scale_factor": config.requested_window_scale_factor()},
         "render": {"backend": "vulkan", "rtt_quality": config.requested_rtt_quality().map(|quality| quality.as_str())},
         "candidate_identity": {
@@ -838,8 +1172,9 @@ fn inspect_joint(
         "gallery": {
             "door_count": acceptance.doors.len(),
             "wall_count": acceptance.walls.len(),
-            "provisional_wall_count": acceptance.walls.iter().filter(|wall| expected_provisional && wall.initially_provisional).count(),
-            "continuous_door_count": 2,
+            "provisional_wall_count": acceptance.walls.iter().filter(|wall| wall.initially_provisional && (expected_provisional || wall.grid == PERSISTENT_FORMWORK_GRID)).count(),
+            "continuous_door_count": 4,
+            "preview_count": 1,
             "both_axes": true,
             "owner_visual_identity_stable": true,
             "projected_targets": projected,

@@ -112,9 +112,10 @@ python scripts/sync_external_assets.py \
 - `--delete-missing` 指定時のみ、コピー元に存在しない同期対象ファイルを `assets/` から削除する
 - `fonts/` と `shaders/` には触れない
 
-Wall production asset-set v2は、staging全体を対象にする上記legacy modeではなくmanifest allowlist modeを使う。
+Wall production asset-set v2 / v3とDoor v1は、staging全体を対象にする上記legacy modeではなくmanifest allowlist modeを使う。
 `--manifest`と`--selection core`は必ず組で指定し、art-approved final manifestの全artifact / report / license /
-source hashとtool commitを検証した後、normalを含まないexact 8 fileだけを明示したasset rootへコピーする。
+source hashを各asset専用validatorで検証した後、確定済みcoreだけを明示したasset rootへコピーする。
+現行Wall v2は8 file、型枠を含むWall v3は15 file、Doorは6 file。旧Wallのnormal採用済み9 file契約も保持する。
 manifest外のfileをcopy / deleteせず、symlinkやroot外pathも拒否する。
 
 ```bash
@@ -222,7 +223,7 @@ python3 tools/blender_ai_workflow/scripts/seal_wall_final.py \
   --output "$ASSET_ROOT/staging/reports/wall-production-v1.asset-set-final.json"
 ```
 
-### Wall v2 canonical generation
+### Canonical generationとrelease登録
 
 `init-asset-workspace`は既存generic v1を上書きせず、`generations/`、`authority/`、`quarantine/`とWall v2
 templateを冪等に追加する。`verify-asset-workspace`は必要directoryが実directoryであることと、generic v1 / Wall v2
@@ -233,6 +234,25 @@ final manifestの昇格は`promote_asset_set.py plan`でcurrent pointer preimage
 世代payloadとimmutable receiptを完全にfsync・renameしてから、最後に`authority/wall-production-v1.active.json`だけを
 atomic replaceする。中断時の`recover`とpreimageへ戻す`rollback`は既定read-onlyで、`--apply`時も世代を削除せず
 `quarantine/`へ移す。generation番号とreceipt IDは再利用しない。
+
+`asset_release_manifest.py`がWall v2 / v3、Door v1を区別する。Wall v2は旧validator、
+Wall v3は型枠validatorと完成Wall v2の全bytes検証、Doorは専用validatorを使い、candidateをpromotionへ渡すと拒否する。
+旧Wall v2のplan / receipt schema、generation path、active pointerは変えない。
+
+| asset set | canonical generation | mutable pointer | quarantine |
+|:--|:--|:--|:--|
+| Wall v2 / v3 | `generations/<GEN>/` | `authority/wall-production-v1.active.json` | `quarantine/` |
+| Door v1 | `asset_sets/door-production-v1/generations/<GEN>/` | `authority/door-production-v1.active.json` | `asset_sets/door-production-v1/quarantine/` |
+
+DoorはWallと同じgeneration番号でも衝突せず、plan / receipt / snapshotのasset IDが異なる入力は拒否する。
+初回Doorのrollbackはpointerなしへ戻し、Wall pointerには触れない。中断後のrecoverは対象assetの一時generationだけを
+隔離し、隔離済みgeneration番号も再利用しない。
+
+Wall v3のpayloadは完成Wallの封印済みgenerationから原本・core・report・license・manifestを
+`completed/`へ同梱する。sourceの完成generation / manifest SHA-256と一致させ、geometry contractも保存する。
+型枠の原本・geometry・prompt・report・art approvalは新generation自身に保存し、旧generationやstagingを
+参照できなくても再検証できる。Doorも原本・全report・art approval・licenseに加え、repo内geometry contractを
+`source/repo/<元path>`へ同梱する。承認済みGLBやtextureの実bytesは変換しない。
 payloadにはmanifestが指す全fileを含める。core 8 file、per-mesh export / khronos / post-export / scene report、
 set report、art review artifact、texture validation report、source `.blend`、license、manifest本体である。
 1つでも欠けると昇格後のgenerationを単体でvalidatorへかけられないため、回帰testで
@@ -240,6 +260,35 @@ promoted generationがそれ自身のrootだけで`validate_manifest`を通る�
 不完全なgenerationを昇格させてしまった場合は、pointerを`rollback`で戻し、当該generationを
 `generations/.quarantine-<GEN>-<理由>-<UTC>`へ退避してから、修正したtoolで同じpayload manifestを再applyする。
 active pointerが指していないgenerationは削除せず、監査のために隔離のまま残す。
+
+### Releaseのruntime mirrorへの導入
+
+Wall v3は`project_wallset.py`からruntime schema v2へ、Doorは`project_doorset.py`からruntime schema v1へ投影する。
+どちらも`release_approved`とgeneration-scoped receiptを要求する。coreの置き先はそれぞれ
+`wall_sets/<GEN>/` / `door_sets/<GEN>/`であり、candidate用の環境変数は使わない。
+
+canonicalへ昇格済みのactive generationだけを、次のinstallerで導入する（既定はdry-run）。
+
+```bash
+python3 tools/blender_ai_workflow/scripts/install_release_asset_set.py \
+  --manifest "$ASSET_ROOT/generations/<WALL_GEN>/manifest/wall-production-v1.asset-set.json" \
+  --dest "$PWD/assets"
+
+python3 tools/blender_ai_workflow/scripts/install_release_asset_set.py \
+  --manifest "$ASSET_ROOT/asset_sets/door-production-v1/generations/<DOOR_GEN>/manifest/door-production-v1.asset-set.json" \
+  --dest "$PWD/assets"
+```
+
+差分・受入・承認を確認してから同じcommandに`--apply`を付ける。installerは全core、receipt、active pointer、
+destinationのsymlinkや既存immutable bytesの衝突を事前検査する。coreとreceiptをcopy・fsyncし、generationを
+read-onlyにした後、最後に`manifests/<asset-set-id>.wallset`または`.doorset`をatomic replaceする。
+最後のlocator切替より前に失敗した場合は既存locatorを維持し、完全に一致する再実行ではlocatorを書き直さない。
+WallとDoorの導入は別transactionであり、両方を同時に切り替える保証はしない。
+初回Doorのcanonical rollbackだけではruntime locatorは消えない。通常版の復帰では、導入前に保存した
+runtime locatorのpreimageも復元する（初回Doorはlocatorなし）。coreを削除してfallbackを起こす手順にはしない。
+
+2026-09-10時点ではこれらはrelease準備toolであり、型枠・Doorの通常authorityは未切替。
+両単独M3に加え、共通J1の残件とrelease承認記録を揃えてから実際のpromotion / installを行う。
 
 validation worktreeは作業場であって成果物ではない。trackを閉じたら、各jobの`manifest.json`、比較CSV、
 承認画像だけを`staging/validation/<capsule>/`のような小さなdirectoryへ残し、worktree本体は

@@ -7,7 +7,7 @@
 | 計画ID | `provisional-wall-formwork-plan-2026-09-05` |
 | ステータス | `In Progress — 両単独M3完了／J1接合・表示遷移の実機確認済み` |
 | 作成日 | `2026-09-05` |
-| 最終更新日 | `2026-09-10` |
+| 最終更新日 | `2026-09-11` |
 | 作成者 | `Codex` |
 | 親計画 | [アセット作成マイルストーン](asset-milestones-2026-03-17.md)（Build-Aの仮設表現を追加改修） |
 | 関連計画 | [ドアの本番ビジュアル化](production-door-art-plan-2026-09-05.md)、[完了済み本番壁計画](archived/production-wall-art-plan-2026-08-31.md) |
@@ -281,7 +281,30 @@ viewも正式jobのtreeへ上書きしない。追加treeの作成前に実使�
 - 完了条件: 標準High/DPI 1の1 processで全phaseのstate・mesh/tag・画像を結ぶ。両asset generation/hash、subject、job IDを両計画へ同じ値で記録する。
 - 本節はshared J1を所有する。Door側で同じjobをもう一度実行せず参照する。quality特有の失敗を見つけた場合だけ該当caseを追加する。
 
-#### 接合・表示遷移profile（2026-09-10）
+#### 全lifecycle profile（2026-09-11、実機受入待ち）
+
+`wall-door-joint-lifecycle-v2`は旧seams-v1を置き換える新profileであり、旧3枚の証跡を全J1合格へ読み替えない。
+Door 9、Wall 17（撤去中だけ16）、Door Blueprint 1を使い、
+`framed → completed → support-changed → support-removed → support-restored → loaded`の6 checkpointを保持する。
+corner近傍とNS連続Doorを追加し、型枠1枚を最後まで残す。支持壁はowner一致で占有を解放してdespawnし、
+復元時は新ownerをspawnする。これ自体はDeconstruct task / 資材返却の受入を主張しない。
+
+最後の保存・読込はjob専用rootと`SaveLoadState` requestから通常`Last` dispatcherへ渡し、成功outcomeと
+WorldEpochのexact +1を待つ。旧Entity IDを使う前に種類・gridからDoor / Wall / Blueprintを再照合し、
+新worldのresident production mesh/material、混在phase、preview画像・anchor・可視性を検査する。
+previewはproduction `sync_door_preview_system`を通る建設Blueprintの実画面であり、配置ghostの入力操作テストではない。
+Python verifierはexact grid/state/axis、撤去・復元以外のvisual同一性、load後の全ID更新とepoch順序を独立検査する。
+ROIのdetail判定はRGB channel差ではなく画素間の輝度分散へ変更し、画像の目視レビューも必須のままとする。
+
+Help影響は`No impact`。profiling限定の検証入口と前回の未適用release toolだけの変更で、通常の建築・Door操作、
+材料・時間・表示resolver、save/load本体、Help本文・到達可能性、primary runtime authorityは変更しない。
+
+凍結前の`dev.py check`、profiling有効Clippy、workspace Clippyと全testを含む理由付き`dev.py verify`、
+native helper self-test群と`git diff --check`はpass。rust-analyzerの対象file診断はerror / warning 0件だが、
+profiling未有効のためunlinked-file hintが残り、workspace診断APIは既知のresponse形式エラーとなった。
+profilingの実コンパイルとClippyで補完した。実機結果はまだなく、この時点ではJ1完了・通常版反映を主張しない。
+
+#### 接合・表示遷移profile（2026-09-10、旧subjectの履歴）
 
 `joint_actual_window.rs`と`wall_door_joint_acceptance.py`の`wall-door-joint-seams-v1`は、
 J1のうち両軸Wall/Door接合、EWの連続Door、型枠の本設化、支持壁の位置変更によるDoor軸追従を対象とする。
@@ -341,6 +364,30 @@ Help影響は`No impact`。専用profiling起動条件と候補opt-inに限定�
 
 ### M4: release・文書同期・close
 
+- 2026-09-10再開時の経路確認: runtimeはrelease authorityを扱えるが、正式登録toolは旧Wall v2専用だった。
+  J1完了前に通常authorityは変更せず、次の順でrelease経路を整える。
+  1. asset種別を明示したmanifest検証・payload収集を追加する。Wall v3は完成Wallの原本・report・manifestを
+     hash付きで同梱し、Doorは専用validatorを使う。旧Wall v2のplan / receipt互換は維持する。
+  2. promotionのpointer・receipt・rollbackをasset setごとに分離し、同じgeneration番号のWallとDoorが衝突しないようにする。
+  3. generation-scopedなrelease projectionとallowlist同期を両種へ追加し、candidate許可を通常起動へ持ち込まない。
+  4. 単体再検証、別asset receiptの拒否、中断復旧、旧pointer復帰をテストした後、J1残件を閉じる。
+     その後にだけrelease承認記録・canonical昇格・通常authority実機確認へ進む。
+- release準備実装: `asset_release_manifest.py`、`project_doorset.py`、既存promoter / Wall projector /
+  allowlist syncを接続した。Wall v3は`completed/`へ完成原本を同梱し、Doorは
+  `asset_sets/door-production-v1/generations/`へ分離する。`install_release_asset_set.py`は既定dry-runで、
+  active canonical receiptの検証、immutable coreの同期・fsync後にruntime locatorだけを最後に切り替える。
+  別asset receipt、改変source、余分なruntime file、symlink、既存immutable bytesの上書きを拒否する。
+- `test_building_release.py`の8件で両payloadの単独再検証、同番号のWall/Doorの非干渉、初回Doorの
+  canonical rollback、中断recover、runtimeの切替順序・失敗前像保持・再実行を確認した。
+  実際のWall generation 10 / Door generation 6もread-onlyの`build_plan`を通過した。
+  これはJ1の残件や通常authorityの実機受入の代わりではない。canonical / primaryへのapplyは未実行。
+- Help影響は`No impact`。変更経路はasset登録・同期toolのみで、primary locatorやasset bytes、
+  runtimeのcandidate許可・release readiness、建築・Door操作、Help providerの文言・到達可能性は不変。
+  `docs/assets_workflow.md`へ登録namespace、自己完結payload、導入と復帰の責務を同期した。
+- release準備toolの検証（2026-09-10）: focused test 8/8、`dev.py check`、workspace Clippy
+  `--all-targets -- -D warnings`、理由付き`dev.py verify`、`git diff --check`がpass。
+  実候補のread-only planではWall 80 payload / Door 24 payloadを確認し、書込みはしていない。
+  このバッチでは新たな実機画像は採取していない。次はJ1残件の実装・actual-window受入。
 - 変更内容: 検証済み新generationのrelease手順、実画面比較、manifest・receipt・同期差分を提示し、canonicalへ昇格する。
 - 対象: `docs/building.md`、`docs/art-style-criteria.md`、`docs/assets_workflow.md`、`docs/rendering-performance.md`、親計画。Room・照明文書は表示説明に影響する部分を確認する。
 - 完了条件:

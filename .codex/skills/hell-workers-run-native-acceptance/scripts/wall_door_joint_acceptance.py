@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run and verify the seam and presentation-transition portion of Wall/Door J1."""
+"""Run and verify the joint Wall/Door lifecycle and construction-preview storyboard."""
 
 from __future__ import annotations
 
@@ -27,21 +27,26 @@ import wall_density_acceptance as density  # noqa: E402
 
 
 SCHEMA_VERSION = 1
-STATUS_SCHEMA_VERSION = 1
-PROFILE = "wall-door-joint-seams-v1"
+STATUS_SCHEMA_VERSION = 2
+PROFILE = "wall-door-joint-lifecycle-v2"
 COVERAGE = {
-    "actual_window": ["both-axis-seams", "east-west-continuous-doors", "completion-in-place", "support-relocation"],
+    "actual_window": ["both-axis-seams", "east-west-continuous-doors", "completion-in-place", "support-relocation",
+                      "joint-paused-load", "construction-preview-axis-after-support-change", "corner-seams",
+                      "north-south-continuous-doors", "support-removal-and-restoration"],
     "focused_audit": ["wall-paused-replacement", "wall-topology-door-removal", "preview-anchor"],
-    "pending_j1": ["joint-paused-load", "preview-axis-after-support-change", "corner-seams", "north-south-continuous-doors", "support-removal-and-restoration"],
+    "pending_j1": [],
 }
 SEED = 20_260_906
 WINDOW = (1280, 720)
 RUN_TIMEOUT_SECONDS = 120.0
 POLL_SECONDS = 0.1
 CHECKPOINTS = (
-    ("wall-door-joint-framed", 1, "joint-framed.png", 2),
-    ("wall-door-joint-completed", 2, "joint-completed.png", 0),
-    ("wall-door-joint-support-changed", 3, "joint-support-changed.png", 0),
+    ("wall-door-joint-framed", 1, "joint-framed.png", 3),
+    ("wall-door-joint-completed", 2, "joint-completed.png", 1),
+    ("wall-door-joint-support-changed", 3, "joint-support-changed.png", 1),
+    ("wall-door-joint-support-removed", 4, "joint-support-removed.png", 1),
+    ("wall-door-joint-support-restored", 5, "joint-support-restored.png", 1),
+    ("wall-door-joint-loaded", 6, "joint-loaded.png", 1),
 )
 FIXED_TESTS = (
     "systems::save::transaction::tests::mixed_wall_presentation_recovers_after_normal_rollback_and_recovery_replacement",
@@ -87,7 +92,8 @@ def build_command() -> list[str]:
 def fixed_test_command(test_name: str) -> list[str]:
     return [
         "python3", "scripts/dev.py", "cargo", "--", "test", "-p", "bevy_app@0.1.0",
-        "--features", "profiling", test_name, "--", "--exact", "--nocapture",
+        "--profile", "profiling", "--no-default-features", "--features", "profiling",
+        test_name, "--", "--exact", "--nocapture",
     ]
 
 
@@ -170,6 +176,27 @@ def clean_environment(
     return environment
 
 
+def expected_targets(generation: int) -> dict[tuple[int, int], dict[str, Any]]:
+    result = {}
+    for grid, state, axis in (
+        ((14, 44), "Closed", "NorthSouth" if generation in {3, 5, 6} else "EastWest"),
+        ((20, 44), "Open", "NorthSouth"), ((26, 44), "Open", "EastWest"),
+        ((32, 44), "Locked", "NorthSouth"), ((38, 44), "Closed", "EastWest"),
+        ((39, 44), "Open", "EastWest"), ((38, 50), "Closed", "NorthSouth"),
+        ((38, 51), "Open", "NorthSouth"), ((26, 50), "Open", "EastWest"),
+    ):
+        result[grid] = {"kind": "door", "state": state, "axis": axis}
+    walls = [(20, 43), (20, 45), (25, 44), (27, 44), (32, 43), (32, 45),
+             (37, 44), (40, 44), (38, 49), (38, 52), (25, 50), (27, 50), (25, 51)]
+    walls += [(13, 44), (15, 44), (13, 50), (15, 50)] if generation < 3 else [(14, 43), (14, 45), (14, 49), (14, 51)]
+    if generation == 4:
+        walls.remove((14, 45))
+    for grid in walls:
+        result[grid] = {"kind": "wall", "provisional": grid == (25, 51) or (generation == 1 and grid in {(25, 44), (32, 43)})}
+    result[(14, 50)] = {"kind": "preview", "axis": "EastWest" if generation < 3 else "NorthSouth"}
+    return result
+
+
 def validate_status(
     value: Any,
     *,
@@ -202,18 +229,23 @@ def validate_status(
             f"J1 {kind} runtime identity differs",
         )
     gallery = value.get("gallery")
+    expected = expected_targets(generation)
+    count = len(expected)
+    native.require(type(value.get("world_epoch")) is int and value["world_epoch"] >= 0
+                   and value.get("paused_load_complete") is (generation == 6), "J1 world replacement evidence differs")
     native.require(
         isinstance(gallery, dict)
-        and gallery.get("door_count") == 6
-        and gallery.get("wall_count") == 10
+        and gallery.get("door_count") == 9
+        and gallery.get("wall_count") == (16 if generation == 4 else 17)
         and gallery.get("provisional_wall_count") == provisional_count
-        and gallery.get("continuous_door_count") == 2
+        and gallery.get("continuous_door_count") == 4
+        and gallery.get("preview_count") == 1
         and gallery.get("both_axes") is True
         and gallery.get("owner_visual_identity_stable") is True,
         "J1 gallery contract differs",
     )
     targets = gallery.get("projected_targets")
-    native.require(isinstance(targets, list) and len(targets) == 16, "J1 projection coverage differs")
+    native.require(isinstance(targets, list) and len(targets) == count, "J1 projection coverage differs")
     for target in targets:
         native.require(
             isinstance(target, dict)
@@ -224,13 +256,28 @@ def validate_status(
         )
         native.require(20 <= target["x"] < WINDOW[0] - 20 and 20 <= target["y"] < WINDOW[1] - 20, "J1 target is outside the client")
         identity = target.get("identity")
-        native.require(isinstance(identity, dict) and identity.get("kind") in {"wall", "door"}
+        native.require(isinstance(identity, dict) and identity.get("kind") in {"wall", "door", "preview"}
                        and isinstance(identity.get("owner"), str) and identity["owner"].isdigit()
                        and isinstance(identity.get("visual"), str) and identity["visual"].isdigit(), "J1 target identity differs")
-    native.require(len({tuple(target["grid"]) for target in targets}) == 16
-                   and len({target["identity"]["owner"] for target in targets}) == 16
-                   and len({target["identity"]["visual"] for target in targets}) == 16, "J1 target identities are duplicated")
+        spec = expected.get(tuple(target["grid"]))
+        native.require(spec is not None and all(identity.get(key) == item for key, item in spec.items()), "J1 target semantic contract differs")
+    native.require(len({tuple(target["grid"]) for target in targets}) == count
+                   and len({target["identity"]["owner"] for target in targets}) == count
+                   and len({target["identity"]["visual"] for target in targets}) == count, "J1 target identities are duplicated")
     return value
+
+
+def validate_transitions(observations: list[dict], identities: list[dict[str, str]]) -> None:
+    native.require(identities[0] == identities[1] == identities[2], "J1 visual identity changed before teardown")
+    removed = next(item["identity"]["owner"] for item in observations[2]["status"]["gallery"]["projected_targets"] if item["grid"] == [14, 45])
+    native.require({owner: visual for owner, visual in identities[2].items() if owner != removed} == identities[3], "J1 teardown changed a surviving visual")
+    restored = next(item["identity"]["owner"] for item in observations[4]["status"]["gallery"]["projected_targets"] if item["grid"] == [14, 45])
+    native.require(restored != removed and set(identities[4]) - set(identities[3]) == {restored}
+                   and {owner: visual for owner, visual in identities[4].items() if owner != restored} == identities[3], "J1 restoration did not create just one replacement")
+    native.require(not (set(identities[4]) & set(identities[5]))
+                   and not (set(identities[4].values()) & set(identities[5].values())), "J1 normal load retained old world entities")
+    epochs = [item["status"]["world_epoch"] for item in observations]
+    native.require(epochs[:5] == [epochs[0]] * 5 and epochs[5] == epochs[0] + 1, "J1 world epoch sequence differs")
 
 
 def image_evidence(path: Path, status: dict[str, Any]) -> list[dict[str, Any]]:
@@ -243,8 +290,9 @@ def image_evidence(path: Path, status: dict[str, Any]) -> list[dict[str, Any]]:
     for target in status["gallery"]["projected_targets"]:
         x, y = round(target["x"]), round(target["y"])
         crop = b"".join(pixels[((row * width) + x - 20) * 3:((row * width) + x + 20) * 3] for row in range(y - 20, y + 20))
-        mean = sum(crop) / len(crop)
-        deviation = math.sqrt(sum((item - mean) ** 2 for item in crop) / len(crop))
+        luminance = [0.2126 * crop[i] + 0.7152 * crop[i + 1] + 0.0722 * crop[i + 2] for i in range(0, len(crop), 3)]
+        mean = sum(luminance) / len(luminance)
+        deviation = math.sqrt(sum((item - mean) ** 2 for item in luminance) / len(luminance))
         native.require(deviation >= 2.0 and mean >= 5, f"J1 target {target['grid']} contains no credible detail")
         evidence.append({"grid": target["grid"], "roi_sha256": hashlib.sha256(crop).hexdigest(), "standard_deviation": round(deviation, 6)})
     return evidence
@@ -370,7 +418,7 @@ def verify_root(root: Path) -> dict[str, Any]:
         "J1 provenance changed",
     )
     observations = manifest.get("observations")
-    native.require(isinstance(observations, list) and len(observations) == 3, "J1 observations differ")
+    native.require(isinstance(observations, list) and len(observations) == len(CHECKPOINTS), "J1 observations differ")
     for checkpoint, observation in zip(CHECKPOINTS, observations, strict=True):
         validate_status(
             observation.get("status"), checkpoint=checkpoint,
@@ -388,7 +436,7 @@ def verify_root(root: Path) -> dict[str, Any]:
         native.require(image_evidence(path, observation["status"]) == screenshot.get("image_evidence"), "J1 target pixels changed")
     identities = [{item["identity"]["owner"]: item["identity"]["visual"]
                    for item in observation["status"]["gallery"]["projected_targets"]} for observation in observations]
-    native.require(identities[0] == identities[1] == identities[2], "J1 visual identity changed")
+    validate_transitions(observations, identities)
     fixed = manifest.get("fixed_tests")
     native.require(isinstance(fixed, list) and [test.get("test") for test in fixed] == list(FIXED_TESTS), "J1 fixed test inventory differs")
     for index, test in enumerate(fixed):
@@ -564,7 +612,7 @@ def verify(args: argparse.Namespace) -> int:
 
 
 def self_test() -> int:
-    native.require([item[1] for item in CHECKPOINTS] == [1, 2, 3], "J1 checkpoint order differs")
+    native.require([item[1] for item in CHECKPOINTS] == list(range(1, 7)), "J1 checkpoint order differs")
     command = game_command(Path("/repo"), Path("/job"))
     native.require(
         command[command.index("--perf-workload") + 1] == "door-density"
@@ -577,14 +625,15 @@ def self_test() -> int:
                   for kind, generation, digit in (("wall", 10, "a"), ("door", 6, "b"))}
     nonce = "0123456789abcdef0123456789abcdef"
     status_value = {
-        "schema_version": 1, "status": "ready", "phase": CHECKPOINTS[0][0], "generation": 1,
+        "schema_version": STATUS_SCHEMA_VERSION, "status": "ready", "phase": CHECKPOINTS[0][0], "generation": 1,
+        "world_epoch": 0, "paused_load_complete": False,
         "session_nonce": nonce, "window": {"width": 1280, "height": 720, "scale_factor": 1.0},
         "render": {"backend": "vulkan", "rtt_quality": "high"},
         "candidate_identity": {kind: {**value, "authority": "IsolatedCandidate"} for kind, value in identities.items()},
-        "gallery": {"door_count": 6, "wall_count": 10, "provisional_wall_count": 2,
-                    "continuous_door_count": 2, "both_axes": True, "owner_visual_identity_stable": True,
-                    "projected_targets": [{"grid": [index, 0], "x": 100 + index * 40, "y": 320,
-                        "identity": {"kind": "door" if index < 6 else "wall", "owner": str(index), "visual": str(index + 16)}} for index in range(16)]},
+        "gallery": {"door_count": 9, "wall_count": 17, "provisional_wall_count": 3, "preview_count": 1,
+                    "continuous_door_count": 4, "both_axes": True, "owner_visual_identity_stable": True,
+                    "projected_targets": [{"grid": list(grid), "x": 100 + index * 30, "y": 320,
+                        "identity": {**spec, "owner": str(index), "visual": str(index + 27)}} for index, (grid, spec) in enumerate(expected_targets(1).items())]},
     }
     validate_status(status_value, checkpoint=CHECKPOINTS[0], nonce=nonce, identities=identities)
     for path, replacement in (
@@ -595,6 +644,8 @@ def self_test() -> int:
         (("gallery", "projected_targets", 0, "x"), float("nan")),
         (("gallery", "projected_targets", 0, "identity", "owner"), "1"),
         (("gallery", "owner_visual_identity_stable"), False),
+        (("world_epoch",), -1), (("paused_load_complete",), True),
+        (("gallery", "projected_targets", 0, "identity", "axis"), "NorthSouth"),
     ):
         changed = copy.deepcopy(status_value)
         parent = changed
@@ -607,6 +658,51 @@ def self_test() -> int:
             pass
         else:
             raise native.AcceptanceError(f"J1 status accepted changed {path}")
+    observations = []
+    owners = {grid: index for index, grid in enumerate(expected_targets(1))}
+    for checkpoint in CHECKPOINTS:
+        generation = checkpoint[1]
+        if generation == 3:
+            for before, after in (((13, 44), (14, 43)), ((15, 44), (14, 45)),
+                                  ((13, 50), (14, 49)), ((15, 50), (14, 51))):
+                owners[after] = owners.pop(before)
+        if generation == 4:
+            del owners[(14, 45)]
+        if generation == 5:
+            owners[(14, 45)] = 100
+        if generation == 6:
+            owners = {grid: owner + 1000 for grid, owner in owners.items()}
+        status = copy.deepcopy(status_value)
+        status.update(phase=checkpoint[0], generation=generation, world_epoch=int(generation == 6),
+                      paused_load_complete=generation == 6)
+        status["gallery"].update(wall_count=16 if generation == 4 else 17,
+                                 provisional_wall_count=checkpoint[3], projected_targets=[
+            {"grid": list(grid), "x": 100 + index * 30, "y": 320,
+             "identity": {**spec, "owner": str(owners[grid]), "visual": str(owners[grid] + 5000)}}
+            for index, (grid, spec) in enumerate(expected_targets(generation).items())])
+        validate_status(status, checkpoint=checkpoint, nonce=nonce, identities=identities)
+        observations.append({"status": status})
+    entity_maps = [{item["identity"]["owner"]: item["identity"]["visual"]
+                   for item in observation["status"]["gallery"]["projected_targets"]} for observation in observations]
+    validate_transitions(observations, entity_maps)
+    for index in (1, 3, 4, 5):
+        changed = copy.deepcopy(entity_maps)
+        owner = next(iter(changed[index]))
+        changed[index][owner] = "999999" if index != 5 else next(iter(entity_maps[4].values()))
+        try:
+            validate_transitions(observations, changed)
+        except native.AcceptanceError:
+            pass
+        else:
+            raise native.AcceptanceError(f"J1 accepted invalid identity transition {index}")
+    changed = copy.deepcopy(observations)
+    changed[-1]["status"]["world_epoch"] = 0
+    try:
+        validate_transitions(changed, entity_maps)
+    except native.AcceptanceError:
+        pass
+    else:
+        raise native.AcceptanceError("J1 accepted load without world replacement")
     native.print_json({"schema_version": SCHEMA_VERSION, "status": "pass", "profile": PROFILE})
     return 0
 

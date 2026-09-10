@@ -1,4 +1,4 @@
-"""Plan and execute atomic promotion of a final Wall asset-set generation."""
+"""Plan and execute atomic promotion of a final Wall or Door asset set."""
 
 from __future__ import annotations
 
@@ -10,6 +10,7 @@ import json
 import os
 import re
 import shutil
+import sys
 from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path, PurePosixPath
@@ -17,6 +18,11 @@ from types import ModuleType
 from typing import Any
 
 WORKFLOW_ROOT = Path(__file__).resolve().parents[1]
+if str(WORKFLOW_ROOT / "scripts") not in sys.path:
+    sys.path.insert(0, str(WORKFLOW_ROOT / "scripts"))
+
+import asset_release_manifest as release_manifest
+
 PROJECT_ROOT = WORKFLOW_ROOT.parents[1]
 MANIFEST_VALIDATOR = WORKFLOW_ROOT / "scripts/validate_asset_set_manifest.py"
 ASSET_SET_ID = "wall-production-v1"
@@ -157,19 +163,41 @@ def file_entry(source: Path, destination: str, expected_hash: str) -> dict[str, 
 
 
 def manifest_context(manifest_path: Path) -> tuple[Path, Path, Path, Path]:
-    reports_root = manifest_path.resolve().parent
-    staging_root = reports_root.parent
+    roots = release_manifest.roots_for(manifest_path)
     return (
-        staging_root / "blend",
-        staging_root / "exports",
-        reports_root,
-        staging_root.parent / "licenses",
+        roots["blend_root"],
+        roots["exports_root"],
+        roots["reports_root"],
+        roots["licenses_root"],
     )
 
 
 def build_payload(
-    manifest_path: Path, manifest: dict[str, Any]
+    manifest_path: Path, manifest: dict[str, Any], *, repo: Path | None = None
 ) -> list[dict[str, str]]:
+    asset_id, version = release_manifest.identity(manifest)
+    if (asset_id, version) != (ASSET_SET_ID, 2):
+        entries = [
+            file_entry(source, destination, digest)
+            for source, destination, digest in release_manifest.additional_payload(
+                manifest_path, manifest, repo=repo
+            )
+        ]
+        if asset_id == ASSET_SET_ID:
+            completed_path = release_manifest.completed_source(manifest_path, manifest)
+            completed = load_manifest_validator().read_json(completed_path)
+            entries.extend(
+                {**entry, "destination": f"completed/{entry['destination']}"}
+                for entry in build_payload(completed_path, completed, repo=repo)
+            )
+            entries.append(file_entry(
+                release_manifest.wall.GEOMETRY_CONTRACT,
+                "completed/source/contracts/wall-production-v1.geometry.json",
+                completed["source"]["geometry_contract"]["sha256"],
+            ))
+        destinations = [entry["destination"] for entry in entries]
+        require(len(destinations) == len(set(destinations)), "payload destination is duplicated")
+        return sorted(entries, key=lambda entry: entry["destination"])
     blend_root, exports_root, reports_root, licenses_root = manifest_context(
         manifest_path
     )
@@ -228,13 +256,13 @@ def build_payload(
     return sorted(entries, key=lambda entry: entry["destination"])
 
 
-def validate_pointer(value: Any) -> dict[str, Any]:
+def validate_pointer(value: Any, asset_id: str = ASSET_SET_ID) -> dict[str, Any]:
     require(
         isinstance(value, dict) and set(value) == POINTER_FIELDS,
         "active pointer fields differ",
     )
     require(
-        value["schema_version"] == 1 and value["asset_set_id"] == ASSET_SET_ID,
+        value["schema_version"] == 1 and value["asset_set_id"] == asset_id,
         "active pointer identity differs",
     )
     require(
@@ -248,7 +276,7 @@ def validate_pointer(value: Any) -> dict[str, Any]:
             f"active pointer {field} differs",
         )
     expected_receipt = (
-        f"generations/{value['asset_set_generation']}/authority/promotion-receipt.json"
+        f"{release_manifest.generation_directory(asset_id).as_posix()}/{value['asset_set_generation']}/authority/promotion-receipt.json"
     )
     require(
         value["receipt_path"] == expected_receipt, "active pointer receipt path differs"
@@ -256,11 +284,11 @@ def validate_pointer(value: Any) -> dict[str, Any]:
     return value
 
 
-def pointer_identity(asset_root: Path) -> dict[str, Any]:
-    path = asset_root / ACTIVE_POINTER
+def pointer_identity(asset_root: Path, asset_id: str = ASSET_SET_ID) -> dict[str, Any]:
+    path = asset_root / release_manifest.active_pointer(asset_id)
     if not path.exists():
         return {"status": "absent"}
-    value = validate_pointer(read_canonical_json(path, "active pointer"))
+    value = validate_pointer(read_canonical_json(path, "active pointer"), asset_id)
     return {
         "status": "present",
         "sha256": sha256(path),
@@ -283,27 +311,18 @@ def build_plan(
     ensure_outside(snapshot, asset_root, "snapshot")
     validator = load_manifest_validator()
     manifest = validator.read_json(manifest_path)
-    blend_root, exports_root, reports_root, licenses_root = manifest_context(
-        manifest_path
-    )
-    validator.validate_manifest(
-        manifest_path,
-        mode="final",
-        blend_root=blend_root,
-        exports_root=exports_root,
-        reports_root=reports_root,
-        licenses_root=licenses_root,
-        repo=repo,
-    )
+    release_manifest.validate(manifest_path, repo=repo)
+    asset_id = manifest["asset_set_id"]
+    generation_directory = release_manifest.generation_directory(asset_id)
     generation = manifest["asset_set_generation"]
     allocated_generations = [
         int(path.name)
-        for path in (asset_root / "generations").glob("*")
+        for path in (asset_root / generation_directory).glob("*")
         if path.is_dir() and path.name.isdigit()
     ]
     quarantined_generations = [
         int(match.group(1))
-        for path in (asset_root / "quarantine").glob("*.recovered")
+        for path in (asset_root / release_manifest.quarantine_directory(asset_id)).glob("*.recovered")
         if (match := re.fullmatch(r"([0-9]+)\.recovered", path.name))
     ]
     if allocated_generations or quarantined_generations:
@@ -311,20 +330,20 @@ def build_plan(
             generation > max(allocated_generations + quarantined_generations),
             "asset-set generation is not monotonically increasing",
         )
-    target = asset_root / "generations" / str(generation)
+    target = asset_root / generation_directory / str(generation)
     require(not target.exists(), f"target generation already exists: {target}")
-    payload = build_payload(manifest_path, manifest)
+    payload = build_payload(manifest_path, manifest, repo=repo)
     return {
         "schema_version": 1,
-        "operation": "promote_wall_asset_set",
-        "asset_set_id": ASSET_SET_ID,
+        "operation": "promote_wall_asset_set" if asset_id == ASSET_SET_ID else "promote_door_asset_set",
+        "asset_set_id": asset_id,
         "asset_set_generation": generation,
         "manifest_sha256": sha256(manifest_path),
         "source_manifest": str(manifest_path),
         "asset_root": str(asset_root),
         "snapshot": str(snapshot),
-        "target_generation": f"generations/{generation}",
-        "previous_active": pointer_identity(asset_root),
+        "target_generation": (generation_directory / str(generation)).as_posix(),
+        "previous_active": pointer_identity(asset_root, asset_id),
         "payload": payload,
         "tool_commit": manifest["source"]["tool_commit"],
         "tool_tree": manifest["source"]["tool_tree"],
@@ -348,8 +367,8 @@ def validate_plan_shape(plan: dict[str, Any]) -> None:
     require(set(plan) == PLAN_FIELDS, "promotion plan fields differ")
     require(
         plan["schema_version"] == 1
-        and plan["operation"] == "promote_wall_asset_set"
-        and plan["asset_set_id"] == ASSET_SET_ID,
+        and (plan["asset_set_id"], plan["operation"])
+        in {(ASSET_SET_ID, "promote_wall_asset_set"), (release_manifest.DOOR_ID, "promote_door_asset_set")},
         "promotion plan identity differs",
     )
     generation = plan["asset_set_generation"]
@@ -357,7 +376,7 @@ def validate_plan_shape(plan: dict[str, Any]) -> None:
         type(generation) is int and generation > 0, "promotion plan generation differs"
     )
     require(
-        plan["target_generation"] == f"generations/{generation}",
+        plan["target_generation"] == (release_manifest.generation_directory(plan["asset_set_id"]) / str(generation)).as_posix(),
         "promotion plan target differs",
     )
     require(
@@ -503,11 +522,11 @@ def fsync_tree(root: Path, hook: Callable[[str], None]) -> None:
 
 
 def snapshot_payload(plan: dict[str, Any], plan_hash: str, asset_root: Path) -> bytes:
-    active = asset_root / ACTIVE_POINTER
+    active = asset_root / release_manifest.active_pointer(plan["asset_set_id"])
     pointer_bytes = active.read_bytes() if active.exists() else None
     value = {
         "schema_version": 1,
-        "asset_set_id": ASSET_SET_ID,
+        "asset_set_id": plan["asset_set_id"],
         "promotion_plan_sha256": plan_hash,
         "previous_active": plan["previous_active"],
         "pointer_bytes_base64": (
@@ -519,11 +538,11 @@ def snapshot_payload(plan: dict[str, Any], plan_hash: str, asset_root: Path) -> 
     return canonical_json(value)
 
 
-def scan_receipt_id(asset_root: Path, receipt_id: str) -> None:
+def scan_receipt_id(asset_root: Path, receipt_id: str, asset_id: str = ASSET_SET_ID) -> None:
     receipt_paths = list(
-        (asset_root / "generations").glob("*/authority/promotion-receipt.json")
+        (asset_root / release_manifest.generation_directory(asset_id)).glob("*/authority/promotion-receipt.json")
     ) + list(
-        (asset_root / "quarantine").glob("*.recovered/authority/promotion-receipt.json")
+        (asset_root / release_manifest.quarantine_directory(asset_id)).glob("*.recovered/authority/promotion-receipt.json")
     )
     for receipt_path in receipt_paths:
         receipt = read_canonical_json(receipt_path, "existing promotion receipt")
@@ -546,7 +565,7 @@ def receipt_value(
     return {
         "schema_version": 1,
         "receipt_id": receipt_id,
-        "asset_set_id": ASSET_SET_ID,
+        "asset_set_id": plan["asset_set_id"],
         "asset_set_generation": generation,
         "manifest_sha256": plan["manifest_sha256"],
         "promotion_plan_sha256": plan_hash,
@@ -561,7 +580,7 @@ def receipt_value(
         },
         "previous_active": plan["previous_active"],
         "new_active": {
-            "asset_set_id": ASSET_SET_ID,
+            "asset_set_id": plan["asset_set_id"],
             "asset_set_generation": generation,
             "manifest_sha256": plan["manifest_sha256"],
         },
@@ -574,10 +593,10 @@ def active_pointer_value(plan: dict[str, Any], receipt_hash: str) -> dict[str, A
     generation = plan["asset_set_generation"]
     return {
         "schema_version": 1,
-        "asset_set_id": ASSET_SET_ID,
+        "asset_set_id": plan["asset_set_id"],
         "asset_set_generation": generation,
         "manifest_sha256": plan["manifest_sha256"],
-        "receipt_path": f"generations/{generation}/authority/promotion-receipt.json",
+        "receipt_path": f"{plan['target_generation']}/authority/promotion-receipt.json",
         "receipt_sha256": receipt_hash,
     }
 
@@ -592,7 +611,7 @@ def validate_receipt(
     receipt = read_canonical_json(receipt_path, "promotion receipt")
     require(set(receipt) == RECEIPT_FIELDS, "promotion receipt fields differ")
     require(
-        receipt["schema_version"] == 1 and receipt["asset_set_id"] == ASSET_SET_ID,
+        receipt["schema_version"] == 1 and receipt["asset_set_id"] == plan["asset_set_id"],
         "promotion receipt identity differs",
     )
     require(
@@ -611,7 +630,7 @@ def validate_receipt(
     require(
         receipt["new_active"]
         == {
-            "asset_set_id": ASSET_SET_ID,
+            "asset_set_id": plan["asset_set_id"],
             "asset_set_generation": plan["asset_set_generation"],
             "manifest_sha256": plan["manifest_sha256"],
         },
@@ -671,7 +690,8 @@ def apply_plan(
     approval = regular_file(approval, "release approval")
     asset_root = Path(plan["asset_root"])
     snapshot = Path(plan["snapshot"])
-    scan_receipt_id(asset_root, receipt_id)
+    asset_id = plan["asset_set_id"]
+    scan_receipt_id(asset_root, receipt_id, asset_id)
     hook = kill_hook or (lambda _stage: None)
     plan_hash = sha256(plan_path)
 
@@ -689,12 +709,17 @@ def apply_plan(
     fsync_directory(snapshot.parent)
     hook("after_snapshot_fsync")
 
-    generations = asset_root / "generations"
+    generations = asset_root / release_manifest.generation_directory(asset_id)
     generations.mkdir(parents=True, exist_ok=True)
-    fsync_directory(generations.parent)
+    ancestor = generations.parent
+    while ancestor.is_relative_to(asset_root):
+        fsync_directory(ancestor)
+        if ancestor == asset_root:
+            break
+        ancestor = ancestor.parent
     generation = plan["asset_set_generation"]
     target = asset_root / plan["target_generation"]
-    temporary = generations / f".{ASSET_SET_ID}-g{generation}-{receipt_id}.tmp"
+    temporary = generations / f".{asset_id}-g{generation}-{receipt_id}.tmp"
     require(not target.exists(), f"target generation already exists: {target}")
     require(
         not temporary.exists(), f"promotion temporary generation exists: {temporary}"
@@ -748,7 +773,7 @@ def apply_plan(
     hook("after_generation_parent_fsync")
 
     pointer = active_pointer_value(plan, receipt_hash)
-    pointer_path = asset_root / ACTIVE_POINTER
+    pointer_path = asset_root / release_manifest.active_pointer(asset_id)
     pointer_path.parent.mkdir(parents=True, exist_ok=True)
     pointer_temporary = pointer_path.with_name(f".{pointer_path.name}.{receipt_id}.tmp")
     write_exclusive(pointer_temporary, canonical_json(pointer))
@@ -770,8 +795,9 @@ def apply_plan(
 def validate_active_generation(
     asset_root: Path, plan: dict[str, Any], plan_path: Path
 ) -> None:
-    pointer_path = asset_root / ACTIVE_POINTER
-    pointer = validate_pointer(read_canonical_json(pointer_path, "active pointer"))
+    asset_id = plan["asset_set_id"]
+    pointer_path = asset_root / release_manifest.active_pointer(asset_id)
+    pointer = validate_pointer(read_canonical_json(pointer_path, "active pointer"), asset_id)
     require(
         pointer["asset_set_generation"] == plan["asset_set_generation"],
         "active generation differs from plan",
@@ -798,13 +824,15 @@ def recover_plan(plan_path: Path, *, apply: bool) -> dict[str, Any]:
     validate_plan_shape(plan)
     asset_root = Path(plan["asset_root"])
     generation = plan["asset_set_generation"]
-    generations = asset_root / "generations"
+    asset_id = plan["asset_set_id"]
+    generations = asset_root / release_manifest.generation_directory(asset_id)
     target = generations / str(generation)
-    temporaries = sorted(generations.glob(f".{ASSET_SET_ID}-g{generation}-*.tmp"))
+    temporaries = sorted(generations.glob(f".{asset_id}-g{generation}-*.tmp"))
+    active_pointer = release_manifest.active_pointer(asset_id)
     pointer_temporaries = sorted(
-        (asset_root / ACTIVE_POINTER.parent).glob(f".{ACTIVE_POINTER.name}.*.tmp")
+        (asset_root / active_pointer.parent).glob(f".{active_pointer.name}.*.tmp")
     )
-    current = pointer_identity(asset_root)
+    current = pointer_identity(asset_root, asset_id)
     new_identity = {
         "status": "present",
         "asset_set_generation": generation,
@@ -822,7 +850,7 @@ def recover_plan(plan_path: Path, *, apply: bool) -> dict[str, Any]:
     require(not conflict, "recovery found a stale active pointer; refusing quarantine")
     moved: list[str] = []
     if apply and (temporaries or pointer_temporaries or inert):
-        quarantine = asset_root / "quarantine"
+        quarantine = asset_root / release_manifest.quarantine_directory(asset_id)
         quarantine.mkdir(parents=True, exist_ok=True)
         for path in [
             *temporaries,
@@ -867,6 +895,11 @@ def rollback_plan(plan_path: Path, snapshot: Path, *, apply: bool) -> dict[str, 
         "promotion snapshot fields differ",
     )
     require(
+        snapshot_value["schema_version"] == 1
+        and snapshot_value["asset_set_id"] == plan["asset_set_id"],
+        "snapshot asset identity differs",
+    )
+    require(
         snapshot_value["promotion_plan_sha256"] == sha256(plan_path),
         "snapshot plan binding differs",
     )
@@ -875,7 +908,8 @@ def rollback_plan(plan_path: Path, snapshot: Path, *, apply: bool) -> dict[str, 
         "snapshot preimage differs",
     )
     asset_root = Path(plan["asset_root"])
-    current = pointer_identity(asset_root)
+    asset_id = plan["asset_set_id"]
+    current = pointer_identity(asset_root, asset_id)
     if current == plan["previous_active"]:
         return {"status": "already_rolled_back", "active": current}
     require(
@@ -888,7 +922,7 @@ def rollback_plan(plan_path: Path, snapshot: Path, *, apply: bool) -> dict[str, 
     if not apply:
         return {"status": "planned", "restore": plan["previous_active"]}
 
-    pointer_path = asset_root / ACTIVE_POINTER
+    pointer_path = asset_root / release_manifest.active_pointer(asset_id)
     encoded = snapshot_value["pointer_bytes_base64"]
     if plan["previous_active"]["status"] == "present":
         require(isinstance(encoded, str), "snapshot pointer bytes are absent")
@@ -898,16 +932,16 @@ def rollback_plan(plan_path: Path, snapshot: Path, *, apply: bool) -> dict[str, 
             "snapshot pointer hash differs",
         )
         value = json.loads(payload)
-        validate_pointer(value)
+        validate_pointer(value, asset_id)
         require(canonical_json(value) == payload, "snapshot pointer is not canonical")
         write_atomic(pointer_path, payload, "rollback")
         fsync_directory(pointer_path.parent)
     else:
         require(encoded is None, "absent snapshot contains pointer bytes")
-        quarantine = asset_root / "quarantine"
+        quarantine = asset_root / release_manifest.quarantine_directory(asset_id)
         quarantine.mkdir(parents=True, exist_ok=True)
         destination = quarantine / (
-            f"wall-production-v1.g{plan['asset_set_generation']}.rolled-back-pointer.json"
+            f"{asset_id}.g{plan['asset_set_generation']}.rolled-back-pointer.json"
         )
         require(
             not destination.exists(), f"rollback pointer backup exists: {destination}"
@@ -915,7 +949,7 @@ def rollback_plan(plan_path: Path, snapshot: Path, *, apply: bool) -> dict[str, 
         os.rename(pointer_path, destination)
         fsync_directory(pointer_path.parent)
         fsync_directory(quarantine)
-    return {"status": "rolled_back", "active": pointer_identity(asset_root)}
+    return {"status": "rolled_back", "active": pointer_identity(asset_root, asset_id)}
 
 
 def write_plan_output(plan: dict[str, Any], output: Path | None) -> None:
@@ -1016,5 +1050,5 @@ if __name__ == "__main__":
         KeyError,
         json.JSONDecodeError,
     ) as error:
-        print(f"Wall asset-set promotion failed: {error}")
+        print(f"Asset-set promotion failed: {error}")
         raise SystemExit(1) from error
