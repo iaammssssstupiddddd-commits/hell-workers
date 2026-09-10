@@ -5,7 +5,7 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `provisional-wall-formwork-plan-2026-09-05` |
-| ステータス | `In Progress — 両単独M3完了／J1接合・表示遷移の実機確認済み` |
+| ステータス | `In Progress — 両単独M3・共通J1完了／M4正式反映待ち` |
 | 作成日 | `2026-09-05` |
 | 最終更新日 | `2026-09-11` |
 | 作成者 | `Codex` |
@@ -281,7 +281,7 @@ viewも正式jobのtreeへ上書きしない。追加treeの作成前に実使�
 - 完了条件: 標準High/DPI 1の1 processで全phaseのstate・mesh/tag・画像を結ぶ。両asset generation/hash、subject、job IDを両計画へ同じ値で記録する。
 - 本節はshared J1を所有する。Door側で同じjobをもう一度実行せず参照する。quality特有の失敗を見つけた場合だけ該当caseを追加する。
 
-#### 全lifecycle profile（2026-09-11、実機受入待ち）
+#### 全lifecycle profile（2026-09-11、実機受入完了）
 
 `wall-door-joint-lifecycle-v2`は旧seams-v1を置き換える新profileであり、旧3枚の証跡を全J1合格へ読み替えない。
 Door 9、Wall 17（撤去中だけ16）、Door Blueprint 1を使い、
@@ -302,7 +302,7 @@ Help影響は`No impact`。profiling限定の検証入口と前回の未適用re
 凍結前の`dev.py check`、profiling有効Clippy、workspace Clippyと全testを含む理由付き`dev.py verify`、
 native helper self-test群と`git diff --check`はpass。rust-analyzerの対象file診断はerror / warning 0件だが、
 profiling未有効のためunlinked-file hintが残り、workspace診断APIは既知のresponse形式エラーとなった。
-profilingの実コンパイルとClippyで補完した。実機結果はまだなく、この時点ではJ1完了・通常版反映を主張しない。
+profilingの実コンパイルとClippyで補完した。ここまでが初回subject凍結時の記録で、実機結果は以下に分離する。
 
 実行subjectは`83ad3f8576c0fd68cd24b0350576ec5ebaa7785f`、専用worktreeは
 `/home/satotakumi/projects/hell-workers-validation/wall-door-joint-83ad3f85`。
@@ -312,12 +312,44 @@ job `wall-door-joint-20260910T171102Z-37fc20c4`をdirect kittyで実行。固定
 対策はload要求前にReadyのcarrierからjoint observerへ責務を明示的に引き渡すこと。
 `HandedOffToJoint`でcarrierの旧layout / presentationを破棄し、density sidecarも拒否する。
 通常densityのReady継続検査は変更せず、load後の新worldはjoint側のepoch / grid / owner / visual照合で検査する。
-handoffの状態遷移・旧ID破棄・sidecar拒否を回帰testに追加し、同じ専用worktreeで再試行する。
+handoffの状態遷移・旧ID破棄・sidecar拒否を回帰testに追加し、同じ専用worktreeをcleanな修正subjectへfast-forwardして再試行した。
 修正後のfocused test 5件、`dev.py check`、profiling有効Clippy、workspace Clippyを含む理由付き
 `dev.py verify`はpass。Help影響は`No impact`で、変更はjoint検証のworld引継ぎと明示release検証入口に限定し、
 通常建築・Doorの操作、表示rule、材料、save/load本体、runtime authority、Help到達可能性は不変。
-Wall generation 10 / Door generation 6のmanifest hashとasset viewは旧J1と同じで、
-未取得のloaded PNGや失敗jobを成功証拠として扱わない。
+Wall generation 10 / Door generation 6のmanifest hashとasset viewは旧J1と同じ。
+初回の失敗jobにはloaded PNGがなく、成功証拠として扱わない。
+
+正式再試行の結果（2026-09-11、J1全体valid）:
+
+- subject: `5de169bcf916e0d2a8e9d9c664708da229f2900f`。専用worktreeは上記と同じで、このsubjectのまま保持する。
+- job: `target/native-acceptance/wall-door-joint-20260910T175148Z-bb4a4563`（専用worktree基準）。
+  direct kittyから固定audit 3/3、Capture build、1 process / 6 checkpoint、最終ACKとexit 0を確認し、独立`verify`もpass。
+- 実adapter: `Intel(R) Arc(tm) Graphics (MTL)`、Mesa 26.1.8、Vulkan / X11 / High / DPI 1 / 1280×720。
+- Wall generation 10 / manifest `734a2a06940287ea63047f4aaa4e57a8c32aa61cd64899d74f20959e0a8e29d1`、
+  Door generation 6 / manifest `4f2b795f596fbd30c84a16588a873f889c158a5f87b9d6357d7233c13de38448`。
+- asset view: `becb0697cfe6d2ead21e841cd510830e65863ba66de872607b85cdb5b893e378`、
+  source: `cc52db3cbb7ecf733d2e22de6e2b1e8912abb6d50cb8b2ea455066b626aed4c8`、
+  harness: `89df57f4f6f2bf9b92a2c0cc0607566226333aadcbe2b3b52b82d82273878e5b`、
+  binary: `cef53ffcb76ddf510605051551c78c9b0ce6f0d72eeec1b1bfcafd86238e51ab`。
+- manifest SHA-256: `08d9ab6a5fee118b768c5426da8027df00acd1aee37ba86682496c8f4005b984`。
+- 全6 PNGを目視確認。型枠2枚の本設化後もcornerの型枠1枚を保持し、両軸の接合・連続Door、支持変更時の
+  Door / Blueprint軸追従、撤去時のEW fallback、復元時のNS復帰を確認した。承認済みの扉形状・左右同開度は不変。
+- 最初の5 checkpointはepoch 0、通常load後はepoch 1かつpaused load完了。Door / Wall / Blueprintの
+  owner / visual IDは新worldへ更新され、phase・mesh/material・previewが一致した。
+  `support-restored`と`loaded`のPNGはbyte単位でも同一で、表示の復元と旧IDの非再利用を別々に検証した。
+- 成功jobのmanifest / job / probe-status、固定audit 3 log、build / actual-window log、6 PNGの計14 fileを
+  `/home/satotakumi/Sync/hell-workers-assets/staging/acceptance/wall-door-joint-20260910T175148Z-bb4a4563/`
+  へ11 MiBのcapsuleとして保存し、manifestの原本一致を確認した。原job・失敗job・worktreeはM4 closeまで保持し、まだ容量回収しない。
+- 本結果はcandidateの接合・表示lifecycle受入。新たな性能 / Memory計測、通常release受入、ユーザーのrelease承認ではない。
+
+| checkpoint | PNG（上記job / capsule基準） | SHA-256 |
+|:--|:--|:--|
+| 型枠あり | `joint-framed.png` | `b6e5a6e27a8e9a67299de30fb79d73b6b4bc9469f748b5e0e981801d9ee13c48` |
+| 本設化後 | `joint-completed.png` | `dbf1de6f6bc7e8a68a151f62d079483473a3692b996ca0722aa9fe1c6d66cbfa` |
+| 支持壁移動後 | `joint-support-changed.png` | `c78480b83629f80a5e0d6a3f1d6ecc25351686dd73084161f4b5ab7e2ad546f2` |
+| 支持壁撤去後 | `joint-support-removed.png` | `a7c5023080d31e71d017b54de6789fc31baebf726712ff14306d728d49cc8c75` |
+| 支持壁復元後 | `joint-support-restored.png` | `c78480b83629f80a5e0d6a3f1d6ecc25351686dd73084161f4b5ab7e2ad546f2` |
+| pause中の通常load後 | `joint-loaded.png` | `c78480b83629f80a5e0d6a3f1d6ecc25351686dd73084161f4b5ab7e2ad546f2` |
 
 #### 接合・表示遷移profile（2026-09-10、旧subjectの履歴）
 
@@ -341,7 +373,7 @@ Wall topology、Door state/axis、投影先のclient範囲と対象ROIを検査�
 
 同じjobでWallのpaused replacement、Wall topologyへのDoor追加削除、preview anchorのexact testも実行する。
 これらは画素確認と区別して`coverage.focused_audit`へ記録する。`coverage.pending_j1`にあるjoint paused load、
-支持変更後のpreview軸、corner接合、NSの連続Door、支持壁撤去・復元は引き続き未完。
+支持変更後のpreview軸、corner接合、NSの連続Door、支持壁撤去・復元は、この旧profile時点では未完だった。
 このprofileはJ1全体や性能/Memoryを合格とするものではなく、3 PNGは目視でも確認する。
 
 Help影響は`No impact`。専用profiling起動条件と候補opt-inに限定した検証追加および型alias整理であり、
@@ -366,7 +398,7 @@ Help影響は`No impact`。専用profiling起動条件と候補opt-inに限定�
 - 3 PNGを目視し、5組の見本が画面内にあること、型枠2 tileの本設化、左端DoorのEW→NSへの追従を確認した。
   owner / visual 16組の同一性とmesh/materialの切替はprobeでも一致。承認済みの扉形状・左右同開度は変更していない。
 - 本jobは画像・表示状態の部分受入であり、frame-time / native Memoryの追加計測ではない。
-  `coverage.pending_j1`の5項目とM4は未完。通常のWall release generation 4とDoor fallbackは維持する。
+  `coverage.pending_j1`の5項目は上記v2の別jobで閉じた。M4は未完で、通常のWall release generation 4とDoor fallbackは維持する。
   再検証はこのworktreeのhelperで`verify --job-root <上記job絶対path>`を実行する。
 - rust-analyzer MCPのworkspace診断は応答形式エラーで取得できず、新profiling moduleは
   `unlinked-file` hintのみ（error / warning 0）。feature有効のCargo検証を実行し、IDE設定の抑制は追加していない。
@@ -380,10 +412,10 @@ Help影響は`No impact`。専用profiling起動条件と候補opt-inに限定�
 ### M4: release・文書同期・close
 
 - 通常authority受入の準備（2026-09-11）: J1と同じ6 checkpointを別profile
-  `wall-door-joint-release-v1`で確認する入口を追加する。明示`--release`だけが選択でき、両candidate / ArtPreviewの
+  `wall-door-joint-release-v1`で確認する入口を実装・self-test済み。明示`--release`だけが選択でき、両candidate / ArtPreviewの
   環境変数を除去し、両runtime locatorの`release_approved`、generation-scopedなcore・receiptの実bytesと
   receipt identityをbuild前に検査する。実画面のreadiness identityも`ReleaseApproved`を必須にする。
-  J1候補の実機jobは凍結済み専用worktreeで並行監視し、release入口の実装でそのsourceを変更しない。
+  これはHigh / DPI 1のauthority切替smokeであり、§7.2の通常release品質 / DPI matrix（両track各9 case）を代替しない。
   canonicalへのapplyとこのprofileの実行は、J1の独立verify・画像目視とrelease承認記録が揃った後に限定する。
   固定auditは3件ともlibrary内なので`cargo test --lib --profile profiling --no-default-features --features profiling`
   へ限定し、無関係なbinary testの最適化linkを避ける。Capture用の通常buildは別stageとして必ず実行する。
@@ -412,19 +444,19 @@ Help影響は`No impact`。専用profiling起動条件と候補opt-inに限定�
 - `test_building_release.py`の8件で両payloadの単独再検証、同番号のWall/Doorの非干渉、初回Doorの
   canonical rollback、中断recover、runtimeの切替順序・失敗前像保持・再実行を確認した。
   実際のWall generation 10 / Door generation 6もread-onlyの`build_plan`を通過した。
-  これはJ1の残件や通常authorityの実機受入の代わりではない。canonical / primaryへのapplyは未実行。
+  tool testはJ1や通常authorityの実機受入の代わりではない。canonical / primaryへのapplyは未実行。
 - Help影響は`No impact`。変更経路はasset登録・同期toolのみで、primary locatorやasset bytes、
   runtimeのcandidate許可・release readiness、建築・Door操作、Help providerの文言・到達可能性は不変。
   `docs/assets_workflow.md`へ登録namespace、自己完結payload、導入と復帰の責務を同期した。
 - release準備toolの検証（2026-09-10）: focused test 8/8、`dev.py check`、workspace Clippy
   `--all-targets -- -D warnings`、理由付き`dev.py verify`、`git diff --check`がpass。
   実候補のread-only planではWall 80 payload / Door 24 payloadを確認し、書込みはしていない。
-  このバッチでは新たな実機画像は採取していない。次はJ1残件の実装・actual-window受入。
+  この準備バッチでは実機画像を採取していない。その後のJ1正式結果は上記共通節に記録した。
 - 変更内容: 検証済み新generationのrelease手順、実画面比較、manifest・receipt・同期差分を提示し、canonicalへ昇格する。
 - 対象: `docs/building.md`、`docs/art-style-criteria.md`、`docs/assets_workflow.md`、`docs/rendering-performance.md`、親計画。Room・照明文書は表示説明に影響する部分を確認する。
 - 完了条件:
   - [ ] session内のアート／release承認を確認し、不足する最終判断だけを完成済みの候補とともに提示。
-  - [ ] 共通J1がvalidで、両assetの変更後の組合せを指している。
+  - [x] 共通J1がvalidで、両assetの変更後の組合せを指している。
   - [ ] 通常起動のrelease authorityで受入。Help影響レビュー、全品質gate、証跡capsuleとworktree整理が完了。
   - [ ] 恒久仕様へ転記後に本計画をarchiveまたは削除し、両索引を再生成。
 
@@ -690,7 +722,7 @@ Update required / 理由付きNo impactをその時点で判断する。
 - W-L03完了: 仮設1 / 本設1の混在saveをpause中のnormal loadで10回反復し、各回のfallback→production復帰、phase保持、owner / visual数、完成6＋型枠6 mesh / 2 material poolの上限を固定した。同じ候補をrollback / recovery-onlyでも検証し、subject `c5c525c3`のexact focused audit 1/1 passを§7.8に記録した。
 - W-A01 / W-A02完了: v2型枠mesh欠落／復元、型枠albedo hash不一致、schema／aggregate reject、`Eligible → Loading → LoadFailed → Eligible`、mixed identityをformal loaderとruntime回帰へ分けて固定した。新→旧v2→新generationでは仮設／本設のactive handleが同一identityへ揃い、settle後に非active mesh/materialのruntime強参照が残らない。subject `01625807`のexact focused audit 6/6 passを§7.9に記録し、actual-window画素はW-L01と分担した。
 - W-G01: 凍結済みmixed 4Nの仮設192／本設192、画像専用E-W直接接続pair、完成6＋型枠6 mesh、段階別2 material、Soul 2体のfront / behind camera depthを同一galleryへ固定した。subject `99362a37`の標準／最大zoom-out正式matrixは18/18 validで、両独立verifyと代表画像目視も完了した。旧v1証跡は再ラベルしていない。
-- 次の作業: 両単独M3と§J1の接合・表示遷移部分は完了。残るjoint paused load・preview軸・corner・NS連続Door・支持壁撤去復元を閉じてからM4へ進む。通常release generation 4を維持する。
+- 次の作業: 両単独M3と共通J1全体が完了。Wall generation 10 / Door generation 6の正式登録承認記録を確定後、M4のcanonical昇格・runtime前像保存と導入・通常authorityおよび品質 / DPI受入へ進む。現時点では通常Wall generation 4とDoor fallbackを維持する。
 - ドアはM0の共通port確定後に制作を並行可能。Rust・tooling編集はmain agentが順に行い、joint受入は両方のruntime接続後。
 - 240 triangles・core 15 file・§7の予算は採用した新設計値。現在のreleaseの実測・アート承認値として扱わない。
 
@@ -708,7 +740,7 @@ Update required / 理由付きNo impactをその時点で判断する。
 - 文書gate: `python3 scripts/dev.py docs --write`で索引を同期後、`docs --check` / `git diff --check`がpass。
 - Help gate: `No impact`。性能受入基盤・非対象asset preflight・証跡文書の追加だけで、通常の入力、ゲームプレイ、表示ロジック、UI文言、Help coverage、release authorityは不変。理由付き`check_help_impact.py`がpass。
 - 最終検証: `wall_formwork_density_acceptance.py self-test / verify`、`scripts/perf.py self-test`、`python3 scripts/dev.py check`、全workspace testとClippy `-D warnings`を含む`python3 scripts/dev.py verify`がpass。
-- 未完項目: 両単独M3は完了。J1、M4、release受入は未完であり、通常releaseは変更しない。
+- 未完項目: 両単独M3・共通J1は完了。M4の正式登録、通常release受入、恒久文書同期と全trackのcapsule / worktree整理は未完。正式登録について質問を提示済みだが未回答であり、選択肢の初期選択を承認扱いしない。
 
 ### Definition of Done
 
@@ -722,6 +754,7 @@ Update required / 理由付きNo impactをその時点で判断する。
 
 | 日付 | 変更者 | 内容 |
 | --- | --- | --- |
+| `2026-09-11` | `Codex` | J1 v2初回load失敗のcarrier引継ぎを修正。subject `5de169bc`の同一候補で6 checkpoint / 固定audit 3件・独立verify・全画像目視が合格し、11 MiB capsuleとhashを記録。通常releaseは未適用 |
 | `2026-09-05` | `Codex` | 木製型枠を推奨し、段階別mesh・後継asset契約・tile完成・実機受入を計画化 |
 | `2026-09-06` | `Codex` | セルフレビュー。部材寸法と三角形予算、2 source/schema互換、承認前preview、baseline前倒し、J1、数値gate・10回loadを具体化 |
 | `2026-09-06` | `Codex` | M1/W2中核のtooling・型枠6 family・runtime schema v2・段階別表示・ArtPreview経路を実装。通常releaseは未変更 |

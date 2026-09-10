@@ -5,7 +5,7 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `production-door-art-plan-2026-09-05` |
-| ステータス | `In Progress` |
+| ステータス | `In Progress — 両単独M3・共通J1完了／M4正式反映待ち` |
 | 作成日 | `2026-09-05` |
 | 最終更新日 | `2026-09-11` |
 | 作成者 | `Codex` |
@@ -287,27 +287,40 @@ sealerへ架空の証拠を渡さない。reviewは`double_leaf_approved`、`nor
 subject `aedd8d5cc6caa5283ba2767733082ff91918e099`、Wall generation 10 / Door generation 6、
 job `wall-door-joint-20260910T145217Z-63429a8e`で固定テスト3/3とIntel Arc / Vulkan / X11の3 PNGがvalid。
 独立verifyと画像目視も完了し、両manifest・asset view・PNGのhashは共通節へ記録した。
-実行手順と未完範囲は[型枠計画J1](provisional-wall-formwork-plan-2026-09-05.md#j1-doorとの共通受入)へ集約する。
-両候補を同時に固定した専用worktreeで採取済み。次は共通節の`coverage.pending_j1`を閉じる。
+実行手順と証跡は[型枠計画J1](provisional-wall-formwork-plan-2026-09-05.md#j1-doorとの共通受入)へ集約する。
+両候補を同時に固定した専用worktreeで採取した旧profileの履歴であり、当時の`coverage.pending_j1`は以下v2で閉じた。
 この部分profileの成功だけではJ1全体・M4を完了にしない。
 
 `2026-09-11`に6 checkpointの`wall-door-joint-lifecycle-v2`を追加し、subject
 `83ad3f8576c0fd68cd24b0350576ec5ebaa7785f`、同じWall generation 10 / Door generation 6で
 job `wall-door-joint-20260910T171102Z-37fc20c4`を開始した。corner・NS連続Door・支持壁撤去/復元・
 建設Blueprintの軸追従・通常save/loadを1 processで検査する。固定audit 3件とbuild、5 checkpointの撮影まで進んだが、
-load後に静的carrierの旧Entity参照でinvalid終了した。Ready carrierからjoint observerへの明示handoffを修正し、再試行する。
+load後に静的carrierの旧Entity参照でinvalid終了した。Ready carrierからjoint observerへの明示handoffを修正して再試行した。
 詳細と結果の所有先は共通節とし、このtrackで再度同じjobを起動しない。
+
+正式再試行はsubject `5de169bcf916e0d2a8e9d9c664708da229f2900f`、
+job `wall-door-joint-20260910T175148Z-bb4a4563`でvalid。Intel Arc / Vulkan / X11 / High / DPI 1の
+6 checkpoint、固定audit 3/3、独立verify、6 PNGの目視を完了した。
+Wall generation 10 / manifest `734a2a06940287ea63047f4aaa4e57a8c32aa61cd64899d74f20959e0a8e29d1`、
+Door generation 6 / manifest `4f2b795f596fbd30c84a16588a873f889c158a5f87b9d6357d7233c13de38448`は不変。
+job manifest SHA-256は`08d9ab6a5fee118b768c5426da8027df00acd1aee37ba86682496c8f4005b984`。
+pause中の通常loadでepoch 0→1、全対象のowner / visual ID更新と表示復帰を確認し、支持壁復元後とload後のPNGはbyte一致。
+両軸連続Door・corner・支持壁撤去復元・Blueprint軸追従を含めて共通J1を閉じた。
+capsuleは`/home/satotakumi/Sync/hell-workers-assets/staging/acceptance/wall-door-joint-20260910T175148Z-bb4a4563/`
+（14 file / 11 MiB）。source / harness / asset view / binaryと各PNGのhashは共通節を正とする。
+これはcandidate受入の完了であり、M4やユーザーによる正式登録承認ではない。
 
 ### M4: release・文書同期・close
 
-- `--release`を明示した`wall-door-joint-release-v1`の検証入口を準備中。
+- `--release`を明示した`wall-door-joint-release-v1`の検証入口を実装・self-test済み（実機未実行）。
   candidate / ArtPreview opt-inなしの`ReleaseApproved`を両trackへ要求し、core / receiptのbytesとidentityを
   build前・実画面の両方で照合する。通常runtime authorityの変更やcanonical登録はまだ行っていない。
+  このHigh / DPI 1 smokeだけでは、共通手順の通常release品質 / DPI matrix（両track各9 case）は完了しない。
 - 変更内容: 最終候補画像、寸法、全状態、検証結果、manifest / receipt / 同期差分を揃え、canonicalとruntime mirrorへreleaseする。
 - 対象: `docs/building.md`、`docs/art-style-criteria.md`、`docs/assets_workflow.md`、`docs/rendering-performance.md`、必要な選択・saveの説明、親計画とHelp。
 - 完了条件:
   - [ ] session内の既存承認を確認し、不足するアート／releaseの最終判断だけを完成候補で求める。
-  - [ ] 共通J1がvalidで、両candidateの変更後の組合せを指す。
+  - [x] 共通J1がvalidで、両candidateの変更後の組合せを指す。
   - [ ] candidate opt-inのない通常releaseで3状態と両軸が成立。
   - [ ] Help影響レビュー、全品質gate、artifact封印、worktree整理後に計画をarchive／削除して索引更新。
 
@@ -402,7 +415,7 @@ Help impact review Skillで建築／ドアの実説明を読み、色表示へ�
 ### 現在地
 
 - 進捗: 実装 `98%`。M0のgeometry/全16mask、M1のtechnical candidate、M2の3D/2D adapterとPostUpdate境界、Door単独M3を完了。承認済みgeneration 5 bytesをgeneration 6 authoring finalへ封印し、preview無効のisolated candidateでEW/NS 6状態の実機visual leg、7 behavior case×3 runs、High/Medium/Low × DPI 1.0/1.5/2.0 × 2 zoomの品質受入、Door density Capture 12 / Memory 6 runsまで通過した。
-- 次の作業: 両単独M3と共通J1の接合・表示遷移部分は完了。共通節の未完5項目を閉じてから通常releaseへ進む。Doorのbehavior/quality/density受入は再採取せず、正式jobと保持中の失敗jobを比較証跡に使う。
+- 次の作業: 両単独M3と共通J1全体は完了。Wall generation 10 / Door generation 6の正式登録承認記録を確定し、通常release導入とauthority / 品質・DPI受入へ進む。Doorのcandidate behavior/quality/density受入は再採取せず、正式jobと保持中の失敗jobを比較証跡に使う。
 - 仮設壁M0とport契約を先に共有。Doorの制作・既存石壁との接続は型枠release待ちにしない。joint受入は双方のruntime接続後。
 - 3 mesh方式は現在の瞬時状態切替に合わせる判断。スムーズな開閉を追加する場合はこの選択を再検討する。
 - セルフレビューで片開きから両開きへ変更し、初回ArtPreview後に完全90°から68°、NS識別性の再指摘後に同方向・同角度の78°へ改訂した。Open leaf AABBはfixture値であり、全Soul状態・両軸の実画面通過を承認済みとしない。
@@ -438,7 +451,7 @@ Help impact review Skillで建築／ドアの実説明を読み、色表示へ�
 - Door density失敗job保持: `door-density-20260907T004517Z-5a7aa916`はfixtureが返した固定`authority`を候補identity APIの不存在キーから検証しようとして最初のrun後に停止した。runnerを実API形状へ修正してself-test / checkを通し、別jobで全matrixを再採取した。失敗jobを成功扱いせず、track closeまで保持する。
 - quality/DPI失敗job保持: `door-art-20260906T185340Z-1604770a`（0 Familiarでgather fixture未成立）、`door-art-20260906T190850Z-437a2c6d`（gallery pause前にOpenが自動閉扉）、`door-art-20260906T191033Z-edd6329c`（wall-density carrierの固定matrix違反で起動前停止）、`door-art-20260906T191239Z-bb1c8205`（pause後に汎用runnerのVirtual Time warmupが進行せずtimeout）、`door-art-20260906T192737Z-7d30d9b0`（静止fixtureを汎用gameplay validatorがzero query/Virtual Timeとして拒否）、`door-art-20260906T194625Z-1a72eb13`（直接起動時の`BEVY_ASSET_ROOT`欠落）を成功jobと同じworktreeに保持する。最後の2件から、汎用性能gateを緩和せずDoor専用Real Time validatorと明示asset rootを使う現契約へ確定した。
 - 失敗job保持: `door-behavior-20260906T170630Z-952adc7b`（P08 backend/repeat契約違反）、`door-behavior-20260906T173316Z-6c17f870`（recovery-failedを通常rebind扱い）、`door-behavior-20260906T175052Z-e55cf022`（到達不能なbaseline observer）、`door-behavior-20260906T181055Z-87886a8f`・`door-behavior-20260906T182844Z-6dc51b2b`・`door-behavior-20260906T183035Z-8f8d34b8`・`door-behavior-20260906T183230Z-1cc267d4`（集約器の固定role／log policy誤り）を成功jobと同じworktreeに保持する。成功jobのcapsule化まではworktreeを削除しない。
-- ブロッカー: Door単独M3は解消。仮設壁単独M3との共通J1が未完であり、releaseは行わない。Door validation worktreeはbehavior / quality / densityの正式jobと失敗jobを保持するため、track close前には削除しない。
+- 残件: 両単独M3と共通J1は完了。正式登録の質問は未回答で、M4のcanonical登録と通常release受入は未実施。Door validation worktreeはbehavior / quality / densityの正式jobと失敗jobを保持するため、track close前には削除しない。
 
 ### Definition of Done
 
@@ -452,6 +465,7 @@ Help impact review Skillで建築／ドアの実説明を読み、色表示へ�
 
 | 日付 | 変更者 | 内容 |
 | --- | --- | --- |
+| `2026-09-11` | `Codex` | 共通J1 v2の6 checkpoint / audit 3件・独立verify・全画像目視の合格を型枠計画と同じsubject `5de169bc`・jobへ結び、capsuleを記録。通常release検証入口は実装済み、正式登録は未実施 |
 | `2026-09-05` | `Codex` | 木・骨の意匠、固定枠＋3状態mesh、向きと開き範囲、runtime・実機・releaseの計画を作成 |
 | `2026-09-06` | `Codex` | セルフレビュー。両開き寸法、Soul alpha幅と通過gate、2軸PNG/pulse、法線tagとPostUpdate ordering、core 6、共通C0/J1・数値受入を具体化 |
 | `2026-09-06` | `Codex` | M0〜M2実装。3状態GLB・共有albedo・EW/NS preview、Door専用asset authority、全16mask resolver、2D/3D同期、PostUpdate境界、6状態ArtPreview galleryを追加 |
