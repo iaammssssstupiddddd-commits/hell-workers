@@ -284,8 +284,11 @@ sealerへ架空の証拠を渡さない。reviewは`double_leaf_approved`、`nor
 - J1の前提は両単独M3の完了。DoorのM4はJ1を待つが、Doorの単独M3は待たない。
 
 `2026-09-10`に共通J1の接合・表示遷移部分を`wall-door-joint-seams-v1`として実装。
+subject `aedd8d5cc6caa5283ba2767733082ff91918e099`、Wall generation 10 / Door generation 6、
+job `wall-door-joint-20260910T145217Z-63429a8e`で固定テスト3/3とIntel Arc / Vulkan / X11の3 PNGがvalid。
+独立verifyと画像目視も完了し、両manifest・asset view・PNGのhashは共通節へ記録した。
 実行手順と未完範囲は[型枠計画J1](provisional-wall-formwork-plan-2026-09-05.md#j1-doorとの共通受入)へ集約する。
-両単独M3は完了しており、次は両候補を同時に固定した専用worktreeで採取する。
+両候補を同時に固定した専用worktreeで採取済み。次は共通節の`coverage.pending_j1`を閉じる。
 この部分profileの成功だけではJ1全体・M4を完了にしない。
 
 ### M4: release・文書同期・close
@@ -389,7 +392,7 @@ Help impact review Skillで建築／ドアの実説明を読み、色表示へ�
 ### 現在地
 
 - 進捗: 実装 `98%`。M0のgeometry/全16mask、M1のtechnical candidate、M2の3D/2D adapterとPostUpdate境界、Door単独M3を完了。承認済みgeneration 5 bytesをgeneration 6 authoring finalへ封印し、preview無効のisolated candidateでEW/NS 6状態の実機visual leg、7 behavior case×3 runs、High/Medium/Low × DPI 1.0/1.5/2.0 × 2 zoomの品質受入、Door density Capture 12 / Memory 6 runsまで通過した。
-- 次の作業: 仮設壁単独M3の完了後、同じsubjectと両asset hashを固定した共通J1を実行し、通常releaseへ進む。Doorのbehavior/quality/density受入は再採取せず、正式jobと保持中の失敗jobを比較証跡に使う。
+- 次の作業: 両単独M3と共通J1の接合・表示遷移部分は完了。共通節の未完5項目を閉じてから通常releaseへ進む。Doorのbehavior/quality/density受入は再採取せず、正式jobと保持中の失敗jobを比較証跡に使う。
 - 仮設壁M0とport契約を先に共有。Doorの制作・既存石壁との接続は型枠release待ちにしない。joint受入は双方のruntime接続後。
 - 3 mesh方式は現在の瞬時状態切替に合わせる判断。スムーズな開閉を追加する場合はこの選択を再検討する。
 - セルフレビューで片開きから両開きへ変更し、初回ArtPreview後に完全90°から68°、NS識別性の再指摘後に同方向・同角度の78°へ改訂した。Open leaf AABBはfixture値であり、全Soul状態・両軸の実画面通過を承認済みとしない。

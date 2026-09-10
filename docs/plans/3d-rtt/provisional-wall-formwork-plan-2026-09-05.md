@@ -5,7 +5,7 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `provisional-wall-formwork-plan-2026-09-05` |
-| ステータス | `In Progress — 単独M3・W-L01〜L03・W-A01〜A02完了／J1実装中` |
+| ステータス | `In Progress — 両単独M3完了／J1接合・表示遷移の実機確認済み` |
 | 作成日 | `2026-09-05` |
 | 最終更新日 | `2026-09-10` |
 | 作成者 | `Codex` |
@@ -269,9 +269,9 @@ viewも正式jobのtreeへ上書きしない。追加treeの作成前に実使�
 - 完了条件:
   - [x] M3aのゲーム所有window ArtPreviewを独立verifyし、木製型枠の方向性をユーザーが承認。候補manifest `f11eb5ef…`、PNG `86a5d643…`、回答「OKです」をapproval artifact `6250d7bd…`へ結んだ。
   - [x] M3b正式画像を同一subject・同一candidateで標準9 case＋最大zoom-out 9 case採取し、両jobを独立verify。詳細は§7.3。
-  - [ ] §7の正式画像・状態・性能の各gateが成立し、木製型枠の最終candidateを確認できる。
-  - [ ] 新inventoryの検証が実resident handlesに一致し、旧completed-only galleryを仮設受入に代用していない。
-  - [ ] `art_preview`ではない正式candidateの証拠を封印し、単独M3を完了。相手のM3完了を前提にしない。
+  - [x] §7の正式画像・状態・性能の各gateが成立し、木製型枠の最終candidateを確認できる（§7.3〜7.9）。
+  - [x] 新inventoryの検証が実resident handlesに一致し、旧completed-only galleryを仮設受入に代用していない（W-G01、W-L01、W-A01〜A02）。
+  - [x] `art_preview`ではない正式candidateの証拠を封印し、単独M3を完了。相手のM3完了を前提にしない。
 - 検証: `hell-workers-run-native-acceptance` Skillの専用scenario・direct `kitty` launcher・独立artifact verify。
 
 ### J1: Doorとの共通受入
@@ -308,6 +308,36 @@ Wall topology、Door state/axis、投影先のclient範囲と対象ROIを検査�
 
 Help影響は`No impact`。専用profiling起動条件と候補opt-inに限定した検証追加および型alias整理であり、
 通常の建築・ドア操作、表示resolver、材料、時間、Helpの本文・到達可能性は変更しない。
+
+実行記録（2026-09-10、接合・表示遷移部分のみvalid）:
+
+- subject: `aedd8d5cc6caa5283ba2767733082ff91918e099`。
+- clean専用worktree: `/home/satotakumi/projects/hell-workers-validation/wall-door-joint-aedd8d5c`。
+- job: `target/native-acceptance/wall-door-joint-20260910T145217Z-63429a8e`（専用worktree基準）。
+- Wall generation 10 / manifest `734a2a06940287ea63047f4aaa4e57a8c32aa61cd64899d74f20959e0a8e29d1`、
+  Door generation 6 / manifest `4f2b795f596fbd30c84a16588a873f889c158a5f87b9d6357d7233c13de38448`。
+- 両candidateを含むasset view: `becb0697cfe6d2ead21e841cd510830e65863ba66de872607b85cdb5b893e378`。
+- primaryで`dev.py check`、workspace Clippy `-D warnings`、profiling有効Clippy、`dev.py verify`がpass。
+  native helperの全指定self-test・joint self-test・Skill quick validation・AI rule gateもpass。
+- native jobはdirect `kitty`で開始し、固定テスト3/3 pass、1 process / 3 checkpointの撮影、最終ACK受理とexit 0、
+  job `valid`、独立`verify` passまで完了。実adapterは`Intel(R) Arc(tm) Graphics (MTL)`、Vulkan / X11 / High / DPI 1。
+- source: `7c85a1504ba16777392f01e9c22ecd1216e6cd51e360d1060824e3bca868e009`、
+  harness: `1d5a7bef92075c5e24c164196b8550cc967bc16cc805ddabc038d838b4be2980`、
+  binary: `461d1e2c0c72518e301055d6949fb304d91dba57c11a63b05be5e822514ddc80`。
+- manifest SHA-256: `fdd7ccfdb29509d213ad714d918d045e3933e3fa5b846db52e8038fad736a106`。
+- 3 PNGを目視し、5組の見本が画面内にあること、型枠2 tileの本設化、左端DoorのEW→NSへの追従を確認した。
+  owner / visual 16組の同一性とmesh/materialの切替はprobeでも一致。承認済みの扉形状・左右同開度は変更していない。
+- 本jobは画像・表示状態の部分受入であり、frame-time / native Memoryの追加計測ではない。
+  `coverage.pending_j1`の5項目とM4は未完。通常のWall release generation 4とDoor fallbackは維持する。
+  再検証はこのworktreeのhelperで`verify --job-root <上記job絶対path>`を実行する。
+- rust-analyzer MCPのworkspace診断は応答形式エラーで取得できず、新profiling moduleは
+  `unlinked-file` hintのみ（error / warning 0）。feature有効のCargo検証を実行し、IDE設定の抑制は追加していない。
+
+| checkpoint | PNG（上記job基準） | SHA-256 |
+|:--|:--|:--|
+| 型枠あり | `joint-framed.png` | `cf3762836d2922fa50ab84e673a7a452ac364e30fcb0357428f4df48301ff8b1` |
+| 本設化後 | `joint-completed.png` | `e79f38a1a79a88d6eb349b5697b182002b4dc3bae2156157c8b33600b32bbdd3` |
+| 支持壁移動後 | `joint-support-changed.png` | `b22e424c5afb109cc2d55f43b1c0fc1ddf4bfda737d425784eb575914ffe469f` |
 
 ### M4: release・文書同期・close
 
@@ -581,7 +611,7 @@ Update required / 理由付きNo impactをその時点で判断する。
 - W-L03完了: 仮設1 / 本設1の混在saveをpause中のnormal loadで10回反復し、各回のfallback→production復帰、phase保持、owner / visual数、完成6＋型枠6 mesh / 2 material poolの上限を固定した。同じ候補をrollback / recovery-onlyでも検証し、subject `c5c525c3`のexact focused audit 1/1 passを§7.8に記録した。
 - W-A01 / W-A02完了: v2型枠mesh欠落／復元、型枠albedo hash不一致、schema／aggregate reject、`Eligible → Loading → LoadFailed → Eligible`、mixed identityをformal loaderとruntime回帰へ分けて固定した。新→旧v2→新generationでは仮設／本設のactive handleが同一identityへ揃い、settle後に非active mesh/materialのruntime強参照が残らない。subject `01625807`のexact focused audit 6/6 passを§7.9に記録し、actual-window画素はW-L01と分担した。
 - W-G01: 凍結済みmixed 4Nの仮設192／本設192、画像専用E-W直接接続pair、完成6＋型枠6 mesh、段階別2 material、Soul 2体のfront / behind camera depthを同一galleryへ固定した。subject `99362a37`の標準／最大zoom-out正式matrixは18/18 validで、両独立verifyと代表画像目視も完了した。旧v1証跡は再ラベルしていない。
-- 次の作業: 両単独M3は完了。§J1の接合・表示遷移profileをclean専用worktreeで実行し、残るjoint paused load・preview軸・corner・NS連続Door・支持壁撤去復元を閉じてからM4へ進む。通常release generation 4を維持する。
+- 次の作業: 両単独M3と§J1の接合・表示遷移部分は完了。残るjoint paused load・preview軸・corner・NS連続Door・支持壁撤去復元を閉じてからM4へ進む。通常release generation 4を維持する。
 - ドアはM0の共通port確定後に制作を並行可能。Rust・tooling編集はmain agentが順に行い、joint受入は両方のruntime接続後。
 - 240 triangles・core 15 file・§7の予算は採用した新設計値。現在のreleaseの実測・アート承認値として扱わない。
 
