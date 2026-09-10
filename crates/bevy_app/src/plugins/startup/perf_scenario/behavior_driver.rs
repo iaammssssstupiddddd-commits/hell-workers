@@ -650,6 +650,18 @@ pub(crate) fn count_perf_behavior_fixed_tick_system(mut capture: ResMut<PerfBeha
     }
 }
 
+type BehaviorBuildingVisualQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        &'static Building3dVisual,
+        Option<&'static DoorPresentationState>,
+        Option<&'static Door3dPresentationMode>,
+        Option<&'static Mesh3d>,
+        Option<&'static MeshMaterial3d<TopDownStructuralMaterial>>,
+    ),
+>;
+
 #[derive(SystemParam)]
 pub(crate) struct BehaviorObserveParams<'w, 's> {
     config: Res<'w, PerfScenarioConfig>,
@@ -674,17 +686,7 @@ pub(crate) struct BehaviorObserveParams<'w, 's> {
         ),
     >,
     sprites: Query<'w, 's, &'static Sprite>,
-    building_3d_visuals: Query<
-        'w,
-        's,
-        (
-            &'static Building3dVisual,
-            Option<&'static DoorPresentationState>,
-            Option<&'static Door3dPresentationMode>,
-            Option<&'static Mesh3d>,
-            Option<&'static MeshMaterial3d<TopDownStructuralMaterial>>,
-        ),
-    >,
+    building_3d_visuals: BehaviorBuildingVisualQuery<'w, 's>,
     door_readiness: Res<'w, DoorAssetReadiness>,
     production_door_assets: Res<'w, ProductionDoorAssetPool>,
     production_door_materials: Res<'w, ProductionDoorMaterialPool>,

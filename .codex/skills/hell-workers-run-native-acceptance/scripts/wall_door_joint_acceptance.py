@@ -1,0 +1,641 @@
+#!/usr/bin/env python3
+"""Run and verify the seam and presentation-transition portion of Wall/Door J1."""
+
+from __future__ import annotations
+
+import argparse
+import copy
+import hashlib
+import json
+import math
+import os
+import re
+import secrets
+import shutil
+import subprocess
+import sys
+import time
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import door_behavior_acceptance as door_art  # noqa: E402
+import native_acceptance as native  # noqa: E402
+import wall_art_acceptance as wall_art  # noqa: E402
+import wall_density_acceptance as density  # noqa: E402
+
+
+SCHEMA_VERSION = 1
+STATUS_SCHEMA_VERSION = 1
+PROFILE = "wall-door-joint-seams-v1"
+COVERAGE = {
+    "actual_window": ["both-axis-seams", "east-west-continuous-doors", "completion-in-place", "support-relocation"],
+    "focused_audit": ["wall-paused-replacement", "wall-topology-door-removal", "preview-anchor"],
+    "pending_j1": ["joint-paused-load", "preview-axis-after-support-change", "corner-seams", "north-south-continuous-doors", "support-removal-and-restoration"],
+}
+SEED = 20_260_906
+WINDOW = (1280, 720)
+RUN_TIMEOUT_SECONDS = 120.0
+POLL_SECONDS = 0.1
+CHECKPOINTS = (
+    ("wall-door-joint-framed", 1, "joint-framed.png", 2),
+    ("wall-door-joint-completed", 2, "joint-completed.png", 0),
+    ("wall-door-joint-support-changed", 3, "joint-support-changed.png", 0),
+)
+FIXED_TESTS = (
+    "systems::save::transaction::tests::mixed_wall_presentation_recovers_after_normal_rollback_and_recovery_replacement",
+    "systems::visual::wall_presentation::tests::real_topology_producer_updates_door_add_and_remove_in_the_same_frame",
+    "systems::visual::door_preview::tests::production_preview_sets_canvas_anchor_without_changing_tint",
+)
+ENV_KEYS = (
+    "HW_WALL_ART_PREVIEW", "HW_DOOR_ART_PREVIEW", "HW_WALL_ART_ACTUAL_WINDOW", "HW_DOOR_ART_ACTUAL_WINDOW",
+    "BEVY_ASSET_ROOT",
+    "HW_WINDOW_BACKEND",
+    "HW_PRESENT_MODE",
+    "WGPU_BACKEND",
+    "WGPU_ADAPTER_NAME",
+    "HW_WALL_CANDIDATE",
+    "HW_WALL_CANDIDATE_GENERATION",
+    "HW_WALL_CANDIDATE_MANIFEST_SHA256",
+    "HW_DOOR_CANDIDATE",
+    "HW_DOOR_CANDIDATE_GENERATION",
+    "HW_DOOR_CANDIDATE_MANIFEST_SHA256",
+    "HW_DOOR_PERF_PRESENTATION",
+    "HW_WALL_DOOR_JOINT_ACTUAL_WINDOW",
+    "HW_WALL_DOOR_JOINT_STATUS_PATH",
+    "HW_WALL_DOOR_JOINT_ACK_PATH",
+    "HW_WALL_DOOR_JOINT_SESSION_NONCE",
+)
+
+
+def sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def build_command() -> list[str]:
+    return [
+        "python3", "scripts/dev.py", "cargo", "--", "build", "--profile", "profiling",
+        "--no-default-features", "--features", "profiling",
+    ]
+
+
+def fixed_test_command(test_name: str) -> list[str]:
+    return [
+        "python3", "scripts/dev.py", "cargo", "--", "test", "-p", "bevy_app@0.1.0",
+        "--features", "profiling", test_name, "--", "--exact", "--nocapture",
+    ]
+
+
+def game_command(repo: Path, root: Path) -> list[str]:
+    return [
+        str(repo / "target/profiling/bevy_app"),
+        "--perf-scenario",
+        "--perf-wall-door-joint-actual-window",
+        "--perf-seed", str(SEED),
+        "--perf-size", "small",
+        "--perf-workload", "door-density",
+        "--perf-render", "gpu",
+        "--perf-clock", "realtime",
+        "--perf-familiar-policy", "baseline",
+        "--perf-operation-dialog", "hidden",
+        "--perf-dashboard", "hidden",
+        "--perf-output-dir", str(root / "data"),
+        "--perf-warmup-secs", "30",
+        "--perf-measure-secs", "60",
+        "--spawn-souls", "0",
+        "--spawn-familiars", "0",
+        "--perf-door-presentation", "production",
+        "--perf-window-width", str(WINDOW[0]),
+        "--perf-window-height", str(WINDOW[1]),
+        "--perf-window-scale-factor", "1.0",
+        "--perf-rtt-quality", "high",
+    ]
+
+
+def candidate_identities(repo: Path) -> dict[str, dict[str, Any]]:
+    result = {
+        "wall": wall_art.candidate_identity(repo, require_formwork=True),
+        "door": door_art.candidate_identity(repo),
+    }
+    wall = native.read_json(repo / "assets/manifests/wall-production-v1.wallset")
+    for record in wall["core"]:
+        relative = Path(record["path"])
+        native.require(not relative.is_absolute() and ".." not in relative.parts, "Wall core path escapes assets")
+        path = repo / "assets" / relative
+        native.require(path.is_file() and not path.is_symlink()
+                       and path.resolve().is_relative_to((repo / "assets").resolve())
+                       and path.stat().st_size == record["bytes"]
+                       and sha256(path) == record["sha256"], f"Wall core bytes differ: {relative}")
+    return result
+
+
+def clean_environment(
+    repo: Path,
+    adapter: str,
+    identities: dict[str, dict[str, Any]],
+    status_path: Path,
+    ack_path: Path,
+    nonce: str,
+) -> dict[str, str]:
+    environment = native.cargo_environment(repo)
+    for key in ENV_KEYS:
+        environment.pop(key, None)
+    wall = identities["wall"]
+    door = identities["door"]
+    environment.update(
+        {
+            "BEVY_ASSET_ROOT": str(repo),
+            "HW_WINDOW_BACKEND": "x11",
+            "HW_PRESENT_MODE": "novsync",
+            "WGPU_BACKEND": "vulkan",
+            "WGPU_ADAPTER_NAME": adapter,
+            "HW_WALL_CANDIDATE": "1",
+            "HW_WALL_CANDIDATE_GENERATION": str(wall["asset_set_generation"]),
+            "HW_WALL_CANDIDATE_MANIFEST_SHA256": wall["manifest_sha256"],
+            "HW_DOOR_CANDIDATE": "1",
+            "HW_DOOR_CANDIDATE_GENERATION": str(door["asset_set_generation"]),
+            "HW_DOOR_CANDIDATE_MANIFEST_SHA256": door["manifest_sha256"],
+            "HW_DOOR_PERF_PRESENTATION": "production",
+            "HW_WALL_DOOR_JOINT_ACTUAL_WINDOW": "1",
+            "HW_WALL_DOOR_JOINT_STATUS_PATH": str(status_path),
+            "HW_WALL_DOOR_JOINT_ACK_PATH": str(ack_path),
+            "HW_WALL_DOOR_JOINT_SESSION_NONCE": nonce,
+        }
+    )
+    return environment
+
+
+def validate_status(
+    value: Any,
+    *,
+    checkpoint: tuple[str, int, str, int],
+    nonce: str,
+    identities: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    native.require(isinstance(value, dict), "J1 status must be an object")
+    phase, generation, _screenshot, provisional_count = checkpoint
+    native.require(
+        value.get("schema_version") == STATUS_SCHEMA_VERSION
+        and value.get("status") == "ready"
+        and value.get("phase") == phase
+        and value.get("generation") == generation
+        and value.get("session_nonce") == nonce,
+        "J1 status identity differs",
+    )
+    native.require(value.get("window") == {"width": 1280, "height": 720, "scale_factor": 1.0}, "J1 window differs")
+    native.require(value.get("render") == {"backend": "vulkan", "rtt_quality": "high"}, "J1 render contract differs")
+    runtime = value.get("candidate_identity")
+    native.require(isinstance(runtime, dict), "J1 runtime identity is absent")
+    for kind in ("wall", "door"):
+        expected = identities[kind]
+        observed = runtime.get(kind)
+        native.require(
+            isinstance(observed, dict)
+            and observed.get("authority") == "IsolatedCandidate"
+            and observed.get("asset_set_generation") == expected["asset_set_generation"]
+            and observed.get("manifest_sha256") == expected["manifest_sha256"],
+            f"J1 {kind} runtime identity differs",
+        )
+    gallery = value.get("gallery")
+    native.require(
+        isinstance(gallery, dict)
+        and gallery.get("door_count") == 6
+        and gallery.get("wall_count") == 10
+        and gallery.get("provisional_wall_count") == provisional_count
+        and gallery.get("continuous_door_count") == 2
+        and gallery.get("both_axes") is True
+        and gallery.get("owner_visual_identity_stable") is True,
+        "J1 gallery contract differs",
+    )
+    targets = gallery.get("projected_targets")
+    native.require(isinstance(targets, list) and len(targets) == 16, "J1 projection coverage differs")
+    for target in targets:
+        native.require(
+            isinstance(target, dict)
+            and isinstance(target.get("grid"), list)
+            and len(target["grid"]) == 2
+            and all(type(target.get(axis)) in {int, float} and math.isfinite(float(target[axis])) for axis in ("x", "y")),
+            "J1 projected target differs",
+        )
+        native.require(20 <= target["x"] < WINDOW[0] - 20 and 20 <= target["y"] < WINDOW[1] - 20, "J1 target is outside the client")
+        identity = target.get("identity")
+        native.require(isinstance(identity, dict) and identity.get("kind") in {"wall", "door"}
+                       and isinstance(identity.get("owner"), str) and identity["owner"].isdigit()
+                       and isinstance(identity.get("visual"), str) and identity["visual"].isdigit(), "J1 target identity differs")
+    native.require(len({tuple(target["grid"]) for target in targets}) == 16
+                   and len({target["identity"]["owner"] for target in targets}) == 16
+                   and len({target["identity"]["visual"] for target in targets}) == 16, "J1 target identities are duplicated")
+    return value
+
+
+def image_evidence(path: Path, status: dict[str, Any]) -> list[dict[str, Any]]:
+    native.require(path.is_file() and not path.is_symlink(), "J1 screenshot is absent or a symlink")
+    payload = path.read_bytes()
+    native.validate_png_structure(payload)
+    width, height, pixels = native.decode_png_rgb(payload)
+    native.require((width, height) == WINDOW and pixels, "J1 screenshot dimensions differ")
+    evidence = []
+    for target in status["gallery"]["projected_targets"]:
+        x, y = round(target["x"]), round(target["y"])
+        crop = b"".join(pixels[((row * width) + x - 20) * 3:((row * width) + x + 20) * 3] for row in range(y - 20, y + 20))
+        mean = sum(crop) / len(crop)
+        deviation = math.sqrt(sum((item - mean) ** 2 for item in crop) / len(crop))
+        native.require(deviation >= 2.0 and mean >= 5, f"J1 target {target['grid']} contains no credible detail")
+        evidence.append({"grid": target["grid"], "roi_sha256": hashlib.sha256(crop).hexdigest(), "standard_deviation": round(deviation, 6)})
+    return evidence
+
+
+def capture_window(destination: Path, root_pid: int, status: dict[str, Any]) -> dict[str, Any] | None:
+    candidates = native.x11_client_windows_for_process_tree(root_pid)
+    if not candidates:
+        return None
+    native.require(len(candidates) == 1, "J1 exposed multiple X11 client windows")
+    window_id, window_pid = candidates[0]
+    import_command = shutil.which("import")
+    native.require(import_command is not None, "J1 requires ImageMagick import")
+    completed = native.run_bounded_capture_tool(
+        [import_command, "-window", window_id, "-depth", "8", "-type", "TrueColor", str(destination)],
+        label="J1 X11 client screenshot",
+    )
+    if completed.returncode != 0 or not destination.is_file():
+        destination.unlink(missing_ok=True)
+        return None
+    return {
+        "file": destination.name,
+        "sha256": sha256(destination),
+        "capture_scope": native.SAVE_CATALOG_CAPTURE_SCOPE,
+        "window_id": window_id,
+        "window_pid": window_pid,
+        "image_evidence": image_evidence(destination, status),
+    }
+
+
+def acknowledgement(status: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "schema_version": STATUS_SCHEMA_VERSION,
+        "status": "captured",
+        "session_nonce": status["session_nonce"],
+        "phase": status["phase"],
+        "generation": status["generation"],
+    }
+
+
+def run_storyboard(
+    *,
+    repo: Path,
+    root: Path,
+    adapter: str,
+    identities: dict[str, dict[str, Any]],
+    job_file: Path,
+    state: dict[str, Any],
+) -> list[dict[str, Any]]:
+    status_path = root / "probe-status.json"
+    ack_path = root / "probe-ack.json"
+    nonce = secrets.token_hex(16)
+    command = game_command(repo, root)
+    environment = clean_environment(repo, adapter, identities, status_path, ack_path, nonce)
+    state.setdefault("commands", []).append({"stage": "actual-window", "argv": command})
+    native.atomic_write_json(job_file, state)
+    observations: list[dict[str, Any]] = []
+    deadline = time.monotonic() + RUN_TIMEOUT_SECONDS
+    log_path = root / "actual-window.log"
+    native.admit_stage_start("actual-window", state=state, job_file=job_file)
+    with log_path.open("w", encoding="utf-8") as log:
+        process = subprocess.Popen(
+            command, cwd=repo, env=environment, stdout=log, stderr=subprocess.STDOUT,
+            text=True, start_new_session=True, pass_fds=native.activity_pass_fds(environment),
+        )
+        state["child_pid"] = process.pid
+        native.atomic_write_json(job_file, state)
+        try:
+            while process.poll() is None:
+                if status_path.is_file() and not status_path.is_symlink():
+                    value = native.read_json(status_path)
+                    if isinstance(value, dict) and value.get("status") == "failed":
+                        raise native.AcceptanceError(f"J1 probe failed: {value.get('reason')}")
+                    checkpoint = CHECKPOINTS[len(observations)] if len(observations) < len(CHECKPOINTS) else None
+                    if checkpoint is not None and isinstance(value, dict) and value.get("phase") == checkpoint[0]:
+                        status = validate_status(value, checkpoint=checkpoint, nonce=nonce, identities=identities)
+                        screenshot = capture_window(root / checkpoint[2], process.pid, status)
+                        if screenshot is not None:
+                            observations.append({"status": status, "screenshot": screenshot})
+                            native.atomic_write_json(ack_path, acknowledgement(status))
+                if time.monotonic() >= deadline:
+                    raise native.AcceptanceError("J1 actual-window storyboard timed out")
+                state["heartbeat_at"] = native.utc_now()
+                native.atomic_write_json(job_file, state)
+                time.sleep(POLL_SECONDS)
+        finally:
+            if process.poll() is None:
+                native.stop_command_process(process)
+            ack_path.unlink(missing_ok=True)
+    native.require(process.returncode == 0, f"J1 process exited with {process.returncode}")
+    native.require(len(observations) == len(CHECKPOINTS), "J1 did not capture every checkpoint")
+    verify_game_log(log_path, adapter)
+    state["child_pid"] = None
+    native.atomic_write_json(job_file, state)
+    return observations
+
+
+def verify_game_log(path: Path, adapter: str) -> dict[str, str]:
+    text = path.read_text(encoding="utf-8")
+    native.require(re.search(r"\b(?:WARN|ERROR)\b|bevy_ecs::error::handler", text) is None, "J1 game log contains a warning or error")
+    adapters = re.findall(r'AdapterInfo \{ name: "([^"]+)".*?backend: ([A-Za-z0-9_]+)', text)
+    native.require(len(adapters) == 1 and adapter.casefold() in adapters[0][0].casefold()
+                   and adapters[0][1] == "Vulkan", "J1 actual adapter/backend differs")
+    return {"name": adapters[0][0], "backend": adapters[0][1]}
+
+
+def verify_root(root: Path) -> dict[str, Any]:
+    manifest = native.read_json(root / "manifest.json")
+    native.require(
+        manifest.get("schema_version") == SCHEMA_VERSION
+        and manifest.get("status") == "pass"
+        and manifest.get("profile") == PROFILE,
+        "J1 manifest differs",
+    )
+    repo = native.validate_repo(manifest["repo"])
+    native.require(manifest.get("coverage") == COVERAGE, "J1 seam scope differs")
+    door_art.assert_fully_clean(repo, manifest["subject_commit"])
+    native.require(
+        native.source_fingerprint(repo) == manifest["source_fingerprint"]
+        and native.native_harness_fingerprint(repo) == manifest["harness_fingerprint"]
+        and density.asset_view_fingerprint(repo) == manifest["asset_view_fingerprint"]
+        and candidate_identities(repo) == manifest["candidate_identities"],
+        "J1 provenance changed",
+    )
+    observations = manifest.get("observations")
+    native.require(isinstance(observations, list) and len(observations) == 3, "J1 observations differ")
+    for checkpoint, observation in zip(CHECKPOINTS, observations, strict=True):
+        validate_status(
+            observation.get("status"), checkpoint=checkpoint,
+            nonce=manifest["session_nonce"], identities=manifest["candidate_identities"],
+        )
+        screenshot = observation.get("screenshot")
+        path = root / checkpoint[2]
+        native.require(
+            isinstance(screenshot, dict)
+            and screenshot.get("capture_scope") == native.SAVE_CATALOG_CAPTURE_SCOPE
+            and sha256(path) == screenshot.get("sha256"),
+            "J1 screenshot evidence changed",
+        )
+        native.validate_png_structure(path.read_bytes())
+        native.require(image_evidence(path, observation["status"]) == screenshot.get("image_evidence"), "J1 target pixels changed")
+    identities = [{item["identity"]["owner"]: item["identity"]["visual"]
+                   for item in observation["status"]["gallery"]["projected_targets"]} for observation in observations]
+    native.require(identities[0] == identities[1] == identities[2], "J1 visual identity changed")
+    fixed = manifest.get("fixed_tests")
+    native.require(isinstance(fixed, list) and [test.get("test") for test in fixed] == list(FIXED_TESTS), "J1 fixed test inventory differs")
+    for index, test in enumerate(fixed):
+        native.require(test.get("log") == f"fixed-{index + 1}.log", "J1 fixed audit path differs")
+        path = root / test["log"]
+        native.require(path.is_file() and sha256(path) == test["sha256"], "J1 fixed audit changed")
+        text = path.read_text(encoding="utf-8")
+        native.require("1 passed; 0 failed" in text, "J1 fixed audit no longer proves one exact test")
+    native.require(sha256(repo / "target/profiling/bevy_app") == manifest["binary_sha256"], "J1 binary changed")
+    native.require(sha256(root / "actual-window.log") == manifest["game_log_sha256"], "J1 game log changed")
+    native.require(verify_game_log(root / "actual-window.log", manifest["adapter"]) == manifest["actual_adapter"], "J1 adapter evidence changed")
+    final_status = native.read_json(root / "probe-status.json")
+    native.require(final_status == {
+        "schema_version": STATUS_SCHEMA_VERSION, "status": "complete",
+        "session_nonce": manifest["session_nonce"], "phase": CHECKPOINTS[-1][0], "generation": CHECKPOINTS[-1][1],
+    }, "J1 final checkpoint was not acknowledged")
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "status": "pass",
+        "profile": PROFILE,
+        "root": str(root),
+        "fixed_tests": len(FIXED_TESTS),
+        "screenshots": len(CHECKPOINTS),
+        "coverage": COVERAGE,
+    }
+
+
+def plan(args: argparse.Namespace) -> int:
+    repo = native.validate_repo(args.repo)
+    resources = native.resource_snapshot(repo, require_launcher=True)
+    failures = list(resources["failures"])
+    subject = native.git_subject(repo)
+    source = native.source_fingerprint(repo)
+    harness = native.native_harness_fingerprint(repo)
+    assets = density.asset_view_fingerprint(repo)
+    identities = None
+    try:
+        door_art.assert_fully_clean(repo, subject)
+        identities = candidate_identities(repo)
+    except native.AcceptanceError as error:
+        failures.append(str(error))
+    root = Path(args.job_root).resolve() if args.job_root else native.unique_job_root(repo, "wall-door-joint")
+    native.require(root.is_relative_to(repo / "target/native-acceptance"), "J1 job root must be under target/native-acceptance")
+    native.require_persistent_storage(root, label="J1 job root")
+    if root.exists():
+        failures.append(f"job root already exists: {root}")
+    command = [
+        "kitty", "--directory", str(repo), "--detach", "env",
+        "HW_NATIVE_ACCEPTANCE_LAUNCHED=1", "PYTHONDONTWRITEBYTECODE=1",
+        "python3", str(Path(__file__).resolve()), "run",
+        "--repo", str(repo), "--job-root", str(root), "--subject-commit", subject,
+        "--source-fingerprint", source, "--harness-fingerprint", harness,
+        "--asset-view-fingerprint", assets, "--adapter", args.adapter,
+    ]
+    native.print_json(
+        {
+            "schema_version": SCHEMA_VERSION,
+            "status": "ready" if not failures else "blocked",
+            "profile": PROFILE,
+            "job_root": str(root),
+            "subject_commit": subject,
+            "source_fingerprint": source,
+            "harness_fingerprint": harness,
+            "asset_view_fingerprint": assets,
+            "candidate_identities": identities,
+            "adapter": args.adapter,
+            "failures": failures,
+            "resources": resources,
+            "launcher_command": command,
+            "status_command": ["python3", str(Path(__file__).resolve()), "status", "--job-root", str(root)],
+            "verify_command": ["python3", str(Path(__file__).resolve()), "verify", "--job-root", str(root)],
+            "execution_contract": {
+                "coverage": COVERAGE,
+                "actual_window_required": True,
+                "capture_scope": native.SAVE_CATALOG_CAPTURE_SCOPE,
+                "parallel_game_processes": 1,
+                "checkpoints": [item[0] for item in CHECKPOINTS],
+                "fixed_tests": list(FIXED_TESTS),
+            },
+        }
+    )
+    return 0 if not failures else 1
+
+
+@native.activity_locked
+def run(args: argparse.Namespace) -> int:
+    native.require(os.environ.get("HW_NATIVE_ACCEPTANCE_LAUNCHED") == "1", "J1 must use the planned direct kitty command")
+    repo = native.validate_repo(args.repo)
+    native.require(native.git_subject(repo) == args.subject_commit, "J1 subject changed")
+    native.require(native.source_fingerprint(repo) == args.source_fingerprint, "J1 source changed")
+    native.require(native.native_harness_fingerprint(repo) == args.harness_fingerprint, "J1 harness changed")
+    native.require(density.asset_view_fingerprint(repo) == args.asset_view_fingerprint, "J1 asset view changed")
+    door_art.assert_fully_clean(repo, args.subject_commit)
+    resources = native.resource_snapshot(repo, require_launcher=True)
+    native.require(not resources["failures"], f"J1 resource preflight failed: {resources['failures']}")
+    identities = candidate_identities(repo)
+    root = Path(args.job_root).resolve()
+    native.require(root.is_relative_to(repo / "target/native-acceptance"), "J1 job root must be under target/native-acceptance")
+    native.require_persistent_storage(root, label="J1 job root")
+    native.require(not root.exists(), f"job root already exists: {root}")
+    root.mkdir(parents=True)
+    state: dict[str, Any] = {
+        "schema_version": SCHEMA_VERSION, "status": "running", "profile": PROFILE,
+        "subject_commit": args.subject_commit, "current_stage": "fixed-audit",
+        "child_pid": None, "heartbeat_at": native.utc_now(), "commands": [],
+        "resources": resources,
+    }
+    job_file = root / "job.json"
+    native.atomic_write_json(job_file, state)
+    try:
+        fixed_results = []
+        for index, test_name in enumerate(FIXED_TESTS):
+            log_path = root / f"fixed-{index + 1}.log"
+            native.run_command(
+                f"fixed-{index + 1}", fixed_test_command(test_name), repo=repo,
+                env=native.cargo_environment(repo), log_path=log_path, job_file=job_file, state=state,
+                timeout_seconds=3600.0,
+            )
+            text = log_path.read_text(encoding="utf-8")
+            native.require("running 1 test" in text and "1 passed; 0 failed" in text, "J1 fixed audit did not execute exactly one passing test")
+            fixed_results.append({"test": test_name, "log": log_path.name, "sha256": sha256(log_path)})
+        native.run_command(
+            "build", build_command(), repo=repo, env=native.cargo_environment(repo),
+            log_path=root / "build.log", job_file=job_file, state=state, timeout_seconds=3600.0,
+        )
+        binary = repo / "target/profiling/bevy_app"
+        native.require(binary.is_file() and not binary.is_symlink(), "J1 profiling binary is absent")
+        state["current_stage"] = "actual-window"
+        observations = run_storyboard(
+            repo=repo, root=root, adapter=args.adapter, identities=identities,
+            job_file=job_file, state=state,
+        )
+        manifest = {
+            "schema_version": SCHEMA_VERSION, "status": "pass", "profile": PROFILE,
+            "repo": str(repo), "subject_commit": args.subject_commit,
+            "source_fingerprint": args.source_fingerprint,
+            "harness_fingerprint": args.harness_fingerprint,
+            "asset_view_fingerprint": args.asset_view_fingerprint,
+            "candidate_identities": identities,
+            "coverage": COVERAGE,
+            "actual_adapter": verify_game_log(root / "actual-window.log", args.adapter),
+            "game_log_sha256": sha256(root / "actual-window.log"),
+            "adapter": args.adapter, "binary_sha256": sha256(binary),
+            "session_nonce": observations[0]["status"]["session_nonce"],
+            "fixed_tests": fixed_results, "observations": observations,
+            "completed_at": native.utc_now(),
+        }
+        native.atomic_write_json(root / "manifest.json", manifest)
+        native.print_json(verify_root(root))
+        state.update({"status": "valid", "completed_at": native.utc_now(), "child_pid": None})
+        native.atomic_write_json(job_file, state)
+        return 0
+    except Exception as error:
+        state.update({"status": "invalid", "failure": f"{type(error).__name__}: {error}", "completed_at": native.utc_now(), "child_pid": None})
+        native.atomic_write_json(job_file, state)
+        raise
+
+
+def status(args: argparse.Namespace) -> int:
+    value = native.read_json(Path(args.job_root).resolve() / "job.json")
+    if value.get("status") == "running":
+        heartbeat = value.get("heartbeat_at")
+        native.require(isinstance(heartbeat, str), "J1 heartbeat is missing")
+        age = (datetime.now(UTC) - native.parse_utc(heartbeat)).total_seconds()
+        native.require(0 <= age <= 120, f"J1 heartbeat is stale: {age:.1f} seconds")
+    native.print_json(value)
+    return 2 if value.get("status") == "running" else 0 if value.get("status") == "valid" else 1
+
+
+def verify(args: argparse.Namespace) -> int:
+    native.print_json(verify_root(Path(args.job_root).resolve()))
+    return 0
+
+
+def self_test() -> int:
+    native.require([item[1] for item in CHECKPOINTS] == [1, 2, 3], "J1 checkpoint order differs")
+    command = game_command(Path("/repo"), Path("/job"))
+    native.require(
+        command[command.index("--perf-workload") + 1] == "door-density"
+        and "--perf-wall-door-joint-actual-window" in command
+        and command[command.index("--perf-door-presentation") + 1] == "production",
+        "J1 game command differs",
+    )
+    native.require(len(FIXED_TESTS) == 3 and all("::tests::" in item for item in FIXED_TESTS), "J1 fixed audit differs")
+    identities = {kind: {"asset_set_generation": generation, "manifest_sha256": digit * 64}
+                  for kind, generation, digit in (("wall", 10, "a"), ("door", 6, "b"))}
+    nonce = "0123456789abcdef0123456789abcdef"
+    status_value = {
+        "schema_version": 1, "status": "ready", "phase": CHECKPOINTS[0][0], "generation": 1,
+        "session_nonce": nonce, "window": {"width": 1280, "height": 720, "scale_factor": 1.0},
+        "render": {"backend": "vulkan", "rtt_quality": "high"},
+        "candidate_identity": {kind: {**value, "authority": "IsolatedCandidate"} for kind, value in identities.items()},
+        "gallery": {"door_count": 6, "wall_count": 10, "provisional_wall_count": 2,
+                    "continuous_door_count": 2, "both_axes": True, "owner_visual_identity_stable": True,
+                    "projected_targets": [{"grid": [index, 0], "x": 100 + index * 40, "y": 320,
+                        "identity": {"kind": "door" if index < 6 else "wall", "owner": str(index), "visual": str(index + 16)}} for index in range(16)]},
+    }
+    validate_status(status_value, checkpoint=CHECKPOINTS[0], nonce=nonce, identities=identities)
+    for path, replacement in (
+        (("generation",), 2), (("session_nonce",), "f" * 32),
+        (("candidate_identity", "wall", "manifest_sha256"), "c" * 64),
+        (("candidate_identity", "door", "authority"), "ArtPreview"),
+        (("gallery", "projected_targets", 0, "x"), -20),
+        (("gallery", "projected_targets", 0, "x"), float("nan")),
+        (("gallery", "projected_targets", 0, "identity", "owner"), "1"),
+        (("gallery", "owner_visual_identity_stable"), False),
+    ):
+        changed = copy.deepcopy(status_value)
+        parent = changed
+        for key in path[:-1]:
+            parent = parent[key]
+        parent[path[-1]] = replacement
+        try:
+            validate_status(changed, checkpoint=CHECKPOINTS[0], nonce=nonce, identities=identities)
+        except native.AcceptanceError:
+            pass
+        else:
+            raise native.AcceptanceError(f"J1 status accepted changed {path}")
+    native.print_json({"schema_version": SCHEMA_VERSION, "status": "pass", "profile": PROFILE})
+    return 0
+
+
+def parser() -> argparse.ArgumentParser:
+    root = argparse.ArgumentParser(description=__doc__)
+    commands = root.add_subparsers(dest="command", required=True)
+    plan_parser = commands.add_parser("plan")
+    plan_parser.add_argument("--repo", required=True)
+    plan_parser.add_argument("--job-root")
+    plan_parser.add_argument("--adapter", default="Intel")
+    run_parser = commands.add_parser("run")
+    for name in ("repo", "job_root", "subject_commit", "source_fingerprint", "harness_fingerprint", "asset_view_fingerprint", "adapter"):
+        run_parser.add_argument("--" + name.replace("_", "-"), required=True)
+    for name in ("status", "verify"):
+        command = commands.add_parser(name)
+        command.add_argument("--job-root", required=True)
+    commands.add_parser("self-test")
+    return root
+
+
+def main() -> int:
+    args = parser().parse_args()
+    try:
+        return {"plan": plan, "run": run, "status": status, "verify": verify, "self-test": lambda _: self_test()}[args.command](args)
+    except (native.AcceptanceError, OSError, KeyError, ValueError, json.JSONDecodeError) as error:
+        print(f"ERROR: {error}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -36,6 +36,7 @@ fn random_streams_are_stable_and_independent() {
         wall_phase: None,
         wall_presentation: None,
         door_presentation: None,
+        wall_door_joint_actual_window: false,
         window_width: None,
         window_height: None,
         window_scale_factor: None,

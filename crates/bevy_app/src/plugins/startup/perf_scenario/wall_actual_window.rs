@@ -249,20 +249,36 @@ type WallVisualQuery<'w, 's> = Query<
     ),
 >;
 
+type GalleryCameraQuery<'w, 's> = Query<
+    'w,
+    's,
+    &'static mut Transform,
+    (
+        With<MainCamera>,
+        Without<Camera3dRtt>,
+        Without<ActorBillboard3d>,
+    ),
+>;
+type GalleryBillboardQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        &'static ActorBillboard3d,
+        &'static mut Transform,
+        &'static mut Visibility,
+    ),
+    (
+        Without<MainCamera>,
+        Without<Building3dVisual>,
+        Without<PerfFixtureMarker>,
+    ),
+>;
+
 #[derive(bevy::ecs::system::SystemParam)]
 pub(crate) struct WallActualWindowViewParams<'w, 's> {
     commands: Commands<'w, 's>,
     wall_owners: Query<'w, 's, &'static mut Building>,
-    main_camera: Query<
-        'w,
-        's,
-        &'static mut Transform,
-        (
-            With<MainCamera>,
-            Without<Camera3dRtt>,
-            Without<ActorBillboard3d>,
-        ),
-    >,
+    main_camera: GalleryCameraQuery<'w, 's>,
     camera_3d: Query<'w, 's, (&'static Camera, &'static GlobalTransform), With<Camera3dRtt>>,
     wall_visuals: Query<
         'w,
@@ -270,20 +286,7 @@ pub(crate) struct WallActualWindowViewParams<'w, 's> {
         (&'static Building3dVisual, &'static GlobalTransform),
         Without<ActorBillboard3d>,
     >,
-    billboards: Query<
-        'w,
-        's,
-        (
-            &'static ActorBillboard3d,
-            &'static mut Transform,
-            &'static mut Visibility,
-        ),
-        (
-            Without<MainCamera>,
-            Without<Building3dVisual>,
-            Without<PerfFixtureMarker>,
-        ),
-    >,
+    billboards: GalleryBillboardQuery<'w, 's>,
     ui_roots: Query<'w, 's, &'static mut Node, Without<ChildOf>>,
     connector_visuals: Query<'w, 's, (&'static PerfFixtureMarker, &'static mut Visibility)>,
 }
@@ -360,14 +363,7 @@ fn prepare_soul_depth_gallery(
     fixture: &WallDensityFixtureState,
     camera_3d: &Query<(&Camera, &GlobalTransform), With<Camera3dRtt>>,
     wall_visuals: &Query<(&Building3dVisual, &GlobalTransform), Without<ActorBillboard3d>>,
-    billboards: &mut Query<
-        (&ActorBillboard3d, &mut Transform, &mut Visibility),
-        (
-            Without<MainCamera>,
-            Without<Building3dVisual>,
-            Without<PerfFixtureMarker>,
-        ),
-    >,
+    billboards: &mut GalleryBillboardQuery,
 ) {
     for (_, _, mut visibility) in billboards.iter_mut() {
         *visibility = Visibility::Hidden;

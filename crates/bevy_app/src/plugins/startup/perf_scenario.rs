@@ -115,6 +115,8 @@ mod fixture;
 #[cfg(feature = "profiling")]
 mod indoor_light_fixture;
 #[cfg(feature = "profiling")]
+mod joint_actual_window;
+#[cfg(feature = "profiling")]
 mod output;
 #[cfg(feature = "profiling")]
 mod p02_actual_window;
@@ -183,6 +185,10 @@ pub(crate) use indoor_light_fixture::{
     restore_p08_cross_consumer_actor_positions_system, seed_indoor_light_static_door_states_system,
     should_settle_indoor_light_fixture, stabilize_indoor_light_actors_system,
     validate_indoor_light_fixture_system,
+};
+#[cfg(feature = "profiling")]
+pub(crate) use joint_actual_window::{
+    WallDoorJointActualWindowAcceptance, configure_wall_door_joint_actual_window_probe,
 };
 #[cfg(feature = "profiling")]
 pub(crate) use p02_actual_window::{

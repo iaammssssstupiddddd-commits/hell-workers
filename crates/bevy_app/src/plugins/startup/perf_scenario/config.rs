@@ -559,6 +559,7 @@ pub struct PerfScenarioConfig {
     wall_phase: Option<PerfWallPhase>,
     wall_presentation: Option<PerfWallPresentation>,
     door_presentation: Option<PerfDoorPresentation>,
+    wall_door_joint_actual_window: bool,
     window_width: Option<u32>,
     window_height: Option<u32>,
     window_scale_factor: Option<f32>,
@@ -918,6 +919,16 @@ impl PerfScenarioConfig {
                 })
             })
             .transpose()?;
+        let wall_door_joint_flag = has_flag(&args, "--perf-wall-door-joint-actual-window");
+        let wall_door_joint_environment =
+            env::var("HW_WALL_DOOR_JOINT_ACTUAL_WINDOW").is_ok_and(|value| value == "1");
+        if wall_door_joint_flag != wall_door_joint_environment {
+            return Err(PerfScenarioConfigError(
+                "--perf-wall-door-joint-actual-window and HW_WALL_DOOR_JOINT_ACTUAL_WINDOW=1 must be paired"
+                    .to_string(),
+            ));
+        }
+        let wall_door_joint_actual_window = wall_door_joint_flag && wall_door_joint_environment;
         let wall_actual_window_flag = has_flag(&args, "--perf-wall-actual-window");
         let wall_actual_window_environment =
             env::var("HW_WALL_ART_ACTUAL_WINDOW").is_ok_and(|value| value == "1");
@@ -1042,6 +1053,20 @@ impl PerfScenarioConfig {
         if door_presentation.is_some() && workload != PerfWorkload::DoorDensity {
             return Err(PerfScenarioConfigError(
                 "Door performance presentation selection is reserved for the formal door-density profile"
+                    .to_string(),
+            ));
+        }
+        if wall_door_joint_actual_window
+            && (workload != PerfWorkload::DoorDensity
+                || size != PerfScenarioSize::Small
+                || door_presentation != Some(PerfDoorPresentation::Production)
+                || !env::var("HW_WALL_CANDIDATE").is_ok_and(|value| value == "1")
+                || !env::var("HW_DOOR_CANDIDATE").is_ok_and(|value| value == "1")
+                || env::var("HW_WALL_ART_ACTUAL_WINDOW").is_ok_and(|value| value == "1")
+                || env::var("HW_DOOR_ART_ACTUAL_WINDOW").is_ok_and(|value| value == "1"))
+        {
+            return Err(PerfScenarioConfigError(
+                "Wall/Door joint actual-window requires door-density/small/production, both isolated candidates, and no single-track actual-window profile"
                     .to_string(),
             ));
         }
@@ -1229,6 +1254,7 @@ impl PerfScenarioConfig {
             wall_phase,
             wall_presentation,
             door_presentation,
+            wall_door_joint_actual_window,
             window_width,
             window_height,
             window_scale_factor,
@@ -1285,6 +1311,10 @@ impl PerfScenarioConfig {
 
     pub const fn door_presentation(&self) -> Option<PerfDoorPresentation> {
         self.door_presentation
+    }
+
+    pub const fn wall_door_joint_actual_window(&self) -> bool {
+        self.enabled && self.wall_door_joint_actual_window
     }
 
     pub const fn requested_window_scale_factor(&self) -> Option<f32> {
@@ -1676,6 +1706,7 @@ impl Default for PerfScenarioConfig {
             wall_phase: None,
             wall_presentation: None,
             door_presentation: None,
+            wall_door_joint_actual_window: false,
             window_width: None,
             window_height: None,
             window_scale_factor: None,

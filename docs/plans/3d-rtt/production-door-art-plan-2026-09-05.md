@@ -7,7 +7,7 @@
 | 計画ID | `production-door-art-plan-2026-09-05` |
 | ステータス | `In Progress` |
 | 作成日 | `2026-09-05` |
-| 最終更新日 | `2026-09-07` |
+| 最終更新日 | `2026-09-10` |
 | 作成者 | `Codex` |
 | 親計画 | [アセット作成マイルストーン](asset-milestones-2026-03-17.md)（Build-BのDoor） |
 | 関連計画 | [仮設壁の木製型枠化](provisional-wall-formwork-plan-2026-09-05.md)、[完了済み本番壁計画](archived/production-wall-art-plan-2026-08-31.md) |
@@ -282,6 +282,11 @@ sealerへ架空の証拠を渡さない。reviewは`double_leaf_approved`、`nor
 - [型枠計画J1](provisional-wall-formwork-plan-2026-09-05.md)を両track共通で1回実行し、同じsubject・両asset hash・job IDを参照する。
 - 両軸seam、Door連続、支持変更、tile完成、pause中loadで枠・leaf・previewが一致したことを確認する。
 - J1の前提は両単独M3の完了。DoorのM4はJ1を待つが、Doorの単独M3は待たない。
+
+`2026-09-10`に共通J1の接合・表示遷移部分を`wall-door-joint-seams-v1`として実装。
+実行手順と未完範囲は[型枠計画J1](provisional-wall-formwork-plan-2026-09-05.md#j1-doorとの共通受入)へ集約する。
+両単独M3は完了しており、次は両候補を同時に固定した専用worktreeで採取する。
+この部分profileの成功だけではJ1全体・M4を完了にしない。
 
 ### M4: release・文書同期・close
 

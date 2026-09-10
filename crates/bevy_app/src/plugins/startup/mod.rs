@@ -139,6 +139,8 @@ impl Plugin for StartupPlugin {
                 perf_scenario::WallActualWindowAcceptance::requested_from_environment();
             let door_actual_window_requested =
                 perf_scenario::DoorActualWindowAcceptance::requested_from_environment();
+            let wall_door_joint_actual_window_requested =
+                perf_scenario::WallDoorJointActualWindowAcceptance::requested_from_environment();
             let wall_color_actual_window_requested =
                 perf_scenario::WallColorActualWindowAcceptance::requested_from_environment();
             if p02_actual_window_requested {
@@ -150,6 +152,10 @@ impl Plugin for StartupPlugin {
             if door_actual_window_requested {
                 app.init_resource::<perf_scenario::DoorActualWindowAcceptance>();
                 perf_scenario::configure_door_actual_window_probe(app);
+            }
+            if wall_door_joint_actual_window_requested {
+                app.init_resource::<perf_scenario::WallDoorJointActualWindowAcceptance>();
+                perf_scenario::configure_wall_door_joint_actual_window_probe(app);
             }
             if wall_color_actual_window_requested {
                 app.init_resource::<perf_scenario::WallColorActualWindowAcceptance>();

@@ -5,9 +5,9 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `provisional-wall-formwork-plan-2026-09-05` |
-| ステータス | `In Progress — M3b正式画像・性能、W-L01〜L03合格／asset失敗系・J1待ち` |
+| ステータス | `In Progress — 単独M3・W-L01〜L03・W-A01〜A02完了／J1実装中` |
 | 作成日 | `2026-09-05` |
-| 最終更新日 | `2026-09-08` |
+| 最終更新日 | `2026-09-10` |
 | 作成者 | `Codex` |
 | 親計画 | [アセット作成マイルストーン](asset-milestones-2026-03-17.md)（Build-Aの仮設表現を追加改修） |
 | 関連計画 | [ドアの本番ビジュアル化](production-door-art-plan-2026-09-05.md)、[完了済み本番壁計画](archived/production-wall-art-plan-2026-08-31.md) |
@@ -281,6 +281,34 @@ viewも正式jobのtreeへ上書きしない。追加treeの作成前に実使�
 - 完了条件: 標準High/DPI 1の1 processで全phaseのstate・mesh/tag・画像を結ぶ。両asset generation/hash、subject、job IDを両計画へ同じ値で記録する。
 - 本節はshared J1を所有する。Door側で同じjobをもう一度実行せず参照する。quality特有の失敗を見つけた場合だけ該当caseを追加する。
 
+#### 接合・表示遷移profile（2026-09-10）
+
+`joint_actual_window.rs`と`wall_door_joint_acceptance.py`の`wall-door-joint-seams-v1`は、
+J1のうち両軸Wall/Door接合、EWの連続Door、型枠の本設化、支持壁の位置変更によるDoor軸追従を対象とする。
+carrierは凍結済み`door-density/small/production`で、既存density対象から離れたgrid y=44に
+Door 6・Wall 10の専用見本を本番shell経路で追加し、camera/UI/可視対象を専用表示へ設定する。
+`Building.is_provisional`変更による表示遷移の確認であり、Coatタスクの実行証拠は既存W-L02を参照する。
+
+```bash
+python3 .codex/skills/hell-workers-run-native-acceptance/scripts/wall_door_joint_acceptance.py \
+  plan --repo <両candidateを固定したclean-worktree> --adapter Intel
+```
+
+返されたdirect `kitty` commandだけを実行し、`status --job-root <job-root>`で監視する。
+同一processで`framed → completed → support-changed`をnonce/generation ACKにより保持し、
+3枚のX11 client PNGを採取する。最終ACKをゲームが受理して正常終了したことも再検証する。
+同一owner/visual ID、実handleの候補identity・mesh/material・resident・可視性、独立した近傍からの
+Wall topology、Door state/axis、投影先のclient範囲と対象ROIを検査し、source/harness/binary/asset view、
+実adapterと画像hashをmanifestへ結ぶ。既存behavior/galleryの複雑なQueryは型aliasへ整理した。
+
+同じjobでWallのpaused replacement、Wall topologyへのDoor追加削除、preview anchorのexact testも実行する。
+これらは画素確認と区別して`coverage.focused_audit`へ記録する。`coverage.pending_j1`にあるjoint paused load、
+支持変更後のpreview軸、corner接合、NSの連続Door、支持壁撤去・復元は引き続き未完。
+このprofileはJ1全体や性能/Memoryを合格とするものではなく、3 PNGは目視でも確認する。
+
+Help影響は`No impact`。専用profiling起動条件と候補opt-inに限定した検証追加および型alias整理であり、
+通常の建築・ドア操作、表示resolver、材料、時間、Helpの本文・到達可能性は変更しない。
+
 ### M4: release・文書同期・close
 
 - 変更内容: 検証済み新generationのrelease手順、実画面比較、manifest・receipt・同期差分を提示し、canonicalへ昇格する。
@@ -553,7 +581,7 @@ Update required / 理由付きNo impactをその時点で判断する。
 - W-L03完了: 仮設1 / 本設1の混在saveをpause中のnormal loadで10回反復し、各回のfallback→production復帰、phase保持、owner / visual数、完成6＋型枠6 mesh / 2 material poolの上限を固定した。同じ候補をrollback / recovery-onlyでも検証し、subject `c5c525c3`のexact focused audit 1/1 passを§7.8に記録した。
 - W-A01 / W-A02完了: v2型枠mesh欠落／復元、型枠albedo hash不一致、schema／aggregate reject、`Eligible → Loading → LoadFailed → Eligible`、mixed identityをformal loaderとruntime回帰へ分けて固定した。新→旧v2→新generationでは仮設／本設のactive handleが同一identityへ揃い、settle後に非active mesh/materialのruntime強参照が残らない。subject `01625807`のexact focused audit 6/6 passを§7.9に記録し、actual-window画素はW-L01と分担した。
 - W-G01: 凍結済みmixed 4Nの仮設192／本設192、画像専用E-W直接接続pair、完成6＋型枠6 mesh、段階別2 material、Soul 2体のfront / behind camera depthを同一galleryへ固定した。subject `99362a37`の標準／最大zoom-out正式matrixは18/18 validで、両独立verifyと代表画像目視も完了した。旧v1証跡は再ラベルしていない。
-- 次の作業: Door側の単独gate後にJ1、M4、release受入へ進む。Wallのfailure / generation auditだけをrelease合格へ読み替えず、通常release generation 4を維持する。
+- 次の作業: 両単独M3は完了。§J1の接合・表示遷移profileをclean専用worktreeで実行し、残るjoint paused load・preview軸・corner・NS連続Door・支持壁撤去復元を閉じてからM4へ進む。通常release generation 4を維持する。
 - ドアはM0の共通port確定後に制作を並行可能。Rust・tooling編集はmain agentが順に行い、joint受入は両方のruntime接続後。
 - 240 triangles・core 15 file・§7の予算は採用した新設計値。現在のreleaseの実測・アート承認値として扱わない。
 
@@ -571,7 +599,7 @@ Update required / 理由付きNo impactをその時点で判断する。
 - 文書gate: `python3 scripts/dev.py docs --write`で索引を同期後、`docs --check` / `git diff --check`がpass。
 - Help gate: `No impact`。性能受入基盤・非対象asset preflight・証跡文書の追加だけで、通常の入力、ゲームプレイ、表示ロジック、UI文言、Help coverage、release authorityは不変。理由付き`check_help_impact.py`がpass。
 - 最終検証: `wall_formwork_density_acceptance.py self-test / verify`、`scripts/perf.py self-test`、`python3 scripts/dev.py check`、全workspace testとClippy `-D warnings`を含む`python3 scripts/dev.py verify`がpass。
-- ブロッカー: Wall final封印・正式画像・性能・Memory・混在gallery / Soul depth・stateful lifecycle・asset failure / generation auditは解消。Door単独残件、J1、M4、release受入が未完であり、通常releaseは変更しない。
+- 未完項目: 両単独M3は完了。J1、M4、release受入は未完であり、通常releaseは変更しない。
 
 ### Definition of Done
 

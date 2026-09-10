@@ -170,9 +170,11 @@ pub(super) struct WallDensityProbeSubject<'a> {
     pub(super) phase: PerfWallPhase,
 }
 
+type GalleryPhasePair = [(Entity, (i32, i32), bool); 2];
+
 pub(super) struct WallDensityRenderDocEvidence {
     pub(super) target_entities: Vec<Entity>,
-    pub(super) mixed_gallery_pair: Option<[(Entity, (i32, i32), bool); 2]>,
+    pub(super) mixed_gallery_pair: Option<GalleryPhasePair>,
     pub(super) layout_checksum: String,
     pub(super) phase: PerfWallPhase,
     pub(super) target_wall_count: usize,
@@ -203,7 +205,7 @@ impl WallDensityFixtureState {
         self.probe_subject(|specimen| specimen.mask == mask)
     }
 
-    pub(super) fn soul_depth_subjects(&self) -> Option<[(Entity, (i32, i32), bool); 2]> {
+    pub(super) fn soul_depth_subjects(&self) -> Option<GalleryPhasePair> {
         let layout = self.layout.as_ref().filter(|layout| {
             self.phase == WallDensityFixturePhase::Ready && layout.phase == PerfWallPhase::Mixed
         })?;
