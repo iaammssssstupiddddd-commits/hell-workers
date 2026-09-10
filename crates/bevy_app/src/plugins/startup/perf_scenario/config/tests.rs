@@ -5,6 +5,35 @@ use super::{
 use hw_core::quality::RttQualityPreset;
 
 #[test]
+fn joint_release_rejects_candidate_and_preview_opt_ins() {
+    for release in [false, true] {
+        for wall_candidate in [false, true] {
+            for door_candidate in [false, true] {
+                for wall_preview in [false, true] {
+                    for door_preview in [false, true] {
+                        let expected = !wall_preview
+                            && !door_preview
+                            && if release {
+                                !wall_candidate && !door_candidate
+                            } else {
+                                wall_candidate && door_candidate
+                            };
+                        assert_eq!(
+                            super::joint_asset_opt_ins_match(
+                                release,
+                                [wall_candidate, door_candidate],
+                                [wall_preview, door_preview],
+                            ),
+                            expected,
+                        );
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[test]
 fn renderdoc_capture_requires_its_dedicated_feature() {
     assert!(!super::resolve_renderdoc_capture(false).unwrap());
     #[cfg(feature = "profiling-renderdoc")]

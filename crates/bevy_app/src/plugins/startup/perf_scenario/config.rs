@@ -929,6 +929,15 @@ impl PerfScenarioConfig {
             ));
         }
         let wall_door_joint_actual_window = wall_door_joint_flag && wall_door_joint_environment;
+        let joint_release = has_flag(&args, "--perf-wall-door-joint-release");
+        if joint_release != env::var("HW_WALL_DOOR_JOINT_RELEASE").is_ok_and(|value| value == "1")
+            || (joint_release && !wall_door_joint_actual_window)
+        {
+            return Err(PerfScenarioConfigError(
+                "Wall/Door joint release requires the paired release flag/environment and joint actual-window profile"
+                    .to_string(),
+            ));
+        }
         let wall_actual_window_flag = has_flag(&args, "--perf-wall-actual-window");
         let wall_actual_window_environment =
             env::var("HW_WALL_ART_ACTUAL_WINDOW").is_ok_and(|value| value == "1");
@@ -1060,13 +1069,18 @@ impl PerfScenarioConfig {
             && (workload != PerfWorkload::DoorDensity
                 || size != PerfScenarioSize::Small
                 || door_presentation != Some(PerfDoorPresentation::Production)
-                || !env::var("HW_WALL_CANDIDATE").is_ok_and(|value| value == "1")
-                || !env::var("HW_DOOR_CANDIDATE").is_ok_and(|value| value == "1")
+                || !joint_asset_opt_ins_match(
+                    joint_release,
+                    ["HW_WALL_CANDIDATE", "HW_DOOR_CANDIDATE"]
+                        .map(|key| env::var(key).is_ok_and(|value| value == "1")),
+                    ["HW_WALL_ART_PREVIEW", "HW_DOOR_ART_PREVIEW"]
+                        .map(|key| env::var(key).is_ok_and(|value| value == "1")),
+                )
                 || env::var("HW_WALL_ART_ACTUAL_WINDOW").is_ok_and(|value| value == "1")
                 || env::var("HW_DOOR_ART_ACTUAL_WINDOW").is_ok_and(|value| value == "1"))
         {
             return Err(PerfScenarioConfigError(
-                "Wall/Door joint actual-window requires door-density/small/production, both isolated candidates, and no single-track actual-window profile"
+                "Wall/Door joint actual-window requires door-density/small/production, both isolated candidates or explicit release, and no art-preview or single-track actual-window profile"
                     .to_string(),
             ));
         }
@@ -1479,6 +1493,10 @@ impl PerfScenarioConfig {
     fn stream_seed(&self, stream: PerfRandomStream) -> u64 {
         splitmix64(self.master_seed ^ stream.salt())
     }
+}
+
+fn joint_asset_opt_ins_match(release: bool, candidates: [bool; 2], previews: [bool; 2]) -> bool {
+    candidates == [!release; 2] && previews == [false; 2]
 }
 
 fn wall_density_durations_match(actual_window: bool, warmup_secs: f32, measure_secs: f32) -> bool {

@@ -7,7 +7,7 @@
 | 計画ID | `production-door-art-plan-2026-09-05` |
 | ステータス | `In Progress` |
 | 作成日 | `2026-09-05` |
-| 最終更新日 | `2026-09-10` |
+| 最終更新日 | `2026-09-11` |
 | 作成者 | `Codex` |
 | 親計画 | [アセット作成マイルストーン](asset-milestones-2026-03-17.md)（Build-BのDoor） |
 | 関連計画 | [仮設壁の木製型枠化](provisional-wall-formwork-plan-2026-09-05.md)、[完了済み本番壁計画](archived/production-wall-art-plan-2026-08-31.md) |
@@ -291,8 +291,18 @@ job `wall-door-joint-20260910T145217Z-63429a8e`で固定テスト3/3とIntel Arc
 両候補を同時に固定した専用worktreeで採取済み。次は共通節の`coverage.pending_j1`を閉じる。
 この部分profileの成功だけではJ1全体・M4を完了にしない。
 
+`2026-09-11`に6 checkpointの`wall-door-joint-lifecycle-v2`を追加し、subject
+`83ad3f8576c0fd68cd24b0350576ec5ebaa7785f`、同じWall generation 10 / Door generation 6で
+job `wall-door-joint-20260910T171102Z-37fc20c4`を開始した。corner・NS連続Door・支持壁撤去/復元・
+建設Blueprintの軸追従・通常save/loadを1 processで検査する。固定audit 3件とbuild、5 checkpointの撮影まで進んだが、
+load後に静的carrierの旧Entity参照でinvalid終了した。Ready carrierからjoint observerへの明示handoffを修正し、再試行する。
+詳細と結果の所有先は共通節とし、このtrackで再度同じjobを起動しない。
+
 ### M4: release・文書同期・close
 
+- `--release`を明示した`wall-door-joint-release-v1`の検証入口を準備中。
+  candidate / ArtPreview opt-inなしの`ReleaseApproved`を両trackへ要求し、core / receiptのbytesとidentityを
+  build前・実画面の両方で照合する。通常runtime authorityの変更やcanonical登録はまだ行っていない。
 - 変更内容: 最終候補画像、寸法、全状態、検証結果、manifest / receipt / 同期差分を揃え、canonicalとruntime mirrorへreleaseする。
 - 対象: `docs/building.md`、`docs/art-style-criteria.md`、`docs/assets_workflow.md`、`docs/rendering-performance.md`、必要な選択・saveの説明、親計画とHelp。
 - 完了条件:

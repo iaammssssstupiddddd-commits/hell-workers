@@ -44,6 +44,7 @@ enum DoorDensityFixturePhase {
     Inactive,
     Spawned,
     Ready,
+    HandedOffToJoint,
     Failed,
 }
 
@@ -141,6 +142,19 @@ pub(crate) struct DoorDensityFixtureState {
 }
 
 impl DoorDensityFixtureState {
+    /// The joint storyboard owns world replacement and its own target checks.
+    /// Drop the static carrier's old Entity IDs before loading, and make its
+    /// frozen-density sidecars unavailable rather than relabeling load evidence.
+    pub(super) fn handoff_to_joint_storyboard(&mut self) -> bool {
+        if self.phase != DoorDensityFixturePhase::Ready {
+            return false;
+        }
+        self.phase = DoorDensityFixturePhase::HandedOffToJoint;
+        self.layout = None;
+        self.presentation = None;
+        true
+    }
+
     pub(super) fn sidecars(&self) -> Result<(serde_json::Value, String), String> {
         if self.phase != DoorDensityFixturePhase::Ready {
             return Err(format!(
@@ -348,7 +362,9 @@ pub(crate) fn validate_door_density_fixture_system(mut params: DoorDensityValida
         || params.config.workload != PerfWorkload::DoorDensity
         || matches!(
             params.state.phase,
-            DoorDensityFixturePhase::Inactive | DoorDensityFixturePhase::Failed
+            DoorDensityFixturePhase::Inactive
+                | DoorDensityFixturePhase::HandedOffToJoint
+                | DoorDensityFixturePhase::Failed
         )
     {
         return;
@@ -664,6 +680,30 @@ fn fail_fixture(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn joint_handoff_drops_old_entities_and_refuses_density_sidecars() {
+        let mut state = DoorDensityFixtureState {
+            phase: DoorDensityFixturePhase::Ready,
+            layout: Some(DoorDensityLayout::build(PerfScenarioSize::Small)),
+            ..default()
+        };
+        assert!(state.handoff_to_joint_storyboard());
+        assert_eq!(state.phase, DoorDensityFixturePhase::HandedOffToJoint);
+        assert!(state.layout.is_none());
+        assert!(state.presentation.is_none());
+        assert!(state.sidecars().is_err());
+        for phase in [
+            DoorDensityFixturePhase::Inactive,
+            DoorDensityFixturePhase::Spawned,
+            DoorDensityFixturePhase::Failed,
+            DoorDensityFixturePhase::HandedOffToJoint,
+        ] {
+            state.phase = phase;
+            assert!(!state.handoff_to_joint_storyboard());
+            assert_eq!(state.phase, phase);
+        }
+    }
 
     #[test]
     fn layouts_have_frozen_counts_and_distributions() {

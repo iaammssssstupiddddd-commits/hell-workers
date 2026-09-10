@@ -14,10 +14,12 @@ import secrets
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import door_behavior_acceptance as door_art  # noqa: E402
@@ -29,6 +31,7 @@ import wall_density_acceptance as density  # noqa: E402
 SCHEMA_VERSION = 1
 STATUS_SCHEMA_VERSION = 2
 PROFILE = "wall-door-joint-lifecycle-v2"
+RELEASE_PROFILE = "wall-door-joint-release-v1"
 COVERAGE = {
     "actual_window": ["both-axis-seams", "east-west-continuous-doors", "completion-in-place", "support-relocation",
                       "joint-paused-load", "construction-preview-axis-after-support-change", "corner-seams",
@@ -55,6 +58,8 @@ FIXED_TESTS = (
 )
 ENV_KEYS = (
     "HW_WALL_ART_PREVIEW", "HW_DOOR_ART_PREVIEW", "HW_WALL_ART_ACTUAL_WINDOW", "HW_DOOR_ART_ACTUAL_WINDOW",
+    "HW_WALL_ART_PREVIEW_GENERATION", "HW_WALL_ART_PREVIEW_MANIFEST_SHA256",
+    "HW_DOOR_ART_PREVIEW_GENERATION", "HW_DOOR_ART_PREVIEW_MANIFEST_SHA256",
     "BEVY_ASSET_ROOT",
     "HW_WINDOW_BACKEND",
     "HW_PRESENT_MODE",
@@ -68,6 +73,7 @@ ENV_KEYS = (
     "HW_DOOR_CANDIDATE_MANIFEST_SHA256",
     "HW_DOOR_PERF_PRESENTATION",
     "HW_WALL_DOOR_JOINT_ACTUAL_WINDOW",
+    "HW_WALL_DOOR_JOINT_RELEASE",
     "HW_WALL_DOOR_JOINT_STATUS_PATH",
     "HW_WALL_DOOR_JOINT_ACK_PATH",
     "HW_WALL_DOOR_JOINT_SESSION_NONCE",
@@ -82,6 +88,16 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def assert_harness_matches(repo: Path) -> None:
+    actual_root = Path(__file__).resolve().parents[4]
+    for relative in native.NATIVE_HARNESS_FILES:
+        actual, recorded = actual_root / relative, repo / relative
+        native.require(actual.is_file() and recorded.is_file()
+                       and not actual.is_symlink() and not recorded.is_symlink()
+                       and sha256(actual) == sha256(recorded),
+                       f"J1 executing harness differs from the recorded repository: {relative}")
+
+
 def build_command() -> list[str]:
     return [
         "python3", "scripts/dev.py", "cargo", "--", "build", "--profile", "profiling",
@@ -92,16 +108,17 @@ def build_command() -> list[str]:
 def fixed_test_command(test_name: str) -> list[str]:
     return [
         "python3", "scripts/dev.py", "cargo", "--", "test", "-p", "bevy_app@0.1.0",
-        "--profile", "profiling", "--no-default-features", "--features", "profiling",
+        "--lib", "--profile", "profiling", "--no-default-features", "--features", "profiling",
         test_name, "--", "--exact", "--nocapture",
     ]
 
 
-def game_command(repo: Path, root: Path) -> list[str]:
+def game_command(repo: Path, root: Path, *, release: bool = False) -> list[str]:
     return [
         str(repo / "target/profiling/bevy_app"),
         "--perf-scenario",
         "--perf-wall-door-joint-actual-window",
+        *(["--perf-wall-door-joint-release"] if release else []),
         "--perf-seed", str(SEED),
         "--perf-size", "small",
         "--perf-workload", "door-density",
@@ -123,7 +140,65 @@ def game_command(repo: Path, root: Path) -> list[str]:
     ]
 
 
-def candidate_identities(repo: Path) -> dict[str, dict[str, Any]]:
+def release_identities(repo: Path) -> dict[str, dict[str, Any]]:
+    """Validate the runtime mirror; canonical promotion approval is a separate gate."""
+    result = {}
+    for kind, schema, roles in (
+        ("wall", 2, wall_art.FORMWORK_PREVIEW_ROLES),
+        ("door", 1, ("mesh:closed", "mesh:open", "mesh:locked", "texture:albedo", "preview:ew", "preview:ns")),
+    ):
+        asset_id = f"{kind}-production-v1"
+        locator = repo / f"assets/manifests/{asset_id}.{kind}set"
+        native.require(locator.is_file() and not locator.is_symlink(), f"J1 {kind} release locator is absent")
+        payload = native.read_json(locator)
+        native.require(locator.read_bytes() == canonical_bytes(payload), "J1 release locator is not canonical")
+        generation = payload.get("asset_set_generation")
+        digest = payload.get("manifest_sha256")
+        native.require(payload.get("schema_version") == schema and payload.get("asset_set_id") == asset_id
+                       and payload.get("authority") == "release_approved" and payload.get("review_status") == "art_approved"
+                       and type(generation) is int and generation > 0
+                       and isinstance(digest, str) and re.fullmatch(r"[0-9a-f]{64}", digest) is not None,
+                       f"J1 {kind} release identity differs")
+        if kind == "wall":
+            native.require(payload.get("normal_decision") == "rejected" and payload.get("candidate_normal") is None,
+                           "J1 released formwork normal contract differs")
+        core = payload.get("core")
+        native.require(isinstance(core, list) and all(isinstance(item, dict) for item in core)
+                       and tuple(item.get("role") for item in core) == tuple(roles), "J1 released core inventory differs")
+        receipt = payload.get("receipt")
+        native.require(isinstance(receipt, dict) and set(receipt) == {"path", "bytes", "sha256"}
+                       and receipt["path"] == f"{kind}_sets/{generation}/authority/promotion-receipt.json",
+                       "J1 release receipt reference differs")
+        paths = []
+        for record in [*core, receipt]:
+            relative = Path(record.get("path", ""))
+            native.require(not relative.is_absolute() and ".." not in relative.parts
+                           and relative.is_relative_to(f"{kind}_sets/{generation}"), "J1 release path escapes its generation")
+            asset = repo / "assets" / relative
+            native.require(asset.is_file() and not any(part.is_symlink() for part in (asset, *asset.parents))
+                           and type(record.get("bytes")) is int and asset.stat().st_size == record["bytes"]
+                           and sha256(asset) == record.get("sha256"), f"J1 release bytes differ: {relative}")
+            paths.append(relative)
+        native.require(len(set(paths)) == len(paths), "J1 release paths are duplicated")
+        receipt_path = repo / "assets" / receipt["path"]
+        sealed = native.read_json(receipt_path)
+        identity = {"asset_set_id": asset_id, "asset_set_generation": generation, "manifest_sha256": digest}
+        native.require(receipt_path.read_bytes() == canonical_bytes(sealed) and sealed.get("schema_version") == 1
+                       and all(sealed.get(key) == value for key, value in identity.items())
+                       and sealed.get("new_active") == identity, "J1 release receipt describes another asset set")
+        result[kind] = {"asset_set_generation": generation, "manifest_sha256": digest,
+                        "authority": "release_approved", "locator_sha256": sha256(locator),
+                        "receipt_sha256": receipt["sha256"]}
+    return result
+
+
+def canonical_bytes(payload: dict) -> bytes:
+    return (json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n").encode()
+
+
+def candidate_identities(repo: Path, *, release: bool = False) -> dict[str, dict[str, Any]]:
+    if release:
+        return release_identities(repo)
     result = {
         "wall": wall_art.candidate_identity(repo, require_formwork=True),
         "door": door_art.candidate_identity(repo),
@@ -173,6 +248,11 @@ def clean_environment(
             "HW_WALL_DOOR_JOINT_SESSION_NONCE": nonce,
         }
     )
+    if wall.get("authority") == "release_approved":
+        for key in ENV_KEYS:
+            if key.startswith(("HW_WALL_CANDIDATE", "HW_DOOR_CANDIDATE")):
+                environment.pop(key, None)
+        environment["HW_WALL_DOOR_JOINT_RELEASE"] = "1"
     return environment
 
 
@@ -223,7 +303,7 @@ def validate_status(
         observed = runtime.get(kind)
         native.require(
             isinstance(observed, dict)
-            and observed.get("authority") == "IsolatedCandidate"
+            and observed.get("authority") == ("ReleaseApproved" if identities["wall"].get("authority") == "release_approved" else "IsolatedCandidate")
             and observed.get("asset_set_generation") == expected["asset_set_generation"]
             and observed.get("manifest_sha256") == expected["manifest_sha256"],
             f"J1 {kind} runtime identity differs",
@@ -345,7 +425,7 @@ def run_storyboard(
     status_path = root / "probe-status.json"
     ack_path = root / "probe-ack.json"
     nonce = secrets.token_hex(16)
-    command = game_command(repo, root)
+    command = game_command(repo, root, release=identities["wall"].get("authority") == "release_approved")
     environment = clean_environment(repo, adapter, identities, status_path, ack_path, nonce)
     state.setdefault("commands", []).append({"stage": "actual-window", "argv": command})
     native.atomic_write_json(job_file, state)
@@ -401,20 +481,24 @@ def verify_game_log(path: Path, adapter: str) -> dict[str, str]:
 
 def verify_root(root: Path) -> dict[str, Any]:
     manifest = native.read_json(root / "manifest.json")
+    released = manifest.get("release", False)
+    native.require(type(released) is bool, "J1 release selection differs")
+    profile = RELEASE_PROFILE if released else PROFILE
     native.require(
         manifest.get("schema_version") == SCHEMA_VERSION
         and manifest.get("status") == "pass"
-        and manifest.get("profile") == PROFILE,
+        and manifest.get("profile") == profile,
         "J1 manifest differs",
     )
     repo = native.validate_repo(manifest["repo"])
+    assert_harness_matches(repo)
     native.require(manifest.get("coverage") == COVERAGE, "J1 seam scope differs")
     door_art.assert_fully_clean(repo, manifest["subject_commit"])
     native.require(
         native.source_fingerprint(repo) == manifest["source_fingerprint"]
         and native.native_harness_fingerprint(repo) == manifest["harness_fingerprint"]
         and density.asset_view_fingerprint(repo) == manifest["asset_view_fingerprint"]
-        and candidate_identities(repo) == manifest["candidate_identities"],
+        and candidate_identities(repo, release=released) == manifest["candidate_identities"],
         "J1 provenance changed",
     )
     observations = manifest.get("observations")
@@ -456,7 +540,7 @@ def verify_root(root: Path) -> dict[str, Any]:
     return {
         "schema_version": SCHEMA_VERSION,
         "status": "pass",
-        "profile": PROFILE,
+        "profile": profile,
         "root": str(root),
         "fixed_tests": len(FIXED_TESTS),
         "screenshots": len(CHECKPOINTS),
@@ -474,8 +558,9 @@ def plan(args: argparse.Namespace) -> int:
     assets = density.asset_view_fingerprint(repo)
     identities = None
     try:
+        assert_harness_matches(repo)
         door_art.assert_fully_clean(repo, subject)
-        identities = candidate_identities(repo)
+        identities = candidate_identities(repo, release=args.release)
     except native.AcceptanceError as error:
         failures.append(str(error))
     root = Path(args.job_root).resolve() if args.job_root else native.unique_job_root(repo, "wall-door-joint")
@@ -490,12 +575,14 @@ def plan(args: argparse.Namespace) -> int:
         "--repo", str(repo), "--job-root", str(root), "--subject-commit", subject,
         "--source-fingerprint", source, "--harness-fingerprint", harness,
         "--asset-view-fingerprint", assets, "--adapter", args.adapter,
+        *(["--release"] if args.release else []),
     ]
     native.print_json(
         {
             "schema_version": SCHEMA_VERSION,
             "status": "ready" if not failures else "blocked",
-            "profile": PROFILE,
+            "profile": RELEASE_PROFILE if args.release else PROFILE,
+            "release": args.release,
             "job_root": str(root),
             "subject_commit": subject,
             "source_fingerprint": source,
@@ -525,6 +612,7 @@ def plan(args: argparse.Namespace) -> int:
 def run(args: argparse.Namespace) -> int:
     native.require(os.environ.get("HW_NATIVE_ACCEPTANCE_LAUNCHED") == "1", "J1 must use the planned direct kitty command")
     repo = native.validate_repo(args.repo)
+    assert_harness_matches(repo)
     native.require(native.git_subject(repo) == args.subject_commit, "J1 subject changed")
     native.require(native.source_fingerprint(repo) == args.source_fingerprint, "J1 source changed")
     native.require(native.native_harness_fingerprint(repo) == args.harness_fingerprint, "J1 harness changed")
@@ -532,14 +620,15 @@ def run(args: argparse.Namespace) -> int:
     door_art.assert_fully_clean(repo, args.subject_commit)
     resources = native.resource_snapshot(repo, require_launcher=True)
     native.require(not resources["failures"], f"J1 resource preflight failed: {resources['failures']}")
-    identities = candidate_identities(repo)
+    identities = candidate_identities(repo, release=args.release)
     root = Path(args.job_root).resolve()
     native.require(root.is_relative_to(repo / "target/native-acceptance"), "J1 job root must be under target/native-acceptance")
     native.require_persistent_storage(root, label="J1 job root")
     native.require(not root.exists(), f"job root already exists: {root}")
     root.mkdir(parents=True)
     state: dict[str, Any] = {
-        "schema_version": SCHEMA_VERSION, "status": "running", "profile": PROFILE,
+        "schema_version": SCHEMA_VERSION, "status": "running", "profile": RELEASE_PROFILE if args.release else PROFILE,
+        "release": args.release,
         "subject_commit": args.subject_commit, "current_stage": "fixed-audit",
         "child_pid": None, "heartbeat_at": native.utc_now(), "commands": [],
         "resources": resources,
@@ -570,7 +659,8 @@ def run(args: argparse.Namespace) -> int:
             job_file=job_file, state=state,
         )
         manifest = {
-            "schema_version": SCHEMA_VERSION, "status": "pass", "profile": PROFILE,
+            "schema_version": SCHEMA_VERSION, "status": "pass", "profile": RELEASE_PROFILE if args.release else PROFILE,
+            "release": args.release,
             "repo": str(repo), "subject_commit": args.subject_commit,
             "source_fingerprint": args.source_fingerprint,
             "harness_fingerprint": args.harness_fingerprint,
@@ -611,7 +701,107 @@ def verify(args: argparse.Namespace) -> int:
     return 0
 
 
+def self_test_release() -> None:
+    with tempfile.TemporaryDirectory(prefix="joint-release-self-test-") as temporary:
+        repo = Path(temporary).resolve()
+        locators = {}
+        for kind, schema, roles in (
+            ("wall", 2, wall_art.FORMWORK_PREVIEW_ROLES),
+            ("door", 1, ("mesh:closed", "mesh:open", "mesh:locked", "texture:albedo", "preview:ew", "preview:ns")),
+        ):
+            identity = {"asset_set_id": f"{kind}-production-v1", "asset_set_generation": 1,
+                        "manifest_sha256": ("a" if kind == "wall" else "b") * 64}
+            core = []
+            for index, role in enumerate(roles):
+                relative = f"{kind}_sets/1/core-{index}.bin"
+                asset = repo / "assets" / relative
+                asset.parent.mkdir(parents=True, exist_ok=True)
+                asset.write_bytes(f"test-only {kind} {role}".encode())
+                core.append({"path": relative, "bytes": asset.stat().st_size, "sha256": sha256(asset), "role": role})
+            relative = f"{kind}_sets/1/authority/promotion-receipt.json"
+            receipt = repo / "assets" / relative
+            receipt.parent.mkdir(parents=True)
+            receipt.write_bytes(canonical_bytes({"schema_version": 1, **identity, "new_active": identity}))
+            payload = {"schema_version": schema, **identity, "authority": "release_approved", "review_status": "art_approved",
+                       "normal_decision": "rejected", "candidate_normal": None, "core": core,
+                       "receipt": {"path": relative, "bytes": receipt.stat().st_size, "sha256": sha256(receipt)}}
+            locator = repo / f"assets/manifests/{kind}-production-v1.{kind}set"
+            locator.parent.mkdir(parents=True, exist_ok=True)
+            locator.write_bytes(canonical_bytes(payload))
+            locators[kind] = (locator, payload)
+        identities = release_identities(repo)
+        native.require(set(identities) == {"wall", "door"}, "J1 release fixture inventory differs")
+        with mock.patch.object(native, "cargo_environment", return_value={key: "inherited" for key in ENV_KEYS}):
+            environment = clean_environment(repo, "Intel", identities, repo / "status", repo / "ack", "a" * 32)
+            native.require(environment.get("HW_WALL_DOOR_JOINT_RELEASE") == "1"
+                           and not any(key.startswith(("HW_WALL_CANDIDATE", "HW_DOOR_CANDIDATE", "HW_WALL_ART_PREVIEW", "HW_DOOR_ART_PREVIEW")) for key in environment),
+                           "J1 release inherited a candidate or art-preview opt-in")
+            candidate = copy.deepcopy(identities)
+            candidate["wall"]["authority"] = "isolated_candidate"
+            environment = clean_environment(repo, "Intel", candidate, repo / "status", repo / "ack", "a" * 32)
+            native.require("HW_WALL_DOOR_JOINT_RELEASE" not in environment
+                           and environment.get("HW_WALL_CANDIDATE") == environment.get("HW_DOOR_CANDIDATE") == "1",
+                           "J1 candidate inherited release selection")
+        for kind in ("wall", "door"):
+            locator, original = locators[kind]
+            for mutation in ("candidate", "wrong-generation", "wrong-receipt", "tampered-core", "duplicate-core", "symlink"):
+                changed = copy.deepcopy(original)
+                if mutation == "candidate":
+                    changed["authority"] = "isolated_candidate"
+                elif mutation == "wrong-generation":
+                    changed["core"][0]["path"] = f"{kind}_sets/2/core-0.bin"
+                elif mutation == "wrong-receipt":
+                    changed["receipt"] = locators["door" if kind == "wall" else "wall"][1]["receipt"]
+                elif mutation == "tampered-core":
+                    changed["core"][0]["sha256"] = "f" * 64
+                elif mutation == "duplicate-core":
+                    changed["core"][1] = {**changed["core"][0], "role": changed["core"][1]["role"]}
+                else:
+                    link = repo / f"assets/{kind}_sets/1/link"
+                    link.symlink_to(repo / f"assets/{kind}_sets/1", target_is_directory=True)
+                    changed["core"][0]["path"] = f"{kind}_sets/1/link/core-0.bin"
+                locator.write_bytes(canonical_bytes(changed))
+                try:
+                    release_identities(repo)
+                except native.AcceptanceError:
+                    pass
+                else:
+                    raise native.AcceptanceError(f"J1 released {kind} accepted {mutation}")
+                locator.write_bytes(canonical_bytes(original))
+            receipt = repo / "assets" / original["receipt"]["path"]
+            saved_receipt = receipt.read_bytes()
+            wrong = native.read_json(receipt)
+            wrong["asset_set_id"] = "another-asset"
+            receipt.write_bytes(canonical_bytes(wrong))
+            changed = copy.deepcopy(original)
+            changed["receipt"].update(bytes=receipt.stat().st_size, sha256=sha256(receipt))
+            locator.write_bytes(canonical_bytes(changed))
+            try:
+                release_identities(repo)
+            except native.AcceptanceError:
+                pass
+            else:
+                raise native.AcceptanceError("J1 release accepted rehashed receipt for another asset")
+            receipt.write_bytes(saved_receipt)
+            locator.write_bytes(canonical_bytes(original))
+        actual_root = Path(__file__).resolve().parents[4]
+        for relative in native.NATIVE_HARNESS_FILES:
+            target = repo / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(actual_root / relative, target)
+        assert_harness_matches(repo)
+        changed_helper = repo / Path(__file__).resolve().relative_to(actual_root)
+        changed_helper.write_bytes(changed_helper.read_bytes() + b"\n# changed test harness\n")
+        try:
+            assert_harness_matches(repo)
+        except native.AcceptanceError:
+            pass
+        else:
+            raise native.AcceptanceError("J1 accepted an unrecorded executing helper")
+
+
 def self_test() -> int:
+    self_test_release()
     native.require([item[1] for item in CHECKPOINTS] == list(range(1, 7)), "J1 checkpoint order differs")
     command = game_command(Path("/repo"), Path("/job"))
     native.require(
@@ -621,6 +811,12 @@ def self_test() -> int:
         "J1 game command differs",
     )
     native.require(len(FIXED_TESTS) == 3 and all("::tests::" in item for item in FIXED_TESTS), "J1 fixed audit differs")
+    for test_name in FIXED_TESTS:
+        audit = fixed_test_command(test_name)
+        native.require("--lib" in audit and "--no-default-features" in audit
+                       and audit[audit.index("--profile") + 1] == "profiling"
+                       and audit[-4:] == [test_name, "--", "--exact", "--nocapture"],
+                       "J1 fixed audit build contract differs")
     identities = {kind: {"asset_set_generation": generation, "manifest_sha256": digit * 64}
                   for kind, generation, digit in (("wall", 10, "a"), ("door", 6, "b"))}
     nonce = "0123456789abcdef0123456789abcdef"
@@ -636,6 +832,22 @@ def self_test() -> int:
                         "identity": {**spec, "owner": str(index), "visual": str(index + 27)}} for index, (grid, spec) in enumerate(expected_targets(1).items())]},
     }
     validate_status(status_value, checkpoint=CHECKPOINTS[0], nonce=nonce, identities=identities)
+    release_status = copy.deepcopy(status_value)
+    release_identity = copy.deepcopy(identities)
+    for kind in ("wall", "door"):
+        release_identity[kind]["authority"] = "release_approved"
+        release_status["candidate_identity"][kind]["authority"] = "ReleaseApproved"
+    validate_status(release_status, checkpoint=CHECKPOINTS[0], nonce=nonce, identities=release_identity)
+    for wrong_status, expected_identity in ((status_value, release_identity), (release_status, identities)):
+        try:
+            validate_status(wrong_status, checkpoint=CHECKPOINTS[0], nonce=nonce, identities=expected_identity)
+        except native.AcceptanceError:
+            pass
+        else:
+            raise native.AcceptanceError("J1 status accepted the other authority")
+    native.require("--perf-wall-door-joint-release" not in command
+                   and "--perf-wall-door-joint-release" in game_command(Path("/repo"), Path("/job"), release=True),
+                   "J1 release command selection differs")
     for path, replacement in (
         (("generation",), 2), (("session_nonce",), "f" * 32),
         (("candidate_identity", "wall", "manifest_sha256"), "c" * 64),
@@ -714,7 +926,9 @@ def parser() -> argparse.ArgumentParser:
     plan_parser.add_argument("--repo", required=True)
     plan_parser.add_argument("--job-root")
     plan_parser.add_argument("--adapter", default="Intel")
+    plan_parser.add_argument("--release", action="store_true")
     run_parser = commands.add_parser("run")
+    run_parser.add_argument("--release", action="store_true")
     for name in ("repo", "job_root", "subject_commit", "source_fingerprint", "harness_fingerprint", "asset_view_fingerprint", "adapter"):
         run_parser.add_argument("--" + name.replace("_", "-"), required=True)
     for name in ("status", "verify"):

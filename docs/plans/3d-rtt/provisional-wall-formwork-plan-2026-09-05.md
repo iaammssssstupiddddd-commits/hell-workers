@@ -304,6 +304,21 @@ native helper self-test群と`git diff --check`はpass。rust-analyzerの対象f
 profiling未有効のためunlinked-file hintが残り、workspace診断APIは既知のresponse形式エラーとなった。
 profilingの実コンパイルとClippyで補完した。実機結果はまだなく、この時点ではJ1完了・通常版反映を主張しない。
 
+実行subjectは`83ad3f8576c0fd68cd24b0350576ec5ebaa7785f`、専用worktreeは
+`/home/satotakumi/projects/hell-workers-validation/wall-door-joint-83ad3f85`。
+job `wall-door-joint-20260910T171102Z-37fc20c4`をdirect kittyで実行。固定audit 3件とbuildはpassしたが、
+5 checkpointの撮影後、通常loadによるworld置換で静的Door-density carrierが旧Entity IDを参照し、
+`door-density target 0 is missing`を出してinvalid終了した。5 PNGは失敗jobの部分証拠として保持し、J1合格にしない。
+対策はload要求前にReadyのcarrierからjoint observerへ責務を明示的に引き渡すこと。
+`HandedOffToJoint`でcarrierの旧layout / presentationを破棄し、density sidecarも拒否する。
+通常densityのReady継続検査は変更せず、load後の新worldはjoint側のepoch / grid / owner / visual照合で検査する。
+handoffの状態遷移・旧ID破棄・sidecar拒否を回帰testに追加し、同じ専用worktreeで再試行する。
+修正後のfocused test 5件、`dev.py check`、profiling有効Clippy、workspace Clippyを含む理由付き
+`dev.py verify`はpass。Help影響は`No impact`で、変更はjoint検証のworld引継ぎと明示release検証入口に限定し、
+通常建築・Doorの操作、表示rule、材料、save/load本体、runtime authority、Help到達可能性は不変。
+Wall generation 10 / Door generation 6のmanifest hashとasset viewは旧J1と同じで、
+未取得のloaded PNGや失敗jobを成功証拠として扱わない。
+
 #### 接合・表示遷移profile（2026-09-10、旧subjectの履歴）
 
 `joint_actual_window.rs`と`wall_door_joint_acceptance.py`の`wall-door-joint-seams-v1`は、
@@ -364,6 +379,23 @@ Help影響は`No impact`。専用profiling起動条件と候補opt-inに限定�
 
 ### M4: release・文書同期・close
 
+- 通常authority受入の準備（2026-09-11）: J1と同じ6 checkpointを別profile
+  `wall-door-joint-release-v1`で確認する入口を追加する。明示`--release`だけが選択でき、両candidate / ArtPreviewの
+  環境変数を除去し、両runtime locatorの`release_approved`、generation-scopedなcore・receiptの実bytesと
+  receipt identityをbuild前に検査する。実画面のreadiness identityも`ReleaseApproved`を必須にする。
+  J1候補の実機jobは凍結済み専用worktreeで並行監視し、release入口の実装でそのsourceを変更しない。
+  canonicalへのapplyとこのprofileの実行は、J1の独立verify・画像目視とrelease承認記録が揃った後に限定する。
+  固定auditは3件ともlibrary内なので`cargo test --lib --profile profiling --no-default-features --features profiling`
+  へ限定し、無関係なbinary testの最適化linkを避ける。Capture用の通常buildは別stageとして必ず実行する。
+  plan / run / verifyは実行元の全harness bytesと記録対象repoを照合し、別worktreeの新旧helperを混用しない。
+- 正式登録のread-only planを`target/building-release-preflight-UPsFCazR/`へ保存した（apply / receipt発行なし）。
+  `wall-promotion-plan.json`はgeneration 10、80 payload、前像はgeneration 4、SHA-256
+  `f31cc8e24f1496299196230367236fde60fc6966e620fff5928544c06cddb3fd`。
+  `door-promotion-plan.json`はgeneration 6、24 payload、前像はpointerなし、SHA-256
+  `34036e6492538bcbd2543993b4cbec2023d1681975d85a29f3ea29591caa77d0`。
+  canonical側のsnapshot予定pathは同directory配下の`wall-snapshot` / `door-snapshot`で、まだ作成していない。
+  primary側はWall locator SHA-256 `a042a615c65b28d042b578d93879974c4d9c61eb9e58f51dd4164239536ee000`、
+  Door locatorなしを確認した。runtime前像の保存はinstall直前に別途必要で、canonical snapshotと混同しない。
 - 2026-09-10再開時の経路確認: runtimeはrelease authorityを扱えるが、正式登録toolは旧Wall v2専用だった。
   J1完了前に通常authorityは変更せず、次の順でrelease経路を整える。
   1. asset種別を明示したmanifest検証・payload収集を追加する。Wall v3は完成Wallの原本・report・manifestを

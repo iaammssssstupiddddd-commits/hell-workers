@@ -421,6 +421,7 @@ pub(crate) fn setup_wall_door_joint_gallery_system(
 #[derive(bevy::ecs::system::SystemParam)]
 pub(crate) struct JointDriveParams<'w, 's> {
     commands: Commands<'w, 's>,
+    density_fixture: ResMut<'w, super::door_density_fixture::DoorDensityFixtureState>,
     buildings: Query<'w, 's, (Entity, &'static mut Building, &'static mut Transform)>,
     blueprints: Query<'w, 's, (Entity, &'static Blueprint)>,
     handles: Res<'w, Building3dHandles>,
@@ -619,6 +620,10 @@ fn drive_joint_load(
         return;
     }
     if operation == SaveLoadOperation::Save {
+        if !params.density_fixture.handoff_to_joint_storyboard() {
+            publish_failure(acceptance, "joint carrier was not ready for load handoff");
+            return;
+        }
         if !params
             .save_state
             .try_set(normal_load_request(SaveSlotId::Manual1, 1))
