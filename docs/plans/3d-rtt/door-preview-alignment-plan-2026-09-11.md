@@ -42,8 +42,8 @@ Bevy 0.19のローカルregistryと既存実装をAPIの一次情報とする。
 
 ## 5. マイルストーン
 
-- [ ] M1: 観測条件を追加し、原因を確定。
-- [ ] M2: 表示位置修正と回帰test。承認済み形状・開度は保持。
+- [x] M1: 観測条件を追加。描画対象可視性・alphaを確認し、資材表示の支持壁への重なりを特定。
+- [x] M2: 資材表示位置修正と回帰test。承認済み形状・開度は保持。
 - [ ] M3: clean subjectの実機J1、独立verify、対象画像の目視確認。
 - [ ] M4: 既存両計画へ結果・正式反映指示を引継ぐ。
 
@@ -67,8 +67,21 @@ Bevy 0.19のローカルregistryと既存実装をAPIの一次情報とする。
 
 ## 9. AI引継ぎメモ
 
-- 現在地: 原因調査中。primary開始時HEAD `0889dd71`、dirtyなし。
-- 最初にやること: 描画対象・alpha・projectionの成立を確定し、値調整の繰り返しを避ける。
+- 現在地: 資材表示の修正後検証中。primary開始時HEAD `0889dd71`、dirtyなし。
+- drawability検査subject `89e56bd1`のjob `wall-door-joint-20260911T003142Z-0872a031`を
+  既存の専用worktree `wall-door-joint-83ad3f85`で完了。固定audit 3件 / screenshot 6枚と独立verifyがpass。
+  manifest SHA-256: `1b25943cccccded737e4ddac462234986ae265b4bae572f48d2a592ddb4f5e6f`。
+  ViewVisibility / alphaによる「描画対象外・透明」の仮説は棄却。ただし画素位置の合格とは区別する。
+  旧成功jobと11 MiB capsuleは保持し、
+  ユーザー指摘で表示受入を再開したため、worktreeだけをclean fast-forwardした。
+- 資材表示の重なりは、従来offset `(20,10)`が東側支持壁へ入るため。
+  primaryでDoorだけを南側支持tileの外へ配置する修正と回帰testを追加した（実機subjectへは未反映）。
+  rust-analyzerはerror / warning 0。native終了後、`cargo test -p hw_visual blueprint::material_display::tests`の2件がpass。
+- 修正後の`python3 scripts/dev.py verify`がpass（Python 99 + 114件、workspace check、
+  profiling / default workspace tests、追加profiling feature check、Clippy `-D warnings`、docs / diff gate）。
+- Help判断: `No impact`。`hw_jobs::visual_sync::blueprint_visual_state`からmaterial displayへの
+  実経路で、Doorの資材数・操作・成立条件・文言は不変。表示offsetだけを変えるためHelp本文は変更しない。
+- 最初にやること: 全体gateを完了し、修正後clean subjectのJ1を採取して両軸・load後の位置を確認する。
 - 参照: `door_preview.rs`、`joint_actual_window.rs`、`hw_visual::blueprint`、`docs/help-screen.md`。
 - DoD: 修正・全gate・新実機証跡・既存M4引継ぎ後にarchiveし、索引更新。
 - worktree整理は両track close時。成功・失敗jobを今は削除しない。

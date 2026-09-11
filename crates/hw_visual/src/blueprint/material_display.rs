@@ -6,8 +6,21 @@ use bevy::prelude::*;
 use super::components::{MaterialCounter, MaterialIcon};
 use super::{COUNTER_TEXT_OFFSET, MATERIAL_ICON_X_OFFSET, MATERIAL_ICON_Y_OFFSET};
 use crate::handles::MaterialIconHandles;
+use hw_core::constants::TILE_SIZE;
 use hw_core::logistics::ResourceType;
 use hw_core::visual_mirror::construction::BlueprintVisualState;
+
+fn material_display_offset(state: &BlueprintVisualState, row: usize) -> Vec3 {
+    // Door blueprints sit between structural supports. Keep their counters
+    // below the footprint and its southern support instead of painting them
+    // over either the east-west or north-south support pair.
+    let (x, y) = if state.is_wall_or_door && !state.is_plain_wall {
+        (-MATERIAL_ICON_X_OFFSET * 0.5, -TILE_SIZE * 2.0)
+    } else {
+        (MATERIAL_ICON_X_OFFSET, MATERIAL_ICON_Y_OFFSET)
+    };
+    Vec3::new(x, y - row as f32 * 14.0, 0.1)
+}
 
 pub fn spawn_material_display_system(
     mut commands: Commands,
@@ -19,11 +32,7 @@ pub fn spawn_material_display_system(
         for (resource_type, _, _) in &state.material_counts {
             let icon_image = material_icon_for(&handles, *resource_type);
 
-            let offset = Vec3::new(
-                MATERIAL_ICON_X_OFFSET,
-                MATERIAL_ICON_Y_OFFSET - (i as f32 * 14.0),
-                0.1,
-            );
+            let offset = material_display_offset(state, i);
 
             commands.entity(bp_entity).with_children(|parent| {
                 parent.spawn((
@@ -62,11 +71,7 @@ pub fn spawn_material_display_system(
             && let Some(&proxy_resource_type) = accepted_types.first()
         {
             let icon_image = material_icon_for(&handles, proxy_resource_type);
-            let offset = Vec3::new(
-                MATERIAL_ICON_X_OFFSET,
-                MATERIAL_ICON_Y_OFFSET - (i as f32 * 14.0),
-                0.1,
-            );
+            let offset = material_display_offset(state, i);
 
             commands.entity(bp_entity).with_children(|parent| {
                 parent.spawn((
@@ -161,6 +166,48 @@ pub fn cleanup_material_display_system(
     for (entity, child_of, _) in q_counters.iter() {
         if !bp_entities.contains(&child_of.parent()) {
             commands.entity(entity).try_despawn();
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn door_material_rows_stay_below_the_footprint_and_clear_of_supports() {
+        let door = BlueprintVisualState {
+            is_wall_or_door: true,
+            ..default()
+        };
+        for row in 0..2 {
+            let icon = material_display_offset(&door, row);
+            let counter = icon + COUNTER_TEXT_OFFSET;
+            assert!(icon.y <= -TILE_SIZE * 2.0);
+            assert!(counter.y <= -TILE_SIZE * 2.0);
+            assert!(icon.x.abs() < TILE_SIZE * 0.5);
+            assert!(counter.x.abs() < TILE_SIZE * 0.5);
+        }
+        assert_eq!(
+            material_display_offset(&door, 0).y - material_display_offset(&door, 1).y,
+            14.0
+        );
+    }
+
+    #[test]
+    fn non_door_material_rows_keep_the_existing_layout() {
+        for state in [
+            BlueprintVisualState::default(),
+            BlueprintVisualState {
+                is_wall_or_door: true,
+                is_plain_wall: true,
+                ..default()
+            },
+        ] {
+            assert_eq!(
+                material_display_offset(&state, 0),
+                Vec3::new(MATERIAL_ICON_X_OFFSET, MATERIAL_ICON_Y_OFFSET, 0.1)
+            );
         }
     }
 }

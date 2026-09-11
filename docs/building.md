@@ -302,6 +302,10 @@ cleanup側はこのsnapshot取得後にもcurrent ownerを照合し、別owner�
 | `WorkerHammerIcon` | 建築中のワーカー頭上に表示されるアニメーション付きハンマー |
 | `task_link_system` | `SoulTaskVisualState`のtargetへ`Gizmos::line_2d`と終点circleを描くデバッグ表示。常設entity/componentではなく、`DebugVisible`時だけ実行 |
 
+Door設計図の資材アイコンと数量は、両軸の支持壁に重ならないよう南側の隣接tileより下へ縦に並べる。
+他の建物は従来の右側配置を維持する。Doorの識別はdurable Blueprintから作るmirrorの
+`is_wall_or_door && !is_plain_wall`を使い、論理rootの位置・占有・資材要件は変更しない。
+
 ### 状態別表示
 
 設計図は「青写真」をイメージした青みがかった配色になります。
