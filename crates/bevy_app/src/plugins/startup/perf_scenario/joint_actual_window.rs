@@ -10,7 +10,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use bevy::camera::visibility::RenderLayers;
+use bevy::camera::visibility::{RenderLayers, VisibilitySystems};
 use bevy::mesh::Mesh3d;
 use bevy::pbr::MeshMaterial3d;
 use bevy::prelude::*;
@@ -772,6 +772,7 @@ type JointPreviewQuery<'w, 's> = Query<
         &'static Anchor,
         &'static GlobalTransform,
         &'static InheritedVisibility,
+        &'static ViewVisibility,
     ),
     With<Blueprint>,
 >;
@@ -1120,7 +1121,7 @@ fn inspect_joint(
         return Err("joint gallery camera differs".to_string());
     }
     let preview = acceptance.preview.ok_or("joint preview owner is missing")?;
-    let (sprite, anchor, transform, visibility) = params
+    let (sprite, anchor, transform, visibility, view_visibility) = params
         .previews
         .get(preview)
         .map_err(|_| "joint preview shell is missing")?;
@@ -1143,6 +1144,16 @@ fn inspect_joint(
         || !visibility.get()
     {
         return Err("joint construction preview asset, anchor or visibility differs".to_string());
+    }
+    if !view_visibility.get() || sprite.color.alpha() <= 0.0 {
+        return Err(format!(
+            "joint preview is not drawable: view_visible={}, color={:?}, transform={:?}, anchor={:?}, rect={:?}",
+            view_visibility.get(),
+            sprite.color,
+            transform,
+            anchor,
+            sprite.rect,
+        ));
     }
     let point = camera2d
         .world_to_viewport(camera2d_transform, transform.translation())
@@ -1267,6 +1278,7 @@ pub(crate) fn configure_wall_door_joint_actual_window_probe(app: &mut App) {
         publish_wall_door_joint_status_system
             .after(DoorPresentationSyncSet)
             .after(WallPresentationApplySet)
+            .after(VisibilitySystems::CheckVisibility)
             .after(TransformSystems::Propagate),
     );
 }
