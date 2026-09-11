@@ -82,6 +82,12 @@ Bevy 0.19のローカルregistryと既存実装をAPIの一次情報とする。
 - Help判断: `No impact`。`hw_jobs::visual_sync::blueprint_visual_state`からmaterial displayへの
   実経路で、Doorの資材数・操作・成立条件・文言は不変。表示offsetだけを変えるためHelp本文は変更しない。
 - 最初にやること: 全体gateを完了し、修正後clean subjectのJ1を採取して両軸・load後の位置を確認する。
+- 修正commit `42caef827681b42d63d341d03d8aea8878df3503`の再採取job
+  `wall-door-joint-20260911T010631Z-738ce27a`を同じ専用worktreeでdirect kitty起動済み。
+  現在はfixed-1のoptimized build中。native helperが終了するまで同時Cargo実行を避け、
+  `wall_door_joint_acceptance.py status --job-root <worktree>/target/native-acceptance/<job>`で再開する。
+- ユーザーへ、画像の指摘が材料アイコン・`0/1`の重なりか、本体の位置かを非同期確認中。
+  材料表示以外まで直ったと判断しない。正式反映は対象の解消確認後に進める。
 - 参照: `door_preview.rs`、`joint_actual_window.rs`、`hw_visual::blueprint`、`docs/help-screen.md`。
 - DoD: 修正・全gate・新実機証跡・既存M4引継ぎ後にarchiveし、索引更新。
 - worktree整理は両track close時。成功・失敗jobを今は削除しない。
