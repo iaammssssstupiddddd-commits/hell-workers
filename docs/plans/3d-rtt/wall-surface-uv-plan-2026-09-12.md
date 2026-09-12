@@ -13,7 +13,7 @@
 ## 1. 目的
 
 ユーザー報告の「側面が引き伸ばされ、断面に外壁模様が貼られる」を解消する。
-側面は面内の水平距離と高さで等密度に展開し、上面は同系色の内部粒子・短い亀裂で
+側面は面内の水平距離と高さで等密度に展開し、上面は同系色の不規則な内部模様で
 外壁ではなく断面と読める表現を検討する。確認画像の厚み比較はゲームと同じ投影条件を必要とする。
 
 ## 2. スコープ
@@ -21,8 +21,8 @@
 - 本設6 familyのUV生成、専用回帰検査、隔離Blender原本・GLB・確認画像。
 - 型枠7 file、Door、形状・厚さ・高さ・接続・material数は変更しない。
 - 現在のWall generation 10を上書きしない。新しいアートの承認と本番昇格は別段階。
-- 承認済み追加範囲: 本設albedo/emissiveの未使用領域へ断面textureを配置する。
-  領域外の全画素は保持する。従来の「元texture画像不変」はv2までの実績。
+- 承認済み追加範囲: 本設albedo/emissiveの石面と断面textureを整理する。
+  2領域外の全画素は保持する。「元texture画像不変」はv2、断面領域以外不変はv3までの実績。
 
 ## 3. 現状とギャップ
 
@@ -34,10 +34,10 @@
 
 - 外壁は輪郭辺の接線方向をU、高さをVとする。長短の辺を同じ画像幅へ正規化しない。
 - 石面の上下は同じ高さ座標を使い、中段で模様をリセットしない。
-- 上下面はatlasの専用粒子・微細亀裂領域へ平面投影する。
+- 上下面はatlasの専用低コントラスト内部石材領域へ平面投影する。
 - 断面の色は側面の目地を除く石の代表色へ合わせる。Blender確認材質の不要な反射を除き、
   runtimeのroughness=1 / reflectance=0に対応させる。照明の違いは別に明記する。
-- 従来の下半分の装飾面選択は維持し、rust/purpleも面内で等密度とする。
+- v4では下半分のrust/purple装飾面選択を廃止し、全側面を連続した石面に統一する。
 - 専用UV profile検査を追加し、旧世代・型枠の検証契約へ遡及適用しない。
 - 通常のゲーム表示/APIは変更しない。GLBのUV0を既存lit materialが消費する経路を維持する。
   perf専用ArtPreviewの設定入口は、本設・型枠双方を明示選択できるよう既存phase判定へ整合する。
@@ -70,6 +70,22 @@
 
 ## 6. リスクと対策
 
+### v4: ゲーム等倍で読める面への整理（追加実装）
+
+ユーザーが実機画像で報告した「黒い筋は格子にすら見えない」を制約とする。
+拡大で解釈できることを合格条件にせず、細い補強帯・留め具案は撤回する。
+2026-09-12の「進めてください」は以下の修正実装を対象とし、本番昇格は保留する。
+
+- [x] 上下段をstoneに統一。rust/purpleの任意edge番号による割当を削除する。
+- [x] 3段程度の大きな石面と弱い目地、低コントラストで粗い内部石材を画像生成する。
+  新隔離root `target/wall-readable-RDcceXFi/`で保管し、既存候補と本番を上書きしない。
+- [x] profile v4とstone/coreのpack領域を束縛し、領域外不変・両領域emission=0を検査する。
+- [x] 6 GLBの形状・法線・厚み不変、側面装飾UV拒否、上下連続、全体gateを検証する。
+- [x] 等倍／最遠相当Blender比較を作る。
+- [x] v4修正コミットとゲーム内撮影の明示承認を得る（質問への「どうぞ」）。本番昇格は含まない。
+- [ ] 新候補のnative撮影には新clean subjectを必要とし、
+  過去のv3 passは再利用しない。既存validation worktreeとCapture buildを再利用して新jobを採取する。
+
 UVの線への退化、面ごとの密度差、上面への目地混入は専用検査で拒否する。
 旧型枠sealerは本設8 file不変を要求するため、その承認を新しい本設meshへ流用しない。
 
@@ -91,7 +107,8 @@ native未実施のBlender画像をゲーム内の完成証拠へ格上げしな�
 - 開始subject: `c58d2aed`、開始時worktree clean。
 - 現在地: M1完了。v3の断面texture・投影条件を実装し、6 GLBとBlender比較を検証済み。
   壁修正を`23d6cd68`へコミット済み。`87f0e682`の隔離候補で標準／最遠native ArtPreviewがpass。
-  新アート最終承認・正式native検証・新本番昇格は未実施。
+  v3の等倍可読性にユーザー指摘があり、現在はv4整理候補を未コミットで実装・出力検証済み。
+  v4のコミット・native撮影、新アート最終承認・正式native検証・新本番昇格は未実施。
 - 参照必須: `docs/blender-setup.md`、`docs/assets_workflow.md`、native/Help/docsスキル。
 - 初回検証ログ: workflow Python 128/128 pass（新規7 testを含む）。6 GLBのscene/Khronosは
   errors=0 / warnings=0、geometry＋新surface UV gate pass。旧GLBとの全triangleの頂点位置・法線を
@@ -324,6 +341,40 @@ Wall本番generation 10とDoor generation 7のlocator hashは上記記録から�
 新worktree/branch作成・削除なし、回収容量0。M3全体は未完了のため共通worktreeを撤去しない。
 次はこの候補画像のアート確認を受け、未検証項目と正式封印・本番昇格を別段階で進める。
 
+### v4出力検証結果（native前）
+
+隔離root `target/wall-readable-RDcceXFi/`（5.8 MiB）へ2枚の画像生成原図、prompt全文
+`prompts.md`、atlas、原本、6 GLB、3倍率の白色照明boardを保存した。
+画像生成はbuilt-in tool、ImageMagickは機械的縮小・atlas配置のみ。
+原図は`stone-art.png` / `core-art.png`で、生成サービス側の原図も削除していない。
+
+- stoneの平均RGB=`49.57/43.20/37.69`、core=`51.89/45.74/40.25`。両面の色差は小さいが、
+  v3のcore平均`36.77/33.29/30.85`より明るい候補となった。既存色と同一とは主張しない。
+- coreの標準偏差は`3.98/3.30/2.77`（v3は`9.28/8.86/8.82`）。微細な高コントラスト粒子を
+  広い低コントラスト内部模様へ置き換えた。両領域emission=0、2領域外は元atlasと全画素一致。
+- 6 GLBはscene / Khronos errors=0 warnings=0、geometry / UV-v4 pass。
+  本番の全triangleの頂点位置・法線signatureと6/6一致。側面triangleは全152件stone、
+  cap全76件core。新たな形状・厚さ・材質スロットは追加していない。
+- Blenderの標準相当boardでは鉄板の下段帯と孤立した黒い部品境界がなく、石面が上下へ続く。
+  最大zoom-out相当は細部の評価には小さすぎるため、輪郭観察に限定する。
+  これらの静止画でゲーム内の可読性改善・ちらつき解消を確定しない。
+- workflow Python 137/137、`dev.py verify`の全gate pass。Rust/runtime設定の変更なし。
+  本番Wall/Door locator hashは上記値から不変。既存validation worktreeとasset viewには触れていない。
+  今回の新規validation worktree / branch作成・削除はなく、回収容量0。
+- 次段階: 修正コミットの明示承認後、既存technical sealerで新候補identityを固定し、
+  clean validation worktreeで標準／最遠native ArtPreviewを再撮影する。Memoryは未実施。
+
+| artifact（隔離root相対） | SHA-256 |
+| --- | --- |
+| `stone-art.png` | `7a09a2167893567bb11542180d3bc49100a6b9d2f6d65c4a858295b29610ce6f` |
+| `core-art.png` | `35f06da3e7286b8b441d432cc7262ae753f054b3a6a992a01ac7601199a48a23` |
+| `staging/blend/wall-production-v1.blend` | `d7d8debc50773cb2a5833518e3005450393a892baf7b35b046035014728f6867` |
+| `staging/exports/textures/buildings/wall/wall_albedo.png` | `251094ae523509cc7a0cd258b94925ab1d398636b8c27462f3c6e33c9c01ddc8` |
+| `staging/exports/textures/buildings/wall/wall_emissive.png` | `4c87e02fdd79353cf134ceb870e072433f47ea19916acbe9dd93095282db006b` |
+| `staging/renders/wall-production-v1-reference-board-neutral.png` | `bf0a8b2e76908d3c29dd05fe29653a6adb5a8aa909a91704b8494f5e9c9b018e` |
+| `staging/renders/wall-production-v1-reference-board-neutral-standard.png` | `92ad048383ee1c74f54c427d7f9e2fcaf7f0d9566d3401ca0cb5a158f1014401` |
+| `staging/renders/wall-production-v1-reference-board-neutral-farthest.png` | `592955734b3616b11d02f86824eeb91e8fceca6b783e31565135272bf24fe115` |
+
 ### Help impact
 
 `No impact`。`create_prism → GLB UV0 → ResolvedProductionWallAssets →
@@ -337,6 +388,11 @@ ProductionWallMaterialPool.complete → apply_wall_presentation_system`を確認
 ゲームの照明・UI・建設機能は不変のため、Help更新は引き続き不要。
 v3でも同経路を再確認。変更は断面albedo/emissiveとUV、制作時の比較投影のみで、
 プレイヤーの入力・成立条件・資源費用・状態の意味・文言は不変。Helpは`No impact`。
+v4も同じproducer/consumerを再確認。`wall_asset_set.rs`のcomplete materialが本設albedo/emissiveを
+消費し、`wall_presentation.rs`の`is_provisional`分岐とtopologyは不変。
+`orders_building_zones`のArchitect説明は金具模様や発光を状態識別条件にしていない。
+下部装飾削除・石面／断面の簡略化は建設入力・必要資材・成立条件・状態の意味・Room境界・文言を
+変えないため`No impact`。Help provider / snapshotへ空変更を加えない。
 
 ## 10. 更新履歴
 
@@ -348,3 +404,4 @@ v3でも同経路を再確認。変更は断面albedo/emissiveとUV、制作時�
 | 2026-09-12 | Codex | 追加依頼を調査。本番と候補の厚さ9.6一致・確認boardの縦補正欠落を確認し、断面textureと同倍率比較の案を記録。実装は未実施 |
 | 2026-09-12 | Codex | 承認済み案をv3へ実装。専用断面texture・投影補正・両軸／連結／倍率別board、6 GLB検証と134 Python test pass。本番は不変、コミット・native前 |
 | 2026-09-12 | Codex | 壁修正と本設preview経路をコミット。起動条件2件を修正後、同一subjectで標準／最遠native ArtPreview pass。画像・hash・未検証範囲を記録。本番は不変 |
+| 2026-09-12 | Codex | 実機等倍での可読性指摘を受けv4へ整理。下段装飾廃止・全側面stone・低コントラストcore、6 GLBと137 test・全体gate pass。未コミット、native再撮影・本番反映前 |

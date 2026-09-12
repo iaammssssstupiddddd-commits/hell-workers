@@ -46,7 +46,8 @@ render-enabled meshが1個でなければexport前に失敗します。指定し
 cap、raw Y `-16..+16 wu`、9.6 wu port profile、12.8 wu corridor unionを検証します。
 
 production Wall sceneは各familyを1 tile単位、9.6 / 32 = 0.30 tile厚、上下`-0.5..+0.5 tile`でauthoringし、
-上下2つのside material bandを持つ24〜72 trianglesへ決定的に分割します。直線辺の共線分割はsilhouetteとUV補間を
+上下2つのside mesh bandを持つ24〜72 trianglesへ決定的に分割します。両段は連続した同じstone UVを使い、
+下段の鉄板・紫装飾割当はありません（surface profile v4）。直線辺の共線分割はsilhouetteとUV補間を
 変えずGPU負荷だけを増やすため生成しません。正式exportだけはscene gate後のin-memory mesh copyへ
 `--geometry-scale 32 --materials-mode placeholder`を適用し、object transformをidentityのままraw wuへbakeします。
 Blender 5.1.1のglTF operatorにglobal scale propertyがないため、このopt-in頂点bakeを使います。既存exportの

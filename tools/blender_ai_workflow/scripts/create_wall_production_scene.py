@@ -139,12 +139,7 @@ def create_prism(
     mesh.update(calc_edges=True)
     uv_layer = mesh.uv_layers.new(name="UVMap")
     for polygon, (kind, ordinal) in zip(mesh.polygons, face_kinds, strict=True):
-        edge_group = ordinal
         surface = "core" if kind in {"top", "bottom"} else "stone"
-        if kind == "side_lower" and edge_group % 4 == 2:
-            surface = "purple"
-        elif kind == "side_lower" and edge_group % 2 == 1:
-            surface = "rust"
         for loop_index in polygon.loop_indices:
             vertex = mesh.vertices[mesh.loops[loop_index].vertex_index].co
             uv_layer.data[loop_index].uv = face_uv(

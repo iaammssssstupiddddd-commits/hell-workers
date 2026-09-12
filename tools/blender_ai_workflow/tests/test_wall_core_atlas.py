@@ -11,23 +11,26 @@ from PIL import Image
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 from pack_wall_core_atlas import verify_packed
-from wall_surface_uv import CORE_PACK_RECT
+from wall_surface_uv import CORE_PACK_RECT, PACK_RECTS
 
 
 class WallCoreAtlasTests(unittest.TestCase):
-    def test_only_core_slot_may_change_and_emission_must_be_black(self):
+    def test_only_surface_slots_may_change_and_emission_must_be_black(self):
         with tempfile.TemporaryDirectory() as directory:
             source, packed = [Path(directory) / name for name in ("source.png", "packed.png")]
             fixture = Image.new("RGB", (1024, 1024), (34, 30, 28))
             fixture.save(source)
-            x, y, w, h = CORE_PACK_RECT
-            fixture.paste((0, 0, 0), (x, y, x + w, y + h))
+            for x, y, w, h in PACK_RECTS.values():
+                fixture.paste((0, 0, 0), (x, y, x + w, y + h))
             fixture.save(packed)
-            self.assertTrue(verify_packed(source, packed, emissive=True)["exterior_pixels_unchanged"])
-            fixture.putpixel((x, y), (1, 0, 0))
-            fixture.save(packed)
-            with self.assertRaisesRegex(ValueError, "emit light"):
-                verify_packed(source, packed, emissive=True)
+            self.assertTrue(verify_packed(source, packed, emissive=True)["protected_pixels_unchanged"])
+            for x, y, _, _ in PACK_RECTS.values():
+                fixture.putpixel((x, y), (1, 0, 0))
+                fixture.save(packed)
+                with self.assertRaisesRegex(ValueError, "emit light"):
+                    verify_packed(source, packed, emissive=True)
+                fixture.putpixel((x, y), (0, 0, 0))
+            x, y, _, _ = CORE_PACK_RECT
             fixture.putpixel((x - 1, y), (1, 0, 0))
             fixture.save(packed)
             with self.assertRaisesRegex(ValueError, "protected exterior"):

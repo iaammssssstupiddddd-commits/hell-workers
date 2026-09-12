@@ -12,7 +12,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
-from wall_surface_uv import CORE_PACK_RECT, PROFILE, SURFACES, face_uv, validate_surface_uv_glb
+from wall_surface_uv import CORE_PACK_RECT, PACK_RECTS, PROFILE, SURFACES, face_uv, validate_surface_uv_glb
 import wall_preview_projection as projection
 from validate_wall_glb import ContractError
 from test_wall_m1_contracts import box_geometry, fixture_document, write_glb
@@ -42,6 +42,10 @@ def surface_box(path: Path, mutation: str = "") -> None:
                       962.5 / 1024 + 16 / 1024 * (point[1] + .5))
             elif mutation == "stretched_side" and not cap:
                 uv = (uv[0], .34 + (uv[1] - .34) * .5)
+            elif mutation == "iron_side" and not cap:
+                uv = (.68 + .28 * (point[0] + .5), .34 + .28 * (point[2] + .5))
+            elif mutation == "purple_side" and not cap:
+                uv = (.03 + .22 * (point[0] + .5), .04 + .22 * (point[2] + .5))
             elif mutation == "nan":
                 uv = (float("nan"), uv[1])
             points.append(original)
@@ -89,7 +93,7 @@ class WallSurfaceUvTests(unittest.TestCase):
         self.assertEqual(shader.inputs["Specular IOR Level"].default_value, 0.0)
 
     def test_both_side_axes_have_equal_nonzero_density(self):
-        for surface in ("stone", "rust", "purple"):
+        for surface in ("stone",):
             for a, b in (((-.5, -.15), (.5, -.15)), ((.15, -.5), (.15, .5))):
                 low = face_uv(surface, a, b, (*a, -.5))
                 along = face_uv(surface, a, b, (*b, -.5))
@@ -103,7 +107,7 @@ class WallSurfaceUvTests(unittest.TestCase):
         for width in (.3, .35, .65, 1.):
             a, b = (-.5, .15), (-.5 + width, .15)
             lo, hi = [face_uv("stone", a, b, (*p, 0)) for p in (a, b)]
-            self.assertAlmostEqual(hi[0] - lo[0], .6 * width)
+            self.assertAlmostEqual(hi[0] - lo[0], SURFACES["stone"][2] * width)
 
     def test_mid_height_does_not_restart_stone(self):
         a, b = (-.5, .15), (.5, .15)
@@ -121,11 +125,20 @@ class WallSurfaceUvTests(unittest.TestCase):
 
     def test_core_packing_cannot_overlap_any_exterior_uv_rectangle(self):
         x, y, w, h = CORE_PACK_RECT
-        for name in ("stone", "rust", "purple"):
+        for name in ("stone",):
             u, v, scale = SURFACES[name]
             left, right = u * 1024, (u + scale) * 1024
             top, bottom = (1 - v - scale) * 1024, (1 - v) * 1024
             self.assertTrue(right < x or left > x + w or bottom < y or top > y + h)
+
+    def test_all_surface_uvs_stay_inside_their_filter_gutters(self):
+        self.assertEqual(set(SURFACES), {"stone", "core"})
+        for name, (u, v, scale) in SURFACES.items():
+            x, y, w, h = PACK_RECTS[name]
+            self.assertGreaterEqual(u * 1024, x + 2)
+            self.assertLessEqual((u + scale) * 1024, x + w - 2)
+            self.assertGreaterEqual((1 - v - scale) * 1024, y + 2)
+            self.assertLessEqual((1 - v) * 1024, y + h - 2)
 
     def test_projection_matches_game_tile_height_and_both_thickness_axes(self):
         for zoom in (1, 5):
@@ -154,7 +167,8 @@ class WallSurfaceUvTests(unittest.TestCase):
             self.assertEqual(report["surface_uv"]["triangles_by_surface"]["core"], 4)
 
     def test_export_rejects_old_uv_stretch_and_decorated_caps(self):
-        for mutation in ("legacy", "decorated_cap", "warm_cap", "stretched_side", "nan"):
+        for mutation in ("legacy", "decorated_cap", "warm_cap", "stretched_side",
+                         "iron_side", "purple_side", "nan"):
             with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as directory:
                 path = Path(directory) / "wall.glb"
                 surface_box(path, mutation)

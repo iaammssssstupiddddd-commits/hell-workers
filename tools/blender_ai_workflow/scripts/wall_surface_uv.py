@@ -1,7 +1,7 @@
 """Face-oriented Wall UVs and an opt-in check of the exported surface profile.
 
 Coordinates here are Blender authoring coordinates (one tile, Z up). The
-runtime keeps its existing atlas, single primitive and lit shared material.
+runtime keeps its single primitive and lit shared material; only atlas art and UVs change.
 """
 
 from __future__ import annotations
@@ -10,15 +10,16 @@ import argparse
 import math
 from pathlib import Path
 
-PROFILE = "wall-face-uv-v3"
+PROFILE = "wall-face-uv-v4"
 # Dedicated 256px cut-core tile, with a two-pixel filtering gutter. Image-space
-# packed rectangle is (702, 750, 260, 260); all exterior UV regions stay intact.
+# packed rectangle is (702, 750, 260, 260); it does not overlap the stone slot.
 CORE_PACK_RECT = (702, 750, 260, 260)
+# Broad masonry replaces the old detailed stone region. Both tiles have 2px gutters.
+STONE_PACK_RECT = (30, 62, 612, 612)
+PACK_RECTS = {"stone": STONE_PACK_RECT, "core": CORE_PACK_RECT}
 # Square atlas: equal U/V scale gives equal texel density in both face axes.
 SURFACES = {
-    "stone": (0.03, 0.34, 0.60),
-    "rust": (0.68, 0.34, 0.28),
-    "purple": (0.03, 0.04, 0.22),
+    "stone": (32.5 / 1024, 352.5 / 1024, 607 / 1024),
     # Pixel centers of the new core tile; no decorative border at tile ports.
     "core": (704.5 / 1024, 16.5 / 1024, 255 / 1024),
 }
@@ -84,7 +85,7 @@ def validate_surface_uv_glb(path: Path, family: str) -> dict:
                          if math.hypot(a[0] - b[0], a[1] - b[1]) > tolerance), None)
             require(pair is not None, "Wall side has no horizontal extent")
             start, end = pair[0][:2], pair[1][:2]
-            candidates = ("stone", "rust", "purple")
+            candidates = ("stone",)
         matches = []
         for surface in candidates:
             expected = [face_uv(surface, start, end, p) for p in points]

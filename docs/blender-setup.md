@@ -166,24 +166,29 @@ OCIO fallback時はreference reportをpassにしません。
 
 ### 本設Wallの面別UV
 
-`create-wall-production-scene`の`wall-face-uv-v3`は、側面を輪郭辺の接線方向×高さで展開する。
+`create-wall-production-scene`の`wall-face-uv-v4`は、側面を輪郭辺の接線方向×高さで展開する。
 辺の長さを0〜1へ正規化せず、同じ表面種別の縦横texel密度を揃える。石面は上下段でも
 高さ座標をリセットしない。上下面はatlas右下の専用256px断面textureを使い、
 外壁の石積みを断面へ貼らない。厚さ・接続port・三角形数・単一primitive / materialの契約は変えない。
+下半分をedge番号に応じてrust/purpleへ切り替える処理は廃止し、全側面をstoneへ統一する。
+等倍で線や点へ潰れる鉄板部品・留め具・黒い輪郭を避け、1 tileあたり約3段の大きな石面と
+弱い目地で材質を示す。上下のmesh分割自体は旧geometryとの一致のため保持する。
 
 新規出力は旧geometry gateに加え、`wall_surface_uv.py <output.glb> --family <family> --report <staging-report>`
 でUV0を再検証する。Blender→glTFの軸・V反転を戻して全三角形を照合し、側面の線状UV・縦横比の
-引き伸ばし・装飾を貼った断面を拒否する。このprofileは旧releaseや木製型枠には遡及適用しない。
+引き伸ばし・装飾を貼った断面・旧rust/purple側面を拒否する。このprofileは旧releaseや木製型枠には遡及適用しない。
 元textureを変更する場合は内部色領域の再確認も必要となる。
 
-断面用画像は画像生成で用意する。角ばった内部粒子と短い不規則な亀裂を含む暗い石色とし、
-レンガ列・鉄板の目地・発光・タイルごとの枠を描かない。外壁との模様の差で境界を示し、
+石面と断面用画像は画像生成で用意する。断面は暗い石色の広い不規則な内部模様とし、
+細粒のノイズ・黒い亀裂・レンガ列・鉄板の目地・発光・タイルごとの枠を描かない。外壁との模様の差で境界を示し、
 外周線や欠けの追加geometryで壁厚を増やさない。新しい隔離`HELL_WORKERS_ASSET_ROOT`で
-`pack_wall_core_atlas.py --source-dir <元textureディレクトリ> --core-art <断面画像>`を実行すると、
+`pack_wall_core_atlas.py --source-dir <元textureディレクトリ> --core-art <断面画像> --stone-art <石面画像>`を実行すると、
 ImageMagickで縮小・配置する。
 image座標`(702,750)`から260×260の範囲へ、256px画像と2pxのfilter余白を収める。
-albedo/emissiveとも領域外の全画素不変を検査し、断面emissiveは完全な黒とする。既存出力へは上書きしない。
-`core-atlas.json`は原図・元atlas・出力hashと色統計を記録する。scene生成はprofileと出力hashの
+石面は`(30,62)`から612×612の範囲へ608px画像と2px余白を収め、両軸のpixel中心間607pxをUVへ使う。
+albedo/emissiveとも2領域外の全画素不変を検査し、石面・断面のemissiveは完全な黒とする。
+使わなくなった装飾領域は画像内に残すが、本設UVから参照しない。既存出力へは上書きしない。
+`core-atlas.json`は`pack_rects`、2枚の`artwork`原図・元atlas・出力hashと面別色統計を記録する。scene生成はprofileと出力hashの
 一致を要求し、旧atlasへ新UVだけを適用する失敗を拒否する。PillowとImageMagickが必要。
 
 断面は側面の石（目地を除く）の代表色へ合わせ、茶色く明るい別領域を使わない。
@@ -209,7 +214,7 @@ Wall boardの投影は`wall-preview-topdown-v1`。角度59.036°に加え、runt
 
 本設surfaceの承認前確認には`provision_wall_surface_preview.py --repo <clean-primary>
 --generation <新番号> --destination <隔離root/staging/validation/新ディレクトリ>`を使う。
-本番schema-2 locator/receiptと15 coreの実bytesを検証し、本設6 meshの形状・法線不変、UV-v3、
+本番schema-2 locator/receiptと15 coreの実bytesを検証し、本設6 meshの形状・法線不変、UV-v4、
 export hash、atlas保護画素を確認する。型枠7 fileは本番bytesのまま保持し、新しい本設8 fileと共に
 `surface_art_preview` manifestへ封印する。出力は新規の隔離先に限り、`authority=art_preview`、
 `receipt=null`のruntime projectionだけを作る。旧世代のアート承認・本番反映権限は引き継がない。
