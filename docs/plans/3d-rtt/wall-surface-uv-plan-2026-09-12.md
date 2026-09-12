@@ -83,8 +83,8 @@
 - [x] 6 GLBの形状・法線・厚み不変、側面装飾UV拒否、上下連続、全体gateを検証する。
 - [x] 等倍／最遠相当Blender比較を作る。
 - [x] v4修正コミットとゲーム内撮影の明示承認を得る（質問への「どうぞ」）。本番昇格は含まない。
-- [ ] 新候補のnative撮影には新clean subjectを必要とし、
-  過去のv3 passは再利用しない。既存validation worktreeとCapture buildを再利用して新jobを採取する。
+- [x] 新clean subjectでv4標準／最遠native ArtPreviewを撮影・独立再検証する。
+  過去のv3 passは再利用せず、既存validation worktreeとCapture buildを再利用して新jobを採取した。
 
 UVの線への退化、面ごとの密度差、上面への目地混入は専用検査で拒否する。
 旧型枠sealerは本設8 file不変を要求するため、その承認を新しい本設meshへ流用しない。
@@ -107,8 +107,8 @@ native未実施のBlender画像をゲーム内の完成証拠へ格上げしな�
 - 開始subject: `c58d2aed`、開始時worktree clean。
 - 現在地: M1完了。v3の断面texture・投影条件を実装し、6 GLBとBlender比較を検証済み。
   壁修正を`23d6cd68`へコミット済み。`87f0e682`の隔離候補で標準／最遠native ArtPreviewがpass。
-  v3の等倍可読性にユーザー指摘があり、現在はv4整理候補を未コミットで実装・出力検証済み。
-  v4のコミット・native撮影、新アート最終承認・正式native検証・新本番昇格は未実施。
+  v3の等倍可読性指摘を受けたv4整理候補は`8d93bf11`へコミットし、標準／最遠native ArtPreview pass。
+  ユーザーの新アート最終承認・正式native検証・新本番昇格は未実施。
 - 参照必須: `docs/blender-setup.md`、`docs/assets_workflow.md`、native/Help/docsスキル。
 - 初回検証ログ: workflow Python 128/128 pass（新規7 testを含む）。6 GLBのscene/Khronosは
   errors=0 / warnings=0、geometry＋新surface UV gate pass。旧GLBとの全triangleの頂点位置・法線を
@@ -375,6 +375,46 @@ Wall本番generation 10とDoor generation 7のlocator hashは上記記録から�
 | `staging/renders/wall-production-v1-reference-board-neutral-standard.png` | `92ad048383ee1c74f54c427d7f9e2fcaf7f0d9566d3401ca0cb5a158f1014401` |
 | `staging/renders/wall-production-v1-reference-board-neutral-farthest.png` | `592955734b3616b11d02f86824eeb91e8fceca6b783e31565135272bf24fe115` |
 
+### v4 native ArtPreview結果
+
+ユーザーの「どうぞ」はv4修正コミット・ゲーム内撮影への承認として扱い、本番昇格へ拡張しない。
+修正subjectは`8d93bf11b98b97574115da57f031f9447f79769f`。
+`provision_wall_surface_preview.py`で隔離generation 12を新規封印し、型枠7 fileと本番geometry/法線の
+保持、atlasの保護画素、出力hashを再検証した。両jobはこの同じ候補で`valid`となり、
+独立offline `verify`も両方`pass`。native helperやRust runtimeへの追加変更はない。
+
+- 実機: Intel(R) Arc(tm) Graphics (MTL) / Vulkan / Intel open-source Mesa driver / Mesa 26.1.8。
+  X11 client 1280×720、High / DPI 1、camera scaleは標準1・最遠5。
+- 対象: completed phase、96 production / 0 fallback / 6 mesh / 1 material、16 masks各6件。
+  撮影はdirect kitty launcherで2 processを順次実行。前job終了後に次jobを開始した。
+- 標準画像では旧下部の鉄板部品境界・紫装飾がなく、側面が連続した石面として表示される。
+  石の目地は控えめで、等倍で留め具のような小部品を読む必要がない。最遠では細部を判読できるとは
+  主張せず、straight ROIの輪郭contrast pass（weakest column sigma=16.748148、terrain sigma=5.215739）
+  として記録する。前候補より明るい石色であり、色・簡略化の最終受容はユーザー確認待ち。
+- source fingerprint: `c07888b27d9ec906af46774dc811d5061b504bdec4858207f6f6a8ade00743ea`
+- harness fingerprint: `6dbc93b109a45d5cb7bad41a78e0ec0f51b3ad6a876d760e5665c8050255e6c3`
+- asset view fingerprint: `c92d02bbaa47a7ae1242fe3374e3a84cfe5e3fc1ba7278c7ad4c9acb6a8ad2c7`
+- binary SHA-256: `e8a8ecbd1f329ba5ac816b88148f4454ea4d1180ecdd4d7f27cc72bc2cee94b4`
+  （Rust/profile不変のため既存buildを再利用、旧画像を再利用した意味ではない）。
+- technical manifest SHA-256: `5277b189311a000ea31e04a18bd454a9998c877fb3e4abcec2c29bc7861537e1`
+  （隔離root内`staging/validation/surface-preview-12/surface-preview.json`）。
+
+job親directoryは`/home/satotakumi/projects/hell-workers-validation/wall-door-joint-83ad3f85/target/native-acceptance/`。
+
+| zoom / job | `manifest.json` SHA-256 | `current-wall.png` SHA-256 |
+| --- | --- | --- |
+| standard / `wall-art-20260912T145424Z-a2fd8435` | `5df91d05832da1e3e0819dad24b251594b5cba16784babc86b3264ee26f58858` | `6096ee9b78f6e3a974c4eed12de35faff760a8a80bad25fb127db06418b74ca7` |
+| farthest / `wall-art-20260912T145546Z-18c4e1ce` | `82a2cc505a3882563f55d20d6edc8ea80efc6d0003ba4768cc52e17f6e7e33f2` | `a2a8506e0b45bf313cb3c630d85e9ff110e843cb903a5cf4c41a099b43818ceb` |
+
+今回の証拠は承認前ArtPreviewの静止画2枚であり、時間方向のちらつき、他quality/DPI、
+formal acceptance、性能baseline、native Memoryは未検証。アート最終承認・release authorityを与えない。
+既存validation worktreeをcleanな新subjectへ切り替え、旧asset viewの変更対象は隔離rootの
+`previous-preview-assets/`へbackupした。新worktree/branch作成・削除なし、回収容量0。
+本番Wall generation 10 / Door generation 7のlocatorとcanonical世代は不変。
+このコミット後もworkflow Python 137/137、`dev.py check`、workspace Clippy `-D warnings`を再実行してpass。
+2つのnative job終了後の`dev.py verify`も`All quality gates passed`。Helpは上記の実経路レビューに基づく
+No impactをコミットtrailerへ記録し、今回の隔離候補provisionでも通常の操作・状態・文言は変えていない。
+
 ### Help impact
 
 `No impact`。`create_prism → GLB UV0 → ResolvedProductionWallAssets →
@@ -405,3 +445,4 @@ v4も同じproducer/consumerを再確認。`wall_asset_set.rs`のcomplete materi
 | 2026-09-12 | Codex | 承認済み案をv3へ実装。専用断面texture・投影補正・両軸／連結／倍率別board、6 GLB検証と134 Python test pass。本番は不変、コミット・native前 |
 | 2026-09-12 | Codex | 壁修正と本設preview経路をコミット。起動条件2件を修正後、同一subjectで標準／最遠native ArtPreview pass。画像・hash・未検証範囲を記録。本番は不変 |
 | 2026-09-12 | Codex | 実機等倍での可読性指摘を受けv4へ整理。下段装飾廃止・全側面stone・低コントラストcore、6 GLBと137 test・全体gate pass。未コミット、native再撮影・本番反映前 |
+| 2026-09-12 | Codex | 明示承認でv4をコミットし、隔離generation 12で標準／最遠native ArtPreview pass。実機画像・identityを記録。本番反映は保留 |
