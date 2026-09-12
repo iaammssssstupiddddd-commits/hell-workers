@@ -88,7 +88,7 @@ native未実施のBlender画像をゲーム内の完成証拠へ格上げしな�
 
 - 開始subject: `c58d2aed`、開始時worktree clean。
 - 現在地: M1完了。v3の断面texture・投影条件を実装し、6 GLBとBlender比較を検証済み。
-  M3のコミット・実機確認は承認済み。新本番昇格は未実施。
+  壁修正を`23d6cd68`へコミット済み。M3の実機確認は承認済み。新本番昇格は未実施。
 - 参照必須: `docs/blender-setup.md`、`docs/assets_workflow.md`、native/Help/docsスキル。
 - 初回検証ログ: workflow Python 128/128 pass（新規7 testを含む）。6 GLBのscene/Khronosは
   errors=0 / warnings=0、geometry＋新surface UV gate pass。旧GLBとの全triangleの頂点位置・法線を
@@ -254,6 +254,17 @@ Bevyとの最終画素一致やnative acceptanceは主張しない。
 | `exports/models/wall_corner.glb` | `2d7c3c16b91d29e9931643055818cdfd6cee7e6dd4b2a03dfc6b0d12b1f6cbc9` |
 | `exports/models/wall_t_junction.glb` | `eaf4f2793387694045baca1fe6d4b78f4ec74a63a8d692e1888ee550b42124f1` |
 | `exports/models/wall_cross.glb` | `69f068e2490847dd29d287441cafb60782bc15235fd316983586bc26d73082c4` |
+
+### M3承認前経路の準備
+
+今回の「OKです」は候補のコミット・実機確認への承認として記録する。アート最終承認や本番反映への
+承認へは広げない。既存runtimeはschema-2 ArtPreviewのcompleted phaseを既に表示できるが、
+`wall_art_acceptance`はArtPreviewをprovisionalへ固定していた。本設確認用に`--completed-preview`を
+追加し、別profileとmanifest/observationの明示flagで標準・最遠の単独previewを束縛する。
+`profile_name`はformal authorityとの混在を拒否し、probeとraw performanceの双方でphaseを再検証する。
+Rustや既存型枠previewの意味は変えない。`provision_wall_surface_preview.py`は本設8 fileだけを差し替え、
+旧型枠7 fileと本番geometry/法線を保持する独立したtechnical sealer。旧final manifestの承認は再利用しない。
+Help/docsスキルで再確認し、診断用経路追加だけなのでHelpはNo impact。
 
 ### Help impact
 

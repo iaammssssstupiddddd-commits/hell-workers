@@ -192,13 +192,16 @@ def profile_name(
     authority: str = "isolated_candidate",
     formwork: bool = False,
     lifecycle: bool = False,
+    completed_preview: bool = False,
 ) -> str:
+    native.require(not completed_preview or (authority == "art_preview" and not formwork and not lifecycle),
+                   "Completed preview requires art-preview without formwork/lifecycle")
     if authority == "art_preview":
         native.require(
-            candidate and not matrix and zoom == "standard",
+            candidate and not matrix and (zoom == "standard" or completed_preview),
             "Wall art preview is a single standard-zoom candidate run",
         )
-        return ART_PREVIEW_PROFILE
+        return f"wall-surface-art-preview-v1-{zoom}" if completed_preview else ART_PREVIEW_PROFILE
     if lifecycle:
         native.require(
             candidate
@@ -232,7 +235,10 @@ def profile_name(
     return CANDIDATE_PROFILE if candidate else PROFILE
 
 
-def performance_wall_phase(authority: str, formwork: bool) -> str:
+def performance_wall_phase(authority: str, formwork: bool, completed_preview: bool = False) -> str:
+    if completed_preview:
+        native.require(authority == "art_preview" and not formwork, "Completed preview phase differs")
+        return "completed"
     if authority == "art_preview":
         return "provisional"
     return "mixed" if formwork else "completed"
@@ -340,6 +346,7 @@ def validate_probe_status(
     scale_factor: float = WINDOW_SCALE_FACTOR,
     zoom: str = "standard",
     art_preview: bool = False,
+    completed_preview: bool = False,
     formwork: bool = False,
     lifecycle_checkpoint: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
@@ -402,7 +409,7 @@ def validate_probe_status(
             "subject_mask",
         },
     )
-    expected_phase = "provisional" if art_preview else "mixed" if formwork else "completed"
+    expected_phase = performance_wall_phase("art_preview" if art_preview else "isolated_candidate", formwork, completed_preview)
     expected_contract_id = (
         "wall-formwork-density-v1" if formwork else "wall-density-v1"
     )
@@ -1030,6 +1037,7 @@ def run_calibration(
     authority: str = "isolated_candidate",
     formwork: bool = False,
     lifecycle: bool = False,
+    completed_preview: bool = False,
     job_file: Path | None = None,
 ) -> dict[str, Any]:
     job_file = job_file or root / "job.json"
@@ -1080,7 +1088,7 @@ def run_calibration(
         quality=quality,
         scale_factor=scale_factor,
         zoom=zoom,
-        wall_phase=performance_wall_phase(authority, formwork),
+        wall_phase=performance_wall_phase(authority, formwork, completed_preview),
     )
     if formwork:
         command.append("--wall-formwork-acceptance")
@@ -1141,6 +1149,7 @@ def run_calibration(
                         scale_factor=scale_factor,
                         zoom=zoom,
                         art_preview=authority == "art_preview",
+                        completed_preview=completed_preview,
                         formwork=formwork,
                         lifecycle_checkpoint=checkpoint,
                     )
@@ -1191,7 +1200,7 @@ def run_calibration(
         quality=quality,
         scale_factor=scale_factor,
         wall_phase=(
-            "provisional" if authority == "art_preview" else "mixed" if formwork else "completed"
+            performance_wall_phase(authority, formwork, completed_preview)
         ),
     )
     native.require(
@@ -1214,11 +1223,12 @@ def run_calibration(
         "schema_version": SCHEMA_VERSION,
         "status": "pass",
         "profile": profile_name(
-            candidate_mode, matrix_mode, zoom, authority, formwork, lifecycle
+            candidate_mode, matrix_mode, zoom, authority, formwork, lifecycle, completed_preview
         ),
         "evidence_kind": "art_preview" if authority == "art_preview" else "formal",
         "formwork": formwork,
         "lifecycle": lifecycle,
+        "completed_preview": completed_preview,
         "candidate": candidate_mode,
         "candidate_identity": candidate,
         "quality": quality,
@@ -1253,6 +1263,7 @@ def verify_observation(
     authority: str,
     formwork: bool,
     lifecycle: bool,
+    completed_preview: bool = False,
 ) -> dict[str, Any]:
     observation = native.read_json(root / "observation.json")
     storyboard = observation.get("storyboard")
@@ -1280,6 +1291,7 @@ def verify_observation(
             scale_factor=scale_factor,
             zoom=zoom,
             art_preview=authority == "art_preview",
+            completed_preview=completed_preview,
             formwork=formwork,
             lifecycle_checkpoint=checkpoint,
         )
@@ -1318,7 +1330,7 @@ def verify_observation(
     native.require(
         observation.get("profile")
         == profile_name(
-            candidate_mode, matrix_mode, zoom, authority, formwork, lifecycle
+            candidate_mode, matrix_mode, zoom, authority, formwork, lifecycle, completed_preview
         )
         and observation.get("candidate") == candidate_mode
         and observation.get("candidate_identity") == candidate
@@ -1326,6 +1338,7 @@ def verify_observation(
         == ("art_preview" if authority == "art_preview" else "formal")
         and observation.get("formwork", False) == formwork
         and observation.get("lifecycle", False) == lifecycle
+        and observation.get("completed_preview", False) == completed_preview
         and observation.get("quality", "high") == quality
         and observation.get("scale_factor", WINDOW_SCALE_FACTOR) == scale_factor,
         "Wall observation identity differs",
@@ -1347,7 +1360,7 @@ def verify_observation(
         binary_sha256=manifest["binary_sha256"],
         quality=quality,
         scale_factor=scale_factor,
-        wall_phase=performance_wall_phase(authority, formwork),
+        wall_phase=performance_wall_phase(authority, formwork, completed_preview),
     )
     native.require(
         performance == observation.get("performance"),
@@ -1372,6 +1385,8 @@ def verify_root(root: Path) -> dict[str, Any]:
     authority = manifest.get("authority", "isolated_candidate")
     formwork = manifest.get("formwork", False)
     native.require(type(formwork) is bool, "Wall formwork mode is invalid")
+    completed_preview = manifest.get("completed_preview", False)
+    native.require(type(completed_preview) is bool, "Wall completed preview mode is invalid")
     lifecycle = manifest.get("lifecycle", False)
     native.require(type(lifecycle) is bool, "Wall lifecycle mode is invalid")
     native.require(authority in AUTHORITIES, "Wall authority is invalid")
@@ -1384,7 +1399,7 @@ def verify_root(root: Path) -> dict[str, Any]:
     native.require(
         manifest.get("profile")
         == profile_name(
-            candidate_mode, matrix_mode, zoom, authority, formwork, lifecycle
+            candidate_mode, matrix_mode, zoom, authority, formwork, lifecycle, completed_preview
         ),
         "Wall manifest profile differs",
     )
@@ -1445,6 +1460,7 @@ def verify_root(root: Path) -> dict[str, Any]:
             authority=authority,
             formwork=formwork,
             lifecycle=lifecycle,
+            completed_preview=completed_preview,
         )
         screenshot_hashes[spec["id"]] = (
             {
@@ -1468,11 +1484,12 @@ def verify_root(root: Path) -> dict[str, Any]:
         "schema_version": SCHEMA_VERSION,
         "status": "pass",
         "profile": profile_name(
-            candidate_mode, matrix_mode, zoom, authority, formwork, lifecycle
+            candidate_mode, matrix_mode, zoom, authority, formwork, lifecycle, completed_preview
         ),
         "candidate": candidate_mode,
         "formwork": formwork,
         "lifecycle": lifecycle,
+        "completed_preview": completed_preview,
         "zoom": zoom,
         "authority": authority,
         "evidence_kind": "art_preview" if authority == "art_preview" else "formal",
@@ -1497,9 +1514,11 @@ def plan(args: argparse.Namespace) -> int:
         if args.release
         else "isolated_candidate"
     )
+    if args.completed_preview and (not args.art_preview or args.formwork or args.lifecycle):
+        failures.append("Completed preview requires --art-preview without formwork/lifecycle")
     if args.art_preview and not args.candidate:
         failures.append("Wall art preview requires --candidate")
-    if args.art_preview and (args.matrix or args.release or args.zoom != "standard"):
+    if args.art_preview and (args.matrix or args.release or (args.zoom != "standard" and not args.completed_preview)):
         failures.append("Wall art preview is one standard-zoom non-release run")
     if args.lifecycle and not (args.candidate and args.formwork):
         failures.append("Wall lifecycle requires candidate formwork mode")
@@ -1581,6 +1600,8 @@ def plan(args: argparse.Namespace) -> int:
         command.append("--release")
     if args.art_preview:
         command.append("--art-preview")
+    if args.completed_preview:
+        command.append("--completed-preview")
     if args.formwork:
         command.append("--formwork")
     if args.lifecycle:
@@ -1596,6 +1617,7 @@ def plan(args: argparse.Namespace) -> int:
                 authority,
                 args.formwork,
                 args.lifecycle,
+                args.completed_preview,
             ),
             "candidate": args.candidate,
             "matrix": args.matrix,
@@ -1603,6 +1625,7 @@ def plan(args: argparse.Namespace) -> int:
             "authority": authority,
             "formwork": args.formwork,
             "lifecycle": args.lifecycle,
+            "completed_preview": args.completed_preview,
             "candidate_identity": candidate,
             "job_root": str(root),
             "subject_commit": subject,
@@ -1676,7 +1699,7 @@ def run(args: argparse.Namespace) -> int:
     )
     native.require(
         not args.art_preview
-        or (args.candidate and not args.matrix and not args.release and args.zoom == "standard"),
+        or (args.candidate and not args.matrix and not args.release and (args.zoom == "standard" or args.completed_preview)),
         "Wall art preview is one standard-zoom candidate run",
     )
     native.require(
@@ -1737,6 +1760,7 @@ def run(args: argparse.Namespace) -> int:
             authority,
             args.formwork,
             args.lifecycle,
+            args.completed_preview,
         ),
         "candidate": args.candidate,
         "matrix": args.matrix,
@@ -1744,6 +1768,7 @@ def run(args: argparse.Namespace) -> int:
         "authority": authority,
         "formwork": args.formwork,
         "lifecycle": args.lifecycle,
+        "completed_preview": args.completed_preview,
         "evidence_kind": "art_preview" if args.art_preview else "formal",
         "candidate_identity": candidate,
         "subject_commit": args.subject_commit,
@@ -1804,6 +1829,7 @@ def run(args: argparse.Namespace) -> int:
                 authority=authority,
                 formwork=args.formwork,
                 lifecycle=args.lifecycle,
+                completed_preview=args.completed_preview,
                 job_file=root / "job.json",
             )
             state["cases_completed"] = index + 1
@@ -1818,6 +1844,7 @@ def run(args: argparse.Namespace) -> int:
                 authority,
                 args.formwork,
                 args.lifecycle,
+                args.completed_preview,
             ),
             "candidate": args.candidate,
             "matrix": args.matrix,
@@ -1825,6 +1852,7 @@ def run(args: argparse.Namespace) -> int:
             "authority": authority,
             "formwork": args.formwork,
             "lifecycle": args.lifecycle,
+            "completed_preview": args.completed_preview,
             "evidence_kind": "art_preview" if args.art_preview else "formal",
             "candidate_identity": candidate,
             "repo": str(repo),
@@ -1888,6 +1916,23 @@ def verify(args: argparse.Namespace) -> int:
 
 
 def self_test() -> int:
+    native.require(
+        performance_wall_phase("art_preview", False, True) == "completed",
+        "Completed preview does not request completed Walls",
+    )
+    for zoom in ZOOM_MODES:
+        native.require(
+            profile_name(True, zoom=zoom, authority="art_preview", completed_preview=True)
+            == f"wall-surface-art-preview-v1-{zoom}",
+            "Completed preview profile differs",
+        )
+    for authority in ("isolated_candidate", "release_approved"):
+        try:
+            profile_name(True, authority=authority, completed_preview=True)
+        except native.AcceptanceError:
+            pass
+        else:
+            raise native.AcceptanceError("Completed preview acquired formal authority")
     native.require(
         performance_wall_phase("art_preview", False) == "provisional"
         and performance_wall_phase("isolated_candidate", True) == "mixed"
@@ -2168,6 +2213,18 @@ def self_test() -> int:
         candidate=True,
         art_preview=True,
     )
+    surface_status = json.loads(json.dumps(preview_status))
+    surface_status["fixture"]["wall_phase"] = "completed"
+    surface_status["gallery"]["wall_phase"] = "completed"
+    validate_probe_status(surface_status, nonce=nonce, candidate=True,
+                          art_preview=True, completed_preview=True)
+    try:
+        validate_probe_status(preview_status, nonce=nonce, candidate=True,
+                              art_preview=True, completed_preview=True)
+    except native.AcceptanceError:
+        pass
+    else:
+        raise native.AcceptanceError("Formwork evidence passed as completed preview")
     formwork_status = json.loads(json.dumps(preview_status))
     formwork_status.pop("evidence_kind")
     formwork_status["fixture"]["contract_id"] = "wall-formwork-density-v1"
@@ -2295,6 +2352,7 @@ def parser() -> argparse.ArgumentParser:
     plan_parser.add_argument("--zoom", choices=ZOOM_MODES, default="standard")
     plan_parser.add_argument("--release", action="store_true")
     plan_parser.add_argument("--art-preview", action="store_true")
+    plan_parser.add_argument("--completed-preview", action="store_true")
     plan_parser.add_argument("--formwork", action="store_true")
     plan_parser.add_argument("--lifecycle", action="store_true")
     run_parser = commands.add_parser("run")
@@ -2313,6 +2371,7 @@ def parser() -> argparse.ArgumentParser:
     run_parser.add_argument("--zoom", choices=ZOOM_MODES, default="standard")
     run_parser.add_argument("--release", action="store_true")
     run_parser.add_argument("--art-preview", action="store_true")
+    run_parser.add_argument("--completed-preview", action="store_true")
     run_parser.add_argument("--formwork", action="store_true")
     run_parser.add_argument("--lifecycle", action="store_true")
     run_parser.add_argument("--candidate-generation")

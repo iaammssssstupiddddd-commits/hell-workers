@@ -207,6 +207,19 @@ Wall boardの投影は`wall-preview-topdown-v1`。角度59.036°に加え、runt
 承認やreleaseを成立させず、変更した完成Wallには新たなアート承認と世代封印を必要とする。
 既存の「本設8 file不変」で承認された型枠追加manifestへ新UVのGLBを混ぜない。
 
+本設surfaceの承認前確認には`provision_wall_surface_preview.py --repo <clean-primary>
+--generation <新番号> --destination <隔離root/staging/validation/新ディレクトリ>`を使う。
+本番schema-2 locator/receiptと15 coreの実bytesを検証し、本設6 meshの形状・法線不変、UV-v3、
+export hash、atlas保護画素を確認する。型枠7 fileは本番bytesのまま保持し、新しい本設8 fileと共に
+`surface_art_preview` manifestへ封印する。出力は新規の隔離先に限り、`authority=art_preview`、
+`receipt=null`のruntime projectionだけを作る。旧世代のアート承認・本番反映権限は引き継がない。
+この15-file viewをclean validation worktreeへ用意した後、nativeスキルの
+`wall_art_acceptance.py plan --candidate --art-preview --completed-preview --repo <worktree> --adapter Intel`
+で返されたdirect kitty commandを実行する。`--zoom farthest`は別の単独preview jobにする。
+profileは`wall-surface-art-preview-v1-standard` / `wall-surface-art-preview-v1-farthest`。
+撮影・再検証ともcompleted phaseと候補identityを照合し、型枠の画像を本設の証拠へ流用しない。
+既存型枠previewの既定動作は不変。いずれもアート承認・正式受入・性能baseline・昇格の証拠ではない。
+
 ### 他のproductionアセット
 
 production Doorは`create-door-production-scene`で`Door_Closed` / `Door_Open` / `Door_Locked`を同じ原本へ生成し、`validate-door-glb`で単一node/mesh/primitive、状態別triangle数、固定枠signature、Open envelopeを検査します。`render-door-previews`はnetworkを切り、repositoryの`wall-calibration-v2.ocio`が陽性である場合だけEW/NSの固定canvasを出力します。`validate-door-textures`は512px Opaque albedo、256px RGBA preview、安全bbox、両軸hash差を検査します。
