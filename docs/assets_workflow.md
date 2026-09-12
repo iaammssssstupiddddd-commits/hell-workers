@@ -301,6 +301,10 @@ Door品質9 case / 18 PNG、本設Wall品質9 case / 9 PNGの独立verify後にp
 [型枠計画M4](plans/3d-rtt/provisional-wall-formwork-plan-2026-09-05.md#m4-release文書同期close)を参照する。
 型枠混在の通常release全品質matrixと全trackのworktree整理は別の残件であり、登録済みという理由だけでcloseしない。
 
+同日、Door設計図の投影修正をgeneration 7として登録・通常版へ導入した。Wallはgeneration 10のまま。
+旧g6の3 GLB・albedoを維持し、preview 2枚だけを更新。新しい通常authority J1の6場面を独立verify・目視確認した。
+g6へのcanonical / runtime復旧前像と新hashは[設計図修正計画M5](plans/3d-rtt/door-preview-alignment-plan-2026-09-11.md)を参照する。
+
 validation worktreeは作業場であって成果物ではない。trackを閉じたら、各jobの`manifest.json`、比較CSV、
 承認画像だけを`staging/validation/<capsule>/`のような小さなdirectoryへ残し、worktree本体は
 `git worktree remove`で削除して使っていたbranchも消す。worktree 1つはRustの`target/`込みで10 GB規模になり、

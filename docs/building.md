@@ -6,12 +6,14 @@ Hell-Workers における建築システムの基礎実装について説明し�
 
 プレイヤーが設計図（Blueprint）を配置し、労働者が資材を運んで建設を完了させるシステムです。
 
-2026-09-12の通常runtimeはWall generation 10（木製型枠＋既存本設壁）とDoor generation 6（木・骨の両開き）を
+2026-09-12の通常runtimeはWall generation 10（木製型枠＋既存本設壁）とDoor generation 7（木・骨の両開き）を
 `ReleaseApproved`で使用する。試験用candidate / ArtPreview opt-inは不要。扉は薄い上枠を固定したまま、
 左右leafが同じ側へ同じ78°で対称に開き、Lockedだけ中央に骨の閂が掛かる。
 これは表示assetの正式導入であり、材料・施工工程・開閉タイマー・施錠操作・通行・保存形式を変更しない。
 資材表示の位置修正も含む通常authorityの実機結果と復旧前像は
 [型枠計画M4](plans/3d-rtt/provisional-wall-formwork-plan-2026-09-05.md#m4-release文書同期close)で追跡する。
+Door g7はg6の3Dを保持し、設計図PNGの斜め投影だけを修正した世代。
+[設計図修正M5](plans/3d-rtt/door-preview-alignment-plan-2026-09-11.md)に通常版6場面の再受入とg6復旧前像を記録する。
 
 ## 2. コンポーネント
 

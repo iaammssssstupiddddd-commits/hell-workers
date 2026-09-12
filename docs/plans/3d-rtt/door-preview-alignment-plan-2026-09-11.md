@@ -63,7 +63,7 @@ Bevy 0.19のローカルregistryと既存実装をAPIの一次情報とする。
 - [x] M2: 資材表示位置修正と回帰test。承認済み形状・開度は保持。
 - [x] M3: 材料表示修正後のclean subjectで実機J1、独立verify、両軸・load後の画像を確認。
 - [x] M4: 既存両計画へ結果・正式反映指示を引継ぐ。canonical登録と通常authority J1も完了。
-- [ ] M5: 設計図本体の投影修正、回帰、新世代登録・通常版再受入。M1〜M4の材料表示修正とは別件。
+- [x] M5: 設計図本体の投影修正、回帰、Door g7登録・通常版再受入。M1〜M4の材料表示修正とは別件。
 
 M5実装: `door_preview_projection.py`とrendererがgameと一致する投影点を実測し、PNGだけを再生成。
 EW/NS画像の目視・0.01px以内の投影照合・全vertexのcanvas検査はpass。Python workflow 121件もpass。
@@ -71,7 +71,8 @@ EW/NS画像の目視・0.01px以内の投影照合・全vertexのcanvas検査は
 Help判断は`No impact`。`DoorAssetReadiness` → `ProductionDoorAssetPool` → `sync_door_preview_system` →
 Blueprint root / pulse child / placement ghostの画像だけを更新し、操作・資材・配置条件・色と文言・保存の意味は不変。
 前回の通常asset導入も表示だけであり、既存Helpに旧扉の色や半透明型枠へ依存する説明はない。
-別作業の搬送回帰test・計画はこのcommitに含めず、cleanな検証treeで本件の全gateと実機受入を行う。
+別作業の搬送回帰test・計画はこのcommitに含めない。実機はcleanな専用tree、全体verifyは既存cacheのあるprimaryで実施。
+primaryの並行差分は`cfg(test)`のtest登録のみであることを確認し、Help overrideにも別scopeと明記した。
 
 ## 6. リスクと対策
 
@@ -92,6 +93,39 @@ Blueprint root / pulse child / placement ghostの画像だけを更新し、操�
 旧assetと証跡を保持し、既存M4の前像保存・pointer最後の切替手順へ従う。
 
 ## 9. AI引継ぎメモ
+
+### M5完了記録（2026-09-12）
+
+- 修正commit: `0d532b34a3fefbea5fbbcfe798b4b4d68dfb8836`。Blender実投影検査と両PNG目視、
+  Python workflow 121件、`dev.py check`、`dev.py verify`、workspace Clippy `-D warnings`がpass。
+  専用treeで開始した全体verifyは重複debug buildを避けるため途中停止し、primaryで全gateを最後まで再実行した。
+- Door generation 7 manifest: `4e3f9236db067772b9a60b37ea98437cb29e481f9ec9cbb4d6dcf6517374a449`。
+  3 GLB・albedo・blend・geometryはg6とbyte同一。EW PNG `f52babe5734a36ba88c67a35cd7c3e4f96b900c2aa35ee70fef22de937c87bd3`、
+  NS PNG `e8a8eeac87432ff4b69f2d76cee2476970992ff529e5599a26707811ba26d827`。
+- receipt `door-g7-preview-20260912-053506` SHA-256:
+  `95ba6a19494d84825db54075cf8735d2024d18e6983dc54343cdc71c19a046ad`。
+  新runtime locator SHA-256: `21075f6b5c6e4412ccc17632ecc3b44bcb619bb901a06062fa0905c0be303002`。
+- 通常authority実機job: `wall-door-joint-20260912T053802Z-6227f30b`、固定audit 3 / PNG 6 / 独立verify pass。
+  Intel Arc (MTL) / Vulkan / X11 / High / DPI 1、subjectは上記修正commit。
+  manifest SHA-256: `bbf9a6758bee7acebbb71a46b048cf45622d9b88f2bae3bc76d2251966705923`。
+  asset-view: `9d215794271163a6f01ef9963e7788c9a3d28b8f14674d3c84be27597707cfce`。
+  全6画像を目視し、EWの横桟・NSの接続軸が斜めにならず、支持変更とpause中load後も向きを維持することを確認した。
+  自動J1はruntime identity・可視性・anchorを検査し、斜視の否定はBlender投影点回帰と新画像目視で補う。
+- capsule: `/home/satotakumi/Sync/hell-workers-assets/staging/acceptance/wall-door-joint-20260912T053802Z-6227f30b/`
+  （12 MiB、元jobと全fileをbyte照合）。`joint-framed.png` SHA-256
+  `b66d33ebfe07cfef07fba7aad75aee6d4ecf1eb65bec8e3c4667f5138a0711d8`、`joint-loaded.png`
+  `85eb0b4e62f3ab9ac4e8154177d9720a22e24c35abe2ae155bfd04fab89f9c52`。
+- 受入後primaryへ導入し、専用treeと全core / receipt / locator identity一致を再検証した。
+  通常起動で追加opt-in不要。Wall generation 10には変更なし。
+- g6前像・promotion plan・許可記録はasset root外
+  `/home/satotakumi/Sync/hell-workers-release-evidence/door-preview-20260912/`へ保存。
+  primary / validation旧locatorはともに`9613b8b3655b8a375f030ed5c3006726cdc2d010a1d86b2138aa64711655e561`。
+  復旧時はゲーム停止後、canonical snapshotと対象runtimeの前像を両方戻す。旧世代は削除しない。
+  許可UTCはユーザー送信時刻ではなく、明示許可を記録した時刻とrelease-approvalで区別している。
+- Help skillの実経路レビューは`No impact`。型枠release全品質matrix・新Memory/性能測定は今回の結果に含めない。
+  位置修正は完了。共通trackの未完受入が同じworktreeを使用するため、worktree整理・本計画archiveは両計画close時。
+
+### M1〜M4の履歴
 
 - 現在地: 資材表示の修正と両計画M4への引継ぎを完了。通常版への導入・残りの受入は両計画で追跡する。
   primary開始時HEAD `0889dd71`、再開時HEAD `7a0e4bf7`、いずれもdirtyなし。
@@ -135,5 +169,6 @@ Blueprint root / pulse child / placement ghostの画像だけを更新し、操�
 
 | 日付 | 変更者 | 内容 |
 | --- | --- | --- |
+| `2026-09-12` | `Codex` | 設計図の斜視をgame TopDown投影へ修正しcommit。Door g7の通常authority J1・全gateを確認してprimaryへ反映 |
 | `2026-09-12` | `Codex` | 材料表示修正後の実機6場面を再検証し、14 fileのcapsuleとhashを記録。通常release検証経路の整備へ進行 |
 | `2026-09-11` | `Codex` | ユーザー指摘から位置ずれの調査・修正・再受入を計画化 |
