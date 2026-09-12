@@ -274,6 +274,13 @@ Help/docsスキルで再確認し、診断用経路追加だけなのでHelpはN
 mixed、actual-windowなし、phaseなしは拒否する回帰testを追加。これは検証用perf起動の成立条件で、
 通常版の建設操作やアセット承認権限を変えない。失敗jobは削除・上書きせず保持する。
 
+`5375338c`で再試行した標準job `wall-art-20260912T111622Z-2d627435`は撮影・offline verify pass。
+Intel Arc (MTL) / Vulkan / X11 / High / DPI 1、96 production / 0 fallback / 6 mesh / 16 masksを確認。
+最遠job `wall-art-20260912T112827Z-6b653703`はperf.pyの`--wall-art-zoom farthest requires
+--wall-art-matrix`でinvalid。単独最遠previewにも既存runnerのmatrix carrier flag/environmentを対で
+渡すよう修正する。orchestratorは1 caseのままで、formal権限や9-case matrixにはしない。
+このharness変更後は標準／最遠とも新subjectで取り直し、前の標準passを新証拠へ流用しない。
+
 ### Help impact
 
 `No impact`。`create_prism → GLB UV0 → ResolvedProductionWallAssets →

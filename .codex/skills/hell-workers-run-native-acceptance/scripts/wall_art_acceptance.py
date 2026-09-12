@@ -165,7 +165,9 @@ def calibration_command(
         "--timeout-secs",
         str(int(RUN_TIMEOUT_SECONDS)),
     ]
-    if matrix_mode:
+    # perf.py requires its quality/zoom carrier opt-in even for a single-case
+    # farthest art preview. This does not expand the orchestrator's case list.
+    if matrix_mode or zoom == "farthest":
         command.append("--wall-art-matrix")
     if zoom != "standard":
         command.extend(["--wall-art-zoom", zoom])
@@ -1072,7 +1074,7 @@ def run_calibration(
             )
             if candidate["authority"] == "art_preview":
                 environment["HW_WALL_ART_PREVIEW"] = "1"
-    if matrix_mode or lifecycle:
+    if matrix_mode or lifecycle or zoom == "farthest":
         environment["HW_WALL_ART_MATRIX"] = "1"
     if formwork:
         environment["HW_WALL_FORMWORK_ACCEPTANCE"] = "1"
@@ -1916,6 +1918,9 @@ def verify(args: argparse.Namespace) -> int:
 
 
 def self_test() -> int:
+    single_farthest = calibration_command(Path("/repo"), Path("/job"), "Intel", zoom="farthest")
+    native.require("--wall-art-matrix" in single_farthest,
+                   "Single-case farthest preview omitted perf.py's paired zoom carrier")
     native.require(
         performance_wall_phase("art_preview", False, True) == "completed",
         "Completed preview does not request completed Walls",

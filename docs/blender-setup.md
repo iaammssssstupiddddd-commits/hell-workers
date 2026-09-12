@@ -217,6 +217,8 @@ export hash、atlas保護画素を確認する。型枠7 fileは本番bytesの�
 `wall_art_acceptance.py plan --candidate --art-preview --completed-preview --repo <worktree> --adapter Intel`
 で返されたdirect kitty commandを実行する。`--zoom farthest`は別の単独preview jobにする。
 profileは`wall-surface-art-preview-v1-standard` / `wall-surface-art-preview-v1-farthest`。
+最遠の単独previewでも、下位perf runnerが要求する`--wall-art-matrix`と`HW_WALL_ART_MATRIX=1`を
+対で渡す。これは画質・zoom選択の許可であり、orchestratorのcase数を9件へ増やす意味ではない。
 撮影・再検証ともcompleted phaseと候補identityを照合し、型枠の画像を本設の証拠へ流用しない。
 perf設定入口も`wall_actual_window_phase_matches`でcompleted/provisionalに限定し、
 ArtPreviewのmixed phase、phase未指定、actual-windowなしは拒否する。
