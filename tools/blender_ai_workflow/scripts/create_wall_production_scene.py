@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import sys
 from pathlib import Path
 
@@ -13,6 +14,21 @@ if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
 from workflow_common import asset_root, staging_path, write_json_atomic
+from wall_surface_uv import PROFILE, face_uv
+
+# Match the nonreflective stone response of make_topdown_structural_material.
+# The game supplies its own shared material; placeholder GLBs do not carry it.
+PREVIEW_SURFACE_INPUTS = {
+    "Roughness": 1.0,
+    "Metallic": 0.0,
+    "Specular IOR Level": 0.0,
+}
+
+
+def configure_surface_shader(shader) -> None:
+    for name, value in PREVIEW_SURFACE_INPUTS.items():
+        shader.inputs[name].default_value = value
+
 
 FAMILIES = {
     "isolated": {
@@ -82,14 +98,6 @@ def clear_scene() -> None:
         bpy.data.materials.remove(material)
 
 
-def atlas_uv(kind: str, x: float, y: float, z: float) -> tuple[float, float]:
-    if kind == "rust":
-        return (0.67 + 0.29 * x, 0.32 + 0.64 * z)
-    if kind == "purple":
-        return (0.03 + 0.60 * x, 0.04 + 0.22 * z)
-    return (0.03 + 0.60 * x, 0.32 + 0.64 * y)
-
-
 def create_prism(
     family: str,
     collection: bpy.types.Collection,
@@ -132,23 +140,19 @@ def create_prism(
     uv_layer = mesh.uv_layers.new(name="UVMap")
     for polygon, (kind, ordinal) in zip(mesh.polygons, face_kinds, strict=True):
         edge_group = ordinal
-        surface = "stone"
+        surface = "core" if kind in {"top", "bottom"} else "stone"
         if kind == "side_lower" and edge_group % 4 == 2:
             surface = "purple"
         elif kind == "side_lower" and edge_group % 2 == 1:
             surface = "rust"
         for loop_index in polygon.loop_indices:
             vertex = mesh.vertices[mesh.loops[loop_index].vertex_index].co
-            x = min(max(float(vertex.x) + 0.5, 0.0), 1.0)
-            y = min(max(float(vertex.y) + 0.5, 0.0), 1.0)
-            z = (
-                min(max(float(vertex.z) * 2.0, 0.0), 1.0)
-                if kind == "side_upper"
-                else min(max((float(vertex.z) + 0.5) * 2.0, 0.0), 1.0)
-                if kind == "side_lower"
-                else min(max(float(vertex.z) + 0.5, 0.0), 1.0)
+            uv_layer.data[loop_index].uv = face_uv(
+                surface,
+                outline[ordinal],
+                outline[(ordinal + 1) % count],
+                tuple(float(value) for value in vertex),
             )
-            uv_layer.data[loop_index].uv = atlas_uv(surface, x, y, z)
         polygon.use_smooth = False
 
     obj = bpy.data.objects.new(f"Wall_{family}", mesh)
@@ -160,6 +164,7 @@ def create_prism(
     obj["hw_export_scale"] = 32.0
     obj["hw_nominal_thickness_wu"] = 9.6
     obj["hw_ornament_envelope_wu"] = 12.8
+    obj["hw_surface_uv_profile"] = PROFILE
     return obj
 
 
@@ -170,6 +175,12 @@ def create_material(root: Path) -> bpy.types.Material:
         raise FileNotFoundError(
             "Wall albedo and emissive candidates must exist before scene creation"
         )
+    packing = json.loads((root / "staging/reports/core-atlas.json").read_text())
+    if packing.get("profile") != PROFILE:
+        raise ValueError("Wall cut-core atlas profile differs")
+    for path in (albedo_path, emissive_path):
+        if packing["textures"][path.name]["sha256"] != hashlib.sha256(path.read_bytes()).hexdigest():
+            raise ValueError(f"Wall cut-core atlas hash differs: {path.name}")
     material = bpy.data.materials.new("Wall_Production_Preview")
     material.use_nodes = True
     nodes = material.node_tree.nodes
@@ -189,8 +200,7 @@ def create_material(root: Path) -> bpy.types.Material:
         raise RuntimeError("Blender Principled BSDF has no emission color input")
     links.new(emissive.outputs["Color"], emission_input)
     shader.inputs["Emission Strength"].default_value = 1.8
-    shader.inputs["Roughness"].default_value = 0.82
-    shader.inputs["Metallic"].default_value = 0.12
+    configure_surface_shader(shader)
     return material
 
 
@@ -232,6 +242,7 @@ def main() -> None:
         "blend_sha256": hashlib.sha256(blend_path.read_bytes()).hexdigest(),
         "authoring_tile_size": 1.0,
         "export_scale": 32.0,
+        "surface_uv_profile": PROFILE,
         "families": created,
         "textures": {
             "albedo": str(

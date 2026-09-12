@@ -13,4 +13,5 @@ exec "${BIN_DIR}/blender-safe" \
     --factory-startup \
     "${BLEND}" \
     --python-exit-code 2 \
-    --python "${WORKFLOW_ROOT}/scripts/render_wall_reference_board.py"
+    --python "${WORKFLOW_ROOT}/scripts/render_wall_reference_board.py" \
+    -- "$@"

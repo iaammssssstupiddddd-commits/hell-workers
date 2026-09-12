@@ -164,6 +164,51 @@ operatorにはglobal scale propertyがないため、正式exportは`--geometry-
 `render-wall-reference-board`はM0と同じOCIO陽性configを強制し、59.036° Orthographicで6 familyを描画します。
 OCIO fallback時はreference reportをpassにしません。
 
+### 本設Wallの面別UV
+
+`create-wall-production-scene`の`wall-face-uv-v3`は、側面を輪郭辺の接線方向×高さで展開する。
+辺の長さを0〜1へ正規化せず、同じ表面種別の縦横texel密度を揃える。石面は上下段でも
+高さ座標をリセットしない。上下面はatlas右下の専用256px断面textureを使い、
+外壁の石積みを断面へ貼らない。厚さ・接続port・三角形数・単一primitive / materialの契約は変えない。
+
+新規出力は旧geometry gateに加え、`wall_surface_uv.py <output.glb> --family <family> --report <staging-report>`
+でUV0を再検証する。Blender→glTFの軸・V反転を戻して全三角形を照合し、側面の線状UV・縦横比の
+引き伸ばし・装飾を貼った断面を拒否する。このprofileは旧releaseや木製型枠には遡及適用しない。
+元textureを変更する場合は内部色領域の再確認も必要となる。
+
+断面用画像は画像生成で用意する。角ばった内部粒子と短い不規則な亀裂を含む暗い石色とし、
+レンガ列・鉄板の目地・発光・タイルごとの枠を描かない。外壁との模様の差で境界を示し、
+外周線や欠けの追加geometryで壁厚を増やさない。新しい隔離`HELL_WORKERS_ASSET_ROOT`で
+`pack_wall_core_atlas.py --source-dir <元textureディレクトリ> --core-art <断面画像>`を実行すると、
+ImageMagickで縮小・配置する。
+image座標`(702,750)`から260×260の範囲へ、256px画像と2pxのfilter余白を収める。
+albedo/emissiveとも領域外の全画素不変を検査し、断面emissiveは完全な黒とする。既存出力へは上書きしない。
+`core-atlas.json`は原図・元atlas・出力hashと色統計を記録する。scene生成はprofileと出力hashの
+一致を要求し、旧atlasへ新UVだけを適用する失敗を拒否する。PillowとImageMagickが必要。
+
+断面は側面の石（目地を除く）の代表色へ合わせ、茶色く明るい別領域を使わない。
+Blenderの確認用石材はruntimeの`make_topdown_structural_material`に合わせてroughness=1、
+metallic=0、specular=0とし、ゲームに存在しない金属反射で上面の色を変えない。
+これは反射特性を揃える契約で、Blenderとゲームの照明全体や最終画素の一致を主張しない。
+`render-wall-reference-board --neutral-light`は白色照明の色確認用画像を別の`-neutral`名で作る。
+既定の紫rim画像は維持し、reportの`lighting_profile`で区別する。各familyの実際の材質設定も
+reportへ記録し、白色照明の画像をゲーム内証拠へ流用しない。
+
+Wall boardの投影は`wall-preview-topdown-v1`。角度59.036°に加え、runtimeのRtT合成と同じ
+`hypot(150,90)/150=1.16619038`の縦補正をpixel aspectで再現する。実cameraの6基準点を
+`screen_up=y+.6*z`の解析値へ0.01px以内で照合し、全Wall頂点のcanvas内収容も確認する。
+32×32 wu grid、EW/NS同倍率標本、3連結標本、厚9.6／高32の寸法labelは確認sceneにだけ追加し、
+保存済みblendやGLBへ含めない。`--review-scale detail`は5px/wu、`standard`は1px/wu、
+`farthest`はcamera scale=5相当の0.2px/wuで別名PNGを直接renderする。
+これらは静止したBlender比較であり、ゲームのDPI、照明、AA、時間方向のちらつき検証を代替しない。
+
+参照boardは実行root内のalbedo / emissiveへ画像参照を再接続し、そのhashをreportへ記録する。
+コピーした旧原本との同条件比較でも保存済みblendを書き換えない。Blender boardだけでゲーム内の
+承認やreleaseを成立させず、変更した完成Wallには新たなアート承認と世代封印を必要とする。
+既存の「本設8 file不変」で承認された型枠追加manifestへ新UVのGLBを混ぜない。
+
+### 他のproductionアセット
+
 production Doorは`create-door-production-scene`で`Door_Closed` / `Door_Open` / `Door_Locked`を同じ原本へ生成し、`validate-door-glb`で単一node/mesh/primitive、状態別triangle数、固定枠signature、Open envelopeを検査します。`render-door-previews`はnetworkを切り、repositoryの`wall-calibration-v2.ocio`が陽性である場合だけEW/NSの固定canvasを出力します。`validate-door-textures`は512px Opaque albedo、256px RGBA preview、安全bbox、両軸hash差を検査します。
 
 production Wall v2は上記legacy同期ではなく、art-approved final manifestに封印されたexact allowlistを隔離worktreeへ

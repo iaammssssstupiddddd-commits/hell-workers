@@ -115,6 +115,10 @@ class ScriptContractTests(unittest.TestCase):
         self.assertIn('if ocio["fallback"]', source)
         self.assertIn('camera_data.type = "ORTHO"', source)
         self.assertIn("wall-production-v1-reference-board.png", source)
+        self.assertIn("wall-production-v1-reference-board-neutral.png", source)
+        self.assertIn('--neutral-light', source)
+        self.assertIn('"surface_inputs_by_family"', source)
+        self.assertIn('-- "$@"', wrapper)
         self.assertIn("wall-calibration-v2.ocio", wrapper)
         self.assertIn("BLENDER_SAFE_NO_NETWORK=1", wrapper)
 
