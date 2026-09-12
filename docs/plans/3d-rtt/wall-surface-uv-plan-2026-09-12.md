@@ -78,7 +78,7 @@
 - [x] 更新後のclean subjectで再採取して60Hz制限の解消を確認する。
   旧subjectの性能値を合格証拠へ流用しない。
 - [x] 残作業を説明した後の「続けてください」をgeneration 13本番反映の了承として記録する。
-- [ ] receipt・復旧前像を揃え、通常authorityで反映後確認する。
+- [x] receipt・復旧前像を揃え、通常authority J1の3 audit / 6場面を確認後、primaryへ反映する。
 
 ## 6. リスクと対策
 
@@ -128,7 +128,8 @@ candidate性能Capture／Memoryは当初予定したが、2026-09-13のユーザ
   perf専用連続更新と回帰testを`552d9c91`で実装。新subjectでは22回すべて非pacedだが、
   fallback / provisional / smallの反復間p50比1.628が上限1.25を超え、正式jobはinvalid。
   新たな性能改善／合格は主張しない。以後のばらつき調査・性能再採取・Memoryはユーザー指示で打ち切り。
-  時間方向の確認は未実施。本番昇格は残件説明後の「続けてください」で了承され、receipt付き反映へ進む。
+  generation 13をreceipt付きで本番登録し、`725910f0`の通常authority J1は3 audit / 6場面と独立verify pass。
+  primaryへ導入し、テスト済みruntime viewと全core / receipt / locatorが一致。時間方向の確認は未実施。
   承認前previewをformal authorityへ手作業で変更しない。
 - 参照必須: `docs/blender-setup.md`、`docs/assets_workflow.md`、native/Help/docsスキル。
 - 初回検証ログ: workflow Python 128/128 pass（新規7 testを含む）。6 GLBのscene/Khronosは
@@ -608,6 +609,73 @@ native helper・Rust・asset dataへの追加変更なし。`docs/performance-pr
 canonical前像とprimary / validation runtime locatorは別々に保存し、Door generation 7は変更しない。
 共通Wall/Door trackは未完なので、そのvalidation worktree・他trackの成果物は削除しない。
 
+### generation 13の本番登録・復旧記録
+
+`725910f0245099f701e3535d02eacab32738e41c`で上記判断をコミットしてから、
+既存`promote_asset_set.py plan / apply`でfinal payload 90 fileをcanonicalへ登録した。
+`/home/satotakumi/Sync/hell-workers-assets/generations/13/`（9.3 MiB）の自己完結release validatorはpass。
+approval記録UTC=`2026-09-12T17:05:30Z`は記録時刻であり、ユーザー送信時刻ではない。
+receipt ID=`wall-g13-surface-20260913`。M5 evidenceは`partial_with_user_waived_additional_performance_and_memory`
+と明記し、immutable receipt作成後にcanonical active pointerを最後にatomic replaceした。
+
+復旧・承認の正本directory（canonical root外）:
+`/home/satotakumi/Sync/hell-workers-release-evidence/wall-surface-20260913/`。
+
+| artifact | SHA-256 |
+| --- | --- |
+| `promotion-plan.json` | `4adab2bf473a6a3484671366d1473ab622b96d61b967732e716d20d64598cc9d` |
+| `canonical-before.json` | `97b80012daa92a2ddc606fed112339be34a91cacb0604dc790662f09e4575aec` |
+| `release-approval.json` | `44396a009ae000b04b26ee4f98be44a545d078190e61ae2ab0bc3fa7c8fd6e44` |
+| `m5-evidence-bundle.json` | `5c87355fe31ebcdc0c71de719d9cd10995391587a72eb715d6ba90a22e7c7f1d` |
+| g13 `authority/promotion-receipt.json` | `b961b04ec8253ae39c808ccb42ae52dc52d661a1233d2ee75e132e48ce6dfab3` |
+| 新canonical active pointer | `6a87f5caeef23e0bc1815ebbb48261abc1fd07f31e7c7b5402bf330983fe35f2` |
+| `primary-before.wallset`（g10 release） | `0b012912bf5bffc6009f082789ebaddf413a6ad186607ce39f5139ed1020fdf9` |
+| `validation-before.wallset`（g13 isolated candidate） | `b4d0ee0415e0e3798ae32848d957237554d498e9b7ac71d8446b7b5224c36f2a` |
+
+`rollback --plan <上記plan> --snapshot <上記snapshot>`の既定read-only検査はg10復旧予定としてpass。
+実際に戻す場合だけゲーム停止後に同commandへ`--apply`を付け、primary runtimeも保存したg10前像へ戻す。
+canonicalだけ戻してruntimeをg13のまま残さない。旧世代・失敗jobは削除していない。
+validation前像は候補であり、primaryへそのまま復元してはいけない。
+正式静止画capsuleは同directoryの`formal-standard-capsule/`へ37 file / 14 MiBをコピーし全bytesを照合。
+`performance-invalid/`には最新invalid jobとcapture-orderをそのまま保存し、上記hashと一致する。
+これは履歴保存であり、追加性能検証を再開したものではない。
+
+### generation 13の通常authority実機結果とprimary導入
+
+nativeスキルのdirect kitty launcherで、clean subject `725910f0245099f701e3535d02eacab32738e41c`から
+`wall-door-joint-20260912T170810Z-d382708c`を実行し、`valid`終了と独立offline `verify`のpassを確認した。
+profile=`wall-door-joint-release-v1`。固定audit 3/3、1 game processの6 checkpoint、PNG 6/6。
+candidate opt-inなしのWall generation 13 / Door generation 7、Intel Arc (MTL) / Vulkan / X11 / High / DPI 1。
+テスト用libraryの最適化ビルド後、既存Capture binaryを再利用し、新しい実画面を取得した。
+
+- source fingerprint: `289c24a6f16203edff7f6df738e0bea9144c5e7759e2919c88f5ba32268ed315`
+- harness fingerprint: `6dbc93b109a45d5cb7bad41a78e0ec0f51b3ad6a876d760e5665c8050255e6c3`
+- asset-view fingerprint: `c21bad43a6c7c1c173cb2438e5547acc5ae49cd6e25a405938a9a5b581262570`
+- binary SHA-256: `182ef8f2df453b8526bc526cd5f50b311d9284d9138c07de7ccb117863622594`
+- manifest SHA-256: `f71bc04b42a0dce971daf89b04fc6d2e8b73251b194089a57ee266d46af7d4b1`
+- `joint-framed.png`: `04e0b230f445e07655bbd427afaca7bf07754e91658700856df84ced356758cd`
+- `joint-completed.png`: `763b8b55c739b61ffecbf86edc30bb7e4b34dff796656a3cd892f2408a3d3d26`
+- `joint-loaded.png`: `20cb02c95d3bfb4f609fc6dbd0b07f8cadddbafafac6f997c7a0f1c9fbb8fe61`
+
+全6画像を目視確認。EW/NS両配置、壁完成、支持変更・撤去・復元、pause中load後も本設の石面と
+同系色の断面が表示され、旧下段装飾の黒い筋はない。支持変更後・復元後・load後のPNGは同一bytes。
+J1は状態遷移のcheckpoint静止画であり、カメラ移動中のちらつき、全品質/DPI、性能比較、Memoryの証拠ではない。
+時間方向のちらつきは未確認のまま残し、今回の静止画の成功をその合格へ広げない。
+
+`install_release_asset_set.py`のdry-run後にprimaryへ導入し、テスト済みvalidationとWall / Door双方の
+exact core・receipt・locator identityを再検証して一致。新Wall locator SHA-256は
+`fc1f05e9a59a5f0a339f7ef655cdf08e95215eaa8440d4a0d5213a7da83279f9`。
+通常起動に追加設定は不要。旧g10の本設8 fileだけが変更対象で、型枠7 fileとDoor g7はbyte不変。
+
+上記復旧directoryの同job名へ15 fileをcapsule保存し、元jobと全bytesを照合した。
+これは保管用であり、元repo / binaryに依存せずoffline verifierが使えるとは主張しない。
+新validation worktree / branchは作成していない。共通worktreeは約4.7 GiBで、Wall / Door別trackと
+時間方向確認が未完のため保持する。他trackのworktree・原図・失敗artifactの削除なし、回収容量0。
+primary反映後の`dev.py verify`は`All quality gates passed`。`dev.py check`、明示workspace Clippy
+`--all-targets -- -D warnings`、docs / diff gateもpass。Help/docsスキルで表示の実経路と記録を再確認し、
+操作・建設条件・文言不変の`No impact`としてHelp provider / snapshotを変更していない。
+今回の追加変更はrelease asset mirrorとドキュメントのみで、Rust sourceは実機subjectから不変。
+
 ### Help impact（実経路レビュー）
 
 `No impact`。`create_prism → GLB UV0 → ResolvedProductionWallAssets →
@@ -638,6 +706,7 @@ Room境界と`orders_building_zones`の説明へ至る経路は不変。Help pro
 
 | 日付 | 変更者 | 内容 |
 | --- | --- | --- |
+| 2026-09-13 | Codex | g13をreceipt付き登録。通常authority J1の3 audit / 6場面・独立verify後にprimary導入、復旧前像とcapsuleを保存。ちらつきは未確認 |
 | 2026-09-13 | Codex | ユーザー指示で追加性能検証・ばらつき調査・Memoryを打ち切り。generation 13本番反映の了承と未確認範囲を記録 |
 | 2026-09-12 | Codex | 原因・UV修正方針・承認境界を固定 |
 | 2026-09-12 | Codex | M1〜M2完了。6 GLB・前後board・128 Python test・全体gate pass、native前のコミット承認待ち |

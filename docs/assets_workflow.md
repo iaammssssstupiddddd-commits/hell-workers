@@ -321,6 +321,19 @@ Door品質9 case / 18 PNG、本設Wall品質9 case / 9 PNGの独立verify後にp
 旧g6の3 GLB・albedoを維持し、preview 2枚だけを更新。新しい通常authority J1の6場面を独立verify・目視確認した。
 g6へのcanonical / runtime復旧前像と新hashは[設計図修正計画M5](plans/3d-rtt/door-preview-alignment-plan-2026-09-11.md)を参照する。
 
+2026-09-13、本設壁の側面UV・断面・ゲーム等倍の可読性修正をWall generation 13としてcanonicalへ登録し、
+通常authority J1の3 audit / 6場面・独立verify後にprimaryへ導入した。
+manifest SHA-256は`ef4f3c62f185570b83b5781470bbb2d7eb8571502c664c18bdcafc39081454cf`。
+全側面を大きな石面へ統一し、断面は同系色の低コントラスト内部模様とする。厚さ9.6・高さ32・形状・法線、
+型枠7 file、Door generation 7は不変。通常runtimeへの導入状況と実画面証拠は
+[本設壁修正計画](plans/3d-rtt/wall-surface-uv-plan-2026-09-12.md)を参照する。
+このrevisionだけはユーザー指示で追加性能Capture・ばらつき調査・Memoryを打ち切った。
+receiptのevidence bundleにも正式性能jobの`invalid`、Memory未実施、時間方向のちらつき未確認を明記し、
+全M5合格や新しい性能baseline登録として扱わない。一般の受入profile・閾値は変更していない。
+承認記録・canonical前像・primary / validation runtime前像・promotion planはasset root外の
+`/home/satotakumi/Sync/hell-workers-release-evidence/wall-surface-20260913/`に保存する。
+旧generation 10は保持し、復旧ではcanonical pointerと対象runtime locatorの両方を戻す。
+
 validation worktreeは作業場であって成果物ではない。trackを閉じたら、各jobの`manifest.json`、比較CSV、
 承認画像だけを`staging/validation/<capsule>/`のような小さなdirectoryへ残し、worktree本体は
 `git worktree remove`で削除して使っていたbranchも消す。worktree 1つはRustの`target/`込みで10 GB規模になり、
