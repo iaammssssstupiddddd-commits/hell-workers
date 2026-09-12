@@ -437,6 +437,10 @@ prompt・原図・pack report・承認PNGをpayload inventoryに加え、後で�
 workflow Pythonは149/149 pass（新規12件）。承認recordへの失敗job・別subject・別candidate・別authority・
 画像改変・core改変・pair fingerprint不一致・過去時刻／空の承認を拒否する。
 revisionの旧generation再利用・型枠変更・非隔離出力、およびrelease内原図の改変も拒否する。
+`55dc2f5d`の初回封印は、移動したblendが相対参照するalbedo/emissiveを再export前に配置して
+いなかったため、scene gateの`MISSING_IMAGE`で停止した（完成payloadなし）。
+値やアートは変更せず、承認済みtextureの配置を先行させる順序へ修正し、専用回帰testを追加する。
+最初の失敗root `surface-final-13/`は保持し、再試行は別rootへ出す。
 
 ### Help impact（実経路レビュー）
 

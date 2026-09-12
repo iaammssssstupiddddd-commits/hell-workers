@@ -41,6 +41,16 @@ def copy_tree(source: Path, target: Path) -> None:
     shutil.copytree(source, target, copy_function=shutil.copyfile)
 
 
+def prepare_rebuild_sources(art_root: Path, prepared: Path, preview_exports: Path, core: list) -> Path:
+    """Preserve blend-relative texture references before opening the copied scene."""
+    blend = prepared / "blend/wall-production-v1.blend"
+    blend.parent.mkdir(parents=True)
+    shutil.copyfile(art_root / "staging/blend/wall-production-v1.blend", blend)
+    for texture in core[6:8]:
+        copy_exclusive(source_file(preview_exports, texture), prepared / "exports" / texture["path"], texture["sha256"])
+    return blend
+
+
 def validate_revision_inputs(base_path: Path, preview_path: Path, approval_path: Path,
                              generation: int, repo: Path, standard: Path, farthest: Path) -> tuple[dict, dict]:
     release.validate(base_path, repo=repo)
@@ -64,7 +74,8 @@ def validate_revision_inputs(base_path: Path, preview_path: Path, approval_path:
 def rebuild_meshes(*, root: Path, repo: Path, prepared: Path, completed: dict, approved_core: list) -> list:
     reports, exports = prepared / "reports", prepared / "exports"
     blend = root / "staging/blend/wall-production-v1.blend"
-    environment = {**os.environ, "HELL_WORKERS_ASSET_ROOT": str(root), "BLENDER_SAFE_NO_NETWORK": "1"}
+    environment = {**os.environ, "HELL_WORKERS_ASSET_ROOT": str(root), "BLENDER_SAFE_NO_NETWORK": "1",
+                   "OCIO": str(repo / "tools/blender_ai_workflow/fixtures/wall-calibration-v2.ocio")}
     families = []
     versions = set()
     for mesh, core in zip(completed["meshes"], approved_core[:6], strict=True):
@@ -124,9 +135,7 @@ def seal(*, base_path: Path, art_root: Path, preview_path: Path, approval_path: 
     destination.mkdir(parents=True)
     prepared, payload = destination / "staging", destination / "payload"
     prepared.mkdir()
-    blend = prepared / "blend/wall-production-v1.blend"
-    blend.parent.mkdir()
-    shutil.copyfile(art_root / "staging/blend/wall-production-v1.blend", blend)
+    blend = prepare_rebuild_sources(art_root, prepared, preview_exports, approved_core)
     # Export in the new isolated root; the approved preview is never overwritten.
     families = rebuild_meshes(root=destination, repo=repo, prepared=prepared,
                               completed=completed, approved_core=approved_core)

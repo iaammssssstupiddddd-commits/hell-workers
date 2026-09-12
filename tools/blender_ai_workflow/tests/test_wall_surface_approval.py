@@ -144,6 +144,16 @@ class SurfaceApprovalTests(unittest.TestCase):
                                   approval_path=self.root / "absent", standard=self.root / "standard",
                                   farthest=self.root / "farthest", destination=destination, generation=13, repo=self.root)
 
+    def test_rebuild_prepares_blend_relative_textures_before_export(self):
+        blend = self.root / "staging/blend/wall-production-v1.blend"
+        blend.parent.mkdir(parents=True)
+        blend.write_bytes(b"fixture blend")
+        prepared = self.root / "isolated/staging"
+        copied = revision.prepare_rebuild_sources(self.root, prepared, self.preview_path.parent / "assets", self.preview["production"]["core"])
+        self.assertEqual(copied.read_bytes(), blend.read_bytes())
+        for texture in self.preview["production"]["core"][6:8]:
+            self.assertEqual(sha256(prepared / "exports" / texture["path"]), texture["sha256"])
+
 
     def test_release_revalidates_source_art_prompt_and_approved_screenshots(self):
         reports = self.root / "reports"
