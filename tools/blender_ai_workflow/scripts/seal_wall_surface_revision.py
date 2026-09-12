@@ -36,9 +36,17 @@ def record(path: Path, root: Path) -> dict:
 def copy_tree(source: Path, target: Path) -> None:
     require(source.is_dir() and not source.is_symlink(), "source directory is absent")
     require(not any(path.is_symlink() for path in source.rglob("*")), "source contains symlinks")
-    # copyfile, not copy2: published source files may be read-only; the new,
-    # exclusively owned staging copy must remain writable during sealing.
-    shutil.copytree(source, target, copy_function=shutil.copyfile)
+    # copytree also inherits read-only *directory* modes even with copyfile.
+    # Create all directories afresh and copy bytes only into this owned tree.
+    target.mkdir(parents=True)
+    for path in source.rglob("*"):
+        destination = target / path.relative_to(source)
+        if path.is_dir():
+            destination.mkdir(parents=True, exist_ok=True)
+        else:
+            require(path.is_file(), "source is not a regular file")
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(path, destination)
 
 
 def prepare_rebuild_sources(art_root: Path, prepared: Path, preview_exports: Path, core: list) -> Path:

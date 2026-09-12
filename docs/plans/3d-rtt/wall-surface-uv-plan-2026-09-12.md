@@ -441,6 +441,11 @@ revisionの旧generation再利用・型枠変更・非隔離出力、およびre
 いなかったため、scene gateの`MISSING_IMAGE`で停止した（完成payloadなし）。
 値やアートは変更せず、承認済みtextureの配置を先行させる順序へ修正し、専用回帰testを追加する。
 最初の失敗root `surface-final-13/`は保持し、再試行は別rootへ出す。
+`da6c2ba9`では再exportした6 GLBが全件承認bytesと一致し、scene/Khronos/UV gateもpass。
+その後のpayloadコピーで`shutil.copytree`が公開済みdirectoryのread-only modeも引き継ぎ、
+新approval report書込が拒否された。directoryを新規作成しbytesだけコピーするよう修正する。
+元generationのmodeは変更せず、read-only sourceを使う回帰testを追加する。
+この失敗root `surface-final-13-textures/`も保持する。
 
 ### Help impact（実経路レビュー）
 

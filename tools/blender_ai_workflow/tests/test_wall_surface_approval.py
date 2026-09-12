@@ -154,6 +154,24 @@ class SurfaceApprovalTests(unittest.TestCase):
         for texture in self.preview["production"]["core"][6:8]:
             self.assertEqual(sha256(prepared / "exports" / texture["path"]), texture["sha256"])
 
+    def test_published_read_only_directory_modes_are_not_inherited(self):
+        source = self.root / "published"
+        reports = source / "reports"
+        reports.mkdir(parents=True)
+        (reports / "old.json").write_bytes(b"immutable evidence")
+        (reports / "old.json").chmod(0o444)
+        reports.chmod(0o555)
+        source.chmod(0o555)
+        try:
+            target = self.root / "new-staging"
+            revision.copy_tree(source, target)
+            (target / "reports/new.json").write_bytes(b"new evidence")
+            self.assertEqual((target / "reports/old.json").read_bytes(), b"immutable evidence")
+            self.assertEqual(reports.stat().st_mode & 0o777, 0o555)
+        finally:
+            source.chmod(0o755)
+            reports.chmod(0o755)
+
 
     def test_release_revalidates_source_art_prompt_and_approved_screenshots(self):
         reports = self.root / "reports"
