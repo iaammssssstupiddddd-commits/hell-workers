@@ -83,7 +83,7 @@ def assert_fully_clean(repo: Path, subject_commit: str) -> None:
     )
 
 
-def candidate_identity(repo: Path) -> dict[str, Any]:
+def candidate_identity(repo: Path, *, release: bool = False) -> dict[str, Any]:
     path = repo / DOORSET_RELATIVE
     native.require(path.is_file() and not path.is_symlink(), "Door locator is absent")
     payload = native.read_json(path)
@@ -93,8 +93,8 @@ def candidate_identity(repo: Path) -> dict[str, Any]:
         "Door locator identity differs",
     )
     native.require(
-        payload.get("authority") == "isolated_candidate",
-        "Door locator is not an isolated candidate",
+        payload.get("authority") == ("release_approved" if release else "isolated_candidate"),
+        "Door locator authority differs",
     )
     native.require(
         payload.get("review_status") == "art_approved",
@@ -103,7 +103,7 @@ def candidate_identity(repo: Path) -> dict[str, Any]:
     generation = payload.get("asset_set_generation")
     manifest_sha256 = payload.get("manifest_sha256")
     native.require(
-        isinstance(generation, int) and generation > 0,
+        type(generation) is int and generation > 0,
         "Door candidate generation is invalid",
     )
     native.require(
@@ -126,7 +126,22 @@ def candidate_identity(repo: Path) -> dict[str, Any]:
         == expected_roles,
         "Door core role order differs",
     )
-    for record in core:
+    records = list(core)
+    if release:
+        native.require(
+            path.read_bytes() == canonical_bytes(payload)
+            and payload.get("normal_decision") == "not_used_by_design",
+            "Door release locator encoding or normal decision differs",
+        )
+        receipt = payload.get("receipt")
+        native.require(
+            isinstance(receipt, dict) and set(receipt) == {"path", "bytes", "sha256"}
+            and receipt["path"] == f"door_sets/{generation}/authority/promotion-receipt.json",
+            "Door release receipt reference differs",
+        )
+        records.append(receipt)
+    paths = []
+    for record in records:
         native.require(isinstance(record, dict), "Door core record is invalid")
         relative = record.get("path")
         native.require(
@@ -136,14 +151,41 @@ def candidate_identity(repo: Path) -> dict[str, Any]:
             "Door core path is invalid",
         )
         asset = repo / "assets" / relative
+        if release:
+            native.require(
+                Path(relative).is_relative_to(f"door_sets/{generation}")
+                and not any(part.is_symlink() for part in (asset, *asset.parents))
+                and type(record.get("bytes")) is int,
+                "Door release path escapes its generation or uses a symlink",
+            )
         native.require(asset.is_file() and not asset.is_symlink(), f"Door asset is absent: {relative}")
         native.require(asset.stat().st_size == record.get("bytes"), f"Door asset size differs: {relative}")
         native.require(sha256(asset) == record.get("sha256"), f"Door asset hash differs: {relative}")
-    return {
+        paths.append(Path(relative))
+    result = {
         "asset_set_generation": generation,
         "manifest_sha256": manifest_sha256,
         "locator_sha256": sha256(path),
     }
+    if release:
+        native.require(len(set(paths)) == len(paths), "Door release paths are duplicated")
+        receipt_path = repo / "assets" / receipt["path"]
+        sealed = native.read_json(receipt_path)
+        identity = {"asset_set_id": "door-production-v1", "asset_set_generation": generation,
+                    "manifest_sha256": manifest_sha256}
+        native.require(
+            receipt_path.read_bytes() == canonical_bytes(sealed)
+            and sealed.get("schema_version") == 1
+            and all(sealed.get(key) == value for key, value in identity.items())
+            and sealed.get("new_active") == identity,
+            "Door release receipt describes another asset set",
+        )
+        result.update(authority="release_approved", receipt_sha256=receipt["sha256"])
+    return result
+
+
+def canonical_bytes(payload: dict[str, Any]) -> bytes:
+    return (json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n").encode()
 
 
 def build_command() -> list[str]:

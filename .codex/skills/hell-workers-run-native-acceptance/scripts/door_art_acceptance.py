@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import copy
 import csv
 import hashlib
 import json
@@ -26,6 +27,7 @@ import wall_density_acceptance as density  # noqa: E402
 SCHEMA_VERSION = 1
 STATUS_SCHEMA_VERSION = 2
 PROFILE = "door-art-v1-quality"
+RELEASE_PROFILE = "door-art-v1-release-quality"
 SEED = 20_260_906
 WINDOW_WIDTH = 1280
 WINDOW_HEIGHT = 720
@@ -68,6 +70,53 @@ ENV_KEYS = (
 )
 
 Image = tuple[int, int, bytes]
+
+
+def profile_name(release: bool) -> str:
+    native.require(type(release) is bool, "Door release selection must be boolean")
+    return RELEASE_PROFILE if release else PROFILE
+
+
+def assert_harness_matches(repo: Path) -> None:
+    executing_repo = Path(__file__).resolve().parents[4]
+    for relative in native.NATIVE_HARNESS_FILES:
+        actual, recorded = executing_repo / relative, repo / relative
+        native.require(
+            actual.is_file() and recorded.is_file()
+            and not actual.is_symlink() and not recorded.is_symlink()
+            and sha256(actual) == sha256(recorded),
+            f"Door executing harness differs from the subject repository: {relative}",
+        )
+
+
+def validate_job_root(repo: Path, root: Path) -> None:
+    native.require(root.is_relative_to(repo / "target/native-acceptance"),
+                   "Door job root must be under target/native-acceptance")
+    native.require_persistent_storage(root, label="Door job root")
+
+
+def run_environment(
+    repo: Path, root: Path, adapter: str, nonce: str,
+    candidate: dict[str, Any], *, release: bool,
+) -> dict[str, str]:
+    environment = os.environ.copy()
+    for key in tuple(environment):
+        if key in ENV_KEYS or key.startswith(("HW_WALL_CANDIDATE", "HW_DOOR_CANDIDATE")) or key == "HW_WALL_ART_PREVIEW":
+            environment.pop(key)
+    environment.update(gallery_environment(repo, adapter))
+    if not release:
+        environment.update({
+            "HW_DOOR_CANDIDATE": "1",
+            "HW_DOOR_CANDIDATE_GENERATION": str(candidate["asset_set_generation"]),
+            "HW_DOOR_CANDIDATE_MANIFEST_SHA256": candidate["manifest_sha256"],
+        })
+    environment.update({
+        "HW_DOOR_ART_ACTUAL_WINDOW": "1",
+        "HW_DOOR_ART_STATUS_PATH": str(root / "probe-status.json"),
+        "HW_DOOR_ART_ACK_PATH": str(root / "probe-ack.json"),
+        "HW_DOOR_ART_SESSION_NONCE": nonce,
+    })
+    return environment
 
 
 def sha256(path: Path) -> str:
@@ -183,6 +232,7 @@ def validate_status(
     quality: str,
     scale_factor: float,
     checkpoint: dict[str, Any],
+    release: bool = False,
 ) -> dict[str, Any]:
     status = require_object(
         value,
@@ -207,7 +257,7 @@ def validate_status(
         and status["session_nonce"] == nonce
         and status["phase"] == checkpoint["phase"]
         and status["generation"] == checkpoint["generation"]
-        and status["evidence_kind"] == "isolated_candidate",
+        and status["evidence_kind"] == ("release_approved" if release else "isolated_candidate"),
         "Door gallery status identity differs",
     )
     native.require(
@@ -241,7 +291,7 @@ def validate_status(
         identity
         == {
             "asset_set_generation": candidate["asset_set_generation"],
-            "authority": "IsolatedCandidate",
+            "authority": "ReleaseApproved" if release else "IsolatedCandidate",
             "manifest_sha256": candidate["manifest_sha256"],
         },
         "Door runtime candidate identity differs",
@@ -561,24 +611,13 @@ def run_case(
     candidate: dict[str, Any],
     quality: str,
     scale_factor: float,
+    release: bool = False,
 ) -> dict[str, Any]:
     status_path = root / "probe-status.json"
     ack_path = root / "probe-ack.json"
     nonce = secrets.token_hex(16)
-    environment = os.environ.copy()
-    for key in ENV_KEYS:
-        environment.pop(key, None)
-    environment.update(gallery_environment(repo, adapter))
-    environment.update(
-        {
-            "HW_DOOR_CANDIDATE": "1",
-            "HW_DOOR_CANDIDATE_GENERATION": str(candidate["asset_set_generation"]),
-            "HW_DOOR_CANDIDATE_MANIFEST_SHA256": candidate["manifest_sha256"],
-            "HW_DOOR_ART_ACTUAL_WINDOW": "1",
-            "HW_DOOR_ART_STATUS_PATH": str(status_path),
-            "HW_DOOR_ART_ACK_PATH": str(ack_path),
-            "HW_DOOR_ART_SESSION_NONCE": nonce,
-        }
+    environment = native.cargo_environment(
+        repo, run_environment(repo, root, adapter, nonce, candidate, release=release),
     )
     command = gallery_command(repo, root, quality=quality, scale_factor=scale_factor)
     state.setdefault("commands", []).append({"stage": "capture", "argv": command})
@@ -588,6 +627,7 @@ def run_case(
     observations: list[dict[str, Any]] = []
     log_path = root / "capture.log"
     with log_path.open("w", encoding="utf-8") as log:
+        native.admit_stage_start("capture", state=state, job_file=job_file)
         process = subprocess.Popen(
             command,
             cwd=repo,
@@ -617,6 +657,7 @@ def run_case(
                             quality=quality,
                             scale_factor=scale_factor,
                             checkpoint=next_checkpoint,
+                            release=release,
                         )
                         screenshot = root / next_checkpoint["screenshot"]
                         evidence = capture_client_window(
@@ -651,7 +692,7 @@ def run_case(
     observation = {
         "schema_version": SCHEMA_VERSION,
         "status": "pass",
-        "profile": PROFILE,
+        "profile": profile_name(release),
         "quality": quality,
         "scale_factor": scale_factor,
         "session_nonce": nonce,
@@ -667,7 +708,7 @@ def verify_case(*, root: Path, manifest: dict[str, Any], spec: dict[str, Any]) -
     native.require(
         observation.get("schema_version") == SCHEMA_VERSION
         and observation.get("status") == "pass"
-        and observation.get("profile") == PROFILE
+        and observation.get("profile") == profile_name(manifest.get("release", False))
         and observation.get("quality") == spec["quality"]
         and observation.get("scale_factor") == spec["scale_factor"],
         "Door observation identity differs",
@@ -684,6 +725,7 @@ def verify_case(*, root: Path, manifest: dict[str, Any], spec: dict[str, Any]) -
             quality=spec["quality"],
             scale_factor=spec["scale_factor"],
             checkpoint=expected,
+            release=manifest.get("release", False),
         )
         screenshot = recorded.get("screenshot")
         native.require(
@@ -712,13 +754,15 @@ def verify_case(*, root: Path, manifest: dict[str, Any], spec: dict[str, Any]) -
 
 def verify_root(root: Path) -> dict[str, Any]:
     manifest = native.read_json(root / "manifest.json")
+    release = manifest.get("release", False)
     native.require(
         manifest.get("schema_version") == SCHEMA_VERSION
         and manifest.get("status") == "pass"
-        and manifest.get("profile") == PROFILE,
+        and manifest.get("profile") == profile_name(release),
         "Door quality manifest differs",
     )
     repo = native.validate_repo(manifest["repo"])
+    assert_harness_matches(repo)
     behavior.assert_fully_clean(repo, manifest["subject_commit"])
     native.require(native.source_fingerprint(repo) == manifest["source_fingerprint"], "Door source changed")
     native.require(
@@ -729,7 +773,7 @@ def verify_root(root: Path) -> dict[str, Any]:
         density.asset_view_fingerprint(repo) == manifest["asset_view_fingerprint"],
         "Door asset view changed",
     )
-    native.require(behavior.candidate_identity(repo) == manifest["candidate_identity"], "Door candidate changed")
+    native.require(behavior.candidate_identity(repo, release=release) == manifest["candidate_identity"], "Door asset identity changed")
     binary = repo / "target/profiling/bevy_app"
     native.require(sha256(binary) == manifest["binary_sha256"], "Door binary changed")
     specs = matrix_cases()
@@ -742,7 +786,8 @@ def verify_root(root: Path) -> dict[str, Any]:
     return {
         "schema_version": SCHEMA_VERSION,
         "status": "pass",
-        "profile": PROFILE,
+        "profile": profile_name(release),
+        "release": release,
         "root": str(root),
         "cases": len(specs),
         "screenshots": len(specs) * len(CHECKPOINTS),
@@ -759,14 +804,19 @@ def plan(args: argparse.Namespace) -> int:
     source = native.source_fingerprint(repo)
     harness = native.native_harness_fingerprint(repo)
     try:
+        assert_harness_matches(repo)
         behavior.assert_fully_clean(repo, subject)
-        candidate = behavior.candidate_identity(repo)
+        candidate = behavior.candidate_identity(repo, release=args.release)
         assets = density.asset_view_fingerprint(repo)
     except native.AcceptanceError as error:
         failures.append(str(error))
         candidate = None
         assets = None
     root = Path(args.job_root).resolve() if args.job_root else native.unique_job_root(repo, "door-art")
+    try:
+        validate_job_root(repo, root)
+    except native.AcceptanceError as error:
+        failures.append(str(error))
     if root.exists():
         failures.append(f"job root already exists: {root}")
     command = [
@@ -794,12 +844,14 @@ def plan(args: argparse.Namespace) -> int:
         assets or "0" * 64,
         "--adapter",
         args.adapter,
+        *(["--release"] if args.release else []),
     ]
     native.print_json(
         {
             "schema_version": SCHEMA_VERSION,
             "status": "ready" if not failures else "blocked",
-            "profile": PROFILE,
+            "profile": profile_name(args.release),
+            "release": args.release,
             "job_root": str(root),
             "subject_commit": subject,
             "source_fingerprint": source,
@@ -832,6 +884,7 @@ def run(args: argparse.Namespace) -> int:
         "Door quality run must use the planned direct kitty command",
     )
     repo = native.validate_repo(args.repo)
+    assert_harness_matches(repo)
     native.require(native.git_subject(repo) == args.subject_commit, "Door subject changed")
     native.require(native.source_fingerprint(repo) == args.source_fingerprint, "Door source changed")
     native.require(
@@ -843,19 +896,24 @@ def run(args: argparse.Namespace) -> int:
         density.asset_view_fingerprint(repo) == args.asset_view_fingerprint,
         "Door asset view changed",
     )
-    candidate = behavior.candidate_identity(repo)
+    candidate = behavior.candidate_identity(repo, release=args.release)
+    resources = native.resource_snapshot(repo, require_launcher=True)
+    native.require(not resources["failures"], f"Door resource preflight failed: {resources['failures']}")
     root = Path(args.job_root).resolve()
+    validate_job_root(repo, root)
     native.require(not root.exists(), f"job root already exists: {root}")
     root.mkdir(parents=True)
     state: dict[str, Any] = {
         "schema_version": SCHEMA_VERSION,
         "status": "running",
-        "profile": PROFILE,
+        "profile": profile_name(args.release),
+        "release": args.release,
         "subject_commit": args.subject_commit,
         "source_fingerprint": args.source_fingerprint,
         "harness_fingerprint": args.harness_fingerprint,
         "asset_view_fingerprint": args.asset_view_fingerprint,
         "adapter": args.adapter,
+        "resources": resources,
         "started_at": native.utc_now(),
         "current_stage": "build",
         "current_case": None,
@@ -867,7 +925,7 @@ def run(args: argparse.Namespace) -> int:
     job_file = root / "job.json"
     native.atomic_write_json(job_file, state)
     try:
-        environment = os.environ.copy()
+        environment = native.cargo_environment(repo)
         native.run_command(
             "build",
             build_command(),
@@ -883,6 +941,11 @@ def run(args: argparse.Namespace) -> int:
         observations: dict[str, dict[str, Any]] = {}
         specs = matrix_cases()
         for index, spec in enumerate(specs):
+            native.require(
+                behavior.candidate_identity(repo, release=args.release) == candidate
+                and density.asset_view_fingerprint(repo) == args.asset_view_fingerprint,
+                "Door assets changed before capture",
+            )
             case_root = root / "cases" / spec["id"]
             case_root.mkdir(parents=True)
             state.update({"current_case": spec["id"], "cases_completed": index})
@@ -896,6 +959,7 @@ def run(args: argparse.Namespace) -> int:
                 candidate=candidate,
                 quality=spec["quality"],
                 scale_factor=spec["scale_factor"],
+                release=args.release,
             )
             state["cases_completed"] = index + 1
             native.atomic_write_json(job_file, state)
@@ -909,7 +973,8 @@ def run(args: argparse.Namespace) -> int:
         manifest = {
             "schema_version": SCHEMA_VERSION,
             "status": "pass",
-            "profile": PROFILE,
+            "profile": profile_name(args.release),
+            "release": args.release,
             "repo": str(repo),
             "subject_commit": args.subject_commit,
             "source_fingerprint": args.source_fingerprint,
@@ -1036,6 +1101,23 @@ def self_test() -> int:
         checkpoint=CHECKPOINTS[0],
     )
     native.require(acknowledgement(validated)["generation"] == 1, "Door acknowledgement differs")
+    released_status = copy.deepcopy(status_value)
+    released_status["evidence_kind"] = "release_approved"
+    released_status["candidate_identity"]["authority"] = "ReleaseApproved"
+    validate_status(
+        released_status, nonce=nonce, candidate=candidate, quality="high",
+        scale_factor=1.0, checkpoint=CHECKPOINTS[0], release=True,
+    )
+    for observed, release in ((status_value, True), (released_status, False)):
+        try:
+            validate_status(
+                observed, nonce=nonce, candidate=candidate, quality="high",
+                scale_factor=1.0, checkpoint=CHECKPOINTS[0], release=release,
+            )
+        except native.AcceptanceError:
+            pass
+        else:
+            raise native.AcceptanceError("Door gallery confused candidate and release authority")
     try:
         validate_status(
             {**status_value, "generation": 2},
@@ -1062,7 +1144,9 @@ def parser() -> argparse.ArgumentParser:
     plan_parser.add_argument("--repo", required=True)
     plan_parser.add_argument("--job-root")
     plan_parser.add_argument("--adapter", default="Intel")
+    plan_parser.add_argument("--release", action="store_true")
     run_parser = commands.add_parser("run")
+    run_parser.add_argument("--release", action="store_true")
     for name in (
         "repo",
         "job_root",
