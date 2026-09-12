@@ -67,10 +67,11 @@
 - [x] clean subjectを固定し、候補を検証用asset viewへ封印する。
 - [x] 新しい本設UVを扱う承認前preview経路を用意し、nativeスキルのdirect kitty launcherで観察する。
 - [x] v4標準／最遠画像への「OKです。進めてください」を新アート承認として受領する。
-- [ ] 承認記録を両native job・PNG・exact 15 coreへ束縛し、改変／取り違え拒否testを追加する。
-- [ ] 本設更新専用final封印を実装する。新しい本設v2 sourceを同梱するauthoring v3とし、
+- [x] 承認記録を両native job・PNG・exact 15 coreへ束縛し、改変／取り違え拒否testを追加する。
+- [x] 本設更新専用final封印を実装する。新しい本設v2 sourceを同梱するauthoring v3とし、
   旧型枠7 fileの不変検査、独立release validator、provenance・再export証拠を必須にする。
-- [ ] clean subjectでfinal封印し、正式candidateの品質matrix・Capture／Memoryを順次検証する。
+- [x] clean subjectでfinal封印し、正式candidateの標準倍率品質matrix（9条件）を検証する。
+- [ ] 正式candidateの性能Capture／Memory、時間方向の確認を行う。
 - [ ] 本番昇格の明示承認とreceipt・復旧前像を揃え、通常authorityで反映後確認する。
 
 ## 6. リスクと対策
@@ -100,7 +101,8 @@ UVの線への退化、面ごとの密度差、上面への目地混入は専用
 GLBの輪郭・port・厚さ・triangle数は旧geometry gateで別に確認する。
 `python3 scripts/dev.py check`、`python3 scripts/dev.py verify`、
 `python3 scripts/dev.py cargo -- clippy --workspace --all-targets -- -D warnings`を実行する。
-native未実施のBlender画像をゲーム内の完成証拠へ格上げしない。性能baselineは今回の対象外。
+native未実施のBlender画像をゲーム内の完成証拠へ格上げしない。新規性能baselineの登録は対象外。
+本番昇格前のcandidate性能Capture／Memoryは既存の正式受入profileで別に検証する。
 
 ## 8. ロールバック方針
 
@@ -113,8 +115,10 @@ native未実施のBlender画像をゲーム内の完成証拠へ格上げしな�
 - 現在地: M1完了。v3の断面texture・投影条件を実装し、6 GLBとBlender比較を検証済み。
   壁修正を`23d6cd68`へコミット済み。`87f0e682`の隔離候補で標準／最遠native ArtPreviewがpass。
   v3の等倍可読性指摘を受けたv4整理候補は`8d93bf11`へコミットし、標準／最遠native ArtPreview pass。
-  ユーザーの新アート承認を受領。承認記録の機械的束縛・final封印・正式native検証を進める。
-  新本番昇格は未実施。承認前previewをformal authorityへ手作業で変更しない。
+  ユーザーの新アート承認を記録し、`edebfc90`でgeneration 13をfinal封印済み。
+  同subject・同候補で正式標準9条件matrixを再試行し、9/9 valid＋独立verify pass。
+  性能Capture／Memory・時間方向の確認・新本番昇格は未実施。
+  承認前previewをformal authorityへ手作業で変更しない。
 - 参照必須: `docs/blender-setup.md`、`docs/assets_workflow.md`、native/Help/docsスキル。
 - 初回検証ログ: workflow Python 128/128 pass（新規7 testを含む）。6 GLBのscene/Khronosは
   errors=0 / warnings=0、geometry＋新surface UV gate pass。旧GLBとの全triangleの頂点位置・法線を
@@ -447,6 +451,62 @@ revisionの旧generation再利用・型枠変更・非隔離出力、およびre
 元generationのmodeは変更せず、read-only sourceを使う回帰testを追加する。
 この失敗root `surface-final-13-textures/`も保持する。
 
+### v4正式候補の封印結果
+
+subject `edebfc90a7cd6a840dca1b3784948390b47cca9a`で専用sealerがpass。
+`target/wall-readable-RDcceXFi/staging/validation/surface-final-13-writable/`へ新規作成した。
+本設6 GLBの再exportは承認済みbytesと全件一致。scene/Khronos errors=0 warnings=0、UV-v4もpass。
+型枠7 file、本設geometry/法線、atlas保護画素は旧releaseと不変。
+
+- authoring v3 generation 13: `payload/manifest/wall-production-v1.asset-set.json`、
+  SHA-256=`ef4f3c62f185570b83b5781470bbb2d7eb8571502c664c18bdcafc39081454cf`。
+- 同梱した新本設v2 source: `payload/completed/manifest/wall-production-v1.asset-set.json`、
+  SHA-256=`f6aed1325458c934e08893026ee9895f2774a2225fb23a12739d778a343d0cc1`。
+- `asset_release_manifest.validate`を独立再実行してpass。promotion collectorは90 fileを列挙し、
+  そのうちsurfaceのprompt・原図・pack report・承認PNG・native job/manifestは10 file。
+  payloadは9.2 MiB。canonical pointer、receipt、primary runtimeは変更していない。
+- 既存validation worktreeを同じsubjectへ移し、`candidate/assets/`をexact 15 core viewとして配置。
+  旧preview locatorは`previous-preview.wallset`へ保持。authority=`isolated_candidate`、
+  asset view fingerprint=`415a8f0b3e8835dce44c3c16f897b96d1be702eb7dc699b6bd3274cda416ad78`。
+- workflow Python 151/151（新規14件）、`dev.py verify`全gate、`dev.py check`、
+  明示workspace Clippy `-D warnings`がpass。Rust変更なし。
+
+最初のformal標準matrix `wall-art-20260912T152623Z-f1385a9a`はHigh/DPI 1.0・1.5の2 case完了後、
+High/DPI 2.0のcaptureが全面単色（1280×720、8-bit grayscale、1色）となりinvalid。
+probeでは96 production / 0 fallback / 6 mesh / completed、generation 13の読み込みは成立していた。
+形式検査を緩めず、失敗PNGを保持する。同一subject・候補・バイナリ・設定のまま一度だけ
+`wall-art-20260912T153053Z-8cae82f2`でmatrix全体を再実行し、一過性撮影か再現する表示失敗かを切り分ける。
+元jobの2 caseだけを9-case gateの合格とは扱わない。
+
+### v4正式標準matrix結果
+
+同条件の再実行 `wall-art-20260912T153053Z-8cae82f2`は9/9 case完了、`status=valid`。
+独立offline `verify`も`status=pass / screenshots=9 / evidence_kind=formal`となった。
+High／Medium／Low × DPI 1.0／1.5／2.0、1280×720 X11 client capture。
+全caseの実adapterはIntel(R) Arc(tm) Graphics (MTL)、Vulkan、Intel open-source Mesa driver / Mesa 26.1.8。
+各caseで96 production / 0 fallback / 6 mesh / 1 material、16 mask各6件、completed phaseと
+generation 13 / authoring hashを確認。warmup 10秒・measure 10秒×各1回であり、性能比較baselineではない。
+subjectは封印時の`edebfc90`に固定。source/harness fingerprint・Capture binaryは先のArtPreviewと同一。
+
+High/DPI 2.0は再試行で正常画像となった。初回の単色capture原因は未確定で、設定や撮影gateは緩めていない。
+代表画像（High/DPI 1.0・2.0、Medium/DPI 1.0、Low/DPI 1.0）を目視確認。
+Lowでは石面の細部が縮退するが、旧下部装飾の黒い筋はなく、形状の輪郭が残る。
+動的なちらつきや最遠倍率の正式全品質matrixを、この静止画検証で合格とはしない。
+
+| artifact | SHA-256 |
+| --- | --- |
+| job `manifest.json` | `6b760647aac3196b153645e95e06582bb68f63b62d7bb59fd7db185ecc212029` |
+| High/DPI 1.0 `current-wall.png` | `8d4073546a8da43aecfd4cd22a2a24084997195ea508fdfb0cba18f2944cd441` |
+| High/DPI 2.0 `current-wall.png` | `f0ac0dfe5208b7ebe4be7e11216f3ce28b66fd9d2966a1f558dc93959ce47a47` |
+| Medium/DPI 1.0 `current-wall.png` | `58ff82a616d316cd9712e82c7757dc7e762ddacbcbae3ce3d3164431aeaae996` |
+| Low/DPI 1.0 `current-wall.png` | `515b813099bd03fd4a0ed0aa6aad9459628e5442d10dc54b5f0aba3d9f217714` |
+
+job親directoryは上記と同じ共通validation worktreeの`target/native-acceptance/`。
+9枚の画像、manifest、observation、aggregate CSVを、封印root内`formal-standard-capsule/`（14 MiB）へコピーした。
+これは保管用capsuleであり、元job一式なしでnative offline verifierを実行できるとは主張しない。
+本番Wall generation 10 / Door generation 7は不変。新規worktree/branch作成・削除なし、回収容量0。
+次は既存正式profileで性能Capture／Memoryと時間方向の確認を行い、明示承認を伴う本番昇格へ進む。
+
 ### Help impact（実経路レビュー）
 
 `No impact`。`create_prism → GLB UV0 → ResolvedProductionWallAssets →
@@ -480,3 +540,4 @@ runtime material選択・建設入力・資材・状態の意味・Help本文を
 | 2026-09-12 | Codex | 壁修正と本設preview経路をコミット。起動条件2件を修正後、同一subjectで標準／最遠native ArtPreview pass。画像・hash・未検証範囲を記録。本番は不変 |
 | 2026-09-12 | Codex | 実機等倍での可読性指摘を受けv4へ整理。下段装飾廃止・全側面stone・低コントラストcore、6 GLBと137 test・全体gate pass。未コミット、native再撮影・本番反映前 |
 | 2026-09-12 | Codex | 明示承認でv4をコミットし、隔離generation 12で標準／最遠native ArtPreview pass。実機画像・identityを記録。本番反映は保留 |
+| 2026-09-12 | Codex | v4アート承認を記録。正式封印経路・14回帰testを追加しgeneration 13を封印、151 test・全体gate pass。正式標準matrixは初回単色captureで停止、同条件再試行で9/9 valid・独立verify pass。本番は不変 |
