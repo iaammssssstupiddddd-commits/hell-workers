@@ -17,6 +17,8 @@ import validate_wall_formwork_manifest as formwork
 WALL_ID = "wall-production-v1"
 DOOR_ID = "door-production-v1"
 ASSET_IDS = (WALL_ID, DOOR_ID)
+SURFACE_ARTIFACT_ROLES = {"prompt", "stone_art", "core_art", "packing", "standard_capture", "farthest_capture",
+                          "standard_manifest", "farthest_manifest", "standard_job", "farthest_job"}
 
 
 def require(condition: bool, message: str) -> None:
@@ -103,6 +105,9 @@ def validate(
             path = roots["exports_root"] / record["path"]
             require(path.is_file() and not path.is_symlink(), "completed core file is absent")
             require(path.stat().st_size == record["bytes"] and wall.sha256(path) == record["sha256"], "completed core bytes differ")
+        revision = manifest["provenance"].get("surface_revision")
+        if revision is not None:
+            validate_surface_revision(revision, manifest, completed, roots["reports_root"])
     else:
         contract_root = (
             manifest_path.parent.parent / "source/repo"
@@ -112,6 +117,35 @@ def validate(
         require(contract_root is not None, "Door validation requires the source repository")
         result = door.validate_manifest(manifest_path, repo_root=contract_root, **roots)
     return {**result, "asset_set_id": asset_id}
+
+
+def validate_surface_revision(revision: dict, manifest: dict, completed: dict, reports: Path) -> None:
+    """A revised Wall carries its new approval and source art without old roots."""
+    require(revision.get("profile") == "wall-face-uv-v4", "surface revision profile differs")
+    artifacts = revision.get("artifacts", {})
+    require(set(artifacts) == SURFACE_ARTIFACT_ROLES, "surface artifact inventory differs")
+    paths = {role: formwork.file_record(record, reports, f"surface {role}") for role, record in artifacts.items()}
+    approval = wall.read_json(reports / manifest["art_review"]["artifact"]["path"])
+    require(approval.get("decision") == "surface_art_approved" and approval.get("promotion_authority") is False
+            and approval.get("schema_version") == 1 and approval.get("asset_set_id") == WALL_ID
+            and approval.get("evidence_kind") == "art_preview" and approval.get("normal_decision") == "rejected"
+            and manifest["art_review"] == completed["art_review"]
+            and approval.get("production") == manifest["production"]
+            and approval.get("base_manifest_sha256") == revision["base_manifest_sha256"], "surface approval differs")
+    for zoom in ("standard", "farthest"):
+        require(approval["previews"][zoom]["screenshot_sha256"] == wall.sha256(paths[f"{zoom}_capture"]),
+                "surface approved screenshot differs")
+        for kind in ("manifest", "job"):
+            require(approval["previews"][zoom][f"{kind}_sha256"] == wall.sha256(paths[f"{zoom}_{kind}"]),
+                    "surface native evidence differs")
+    packing = wall.read_json(paths["packing"])
+    require(packing.get("profile") == revision["profile"], "surface packing profile differs")
+    for role in ("stone", "core"):
+        require(packing["artwork"][role]["sha256"] == wall.sha256(paths[f"{role}_art"]), "surface source artwork differs")
+    for record in completed["production"]["core"][6:8]:
+        require(packing["textures"][Path(record["path"]).name]["sha256"] == record["sha256"], "surface packed texture differs")
+    generator = next(entry for entry in completed["provenance"]["generators"] if entry["role"] == "texture")
+    require(generator["prompt_sha256"] == wall.sha256(paths["prompt"]), "surface prompt differs")
 
 
 def additional_payload(
@@ -140,6 +174,10 @@ def additional_payload(
             for record in mesh["reports"].values():
                 add(record, roots["reports_root"], "reports")
         add(manifest["formwork_texture_report"], roots["reports_root"], "reports")
+        revision = manifest["provenance"].get("surface_revision")
+        if revision is not None:
+            for record in revision["artifacts"].values():
+                add(record, roots["reports_root"], "reports")
     else:
         source = manifest["source"]
         require(repo is not None, "Door payload requires the source repository")

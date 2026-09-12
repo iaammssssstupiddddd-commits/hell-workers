@@ -66,7 +66,12 @@
 - [x] コミットの明示承認を得る（候補をコミットし実機確認へ進める質問への「OKです」）。
 - [x] clean subjectを固定し、候補を検証用asset viewへ封印する。
 - [x] 新しい本設UVを扱う承認前preview経路を用意し、nativeスキルのdirect kitty launcherで観察する。
-- [ ] 新アート承認を記録し、final封印・正式native検証後、明示承認のある本番昇格へ進む。
+- [x] v4標準／最遠画像への「OKです。進めてください」を新アート承認として受領する。
+- [ ] 承認記録を両native job・PNG・exact 15 coreへ束縛し、改変／取り違え拒否testを追加する。
+- [ ] 本設更新専用final封印を実装する。新しい本設v2 sourceを同梱するauthoring v3とし、
+  旧型枠7 fileの不変検査、独立release validator、provenance・再export証拠を必須にする。
+- [ ] clean subjectでfinal封印し、正式candidateの品質matrix・Capture／Memoryを順次検証する。
+- [ ] 本番昇格の明示承認とreceipt・復旧前像を揃え、通常authorityで反映後確認する。
 
 ## 6. リスクと対策
 
@@ -108,7 +113,8 @@ native未実施のBlender画像をゲーム内の完成証拠へ格上げしな�
 - 現在地: M1完了。v3の断面texture・投影条件を実装し、6 GLBとBlender比較を検証済み。
   壁修正を`23d6cd68`へコミット済み。`87f0e682`の隔離候補で標準／最遠native ArtPreviewがpass。
   v3の等倍可読性指摘を受けたv4整理候補は`8d93bf11`へコミットし、標準／最遠native ArtPreview pass。
-  ユーザーの新アート最終承認・正式native検証・新本番昇格は未実施。
+  ユーザーの新アート承認を受領。承認記録の機械的束縛・final封印・正式native検証を進める。
+  新本番昇格は未実施。承認前previewをformal authorityへ手作業で変更しない。
 - 参照必須: `docs/blender-setup.md`、`docs/assets_workflow.md`、native/Help/docsスキル。
 - 初回検証ログ: workflow Python 128/128 pass（新規7 testを含む）。6 GLBのscene/Khronosは
   errors=0 / warnings=0、geometry＋新surface UV gate pass。旧GLBとの全triangleの頂点位置・法線を
@@ -415,7 +421,24 @@ formal acceptance、性能baseline、native Memoryは未検証。アート最終
 2つのnative job終了後の`dev.py verify`も`All quality gates passed`。Helpは上記の実経路レビューに基づく
 No impactをコミットtrailerへ記録し、今回の隔離候補provisionでも通常の操作・状態・文言は変えていない。
 
-### Help impact
+### v4アート承認と正式封印の準備
+
+ユーザーの「OKです。進めてください」を、直前に提示したv4標準／最遠画像への承認として記録。
+記録UTCは`2026-09-12T15:08:26Z`（メッセージ送信時刻の推定ではない）。
+`record_wall_surface_approval.py`で両jobを再度独立verifyし、
+`target/wall-readable-RDcceXFi/staging/reports/wall-surface.art-approval.json`へ保存した。
+SHA-256=`441c69a86b1e2dc95ccc3a8aef533373d5d83bccdbe28b263b6c3341981a709d`。
+生成原図やゲーム画像は変更していない。これはformal acceptanceや本番反映許可へ拡張しない。
+
+`seal_wall_surface_revision.py`は自己完結v3 payloadに新本設v2 sourceを同梱する専用経路。
+承認済み6 GLBの再export一致、型枠7 file不変、geometry/法線/atlas保護画素不変を要求する。
+prompt・原図・pack report・承認PNGをpayload inventoryに加え、後で旧stagingに依存せず検証できる。
+通常runtimeを変更せず、正式候補を隔離viewへ出す。実封印・formal native結果は別途追記する。
+workflow Pythonは149/149 pass（新規12件）。承認recordへの失敗job・別subject・別candidate・別authority・
+画像改変・core改変・pair fingerprint不一致・過去時刻／空の承認を拒否する。
+revisionの旧generation再利用・型枠変更・非隔離出力、およびrelease内原図の改変も拒否する。
+
+### Help impact（実経路レビュー）
 
 `No impact`。`create_prism → GLB UV0 → ResolvedProductionWallAssets →
 ProductionWallMaterialPool.complete → apply_wall_presentation_system`を確認した。
@@ -433,6 +456,8 @@ v4も同じproducer/consumerを再確認。`wall_asset_set.rs`のcomplete materi
 `orders_building_zones`のArchitect説明は金具模様や発光を状態識別条件にしていない。
 下部装飾削除・石面／断面の簡略化は建設入力・必要資材・成立条件・状態の意味・Room境界・文言を
 変えないため`No impact`。Help provider / snapshotへ空変更を加えない。
+v4承認記録／封印追加も実経路で`No impact`。制作側の承認・隔離候補・release payload検査のみを追加し、
+runtime material選択・建設入力・資材・状態の意味・Help本文を変更しない。
 
 ## 10. 更新履歴
 

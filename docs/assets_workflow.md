@@ -147,6 +147,22 @@ allowlistを固定し、異なる既存bytesの上書きを拒否する。
 `evidence_kind=art_preview`でない入力は拒否する。このartifactはアート判断の記録であり、単独では
 `isolated_candidate`やrelease authorityを与えない。
 
+本設面を更新し型枠を保持する場合は、`record_wall_surface_approval.py`で
+`wall-surface-art-preview-v1-standard` / `-farthest`の2 jobを独立verifyし、同じsubject・candidate・
+source/harness/asset-view fingerprint、実PNGとexact 15 core、ユーザー文言・記録UTCへ束縛する。
+これは見た目だけの承認であり、性能・Memory・releaseの承認ではない。
+`seal_wall_surface_revision.py`はclean subjectで新しい`staging/validation/`配下を作り、
+旧final全体を再検証した上で本設6 GLBを原本から再exportし、承認済みbytesとの完全一致を要求する。
+型枠7 file・本設geometry/法線・atlas保護領域の不変も確認する。
+出力は自己完結した`payload/manifest/`のauthoring v3と`candidate/assets/`のisolated projectionで、
+canonical pointerやreceiptを作らない。新本設v2 sourceは`payload/completed/`へ同梱し、旧本設の
+アート承認を置き換える。旧型枠の承認は不変の型枠だけに保持する。
+`provenance.surface_revision.artifacts`にはprompt全文、石面／断面原図、pack report、承認PNG2枚と
+両native jobの`job.json` / `manifest.json`を保持し、
+release validatorとpayload collectorで実bytesとhash束縛を検証する。
+元のArtPreview viewを変更するとnative offline verifyが成立しないため、封印完了までは保持する。
+封印後も正式candidateの品質matrix・Capture／Memoryと別のrelease承認を省略しない。
+
 Door M2を含むclean runtime subjectが確定した後、`seal_wall_formwork_final.py`が承認済みcandidateを新generationの
 authoring v3 final manifestへ封印する。`project_wall_formwork_candidate.py`はそのfinalだけをruntime schema v2の
 `authority=isolated_candidate`へ投影する。正式candidateは`art_review.status=art_approved`、exact 15 core、
