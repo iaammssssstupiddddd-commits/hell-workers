@@ -393,6 +393,39 @@ fn wall_art_matrix_has_a_scoped_quality_and_dpi_contract() {
 }
 
 #[test]
+fn wall_art_preview_accepts_completed_and_provisional_but_not_mixed_or_non_window() {
+    for phase in [
+        super::PerfWallPhase::Completed,
+        super::PerfWallPhase::Provisional,
+    ] {
+        assert!(super::wall_actual_window_phase_matches(
+            true,
+            false,
+            true,
+            false,
+            Some(phase)
+        ));
+        assert!(!super::wall_actual_window_phase_matches(
+            false,
+            false,
+            true,
+            false,
+            Some(phase)
+        ));
+    }
+    assert!(!super::wall_actual_window_phase_matches(
+        true,
+        false,
+        true,
+        false,
+        Some(super::PerfWallPhase::Mixed)
+    ));
+    assert!(!super::wall_actual_window_phase_matches(
+        true, false, true, false, None
+    ));
+}
+
+#[test]
 fn wall_art_zoom_requires_paired_keys_and_the_actual_window_profile() {
     assert_eq!(super::wall_art_zoom_selection(None, None, false), Ok(false));
     assert_eq!(

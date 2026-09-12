@@ -1011,10 +1011,10 @@ impl PerfScenarioConfig {
             ));
         }
         if wall_art_preview
-            && (!wall_actual_window || wall_phase != Some(PerfWallPhase::Provisional))
+            && !wall_actual_window_phase_matches(wall_actual_window, false, true, false, wall_phase)
         {
             return Err(PerfScenarioConfigError(
-                "Wall art preview requires the provisional current-Wall actual-window profile"
+                "Wall art preview requires the completed or provisional current-Wall actual-window profile"
                     .to_string(),
             ));
         }

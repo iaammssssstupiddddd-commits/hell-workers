@@ -218,6 +218,8 @@ export hash、atlas保護画素を確認する。型枠7 fileは本番bytesの�
 で返されたdirect kitty commandを実行する。`--zoom farthest`は別の単独preview jobにする。
 profileは`wall-surface-art-preview-v1-standard` / `wall-surface-art-preview-v1-farthest`。
 撮影・再検証ともcompleted phaseと候補identityを照合し、型枠の画像を本設の証拠へ流用しない。
+perf設定入口も`wall_actual_window_phase_matches`でcompleted/provisionalに限定し、
+ArtPreviewのmixed phase、phase未指定、actual-windowなしは拒否する。
 既存型枠previewの既定動作は不変。いずれもアート承認・正式受入・性能baseline・昇格の証拠ではない。
 
 ### 他のproductionアセット

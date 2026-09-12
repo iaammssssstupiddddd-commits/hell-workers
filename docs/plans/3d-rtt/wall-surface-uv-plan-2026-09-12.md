@@ -39,7 +39,8 @@
   runtimeのroughness=1 / reflectance=0に対応させる。照明の違いは別に明記する。
 - 従来の下半分の装飾面選択は維持し、rust/purpleも面内で等密度とする。
 - 専用UV profile検査を追加し、旧世代・型枠の検証契約へ遡及適用しない。
-- Bevy runtime/API変更なし。GLBのUV0を既存lit materialが消費する経路を維持する。
+- 通常のゲーム表示/APIは変更しない。GLBのUV0を既存lit materialが消費する経路を維持する。
+  perf専用ArtPreviewの設定入口は、本設・型枠双方を明示選択できるよう既存phase判定へ整合する。
 
 ## 5. マイルストーン
 
@@ -265,6 +266,13 @@ Bevyとの最終画素一致やnative acceptanceは主張しない。
 Rustや既存型枠previewの意味は変えない。`provision_wall_surface_preview.py`は本設8 fileだけを差し替え、
 旧型枠7 fileと本番geometry/法線を保持する独立したtechnical sealer。旧final manifestの承認は再利用しない。
 Help/docsスキルで再確認し、診断用経路追加だけなのでHelpはNo impact。
+
+初回native job `wall-art-20260912T105446Z-97d5ec25`（subject `d15b0156`）はビルド完了後、
+起動前の`config.rs`がArtPreviewをprovisionalに限定していたためinvalidとなった。画像は未取得。
+表示側の`accepted_wall_phase`だけの確認では不十分だった。値・textureは触らず、設定入口でも既存の
+`wall_actual_window_phase_matches`を使い、completed/provisionalだけを受理するよう整合させる。
+mixed、actual-windowなし、phaseなしは拒否する回帰testを追加。これは検証用perf起動の成立条件で、
+通常版の建設操作やアセット承認権限を変えない。失敗jobは削除・上書きせず保持する。
 
 ### Help impact
 
