@@ -6,6 +6,13 @@ Hell-Workers における建築システムの基礎実装について説明し�
 
 プレイヤーが設計図（Blueprint）を配置し、労働者が資材を運んで建設を完了させるシステムです。
 
+2026-09-12の通常runtimeはWall generation 10（木製型枠＋既存本設壁）とDoor generation 6（木・骨の両開き）を
+`ReleaseApproved`で使用する。試験用candidate / ArtPreview opt-inは不要。扉は薄い上枠を固定したまま、
+左右leafが同じ側へ同じ78°で対称に開き、Lockedだけ中央に骨の閂が掛かる。
+これは表示assetの正式導入であり、材料・施工工程・開閉タイマー・施錠操作・通行・保存形式を変更しない。
+資材表示の位置修正も含む通常authorityの実機結果と復旧前像は
+[型枠計画M4](plans/3d-rtt/provisional-wall-formwork-plan-2026-09-05.md#m4-release文書同期close)で追跡する。
+
 ## 2. コンポーネント
 
 | コンポーネント | 役割 |
@@ -373,6 +380,12 @@ Structural3d のときだけ Building3dVisual エンティティ（独立。Buil
 `Building3dVisual { owner: Entity }` は `Structural3d` Buildingとは独立した3Dビジュアルで、XZ 平面上に独立スポーンする（Building の子エンティティではない）。ownerの移動・Z回転・完成bounce scaleは共通transform resolverで追従する。Doorは追加で`Door3dVisual`を持つ。fallbackはClosed / Open / Lockedを状態別shared materialとhinge transformへ同期し、productionは固定枠を含む状態別meshを同じroot位置で交換する。
 
 Doorの表示軸はN/S/W/E=`8/4/2/1`の接続maskで、E+WがあればEW、なければN+SがあればNS、それ以外はEWへ決定的にfallbackする。EWの`MeshTag`法線はNorth、NSはWestであり、Open leaf先端をsampling anchorにしない。設計図、Building中のpulse child、配置ghostも同じresolverを使い、production previewでは256px画像の`(128,192)`をrootへ合わせる64×64 logical canvasを使う。saveには派生軸やasset handleを保存せず、rehydrate後の最初のpresentation frameに近傍とauthorityから再構成する。
+
+設計図PNGの生成契約`door-preview-topdown-v1`はゲームのyaw 0、camera高度150 / offset90と縦補正を再現する。
+1 tileは画像内128px（表示時32wu）、地面中心は`(128,192)`。EWの横桟は水平、NSの接続方向は垂直となる。
+Blenderの実cameraへ基準点と全mesh vertexを投影して、位置・縮尺・canvas内収まりを検証してから保存する。
+NSの南端はcanvas下端へ達するため、新契約のhash付き投影証拠がある画像だけ下端256pxを許可する。
+論理root、既存Anchor、資材表示、配置可否の色、扉の形状・左右共通78°は変更しない。
 
 Floorのactive presentationは1タイルの`Plane3d`で、既存の`textures/terrain/mud_floor.png`を共有マテリアルから参照する。3D側の高さにも`Z_BUILDING_FLOOR`（0.05）を使い、`y=0`の地形面との深度競合を避ける。spawn時とowner transform同期時は同じ高さresolverを通す。
 

@@ -185,6 +185,14 @@ clean subject、production 6 / fallback 0、X11/Vulkan、capture・review crop�
 `HW_DOOR_CANDIDATE=1`とgeneration / manifest hashが一致する隔離検証だけで有効にする。
 ArtPreviewの成功はこの正式candidate受入へ読み替えない。
 
+既存releaseの設計図だけを修正する場合は`seal_door_preview_revision.py`を使う。
+旧final世代を隔離stagingへコピーし、`render-door-previews`で`door-preview-topdown-v1`を生成する。
+`validate_door_textures.py --preview-report <今回のpreviews.json>`で実投影点・hashを照合する。
+cleanな修正commit、元final manifest、新generation、ユーザーの修正指示・release許可と記録UTCを指定して封印する。
+sealerは旧finalを完全再検証し、3 GLB・albedo・blend・geometry・旧art approval・licenseの変更を拒否する。
+旧アート承認は不変の3Dだけへ保持し、新PNGを過去の目視承認済みと扱わない。別の修正許可をpreview reportへ封印する。
+この経路でもpromotion receipt、runtime前像保存、通常authorityでの実画面・load後確認を省略しない。
+
 canonicalへ昇格した後のprimary同期は、同じmanifest allowlistに`--receipt`を加えたrelease modeで行う。
 manifestが`generations/<GEN>/manifest/`にある場合は`--receipt`を必須とし、receiptのmanifest hash / generationと
 active pointerの三点一致を検証してからcopyする。配置先は`project_wallset.py`の`runtime_path`をそのまま使い、
@@ -287,8 +295,11 @@ WallとDoorの導入は別transactionであり、両方を同時に切り替え�
 初回Doorのcanonical rollbackだけではruntime locatorは消えない。通常版の復帰では、導入前に保存した
 runtime locatorのpreimageも復元する（初回Doorはlocatorなし）。coreを削除してfallbackを起こす手順にはしない。
 
-2026-09-10時点ではこれらはrelease準備toolであり、型枠・Doorの通常authorityは未切替。
-両単独M3に加え、共通J1の残件とrelease承認記録を揃えてから実際のpromotion / installを行う。
+2026-09-12にWall generation 10 / Door generation 6を正式登録し、通常authorityの共通J1、
+Door品質9 case / 18 PNG、本設Wall品質9 case / 9 PNGの独立verify後にprimaryへ導入した。
+通常起動でcandidate / ArtPreviewの許可は不要。承認・receipt・runtime前像と検証範囲は
+[型枠計画M4](plans/3d-rtt/provisional-wall-formwork-plan-2026-09-05.md#m4-release文書同期close)を参照する。
+型枠混在の通常release全品質matrixと全trackのworktree整理は別の残件であり、登録済みという理由だけでcloseしない。
 
 validation worktreeは作業場であって成果物ではない。trackを閉じたら、各jobの`manifest.json`、比較CSV、
 承認画像だけを`staging/validation/<capsule>/`のような小さなdirectoryへ残し、worktree本体は

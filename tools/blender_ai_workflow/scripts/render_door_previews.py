@@ -10,6 +10,7 @@ from pathlib import Path
 
 import bpy
 from mathutils import Vector
+from bpy_extras.object_utils import world_to_camera_view
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
@@ -21,6 +22,7 @@ from render_color_calibration import (
     resolve_ocio_evidence,
 )
 from workflow_common import asset_root
+import door_preview_projection as projection
 
 
 def look_at(camera: bpy.types.Object, target: Vector) -> None:
@@ -52,12 +54,15 @@ def configure_scene() -> None:
 
     camera_data = bpy.data.cameras.new("DoorPreviewCamera")
     camera_data.type = "ORTHO"
-    camera_data.ortho_scale = 1.75
+    settings = projection.camera_settings()
+    camera_data.ortho_scale = settings["ortho_scale"]
     camera = bpy.data.objects.new("DoorPreviewCamera", camera_data)
     scene.collection.objects.link(camera)
-    camera.location = Vector((1.8, -2.5, 2.2))
-    look_at(camera, Vector((0.0, 0.0, -0.06)))
+    camera.location = Vector(settings["location"])
+    look_at(camera, Vector(settings["target"]))
     scene.camera = camera
+    scene.render.pixel_aspect_x = settings["pixel_aspect_x"]
+    scene.render.pixel_aspect_y = settings["pixel_aspect_y"]
 
     key_data = bpy.data.lights.new("DoorPreviewKey", type="AREA")
     key_data.energy = 700.0
@@ -77,15 +82,37 @@ def configure_scene() -> None:
     look_at(fill, Vector((0.0, 0.0, 0.0)))
 
 
-def render(path: Path, door: bpy.types.Object, rotation: float) -> dict[str, object]:
+def validate_projection(door: bpy.types.Object, axis: str) -> dict[str, object]:
+    scene = bpy.context.scene
+    samples = {}
+    for name, point in projection.reference_points().items():
+        x, y, z = point
+        world = door.matrix_world @ (Vector((x, -z, y)) / projection.AUTHORING_SCALE)
+        ndc = world_to_camera_view(scene, scene.camera, world)
+        actual = (ndc.x * 256.0, (1.0 - ndc.y) * 256.0)
+        expected = projection.project_glb(point, axis)
+        if any(abs(a - e) > 0.01 for a, e in zip(actual, expected, strict=True)):
+            raise RuntimeError(f"Door {axis} {name} projection mismatch: {actual} != {expected}")
+        samples[name] = list(actual)
+    # Check every source vertex, not just the declared anchor or alpha bbox.
+    for vertex in door.data.vertices:
+        ndc = world_to_camera_view(scene, scene.camera, door.matrix_world @ vertex.co)
+        if not (-1e-5 <= ndc.x <= 1.00001 and -1e-5 <= ndc.y <= 1.00001):
+            raise RuntimeError(f"Door {axis} vertex would be cropped: {tuple(ndc)}")
+    return {"profile": projection.PROFILE, "samples_px": samples, "all_vertices_in_canvas": True}
+
+
+def render(path: Path, door: bpy.types.Object, rotation: float, *, axis: str) -> dict[str, object]:
     door.rotation_euler[2] = rotation
     bpy.context.view_layer.update()
+    evidence = validate_projection(door, axis)
     bpy.context.scene.render.filepath = str(path)
     bpy.ops.render.render(write_still=True)
     return {
         "bytes": path.stat().st_size,
         "path": str(path),
         "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+        "projection": evidence,
     }
 
 
@@ -96,11 +123,17 @@ def main() -> None:
         raise RuntimeError("Door previews require positive OCIO evidence")
     output = root / "staging/exports/textures/buildings/door"
     output.mkdir(parents=True, exist_ok=True)
+    # A copied immutable blend may retain its original workspace's absolute path.
+    # Resolve the one runtime albedo from this generation, without editing the blend.
+    for image in bpy.data.images:
+        if Path(image.filepath).name == "door_albedo.png":
+            image.filepath = str(output / "door_albedo.png")
+            image.reload()
     configure_scene()
     door = select_state("closed")
     previews = {
-        "ew": render(output / "door_preview_ew.png", door, 0.0),
-        "ns": render(output / "door_preview_ns.png", door, math.pi / 2.0),
+        "ew": render(output / "door_preview_ew.png", door, 0.0, axis="ew"),
+        "ns": render(output / "door_preview_ns.png", door, math.pi / 2.0, axis="ns"),
     }
     review_output = root / "staging/reviews/door-production-v1"
     review_output.mkdir(parents=True, exist_ok=True)
@@ -108,14 +141,15 @@ def main() -> None:
     for state in ("closed", "open", "locked"):
         door = select_state(state)
         review_previews[state] = {
-            "ew": render(review_output / f"door_{state}_ew.png", door, 0.0),
-            "ns": render(review_output / f"door_{state}_ns.png", door, math.pi / 2.0),
+            "ew": render(review_output / f"door_{state}_ew.png", door, 0.0, axis="ew"),
+            "ns": render(review_output / f"door_{state}_ns.png", door, math.pi / 2.0, axis="ns"),
         }
     report = root / "staging/reports/door-production-v1.previews.json"
     report.write_text(
         json.dumps(
             {
                 "anchor_px": [128, 192],
+                "projection": {"profile": projection.PROFILE, **projection.camera_settings()},
                 "asset_set_id": "door-production-v1",
                 "ocio": ocio,
                 "previews": previews,

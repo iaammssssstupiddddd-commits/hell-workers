@@ -33,6 +33,23 @@
 
 ## 4. 実装方針
 
+### 2026-09-12追加指摘: 設計図本体の斜め投影
+
+ユーザーが「扉の設計図配置が斜め」と明示したため、材料表示とは独立した本体画像の修正を再開する。
+現行rendererはcamera `(1.8,-2.5,2.2)` / ortho span 1.75で、ゲームのyaw 0・高度150 / offset90と不一致。
+画像内anchor `(128,192)`も報告するだけで実投影を検証していなかった。材料位置の旧合格で本件を閉じない。
+
+- Blender cameraをgame TopDownと同じyaw・傾斜へ揃え、縦補正もrenderへ反映する。
+- 256px / 64wu canvasの1 tileを128px、地面中心を実測で`(128,192)`に固定する。
+  NSの南端はcanvas下端へ達するため、旧斜視画像用bbox制限を無条件に緩和せず、
+  明示した新projection契約と投影点の検査で全形状がcanvas内にあることを検証する。
+- 旧release g6は不変。3 GLB・albedoと左右共通78°を維持し、preview 2 PNGだけを新世代へ更新する。
+- ユーザーは修正のcommitと本番反映まで明示承認済み。旧アート承認は変更しない3Dにのみ引継ぎ、
+  新画像を過去の目視承認済みと偽らず、今回の修正指示と新しい検証証拠を別記録する。
+- Python回帰・Blender実投影点・PNG目視・通常authority J1で両軸とload後を確認し、旧画像の合格へ再ラベルしない。
+
+以下は材料表示修正時の手順である。
+
 1. 実機observerへ透明度・ViewVisibility・sprite geometryの検査を追加し、表示の成立条件を確定する。
 2. 原因となる表示経路だけを修正。論理rootのgridや占有を表示都合で動かさず、診断専用変更は撤去する。
 3. 完成Door / 支持壁 / previewの画素位置を照合する回帰を追加し、両軸・load後を再採取する。
@@ -45,7 +62,16 @@ Bevy 0.19のローカルregistryと既存実装をAPIの一次情報とする。
 - [x] M1: 観測条件を追加。描画対象可視性・alphaを確認し、資材表示の支持壁への重なりを特定。
 - [x] M2: 資材表示位置修正と回帰test。承認済み形状・開度は保持。
 - [x] M3: 材料表示修正後のclean subjectで実機J1、独立verify、両軸・load後の画像を確認。
-- [ ] M4: 既存両計画へ結果・正式反映指示を引継ぐ。
+- [x] M4: 既存両計画へ結果・正式反映指示を引継ぐ。canonical登録と通常authority J1も完了。
+- [ ] M5: 設計図本体の投影修正、回帰、新世代登録・通常版再受入。M1〜M4の材料表示修正とは別件。
+
+M5実装: `door_preview_projection.py`とrendererがgameと一致する投影点を実測し、PNGだけを再生成。
+EW/NS画像の目視・0.01px以内の投影照合・全vertexのcanvas検査はpass。Python workflow 121件もpass。
+`seal_door_preview_revision.py`は不変3Dの承認と今回の画像修正許可を分離し、旧世代を上書きしない。
+Help判断は`No impact`。`DoorAssetReadiness` → `ProductionDoorAssetPool` → `sync_door_preview_system` →
+Blueprint root / pulse child / placement ghostの画像だけを更新し、操作・資材・配置条件・色と文言・保存の意味は不変。
+前回の通常asset導入も表示だけであり、既存Helpに旧扉の色や半透明型枠へ依存する説明はない。
+別作業の搬送回帰test・計画はこのcommitに含めず、cleanな検証treeで本件の全gateと実機受入を行う。
 
 ## 6. リスクと対策
 
@@ -67,7 +93,7 @@ Bevy 0.19のローカルregistryと既存実装をAPIの一次情報とする。
 
 ## 9. AI引継ぎメモ
 
-- 現在地: 資材表示の修正後実機検証を完了。通常release検証経路の整備へ進行中。
+- 現在地: 資材表示の修正と両計画M4への引継ぎを完了。通常版への導入・残りの受入は両計画で追跡する。
   primary開始時HEAD `0889dd71`、再開時HEAD `7a0e4bf7`、いずれもdirtyなし。
 - drawability検査subject `89e56bd1`のjob `wall-door-joint-20260911T003142Z-0872a031`を
   既存の専用worktree `wall-door-joint-83ad3f85`で完了。固定audit 3件 / screenshot 6枚と独立verifyがpass。
@@ -82,7 +108,7 @@ Bevy 0.19のローカルregistryと既存実装をAPIの一次情報とする。
   profiling / default workspace tests、追加profiling feature check、Clippy `-D warnings`、docs / diff gate）。
 - Help判断: `No impact`。`hw_jobs::visual_sync::blueprint_visual_state`からmaterial displayへの
   実経路で、Doorの資材数・操作・成立条件・文言は不変。表示offsetだけを変えるためHelp本文は変更しない。
-- 最初にやること: Door通常release quality helperを完成し、登録・通常authority受入へ引継ぐ。
+- 次の作業: 両計画M4の最新記録を参照。正式登録と通常J1 / Door品質は完了し、通常版導入・残件の完了後に本計画もarchiveする。
 - 修正commit `42caef827681b42d63d341d03d8aea8878df3503`の再採取job
   `wall-door-joint-20260911T010631Z-738ce27a`は`2026-09-11T01:30:07Z`にvalid完了。
   `2026-09-12`に独立verifyと全6 PNGを確認。Intel Arc / Vulkan / X11 / High / DPI 1、
@@ -99,6 +125,11 @@ Bevy 0.19のローカルregistryと既存実装をAPIの一次情報とする。
 - 参照: `door_preview.rs`、`joint_actual_window.rs`、`hw_visual::blueprint`、`docs/help-screen.md`。
 - DoD: 修正・全gate・新実機証跡・既存M4引継ぎ後にarchiveし、索引更新。
 - worktree整理は両track close時。成功・失敗jobを今は削除しない。
+- 通常authorityでもsubject `8d3edab9`、job `wall-door-joint-20260912T035627Z-c9ca85fe`の
+  固定audit 3 / PNG 6 / 独立verifyがpass。全6画像で材料表示・支持壁・load後を確認した。
+  manifest SHA-256 `b3af705ec6a2cf5bcfef4ec361f440181021bcec87c2adbc4e416e77c570cdfb`。
+  capsuleは外部asset rootの`staging/acceptance/`同job名へ15 file / 12 MiBで保存し、全file byte照合済み。
+  旧candidate capsuleを通常版画像へ再ラベルしていない。
 
 ## 10. 更新履歴
 

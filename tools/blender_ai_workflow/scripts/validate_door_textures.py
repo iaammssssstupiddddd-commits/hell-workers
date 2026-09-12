@@ -9,6 +9,8 @@ from pathlib import Path
 
 from PIL import Image
 
+import door_preview_projection as projection
+
 
 class TextureError(RuntimeError):
     pass
@@ -23,7 +25,11 @@ def digest(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def validate(root: Path) -> dict[str, object]:
+def validate(root: Path, preview_report: dict | None = None) -> dict[str, object]:
+    if preview_report is not None:
+        projection.validate_report(preview_report, {
+            axis: digest(root / f"door_preview_{axis}.png") for axis in ("ew", "ns")
+        })
     albedo_path = root / "door_albedo.png"
     require(albedo_path.is_file() and not albedo_path.is_symlink(), "Door albedo is absent")
     with Image.open(albedo_path) as albedo:
@@ -39,8 +45,11 @@ def validate(root: Path) -> dict[str, object]:
             alpha = image.getchannel("A")
             bbox = alpha.getbbox()
             require(bbox is not None, f"Door {axis} preview is empty")
+            # Exact TopDown NS geometry reaches the south ground edge at y=256.
+            # Only a hash-bound, all-vertex-validated projection may use that edge.
+            bottom_limit = 256 if preview_report is not None and axis == "ns" else 224
             require(
-                bbox[0] >= 16 and bbox[1] >= 16 and bbox[2] <= 240 and bbox[3] <= 224,
+                bbox[0] >= 16 and bbox[1] >= 16 and bbox[2] <= 240 and bbox[3] <= bottom_limit,
                 f"Door {axis} preview exceeds the fixed canvas safe area: {bbox}",
             )
             previews[axis] = {"alpha_bbox": list(bbox), "sha256": digest(path)}
@@ -61,8 +70,10 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--texture-root", required=True, type=Path)
     parser.add_argument("--report", required=True, type=Path)
+    parser.add_argument("--preview-report", type=Path)
     args = parser.parse_args()
-    result = validate(args.texture_root.resolve())
+    preview_report = json.loads(args.preview_report.read_text()) if args.preview_report else None
+    result = validate(args.texture_root.resolve(), preview_report)
     args.report.resolve().write_text(
         json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8"
     )

@@ -9,6 +9,8 @@ from datetime import datetime
 from pathlib import Path, PurePosixPath
 from typing import Any
 
+import door_preview_projection
+
 ASSET_SET_ID = "door-production-v1"
 STATES = {"closed": 204, "open": 204, "locked": 216}
 CORE = [
@@ -139,6 +141,10 @@ def validate_manifest(
     for axis, role in (("ew", "preview:ew"), ("ns", "preview:ns")):
         record = core[4 if axis == "ew" else 5]
         require(previews["previews"][axis]["sha256"] == record["sha256"] and record["role"] == role, f"{axis} preview binding differs")
+    if "projection" in previews:
+        door_preview_projection.validate_report(
+            previews, {"ew": core[4]["sha256"], "ns": core[5]["sha256"]}
+        )
 
     file_record(manifest["license"]["file"], licenses_root, "license")
     source = manifest["source"]
