@@ -469,6 +469,13 @@ native formalのproduction subject fingerprintと起動・監視harness fingerpr
 
 ### window backendの使い分け
 
+perfが有効な実window起動では、`main.rs::perf_window_update_settings`が
+`WinitSettings::continuous()`を設定し、focusの有無で更新頻度を変えない。
+Bevy 0.19の既定game設定は非focus時に60Hzのreactive loopとなり、
+`PresentMode::Immediate`でも別途制限されるためである。通常playではWinit設定を上書きせず、
+headlessの`ScheduleRunnerPlugin`も変更しない。VSyncやcompositorの制限を解除する設定ではないので、
+実測の非paced判定は引き続き必要。更新前のpaced runは性能比較へ流用しない。
+
 `--window-backend headless`はWinit、primary window、surface、swapchain、presentを作らない。display socketを使わずに固定step監査とCPU-onlyの経路smokeを実行できるが、実renderer frame-time、GPU adapter、presentの証拠にはしない。`headless`は`--renders cpu`だけを許可し、software adapter警告を明示的にallowlistしたsmokeの値も性能比較には使わない。
 
 sandbox内から実windowへ直接接続できない場合は、既に許可されたterminal launcherを入口にしてrunner全体をsandbox外で起動する。追加の対話的許可を要求せず、artifactを通常どおり監視・検証する。

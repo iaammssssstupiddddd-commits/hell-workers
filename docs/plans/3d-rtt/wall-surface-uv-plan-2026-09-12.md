@@ -74,7 +74,7 @@
 - [ ] 正式candidateの性能Capture／Memory、時間方向の確認を行う。
 - [x] 非focus経路を観測し、perf実windowだけ連続更新へ固定する修正と、
   通常playの省電力設定・headless runnerを維持する回帰testを追加する。
-- [ ] 更新後のclean subjectで再採取して60Hz制限の解消を確認する。
+- [x] 更新後のclean subjectで再採取して60Hz制限の解消を確認する。
   旧subjectの性能値を合格証拠へ流用しない。
 - [ ] 本番昇格の明示承認とreceipt・復旧前像を揃え、通常authorityで反映後確認する。
 
@@ -122,7 +122,9 @@ native未実施のBlender画像をゲーム内の完成証拠へ格上げしな�
   ユーザーの新アート承認を記録し、`edebfc90`でgeneration 13をfinal封印済み。
   同subject・同候補で正式標準9条件matrixを再試行し、9/9 valid＋独立verify pass。
   性能Captureは同条件2回とも60Hz paced判定で停止。非focus時の更新制限を避ける
-  perf専用連続更新と回帰testを実装。新subjectの実機再検証は未実施。
+  perf専用連続更新と回帰testを`552d9c91`で実装。新subjectでは22回すべて非pacedだが、
+  fallback / provisional / smallの反復間p50比1.628が上限1.25を超え、正式jobはinvalid。
+  新たな性能改善／合格は主張しない。ばらつきの原因調査と安定条件での再採取が必要。
   Memory・時間方向の確認・新本番昇格は未実施。
   承認前previewをformal authorityへ手作業で変更しない。
 - 参照必須: `docs/blender-setup.md`、`docs/assets_workflow.md`、native/Help/docsスキル。
@@ -551,6 +553,46 @@ profiling binaryの上記focused 2 testも2/2 pass。`main.rs`のrust-analyzer�
 native helper・asset view・原図は変更していない。新規worktree/branch作成・削除なし、回収容量0。
 MemoryはCapture完了後に逐次実行する。ちらつき・本番昇格も未完了で、本番locatorは不変。
 
+### v4連続更新修正後の実機結果
+
+clean subject `552d9c91d290eaa25a6619f2c947a6d0a755ebe4`へ既存validation worktreeを移し、
+generation 13とexact asset viewを変更せず、正式24-run profileを再実行した。
+jobは`wall-production-performance-20260912T160545Z-bcbfc3ba`、親directoryは上記共通worktreeの
+`target/native-acceptance/`。7分42秒のCapture build後、30秒warmup／60秒measureを22 process採取。
+22回の各raw runは検証されたが、22回目の反復安定性gateでjob全体が`invalid`となった。
+残り2回、全体集約・p95/p99比較、Memoryは未実施。途中session/orderの`running`表示を
+成功とは扱わず、終端`job.json`のinvalidを正本とする。childは終了済み。
+
+- source fingerprint: `289c24a6f16203edff7f6df738e0bea9144c5e7759e2919c88f5ba32268ed315`
+- harness fingerprint: `6dbc93b109a45d5cb7bad41a78e0ec0f51b3ad6a876d760e5665c8050255e6c3`
+- asset view fingerprint: `415a8f0b3e8835dce44c3c16f897b96d1be702eb7dc699b6bd3274cda416ad78`
+- Capture binary SHA-256: `182ef8f2df453b8526bc526cd5f50b311d9284d9138c07de7ccb117863622594`
+- job.json SHA-256: `6b95a36f84f9ba46a9db61741b4c08a61d02800ed579dcbd56ec5fd78628ab92`
+- capture-order.json SHA-256: `3320a90bcba205e2c2a892553914a30c089c3b6369cba517d0dc62c34a2324f6`
+- 実adapter: Intel Arc (MTL) / Vulkan / Mesa 26.1.8、X11、1280×720、High / DPI 1、Immediate。
+
+初回completed / smallはfallback 124.767 fps / p50 7.536633 ms、production 121.750 fps /
+p50 7.559471 ms。`xprop`でゲームPID 785305／786258のclientが`0x1800004`、
+activeが別client `0xe00004`であることをそれぞれ観測した（UTC 16:14:55／16:16:30付近）。
+非focusでも60fps固定にならない経路が成立し、全22回の`display_paced=false`を確認した。
+これは60Hz制限修正の確認であり、旧invalid job比のゲーム高速化率ではない。
+
+停止条件はfallback-control / provisional / smallのp50
+`13.192470 / 8.104464 / 8.342522 ms`、最大／最小比`1.627803`（上限`1.25`）。
+同条件productionは`8.840660 / 8.001466 / 8.126925 ms`、比`1.104880`。
+本設4 cellは各3反復が揃い、p50比は`1.024〜1.117`だったが、部分結果を全体合格へ流用しない。
+fallback / provisional / mediumも採取済み2回の比が`1.299254`であり、基準表示側の
+ばらつきはsmallだけではない。閾値・測定時間・case集合・アートを変えて通す修正は行っていない。
+
+次は長いmatrixを無条件に再実行せず、電源・温度・CPU/GPU負荷等を計測中に観測し、
+同一fallback条件のbounded診断で変動要因を切り分けてから正式jobを新規採取する。
+終了後のread-only確認ではCPU governorは`performance`だったが、計測中の履歴はないため
+温度・他process・compositorのどれが原因かは未確定。他アプリ終了やOS設定変更はしていない。
+native helper・Rust・asset dataへの追加変更なし。`docs/performance-profiling.md`へ連続更新の
+適用範囲とVSyncとの違いを同期した。Helpはperf起動に限定する同じ実経路でNo impact。
+本番Wall generation 10 / Door generation 7、画像・原図は不変。新worktree/branch作成・削除なし、
+回収容量0。ちらつき確認・正式Memory・本番昇格は引き続き未完了。
+
 ### Help impact（実経路レビュー）
 
 `No impact`。`create_prism → GLB UV0 → ResolvedProductionWallAssets →
@@ -589,3 +631,4 @@ Room境界と`orders_building_zones`の説明へ至る経路は不変。Help pro
 | 2026-09-12 | Codex | 明示承認でv4をコミットし、隔離generation 12で標準／最遠native ArtPreview pass。実機画像・identityを記録。本番反映は保留 |
 | 2026-09-12 | Codex | v4アート承認を記録。正式封印経路・14回帰testを追加しgeneration 13を封印、151 test・全体gate pass。正式標準matrixは初回単色captureで停止、同条件再試行で9/9 valid・独立verify pass。本番は不変 |
 | 2026-09-12 | Codex | 正式性能Captureは2回とも60Hz判定で停止。非focus経路を観測し、perf実window限定の連続更新と2回帰testを追加。実機再採取・Memory・ちらつき・本番は未完了 |
+| 2026-09-12 | Codex | `552d9c91`で22回の非paced実機計測を確認。基準表示の反復p50比1.628で正式jobはinvalid。原因未確定・再採取前提、Memoryと本番は保留。性能仕様書を同期 |
