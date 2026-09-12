@@ -94,7 +94,7 @@ struct SoulPfState<'a> {
     task: &'a mut AssignedTask,
     idle: &'a mut IdleState,
     rest_reserved_for: Option<&'a RestAreaReservedFor>,
-    inventory_opt: Option<&'a mut hw_logistics::Inventory>,
+    inventory_opt: Option<Mut<'a, hw_logistics::Inventory>>,
 }
 
 /// `process_worker_pathfinding` に渡すワールド・パス探索コンテキスト。
@@ -438,7 +438,7 @@ pub fn pathfinding_system(
                 resting_in,
                 rest_reserved_for,
                 mut cooldown_opt,
-                mut inventory_opt,
+                inventory_opt,
             )) = query.get_mut(entity)
             else {
                 work_queue.clear_entity(entity);
@@ -491,7 +491,7 @@ pub fn pathfinding_system(
                     task: &mut task,
                     idle: &mut idle,
                     rest_reserved_for,
-                    inventory_opt: inventory_opt.as_deref_mut(),
+                    inventory_opt,
                 },
                 WorldPfCtx {
                     world_map: world_map.as_ref(),

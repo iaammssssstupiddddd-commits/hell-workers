@@ -40,7 +40,7 @@ Bevy 0.19 の Relationship は **Source 側を操作すれば Target 側が自�
 
 `SharedResourceCache` は **2つのシステムが直接呼び合わずに調整する場所**。
 
-- **予約 snapshot の再構築**: `sync_reservations_system` が `AssignedTask` + `Designation`（Without\<TaskWorkers\>）から構築する。初回、予約 operation を変える active task の signature 差分、pending task 側の変更/削除、または 0.2秒の安全監査で実行する。signature は `hw_jobs::lifecycle` の active reservation operation から導出するため、進捗値だけの更新では再構築しない。
+- **予約 snapshot の再構築**: `sync_reservations_system` が割り当て済み`AssignedTask`だけから構築する。未割り当てrequestは容量を占有しない。初回、予約 operation を変える active task の signature 差分、または 0.2秒の安全監査で実行する。signature は `hw_jobs::lifecycle` の active reservation operation から導出するため、進捗値だけの更新では再構築しない。Mixer向け砂採取は、item生成前も`collect_amount`分の搬入予約を保持する。
 - **差分適用**: タスク中断・実行 handler が送る `ResourceReservationRequest` は `hw_logistics::apply_reservation_requests_system` が Execute で適用する。`TaskAssignmentRequest` 内の `reservation_ops` は割り当て適用時に直接 cache へ反映する。
 - **delta と snapshot の分離**: Perceive の先頭で `begin_frame()` が pickup/store の frame-local delta だけを clear する。予約 snapshot の置換は再構築時だけで、未反映の frame-local delta を消してはならない。
 - **DeliveringTo との関係**: 搬入先予約は `DeliveringTo` / `IncomingDeliveries` の Relationship が所有する。`SharedResourceCache` には積まず、二重カウントしない。

@@ -70,6 +70,10 @@ auto-build evidence を上書きしません。
 各 blocker record は理由が参照した domain（task / roster / availability / topology）だけを鮮度判定に使います。
 ただし producer cycle の evaluator coverage は roster stamp も照合し、作業可能 Soul / Familiar 構成が変わった旧 cycle は
 `Evaluating...` に戻します。
+Actorの経路探索は`Inventory`のchange detectionを保持したまま処理し、
+到達不能タスクの携行品cleanupが必要な場合だけmutable dereferenceします。
+通常移動・探索成功・idleの到達不能処理で`Changed<Inventory>`を立てて、
+資材の状態が不変なblockerを無効化してはいけません。
 
 ### ツールバー
 

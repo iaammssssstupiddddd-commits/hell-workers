@@ -63,7 +63,7 @@ Familiar AI と Soul AI は**別々のシステムセット**として定義さ�
 - Soul AI: `handle_soul_task_unassign_system`（requestをtask/relationship cleanupへ反映する明示的mutation例外）
 - Familiar AI: `detect_state_changes_system`, `detect_command_changes_system`, `sync_reservations_system`（予約 dirty 時は即時、0.2秒ごとの安全監査あり）
 
-`sync_reservations_system` は `AssignedTask` と `Designation`（Without\<TaskWorkers\>）の2ソースから予約 snapshot を再構築する。active task は予約 operation 由来の signature を比較し、progress だけの更新では再構築しない。差分は `ResourceReservationRequest` で随時反映し、frame-local pickup/store delta は snapshot と別に管理する。
+`sync_reservations_system` は割り当て済み`AssignedTask`から予約 snapshot を再構築する。未割り当てrequestは容量を占有しない。active task は予約 operation 由来の signature を比較し、progress だけの更新では再構築しない。砂の直接採取はitem生成前も`collect_amount`分のMixer容量を保持する。差分は `ResourceReservationRequest` で随時反映し、frame-local pickup/store delta は snapshot と別に管理する。
 
 ### Update（更新）
 

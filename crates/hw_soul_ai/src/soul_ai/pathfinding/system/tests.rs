@@ -158,6 +158,54 @@ fn arrived_idle_soul_does_not_regenerate_a_completed_path() {
 }
 
 #[test]
+fn successful_idle_path_search_preserves_inventory_change_tick() {
+    let mut app = App::new();
+    let position = WorldMap::grid_to_world(12, 12);
+    let destination = WorldMap::grid_to_world(15, 12);
+    app.add_plugins(MinimalPlugins)
+        .insert_resource(WorldMap::default())
+        .insert_resource(RuntimePathSearchBudget::new(1))
+        .init_resource::<SharedResourceCache>()
+        .add_message::<ResourceReservationRequest>()
+        .add_message::<TaskAssignmentRequest>()
+        .add_systems(PreUpdate, reset_runtime_path_search_budget_system)
+        .add_systems(Update, pathfinding_system);
+    #[cfg(feature = "profiling")]
+    app.init_resource::<RuntimePathDeferMetrics>();
+    let soul = app
+        .world_mut()
+        .spawn((
+            Transform::from_translation(position.extend(0.0)),
+            DamnedSoul::default(),
+            Destination(position),
+            Path::default(),
+            AssignedTask::None,
+            IdleState::default(),
+            hw_logistics::Inventory::default(),
+        ))
+        .id();
+    app.update();
+    let before = app
+        .world()
+        .entity(soul)
+        .get_ref::<hw_logistics::Inventory>()
+        .unwrap()
+        .last_changed();
+    app.world_mut().get_mut::<Destination>(soul).unwrap().0 = destination;
+    app.update();
+    assert!(!app.world().get::<Path>(soul).unwrap().waypoints.is_empty());
+    assert_eq!(
+        app.world()
+            .entity(soul)
+            .get_ref::<hw_logistics::Inventory>()
+            .unwrap()
+            .last_changed(),
+        before,
+        "ordinary movement must not invalidate resource availability diagnostics"
+    );
+}
+
+#[test]
 fn actor_work_queue_keeps_fifo_and_drops_entity_state_on_world_epoch_change() {
     let first = Entity::from_bits(1);
     let second = Entity::from_bits(2);

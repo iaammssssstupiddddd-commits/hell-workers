@@ -127,6 +127,7 @@ AutoGather では `ApplyDeferred` 後の同じ Decide tick に `Chop` / `Mine` �
   無条件に stale にしない。一方、producer cycle の evaluator coverage は roster に依存するため、Soul eligibility や
   Familiar 構成が変わった旧 cycle は理由種別にかかわらず stale にする。
 - producer は前 cycle の map を置換し、removed task、履歴、task × evaluator 行列を蓄積しない。
+- Actor経路探索の成功・idle fallbackでは`Inventory`の変更検出を保持し、通常移動だけでavailability診断を無効化しない。
 
 ### I-T8: task action capability は positive allow-list と live 再検証を通す
 
@@ -215,6 +216,10 @@ StasisMud と Sand は地面にドロップされた状態で **5秒後に消滅
 `LoadedIn` / `StoredIn` / `DeliveringTo` / `StoredByMixer`
 
 ### I-L3: 容量判定の方法
+
+Mixerの未割り当てrequestは容量を予約しない。確定済み搬送の予約と同一cycleのshadowだけを
+空き容量から差し引く。砂の直接採取はitem生成前も`collect_amount`分を予約signatureに保持し、
+同期で予約を消したり、中断時に未生成分の解放を省略したりしてはならない。
 
 通常 Stockpile の新規搬入可能量は `evaluate_stockpile_policy(NewInbound)` で決める。
 物理容量だけでなく `target_amount`、acceptance、現在内容の資源、資源別 `IncomingDeliveries`、

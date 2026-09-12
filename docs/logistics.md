@@ -293,6 +293,7 @@ assignment arbitrationが新しいrequest/workerを追加しない。既存in-fl
   - 積込: `Loading` フェーズで砂アイテムを砂源位置に直接生成し、`min(不足量, WHEELBARROW_CAPACITY)` 分を猫車に一括積載。
   - ソース（砂置き場/砂タイル）は消費しない（無限ソース）。
   - `Loading` フェーズで生成するため搬入先への `DeliveringTo` は挿入されない（Mixer 宛の予約は `ReserveMixerDestination` op で別途管理）。
+  - 採取前は`collect_amount`分、採取後は`items`分のMixer容量をactive reservation signatureに保持する。同期・中断時もbuilderと同じ数量を再構築・解放する。
   - 需要計算: `needed = MUD_MIXER_CAPACITY - current - inflight`。`inflight` には `DeliverToMixerSolid+Sand` に割り当て済みの worker 数を使用し、過剰タスク発行を防止する。
 
 ### 4.4 MudMixer 水搬入 (`DeliverWaterToMixer`)
@@ -572,10 +573,11 @@ Stockpile / Blueprint / Tank などへの搬入予約は、Bevy の Relationship
 - `source_reservations`（アイテムやタンク）
 
 #### 再構築
-- `sync_reservations_system` が `AssignedTask` と未割り当て request（`Designation` + `TransportRequest`）から予約を再構築。
-- 初回、予約 operation を変える active task の signature 差分、pending request 側の変更/削除、または `RESERVATION_SYNC_INTERVAL` の安全監査で snapshot を置換する。timer は遅延適用のためではなく、取りこぼし検出のための監査である。
+- `sync_reservations_system` が割り当て済み`AssignedTask`だけから予約を再構築。未割り当てrequestは需要であり容量を占有しない。pending requestを予約に含めると、自身が最後の空き1個を塞いで割り当て不能になる。
+- 初回、予約 operation を変える active task の signature 差分、または `RESERVATION_SYNC_INTERVAL` の安全監査で snapshot を置換する。timer は遅延適用のためではなく、取りこぼし検出のための監査である。
 - active task の signature は `hw_jobs::lifecycle::collect_active_reservation_ops` と同じ正規化経路から導出する。progress のみが変わった `AssignedTask` は snapshot を再構築しないが、予約対象・種別・phase が変わる遷移、assignment、completion、removal は再構築対象である。
 - `AssignedTask` removal は安全側で snapshot を再構築する。`RemovedComponents` reader は全件消費し、同じ removal を次フレーム以降に繰り返し dirty と扱わない。
+- profiling CSVの`reservation_sync_pending_tasks_scanned`列は互換性のため維持し、pending走査廃止後は0となる。
 
 #### 差分適用
 - `TaskAssignmentRequest` に含まれる `reservation_ops` は、その適用時に `apply_reservation_op` を通じて cache へ直接反映する。

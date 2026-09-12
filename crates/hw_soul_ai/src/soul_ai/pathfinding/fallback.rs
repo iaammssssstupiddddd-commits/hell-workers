@@ -177,7 +177,7 @@ pub(super) fn cleanup_unreachable_destination(
     commands: &mut Commands,
     soul: SoulEntityCtx<'_>,
     state: SoulMoveState<'_>,
-    inventory_opt: Option<&mut hw_logistics::Inventory>,
+    mut inventory_opt: Option<Mut<'_, hw_logistics::Inventory>>,
     queries: &mut TaskAssignmentQueries,
     world_map: &WorldMap,
 ) {
@@ -207,7 +207,9 @@ pub(super) fn cleanup_unreachable_destination(
             SoulDropCtx {
                 soul_entity: soul.entity,
                 drop_pos: soul.transform.translation.truncate(),
-                inventory: inventory_opt,
+                // Keep change detection untouched during successful searches and
+                // idle fallback. Only task cleanup can drop carried resources.
+                inventory: inventory_opt.as_deref_mut(),
                 dropped_item_res: None,
             },
             state.task,

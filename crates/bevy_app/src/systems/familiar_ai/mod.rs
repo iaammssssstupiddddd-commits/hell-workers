@@ -5,6 +5,9 @@ use bevy::prelude::*;
 pub mod diagnostics;
 pub mod perceive;
 
+#[cfg(test)]
+mod transport_assignment_tests;
+
 pub use hw_core::familiar::FamiliarAiState;
 
 pub struct FamiliarAiPlugin;

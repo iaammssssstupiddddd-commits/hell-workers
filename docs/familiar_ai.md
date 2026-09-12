@@ -219,7 +219,7 @@ callers は `hw_familiar_ai::*` の完全パスを直接参照する。
 
 ### 7.1. 共有リソースキャッシュ (SharedResourceCache)
 タスク間のリソース競合を O(1) で管理します。従来の `HaulReservationCache` を統合・拡張したものです。
-- **仕組み**: Perceiveフェーズで初回、reservation signature の差分、pending task 側の変更/削除、または **0.2秒の安全監査**時に snapshot を再構築し、各フレームの更新は `ResourceReservationRequest` を通じて反映されます。signature は active reservation operation だけを比較するため、進捗値の更新は再構築しません。
+- **仕組み**: Perceiveフェーズで初回、active reservation signature の差分、または **0.2秒の安全監査**時に snapshot を再構築し、各フレームの更新は `ResourceReservationRequest` を通じて反映されます。未割り当てrequestは容量を占有しません。signature は active reservation operation だけを比較するため、進捗値の更新は再構築しません。Mixer向け砂採取はitem生成前も`collect_amount`分を保持します。
 - **cache 境界**: `begin_frame()` は frame-local の pickup/store delta だけを clear し、snapshot 置換は delta を保ったまま予約 map だけを更新します。
 - **load**: `ReservationSignatureCache` と同期 timer も cache と同時に reset され、次の Perceive が完全 snapshot を構築します。
 - **境界**: `apply_reservation_op` / `apply_reservation_requests_system` の実装は `hw_logistics` にあるが、`SharedResourceCache` / `ReservationSignatureCache` の `init_resource` と `ResourceReservationRequest` の `add_message` は app shell が担当します。

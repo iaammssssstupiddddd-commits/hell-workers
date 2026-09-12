@@ -152,6 +152,23 @@ pub fn collect_active_reservation_ops(
                 amount: 1,
             });
 
+            // Direct collection has no item entities until Loading. Preserve
+            // the builder's destination reservation across snapshot rebuilds
+            // and release the same amount if collection is interrupted.
+            if data.collect_source.is_some()
+                && let WheelbarrowDestination::Mixer {
+                    entity: target,
+                    resource_type,
+                } = data.destination
+            {
+                for _ in 0..data.collect_amount.max(1) {
+                    ops.push(ResourceReservationOp::ReserveMixerDestination {
+                        target,
+                        resource_type,
+                    });
+                }
+            }
+
             for &item in &data.items {
                 match data.destination {
                     WheelbarrowDestination::Stockpile(_) | WheelbarrowDestination::Blueprint(_) => {

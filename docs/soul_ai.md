@@ -192,6 +192,7 @@ Soul 本体画像は、Idle 状態だけでなくイベントでも一時差し�
   - budget不足は `Deferred` であり到達不能ではない。Actor再探索の `Deferred` 時は `PathCooldown`、`Destination`、`Path`、task/予約を変更せず同じ探索段階から再試行する。task handler / bucket routing も phase・assignment・reservation・Destination・Path を維持し、direct失敗後のadjacent探索は adjacent から再開する。escapeは要求を出さず、現在の逃走状態・目的地・経路と評価済み候補を次の行動tickまで維持する
 - **無変更フレームのスキップ**: `Path` は計画時の目的地 `planned_destination` と検証済み世代 `validated_obstacle_version` を保持する。`can_skip_pathfinding_tick` が「有効パス追従中 かつ 目的地不変（`planned_destination == destination`）かつ `WorldMap.obstacle_version` 不変 かつ cooldown なし」を満たす Soul を per-tick でスキップし、`reuse.rs` も版一致時は経路上の全 waypoint 再検証（`is_walkable` 走査）を省略する。完了済みまたは空のPathで現在位置がDestinationから1 world unit以内なら、新しい探索要求自体を作らない。目的地変更・マップ変更（→ [I-PF1](invariants.md)）のいずれかで再検証・再探索が発火する。
 - **部分再利用**: 既存パスの後半だけが障害物で塞がれた場合、阻塞直前から目的地までの部分パスを再探索して前半を再利用します。
+- **携行品の変更検出**: Actorの経路探索は`Inventory`を`Mut`のまま渡し、到達不能タスクのcleanupに入る場合だけmutable dereferenceする。通常移動のために`Changed<Inventory>`を立てると、Task Dashboardのavailability診断を誤って無効化するため禁止する。
 
 `RuntimePathSearchBudget` は `PreUpdate` でresetされ、world replacement時にも初期化される。runtime の waypoint 生成はすべて budgeted facade を使い、raw A* は `hw_world` 内の mapgen/test 専用である。Actor は目的地・task・idle state の変更、cooldown 終了、topology 変更を class 別 FIFO へ入れ、topology 変更時以外は全 Soul の二重走査をしない。task executionのround-robin母集団も`ActiveTaskIdentity`保持者に限定し、`WorkingOn`だけが残るidentity欠落と`RemovedComponents<ActiveTaskIdentity>`をfail-closed edgeとして追加する。task handler とescape は core A* を claim した Entity の次から round-robin し、Actor FIFO、task/escape continuation は `WorldEpoch` 変更時に破棄する。
 
