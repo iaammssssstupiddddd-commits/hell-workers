@@ -72,6 +72,10 @@
   旧型枠7 fileの不変検査、独立release validator、provenance・再export証拠を必須にする。
 - [x] clean subjectでfinal封印し、正式candidateの標準倍率品質matrix（9条件）を検証する。
 - [ ] 正式candidateの性能Capture／Memory、時間方向の確認を行う。
+- [x] 非focus経路を観測し、perf実windowだけ連続更新へ固定する修正と、
+  通常playの省電力設定・headless runnerを維持する回帰testを追加する。
+- [ ] 更新後のclean subjectで再採取して60Hz制限の解消を確認する。
+  旧subjectの性能値を合格証拠へ流用しない。
 - [ ] 本番昇格の明示承認とreceipt・復旧前像を揃え、通常authorityで反映後確認する。
 
 ## 6. リスクと対策
@@ -117,7 +121,9 @@ native未実施のBlender画像をゲーム内の完成証拠へ格上げしな�
   v3の等倍可読性指摘を受けたv4整理候補は`8d93bf11`へコミットし、標準／最遠native ArtPreview pass。
   ユーザーの新アート承認を記録し、`edebfc90`でgeneration 13をfinal封印済み。
   同subject・同候補で正式標準9条件matrixを再試行し、9/9 valid＋独立verify pass。
-  性能Capture／Memory・時間方向の確認・新本番昇格は未実施。
+  性能Captureは同条件2回とも60Hz paced判定で停止。非focus時の更新制限を避ける
+  perf専用連続更新と回帰testを実装。新subjectの実機再検証は未実施。
+  Memory・時間方向の確認・新本番昇格は未実施。
   承認前previewをformal authorityへ手作業で変更しない。
 - 参照必須: `docs/blender-setup.md`、`docs/assets_workflow.md`、native/Help/docsスキル。
 - 初回検証ログ: workflow Python 128/128 pass（新規7 testを含む）。6 GLBのscene/Khronosは
@@ -507,6 +513,44 @@ job親directoryは上記と同じ共通validation worktreeの`target/native-acce
 本番Wall generation 10 / Door generation 7は不変。新規worktree/branch作成・削除なし、回収容量0。
 次は既存正式profileで性能Capture／Memoryと時間方向の確認を行い、明示承認を伴う本番昇格へ進む。
 
+### v4性能Captureの停止と再開計画
+
+同じ`edebfc90`／generation 13から正式profile `wall-production-performance-v2`を開始した。
+job `wall-production-performance-20260912T154554Z-d5c6f456`はbuild完了後、
+completed / small / productionの初回runで`display_paced`判定となり`status=invalid`。
+60秒の3,600 sample、60.0 fps、p50=16.657678 ms。先行fallbackは3,110 sample、
+51.833 fps、p50=16.817592 msであり、この1 pairだけで比較の合格や性能改善を主張しない。
+job.json SHA-256=`7e9187c34196b627e8831cec9f3b31258099ed7057a37ae844b624eed7fe98fe`、
+capture-order.json SHA-256=`78b68049c31fac82e30673035ec216a14fa321bffc5aa4c825beeb2e4165fd30`。
+parentは上記共通validation worktreeの`target/native-acceptance/`。失敗artifactは保持する。
+
+`window.csv`は開始／終了ともX11 / Intel Arc (MTL) / Vulkan、
+requested=`auto_no_vsync`、effective=`immediate`。ただしこれは更新ループが非pacedである証拠ではない。
+hostはGNOME Wayland上のXwayland。compositor原因とは断定しない。
+ローカルBevy 0.19.0の`bevy_winit/src/winit_config.rs`で、既定`WinitSettings::game()`が
+focus時Continuous／非focus時`reactive_low_power(1/60秒)`を使い、VSyncとは独立であると確認した。
+失敗時subjectのアプリはこのresourceを上書きしていなかった。
+
+同条件再試行`wall-production-performance-20260912T155229Z-0408c508`を一度だけ開始し、
+`xprop`で非破壊にフォーカスを観測した。fallback PID 760650のclientは`0x1800004`、
+activeは別PID 741846の`0xe00004`だった（UTC 15:53:31時点でも同じ）。
+これにより非focus経路の成立を確認したが、初回失敗runのfocusやcompositor寄与までは確定しない。
+再試行もproduction / completed / smallで3,600 sample、60.0 fps、p50=16.659912 msとなりinvalid。
+job.json SHA-256=`f147bcd9bb3c35643741190051ffcf4e0ad1bf21a2a840da64f4db07ab05e160`。
+両jobのchild終了後にのみ、primaryの`main.rs`へ次の修正を実装した。
+
+次の変更は非focus制限が計測を支配する仮説だけを検証する。perfの実windowに限り
+`WinitSettings::continuous()`を設定し、通常play／headlessには適用しない。
+通常mode維持とperfのfocused/unfocused両方Continuousをtestする。画面設定・VSync・測定時間・
+60Hz拒否gateは変更しない。変化がなければ同仮説の値調整を繰り返さず、表示環境側へ切り分ける。
+`perf_window_update_settings`は`perf_enabled && !headless`のときだけresourceを返し、
+WinitPlugin設定後に適用する。2 testでfocusの両分岐と通常／headlessの3組合せを検査する。
+新sourceでの実機再採取前なので、この修正で実測の60fps固定が解消したとはまだ主張しない。
+修正後の`dev.py check`、明示workspace Clippy `-D warnings`、`dev.py verify`全gateがpass。
+profiling binaryの上記focused 2 testも2/2 pass。`main.rs`のrust-analyzer診断はerrors=0 / warnings=0。
+native helper・asset view・原図は変更していない。新規worktree/branch作成・削除なし、回収容量0。
+MemoryはCapture完了後に逐次実行する。ちらつき・本番昇格も未完了で、本番locatorは不変。
+
 ### Help impact（実経路レビュー）
 
 `No impact`。`create_prism → GLB UV0 → ResolvedProductionWallAssets →
@@ -527,6 +571,9 @@ v4も同じproducer/consumerを再確認。`wall_asset_set.rs`のcomplete materi
 変えないため`No impact`。Help provider / snapshotへ空変更を加えない。
 v4承認記録／封印追加も実経路で`No impact`。制作側の承認・隔離候補・release payload検査のみを追加し、
 runtime material選択・建設入力・資材・状態の意味・Help本文を変更しない。
+性能計測の連続更新も`No impact`。`PerfScenarioConfig::enabled → perf_window_update_settings →
+WinitSettings`だけに作用し、通常起動ではresourceを上書きしない。Architect入力からWall完成・
+Room境界と`orders_building_zones`の説明へ至る経路は不変。Help provider/snapshotは変更しない。
 
 ## 10. 更新履歴
 
@@ -541,3 +588,4 @@ runtime material選択・建設入力・資材・状態の意味・Help本文を
 | 2026-09-12 | Codex | 実機等倍での可読性指摘を受けv4へ整理。下段装飾廃止・全側面stone・低コントラストcore、6 GLBと137 test・全体gate pass。未コミット、native再撮影・本番反映前 |
 | 2026-09-12 | Codex | 明示承認でv4をコミットし、隔離generation 12で標準／最遠native ArtPreview pass。実機画像・identityを記録。本番反映は保留 |
 | 2026-09-12 | Codex | v4アート承認を記録。正式封印経路・14回帰testを追加しgeneration 13を封印、151 test・全体gate pass。正式標準matrixは初回単色captureで停止、同条件再試行で9/9 valid・独立verify pass。本番は不変 |
+| 2026-09-12 | Codex | 正式性能Captureは2回とも60Hz判定で停止。非focus経路を観測し、perf実window限定の連続更新と2回帰testを追加。実機再採取・Memory・ちらつき・本番は未完了 |

@@ -4,7 +4,7 @@ use bevy::prelude::*;
 use bevy::render::RenderPlugin;
 use bevy::render::settings::{Backends, RenderCreation, WgpuSettings};
 use bevy::window::{ExitCondition, PresentMode, WindowResolution};
-use bevy::winit::WinitPlugin;
+use bevy::winit::{WinitPlugin, WinitSettings};
 use bevy_app::{HellWorkersGamePlugin, plugins::startup::PerfScenarioConfig};
 use std::env;
 #[cfg(target_os = "linux")]
@@ -58,6 +58,8 @@ fn main() -> AppExit {
         std::process::exit(2);
     }
     let use_headless_runner = headless_runner_requested(&perf_config);
+    let window_update_settings =
+        perf_window_update_settings(perf_config.enabled(), use_headless_runner);
     let window_resolution = perf_window_resolution(&perf_config);
     let game_plugin = HellWorkersGamePlugin::new(perf_config);
     let log_filter = game_plugin.log_filter().to_string();
@@ -103,6 +105,9 @@ fn main() -> AppExit {
     } else {
         app.add_plugins(default_plugins);
     }
+    if let Some(settings) = window_update_settings {
+        app.insert_resource(settings);
+    }
     app.add_plugins(game_plugin);
     if let Some(plugin) = native_acceptance_plugin {
         app.add_plugins(plugin);
@@ -115,6 +120,12 @@ fn main() -> AppExit {
     }
 
     app.run()
+}
+
+fn perf_window_update_settings(perf_enabled: bool, headless: bool) -> Option<WinitSettings> {
+    // Bevy's default unfocused game loop is limited to 60 Hz independently of VSync.
+    // Benchmark both presentations without focus-dependent pacing; leave normal play alone.
+    (perf_enabled && !headless).then(WinitSettings::continuous)
 }
 
 fn perf_window_resolution(perf_config: &PerfScenarioConfig) -> WindowResolution {
@@ -242,5 +253,29 @@ fn select_present_mode() -> PresentMode {
             _ => PresentMode::AutoVsync,
         },
         Err(_) => PresentMode::AutoVsync,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bevy::winit::UpdateMode;
+
+    #[test]
+    fn perf_window_updates_are_continuous_with_or_without_focus() {
+        let settings = perf_window_update_settings(true, false).unwrap();
+        for focused in [true, false] {
+            assert!(matches!(
+                settings.update_mode(focused),
+                UpdateMode::Continuous
+            ));
+        }
+    }
+
+    #[test]
+    fn normal_play_and_headless_keep_their_existing_update_settings() {
+        for (perf_enabled, headless) in [(false, false), (false, true), (true, true)] {
+            assert!(perf_window_update_settings(perf_enabled, headless).is_none());
+        }
     }
 }
