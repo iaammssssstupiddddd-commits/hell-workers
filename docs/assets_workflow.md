@@ -326,13 +326,24 @@ g6へのcanonical / runtime復旧前像と新hashは[設計図修正計画M5](pl
 manifest SHA-256は`ef4f3c62f185570b83b5781470bbb2d7eb8571502c664c18bdcafc39081454cf`。
 全側面を大きな石面へ統一し、断面は同系色の低コントラスト内部模様とする。厚さ9.6・高さ32・形状・法線、
 型枠7 file、Door generation 7は不変。通常runtimeへの導入状況と実画面証拠は
-[本設壁修正計画](plans/3d-rtt/wall-surface-uv-plan-2026-09-12.md)を参照する。
+[本設壁修正の完了記録](plans/archive/wall-surface-uv-plan-2026-09-12.md)を参照する。
 このrevisionだけはユーザー指示で追加性能Capture・ばらつき調査・Memoryを打ち切った。
 receiptのevidence bundleにも正式性能jobの`invalid`、Memory未実施、時間方向のちらつき未確認を明記し、
 全M5合格や新しい性能baseline登録として扱わない。一般の受入profile・閾値は変更していない。
 承認記録・canonical前像・primary / validation runtime前像・promotion planはasset root外の
 `/home/satotakumi/Sync/hell-workers-release-evidence/wall-surface-20260913/`に保存する。
 旧generation 10は保持し、復旧ではcanonical pointerと対象runtime locatorの両方を戻す。
+
+同日の「OKです。クローズしてください」により、本設壁修正は完了としてクローズした。
+時間方向のちらつきは未検証のまま終了する。追加検証の予定を残さず、未検証を合格にも変更しない。
+release locator SHA-256は`fc1f05e9a59a5f0a339f7ef655cdf08e95215eaa8440d4a0d5213a7da83279f9`。
+上記release-evidence内の`wall-door-joint-20260912T170810Z-d382708c/`に通常版6場面のcapsuleを保存済み。
+manifest SHA-256は`f71bc04b42a0dce971daf89b04fc6d2e8b73251b194089a57ee266d46af7d4b1`、
+承認された`joint-loaded.png`は`20cb02c95d3bfb4f609fc6dbd0b07f8cadddbafafac6f997c7a0f1c9fbb8fe61`。
+他のmanifest・比較CSV・承認PNG・復旧前像のhashは上記完了記録に保持する。
+本修正専用の新規worktree / branchはなく、共通`wall-door-joint-83ad3f85`は未完の型枠／扉trackが所有する。
+その整理は両trackのclose時に行い、本修正のちらつき確認を保持理由にしない。今回の削除・回収容量は0。
+本クローズは文書と索引のみの変更で、ゲームの表示・操作・建設条件・Help文言を変更しない（Help: No impact）。
 
 validation worktreeは作業場であって成果物ではない。trackを閉じたら、各jobの`manifest.json`、比較CSV、
 承認画像だけを`staging/validation/<capsule>/`のような小さなdirectoryへ残し、worktree本体は

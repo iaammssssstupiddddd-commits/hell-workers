@@ -1,6 +1,6 @@
 # Plans Index
 
-`docs/plans` の文書ステータス一覧（更新日: 2026-09-12）。
+`docs/plans` の文書ステータス一覧（更新日: 2026-09-13）。
 
 ## 新規計画書の作り方
 
@@ -44,7 +44,6 @@
 | [3d-rtt/single-scene-light-field/08-legacy-cleanup-release-plan-2026-08-03.md](3d-rtt/single-scene-light-field/08-legacy-cleanup-release-plan-2026-08-03.md) | Completed — bounded P08 release closure valid; historical performance bootstrap intentionally not resumed | Soul projector／section／legacy mirrorを撤去し、最終GPU経路・cross-consumer・Help gateを閉じるP08。 |
 | [3d-rtt/single-scene-rtt-indoor-light-field-migration-plan-2026-08-03.md](3d-rtt/single-scene-rtt-indoor-light-field-migration-plan-2026-08-03.md) | Completed — P00〜P08 and P02-A complete; P08 bounded release closure valid | Scene RtT 1枚、TopDown表示、放射状Indoor Light Fieldへの9分割親ロードマップ。 |
 | [3d-rtt/terrain-lod-switch-flicker-plan-2026-04-17.md](3d-rtt/terrain-lod-switch-flicker-plan-2026-04-17.md) | Draft | 地形 LOD の単発切替ポップを観測し、短い dither 遷移で抑える計画 |
-| [3d-rtt/wall-surface-uv-plan-2026-09-12.md](3d-rtt/wall-surface-uv-plan-2026-09-12.md) | In Progress | 本設壁の側面UV・上面断面修正 |
 | [development-workstation-blender-migration-plan-2026-07-29.md](development-workstation-blender-migration-plan-2026-07-29.md) | In Progress | 新PCへの開発環境移行と、現PCでのBlender／asset新規構築計画。 |
 | [hvac-plumbing-plan-2026-07-13.md](hvac-plumbing-plan-2026-07-13.md) | Draft | 地獄のインフラ（換気・導水・部屋認可）実装計画 |
 | [native-acceptance-resource-safety-plan-2026-08-05.md](native-acceptance-resource-safety-plan-2026-08-05.md) | Complete | tmpfs上のCargo出力を永続storageへ固定し、実機検証のRAM圧迫を防ぐ計画。 |
@@ -110,6 +109,7 @@
 | [archive/task-dashboard-performance-validation-plan-2026-07-20.md](archive/task-dashboard-performance-validation-plan-2026-07-20.md) | Archived | A3で未整備のdashboard mode別AI work counterと実renderer / allocator計測を、再現可能なperf harnessへ載せるの計画。 |
 | [archive/task-execution-refactor-plan-2026-07-07.md](archive/task-execution-refactor-plan-2026-07-07.md) | Archived | task_execution リファクタリング計画（コンテキスト集約・完了/中断区別・ログ降格・boundary.rs 分割） |
 | [archive/text-input-ui-plan-2026-07-05.md](archive/text-input-ui-plan-2026-07-05.md) | Archived | テキスト入力 UI — EditableText + clipboard 実装計画 |
+| [archive/wall-surface-uv-plan-2026-09-12.md](archive/wall-surface-uv-plan-2026-09-12.md) | Archived | 本設壁の側面UV・上面断面修正 |
 | [soul-energy/archived/milestone-roadmap.md](soul-energy/archived/milestone-roadmap.md) | Archived | Soul Energy System — Milestone Roadmap |
 | [soul-energy/archived/phase1a-data-model.md](soul-energy/archived/phase1a-data-model.md) | Archived | Phase 1a: Data Model + Grid Infrastructure |
 | [soul-energy/archived/phase1b-soul-spa.md](soul-energy/archived/phase1b-soul-spa.md) | Archived | Phase 1b: Soul Spa + GeneratePower Task |

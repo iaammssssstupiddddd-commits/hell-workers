@@ -5,10 +5,24 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `wall-surface-uv-plan-2026-09-12` |
-| ステータス | `In Progress` |
+| ステータス | `Completed — ユーザー了承でクローズ（未検証範囲を明記）` |
 | 作成日 / 最終更新日 | `2026-09-12` / `2026-09-13` |
 | 作成者 | Codex |
 | 関連提案 / Issue/PR | N/A |
+
+## クローズ記録（2026-09-13）
+
+generation 13の通常版反映・実機6場面／ロード後・品質gateの結果と、ちらつき未確認、
+共有検証環境の保持を報告した後、ユーザーから「OKです。クローズしてください」を受領した。
+本設壁の修正・本番反映を完了としてクローズする。時間方向のちらつきは未検証のまま終了し、
+合格とはしない。追加性能Capture・ばらつき調査・Memoryも再開しない。
+ここから下の再開予定・未完表示は当時の履歴であり、追加作業の指示ではない。
+恒久仕様と最終状態は`docs/assets_workflow.md`へ同期した。release payload・receipt・画像は変更しない。
+
+本修正が新規作成したvalidation worktree / branchは0件。共通の`wall-door-joint-83ad3f85`は
+型枠計画・扉計画の未完受入／共通closeが所有するため、両trackのclose時に整理する。
+本修正のちらつき確認は保持理由から外す。他trackを勝手にクローズ・削除しない。
+証拠capsuleと復旧前像は下記の外部release-evidence directoryに保存済み。削除・回収容量は0。
 
 ## 1. 目的
 
@@ -59,7 +73,7 @@
 - [x] ゲームの縦補正・基準grid・両軸を備えた寸法比較画像へ更新する。
 - [x] 断面専用の粒子・微細亀裂を実装し、標準zoomと最大zoom-out相当の静止Blender画像を確認する。
 - [x] nativeで標準／最大zoom-outの静止画像と対象assetの描画成立を確認する（M3証拠参照）。
-- [ ] 時間方向のちらつきを確認する。今回の単一frame画像では未検証。
+- 時間方向のちらつき: 未検証で終了。未確認を説明した上でユーザーがクローズを了承。
 
 ### M3: 実機・本番反映
 
@@ -72,7 +86,7 @@
   旧型枠7 fileの不変検査、独立release validator、provenance・再export証拠を必須にする。
 - [x] clean subjectでfinal封印し、正式candidateの標準倍率品質matrix（9条件）を検証する。
 - [x] 性能Capture／Memoryの追加実施はユーザー指示で打ち切る（合格ではなく免除、下記参照）。
-- [ ] 時間方向のちらつきを確認する（性能検証の免除とは別）。
+- 時間方向のちらつき: 未検証で終了（性能検証の免除とは別に、最終クローズ指示で終了）。
 - [x] 非focus経路を観測し、perf実windowだけ連続更新へ固定する修正と、
   通常playの省電力設定・headless runnerを維持する回帰testを追加する。
 - [x] 更新後のclean subjectで再採取して60Hz制限の解消を確認する。
@@ -119,7 +133,8 @@ candidate性能Capture／Memoryは当初予定したが、2026-09-13のユーザ
 ## 9. AI引継ぎメモ
 
 - 開始subject: `c58d2aed`、開始時worktree clean。
-- 現在地: M1完了。v3の断面texture・投影条件を実装し、6 GLBとBlender比較を検証済み。
+- 最終状態: ユーザー了承でクローズ済み。以下は実装・受入の履歴。
+  v3の断面texture・投影条件を実装し、6 GLBとBlender比較を検証済み。
   壁修正を`23d6cd68`へコミット済み。`87f0e682`の隔離候補で標準／最遠native ArtPreviewがpass。
   v3の等倍可読性指摘を受けたv4整理候補は`8d93bf11`へコミットし、標準／最遠native ArtPreview pass。
   ユーザーの新アート承認を記録し、`edebfc90`でgeneration 13をfinal封印済み。
@@ -138,7 +153,8 @@ candidate性能Capture／Memoryは当初予定したが、2026-09-13のユーザ
 - 2026-09-12: `python3 scripts/dev.py verify`は`All quality gates passed`、
   `python3 scripts/dev.py check`および明示的なworkspace Clippy `-D warnings`もpass。
   初回M2時点ではRust変更・native Capture / Memoryなし。後続M3の結果は下記へ分離して記録する。
-- Definition of Done: M1〜M3、仕様同期、全gate合格、承認証拠のcapsule保存と所有workspaceの棚卸し。
+- Definition of Done: 実装・本番反映・仕様同期・品質gate、承認証拠のcapsule保存とworkspace所有の棚卸し。
+  ユーザーの打ち切り／クローズ了承による未検証範囲を明記し、全受入合格とは扱わない。
 
 ### M2初回の隔離成果物（色修正前の履歴）
 
@@ -706,6 +722,7 @@ Room境界と`orders_building_zones`の説明へ至る経路は不変。Help pro
 
 | 日付 | 変更者 | 内容 |
 | --- | --- | --- |
+| 2026-09-13 | Codex | 「OKです。クローズしてください」で完了。ちらつき未検証のまま終了、共有環境は型枠／扉track所有として保持し、本計画をarchive |
 | 2026-09-13 | Codex | g13をreceipt付き登録。通常authority J1の3 audit / 6場面・独立verify後にprimary導入、復旧前像とcapsuleを保存。ちらつきは未確認 |
 | 2026-09-13 | Codex | ユーザー指示で追加性能検証・ばらつき調査・Memoryを打ち切り。generation 13本番反映の了承と未確認範囲を記録 |
 | 2026-09-12 | Codex | 原因・UV修正方針・承認境界を固定 |
