@@ -6,7 +6,7 @@
 | --- | --- |
 | 計画ID | `wall-surface-uv-plan-2026-09-12` |
 | ステータス | `In Progress` |
-| 作成日 / 最終更新日 | `2026-09-12` |
+| 作成日 / 最終更新日 | `2026-09-12` / `2026-09-13` |
 | 作成者 | Codex |
 | 関連提案 / Issue/PR | N/A |
 
@@ -71,12 +71,14 @@
 - [x] 本設更新専用final封印を実装する。新しい本設v2 sourceを同梱するauthoring v3とし、
   旧型枠7 fileの不変検査、独立release validator、provenance・再export証拠を必須にする。
 - [x] clean subjectでfinal封印し、正式candidateの標準倍率品質matrix（9条件）を検証する。
-- [ ] 正式candidateの性能Capture／Memory、時間方向の確認を行う。
+- [x] 性能Capture／Memoryの追加実施はユーザー指示で打ち切る（合格ではなく免除、下記参照）。
+- [ ] 時間方向のちらつきを確認する（性能検証の免除とは別）。
 - [x] 非focus経路を観測し、perf実windowだけ連続更新へ固定する修正と、
   通常playの省電力設定・headless runnerを維持する回帰testを追加する。
 - [x] 更新後のclean subjectで再採取して60Hz制限の解消を確認する。
   旧subjectの性能値を合格証拠へ流用しない。
-- [ ] 本番昇格の明示承認とreceipt・復旧前像を揃え、通常authorityで反映後確認する。
+- [x] 残作業を説明した後の「続けてください」をgeneration 13本番反映の了承として記録する。
+- [ ] receipt・復旧前像を揃え、通常authorityで反映後確認する。
 
 ## 6. リスクと対策
 
@@ -106,7 +108,8 @@ GLBの輪郭・port・厚さ・triangle数は旧geometry gateで別に確認す�
 `python3 scripts/dev.py check`、`python3 scripts/dev.py verify`、
 `python3 scripts/dev.py cargo -- clippy --workspace --all-targets -- -D warnings`を実行する。
 native未実施のBlender画像をゲーム内の完成証拠へ格上げしない。新規性能baselineの登録は対象外。
-本番昇格前のcandidate性能Capture／Memoryは既存の正式受入profileで別に検証する。
+candidate性能Capture／Memoryは当初予定したが、2026-09-13のユーザー指示で追加実施を免除する。
+これは本revision限定であり、正式受入profileや閾値を変更せず、過去のinvalidをpassに変更しない。
 
 ## 8. ロールバック方針
 
@@ -124,8 +127,8 @@ native未実施のBlender画像をゲーム内の完成証拠へ格上げしな�
   性能Captureは同条件2回とも60Hz paced判定で停止。非focus時の更新制限を避ける
   perf専用連続更新と回帰testを`552d9c91`で実装。新subjectでは22回すべて非pacedだが、
   fallback / provisional / smallの反復間p50比1.628が上限1.25を超え、正式jobはinvalid。
-  新たな性能改善／合格は主張しない。ばらつきの原因調査と安定条件での再採取が必要。
-  Memory・時間方向の確認・新本番昇格は未実施。
+  新たな性能改善／合格は主張しない。以後のばらつき調査・性能再採取・Memoryはユーザー指示で打ち切り。
+  時間方向の確認は未実施。本番昇格は残件説明後の「続けてください」で了承され、receipt付き反映へ進む。
   承認前previewをformal authorityへ手作業で変更しない。
 - 参照必須: `docs/blender-setup.md`、`docs/assets_workflow.md`、native/Help/docsスキル。
 - 初回検証ログ: workflow Python 128/128 pass（新規7 testを含む）。6 GLBのscene/Khronosは
@@ -593,6 +596,18 @@ native helper・Rust・asset dataへの追加変更なし。`docs/performance-pr
 本番Wall generation 10 / Door generation 7、画像・原図は不変。新worktree/branch作成・削除なし、
 回収容量0。ちらつき確認・正式Memory・本番昇格は引き続き未完了。
 
+### 2026-09-13: 追加性能検証の打ち切りと本番反映許可
+
+ユーザーはばらつきが旧表示側にあることを確認した後、「じゃあ検証不要です」と指示した。
+追加の性能検証・ばらつき調査を打ち切り、Memoryも再開しない。上記の再開計画は履歴としてのみ保持する。
+正式性能jobはinvalidのまま、Memoryは未実施のままとし、合格・性能改善・baseline登録を主張しない。
+残件としてgeneration 13の本番反映、時間方向のちらつき確認、記録とworkspace整理を説明した後の
+「続けてください」を、承認済みアートのreceipt付き本番反映への了承として記録する。
+ちらつきは未確認であり、性能検証の打ち切りをその合格または免除へ広げない。
+通常authorityの実画面・load後確認は既存J1 launcherで行い、性能比較matrixを再実行しない。
+canonical前像とprimary / validation runtime locatorは別々に保存し、Door generation 7は変更しない。
+共通Wall/Door trackは未完なので、そのvalidation worktree・他trackの成果物は削除しない。
+
 ### Help impact（実経路レビュー）
 
 `No impact`。`create_prism → GLB UV0 → ResolvedProductionWallAssets →
@@ -616,11 +631,14 @@ runtime material選択・建設入力・資材・状態の意味・Help本文を
 性能計測の連続更新も`No impact`。`PerfScenarioConfig::enabled → perf_window_update_settings →
 WinitSettings`だけに作用し、通常起動ではresourceを上書きしない。Architect入力からWall完成・
 Room境界と`orders_building_zones`の説明へ至る経路は不変。Help provider/snapshotは変更しない。
+本番反映も同じ実経路で`No impact`。release locatorから本設6 mesh・albedo/emissiveの読み込み先を
+切り替えるだけで、型枠7 file・Door・建設入力・必要資材・状態選択・Room境界・Help文言は変えない。
 
 ## 10. 更新履歴
 
 | 日付 | 変更者 | 内容 |
 | --- | --- | --- |
+| 2026-09-13 | Codex | ユーザー指示で追加性能検証・ばらつき調査・Memoryを打ち切り。generation 13本番反映の了承と未確認範囲を記録 |
 | 2026-09-12 | Codex | 原因・UV修正方針・承認境界を固定 |
 | 2026-09-12 | Codex | M1〜M2完了。6 GLB・前後board・128 Python test・全体gate pass、native前のコミット承認待ち |
 | 2026-09-12 | Codex | 断面色の追加修正。UV-v2と確認材質の反射補正、紫rim／白色照明の比較画像を別生成 |
