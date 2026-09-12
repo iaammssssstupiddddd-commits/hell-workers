@@ -58,13 +58,14 @@
 - [x] 追加依頼の断面texture案と厚み差の調査を記録する。
 - [x] ゲームの縦補正・基準grid・両軸を備えた寸法比較画像へ更新する。
 - [x] 断面専用の粒子・微細亀裂を実装し、標準zoomと最大zoom-out相当の静止Blender画像を確認する。
-- [ ] nativeで標準／最大zoom-outの見え方と時間方向のちらつきを確認する（M3対象）。
+- [x] nativeで標準／最大zoom-outの静止画像と対象assetの描画成立を確認する（M3証拠参照）。
+- [ ] 時間方向のちらつきを確認する。今回の単一frame画像では未検証。
 
 ### M3: 実機・本番反映
 
 - [x] コミットの明示承認を得る（候補をコミットし実機確認へ進める質問への「OKです」）。
-- [ ] clean subjectを固定し、候補を検証用asset viewへ封印する。
-- [ ] 新しい本設UVを扱う承認前preview経路を用意し、nativeスキルのdirect kitty launcherで観察する。
+- [x] clean subjectを固定し、候補を検証用asset viewへ封印する。
+- [x] 新しい本設UVを扱う承認前preview経路を用意し、nativeスキルのdirect kitty launcherで観察する。
 - [ ] 新アート承認を記録し、final封印・正式native検証後、明示承認のある本番昇格へ進む。
 
 ## 6. リスクと対策
@@ -89,14 +90,15 @@ native未実施のBlender画像をゲーム内の完成証拠へ格上げしな�
 
 - 開始subject: `c58d2aed`、開始時worktree clean。
 - 現在地: M1完了。v3の断面texture・投影条件を実装し、6 GLBとBlender比較を検証済み。
-  壁修正を`23d6cd68`へコミット済み。M3の実機確認は承認済み。新本番昇格は未実施。
+  壁修正を`23d6cd68`へコミット済み。`87f0e682`の隔離候補で標準／最遠native ArtPreviewがpass。
+  新アート最終承認・正式native検証・新本番昇格は未実施。
 - 参照必須: `docs/blender-setup.md`、`docs/assets_workflow.md`、native/Help/docsスキル。
 - 初回検証ログ: workflow Python 128/128 pass（新規7 testを含む）。6 GLBのscene/Khronosは
   errors=0 / warnings=0、geometry＋新surface UV gate pass。旧GLBとの全triangleの頂点位置・法線を
   頂点分割順に依存しない比較で照合し、6/6不変を確認した。
 - 2026-09-12: `python3 scripts/dev.py verify`は`All quality gates passed`、
   `python3 scripts/dev.py check`および明示的なworkspace Clippy `-D warnings`もpass。
-  Rust変更なし。native Capture / Memoryは未実施で、過去世代のpassを新UVへ流用しない。
+  初回M2時点ではRust変更・native Capture / Memoryなし。後続M3の結果は下記へ分離して記録する。
 - Definition of Done: M1〜M3、仕様同期、全gate合格、承認証拠のcapsule保存と所有workspaceの棚卸し。
 
 ### M2初回の隔離成果物（色修正前の履歴）
@@ -263,7 +265,7 @@ Bevyとの最終画素一致やnative acceptanceは主張しない。
 `wall_art_acceptance`はArtPreviewをprovisionalへ固定していた。本設確認用に`--completed-preview`を
 追加し、別profileとmanifest/observationの明示flagで標準・最遠の単独previewを束縛する。
 `profile_name`はformal authorityとの混在を拒否し、probeとraw performanceの双方でphaseを再検証する。
-Rustや既存型枠previewの意味は変えない。`provision_wall_surface_preview.py`は本設8 fileだけを差し替え、
+既存型枠previewの意味は変えない。`provision_wall_surface_preview.py`は本設8 fileだけを差し替え、
 旧型枠7 fileと本番geometry/法線を保持する独立したtechnical sealer。旧final manifestの承認は再利用しない。
 Help/docsスキルで再確認し、診断用経路追加だけなのでHelpはNo impact。
 
@@ -280,6 +282,47 @@ Intel Arc (MTL) / Vulkan / X11 / High / DPI 1、96 production / 0 fallback / 6 m
 --wall-art-matrix`でinvalid。単独最遠previewにも既存runnerのmatrix carrier flag/environmentを対で
 渡すよう修正する。orchestratorは1 caseのままで、formal権限や9-case matrixにはしない。
 このharness変更後は標準／最遠とも新subjectで取り直し、前の標準passを新証拠へ流用しない。
+
+### M3: 本設候補のnative ArtPreview結果
+
+2026-09-12、clean subject `87f0e68267588a3eb9ed7848f1be1f244babf505`で両方を再撮影し、
+各jobの終了状態`valid`および独立したoffline `verify`の`pass`を確認した。
+nativeスキルのdirect kitty launcherを使用。画像は加工なしの1280×720 X11 client capture。
+Intel(R) Arc(tm) Graphics (MTL) / Vulkan / Intel open-source Mesa driver / Mesa 26.1.8、
+High / DPI 1、camera scaleは標準1・最遠5。96 production / 0 fallback / 6 mesh / 1 material、
+16 topology masks各6件をprobeで確認した。型枠7 fileは旧本番と同一bytes。
+
+標準画像では上面の暗い細粒と側面の石積み・下段装飾の区別を確認した。
+最遠画像では細部は数pixelへ縮退する。straight ROIのterrain contrast検査はpass
+（weakest column sigma=19.691723、terrain sigma=5.297357）。これは静止画の検査であり、
+時間方向のちらつき・全quality/DPI・性能baseline・native Memoryの検証ではない。
+ArtPreviewは最終アート承認・formal acceptance・release authorityを与えない。
+
+共通のidentity:
+
+- source fingerprint: `c07888b27d9ec906af46774dc811d5061b504bdec4858207f6f6a8ade00743ea`
+- harness fingerprint: `6dbc93b109a45d5cb7bad41a78e0ec0f51b3ad6a876d760e5665c8050255e6c3`
+- asset view fingerprint: `ef23820f76cc23470fbde93de7ecc2438a738e7996a533515158c6378ab31a28`
+- binary SHA-256: `e8a8ecbd1f329ba5ac816b88148f4454ea4d1180ecdd4d7f27cc72bc2cee94b4`
+- 隔離generation 11 technical manifest: `044f893190bc3bab106a02144d79f016516b05d38a986aa8b0f0b86539a03ffd`
+  （`target/wall-core-texture-NVprLDwY/staging/validation/surface-preview-11-carrier/surface-preview.json`）
+
+job親directoryは`/home/satotakumi/projects/hell-workers-validation/wall-door-joint-83ad3f85/target/native-acceptance/`。
+
+| zoom / job | `manifest.json` SHA-256 | `current-wall.png` SHA-256 |
+| --- | --- | --- |
+| standard / `wall-art-20260912T113344Z-5d1af382` | `0243d76724833cf69ebe78ee425de74b8bd5604107e37f392c871cf5ab457f59` | `e8f03ef4a75b046b3488a21c7ee6dabed6e041c637362e4a15dd6b5e8123fbf7` |
+| farthest / `wall-art-20260912T113518Z-c28498d4` | `319183ff4bb224009d40167d14b76d7b04bc8ef671e08e4c2a6aa61b2263469a` | `2445bfe7f2c2662cac0a3c2be168ce3bb2e6269d85df4a83480b786a49a4dceb` |
+
+最新実装で`dev.py verify`、`dev.py check`、workspace Clippy `-D warnings`、workflow Python
+136/136、nativeスキルの全指定self-test、agent-rules、skill validatorがpass。
+変更Rustのrust-analyzer診断はerrors=0 / warnings=0。Helpは設定入口のperf専用変更も含め
+実経路でNo impactと判定した。通常の建設入力・資材・状態・Help文言は不変。
+
+Wall本番generation 10とDoor generation 7のlocator hashは上記記録から不変。
+既存の共通validation worktreeを再利用し、上書き前の隔離asset viewはbackupへ保持した。
+新worktree/branch作成・削除なし、回収容量0。M3全体は未完了のため共通worktreeを撤去しない。
+次はこの候補画像のアート確認を受け、未検証項目と正式封印・本番昇格を別段階で進める。
 
 ### Help impact
 
@@ -304,3 +347,4 @@ v3でも同経路を再確認。変更は断面albedo/emissiveとUV、制作時�
 | 2026-09-12 | Codex | 断面色の追加修正。UV-v2と確認材質の反射補正、紫rim／白色照明の比較画像を別生成 |
 | 2026-09-12 | Codex | 追加依頼を調査。本番と候補の厚さ9.6一致・確認boardの縦補正欠落を確認し、断面textureと同倍率比較の案を記録。実装は未実施 |
 | 2026-09-12 | Codex | 承認済み案をv3へ実装。専用断面texture・投影補正・両軸／連結／倍率別board、6 GLB検証と134 Python test pass。本番は不変、コミット・native前 |
+| 2026-09-12 | Codex | 壁修正と本設preview経路をコミット。起動条件2件を修正後、同一subjectで標準／最遠native ArtPreview pass。画像・hash・未検証範囲を記録。本番は不変 |
