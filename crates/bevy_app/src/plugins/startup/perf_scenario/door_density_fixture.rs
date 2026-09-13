@@ -9,6 +9,7 @@ use bevy::pbr::MeshMaterial3d;
 use bevy::prelude::*;
 use hw_core::constants::{MAP_HEIGHT, MAP_WIDTH};
 use hw_core::visual_mirror::building::{BuildingTypeVisual, BuildingVisualState};
+use hw_infra::lighting::digest_hex;
 use hw_jobs::{Building, BuildingType, Door, DoorState};
 use hw_visual::TopDownStructuralMaterial;
 use hw_visual::visual3d::{
@@ -173,7 +174,7 @@ impl DoorDensityFixtureState {
         let summary = serde_json::json!({
             "schema_version": 1,
             "contract_id": CONTRACT_ID,
-            "contract_sha256": format!("{:x}", Sha256::digest(CONTRACT_BYTES)),
+            "contract_sha256": digest_hex(&Sha256::digest(CONTRACT_BYTES).into()),
             "layout_checksum": layout.layout_checksum,
             "target_size": target_size_name(layout.size),
             "perf_size": layout.size.as_str(),
@@ -663,7 +664,7 @@ fn calculate_layout_checksum(size: PerfScenarioSize, specimens: &[DoorSpecimen])
             digest.update(support.1.to_le_bytes());
         }
     }
-    format!("{:x}", digest.finalize())
+    digest_hex(&digest.finalize().into())
 }
 
 fn fail_fixture(

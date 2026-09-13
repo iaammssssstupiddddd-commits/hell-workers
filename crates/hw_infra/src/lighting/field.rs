@@ -552,6 +552,22 @@ mod tests {
             &[255, 255, 255, 255, 255, 255, 255, 255]
         );
         assert_eq!(pack_rgba8_linear(&outcome.snapshot).len(), 20);
+        // Independently calculated with Python hashlib.sha256 from the five
+        // little-endian RGBl cells (65535, 52428, 39321, 26214, 13107), the
+        // all-indoor mask, and the documented P03-field-v1 header. Keep these
+        // fixed across digest dependency updates; self-comparison misses drift.
+        assert_eq!(
+            digest_hex(outcome.snapshot.radiance_checksum()),
+            "d142bc8ef944af1d01e8c7008b7ec5c7e89a763ce183db28121e0b2158ec5ade"
+        );
+        assert_eq!(
+            digest_hex(outcome.snapshot.mask_checksum()),
+            "377a23f52c6b357696238c3318f677a082dd3430bb6691042bd550a5cda28ebb"
+        );
+        assert_eq!(
+            digest_hex(outcome.snapshot.field_checksum()),
+            "ba9b710b82189be86e623ab6a19189494ca301222295bba6e7b9bce315721ab1"
+        );
     }
 
     #[test]

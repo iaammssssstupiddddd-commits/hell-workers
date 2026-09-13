@@ -531,12 +531,41 @@ Python147+151 test、通常/profiling構成のworkspace test、各profiling feat
 全契約検査とCargo cache保存まで成功した。job全体は69分02秒で、90分上限内に収まった。
 [Cargo scan](https://github.com/iaammssssstupiddddd-commits/hell-workers/actions/runs/34748265575)と
 [Actions scan](https://github.com/iaammssssstupiddddd-commits/hell-workers/actions/runs/34748265761)も成功し、
-設定どおりCargo 3件（PR #14〜#16）・Actions 1件（PR #13）が生成された。更新は未mergeである。
+設定どおりCargo 3件（PR #14〜#16）・Actions 1件（PR #13）が生成された。
 PR #13〜#15の初回CIは旧Pillow供給で停止し、修正後のbaseを使った#16はPython test等を通過後、
-Cargo変更のHelpレビュー未記録で拒否された。これらの依存更新の互換性・Help判断は別レビューとする。
+Cargo変更のHelpレビュー未記録で拒否された。初回の失敗と依存更新自体の互換性は区別する。
 [日次監査と同じjobの手動実走](https://github.com/iaammssssstupiddddd-commits/hell-workers/actions/runs/34748259651)は成功。
 定刻scheduleの発火自体は未観測。security updatesはdisabledのままで、alertsの有効状態はAPIの404応答では確定できなかった。
 Helpへの影響はNo impact（開発環境・監査・testと互換security patchのみ、入力・保存・Help catalogは不変）。
+
+#### 初回依存PRのレビュー（2026-09-13）
+
+| PR | 判断 | 根拠と再検討条件 |
+| --- | --- | --- |
+| [#13](https://github.com/iaammssssstupiddddd-commits/hell-workers/pull/13) | 採用候補、CI確認中 | checkout 7.0.1の公式SHAを照合。ref判定のUnicode処理とgit config解除値のescape修正。権限やworkflow入力は維持。 |
+| [#14](https://github.com/iaammssssstupiddddd-commits/hell-workers/pull/14) | 不採用、closed | Bevy 0.19.1もwgpu 29を要求する。直接依存の30への変更はprofilingのSurfaceTargetUnsafe / SurfaceCapabilities / Backendの型境界を壊す。Bevyと直接依存の系列を揃えた移行とnative受入を用意して再検討。Bevyのpatchのみの更新は分離可能。 |
+| [#15](https://github.com/iaammssssstupiddddd-commits/hell-workers/pull/15) | 不採用、closed | WFC 0.10.7はrand 0.8 / direction 0.18を要求する。直接依存の0.10 / 0.19はRNG traitとPatternDescriptionの型に不一致を作り、SimulationRngの旧API移行もない。WFCとの統合移行・seed互換性検証を計画して再検討。 |
+| [#16](https://github.com/iaammssssstupiddddd-commits/hell-workers/pull/16) | 採用候補、検証中 | sha2 0.11 / libloading 0.9とRON・Serde・JSONのlock更新。実利用APIを確認し、独立計算した照明checksumの固定vectorを既存testへ追加。 |
+
+#16のHelp判断は **No impact**。SHA-256はwall/door manifestの実bytes検査と照明の同一性判定に使い、
+digestの入力と32byte出力を維持する。sha2 0.11の戻り値は`LowerHex`を実装しないため、
+asset loaderとprofilingの14か所を既存`hw_infra::lighting::digest_hex`へ移し、
+先頭ゼロを含む64桁小文字形式を維持する。照明の固定vectorはPython hashlibの独立値に照合する。
+Save/Loadは既存のheader version・DynamicWorld RON、SettingsはGameSettingsFileと既存default移行を維持し、
+serde_jsonの非文字列enum key拒否修正に依存する入力を生成しない。新しいRON構文は製品で使用しない。
+libloadingはLinuxのprofiling-renderdocで注入済みライブラリを`RTLD_NOW | RTLD_NOLOAD`で開き、
+固定の`RENDERDOC_GetAPI`を解決する用途だけ。0.9でも`&str`/byte literal、flags、handle所有とsymbol寿命は維持される。
+`Error` variantへのmatchや削除されたAPIは使わない。診断のerror chain以外に変更はなく、player入力・成立条件・
+成功結果・文言を追加変更しないためHelp source/snapshotは更新しない。
+
+一次情報: [checkout差分](https://github.com/actions/checkout/compare/v7.0.0...v7.0.1)、
+[Bevy manifest](https://docs.rs/crate/bevy_render/0.19.1/source/Cargo.toml)、
+[WFC manifest](https://docs.rs/crate/wfc/0.10.7/source/Cargo.toml)、
+[sha2 changelog](https://docs.rs/crate/sha2/0.11.0/source/CHANGELOG.md)、
+[libloading changelog](https://docs.rs/libloading/0.9.0/libloading/changelog/r0_9_0/index.html)、
+[RON changelog](https://docs.rs/crate/ron/0.12.2/source/CHANGELOG.md)、
+[Serde release](https://github.com/serde-rs/serde/releases/tag/v1.0.229)、
+[JSON差分](https://github.com/serde-rs/json/compare/v1.0.149...v1.0.151)。
 
 ### 任意ツール
 

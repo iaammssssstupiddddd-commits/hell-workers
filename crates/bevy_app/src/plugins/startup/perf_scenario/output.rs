@@ -345,6 +345,7 @@ fn write_indoor_light_runtime_sidecar(
 /// matching the P00 contract for multi-room fixtures.
 #[cfg(feature = "profiling")]
 pub(super) fn canonical_room_mask_checksum(tiles: &[(i32, i32)]) -> String {
+    use hw_infra::lighting::digest_hex;
     use sha2::{Digest, Sha256};
     use std::collections::{BTreeSet, VecDeque};
 
@@ -372,7 +373,7 @@ pub(super) fn canonical_room_mask_checksum(tiles: &[(i32, i32)]) -> String {
     }
     let canonical = serde_json::json!({"cells": ordered_cells});
     let bytes = serde_json::to_vec(&canonical).expect("Room mask JSON is serializable");
-    format!("{:x}", Sha256::digest(bytes))
+    digest_hex(&Sha256::digest(bytes).into())
 }
 
 #[cfg(all(test, feature = "profiling"))]

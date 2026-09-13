@@ -5,6 +5,7 @@ use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use hw_core::constants::{MAP_HEIGHT, MAP_WIDTH, TILE_SIZE, Z_AURA};
 use hw_core::visual_mirror::construction::BlueprintVisualState;
+use hw_infra::lighting::digest_hex;
 use hw_jobs::{Blueprint, Building, BuildingType};
 use hw_ui::camera::MainCamera;
 use hw_visual::visual3d::Building3dVisual;
@@ -780,11 +781,11 @@ fn calculate_layout_checksum(
         }
         digest.update([0xff]);
     }
-    format!("{:x}", digest.finalize())
+    digest_hex(&digest.finalize().into())
 }
 
 fn contract_sha256(bytes: &[u8]) -> String {
-    format!("{:x}", Sha256::digest(bytes))
+    digest_hex(&Sha256::digest(bytes).into())
 }
 
 fn fail_fixture(

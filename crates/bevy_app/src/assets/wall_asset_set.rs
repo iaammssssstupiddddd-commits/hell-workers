@@ -8,6 +8,7 @@ use bevy::asset::{AssetLoader, LoadContext, LoadState, io::Reader};
 use bevy::ecs::system::SystemParam;
 use bevy::gltf::GltfAssetLabel;
 use bevy::prelude::*;
+use hw_infra::lighting::digest_hex;
 use hw_visual::TopDownStructuralMaterial;
 use hw_visual::wall_connection::WallTopologyIndex;
 use serde::{Deserialize, Serialize};
@@ -526,7 +527,7 @@ impl AssetLoader for WallAssetSetLoader {
                 "promotion receipt byte length differs",
             )?;
             contract(
-                format!("{:x}", Sha256::digest(&payload)) == receipt.sha256,
+                digest_hex(&Sha256::digest(&payload).into()) == receipt.sha256,
                 "promotion receipt actual bytes hash differs",
             )?;
             decode_canonical_receipt(&payload, &manifest)?;
@@ -540,7 +541,7 @@ impl AssetLoader for WallAssetSetLoader {
                 payload.len() as u64 == record.bytes,
                 format!("{} byte length differs", record.path),
             )?;
-            let digest = format!("{:x}", Sha256::digest(&payload));
+            let digest = digest_hex(&Sha256::digest(&payload).into());
             contract(
                 digest == record.sha256,
                 format!("{} actual bytes hash differs", record.path),
@@ -1569,7 +1570,7 @@ mod tests {
             let payload = format!("core-payload-{ordinal}");
             root.write(&record.path, payload.as_bytes());
             record.bytes = payload.len() as u64;
-            record.sha256 = format!("{:x}", Sha256::digest(payload.as_bytes()));
+            record.sha256 = digest_hex(&Sha256::digest(payload.as_bytes()).into());
         }
         root.write(WALLSET_PATH, &encoded(&manifest));
         manifest
@@ -1587,12 +1588,12 @@ mod tests {
             let payload = format!("release-core-payload-{ordinal}");
             root.write(&record.path, payload.as_bytes());
             record.bytes = payload.len() as u64;
-            record.sha256 = format!("{:x}", Sha256::digest(payload.as_bytes()));
+            record.sha256 = digest_hex(&Sha256::digest(payload.as_bytes()).into());
         }
         let receipt_bytes = encoded_receipt(&promotion_receipt(&manifest));
         let receipt = manifest.receipt.as_mut().unwrap();
         receipt.bytes = receipt_bytes.len() as u64;
-        receipt.sha256 = format!("{:x}", Sha256::digest(&receipt_bytes));
+        receipt.sha256 = digest_hex(&Sha256::digest(&receipt_bytes).into());
         root.write(&receipt.path, &receipt_bytes);
         root.write(WALLSET_PATH, &encoded(&manifest));
         manifest
@@ -2057,7 +2058,7 @@ mod tests {
         let receipt_bytes = encoded_receipt(&receipt);
         let receipt_record = manifest.receipt.as_mut().unwrap();
         receipt_record.bytes = receipt_bytes.len() as u64;
-        receipt_record.sha256 = format!("{:x}", Sha256::digest(&receipt_bytes));
+        receipt_record.sha256 = digest_hex(&Sha256::digest(&receipt_bytes).into());
         root.write(&receipt_record.path, &receipt_bytes);
         root.write(WALLSET_PATH, &encoded(&manifest));
         let mut app = loader_app(&root.0);
