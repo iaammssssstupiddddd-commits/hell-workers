@@ -515,8 +515,9 @@ Cargo manifest/lockはdev-dependency更新でもHelp gateの対象である。bo
 PR本文・CI環境変数・固定理由の自動注入で代用しない。bot再更新/rebase後は再判断し、squash後も判断を保持する。
 
 CIは公式SHA固定Action、manifestからの明示Rust/tool供給、read権限で同じ`verify`を実行する。
-quality jobは画像処理testに必要なPillowをUbuntuの`python3-pil`として明示導入し、
-`verify`と同じ`python3`で`PIL.Image`をimportしてから検査を始める。
+quality jobは画像処理testに必要なPillow 12.3.0をrunnerの一時venvへPyPI wheelから明示導入し、
+そのPythonで`verify`を実行する。Ubuntu標準Pillow 10.2では既存の`get_flattened_data`が使えないため、
+導入直後に同APIの存在を確認する。venvはjob終了時にrunnerとともに破棄し、Cargo cacheへ含めない。
 quality jobは依存更新後のprofiling / dynamic-linking両構成の再buildを許す90分上限とする。
 日次03:17 UTCは`deps`だけを走らせ、game buildやHelp gateを呼ばない。
 ActionsのRun workflow（`workflow_dispatch`）も同じ依存監査jobだけを実行する。

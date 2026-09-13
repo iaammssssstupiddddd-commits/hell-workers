@@ -475,6 +475,8 @@ python3 scripts/dev.py validation check
   ローカルworkflowにも供給漏れが残っていたため、quality jobへ[Ubuntu公式python3-pil](https://packages.ubuntu.com/noble/python3-pil)の導入と同じPythonでのimport確認を追加した。
   修正後の`dev.py lint`とBlender tooling 151 testはpass（ローカルPillow 12.3.0、6.653秒）。Ubuntu runnerでのinstall・全体CI成功は未検証。
   この追補はCI環境と文書だけで、画像生成処理・runtime asset・Help catalog生成経路は不変のNo impact。前回全体verify後にRust/Python実装は変更していない。
+- `ecf2ab7d`をmasterへ公開。依存監査jobの手動実走34748259651は成功し、Dependabot両ecosystemの初回scanが起動した。
+  通常CI 34748257572はUbuntu標準Pillow 10.2に`get_flattened_data`がなく5 test失敗。公式Pillow APIとlocal 12.3.0を照合し、runner一時venvへPyPIの12.3.0 wheelを固定導入するよう補正した。画像処理実装・期待値は変更していない。
 - proptestの固定seed 20260913 / 42で各3 propertyがpass（各256 cases、計1536 cases）。初回依存compileは26分51秒、test本体は照明2件+一時probeが0.02秒、経路1件が0.06秒。
   一時probeは両SourceParallel pathで意図した失敗seedを保存し、新規cases=0・別RNG seedでも各1件の再生を確認した。probeと隔離source/corpusを撤去し、2 exact pathのGit追跡可能性と無関係txtの除外を確認済み。
 - seed 42の再実行は照明2件0.02秒・経路1件0.04秒。診断probe撤去後のhw_infra再compileを含むdriver全体は2.15秒・peak RSS 448,280 KiB。test単体memoryやゲーム性能の測定とは扱わない。
