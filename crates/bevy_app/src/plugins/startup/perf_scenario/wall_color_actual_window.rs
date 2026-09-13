@@ -13,6 +13,7 @@ use bevy::color::LinearRgba;
 use bevy::prelude::*;
 use bevy::ui::IsDefaultUiCamera;
 use bevy::window::PrimaryWindow;
+#[cfg(test)]
 use hw_infra::lighting::digest_hex;
 use hw_ui::camera::MainCamera;
 use serde_json::{Value, json};
