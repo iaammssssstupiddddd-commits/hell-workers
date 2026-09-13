@@ -19,6 +19,8 @@
 
 後続の実装ではD01/D03/D05/D06/T01の5項目を導入し、GitHub上の受入も完了した。導入・監査・受入結果は
 [完了計画](../plans/archive/priority-development-tools-plan-2026-09-13.md)と[開発ガイド](../DEVELOPMENT.md#dependency-update-prとci)を参照する。以下の棚卸しは導入前の調査記録である。
+生成された初回依存PR 4件もレビューを完了し、#13・#16を採用、#14・#15を互換性の理由からクローズした。
+採否・互換修正・検証結果は開発ガイドに記録した。
 
 **推奨は、依存監査・更新管理、Python/CIの静的検査、不変条件テストを先に補うこと。**
 実行時の変更では、配布に向けた保存先の整備と設定ファイルの書き込み堅牢化が有力である。
@@ -244,7 +246,7 @@ Tracy・heaptrack等は観測した問題の原因を絞るために使用する
 
 ## 11. 未解決事項
 
-- 実際のCI時間内訳、テスト時間・peak RSS、cache hit率。nextest / sccache等の効果はこの測定まで未確定。
+- テスト実行単体の時間・peak RSS、cache hit率。ビルドを含むCI受入実績は開発ガイドに記録したが、nextest / sccache等の効果は専用測定まで未確定。
 - GitHubの依存アラート設定、原本の外部バックアップと復元手順。設定がrepoにないことだけで不在とは判定しない。
 - 配布OSと配布方式、セーブのportable mode、多言語・gamepad・音声の製品優先度。
 - Bevy 0.19.1の個々の修正が現在の観測問題に関係するか。releaseの存在確認だけで更新必須とはしない。
@@ -252,7 +254,7 @@ Tracy・heaptrack等は観測した問題の原因を絞るために使用する
 ## 12. AI引継ぎメモ
 
 - 現在地: 5項目のツール導入・公開受入が完了。残る候補とruntime移行は未着手であり、採用済みとは扱わない。
-- D01/D03/D05/D06/T01は[優先開発ツール導入計画](../plans/archive/priority-development-tools-plan-2026-09-13.md)に沿って実装・公開・GitHub受入を完了した。生成された依存更新PRの採用は別レビューとする。その他の候補は本評価の条件に沿って個別に計画する。
+- D01/D03/D05/D06/T01は[優先開発ツール導入計画](../plans/archive/priority-development-tools-plan-2026-09-13.md)に沿って実装・公開・GitHub受入を完了した。初回依存PR 4件も採否を確定し、#13・#16はmerge、#14・#15は理由付きclose済み。その他の候補は本評価の条件に沿って個別に計画する。
 - 参照必須: [DEVELOPMENT.md](../DEVELOPMENT.md)、[invariants.md](../invariants.md)、[crate-boundaries.md](../crate-boundaries.md)、[Help契約](../help-screen.md)、[validation workflow](../development-infra/validation-storage-workflow.md)。
 - 公開資料は2026-09-13確認。`latest`やGitHub mainのリンク先は変化するため、導入時には採用release/tagと依存manifestを再確認する。
 - 古いasset構成・古いBevy plugin互換表・未測定の一般的な高速化率を根拠に優先順位を上書きしない。
@@ -264,3 +266,4 @@ Tracy・heaptrack等は観測した問題の原因を絞るために使用する
 | 2026-09-13 | Codex | 現行構成と公式資料に基づく領域別評価、優先順位、採用条件、保留理由を作成 |
 | 2026-09-13 | Codex | 最優先・優先の5項目を独立した導入計画へ接続 |
 | 2026-09-13 | Codex | 5項目の導入・公開受入完了を反映し、完了計画と運用文書へ接続 |
+| 2026-09-13 | Codex | 初回依存PR 4件のレビュー・採否確定と検証結果を反映 |

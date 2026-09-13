@@ -542,10 +542,10 @@ Helpへの影響はNo impact（開発環境・監査・testと互換security pat
 
 | PR | 判断 | 根拠と再検討条件 |
 | --- | --- | --- |
-| [#13](https://github.com/iaammssssstupiddddd-commits/hell-workers/pull/13) | 採用候補、CI確認中 | checkout 7.0.1の公式SHAを照合。ref判定のUnicode処理とgit config解除値のescape修正。権限やworkflow入力は維持。 |
+| [#13](https://github.com/iaammssssstupiddddd-commits/hell-workers/pull/13) | 採用、merged | checkout 7.0.1の公式SHAを照合。ref判定のUnicode処理とgit config解除値のescape修正。権限やworkflow入力は維持。 |
 | [#14](https://github.com/iaammssssstupiddddd-commits/hell-workers/pull/14) | 不採用、closed | Bevy 0.19.1もwgpu 29を要求する。直接依存の30への変更はprofilingのSurfaceTargetUnsafe / SurfaceCapabilities / Backendの型境界を壊す。Bevyと直接依存の系列を揃えた移行とnative受入を用意して再検討。Bevyのpatchのみの更新は分離可能。 |
 | [#15](https://github.com/iaammssssstupiddddd-commits/hell-workers/pull/15) | 不採用、closed | WFC 0.10.7はrand 0.8 / direction 0.18を要求する。直接依存の0.10 / 0.19はRNG traitとPatternDescriptionの型に不一致を作り、SimulationRngの旧API移行もない。WFCとの統合移行・seed互換性検証を計画して再検討。 |
-| [#16](https://github.com/iaammssssstupiddddd-commits/hell-workers/pull/16) | 採用候補、検証中 | sha2 0.11 / libloading 0.9とRON・Serde・JSONのlock更新。実利用APIを確認し、独立計算した照明checksumの固定vectorを既存testへ追加。 |
+| [#16](https://github.com/iaammssssstupiddddd-commits/hell-workers/pull/16) | 互換修正を加えて採用、merged | sha2 0.11 / libloading 0.9とRON・Serde・JSONのlock更新。16進数変換を修正し、独立計算した照明checksumの固定vectorを既存testへ追加。 |
 
 #16のHelp判断は **No impact**。SHA-256はwall/door manifestの実bytes検査と照明の同一性判定に使い、
 digestの入力と32byte出力を維持する。sha2 0.11の戻り値は`LowerHex`を実装しないため、
@@ -566,6 +566,25 @@ libloadingはLinuxのprofiling-renderdocで注入済みライブラリを`RTLD_N
 [RON changelog](https://docs.rs/crate/ron/0.12.2/source/CHANGELOG.md)、
 [Serde release](https://github.com/serde-rs/serde/releases/tag/v1.0.229)、
 [JSON差分](https://github.com/serde-rs/json/compare/v1.0.149...v1.0.151)。
+
+最終受入: #13は`e0da9db3`の[PR CI](https://github.com/iaammssssstupiddddd-commits/hell-workers/actions/runs/34760542442)
+成功後に`874d051f`へmergeし、[merge後のCI](https://github.com/iaammssssstupiddddd-commits/hell-workers/actions/runs/34760970688)も成功した。
+#16は`31835356`の[全品質ゲート](https://github.com/iaammssssstupiddddd-commits/hell-workers/actions/runs/34761079967)
+成功後に`e4e1f193`へmergeし、候補とmerge commitのtreeが完全一致することを確認した。
+同ゲートは通常/profiling workspace test、profiling-memory/tracy/renderdoc check、Clippy警告0件、
+Python147+151 test、オンライン依存監査と全契約検査に成功。Rust testは複数構成の合計2,473回成功、失敗0。
+照明の固定checksum vectorは両構成で成功し、profilingのembedded contract hashも一致した。
+quality job全体は81分01秒で、Cargo cache保存まで90分上限内に収まった。
+
+ローカルの`dev.py check`とClippy（workspace/all-targets、`-D warnings`）も成功。
+ローカル`verify`は非Rust gate通過後、MemAvailableが8 GiBを下回り安全guardで停止したため、
+全体結果には上記CIを用いた。rust-analyzer MCPは`Unexpected response format`で診断未取得であり、
+診断0件の証拠とはしていない。実window/GPU受入は今回の検証に含めず、renderer系列変更も採用していない。
+
+4件の処置を完了し、作業用計画は終了・削除した。新しいnative job、専用target、worktree、binary copyは作らず、
+primaryの通常Cargo cacheを再利用した。storage checkは開始時・終了時とも成功し、既存2batchの管理対象容量は
+4,881,321,984 bytesで不変。削除した検証job pathはなく、この作業専用の保持consumerもない。
+既存consumerと通常開発cacheは維持し、採用済みのローカル作業ブランチ`review/dependabot-other-cargo`を削除した。
 
 ### 任意ツール
 
