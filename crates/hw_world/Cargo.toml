@@ -1,4 +1,5 @@
 [package]
+publish = false
 name = "hw_world"
 version = "0.1.0"
 edition = "2024"
@@ -15,3 +16,6 @@ rand = { workspace = true }
 serde = { workspace = true }
 wfc = { workspace = true }
 direction = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }

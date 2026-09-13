@@ -5,6 +5,9 @@ mod occlusion;
 mod packing;
 mod room_summary;
 
+#[cfg(test)]
+mod properties;
+
 use hw_core::constants::{MAP_HEIGHT, MAP_WIDTH};
 use serde::{Deserialize, Serialize};
 use std::fmt;

@@ -47,6 +47,7 @@
 | [development-workstation-blender-migration-plan-2026-07-29.md](development-workstation-blender-migration-plan-2026-07-29.md) | In Progress | 新PCへの開発環境移行と、現PCでのBlender／asset新規構築計画。 |
 | [hvac-plumbing-plan-2026-07-13.md](hvac-plumbing-plan-2026-07-13.md) | Draft | 地獄のインフラ（換気・導水・部屋認可）実装計画 |
 | [native-acceptance-resource-safety-plan-2026-08-05.md](native-acceptance-resource-safety-plan-2026-08-05.md) | Complete | tmpfs上のCargo出力を永続storageへ固定し、実機検証のRAM圧迫を防ぐ計画。 |
+| [priority-development-tools-plan-2026-09-13.md](priority-development-tools-plan-2026-09-13.md) | In Progress | cargo-deny、Dependabot、Ruff、actionlint、proptestの段階導入と検証計画。 |
 
 ## アーカイブ計画書一覧 (`archive/` / `**/archived/`)
 

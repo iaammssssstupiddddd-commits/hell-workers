@@ -14,7 +14,6 @@ from .model import (
     Validation,
 )
 from .rtt_light_contract import load_rtt_light_contract
-from .renderdoc_foundation import assert_publish_allowed, transition_foundation_state
 
 def validate_session_artifact_set(
     session_dir: Path, manifest: dict[str, Any]

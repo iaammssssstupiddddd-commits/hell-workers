@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import csv
 import hashlib
 import json
@@ -15,16 +16,17 @@ import time
 from dataclasses import asdict
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 from .artifacts import sha256, validate_run, write_json
-from .model import REPO_ROOT, SESSION_MANIFEST_SCHEMA_VERSION, TRACY_DASHBOARD_ZONE_FILTER
+from .model import Case, Validation, REPO_ROOT, SESSION_MANIFEST_SCHEMA_VERSION, TRACY_DASHBOARD_ZONE_FILTER
 from .rtt_light_contract import build_fixture_layout, contract_fingerprints, load_rtt_light_contract
 
 try:
     from cargo_runtime import (
         cargo_environment as controlled_cargo_environment,
         persistent_storage_error,
-        require_cargo_memory,
+        require_cargo_memory as require_cargo_memory,
         resource_policy as cargo_resource_policy,
         workspace_cargo_target,
     )
@@ -32,7 +34,7 @@ except ModuleNotFoundError:
     from scripts.cargo_runtime import (
         cargo_environment as controlled_cargo_environment,
         persistent_storage_error,
-        require_cargo_memory,
+        require_cargo_memory as require_cargo_memory,
         resource_policy as cargo_resource_policy,
         workspace_cargo_target,
     )

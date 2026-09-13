@@ -18,6 +18,7 @@
 | Document | Status | Notes |
 | --- | --- | --- |
 | [hvac-plumbing-proposal.md](hvac-plumbing-proposal.md) | Accepted / Promoted | 空調・衛生の建築設備導入と世界観への落とし込み提案 |
+| [library-tooling-evaluation-proposal-2026-09-13.md](library-tooling-evaluation-proposal-2026-09-13.md) | Review | ライブラリ・開発ツール65項目の導入／置換評価、優先順位と採用条件 |
 | [progression-and-choice-proposal-2026-08-09.md](progression-and-choice-proposal-2026-08-09.md) | Draft | Dream Edict、Contract、Familiar昇格を独立評価するTrack D提案 |
 | [soul-outline-mask-ring-proposal-2026-04-16.md](soul-outline-mask-ring-proposal-2026-04-16.md) | Superseded | 既存 soul mask RtT を使い、composite 側で画面空間の外周 ring を生成する提案 |
 | [soul_spawn_despawn_optimization.md](soul_spawn_despawn_optimization.md) | Draft / Active | Soul Spawn/Despawn 最適化提案 |

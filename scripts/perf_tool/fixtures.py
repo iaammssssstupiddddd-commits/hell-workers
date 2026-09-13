@@ -9,6 +9,7 @@ import tempfile
 from dataclasses import asdict
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 
 from .artifacts import (
     P02_PRESENTATION_COLUMNS,
@@ -119,6 +120,38 @@ try:
     from cargo_runtime import workspace_temp_dir
 except ModuleNotFoundError:
     from scripts.cargo_runtime import workspace_temp_dir
+
+# The lazy self-test imports this facade; keep its existing re-exports explicit.
+__all__ = [
+    "Case", "DECONSTRUCTION_HEADLESS_SOFTWARE_RENDERING_WARNING", "DEFAULT_SEED",
+    "DETERMINISM_COLUMNS", "EXPECTED_CONTRACT_SHA256", "INDOOR_LIGHT_CONSUMER_COLUMNS",
+    "INDOOR_LIGHT_CPU_COLUMNS", "Path", "RENDER_INVENTORY_SCHEMA_VERSION", "REPO_ROOT",
+    "RTT_LIGHT_STAGES", "SESSION_MANIFEST_SCHEMA_VERSION", "SimpleNamespace",
+    "TRANSPORT_REQUEST_KIND_NAMES", "Validation", "WALL_DENSITY_CASES",
+    "WALL_DENSITY_CONTRACT_SHA256", "WALL_DENSITY_LAYOUT_COLUMNS",
+    "WALL_FORMWORK_DENSITY_CONTRACT_SHA256", "WINDOW_COLUMNS", "WINDOW_SCHEMA_VERSION",
+    "argparse", "asdict", "build_fixture_audit_actor_counts", "build_fixture_layout",
+    "build_fixture_ledger", "build_fixture_presentation_rows", "build_parser",
+    "build_rtt_light_gate_result_rows", "build_rtt_light_projection_rows", "canonical_sha256",
+    "collect_profile_artifact", "compare_dashboard_modes", "compare_sessions",
+    "contract_fingerprints", "csv", "determinism_records_checksum", "directory_digest",
+    "expected_eligible_supplied_emitters", "expected_formal_cases", "expected_gate_result_rows",
+    "expected_rtt_light_requested_environment", "is_compatible_contract_predecessor", "json",
+    "load_rtt_light_contract", "load_valid_runs", "measurement_duration_clock",
+    "observe_rtt_light_gate", "project_rtt_light_runtime", "projection_field_applicability",
+    "re", "read_indoor_light_consumer_lifecycle", "read_indoor_light_consumers",
+    "read_indoor_light_field", "read_indoor_light_gpu", "read_native_memory",
+    "read_task_dashboard_cpu", "read_tracy_zone_summary", "read_wall_density_sidecars",
+    "read_window", "recorded_rtt_light_repo_root", "resolve_baseline_locator",
+    "rtt_light_checksum_text", "sha256", "shutil", "summarize_session", "tempfile",
+    "upgrade_rtt_light_baseline_index", "validate_arguments", "validate_gate_result_rows",
+    "validate_p08_cross_sidecar", "validate_projection_rows", "validate_rtt_light_contract",
+    "validate_rtt_light_run_file_set", "validate_rtt_light_session_matrix", "validate_run",
+    "validate_session_artifact_set", "validate_stage_lane", "verify_rtt_light_case_entry",
+    "workspace_temp_dir", "write_behavior_fixture_run", "write_fixture_run",
+    "write_indoor_light_sidecars", "write_json", "write_p02_presentation_fixture",
+    "write_render_inventory_fixture",
+]
 
 def write_fixture_run(
     root: Path,

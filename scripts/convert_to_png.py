@@ -1,5 +1,4 @@
 from PIL import Image
-import os
 import sys
 
 def convert_to_transparent_png(input_path, output_path, chroma_color=(255, 0, 255)):

@@ -21,6 +21,11 @@ from pathlib import Path
 from typing import Sequence
 
 try:
+    import dev_tools
+except ModuleNotFoundError:
+    from scripts import dev_tools
+
+try:
     from cargo_runtime import cargo_environment, require_cargo_memory
 except ModuleNotFoundError:
     from scripts.cargo_runtime import cargo_environment, require_cargo_memory
@@ -189,6 +194,8 @@ def diff_hygiene_command(environment: dict[str, str] | None = None) -> list[str]
 
 def verify() -> None:
     """Run the complete local/CI quality gate."""
+    print("==> Pinned quality tools", flush=True)
+    run_quality_tools(lint=True, deps=True)
     print("==> Python tooling", flush=True)
     run_python_script(
         "-m",
@@ -271,6 +278,36 @@ def verify() -> None:
     print("All quality gates passed.")
 
 
+def quality_environment(*, create_temp_dir: bool = False) -> dict[str, str]:
+    environment = cargo_environment(
+        REPO_ROOT, namespace=".dev-tmp", incremental=None,
+        create_temp_dir=create_temp_dir,
+    )
+    environment["RUSTUP_AUTO_INSTALL"] = "0"
+    environment["PYTHONDONTWRITEBYTECODE"] = "1"
+    return environment
+
+
+def run_quality_tools(*, lint: bool = False, deps: bool = False, offline: bool = False) -> None:
+    environment = quality_environment(create_temp_dir=deps)
+    names = (["ruff", "actionlint"] if lint else []) + (["cargo-deny"] if deps else [])
+    binaries = dev_tools.preflight(REPO_ROOT, environment, names)
+    commands = dev_tools.lint_commands(REPO_ROOT, binaries) if lint else []
+    if deps:
+        if offline:
+            print("Offline dependency diagnosis: cached data only; not an online audit.", flush=True)
+        commands.append(dev_tools.deps_command(REPO_ROOT, binaries["cargo-deny"], offline=offline))
+    # Audits can use CPU/registry resources, so keep them out of native/perf captures.
+    activity = acquire_activity(REPO_ROOT, "shared") if deps else None
+    try:
+        for command in commands:
+            print(f"+ {command_text(command)}", flush=True)
+            subprocess.run(command, cwd=REPO_ROOT, env=environment, check=True)
+    finally:
+        if activity is not None:
+            activity.close()
+
+
 def fast_check(package: str | None, *, run_tests: bool) -> None:
     """Run the fast repository gate, optionally followed by focused tests."""
     run_command(["cargo", "fmt", "--all", "--check"])
@@ -328,6 +365,7 @@ def doctor() -> int:
     """Report required and optional development dependencies without mutation."""
     errors: list[str] = []
     warnings: list[str] = []
+    probe_environment = quality_environment()
 
     print(f"Repository: {REPO_ROOT}")
     print(f"Python: {platform.python_version()} ({sys.executable})")
@@ -352,6 +390,8 @@ def doctor() -> int:
             check=False,
             capture_output=True,
             text=True,
+            env=probe_environment,
+            timeout=10,
         )
         details = result.stdout.strip()
         actual = details.splitlines()[0] if details else ""
@@ -378,7 +418,6 @@ def doctor() -> int:
 
     optional_commands = [
         "bacon",
-        "cargo-deny",
         "cargo-expand",
         "docsrs-mcp",
         "rust-analyzer-mcp",
@@ -389,6 +428,18 @@ def doctor() -> int:
         resolved = shutil.which(command)
         status = resolved if resolved else "not installed"
         print(f"optional {command}: {status}")
+
+    tool_errors: list[str] = []
+    for name in dev_tools.TOOL_NAMES:
+        try:
+            dev_tools.preflight(REPO_ROOT, probe_environment, [name])
+        except (RuntimeError, OSError, ValueError, subprocess.TimeoutExpired) as error:
+            tool_errors.append(str(error))
+    if tool_errors:
+        warnings.extend(tool_errors)
+        print("Full verification tools: not ready")
+    else:
+        print("Full verification tools: ready")
 
     pillow = importlib.util.find_spec("PIL")
     print(f"optional Pillow: {'installed' if pillow else 'not installed'}")
@@ -441,6 +492,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     subparsers.add_parser("verify", help="run the complete local/CI quality gate")
+    subparsers.add_parser("lint", help="run pinned Ruff and actionlint checks")
+    deps_parser = subparsers.add_parser("deps", help="audit workspace dependencies with cargo-deny")
+    deps_parser.add_argument("--offline", action="store_true", help="diagnose using cached data only")
 
     build_parser = subparsers.add_parser("build", help="build without implicit cleanup")
     build_parser.add_argument("--release", action="store_true", help="build release mode")
@@ -499,6 +553,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             fast_check(args.package, run_tests=args.tests)
         elif args.command == "verify":
             verify()
+        elif args.command == "lint":
+            run_quality_tools(lint=True)
+        elif args.command == "deps":
+            run_quality_tools(deps=True, offline=args.offline)
         elif args.command == "build":
             build(release=args.release)
         elif args.command == "feedback":
@@ -525,6 +583,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                 return run_lane_shell(REPO_ROOT, command or None)
     except subprocess.CalledProcessError as error:
         return error.returncode
+    except subprocess.TimeoutExpired as error:
+        print(f"Tool version probe timed out: {error.cmd}", file=sys.stderr)
+        return 1
     except FileNotFoundError as error:
         print(f"Required command not found: {error.filename}", file=sys.stderr)
         return 127

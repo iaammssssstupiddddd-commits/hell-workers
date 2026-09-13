@@ -21,8 +21,9 @@ SCRIPTS_ROOT = Path(__file__).resolve().parents[1]
 if str(SCRIPTS_ROOT) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_ROOT))
 
-from cargo_runtime import persistent_storage_error
-from perf_tool.renderdoc_foundation import (
+# Direct script launch needs the scripts root before importing project modules.
+from cargo_runtime import persistent_storage_error  # noqa: E402
+from perf_tool.renderdoc_foundation import (  # noqa: E402
     CAPTURE_CHILD_DEADLINE_SECONDS,
     REPLAY_CHILD_DEADLINE_SECONDS,
     classify_renderdoc_log_lines,

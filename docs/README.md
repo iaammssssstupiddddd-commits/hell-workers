@@ -55,13 +55,14 @@
 - [rendering-performance.md](rendering-performance.md): 描画パイプライン別の draw call 構造、バジェット、最適化方針。
 - [performance-profiling.md](performance-profiling.md): 決定的なランタイム計測シナリオ、CSV、native allocation / RSS、Tracy、RenderDocの採取手順。
 - [visual_test.md](visual_test.md): productionとは独立したTopDown建物・地形visual testの操作とScene RtT構造。
-- [DEVELOPMENT.md](DEVELOPMENT.md): AIエージェントおよび開発者向けガイドライン（コーディング規約・MCP活用）。
+- [DEVELOPMENT.md](DEVELOPMENT.md): 開発規約・MCP活用、固定品質ツール、依存監査・Dependabot更新、property testの再現手順。
 - [development-infra/rust-analyzer-mcp.md](development-infra/rust-analyzer-mcp.md): 複数エージェントでrust-analyzer MCP backendを共有するadapter、idle解放、IDE側の常駐コスト削減設定。
 - [development-infra/validation-storage-audit-2026-09-13.md](development-infra/validation-storage-audit-2026-09-13.md): 検証データの容量実測、track close時の撤去規則と実装の差、旧checkout・共有worktreeの残存調査。
 - [development-infra/validation-storage-workflow.md](development-infra/validation-storage-workflow.md): 終了データの整理、現在の用途による保持、フィードバック中の差分ビルド保全。全job保存・固定日数の義務は設けない。
 - [development-infra/validation-storage-workflow-review-2026-09-13.md](development-infra/validation-storage-workflow-review-2026-09-13.md): 保存規則の自己レビューと修正結果。差分ビルド保全、primary coordinator・台帳・整理gateの適用範囲と検証記録。
 - [linux-setup.md](linux-setup.md): Linux ネイティブ環境でのビルド・実行セットアップ手順。
 - [plans/README.md](plans/README.md): フェーズ分割した実装計画ドキュメント。
+- [plans/priority-development-tools-plan-2026-09-13.md](plans/priority-development-tools-plan-2026-09-13.md): cargo-deny、Dependabot、Ruff、actionlint、proptestの段階導入と検証計画。
 - [plans/3d-rtt/provisional-wall-formwork-plan-2026-09-05.md](plans/3d-rtt/provisional-wall-formwork-plan-2026-09-05.md): 木材を使う仮設壁の型枠表現、段階別mesh切替、混在接続・実機受入の計画。
 - [plans/3d-rtt/production-door-art-plan-2026-09-05.md](plans/3d-rtt/production-door-art-plan-2026-09-05.md): 木・骨の両開きドア、固定枠と開閉／施錠の3状態、2軸preview・壁との接続・実機受入の計画。
 - [plans/archive/save-rehydration-registry-plan-2026-08-03.md](plans/archive/save-rehydration-registry-plan-2026-08-03.md): Track C3 のロード前検証、phase-aware 再構築 registry、通常ロード／rollback共通化の完了記録。
@@ -73,6 +74,7 @@
 - [plans/hvac-plumbing-plan-2026-07-13.md](plans/hvac-plumbing-plan-2026-07-13.md): 換気・導水・Room 認可を M0〜M4 で導入する実装計画。
 - [plans/3d-rtt/single-scene-rtt-indoor-light-field-migration-plan-2026-08-03.md](plans/3d-rtt/single-scene-rtt-indoor-light-field-migration-plan-2026-08-03.md): Scene RtT 1枚、TopDown表示、Wall / Door遮光の放射状Indoor Light Fieldへ移行する9分割計画の親ロードマップ。
 - [proposals/README.md](proposals/README.md): 提案書一覧とテンプレート。
+- [proposals/library-tooling-evaluation-proposal-2026-09-13.md](proposals/library-tooling-evaluation-proposal-2026-09-13.md): ライブラリ・開発ツールの導入／置換候補、現行構成との重複、優先順位と採用条件。
 - [proposals/progression-and-choice-proposal-2026-08-09.md](proposals/progression-and-choice-proposal-2026-08-09.md): Track D の Dream Edict、Contract、Familiar 昇格を扱う進行・選択提案。
 - [proposals/archive/gameplay-management-improvements-proposal-2026-07-17.md](proposals/archive/gameplay-management-improvements-proposal-2026-07-17.md): Track A〜C のロードマップと完了履歴を保持するアーカイブ提案。
 - [proposals/hvac-plumbing-proposal.md](proposals/hvac-plumbing-proposal.md): 採用済みの空調・衛生インフラ提案（世界観・採否理由）。

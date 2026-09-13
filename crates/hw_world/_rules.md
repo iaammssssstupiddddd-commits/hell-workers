@@ -35,6 +35,7 @@ bevy    ✓
 rand    ✓
 wfc     ✓
 direction ✓
+proptest ✓ (dev-dependency only; pure property tests)
 
 # 禁止
 bevy_app       ✗

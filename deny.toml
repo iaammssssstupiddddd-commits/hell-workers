@@ -1,0 +1,38 @@
+[graph]
+all-features = true
+no-default-features = false
+targets = []
+
+[advisories]
+unsound = "all"
+unmaintained = "all"
+yanked = "warn"
+ignore = [
+    # Owner: dependency update reviewer. Remove when winit/sctk-adwaita's
+    # ab_glyph/owned_ttf_parser path no longer includes ttf-parser.
+    # Maintenance notice, not a reported vulnerability; do not suppress new IDs.
+    { id = "RUSTSEC-2026-0192", reason = "ttf-parser 0.25.1 is transitive through winit's Wayland decorations; await upstream font backend migration. See docs/DEVELOPMENT.md." },
+]
+
+[licenses]
+# SPDX expressions are checked for all external normal/build/dev dependencies.
+include-dev = true
+include-build = true
+allow = [
+    "MIT", "Apache-2.0", "BSD-2-Clause", "BSD-3-Clause", "BSL-1.0",
+    "CC0-1.0", "ISC", "MIT-0", "Unicode-3.0", "Zlib",
+]
+
+[licenses.private]
+# Only the unpublished workspace members' own license checks are skipped.
+ignore = true
+
+[bans]
+multiple-versions = "warn"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []
+required-git-spec = "rev"

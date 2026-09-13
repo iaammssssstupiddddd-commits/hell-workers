@@ -31,3 +31,7 @@ node_modules/
 
 
 
+
+# Only these proptest failure seeds are source regressions, not logs.
+!/crates/hw_world/proptest-regressions/pathfinding/tests/properties.txt
+!/crates/hw_infra/proptest-regressions/lighting/properties.txt

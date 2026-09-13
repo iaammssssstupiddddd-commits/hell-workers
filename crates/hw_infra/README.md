@@ -14,6 +14,13 @@ assets, GPU APIs, and game-world queries. P04 owns ECS collection and rebuild
 scheduling, P05 owns save/load lifecycle, P06 owns GPU upload and rendering,
 and P07 owns gameplay and room consumers.
 
+`lighting/properties.rs` uses proptest as a dev-dependency with only `std` enabled.
+It checks emitter permutation invariance and no-op rebuilds on generated grids
+up to 8x8 with at most six emitters (256 cases, 1024 shrink iterations).
+No-op snapshots retain cells, mask, checksums and revision while all changed
+counts become zero; whole-snapshot equality is deliberately not required.
+Failure seed persistence and replay follow the [development guide](../../docs/DEVELOPMENT.md#property-tests).
+
 Run the focused tests with:
 
 ```bash

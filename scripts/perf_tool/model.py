@@ -8,24 +8,10 @@ standard library so it can run on every developer machine that can run Cargo.
 
 from __future__ import annotations
 
-import argparse
-import csv
-import hashlib
-import json
-import math
-import os
-import platform
 import re
-import signal
-import shutil
-import statistics
-import subprocess
-import sys
-import time
-from dataclasses import asdict, dataclass
-from datetime import UTC, datetime
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent.parent

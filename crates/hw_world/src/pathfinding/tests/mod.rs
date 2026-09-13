@@ -2,6 +2,8 @@ use super::*;
 use hw_core::constants::{MAP_HEIGHT, MAP_WIDTH};
 use std::collections::HashSet;
 
+mod properties;
+
 #[derive(Default)]
 struct TestWorld {
     obstacles: HashSet<(i32, i32)>,

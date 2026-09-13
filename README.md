@@ -77,6 +77,14 @@ lane leaseはPOSIXの`flock`を使い、未対応hostでは共有targetへfallba
 競合時は子processを起動せず停止します。native acceptanceとperformance runnerのcanonical
 `target/`契約は変更しません。
 
+### 品質検証
+
+完了前は`python3 scripts/dev.py verify`を実行します。固定版cargo-deny / Ruff / actionlintが必要です。
+Linux x86_64では`python3 scripts/install_dev_tools.py --bin-dir "$HOME/.local/bin"`で明示導入し、
+同directoryをPATHへ追加します。`doctor`や`verify`は自動installしません。
+個別検査は`dev.py lint`と`dev.py deps`、導入・更新・property testの再現手順は
+[開発ガイド](docs/DEVELOPMENT.md#quality-toolsfull-verifyで必須)を参照してください。
+
 ### デバッグ
 - `F12`: デバッグ表示 / Gizmo のトグル
 - `Space`: ポーズ / 再開（Virtual Time）

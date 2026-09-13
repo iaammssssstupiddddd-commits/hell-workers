@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from .fixtures import (
     Case,
     DECONSTRUCTION_HEADLESS_SOFTWARE_RENDERING_WARNING,

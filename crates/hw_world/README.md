@@ -75,6 +75,14 @@ ActorのSoul再探索、escapeの経路距離判定、task execution、bucket ro
 
 歩行可能性の契約をカスタマイズするトレイト。用途に応じて探索条件を差し替え可能。
 
+### Property test
+
+`pathfinding/tests/properties.rs`は2〜8×2〜8の有界worldで、同じscratchのA→B→A検索を
+新規scratchと比較する。成功経路の始終点・通行可能性・8近傍・斜め両脇・ループなしも検査する。
+到達可能性や最短costの完全証明ではなく、既存の数値例・worldgen golden testと併用する。
+proptestはdev-dependencyのみ。各256 cases・縮小上限1024、失敗seedの保存と再生は
+[開発ガイド](../../docs/DEVELOPMENT.md#property-tests)を参照する。
+
 ## 座標系
 
 - **グリッド座標**: タイル単位の整数インデックス
@@ -85,6 +93,7 @@ ActorのSoul再探索、escapeの経路距離判定、task execution、bucket ro
 
 - `hw_core`, `hw_jobs`, `bevy`, `rand`
 - `wfc`, `direction`
+- testのみ: `proptest`（workspace管理、`std`のみ）
 
 ---
 

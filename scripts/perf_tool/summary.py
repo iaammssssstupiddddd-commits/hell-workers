@@ -132,7 +132,6 @@ def summarize_behavior_session(
     runs: list[tuple[Path, Validation]],
 ) -> bool:
     groups: dict[str, list[tuple[Path, Validation]]] = {}
-    preflight_groups: dict[str, list[tuple[Path, Validation]]] = {}
     invalid_runs: list[tuple[Path, Validation]] = []
     adapters: list[dict[str, str]] = []
     for run_dir, validation in runs:

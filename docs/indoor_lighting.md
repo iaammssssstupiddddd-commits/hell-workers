@@ -94,6 +94,12 @@ large fixture（500 Soul／16 Room／576 cells）を32回warmup後に256回測�
 
 ## P03 field-core evidence
 
+通常unit testの`hw_infra::lighting::properties`は、最大8×8のmask・全遮蔽種・0〜6光源を生成し、
+光源順の変更でinput/output checksum・全cells・diagnosticsが一致することを検査する。
+同じ入力の再適用ではcells/mask/checksum/revisionが保たれ、changed radiance/mask/total countが0になる。
+proptestはdev-dependencyで各256 cases・縮小上限1024とし、既存の数値例を置き換えない。
+保存seedの扱いは[開発ガイド](DEVELOPMENT.md#property-tests)を参照する。
+
 P03の専用headless計測は次を使う。
 
 ```bash

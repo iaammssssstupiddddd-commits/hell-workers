@@ -104,7 +104,7 @@ python3 scripts/dev.py check
 python3 scripts/dev.py verify
 ```
 
-`verify` はPython tooling test、性能runner self-test、AIルール・secret・docs契約、
+`verify` は固定版toolのpreflight、Ruff・actionlint・online依存監査、Python tooling test、性能runner self-test、AIルール・secret・docs契約、
 fmt、workspace check、profiling最小feature check、Clippy、全test、diff hygieneを順に実行する。
 diff hygiene はローカルでは `HEAD` からの作業差分、CIではeventのbaseから`HEAD`までを検査する。
 通常のcheck/buildは暗黙のログ作成や`target/`削除を行わない。容量整理は専用maintenance
@@ -424,15 +424,113 @@ pub fn is_soul_available_for_work(assigned: &AssignedTask) -> bool { ... }
 - `Res<T>` は `&mut World` から再構築できない。closure から呼ぶヘルパーの引数は `&Res<T>` ではなく `&T` にする（既存の呼び出し元は deref coercion でそのまま通る）
 - 適用例: `ConversationCooldown` の時限除去、勧誘/激励リアクションの遅延バブル（`docs/speech_system.md` 参照）
 
-## 推奨開発ツール
+## 開発ツール
+
+### Quality tools（full verifyで必須）
+
+固定版の正本は[`scripts/dev-tools.toml`](../scripts/dev-tools.toml)で、cargo-deny 0.20.2、
+Ruff 0.16.7、actionlint 1.7.12を使う。Linux x86_64では公式releaseのSHA-256を照合する
+専用installerを明示実行する。通常の`doctor` / `check` / `verify`はinstallやupgradeを行わない。
+
+```bash
+python3 scripts/install_dev_tools.py --bin-dir "$HOME/.local/bin"
+export PATH="$HOME/.local/bin:$PATH"
+python3 scripts/dev.py doctor
+python3 scripts/dev.py lint
+python3 scripts/dev.py deps
+# cached DBによる診断だけ。online監査の代用にはしない
+python3 scripts/dev.py deps --offline
+```
+
+installerはLinux x86_64以外を拒否する。他hostでは同じ版の公式配布物を各toolの公式手順で
+永続領域へ供給する。cargo-denyをsource buildする場合は
+`python3 scripts/dev.py cargo -- install cargo-deny --version 0.20.2 --locked`を使う。
+`doctor`は`RUSTUP_AUTO_INSTALL=0`でRustとtoolの版・pathを診断し、追加tool不足は
+`Full verification tools: not ready`として通常build readinessと分ける。
+`check`は追加CLIを要求しない。`verify`は欠損・版違いを先頭で拒否する。
+Cargo homeの`bin`にあるcargo-denyがPATHより優先されるので、古い同名binaryも診断対象になる。
+衝突時は診断に表示されたbinaryの親directoryをinstallerの`--bin-dir`へ指定し、
+`--tool cargo-deny`でその場所の版を揃える。別directoryへ追加するだけでは衝突を解消しない。
+
+RuffはPython 3.11向けの`scripts/`に`E4/E7/E9/F`だけを適用し、cache・自動修正・formatを使わない。
+`ruff.toml`の`required-version`とmanifestの一致も検査する。actionlintはworkflowの構文・式・型を検査し、
+任意導入のShellCheck/Pyflakes連携を無効にして環境差を避ける。Dependabot YAMLはactionlintの対象外である。
+
+依存監査は全13 workspace、全feature、target filterなしのnormal/build/dev graphを対象とする。
+`--locked`でlock変更を拒否し、online DB更新失敗をofflineへfallbackしない。
+offlineではDB欠損・鮮度検査失敗もnon-zeroになる。DBは正規化したCargo homeの
+`advisory-dbs/`、registryは同`registry/`に置き、通常開発cacheとして保守する。
+監査はnative/performanceのactivity exclusive leaseと競合する間、起動しない。
+
+`deny.toml`は未知license/source、既知脆弱性、推移依存のunsound/未保守通知を拒否する。
+内部memberの`publish = false`と`licenses.private.ignore`は自前license判定だけを外し、
+外部依存をgraphから除外しない。外部licenseはMIT、Apache-2.0、BSD-2-Clause、BSD-3-Clause、
+BSL-1.0、CC0-1.0、ISC、MIT-0、Unicode-3.0、Zlibを許可する。配布時のnotice義務は別途維持する。
+複数versionとyankedはwarningとして表示し、Clippy警告ゼロとは区別する。
+
+例外は[`RUSTSEC-2026-0192`](https://rustsec.org/advisories/RUSTSEC-2026-0192.html)だけである。
+`bevy_winit → winit → sctk-adwaita → ab_glyph → owned_ttf_parser → ttf-parser 0.25.1`
+というWayland decoration経路に修正版のない保守終了通知がある。これは当該通知に脆弱性の記載がないことを
+確認した個別例外であり、同crateの新しいadvisoryは抑制しない。ownerは依存更新reviewer、
+next actionはwinit/sctk-adwaita更新時のfont backend移行確認、解除条件はこの依存経路の解消である。
+
+CLI更新担当はversion・公式URL・公式release digestを同時に更新し、Ruffの要求版を同期する。
+明示install後に`doctor` / `lint` / `deps` / `verify`を通す。Dependabotはこの任意TOMLの版を更新しない。
+
+### Property tests
+
+proptestはroot workspace dependencyで管理し、`hw_world` / `hw_infra`だけのdev-dependencyとする。
+`default-features = false`、`std`だけを使い、fork/timeout subprocessを作らない。
+検索のA→B→A履歴非干渉・経路合法性、光源順の不変性、照明再適用の無変更を計3 propertyで検査する。
+各256 cases、縮小1024回、最大8×8・6光源で処理量を制限する。
+
+```bash
+PROPTEST_RNG_SEED=20260913 python3 scripts/dev.py cargo -- test --locked -p hw_world -p hw_infra properties
+```
+
+失敗seedは標準SourceParallelで次の2箇所へ保存され、Git・IDE ignoreの狭い例外で追跡できる。
+成功時の空corpusは作らない。生成器を変えるとseedだけでは再現を保証できないため、
+実際の失敗seedをレビューしてcommitし、縮小された入力を通常の`#[test]`へ昇格する。
+
+```text
+crates/hw_world/proptest-regressions/pathfinding/tests/properties.txt
+crates/hw_infra/proptest-regressions/lighting/properties.txt
+```
+
+通常のmutable workspace/laneで実行する。凍結したnative subjectでは実行せず、
+failure persistenceの無効化によって既存seedの再生を止めない。
+
+### Dependency update PRとCI
+
+[Dependabot設定](../.github/dependabot.yml)はCargo/Actionsを週次月曜に確認する。
+通常version更新のopen PR上限はCargo 3、Actions 1。engine-render、worldgen、その他Cargo、Actionsを分け、
+自動mergeしない。Bevy/wgpu更新はAPIと必要なnative受入、rand/WFC更新は同seedと保存互換をreviewする。
+groupは`version-updates`専用で、security更新の上限やgroupを保証しない。
+security更新はGitHub側の設定も必要で、有効化する場合は`security-updates`用groupを別途設計する。
+default branchへの反映後、両ecosystemのscan、生成PR（またはno-update）とCIをGitHub上で確認する。
+
+Cargo manifest/lockはdev-dependency更新でもHelp gateの対象である。bot commitだけの初期失敗は
+実レビュー待ちとして扱う。担当者がplayer-visible経路を確認し、必要なHelp更新または
+全更新commitの子孫となる末尾commitの`Help-Impact: none` / 具体的な`Help-Impact-Reason`を残す。
+PR本文・CI環境変数・固定理由の自動注入で代用しない。bot再更新/rebase後は再判断し、squash後も判断を保持する。
+
+CIは公式SHA固定Action、manifestからの明示Rust/tool供給、read権限で同じ`verify`を実行する。
+quality jobは画像処理testに必要なPillowをUbuntuの`python3-pil`として明示導入し、
+`verify`と同じ`python3`で`PIL.Image`をimportしてから検査を始める。
+quality jobは依存更新後のprofiling / dynamic-linking両構成の再buildを許す90分上限とする。
+日次03:17 UTCは`deps`だけを走らせ、game buildやHelp gateを呼ばない。
+ActionsのRun workflow（`workflow_dispatch`）も同じ依存監査jobだけを実行する。
+初回受入・監査障害の再確認に使い、定刻scheduleの発火確認とは分けて記録する。
+concurrencyにはevent名を含め、scheduleがmaster pushのqualityをcancelしない。
+
+### 任意ツール
 
 | ツール | 用途 | インストール |
 |:---|:---|:---|
-| **bacon** | ファイル変更監視 + `scripts/dev.py check` | `cargo install bacon` |
-| **cargo-expand** | Bevy derive マクロの展開確認 | `cargo install cargo-expand` |
-| **cargo-udeps** | 未使用依存クレートの検出 | `cargo install cargo-udeps` |
-| **cargo-flamegraph** | フレームグラフによるプロファイリング | `cargo install flamegraph` |
-| **cargo-deny** | 依存ライセンス・脆弱性チェック | `cargo install cargo-deny` |
+| **bacon** | ファイル変更監視 + `scripts/dev.py check` | `python3 scripts/dev.py cargo -- install bacon` |
+| **cargo-expand** | Bevy derive マクロの展開確認 | `python3 scripts/dev.py cargo -- install cargo-expand` |
+| **cargo-udeps** | 未使用依存クレートの検出 | `python3 scripts/dev.py cargo -- install cargo-udeps` |
+| **cargo-flamegraph** | フレームグラフによるプロファイリング | `python3 scripts/dev.py cargo -- install flamegraph` |
 
 ## 便利なコマンド
 

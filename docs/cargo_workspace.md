@@ -31,6 +31,10 @@ crates/hw_infra
 ```
 
 root `Cargo.toml`は`members = ["crates/*"]`、`default-members = ["crates/bevy_app"]`を使います。
+全13 memberは内部ゲームcrateとして`publish = false`です。自前licenseはこのmetadataから推測しません。
+rootが版を管理する`proptest`は`hw_world`と`hw_infra`のdev-dependencyだけに追加し、
+`std` featureのみでpure property testを実行します。通常runtimeの依存方向は変えません。
+`dev.py deps`は内部crateのlicense判定だけを除外し、外部normal/build/devとoptional依存を監査します。
 内部crate間の直接依存は各`Cargo.toml`を正本とし、現在は次の通りです。
 
 | crate | workspace内の直接依存 |

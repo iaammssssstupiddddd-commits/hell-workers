@@ -1,7 +1,7 @@
 # Development Tools
 
-ローカルとCIの品質ゲートは `scripts/dev.py` を正本とする。Python標準ライブラリ
-だけで動作し、workspace rootを自動解決するため、どのディレクトリから呼んでも
+ローカルとCIの品質ゲートは `scripts/dev.py` を正本とする。driver自体はPython標準ライブラリ
+で動作し、workspace rootを自動解決するため、どのディレクトリから呼んでも
 同じCargo workspaceを対象にする。
 
 ## 基本コマンド
@@ -18,6 +18,11 @@ python3 scripts/dev.py check --package hw_jobs --tests
 
 # CIと同一の完全ゲート
 python3 scripts/dev.py verify
+
+# 固定版Ruff/actionlintと依存監査
+python3 scripts/dev.py lint
+python3 scripts/dev.py deps
+python3 scripts/dev.py deps --offline
 
 # 暗黙cleanupを行わないbuild
 python3 scripts/dev.py build
@@ -57,6 +62,17 @@ performance/nativeを妨げない。
 互換wrapperとして `scripts/check.sh` / `check.ps1`、`scripts/build.sh` /
 `build.ps1` も残している。wrapperは引数を `dev.py` へ渡すだけで、ログファイル作成、
 Cargo出力の再解釈、`target/`の削除を行わない。
+
+## 品質ツール
+
+full verifyに必要な3 CLIの正本は`dev-tools.toml`、版/path照合は`dev_tools.py`。
+Linux x86_64の明示導入は`python3 scripts/install_dev_tools.py --bin-dir "$HOME/.local/bin"`を使い、
+同directoryをPATHへ加える。公式archiveのSHA-256不一致なら既存binaryを置換しない。
+doctor/verifyは暗黙installを行わない。Ruffはcacheなし、actionlintはShellCheck/Pyflakes連携なし、
+depsは全workspace/feature/targetのnormal/build/dev依存を監査しlockを変更しない。
+offlineはcached DB診断として区別し、online失敗を成功へ読み替えない。
+固定版更新、license/advisory方針、DependabotのHelp判断とGitHub受入は
+[開発ガイド](../docs/DEVELOPMENT.md#quality-toolsfull-verifyで必須)を参照する。
 
 ## ドキュメント契約
 

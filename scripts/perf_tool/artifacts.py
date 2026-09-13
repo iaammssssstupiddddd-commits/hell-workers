@@ -10,8 +10,7 @@ from typing import Any, Iterable
 
 from .model import (
     ADAPTER_RE,
-    DECONSTRUCTION_FIXTURE_COLUMNS,
-    DECONSTRUCTION_FIXTURE_SCHEMA_VERSION,
+    Case,
     DETERMINISM_COLUMNS,
     DETERMINISM_EARLY_CHECKPOINTS,
     DETERMINISM_RECORD_COLUMNS,
@@ -19,19 +18,10 @@ from .model import (
     DREAM_UI_METRICS_COLUMNS,
     DREAM_UI_METRICS_SCHEMA_VERSION,
     EXPECTED_SUMMARY_COLUMNS,
-    INDOOR_LIGHT_CONSUMER_COLUMNS,
-    INDOOR_LIGHT_CONSUMER_PROOF_SCHEMA_VERSION,
-    INDOOR_LIGHT_CPU_COLUMNS,
-    INDOOR_LIGHT_FIELD_SCHEMA_VERSION,
-    INDOOR_LIGHT_FIXTURE_COLUMNS,
-    INDOOR_LIGHT_FIXTURE_SCHEMA_VERSION,
-    INDOOR_LIGHT_LAYOUT_COLUMNS,
-    INDOOR_LIGHT_PRESENTATION_COLUMNS,
     LOG_LEVEL_RE,
     ONE_F64_BITS,
     RENDER_INVENTORY_COLUMNS,
     RENDER_INVENTORY_SCHEMA_VERSION,
-    REPO_ROOT,
     SCENE_ROOT_COLUMNS,
     SPATIAL_QUERY_METRICS_COLUMNS,
     SPATIAL_QUERY_METRICS_CONTRACTS,
@@ -44,9 +34,6 @@ from .model import (
     TRANSPORT_REQUEST_CHANGES_SCHEMA_VERSION,
     TRANSPORT_REQUEST_KIND_NAMES,
     Validation,
-    WALL_DENSITY_CASES,
-    WALL_DENSITY_CONTRACT_SHA256,
-    WALL_DENSITY_LAYOUT_COLUMNS,
     WINDOW_COLUMNS,
     WINDOW_COLUMNS_V2,
     WINDOW_HISTORICAL_SCHEMA_VERSION,
@@ -54,15 +41,13 @@ from .model import (
     ZERO_F64_BITS,
 )
 from .artifact_io import (
-    compare_exact_rows,
     determinism_records_checksum,
     read_exact_csv_rows,
-    reject_duplicate_json_keys,
     sha256,
-    write_json,
+    write_json as write_json,
 )
 from .artifact_readers import (
-    expected_indoor_light_fixture_row,
+    expected_indoor_light_fixture_row as expected_indoor_light_fixture_row,
     read_deconstruction_fixture,
     read_indoor_light_consumer_lifecycle,
     read_indoor_light_consumers,
@@ -78,12 +63,7 @@ from .artifact_readers import (
 from .rtt_light_contract import (
     build_fixture_audit_actor_counts,
     build_fixture_layout,
-    build_fixture_ledger,
-    build_fixture_presentation_rows,
-    contract_fingerprints,
-    expected_eligible_supplied_emitters,
     load_rtt_light_contract,
-    validate_stage_lane,
 )
 
 P02_PRESENTATION_COLUMNS = (

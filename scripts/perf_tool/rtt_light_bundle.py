@@ -33,7 +33,6 @@ from .renderdoc_foundation import (
     validate_runtime_checkpoint_v3,
 )
 from .rtt_light_contract import (
-    GATE_UNIT_TYPES,
     build_fixture_layout,
     contract_fingerprints,
     expected_formal_cases,
@@ -499,7 +498,6 @@ def _expected_matrix(
     fixed = leg_id in {"audit", "behavior", "field-core", "consumer-core"}
     behavior = leg_id == "behavior"
     windowed = leg_id in {"capture", "memory"}
-    lane = "behavior" if behavior else leg_id if leg_id in {"field-core", "consumer-core"} else "static"
     leg_matrix = formal.get(leg_id.replace("-", "_"), {})
     return {
         "workload": "indoor-light",

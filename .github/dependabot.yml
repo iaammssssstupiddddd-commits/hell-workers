@@ -1,0 +1,29 @@
+version: 2
+updates:
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
+    groups:
+      engine-render:
+        applies-to: version-updates
+        patterns: ["bevy*", "wgpu*"]
+      worldgen:
+        applies-to: version-updates
+        patterns: ["rand", "rand_chacha", "wfc", "direction"]
+      other-cargo:
+        applies-to: version-updates
+        patterns: ["*"]
+        exclude-patterns: ["bevy*", "wgpu*", "rand", "rand_chacha", "wfc", "direction"]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 1
+    groups:
+      actions:
+        applies-to: version-updates
+        patterns: ["*"]

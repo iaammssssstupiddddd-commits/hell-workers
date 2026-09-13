@@ -1,0 +1,16 @@
+# Exact CLI versions and official Linux x86_64 release archives.
+# Update the version, URL and SHA-256 together after reviewing upstream releases.
+[cargo-deny]
+version = "0.20.2"
+url = "https://github.com/EmbarkStudios/cargo-deny/releases/download/0.20.2/cargo-deny-0.20.2-x86_64-unknown-linux-musl.tar.gz"
+sha256 = "9f12ed4c49936e09b48bf862b595cde2fe64fcbd9d74dfacac6131ca824c8d5f"
+
+[ruff]
+version = "0.16.7"
+url = "https://github.com/astral-sh/ruff/releases/download/0.16.7/ruff-x86_64-unknown-linux-musl.tar.gz"
+sha256 = "8d28939cf5cabe54a2f8f7cbfab52c643436d1bc70474198181db9e48f504411"
+
+[actionlint]
+version = "1.7.12"
+url = "https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz"
+sha256 = "8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8"

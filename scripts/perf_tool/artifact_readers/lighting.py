@@ -12,8 +12,7 @@ from ..model import (
     INDOOR_LIGHT_CPU_COLUMNS,
     INDOOR_LIGHT_FIELD_SCHEMA_VERSION, INDOOR_LIGHT_FIXTURE_COLUMNS,
     INDOOR_LIGHT_FIXTURE_SCHEMA_VERSION,
-    INDOOR_LIGHT_LAYOUT_COLUMNS, INDOOR_LIGHT_PRESENTATION_COLUMNS, ONE_F64_BITS,
-    Validation, ZERO_F64_BITS,
+    INDOOR_LIGHT_LAYOUT_COLUMNS, INDOOR_LIGHT_PRESENTATION_COLUMNS,
 )
 from ..rtt_light_contract import (
     build_fixture_layout, build_fixture_ledger, build_fixture_presentation_rows,
@@ -256,7 +255,8 @@ def read_indoor_light_field(
     if errors or len(elapsed) != 256:
         return None, errors
     ordered = sorted(elapsed)
-    quantile = lambda ratio: ordered[math.floor((len(ordered) - 1) * ratio + 0.5)] / 1_000_000
+    def quantile(ratio: float) -> float:
+        return ordered[math.floor((len(ordered) - 1) * ratio + 0.5)] / 1_000_000
     return {
         **expected_scalars,
         "input_checksum": metadata["input_checksum"],
@@ -472,9 +472,8 @@ def read_indoor_light_consumers(
     if errors or len(elapsed) != 256:
         return None, errors
     ordered = sorted(elapsed)
-    quantile = lambda ratio: ordered[
-        math.floor((len(ordered) - 1) * ratio + 0.5)
-    ] / 1_000_000
+    def quantile(ratio: float) -> float:
+        return ordered[math.floor((len(ordered) - 1) * ratio + 0.5)] / 1_000_000
     return {
         "samples_per_soul_slow_step": 1,
         "effects_per_soul_slow_step": effects,

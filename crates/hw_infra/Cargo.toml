@@ -1,4 +1,5 @@
 [package]
+publish = false
 name = "hw_infra"
 version = "0.1.0"
 edition = "2024"
@@ -11,3 +12,6 @@ profiling = []
 hw_core = { path = "../hw_core" }
 serde = { workspace = true }
 sha2 = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }
