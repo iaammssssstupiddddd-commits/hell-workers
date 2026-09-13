@@ -13,6 +13,7 @@ use bevy::color::LinearRgba;
 use bevy::prelude::*;
 use bevy::ui::IsDefaultUiCamera;
 use bevy::window::PrimaryWindow;
+use hw_infra::lighting::digest_hex;
 use hw_ui::camera::MainCamera;
 use serde_json::{Value, json};
 #[cfg(test)]
@@ -448,7 +449,7 @@ mod tests {
 
     #[test]
     fn embedded_contract_hash_is_current() {
-        let actual = format!("{:x}", Sha256::digest(CONTRACT_BYTES));
+        let actual = digest_hex(&Sha256::digest(CONTRACT_BYTES).into());
         assert_eq!(actual, CONTRACT_SHA256);
     }
 

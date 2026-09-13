@@ -6,6 +6,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use bevy::asset::{AssetLoader, LoadContext, LoadState, io::Reader};
 use bevy::gltf::GltfAssetLabel;
 use bevy::prelude::*;
+use hw_infra::lighting::digest_hex;
 use hw_visual::{TopDownStructuralMaterial, make_topdown_structural_material};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -236,7 +237,7 @@ impl AssetLoader for DoorAssetSetLoader {
                 "receipt byte length differs",
             )?;
             contract(
-                format!("{:x}", Sha256::digest(&payload)) == receipt.sha256,
+                digest_hex(&Sha256::digest(&payload).into()) == receipt.sha256,
                 "receipt actual bytes hash differs",
             )?;
         }
@@ -250,7 +251,7 @@ impl AssetLoader for DoorAssetSetLoader {
                 format!("{} byte length differs", record.path),
             )?;
             contract(
-                format!("{:x}", Sha256::digest(&payload)) == record.sha256,
+                digest_hex(&Sha256::digest(&payload).into()) == record.sha256,
                 format!("{} actual bytes hash differs", record.path),
             )?;
         }

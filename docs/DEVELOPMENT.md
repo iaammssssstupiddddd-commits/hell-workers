@@ -548,7 +548,9 @@ Helpへの影響はNo impact（開発環境・監査・testと互換security pat
 | [#16](https://github.com/iaammssssstupiddddd-commits/hell-workers/pull/16) | 採用候補、検証中 | sha2 0.11 / libloading 0.9とRON・Serde・JSONのlock更新。実利用APIを確認し、独立計算した照明checksumの固定vectorを既存testへ追加。 |
 
 #16のHelp判断は **No impact**。SHA-256はwall/door manifestの実bytes検査と照明の同一性判定に使い、
-digestの入力・lower-hex・32byte出力を維持する。照明の固定vectorはPython hashlibの独立値に照合する。
+digestの入力と32byte出力を維持する。sha2 0.11の戻り値は`LowerHex`を実装しないため、
+asset loaderとprofilingの14か所を既存`hw_infra::lighting::digest_hex`へ移し、
+先頭ゼロを含む64桁小文字形式を維持する。照明の固定vectorはPython hashlibの独立値に照合する。
 Save/Loadは既存のheader version・DynamicWorld RON、SettingsはGameSettingsFileと既存default移行を維持し、
 serde_jsonの非文字列enum key拒否修正に依存する入力を生成しない。新しいRON構文は製品で使用しない。
 libloadingはLinuxのprofiling-renderdocで注入済みライブラリを`RTLD_NOW | RTLD_NOLOAD`で開き、
