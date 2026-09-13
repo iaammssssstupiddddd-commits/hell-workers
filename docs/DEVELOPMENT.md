@@ -431,6 +431,7 @@ pub fn is_soul_available_for_work(assigned: &AssignedTask) -> bool { ... }
 固定版の正本は[`scripts/dev-tools.toml`](../scripts/dev-tools.toml)で、cargo-deny 0.20.2、
 Ruff 0.16.7、actionlint 1.7.12を使う。Linux x86_64では公式releaseのSHA-256を照合する
 専用installerを明示実行する。通常の`doctor` / `check` / `verify`はinstallやupgradeを行わない。
+全体`verify`には、画像処理testのため同じPython環境のPillow 12.3.0も必要である。
 
 ```bash
 python3 scripts/install_dev_tools.py --bin-dir "$HOME/.local/bin"
@@ -515,13 +516,27 @@ Cargo manifest/lockはdev-dependency更新でもHelp gateの対象である。bo
 PR本文・CI環境変数・固定理由の自動注入で代用しない。bot再更新/rebase後は再判断し、squash後も判断を保持する。
 
 CIは公式SHA固定Action、manifestからの明示Rust/tool供給、read権限で同じ`verify`を実行する。
-quality jobは画像処理testに必要なPillowをUbuntuの`python3-pil`として明示導入し、
-`verify`と同じ`python3`で`PIL.Image`をimportしてから検査を始める。
+quality jobは画像処理testに必要なPillow 12.3.0をrunnerの一時venvへPyPI wheelから明示導入し、
+そのPythonで`verify`を実行する。Ubuntu標準Pillow 10.2では既存の`get_flattened_data`が使えないため、
+導入直後に同APIの存在を確認する。venvはjob終了時にrunnerとともに破棄し、Cargo cacheへ含めない。
 quality jobは依存更新後のprofiling / dynamic-linking両構成の再buildを許す90分上限とする。
 日次03:17 UTCは`deps`だけを走らせ、game buildやHelp gateを呼ばない。
 ActionsのRun workflow（`workflow_dispatch`）も同じ依存監査jobだけを実行する。
 初回受入・監査障害の再確認に使い、定刻scheduleの発火確認とは分けて記録する。
 concurrencyにはevent名を含め、scheduleがmaster pushのqualityをcancelしない。
+
+2026-09-13の導入受入では、`ecf2ab7d`で5項目を公開し、`c870bfea`でCIのPillow供給を固定した。
+[通常CI](https://github.com/iaammssssstupiddddd-commits/hell-workers/actions/runs/34748374154)は
+Python147+151 test、通常/profiling構成のworkspace test、各profiling feature check、Clippy警告0件、
+全契約検査とCargo cache保存まで成功した。job全体は69分02秒で、90分上限内に収まった。
+[Cargo scan](https://github.com/iaammssssstupiddddd-commits/hell-workers/actions/runs/34748265575)と
+[Actions scan](https://github.com/iaammssssstupiddddd-commits/hell-workers/actions/runs/34748265761)も成功し、
+設定どおりCargo 3件（PR #14〜#16）・Actions 1件（PR #13）が生成された。更新は未mergeである。
+PR #13〜#15の初回CIは旧Pillow供給で停止し、修正後のbaseを使った#16はPython test等を通過後、
+Cargo変更のHelpレビュー未記録で拒否された。これらの依存更新の互換性・Help判断は別レビューとする。
+[日次監査と同じjobの手動実走](https://github.com/iaammssssstupiddddd-commits/hell-workers/actions/runs/34748259651)は成功。
+定刻scheduleの発火自体は未観測。security updatesはdisabledのままで、alertsの有効状態はAPIの404応答では確定できなかった。
+Helpへの影響はNo impact（開発環境・監査・testと互換security patchのみ、入力・保存・Help catalogは不変）。
 
 ### 任意ツール
 

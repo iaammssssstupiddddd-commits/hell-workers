@@ -80,6 +80,7 @@ lane leaseはPOSIXの`flock`を使い、未対応hostでは共有targetへfallba
 ### 品質検証
 
 完了前は`python3 scripts/dev.py verify`を実行します。固定版cargo-deny / Ruff / actionlintが必要です。
+画像処理テスト用のPillow 12.3.0も、検査に使うPython環境へ導入してください。
 Linux x86_64では`python3 scripts/install_dev_tools.py --bin-dir "$HOME/.local/bin"`で明示導入し、
 同directoryをPATHへ追加します。`doctor`や`verify`は自動installしません。
 個別検査は`dev.py lint`と`dev.py deps`、導入・更新・property testの再現手順は
