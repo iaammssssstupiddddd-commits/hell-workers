@@ -44,10 +44,10 @@
 | [3d-rtt/single-scene-light-field/08-legacy-cleanup-release-plan-2026-08-03.md](3d-rtt/single-scene-light-field/08-legacy-cleanup-release-plan-2026-08-03.md) | Completed — bounded P08 release closure valid; historical performance bootstrap intentionally not resumed | Soul projector／section／legacy mirrorを撤去し、最終GPU経路・cross-consumer・Help gateを閉じるP08。 |
 | [3d-rtt/single-scene-rtt-indoor-light-field-migration-plan-2026-08-03.md](3d-rtt/single-scene-rtt-indoor-light-field-migration-plan-2026-08-03.md) | Completed — P00〜P08 and P02-A complete; P08 bounded release closure valid | Scene RtT 1枚、TopDown表示、放射状Indoor Light Fieldへの9分割親ロードマップ。 |
 | [3d-rtt/terrain-lod-switch-flicker-plan-2026-04-17.md](3d-rtt/terrain-lod-switch-flicker-plan-2026-04-17.md) | Draft | 地形 LOD の単発切替ポップを観測し、短い dither 遷移で抑える計画 |
+| [dependabot-review-plan-2026-09-13.md](dependabot-review-plan-2026-09-13.md) | In Progress | Dependabot初回4件の採否レビュー |
 | [development-workstation-blender-migration-plan-2026-07-29.md](development-workstation-blender-migration-plan-2026-07-29.md) | In Progress | 新PCへの開発環境移行と、現PCでのBlender／asset新規構築計画。 |
 | [hvac-plumbing-plan-2026-07-13.md](hvac-plumbing-plan-2026-07-13.md) | Draft | 地獄のインフラ（換気・導水・部屋認可）実装計画 |
 | [native-acceptance-resource-safety-plan-2026-08-05.md](native-acceptance-resource-safety-plan-2026-08-05.md) | Complete | tmpfs上のCargo出力を永続storageへ固定し、実機検証のRAM圧迫を防ぐ計画。 |
-| [priority-development-tools-plan-2026-09-13.md](priority-development-tools-plan-2026-09-13.md) | In Progress | cargo-deny、Dependabot、Ruff、actionlint、proptestの段階導入と検証計画。 |
 
 ## アーカイブ計画書一覧 (`archive/` / `**/archived/`)
 
@@ -96,6 +96,7 @@
 | [archive/input-action-context-resolver-plan-2026-07-17.md](archive/input-action-context-resolver-plan-2026-07-17.md) | Archived | Track A1: 離散キーボード競合解決と Modal/Pause の背景入力遮断計画 |
 | [archive/large-source-file-split-plan-2026-07-17.md](archive/large-source-file-split-plan-2026-07-17.md) | Archived | 500行以上の実装ファイル分割計画 |
 | [archive/player-facing-result-notifications-plan-2026-07-18.md](archive/player-facing-result-notifications-plan-2026-07-18.md) | Archived | 配置不能理由とセーブ/ロードの終端結果をゲーム画面から確実に確認できないの計画。 |
+| [archive/priority-development-tools-plan-2026-09-13.md](archive/priority-development-tools-plan-2026-09-13.md) | Archived | 依存監査・更新PR・Python/CI静的検査・生成入力による不変条件テストが定常gateに接続されていないの計画。 |
 | [archive/runtime-correctness-contracts-plan-2026-07-12.md](archive/runtime-correctness-contracts-plan-2026-07-12.md) | Archived | 実行時正しさ契約リファクタリング計画 |
 | [archive/save-catalog-autosave-plan-2026-08-03.md](archive/save-catalog-autosave-plan-2026-08-03.md) | Archived | 単一save fileしか扱えず、退避・比較・世代付き自動復旧を安全に行えないの計画。 |
 | [archive/save-load-hardening-plan-2026-07-12.md](archive/save-load-hardening-plan-2026-07-12.md) | Archived | Save/Load境界強化・互換性リファクタリング計画 |

@@ -5,13 +5,13 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `priority-development-tools-plan-2026-09-13` |
-| ステータス | In Progress |
+| ステータス | Completed |
 | 作成日 / 最終更新日 | 2026-09-13 |
 | 作成者 | Codex |
-| 関連提案 | [ライブラリ・開発ツールの導入／置換評価](../proposals/library-tooling-evaluation-proposal-2026-09-13.md) |
+| 関連提案 | [ライブラリ・開発ツールの導入／置換評価](../../proposals/library-tooling-evaluation-proposal-2026-09-13.md) |
 | 関連Issue/PR | N/A |
 | 調査基準 | primary `master`、`eec38b3e6371f847da8c2a5dac7848ea6fc3b3e6`と前回作成の未commit評価書・索引 |
-| 現在地 | 5項目のローカル実装・全体verify完了。GitHub受入待ちのため計画を継続 |
+| 現在地 | masterへ公開し、通常CI・Dependabot両scan・監査jobの成功を確認。運用文書へ結果を集約 |
 | 自己レビュー | 2026-09-13、6件の不足を計画へ反映。実装時の実tool負例確認を追記。Rust統合検証とGitHub受入を分離 |
 
 ## 1. 目的
@@ -314,7 +314,7 @@ No impactなら、全Cargo更新commitの子孫となる末尾commitへ`Help-Imp
 `Help-Impact-Reason`のexact trailerを記録する。PR本文やCI環境変数では代用しない。
 botの再更新・rebase後は判断が現差分全体を覆うか再確認する。squash mergeを使う場合も最終commitへ判断を保持する。
 bot専用の検査免除や固定No-impact文の自動注入は行わない。Agentによるcommit/pushはその作業の依頼範囲で扱う。
-根拠: `scripts/check_help_impact.py::is_production_path` / `evaluate_batch`、[Help契約](../help-screen.md)。
+根拠: `scripts/check_help_impact.py::is_production_path` / `evaluate_batch`、[Help契約](../../help-screen.md)。
 
 既存CIは`push(master)` / `pull_request`とread権限を維持する。
 新しい脆弱性はcode変更なしでも公開されるため、日次の依存監査を軽量jobとして追加する案とする。
@@ -331,13 +331,13 @@ bot専用の検査免除や固定No-impact文の自動注入は行わない。Ag
 
 完了条件:
 
-- [ ] workflowをactionlintで検査し、Dependabot設定はGitHub側の読込結果で別途確認する。actionlintをDependabot YAMLのvalidatorと誤認しない。
-- [ ] default branchへ反映後、Cargo/Actionsの両ecosystemでscan成功を確認し、updateがあれば生成PRのgroup・lock差分・CIを確認する。
-- [ ] 更新がなければ成功したscanのno-update結果を記録し、PRを作るためだけの不要なversion変更はしない。
-- [ ] bot由来PRが秘密情報や追加write権限なしで既存quality checkを実行できる。
+- [x] actionlint passに加え、GitHubでDependabot設定の読込と両ecosystemのscan起動を確認した。
+- [x] Cargo/Actions両scan成功、生成PRのgroup・manifest/lock差分・CIの実行と停止理由を確認した。更新の採用・mergeは別レビューとする。
+- [x] 初回scanで更新が見つかったためno-update記録は非該当。PR生成目的のversion変更はしていない。
+- [x] bot由来PRが追加secret/write権限なしでquality checkを実行した。Cargo変更のHelp未レビュー拒否も実CIで確認した。
 - [x] Cargo bot commit単独拒否、実レビュー済み末尾判断の受理、判断後のCargo再更新で再拒否をfixtureで確認した。
 - [x] version/security更新のgroup・PR上限を文書化し、security updates disabledと未確認のalertsを区別した。
-- [x] 日次監査の設定は同じdeps入口を使い、失敗を非表示・成功扱いにしていない（実走は反映後）。
+- [x] 日次監査と同じjobを手動dispatchで実走し成功。定刻scheduleイベントの発火自体は未観測として分ける。
 - [x] scheduleとmaster pushのconcurrency groupが異なる設定をactionlintとevent別展開値で確認した。
 
 設定根拠: [Dependabot options](https://docs.github.com/en/code-security/reference/supply-chain-security/dependabot-options-reference)。
@@ -399,7 +399,7 @@ python3 scripts/dev.py validation check
 
 ### 検証データ管理
 
-- 正本: [validation-storage-workflow.md](../development-infra/validation-storage-workflow.md)。各開始/再開時に読む。
+- 正本: [validation-storage-workflow.md](../../development-infra/validation-storage-workflow.md)。各開始/再開時に読む。
 - 計画レビュー識別子: `priority-development-tools-planning-2026-09-13`、owner Codex、consumer 本計画の内容レビュー。primaryの文書編集のみで、coordinator batchは作成していない。新規job/clone/worktree/binary copyは0件。
 - 実装開始時に各バッチのowner、consumer、対象差分、使用する通常target/lane、追加tool/cache pathと実測bytesを記入する。
 - 専用の比較・診断出力を作る場合のみ、primary coordinatorへ登録してexecute、結果確定、seal/finalize/checkを行う。
@@ -421,16 +421,16 @@ python3 scripts/dev.py validation check
 
 ### 現在地
 
-- 実装進捗: 5項目のsource/configを追加。CLI負例、property/persistence、Rust/Pythonの最終統合検証は完了。GitHub上のscan/CIはdefault branch反映後に確認する。
-- 公開受入: ユーザー指示によりcommit/pushを実行する。日次監査jobへ手動dispatchを追加し、同じjobの実走と定刻scheduleの発火を区別して確認する。
-- 作業開始時に前回評価書と関連索引の未commit変更がある。今回の差分と併せて所有を維持し、消さない。
-- M0のmode修正はGit indexの100755だけstage済み。その他の変更は未commitで維持する。
-- 採用版はmanifestが正本。残る検証から継続し、初回監査やbaselineを重複実行しない。
+- 実装・公開受入完了: `ecf2ab7d` / `c870bfea`をmasterへ公開し、通常CI、Dependabot両scan、監査job成功を確認した。
+- 日次監査と同じjobは手動dispatchで実走済み。定刻scheduleの発火は未観測として区別する。
+- 作業開始時の評価書・索引とM0の実行mode修正を含めてcommit済み。本計画は完了履歴としてarchiveする。
+- 生成PR #13〜#16は未merge。メジャー更新等の互換性とCargo変更のHelp影響は各更新で別途判断する。
+- 採用版はmanifest、通常操作と受入結果はDEVELOPMENTが正本。初回監査やbaselineを重複実行しない。
 - public用途のworkspace memberが判明した場合、M1のprivate指定だけを再設計する。外部依存監査を省略しない。
 
 ### 参照必須
 
-- [評価書](../proposals/library-tooling-evaluation-proposal-2026-09-13.md)、[DEVELOPMENT.md](../DEVELOPMENT.md)、[invariants.md](../invariants.md)、[Help契約](../help-screen.md)、[照明仕様](../indoor_lighting.md)。
+- [評価書](../../proposals/library-tooling-evaluation-proposal-2026-09-13.md)、[DEVELOPMENT.md](../../DEVELOPMENT.md)、[invariants.md](../../invariants.md)、[Help契約](../../help-screen.md)、[照明仕様](../../indoor_lighting.md)。
 - `scripts/dev.py`、`cargo_runtime.py`、`build_coordination.py`、`validation_storage.py`、`check_repo_hygiene.py`と各test。
 - `crates/hw_world/src/pathfinding/`、`crates/hw_infra/src/lighting/`。
 
@@ -475,6 +475,13 @@ python3 scripts/dev.py validation check
   ローカルworkflowにも供給漏れが残っていたため、quality jobへ[Ubuntu公式python3-pil](https://packages.ubuntu.com/noble/python3-pil)の導入と同じPythonでのimport確認を追加した。
   修正後の`dev.py lint`とBlender tooling 151 testはpass（ローカルPillow 12.3.0、6.653秒）。Ubuntu runnerでのinstall・全体CI成功は未検証。
   この追補はCI環境と文書だけで、画像生成処理・runtime asset・Help catalog生成経路は不変のNo impact。前回全体verify後にRust/Python実装は変更していない。
+- `ecf2ab7d`をmasterへ公開。依存監査jobの手動実走34748259651は成功し、Dependabot両ecosystemの初回scanが起動した。
+  通常CI 34748257572はUbuntu標準Pillow 10.2に`get_flattened_data`がなく5 test失敗。公式Pillow APIとlocal 12.3.0を照合し、runner一時venvへPyPIの12.3.0 wheelを固定導入するよう補正した。画像処理実装・期待値は変更していない。
+- GitHub受入: [Cargo scan](https://github.com/iaammssssstupiddddd-commits/hell-workers/actions/runs/34748265575)、[Actions scan](https://github.com/iaammssssstupiddddd-commits/hell-workers/actions/runs/34748265761)、[依存監査job](https://github.com/iaammssssstupiddddd-commits/hell-workers/actions/runs/34748259651)はsuccess。
+  PR #13はActions groupでcheckout 7.0.0→7.0.1、#14はengine-render（Bevy patch / wgpu major）、#15はworldgen（rand / direction major）、#16はother-cargoの更新。Cargo 3件・Actions 1件という上限とgroup分離を確認し、すべて未mergeで維持した。
+  #13〜#15の初回CIは旧Pillow供給で停止。修正後のbaseを使った#16の[CI](https://github.com/iaammssssstupiddddd-commits/hell-workers/actions/runs/34748380268)は追加lint/依存監査、Python147+151 test、性能self-testを通過し、Cargo変更に対するHelpレビュー未記録で拒否した。固定No-impactの自動注入や検査免除は行っていない。
+  masterの修正commitは`c870bfea`。[通常CI](https://github.com/iaammssssstupiddddd-commits/hell-workers/actions/runs/34748374154)はsuccessで終了し、全体verifyとCargo cache保存が成功した。job時間は08:42:54〜09:51:56 UTCの69分02秒。
+  Python147+151 test、通常/profilingの全workspace test、profiling-memory/tracy/renderdoc check、全target Clippy -D warnings、全契約gateがpass。予定どおり90分上限内に完了した。
 - proptestの固定seed 20260913 / 42で各3 propertyがpass（各256 cases、計1536 cases）。初回依存compileは26分51秒、test本体は照明2件+一時probeが0.02秒、経路1件が0.06秒。
   一時probeは両SourceParallel pathで意図した失敗seedを保存し、新規cases=0・別RNG seedでも各1件の再生を確認した。probeと隔離source/corpusを撤去し、2 exact pathのGit追跡可能性と無関係txtの除外を確認済み。
 - seed 42の再実行は照明2件0.02秒・経路1件0.04秒。診断probe撤去後のhw_infra再compileを含むdriver全体は2.15秒・peak RSS 448,280 KiB。test単体memoryやゲーム性能の測定とは扱わない。
@@ -520,13 +527,13 @@ Ruff/actionlintの限定導入範囲、cargo-denyのonline/offline方針、M3の
 
 ### Definition of Done（実装の完了条件）
 
-- [ ] M0〜M5と各完了条件を満たす（GitHub受入が残る）。
+- [x] M0〜M5の導入・ローカル検証・GitHub受入を完了した。定刻schedule発火の未観測と生成PRの採用レビューは区別して記録した。
 - [x] ローカルでCLI固定版、監査対象、proptest再現入力を確認した。
-- [ ] GitHubでDependabotの設定読込・scan・bot PR/CIと日次監査の実走を確認した。
+- [x] GitHubでDependabotの設定読込・scan・bot PR/CIと、日次監査と同じjobの手動実走を確認した。
 - [x] Help impactを実差分から判断し、必要なdocsと判断記録を残した。
 - [x] `dev.py check`、Clippy、全workspace test、`dev.py verify`が成功した。
 - [x] 検証データの整理と最終storage checkを終えた。専用資源は残さず、既存review保持2 batch・4,881,321,984 Bを維持した。
-- [x] 安定した運用を既存文書へ集約した。本計画はGitHub受入の追跡用としてIn Progressで保持し、索引に反映した。
+- [x] 安定した運用・受入結果をDEVELOPMENTへ集約し、本計画をCompletedとしてarchiveし、索引を更新した。
 
 ## 10. 更新履歴
 
@@ -535,3 +542,4 @@ Ruff/actionlintの限定導入範囲、cargo-denyのonline/offline方針、M3の
 | 2026-09-13 | Codex | 最優先・優先の5項目について、導入順・固定版・変更先・負例検証・完了条件・保存管理を計画 |
 | 2026-09-13 | Codex | 自己レビュー6件を反映。段階ごとのHelp判断、監査範囲とsource拒否、CI concurrency、doctorの暗黙install防止、Dependabotの適用範囲を補強 |
 | 2026-09-13 | Codex | 5項目を実装し、実toolの負例・property再現・check・全体verifyを確認。HelpはNo impact。GitHub受入はdefault branch反映後の未完項目として保持 |
+| 2026-09-13 | Codex | ユーザー指示でcommit/push。CIのPillow版差異を修正し、通常CI・依存監査job・Dependabot両scan成功と4 PR生成を確認。運用文書へ結果を集約して計画完了 |
