@@ -43,15 +43,15 @@
 
 ### M1: 4件の一次レビュー
 
-- [ ] checkoutの修正内容・pin・workflow利用方法を確認。
-- [ ] engine-renderの型境界を確認。
-- [ ] worldgenの型境界・乱数互換性を確認。
-- [ ] other-cargoのhash・serialization・library loading経路を確認。
+- [x] checkoutの修正内容・pin・workflow利用方法を確認。
+- [x] engine-renderの型境界を確認。
+- [x] worldgenの型境界・乱数互換性を確認。
+- [x] other-cargoのhash・serialization・library loading経路を確認。
 
 ### M2: 採否と検証
 
-- [ ] 不採用のPRへ具体的理由と再検討条件を記録してclose。
-- [ ] 採用候補に必要な修正・Helpレビューを反映。
+- [x] 不採用のPRへ具体的理由と再検討条件を記録してclose。
+- [x] 採用候補に必要な修正・Helpレビューを反映。
 - [ ] 採用候補の品質ゲートを確認してmerge。
 
 ### M3: 完了処理
@@ -91,8 +91,9 @@ revert PRで戻す。履歴や他sessionの差分を破壊しない。
 
 ## 9. AI引継ぎメモ
 
-- 現在地: 一次レビュー中。PR操作・採用変更は未実施。
-- 次の作業: #13を現行masterへ更新、#14/#15の不一致を確定、#16の互換性確認。
+- 現在地: M1完了。#14/#15は理由付きclose、#13はmaster更新後のCI中。
+  #16はprimaryでmasterをmergeし、Help No impactとhash固定vectorを追加、compile check中。
+- 次の作業: #16のlocal/remote verify、#13/#16の成功headをmergeして最終結果を記録。
 - 必読: 本計画、DEVELOPMENT、Help skill、validation-storage-workflow。
 - 最終確認: storage pass。依存変更後のlocal/remote gateは未実施。
 - DoD: M1–M3完了、4件resolved、採用subjectのgate成功、不要な専用資源なし。
