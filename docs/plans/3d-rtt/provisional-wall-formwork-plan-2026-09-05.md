@@ -7,7 +7,7 @@
 | 計画ID | `provisional-wall-formwork-plan-2026-09-05` |
 | ステータス | `In Progress — 通常版導入済み／型枠release全品質・close残件` |
 | 作成日 | `2026-09-05` |
-| 最終更新日 | `2026-09-12` |
+| 最終更新日 | `2026-09-13` |
 | 作成者 | `Codex` |
 | 親計画 | [アセット作成マイルストーン](asset-milestones-2026-03-17.md)（Build-Aの仮設表現を追加改修） |
 | 関連計画 | [ドアの本番ビジュアル化](production-door-art-plan-2026-09-05.md)、[完了済み本番壁計画](archived/production-wall-art-plan-2026-08-31.md) |
@@ -16,6 +16,20 @@
 本書は実装追跡中。候補tooling・6 family・runtime接続を実装し、M3aのArtPreviewはユーザー承認済み。
 subject `3c0f7c67`とgeneration 8の隔離candidateでM3b正式画像18枚も合格した。調査基点は `57a488e1`。
 完了済み壁trackを再開せず、現在の石壁を基準に仮設段階の表現を改修する。
+
+## 検証データ管理（2026-09-13以降）
+
+保持・整理は[検証データ管理](../../development-infra/validation-storage-workflow.md)を正本とする。
+本書の過去のjob / tree全量保持やcapsule保存の記述は履歴であり、現在の保持義務にしない。
+終了した仕事の検証データはarchive不要。最終結果と未検証範囲は既存文書、採用成果物・承認は製品正本へ集約する。
+
+2026-09-13、旧検証環境と用途を終えたrawを整理した。
+継続する型枠release混在matrixには `wall-door-joint-83ad3f85` とそのCargo targetを再利用する。
+このtree内の旧jobは削除済み。完了したsurfaceの検証や旧RtTの再測定を再開しない。
+フィードバック中は同じcandidate / targetを維持し、別の利用者がなくなった時点で撤去する。
+残存path・owner・consumer・bytes・次の作業・終了条件はprimary coordinatorのholdに登録する。
+固定日数や容量の既定値は設けず、全trackのcloseを不要データ整理の条件にしない。
+回収容量と独自成果物の保全先は[整理結果](../../development-infra/validation-storage-workflow-review-2026-09-13.md)を参照する。
 
 ## 0. セルフレビューで修正した点
 
@@ -203,7 +217,9 @@ clean validation worktreeへ固定し、同じtreeへの逐次上書きで先行
 各treeの全asset-view hash、非対象assetの一致、candidate identityをjobへ結ぶ。previewとreleaseの
 viewも正式jobのtreeへ上書きしない。追加treeの作成前に実使用量と必要なbuild容量を確認し、容量不足を
 別targetや証拠の途中削除で回避しない。各treeは固有の`target/`を使い、build/gameは完全逐次実行する。
-再試行でtreeを増やさず、両trackのcloseまで保持して再検証し、capsule保存後に本track所有分だけを整理する。
+再試行でtreeを増やさず、viewを参照する具体的なconsumerの実行中だけ固定する。
+後続比較が終了したviewは結果確定後に整理する。必要なviewの固定と全track終了までの
+全tree保持は区別し、用途と終了条件を冒頭の検証データ管理へ記録する。
 
 現行`project_wallset.py`、syncのmanifest mode、runtime loaderは`final/art_approved`を要求する。
 その検査を緩める代わりに、**新しいprofiling専用アートpreview adapter**を両assetに共用する。
@@ -223,7 +239,7 @@ viewも正式jobのtreeへ上書きしない。追加treeの作成前に実使�
 | W1: 制作 | 新`create_wall_formwork_scene.py`、外部`staging/` | 6 family、240以下、512² albedo、完成8 fileのhash不変 |
 | W2: asset / 表示 | `crates/bevy_app/src/assets/wall_asset_set.rs`、`systems/visual/wall_presentation.rs`、`hw_visual/src/visual3d.rs` | 旧/新inventoryのreadyとtile単位mesh/material切替 |
 | W3: lifecycle / ordering | root `plugins/visual.rs`、`systems/save/rehydrate/`と`systems/save/transaction.rs`のtests | reset→topology再構築→表示→Transform propagation。bounceと表示更新の二重適用なし |
-| W4: 受入 / close | 新formwork profileとsidecar、§7のdocs | current subject・exact assetを結んだ証拠、Help判断、capsule |
+| W4: 受入 / close | 新formwork profileとsidecar、§7のdocs | current subject・exact assetの結果、Help判断、不要データ整理 |
 
 施工domainの`coat_wall.rs`や`wall_construction/completion.rs`は回帰経路として使う。
 本件の表示切替のために、task完了条件や搬送producerの責務を移さない。
@@ -775,7 +791,7 @@ Update required / 理由付きNo impactをその時点で判断する。
 - 新generationは旧releaseから独立して保持し、失敗時は検証済み旧pointer / projectionへ戻せるようpreimageを記録する。
 - schema後継readerの旧v2互換を先に検証する。productionでは部分的に新旧meshを混ぜない。
 - セーブの変換は不要。Rustの差戻しが必要なら履歴と全差分・並行作業を確認した上で対象変更だけをrevertする。
-- 無効artifactはtrack中保持し、close時に必要な封印記録を残して本trackの作業場を整理する。
+- 無効artifactは診断中保持し、診断終了・打切り後は結果を記録して用途のないrawを削除する。
 
 ## 9. AI引継ぎメモ
 
@@ -812,8 +828,9 @@ Update required / 理由付きNo impactをその時点で判断する。
 - [ ] M0〜M4と共通J1完了、木枠と石壁の識別性・全lifecycle・ドアseamが成立。
 - [ ] Help影響判断と恒久文書更新が完了、check / Clippy / verify成功。
 - [ ] release authorityによる実機受入と最終候補の承認記録がある。
-- [ ] 各jobのmanifest、比較CSV、承認PNGを小さなcapsuleへ保存し、hashをclose文書へ記録。
-- [ ] 本trackで作ったvalidation worktree・branchを廃棄。`git worktree list`、削除前後の`du -sh`、回収容量を記録し、他sessionの作業場に触れていない。
+- [ ] 最終結果を既存文書へ集約し、用途のないjob / binary copyを整理した。全jobの保存は要求しない。
+- [ ] 本trackのconsumerは0。不要worktree・branchを撤去し、cloneを含む棚卸しと前後容量を記録。
+      残る共有領域は別consumer・担当者・bytes・終了条件を引継ぎ済み。
 
 ## 10. 更新履歴
 

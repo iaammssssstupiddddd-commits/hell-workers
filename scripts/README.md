@@ -23,6 +23,12 @@ python3 scripts/dev.py verify
 python3 scripts/dev.py build
 python3 scripts/dev.py build --release
 
+# 修正中の見た目・操作確認: dev + profiling feature、incrementalを強制有効化
+python3 scripts/dev.py feedback
+python3 scripts/dev.py feedback --build-only
+# -- 以後はCargoではなくゲームの引数
+python3 scripts/dev.py feedback -- --spawn-souls 20
+
 # 2窓運用: 空いているlaneを開始時に取得し、shell終了まで固定
 python3 scripts/dev.py lane status
 python3 scripts/dev.py lane shell
@@ -72,9 +78,25 @@ AIルールだけを切り分ける場合は `python3 scripts/check_agent_rules.
 
 ## 容量メンテナンス
 
+`feedback` は既存workspace/laneの `debug` cacheを使う。新profileやjobごとのtargetを作らない。
+native合同storyboardも `--feedback` で同じbinaryを使用できる。正式の `profiling` binaryとは別であり、
+feedbackの計測値は性能判断に使わない。詳しい使い分けは [開発ガイド](../docs/DEVELOPMENT.md) を参照する。
+
 通常のcheck/buildはビルドキャッシュを削除しない。容量整理が必要な時だけ、対象と
 影響を確認して `post-build-cleanup.sh` / `.ps1` や各OS向けmaintenance scriptを
 明示実行する。クロスターゲットの成果物を自動削除しないこと。
+
+検証job・binary capsule・検証用worktree / cloneの整理は
+[検証データ管理](../docs/development-infra/validation-storage-workflow.md)を正本とする。
+各検証バッチの報告前に担当者が結果確定・不要領域撤去まで実施する。全jobのarchiveは不要。
+`python3 scripts/dev.py validation` は所有者・consumer・実測容量・終了条件の台帳と共通検査を提供する。
+init / retain / plan / execute / seal / finalize / reconcile / checkはprimaryから使う。sealは独立検証と結果記録だけで、
+コピーを作らない。checkは未登録・未整理・未分類残存と任意の明示予算を検査し、終了済みcapsuleを監視しない。
+既定の容量上限・日数はなく、review_atは助言のみ。`dev.py verify`もcheckを実行する。
+coordinatorはデータを自動削除しない。凍結した旧helperはprimary coordinatorの子としてそのまま実行する。
+通常Cargo cacheの維持と、検証用データをtrack closeまで残すことを混同しない。
+フィードバック待ち・修正中のcandidate worktreeとtargetは継続利用し、不要job整理の対象から外す。
+レビューの見直し日はcacheの削除期限ではなく、同じ作業場で差分ビルドを続けるための状態確認日とする。
 
 ## その他
 

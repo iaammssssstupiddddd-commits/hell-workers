@@ -35,6 +35,11 @@ try:
 except ModuleNotFoundError:
     from scripts.build_coordination import acquire_activity
 
+try:
+    from validation_storage import require_mutable
+except ModuleNotFoundError:
+    from scripts.validation_storage import require_mutable
+
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SCRIPTS_DIR = REPO_ROOT / "scripts"
@@ -91,6 +96,7 @@ def run_command(
     command: Sequence[str],
     *,
     extra_env: dict[str, str] | None = None,
+    incremental: bool | None = None,
 ) -> None:
     """Run a command from the repository root and fail on a non-zero status."""
     print(f"+ {command_text(command)}", flush=True)
@@ -119,6 +125,7 @@ def run_command(
     activity = None
     try:
         if requires_activity:
+            require_mutable(REPO_ROOT)
             activity = acquire_activity(REPO_ROOT, "shared")
             require_cargo_memory()
         if command and Path(command[0]).name == "cargo":
@@ -126,7 +133,7 @@ def run_command(
                 REPO_ROOT,
                 namespace=".dev-tmp",
                 environment=env,
-                incremental=None,
+                incremental=incremental,
                 lane=lane,
             )
         subprocess.run(command, cwd=REPO_ROOT, env=env, check=True)
@@ -204,6 +211,7 @@ def verify() -> None:
     run_python_script(str(SCRIPTS_DIR / "perf.py"), "self-test")
 
     print("==> Repository contracts", flush=True)
+    run_python_script(str(SCRIPTS_DIR / "validation_storage.py"), "check")
     run_python_script(str(SCRIPTS_DIR / "check_agent_rules.py"))
     run_python_script(str(SCRIPTS_DIR / "check_help_impact.py"))
     run_python_script(str(SCRIPTS_DIR / "check_repo_hygiene.py"))
@@ -291,6 +299,24 @@ def build(*, release: bool) -> None:
     if release:
         command.append("--release")
     run_command(command)
+
+
+def feedback(*, build_only: bool, arguments: Sequence[str]) -> None:
+    """Reuse dev artifacts for iteration, including the profiling-only visual probes."""
+    game_arguments = list(arguments)
+    if game_arguments[:1] == ["--"]:
+        game_arguments.pop(0)
+    if build_only and game_arguments:
+        raise RuntimeError("feedback --build-only does not accept game arguments")
+    print("Feedback only: dev profile, incremental=1; not formal acceptance or performance evidence.", flush=True)
+    command = [
+        "cargo", "build" if build_only else "run", "--locked",
+        "-p", "bevy_app@0.1.0", "--bin", "bevy_app", "--profile", "dev",
+        "--no-default-features", "--features", "profiling",
+    ]
+    if not build_only:
+        command.extend(["--", *game_arguments])
+    run_command(command, incremental=True)
 
 
 def load_toml(path: Path) -> dict[str, object]:
@@ -401,6 +427,10 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     subparsers.add_parser("doctor", help="diagnose the local environment")
+    validation_parser = subparsers.add_parser(
+        "validation", help="manage validation retention through the primary coordinator"
+    )
+    validation_parser.add_argument("arguments", nargs=argparse.REMAINDER)
 
     check_parser = subparsers.add_parser("check", help="run a fast compile check")
     check_parser.add_argument("--package", help="limit the check to one workspace package")
@@ -414,6 +444,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     build_parser = subparsers.add_parser("build", help="build without implicit cleanup")
     build_parser.add_argument("--release", action="store_true", help="build release mode")
+
+    feedback_parser = subparsers.add_parser(
+        "feedback", help="build/run the reusable dev binary for visual and interaction feedback"
+    )
+    feedback_parser.add_argument("--build-only", action="store_true", help="build without opening the game")
+    feedback_parser.add_argument("arguments", nargs=argparse.REMAINDER, help="game arguments after --")
 
     cargo_parser = subparsers.add_parser(
         "cargo",
@@ -454,12 +490,19 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         if args.command == "doctor":
             return doctor()
+        if args.command == "validation":
+            return subprocess.run(
+                [sys.executable, str(SCRIPTS_DIR / "validation_storage.py"), *args.arguments],
+                cwd=REPO_ROOT, check=False,
+            ).returncode
         if args.command == "check":
             fast_check(args.package, run_tests=args.tests)
         elif args.command == "verify":
             verify()
         elif args.command == "build":
             build(release=args.release)
+        elif args.command == "feedback":
+            feedback(build_only=args.build_only, arguments=args.arguments)
         elif args.command == "cargo":
             cargo_arguments = list(args.arguments)
             if cargo_arguments[:1] == ["--"]:

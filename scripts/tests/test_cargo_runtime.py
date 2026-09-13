@@ -324,6 +324,7 @@ class CargoRuntimeTests(unittest.TestCase):
         self.assertEqual((returncode, timeout_error), (0, None))
         self.assertEqual(run.call_args.kwargs["env"], environment)
 
+    @patch("scripts.dev.require_mutable", lambda repo: None)
     def test_dev_cargo_commands_use_the_controlled_environment(self) -> None:
         with patch.object(dev, "require_cargo_memory") as require_memory, patch.object(
             dev.subprocess,
@@ -343,6 +344,7 @@ class CargoRuntimeTests(unittest.TestCase):
         )
         self.assertIn(environment["CARGO_BUILD_JOBS"], {"1", "2"})
 
+    @patch("scripts.dev.require_mutable", lambda repo: None)
     def test_dev_cargo_commands_keep_an_inherited_lane(self) -> None:
         with patch.object(dev, "validate_inherited_lease", return_value="b"):
             with patch.object(dev, "require_cargo_memory"), patch.object(
@@ -375,6 +377,45 @@ class CargoRuntimeTests(unittest.TestCase):
                         dev.run_command(["cargo", "check", *arguments])
                 run.assert_not_called()
 
+    @patch("scripts.dev.require_mutable", lambda repo: None)
+    def test_feedback_overrides_disabled_incremental_and_keeps_lane(self) -> None:
+        for lane in (None, "b"):
+            with self.subTest(lane=lane), patch.dict(dev.os.environ, {"CARGO_INCREMENTAL": "0"}), patch.object(
+                dev, "validate_inherited_lease", return_value=lane
+            ), patch.object(dev, "require_cargo_memory"), patch.object(dev.subprocess, "run") as run:
+                self.assertEqual(dev.main(["feedback", "--build-only"]), 0)
+                env = run.call_args.kwargs["env"]
+                expected = (cargo_runtime.workspace_lane_target(dev.REPO_ROOT, lane)
+                            if lane else cargo_runtime.workspace_cargo_target(dev.REPO_ROOT))
+                self.assertEqual(env["CARGO_TARGET_DIR"], str(expected))
+                self.assertEqual(env["CARGO_BUILD_BUILD_DIR"], str(expected))
+                self.assertEqual(env["CARGO_INCREMENTAL"], "1")
+                self.assertEqual(execution.performance_environment()["CARGO_INCREMENTAL"], "0")
+                argv = run.call_args.args[0]
+                self.assertEqual(argv[argv.index("--profile") + 1], "dev")
+                self.assertEqual(argv[argv.index("--features") + 1], "profiling")
+                self.assertIn("--no-default-features", argv)
+
+    @patch("scripts.dev.require_mutable", lambda repo: None)
+    def test_feedback_run_keeps_game_arguments_out_of_cargo_options(self) -> None:
+        with patch.object(dev, "require_cargo_memory"), patch.object(dev.subprocess, "run") as run:
+            self.assertEqual(dev.main(["feedback", "--", "--release", "--profile", "profiling"]), 0)
+        argv = run.call_args.args[0]
+        self.assertEqual(argv[-4:], ["--", "--release", "--profile", "profiling"])
+        self.assertEqual(argv[1], "run")
+        self.assertEqual(argv[argv.index("--profile") + 1], "dev")
+
+    def test_feedback_build_rejects_game_arguments_and_obeys_freeze(self) -> None:
+        with patch.object(dev.subprocess, "run") as run:
+            self.assertEqual(dev.main(["feedback", "--build-only", "--", "--release"]), 1)
+            run.assert_not_called()
+        with patch.object(dev, "require_mutable", side_effect=RuntimeError("comparison freeze")), patch.object(
+            dev.subprocess, "run"
+        ) as run:
+            self.assertEqual(dev.main(["feedback", "--build-only"]), 1)
+            run.assert_not_called()
+
+    @patch("scripts.dev.require_mutable", lambda repo: None)
     def test_dev_does_not_spawn_a_compile_below_the_memory_floor(self) -> None:
         with patch.object(
             dev,

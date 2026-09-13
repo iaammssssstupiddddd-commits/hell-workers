@@ -52,6 +52,11 @@ SOURCE_FINGERPRINT_FILES = {
     "tools/blender_ai_workflow/scripts/render_color_calibration.py",
     "tools/blender_ai_workflow/scripts/verify_color_calibration.py",
 }
+
+try:
+    from validation_storage import require_admission
+except ModuleNotFoundError:
+    from scripts.validation_storage import require_admission
 SOURCE_FINGERPRINT_PREFIXES = ("crates/", "scripts/perf_tool/")
 SOURCE_FINGERPRINT_ASSET_PREFIX = "assets/"
 MEASUREMENT_HARNESS_FILES = (
@@ -69,6 +74,7 @@ MEASUREMENT_HARNESS_FILES = (
     ".codex/skills/hell-workers-run-native-acceptance/scripts/wall_renderdoc_acceptance.py",
     "scripts/build_coordination.py",
     "scripts/cargo_runtime.py",
+    "scripts/validation_storage.py",
     "scripts/perf_tool/execution.py",
     "scripts/perf_tool/renderdoc_capture.py",
     "scripts/perf_tool/renderdoc_foundation.py",
@@ -380,6 +386,7 @@ def cargo_features(instrumentation: str) -> str:
 
 
 def build_binary(args: argparse.Namespace) -> Path:
+    require_admission(REPO_ROOT, [])
     if args.workload == "save-transaction" and (args.binary or args.skip_build):
         raise RuntimeError(
             "save-transaction must build and run its canonical profiling binary"
@@ -539,6 +546,7 @@ def prepare_session(
         session_dir = session_dir.resolve()
     validate_requested_output(args)
     require_persistent_output(session_dir)
+    require_admission(REPO_ROOT, [session_dir])
     if session_dir.exists():
         raise RuntimeError(f"output directory already exists: {session_dir}")
     save_runtime_parent = prepare_save_transaction_runtime_parent(args, session_dir)

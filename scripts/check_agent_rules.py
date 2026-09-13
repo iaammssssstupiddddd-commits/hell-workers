@@ -23,6 +23,18 @@ ROOT_RULE_FILES = (
     ".gemini/antigravity/project_rules.md",
 )
 
+MANDATORY_STORAGE_RULE = (
+    "Use the primary repository's `python3 scripts/dev.py validation` coordinator "
+    "for validation planning/execution and pass its storage check before reporting."
+)
+STORAGE_RULE_FILES = (*ROOT_RULE_FILES,
+    ".agent/workflows/task-lifecycle.md", ".cursor/workflows/task-lifecycle.md")
+
+
+def missing_storage_rules(paths: Iterable[Path]) -> tuple[Path, ...]:
+    return tuple(path for path in paths if not path.is_file()
+                 or MANDATORY_STORAGE_RULE not in path.read_text(encoding="utf-8"))
+
 MANDATORY_HELP_REVIEW_RULE = (
     "You MUST use the repository `hell-workers-review-help-impact` Skill after "
     "implementing, changing, or removing functionality, code, or runtime data "
@@ -170,6 +182,11 @@ def missing_mandatory_help_review_rules(
 def find_violations() -> list[str]:
     expected_bevy = bevy_version()
     violations: list[str] = []
+    for path in missing_storage_rules(REPO_ROOT / name for name in STORAGE_RULE_FILES):
+        violations.append(f"{path.relative_to(REPO_ROOT)}: mandatory validation storage rule is missing")
+    for name in ("docs/development-infra/validation-storage-workflow.md", "scripts/validation_storage.py"):
+        if not (REPO_ROOT / name).is_file():
+            violations.append(f"{name}: validation storage authority is missing")
 
     for relative in CANONICAL_PATHS:
         if not (REPO_ROOT / relative).is_file():

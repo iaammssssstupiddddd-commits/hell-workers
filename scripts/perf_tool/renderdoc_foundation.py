@@ -382,6 +382,11 @@ def verify_capsule_hash(capsule_root: Path) -> BinaryCapsuleManifest:
 
 
 def guarded_build_activity(repo: Path):
+    try:
+        from validation_storage import require_admission
+    except ModuleNotFoundError:
+        from scripts.validation_storage import require_admission
+    require_admission(repo, [])
     return acquire_activity(repo, "exclusive")
 
 

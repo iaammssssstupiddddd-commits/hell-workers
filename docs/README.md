@@ -57,6 +57,9 @@
 - [visual_test.md](visual_test.md): productionとは独立したTopDown建物・地形visual testの操作とScene RtT構造。
 - [DEVELOPMENT.md](DEVELOPMENT.md): AIエージェントおよび開発者向けガイドライン（コーディング規約・MCP活用）。
 - [development-infra/rust-analyzer-mcp.md](development-infra/rust-analyzer-mcp.md): 複数エージェントでrust-analyzer MCP backendを共有するadapter、idle解放、IDE側の常駐コスト削減設定。
+- [development-infra/validation-storage-audit-2026-09-13.md](development-infra/validation-storage-audit-2026-09-13.md): 検証データの容量実測、track close時の撤去規則と実装の差、旧checkout・共有worktreeの残存調査。
+- [development-infra/validation-storage-workflow.md](development-infra/validation-storage-workflow.md): 終了データの整理、現在の用途による保持、フィードバック中の差分ビルド保全。全job保存・固定日数の義務は設けない。
+- [development-infra/validation-storage-workflow-review-2026-09-13.md](development-infra/validation-storage-workflow-review-2026-09-13.md): 保存規則の自己レビューと修正結果。差分ビルド保全、primary coordinator・台帳・整理gateの適用範囲と検証記録。
 - [linux-setup.md](linux-setup.md): Linux ネイティブ環境でのビルド・実行セットアップ手順。
 - [plans/README.md](plans/README.md): フェーズ分割した実装計画ドキュメント。
 - [plans/3d-rtt/provisional-wall-formwork-plan-2026-09-05.md](plans/3d-rtt/provisional-wall-formwork-plan-2026-09-05.md): 木材を使う仮設壁の型枠表現、段階別mesh切替、混在接続・実機受入の計画。

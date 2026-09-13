@@ -6,7 +6,7 @@
 
 1.  **Planning**: 変更対象をどのクレートに置くべきか、**[クレート境界とコアロジック分離の原則 (crate-boundaries.md)](crate-boundaries.md)** に従って先に決める。crate 境界に影響する変更は `docs/cargo_workspace.md` と関連仕様書の更新範囲も同時に決める。
 2.  **Execution**: 責務に合う crate で実装し、root 側は app shell と薄い互換層に保つ。初回は `python3 scripts/dev.py doctor` で環境を診断し、作業中は `python3 scripts/dev.py check` を使う。
-3.  **Verification**: 完了前は `python3 scripts/dev.py verify` を通す。挙動変更がある場合は `python3 scripts/dev.py cargo -- run` でも確認し、仕様変更を対応する `docs/*.md` に反映する。
+3.  **Verification**: 修正中の見た目・操作確認には `python3 scripts/dev.py feedback` を使い、同じ作業場で差分ビルドを続ける。完了前は `python3 scripts/dev.py verify` と変更に必要な正式受入を通し、仕様変更を対応する `docs/*.md` に反映する。
 
 ## 開発ルール
 
@@ -65,6 +65,32 @@ python3 scripts/dev.py cargo -- clippy --workspace --all-targets -- -D warnings
 
 ### 1.6. Local 品質ゲート
 
+#### 修正中のビルド
+
+`python3 scripts/dev.py feedback` は既存dev profile（workspace opt=0、依存opt=2）で起動する。
+`--build-only` ならビルドだけ、`-- <引数>` はゲームへ渡す。profiling featureを固定して
+診断用の描画経路も含め、直接起動するnative helperと共有できるようdynamic linkingを無効にする。
+`CARGO_INCREMENTAL=1` を明示し、親shellに0が残っていても無効化されない。
+通常は `target/debug`、対話lane内では同じlaneの `debug` を再利用する。
+専用profile・jobごとのCargo target・binary copyを作らない。初回やfeature/toolchain変更時は追加ビルドが必要。
+
+壁・ドアの合同storyboardはnative Skillの `wall_door_joint_acceptance.py plan --feedback`
+で同じdev binaryを使う。dirty sourceを許し、6画面と状態遷移を確認する。正式fixed auditは省略する。
+この結果はfeedback専用で、性能比較・品質/DPI matrix・正式受入の代替にはならない。
+未承認ArtPreviewのgallery等、まだ軽量経路のない専用recipeは既存helperを使う。
+正式確認へ進むときだけprofiling buildと必要な監査を実施する。詳細はnative Skillを参照する。
+
+2026-09-13の既存cacheを使った実測では、feedback初回4.49秒、未変更再実行0.40秒、
+main.rsのwindow title 1行変更3.29秒、復元後2.64秒（いずれもdriver込みの実時間）。
+診断変更は撤去済み。依存cacheがない初回や広範囲のcrate変更の速度は未測定で、全変更の改善率ではない。
+合同feedbackはIntel Arc / Vulkan / X11で6画面・状態遷移を検証し、正式verifyがfeedbackを拒否することも確認した。
+描画前の単色画面ではACKせず、画面検証が成功するまで既存120秒期限内で再撮影する。
+試行2件を台帳で結果確定・finalizeし、不要job計12,062,720 bytesを撤去した。通常debug cacheは継続利用する。
+同日の `check` / `verify`（Clippy警告0・全Rust test・Python tooling 137件＋Blender tooling 151件）、
+native関連self-test 9件、Skill同期・ルール・storage検査はpass。
+Help影響はNo impact: 開発用build・診断・保存管理のみの変更で、通常プレイヤー操作・状態・asset・
+`build_help_panel_content`から生成される静的Help内容は不変。
+
 `rust-toolchain.toml` は Rust `1.96.1` と `rustfmt` / `clippy` を固定する。rustup 環境ではワークスペースルートで cargo を実行すれば自動的に選択される。ローカルとCIは同じdriverを使い、コマンド列の乖離を防ぐ。
 
 ```bash
@@ -82,7 +108,18 @@ python3 scripts/dev.py verify
 fmt、workspace check、profiling最小feature check、Clippy、全test、diff hygieneを順に実行する。
 diff hygiene はローカルでは `HEAD` からの作業差分、CIではeventのbaseから`HEAD`までを検査する。
 通常のcheck/buildは暗黙のログ作成や`target/`削除を行わない。容量整理は専用maintenance
-scriptを明示的に実行する。`scripts/dev.py`が起動するCargoは、親shellの`CARGO_TARGET_DIR`、
+scriptを明示的に実行する。検証用job・binary copy・worktreeは
+[検証データ管理](development-infra/validation-storage-workflow.md)に従い、成功・失敗・中断を問わず
+各バッチの報告前に結果を確定・整理する。全jobの証拠保存は要求しない。担当者の必須手順であり、track closeまで
+一括保持しない。ただしフィードバック対応中のcandidate worktreeとtargetは同じ場所に維持して
+差分ビルドへ使う。レビュー待ちをconsumerとして記録し、出力整理と作業環境撤去を分ける。
+残存は所有者・具体的consumer・bytes・次の作業・終了条件をprimary計画へ記録する。
+実行はprimaryの `python3 scripts/dev.py validation` へ登録し、plan/execute、seal/finalize/checkを通す。
+`seal`は独立検証の結果だけを台帳に記録し、capsuleを作らない。`verify`も未整理・用途のない残存を検査する。
+容量上限と保存日数の既定値はなく、任意のreview_atは状態確認用で修正buildを停止しない。
+旧凍結helperはprimary coordinatorの子processで実行し、
+凍結worktreeへ新規則をコピーしない。詳細とJSON specは上記の検証データ管理を参照する。
+`scripts/dev.py`が起動するCargoは、親shellの`CARGO_TARGET_DIR`、
 `CARGO_BUILD_TARGET_DIR`、`CARGO_BUILD_BUILD_DIR`、`TMPDIR`、`CARGO_HOME`、`RUSTUP_HOME`を
 安全な永続領域へ正規化し、通常はworkspace `target/`、`target/.dev-tmp`、既定のaccount
 toolchain cacheへ固定する。2窓の対話作業では各ターミナルで`python3 scripts/dev.py lane shell`

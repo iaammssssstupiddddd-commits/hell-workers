@@ -45,6 +45,9 @@ except ModuleNotFoundError:
     )
 
 
+from scripts.validation_storage import require_admission
+
+
 GIB = 1024**3
 SCHEMA_VERSION = 1
 RUNNING_EXIT_CODE = 2
@@ -104,6 +107,7 @@ NATIVE_HARNESS_FILES = (
     ".codex/skills/hell-workers-run-native-acceptance/scripts/wall_renderdoc_acceptance.py",
     "scripts/build_coordination.py",
     "scripts/cargo_runtime.py",
+    "scripts/validation_storage.py",
     "scripts/perf_tool/execution.py",
     "scripts/perf_tool/renderdoc_capture.py",
     "scripts/perf_tool/renderdoc_foundation.py",
@@ -198,6 +202,9 @@ def activity_locked(function):
     @wraps(function)
     def wrapped(args: argparse.Namespace) -> int:
         repo = Path(args.repo).resolve()
+        outputs = [Path(value) for name in ("job_root", "state_root", "output_root")
+                   if (value := getattr(args, name, None))]
+        require_admission(repo, outputs)
         with acquire_activity(repo, "exclusive") as lease:
             inherited = activity_lease_environment(lease)
             previous_fd = os.environ.get(ACTIVITY_LOCK_FD_ENV)
@@ -2152,6 +2159,8 @@ def run_command(
     timeout_seconds: float | None = None,
 ) -> None:
     state.setdefault("commands", []).append({"stage": stage, "argv": command})
+    if os.environ.get("HW_VALIDATION_BATCH"):
+        require_admission(repo, [])
     update_state(job_file, state, current_stage=stage)
     admit_stage_start(stage, state=state, job_file=job_file)
     with log_path.open("a", encoding="utf-8") as log:
@@ -2480,6 +2489,8 @@ def run_command_with_save_capture(
     screenshot_path: Path,
     timeout_seconds: float | None = None,
 ) -> None:
+    if os.environ.get("HW_VALIDATION_BATCH"):
+        require_admission(repo, [])
     state.setdefault("commands", []).append({"stage": stage, "argv": command})
     update_state(job_file, state, current_stage=stage)
     admit_stage_start(stage, state=state, job_file=job_file)
@@ -4274,6 +4285,7 @@ def run_notifications(args: argparse.Namespace) -> int:
                 finished_at=utc_now(),
             )
             return 1
+@activity_locked
 def run_save_catalog(args: argparse.Namespace) -> int:
     if os.environ.get("HW_NATIVE_ACCEPTANCE_LAUNCHED") != "1":
         raise AcceptanceError(

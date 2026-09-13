@@ -51,6 +51,8 @@
 - You MUST use the repository `hell-workers-run-native-acceptance` Skill whenever a task requires real-machine or native acceptance, actual-window, renderer/GPU/backend, or native performance verification, including requests for `実機確認` or `実機テスト`.
 - Use the Skill's established no-prompt launcher and fail-closed artifact verification; do not ask the user for repeated display or GUI permissions while that launcher is available.
 - If the current product does not expose that Skill natively, read and follow `.cursor/skills/hell-workers-run-native-acceptance/SKILL.md` directly.
+- Use the primary repository's `python3 scripts/dev.py validation` coordinator for validation planning/execution and pass its storage check before reporting.
+- Read the primary `docs/development-infra/validation-storage-workflow.md` on each validation start/resume; keep frozen subjects unchanged and preserve review-active build caches.
 
 ### Debugging and Verification Policy
 - ユーザーが報告した観測事実や、直前の検証で確定した事実は、以後の切り分けで **強い制約** として扱う。補助情報として軽く扱わない。
@@ -106,12 +108,16 @@ Create an implementation plan in `docs/plans/` when:
    - If successful: Delete plan file or move to archive
    - If relevant for future: Document in `docs/architecture.md` or system-specific docs
    - Plans are temporary working documents, not permanent documentation
-   - Dispose of the workspaces the plan created. Keep each acceptance job's
-     `manifest.json`, comparison CSVs and approved screenshots in a small capsule,
-     record their hashes in the closing document, then `git worktree remove` every
-     validation worktree and delete the branches they used. A worktree carries a
-     Rust `target/` of tens of gigabytes, and old artifacts cannot serve as
-     evidence for a later subject. Report the reclaimed size.
+   - Follow `docs/development-infra/validation-storage-workflow.md` before reporting
+     validation results. Closed work requires no per-job archive or capsule.
+     Keep adopted work and concise final results in their existing authoritative locations.
+     Dispose of jobs, binary copies and dedicated workspaces without a current use.
+     Preserve the same candidate workspace and Cargo target through feedback/revision
+     until final acceptance or closure. Shared resources need a concrete remaining user.
+     Retained paths require owner, consumer, bytes, next action and release_when.
+     No default capacity or day limit applies; review dates never expire feedback caches.
+     Preserve unique code/assets before disposal and report removed paths and measured
+     storage change. Normal primary Cargo caches have a separate maintenance lifetime.
 
 #### Index Maintenance
 - After adding, moving, or deleting a plan/proposal, run `python3 scripts/dev.py docs --write` and review both generated indexes.

@@ -55,3 +55,6 @@ Do not add Clippy suppressions or dead code. Do not hard-code personal
 - You MUST use the repository `hell-workers-run-native-acceptance` Skill whenever a task requires real-machine or native acceptance, actual-window, renderer/GPU/backend, or native performance verification, including requests for `実機確認` or `実機テスト`.
 - Use the Skill's established no-prompt launcher and fail-closed artifact verification; do not ask the user for repeated display or GUI permissions while that launcher is available.
 - If the current product does not expose that Skill natively, read and follow `.cursor/skills/hell-workers-run-native-acceptance/SKILL.md` directly.
+- Use the primary repository's `python3 scripts/dev.py validation` coordinator for validation planning/execution and pass its storage check before reporting.
+- Read the primary `docs/development-infra/validation-storage-workflow.md` on each validation start/resume; keep frozen subjects unchanged and preserve review-active build caches.
+- Closed work requires no per-job archive. Retain only concrete active uses and product sources/releases; record the owner and release condition, then dispose of unneeded validation output.

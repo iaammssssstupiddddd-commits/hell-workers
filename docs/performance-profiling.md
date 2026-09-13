@@ -12,6 +12,11 @@ exclusive leaseを保持する。lease取得に失敗した場合はCargo/game/R
 
 ## 計測モード
 
+見た目・操作のフィードバック中は `scripts/dev.py feedback` と対応するnative `--feedback` 経路を使う。
+既存dev profileでincrementalを有効化するため、profilingの最適化・リンクを毎回実行しない。
+feedbackは正式計測ではなく、得られたframe time等をbaselineへ採用しない。
+正式なCapture / Memory / RenderDocのprofile・feature・逐次実行順は変更しない。
+
 | モード | runner option | 用途 | frame timeへのTracy擾乱 |
 | --- | --- | --- | --- |
 | Capture | `--instrumentation capture` | 標準のframe time・domain counter・Task Dashboard実CPU | なし |
@@ -467,6 +472,22 @@ native formalのproduction subject fingerprintと起動・監視harness fingerpr
 
 既承認launcherが利用可能な間は、displayやGUIの追加許可をユーザーへ求めない。helperが返す`status_command`だけを15〜30秒間隔でpollし、通常は大きなbuild/game logを会話へ読み込まない。headlessはfixed correctnessまたはCPU-only route smokeに限定し、実renderer / adapter / presentの証拠にはしない。
 
+### バッチ終了後の整理
+
+上記の失敗診断保持とscratch削除はrunnerの実行中契約である。報告前の結果確定・整理は
+[検証データ管理](development-infra/validation-storage-workflow.md)に従って担当者が別途実施する。
+成功・失敗・中断の各バッチで不要raw・binary copy・worktreeを整理し、track全体のcloseまで残さない。
+S0/S1、before/after、cross-subject等の後続consumerが元repo・asset view・binaryを必要とする場合は
+path・owner・bytes・次の作業・終了条件を登録して保持する。閉じたjobはarchive不要であり、
+結果と未検証範囲を既存文書へ集約する。必要な製品baselineと通常primary Cargo cacheの保守は別扱い。
+フィードバック対応中のcandidate worktreeとtargetも保持し、未変更crateのCargo成果物を再利用する。
+レビュー待ちは有効なconsumerであり、報告時のraw整理や見直し日時を理由にcacheを消さない。
+subject更新・feature切替前に旧binaryを必要とするconsumerを解消し、新subjectは新jobで計測する。
+primaryの `python3 scripts/dev.py validation` が台帳登録、現在の依存検査、任意予算の検査、
+seal/finalize/checkを提供し、`dev.py verify`も残存を検査する。cronや自動削除は行わない。
+上記plan例はprimary coordinatorの `plan --spec <batch.json> -- <plan-command>` で包み、
+返されたkitty launcherを使う。独立verifyのargvと出力rootをspecへ登録し、旧subjectは書き換えない。
+
 ### window backendの使い分け
 
 perfが有効な実window起動では、`main.rs::perf_window_update_settings`が
@@ -833,7 +854,7 @@ python3 scripts/perf.py compare \
 別の最適化対象でも、同じrunnerとartifact契約を使う。新しいworkloadは、手操作や既存saveへ依存させず、次の順に追加・採取する。
 
 1. `PerfWorkload`とscenario setupに名前・決定的な操作列・必要entity数を追加する。初期fixture checkpointより前に配置を完了し、master seedから専用substreamを分ける。
-2. `--workload <name> --sizes small,medium,large --renders cpu,gpu`の短縮runを3反復し、initial fixture、実adapter/backend、marker前logが全て有効であることを確認する。失格artifactは削除せず残すが、比較値にはしない。
+2. `--workload <name> --sizes small,medium,large --renders cpu,gpu`の短縮runを3反復し、initial fixture、実adapter/backend、marker前logが全て有効であることを確認する。失格artifactは診断中保持し、比較値にはしない。診断終了・打切り時は理由を記録し、用途のなくなったrawを削除する。
 3. 標準の30秒warm-up / 60秒measure matrixを3反復する。frame-timeはCaptureだけ、対象system CPUは専用sidecarまたはTracy、allocation / RSSはMemory、draw/passはRenderDocへ分ける。
 4. 最適化前後は同じseed、population、window/backend、adapter、present mode、runner versionを使い、`compare`でcaseごとに比較する。workloadの意味やfixtureが変わった場合は新しいbaselineとして扱う。
 

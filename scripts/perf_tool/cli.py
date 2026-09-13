@@ -62,6 +62,8 @@ def run_suite(args: argparse.Namespace) -> int:
     """Run a performance recipe under the workspace-wide exclusive lease."""
     if args.dry_run:
         return _run_suite(args)
+    from .execution import require_admission
+    require_admission(REPO_ROOT, [])
     with acquire_activity(REPO_ROOT, "exclusive"):
         return _run_suite(args)
 

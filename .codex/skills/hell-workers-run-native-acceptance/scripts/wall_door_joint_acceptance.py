@@ -26,12 +26,14 @@ import door_behavior_acceptance as door_art  # noqa: E402
 import native_acceptance as native  # noqa: E402
 import wall_art_acceptance as wall_art  # noqa: E402
 import wall_density_acceptance as density  # noqa: E402
+from scripts.cargo_runtime import resource_policy  # noqa: E402
 
 
 SCHEMA_VERSION = 1
 STATUS_SCHEMA_VERSION = 2
 PROFILE = "wall-door-joint-lifecycle-v2"
 RELEASE_PROFILE = "wall-door-joint-release-v1"
+FEEDBACK_PROFILE = "wall-door-joint-feedback-v1"
 COVERAGE = {
     "actual_window": ["both-axis-seams", "east-west-continuous-doors", "completion-in-place", "support-relocation",
                       "joint-paused-load", "construction-preview-axis-after-support-change", "corner-seams",
@@ -98,7 +100,37 @@ def assert_harness_matches(repo: Path) -> None:
                        f"J1 executing harness differs from the recorded repository: {relative}")
 
 
-def build_command() -> list[str]:
+def profile_name(*, release: bool, feedback: bool) -> str:
+    return FEEDBACK_PROFILE if feedback else RELEASE_PROFILE if release else PROFILE
+
+
+def coverage(*, feedback: bool) -> dict[str, list[str]]:
+    if not feedback:
+        return COVERAGE
+    return {**COVERAGE, "focused_audit": [], "pending_j1": list(COVERAGE["focused_audit"])}
+
+
+def assert_subject(repo: Path, subject: str, *, feedback: bool) -> None:
+    native.require(native.git_subject(repo) == subject, "J1 subject changed")
+    if not feedback:
+        door_art.assert_fully_clean(repo, subject)
+
+
+def binary_path(repo: Path, *, feedback: bool) -> Path:
+    return repo / "target" / ("debug" if feedback else "profiling") / "bevy_app"
+
+
+def resource_snapshot(repo: Path, *, feedback: bool) -> dict[str, Any]:
+    resources = native.resource_snapshot(repo, require_launcher=True)
+    if feedback:
+        resources["cargo_incremental"] = 1
+        resources["feedback_build"] = resource_policy(repo, namespace=".dev-tmp", incremental=True)
+    return resources
+
+
+def build_command(*, feedback: bool = False) -> list[str]:
+    if feedback:
+        return ["python3", "scripts/dev.py", "feedback", "--build-only"]
     return [
         "python3", "scripts/dev.py", "cargo", "--", "build", "--profile", "profiling",
         "--no-default-features", "--features", "profiling",
@@ -113,9 +145,9 @@ def fixed_test_command(test_name: str) -> list[str]:
     ]
 
 
-def game_command(repo: Path, root: Path, *, release: bool = False) -> list[str]:
+def game_command(repo: Path, root: Path, *, release: bool = False, feedback: bool = False) -> list[str]:
     return [
-        str(repo / "target/profiling/bevy_app"),
+        str(binary_path(repo, feedback=feedback)),
         "--perf-scenario",
         "--perf-wall-door-joint-actual-window",
         *(["--perf-wall-door-joint-release"] if release else []),
@@ -393,13 +425,20 @@ def capture_window(destination: Path, root_pid: int, status: dict[str, Any]) -> 
     if completed.returncode != 0 or not destination.is_file():
         destination.unlink(missing_ok=True)
         return None
+    try:
+        evidence = image_evidence(destination, status)
+    except native.AcceptanceError:
+        # Probe readiness can precede the first presented frame in a dev build.
+        # Keep the checkpoint held; the storyboard deadline still fails closed.
+        destination.unlink(missing_ok=True)
+        return None
     return {
         "file": destination.name,
         "sha256": sha256(destination),
         "capture_scope": native.SAVE_CATALOG_CAPTURE_SCOPE,
         "window_id": window_id,
         "window_pid": window_pid,
-        "image_evidence": image_evidence(destination, status),
+        "image_evidence": evidence,
     }
 
 
@@ -425,8 +464,11 @@ def run_storyboard(
     status_path = root / "probe-status.json"
     ack_path = root / "probe-ack.json"
     nonce = secrets.token_hex(16)
-    command = game_command(repo, root, release=identities["wall"].get("authority") == "release_approved")
+    feedback = state.get("feedback", False)
+    command = game_command(repo, root, release=identities["wall"].get("authority") == "release_approved", feedback=feedback)
     environment = clean_environment(repo, adapter, identities, status_path, ack_path, nonce)
+    if feedback:
+        environment["CARGO_INCREMENTAL"] = "1"
     state.setdefault("commands", []).append({"stage": "actual-window", "argv": command})
     native.atomic_write_json(job_file, state)
     observations: list[dict[str, Any]] = []
@@ -479,11 +521,14 @@ def verify_game_log(path: Path, adapter: str) -> dict[str, str]:
     return {"name": adapters[0][0], "backend": adapters[0][1]}
 
 
-def verify_root(root: Path) -> dict[str, Any]:
+def verify_root(root: Path, *, feedback: bool = False) -> dict[str, Any]:
     manifest = native.read_json(root / "manifest.json")
+    native.require(type(manifest.get("feedback", False)) is bool
+                   and manifest.get("feedback", False) == feedback,
+                   "J1 feedback requires explicit --feedback verification; it is not formal acceptance")
     released = manifest.get("release", False)
     native.require(type(released) is bool, "J1 release selection differs")
-    profile = RELEASE_PROFILE if released else PROFILE
+    profile = profile_name(release=released, feedback=feedback)
     native.require(
         manifest.get("schema_version") == SCHEMA_VERSION
         and manifest.get("status") == "pass"
@@ -492,8 +537,12 @@ def verify_root(root: Path) -> dict[str, Any]:
     )
     repo = native.validate_repo(manifest["repo"])
     assert_harness_matches(repo)
-    native.require(manifest.get("coverage") == COVERAGE, "J1 seam scope differs")
-    door_art.assert_fully_clean(repo, manifest["subject_commit"])
+    native.require(manifest.get("coverage") == coverage(feedback=feedback), "J1 seam scope differs")
+    assert_subject(repo, manifest["subject_commit"], feedback=feedback)
+    if feedback:
+        native.require(manifest.get("evidence_kind") == "feedback"
+                       and manifest.get("feedback_driver_sha256") == sha256(repo / "scripts/dev.py"),
+                       "J1 feedback build driver changed")
     native.require(
         native.source_fingerprint(repo) == manifest["source_fingerprint"]
         and native.native_harness_fingerprint(repo) == manifest["harness_fingerprint"]
@@ -522,14 +571,15 @@ def verify_root(root: Path) -> dict[str, Any]:
                    for item in observation["status"]["gallery"]["projected_targets"]} for observation in observations]
     validate_transitions(observations, identities)
     fixed = manifest.get("fixed_tests")
-    native.require(isinstance(fixed, list) and [test.get("test") for test in fixed] == list(FIXED_TESTS), "J1 fixed test inventory differs")
+    expected_tests = [] if feedback else list(FIXED_TESTS)
+    native.require(isinstance(fixed, list) and [test.get("test") for test in fixed] == expected_tests, "J1 fixed test inventory differs")
     for index, test in enumerate(fixed):
         native.require(test.get("log") == f"fixed-{index + 1}.log", "J1 fixed audit path differs")
         path = root / test["log"]
         native.require(path.is_file() and sha256(path) == test["sha256"], "J1 fixed audit changed")
         text = path.read_text(encoding="utf-8")
         native.require("1 passed; 0 failed" in text, "J1 fixed audit no longer proves one exact test")
-    native.require(sha256(repo / "target/profiling/bevy_app") == manifest["binary_sha256"], "J1 binary changed")
+    native.require(sha256(binary_path(repo, feedback=feedback)) == manifest["binary_sha256"], "J1 binary changed")
     native.require(sha256(root / "actual-window.log") == manifest["game_log_sha256"], "J1 game log changed")
     native.require(verify_game_log(root / "actual-window.log", manifest["adapter"]) == manifest["actual_adapter"], "J1 adapter evidence changed")
     final_status = native.read_json(root / "probe-status.json")
@@ -542,15 +592,16 @@ def verify_root(root: Path) -> dict[str, Any]:
         "status": "pass",
         "profile": profile,
         "root": str(root),
-        "fixed_tests": len(FIXED_TESTS),
+        "fixed_tests": len(expected_tests),
         "screenshots": len(CHECKPOINTS),
-        "coverage": COVERAGE,
+        "coverage": coverage(feedback=feedback),
+        "evidence_kind": "feedback" if feedback else "formal",
     }
 
 
 def plan(args: argparse.Namespace) -> int:
     repo = native.validate_repo(args.repo)
-    resources = native.resource_snapshot(repo, require_launcher=True)
+    resources = resource_snapshot(repo, feedback=args.feedback)
     failures = list(resources["failures"])
     subject = native.git_subject(repo)
     source = native.source_fingerprint(repo)
@@ -559,7 +610,7 @@ def plan(args: argparse.Namespace) -> int:
     identities = None
     try:
         assert_harness_matches(repo)
-        door_art.assert_fully_clean(repo, subject)
+        assert_subject(repo, subject, feedback=args.feedback)
         identities = candidate_identities(repo, release=args.release)
     except native.AcceptanceError as error:
         failures.append(str(error))
@@ -568,6 +619,8 @@ def plan(args: argparse.Namespace) -> int:
     native.require_persistent_storage(root, label="J1 job root")
     if root.exists():
         failures.append(f"job root already exists: {root}")
+    if os.environ.get("HW_BUILD_LANE") or os.environ.get("HW_BUILD_LANE_FD"):
+        failures.append("J1 uses the canonical target; plan outside an interactive build lane")
     command = [
         "kitty", "--directory", str(repo), "--detach", "env",
         "HW_NATIVE_ACCEPTANCE_LAUNCHED=1", "PYTHONDONTWRITEBYTECODE=1",
@@ -576,12 +629,15 @@ def plan(args: argparse.Namespace) -> int:
         "--source-fingerprint", source, "--harness-fingerprint", harness,
         "--asset-view-fingerprint", assets, "--adapter", args.adapter,
         *(["--release"] if args.release else []),
+        *(["--feedback", "--feedback-driver-sha256", sha256(repo / "scripts/dev.py")] if args.feedback else []),
     ]
     native.print_json(
         {
             "schema_version": SCHEMA_VERSION,
             "status": "ready" if not failures else "blocked",
-            "profile": RELEASE_PROFILE if args.release else PROFILE,
+            "profile": profile_name(release=args.release, feedback=args.feedback),
+            "feedback": args.feedback,
+            "evidence_kind": "feedback" if args.feedback else "formal",
             "release": args.release,
             "job_root": str(root),
             "subject_commit": subject,
@@ -594,14 +650,15 @@ def plan(args: argparse.Namespace) -> int:
             "resources": resources,
             "launcher_command": command,
             "status_command": ["python3", str(Path(__file__).resolve()), "status", "--job-root", str(root)],
-            "verify_command": ["python3", str(Path(__file__).resolve()), "verify", "--job-root", str(root)],
+            "verify_command": ["python3", str(Path(__file__).resolve()), "verify", "--job-root", str(root),
+                               *(["--feedback"] if args.feedback else [])],
             "execution_contract": {
-                "coverage": COVERAGE,
+                "coverage": coverage(feedback=args.feedback),
                 "actual_window_required": True,
                 "capture_scope": native.SAVE_CATALOG_CAPTURE_SCOPE,
                 "parallel_game_processes": 1,
                 "checkpoints": [item[0] for item in CHECKPOINTS],
-                "fixed_tests": list(FIXED_TESTS),
+                "fixed_tests": [] if args.feedback else list(FIXED_TESTS),
             },
         }
     )
@@ -617,8 +674,12 @@ def run(args: argparse.Namespace) -> int:
     native.require(native.source_fingerprint(repo) == args.source_fingerprint, "J1 source changed")
     native.require(native.native_harness_fingerprint(repo) == args.harness_fingerprint, "J1 harness changed")
     native.require(density.asset_view_fingerprint(repo) == args.asset_view_fingerprint, "J1 asset view changed")
-    door_art.assert_fully_clean(repo, args.subject_commit)
-    resources = native.resource_snapshot(repo, require_launcher=True)
+    assert_subject(repo, args.subject_commit, feedback=args.feedback)
+    native.require(not (os.environ.get("HW_BUILD_LANE") or os.environ.get("HW_BUILD_LANE_FD")),
+                   "J1 uses the canonical target; run outside an interactive build lane")
+    if args.feedback:
+        native.require(args.feedback_driver_sha256 == sha256(repo / "scripts/dev.py"), "J1 feedback build driver changed")
+    resources = resource_snapshot(repo, feedback=args.feedback)
     native.require(not resources["failures"], f"J1 resource preflight failed: {resources['failures']}")
     identities = candidate_identities(repo, release=args.release)
     root = Path(args.job_root).resolve()
@@ -627,7 +688,8 @@ def run(args: argparse.Namespace) -> int:
     native.require(not root.exists(), f"job root already exists: {root}")
     root.mkdir(parents=True)
     state: dict[str, Any] = {
-        "schema_version": SCHEMA_VERSION, "status": "running", "profile": RELEASE_PROFILE if args.release else PROFILE,
+        "schema_version": SCHEMA_VERSION, "status": "running", "profile": profile_name(release=args.release, feedback=args.feedback),
+        "feedback": args.feedback,
         "release": args.release,
         "subject_commit": args.subject_commit, "current_stage": "fixed-audit",
         "child_pid": None, "heartbeat_at": native.utc_now(), "commands": [],
@@ -637,7 +699,7 @@ def run(args: argparse.Namespace) -> int:
     native.atomic_write_json(job_file, state)
     try:
         fixed_results = []
-        for index, test_name in enumerate(FIXED_TESTS):
+        for index, test_name in enumerate(() if args.feedback else FIXED_TESTS):
             log_path = root / f"fixed-{index + 1}.log"
             native.run_command(
                 f"fixed-{index + 1}", fixed_test_command(test_name), repo=repo,
@@ -648,25 +710,28 @@ def run(args: argparse.Namespace) -> int:
             native.require("running 1 test" in text and "1 passed; 0 failed" in text, "J1 fixed audit did not execute exactly one passing test")
             fixed_results.append({"test": test_name, "log": log_path.name, "sha256": sha256(log_path)})
         native.run_command(
-            "build", build_command(), repo=repo, env=native.cargo_environment(repo),
+            "build", build_command(feedback=args.feedback), repo=repo, env=native.cargo_environment(repo),
             log_path=root / "build.log", job_file=job_file, state=state, timeout_seconds=3600.0,
         )
-        binary = repo / "target/profiling/bevy_app"
-        native.require(binary.is_file() and not binary.is_symlink(), "J1 profiling binary is absent")
+        binary = binary_path(repo, feedback=args.feedback)
+        native.require(binary.is_file() and not binary.is_symlink(), "J1 binary is absent")
         state["current_stage"] = "actual-window"
         observations = run_storyboard(
             repo=repo, root=root, adapter=args.adapter, identities=identities,
             job_file=job_file, state=state,
         )
         manifest = {
-            "schema_version": SCHEMA_VERSION, "status": "pass", "profile": RELEASE_PROFILE if args.release else PROFILE,
+            "schema_version": SCHEMA_VERSION, "status": "pass", "profile": profile_name(release=args.release, feedback=args.feedback),
+            "feedback": args.feedback,
+            "evidence_kind": "feedback" if args.feedback else "formal",
+            "feedback_driver_sha256": args.feedback_driver_sha256 if args.feedback else None,
             "release": args.release,
             "repo": str(repo), "subject_commit": args.subject_commit,
             "source_fingerprint": args.source_fingerprint,
             "harness_fingerprint": args.harness_fingerprint,
             "asset_view_fingerprint": args.asset_view_fingerprint,
             "candidate_identities": identities,
-            "coverage": COVERAGE,
+            "coverage": coverage(feedback=args.feedback),
             "actual_adapter": verify_game_log(root / "actual-window.log", args.adapter),
             "game_log_sha256": sha256(root / "actual-window.log"),
             "adapter": args.adapter, "binary_sha256": sha256(binary),
@@ -675,7 +740,7 @@ def run(args: argparse.Namespace) -> int:
             "completed_at": native.utc_now(),
         }
         native.atomic_write_json(root / "manifest.json", manifest)
-        native.print_json(verify_root(root))
+        native.print_json(verify_root(root, feedback=args.feedback))
         state.update({"status": "valid", "completed_at": native.utc_now(), "child_pid": None})
         native.atomic_write_json(job_file, state)
         return 0
@@ -697,7 +762,7 @@ def status(args: argparse.Namespace) -> int:
 
 
 def verify(args: argparse.Namespace) -> int:
-    native.print_json(verify_root(Path(args.job_root).resolve()))
+    native.print_json(verify_root(Path(args.job_root).resolve(), feedback=args.feedback))
     return 0
 
 
@@ -802,6 +867,62 @@ def self_test_release() -> None:
 
 def self_test() -> int:
     self_test_release()
+    with tempfile.TemporaryDirectory(prefix="joint-first-frame-") as temporary:
+        destination = Path(temporary) / "capture.png"
+        def capture_fixture(*_args, **_kwargs):
+            destination.write_bytes(b"pending-frame")
+            return subprocess.CompletedProcess([], 0)
+        with mock.patch.object(native, "x11_client_windows_for_process_tree", return_value=[("0x123", 12)]), mock.patch.object(
+            shutil, "which", return_value="/usr/bin/import"
+        ), mock.patch.object(native, "run_bounded_capture_tool", side_effect=capture_fixture), mock.patch(
+            __name__ + ".image_evidence", side_effect=[native.AcceptanceError("frame not presented"), [{"grid": [1, 2]}]]
+        ):
+            native.require(capture_window(destination, 12, {}) is None and not destination.exists(),
+                           "J1 accepted the pre-present frame")
+            native.require(capture_window(destination, 12, {})["image_evidence"] == [{"grid": [1, 2]}],
+                           "J1 did not retry the held checkpoint after presentation")
+    with mock.patch.object(native, "resource_snapshot", return_value={"cargo_incremental": 0}), mock.patch(
+        __name__ + ".resource_policy", return_value={"cargo_incremental": "1", "process_temp_dir": "/repo/target/.dev-tmp"}
+    ):
+        snapshot = resource_snapshot(Path("/repo"), feedback=True)
+        native.require(snapshot["cargo_incremental"] == 1
+                       and snapshot["feedback_build"]["process_temp_dir"].endswith("/.dev-tmp"),
+                       "J1 feedback records the wrong build policy")
+    native.require(build_command(feedback=True) == ["python3", "scripts/dev.py", "feedback", "--build-only"],
+                   "J1 feedback must consume the dev driver")
+    native.require(game_command(Path("/repo"), Path("/job"), feedback=True)[0] == "/repo/target/debug/bevy_app"
+                   and game_command(Path("/repo"), Path("/job"))[0] == "/repo/target/profiling/bevy_app",
+                   "J1 feedback and formal binaries overlap")
+    native.require(coverage(feedback=True)["focused_audit"] == []
+                   and coverage(feedback=True)["pending_j1"] == COVERAGE["focused_audit"]
+                   and coverage(feedback=False) == COVERAGE, "J1 feedback claims formal audit coverage")
+    with mock.patch.object(native, "git_subject", return_value="subject"), mock.patch.object(
+        door_art, "assert_fully_clean", side_effect=native.AcceptanceError("dirty subject")
+    ):
+        assert_subject(Path("/repo"), "subject", feedback=True)
+        try:
+            assert_subject(Path("/repo"), "subject", feedback=False)
+        except native.AcceptanceError:
+            pass
+        else:
+            raise native.AcceptanceError("J1 formal accepted a dirty subject")
+    for document, feedback in (
+        ({"feedback": True, "profile": FEEDBACK_PROFILE}, False),
+        ({"feedback": False, "profile": PROFILE}, True),
+        ({"feedback": False, "profile": FEEDBACK_PROFILE}, False),
+        ({"feedback": 1, "profile": FEEDBACK_PROFILE}, True),
+    ):
+        document.update(schema_version=SCHEMA_VERSION, status="pass")
+        with mock.patch.object(native, "read_json", return_value=document):
+            try:
+                verify_root(Path("/job"), feedback=feedback)
+            except native.AcceptanceError:
+                pass
+            else:
+                raise native.AcceptanceError("J1 accepted mismatched feedback/formal evidence")
+    native.require(parser().parse_args(["plan", "--repo", "/repo", "--release", "--feedback"]).feedback
+                   and parser().parse_args(["verify", "--job-root", "/job", "--feedback"]).feedback,
+                   "J1 feedback opt-in is not reachable")
     native.require([item[1] for item in CHECKPOINTS] == list(range(1, 7)), "J1 checkpoint order differs")
     command = game_command(Path("/repo"), Path("/job"))
     native.require(
@@ -927,13 +1048,18 @@ def parser() -> argparse.ArgumentParser:
     plan_parser.add_argument("--job-root")
     plan_parser.add_argument("--adapter", default="Intel")
     plan_parser.add_argument("--release", action="store_true")
+    plan_parser.add_argument("--feedback", action="store_true", help="incremental dev storyboard only; not formal acceptance")
     run_parser = commands.add_parser("run")
     run_parser.add_argument("--release", action="store_true")
+    run_parser.add_argument("--feedback", action="store_true")
+    run_parser.add_argument("--feedback-driver-sha256")
     for name in ("repo", "job_root", "subject_commit", "source_fingerprint", "harness_fingerprint", "asset_view_fingerprint", "adapter"):
         run_parser.add_argument("--" + name.replace("_", "-"), required=True)
     for name in ("status", "verify"):
         command = commands.add_parser(name)
         command.add_argument("--job-root", required=True)
+        if name == "verify":
+            command.add_argument("--feedback", action="store_true", help="explicitly verify feedback-only evidence")
     commands.add_parser("self-test")
     return root
 

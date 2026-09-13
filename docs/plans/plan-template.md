@@ -95,6 +95,25 @@
 - 手動確認シナリオ:
 - パフォーマンス確認（必要時）:
 
+### 検証データ管理（各バッチの開始前・報告前に更新）
+
+- 正本: `docs/development-infra/validation-storage-workflow.md`
+- primaryの `python3 scripts/dev.py validation` でretain/plan/execute、seal/finalize/checkを行う。
+  台帳はGit common directoryに保持し、旧凍結subjectのhelperはprimary coordinator経由で使う。
+- batch ID / 判断対象 / 責任者 / 全consumer:
+- worktree・clone・branch / subject・asset view / job roots:
+- 開始時bytes / 検証結果 / 採用成果物と最終結果の正本:
+- 削除済みpath / 前後bytes / filesystem空き差:
+- 残存path / bytes / owner / consumer / 次の作業 / release_when（終了条件）:
+- 修正対応（review-active / accepted / abandoned） / 最新提示・修正日時:
+- 整理状態（cleaned / review-active / 具体的な継続用途）と理由:
+
+成功・失敗・中断のいずれもバッチ終了時に結果確定・整理する。全jobのcapsule保存は不要。
+共有・親track未完を一括保持の理由にしない。固定の容量上限・日数は設けない。
+フィードバック対応中のcandidate worktreeとtargetは同じ場所で保持し、不要な検証出力だけを整理する。
+提示→応答待ち→修正→再確認を一つの利用単位とし、最終承認／終了前にcacheを撤去しない。
+過去の記録を再検証し続けることを保持の目的にしない。
+
 ## 8. ロールバック方針
 
 - どの単位で戻せるか:
@@ -137,8 +156,9 @@
 - [ ] `python3 scripts/dev.py check` が成功
 - [ ] `python3 scripts/dev.py cargo -- clippy --workspace --all-targets -- -D warnings` が成功
 - [ ] `python3 scripts/dev.py cargo -- test --workspace` が成功
-- [ ] 受入artifactとvalidation worktreeを棚卸しし、封印済みhashと承認画像だけを小さなcapsuleへ残して
-      worktree・branchを削除した（`git worktree list`と`du -sh`の結果、回収容量を本書へ記録する）
+- [ ] 各検証バッチの結果確定・不要job / binary copy / worktree / clone整理を報告前に実施した。
+- [ ] 最終close時に本計画のconsumerは0。共有残存は別consumer・担当者・bytes・終了条件を引継ぎ済み。
+      削除path、前後bytes / filesystem空き差と最終結果を記録し、採用成果物を正本へ集約した。
 
 ## 10. 更新履歴
 

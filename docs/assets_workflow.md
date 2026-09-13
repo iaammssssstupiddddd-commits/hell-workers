@@ -337,19 +337,26 @@ receiptのevidence bundleにも正式性能jobの`invalid`、Memory未実施、�
 同日の「OKです。クローズしてください」により、本設壁修正は完了としてクローズした。
 時間方向のちらつきは未検証のまま終了する。追加検証の予定を残さず、未検証を合格にも変更しない。
 release locator SHA-256は`fc1f05e9a59a5f0a339f7ef655cdf08e95215eaa8440d4a0d5213a7da83279f9`。
-上記release-evidence内の`wall-door-joint-20260912T170810Z-d382708c/`に通常版6場面のcapsuleを保存済み。
+当時は上記release-evidence内の`wall-door-joint-20260912T170810Z-d382708c/`へ通常版6場面を保存した。
+同日後続の整理でこのcapsuleとformal-standard / performance-invalidの履歴コピーは削除した。
+採用されたgeneration 13の自己完結payload・承認と復旧前像を正本として維持する。
 manifest SHA-256は`f71bc04b42a0dce971daf89b04fc6d2e8b73251b194089a57ee266d46af7d4b1`、
 承認された`joint-loaded.png`は`20cb02c95d3bfb4f609fc6dbd0b07f8cadddbafafac6f997c7a0f1c9fbb8fe61`。
 他のmanifest・比較CSV・承認PNG・復旧前像のhashは上記完了記録に保持する。
 本修正専用の新規worktree / branchはなく、共通`wall-door-joint-83ad3f85`は未完の型枠／扉trackが所有する。
-その整理は両trackのclose時に行い、本修正のちらつき確認を保持理由にしない。今回の削除・回収容量は0。
+当時は両trackのclose時に整理する運用であり、今回の削除・回収容量は0だった。
+今後の保持は下記ワークフローで具体的consumerと終了条件を確認する。本修正のちらつき確認を保持理由にしない。
 本クローズは文書と索引のみの変更で、ゲームの表示・操作・建設条件・Help文言を変更しない（Help: No impact）。
 
-validation worktreeは作業場であって成果物ではない。trackを閉じたら、各jobの`manifest.json`、比較CSV、
-承認画像だけを`staging/validation/<capsule>/`のような小さなdirectoryへ残し、worktree本体は
-`git worktree remove`で削除して使っていたbranchも消す。worktree 1つはRustの`target/`込みで10 GB規模になり、
-過去のartifactは後続subjectの証拠に使えない（harnessはfingerprintが一致するfresh runを要求する）ため、
-残しても容量を消費するだけである。
+validation worktreeは[検証データ管理](development-infra/validation-storage-workflow.md)に従い、
+各検証バッチの終了時に結果を確定し、consumerのないjob・binary copy・worktree / branchを撤去する。
+全jobのmanifest・CSV・承認画像の別途保存は要求しない。製品に必要な承認等はrelease正本へ集約し、
+結果と未検証範囲を既存文書に残す。元worktree・raw・binaryを読む実施中の比較だけ依存を保持する。
+共有treeも最後のconsumer終了時に撤去し、親track全体のcloseを待たない。
+レビュー待ち・修正対応もconsumerに含める。同じcandidate worktreeとtargetは最終承認／終了まで
+維持し、フィードバックのたびにbuild環境を作り直さない。不要jobの整理とは別の寿命で扱う。
+canonical release・復旧前像は通常cleanupの対象外。primary coordinatorのseal/finalize/checkで結果と残存を検査する。
+データ削除は担当者が所有・依存を確認して行い、ツールによる自動回収は行わない。
 
 ### Wall runtime projection
 

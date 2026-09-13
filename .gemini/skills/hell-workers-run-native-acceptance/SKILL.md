@@ -9,7 +9,41 @@ Use the repository performance runner as the source of truth while keeping the
 launcher, feature order, resource budget, and artifact checks deterministic. Do
 not turn a successful headless run into renderer evidence.
 
+Before creating a job, read the primary repository's
+`docs/development-infra/validation-storage-workflow.md`. Register the batch's
+owner, consumers, paths and release conditions in its primary plan.
+Inventory remaining uses and standalone clones as well as Git worktrees.
+The same document governs finalization after success, failure or interruption.
+
+Use the primary repository's `python3 scripts/dev.py validation` coordinator.
+Register the candidate/cache hold and wrap every plan example below as
+`python3 scripts/dev.py validation plan --spec <batch-spec.json> -- <plan-command>`.
+The spec names owner, consumers and the frozen verifier;
+the storage workflow defines its JSON fields and output-root placeholders.
+Run the wrapped direct kitty launcher, which rechecks admission inside the terminal.
+For frozen worktrees, run their own helper under the primary coordinator; never
+copy current rules/helpers into a frozen subject. Direct plan examples below are
+read-only recipe descriptions, not authorization to use an unregistered launcher.
+Before ANY launcher or Capture/Memory rebuild, register and check dependencies
+on the old source/assets/binary, including verifiers that require original paths.
+After the recipe, use `validation seal`, finalize expendable outputs, then run
+`validation finalize` and `validation check --batch <id>` before reporting.
+Keep the candidate's review hold active across feedback; finalizing a batch does
+not release its workspace or Cargo cache. There is no default capacity or day limit.
+An optional review date is advisory and does not block feedback builds.
+Any explicit budget must have a measured environmental reason; silence never closes a review.
+
 ## Choose the path
+
+For visual/interaction revisions, first use the reusable dev build described in
+`docs/DEVELOPMENT.md`: `python3 scripts/dev.py feedback` (or `--build-only`).
+This fixes the profiling feature set and enables incremental compilation even
+when the parent shell disables it. It reuses `target/debug` (the session's lane
+for ordinary interactive use); it does not create a profile or per-job target.
+Use the feedback storyboard below for supported automated Wall/Door revisions.
+Unapproved ArtPreview galleries and other dedicated scenarios still use their
+existing recipes. Do not run the formal performance matrix on every visual tweak;
+run the required formal gates when the revised subject is ready for acceptance.
 
 1. Use the bundled `task-dashboard` recipe when validating Task Dashboard CPU,
    allocation, or the hidden / visible / active-filter contract.
@@ -26,6 +60,36 @@ not turn a successful headless run into renderer evidence.
 5. Treat the default 1-second warm-up and 2-second measure as acceptance smoke.
    Use the repository's documented 30/60-second matrix when a formal baseline or
    regression percentage is required.
+
+## Wall/Door feedback storyboard
+
+For already approved candidate or release assets, the joint helper supports a
+feedback-only dev build. Keep the same mutable workspace and cache; an uncommitted
+source revision is allowed. Plan/run/verify still bind the current HEAD, source,
+harness, asset view and feedback build driver hashes. Do not edit those inputs
+until the batch is sealed. Plan outside an interactive lane: the storyboard uses
+canonical `target/debug/bevy_app` and the existing exclusive activity lease.
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 \
+  .codex/skills/hell-workers-run-native-acceptance/scripts/wall_door_joint_acceptance.py \
+  plan --repo "$PWD" --adapter Intel --release --feedback
+```
+
+Wrap this plan with the primary validation coordinator as described above; its
+registered verifier must be `verify --job-root @job_root --feedback`. Run only
+the returned direct kitty launcher, poll `status`, and seal/finalize the batch.
+Omit `--release` for the already art-approved isolated-candidate projection.
+This is not the unapproved ArtPreview gallery and cannot replace its identity
+and approval workflow.
+
+The helper builds via `dev.py feedback --build-only`, then retains the normal
+six-checkpoint X11 capture, nonce/ACK, identity and transition verification.
+It skips the three formal fixed-audit builds and reports them as pending.
+The result uses `wall-door-joint-feedback-v1` / `evidence_kind=feedback`;
+ordinary `verify` rejects it unless `--feedback` is explicitly requested.
+Do not treat it as formal J1, performance, quality/DPI matrix or art approval.
+For formal J1, remove `--feedback` and use the existing clean-subject recipe.
 
 ## Run the Task Dashboard recipe
 
@@ -665,8 +729,9 @@ baseline.
   proof of the requested renderer or GPU.
 - Freeze relevant Rust, Cargo, asset metadata, and performance-runner files while
   the recipe is active. The helper fails if their fingerprint changes.
-- Preserve invalid and interrupted artifacts for diagnosis. Never overwrite an
-  existing output directory.
+- Preserve invalid and interrupted artifacts during diagnosis. Never overwrite an
+  existing output directory. At batch end, keep the bounded failure record and
+  finalize raw data under the storage workflow; failure is not indefinite retention.
 
 ## Keep memory and disk bounded
 
@@ -684,12 +749,15 @@ baseline.
   SwapTotal/SwapFree are recorded as diagnostic telemetry only: a low or
   unavailable swap balance does not block a run while the RAM floor is met.
   On Linux, unavailable `MemAvailable` is a failure, not an exemption.
-- Every native build and game process must set `CARGO_TARGET_DIR` to the
+- Every formal native build and game process must set `CARGO_TARGET_DIR` to the
   repository `target/`, `CARGO_INCREMENTAL=0`, and `TMPDIR`/`TMP`/`TEMP` to
   `target/.native-acceptance-tmp`. `CARGO_HOME` and `RUSTUP_HOME` retain only
   safe persistent overrides; inherited tmpfs values are replaced with the
   account defaults. The helper normalizes these values; do not run a raw Cargo
   command or pass an alternate target for acceptance.
+  The explicit joint `--feedback` mode uses `CARGO_INCREMENTAL=1`, the existing
+  dev profile and `target/.dev-tmp` for compilation; game temporary files stay
+  in `target/.native-acceptance-tmp`. Its resource record identifies both paths.
 - Job roots and all performance artifacts belong under
   `target/native-acceptance/` or `target/perf-runs/`. The plan rejects an
   explicit `/tmp` or memory-backed job/artifact path and reports
@@ -709,26 +777,58 @@ baseline.
   those distinct measurements.
 - Do not apply `nice`, `ionice`, or CPU affinity to formal measurements; they
   change the timing conditions.
-- Do not delete artifacts or caches mid-track. While a milestone is open, its
-  jobs are the only way to re-verify what has been accepted so far.
-- Do dispose of them when the track closes. A validation worktree costs tens of
-  gigabytes, most of it a Rust `target/` with no audit value, and old artifacts
-  can never serve as evidence for a later subject: this harness requires a fresh
-  run against the current fingerprint. Leaving them behind buys nothing and cost
-  120 GB across the 2026-09 wall track.
-- At close, keep the small sealed records and drop the rest. Copy each job's
-  `manifest.json`, comparison CSVs and any approved screenshot into a capsule
-  directory beside the asset set, record the hashes in the closing document, then
-  remove the validation worktrees with `git worktree remove` and delete the
-  branches they used. Report the reclaimed size in the closing report.
-- Report exact directory sizes before removing anything, and ask when a worktree
-  belongs to a track you did not close yourself.
+- Protect data while a recipe or dependent comparison is running. Keep one
+  stable candidate worktree and its target through presentation, awaiting feedback,
+  revision and revalidation. A passed batch or interim report does not close that
+  feedback cycle. Finalize expendable job outputs separately from build caches.
+  Before advancing the candidate or rebuilding its binary, discharge any old
+  verifier's original-path dependencies or preserve the required frozen view.
+  Run the changed clean subject through a new plan/job; reuse Cargo artifacts,
+  never old acceptance results. Formal runs keep CARGO_INCREMENTAL=0 and normal
+  build checks; the explicit feedback route enables incremental compilation.
+- Before reporting a successful batch, run the frozen verifier while its
+  dependencies still exist. For failed/interrupted jobs, record the terminal
+  stage and reason without requiring a missing manifest or restarting cancelled
+  work. The coordinator's seal records the result in its ledger without copying
+  files. Closed work needs no per-job archive. Consolidate final decisions into
+  existing docs and required release evidence into its product-owned location.
+  Verify any necessary copy against its source. Keep raw dependencies only for
+  a concrete ongoing comparison; do not preserve old environments just to rerun
+  historical verifiers. A retained comparison must have all its actual dependencies.
+  Do not rewrite manifests or substitute checksum-only checks for recipe validation.
+- Dispose of jobs, binary copies and validation workspaces with no remaining
+  consumer, following the storage workflow's ownership/diff/process checks.
+  Do not delete canonical baselines, release/rollback records or primary Cargo
+  caches as ordinary job cleanup. Never use broad target deletion or forced Git
+  cleanup to bypass unknown files, ownership or unique commits.
+- Treat awaiting feedback/revision as a `review-active` consumer of the candidate
+  workspace/cache and latest presented evidence. Record owner, paths, bytes,
+  latest presentation/revision, next action and release_when. An optional review_at
+  is advisory: silence or an interim pass never authorizes
+  deletion. Release after explicit final acceptance/closure/abandonment and all
+  other consumers finish. A cancelled measurement need not close the wider review.
+- Other retained data must name its path, owner, concrete consumer, measured bytes,
+  next action and release condition. Dispose of diagnostic raw when that investigation
+  finishes or is cancelled. No default capacity or day limit applies.
+  Shared workspaces count feedback consumers too; an open parent track alone
+  does not justify holding every old checkout.
+- Deletion remains the executor's responsibility. The primary coordinator checks
+  registration, admission, verification results and storage finalization;
+  artifact validity alone cannot close the batch. Report removed paths, measured
+  storage change and concrete remaining uses. Do not recreate a permanent archive
+  requirement in a different directory. Preserve unique uncommitted work and sources.
 
 ## Report the result
+
+For the explicit joint feedback mode, report its six checkpoint observations
+and feedback-only status; fixed audits and performance/Memory are outside that
+recipe. Do not require those extra builds merely to report an interim revision.
 
 Report the three independent outcomes: fixed correctness, actual renderer
 Capture, and native Memory. Include the actual adapter/backend, valid run counts,
 artifact root, and whether the short acceptance or formal timing matrix was used.
+Also report storage finalization (`cleaned`, `review-active`, or a concrete retained use)
+and the location of the final decision. A compact archive is not required.
 State any incomplete leg explicitly. Never summarize an invalid session as a
 pass because individual runs happened to finish.
 
@@ -759,6 +859,9 @@ PYTHONDONTWRITEBYTECODE=1 python3 scripts/perf_tool/wall_renderdoc_extract.py \
   --self-test
 PYTHONDONTWRITEBYTECODE=1 python3 \
   .codex/skills/hell-workers-run-native-acceptance/scripts/wall_cross_subject_performance_acceptance.py \
+  self-test
+PYTHONDONTWRITEBYTECODE=1 python3 \
+  .codex/skills/hell-workers-run-native-acceptance/scripts/wall_door_joint_acceptance.py \
   self-test
 python3 scripts/check_agent_rules.py
 ```

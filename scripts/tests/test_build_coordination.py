@@ -37,6 +37,7 @@ class BuildCoordinationTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "must not be placed under /tmp"):
             build_coordination.acquire_activity(Path("/tmp/hell-workers-activity-test"), "shared")
 
+    @patch("scripts.dev.require_mutable", lambda repo: None)
     def test_dev_compile_refuses_before_child_when_native_recipe_is_active(self) -> None:
         with build_coordination.acquire_activity(dev.REPO_ROOT, "exclusive"):
             with patch.object(dev, "require_cargo_memory"), patch.object(
@@ -92,7 +93,7 @@ class BuildCoordinationTests(unittest.TestCase):
 
     def test_performance_recipe_uses_exclusive_lease_but_dry_run_does_not(self) -> None:
         lease = MagicMock()
-        with patch.object(perf_cli, "acquire_activity", return_value=lease) as acquire:
+        with patch("scripts.perf_tool.execution.require_admission"), patch.object(perf_cli, "acquire_activity", return_value=lease) as acquire:
             with patch.object(perf_cli, "_run_suite", return_value=3) as run:
                 args = SimpleNamespace(dry_run=False)
                 self.assertEqual(perf_cli.run_suite(args), 3)

@@ -7,7 +7,7 @@
 | 計画ID | `production-door-art-plan-2026-09-05` |
 | ステータス | `In Progress — 通常版導入・通常quality受入済み／共通close残件` |
 | 作成日 | `2026-09-05` |
-| 最終更新日 | `2026-09-12` |
+| 最終更新日 | `2026-09-13` |
 | 作成者 | `Codex` |
 | 親計画 | [アセット作成マイルストーン](asset-milestones-2026-03-17.md)（Build-BのDoor） |
 | 関連計画 | [仮設壁の木製型枠化](provisional-wall-formwork-plan-2026-09-05.md)、[完了済み本番壁計画](archived/production-wall-art-plan-2026-08-31.md) |
@@ -15,6 +15,20 @@
 
 本書は実装中の計画である。M0〜M2の技術候補と実行時接続を実装し、M3のアート承認、正式candidate、behavior、quality/DPI、Door densityの単独受入まで完了した。調査基点は `57a488e1`。
 完了済みWall計画から引き継ぐ範囲は、Doorの枠・戸当たり・向き・Wallの9.6 wu portとの継ぎ目である。
+
+## 検証データ管理（2026-09-13以降）
+
+保持・整理は[検証データ管理](../../development-infra/validation-storage-workflow.md)を正本とする。
+本書の過去のjob / tree全量保持やcapsule保存の記述は履歴であり、現在の保持義務にしない。
+終了した仕事の検証データはarchive不要。最終結果と未検証範囲は既存文書、採用成果物・承認は製品正本へ集約する。
+
+2026-09-13、旧検証環境と用途を終えたrawを整理した。
+継続する型枠release混在matrixには `wall-door-joint-83ad3f85` とそのCargo targetを再利用する。
+このtree内の旧jobは削除済み。完了したsurfaceの検証や旧RtTの再測定を再開しない。
+フィードバック中は同じcandidate / targetを維持し、別の利用者がなくなった時点で撤去する。
+残存path・owner・consumer・bytes・次の作業・終了条件はprimary coordinatorのholdに登録する。
+固定日数や容量の既定値は設けず、全trackのcloseを不要データ整理の条件にしない。
+回収容量と独自成果物の保全先は[整理結果](../../development-infra/validation-storage-workflow-review-2026-09-13.md)を参照する。
 
 ## 0. セルフレビューで修正した点
 
@@ -478,15 +492,16 @@ Help impact review Skillで建築／ドアの実説明を読み、色表示へ�
 - Door density失敗job保持: `door-density-20260907T004517Z-5a7aa916`はfixtureが返した固定`authority`を候補identity APIの不存在キーから検証しようとして最初のrun後に停止した。runnerを実API形状へ修正してself-test / checkを通し、別jobで全matrixを再採取した。失敗jobを成功扱いせず、track closeまで保持する。
 - quality/DPI失敗job保持: `door-art-20260906T185340Z-1604770a`（0 Familiarでgather fixture未成立）、`door-art-20260906T190850Z-437a2c6d`（gallery pause前にOpenが自動閉扉）、`door-art-20260906T191033Z-edd6329c`（wall-density carrierの固定matrix違反で起動前停止）、`door-art-20260906T191239Z-bb1c8205`（pause後に汎用runnerのVirtual Time warmupが進行せずtimeout）、`door-art-20260906T192737Z-7d30d9b0`（静止fixtureを汎用gameplay validatorがzero query/Virtual Timeとして拒否）、`door-art-20260906T194625Z-1a72eb13`（直接起動時の`BEVY_ASSET_ROOT`欠落）を成功jobと同じworktreeに保持する。最後の2件から、汎用性能gateを緩和せずDoor専用Real Time validatorと明示asset rootを使う現契約へ確定した。
 - 失敗job保持: `door-behavior-20260906T170630Z-952adc7b`（P08 backend/repeat契約違反）、`door-behavior-20260906T173316Z-6c17f870`（recovery-failedを通常rebind扱い）、`door-behavior-20260906T175052Z-e55cf022`（到達不能なbaseline observer）、`door-behavior-20260906T181055Z-87886a8f`・`door-behavior-20260906T182844Z-6dc51b2b`・`door-behavior-20260906T183035Z-8f8d34b8`・`door-behavior-20260906T183230Z-1cc267d4`（集約器の固定role／log policy誤り）を成功jobと同じworktreeに保持する。成功jobのcapsule化まではworktreeを削除しない。
-- 残件: M4最新節を正本とする。canonical登録・primary導入と通常releaseのDoor品質・共通J1は完了。共通Wall側の検証残件、全trackのcapsule / worktree整理を続ける。過去の正式jobと失敗jobはclose前には削除しない。
+- 残件: M4最新節を正本とする。canonical登録・primary導入と通常releaseのDoor品質・共通J1は完了。共通Wall側の検証残件を維持し、冒頭の新ワークフローで過去jobのconsumerを棚卸しする。不要領域はバッチ単位で整理する。
 
 ### Definition of Done
 
 - [ ] M0〜M4と共通J1完了、3状態・両軸・Wallと型枠のseam・操作とloadが成立。
 - [ ] Help判断と恒久文書更新が完了、check / Clippy / verify成功。
 - [ ] 通常releaseでの実機受入と最終候補の承認記録がある。
-- [ ] job manifest / 比較CSV / 承認PNGを小さなcapsuleへ封印し、hashをclose文書へ記録。
-- [ ] 本trackで作ったvalidation worktreeとbranchを削除し、`git worktree list`、削除前後の`du -sh`、回収容量を記録。他trackと共用なら両trackのcloseまで所有を明記する。
+- [ ] 最終結果を既存文書へ集約し、用途のないjob / binary copyを整理した。全jobの保存は要求しない。
+- [ ] 本trackのconsumerは0。不要worktree・branchを撤去し、cloneを含む棚卸しと前後容量を記録。
+      残る共有領域は別consumer・担当者・bytes・終了条件を引継ぎ済み。
 
 ## 10. 更新履歴
 
