@@ -466,7 +466,7 @@ dependencies = [
  "hw_visual",
  "hw_world",
  "libloading 0.9.0",
- "rand 0.8.6",
+ "rand 0.10.2",
  "renderdoc-sys",
  "ron",
  "serde",
@@ -2028,6 +2028,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "613afe47fcd5fac7ccf1db93babcb082c5994d996f20b8b159f2ad1658eb5724"
 
 [[package]]
+name = "chacha20"
+version = "0.10.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "65c35e4b699c7e15ccbe7ee35c005e4fc0a278d22238a2857e6ce2dadeda1b06"
+dependencies = [
+ "cfg-if",
+ "cpufeatures",
+ "rand_core 0.10.1",
+]
+
+[[package]]
 name = "clipboard-win"
 version = "5.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2144,6 +2155,12 @@ name = "coord_2d"
 version = "0.3.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0f941429f31aa80449c9b9e4b3b223615d7141cfb623ee551b488925fc502fd6"
+
+[[package]]
+name = "coord_2d"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "72feb33c4770a87e188fa9e0f63fff89317e7e9eea3dc73e1482067812953e53"
 
 [[package]]
 name = "core-foundation"
@@ -2330,7 +2347,16 @@ version = "0.18.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3c56672976b806b6fe8e41998c6d0503cd02479c6059c47451ce8addc7871271"
 dependencies = [
- "coord_2d",
+ "coord_2d 0.3.7",
+]
+
+[[package]]
+name = "direction"
+version = "0.19.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "82b35371e501a3831bb40401e8a8c8341c6b618dc5c2ca5e64058dc18b2f96c9"
+dependencies = [
+ "coord_2d 0.4.2",
 ]
 
 [[package]]
@@ -2750,6 +2776,7 @@ dependencies = [
  "cfg-if",
  "libc",
  "r-efi 6.0.0",
+ "rand_core 0.10.1",
 ]
 
 [[package]]
@@ -2913,7 +2940,7 @@ version = "0.15.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6dfb23b456edfd3f388df8047a84a367a1168f4606bc21fe1e5dc9606a23689b"
 dependencies = [
- "coord_2d",
+ "coord_2d 0.3.7",
 ]
 
 [[package]]
@@ -3041,7 +3068,7 @@ name = "hw_core"
 version = "0.1.0"
 dependencies = [
  "bevy",
- "rand 0.8.6",
+ "rand 0.10.2",
  "serde",
 ]
 
@@ -3063,7 +3090,7 @@ dependencies = [
  "hw_logistics",
  "hw_spatial",
  "hw_world",
- "rand 0.8.6",
+ "rand 0.10.2",
 ]
 
 [[package]]
@@ -3094,7 +3121,7 @@ dependencies = [
  "hw_jobs",
  "hw_spatial",
  "hw_world",
- "rand 0.8.6",
+ "rand 0.10.2",
 ]
 
 [[package]]
@@ -3108,7 +3135,7 @@ dependencies = [
  "hw_logistics",
  "hw_spatial",
  "hw_world",
- "rand 0.8.6",
+ "rand 0.10.2",
 ]
 
 [[package]]
@@ -3139,7 +3166,7 @@ dependencies = [
  "hw_core",
  "hw_spatial",
  "hw_world",
- "rand 0.8.6",
+ "rand 0.10.2",
 ]
 
 [[package]]
@@ -3147,11 +3174,11 @@ name = "hw_world"
 version = "0.1.0"
 dependencies = [
  "bevy",
- "direction",
+ "direction 0.19.1",
  "hw_core",
  "hw_jobs",
  "proptest",
- "rand 0.8.6",
+ "rand 0.10.2",
  "serde",
  "wfc",
 ]
@@ -4415,9 +4442,9 @@ checksum = "019b4b213425016d7d84a153c4c73afb0946fbb4840e4eece7ba8848b9d6da22"
 
 [[package]]
 name = "rand"
-version = "0.8.6"
+version = "0.8.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5ca0ecfa931c29007047d1bc58e623ab12e5590e8c7cc53200d5202b69266d8a"
+checksum = "e058c7de0b26af77780c769414d6257830bb240f3c38477dbc2c16e5f54d6d4c"
 dependencies = [
  "libc",
  "rand_chacha 0.3.1",
@@ -4440,6 +4467,7 @@ version = "0.10.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c7f5fa3a058cd35567ef9bfa5e75732bee0f9e4c55fa90477bef2dfcdbc4be80"
 dependencies = [
+ "chacha20",
  "getrandom 0.4.3",
  "rand_core 0.10.1",
 ]
@@ -5654,12 +5682,12 @@ version = "0.10.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8f2e3d966729ec64112a2167bfd6237f449e2445b70c4f7547916707fc684b11"
 dependencies = [
- "coord_2d",
- "direction",
+ "coord_2d 0.3.7",
+ "direction 0.18.1",
  "getrandom 0.2.16",
  "grid_2d",
  "hashbrown 0.13.2",
- "rand 0.8.6",
+ "rand 0.8.8",
 ]
 
 [[package]]
