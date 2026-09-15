@@ -1,5 +1,6 @@
 use super::*;
 use bevy::input_focus::InputFocus;
+use hw_ui::components::UiInputState;
 
 fn belongs_to_ui_subtree(entity: Entity, root: Entity, q_parents: &Query<&ChildOf>) -> bool {
     let mut current = entity;
@@ -17,16 +18,14 @@ fn belongs_to_ui_subtree(entity: Entity, root: Entity, q_parents: &Query<&ChildO
 
 /// DevPanel 本文の最小化・復元を処理
 pub fn toggle_dev_panel_minimize_button_system(
-    q_button: Query<&Interaction, (Changed<Interaction>, With<DevPanelMinimizeButton>)>,
+    q_button: Query<Entity, With<DevPanelMinimizeButton>>,
+    ui: Res<UiInputState>,
     mut q_body: Query<(Entity, &mut Node), With<DevPanelBody>>,
     mut q_label: Query<&mut Text, With<DevPanelMinimizeButtonLabel>>,
     q_parents: Query<&ChildOf>,
     mut input_focus: ResMut<InputFocus>,
 ) {
-    if !q_button
-        .iter()
-        .any(|interaction| *interaction == Interaction::Pressed)
-    {
+    if !q_button.iter().any(|entity| ui.button_activated(entity)) {
         return;
     }
 
@@ -54,11 +53,12 @@ pub fn toggle_dev_panel_minimize_button_system(
 
 /// 3D表示ボタンのクリックを処理
 pub fn toggle_render3d_button_system(
-    q_button: Query<&Interaction, (Changed<Interaction>, With<ToggleRender3dButton>)>,
+    q_button: Query<Entity, With<ToggleRender3dButton>>,
+    ui: Res<UiInputState>,
     mut render3d: ResMut<crate::Render3dVisible>,
 ) {
-    for interaction in q_button.iter() {
-        if *interaction == Interaction::Pressed {
+    for entity in q_button.iter() {
+        if ui.button_activated(entity) {
             render3d.0 = !render3d.0;
         }
     }
@@ -66,11 +66,12 @@ pub fn toggle_render3d_button_system(
 
 /// 即時ビルドボタンのクリックを処理
 pub fn toggle_instant_build_button_system(
-    q_button: Query<&Interaction, (Changed<Interaction>, With<InstantBuildButton>)>,
+    q_button: Query<Entity, With<InstantBuildButton>>,
+    ui: Res<UiInputState>,
     mut instant_build: ResMut<crate::DebugInstantBuild>,
 ) {
-    for interaction in q_button.iter() {
-        if *interaction == Interaction::Pressed {
+    for entity in q_button.iter() {
+        if ui.button_activated(entity) {
             instant_build.0 = !instant_build.0;
         }
     }
@@ -78,11 +79,12 @@ pub fn toggle_instant_build_button_system(
 
 /// RtT light ボタンのクリックを処理
 pub fn toggle_rtt_light_button_system(
-    q_button: Query<&Interaction, (Changed<Interaction>, With<ToggleRttLightButton>)>,
+    q_button: Query<Entity, With<ToggleRttLightButton>>,
+    ui: Res<UiInputState>,
     mut perf_toggles: ResMut<crate::RenderPerfToggles>,
 ) {
-    for interaction in q_button.iter() {
-        if *interaction == Interaction::Pressed {
+    for entity in q_button.iter() {
+        if ui.button_activated(entity) {
             perf_toggles.directional_light_enabled = !perf_toggles.directional_light_enabled;
         }
     }
@@ -90,11 +92,12 @@ pub fn toggle_rtt_light_button_system(
 
 /// 追加 RtT light ボタンのクリックを処理
 pub fn toggle_rtt_extra_light_button_system(
-    q_button: Query<&Interaction, (Changed<Interaction>, With<ToggleRttExtraLightButton>)>,
+    q_button: Query<Entity, With<ToggleRttExtraLightButton>>,
+    ui: Res<UiInputState>,
     mut perf_toggles: ResMut<crate::RenderPerfToggles>,
 ) {
-    for interaction in q_button.iter() {
-        if *interaction == Interaction::Pressed {
+    for entity in q_button.iter() {
+        if ui.button_activated(entity) {
             perf_toggles.extra_directional_light_enabled =
                 !perf_toggles.extra_directional_light_enabled;
         }
@@ -103,11 +106,12 @@ pub fn toggle_rtt_extra_light_button_system(
 
 /// RtT terrain ボタンのクリックを処理
 pub fn toggle_rtt_terrain_button_system(
-    q_button: Query<&Interaction, (Changed<Interaction>, With<ToggleRttTerrainButton>)>,
+    q_button: Query<Entity, With<ToggleRttTerrainButton>>,
+    ui: Res<UiInputState>,
     mut perf_toggles: ResMut<crate::RenderPerfToggles>,
 ) {
-    for interaction in q_button.iter() {
-        if *interaction == Interaction::Pressed {
+    for entity in q_button.iter() {
+        if ui.button_activated(entity) {
             perf_toggles.terrain_enabled = !perf_toggles.terrain_enabled;
         }
     }
@@ -115,11 +119,12 @@ pub fn toggle_rtt_terrain_button_system(
 
 /// RtT scene object ボタンのクリックを処理
 pub fn toggle_rtt_scene_objects_button_system(
-    q_button: Query<&Interaction, (Changed<Interaction>, With<ToggleRttSceneObjectsButton>)>,
+    q_button: Query<Entity, With<ToggleRttSceneObjectsButton>>,
+    ui: Res<UiInputState>,
     mut perf_toggles: ResMut<crate::RenderPerfToggles>,
 ) {
-    for interaction in q_button.iter() {
-        if *interaction == Interaction::Pressed {
+    for entity in q_button.iter() {
+        if ui.button_activated(entity) {
             perf_toggles.scene_objects_enabled = !perf_toggles.scene_objects_enabled;
         }
     }
@@ -132,6 +137,7 @@ mod tests {
     #[test]
     fn minimize_button_hides_and_restores_dev_panel_body() {
         let mut app = App::new();
+        crate::test_support::accepted_button_fixture(&mut app);
         app.add_plugins(MinimalPlugins)
             .init_resource::<InputFocus>()
             .add_systems(Update, toggle_dev_panel_minimize_button_system);
@@ -171,6 +177,7 @@ mod tests {
     #[test]
     fn minimizing_clears_focus_inside_the_dev_panel_body() {
         let mut app = App::new();
+        crate::test_support::accepted_button_fixture(&mut app);
         app.add_plugins(MinimalPlugins)
             .init_resource::<InputFocus>()
             .add_systems(Update, toggle_dev_panel_minimize_button_system);

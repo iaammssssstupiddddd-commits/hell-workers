@@ -366,7 +366,9 @@ typed `UiIntent`のlive再検証とdomain mutationは`bevy_app::systems::ui_doma
 → 詳細: [events.md](events.md)
 
 ### I-U2: システムセット実行順の遵守
-`Input → Spatial → Logic → Actor → Visual → Interface` の順序は固定。
+`Input → Spatial → Logic → Actor → Visual → Interface` の相対順序は固定。
+停止中の計画入力はInput後/Spatial前で明示したallowlistだけを適用し、選択用差分索引はPreUpdateで更新する。
+AI/Actorを停止中に実行する例外ではない。manual Door requestはPostUpdateの単一ownerでLastのsave前に確定する。
 Visual / Interface フェーズから Logic フェーズのリソースに書き込んではならない。
 speechのstate-driven ingressは`GameSystemSet::Visual`配下に置き、fixed-step auditのVisual停止条件を迂回しない。
 
@@ -616,3 +618,9 @@ budgeted facadeは実際にcore A*を開始する直前にだけ1枠をclaimす�
 枠がない場合の `PathSearchResult::Deferred` は `Unreachable` と同一視してはならない。Actor再探索では`Deferred`時に`PathCooldown`、`Destination`、`Path`、`AssignedTask`、reservation、task dispositionを変更せず、同じ探索段階から再試行する。task handler と bucket routing でも phase、assignment、reservation、`Destination`、`Path` を維持し、direct 探索が失敗して adjacent 探索で defer した場合は adjacent から再開する。escapeの経路距離判定では`EscapeRequest`を出さず、`Escaping`、`Destination`、既存`Path`と評価済み候補を次の行動tickまで維持する。一方、すべての試行が実行されて`Unreachable`となったときだけ従来の到達不能cleanupまたは`ReachSafety`を許可する。Blueprint運搬のpickup先が`Unreachable`なら、taskを保持して枠を占有せずretryable cleanupでsource予約と搬入先relationshipを解放する。
 
 escapeはLogic/DecideでActorより先に最大2枠を使う。Execute の task handler / bucket routing は累積4枠まで、続く Actor の `ActiveTask` 再探索は累積6枠まで、idle/rest は累積8枠まで引き上げる。これにより Execute が全枠を使い切らず、Actor 側の task replan に2枠を残す。Actor は `RuntimePathWorkQueue` の `ActiveTask` / `IdleOrRest` class 別 FIFO へ、目的地・task・idle state の変更、cooldown 終了、topology version 変更を投入し、topology 変更時以外に全 Soul を二重走査しない。task handler と escape は最後に core A* を claim した Entity の次から round-robin する。これらの queue、continuation、cursor はすべて `EpochLocal` で保持し、`WorldEpoch` 変更時に旧 world の Entity/request を破棄する。
+
+### I-U4: 停止中の計画操作は即時適用し、再開へqueueしない
+
+許可範囲は[state.md](state.md)の時間停止契約と`UiIntent::allowed_while_paused`。
+未許可操作は表示・keyboard・root domain ingressで拒否する。新規Chop/Mineは既存Designation、TaskSlots、ManagedBy、workerを上書きしない。
+TaskAreaの適用でactor位置、Stockpile単体policyで在庫/搬送中claimを変更しない。pause起因の既存typed rejection outcomeは維持する。

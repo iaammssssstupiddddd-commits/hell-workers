@@ -186,6 +186,12 @@ impl HelpPanelContent {
         self.topic_ids().any(|candidate| candidate == topic)
     }
 
+    pub fn entry_topic(&self, entry: HelpEntryId) -> Option<HelpTopicId> {
+        self.topics()
+            .find(|topic| topic.entries().iter().any(|item| item.id() == entry))
+            .map(HelpTopic::id)
+    }
+
     pub fn adjacent_topic(&self, current: HelpTopicId, step: HelpTopicStep) -> Option<HelpTopicId> {
         let topics: Vec<_> = self.topic_ids().collect();
         let index = topics.iter().position(|candidate| *candidate == current)?;
@@ -270,6 +276,9 @@ pub struct HelpPanelCopySpec {
     pub page_navigation_label: &'static str,
     pub document_bounds_label: &'static str,
     pub shortcut_label: &'static str,
+    pub search_label: &'static str,
+    pub guide_start_label: &'static str,
+    pub no_results_label: &'static str,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -282,6 +291,9 @@ pub struct HelpPanelCopy {
     page_navigation_label: String,
     document_bounds_label: String,
     shortcut_label: String,
+    search_label: String,
+    guide_start_label: String,
+    no_results_label: String,
 }
 
 impl HelpPanelCopy {
@@ -295,6 +307,9 @@ impl HelpPanelCopy {
             page_navigation_label: spec.page_navigation_label.to_string(),
             document_bounds_label: spec.document_bounds_label.to_string(),
             shortcut_label: spec.shortcut_label.to_string(),
+            search_label: spec.search_label.to_string(),
+            guide_start_label: spec.guide_start_label.to_string(),
+            no_results_label: spec.no_results_label.to_string(),
         }
     }
 
@@ -328,6 +343,16 @@ impl HelpPanelCopy {
 
     pub fn shortcut_label(&self) -> &str {
         &self.shortcut_label
+    }
+
+    pub fn search_label(&self) -> &str {
+        &self.search_label
+    }
+    pub fn guide_start_label(&self) -> &str {
+        &self.guide_start_label
+    }
+    pub fn no_results_label(&self) -> &str {
+        &self.no_results_label
     }
 }
 
@@ -465,6 +490,24 @@ pub struct HelpTopicButton(pub HelpTopicId);
 
 #[derive(Component, Clone, Copy)]
 pub struct HelpTopicBody(pub HelpTopicId);
+
+#[derive(Component)]
+pub struct HelpEntryBody(pub HelpEntryId);
+
+#[derive(Component)]
+pub struct HelpSearchResult {
+    pub entry: HelpEntryId,
+    pub searchable: String,
+}
+
+#[derive(Component)]
+pub struct HelpSearchEmpty;
+
+#[derive(Component)]
+pub struct HelpNavigationHeading;
+
+#[derive(Component)]
+pub struct HelpInspectionLink;
 
 #[derive(Component, Default)]
 pub struct HelpScrollArea;

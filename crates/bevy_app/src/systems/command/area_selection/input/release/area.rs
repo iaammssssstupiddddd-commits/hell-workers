@@ -42,7 +42,9 @@ pub(super) fn handle_release_area_selection(
     }
 
     let new_area = TaskArea::from_points(ctx.start_pos, end_pos);
-    if let Some(fam_entity) = ctx.selected_entity {
+    if let Some(fam_entity) = ctx.selected_entity
+        && q_familiars.contains(fam_entity)
+    {
         let before_area = q_familiar_areas.get(fam_entity).ok().cloned();
         apply_area_and_record_history(
             fam_entity,
@@ -53,7 +55,13 @@ pub(super) fn handle_release_area_selection(
             ctx.area_edit_history,
             q_sites,
         );
-        assign_unassigned_tasks_in_area(commands, fam_entity, &new_area, q_unassigned);
+        let count = assign_unassigned_tasks_in_area(commands, fam_entity, &new_area, q_unassigned);
+        super::notify_order_result(
+            commands,
+            Some(fam_entity),
+            "担当範囲",
+            format!("未担当の作業を {count} 件配属"),
+        );
     }
 
     despawn_indicators(indicator_entities, commands);

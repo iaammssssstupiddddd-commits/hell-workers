@@ -49,7 +49,7 @@ pub enum StressBucket {
     High,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TaskVisual {
     Idle,
     Chop,
@@ -59,6 +59,31 @@ pub enum TaskVisual {
     Build,
     HaulToBlueprint,
     Water,
+    GeneratePower,
+    Deconstruct,
+    Move,
+    Refine,
+    CollectBone,
+}
+
+impl TaskVisual {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Idle => "待機",
+            Self::Chop => "伐採",
+            Self::Mine => "採掘",
+            Self::GatherDefault => "採取",
+            Self::Haul => "運搬",
+            Self::Build => "施工",
+            Self::HaulToBlueprint => "搬入",
+            Self::Water => "給水",
+            Self::GeneratePower => "発電",
+            Self::Deconstruct => "解体",
+            Self::Move => "移設",
+            Self::Refine => "精製",
+            Self::CollectBone => "骨回収",
+        }
+    }
 }
 
 /// エンティティリストUI ノードの参照インデックス（差分同期用）

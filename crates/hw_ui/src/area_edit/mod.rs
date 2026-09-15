@@ -1,4 +1,5 @@
 pub mod interaction;
+pub mod panel;
 mod state;
 
 pub use interaction::{

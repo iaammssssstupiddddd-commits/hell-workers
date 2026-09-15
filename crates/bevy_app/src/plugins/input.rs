@@ -1,5 +1,8 @@
 //! 入力関連のプラグイン
 
+mod modal_focus;
+mod pan;
+
 use crate::app_contexts::TaskContext;
 use crate::entities::familiar::Familiar;
 use crate::input_actions::{
@@ -37,12 +40,41 @@ pub struct InputPlugin;
 impl Plugin for InputPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(PanCameraPlugin);
+        app.init_resource::<pan::DedicatedPanState>();
+        app.init_resource::<hw_core::WorldEpoch>();
+        app.add_systems(
+            Update,
+            pan::apply_dedicated_pan.in_set(InputResolutionSet::PointerIngress),
+        );
+        app.init_resource::<modal_focus::ModalFocusState>();
+        app.init_resource::<bevy::input_focus::InputFocus>();
+        app.add_systems(
+            Update,
+            modal_focus::navigate_modal.in_set(InputResolutionSet::Consume),
+        );
+        app.add_systems(
+            PostUpdate,
+            modal_focus::sync_modal_focus.after(bevy::ui::UiSystems::Layout),
+        );
         app.init_resource::<ResolvedInputFrame>();
         app.init_resource::<PendingWorldInputCapture>();
         app.init_resource::<UiInputState>();
+        app.init_resource::<bevy::ui::UiStack>();
+        app.init_resource::<hw_ui::interaction::button_activation::ButtonActivationState>();
+        app.init_resource::<hw_ui::interaction::pause_menu::SystemMenuState>();
         app.init_resource::<TaskAreaPointerClaim>();
         app.init_resource::<HelpPauseGuard>();
         app.init_resource::<WorldSelectionGesture>();
+        app.init_resource::<crate::interface::selection::candidates::OverlapCandidates>();
+        app.add_systems(
+            Update,
+            (
+                crate::interface::selection::candidates::refresh_candidates,
+                crate::interface::selection::candidates::candidate_picker,
+            )
+                .chain()
+                .in_set(crate::systems::GameSystemSet::Interface),
+        );
         app.init_resource::<WorldPointerTarget>();
         app.init_resource::<FamiliarMoveFeedback>();
         app.init_resource::<WorldMap>();
@@ -58,6 +90,7 @@ impl Plugin for InputPlugin {
             (
                 (
                     reset_pending_world_input_capture_system,
+                    hw_ui::interaction::button_activation::collect_button_activations,
                     request_capture_from_menu_buttons_system,
                 )
                     .chain()
@@ -66,6 +99,7 @@ impl Plugin for InputPlugin {
                 (
                     request_capture_from_resolved_actions_system,
                     sync_world_input_capture_system,
+                    pan::capture_dedicated_pan,
                 )
                     .chain()
                     .in_set(InputPreUpdateSet::CaptureTransition),
@@ -87,6 +121,7 @@ impl Plugin for InputPlugin {
                 cancel_or_close_input_action_system,
                 input_action_to_ui_intent_system,
                 apply_accepted_help_open_system,
+                crate::interface::ui::help_controller::open_inspection_help_entry,
             )
                 .chain()
                 .in_set(InputResolutionSet::Consume),

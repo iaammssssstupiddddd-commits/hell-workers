@@ -24,6 +24,7 @@ pub use hw_ui::panels::task_list::TaskListDirty;
 
 #[derive(SystemParam)]
 pub struct TaskChangedDetectors<'w, 's> {
+    q_managed_by: Query<'w, 's, (), Changed<hw_core::relationships::ManagedBy>>,
     q_designations: Query<'w, 's, (), Changed<Designation>>,
     q_added_designations: Query<'w, 's, (), Added<Designation>>,
     q_priority: Query<'w, 's, (), Changed<Priority>>,
@@ -59,6 +60,7 @@ pub fn detect_task_list_changed_components(
     detectors: TaskChangedDetectors,
 ) {
     let TaskChangedDetectors {
+        q_managed_by,
         q_designations,
         q_added_designations,
         q_priority,
@@ -84,7 +86,8 @@ pub fn detect_task_list_changed_components(
         q_deconstruction_blockers,
         q_buildings,
     } = detectors;
-    let task_data_changed = !q_designations.is_empty()
+    let task_data_changed = !q_managed_by.is_empty()
+        || !q_designations.is_empty()
         || !q_added_designations.is_empty()
         || !q_priority.is_empty()
         || !q_task_workers.is_empty()
@@ -122,6 +125,8 @@ pub fn detect_task_list_changed_components(
 
 #[derive(SystemParam)]
 pub struct TaskRemovedDetectors<'w, 's> {
+    removed_managed_by: RemovedComponents<'w, 's, hw_core::relationships::ManagedBy>,
+    removed_familiars: RemovedComponents<'w, 's, hw_core::familiar::Familiar>,
     removed_designations: RemovedComponents<'w, 's, Designation>,
     removed_priority: RemovedComponents<'w, 's, Priority>,
     removed_task_workers: RemovedComponents<'w, 's, TaskWorkers>,
@@ -153,6 +158,8 @@ pub fn detect_task_list_removed_components(
 ) {
     // 全 reader を1件だけ進めずに最後まで消費する。
     let mut removed_any = false;
+    removed_any |= drain_removed(&mut removed.removed_managed_by);
+    removed_any |= drain_removed(&mut removed.removed_familiars);
     removed_any |= drain_removed(&mut removed.removed_designations);
     removed_any |= drain_removed(&mut removed.removed_priority);
     removed_any |= drain_removed(&mut removed.removed_task_workers);

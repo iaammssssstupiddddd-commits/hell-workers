@@ -29,6 +29,7 @@ Normal ↔ TaskDesignation（Orders/Zoneボタン/Esc）。Zone配置は
 | `MovePlacementState` | `Option<PendingMovePlacement>` | BuildingMove中の移動先一次確定（Tank companion再指定待ち） |
 | `CompanionPlacementState` | `Option<CompanionPlacement>` | companion配置中の親アンカー・有効半径 |
 | `ZoneContext` | `Option<ZoneType>` | 配置するゾーンの種類 |
+| `ZonePlacementPreview` | `Option<ZonePreview>` | Stockpile/Yardの直前表示planとepoch。releaseで照合し、capture/取消/loadで破棄 |
 | `TaskContext` | `TaskMode` | タスクの詳細（伐採/採掘/運搬など） |
 | `StockpilePolicyRangeEditState` | `Option<StockpilePolicyPatch>` | Stockpile 方針の一回限りの矩形編集で、release まで保持する patch |
 
@@ -81,6 +82,8 @@ Deconstructではpress位置として使い、release時に単一requestへ確�
 ## MenuState と Architect サブメニュー
 
 `MenuState` Resource がボトムバーの各サブメニューの開閉を管理する。
+
+サブメニューは `fit_submenus_to_viewport` で画面内に収め、表示中のModeText（下部tips）の実測上端から4px上に下端を配置する。残りの高さを最大高に使い、UI倍率や案内の折り返しが変わってもtipsを覆わない。
 
 | バリアント | サブメニュー |
 |:---|:---|
@@ -136,7 +139,7 @@ world replacementではrootの`lighting-runtime` reset hookがsnapshot、pending
 ## HelpPanelState と HelpPauseGuard
 
 Helpは背景メニューを保持するため`MenuState` variantにせず、`hw_ui::help::HelpPanelState`で
-`open`と`active_topic`を管理する。open時は必ず先頭topicと本文scroll先頭へ戻り、前回表示位置は保持しない。
+`open`と`active_topic`を管理する。表示済みtopicと読書位置を保持し、loadでリセットする。検索は見出し・本文のAND一致で絞り込む。
 
 rootの`HelpPauseGuard`は「Helpが実行中の時間をpauseしたか」だけを保持する。通常時から開いた場合は
 `paused_by_help=true`としてpauseし、close時にunpauseする。すでにPause中なら`false`のまま時間を変更せず、
@@ -166,7 +169,7 @@ snapshotなしで置換するrecovery-only経路へ送る。通常F9やraw UI pa
 - 最前面 overlay がある場合は `Save / Load / Recovery catalog（確認を含む） → Help → Settings → Pause → OperationDialog`
   の優先順で、その overlay だけを閉じる。catalog確認のEscapeは親catalogへ戻り、通常catalogの次のEscapeだけが
   catalogを閉じる。Recovery catalogはRecoveryFailed中に閉じて通常world操作へ戻る経路を作らない。HelpのEscapeは
-  Helpが所有したpauseだけを解除し、PauseのEscapeはresumeだけを行う。
+  Helpが所有したpauseだけを解除し、システムメニューのEscapeはメニューを閉じて同メニューが所有するpauseだけを解除する。
   いずれも背景mode stateは変更しない。
 - overlay がない active owner（non-Normal `PlayMode`、non-`None` `TaskMode`、pending non-Normal 遷移）では
   共通 `ActiveModeCleanupParams` を通り、`Normal` を予約すると同時に
@@ -175,7 +178,7 @@ snapshotなしで置換するrecovery-only経路へ送る。通常F9やraw UI pa
 - AreaEdit drag は元の `TaskArea` / `Destination` / `ActiveCommand` を復元する。Dream preview seed、Zone
   removal preview、Stockpile 方針の保留 patch、building move の未確定 state も同じ cleanup で破棄する。
 - `PlayMode::Normal` でメニューだけが開いている場合はメニューだけを閉じる。メニューもない状態で
-  Familiar が選択されている場合だけ、既存の Idle / Patrol toggle として扱う。
+  システムメニューを開く。Idle / PatrolはIまたは対象のcontext menuで操作する。
 - keyboard shortcut と UI の mode 切替は同じ active-owner predicate と cleanup helper を使い、current
   state がまだ Normal の pending 遷移 frame も含めて旧 owner state を残さない。
 
@@ -215,3 +218,38 @@ snapshotなしで置換するrecovery-only経路へ送る。通常F9やraw UI pa
 - `crates/bevy_app/src/interface/ui/{help_content/,help_controller.rs}` - Help catalog、accepted open、可逆pause
 - `crates/bevy_app/src/interface/ui/interaction/handlers/` - ボタンによる状態遷移と共通 cleanup 呼び出し
 - `crates/bevy_app/src/systems/command/zone_placement/` - zone_placement（ZoneContext使用）
+
+### Ordersの担当と結果
+
+伐採・採掘・運搬・Area開始時は選択済み使い魔、なければ既存の担当範囲なし優先順で担当を選ぶ。使い魔不在なら既存モードを変更せず理由を重要通知する。Deconstructはこの自動選択条件へ加えない。伐採・採掘・運搬のmode表示へ担当名を加え、release時にdesignation ownerが実際に返す対象・適用・受入先なし・担当なし件数を履歴へ通知する。Areaは配属処理が返した件数を通知する。
+
+### モード案内と画面内配置
+
+モード表示を下部のボタン列の上へ分け、最大幅96%で折り返す。配置・移設・範囲指定ごとに次の入力と終了方法を併記する。床・壁のdrag中は既存preview ownerが作成したAreaPlacementPlanから採用・除外数と必要資材を表示する（除外セルは費用へ含めない）。床はBone/Mud、壁はWood/Mudのdomain定数を使い、debug即時壁では資材不要と区別する。preview不能時・world reset時に要約を破棄する。
+Architect / Zones / Orders / DreamのsubmenuはUI倍率とwindow寸法から位置・最大高さを補正し、長い本文は標準ScrollAreaで移動する。表示matrixの実機受入は現行UI改善計画で追跡する。
+
+## 時間停止とシステムメニュー
+
+時間のSpace/1〜4操作はメニューを開かない。`SystemMenuState`は独立した非永続Resourceで、
+`ToggleSystemMenu`をMenuボタン／未処理Escapeから受ける。実行中から開く場合だけ相対速度を記録し、
+閉じるとその速度へ戻す。元からpausedなら閉じてもpaused。Help/Settingsを重ねてもメニューのpause所有権を移さない。
+loadのUI resetとRecoveryFailedで所有権を破棄する。内部の`PauseMenu` / `InputOverlay::Pause`名はシステムメニューのcaptureを指す。
+
+停止中は閲覧・選択・カメラ、TaskArea指定/移動/resize/履歴、新規Chop/Mine、既存Stockpile単体policy、完成Door lockを許可する。
+`UiIntent::allowed_while_paused`をボタン受理・表示とroot consumerで共有し、keyboard/domain側でも再検証する。
+建築/移設、Haul、Zone作成/解除、Dream、Soul配属、作業取消、範囲policy、slots/power priority等は拒否する。
+無効ボタンは減光しTooltipに「停止中は利用不可」を示す。Familiar settingsとSoul Spa取消の既存Paused outcomeは維持する。
+停止へ切り替える際の未許可modeは共通cleanupで終了し、再開時に保留操作を再送しない。
+
+Familiar command・Area入力/履歴だけをInput後/Spatial前へ分離し、各ownerの許可判定後にその場で適用する。
+AI・Actor・通常Spatial全体のpause gateは解除しない。選択用のSoul/Familiar/資源/障害物/Stockpile/Designation索引は
+PreUpdateで差分更新し、停止直前の変更とworld置換後の選択を最新化する。TaskArea更新はDestination/ActiveCommandと
+既存未配属designationのManagedBy/Priorityまでで、actor座標は動かさない。新規採取は既存Designation/TaskSlots/ManagedBy/workerを上書きしない。
+Door requestは単一のPostUpdate ownerでdoor/mapを更新してからLastのsaveに渡す。表示更新より先に適用し、Light Fieldは次Updateで再構築する。
+
+## 任意の操作ガイド
+
+Helpの「操作ガイドを開始」はHelpとシステムメニューを閉じ、それぞれが所有するpauseだけを解除する。
+root `work_guide::WorkGuide`は使い魔・確定TaskArea・範囲内の本人のPlayerIssuedDesignation・所属SoulのGather phaseを読む。
+既存範囲/指定も利用でき、作業開始はCollecting、完了はDoneから確認する。採掘の成功despawnはDoneを先に読んで完了と判定し、
+単なる対象消滅を成功扱いしない。使い魔/範囲/指定の消滅は必要な段階へ戻す。閉じる/スキップ/loadで終了し、保存schemaは増やさない。

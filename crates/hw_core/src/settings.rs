@@ -26,6 +26,8 @@ pub struct GameSettings {
     pub autosave_interval_minutes: u32,
     /// Active autosave generation count `1..=5`.
     pub autosave_generations: u8,
+    /// New toast duration in real seconds: 4 / 8 / 12.
+    pub notification_duration_seconds: u8,
 }
 
 impl Default for GameSettings {
@@ -41,6 +43,7 @@ impl Default for GameSettings {
             autosave_enabled: false,
             autosave_interval_minutes: 10,
             autosave_generations: 3,
+            notification_duration_seconds: 4,
         }
     }
 }
@@ -49,6 +52,18 @@ impl Default for GameSettings {
 pub const AUTOSAVE_INTERVAL_MINUTES: [u32; 4] = [5, 10, 20, 30];
 
 impl GameSettings {
+    pub fn normalized_notification_duration_seconds(&self) -> u8 {
+        match self.notification_duration_seconds {
+            8 => 8,
+            12 => 12,
+            _ => 4,
+        }
+    }
+
+    pub fn notification_duration_slider_value(&self) -> f32 {
+        f32::from(self.normalized_notification_duration_seconds() / 4 - 1)
+    }
+
     pub fn normalized_autosave_interval_minutes(&self) -> u32 {
         match self.autosave_interval_minutes {
             ..=7 => 5,

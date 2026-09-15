@@ -79,6 +79,95 @@ fn default_bindings_have_unique_contextual_claims() {
 }
 
 #[test]
+fn modal_navigation_wrap_keys_own_the_overlay_but_text_keeps_enter_and_space() {
+    for overlay in [
+        InputOverlay::Help,
+        InputOverlay::Settings,
+        InputOverlay::SaveCatalog,
+        InputOverlay::Pause,
+        InputOverlay::OperationDialog,
+    ] {
+        let context = InputContextSnapshot {
+            top_overlay: Some(overlay),
+            ..default()
+        };
+        assert_eq!(
+            resolve_input_chords(&[plain(KeyCode::Tab)], context.clone()),
+            [InputAction::ModalFocusNext]
+        );
+        assert_eq!(
+            resolve_input_chords(
+                &[modified(
+                    KeyCode::Tab,
+                    InputModifiers {
+                        shift: true,
+                        ..default()
+                    }
+                )],
+                context.clone()
+            ),
+            [InputAction::ModalFocusPrevious]
+        );
+        for key in [KeyCode::Enter, KeyCode::Space] {
+            assert_eq!(
+                resolve_input_chords(&[plain(key)], context.clone()),
+                [InputAction::ModalActivate]
+            );
+            assert!(
+                resolve_input_chords(
+                    &[plain(key)],
+                    InputContextSnapshot {
+                        text_input_blocks_keybinds: true,
+                        ..context.clone()
+                    }
+                )
+                .is_empty()
+            );
+        }
+        assert!(
+            !resolve_input_chords(&[plain(KeyCode::Escape), plain(KeyCode::Enter)], context)
+                .contains(&InputAction::ModalActivate)
+        );
+    }
+    assert!(
+        resolve_input_chords(&[plain(KeyCode::Enter)], InputContextSnapshot::default()).is_empty()
+    );
+}
+
+#[test]
+fn context_menu_escape_precedes_commands_and_modes_but_not_help() {
+    let context = InputContextSnapshot {
+        context_menu_open: true,
+        ..familiar_context()
+    };
+    assert_eq!(
+        resolve_input_chords(&[plain(KeyCode::Escape)], context.clone()),
+        [InputAction::CloseContextMenu]
+    );
+    assert_eq!(
+        resolve_input_chords(
+            &[plain(KeyCode::Escape)],
+            InputContextSnapshot {
+                top_overlay: Some(InputOverlay::Help),
+                ..context.clone()
+            }
+        ),
+        [InputAction::CloseHelp]
+    );
+    assert_eq!(
+        resolve_input_chords(
+            &[plain(KeyCode::Escape)],
+            InputContextSnapshot {
+                play_mode: PlayMode::TaskDesignation,
+                task_mode: TaskMode::DesignateChop(None),
+                ..context
+            }
+        ),
+        [InputAction::CloseContextMenu]
+    );
+}
+
+#[test]
 fn input_overlay_priority_matches_global_visual_layer_order() {
     let overlays = [
         (
@@ -109,12 +198,17 @@ fn every_action_has_exactly_one_consumer_owner() {
         DebugSpawn,
         FamiliarCommand,
         ActiveModeCancel,
+        ContextMenu,
         AreaEdit,
         ListNavigation,
+        ModalNavigation,
     }
 
     fn owner(action: InputAction) -> ConsumerOwner {
         match action {
+            InputAction::ModalFocusNext
+            | InputAction::ModalFocusPrevious
+            | InputAction::ModalActivate => ConsumerOwner::ModalNavigation,
             InputAction::OpenHelp
             | InputAction::CloseHelp
             | InputAction::HelpPreviousTopic
@@ -128,6 +222,7 @@ fn every_action_has_exactly_one_consumer_owner() {
             | InputAction::ToggleArchitect
             | InputAction::ToggleZones
             | InputAction::TogglePause
+            | InputAction::ToggleSystemMenu
             | InputAction::TimePaused
             | InputAction::TimeNormal
             | InputAction::TimeFast
@@ -153,6 +248,7 @@ fn every_action_has_exactly_one_consumer_owner() {
             InputAction::CancelActiveMode | InputAction::CloseOpenMenu => {
                 ConsumerOwner::ActiveModeCancel
             }
+            InputAction::CloseContextMenu => ConsumerOwner::ContextMenu,
             InputAction::AreaCopy
             | InputAction::AreaPaste
             | InputAction::AreaUndo
@@ -189,6 +285,7 @@ fn every_action_has_exactly_one_consumer_owner() {
         InputAction::ToggleArchitect,
         InputAction::ToggleZones,
         InputAction::TogglePause,
+        InputAction::ToggleSystemMenu,
         InputAction::TimePaused,
         InputAction::TimeNormal,
         InputAction::TimeFast,
@@ -393,15 +490,15 @@ fn migrated_debug_actions_are_modal_suppressed_and_world_compatible() {
         actions,
         [InputAction::ToggleArchitect, InputAction::ToggleRender3d]
     );
-    assert!(
+    assert_eq!(
         resolve_input_chords(
             &[plain(KeyCode::F3), plain(KeyCode::Tab)],
             InputContextSnapshot {
                 top_overlay: Some(InputOverlay::Settings),
                 ..default()
             },
-        )
-        .is_empty()
+        ),
+        [InputAction::ModalFocusNext]
     );
     assert!(resolve_input_chords(&[plain(KeyCode::F3)], paused_context()).is_empty());
 
@@ -492,7 +589,7 @@ fn world_and_familiar_claims_resolve_without_blocked_shortcuts() {
     );
     assert_eq!(
         resolve_input_chords(&[plain(KeyCode::Digit1)], familiar_context()),
-        [InputAction::FamiliarChop]
+        [InputAction::TimePaused]
     );
     assert_eq!(
         resolve_input_chords(&[plain(KeyCode::KeyB)], familiar_context()),
@@ -505,12 +602,43 @@ fn world_and_familiar_claims_resolve_without_blocked_shortcuts() {
 }
 
 #[test]
+fn time_digits_and_idle_key_have_stable_meanings() {
+    for (key, action) in [
+        (KeyCode::Digit1, InputAction::TimePaused),
+        (KeyCode::Digit2, InputAction::TimeNormal),
+        (KeyCode::Digit3, InputAction::TimeFast),
+        (KeyCode::Digit4, InputAction::TimeSuper),
+    ] {
+        for context in [InputContextSnapshot::default(), familiar_context()] {
+            assert_eq!(
+                resolve_input_chords(&[plain(key)], context.clone()),
+                [action]
+            );
+            let mut typing = context.clone();
+            typing.text_input_blocks_keybinds = true;
+            assert!(resolve_input_chords(&[plain(key)], typing).is_empty());
+            let mut help = context;
+            help.top_overlay = Some(InputOverlay::Help);
+            assert!(resolve_input_chords(&[plain(key)], help).is_empty());
+        }
+    }
+    assert_eq!(
+        resolve_input_chords(&[plain(KeyCode::KeyI)], familiar_context()),
+        [InputAction::ToggleFamiliarIdlePatrol]
+    );
+    assert!(
+        !resolve_input_chords(&[plain(KeyCode::Escape)], familiar_context())
+            .contains(&InputAction::ToggleFamiliarIdlePatrol)
+    );
+}
+
+#[test]
 fn familiar_family_preserves_legacy_else_if_priority() {
     let actions = resolve_input_chords(
         &[
             plain(KeyCode::KeyC),
             plain(KeyCode::KeyM),
-            plain(KeyCode::Escape),
+            plain(KeyCode::KeyI),
         ],
         familiar_context(),
     );
@@ -634,28 +762,28 @@ fn pause_whitelist_and_time_priority_are_deterministic() {
     assert!(resolve_input_chords(&[plain(KeyCode::KeyC)], paused_context()).is_empty());
     assert_eq!(
         resolve_input_chords(&[plain(KeyCode::Escape)], paused_context()),
-        [InputAction::TogglePause]
+        [InputAction::ToggleSystemMenu]
     );
     assert_eq!(
         resolve_input_chords(
             &[plain(KeyCode::Escape), plain(KeyCode::Digit4)],
             paused_context(),
         ),
-        [InputAction::TimeSuper]
+        [InputAction::ToggleSystemMenu]
     );
     assert_eq!(
         resolve_input_chords(
             &[plain(KeyCode::Space), plain(KeyCode::F5)],
             paused_context(),
         ),
-        [InputAction::TogglePause]
+        [InputAction::ModalActivate]
     );
     assert_eq!(
         resolve_input_chords(
             &[plain(KeyCode::Digit2), plain(KeyCode::F5)],
             paused_context(),
         ),
-        [InputAction::TimeNormal, InputAction::SaveGame]
+        [InputAction::SaveGame]
     );
 }
 
@@ -715,7 +843,10 @@ fn help_binding_opens_from_world_and_pause_but_owns_navigation_when_visible() {
             [expected]
         );
     }
-    assert!(resolve_input_chords(&[plain(KeyCode::Space)], help_context).is_empty());
+    assert_eq!(
+        resolve_input_chords(&[plain(KeyCode::Space)], help_context),
+        [InputAction::ModalActivate]
+    );
     assert!(
         resolve_input_chords(
             &[plain(KeyCode::F1)],
@@ -993,7 +1124,7 @@ fn task_mode_drag_blocks_save_without_an_area_edit_session() {
 }
 
 #[test]
-fn paused_familiar_edge_does_not_fire_after_unpause() {
+fn paused_planning_input_applies_now_without_replaying_after_unpause() {
     let mut app = resolver_app();
     let familiar = app.world_mut().spawn(Familiar::default()).id();
     app.world_mut().resource_mut::<SelectedEntity>().0 = Some(familiar);
@@ -1003,11 +1134,9 @@ fn paused_familiar_edge_does_not_fire_after_unpause() {
         .press(KeyCode::KeyC);
 
     app.update();
-    assert!(
-        app.world()
-            .resource::<ResolvedInputFrame>()
-            .actions()
-            .is_empty()
+    assert_eq!(
+        app.world().resource::<ResolvedInputFrame>().actions(),
+        &[InputAction::FamiliarChop]
     );
 
     app.world_mut()
@@ -1060,6 +1189,10 @@ fn resolve_escape_with_overlays(
     ));
     if paused {
         app.world_mut().resource_mut::<Time<Virtual>>().pause();
+        app.insert_resource(hw_ui::interaction::pause_menu::SystemMenuState {
+            open: true,
+            resume_speed: None,
+        });
     }
     app.world_mut()
         .resource_mut::<ButtonInput<KeyCode>>()
@@ -1085,7 +1218,7 @@ fn resolver_context_uses_visual_overlay_stack_order_and_ignores_hidden_nodes() {
     );
     assert_eq!(
         resolve_escape_with_overlays(Display::None, Display::None, true, Display::Flex),
-        [InputAction::TogglePause]
+        [InputAction::ToggleSystemMenu]
     );
     assert_eq!(
         resolve_escape_with_overlays(Display::None, Display::None, false, Display::Flex),
@@ -1101,4 +1234,27 @@ fn in_progress_familiar_task_mode_blocks_familiar_shortcuts() {
         ..default()
     };
     assert!(resolve_input_chords(&[plain(KeyCode::KeyM)], context).is_empty());
+}
+
+#[test]
+fn consumed_text_keys_do_not_close_or_activate_the_modal() {
+    let context = InputContextSnapshot {
+        top_overlay: Some(InputOverlay::Help),
+        text_input_consumed_keyboard: true,
+        text_input_blocks_keybinds: true,
+        ..default()
+    };
+    for key in [
+        KeyCode::Escape,
+        KeyCode::Enter,
+        KeyCode::Space,
+        KeyCode::ArrowDown,
+        KeyCode::Home,
+    ] {
+        assert!(resolve_input_chords(&[plain(key)], context.clone()).is_empty());
+    }
+    assert_eq!(
+        resolve_input_chords(&[plain(KeyCode::Tab)], context),
+        [InputAction::ModalFocusNext]
+    );
 }

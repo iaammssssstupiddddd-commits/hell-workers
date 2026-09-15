@@ -1,7 +1,7 @@
 use super::model::{
-    MAX_ACTIVE_TOASTS, MAX_NOTIFICATION_HISTORY, NOTIFICATION_DEDUPE_WINDOW,
-    NOTIFICATION_TOAST_LIFETIME, NotificationCenter, NotificationEntry, NotificationEntryId,
-    NotificationHistoryButton, NotificationRetention, UserFacingNotification,
+    MAX_ACTIVE_TOASTS, MAX_NOTIFICATION_HISTORY, NOTIFICATION_DEDUPE_WINDOW, NotificationCenter,
+    NotificationEntry, NotificationEntryId, NotificationHistoryButton, NotificationHistoryClose,
+    NotificationRetention, UserFacingNotification,
 };
 use crate::components::UiInputState;
 use crate::interaction::update_interaction_color;
@@ -13,8 +13,15 @@ use std::time::Duration;
 type NotificationHistoryButtonQuery<'w, 's> = Query<
     'w,
     's,
-    (&'static Interaction, &'static mut BackgroundColor),
-    (Changed<Interaction>, With<NotificationHistoryButton>),
+    (
+        Entity,
+        Ref<'static, Interaction>,
+        &'static mut BackgroundColor,
+    ),
+    Or<(
+        With<NotificationHistoryButton>,
+        With<NotificationHistoryClose>,
+    )>,
 >;
 
 impl NotificationCenter {
@@ -92,9 +99,10 @@ impl NotificationCenter {
             entry.severity = incoming.severity;
             entry.title = incoming.title;
             entry.body = incoming.body;
+            entry.action = incoming.action;
             entry.retention = entry.retention.merge(incoming.retention);
             entry.last_seen = now;
-            entry.expires_at = now + NOTIFICATION_TOAST_LIFETIME;
+            entry.expires_at = now + self.toast_lifetime;
             entry.repeat_count = entry.repeat_count.saturating_add(1);
             entry.retention == NotificationRetention::Important
         };
@@ -121,11 +129,12 @@ impl NotificationCenter {
                 severity: incoming.severity,
                 title: incoming.title,
                 body: incoming.body,
+                action: incoming.action,
                 retention,
                 first_seen: now,
                 last_seen: now,
                 repeat_count: 1,
-                expires_at: now + NOTIFICATION_TOAST_LIFETIME,
+                expires_at: now + self.toast_lifetime,
             },
         );
         self.toasts.push_back(id);
@@ -200,9 +209,11 @@ pub fn apply_notification_ui_state_system(
         return;
     }
 
-    for (interaction, mut color) in &mut buttons {
-        update_interaction_color(*interaction, &mut color, &theme);
-        if *interaction == Interaction::Pressed {
+    for (entity, interaction, mut color) in &mut buttons {
+        if interaction.is_changed() || theme.is_changed() {
+            update_interaction_color(*interaction, &mut color, &theme);
+        }
+        if input_state.button_activated(entity) {
             center.toggle_history();
         }
     }
@@ -225,6 +236,29 @@ mod tests {
             format!("body {key}"),
             retention,
         )
+    }
+
+    #[test]
+    fn configured_toast_duration_applies_to_new_notifications() {
+        for seconds in [4, 8, 12] {
+            let mut center = NotificationCenter::default();
+            center.set_toast_lifetime(Duration::from_secs(seconds));
+            center.push(
+                UserFacingNotification::new(
+                    "duration",
+                    super::super::NotificationSeverity::Info,
+                    "title",
+                    "body",
+                    NotificationRetention::Important,
+                ),
+                Duration::ZERO,
+            );
+            center.expire(Duration::from_secs(seconds - 1));
+            assert_eq!(center.toast_count(), 1);
+            center.expire(Duration::from_secs(seconds));
+            assert_eq!(center.toast_count(), 0);
+            assert_eq!(center.history_count(), 1);
+        }
     }
 
     #[test]

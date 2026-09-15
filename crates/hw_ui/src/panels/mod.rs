@@ -1,3 +1,4 @@
+pub mod construction_cancel;
 pub mod info_panel;
 pub mod menu;
 pub mod task_list;

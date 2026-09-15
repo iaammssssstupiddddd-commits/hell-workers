@@ -189,6 +189,9 @@ coverage_table! {
     fn input_action_coverage(action: InputAction);
     fn input_action_decisions();
     {
+        "input::modal-focus-next" => unit(ModalFocusNext) => published("getting-started-first-steps"),
+        "input::modal-focus-previous" => unit(ModalFocusPrevious) => published("getting-started-first-steps"),
+        "input::modal-activate" => unit(ModalActivate) => published("getting-started-first-steps"),
         "input::help-open" => unit(OpenHelp) => launcher(),
         "input::help-close" => unit(CloseHelp) => chrome(HelpChromeSlot::Close),
         "input::help-topic-previous" => unit(HelpPreviousTopic) => {
@@ -214,6 +217,7 @@ coverage_table! {
         "input::architect" => unit(ToggleArchitect) => published("architect-building"),
         "input::zones" => unit(ToggleZones) => published("zones-workflow"),
         "input::pause-toggle" => unit(TogglePause) => published("time-controls"),
+        "input::system-menu" => unit(ToggleSystemMenu) => published("time-controls"),
         "input::time-paused" => unit(TimePaused) => published("time-controls"),
         "input::time-normal" => unit(TimeNormal) => published("time-controls"),
         "input::time-fast" => unit(TimeFast) => published("time-controls"),
@@ -239,6 +243,7 @@ coverage_table! {
         "input::close-open-menu" => unit(CloseOpenMenu) => {
             published("orders-designation")
         },
+        "input::close-context-menu" => unit(CloseContextMenu) => published("world-object-actions"),
         "input::area-copy" => unit(AreaCopy) => published("area-edit"),
         "input::area-paste" => unit(AreaPaste) => published("area-edit"),
         "input::area-undo" => unit(AreaUndo) => published("area-edit"),
@@ -265,7 +270,10 @@ coverage_table! {
     {
         "ui-intent::help-open" => record(OpenHelp { .. }) => launcher(),
         "ui-intent::help-close" => unit(CloseHelp) => chrome(HelpChromeSlot::Close),
+        "ui-intent::guide-start" => unit(StartWorkGuide) => published("getting-started-work-loop"),
+        "ui-intent::guide-end" => unit(EndWorkGuide) => published("getting-started-work-loop"),
         "ui-intent::help-topic-select" => tuple(SelectHelpTopic(_)) => internal(),
+        "ui-intent::help-entry-select" => tuple(SelectHelpEntry(_)) => published("getting-started-first-steps"),
         "ui-intent::help-topic-step" => tuple(StepHelpTopic(_)) => internal(),
         "ui-intent::help-scroll" => tuple(ScrollHelp(_)) => internal(),
         "ui-intent::architect-toggle" => unit(ToggleArchitect) => published("architect-building"),
@@ -303,6 +311,13 @@ coverage_table! {
             published("settings")
         },
         "ui-intent::inspect-entity" => tuple(InspectEntity(_)) => published("info-panel-pin"),
+        "ui-intent::familiar-idle-patrol" => tuple(ToggleFamiliarIdlePatrol(_)) => published("familiar-idle-patrol"),
+        "ui-intent::construction-cancel-dismiss" => unit(DismissConstructionCancel) => published("soul-energy-recovery"),
+        "ui-intent::soul-spa-cancel-confirm" => record(ConfirmSoulSpaConstructionCancel { .. }) => published("soul-energy-recovery"),
+        "ui-intent::area-edit-control" => record(AreaEditControl { .. }) => published("area-edit"),
+        "ui-intent::settings-retry-save" => record(RetrySettingsSave { .. }) => published("settings"),
+        "ui-intent::notification-duration" => tuple(SetNotificationDuration(_)) => published("settings"),
+        "ui-intent::focus-entity" => tuple(FocusEntity(_)) => published("entity-list-selection"),
         "ui-intent::clear-inspect-pin" => unit(ClearInspectPin) => published("info-panel-pin"),
         "ui-intent::select-build" => tuple(SelectBuild(_)) => published("architect-building"),
         "ui-intent::select-floor-place" => unit(SelectFloorPlace) => {
@@ -385,6 +400,7 @@ coverage_table! {
         },
         "ui-intent::time-speed" => tuple(SetTimeSpeed(_)) => published("time-controls"),
         "ui-intent::time-pause-toggle" => unit(TogglePause) => published("time-controls"),
+        "ui-intent::system-menu" => unit(ToggleSystemMenu) => published("time-controls"),
         "ui-intent::save" => unit(SaveGame) => published("save-load"),
         "ui-intent::load-request" => unit(RequestLoadGame) => published("save-load"),
         "ui-intent::load-cancel" => unit(CancelLoadConfirm) => published("save-load"),
@@ -791,6 +807,15 @@ coverage_table! {
     fn task_dashboard_control_coverage(control: TaskDashboardControl);
     fn task_dashboard_control_decisions();
     {
+        "task-dashboard-control::first-page" => unit(FirstPage) => published("task-dashboard-filter-sort"),
+        "task-dashboard-control::set-work-type" => tuple(SetWorkType(_)) => published("task-dashboard-filter-sort"),
+        "task-dashboard-control::set-status" => tuple(SetStatus(_)) => published("task-dashboard-filter-sort"),
+        "task-dashboard-control::set-priority" => tuple(SetPriority(_)) => published("task-dashboard-filter-sort"),
+        "task-dashboard-control::set-workers" => tuple(SetWorkers(_)) => published("task-dashboard-filter-sort"),
+        "task-dashboard-control::reset-filters" => unit(ResetFilters) => published("task-dashboard-filter-sort"),
+        "task-dashboard-control::previous-page" => unit(PreviousPage) => published("task-dashboard-filter-sort"),
+        "task-dashboard-control::next-page" => unit(NextPage) => published("task-dashboard-filter-sort"),
+        "task-dashboard-control::last-page" => unit(LastPage) => published("task-dashboard-filter-sort"),
         "task-dashboard-control::work-type" => unit(WorkTypeFilter) => {
             published("task-dashboard-filter-sort")
         },

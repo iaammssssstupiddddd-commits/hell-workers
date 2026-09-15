@@ -49,6 +49,12 @@ pub struct GameSettingsFile {
     pub autosave_interval_minutes: u32,
     #[serde(default = "default_autosave_generations")]
     pub autosave_generations: u8,
+    #[serde(default = "default_notification_duration_seconds")]
+    pub notification_duration_seconds: u8,
+}
+
+const fn default_notification_duration_seconds() -> u8 {
+    4
 }
 
 const fn default_power_priority_enabled() -> bool {
@@ -88,6 +94,7 @@ impl From<GameSettings> for GameSettingsFile {
             autosave_enabled: settings.autosave_enabled,
             autosave_interval_minutes: settings.normalized_autosave_interval_minutes(),
             autosave_generations: settings.normalized_autosave_generations(),
+            notification_duration_seconds: settings.normalized_notification_duration_seconds(),
         }
     }
 }
@@ -105,7 +112,10 @@ impl From<GameSettingsFile> for GameSettings {
             autosave_enabled: file.autosave_enabled,
             autosave_interval_minutes: file.autosave_interval_minutes,
             autosave_generations: file.autosave_generations,
+            notification_duration_seconds: file.notification_duration_seconds,
         };
+        settings.notification_duration_seconds =
+            settings.normalized_notification_duration_seconds();
         settings.autosave_interval_minutes = settings.normalized_autosave_interval_minutes();
         settings.autosave_generations = settings.normalized_autosave_generations();
         settings
@@ -179,6 +189,21 @@ mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     #[test]
+    fn notification_duration_round_trips_and_invalid_values_use_default() {
+        for (requested, expected) in [(4, 4), (8, 8), (12, 12), (0, 4), (255, 4)] {
+            let settings = GameSettings {
+                notification_duration_seconds: requested,
+                ..default()
+            };
+            let serialized = ron::to_string(&GameSettingsFile::from(settings)).unwrap();
+            let restored: GameSettings = ron::from_str::<GameSettingsFile>(&serialized)
+                .unwrap()
+                .into();
+            assert_eq!(restored.notification_duration_seconds, expected);
+        }
+    }
+
+    #[test]
     fn old_settings_file_preserves_existing_values_and_enables_priority() {
         let old = r#"(
             ui_scale: 1.15,
@@ -200,6 +225,7 @@ mod tests {
         assert!(!settings.fps_display_enabled);
         assert!(settings.power_priority_enabled);
         assert!(!settings.autosave_enabled);
+        assert_eq!(settings.notification_duration_seconds, 4);
         assert_eq!(settings.autosave_interval_minutes, 10);
         assert_eq!(settings.autosave_generations, 3);
     }

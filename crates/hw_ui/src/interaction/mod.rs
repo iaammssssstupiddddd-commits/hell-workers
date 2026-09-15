@@ -1,3 +1,4 @@
+pub mod button_activation;
 pub mod common;
 pub mod dialog;
 pub mod help;

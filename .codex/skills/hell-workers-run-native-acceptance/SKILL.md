@@ -61,6 +61,57 @@ run the required formal gates when the revised subject is ready for acceptance.
    Use the repository's documented 30/60-second matrix when a formal baseline or
    regression percentage is required.
 
+## UI input feedback
+
+For Entities design revisions, `plan --input-backend none` uses the same registered
+launcher and six viewports for rendering only. It never opens a portal or sends
+input. The one-time profiling fixture hides the developer body, assigns two
+existing Souls per Familiar where available, and pauses simulation. The observer
+then stays read-only; the verifier checks nonce/PID-owned client images, visible
+Familiar text, fixture state, frozen inputs and image hashes. Inspect every image.
+This mode provides no click, scroll, navigation or high-DPI acceptance evidence.
+Add `--layout-menu` to the no-input mode to prepare an open Zones menu and verify
+that its bottom is above the visible mode guidance. This is a separate rendering
+fixture; it does not prove that clicking the menu works.
+
+Use `scripts/ui_usability_acceptance.py` in this Skill's `.codex` directory for
+OS-driven UI feedback. Wrap `plan --repo "$PWD" --smoke` with the primary
+validation coordinator and register `verify --job-root @job_root`. The smoke
+uses 1920×1080 / UI scale 1; omit `--smoke` for the six viewport/scale combinations.
+It reuses the feedback dev build and direct kitty launcher. Source, assets,
+harness and binary remain frozen until verification and seal.
+
+For an Xwayland session where XTest does not reach the compositor, the explicit
+`--input-backend portal` option uses RemoteDesktop Notify methods after the OS
+grants pointer and keyboard access. The user handles that OS dialog; never accept
+it automatically. Start waits up to 300 seconds with heartbeats, rejects denial
+or missing capabilities, and closes the request/session at recipe end. Permissions
+are not persisted. One session is reused across viewports; a revoked session is
+never silently reopened. Each event still checks the owned X11 client's focus,
+PID and bounds. Relative motion is sent once and must match the game observer's
+exact target before a click; coordinate mismatch stops the run without correction.
+This backend requires PyGObject and a single, unrotated Mutter monitor in physical
+layout. Its current mode must match the X11 root dimensions. Relative deltas are
+divided by the queried monitor scale because Mutter scales virtual relative motion
+in physical layout. A changed monitor serial/scale fails closed. This backend does
+not use EIS or XTest as a fallback.
+After consent, wait for one second of pointer stability. During the automated
+sequence the user must leave pointer/key input idle. The driver verifies the
+intended control is hovered and pressed, rejects pointer drift during a click,
+and confirms the developer panel is minimized before touching underlying tabs.
+Button presses outside the owned client are rejected; cleanup releases remain allowed.
+
+The profiling fixture is prepared once; subsequent observations are read-only.
+X11/XTest sends actual pointer/key events only to the launched PID-owned client.
+Focus loss, duplicate steps, stale nonce, missing observations and timeouts fail
+closed. Screenshots capture that client only. Inspect the images for clipping
+and occlusion; a visible rectangle alone is not evidence of readability.
+
+This recipe currently covers navigation/layout feedback for Tasks, minimization,
+paused Tooltip, Settings and notification history. It is not full C01–C08/P1
+acceptance, high-DPI acceptance or a CPU/allocator result. Save transactions,
+context-menu cancellation and Zone commit scenarios still need dedicated cases.
+
 ## Wall/Door feedback storyboard
 
 For already approved candidate or release assets, the joint helper supports a

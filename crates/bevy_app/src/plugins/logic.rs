@@ -108,6 +108,7 @@ impl Plugin for LogicPlugin {
         app.init_resource::<AreaEditClipboard>();
         app.init_resource::<AreaEditPresets>();
         app.init_resource::<ZoneRemovalPreviewState>();
+        app.init_resource::<crate::systems::command::zone_placement::plan::ZonePlacementPreview>();
         app.init_resource::<StockpilePolicyRangeEditState>();
         app.init_resource::<crate::entities::familiar::FamiliarColorAllocator>();
         app.init_resource::<RoomDetectionState>();
@@ -153,20 +154,33 @@ impl Plugin for LogicPlugin {
             .register_type::<GeneratePowerPhase>()
             .register_type::<TargetSoulSpaSite>();
 
+        app.init_resource::<crate::systems::command::area_selection::ui::AreaEditUiState>()
+            .init_resource::<hw_ui::area_edit::panel::AreaEditPanelModel>();
+        // Planning commits run while paused; each owner enforces the pause allowlist.
+        // Deferred changes are visible to Spatial / AI and to the Last-stage save owner.
+        app.add_systems(
+            Update,
+            (
+                familiar_command_input_system,
+                task_area_selection_system,
+                task_area_edit_history_shortcuts_system.run_if(in_state(PlayMode::TaskDesignation)),
+                bevy::ecs::schedule::ApplyDeferred,
+            )
+                .chain()
+                .after(GameSystemSet::Input)
+                .before(GameSystemSet::Spatial),
+        );
         // グループA: command 系（直列維持 — TaskContext / AreaEdit / WorldMapWrite が競合）
         app.add_systems(
             Update,
             (
                 assign_task_system.run_if(in_state(PlayMode::TaskDesignation)),
-                familiar_command_input_system,
                 stockpile_policy_range_selection_system,
-                task_area_selection_system,
                 deconstruction_designation_input_system,
                 deconstruction_designation_system,
                 deconstruction_hover_preview_system,
                 zone_placement_system.run_if(in_state(PlayMode::TaskDesignation)),
                 zone_removal_system.run_if(in_state(PlayMode::TaskDesignation)),
-                task_area_edit_history_shortcuts_system.run_if(in_state(PlayMode::TaskDesignation)),
             )
                 .chain()
                 .before(SoulAiSystemSet::Perceive)

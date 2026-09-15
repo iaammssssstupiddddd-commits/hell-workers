@@ -4,6 +4,7 @@ use crate::components::{
 use crate::models::inspection::EntityInspectionModel;
 use crate::panels::tooltip_builder::TooltipBuildPayload;
 use crate::theme::UiTheme;
+use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use bevy::time::Real;
 use bevy::ui_widgets::popover::Popover;
@@ -16,7 +17,6 @@ use super::{
 
 /// Bevy-extracted resources passed to hover_tooltip_system
 pub struct TooltipBevy<'a> {
-    pub time: &'a Time,
     pub real_time: &'a Time<Real>,
     pub hovered: &'a crate::selection::HoveredEntity,
     pub placement_feedback: &'a crate::selection::PlacementFeedbackState,
@@ -25,6 +25,7 @@ pub struct TooltipBevy<'a> {
 }
 
 /// Query bundle for hover_tooltip_system
+#[derive(SystemParam)]
 pub struct TooltipQuerySet<'w, 's> {
     pub q_window: Query<'w, 's, &'static Window, With<bevy::window::PrimaryWindow>>,
     pub q_tooltip: Query<
@@ -98,7 +99,7 @@ pub fn hover_tooltip_system<'w, 's, I, R>(
     let mut payload = String::new();
     let inspection_refresh_due = runtime
         .inspection_refresh_timer
-        .tick(bevy.time.delta())
+        .tick(bevy.real_time.delta())
         .just_finished();
 
     if let Some((button_entity, _, tooltip_data, menu_button, computed, transform)) = hovered_button
@@ -268,7 +269,7 @@ pub fn hover_tooltip_system<'w, 's, I, R>(
     }
 
     if target.is_some() {
-        tooltip.delay_timer.tick(bevy.time.delta());
+        tooltip.delay_timer.tick(bevy.real_time.delta());
     }
     let desired_alpha = if target.is_some() && tooltip.delay_timer.is_finished() {
         1.0
@@ -280,7 +281,7 @@ pub fn hover_tooltip_system<'w, 's, I, R>(
     } else {
         0.05
     };
-    let fade_t = (bevy.time.delta_secs() / fade_duration).clamp(0.0, 1.0);
+    let fade_t = (bevy.real_time.delta_secs() / fade_duration).clamp(0.0, 1.0);
     tooltip.fade_alpha += (desired_alpha - tooltip.fade_alpha) * fade_t;
     tooltip.fade_alpha = tooltip.fade_alpha.clamp(0.0, 1.0);
 
@@ -319,4 +320,143 @@ pub fn hover_tooltip_system<'w, 's, I, R>(
             interpolation: fade_t,
         },
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bevy::time::TimeUpdateStrategy;
+    use std::time::Duration;
+
+    struct NoInspection;
+    impl TooltipInspectionSource for NoInspection {
+        fn build_model(&self, _: Entity) -> Option<EntityInspectionModel> {
+            None
+        }
+        fn classify_template(&self, _: Entity) -> TooltipTemplate {
+            TooltipTemplate::Generic
+        }
+    }
+    struct NoContent;
+    impl TooltipContentRenderer for NoContent {
+        type GameAssets = ();
+        fn rebuild_tooltip_content(
+            &self,
+            _: &mut Commands,
+            _: Entity,
+            _: &Query<&Children>,
+            _: &(),
+            _: &UiTheme,
+            _: TooltipBuildPayload<'_>,
+        ) {
+        }
+    }
+    #[derive(Resource, Default)]
+    struct Runtime(TooltipRuntimeState);
+
+    fn tick(
+        commands: Commands,
+        queries: TooltipQuerySet,
+        time: Res<Time<Real>>,
+        nodes: Res<UiNodeRegistry>,
+        theme: Res<UiTheme>,
+        mut runtime: ResMut<Runtime>,
+    ) {
+        hover_tooltip_system(
+            commands,
+            TooltipBevy {
+                real_time: &time,
+                hovered: &default(),
+                placement_feedback: &default(),
+                menu_state: &MenuState::Hidden,
+                ui_nodes: &nodes,
+            },
+            queries,
+            TooltipHandlers {
+                game_assets: &(),
+                theme: &theme,
+                inspection: &NoInspection,
+                tooltip_renderer: &NoContent,
+            },
+            &mut runtime.0,
+        );
+    }
+
+    fn hover_trace(speed: f32) -> Vec<(f32, bool)> {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins)
+            .insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_millis(
+                10,
+            )))
+            .init_resource::<UiNodeRegistry>()
+            .init_resource::<UiTheme>()
+            .init_resource::<Runtime>()
+            .add_systems(Update, tick);
+        app.world_mut()
+            .spawn((Window::default(), bevy::window::PrimaryWindow));
+        let anchor = app.world_mut().spawn(Node::default()).id();
+        app.world_mut()
+            .resource_mut::<UiNodeRegistry>()
+            .set_slot(UiSlot::TooltipAnchor, anchor);
+        let tooltip = app
+            .world_mut()
+            .spawn((
+                HoverTooltip::default(),
+                Node::default(),
+                BackgroundColor::default(),
+                BorderColor::default(),
+                Popover::default(),
+            ))
+            .id();
+        let first = app
+            .world_mut()
+            .spawn((Button, Node::default(), UiTooltip::new("first")))
+            .id();
+        let second = app
+            .world_mut()
+            .spawn((Button, Node::default(), UiTooltip::new("second")))
+            .id();
+        app.update();
+        if speed == 0.0 {
+            app.world_mut().resource_mut::<Time<Virtual>>().pause();
+        } else {
+            app.world_mut()
+                .resource_mut::<Time<Virtual>>()
+                .set_relative_speed(speed);
+        }
+        let mut trace = Vec::new();
+        for button in [first, second] {
+            *app.world_mut().get_mut::<Interaction>(first).unwrap() = Interaction::None;
+            *app.world_mut().get_mut::<Interaction>(button).unwrap() = Interaction::Hovered;
+            for _ in 0..70 {
+                app.update();
+                let state = app.world().get::<HoverTooltip>(tooltip).unwrap();
+                trace.push((
+                    state.fade_alpha,
+                    app.world().get::<Node>(tooltip).unwrap().display != Display::None,
+                ));
+            }
+        }
+        assert_eq!(
+            app.world().resource::<Time<Virtual>>().is_paused(),
+            speed == 0.0
+        );
+        trace
+    }
+
+    #[test]
+    fn new_hover_delay_and_fade_use_identical_real_time_at_pause_and_all_speeds() {
+        let paused = hover_trace(0.0);
+        for start in [0, 70] {
+            assert!(
+                paused[start..start + 28]
+                    .iter()
+                    .all(|(alpha, visible)| *alpha == 0.0 && !visible)
+            );
+            assert!(paused[start + 69].0 > 0.95 && paused[start + 69].1);
+        }
+        for speed in [1.0, 2.0, 4.0] {
+            assert_eq!(paused, hover_trace(speed));
+        }
+    }
 }

@@ -1,19 +1,20 @@
+use super::plan::{ZonePlacementPreview, ZonePlan, ZonePreview, ZoneReject, build_zone_plan};
 use crate::app_contexts::TaskContext;
 use crate::interface::ui::UiInputState;
 use crate::systems::command::TaskMode;
-use crate::systems::command::TaskModeZoneType;
 use crate::systems::logistics::{BelongsTo, Stockpile};
 use crate::world::map::{WorldMap, WorldMapWrite};
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
+use hw_core::WorldEpoch;
 use hw_core::constants::*;
 use hw_core::game_state::PlayMode;
 use hw_logistics::StockpilePolicy;
 use hw_ui::camera::MainCamera;
+use hw_ui::notifications::{NotificationRetention, NotificationSeverity, UserFacingNotification};
 use hw_world::zones::Site;
 use hw_world::zones::{AreaBounds, Yard};
-use hw_world::{area_tile_size, expand_yard_area, rectangles_overlap, rectangles_overlap_site};
 
 const STOCKPILE_CELL_CAPACITY: usize = 10;
 
@@ -23,10 +24,13 @@ pub struct ZonePlacementInput<'w, 's> {
     q_window: Query<'w, 's, &'static Window, With<PrimaryWindow>>,
     q_camera: Query<'w, 's, (&'static Camera, &'static GlobalTransform), With<MainCamera>>,
     ui_input_state: Res<'w, UiInputState>,
+    preview: ResMut<'w, ZonePlacementPreview>,
+    epoch: Res<'w, WorldEpoch>,
+    notifications: MessageWriter<'w, UserFacingNotification>,
 }
 
 pub fn zone_placement_system(
-    input: ZonePlacementInput,
+    mut input: ZonePlacementInput,
     mut task_context: ResMut<TaskContext>,
     mut next_play_mode: ResMut<NextState<PlayMode>>,
     mut world_map: WorldMapWrite,
@@ -34,199 +38,173 @@ pub fn zone_placement_system(
     q_yards: Query<(Entity, &Yard)>,
     q_sites: Query<&Site>,
 ) {
+    let TaskMode::ZonePlacement(kind, start) = task_context.0 else {
+        input.preview.0 = None;
+        return;
+    };
+    let released = input.buttons.just_released(MouseButton::Left);
+    // Release consumes the gesture even if capture or a missing cursor prevents commit.
+    if released {
+        task_context.0 = TaskMode::ZonePlacement(kind, None);
+    }
     if input.ui_input_state.world_input_blocked() {
+        input.preview.0 = None;
         return;
     }
-
-    let TaskMode::ZonePlacement(zone_type, start_pos_opt) = task_context.0 else {
-        return;
-    };
-
-    let Some(world_pos) = super::world_cursor_pos(&input.q_window, &input.q_camera) else {
-        return;
-    };
-    let snapped_pos = WorldMap::snap_to_grid_edge(world_pos);
-
-    // 開始
-    if input.buttons.just_pressed(MouseButton::Left) {
-        task_context.0 = TaskMode::ZonePlacement(zone_type, Some(snapped_pos));
-        return;
-    }
-
-    // 確定
-    if input.buttons.just_released(MouseButton::Left) {
-        if let Some(start_pos) = start_pos_opt {
-            let area = AreaBounds::from_points(start_pos, snapped_pos);
-            if matches!(zone_type, TaskModeZoneType::Stockpile)
-                && !is_stockpile_area_within_yards(&area, &q_yards)
-            {
-                return;
-            }
-            if matches!(zone_type, TaskModeZoneType::Yard)
-                && !is_yard_expansion_area_valid(start_pos, &area, &q_sites, &q_yards)
-            {
-                return;
-            }
-            if matches!(zone_type, TaskModeZoneType::Yard) {
-                apply_yard_expansion(&mut commands, start_pos, &area, &q_sites, &q_yards);
-            } else {
-                apply_zone_placement(&mut commands, &mut world_map, zone_type, &area, &q_yards);
-            }
-
-            // Shift押下で継続、そうでなければ解除
-            // FIXME: keyboard リソースが必要だが、一旦シンプルに解除
-            task_context.0 = TaskMode::ZonePlacement(zone_type, None);
-        }
-        return;
-    }
-
-    // キャンセル (右クリック)
     if input.buttons.just_pressed(MouseButton::Right) {
         task_context.0 = TaskMode::None;
         next_play_mode.set(PlayMode::Normal);
-    }
-}
-
-fn apply_zone_placement(
-    commands: &mut Commands,
-    world_map: &mut WorldMap,
-    zone_type: TaskModeZoneType,
-    area: &AreaBounds,
-    q_yards: &Query<(Entity, &Yard)>,
-) {
-    let min_grid = WorldMap::world_to_grid(area.min + Vec2::splat(0.1));
-    let max_grid = WorldMap::world_to_grid(area.max - Vec2::splat(0.1));
-
-    for gy in min_grid.1..=max_grid.1 {
-        for gx in min_grid.0..=max_grid.0 {
-            let grid = (gx, gy);
-            let grid_pos = WorldMap::grid_to_world(gx, gy);
-            let Some(yard_entity) = pick_stockpile_owner_yard(grid_pos, q_yards) else {
-                continue;
-            };
-
-            // 既に存在するか、建築物がある場合はスキップ
-            if world_map.has_stockpile(grid) || world_map.has_building(grid) {
-                continue;
-            }
-            // 通行不能な場所もスキップ
-            if !world_map.is_walkable(gx, gy) {
-                continue;
-            }
-
-            match zone_type {
-                TaskModeZoneType::Stockpile => {
-                    let entity = commands
-                        .spawn((
-                            Stockpile {
-                                capacity: STOCKPILE_CELL_CAPACITY,
-                                resource_type: None,
-                            },
-                            StockpilePolicy::for_capacity(STOCKPILE_CELL_CAPACITY),
-                            BelongsTo(yard_entity),
-                            Sprite {
-                                color: Color::srgba(1.0, 1.0, 0.0, 0.2),
-                                custom_size: Some(Vec2::splat(TILE_SIZE)),
-                                ..default()
-                            },
-                            Transform::from_xyz(grid_pos.x, grid_pos.y, Z_MAP + 0.01),
-                            Name::new("Stockpile"),
-                        ))
-                        .id();
-                    world_map.register_stockpile_tile(grid, entity);
-                }
-                TaskModeZoneType::Yard => {}
-            }
-        }
-    }
-}
-
-fn apply_yard_expansion(
-    commands: &mut Commands,
-    start_pos: Vec2,
-    area: &AreaBounds,
-    q_sites: &Query<&Site>,
-    q_yards: &Query<(Entity, &Yard)>,
-) {
-    let Some((yard_entity, source_yard)) = pick_yard_for_position(start_pos, q_yards) else {
-        return;
-    };
-    let expanded_area = expand_yard_area(&source_yard, area);
-    if !is_yard_expansion_area_valid(start_pos, area, q_sites, q_yards) {
+        input.preview.0 = None;
         return;
     }
-    commands.entity(yard_entity).insert(Yard {
-        min: expanded_area.min,
-        max: expanded_area.max,
-    });
-}
-
-pub(crate) fn is_stockpile_area_within_yards(
-    area: &AreaBounds,
-    q_yards: &Query<(Entity, &Yard)>,
-) -> bool {
-    let min_grid = WorldMap::world_to_grid(area.min + Vec2::splat(0.1));
-    let max_grid = WorldMap::world_to_grid(area.max - Vec2::splat(0.1));
-
-    for gy in min_grid.1..=max_grid.1 {
-        for gx in min_grid.0..=max_grid.0 {
-            let grid_pos = WorldMap::grid_to_world(gx, gy);
-            if q_yards.iter().all(|(_, yard)| !yard.contains(grid_pos)) {
-                return false;
-            }
-        }
-    }
-    true
-}
-
-pub(crate) fn is_yard_expansion_area_valid(
-    start_pos: Vec2,
-    drag_area: &AreaBounds,
-    q_sites: &Query<&Site>,
-    q_yards: &Query<(Entity, &Yard)>,
-) -> bool {
-    let Some((source_entity, source_yard)) = pick_yard_for_position(start_pos, q_yards) else {
-        return false;
+    let Some(world_pos) = super::world_cursor_pos(&input.q_window, &input.q_camera) else {
+        input.preview.0 = None;
+        return;
     };
-    let expanded_area = expand_yard_area(&source_yard, drag_area);
-    let expanded_tiles = area_tile_size(&expanded_area);
-
-    if expanded_tiles.0 < YARD_MIN_WIDTH_TILES as usize
-        || expanded_tiles.1 < YARD_MIN_HEIGHT_TILES as usize
-    {
-        return false;
+    let end = WorldMap::snap_to_grid_edge(world_pos);
+    if input.buttons.just_pressed(MouseButton::Left) {
+        task_context.0 = TaskMode::ZonePlacement(kind, Some(end));
+        input.preview.0 = None;
+        return;
     }
-
-    let overlaps_site = q_sites
+    let Some(start) = start else {
+        input.preview.0 = None;
+        return;
+    };
+    let area = AreaBounds::from_points(start, end);
+    let yards: Vec<_> = q_yards
         .iter()
-        .any(|site| rectangles_overlap_site(&expanded_area, site));
-    if overlaps_site {
-        return false;
-    }
-
-    let overlaps_other_yard = q_yards
-        .iter()
-        .any(|(entity, yard)| entity != source_entity && rectangles_overlap(&expanded_area, yard));
-    if overlaps_other_yard {
-        return false;
-    }
-
-    true
-}
-
-fn pick_yard_for_position(
-    position: Vec2,
-    q_yards: &Query<(Entity, &Yard)>,
-) -> Option<(Entity, Yard)> {
-    q_yards
-        .iter()
-        .find(|(_, yard)| yard.contains(position))
         .map(|(entity, yard)| (entity, yard.clone()))
+        .collect();
+    let sites: Vec<_> = q_sites.iter().cloned().collect();
+    let result = build_zone_plan(kind, start, &area, &world_map, &yards, &sites);
+    if !released {
+        input.preview.0 = Some(ZonePreview {
+            epoch: *input.epoch,
+            kind,
+            start,
+            area,
+            result,
+        });
+        return;
+    }
+    let previous = input.preview.0.take();
+    let result = result.and_then(|plan| {
+        let matches_preview = previous.as_ref().is_some_and(|preview| {
+            preview.epoch == *input.epoch
+                && preview.kind == kind
+                && preview.start == start
+                && preview.area == area
+                && preview.result.as_ref() == Ok(&plan)
+        });
+        if matches_preview {
+            Ok(plan)
+        } else {
+            Err(ZoneReject::PreviewChanged)
+        }
+    });
+    let (severity, message) = match result {
+        Ok(plan) => {
+            let message = plan.summary();
+            apply_plan(&mut commands, &mut world_map, plan);
+            (NotificationSeverity::Success, message)
+        }
+        Err(reason) => (NotificationSeverity::Warning, reason.label().to_owned()),
+    };
+    input.notifications.write(UserFacingNotification::new(
+        "zone-placement",
+        severity,
+        "Zone配置",
+        message,
+        NotificationRetention::ToastOnly,
+    ));
 }
 
-fn pick_stockpile_owner_yard(grid_pos: Vec2, q_yards: &Query<(Entity, &Yard)>) -> Option<Entity> {
-    if let Some((owner, _)) = q_yards.iter().find(|(_, yard)| yard.contains(grid_pos)) {
-        return Some(owner);
+fn apply_plan(commands: &mut Commands, world_map: &mut WorldMap, plan: ZonePlan) {
+    match plan {
+        ZonePlan::Yard { owner, bounds, .. } => {
+            commands.entity(owner).insert(Yard {
+                min: bounds.min,
+                max: bounds.max,
+            });
+        }
+        ZonePlan::Stockpile { cells, .. } => {
+            for (grid, owner) in cells {
+                let pos = WorldMap::grid_to_world(grid.0, grid.1);
+                let entity = commands
+                    .spawn((
+                        Stockpile {
+                            capacity: STOCKPILE_CELL_CAPACITY,
+                            resource_type: None,
+                        },
+                        StockpilePolicy::for_capacity(STOCKPILE_CELL_CAPACITY),
+                        BelongsTo(owner),
+                        Sprite {
+                            color: Color::srgba(1.0, 1.0, 0.0, 0.2),
+                            custom_size: Some(Vec2::splat(TILE_SIZE)),
+                            ..default()
+                        },
+                        Transform::from_xyz(pos.x, pos.y, Z_MAP + 0.01),
+                        Name::new("Stockpile"),
+                    ))
+                    .id();
+                world_map.register_stockpile_tile(grid, entity);
+            }
+        }
     }
-    None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use hw_core::game_state::TaskModeZoneType;
+
+    #[test]
+    fn release_consumes_drag_when_cursor_is_missing_or_ui_captures_input() {
+        for captured in [false, true] {
+            let mut app = App::new();
+            let kind = TaskModeZoneType::Stockpile;
+            let start = Vec2::ZERO;
+            app.init_resource::<ButtonInput<MouseButton>>()
+                .init_resource::<WorldMap>()
+                .init_resource::<WorldEpoch>()
+                .init_resource::<NextState<PlayMode>>()
+                .insert_resource(TaskContext(TaskMode::ZonePlacement(kind, Some(start))))
+                .insert_resource(UiInputState {
+                    world_input_captured: captured,
+                    ..default()
+                })
+                .insert_resource(ZonePlacementPreview(Some(ZonePreview {
+                    epoch: WorldEpoch::default(),
+                    kind,
+                    start,
+                    area: AreaBounds::from_points(start, Vec2::splat(TILE_SIZE)),
+                    result: Err(ZoneReject::OutsideYard),
+                })))
+                .add_message::<UserFacingNotification>()
+                .add_systems(Update, zone_placement_system);
+            let mut buttons = app.world_mut().resource_mut::<ButtonInput<MouseButton>>();
+            buttons.press(MouseButton::Left);
+            buttons.clear();
+            buttons.release(MouseButton::Left);
+            app.update();
+            assert_eq!(
+                app.world().resource::<TaskContext>().0,
+                TaskMode::ZonePlacement(kind, None)
+            );
+            assert!(app.world().resource::<ZonePlacementPreview>().0.is_none());
+            assert!(
+                app.world()
+                    .resource::<Messages<UserFacingNotification>>()
+                    .is_empty()
+            );
+            assert_eq!(
+                app.world_mut()
+                    .query::<&Stockpile>()
+                    .iter(app.world())
+                    .count(),
+                0
+            );
+        }
+    }
 }

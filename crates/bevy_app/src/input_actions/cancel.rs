@@ -15,6 +15,7 @@ use crate::entities::familiar::{ActiveCommand, Familiar};
 use crate::interface::selection::building_move::clear_move_states;
 use crate::systems::command::StockpilePolicyRangeEditState;
 use crate::systems::command::zone_placement::ZoneRemovalPreviewState;
+use crate::systems::command::zone_placement::plan::ZonePlacementPreview;
 use crate::systems::command::zone_placement::removal_preview::clear_removal_preview;
 use crate::world::map::WorldMap;
 
@@ -32,6 +33,7 @@ pub struct ActiveModeCleanupParams<'w, 's> {
     pub(crate) companion_state: ResMut<'w, CompanionPlacementState>,
     pub(crate) area_edit_session: ResMut<'w, AreaEditSession>,
     zone_removal_preview: ResMut<'w, ZoneRemovalPreviewState>,
+    zone_placement_preview: Option<ResMut<'w, ZonePlacementPreview>>,
     stockpile_policy_range: Option<ResMut<'w, StockpilePolicyRangeEditState>>,
     world_map: Res<'w, WorldMap>,
     q_familiar_state:
@@ -86,6 +88,9 @@ impl ActiveModeCleanupParams<'_, '_> {
     /// Rolls back only an uncommitted pointer gesture while preserving its mode owner.
     pub(crate) fn rollback_in_progress_gesture(&mut self) {
         self.restore_active_area_edit_drag();
+        if let Some(preview) = self.zone_placement_preview.as_mut() {
+            preview.0 = None;
+        }
 
         self.task_context.0 = match self.task_context.0 {
             TaskMode::DesignateChop(Some(_)) => TaskMode::DesignateChop(None),
@@ -116,6 +121,9 @@ impl ActiveModeCleanupParams<'_, '_> {
 
     pub(crate) fn cancel_active_mode(&mut self) {
         self.restore_active_area_edit_drag();
+        if let Some(preview) = self.zone_placement_preview.as_mut() {
+            preview.0 = None;
+        }
         self.area_edit_session.dream_planting_preview_seed = None;
         if let Some(range_state) = self.stockpile_policy_range.as_mut() {
             range_state.patch = None;

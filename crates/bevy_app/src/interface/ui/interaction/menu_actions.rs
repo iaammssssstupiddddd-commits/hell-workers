@@ -19,6 +19,9 @@ pub(super) fn handle_pressed_action(
         MenuAction::SelectHelpTopic(topic) => {
             ui_intents.write(UiIntent::SelectHelpTopic(topic));
         }
+        MenuAction::SelectHelpEntry(entry) => {
+            ui_intents.write(UiIntent::SelectHelpEntry(entry));
+        }
         MenuAction::StepHelpTopic(step) => {
             ui_intents.write(UiIntent::StepHelpTopic(step));
         }
@@ -27,6 +30,43 @@ pub(super) fn handle_pressed_action(
         }
         MenuAction::InspectEntity(entity) => {
             ui_intents.write(UiIntent::InspectEntity(entity));
+        }
+        MenuAction::FocusEntity(entity) => {
+            ui_intents.write(UiIntent::FocusEntity(entity));
+        }
+        MenuAction::ToggleFamiliarIdlePatrol(entity) => {
+            ui_intents.write(UiIntent::ToggleFamiliarIdlePatrol(entity));
+        }
+        MenuAction::DismissConstructionCancel => {
+            ui_intents.write(UiIntent::DismissConstructionCancel);
+        }
+        MenuAction::ConfirmSoulSpaConstructionCancel {
+            target,
+            epoch,
+            ticket,
+        } => {
+            ui_intents.write(UiIntent::ConfirmSoulSpaConstructionCancel {
+                target,
+                epoch,
+                ticket,
+            });
+        }
+        MenuAction::AreaEditControl {
+            action,
+            revision,
+            epoch,
+        } => {
+            ui_intents.write(UiIntent::AreaEditControl {
+                action,
+                revision,
+                epoch,
+            });
+        }
+        MenuAction::RetrySettingsSave { attempt } => {
+            ui_intents.write(UiIntent::RetrySettingsSave { attempt });
+        }
+        MenuAction::SetNotificationDuration(seconds) => {
+            ui_intents.write(UiIntent::SetNotificationDuration(seconds));
         }
         MenuAction::ClearInspectPin => {
             ui_intents.write(UiIntent::ClearInspectPin);
@@ -94,6 +134,12 @@ pub(super) fn handle_pressed_action(
         MenuAction::TogglePause => {
             ui_intents.write(UiIntent::TogglePause);
         }
+        MenuAction::ToggleSystemMenu => {
+            ui_intents.write(UiIntent::ToggleSystemMenu);
+        }
+        MenuAction::StartWorkGuide | MenuAction::EndWorkGuide => {
+            ui_intents.write(action);
+        }
         MenuAction::SaveGame => {
             ui_intents.write(UiIntent::SaveGame);
         }
@@ -145,8 +191,14 @@ pub(super) fn handle_pressed_action(
                 active_slots,
             });
         }
-        MenuAction::CancelSoulSpaConstruction { target } => {
-            ui_intents.write(UiIntent::CancelSoulSpaConstruction { target });
+        MenuAction::CancelSoulSpaConstruction {
+            target,
+            source_task,
+        } => {
+            ui_intents.write(UiIntent::CancelSoulSpaConstruction {
+                target,
+                source_task,
+            });
         }
         MenuAction::SetPowerConsumerPriority { target, priority } => {
             ui_intents.write(UiIntent::SetPowerConsumerPriority { target, priority });

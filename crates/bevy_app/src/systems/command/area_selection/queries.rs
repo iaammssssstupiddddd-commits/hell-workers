@@ -34,6 +34,8 @@ pub type DesignationTargetQuery<'w, 's> = Query<
             Option<&'static ManualTransportRequest>,
             Option<&'static StockpilePolicy>,
             Option<&'static IncomingDeliveries>,
+            Option<&'static crate::systems::jobs::TaskSlots>,
+            Option<&'static hw_core::relationships::ManagedBy>,
         ),
     ),
 >;

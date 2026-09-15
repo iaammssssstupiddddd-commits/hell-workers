@@ -16,8 +16,8 @@
 
 ### ピン操作
 - 右クリックコンテキストメニューの `Inspect (Pin)` でピン設定
-- パネル右上 `Unpin` ボタンで解除
-- `Unpin` ボタンはピン中のみ表示
+- パネル右上「選択を表示」ボタンで解除
+- 「選択を表示」ボタンはピン中のみ表示。対象名に「固定:」を付け、本文末尾でも固定状態と対象を確認できる
 
 ## 表示対象
 
@@ -78,7 +78,7 @@ Modal/Pause capture開始時のgesture rollbackはpatchを保持して再試行�
 Accepted Resourcesの各行は起動時に一度だけ生成する静的UI nodeであり、ViewModel更新時はTextと
 `MenuButton` actionだけを差分更新する。全許可、単一許可、空集合、複数許可は同じ集合契約で表示し、
 複数許可でも1セルの現在内容と搬入予約は1資材に限定する。全資材を一覧から隠すcycle操作は持たない。
-情報パネル全体はviewport高58%を上限に縦scrollし、`1280x720 / UiScale 1.25` でも下段操作へ到達できる。
+情報パネルの外枠はviewport高58%を上限とし、見出しと固定解除を外側に残して本文だけを標準ScrollArea/Scrollbarで縦scrollする。別対象へ切り替えたときとworld置換時に先頭へ戻し、同じ対象の内容更新では読書位置を保持する。`1280x720 / UiScale 1.25` の実入力受入はUI改善計画で確認する。
 
 ### 電力発電施設（Soul Spa）
 `SoulSpaSite` を持つエンティティは `append_soul_spa_model()` で追記される。
@@ -170,3 +170,20 @@ append_designation_model   // Designation: タスク情報
 - `crates/bevy_app/src/systems/command/stockpile_policy.rs` - 矩形gesture、安定した対象解決、保留patch resource
 - `crates/bevy_app/src/interface/ui/interaction/handlers/soul_rename.rs` - `TextInputIntent` → `SoulIdentity` 更新
 - `crates/bevy_app/src/interface/ui/setup/mod.rs` - `spawn_info_panel_ui` を `hw_ui` 実装へ委譲する setup adapter
+
+### 建設取消の共通確認
+
+建設中のSoul Spaの取消は、情報パネルとTask一覧の搬入タスクから同じ確認パネルを開く。
+確定と「戻る」は取消の入口とは別のボタンとし、「現地へ」で対象位置を確認できる。
+確認パネルは全面captureを持たず、別対象の選択・pin変更・Task操作対象変更で失効する。
+Pause、別modalのcapture、world epoch変更、対象消滅、Operationalへの遷移でも失効する。
+確定はtarget/epoch/ticketを照合して確認を先に消費し、既存のSoul Spa取消ownerへ1件だけ送る。
+Bone返却や担当解放の処理は既存ownerが引き続き行う。その他のTask取消は既存確認を維持する。
+
+### 扉と部屋の診断
+
+扉の情報には開いている／閉じている／施錠中と通行可否を表示し、右クリックの施錠・解錠へ案内する。床の情報には現在の部屋成立条件、失敗理由と確認位置を表示する。判定はworldの既存flood-fillとECS分類を共有し、Room Entityの生成前・再生成後もgrid起点で確認できる。
+
+Task一覧の関連リンクから担当の情報を固定した場合も、FamiliarPolicyの現在値から新規割当停止中の種別を表示する。集計されたTask blockerの原因者を新たに推定する処理はない。
+
+情報パネルの「詳しく（ヘルプ）」は、表示中のSoul・Stockpile・Soul Spa・Powerに対応するHelp entryへ移動する。その他の対象は情報パネルの使い方を開く。通常のHelp capture成立条件を共有し、accepted openerがこのボタンの場合だけ文脈移動を送る。選択や固定対象への書込は行わない。

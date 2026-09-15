@@ -31,9 +31,15 @@ pub font_soul_emoji: Handle<Font>, // Soulセリフ（絵文字）
 ## フォントサイズ
 
 Bevy UIの正本は[theme.rs](../crates/hw_ui/src/theme.rs)の`UiTheme.typography`です。
-基本のmodular scaleは`xs/sm/base/md/lg/xl = 9/11/13/15/18/22px`で、widgetはResourceから値を読みます。
+基本のmodular scaleは`xs/sm/base/md/lg/xl = 12/14/14/15/18/22px`で、widgetはResourceから値を読みます。
+本文・一覧項目は14px、補助文字は12pxをscale=1の初期値とする。ButtonのAuto/px最小寸法には32×32pxの下限を適用し、UI倍率で全体を拡縮する。SettingsのSlider/Checkbox行も高さ32px以上を確保する。実画面の可読性・1280×720での拡大表示は受入待ち。
 `title/header/item/small/clock/status/dialog_*`は既存画面向けのtheme aliasであり、グローバルな
 `FONT_SIZE_TITLE`等の定数ではありません。
+
+HoverTooltipはボタンの子へ移されてもモード案内や別パネルに埋もれないよう、
+共通`TOOLTIP_LAYER`（GlobalZIndex）で描画する。local ZIndexだけでは親の描画順を越えられない。
+実入力の受入ではfade値に加え、本文の可視矩形・透明度とモード案内との描画順を記録し、
+最後にclient画像で可読性を確認する。内部のfade値だけを表示成功の証拠にしない。
 
 world-space visualはUI themeとは別責務です。Soul status iconは
 `hw_core::constants::animation::FONT_SIZE_BODY = 16px`、speech bubbleは

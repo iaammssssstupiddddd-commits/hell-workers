@@ -8,6 +8,7 @@ mod input;
 mod manual_haul;
 mod queries;
 mod shortcuts;
+pub mod ui;
 
 pub(crate) use cancel::cancel_single_designation;
 pub use cleanup::blueprint_cancel_cleanup_system;

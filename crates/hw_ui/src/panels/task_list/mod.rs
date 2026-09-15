@@ -11,11 +11,12 @@ pub use interaction::{
 pub use render::TaskListRenderStats;
 pub use render::{TaskListRenderInput, rebuild_task_list_ui};
 pub use types::{
-    PendingTaskCancellation, TaskActionButton, TaskActionButtonKind, TaskActionCapabilities,
-    TaskBlockerReason, TaskCancelKind, TaskDashboardActionState, TaskDashboardControl,
-    TaskDashboardViewState, TaskEntry, TaskListDirty, TaskListDynamicNode, TaskPriorityAdjustment,
-    TaskPriorityFilter, TaskPriorityTier, TaskSortDirection, TaskSortKey, TaskStatusFilter,
-    TaskStatusSummary, TaskWorkTypeFilter, TaskWorkerFilter,
+    PendingTaskCancellation, TASK_PAGE_SIZE, TaskActionButton, TaskActionButtonKind,
+    TaskActionCapabilities, TaskBlockerReason, TaskCancelKind, TaskDashboardActionState,
+    TaskDashboardControl, TaskDashboardViewState, TaskEntry, TaskFilterMenu, TaskListDirty,
+    TaskListDynamicNode, TaskListScroll, TaskPriorityAdjustment, TaskPriorityFilter,
+    TaskPriorityTier, TaskRelatedKind, TaskSortDirection, TaskSortKey, TaskStatusFilter,
+    TaskStatusSummary, TaskWorkTypeFilter, TaskWorkerFilter, task_page_range,
 };
 pub(crate) use work_type_icon::player_reachable_work_types;
 pub use work_type_icon::{work_type_icon, work_type_label};

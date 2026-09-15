@@ -78,10 +78,6 @@ pub(super) fn familiar_label(
 }
 
 fn task_visual(task: &AssignedTask) -> TaskVisual {
-    if task.bucket_transport_data().is_some() {
-        return TaskVisual::Water;
-    }
-
     match task {
         AssignedTask::None => TaskVisual::Idle,
         AssignedTask::Gather(data) => match data.work_type {
@@ -91,17 +87,19 @@ fn task_visual(task: &AssignedTask) -> TaskVisual {
         },
         AssignedTask::Haul { .. } => TaskVisual::Haul,
         AssignedTask::Build { .. } => TaskVisual::Build,
-        AssignedTask::MovePlant { .. } => TaskVisual::Build,
+        AssignedTask::MovePlant { .. } => TaskVisual::Move,
         AssignedTask::HaulToBlueprint { .. } => TaskVisual::HaulToBlueprint,
-        AssignedTask::CollectBone { .. } => TaskVisual::GatherDefault,
-        AssignedTask::Refine { .. } => TaskVisual::Build,
+        AssignedTask::CollectBone { .. } => TaskVisual::CollectBone,
+        AssignedTask::Refine { .. } => TaskVisual::Refine,
         AssignedTask::HaulToMixer { .. } => TaskVisual::HaulToBlueprint,
         AssignedTask::HaulWithWheelbarrow { .. } => TaskVisual::Haul,
         AssignedTask::ReinforceFloorTile { .. } => TaskVisual::Build,
         AssignedTask::PourFloorTile { .. } => TaskVisual::Build,
         AssignedTask::FrameWallTile { .. } => TaskVisual::Build,
         AssignedTask::CoatWall { .. } => TaskVisual::Build,
-        _ => TaskVisual::Water,
+        AssignedTask::BucketTransport(_) => TaskVisual::Water,
+        AssignedTask::GeneratePower(_) => TaskVisual::GeneratePower,
+        AssignedTask::Deconstruct(_) => TaskVisual::Deconstruct,
     }
 }
 
@@ -187,6 +185,8 @@ pub fn build_entity_list_view_model_system(
 
     view_model.previous = std::mem::take(&mut view_model.current);
 
+    let query = search_state.normalized();
+    let searching = !query.is_empty();
     let unassigned_folded = unassigned_folded_query.iter().next().unwrap_or(false);
     let mut familiars = Vec::new();
 
@@ -198,14 +198,14 @@ pub fn build_entity_list_view_model_system(
             op,
             ai_state,
             commanding_opt,
-            is_folded,
+            is_folded && !searching,
             &q_all_souls,
         ));
     }
     familiars.sort_by_key(|vm| vm.entity.index());
 
     let mut unassigned = Vec::new();
-    if !unassigned_folded {
+    if !unassigned_folded || searching {
         for (soul_entity, soul, task, identity, under_command) in q_all_souls.iter() {
             if under_command.is_none() {
                 unassigned.push(build_soul_view_model(soul_entity, soul, task, identity));
@@ -214,15 +214,19 @@ pub fn build_entity_list_view_model_system(
     }
     unassigned.sort_by_key(|vm| vm.entity.index());
 
-    let query = search_state.normalized();
     let familiars = familiars
         .into_iter()
         .map(|mut row| {
             row.souls = filter_soul_rows(row.souls, query);
+            if searching {
+                row.is_folded = row.souls.is_empty() && q_folded.get(row.entity).unwrap_or(false);
+                row.show_empty = false;
+            }
             row
         })
         .collect();
     let unassigned = filter_soul_rows(unassigned, query);
+    let unassigned_folded = unassigned_folded && (!searching || unassigned.is_empty());
 
     view_model.current = EntityListSnapshot {
         familiars,
@@ -234,6 +238,94 @@ pub fn build_entity_list_view_model_system(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn power_and_deconstruction_never_fall_back_to_water() {
+        use hw_jobs::tasks::{DeconstructData, GeneratePowerData};
+        let power = AssignedTask::GeneratePower(GeneratePowerData {
+            tile: Entity::PLACEHOLDER,
+            tile_pos: Vec2::ZERO,
+            phase: default(),
+        });
+        let deconstruct = AssignedTask::Deconstruct(DeconstructData {
+            order: Entity::PLACEHOLDER,
+            target: Entity::PLACEHOLDER,
+            phase: default(),
+        });
+        assert_eq!(task_visual(&power), TaskVisual::GeneratePower);
+        assert_eq!(task_visual(&deconstruct), TaskVisual::Deconstruct);
+        assert_eq!(task_visual(&power).label(), "発電");
+        assert_eq!(task_visual(&deconstruct).label(), "解体");
+    }
+
+    #[test]
+    fn search_finds_folded_souls_and_restores_original_folds() {
+        let mut app = App::new();
+        app.init_resource::<super::super::dirty::EntityListDirty>()
+            .init_resource::<EntityListSearchState>()
+            .init_resource::<EntityListViewModel>()
+            .add_systems(Update, build_entity_list_view_model_system);
+        let familiar = app
+            .world_mut()
+            .spawn((
+                Familiar::default(),
+                FamiliarOperation::default(),
+                FamiliarAiState::Idle,
+                SectionFolded,
+            ))
+            .id();
+        let section = app
+            .world_mut()
+            .spawn((UnassignedSoulSection, UnassignedFolded))
+            .id();
+        let mut souls = Vec::new();
+        for assigned in [true, false] {
+            let mut entity = app.world_mut().spawn((
+                DamnedSoul::default(),
+                AssignedTask::None,
+                SoulIdentity {
+                    name: "検索対象".into(),
+                    gender: Gender::Male,
+                },
+            ));
+            if assigned {
+                entity.insert(CommandedBy(familiar));
+            }
+            souls.push(entity.id());
+        }
+        app.world_mut()
+            .resource_mut::<super::super::dirty::EntityListDirty>()
+            .mark_structure();
+        app.update();
+        assert!(
+            app.world()
+                .resource::<EntityListViewModel>()
+                .current
+                .familiars[0]
+                .souls
+                .is_empty()
+        );
+        for query in [" 対象 ", "存在しない", ""] {
+            app.world_mut()
+                .resource_mut::<EntityListSearchState>()
+                .query = query.into();
+            app.update();
+            let snapshot = &app.world().resource::<EntityListViewModel>().current;
+            if query.trim() == "対象" {
+                assert_eq!(snapshot.familiars[0].souls[0].entity, souls[0]);
+                assert_eq!(snapshot.unassigned[0].entity, souls[1]);
+                assert!(!snapshot.familiars[0].is_folded);
+                assert!(!snapshot.unassigned_folded);
+            } else {
+                assert!(snapshot.familiars[0].souls.is_empty());
+                assert!(snapshot.unassigned.is_empty());
+                assert!(snapshot.familiars[0].is_folded);
+                assert!(snapshot.unassigned_folded);
+            }
+            assert!(app.world().get::<SectionFolded>(familiar).is_some());
+            assert!(app.world().get::<UnassignedFolded>(section).is_some());
+        }
+    }
 
     #[test]
     fn familiar_label_reflects_current_roster_and_operation_max() {

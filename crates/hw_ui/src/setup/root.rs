@@ -271,6 +271,12 @@ pub fn setup_ui<F, G>(
         overlay_slot,
         &mut ui_nodes,
     );
+    crate::panels::construction_cancel::spawn_construction_cancel_panel(
+        &mut commands,
+        game_assets,
+        theme,
+        overlay_slot,
+    );
     super::pause_menu::spawn_pause_menu(
         &mut commands,
         game_assets,

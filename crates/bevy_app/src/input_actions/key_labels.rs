@@ -101,6 +101,7 @@ fn key_label(key: KeyCode) -> Result<&'static str, UnsupportedPublicKey> {
         KeyCode::Escape => "Esc",
         KeyCode::Delete => "Delete",
         KeyCode::Tab => "Tab",
+        KeyCode::Enter => "Enter",
         KeyCode::Space => "Space",
         KeyCode::ArrowUp => "↑",
         KeyCode::ArrowDown => "↓",
@@ -151,7 +152,7 @@ mod tests {
     fn action_lookup_preserves_binding_alias_order() {
         assert_eq!(
             binding_labels_for_action(InputAction::FamiliarChop),
-            Ok(vec!["C".to_string(), "1".to_string()])
+            Ok(vec!["C".to_string()])
         );
         assert_eq!(
             binding_labels_for_action(InputAction::AreaRedo),

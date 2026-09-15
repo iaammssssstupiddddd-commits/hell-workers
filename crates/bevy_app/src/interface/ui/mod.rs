@@ -7,12 +7,15 @@ pub(crate) mod help_content;
 pub(crate) mod help_controller;
 pub mod interaction;
 pub mod list;
+#[cfg(feature = "profiling")]
+pub mod native_acceptance;
 pub mod notifications;
 pub mod panels;
 pub mod plugins;
 pub mod presentation;
 pub mod setup;
 pub mod vignette;
+pub(crate) mod work_guide;
 
 // hw_ui::components から外部が使うシンボル
 pub use hw_ui::components::{InfoPanelNodes, MenuState, UiInputState};

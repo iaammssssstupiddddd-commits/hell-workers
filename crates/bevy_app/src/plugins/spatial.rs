@@ -27,13 +27,30 @@ impl Plugin for SpatialPlugin {
         app.init_resource::<DesignationSpatialGrid>();
         app.init_resource::<TransportRequestSpatialGrid>();
         app.init_resource::<SelectableObstacleSpatialGrid>();
+        // Selection must observe changes from the last running frame even after pause.
+        // These are delta-maintained indexes, not simulation or actor updates.
         app.add_systems(
-            Update,
+            PreUpdate,
             (
                 update_damned_soul_spatial_grid_system,
                 update_familiar_entity_spatial_grid_system,
                 update_resource_spatial_grid_system_resource_item,
                 update_designation_spatial_grid_system_designation,
+                update_selectable_obstacle_spatial_grid_system,
+                update_stockpile_spatial_grid_system_stockpile,
+            )
+                .before(crate::input_actions::InputPreUpdateSet::CaptureRequest)
+                .run_if(
+                    |recovery: Option<Res<crate::systems::save::SaveRecoveryMode>>| {
+                        recovery.is_none_or(|mode| {
+                            *mode != crate::systems::save::SaveRecoveryMode::RecoveryFailed
+                        })
+                    },
+                ),
+        );
+        app.add_systems(
+            Update,
+            (
                 update_gathering_spot_spatial_grid_system,
                 update_blueprint_spatial_grid_system_blueprint,
                 update_floor_construction_spatial_grid_system,
@@ -41,9 +58,7 @@ impl Plugin for SpatialPlugin {
                 sync_removed_floor_tile_site_index_system,
                 sync_wall_tile_site_index_system,
                 sync_removed_wall_tile_site_index_system,
-                update_stockpile_spatial_grid_system_stockpile,
                 update_transport_request_spatial_grid_system_transport_request,
-                update_selectable_obstacle_spatial_grid_system,
             )
                 .in_set(GameSystemSet::Spatial),
         );
@@ -95,7 +110,7 @@ mod tests {
         );
 
         // A load replaces old entities, resets derived indexes, then writes the
-        // new payload. The paused frame must not eagerly rebuild any index.
+        // new payload. Paused selection indexes must reflect the replaced world.
         app.world_mut().resource_mut::<Time<Virtual>>().pause();
         app.world_mut().despawn(old_item);
         reset_runtime_caches(app.world_mut());
@@ -118,17 +133,17 @@ mod tests {
             ))
             .id();
         app.update();
-        assert!(
+        assert_eq!(
             app.world()
                 .resource::<SpatialGrid>()
-                .get_nearby_in_radius(Vec2::new(128.0, 0.0), 1.0)
-                .is_empty()
+                .get_nearby_in_radius(Vec2::new(128.0, 0.0), 1.0),
+            vec![rehydrated_soul]
         );
-        assert!(
+        assert_eq!(
             app.world()
                 .resource::<ResourceSpatialGrid>()
-                .get_nearby_in_radius(Vec2::new(96.0, 0.0), 1.0)
-                .is_empty()
+                .get_nearby_in_radius(Vec2::new(96.0, 0.0), 1.0),
+            vec![rehydrated_item]
         );
 
         app.world_mut().resource_mut::<Time<Virtual>>().unpause();

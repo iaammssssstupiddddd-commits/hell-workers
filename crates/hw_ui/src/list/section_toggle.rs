@@ -11,11 +11,12 @@ type SectionToggleInteractionQuery<'w, 's> = Query<
     'w,
     's,
     (
-        &'static Interaction,
+        Entity,
+        Ref<'static, Interaction>,
         &'static SectionToggle,
         &'static mut BackgroundColor,
     ),
-    (Changed<Interaction>, With<Button>),
+    With<Button>,
 >;
 
 /// SectionToggle ボタンの押下/ホバーに応じて
@@ -31,18 +32,16 @@ pub fn entity_list_section_toggle_system(
     if ui_input_state.world_input_captured {
         return;
     }
-    for (interaction, toggle, mut color) in interaction_query.iter_mut() {
-        match *interaction {
-            Interaction::Pressed => {
-                *color = BackgroundColor(theme.colors.section_toggle_pressed);
-                toggle_list_section(&mut commands, toggle.0, &q_folded, &unassigned_folded_query);
-            }
-            Interaction::Hovered => {
-                *color = BackgroundColor(theme.colors.button_hover);
-            }
-            Interaction::None => {
-                *color = BackgroundColor(theme.colors.button_default);
-            }
+    for (entity, interaction, toggle, mut color) in interaction_query.iter_mut() {
+        if interaction.is_changed() || theme.is_changed() {
+            color.0 = match *interaction {
+                Interaction::Pressed => theme.colors.section_toggle_pressed,
+                Interaction::Hovered => theme.colors.button_hover,
+                Interaction::None => theme.colors.button_default,
+            };
+        }
+        if ui_input_state.button_activated(entity) {
+            toggle_list_section(&mut commands, toggle.0, &q_folded, &unassigned_folded_query);
         }
     }
 }

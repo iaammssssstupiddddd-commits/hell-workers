@@ -328,3 +328,9 @@ drain し、capture 解除後に遅延適用しない。
 Constructing Soul Spaの`DeliverToSoulSpa`行は`TransportRequest.kind`、Bone、anchor、
 `TargetSoulSpaSite`が同じlive siteを指す場合だけcancel可能にする。Task Dashboardはrequestを直接despawnせず
 `SoulSpaConstructionCancelRequest`をsite ownerへ送り、情報パネルと同じexact cleanup・実搬入Bone返却へ合流する。
+
+### Player採取指定と時間停止
+
+Ordersの新規Chop/Mineは使い魔を必須とし、既存Designation/TaskSlots/ManagedBy/workerがある資源は上書きせずスキップする。
+停止中も同じownerへ直接適用するが、Soul/FamiliarのAIや採取進行は停止したまま。未許可のHaul/取消等を再開時へqueueしない。
+任意の操作ガイドは所属SoulのGatherPhase::Collecting/Doneを読むだけで、割当や完了を作らない。

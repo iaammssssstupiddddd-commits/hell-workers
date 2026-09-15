@@ -3,6 +3,7 @@ use crate::{SquadManagementOperation, SquadManagementRequest};
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use bevy::ui::FocusPolicy;
+use bevy::ui::RelativeCursorPosition;
 use hw_core::relationships::CommandedBy;
 use hw_ui::components::{FamiliarListItem, SoulListItem, UiInputState, UiNodeRegistry, UiSlot};
 pub use hw_ui::list::DragState;
@@ -13,19 +14,30 @@ struct DragGhost;
 
 #[derive(SystemParam)]
 pub struct DragDropResources<'w> {
-    time: Res<'w, Time>,
+    time: Res<'w, Time<Real>>,
     buttons: Res<'w, ButtonInput<MouseButton>>,
     ui_nodes: Res<'w, UiNodeRegistry>,
     game_assets: Res<'w, crate::assets::GameAssets>,
     theme: Res<'w, UiTheme>,
     resolved_frame: Res<'w, crate::input_actions::ResolvedInputFrame>,
     ui_input_state: Res<'w, UiInputState>,
+    simulation: Res<'w, Time<Virtual>>,
     drag_state: ResMut<'w, DragState>,
     squad_request_writer: MessageWriter<'w, SquadManagementRequest>,
 }
 
 #[derive(SystemParam)]
 pub struct DragDropQueries<'w, 's> {
+    scroll: Query<
+        'w,
+        's,
+        (
+            &'static ComputedNode,
+            &'static RelativeCursorPosition,
+            &'static mut ScrollPosition,
+        ),
+        With<hw_ui::components::EntityListScrollArea>,
+    >,
     q_soul_rows: Query<'w, 's, (&'static Interaction, &'static SoulListItem), With<Button>>,
     q_familiar_rows: Query<'w, 's, (&'static Interaction, &'static FamiliarListItem), With<Button>>,
     q_soul_names: Query<'w, 's, &'static SoulIdentity, With<DamnedSoul>>,
@@ -45,16 +57,21 @@ pub fn entity_list_drag_drop_system(
         theme,
         resolved_frame,
         ui_input_state,
+        simulation,
         mut drag_state,
         mut squad_request_writer,
     } = resources;
     let DragDropQueries {
+        mut scroll,
         q_soul_rows,
         q_familiar_rows,
         q_soul_names,
         q_commanded_by,
     } = queries;
-    if ui_input_state.world_input_captured || resolved_frame.pointer_selection_suppressed() {
+    if simulation.is_paused()
+        || ui_input_state.world_input_captured
+        || resolved_frame.pointer_selection_suppressed()
+    {
         reset_entity_list_drag_state(&mut commands, &mut drag_state);
         return;
     }
@@ -89,6 +106,28 @@ pub fn entity_list_drag_drop_system(
     }
 
     if drag_state.is_dragging() {
+        if buttons.pressed(MouseButton::Left) {
+            for (node, cursor, mut position) in &mut scroll {
+                if !cursor.cursor_over() {
+                    continue;
+                }
+                let Some(cursor) = cursor.normalized else {
+                    continue;
+                };
+                let height = node.size().y * node.inverse_scale_factor();
+                let y = (cursor.y + 0.5) * height;
+                let velocity = if y < 28.0 {
+                    -240.0
+                } else if y > height - 28.0 {
+                    240.0
+                } else {
+                    0.0
+                };
+                let max = ((node.content_size().y - node.size().y) * node.inverse_scale_factor())
+                    .max(0.0);
+                position.0.y = (position.0.y + velocity * time.delta_secs()).clamp(0.0, max);
+            }
+        }
         drag_state.drop_target = hovered_familiar_row(&q_familiar_rows);
 
         if buttons.just_released(MouseButton::Left) {

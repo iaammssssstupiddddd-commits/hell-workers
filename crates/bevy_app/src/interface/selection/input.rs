@@ -13,7 +13,6 @@ use hw_core::selection::{
 };
 use hw_ui::camera::MainCamera;
 use hw_ui::selection::{OpenWorldContextMenu, SelectionIntent};
-use std::time::{Duration, Instant};
 
 use super::hit_test::SelectionResolver;
 use super::hit_test::hovered_task_area_border_entity;
@@ -31,9 +30,10 @@ pub(crate) fn pointer_hits_task_area_border(
 
 #[derive(Resource, Debug, Default)]
 pub struct WorldSelectionGesture {
+    epoch: hw_core::WorldEpoch,
     pending: Option<PendingSelection>,
     suppressed_until_release: bool,
-    last_click_at: Option<Instant>,
+    has_clicked: bool,
     last_click_pos: Vec2,
     last_candidates: Vec<Entity>,
     last_candidate_index: usize,
@@ -50,6 +50,8 @@ struct PendingSelection {
 
 #[derive(SystemParam)]
 pub struct SelectionInput<'w, 's> {
+    pub epoch: Option<Res<'w, hw_core::WorldEpoch>>,
+    pub time: Option<Res<'w, Time<Virtual>>>,
     pub buttons: Res<'w, ButtonInput<MouseButton>>,
     pub q_window: Query<'w, 's, &'static Window, With<bevy::window::PrimaryWindow>>,
     pub q_camera: Query<'w, 's, (&'static Camera, &'static GlobalTransform), With<MainCamera>>,
@@ -60,6 +62,7 @@ pub struct SelectionInput<'w, 's> {
 #[derive(SystemParam)]
 pub(crate) struct SelectionMutation<'w, 's> {
     gesture: ResMut<'w, WorldSelectionGesture>,
+    candidates: ResMut<'w, super::candidates::OverlapCandidates>,
     selected_entity: ResMut<'w, SelectedEntity>,
     next_play_mode: ResMut<'w, NextState<PlayMode>>,
     task_context: ResMut<'w, TaskContext>,
@@ -78,6 +81,7 @@ pub(crate) fn handle_mouse_input(
 ) {
     let SelectionMutation {
         mut gesture,
+        mut candidates,
         mut selected_entity,
         mut next_play_mode,
         mut task_context,
@@ -88,6 +92,10 @@ pub(crate) fn handle_mouse_input(
         mut q_camera_transform,
         mut move_feedback,
     } = state;
+    let epoch = input.epoch.as_deref().copied().unwrap_or_default();
+    if gesture.epoch != epoch {
+        *gesture = WorldSelectionGesture { epoch, ..default() };
+    }
     let blocked = input.ui_input_state.world_input_blocked()
         || input.resolved_frame.pointer_selection_suppressed();
 
@@ -191,6 +199,7 @@ pub(crate) fn handle_mouse_input(
                 camera_transform,
                 selected_entity.0,
             );
+            candidates.latch(world_pos, &live_candidates);
             let latched = cycled_latched_candidate(&mut gesture, pending);
             let still_live = latched.filter(|candidate| {
                 live_candidates
@@ -217,12 +226,7 @@ pub(crate) fn handle_mouse_input(
             camera_transform,
             selected_entity.0,
         );
-        let context_target = candidates.iter().find(|candidate| {
-            !matches!(
-                candidate.class,
-                SelectionTargetClass::Floor | SelectionTargetClass::TaskArea
-            )
-        });
+        let context_target = context_candidate(&candidates, selected_entity.0);
         if let Some(target) = context_target {
             context_requests.write(OpenWorldContextMenu {
                 target: target.entity,
@@ -230,6 +234,7 @@ pub(crate) fn handle_mouse_input(
             });
         } else if let Some(familiar) = selected_entity.0
             && q_familiars.get(familiar).is_ok()
+            && !input.time.as_ref().is_some_and(|time| time.is_paused())
         {
             apply_selection_intent(
                 SelectionIntent::MoveFamiliar {
@@ -246,6 +251,23 @@ pub(crate) fn handle_mouse_input(
     }
 }
 
+fn context_candidate(
+    candidates: &[SelectionCandidate],
+    selected: Option<Entity>,
+) -> Option<&SelectionCandidate> {
+    let eligible = |candidate: &&SelectionCandidate| {
+        !matches!(
+            candidate.class,
+            SelectionTargetClass::Floor | SelectionTargetClass::TaskArea
+        )
+    };
+    candidates
+        .iter()
+        .filter(eligible)
+        .find(|candidate| Some(candidate.entity) == selected)
+        .or_else(|| candidates.iter().find(eligible))
+}
+
 fn exceeds_click_slop(start: Vec2, current: Vec2) -> bool {
     start.distance(current) > CLICK_SLOP_LOGICAL_PX
 }
@@ -254,23 +276,20 @@ fn cycled_latched_candidate(
     gesture: &mut WorldSelectionGesture,
     pending: PendingSelection,
 ) -> Option<SelectionCandidate> {
-    let now = Instant::now();
     let entity_order: Vec<_> = pending
         .candidates
         .iter()
         .map(|candidate| candidate.entity)
         .collect();
-    let repeats_stack = gesture.last_click_at.is_some_and(|last| {
-        now.duration_since(last) <= Duration::from_millis(500)
-            && pending.start_screen_pos.distance(gesture.last_click_pos) <= 4.0
-            && entity_order == gesture.last_candidates
-    });
+    let repeats_stack = gesture.has_clicked
+        && pending.start_screen_pos.distance(gesture.last_click_pos) <= 4.0
+        && entity_order == gesture.last_candidates;
     let index = if repeats_stack && !pending.candidates.is_empty() {
         (gesture.last_candidate_index + 1) % pending.candidates.len()
     } else {
         0
     };
-    gesture.last_click_at = Some(now);
+    gesture.has_clicked = true;
     gesture.last_click_pos = pending.start_screen_pos;
     gesture.last_candidates = entity_order;
     gesture.last_candidate_index = index;
@@ -401,5 +420,26 @@ mod tests {
             cycled_latched_candidate(&mut gesture, pending()).map(|value| value.entity),
             Some(second.entity)
         );
+    }
+
+    #[test]
+    fn right_click_prefers_the_selected_live_overlap_but_floor_keeps_ground_move() {
+        let first = candidate(Entity::from_bits(1));
+        let second = candidate(Entity::from_bits(2));
+        let floor = SelectionCandidate {
+            class: SelectionTargetClass::Floor,
+            ..candidate(Entity::from_bits(3))
+        };
+        assert_eq!(
+            context_candidate(&[first, second, floor], Some(second.entity))
+                .map(|target| target.entity),
+            Some(second.entity)
+        );
+        assert_eq!(
+            context_candidate(&[first, floor], Some(second.entity)).map(|target| target.entity),
+            Some(first.entity)
+        );
+        assert!(context_candidate(&[floor], Some(floor.entity)).is_none());
+        assert!(context_candidate(&[], Some(second.entity)).is_none());
     }
 }

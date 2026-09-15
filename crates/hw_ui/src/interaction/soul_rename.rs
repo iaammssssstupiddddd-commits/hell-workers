@@ -31,14 +31,14 @@ pub struct SoulRenameButtonCtx<'w, 's, A: UiAssets + Resource + 'static> {
 
 /// Soul リネームボタンのクリック処理
 pub fn soul_rename_button_system<A: UiAssets + Resource>(
-    q_buttons: Query<&Interaction, (Changed<Interaction>, With<SoulRenameButton>)>,
+    q_buttons: Query<Entity, With<SoulRenameButton>>,
     mut ctx: SoulRenameButtonCtx<A>,
 ) {
     if ctx.ui_input_state.world_input_captured {
         return;
     }
-    for interaction in q_buttons.iter() {
-        if *interaction != Interaction::Pressed {
+    for entity in q_buttons.iter() {
+        if !ctx.ui_input_state.button_activated(entity) {
             continue;
         }
 

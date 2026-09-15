@@ -48,6 +48,11 @@ impl Plugin for UiNotificationsPlugin {
             Update,
             present_notifications_system.in_set(NotificationSystemSet::Present),
         );
+        app.add_systems(
+            PostUpdate,
+            hw_ui::notifications::restore_notification_scroll_anchor_system
+                .after(bevy::ui::UiSystems::Layout),
+        );
     }
 }
 

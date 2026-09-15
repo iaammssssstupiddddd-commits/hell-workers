@@ -33,6 +33,37 @@ use validation::{
     build_floor_placement_plan, build_wall_placement_plan, existing_floor_building_grids,
 };
 
+#[derive(Resource, Default, PartialEq, Eq)]
+pub struct FloorPlacementPreview(pub Option<String>);
+
+fn floor_plan_summary(
+    plan: &hw_ui::selection::AreaPlacementPlan,
+    floor: bool,
+    instant: bool,
+) -> String {
+    use hw_core::constants::{
+        FLOOR_BONES_PER_TILE, FLOOR_MUD_PER_TILE, WALL_MUD_PER_TILE, WALL_WOOD_PER_TILE,
+    };
+    let accepted = plan.valid_tiles.len();
+    let rejected = plan.total_tile_count.saturating_sub(accepted);
+    let materials = if !floor && instant {
+        "即時建築: 資材不要".to_owned()
+    } else if floor {
+        format!(
+            "必要資材: Bone×{} / Mud×{}",
+            accepted as u64 * u64::from(FLOOR_BONES_PER_TILE),
+            accepted as u64 * u64::from(FLOOR_MUD_PER_TILE)
+        )
+    } else {
+        format!(
+            "必要資材: Wood×{} / Mud×{}",
+            accepted as u64 * u64::from(WALL_WOOD_PER_TILE),
+            accepted as u64 * u64::from(WALL_MUD_PER_TILE)
+        )
+    };
+    format!("採用 {accepted} / 除外 {rejected} タイル — {materials}")
+}
+
 #[derive(SystemParam)]
 pub struct FloorPlaceInput<'w, 's> {
     pub buttons: Res<'w, ButtonInput<MouseButton>>,
@@ -120,6 +151,7 @@ pub fn floor_placement_system(
 
 #[derive(SystemParam)]
 pub struct FloorPlacePreviewContext<'w, 's> {
+    pub summary: ResMut<'w, FloorPlacementPreview>,
     pub task_context: Res<'w, TaskContext>,
     pub placement_feedback: ResMut<'w, PlacementFeedbackState>,
     pub q_existing_floor_tiles: Query<'w, 's, &'static FloorTileBlueprint>,
@@ -133,14 +165,25 @@ pub fn floor_placement_preview_system(
     world_map: crate::world::map::WorldMapRead,
 ) {
     if input.ui_input_state.world_input_blocked() {
+        if context.summary.0.is_some() {
+            context.summary.0 = None;
+        }
         return;
     }
     let (is_floor_mode, start_pos) = match context.task_context.0 {
         TaskMode::FloorPlace(Some(start)) => (true, start),
         TaskMode::WallPlace(Some(start)) => (false, start),
-        _ => return,
+        _ => {
+            if context.summary.0.is_some() {
+                context.summary.0 = None;
+            }
+            return;
+        }
     };
     let Some(world_pos) = hw_ui::camera::world_cursor_pos(&input.q_window, &input.q_camera) else {
+        if context.summary.0.is_some() {
+            context.summary.0 = None;
+        }
         return;
     };
     let snapped_pos = WorldMap::snap_to_grid_edge(world_pos);
@@ -168,4 +211,40 @@ pub fn floor_placement_preview_system(
         )
     };
     context.placement_feedback.set_live_area_plan(&plan);
+    let summary = Some(floor_plan_summary(
+        &plan,
+        is_floor_mode,
+        context.debug_instant_build.0,
+    ));
+    if context.summary.0 != summary {
+        context.summary.0 = summary;
+    }
+}
+
+#[cfg(test)]
+mod summary_tests {
+    use super::*;
+    #[test]
+    fn floor_and_wall_costs_count_only_adopted_tiles() {
+        let plan = hw_ui::selection::AreaPlacementPlan {
+            valid_tiles: vec![(1, 1), (1, 2)],
+            total_tile_count: 3,
+            first_reject: None,
+        };
+        assert_eq!(
+            floor_plan_summary(&plan, true, false),
+            "採用 2 / 除外 1 タイル — 必要資材: Bone×4 / Mud×2"
+        );
+        assert_eq!(
+            floor_plan_summary(&plan, false, false),
+            "採用 2 / 除外 1 タイル — 必要資材: Wood×2 / Mud×2"
+        );
+        assert!(floor_plan_summary(&plan, false, true).ends_with("即時建築: 資材不要"));
+        let rejected = hw_ui::selection::AreaPlacementPlan {
+            valid_tiles: vec![],
+            total_tile_count: 3,
+            first_reject: None,
+        };
+        assert!(floor_plan_summary(&rejected, true, false).ends_with("Bone×0 / Mud×0"));
+    }
 }

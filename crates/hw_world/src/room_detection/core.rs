@@ -98,13 +98,37 @@ pub fn build_detection_input(tiles: &[RoomDetectionBuildingTile]) -> RoomDetecti
     input
 }
 
+/// Failure returned by the same traversal used to create rooms.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RoomFailureReason {
+    NoFloor,
+    TooLarge,
+    MapBoundary,
+    OpenBoundary,
+    NoDoor,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RoomFailure {
+    pub reason: RoomFailureReason,
+    pub grid: (i32, i32),
+}
+
+/// Inspect a floor position without retaining an ephemeral Room entity.
+pub fn inspect_room(
+    seed: (i32, i32),
+    input: &RoomDetectionInput,
+) -> Result<DetectedRoom, RoomFailure> {
+    flood_fill_room(seed, input, &mut input.floor_tiles.clone())
+}
+
 /// Runs flood-fill over all floor tiles and returns every valid room.
 pub fn detect_rooms(input: &RoomDetectionInput) -> Vec<DetectedRoom> {
     let mut unvisited_floors = input.floor_tiles.clone();
     let mut rooms = Vec::new();
 
     while let Some(seed) = unvisited_floors.iter().next().copied() {
-        if let Some(room) = flood_fill_room(seed, input, &mut unvisited_floors) {
+        if let Ok(room) = flood_fill_room(seed, input, &mut unvisited_floors) {
             rooms.push(room);
         }
     }
@@ -167,9 +191,12 @@ fn flood_fill_room(
     seed: (i32, i32),
     input: &RoomDetectionInput,
     unvisited_floors: &mut HashSet<(i32, i32)>,
-) -> Option<DetectedRoom> {
+) -> Result<DetectedRoom, RoomFailure> {
     if !unvisited_floors.remove(&seed) {
-        return None;
+        return Err(RoomFailure {
+            reason: RoomFailureReason::NoFloor,
+            grid: seed,
+        });
     }
 
     let mut queue = VecDeque::from([seed]);
@@ -177,19 +204,25 @@ fn flood_fill_room(
     let mut bounds = RoomBounds::from_tile(seed);
     let mut boundary_walls = HashSet::new();
     let mut boundary_doors = HashSet::new();
-    let mut is_valid = true;
+    let mut failure = None;
 
     while let Some(tile) = queue.pop_front() {
         tiles.push(tile);
         bounds.include(tile);
 
         if tiles.len() > ROOM_MAX_TILES {
-            is_valid = false;
+            failure.get_or_insert(RoomFailure {
+                reason: RoomFailureReason::TooLarge,
+                grid: tile,
+            });
         }
 
         for neighbor in cardinal_neighbors(tile) {
             if !is_in_map_bounds(neighbor) {
-                is_valid = false;
+                failure.get_or_insert(RoomFailure {
+                    reason: RoomFailureReason::MapBoundary,
+                    grid: neighbor,
+                });
                 continue;
             }
 
@@ -210,12 +243,21 @@ fn flood_fill_room(
                 continue;
             }
 
-            is_valid = false;
+            failure.get_or_insert(RoomFailure {
+                reason: RoomFailureReason::OpenBoundary,
+                grid: neighbor,
+            });
         }
     }
 
-    if !is_valid || boundary_doors.is_empty() {
-        return None;
+    if let Some(failure) = failure {
+        return Err(failure);
+    }
+    if boundary_doors.is_empty() {
+        return Err(RoomFailure {
+            reason: RoomFailureReason::NoDoor,
+            grid: seed,
+        });
     }
 
     tiles.sort_unstable();
@@ -226,7 +268,7 @@ fn flood_fill_room(
     let mut door_tiles: Vec<(i32, i32)> = boundary_doors.into_iter().collect();
     door_tiles.sort_unstable();
 
-    Some(DetectedRoom {
+    Ok(DetectedRoom {
         tiles,
         wall_tiles,
         door_tiles,

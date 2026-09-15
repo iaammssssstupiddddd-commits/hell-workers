@@ -2,6 +2,7 @@
 
 use super::UiAssets;
 use crate::components::{MenuButton, UiInputBlocker, UiInputCapture};
+use crate::help::{HelpEntryBody, HelpNavigationHeading, HelpSearchEmpty, HelpSearchResult};
 use crate::help::{
     HelpNavigationScrollArea, HelpPanel, HelpPanelChrome, HelpPanelContent, HelpScrollArea,
     HelpTopicBody, HelpTopicButton,
@@ -9,6 +10,7 @@ use crate::help::{
 use crate::intents::UiIntent;
 use crate::overlay::HELP_LAYER;
 use crate::theme::UiTheme;
+use crate::widgets::{TextFieldConfig, TextFieldRole, spawn_text_field};
 use bevy::picking::Pickable;
 use bevy::prelude::*;
 use bevy::ui::{FocusPolicy, RelativeCursorPosition};
@@ -74,6 +76,26 @@ pub fn spawn_help_panel(
 
     commands.entity(panel).with_children(|parent| {
         spawn_header(parent, game_assets, theme, chrome);
+        parent.spawn((
+            Text::new(chrome.copy().search_label()),
+            TextFont {
+                font: game_assets.font_ui().clone().into(),
+                font_size: FontSize::Px(theme.typography.font_size_sm),
+                ..default()
+            },
+            TextColor(theme.colors.text_primary_semantic),
+        ));
+        spawn_text_field(
+            parent,
+            game_assets,
+            theme,
+            TextFieldConfig {
+                initial_text: "",
+                role: TextFieldRole::HelpSearch,
+                max_characters: Some(120),
+                select_all_on_focus: false,
+            },
+        );
 
         parent
             .spawn(Node {
@@ -85,10 +107,34 @@ pub fn spawn_help_panel(
                 ..default()
             })
             .with_children(|body| {
-                spawn_navigation(body, game_assets, theme, content);
+                spawn_navigation(body, game_assets, theme, content, chrome);
                 spawn_content(body, game_assets, theme, content, chrome);
             });
 
+        parent
+            .spawn((
+                Button,
+                MenuButton(UiIntent::StartWorkGuide),
+                Node {
+                    min_height: Val::Px(32.0),
+                    flex_shrink: 0.0,
+                    justify_content: JustifyContent::Center,
+                    align_items: AlignItems::Center,
+                    ..default()
+                },
+                BackgroundColor(theme.colors.button_default),
+            ))
+            .with_children(|button| {
+                button.spawn((
+                    Text::new(chrome.copy().guide_start_label()),
+                    TextFont {
+                        font: game_assets.font_ui().clone().into(),
+                        font_size: FontSize::Px(14.0),
+                        ..default()
+                    },
+                    TextColor(theme.colors.text_primary_semantic),
+                ));
+            });
         parent.spawn((
             Text::new(chrome.footer_text()),
             TextFont {
@@ -167,6 +213,7 @@ fn spawn_navigation(
     game_assets: &dyn UiAssets,
     theme: &UiTheme,
     content: &HelpPanelContent,
+    chrome: &HelpPanelChrome,
 ) {
     parent
         .spawn((
@@ -191,6 +238,7 @@ fn spawn_navigation(
         .with_children(|navigation| {
             for section in content.sections() {
                 navigation.spawn((
+                    HelpNavigationHeading,
                     Text::new(section.title()),
                     TextFont {
                         font: game_assets.font_ui().clone().into(),
@@ -236,6 +284,61 @@ fn spawn_navigation(
                         });
                 }
             }
+            for topic in content.topics() {
+                for entry in topic.entries() {
+                    let searchable = std::iter::once(topic.title())
+                        .chain(std::iter::once(entry.title()))
+                        .chain(entry.paragraphs().iter().map(String::as_str))
+                        .collect::<Vec<_>>()
+                        .join("\n")
+                        .to_lowercase();
+                    navigation
+                        .spawn((
+                            Button,
+                            MenuButton(UiIntent::SelectHelpEntry(entry.id())),
+                            HelpSearchResult {
+                                entry: entry.id(),
+                                searchable,
+                            },
+                            Node {
+                                display: Display::None,
+                                min_height: Val::Px(32.0),
+                                flex_shrink: 0.0,
+                                width: Val::Percent(100.0),
+                                padding: UiRect::all(Val::Px(6.0)),
+                                ..default()
+                            },
+                            BackgroundColor(theme.colors.button_default),
+                        ))
+                        .with_children(|button| {
+                            button.spawn((
+                                Text::new(format!("{} / {}", topic.title(), entry.title())),
+                                TextFont {
+                                    font: game_assets.font_ui().clone().into(),
+                                    font_size: FontSize::Px(theme.typography.font_size_sm),
+                                    ..default()
+                                },
+                                TextColor(theme.colors.text_primary_semantic),
+                                TextLayout::new(Justify::Left, LineBreak::WordOrCharacter),
+                            ));
+                        });
+                }
+            }
+            navigation.spawn((
+                HelpSearchEmpty,
+                Text::new(chrome.copy().no_results_label()),
+                Node {
+                    display: Display::None,
+                    ..default()
+                },
+                TextFont {
+                    font: game_assets.font_ui().clone().into(),
+                    font_size: FontSize::Px(theme.typography.font_size_sm),
+                    ..default()
+                },
+                TextColor(theme.colors.text_muted),
+                TextLayout::new(Justify::Left, LineBreak::WordOrCharacter),
+            ));
         });
 }
 
@@ -344,6 +447,7 @@ fn spawn_entry(
 ) {
     parent
         .spawn((
+            HelpEntryBody(entry.id()),
             Node {
                 width: Val::Percent(100.0),
                 flex_direction: FlexDirection::Column,
@@ -459,6 +563,7 @@ mod tests {
             .map(|text| text.0.as_str())
             .collect();
         assert!(texts.contains(&"Injected Help Title"));
+        assert!(texts.contains(&"Injected Guide Start"));
         assert!(texts.contains(&"Injected Close (Ctrl+F1 / Esc)"));
         assert!(texts.contains(
             &"Ctrl+F1 / Esc: Injected Close  PrevTopic / NextTopic: Injected Topics  \

@@ -21,7 +21,7 @@ pub struct ShortcutResources<'w> {
 
 #[derive(SystemParam)]
 pub struct ShortcutQueries<'w, 's> {
-    q_familiar_exists: Query<'w, 's, (), With<Familiar>>,
+    q_familiar_exists: Query<'w, 's, &'static Familiar>,
     q_task_areas: Query<'w, 's, &'static TaskArea, With<Familiar>>,
     q_sites: Query<'w, 's, &'static Site>,
     q_familiars:
@@ -32,14 +32,40 @@ pub fn task_area_edit_history_shortcuts_system(
     mut res: ShortcutResources,
     mut queries: ShortcutQueries,
     mut commands: Commands,
+    guard: super::ui::AreaUiGuard,
+    ui_state: Res<super::ui::AreaEditUiState>,
+    mut ui_intents: MessageReader<hw_ui::UiIntent>,
 ) {
-    let Some(action) = res
-        .resolved_frame
-        .actions()
-        .iter()
-        .copied()
-        .find(|action| is_area_edit_action(*action))
-    else {
+    let flags = guard.flags();
+    let current = super::ui::snapshot(
+        res.selected_entity.0,
+        &res.area_edit_history,
+        &res.area_edit_clipboard,
+        &res.area_edit_presets,
+        (&queries.q_familiar_exists, &queries.q_task_areas),
+        flags,
+    );
+    let ui_action = ui_intents
+        .read()
+        .filter_map(|intent| match *intent {
+            hw_ui::UiIntent::AreaEditControl {
+                action,
+                revision,
+                epoch,
+            } => super::ui::resolve_control(action, revision, epoch, &ui_state, &current),
+            _ => None,
+        })
+        .fold(None, |first, next| first.or(Some(next)));
+    if !flags.enabled {
+        return;
+    }
+    let Some(action) = ui_action.or_else(|| {
+        res.resolved_frame
+            .actions()
+            .iter()
+            .copied()
+            .find(|action| is_area_edit_action(*action))
+    }) else {
         return;
     };
 
@@ -122,6 +148,19 @@ pub fn task_area_edit_history_shortcuts_system(
     }
 
     if action == InputAction::AreaRedo {
+        if res
+            .area_edit_history
+            .redo_stack
+            .last()
+            .is_some_and(|entry| {
+                queries
+                    .q_familiar_exists
+                    .get(entry.familiar_entity)
+                    .is_err()
+            })
+        {
+            return;
+        }
         if let Some(entry) = res.area_edit_history.redo_stack.pop() {
             let familiar_entity = entry.familiar_entity;
             apply_task_area_to_familiar(
@@ -136,6 +175,20 @@ pub fn task_area_edit_history_shortcuts_system(
         return;
     }
 
+    if action == InputAction::AreaUndo
+        && res
+            .area_edit_history
+            .undo_stack
+            .last()
+            .is_some_and(|entry| {
+                queries
+                    .q_familiar_exists
+                    .get(entry.familiar_entity)
+                    .is_err()
+            })
+    {
+        return;
+    }
     if action == InputAction::AreaUndo
         && let Some(entry) = res.area_edit_history.undo_stack.pop()
     {
@@ -193,7 +246,16 @@ mod tests {
 
     fn shortcut_app(action: InputAction) -> (App, Entity) {
         let mut app = minimal_app();
-        app.init_resource::<SelectedEntity>()
+        app.init_resource::<super::super::ui::AreaEditUiState>()
+            .init_resource::<hw_core::WorldEpoch>()
+            .insert_resource(crate::app_contexts::TaskContext(
+                crate::systems::command::TaskMode::AreaSelection(None),
+            ))
+            .init_resource::<super::super::AreaEditSession>()
+            .init_resource::<hw_ui::components::UiInputState>()
+            .init_resource::<crate::input_actions::PendingWorldInputCapture>()
+            .add_message::<hw_ui::UiIntent>()
+            .init_resource::<SelectedEntity>()
             .init_resource::<ResolvedInputFrame>()
             .init_resource::<AreaEditHistory>()
             .init_resource::<AreaEditClipboard>()
@@ -233,6 +295,107 @@ mod tests {
         assert_eq!(
             app.world().resource::<AreaEditPresets>().slots,
             [None, Some(Vec2::new(4.0, 6.0)), None]
+        );
+    }
+    #[test]
+    fn area_controls_use_the_displayed_history_owner_and_reject_stale_world() {
+        use hw_ui::area_edit::panel::{AreaEditAction, AreaEditPanelModel};
+        let (mut app, selected) = shortcut_app(InputAction::AreaCopy);
+        app.world_mut()
+            .resource_mut::<crate::app_contexts::TaskContext>()
+            .0 = crate::systems::command::TaskMode::AreaSelection(None);
+        app.init_resource::<AreaEditPanelModel>().add_systems(
+            Update,
+            super::super::ui::update_area_edit_controls
+                .after(task_area_edit_history_shortcuts_system),
+        );
+        let other = app
+            .world_mut()
+            .spawn((
+                Familiar {
+                    name: "別の担当".into(),
+                    ..default()
+                },
+                ActiveCommand::default(),
+                Destination(Vec2::ZERO),
+                TaskArea::from_points(Vec2::ZERO, Vec2::splat(64.0)),
+            ))
+            .id();
+        app.world_mut().resource_mut::<AreaEditHistory>().push(
+            other,
+            None,
+            Some(TaskArea::from_points(Vec2::ZERO, Vec2::splat(64.0))),
+        );
+        app.update();
+        app.world_mut()
+            .resource_mut::<ResolvedInputFrame>()
+            .replace(InputModifiers::default(), vec![], None, true);
+        let model = app.world().resource::<AreaEditPanelModel>();
+        assert!(
+            model
+                .controls
+                .iter()
+                .any(|control| control.action == AreaEditAction::Undo
+                    && control.label.contains("別の担当")
+                    && control.label.contains("範囲なし")
+                    && control.enabled)
+        );
+        assert!(
+            model
+                .controls
+                .iter()
+                .any(|control| control.action == AreaEditAction::Load1
+                    && control.label.contains("未保存")
+                    && !control.enabled)
+        );
+        let old_revision = model.revision;
+        let old_epoch = model.epoch;
+        app.world_mut()
+            .write_message(hw_ui::UiIntent::AreaEditControl {
+                action: AreaEditAction::Undo,
+                revision: old_revision,
+                epoch: old_epoch,
+            });
+        app.update();
+        assert_eq!(app.world().resource::<SelectedEntity>().0, Some(other));
+        assert!(app.world().get::<TaskArea>(other).is_none());
+        assert_eq!(
+            app.world().resource::<AreaEditHistory>().redo_stack.len(),
+            1
+        );
+        app.world_mut()
+            .resource_mut::<hw_core::WorldEpoch>()
+            .advance();
+        app.world_mut()
+            .write_message(hw_ui::UiIntent::AreaEditControl {
+                action: AreaEditAction::Redo,
+                revision: old_revision,
+                epoch: old_epoch,
+            });
+        app.update();
+        assert!(app.world().get::<TaskArea>(other).is_none());
+        assert!(app.world().get::<TaskArea>(selected).is_some());
+    }
+
+    #[test]
+    fn area_history_does_not_apply_to_a_deleted_familiar() {
+        let (mut app, familiar) = shortcut_app(InputAction::AreaUndo);
+        app.world_mut().resource_mut::<AreaEditHistory>().push(
+            familiar,
+            None,
+            Some(TaskArea::from_points(Vec2::ZERO, Vec2::ONE)),
+        );
+        app.world_mut().despawn(familiar);
+        app.update();
+        assert_eq!(
+            app.world().resource::<AreaEditHistory>().undo_stack.len(),
+            1
+        );
+        assert!(
+            app.world()
+                .resource::<AreaEditHistory>()
+                .redo_stack
+                .is_empty()
         );
     }
 }

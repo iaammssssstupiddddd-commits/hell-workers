@@ -30,6 +30,21 @@ pub(super) fn handle_release_designation(
     let issued_by = ctx
         .selected_entity
         .filter(|entity| q_familiars.contains(*entity));
-    apply_designation_in_area(commands, ctx.mode, &area, issued_by, q_targets);
+    let summary = apply_designation_in_area(commands, ctx.mode, &area, issued_by, q_targets);
+    let label = match ctx.mode {
+        TaskMode::DesignateChop(_) => "伐採",
+        TaskMode::DesignateMine(_) => "採掘",
+        TaskMode::DesignateHaul(_) => "運搬",
+        _ => return,
+    };
+    super::notify_order_result(
+        commands,
+        issued_by,
+        label,
+        format!(
+            "対象 {}・適用 {}・受入先なし {}・担当なし {}",
+            summary.matched, summary.applied, summary.no_destination, summary.no_issuer,
+        ),
+    );
     task_context.0 = reset_designation_mode(ctx.mode);
 }

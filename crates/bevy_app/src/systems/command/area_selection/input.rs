@@ -33,6 +33,8 @@ pub struct AreaInputContext<'w, 's> {
     q_camera: Query<'w, 's, (&'static Camera, &'static GlobalTransform), With<MainCamera>>,
     ui_input_state: Res<'w, UiInputState>,
     resolved_frame: Res<'w, ResolvedInputFrame>,
+    time: Option<Res<'w, Time<Virtual>>>,
+    recovery: Option<Res<'w, crate::systems::save::SaveRecoveryMode>>,
 }
 
 #[derive(SystemParam)]
@@ -75,6 +77,16 @@ pub fn task_area_selection_system(
     mut queries: AreaEntityQueries,
     mut commands: Commands,
 ) {
+    if input.recovery.as_ref().is_some_and(|recovery| {
+        **recovery == crate::systems::save::SaveRecoveryMode::RecoveryFailed
+    }) || (input.time.as_ref().is_some_and(|time| time.is_paused())
+        && !matches!(
+            state.task_context.0,
+            TaskMode::AreaSelection(_) | TaskMode::DesignateChop(_) | TaskMode::DesignateMine(_)
+        ))
+    {
+        return;
+    }
     if !matches!(state.task_context.0, TaskMode::DreamPlanting(_)) {
         state.area_edit_session.dream_planting_preview_seed = None;
     }

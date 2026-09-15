@@ -9,10 +9,13 @@ Familiar command の keyboard edge は `bevy_app::input_actions` が context 解
 `SelectedEntity` から snapshot した Familiar を使い、同 frame の world / Entity List click は抑止する。
 
 - 非 pause、`PlayMode::Normal`、互換 `TaskMode` のときだけ有効。
-- `C/M/H/B` と `Digit1-4` は Chop/Mine/Haul/Build、`Digit0/Delete` は指定キャンセル。Escape は
-  `TaskMode::None` の Normal 時だけ Idle/Patrol toggle とし、non-`None` TaskMode は active owner cancel を優先する。
-- B と数字キーは Familiar context を World menu / 時間操作より優先する。Pause、in-progress gesture、
-  pending non-Normal mode、modal では Familiar command を生成せず、停止中の入力を次 frame へ保持しない。
+- `C/M/H` は Chop/Mine/Haul、`Digit0/Delete` は指定キャンセル。未完成の FamiliarBuild は公開しない。
+- 修飾なし `1/2/3/4` は選択対象に関係なく停止/通常/高速/最高速。`B` は建築メニュー。
+- `I` と Familiar の右クリックメニュー「待機 / 巡回」は共通処理で Idle/Patrol を切り替える。
+  TaskArea がなければ Idle。メニューは開いた対象 Entity を保持し、後から選択した別対象へ流用しない。
+  Esc は閉じる/取消専用で、命令を切り替えない。
+- Pause、in-progress gesture、pending non-Normal mode、modal では Familiar keyboard command を生成せず、
+  停止中の入力を次 frame へ保持しない。メニュー操作も foreground capture と失効対象を拒否する。
 - 複数 command chord を同 frame に押した場合は旧 `else if` 順の優先度で 1 action に絞る。
 
 ## 1. AI 状態 (FamiliarAiState)
@@ -380,3 +383,7 @@ load 時は revisions と snapshot を default に戻し、新 world の最初�
   - **毒緑 (Toxic Green)**: 腐敗の硫黄
   - **真紅 (Crimson Red)**: 鮮烈な流血
 - **適用範囲**: タスクエリア（`TaskArea`）の境界線やグラデーションは、この `color_index` に基づいた色で描画されます。
+
+### Area編集の操作パネル
+
+Areaモードでは戻す／やり直す担当と復元後の寸法、コピー／貼付け先、3枠の保存・適用寸法を表示する。履歴・clipboard・presetが空なら理由付きで無効化する。UIは表示revision・world epochと現在の選択・履歴先頭・寸法・操作可能状態を照合し、既存shortcut consumerへ渡す。Undo/Redoは全使い魔共通の履歴を使い、表示された担当へ選択を切り替える。削除された使い魔への履歴は実行しない。履歴上限64件と新規編集時のredo消去は維持する。

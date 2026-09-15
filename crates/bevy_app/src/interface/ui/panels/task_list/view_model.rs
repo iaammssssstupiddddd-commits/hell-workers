@@ -145,6 +145,7 @@ pub struct TaskListSnapshotInputs<'a, 'w, 's> {
     pub familiar_diagnostics: &'a FamiliarTaskCandidateDiagnostics,
     pub auto_build_diagnostics: &'a BlueprintAutoBuildDiagnostics,
     pub revisions: &'a TaskDiagnosticInputRevisions,
+    pub related: &'a super::actions::InspectableTaskRelatedQuery<'w, 's>,
 }
 
 pub fn build_task_list_snapshot(inputs: TaskListSnapshotInputs<'_, '_, '_>) -> Vec<TaskEntry> {
@@ -157,6 +158,7 @@ pub fn build_task_list_snapshot(inputs: TaskListSnapshotInputs<'_, '_, '_>) -> V
         familiar_diagnostics,
         auto_build_diagnostics,
         revisions,
+        related,
     } = inputs;
     let mut entries = Vec::new();
 
@@ -212,6 +214,12 @@ pub fn build_task_list_snapshot(inputs: TaskListSnapshotInputs<'_, '_, '_>) -> V
         );
 
         entries.push(TaskEntry {
+            related_owner: managed_by
+                .map(|owner| owner.0)
+                .filter(|entity| related.contains(*entity)),
+            related_anchor: transport_req
+                .map(|request| request.anchor)
+                .filter(|entity| related.contains(*entity)),
             entity,
             work_type,
             description,
@@ -428,6 +436,7 @@ pub fn update_task_list_state_system(
     deconstruction_targets: DeconstructionTargetActionQuery,
     deconstruction_target_buildings: Query<'_, '_, &'static Building>,
     mut context: TaskListStateUpdateContext,
+    related: super::actions::InspectableTaskRelatedQuery,
 ) {
     if context.state.initialized && !context.dirty.state_dirty() {
         return;
@@ -442,6 +451,7 @@ pub fn update_task_list_state_system(
         familiar_diagnostics: &context.familiar_diagnostics,
         auto_build_diagnostics: &context.auto_build_diagnostics,
         revisions: &context.revisions,
+        related: &related,
     });
     let (summary_total, summary_high) = build_task_summary(&designations);
     let list_changed = !context.state.initialized || snapshot != context.state.snapshot;

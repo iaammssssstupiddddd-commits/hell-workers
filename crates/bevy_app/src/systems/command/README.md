@@ -55,7 +55,8 @@ UI からの入力を受け取り、`Designation` や `TaskArea` コンポーネ
 
 | ファイル | 内容 |
 |---|---|
-| `placement.rs` | `zone_placement_system` — ゾーン配置（ECS apply）。バリデーション helper は `hw_world::zone_ops` を呼ぶ |
+| `plan.rs` | `build_zone_plan` — Stockpileの採用/除外セル・owner、Yard拡張後boundsとtyped拒否理由。geometryは`hw_world::zone_ops`を使用 |
+| `placement.rs` | `zone_placement_system` — previewを公開し、release時に最新plan/epoch/範囲を照合してECS apply。cursor喪失時もgestureを消費する |
 | `removal.rs` | `zone_removal_system` — ゾーン削除（ECS apply） |
 | `removal_preview.rs` | `ZoneRemovalPreviewState` — 削除プレビュー。連結判定は `hw_world::identify_removal_targets` を使用 |
 

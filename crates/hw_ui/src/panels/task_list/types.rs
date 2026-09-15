@@ -3,8 +3,6 @@ use std::cmp::Ordering;
 use bevy::prelude::*;
 use hw_core::jobs::WorkType;
 
-use super::work_type_icon::player_reachable_work_types;
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum TaskBlockerReason {
     NoEligibleFamiliar,
@@ -213,6 +211,8 @@ pub enum TaskSortDirection {
 
 #[derive(Resource, Debug, Clone, PartialEq, Eq, Default)]
 pub struct TaskDashboardViewState {
+    pub filter_menu: Option<TaskFilterMenu>,
+    pub page_index: usize,
     pub work_type: TaskWorkTypeFilter,
     pub status: TaskStatusFilter,
     pub priority: TaskPriorityFilter,
@@ -221,8 +221,25 @@ pub struct TaskDashboardViewState {
     pub direction: TaskSortDirection,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TaskFilterMenu {
+    WorkType,
+    Status,
+    Priority,
+    Workers,
+}
+
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TaskDashboardControl {
+    SetWorkType(TaskWorkTypeFilter),
+    SetStatus(TaskStatusFilter),
+    SetPriority(TaskPriorityFilter),
+    SetWorkers(TaskWorkerFilter),
+    ResetFilters,
+    FirstPage,
+    PreviousPage,
+    NextPage,
+    LastPage,
     WorkTypeFilter,
     StatusFilter,
     PriorityFilter,
@@ -239,7 +256,17 @@ pub struct TaskActionButton {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TaskRelatedKind {
+    Owner,
+    Anchor,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TaskActionButtonKind {
+    InspectRelated {
+        kind: TaskRelatedKind,
+        target: Entity,
+    },
     AdjustPriority(TaskPriorityAdjustment),
     Cancel(TaskCancelKind),
 }
@@ -253,6 +280,7 @@ pub struct PendingTaskCancellation {
 
 #[derive(Resource, Debug, Clone, PartialEq, Eq, Default)]
 pub struct TaskDashboardActionState {
+    pub active_task: Option<Entity>,
     pub confirmation: Option<PendingTaskCancellation>,
 }
 
@@ -260,6 +288,17 @@ pub struct TaskDashboardActionState {
 /// empty-state rows that do not carry `TaskListItem`.
 #[derive(Component)]
 pub struct TaskListDynamicNode;
+
+#[derive(Component)]
+pub struct TaskListScroll;
+
+pub const TASK_PAGE_SIZE: usize = 20;
+
+pub fn task_page_range(page: usize, total: usize) -> std::ops::Range<usize> {
+    let last = total.saturating_sub(1) / TASK_PAGE_SIZE;
+    let start = page.min(last) * TASK_PAGE_SIZE;
+    start..start.saturating_add(TASK_PAGE_SIZE).min(total)
+}
 
 /// Task dashboard entry after root-owned game state has been adapted to UI
 /// safe values.
@@ -272,6 +311,8 @@ pub struct TaskEntry {
     pub worker_count: usize,
     pub status: TaskStatusSummary,
     pub actions: TaskActionCapabilities,
+    pub related_owner: Option<Entity>,
+    pub related_anchor: Option<Entity>,
 }
 
 impl TaskEntry {
@@ -322,32 +363,59 @@ impl TaskDashboardViewState {
     }
 
     pub fn apply_control(&mut self, control: TaskDashboardControl) {
+        let menu = match control {
+            TaskDashboardControl::WorkTypeFilter => Some(TaskFilterMenu::WorkType),
+            TaskDashboardControl::StatusFilter => Some(TaskFilterMenu::Status),
+            TaskDashboardControl::PriorityFilter => Some(TaskFilterMenu::Priority),
+            TaskDashboardControl::WorkerFilter => Some(TaskFilterMenu::Workers),
+            _ => None,
+        };
+        if let Some(menu) = menu {
+            self.filter_menu = if self.filter_menu == Some(menu) {
+                None
+            } else {
+                Some(menu)
+            };
+            return;
+        }
+        self.filter_menu = None;
         match control {
-            TaskDashboardControl::WorkTypeFilter => {
-                self.work_type = next_work_type_filter(self.work_type);
+            TaskDashboardControl::FirstPage => {
+                self.page_index = 0;
+                return;
             }
-            TaskDashboardControl::StatusFilter => {
-                self.status = match self.status {
-                    TaskStatusFilter::All => TaskStatusFilter::Working,
-                    TaskStatusFilter::Working => TaskStatusFilter::Blocked,
-                    TaskStatusFilter::Blocked => TaskStatusFilter::Pending,
-                    TaskStatusFilter::Pending => TaskStatusFilter::All,
-                };
+            TaskDashboardControl::PreviousPage => {
+                self.page_index = self.page_index.saturating_sub(1);
+                return;
             }
-            TaskDashboardControl::PriorityFilter => {
-                self.priority = match self.priority {
-                    TaskPriorityFilter::All => TaskPriorityFilter::Normal,
-                    TaskPriorityFilter::Normal => TaskPriorityFilter::High,
-                    TaskPriorityFilter::High => TaskPriorityFilter::Critical,
-                    TaskPriorityFilter::Critical => TaskPriorityFilter::All,
-                };
+            TaskDashboardControl::NextPage => {
+                self.page_index = self.page_index.saturating_add(1);
+                return;
             }
-            TaskDashboardControl::WorkerFilter => {
-                self.workers = match self.workers {
-                    TaskWorkerFilter::All => TaskWorkerFilter::Assigned,
-                    TaskWorkerFilter::Assigned => TaskWorkerFilter::Unassigned,
-                    TaskWorkerFilter::Unassigned => TaskWorkerFilter::All,
-                };
+            TaskDashboardControl::LastPage => {
+                self.page_index = usize::MAX;
+                return;
+            }
+            _ => self.page_index = 0,
+        }
+        match control {
+            TaskDashboardControl::FirstPage
+            | TaskDashboardControl::PreviousPage
+            | TaskDashboardControl::NextPage
+            | TaskDashboardControl::LastPage => unreachable!("page controls returned above"),
+            TaskDashboardControl::WorkTypeFilter
+            | TaskDashboardControl::StatusFilter
+            | TaskDashboardControl::PriorityFilter
+            | TaskDashboardControl::WorkerFilter => unreachable!("menu toggles returned above"),
+            TaskDashboardControl::SetWorkType(value) => self.work_type = value,
+            TaskDashboardControl::SetStatus(value) => self.status = value,
+            TaskDashboardControl::SetPriority(value) => self.priority = value,
+            TaskDashboardControl::SetWorkers(value) => self.workers = value,
+            TaskDashboardControl::ResetFilters => {
+                self.work_type = TaskWorkTypeFilter::All;
+                self.status = TaskStatusFilter::All;
+                self.priority = TaskPriorityFilter::All;
+                self.workers = TaskWorkerFilter::All;
             }
             TaskDashboardControl::SortKey => {
                 self.sort_key = match self.sort_key {
@@ -388,21 +456,6 @@ fn compare_entity_keys(left: Entity, right: Entity) -> Ordering {
             .to_bits()
             .cmp(&right.generation().to_bits())
     })
-}
-
-fn next_work_type_filter(current: TaskWorkTypeFilter) -> TaskWorkTypeFilter {
-    match current {
-        TaskWorkTypeFilter::All => player_reachable_work_types()
-            .next()
-            .map_or(TaskWorkTypeFilter::All, TaskWorkTypeFilter::Only),
-        TaskWorkTypeFilter::Only(current) => {
-            let mut types = player_reachable_work_types();
-            types
-                .find(|work_type| *work_type == current)
-                .and_then(|_| types.next())
-                .map_or(TaskWorkTypeFilter::All, TaskWorkTypeFilter::Only)
-        }
-    }
 }
 
 /// Task list dirty flags shared by the root view-model adapter and UI widget.
@@ -483,6 +536,8 @@ mod tests {
             worker_count: workers,
             status,
             actions: TaskActionCapabilities::READ_ONLY,
+            related_owner: None,
+            related_anchor: None,
         }
     }
 
@@ -769,13 +824,10 @@ mod tests {
     #[test]
     fn dashboard_controls_cycle_back_to_their_defaults() {
         let cases = [
-            (
-                TaskDashboardControl::WorkTypeFilter,
-                player_reachable_work_types().count() + 1,
-            ),
-            (TaskDashboardControl::StatusFilter, 4),
-            (TaskDashboardControl::PriorityFilter, 4),
-            (TaskDashboardControl::WorkerFilter, 3),
+            (TaskDashboardControl::WorkTypeFilter, 2),
+            (TaskDashboardControl::StatusFilter, 2),
+            (TaskDashboardControl::PriorityFilter, 2),
+            (TaskDashboardControl::WorkerFilter, 2),
             (TaskDashboardControl::SortKey, 4),
             (TaskDashboardControl::SortDirection, 2),
         ];
@@ -786,6 +838,41 @@ mod tests {
                 state.apply_control(control);
             }
             assert_eq!(state, TaskDashboardViewState::default());
+        }
+    }
+
+    #[test]
+    fn every_work_type_is_chosen_directly_and_reset_keeps_sort_order() {
+        for work_type in super::super::work_type_icon::player_reachable_work_types() {
+            let mut state = TaskDashboardViewState {
+                page_index: 9,
+                ..default()
+            };
+            state.apply_control(TaskDashboardControl::WorkTypeFilter);
+            assert_eq!(state.filter_menu, Some(TaskFilterMenu::WorkType));
+            assert_eq!(state.page_index, 9);
+            state.apply_control(TaskDashboardControl::SetWorkType(TaskWorkTypeFilter::Only(
+                work_type,
+            )));
+            assert_eq!(state.work_type, TaskWorkTypeFilter::Only(work_type));
+            assert_eq!(state.page_index, 0);
+            assert_eq!(state.filter_menu, None);
+            state.apply_control(TaskDashboardControl::SetStatus(TaskStatusFilter::Blocked));
+            state.apply_control(TaskDashboardControl::SetPriority(
+                TaskPriorityFilter::Critical,
+            ));
+            state.apply_control(TaskDashboardControl::SetWorkers(
+                TaskWorkerFilter::Unassigned,
+            ));
+            state.sort_key = TaskSortKey::Priority;
+            state.direction = TaskSortDirection::Descending;
+            state.apply_control(TaskDashboardControl::ResetFilters);
+            assert_eq!(state.work_type, TaskWorkTypeFilter::All);
+            assert_eq!(state.status, TaskStatusFilter::All);
+            assert_eq!(state.priority, TaskPriorityFilter::All);
+            assert_eq!(state.workers, TaskWorkerFilter::All);
+            assert_eq!(state.sort_key, TaskSortKey::Priority);
+            assert_eq!(state.direction, TaskSortDirection::Descending);
         }
     }
 }

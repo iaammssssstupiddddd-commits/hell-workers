@@ -1,4 +1,6 @@
 mod builders;
+mod room;
+pub use room::RoomInspectionChanges;
 
 use crate::entities::damned_soul::{DamnedSoul, IdleBehavior, IdleState};
 use crate::entities::familiar::Familiar;
@@ -96,6 +98,7 @@ pub struct EntityInspectionQuery<'w, 's> {
         (
             &'static Familiar,
             &'static crate::entities::familiar::FamiliarOperation,
+            Option<&'static hw_core::familiar::FamiliarPolicy>,
         ),
     >,
     q_familiars_escape: Query<'w, 's, (&'static Transform, &'static Familiar)>,
@@ -104,6 +107,7 @@ pub struct EntityInspectionQuery<'w, 's> {
     q_trees: Query<'w, 's, &'static crate::systems::jobs::Tree>,
     q_rocks: Query<'w, 's, &'static crate::systems::jobs::Rock>,
     q_designations: DesignationInspectionQuery<'w, 's>,
+    q_doors: Query<'w, 's, &'static hw_jobs::Door>,
     q_buildings: BuildingInspectionQuery<'w, 's>,
     q_stockpiles: StockpileInspectionQuery<'w, 's>,
     pub(super) q_power_consumers: PowerConsumerInspectionQuery<'w, 's>,
@@ -174,6 +178,7 @@ pub fn update_entity_inspection_view_model_system(
     selected_entity: Res<SelectedEntity>,
     mut pin_state: ResMut<InfoPanelPinState>,
     inspection: EntityInspectionQuery,
+    mut room: room::RoomInspection,
     mut view_model: ResMut<EntityInspectionViewModel>,
 ) {
     let mut inspected_entity = pin_state.entity.or(selected_entity.0);
@@ -185,6 +190,7 @@ pub fn update_entity_inspection_view_model_system(
         model = inspected_entity.and_then(|entity| inspection.build_model(entity));
     }
 
+    room.append(model.as_mut());
     let _ = inspected_entity;
     view_model.model = model;
 }

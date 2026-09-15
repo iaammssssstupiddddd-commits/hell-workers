@@ -1,6 +1,6 @@
 # タスクリストUI仕様
 
-最終更新: 2026-08-24
+最終更新: 2026-09-14
 
 ## 概要
 画面左側に表示される常駐パネルのモードの1つです（エンティティリストとタブ切替）。
@@ -90,6 +90,14 @@ exhaustive coverageされ、追加・変更時は`docs/help-screen.md`の更新�
 
 同値の最終順序は Entity index / generation で固定し、query や HashMap の反復順に依存させません。
 
+### ページとスクロール
+
+filter/sort後の全件を20件ずつ表示します。固定footerの先頭・前・次・末尾ボタンと
+表示範囲/総件数で移動し、ページ内は標準 `ScrollArea` / `Scrollbar` でスクロールします。
+toolbarとfooterは本文の外側に残ります。group件数はfilter後の全体を数えます。
+filter/sort変更は先頭ページ、ページ変更は本文の先頭へ戻ります。通常のデータ更新は
+ページと本文のoffsetを保持し、件数減少時は最終ページへclampします。
+
 ## ビジュアルフィードバック
 
 エンティティリストと統一されたホバー・選択ハイライトを提供します。
@@ -116,10 +124,8 @@ exhaustive coverageされ、追加・変更時は`docs/help-screen.md`の更新�
   task list の dirty 検知は policy 本体を再評価せず、更新された diagnostics / revision を通常の dirty source として読みます。
 - 左パネルを `TaskList` に切り替えたフレームは `mark_all()` で `state_dirty` / `list_dirty` を両方立て、最新スナップショットで再描画します（タスクデータが変わっていない場合も含む）。
 - 画面上部の task summary は `TaskListState.summary_total` / `summary_high` を参照し、タスクリストと同じ dirty source を共有します。
-- `TaskListBody`は`clip_y`でスクロールしないため、ウィンドウ高の70%に相当する最大パネル高から
-  `ceil(max_panel_height / soul_item_height) + 2`行をresident上限として計算します。filter / sort後の件数と
-  group countは全snapshotを使いますが、上限より後ろの完全に不可視なrow Nodeは生成しません。ウィンドウ高から
-  求めた上限が変わった場合だけ`TaskListDirty::list_dirty`を立てて再構築します。
+- 常駐するtask行は現在ページの最大20件です。非表示/最小化中は本文を再構築せず、再表示時にdirtyを処理します。
+  profilingの`render_visible_rows`はfilter後の総数であり、常駐row数とは区別します。
 
 ## 実装アーキテクチャ
 - `LeftPanelMode::TaskList` 時に表示
@@ -128,19 +134,19 @@ exhaustive coverageされ、追加・変更時は`docs/help-screen.md`の更新�
   - `presenter.rs` - WorkType → icon / label / description
   - `actions.rs` - capability の positive allow-list、live 再検証、owner 別 action adapter
   - `dirty.rs` - タスクリストと task summary の dirty source
-  - `update.rs` - dirty gate、最大viewport resident行数、必要時のみ再描画
+  - `update.rs` - dirty gate、ページclamp、本文offset保持、必要時のみ再描画
 - `crates/bevy_app/src/interface/ui/plugins/info_panel.rs` が `PreUpdate` の dirty 検知と state 更新、`Update` の左パネル表示更新を束ねます。
 - `crates/bevy_app/src/interface/ui/interaction/status_display/mode_panel.rs` が cached summary を読み、task summary 表示だけを差分更新します。
 - `Designation` コンポーネントを持つエンティティをクエリし、関連コンポーネント（Blueprint, TransportRequest等）を参照して説明文を生成
-- `task_list_visual_feedback_system` が `Interaction` と `InfoPanelPinState` を監視し、`ui/list::apply_row_highlight` でホバー・選択ハイライトを適用
+- `task_list_visual_feedback_system` が `Interaction` と `TaskDashboardActionState.active_task` を監視し、`ui/list::apply_row_highlight` でホバー・選択ハイライトを適用
 - `hw_ui::panels::task_list` が表示型、filter / sort、render、pure UI interaction を所有する
 
 ## インタラクション
 - **ホバー**: 背景色がハイライト
-- **クリック**: カメラをそのタスク（対象エンティティ）の位置へ移動し、InfoPanel にピン留め
+- **クリック**: 当該Taskを選択し操作欄を表示。カメラとpinは明示ボタンから変更する
 - **選択状態**: ピン留めされたエンティティに対応するアイテムに選択ボーダーと背景色が表示
 - **優先度**: 許可された手動 Chop / Mine、ManualTransportRequest、DeconstructionOrderだけを `0 / 5 / 10` で上下する
-- **キャンセル**: 1 回目で行内確認、同じ対象・種別の 2 回目で intent を発行する。Floor / Wall は site 全体を対象にする
+- **キャンセル**: 原則は1回目で行内確認、同じ対象・種別の2回目でintentを発行する。Soul Spa搬入は情報パネルと共通の確認パネルを開き、独立した確定ボタンを使う。Floor / Wall はsite全体を対象にする
 
 フォーカス行の `Button` と action bar の各 `Button` は sibling であり、nested Button にしません。
 Pause / Modal capture 中も action intent reader は drain して拒否結果を返し、解除後に遅延適用しません。
@@ -214,3 +220,15 @@ A3 の完了判断と受入履歴は
 - `crates/bevy_app/src/interface/ui/panels/task_list/actions.rs` - live capability resolver、typed action outcome、owner別適用
 - `crates/bevy_app/src/interface/ui/plugins/info_panel.rs` - task list の dirty 検知 / state 更新 / 左パネル system 登録
 - `crates/bevy_app/src/interface/ui/interaction/status_display/mode_panel.rs` - task summary の cached 描画
+
+### 選択と詳細固定の分離
+
+Task行の選択は `SelectedEntity` と `TaskDashboardActionState.active_task` を更新する。カメラとpinを自動変更しない。選択行には「現地へ」「詳細を固定」と利用可能な優先度/取消操作を表示する。pinなしで操作でき、pin済みの別対象の閲覧も維持できる。page/filter後に表示対象から外れたactive_taskと未確定取消を解除するが、生存中のpinは維持する。capture開始で未確定取消を解除し、world置換でactive_taskも初期化する。
+
+### 条件の直接選択
+
+Type/State/Priority/Workersは対応する選択肢一覧を開き、単一条件を直接選ぶ。選択肢は標準スクロール領域に収める。「全解除」は4条件とpageを初期化し、sort key/directionを保持する。選択肢を開閉するだけではfilter値とpageを変えない。Taskが0件でもtoolbarと全解除を残す。関連blockerからの操作は別途実装中で、現時点のラベルを操作可能とは扱わない。
+
+### 関連対象への導線
+
+選択行の「担当の詳細」は現在のManagedBy、「運搬の関連先」はTransportRequest.anchorに対応する情報パネルを固定する。anchorはrequest種別により用途が違うため、常に搬入先とは表記しない。inspect可能な型のlive Entityだけを表示し、実行直前にもtask種別・関連づけ・対象存在を照合する。集計blockerから特定のFamiliarを推測しない。カメラは移動しない。担当の情報にはpolicyが停止している作業種別とOperationへの案内を表示する。

@@ -7,8 +7,9 @@ Hover、左クリック、右クリックは `interface/selection/hit_test.rs` �
 
 - 左ボタンは押下位置の候補を保持し、5 logical px以内で離した場合だけ選択を確定します。
 - 5 pxを超えるドラッグは選択を変更しません。Mouse Drag Panが有効なら、しきい値を超えた移動分からカメラへ適用します。
-- 同じ候補列を500 ms以内・4 px以内で再クリックすると、重なった対象を順に選択します。
+- 同じ候補列を4 px以内で再クリックすると（時間制限なし）、重なった対象を順に選択します。
 - 右クリックは非Floor対象のコンテキストメニューを優先します。空地または完成Floor上では、選択中Familiarの移動指示として扱います。
+- コンテキストメニューが開いているときのEscは`CloseContextMenu`としてmenuと古いopen要求だけを消去し、Familiarの命令やactive modeを変更しません。Helpなど最前面overlayがある場合は、そのoverlayのEscを優先します。
 - UI capture、入力欄、modal、selection suppression中のworld操作は受理しません。
 
 ## 候補と形状
@@ -36,3 +37,15 @@ Familiarの地面移動を受理すると、移動先へ短時間の緑色マー
 - `hw_visual::selection_indicator`: Hover、footprint selection、Familiar destination marker
 
 プレイヤー向け説明はHelpの`camera-selection` topicに置き、`world-selection`と`world-object-actions`のstable entry IDで管理します。
+
+### 中ボタンの専用pan
+
+Mouse Drag Pan有効時、中ボタンをワールド上で押してドラッグすると配置・移動・範囲編集モードを保ったままカメラを動かす。左/右gestureが先に始まっている場合は中ボタンが割り込まない。中ボタンが先の場合、左/右入力は選択・配置・範囲開始/確定へ送らず、全ボタンreleaseまで抑止する。UI・入力欄・modal・focus消失・world置換で中断し、押したまま再開しない。`UiInputState.world_pointer_claimed`で既存world入力consumerを遮断し、modal開始扱いにはしない。
+
+## 重なり候補一覧（U31）
+
+同じ画面位置（4 logical px以内）で同じ候補順をクリックすると巡回する。500 msの連打期限は撤廃した。複数候補を選んだ地点はworld座標で保持し、画面上部の「候補 n/m — 一覧を開く」から名前付き一覧を開ける。一覧はScrollArea/Scrollbarを使用し、行のreleaseで選択だけを変える（camera/pinは不変）。Escは既存ContextMenuの閉鎖ownerで一覧だけを閉じる。
+
+元地点を共通SelectionResolverで再検査し、候補や地点の変更でrevisionを進める。buttonはtarget/revision/epochを持ち、古い候補やworld置換後の操作は拒否する。UI行はrevision変更で新Entityに再生成するため、古いpressが新しい対象へ移らない。TaskArea境界は別のArea開始操作であり候補一覧から除外する。mode変更・foreground capture・loadでは一時候補を破棄する。
+
+右クリックではFloor/TaskAreaを除いた現在の候補から選択済みEntityを優先し、不在なら既定順の最初を使う。Floor/空地だけなら従来のFamiliar地面移動へ進む。stored/loaded/hidden対象は既存resolverの除外規則を共用する。

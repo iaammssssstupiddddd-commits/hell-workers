@@ -10,8 +10,11 @@ use bevy::ui_widgets::SelectAllOnFocus;
 pub enum TextFieldRole {
     /// エンティティリスト検索（ライブフィルタ、Enter で確定不要）
     EntityListSearch,
+    HelpSearch,
     /// Soul リネーム（Enter=確定、Escape=キャンセル）
-    SoulRename { target: Entity },
+    SoulRename {
+        target: Entity,
+    },
     /// M1 PoC 用
     DevPoc,
 }

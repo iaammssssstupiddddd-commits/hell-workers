@@ -12,7 +12,15 @@
 | `ArrowUp` / `ArrowDown` | 前後の topic を選ぶ |
 | `PageUp` / `PageDown` | 本文を一画面単位で移動する |
 | `Home` / `End` | 本文の先頭 / 末尾へ移動する |
+| `Tab` / `Shift+Tab` | 前景ダイアログ内の可視・有効な操作へ循環移動（本文scroll外も対象） |
+| `Enter` / `Space` | フォーカス中のボタンを決定。入力欄では編集を優先 |
 | mouse wheel / scrollbar | navigation または本文をスクロールする |
+
+項目を切り替えると本文の読書位置を項目IDごとに保持し、戻ると復元する。同じ項目の再選択では先頭へ戻さない。
+閉じて開き直すと最後の項目を開き、非表示中のlayout補正で本文offsetが失われても保持した値を復元する。
+保持は実行時のみで、world loadによるHelpPanelState reset時に破棄する。
+検索欄は見出し・本文を小文字化して空白区切りAND部分一致で検索する。結果はstable entry IDに結び、選択後のlayout確定時にScrollIntoViewで該当見出しを表示する。検索語変更でnavigation scrollは先頭へ戻り、空欄で通常の目次を戻す。Enterは編集を終了し、Escは検索を消して編集を終了する（同frameのHelp閉鎖やゲームshortcutへ伝播しない）。
+情報パネルの「詳しく（ヘルプ）」は既存OpenHelp capture経路を使用し、受理されたopenerが同ボタンの場合だけ表示中のinspectionからentryを選ぶ。Soul、Stockpile、Soul Spa、Power以外は情報パネルの説明へ進む。検索入力と結果は静的な検証済catalogだけを参照し、ゲーム状態を変更しない。
 
 Save/Load catalog、Settings、Operation dialog、Load confirmation が前景の場合は Help を開きません。通常時に Help を開くと
 `Time<Virtual>` を一時停止し、閉じたときだけ直前の相対速度で再開します。すでに Pause 中だった場合は
@@ -50,6 +58,9 @@ focus clear、world selection抑止、camera guardが有効になり、通常/ac
 一度rollbackします。Pauseからのhandoffはcapture継続なのでrollback latchを再発火しません。
 button経路は保存済みのforeground値だけに依存せず、そのframeで表示中のcapture rootから実効foregroundを
 再計算します。このため、Helpを閉じた直後に前frameのHelp ownershipが残っていても再表示やPause操作を誤って拒否しません。
+
+説明表示のHoverTooltipはcapture rootとは別に`TOOLTIP_LAYER = GlobalZIndex(20_060)`を使う。
+ボタンの子に付け替えてもモード案内の背後へ隠れないための描画順であり、上記の入力所有権を変更しない。
 
 ## catalog の正本
 
@@ -171,3 +182,22 @@ python3 scripts/dev.py cargo -- test -p hw_ui help
 python3 scripts/dev.py cargo -- test -p bevy_app@0.1.0 help_
 python3 scripts/dev.py verify
 ```
+
+## 共通ボタンとフォーカス（U28）
+
+ボタンは共通collectorが左press時のEntity・操作payload・foreground・WorldEpochを保持し、同じ対象上のreleaseだけを1回受理する。途中で外へ移動、非表示、disabled、payload変更、対象消滅、world置換、window/cursor喪失、Soul drag、world pointer claimがあれば取消。Interactionはhover/pressの描画と長押しdrag検出に残し、業務actionはUiInputStateの受理集合だけを消費する。
+
+modalのTab/Shift+Tab/Enter/Spaceはroot canonical bindingで解決する。UI tree順でButton/EditableText/Slider/Checkboxを列挙し、祖先を含む非表示・disabledを除外する。決定ボタンは次のPreUpdateでfocus・payload・foreground・epochを再照合して共通collectorへ渡し、capture prepassより前に受理する。長押しのrepeatを新しい確認画面へ持ち越さない。Slider/Checkboxの値変更キーは既存Bevy widget ownerを使う。
+
+表示更新後にfocusを前景へ限定し、初期位置は戻る/閉じるを優先する。選択箇所に枠を表示し、ScrollIntoViewで見える位置へ移動する。閉じると生存・表示中の呼出元へ戻し、入れ子を戻る場合も親の位置を復元する。world置換では復帰履歴を捨てる。入力欄が消費したEsc/Enter等は同frameのoverlay操作へ伝播しない。
+
+### システムメニューと任意ガイド
+
+Space/時間速度は時間だけを変更し、Menu/未処理Escapeは独立したSystemMenuStateを開閉する。
+停止中の計画allowlistと制限は`time-controls`へ公開し、canonical ToggleSystemMenuを同entryへcoverage登録する。
+任意のWorkGuideはHelp下部の開始ボタンから起動する。固定開始文言はsealed HelpPanelCopySpecのguide_start_labelとしてrootが供給し、
+catalog validation・sentinel fixture・exact approval snapshotに含める。StartWorkGuide/EndWorkGuideは`getting-started-work-loop`へ公開する。
+実際の使い魔/範囲/採取指定/Gather進行をrootのreadonly adapterが確認し、対象消滅時の戻りとload時終了をテストする。
+ガイドはviewport高さの60%を上限とし、本文を標準ScrollArea/Scrollbarでスクロールする。
+閉じる/スキップはscroll body外に固定し、長い使い魔名や案内本文によって終了操作が押し出されるのを防ぐ。
+手順や停止状態によって案内が更新されたときだけ本文を先頭へ戻し、同じ案内を読む間は位置を保つ。

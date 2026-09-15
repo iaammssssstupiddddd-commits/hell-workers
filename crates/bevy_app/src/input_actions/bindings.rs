@@ -7,6 +7,7 @@ use super::{
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) enum InputBindingContext {
+    Modal,
     Global,
     WorldNormal,
     Familiar,
@@ -17,6 +18,7 @@ pub(crate) enum InputBindingContext {
     OperationDialog,
     ActiveMode,
     OpenMenu,
+    ContextMenu,
     AreaEdit,
     Debug,
     DebugVisible,
@@ -141,6 +143,39 @@ const SHIFT: InputModifiers = InputModifiers {
 };
 
 pub(crate) const DEFAULT_BINDINGS: &[InputBinding] = &[
+    binding(
+        KeyCode::Tab,
+        InputAction::ModalFocusNext,
+        InputBindingContext::Modal,
+        resolution(100, None, 0, 90),
+        InputConflictLane::OverlayTransition,
+        true,
+    ),
+    modified_binding(
+        KeyCode::Tab,
+        SHIFT,
+        InputAction::ModalFocusPrevious,
+        InputBindingContext::Modal,
+        resolution(100, None, 0, 90),
+        InputConflictLane::OverlayTransition,
+        true,
+    ),
+    binding(
+        KeyCode::Enter,
+        InputAction::ModalActivate,
+        InputBindingContext::Modal,
+        resolution(100, None, 0, 80),
+        InputConflictLane::OverlayTransition,
+        true,
+    ),
+    binding(
+        KeyCode::Space,
+        InputAction::ModalActivate,
+        InputBindingContext::Modal,
+        resolution(100, None, 0, 80),
+        InputConflictLane::OverlayTransition,
+        true,
+    ),
     binding(
         KeyCode::F1,
         InputAction::OpenHelp,
@@ -410,14 +445,6 @@ pub(crate) const DEFAULT_BINDINGS: &[InputBinding] = &[
         true,
     ),
     binding(
-        KeyCode::Digit1,
-        InputAction::FamiliarChop,
-        InputBindingContext::Familiar,
-        resolution(50, Some(InputActionFamily::FamiliarCommand), 6, 80),
-        InputConflictLane::SelectionOrMode,
-        true,
-    ),
-    binding(
         KeyCode::KeyM,
         InputAction::FamiliarMine,
         InputBindingContext::Familiar,
@@ -426,23 +453,7 @@ pub(crate) const DEFAULT_BINDINGS: &[InputBinding] = &[
         true,
     ),
     binding(
-        KeyCode::Digit2,
-        InputAction::FamiliarMine,
-        InputBindingContext::Familiar,
-        resolution(50, Some(InputActionFamily::FamiliarCommand), 5, 80),
-        InputConflictLane::SelectionOrMode,
-        true,
-    ),
-    binding(
         KeyCode::KeyH,
-        InputAction::FamiliarHaul,
-        InputBindingContext::Familiar,
-        resolution(50, Some(InputActionFamily::FamiliarCommand), 4, 80),
-        InputConflictLane::SelectionOrMode,
-        true,
-    ),
-    binding(
-        KeyCode::Digit3,
         InputAction::FamiliarHaul,
         InputBindingContext::Familiar,
         resolution(50, Some(InputActionFamily::FamiliarCommand), 4, 80),
@@ -466,7 +477,7 @@ pub(crate) const DEFAULT_BINDINGS: &[InputBinding] = &[
         true,
     ),
     binding(
-        KeyCode::Escape,
+        KeyCode::KeyI,
         InputAction::ToggleFamiliarIdlePatrol,
         InputBindingContext::Familiar,
         resolution(50, Some(InputActionFamily::FamiliarCommand), 1, 80),
@@ -555,9 +566,17 @@ pub(crate) const DEFAULT_BINDINGS: &[InputBinding] = &[
     ),
     binding(
         KeyCode::Escape,
-        InputAction::TogglePause,
+        InputAction::ToggleSystemMenu,
         InputBindingContext::Pause,
         resolution(100, Some(InputActionFamily::TimeControl), 1, 100),
+        InputConflictLane::OverlayTransition,
+        true,
+    ),
+    binding(
+        KeyCode::Escape,
+        InputAction::ToggleSystemMenu,
+        InputBindingContext::WorldNormal,
+        resolution(30, Some(InputActionFamily::CancelOrClose), 1, 10),
         InputConflictLane::OverlayTransition,
         true,
     ),
@@ -579,6 +598,14 @@ pub(crate) const DEFAULT_BINDINGS: &[InputBinding] = &[
     ),
     binding(
         KeyCode::Escape,
+        InputAction::CloseContextMenu,
+        InputBindingContext::ContextMenu,
+        resolution(90, Some(InputActionFamily::CancelOrClose), 4, 105),
+        InputConflictLane::SelectionOrMode,
+        true,
+    ),
+    binding(
+        KeyCode::Escape,
         InputAction::CloseOpenMenu,
         InputBindingContext::OpenMenu,
         resolution(70, Some(InputActionFamily::CancelOrClose), 2, 90),
@@ -591,8 +618,43 @@ pub(crate) fn binding_matches_context(
     binding: &InputBinding,
     context: &InputContextSnapshot,
 ) -> bool {
+    if context.simulation_paused
+        && matches!(
+            binding.action,
+            InputAction::FamiliarHaul
+                | InputAction::FamiliarBuild
+                | InputAction::FamiliarCancelDesignation
+                | InputAction::ToggleFamiliarIdlePatrol
+                | InputAction::DebugSpawnSoul
+                | InputAction::DebugSpawnFamiliar
+        )
+    {
+        return false;
+    }
     if context.recovery_failed && binding.action == InputAction::SaveGame {
         return false;
+    }
+
+    if context.text_input_consumed_keyboard
+        && !matches!(binding.chord.key, KeyCode::Tab | KeyCode::F1)
+    {
+        return false;
+    }
+    if context.text_input_blocks_keybinds
+        && matches!(binding.chord.key, KeyCode::Enter | KeyCode::Space)
+    {
+        return false;
+    }
+    if context.text_input_blocks_keybinds
+        && binding.context == InputBindingContext::Help
+        && binding.action != InputAction::CloseHelp
+    {
+        return false;
+    }
+    if binding.context == InputBindingContext::Modal {
+        return context.top_overlay.is_some()
+            && (binding.action != InputAction::ModalActivate
+                || !context.text_input_blocks_keybinds);
     }
 
     if let Some(overlay) = context.top_overlay {
@@ -608,7 +670,12 @@ pub(crate) fn binding_matches_context(
             InputOverlay::Pause => {
                 binding.context == InputBindingContext::Pause
                     || (binding.context == InputBindingContext::Global
-                        && action_allowed_while_paused(binding.action, context.recovery_failed))
+                        && matches!(
+                            binding.action,
+                            InputAction::OpenHelp
+                                | InputAction::SaveGame
+                                | InputAction::RequestLoadGame
+                        ))
             }
             InputOverlay::OperationDialog => {
                 binding.context == InputBindingContext::OperationDialog
@@ -624,6 +691,7 @@ pub(crate) fn binding_matches_context(
         InputBindingContext::Familiar => context.familiar_shortcuts_enabled(),
         InputBindingContext::ActiveMode => context.active_mode(),
         InputBindingContext::OpenMenu => context.open_menu(),
+        InputBindingContext::ContextMenu => context.context_menu_open,
         InputBindingContext::AreaEdit => {
             context.logic_shortcuts_enabled
                 && context.play_mode == hw_core::game_state::PlayMode::TaskDesignation
@@ -634,29 +702,13 @@ pub(crate) fn binding_matches_context(
         }
         InputBindingContext::Debug => true,
         InputBindingContext::DebugVisible => context.debug_visible,
-        InputBindingContext::Help
+        InputBindingContext::Modal
+        | InputBindingContext::Help
         | InputBindingContext::LoadConfirm
         | InputBindingContext::Settings
         | InputBindingContext::Pause
         | InputBindingContext::OperationDialog => false,
     }
-}
-
-fn action_allowed_while_paused(action: InputAction, recovery_failed: bool) -> bool {
-    if recovery_failed {
-        return matches!(action, InputAction::RequestLoadGame);
-    }
-    matches!(
-        action,
-        InputAction::SaveGame
-            | InputAction::OpenHelp
-            | InputAction::RequestLoadGame
-            | InputAction::TogglePause
-            | InputAction::TimePaused
-            | InputAction::TimeNormal
-            | InputAction::TimeFast
-            | InputAction::TimeSuper
-    )
 }
 
 pub(crate) fn actions_are_compatible(

@@ -14,17 +14,21 @@
 | `key` | source、対象、結果分類から作る安定した重複集約キー |
 | `severity` | `Info` / `Success` / `Warning` / `Error` |
 | `title`, `body` | プレイヤーへ表示可能な文言。raw error、絶対 path、debug dump を含めない |
+| `action` | 履歴だけの型付き操作。設定保存retryは現在有効な試行だけ受理 |
 | `retention` | `ToastOnly` または `Important`。後者だけ履歴へ残る |
 
 `NotificationCenter` は次の有界な runtime state を持つ。
 
 - 同一 key を 2 real-time 秒以内に受け取ると、同じ entry の `repeat_count` を増やし、内容と期限を更新する。
-- 表示中トーストは最大 3 件、寿命は 4 real-time 秒。別の pending queue は持たない。
+- 表示中トーストは最大 3 件、寿命はSettingsで選ぶ4 / 8 / 12 real-time秒（既定4秒、新規・再通知から反映）。別の pending queue は持たない。
 - `Important` 履歴は最大 64 件。超過時は最古を削除する。
 - expiry、dedupe、履歴の開閉は `Time<Real>` を使うため、Pause とゲーム速度の影響を受けない。
-- revision が変化したときだけ動的な toast/history row を再構築する。
+- revisionが変化したときだけ動的なtoast/history rowを再構築する。履歴の経過時間は最終受信からの秒/分/時間を1秒単位でTextだけ更新し、row/scrollを作り直さない。
 
 重要通知履歴は画面右上の「通知」ボタンで開く。未読数は履歴上限以内に保ち、履歴を開いた時点で既読化する。
+見出しとCloseは固定し、本文だけを標準`ScrollArea`/`Scrollbar`でスクロールする。
+開いた直後は最新側。履歴更新時は先頭可視entryのIDとoffsetを基準に読書位置を保持し、
+64件の追い出しで基準が消えた場合は有効範囲へclampする。world置換ではanchorとoffsetも解除する。
 トーストと全子要素は picking-transparent で、world click や camera を遮らない。履歴ボタンと開いた履歴パネルだけが
 `UiInputBlocker` である。Modal / Pause の foreground capture 開始時は履歴を閉じ、履歴ボタンを隠す。
 
@@ -45,6 +49,11 @@ commit 時にも必ず再検証する。
 | BuildingMove | 自己占有だけを許可する `validate_moved_building_placement`。Tank companion は移動用 validator |
 | SoulSpa | `building_geometry(BuildingType::SoulSpa)` と共通 validator。単一 Yard が下向き2×2 footprint全体を含むこと |
 | Floor / Wall | `AreaPlacementPlan`。範囲構造と各タイルを preview / commit の両方で再構築 |
+| Stockpile / Yard拡張 | `ZonePlan`。Stockpileの採用/除外セルと各Yard owner、Yard拡張後boundsを共通のpure判定で生成 |
+
+Zoneは`ZonePlacementPreview`の判定を枠とmode表示へ渡す。releaseでは最新worldから再構築し、
+直前の表示範囲・epoch・採用結果と一致する場合だけ適用する。不一致は範囲の再指定を促す。
+成功/拒否を`zone-placement`の`ToastOnly`通知で伝え、UI capture/cursor喪失時のreleaseもdrag開始点を消費する。
 
 拒否は `Cannot place`、一部だけ採用できる範囲は `Some tiles will be skipped` として色と見出しを分ける。
 Floor / Wall は valid tile が1件以上ならそのタイルだけを従来どおり生成し、invalid tile を飛ばす。
@@ -208,3 +217,12 @@ python3 scripts/dev.py cargo -- test -p bevy_app@0.1.0 stockpile_policy
 
 手動では、各配置モードの無効候補とFloor / Wallの部分採用、F5の成功通知、存在しない対象を含む
 F9結果、正常load後に旧履歴が消えてload成功だけが残ることを確認する。
+
+### 設定保存の再試行
+
+`NotificationAction::RetrySettingsSave` は履歴に「現在の設定を再保存」を表示する。
+toastにはボタンを生成しない。rootの `SettingsSaveFeedback` が現在有効な試行ticketを保持し、
+保存成功・新しい失敗後には古い操作を拒否する。reducerの後、presentationの前に古いactionを削除するため、
+同frameに届いた通知も現在の再試行状態と一致する。通知履歴がworld置換で消えた後も、設定画面を閉じて再保存できる。
+
+Ordersの範囲指定結果は重要履歴へ残す。伐採・採掘・運搬では実際のdesignation処理の対象/適用/受入先なし/担当なし件数、Areaでは配属処理の件数を担当名と表示する。使い魔がいない開始要求も理由を通知する。

@@ -1,14 +1,18 @@
 use super::types::{
     PendingTaskCancellation, TaskActionButton, TaskActionButtonKind, TaskDashboardActionState,
-    TaskDashboardControl, TaskDashboardViewState, TaskEntry, TaskListDynamicNode,
+    TaskDashboardControl, TaskDashboardViewState, TaskEntry, TaskFilterMenu, TaskListDynamicNode,
     TaskPriorityAdjustment, TaskPriorityFilter, TaskPriorityTier, TaskSortDirection, TaskSortKey,
     TaskStatusFilter, TaskStatusSummary, TaskWorkTypeFilter, TaskWorkerFilter,
 };
+use super::types::{TaskListScroll, task_page_range};
 use super::work_type_icon::{work_type_icon, work_type_label};
 use crate::components::TaskListItem;
+use crate::components::UiInputBlocker;
 use crate::setup::UiAssets;
 use crate::theme::UiTheme;
 use bevy::prelude::*;
+use bevy::ui::RelativeCursorPosition;
+use bevy::ui_widgets::{ControlOrientation, ScrollArea, Scrollbar, ScrollbarThumb};
 use hw_core::jobs::WorkType;
 
 #[cfg(feature = "profiling")]
@@ -27,15 +31,10 @@ type TaskListRenderResult = ();
 pub struct TaskListRenderInput<'a> {
     pub snapshot: &'a [TaskEntry],
     pub view_state: &'a TaskDashboardViewState,
-    pub pinned_entity: Option<Entity>,
     pub action_state: &'a TaskDashboardActionState,
     pub game_assets: &'a dyn UiAssets,
     pub theme: &'a UiTheme,
-    pub resident_row_limit: usize,
-}
-
-fn resident_row_count(filtered_rows: usize, resident_row_limit: usize) -> usize {
-    filtered_rows.min(resident_row_limit.max(1))
+    pub scroll_position: Vec2,
 }
 
 pub fn rebuild_task_list_ui(
@@ -45,67 +44,157 @@ pub fn rebuild_task_list_ui(
     let TaskListRenderInput {
         snapshot,
         view_state,
-        pinned_entity,
         action_state,
         game_assets,
         theme,
-        resident_row_limit,
+        scroll_position,
     } = input;
     spawn_toolbar(parent, view_state, game_assets, theme);
 
     let visible = view_state.visible_entries(snapshot);
+    let range = task_page_range(view_state.page_index, visible.len());
     #[cfg(feature = "profiling")]
     let mut stats = TaskListRenderStats {
         input_rows: u32::try_from(snapshot.len()).unwrap_or(u32::MAX),
         visible_rows: u32::try_from(visible.len()).unwrap_or(u32::MAX),
         group_headers: 0,
     };
-    if visible.is_empty() {
-        parent.spawn((
+    parent
+        .spawn((
             TaskListDynamicNode,
-            Text::new(if snapshot.is_empty() {
-                "No designations"
-            } else {
-                "No matching designations"
-            }),
-            TextFont {
-                font: game_assets.font_ui().clone().into(),
-                font_size: crate::theme::font_size_rem(theme.typography.font_size_small),
+            Node {
+                width: Val::Percent(100.0),
+                flex_grow: 1.0,
+                min_height: Val::Px(0.0),
                 ..default()
             },
-            TextColor(theme.colors.empty_text),
-        ));
-        #[cfg(feature = "profiling")]
-        return stats;
-        #[cfg(not(feature = "profiling"))]
-        return;
-    }
+        ))
+        .with_children(|row| {
+            let scroll = row
+                .spawn((
+                    TaskListDynamicNode,
+                    TaskListScroll,
+                    ScrollArea,
+                    // Preserve the previous offset when ordinary progress rebuilds the rows.
+                    ScrollPosition(scroll_position),
+                    UiInputBlocker,
+                    RelativeCursorPosition::default(),
+                    Node {
+                        flex_grow: 1.0,
+                        min_width: Val::Px(0.0),
+                        min_height: Val::Px(0.0),
+                        flex_direction: FlexDirection::Column,
+                        overflow: Overflow::scroll_y(),
+                        ..default()
+                    },
+                ))
+                .with_children(|parent| {
+                    if visible.is_empty() {
+                        parent.spawn((
+                            TaskListDynamicNode,
+                            Text::new(if snapshot.is_empty() {
+                                "No designations"
+                            } else {
+                                "No matching designations"
+                            }),
+                            TextFont {
+                                font: game_assets.font_ui().clone().into(),
+                                font_size: crate::theme::font_size_rem(
+                                    theme.typography.font_size_small,
+                                ),
+                                ..default()
+                            },
+                            TextColor(theme.colors.empty_text),
+                        ));
+                        return;
+                    }
 
-    let grouped = view_state.sort_key == TaskSortKey::WorkType;
-    let mut previous_work_type = None;
-    let resident_rows = resident_row_count(visible.len(), resident_row_limit);
-    for entry in visible[..resident_rows].iter().copied() {
-        if grouped && previous_work_type != Some(entry.work_type) {
-            let count = visible
-                .iter()
-                .filter(|candidate| candidate.work_type == entry.work_type)
-                .count();
-            spawn_group_header(parent, entry.work_type, count, game_assets, theme);
-            #[cfg(feature = "profiling")]
-            {
-                stats.group_headers = stats.group_headers.saturating_add(1);
+                    let grouped = view_state.sort_key == TaskSortKey::WorkType;
+                    let mut previous_work_type = None;
+                    for entry in visible[range.clone()].iter().copied() {
+                        if grouped && previous_work_type != Some(entry.work_type) {
+                            let count = visible
+                                .iter()
+                                .filter(|candidate| candidate.work_type == entry.work_type)
+                                .count();
+                            spawn_group_header(parent, entry.work_type, count, game_assets, theme);
+                            #[cfg(feature = "profiling")]
+                            {
+                                stats.group_headers = stats.group_headers.saturating_add(1);
+                            }
+                            previous_work_type = Some(entry.work_type);
+                        }
+                        spawn_task_row(
+                            parent,
+                            entry,
+                            action_state.active_task == Some(entry.entity),
+                            action_state,
+                            game_assets,
+                            theme,
+                        );
+                    }
+                })
+                .id();
+            row.spawn((
+                TaskListDynamicNode,
+                Node {
+                    width: Val::Px(6.0),
+                    ..default()
+                },
+                Scrollbar::new(scroll, ControlOrientation::Vertical, 20.0),
+            ))
+            .with_children(|bar| {
+                bar.spawn((
+                    TaskListDynamicNode,
+                    ScrollbarThumb {
+                        border_radius: BorderRadius::all(Val::Px(3.0)),
+                        border: UiRect::ZERO,
+                    },
+                    BackgroundColor(theme.colors.text_muted),
+                ));
+            });
+        });
+    parent
+        .spawn((
+            TaskListDynamicNode,
+            Node {
+                width: Val::Percent(100.0),
+                flex_shrink: 0.0,
+                flex_wrap: FlexWrap::Wrap,
+                column_gap: Val::Px(3.0),
+                row_gap: Val::Px(3.0),
+                ..default()
+            },
+        ))
+        .with_children(|footer| {
+            for (control, label) in [
+                (TaskDashboardControl::FirstPage, "|<"),
+                (TaskDashboardControl::PreviousPage, "<"),
+                (TaskDashboardControl::NextPage, ">"),
+                (TaskDashboardControl::LastPage, ">|"),
+            ] {
+                spawn_control(footer, control, label, game_assets, theme);
             }
-            previous_work_type = Some(entry.work_type);
-        }
-        spawn_task_row(
-            parent,
-            entry,
-            pinned_entity == Some(entry.entity),
-            action_state,
-            game_assets,
-            theme,
-        );
-    }
+            footer.spawn((
+                TaskListDynamicNode,
+                Text::new(format!(
+                    "{}–{} / {}",
+                    if visible.is_empty() {
+                        0
+                    } else {
+                        range.start + 1
+                    },
+                    range.end,
+                    visible.len()
+                )),
+                TextFont {
+                    font: game_assets.font_ui().clone().into(),
+                    font_size: crate::theme::font_size_rem(theme.typography.font_size_small),
+                    ..default()
+                },
+                TextColor(theme.colors.text_primary_semantic),
+            ));
+        });
     #[cfg(feature = "profiling")]
     return stats;
 }
@@ -123,6 +212,7 @@ fn spawn_toolbar(
                 width: Val::Percent(100.0),
                 flex_direction: FlexDirection::Row,
                 flex_wrap: FlexWrap::Wrap,
+                flex_shrink: 0.0,
                 column_gap: Val::Px(3.0),
                 row_gap: Val::Px(3.0),
                 padding: UiRect::all(Val::Px(3.0)),
@@ -175,6 +265,128 @@ fn spawn_toolbar(
                 game_assets,
                 theme,
             );
+            spawn_control(
+                toolbar,
+                TaskDashboardControl::ResetFilters,
+                "全解除",
+                game_assets,
+                theme,
+            );
+        });
+    if let Some(menu) = state.filter_menu {
+        spawn_filter_choices(parent, menu, game_assets, theme);
+    }
+}
+
+fn spawn_filter_choices(
+    parent: &mut ChildSpawnerCommands,
+    menu: TaskFilterMenu,
+    assets: &dyn UiAssets,
+    theme: &UiTheme,
+) {
+    let options: Vec<(TaskDashboardControl, String)> = match menu {
+        TaskFilterMenu::WorkType => std::iter::once(TaskWorkTypeFilter::All)
+            .chain(
+                super::work_type_icon::player_reachable_work_types().map(TaskWorkTypeFilter::Only),
+            )
+            .map(|value| {
+                (
+                    TaskDashboardControl::SetWorkType(value),
+                    work_type_filter_label(value).to_owned(),
+                )
+            })
+            .collect(),
+        TaskFilterMenu::Status => [
+            TaskStatusFilter::All,
+            TaskStatusFilter::Working,
+            TaskStatusFilter::Blocked,
+            TaskStatusFilter::Pending,
+        ]
+        .into_iter()
+        .map(|value| {
+            (
+                TaskDashboardControl::SetStatus(value),
+                status_filter_label(value).to_owned(),
+            )
+        })
+        .collect(),
+        TaskFilterMenu::Priority => [
+            TaskPriorityFilter::All,
+            TaskPriorityFilter::Normal,
+            TaskPriorityFilter::High,
+            TaskPriorityFilter::Critical,
+        ]
+        .into_iter()
+        .map(|value| {
+            (
+                TaskDashboardControl::SetPriority(value),
+                priority_filter_label(value).to_owned(),
+            )
+        })
+        .collect(),
+        TaskFilterMenu::Workers => [
+            TaskWorkerFilter::All,
+            TaskWorkerFilter::Assigned,
+            TaskWorkerFilter::Unassigned,
+        ]
+        .into_iter()
+        .map(|value| {
+            (
+                TaskDashboardControl::SetWorkers(value),
+                worker_filter_label(value).to_owned(),
+            )
+        })
+        .collect(),
+    };
+    parent
+        .spawn((
+            TaskListDynamicNode,
+            Node {
+                max_height: Val::Px(140.0),
+                min_height: Val::Px(0.0),
+                flex_shrink: 0.0,
+                width: Val::Percent(100.0),
+                ..default()
+            },
+        ))
+        .with_children(|row| {
+            let scroll = row
+                .spawn((
+                    ScrollArea,
+                    UiInputBlocker,
+                    RelativeCursorPosition::default(),
+                    Node {
+                        flex_grow: 1.0,
+                        min_width: Val::Px(0.0),
+                        min_height: Val::Px(0.0),
+                        flex_direction: FlexDirection::Column,
+                        overflow: Overflow::scroll_y(),
+                        ..default()
+                    },
+                    Name::new("Task Filter Choices"),
+                ))
+                .with_children(|choices| {
+                    for (control, label) in options {
+                        spawn_control(choices, control, &label, assets, theme);
+                    }
+                })
+                .id();
+            row.spawn((
+                Node {
+                    width: Val::Px(6.0),
+                    ..default()
+                },
+                Scrollbar::new(scroll, ControlOrientation::Vertical, 20.0),
+            ))
+            .with_children(|bar| {
+                bar.spawn((
+                    ScrollbarThumb {
+                        border_radius: BorderRadius::all(Val::Px(3.0)),
+                        border: UiRect::ZERO,
+                    },
+                    BackgroundColor(theme.colors.text_muted),
+                ));
+            });
         });
 }
 
@@ -191,6 +403,7 @@ fn spawn_control(
             control,
             Node {
                 padding: UiRect::axes(Val::Px(4.0), Val::Px(2.0)),
+                flex_shrink: 0.0,
                 ..default()
             },
             BackgroundColor(theme.colors.button_default),
@@ -260,7 +473,7 @@ fn spawn_group_header(
 fn spawn_task_row(
     parent: &mut ChildSpawnerCommands,
     entry: &TaskEntry,
-    is_pinned: bool,
+    is_active: bool,
     action_state: &TaskDashboardActionState,
     game_assets: &dyn UiAssets,
     theme: &UiTheme,
@@ -359,7 +572,86 @@ fn spawn_task_row(
                     }
                 });
 
-            if is_pinned && entry.actions.has_actions() {
+            if is_active {
+                wrapper
+                    .spawn(Node {
+                        flex_direction: FlexDirection::Row,
+                        flex_wrap: FlexWrap::Wrap,
+                        column_gap: Val::Px(4.0),
+                        ..default()
+                    })
+                    .with_children(|bar| {
+                        for (kind, target, label) in [
+                            (
+                                super::TaskRelatedKind::Owner,
+                                entry.related_owner,
+                                "担当の詳細",
+                            ),
+                            (
+                                super::TaskRelatedKind::Anchor,
+                                entry.related_anchor,
+                                "運搬の関連先",
+                            ),
+                        ] {
+                            if let Some(target) = target {
+                                bar.spawn((
+                                    Button,
+                                    TaskActionButton {
+                                        target: entry.entity,
+                                        expected_work_type: entry.work_type,
+                                        kind: TaskActionButtonKind::InspectRelated { kind, target },
+                                    },
+                                    Node {
+                                        padding: UiRect::axes(Val::Px(4.0), Val::Px(2.0)),
+                                        ..default()
+                                    },
+                                    BackgroundColor(theme.colors.button_default),
+                                ))
+                                .with_children(|button| {
+                                    button.spawn((
+                                        Text::new(label),
+                                        TextFont {
+                                            font: game_assets.font_ui().clone().into(),
+                                            font_size: FontSize::Px(theme.typography.font_size_xs),
+                                            ..default()
+                                        },
+                                        TextColor(theme.colors.text_primary_semantic),
+                                    ));
+                                });
+                            }
+                        }
+                        crate::list::spawn::spawn_entity_focus_button(
+                            bar,
+                            entry.entity,
+                            game_assets,
+                            theme,
+                            Node::default(),
+                        );
+                        bar.spawn((
+                            Button,
+                            crate::components::MenuButton(
+                                crate::components::MenuAction::InspectEntity(entry.entity),
+                            ),
+                            Node {
+                                padding: UiRect::axes(Val::Px(4.0), Val::Px(2.0)),
+                                ..default()
+                            },
+                            BackgroundColor(theme.colors.button_default),
+                        ))
+                        .with_children(|button| {
+                            button.spawn((
+                                Text::new("詳細を固定"),
+                                TextFont {
+                                    font: game_assets.font_ui().clone().into(),
+                                    font_size: FontSize::Px(theme.typography.font_size_xs),
+                                    ..default()
+                                },
+                                TextColor(theme.colors.text_primary_semantic),
+                            ));
+                        });
+                    });
+            }
+            if is_active && entry.actions.has_actions() {
                 spawn_action_bar(wrapper, entry, action_state, game_assets, theme);
             }
         });
@@ -546,9 +838,15 @@ mod tests {
     }
 
     #[test]
-    fn clipped_tail_is_not_materialized_beyond_the_viewport_limit() {
-        assert_eq!(resident_row_count(661, 40), 40);
-        assert_eq!(resident_row_count(12, 40), 12);
-        assert_eq!(resident_row_count(12, 0), 1);
+    fn every_task_is_reachable_and_shrinking_lists_clamp_the_page() {
+        for total in [0_usize, 1, 20, 21, 200, 661] {
+            let pages = total.max(1).div_ceil(20);
+            let actual: Vec<_> = (0..pages)
+                .flat_map(|page| task_page_range(page, total))
+                .collect();
+            assert_eq!(actual, (0..total).collect::<Vec<_>>());
+            assert!(task_page_range(usize::MAX, total).len() <= 20);
+        }
+        assert_eq!(task_page_range(9, 180), 160..180);
     }
 }

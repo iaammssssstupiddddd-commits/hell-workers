@@ -1,6 +1,8 @@
 launcher|label="Help"|tooltip="操作とゲームのヘルプ"|shortcut="F1"
 chrome-copy|panel-title="Hell Workers ヘルプ"|close-label="閉じる"|topic-navigation-label="項目移動"|page-navigation-label="ページ移動"|document-bounds-label="先頭 / 末尾"|shortcut-label="操作"
 chrome-render|close-button="閉じる (F1 / Esc)"|footer="F1 / Esc: 閉じる  ↑ / ↓: 項目移動  PageUp / PageDown: ページ移動  Home / End: 先頭 / 末尾"|shortcut-sample="操作: <binding>"
+chrome-search|label="ヘルプを検索（見出し・本文）"|empty="一致する項目はありません。検索語を変更してください。"
+chrome-guide|start="操作ガイドを開始"
 chrome|slot="close"|shortcut="F1 / Esc"
 chrome|slot="topic-previous"|shortcut="↑"
 chrome|slot="topic-next"|shortcut="↓"
@@ -10,48 +12,48 @@ chrome|slot="document-start"|shortcut="Home"
 chrome|slot="document-end"|shortcut="End"
 section|id="getting-started"|title="はじめに"
 topic|feature="getting-started"|owner="root-onboarding"|section="getting-started"|id="getting-started"|title="基本の仕事ループ"
-entry|topic="getting-started"|id="getting-started-work-loop"|title="Familiar が仕事を管理します"|paragraphs=["Familiar を選び、担当範囲と命令を決めると、範囲内の Soul が必要な仕事へ自動で割り当てられます。", "資源・建築予定・作業範囲を整え、一覧と通知で詰まりを確認するのが基本です。"]|shortcut=None
-entry|topic="getting-started"|id="getting-started-first-steps"|title="最初に確認する場所"|paragraphs=["左の一覧で Familiar と未所属 Soul を確認し、下の Orders・Architect・Zones から仕事を作ります。", "対象を選ぶと右の情報パネルに状態と操作が表示されます。"]|shortcut=None
+entry|topic="getting-started"|id="getting-started-work-loop"|title="Familiar が仕事を管理します"|paragraphs=["Familiar を選び、担当範囲と命令を決めると、範囲内の Soul が必要な仕事へ自動で割り当てられます。", "資源・建築予定・作業範囲を整え、一覧と通知で詰まりを確認するのが基本です。", "ヘルプ下部の「操作ガイドを開始」から任意の案内を開始できます。使い魔選択→担当範囲→本人の伐採/採掘指定→Soulの作業開始と完了を、実際のゲーム状態から確認します。既存の担当範囲・本人の指定も利用できます。", "使い魔・範囲・対象が失われると必要な手順へ戻ります。待機中はTasksの停止理由、Soulの状態、通路、仕事設定を確認してください。ガイドの閉じる/スキップで終了し、読込でも進捗を破棄します。Helpからいつでもやり直せます。", "長いガイドは本文をスクロールして読めます。下部の終了ボタンは本文をスクロールしても残ります。"]|shortcut=None
+entry|topic="getting-started"|id="getting-started-first-steps"|title="最初に確認する場所"|paragraphs=["ボタンは押してから同じボタンの上で離すと実行します。押している途中で外へ動かしたり、対象や画面が変わったりすると実行を取り消します。", "ダイアログ内ではフォーカス枠を移動してボタンを決定できます。隠れた項目・無効な項目を飛ばし、末尾から先頭へ戻ります。確認画面では戻る操作を先に選び、閉じると利用可能な呼出元へ戻ります。入力欄では文字編集を優先します。", "左の一覧で Familiar と未所属 Soul を確認し、下の Orders・Architect・Zones から仕事を作ります。", "対象を選ぶと右の情報パネルに状態と操作が表示されます。", "ヘルプは項目ごとの読書位置を覚えます。別の項目から戻ったときや閉じて開き直したときも続きから読めます。ワールドの読込ではこの履歴をリセットします。", "ヘルプの検索欄は見出しと本文を検索します。空白で区切った語はすべて一致する項目に絞り込み、結果を選ぶと該当見出しへ移動します。検索欄の Esc は検索を消して編集を終えます。", "情報パネルの「詳しく（ヘルプ）」から、Soul・保管範囲・Soul Spa・電力の説明を開けます。その他の対象では情報パネルの使い方を表示します。別のダイアログが前景にある間は開きません。"]|shortcut=Some("次の項目: Tab / 前の項目: Shift+Tab / ボタン決定: Enter / Space")
 section|id="basic-controls"|title="基本操作"
 topic|feature="camera-selection"|owner="input-camera"|section="basic-controls"|id="camera-selection"|title="カメラと選択"
-entry|topic="camera-selection"|id="camera-pan-zoom"|title="カメラ移動"|paragraphs=["W / A / S / D で移動し、マウスホイールで拡大・縮小します。", "Settings で Mouse Drag Pan が有効なら、左ドラッグでもカメラを移動できます。", "カメラは固定のトップダウン表示で、表示階層や視点を切り替える操作はありません。"]|shortcut=Some("W / A / S / D / Mouse Wheel")
-entry|topic="camera-selection"|id="world-selection"|title="選択とスナップ"|paragraphs=["対象へ近づけると選択候補が先に表示されます。水色の強い表示は、カーソルの少し外側から対象へスナップしている状態です。", "左ボタンを離したときに候補を選びます。5 pxを超える左ドラッグはカメラ移動になり、選択を変更しません。", "同じ場所を続けて左クリックすると、資源と建物、建物と床など、重なった候補を順に選べます。建物とBlueprintは中心ではなく占有範囲全体が対象です。", "入力欄を編集中は、ゲーム用ショートカットが抑止されます。"]|shortcut=None
-entry|topic="camera-selection"|id="world-object-actions"|title="右クリック操作"|paragraphs=["対象上の右クリックは、その対象を選んでコンテキストメニューを開きます。使い魔では確認、Task Area編集、Operationを選べます。", "使い魔を選択して空き地を右クリックすると移動先を更新し、短時間マーカーを表示します。対象上では移動よりコンテキストメニューを優先します。", "Doorはメニューから施錠・解錠できます。TankとMud MixerはMoveを選べますが、移動できない建物にはMoveを表示しません。"]|shortcut=None
+entry|topic="camera-selection"|id="camera-pan-zoom"|title="カメラ移動"|paragraphs=["W / A / S / D で移動し、マウスホイールで拡大・縮小します。", "Settings で Mouse Drag Pan が有効なら、通常モードの左ドラッグ、または中ボタンドラッグでカメラを移動できます。", "中ボタンドラッグは配置・移動・範囲編集モードを維持します。左／右ボタンの操作中には開始せず、中ボタンで移動中の左／右操作は配置や選択に使いません。UI・入力欄・ダイアログへ入ると移動を終了します。", "カメラは固定のトップダウン表示で、表示階層や視点を切り替える操作はありません。"]|shortcut=Some("W / A / S / D / Mouse Wheel")
+entry|topic="camera-selection"|id="world-selection"|title="選択とスナップ"|paragraphs=["対象へ近づけると選択候補が先に表示されます。水色の強い表示は、カーソルの少し外側から対象へスナップしている状態です。", "左ボタンを離したときに候補を選びます。5 pxを超える左ドラッグはカメラ移動になり、選択を変更しません。", "同じ場所の左クリックで重なった候補を順に選べます。連続クリックの時間制限はありません。「候補 n/m — 一覧を開く」から名前を確認して直接選ぶこともできます。別の地点を選ぶと候補を更新し、移動・消滅した対象や非表示の対象は選べません。建物とBlueprintは占有範囲全体が対象です。", "入力欄を編集中は、ゲーム用ショートカットが抑止されます。"]|shortcut=None
+entry|topic="camera-selection"|id="world-object-actions"|title="右クリック操作"|paragraphs=["対象上の右クリックは、同じ地点に残っている選択済みの候補を優先してコンテキストメニューを開きます。該当する候補がなければ手前の対象を使います。使い魔では確認、Task Area編集、Operationを選べます。", "使い魔を選択して空き地を右クリックすると移動先を更新し、短時間マーカーを表示します。対象上では移動よりコンテキストメニューを優先します。", "Doorはメニューから施錠・解錠できます。TankとMud MixerはMoveを選べますが、移動できない建物にはMoveを表示しません。", "コンテキストメニューの閉じる操作は、使い魔の命令や目的地を変更しません。別のダイアログが前面にある場合は、先にそのダイアログを閉じます。"]|shortcut=Some("Esc")
 topic|feature="time-help"|owner="input-camera"|section="basic-controls"|id="time-help"|title="時間とヘルプ"
-entry|topic="time-help"|id="time-controls"|title="時間速度"|paragraphs=["一時停止を切り替えるか、Paused / Normal / Fast / Super を直接選択できます。"]|shortcut=Some("Space / Esc / 1 / 2 / 3 / 4")
+entry|topic="time-help"|id="time-controls"|title="時間速度"|paragraphs=["一時停止を切り替えるか、Paused / Normal / Fast / Super を直接選択できます。", "時間停止だけではメニューを開きません。停止中も選択・カメラ・担当範囲の編集と履歴・新規の伐採/採掘指定・既存の保管範囲1件の方針・完成ドアの施錠を操作できます。変更はその場で適用し、再開時には再送しません。", "停止中は運搬指定・建築/移設・Zone作成/解除・植林・Soul配属・作業取消・方針の範囲編集を利用できません。対象ボタンは薄く表示し、Tooltipで停止中の制限を案内します。AIと移動・作業進行は停止したままです。", "Menuボタン、または他の画面や操作を閉じる役割がない終了キーでシステムメニューを開きます。メニューが止めた時間だけ、閉じると元の速度で再開します。元から停止していた場合は停止を維持します。メニュー上のHelp/Settingsを閉じても時間は再開しません。"]|shortcut=Some("Space / 1 / 2 / 3 / 4 / メニュー: Esc")
 entry|topic="time-help"|id="help-pause-behavior"|title="ヘルプ中の時間"|paragraphs=["通常時にヘルプを開くと自動で一時停止し、閉じると直前の相対速度で再開します。", "すでに Pause 中なら、ヘルプを閉じても Pause を維持します。"]|shortcut=Some("F1")
 section|id="familiars-workers"|title="Familiar と作業員"
 topic|feature="entity-list-squads"|owner="familiar-management"|section="familiars-workers"|id="entity-list-squads"|title="一覧と所属"
-entry|topic="entity-list-squads"|id="entity-list-selection"|title="一覧から選択"|paragraphs=["左一覧の行を選ぶと対象へ注目できます。前後の候補を順に巡回することもできます。", "検索欄の入力中はショートカットが抑止されます。"]|shortcut=Some("Tab / Shift+Tab")
-entry|topic="entity-list-squads"|id="soul-assignment"|title="Soul の所属変更"|paragraphs=["Soul の行を Familiar セクションへドラッグすると所属を変更できます。", "Familiar の使役上限を超える場合は割り当てられません。"]|shortcut=None
-entry|topic="entity-list-squads"|id="familiar-operation-policy"|title="Familiar の運用ポリシー"|paragraphs=["Familiar のコンテキストメニューから Open Operation を選ぶと、疲労閾値、最大使役 Soul 数、作業種別ごとの許可と Low / Normal / High の優先度を設定できます。", "Disable all は新しい作業の割り当てだけを止めます。すでに実行中の作業と休息などの自己維持は継続します。", "方針だけで新しい割り当てが止まった仕事は Tasks に Blocked: Disabled by familiar policy と表示されます。", "命令が Idle でも、1体以上所属していれば既存メンバーを監視しながら最大使役 Soul 数まで追加募集を続けます。", "設定は Familiar ごとに保存されます。最大数を現在の使役数より下げると、超過した Soul は所属と作業から解放されます。"]|shortcut=Some("Esc")
+entry|topic="entity-list-squads"|id="entity-list-selection"|title="一覧から選択"|paragraphs=["左一覧の行や候補の巡回は選択だけを変えます。各行の「現地へ」でカメラを移動でき、選択や固定中の詳細は変わりません。", "検索欄の入力中はショートカットが抑止されます。", "Soul名の部分一致で、折りたたんだ配下・未所属Soulも検索できます。一致するSoulのグループは一時的に開き、検索を消すと元の開閉状態へ戻ります。", "一覧本文は使い魔・配下・未所属をまとめてスクロールできます。候補の巡回は表示順で末尾と先頭をつなぎ、移動先の行を表示します。", "Soul行の作業アイコンには作業名を併記します。発電・解体・移設・精製・骨回収も個別の名前で確認できます。", "Entities と Tasks を切り替えられます。最小化すると本文と検索欄を隠し、展開すると選んだタブへ戻ります。検索欄はEntitiesの展開中だけ表示され、タブ往復でも検索文字列を保持します。"]|shortcut=Some("Tab / Shift+Tab")
+entry|topic="entity-list-squads"|id="soul-assignment"|title="Soul の所属変更"|paragraphs=["Soul の行を Familiar セクションへドラッグすると所属を変更できます。", "長押しの待ち時間はゲーム速度に依存しません。ドラッグ中に一覧本文の上端・下端へ寄せるとスクロールします。", "Familiar の使役上限を超える場合は割り当てられません。"]|shortcut=None
+entry|topic="entity-list-squads"|id="familiar-operation-policy"|title="Familiar の運用ポリシー"|paragraphs=["Familiar のコンテキストメニューから Open Operation を選ぶと、疲労閾値、最大使役 Soul 数、作業種別ごとの許可と Low / Normal / High の優先度を設定できます。", "Disable all は新しい作業の割り当てだけを止めます。すでに実行中の作業と休息などの自己維持は継続します。", "方針だけで新しい割り当てが止まった仕事は Tasks に Blocked: Disabled by familiar policy と表示されます。担当が確定していれば「担当の詳細」から情報パネルへ進み、新規割当を停止している作業種別を確認できます。", "命令が Idle でも、1体以上所属していれば既存メンバーを監視しながら最大使役 Soul 数まで追加募集を続けます。", "設定は Familiar ごとに保存されます。最大数を現在の使役数より下げると、超過した Soul は所属と作業から解放されます。"]|shortcut=Some("Esc")
 topic|feature="familiar-commands"|owner="familiar-management"|section="familiars-workers"|id="familiar-commands"|title="Familiar の命令"
-entry|topic="familiar-commands"|id="familiar-designations"|title="作業指定"|paragraphs=["Familiar を選択中に Chop / Mine / Haul を選び、対象範囲をクリックまたはドラッグします。", "Cancel は既存の指定を範囲で取り消します。"]|shortcut=Some("C / 1 / M / 2 / H / 3 / 0 / Delete")
-entry|topic="familiar-commands"|id="familiar-idle-patrol"|title="Idle / Patrol"|paragraphs=["通常状態の Familiar を選択中に、Idle と Patrol を切り替えられます。"]|shortcut=Some("Esc")
+entry|topic="familiar-commands"|id="familiar-designations"|title="作業指定"|paragraphs=["Familiar を選択中に Chop / Mine / Haul を選び、対象範囲をクリックまたはドラッグします。", "Cancel は既存の指定を範囲で取り消します。"]|shortcut=Some("C / M / H / 0 / Delete")
+entry|topic="familiar-commands"|id="familiar-idle-patrol"|title="Idle / Patrol"|paragraphs=["通常状態の Familiar を選択中にショートカット、または右クリックメニューの「待機 / 巡回」で Idle と Patrol を切り替えます。作業範囲がない場合は Idle になります。時間操作のショートカットは選択対象によって変わりません。"]|shortcut=Some("I")
 topic|feature="soul-energy"|owner="soul-energy"|section="familiars-workers"|id="soul-energy"|title="Soul Energy"
 entry|topic="soul-energy"|id="soul-energy-status"|title="Yard の電力網を確認する"|paragraphs=["電力は Yard ごとのリアルタイムな発電量と需要で決まり、蓄電はしません。", "Outdoor Lamp を選ぶと、接続、発電・供給済み需要・予備力または不足量、設備件数、供給状態と遮断順を確認できます。供給不足時は High、Normal、Low の順で給電し、同じ優先度では位置順に遮断します。", "情報パネルの Priority ボタンで設備の優先度を変更できます。Settings の Power priority allocation を無効にすると、需要超過時は接続中の全設備が停止する従来方式へ戻ります。"]|shortcut=None
-entry|topic="soul-energy"|id="soul-energy-recovery"|title="Soul Spa で発電する"|paragraphs=["Yard 内に Soul Spa を建てて選択すると Bone の搬入進捗を確認できます。建設中は情報パネルまたは搬入タスクからキャンセルでき、実際に搬入済みの Bone だけをすべて返します。一時停止中は再開してからキャンセルしてください。Operational になると出力と電力網が表示され、発電枠へ Soul が入れます。", "情報パネルの Active slots は 0〜4 で変更できます。稼働数より小さくしても作業中の Soul は追い出さず、終了後の新規割り当てだけを設定枠まで止めます。", "発電中の Soul は Dream を消費します。Lamp を増やしたら、発電量、Soul の Dream、Yard への接続を一緒に確認してください。", "給電中の Outdoor Lamp が照らす Room 内では、Soul の stress と fatigue が少しずつ回復します。複数の Lamp が同じ場所を照らしても回復量は重なりません。", "完成した Wall と閉じた Door、Locked Door は光を遮り、開いた Door は光を通します。Lamp が給電されていない、Room 外にいる、または光が届かない場合は回復しません。", "回復はゲーム時間が進んでいる間だけ適用されます。一時停止中も Door と室内の明るさ表示は更新されますが、Soul の回復は進みません。"]|shortcut=None
+entry|topic="soul-energy"|id="soul-energy-recovery"|title="Soul Spa で発電する"|paragraphs=["Yard 内に Soul Spa を建てて選択すると Bone の搬入進捗を確認できます。建設中は情報パネルまたは搬入タスクから共通の取消確認を開けます。「現地へ」で対象を確認し、「建設を取り消す」で確定すると、実際に搬入済みの Bone だけをすべて返します。選択や固定対象の変更、別画面の表示、対象状態の変化で確認は解除されます。一時停止中は再開してからキャンセルしてください。Operational になると出力と電力網が表示され、発電枠へ Soul が入れます。", "情報パネルの Active slots は 0〜4 で変更できます。稼働数より小さくしても作業中の Soul は追い出さず、終了後の新規割り当てだけを設定枠まで止めます。", "発電中の Soul は Dream を消費します。Lamp を増やしたら、発電量、Soul の Dream、Yard への接続を一緒に確認してください。", "給電中の Outdoor Lamp が照らす Room 内では、Soul の stress と fatigue が少しずつ回復します。複数の Lamp が同じ場所を照らしても回復量は重なりません。", "完成した Wall と閉じた Door、Locked Door は光を遮り、開いた Door は光を通します。Lamp が給電されていない、Room 外にいる、または光が届かない場合は回復しません。", "回復はゲーム時間が進んでいる間だけ適用されます。一時停止中も Door と室内の明るさ表示は更新されますが、Soul の回復は進みません。"]|shortcut=None
 topic|feature="info-panel"|owner="familiar-management"|section="familiars-workers"|id="info-panel"|title="情報パネル"
-entry|topic="info-panel"|id="info-panel-pin"|title="表示を固定する"|paragraphs=["情報パネルを pin すると、ポインターを別の対象へ動かしても表示対象を維持します。", "unpin すると現在の hover / selection に追従します。"]|shortcut=None
+entry|topic="info-panel"|id="info-panel-pin"|title="表示を固定する"|paragraphs=["情報パネルを pin すると、ポインターを別の対象へ動かしても表示対象を維持します。", "「選択を表示」で固定を解除すると、現在の選択を表示します。固定中の対象名とこのボタンは、本文をスクロールしても残ります。", "別の対象の詳細を開くと本文は先頭へ戻り、同じ対象の情報更新では読んでいる位置を保ちます。"]|shortcut=None
 entry|topic="info-panel"|id="soul-rename"|title="Soul の名前変更"|paragraphs=["Soul の情報パネルから名前を編集できます。Enter で確定、Esc でキャンセルします。"]|shortcut=Some("Enter / Esc")
 section|id="orders-building-zones"|title="タスク・建築・ゾーン・Dream"
 topic|feature="orders-areas"|owner="orders-building"|section="orders-building-zones"|id="orders-areas"|title="Orders と範囲編集"
-entry|topic="orders-areas"|id="orders-designation"|title="タスクを指定する"|paragraphs=["下部の Orders から作業を選び、対象をクリックまたは範囲ドラッグします。", "未確定の操作または開いているメニューは、その時点の入力文脈に応じて解除できます。"]|shortcut=Some("Esc")
+entry|topic="orders-areas"|id="orders-designation"|title="タスクを指定する"|paragraphs=["下部の Orders から作業を選び、対象をクリックまたは範囲ドラッグします。", "伐採・採掘・運搬・Areaは使い魔が担当します。選択が使い魔でなければ担当範囲のない使い魔を優先して自動選択し、使い魔がいない場合は開始できない理由を通知します。", "担当名はモード表示で確認できます。指定後は対象・適用件数と運搬の受入先不足などを通知履歴で確認できます。Areaは新たに配属した作業件数を表示します。", "未確定の操作または開いているメニューは、その時点の入力文脈に応じて解除できます。"]|shortcut=Some("Esc")
 entry|topic="orders-areas"|id="building-deconstruction"|title="完成した建物を解体する"|paragraphs=["Orders の Deconstruct を選び、完成した建物をクリックします。カーソル表示で対象にできるかと、指定できない理由を確認できます。", "指示は専用タスクとして Tasks に追加されます。優先度の変更と確認付きキャンセルができ、解体を許可した Familiar が担当します。", "カーソルには固定回収量も表示されます。Wall・Door・Tank・WheelbarrowParking は Wood×1、MudMixer・RestArea は Wood×2、Floor・OutdoorLamp は Bone×1、BonePile は Bone×5、SoulSpa は Bone×6、Bridge は Rock×3、SandPile は回収なしです。", "設備内の資材や利用中の対象を安全に退避できない間は、建物を残したまま理由付きで待機します。Wall、Door、Floor、Bridge、Operational Soul Spa、Outdoor Lamp も対象になり、通路・部屋・電力網は撤去後に再計算されます。指定結果と解体結果は通知にも表示されます。"]|shortcut=Some("Esc")
-entry|topic="orders-areas"|id="area-edit"|title="Task Area を編集する"|paragraphs=["範囲編集では copy / paste、undo / redo、3つの preset 保存・読込を利用できます。", "3つの preset は保存用と読込用のショートカットから使い分けます。"]|shortcut=Some("Ctrl+C / Ctrl+V / Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z / Ctrl+1 / Ctrl+2 / Ctrl+3 / Alt+1 / Alt+2 / Alt+3")
+entry|topic="orders-areas"|id="area-edit"|title="Task Area を編集する"|paragraphs=["範囲編集では copy / paste、undo / redo、3つの preset 保存・読込を利用できます。", "範囲編集パネルでは、戻す／やり直す対象の使い魔と復元後の寸法、コピー・貼付け先、3つの枠の保存寸法を実行前に確認できます。履歴や保存内容がない操作は理由付きで無効になります。", "Undo／Redoは使い魔全体の履歴です。実行すると表示された担当へ選択が切り替わります。保存枠は寸法を保持し、現在の範囲中心（範囲がなければ目的地）へ適用します。"]|shortcut=Some("Ctrl+C / Ctrl+V / Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z / Ctrl+1 / Ctrl+2 / Ctrl+3 / Alt+1 / Alt+2 / Alt+3")
 topic|feature="building-zones-dream"|owner="orders-building"|section="orders-building-zones"|id="building-zones-dream"|title="建築・ゾーン・Dream"
-entry|topic="building-zones-dream"|id="architect-building"|title="Architect で建築"|paragraphs=["建物を選び、world 上で配置します。Floor と Wall は範囲を指定して施工予定を作ります。", "必要資源が届くと、担当可能な Soul が工程を進めます。", "Floor を Wall と Door で囲むと Room の境界が表示されます。完成した設備を床上に置いても Room は維持されます。", "Outdoor Lamp は通行できますが建物としてタイルを占有するため、同じ場所へ別の建物を重ねて配置できません。"]|shortcut=Some("B")
-entry|topic="building-zones-dream"|id="zones-workflow"|title="Zones で保管範囲を作る"|paragraphs=["Stockpile は新しい保管範囲を作成でき、Yard は既存範囲を拡張できます。Remove は Stockpile の削除に使います。", "Stockpile の対象資源、目標量、優先度、持出可否は情報パネルから変更できます。"]|shortcut=Some("Z")
+entry|topic="building-zones-dream"|id="architect-building"|title="Architect で建築"|paragraphs=["建物を選び、world 上で配置します。Floor と Wall は範囲を指定して施工予定を作ります。", "必要資源が届くと、担当可能な Soul が工程を進めます。", "床・壁をドラッグしている間は、採用・除外タイル数と採用分だけの必要資材を画面下部で確認できます。モード表示の次操作を読み、指定を確定してください。長い案内はボタン列の上で折り返して表示します。", "Floor を Wall と Door で囲むと Room の境界が表示されます。完成した設備を床上に置いても Room は維持されます。", "床を選択すると情報パネルで部屋の成立条件を確認できます。不成立なら境界の開放・扉不足・広さ上限などの理由と確認位置を表示します。", "扉を選択すると開閉・施錠状態が表示されます。右クリックの施錠／解錠で通行を切り替えます。", "Outdoor Lamp は通行できますが建物としてタイルを占有するため、同じ場所へ別の建物を重ねて配置できません。"]|shortcut=Some("B")
+entry|topic="building-zones-dream"|id="zones-workflow"|title="Zones で保管範囲を作る"|paragraphs=["Stockpile は新しい保管範囲を作成でき、Yard は既存範囲を拡張できます。Remove は Stockpile の削除に使います。", "Stockpile の対象資源、目標量、優先度、持出可否は情報パネルから変更できます。", "ドラッグ中は採用・除外セル数、Yardでは追加面積を確認できます。StockpileはYard外を含む範囲全体を拒否し、Yard内の建物・既存Stockpile・歩行不能セルは除外します。", "Yardは既存範囲から拡張し、Site・別のYardとの重なりや変更のない範囲を拒否します。条件が変わった場合は確定せず、再指定を案内します。失敗時やカーソルが画面から外れた場合もドラッグを終了します。"]|shortcut=Some("Z")
 entry|topic="building-zones-dream"|id="dream-planting"|title="Dream で植樹"|paragraphs=["Dream の Plant Trees を選び、植える範囲を指定します。必要な Dream と成立条件を確認してください。"]|shortcut=None
 topic|feature="task-dashboard"|owner="orders-building"|section="orders-building-zones"|id="task-dashboard"|title="タスク一覧"
-entry|topic="task-dashboard"|id="task-dashboard-focus"|title="仕事の場所を確認する"|paragraphs=["左パネルを Tasks に切り替え、行を選ぶと該当する仕事へフォーカスできます。"]|shortcut=None
-entry|topic="task-dashboard"|id="task-dashboard-filter-sort"|title="絞り込みと並べ替え"|paragraphs=["Type / State / Priority / Workers の条件を順に切り替えて、表示する仕事を絞り込めます。", "Sort と Order では、仕事種別・状態・優先度・担当数の並び順と昇順／降順を変更できます。"]|shortcut=None
+entry|topic="task-dashboard"|id="task-dashboard-focus"|title="仕事の場所を確認する"|paragraphs=["左パネルを Tasks に切り替えて行を選びます。「現地へ」でカメラ移動、「詳細を固定」で情報パネルの対象を固定できます。行の選択だけではカメラや固定対象を変えません。"]|shortcut=None
+entry|topic="task-dashboard"|id="task-dashboard-filter-sort"|title="絞り込みと並べ替え"|paragraphs=["Type / State / Priority / Workers を開き、選択肢から条件を直接選べます。「全解除」は4つの条件をまとめて解除し、並び順は維持します。0件になった場合も操作できます。", "行を選ぶと、確定している担当の詳細や運搬の関連先へ進めます。関連づけが未確定の場合は候補を推測して表示しません。関連先を開くと情報パネルに固定され、カメラは移動しません。", "Sort と Order では、仕事種別・状態・優先度・担当数の並び順と昇順／降順を変更できます。", "一覧は20件ごとのページです。下部の先頭・前・次・末尾ボタンで全件へ移動し、表示範囲と総件数を確認できます。各ページ内はホイールとスクロールバーで移動します。絞り込みや並べ替えを変えると先頭ページへ戻ります。"]|shortcut=None
 entry|topic="task-dashboard"|id="task-dashboard-actions"|title="優先度変更とキャンセル"|paragraphs=["変更可能なタスクだけ優先度を調整できます。Deconstruct を含むキャンセルは確認を経て実行され、状態が変わって受理できない場合は理由が通知されます。"]|shortcut=None
 section|id="save-settings-notifications"|title="保存・設定・通知"
 topic|feature="save-settings-notifications"|owner="persistence-settings"|section="save-settings-notifications"|id="save-settings-notifications"|title="保存・設定・通知"
-entry|topic="save-settings-notifications"|id="save-load"|title="保存と読込"|paragraphs=["F5 と Pause の Save Game はセーブカタログを開き、手動スロット 1〜3 から保存先を選びます。", "F9 と Pause の Load Game はロードカタログを開き、手動スロット・オートセーブ世代・既存の legacy default を一覧します。", "空の手動スロットは確認なしで保存し、既存スロットは上書き確認後にだけ置換します。読込は確認後に現在の world を置き換えます。", "読込後は建築進捗と Familiar 設定を復元し、進行中の担当・運搬を安全な待機状態へ戻して再割り当てします。猫車の積載資材は車両付近へ荷下ろしされます。", "破損・非対応形式・別 seed の候補はロードできません。適用途中で失敗した場合は直前の world の復旧を試み、復旧不能時は専用の再ロードだけが許可されます。"]|shortcut=Some("F5 / F9")
-entry|topic="save-settings-notifications"|id="settings"|title="Settings"|paragraphs=["UI scale、カメラ速度、マウス移動、既定時間速度、電力の優先配電、オートセーブ（有効・間隔・世代数）、デバッグ表示を変更できます。", "オートセーブは初期状態ではオフです。有効化すると操作中の実時間間隔（5/10/20/30 分）と世代数（1〜5）で自動保存します。", "設定画面を閉じると保存され、次回起動でも利用されます。"]|shortcut=None
-entry|topic="save-settings-notifications"|id="notifications"|title="通知"|paragraphs=["短い結果は toast で表示されます。重要な履歴は通知一覧から後で確認できます。", "同じ失敗が続く場合は、対象・資源・経路・担当範囲を順に確認してください。"]|shortcut=None
+entry|topic="save-settings-notifications"|id="save-load"|title="保存と読込"|paragraphs=["保存操作とMenu内のSave Gameはセーブカタログを開き、手動スロット1〜3から保存先を選びます。", "読込操作とMenu内のLoad Gameはロードカタログを開き、手動スロット・オートセーブ世代・既存のlegacy defaultを一覧します。", "空の手動スロットは確認なしで保存し、既存スロットは上書き確認後にだけ置換します。読込は確認後に現在の world を置き換えます。", "一覧には手動・自動・旧形式の区分、状態、保存日時を表示します。日時は UTC（協定世界時）です。ホイールまたは右端のスクロールバーで末尾まで比較でき、確認画面にも対象の日時を表示します。", "確認画面で対象と置換の説明を読み、下部の Confirm で確定します。Back は元の一覧へ戻ります。同じスロット行を続けて押しても確定しません。", "読込後は建築進捗と Familiar 設定を復元し、進行中の担当・運搬を安全な待機状態へ戻して再割り当てします。猫車の積載資材は車両付近へ荷下ろしされます。", "破損・非対応形式・別 seed の候補はロードできません。適用途中で失敗した場合は直前の world の復旧を試み、復旧不能時は専用の再ロードだけが許可されます。"]|shortcut=Some("F5 / F9")
+entry|topic="save-settings-notifications"|id="settings"|title="Settings"|paragraphs=["UI scale、カメラ速度、マウス移動、既定時間速度、電力の優先配電、オートセーブ（有効・間隔・世代数）、デバッグ表示を変更できます。", "オートセーブは初期状態ではオフです。有効化すると操作中の実時間間隔（5/10/20/30 分）と世代数（1〜5）で自動保存します。", "UI倍率・カメラ速度・自動保存間隔・保持数は、適用済みの値と単位を表示します。UI倍率とカメラ速度は即時、起動時のゲーム速度は次回起動時に反映されます。", "画面を閉じると次回起動用の保存を試みます。失敗時も今回の変更は反映済みです。通知履歴の「現在の設定を再保存」、または設定画面を閉じる操作で、現在の値を再保存できます。", "通知の表示時間は4・8・12秒から選べます。変更は新しい通知から反映され、ゲーム速度や停止状態に影響されません。", "項目が収まらない場合は本文をホイールまたは右のスクロールバーで移動します。Close は画面下部に残ります。"]|shortcut=None
+entry|topic="save-settings-notifications"|id="notifications"|title="通知"|paragraphs=["短い結果は toast で表示されます。重要な履歴は通知一覧から後で確認でき、最後に届いてからの経過時間も表示します。再保存などの操作ボタンは履歴だけに表示します。", "履歴は最新の通知から表示します。ホイールまたは右のスクロールバーで過去の通知へ移動でき、追記があっても読んでいる位置を保ちます。見出しと閉じるボタンはスクロールしません。", "ボタンや配置失敗のTooltipは、ゲーム停止中にも同じ実時間の待ち時間で表示されます。", "同じ失敗が続く場合は、対象・資源・経路・担当範囲を順に確認してください。"]|shortcut=None
 coverage|building-category::architecture|player|published:entry:architect-building
 coverage|building-category::plant|player|published:entry:architect-building
 coverage|building-category::structure|player|published:entry:architect-building
@@ -103,6 +105,7 @@ coverage|input::area-save-preset-2|player|published:entry:area-edit
 coverage|input::area-save-preset-3|player|published:entry:area-edit
 coverage|input::area-undo|player|published:entry:area-edit
 coverage|input::cancel-active-mode|player|published:entry:orders-designation
+coverage|input::close-context-menu|player|published:entry:world-object-actions
 coverage|input::close-open-menu|player|published:entry:orders-designation
 coverage|input::debug-spawn-familiar|debug|excluded:debug-only
 coverage|input::debug-spawn-soul|debug|excluded:debug-only
@@ -125,6 +128,9 @@ coverage|input::list-next|player|published:entry:entity-list-selection
 coverage|input::list-previous|player|published:entry:entity-list-selection
 coverage|input::load-cancel|player|published:entry:save-load
 coverage|input::load|player|published:entry:save-load
+coverage|input::modal-activate|player|published:entry:getting-started-first-steps
+coverage|input::modal-focus-next|player|published:entry:getting-started-first-steps
+coverage|input::modal-focus-previous|player|published:entry:getting-started-first-steps
 coverage|input::operation-close|player|published:entry:familiar-operation-policy
 coverage|input::pause-toggle|player|published:entry:time-controls
 coverage|input::render-3d|debug|excluded:debug-only
@@ -134,6 +140,7 @@ coverage|input::rtt-scene-objects|debug|excluded:debug-only
 coverage|input::rtt-terrain|debug|excluded:debug-only
 coverage|input::save|player|published:entry:save-load
 coverage|input::settings-close|player|published:entry:settings
+coverage|input::system-menu|player|published:entry:time-controls
 coverage|input::time-fast|player|published:entry:time-controls
 coverage|input::time-normal|player|published:entry:time-controls
 coverage|input::time-paused|player|published:entry:time-controls
@@ -174,7 +181,16 @@ coverage|resource-type::wood|player|published:entry:zones-workflow
 coverage|stockpile-acceptance::any|player|published:entry:zones-workflow
 coverage|stockpile-acceptance::only|player|published:entry:zones-workflow
 coverage|stockpile-acceptance::selected|player|published:entry:zones-workflow
+coverage|task-dashboard-control::first-page|player|published:entry:task-dashboard-filter-sort
+coverage|task-dashboard-control::last-page|player|published:entry:task-dashboard-filter-sort
+coverage|task-dashboard-control::next-page|player|published:entry:task-dashboard-filter-sort
+coverage|task-dashboard-control::previous-page|player|published:entry:task-dashboard-filter-sort
 coverage|task-dashboard-control::priority|player|published:entry:task-dashboard-filter-sort
+coverage|task-dashboard-control::reset-filters|player|published:entry:task-dashboard-filter-sort
+coverage|task-dashboard-control::set-priority|player|published:entry:task-dashboard-filter-sort
+coverage|task-dashboard-control::set-status|player|published:entry:task-dashboard-filter-sort
+coverage|task-dashboard-control::set-work-type|player|published:entry:task-dashboard-filter-sort
+coverage|task-dashboard-control::set-workers|player|published:entry:task-dashboard-filter-sort
 coverage|task-dashboard-control::sort-direction|player|published:entry:task-dashboard-filter-sort
 coverage|task-dashboard-control::sort-key|player|published:entry:task-dashboard-filter-sort
 coverage|task-dashboard-control::status|player|published:entry:task-dashboard-filter-sort
@@ -241,10 +257,17 @@ coverage|transport-request-kind::return-bucket|internal|excluded:internal-mechan
 coverage|transport-request-kind::return-wheelbarrow|internal|excluded:internal-mechanism
 coverage|ui-intent::architect-category|player|published:entry:architect-building
 coverage|ui-intent::architect-toggle|player|published:entry:architect-building
+coverage|ui-intent::area-edit-control|player|published:entry:area-edit
 coverage|ui-intent::clear-inspect-pin|player|published:entry:info-panel-pin
+coverage|ui-intent::construction-cancel-dismiss|player|published:entry:soul-energy-recovery
 coverage|ui-intent::door-lock|player|published:entry:world-selection
 coverage|ui-intent::dream-toggle|player|published:entry:dream-planting
+coverage|ui-intent::familiar-idle-patrol|player|published:entry:familiar-idle-patrol
+coverage|ui-intent::focus-entity|player|published:entry:entity-list-selection
+coverage|ui-intent::guide-end|player|published:entry:getting-started-work-loop
+coverage|ui-intent::guide-start|player|published:entry:getting-started-work-loop
 coverage|ui-intent::help-close|player|published:chrome:close
+coverage|ui-intent::help-entry-select|player|published:entry:getting-started-first-steps
 coverage|ui-intent::help-open|player|published:launcher
 coverage|ui-intent::help-scroll|internal|excluded:internal-mechanism
 coverage|ui-intent::help-topic-select|internal|excluded:internal-mechanism
@@ -255,6 +278,7 @@ coverage|ui-intent::load-catalog-confirm|player|published:entry:save-load
 coverage|ui-intent::load-catalog-select|player|published:entry:save-load
 coverage|ui-intent::load-request|player|published:entry:save-load
 coverage|ui-intent::move-plant-building|player|published:entry:world-object-actions
+coverage|ui-intent::notification-duration|player|published:entry:settings
 coverage|ui-intent::operation-close|player|published:entry:familiar-operation-policy
 coverage|ui-intent::operation-open|player|published:entry:familiar-operation-policy
 coverage|ui-intent::operation-settings-dialog|player|published:entry:familiar-operation-policy
@@ -283,12 +307,15 @@ coverage|ui-intent::settings-debug-gizmos|player|published:entry:settings
 coverage|ui-intent::settings-default-time-speed|player|published:entry:settings
 coverage|ui-intent::settings-fps-display|player|published:entry:settings
 coverage|ui-intent::settings-power-priority|player|published:entry:settings
+coverage|ui-intent::settings-retry-save|player|published:entry:settings
 coverage|ui-intent::settings-toggle|player|published:entry:settings
 coverage|ui-intent::settings-ui-scale|player|published:entry:settings
 coverage|ui-intent::soul-spa-active-slots|player|published:entry:soul-energy-recovery
+coverage|ui-intent::soul-spa-cancel-confirm|player|published:entry:soul-energy-recovery
 coverage|ui-intent::soul-spa-construction-cancel|player|published:entry:soul-energy-recovery
 coverage|ui-intent::stockpile-policy-range|player|published:entry:zones-workflow
 coverage|ui-intent::stockpile-policy|player|published:entry:zones-workflow
+coverage|ui-intent::system-menu|player|published:entry:time-controls
 coverage|ui-intent::task-cancel|player|published:entry:task-dashboard-actions
 coverage|ui-intent::task-mode-area-selection|player|published:entry:area-edit
 coverage|ui-intent::task-mode-assign-task|player|published:entry:orders-designation

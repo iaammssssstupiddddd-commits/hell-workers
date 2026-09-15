@@ -33,6 +33,7 @@ impl Plugin for HwUiPlugin {
             .init_resource::<notifications::NotificationUiRuntime>()
             .init_resource::<panels::task_list::TaskDashboardViewState>()
             .init_resource::<panels::task_list::TaskDashboardActionState>()
+            .init_resource::<panels::construction_cancel::ConstructionCancelState>()
             .init_resource::<panels::task_list::TaskListDirty>()
             .init_resource::<help::HelpPanelState>()
             .init_resource::<components::OperationDialogState>()
@@ -72,6 +73,8 @@ pub fn reset_for_world_replace(world: &mut World) {
     clear_hover_action_targets(world);
     clear_entity_bearing_button_targets(world);
     reset_existing_resource::<components::UiInputState>(world);
+    reset_existing_resource::<interaction::button_activation::ButtonActivationState>(world);
+    reset_existing_resource::<interaction::pause_menu::SystemMenuState>(world);
     reset_existing_resource::<help::HelpPanelState>(world);
     reset_existing_resource::<components::OperationDialogState>(world);
     reset_existing_resource::<components::SoulRenameState>(world);
@@ -84,11 +87,23 @@ pub fn reset_for_world_replace(world: &mut World) {
     reset_existing_resource::<area_edit::AreaEditSession>(world);
     reset_existing_resource::<area_edit::AreaEditHistory>(world);
     reset_existing_resource::<area_edit::AreaEditClipboard>(world);
+    reset_existing_resource::<area_edit::panel::AreaEditPanelModel>(world);
+    let mut area_panels =
+        world.query_filtered::<&mut Node, With<area_edit::panel::AreaEditPanel>>();
+    for mut node in area_panels.iter_mut(world) {
+        node.display = Display::None;
+    }
     reset_existing_resource::<interaction::TextFieldPendingAction>(world);
     reset_existing_resource::<interaction::HoverActionTarget>(world);
     reset_existing_resource::<selection::PlacementFeedbackState>(world);
     reset_existing_resource::<panels::task_list::TaskDashboardViewState>(world);
     reset_existing_resource::<panels::task_list::TaskDashboardActionState>(world);
+    reset_existing_resource::<panels::construction_cancel::ConstructionCancelState>(world);
+    let mut confirmations = world
+        .query_filtered::<&mut Node, With<panels::construction_cancel::ConstructionCancelPanel>>();
+    for mut node in confirmations.iter_mut(world) {
+        node.display = Display::None;
+    }
     notifications::reset_for_world_replace(world);
     reset_info_panel_presentation(world);
     reset_help_presentation(world);
@@ -104,6 +119,11 @@ pub fn reset_for_world_replace(world: &mut World) {
 }
 
 fn reset_info_panel_presentation(world: &mut World) {
+    let mut scrolls =
+        world.query_filtered::<&mut ScrollPosition, With<components::InfoPanelScrollArea>>();
+    for mut scroll in scrolls.iter_mut(world) {
+        scroll.0 = Vec2::ZERO;
+    }
     let mut roots = world.query_filtered::<&mut Node, With<components::InfoPanel>>();
     for mut node in roots.iter_mut(world) {
         node.display = Display::None;
@@ -163,8 +183,16 @@ fn clear_entity_bearing_button_targets(world: &mut World) {
                 active_slots: 0,
             },
             UiIntent::CancelSoulSpaConstruction { .. } => UiIntent::CancelSoulSpaConstruction {
+                source_task: None,
                 target: Entity::PLACEHOLDER,
             },
+            UiIntent::ConfirmSoulSpaConstructionCancel { .. } => {
+                UiIntent::DismissConstructionCancel
+            }
+            UiIntent::FocusEntity(_) => UiIntent::FocusEntity(Entity::PLACEHOLDER),
+            UiIntent::ToggleFamiliarIdlePatrol(_) => {
+                UiIntent::ToggleFamiliarIdlePatrol(Entity::PLACEHOLDER)
+            }
             UiIntent::SetPowerConsumerPriority { .. } => UiIntent::SetPowerConsumerPriority {
                 target: Entity::PLACEHOLDER,
                 priority: power::PowerPriorityValue::default(),
@@ -227,6 +255,22 @@ fn mark_entity_list_dirty(world: &mut World) {
     if let Some(mut dirty) = world.get_resource_mut::<list::EntityListDirty>() {
         dirty.mark_structure();
     }
+}
+
+#[cfg(test)]
+pub(crate) fn accepted_button_fixture(app: &mut App) {
+    fn collect(
+        interactions: Query<(Entity, &Interaction), Changed<Interaction>>,
+        mut ui: ResMut<components::UiInputState>,
+    ) {
+        ui.activated_buttons.clear();
+        ui.activated_buttons
+            .extend(interactions.iter().filter_map(|(entity, interaction)| {
+                (*interaction == Interaction::Pressed).then_some(entity)
+            }));
+    }
+    app.init_resource::<components::UiInputState>();
+    app.add_systems(PreUpdate, collect);
 }
 
 #[cfg(test)]
@@ -423,6 +467,7 @@ mod tests {
         let soul_spa_cancel_button = world
             .spawn(components::MenuButton(
                 UiIntent::CancelSoulSpaConstruction {
+                    source_task: None,
                     target: stale_simulation_entity,
                 },
             ))
@@ -462,6 +507,7 @@ mod tests {
             ..default()
         });
         world.insert_resource(panels::task_list::TaskDashboardActionState {
+            active_task: Some(stale_simulation_entity),
             confirmation: Some(panels::task_list::PendingTaskCancellation {
                 target: stale_simulation_entity,
                 expected_work_type: hw_core::jobs::WorkType::Chop,
@@ -601,7 +647,10 @@ mod tests {
         assert_eq!(target, Entity::PLACEHOLDER);
         assert_eq!(active_slots, 0);
 
-        let UiIntent::CancelSoulSpaConstruction { target } = world
+        let UiIntent::CancelSoulSpaConstruction {
+            target,
+            source_task: None,
+        } = world
             .get::<components::MenuButton>(soul_spa_cancel_button)
             .unwrap()
             .0

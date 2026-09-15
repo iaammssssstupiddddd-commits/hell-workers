@@ -44,10 +44,10 @@ fn register_ui_entity_list_plugin_systems(app: &mut App) {
             entity_list_scroll_hint_visibility_system,
             entity_list_tab_focus_system,
             entity_list_minimize_toggle_system,
-            entity_list_resize_system,
+            entity_list_resize_system.after(entity_list_minimize_toggle_system),
             entity_list_resize_cursor_system.after(entity_list_resize_system),
             task_area_edit_cursor_system.after(entity_list_resize_cursor_system),
-            update_unassigned_arrow_icon_system,
+            update_unassigned_arrow_icon_system.after(build_entity_list_view_model_system),
         )
             .in_set(GameSystemSet::Interface),
     )

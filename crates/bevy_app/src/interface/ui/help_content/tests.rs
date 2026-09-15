@@ -47,6 +47,12 @@ fn normalized_approval_snapshot(content: &HelpPanelContent) -> String {
         chrome.footer_text(),
         chrome.entry_shortcut_text("<binding>"),
     ));
+    lines.push(format!(
+        "chrome-search|label={:?}|empty={:?}",
+        copy.search_label(),
+        copy.no_results_label()
+    ));
+    lines.push(format!("chrome-guide|start={:?}", copy.guide_start_label()));
     for slot in hw_ui::help::HelpChromeSlot::ALL {
         lines.push(format!(
             "chrome|slot={:?}|shortcut={:?}",

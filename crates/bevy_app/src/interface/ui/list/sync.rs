@@ -52,6 +52,14 @@ fn task_icon_and_color(
         TaskVisual::Build => (game_assets.icon_pick.clone(), theme.colors.build),
         TaskVisual::HaulToBlueprint => (game_assets.icon_haul.clone(), theme.colors.haul_to_bp),
         TaskVisual::Water => (game_assets.icon_haul.clone(), theme.colors.water),
+        TaskVisual::GeneratePower => (game_assets.icon_fatigue.clone(), theme.colors.text_accent),
+        TaskVisual::Deconstruct => (game_assets.icon_hammer.clone(), theme.colors.stress_high),
+        TaskVisual::Move => (game_assets.icon_haul.clone(), theme.colors.build),
+        TaskVisual::Refine => (game_assets.icon_hammer.clone(), theme.colors.build),
+        TaskVisual::CollectBone => (
+            game_assets.icon_bone_small.clone(),
+            theme.colors.gather_default,
+        ),
     }
 }
 
@@ -250,6 +258,18 @@ pub fn sync_entity_list_value_rows_system(
         }
         let (task_icon, task_color) =
             task_icon_and_color(soul_vm.task_visual, &game_assets, &theme);
+        if let Some(&label_node) = children.get(8) {
+            if let Ok(mut text) = q_text.get_mut(label_node)
+                && text.0 != soul_vm.task_visual.label()
+            {
+                text.0 = soul_vm.task_visual.label().into();
+            }
+            if let Ok(mut color) = q_text_color.get_mut(label_node)
+                && color.0 != task_color
+            {
+                color.0 = task_color;
+            }
+        }
         if let Ok(mut image) = q_image.get_mut(task_icon_node)
             && (image.image != task_icon || image.color != task_color)
         {

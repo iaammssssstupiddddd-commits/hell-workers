@@ -88,6 +88,11 @@ pub fn context_menu_system(
         q_resources,
     } = classify_queries;
     let ContextMenuRenderAssets { game_assets, theme } = render_assets;
+    if resolved_frame.contains(crate::input_actions::InputAction::CloseContextMenu) {
+        despawn_context_menus(&mut commands, &q_context_menu);
+        requests.clear();
+        return;
+    }
     if resolved_frame.pointer_selection_suppressed() {
         return;
     }
@@ -185,6 +190,13 @@ pub fn context_menu_system(
                     );
                     spawn_menu_item(
                         menu,
+                        "待機 / 巡回",
+                        MenuAction::ToggleFamiliarIdlePatrol(entity),
+                        &game_assets,
+                        &theme,
+                    );
+                    spawn_menu_item(
+                        menu,
                         "Edit Task Area",
                         MenuAction::SelectAreaTask,
                         &game_assets,
@@ -221,9 +233,9 @@ pub fn context_menu_system(
                     if let Ok(door) = q_doors.get(entity) {
                         let (label, action) =
                             if door.state == crate::systems::jobs::DoorState::Locked {
-                                ("Unlock Door", MenuAction::ToggleDoorLock(entity))
+                                ("解錠", MenuAction::ToggleDoorLock(entity))
                             } else {
-                                ("Lock Door", MenuAction::ToggleDoorLock(entity))
+                                ("施錠", MenuAction::ToggleDoorLock(entity))
                             };
                         spawn_menu_item(menu, label, action, &game_assets, &theme);
                     }

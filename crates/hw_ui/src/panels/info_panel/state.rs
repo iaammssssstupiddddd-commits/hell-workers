@@ -3,6 +3,7 @@ use bevy::prelude::*;
 
 #[derive(Resource, Default)]
 pub struct InfoPanelState {
+    pub(super) last_entity: Option<Entity>,
     pub(super) last: Option<InfoPanelViewModel>,
     pub(super) last_pinned: bool,
     pub(super) last_rename_target: Option<Entity>,

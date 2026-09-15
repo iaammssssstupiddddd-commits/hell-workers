@@ -21,6 +21,7 @@ pub fn setup_ui(
         power_priority_enabled: settings.power_priority_enabled,
         autosave_enabled: settings.autosave_enabled,
         autosave_interval_slider: settings.autosave_interval_slider_value(),
+        notification_duration_slider: settings.notification_duration_slider_value(),
         autosave_generations_slider: settings.autosave_generations_slider_value(),
     };
     let help_chrome = crate::interface::ui::help_content::build_help_panel_chrome()
@@ -49,6 +50,12 @@ pub fn setup_ui(
         },
         |commands, overlay_slot| {
             crate::interface::ui::vignette::spawn_vignette_ui(commands, overlay_slot);
+            hw_ui::area_edit::panel::spawn_area_edit_panel(
+                commands,
+                overlay_slot,
+                hw_ui::setup::UiAssets::font_ui(&*game_assets).clone(),
+                theme_ref,
+            );
         },
     );
 }

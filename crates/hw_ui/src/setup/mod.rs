@@ -11,6 +11,7 @@ mod pause_menu;
 mod root;
 mod settings_panel;
 mod submenus;
+pub use submenus::fit_submenus_to_viewport;
 mod time_control;
 
 use bevy::prelude::{Font, Handle, Image};
@@ -41,9 +42,9 @@ pub use settings_panel::{SettingsPanelInitial, spawn_settings_panel};
 pub(super) mod test_support {
     use super::UiAssets;
     use crate::help::{HelpPanelChrome, HelpPanelCopy, HelpPanelCopySpec, HelpShortcutPair};
-    use bevy::prelude::{Font, Handle, Image};
+    use bevy::prelude::{Font, Handle, Image, Resource};
 
-    #[derive(Default)]
+    #[derive(Default, Resource)]
     pub struct TestAssets {
         font: Handle<Font>,
         image: Handle<Image>,
@@ -126,6 +127,9 @@ pub(super) mod test_support {
                 page_navigation_label: "Injected Pages",
                 document_bounds_label: "Injected Bounds",
                 shortcut_label: "Injected Shortcut",
+                search_label: "Injected Search",
+                guide_start_label: "Injected Guide Start",
+                no_results_label: "Injected No Results",
             }),
             "Ctrl+F1",
             "Ctrl+F1 / Esc",

@@ -17,7 +17,7 @@ pub(super) struct CaptureOpenSnapshot {
     pub recovery_failed: bool,
     pub help_open: bool,
     pub settings_open: bool,
-    pub simulation_paused: bool,
+    pub system_menu_open: bool,
     pub operation_target_is_familiar: bool,
 }
 
@@ -40,7 +40,7 @@ pub(super) const fn opening_capture(
         CaptureOpenAction::Help if !state.recovery_failed && !state.help_open => {
             Some((InputOverlay::Help, None))
         }
-        CaptureOpenAction::Pause if !state.recovery_failed && !state.simulation_paused => {
+        CaptureOpenAction::Pause if !state.recovery_failed && !state.system_menu_open => {
             Some((InputOverlay::Pause, None))
         }
         CaptureOpenAction::Settings if !state.recovery_failed && !state.settings_open => {
@@ -116,7 +116,7 @@ mod tests {
             opening_capture(
                 CaptureOpenAction::Pause,
                 CaptureOpenSnapshot {
-                    simulation_paused: true,
+                    system_menu_open: true,
                     ..Default::default()
                 },
             ),

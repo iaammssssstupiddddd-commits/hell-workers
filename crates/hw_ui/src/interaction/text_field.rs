@@ -19,6 +19,7 @@ pub struct TextFieldPendingAction {
 pub enum TextFieldAction {
     SubmitRename { entity: Entity, name: String },
     CancelSearch { editable: Entity },
+    CancelHelpSearch { editable: Entity },
     CancelRename,
     ClearFocus,
 }
@@ -111,14 +112,18 @@ pub fn on_text_field_keyboard_input(
             entity: *target,
             name: editable_text_value(editable),
         },
-        (Key::Enter, TextFieldRole::DevPoc | TextFieldRole::EntityListSearch) => {
-            TextFieldAction::ClearFocus
-        }
+        (
+            Key::Enter,
+            TextFieldRole::DevPoc | TextFieldRole::EntityListSearch | TextFieldRole::HelpSearch,
+        ) => TextFieldAction::ClearFocus,
         (Key::Escape, TextFieldRole::EntityListSearch) => TextFieldAction::CancelSearch {
             editable: input.focused_entity,
         },
         (Key::Escape, TextFieldRole::SoulRename { .. }) => TextFieldAction::CancelRename,
         (Key::Escape, TextFieldRole::DevPoc) => TextFieldAction::ClearFocus,
+        (Key::Escape, TextFieldRole::HelpSearch) => TextFieldAction::CancelHelpSearch {
+            editable: input.focused_entity,
+        },
         _ => return,
     });
 }
@@ -169,6 +174,12 @@ pub fn apply_text_field_pending_action_system(
                 &mut ctx.commands,
                 &mut ctx.rename_state,
             );
+            ctx.input_focus.clear();
+        }
+        TextFieldAction::CancelHelpSearch { editable } => {
+            if let Ok(mut editable) = ctx.q_editable.get_mut(editable) {
+                editable.clear();
+            }
             ctx.input_focus.clear();
         }
         TextFieldAction::ClearFocus => {

@@ -23,7 +23,7 @@ pub use resize::{
 };
 pub use search::EntityListSearchState;
 pub use section_toggle::entity_list_section_toggle_system;
-pub use selection_focus::{focus_camera_on_entity, select_entity_and_focus_camera};
+pub use selection_focus::focus_camera_on_entity;
 pub use spawn::{
     spawn_empty_squad_hint_entity, spawn_familiar_section, spawn_soul_list_item,
     spawn_soul_list_item_entity,

@@ -120,6 +120,7 @@ fn ui_intent_for_action(action: InputAction) -> Option<UiIntent> {
         InputAction::ToggleArchitect => Some(UiIntent::ToggleArchitect),
         InputAction::ToggleZones => Some(UiIntent::ToggleZones),
         InputAction::TogglePause => Some(UiIntent::TogglePause),
+        InputAction::ToggleSystemMenu => Some(UiIntent::ToggleSystemMenu),
         InputAction::TimePaused => Some(UiIntent::SetTimeSpeed(
             hw_core::game_state::TimeSpeed::Paused,
         )),
@@ -133,7 +134,10 @@ fn ui_intent_for_action(action: InputAction) -> Option<UiIntent> {
         InputAction::CancelLoadConfirm => Some(UiIntent::CancelLoadConfirm),
         InputAction::CloseSettings => Some(UiIntent::CloseSettings),
         InputAction::CloseOperationDialog => Some(UiIntent::CloseDialog),
-        InputAction::ToggleRender3d
+        InputAction::ModalFocusNext
+        | InputAction::ModalFocusPrevious
+        | InputAction::ModalActivate
+        | InputAction::ToggleRender3d
         | InputAction::CycleRttQuality
         | InputAction::ToggleRttDirectionalLight
         | InputAction::ToggleRttTerrain
@@ -149,6 +153,7 @@ fn ui_intent_for_action(action: InputAction) -> Option<UiIntent> {
         | InputAction::ToggleFamiliarIdlePatrol
         | InputAction::CancelActiveMode
         | InputAction::CloseOpenMenu
+        | InputAction::CloseContextMenu
         | InputAction::AreaCopy
         | InputAction::AreaPaste
         | InputAction::AreaUndo

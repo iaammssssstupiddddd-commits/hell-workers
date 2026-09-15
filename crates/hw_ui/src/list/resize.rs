@@ -1,5 +1,5 @@
 use super::minimize::EntityListMinimizeState;
-use crate::components::{EntityListPanel, UiInputState};
+use crate::components::{EntityListPanel, UiInputState, UiSlot};
 use crate::theme::UiTheme;
 use bevy::prelude::*;
 use bevy::window::{CursorIcon, PrimaryWindow, SystemCursorIcon};
@@ -7,6 +7,18 @@ use bevy::window::{CursorIcon, PrimaryWindow, SystemCursorIcon};
 pub const ENTITY_LIST_DEFAULT_HEIGHT: f32 = 420.0;
 pub const ENTITY_LIST_MIN_HEIGHT: f32 = 220.0;
 const EDGE_DRAG_THRESHOLD_PX: f32 = 10.0;
+
+type ModeLayoutQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        &'static UiSlot,
+        &'static Node,
+        &'static ComputedNode,
+        &'static UiGlobalTransform,
+    ),
+    Without<EntityListPanel>,
+>;
 
 #[derive(Clone, Copy)]
 enum ResizeEdge {
@@ -108,9 +120,54 @@ pub fn entity_list_resize_system(
     mut q_panel: Query<(&mut Node, &ComputedNode, &UiGlobalTransform), With<EntityListPanel>>,
     mut resize_state: ResMut<EntityListResizeState>,
     mut minimize_state: ResMut<EntityListMinimizeState>,
-    theme: Res<UiTheme>,
+    (theme, ui_scale, mode_layout): (Res<UiTheme>, Res<UiScale>, ModeLayoutQuery),
     ui_input_state: Res<UiInputState>,
 ) {
+    let Ok(window) = q_window.single() else {
+        return;
+    };
+    let Ok((mut panel_node, computed, transform)) = q_panel.single_mut() else {
+        return;
+    };
+    let scale = ui_scale.0.max(f32::EPSILON);
+    let viewport_height = window.height() / scale;
+    let mut bottom =
+        viewport_height - theme.spacing.bottom_bar_height - theme.spacing.panel_margin_x;
+    if let Some((_, _, mode_size, mode_transform)) =
+        mode_layout.iter().find(|(slot, node, size, _)| {
+            **slot == UiSlot::ModeText && node.display != Display::None && size.size().y > 0.0
+        })
+    {
+        let mode_top = (mode_transform.translation.y - mode_size.size().y * 0.5)
+            * mode_size.inverse_scale_factor();
+        bottom = bottom.min(mode_top - theme.spacing.panel_margin_x);
+    }
+    let top = match panel_node.top {
+        Val::Px(value) => value,
+        _ => theme.spacing.panel_top,
+    }
+    .clamp(
+        theme.spacing.panel_margin_x,
+        (bottom - ENTITY_LIST_MIN_HEIGHT).max(theme.spacing.panel_margin_x),
+    );
+    let max_height = (viewport_height * theme.sizes.entity_list_max_height_percent / 100.0)
+        .min(bottom - top)
+        .max(1.0);
+    let min_height = ENTITY_LIST_MIN_HEIGHT.min(max_height);
+    let height = minimize_state.expanded_height.clamp(min_height, max_height);
+    if panel_node.top != Val::Px(top) || minimize_state.expanded_height != height {
+        resize_state.reset_active();
+        panel_node.top = Val::Px(top);
+        minimize_state.expanded_height = height;
+    }
+    if !minimize_state.minimized {
+        if panel_node.height != Val::Px(height) {
+            panel_node.height = Val::Px(height);
+        }
+        if panel_node.min_height != Val::Px(min_height) {
+            panel_node.min_height = Val::Px(min_height);
+        }
+    }
     if ui_input_state.world_input_captured {
         resize_state.reset_active();
         return;
@@ -121,9 +178,6 @@ pub fn entity_list_resize_system(
         return;
     }
 
-    let Ok(window) = q_window.single() else {
-        return;
-    };
     let Some(cursor) = window.cursor_position() else {
         if !mouse_buttons.pressed(MouseButton::Left) {
             resize_state.active = false;
@@ -131,9 +185,7 @@ pub fn entity_list_resize_system(
         }
         return;
     };
-    let Ok((mut panel_node, computed, transform)) = q_panel.single_mut() else {
-        return;
-    };
+    let cursor = cursor / scale;
 
     if !resize_state.active {
         if mouse_buttons.just_pressed(MouseButton::Left)
@@ -183,12 +235,6 @@ pub fn entity_list_resize_system(
         return;
     }
 
-    let max_height_percent = window.height() * (theme.sizes.entity_list_max_height_percent / 100.0);
-    let max_height_layout =
-        window.height() - theme.spacing.bottom_bar_height - theme.spacing.panel_margin_x;
-    let max_height = max_height_percent
-        .min(max_height_layout)
-        .max(ENTITY_LIST_MIN_HEIGHT);
     let delta_y = cursor.y - resize_state.start_cursor_y;
     let snap_step = resize_state.snap_step.max(1.0);
     let snap_anchor = resize_state.snap_anchor;
@@ -198,7 +244,7 @@ pub fn entity_list_resize_system(
             let desired_height = resize_state.start_height + delta_y;
             let snapped_height = snap_panel_height_to_row_midpoint(
                 desired_height,
-                ENTITY_LIST_MIN_HEIGHT,
+                min_height,
                 max_height,
                 snap_step,
                 snap_anchor,
@@ -211,7 +257,7 @@ pub fn entity_list_resize_system(
             let desired_height = resize_state.start_height - delta_y;
             let mut snapped_height = snap_panel_height_to_row_midpoint(
                 desired_height,
-                ENTITY_LIST_MIN_HEIGHT,
+                min_height,
                 max_height,
                 snap_step,
                 snap_anchor,
@@ -220,13 +266,13 @@ pub fn entity_list_resize_system(
             if snapped_height > max_height_by_top {
                 snapped_height = snap_panel_height_to_row_midpoint_floor(
                     max_height_by_top,
-                    ENTITY_LIST_MIN_HEIGHT,
+                    min_height,
                     max_height,
                     snap_step,
                     snap_anchor,
                 );
             }
-            let clamped_height = clamp_height(snapped_height, ENTITY_LIST_MIN_HEIGHT, max_height);
+            let clamped_height = clamp_height(snapped_height, min_height, max_height);
             let clamped_top = (start_bottom - clamped_height).max(theme.spacing.panel_margin_x);
             panel_node.top = Val::Px(clamped_top);
             panel_node.height = Val::Px(clamped_height);
@@ -241,7 +287,7 @@ pub fn entity_list_resize_cursor_system(
     q_panel: Query<(&ComputedNode, &UiGlobalTransform), With<EntityListPanel>>,
     resize_state: Res<EntityListResizeState>,
     minimize_state: Res<EntityListMinimizeState>,
-    ui_input_state: Res<UiInputState>,
+    (ui_input_state, ui_scale): (Res<UiInputState>, Res<UiScale>),
     mut q_cursor: Query<&mut CursorIcon, With<PrimaryWindow>>,
     mut commands: Commands,
 ) {
@@ -256,7 +302,11 @@ pub fn entity_list_resize_cursor_system(
         && !minimize_state.minimized
         && (resize_state.active
             || window.cursor_position().is_some_and(|cursor| {
-                is_cursor_on_vertical_resize_edge(cursor, computed, transform)
+                is_cursor_on_vertical_resize_edge(
+                    cursor / ui_scale.0.max(f32::EPSILON),
+                    computed,
+                    transform,
+                )
             })) {
         CursorIcon::System(SystemCursorIcon::NsResize)
     } else {
@@ -275,6 +325,78 @@ pub fn entity_list_resize_cursor_system(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn scale_change_clamps_expanded_height_even_with_capture_and_no_cursor() {
+        let mut app = App::new();
+        app.init_resource::<ButtonInput<MouseButton>>()
+            .init_resource::<EntityListResizeState>()
+            .init_resource::<EntityListMinimizeState>()
+            .init_resource::<UiTheme>()
+            .insert_resource(UiScale(1.25))
+            .insert_resource(UiInputState {
+                world_input_captured: true,
+                ..default()
+            })
+            .add_systems(Update, entity_list_resize_system);
+        app.world_mut().spawn((
+            Window {
+                resolution: (1280, 720).into(),
+                ..default()
+            },
+            PrimaryWindow,
+        ));
+        let panel = app
+            .world_mut()
+            .spawn((
+                EntityListPanel,
+                Node {
+                    top: Val::Px(170.0),
+                    height: Val::Px(420.0),
+                    ..default()
+                },
+            ))
+            .id();
+        app.update();
+        let theme = app.world().resource::<UiTheme>();
+        let expected =
+            720.0 / 1.25 - theme.spacing.bottom_bar_height - theme.spacing.panel_margin_x - 170.0;
+        assert_eq!(
+            app.world().get::<Node>(panel).unwrap().height,
+            Val::Px(expected)
+        );
+        assert_eq!(
+            app.world()
+                .resource::<EntityListMinimizeState>()
+                .expanded_height,
+            expected
+        );
+        let reserved_height = 440.0 - theme.spacing.panel_margin_x - 170.0;
+        app.world_mut().spawn((
+            UiSlot::ModeText,
+            Node::default(),
+            ComputedNode {
+                size: Vec2::new(1000.0, 100.0),
+                inverse_scale_factor: 0.8,
+                ..default()
+            },
+            UiGlobalTransform::from_translation(Vec2::new(500.0, 600.0)),
+        ));
+        app.update();
+        assert_eq!(
+            app.world().get::<Node>(panel).unwrap().height,
+            Val::Px(reserved_height)
+        );
+        app.world_mut()
+            .resource_mut::<EntityListMinimizeState>()
+            .minimized = true;
+        app.world_mut().get_mut::<Node>(panel).unwrap().height = Val::Px(44.0);
+        app.update();
+        assert_eq!(
+            app.world().get::<Node>(panel).unwrap().height,
+            Val::Px(44.0)
+        );
+    }
 
     #[test]
     fn capture_reset_clears_active_resize_edge() {

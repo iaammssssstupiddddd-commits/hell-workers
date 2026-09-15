@@ -5,8 +5,8 @@ use crate::components::{
     MenuAction, MenuButton, OperationDialog, OperationDialogScroll,
     OperationPolicyAllDisabledWarning, OperationPolicyAllowedButton, OperationPolicyAllowedText,
     OperationPolicyPriorityButton, OperationPolicyPriorityText, OperationPolicyRow,
-    SaveCatalogDialog, SaveCatalogSlotList, SaveCatalogTitle, UiInputBlocker, UiInputCapture,
-    UiNodeRegistry, UiSlot,
+    SaveCatalogConfirmFooter, SaveCatalogDialog, SaveCatalogSlotList, SaveCatalogTitle,
+    UiInputBlocker, UiInputCapture, UiNodeRegistry, UiSlot,
 };
 use crate::overlay::{LOAD_CONFIRM_LAYER, OPERATION_DIALOG_LAYER};
 use crate::panels::task_list::player_reachable_work_types;
@@ -615,8 +615,9 @@ fn spawn_save_catalog_dialog(
         .spawn((
             Node {
                 width: Val::Px(420.0),
-                height: Val::Auto,
-                max_height: Val::Px(520.0),
+                height: Val::Px(520.0),
+                max_height: Val::Percent(88.0),
+                max_width: Val::Percent(92.0),
                 flex_direction: FlexDirection::Column,
                 padding: UiRect::all(Val::Px(16.0)),
                 border: UiRect::all(Val::Px(2.0)),
@@ -644,16 +645,67 @@ fn spawn_save_catalog_dialog(
             },
             TextColor(theme.colors.text_accent),
             SaveCatalogTitle,
-        ));
-        parent.spawn((
             Node {
-                width: Val::Percent(100.0),
-                flex_direction: FlexDirection::Column,
-                row_gap: Val::Px(6.0),
+                flex_shrink: 0.0,
                 ..default()
             },
-            SaveCatalogSlotList,
-            Name::new("Save Catalog Slot List"),
+        ));
+        parent
+            .spawn(Node {
+                width: Val::Percent(100.0),
+                flex_grow: 1.0,
+                min_height: Val::Px(0.0),
+                ..default()
+            })
+            .with_children(|row| {
+                let list = row
+                    .spawn((
+                        Node {
+                            flex_direction: FlexDirection::Column,
+                            row_gap: Val::Px(6.0),
+                            flex_grow: 1.0,
+                            min_width: Val::Px(0.0),
+                            min_height: Val::Px(0.0),
+                            height: Val::Percent(100.0),
+                            overflow: Overflow::scroll_y(),
+                            ..default()
+                        },
+                        SaveCatalogSlotList,
+                        ScrollArea,
+                        UiInputBlocker,
+                        RelativeCursorPosition::default(),
+                        Name::new("Save Catalog Slot List"),
+                    ))
+                    .id();
+                row.spawn((
+                    Node {
+                        width: Val::Px(12.0),
+                        flex_shrink: 0.0,
+                        height: Val::Percent(100.0),
+                        margin: UiRect::left(Val::Px(4.0)),
+                        ..default()
+                    },
+                    Scrollbar::new(list, ControlOrientation::Vertical, 20.0),
+                ))
+                .with_children(|bar| {
+                    bar.spawn((
+                        ScrollbarThumb {
+                            border_radius: BorderRadius::all(Val::Px(3.0)),
+                            border: UiRect::ZERO,
+                        },
+                        BackgroundColor(theme.colors.text_muted),
+                    ));
+                });
+            });
+        parent.spawn((
+            Node {
+                height: Val::Px(40.0),
+                flex_shrink: 0.0,
+                column_gap: Val::Px(8.0),
+                justify_content: JustifyContent::FlexEnd,
+                ..default()
+            },
+            SaveCatalogConfirmFooter,
         ));
         parent
             .spawn((

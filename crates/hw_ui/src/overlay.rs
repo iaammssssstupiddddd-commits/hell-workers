@@ -7,8 +7,11 @@ pub const PAUSE_LAYER: GlobalZIndex = GlobalZIndex(20_020);
 pub const SETTINGS_LAYER: GlobalZIndex = GlobalZIndex(20_030);
 pub const HELP_LAYER: GlobalZIndex = GlobalZIndex(20_040);
 pub const LOAD_CONFIRM_LAYER: GlobalZIndex = GlobalZIndex(20_050);
+/// Tooltips can be parented to controls in any panel; local ZIndex cannot escape them.
+pub const TOOLTIP_LAYER: GlobalZIndex = GlobalZIndex(20_060);
 
 const _: () = {
+    assert!(TOOLTIP_LAYER.0 > LOAD_CONFIRM_LAYER.0);
     assert!(LOAD_CONFIRM_LAYER.0 > HELP_LAYER.0);
     assert!(HELP_LAYER.0 > SETTINGS_LAYER.0);
     assert!(SETTINGS_LAYER.0 > PAUSE_LAYER.0);

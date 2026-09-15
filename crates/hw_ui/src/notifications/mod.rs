@@ -6,15 +6,16 @@ use bevy::prelude::*;
 
 pub use model::{
     MAX_ACTIVE_TOASTS, MAX_NOTIFICATION_HISTORY, NOTIFICATION_DEDUPE_WINDOW,
-    NOTIFICATION_TOAST_LIFETIME, NotificationCenter, NotificationEntry, NotificationEntryId,
-    NotificationHistoryButton, NotificationHistoryPanel, NotificationHistoryRow, NotificationKey,
-    NotificationRetention, NotificationSeverity, NotificationToastRoot, NotificationToastRow,
-    NotificationToastSurface, NotificationUiAssets, NotificationUiRuntime, NotificationUnreadText,
-    UserFacingNotification,
+    NOTIFICATION_TOAST_LIFETIME, NotificationAction, NotificationCenter, NotificationEntry,
+    NotificationEntryId, NotificationHistoryButton, NotificationHistoryClose,
+    NotificationHistoryKey, NotificationHistoryPanel, NotificationHistoryRow,
+    NotificationHistoryScroll, NotificationKey, NotificationRetention, NotificationSeverity,
+    NotificationToastRoot, NotificationToastRow, NotificationToastSurface, NotificationUiAssets,
+    NotificationUiRuntime, NotificationUnreadText, UserFacingNotification,
 };
 pub use reducer::{apply_notification_ui_state_system, reduce_notifications_system};
-pub use ui::present_notifications_system;
 pub(crate) use ui::spawn_notification_ui;
+pub use ui::{present_notifications_system, restore_notification_scroll_anchor_system};
 
 #[derive(SystemSet, Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum NotificationSystemSet {
@@ -47,6 +48,11 @@ pub(crate) fn reset_for_world_replace(world: &mut World) {
     let mut history_panels = world.query_filtered::<&mut Node, With<NotificationHistoryPanel>>();
     for mut node in history_panels.iter_mut(world) {
         node.display = Display::None;
+    }
+    let mut scrolls =
+        world.query_filtered::<&mut ScrollPosition, With<NotificationHistoryScroll>>();
+    for mut scroll in scrolls.iter_mut(world) {
+        scroll.0 = Vec2::ZERO;
     }
     let mut unread_labels = world.query_filtered::<&mut Text, With<NotificationUnreadText>>();
     for mut text in unread_labels.iter_mut(world) {

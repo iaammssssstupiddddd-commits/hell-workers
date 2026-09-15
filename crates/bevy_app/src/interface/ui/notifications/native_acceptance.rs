@@ -582,10 +582,7 @@ fn await_toast_expiry(
     {
         return Err("expired toast stack remained visible".to_owned());
     }
-    // Toast expiry above must be proven while paused, but the placement
-    // tooltip's intentional reveal animation uses Time<Virtual>. Resume only
-    // for the final presentation setup, then pause again before capture.
-    world.resource_mut::<Time<Virtual>>().unpause();
+    // Tooltip reveal uses real time as well; keep the world paused through capture.
     let now = world.resource::<Time<Real>>().elapsed();
     world
         .resource_mut::<PlacementFeedbackState>()

@@ -188,7 +188,9 @@ impl Plugin for NativeDeconstructionAcceptancePlugin {
                 .after(InputSystems)
                 .after(bevy::ui::UiSystems::Focus)
                 .before(crate::interface::ui::update_ui_input_state_system)
-                .before(InputPreUpdateSet::CaptureRequest),
+                .in_set(InputPreUpdateSet::CaptureRequest)
+                .after(hw_ui::interaction::button_activation::collect_button_activations)
+                .before(crate::input_actions::request_capture_from_menu_buttons_system),
         );
         app.add_systems(PostUpdate, drive_native_deconstruction_acceptance);
     }
@@ -462,7 +464,6 @@ struct NativeDeconstructionAcceptance {
     started_at: Instant,
     ready_frames: u32,
     pending_ui_release: Option<Entity>,
-    v4_constructing_cancel_press_attempts: u8,
     v5_cancel_press_attempts: u8,
     native_relative_speed: Option<f32>,
     base_grid: Option<(i32, i32)>,
@@ -514,7 +515,6 @@ impl NativeDeconstructionAcceptance {
             started_at: Instant::now(),
             ready_frames: 0,
             pending_ui_release: None,
-            v4_constructing_cancel_press_attempts: 0,
             v5_cancel_press_attempts: 0,
             native_relative_speed: None,
             base_grid: None,
@@ -641,15 +641,29 @@ fn inject_native_resolved_input(
     }
 }
 
+/// This owner/renderer recipe injects accepted UI input, not OS pointer evidence.
+#[derive(bevy::ecs::system::SystemParam)]
+struct NativeUiAcceptance<'w> {
+    ui: ResMut<'w, hw_ui::components::UiInputState>,
+    pointer: ResMut<'w, ButtonInput<MouseButton>>,
+    action_state: Res<'w, TaskDashboardActionState>,
+    construction: Res<'w, hw_ui::panels::construction_cancel::ConstructionCancelState>,
+}
+
 fn inject_native_menu_and_pointer_input(
     mut driver: ResMut<NativeDeconstructionAcceptance>,
     mut menu_buttons: NativeMenuButtonQuery,
     mut task_buttons: NativeTaskButtonQuery,
     mut task_items: NativeTaskItemQuery,
     mut task_tabs: NativeTaskTabQuery,
-    action_state: Res<TaskDashboardActionState>,
-    mut pointer: ResMut<ButtonInput<MouseButton>>,
+    accepted: NativeUiAcceptance,
 ) {
+    let NativeUiAcceptance {
+        mut ui,
+        mut pointer,
+        action_state,
+        construction,
+    } = accepted;
     if let Some(entity) = driver.pending_ui_release.take() {
         if let Ok((_, _, mut interaction)) = menu_buttons.get_mut(entity) {
             *interaction = Interaction::None;
@@ -681,6 +695,7 @@ fn inject_native_menu_and_pointer_input(
             };
             if matches_stage {
                 *interaction = Interaction::Pressed;
+                ui.activated_buttons.insert(entity);
                 driver.pending_ui_release = Some(entity);
                 break;
             }
@@ -697,6 +712,7 @@ fn inject_native_menu_and_pointer_input(
         for (entity, tab, mut interaction) in &mut task_tabs {
             if tab.0 == LeftPanelMode::TaskList {
                 *interaction = Interaction::Pressed;
+                ui.activated_buttons.insert(entity);
                 driver.pending_ui_release = Some(entity);
                 pressed = true;
                 break;
@@ -729,6 +745,7 @@ fn inject_native_menu_and_pointer_input(
         for (entity, item, mut interaction) in &mut task_items {
             if item.0 == target {
                 *interaction = Interaction::Pressed;
+                ui.activated_buttons.insert(entity);
                 driver.pending_ui_release = Some(entity);
                 selected = true;
                 break;
@@ -745,9 +762,36 @@ fn inject_native_menu_and_pointer_input(
         }
     }
 
+    if driver.stage == AcceptanceStage::AwaitV4ConstructingCancelSecondPress {
+        let expected = driver
+            .v4
+            .as_ref()
+            .and_then(|fixture| fixture.constructing.as_ref());
+        if let (Some(expected), Some(pending)) = (expected, construction.pending)
+            && pending.target == expected.target
+            && pending.source_task == Some(expected.request)
+        {
+            for (entity, button, mut interaction) in &mut menu_buttons {
+                if button.0
+                    == (MenuAction::ConfirmSoulSpaConstructionCancel {
+                        target: pending.target,
+                        epoch: pending.epoch,
+                        ticket: pending.ticket,
+                    })
+                {
+                    *interaction = Interaction::Pressed;
+                    ui.activated_buttons.insert(entity);
+                    driver.pending_ui_release = Some(entity);
+                    driver.stage = AcceptanceStage::AwaitV4ConstructingCancel;
+                    break;
+                }
+            }
+        }
+        return;
+    }
+
     let task_action = match driver.stage {
-        AcceptanceStage::AwaitV4ConstructingCancelFirstPress
-        | AcceptanceStage::AwaitV4ConstructingCancelSecondPress => driver
+        AcceptanceStage::AwaitV4ConstructingCancelFirstPress => driver
             .v4
             .as_ref()
             .and_then(|fixture| fixture.constructing.as_ref())
@@ -771,32 +815,14 @@ fn inject_native_menu_and_pointer_input(
         _ => None,
     };
     if let Some(expected) = task_action {
-        if driver.stage == AcceptanceStage::AwaitV4ConstructingCancelSecondPress {
-            let pending = PendingTaskCancellation {
-                target: expected.target,
-                expected_work_type: expected.expected_work_type,
-                kind: match expected.kind {
-                    TaskActionButtonKind::Cancel(kind) => kind,
-                    TaskActionButtonKind::AdjustPriority(_) => {
-                        return;
-                    }
-                },
-            };
-            if action_state.confirmation != Some(pending) {
-                if driver.v4_constructing_cancel_press_attempts < 3 {
-                    driver.v4_constructing_cancel_press_attempts += 1;
-                    driver.stage = AcceptanceStage::AwaitV4ConstructingCancelFirstPress;
-                }
-                return;
-            }
-        }
         if driver.stage == AcceptanceStage::AwaitV5CancelSecondPress {
             let pending = PendingTaskCancellation {
                 target: expected.target,
                 expected_work_type: expected.expected_work_type,
                 kind: match expected.kind {
                     TaskActionButtonKind::Cancel(kind) => kind,
-                    TaskActionButtonKind::AdjustPriority(_) => return,
+                    TaskActionButtonKind::InspectRelated { .. }
+                    | TaskActionButtonKind::AdjustPriority(_) => return,
                 },
             };
             if action_state.confirmation != Some(pending) {
@@ -811,6 +837,7 @@ fn inject_native_menu_and_pointer_input(
         for (entity, button, mut interaction) in &mut task_buttons {
             if *button == expected {
                 *interaction = Interaction::Pressed;
+                ui.activated_buttons.insert(entity);
                 driver.pending_ui_release = Some(entity);
                 pressed = true;
                 break;

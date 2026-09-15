@@ -24,6 +24,7 @@ pub(crate) struct IntentHelpCtx<'w, 's> {
 
 #[derive(SystemParam)]
 pub(crate) struct IntentSettingsCtx<'w> {
+    feedback: crate::systems::settings::feedback::SettingsSaveFeedback<'w>,
     settings: ResMut<'w, hw_core::GameSettings>,
     debug_visible: ResMut<'w, crate::DebugVisible>,
     config_store: ResMut<'w, GizmoConfigStore>,
@@ -31,6 +32,8 @@ pub(crate) struct IntentSettingsCtx<'w> {
 
 #[derive(SystemParam)]
 pub(crate) struct IntentAuxCtx<'w, 's> {
+    guide: Option<ResMut<'w, crate::interface::ui::work_guide::WorkGuide>>,
+    epoch: Option<Res<'w, hw_core::WorldEpoch>>,
     settings: IntentSettingsCtx<'w>,
     help: IntentHelpCtx<'w, 's>,
 }
@@ -70,7 +73,58 @@ pub(crate) fn handle_ui_intent(
         {
             continue;
         }
+        if action_contexts.p0().time.is_paused()
+            && !intent.allowed_while_paused()
+            && !matches!(
+                intent,
+                UiIntent::ApplyFamiliarSettings { .. } | UiIntent::ApplyFamiliarSettingsFor { .. }
+            )
+        {
+            // Familiar settings has an existing rejection outcome consumer.
+            continue;
+        }
         let should_save_settings = match intent {
+            UiIntent::StartWorkGuide => {
+                if aux_ctx.help.state.open {
+                    if let Some(guide) = &mut aux_ctx.guide {
+                        guide.start(aux_ctx.epoch.as_deref().copied().unwrap_or_default());
+                    }
+                    handle_help_intent(
+                        UiIntent::CloseHelp,
+                        &aux_ctx.help.pending,
+                        &aux_ctx.help.content,
+                        &mut aux_ctx.help.state,
+                        &mut aux_ctx.help.guard,
+                        &mut action_contexts.p0().time,
+                        &mut aux_ctx.help.scroll_areas,
+                    );
+                    if let Some(menu) = &mut ui_queries.system_menu
+                        && menu.open
+                    {
+                        handlers::general::toggle_system_menu(menu, &mut action_contexts.p0().time);
+                    }
+                }
+                false
+            }
+            UiIntent::EndWorkGuide => {
+                if let Some(guide) = &mut aux_ctx.guide {
+                    guide.end();
+                }
+                false
+            }
+            UiIntent::ToggleSystemMenu => {
+                if let Some(menu) = &mut ui_queries.system_menu
+                    && (menu.open
+                        || aux_ctx
+                            .help
+                            .pending
+                            .accepts_overlay(crate::input_actions::InputOverlay::Pause))
+                {
+                    handlers::general::toggle_system_menu(menu, &mut action_contexts.p0().time);
+                }
+                false
+            }
+            UiIntent::AreaEditControl { .. } => false,
             UiIntent::OpenHelp { .. } | UiIntent::CloseHelp => {
                 let mut mode_ctx = action_contexts.p0();
                 handle_help_intent(
@@ -84,12 +138,36 @@ pub(crate) fn handle_ui_intent(
                 );
                 false
             }
-            UiIntent::SelectHelpTopic(_) | UiIntent::StepHelpTopic(_) | UiIntent::ScrollHelp(_) => {
-                false
-            }
-            UiIntent::InspectEntity(_) | UiIntent::ClearInspectPin => {
+            UiIntent::SelectHelpTopic(_)
+            | UiIntent::SelectHelpEntry(_)
+            | UiIntent::StepHelpTopic(_)
+            | UiIntent::ScrollHelp(_) => false,
+            UiIntent::InspectEntity(_) | UiIntent::FocusEntity(_) | UiIntent::ClearInspectPin => {
                 handlers::handle_selection(intent, &mut selection_ctx);
                 false
+            }
+            UiIntent::ToggleFamiliarIdlePatrol(target) => {
+                if !selection_ctx.resolved_frame.pointer_selection_suppressed()
+                    && !action_contexts.p0().time.is_paused()
+                    && action_contexts.p1().q_active_commands.get(target).is_ok()
+                {
+                    {
+                        let mut mode = action_contexts.p0();
+                        mode.cancel_active_mode_if_needed();
+                        mode.cleanup.task_context.0 = crate::systems::command::TaskMode::None;
+                    }
+                    if let Ok((mut active, area)) =
+                        action_contexts.p1().q_active_commands.get_mut(target)
+                    {
+                        crate::systems::command::input::toggle_idle_patrol(&mut active, area);
+                    }
+                }
+                false
+            }
+            UiIntent::RetrySettingsSave { attempt } => {
+                !selection_ctx.resolved_frame.pointer_selection_suppressed()
+                    && aux_ctx.help.pending.overlay().is_none()
+                    && aux_ctx.settings.feedback.can_retry(attempt)
             }
             UiIntent::ToggleArchitect
             | UiIntent::ToggleOrders
@@ -135,6 +213,15 @@ pub(crate) fn handle_ui_intent(
                 false
             }
             UiIntent::TogglePause | UiIntent::SetTimeSpeed(_) => {
+                if ui_queries
+                    .system_menu
+                    .as_ref()
+                    .is_some_and(|menu| menu.open)
+                    || aux_ctx.help.state.open
+                    || ui_queries.ui_input.world_input_captured
+                {
+                    continue;
+                }
                 let recovery_failed = *ui_queries.save_recovery == SaveRecoveryMode::RecoveryFailed;
                 handlers::handle_time(
                     intent,
@@ -142,6 +229,22 @@ pub(crate) fn handle_ui_intent(
                     &mut ui_queries.input_focus,
                     recovery_failed,
                 );
+                let mut mode = action_contexts.p0();
+                if mode.time.is_paused()
+                    && (!matches!(
+                        mode.cleanup.task_context.0,
+                        crate::systems::command::TaskMode::None
+                            | crate::systems::command::TaskMode::AreaSelection(_)
+                            | crate::systems::command::TaskMode::DesignateChop(_)
+                            | crate::systems::command::TaskMode::DesignateMine(_)
+                    ) || !matches!(
+                        mode.play_mode.get(),
+                        hw_core::game_state::PlayMode::Normal
+                            | hw_core::game_state::PlayMode::TaskDesignation
+                    ))
+                {
+                    mode.cancel_active_mode_if_needed();
+                }
                 false
             }
             UiIntent::SaveGame
@@ -167,6 +270,7 @@ pub(crate) fn handle_ui_intent(
             | UiIntent::SetPowerPriorityEnabled(_)
             | UiIntent::SetAutosaveEnabled(_)
             | UiIntent::SetAutosaveIntervalMinutes(_)
+            | UiIntent::SetNotificationDuration(_)
             | UiIntent::SetAutosaveGenerations(_) => {
                 let mut mode_ctx = action_contexts.p0();
                 handlers::handle_settings(
@@ -202,6 +306,8 @@ pub(crate) fn handle_ui_intent(
             }
             UiIntent::ApplyStockpilePolicy { .. }
             | UiIntent::SetSoulSpaActiveSlots { .. }
+            | UiIntent::DismissConstructionCancel
+            | UiIntent::ConfirmSoulSpaConstructionCancel { .. }
             | UiIntent::CancelSoulSpaConstruction { .. }
             | UiIntent::SetPowerConsumerPriority { .. } => false,
             UiIntent::AdjustTaskPriority { .. } | UiIntent::CancelTask { .. } => false,
@@ -211,6 +317,7 @@ pub(crate) fn handle_ui_intent(
             should_save_settings,
             &ui_queries.settings_storage_root,
             &aux_ctx.settings.settings,
+            &mut aux_ctx.settings.feedback,
         );
     }
 }
@@ -253,6 +360,7 @@ mod tests {
     #[test]
     fn handler_system_params_are_conflict_free() {
         let mut app = minimal_app();
+        crate::test_support::accepted_button_fixture(&mut app);
         app.add_message::<hw_world::DoorLockToggleRequest>();
         app.add_message::<hw_energy::SoulSpaConstructionCancelRequest>();
         app.add_message::<hw_energy::SoulSpaConstructionCancelOutcome>();
@@ -261,8 +369,125 @@ mod tests {
         system.initialize(app.world_mut());
     }
 
+    #[test]
+    fn context_idle_patrol_uses_explicit_target_and_rejects_capture() {
+        use crate::entities::familiar::{ActiveCommand, FamiliarCommand};
+        let mut app = domain_action_app();
+        let target = app
+            .world_mut()
+            .spawn((
+                Familiar::default(),
+                ActiveCommand::default(),
+                crate::systems::command::TaskArea::from_points(Vec2::ZERO, Vec2::ONE),
+            ))
+            .id();
+        let other = app
+            .world_mut()
+            .spawn((Familiar::default(), ActiveCommand::default()))
+            .id();
+        app.world_mut().resource_mut::<SelectedEntity>().0 = Some(other);
+        app.world_mut()
+            .write_message(UiIntent::ToggleFamiliarIdlePatrol(target));
+        app.update();
+        assert_eq!(
+            app.world().get::<ActiveCommand>(target).unwrap().command,
+            FamiliarCommand::Patrol
+        );
+        assert_eq!(
+            app.world().get::<ActiveCommand>(other).unwrap().command,
+            FamiliarCommand::Idle
+        );
+        assert_eq!(app.world().resource::<SelectedEntity>().0, Some(other));
+        app.world_mut()
+            .resource_mut::<ResolvedInputFrame>()
+            .replace(InputModifiers::default(), vec![], Some(other), true);
+        app.world_mut()
+            .write_message(UiIntent::ToggleFamiliarIdlePatrol(target));
+        app.update();
+        assert_eq!(
+            app.world().get::<ActiveCommand>(target).unwrap().command,
+            FamiliarCommand::Patrol
+        );
+    }
+
+    #[test]
+    fn settings_save_failure_retries_current_values_and_discards_stale_retry() {
+        use crate::systems::settings::{
+            feedback::sync_settings_retry_actions, persistence::load_settings_from_disk,
+        };
+        use hw_ui::notifications::{
+            NotificationAction, NotificationCenter, reduce_notifications_system,
+        };
+        let unique = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let path =
+            std::env::temp_dir().join(format!("hw-settings-retry-{}-{unique}", std::process::id()));
+        // A regular file in place of the directory reliably fails even as root.
+        std::fs::write(&path, b"blocked directory").unwrap();
+        let root = SettingsStorageRoot::new(&path);
+        let mut app = domain_action_app();
+        app.insert_resource(root.clone()).add_systems(
+            Update,
+            (reduce_notifications_system, sync_settings_retry_actions)
+                .chain()
+                .after(handle_ui_intent),
+        );
+        app.world_mut()
+            .resource_mut::<hw_core::GameSettings>()
+            .ui_scale = 1.15;
+        write_intent(&mut app, UiIntent::CloseSettings);
+        app.update();
+        let attempt = app
+            .world()
+            .resource::<NotificationCenter>()
+            .history_entries()
+            .find_map(|entry| match entry.action {
+                Some(NotificationAction::RetrySettingsSave { attempt }) => Some(attempt),
+                _ => None,
+            })
+            .unwrap();
+        assert_eq!(
+            app.world().resource::<hw_core::GameSettings>().ui_scale,
+            1.15
+        );
+        // Recover storage, then change the current value before retrying.
+        std::fs::remove_file(&path).unwrap();
+        app.world_mut()
+            .resource_mut::<hw_ui::components::UiInputState>()
+            .world_input_captured = true;
+        write_intent(&mut app, UiIntent::RetrySettingsSave { attempt });
+        app.update();
+        assert!(!root.settings_file().exists());
+        app.world_mut()
+            .resource_mut::<hw_ui::components::UiInputState>()
+            .world_input_captured = false;
+        app.world_mut()
+            .resource_mut::<hw_core::GameSettings>()
+            .ui_scale = 0.85;
+        write_intent(&mut app, UiIntent::RetrySettingsSave { attempt });
+        app.update();
+        assert_eq!(load_settings_from_disk(&root).ui_scale, 0.85);
+        assert!(
+            app.world()
+                .resource::<NotificationCenter>()
+                .history_entries()
+                .all(|entry| entry.action.is_none())
+        );
+        // Replaying the old action must not persist another, newer in-memory change.
+        app.world_mut()
+            .resource_mut::<hw_core::GameSettings>()
+            .ui_scale = 1.25;
+        write_intent(&mut app, UiIntent::RetrySettingsSave { attempt });
+        app.update();
+        assert_eq!(load_settings_from_disk(&root).ui_scale, 0.85);
+        std::fs::remove_dir_all(path).unwrap();
+    }
+
     fn domain_action_app() -> App {
         let mut app = minimal_app();
+        crate::test_support::accepted_button_fixture(&mut app);
         app.add_plugins(bevy::state::app::StatesPlugin)
             .add_message::<UiIntent>()
             .add_message::<hw_familiar_ai::FamiliarSettingsChangeRequest>()
@@ -283,6 +508,9 @@ mod tests {
             .init_resource::<AreaEditSession>()
             .init_resource::<ZoneRemovalPreviewState>()
             .init_resource::<StockpilePolicyRangeEditState>()
+            .init_resource::<hw_core::WorldEpoch>()
+            .init_resource::<hw_ui::panels::construction_cancel::ConstructionCancelState>()
+            .init_resource::<hw_ui::panels::task_list::TaskDashboardActionState>()
             .init_resource::<StockpileSpatialGrid>()
             .init_resource::<WorldMap>()
             .init_resource::<MenuState>()
@@ -300,6 +528,9 @@ mod tests {
             .init_resource::<SaveDialogSession>()
             .init_resource::<SaveRecoveryMode>()
             .init_resource::<hw_core::GameSettings>()
+            .init_resource::<crate::systems::settings::feedback::SettingsSaveState>()
+            .init_resource::<hw_ui::notifications::NotificationCenter>()
+            .add_message::<hw_ui::notifications::UserFacingNotification>()
             .init_resource::<crate::DebugVisible>()
             .init_resource::<GizmoConfigStore>()
             .init_resource::<ArchitectCategoryState>()
@@ -341,6 +572,82 @@ mod tests {
         app.world_mut()
             .resource_mut::<Messages<UiIntent>>()
             .write(intent);
+    }
+
+    #[test]
+    fn paused_domain_allowlist_commits_door_once_and_rejects_slots_and_foreground_capture() {
+        for captured in [false, true] {
+            let mut app = domain_action_app();
+            let site = app
+                .world_mut()
+                .spawn(hw_energy::SoulSpaSite {
+                    phase: hw_energy::SoulSpaPhase::Operational,
+                    active_slots: 1,
+                    ..default()
+                })
+                .id();
+            let door = spawn_building(&mut app, BuildingType::Door);
+            app.world_mut().resource_mut::<Time<Virtual>>().pause();
+            app.world_mut()
+                .resource_mut::<hw_ui::components::UiInputState>()
+                .world_input_captured = captured;
+            write_intent(&mut app, UiIntent::ToggleDoorLock(door));
+            write_intent(
+                &mut app,
+                UiIntent::SetSoulSpaActiveSlots {
+                    target: site,
+                    active_slots: 2,
+                },
+            );
+            app.update();
+            assert_eq!(
+                app.world().resource::<DoorLockRequestReceipts>().0.len(),
+                usize::from(!captured)
+            );
+            assert_eq!(
+                app.world()
+                    .get::<hw_energy::SoulSpaSite>(site)
+                    .unwrap()
+                    .active_slots,
+                1
+            );
+            app.world_mut()
+                .resource_mut::<hw_ui::components::UiInputState>()
+                .world_input_captured = false;
+            app.world_mut().resource_mut::<Time<Virtual>>().unpause();
+            app.update();
+            assert_eq!(
+                app.world().resource::<DoorLockRequestReceipts>().0.len(),
+                usize::from(!captured)
+            );
+            assert_eq!(
+                app.world()
+                    .get::<hw_energy::SoulSpaSite>(site)
+                    .unwrap()
+                    .active_slots,
+                1
+            );
+        }
+    }
+
+    #[test]
+    fn a_captured_time_intent_does_not_resume_a_foreground_overlay() {
+        let mut app = domain_action_app();
+        app.world_mut().resource_mut::<Time<Virtual>>().pause();
+        app.world_mut()
+            .resource_mut::<hw_ui::components::UiInputState>()
+            .world_input_captured = true;
+        write_intent(
+            &mut app,
+            UiIntent::SetTimeSpeed(hw_core::game_state::TimeSpeed::Super),
+        );
+        app.update();
+        assert!(app.world().resource::<Time<Virtual>>().is_paused());
+        app.world_mut()
+            .resource_mut::<hw_ui::components::UiInputState>()
+            .world_input_captured = false;
+        app.update();
+        assert!(app.world().resource::<Time<Virtual>>().is_paused());
     }
 
     fn spawn_building(app: &mut App, kind: BuildingType) -> Entity {
@@ -546,27 +853,237 @@ mod tests {
         );
     }
 
+    fn pending_spa_confirmation(app: &App) -> UiIntent {
+        let pending = app
+            .world()
+            .resource::<hw_ui::panels::construction_cancel::ConstructionCancelState>()
+            .pending
+            .unwrap();
+        UiIntent::ConfirmSoulSpaConstructionCancel {
+            target: pending.target,
+            epoch: pending.epoch,
+            ticket: pending.ticket,
+        }
+    }
+
     #[test]
-    fn soul_spa_construction_cancel_intent_routes_to_the_domain_owner() {
+    fn soul_spa_construction_cancel_requires_current_confirmation_once() {
         let mut app = domain_action_app();
         app.init_resource::<SoulSpaCancelReceipts>().add_systems(
             Update,
             collect_soul_spa_cancel_receipts.after(handle_ui_intent),
         );
-        let target = app.world_mut().spawn_empty().id();
-
-        write_intent(&mut app, UiIntent::CancelSoulSpaConstruction { target });
+        let target = app
+            .world_mut()
+            .spawn(hw_energy::SoulSpaSite::default())
+            .id();
+        write_intent(
+            &mut app,
+            UiIntent::CancelSoulSpaConstruction {
+                target,
+                source_task: None,
+            },
+        );
         app.update();
-
+        assert!(
+            app.world()
+                .resource::<SoulSpaCancelReceipts>()
+                .requests
+                .is_empty()
+        );
+        let old = pending_spa_confirmation(&app);
+        // A new request never acts as the confirmation, and invalidates the old button ticket.
+        write_intent(
+            &mut app,
+            UiIntent::CancelSoulSpaConstruction {
+                target,
+                source_task: None,
+            },
+        );
+        app.update();
+        write_intent(&mut app, old);
+        app.update();
+        assert!(
+            app.world()
+                .resource::<SoulSpaCancelReceipts>()
+                .requests
+                .is_empty()
+        );
+        let confirm = pending_spa_confirmation(&app);
+        write_intent(&mut app, confirm);
+        write_intent(&mut app, confirm);
+        app.update();
         assert_eq!(
             app.world().resource::<SoulSpaCancelReceipts>().requests,
             vec![hw_energy::SoulSpaConstructionCancelRequest { target }]
         );
         assert!(
             app.world()
+                .resource::<hw_ui::panels::construction_cancel::ConstructionCancelState>()
+                .pending
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn soul_spa_confirmation_expires_when_its_context_changes() {
+        for case in 0..8 {
+            let mut app = domain_action_app();
+            app.init_resource::<SoulSpaCancelReceipts>().add_systems(
+                Update,
+                collect_soul_spa_cancel_receipts.after(handle_ui_intent),
+            );
+            let target = app
+                .world_mut()
+                .spawn(hw_energy::SoulSpaSite::default())
+                .id();
+            write_intent(
+                &mut app,
+                UiIntent::CancelSoulSpaConstruction {
+                    target,
+                    source_task: None,
+                },
+            );
+            app.update();
+            let confirm = pending_spa_confirmation(&app);
+            match case {
+                0 => app.world_mut().resource_mut::<SelectedEntity>().0 = Some(target),
+                1 => app.world_mut().resource_mut::<InfoPanelPinState>().entity = Some(target),
+                2 => app
+                    .world_mut()
+                    .resource_mut::<hw_core::WorldEpoch>()
+                    .advance(),
+                3 => {
+                    app.world_mut()
+                        .resource_mut::<hw_ui::components::UiInputState>()
+                        .world_input_captured = true
+                }
+                4 => {
+                    app.world_mut()
+                        .get_mut::<hw_energy::SoulSpaSite>(target)
+                        .unwrap()
+                        .phase = hw_energy::SoulSpaPhase::Operational
+                }
+                5 => {
+                    app.world_mut().despawn(target);
+                }
+                6 => {
+                    app.world_mut()
+                        .resource_mut::<hw_ui::panels::task_list::TaskDashboardActionState>()
+                        .active_task = Some(target)
+                }
+                7 => app.world_mut().resource_mut::<Time<Virtual>>().pause(),
+                _ => unreachable!(),
+            }
+            write_intent(&mut app, confirm);
+            app.update();
+            assert!(
+                app.world()
+                    .resource::<SoulSpaCancelReceipts>()
+                    .requests
+                    .is_empty(),
+                "case {case}"
+            );
+            assert!(
+                app.world()
+                    .resource::<hw_ui::panels::construction_cancel::ConstructionCancelState>()
+                    .pending
+                    .is_none(),
+                "case {case}"
+            );
+        }
+    }
+
+    #[test]
+    fn soul_spa_task_button_opens_shared_confirmation_and_revalidates_delivery_target() {
+        use hw_logistics::transport_request::{
+            TransportPriority, TransportRequest, TransportRequestKind,
+        };
+        use hw_ui::panels::task_list::{
+            TaskActionButton, TaskActionButtonKind, TaskCancelKind, TaskDashboardActionState,
+            TaskListDirty,
+        };
+        let mut app = domain_action_app();
+        app.init_resource::<SoulSpaCancelReceipts>()
+            .init_resource::<TaskListDirty>()
+            .add_systems(
+                Update,
+                (
+                    crate::interface::ui::panels::task_list::task_dashboard_action_button_system
+                        .before(apply_ui_domain_intents_system),
+                    collect_soul_spa_cancel_receipts.after(handle_ui_intent),
+                ),
+            );
+        let site = app
+            .world_mut()
+            .spawn(hw_energy::SoulSpaSite::default())
+            .id();
+        let other = app
+            .world_mut()
+            .spawn(hw_energy::SoulSpaSite::default())
+            .id();
+        let task = app
+            .world_mut()
+            .spawn((
+                hw_jobs::Designation {
+                    work_type: hw_core::jobs::WorkType::Haul,
+                },
+                TransportRequest {
+                    kind: TransportRequestKind::DeliverToSoulSpa,
+                    anchor: site,
+                    resource_type: hw_core::logistics::ResourceType::Bone,
+                    issued_by: site,
+                    priority: TransportPriority::Normal,
+                    stockpile_group: vec![],
+                },
+                hw_jobs::TargetSoulSpaSite(site),
+            ))
+            .id();
+        app.world_mut().resource_mut::<SelectedEntity>().0 = Some(task);
+        app.world_mut()
+            .resource_mut::<TaskDashboardActionState>()
+            .active_task = Some(task);
+        app.world_mut().spawn((
+            Interaction::Pressed,
+            TaskActionButton {
+                target: task,
+                expected_work_type: hw_core::jobs::WorkType::Haul,
+                kind: TaskActionButtonKind::Cancel(TaskCancelKind::SoulSpaSite(site)),
+            },
+        ));
+        app.update();
+        assert!(
+            app.world()
                 .resource::<SoulSpaCancelReceipts>()
-                .outcomes
+                .requests
                 .is_empty()
+        );
+        assert_eq!(
+            app.world()
+                .resource::<hw_ui::panels::construction_cancel::ConstructionCancelState>()
+                .pending
+                .unwrap()
+                .source_task,
+            Some(task)
+        );
+        let confirm = pending_spa_confirmation(&app);
+        app.world_mut()
+            .get_mut::<hw_jobs::TargetSoulSpaSite>(task)
+            .unwrap()
+            .0 = other;
+        write_intent(&mut app, confirm);
+        app.update();
+        assert!(
+            app.world()
+                .resource::<SoulSpaCancelReceipts>()
+                .requests
+                .is_empty()
+        );
+        assert!(
+            app.world()
+                .resource::<hw_ui::panels::construction_cancel::ConstructionCancelState>()
+                .pending
+                .is_none()
         );
     }
 
@@ -579,7 +1096,13 @@ mod tests {
         );
         let target = app.world_mut().spawn_empty().id();
         app.world_mut().resource_mut::<Time<Virtual>>().pause();
-        write_intent(&mut app, UiIntent::CancelSoulSpaConstruction { target });
+        write_intent(
+            &mut app,
+            UiIntent::CancelSoulSpaConstruction {
+                target,
+                source_task: None,
+            },
+        );
 
         for _ in 0..3 {
             app.update();
@@ -1311,5 +1834,34 @@ mod tests {
                 reason: PowerShedReason::InsufficientGeneration,
             })
         ));
+    }
+    #[test]
+    fn orders_require_a_familiar_then_show_the_automatically_selected_owner() {
+        let mut app = domain_action_app();
+        app.world_mut()
+            .write_message(UiIntent::SelectTaskMode(TaskMode::DesignateHaul(None)));
+        app.update();
+        assert_eq!(app.world().resource::<TaskContext>().0, TaskMode::None);
+        let notifications = app
+            .world()
+            .resource::<Messages<hw_ui::notifications::UserFacingNotification>>();
+        assert!(
+            notifications
+                .get_cursor()
+                .read(notifications)
+                .any(|notice| notice.key.as_str() == "orders-no-familiar")
+        );
+        let familiar = app
+            .world_mut()
+            .spawn(crate::entities::familiar::Familiar::default())
+            .id();
+        app.world_mut()
+            .write_message(UiIntent::SelectTaskMode(TaskMode::DesignateHaul(None)));
+        app.update();
+        assert_eq!(app.world().resource::<SelectedEntity>().0, Some(familiar));
+        assert_eq!(
+            app.world().resource::<TaskContext>().0,
+            TaskMode::DesignateHaul(None)
+        );
     }
 }

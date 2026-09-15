@@ -56,6 +56,7 @@ pub fn spawn_entity_list_panel(
                 Node {
                     width: Val::Percent(100.0),
                     min_height: Val::Px(24.0),
+                    flex_shrink: 0.0,
                     flex_direction: FlexDirection::Row,
                     justify_content: JustifyContent::SpaceBetween,
                     align_items: AlignItems::Center,
@@ -106,6 +107,7 @@ pub fn spawn_entity_list_panel(
                     flex_direction: FlexDirection::Row,
                     align_items: AlignItems::Center,
                     column_gap: Val::Px(6.0),
+                    flex_shrink: 0.0,
                     margin: UiRect::bottom(Val::Px(6.0)),
                     ..default()
                 },
@@ -153,110 +155,117 @@ pub fn spawn_entity_list_panel(
                 EntityListBody,
             ))
             .with_children(|body| {
-                // 使い魔リストコンテナ (動的に中身を追加される)
-                body.spawn((
-                    Node {
-                        flex_direction: FlexDirection::Column,
-                        ..default()
-                    },
-                    FamiliarListContainer,
-                    Name::new("Familiar List Container"),
-                ));
-
-                // 未所属ソウルセクション
-                body.spawn((
-                    Node {
-                        flex_grow: 1.0,
-                        min_height: Val::Px(0.0),
-                        flex_direction: FlexDirection::Column,
-                        margin: UiRect::top(Val::Px(10.0)),
-                        ..default()
-                    },
-                    UnassignedSoulSection,
-                ))
-                .with_children(|section| {
-                    // セクションヘッダー
-                    section
+                body.spawn(Node {
+                    flex_grow: 1.0,
+                    min_height: Val::Px(0.0),
+                    ..default()
+                })
+                .with_children(|row| {
+                    let scroll = row
                         .spawn((
-                            Button,
                             Node {
-                                width: Val::Percent(100.0),
-                                height: Val::Px(24.0),
-                                align_items: AlignItems::Center,
-                                padding: UiRect::horizontal(Val::Px(5.0)),
+                                flex_grow: 1.0,
+                                min_width: Val::Px(0.0),
+                                min_height: Val::Px(0.0),
+                                flex_direction: FlexDirection::Column,
+                                overflow: Overflow::scroll_y(),
+                                padding: UiRect::right(Val::Px(4.0)),
                                 ..default()
                             },
-                            BackgroundColor(theme.colors.button_default),
-                            SectionToggle(EntityListSectionType::Unassigned),
+                            ScrollArea,
+                            EntityListScrollArea,
+                            UiInputBlocker,
+                            RelativeCursorPosition::default(),
+                            Name::new("Entities Scroll Area"),
                         ))
-                        .with_children(|button| {
-                            button.spawn((
-                                ImageNode::new(game_assets.icon_arrow_down().clone()),
+                        .with_children(|body| {
+                            // 使い魔リストコンテナ (動的に中身を追加される)
+                            body.spawn((
                                 Node {
-                                    width: Val::Px(theme.sizes.fold_icon_size),
-                                    height: Val::Px(theme.sizes.fold_icon_size),
-                                    margin: UiRect::right(Val::Px(4.0)),
+                                    flex_direction: FlexDirection::Column,
+                                    flex_shrink: 0.0,
                                     ..default()
                                 },
-                                UnassignedSectionArrowIcon,
+                                FamiliarListContainer,
+                                Name::new("Familiar List Container"),
                             ));
-                            button.spawn((
-                                Text::new("Unassigned Souls"),
-                                TextFont {
-                                    font: game_assets.font_ui().clone().into(),
-                                    font_size: crate::theme::font_size_rem(
-                                        theme.typography.font_size_base,
-                                    ),
-                                    ..default()
-                                },
-                                TextColor(theme.colors.text_primary_semantic),
-                            ));
-                        });
 
-                    // 未所属ソウルリストコンテナ + スクロールバーの行ラッパー
-                    section
-                        .spawn(Node {
-                            flex_grow: 1.0,
-                            min_height: Val::Px(0.0),
-                            flex_direction: FlexDirection::Row,
-                            ..default()
-                        })
-                        .with_children(|row| {
-                            let content_id = row
-                                .spawn((
+                            // 未所属ソウルセクション
+                            body.spawn((
+                                Node {
+                                    flex_shrink: 0.0,
+                                    flex_direction: FlexDirection::Column,
+                                    margin: UiRect::top(Val::Px(10.0)),
+                                    ..default()
+                                },
+                                UnassignedSoulSection,
+                            ))
+                            .with_children(|section| {
+                                // セクションヘッダー
+                                section
+                                    .spawn((
+                                        Button,
+                                        Node {
+                                            width: Val::Percent(100.0),
+                                            height: Val::Px(24.0),
+                                            align_items: AlignItems::Center,
+                                            padding: UiRect::horizontal(Val::Px(5.0)),
+                                            ..default()
+                                        },
+                                        BackgroundColor(theme.colors.button_default),
+                                        SectionToggle(EntityListSectionType::Unassigned),
+                                    ))
+                                    .with_children(|button| {
+                                        button.spawn((
+                                            ImageNode::new(game_assets.icon_arrow_down().clone()),
+                                            Node {
+                                                width: Val::Px(theme.sizes.fold_icon_size),
+                                                height: Val::Px(theme.sizes.fold_icon_size),
+                                                margin: UiRect::right(Val::Px(4.0)),
+                                                ..default()
+                                            },
+                                            UnassignedSectionArrowIcon,
+                                        ));
+                                        button.spawn((
+                                            Text::new("Unassigned Souls"),
+                                            TextFont {
+                                                font: game_assets.font_ui().clone().into(),
+                                                font_size: crate::theme::font_size_rem(
+                                                    theme.typography.font_size_base,
+                                                ),
+                                                ..default()
+                                            },
+                                            TextColor(theme.colors.text_primary_semantic),
+                                        ));
+                                    });
+
+                                section.spawn((
                                     Node {
-                                        flex_grow: 1.0,
-                                        min_height: Val::Px(0.0),
                                         flex_direction: FlexDirection::Column,
-                                        overflow: Overflow::scroll_y(),
+                                        flex_shrink: 0.0,
                                         ..default()
                                     },
-                                    RelativeCursorPosition::default(),
-                                    UiInputBlocker,
-                                    ScrollArea,
                                     UnassignedSoulContent,
-                                ))
-                                .id();
-
-                            // 縦スクロールバー（overflow 時のみ視認できる程度の細さ）
-                            row.spawn((
-                                Node {
-                                    width: Val::Px(4.0),
-                                    height: Val::Percent(100.0),
-                                    ..default()
-                                },
-                                Scrollbar::new(content_id, ControlOrientation::Vertical, 20.0),
-                            ))
-                            .with_children(|scrollbar| {
-                                scrollbar.spawn((
-                                    ScrollbarThumb {
-                                        border_radius: BorderRadius::all(Val::Px(2.0)),
-                                        border: UiRect::ZERO,
-                                    },
-                                    BackgroundColor(theme.colors.text_muted),
                                 ));
                             });
-                        });
+                        })
+                        .id();
+                    row.spawn((
+                        Node {
+                            width: Val::Px(6.0),
+                            ..default()
+                        },
+                        Scrollbar::new(scroll, ControlOrientation::Vertical, 20.0),
+                    ))
+                    .with_children(|bar| {
+                        bar.spawn((
+                            ScrollbarThumb {
+                                border_radius: BorderRadius::all(Val::Px(3.0)),
+                                border: UiRect::ZERO,
+                            },
+                            BackgroundColor(theme.colors.text_muted),
+                        ));
+                    });
                 });
 
                 // スクロール可能であることを示す固定ヒント
@@ -270,9 +279,9 @@ pub fn spawn_entity_list_panel(
                     TextColor(theme.colors.text_secondary_semantic),
                     Node {
                         display: Display::None,
-                        position_type: PositionType::Absolute,
-                        right: Val::Px(0.0),
-                        bottom: Val::Px(0.0),
+                        flex_shrink: 0.0,
+                        align_self: AlignSelf::End,
+                        margin: UiRect::top(Val::Px(4.0)),
                         ..default()
                     },
                     IgnoreScroll(BVec2::new(false, true)),
@@ -367,4 +376,55 @@ fn spawn_left_panel_tab_button(
                 }),
             ));
         });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::setup::test_support::TestAssets;
+
+    fn fixture(mut commands: Commands, theme: Res<UiTheme>) {
+        let root = commands.spawn(Node::default()).id();
+        spawn_entity_list_panel(&mut commands, &TestAssets::default(), &theme, root);
+    }
+
+    #[test]
+    fn all_groups_share_one_scroll_area_and_search_stays_outside() {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins)
+            .init_resource::<UiTheme>()
+            .add_systems(Startup, fixture);
+        app.update();
+        let scroll = app
+            .world_mut()
+            .query_filtered::<Entity, With<ScrollArea>>()
+            .single(app.world())
+            .expect("one scroll area, no nested unassigned scroller");
+        assert!(app.world().get::<EntityListScrollArea>(scroll).is_some());
+        let groups: Vec<_> = app.world_mut().query_filtered::<Entity,
+            Or<(With<FamiliarListContainer>, With<UnassignedSoulSection>)>>()
+            .iter(app.world()).collect();
+        assert_eq!(groups.len(), 2);
+        for group in groups {
+            assert_eq!(app.world().get::<ChildOf>(group).unwrap().parent(), scroll);
+        }
+        let search = app
+            .world_mut()
+            .query_filtered::<&ChildOf, With<EntityListSearchRow>>()
+            .single(app.world())
+            .unwrap();
+        assert!(
+            app.world()
+                .get::<EntityListPanel>(search.parent())
+                .is_some()
+        );
+        assert_eq!(
+            app.world_mut()
+                .query::<&Scrollbar>()
+                .single(app.world())
+                .unwrap()
+                .target,
+            scroll
+        );
+    }
 }

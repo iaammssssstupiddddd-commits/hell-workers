@@ -9,13 +9,41 @@ use crate::systems::command::TaskMode;
 pub(crate) fn handle_mode_select(
     intent: UiIntent,
     mode_ctx: &mut IntentModeCtx<'_, '_>,
-    sel_ctx: &mut IntentSelectionCtx<'_>,
+    sel_ctx: &mut IntentSelectionCtx<'_, '_>,
     familiar_queries: &IntentFamiliarQueries<'_, '_>,
 ) {
     if matches!(
         &intent,
         UiIntent::SelectTaskMode(TaskMode::SelectBuildTarget)
     ) {
+        return;
+    }
+
+    let needs_familiar = matches!(
+        intent,
+        UiIntent::SelectAreaTask
+            | UiIntent::SelectTaskMode(
+                TaskMode::DesignateChop(_)
+                    | TaskMode::DesignateMine(_)
+                    | TaskMode::DesignateHaul(_)
+            )
+    );
+    if needs_familiar && familiar_queries.q_familiars_for_area.is_empty() {
+        mode_ctx
+            .cleanup
+            .commands
+            .queue(|world: &mut bevy::prelude::World| {
+                use hw_ui::notifications::{
+                    NotificationRetention, NotificationSeverity, UserFacingNotification,
+                };
+                world.write_message(UserFacingNotification::new(
+                    "orders-no-familiar",
+                    NotificationSeverity::Warning,
+                    "作業指示を開始できません",
+                    "担当できる使い魔がいません。使い魔を用意してからOrdersを再開してください。",
+                    NotificationRetention::Important,
+                ));
+            });
         return;
     }
 

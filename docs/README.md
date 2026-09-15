@@ -22,6 +22,8 @@
 - [soul_energy.md](soul_energy.md): Soul Energy システム（発電・消費・停電サイクル、Soul Spa、Outdoor Lamp）。
 
 ## UI & Visuals
+- [plans/ui-usability-improvements-plan-2026-09-14.md](plans/ui-usability-improvements-plan-2026-09-14.md): UI改善32項目の実装計画。自己レビューで初回仕様・状態遷移・停止中の許可操作、P1の8修正と8受入手順を具体化。
+- [proposals/ui-usability-audit-proposal-2026-09-13.md](proposals/ui-usability-audit-proposal-2026-09-13.md): UI全領域の実装レビュー、操作性向上32項目、優先順位と受入条件。
 - [help-screen.md](help-screen.md): F1/ボタンで開くプレイヤーHelp、catalog ownership、可逆pause、継続更新gate。
 - [world-selection.md](world-selection.md): screen-spaceオブジェクトスナップ、クリック／ドラッグ所有、右クリック、選択表示の契約。
 - [notifications.md](notifications.md): 有界なトースト／重要履歴、配置不能理由、セーブ／ロード終端結果、タスク操作・Stockpile方針変更結果の仕様。

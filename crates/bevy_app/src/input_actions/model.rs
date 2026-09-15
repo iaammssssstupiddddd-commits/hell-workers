@@ -3,6 +3,9 @@ use bevy::prelude::*;
 /// Project-owned semantic actions resolved from physical keyboard chords.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum InputAction {
+    ModalFocusNext,
+    ModalFocusPrevious,
+    ModalActivate,
     OpenHelp,
     CloseHelp,
     HelpPreviousTopic,
@@ -24,6 +27,7 @@ pub enum InputAction {
     ToggleArchitect,
     ToggleZones,
     TogglePause,
+    ToggleSystemMenu,
     TimePaused,
     TimeNormal,
     TimeFast,
@@ -39,6 +43,7 @@ pub enum InputAction {
     CloseOperationDialog,
     CancelActiveMode,
     CloseOpenMenu,
+    CloseContextMenu,
     AreaCopy,
     AreaPaste,
     AreaUndo,

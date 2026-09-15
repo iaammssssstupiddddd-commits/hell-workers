@@ -28,6 +28,7 @@ pub enum InputOverlay {
 #[derive(Debug, Clone, PartialEq)]
 pub struct InputContextSnapshot {
     pub text_input_blocks_keybinds: bool,
+    pub text_input_consumed_keyboard: bool,
     pub has_in_progress_gesture: bool,
     pub top_overlay: Option<InputOverlay>,
     pub simulation_paused: bool,
@@ -36,6 +37,7 @@ pub struct InputContextSnapshot {
     pub task_mode: TaskMode,
     pub menu_state: MenuState,
     pub has_selected_familiar: bool,
+    pub context_menu_open: bool,
     pub pending_play_mode: Option<PlayMode>,
     pub debug_visible: bool,
     pub recovery_failed: bool,
@@ -45,6 +47,7 @@ impl Default for InputContextSnapshot {
     fn default() -> Self {
         Self {
             text_input_blocks_keybinds: false,
+            text_input_consumed_keyboard: false,
             has_in_progress_gesture: false,
             top_overlay: None,
             simulation_paused: false,
@@ -53,6 +56,7 @@ impl Default for InputContextSnapshot {
             task_mode: TaskMode::default(),
             menu_state: MenuState::default(),
             has_selected_familiar: false,
+            context_menu_open: false,
             pending_play_mode: None,
             debug_visible: false,
             recovery_failed: false,
@@ -102,6 +106,7 @@ fn familiar_compatible_task_mode(task_mode: TaskMode) -> bool {
 pub(crate) struct InputContextParams<'w, 's> {
     ui_input_state: Res<'w, UiInputState>,
     time: Res<'w, Time<Virtual>>,
+    system_menu: Option<Res<'w, hw_ui::interaction::pause_menu::SystemMenuState>>,
     play_mode: Res<'w, State<PlayMode>>,
     next_play_mode: Res<'w, NextState<PlayMode>>,
     task_context: Res<'w, TaskContext>,
@@ -112,6 +117,7 @@ pub(crate) struct InputContextParams<'w, 's> {
     save_catalog_ui: Res<'w, SaveCatalogUi>,
     save_recovery: Res<'w, SaveRecoveryMode>,
     q_familiars: Query<'w, 's, (), With<Familiar>>,
+    q_context_menu: Query<'w, 's, (), With<hw_ui::components::ContextMenu>>,
     q_help: Query<'w, 's, &'static Node, With<HelpPanel>>,
     q_settings: Query<'w, 's, &'static Node, With<SettingsPanel>>,
     q_operation_dialog: Query<'w, 's, &'static Node, With<OperationDialog>>,
@@ -135,7 +141,7 @@ impl InputContextParams<'_, '_> {
             .filter(|entity| self.q_familiars.get(*entity).is_ok());
         let recovery_failed = *self.save_recovery == SaveRecoveryMode::RecoveryFailed;
         let simulation_paused = self.time.is_paused();
-        let logic_shortcuts_enabled = !simulation_paused && !recovery_failed;
+        let logic_shortcuts_enabled = !recovery_failed;
         let has_in_progress_gesture =
             has_active_area_edit_drag || task_mode_has_in_progress_gesture(self.task_context.0);
         let visible_overlay = if let Some(overlay) = catalog_overlay(self.save_catalog_ui.mode) {
@@ -144,7 +150,7 @@ impl InputContextParams<'_, '_> {
             Some(InputOverlay::Help)
         } else if query_is_visible(&self.q_settings) {
             Some(InputOverlay::Settings)
-        } else if simulation_paused {
+        } else if self.system_menu.as_ref().is_some_and(|menu| menu.open) {
             Some(InputOverlay::Pause)
         } else if query_is_visible(&self.q_operation_dialog) {
             Some(InputOverlay::OperationDialog)
@@ -168,6 +174,7 @@ impl InputContextParams<'_, '_> {
                 text_input_blocks_keybinds: hw_ui::interaction::text_input_blocks_keybinds(
                     &self.ui_input_state,
                 ),
+                text_input_consumed_keyboard: self.ui_input_state.text_input_consumed_keyboard,
                 has_in_progress_gesture,
                 top_overlay,
                 simulation_paused,
@@ -176,6 +183,7 @@ impl InputContextParams<'_, '_> {
                 task_mode: self.task_context.0,
                 menu_state: *self.menu_state,
                 has_selected_familiar: selected_familiar.is_some(),
+                context_menu_open: !self.q_context_menu.is_empty(),
                 pending_play_mode,
                 debug_visible: self.debug_visible.0,
                 recovery_failed,

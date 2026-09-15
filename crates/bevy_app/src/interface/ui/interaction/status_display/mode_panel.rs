@@ -27,6 +27,9 @@ pub struct ModeState<'w> {
     companion_state: Res<'w, CompanionPlacementState>,
     zone_context: Res<'w, ZoneContext>,
     task_context: Res<'w, TaskContext>,
+    zone_preview: Res<'w, crate::systems::command::zone_placement::plan::ZonePlacementPreview>,
+    floor_preview: Res<'w, crate::interface::selection::FloorPlacementPreview>,
+    time: Res<'w, Time<Virtual>>,
 }
 
 #[derive(SystemParam)]
@@ -45,6 +48,7 @@ pub fn update_mode_text_system(
     selection_data: ModeSelectionData,
     q_text: Query<&mut Text>,
     ui_nodes: Res<UiNodeRegistry>,
+    mut previous_pause: Local<bool>,
 ) {
     let ModeState {
         play_mode,
@@ -52,6 +56,9 @@ pub fn update_mode_text_system(
         companion_state,
         zone_context,
         task_context,
+        zone_preview,
+        floor_preview,
+        time,
     } = mode_state;
     let ModeSelectionData {
         selected_entity,
@@ -61,6 +68,8 @@ pub fn update_mode_text_system(
         q_task_areas,
         q_unassigned_tasks,
     } = selection_data;
+    let pause_changed = *previous_pause != time.is_paused();
+    *previous_pause = time.is_paused();
     let area_mode_active = matches!(task_context.0, TaskMode::AreaSelection(_));
     let selected_area_changed = selected_entity.0.is_some_and(|selected| {
         q_task_areas
@@ -79,6 +88,9 @@ pub fn update_mode_text_system(
         && !area_edit_clipboard.is_changed()
         && !selected_area_changed
         && !area_mode_active
+        && !zone_preview.is_changed()
+        && !floor_preview.is_changed()
+        && !pause_changed
     {
         return;
     }
@@ -121,7 +133,7 @@ pub fn update_mode_text_system(
         )
     });
 
-    let mode_text = mode::build_mode_text(
+    let mut mode_text = mode::build_mode_text(
         mode::ModeCtxRefs {
             play_mode: play_mode.get(),
             build_context: &build_context,
@@ -138,6 +150,41 @@ pub fn update_mode_text_system(
             unassigned_tasks_in_area,
         },
     );
+    if matches!(
+        task_context.0,
+        TaskMode::DesignateChop(_) | TaskMode::DesignateMine(_) | TaskMode::DesignateHaul(_)
+    ) {
+        mode_text.push_str(&format!(
+            " — 担当: {}（担当変更: Escで終了し、使い魔を選択してOrdersを再開）",
+            selected_familiar_name.unwrap_or("使い魔がいません")
+        ));
+    }
+    if matches!(task_context.0, TaskMode::ZonePlacement(_, Some(_)))
+        && let Some(preview) = &zone_preview.0
+    {
+        let summary = match &preview.result {
+            Ok(plan) => plan.summary(),
+            Err(reason) => reason.label().to_owned(),
+        };
+        mode_text.push_str(" — ");
+        mode_text.push_str(&summary);
+    }
+    if time.is_paused() {
+        mode_text.push_str("\n停止中 — 選択・範囲編集・新規の伐採/採掘指定・保管方針・ドア施錠を操作できます。Spaceで再開 / Escでメニュー");
+    }
+    mode_text.push('\n');
+    if matches!(
+        task_context.0,
+        TaskMode::FloorPlace(Some(_)) | TaskMode::WallPlace(Some(_))
+    ) && let Some(summary) = &floor_preview.0
+    {
+        mode_text.push_str(summary);
+        mode_text.push('\n');
+    }
+    mode_text.push_str(mode::next_operation_guidance(
+        play_mode.get(),
+        &task_context.0,
+    ));
 
     hw_ui::interaction::status_display::update_mode_text_system(
         Some(hw_ui::interaction::status_display::ModeTextPayload { text: mode_text }),

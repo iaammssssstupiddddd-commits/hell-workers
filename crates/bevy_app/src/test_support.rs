@@ -85,6 +85,25 @@ pub(crate) fn empty_wall_visual_handles() -> hw_visual::WallVisualHandles {
     }
 }
 
+/// Owner tests start at accepted UI input. Gesture protocol tests use the real collector.
+pub(crate) fn accepted_button_fixture(app: &mut App) {
+    fn collect(
+        interactions: Query<(Entity, &Interaction), Changed<Interaction>>,
+        mut ui: ResMut<hw_ui::components::UiInputState>,
+    ) {
+        ui.activated_buttons.clear();
+        ui.activated_buttons
+            .extend(interactions.iter().filter_map(|(entity, interaction)| {
+                (*interaction == Interaction::Pressed).then_some(entity)
+            }));
+    }
+    app.init_resource::<hw_ui::components::UiInputState>();
+    app.add_systems(
+        PreUpdate,
+        collect.before(crate::input_actions::InputPreUpdateSet::CaptureRequest),
+    );
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

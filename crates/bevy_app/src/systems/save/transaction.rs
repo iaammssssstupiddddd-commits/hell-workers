@@ -367,6 +367,11 @@ fn set_recovery_mode(world: &mut World, mode: SaveRecoveryMode) {
 
 fn enter_recovery_failed(world: &mut World) {
     set_recovery_mode(world, SaveRecoveryMode::RecoveryFailed);
+    if let Some(mut menu) =
+        world.get_resource_mut::<hw_ui::interaction::pause_menu::SystemMenuState>()
+    {
+        *menu = default();
+    }
     if !world.contains_resource::<Time<Virtual>>() {
         world.insert_resource(Time::<Virtual>::default());
     }

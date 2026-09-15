@@ -63,7 +63,7 @@ impl AreaEditSession {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct AreaEditHistoryEntry {
     pub familiar_entity: Entity,
     pub before: Option<TaskArea>,

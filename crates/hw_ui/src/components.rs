@@ -26,7 +26,11 @@ pub enum LeftPanelMode {
 
 #[derive(Resource, Default)]
 pub struct UiInputState {
+    /// Frame-local accepted releases. Consumers must not treat raw Pressed as activation.
+    pub activated_buttons: std::collections::HashSet<Entity>,
     pub pointer_over_ui: bool,
+    /// A dedicated world gesture owns the primary pointer without opening a modal.
+    pub world_pointer_claimed: bool,
     pub text_input_focused: bool,
     pub text_input_consumed_keyboard: bool,
     /// A modal/pause overlay owns all world input for this frame.
@@ -38,12 +42,15 @@ pub struct UiInputState {
 }
 
 impl UiInputState {
+    pub fn button_activated(&self, entity: Entity) -> bool {
+        self.activated_buttons.contains(&entity)
+    }
     pub fn text_input_blocks_keybinds(&self) -> bool {
         self.text_input_focused || self.text_input_consumed_keyboard
     }
 
     pub fn world_input_blocked(&self) -> bool {
-        self.pointer_over_ui || self.world_input_captured
+        self.pointer_over_ui || self.world_input_captured || self.world_pointer_claimed
     }
 }
 
@@ -340,10 +347,17 @@ pub enum SettingsField {
     AutosaveEnabled,
     AutosaveInterval,
     AutosaveGenerations,
+    NotificationDuration,
 }
 
 #[derive(Component, Clone, Copy)]
 pub struct SettingsSliderMarker(pub SettingsField);
+
+#[derive(Component)]
+pub struct SettingsSaveStatusText;
+
+#[derive(Component, Clone, Copy)]
+pub struct SettingsValueText(pub SettingsField);
 
 #[derive(Component, Clone, Copy)]
 pub struct SettingsCheckboxMarker(pub SettingsField);
@@ -367,6 +381,9 @@ pub struct SaveCatalogDialog;
 pub struct SaveCatalogSlotList;
 
 #[derive(Component)]
+pub struct SaveCatalogConfirmFooter;
+
+#[derive(Component)]
 pub struct SaveCatalogTitle;
 
 // ============================================================
@@ -378,6 +395,12 @@ pub struct EntityListPanel;
 
 #[derive(Component)]
 pub struct EntityListBody;
+
+#[derive(Component)]
+pub struct EntityListScrollArea;
+
+#[derive(Component)]
+pub struct InfoPanelScrollArea;
 
 #[derive(Component)]
 pub struct EntityListScrollHint;

@@ -1,9 +1,9 @@
 use crate::app_contexts::TaskContext;
 use crate::assets::GameAssets;
 use crate::entities::damned_soul::DreamPool;
+use crate::systems::command::zone_placement::plan::{ZonePlacementPreview, ZonePlan};
 use crate::systems::command::{
     AreaEditSession, AreaSelectionIndicator, DreamTreePreviewIndicator, TaskArea, TaskMode,
-    TaskModeZoneType,
 };
 use crate::systems::dream_tree_planting::build_dream_tree_planting_plan;
 use crate::systems::jobs::Tree;
@@ -16,15 +16,13 @@ use bevy::window::PrimaryWindow;
 use hw_core::area::{get_drag_start, wall_line_area};
 use hw_core::constants::{TILE_SIZE, Z_DREAM_TREE_PREVIEW};
 use hw_ui::camera::{MainCamera, world_cursor_pos};
-use hw_world::zones::{Site, Yard};
 
 #[derive(SystemParam)]
 pub struct IndicatorInputQueries<'w, 's> {
     task_context: Res<'w, TaskContext>,
     q_camera: Query<'w, 's, (&'static Camera, &'static GlobalTransform), With<MainCamera>>,
     q_window: Query<'w, 's, &'static Window, With<PrimaryWindow>>,
-    q_yards: Query<'w, 's, (Entity, &'static Yard)>,
-    q_sites: Query<'w, 's, &'static Site>,
+    zone_preview: Res<'w, ZonePlacementPreview>,
 }
 
 pub fn area_selection_indicator_system(
@@ -49,6 +47,26 @@ pub fn area_selection_indicator_system(
         && let Some(world_pos) = world_cursor_pos(&ctx.q_window, &ctx.q_camera)
     {
         let area = match ctx.task_context.0 {
+            TaskMode::ZonePlacement(kind, Some(start)) => {
+                let Some(preview) = ctx
+                    .zone_preview
+                    .0
+                    .as_ref()
+                    .filter(|preview| preview.kind == kind && preview.start == start)
+                else {
+                    for (_, _, mut visibility) in &mut q_indicator {
+                        *visibility = Visibility::Hidden;
+                    }
+                    return;
+                };
+                // Display the same decision that release will revalidate. A Yard
+                // expands its existing bounds, rather than replacing the drag box.
+                let bounds = match &preview.result {
+                    Ok(ZonePlan::Yard { bounds, .. }) => bounds,
+                    _ => &preview.area,
+                };
+                TaskArea::from_points(bounds.min, bounds.max)
+            }
             TaskMode::WallPlace(_) => {
                 let end_pos = WorldMap::snap_to_grid_edge(world_pos);
                 wall_line_area(start_pos, end_pos)
@@ -70,22 +88,12 @@ pub fn area_selection_indicator_system(
                 TaskArea::from_points(start_pos, end_pos)
             }
         };
-        let area_bounds = area.bounds();
         let is_area_valid = match ctx.task_context.0 {
-            TaskMode::ZonePlacement(TaskModeZoneType::Stockpile, _) => {
-                crate::systems::command::zone_placement::is_stockpile_area_within_yards(
-                    &area_bounds,
-                    &ctx.q_yards,
-                )
-            }
-            TaskMode::ZonePlacement(TaskModeZoneType::Yard, Some(start_pos)) => {
-                crate::systems::command::zone_placement::is_yard_expansion_area_valid(
-                    start_pos,
-                    &area_bounds,
-                    &ctx.q_sites,
-                    &ctx.q_yards,
-                )
-            }
+            TaskMode::ZonePlacement(_, _) => ctx
+                .zone_preview
+                .0
+                .as_ref()
+                .is_some_and(|preview| preview.result.is_ok()),
             _ => true,
         };
         let center = area.center();

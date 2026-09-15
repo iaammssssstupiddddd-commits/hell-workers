@@ -22,8 +22,12 @@ pub(crate) fn entity_list_and_squads() -> Result<HelpContribution, HelpCatalogEr
                     HelpEntryId::new("entity-list-selection"),
                     "一覧から選択",
                     [
-                        "左一覧の行を選ぶと対象へ注目できます。前後の候補を順に巡回することもできます。",
+                        "左一覧の行や候補の巡回は選択だけを変えます。各行の「現地へ」でカメラを移動でき、選択や固定中の詳細は変わりません。",
                         "検索欄の入力中はショートカットが抑止されます。",
+                        "Soul名の部分一致で、折りたたんだ配下・未所属Soulも検索できます。一致するSoulのグループは一時的に開き、検索を消すと元の開閉状態へ戻ります。",
+                        "一覧本文は使い魔・配下・未所属をまとめてスクロールできます。候補の巡回は表示順で末尾と先頭をつなぎ、移動先の行を表示します。",
+                        "Soul行の作業アイコンには作業名を併記します。発電・解体・移設・精製・骨回収も個別の名前で確認できます。",
+                        "Entities と Tasks を切り替えられます。最小化すると本文と検索欄を隠し、展開すると選んだタブへ戻ります。検索欄はEntitiesの展開中だけ表示され、タブ往復でも検索文字列を保持します。",
                     ],
                 )
                 .with_shortcut(format!(
@@ -36,6 +40,7 @@ pub(crate) fn entity_list_and_squads() -> Result<HelpContribution, HelpCatalogEr
                     "Soul の所属変更",
                     [
                         "Soul の行を Familiar セクションへドラッグすると所属を変更できます。",
+                        "長押しの待ち時間はゲーム速度に依存しません。ドラッグ中に一覧本文の上端・下端へ寄せるとスクロールします。",
                         "Familiar の使役上限を超える場合は割り当てられません。",
                     ],
                 ),
@@ -45,7 +50,7 @@ pub(crate) fn entity_list_and_squads() -> Result<HelpContribution, HelpCatalogEr
                     [
                         "Familiar のコンテキストメニューから Open Operation を選ぶと、疲労閾値、最大使役 Soul 数、作業種別ごとの許可と Low / Normal / High の優先度を設定できます。",
                         "Disable all は新しい作業の割り当てだけを止めます。すでに実行中の作業と休息などの自己維持は継続します。",
-                        "方針だけで新しい割り当てが止まった仕事は Tasks に Blocked: Disabled by familiar policy と表示されます。",
+                        "方針だけで新しい割り当てが止まった仕事は Tasks に Blocked: Disabled by familiar policy と表示されます。担当が確定していれば「担当の詳細」から情報パネルへ進み、新規割当を停止している作業種別を確認できます。",
                         "命令が Idle でも、1体以上所属していれば既存メンバーを監視しながら最大使役 Soul 数まで追加募集を続けます。",
                         "設定は Familiar ごとに保存されます。最大数を現在の使役数より下げると、超過した Soul は所属と作業から解放されます。",
                     ],
@@ -85,7 +90,7 @@ pub(crate) fn familiar_commands() -> Result<HelpContribution, HelpCatalogError> 
                     HelpEntryId::new("familiar-idle-patrol"),
                     "Idle / Patrol",
                     [
-                        "通常状態の Familiar を選択中に、Idle と Patrol を切り替えられます。",
+                        "通常状態の Familiar を選択中にショートカット、または右クリックメニューの「待機 / 巡回」で Idle と Patrol を切り替えます。作業範囲がない場合は Idle になります。時間操作のショートカットは選択対象によって変わりません。",
                     ],
                 )
                 .with_shortcut(shortcut(InputAction::ToggleFamiliarIdlePatrol)?),
@@ -109,7 +114,8 @@ pub(crate) fn info_panel() -> Result<HelpContribution, HelpCatalogError> {
                     "表示を固定する",
                     [
                         "情報パネルを pin すると、ポインターを別の対象へ動かしても表示対象を維持します。",
-                        "unpin すると現在の hover / selection に追従します。",
+                        "「選択を表示」で固定を解除すると、現在の選択を表示します。固定中の対象名とこのボタンは、本文をスクロールしても残ります。",
+                        "別の対象の詳細を開くと本文は先頭へ戻り、同じ対象の情報更新では読んでいる位置を保ちます。",
                     ],
                 ),
                 HelpEntry::new(

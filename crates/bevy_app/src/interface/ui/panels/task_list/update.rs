@@ -2,10 +2,11 @@
 
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
-use bevy::window::PrimaryWindow;
 use hw_ui::components::{LeftPanelMode, TaskListBody};
-use hw_ui::panels::info_panel::InfoPanelPinState;
-use hw_ui::panels::task_list::{TaskDashboardActionState, TaskDashboardViewState};
+use hw_ui::list::EntityListMinimizeState;
+use hw_ui::panels::task_list::{
+    TASK_PAGE_SIZE, TaskDashboardActionState, TaskDashboardViewState, TaskListScroll,
+};
 use hw_ui::theme::UiTheme;
 
 #[cfg(feature = "profiling")]
@@ -14,46 +15,8 @@ use super::{TaskListDirty, view_model::TaskListState};
 #[cfg(feature = "profiling")]
 use std::time::Instant;
 
-const TASK_DASHBOARD_ROW_OVERDRAW: usize = 2;
-
-#[derive(Resource, Debug, Clone, Copy, PartialEq, Eq)]
-pub struct TaskDashboardViewport {
-    resident_row_limit: usize,
-}
-
-impl Default for TaskDashboardViewport {
-    fn default() -> Self {
-        Self {
-            resident_row_limit: 1,
-        }
-    }
-}
-
-fn maximum_resident_rows(window_height: f32, theme: &UiTheme) -> usize {
-    let row_height = theme.sizes.soul_item_height.max(1.0);
-    let max_panel_height =
-        window_height.max(0.0) * theme.sizes.entity_list_max_height_percent / 100.0;
-    (max_panel_height / row_height).ceil() as usize + TASK_DASHBOARD_ROW_OVERDRAW
-}
-
 fn clear_task_list_body(commands: &mut Commands, body_entity: Entity) {
     commands.entity(body_entity).despawn_children();
-}
-
-pub fn sync_task_dashboard_viewport_system(
-    window: Query<&Window, With<PrimaryWindow>>,
-    theme: Res<UiTheme>,
-    mut viewport: ResMut<TaskDashboardViewport>,
-    mut dirty: ResMut<TaskListDirty>,
-) {
-    let Ok(window) = window.single() else {
-        return;
-    };
-    let resident_row_limit = maximum_resident_rows(window.height(), &theme).max(1);
-    if viewport.resident_row_limit != resident_row_limit {
-        viewport.resident_row_limit = resident_row_limit;
-        dirty.mark_list();
-    }
 }
 
 #[cfg(feature = "profiling")]
@@ -88,20 +51,20 @@ impl Drop for TaskDashboardTimingGuard<'_> {
 }
 
 #[derive(SystemParam)]
-pub struct TaskListRenderState<'w> {
+pub struct TaskListRenderState<'w, 's> {
     game_assets: Res<'w, crate::assets::GameAssets>,
     theme: Res<'w, UiTheme>,
     mode: Res<'w, LeftPanelMode>,
     state: Res<'w, TaskListState>,
-    view_state: Res<'w, TaskDashboardViewState>,
-    action_state: Res<'w, TaskDashboardActionState>,
-    pin_state: Res<'w, InfoPanelPinState>,
-    viewport: Res<'w, TaskDashboardViewport>,
+    view_state: ResMut<'w, TaskDashboardViewState>,
+    action_state: ResMut<'w, TaskDashboardActionState>,
+    minimized: Res<'w, EntityListMinimizeState>,
+    scroll: Query<'w, 's, &'static ScrollPosition, With<TaskListScroll>>,
 }
 
 pub fn task_list_update_system(
     mut commands: Commands,
-    render_state: TaskListRenderState,
+    mut render_state: TaskListRenderState,
     mut dirty: ResMut<TaskListDirty>,
     body_query: Query<Entity, With<TaskListBody>>,
     children_query: Query<&Children>,
@@ -111,13 +74,45 @@ pub fn task_list_update_system(
     #[cfg(feature = "profiling")]
     let _timing_guard = TaskDashboardTimingGuard::new(timing_metrics.as_deref_mut());
 
-    if *render_state.mode != LeftPanelMode::TaskList {
+    if *render_state.mode != LeftPanelMode::TaskList || render_state.minimized.minimized {
         return;
     }
 
-    if !dirty.list_dirty() {
+    if !dirty.list_dirty() && !render_state.view_state.is_changed() {
         return;
     }
+
+    let total = render_state
+        .view_state
+        .visible_entries(&render_state.state.snapshot)
+        .len();
+    let page = render_state
+        .view_state
+        .page_index
+        .min(total.saturating_sub(1) / TASK_PAGE_SIZE);
+    let reset_scroll =
+        render_state.view_state.is_changed() || page != render_state.view_state.page_index;
+    if page != render_state.view_state.page_index {
+        render_state.view_state.page_index = page;
+    }
+    if let Some(active) = render_state.action_state.active_task {
+        let visible = render_state
+            .view_state
+            .visible_entries(&render_state.state.snapshot);
+        let range = hw_ui::panels::task_list::task_page_range(page, visible.len());
+        if !visible[range].iter().any(|entry| entry.entity == active) {
+            render_state.action_state.active_task = None;
+            render_state.action_state.confirmation = None;
+        }
+    }
+    let scroll_position = if reset_scroll {
+        Vec2::ZERO
+    } else {
+        render_state
+            .scroll
+            .single()
+            .map_or(Vec2::ZERO, |scroll| scroll.0)
+    };
 
     let Ok(body_entity) = body_query.single() else {
         return;
@@ -143,11 +138,10 @@ pub fn task_list_update_system(
                 hw_ui::panels::task_list::TaskListRenderInput {
                     snapshot: &render_state.state.snapshot,
                     view_state: &render_state.view_state,
-                    pinned_entity: render_state.pin_state.entity,
                     action_state: &render_state.action_state,
                     game_assets: &*render_state.game_assets,
                     theme: &render_state.theme,
-                    resident_row_limit: render_state.viewport.resident_row_limit,
+                    scroll_position,
                 },
             );
         }
@@ -157,11 +151,10 @@ pub fn task_list_update_system(
             hw_ui::panels::task_list::TaskListRenderInput {
                 snapshot: &render_state.state.snapshot,
                 view_state: &render_state.view_state,
-                pinned_entity: render_state.pin_state.entity,
                 action_state: &render_state.action_state,
                 game_assets: &*render_state.game_assets,
                 theme: &render_state.theme,
-                resident_row_limit: render_state.viewport.resident_row_limit,
+                scroll_position,
             },
         );
     });
@@ -200,14 +193,6 @@ mod tests {
     fn queue_body_cleanup(mut commands: Commands, body_query: Query<Entity, With<TestBody>>) {
         let body = body_query.single().expect("test body should exist");
         clear_task_list_body(&mut commands, body);
-    }
-
-    #[test]
-    fn resident_limit_covers_the_maximum_panel_height_with_overdraw() {
-        let theme = UiTheme::default();
-
-        assert_eq!(maximum_resident_rows(1_080.0, &theme), 40);
-        assert_eq!(maximum_resident_rows(2_160.0, &theme), 78);
     }
 
     #[test]

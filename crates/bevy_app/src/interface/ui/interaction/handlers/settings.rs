@@ -7,7 +7,7 @@ use hw_ui::components::MenuState;
 use super::begin_overlay_open;
 use crate::DebugVisible;
 use crate::systems::settings::apply::sync_debug_gizmos;
-use crate::systems::settings::persistence::{SettingsStorageRoot, save_settings_to_disk};
+use crate::systems::settings::persistence::SettingsStorageRoot;
 
 pub fn handle(
     intent: UiIntent,
@@ -69,6 +69,14 @@ pub fn handle(
             settings.autosave_interval_minutes = minutes;
             false
         }
+        UiIntent::SetNotificationDuration(seconds) => {
+            settings.notification_duration_seconds = match seconds {
+                8 => 8,
+                12 => 12,
+                _ => 4,
+            };
+            false
+        }
         UiIntent::SetAutosaveGenerations(generations) => {
             settings.autosave_generations = generations.clamp(1, 5);
             false
@@ -77,18 +85,17 @@ pub fn handle(
     }
 }
 
-pub fn save_if_requested(
+pub(crate) fn save_if_requested(
     should_save: bool,
     settings_root: &SettingsStorageRoot,
     settings: &GameSettings,
+    feedback: &mut crate::systems::settings::feedback::SettingsSaveFeedback,
 ) {
     if !should_save {
         return;
     }
 
-    if let Err(err) = save_settings_to_disk(settings_root, settings) {
-        warn!("Failed to save settings: {err}");
-    }
+    feedback.save_current(settings_root, settings);
 }
 
 #[cfg(test)]

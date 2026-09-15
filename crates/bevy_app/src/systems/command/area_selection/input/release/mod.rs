@@ -109,3 +109,28 @@ pub(super) fn handle_left_just_released_input(
         _ => {}
     }
 }
+
+fn notify_order_result(
+    commands: &mut Commands,
+    issuer: Option<Entity>,
+    label: &'static str,
+    result: String,
+) {
+    commands.queue(move |world: &mut World| {
+        use hw_ui::notifications::{
+            NotificationRetention, NotificationSeverity, UserFacingNotification,
+        };
+        let name = issuer
+            .and_then(|entity| world.get::<Familiar>(entity))
+            .map(|familiar| familiar.name.as_str())
+            .unwrap_or("担当なし");
+        let notification = UserFacingNotification::new(
+            format!("orders-result-{label}"),
+            NotificationSeverity::Info,
+            format!("{label}の指定結果"),
+            format!("担当: {name}\n{result}"),
+            NotificationRetention::Important,
+        );
+        world.write_message(notification);
+    });
+}

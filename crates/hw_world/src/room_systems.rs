@@ -199,7 +199,7 @@ pub fn validate_rooms_system(mut p: ValidateRoomsParams) {
     lookup_builder.publish(&mut p.room_tile_lookup, &mut p.room_boundary_lookup);
 }
 
-fn collect_building_tiles(
+pub fn collect_building_tiles(
     q_buildings: &Query<(Entity, &Building, &Transform)>,
 ) -> Vec<RoomDetectionBuildingTile> {
     q_buildings

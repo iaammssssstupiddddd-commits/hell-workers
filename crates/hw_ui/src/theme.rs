@@ -322,9 +322,9 @@ impl Default for UiTheme {
             },
             typography: ThemeTypography {
                 // New Modular Scale
-                font_size_xs: 9.0,
-                font_size_sm: 11.0,
-                font_size_base: 13.0,
+                font_size_xs: 12.0,
+                font_size_sm: 14.0,
+                font_size_base: 14.0,
                 font_size_md: 15.0,
                 font_size_lg: 18.0,
                 font_size_xl: 22.0,
@@ -332,12 +332,12 @@ impl Default for UiTheme {
                 // Legacy
                 font_size_title: 18.0,
                 font_size_header: 14.0,
-                font_size_item: 12.0,
-                font_size_small: 10.0,
+                font_size_item: 14.0,
+                font_size_small: 12.0,
                 font_size_clock: 22.0,
                 font_size_status: 16.0,
                 font_size_dialog_small: 14.0,
-                font_size_dialog_tiny: 10.0,
+                font_size_dialog_tiny: 12.0,
             },
             spacing: ThemeSpacing {
                 margin_small: 2.0,
@@ -371,11 +371,11 @@ impl Default for UiTheme {
                 tooltip_padding: 8.0,
 
                 // Legacy
-                header_height: 24.0,
-                soul_item_height: 20.0,
+                header_height: 32.0,
+                soul_item_height: 32.0,
                 icon_size: 16.0,
                 fold_icon_size: 12.0,
-                fold_button_size: 20.0,
+                fold_button_size: 32.0,
                 familiar_section_margin_top: 4.0,
                 squad_member_left_margin: 15.0,
                 empty_squad_left_margin: 15.0,
@@ -383,7 +383,7 @@ impl Default for UiTheme {
                 entity_list_panel_width: 300.0,
                 entity_list_max_height_percent: 70.0,
                 info_panel_width: 260.0, // Increased from 200.0
-                submenu_width: 120.0,
+                submenu_width: 160.0,
                 submenu_left_architect: 0.0,
                 submenu_left_zones: 110.0,
                 submenu_left_orders: 220.0,

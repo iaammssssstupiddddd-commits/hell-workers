@@ -19,11 +19,11 @@ type MenuButtonWithColorQuery<'w, 's> = Query<
     's,
     (
         Entity,
-        &'static Interaction,
+        Ref<'static, Interaction>,
         &'static MenuButton,
         &'static mut BackgroundColor,
     ),
-    (Changed<Interaction>, With<Button>),
+    With<Button>,
 >;
 
 type OperationDialogTextQuery<'w, 's> = Query<
@@ -133,8 +133,10 @@ pub fn ui_interaction_system(
     foreground_gate: ForegroundUiGate,
 ) {
     for (entity, interaction, menu_button, mut color) in interaction_query.iter_mut() {
-        update_interaction_color(*interaction, &mut color, &theme);
-        if *interaction != Interaction::Pressed {
+        if interaction.is_changed() || theme.is_changed() {
+            update_interaction_color(*interaction, &mut color, &theme);
+        }
+        if !foreground_gate.activated(entity) {
             continue;
         }
         if !foreground_gate.allows(entity) {
@@ -293,6 +295,7 @@ mod tests {
     #[test]
     fn move_overlay_is_limited_to_supported_buildings() {
         let mut app = App::new();
+        crate::test_support::accepted_button_fixture(&mut app);
         app.init_resource::<HoveredEntity>()
             .init_resource::<HoverActionTarget>()
             .add_systems(Update, update_move_plant_hover_target_system);
@@ -347,6 +350,7 @@ mod tests {
     #[test]
     fn foreground_gate_blocks_background_menu_action() {
         let mut app = App::new();
+        crate::test_support::accepted_button_fixture(&mut app);
         app.add_message::<UiIntent>()
             .init_resource::<UiInputState>()
             .init_resource::<PendingWorldInputCapture>()
@@ -391,6 +395,7 @@ mod tests {
     #[test]
     fn soul_spa_cancel_button_emits_one_exact_intent_per_press() {
         let mut app = App::new();
+        crate::test_support::accepted_button_fixture(&mut app);
         app.add_message::<UiIntent>()
             .init_resource::<UiInputState>()
             .init_resource::<PendingWorldInputCapture>()
@@ -401,13 +406,19 @@ mod tests {
         app.world_mut().spawn((
             Interaction::Pressed,
             Button,
-            MenuButton(MenuAction::CancelSoulSpaConstruction { target }),
+            MenuButton(MenuAction::CancelSoulSpaConstruction {
+                target,
+                source_task: None,
+            }),
             BackgroundColor::default(),
         ));
         app.world_mut().spawn((
             Interaction::Hovered,
             Button,
-            MenuButton(MenuAction::CancelSoulSpaConstruction { target }),
+            MenuButton(MenuAction::CancelSoulSpaConstruction {
+                target,
+                source_task: None,
+            }),
             BackgroundColor::default(),
         ));
 
@@ -418,13 +429,14 @@ mod tests {
         assert_eq!(intents.len(), 1);
         assert!(matches!(
             intents[0],
-            UiIntent::CancelSoulSpaConstruction { target: actual } if actual == target
+            UiIntent::CancelSoulSpaConstruction { target: actual, .. } if actual == target
         ));
     }
 
     #[test]
     fn stale_operation_target_closes_without_retargeting_and_resets_scroll() {
         let mut app = App::new();
+        crate::test_support::accepted_button_fixture(&mut app);
         let stale_target = app.world_mut().spawn_empty().id();
         app.world_mut().despawn(stale_target);
         app.init_resource::<UiNodeRegistry>()
@@ -467,6 +479,7 @@ mod tests {
     #[test]
     fn operation_dialog_binds_each_exact_target_value_and_next_action() {
         let mut app = App::new();
+        crate::test_support::accepted_button_fixture(&mut app);
         app.init_resource::<UiNodeRegistry>()
             .init_resource::<UiTheme>()
             .add_systems(Update, update_operation_dialog_system);

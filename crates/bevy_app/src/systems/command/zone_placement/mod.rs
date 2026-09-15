@@ -1,4 +1,5 @@
 pub mod placement;
+pub mod plan;
 pub mod removal;
 pub mod removal_preview;
 
@@ -23,6 +24,5 @@ fn world_cursor_pos(
 }
 
 pub use placement::zone_placement_system;
-pub(crate) use placement::{is_stockpile_area_within_yards, is_yard_expansion_area_valid};
 pub use removal::zone_removal_system;
 pub use removal_preview::ZoneRemovalPreviewState;

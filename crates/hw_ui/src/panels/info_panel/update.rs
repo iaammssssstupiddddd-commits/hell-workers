@@ -26,6 +26,8 @@ pub struct InfoPanelRes<'w, A: UiAssets + Resource + 'static> {
 
 #[derive(SystemParam)]
 pub struct InfoPanelNodeQueries<'w, 's> {
+    pub q_scroll:
+        Query<'w, 's, &'static mut ScrollPosition, With<crate::components::InfoPanelScrollArea>>,
     pub q_text: Query<'w, 's, &'static mut Text>,
     pub q_node: Query<'w, 's, &'static mut Node>,
     pub q_gender: Query<'w, 's, &'static mut ImageNode>,
@@ -305,6 +307,17 @@ pub fn info_panel_system<A: UiAssets + Resource>(
     mut queries: InfoPanelNodeQueries,
 ) {
     let next_model = res.inspection_view_model.model.clone().map(to_view_model);
+    let target = res
+        .inspection_view_model
+        .model
+        .as_ref()
+        .map(|model| model.entity);
+    let target_changed = panel_state.last_entity != target;
+    if target_changed {
+        for mut scroll in &mut queries.q_scroll {
+            scroll.0 = Vec2::ZERO;
+        }
+    }
 
     let pinned = pin_state.entity.is_some();
     let rename_target = match &next_model {
@@ -319,6 +332,7 @@ pub fn info_panel_system<A: UiAssets + Resource>(
     };
 
     if panel_state.last == next_model
+        && !target_changed
         && panel_state.last_pinned == pinned
         && panel_state.last_rename_target == rename_target
     {
@@ -790,6 +804,7 @@ pub fn info_panel_system<A: UiAssets + Resource>(
                 res.info_nodes.soul_spa.soul_spa_cancel_button,
                 &mut queries.q_menu_button,
                 MenuAction::CancelSoulSpaConstruction {
+                    source_task: None,
                     target: soul_spa.entity,
                 },
             );
@@ -952,6 +967,13 @@ pub fn info_panel_system<A: UiAssets + Resource>(
         }
     }
 
+    if pinned
+        && let Some(header) = res.info_nodes.common.header
+        && let Ok(mut text) = queries.q_text.get_mut(header)
+    {
+        text.0 = format!("固定: {}", text.0);
+    }
+    panel_state.last_entity = target;
     panel_state.last = next_model;
     panel_state.last_pinned = pinned;
     panel_state.last_rename_target = rename_target;
@@ -960,6 +982,100 @@ pub fn info_panel_system<A: UiAssets + Resource>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::setup::test_support::TestAssets;
+
+    fn spawn_test_panel(
+        mut commands: Commands,
+        assets: Res<TestAssets>,
+        theme: Res<crate::theme::UiTheme>,
+        mut nodes: ResMut<InfoPanelNodes>,
+        mut registry: ResMut<crate::components::UiNodeRegistry>,
+    ) {
+        let root = commands.spawn(Node::default()).id();
+        super::super::layout::spawn_info_panel_ui(
+            &mut commands,
+            &*assets,
+            &theme,
+            root,
+            &mut registry,
+            &mut nodes,
+        );
+    }
+
+    #[test]
+    fn detail_scroll_follows_target_identity_and_keeps_pinned_header_outside_body() {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins)
+            .init_resource::<TestAssets>()
+            .init_resource::<crate::theme::UiTheme>()
+            .init_resource::<InfoPanelNodes>()
+            .init_resource::<crate::components::UiNodeRegistry>()
+            .init_resource::<EntityInspectionViewModel>()
+            .init_resource::<SelectedEntity>()
+            .init_resource::<InfoPanelPinState>()
+            .init_resource::<InfoPanelState>()
+            .init_resource::<SoulRenameState>()
+            .add_systems(Startup, spawn_test_panel)
+            .add_systems(Update, info_panel_system::<TestAssets>);
+        let first = app.world_mut().spawn_empty().id();
+        let second = app.world_mut().spawn_empty().id();
+        let mut model = crate::models::inspection::EntityInspectionModel {
+            entity: first,
+            header: "対象".into(),
+            common_text: "初期".into(),
+            tooltip_lines: Vec::new(),
+            soul: None,
+            stockpile: None,
+            soul_spa: None,
+            power: None,
+        };
+        app.world_mut()
+            .resource_mut::<EntityInspectionViewModel>()
+            .model = Some(model.clone());
+        app.update();
+        let scroll = app
+            .world_mut()
+            .query_filtered::<Entity, With<crate::components::InfoPanelScrollArea>>()
+            .single(app.world())
+            .unwrap();
+        app.world_mut()
+            .get_mut::<ScrollPosition>(scroll)
+            .unwrap()
+            .0
+            .y = 222.0;
+        model.common_text = "更新".into();
+        app.world_mut()
+            .resource_mut::<EntityInspectionViewModel>()
+            .model = Some(model.clone());
+        app.update();
+        assert_eq!(
+            app.world().get::<ScrollPosition>(scroll).unwrap().0.y,
+            222.0
+        );
+        model.entity = second;
+        app.world_mut()
+            .resource_mut::<EntityInspectionViewModel>()
+            .model = Some(model.clone());
+        app.world_mut().resource_mut::<InfoPanelPinState>().entity = Some(second);
+        app.update();
+        assert_eq!(app.world().get::<ScrollPosition>(scroll).unwrap().0.y, 0.0);
+        let nodes = app.world().resource::<InfoPanelNodes>();
+        let header = nodes.common.header.unwrap();
+        assert_eq!(app.world().get::<Text>(header).unwrap().0, "固定: 対象");
+        for node in [header, nodes.common.unpin_button.unwrap()] {
+            let mut ancestor = node;
+            while let Some(parent) = app.world().get::<ChildOf>(ancestor) {
+                assert_ne!(ancestor, scroll);
+                ancestor = parent.parent();
+            }
+        }
+        model.common_text = "再更新".into();
+        app.world_mut()
+            .resource_mut::<EntityInspectionViewModel>()
+            .model = Some(model);
+        app.update();
+        assert_eq!(app.world().get::<Text>(header).unwrap().0, "固定: 対象");
+    }
 
     #[test]
     fn constructing_soul_spa_status_includes_material_progress() {

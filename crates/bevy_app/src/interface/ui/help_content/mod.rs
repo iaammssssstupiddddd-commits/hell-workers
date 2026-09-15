@@ -61,6 +61,9 @@ pub(crate) fn build_help_panel_chrome() -> Result<HelpPanelChrome, HelpCatalogEr
             page_navigation_label: "ページ移動",
             document_bounds_label: "先頭 / 末尾",
             shortcut_label: "操作",
+            search_label: "ヘルプを検索（見出し・本文）",
+            guide_start_label: "操作ガイドを開始",
+            no_results_label: "一致する項目はありません。検索語を変更してください。",
         }),
         shortcut(InputAction::OpenHelp)?,
         shortcut(InputAction::CloseHelp)?,
@@ -87,6 +90,9 @@ pub(crate) fn build_help_panel_chrome() -> Result<HelpPanelChrome, HelpCatalogEr
         copy.page_navigation_label(),
         copy.document_bounds_label(),
         copy.shortcut_label(),
+        copy.search_label(),
+        copy.guide_start_label(),
+        copy.no_results_label(),
     ]
     .into_iter()
     .any(|text| text.trim().is_empty())

@@ -2,7 +2,6 @@ use crate::systems::save::SaveCatalogUi;
 use bevy::ecs::system::SystemParam;
 use bevy::input_focus::InputFocus;
 use bevy::prelude::*;
-use hw_core::game_state::TimeSpeed;
 use hw_ui::components::{
     MenuAction, MenuButton, MenuState, OperationDialog, PauseMenu, SaveCatalogDialog,
     SettingsPanel, UiInputCapture, UiInputState,
@@ -64,7 +63,7 @@ impl PendingWorldInputCapture {
             .is_some_and(|request| request.overlay == overlay)
     }
 
-    fn foreground_opener(&self, foreground_root: Option<Entity>) -> Option<Entity> {
+    pub(crate) fn foreground_opener(&self, foreground_root: Option<Entity>) -> Option<Entity> {
         self.request
             .filter(|request| Some(request.root) == foreground_root)
             .and_then(|request| request.opener)
@@ -86,12 +85,8 @@ type CaptureRootQuery<'w, 's> = Query<
     With<UiInputCapture>,
 >;
 
-type CaptureOpeningButtonQuery<'w, 's> = Query<
-    'w,
-    's,
-    (Entity, &'static Interaction, &'static MenuButton),
-    (Changed<Interaction>, With<Button>),
->;
+type CaptureOpeningButtonQuery<'w, 's> =
+    Query<'w, 's, (Entity, &'static Interaction, &'static MenuButton), With<Button>>;
 
 fn capture_root_overlay(
     is_save_catalog: bool,
@@ -147,7 +142,7 @@ fn root_for_overlay(
 fn visible_capture(
     roots: &CaptureRootQuery<'_, '_>,
     save_catalog_ui: &SaveCatalogUi,
-    simulation_paused: bool,
+    system_menu_open: bool,
 ) -> Option<(InputOverlay, Entity)> {
     roots
         .iter()
@@ -159,7 +154,7 @@ fn visible_capture(
                     capture_root_overlay(false, is_help, is_settings, is_pause, is_operation)?
                 };
                 let visible = node.display != Display::None
-                    || (overlay == InputOverlay::Pause && simulation_paused);
+                    || (overlay == InputOverlay::Pause && system_menu_open);
                 visible.then_some((overlay, entity))
             },
         )
@@ -170,12 +165,12 @@ fn effective_capture(
     pending: &PendingWorldInputCapture,
     roots: &CaptureRootQuery<'_, '_>,
     save_catalog_ui: &SaveCatalogUi,
-    simulation_paused: bool,
+    system_menu_open: bool,
 ) -> Option<(InputOverlay, Entity)> {
     let pending_capture = pending
         .request
         .map(|request| (request.overlay, request.root));
-    let visible_capture = visible_capture(roots, save_catalog_ui, simulation_paused);
+    let visible_capture = visible_capture(roots, save_catalog_ui, system_menu_open);
 
     match (pending_capture, visible_capture) {
         (Some(pending), Some(visible)) if pending.0.priority() >= visible.0.priority() => {
@@ -220,9 +215,10 @@ pub(crate) fn reset_pending_world_input_capture_system(
 
 #[derive(SystemParam)]
 pub(crate) struct CaptureRequestParams<'w, 's> {
+    ui_input_state: Res<'w, UiInputState>,
     pending: ResMut<'w, PendingWorldInputCapture>,
     input_focus: ResMut<'w, InputFocus>,
-    time: Res<'w, Time<Virtual>>,
+    system_menu: Option<Res<'w, hw_ui::interaction::pause_menu::SystemMenuState>>,
     menu_state: Res<'w, MenuState>,
     help_state: Res<'w, HelpPanelState>,
     save_recovery: Res<'w, SaveRecoveryMode>,
@@ -241,9 +237,7 @@ fn capture_request_for_menu_action(
         MenuAction::SaveGame => CaptureOpenAction::Save,
         MenuAction::RequestLoadGame => CaptureOpenAction::Load,
         MenuAction::ToggleSettings => CaptureOpenAction::Settings,
-        MenuAction::TogglePause | MenuAction::SetTimeSpeed(TimeSpeed::Paused) => {
-            CaptureOpenAction::Pause
-        }
+        MenuAction::ToggleSystemMenu => CaptureOpenAction::Pause,
         MenuAction::OpenOperationDialog { target, .. } => CaptureOpenAction::Operation(target),
         _ => return None,
     };
@@ -258,7 +252,7 @@ fn capture_open_snapshot(
         recovery_failed: *params.save_recovery == SaveRecoveryMode::RecoveryFailed,
         help_open: params.help_state.open,
         settings_open: *params.menu_state == MenuState::Settings,
-        simulation_paused: params.time.is_paused(),
+        system_menu_open: params.system_menu.as_ref().is_some_and(|menu| menu.open),
         operation_target_is_familiar: match action {
             CaptureOpenAction::Operation(target) => params.familiars.get(target).is_ok(),
             _ => false,
@@ -271,15 +265,15 @@ pub(crate) fn request_capture_from_menu_buttons_system(
     buttons: CaptureOpeningButtonQuery,
     mut params: CaptureRequestParams,
 ) {
-    for (entity, interaction, menu_button) in &buttons {
-        if *interaction != Interaction::Pressed {
+    for (entity, _, menu_button) in &buttons {
+        if !params.ui_input_state.button_activated(entity) {
             continue;
         }
         let foreground_root = effective_capture(
             &params.pending,
             &params.roots,
             &params.save_catalog_ui,
-            params.time.is_paused(),
+            params.system_menu.as_ref().is_some_and(|menu| menu.open),
         )
         .map(|(_, root)| root);
         if !foreground_ui_action_allowed_for_root(
@@ -315,8 +309,7 @@ pub(crate) fn request_capture_from_resolved_actions_system(
         (InputAction::SaveGame, CaptureOpenAction::Save),
         (InputAction::RequestLoadGame, CaptureOpenAction::Load),
         (InputAction::OpenHelp, CaptureOpenAction::Help),
-        (InputAction::TogglePause, CaptureOpenAction::Pause),
-        (InputAction::TimePaused, CaptureOpenAction::Pause),
+        (InputAction::ToggleSystemMenu, CaptureOpenAction::Pause),
     ]
     .into_iter()
     .find_map(|(input, action)| {
@@ -346,11 +339,16 @@ pub(crate) fn sync_world_input_capture_system(
     pending: Res<PendingWorldInputCapture>,
     roots: CaptureRootQuery<'_, '_>,
     save_catalog_ui: Res<SaveCatalogUi>,
-    time: Res<Time<Virtual>>,
+    system_menu: Option<Res<hw_ui::interaction::pause_menu::SystemMenuState>>,
     mut ui_input_state: ResMut<UiInputState>,
     mut resolved_frame: ResMut<ResolvedInputFrame>,
 ) {
-    let foreground = effective_capture(&pending, &roots, &save_catalog_ui, time.is_paused());
+    let foreground = effective_capture(
+        &pending,
+        &roots,
+        &save_catalog_ui,
+        system_menu.as_ref().is_some_and(|menu| menu.open),
+    );
 
     let was_captured = ui_input_state.world_input_captured;
     ui_input_state.world_input_captured = foreground.is_some();
@@ -434,6 +432,9 @@ pub struct ForegroundUiGate<'w, 's> {
 }
 
 impl ForegroundUiGate<'_, '_> {
+    pub(crate) fn activated(&self, entity: Entity) -> bool {
+        self.ui_input_state.button_activated(entity)
+    }
     pub(crate) fn allows(&self, entity: Entity) -> bool {
         foreground_ui_action_allowed(entity, &self.ui_input_state, &self.pending, &self.parents)
     }
@@ -441,6 +442,87 @@ impl ForegroundUiGate<'_, '_> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn inspection_help_link_uses_only_the_accepted_opener() {
+        use hw_ui::help::{
+            HelpEntry, HelpEntryId, HelpInspectionLink, HelpPanelContent, HelpSection,
+            HelpSectionId, HelpTopic, HelpTopicId,
+        };
+        use hw_ui::models::{EntityInspectionModel, EntityInspectionViewModel};
+        let mut app = App::new();
+        crate::test_support::accepted_button_fixture(&mut app);
+        app.add_message::<hw_ui::UiIntent>()
+            .init_resource::<PendingWorldInputCapture>()
+            .init_resource::<UiInputState>()
+            .init_resource::<HelpPanelState>()
+            .insert_resource(HelpPanelContent::new([HelpSection::new(
+                HelpSectionId::new("section"),
+                "Section",
+                [HelpTopic::new(
+                    HelpTopicId::new("topic"),
+                    "Topic",
+                    [HelpEntry::new(
+                        HelpEntryId::new("info-panel-pin"),
+                        "Info",
+                        ["Body"],
+                    )],
+                )],
+            )]))
+            .insert_resource(EntityInspectionViewModel {
+                model: Some(EntityInspectionModel {
+                    entity: Entity::PLACEHOLDER,
+                    header: String::new(),
+                    common_text: String::new(),
+                    tooltip_lines: vec![],
+                    soul: None,
+                    stockpile: None,
+                    soul_spa: None,
+                    power: None,
+                }),
+            })
+            .add_systems(
+                Update,
+                crate::interface::ui::help_controller::open_inspection_help_entry,
+            );
+        let root = app.world_mut().spawn_empty().id();
+        let opener = app.world_mut().spawn(HelpInspectionLink).id();
+        app.world_mut()
+            .resource_mut::<HelpPanelState>()
+            .open_at(HelpTopicId::new("topic"));
+        app.world_mut()
+            .resource_mut::<UiInputState>()
+            .foreground_capture_root = Some(root);
+        app.update();
+        assert!(
+            app.world()
+                .resource::<Messages<hw_ui::UiIntent>>()
+                .is_empty()
+        );
+        app.world_mut()
+            .resource_mut::<PendingWorldInputCapture>()
+            .request(WorldInputCaptureRequest {
+                overlay: InputOverlay::Help,
+                root,
+                opener: Some(opener),
+                target: None,
+            });
+        app.update();
+        let emitted: Vec<_> = app
+            .world_mut()
+            .resource_mut::<Messages<hw_ui::UiIntent>>()
+            .drain()
+            .collect();
+        assert!(
+            matches!(emitted.as_slice(), [hw_ui::UiIntent::SelectHelpEntry(entry)] if entry.as_str() == "info-panel-pin")
+        );
+        app.world_mut().despawn(opener);
+        app.update();
+        assert!(
+            app.world()
+                .resource::<Messages<hw_ui::UiIntent>>()
+                .is_empty()
+        );
+    }
     use super::*;
     use crate::systems::save::{SaveCatalogMode, SaveCatalogUi, SavePath, SaveRecoveryMode};
     use crate::test_support::minimal_app;
@@ -448,6 +530,7 @@ mod tests {
 
     fn capture_test_app() -> App {
         let mut app = minimal_app();
+        crate::test_support::accepted_button_fixture(&mut app);
         app.init_resource::<PendingWorldInputCapture>()
             .init_resource::<UiInputState>()
             .init_resource::<ResolvedInputFrame>()
@@ -596,7 +679,7 @@ mod tests {
         assert_accepted_button_capture(
             capture_test_app(),
             PauseMenu,
-            MenuAction::TogglePause,
+            MenuAction::ToggleSystemMenu,
             InputOverlay::Pause,
         );
 
@@ -817,7 +900,7 @@ mod tests {
                 opener: None,
                 target: Entity::PLACEHOLDER,
             },
-            MenuAction::TogglePause,
+            MenuAction::ToggleSystemMenu,
         ] {
             app.world_mut()
                 .spawn((Interaction::Pressed, Button, MenuButton(action)));
@@ -846,14 +929,14 @@ mod tests {
     }
 
     #[test]
-    fn accepted_keyboard_pause_request_clears_focus_and_suppresses_pointer_ingress() {
+    fn accepted_keyboard_system_menu_request_clears_focus_and_suppresses_pointer_ingress() {
         let mut app = capture_test_app();
         let root = spawn_capture_root(&mut app, PauseMenu, Display::None);
         app.world_mut()
             .resource_mut::<ResolvedInputFrame>()
             .replace(
                 super::super::InputModifiers::default(),
-                vec![InputAction::TogglePause],
+                vec![InputAction::ToggleSystemMenu],
                 None,
                 false,
             );

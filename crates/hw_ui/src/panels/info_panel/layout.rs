@@ -1,33 +1,18 @@
 use crate::components::{
-    InfoPanel, InfoPanelNodes, MenuAction, MenuButton, SoulRenameButton, SoulRenameFieldContainer,
-    StockpileAcceptanceRowNodes, UiInputBlocker, UiNodeRegistry, UiSlot,
+    InfoPanel, InfoPanelNodes, InfoPanelScrollArea, MenuAction, MenuButton, SoulRenameButton,
+    SoulRenameFieldContainer, StockpileAcceptanceRowNodes, UiInputBlocker, UiNodeRegistry, UiSlot,
 };
 use crate::setup::UiAssets;
 use crate::theme::UiTheme;
-use bevy::input::mouse::MouseScrollUnit;
 use bevy::prelude::*;
 use bevy::ui::{BackgroundGradient, ColorStop, LinearGradient, RelativeCursorPosition};
+use bevy::ui_widgets::{ControlOrientation, ScrollArea, Scrollbar, ScrollbarThumb};
 use hw_logistics::{STOCKPILE_ACCEPTANCE_RESOURCES, StockpilePolicyPatch};
 
 use crate::intents::StockpilePolicyEditTarget;
 use crate::power::PowerPriorityValue;
 
 const INFO_PANEL_MAX_HEIGHT_VH: f32 = 58.0;
-
-fn scroll_info_panel(
-    on_scroll: On<Pointer<Scroll>>,
-    mut query: Query<(&mut ScrollPosition, &ComputedNode), With<InfoPanel>>,
-) {
-    let Ok((mut scroll_position, node)) = query.get_mut(on_scroll.entity) else {
-        return;
-    };
-    let delta_y = match on_scroll.unit {
-        MouseScrollUnit::Line => on_scroll.y * 20.0,
-        MouseScrollUnit::Pixel => on_scroll.y,
-    };
-    let max_offset = (node.content_size.y - node.size.y).max(0.0) * node.inverse_scale_factor;
-    scroll_position.y = (scroll_position.y - delta_y).clamp(0.0, max_offset);
-}
 
 fn spawn_info_section_divider(
     parent: &mut ChildSpawnerCommands,
@@ -176,6 +161,7 @@ fn spawn_soul_spa_cancel_button(
             },
             BackgroundColor(theme.colors.button_default),
             MenuButton(MenuAction::CancelSoulSpaConstruction {
+                source_task: None,
                 target: Entity::PLACEHOLDER,
             }),
         ))
@@ -304,11 +290,10 @@ pub fn spawn_info_panel_ui(
                 padding: UiRect::all(Val::Px(theme.spacing.panel_padding)),
                 border: UiRect::all(Val::Px(theme.sizes.panel_border_width)),
                 border_radius: BorderRadius::all(Val::Px(theme.sizes.panel_corner_radius)),
-                overflow: Overflow::scroll_y(),
+                min_height: Val::Px(0.0),
                 display: Display::None,
                 ..default()
             },
-            ScrollPosition::default(),
             BackgroundGradient::from(LinearGradient {
                 angle: 0.0,
                 stops: vec![
@@ -323,7 +308,6 @@ pub fn spawn_info_panel_ui(
             InfoPanel,
             UiSlot::InfoPanelRoot,
         ))
-        .observe(scroll_info_panel)
         .id();
     commands.entity(parent_entity).add_child(root);
     ui_nodes.set_slot(UiSlot::InfoPanelRoot, root);
@@ -336,6 +320,8 @@ pub fn spawn_info_panel_ui(
                 flex_direction: FlexDirection::Row,
                 align_items: AlignItems::Center,
                 justify_content: JustifyContent::SpaceBetween,
+                flex_shrink: 0.0,
+                flex_wrap: FlexWrap::Wrap,
                 margin: UiRect::bottom(Val::Px(5.0)),
                 ..default()
             })
@@ -429,7 +415,7 @@ pub fn spawn_info_panel_ui(
                     ))
                     .with_children(|btn| {
                         btn.spawn((
-                            Text::new("Unpin"),
+                            Text::new("選択を表示"),
                             TextFont {
                                 font: game_assets.font_ui().clone().into(),
                                 font_size: crate::theme::font_size_rem(
@@ -446,505 +432,630 @@ pub fn spawn_info_panel_ui(
                 info_panel_nodes.common.unpin_button = Some(unpin_button);
             });
 
-        let rename_field_container = parent
+        parent
             .spawn((
+                Button,
+                crate::help::HelpInspectionLink,
+                MenuButton(MenuAction::OpenHelp { opener: None }),
                 Node {
-                    display: Display::None,
-                    width: Val::Percent(100.0),
-                    margin: UiRect::bottom(Val::Px(5.0)),
+                    min_height: Val::Px(32.0),
+                    flex_shrink: 0.0,
+                    align_items: AlignItems::Center,
+                    justify_content: JustifyContent::Center,
                     ..default()
                 },
-                SoulRenameFieldContainer,
+                BackgroundColor(theme.colors.button_default),
             ))
-            .id();
-        info_panel_nodes.common.rename_field_container = Some(rename_field_container);
+            .with_children(|button| {
+                button.spawn((
+                    Text::new("詳しく（ヘルプ）"),
+                    TextFont {
+                        font: game_assets.font_ui().clone().into(),
+                        font_size: FontSize::Px(theme.typography.font_size_sm),
+                        ..default()
+                    },
+                    TextColor(theme.colors.text_primary_semantic),
+                ));
+            });
 
-        let stats = parent
-            .spawn((
-                Node {
-                    flex_direction: FlexDirection::Column,
-                    ..default()
-                },
-                UiSlot::InfoPanelStatsGroup,
-            ))
-            .with_children(|col| {
-                spawn_info_section_divider(col, game_assets, theme, "Status");
-
-                let motivation = col
-                    .spawn((
-                        Text::new(""),
-                        TextFont {
-                            font: game_assets.font_ui().clone().into(),
-                            font_size: crate::theme::font_size_rem(
-                                theme.typography.font_size_small,
-                            ),
-                            ..default()
-                        },
-                        UiSlot::StatMotivation,
-                    ))
-                    .id();
-                ui_nodes.set_slot(UiSlot::StatMotivation, motivation);
-                info_panel_nodes.soul.motivation = Some(motivation);
-
-                col.spawn(Node {
-                    flex_direction: FlexDirection::Row,
-                    align_items: AlignItems::Center,
-                    ..default()
-                })
-                .with_children(|row| {
-                    row.spawn((
-                        ImageNode::new(game_assets.icon_stress().clone()),
-                        Node {
-                            width: Val::Px(14.0),
-                            height: Val::Px(14.0),
-                            margin: UiRect::right(Val::Px(4.0)),
-                            ..default()
-                        },
-                    ));
-                    let stress = row
-                        .spawn((
-                            Text::new(""),
-                            TextFont {
-                                font: game_assets.font_ui().clone().into(),
-                                font_size: crate::theme::font_size_rem(
-                                    theme.typography.font_size_small,
-                                ),
-                                ..default()
-                            },
-                            UiSlot::StatStress,
-                        ))
-                        .id();
-                    ui_nodes.set_slot(UiSlot::StatStress, stress);
-                    info_panel_nodes.soul.stress = Some(stress);
-                });
-
-                col.spawn(Node {
-                    flex_direction: FlexDirection::Row,
-                    align_items: AlignItems::Center,
-                    ..default()
-                })
-                .with_children(|row| {
-                    row.spawn((
-                        ImageNode::new(game_assets.icon_fatigue().clone()),
-                        Node {
-                            width: Val::Px(14.0),
-                            height: Val::Px(14.0),
-                            margin: UiRect::right(Val::Px(4.0)),
-                            ..default()
-                        },
-                    ));
-                    let fatigue = row
-                        .spawn((
-                            Text::new(""),
-                            TextFont {
-                                font: game_assets.font_ui().clone().into(),
-                                font_size: crate::theme::font_size_rem(
-                                    theme.typography.font_size_small,
-                                ),
-                                ..default()
-                            },
-                            UiSlot::StatFatigue,
-                        ))
-                        .id();
-                    ui_nodes.set_slot(UiSlot::StatFatigue, fatigue);
-                    info_panel_nodes.soul.fatigue = Some(fatigue);
-                });
-
-                let dream = col
-                    .spawn((
-                        Text::new(""),
-                        TextFont {
-                            font: game_assets.font_ui().clone().into(),
-                            font_size: crate::theme::font_size_rem(
-                                theme.typography.font_size_small,
-                            ),
-                            ..default()
-                        },
-                        UiSlot::StatDream,
-                    ))
-                    .id();
-                ui_nodes.set_slot(UiSlot::StatDream, dream);
-                info_panel_nodes.soul.dream = Some(dream);
-
-                spawn_info_section_divider(col, game_assets, theme, "Current Task");
-
-                col.spawn(Node {
-                    flex_direction: FlexDirection::Row,
-                    align_items: AlignItems::Center,
-                    margin: UiRect::top(Val::Px(5.0)),
-                    ..default()
-                })
-                .with_children(|row| {
-                    let task = row
-                        .spawn((
-                            Text::new(""),
-                            TextFont {
-                                font: game_assets.font_ui().clone().into(),
-                                font_size: crate::theme::font_size_rem(
-                                    theme.typography.font_size_small,
-                                ),
-                                ..default()
-                            },
-                            UiSlot::TaskText,
-                        ))
-                        .id();
-                    ui_nodes.set_slot(UiSlot::TaskText, task);
-                    info_panel_nodes.soul.task = Some(task);
-                });
-
-                spawn_info_section_divider(col, game_assets, theme, "Inventory");
-
-                let inventory = col
-                    .spawn((
-                        Text::new(""),
-                        TextFont {
-                            font: game_assets.font_ui().clone().into(),
-                            font_size: crate::theme::font_size_rem(
-                                theme.typography.font_size_small,
-                            ),
-                            ..default()
-                        },
-                        UiSlot::InventoryText,
-                    ))
-                    .id();
-                ui_nodes.set_slot(UiSlot::InventoryText, inventory);
-                info_panel_nodes.soul.inventory = Some(inventory);
-            })
-            .id();
-        ui_nodes.set_slot(UiSlot::InfoPanelStatsGroup, stats);
-        info_panel_nodes.common.stats_group = Some(stats);
-
-        let stockpile_group = parent
+        parent
             .spawn(Node {
-                display: Display::None,
-                width: Val::Percent(100.0),
-                flex_direction: FlexDirection::Column,
-                row_gap: Val::Px(5.0),
+                flex_grow: 1.0,
+                min_height: Val::Px(0.0),
                 ..default()
             })
-            .with_children(|column| {
-                spawn_info_section_divider(column, game_assets, theme, "Stockpile Policy");
+            .with_children(|row| {
+                let scroll = row
+                    .spawn((
+                        Node {
+                            flex_grow: 1.0,
+                            min_width: Val::Px(0.0),
+                            min_height: Val::Px(0.0),
+                            flex_direction: FlexDirection::Column,
+                            overflow: Overflow::scroll_y(),
+                            ..default()
+                        },
+                        ScrollArea,
+                        InfoPanelScrollArea,
+                        UiInputBlocker,
+                        RelativeCursorPosition::default(),
+                        Name::new("Info Panel Scroll Area"),
+                    ))
+                    .with_children(|parent| {
+                        let rename_field_container = parent
+                            .spawn((
+                                Node {
+                                    display: Display::None,
+                                    width: Val::Percent(100.0),
+                                    margin: UiRect::bottom(Val::Px(5.0)),
+                                    ..default()
+                                },
+                                SoulRenameFieldContainer,
+                            ))
+                            .id();
+                        info_panel_nodes.common.rename_field_container =
+                            Some(rename_field_container);
 
-                info_panel_nodes.stockpile.stockpile_state = Some(
-                    column
-                        .spawn((
-                            Text::new(""),
-                            TextFont {
-                                font: game_assets.font_ui().clone().into(),
-                                font_size: crate::theme::font_size_rem(
-                                    theme.typography.font_size_small,
-                                ),
-                                weight: FontWeight::SEMIBOLD,
+                        let stats = parent
+                            .spawn((
+                                Node {
+                                    flex_direction: FlexDirection::Column,
+                                    ..default()
+                                },
+                                UiSlot::InfoPanelStatsGroup,
+                            ))
+                            .with_children(|col| {
+                                spawn_info_section_divider(col, game_assets, theme, "Status");
+
+                                let motivation = col
+                                    .spawn((
+                                        Text::new(""),
+                                        TextFont {
+                                            font: game_assets.font_ui().clone().into(),
+                                            font_size: crate::theme::font_size_rem(
+                                                theme.typography.font_size_small,
+                                            ),
+                                            ..default()
+                                        },
+                                        UiSlot::StatMotivation,
+                                    ))
+                                    .id();
+                                ui_nodes.set_slot(UiSlot::StatMotivation, motivation);
+                                info_panel_nodes.soul.motivation = Some(motivation);
+
+                                col.spawn(Node {
+                                    flex_direction: FlexDirection::Row,
+                                    align_items: AlignItems::Center,
+                                    ..default()
+                                })
+                                .with_children(|row| {
+                                    row.spawn((
+                                        ImageNode::new(game_assets.icon_stress().clone()),
+                                        Node {
+                                            width: Val::Px(14.0),
+                                            height: Val::Px(14.0),
+                                            margin: UiRect::right(Val::Px(4.0)),
+                                            ..default()
+                                        },
+                                    ));
+                                    let stress = row
+                                        .spawn((
+                                            Text::new(""),
+                                            TextFont {
+                                                font: game_assets.font_ui().clone().into(),
+                                                font_size: crate::theme::font_size_rem(
+                                                    theme.typography.font_size_small,
+                                                ),
+                                                ..default()
+                                            },
+                                            UiSlot::StatStress,
+                                        ))
+                                        .id();
+                                    ui_nodes.set_slot(UiSlot::StatStress, stress);
+                                    info_panel_nodes.soul.stress = Some(stress);
+                                });
+
+                                col.spawn(Node {
+                                    flex_direction: FlexDirection::Row,
+                                    align_items: AlignItems::Center,
+                                    ..default()
+                                })
+                                .with_children(|row| {
+                                    row.spawn((
+                                        ImageNode::new(game_assets.icon_fatigue().clone()),
+                                        Node {
+                                            width: Val::Px(14.0),
+                                            height: Val::Px(14.0),
+                                            margin: UiRect::right(Val::Px(4.0)),
+                                            ..default()
+                                        },
+                                    ));
+                                    let fatigue = row
+                                        .spawn((
+                                            Text::new(""),
+                                            TextFont {
+                                                font: game_assets.font_ui().clone().into(),
+                                                font_size: crate::theme::font_size_rem(
+                                                    theme.typography.font_size_small,
+                                                ),
+                                                ..default()
+                                            },
+                                            UiSlot::StatFatigue,
+                                        ))
+                                        .id();
+                                    ui_nodes.set_slot(UiSlot::StatFatigue, fatigue);
+                                    info_panel_nodes.soul.fatigue = Some(fatigue);
+                                });
+
+                                let dream = col
+                                    .spawn((
+                                        Text::new(""),
+                                        TextFont {
+                                            font: game_assets.font_ui().clone().into(),
+                                            font_size: crate::theme::font_size_rem(
+                                                theme.typography.font_size_small,
+                                            ),
+                                            ..default()
+                                        },
+                                        UiSlot::StatDream,
+                                    ))
+                                    .id();
+                                ui_nodes.set_slot(UiSlot::StatDream, dream);
+                                info_panel_nodes.soul.dream = Some(dream);
+
+                                spawn_info_section_divider(col, game_assets, theme, "Current Task");
+
+                                col.spawn(Node {
+                                    flex_direction: FlexDirection::Row,
+                                    align_items: AlignItems::Center,
+                                    margin: UiRect::top(Val::Px(5.0)),
+                                    ..default()
+                                })
+                                .with_children(|row| {
+                                    let task = row
+                                        .spawn((
+                                            Text::new(""),
+                                            TextFont {
+                                                font: game_assets.font_ui().clone().into(),
+                                                font_size: crate::theme::font_size_rem(
+                                                    theme.typography.font_size_small,
+                                                ),
+                                                ..default()
+                                            },
+                                            UiSlot::TaskText,
+                                        ))
+                                        .id();
+                                    ui_nodes.set_slot(UiSlot::TaskText, task);
+                                    info_panel_nodes.soul.task = Some(task);
+                                });
+
+                                spawn_info_section_divider(col, game_assets, theme, "Inventory");
+
+                                let inventory = col
+                                    .spawn((
+                                        Text::new(""),
+                                        TextFont {
+                                            font: game_assets.font_ui().clone().into(),
+                                            font_size: crate::theme::font_size_rem(
+                                                theme.typography.font_size_small,
+                                            ),
+                                            ..default()
+                                        },
+                                        UiSlot::InventoryText,
+                                    ))
+                                    .id();
+                                ui_nodes.set_slot(UiSlot::InventoryText, inventory);
+                                info_panel_nodes.soul.inventory = Some(inventory);
+                            })
+                            .id();
+                        ui_nodes.set_slot(UiSlot::InfoPanelStatsGroup, stats);
+                        info_panel_nodes.common.stats_group = Some(stats);
+
+                        let stockpile_group = parent
+                            .spawn(Node {
+                                display: Display::None,
+                                width: Val::Percent(100.0),
+                                flex_direction: FlexDirection::Column,
+                                row_gap: Val::Px(5.0),
                                 ..default()
-                            },
-                            TextColor(theme.colors.text_primary_semantic),
-                        ))
-                        .id(),
-                );
-                info_panel_nodes.stockpile.stockpile_current = Some(
-                    column
-                        .spawn((
-                            Text::new(""),
-                            TextFont {
-                                font: game_assets.font_ui().clone().into(),
-                                font_size: crate::theme::font_size_rem(
-                                    theme.typography.font_size_small,
-                                ),
-                                ..default()
-                            },
-                            TextColor(theme.colors.text_primary_semantic),
-                        ))
-                        .id(),
-                );
-
-                spawn_info_section_divider(column, game_assets, theme, "Accepted Resources");
-
-                info_panel_nodes.stockpile.stockpile_acceptance_summary = Some(
-                    column
-                        .spawn((
-                            Text::new(""),
-                            TextFont {
-                                font: game_assets.font_ui().clone().into(),
-                                font_size: crate::theme::font_size_rem(
-                                    theme.typography.font_size_xs,
-                                ),
-                                weight: FontWeight::SEMIBOLD,
-                                ..default()
-                            },
-                            TextColor(theme.colors.text_secondary_semantic),
-                        ))
-                        .id(),
-                );
-
-                column
-                    .spawn(Node {
-                        width: Val::Percent(100.0),
-                        flex_direction: FlexDirection::Row,
-                        column_gap: Val::Px(5.0),
-                        ..default()
-                    })
-                    .with_children(|row| {
-                        let (all_button, _) = spawn_stockpile_editor_button(
-                            row,
-                            game_assets,
-                            theme,
-                            Val::Percent(50.0),
-                            "Allow All",
-                        );
-                        info_panel_nodes.stockpile.stockpile_acceptance_all_button =
-                            Some(all_button);
-
-                        let (none_button, _) = spawn_stockpile_editor_button(
-                            row,
-                            game_assets,
-                            theme,
-                            Val::Percent(50.0),
-                            "Clear All",
-                        );
-                        info_panel_nodes.stockpile.stockpile_acceptance_none_button =
-                            Some(none_button);
-                    });
-
-                column
-                    .spawn(Node {
-                        width: Val::Percent(100.0),
-                        flex_direction: FlexDirection::Row,
-                        flex_wrap: FlexWrap::Wrap,
-                        row_gap: Val::Px(4.0),
-                        column_gap: Val::Px(5.0),
-                        ..default()
-                    })
-                    .with_children(|checklist| {
-                        for resource_type in STOCKPILE_ACCEPTANCE_RESOURCES {
-                            info_panel_nodes.stockpile.stockpile_acceptance_rows.push(
-                                spawn_stockpile_acceptance_row(
-                                    checklist,
+                            })
+                            .with_children(|column| {
+                                spawn_info_section_divider(
+                                    column,
                                     game_assets,
                                     theme,
-                                    resource_type,
-                                ),
-                            );
-                        }
-                    });
+                                    "Stockpile Policy",
+                                );
 
-                column
-                    .spawn(Node {
-                        width: Val::Percent(100.0),
-                        flex_direction: FlexDirection::Row,
-                        align_items: AlignItems::Center,
-                        column_gap: Val::Px(5.0),
-                        ..default()
-                    })
-                    .with_children(|row| {
-                        let (decrease_button, _) = spawn_stockpile_editor_button(
-                            row,
-                            game_assets,
-                            theme,
-                            Val::Px(30.0),
-                            "−",
-                        );
-                        info_panel_nodes.stockpile.stockpile_target_decrease_button =
-                            Some(decrease_button);
+                                info_panel_nodes.stockpile.stockpile_state = Some(
+                                    column
+                                        .spawn((
+                                            Text::new(""),
+                                            TextFont {
+                                                font: game_assets.font_ui().clone().into(),
+                                                font_size: crate::theme::font_size_rem(
+                                                    theme.typography.font_size_small,
+                                                ),
+                                                weight: FontWeight::SEMIBOLD,
+                                                ..default()
+                                            },
+                                            TextColor(theme.colors.text_primary_semantic),
+                                        ))
+                                        .id(),
+                                );
+                                info_panel_nodes.stockpile.stockpile_current = Some(
+                                    column
+                                        .spawn((
+                                            Text::new(""),
+                                            TextFont {
+                                                font: game_assets.font_ui().clone().into(),
+                                                font_size: crate::theme::font_size_rem(
+                                                    theme.typography.font_size_small,
+                                                ),
+                                                ..default()
+                                            },
+                                            TextColor(theme.colors.text_primary_semantic),
+                                        ))
+                                        .id(),
+                                );
 
-                        info_panel_nodes.stockpile.stockpile_target_text = Some(
-                            row.spawn((
-                                Text::new("Target"),
+                                spawn_info_section_divider(
+                                    column,
+                                    game_assets,
+                                    theme,
+                                    "Accepted Resources",
+                                );
+
+                                info_panel_nodes.stockpile.stockpile_acceptance_summary = Some(
+                                    column
+                                        .spawn((
+                                            Text::new(""),
+                                            TextFont {
+                                                font: game_assets.font_ui().clone().into(),
+                                                font_size: crate::theme::font_size_rem(
+                                                    theme.typography.font_size_xs,
+                                                ),
+                                                weight: FontWeight::SEMIBOLD,
+                                                ..default()
+                                            },
+                                            TextColor(theme.colors.text_secondary_semantic),
+                                        ))
+                                        .id(),
+                                );
+
+                                column
+                                    .spawn(Node {
+                                        width: Val::Percent(100.0),
+                                        flex_direction: FlexDirection::Row,
+                                        column_gap: Val::Px(5.0),
+                                        ..default()
+                                    })
+                                    .with_children(|row| {
+                                        let (all_button, _) = spawn_stockpile_editor_button(
+                                            row,
+                                            game_assets,
+                                            theme,
+                                            Val::Percent(50.0),
+                                            "Allow All",
+                                        );
+                                        info_panel_nodes
+                                            .stockpile
+                                            .stockpile_acceptance_all_button = Some(all_button);
+
+                                        let (none_button, _) = spawn_stockpile_editor_button(
+                                            row,
+                                            game_assets,
+                                            theme,
+                                            Val::Percent(50.0),
+                                            "Clear All",
+                                        );
+                                        info_panel_nodes
+                                            .stockpile
+                                            .stockpile_acceptance_none_button = Some(none_button);
+                                    });
+
+                                column
+                                    .spawn(Node {
+                                        width: Val::Percent(100.0),
+                                        flex_direction: FlexDirection::Row,
+                                        flex_wrap: FlexWrap::Wrap,
+                                        row_gap: Val::Px(4.0),
+                                        column_gap: Val::Px(5.0),
+                                        ..default()
+                                    })
+                                    .with_children(|checklist| {
+                                        for resource_type in STOCKPILE_ACCEPTANCE_RESOURCES {
+                                            info_panel_nodes
+                                                .stockpile
+                                                .stockpile_acceptance_rows
+                                                .push(spawn_stockpile_acceptance_row(
+                                                    checklist,
+                                                    game_assets,
+                                                    theme,
+                                                    resource_type,
+                                                ));
+                                        }
+                                    });
+
+                                column
+                                    .spawn(Node {
+                                        width: Val::Percent(100.0),
+                                        flex_direction: FlexDirection::Row,
+                                        align_items: AlignItems::Center,
+                                        column_gap: Val::Px(5.0),
+                                        ..default()
+                                    })
+                                    .with_children(|row| {
+                                        let (decrease_button, _) = spawn_stockpile_editor_button(
+                                            row,
+                                            game_assets,
+                                            theme,
+                                            Val::Px(30.0),
+                                            "−",
+                                        );
+                                        info_panel_nodes
+                                            .stockpile
+                                            .stockpile_target_decrease_button =
+                                            Some(decrease_button);
+
+                                        info_panel_nodes.stockpile.stockpile_target_text = Some(
+                                            row.spawn((
+                                                Text::new("Target"),
+                                                TextFont {
+                                                    font: game_assets.font_ui().clone().into(),
+                                                    font_size: crate::theme::font_size_rem(
+                                                        theme.typography.font_size_small,
+                                                    ),
+                                                    weight: FontWeight::SEMIBOLD,
+                                                    ..default()
+                                                },
+                                                TextColor(theme.colors.text_primary_semantic),
+                                                Node {
+                                                    flex_grow: 1.0,
+                                                    justify_content: JustifyContent::Center,
+                                                    ..default()
+                                                },
+                                            ))
+                                            .id(),
+                                        );
+
+                                        let (increase_button, _) = spawn_stockpile_editor_button(
+                                            row,
+                                            game_assets,
+                                            theme,
+                                            Val::Px(30.0),
+                                            "+",
+                                        );
+                                        info_panel_nodes
+                                            .stockpile
+                                            .stockpile_target_increase_button =
+                                            Some(increase_button);
+                                    });
+
+                                let (priority_button, priority_text) =
+                                    spawn_stockpile_editor_button(
+                                        column,
+                                        game_assets,
+                                        theme,
+                                        Val::Percent(100.0),
+                                        "Inbound Priority",
+                                    );
+                                info_panel_nodes.stockpile.stockpile_priority_button =
+                                    Some(priority_button);
+                                info_panel_nodes.stockpile.stockpile_priority_text =
+                                    Some(priority_text);
+
+                                let (export_button, export_text) = spawn_stockpile_editor_button(
+                                    column,
+                                    game_assets,
+                                    theme,
+                                    Val::Percent(100.0),
+                                    "Export",
+                                );
+                                info_panel_nodes.stockpile.stockpile_export_button =
+                                    Some(export_button);
+                                info_panel_nodes.stockpile.stockpile_export_text =
+                                    Some(export_text);
+
+                                spawn_info_section_divider(
+                                    column,
+                                    game_assets,
+                                    theme,
+                                    "Batch Edit",
+                                );
+                                let (area_button, _) = spawn_stockpile_editor_button(
+                                    column,
+                                    game_assets,
+                                    theme,
+                                    Val::Percent(100.0),
+                                    "Apply Policy to Area",
+                                );
+                                info_panel_nodes.stockpile.stockpile_area_button =
+                                    Some(area_button);
+                            })
+                            .id();
+                        info_panel_nodes.stockpile.stockpile_group = Some(stockpile_group);
+
+                        let soul_spa_group = parent
+                            .spawn(Node {
+                                display: Display::None,
+                                width: Val::Percent(100.0),
+                                flex_direction: FlexDirection::Column,
+                                row_gap: Val::Px(5.0),
+                                ..default()
+                            })
+                            .with_children(|column| {
+                                spawn_info_section_divider(
+                                    column,
+                                    game_assets,
+                                    theme,
+                                    "Soul Energy",
+                                );
+                                info_panel_nodes.soul_spa.soul_spa_status = Some(
+                                    column
+                                        .spawn((
+                                            Text::new(""),
+                                            TextFont {
+                                                font: game_assets.font_ui().clone().into(),
+                                                font_size: crate::theme::font_size_rem(
+                                                    theme.typography.font_size_small,
+                                                ),
+                                                weight: FontWeight::SEMIBOLD,
+                                                ..default()
+                                            },
+                                            TextColor(theme.colors.text_primary_semantic),
+                                        ))
+                                        .id(),
+                                );
+                                info_panel_nodes.soul_spa.soul_spa_output = Some(
+                                    column
+                                        .spawn((
+                                            Text::new(""),
+                                            TextFont {
+                                                font: game_assets.font_ui().clone().into(),
+                                                font_size: crate::theme::font_size_rem(
+                                                    theme.typography.font_size_small,
+                                                ),
+                                                ..default()
+                                            },
+                                            TextColor(theme.colors.text_primary_semantic),
+                                        ))
+                                        .id(),
+                                );
+
+                                info_panel_nodes.soul_spa.soul_spa_controls = Some(
+                                    column
+                                        .spawn(Node {
+                                            width: Val::Percent(100.0),
+                                            flex_direction: FlexDirection::Row,
+                                            align_items: AlignItems::Center,
+                                            column_gap: Val::Px(5.0),
+                                            ..default()
+                                        })
+                                        .with_children(|row| {
+                                            info_panel_nodes
+                                                .soul_spa
+                                                .soul_spa_slots_decrease_button =
+                                                Some(spawn_soul_spa_slot_button(
+                                                    row,
+                                                    game_assets,
+                                                    theme,
+                                                    "−",
+                                                ));
+                                            info_panel_nodes.soul_spa.soul_spa_slots_text = Some(
+                                                row.spawn((
+                                                    Text::new("Active slots"),
+                                                    TextFont {
+                                                        font: game_assets.font_ui().clone().into(),
+                                                        font_size: crate::theme::font_size_rem(
+                                                            theme.typography.font_size_small,
+                                                        ),
+                                                        weight: FontWeight::SEMIBOLD,
+                                                        ..default()
+                                                    },
+                                                    TextColor(theme.colors.text_primary_semantic),
+                                                    Node {
+                                                        flex_grow: 1.0,
+                                                        justify_content: JustifyContent::Center,
+                                                        ..default()
+                                                    },
+                                                ))
+                                                .id(),
+                                            );
+                                            info_panel_nodes
+                                                .soul_spa
+                                                .soul_spa_slots_increase_button =
+                                                Some(spawn_soul_spa_slot_button(
+                                                    row,
+                                                    game_assets,
+                                                    theme,
+                                                    "+",
+                                                ));
+                                        })
+                                        .id(),
+                                );
+                                info_panel_nodes.soul_spa.soul_spa_cancel_button =
+                                    Some(spawn_soul_spa_cancel_button(column, game_assets, theme));
+                            })
+                            .id();
+                        info_panel_nodes.soul_spa.soul_spa_group = Some(soul_spa_group);
+
+                        let power_group = parent
+                            .spawn(Node {
+                                display: Display::None,
+                                width: Val::Percent(100.0),
+                                flex_direction: FlexDirection::Column,
+                                row_gap: Val::Px(5.0),
+                                ..default()
+                            })
+                            .with_children(|column| {
+                                spawn_info_section_divider(
+                                    column,
+                                    game_assets,
+                                    theme,
+                                    "Power Grid",
+                                );
+                                let text_bundle = || {
+                                    (
+                                        TextFont {
+                                            font: game_assets.font_ui().clone().into(),
+                                            font_size: crate::theme::font_size_rem(
+                                                theme.typography.font_size_small,
+                                            ),
+                                            ..default()
+                                        },
+                                        TextColor(theme.colors.text_primary_semantic),
+                                    )
+                                };
+                                info_panel_nodes.power.power_connection =
+                                    Some(column.spawn((Text::new(""), text_bundle())).id());
+                                info_panel_nodes.power.power_flow =
+                                    Some(column.spawn((Text::new(""), text_bundle())).id());
+                                info_panel_nodes.power.power_state =
+                                    Some(column.spawn((Text::new(""), text_bundle())).id());
+                                let (button, text) =
+                                    spawn_power_priority_button(column, game_assets, theme);
+                                info_panel_nodes.power.power_priority_button = Some(button);
+                                info_panel_nodes.power.power_priority_text = Some(text);
+                            })
+                            .id();
+                        info_panel_nodes.power.power_group = Some(power_group);
+
+                        let common = parent
+                            .spawn((
+                                Text::new(""),
                                 TextFont {
                                     font: game_assets.font_ui().clone().into(),
                                     font_size: crate::theme::font_size_rem(
-                                        theme.typography.font_size_small,
+                                        theme.typography.font_size_item,
                                     ),
-                                    weight: FontWeight::SEMIBOLD,
                                     ..default()
                                 },
-                                TextColor(theme.colors.text_primary_semantic),
-                                Node {
-                                    flex_grow: 1.0,
-                                    justify_content: JustifyContent::Center,
-                                    ..default()
-                                },
+                                TextColor(theme.colors.text_primary),
+                                UiSlot::CommonText,
                             ))
-                            .id(),
-                        );
-
-                        let (increase_button, _) = spawn_stockpile_editor_button(
-                            row,
-                            game_assets,
-                            theme,
-                            Val::Px(30.0),
-                            "+",
-                        );
-                        info_panel_nodes.stockpile.stockpile_target_increase_button =
-                            Some(increase_button);
-                    });
-
-                let (priority_button, priority_text) = spawn_stockpile_editor_button(
-                    column,
-                    game_assets,
-                    theme,
-                    Val::Percent(100.0),
-                    "Inbound Priority",
-                );
-                info_panel_nodes.stockpile.stockpile_priority_button = Some(priority_button);
-                info_panel_nodes.stockpile.stockpile_priority_text = Some(priority_text);
-
-                let (export_button, export_text) = spawn_stockpile_editor_button(
-                    column,
-                    game_assets,
-                    theme,
-                    Val::Percent(100.0),
-                    "Export",
-                );
-                info_panel_nodes.stockpile.stockpile_export_button = Some(export_button);
-                info_panel_nodes.stockpile.stockpile_export_text = Some(export_text);
-
-                spawn_info_section_divider(column, game_assets, theme, "Batch Edit");
-                let (area_button, _) = spawn_stockpile_editor_button(
-                    column,
-                    game_assets,
-                    theme,
-                    Val::Percent(100.0),
-                    "Apply Policy to Area",
-                );
-                info_panel_nodes.stockpile.stockpile_area_button = Some(area_button);
-            })
-            .id();
-        info_panel_nodes.stockpile.stockpile_group = Some(stockpile_group);
-
-        let soul_spa_group = parent
-            .spawn(Node {
-                display: Display::None,
-                width: Val::Percent(100.0),
-                flex_direction: FlexDirection::Column,
-                row_gap: Val::Px(5.0),
-                ..default()
-            })
-            .with_children(|column| {
-                spawn_info_section_divider(column, game_assets, theme, "Soul Energy");
-                info_panel_nodes.soul_spa.soul_spa_status = Some(
-                    column
-                        .spawn((
-                            Text::new(""),
-                            TextFont {
-                                font: game_assets.font_ui().clone().into(),
-                                font_size: crate::theme::font_size_rem(
-                                    theme.typography.font_size_small,
-                                ),
-                                weight: FontWeight::SEMIBOLD,
-                                ..default()
-                            },
-                            TextColor(theme.colors.text_primary_semantic),
-                        ))
-                        .id(),
-                );
-                info_panel_nodes.soul_spa.soul_spa_output = Some(
-                    column
-                        .spawn((
-                            Text::new(""),
-                            TextFont {
-                                font: game_assets.font_ui().clone().into(),
-                                font_size: crate::theme::font_size_rem(
-                                    theme.typography.font_size_small,
-                                ),
-                                ..default()
-                            },
-                            TextColor(theme.colors.text_primary_semantic),
-                        ))
-                        .id(),
-                );
-
-                info_panel_nodes.soul_spa.soul_spa_controls = Some(
-                    column
-                        .spawn(Node {
-                            width: Val::Percent(100.0),
-                            flex_direction: FlexDirection::Row,
-                            align_items: AlignItems::Center,
-                            column_gap: Val::Px(5.0),
-                            ..default()
-                        })
-                        .with_children(|row| {
-                            info_panel_nodes.soul_spa.soul_spa_slots_decrease_button =
-                                Some(spawn_soul_spa_slot_button(row, game_assets, theme, "−"));
-                            info_panel_nodes.soul_spa.soul_spa_slots_text = Some(
-                                row.spawn((
-                                    Text::new("Active slots"),
-                                    TextFont {
-                                        font: game_assets.font_ui().clone().into(),
-                                        font_size: crate::theme::font_size_rem(
-                                            theme.typography.font_size_small,
-                                        ),
-                                        weight: FontWeight::SEMIBOLD,
-                                        ..default()
-                                    },
-                                    TextColor(theme.colors.text_primary_semantic),
-                                    Node {
-                                        flex_grow: 1.0,
-                                        justify_content: JustifyContent::Center,
-                                        ..default()
-                                    },
-                                ))
-                                .id(),
-                            );
-                            info_panel_nodes.soul_spa.soul_spa_slots_increase_button =
-                                Some(spawn_soul_spa_slot_button(row, game_assets, theme, "+"));
-                        })
-                        .id(),
-                );
-                info_panel_nodes.soul_spa.soul_spa_cancel_button =
-                    Some(spawn_soul_spa_cancel_button(column, game_assets, theme));
-            })
-            .id();
-        info_panel_nodes.soul_spa.soul_spa_group = Some(soul_spa_group);
-
-        let power_group = parent
-            .spawn(Node {
-                display: Display::None,
-                width: Val::Percent(100.0),
-                flex_direction: FlexDirection::Column,
-                row_gap: Val::Px(5.0),
-                ..default()
-            })
-            .with_children(|column| {
-                spawn_info_section_divider(column, game_assets, theme, "Power Grid");
-                let text_bundle = || {
-                    (
-                        TextFont {
-                            font: game_assets.font_ui().clone().into(),
-                            font_size: crate::theme::font_size_rem(
-                                theme.typography.font_size_small,
-                            ),
-                            ..default()
+                            .id();
+                        ui_nodes.set_slot(UiSlot::CommonText, common);
+                        info_panel_nodes.common.summary = Some(common);
+                    })
+                    .id();
+                row.spawn((
+                    Node {
+                        width: Val::Px(6.0),
+                        ..default()
+                    },
+                    Scrollbar::new(scroll, ControlOrientation::Vertical, 20.0),
+                ))
+                .with_children(|bar| {
+                    bar.spawn((
+                        ScrollbarThumb {
+                            border_radius: BorderRadius::all(Val::Px(3.0)),
+                            border: UiRect::ZERO,
                         },
-                        TextColor(theme.colors.text_primary_semantic),
-                    )
-                };
-                info_panel_nodes.power.power_connection =
-                    Some(column.spawn((Text::new(""), text_bundle())).id());
-                info_panel_nodes.power.power_flow =
-                    Some(column.spawn((Text::new(""), text_bundle())).id());
-                info_panel_nodes.power.power_state =
-                    Some(column.spawn((Text::new(""), text_bundle())).id());
-                let (button, text) = spawn_power_priority_button(column, game_assets, theme);
-                info_panel_nodes.power.power_priority_button = Some(button);
-                info_panel_nodes.power.power_priority_text = Some(text);
-            })
-            .id();
-        info_panel_nodes.power.power_group = Some(power_group);
-
-        let common = parent
-            .spawn((
-                Text::new(""),
-                TextFont {
-                    font: game_assets.font_ui().clone().into(),
-                    font_size: crate::theme::font_size_rem(theme.typography.font_size_item),
-                    ..default()
-                },
-                TextColor(theme.colors.text_primary),
-                UiSlot::CommonText,
-            ))
-            .id();
-        ui_nodes.set_slot(UiSlot::CommonText, common);
-        info_panel_nodes.common.summary = Some(common);
+                        BackgroundColor(theme.colors.text_muted),
+                    ));
+                });
+            });
     });
 }
 
@@ -1079,8 +1190,13 @@ mod tests {
         let root_entity = app.world().entity(root);
         let root_node = root_entity.get::<Node>().unwrap();
         assert_eq!(root_node.max_height, Val::Vh(INFO_PANEL_MAX_HEIGHT_VH));
-        assert_eq!(root_node.overflow.y, OverflowAxis::Scroll);
-        assert!(root_entity.contains::<ScrollPosition>());
+        assert_eq!(root_node.overflow.y, OverflowAxis::Visible);
+        let mut bodies = app.world_mut().query_filtered::<
+            (&Node, &ScrollPosition),
+            With<crate::components::InfoPanelScrollArea>,
+        >();
+        let (body, _) = bodies.single(app.world()).unwrap();
+        assert_eq!(body.overflow.y, OverflowAxis::Scroll);
 
         let theme = app.world().resource::<UiTheme>();
         let viewport_height = 720.0;
@@ -1276,7 +1392,7 @@ mod tests {
         );
         assert!(matches!(
             app.world().get::<MenuButton>(cancel).unwrap().0,
-            MenuAction::CancelSoulSpaConstruction { target } if target == soul_spa
+            MenuAction::CancelSoulSpaConstruction { target, source_task: None } if target == soul_spa
         ));
     }
 

@@ -34,6 +34,15 @@ impl IntentModeCtx<'_, '_> {
 /// UI-owned mode and selection actions used by the generic intent handler.
 #[derive(SystemParam)]
 pub(crate) struct IntentActionCtx<'w, 's> {
+    pub(crate) q_active_commands: Query<
+        'w,
+        's,
+        (
+            &'static mut crate::entities::familiar::ActiveCommand,
+            Option<&'static TaskArea>,
+        ),
+        With<Familiar>,
+    >,
     architect_category: ResMut<'w, ArchitectCategoryState>,
     q_buildings: Query<'w, 's, &'static Building, Without<DeconstructionPending>>,
 }
@@ -55,10 +64,12 @@ impl IntentActionCtx<'_, '_> {
 }
 
 #[derive(SystemParam)]
-pub(crate) struct IntentSelectionCtx<'w> {
+pub(crate) struct IntentSelectionCtx<'w, 's> {
     pub(crate) selected_entity: ResMut<'w, SelectedEntity>,
     pub(crate) info_panel_pin: ResMut<'w, InfoPanelPinState>,
     pub(crate) resolved_frame: Res<'w, crate::input_actions::ResolvedInputFrame>,
+    pub(crate) camera: Query<'w, 's, &'static mut Transform, With<hw_ui::camera::MainCamera>>,
+    pub(crate) transforms: Query<'w, 's, &'static GlobalTransform>,
 }
 
 type FamiliarSettingsTargetQuery<'w, 's> = Query<
@@ -87,6 +98,8 @@ pub(crate) struct IntentUiQueries<'w, 's> {
     pub(crate) q_operation_scroll:
         Query<'w, 's, &'static mut ScrollPosition, With<hw_ui::components::OperationDialogScroll>>,
     pub(crate) input_focus: ResMut<'w, InputFocus>,
+    pub(crate) ui_input: Res<'w, hw_ui::components::UiInputState>,
+    pub(crate) system_menu: Option<ResMut<'w, hw_ui::interaction::pause_menu::SystemMenuState>>,
     pub(crate) save_load_state: ResMut<'w, SaveLoadState>,
     pub(crate) save_storage_root: Res<'w, SaveStorageRoot>,
     pub(crate) settings_storage_root: Res<'w, SettingsStorageRoot>,

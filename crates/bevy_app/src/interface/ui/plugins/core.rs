@@ -25,8 +25,47 @@ pub fn ui_core_plugin() -> UiCorePlugin {
 }
 
 fn register_ui_core_plugin_systems(app: &mut App) {
+    app.init_resource::<crate::interface::ui::work_guide::WorkGuide>();
+    crate::systems::save::register_load_reset_hook(
+        app,
+        "work-guide",
+        crate::interface::ui::work_guide::reset,
+    );
+    app.add_systems(
+        Update,
+        (
+            crate::interface::ui::work_guide::update,
+            crate::interface::ui::work_guide::present,
+        )
+            .chain()
+            .after(handle_ui_intent)
+            .in_set(GameSystemSet::Interface),
+    );
     configure_placement_feedback_sets(app);
     app.init_resource::<StockpilePolicyRangeEditState>();
+    app.init_resource::<crate::interface::selection::FloorPlacementPreview>();
+    app.add_systems(
+        PostUpdate,
+        hw_ui::interaction::common::ensure_button_hit_targets.before(bevy::ui::UiSystems::Layout),
+    );
+    app.add_systems(
+        PostUpdate,
+        hw_ui::interaction::pause_menu::show_paused_action_availability,
+    );
+    app.add_systems(
+        PostUpdate,
+        hw_ui::interaction::help::apply_help_entry_jump.after(bevy::ui::UiSystems::Layout),
+    );
+    app.add_systems(
+        Update,
+        (
+            crate::systems::command::area_selection::ui::update_area_edit_controls,
+            hw_ui::area_edit::panel::update_area_edit_panel,
+        )
+            .chain()
+            .after(crate::systems::command::task_area_edit_history_shortcuts_system)
+            .in_set(GameSystemSet::Interface),
+    );
     app.add_systems(
         Update,
         (
@@ -63,7 +102,8 @@ fn register_ui_core_plugin_systems(app: &mut App) {
             building_move_system.run_if(in_state(PlayMode::BuildingMove)),
             soul_spa_place_input_system.run_if(in_state(PlayMode::TaskDesignation)),
         )
-            .in_set(PlacementFeedbackSet::Commit),
+            .in_set(PlacementFeedbackSet::Commit)
+            .run_if(|time: Res<Time<Virtual>>| !time.is_paused()),
     )
     .add_systems(
         Update,
@@ -76,18 +116,21 @@ fn register_ui_core_plugin_systems(app: &mut App) {
             crate::interface::ui::panels::task_list::apply_task_action_intents_system
                 .in_set(crate::systems::ui_domain_commit::UiDomainCommitSet)
                 .before(NotificationSystemSet::Adapt),
-            handle_ui_intent,
+            handle_ui_intent.before(NotificationSystemSet::Reduce),
+            hw_ui::panels::construction_cancel::update_construction_cancel_panel,
             hw_ui::interaction::handle_help_navigation_system,
+            hw_ui::interaction::help::sync_help_search.after(bevy::text::EditableTextSystems),
             hw_logistics::apply_stockpile_policy_change_requests_system
                 .before(NotificationSystemSet::Adapt),
             crate::interface::ui::menu_visibility_system,
+            hw_ui::setup::fit_submenus_to_viewport,
             hw_ui::interaction::update_pause_menu_visibility_system,
             hw_ui::interaction::update_settings_panel_visibility,
             hw_ui::interaction::update_help_panel_visibility_system,
             hw_ui::interaction::update_help_topic_presentation_system,
             hw_ui::interaction::sync_settings_slider_thumbs_system,
             hw_ui::interaction::sync_settings_checkmarks_system,
-            crate::interface::ui::update_mode_text_system,
+            crate::interface::ui::update_mode_text_system.after(PlacementFeedbackSet::Produce),
             crate::interface::ui::update_area_edit_preview_ui_system,
         )
             .chain()

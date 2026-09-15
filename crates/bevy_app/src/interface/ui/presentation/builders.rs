@@ -95,7 +95,7 @@ impl EntityInspectionQuery<'_, '_> {
         entity: Entity,
         model: &mut InspectionAccumulator,
     ) -> bool {
-        let Ok((familiar, op)) = self.q_familiars.get(entity) else {
+        let Ok((familiar, op, policy)) = self.q_familiars.get(entity) else {
             return false;
         };
 
@@ -111,6 +111,22 @@ impl EntityInspectionQuery<'_, '_> {
             "0% (Recruit Off)".to_string()
         };
         model.push_common(format!("Fatigue Threshold: {threshold}"));
+        if let Some(policy) = policy {
+            let disabled = hw_core::jobs::WorkType::ALL
+                .into_iter()
+                .filter(|work| !policy.rule_for(*work).allowed)
+                .map(|work| hw_ui::panels::task_list::work_type_label(&work))
+                .collect::<Vec<_>>();
+            model.push_common(format!(
+                "新規割当を停止中: {}",
+                if disabled.is_empty() {
+                    "なし".to_owned()
+                } else {
+                    disabled.join(" / ")
+                }
+            ));
+            model.push_common("方針変更: 対象の使い魔を右クリック → Open Operation");
+        }
         model.push_tooltip(format!("Familiar: {}", familiar.name));
         true
     }
@@ -264,6 +280,22 @@ impl EntityInspectionQuery<'_, '_> {
         }
         model.push_tooltip(building_info.clone());
 
+        if let Ok(door) = self.q_doors.get(entity) {
+            let state = match door.state {
+                hw_jobs::DoorState::Open => "開いている（通行可）",
+                hw_jobs::DoorState::Closed => "閉じている（通行時に開く）",
+                hw_jobs::DoorState::Locked => "施錠中（通行不可）",
+            };
+            let action = if door.state == hw_jobs::DoorState::Locked {
+                "解錠"
+            } else {
+                "施錠"
+            };
+            let line = format!("扉: {state}\n右クリック → {action}");
+            model.push_common(line.clone());
+            model.push_tooltip(line);
+        }
+
         if building.kind == crate::systems::jobs::BuildingType::Wall && building.is_provisional {
             let wall_status = provisional_wall_opt
                 .map(|provisional| {
@@ -322,7 +354,7 @@ impl EntityInspectionQuery<'_, '_> {
         model.push_tooltip(task_line.clone());
 
         if let Some(issued_by) = issued_by_opt
-            && let Ok((familiar, _)) = self.q_familiars.get(issued_by.0)
+            && let Ok((familiar, _, _)) = self.q_familiars.get(issued_by.0)
         {
             let line = format!("Issued by: {}", familiar.name);
             model.push_tooltip(line.clone());

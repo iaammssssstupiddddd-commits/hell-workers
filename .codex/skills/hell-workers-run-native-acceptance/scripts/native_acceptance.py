@@ -98,6 +98,9 @@ NATIVE_HARNESS_FILES = (
     ".codex/skills/hell-workers-run-native-acceptance/scripts/door_behavior_acceptance.py",
     ".codex/skills/hell-workers-run-native-acceptance/scripts/door_density_acceptance.py",
     ".codex/skills/hell-workers-run-native-acceptance/scripts/wall_door_joint_acceptance.py",
+    ".codex/skills/hell-workers-run-native-acceptance/scripts/ui_usability_acceptance.py",
+    "scripts/native_ui_input.py",
+    "scripts/native_ui_portal.py",
     ".codex/skills/hell-workers-run-native-acceptance/scripts/p02_presentation_acceptance.py",
     ".codex/skills/hell-workers-run-native-acceptance/scripts/wall_art_acceptance.py",
     ".codex/skills/hell-workers-run-native-acceptance/scripts/wall_color_acceptance.py",
@@ -2363,6 +2366,19 @@ def x11_client_windows_for_process_tree(root_pid: int) -> list[tuple[str, int]]:
     return owned
 
 
+def capture_client_png(window_id: str, destination: Path, *, import_cmd: str) -> bool:
+    """Raw client capture; callers must resolve PID ownership before calling.
+
+    Keep per-screen validators separate: UI feedback must not weaken the Save
+    Catalog marker contract, and neither caller may fall back to the desktop.
+    """
+    completed = run_bounded_capture_tool(
+        [import_cmd, "-window", window_id, "-depth", "8", "-type", "TrueColor", str(destination)],
+        label=f"X11 client screenshot capture for {window_id}",
+    )
+    return completed.returncode == 0 and destination.is_file()
+
+
 def take_native_screenshot(destination: Path, *, root_pid: int) -> dict[str, int | str] | None:
     """Capture exactly one X11 client window owned by the launched game tree.
 
@@ -2382,20 +2398,7 @@ def take_native_screenshot(destination: Path, *, root_pid: int) -> dict[str, int
         )
         try:
             candidate.unlink(missing_ok=True)
-            completed = run_bounded_capture_tool(
-                [
-                    import_cmd,
-                    "-window",
-                    window_id,
-                    "-depth",
-                    "8",
-                    "-type",
-                    "TrueColor",
-                    str(candidate),
-                ],
-                label=f"X11 client screenshot capture for {window_id}",
-            )
-            if completed.returncode != 0 or not candidate.is_file():
+            if not capture_client_png(window_id, candidate, import_cmd=import_cmd):
                 candidate.unlink(missing_ok=True)
                 continue
             try:

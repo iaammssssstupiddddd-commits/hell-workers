@@ -67,6 +67,12 @@ pub fn spawn_bottom_bar(
             ("Orders", "命令メニュー切替", MenuAction::ToggleOrders, None),
             ("Dream", "Dreamメニュー切替", MenuAction::ToggleDream, None),
             ("Settings", "設定", MenuAction::ToggleSettings, None),
+            (
+                "Menu",
+                "システムメニュー",
+                MenuAction::ToggleSystemMenu,
+                Some("Esc"),
+            ),
         ];
 
         for (label, tooltip, action, shortcut) in buttons {
@@ -93,8 +99,14 @@ pub fn spawn_bottom_bar(
                     ..default()
                 },
                 TextColor(theme.colors.accent_ember.with_alpha(0.85)),
+                TextLayout::new(Justify::Left, LineBreak::WordOrCharacter),
+                BackgroundColor(theme.colors.bg_surface),
                 Node {
-                    margin: UiRect::left(Val::Px(20.0)),
+                    position_type: PositionType::Absolute,
+                    left: Val::Px(8.0),
+                    bottom: Val::Px(theme.spacing.bottom_bar_height + 8.0),
+                    max_width: Val::Percent(96.0),
+                    padding: UiRect::all(Val::Px(6.0)),
                     ..default()
                 },
                 UiSlot::ModeText,

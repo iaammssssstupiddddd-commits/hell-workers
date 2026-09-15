@@ -20,6 +20,13 @@ shortcut は発火しない。catalog / 確認は overlay priority の最上位�
 受理された open request は panel の `Node.display` 更新を待たず pending world-input capture を立てる。
 表示後は full-viewport `UiInputCapture` root へ引き継ぎ、panel 外の world pointer/camera と背景 UI を遮断する。
 
+occupied slotの選択後はslot一覧を確認本文へ切り替える。対象slot名と上書き/現在world置換の
+結果を表示し、固定footerにBackとConfirmを置く。Confirmは元のslot行と別の領域にあり、
+slot行の再クリックを確定として扱わない。空の手動slotは従来どおり直接保存する。
+確認のowner/session/capabilityとone-shot requestを既存ownerで検証する。保存のrevision照合は
+request時のcatalog revisionと書込直前の状態を比較するもので、確認表示時のsnapshot固定や
+Load requestへのrevision条件を追加したものではない。
+
 ## アーキテクチャ
 
 ```text
@@ -536,7 +543,7 @@ Skillを正本とする。
 ## UI 構成
 
 - **Pause メニュー**（`hw_ui/src/setup/pause_menu.rs`）: `Time<Virtual>` 一時停止中に full-viewport capture root + 中央 panel を表示。Resume / Save / Load / Settings の `MenuButton` を持つ
-- **Save / Load catalog**（`hw_ui/src/setup/dialogs.rs`）: F5/F9 用の foreground modal。スロット一覧、上書き／読込確認、状態表示。
+- **Save / Load catalog**（`hw_ui/src/setup/dialogs.rs`）: F5/F9 用の foreground modal。タイトル・確認footer・Closeを固定し、一覧を独立したScrollAreaと右端Scrollbarで移動する。各行と上書き／読込確認に手動／自動／旧形式区分、既存の状態、ファイル更新日時（`YYYY-MM-DD HH:MM:SS UTC`）と相対時間を表示する。存在しないslotは日時を `—`、取得失敗・表示範囲外（1970年より前または10000年以降）は明示する。追加保存schemaや実行時ファイル再読は導入しない。
 - **Intent 処理**（`bevy_app/.../handlers/save_game.rs`）: catalog `UiIntent` → `SaveLoadState`
 - **結果通知**（`bevy_app/.../notifications.rs`）: manual/load は Important、autosave 成功は ToastOnly（slot 単位 dedupe）、autosave 失敗は Important
 

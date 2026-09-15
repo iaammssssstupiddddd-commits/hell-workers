@@ -76,13 +76,22 @@ pub(super) fn apply_area_and_record_history(
     area_edit_history.push(familiar_entity, before, Some(clamped_area));
 }
 
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub(super) struct DesignationApplySummary {
+    pub matched: usize,
+    pub applied: usize,
+    pub no_issuer: usize,
+    pub no_destination: usize,
+}
+
 pub(super) fn apply_designation_in_area(
     commands: &mut Commands,
     mode: TaskMode,
     area: &TaskArea,
     issued_by: Option<Entity>,
     q_targets: &DesignationTargetQuery,
-) {
+) -> DesignationApplySummary {
+    let mut summary = DesignationApplySummary::default();
     let work_type = match mode {
         TaskMode::DesignateChop(_) => Some(WorkType::Chop),
         TaskMode::DesignateMine(_) => Some(WorkType::Mine),
@@ -120,7 +129,7 @@ pub(super) fn apply_designation_in_area(
             _stockpile,
             _stored_items,
             _bucket_storage,
-            _stockpile_runtime,
+            target_runtime,
         )) = q_targets.get(target_entity)
         else {
             continue;
@@ -138,8 +147,10 @@ pub(super) fn apply_designation_in_area(
                 continue;
             }
 
+            summary.matched += 1;
             if wt == WorkType::Haul {
                 let Some(issuer) = issued_by else {
+                    summary.no_issuer += 1;
                     warn!(
                         "MANUAL_HAUL: Skipped source {:?} because no familiar is selected",
                         target_entity
@@ -158,6 +169,7 @@ pub(super) fn apply_designation_in_area(
                     &manual_destination_shadow,
                     q_targets,
                 ) else {
+                    summary.no_destination += 1;
                     debug!(
                         "MANUAL_HAUL: No stockpile anchor found for source {:?} ({:?})",
                         target_entity, item_type
@@ -194,6 +206,7 @@ pub(super) fn apply_designation_in_area(
                     commands.spawn_empty()
                 };
 
+                summary.applied += 1;
                 request_cmd.insert((
                     Name::new("TransportRequest::ManualDesignateHaul"),
                     Transform::from_xyz(pos.x, pos.y, 0.0),
@@ -225,29 +238,29 @@ pub(super) fn apply_designation_in_area(
                 continue;
             }
 
-            if let Some(issuer) = issued_by {
-                commands
-                    .entity(target_entity)
-                    .remove::<AutoGatherDesignation>()
-                    .insert((
-                        Designation { work_type: wt },
-                        PlayerIssuedDesignation,
-                        ManagedBy(issuer),
-                        TaskSlots::new(1),
-                        Priority(0),
-                    ));
-            } else {
-                commands
-                    .entity(target_entity)
-                    .remove::<AutoGatherDesignation>()
-                    .remove::<ManagedBy>()
-                    .insert((
-                        Designation { work_type: wt },
-                        PlayerIssuedDesignation,
-                        TaskSlots::new(1),
-                        Priority(0),
-                    ));
+            let Some(issuer) = issued_by else {
+                summary.no_issuer += 1;
+                continue;
+            };
+            // Re-designation must never overwrite an active job's owner or slots.
+            if designation.is_some()
+                || target_runtime.3.is_some()
+                || target_runtime.4.is_some()
+                || task_workers.is_some_and(|workers| !workers.is_empty())
+            {
+                continue;
             }
+            summary.applied += 1;
+            commands
+                .entity(target_entity)
+                .remove::<AutoGatherDesignation>()
+                .insert((
+                    Designation { work_type: wt },
+                    PlayerIssuedDesignation,
+                    ManagedBy(issuer),
+                    TaskSlots::new(1),
+                    Priority(0),
+                ));
             continue;
         }
 
@@ -262,6 +275,7 @@ pub(super) fn apply_designation_in_area(
             );
         }
     }
+    summary
 }
 
 fn compare_designation_target_order(
@@ -292,12 +306,73 @@ mod tests {
         area: TaskArea,
     }
 
+    #[derive(Resource, Default)]
+    struct ApplyReceipt(DesignationApplySummary);
+
+    fn apply_chop_fixture(
+        mut commands: Commands,
+        fixture: Res<ManualHaulApplyFixture>,
+        mut receipt: ResMut<ApplyReceipt>,
+        q_targets: DesignationTargetQuery,
+    ) {
+        receipt.0 = apply_designation_in_area(
+            &mut commands,
+            TaskMode::DesignateChop(None),
+            &fixture.area,
+            Some(fixture.issuer),
+            &q_targets,
+        );
+    }
+
+    #[test]
+    fn paused_new_gather_commits_once_without_overwriting_existing_owner_or_slots() {
+        let mut app = App::new();
+        let issuer = app.world_mut().spawn_empty().id();
+        let other = app.world_mut().spawn_empty().id();
+        let new = app
+            .world_mut()
+            .spawn((hw_jobs::Tree, Transform::default()))
+            .id();
+        let existing = app
+            .world_mut()
+            .spawn((
+                hw_jobs::Tree,
+                Transform::default(),
+                Designation {
+                    work_type: WorkType::Chop,
+                },
+                ManagedBy(other),
+                TaskSlots::new(3),
+                Priority(8),
+            ))
+            .id();
+        let mut time = Time::<Virtual>::default();
+        time.pause();
+        app.insert_resource(time)
+            .insert_resource(ManualHaulApplyFixture {
+                issuer,
+                area: TaskArea::from_points(Vec2::splat(-100.0), Vec2::splat(100.0)),
+            })
+            .init_resource::<ApplyReceipt>()
+            .add_systems(Update, apply_chop_fixture);
+        app.update();
+        assert_eq!(app.world().resource::<ApplyReceipt>().0.applied, 1);
+        assert_eq!(app.world().get::<ManagedBy>(new).unwrap().0, issuer);
+        assert_eq!(app.world().get::<ManagedBy>(existing).unwrap().0, other);
+        assert_eq!(app.world().get::<TaskSlots>(existing).unwrap().max, 3);
+        assert_eq!(app.world().get::<Priority>(existing).unwrap().0, 8);
+        app.world_mut().resource_mut::<Time<Virtual>>().unpause();
+        app.update();
+        assert_eq!(app.world().resource::<ApplyReceipt>().0.applied, 0);
+    }
+
     fn apply_manual_haul_fixture(
         mut commands: Commands,
         fixture: Res<ManualHaulApplyFixture>,
+        mut receipt: ResMut<ApplyReceipt>,
         q_targets: DesignationTargetQuery,
     ) {
-        apply_designation_in_area(
+        receipt.0 = apply_designation_in_area(
             &mut commands,
             TaskMode::DesignateHaul(None),
             &fixture.area,
@@ -342,6 +417,11 @@ mod tests {
                 hw_logistics::ResourceItem(hw_logistics::ResourceType::Wood),
             ))
             .id();
+        app.world_mut().spawn((
+            Transform::from_xyz(0.5, 0.0, 0.0),
+            Visibility::Visible,
+            hw_logistics::ResourceItem(hw_logistics::ResourceType::Wood),
+        ));
         let rejected = app
             .world_mut()
             .spawn((
@@ -380,10 +460,20 @@ mod tests {
             issuer,
             area: TaskArea::from_points(Vec2::splat(-1.0), Vec2::splat(1.0)),
         })
+        .init_resource::<ApplyReceipt>()
         .add_systems(Update, apply_manual_haul_fixture);
 
         app.update();
 
+        assert_eq!(
+            app.world().resource::<ApplyReceipt>().0,
+            DesignationApplySummary {
+                matched: 2,
+                applied: 1,
+                no_destination: 1,
+                no_issuer: 0
+            }
+        );
         let mut requests = app.world_mut().query_filtered::<(
             &TransportRequest,
             &TransportRequestFixedSource,

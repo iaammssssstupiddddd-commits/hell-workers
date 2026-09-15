@@ -368,8 +368,10 @@ mod tests {
 
     #[test]
     fn reset_restores_schema_and_checksum_seeds() {
-        let mut metrics = DreamUiPerfMetrics::default();
-        metrics.measured_frames = 9;
+        let mut metrics = DreamUiPerfMetrics {
+            measured_frames: 9,
+            ..default()
+        };
         metrics.record_rng_value(7);
         metrics.reset_measurement();
 

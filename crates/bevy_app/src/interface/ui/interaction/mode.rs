@@ -133,6 +133,43 @@ pub(super) struct ModeDisplayInfo<'a> {
     pub unassigned_tasks_in_area: Option<usize>,
 }
 
+pub(super) fn next_operation_guidance(play_mode: &PlayMode, task: &TaskMode) -> &'static str {
+    match play_mode {
+        PlayMode::Normal => "対象を選択して確認 / Orders・Architect・Zonesで操作を開始",
+        PlayMode::BuildingPlace => {
+            "配置先を選んで左クリック / 配置できない理由はカーソルの説明で確認 / Escで終了"
+        }
+        PlayMode::BuildingMove => "移動先を選んで左クリック / Escで移動先の指定を中止",
+        PlayMode::FloorPlace => {
+            "左ドラッグで範囲指定 → 離して施工予定を作成 / Escで未確定の指定を中止"
+        }
+        PlayMode::TaskDesignation => match task {
+            TaskMode::AreaSelection(_) => {
+                "左ドラッグ → 離して担当範囲を適用 / 戻す・やり直す・保存枠は範囲編集パネル / Escで終了"
+            }
+            TaskMode::DesignateDeconstruct(_) => {
+                "完成した建物を1つ指定 → 左ボタンを離して解体を指示 / 返却資材と不可理由を確認 / Escで終了"
+            }
+            TaskMode::SoulSpaPlace(_) => "2×2の配置先を選んで左クリック / Escで終了",
+            TaskMode::ZonePlacement(_, _) => {
+                "左ドラッグ → 採用・除外数を確認 → 離して確定 / Escで未確定の指定を中止"
+            }
+            TaskMode::ZoneRemoval(_, _) => {
+                "左ドラッグで削除範囲を指定 → 離して確定 / Escで未確定の指定を中止"
+            }
+            TaskMode::StockpilePolicyEdit(_) => {
+                "左ドラッグで対象範囲を指定 → 離して方針を適用 / Escで中止"
+            }
+            TaskMode::DreamPlanting(_) => {
+                "左ドラッグで植樹範囲を指定 → 離して適用 / Escで未確定の指定を中止"
+            }
+            _ => {
+                "左クリックまたはドラッグで対象指定 → 離して適用 / 結果は通知履歴で確認 / Escで終了"
+            }
+        },
+    }
+}
+
 pub(super) fn build_mode_text(ctx: ModeCtxRefs, info: ModeDisplayInfo) -> String {
     let ModeCtxRefs {
         play_mode,

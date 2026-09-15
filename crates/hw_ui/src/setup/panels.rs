@@ -127,9 +127,57 @@ fn spawn_hover_tooltip(
                 window_margin: 8.0,
             },
             OverrideClip,
-            ZIndex(50),
+            crate::overlay::TOOLTIP_LAYER,
             Name::new("Hover Tooltip"),
         ))
         .id();
     commands.entity(tooltip_anchor).add_child(tooltip_root);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bevy::ecs::world::CommandQueue;
+    use bevy::ui::{ComputedStackIndex, UiPlugin, UiSystems};
+
+    #[test]
+    fn reparented_tooltip_renders_above_later_mode_guidance() {
+        let mut app = App::new();
+        app.add_plugins(UiPlugin);
+        // Exercise the actual stack system without renderer/text/layout resources.
+        for set in [
+            UiSystems::Prepare,
+            UiSystems::Propagate,
+            UiSystems::Content,
+            UiSystems::Layout,
+            UiSystems::PostLayout,
+        ] {
+            app.configure_sets(PostUpdate, set.run_if(|| false));
+        }
+        let world = app.world_mut();
+        let root = world.spawn(Node::default()).id();
+        let bar = world.spawn((Node::default(), ChildOf(root))).id();
+        let button = world.spawn((Node::default(), ChildOf(bar))).id();
+        let mode = world.spawn((Node::default(), ChildOf(bar))).id();
+        let mut queue = CommandQueue::default();
+        let mut registry = UiNodeRegistry::default();
+        spawn_hover_tooltip(
+            &mut Commands::new(&mut queue, world),
+            &UiTheme::default(),
+            root,
+            &mut registry,
+        );
+        queue.apply(world);
+        let tooltip = world
+            .query_filtered::<Entity, With<HoverTooltip>>()
+            .single(world)
+            .unwrap();
+        world.entity_mut(button).add_child(tooltip);
+        let text = world.spawn((Node::default(), ChildOf(tooltip))).id();
+
+        world.run_schedule(PostUpdate);
+        let index = |entity| world.get::<ComputedStackIndex>(entity).unwrap().0;
+        assert!(index(tooltip) > index(mode));
+        assert!(index(text) > index(mode));
+    }
 }

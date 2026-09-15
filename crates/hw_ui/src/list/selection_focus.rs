@@ -18,14 +18,3 @@ pub fn focus_camera_on_entity<F>(
         cam_transform.translation.y = target_pos.y;
     }
 }
-
-pub fn select_entity_and_focus_camera(
-    target: Entity,
-    _label: &str,
-    selected_entity: &mut ResMut<crate::selection::SelectedEntity>,
-    q_camera: &mut Query<&mut Transform, With<crate::camera::MainCamera>>,
-    q_transforms: &Query<&GlobalTransform>,
-) {
-    selected_entity.0 = Some(target);
-    focus_camera_on_entity(target, q_camera, q_transforms);
-}

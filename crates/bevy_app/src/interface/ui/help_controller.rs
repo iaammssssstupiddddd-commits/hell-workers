@@ -19,6 +19,46 @@ pub(crate) struct HelpPauseGuard {
     paused_by_help: bool,
 }
 
+pub(crate) fn open_inspection_help_entry(
+    pending: Res<PendingWorldInputCapture>,
+    input: Res<hw_ui::components::UiInputState>,
+    state: Option<Res<HelpPanelState>>,
+    inspection: Option<Res<hw_ui::models::inspection::EntityInspectionViewModel>>,
+    links: Query<(), With<hw_ui::help::HelpInspectionLink>>,
+    content: Option<Res<HelpPanelContent>>,
+    mut intents: MessageWriter<hw_ui::UiIntent>,
+) {
+    let (Some(state), Some(inspection), Some(content)) = (state, inspection, content) else {
+        return;
+    };
+    if !state.open || !pending.accepts_overlay(InputOverlay::Help) {
+        return;
+    }
+    let Some(opener) = pending.foreground_opener(input.foreground_capture_root) else {
+        return;
+    };
+    if !links.contains(opener) {
+        return;
+    }
+    let Some(model) = inspection.model.as_ref() else {
+        return;
+    };
+    let entry = hw_ui::help::HelpEntryId::new(if model.soul_spa.is_some() {
+        "soul-energy-recovery"
+    } else if model.power.is_some() {
+        "soul-energy-status"
+    } else if model.stockpile.is_some() {
+        "zones-workflow"
+    } else if model.soul.is_some() {
+        "entity-list-selection"
+    } else {
+        "info-panel-pin"
+    });
+    if content.entry_topic(entry).is_some() {
+        intents.write(hw_ui::UiIntent::SelectHelpEntry(entry));
+    }
+}
+
 pub(crate) fn apply_accepted_help_open_system(
     pending: Res<PendingWorldInputCapture>,
     mut settings_requests: MessageReader<hw_familiar_ai::FamiliarSettingsChangeRequest>,
@@ -94,9 +134,16 @@ fn open_help(
         return;
     };
 
-    state.open_at(first_topic);
-    for mut position in scroll_areas.iter_mut() {
-        position.0 = Vec2::ZERO;
+    if let Some(current) = state
+        .active_topic
+        .filter(|topic| content.contains_topic(*topic))
+    {
+        state.open_at(current);
+    } else {
+        state.open_at(first_topic);
+        for mut position in scroll_areas.iter_mut() {
+            position.0 = Vec2::ZERO;
+        }
     }
 
     guard.paused_by_help = !time.is_paused();

@@ -235,3 +235,38 @@ fn test_invalid_room_fails_validator() {
     let fake_tiles = vec![(1, 1), (2, 1)];
     assert!(!room_is_valid_against_input(&fake_tiles, &input));
 }
+
+#[test]
+fn inspection_reuses_room_detection_and_reports_boundary_witnesses() {
+    let mut input = build_detection_input(&closed_room_tiles());
+    let room = inspect_room((2, 2), &input).unwrap();
+    assert_eq!(room.tiles, detect_rooms(&input)[0].tiles);
+    assert!(room_is_valid_against_input(&room.tiles, &input));
+    input.solid_wall_tiles.remove(&(0, 2));
+    assert_eq!(
+        inspect_room((2, 2), &input).unwrap_err(),
+        RoomFailure {
+            reason: RoomFailureReason::OpenBoundary,
+            grid: (0, 2),
+        }
+    );
+    assert!(detect_rooms(&input).is_empty());
+    input.solid_wall_tiles.insert((0, 2));
+    input.door_tiles.remove(&(1, 4));
+    input.solid_wall_tiles.insert((1, 4));
+    assert_eq!(
+        inspect_room((2, 2), &input).unwrap_err().reason,
+        RoomFailureReason::NoDoor
+    );
+    assert!(detect_rooms(&input).is_empty());
+    assert_eq!(
+        inspect_room((8, 8), &input).unwrap_err().reason,
+        RoomFailureReason::NoFloor
+    );
+    let input = RoomDetectionInput {
+        floor_tiles: [(0, 0)].into(),
+        ..Default::default()
+    };
+    assert!(inspect_room((0, 0), &input).is_err());
+    assert!(detect_rooms(&input).is_empty());
+}

@@ -64,8 +64,9 @@ impl Plugin for IndoorLightingPlugin {
             .init_resource::<RoomIlluminationCache>()
             .init_resource::<WorldEpoch>()
             .configure_sets(
-                Update,
-                DoorManualMutationSet.in_set(GameSystemSet::PreActor),
+                PostUpdate,
+                DoorManualMutationSet
+                    .before(crate::systems::visual::building3d_cleanup::DoorPresentationSyncSet),
             )
             .configure_sets(
                 Update,
@@ -78,7 +79,7 @@ impl Plugin for IndoorLightingPlugin {
                     .chain(),
             )
             .add_systems(
-                Update,
+                PostUpdate,
                 consume_door_lock_toggle_requests_system.in_set(DoorManualMutationSet),
             )
             .add_systems(

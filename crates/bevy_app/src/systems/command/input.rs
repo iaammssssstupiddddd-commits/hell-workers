@@ -10,6 +10,7 @@ pub(crate) fn familiar_command_input_system(
     q_familiars: Query<(), With<Familiar>>,
     mut q_active_commands: Query<(&mut ActiveCommand, Option<&TaskArea>), With<Familiar>>,
     mut task_context: ResMut<TaskContext>,
+    time: Option<Res<Time<Virtual>>>,
 ) {
     let Some(entity) = resolved_frame.selected_familiar() else {
         return;
@@ -19,6 +20,14 @@ pub(crate) fn familiar_command_input_system(
     }
 
     for action in resolved_frame.actions() {
+        if time.as_ref().is_some_and(|time| time.is_paused())
+            && !matches!(
+                action,
+                InputAction::FamiliarChop | InputAction::FamiliarMine
+            )
+        {
+            continue;
+        }
         match action {
             InputAction::FamiliarChop => task_context.0 = TaskMode::DesignateChop(None),
             InputAction::FamiliarMine => task_context.0 = TaskMode::DesignateMine(None),
@@ -32,16 +41,21 @@ pub(crate) fn familiar_command_input_system(
             InputAction::ToggleFamiliarIdlePatrol => {
                 task_context.0 = TaskMode::None;
                 if let Ok((mut active, area_opt)) = q_active_commands.get_mut(entity) {
-                    if matches!(active.command, FamiliarCommand::Idle) && area_opt.is_some() {
-                        active.command = FamiliarCommand::Patrol;
-                    } else {
-                        active.command = FamiliarCommand::Idle;
-                    }
+                    toggle_idle_patrol(&mut active, area_opt);
                 }
             }
             _ => {}
         }
     }
+}
+
+/// Shared by the keyboard and the target-bound context-menu command.
+pub(crate) fn toggle_idle_patrol(active: &mut ActiveCommand, area: Option<&TaskArea>) {
+    active.command = if matches!(active.command, FamiliarCommand::Idle) && area.is_some() {
+        FamiliarCommand::Patrol
+    } else {
+        FamiliarCommand::Idle
+    };
 }
 
 #[cfg(test)]
@@ -102,7 +116,7 @@ mod tests {
     }
 
     #[test]
-    fn familiar_escape_preserves_idle_patrol_toggle() {
+    fn familiar_command_preserves_idle_patrol_toggle() {
         let mut app = minimal_app();
         app.init_resource::<TaskContext>()
             .init_resource::<ResolvedInputFrame>()

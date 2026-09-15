@@ -5,8 +5,8 @@ use super::models::{
     TaskVisual,
 };
 use crate::components::{
-    EntityListSectionType, FamiliarListItem, FamiliarMaxSoulAdjustButton, SectionToggle,
-    SoulListItem,
+    EntityListSectionType, FamiliarListItem, FamiliarMaxSoulAdjustButton, MenuAction, MenuButton,
+    SectionToggle, SoulListItem, UiTooltip,
 };
 use crate::setup::UiAssets;
 use crate::theme::UiTheme;
@@ -17,13 +17,12 @@ use bevy::prelude::*;
 // ============================================================
 
 /// アイコン画像ノード（ImageNode + Node）をスポーンする。
-/// `margin_right`: `None` のときは margin なし。
 fn spawn_icon(
     parent: &mut ChildSpawnerCommands,
     image: Handle<Image>,
     color: Color,
     size: f32,
-    margin_right: Option<f32>,
+    placement: Node,
 ) {
     parent.spawn((
         ImageNode {
@@ -35,10 +34,7 @@ fn spawn_icon(
             width: Val::Px(size),
             height: Val::Px(size),
             flex_shrink: 0.0,
-            margin: margin_right
-                .map(|m| UiRect::right(Val::Px(m)))
-                .unwrap_or_default(),
-            ..default()
+            ..placement
         },
     ));
 }
@@ -52,7 +48,7 @@ fn spawn_text(
     font_size: f32,
     color: Color,
     weight: FontWeight,
-    margin_right: f32,
+    placement: Node,
 ) {
     let mut text_font = TextFont {
         font_size: FontSize::Px(font_size),
@@ -66,10 +62,11 @@ fn spawn_text(
         Text::new(text),
         text_font,
         TextColor(color),
+        bevy::text::LineHeight::Px(16.0),
         Node {
-            flex_shrink: 0.0,
-            margin: UiRect::right(Val::Px(margin_right)),
-            ..default()
+            width: Val::Percent(100.0),
+            min_width: Val::Px(0.0),
+            ..placement
         },
     ));
 }
@@ -88,8 +85,8 @@ fn spawn_adjust_button(
         .spawn((
             Button,
             Node {
-                width: Val::Px(18.0),
-                height: Val::Px(18.0),
+                width: Val::Px(32.0),
+                height: Val::Px(32.0),
                 flex_shrink: 0.0,
                 justify_content: JustifyContent::Center,
                 align_items: AlignItems::Center,
@@ -133,8 +130,10 @@ pub fn spawn_familiar_section(
 
     let root = commands
         .spawn((Node {
+            width: Val::Percent(100.0),
             flex_direction: FlexDirection::Column,
             flex_shrink: 0.0,
+            padding: UiRect::bottom(Val::Px(2.0)),
             margin: UiRect::top(Val::Px(theme.sizes.familiar_section_margin_top)),
             ..default()
         },))
@@ -144,10 +143,23 @@ pub fn spawn_familiar_section(
     let header = commands
         .spawn(Node {
             width: Val::Percent(100.0),
-            height: Val::Px(theme.sizes.header_height),
+            min_height: Val::Px(theme.sizes.header_height),
             flex_shrink: 0.0,
             align_items: AlignItems::Center,
-            flex_direction: FlexDirection::Row,
+            display: Display::Grid,
+            grid_template_columns: vec![
+                GridTrack::px(32.0),
+                GridTrack::flex(1.0),
+                GridTrack::px(68.0),
+                GridTrack::px(48.0),
+            ],
+            column_gap: Val::Px(4.0),
+            padding: UiRect {
+                right: Val::Px(4.0),
+                top: Val::Px(2.0),
+                bottom: Val::Px(2.0),
+                ..default()
+            },
             ..default()
         })
         .id();
@@ -158,6 +170,8 @@ pub fn spawn_familiar_section(
             Button,
             Node {
                 width: Val::Px(theme.sizes.fold_button_size),
+                grid_column: GridPlacement::start(1),
+                grid_row: GridPlacement::start(1),
                 height: Val::Px(theme.sizes.fold_button_size),
                 flex_shrink: 0.0,
                 align_items: AlignItems::Center,
@@ -189,9 +203,10 @@ pub fn spawn_familiar_section(
         .spawn((
             Button,
             Node {
-                flex_grow: 1.0,
-                height: Val::Px(theme.sizes.header_height),
-                flex_shrink: 0.0,
+                grid_column: GridPlacement::start(2),
+                grid_row: GridPlacement::start(1),
+                min_width: Val::Px(0.0),
+                min_height: Val::Px(theme.sizes.header_height),
                 align_items: AlignItems::Center,
                 border: UiRect::left(Val::Px(0.0)),
                 padding: UiRect::left(Val::Px(theme.spacing.text_left_padding)),
@@ -203,27 +218,47 @@ pub fn spawn_familiar_section(
         ))
         .id();
     commands.entity(header).add_child(familiar_button);
+    commands.entity(header).with_children(|parent| {
+        spawn_entity_focus_button(
+            parent,
+            familiar.entity,
+            assets,
+            theme,
+            Node {
+                grid_column: GridPlacement::start(4),
+                grid_row: GridPlacement::start(1),
+                ..default()
+            },
+        );
+    });
 
     let header_text = commands
         .spawn((
             Text::new(familiar.label.clone()),
             TextFont {
-                font: assets.font_familiar().clone().into(),
-                font_size: FontSize::Px(theme.typography.font_size_header),
+                font: assets.font_ui().clone().into(),
+                font_size: FontSize::Px(theme.typography.font_size_base),
+                weight: FontWeight::SEMIBOLD,
                 ..default()
             },
             TextColor(theme.colors.accent_soul),
+            Node {
+                width: Val::Percent(100.0),
+                min_width: Val::Px(0.0),
+                ..default()
+            },
         ))
         .id();
     commands.entity(familiar_button).add_child(header_text);
 
     let adjust_container = commands
         .spawn(Node {
+            grid_column: GridPlacement::start(3),
+            grid_row: GridPlacement::start(1),
             flex_direction: FlexDirection::Row,
             flex_shrink: 0.0,
             align_items: AlignItems::Center,
             column_gap: Val::Px(theme.spacing.margin_small),
-            padding: UiRect::right(Val::Px(theme.spacing.margin_small)),
             ..default()
         })
         .id();
@@ -297,6 +332,18 @@ pub fn spawn_empty_squad_hint_entity(
 // Soul Row
 // ============================================================
 
+// Keep direct children in the value-sync order; grid placement owns presentation only.
+fn soul_cell(row: i16, column: i16, span: u16) -> Node {
+    Node {
+        grid_row: GridPlacement::start(row),
+        grid_column: GridPlacement::start_span(column, span),
+        min_width: Val::Px(0.0),
+        align_self: AlignSelf::Center,
+        justify_self: JustifySelf::Start,
+        ..default()
+    }
+}
+
 fn get_gender_icon_and_color(
     gender: SoulGender,
     assets: &dyn UiAssets,
@@ -322,6 +369,14 @@ fn get_task_icon_and_color(
         TaskVisual::Build => (assets.icon_pick().clone(), theme.colors.build),
         TaskVisual::HaulToBlueprint => (assets.icon_haul().clone(), theme.colors.haul_to_bp),
         TaskVisual::Water => (assets.icon_haul().clone(), theme.colors.water),
+        TaskVisual::GeneratePower => (assets.icon_fatigue().clone(), theme.colors.text_accent),
+        TaskVisual::Deconstruct => (assets.icon_hammer().clone(), theme.colors.stress_high),
+        TaskVisual::Move => (assets.icon_haul().clone(), theme.colors.build),
+        TaskVisual::Refine => (assets.icon_hammer().clone(), theme.colors.build),
+        TaskVisual::CollectBone => (
+            assets.icon_bone_small().clone(),
+            theme.colors.gather_default,
+        ),
     }
 }
 
@@ -365,15 +420,30 @@ pub fn spawn_soul_list_item(
             Button,
             Node {
                 width: Val::Percent(100.0),
-                height: Val::Px(theme.sizes.soul_item_height),
+                min_height: Val::Px(theme.sizes.soul_item_height),
+                display: Display::Grid,
+                grid_template_columns: vec![
+                    GridTrack::px(12.0),
+                    GridTrack::px(30.0),
+                    GridTrack::px(12.0),
+                    GridTrack::px(30.0),
+                    GridTrack::flex(1.0),
+                    GridTrack::px(12.0),
+                    GridTrack::px(36.0),
+                    GridTrack::px(48.0),
+                ],
+                column_gap: Val::Px(2.0),
+                row_gap: Val::Px(0.0),
                 flex_shrink: 0.0,
                 align_items: AlignItems::Center,
                 border: UiRect::left(Val::Px(0.0)),
-                margin: if left_margin > 0.0 {
-                    UiRect::left(Val::Px(left_margin))
-                } else {
-                    UiRect::default()
+                padding: UiRect {
+                    left: Val::Px(left_margin.min(8.0) + 4.0),
+                    right: Val::Px(4.0),
+                    top: Val::Px(1.0),
+                    bottom: Val::Px(1.0),
                 },
+                margin: UiRect::bottom(Val::Px(1.0)),
                 ..default()
             },
             BackgroundColor(theme.colors.list_item_default),
@@ -386,62 +456,124 @@ pub fn spawn_soul_list_item(
                 gender_handle,
                 gender_color,
                 theme.sizes.icon_size,
-                Some(theme.spacing.margin_medium),
+                soul_cell(1, 1, 1),
             );
             spawn_text(
                 item,
                 soul_vm.name.clone(),
-                Some(assets.font_soul_name().clone()),
+                Some(assets.font_ui().clone()),
                 theme.typography.font_size_item,
                 stress_color,
                 FontWeight::default(),
-                theme.spacing.margin_large,
+                soul_cell(1, 2, 4),
             );
             spawn_icon(
                 item,
                 assets.icon_fatigue().clone(),
                 theme.colors.fatigue_icon,
                 theme.sizes.icon_size,
-                Some(theme.spacing.margin_small),
+                soul_cell(2, 1, 1),
             );
             spawn_text(
                 item,
                 soul_vm.fatigue_text.clone(),
-                None,
+                Some(assets.font_ui().clone()),
                 theme.typography.font_size_small,
                 theme.colors.fatigue_text,
                 FontWeight::default(),
-                theme.spacing.margin_large,
+                soul_cell(2, 2, 1),
             );
             spawn_icon(
                 item,
                 assets.icon_stress().clone(),
                 theme.colors.stress_icon,
                 theme.sizes.icon_size,
-                Some(theme.spacing.margin_small),
+                soul_cell(2, 3, 1),
             );
             spawn_text(
                 item,
                 soul_vm.stress_text.clone(),
-                None,
+                Some(assets.font_ui().clone()),
                 theme.typography.font_size_small,
                 stress_color,
                 stress_weight(soul_vm.stress_bucket),
-                theme.spacing.margin_large,
+                soul_cell(2, 4, 1),
             );
             // children[6]: dream text
             spawn_text(
                 item,
                 soul_vm.dream_text.clone(),
-                None,
+                Some(assets.font_ui().clone()),
                 theme.typography.font_size_small,
                 dream_color,
                 FontWeight::default(),
-                theme.spacing.margin_large,
+                soul_cell(2, 5, 3),
             );
-            spawn_icon(item, task_handle, task_color, theme.sizes.icon_size, None);
+            spawn_icon(
+                item,
+                task_handle,
+                task_color,
+                theme.sizes.icon_size,
+                soul_cell(1, 6, 1),
+            );
+            spawn_text(
+                item,
+                soul_vm.task_visual.label().into(),
+                Some(assets.font_ui().clone()),
+                theme.typography.font_size_small,
+                task_color,
+                FontWeight::default(),
+                soul_cell(1, 7, 1),
+            );
+            spawn_entity_focus_button(
+                item,
+                soul_vm.entity,
+                assets,
+                theme,
+                Node {
+                    grid_row: GridPlacement::start_span(1, 2),
+                    ..soul_cell(1, 8, 1)
+                },
+            );
         })
         .id()
+}
+
+pub(crate) fn spawn_entity_focus_button(
+    parent: &mut ChildSpawnerCommands,
+    target: Entity,
+    assets: &dyn UiAssets,
+    theme: &UiTheme,
+    placement: Node,
+) {
+    parent
+        .spawn((
+            Button,
+            MenuButton(MenuAction::FocusEntity(target)),
+            UiTooltip::new("選択と固定対象を変えずに、現在の場所へカメラを移動します"),
+            Node {
+                padding: UiRect::axes(Val::Px(4.0), Val::Px(2.0)),
+                width: Val::Px(48.0),
+                min_height: Val::Px(32.0),
+                align_items: AlignItems::Center,
+                justify_content: JustifyContent::Center,
+                border_radius: BorderRadius::all(Val::Px(4.0)),
+                flex_shrink: 0.0,
+                ..placement
+            },
+            BackgroundColor(theme.colors.button_default),
+        ))
+        .with_children(|button| {
+            button.spawn((
+                Text::new("現地へ"),
+                TextFont {
+                    font: assets.font_ui().clone().into(),
+                    font_size: FontSize::Px(theme.typography.font_size_xs),
+                    ..default()
+                },
+                TextColor(theme.colors.text_primary_semantic),
+            ));
+        });
 }
 
 pub fn spawn_soul_list_item_entity(

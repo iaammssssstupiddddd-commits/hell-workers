@@ -113,8 +113,12 @@ pub(crate) fn reset_root_interaction_state(world: &mut World) {
     reset_existing_resource::<MovePlacementState>(world);
     reset_existing_resource::<ZoneContext>(world);
     reset_existing_resource::<TaskContext>(world);
+    reset_existing_resource::<crate::interface::selection::FloorPlacementPreview>(world);
     reset_existing_resource::<CompanionPlacementState>(world);
     reset_existing_resource::<StockpilePolicyRangeEditState>(world);
+    reset_existing_resource::<crate::systems::command::zone_placement::plan::ZonePlacementPreview>(
+        world,
+    );
     reset_existing_resource::<crate::systems::jobs::deconstruction::DeconstructionHoverPreview>(
         world,
     );

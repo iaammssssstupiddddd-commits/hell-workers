@@ -1,38 +1,25 @@
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use hw_ui::UiIntent;
-use hw_ui::camera::MainCamera;
 use hw_ui::components::*;
 use hw_ui::theme::UiTheme;
 
-type SoulListInteractionQuery<'w, 's> = Query<
-    'w,
-    's,
-    (&'static Interaction, &'static SoulListItem),
-    (
-        Changed<Interaction>,
-        With<Button>,
-        Without<FamiliarListItem>,
-    ),
->;
+type SoulListInteractionQuery<'w, 's> =
+    Query<'w, 's, (Entity, &'static SoulListItem), (With<Button>, Without<FamiliarListItem>)>;
 
-type FamiliarListInteractionQuery<'w, 's> = Query<
-    'w,
-    's,
-    (&'static Interaction, &'static FamiliarListItem),
-    (Changed<Interaction>, With<Button>, Without<SoulListItem>),
->;
+type FamiliarListInteractionQuery<'w, 's> =
+    Query<'w, 's, (Entity, &'static FamiliarListItem), (With<Button>, Without<SoulListItem>)>;
 
 type FamiliarMaxSoulButtonQuery<'w, 's> = Query<
     'w,
     's,
     (
-        &'static Interaction,
+        Entity,
+        Ref<'static, Interaction>,
         &'static FamiliarMaxSoulAdjustButton,
         &'static mut BackgroundColor,
     ),
     (
-        Changed<Interaction>,
         With<Button>,
         Without<FamiliarListItem>,
         Without<SoulListItem>,
@@ -53,34 +40,12 @@ pub use navigation::{
 pub use visual::{apply_row_highlight, entity_list_visual_feedback_system};
 
 #[derive(SystemParam)]
-pub struct FocusQueries<'w, 's> {
-    q_camera: Query<'w, 's, &'static mut Transform, With<MainCamera>>,
-    q_transforms: Query<'w, 's, &'static GlobalTransform>,
-}
-
-#[derive(SystemParam)]
 pub struct EntityListInteractionResources<'w> {
     selected_entity: ResMut<'w, crate::interface::selection::SelectedEntity>,
     ui_intents: MessageWriter<'w, UiIntent>,
     theme: Res<'w, UiTheme>,
     resolved_frame: Res<'w, crate::input_actions::ResolvedInputFrame>,
     ui_input_state: Res<'w, UiInputState>,
-}
-
-fn focus_list_entity(
-    entity: Entity,
-    label: &'static str,
-    selected_entity: &mut ResMut<crate::interface::selection::SelectedEntity>,
-    q_camera: &mut Query<&mut Transform, With<MainCamera>>,
-    q_transforms: &Query<&GlobalTransform>,
-) {
-    hw_ui::list::select_entity_and_focus_camera(
-        entity,
-        label,
-        selected_entity,
-        q_camera,
-        q_transforms,
-    );
 }
 
 /// エンティティリストのゲーム側インタラクション
@@ -90,7 +55,6 @@ pub fn entity_list_interaction_system(
     mut soul_list_interaction: SoulListInteractionQuery<'_, '_>,
     mut familiar_list_interaction: FamiliarListInteractionQuery<'_, '_>,
     mut familiar_max_soul_buttons: FamiliarMaxSoulButtonQuery<'_, '_>,
-    mut focus_queries: FocusQueries,
     resources: EntityListInteractionResources,
 ) {
     let EntityListInteractionResources {
@@ -104,48 +68,30 @@ pub fn entity_list_interaction_system(
         return;
     }
     if !resolved_frame.pointer_selection_suppressed() {
-        for (interaction, item) in soul_list_interaction.iter_mut() {
-            if *interaction == Interaction::Pressed {
-                focus_list_entity(
-                    item.0,
-                    "soul",
-                    &mut selected_entity,
-                    &mut focus_queries.q_camera,
-                    &focus_queries.q_transforms,
-                );
+        for (entity, item) in soul_list_interaction.iter_mut() {
+            if ui_input_state.button_activated(entity) {
+                selected_entity.0 = Some(item.0);
             }
         }
 
-        for (interaction, item) in familiar_list_interaction.iter_mut() {
-            if *interaction == Interaction::Pressed {
-                focus_list_entity(
-                    item.0,
-                    "familiar",
-                    &mut selected_entity,
-                    &mut focus_queries.q_camera,
-                    &focus_queries.q_transforms,
-                );
+        for (entity, item) in familiar_list_interaction.iter_mut() {
+            if ui_input_state.button_activated(entity) {
+                selected_entity.0 = Some(item.0);
             }
         }
     }
 
-    for (interaction, button, mut color) in familiar_max_soul_buttons.iter_mut() {
-        match *interaction {
-            Interaction::Pressed => {
-                *color = BackgroundColor(theme.colors.button_pressed);
-                ui_intents.write(UiIntent::ApplyFamiliarSettingsFor {
-                    target: button.familiar,
-                    patch: hw_core::familiar::FamiliarSettingsPatch::AdjustMaxControlledSoul {
-                        delta: button.delta,
-                    },
-                });
-            }
-            Interaction::Hovered => {
-                *color = BackgroundColor(theme.colors.button_hover);
-            }
-            Interaction::None => {
-                *color = BackgroundColor(theme.colors.button_default);
-            }
+    for (entity, interaction, button, mut color) in familiar_max_soul_buttons.iter_mut() {
+        if interaction.is_changed() || theme.is_changed() {
+            hw_ui::interaction::common::update_interaction_color(*interaction, &mut color, &theme);
+        }
+        if ui_input_state.button_activated(entity) {
+            ui_intents.write(UiIntent::ApplyFamiliarSettingsFor {
+                target: button.familiar,
+                patch: hw_core::familiar::FamiliarSettingsPatch::AdjustMaxControlledSoul {
+                    delta: button.delta,
+                },
+            });
         }
     }
 }
@@ -166,6 +112,7 @@ mod tests {
     #[test]
     fn resolved_action_suppresses_entity_list_row_selection() {
         let mut app = minimal_app();
+        crate::test_support::accepted_button_fixture(&mut app);
         app.add_message::<UiIntent>()
             .init_resource::<crate::interface::selection::SelectedEntity>()
             .init_resource::<ResolvedInputFrame>()
@@ -198,6 +145,7 @@ mod tests {
     fn pointer_hover_allows_list_click_but_modal_capture_blocks_it() {
         fn app_with_row(captured: bool) -> (App, Entity) {
             let mut app = minimal_app();
+            crate::test_support::accepted_button_fixture(&mut app);
             app.add_message::<UiIntent>()
                 .init_resource::<crate::interface::selection::SelectedEntity>()
                 .init_resource::<ResolvedInputFrame>()
@@ -237,6 +185,7 @@ mod tests {
     #[test]
     fn resolved_familiar_command_keeps_frame_target_during_same_frame_row_click() {
         let mut app = minimal_app();
+        crate::test_support::accepted_button_fixture(&mut app);
         app.add_message::<UiIntent>()
             .init_resource::<ButtonInput<KeyCode>>()
             .init_resource::<UiInputState>()

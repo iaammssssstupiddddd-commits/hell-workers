@@ -1,5 +1,6 @@
 pub(crate) mod building_move;
 pub(crate) mod building_place;
+pub(crate) mod candidates;
 mod floor_place;
 mod hit_test;
 mod input;
@@ -15,7 +16,9 @@ mod state {
 
 pub use building_move::{building_move_preview_system, building_move_system};
 pub use building_place::blueprint_placement;
-pub use floor_place::{floor_placement_preview_system, floor_placement_system};
+pub use floor_place::{
+    FloorPlacementPreview, floor_placement_preview_system, floor_placement_system,
+};
 pub(crate) use input::pointer_hits_task_area_border;
 pub(crate) use input::{WorldSelectionGesture, handle_mouse_input, update_hover_entity};
 pub use mode::clear_companion_state_outside_build_mode;

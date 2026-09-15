@@ -240,6 +240,15 @@ cleanup側はこのsnapshot取得後にもcurrent ownerを照合し、別owner�
 - **エリア選択**: `Stockpile` や `TaskArea` の指定時、ドラッグ中の矩形は常にグリッドの境界線（タイルの端）にスナップします。中途半端な座標での指定はできません。
 - **建築配置**: 建築物の配置位置はグリッドの中心にスナップします。
 
+### Stockpile / Yard拡張の判定
+
+`zone_placement::plan::build_zone_plan`が、表示と確定に共通の`ZonePlan`を返す。
+Stockpileは全範囲がYard内にあることを確認し、各セルのownerを決める。占有/歩行不可セルは除外し、
+採用セルがある場合だけ生成する。Yard外を含む範囲と全セル不可は全体を拒否する。
+Yard拡張は開始点の既存Yardに対する拡張後boundsを返し、最小寸法、Site/他Yard重複、変更なしを検証する。
+枠はその拡張後bounds、mode表示は採用/除外件数または追加セル数と拒否理由を示す。
+releaseで最新条件を再検証し、直前の表示と一致しなければ再指定を促す。UI上/cursor喪失のreleaseも開始点を解除する。
+
 ### 建築ゴースト (Placement Ghost)
 建築モード（`PlayMode::BuildingPlace`）中、マウスカーソルに追従する半透明の建物（ゴースト）が表示されます。
 

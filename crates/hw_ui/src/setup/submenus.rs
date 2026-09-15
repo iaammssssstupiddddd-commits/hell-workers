@@ -3,12 +3,59 @@
 use super::UiAssets;
 use crate::components::{
     ArchitectBuildingPanel, ArchitectCategoryListPanel, ArchitectSubMenu, DreamSubMenu, MenuAction,
-    MenuButton, OrdersSubMenu, UiInputBlocker, ZonesSubMenu,
+    MenuButton, OrdersSubMenu, UiInputBlocker, UiSlot, ZonesSubMenu,
 };
 use crate::theme::UiTheme;
 use bevy::ecs::hierarchy::ChildSpawnerCommands;
 use bevy::prelude::*;
 use bevy::ui::RelativeCursorPosition;
+use bevy::ui_widgets::ScrollArea;
+
+#[derive(Component)]
+pub struct SubmenuViewportAnchor {
+    left: Val,
+    estimated_width: f32,
+}
+
+pub fn fit_submenus_to_viewport(
+    windows: Query<&Window, With<bevy::window::PrimaryWindow>>,
+    scale: Res<UiScale>,
+    theme: Res<UiTheme>,
+    guidance: Query<
+        (&UiSlot, &Node, &ComputedNode, &UiGlobalTransform),
+        Without<SubmenuViewportAnchor>,
+    >,
+    mut menus: Query<(&SubmenuViewportAnchor, &ComputedNode, &mut Node)>,
+) {
+    let Ok(window) = windows.single() else {
+        return;
+    };
+    let viewport = window.size() / scale.0.max(f32::EPSILON);
+    let mut bottom = theme.spacing.bottom_bar_height;
+    for (slot, node, computed, transform) in &guidance {
+        if *slot == UiSlot::ModeText && node.display != Display::None && computed.size().y > 0.0 {
+            let top = (transform.translation.y - computed.size().y * 0.5)
+                * computed.inverse_scale_factor();
+            bottom = bottom.max(viewport.y - top + 4.0);
+        }
+    }
+    for (anchor, computed, mut node) in &mut menus {
+        let desired = match anchor.left {
+            Val::Px(left) => left,
+            Val::Percent(percent) => viewport.x * percent / 100.0,
+            _ => 0.0,
+        };
+        let width = if computed.size().x > 0.0 {
+            computed.size().x * computed.inverse_scale_factor()
+        } else {
+            anchor.estimated_width
+        };
+        node.left = Val::Px(desired.clamp(4.0, (viewport.x - width - 4.0).max(4.0)));
+        node.max_width = Val::Px((viewport.x - 8.0).max(0.0));
+        node.bottom = Val::Px(bottom);
+        node.max_height = Val::Px((viewport.y - bottom - 8.0).max(0.0));
+    }
+}
 use hw_core::game_state::TaskMode;
 use hw_jobs::{BuildingCategory, BuildingType};
 use hw_logistics::zone::ZoneType;
@@ -72,6 +119,7 @@ fn spawn_submenu_container<T: Bundle>(
         bottom: Val::Px(theme.spacing.bottom_bar_height),
         flex_direction,
         padding: UiRect::all(Val::Px(5.0)),
+        overflow: Overflow::scroll_y(),
         ..default()
     };
     if let Some(align) = align_items {
@@ -84,6 +132,14 @@ fn spawn_submenu_container<T: Bundle>(
             BackgroundColor(theme.colors.submenu_bg),
             RelativeCursorPosition::default(),
             UiInputBlocker,
+            ScrollArea,
+            SubmenuViewportAnchor {
+                left,
+                estimated_width: match width {
+                    Val::Px(width) => width,
+                    _ => theme.sizes.submenu_width * 2.0 + 10.0,
+                },
+            },
             marker,
         ))
         .id();
@@ -123,6 +179,9 @@ fn spawn_menu_button(
             Node {
                 width: Val::Percent(100.0),
                 height: Val::Px(40.0),
+                min_height: Val::Px(32.0),
+                min_width: Val::Px(32.0),
+                flex_shrink: 0.0,
                 margin: UiRect::bottom(Val::Px(5.0)),
                 justify_content: JustifyContent::Center,
                 align_items: AlignItems::Center,
@@ -140,6 +199,7 @@ fn spawn_menu_button(
                     ..default()
                 },
                 TextColor(theme.colors.text_primary),
+                TextLayout::new(Justify::Center, LineBreak::WordOrCharacter),
             ));
         });
 }
@@ -455,4 +515,49 @@ fn dream_menu_specs(theme: &UiTheme) -> Vec<MenuEntrySpec<'static>> {
         MenuAction::SelectDreamPlanting,
         theme.colors.button_default,
     )]
+}
+
+#[cfg(test)]
+mod layout_tests {
+    use super::*;
+
+    #[test]
+    fn submenu_reserves_visible_guidance_height_at_scaled_viewport() {
+        let mut app = App::new();
+        app.insert_resource(UiScale(1.25))
+            .init_resource::<UiTheme>()
+            .add_systems(Update, fit_submenus_to_viewport);
+        app.world_mut().spawn((
+            Window {
+                resolution: (1280, 720).into(),
+                ..default()
+            },
+            bevy::window::PrimaryWindow,
+        ));
+        app.world_mut().spawn((
+            UiSlot::ModeText,
+            Node::default(),
+            ComputedNode {
+                size: Vec2::new(600.0, 80.0),
+                inverse_scale_factor: 0.8,
+                ..default()
+            },
+            UiGlobalTransform::from_translation(Vec2::new(300.0, 620.0)),
+        ));
+        let menu = app
+            .world_mut()
+            .spawn((
+                Node::default(),
+                ComputedNode::default(),
+                SubmenuViewportAnchor {
+                    left: Val::Px(100.0),
+                    estimated_width: 150.0,
+                },
+            ))
+            .id();
+        app.update();
+        let node = app.world().get::<Node>(menu).unwrap();
+        assert_eq!(node.bottom, Val::Px(116.0));
+        assert_eq!(node.max_height, Val::Px(452.0));
+    }
 }

@@ -1,12 +1,11 @@
 use crate::interface::ui::panels::task_list::{
-    TaskDashboardViewport, left_panel_tab_system, left_panel_visibility_system,
-    sync_task_dashboard_viewport_system, task_dashboard_action_state_sync_system,
-    task_dashboard_control_system, task_list_click_system, task_list_update_system,
-    task_list_visual_feedback_system,
-};
-use crate::interface::ui::panels::task_list::{
     TaskListDirty, TaskListState, detect_task_list_changed_components,
     detect_task_list_removed_components, update_task_list_state_system,
+};
+use crate::interface::ui::panels::task_list::{
+    left_panel_tab_system, left_panel_visibility_system, task_dashboard_action_state_sync_system,
+    task_dashboard_control_system, task_list_click_system, task_list_update_system,
+    task_list_visual_feedback_system,
 };
 use crate::interface::ui::{
     InfoPanelNodes, InfoPanelPinState, InfoPanelState, info_panel_system,
@@ -53,7 +52,9 @@ fn inspection_refresh_should_run(
     cadence: Res<InspectionRefreshCadence>,
     changed_stockpiles: Query<(), Changed<hw_logistics::StockpilePolicy>>,
     changed_soul_spas: Query<(), Changed<hw_energy::SoulSpaSite>>,
+    mut room_changes: crate::interface::ui::presentation::RoomInspectionChanges,
 ) -> bool {
+    let room_changed = room_changes.changed();
     let inspected_entity = pin_state.entity.or(selected.0);
     let inspected_policy_changed =
         inspected_entity.is_some_and(|entity| changed_stockpiles.get(entity).is_ok());
@@ -64,6 +65,7 @@ fn inspection_refresh_should_run(
         || rename_state.is_changed()
         || inspected_policy_changed
         || inspected_soul_spa_changed
+        || room_changed
         || (cadence.due && (selected.0.is_some() || pin_state.entity.is_some()))
 }
 
@@ -82,7 +84,6 @@ fn register_ui_info_panel_plugin_systems(app: &mut App) {
     app.init_resource::<InspectionRefreshCadence>();
     app.init_resource::<TaskListDirty>();
     app.init_resource::<TaskListState>();
-    app.init_resource::<TaskDashboardViewport>();
     #[cfg(feature = "profiling")]
     app.init_resource::<crate::interface::ui::panels::task_list::TaskDashboardPerfMetrics>()
         .init_resource::<crate::interface::ui::panels::task_list::TaskDashboardTimingMetrics>();
@@ -103,14 +104,17 @@ fn register_ui_info_panel_plugin_systems(app: &mut App) {
         Update,
         (
             left_panel_tab_system,
-            left_panel_visibility_system.after(left_panel_tab_system),
-            task_dashboard_action_state_sync_system.after(left_panel_tab_system),
+            left_panel_visibility_system
+                .after(left_panel_tab_system)
+                .after(hw_ui::list::entity_list_minimize_toggle_system),
+            task_dashboard_action_state_sync_system
+                .after(left_panel_tab_system)
+                .after(task_list_click_system),
             task_dashboard_control_system.after(task_dashboard_action_state_sync_system),
-            sync_task_dashboard_viewport_system.after(left_panel_visibility_system),
             task_list_update_system
                 .after(task_dashboard_action_state_sync_system)
                 .after(task_dashboard_control_system)
-                .after(sync_task_dashboard_viewport_system),
+                .after(left_panel_visibility_system),
             task_list_click_system,
             task_list_visual_feedback_system.after(task_list_click_system),
             soul_rename_button_system::<crate::assets::GameAssets>,

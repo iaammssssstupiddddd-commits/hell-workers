@@ -190,3 +190,7 @@ normal load、rollback、recovery-only replaceはpersisted entityを書き換え
 | `crates/bevy_app/src/plugins/logic.rs` | Room 検出システムの登録 |
 | `crates/bevy_app/src/plugins/visual.rs` | Room ビジュアルシステムの登録 |
 | `crates/hw_core/src/constants/building.rs` | Room 関連定数 |
+
+## 情報パネルの床起点診断
+
+床を選択すると、Room Entityの有無に依存せず、そのgridから現在の建物配置を検査する。`inspect_room`は通常の`detect_rooms`と同じflood-fillを使い、床なし・面積上限・マップ境界・開放境界・扉なしをtypedな理由と確認位置で返す。ECS分類も`collect_building_tiles`を共有する。選択位置と建物変更・削除に応じて診断を更新し、変更のない再描画では結果を再利用する。表示は成立条件の診断であり、遅延再生成中のRoom Entityを保持しない。

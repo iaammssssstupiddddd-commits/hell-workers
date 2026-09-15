@@ -152,16 +152,77 @@ pub(super) fn resolve_task_action_capabilities(
     TaskActionCapabilities::READ_ONLY
 }
 
+type RelatedTaskQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        &'static Designation,
+        Option<&'static hw_core::relationships::ManagedBy>,
+        Option<&'static TransportRequest>,
+    ),
+>;
+
+pub(super) type InspectableTaskRelatedQuery<'w, 's> = Query<
+    'w,
+    's,
+    (),
+    Or<(
+        (
+            With<hw_core::familiar::Familiar>,
+            With<hw_core::familiar::FamiliarOperation>,
+        ),
+        With<hw_jobs::Building>,
+        With<Blueprint>,
+        (
+            With<hw_logistics::Stockpile>,
+            With<hw_logistics::StockpilePolicy>,
+        ),
+        With<SoulSpaSite>,
+    )>,
+>;
+
+#[derive(SystemParam)]
+pub struct TaskRelatedQueries<'w, 's> {
+    tasks: RelatedTaskQuery<'w, 's>,
+    targets: InspectableTaskRelatedQuery<'w, 's>,
+}
+
+impl TaskRelatedQueries<'_, '_> {
+    fn valid(
+        &self,
+        task: Entity,
+        work_type: WorkType,
+        kind: hw_ui::panels::task_list::TaskRelatedKind,
+        target: Entity,
+    ) -> bool {
+        let Ok((designation, owner, transport)) = self.tasks.get(task) else {
+            return false;
+        };
+        designation.work_type == work_type
+            && self.targets.contains(target)
+            && match kind {
+                hw_ui::panels::task_list::TaskRelatedKind::Owner => {
+                    owner.is_some_and(|owner| owner.0 == target)
+                }
+                hw_ui::panels::task_list::TaskRelatedKind::Anchor => {
+                    transport.is_some_and(|request| request.anchor == target)
+                }
+            }
+    }
+}
+
 pub fn task_dashboard_action_button_system(
-    interactions: Query<(Entity, &Interaction, &TaskActionButton), Changed<Interaction>>,
+    interactions: Query<(Entity, &TaskActionButton)>,
     time: Res<Time<Virtual>>,
     foreground_gate: ForegroundUiGate,
     mut action_state: ResMut<TaskDashboardActionState>,
     mut dirty: ResMut<TaskListDirty>,
     mut intents: MessageWriter<UiIntent>,
+    related: TaskRelatedQueries,
 ) {
-    for (button_entity, interaction, action) in &interactions {
-        if *interaction != Interaction::Pressed
+    for (button_entity, action) in &interactions {
+        if !foreground_gate.activated(button_entity)
+            || action_state.active_task != Some(action.target)
             || time.is_paused()
             || !foreground_gate.allows(button_entity)
         {
@@ -169,6 +230,13 @@ pub fn task_dashboard_action_button_system(
         }
 
         match action.kind {
+            TaskActionButtonKind::InspectRelated { kind, target } => {
+                if related.valid(action.target, action.expected_work_type, kind, target) {
+                    intents.write(UiIntent::InspectEntity(target));
+                } else {
+                    dirty.mark_all();
+                }
+            }
             TaskActionButtonKind::AdjustPriority(adjustment) => {
                 if action_state.confirmation.take().is_some() {
                     dirty.mark_list();
@@ -178,6 +246,16 @@ pub fn task_dashboard_action_button_system(
                     expected_work_type: action.expected_work_type,
                     adjustment,
                 });
+            }
+            TaskActionButtonKind::Cancel(TaskCancelKind::SoulSpaSite(target)) => {
+                action_state.confirmation = None;
+                if action.expected_work_type == WorkType::Haul {
+                    intents.write(UiIntent::CancelSoulSpaConstruction {
+                        target,
+                        source_task: Some(action.target),
+                    });
+                }
+                dirty.mark_list();
             }
             TaskActionButtonKind::Cancel(kind) => {
                 let pending = PendingTaskCancellation {
@@ -965,6 +1043,7 @@ mod tests {
     #[test]
     fn task_dashboard_deconstruction_cancel_routes_only_through_the_owner_request() {
         let mut app = App::new();
+        crate::test_support::accepted_button_fixture(&mut app);
         app.add_plugins(MinimalPlugins)
             .init_resource::<UiInputState>()
             .init_resource::<PendingWorldInputCapture>()
@@ -1068,6 +1147,7 @@ mod tests {
     #[test]
     fn task_dashboard_soul_spa_cancel_routes_through_the_live_site_owner() {
         let mut app = App::new();
+        crate::test_support::accepted_button_fixture(&mut app);
         app.add_plugins(MinimalPlugins)
             .init_resource::<UiInputState>()
             .init_resource::<PendingWorldInputCapture>()
@@ -1152,6 +1232,7 @@ mod tests {
     #[test]
     fn task_dashboard_captured_or_paused_action_press_leaves_no_intent_or_confirmation() {
         let mut app = App::new();
+        crate::test_support::accepted_button_fixture(&mut app);
         app.add_plugins(MinimalPlugins)
             .init_resource::<UiInputState>()
             .init_resource::<PendingWorldInputCapture>()
@@ -1165,6 +1246,9 @@ mod tests {
             );
 
         let target = Entity::from_raw_u32(23).expect("valid test target");
+        app.world_mut()
+            .resource_mut::<TaskDashboardActionState>()
+            .active_task = Some(target);
         let capture_root = app.world_mut().spawn_empty().id();
         {
             let mut input = app.world_mut().resource_mut::<UiInputState>();
@@ -1219,6 +1303,7 @@ mod tests {
     #[test]
     fn task_dashboard_cancel_intents_route_through_task_owners() {
         let mut app = App::new();
+        crate::test_support::accepted_button_fixture(&mut app);
         app.add_plugins(MinimalPlugins)
             .init_resource::<UiInputState>()
             .init_resource::<PendingWorldInputCapture>()
@@ -1326,6 +1411,7 @@ mod tests {
     #[test]
     fn task_dashboard_action_applies_priority_only_after_live_revalidation() {
         let mut app = App::new();
+        crate::test_support::accepted_button_fixture(&mut app);
         app.add_plugins(MinimalPlugins)
             .init_resource::<UiInputState>()
             .init_resource::<PendingWorldInputCapture>()
@@ -1454,5 +1540,65 @@ mod tests {
             outcomes_before,
             "rejected intents must be drained instead of applying later",
         );
+    }
+    #[test]
+    fn task_related_link_rechecks_the_live_owner_before_opening_details() {
+        let mut app = App::new();
+        crate::test_support::accepted_button_fixture(&mut app);
+        app.add_plugins(MinimalPlugins)
+            .init_resource::<UiInputState>()
+            .init_resource::<PendingWorldInputCapture>()
+            .init_resource::<TaskDashboardActionState>()
+            .init_resource::<TaskListDirty>()
+            .init_resource::<IntentReceiptCount>()
+            .add_message::<UiIntent>()
+            .add_systems(
+                Update,
+                (task_dashboard_action_button_system, count_intents).chain(),
+            );
+        let owner = app
+            .world_mut()
+            .spawn((
+                hw_core::familiar::Familiar::default(),
+                hw_core::familiar::FamiliarOperation::default(),
+            ))
+            .id();
+        let task = app
+            .world_mut()
+            .spawn((
+                Designation {
+                    work_type: WorkType::Chop,
+                },
+                hw_core::relationships::ManagedBy(owner),
+            ))
+            .id();
+        app.world_mut()
+            .resource_mut::<TaskDashboardActionState>()
+            .active_task = Some(task);
+        let button = app
+            .world_mut()
+            .spawn((
+                Interaction::Pressed,
+                TaskActionButton {
+                    target: task,
+                    expected_work_type: WorkType::Chop,
+                    kind: TaskActionButtonKind::InspectRelated {
+                        kind: hw_ui::panels::task_list::TaskRelatedKind::Owner,
+                        target: owner,
+                    },
+                },
+            ))
+            .id();
+        app.update();
+        assert_eq!(app.world().resource::<IntentReceiptCount>().0, 1);
+        app.world_mut()
+            .entity_mut(task)
+            .remove::<hw_core::relationships::ManagedBy>();
+        *app.world_mut().get_mut::<Interaction>(button).unwrap() = Interaction::Hovered;
+        app.update();
+        *app.world_mut().get_mut::<Interaction>(button).unwrap() = Interaction::Pressed;
+        app.update();
+        assert_eq!(app.world().resource::<IntentReceiptCount>().0, 1);
+        assert!(app.world().resource::<TaskListDirty>().state_dirty());
     }
 }

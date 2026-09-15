@@ -37,9 +37,21 @@ fn main() -> AppExit {
                 eprintln!("Invalid native notification acceptance configuration: {error}");
                 std::process::exit(2);
             });
+    #[cfg(feature = "profiling")]
+    let native_ui_plugin =
+        bevy_app::interface::ui::native_acceptance::NativeUiAcceptancePlugin::try_from_process()
+            .unwrap_or_else(|error| {
+                eprintln!("Invalid UI acceptance configuration: {error}");
+                std::process::exit(2);
+            });
+    #[cfg(feature = "profiling")]
+    let native_ui_enabled = native_ui_plugin.is_some();
+    #[cfg(not(feature = "profiling"))]
+    let native_ui_enabled = false;
     if (native_acceptance_plugin.is_some()
         || native_deconstruction_plugin.is_some()
-        || native_notification_plugin.is_some())
+        || native_notification_plugin.is_some()
+        || native_ui_enabled)
         && perf_config.enabled()
     {
         eprintln!("Native acceptance cannot be combined with a performance scenario.");
@@ -49,6 +61,7 @@ fn main() -> AppExit {
         native_acceptance_plugin.is_some(),
         native_deconstruction_plugin.is_some(),
         native_notification_plugin.is_some(),
+        native_ui_enabled,
     ]
     .into_iter()
     .filter(|enabled| *enabled)
@@ -61,6 +74,10 @@ fn main() -> AppExit {
     let window_update_settings =
         perf_window_update_settings(perf_config.enabled(), use_headless_runner);
     let window_resolution = perf_window_resolution(&perf_config);
+    #[cfg(feature = "profiling")]
+    let window_resolution = native_ui_plugin
+        .as_ref()
+        .map_or(window_resolution, |plugin| plugin.window_resolution());
     let game_plugin = HellWorkersGamePlugin::new(perf_config);
     let log_filter = game_plugin.log_filter().to_string();
     configure_linux_window_backend();
@@ -116,6 +133,10 @@ fn main() -> AppExit {
         app.add_plugins(plugin);
     }
     if let Some(plugin) = native_notification_plugin {
+        app.add_plugins(plugin);
+    }
+    #[cfg(feature = "profiling")]
+    if let Some(plugin) = native_ui_plugin {
         app.add_plugins(plugin);
     }
 

@@ -18,7 +18,7 @@ graph TD
         F_AI_Sub["├─ State Handlers<br/>├─ Squad Management<br/>├─ Task Management<br/>└─ Recruitment"]
         S_AI["Soul AI (soul_ai.md)"]
     end
-    
+
     F_AI --> F_AI_Sub
 
     subgraph Data["Data Structures"]
@@ -37,7 +37,7 @@ graph TD
     S_AI -->|タスク実行| Jobs
     Jobs -->|空間検索| Grid
     S_AI -->|アイテム保持| Inventory
-    
+
     %% Engine Integration
     Core --> ECS
     Core --> Rel
@@ -66,7 +66,9 @@ auto-build を適用外にする。各 blocker record は代表理由が使っ�
 `crates/bevy_app/src/lib.rs` は共有 Resource・公開 module・event re-exportと `HellWorkersGamePlugin` を提供し、focused unit testはここから対象systemだけを登録する：
 `Input` → `Spatial` → `Logic` → `PreActor` → `Actor` → `PostActor` → `Visual` → `Interface`
 
-`PreActor` / `PostActor`はpause gate外のtransaction境界である。P04ではInterfaceがenqueueしたmanual Door requestを次Updateの`PreActor`で適用し、unpaused `Actor`のauto Door / movement確定後に`PostActor`で室内Light Fieldをcollect/rebuildする。VisualのDoor presentationは同じUpdateのCPU field rebuild後を観測する。
+`PreActor` / `PostActor`はpause gate外のtransaction境界である。Interfaceがenqueueしたmanual Door requestは単一の`PostUpdate::DoorManualMutationSet`でdoor/mapへ適用し、Door presentationおよびLastのsaveに先行する。unpaused `Actor`のauto Door / movement確定後に`PostActor`で室内Light Fieldをcollect/rebuildする。manual Doorのfield差分は次Updateに反映する。
+
+停止中の計画入力（Familiar command、TaskArea/新規採取、Area履歴）はInput後/Spatial前でowner別に制限し、AI/Actorは停止したままにする。選択に必要なSoul/Familiar/Resource/SelectableObstacle/Stockpile/Designationの差分索引更新はPreUpdateで動かす。停止中の許可範囲とメニューのpause所有権は[state.md](state.md)を参照。
 
 Wallの接続と3D presentationは、全`Update` writerの後に
 `PostUpdate::WallAssetReadinessSet → WallTopologyResolveSet → ApplyDeferred → DoorAssetReadinessSet → DoorPresentationSyncSet → WallPresentationApplySet → TransformSystems::Propagate`

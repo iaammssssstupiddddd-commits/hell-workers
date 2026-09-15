@@ -110,7 +110,7 @@ pub fn spawn_pause_menu(
 
     commands.entity(panel).with_children(|parent| {
         parent.spawn((
-            Text::new("Paused"),
+            Text::new("メニュー"),
             TextFont {
                 font: game_assets.font_ui().clone().into(),
                 font_size: FontSize::Px(theme.typography.font_size_xl),
@@ -128,9 +128,9 @@ pub fn spawn_pause_menu(
             parent,
             game_assets,
             theme,
-            "Resume",
-            "Resume",
-            MenuAction::TogglePause,
+            "閉じる",
+            "閉じる",
+            MenuAction::ToggleSystemMenu,
             None,
         );
         spawn_menu_button(
@@ -221,7 +221,7 @@ mod tests {
         assert!(
             buttons
                 .iter(app.world())
-                .any(|button| matches!(button.0, MenuAction::TogglePause))
+                .any(|button| matches!(button.0, MenuAction::ToggleSystemMenu))
         );
 
         let mut help_buttons = app

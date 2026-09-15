@@ -14,7 +14,7 @@ rootでbufferを所有する`Message`は`crates/bevy_app/src/plugins/messages.rs
 
 | Message | 定義 / 登録owner | Producer | Consumer / Timing | 契約 |
 |:---|:---|:---|:---|:---|
-| `DoorLockToggleRequest` | `hw_world::door_systems` / root `MessagesPlugin` | `handle_ui_intent`が`UiIntent::ToggleDoorLock`を変換 | `DoorManualMutationSet`（次Updateのpause gate外`PreActor`） | Door root ownerだけを渡す。consumerがcompleted Door / `WorldMap` ownerを再検証し、FIFOで一度だけ`apply_door_state`へ適用する。stale / invalid / wrong ownerはreason別metricへ数え、player通知は増やさない。world replacement時clearはP05が所有する |
+| `DoorLockToggleRequest` | `hw_world::door_systems` / root `MessagesPlugin` | `apply_ui_domain_intents_system`が`UiIntent::ToggleDoorLock`を変換 | `DoorManualMutationSet`（同frameのpause gate外`PostUpdate`、Door表示とLastのsaveより前） | Door root ownerだけを渡す。consumerがcompleted Door / `WorldMap` ownerを再検証し、FIFOで一度だけ`apply_door_state`へ適用する。stale / invalid / wrong ownerはreason別metricへ数え、player通知は増やさない。world replacement時clearはP05が所有する |
 
 ## 1. 通知イベント（EntityEvent Observer / MessageReader が受け取る）
 
@@ -57,7 +57,7 @@ dual 通知の Producer は `publish_*` helper を使う。
 | `SoulSpaConstructionCancelOutcome` | `hw_energy::soul_spa` / root `MessagesPlugin` | pause中のroot UI adapter、または`SoulSpaConstructionCancelRequest`のexclusive owner consumer | Soul Spa construction cancel通知adapter（同じ`Update::NotificationSystemSet::Adapt`） | cancel操作ごとに終端結果を1件。実搬入Bone返却数、pause、stale、phase、owner、active task不整合をtyped resultで表し、中間`TaskActionOutcome`は通知しない |
 | `PowerConsumerPolicyChangeOutcome` | `hw_energy::components` / root `MessagesPlugin` | root `handle_ui_intent` のlive consumer/policy検証 | Power policy通知adapter（同じ`Update::NotificationSystemSet::Adapt`） | priority intentごとに1件。applied/stale/unsupported/missing policyを区別し、欠落policyをUI経路で推測補完しない |
 | `DeconstructionDesignationOutcome` / `DeconstructionCancelOutcome` / `DeconstructionCommitOutcome` | `hw_jobs::deconstruction` / root `MessagesPlugin` | designation consumer / root finalizer | 解体通知adapter（同じ`Update::NotificationSystemSet::Adapt`） | logical designation/cancel/commit requestごとのtyped receipt。playerが対処できる成功・拒否・recovery failureだけをToastOnlyへ変換し、duplicate/stale replay等の内部排他結果は抑止する |
-| `UserFacingNotification` | `hw_ui::notifications` / `HwUiPlugin` | save/load root adapterなど | `NotificationSystemSet::Reduce` → `Present`（同じUpdate） | 表示専用Message。stable key、severity、safe title/body、retentionを持つ。2秒dedupe、toast 3件、重要履歴64件へreduce |
+| `UserFacingNotification` | `hw_ui::notifications` / `HwUiPlugin` | save/load root adapter、Zone配置のrelease結果など | `NotificationSystemSet::Reduce` → `Present`（同じUpdate） | 表示専用Message。stable key、severity、safe title/body、retentionを持つ。2秒dedupe、toast 3件、重要履歴64件へreduce。Zoneは成功/拒否をToastOnlyで通知 |
 
 配置プレビューは連続状態であり、毎フレームMessageを発行しない。`PlacementFeedbackState` resourceの
 `live` / `recent_failure`と成功anchor用live blockerから、`PlacementFeedbackSet::Present`がvisible feedbackを直接読む。詳細は
