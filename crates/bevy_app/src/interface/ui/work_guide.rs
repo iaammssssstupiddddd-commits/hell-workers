@@ -23,6 +23,8 @@ pub(crate) struct WorkGuide {
     target: Option<Entity>,
     started: bool,
     completed: bool,
+    building_target: Option<Entity>,
+    building_completed: bool,
     text: String,
 }
 
@@ -41,6 +43,8 @@ impl WorkGuide {
         self.target = None;
         self.started = false;
         self.completed = false;
+        self.building_target = None;
+        self.building_completed = false;
     }
 }
 
@@ -69,6 +73,73 @@ type GatherTargets<'w, 's> = Query<
     With<PlayerIssuedDesignation>,
 >;
 
+pub(crate) fn record_building_completion(
+    mut events: MessageReader<hw_jobs::BuildingCompletedVisualMessage>,
+    mut guide: ResMut<WorkGuide>,
+    epoch: Res<WorldEpoch>,
+) {
+    for event in events.read() {
+        if guide.active
+            && guide.epoch == *epoch
+            && guide.building_target == Some(event.blueprint_entity)
+        {
+            guide.building_completed = true;
+        }
+    }
+}
+
+fn construction_instruction(
+    guide: &mut WorkGuide,
+    selected: Option<Entity>,
+    area: &TaskArea,
+    blueprints: &Query<(&hw_jobs::Blueprint, &Transform)>,
+) -> String {
+    if guide.building_completed {
+        return "8/8 休息所が完成\n採取→建築予定→資材搬入→施工を確認できました。完成した休息所を選ぶと役割を確認できます。ガイドを閉じて続けてください。".into();
+    }
+    if guide
+        .building_target
+        .is_some_and(|target| !blueprints.contains(target))
+    {
+        guide.building_target = None;
+    }
+    if guide.building_target.is_none() {
+        guide.building_target = selected.filter(|target| {
+            blueprints.get(*target).is_ok_and(|(blueprint, transform)| {
+                blueprint.kind == hw_jobs::BuildingType::RestArea
+                    && area.contains(transform.translation.truncate())
+            })
+        });
+    }
+    let Some(target) = guide.building_target else {
+        return "5/8 休息所の建築予定を選択\n採取が完了しました。「建てる」→「休息所」でYard内かつ使い魔の担当範囲内に配置し、操作を終了して建築予定を選んでください。休息所は魂の疲労を回復する場所です。".into();
+    };
+    let Ok((blueprint, _)) = blueprints.get(target) else {
+        return String::new();
+    };
+    let wood = hw_logistics::ResourceType::Wood;
+    let required = blueprint
+        .required_materials
+        .get(&wood)
+        .copied()
+        .unwrap_or(0);
+    let delivered = blueprint
+        .delivered_materials
+        .get(&wood)
+        .copied()
+        .unwrap_or(0);
+    if !blueprint.materials_complete() {
+        format!(
+            "6/8 資材の搬入を待機\n木材 {delivered}/{required} 搬入済み。採取しただけでは建築予定に届きません。搬入できる魂と通路が必要です。「要対応」→仕事の停止理由・確定した関連先を確認してください。地面の資材と保管済み資材は別です。"
+        )
+    } else {
+        format!(
+            "7/8 施工を確認\n木材 {delivered}/{required} 搬入済み · 施工 {:.0}%。資材が届くと施工を許可された魂が工事を進めます。別の工事の完成や、この予定の取消は完了に数えません。",
+            blueprint.progress.clamp(0.0, 1.0) * 100.0
+        )
+    }
+}
+
 pub(crate) fn update(
     mut guide: ResMut<WorkGuide>,
     epoch: Res<WorldEpoch>,
@@ -76,7 +147,7 @@ pub(crate) fn update(
     familiars: Query<(&Familiar, Option<&TaskArea>)>,
     targets: GatherTargets,
     tasks: Query<(&AssignedTask, &CommandedBy)>,
-    time: Res<Time<Virtual>>,
+    (time, blueprints): (Res<Time<Virtual>>, Query<(&hw_jobs::Blueprint, &Transform)>),
 ) {
     if guide.epoch != *epoch {
         guide.end();
@@ -95,7 +166,7 @@ pub(crate) fn update(
         guide.familiar = selected.0.filter(|entity| familiars.contains(*entity));
     }
     let Some(familiar_entity) = guide.familiar else {
-        guide.text = "1/5 使い魔を選択\n左のEntities一覧、またはワールド上の使い魔を選んでください。使い魔がいなければ、用意できるまでガイドを閉じて構いません。".into();
+        guide.text = "1/8 使い魔を選択\n「管理」の使い魔・魂一覧、またはワールド上の使い魔を選んでください。使い魔がいなければ、用意できるまでガイドを閉じて構いません。".into();
         return;
     };
     let Ok((familiar, area)) = familiars.get(familiar_entity) else {
@@ -105,7 +176,7 @@ pub(crate) fn update(
     let Some(area) = area else {
         guide.forget_target();
         guide.text = format!(
-            "{prefix}2/5 担当範囲を確定\nこの使い魔を選び、OrdersのAreaから範囲をドラッグして離してください。木・岩と働けるSoulが入る範囲を選びます。"
+            "{prefix}2/8 担当範囲を確定\nこの使い魔を選び、「作業を指示」の「担当範囲を編集」から範囲をドラッグして離してください。木・岩と働けるSoul、Yardが入る範囲を選びます。"
         );
         return;
     };
@@ -155,17 +226,17 @@ pub(crate) fn update(
             .min_by_key(|entity| entity.to_bits());
     }
     let instruction = if guide.completed {
-        "5/5 作業完了\n資源の採取が完了しました。担当範囲と作業指定を整えると、使い魔とSoulが仕事を進めます。ガイドを閉じて続けてください。"
+        &construction_instruction(&mut guide, selected.0, area, &blueprints)
     } else if guide.started {
-        "4/5 作業開始を確認\nSoulが採取を開始しました。完了まで待ちます。中断した場合は、Tasksの停止理由とSoulの状態を確認してください。"
+        "4/8 作業開始を確認\nSoulが採取を開始しました。完了まで待ちます。中断した場合は、管理の「仕事」の停止理由とSoulの状態を確認してください。"
     } else if guide.target.is_some() {
-        "4/5 Soulの作業開始を待機\nTasksで担当と停止理由を確認できます。働けるSoul、使い魔の仕事設定、対象への通路を確認してください。"
+        "4/8 Soulの作業開始を待機\n管理の「仕事」で担当と停止理由を確認できます。働けるSoul、使い魔の仕事設定、対象への通路を確認してください。"
     } else {
-        "3/5 伐採または採掘を指定\nこの使い魔を選び、OrdersのChopまたはMineから担当範囲内の未指定の木・岩を囲んで離してください。"
+        "3/8 伐採または採掘を指定\nこの使い魔を選び、「作業を指示」の「伐採」または「採掘」から担当範囲内の未指定の木・岩を囲んで離してください。"
     };
     guide.text = format!(
         "{prefix}{instruction}{}",
-        if time.is_paused() && guide.target.is_some() && !guide.completed {
+        if time.is_paused() && guide.target.is_some() && !guide.building_completed {
             "\n時間停止中です。作業を進めるにはSpaceで再開します。"
         } else {
             ""
@@ -224,11 +295,11 @@ pub(crate) fn present(
             GuidePanel,
             Node {
                 position_type: PositionType::Absolute,
-                top: Val::Px(94.0),
-                left: Val::Percent(35.0),
-                width: Val::Px(350.0),
-                max_width: Val::Percent(40.0),
-                max_height: Val::Percent(60.0),
+                top: Val::Px(196.0),
+                left: Val::Px(12.0),
+                width: Val::Px(300.0),
+                max_width: Val::Percent(35.0),
+                max_height: Val::Vh(35.0),
                 min_height: Val::Px(0.0),
                 flex_direction: FlexDirection::Column,
                 padding: UiRect::all(Val::Px(12.0)),
@@ -370,7 +441,8 @@ mod tests {
             .init_resource::<WorldEpoch>()
             .init_resource::<crate::interface::selection::SelectedEntity>()
             .init_resource::<Time<Virtual>>()
-            .add_systems(Update, update);
+            .add_message::<hw_jobs::BuildingCompletedVisualMessage>()
+            .add_systems(Update, (record_building_completion, update).chain());
         app.world_mut()
             .resource_mut::<WorkGuide>()
             .start(WorldEpoch::default());
@@ -378,17 +450,91 @@ mod tests {
     }
 
     #[test]
+    fn construction_guide_requires_the_selected_blueprints_completion_event() {
+        let mut app = app();
+        let area = TaskArea::from_points(Vec2::ZERO, Vec2::splat(100.0));
+        let familiar = app.world_mut().spawn((Familiar::default(), area)).id();
+        let blueprint = app
+            .world_mut()
+            .spawn((
+                hw_jobs::Blueprint::new(hw_jobs::BuildingType::RestArea, vec![(1, 1)]),
+                Transform::from_xyz(32.0, 32.0, 0.0),
+            ))
+            .id();
+        {
+            let mut guide = app.world_mut().resource_mut::<WorkGuide>();
+            guide.familiar = Some(familiar);
+            guide.completed = true;
+        }
+        app.world_mut()
+            .resource_mut::<crate::interface::selection::SelectedEntity>()
+            .0 = Some(blueprint);
+        app.update();
+        assert_eq!(
+            app.world().resource::<WorkGuide>().building_target,
+            Some(blueprint)
+        );
+        assert!(app.world().resource::<WorkGuide>().text.contains("6/8"));
+        let unrelated = app.world_mut().spawn_empty().id();
+        app.world_mut()
+            .write_message(hw_jobs::BuildingCompletedVisualMessage {
+                blueprint_entity: unrelated,
+            });
+        app.update();
+        assert!(!app.world().resource::<WorkGuide>().building_completed);
+        app.world_mut()
+            .get_mut::<hw_jobs::Blueprint>(blueprint)
+            .unwrap()
+            .deliver_material(hw_logistics::ResourceType::Wood, 5);
+        app.update();
+        assert!(app.world().resource::<WorkGuide>().text.contains("7/8"));
+        app.world_mut().despawn(blueprint);
+        app.update();
+        assert!(!app.world().resource::<WorkGuide>().building_completed);
+        assert!(
+            app.world()
+                .resource::<WorkGuide>()
+                .building_target
+                .is_none()
+        );
+        let replacement = app
+            .world_mut()
+            .spawn((
+                hw_jobs::Blueprint::new(hw_jobs::BuildingType::RestArea, vec![(1, 1)]),
+                Transform::from_xyz(32.0, 32.0, 0.0),
+            ))
+            .id();
+        app.world_mut()
+            .resource_mut::<crate::interface::selection::SelectedEntity>()
+            .0 = Some(replacement);
+        app.update();
+        app.world_mut()
+            .write_message(hw_jobs::BuildingCompletedVisualMessage {
+                blueprint_entity: blueprint,
+            });
+        app.update();
+        assert!(!app.world().resource::<WorkGuide>().building_completed);
+        app.world_mut()
+            .write_message(hw_jobs::BuildingCompletedVisualMessage {
+                blueprint_entity: replacement,
+            });
+        app.world_mut().despawn(replacement);
+        app.update();
+        assert!(app.world().resource::<WorkGuide>().text.contains("8/8"));
+    }
+
+    #[test]
     fn guide_observes_owner_area_and_actual_work_and_handles_successful_despawn() {
         let mut app = app();
         app.update();
-        assert!(app.world().resource::<WorkGuide>().text.starts_with("1/5"));
+        assert!(app.world().resource::<WorkGuide>().text.starts_with("1/8"));
         let familiar = app.world_mut().spawn(Familiar::default()).id();
         let other = app.world_mut().spawn(Familiar::default()).id();
         app.world_mut()
             .resource_mut::<crate::interface::selection::SelectedEntity>()
             .0 = Some(familiar);
         app.update();
-        assert!(app.world().resource::<WorkGuide>().text.contains("2/5"));
+        assert!(app.world().resource::<WorkGuide>().text.contains("2/8"));
         app.world_mut()
             .entity_mut(familiar)
             .insert(TaskArea::from_points(Vec2::ZERO, Vec2::splat(100.0)));
@@ -475,10 +621,10 @@ mod tests {
         app.update();
         app.world_mut().despawn(target);
         app.update();
-        assert!(app.world().resource::<WorkGuide>().text.contains("3/5"));
+        assert!(app.world().resource::<WorkGuide>().text.contains("3/8"));
         app.world_mut().entity_mut(familiar).remove::<TaskArea>();
         app.update();
-        assert!(app.world().resource::<WorkGuide>().text.contains("2/5"));
+        assert!(app.world().resource::<WorkGuide>().text.contains("2/8"));
         app.world_mut().despawn(familiar);
         app.update();
         assert!(app.world().resource::<WorkGuide>().familiar.is_none());

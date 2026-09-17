@@ -250,6 +250,19 @@ pub fn update_area_edit_controls(
     state.revision = state.revision.wrapping_add(1);
     *model = AreaEditPanelModel {
         visible: current.flags.visible,
+        target: current.selected,
+        summary: format!(
+            "{} · {}",
+            current
+                .name
+                .as_deref()
+                .unwrap_or("使い魔を選択してください"),
+            current
+                .area
+                .as_ref()
+                .map(|area| dimensions(area.size()))
+                .unwrap_or_else(|| "未設定".into())
+        ),
         revision: state.revision,
         epoch: current.flags.epoch,
         controls: current.controls(),

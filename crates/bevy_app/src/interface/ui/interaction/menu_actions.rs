@@ -8,6 +8,9 @@ pub(super) fn handle_pressed_action(
     ui_intents: &mut MessageWriter<UiIntent>,
 ) {
     match action {
+        MenuAction::Workspace(_) | MenuAction::SetWorldView(_) => {
+            ui_intents.write(action);
+        }
         MenuAction::OpenHelp { .. } => {
             ui_intents.write(UiIntent::OpenHelp {
                 opener: Some(opener),
@@ -109,6 +112,9 @@ pub(super) fn handle_pressed_action(
         }
         MenuAction::SelectAreaTask => {
             ui_intents.write(UiIntent::SelectAreaTask);
+        }
+        MenuAction::SelectAreaTaskFor(_) | MenuAction::FinishAreaEdit => {
+            ui_intents.write(action);
         }
         MenuAction::SelectDreamPlanting => {
             ui_intents.write(UiIntent::SelectDreamPlanting);

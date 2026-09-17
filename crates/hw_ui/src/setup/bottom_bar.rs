@@ -22,11 +22,12 @@ pub fn spawn_bottom_bar(
     let bottom_bar = commands
         .spawn((
             Node {
-                width: Val::Percent(100.0),
-                height: Val::Px(theme.spacing.bottom_bar_height),
+                width: Val::Auto,
+                height: Val::Px(44.0),
                 position_type: PositionType::Absolute,
-                left: Val::Px(0.0),
-                bottom: Val::Px(0.0),
+                left: Val::Px(12.0),
+                bottom: Val::Px(12.0),
+                column_gap: Val::Px(4.0),
                 flex_direction: FlexDirection::Row,
                 align_items: AlignItems::Center,
                 justify_content: JustifyContent::Start,
@@ -53,26 +54,36 @@ pub fn spawn_bottom_bar(
     commands.entity(bottom_bar).with_children(|parent| {
         let buttons = [
             (
-                "Architect",
-                "建築モード切替 (B)",
+                "建てる",
+                "建築物の種類を選び、地図に配置します",
                 MenuAction::ToggleArchitect,
                 Some("B"),
             ),
             (
-                "Zones",
-                "ゾーンモード切替 (Z)",
+                "作業を指示",
+                "伐採・採掘・運搬などの仕事を指定します",
+                MenuAction::ToggleOrders,
+                None,
+            ),
+            (
+                "範囲を設定",
+                "保管場所やYardの範囲を設定します",
                 MenuAction::ToggleZones,
                 Some("Z"),
             ),
-            ("Orders", "命令メニュー切替", MenuAction::ToggleOrders, None),
-            ("Dream", "Dreamメニュー切替", MenuAction::ToggleDream, None),
-            ("Settings", "設定", MenuAction::ToggleSettings, None),
             (
-                "Menu",
-                "システムメニュー",
-                MenuAction::ToggleSystemMenu,
-                Some("Esc"),
+                "管理",
+                "使い魔・魂・仕事の一覧を開きます",
+                MenuAction::Workspace(crate::shell::WorkspaceAction::ToggleManagement),
+                None,
             ),
+            (
+                "表示",
+                "担当範囲・保管場所・給電・部屋を地図で確認します",
+                MenuAction::Workspace(crate::shell::WorkspaceAction::ToggleDisplay),
+                None,
+            ),
+            ("Dream", "Dreamメニュー切替", MenuAction::ToggleDream, None),
         ];
 
         for (label, tooltip, action, shortcut) in buttons {
@@ -91,21 +102,22 @@ pub fn spawn_bottom_bar(
         // Mode Display
         let mode_text = parent
             .spawn((
-                Text::new("Mode: Normal"),
+                Text::new(""),
                 TextFont {
                     font: game_assets.font_ui().clone().into(),
                     font_size: crate::theme::font_size_rem(theme.typography.font_size_md), // Semantic
                     weight: FontWeight::BOLD,
                     ..default()
                 },
-                TextColor(theme.colors.accent_ember.with_alpha(0.85)),
+                TextColor(theme.colors.text_primary_semantic),
                 TextLayout::new(Justify::Left, LineBreak::WordOrCharacter),
                 BackgroundColor(theme.colors.bg_surface),
                 Node {
                     position_type: PositionType::Absolute,
                     left: Val::Px(8.0),
                     bottom: Val::Px(theme.spacing.bottom_bar_height + 8.0),
-                    max_width: Val::Percent(96.0),
+                    max_width: Val::Vw(94.0),
+                    display: Display::None,
                     padding: UiRect::all(Val::Px(6.0)),
                     ..default()
                 },
@@ -129,9 +141,11 @@ fn spawn_bottom_bar_button(
         .spawn((
             Button,
             Node {
-                width: Val::Px(100.0),
-                height: Val::Px(40.0),
-                margin: UiRect::right(Val::Px(10.0)),
+                min_width: Val::Px(76.0),
+                height: Val::Px(36.0),
+                padding: UiRect::horizontal(Val::Px(8.0)),
+                flex_direction: FlexDirection::RowReverse,
+                column_gap: Val::Px(6.0),
                 justify_content: JustifyContent::Center,
                 align_items: AlignItems::Center,
                 ..default()
@@ -153,9 +167,31 @@ fn spawn_bottom_bar_button(
                     ..default()
                 },
                 TextColor(theme.colors.text_primary_semantic),
-                Underline,
-                UnderlineColor(theme.colors.accent_ember_bright.with_alpha(0.35)),
             ));
+            let icon = match action {
+                MenuAction::ToggleArchitect => Some(game_assets.icon_hammer()),
+                MenuAction::ToggleOrders => Some(game_assets.icon_axe()),
+                MenuAction::ToggleZones => Some(game_assets.icon_haul()),
+                MenuAction::Workspace(crate::shell::WorkspaceAction::ToggleManagement) => {
+                    Some(game_assets.icon_idle())
+                }
+                MenuAction::Workspace(crate::shell::WorkspaceAction::ToggleDisplay) => {
+                    Some(game_assets.icon_arrow_down())
+                }
+                MenuAction::ToggleDream => Some(game_assets.glow_circle()),
+                _ => None,
+            };
+            if let Some(icon) = icon {
+                button.spawn((
+                    ImageNode::new(icon.clone()),
+                    Node {
+                        width: Val::Px(16.0),
+                        height: Val::Px(16.0),
+                        flex_shrink: 0.0,
+                        ..default()
+                    },
+                ));
+            }
         });
 }
 

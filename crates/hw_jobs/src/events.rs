@@ -21,7 +21,23 @@ pub struct TaskAssignmentRequest {
 /// `hw_soul_ai` の Observer が WorldMap 更新と ObstaclePosition の配置を担当する。
 #[derive(Event, Debug, Clone)]
 pub struct BuildingCompletedEvent {
+    /// The exact construction owner replaced by this completed building.
+    pub blueprint_entity: Entity,
     pub building_entity: Entity,
     pub kind: BuildingType,
     pub occupied_grids: Vec<(i32, i32)>,
+}
+
+/// Presentation receipt for an exact completed construction owner, which may
+/// already be despawned when the next presentation system reads this message.
+#[derive(Message, Debug, Clone)]
+pub struct BuildingCompletedVisualMessage {
+    pub blueprint_entity: Entity,
+}
+
+pub fn publish_building_completed(commands: &mut Commands, event: BuildingCompletedEvent) {
+    commands.write_message(BuildingCompletedVisualMessage {
+        blueprint_entity: event.blueprint_entity,
+    });
+    commands.trigger(event);
 }

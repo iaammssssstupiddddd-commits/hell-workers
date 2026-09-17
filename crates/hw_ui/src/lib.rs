@@ -3,6 +3,7 @@ use bevy::prelude::*;
 use std::collections::HashSet;
 
 pub mod area_edit;
+pub mod catalog;
 /// Game-agnostic Help content schema and presentation state.
 pub mod help;
 pub mod intents;
@@ -17,10 +18,12 @@ pub mod panels;
 pub mod plugins;
 pub mod power;
 pub mod setup;
+pub mod shell;
 pub mod text_input_intents;
 pub use text_input_intents::TextInputIntent;
 pub mod theme;
 pub mod widgets;
+pub mod world_view;
 
 pub struct HwUiPlugin;
 
@@ -37,6 +40,8 @@ impl Plugin for HwUiPlugin {
             .init_resource::<panels::task_list::TaskListDirty>()
             .init_resource::<help::HelpPanelState>()
             .init_resource::<components::OperationDialogState>()
+            .init_resource::<shell::UiShellState>()
+            .init_resource::<world_view::WorldViewState>()
             .init_resource::<interaction::HoverActionTarget>();
     }
 }
@@ -73,6 +78,8 @@ pub fn reset_for_world_replace(world: &mut World) {
     clear_hover_action_targets(world);
     clear_entity_bearing_button_targets(world);
     reset_existing_resource::<components::UiInputState>(world);
+    reset_existing_resource::<shell::UiShellState>(world);
+    reset_existing_resource::<world_view::WorldViewState>(world);
     reset_existing_resource::<interaction::button_activation::ButtonActivationState>(world);
     reset_existing_resource::<interaction::pause_menu::SystemMenuState>(world);
     reset_existing_resource::<help::HelpPanelState>(world);
@@ -88,6 +95,14 @@ pub fn reset_for_world_replace(world: &mut World) {
     reset_existing_resource::<area_edit::AreaEditHistory>(world);
     reset_existing_resource::<area_edit::AreaEditClipboard>(world);
     reset_existing_resource::<area_edit::panel::AreaEditPanelModel>(world);
+    let mut workspace_roots = world.query_filtered::<&mut Node, Or<(
+        With<components::EntityListPanel>,
+        With<world_view::WorldViewPanel>,
+        With<world_view::WorldViewLegend>,
+    )>>();
+    for mut node in workspace_roots.iter_mut(world) {
+        node.display = Display::None;
+    }
     let mut area_panels =
         world.query_filtered::<&mut Node, With<area_edit::panel::AreaEditPanel>>();
     for mut node in area_panels.iter_mut(world) {

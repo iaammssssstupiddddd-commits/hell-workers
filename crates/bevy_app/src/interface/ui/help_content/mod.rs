@@ -53,7 +53,7 @@ pub(crate) fn build_help_panel_content() -> Result<HelpPanelContent, HelpCatalog
 pub(crate) fn build_help_panel_chrome() -> Result<HelpPanelChrome, HelpCatalogError> {
     let chrome = HelpPanelChrome::new(
         HelpPanelCopy::new(HelpPanelCopySpec {
-            launcher_label: "Help",
+            launcher_label: "ヘルプ",
             launcher_tooltip: "操作とゲームのヘルプ",
             panel_title: "Hell Workers ヘルプ",
             close_label: "閉じる",

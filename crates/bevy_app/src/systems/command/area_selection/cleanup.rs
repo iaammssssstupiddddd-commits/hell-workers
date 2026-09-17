@@ -80,6 +80,7 @@ mod tests {
             .reserve_building_footprint(BuildingType::OutdoorLamp, blueprint, [grid]);
 
         app.world_mut().trigger(BuildingCompletedEvent {
+            blueprint_entity: blueprint,
             building_entity: building,
             kind: BuildingType::OutdoorLamp,
             occupied_grids: vec![grid],

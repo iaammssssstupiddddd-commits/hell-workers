@@ -23,6 +23,7 @@ fn spawn_area_edit_preview(
                 position_type: PositionType::Absolute,
                 left: Val::Px(12.0),
                 top: Val::Px(12.0),
+                max_width: Val::Px(480.0),
                 padding: UiRect::axes(Val::Px(8.0), Val::Px(5.0)),
                 border: UiRect::all(Val::Px(1.0)),
                 border_radius: BorderRadius::all(Val::Px(3.0)),

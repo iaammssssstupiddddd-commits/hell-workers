@@ -17,6 +17,7 @@ mod time_control;
 use bevy::prelude::{Font, Handle, Image};
 
 pub trait UiAssets {
+    fn building_preview(&self, kind: hw_jobs::BuildingType) -> &Handle<Image>;
     fn font_ui(&self) -> &Handle<Font>;
     fn font_familiar(&self) -> &Handle<Font>;
     fn font_soul_name(&self) -> &Handle<Font>;
@@ -51,6 +52,9 @@ pub(super) mod test_support {
     }
 
     impl UiAssets for TestAssets {
+        fn building_preview(&self, _kind: hw_jobs::BuildingType) -> &Handle<Image> {
+            &self.image
+        }
         fn font_ui(&self) -> &Handle<Font> {
             &self.font
         }

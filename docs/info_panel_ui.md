@@ -1,30 +1,31 @@
 # 情報パネルUI仕様
 
-最終更新: 2026-07-26
+最終更新: 2026-09-16
 
 ## 概要
-画面右側に表示される常駐パネルです。  
+右の共通枠の詳細ページです。管理・表示設定と排他的に開き、対象を保持したまま閉じられます。[地図中心UI](ui-world-first.md)も参照してください。
 `SelectedEntity` またはピン留め中エンティティを参照し、変更時は差分更新のみ行います。  
-対象がない場合は `display: none` で非表示です。
+対象がない場合と詳細ページを閉じた場合は `display: none` で非表示です。
 
 ## 表示ルール
 
 ### 参照優先順位
-- `InfoPanelPinState.entity` があればそれを優先（ピン表示）
+- 明示的に開いた現在選択の一時詳細を優先し、「戻る」で固定対象を復元する
+- 一時詳細がなければ `InfoPanelPinState.entity` を優先（ピン表示）
 - ピンが無ければ `SelectedEntity`
 - ピン対象が消滅した場合は自動でピン解除し、選択対象へフォールバック
 
 ### ピン操作
 - 右クリックコンテキストメニューの `Inspect (Pin)` でピン設定
 - パネル右上「選択を表示」ボタンで解除
-- 「選択を表示」ボタンはピン中のみ表示。対象名に「固定:」を付け、本文末尾でも固定状態と対象を確認できる
+- 「選択を表示」ボタンは固定対象を表示中のみ表示（一時詳細では隠す）。対象名に「固定:」を付け、本文末尾でも固定状態と対象を確認できる
 
 ## 表示対象
 
 ### ソウル
 - ヘッダー（名前）
 - 性別アイコン
-- リネームボタン（`✎`、Soul 選択時のみ表示）
+- リネームボタン（`✎`、Soul の詳細表示中のみ表示）
 - ステータス
   - Motivation
   - Stress
@@ -43,10 +44,13 @@
 - バリデーション: 空文字・32 文字超は拒否（トリム後判定）
 - `UiIntent` は `Copy` 前提のため、リネームは non-`Copy` の `TextInputIntent` を使用
 - 確定後は Info Panel ヘッダー・エンティティリストの Soul 行名が次回 VM 同期で更新される
+- 詳細を閉じる／表示対象を変更すると未確定renameと当該入力focusを破棄する。
 - セーブ/ロードは既存の `SoulIdentity` 永続化経路に従う
 
 ### 使い魔
 - ヘッダー（名前）
+- 詳細上部の「作業範囲を指定」（未設定）／「作業範囲を変更」（設定済み）。スクロール本文の外に固定し、左クリックで選択した使い魔や管理一覧から開いた詳細でも使える
+- actionの対象は表示モデルのEntity。固定詳細と現在選択が異なる場合にも表示中の使い魔を編集し、開始時に生存・captureを再検証する。一時停止中も範囲編集は可能
 - 共通テキスト（タイプ、指揮関連パラメータ）
 - ソウル専用ステータス列は非表示
 
@@ -71,14 +75,14 @@ Tank、Mud Mixer、`BucketStorage` など `StockpilePolicy` を持たない特�
 | Apply Policy to Area | 表示中セルの4設定を保持して一回限りの矩形編集modeを開始 |
 
 単一セルの各ボタンは対象フィールドだけの `StockpilePolicyPatch`、範囲ボタンは4フィールドを固定したpatchを
-`UiIntent` として発行する。ピン中は `SelectedEntity` ではなく、表示モデルが保持するピン対象Entityへ適用する。
+`UiIntent` として発行する。固定・一時詳細とも `SelectedEntity` ではなく、表示モデルが保持するEntityへ適用する。
 矩形操作は左ボタンpress/releaseを所有し、クリックだけなら1タイルとして扱う。Escapeはmodeとpatchを破棄し、
 Modal/Pause capture開始時のgesture rollbackはpatchを保持して再試行できる。
 
 Accepted Resourcesの各行は起動時に一度だけ生成する静的UI nodeであり、ViewModel更新時はTextと
 `MenuButton` actionだけを差分更新する。全許可、単一許可、空集合、複数許可は同じ集合契約で表示し、
 複数許可でも1セルの現在内容と搬入予約は1資材に限定する。全資材を一覧から隠すcycle操作は持たない。
-情報パネルの外枠はviewport高58%を上限とし、見出しと固定解除を外側に残して本文だけを標準ScrollArea/Scrollbarで縦scrollする。別対象へ切り替えたときとworld置換時に先頭へ戻し、同じ対象の内容更新では読書位置を保持する。`1280x720 / UiScale 1.25` の実入力受入はUI改善計画で確認する。
+情報パネルの外枠はviewport高46%を上限とし、見出しと固定解除を外側に残して本文だけを標準ScrollArea/Scrollbarで縦scrollする。別対象へ切り替えたときとworld置換時に先頭へ戻し、同じ対象の内容更新では読書位置を保持する。`1280x720 / UiScale 1.25` の実入力は [残るUI受入計画](plans/ui-usability-improvements-plan-2026-09-14.md)で確認する。
 
 ### 電力発電施設（Soul Spa）
 `SoulSpaSite` を持つエンティティは `append_soul_spa_model()` で追記される。
@@ -129,6 +133,7 @@ priority変更はrootでtarget、`PowerConsumer`、durable policyを再検証し
 - `InfoPanelState` はリネーム中の対象 entity も保持する。表示モデルが同一でも、`SoulRenameState.active` の開始/終了でフィールド表示が切り替わるため、この状態は再描画判定に含める
 - `Update` では `update_entity_inspection_view_model_system` → `info_panel_system` の順に固定し、selection / pin / entity 消滅の反映が 1 フレーム遅れないようにします。
 - `info_panel_system` は `menu_visibility_system` の後、`update_mode_text_system` の前で実行されます。
+- 外枠の表示は `workspace_visibility_system` がPostUpdateのLayout前に所有します。閉じた状態は定期更新や参照消滅で再表示しません。
 
 ### `build_model()` の呼び出し順序
 
@@ -143,7 +148,7 @@ append_designation_model   // Designation: タスク情報
 ```
 
 ## デザイン仕様（現行）
-- 幅: `260px`（`min 200 / max 400`）
+- 幅: `296px`（`min 200 / max 400`）
 - 背景: セマンティックグラデーション
 - 外枠: `panel_border_width` + `panel_corner_radius`
 - セクションディバイダー: `Status / Current Task / Inventory`
@@ -175,7 +180,7 @@ append_designation_model   // Designation: タスク情報
 
 建設中のSoul Spaの取消は、情報パネルとTask一覧の搬入タスクから同じ確認パネルを開く。
 確定と「戻る」は取消の入口とは別のボタンとし、「現地へ」で対象位置を確認できる。
-確認パネルは全面captureを持たず、別対象の選択・pin変更・Task操作対象変更で失効する。
+確認パネルは全面captureを持たず、別対象の選択・pin変更・Task操作対象変更、共通枠の戻る・閉じる・ページ切替で失効する。
 Pause、別modalのcapture、world epoch変更、対象消滅、Operationalへの遷移でも失効する。
 確定はtarget/epoch/ticketを照合して確認を先に消費し、既存のSoul Spa取消ownerへ1件だけ送る。
 Bone返却や担当解放の処理は既存ownerが引き続き行う。その他のTask取消は既存確認を維持する。

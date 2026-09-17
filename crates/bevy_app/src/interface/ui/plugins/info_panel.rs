@@ -49,18 +49,25 @@ fn inspection_refresh_should_run(
     selected: Res<crate::interface::selection::SelectedEntity>,
     pin_state: Res<InfoPanelPinState>,
     rename_state: Res<SoulRenameState>,
-    cadence: Res<InspectionRefreshCadence>,
+    (cadence, shell): (
+        Res<InspectionRefreshCadence>,
+        Option<Res<hw_ui::shell::UiShellState>>,
+    ),
     changed_stockpiles: Query<(), Changed<hw_logistics::StockpilePolicy>>,
     changed_soul_spas: Query<(), Changed<hw_energy::SoulSpaSite>>,
     mut room_changes: crate::interface::ui::presentation::RoomInspectionChanges,
 ) -> bool {
     let room_changed = room_changes.changed();
-    let inspected_entity = pin_state.entity.or(selected.0);
+    let inspected_entity = shell.as_ref().map_or_else(
+        || pin_state.entity.or(selected.0),
+        |shell| shell.inspected_entity(selected.0, pin_state.entity),
+    );
     let inspected_policy_changed =
         inspected_entity.is_some_and(|entity| changed_stockpiles.get(entity).is_ok());
     let inspected_soul_spa_changed =
         inspected_entity.is_some_and(|entity| changed_soul_spas.get(entity).is_ok());
     selected.is_changed()
+        || shell.as_ref().is_some_and(|shell| shell.is_changed())
         || pin_state.is_changed()
         || rename_state.is_changed()
         || inspected_policy_changed
@@ -77,6 +84,45 @@ pub fn ui_info_panel_plugin() -> UiInfoPanelPlugin {
 
 fn register_ui_info_panel_plugin_systems(app: &mut App) {
     app.init_resource::<InfoPanelState>();
+    app.init_resource::<hw_ui::shell::UiShellState>();
+    app.init_gizmo_group::<crate::interface::ui::world_first::overlays::WorldViewGizmos>();
+    app.add_systems(
+        Update,
+        (
+            crate::interface::ui::world_first::overlays::sync_tool_view,
+            hw_ui::world_view::world_view_ui_system,
+            crate::interface::ui::world_first::overlays::draw_world_view,
+        )
+            .chain()
+            .in_set(GameSystemSet::Interface),
+    );
+    app.add_systems(
+        PostUpdate,
+        crate::interface::ui::world_first::overlays::world_overlay_visibility
+            .before(bevy::camera::visibility::VisibilitySystems::VisibilityPropagate),
+    );
+    app.add_systems(
+        Update,
+        (
+            crate::interface::ui::world_first::population_hud_system,
+            crate::interface::ui::world_first::current_selection_label_system,
+        )
+            .in_set(GameSystemSet::Interface),
+    );
+    app.add_systems(
+        Update,
+        hw_ui::list::minimize::sync_entity_list_minimize_system
+            .after(hw_ui::list::entity_list_minimize_toggle_system)
+            .in_set(GameSystemSet::Interface),
+    );
+    app.add_systems(
+        PostUpdate,
+        (
+            hw_ui::shell::workspace_visibility_system,
+            crate::interface::ui::dev_panel::dev_panel_visibility_system,
+        )
+            .before(bevy::ui::UiSystems::Layout),
+    );
     app.init_resource::<InfoPanelPinState>();
     app.init_resource::<InfoPanelNodes>();
     app.init_resource::<LeftPanelMode>();
@@ -84,6 +130,7 @@ fn register_ui_info_panel_plugin_systems(app: &mut App) {
     app.init_resource::<InspectionRefreshCadence>();
     app.init_resource::<TaskListDirty>();
     app.init_resource::<TaskListState>();
+    app.init_resource::<crate::interface::ui::world_first::attention::AttentionSummary>();
     #[cfg(feature = "profiling")]
     app.init_resource::<crate::interface::ui::panels::task_list::TaskDashboardPerfMetrics>()
         .init_resource::<crate::interface::ui::panels::task_list::TaskDashboardTimingMetrics>();
@@ -93,6 +140,7 @@ fn register_ui_info_panel_plugin_systems(app: &mut App) {
             detect_task_list_changed_components,
             detect_task_list_removed_components,
             update_task_list_state_system,
+            crate::interface::ui::world_first::attention::update_attention_summary,
         )
             .chain(),
     );
@@ -104,7 +152,13 @@ fn register_ui_info_panel_plugin_systems(app: &mut App) {
         Update,
         (
             left_panel_tab_system,
+            crate::interface::ui::world_first::tool_workspace_system
+                .after(update_entity_inspection_view_model_system)
+                .after(crate::interface::ui::interaction::handle_ui_intent),
             left_panel_visibility_system
+                .after(crate::interface::ui::world_first::tool_workspace_system)
+                .after(crate::interface::ui::interaction::handle_ui_intent)
+                .after(update_entity_inspection_view_model_system)
                 .after(left_panel_tab_system)
                 .after(hw_ui::list::entity_list_minimize_toggle_system),
             task_dashboard_action_state_sync_system
@@ -115,10 +169,17 @@ fn register_ui_info_panel_plugin_systems(app: &mut App) {
                 .after(task_dashboard_action_state_sync_system)
                 .after(task_dashboard_control_system)
                 .after(left_panel_visibility_system),
-            task_list_click_system,
+            task_list_click_system.run_if(
+                |frame: Res<crate::input_actions::ResolvedInputFrame>| {
+                    !frame.pointer_selection_suppressed()
+                },
+            ),
             task_list_visual_feedback_system.after(task_list_click_system),
             soul_rename_button_system::<crate::assets::GameAssets>,
-            soul_rename_cleanup_system,
+            soul_rename_cleanup_system
+                .after(crate::interface::ui::world_first::tool_workspace_system)
+                .after(crate::interface::ui::interaction::handle_ui_intent)
+                .after(update_entity_inspection_view_model_system),
         )
             .in_set(GameSystemSet::Interface),
     );
@@ -126,6 +187,7 @@ fn register_ui_info_panel_plugin_systems(app: &mut App) {
         Update,
         (
             update_entity_inspection_view_model_system
+                .after(crate::interface::ui::interaction::handle_ui_intent)
                 .after(hw_logistics::apply_stockpile_policy_change_requests_system),
             info_panel_system::<crate::assets::GameAssets>
                 .after(update_entity_inspection_view_model_system)

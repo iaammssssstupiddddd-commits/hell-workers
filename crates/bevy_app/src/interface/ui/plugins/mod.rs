@@ -41,6 +41,11 @@ pub fn register_ui_plugins(app: &mut App) {
 
 fn reset_root_ui_task_list(world: &mut World) {
     use crate::interface::ui::panels::task_list::{TaskListDirty, TaskListState};
+    if world.contains_resource::<crate::interface::ui::world_first::attention::AttentionSummary>() {
+        world.insert_resource(
+            crate::interface::ui::world_first::attention::AttentionSummary::default(),
+        );
+    }
 
     if world.contains_resource::<TaskListState>() {
         world.insert_resource(TaskListState::default());

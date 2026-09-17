@@ -1,185 +1,178 @@
-//! 時間操作 UI
-
+//! Compact map HUD: time on the left, population and current work on the right.
 use super::UiAssets;
-use crate::components::ClockText;
-use crate::components::DreamIconAbsorb;
 use crate::components::{
-    DreamPoolPulse, MenuAction, MenuButton, SpeedButtonMarker, UiInputBlocker, UiNodeRegistry,
-    UiSlot, UiTooltip,
+    ClockText, DreamIconAbsorb, DreamPoolPulse, MenuAction, MenuButton, SpeedButtonMarker,
+    UiInputBlocker, UiNodeRegistry, UiSlot, UiTooltip,
 };
-use crate::theme::UiTheme;
+use crate::shell::{PopulationText, WorkspaceAction};
+use crate::theme::{UiTheme, font_size_rem};
 use bevy::prelude::*;
 use bevy::ui::RelativeCursorPosition;
 use hw_core::game_state::TimeSpeed;
 
-/// 時間操作UIをスポーン
+fn hud_node() -> Node {
+    Node {
+        position_type: PositionType::Absolute,
+        top: Val::Px(12.0),
+        height: Val::Px(40.0),
+        flex_direction: FlexDirection::Row,
+        align_items: AlignItems::Center,
+        column_gap: Val::Px(8.0),
+        padding: UiRect::all(Val::Px(4.0)),
+        border_radius: BorderRadius::all(Val::Px(4.0)),
+        ..default()
+    }
+}
+
+fn hud_button(action: MenuAction, theme: &UiTheme) -> impl Bundle {
+    (
+        Button,
+        Node {
+            min_height: Val::Px(32.0),
+            padding: UiRect::horizontal(Val::Px(8.0)),
+            align_items: AlignItems::Center,
+            justify_content: JustifyContent::Center,
+            column_gap: Val::Px(6.0),
+            ..default()
+        },
+        BackgroundColor(theme.colors.button_default),
+        MenuButton(action),
+    )
+}
+
 pub fn spawn_time_control(
     commands: &mut Commands,
-    game_assets: &dyn UiAssets,
+    assets: &dyn UiAssets,
     theme: &UiTheme,
-    parent_entity: Entity,
-    ui_nodes: &mut UiNodeRegistry,
+    parent: Entity,
+    registry: &mut UiNodeRegistry,
 ) {
-    // Panel root with semi-transparent background
-    let time_control_root = commands
+    crate::world_view::spawn_world_view_ui(commands, parent, assets, theme);
+    let font = TextFont {
+        font: assets.font_ui().clone().into(),
+        font_size: font_size_rem(14.0),
+        ..default()
+    };
+    let clock = commands
         .spawn((
             Node {
-                position_type: PositionType::Absolute,
-                right: Val::Px(theme.spacing.panel_margin_x),
-                top: Val::Px(theme.sizes.time_control_top),
-                flex_direction: FlexDirection::Column,
-                align_items: AlignItems::Stretch,
-                padding: UiRect::all(Val::Px(10.0)),
-                min_width: Val::Px(180.0),
-                border: UiRect::all(Val::Px(1.0)),
-                border_radius: BorderRadius::all(Val::Px(6.0)),
-                ..default()
+                left: Val::Px(12.0),
+                ..hud_node()
             },
-            BackgroundColor(theme.colors.time_control_bg),
-            BorderColor::all(theme.colors.time_control_border),
+            BackgroundColor(theme.colors.bg_surface),
             RelativeCursorPosition::default(),
             UiInputBlocker,
         ))
+        .with_children(|row| {
+            row.spawn((
+                Text::new("Day 1, 00:00"),
+                font.clone(),
+                TextColor(theme.colors.text_primary_semantic),
+                ClockText,
+            ));
+            for (speed, label, tooltip, shortcut) in [
+                (TimeSpeed::Paused, "Ⅱ", "一時停止", "1"),
+                (TimeSpeed::Normal, "1×", "通常速度", "2"),
+                (TimeSpeed::Fast, "2×", "高速", "3"),
+                (TimeSpeed::Super, "4×", "超高速", "4"),
+            ] {
+                row.spawn((
+                    hud_button(MenuAction::SetTimeSpeed(speed), theme),
+                    SpeedButtonMarker(speed),
+                    UiTooltip::with_shortcut(tooltip, shortcut),
+                ))
+                .with_children(|button| {
+                    button.spawn((
+                        Text::new(label),
+                        font.clone(),
+                        TextColor(theme.colors.text_primary_semantic),
+                    ));
+                });
+            }
+        })
         .id();
-    commands.entity(parent_entity).add_child(time_control_root);
+    commands.entity(parent).add_child(clock);
 
-    commands.entity(time_control_root).with_children(|panel| {
-        // ── Clock row ──
-        panel.spawn((
-            Text::new("Day 1, 00:00"),
-            TextFont {
-                font: game_assets.font_ui().clone().into(),
-                font_size: crate::theme::font_size_rem(theme.typography.font_size_clock),
-                ..default()
-            },
-            TextColor(theme.colors.text_primary_semantic),
-            ClockText,
+    let status = commands
+        .spawn((
             Node {
-                margin: UiRect::bottom(Val::Px(6.0)),
-                ..default()
+                right: Val::Px(12.0),
+                ..hud_node()
             },
-        ));
-
-        // ── Speed buttons row ──
-        panel
-            .spawn(Node {
-                flex_direction: FlexDirection::Row,
-                column_gap: Val::Px(4.0),
-                margin: UiRect::bottom(Val::Px(8.0)),
-                ..default()
-            })
-            .with_children(|speed_row| {
-                let speeds = [
-                    (TimeSpeed::Paused, "||", "一時停止", "1"),
-                    (TimeSpeed::Normal, ">", "通常速度 (x1)", "2"),
-                    (TimeSpeed::Fast, ">>", "高速 (x2)", "3"),
-                    (TimeSpeed::Super, ">>>", "超高速 (x4)", "4"),
-                ];
-
-                for (speed, label, tooltip, shortcut) in speeds {
-                    speed_row
+            BackgroundColor(theme.colors.bg_surface),
+            RelativeCursorPosition::default(),
+            UiInputBlocker,
+        ))
+        .with_children(|row| {
+            row.spawn((
+                hud_button(MenuAction::Workspace(WorkspaceAction::OpenEntities), theme),
+                UiTooltip::new("世界全体の人数。クリックで管理を開きます"),
+            ))
+            .with_children(|button| {
+                button.spawn((
+                    Text::new("使い魔 0 · 魂 0"),
+                    font.clone(),
+                    TextColor(theme.colors.text_primary_semantic),
+                    PopulationText,
+                ));
+            });
+            row.spawn((
+                hud_button(
+                    MenuAction::Workspace(WorkspaceAction::OpenBlockedTasks),
+                    theme,
+                ),
+                UiTooltip::new("現在止まっている仕事を確認します。通知の未読数とは別です"),
+            ))
+            .with_children(|button| {
+                let text = button
+                    .spawn((
+                        Text::new("要対応 0"),
+                        font.clone(),
+                        TextColor(theme.colors.text_primary_semantic),
+                        UiSlot::TaskSummaryText,
+                    ))
+                    .id();
+                registry.set_slot(UiSlot::TaskSummaryText, text);
+            });
+            row.spawn(hud_button(MenuAction::ToggleDream, theme))
+                .with_children(|button| {
+                    let text = button
                         .spawn((
-                            Button,
+                            Text::new("Dream 0"),
+                            font.clone(),
+                            TextColor(theme.colors.accent_soul_bright),
+                            UiSlot::DreamPoolText,
+                            DreamPoolPulse::default(),
+                        ))
+                        .id();
+                    registry.set_slot(UiSlot::DreamPoolText, text);
+                    let icon = button
+                        .spawn((
                             Node {
-                                width: Val::Px(40.0),
-                                height: Val::Px(28.0),
-                                justify_content: JustifyContent::Center,
-                                align_items: AlignItems::Center,
-                                border: UiRect::all(Val::Px(1.0)),
-                                border_radius: BorderRadius::all(Val::Px(3.0)),
+                                width: Val::Px(16.0),
+                                height: Val::Px(16.0),
                                 ..default()
                             },
-                            BackgroundColor(theme.colors.button_default),
-                            BorderColor::all(Color::NONE),
-                            MenuButton(MenuAction::SetTimeSpeed(speed)),
-                            SpeedButtonMarker(speed),
-                            UiTooltip::with_shortcut(tooltip, shortcut),
+                            ImageNode::new(assets.glow_circle().clone()),
+                            BackgroundColor(theme.colors.accent_soul_bright),
+                            UiSlot::DreamPoolIcon,
+                            DreamIconAbsorb::default(),
                         ))
-                        .with_children(|btn| {
-                            btn.spawn((
-                                Text::new(label),
-                                TextFont {
-                                    font: game_assets.font_ui().clone().into(),
-                                    font_size: crate::theme::font_size_rem(
-                                        theme.typography.font_size_title,
-                                    ),
-                                    ..default()
-                                },
-                                TextColor(theme.colors.accent_sulfur),
-                            ));
-                        });
-                }
-            });
-
-        // ── Separator ──
-        panel.spawn((
-            Node {
-                height: Val::Px(1.0),
-                margin: UiRect::bottom(Val::Px(8.0)),
-                ..default()
-            },
-            BackgroundColor(theme.colors.time_control_separator),
-        ));
-
-        // ── Task Summary ──
-        let task_text_entity = panel
-            .spawn((
-                Text::new("Tasks: 0 (0 High)"),
-                TextFont {
-                    font: game_assets.font_ui().clone().into(),
-                    font_size: crate::theme::font_size_rem(theme.typography.font_size_status),
-                    ..default()
-                },
-                TextColor(theme.colors.panel_accent_time_control),
-                UiSlot::TaskSummaryText,
-                Node {
-                    margin: UiRect::bottom(Val::Px(4.0)),
-                    ..default()
-                },
+                        .id();
+                    registry.set_slot(UiSlot::DreamPoolIcon, icon);
+                });
+            row.spawn((
+                hud_button(MenuAction::ToggleSystemMenu, theme),
+                UiTooltip::new("保存・読込・設定"),
             ))
-            .id();
-        ui_nodes.set_slot(UiSlot::TaskSummaryText, task_text_entity);
-
-        // ── Dream Pool ──
-        panel
-            .spawn((Node {
-                flex_direction: FlexDirection::Row,
-                align_items: AlignItems::Center,
-                ..default()
-            },))
-            .with_children(|row| {
-                let dream_text_entity = row
-                    .spawn((
-                        Text::new("Dream: 0"),
-                        TextFont {
-                            font: game_assets.font_ui().clone().into(),
-                            font_size: crate::theme::font_size_rem(
-                                theme.typography.font_size_status,
-                            ),
-                            ..default()
-                        },
-                        TextColor(theme.colors.accent_soul_bright),
-                        UiSlot::DreamPoolText,
-                        DreamPoolPulse::default(),
-                    ))
-                    .id();
-                ui_nodes.set_slot(UiSlot::DreamPoolText, dream_text_entity);
-
-                let icon_entity = row
-                    .spawn((
-                        Node {
-                            width: Val::Px(16.0),
-                            height: Val::Px(16.0),
-                            margin: UiRect::left(Val::Px(6.0)),
-                            ..default()
-                        },
-                        ImageNode::new(game_assets.glow_circle().clone()),
-                        BackgroundColor(theme.colors.accent_soul_bright),
-                        UiSlot::DreamPoolIcon,
-                        DreamIconAbsorb::default(),
-                    ))
-                    .id();
-                ui_nodes.set_slot(UiSlot::DreamPoolIcon, icon_entity);
+            .with_children(|button| {
+                button.spawn((
+                    Text::new("メニュー"),
+                    font.clone(),
+                    TextColor(theme.colors.text_primary_semantic),
+                ));
             });
-    });
+        })
+        .id();
+    commands.entity(parent).add_child(status);
 }

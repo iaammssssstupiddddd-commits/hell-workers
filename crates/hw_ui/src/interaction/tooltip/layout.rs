@@ -206,6 +206,16 @@ pub(crate) fn update_tooltip_popover_positions(
                 align: PopoverAlign::Start,
                 gap: 8.0,
             },
+            PopoverPlacement {
+                side: PopoverSide::Right,
+                align: PopoverAlign::End,
+                gap: 8.0,
+            },
+            PopoverPlacement {
+                side: PopoverSide::Left,
+                align: PopoverAlign::End,
+                gap: 8.0,
+            },
         ]
     } else {
         vec![
@@ -217,6 +227,16 @@ pub(crate) fn update_tooltip_popover_positions(
             PopoverPlacement {
                 side: PopoverSide::Top,
                 align: PopoverAlign::Start,
+                gap: 6.0,
+            },
+            PopoverPlacement {
+                side: PopoverSide::Bottom,
+                align: PopoverAlign::End,
+                gap: 6.0,
+            },
+            PopoverPlacement {
+                side: PopoverSide::Top,
+                align: PopoverAlign::End,
                 gap: 6.0,
             },
         ]

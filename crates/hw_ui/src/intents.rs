@@ -18,6 +18,8 @@ pub enum StockpilePolicyEditTarget {
 
 #[derive(Message, Copy, Clone, Debug, PartialEq)]
 pub enum UiIntent {
+    Workspace(crate::shell::WorkspaceAction),
+    SetWorldView(crate::world_view::WorldView),
     OpenHelp {
         opener: Option<Entity>,
     },
@@ -58,6 +60,8 @@ pub enum UiIntent {
     RemoveZone(ZoneType),
     SelectTaskMode(TaskMode),
     SelectAreaTask,
+    SelectAreaTaskFor(Entity),
+    FinishAreaEdit,
     AreaEditControl {
         action: crate::area_edit::panel::AreaEditAction,
         revision: u64,
@@ -174,7 +178,9 @@ impl UiIntent {
             | Self::ConfirmSoulSpaConstructionCancel { .. }
             | Self::AdjustTaskPriority { .. }
             | Self::CancelTask { .. } => false,
-            Self::StartWorkGuide
+            Self::Workspace(_)
+            | Self::SetWorldView(_)
+            | Self::StartWorkGuide
             | Self::EndWorkGuide
             | Self::OpenHelp { .. }
             | Self::CloseHelp
@@ -204,6 +210,8 @@ impl UiIntent {
             | Self::FocusEntity(_)
             | Self::ClearInspectPin
             | Self::SelectAreaTask
+            | Self::SelectAreaTaskFor(_)
+            | Self::FinishAreaEdit
             | Self::AreaEditControl { .. }
             | Self::ToggleDoorLock(_)
             | Self::OpenOperationDialog { .. }

@@ -218,9 +218,9 @@ impl Default for UiTheme {
         Self {
             colors: ThemeColors {
                 // Base Palette (Dark Purple/Hell Theme)
-                bg_surface: Color::srgb(0.08, 0.03, 0.06),
-                bg_elevated: Color::srgb(0.12, 0.05, 0.10),
-                bg_overlay: Color::srgb(0.18, 0.08, 0.14),
+                bg_surface: Color::srgb(0.075, 0.085, 0.09),
+                bg_elevated: Color::srgb(0.12, 0.135, 0.14),
+                bg_overlay: Color::srgb(0.16, 0.175, 0.18),
 
                 // Embers (Orange Accent)
                 accent_ember: Color::srgb(0.8, 0.4, 0.1),
@@ -345,9 +345,9 @@ impl Default for UiTheme {
                 margin_large: 6.0,
                 text_left_padding: 4.0,
                 panel_padding: 10.0,
-                panel_margin_x: 20.0,
-                panel_top: 170.0,
-                bottom_bar_height: 50.0,
+                panel_margin_x: 12.0,
+                panel_top: 64.0,
+                bottom_bar_height: 64.0,
                 bottom_bar_padding: 5.0,
             },
             sizes: ThemeSizes {
@@ -357,7 +357,7 @@ impl Default for UiTheme {
 
                 // Entity List Constraints
                 entity_list_min_width: 200.0,
-                entity_list_max_width: 450.0,
+                entity_list_max_width: 480.0,
 
                 // Info Panel Constraints
                 info_panel_min_width: 200.0,
@@ -380,9 +380,9 @@ impl Default for UiTheme {
                 squad_member_left_margin: 15.0,
                 empty_squad_left_margin: 15.0,
                 list_selection_border_width: 3.0,
-                entity_list_panel_width: 300.0,
+                entity_list_panel_width: 400.0,
                 entity_list_max_height_percent: 70.0,
-                info_panel_width: 260.0, // Increased from 200.0
+                info_panel_width: 296.0,
                 submenu_width: 160.0,
                 submenu_left_architect: 0.0,
                 submenu_left_zones: 110.0,
@@ -394,16 +394,16 @@ impl Default for UiTheme {
             },
             panels: PanelThemes {
                 entity_list: PanelGradient {
-                    top: Color::srgb(0.12, 0.05, 0.10),    // bg_elevated
-                    bottom: Color::srgb(0.08, 0.03, 0.06), // bg_surface
+                    top: Color::srgb(0.12, 0.135, 0.14),
+                    bottom: Color::srgb(0.075, 0.085, 0.09),
                 },
                 info_panel: PanelGradient {
-                    top: Color::srgb(0.12, 0.05, 0.10),    // bg_elevated
-                    bottom: Color::srgb(0.08, 0.03, 0.06), // bg_surface
+                    top: Color::srgb(0.12, 0.135, 0.14),
+                    bottom: Color::srgb(0.075, 0.085, 0.09),
                 },
                 bottom_bar: PanelGradient {
-                    top: Color::srgb(0.12, 0.05, 0.10),    // bg_elevated
-                    bottom: Color::srgb(0.08, 0.03, 0.06), // bg_surface
+                    top: Color::srgb(0.12, 0.135, 0.14),
+                    bottom: Color::srgb(0.075, 0.085, 0.09),
                 },
             },
         }

@@ -8,6 +8,7 @@ pub fn spawn_dev_panel_system(
     settings: Res<hw_core::GameSettings>,
     game_assets: Res<GameAssets>,
     theme: Res<UiTheme>,
+    clocks: Query<&ChildOf, With<hw_ui::components::ClockText>>,
 ) {
     let Some((top_left, _)) = q_slots
         .iter()
@@ -19,9 +20,10 @@ pub fn spawn_dev_panel_system(
     let panel = commands
         .spawn((
             Node {
+                display: Display::None,
                 position_type: PositionType::Absolute,
-                left: Val::Px(8.0),
-                top: Val::Px(8.0),
+                left: Val::Px(12.0),
+                top: Val::Px(104.0),
                 flex_direction: FlexDirection::Column,
                 row_gap: Val::Px(4.0),
                 padding: UiRect::all(Val::Px(6.0)),
@@ -32,6 +34,7 @@ pub fn spawn_dev_panel_system(
             BackgroundColor(Color::srgba(0.08, 0.08, 0.08, 0.80)),
             BorderColor::all(Color::srgba(0.35, 0.35, 0.35, 0.80)),
             UiInputBlocker,
+            DevPanelRoot,
             Name::new("DevPanel"),
         ))
         .id();
@@ -311,4 +314,8 @@ pub fn spawn_dev_panel_system(
                 );
             });
     });
+    // FPS remains independently configurable, even while developer controls are hidden.
+    if let (Some(fps), Ok(clock)) = (ui_nodes.get_slot(UiSlot::FpsText), clocks.single()) {
+        commands.entity(clock.parent()).add_child(fps);
+    }
 }

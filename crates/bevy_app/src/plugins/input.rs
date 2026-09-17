@@ -329,9 +329,11 @@ pub fn debug_toggle_system(
     if resolved_frame.contains(InputAction::ToggleDebug) {
         visible.0 = !visible.0;
         settings.debug_gizmos_enabled = visible.0;
-        for (_, config, _) in config_store.iter_mut() {
-            config.enabled = visible.0;
-        }
+        crate::systems::settings::apply::sync_debug_gizmos(
+            settings.debug_gizmos_enabled,
+            &mut visible,
+            &mut config_store,
+        );
 
         // 設定画面の Debug Gizmos チェックボックスにも反映（Checked は widget 状態の実体）
         for (entity, marker) in q_checkboxes.iter() {

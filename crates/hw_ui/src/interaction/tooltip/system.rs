@@ -27,6 +27,7 @@ pub struct TooltipBevy<'a> {
 /// Query bundle for hover_tooltip_system
 #[derive(SystemParam)]
 pub struct TooltipQuerySet<'w, 's> {
+    pub ui_scale: Option<Res<'w, UiScale>>,
     pub q_window: Query<'w, 's, &'static Window, With<bevy::window::PrimaryWindow>>,
     pub q_tooltip: Query<
         'w,
@@ -66,6 +67,11 @@ pub fn hover_tooltip_system<'w, 's, I, R>(
     let Ok(window) = queries.q_window.single() else {
         return;
     };
+    let ui_scale = queries
+        .ui_scale
+        .as_ref()
+        .map_or(1.0, |scale| scale.0)
+        .max(0.01);
     let Some(tooltip_anchor) = bevy.ui_nodes.get_slot(UiSlot::TooltipAnchor) else {
         return;
     };
@@ -139,6 +145,7 @@ pub fn hover_tooltip_system<'w, 's, I, R>(
             header: feedback.header().to_string(),
             common_text: String::new(),
             tooltip_lines: vec![body],
+            familiar_has_area: None,
             soul: None,
             stockpile: None,
             soul_spa: None,
@@ -229,7 +236,7 @@ pub fn hover_tooltip_system<'w, 's, I, R>(
                 button_x_span,
                 button_y_span,
                 tooltip_size,
-                Vec2::new(window.width(), window.height()),
+                Vec2::new(window.width(), window.height()) / ui_scale,
                 layout::resolve_mode_text_span_x(bevy.ui_nodes, &queries.ui_layout.q_layout),
                 layout::resolve_toggle_span_x(&queries.ui_layout.q_ui_tooltip_buttons),
                 &layout::resolve_visible_submenu_spans_x(&queries.ui_layout, *bevy.menu_state),
@@ -298,8 +305,8 @@ pub fn hover_tooltip_system<'w, 's, I, R>(
             anchor_node.left = Val::Px(0.0);
             anchor_node.top = Val::Px(0.0);
         } else if let Some(cursor_pos) = window.cursor_position() {
-            anchor_node.left = Val::Px(cursor_pos.x);
-            anchor_node.top = Val::Px(cursor_pos.y);
+            anchor_node.left = Val::Px(cursor_pos.x / ui_scale);
+            anchor_node.top = Val::Px(cursor_pos.y / ui_scale);
         }
     }
 

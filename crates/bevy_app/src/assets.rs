@@ -5,6 +5,24 @@ pub mod door_asset_set;
 pub mod wall_asset_set;
 
 impl UiAssets for GameAssets {
+    fn building_preview(&self, kind: hw_jobs::BuildingType) -> &Handle<Image> {
+        use hw_jobs::BuildingType;
+        match kind {
+            BuildingType::Wall => &self.mud_wall_isolated,
+            BuildingType::Door => &self.door_closed,
+            BuildingType::Floor => &self.mud_floor,
+            BuildingType::Tank => &self.tank_full,
+            BuildingType::MudMixer => &self.mud_mixer,
+            BuildingType::RestArea => &self.rest_area,
+            BuildingType::Bridge => &self.bridge,
+            BuildingType::SandPile => &self.sand_pile,
+            BuildingType::BonePile => &self.bone_pile,
+            BuildingType::WheelbarrowParking => &self.wheelbarrow_parking,
+            // These world objects are procedural; use their resource/light symbols.
+            BuildingType::SoulSpa => &self.icon_bone_small,
+            BuildingType::OutdoorLamp => &self.glow_circle,
+        }
+    }
     fn font_ui(&self) -> &Handle<Font> {
         &self.font_ui
     }

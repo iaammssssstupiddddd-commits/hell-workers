@@ -30,7 +30,7 @@ pub fn update_selection_indicator(
 ) {
     sync_indicator(
         selected.0,
-        Color::srgba(1.0, 0.92, 0.2, 0.45),
+        Color::srgba(1.0, 0.92, 0.2, 0.10),
         &world_map,
         &q_transforms,
         &mut indicators.p0(),
@@ -126,7 +126,8 @@ fn sync_indicator<Marker: Component + Copy>(
     }
 }
 
-fn target_geometry(
+/// Shared footprint for the selection fill and its map-view outline.
+pub fn target_geometry(
     target: Entity,
     world_map: &WorldMap,
     q_transforms: &Query<&GlobalTransform>,

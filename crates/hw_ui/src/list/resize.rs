@@ -4,7 +4,7 @@ use crate::theme::UiTheme;
 use bevy::prelude::*;
 use bevy::window::{CursorIcon, PrimaryWindow, SystemCursorIcon};
 
-pub const ENTITY_LIST_DEFAULT_HEIGHT: f32 = 420.0;
+pub const ENTITY_LIST_DEFAULT_HEIGHT: f32 = 380.0;
 pub const ENTITY_LIST_MIN_HEIGHT: f32 = 220.0;
 const EDGE_DRAG_THRESHOLD_PX: f32 = 10.0;
 
@@ -129,6 +129,10 @@ pub fn entity_list_resize_system(
     let Ok((mut panel_node, computed, transform)) = q_panel.single_mut() else {
         return;
     };
+    if panel_node.display == Display::None {
+        *resize_state = EntityListResizeState::default();
+        return;
+    }
     let scale = ui_scale.0.max(f32::EPSILON);
     let viewport_height = window.height() / scale;
     let mut bottom =

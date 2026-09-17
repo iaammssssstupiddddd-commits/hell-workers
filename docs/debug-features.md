@@ -6,7 +6,7 @@
 
 ## DevPanel（左上トグルパネル）
 
-`DevPanel` は画面左上に表示される開発用ボタン・インジケーター群。
+`DevPanel` はデバッグ表示が有効な間だけ画面左上に表示される開発用ボタン・インジケーター群。通常起動では非表示で、F12またはSettingsのDebug Gizmosで切り替える。
 `crates/bevy_app/src/interface/ui/dev_panel.rs` を公開facadeとし、`dev_panel/` 配下のcomponents、spawn、actions、presentationが定義・表示・操作を分担する。
 
 パネル内の表示順（上から）：
@@ -18,21 +18,20 @@
 | IBuild: ON/OFF | 壁即時完成トグルボタン | クリック |
 | Mask / Light / Light2 / Terrain / Objs | 3D 固定費の切り分けボタン | クリック |
 | ─ セパレーター ─ | | — |
-| FPS: XX | フレームレート表示 | `update_fps_display_system`（1秒毎） |
 | LOD:X rtt:XX.Xpx | 地形 LOD レベルと tile_rtt_px | `update_lod_indicator_system`（毎フレーム） |
 | RTT:H Mask:ON Light:ON Light2:OFF Terrain:ON Objs:ON | RtT 品質と固定費トグル状態 | `update_render_perf_status_system`（変更時） |
 
-最小化ボタンはパネル本文の外側に常時残る。`-` を押すと既存ボタン、インジケーター、
+デバッグ表示中は最小化ボタンがパネル本文の外側に残る。`-` を押すと既存ボタン、インジケーター、
 テキスト入力を含む本文を非表示にし、`+` を押すと同じentity群を復元する。
 本文内のテキスト入力がフォーカス中なら、最小化時にフォーカスも解除する。
-最小化中も FPS / LOD などの更新systemは動作し、復元時には最新値を表示する。
+最小化中もLODなどの更新systemは動作し、復元時には最新値を表示する。FPSは後述の独立HUDで表示する。
 初期状態は展開で、最小化状態は設定ファイルへ永続化しない。
 
 ### FPS インジケーター
 
-- `UiSlot::FpsText` entity として DevPanel 内に spawn し、`spawn_dev_panel_system` で `UiNodeRegistry` に登録する
+- `spawn_dev_panel_system` が `UiSlot::FpsText` を登録し、左上の時計と同じHUD行へ配置する
 - `update_fps_display_system`（`hw_ui` 側）が 1 秒間隔で平均 FPS を書き込む
-- 以前は `top_right_slot` 内に独立 widget として配置していたが、DevPanel と重なって不可視になったため統合
+- SettingsのShow FPSで独立して切り替え、DevPanelの非表示・最小化に左右されない
 
 ### LOD インジケーター
 
@@ -62,6 +61,7 @@
 - F3/F4/F6/F7/F8/F12 は project-owned resolver が exact chord として解決し、Modal/Pause/TextInput 中は生成しない。各 consumer は既存 Resource mutation だけを担当する
 - `F12`は`DebugVisible`を切り替える。trueの間、`hw_visual::soul::task_link_system`が
   `SoulTaskVisualState`のtask targetへGizmosの線と終点circleを描く。永続する`WorkLine` entity/componentは生成しない
+- `WorldViewGizmos`はプレイヤー用の選択・関連表示なのでデバッグ切替では無効化しない。「表示」と現在の操作だけで制御する。
 
 ### IBuild: ON / OFF ボタン（Instant Build）
 

@@ -22,7 +22,7 @@
 | [progression-and-choice-proposal-2026-08-09.md](progression-and-choice-proposal-2026-08-09.md) | Draft | Dream Edict、Contract、Familiar昇格を独立評価するTrack D提案 |
 | [soul-outline-mask-ring-proposal-2026-04-16.md](soul-outline-mask-ring-proposal-2026-04-16.md) | Superseded | 既存 soul mask RtT を使い、composite 側で画面空間の外周 ring を生成する提案 |
 | [soul_spawn_despawn_optimization.md](soul_spawn_despawn_optimization.md) | Draft / Active | Soul Spawn/Despawn 最適化提案 |
-| [ui-usability-audit-proposal-2026-09-13.md](ui-usability-audit-proposal-2026-09-13.md) | Review | UI全領域の実装レビュー、操作性向上32項目、優先順位・根拠・受入条件 |
+| [ui-usability-audit-proposal-2026-09-13.md](ui-usability-audit-proposal-2026-09-13.md) | Approved | UI全領域の実装レビュー、操作性向上32項目、優先順位・根拠・受入条件 |
 
 ## アーカイブ提案書一覧 (`archive/` / `**/archived/`)
 

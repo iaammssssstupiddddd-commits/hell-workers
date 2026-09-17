@@ -127,7 +127,12 @@ pub fn menu_visibility_system(
     }
 
     for (mut node, panel) in q.q_building_panels.iter_mut() {
-        node.display = if is_architect && !settings_open && arch_category_state.0 == Some(panel.0) {
+        node.display = if is_architect
+            && !settings_open
+            && arch_category_state
+                .0
+                .is_none_or(|category| category == panel.0)
+        {
             Display::Flex
         } else {
             Display::None

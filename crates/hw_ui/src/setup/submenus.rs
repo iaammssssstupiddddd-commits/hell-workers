@@ -129,7 +129,7 @@ fn spawn_submenu_container<T: Bundle>(
     let submenu = commands
         .spawn((
             node,
-            BackgroundColor(theme.colors.submenu_bg),
+            BackgroundColor(theme.colors.bg_surface),
             RelativeCursorPosition::default(),
             UiInputBlocker,
             ScrollArea,
@@ -206,49 +206,119 @@ fn spawn_menu_button(
 
 fn spawn_category_button(
     parent: &mut ChildSpawnerCommands,
-    game_assets: &dyn UiAssets,
+    assets: &dyn UiAssets,
     theme: &UiTheme,
-    category: BuildingCategory,
+    category: Option<BuildingCategory>,
 ) {
-    spawn_menu_button(
-        parent,
-        game_assets,
-        theme,
-        category.label(),
-        MenuAction::SelectArchitectCategory(Some(category)),
-        theme.colors.button_default,
-    );
+    let label = match category {
+        None => "すべて",
+        Some(BuildingCategory::Structure) => "壁・床・橋",
+        Some(BuildingCategory::Architecture) => "出入口",
+        Some(BuildingCategory::Plant) => "生産・設備",
+        Some(BuildingCategory::Temporary) => "休息・屋外",
+    };
+    parent
+        .spawn((
+            Button,
+            Node {
+                min_height: Val::Px(32.0),
+                padding: UiRect::horizontal(Val::Px(12.0)),
+                align_items: AlignItems::Center,
+                ..default()
+            },
+            BackgroundColor(theme.colors.button_default),
+            MenuButton(MenuAction::SelectArchitectCategory(category)),
+        ))
+        .with_children(|button| {
+            button.spawn((
+                Text::new(label),
+                TextFont {
+                    font: assets.font_ui().clone().into(),
+                    font_size: crate::theme::font_size_rem(14.0),
+                    ..default()
+                },
+                TextColor(theme.colors.text_primary_semantic),
+            ));
+        });
 }
 
 fn spawn_building_panel(
     parent: &mut ChildSpawnerCommands,
-    game_assets: &dyn UiAssets,
+    assets: &dyn UiAssets,
     theme: &UiTheme,
     category: BuildingCategory,
     items: Vec<MenuEntrySpec<'static>>,
 ) {
-    parent
-        .spawn((
-            Node {
-                display: Display::None,
-                width: Val::Px(theme.sizes.submenu_width),
-                height: Val::Auto,
-                flex_direction: FlexDirection::Column,
-                padding: UiRect::left(Val::Px(5.0)),
-                border: UiRect::left(Val::Px(1.0)),
-                ..default()
-            },
-            BorderColor::all(theme.colors.border_default),
-            ArchitectBuildingPanel(category),
-        ))
-        .with_children(|panel| {
-            spawn_menu_entries(panel, game_assets, theme, items);
-        });
+    for entry in items {
+        let kind = match entry.action {
+            MenuAction::SelectBuild(kind) => kind,
+            MenuAction::SelectFloorPlace => BuildingType::Floor,
+            MenuAction::SelectTaskMode(TaskMode::SoulSpaPlace(_)) => BuildingType::SoulSpa,
+            _ => continue,
+        };
+        let (name, role) = crate::catalog::building_copy(kind);
+        parent
+            .spawn((
+                Button,
+                Node {
+                    width: Val::Px(140.0),
+                    height: Val::Px(56.0),
+                    flex_shrink: 0.0,
+                    padding: UiRect::all(Val::Px(6.0)),
+                    column_gap: Val::Px(6.0),
+                    align_items: AlignItems::Center,
+                    border_radius: BorderRadius::all(Val::Px(4.0)),
+                    ..default()
+                },
+                BackgroundColor(theme.colors.button_default),
+                MenuButton(entry.action),
+                ArchitectBuildingPanel(category),
+                crate::components::UiTooltip::new(role),
+            ))
+            .with_children(|card| {
+                card.spawn((
+                    ImageNode::new(assets.building_preview(kind).clone()),
+                    Node {
+                        width: Val::Px(32.0),
+                        height: Val::Px(32.0),
+                        flex_shrink: 0.0,
+                        ..default()
+                    },
+                ));
+                card.spawn(Node {
+                    flex_direction: FlexDirection::Column,
+                    row_gap: Val::Px(4.0),
+                    flex_grow: 1.0,
+                    min_width: Val::Px(0.0),
+                    ..default()
+                })
+                .with_children(|copy| {
+                    copy.spawn((
+                        Text::new(name),
+                        TextFont {
+                            font: assets.font_ui().clone().into(),
+                            font_size: crate::theme::font_size_rem(14.0),
+                            ..default()
+                        },
+                        TextColor(theme.colors.text_primary_semantic),
+                    ));
+                    copy.spawn((
+                        Text::new(role),
+                        TextFont {
+                            font: assets.font_ui().clone().into(),
+                            font_size: crate::theme::font_size_rem(12.0),
+                            ..default()
+                        },
+                        TextColor(theme.colors.text_secondary_semantic),
+                    ));
+                });
+            });
+    }
 }
 
 fn spawn_architect_submenu(
     commands: &mut Commands,
-    game_assets: &dyn UiAssets,
+    assets: &dyn UiAssets,
     theme: &UiTheme,
     parent_entity: Entity,
 ) {
@@ -257,42 +327,51 @@ fn spawn_architect_submenu(
         theme,
         parent_entity,
         SubmenuContainerSpec {
-            left: Val::Px(theme.sizes.submenu_left_architect),
-            width: Val::Auto,
-            flex_direction: FlexDirection::Row,
-            align_items: Some(AlignItems::Start),
+            left: Val::Px(12.0),
+            width: Val::Px(880.0),
+            flex_direction: FlexDirection::Column,
+            align_items: Some(AlignItems::Stretch),
             marker: ArchitectSubMenu,
         },
     );
-
     commands.entity(submenu).with_children(|parent| {
-        // カテゴリ選択パネル（常時表示・左列）
         parent
             .spawn((
                 Node {
-                    display: Display::Flex,
-                    width: Val::Px(theme.sizes.submenu_width),
-                    height: Val::Auto,
-                    flex_direction: FlexDirection::Column,
+                    width: Val::Percent(100.0),
+                    column_gap: Val::Px(6.0),
+                    margin: UiRect::bottom(Val::Px(6.0)),
+                    flex_shrink: 0.0,
                     ..default()
                 },
                 ArchitectCategoryListPanel,
             ))
-            .with_children(|cat_panel| {
+            .with_children(|categories| {
+                spawn_category_button(categories, assets, theme, None);
                 for category in architect_categories() {
-                    spawn_category_button(cat_panel, game_assets, theme, *category);
+                    spawn_category_button(categories, assets, theme, Some(*category));
                 }
             });
-
-        for category in architect_categories() {
-            spawn_building_panel(
-                parent,
-                game_assets,
-                theme,
-                *category,
-                architect_building_specs(*category, theme.colors.button_default),
-            );
-        }
+        parent
+            .spawn(Node {
+                width: Val::Percent(100.0),
+                flex_wrap: FlexWrap::Wrap,
+                column_gap: Val::Px(4.0),
+                row_gap: Val::Px(4.0),
+                flex_shrink: 0.0,
+                ..default()
+            })
+            .with_children(|cards| {
+                for category in architect_categories() {
+                    spawn_building_panel(
+                        cards,
+                        assets,
+                        theme,
+                        *category,
+                        architect_building_specs(*category, theme.colors.button_default),
+                    );
+                }
+            });
     });
 }
 
@@ -457,17 +536,17 @@ fn architect_building_specs(
 fn zones_menu_specs(theme: &UiTheme) -> Vec<MenuEntrySpec<'static>> {
     vec![
         MenuEntrySpec::new(
-            "Stockpile",
+            "保管場所",
             MenuAction::SelectZone(ZoneType::Stockpile),
             theme.colors.button_default,
         ),
         MenuEntrySpec::new(
-            "Yard を拡張",
+            "Yardを拡張",
             MenuAction::SelectZone(ZoneType::Yard),
             theme.colors.button_default,
         ),
         MenuEntrySpec::new(
-            "Remove",
+            "保管範囲を削除",
             MenuAction::RemoveZone(ZoneType::Stockpile),
             theme.colors.status_danger,
         ),
@@ -477,32 +556,32 @@ fn zones_menu_specs(theme: &UiTheme) -> Vec<MenuEntrySpec<'static>> {
 fn orders_menu_specs(theme: &UiTheme) -> Vec<MenuEntrySpec<'static>> {
     vec![
         MenuEntrySpec::new(
-            "Chop",
+            "伐採",
             MenuAction::SelectTaskMode(TaskMode::DesignateChop(None)),
             theme.colors.button_default,
         ),
         MenuEntrySpec::new(
-            "Mine",
+            "採掘",
             MenuAction::SelectTaskMode(TaskMode::DesignateMine(None)),
             theme.colors.button_default,
         ),
         MenuEntrySpec::new(
-            "Haul",
+            "運搬",
             MenuAction::SelectTaskMode(TaskMode::DesignateHaul(None)),
             theme.colors.button_default,
         ),
         MenuEntrySpec::new(
-            "Deconstruct",
+            "建物を解体",
             MenuAction::SelectTaskMode(TaskMode::DesignateDeconstruct(None)),
             theme.colors.status_danger,
         ),
         MenuEntrySpec::new(
-            "Cancel",
+            "作業指示を取消",
             MenuAction::SelectTaskMode(TaskMode::CancelDesignation(None)),
             theme.colors.button_default,
         ),
         MenuEntrySpec::new(
-            "Area",
+            "使い魔の作業範囲を指定 / 変更",
             MenuAction::SelectAreaTask,
             theme.colors.button_default,
         ),
@@ -511,7 +590,7 @@ fn orders_menu_specs(theme: &UiTheme) -> Vec<MenuEntrySpec<'static>> {
 
 fn dream_menu_specs(theme: &UiTheme) -> Vec<MenuEntrySpec<'static>> {
     vec![MenuEntrySpec::new(
-        "Plant Trees",
+        "植樹",
         MenuAction::SelectDreamPlanting,
         theme.colors.button_default,
     )]

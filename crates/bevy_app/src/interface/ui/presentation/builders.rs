@@ -95,11 +95,12 @@ impl EntityInspectionQuery<'_, '_> {
         entity: Entity,
         model: &mut InspectionAccumulator,
     ) -> bool {
-        let Ok((familiar, op, policy)) = self.q_familiars.get(entity) else {
+        let Ok((familiar, op, policy, area)) = self.q_familiars.get(entity) else {
             return false;
         };
 
         model.header = familiar.name.clone();
+        model.familiar_has_area = Some(area.is_some());
         model.push_common(format!("Type: {:?}", familiar.familiar_type));
         model.push_common(format!(
             "Range: {:.0} tiles",
@@ -354,7 +355,7 @@ impl EntityInspectionQuery<'_, '_> {
         model.push_tooltip(task_line.clone());
 
         if let Some(issued_by) = issued_by_opt
-            && let Ok((familiar, _, _)) = self.q_familiars.get(issued_by.0)
+            && let Ok((familiar, _, _, _)) = self.q_familiars.get(issued_by.0)
         {
             let line = format!("Issued by: {}", familiar.name);
             model.push_tooltip(line.clone());

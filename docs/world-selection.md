@@ -24,9 +24,13 @@ Familiar、Soul、地面上Resource、Tree／Rockはcrate-owned spatial indexを
 
 ## 表示と操作結果
 
-Direct Hoverは淡い水色、Snapped Hoverは強い水色、選択中targetは黄色で表示します。Building系はowner footprint全体の矩形へ表示を合わせます。WorldMapが同一Entityの占有セルを移動した場合も次の表示更新で再計算します。
+Direct Hoverは淡い水色、Snapped Hoverは強い水色、選択中targetは薄い黄色の塗りと輪郭で表示します。Building系はowner footprint全体の矩形へ表示を合わせます。WorldMapが同一Entityの占有セルを移動した場合も次の表示更新で再計算します。
 
 Familiarの地面移動を受理すると、移動先へ短時間の緑色マーカーを表示します。BuildingのMove capabilityは`BuildingType::is_player_movable`が正本で、現在はTankとMud Mixerだけです。hover action、context menu、intent validation、実行処理は同じpredicateを使います。
+
+設定済みの作業範囲、使い魔の指揮範囲、Site/Yard境界は通常時も常設します。「表示」で担当範囲の凡例・保管タイル・消費設備の給電状態・成立した部屋を切り替えても常設エリアを隠しません。選択した魂の線は実際の確定済み作業先を結び、経路予測ではありません。ツールの一時表示が終わると手動表示へ戻ります。詳細の開閉は選択と独立し、閉じてもカメラ・選択・pinを保持します。
+
+右クリックメニューのアンカーはwindow座標をUiScaleで割り、UIのlogical pxへ変換します。
 
 ## 実装境界
 
@@ -44,7 +48,7 @@ Mouse Drag Pan有効時、中ボタンをワールド上で押してドラッグ
 
 ## 重なり候補一覧（U31）
 
-同じ画面位置（4 logical px以内）で同じ候補順をクリックすると巡回する。500 msの連打期限は撤廃した。複数候補を選んだ地点はworld座標で保持し、画面上部の「候補 n/m — 一覧を開く」から名前付き一覧を開ける。一覧はScrollArea/Scrollbarを使用し、行のreleaseで選択だけを変える（camera/pinは不変）。Escは既存ContextMenuの閉鎖ownerで一覧だけを閉じる。
+同じ画面位置（4 logical px以内）で同じ候補順をクリックすると巡回する。500 msの連打期限は撤廃した。複数候補を選んだ地点はworld座標で保持し、画面上部の「候補 n/m — 一覧を開く」から名前付き一覧を開ける。一覧はScrollArea/Scrollbarを使用し、行のreleaseで選択と詳細表示を更新する（camera/pinは不変）。Escは既存ContextMenuの閉鎖ownerで一覧だけを閉じる。
 
 元地点を共通SelectionResolverで再検査し、候補や地点の変更でrevisionを進める。buttonはtarget/revision/epochを持ち、古い候補やworld置換後の操作は拒否する。UI行はrevision変更で新Entityに再生成するため、古いpressが新しい対象へ移らない。TaskArea境界は別のArea開始操作であり候補一覧から除外する。mode変更・foreground capture・loadでは一時候補を破棄する。
 

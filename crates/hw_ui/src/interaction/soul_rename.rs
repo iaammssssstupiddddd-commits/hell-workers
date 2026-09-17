@@ -87,17 +87,32 @@ pub fn soul_rename_cleanup_system(
     inspection_vm: Res<EntityInspectionViewModel>,
     mut rename_state: ResMut<SoulRenameState>,
     mut commands: Commands,
+    shell: Option<Res<crate::shell::UiShellState>>,
+    mut focus: Option<ResMut<InputFocus>>,
+    parents: Query<&ChildOf>,
 ) {
     let Some(active) = rename_state.active else {
         return;
     };
 
-    let should_close = inspection_vm
-        .model
-        .as_ref()
-        .is_none_or(|model| model.soul.is_none() || model.entity != active.target);
+    let hidden = shell.is_some_and(|shell| shell.page != crate::shell::WorkspacePage::Inspector);
+    let should_close = hidden
+        || inspection_vm
+            .model
+            .as_ref()
+            .is_none_or(|model| model.soul.is_none() || model.entity != active.target);
 
     if should_close {
+        if let Some(focus) = &mut focus {
+            let mut current = focus.get();
+            while let Some(entity) = current {
+                if entity == active.field_root {
+                    focus.clear();
+                    break;
+                }
+                current = parents.get(entity).ok().map(ChildOf::parent);
+            }
+        }
         close_soul_rename(&mut commands, &mut rename_state);
     }
 }

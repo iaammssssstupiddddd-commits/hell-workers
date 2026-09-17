@@ -67,11 +67,15 @@ pub fn building_completion_system(
         }
 
         // WorldMap 更新と ObstaclePosition 配置を SoulAiCorePlugin の Observer に委譲
-        commands.trigger(hw_jobs::BuildingCompletedEvent {
-            building_entity,
-            kind: bp.kind,
-            occupied_grids: bp.occupied_grids.clone(),
-        });
+        hw_jobs::publish_building_completed(
+            &mut commands,
+            hw_jobs::BuildingCompletedEvent {
+                blueprint_entity: entity,
+                building_entity,
+                kind: bp.kind,
+                occupied_grids: bp.occupied_grids.clone(),
+            },
+        );
 
         post_process::apply_building_specific_post_process(
             &mut commands,

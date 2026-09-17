@@ -28,6 +28,7 @@ pub struct StructureDetectors<'w, 's> {
 pub struct ValueDetectors<'w, 's> {
     q_souls: Query<'w, 's, (), Changed<DamnedSoul>>,
     q_tasks: Query<'w, 's, (), Changed<AssignedTask>>,
+    q_idle: Query<'w, 's, (), Changed<hw_core::soul::IdleState>>,
     q_identity: Query<'w, 's, (), Changed<SoulIdentity>>,
     q_familiars: Query<'w, 's, (), Changed<Familiar>>,
     q_familiar_ai: Query<'w, 's, (), Changed<FamiliarAiState>>,
@@ -54,6 +55,7 @@ pub fn detect_entity_list_changes(
     let ValueDetectors {
         q_souls,
         q_tasks,
+        q_idle,
         q_identity,
         q_familiars,
         q_familiar_ai,
@@ -82,6 +84,7 @@ pub fn detect_entity_list_changes(
     }
 
     let value_changed = !q_souls.is_empty()
+        || !q_idle.is_empty()
         || !q_tasks.is_empty()
         || (!q_identity.is_empty() && !search_active)
         || !q_familiars.is_empty()

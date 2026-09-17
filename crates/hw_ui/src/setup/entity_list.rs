@@ -20,17 +20,18 @@ pub fn spawn_entity_list_panel(
                 width: Val::Px(theme.sizes.entity_list_panel_width),
                 min_width: Val::Px(theme.sizes.entity_list_min_width),
                 max_width: Val::Px(theme.sizes.entity_list_max_width),
-                height: Val::Px(420.0),
+                height: Val::Px(crate::list::resize::ENTITY_LIST_DEFAULT_HEIGHT),
                 min_height: Val::Px(220.0),
                 max_height: Val::Percent(theme.sizes.entity_list_max_height_percent),
                 position_type: PositionType::Absolute,
-                left: Val::Px(theme.spacing.panel_margin_x),
+                right: Val::Px(theme.spacing.panel_margin_x),
                 top: Val::Px(theme.spacing.panel_top),
                 flex_direction: FlexDirection::Column,
                 padding: UiRect::all(Val::Px(theme.spacing.panel_padding)),
                 border: UiRect::all(Val::Px(theme.sizes.panel_border_width)),
                 border_radius: BorderRadius::all(Val::Px(theme.sizes.panel_corner_radius)),
                 overflow: Overflow::clip_y(),
+                display: Display::None,
                 ..default()
             },
             BackgroundGradient::from(LinearGradient {
@@ -50,7 +51,7 @@ pub fn spawn_entity_list_panel(
     commands.entity(parent_entity).add_child(panel);
 
     commands.entity(panel).with_children(|parent| {
-        // ヘッダー行（タブバー + 最小化ボタン）
+        // Navigation and tabs share one row so the roster keeps its visible capacity.
         parent
             .spawn((
                 Node {
@@ -60,12 +61,20 @@ pub fn spawn_entity_list_panel(
                     flex_direction: FlexDirection::Row,
                     justify_content: JustifyContent::SpaceBetween,
                     align_items: AlignItems::Center,
+                    column_gap: Val::Px(4.0),
                     margin: UiRect::bottom(Val::Px(6.0)),
                     ..default()
                 },
                 BackgroundColor(theme.colors.bg_elevated),
             ))
             .with_children(|header| {
+                crate::shell::workspace_button(
+                    header,
+                    game_assets,
+                    theme,
+                    "戻る",
+                    crate::shell::WorkspaceAction::Back,
+                );
                 // タブバー
                 spawn_left_panel_tab_bar(header, game_assets, theme);
 
@@ -98,6 +107,13 @@ pub fn spawn_entity_list_panel(
                             EntityListMinimizeButtonLabel,
                         ));
                     });
+                crate::shell::workspace_button(
+                    header,
+                    game_assets,
+                    theme,
+                    "閉じる",
+                    crate::shell::WorkspaceAction::Close,
+                );
             });
 
         parent
@@ -115,7 +131,7 @@ pub fn spawn_entity_list_panel(
             ))
             .with_children(|row| {
                 row.spawn((
-                    Text::new("Search"),
+                    Text::new("検索"),
                     TextFont {
                         font: game_assets.font_ui().clone().into(),
                         font_size: crate::theme::font_size_rem(theme.typography.font_size_xs),
@@ -227,7 +243,7 @@ pub fn spawn_entity_list_panel(
                                             UnassignedSectionArrowIcon,
                                         ));
                                         button.spawn((
-                                            Text::new("Unassigned Souls"),
+                                            Text::new("未所属の魂"),
                                             TextFont {
                                                 font: game_assets.font_ui().clone().into(),
                                                 font_size: crate::theme::font_size_rem(
@@ -270,7 +286,7 @@ pub fn spawn_entity_list_panel(
 
                 // スクロール可能であることを示す固定ヒント
                 body.spawn((
-                    Text::new("Scroll: Mouse Wheel"),
+                    Text::new("ホイールでスクロール"),
                     TextFont {
                         font: game_assets.font_ui().clone().into(),
                         font_size: crate::theme::font_size_rem(theme.typography.font_size_xs),
@@ -321,7 +337,7 @@ fn spawn_left_panel_tab_bar(
                 row,
                 game_assets,
                 theme,
-                "Entities",
+                "使い魔・魂",
                 LeftPanelMode::EntityList,
                 true,
             );
@@ -329,7 +345,7 @@ fn spawn_left_panel_tab_bar(
                 row,
                 game_assets,
                 theme,
-                "Tasks",
+                "仕事",
                 LeftPanelMode::TaskList,
                 false,
             );

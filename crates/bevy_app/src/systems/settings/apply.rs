@@ -31,8 +31,12 @@ pub fn sync_debug_gizmos(
     config_store: &mut GizmoConfigStore,
 ) {
     visible.0 = enabled;
-    for (_, config, _) in config_store.iter_mut() {
-        config.enabled = enabled;
+    for (group, config, _) in config_store.iter_mut() {
+        config.enabled = enabled
+            || *group
+                == std::any::TypeId::of::<
+                    crate::interface::ui::world_first::overlays::WorldViewGizmos,
+                >();
     }
 }
 

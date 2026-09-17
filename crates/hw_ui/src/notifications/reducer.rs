@@ -305,7 +305,7 @@ mod tests {
             Duration::from_secs(2) + Duration::from_nanos(1),
         );
 
-        assert_eq!(center.toast_count(), 2);
+        assert_eq!(center.toast_count(), MAX_ACTIVE_TOASTS);
         assert_eq!(center.history_count(), 2);
     }
 

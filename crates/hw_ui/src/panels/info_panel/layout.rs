@@ -12,7 +12,7 @@ use hw_logistics::{STOCKPILE_ACCEPTANCE_RESOURCES, StockpilePolicyPatch};
 use crate::intents::StockpilePolicyEditTarget;
 use crate::power::PowerPriorityValue;
 
-const INFO_PANEL_MAX_HEIGHT_VH: f32 = 58.0;
+const INFO_PANEL_MAX_HEIGHT_VH: f32 = 46.0;
 
 fn spawn_info_section_divider(
     parent: &mut ChildSpawnerCommands,
@@ -314,6 +314,7 @@ pub fn spawn_info_panel_ui(
     info_panel_nodes.common.root = Some(root);
 
     commands.entity(root).with_children(|parent| {
+        crate::shell::spawn_workspace_navigation(parent, game_assets, theme, true);
         parent
             .spawn(Node {
                 width: Val::Percent(100.0),
@@ -329,12 +330,21 @@ pub fn spawn_info_panel_ui(
                 row.spawn(Node {
                     flex_direction: FlexDirection::Row,
                     align_items: AlignItems::Center,
+                    max_width: Val::Percent(100.0),
+                    min_width: Val::Px(0.0),
+                    flex_grow: 1.0,
+                    flex_basis: Val::Px(0.0),
+                    flex_wrap: FlexWrap::Wrap,
                     ..default()
                 })
                 .with_children(|left| {
                     let header = left
                         .spawn((
                             Text::new(""),
+                            Node {
+                                max_width: Val::Percent(100.0),
+                                ..default()
+                            },
                             TextFont {
                                 font: game_assets.font_ui().clone().into(),
                                 font_size: crate::theme::font_size_rem(
@@ -431,6 +441,39 @@ pub fn spawn_info_panel_ui(
                 ui_nodes.set_slot(UiSlot::InfoPanelUnpinButton, unpin_button);
                 info_panel_nodes.common.unpin_button = Some(unpin_button);
             });
+
+        let area_button = parent
+            .spawn((
+                Button,
+                MenuButton(MenuAction::SelectAreaTaskFor(Entity::PLACEHOLDER)),
+                Node {
+                    display: Display::None,
+                    min_height: Val::Px(32.0),
+                    flex_shrink: 0.0,
+                    margin: UiRect::bottom(Val::Px(4.0)),
+                    align_items: AlignItems::Center,
+                    justify_content: JustifyContent::Center,
+                    ..default()
+                },
+                BackgroundColor(theme.colors.button_default),
+            ))
+            .with_children(|button| {
+                info_panel_nodes.common.familiar_area_label = Some(
+                    button
+                        .spawn((
+                            Text::new("作業範囲を指定"),
+                            TextFont {
+                                font: game_assets.font_ui().clone().into(),
+                                font_size: FontSize::Px(theme.typography.font_size_sm),
+                                ..default()
+                            },
+                            TextColor(theme.colors.text_primary_semantic),
+                        ))
+                        .id(),
+                );
+            })
+            .id();
+        info_panel_nodes.common.familiar_area_button = Some(area_button);
 
         parent
             .spawn((
@@ -1079,6 +1122,9 @@ mod tests {
     }
 
     impl UiAssets for TestAssets {
+        fn building_preview(&self, _kind: hw_jobs::BuildingType) -> &Handle<Image> {
+            &self.image
+        }
         fn font_ui(&self) -> &Handle<Font> {
             &self.font
         }
@@ -1231,6 +1277,7 @@ mod tests {
                     header: "Stockpile".to_string(),
                     common_text: String::new(),
                     tooltip_lines: Vec::new(),
+                    familiar_has_area: None,
                     soul: None,
                     stockpile: Some(StockpileInspectionFields {
                         state: StockpilePolicyState::Accepting,
@@ -1299,6 +1346,7 @@ mod tests {
                     header: "Soul Spa".to_string(),
                     common_text: String::new(),
                     tooltip_lines: Vec::new(),
+                    familiar_has_area: None,
                     soul: None,
                     stockpile: None,
                     soul_spa: Some(SoulSpaInspectionFields {
@@ -1421,6 +1469,7 @@ mod tests {
                     header: "Outdoor Lamp".to_string(),
                     common_text: String::new(),
                     tooltip_lines: Vec::new(),
+                    familiar_has_area: None,
                     soul: None,
                     stockpile: None,
                     soul_spa: None,

@@ -32,7 +32,35 @@ impl Default for EntityListMinimizeState {
 }
 
 fn minimized_panel_height(theme: &UiTheme) -> f32 {
-    theme.spacing.panel_padding * 2.0 + theme.sizes.fold_button_size.max(32.0) + 6.0
+    theme.spacing.panel_padding * 2.0 + theme.sizes.fold_button_size.max(32.0) + 8.0
+}
+
+/// External HUD navigation can expand a previously minimized management page.
+pub fn sync_entity_list_minimize_system(
+    state: Res<EntityListMinimizeState>,
+    theme: Res<UiTheme>,
+    mut panels: Query<&mut Node, With<EntityListPanel>>,
+    mut labels: Query<&mut Text, With<EntityListMinimizeButtonLabel>>,
+) {
+    if !state.is_changed() && !theme.is_changed() {
+        return;
+    }
+    for mut node in &mut panels {
+        let min = if state.minimized {
+            minimized_panel_height(&theme)
+        } else {
+            ENTITY_LIST_MIN_HEIGHT
+        };
+        node.height = Val::Px(if state.minimized {
+            min
+        } else {
+            state.expanded_height.max(min)
+        });
+        node.min_height = Val::Px(min);
+    }
+    for mut label in &mut labels {
+        label.0 = if state.minimized { "+" } else { "-" }.to_owned();
+    }
 }
 
 pub fn entity_list_minimize_toggle_system(

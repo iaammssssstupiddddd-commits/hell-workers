@@ -99,6 +99,7 @@ impl Plugin for NativeUiAcceptancePlugin {
             .add_systems(
                 PostUpdate,
                 observe_ui
+                    .after(bevy::camera::visibility::VisibilitySystems::VisibilityPropagate)
                     .after(bevy::ui::UiSystems::PostLayout)
                     .after(bevy::ui::UiSystems::Stack),
             );
@@ -142,6 +143,54 @@ fn prepare_fixture(world: &mut World, scale: f32) {
             .query_filtered::<Entity, With<crate::entities::damned_soul::DamnedSoul>>()
             .iter(world)
             .collect();
+        // Exercise the production area renderer with unselected, established areas.
+        for (index, familiar) in familiars.iter().enumerate() {
+            let center = Vec2::new(-180.0 + index as f32 * 220.0, 40.0);
+            world
+                .entity_mut(*familiar)
+                .insert(hw_core::area::TaskArea::from_points(
+                    center - Vec2::new(100.0, 80.0),
+                    center + Vec2::new(100.0, 80.0),
+                ));
+        }
+        use hw_ui::shell::{UiShellState, WorkspaceAction};
+        let scene =
+            std::env::var("HW_NATIVE_UI_LAYOUT_SCENE").unwrap_or_else(|_| "management".into());
+        match scene.as_str() {
+            "management" => world.resource_mut::<UiShellState>().apply(
+                WorkspaceAction::OpenEntities,
+                None,
+                None,
+            ),
+            "selection" => {
+                world.resource_mut::<hw_ui::selection::SelectedEntity>().0 =
+                    familiars.first().copied()
+            }
+            "area" | "area-details" => {
+                world.resource_mut::<hw_ui::selection::SelectedEntity>().0 =
+                    familiars.first().copied();
+                world.resource_mut::<crate::app_contexts::TaskContext>().0 =
+                    hw_core::game_state::TaskMode::AreaSelection(None);
+                world
+                    .resource_mut::<NextState<hw_core::game_state::PlayMode>>()
+                    .set(hw_core::game_state::PlayMode::TaskDesignation);
+            }
+            "pinned" => {
+                world
+                    .resource_mut::<crate::interface::ui::InfoPanelPinState>()
+                    .entity = familiars.first().copied();
+                world.resource_mut::<hw_ui::selection::SelectedEntity>().0 =
+                    familiars.get(1).copied();
+            }
+            "build" => *world.resource_mut::<MenuState>() = MenuState::Architect,
+            "display" => world.resource_mut::<UiShellState>().apply(
+                WorkspaceAction::ToggleDisplay,
+                None,
+                None,
+            ),
+            "normal" => {}
+            _ => panic!("unsupported native UI layout scene"),
+        }
         for (index, soul) in souls.into_iter().enumerate() {
             world
                 .entity_mut(soul)
@@ -191,6 +240,12 @@ fn prepare_fixture(world: &mut World, scale: f32) {
 }
 
 fn visible_rect(world: &World, entity: Entity, viewport: Vec2) -> Option<[f32; 4]> {
+    if world
+        .get::<InheritedVisibility>(entity)
+        .is_some_and(|visibility| !visibility.get())
+    {
+        return None;
+    }
     let computed = world.get::<ComputedNode>(entity)?;
     let transform = world.get::<UiGlobalTransform>(entity)?;
     if computed.size().min_element() <= 0.0 {
@@ -199,31 +254,19 @@ fn visible_rect(world: &World, entity: Entity, viewport: Vec2) -> Option<[f32; 4
     let half = computed.size() * 0.5;
     let mut min = (transform.translation - half).max(Vec2::ZERO);
     let mut max = (transform.translation + half).min(viewport);
+    // Use the renderer's clip: popovers can override a scrolling ancestor's
+    // clip, so reconstructing clipping from ancestor overflow is incorrect.
+    if let Some(clip) = world.get::<bevy::ui::CalculatedClip>(entity) {
+        min = min.max(clip.clip.min);
+        max = max.min(clip.clip.max);
+    }
     let mut ancestor = Some(entity);
     while let Some(current) = ancestor {
-        if let Some(node) = world.get::<Node>(current) {
-            if node.display == Display::None {
-                return None;
-            }
-            if current != entity
-                && (node.overflow.x != OverflowAxis::Visible
-                    || node.overflow.y != OverflowAxis::Visible)
-                && let (Some(bounds), Some(position)) = (
-                    world.get::<ComputedNode>(current),
-                    world.get::<UiGlobalTransform>(current),
-                )
-            {
-                let lower = position.translation - bounds.size() * 0.5;
-                let upper = position.translation + bounds.size() * 0.5;
-                if node.overflow.x != OverflowAxis::Visible {
-                    min.x = min.x.max(lower.x);
-                    max.x = max.x.min(upper.x);
-                }
-                if node.overflow.y != OverflowAxis::Visible {
-                    min.y = min.y.max(lower.y);
-                    max.y = max.y.min(upper.y);
-                }
-            }
+        if world
+            .get::<Node>(current)
+            .is_some_and(|node| node.display == Display::None)
+        {
+            return None;
         }
         ancestor = world.get::<ChildOf>(current).map(ChildOf::parent);
     }
@@ -231,6 +274,35 @@ fn visible_rect(world: &World, entity: Entity, viewport: Vec2) -> Option<[f32; 4
 }
 
 fn node_key(world: &World, entity: Entity) -> Option<String> {
+    if world.get::<Text>(entity).is_some()
+        && let Some(parent) = world.get::<ChildOf>(entity).map(ChildOf::parent)
+        && (world
+            .get::<hw_ui::area_edit::panel::AreaEditDetailsToggle>(parent)
+            .is_some()
+            || world
+                .get::<hw_ui::area_edit::panel::AreaEditControlButton>(parent)
+                .is_some()
+            || world.get::<MenuButton>(parent).is_some_and(|button| {
+                matches!(
+                    button.0,
+                    hw_ui::UiIntent::FinishAreaEdit | hw_ui::UiIntent::SelectAreaTaskFor(_)
+                )
+            }))
+    {
+        return node_key(world, parent).map(|key| format!("label:{key}"));
+    }
+    if world
+        .get::<hw_ui::area_edit::panel::AreaEditDetailsToggle>(entity)
+        .is_some()
+    {
+        return Some("area-details-toggle".into());
+    }
+    if let Some(control) = world.get::<hw_ui::area_edit::panel::AreaEditControlButton>(entity) {
+        return Some(format!("area-control:{:?}", control.0));
+    }
+    if matches!(world.get::<UiSlot>(entity), Some(UiSlot::Header)) {
+        return Some("text:inspection-header".into());
+    }
     if world
         .get::<crate::interface::ui::dev_panel::DevPanelMinimizeButton>(entity)
         .is_some()
@@ -319,7 +391,14 @@ fn snapshot(world: &mut World, observer: &UiObserver) -> Value {
         if let Some(key) = node_key(world, entity)
             && let Some(rect) = visible_rect(world, entity, viewport)
         {
-            controls.insert(key, json!({"rect": rect, "entity": entity.to_bits(),
+            let computed = world.get::<ComputedNode>(entity).unwrap();
+            let transform = world.get::<UiGlobalTransform>(entity).unwrap();
+            let min = transform.translation - computed.size() * 0.5;
+            let max = transform.translation + computed.size() * 0.5;
+            let raw = [min.x, min.y, max.x, max.y];
+            let fully_visible = raw.iter().zip(rect).all(|(a, b)| (a - b).abs() <= 1.0);
+            controls.insert(key, json!({"rect": rect, "unclipped_rect": raw, "fully_visible": fully_visible, "entity": entity.to_bits(),
+                "text": world.get::<Text>(entity).map(|text| &text.0),
                 "interaction": world.get::<Interaction>(entity).map(|value| format!("{value:?}")),
                 "scroll": world.get::<ScrollPosition>(entity).map(|scroll| [scroll.0.x, scroll.0.y])}));
         }
@@ -386,7 +465,73 @@ fn snapshot(world: &mut World, observer: &UiObserver) -> Value {
         .map(|(transform, projection)| format!("{transform:?}:{projection:?}"))
         .collect::<Vec<_>>();
     let center = world.resource::<NotificationCenter>();
-    json!({
+    let scene = std::env::var("HW_NATIVE_UI_LAYOUT_SCENE").unwrap_or_else(|_| "management".into());
+    let panel_rect = |marker: Entity| visible_rect(world, marker, viewport);
+    let inspector_rect = world
+        .resource::<UiNodeRegistry>()
+        .get_slot(UiSlot::InfoPanelRoot)
+        .and_then(panel_rect);
+    let management_rect = world
+        .iter_entities()
+        .find(|entity| entity.contains::<EntityListPanel>())
+        .and_then(|entity| panel_rect(entity.id()));
+    let catalog_rect = world
+        .iter_entities()
+        .find(|entity| entity.contains::<ArchitectSubMenu>())
+        .and_then(|entity| panel_rect(entity.id()));
+    let display_rect = world
+        .iter_entities()
+        .find(|entity| entity.contains::<hw_ui::world_view::WorldViewPanel>())
+        .and_then(|entity| panel_rect(entity.id()));
+    let ui_rects: Vec<_> = world
+        .iter_entities()
+        .filter(|entity| {
+            entity.contains::<Node>()
+                && (entity
+                    .get::<BackgroundColor>()
+                    .is_some_and(|color| color.0.alpha() > 0.0)
+                    || entity
+                        .get::<bevy::ui::BackgroundGradient>()
+                        .is_some_and(|gradient| {
+                            gradient.0.iter().any(|gradient| match gradient {
+                                bevy::ui::Gradient::Linear(value) => {
+                                    value.stops.iter().any(|stop| stop.color.alpha() > 0.0)
+                                }
+                                bevy::ui::Gradient::Radial(value) => {
+                                    value.stops.iter().any(|stop| stop.color.alpha() > 0.0)
+                                }
+                                bevy::ui::Gradient::Conic(value) => {
+                                    value.stops.iter().any(|stop| stop.color.alpha() > 0.0)
+                                }
+                            })
+                        }))
+        })
+        .filter_map(|entity| panel_rect(entity.id()))
+        .collect();
+    let persistent_areas: Vec<_> = world.iter_entities().filter_map(|entity| {
+        let kind = if entity.contains::<hw_visual::task_area_visual::TaskAreaVisual>() {
+            "work"
+        } else if entity.contains::<crate::entities::familiar::FamiliarRangeIndicator>() {
+            "command"
+        } else if entity.contains::<hw_visual::site_yard_visual::SiteYardBoundaryVisual>() {
+            "site-yard"
+        } else {
+            return None;
+        };
+        Some(json!({
+            "kind": kind,
+            "visible": entity.get::<InheritedVisibility>().is_some_and(|visibility| visibility.get()),
+        }))
+    }).collect();
+    let layout = json!({
+        "area_edit_rect": world.iter_entities().find(|entity| entity.contains::<hw_ui::area_edit::panel::AreaEditPanel>()).and_then(|entity| panel_rect(entity.id())),
+        "layout_scene": scene, "inspector_rect": inspector_rect, "management_rect": management_rect,
+        "catalog_rect": catalog_rect, "display_rect": display_rect, "ui_rects": ui_rects,
+        "workspace_page": format!("{:?}", world.resource::<hw_ui::shell::UiShellState>().page),
+        "pinned": world.resource::<crate::interface::ui::InfoPanelPinState>().entity.map(Entity::to_bits),
+        "persistent_areas": persistent_areas,
+    });
+    let mut value = json!({
         "nonce": observer.nonce, "frame": observer.frame, "pid": std::process::id(),
         "list_text": list_text,
         "zones_rect": zones_rect,
@@ -416,7 +561,12 @@ fn snapshot(world: &mut World, observer: &UiObserver) -> Value {
         "camera": camera,
         "selected": world.resource::<hw_ui::selection::SelectedEntity>().0.map(Entity::to_bits),
         "controls": controls,
-    })
+    });
+    value
+        .as_object_mut()
+        .expect("snapshot object")
+        .extend(layout.as_object().expect("layout object").clone());
+    value
 }
 
 fn observe_ui(world: &mut World) {
@@ -429,6 +579,18 @@ fn observe_ui(world: &mut World) {
         if observer.frame == 45 {
             prepare_fixture(world, observer.scale);
             observer.prepared = true;
+        }
+        // Complete this scene's one-time fixture after the mode/model has settled.
+        if observer.frame == 48
+            && std::env::var("HW_NATIVE_UI_LAYOUT_ONLY").as_deref() == Ok("1")
+            && std::env::var("HW_NATIVE_UI_LAYOUT_SCENE").as_deref() == Ok("area-details")
+        {
+            for mut panel in world
+                .query::<&mut hw_ui::area_edit::panel::AreaEditPanel>()
+                .iter_mut(world)
+            {
+                panel.details_expanded = true;
+            }
         }
         let outcomes: Vec<_> = observer
             .save_cursor

@@ -18,6 +18,7 @@ pub(crate) enum InputBindingContext {
     OperationDialog,
     ActiveMode,
     OpenMenu,
+    Workspace,
     ContextMenu,
     AreaEdit,
     Debug,
@@ -582,6 +583,14 @@ pub(crate) const DEFAULT_BINDINGS: &[InputBinding] = &[
     ),
     binding(
         KeyCode::Escape,
+        InputAction::WorkspaceBack,
+        InputBindingContext::Workspace,
+        resolution(60, Some(InputActionFamily::CancelOrClose), 1, 85),
+        InputConflictLane::OverlayTransition,
+        true,
+    ),
+    binding(
+        KeyCode::Escape,
         InputAction::CloseOperationDialog,
         InputBindingContext::OperationDialog,
         resolution(100, Some(InputActionFamily::CancelOrClose), 4, 110),
@@ -691,6 +700,7 @@ pub(crate) fn binding_matches_context(
         InputBindingContext::Familiar => context.familiar_shortcuts_enabled(),
         InputBindingContext::ActiveMode => context.active_mode(),
         InputBindingContext::OpenMenu => context.open_menu(),
+        InputBindingContext::Workspace => context.shell_can_back && !context.recovery_failed,
         InputBindingContext::ContextMenu => context.context_menu_open,
         InputBindingContext::AreaEdit => {
             context.logic_shortcuts_enabled

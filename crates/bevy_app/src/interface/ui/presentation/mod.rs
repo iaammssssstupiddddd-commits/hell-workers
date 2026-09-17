@@ -99,6 +99,7 @@ pub struct EntityInspectionQuery<'w, 's> {
             &'static Familiar,
             &'static crate::entities::familiar::FamiliarOperation,
             Option<&'static hw_core::familiar::FamiliarPolicy>,
+            Option<&'static hw_core::area::TaskArea>,
         ),
     >,
     q_familiars_escape: Query<'w, 's, (&'static Transform, &'static Familiar)>,
@@ -138,6 +139,7 @@ struct InspectionAccumulator {
     common_lines: Vec<String>,
     tooltip_lines: Vec<String>,
     soul_fields: Option<SoulInspectionFields>,
+    familiar_has_area: Option<bool>,
     stockpile_fields: Option<StockpileInspectionFields>,
     soul_spa_fields: Option<SoulSpaInspectionFields>,
     power_fields: Option<PowerInspectionFields>,
@@ -167,6 +169,7 @@ impl InspectionAccumulator {
             common_text: self.common_lines.join("\n"),
             tooltip_lines: self.tooltip_lines,
             soul: self.soul_fields,
+            familiar_has_area: self.familiar_has_area,
             stockpile: self.stockpile_fields,
             soul_spa: self.soul_spa_fields,
             power: self.power_fields,
@@ -180,13 +183,50 @@ pub fn update_entity_inspection_view_model_system(
     inspection: EntityInspectionQuery,
     mut room: room::RoomInspection,
     mut view_model: ResMut<EntityInspectionViewModel>,
+    mut shell: Option<ResMut<hw_ui::shell::UiShellState>>,
+    management_mode: Option<Res<hw_ui::components::LeftPanelMode>>,
 ) {
-    let mut inspected_entity = pin_state.entity.or(selected_entity.0);
+    if selected_entity.is_changed()
+        && selected_entity.0.is_some()
+        && let Some(shell) = &mut shell
+        && (shell.page == hw_ui::shell::WorkspacePage::World
+            || (shell.management_open()
+                && management_mode.as_deref()
+                    == Some(&hw_ui::components::LeftPanelMode::EntityList)))
+    {
+        shell.reopen_inspector(selected_entity.0, pin_state.entity);
+    }
+    if let Some(shell) = &mut shell
+        && shell.selection_changed(selected_entity.0, pin_state.entity)
+    {
+        if shell.management_open()
+            && management_mode.as_deref() == Some(&hw_ui::components::LeftPanelMode::TaskList)
+        {
+            // Task selection exposes its inline priority/cancel controls in the ledger.
+            shell.observe_task_selection(selected_entity.0, pin_state.entity);
+        } else {
+            shell.observe_selection(selected_entity.0, pin_state.entity);
+        }
+    }
+    let mut inspected_entity = shell.as_ref().map_or_else(
+        || pin_state.entity.or(selected_entity.0),
+        |shell| shell.inspected_entity(selected_entity.0, pin_state.entity),
+    );
     let mut model = inspected_entity.and_then(|entity| inspection.build_model(entity));
 
-    if pin_state.entity.is_some() && model.is_none() {
-        pin_state.entity = None;
-        inspected_entity = selected_entity.0;
+    if model.is_none() {
+        if let Some(shell) = &mut shell
+            && shell.has_temporary_target()
+        {
+            shell.discard_missing_temporary_target();
+        }
+        if pin_state
+            .entity
+            .is_some_and(|pin| inspection.build_model(pin).is_none())
+        {
+            pin_state.entity = None;
+        }
+        inspected_entity = pin_state.entity.or(selected_entity.0);
         model = inspected_entity.and_then(|entity| inspection.build_model(entity));
     }
 

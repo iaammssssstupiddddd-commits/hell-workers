@@ -99,15 +99,78 @@ def paused_tooltip_ready(value: dict) -> bool:
 
 
 def check_entities_render(value):
-    native.require(value.get("list_text") and any(
-        item["text"].strip() and item["rect"] is not None for item in value["list_text"]
-    ), "Familiar header text has no visible layout")
+    if value.get("menu_state") != "Zones":
+        native.require(value.get("list_text") and any(
+            item["text"].strip() and item["rect"] is not None for item in value["list_text"]
+        ), "Familiar header text has no visible layout")
     native.require(value["paused"] and "text-field:DevPoc" not in value["controls"],
                    "render fixture must be paused with developer body hidden")
     if value.get("menu_state") == "Zones":
         menu = value.get("zones_rect")
         hint = value["mode_presentation"]["rect"]
-        native.require(menu and hint and menu[3] <= hint[1], "submenu obscures mode guidance")
+        native.require(menu and (hint is None or menu[3] <= hint[1]), "submenu obscures mode guidance")
+
+
+def rectangle_union_area(rectangles):
+    edges = sorted({x for rect in rectangles for x in (rect[0], rect[2])})
+    area = 0.0
+    for left, right in zip(edges, edges[1:]):
+        intervals = sorted((r[1], r[3]) for r in rectangles if r[0] < right and r[2] > left)
+        covered, end = 0.0, float("-inf")
+        for low, high in intervals:
+            covered += max(0.0, high - max(low, end))
+            end = max(end, high)
+        area += (right - left) * covered
+    return area
+
+
+def check_layout_scene(value, scene):
+    native.require(value.get("layout_scene") == scene, "layout scene differs")
+    native.require(value["paused"] and "text-field:DevPoc" not in value["controls"], "render fixture is not prepared")
+    native.require(not (value["management_rect"] and value["inspector_rect"]), "workspace panels overlap")
+    if scene == "management":
+        check_entities_render(value)
+        if value.get("menu_state") == "Zones":
+            native.require(not value["management_rect"] and not value["inspector_rect"], "tool menu must close the workspace")
+        else:
+            native.require(value["management_rect"], "management page is hidden")
+    elif scene in ("selection", "pinned"):
+        native.require(value["inspector_rect"] and not value["management_rect"], "selection page is missing")
+        header = value["controls"].get("text:inspection-header", {})
+        native.require(header.get("fully_visible") and header.get("text", "").strip(), "inspection target heading is missing or clipped")
+        area_entries = [key for key in value["controls"] if key.startswith("menu:SelectAreaTaskFor(")]
+        native.require(len(area_entries) == 1 and value["controls"][area_entries[0]].get("fully_visible"), "familiar area entry is missing or clipped")
+        label = value["controls"].get("label:" + area_entries[0], {})
+        native.require(label.get("fully_visible") and label.get("text", "").strip(), "familiar area entry label is missing or clipped")
+        if scene == "pinned":
+            native.require(value.get("pinned") and value.get("selected") and value["pinned"] != value["selected"], "pin and selection must be distinct")
+            native.require(value["controls"].get("menu:Workspace(InspectSelection)", {}).get("fully_visible"), "current selection chip is not fully visible")
+    elif scene in ("area", "area-details"):
+        native.require(value.get("area_edit_rect") and not value["inspector_rect"] and not value["management_rect"], "area editor is missing or overlaps workspace")
+        for key in ("menu:FinishAreaEdit", "area-details-toggle"):
+            native.require(value["controls"].get(key, {}).get("fully_visible"), "area editor primary action is clipped")
+            label = value["controls"].get("label:" + key, {})
+            native.require(label.get("fully_visible") and label.get("text", "").strip(), "area editor primary label is missing or clipped")
+        controls = [item for key, item in value["controls"].items() if key.startswith("area-control:")]
+        native.require(len(controls) == (10 if scene == "area-details" else 0), "area details disclosure differs")
+        native.require(all(item.get("fully_visible") for item in controls), "area detail action is clipped")
+        labels = [item for key, item in value["controls"].items() if key.startswith("label:area-control:")]
+        native.require(len(labels) == len(controls) and all(item.get("fully_visible") and item.get("text", "").strip() for item in labels), "area detail label is missing or clipped")
+    elif scene == "build":
+        native.require(value["catalog_rect"] and not value["inspector_rect"], "build catalog is missing or overlaps details")
+        cards = [key for key in value["controls"] if key.startswith("menu:SelectBuild(") or key in ("menu:SelectFloorPlace", "menu:SelectTaskMode(SoulSpaPlace(None))")]
+        native.require(len(cards) == 12, "not every build kind is visible")
+        native.require(all(value["controls"][key].get("fully_visible") for key in cards), "build card is clipped")
+    elif scene == "display":
+        native.require(value["display_rect"], "display page is hidden")
+    else:
+        native.require(value["workspace_page"] == "World" and not value["management_rect"] and not value["inspector_rect"], "normal map has a workspace open")
+        native.require(value["mode_presentation"]["rect"] is None, "normal map has persistent tool guidance")
+    native.require(value.get("ui_rects"), "UI occlusion measurements are missing")
+    ratio = rectangle_union_area(value["ui_rects"]) / (value["viewport"][0] * value["viewport"][1])
+    limit = {"normal": 0.20, "selection": 0.30, "pinned": 0.30, "area": 0.30, "area-details": 0.40, "build": 0.40}.get(scene, 0.60)
+    native.require(ratio <= limit, f"UI occlusion {ratio:.1%} exceeds {limit:.0%}")
+    return ratio
 
 
 class Driver:
@@ -227,7 +290,7 @@ class Driver:
         try:
             check_observation(case, self.last)
             if self.input is None:
-                check_entities_render(self.last)
+                check_layout_scene(self.last, self.last["layout_scene"])
         except native.AcceptanceError:
             native.atomic_write_json(self.root / "failed-checkpoint.json", {"case": case, "value": self.last})
             raise
@@ -239,8 +302,10 @@ class Driver:
         native.atomic_write_json(self.root / "checkpoints.json", {"checkpoints": self.checkpoints})
 
     def exercise(self):
-        self.click("dev-minimize")
-        self.last = self.wait(lambda value: "text-field:DevPoc" not in value["controls"], after=self.last["frame"])
+        if "text-field:DevPoc" in self.last["controls"]:
+            self.click("dev-minimize")
+            self.last = self.wait(lambda value: "text-field:DevPoc" not in value["controls"], after=self.last["frame"])
+        self.click("menu:Workspace(OpenEntities)")
         self.click("tab:TaskList")
         self.capture("tasks")
         self.click("task-control:LastPage")
@@ -315,8 +380,9 @@ def verify_root(root):
             value = item["value"]
             check_observation(item["case"], value)
             if layout_only:
-                check_entities_render(value)
-                native.require(value.get("menu_state") == ("Zones" if manifest.get("layout_menu") else "Hidden"),
+                scene = manifest.get("layout_scene", "management")
+                check_layout_scene(value, scene)
+                native.require(value.get("menu_state") == ("Zones" if manifest.get("layout_menu") else "Architect" if scene == "build" else "Hidden"),
                                "layout menu fixture differs")
             native.require(value["nonce"] == session["nonce"] and value["viewport"] == [width, height]
                            and abs(value["ui_scale"] - scale) < 0.001, "viewport/nonce differs")
@@ -334,7 +400,7 @@ def verify_root(root):
         native.require(min(oldest["visible_history"]) < min(history["visible_history"]), "older history entries were not reached")
         joint.verify_game_log(directory / "game.log", "Intel")
     return {"status": "valid", "profile": PROFILE, "sessions": len(expected),
-            "coverage": "Entities rendering only; no input evidence" if layout_only else
+            "coverage": f"{manifest.get('layout_scene', 'management')} rendering only; no input evidence" if layout_only else
                         "navigation/layout feedback only; C05/C07/C08 and full C01-C06 acceptance remain open"}
 
 
@@ -349,6 +415,7 @@ def plan(args):
                "PYTHONDONTWRITEBYTECODE=1", "python3", str(Path(__file__).resolve()), "run", "--repo", str(repo),
                "--job-root", str(root), "--subject-commit", subject, "--source-fingerprint", source,
                "--harness-fingerprint", harness, "--input-backend", args.input_backend,
+               "--layout-scene", args.layout_scene,
                *(["--layout-menu"] if args.layout_menu else []),
                *(["--smoke"] if args.smoke else [])]
     native.print_json({"status": "blocked" if resources["failures"] else "ready", "profile": PROFILE,
@@ -364,6 +431,7 @@ def run(args):
     repo, root = native.validate_repo(args.repo), Path(args.job_root).resolve()
     native.require(os.environ.get("HW_NATIVE_ACCEPTANCE_LAUNCHED") == "1", "use planned kitty launcher")
     native.require(not args.layout_menu or args.input_backend == "none", "layout menu requires no-input rendering")
+    native.require(not args.layout_menu or args.layout_scene == "management", "layout menu requires management scene")
     native.require(native.git_subject(repo) == args.subject_commit and native.source_fingerprint(repo) == args.source_fingerprint
                    and native.native_harness_fingerprint(repo) == args.harness_fingerprint, "frozen inputs changed")
     native.require(root.is_relative_to(repo / "target/native-acceptance") and not root.exists(), "invalid job root")
@@ -400,6 +468,7 @@ def run(args):
                                 "HW_NATIVE_UI_WIDTH": str(width), "HW_NATIVE_UI_HEIGHT": str(height), "HW_NATIVE_UI_SCALE": str(scale)})
             if args.input_backend == "none":
                 environment["HW_NATIVE_UI_LAYOUT_ONLY"] = "1"
+                environment["HW_NATIVE_UI_LAYOUT_SCENE"] = args.layout_scene
                 if args.layout_menu:
                     environment["HW_NATIVE_UI_LAYOUT_MENU"] = "1"
             state["current_stage"] = f"viewport-{index}"
@@ -441,6 +510,7 @@ def run(args):
             "profile": PROFILE, "evidence_kind": "feedback", "repo": str(repo), "smoke": args.smoke,
             "input_backend": args.input_backend,
             "layout_menu": args.layout_menu,
+            "layout_scene": args.layout_scene,
             "subject_commit": args.subject_commit, "source_fingerprint": args.source_fingerprint,
             "harness_fingerprint": args.harness_fingerprint, "binary_sha256": sha256(repo / "target/debug/bevy_app"), "sessions": sessions})
         native.print_json(verify_root(root))
@@ -465,6 +535,7 @@ def main():
             child.add_argument("--repo", required=True)
             child.add_argument("--smoke", action="store_true")
             child.add_argument("--layout-menu", action="store_true")
+            child.add_argument("--layout-scene", choices=("management", "normal", "selection", "pinned", "build", "display", "area", "area-details"), default="management")
             child.add_argument("--input-backend", choices=("xtest", "portal", "none"), default="xtest")
         if command == "run":
             for option in ("subject-commit", "source-fingerprint", "harness-fingerprint"):

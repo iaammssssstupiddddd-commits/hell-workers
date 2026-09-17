@@ -474,6 +474,7 @@ mod tests {
                     header: String::new(),
                     common_text: String::new(),
                     tooltip_lines: vec![],
+                    familiar_has_area: None,
                     soul: None,
                     stockpile: None,
                     soul_spa: None,

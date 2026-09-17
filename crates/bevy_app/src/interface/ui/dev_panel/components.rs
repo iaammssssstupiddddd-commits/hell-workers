@@ -1,5 +1,8 @@
 use super::*;
 
+#[derive(Component)]
+pub struct DevPanelRoot;
+
 /// 最小化時に非表示にする DevPanel 本文のマーカー
 #[derive(Component)]
 pub struct DevPanelBody;

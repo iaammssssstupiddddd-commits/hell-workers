@@ -63,6 +63,7 @@ pub struct ContextMenuClassifyQueries<'w, 's> {
 pub struct ContextMenuRenderAssets<'w> {
     game_assets: Res<'w, crate::assets::GameAssets>,
     theme: Res<'w, UiTheme>,
+    ui_scale: Option<Res<'w, UiScale>>,
 }
 
 pub fn context_menu_system(
@@ -87,7 +88,12 @@ pub fn context_menu_system(
         q_building_details,
         q_resources,
     } = classify_queries;
-    let ContextMenuRenderAssets { game_assets, theme } = render_assets;
+    let ContextMenuRenderAssets {
+        game_assets,
+        theme,
+        ui_scale,
+    } = render_assets;
+    let scale = ui_scale.as_ref().map_or(1.0, |scale| scale.0).max(0.1);
     if resolved_frame.contains(crate::input_actions::InputAction::CloseContextMenu) {
         despawn_context_menus(&mut commands, &q_context_menu);
         requests.clear();
@@ -129,8 +135,8 @@ pub fn context_menu_system(
         .spawn((
             Node {
                 position_type: PositionType::Absolute,
-                left: Val::Px(request.screen_pos.x),
-                top: Val::Px(request.screen_pos.y),
+                left: Val::Px(request.screen_pos.x / scale),
+                top: Val::Px(request.screen_pos.y / scale),
                 width: Val::Px(1.0),
                 height: Val::Px(1.0),
                 ..default()
@@ -197,8 +203,8 @@ pub fn context_menu_system(
                     );
                     spawn_menu_item(
                         menu,
-                        "Edit Task Area",
-                        MenuAction::SelectAreaTask,
+                        "作業範囲を指定 / 変更",
+                        MenuAction::SelectAreaTaskFor(entity),
                         &game_assets,
                         &theme,
                     );

@@ -22,6 +22,7 @@ pub struct DragDropResources<'w> {
     resolved_frame: Res<'w, crate::input_actions::ResolvedInputFrame>,
     ui_input_state: Res<'w, UiInputState>,
     simulation: Res<'w, Time<Virtual>>,
+    shell: Option<Res<'w, hw_ui::shell::UiShellState>>,
     drag_state: ResMut<'w, DragState>,
     squad_request_writer: MessageWriter<'w, SquadManagementRequest>,
 }
@@ -58,6 +59,7 @@ pub fn entity_list_drag_drop_system(
         resolved_frame,
         ui_input_state,
         simulation,
+        shell,
         mut drag_state,
         mut squad_request_writer,
     } = resources;
@@ -69,6 +71,7 @@ pub fn entity_list_drag_drop_system(
         q_commanded_by,
     } = queries;
     if simulation.is_paused()
+        || shell.as_ref().is_some_and(|shell| !shell.management_open())
         || ui_input_state.world_input_captured
         || resolved_frame.pointer_selection_suppressed()
     {

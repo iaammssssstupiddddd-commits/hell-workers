@@ -39,7 +39,8 @@ fn register_ui_entity_list_plugin_systems(app: &mut App) {
         (
             entity_list_section_toggle_system,
             entity_list_interaction_system.before(handle_ui_intent),
-            entity_list_drag_drop_system,
+            entity_list_drag_drop_system
+                .after(crate::interface::ui::world_first::tool_workspace_system),
             entity_list_visual_feedback_system,
             entity_list_scroll_hint_visibility_system,
             entity_list_tab_focus_system,

@@ -43,6 +43,7 @@ pub enum InputAction {
     CloseOperationDialog,
     CancelActiveMode,
     CloseOpenMenu,
+    WorkspaceBack,
     CloseContextMenu,
     AreaCopy,
     AreaPaste,

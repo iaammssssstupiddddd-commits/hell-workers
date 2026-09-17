@@ -121,6 +121,9 @@ fn ui_intent_for_action(action: InputAction) -> Option<UiIntent> {
         InputAction::ToggleZones => Some(UiIntent::ToggleZones),
         InputAction::TogglePause => Some(UiIntent::TogglePause),
         InputAction::ToggleSystemMenu => Some(UiIntent::ToggleSystemMenu),
+        InputAction::WorkspaceBack => {
+            Some(UiIntent::Workspace(hw_ui::shell::WorkspaceAction::Back))
+        }
         InputAction::TimePaused => Some(UiIntent::SetTimeSpeed(
             hw_core::game_state::TimeSpeed::Paused,
         )),

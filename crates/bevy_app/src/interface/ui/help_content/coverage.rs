@@ -244,6 +244,7 @@ coverage_table! {
             published("orders-designation")
         },
         "input::close-context-menu" => unit(CloseContextMenu) => published("world-object-actions"),
+        "input::workspace-back" => unit(WorkspaceBack) => published("entity-list-selection"),
         "input::area-copy" => unit(AreaCopy) => published("area-edit"),
         "input::area-paste" => unit(AreaPaste) => published("area-edit"),
         "input::area-undo" => unit(AreaUndo) => published("area-edit"),
@@ -269,6 +270,14 @@ coverage_table! {
     fn ui_intent_decisions();
     {
         "ui-intent::help-open" => record(OpenHelp { .. }) => launcher(),
+        "ui-intent::workspace-management" => tuple(Workspace(hw_ui::shell::WorkspaceAction::ToggleManagement)) => published("entity-list-selection"),
+        "ui-intent::workspace-entities" => tuple(Workspace(hw_ui::shell::WorkspaceAction::OpenEntities)) => published("entity-list-selection"),
+        "ui-intent::workspace-blocked" => tuple(Workspace(hw_ui::shell::WorkspaceAction::OpenBlockedTasks)) => published("task-dashboard-filter-sort"),
+        "ui-intent::workspace-display" => tuple(Workspace(hw_ui::shell::WorkspaceAction::ToggleDisplay)) => published("world-selection"),
+        "ui-intent::workspace-inspect-selection" => tuple(Workspace(hw_ui::shell::WorkspaceAction::InspectSelection)) => published("info-panel-pin"),
+        "ui-intent::workspace-back" => tuple(Workspace(hw_ui::shell::WorkspaceAction::Back)) => published("entity-list-selection"),
+        "ui-intent::workspace-close" => tuple(Workspace(hw_ui::shell::WorkspaceAction::Close)) => published("entity-list-selection"),
+        "ui-intent::world-view" => tuple(SetWorldView(_)) => published("world-selection"),
         "ui-intent::help-close" => unit(CloseHelp) => chrome(HelpChromeSlot::Close),
         "ui-intent::guide-start" => unit(StartWorkGuide) => published("getting-started-work-loop"),
         "ui-intent::guide-end" => unit(EndWorkGuide) => published("getting-started-work-loop"),
@@ -315,6 +324,8 @@ coverage_table! {
         "ui-intent::construction-cancel-dismiss" => unit(DismissConstructionCancel) => published("soul-energy-recovery"),
         "ui-intent::soul-spa-cancel-confirm" => record(ConfirmSoulSpaConstructionCancel { .. }) => published("soul-energy-recovery"),
         "ui-intent::area-edit-control" => record(AreaEditControl { .. }) => published("area-edit"),
+        "ui-intent::area-edit-target" => tuple(SelectAreaTaskFor(_)) => published("area-edit"),
+        "ui-intent::area-edit-finish" => unit(FinishAreaEdit) => published("area-edit"),
         "ui-intent::settings-retry-save" => record(RetrySettingsSave { .. }) => published("settings"),
         "ui-intent::notification-duration" => tuple(SetNotificationDuration(_)) => published("settings"),
         "ui-intent::focus-entity" => tuple(FocusEntity(_)) => published("entity-list-selection"),

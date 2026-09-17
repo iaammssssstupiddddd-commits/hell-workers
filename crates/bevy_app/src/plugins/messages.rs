@@ -21,8 +21,8 @@ use hw_energy::{
     SoulSpaConstructionCancelRequest, SoulSpaSlotsChangeOutcome,
 };
 use hw_jobs::{
-    DeconstructionCancelOutcome, DeconstructionCancelRequest, DeconstructionCommitOutcome,
-    DeconstructionCommitRequest, DeconstructionDesignationOutcome,
+    BuildingCompletedVisualMessage, DeconstructionCancelOutcome, DeconstructionCancelRequest,
+    DeconstructionCommitOutcome, DeconstructionCommitRequest, DeconstructionDesignationOutcome,
     DeconstructionDesignationRequest,
 };
 use hw_logistics::{StockpilePolicyChangeOutcome, StockpilePolicyChangeRequest};
@@ -37,6 +37,7 @@ macro_rules! root_message_types {
             $argument;
             DamnedSoulSpawnEvent,
             FamiliarSpawnEvent,
+            BuildingCompletedVisualMessage,
             FamiliarSettingsChangeRequest,
             FamiliarSettingsChangeOutcome,
             FamiliarRosterReleasedVisualMessage,

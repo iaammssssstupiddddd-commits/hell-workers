@@ -36,6 +36,7 @@ pub(crate) struct IntentAuxCtx<'w, 's> {
     epoch: Option<Res<'w, hw_core::WorldEpoch>>,
     settings: IntentSettingsCtx<'w>,
     help: IntentHelpCtx<'w, 's>,
+    shell: crate::interface::ui::world_first::WorkspaceIntentContext<'w>,
 }
 
 /// RecoveryFailed is a fail-closed UI boundary. Keyboard routing is only one
@@ -67,6 +68,7 @@ pub(crate) fn handle_ui_intent(
     mut familiar_settings_ctx: FamiliarSettingsIntentCtx,
     mut aux_ctx: IntentAuxCtx,
 ) {
+    let mut workspace_action_applied = false;
     for intent in ui_intents.read().cloned() {
         if *ui_queries.save_recovery == SaveRecoveryMode::RecoveryFailed
             && !recovery_allows_ui_intent(&intent)
@@ -84,6 +86,48 @@ pub(crate) fn handle_ui_intent(
             continue;
         }
         let should_save_settings = match intent {
+            UiIntent::SetWorldView(view) => {
+                if !ui_queries.ui_input.world_input_captured
+                    && aux_ctx.help.pending.overlay().is_none()
+                    && !selection_ctx.resolved_frame.pointer_selection_suppressed()
+                {
+                    aux_ctx.shell.set_world_view(
+                        view,
+                        selection_ctx.selected_entity.0,
+                        selection_ctx.info_panel_pin.entity,
+                    );
+                }
+                false
+            }
+            UiIntent::Workspace(action) => {
+                // A pointer release and Escape in the same frame must not pop two pages.
+                if !workspace_action_applied
+                    && !ui_queries.ui_input.world_input_captured
+                    && aux_ctx.help.pending.overlay().is_none()
+                    && (!selection_ctx.resolved_frame.pointer_selection_suppressed()
+                        || (action == hw_ui::shell::WorkspaceAction::Back
+                            && selection_ctx
+                                .resolved_frame
+                                .contains(crate::input_actions::InputAction::WorkspaceBack)))
+                {
+                    if matches!(
+                        action,
+                        hw_ui::shell::WorkspaceAction::ToggleManagement
+                            | hw_ui::shell::WorkspaceAction::ToggleDisplay
+                            | hw_ui::shell::WorkspaceAction::OpenEntities
+                            | hw_ui::shell::WorkspaceAction::OpenBlockedTasks
+                    ) {
+                        action_contexts.p0().cleanup.cancel_active_mode();
+                    }
+                    aux_ctx.shell.apply(
+                        action,
+                        selection_ctx.selected_entity.0,
+                        selection_ctx.info_panel_pin.entity,
+                    );
+                    workspace_action_applied = true;
+                }
+                false
+            }
             UiIntent::StartWorkGuide => {
                 if aux_ctx.help.state.open {
                     if let Some(guide) = &mut aux_ctx.guide {
@@ -124,6 +168,37 @@ pub(crate) fn handle_ui_intent(
                 }
                 false
             }
+            UiIntent::SelectAreaTaskFor(target) => {
+                if !selection_ctx.resolved_frame.pointer_selection_suppressed()
+                    && !ui_queries.ui_input.world_input_captured
+                    && aux_ctx.help.pending.overlay().is_none()
+                    && familiar_queries.q_familiars_for_area.get(target).is_ok()
+                {
+                    let mut mode = action_contexts.p0();
+                    mode.cancel_active_mode_if_needed();
+                    selection_ctx.selected_entity.0 = Some(target);
+                    handlers::handle_mode_select(
+                        UiIntent::SelectAreaTask,
+                        &mut mode,
+                        &mut selection_ctx,
+                        &familiar_queries,
+                    );
+                }
+                false
+            }
+            UiIntent::FinishAreaEdit => {
+                if !selection_ctx.resolved_frame.pointer_selection_suppressed()
+                    && !ui_queries.ui_input.world_input_captured
+                    && aux_ctx.help.pending.overlay().is_none()
+                    && matches!(
+                        action_contexts.p0().cleanup.task_context.0,
+                        crate::systems::command::TaskMode::AreaSelection(_)
+                    )
+                {
+                    action_contexts.p0().cleanup.cancel_active_mode();
+                }
+                false
+            }
             UiIntent::AreaEditControl { .. } => false,
             UiIntent::OpenHelp { .. } | UiIntent::CloseHelp => {
                 let mut mode_ctx = action_contexts.p0();
@@ -144,6 +219,17 @@ pub(crate) fn handle_ui_intent(
             | UiIntent::ScrollHelp(_) => false,
             UiIntent::InspectEntity(_) | UiIntent::FocusEntity(_) | UiIntent::ClearInspectPin => {
                 handlers::handle_selection(intent, &mut selection_ctx);
+                if matches!(intent, UiIntent::InspectEntity(_))
+                    && !selection_ctx.resolved_frame.pointer_selection_suppressed()
+                    && !ui_queries.ui_input.world_input_captured
+                    && aux_ctx.help.pending.overlay().is_none()
+                {
+                    aux_ctx.shell.apply(
+                        hw_ui::shell::WorkspaceAction::InspectSelection,
+                        selection_ctx.selected_entity.0,
+                        selection_ctx.info_panel_pin.entity,
+                    );
+                }
                 false
             }
             UiIntent::ToggleFamiliarIdlePatrol(target) => {
@@ -572,6 +658,133 @@ mod tests {
         app.world_mut()
             .resource_mut::<Messages<UiIntent>>()
             .write(intent);
+    }
+
+    #[test]
+    fn familiar_area_entry_uses_explicit_target_and_rejects_missing_or_captured() {
+        for condition in ["allowed", "capture", "missing", "recovery"] {
+            let mut app = domain_action_app();
+            let previous = app.world_mut().spawn(Familiar::default()).id();
+            let target = app.world_mut().spawn(Familiar::default()).id();
+            app.world_mut().resource_mut::<SelectedEntity>().0 = Some(previous);
+            app.world_mut().resource_mut::<InfoPanelPinState>().entity = Some(target);
+            app.world_mut().resource_mut::<Time<Virtual>>().pause();
+            match condition {
+                "capture" => {
+                    app.world_mut()
+                        .resource_mut::<hw_ui::components::UiInputState>()
+                        .world_input_captured = true
+                }
+                "missing" => {
+                    app.world_mut().despawn(target);
+                }
+                "recovery" => {
+                    *app.world_mut().resource_mut::<SaveRecoveryMode>() =
+                        SaveRecoveryMode::RecoveryFailed
+                }
+                _ => {}
+            }
+            write_intent(&mut app, UiIntent::SelectAreaTaskFor(target));
+            app.update();
+            let allowed = condition == "allowed";
+            assert_eq!(
+                app.world().resource::<SelectedEntity>().0,
+                Some(if allowed { target } else { previous })
+            );
+            assert_eq!(
+                matches!(
+                    app.world().resource::<TaskContext>().0,
+                    TaskMode::AreaSelection(None)
+                ),
+                allowed
+            );
+            assert_eq!(
+                app.world().resource::<InfoPanelPinState>().entity,
+                Some(target)
+            );
+        }
+    }
+
+    #[test]
+    fn finishing_area_edit_preserves_applied_area_and_ignores_other_modes() {
+        let mut app = domain_action_app();
+        let area = crate::systems::command::TaskArea::from_points(Vec2::ZERO, Vec2::splat(64.0));
+        let target = app
+            .world_mut()
+            .spawn((Familiar::default(), area.clone()))
+            .id();
+        app.world_mut().resource_mut::<SelectedEntity>().0 = Some(target);
+        app.world_mut().resource_mut::<TaskContext>().0 = TaskMode::AreaSelection(None);
+        write_intent(&mut app, UiIntent::FinishAreaEdit);
+        app.update();
+        assert!(matches!(
+            app.world().resource::<TaskContext>().0,
+            TaskMode::None
+        ));
+        assert_eq!(
+            app.world().get::<crate::systems::command::TaskArea>(target),
+            Some(&area)
+        );
+        app.world_mut().resource_mut::<TaskContext>().0 = TaskMode::DesignateChop(None);
+        write_intent(&mut app, UiIntent::FinishAreaEdit);
+        app.update();
+        assert!(matches!(
+            app.world().resource::<TaskContext>().0,
+            TaskMode::DesignateChop(None)
+        ));
+    }
+
+    #[test]
+    fn workspace_opens_while_paused_but_rejects_foreground_capture() {
+        for captured in [false, true] {
+            let mut app = domain_action_app();
+            app.init_resource::<hw_ui::shell::UiShellState>();
+            app.world_mut().resource_mut::<Time<Virtual>>().pause();
+            app.world_mut()
+                .resource_mut::<hw_ui::components::UiInputState>()
+                .world_input_captured = captured;
+            write_intent(
+                &mut app,
+                UiIntent::Workspace(hw_ui::shell::WorkspaceAction::OpenEntities),
+            );
+            app.update();
+            assert_eq!(
+                app.world()
+                    .resource::<hw_ui::shell::UiShellState>()
+                    .management_open(),
+                !captured
+            );
+        }
+    }
+
+    #[test]
+    fn workspace_back_wins_over_same_frame_inspect_release() {
+        let mut app = domain_action_app();
+        app.init_resource::<hw_ui::shell::UiShellState>();
+        let target = app.world_mut().spawn_empty().id();
+        app.world_mut().resource_mut::<SelectedEntity>().0 = Some(target);
+        app.world_mut()
+            .resource_mut::<hw_ui::shell::UiShellState>()
+            .observe_selection(Some(target), None);
+        app.world_mut()
+            .resource_mut::<ResolvedInputFrame>()
+            .replace(
+                default(),
+                vec![crate::input_actions::InputAction::WorkspaceBack],
+                None,
+                true,
+            );
+        write_intent(
+            &mut app,
+            UiIntent::Workspace(hw_ui::shell::WorkspaceAction::Back),
+        );
+        write_intent(&mut app, UiIntent::InspectEntity(target));
+        app.update();
+        assert_eq!(
+            app.world().resource::<hw_ui::shell::UiShellState>().page,
+            hw_ui::shell::WorkspacePage::World
+        );
+        assert!(app.world().resource::<InfoPanelPinState>().entity.is_none());
     }
 
     #[test]

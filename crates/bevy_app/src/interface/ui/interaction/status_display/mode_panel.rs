@@ -9,7 +9,7 @@ use hw_core::game_state::PlayMode;
 use crate::app_contexts::{BuildContext, CompanionPlacementState, TaskContext, ZoneContext};
 use crate::interface::selection::SelectedEntity;
 use crate::interface::ui::interaction::mode;
-use crate::interface::ui::panels::task_list::{TaskListDirty, TaskListState};
+use crate::interface::ui::panels::task_list::TaskListDirty;
 use crate::systems::command::{
     AreaEditClipboard, AreaEditSession, TaskArea, TaskMode, count_positions_in_area,
     overlap_summary_from_areas,
@@ -46,7 +46,7 @@ pub struct ModeSelectionData<'w, 's> {
 pub fn update_mode_text_system(
     mode_state: ModeState,
     selection_data: ModeSelectionData,
-    q_text: Query<&mut Text>,
+    q_text: Query<(&mut Text, &mut Node)>,
     ui_nodes: Res<UiNodeRegistry>,
     mut previous_pause: Local<bool>,
 ) {
@@ -155,7 +155,7 @@ pub fn update_mode_text_system(
         TaskMode::DesignateChop(_) | TaskMode::DesignateMine(_) | TaskMode::DesignateHaul(_)
     ) {
         mode_text.push_str(&format!(
-            " — 担当: {}（担当変更: Escで終了し、使い魔を選択してOrdersを再開）",
+            " · 担当: {}",
             selected_familiar_name.unwrap_or("使い魔がいません")
         ));
     }
@@ -169,8 +169,8 @@ pub fn update_mode_text_system(
         mode_text.push_str(" — ");
         mode_text.push_str(&summary);
     }
-    if time.is_paused() {
-        mode_text.push_str("\n停止中 — 選択・範囲編集・新規の伐採/採掘指定・保管方針・ドア施錠を操作できます。Spaceで再開 / Escでメニュー");
+    if time.is_paused() && *play_mode.get() != PlayMode::Normal {
+        mode_text.push_str(" · 停止中");
     }
     mode_text.push('\n');
     if matches!(
@@ -185,6 +185,9 @@ pub fn update_mode_text_system(
         play_mode.get(),
         &task_context.0,
     ));
+    if *play_mode.get() == PlayMode::Normal && task_context.0 == TaskMode::None {
+        mode_text.clear();
+    }
 
     hw_ui::interaction::status_display::update_mode_text_system(
         Some(hw_ui::interaction::status_display::ModeTextPayload { text: mode_text }),
@@ -195,7 +198,7 @@ pub fn update_mode_text_system(
 
 pub fn task_summary_ui_system(
     mut dirty: Option<ResMut<TaskListDirty>>,
-    state: Option<Res<TaskListState>>,
+    state: Option<Res<crate::interface::ui::world_first::attention::AttentionSummary>>,
     theme: Res<hw_ui::theme::UiTheme>,
     ui_nodes: Res<UiNodeRegistry>,
     q_text: Query<(&mut Text, &mut TextColor)>,
@@ -207,7 +210,7 @@ pub fn task_summary_ui_system(
         return;
     };
 
-    if !theme.is_changed() && !dirty.summary_dirty() {
+    if !theme.is_changed() && !dirty.summary_dirty() && !state.is_changed() {
         return;
     }
 
@@ -217,11 +220,11 @@ pub fn task_summary_ui_system(
 
     hw_ui::interaction::status_display::task_summary_ui_system(
         Some(hw_ui::interaction::status_display::TaskSummaryPayload {
-            total: state.summary_total as u32,
-            high: state.summary_high as u32,
+            blocked: state.targets.len(),
+            evaluating: state.evaluating,
         }),
         theme.colors.task_high_warning,
-        theme.colors.panel_accent_time_control,
+        theme.colors.text_primary_semantic,
         ui_nodes,
         q_text,
     );
@@ -241,6 +244,8 @@ pub struct AreaEditQueries<'w, 's> {
     q_task_areas: Query<'w, 's, (Entity, &'static TaskArea), With<hw_core::familiar::Familiar>>,
     q_unassigned_tasks: Query<'w, 's, &'static Transform, (With<Designation>, Without<ManagedBy>)>,
     q_window: Query<'w, 's, &'static Window, With<PrimaryWindow>>,
+    ui_scale: Option<Res<'w, UiScale>>,
+    computed: Query<'w, 's, &'static ComputedNode>,
 }
 
 pub fn update_area_edit_preview_ui_system(
@@ -261,7 +266,15 @@ pub fn update_area_edit_preview_ui_system(
         q_task_areas,
         q_unassigned_tasks,
         q_window,
+        ui_scale,
+        computed,
     } = edit_queries;
+    let scale = ui_scale.as_ref().map_or(1.0, |scale| scale.0).max(0.1);
+    let preview_size = ui_nodes
+        .get_slot(hw_ui::components::UiSlot::AreaEditPreview)
+        .and_then(|entity| computed.get(entity).ok())
+        .map(|node| node.size() * node.inverse_scale_factor())
+        .unwrap_or(Vec2::new(480.0, 72.0));
     let mut payload = Some(hw_ui::interaction::status_display::AreaEditPreviewPayload {
         display: false,
         text: String::new(),
@@ -274,7 +287,13 @@ pub fn update_area_edit_preview_ui_system(
             deconstruction_preview
                 .as_ref()
                 .and_then(|preview| {
-                    deconstruction_preview_payload(&task_context, preview, &q_window)
+                    deconstruction_preview_payload(
+                        &task_context,
+                        preview,
+                        &q_window,
+                        scale,
+                        preview_size,
+                    )
                 })
                 .unwrap_or(hw_ui::interaction::status_display::AreaEditPreviewPayload {
                     display: false,
@@ -378,8 +397,8 @@ pub fn update_area_edit_preview_ui_system(
             "Area {}x{}t | {} | {} | Tasks:{} | {}{}",
             width_tiles, height_tiles, state, overlap_text, tasks_in_area, clip_text, warn_text,
         ),
-        left: (cursor.x + 14.0).min(window.width() - 360.0).max(4.0),
-        top: (cursor.y + 18.0).min(window.height() - 34.0).max(4.0),
+        left: preview_position(cursor, window.size(), scale, preview_size).x,
+        top: preview_position(cursor, window.size(), scale, preview_size).y,
     });
 
     hw_ui::interaction::status_display::update_area_edit_preview_ui_system(
@@ -391,6 +410,8 @@ fn deconstruction_preview_payload(
     task_context: &TaskContext,
     preview: &DeconstructionHoverPreview,
     q_window: &Query<&Window, With<PrimaryWindow>>,
+    scale: f32,
+    preview_size: Vec2,
 ) -> Option<hw_ui::interaction::status_display::AreaEditPreviewPayload> {
     let cursor = preview.cursor?;
     let status = preview.status?;
@@ -421,9 +442,20 @@ fn deconstruction_preview_payload(
     Some(hw_ui::interaction::status_display::AreaEditPreviewPayload {
         display: true,
         text,
-        left: (cursor.x + 14.0).min(window.width() - 420.0).max(4.0),
-        top: (cursor.y + 18.0).min(window.height() - 34.0).max(4.0),
+        left: preview_position(cursor, window.size(), scale, preview_size).x,
+        top: preview_position(cursor, window.size(), scale, preview_size).y,
     })
+}
+
+fn preview_position(cursor: Vec2, viewport: Vec2, scale: f32, size: Vec2) -> Vec2 {
+    let viewport = viewport / scale;
+    let desired = cursor / scale + Vec2::new(14.0, 18.0);
+    let size = size.max(Vec2::new(480.0, 72.0));
+    // Leave the top HUD and bottom operation guidance readable.
+    desired.clamp(
+        Vec2::new(4.0, 64.0),
+        (viewport - size - Vec2::new(4.0, 148.0)).max(Vec2::new(4.0, 64.0)),
+    )
 }
 
 fn deconstruction_salvage_label(kind: BuildingType) -> String {
@@ -461,6 +493,19 @@ const fn deconstruction_reject_label(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn preview_respects_scaled_viewport_and_bottom_guidance() {
+        let position = preview_position(
+            Vec2::new(1275.0, 715.0),
+            Vec2::new(1280.0, 720.0),
+            1.25,
+            Vec2::new(480.0, 72.0),
+        );
+        assert!(position.x + 480.0 <= 1024.0);
+        assert!(position.y + 72.0 <= 576.0 - 148.0);
+        assert!(position.y >= 64.0);
+    }
 
     #[test]
     fn deconstruction_hover_uses_the_domain_salvage_table() {

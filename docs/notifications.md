@@ -20,12 +20,12 @@
 `NotificationCenter` は次の有界な runtime state を持つ。
 
 - 同一 key を 2 real-time 秒以内に受け取ると、同じ entry の `repeat_count` を増やし、内容と期限を更新する。
-- 表示中トーストは最大 3 件、寿命はSettingsで選ぶ4 / 8 / 12 real-time秒（既定4秒、新規・再通知から反映）。別の pending queue は持たない。
+- 左上に表示するトーストは最大 1 件、寿命はSettingsで選ぶ4 / 8 / 12 real-time秒（既定4秒、新規・再通知から反映）。別の pending queue は持たない。
 - `Important` 履歴は最大 64 件。超過時は最古を削除する。
 - expiry、dedupe、履歴の開閉は `Time<Real>` を使うため、Pause とゲーム速度の影響を受けない。
 - revisionが変化したときだけ動的なtoast/history rowを再構築する。履歴の経過時間は最終受信からの秒/分/時間を1秒単位でTextだけ更新し、row/scrollを作り直さない。
 
-重要通知履歴は画面右上の「通知」ボタンで開く。未読数は履歴上限以内に保ち、履歴を開いた時点で既読化する。
+重要通知履歴は画面右下の「通知」ボタンで開く。上部の「要対応」は現在の停止対象数であり、通知未読数とは別である。履歴を読んでも停止原因は解消扱いにしない。未読数は履歴上限以内に保ち、履歴を開いた時点で既読化する。
 見出しとCloseは固定し、本文だけを標準`ScrollArea`/`Scrollbar`でスクロールする。
 開いた直後は最新側。履歴更新時は先頭可視entryのIDとoffsetを基準に読書位置を保持し、
 64件の追い出しで基準が消えた場合は有効範囲へclampする。world置換ではanchorとoffsetも解除する。

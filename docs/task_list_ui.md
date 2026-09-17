@@ -1,9 +1,9 @@
 # タスクリストUI仕様
 
-最終更新: 2026-09-14
+最終更新: 2026-09-16
 
 ## 概要
-画面左側に表示される常駐パネルのモードの1つです（エンティティリストとタブ切替）。
+右の共通枠で開く管理ページの「仕事」タブです（「使い魔・魂」と切替）。初期状態では閉じています。[地図中心UI](ui-world-first.md)を参照してください。
 現在の **Designation（仕事の指示）** をダッシュボードとして表示します。担当状況に加えて、通常の
 AI 判定 cycle から得た停止理由、絞り込み・並べ替え、安全な優先度変更・キャンセルを提供します。
 
@@ -77,7 +77,7 @@ Actorの経路探索は`Inventory`のchange detectionを保持したまま処理
 
 ### ツールバー
 
-4 filter と 2 sort control を表示します。各ボタンは候補を順番に切り替えます。
+4 filter と 2 sort control を表示します。filterは選択肢から直接選び、sortは順番に切り替えます。
 これらのcontrol/filter/sort variantはプレイヤーHelpの`task-dashboard-filter-sort` entryへ
 exhaustive coverageされ、追加・変更時は`docs/help-screen.md`の更新手順とexact approvalを同時に更新します。
 
@@ -109,33 +109,33 @@ filter/sort変更は先頭ページ、ページ変更は本文の先頭へ戻り
 - **選択中+ホバー**: `list_item_selected_hover`
 
 ### 選択ボーダー
-ピン留めされたエンティティに対応するアイテムに左 3px の `list_selection_border` 色ボーダーを表示します。
+`TaskDashboardActionState.active_task`に対応するアイテムに左 3px の `list_selection_border` 色ボーダーを表示します。
 
 ## 更新タイミング
 
 - `PreUpdate` で `detect_task_list_changed_components` → `detect_task_list_removed_components` → `update_task_list_state_system` を順序固定で実行します。
 - `LeftPanelMode::TaskList` 中でも、無変更フレームではスナップショット再生成と子 UI の再構築を行いません。
-- 再生成トリガーは、`Designation` とその表示内容に影響する関連コンポーネントの `Added` / `Changed` / `Removed`、および左パネルのタブ切替です。
+- 再生成トリガーは、`Designation` とその表示内容に影響する関連コンポーネントの `Added` / `Changed` / `Removed`、および管理ページのタブ切替です。
 - `TaskListDirty` は `state_dirty` / `list_dirty` / `summary_dirty` の 3 つの責務に分かれます。
-- `state_dirty` は snapshot と summary の再計算要求、`list_dirty` は左パネル本文の再描画要求、`summary_dirty` は画面上部 summary の更新要求です。
+- `state_dirty` は snapshot と summary の再計算要求、`list_dirty` は管理ページ本文の再描画要求、`summary_dirty` は画面上部 summary の更新要求です。
 - `TaskListState.snapshot` は最新観測済みデータを保持し、未描画の `pending` snapshot は持ちません。
 - diagnostics の cycle ID 自体は `TaskEntry` に含めず、表示内容が同じなら周期評価だけで UI を再構築しません。
 - `Changed<FamiliarPolicy>` / `RemovedComponents<FamiliarPolicy>` は task diagnostic の roster revision を進めます。
   task list の dirty 検知は policy 本体を再評価せず、更新された diagnostics / revision を通常の dirty source として読みます。
-- 左パネルを `TaskList` に切り替えたフレームは `mark_all()` で `state_dirty` / `list_dirty` を両方立て、最新スナップショットで再描画します（タスクデータが変わっていない場合も含む）。
-- 画面上部の task summary は `TaskListState.summary_total` / `summary_high` を参照し、タスクリストと同じ dirty source を共有します。
+- 管理ページを `TaskList` に切り替えたフレームは `mark_all()` で `state_dirty` / `list_dirty` を両方立て、最新スナップショットで再描画します（タスクデータが変わっていない場合も含む）。
+- 画面上部の「要対応」は `AttentionSummary` の新鮮なBlocked対象数と別集計の判定中件数を参照します。確定した施工元は重複集約するため、明細行数とは異なります。
 - 常駐するtask行は現在ページの最大20件です。非表示/最小化中は本文を再構築せず、再表示時にdirtyを処理します。
   profilingの`render_visible_rows`はfilter後の総数であり、常駐row数とは区別します。
 
 ## 実装アーキテクチャ
-- `LeftPanelMode::TaskList` 時に表示
+- 管理ページが開き、`LeftPanelMode::TaskList` かつ非最小化のとき表示
 - `crates/bevy_app/src/interface/ui/panels/task_list/`：責務別に分割
   - `view_model.rs` - ゲーム状態と producer diagnostics を表示用 snapshot へ縮約
   - `presenter.rs` - WorkType → icon / label / description
   - `actions.rs` - capability の positive allow-list、live 再検証、owner 別 action adapter
   - `dirty.rs` - タスクリストと task summary の dirty source
   - `update.rs` - dirty gate、ページclamp、本文offset保持、必要時のみ再描画
-- `crates/bevy_app/src/interface/ui/plugins/info_panel.rs` が `PreUpdate` の dirty 検知と state 更新、`Update` の左パネル表示更新を束ねます。
+- `crates/bevy_app/src/interface/ui/plugins/info_panel.rs` が `PreUpdate` の dirty 検知と state 更新、`Update` の管理ページ表示更新を束ねます。
 - `crates/bevy_app/src/interface/ui/interaction/status_display/mode_panel.rs` が cached summary を読み、task summary 表示だけを差分更新します。
 - `Designation` コンポーネントを持つエンティティをクエリし、関連コンポーネント（Blueprint, TransportRequest等）を参照して説明文を生成
 - `task_list_visual_feedback_system` が `Interaction` と `TaskDashboardActionState.active_task` を監視し、`ui/list::apply_row_highlight` でホバー・選択ハイライトを適用
@@ -143,14 +143,14 @@ filter/sort変更は先頭ページ、ページ変更は本文の先頭へ戻り
 
 ## インタラクション
 - **ホバー**: 背景色がハイライト
-- **クリック**: 当該Taskを選択し操作欄を表示。カメラとpinは明示ボタンから変更する
-- **選択状態**: ピン留めされたエンティティに対応するアイテムに選択ボーダーと背景色が表示
+- **クリック**: 管理ページを維持して当該Taskを選択し、行内操作欄を表示。カメラとpinは明示ボタンから変更する
+- **選択状態**: `TaskDashboardActionState.active_task`に対応するアイテムに選択ボーダーと背景色が表示
 - **優先度**: 許可された手動 Chop / Mine、ManualTransportRequest、DeconstructionOrderだけを `0 / 5 / 10` で上下する
 - **キャンセル**: 原則は1回目で行内確認、同じ対象・種別の2回目でintentを発行する。Soul Spa搬入は情報パネルと共通の確認パネルを開き、独立した確定ボタンを使う。Floor / Wall はsite全体を対象にする
 
 フォーカス行の `Button` と action bar の各 `Button` は sibling であり、nested Button にしません。
 Pause / Modal capture 中も action intent reader は drain して拒否結果を返し、解除後に遅延適用しません。
-選択変更、タブ変更、filter/sort 変更、capture 開始、world replacement は保留中の確認を消去します。
+選択変更、タブ変更、filter/sort 変更、capture 開始、共通枠の遷移・閉鎖、world replacement は保留中の確認を消去します。
 
 ### 操作 capability
 
@@ -218,7 +218,7 @@ A3 の完了判断と受入履歴は
 - `crates/bevy_app/src/interface/ui/panels/task_list/dirty.rs` - dirty 検知システム（Designation 等の Changed 監視）
 - `crates/bevy_app/src/interface/ui/panels/task_list/update.rs` - dirty gate 付きオーケストレーション（`Res<GameAssets>` 依存のため root 残留）
 - `crates/bevy_app/src/interface/ui/panels/task_list/actions.rs` - live capability resolver、typed action outcome、owner別適用
-- `crates/bevy_app/src/interface/ui/plugins/info_panel.rs` - task list の dirty 検知 / state 更新 / 左パネル system 登録
+- `crates/bevy_app/src/interface/ui/plugins/info_panel.rs` - task list の dirty 検知 / state 更新 / 管理ページ system 登録
 - `crates/bevy_app/src/interface/ui/interaction/status_display/mode_panel.rs` - task summary の cached 描画
 
 ### 選択と詳細固定の分離

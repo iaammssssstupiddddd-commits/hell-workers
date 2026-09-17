@@ -24,8 +24,8 @@
 | `camera_pan_speed` | カメラ移動速度（即時反映） | `PanCamera.pan_speed`（`MainCamera`） |
 | `camera_mouse_pan_enabled` | Mouse Drag Pan | project-owned world pointer gesture（`PanCamera.mouse_pan_settings.enabled`は常時false） |
 | `default_time_speed` | 起動時のゲーム速度（次回起動時に反映） | **起動時のみ** `Time<Virtual>` |
-| `debug_gizmos_enabled` | Debug Gizmos | `DebugVisible` + `GizmoConfigStore`（F12 と同期） |
-| `fps_display_enabled` | Show FPS | DevPanel 内 `UiSlot::FpsText` の `Visibility` |
+| `debug_gizmos_enabled` | Debug Gizmos | `DebugVisible` + 開発パネルと診断用 `GizmoConfigStore`（F12 と同期）。プレイヤー用地図レイヤーは独立 |
+| `fps_display_enabled` | Show FPS | 左上の時計に隣接する `UiSlot::FpsText` の `Visibility`。開発パネルの表示と独立 |
 | `power_priority_enabled` | Power priority allocation | `true`: priority strict prefix / `false`: Legacy all-or-none |
 | `autosave_enabled` | Autosave | 初期値 `false`（性能 gate とは独立した product 判断） |
 | `autosave_interval_minutes` | 自動保存間隔 | `5` / `10` / `20` / `30`（active play の実時間） |
@@ -51,8 +51,7 @@
 
 ## 設定画面の開き方
 
-- ボトムバー **Settings** ボタン
-- ポーズメニュー（Save/Load 下）の **Settings** 行
+- 右上の **メニュー** → **Settings** 行（Save/Load 下）
 - Esc: 最前面 overlay を `LoadConfirm → Save/Load catalog → Settings → Pause → OperationDialog` の優先順で
   1つだけ閉じる。Load confirmのEscは親catalogへ戻る。Recovery Load catalogは`RecoveryFailed`中に閉じず、
   Settings close自体は背景 active modeをcancelしない。

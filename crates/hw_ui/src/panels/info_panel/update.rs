@@ -305,6 +305,7 @@ pub fn info_panel_system<A: UiAssets + Resource>(
     mut panel_state: ResMut<InfoPanelState>,
     rename_state: Res<SoulRenameState>,
     mut queries: InfoPanelNodeQueries,
+    shell: Option<Res<crate::shell::UiShellState>>,
 ) {
     let next_model = res.inspection_view_model.model.clone().map(to_view_model);
     let target = res
@@ -319,7 +320,7 @@ pub fn info_panel_system<A: UiAssets + Resource>(
         }
     }
 
-    let pinned = pin_state.entity.is_some();
+    let pinned = target.is_some() && pin_state.entity == target;
     let rename_target = match &next_model {
         Some(InfoPanelViewModel::Soul(soul))
             if rename_state
@@ -339,22 +340,55 @@ pub fn info_panel_system<A: UiAssets + Resource>(
         return;
     }
 
-    set_display_slot(
-        &res.info_nodes,
-        &mut queries.q_node,
-        UiSlot::InfoPanelRoot,
-        if next_model.is_some() {
-            Display::Flex
-        } else {
-            Display::None
-        },
-    );
+    // Standalone consumers without the map-first shell retain the legacy root owner.
+    if shell.is_none() {
+        set_display_slot(
+            &res.info_nodes,
+            &mut queries.q_node,
+            UiSlot::InfoPanelRoot,
+            if next_model.is_some() {
+                Display::Flex
+            } else {
+                Display::None
+            },
+        );
+    }
     set_display_slot(
         &res.info_nodes,
         &mut queries.q_node,
         UiSlot::InfoPanelUnpinButton,
         if pinned { Display::Flex } else { Display::None },
     );
+
+    let familiar_has_area = match &next_model {
+        Some(InfoPanelViewModel::Simple(simple)) => simple.familiar_has_area,
+        _ => None,
+    };
+    set_node_display(
+        res.info_nodes.common.familiar_area_button,
+        &mut queries.q_node,
+        if familiar_has_area.is_some() {
+            Display::Flex
+        } else {
+            Display::None
+        },
+    );
+    if let (Some(has_area), Some(target)) = (familiar_has_area, target) {
+        set_menu_action(
+            res.info_nodes.common.familiar_area_button,
+            &mut queries.q_menu_button,
+            MenuAction::SelectAreaTaskFor(target),
+        );
+        set_text_entity(
+            res.info_nodes.common.familiar_area_label,
+            &mut queries.q_text,
+            if has_area {
+                "作業範囲を変更"
+            } else {
+                "作業範囲を指定"
+            },
+        );
+    }
 
     let (power_target, power_fields) = match &next_model {
         Some(InfoPanelViewModel::SoulSpa(soul_spa)) => (soul_spa.entity, soul_spa.power.as_ref()),
@@ -863,6 +897,12 @@ pub fn info_panel_system<A: UiAssets + Resource>(
             );
         }
         Some(InfoPanelViewModel::Simple(simple)) => {
+            set_display_slot(
+                &res.info_nodes,
+                &mut queries.q_node,
+                UiSlot::Header,
+                Display::Flex,
+            );
             set_node_display(
                 res.info_nodes.stockpile.stockpile_group,
                 &mut queries.q_node,
@@ -1024,6 +1064,7 @@ mod tests {
             header: "対象".into(),
             common_text: "初期".into(),
             tooltip_lines: Vec::new(),
+            familiar_has_area: Some(false),
             soul: None,
             stockpile: None,
             soul_spa: None,
@@ -1057,10 +1098,21 @@ mod tests {
             .resource_mut::<EntityInspectionViewModel>()
             .model = Some(model.clone());
         app.world_mut().resource_mut::<InfoPanelPinState>().entity = Some(second);
+        app.world_mut().resource_mut::<SelectedEntity>().0 = Some(first);
         app.update();
         assert_eq!(app.world().get::<ScrollPosition>(scroll).unwrap().0.y, 0.0);
         let nodes = app.world().resource::<InfoPanelNodes>();
         let header = nodes.common.header.unwrap();
+        let area_button = nodes.common.familiar_area_button.unwrap();
+        let area_label = nodes.common.familiar_area_label.unwrap();
+        assert!(
+            matches!(app.world().get::<MenuButton>(area_button).unwrap().0,
+            MenuAction::SelectAreaTaskFor(target) if target == second)
+        );
+        assert_eq!(
+            app.world().get::<Text>(area_label).unwrap().0,
+            "作業範囲を指定"
+        );
         assert_eq!(app.world().get::<Text>(header).unwrap().0, "固定: 対象");
         for node in [header, nodes.common.unpin_button.unwrap()] {
             let mut ancestor = node;
@@ -1070,11 +1122,32 @@ mod tests {
             }
         }
         model.common_text = "再更新".into();
+        model.familiar_has_area = Some(true);
+        // A previous rename hides the title. Switching to a simple detail must
+        // restore it even though the text entity itself is reused.
+        app.world_mut().get_mut::<Node>(header).unwrap().display = Display::None;
+        app.world_mut()
+            .resource_mut::<EntityInspectionViewModel>()
+            .model = Some(model.clone());
+        app.update();
+        assert_eq!(app.world().get::<Text>(header).unwrap().0, "固定: 対象");
+        assert_eq!(
+            app.world().get::<Node>(header).unwrap().display,
+            Display::Flex
+        );
+        assert_eq!(
+            app.world().get::<Text>(area_label).unwrap().0,
+            "作業範囲を変更"
+        );
+        model.familiar_has_area = None;
         app.world_mut()
             .resource_mut::<EntityInspectionViewModel>()
             .model = Some(model);
         app.update();
-        assert_eq!(app.world().get::<Text>(header).unwrap().0, "固定: 対象");
+        assert_eq!(
+            app.world().get::<Node>(area_button).unwrap().display,
+            Display::None
+        );
     }
 
     #[test]

@@ -75,6 +75,8 @@ pub struct EntityInspectionModel {
     pub common_text: String,
     pub tooltip_lines: Vec<String>,
     pub soul: Option<SoulInspectionFields>,
+    /// Some for a Familiar; the value indicates an established work area.
+    pub familiar_has_area: Option<bool>,
     pub stockpile: Option<StockpileInspectionFields>,
     pub soul_spa: Option<SoulSpaInspectionFields>,
     pub power: Option<PowerInspectionFields>,

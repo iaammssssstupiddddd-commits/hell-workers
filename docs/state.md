@@ -9,13 +9,13 @@
 | モード | 説明 | 遷移条件 |
 |--------|------|----------|
 | `Normal` | 通常操作（選択・移動） | デフォルト / Escキー |
-| `BuildingPlace` | 建物配置中 | Buildボタンクリック |
+| `BuildingPlace` | 建物配置中 | 「建てる」から種類選択 |
 | `BuildingMove` | Plant建物（Tank/MudMixer）移動先指定中 | Moveボタンクリック |
-| `TaskDesignation` | タスク指定中（伐採/採掘/Zone配置など） | Orders/Zoneメニュー選択 |
+| `TaskDesignation` | タスク指定中（伐採/採掘/Zone配置など） | 「作業を指示」／「範囲を設定」から選択 |
 | `FloorPlace` | 床エリア配置中 | Floor操作開始 |
 
-遷移: Normal ↔ BuildingPlace（Buildボタン/Esc）、Normal ↔ BuildingMove（Moveボタン/Esc/右クリック）、
-Normal ↔ TaskDesignation（Orders/Zoneボタン/Esc）。Zone配置は
+遷移: Normal ↔ BuildingPlace（建てる/Esc）、Normal ↔ BuildingMove（Moveボタン/Esc/右クリック）、
+Normal ↔ TaskDesignation（作業を指示／範囲を設定/Esc）。Zone配置は
 `TaskMode::ZonePlacement`、Zone解除は`TaskMode::ZoneRemoval`で表し、専用`PlayMode`は持たない。
 
 ## コンテキストリソース
@@ -69,48 +69,37 @@ Deconstructではpress位置として使い、release時に単一requestへ確�
 - `TaskMode::AreaSelection(Some(start_pos))`: 新規矩形ドラッグ中
 
 ### 遷移ルール
-- `Orders -> Area` で `TaskMode::AreaSelection(None)` に遷移
+- 使い魔を左クリック→詳細上部「作業範囲を指定／変更」、または「作業を指示」→「使い魔の作業範囲を指定 / 変更」で `TaskMode::AreaSelection(None)` に遷移。管理一覧から詳細へ進んでも利用できる
+- 詳細と右クリックは `SelectAreaTaskFor(Entity)` で対象を固定し、実行時に生存する使い魔か再検証する。固定詳細と別対象選択が併存しても表示対象を編集する。capture／pending overlay／RecoveryFailedでは開始しない
+- 右上の300px編集パネルは対象と現寸法・入力案内・終了を常時表示し、履歴／コピー／3保存枠は「詳細操作を開く」で展開する。対象・world epoch・非表示への切替で閉じ、同対象の寸法更新では展開を維持する
+- 無効操作もtooltipで理由を読める。実行payloadは既存revision/epoch/snapshot照合を通し、見出し・余白を含めてworld pointerを遮断する。「編集を終了」は適用済み範囲を保持し未確定dragだけrollbackする
 - 適用後はデフォルトで `TaskMode::AreaSelection(None)` を維持（連続編集）
 - `Shift + 左ボタンリリース` で適用と同時に `PlayMode::Normal` へ復帰
 - `Esc` で `PlayMode::Normal` へ復帰
 
 ### 入力補足
-- `Tab` / `Shift + Tab` は `PlayMode::Normal` の Entity List 巡回だけに使い、Areaモードを含む active mode 中は処理しない
+- `Tab` / `Shift + Tab` は `PlayMode::Normal` かつ管理ページの使い魔・魂一覧を展開中の巡回だけに使い、Areaモードを含む active mode 中は処理しない
 - `Ctrl + Z / Y`（および `Ctrl + Shift + Z`）で TaskArea の Undo/Redo を行う
 - Area shortcut と適用時の Shift 判定は frame-local resolver の exact chord / modifier snapshot を使い、raw keyboard を再読しない
 
 ## MenuState と Architect サブメニュー
 
-`MenuState` Resource がボトムバーの各サブメニューの開閉を管理する。
+`MenuState` Resource が建築・作業・範囲・Dreamのサブメニューを管理する。管理／表示／詳細は `UiShellState`、システムメニューは `SystemMenuState` が所有する。
 
 サブメニューは `fit_submenus_to_viewport` で画面内に収め、表示中のModeText（下部tips）の実測上端から4px上に下端を配置する。残りの高さを最大高に使い、UI倍率や案内の折り返しが変わってもtipsを覆わない。
 
 | バリアント | サブメニュー |
 |:---|:---|
 | `Hidden` | 全サブメニュー非表示 |
-| `Architect` | 建築メニュー（2段階） |
+| `Architect` | 絵・名前・用途付きの全12種類カタログ |
 | `Zones` | ゾーンメニュー |
 | `Orders` | 命令メニュー |
 | `Dream` | Dreamメニュー |
 | `Settings` | 設定モーダル（中央オーバーレイ。Architect 等サブメニューは非表示） |
 
-### Architect サブメニューの2段階構造
+### 建築カタログ
 
-Architect メニューはカテゴリ列（左）と建物列（右）の横並び2段構成。
-
-```
-[Architect サブメニュー] ← FlexDirection::Row
-  [カテゴリ列]          [建物列（選択時のみ表示）]
-  Structure  →         Wall / Floor / Bridge
-  Architecture →       Door
-  Plant        →       Tank / MudMixer
-  Temporary    →       RestArea / WB Parking / SandPile / BonePile
-```
-
-- カテゴリ列はArchitectメニューが開いている間、常時表示
-- カテゴリボタンをクリック → 右に建物列を展開
-- 同じカテゴリを再クリック → 建物列を折りたたむ（トグル）
-- 別メニューを開く / Escape → `ArchitectCategoryState` がリセットされ建物列は閉じる
+「建てる」は全12種類を最大2段で表示する。画像・名前・用途から直接選べ、種類選択まで2操作以内に到達する。カテゴリは任意の絞り込みで、再選択すると「すべて」へ戻る。種類を選ぶとカタログを閉じ、地図上の配置と短い案内へ切り替える。必要資材は配置プレビューのdomain値を使い、総在庫から調達可能とは推定しない。
 
 ### ArchitectCategoryState
 
@@ -118,14 +107,15 @@ Architect メニューはカテゴリ列（左）と建物列（右）の横並�
 
 | 値 | 意味 |
 |:---|:---|
-| `None` | 建物列を非表示（カテゴリ未選択） |
+| `None` | 全種類を表示（すべて） |
 | `Some(Structure)` | Structure の建物列を表示 |
 | `Some(Architecture)` | Architecture の建物列を表示 |
 | `Some(Plant)` | Plant の建物列を表示 |
 | `Some(Temporary)` | Temporary の建物列を表示 |
 
 書き込み元: `UiIntent::SelectArchitectCategory`を単一consumer
-`handle_ui_intent`（`crates/bevy_app/src/interface/ui/interaction/intent_handler.rs`）が適用
+`handle_ui_intent`（`crates/bevy_app/src/interface/ui/interaction/intent_handler.rs`）が適用。
+Architect以外のMenuStateへ遷移すると `menu_visibility_system` がカテゴリを初期化する。
 
 ## IndoorLightRuntime（非永続）
 
@@ -134,7 +124,6 @@ Architect メニューはカテゴリ列（左）と建物列（右）の横並�
 dirtyはtopology、typed emitter/power、Room maskの3系統をcoalesceする。`RoomMaskSignature`はtile membershipが変わった時だけrevisionを進める。入力checksumが変わった時だけinput revision、公開field bytesが変わった時だけoutput revisionが進み、入力不変Updateはcollect/rebuildしない。このResourceはsave/Reflect対象外である。
 
 world replacementではrootの`lighting-runtime` reset hookがsnapshot、pending input、revision、published epochを消去して`Unavailable`へ遷移する。rehydrate後に公開するsnapshotは`WorldEpoch`でtagし、epoch-aware readは現在epochと一致する場合だけ返す。`RecoveryFailed`ではlighting transaction自体を停止し、successful normal / rollback / recovery-onlyの`lighting.wake`だけが次Updateの再構築をarmする。durableな正本はOutdoorLamp rootの`LightingFixtureMount`であり、このResourceやruntime-only `RadialLightEmitter`ではない。
-リセット元: `menu_visibility_system`（Architect以外のMenuStateに遷移した時）
 
 ## HelpPanelState と HelpPauseGuard
 
@@ -177,8 +166,7 @@ snapshotなしで置換するrecovery-only経路へ送る。通常F9やraw UI pa
   `TaskContext` と `MenuState` を初期化する。
 - AreaEdit drag は元の `TaskArea` / `Destination` / `ActiveCommand` を復元する。Dream preview seed、Zone
   removal preview、Stockpile 方針の保留 patch、building move の未確定 state も同じ cleanup で破棄する。
-- `PlayMode::Normal` でメニューだけが開いている場合はメニューだけを閉じる。メニューもない状態で
-  システムメニューを開く。Idle / PatrolはIまたは対象のcontext menuで操作する。
+- `PlayMode::Normal` でメニューだけが開いている場合はメニューだけを閉じる。次に右の共通枠を `WorkspaceBack` で戻る／閉じる。どちらもない状態でシステムメニューを開く。Idle / PatrolはIまたは対象のcontext menuで操作する。
 - keyboard shortcut と UI の mode 切替は同じ active-owner predicate と cleanup helper を使い、current
   state がまだ Normal の pending 遷移 frame も含めて旧 owner state を残さない。
 
@@ -225,13 +213,13 @@ snapshotなしで置換するrecovery-only経路へ送る。通常F9やraw UI pa
 
 ### モード案内と画面内配置
 
-モード表示を下部のボタン列の上へ分け、最大幅96%で折り返す。配置・移設・範囲指定ごとに次の入力と終了方法を併記する。床・壁のdrag中は既存preview ownerが作成したAreaPlacementPlanから採用・除外数と必要資材を表示する（除外セルは費用へ含めない）。床はBone/Mud、壁はWood/Mudのdomain定数を使い、debug即時壁では資材不要と区別する。preview不能時・world reset時に要約を破棄する。
-Architect / Zones / Orders / DreamのsubmenuはUI倍率とwindow寸法から位置・最大高さを補正し、長い本文は標準ScrollAreaで移動する。表示matrixの実機受入は現行UI改善計画で追跡する。
+Normal + TaskMode::Noneでは案内を隠す。操作中のモード表示を下部のボタン列の上へ分け、最大幅94%で折り返す。配置・移設・範囲指定ごとに次の入力と終了方法を併記する。床・壁のdrag中は既存preview ownerが作成したAreaPlacementPlanから採用・除外数と必要資材を表示する（除外セルは費用へ含めない）。床はBone/Mud、壁はWood/Mudのdomain定数を使い、debug即時壁では資材不要と区別する。preview不能時・world reset時に要約を破棄する。
+Architect / Zones / Orders / DreamのsubmenuはUI倍率とwindow寸法から位置・最大高さを補正し、長い本文は標準ScrollAreaで移動する。表示matrixの実機受入は [残るUI受入計画](plans/ui-usability-improvements-plan-2026-09-14.md)で追跡する。
 
 ## 時間停止とシステムメニュー
 
 時間のSpace/1〜4操作はメニューを開かない。`SystemMenuState`は独立した非永続Resourceで、
-`ToggleSystemMenu`をMenuボタン／未処理Escapeから受ける。実行中から開く場合だけ相対速度を記録し、
+`ToggleSystemMenu`を右上の「メニュー」／未処理Escapeから受ける。実行中から開く場合だけ相対速度を記録し、
 閉じるとその速度へ戻す。元からpausedなら閉じてもpaused。Help/Settingsを重ねてもメニューのpause所有権を移さない。
 loadのUI resetとRecoveryFailedで所有権を破棄する。内部の`PauseMenu` / `InputOverlay::Pause`名はシステムメニューのcaptureを指す。
 
@@ -253,3 +241,7 @@ Helpの「操作ガイドを開始」はHelpとシステムメニューを閉じ
 root `work_guide::WorkGuide`は使い魔・確定TaskArea・範囲内の本人のPlayerIssuedDesignation・所属SoulのGather phaseを読む。
 既存範囲/指定も利用でき、作業開始はCollecting、完了はDoneから確認する。採掘の成功despawnはDoneを先に読んで完了と判定し、
 単なる対象消滅を成功扱いしない。使い魔/範囲/指定の消滅は必要な段階へ戻す。閉じる/スキップ/loadで終了し、保存schemaは増やさない。
+
+採取完了後は担当範囲内の休息所Blueprintを明示選択し、その1件の木材搬入・施工・完成を8段階の案内で追う。
+完成ownerの `publish_building_completed` がdomain Eventと別配送する `BuildingCompletedVisualMessage.blueprint_entity` で消滅前の施工元を照合する。ガイドreaderは生存確認より先に正式完成を確認し、取消・同座標への再建・別工事の完成を成功にしない。
+この入門例は木材だけで作る休息所を使用し、床の養生工程ガイドは含まない。採取した資源個体と搬入資源個体の同一性は主張しない。

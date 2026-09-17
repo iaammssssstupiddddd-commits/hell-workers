@@ -51,6 +51,7 @@ impl TooltipContentRenderer for TooltipRenderer {
 
 #[derive(SystemParam)]
 pub(crate) struct TooltipStateInput<'w, 's> {
+    pub ui_scale: Option<Res<'w, UiScale>>,
     pub real_time: Res<'w, Time<Real>>,
     pub hovered: Res<'w, crate::interface::selection::HoveredEntity>,
     pub placement_feedback: Res<'w, hw_ui::selection::PlacementFeedbackState>,
@@ -84,6 +85,7 @@ pub(crate) fn hover_tooltip_system(
     mut runtime: Local<EpochLocal<TooltipRuntimeState>>,
 ) {
     let TooltipStateInput {
+        ui_scale,
         real_time,
         hovered,
         placement_feedback,
@@ -104,6 +106,7 @@ pub(crate) fn hover_tooltip_system(
             ui_nodes: &ui_nodes,
         },
         tooltip::TooltipQuerySet {
+            ui_scale,
             q_window,
             q_tooltip,
             render_queries,

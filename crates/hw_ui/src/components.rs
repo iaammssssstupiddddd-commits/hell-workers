@@ -87,6 +87,8 @@ pub struct InfoPanelNodes {
 
 #[derive(Default)]
 pub struct InfoPanelCommonNodes {
+    pub familiar_area_button: Option<Entity>,
+    pub familiar_area_label: Option<Entity>,
     pub root: Option<Entity>,
     pub stats_group: Option<Entity>,
     pub unpin_button: Option<Entity>,

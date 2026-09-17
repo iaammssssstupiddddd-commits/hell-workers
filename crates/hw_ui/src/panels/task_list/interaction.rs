@@ -1,8 +1,8 @@
 // クリック、タブ、可視状態、ハイライト
 
 use crate::components::{
-    EntityListBody, EntityListSearchRow, LeftPanelMode, LeftPanelTabButton, TaskListBody,
-    TaskListItem, UiInputState,
+    EntityListBody, EntityListPanel, EntityListSearchRow, LeftPanelMode, LeftPanelTabButton,
+    TaskListBody, TaskListItem, UiInputState,
 };
 use crate::list::EntityListMinimizeState;
 use crate::list::{RowHighlightState, apply_row_highlight};
@@ -104,11 +104,12 @@ pub fn left_panel_tab_system(
 type LeftPanelVisibilityQuery<'w, 's> = Query<
     'w,
     's,
-    (&'static mut Node, Has<TaskListBody>),
+    (&'static mut Node, Has<TaskListBody>, Has<EntityListPanel>),
     Or<(
         With<EntityListBody>,
         With<TaskListBody>,
         With<EntityListSearchRow>,
+        With<EntityListPanel>,
     )>,
 >;
 
@@ -118,18 +119,37 @@ pub fn left_panel_visibility_system(
     mut nodes: LeftPanelVisibilityQuery,
     mut focus: ResMut<InputFocus>,
     fields: Query<&TextFieldRole>,
+    shell: Option<Res<crate::shell::UiShellState>>,
+    theme: Res<UiTheme>,
 ) {
-    let entities_visible = !minimized.minimized && *mode == LeftPanelMode::EntityList;
+    let workspace_visible = shell.as_ref().is_none_or(|shell| shell.management_open());
+    let entities_visible =
+        workspace_visible && !minimized.minimized && *mode == LeftPanelMode::EntityList;
     if !entities_visible
         && focus.get().and_then(|entity| fields.get(entity).ok())
             == Some(&TextFieldRole::EntityListSearch)
     {
         focus.clear();
     }
-    if !mode.is_changed() && !minimized.is_changed() {
+    if !mode.is_changed()
+        && !minimized.is_changed()
+        && !theme.is_changed()
+        && !shell.as_ref().is_some_and(|shell| shell.is_changed())
+    {
         return;
     }
-    for (mut node, is_tasks) in &mut nodes {
+    for (mut node, is_tasks, is_panel) in &mut nodes {
+        if is_panel {
+            let width = Val::Px(if *mode == LeftPanelMode::EntityList {
+                theme.sizes.entity_list_panel_width
+            } else {
+                theme.sizes.entity_list_max_width
+            });
+            if node.width != width {
+                node.width = width;
+            }
+            continue;
+        }
         let visible = !minimized.minimized
             && if is_tasks {
                 *mode == LeftPanelMode::TaskList
@@ -229,7 +249,12 @@ mod tests {
             .init_resource::<LeftPanelMode>()
             .init_resource::<EntityListMinimizeState>()
             .init_resource::<InputFocus>()
+            .init_resource::<UiTheme>()
             .add_systems(Update, left_panel_visibility_system);
+        let panel = app
+            .world_mut()
+            .spawn((Node::default(), EntityListPanel))
+            .id();
         let entities = app
             .world_mut()
             .spawn((Node::default(), EntityListBody))
@@ -270,6 +295,14 @@ mod tests {
                 .resource_mut::<InputFocus>()
                 .set(field, bevy::input_focus::FocusCause::Navigated);
             app.update();
+            assert_eq!(
+                app.world().get::<Node>(panel).unwrap().width,
+                Val::Px(if mode == LeftPanelMode::EntityList {
+                    400.0
+                } else {
+                    480.0
+                })
+            );
             assert_eq!(
                 app.world().get::<Node>(entities).unwrap().display,
                 entity_display

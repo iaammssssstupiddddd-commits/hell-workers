@@ -424,10 +424,12 @@ pub fn spawn_soul_list_item(
                 display: Display::Grid,
                 grid_template_columns: vec![
                     GridTrack::px(12.0),
+                    GridTrack::flex(1.0),
+                    GridTrack::px(12.0),
                     GridTrack::px(30.0),
                     GridTrack::px(12.0),
                     GridTrack::px(30.0),
-                    GridTrack::flex(1.0),
+                    GridTrack::px(30.0),
                     GridTrack::px(12.0),
                     GridTrack::px(36.0),
                     GridTrack::px(48.0),
@@ -465,14 +467,14 @@ pub fn spawn_soul_list_item(
                 theme.typography.font_size_item,
                 stress_color,
                 FontWeight::default(),
-                soul_cell(1, 2, 4),
+                soul_cell(1, 2, 1),
             );
             spawn_icon(
                 item,
                 assets.icon_fatigue().clone(),
                 theme.colors.fatigue_icon,
                 theme.sizes.icon_size,
-                soul_cell(2, 1, 1),
+                soul_cell(1, 3, 1),
             );
             spawn_text(
                 item,
@@ -481,14 +483,14 @@ pub fn spawn_soul_list_item(
                 theme.typography.font_size_small,
                 theme.colors.fatigue_text,
                 FontWeight::default(),
-                soul_cell(2, 2, 1),
+                soul_cell(1, 4, 1),
             );
             spawn_icon(
                 item,
                 assets.icon_stress().clone(),
                 theme.colors.stress_icon,
                 theme.sizes.icon_size,
-                soul_cell(2, 3, 1),
+                soul_cell(1, 5, 1),
             );
             spawn_text(
                 item,
@@ -497,7 +499,7 @@ pub fn spawn_soul_list_item(
                 theme.typography.font_size_small,
                 stress_color,
                 stress_weight(soul_vm.stress_bucket),
-                soul_cell(2, 4, 1),
+                soul_cell(1, 6, 1),
             );
             // children[6]: dream text
             spawn_text(
@@ -507,14 +509,14 @@ pub fn spawn_soul_list_item(
                 theme.typography.font_size_small,
                 dream_color,
                 FontWeight::default(),
-                soul_cell(2, 5, 3),
+                soul_cell(1, 7, 1),
             );
             spawn_icon(
                 item,
                 task_handle,
                 task_color,
                 theme.sizes.icon_size,
-                soul_cell(1, 6, 1),
+                soul_cell(1, 8, 1),
             );
             spawn_text(
                 item,
@@ -523,18 +525,9 @@ pub fn spawn_soul_list_item(
                 theme.typography.font_size_small,
                 task_color,
                 FontWeight::default(),
-                soul_cell(1, 7, 1),
+                soul_cell(1, 9, 1),
             );
-            spawn_entity_focus_button(
-                item,
-                soul_vm.entity,
-                assets,
-                theme,
-                Node {
-                    grid_row: GridPlacement::start_span(1, 2),
-                    ..soul_cell(1, 8, 1)
-                },
-            );
+            spawn_entity_focus_button(item, soul_vm.entity, assets, theme, soul_cell(1, 10, 1));
         })
         .id()
 }

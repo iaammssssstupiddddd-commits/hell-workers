@@ -47,6 +47,7 @@ type AllSoulsQuery<'w, 's> = Query<
         &'static AssignedTask,
         &'static SoulIdentity,
         Option<&'static CommandedBy>,
+        Option<&'static hw_core::soul::IdleState>,
     ),
     Without<Familiar>,
 >;
@@ -55,10 +56,10 @@ use super::{StressBucket, TaskVisual};
 
 pub fn familiar_state_label(ai_state: &FamiliarAiState) -> &'static str {
     match ai_state {
-        FamiliarAiState::Idle => "Idle",
-        FamiliarAiState::SearchingTask => "Searching",
-        FamiliarAiState::Scouting { .. } => "Scouting",
-        FamiliarAiState::Supervising { .. } => "Supervising",
+        FamiliarAiState::Idle => "待機",
+        FamiliarAiState::SearchingTask => "仕事を探索",
+        FamiliarAiState::Scouting { .. } => "勧誘中",
+        FamiliarAiState::Supervising { .. } => "配下を監督",
     }
 }
 
@@ -69,7 +70,7 @@ pub(super) fn familiar_label(
     squad_count: usize,
 ) -> String {
     format!(
-        "{} ({}/{}) [{}]",
+        "{} 所属{}/{}\n{}",
         familiar.name,
         squad_count,
         op.max_controlled_soul,
@@ -147,13 +148,33 @@ fn build_familiar_row_view_model(
     let squad_count = commanding_opt.map(|c| c.len()).unwrap_or(0);
     let mut souls = Vec::new();
     let mut show_empty = false;
+    let (working, resting) = commanding_opt.map_or((0, 0), |members| {
+        members.iter().fold((0, 0), |(working, resting), entity| {
+            let Ok((_, _, task, _, _, idle)) = q_all_souls.get(*entity) else {
+                return (working, resting);
+            };
+            let has_work = !matches!(task, AssignedTask::None);
+            let is_resting = !has_work
+                && idle.is_some_and(|idle| {
+                    matches!(
+                        idle.behavior,
+                        hw_core::soul::IdleBehavior::Resting
+                            | hw_core::soul::IdleBehavior::Sleeping
+                    )
+                });
+            (
+                working + usize::from(has_work),
+                resting + usize::from(is_resting),
+            )
+        })
+    });
 
     if !is_folded && let Some(commanding) = commanding_opt {
         if commanding.is_empty() {
             show_empty = true;
         } else {
             for &soul_entity in commanding.iter() {
-                if let Ok((_, soul, task, identity, _)) = q_all_souls.get(soul_entity) {
+                if let Ok((_, soul, task, identity, _, _)) = q_all_souls.get(soul_entity) {
                     souls.push(build_soul_view_model(soul_entity, soul, task, identity));
                 }
             }
@@ -163,7 +184,12 @@ fn build_familiar_row_view_model(
 
     FamiliarRowViewModel {
         entity: fam_entity,
-        label: familiar_label(familiar, op, ai_state, squad_count),
+        label: format!(
+            "{} · 仕事あり{} / 休息中{}",
+            familiar_label(familiar, op, ai_state, squad_count),
+            working,
+            resting
+        ),
         is_folded,
         show_empty,
         souls,
@@ -206,7 +232,7 @@ pub fn build_entity_list_view_model_system(
 
     let mut unassigned = Vec::new();
     if !unassigned_folded || searching {
-        for (soul_entity, soul, task, identity, under_command) in q_all_souls.iter() {
+        for (soul_entity, soul, task, identity, under_command, _) in q_all_souls.iter() {
             if under_command.is_none() {
                 unassigned.push(build_soul_view_model(soul_entity, soul, task, identity));
             }
@@ -289,7 +315,13 @@ mod tests {
                 },
             ));
             if assigned {
-                entity.insert(CommandedBy(familiar));
+                entity.insert((
+                    CommandedBy(familiar),
+                    hw_core::soul::IdleState {
+                        behavior: hw_core::soul::IdleBehavior::Resting,
+                        ..default()
+                    },
+                ));
             }
             souls.push(entity.id());
         }
@@ -311,6 +343,7 @@ mod tests {
                 .query = query.into();
             app.update();
             let snapshot = &app.world().resource::<EntityListViewModel>().current;
+            assert!(snapshot.familiars[0].label.contains("仕事あり0 / 休息中1"));
             if query.trim() == "対象" {
                 assert_eq!(snapshot.familiars[0].souls[0].entity, souls[0]);
                 assert_eq!(snapshot.unassigned[0].entity, souls[1]);
@@ -340,7 +373,7 @@ mod tests {
 
         assert_eq!(
             familiar_label(&familiar, &operation, &FamiliarAiState::Idle, 3),
-            "A (3/1) [Idle]"
+            "A 所属3/1\n待機"
         );
     }
 }

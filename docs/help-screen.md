@@ -105,6 +105,7 @@ world pointerのplayer契約は`camera-selection` topicの`world-selection`と
 `world-object-actions`へ掲載します。前者はscreen-space snap、release確定、drag slop、重なり巡回、
 footprint選択、後者はentity context menu、Familiar地面移動、Door lock、移動可能BuildingのMoveを扱います。
 詳細なruntime契約は[world-selection.md](world-selection.md)を正本とします。
+設定済みの作業範囲・使い魔の指揮範囲・Site/Yard境界は通常時も表示するため、補助レイヤーを解除してもエリアが消えないことを同topicに明記します。
 `coverage_approval.snap`はlauncherのlabel/tooltip、画面title・閉じる・navigation・shortcut接頭辞と
 それらのrender結果、launcher/chrome shortcut、section/topic/entryのID・title・全paragraph・shortcut、
 feature/owner、およびstable surface ID、Published target、Excluded reason、Blocked target/reason/ownerを
@@ -197,7 +198,11 @@ Space/時間速度は時間だけを変更し、Menu/未処理Escapeは独立し
 停止中の計画allowlistと制限は`time-controls`へ公開し、canonical ToggleSystemMenuを同entryへcoverage登録する。
 任意のWorkGuideはHelp下部の開始ボタンから起動する。固定開始文言はsealed HelpPanelCopySpecのguide_start_labelとしてrootが供給し、
 catalog validation・sentinel fixture・exact approval snapshotに含める。StartWorkGuide/EndWorkGuideは`getting-started-work-loop`へ公開する。
-実際の使い魔/範囲/採取指定/Gather進行をrootのreadonly adapterが確認し、対象消滅時の戻りとload時終了をテストする。
-ガイドはviewport高さの60%を上限とし、本文を標準ScrollArea/Scrollbarでスクロールする。
+実際の使い魔/範囲/採取指定/Gather進行、明示選択した休息所Blueprintの搬入/施工/正式完成をrootのreadonly adapterが確認し、対象消滅時の戻りとload時終了をテストする。
+ガイドはviewport高さの35%を上限とし、本文を標準ScrollArea/Scrollbarでスクロールする。
 閉じる/スキップはscroll body外に固定し、長い使い魔名や案内本文によって終了操作が押し出されるのを防ぐ。
 手順や停止状態によって案内が更新されたときだけ本文を先頭へ戻し、同じ案内を読む間は位置を保つ。
+
+地図中心UIの管理/表示/戻る操作は既存stable entryへ公開する。WorkspaceActionはvariantごとにcoverageを持ち、WorkspaceBackはcanonical Esc bindingを使う。人数と要対応の意味、固定と一時詳細の区別、補助表示の凡例はproviderの実装経路と照合する。
+
+作業範囲の小型編集欄と使い魔詳細の入口は `Update required`。`area-edit` を維持して左クリック→詳細→指定/変更、明示対象、停止中/capture条件、詳細操作の開閉、tooltipの無効理由、適用後の終了を掲載する。`SelectAreaTaskFor` と `FinishAreaEdit` は同entryへPublished登録し、対象同一性・拒否・適用範囲保持・受理releaseと折りたたみをbehavior testで検証する。

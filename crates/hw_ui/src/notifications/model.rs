@@ -4,7 +4,7 @@ use std::time::Duration;
 
 pub const NOTIFICATION_DEDUPE_WINDOW: Duration = Duration::from_secs(2);
 pub const NOTIFICATION_TOAST_LIFETIME: Duration = Duration::from_secs(4);
-pub const MAX_ACTIVE_TOASTS: usize = 3;
+pub const MAX_ACTIVE_TOASTS: usize = 1;
 pub const MAX_NOTIFICATION_HISTORY: usize = 64;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]

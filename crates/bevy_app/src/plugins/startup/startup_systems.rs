@@ -212,8 +212,10 @@ fn gameplay_pan_camera() -> PanCamera {
 }
 
 pub(super) fn initialize_gizmo_config(mut config_store: ResMut<GizmoConfigStore>) {
-    for (_, config, _) in config_store.iter_mut() {
-        config.enabled = false;
+    for (group, config, _) in config_store.iter_mut() {
+        config.enabled = *group
+            == std::any::TypeId::of::<crate::interface::ui::world_first::overlays::WorldViewGizmos>(
+            );
         config.line.width = 1.0;
     }
 }

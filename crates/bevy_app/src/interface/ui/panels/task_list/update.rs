@@ -59,6 +59,7 @@ pub struct TaskListRenderState<'w, 's> {
     view_state: ResMut<'w, TaskDashboardViewState>,
     action_state: ResMut<'w, TaskDashboardActionState>,
     minimized: Res<'w, EntityListMinimizeState>,
+    shell: Option<Res<'w, hw_ui::shell::UiShellState>>,
     scroll: Query<'w, 's, &'static ScrollPosition, With<TaskListScroll>>,
 }
 
@@ -74,11 +75,23 @@ pub fn task_list_update_system(
     #[cfg(feature = "profiling")]
     let _timing_guard = TaskDashboardTimingGuard::new(timing_metrics.as_deref_mut());
 
-    if *render_state.mode != LeftPanelMode::TaskList || render_state.minimized.minimized {
+    if *render_state.mode != LeftPanelMode::TaskList
+        || render_state.minimized.minimized
+        || render_state
+            .shell
+            .as_ref()
+            .is_some_and(|shell| !shell.management_open())
+    {
         return;
     }
 
-    if !dirty.list_dirty() && !render_state.view_state.is_changed() {
+    if !dirty.list_dirty()
+        && !render_state.view_state.is_changed()
+        && !render_state
+            .shell
+            .as_ref()
+            .is_some_and(|shell| shell.is_changed())
+    {
         return;
     }
 

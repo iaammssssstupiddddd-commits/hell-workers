@@ -26,6 +26,10 @@ pub fn ui_core_plugin() -> UiCorePlugin {
 
 fn register_ui_core_plugin_systems(app: &mut App) {
     app.init_resource::<crate::interface::ui::work_guide::WorkGuide>();
+    app.add_systems(
+        Update,
+        crate::interface::ui::work_guide::record_building_completion.in_set(GameSystemSet::Visual),
+    );
     crate::systems::save::register_load_reset_hook(
         app,
         "work-guide",

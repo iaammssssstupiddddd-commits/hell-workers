@@ -22,9 +22,10 @@ pub use actions::{
     toggle_rtt_terrain_button_system,
 };
 pub use components::{
-    DevPanelBody, DevPanelMinimizeButton, DevPanelMinimizeButtonLabel, InstantBuildButton,
-    LodIndicatorText, RenderPerfStatusText, ToggleRender3dButton, ToggleRttExtraLightButton,
-    ToggleRttLightButton, ToggleRttSceneObjectsButton, ToggleRttTerrainButton,
+    DevPanelBody, DevPanelMinimizeButton, DevPanelMinimizeButtonLabel, DevPanelRoot,
+    InstantBuildButton, LodIndicatorText, RenderPerfStatusText, ToggleRender3dButton,
+    ToggleRttExtraLightButton, ToggleRttLightButton, ToggleRttSceneObjectsButton,
+    ToggleRttTerrainButton,
 };
 pub use presentation::{
     update_instant_build_button_visual_system, update_lod_indicator_system,
@@ -33,3 +34,19 @@ pub use presentation::{
     update_rtt_scene_objects_button_visual_system, update_rtt_terrain_button_visual_system,
 };
 pub use spawn::spawn_dev_panel_system;
+
+pub fn dev_panel_visibility_system(
+    debug: Res<crate::DebugVisible>,
+    mut panels: Query<&mut Node, With<DevPanelRoot>>,
+) {
+    let display = if debug.0 {
+        Display::Flex
+    } else {
+        Display::None
+    };
+    for mut node in &mut panels {
+        if node.display != display {
+            node.display = display;
+        }
+    }
+}

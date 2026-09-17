@@ -70,6 +70,16 @@ existing Souls per Familiar where available, and pauses simulation. The observer
 then stays read-only; the verifier checks nonce/PID-owned client images, visible
 Familiar text, fixture state, frozen inputs and image hashes. Inspect every image.
 This mode provides no click, scroll, navigation or high-DPI acceptance evidence.
+The map-first UI also supports `--layout-scene normal|selection|pinned|build|display|area|area-details`.
+Area fixtures verify the compact editor and the ten disclosed actions; selection
+fixtures require the visible Familiar area entry. The details fixture completes
+its one-time expansion at frame 48, before passive observation is ready.
+The default `management` scene opens the retained roster explicitly. Each scene is
+prepared once before passive observation; the driver sends no input. The verifier
+checks the requested page, management/inspector exclusion, all 12 catalog choices
+for `build`, and the union of visible UI rectangles against the scene's occlusion
+budget. Every image still needs visual inspection. These fixtures do not prove
+that player input reaches the page or that a construction completes.
 Add `--layout-menu` to the no-input mode to prepare an open Zones menu and verify
 that its bottom is above the visible mode guidance. This is a separate rendering
 fixture; it does not prove that clicking the menu works.

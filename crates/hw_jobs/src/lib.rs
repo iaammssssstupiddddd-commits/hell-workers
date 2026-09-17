@@ -33,7 +33,9 @@ pub use diagnostics::{
     TaskDiagnosticDomainMask, TaskDiagnosticInputRevisions, TaskDiagnosticInputStamp,
     TaskDiagnosticProducer, TaskDiagnosticProducerMask, TaskDiagnosticRecord,
 };
-pub use events::BuildingCompletedEvent;
+pub use events::{
+    BuildingCompletedEvent, BuildingCompletedVisualMessage, publish_building_completed,
+};
 pub use model::{
     Blueprint, BlueprintCancelRequested, BonePile, BridgeMarker, Building, BuildingCategory,
     BuildingType, Designation, Door, DoorCloseTimer, DoorState, FlexibleMaterialRequirement,

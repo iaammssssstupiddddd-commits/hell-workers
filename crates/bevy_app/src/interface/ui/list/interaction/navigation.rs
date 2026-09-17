@@ -16,6 +16,7 @@ pub struct EntityListTabFocusCtx<'w, 's> {
     pub view_model: Res<'w, super::super::EntityListViewModel>,
     pub mode: Res<'w, hw_ui::components::LeftPanelMode>,
     pub minimized: Res<'w, hw_ui::list::EntityListMinimizeState>,
+    pub shell: Option<Res<'w, hw_ui::shell::UiShellState>>,
     pub rows: Query<
         'w,
         's,
@@ -39,7 +40,13 @@ pub struct EntityListTabFocusCtx<'w, 's> {
 }
 
 pub fn entity_list_tab_focus_system(mut ctx: EntityListTabFocusCtx) {
-    if *ctx.mode != hw_ui::components::LeftPanelMode::EntityList || ctx.minimized.minimized {
+    if *ctx.mode != hw_ui::components::LeftPanelMode::EntityList
+        || ctx.minimized.minimized
+        || ctx
+            .shell
+            .as_ref()
+            .is_some_and(|shell| !shell.management_open())
+    {
         return;
     }
     let reverse = if ctx.resolved_frame.contains(InputAction::ListPrevious) {

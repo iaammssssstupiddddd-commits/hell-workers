@@ -135,20 +135,14 @@ pub(super) struct ModeDisplayInfo<'a> {
 
 pub(super) fn next_operation_guidance(play_mode: &PlayMode, task: &TaskMode) -> &'static str {
     match play_mode {
-        PlayMode::Normal => "対象を選択して確認 / Orders・Architect・Zonesで操作を開始",
-        PlayMode::BuildingPlace => {
-            "配置先を選んで左クリック / 配置できない理由はカーソルの説明で確認 / Escで終了"
-        }
-        PlayMode::BuildingMove => "移動先を選んで左クリック / Escで移動先の指定を中止",
-        PlayMode::FloorPlace => {
-            "左ドラッグで範囲指定 → 離して施工予定を作成 / Escで未確定の指定を中止"
-        }
+        PlayMode::Normal => "",
+        PlayMode::BuildingPlace => "左クリックで配置 · Escで操作を終了",
+        PlayMode::BuildingMove => "左クリックで移動先を決定 · Escで中止",
+        PlayMode::FloorPlace => "ドラッグして離すと施工予定を作成 · Escで中止",
         PlayMode::TaskDesignation => match task {
-            TaskMode::AreaSelection(_) => {
-                "左ドラッグ → 離して担当範囲を適用 / 戻す・やり直す・保存枠は範囲編集パネル / Escで終了"
-            }
+            TaskMode::AreaSelection(_) => "ドラッグして離すと担当範囲を適用 · Escで操作を終了",
             TaskMode::DesignateDeconstruct(_) => {
-                "完成した建物を1つ指定 → 左ボタンを離して解体を指示 / 返却資材と不可理由を確認 / Escで終了"
+                "建物を選び、返却資材を確認して離すと解体 · Escで中止"
             }
             TaskMode::SoulSpaPlace(_) => "2×2の配置先を選んで左クリック / Escで終了",
             TaskMode::ZonePlacement(_, _) => {
@@ -171,133 +165,68 @@ pub(super) fn next_operation_guidance(play_mode: &PlayMode, task: &TaskMode) -> 
 }
 
 pub(super) fn build_mode_text(ctx: ModeCtxRefs, info: ModeDisplayInfo) -> String {
-    let ModeCtxRefs {
-        play_mode,
-        build_context,
-        companion_state,
-        task_context,
-    } = ctx;
-    let ModeDisplayInfo {
-        selected_familiar_name,
-        selected_area_size_tiles,
-        area_edit_dragging,
-        area_edit_operation,
-        area_overlap,
-        clipboard_has_area,
-        unassigned_tasks_in_area,
-    } = info;
-    match play_mode {
-        PlayMode::Normal => "Mode: Normal".to_string(),
+    match ctx.play_mode {
+        PlayMode::Normal => String::new(),
         PlayMode::BuildingPlace => {
-            if let Some(companion) = companion_state.0.as_ref() {
-                format!(
-                    "Mode: Companion ({:?} -> {:?})",
-                    companion.parent_kind, companion.kind
-                )
-            } else if let Some(kind) = build_context.0 {
-                format!("Mode: Build ({:?})", kind)
-            } else {
-                "Mode: Build".to_string()
+            if ctx.companion_state.0.is_some() {
+                return "バケツ置き場を配置 · 水タンクの付属設備".into();
             }
+            let kind = ctx.build_context.0;
+            kind.map(|kind| {
+                let (name, role) = hw_ui::catalog::building_copy(kind);
+                format!("{name}を配置 · {role}")
+            })
+            .unwrap_or_else(|| "建築物を配置".into())
         }
-        PlayMode::TaskDesignation => match task_context.0 {
-            TaskMode::DesignateChop(None) => "Mode: Chop (Drag to select)".to_string(),
-            TaskMode::DesignateChop(Some(_)) => "Mode: Chop (Dragging...)".to_string(),
-            TaskMode::DesignateMine(None) => "Mode: Mine (Drag to select)".to_string(),
-            TaskMode::DesignateMine(Some(_)) => "Mode: Mine (Dragging...)".to_string(),
-            TaskMode::DesignateHaul(None) => "Mode: Haul (Drag to select)".to_string(),
-            TaskMode::DesignateHaul(Some(_)) => "Mode: Haul (Dragging...)".to_string(),
-            TaskMode::CancelDesignation(None) => "Mode: Cancel (Drag to select)".to_string(),
-            TaskMode::CancelDesignation(Some(_)) => "Mode: Cancel (Dragging...)".to_string(),
-            TaskMode::AreaSelection(None) => {
-                let target_name = selected_familiar_name.unwrap_or("No Familiar");
-                let size = selected_area_size_tiles
-                    .map(|v| format!("{}x{}t", v.x, v.y))
-                    .unwrap_or_else(|| "?x?t".to_string());
-                let state = if area_edit_dragging {
-                    if let Some(op) = area_edit_operation {
-                        format!("Dragging {}", op)
-                    } else {
-                        "Dragging".to_string()
-                    }
+        PlayMode::BuildingMove => "建築物を移動".into(),
+        PlayMode::FloorPlace => match ctx.task_context.0 {
+            TaskMode::WallPlace(_) => "壁を配置 · 幅1タイルの直線".into(),
+            _ => "床を配置 · 部屋の土台".into(),
+        },
+        PlayMode::TaskDesignation => match ctx.task_context.0 {
+            TaskMode::DesignateChop(_) => "伐採を指示".into(),
+            TaskMode::DesignateMine(_) => "採掘を指示".into(),
+            TaskMode::DesignateHaul(_) => "運搬を指示".into(),
+            TaskMode::CancelDesignation(_) => "作業指示を取消".into(),
+            TaskMode::DesignateDeconstruct(_) => "完成した建物を解体".into(),
+            TaskMode::AreaSelection(_) => {
+                let target = info.selected_familiar_name.unwrap_or("使い魔を選択");
+                let size = info
+                    .selected_area_size_tiles
+                    .map(|size| format!("{}×{}タイル", size.x, size.y))
+                    .unwrap_or_else(|| "新規範囲".into());
+                let state = if info.area_edit_dragging {
+                    info.area_edit_operation.unwrap_or("ドラッグ中")
                 } else {
-                    "Ready".to_string()
+                    "範囲編集"
                 };
-                let overlap_text = if let Some((count, max_ratio)) = area_overlap {
-                    if count > 0 {
-                        format!("Overlap:{}({:.0}%)", count, max_ratio * 100.0)
-                    } else {
-                        "Overlap:0".to_string()
-                    }
-                } else {
-                    "Overlap:-".to_string()
-                };
-                let clip = if clipboard_has_area {
-                    "Clip:Ready"
-                } else {
-                    "Clip:Empty"
-                };
-                let tasks = unassigned_tasks_in_area
-                    .map(|count| format!("Tasks:{}", count))
-                    .unwrap_or_else(|| "Tasks:-".to_string());
-                let overlap_warn =
-                    area_overlap.is_some_and(|(count, max_ratio)| count > 0 && max_ratio >= 0.5);
-                let warn = if overlap_warn {
-                    " WARN:HighOverlap"
+                let overlap = info
+                    .area_overlap
+                    .filter(|(count, _)| *count > 0)
+                    .map(|(count, ratio)| format!(" · 重複{count}（最大{:.0}%）", ratio * 100.0))
+                    .unwrap_or_default();
+                let tasks = info
+                    .unassigned_tasks_in_area
+                    .map(|count| format!(" · 未担当{count}件"))
+                    .unwrap_or_default();
+                let clipboard = if info.clipboard_has_area {
+                    " · コピーあり"
                 } else {
                     ""
                 };
-                format!(
-                    "Mode: Area Edit [{}] {} {} {} {} {}{} (Drag:Apply, Esc:Exit, Shift+Release:Exit, Ctrl+C/V, Ctrl+Z/Y, Ctrl+1..3 Save, Alt+1..3 Apply)",
-                    target_name, size, state, overlap_text, tasks, clip, warn
-                )
+                format!("{target} · {state} · {size}{overlap}{tasks}{clipboard}")
             }
-            TaskMode::AreaSelection(Some(_)) => {
-                let target_name = selected_familiar_name.unwrap_or("No Familiar");
-                format!("Mode: Area Edit [{}] (New Area Dragging...)", target_name)
-            }
-            TaskMode::AssignTask(_) => "Mode: Assign Task".to_string(),
-            TaskMode::ZonePlacement(kind, start_pos) => {
-                if start_pos.is_some() {
-                    format!("Mode: Zone {:?} (Dragging...)", kind)
-                } else {
-                    format!("Mode: Zone {:?} (Drag to place)", kind)
-                }
-            }
-            TaskMode::ZoneRemoval(kind, start_pos) => {
-                if start_pos.is_some() {
-                    format!("Mode: Remove Zone {:?} (Dragging...)", kind)
-                } else {
-                    format!("Mode: Remove Zone {:?} (Drag to remove)", kind)
-                }
-            }
-            TaskMode::DreamPlanting(None) => {
-                "Mode: Dream Planting (Drag to select area)".to_string()
-            }
-            TaskMode::DreamPlanting(Some(_)) => "Mode: Dream Planting (Dragging...)".to_string(),
-            TaskMode::StockpilePolicyEdit(None) => {
-                "Mode: Stockpile Policy (Drag one area, Esc:Cancel)".to_string()
-            }
-            TaskMode::StockpilePolicyEdit(Some(_)) => {
-                "Mode: Stockpile Policy (Dragging...)".to_string()
-            }
-            TaskMode::DesignateDeconstruct(None) => {
-                "Mode: Deconstruct (Click one completed building, Esc:Exit)".to_string()
-            }
-            TaskMode::DesignateDeconstruct(Some(_)) => {
-                "Mode: Deconstruct (Release to designate, Esc:Exit)".to_string()
-            }
-            TaskMode::SoulSpaPlace(_) => "Mode: Soul Spa (Click to place 2×2)".to_string(),
-            _ => "Mode: Task".to_string(),
+            TaskMode::ZonePlacement(kind, _) => match kind {
+                hw_core::game_state::TaskModeZoneType::Stockpile => "保管場所を設定".into(),
+                hw_core::game_state::TaskModeZoneType::Yard => "Yardを拡張".into(),
+            },
+            TaskMode::ZoneRemoval(_, _) => "保管範囲を削除".into(),
+            TaskMode::DreamPlanting(_) => "Dreamで植樹".into(),
+            TaskMode::StockpilePolicyEdit(_) => "保管方針を範囲に適用".into(),
+            TaskMode::SoulSpaPlace(_) => "Soul Spaを配置 · 2×2タイル".into(),
+            TaskMode::AssignTask(_) | TaskMode::SelectBuildTarget => "担当する仕事を選択".into(),
+            _ => "仕事を指定".into(),
         },
-        PlayMode::FloorPlace => match task_context.0 {
-            TaskMode::FloorPlace(None) => "Mode: Floor (Drag to place)".to_string(),
-            TaskMode::FloorPlace(Some(_)) => "Mode: Floor (Dragging...)".to_string(),
-            TaskMode::WallPlace(None) => "Mode: Wall (Drag to place 1xn)".to_string(),
-            TaskMode::WallPlace(Some(_)) => "Mode: Wall (Dragging 1xn...)".to_string(),
-            _ => "Mode: Floor".to_string(),
-        },
-        PlayMode::BuildingMove => "Mode: Move Building".to_string(),
     }
 }
 

@@ -245,6 +245,7 @@ fn every_action_has_exactly_one_consumer_owner() {
             | InputAction::FamiliarBuild
             | InputAction::FamiliarCancelDesignation
             | InputAction::ToggleFamiliarIdlePatrol => ConsumerOwner::FamiliarCommand,
+            InputAction::WorkspaceBack => ConsumerOwner::UiIntentBridge,
             InputAction::CancelActiveMode | InputAction::CloseOpenMenu => {
                 ConsumerOwner::ActiveModeCancel
             }
@@ -754,6 +755,59 @@ fn open_menu_escape_beats_familiar_escape() {
             },
         ),
         [InputAction::CancelActiveMode]
+    );
+}
+
+#[test]
+fn workspace_escape_returns_before_system_menu_and_yields_to_tools_and_text() {
+    let context = InputContextSnapshot {
+        shell_can_back: true,
+        simulation_paused: true,
+        ..default()
+    };
+    assert_eq!(
+        resolve_input_chords(&[plain(KeyCode::Escape)], context.clone()),
+        [InputAction::WorkspaceBack]
+    );
+    assert_eq!(
+        resolve_input_chords(
+            &[plain(KeyCode::Escape)],
+            InputContextSnapshot {
+                menu_state: MenuState::Architect,
+                ..context.clone()
+            }
+        ),
+        [InputAction::CloseOpenMenu]
+    );
+    assert_eq!(
+        resolve_input_chords(
+            &[plain(KeyCode::Escape)],
+            InputContextSnapshot {
+                play_mode: PlayMode::BuildingPlace,
+                ..context.clone()
+            }
+        ),
+        [InputAction::CancelActiveMode]
+    );
+    assert_eq!(
+        resolve_input_chords(
+            &[plain(KeyCode::Escape)],
+            InputContextSnapshot {
+                top_overlay: Some(InputOverlay::Help),
+                ..context.clone()
+            }
+        ),
+        [InputAction::CloseHelp]
+    );
+    assert!(
+        resolve_input_chords(
+            &[plain(KeyCode::Escape)],
+            InputContextSnapshot {
+                text_input_blocks_keybinds: true,
+                ..context
+            }
+        )
+        .is_empty()
     );
 }
 

@@ -36,6 +36,7 @@ pub(super) struct SoulInfoViewModel {
 pub(super) struct SimpleInfoViewModel {
     pub(super) header: String,
     pub(super) common: String,
+    pub(super) familiar_has_area: Option<bool>,
 }
 
 #[derive(Clone, PartialEq)]
@@ -162,6 +163,7 @@ pub(super) fn to_view_model(model: EntityInspectionModel) -> InfoPanelViewModel 
         InfoPanelViewModel::Simple(SimpleInfoViewModel {
             header: model.header,
             common: model.common_text,
+            familiar_has_area: model.familiar_has_area,
         })
     }
 }
@@ -253,6 +255,7 @@ mod tests {
             header: "Stockpile".to_string(),
             common_text: "Managed".to_string(),
             tooltip_lines: Vec::new(),
+            familiar_has_area: None,
             soul: None,
             stockpile: Some(StockpileInspectionFields {
                 state: StockpilePolicyState::Draining,

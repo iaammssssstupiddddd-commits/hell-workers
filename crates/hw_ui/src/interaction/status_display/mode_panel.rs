@@ -8,8 +8,8 @@ pub struct ModeTextPayload {
 
 #[derive(Debug)]
 pub struct TaskSummaryPayload {
-    pub total: u32,
-    pub high: u32,
+    pub blocked: usize,
+    pub evaluating: usize,
 }
 
 #[derive(Debug)]
@@ -23,7 +23,7 @@ pub struct AreaEditPreviewPayload {
 pub fn update_mode_text_system(
     payload: Option<ModeTextPayload>,
     ui_nodes: Res<UiNodeRegistry>,
-    mut q_text: Query<&mut Text>,
+    mut q_text: Query<(&mut Text, &mut Node)>,
 ) {
     let Some(payload) = payload else {
         return;
@@ -33,7 +33,12 @@ pub fn update_mode_text_system(
         return;
     };
 
-    if let Ok(mut text) = q_text.get_mut(entity) {
+    if let Ok((mut text, mut node)) = q_text.get_mut(entity) {
+        node.display = if payload.text.is_empty() {
+            Display::None
+        } else {
+            Display::Flex
+        };
         text.0 = payload.text;
     }
 }
@@ -53,8 +58,12 @@ pub fn task_summary_ui_system(
         return;
     };
     if let Ok((mut text, mut color)) = q_text.get_mut(entity) {
-        text.0 = format!("Tasks: {} ({} High)", payload.total, payload.high);
-        if payload.high > 0 {
+        text.0 = if payload.evaluating == 0 {
+            format!("要対応 {}", payload.blocked)
+        } else {
+            format!("要対応 {} · 判定中 {}", payload.blocked, payload.evaluating)
+        };
+        if payload.blocked > 0 {
             color.0 = task_high_color;
         } else {
             color.0 = normal_color;
