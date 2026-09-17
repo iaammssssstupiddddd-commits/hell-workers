@@ -10,7 +10,7 @@
 | 最終更新日 | 2026-09-17 |
 | 作成者 | Codex |
 | 調査対象 | primary repository、HEAD `a4051f9b`、開始時の作業差分なし |
-| 関連計画 | [UI操作性改善の残る受入](../plans/ui-usability-improvements-plan-2026-09-14.md)（実装済み、未実施の操作・理解度評価を追跡） |
+| 完了記録 | UI改善計画はクローズ済み。[現行仕様・検証結果](../ui-world-first.md)と未検証事項へ集約 |
 | 関連Issue/PR | N/A |
 
 ## 1. 背景と問題
@@ -442,12 +442,12 @@ ScrollAreaの仕様は [Bevy 0.19 ScrollArea](https://docs.rs/bevy_ui_widgets/0.
 - 停止中の許可操作は [状態管理](../state.md) のallowlistを採用。配属等への拡張は後続候補O05。
 - 単クリックで詳細を開き、明示「現地へ」でcameraを移動。固定は独立する。
 - 主な操作入口を日本語化。全面翻訳・文字のみ拡大・演出量は後続候補O04。
-- 1280×720 / 1920×1080、UI倍率0.85 / 1 / 1.25で描画確認済み。実OS高DPI、実操作、初見理解は [残る受入計画](../plans/ui-usability-improvements-plan-2026-09-14.md)で追跡する。
+- 1280×720 / 1920×1080、UI倍率0.85 / 1 / 1.25で描画確認済み。実OS高DPI、実操作、初見理解は [未検証事項と再検証条件](../ui-world-first.md#未検証事項と再検証条件)で追跡する。
 
 ## 12. AI引継ぎメモ
 
 - 現在地: U01〜U32と地図中心UIの実装・デザインレビューは完了。コード編集を他agentへ委譲しない。
-- 次の作業: [残る受入計画](../plans/ui-usability-improvements-plan-2026-09-14.md)に従い、現行subjectで未実施の実入力・高DPI・初見評価を確認する。旧提案を新規実装の指示と解釈しない。
+- 計画はクローズ済み。[未検証事項と再検証条件](../ui-world-first.md#未検証事項と再検証条件)を残し、必要時に現行subjectで再検証する。旧提案を継続中の作業指示と解釈しない。
 - `crates/` から始まらないコード参照はすべて `crates/` 配下の相対path。行番号は調査対象HEADの目印であり、将来変更時はsymbolで再確認する。
 - 詳細の受入条件を独立した修正単位に分け、表示確認と状態遷移の検証を両方行う。
 - 既存のHelp coverage、blocked capability、modal ancestry、positive allow-list、save revision/session guardは維持対象。
@@ -468,3 +468,5 @@ ScrollAreaの仕様は [Bevy 0.19 ScrollArea](https://docs.rs/bevy_ui_widgets/0.
 | 2026-09-14 | Codex | コード根拠・受入条件を再レビューし、verify/Clippy・文書・Help・storageのpassと解析ツールの確認範囲を記録 |
 | 2026-09-14 | Codex | U01〜U32を対応付けた実装計画へリンクし、引継ぎ先と検証記録の範囲を同期 |
 | 2026-09-17 | Codex | 実装承認を反映し、調査当時の本文と現行仕様・残る受入の参照先を分離 |
+
+2026-09-17: UI改善計画をクローズし、未検証事項・任意拡張は現行仕様へ引き継いだ。全受入のpassを意味しない。

@@ -24,7 +24,6 @@
 ## UI & Visuals
 - [ui-world-first.md](ui-world-first.md): 地図中心のHUD、管理/詳細の共通枠、要対応、建築カタログと補助表示。
 - [design/ui-world-first/README.md](design/ui-world-first/README.md): 地図中心UIの設計理由、他ゲームの参考事例、実装前のラフと実装後の代表画面。
-- [plans/ui-usability-improvements-plan-2026-09-14.md](plans/ui-usability-improvements-plan-2026-09-14.md): 実装承認後に残るUI受入。C01〜C08、再設計後の実操作、高DPI、初見理解と任意拡張の境界。
 - [proposals/ui-usability-audit-proposal-2026-09-13.md](proposals/ui-usability-audit-proposal-2026-09-13.md): UI全領域の実装レビュー、操作性向上32項目、優先順位と受入条件。
 - [help-screen.md](help-screen.md): F1/ボタンで開くプレイヤーHelp、catalog ownership、可逆pause、継続更新gate。
 - [world-selection.md](world-selection.md): screen-spaceオブジェクトスナップ、クリック／ドラッグ所有、右クリック、選択表示の契約。

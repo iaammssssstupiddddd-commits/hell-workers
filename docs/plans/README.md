@@ -47,7 +47,6 @@
 | [development-workstation-blender-migration-plan-2026-07-29.md](development-workstation-blender-migration-plan-2026-07-29.md) | In Progress | 新PCへの開発環境移行と、現PCでのBlender／asset新規構築計画。 |
 | [hvac-plumbing-plan-2026-07-13.md](hvac-plumbing-plan-2026-07-13.md) | Draft | 地獄のインフラ（換気・導水・部屋認可）実装計画 |
 | [native-acceptance-resource-safety-plan-2026-08-05.md](native-acceptance-resource-safety-plan-2026-08-05.md) | Complete | tmpfs上のCargo出力を永続storageへ固定し、実機検証のRAM圧迫を防ぐ計画。 |
-| [ui-usability-improvements-plan-2026-09-14.md](ui-usability-improvements-plan-2026-09-14.md) | In Progress | 実装承認後に残るC01〜C08、再設計後の実操作・高DPI・初見理解の受入。 |
 
 ## アーカイブ計画書一覧 (`archive/` / `**/archived/`)
 

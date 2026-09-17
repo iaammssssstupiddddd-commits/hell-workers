@@ -82,7 +82,7 @@ Modal/Pause capture開始時のgesture rollbackはpatchを保持して再試行�
 Accepted Resourcesの各行は起動時に一度だけ生成する静的UI nodeであり、ViewModel更新時はTextと
 `MenuButton` actionだけを差分更新する。全許可、単一許可、空集合、複数許可は同じ集合契約で表示し、
 複数許可でも1セルの現在内容と搬入予約は1資材に限定する。全資材を一覧から隠すcycle操作は持たない。
-情報パネルの外枠はviewport高46%を上限とし、見出しと固定解除を外側に残して本文だけを標準ScrollArea/Scrollbarで縦scrollする。別対象へ切り替えたときとworld置換時に先頭へ戻し、同じ対象の内容更新では読書位置を保持する。`1280x720 / UiScale 1.25` の実入力は [残るUI受入計画](plans/ui-usability-improvements-plan-2026-09-14.md)で確認する。
+情報パネルの外枠はviewport高46%を上限とし、見出しと固定解除を外側に残して本文だけを標準ScrollArea/Scrollbarで縦scrollする。別対象へ切り替えたときとworld置換時に先頭へ戻し、同じ対象の内容更新では読書位置を保持する。`1280x720 / UiScale 1.25` の実入力は [未検証事項と再検証条件](ui-world-first.md#未検証事項と再検証条件)で確認する。
 
 ### 電力発電施設（Soul Spa）
 `SoulSpaSite` を持つエンティティは `append_soul_spa_model()` で追記される。

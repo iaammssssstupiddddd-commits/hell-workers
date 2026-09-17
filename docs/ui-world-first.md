@@ -72,7 +72,7 @@ submenuは案内の実測上端を避ける。Area操作欄は右上、cursor pr
 
 ## 検証結果と残る受入
 
-2026-09-17にユーザーが現行UIを承認。再設計の実装計画を閉じ、仕様は本書と各機能文書、設計理由・画面例は[デザイン資料](design/ui-world-first/README.md)へ集約した。未実施の操作・理解度評価は[UI受入計画](plans/ui-usability-improvements-plan-2026-09-14.md)へ引き継ぐ。
+2026-09-17にユーザーが現行UIを承認。実装コミットは `578cc98f`。再設計とUI操作性改善の計画は、承認済み実装・品質検証・文書同期・専用データ整理をもってクローズした。仕様は本書と各機能文書、設計理由・画面例は[デザイン資料](design/ui-world-first/README.md)へ集約する。未実施の操作・理解度評価は下記に残し、全受入完了とは扱わない。
 
 2026-09-16の実装最終版は `dev.py check` / `dev.py verify` を通過。通常・profilingのworkspace test、追加feature compile、Clippy警告0、Help exact/coverage、Python、docs/storageを含む。ページ遷移・固定優先・消滅・Esc所有・capture・pause・フィルタ・集約・ガイドの対象同一性と、範囲編集の開始/終了/拒否を検証した。変更Rustのfile診断はerror 0 / warning 0。profiling専用observerは通常構成でunlinked-file hintになるため、profiling compile/testと実window buildで確認した。
 
@@ -96,6 +96,43 @@ native描画は1280×720 / 1920×1080 × UI倍率0.85 / 1 / 1.25で検証した�
 2026-09-17の文書整理・コミット前にも `python3 scripts/dev.py verify` を実行し、全品質gateを通過した。文書索引の再生成とHelp影響レビュー、storage checkも完了。整理のためのproduction変更やnative再撮影は行っていない。
 
 詳細: [一覧](entity_list_ui.md)、[仕事](task_list_ui.md)、[詳細](info_panel_ui.md)、[選択](world-selection.md)、[状態](state.md)、[通知](notifications.md)、[Help](help-screen.md)。
+
+## 未検証事項と再検証条件
+
+以下は計画クローズ時の未検証事項であり、既知の不具合一覧や合格済み一覧ではない。実利用で問題が報告された場合、関連UIを変更する場合、またはリリースの受入範囲に含める場合に、現行subjectで必要なシナリオを検証する。旧計画の全項目を継続中として残さず、未確認を成功へ変更しない。
+
+| ID / 領域 | 未実施の全体受入で守る条件 |
+| --- | --- |
+| C01 管理の表示状態 | 使い魔・魂/仕事×展開/最小化、検索後の往復。本文とクリック領域は最大1つ、仕事にSoul検索を出さず、検索解除で元の状態へ戻る |
+| C02 停止中のtooltip | Pause/1x/2x/4xで新規hoverを実入力。unpauseを挟まず同じ実時間delay/fadeで表示し、差は描画2frame分以内 |
+| C03 設定 | 6画面条件で末尾とCloseへ到達。実際の設定操作でUI倍率を1.25へ変更して戻す。長い日本語の文字・操作を切らない |
+| C04 通知64件 | wheel/scrollbarで先頭・中央・最古の固定IDに到達。追記/追出しの読書位置、cameraとworld選択の不変を確認 |
+| C05 保存・読込 | occupied slotの同座標double-clickではtransaction 0、独立Confirmで1回。旧session拒否とLoad/Recoveryのownerを確認。既存の保存request後revision照合を維持 |
+| C06 仕事200件 | 取消可能な手動指定の1/5/10ページ先頭・末尾を選択/取消。最大20行、最終ページの件数減少時clamp、pinと操作先、READ_ONLY拒否を確認 |
+| C07 ContextMenu | 命令/目的地を維持し、右クリック→Escはmenuだけを閉じる。Helpを重ねた場合は最初のEscでHelpだけ閉じる。連打/同frame入力も拒否経路を確認 |
+| C08 Zone | StockpileのYard外/複数Yard/一部不可/全不可、Yard拡張の重複/変更なし。採用セル・boundsを照合し、cursor喪失や失敗release後に枠が追従しない |
+| 共通枠・密度 | 管理→詳細→戻るの検索/scroll保持、固定A/選択B、消滅/load、8使い魔×各8魂の比較・配属、明示的なcamera移動 |
+| 範囲編集 | 左クリック→詳細から表示対象を編集し、ドラッグ/全10操作/終了を実入力。pause許可、capture拒否、適用済み範囲保持、対象変更時の折りたたみ |
+| 入力・表示 | modal focus循環/復帰、IME、Esc一段処理、重なり候補、配置に漏れないpan。長名、非空Mode案内＋範囲メニュー、高DPI |
+| ガイド・理解 | 採取→選んだ休息所の搬入→施工→完成を実操作。取消/消滅/skip/load。床完成・担当・停止理由・範囲・取消の初見評価 |
+
+基本条件は1920×1080 / UI倍率1、C03は2解像度×3倍率。C01/C04/C05/C06は1280×720 / 1.25でも確認する。高DPIでは実OSのscale factorと物理/論理寸法を記録し、UI倍率やoverrideで代用しない。実trackpad/Waylandも別の未検証条件である。
+
+再検証はnative Skillとprimary validation coordinatorの既存no-prompt launcherを使い、seed `20260914` と隔離save/settingsを使用する。fixture準備後はOS入力→production結果→PID所有client画像を照合し、状態の直接代入を操作成功と数えない。source/harness・nonce・window/focusの不一致やtimeoutでは停止し、入力を重複送信しない。
+
+初見評価を行う場合の暫定目標は、5名中4名以上が停止中か・対象の役割・停止理由・次の確認先を各10秒以内に説明できること。操作数、迷った入口、誤解した語も記録する。これは未測定の設計目標であり、実績や統計的保証ではない。
+
+## 任意の後続候補
+
+以下は未実装の拡張で、今回のクローズ条件には含めない。
+
+| ID | 候補 | 着手条件 |
+| --- | --- | --- |
+| O01 | Task仮想scroll、即focus互換設定 | ページングの実利用で移動負担を確認し、可変高/activationと計測条件を決める |
+| O02 | Stockpile方針コピー/preset、通知の見た行だけ既読 | 誤適用防止の差分確認と履歴更新中の既読規則を定義する |
+| O03 | save名・人口・ゲーム内日付・サムネイル、表示時snapshot/Loadのrevision照合 | 有界読取、旧形式互換、失敗/サイズ上限、変更時の再確認を定義する |
+| O04 | 全面日本語化、文字のみ拡大、演出量設定 | 用語辞書・viewport検証・利用者評価から対象を決める |
+| O05 | 停止中の建築/Zone/Haul/Dream/配属/取消/範囲policy | 各ownerの副作用・index・繰返し適用・取消/loadを受け入れる計画を作る |
 
 ## 承認後の検証データ整理
 

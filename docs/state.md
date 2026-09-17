@@ -214,7 +214,7 @@ snapshotなしで置換するrecovery-only経路へ送る。通常F9やraw UI pa
 ### モード案内と画面内配置
 
 Normal + TaskMode::Noneでは案内を隠す。操作中のモード表示を下部のボタン列の上へ分け、最大幅94%で折り返す。配置・移設・範囲指定ごとに次の入力と終了方法を併記する。床・壁のdrag中は既存preview ownerが作成したAreaPlacementPlanから採用・除外数と必要資材を表示する（除外セルは費用へ含めない）。床はBone/Mud、壁はWood/Mudのdomain定数を使い、debug即時壁では資材不要と区別する。preview不能時・world reset時に要約を破棄する。
-Architect / Zones / Orders / DreamのsubmenuはUI倍率とwindow寸法から位置・最大高さを補正し、長い本文は標準ScrollAreaで移動する。表示matrixの実機受入は [残るUI受入計画](plans/ui-usability-improvements-plan-2026-09-14.md)で追跡する。
+Architect / Zones / Orders / DreamのsubmenuはUI倍率とwindow寸法から位置・最大高さを補正し、長い本文は標準ScrollAreaで移動する。表示matrixの実機受入は [未検証事項と再検証条件](ui-world-first.md#未検証事項と再検証条件)で追跡する。
 
 ## 時間停止とシステムメニュー
 
