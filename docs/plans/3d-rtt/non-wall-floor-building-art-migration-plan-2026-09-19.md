@@ -7,19 +7,23 @@
 | 計画ID | `non-wall-floor-building-art-migration-plan-2026-09-19` |
 | ステータス | `Draft` |
 | 作成日 | `2026-09-19` |
-| 最終更新日 | `2026-09-19` |
+| 最終更新日 | `2026-09-20` |
 | 作成者 | `Codex` |
 | 関連提案 | `N/A`（ユーザー依頼による計画） |
 | 関連Issue/PR | `N/A` |
 | 制作仕様 | [building-art-direction.md](../../building-art-direction.md) |
-| 調査基点 | `94ccdf23`＋同sessionで定義した制作仕様の未commit差分 |
+| 調査基点 | 初稿: `94ccdf23`。自己レビュー: `43ca0cb1`の計画と現行実装（文書変更のみ） |
 
 本書は全10種の移行順、制作物、表示接続、受入条件を所有する。実装・制作・実機受入は未着手。
 個別意匠の最終判断はゲーム内の候補画像で行い、本計画の作成をアート受入やreleaseとして扱わない。
 
+自己レビューでは、全種の美術数値を先行2種の試作だけで決める前提を撤回し、共通契約と群別の確定点を分離した。
+role別GLB、active/pendingの切替、再利用ghostのanchor復元、移動依頼の行先表示、load後の状態、
+基盤自体の性能比較を具体化した。以下の新しい型・fixture・recipe名は実装予定であり、既存APIではない。
+
 ## 1. 目的
 
-- 解決したい課題: 設備の共通Cuboid、建物間の画風差、完成表示と旧previewの不一致により、地図上で用途・状態を読み取りにくい。
+- 解決したい課題: 壁・床以外の建築物で、用途・状態が読める形状と手描き表現を統一し、完成表示から各previewまで整合させる。
 - 到達したい状態: モデルが外形・開口・可動部を、テクスチャが手描きの線・材質・色面を担当し、全対象が同じ世界の設備として読める。
 - 成功指標: 全10種の完成表示・配置・施工・カタログが整合し、実状態・save/load・撤去に追従する。新しい表示が論理占有・通行・生産・照明の意味を変えない。
 
@@ -77,7 +81,7 @@ Doorの既存release・未完closeは[Door計画](production-door-art-plan-2026-
 ### 4.1 制作と表示分類
 
 モデル・テクスチャ・光の分担は[制作仕様](../../building-art-direction.md)に従う。
-新規GLBはTank / MudMixer / RestArea / SoulSpa / Bridgeの5種とし、Doorは既存3GLBを監査する。
+新規3D制作はTank / MudMixer / RestArea / SoulSpa / Bridgeの5種（計8 GLB）とし、Doorは既存3GLBを監査する。
 小物4種は2D表示を維持し、手描き原図または同じ視点の制作モデルから専用PNGを作る。
 小物用の制作モデルを用いても、そのGLBをruntimeへ持ち込む必要はない。
 
@@ -85,7 +89,7 @@ Doorの既存release・未完closeは[Door計画](production-door-art-plan-2026-
 | --- | --- | --- |
 | Tank | 固定桶1 mesh＋水面1 mesh、albedo、代表preview | `StoredItems`とcapacityの既存3分類。空は水面非表示、途中／満杯は所定高さへ。正確な連続水量表示とは主張しない |
 | MudMixer | 固定槽・架台1 mesh＋攪拌部1 mesh、albedo、停止姿勢preview | `MudMixerVisualState.is_active`（実`Refining`）。可動部だけVirtual Timeで回転しpauseで停止 |
-| RestArea | 固定body 1 mesh、albedo、preview | 実occupantsから空／利用中を得る。既存Dream粒子を入口・屋根に合わせ、予約を入所扱いしない |
+| RestArea | 固定body 1 mesh、albedo、preview | 既存Dream粒子が実occupantsから発生する経路を維持。粒子の残存・cooldown・pauseがあるため、bodyだけで空／利用中を常時即判別できるとは約束しない。正確な人数は既存UI |
 | SoulSpa | 固定body 1 mesh＋共有の稼働部meshを4配置、albedo、必要なemissive、preview | `SoulSpaPhase`、tileのdurable parent、実`TaskWorkers`から建設段階＋4bit稼働mask。建設中は共有施工材質＋既存骨材進捗、稼働部は消灯。`active_slots`は実稼働の代用にしない |
 | Bridge | 固定body 1 mesh、albedo、preview | 完成・建設中・撤去は既存lifecycle。長軸と通行域は変更しない |
 | Door | 現行3状態mesh、albedo、EW/NS previewを優先再利用 | 既存Door state・topology consumer。カタログ代表画像はEW Closed |
@@ -94,8 +98,58 @@ Doorの既存release・未完closeは[Door計画](production-door-art-plan-2026-
 
 表のmesh数は制作開始時の部品構成上限であり、実測draw call数ではない。
 固定部の結合・共有を優先し、可動部・状態部以外で増やす場合は理由と予算をM0の契約へ記録する。
-triangle数、画像解像度、表示高さ、preview canvas・anchorは無地モデルの投影で決め、着色前に確定する。
+triangle数、画像解像度、表示高さ、preview canvas・anchorは各群の無地モデルの投影で決め、当該群の着色前に確定する。
 壁の240 trianglesやDoorの256px canvasを全設備へ流用しない。
+
+#### role単位の制作・export契約
+
+初期方式は **1 mesh role = 1 GLB = 1 node / 1 mesh / 1 primitive**。新規5種は合計8個の固有GLBを作る。
+scene全体の読み込みは使わず、既存Doorと同じ`GltfAssetLabel::Primitive { mesh: 0, primitive: 0 }`を解決する。
+node transformはidentity、POSITION/NORMAL/UV0を必須とし、skin・morph・GLB animation・埋込textureを使わない。
+固定bodyは足元中心、水面・攪拌部・稼働区画はそれぞれのlocal pivotを原点とする。
+頂点はexport後のworld unit、part位置もmanifestでworld unitに統一し、runtimeで再度tile倍率を掛けない。
+現行`export_glb.py`の`--geometry-scale`は頂点のみを拡縮するため、位置付きobjectをそのまま渡さず、
+role別identity objectへ書き出してから変換する。scene reportだけでなく実GLBのbounds・pivot・UV・法線を再検査する。
+
+| kind | mesh role / runtime leaf上限 | 画像roleと代表preview状態 | 無地・輪郭段階で棄却する条件 |
+| --- | --- | --- | --- |
+| Tank | `body`, `water` / 2 | albedo、world preview、catalog。Empty | 開口・内壁が読めない、水面の途中／満杯が縁に隠れる、companionの作業位置を塞ぐ |
+| MudMixer | `body`, `rotor` / 2 | albedo、world preview、catalog。Idle・角度0 | Tankと外形が区別できない、軸が支持されない、一周で槽を貫通する |
+| RestArea | `body` / 1 | albedo、world preview、catalog。利用者なし | 屋根・支柱・入口が読めない、既存Dream発生位置との重なりが不自然 |
+| SoulSpa | `body`, `slot` / 5（slotを4配置） | albedo、slot発光mask、world preview、catalog。Operational・稼働mask0 | 4区画が分離しない、tileとslotが一致しない、高い縁で歩行者が埋まる |
+| Bridge | `body` / 1 | albedo、world preview、catalog。Complete | 両岸とつながらない、橋端・中央でSoulの足元が橋床に埋まる／浮く |
+| Parking | なし / 0 | world、catalog。猫車なし | 実物の猫車を画像へ描き込む、空き状態が駐車場所に見えない |
+| SandPile / BonePile | なし / 0 | 各world、catalog。静的 | 両者を低い山の輪郭で区別できない、item iconの差替えが必要になる |
+| OutdoorLamp | なし / 0 | world off/on、catalog。Off | 点消灯で外形・canvas・anchorが変わる、骨山と区別できない |
+| Door | 既存3状態 / 1 | 既存albedo・EW/NS world preview、catalogはEW Closedをcontain表示 | 現行assetの不適合が確認された場合だけ、既存doorsetの手順で改訂 |
+
+`catalog`はworld画像と同じ原本・世代から正方形canvasへcontainした画像roleとする。専用bytesが不要な場合は
+同じartifactを参照してよいが、worldのanchorをcatalogの中央配置で上書きしない。
+小物の配置・Blueprintはworld（Lampはoff）を参照し、別の完成イラストを描き直さない。
+Spaの発光maskはslotだけに使い、bodyの発光や新しい論理光源は追加しない。
+
+Bridgeはactorの高さを変える機能を前提にしない。現行`actor_billboard.rs`はSoulの中心Yを`0.55 tile`に固定し、
+橋面追従を行わない。M4の最初に低い橋床で両岸・端・中央の通過を試し、成立しない案は形状へ戻す。
+actor height、通行rule、shader変更が必要なら本計画へ暗黙に追加せず、別の判断事項として止める。
+
+#### 群ごとの納品物と確定点
+
+M0では全種の論理shape・role名・試験方式を固定し、M2〜M5の各群では次の順で成果物をそろえる。
+
+1. `tools/blender_ai_workflow/fixtures/building-<kind>-v1.geometry.json`（新規）に、実shape参照、軸、
+   body bounds、part pivot/transform、接地・作業/通行域、状態別可動範囲を記録。既存Door fixtureは継承する。
+2. 無地／輪郭のゲーム内比較後、同fixtureへ高さ・triangle/part上限・atlas解像度・preview数値を固定。
+   Tank/Mixerだけを先行し、未制作のRest/Spa/Bridgeの美術数値を推測で固定しない。
+3. 原本、面とatlas領域の対応表、albedo（Spaは発光maskも）、全role GLB/PNG、post-export report、
+   preview projection report、状態→部品の対応表をstagingにそろえる。
+4. ArtPreviewの対象画像と承認対象のidentityを結び、技術受入・正式candidate・releaseへ進む。
+   asset承認・release許可を計画への同意や検査passから推定しない。
+
+2DのfixtureはGLB/body/pivot欄を理由付きN/Aとし、輪郭bounds・world canvas・接地anchorを記録する。
+無地の技術候補でもrole欠落は許さず、neutral albedoと同じ無地原本の暫定previewを用意してArtPreviewで確認する。
+これらを最終texture/previewや承認済みassetと混同しない。
+数値未記入のfixtureは当該群の着色・正式candidate作成を止めるが、他群の制作まで止めない。
+仕様変更時はfixtureを改訂し、影響するexport/preview/受入を再実行する。合格後に上限を結果へ合わせない。
 
 ### 4.2 asset単位と切り替え
 
@@ -105,9 +159,32 @@ Doorの既存doorsetは維持する。9個のloader複製や全建物一括で�
 - 各setにkind、generation、原本・exportの識別、mesh/texture/preview role、partのlocal transform・pivot、canvas・anchor、hashを持たせる。
 - 同種全instanceは有限のmesh・texture・material poolを共有する。Spaの各区画も共有meshとoff/on材質を使い、ownerごとのmaterial cloneを作らない。
 - 同一kindの全必須roleがreadyな同じ世代だけをactiveにし、完成表示とpreviewの解決結果をまとめてpublishする。各consumerが同じrevisionをrender extract前に反映する順序を固定する。
-- asset欠落・不正・世代不一致は、そのkind全体を既存fallbackへ戻す。正常な他kindのreleaseやDoorは巻き込まない。
-- 切替前のセットを旧参照が残る間に破棄しない。切替後は非active partと強参照を解放し、世代切替の反復でpoolが増えないことを確認する。
+- 初回のasset欠落・不正・世代不一致はそのkindを既存fallbackへする。新候補の失敗と、表示中のactive自体の無効化は区別する（下表）。正常な他kindやDoorは巻き込まない。
+- 切替前のセットを旧参照が残る間に破棄しない。切替後は退役世代のpartと強参照を解放し、世代切替の反復でpoolが増えないことを確認する。同世代の非表示／消灯partは保持する。
 - 既存のstaging、ArtPreview、承認済みcandidate、releaseのauthorityを新設備にも適用する。未承認assetの通常起動への流入を防ぐ。既存Wall/Doorの検査を緩めない。
+
+runtime projectionは新しい`building asset-set v1`、拡張子`.buildingset`を採用予定とする。
+authoring manifestとは分離し、`schema_version / asset_set_id / kind / generation / manifest_sha256 /
+authority / approval・receipt identity / artifacts / parts / previews / geometry_contract_sha256`を持つ。
+artifactsはrole・相対path・byte長・SHA-256、partsはmesh/material roleとlocal transform、previewsは用途別の
+image role・canvas・anchor・代表状態を持つ。unknown field、重複／欠落role、非有限transform、root外path、
+hash不一致、当該起動policyで許可されないauthorityを拒否する。通常起動は承認済みreleaseのみ、
+専用ArtPreview/candidate起動はexact identityの明示許可を必要とする。role表はkindごとにexactで、未知kindを汎用boxとして受理しない。
+artifact pathはkind＋generation＋hashに束縛した不変pathとし、同じpathのbytesをhot reloadで上書きしない。
+変更するのは最後のlocatorだけとする。これによりBの読み込みがAの既存Handleの内容を変えない。
+`asset_release_manifest.py`、promotion / projection / install / rollbackへのkind dispatchをM1で追加する。
+現在のWall/Door専用toolに新拡張子を渡すだけでは動かない。新schemaの追加で既存validatorを緩めない。
+
+| 入力状態 | 同kindの表示結果 | pendingの扱い |
+| --- | --- | --- |
+| 起動直後、activeなし | 従来fallback一式 | 全roleを検証・読み込み中 |
+| 有効なactive AがありBを読み込み中 | Aの完成・preview一式を維持 | Bだけを別poolで準備 |
+| Bが不正／失敗、Aは有効 | Aを維持。Bのエラーを記録 | Bの強参照を解放。同じ失敗を毎frame再生成しない |
+| Bの全roleとauthorityが有効 | 同じpresentation境界でA→B | 旧参照解放後にAをretire |
+| active自身が破損／失効、または明示fallback | fallback一式へ戻す | 他kindは変更しない |
+
+poolはkindごとにactive最大1＋pending最大1。切替完了後のretiredは強参照ゼロとし、AssetServer/GPUの
+解放遅延とアプリの参照漏れを区別する。world loadではasset poolを作り直さず、owner/part cacheだけをresetする。
 
 ### 4.3 3D rootと部品の所有
 
@@ -115,17 +192,35 @@ Doorの既存doorsetは維持する。9個のloader複製や全建物一括で�
 rootは表示modeに対応した基準transform・visibility・状態を持ち、meshを持たない。各描画partに別markerを用いる。
 Door / Wall / Floorのroot形式は変更しない。
 
-- production rootのXZは既存logical ownerへ対応、接地Yは0。制作GLBは足元中心を原点とし、部品のpivotはlocal座標で定義する。
+- production rootのXZは既存logical ownerへ対応、接地Yは0。固定body GLBは足元中心、状態partは§4.1のlocal pivotを原点とする。
 - fallbackは同じroot entityを使い、root Yを旧中心高（設備0.4 tile、Bridge0.09 tile）、Cuboid childのlocal Yを0とする。これにより中心高をscaleと独立に保ち、完成bounce中も旧transformを再現する。
 - ground rootに旧中心高の固定child offsetを足す方式は採らない。root scaleをs、旧中心高をhとすると中心がs×hへ動いてしまうためである。mode切替時はroot原点・part集合・previewを同時に切り替える。
 - ownerの移動・回転・完成bounceはrootへ一度だけ適用し、水面高さ・攪拌角は子localへ適用する。描画childへ`Building3dVisual`を付けない。
-- 各描画partに`RenderLayers`と必要なLight Field sampling tagを明示する。回転する羽根の座標から照明の論理anchorを再定義しない。
+- 各描画partにScene RtTの`RenderLayers`を明示する。設備は現行の特別anchor tagなしのLight Field samplingを維持する。現行`structural_light_anchor_mesh_tag`が返すWall/Door専用tagを設備へ流用せず、shaderや照明anchor ruleも変更しない。
 - legacyのroot material更新をこの5種から分離し、表示用状態→part consumerでmaterial・visibility・transformを決める。
+- 新equipment root markerを旧transform/material systemの除外条件へ追加する。ownerの`Changed<Transform>`だけを更新条件にせず、mode/revision変更・新規rootも同じconsumerで適用する。
+- 同世代ではTankのwater、Spaのslotを全て固定生成し、空時のvisibility・on/off材質だけを変える。状態変化のたびにspawn/despawnしない。世代の退役と状態の非activeを区別する。
 - owner消失、cancel、解体、world replacement、世代交換で不要childを除去する。通常生成・初期配置・Instant Build・loadは同じfactoryを使う。
 - 現行diagnosticsのroot数と描画part数を区別する。meshのないrootが存在するだけで表示成功とは判定せず、各leafのresident handle・visibilityを確認する。
 
 上記変更はM1でfallbackの見え方を保ったまま成立させる。Bevy 0.19の`ChildOf` cleanup、visibility伝播、
 `RenderLayers`、glTF primitive取得は実装時にローカル一次資料／docsrs-mcpで再確認する。
+
+#### 表示更新の順序とreset
+
+新規設備の登録元はrootの`plugins/visual.rs`に限定し、次を一つの順序として固定する。
+
+1. `Update`で既存domain・建設bounce・UI操作を終える。pausedでも既存表示は更新可能にするが、domainのpause条件は変えない。
+2. `PostUpdate`でowner/状態のsnapshotと全role readinessを解決し、kind単位のactive descriptorをpublishする。
+3. root/part、2D本体、各world preview、catalogへ同じrevisionを適用する。新規entityにも初回適用する。
+4. `ApplyDeferred`を通し、`TransformSystems::Propagate`・visibility計算・render extractより前に新childを反映する。
+   catalogの画像適用もUIのcontent/layout処理より前へ登録する。Door用順序へcycleを作らないschedule testを追加する。
+
+2〜4の間でgameplayの正本を書き換えない。検証sidecarは伝播・visibility計算の後に採り、全consumerの
+`applied_revision`とgeometryを確認する。revisionを進めただけで実体が旧世代のframeは不合格。
+owner→root/part対応はindexを使い、毎frame全owner×全visualの二重走査を追加しない。
+resetではowner indexとanimation stateを消去し、現行world replacement collectorが全rootを回収する。
+永続asset poolは再利用し、旧worldのEntityをpoolへ保持しない。
 
 ### 4.4 previewと状態の全経路
 
@@ -133,7 +228,8 @@ Door / Wall / Floorのroot形式は変更しない。
 論理占有は既存shapeを参照し、余白を含むPNGの外形から配置可否を計算しない。
 
 更新対象は、カタログの既存`ImageNode`、配置ghost、Tankの確定済み相方ghost、通常Blueprint、
-施工pulse child、Tank/Mixer移動preview、SoulSpa専用配置・建設表示、load後のshellである。
+施工pulse child、Tank/Mixer移動preview、移動確定後の`MovePlantTask`行先シルエット、
+SoulSpa専用配置・建設表示、load後のshellである。
 世代変更・asset後着はこれら全consumerへ届くrevisionとして公開する。
 3Dの同一原本から59°・yaw 0・RtT縦補正を合わせてpreviewを生成する。2Dは同じ原図を用途別canvasへ配置する。
 建設中の色、資材カウンタ、progress bar、配置不能理由は既存表示を維持し、装飾へ埋め込まない。
@@ -142,6 +238,44 @@ Door / Wall / Floorのroot形式は変更しない。
 再構成する。asset handle・part entity・回転角をsave schemaへ追加しない。
 Spaの3D childを論理`SoulSpaTile`の階層へ混ぜず、ConstructingのcancelとOperationalの解体を別経路で確認する。
 
+#### preview descriptorとconsumer一覧
+
+world descriptorは`image / canvas_px / canvas_wu / anchor_px / representative_state / revision`を持つ。
+左上基準pixel座標の接地点`(u,v)`とcanvas`(W,H)`から、SpriteのAnchorを`(u/W-0.5, 0.5-v/H)`へ変換する。
+camera・world unit倍率・RtT補正は現行投影から取得してreportへ固定し、独自の疑似isometric式を導入しない。
+Doorのcenter-origin補正をground-originの設備へコピーしない。全表示状態のboundsをcanvasに収め、
+projection reportでは接地点・外形の基準点をrenderer側と照合する。
+
+| consumer | 既存入口 | 適用・維持する内容 |
+| --- | --- | --- |
+| 配置ghost / Tank locked ghost / Spa配置 | `systems/visual/placement_ghost.rs` | 建物／companionの用途を識別して解決。配置可否tintは既存判定を維持 |
+| Blueprint / pulse | `interface/selection/building_place/placement.rs`、`hw_visual/src/blueprint/` | rootと後着pulseに同じimage・size・anchor。色と施工progressは独立 |
+| 移動中ghost | `interface/selection/building_move/preview.rs` | Tank/Mixerとcompanionを区別。元建物のworld表示を変えない |
+| 移動確定後の行先 | `interface/selection/building_move/finalization.rs` | `MovePlantTask.building`からkindを解決。待機中も後着revision更新、既存0.35 alphaを維持 |
+| カタログ | `hw_ui/src/setup/submenus.rs`、rootの`UiAssets` adapter | image entityにkindを持たせ、開いたカードも更新。既存32×32枠へ正方形catalog roleを表示 |
+| Spa施工 / load shell | `interface/selection/soul_spa_place/`、`systems/save/rehydrate/` | 既存phaseと保存対象だけから再構成。通常Blueprintと同一視しない |
+
+同じEntityを再利用するため、descriptor適用はimageだけでなくsize・anchor・rect/flipの既定値を全て書き戻す。
+位置・scale・tintは既存ownerへ残す。kind変更、世代変更、mode変更、consumer新規生成を更新条件に含める。
+BucketStorage等の非移行consumerへ戻るときも旧size・`Anchor::CENTER`を復元する。
+Tankのcompanionを新しいTank本体画像へ置換しない。画像の後着により論理footprintや予約範囲を変えない。
+
+#### 状態・停止・load後の期待値
+
+| 対象 | 表示rule | load直後／pause時の期待 |
+| --- | --- | --- |
+| Tank | count=0でwater非表示、capacity>0かつcount>=capacityでFull、それ以外の非空はPartial | 保存された在庫から再分類。capacity不在/0で非空は現行同様Partial |
+| Mixer | `is_active`時のみrotorへVirtual Timeのdeltaを加算 | load直後はIdle/角度0、再割当後のRefiningで回転。pauseは角度保持、通常停止も現在角を保持 |
+| RestArea | 既存`RestAreaOccupants`でDream生成。bodyの材質は不変 | durable `RestingIn`からoccupants復元。既存粒子の残存・cooldownを許し、即時の空表示は要求しない |
+| Spa | Constructingはmask0。Operationalの各tileの`TaskWorkers`が非空なら対応bitを立てる | phaseは保存対象、workerはruntime派生。load直後mask0、再割当後に点灯。`active_slots`をmaskにしない |
+| Lamp | `PoweredVisualState`に対応するoff/on image | paused load直後は初期off。resume後、既存energy再計算結果を表示。表示のためにpause中へ再計算を移さない |
+| 移動行先 | 生存する`MovePlantTask`にdescriptorを適用 | taskはdurable対象外。loadで旧行先が残らないことを確認し、移動予約の永続化は追加しない |
+
+Spaのbit順は`building_shape(SoulSpa).ordered_relative_tiles`の`(0,0),(1,0),(0,-1),(1,-1)`とし、
+`parent_site`とtileの`grid_pos`から特定する。Query順／Children順／Entity番号をbit位置にしない。
+maskは全16通りをtestし、各slotのlocal位置も同じshapeの中心offset `(0.5,-0.5)`から導出する。
+これらは`save/schema.rs`のdurable allow-listとruntime除外に従う期待値であり、保存前の見た目の完全再現ではない。
+
 ### 4.5 crate ownershipと候補ファイル
 
 | 所有先 | 作業 |
@@ -149,13 +283,13 @@ Spaの3D childを論理`SoulSpaTile`の階層へ混ぜず、Constructingのcance
 | `bevy_app/src/assets/` | 新共通assetset loader、authority、readiness、root所有の画像解決。既存Wall/Doorと必要な検証部だけ共有 |
 | `bevy_app/src/plugins/startup/`、`plugins/visual.rs` | pool注入、初期化、state publication→presentation→Transform伝播の登録順 |
 | `hw_core/src/visual_mirror/` | root/leaf間で必要な表示専用状態。domain型やasset authorityを流入させない |
-| `hw_jobs` / `hw_energy`とroot adapter | 既存正本から表示値を投影。生産・回復・発電ruleを新visual側へ複製しない |
+| `hw_jobs` / `hw_energy`とroot adapter | 既存正本からTank/Spa等の表示値を投影。Mixer mirror・Rest粒子は再利用し、生産・回復・発電ruleを新visual側へ複製しない |
 | `hw_visual/src/` | 建物part、アニメーション、材質・表示同期、preview用handle契約。rootへの逆依存なし |
 | `bevy_app/src/systems/jobs/building_completion/spawn.rs`、`systems/visual/building3d_cleanup.rs` | factory、既存fallback移行、owner変換とpart consumerの分離 |
 | `systems/logistics/initial_spawn/facilities.rs`、`interface/selection/`、`systems/save/rehydrate/` | 通常以外の生成、移動、専用Spa、Blueprint shell、resetへの接続 |
 | `systems/jobs/deconstruction/`、`systems/jobs/soul_spa_construction/` | 既存owner lifecycleから全partを解放、建設段階の投影 |
 | `bevy_app/src/assets.rs`、`hw_ui/src/setup/submenus.rs`とUI adapter | カタログのready後／世代変更後の画像更新。ゲームECSの読み取りはroot adapter |
-| `tools/blender_ai_workflow/`、asset同期tooling | 原本・モデル・UV・opaque albedo・preview・manifestの生成と検査 |
+| `tools/blender_ai_workflow/`、asset同期tooling | role別export、群別geometry fixture、preview report、manifestの封印・検査、新schemaのpromotion/install/rollback dispatch |
 | native Skillのhelper、`scripts/perf_tool/`、profiling fixture | 新設備用のcurrent-source recipe・独立verifier。旧凍結profileは変更しない |
 
 候補ファイルは変更責務の入口であり、既存の大きなrootファイルへ全処理を追記する指示ではない。
@@ -167,14 +301,31 @@ Spaの3D childを論理`SoulSpaTile`の階層へ混ぜず、Constructingのcance
 M2の2設備で制作・動作・preview・releaseまで一巡させ、その確定した方法を後続へ適用する。
 各群を受入後に独立導入できるようにし、全10種の制作が終わるまで先行群を未releaseに留めない。
 
+### 着手単位・依存関係
+
+| 単位 | 前提 | その単位で閉じる成果物・判断 |
+| --- | --- | --- |
+| M0-a 現行契約 | 本計画 | 全10種のshape・状態・consumer一覧、対象外画像hash。Tank寸法の文書訂正 |
+| M0-b 先行仕様 | M0-a | Tank/Mixerのrole契約・無地案、共通schemaのfield定義、比較fixtureと予算項目・決定根拠 |
+| M1-0 基準取得 | M0-b | 新表示処理を含まない共通profiling fixtureだけを先行導入・検証。baseline sourceを記録し、基盤予算を候補実装前にfreeze |
+| M1-a 読み込み | M1-0 | schema validatorとloader、authority、active/pendingのunit test。新assetはまだ通常起動へ公開しない |
+| M1-b 表示接続 | M1-a | root/part factory・共通descriptor・全consumer・reset。従来fallbackの実画面同等性 |
+| M1-c 導入経路 | M1-b | export/projection/promotion/rollback dispatch、新設備recipe、基盤だけの前後比較。正式asset承認はまだしない |
+| M2 Tank/Mixer | M1-c | 2種のゲーム内無地判定→数値fixture固定→描線→全状態→候補受入→許可後release |
+| M3 / M4 / M5 | M2で制作経路確定 | 各群で同じ順を反復。M3→M4→M5を推奨するが、相互の未制作assetには依存させない |
+| M6 混在close | 各群releaseとDoor差分処置 | 全10種の混在回帰、累積資源・性能、恒久仕様同期、保存管理close |
+
+各実装単位はcode・test・必要なdocsをそろえて区切る。コードの導入と未承認assetの通常版公開を同じ操作にしない。
+M1では全9種の美術制作や専用systemを先作りせず、kind別role表を共通基盤へ接続するところまでに限定する。
+
 ### M0: 寸法・状態・制作境界を確定
 
-- 変更内容: 全10種のfootprint、接地、可視高さ、作業位置、許可された向き、状態一覧を表に固定。Tank/Mixerの無地ラフで投影を確認し、画像・mesh予算を決める。
+- 変更内容: 全10種の既存footprint・anchor・作業位置・許可された向き・状態を固定。Tank/Mixerの構造ラフと共通schemaを用意する。美術由来の高さ・画像・mesh数値は各群のゲーム内無地判定後に固定する。
 - 変更ファイル: 本計画、`docs/building.md`、`docs/art-style-criteria.md`、`tools/blender_ai_workflow/fixtures/`（新設備契約）。原本は外部staging。
 - 完了条件:
   - [ ] 表の全10種と`BuildingType::ALL`が一致し、Tank寸法・旧アセット計画の新規制作範囲を文書同期。
-  - [ ] 5種の接地・part構成、9種のasset role一覧、全previewのcanvas/anchor、役割別資源上限が確定。
-  - [ ] 性能fixtureの分布・状態・環境・比較方式・数値budgetを、結果取得前に固定。
+  - [ ] 5種の接地方式・part構成、9種のexact role、descriptor fieldと検査方式が確定。未制作群の美術数値は未確定と明記。
+  - [ ] 基盤比較のfixture・状態・環境・予算項目と決定根拠が確定。数値はM1-0の基準取得後、候補実装前にfreeze。後続群は各群の候補比較前にfreezeする。
   - [ ] Door g7の継承範囲と、既存計画所有の残件を記録。
 - 検証: schema/geometryのfocused検査、docs検査。無地の原本previewを本番表示の合格証拠にはしない。
 
@@ -183,10 +334,12 @@ M2の2設備で制作・動作・preview・releaseまで一巡させ、その確
 - 変更内容: §4.2〜4.5の最小共通実装と新設備用feedback/受入recipeを用意し、Tank/Mixerの技術候補を通す。
 - 変更ファイル: §4.5のasset・visual・factory・preview・save入口、authoring/tooling、native helperとprofiling fixture。
 - 完了条件:
+  - [ ] M1-0→a→b→cの順で閉じ、§4のschema/role契約と退役pool管理、既存Wall/Doorのvalidator回帰が通る。
   - [ ] fallbackが従来と同じ形・位置・状態を保ち、5種のroot/child管理と通常生成・load・cleanupが通る。完成bounceの開始・中間・終了とmode切替中も旧pivotを照合する。
-  - [ ] 同一kindのmesh/texture/previewをatomicに切り替え、欠落・不正・世代混在・復旧の経路が検証される。
+  - [ ] 同一kindのmesh/texture/previewをatomicに切り替え、cold失敗／pending失敗／active失効を区別して検証。
   - [ ] root countとpart count、pool上限、pause中の後着・load、既存カタログ更新を確認。
   - [ ] `building-art`用recipe（新規）のfeedback、art-preview、正式candidateを区別できる。既存Door helperへ設備を偽装しない。
+  - [ ] M1前のコードとのfallback比較で基盤の追加コストを確認し、同一binaryのasset A/Bだけで代替しない。
 - 検証: loader/state/lifecycle/previewのfocused test、§7共通gate、fallback同等性のactual-window確認。
 
 ### M2: Tank・MudMixerの制作と先行導入
@@ -194,19 +347,20 @@ M2の2設備で制作・動作・preview・releaseまで一巡させ、その確
 - 変更内容: 無地形状→素材の色面→面別UV→線と筆跡の順で2種を制作し、3水量・回転状態と全previewを接続。
 - 変更ファイル: 原本・2種assetset、asset catalog、building preview・move経路、Tank/Mixer visual consumer、関連仕様。
 - 完了条件:
+  - [ ] §4.1の群別納品物と数値fixtureをそろえ、albedoの前に無地の開口・水面高さ・rotor可動域を採否判断。
   - [ ] 通常表示・最遠表示で2種を識別でき、色と模様が形を埋めない。
   - [ ] 空／途中／満杯、精製開始／停止、pause／再開、水・泥itemと可動部の重なりが正しい。
-  - [ ] Tank companion、移動成功／拒否／取消、建設・load・解体で足元とownerが一致。
+  - [ ] Tank companion、移動成功／拒否／取消、移動確定後の行先、建設・load・解体で足元とownerが一致。再利用ghostのanchor持越しなし。
   - [ ] §7の当該行と当該変更の性能budgetを満たし、アート判断・candidate受入・2種releaseを記録。
 - 検証: 状態・移動・資源正本のfocused test、2種gallery・lifecycle、対象性能比較、通常authorityで表示確認。
 
 ### M3: RestArea・SoulSpaの制作と導入
 
-- 変更内容: 休憩所の屋根・入口と既存粒子、Spaの建設段階・4区画を制作。実occupancyの表示用投影を追加。
+- 変更内容: 休憩所の屋根・入口と既存粒子、Spaの建設段階・4区画を制作。Spaの実稼働maskを投影し、Restの粒子正本は既存のまま使う。
 - 変更ファイル: 原本・2種assetset、`hw_core/src/visual_mirror/`、rest/energy adapter、Spa専用配置・施工・cancel・save経路、関連仕様。
 - 完了条件:
   - [ ] 休憩者の既存非表示・復帰とDream発生位置を保持し、予約数を利用中表示へ含めない。
-  - [ ] SpaのConstructing→Operational、4bit全組合せの対応、代表0/1/4区画の実画面と停止中loadを確認。
+  - [ ] SpaのConstructing→Operational、4bit全組合せ、空のTaskWorkersは消灯、代表0/1/4区画の実画面と停止中loadでのmask0を確認。
   - [ ] Spaの歩行可能な4tile、骨の搬入、発電出力・配電は既存正本と一致。
   - [ ] M2と並べて画風を確認し、当該受入・Help判断・2種releaseを完了。
 - 検証: phase/maskとcancel/deconstructのfocused test、利用開始／終了storyboard、対象性能比較、通常authority確認。
@@ -216,7 +370,7 @@ M2の2設備で制作・動作・preview・releaseまで一巡させ、その確
 - 変更内容: 2×5固定橋のモデル・texture・previewを制作。Doorはg7を制作仕様へ照合し、旧カタログ画像をproductionへ接続。
 - 変更ファイル: Bridge原本・assetset、factory/transform/preview入口、DoorのUI画像解決、関連仕様。不適合がある場合だけdoorset revision。
 - 完了条件:
-  - [ ] Bridgeの両岸接続、橋端／中央でのSoul通過、隣接橋、完成bounceを確認。高さと描画が通行を誤解させない。
+  - [ ] 着色前にBridgeの両岸接続、橋端／中央でのSoul通過、隣接橋を確認し高さを固定。完成bounceも確認し、actor height変更を前提にしない。
   - [ ] Bridgeの通常建設／Instant Build／施工cancel／load／解体後の川の通行復元が既存ruleと一致。
   - [ ] Doorの両軸×3状態と現在の接続・固定枠が新仕様へ適合。適合した既存assetは再制作しない。
   - [ ] Doorの完成・ghost・Blueprint・pulse・カタログを同じ世代に統一。改修scopeに応じた再受入を実施。
@@ -229,8 +383,8 @@ M2の2設備で制作・動作・preview・releaseまで一巡させ、その確
 - 完了条件:
   - [ ] 4種を通常／最遠表示で識別でき、線・色面が導入済み3D建物と調和する。
   - [ ] 砂・骨item iconと猫車本体の画像が意図せず変更されない。Parking画像に猫車を描き込まない。
-  - [ ] Lamp専用画像で点灯／消灯が読め、配電変更・供給喪失・loadと同じ表示更新で同期。既存暗色tintとの二重適用なし。
-  - [ ] world/ghost/Blueprint/pulse/catalogの画像・anchorが一致し、4種の当該受入・releaseを記録。
+  - [ ] Lamp専用画像で点灯／消灯が読め、配電変更・供給喪失と同じ表示更新で同期。paused loadはoff→resume時再計算。旧暗色tintとの二重適用なし。
+  - [ ] world/ghost/Blueprint/pulse/catalogを同じ原本・世代へ統一。world系の画像・anchorは一致し、catalogは専用contain規約。4種の当該受入・releaseを記録。
 - 検証: 画像役割の分離・power状態のfocused test、密集時・壁/Soul付近・明暗場所のactual-window確認。2Dの常時前景を3D depth対応済みと扱わない。
 
 ### M6: 全10種の共存確認・文書同期・close
@@ -252,6 +406,9 @@ M2の2設備で制作・動作・preview・releaseまで一巡させ、その確
 | 複数partと旧root前提が衝突 | 二重表示、絶対座標の上書き、不可視 | root/leaf markerを分離し、render layer・state consumer・診断も同時変更 |
 | 接地原点と旧Cuboid中心が混ざる | 浮き・沈み・previewずれ | production接地原点とfallback中心原点をmode別に同一factoryで管理。bounce中も照合 |
 | 後着assetやUIのhandle clone | 完成とカタログが別世代 | kind単位のactive revisionと全consumer同期、開いたままのUIも検査 |
+| 再利用ghostのanchorが残る | 別種へ切替時だけ浮く・ずれる | 全descriptorを復元し、Door→設備→companionを同じEntityで検査 |
+| runtime状態を保存済みと誤認 | load直後に幽霊の稼働・点灯 | durableからの復元とresume後の再計算を分離。schemaは拡張しない |
+| 同pathのasset上書き | pending失敗時にactiveを維持できない | generation/hash別の不変path。最後のlocatorのみ切替 |
 | 資源画像の共有を上書き | 本体以外の表示も変化 | 建物専用roleを新設し、非対象画像のhashを比較 |
 | Spaのphaseとworker対応を誤る | 建設中発光・稼働数誤表示 | durable parent＋実workerからmirror構築、ConstructingとOperationalを別検査 |
 | 部品・材質数がinstanceごとに増える | 描画負荷・メモリ増加 | 有限pool、固定part上限、N/4Nと世代反復で検証 |
@@ -286,14 +443,34 @@ python3 scripts/dev.py cargo -- clippy --workspace --all-targets -- -D warnings
 | --- | --- | --- |
 | A1 | geometry、UV、法線、部品原点・pivot、画像role、previewの投影・anchor | export後のGLB/PNG検査＋無地・着色比較 |
 | A2 | 3D root exactly one、期待leaf数、2Dは3D rootゼロ、同種有限pool | ECS test＋actual-window sidecarと画像 |
-| A3 | asset遅延／不正／欠落／世代不一致／復旧／反復切替 | loader・ECS test。復旧の代表画面で同一世代と非増殖を確認 |
+| A3 | asset遅延／不正／欠落／世代不一致／復旧／反復切替 | loader・ECS test。cold/pending/activeの失敗別に§4.2の期待結果を確認 |
 | A4 | 通常配置／建設／初期配置／Instant Build、cancel、完成bounce | 存在する経路を種別ごとに列挙し、通常操作storyboardとfocused testで分担 |
-| A5 | ghost／Blueprint／pulse／move／catalog、ready後とUIを開いたままの更新 | 投影比較・UI同期test＋actual-window代表画像 |
+| A5 | ghost／Blueprint／pulse／move／確定行先／catalog、ready後とUIを開いたままの更新 | 投影比較・UI同期test＋actual-window。再利用Entityのkind変更、新規consumerにも全descriptor適用 |
 | A6 | Tank3状態、Mixer開始停止、Rest空/利用中、Spa建設/0/1/4稼働、Lamp点消灯、Door2軸×3状態 | 全状態ruleのtest。実状態と画像を結ぶstoryboard、動作は複数時点を採取 |
-| A7 | Tank/Mixer移動成功・拒否・取消、companion、save/load・rollback・pause中load | 既存通常経路のtest＋代表actual-window。world置換後最初のpresentation frameから再構成 |
+| A7 | Tank/Mixer移動成功・拒否・取消、companion、save/load・rollback・pause中load | §4.4のload期待値をtest＋代表actual-windowで確認。最初のpresentationから有効な状態を出すが、runtime task/powerの保存前状態は復元しない |
 | A8 | 通常解体・Spa施工cancel、owner消失、load反復 | 親子・pool・正本resourceのtest。残像・孤児leafゼロを確認 |
 | A9 | 壁/床/Soul/運搬item、橋の両岸・隣接橋・通過、Door seamと支持変更 | 実画面。geometryから通行・Room・照明ruleを変更しない |
 | A10 | 描画quality/DPI・通常/最遠zoom・明暗場所・全10種混在 | 以下の対象限定matrixと最終通常authority storyboard |
+
+#### 実装testへ落とす最小の具体例
+
+| 対応 | 入力・操作 | 合格条件 |
+| --- | --- | --- |
+| A2/A3 | A表示中にBのpreviewだけ遅延→B失敗→有効Cを投入 | 遅延・失敗中はA、C eligible後の同じ境界で本体・全previewがC。revision混在frameなし |
+| A3/A5 | pause中にasset後着、owner transformは未変更、カタログは開いたまま | root原点・part・全画像が更新される。新規に開いたカードにも同じrevision |
+| A4 | 通常生成・初期配置・Instant Build・rehydrateをそれぞれ実行し、同じownerへ同期を再実行 | ownerごとrootが1、追加partの二重生成なし。通常Blueprintと専用Spaは別fixture |
+| A5 | 同一ghostでDoor→Tank→BucketStorage、Tank↔Mixer、production→fallback | image・size・anchor・rect/flipが各契約へ復元。tint・位置とcompanionの論理範囲は不変 |
+| A5/A7 | 移動確定→worker待機中に世代更新→完了または取消 | 確定行先も更新、完了/取消で消失。load後に旧taskシルエット・予約障害物が残らない |
+| A6 | Tank countを0/1/capacityへ、capacity=0で非空も入力 | hidden/Partial/Full、最後はPartial。waterのEntity/mesh handle数は一定 |
+| A6 | Mixerを非Refining→Refining→pause→resume→Idle | RefiningのVirtual deltaだけ角度が進む。pause/Idleで角度不変。槽は回転しない |
+| A6 | Spaのtile生成順を逆転、空TaskWorkers、予約のみ、全16mask、Constructingを入力 | 座標順のbit対応、空・予約のみ・Constructingは消灯。slot Entity数は常に4 |
+| A7 | 稼働状態を保存→paused load→resume | Tank在庫とRestingInは復元、Mixer Idle、Spa mask0、Lamp offから既存再計算へ。旧worldのpart・Entity参照ゼロ |
+| A8 | Empty↔Full、mask0↔15、A→B→A、load、Spa cancelを各10反復 | 同世代state切替でpart数不変。世代/owner終了後は旧part・アプリ所有強参照が残らず、共有pool数が収束 |
+| A9 | Bridge無地で両岸→橋端→中央→対岸を通過 | 現行actor高さのまま成立。見た目を直すための通行・高さrule変更なし |
+
+全fixtureへ対象kind、存在する生成経路、domain状態の作り方、期待role数、期待descriptorを持たせる。
+実装されていない経路は理由付きN/Aとし、架空の全種共通建設経路を用意しない。
+側車データだけで画風合格とはせず、逆に画像だけでstate・世代・所有権が正しいとも判定しない。
 
 反復中はHigh/DPI 1の対象群を同じdev cacheで確認する。正式アート候補は対象群を同じgalleryへまとめ、
 High/Medium/Low × DPI 1.0/1.5/2.0の9 caseで通常・最遠zoomを採る。部品運動・pause・状態遷移は
@@ -303,16 +480,37 @@ Doorを改変しない場合は、新規gallery内の混在確認と変更した
 
 ### 性能と資源の予算
 
-M0で新profileのN/4N分布、停止・稼働割合、画面内面積、warmup/measurement、比較対象とbudgetを固定する。
+M0で新profileのN/4N分布、停止・稼働割合、画面内面積、warmup/measurement、比較方式を固定する。
 初期fixture案は全10種各4棟のN=40、各16棟の4N=160とし、Bridgeやcompanionを含め合法配置できる範囲へ確定する。
 静止galleryに加え、Mixer稼働・Spa区画・Rest粒子を含む動作caseを設ける。停止中だけの測定を動作時へ一般化しない。
+動作caseの4棟blockはTank=Empty/Partial/Full/Full、Mixer=Idle/Idle/Active/Active、
+Rest occupants=0/1/capacity/0、Spa mask=0/1/3/15、Lamp=off/off/on/onを初期案とする。
+Nと4Nでこのblockを同じ比率で繰り返し、domain状態を成立させる人数・資源・電力をfixtureへ固定する。
+test用のmirror値の直書きだけで稼働性能を測定しない。通常の更新で状態を維持できないfixtureは採用しない。
 
-- 差替え前と候補のseed・論理状態・kind数・画面条件・adapter/backendをそろえる。同じbinaryの明示legacy-controlを基本とし、assetの読込・保持差も記録する。
-- frame p95/p99、native peak live bytes、RSS、mesh/material/textureのresident数とbytes、root/part数を比較する。
+| 比較 | 時点・対照 | 見落とさないコスト |
+| --- | --- | --- |
+| 基盤比較 | M1-0のfixtureのみを導入したbaseline vs M1後コードのfallback。同一fixtureで比較できるsource identityを記録 | child化、index、descriptor同期、loader追加。新binary内のmode切替だけでは測れない |
+| 群別比較 | M2〜M5。同じbinaryで対象群だけlegacy-control vs candidate、他群は同じ世代固定 | 新mesh・texture・part・animationと状態表示 |
+| 累積比較 | M6。M1-0の基準結果 vs 全群導入結果。環境・fixtureが異なる場合は直接比較不可として同条件を用意 | 個別には小さい差の累積。基盤＋全assetの総増分 |
+
+legacy-controlはprofiling専用の明示modeとし、asset欠落を故意に起こして作らない。各測定は別processで開始し、
+非対象candidateのGLB/画像をcontrol側で先読みしない。両pool常駐でMemory差が打ち消される比較は無効。
+候補側に保持する既存fallback等の必要資源は実運用どおり含める。測定開始時に実resident一覧で差を確認する。
+
+- 差替え前と候補のseed・論理状態・kind数・画面条件・adapter/backendをそろえ、binary/profile/featureとasset identityも記録する。
+- frame p95/p99、native peak live bytes、RSS、mesh/material/texture数とbytes、root/part数を比較する。GPU bytesの推計と実測、圧縮PNGサイズと展開画像サイズを区別する。
 - 各対照は隣接・順序反転を含む3反復、正式な時間比較は30秒warmup＋60秒measureを基本とする。中央値とMADを併記する。
-- 時間・RSSの許容差と追加asset bytes予算はM0で決め、候補の結果を見て緩めない。壁用の+5%や+4 MiBを測定条件の違う設備へ無条件には移植しない。
-- N→4Nで共有asset数が増えないこと、世代切替・load反復後に非active poolが残らないことを必須とする。entity/instance bufferの必要な増加は別計上する。
+- 基盤budgetはM1-0、群別budgetは当該群のbaseline取得後・候補比較前に固定。`p95_ms/p99_msの増分、native_peak_bytes、RSS、texture/mesh展開bytes上限、許容ばらつき、設定根拠`をfixtureへ数値で記録する。未記入では性能受入を開始しない。
+- 基盤baselineと予算は候補を測る前にレビューする。後続群も予算を結果へ合わせて緩めない。ノイズが許容幅を超える場合は判定不能とし環境を再確認する。壁用+5%/+4 MiBの無条件流用もしない。
+- 動作caseは稼働数・worker/occupant数・粒子数を併記する。Dreamは既存乱数を含むためseedだけで同一と主張せず、状態/負荷が異なるrunを除外する基準を事前固定する。fixture都合で通常の乱数ruleを変更しない。
+- N→4Nで共有asset数が増えないこと、世代切替・load反復後に退役poolのアプリ所有強参照が残らないことを必須とする。entity/instance bufferの必要な増加は別計上する。
 - 描画構造の説明が必要な場合だけRenderDocを追加する。部品数をdraw call実測値と呼ばない。
+
+全10種を完成済み（SpaはOperational）で各k棟置いたとき、建物用3D rootは`6k`、productionの描画mesh entityは`12k`
+（新設備のchild `11k`＋Door root `k`）が初期構成の期待値。fallbackでは描画mesh entity `6k`。
+水面非表示やslot消灯でも割当数は変わらない。4種の2D owner、companion、Soul、粒子、壁床は別集計する。
+この期待値はroot/part増殖の検査であり、visible drawや総frame負荷の見積もりではない。
 
 ### 実機実行と検証データ管理
 
@@ -351,14 +549,14 @@ M0で新profileのN/4N分布、停止・稼働割合、画面内面積、warmup/
 ### 現在地
 
 - 実装進捗: `0%`。計画作成とread-only調査のみ。
-- 完了済みマイルストーン: なし。前提の制作仕様は同sessionで文書化済み。
-- 次の作業: M0。全10種の寸法・状態・画像consumerを確定し、Tank/Mixerの構造ラフと予算契約から始める。
-- 生産asset、code、外部原本、Help本文は本計画作成では変更していない。
+- 完了済みマイルストーン: なし。制作仕様と初稿は`43ca0cb1`でcommit済み。自己レビューと具体化は文書のみ。
+- 次の作業: M0-a→M0-b。論理shape・consumer・画像roleを固定し、Tank/Mixerの構造ラフとfixtureを作る。実装開始はM1-0のbaseline取得から。
+- 生産asset、code、外部原本、Help本文は本計画作成・レビューでは変更していない。
 
 ### 次のAIが最初にやること
 
-1. 現在のdirty差分・並行sessionと本計画の作業範囲を分ける。前turnの制作仕様や別sessionのCI計画を破棄しない。
-2. `building-art-direction.md`と下記参照を読み、M0のfixture・寸法・状態表を確定する。
+1. 現在のdirty差分・並行sessionと本計画の作業範囲を分ける。別sessionのCI計画や新しい変更を破棄しない。
+2. `building-art-direction.md`と下記参照を読み、M0の論理寸法・状態・role表を固定する。全群の美術数値を先行2種のラフだけで確定しない。
 3. asset原本と候補の制作は既定stagingで開始する。モデル／画像制作時は該当Skillを使い、アートを最終判断する前に具体的なゲーム内比較を用意する。
 
 ### ブロッカー/注意点
@@ -366,6 +564,8 @@ M0で新profileのN/4N分布、停止・稼働割合、画面内面積、warmup/
 - 全設備用のnative recipe・asset schemaは未実装。既存Wall/Door recipeを名前だけ変えて設備の受入済みにしない。
 - 新root形式はroot数だけの既存監査では不十分。visible part、材質、layer、asset readinessまで調べる。
 - SpaのConstructing、Tank companion、カタログ後着、砂icon共有が取りこぼしやすい。
+- `MovePlantTask`の確定行先を配置ghostと混同しない。loadではtaskが復元されず、Mixer/Spaの稼働やLampの供給結果も保存前とは限らない。
+- 技術候補・ArtPreviewの採否とrelease許可は別の判断。承認待ちでも完成済みと記録しない。
 - Doorは既存releaseを使う。旧計画の「未導入」などの古い文言だけから再制作を始めない。
 - code編集は主担当だけが行う。agentはread-only探索・レビューに限る。
 
@@ -387,6 +587,27 @@ M0で新profileのN/4N分布、停止・稼働割合、画面内面積、warmup/
 - `dev.py check` / Clippy / workspace test / `dev.py verify`: 未実行（今回は計画文書のみ）。実装完了の証拠なし。
 - native / performance / art acceptance: 未実行。既存Door releaseの成果と今回の受入を区別する。
 
+### 自己レビューの修正記録（2026-09-20）
+
+| 指摘 | 修正先・決定 |
+| --- | --- |
+| 全種の美術寸法をM0で固定すると未制作群の判断を先取りする | §4.1 / §5。論理契約はM0、美術数値は各群の無地判定後・着色前 |
+| GLBのファイル単位とtransform単位が未定義 | §4.1。role別8 GLB、identity node、world unitとpivotを分離 |
+| 部品に既存Wall/Door用の照明anchorを導入する根拠がない | §4.3。設備の既存samplingを保持 |
+| 新候補失敗時まで正常なactiveを消してしまう | §4.2。不変artifact path、active/pending分離、失敗種別別の状態表 |
+| 表示のatomic切替が実行順と結ばれていない | §4.3。PostUpdate適用とdeferred/伝播境界、旧system除外 |
+| 再利用ghost・確定行先・非正方カタログの経路漏れ | §4.4。全descriptor復元、consumer表、独立catalog role |
+| loadでruntime稼働も保存前へ戻るように読める | §4.4 / A7。durableと派生状態を区別し、pause条件を維持 |
+| Restの常時利用表示、Bridgeの橋面追従を暗に要求 | §4.1。既存粒子/UIの範囲、actor高さ不変のclay判定 |
+| 同一binary A/Bだけでは共通基盤の負荷を測れない | §5 / §7。fixture先行baseline、基盤・群別・累積の3比較 |
+
+このレビューは計画上の矛盾・未定義の解消であり、上記実装の動作証明ではない。
+`2026-09-20`に`dev.py docs --write` / `docs --check`、本計画・索引を対象にした`git diff --check`、
+`dev.py validation check`、`scripts/check_help_impact.py`を再実行し成功。Help gateは既存commitの判断を確認したもので、
+今回の文書修正や将来の実装に対する新しいプレイヤー経路の受入ではない。
+本作業の変更は本計画と索引の該当項目。並行CI変更・全workspaceの実装品質は今回の検証対象外で、
+build・実機・性能検証用の出力や専用workspaceは作成していない。
+
 ### Definition of Done
 
 - [ ] M0〜M6の完了条件と全10種の処置が確定。
@@ -402,3 +623,4 @@ M0で新profileのN/4N分布、停止・稼働割合、画面内面積、warmup/
 | 日付 | 変更者 | 内容 |
 | --- | --- | --- |
 | `2026-09-19` | `Codex` | 制作仕様を前提に全10種の移行、9種の新asset経路、Door監査、段階導入・全表示consumer・受入・保存管理を計画。実装未着手 |
+| `2026-09-20` | `Codex` | 実装照合の自己レビュー。role別export、群別freeze、active/pending、表示順、preview全経路、load期待値、試験入出力、基盤比較を具体化。code・assetは未変更 |
