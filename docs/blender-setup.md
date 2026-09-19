@@ -229,7 +229,51 @@ perf設定入口も`wall_actual_window_phase_matches`でcompleted/provisionalに
 ArtPreviewのmixed phase、phase未指定、actual-windowなしは拒否する。
 既存型枠previewの既定動作は不変。いずれもアート承認・正式受入・性能baseline・昇格の証拠ではない。
 
-### 他のproductionアセット
+### 壁・床以外の設備の無地制作（M0、runtime未接続）
+
+`building-art-v1.contract.json`は全10種の論理shape、9新setのexact role、既存Door g7、
+preview consumerと原点／単位を記録する。`check_building_art_contract.py`はRustの
+`BuildingType::ALL`・shape定数・kindへの割当・中心・anchorとconsumer入口をread-onlyで照合する。
+`--check-images`は砂・骨item iconと猫車2画像の実bytesも照合する。CIでは外部runtime mirrorを要求しない。
+
+Tank / MudMixerの`building-*-v1.geometry.json`は**clay_draft**であり、`final_art=null`。
+高さ・triangle上限・canvasは試作検査用の値で、ゲーム内無地判定後の最終freezeではない。
+残る群の美術数値、`.buildingset` loader、native設備profile、release経路は未実装。
+
+```bash
+python3 tools/blender_ai_workflow/scripts/check_building_art_contract.py --check-images
+python3 tools/blender_ai_workflow/scripts/build_building_clay.py build Tank --name tank-clay-review-001
+python3 tools/blender_ai_workflow/scripts/build_building_clay.py build MudMixer --name mixer-clay-review-001
+python3 tools/blender_ai_workflow/scripts/build_building_clay.py verify Tank --name tank-clay-review-001
+```
+
+`build`は新しい名前だけを受け付け、既存fileを上書きしない。Blenderはnetworkなし・factory-startup・
+autoexec無効で動く。原本は`staging/blend/<name>.blend`、neutral albedo・状態PNG・role GLBは
+`staging/exports/building-clay/<name>/`、制作reportは`staging/reports/<name>.json`、
+role別export / Khronos / bundle reportは`staging/reports/building-clay/<name>/`へ出る。
+canonicalとrepo assetsは一切変更しない。失敗した名前での再試行は拒否し、原因を直して新名を使う。
+
+原本のrole objectは全てidentityで保存する。既存`export-staging-glb`のexact collection選択と
+`--geometry-scale 32 --materials-mode placeholder`を通し、node transformを使わず頂点をworld unitへ変換する。
+水面・rotorの配置はfixtureのworld-unit translationを使い、原本のobject translationへ焼き込まない。
+後段validatorはGLB bytesの単一scene/node/mesh/primitive、identity、属性型・数、法線長、
+非退化geometry/UV、bounds、triangle上限、skin/morph/animation/画像の不在を確認する。
+`verify`は原本・script・fixture・PNG・GLBのhashを照合し、現在のGLBへKhronosを再実行する。
+再生成した原本や別状態のPNGを古いreportで合格にしない。
+
+無地previewは59°・yaw 0・既存RtT縦補正を合わせ、足元原点と3軸の投影点を0.01px以内で照合する。
+既存sealed OCIO configをこの無地確認に限定して使い、陽性情報も記録する。一般Blender設定や
+最終textureの色承認を置き換えない。TankはEmpty/Partial/Full、Mixerは停止姿勢と45°姿勢を出す。
+静止2姿勢はゲーム内animation/pauseの証明ではない。catalogは同じ正方形の代表PNGを参照する。
+UVは面ID付きの無地用planar mapping、材質はroughness=1 / metallic=0 / specular=0。
+最終の面別atlas・描線・smoothingはゲーム内無地判定後に制作する。
+
+2026-09-20の実測はBlender 5.1.1、4 GLBがscene errors/warnings=0、Khronos errors/warnings=0。
+triangle数はTank body/water=`96/48`、Mixer body/rotor=`120/36`。
+KhronosのUV未使用infoはplaceholder material exportにより外部albedo参照を含めないためで、UV0自体は後段で検査する。
+Blender画像とtechnical passはArtPreview authority、アート承認、ゲーム内受入、releaseのいずれでもない。
+
+### 既存Door / Wallのproduction経路
 
 production Doorは`create-door-production-scene`で`Door_Closed` / `Door_Open` / `Door_Locked`を同じ原本へ生成し、`validate-door-glb`で単一node/mesh/primitive、状態別triangle数、固定枠signature、Open envelopeを検査します。`render-door-previews`はnetworkを切り、repositoryの`wall-calibration-v2.ocio`が陽性である場合だけEW/NSの固定canvasを出力します。`validate-door-textures`は512px Opaque albedo、256px RGBA preview、安全bbox、両軸hash差を検査します。
 

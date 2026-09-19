@@ -5,7 +5,7 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `non-wall-floor-building-art-migration-plan-2026-09-19` |
-| ステータス | `Draft` |
+| ステータス | `In Progress` |
 | 作成日 | `2026-09-19` |
 | 最終更新日 | `2026-09-20` |
 | 作成者 | `Codex` |
@@ -14,12 +14,13 @@
 | 制作仕様 | [building-art-direction.md](../../building-art-direction.md) |
 | 調査基点 | 初稿: `94ccdf23`。自己レビュー: `43ca0cb1`の計画と現行実装（文書変更のみ） |
 
-本書は全10種の移行順、制作物、表示接続、受入条件を所有する。実装・制作・実機受入は未着手。
+本書は全10種の移行順、制作物、表示接続、受入条件を所有する。M0の制作・検査toolingと先行無地原本を実装中。
+runtime表示接続・正式baseline・ゲーム内アート受入は未着手。
 個別意匠の最終判断はゲーム内の候補画像で行い、本計画の作成をアート受入やreleaseとして扱わない。
 
 自己レビューでは、全種の美術数値を先行2種の試作だけで決める前提を撤回し、共通契約と群別の確定点を分離した。
 role別GLB、active/pendingの切替、再利用ghostのanchor復元、移動依頼の行先表示、load後の状態、
-基盤自体の性能比較を具体化した。以下の新しい型・fixture・recipe名は実装予定であり、既存APIではない。
+基盤自体の性能比較を具体化した。実装済みfixture/toolは§9に記載し、それ以外の新しい型・recipe名は実装予定である。
 
 ## 1. 目的
 
@@ -323,10 +324,10 @@ M1では全9種の美術制作や専用systemを先作りせず、kind別role表
 - 変更内容: 全10種の既存footprint・anchor・作業位置・許可された向き・状態を固定。Tank/Mixerの構造ラフと共通schemaを用意する。美術由来の高さ・画像・mesh数値は各群のゲーム内無地判定後に固定する。
 - 変更ファイル: 本計画、`docs/building.md`、`docs/art-style-criteria.md`、`tools/blender_ai_workflow/fixtures/`（新設備契約）。原本は外部staging。
 - 完了条件:
-  - [ ] 表の全10種と`BuildingType::ALL`が一致し、Tank寸法・旧アセット計画の新規制作範囲を文書同期。
+  - [x] 表の全10種と`BuildingType::ALL`が一致し、Tank寸法・旧アセット計画の新規制作範囲を文書同期。
   - [ ] 5種の接地方式・part構成、9種のexact role、descriptor fieldと検査方式が確定。未制作群の美術数値は未確定と明記。
   - [ ] 基盤比較のfixture・状態・環境・予算項目と決定根拠が確定。数値はM1-0の基準取得後、候補実装前にfreeze。後続群は各群の候補比較前にfreezeする。
-  - [ ] Door g7の継承範囲と、既存計画所有の残件を記録。
+  - [x] Door g7の継承範囲と、既存計画所有の残件を記録。
 - 検証: schema/geometryのfocused検査、docs検査。無地の原本previewを本番表示の合格証拠にはしない。
 
 ### M1: 共通の読み込み・part・preview経路
@@ -525,7 +526,7 @@ legacy-controlはprofiling専用の明示modeとし、asset欠落を故意に起
 5. 成功・失敗・中止をsealし、使い終えたjobを整理、finalize/checkを通す。変更した新subjectには新jobを使う。
 6. フィードバック中の同じcandidate workspace/Cargo cacheを保持し、最終acceptance/closureまで撤去しない。固定日数・容量・全job archiveを要求しない。
 
-各実行時に次を本計画または後続の群別記録へ追記する。exact保持pathはprimary台帳にも登録する。
+各実行時に次を本計画または後続の群別記録へ追記する。native検証のexact保持pathはprimary台帳にも登録する。
 
 | 項目 | 計画作成時の状態 |
 | --- | --- |
@@ -548,10 +549,15 @@ legacy-controlはprofiling専用の明示modeとし、asset欠落を故意に起
 
 ### 現在地
 
-- 実装進捗: `0%`。計画作成とread-only調査のみ。
-- 完了済みマイルストーン: なし。制作仕様と初稿は`43ca0cb1`でcommit済み。自己レビューと具体化は文書のみ。
-- 次の作業: M0-a→M0-b。論理shape・consumer・画像roleを固定し、Tank/Mixerの構造ラフとfixtureを作る。実装開始はM1-0のbaseline取得から。
-- 生産asset、code、外部原本、Help本文は本計画作成・レビューでは変更していない。
+- 実装進捗: M0の制作・検査toolingを実装。M0全体、M1〜M6は未完。
+- 作業branch: `codex/building-art-migration`、実装基点: `53c8b6fb8f2d17e8cca4458d098060d2d9fb1e42`。
+- 全10種・Rust shapeとの照合、9種のrole・consumer・単位契約、非対象4画像hash、Tank寸法訂正、Door g7継承を追加。
+- Tank/Mixerのidentity原本、neutral albedo、計4 role GLB、計5状態PNG、projectionとexport後検査を実装。
+  `build_building_clay.py build/verify`で既存scene/export/Khronos gateを再利用する。詳細は`docs/blender-setup.md`。
+- 次の作業: M0-bの共通runtime schema詳細・比較fixture/負荷の確定→M1-0のprofiling fixture導入とbaseline。
+  baseline sourceと基盤budgetをfreezeする前にruntime表示基盤を変えない。
+- Rust/runtime・repo assets・canonical・Help本文は未変更。今回の外部原本は未承認stagingのみ。
+- 無地の寸法・UV・法線処理・canvasは`clay_draft`。ゲーム内判定、最終atlas、アート承認、releaseではない。
 
 ### 次のAIが最初にやること
 
@@ -561,6 +567,8 @@ legacy-controlはprofiling専用の明示modeとし、asset欠落を故意に起
 
 ### ブロッカー/注意点
 
+- 正式baselineは新しい計測fixtureを含むclean subjectが必要。commitはユーザー指示後に行う。
+  現在の制作toolingだけのcommitをM1-0の完了や性能baselineと扱わない。
 - 全設備用のnative recipe・asset schemaは未実装。既存Wall/Door recipeを名前だけ変えて設備の受入済みにしない。
 - 新root形式はroot数だけの既存監査では不十分。visible part、材質、layer、asset readinessまで調べる。
 - SpaのConstructing、Tank companion、カタログ後着、砂icon共有が取りこぼしやすい。
@@ -608,6 +616,40 @@ legacy-controlはprofiling専用の明示modeとし、asset欠落を故意に起
 本作業の変更は本計画と索引の該当項目。並行CI変更・全workspaceの実装品質は今回の検証対象外で、
 build・実機・性能検証用の出力や専用workspaceは作成していない。
 
+### M0制作toolingの実装記録（2026-09-20）
+
+- `building-art-v1.contract.json`、保護画像hash、Tank/Mixerのgeometry draftを追加。
+- `check_building_art_contract.py`は全10種のshape定数だけでなく、実際のkind割当・中心・anchorと全preview入口を照合する。
+- 部品原点を保存してから、Blender確認だけに状態translationとcameraを適用する。export時の二重scaleを防ぐ。
+- Tank開口は実際の閉じた容器mesh。Mixerの360° sweepを幾何testで確認し、槽・架台は回転させない。
+- 無地目視でTankの満水時の隙間を検出し、内径を上下一定、水面との半径差を0.05 wuへ修正。
+  Partial/Fullとも隙間が0より大きく0.1 wu以内であるtestを追加し、貫通と浮いた円盤状の水面を防ぐ。
+- 新しい13 testに、4 role GLB roundtrip、法線/UV/shape、不正node・skin・animation・morph・画像・index、
+  hash変更・偽authority・画像差替え・上書き・path escapeの拒否を含める。
+- 技術検査はBlender 5.1.1で4 GLBのscene/Khronos error・warning各0、projection誤差0.01px以内。
+  GLBのUV未使用infoは外部材質用のplaceholder exportとして確認。neutral素材は完成textureではない。
+- Help review: **No impact**。変更はstaging専用制作toolとfixture/docのみ。通常入力→建築factory→既存描画consumer、
+  runtime locator・画像・保存・Help providerへ新しい経路は接続しておらず、操作・成立条件・表示意味は不変。
+- 実機Capture / native Memory / 性能budget / アート承認は未実施。Blender画像をそれらのpassへ読み替えない。
+- 最新制作原本・出力は外部stagingで次のM1/M2の制作consumerが使う。native job、binary copy、専用worktreeは未作成。
+- 検証: `dev.py ci check --base 53c8b6fb8f2d17e8cca4458d098060d2d9fb1e42 --mode auto`の
+  contracts/toolingがpass（scripts 241件、Blender tooling 164件、perf self-test、文書・Help・storage gate）。
+  追加script/testのRuffもpass。Rust変更なしのためRust build/Clippy/nativeは今回の選択対象外。
+- 制作物のowner=`building-art-migration`、consumer=`Tank/Mixer M1/M2 clay integration`。
+  次の作業はruntime接続後のゲーム内無地比較。採否確定後、採用原本へ引継ぎ、未採用stagingは整理する。
+  現在はreview-activeで、制作原本を日数・中間passで消さない。
+
+外部asset root `/home/satotakumi/Sync/hell-workers-assets` 配下の最新制作物（allocated bytes実測）:
+
+| 名前 | `staging/blend/<名前>.blend` | `staging/exports/building-clay/<名前>/` | `staging/reports/<名前>.json` | `staging/reports/building-clay/<名前>/` |
+| --- | ---: | ---: | ---: | ---: |
+| `building-tank-clay-20260920-v4` | 98,304 | 102,400 | 8,192 | 20,480 |
+| `building-mud-mixer-clay-20260920-v4` | 98,304 | 77,824 | 8,192 | 20,480 |
+
+計434,176 bytes。途中試作v1〜v3の同名系列だけを、後継版の独立検査後にごみ箱へ移動した（復元可能）。
+canonical・runtime asset・他sessionの原本／検証cacheは変更していない。trash移動のためdisk解放量は主張しない。
+本件のゲーム受入jobは0で、既存primary開発cacheの保持者も変更していない。
+
 ### Definition of Done
 
 - [ ] M0〜M6の完了条件と全10種の処置が確定。
@@ -624,3 +666,4 @@ build・実機・性能検証用の出力や専用workspaceは作成していな
 | --- | --- | --- |
 | `2026-09-19` | `Codex` | 制作仕様を前提に全10種の移行、9種の新asset経路、Door監査、段階導入・全表示consumer・受入・保存管理を計画。実装未着手 |
 | `2026-09-20` | `Codex` | 実装照合の自己レビュー。role別export、群別freeze、active/pending、表示順、preview全経路、load期待値、試験入出力、基盤比較を具体化。code・assetは未変更 |
+| `2026-09-20` | `Codex` | M0のshape/role/保護画像契約、先行2種の無地原本生成・GLB/PNG検査・13 testを実装。stagingのみ。runtimeとM1-0以降は未着手 |

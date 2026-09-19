@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "kind": "MudMixer",
+  "stage": "clay_draft",
+  "final_art": null,
+  "units": "world_unit",
+  "geometry_scale": 32,
+  "tolerance_wu": 0.001,
+  "preview": {"canvas_px": [256, 256], "canvas_wu": [96, 96], "anchor_px": [128, 176], "representative_state": "IdleAngleZero"},
+  "roles": {
+    "body": {"collection": "MudMixer_Body", "bounds_min_wu": [-28, 0, -24], "bounds_max_wu": [28, 46, 24], "translation_wu": [0, 0, 0], "triangle_cap": 120},
+    "rotor": {"collection": "MudMixer_Rotor", "bounds_min_wu": [-14, -14, -14], "bounds_max_wu": [14, 14, 14], "translation_wu": [0, 28, 0], "triangle_cap": 36}
+  },
+  "construction": {
+    "body_boxes": [
+      {"center": [0, 10, 0], "size": [48, 4, 40]},
+      {"center": [-24, 20, 0], "size": [4, 24, 48]},
+      {"center": [24, 20, 0], "size": [4, 24, 48]},
+      {"center": [0, 20, -22], "size": [44, 24, 4]},
+      {"center": [0, 20, 22], "size": [44, 24, 4]},
+      {"center": [-18, 4, 0], "size": [8, 8, 40]},
+      {"center": [18, 4, 0], "size": [8, 8, 40]},
+      {"center": [-26, 23, 0], "size": [4, 46, 6]},
+      {"center": [26, 23, 0], "size": [4, 46, 6]},
+      {"center": [0, 44, 0], "size": [48, 4, 6]}
+    ],
+    "rotor_boxes": [
+      {"center": [0, 0, 0], "size": [3, 28, 3]},
+      {"center": [0, -11, 0], "size": [28, 4, 4]},
+      {"center": [0, -11, 0], "size": [4, 4, 28]}
+    ]
+  },
+  "states": {"Idle": "Hold current rotor angle; load resets to zero", "Active": "Advance rotor only with Refining and Virtual delta", "Paused": "Hold angle"},
+  "reject_if": ["Silhouette too similar to Tank", "Unsupported shaft", "Rotor swept volume intersects trough"],
+  "final_freeze_requires": ["actual-window clay approval", "triangle and texture budgets", "preview projection report", "rotor swept volume"]
+}

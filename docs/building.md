@@ -46,7 +46,7 @@ Logic の次回同期へ委ねてはならない。
 | `Floor` | Structure | 床（エリア指定型建設） |
 | `Bridge` | Structure | 橋（木材/岩 代替可） |
 | `Door` | Architecture | 扉（Open/Closed/Locked） |
-| `Tank` | Plant | 水タンク（2×1、BucketStorage companion必須） |
+| `Tank` | Plant | 水タンク（本体2×2、別配置のBucketStorage companion 2×1が必須） |
 | `MudMixer` | Plant | 泥ミキサー（2×2） |
 | `WheelbarrowParking` | Temporary | 猫車置き場 |
 | `SandPile` | Temporary | 無限砂ソース |

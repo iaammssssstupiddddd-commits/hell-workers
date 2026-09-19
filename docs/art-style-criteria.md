@@ -105,6 +105,10 @@ shared Rectangle mesh
 下表の世界観モチーフを全ての面へ一律に描かず、通常表示で読める形・線・色面へ整理する。
 現行本設Wallの面別UVと弱い目地・断面表現は [Blender制作仕様](blender-setup.md#本設wallの面別uv) を参照する。
 
+新規設備の無地制作は[移行計画](plans/3d-rtt/non-wall-floor-building-art-migration-plan-2026-09-19.md)に従う。
+Tank/Mixerの`clay_draft` fixtureと自動検査は制作時の技術契約で、最終高さ・triangle予算・atlas・
+previewのアート受入ではない。無地で形を確認した後に面別UV・描線・surface別法線を確定する。
+
 | 要素 | 基準 |
 | --- | --- |
 | **視点ルール** | 正面（Front face）と上面（Top edge）が見える角度（Camera 59°準拠） |
