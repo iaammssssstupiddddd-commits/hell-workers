@@ -22,8 +22,11 @@ from typing import Sequence
 
 try:
     import dev_tools
+    import ci_scope
+    import ci_result
+    import quality
 except ModuleNotFoundError:
-    from scripts import dev_tools
+    from scripts import ci_result, ci_scope, dev_tools, quality
 
 try:
     from cargo_runtime import cargo_environment, require_cargo_memory
@@ -195,87 +198,87 @@ def diff_hygiene_command(environment: dict[str, str] | None = None) -> list[str]
 def verify() -> None:
     """Run the complete local/CI quality gate."""
     print("==> Pinned quality tools", flush=True)
-    run_quality_tools(lint=True, deps=True)
-    print("==> Python tooling", flush=True)
-    run_python_script(
-        "-m",
-        "unittest",
-        "discover",
-        "-s",
-        "scripts/tests",
-        "-p",
-        "test_*.py",
-    )
-    run_python_script(
-        "-m",
-        "unittest",
-        "discover",
-        "-s",
-        "tools/blender_ai_workflow/tests",
-        "-p",
-        "test_*.py",
-    )
-    run_python_script(str(SCRIPTS_DIR / "perf.py"), "self-test")
-
-    print("==> Repository contracts", flush=True)
-    run_python_script(str(SCRIPTS_DIR / "validation_storage.py"), "check")
-    run_python_script(str(SCRIPTS_DIR / "check_agent_rules.py"))
-    run_python_script(str(SCRIPTS_DIR / "check_help_impact.py"))
-    run_python_script(str(SCRIPTS_DIR / "check_repo_hygiene.py"))
-    run_python_script(str(SCRIPTS_DIR / "check_crate_dependencies.py"))
-    run_docs(write=False)
-
-    print("==> Rust quality gates", flush=True)
-    run_command(["cargo", "fmt", "--all", "--check"])
-    run_command(["cargo", "check", "--workspace", "--locked"])
-    run_command(
-        [
-            "cargo",
-            "test",
-            "--workspace",
-            "--no-default-features",
-            "--features",
-            "profiling",
-            "--locked",
-        ]
-    )
-    profiling_features = ["profiling-memory", "profiling-tracy"]
-    if platform.system() in {"Linux", "Windows"}:
-        profiling_features.append("profiling-renderdoc")
-    else:
-        print("profiling-renderdoc: skipped (supported on Linux/Windows)")
-    for feature in profiling_features:
-        run_command(
-            [
-                "cargo",
-                "check",
-                "-p",
-                "bevy_app@0.1.0",
-                "--lib",
-                "--no-default-features",
-                "--features",
-                feature,
-                "--locked",
-            ]
-        )
-    run_command(
-        [
-            "cargo",
-            "clippy",
-            "--workspace",
-            "--all-targets",
-            "--locked",
-            "--",
-            "-D",
-            "warnings",
-        ]
-    )
-    check_clippy_suppressions()
-    run_command(["cargo", "test", "--workspace", "--locked"])
-
-    print("==> Diff hygiene", flush=True)
-    run_command(diff_hygiene_command())
+    dev_tools.preflight(REPO_ROOT, quality_environment())
+    quality.run_groups(list(quality.GROUPS), quality_runner())
     print("All quality gates passed.")
+
+
+def quality_runner(*, base: str | None = None, pairs: list[list[str]] | None = None,
+                   local: bool = False) -> quality.Runner:
+    def hygiene() -> None:
+        if pairs is None:
+            run_command(diff_hygiene_command())
+            ci_scope.diff_hygiene(REPO_ROOT, [], local=True)
+        else:
+            ci_scope.diff_hygiene(REPO_ROOT, pairs, local=local)
+
+    return quality.Runner(
+        command=run_command, tools=run_quality_tools,
+        suppressions=check_clippy_suppressions, hygiene=hygiene,
+        environment={"HELL_WORKERS_DIFF_BASE": base} if base else {},
+    )
+
+
+def run_quality_group(group: str, plan_json: str | None) -> None:
+    if plan_json is None:
+        if os.environ.get("CI", "").lower() in {"1", "true", "yes"}:
+            raise ValueError("CI quality groups require --plan-json")
+        quality.run_group(group, quality_runner())
+        return
+    plan = ci_scope.load_json(plan_json)
+    ci_scope.verify_github_plan(REPO_ROOT, plan, os.environ)
+    if not plan["groups"][group]:
+        raise ValueError(f"quality group was not selected: {group}")
+    quality.run_group(group, quality_runner(base=plan["help_base_sha"], pairs=plan["diff_pairs"]))
+    ci_scope.write_outputs(os.environ.get("GITHUB_OUTPUT"), {
+        "tested_sha": plan["tested_sha"], "plan_sha256": ci_scope.plan_digest(plan),
+    })
+
+
+def run_ci(args: argparse.Namespace) -> None:
+    if args.ci_command == "plan":
+        event = ci_scope.load_json(Path(args.github_event).read_text(encoding="utf-8"))
+        plan = ci_scope.github_plan(REPO_ROOT, event, os.environ)
+        encoded = ci_scope.canonical_json(plan)
+        ci_scope.write_outputs(args.github_output, {
+            "plan_json": encoded, "tested_sha": plan["tested_sha"],
+            "plan_sha256": ci_scope.plan_digest(plan),
+            **{name: str(value).lower() for name, value in plan["groups"].items()},
+        })
+        print(encoded)
+    elif args.ci_command == "result":
+        plan = ci_scope.load_json(args.plan_json)
+        ci_scope.verify_github_plan(REPO_ROOT, plan, os.environ)
+        plan["run_attempt"] = os.environ["GITHUB_RUN_ATTEMPT"]
+        needs = ci_scope.load_json(args.needs_json)
+        failures = ci_result.evaluate(plan, needs)
+        run_url = (
+            f"{os.environ.get('GITHUB_SERVER_URL', 'https://github.com')}/"
+            f"{os.environ.get('GITHUB_REPOSITORY', '')}/actions/runs/{plan['run_id']}"
+        )
+        report = ci_result.summary(plan, needs, failures, run_url)
+        summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+        if summary_path:
+            with Path(summary_path).open("a", encoding="utf-8") as stream:
+                stream.write(report)
+        print(report)
+        if failures:
+            raise ValueError("Required quality jobs did not pass")
+    else:
+        if os.environ.get("CI", "").lower() in {"1", "true", "yes"}:
+            raise ValueError("ci check is a local worktree command; CI must use immutable plans")
+        fingerprint = ci_scope.source_fingerprint(REPO_ROOT)
+        head = ci_scope.commit(REPO_ROOT, ci_scope.git(REPO_ROOT, "rev-parse", "HEAD").decode().strip())
+        base = ci_scope.merge_base(REPO_ROOT, ci_scope.commit(REPO_ROOT, args.base), head)
+        pairs = [[base, head]]
+        paths = sorted(set(ci_scope.changed_paths(REPO_ROOT, pairs) + ci_scope.worktree_paths(REPO_ROOT)))
+        groups, reasons = ci_scope.classify(paths, full=args.mode == "full")
+        selected = [name for name in quality.GROUPS if groups[name]]
+        print(f"Selected quality groups: {', '.join(selected)} ({', '.join(reasons)})", flush=True)
+        quality.run_groups(selected, quality_runner(base=base, pairs=pairs, local=True))
+        if ci_scope.source_fingerprint(REPO_ROOT) != fingerprint:
+            raise ValueError("source changed during verification; reclassify and verify the new worktree")
+        print(f"Selected quality groups passed. HEAD={head} base={base} source={fingerprint}")
 
 
 def quality_environment(*, create_temp_dir: bool = False) -> dict[str, str]:
@@ -492,6 +495,20 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     subparsers.add_parser("verify", help="run the complete local/CI quality gate")
+    quality_parser = subparsers.add_parser("quality", help="run one shared quality group")
+    quality_parser.add_argument("--group", required=True, choices=quality.GROUPS)
+    quality_parser.add_argument("--plan-json", help="immutable GitHub plan (required in CI)")
+    ci_parser = subparsers.add_parser("ci", help="select and aggregate change-aware verification")
+    ci_subparsers = ci_parser.add_subparsers(dest="ci_command", required=True)
+    plan_parser = ci_subparsers.add_parser("plan", help="classify a checked-out GitHub event")
+    plan_parser.add_argument("--github-event", required=True)
+    plan_parser.add_argument("--github-output")
+    result_parser = ci_subparsers.add_parser("result", help="verify all required job results")
+    result_parser.add_argument("--plan-json", required=True)
+    result_parser.add_argument("--needs-json", required=True)
+    local_parser = ci_subparsers.add_parser("check", help="verify committed and dirty local changes")
+    local_parser.add_argument("--base", required=True, help="full comparison commit SHA")
+    local_parser.add_argument("--mode", choices=("auto", "full"), default="auto")
     subparsers.add_parser("lint", help="run pinned Ruff and actionlint checks")
     deps_parser = subparsers.add_parser("deps", help="audit workspace dependencies with cargo-deny")
     deps_parser.add_argument("--offline", action="store_true", help="diagnose using cached data only")
@@ -553,6 +570,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             fast_check(args.package, run_tests=args.tests)
         elif args.command == "verify":
             verify()
+        elif args.command == "quality":
+            run_quality_group(args.group, args.plan_json)
+        elif args.command == "ci":
+            run_ci(args)
         elif args.command == "lint":
             run_quality_tools(lint=True)
         elif args.command == "deps":
@@ -589,7 +610,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     except FileNotFoundError as error:
         print(f"Required command not found: {error.filename}", file=sys.stderr)
         return 127
-    except (RuntimeError, ValueError) as error:
+    except (RuntimeError, ValueError, KeyError, TypeError) as error:
         print(str(error), file=sys.stderr)
         return 1
     except KeyboardInterrupt:

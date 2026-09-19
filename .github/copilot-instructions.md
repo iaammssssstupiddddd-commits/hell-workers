@@ -10,7 +10,7 @@ editing. The project uses Bevy 0.19 and Rust 2024.
 
 - `python3 scripts/dev.py doctor` — read-only environment diagnosis.
 - `python3 scripts/dev.py check` — fast format/policy/workspace compile gate.
-- `python3 scripts/dev.py verify` — full local/CI gate; run before completion.
+- `python3 scripts/dev.py verify` — full local/CI fallback; see the change-aware completion policy below.
 - `python3 scripts/dev.py cargo -- run` — native game run through the persistent-storage guard.
 - `trunk serve` — optional WASM workflow; not a native/performance acceptance route and not a substitute for the guarded Cargo workflow.
 
@@ -58,3 +58,10 @@ Do not add Clippy suppressions or dead code. Do not hard-code personal
 - Use the primary repository's `python3 scripts/dev.py validation` coordinator for validation planning/execution and pass its storage check before reporting.
 - Read the primary `docs/development-infra/validation-storage-workflow.md` on each validation start/resume; keep frozen subjects unchanged and preserve review-active build caches.
 - Closed work requires no per-job archive. Retain only concrete active uses and product sources/releases; record the owner and release condition, then dispose of unneeded validation output.
+
+## Change-aware completion and branches
+
+- Before completion, use same-subject CI evidence or `python3 scripts/dev.py ci check --base <full-SHA> --mode auto`; use `python3 scripts/dev.py verify` for full fallback.
+- Use a dedicated branch for an independent change; reuse the branch for fixes to the same purpose. Preserve parallel work, and use a PR as the automatic CI entry point; publishing still requires task authorization.
+- Accept CI only for the intended base/head/tested SHA and selected groups, with no additional dirty source; record the run URL and scope. CI does not replace Help review, required native acceptance, or primary storage cleanup.
+- Unknown scope or unavailable CI requires local verification. Use full mode or `verify` when classification cannot be trusted; never treat a missing diff base as success.

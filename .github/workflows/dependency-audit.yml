@@ -1,0 +1,32 @@
+name: Dependency audit
+
+on:
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  PYTHONDONTWRITEBYTECODE: "1"
+
+jobs:
+  dependencies:
+    name: Daily dependency audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+      - uses: ./.github/actions/prepare-quality
+        with:
+          group: deps
+      - name: Audit dependencies
+        run: python3 scripts/dev.py deps

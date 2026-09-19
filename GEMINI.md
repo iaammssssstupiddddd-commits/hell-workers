@@ -5,7 +5,7 @@ This project uses **Bevy 0.19**. Adhere to the following rules and conventions.
 ## 1. Bevy Version & Documentation
 - **Bevy 0.19** is strictly required. Avoid using APIs from older versions (0.14 or earlier).
 - Verify API signatures using `docs.rs/bevy/0.19.0` or local source code in `~/.cargo/registry/src/` if unsure.
-- Always run `python3 scripts/dev.py check` after implementation to verify API compatibility.
+- Run `python3 scripts/dev.py check` after Rust implementation to verify API compatibility.
 
 ## 2. Crate Boundaries & Architecture
 - Follow `docs/crate-boundaries.md` for all structural changes.
@@ -54,5 +54,12 @@ This project uses **Bevy 0.19**. Adhere to the following rules and conventions.
 2. **Strategy**: Formulate a plan and share a concise summary.
 3. **Execution**: Iterate through Plan -> Act -> Validate.
    - **Act**: Surgical, idiomatic updates.
-   - **Validate**: Run `python3 scripts/dev.py check` during implementation and `python3 scripts/dev.py verify` before broad completion.
+   - **Validate**: Use `python3 scripts/dev.py check` during Rust implementation and the change-aware completion policy below before completion.
 4. **Documentation**: Update all affected docs using `hell-workers-update-docs` before finishing.
+
+## Change-aware completion and branches
+
+- Before completion, use same-subject CI evidence or `python3 scripts/dev.py ci check --base <full-SHA> --mode auto`; use `python3 scripts/dev.py verify` for full fallback.
+- Use a dedicated branch for an independent change; reuse the branch for fixes to the same purpose. Preserve parallel work, and use a PR as the automatic CI entry point; publishing still requires task authorization.
+- Accept CI only for the intended base/head/tested SHA and selected groups, with no additional dirty source; record the run URL and scope. CI does not replace Help review, required native acceptance, or primary storage cleanup.
+- Unknown scope or unavailable CI requires local verification. Use full mode or `verify` when classification cannot be trusted; never treat a missing diff base as success.

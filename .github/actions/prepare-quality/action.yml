@@ -1,0 +1,71 @@
+name: Prepare quality group
+description: Resolve event history and install only the selected group's tools.
+inputs:
+  group:
+    description: changes, contracts, tooling, deps, or rust
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Resolve immutable event history
+      shell: bash
+      env:
+        QUALITY_GROUP: ${{ inputs.group }}
+      run: |
+        python3 - <<'PY'
+        import os
+        from pathlib import Path
+        from scripts.ci_scope import fetch_event_history
+        assert os.environ['QUALITY_GROUP'] in {'changes', 'contracts', 'tooling', 'deps', 'rust'}
+        fetch_event_history(Path.cwd(), os.environ)
+        PY
+    - name: Install native dependencies
+      if: inputs.group == 'rust'
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install --yes --no-install-recommends \
+          g++ libasound2-dev libudev-dev libwayland-dev libx11-dev \
+          libxkbcommon-dev libxkbcommon-x11-0 mold pkg-config ripgrep
+        mold --version
+    - name: Install Python test dependency
+      if: inputs.group == 'tooling'
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install --yes --no-install-recommends python3-venv
+        python3 -m venv "$RUNNER_TEMP/quality-python"
+        "$RUNNER_TEMP/quality-python/bin/python3" -m pip install --no-cache-dir --only-binary=:all: 'Pillow==12.3.0'
+        "$RUNNER_TEMP/quality-python/bin/python3" -c 'from PIL import Image; assert hasattr(Image.Image, "get_flattened_data"); print("Pillow", Image.__version__)'
+        echo "$RUNNER_TEMP/quality-python/bin" >> "$GITHUB_PATH"
+    - name: Install pinned Rust toolchain
+      if: inputs.group == 'rust' || inputs.group == 'deps'
+      shell: bash
+      run: |
+        python3 - <<'PY'
+        import subprocess
+        import tomllib
+        from pathlib import Path
+        spec = tomllib.loads(Path('rust-toolchain.toml').read_text())['toolchain']
+        subprocess.run(['rustup', 'toolchain', 'install', spec['channel'],
+                        '--profile', spec['profile'], '--no-self-update',
+                        '--component', ','.join(spec['components'])], check=True)
+        PY
+    - name: Install pinned quality tools
+      if: inputs.group == 'tooling' || inputs.group == 'deps'
+      shell: bash
+      env:
+        QUALITY_GROUP: ${{ inputs.group }}
+      run: |
+        python3 - <<'PY'
+        import os
+        import subprocess
+        import sys
+        from pathlib import Path
+        selected = ['ruff', 'actionlint'] if os.environ['QUALITY_GROUP'] == 'tooling' else ['cargo-deny']
+        command = [sys.executable, 'scripts/install_dev_tools.py', '--bin-dir', str(Path.home() / '.local/bin')]
+        for tool in selected:
+            command.extend(['--tool', tool])
+        subprocess.run(command, check=True)
+        PY
+        echo "$HOME/.local/bin" >> "$GITHUB_PATH"

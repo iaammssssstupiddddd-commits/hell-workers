@@ -79,7 +79,10 @@ lane leaseはPOSIXの`flock`を使い、未対応hostでは共有targetへfallba
 
 ### 品質検証
 
-完了前は`python3 scripts/dev.py verify`を実行します。固定版cargo-deny / Ruff / actionlintが必要です。
+完了前は同じ対象SHA・必要群の成功CIを確認するか、`python3 scripts/dev.py ci check --base <full-SHA> --mode auto`
+でcommit・dirty・未追跡を含めて検証します。文書のみは契約検査、Rust変更はtoolingとworkspace検証も実行します。
+独立変更は目的別branchを作り、同目的の修正では再利用します。公開が許可されたPRが自動CIの入口です。
+全検証fallbackは`python3 scripts/dev.py verify`です。全群には固定版cargo-deny / Ruff / actionlintが必要です。
 画像処理テスト用のPillow 12.3.0も、検査に使うPython環境へ導入してください。
 Linux x86_64では`python3 scripts/install_dev_tools.py --bin-dir "$HOME/.local/bin"`で明示導入し、
 同directoryをPATHへ追加します。`doctor`や`verify`は自動installしません。

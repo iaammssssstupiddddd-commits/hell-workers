@@ -16,7 +16,10 @@ python3 scripts/dev.py check
 # package限定（必要ならtestsも実行）
 python3 scripts/dev.py check --package hw_jobs --tests
 
-# CIと同一の完全ゲート
+# 変更に応じた完了ゲート（staged/unstaged/untrackedも含む）
+python3 scripts/dev.py ci check --base <full-SHA> --mode auto
+
+# 分類を使わない完全ゲート
 python3 scripts/dev.py verify
 
 # 固定版Ruff/actionlintと依存監査
@@ -64,6 +67,12 @@ performance/nativeを妨げない。
 Cargo出力の再解釈、`target/`の削除を行わない。
 
 ## 品質ツール
+
+`quality.py`はcontracts/tooling/deps/rustの共通実行器、`ci_scope.py`はGit差分と不変のevent SHAに基づく分類、
+`ci_result.py`は必要jobの成功とSHA/digest一致を確認する集約器。群の切り分けには
+`dev.py quality --group contracts|tooling|rust|deps`を使う。CIでは必ず`--plan-json`を渡し、eventから再計算して照合する。
+`dev.py ci plan --github-event ... --github-output ...`と`dev.py ci result --plan-json ... --needs-json ...`はCI用入口。
+選択条件・branch運用・同一対象のCI証拠要件は[開発ガイド](../docs/DEVELOPMENT.md)を参照する。
 
 full verifyに必要な3 CLIの正本は`dev-tools.toml`、版/path照合は`dev_tools.py`。
 Linux x86_64の明示導入は`python3 scripts/install_dev_tools.py --bin-dir "$HOME/.local/bin"`を使い、

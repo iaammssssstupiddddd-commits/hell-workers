@@ -30,6 +30,32 @@ MANDATORY_STORAGE_RULE = (
 STORAGE_RULE_FILES = (*ROOT_RULE_FILES,
     ".agent/workflows/task-lifecycle.md", ".cursor/workflows/task-lifecycle.md")
 
+MANDATORY_CI_RULE = (
+    "Before completion, use same-subject CI evidence or "
+    "`python3 scripts/dev.py ci check --base <full-SHA> --mode auto`; "
+    "use `python3 scripts/dev.py verify` for full fallback."
+)
+MANDATORY_BRANCH_RULE = (
+    "Use a dedicated branch for an independent change; reuse the branch for "
+    "fixes to the same purpose. Preserve parallel work, and use a PR as the "
+    "automatic CI entry point; publishing still requires task authorization."
+)
+MANDATORY_CI_EVIDENCE_RULE = (
+    "Accept CI only for the intended base/head/tested SHA and selected groups, "
+    "with no additional dirty source; record the run URL and scope. "
+    "CI does not replace Help review, required native acceptance, or primary storage cleanup."
+)
+CI_RULE_FILES = (*STORAGE_RULE_FILES,
+    ".cursor/skills/hell-workers-update-docs/SKILL.md",
+    ".cursor/skills/hell-workers-review-help-impact/SKILL.md")
+CI_RULE_MARKERS = (MANDATORY_CI_RULE, MANDATORY_BRANCH_RULE, MANDATORY_CI_EVIDENCE_RULE)
+
+
+def missing_ci_rules(paths: Iterable[Path]) -> tuple[Path, ...]:
+    return tuple(path for path in paths if not path.is_file()
+                 or any(marker not in path.read_text(encoding="utf-8")
+                        for marker in CI_RULE_MARKERS))
+
 
 def missing_storage_rules(paths: Iterable[Path]) -> tuple[Path, ...]:
     return tuple(path for path in paths if not path.is_file()
@@ -111,6 +137,14 @@ CANONICAL_PATHS = (
 
 STALE_PATTERNS = (
     (
+        "unconditional legacy completion gate",
+        re.compile(
+            r"(?:Completion criteria\*\*: `python3 scripts/dev.py (?:check|verify)`|"
+            r"Always run `python3 scripts/dev.py check` before finishing|"
+            r"Before broad completion, run `python3 scripts/dev.py verify`)"
+        ),
+    ),
+    (
         "removed task model path",
         re.compile(
             r"(?:crates/bevy_app/)?src/systems/soul_ai/(?:execute/)?"
@@ -182,6 +216,8 @@ def missing_mandatory_help_review_rules(
 def find_violations() -> list[str]:
     expected_bevy = bevy_version()
     violations: list[str] = []
+    for path in missing_ci_rules(REPO_ROOT / name for name in CI_RULE_FILES):
+        violations.append(f"{path.relative_to(REPO_ROOT)}: mandatory CI/branch rule is missing")
     for path in missing_storage_rules(REPO_ROOT / name for name in STORAGE_RULE_FILES):
         violations.append(f"{path.relative_to(REPO_ROOT)}: mandatory validation storage rule is missing")
     for name in ("docs/development-infra/validation-storage-workflow.md", "scripts/validation_storage.py"):

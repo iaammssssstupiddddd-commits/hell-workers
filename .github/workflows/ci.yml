@@ -4,16 +4,25 @@ on:
   push:
     branches: [master]
   pull_request:
-  # Manual dispatch exercises the same job as the daily audit.
+    types: [opened, synchronize, reopened, ready_for_review, edited]
   workflow_dispatch:
-  schedule:
-    - cron: '17 3 * * *'
+    inputs:
+      mode:
+        description: Change-aware or full quality gates
+        type: choice
+        options: [auto, full]
+        default: auto
+        required: true
+      base_sha:
+        description: Full commit SHA of a strict ancestor to compare
+        type: string
+        required: true
 
 permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}-${{ inputs.mode || 'auto' }}
   cancel-in-progress: true
 
 env:
@@ -21,40 +30,116 @@ env:
   PYTHONDONTWRITEBYTECODE: "1"
 
 jobs:
-  quality:
-    name: Quality gates
-    if: github.event_name != 'schedule' && github.event_name != 'workflow_dispatch'
+  changes:
+    name: Classify changes
     runs-on: ubuntu-latest
-    # Dependency updates can rebuild both profiling and dynamic-linking graphs.
-    timeout-minutes: 90
+    timeout-minutes: 5
+    outputs:
+      plan_json: ${{ steps.plan.outputs.plan_json }}
+      tested_sha: ${{ steps.plan.outputs.tested_sha }}
+      plan_sha256: ${{ steps.plan.outputs.plan_sha256 }}
+      tooling: ${{ steps.plan.outputs.tooling }}
+      rust: ${{ steps.plan.outputs.rust }}
+      deps: ${{ steps.plan.outputs.deps }}
     steps:
-      - name: Check out repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ github.sha }}
           fetch-depth: 0
-      - name: Install native dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install --yes --no-install-recommends \
-            g++ \
-            libasound2-dev \
-            libudev-dev \
-            libwayland-dev \
-            libx11-dev \
-            libxkbcommon-dev \
-            libxkbcommon-x11-0 \
-            mold \
-            pkg-config \
-            python3-venv \
-            ripgrep
-          mold --version
-      - name: Install Python test dependency
-        run: |
-          python3 -m venv "$RUNNER_TEMP/quality-python"
-          "$RUNNER_TEMP/quality-python/bin/python3" -m pip install --no-cache-dir --only-binary=:all: 'Pillow==12.3.0'
-          "$RUNNER_TEMP/quality-python/bin/python3" -c 'from PIL import Image; assert hasattr(Image.Image, "get_flattened_data"); print("Pillow", Image.__version__)'
-          echo "$RUNNER_TEMP/quality-python/bin" >> "$GITHUB_PATH"
+      - uses: ./.github/actions/prepare-quality
+        with:
+          group: changes
+      - id: plan
+        run: python3 scripts/dev.py ci plan --github-event "$GITHUB_EVENT_PATH" --github-output "$GITHUB_OUTPUT"
+
+  contracts:
+    name: Repository contracts
+    needs: changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      tested_sha: ${{ steps.check.outputs.tested_sha }}
+      plan_sha256: ${{ steps.check.outputs.plan_sha256 }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - uses: ./.github/actions/prepare-quality
+        with:
+          group: contracts
+      - id: check
+        env:
+          QUALITY_PLAN: ${{ needs.changes.outputs.plan_json }}
+        run: python3 scripts/dev.py quality --group contracts --plan-json "$QUALITY_PLAN"
+
+  tooling:
+    name: Tooling tests and lint
+    needs: [changes, contracts]
+    if: needs.changes.outputs.tooling == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      tested_sha: ${{ steps.check.outputs.tested_sha }}
+      plan_sha256: ${{ steps.check.outputs.plan_sha256 }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - uses: ./.github/actions/prepare-quality
+        with:
+          group: tooling
+      - id: check
+        env:
+          QUALITY_PLAN: ${{ needs.changes.outputs.plan_json }}
+        run: python3 scripts/dev.py quality --group tooling --plan-json "$QUALITY_PLAN"
+
+  dependencies:
+    name: Dependency audit
+    needs: [changes, contracts]
+    if: needs.changes.outputs.deps == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      tested_sha: ${{ steps.check.outputs.tested_sha }}
+      plan_sha256: ${{ steps.check.outputs.plan_sha256 }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - uses: ./.github/actions/prepare-quality
+        with:
+          group: deps
+      - id: check
+        env:
+          QUALITY_PLAN: ${{ needs.changes.outputs.plan_json }}
+        run: python3 scripts/dev.py quality --group deps --plan-json "$QUALITY_PLAN"
+
+  rust:
+    name: Rust quality gates
+    needs: [changes, contracts, tooling, dependencies]
+    if: >-
+      !cancelled() && needs.changes.result == 'success' &&
+      needs.contracts.result == 'success' && needs.tooling.result == 'success' &&
+      needs.changes.outputs.rust == 'true' &&
+      (needs.changes.outputs.deps == 'false' || needs.dependencies.result == 'success')
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    outputs:
+      tested_sha: ${{ steps.check.outputs.tested_sha }}
+      plan_sha256: ${{ steps.check.outputs.plan_sha256 }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - uses: ./.github/actions/prepare-quality
+        with:
+          group: rust
       - name: Cache Cargo artifacts
+        id: cargo-cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
@@ -64,50 +149,31 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml', '.cargo/config.toml') }}
           restore-keys: |
             ${{ runner.os }}-cargo-
-      - name: Install pinned Rust toolchain
-        run: |
-          python3 - <<'PY'
-          import subprocess
-          import tomllib
-          from pathlib import Path
-          spec = tomllib.loads(Path('rust-toolchain.toml').read_text())['toolchain']
-          subprocess.run(['rustup', 'toolchain', 'install', spec['channel'],
-                          '--profile', spec['profile'], '--no-self-update',
-                          '--component', ','.join(spec['components'])], check=True)
-          PY
-      - name: Install pinned quality tools
-        run: |
-          python3 scripts/install_dev_tools.py --bin-dir "$HOME/.local/bin"
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-      - name: Diagnose environment
-        run: python3 scripts/dev.py doctor
-      - name: Run quality gates
+      - name: Record cache state
         env:
-          HELL_WORKERS_DIFF_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
-        run: python3 scripts/dev.py verify
+          CACHE_HIT: ${{ steps.cargo-cache.outputs.cache-hit }}
+        run: printf 'Cargo cache hit = %s\n' "$CACHE_HIT" >> "$GITHUB_STEP_SUMMARY"
+      - id: check
+        env:
+          QUALITY_PLAN: ${{ needs.changes.outputs.plan_json }}
+        run: python3 scripts/dev.py quality --group rust --plan-json "$QUALITY_PLAN"
 
-  dependencies:
-    name: Daily dependency audit
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+  quality:
+    name: Quality gates
+    needs: [changes, contracts, tooling, dependencies, rust]
+    if: always()
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 5
     steps:
-      - name: Check out repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Install pinned Rust toolchain
-        run: |
-          python3 - <<'PY'
-          import subprocess
-          import tomllib
-          from pathlib import Path
-          spec = tomllib.loads(Path('rust-toolchain.toml').read_text())['toolchain']
-          subprocess.run(['rustup', 'toolchain', 'install', spec['channel'],
-                          '--profile', spec['profile'], '--no-self-update',
-                          '--component', ','.join(spec['components'])], check=True)
-          PY
-      - name: Install pinned dependency auditor
-        run: |
-          python3 scripts/install_dev_tools.py --tool cargo-deny --bin-dir "$HOME/.local/bin"
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-      - name: Audit dependencies
-        run: python3 scripts/dev.py deps
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - uses: ./.github/actions/prepare-quality
+        with:
+          group: changes
+      - name: Aggregate required results
+        env:
+          QUALITY_PLAN: ${{ needs.changes.outputs.plan_json }}
+          QUALITY_NEEDS: ${{ toJSON(needs) }}
+        run: python3 scripts/dev.py ci result --plan-json "$QUALITY_PLAN" --needs-json "$QUALITY_NEEDS"
