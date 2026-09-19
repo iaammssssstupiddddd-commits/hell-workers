@@ -1,3 +1,4 @@
+# Temporary CI acceptance fixture: tooling-only selection.
 from PIL import Image
 import sys
 
