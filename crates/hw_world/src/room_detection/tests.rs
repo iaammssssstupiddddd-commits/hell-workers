@@ -1,4 +1,5 @@
 use hw_core::constants::ROOM_MAX_TILES;
+// Temporary CI acceptance fixture: test-only Rust selection.
 use hw_jobs::{BuildingCategory, BuildingType, RoomDetectionRole};
 
 use super::*;
