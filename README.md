@@ -1,5 +1,7 @@
 # Hell Workers
 
+<!-- Temporary CI acceptance fixture: documentation-only selection. -->
+
 地獄の建設プロジェクトを指揮する建築シミュレーションゲームです。見下ろし視点の2D画面へ、3DのRender-to-Texture結果を合成して描画します。建築物のアートはRough Vector Sketch（黒い石積み、錆びた鉄、紫の裂け目）です。
 
 ## コンセプト
