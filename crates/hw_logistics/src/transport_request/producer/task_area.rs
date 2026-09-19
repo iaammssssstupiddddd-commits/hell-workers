@@ -9,8 +9,8 @@ use hw_core::relationships::{IncomingDeliveries, StoredItems, TaskWorkers};
 use hw_jobs::{Designation, WorkType};
 
 use crate::stockpile_policy::{
-    StockpilePolicyInput, StockpileTransferPhase, evaluate_stockpile_policy,
-    stockpile_owner_accepts_item,
+    InboundReservationSnapshot, StockpileContentsSnapshot, StockpileTransferPhase,
+    evaluate_stockpile_policy, stockpile_owner_accepts_item,
 };
 use crate::transport_request::producer::active_unit_cache::CachedStockpileGroups;
 use crate::transport_request::{
@@ -216,26 +216,27 @@ fn evaluate_cell(
         .get(&resource_type)
         .copied()
         .unwrap_or(0);
-    let incoming_other = cell.incoming_total.saturating_sub(incoming_matching);
     let cycle = cycle_reservations.get(&cell.entity).copied();
     let cycle_reserved = cycle.map_or(0, |reservation| reservation.amount);
     let cycle_other = cycle
         .filter(|reservation| reservation.resource_type != resource_type)
         .map_or(0, |reservation| reservation.amount);
 
-    evaluate_stockpile_policy(StockpilePolicyInput {
-        phase: StockpileTransferPhase::NewInbound,
-        policy: cell.policy,
-        capacity: cell.stockpile.capacity,
-        stored_amount: cell.stored_amount,
-        stored_resource: cell.stockpile.resource_type,
-        transfer_resource: resource_type,
-        requested_amount,
-        incoming_reserved: cell.incoming_total,
-        incoming_reserved_other_resource: incoming_other,
-        cycle_reserved,
-        cycle_reserved_other_resource: cycle_other,
-    })
+    evaluate_stockpile_policy(
+        StockpileContentsSnapshot {
+            policy: cell.policy,
+            capacity: cell.stockpile.capacity,
+            stored_amount: cell.stored_amount,
+            stored_resource: cell.stockpile.resource_type,
+        }
+        .policy_input(
+            StockpileTransferPhase::NewInbound,
+            resource_type,
+            requested_amount,
+            InboundReservationSnapshot::from_counts(cell.incoming_total, incoming_matching, 0)
+                .with_cycle_counts(cycle_reserved, cycle_reserved.saturating_sub(cycle_other)),
+        ),
+    )
 }
 
 fn pick_representative_resource_type_per_tier(
@@ -483,19 +484,18 @@ pub fn task_area_auto_haul_system(mut commands: Commands, mut p: TaskAreaAutoHau
     );
     let desired_requests = build_desired_requests(&contexts, &selected);
 
-    let mut canonical = HashMap::<StockpileRequestKey, (Entity, usize)>::new();
-    for (entity, request, workers, _) in p.q_stockpile_requests.iter() {
-        if request.kind != TransportRequestKind::DepositToStockpile {
-            continue;
-        }
-        let workers = workers.map_or(0, TaskWorkers::len);
-        canonical
-            .entry(request_key(request))
-            .and_modify(|current| {
-                *current = super::upsert::prefer_canonical_request((entity, workers), *current)
-            })
-            .or_insert((entity, workers));
-    }
+    let canonical = super::upsert::select_canonical_requests(
+        p.q_stockpile_requests
+            .iter()
+            .filter(|(_, request, _, _)| request.kind == TransportRequestKind::DepositToStockpile)
+            .map(|(entity, request, workers, _)| {
+                (
+                    request_key(request),
+                    entity,
+                    workers.map_or(0, TaskWorkers::len),
+                )
+            }),
+    );
 
     for (entity, request, workers, current) in p.q_stockpile_requests.iter() {
         if request.kind != TransportRequestKind::DepositToStockpile {
@@ -513,7 +513,7 @@ pub fn task_area_auto_haul_system(mut commands: Commands, mut p: TaskAreaAutoHau
                     resource_type: desired.key.resource_type,
                     site_pos: desired.pos,
                     issued_by: desired.issued_by,
-                    new_assignable: desired.new_assignable,
+                    slots: super::upsert::RequestSlots::AdditionalSlots(desired.new_assignable),
                     job_priority: 0,
                     transport_priority: desired.key.priority,
                     stockpile_group: &desired.group_cells,
@@ -546,7 +546,7 @@ pub fn task_area_auto_haul_system(mut commands: Commands, mut p: TaskAreaAutoHau
                 resource_type: key.resource_type,
                 site_pos: desired.pos,
                 issued_by: desired.issued_by,
-                new_assignable: desired.new_assignable,
+                slots: super::upsert::RequestSlots::AdditionalSlots(desired.new_assignable),
                 job_priority: 0,
                 transport_priority: key.priority,
                 stockpile_group: &desired.group_cells,

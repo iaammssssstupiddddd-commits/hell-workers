@@ -99,6 +99,10 @@ NATIVE_HARNESS_FILES = (
     ".codex/skills/hell-workers-run-native-acceptance/scripts/door_density_acceptance.py",
     ".codex/skills/hell-workers-run-native-acceptance/scripts/wall_door_joint_acceptance.py",
     ".codex/skills/hell-workers-run-native-acceptance/scripts/ui_usability_acceptance.py",
+    ".codex/skills/hell-workers-run-native-acceptance/scripts/ui_refactor_rows.py",
+    ".codex/skills/hell-workers-run-native-acceptance/scripts/ui_progress_bars.py",
+    ".codex/skills/hell-workers-run-native-acceptance/scripts/ui_terrain_materials.py",
+    ".codex/skills/hell-workers-run-native-acceptance/scripts/rtt_light_closure_verify.py",
     "scripts/native_ui_input.py",
     "scripts/native_ui_portal.py",
     ".codex/skills/hell-workers-run-native-acceptance/scripts/p02_presentation_acceptance.py",
@@ -1883,6 +1887,17 @@ def plan_save_catalog(args: argparse.Namespace) -> int:
     return 0 if status == "ready" else 1
 
 
+def closure_state_root(repo: Path, requested: str | None) -> Path:
+    from scripts.perf_tool.renderdoc_foundation import (
+        DIAGNOSTIC_NAMESPACE,
+        foundation_diagnostic_root,
+    )
+    root = Path(requested).resolve() if requested else foundation_diagnostic_root(repo)
+    require(root.parent == (repo / DIAGNOSTIC_NAMESPACE).resolve(),
+            "P08 closure job root must be directly inside the RenderDoc foundation namespace")
+    return root
+
+
 def plan_rtt_light(args: argparse.Namespace) -> int:
     repo = validate_repo(args.repo)
     resources = resource_snapshot(repo, require_launcher=True)
@@ -1891,7 +1906,7 @@ def plan_rtt_light(args: argparse.Namespace) -> int:
     fingerprint = source_fingerprint(repo)
     harness_fingerprint = native_harness_fingerprint(repo)
     attempt_id = args.attempt_id or str(uuid.uuid4())
-    state_root = (
+    state_root = closure_state_root(repo, args.job_root) if args.level == "closure" else (
         Path(args.job_root).resolve()
         if args.job_root
         else unique_job_root(repo, f"rtt-light-{args.level}")
@@ -3047,6 +3062,8 @@ def run_rtt_light(args: argparse.Namespace) -> int:
     if harness_fingerprint != args.harness_fingerprint:
         raise AcceptanceError("planned RtT-light harness fingerprint changed before launch")
     state_root = Path(args.state_root).resolve()
+    if args.level == "closure":
+        closure_state_root(repo, str(state_root))
     require_persistent_storage(state_root, label="RtT-light state root")
     if state_root.exists():
         raise AcceptanceError(f"state root already exists: {state_root}")
@@ -3254,11 +3271,10 @@ def run_rtt_light(args: argparse.Namespace) -> int:
                 from perf_tool.renderdoc_foundation import (
                     RD0_OUTER_DEADLINE_SECONDS,
                     copy_binary_capsule,
-                    foundation_diagnostic_root,
                     verify_capsule_hash,
                 )
 
-                foundation_root = foundation_diagnostic_root(repo)
+                foundation_root = state_root
                 capsule_root = foundation_root / "capsule/renderdoc"
                 rustc = subprocess.run(
                     ["rustc", "--version"],
@@ -3348,6 +3364,16 @@ def run_rtt_light(args: argparse.Namespace) -> int:
                         harness_fingerprint=harness_fingerprint,
                     )
                 )
+                from perf_tool.rtt_light_bundle import directory_digest, directory_inventory, _load_renderdoc_evidence
+                from rtt_light_closure_verify import verify_renderer_gates
+                _, renderer_cases = _load_renderdoc_evidence(
+                    attempt=renderdoc_output.parent, contract=contract, stage="p08",
+                    job={**state, "source_checks": source_checks,
+                         "tooling": tooling["job"], "window_backend": args.window_backend},
+                    environment_lock=read_json(environment_lock),
+                )
+                verify_renderer_gates(contract, renderer_cases)
+                capture_inventory = directory_inventory(attempt / "capture", relative_to=attempt / "capture")
                 update_state(
                     state_file,
                     state,
@@ -3360,6 +3386,10 @@ def run_rtt_light(args: argparse.Namespace) -> int:
                     },
                     source_checks=source_checks,
                     verification=verification,
+                    capture_inventory=capture_inventory,
+                    capture_digest=directory_digest(capture_inventory),
+                    tooling=tooling["job"],
+                    window_backend=args.window_backend,
                     finished_at=utc_now(),
                 )
                 return 0
@@ -8213,6 +8243,11 @@ def parser() -> argparse.ArgumentParser:
     )
     verify_rtt.add_argument("--repo", required=True)
     verify_rtt.add_argument("--attempt", required=True)
+    verify_closure = commands.add_parser("verify-rtt-light-closure", help="revalidate one bounded P08 closure")
+    verify_closure.add_argument("--repo", required=True)
+    verify_closure.add_argument("--job-root", required=True)
+    verify_closure.add_argument("--adapter", default="Intel")
+    verify_closure.add_argument("--window-backend", default="x11", choices=["x11", "wayland"])
     commands.add_parser("self-test", help="run stdlib-only helper tests")
     return root
 
@@ -8323,6 +8358,10 @@ def main() -> int:
         return verify_save_catalog_command(args)
     if args.command == "verify-rtt-light":
         return verify_rtt_light_command(args)
+    if args.command == "verify-rtt-light-closure":
+        from rtt_light_closure_verify import verify
+        print_json(verify(args))
+        return 0
     if args.command == "self-test":
         return self_test()
     raise AcceptanceError(f"unsupported command: {args.command}")

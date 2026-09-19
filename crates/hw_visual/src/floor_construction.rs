@@ -5,12 +5,11 @@ use hw_core::constants::{FLOOR_BONES_PER_TILE, FLOOR_CURING_DURATION_SECS, TILE_
 use hw_core::visual_mirror::construction::{
     FloorConstructionPhaseMirror, FloorSiteVisualState, FloorTileStateMirror, FloorTileVisualMirror,
 };
-use std::collections::HashSet;
 
 use crate::handles::MaterialIconHandles;
 use crate::progress_bar::{
     GenericProgressBar, ProgressBarBackground, ProgressBarConfig, ProgressBarFill,
-    spawn_progress_bar, sync_progress_bar_fill_position, sync_progress_bar_position,
+    reconcile_site_progress_bars, sync_progress_bar_fill_position, sync_progress_bar_position,
     update_progress_bar_fill,
 };
 
@@ -54,7 +53,7 @@ pub struct FloorTileBoneVisual {
     slot: u8,
 }
 
-#[derive(Component)]
+#[derive(Component, Default)]
 pub struct FloorCuringProgressBar;
 
 fn desired_bone_visual_count(mirror: &FloorTileVisualMirror) -> u8 {
@@ -138,26 +137,12 @@ pub fn manage_floor_curing_progress_bars_system(
     q_sites: Query<(Entity, &Transform, &FloorSiteVisualState), Without<FloorCuringProgressBar>>,
     q_bars: Query<(Entity, &ChildOf), With<FloorCuringProgressBar>>,
 ) {
-    let mut curing_sites = HashSet::new();
-    let mut bar_parents = HashSet::new();
-    for (_, child_of) in q_bars.iter() {
-        bar_parents.insert(child_of.parent());
-    }
-
-    for (site_entity, site_transform, site) in q_sites.iter() {
-        if site.phase != FloorConstructionPhaseMirror::Curing {
-            continue;
+    let active = q_sites.iter().filter_map(|(site_entity, _, site)| {
+        if site.phase != FloorConstructionPhaseMirror::Curing
+            || site.curing_remaining_secs <= f32::EPSILON
+        {
+            return None;
         }
-
-        if site.curing_remaining_secs <= f32::EPSILON {
-            continue;
-        }
-
-        curing_sites.insert(site_entity);
-        if bar_parents.contains(&site_entity) {
-            continue;
-        }
-
         let config = ProgressBarConfig {
             width: FLOOR_CURING_BAR_WIDTH,
             height: FLOOR_CURING_BAR_HEIGHT,
@@ -166,22 +151,13 @@ pub fn manage_floor_curing_progress_bars_system(
             fill_color: FLOOR_CURING_BAR_FILL_COLOR,
             z_index: Z_BAR_BG,
         };
-        let (bg_entity, fill_entity) =
-            spawn_progress_bar(&mut commands, site_entity, site_transform, config);
-
-        commands
-            .entity(bg_entity)
-            .insert((FloorCuringProgressBar, ChildOf(site_entity)));
-        commands
-            .entity(fill_entity)
-            .insert((FloorCuringProgressBar, ChildOf(site_entity)));
-    }
-
-    for (bar_entity, child_of) in q_bars.iter() {
-        if !curing_sites.contains(&child_of.parent()) {
-            commands.entity(bar_entity).try_despawn();
-        }
-    }
+        Some((site_entity, config))
+    });
+    reconcile_site_progress_bars::<FloorCuringProgressBar>(
+        &mut commands,
+        active,
+        q_bars.iter().map(|(bar, parent)| (bar, parent.parent())),
+    );
 }
 
 /// Update curing progress bar fill/position.

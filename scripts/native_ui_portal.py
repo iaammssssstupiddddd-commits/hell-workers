@@ -140,6 +140,9 @@ class PortalX11Input(X11Input):
     def activate(self):
         self._check_owner()
         self.mapping = self.portal.motion_mapping(self.root_size())
+        # Present the owned parent, but consent does not require X11 input focus.
+        # The compositor may keep focus on a Wayland surface until consent closes.
+        self._request_activation()
         self.portal.start(self.window)
         # The consent dialog owned focus; acquire the game once after it closes.
         super().activate()

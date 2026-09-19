@@ -30,6 +30,24 @@ class NativeUiInputTests(unittest.TestCase):
             bridge.send("step", "test-run", button=1, pressed=True)
         self.assertEqual(bridge.xtest.XTestFakeButtonEvent.call_count, 1)
 
+    def test_resize_requires_owned_focused_window_and_fresh_step(self):
+        bridge = self.bridge()
+        bridge._check_owner.side_effect = InputRejected("wrong owner")
+        with self.assertRaises(InputRejected):
+            bridge.resize("1", "test-run", 1280, 720)
+        bridge.x11.XResizeWindow.assert_not_called()
+        bridge._check_owner.side_effect = None
+        bridge._check_focus.side_effect = InputRejected("lost focus")
+        with self.assertRaises(InputRejected):
+            bridge.resize("1", "test-run", 1280, 720)
+        bridge.x11.XResizeWindow.assert_not_called()
+        bridge._check_focus.side_effect = None
+        bridge.resize("1", "test-run", 1280, 720)
+        bridge.x11.XResizeWindow.assert_called_once_with(1, 100, 1280, 720)
+        with self.assertRaises(InputRejected):
+            bridge.resize("1", "test-run", 1920, 1080)
+        self.assertEqual(bridge.x11.XResizeWindow.call_count, 1)
+
     def test_focus_loss_stops_input_and_cleanup_releases_held_button(self) -> None:
         bridge = self.bridge()
         bridge.send("press", "test-run", button=1, pressed=True)

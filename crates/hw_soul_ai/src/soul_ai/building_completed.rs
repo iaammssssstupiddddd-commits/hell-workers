@@ -1,19 +1,20 @@
 //! 建設完了イベントの Observer
 //!
 //! `bevy_app` の `building_completion_system` が `BuildingCompletedEvent` を発行した後、
-//! この Observer が WorldMap の更新と ObstaclePosition の spawn を担当する。
+//! この Observer が ObstaclePosition の spawn と Soul の退避を担当する。
+//! WorldMap の所有権移管は発行元の完成 transaction が先に確定する。
 //! Observer は hw_soul_ai に配置する（hw_world と hw_jobs 両方に依存できるため）。
 
 use bevy::prelude::*;
 use hw_core::soul::DamnedSoul;
 use hw_jobs::events::BuildingCompletedEvent;
 use hw_jobs::{BuildingType, ObstaclePosition, ObstacleSourceKind};
-use hw_world::{WorldMap, WorldMapWrite};
+use hw_world::{WorldMap, WorldMapRead};
 
 pub fn on_building_completed(
     trigger: On<BuildingCompletedEvent>,
     mut commands: Commands,
-    mut world_map: WorldMapWrite,
+    world_map: WorldMapRead,
     mut q_souls: Query<(&mut Transform, Entity), With<DamnedSoul>>,
 ) {
     let ev = trigger.event();
@@ -34,12 +35,6 @@ pub fn on_building_completed(
             }
         });
     }
-
-    world_map.register_completed_building_footprint(
-        kind,
-        building_entity,
-        occupied_grids.iter().copied(),
-    );
 
     if !is_obstacle {
         return;

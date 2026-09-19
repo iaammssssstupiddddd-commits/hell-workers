@@ -268,6 +268,7 @@ mod tests {
         PendingBuildingMove, Priority, Rock, SandPile, TargetDeconstructionRoot, TaskSlots, Tree,
     };
     use hw_logistics::SharedResourceCache;
+    use hw_spatial::SpatialGridOps;
 
     #[derive(Resource, Default)]
     struct CandidateProbe(Vec<Entity>);
@@ -505,9 +506,16 @@ mod tests {
         app.world_mut()
             .entity_mut(target)
             .insert(PendingBuildingMove {
+                worker: target,
+                task_entity: order,
+                expected_identity: hw_jobs::ActiveTaskIdentity::new(order, order, WorkType::Move),
+                expected_transform: Transform::default(),
+                proposed_transform: Transform::default(),
+                expected_kind: BuildingType::MudMixer,
                 old_occupied: vec![(2, 2)],
                 new_occupied: vec![(3, 3)],
                 companion_anchor: None,
+                rejected: false,
             });
         app.update();
         assert!(
@@ -837,7 +845,6 @@ mod tests {
             .id();
         app.world_mut()
             .resource_mut::<DesignationSpatialGrid>()
-            .data_mut()
             .insert(local, Vec2::splat(64.0));
 
         let build = app

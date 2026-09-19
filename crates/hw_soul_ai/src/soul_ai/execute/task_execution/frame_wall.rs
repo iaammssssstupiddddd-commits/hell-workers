@@ -18,7 +18,6 @@ pub fn handle_frame_wall_task(
     let FrameWallTileData { tile, site, phase } = data;
     let tile_entity = tile;
     let site_entity = site;
-    let soul_pos = ctx.soul_pos();
 
     match phase {
         FrameWallPhase::GoingToMaterialCenter => {
@@ -28,20 +27,20 @@ pub fn handle_frame_wall_task(
             };
 
             let material_center = site_transform.translation.truncate();
-            if matches!(
-                update_task_destination_to_adjacent(ctx, material_center),
-                PathSearchResult::Deferred
-            ) {
-                return TaskHandlerControl::Continue;
+            match navigate_to_construction_target(ctx, material_center) {
+                NavOutcome::Arrived => {}
+                NavOutcome::Unreachable => {
+                    return ctx.abort_retryable(commands, "construction target unreachable");
+                }
+                NavOutcome::Ended(control) => return control,
+                NavOutcome::Moving | NavOutcome::Deferred => return TaskHandlerControl::Continue,
             }
 
-            if is_near_target_or_dest(soul_pos, material_center, ctx.dest.0) {
-                *ctx.task = AssignedTask::FrameWallTile(FrameWallTileData {
-                    tile: tile_entity,
-                    site: site_entity,
-                    phase: FrameWallPhase::PickingUpWood,
-                });
-            }
+            *ctx.task = AssignedTask::FrameWallTile(FrameWallTileData {
+                tile: tile_entity,
+                site: site_entity,
+                phase: FrameWallPhase::PickingUpWood,
+            });
         }
         FrameWallPhase::PickingUpWood => {
             let Ok((_, tile_blueprint, _)) = ctx.queries.storage.wall_tiles.get(tile_entity) else {
@@ -73,21 +72,21 @@ pub fn handle_frame_wall_task(
 
             let tile_pos =
                 WorldMap::grid_to_world(tile_blueprint.grid_pos.0, tile_blueprint.grid_pos.1);
-            if matches!(
-                update_task_destination_to_adjacent(ctx, tile_pos),
-                PathSearchResult::Deferred
-            ) {
-                return TaskHandlerControl::Continue;
+            match navigate_to_construction_target(ctx, tile_pos) {
+                NavOutcome::Arrived => {}
+                NavOutcome::Unreachable => {
+                    return ctx.abort_retryable(commands, "construction target unreachable");
+                }
+                NavOutcome::Ended(control) => return control,
+                NavOutcome::Moving | NavOutcome::Deferred => return TaskHandlerControl::Continue,
             }
 
-            if is_near_target_or_dest(soul_pos, tile_pos, ctx.dest.0) {
-                *ctx.task = AssignedTask::FrameWallTile(FrameWallTileData {
-                    tile: tile_entity,
-                    site: site_entity,
-                    phase: FrameWallPhase::Framing { progress_bp: 0 },
-                });
-                ctx.path.waypoints.clear();
-            }
+            *ctx.task = AssignedTask::FrameWallTile(FrameWallTileData {
+                tile: tile_entity,
+                site: site_entity,
+                phase: FrameWallPhase::Framing { progress_bp: 0 },
+            });
+            ctx.path.waypoints.clear();
         }
         FrameWallPhase::Framing { progress_bp } => {
             let Ok((_, mut tile_blueprint, _)) =

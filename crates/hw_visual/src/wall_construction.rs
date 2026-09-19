@@ -3,11 +3,10 @@
 use bevy::prelude::*;
 use hw_core::constants::{TILE_SIZE, Z_BAR_BG};
 use hw_core::visual_mirror::construction::WallSiteVisualState;
-use std::collections::HashSet;
 
 use crate::progress_bar::{
     GenericProgressBar, ProgressBarBackground, ProgressBarConfig, ProgressBarFill,
-    spawn_progress_bar, sync_progress_bar_fill_position, sync_progress_bar_position,
+    reconcile_site_progress_bars, sync_progress_bar_fill_position, sync_progress_bar_position,
     update_progress_bar_fill,
 };
 
@@ -16,7 +15,7 @@ const WALL_PROGRESS_BAR_HEIGHT: f32 = 5.0;
 const WALL_PROGRESS_BAR_Y_OFFSET: f32 = TILE_SIZE * 1.25;
 const WALL_PROGRESS_BAR_BG_COLOR: Color = Color::srgba(0.1, 0.1, 0.1, 0.9);
 
-#[derive(Component)]
+#[derive(Component, Default)]
 pub struct WallConstructionProgressBar;
 
 type WallConstructionBgQuery<'w, 's> = Query<
@@ -88,22 +87,10 @@ pub fn manage_wall_progress_bars_system(
     >,
     q_bars: Query<(Entity, &ChildOf), With<WallConstructionProgressBar>>,
 ) {
-    let mut active_sites = HashSet::new();
-    let mut bar_parents = HashSet::new();
-    for (_, child_of) in q_bars.iter() {
-        bar_parents.insert(child_of.parent());
-    }
-
-    for (site_entity, site_transform, site) in q_sites.iter() {
+    let active = q_sites.iter().filter_map(|(site_entity, _, site)| {
         if !should_show_site_progress(site) {
-            continue;
+            return None;
         }
-
-        active_sites.insert(site_entity);
-        if bar_parents.contains(&site_entity) {
-            continue;
-        }
-
         let config = ProgressBarConfig {
             width: WALL_PROGRESS_BAR_WIDTH,
             height: WALL_PROGRESS_BAR_HEIGHT,
@@ -112,22 +99,13 @@ pub fn manage_wall_progress_bars_system(
             fill_color: site_phase_fill_color(site.phase_is_framing),
             z_index: Z_BAR_BG,
         };
-        let (bg_entity, fill_entity) =
-            spawn_progress_bar(&mut commands, site_entity, site_transform, config);
-
-        commands
-            .entity(bg_entity)
-            .insert((WallConstructionProgressBar, ChildOf(site_entity)));
-        commands
-            .entity(fill_entity)
-            .insert((WallConstructionProgressBar, ChildOf(site_entity)));
-    }
-
-    for (bar_entity, child_of) in q_bars.iter() {
-        if !active_sites.contains(&child_of.parent()) {
-            commands.entity(bar_entity).try_despawn();
-        }
-    }
+        Some((site_entity, config))
+    });
+    reconcile_site_progress_bars::<WallConstructionProgressBar>(
+        &mut commands,
+        active,
+        q_bars.iter().map(|(bar, parent)| (bar, parent.parent())),
+    );
 }
 
 /// Update wall phase progress bar fill/position.

@@ -79,7 +79,7 @@ applyと`ApplyDeferred`は`FamiliarAiSystemSet::Perceive`より前に完了さ�
 
 ## 3. タスクシステムの不変条件
 
-### I-T1: Haul 系 WorkType には TransportRequest が必須
+### I-T1: task_finderへ公開するHaul系WorkTypeにはTransportRequestが必須
 ⚠️ **サイレント失敗**: 以下の WorkType は `TransportRequest` コンポーネントがないと
 `task_finder` のフィルタで無音スキップされる（エラーもログも出ない）:
 `Haul` / `HaulToMixer` / `GatherWater` / `HaulWaterToMixer` / `WheelbarrowHaul`
@@ -96,6 +96,11 @@ Soulの携行品はRelationshipではなく`hw_logistics::Inventory(Option<Entit
 producer 側の仮想割当だけを正本にせず、`apply_task_assignment_requests_system` は current
 `TaskWorkers` と同じ message batch で既に受理した人数を合算して確定前に再検証する。
 `SharedResourceCache` による排他制御を迂回してはならない。
+
+Gather→Haulの準備段階は予約・relationship・identityを変更しない。受理時はtask execution呼出し内の
+空の`ChainAdmissionShadow`へsourceと搬入先の増分を先に記録し、同じSoul走査内の後続候補から除外する。
+shadowはlive予約を複製せず、次frameへ保持しない。予約Messageは同じExecute cycleの後段で適用し、
+次Perceiveのactive task snapshotと二重計上させない。
 
 ### I-T4: Designation 削除 = タスク消滅
 `Designation` を削除するとタスクが消滅する。
@@ -238,6 +243,11 @@ Familiar resolver も assignment 直前に request subset、tier、live policy �
 通常 haul と wheelbarrow の実行は、搬送 item と destination の `IncomingDeliveries` の Entity 一致を reservation ownership
 として使う。所有予約分の `CommittedInbound` は変更後の acceptance / target を grandfather するが、物理容量、
 現在内容、owner の安全条件を迂回してはならない。batch 内の未予約分は `NewInbound` として別に再評価する。
+
+policy入力は`StockpileContentsSnapshot`と`InboundReservationSnapshot`で組み立てる。
+資源型不明の搬入予約も物理容量と異種予約に数える。owned予約はcallerが評価対象destinationの
+live relationshipから確定し、snapshot自体はownershipやphaseを推定しない。
+同cycle増分とlive予約を重複して入力しない。
 
 consolidation receiver は `NewInbound`、donor は `NewOutbound` で判定する。方針適合中の在庫は
 `allow_export = false` なら donor にしてはならないが、acceptance と現在内容が不一致の `Draining` は搬出を許可する。
@@ -445,6 +455,13 @@ system / Observer は、所有する leaf crate に置いてよい。
 
 root (`bevy_app`) は、window / asset / UI adapter / production plugin wiring と、root 固有 Resource を
 必要とする ECS 接続を担当する。leaf の system を root 側へ戻して依存方向や登録責務を曖昧にしてはならない。
+
+### I-A3: owner付きoccupancyとtransaction境界
+
+owner付きoccupancy解放は期待ownerとの一致を必要とする。`release_building_footprint_if_owned`は
+全セルを先に検証し、1セルでも不一致なら一致部分を含めて変更しない。Blueprint完成とPlant移動は
+exclusive commitでliveなowner・task／予約条件を再確認してからmapとECSを更新する。
+移動拒否時は旧map・Transformを保持し、拒否markerを通じて同identityのhandlerへ取消cleanupを返す。
 
 ---
 

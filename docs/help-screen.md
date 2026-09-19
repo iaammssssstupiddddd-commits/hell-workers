@@ -143,6 +143,15 @@ exact testで一致を再検証します。生成後は
 
 ## Help impact gate
 
+2026-09-18のR01〜R14レビューは`Update required`とした。実入力から到達するMoveのcommit拒否では
+元の建物・付属保管場所を保持して取消するため`world-object-actions`へ失敗時の結果を追記した。
+Soul一覧・詳細・Tooltipの共通分類でDeconstructの誤表示を修正したため`entity-list-selection`に
+Deconstruct／GeneratePower／BucketTransportの表示を明記し、`architect-building`に資材・施工場所への移動と
+床養生の表示を補った。新しい操作・enum variantはなく、既存manifestとPublished coverageのstable IDを維持する。
+approval snapshotの変更はこの3 entryの本文だけで、順序・shortcut・owner・surface分類は不変。
+
+同じ受入で修正した一覧の再展開通知、長いSoul名の折り返し、床・壁siteのロード後の表示継承は、既存の展開・名前・進捗表示を正しく復元する修正である。入力や表示の意味・文言を追加しないためHelp本文への追加影響はNo impact。開発用fixture、親Transform行列の検証、portal入力と短いキー入力の調整にも通常プレイへの追加影響はない。全R01〜R14のUpdate required判断と3 entryの更新は維持する。
+
 `python3 scripts/dev.py verify`は`scripts/check_help_impact.py`を実行します。diff base以後のproduction変更
 （test専用fileを除くRust、Cargo/build、runtime text data）を検査し、root所有`help_content/`配下の
 production Rustまたはexact snapshotが直接検証する`hw_ui/src/help.rs`のtyped rendererと、

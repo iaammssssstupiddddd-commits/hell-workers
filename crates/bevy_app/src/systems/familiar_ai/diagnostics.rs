@@ -848,6 +848,101 @@ mod tests {
     }
 
     #[test]
+    fn resource_grid_semantic_changes_wake_availability_blockers_test() {
+        use hw_spatial::SpatialGridOps;
+        for mutation in ["insert", "update", "remove", "clear", "replace"] {
+            let mut app = App::new();
+            app.init_resource::<TaskDiagnosticInputRevisions>()
+                .init_resource::<TaskDiagnosticExternalRevisionState>()
+                .init_resource::<ResourceSpatialGrid>()
+                .init_resource::<SharedResourceCache>()
+                .init_resource::<WorldMap>()
+                .add_systems(
+                    Update,
+                    (
+                        sync_task_diagnostic_revisions_system,
+                        refresh_deconstruction_blockers_after_revision_sync_system,
+                    )
+                        .chain(),
+                );
+            let item = app.world_mut().spawn_empty().id();
+            let absent = app.world_mut().spawn_empty().id();
+            app.world_mut()
+                .resource_mut::<ResourceSpatialGrid>()
+                .insert(item, Vec2::ZERO);
+            let order = app
+                .world_mut()
+                .spawn(DeconstructionBlocker::pending(
+                    DeconstructionBlockReason::NoSafeRecovery,
+                    TaskDiagnosticDomainMask::AVAILABILITY,
+                ))
+                .id();
+            app.update();
+            let before = app
+                .world()
+                .resource::<TaskDiagnosticInputRevisions>()
+                .availability;
+            let generation = app.world().resource::<ResourceSpatialGrid>().generation();
+            {
+                let mut grid = app.world_mut().resource_mut::<ResourceSpatialGrid>();
+                grid.insert(item, Vec2::ZERO);
+                grid.update(item, Vec2::ZERO);
+                grid.remove(absent);
+                grid.replace_positions([(item, Vec2::ZERO)].into_iter().collect());
+            }
+            app.update();
+            assert_eq!(
+                app.world().resource::<ResourceSpatialGrid>().generation(),
+                generation
+            );
+            assert_eq!(
+                app.world()
+                    .resource::<TaskDiagnosticInputRevisions>()
+                    .availability,
+                before
+            );
+            assert!(
+                app.world()
+                    .get::<DeconstructionBlocker>(order)
+                    .unwrap()
+                    .active
+            );
+            {
+                let mut grid = app.world_mut().resource_mut::<ResourceSpatialGrid>();
+                match mutation {
+                    "insert" => grid.insert(item, Vec2::new(128.0, 0.0)),
+                    "update" => grid.update(item, Vec2::new(128.0, 0.0)),
+                    "remove" => grid.remove(item),
+                    "clear" => grid.clear(),
+                    "replace" => grid
+                        .replace_positions([(item, Vec2::new(128.0, 0.0))].into_iter().collect()),
+                    _ => unreachable!(),
+                }
+            }
+            app.update();
+            assert_eq!(
+                app.world().resource::<ResourceSpatialGrid>().generation(),
+                generation + 1,
+                "{mutation}"
+            );
+            assert_eq!(
+                app.world()
+                    .resource::<TaskDiagnosticInputRevisions>()
+                    .availability,
+                before + 1,
+                "{mutation}"
+            );
+            assert!(
+                !app.world()
+                    .get::<DeconstructionBlocker>(order)
+                    .unwrap()
+                    .active,
+                "{mutation}"
+            );
+        }
+    }
+
+    #[test]
     fn armed_task_blocker_ignores_unselected_revision_domains() {
         let mut app = App::new();
         app.init_resource::<TaskDiagnosticInputRevisions>()

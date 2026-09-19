@@ -17,8 +17,8 @@ pub struct TaskAssignmentRequest {
     pub already_commanded: bool,
 }
 
-/// Blueprint が全工程完了し、建物エンティティが spawn された直後に発行される。
-/// `hw_soul_ai` の Observer が WorldMap 更新と ObstaclePosition の配置を担当する。
+/// Blueprint の全工程、WorldMap 所有権移管、建物 spawn が確定した後に発行される。
+/// `hw_soul_ai` の Observer は ObstaclePosition の配置と Soul の退避を担当する。
 #[derive(Event, Debug, Clone)]
 pub struct BuildingCompletedEvent {
     /// The exact construction owner replaced by this completed building.

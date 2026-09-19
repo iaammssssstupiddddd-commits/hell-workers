@@ -1,6 +1,5 @@
 //! 設計図のプログレスバー関連システム
 
-use bevy::prelude::ChildOf;
 use bevy::prelude::*;
 use hw_core::constants::Z_BAR_BG;
 
@@ -10,7 +9,7 @@ use super::{
     PROGRESS_BAR_WIDTH, PROGRESS_BAR_Y_OFFSET,
 };
 use crate::progress_bar::{
-    GenericProgressBar, ProgressBarConfig, ProgressBarFill, spawn_progress_bar,
+    GenericProgressBar, ProgressBarConfig, ProgressBarFill, ProgressBarPair, spawn_progress_bar,
     update_progress_bar_fill,
 };
 use hw_core::visual_mirror::construction::BlueprintVisualState;
@@ -40,7 +39,7 @@ type ProgressFillQuery<'w, 's> = Query<
 >;
 
 pub fn spawn_progress_bar_system(mut commands: Commands, q_blueprints: BlueprintWithoutBarsQuery) {
-    for (bp_entity, bp_transform) in q_blueprints.iter() {
+    for (bp_entity, _) in q_blueprints.iter() {
         let config = ProgressBarConfig {
             width: PROGRESS_BAR_WIDTH,
             height: PROGRESS_BAR_HEIGHT,
@@ -50,14 +49,14 @@ pub fn spawn_progress_bar_system(mut commands: Commands, q_blueprints: Blueprint
             z_index: Z_BAR_BG,
         };
 
-        let (bg_entity, fill_entity) =
-            spawn_progress_bar(&mut commands, bp_entity, bp_transform, config);
+        let ProgressBarPair {
+            background: bg_entity,
+            fill: fill_entity,
+        } = spawn_progress_bar(&mut commands, bp_entity, config);
 
         commands.entity(bg_entity).insert(ProgressBar);
         commands.entity(fill_entity).insert(ProgressBar);
 
-        commands.entity(bg_entity).try_insert(ChildOf(bp_entity));
-        commands.entity(fill_entity).try_insert(ChildOf(bp_entity));
         commands.entity(bp_entity).insert(BlueprintProgressBars {
             background: bg_entity,
             fill: fill_entity,

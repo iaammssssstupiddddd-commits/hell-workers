@@ -46,18 +46,19 @@ from .artifact_io import (
     sha256,
     write_json as write_json,
 )
+from .artifact_readers.workload import read_workload_sidecars
 from .artifact_readers import (
+    read_deconstruction_fixture as read_deconstruction_fixture,
+    read_indoor_light_consumers as read_indoor_light_consumers,
+    read_indoor_light_field as read_indoor_light_field,
+    read_indoor_light_gpu as read_indoor_light_gpu,
+    read_indoor_light_runtime as read_indoor_light_runtime,
+    read_indoor_light_sidecars as read_indoor_light_sidecars,
+    read_save_transaction as read_save_transaction,
+    read_wall_density_sidecars as read_wall_density_sidecars,
+    read_door_density_sidecars as read_door_density_sidecars,
     expected_indoor_light_fixture_row as expected_indoor_light_fixture_row,
-    read_deconstruction_fixture,
     read_indoor_light_consumer_lifecycle,
-    read_indoor_light_consumers,
-    read_indoor_light_field,
-    read_indoor_light_gpu,
-    read_indoor_light_runtime,
-    read_indoor_light_sidecars,
-    read_save_transaction,
-    read_wall_density_sidecars,
-    read_door_density_sidecars,
 )
 
 from .rtt_light_contract import (
@@ -1523,22 +1524,9 @@ def validate_run(
     determinism_records = None
     scene_roots = None
     render_inventory = None
-    indoor_light_fixture = None
-    indoor_light_layout = None
-    indoor_light_presentation = None
-    indoor_light_field = None
-    indoor_light_runtime = None
-    indoor_light_gpu = None
-    indoor_light_consumers = None
     indoor_light_consumer_lifecycle = None
     p02_presentation = None
-    deconstruction_fixture = None
-    save_transaction = None
     dream_ui_metrics = None
-    wall_density_fixture = None
-    wall_density_layout = None
-    door_density_fixture = None
-    door_density_layout = None
     timeline = None
     behavior_save_artifact = None
     if capture_kind in {"field-core", "consumer-core"}:
@@ -1571,106 +1559,29 @@ def validate_run(
         data_dir / "door_density_fixture.json",
         data_dir / "door_density_layout.csv",
     )
-    if expected_case.workload == "wall-density":
-        if capture_kind != "frame-time":
-            reasons.append("wall-density validation requires a frame-time capture")
-        (
-            wall_density_fixture,
-            wall_density_layout,
-            wall_density_errors,
-        ) = read_wall_density_sidecars(data_dir, expected_case=expected_case)
-        reasons.extend(wall_density_errors)
-    elif expected_case.workload == "door-density":
-        (
-            door_density_fixture,
-            door_density_layout,
-            door_density_errors,
-        ) = read_door_density_sidecars(data_dir, expected_case=expected_case)
-        reasons.extend(door_density_errors)
-    elif expected_case.workload == "indoor-light" and capture_kind == "consumer-core":
-        if (
-            expected_contract != "rtt-light-v1"
-            or expected_stage not in {"p07", "p08"}
-            or expected_lane != "consumer-core"
-        ):
-            reasons.append("consumer-core requires rtt-light-v1/p07|p08/consumer-core")
-        indoor_light_consumers, consumer_errors = read_indoor_light_consumers(data_dir)
-        reasons.extend(consumer_errors)
-    elif expected_case.workload == "indoor-light" and capture_kind == "field-core":
-        if (
-            expected_contract != "rtt-light-v1"
-            or expected_stage not in {"p03", "p04", "p05", "p06", "p07", "p08"}
-            or expected_lane != "field-core"
-        ):
-            reasons.append("field-core requires rtt-light-v1/p03|p04|p05|p06|p07|p08/field-core")
-        indoor_light_field, field_errors = read_indoor_light_field(data_dir)
-        reasons.extend(field_errors)
-        if expected_stage in {"p04", "p05", "p06", "p07", "p08"} and expected_contract is not None:
-            indoor_light_runtime, runtime_errors = read_indoor_light_runtime(
-                data_dir,
-                expected_case=expected_case,
-                contract_id=expected_contract,
-                stage_id=expected_stage,
-                field_core=True,
-            )
-            reasons.extend(runtime_errors)
-        unexpected_sidecars = [path.name for path in indoor_sidecar_paths if path.exists()]
-        if unexpected_sidecars:
-            reasons.append("field-core must not write ECS fixture sidecars")
-    elif expected_case.workload == "indoor-light":
-        if expected_contract is None or expected_stage is None or expected_lane is None:
-            reasons.append(
-                "indoor-light validation requires expected contract, stage, and lane"
-            )
-        else:
-            (
-                indoor_light_fixture,
-                indoor_light_layout,
-                indoor_light_presentation,
-                indoor_errors,
-            ) = read_indoor_light_sidecars(
-                data_dir,
-                expected_case=expected_case,
-                contract_id=expected_contract,
-                stage_id=expected_stage,
-                lane=expected_lane,
-            )
-            reasons.extend(indoor_errors)
-            if expected_stage in {"p04", "p05", "p06", "p07", "p08"}:
-                indoor_light_runtime, runtime_errors = read_indoor_light_runtime(
-                    data_dir,
-                    expected_case=expected_case,
-                    contract_id=expected_contract,
-                    stage_id=expected_stage,
-                    field_core=False,
-                )
-                reasons.extend(runtime_errors)
-                if (
-                    expected_stage in {"p06", "p08"}
-                    and expected_lane == "static"
-                    and expected_case.render == "gpu"
-                    and capture_kind == "frame-time"
-                ):
-                    indoor_light_gpu, gpu_errors = read_indoor_light_gpu(
-                        data_dir,
-                        runtime=indoor_light_runtime,
-                    )
-                    reasons.extend(gpu_errors)
-    elif expected_case.workload == "deconstruction":
-        if capture_kind != "fixed-step-determinism":
-            reasons.append("deconstruction validation requires fixed-step determinism capture")
-        deconstruction_fixture, deconstruction_errors = read_deconstruction_fixture(
-            data_dir / "deconstruction_fixture.csv"
-        )
-        reasons.extend(deconstruction_errors)
-    elif expected_case.workload == "save-transaction":
-        if capture_kind != "frame-time":
-            reasons.append("save-transaction validation requires frame-time capture")
-        save_transaction, save_transaction_errors = read_save_transaction(
-            data_dir / "save_transaction.csv"
-        )
-        reasons.extend(save_transaction_errors)
-    else:
+    sidecars = read_workload_sidecars(
+        data_dir,
+        expected_case=expected_case,
+        capture_kind=capture_kind,
+        expected_contract=expected_contract,
+        expected_stage=expected_stage,
+        expected_lane=expected_lane,
+    )
+    reasons.extend(sidecars.reasons)
+    indoor_light_fixture = sidecars.indoor_light_fixture
+    indoor_light_layout = sidecars.indoor_light_layout
+    indoor_light_presentation = sidecars.indoor_light_presentation
+    indoor_light_field = sidecars.indoor_light_field
+    indoor_light_runtime = sidecars.indoor_light_runtime
+    indoor_light_gpu = sidecars.indoor_light_gpu
+    indoor_light_consumers = sidecars.indoor_light_consumers
+    deconstruction_fixture = sidecars.deconstruction_fixture
+    save_transaction = sidecars.save_transaction
+    wall_density_fixture = sidecars.wall_density_fixture
+    wall_density_layout = sidecars.wall_density_layout
+    door_density_fixture = sidecars.door_density_fixture
+    door_density_layout = sidecars.door_density_layout
+    if expected_case.workload not in {"wall-density", "door-density", "indoor-light", "deconstruction", "save-transaction"}:
         unexpected_sidecars = [path.name for path in indoor_sidecar_paths if path.exists()]
         if unexpected_sidecars:
             reasons.append(

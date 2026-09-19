@@ -574,7 +574,7 @@ pub(crate) fn apply_p02_actual_window_actor_probe_system(
     let Some(subject) = fixture.actual_window_subject_soul() else {
         return;
     };
-    let is_gpu = matches!(config.render_mode, PerfRenderMode::Gpu);
+    let is_gpu = matches!(config.render_mode(), PerfRenderMode::Gpu);
     let phase = acceptance.phase;
     for (billboard, _, mut visibility) in &mut billboards {
         *visibility = if is_gpu && phase.is_soul_depth() && billboard.owner == subject {
@@ -745,7 +745,7 @@ impl<'w, 's> P02ActualWindowStatusParams<'w, 's> {
         if physical_width == 0 || physical_height == 0 {
             return Err("primary window has no physical extent".to_string());
         }
-        let is_gpu = matches!(config.render_mode, PerfRenderMode::Gpu);
+        let is_gpu = matches!(config.render_mode(), PerfRenderMode::Gpu);
         let fixture_checksum = fixture
             .actual_window_layout_checksum()
             .ok_or_else(|| "ready fixture has no layout checksum".to_string())?;

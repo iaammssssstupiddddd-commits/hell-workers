@@ -234,7 +234,7 @@ callers は `hw_familiar_ai::*` の完全パスを直接参照する。
 ### 7.1.1. TaskQueries の分割
 タスク割り当てとタスク実行で必要なクエリを分離し、システム並列性の阻害を抑えています。
 - **`FamiliarTaskAssignmentQueries`**: Familiar AI の割り当てに必要なクエリを集約。定義本体は `hw_familiar_ai::familiar_ai::decide::task_management` にあり、root 側は re-export と construction site bridge を提供する
-- **`TaskAssignmentQueries`**: Soul AI 側の割り当て適用・解除で使う full query を集約
+- **`TaskUnassignQueries`**: Soul AI側の解除で使う`ReservationAccess`と`DesignationAccess`だけを集約。割当適用systemは固有queryを使用
 - **`TaskQueries`**: Soul AI のタスク実行に必要なクエリを集約
 
 ### 7.2. タスク用空間グリッド (DesignationSpatialGrid)

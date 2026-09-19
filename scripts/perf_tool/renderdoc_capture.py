@@ -31,6 +31,7 @@ from perf_tool.renderdoc_foundation import (  # noqa: E402
     disk_reservation_bytes,
     run_with_deadline,
     validate_runtime_checkpoint_v3,
+    validate_light_field_binding_evidence,
     verify_capsule_hash,
     DIAGNOSTIC_NAMESPACE,
 )
@@ -63,6 +64,10 @@ MEASUREMENT_HARNESS_FILES = (
     ".codex/skills/hell-workers-run-native-acceptance/scripts/door_behavior_acceptance.py",
     ".codex/skills/hell-workers-run-native-acceptance/scripts/door_density_acceptance.py",
     ".codex/skills/hell-workers-run-native-acceptance/scripts/wall_door_joint_acceptance.py",
+    ".codex/skills/hell-workers-run-native-acceptance/scripts/ui_refactor_rows.py",
+    ".codex/skills/hell-workers-run-native-acceptance/scripts/ui_progress_bars.py",
+    ".codex/skills/hell-workers-run-native-acceptance/scripts/ui_terrain_materials.py",
+    ".codex/skills/hell-workers-run-native-acceptance/scripts/rtt_light_closure_verify.py",
     ".codex/skills/hell-workers-run-native-acceptance/scripts/p02_presentation_acceptance.py",
     ".codex/skills/hell-workers-run-native-acceptance/scripts/wall_art_acceptance.py",
     ".codex/skills/hell-workers-run-native-acceptance/scripts/wall_color_acceptance.py",
@@ -940,6 +945,8 @@ def _validate_extraction(path: Path, *, capture_hash: str, runtime: dict[str, An
             or not row["resource_id"]
         ):
             raise CaptureError("RenderDoc binding row is invalid")
+    if stage_id in {"p06", "p08"}:
+        validate_light_field_binding_evidence(value["gpu_light_field_pixel_probe"], bindings)
     tracked = value["tracked_resources"]
     render_resources = _validate_render_resources(
         runtime.get("render_resources"), stage_id=runtime.get("stage_id")
@@ -1132,7 +1139,8 @@ def run_capture(args: argparse.Namespace) -> dict[str, Any]:
         binary_hash=environment_lock["capture_binary_sha256"],
     )
 
-    temporary_root = workspace_temp_dir(repo)
+    # Bounded diagnostic jobs own their scratch, including retained failures.
+    temporary_root = output.parent / "scratch" if args.mode == "rd0" else workspace_temp_dir(repo)
     require_persistent_storage(temporary_root, label="RenderDoc temporary directory")
     temporary_root.mkdir(parents=True, exist_ok=True)
     with RetainedFailureDirectory(
@@ -1608,6 +1616,12 @@ def self_test() -> int:
             "uploaded_epoch": 7,
             "uploaded_revision": 11,
             "gpu_checksum": "b" * 64,
+            "field_texture_label": "self-test-light-field",
+            "field_width": 100,
+            "field_height": 100,
+            "pixel_probe_x": 50,
+            "pixel_probe_y": 50,
+            "pixel_probe_expected_rgba": [20, 30, 40, 255],
             "receiver_pipeline_count": 4,
             "receiver_material_count": 15,
             "receiver_binding_count": 1,

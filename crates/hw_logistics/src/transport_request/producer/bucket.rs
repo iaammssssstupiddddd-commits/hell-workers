@@ -177,7 +177,23 @@ pub fn bucket_auto_haul_system(mut commands: Commands, p: BucketAutoHaulParams) 
         );
     }
 
-    let mut seen_existing = std::collections::HashSet::<Entity>::new();
+    let seen_existing = super::upsert::select_canonical_requests(
+        p.q_bucket_requests
+            .iter()
+            .filter(|(_, request, _, _)| {
+                request.kind == TransportRequestKind::ReturnBucket
+                    && p.q_tanks.get(request.anchor).is_ok_and(|(_, stockpile)| {
+                        stockpile.resource_type == Some(ResourceType::Water)
+                    })
+            })
+            .map(|(entity, request, workers, _)| {
+                (
+                    request.anchor,
+                    entity,
+                    workers.map_or(0, |workers| workers.len()),
+                )
+            }),
+    );
     for (request_entity, request, workers_opt, current) in p.q_bucket_requests.iter() {
         if request.kind != TransportRequestKind::ReturnBucket {
             continue;
@@ -205,21 +221,15 @@ pub fn bucket_auto_haul_system(mut commands: Commands, p: BucketAutoHaulParams) 
             continue;
         }
 
-        if !super::upsert::process_duplicate_key(
+        if !super::upsert::reconcile_duplicate_request(
             &mut commands,
             request_entity,
             workers,
-            &mut seen_existing,
-            tank_entity,
+            seen_existing
+                .get(&tank_entity)
+                .is_some_and(|(kept, _)| *kept == request_entity),
+            super::upsert::RequestSlotSnapshot::from_runtime(current),
         ) {
-            if workers > 0 {
-                super::upsert::disable_request_if_needed(
-                    &mut commands,
-                    request_entity,
-                    current,
-                    Some(inflight),
-                );
-            }
             continue;
         }
 
@@ -233,7 +243,7 @@ pub fn bucket_auto_haul_system(mut commands: Commands, p: BucketAutoHaulParams) 
                     key: (tank_entity, ResourceType::BucketEmpty),
                     site_pos: desired.tank_pos,
                     issued_by: desired.issued_by,
-                    desired_slots: desired.desired_slots,
+                    slots: super::upsert::RequestSlots::TotalSlots(desired.desired_slots),
                     inflight,
                     priority: 5,
                     transport_priority: TransportPriority::Normal,
@@ -253,7 +263,7 @@ pub fn bucket_auto_haul_system(mut commands: Commands, p: BucketAutoHaulParams) 
     }
 
     for (tank_entity, desired) in desired_requests {
-        if seen_existing.contains(&tank_entity) {
+        if seen_existing.contains_key(&tank_entity) {
             continue;
         }
 

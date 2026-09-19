@@ -101,9 +101,9 @@ pub fn wall_construction_cancellation_system(
             &mut reservation_queries,
             &world_map,
             |assigned_task, working_on_opt| {
-                assigned_task
-                    .primary_payload_entity()
-                    .is_some_and(|target| related_targets.contains(&target))
+                related_targets
+                    .iter()
+                    .any(|&target| assigned_task.references_entity(target))
                     || working_on_opt
                         .is_some_and(|working_on| related_targets.contains(&working_on.0))
             },

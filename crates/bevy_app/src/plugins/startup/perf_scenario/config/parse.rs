@@ -4,12 +4,27 @@ pub(super) fn has_flag(args: &[String], flag: &str) -> bool {
     args.iter().any(|arg| arg == flag)
 }
 
-pub(super) fn value_from_args_or_env(
-    args: &[String],
-    flag: &str,
-    env_key: &str,
-) -> Result<Option<String>, PerfScenarioConfigError> {
-    value_from_args(args, flag).map(|value| value.or_else(|| env::var(env_key).ok()))
+pub(super) struct PerfConfigInput<'a> {
+    pub args: &'a [String],
+    pub environment: &'a dyn Fn(&str) -> Option<std::ffi::OsString>,
+}
+
+impl PerfConfigInput<'_> {
+    pub fn env_os(&self, key: &str) -> Option<std::ffi::OsString> {
+        (self.environment)(key)
+    }
+
+    pub fn env_text(&self, key: &str) -> Option<String> {
+        self.env_os(key)?.into_string().ok()
+    }
+
+    pub fn value(
+        &self,
+        flag: &str,
+        env_key: &str,
+    ) -> Result<Option<String>, PerfScenarioConfigError> {
+        value_from_args(self.args, flag).map(|value| value.or_else(|| self.env_text(env_key)))
+    }
 }
 
 pub(super) fn parse_value_or_default<T>(
@@ -77,12 +92,13 @@ pub(super) fn parse_optional_positive_f32(
 pub(super) fn parse_u64_value_or_random(
     value: Option<String>,
     flag: &str,
+    seed: impl FnOnce() -> u64,
 ) -> Result<u64, PerfScenarioConfigError> {
     match value {
         Some(value) => value.parse().map_err(|_| {
             PerfScenarioConfigError(format!("{flag} must be an unsigned integer; got '{value}'"))
         }),
-        None => Ok(rand::random()),
+        None => Ok(seed()),
     }
 }
 

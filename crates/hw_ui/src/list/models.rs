@@ -36,6 +36,18 @@ pub struct SoulRowViewModel {
     pub task_visual: TaskVisual,
 }
 
+/// Named value nodes owned by a Soul row; independent from child layout order.
+#[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SoulRowNodes {
+    pub gender_icon: Entity,
+    pub name_text: Entity,
+    pub fatigue_text: Entity,
+    pub stress_text: Entity,
+    pub dream_text: Entity,
+    pub task_icon: Entity,
+    pub task_label: Entity,
+}
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum SoulGender {
     Male,

@@ -8,7 +8,8 @@ use hw_jobs::WorkType;
 
 use crate::SharedResourceCache;
 use crate::stockpile_policy::{
-    StockpilePolicyInput, StockpileTransferPhase, evaluate_stockpile_policy,
+    InboundReservationSnapshot, StockpileContentsSnapshot, StockpileTransferPhase,
+    evaluate_stockpile_policy,
 };
 use crate::transport_request::producer::active_unit_cache::CachedStockpileGroups;
 use crate::transport_request::{
@@ -113,38 +114,43 @@ fn receiver_available(
         .and_then(|counts| counts.get(&resource_type))
         .copied()
         .unwrap_or(0);
-    evaluate_stockpile_policy(StockpilePolicyInput {
-        phase: StockpileTransferPhase::NewInbound,
-        policy: cell.policy,
-        capacity: cell.stockpile.capacity,
-        stored_amount: cell.stored,
-        stored_resource: cell.stockpile.resource_type,
-        transfer_resource: resource_type,
-        requested_amount: 0,
-        incoming_reserved: cell.incoming_reserved,
-        incoming_reserved_other_resource: cell
-            .incoming_reserved
-            .saturating_sub(cell.incoming_matching(resource_type)),
-        cycle_reserved,
-        cycle_reserved_other_resource: cycle_reserved.saturating_sub(cycle_matching),
-    })
+    evaluate_stockpile_policy(
+        StockpileContentsSnapshot {
+            policy: cell.policy,
+            capacity: cell.stockpile.capacity,
+            stored_amount: cell.stored,
+            stored_resource: cell.stockpile.resource_type,
+        }
+        .policy_input(
+            StockpileTransferPhase::NewInbound,
+            resource_type,
+            0,
+            InboundReservationSnapshot::from_counts(
+                cell.incoming_reserved,
+                cell.incoming_matching(resource_type),
+                0,
+            )
+            .with_cycle_counts(cycle_reserved, cycle_matching),
+        ),
+    )
     .available_amount
 }
 
 fn donor_available(cell: &CellInfo, resource_type: ResourceType) -> usize {
-    evaluate_stockpile_policy(StockpilePolicyInput {
-        phase: StockpileTransferPhase::NewOutbound,
-        policy: cell.policy,
-        capacity: cell.stockpile.capacity,
-        stored_amount: cell.stored,
-        stored_resource: cell.stockpile.resource_type,
-        transfer_resource: resource_type,
-        requested_amount: cell.available_sources,
-        incoming_reserved: 0,
-        incoming_reserved_other_resource: 0,
-        cycle_reserved: 0,
-        cycle_reserved_other_resource: 0,
-    })
+    evaluate_stockpile_policy(
+        StockpileContentsSnapshot {
+            policy: cell.policy,
+            capacity: cell.stockpile.capacity,
+            stored_amount: cell.stored,
+            stored_resource: cell.stockpile.resource_type,
+        }
+        .policy_input(
+            StockpileTransferPhase::NewOutbound,
+            resource_type,
+            cell.available_sources,
+            InboundReservationSnapshot::default(),
+        ),
+    )
     .allowed_amount
 }
 
@@ -340,19 +346,18 @@ pub fn stockpile_consolidation_producer_system(
         }
     }
 
-    let mut canonical = HashMap::<(Entity, ResourceType), (Entity, usize)>::new();
-    for (entity, request, workers, _) in q_existing_requests.iter() {
-        if request.kind != TransportRequestKind::ConsolidateStockpile {
-            continue;
-        }
-        let workers = workers.map_or(0, TaskWorkers::len);
-        canonical
-            .entry((request.anchor, request.resource_type))
-            .and_modify(|current| {
-                *current = super::upsert::prefer_canonical_request((entity, workers), *current)
-            })
-            .or_insert((entity, workers));
-    }
+    let canonical = super::upsert::select_canonical_requests(
+        q_existing_requests
+            .iter()
+            .filter(|(_, request, _, _)| request.kind == TransportRequestKind::ConsolidateStockpile)
+            .map(|(entity, request, workers, _)| {
+                (
+                    (request.anchor, request.resource_type),
+                    entity,
+                    workers.map_or(0, TaskWorkers::len),
+                )
+            }),
+    );
 
     for (entity, request, workers, current) in q_existing_requests.iter() {
         if request.kind != TransportRequestKind::ConsolidateStockpile {
@@ -370,7 +375,7 @@ pub fn stockpile_consolidation_producer_system(
                     resource_type: key.1,
                     site_pos: desired.pos,
                     issued_by: desired.issued_by,
-                    new_assignable: desired.new_assignable,
+                    slots: super::upsert::RequestSlots::AdditionalSlots(desired.new_assignable),
                     job_priority: 0,
                     transport_priority: TransportPriority::Low,
                     stockpile_group: &desired.donor_cells,
@@ -410,7 +415,7 @@ pub fn stockpile_consolidation_producer_system(
                 resource_type: key.1,
                 site_pos: desired.pos,
                 issued_by: desired.issued_by,
-                new_assignable: desired.new_assignable,
+                slots: super::upsert::RequestSlots::AdditionalSlots(desired.new_assignable),
                 job_priority: 0,
                 transport_priority: TransportPriority::Low,
                 stockpile_group: &desired.donor_cells,

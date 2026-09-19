@@ -244,7 +244,7 @@ pub(super) fn begin_door_density_fixture(
     if state.phase != DoorDensityFixturePhase::Inactive {
         return;
     }
-    let mut layout = DoorDensityLayout::build(config.size);
+    let mut layout = DoorDensityLayout::build(config.size());
     if let Err(reason) = validate_layout_cells(&layout, world_map.as_ref()) {
         fail_fixture(state, exit, reason);
         return;
@@ -261,7 +261,8 @@ pub(super) fn begin_door_density_fixture(
     let last = WorldMap::grid_to_world(
         GRID_ORIGIN.0 + 7 * GRID_STRIDE.0,
         GRID_ORIGIN.1
-            + i32::try_from((target_count(config.size) - 1) / GRID_COLUMNS).expect("row fits i32")
+            + i32::try_from((target_count(config.size()) - 1) / GRID_COLUMNS)
+                .expect("row fits i32")
                 * GRID_STRIDE.1,
     );
     camera.translation.x = (first.x + last.x) * 0.5;
@@ -360,7 +361,7 @@ pub(crate) struct DoorDensityValidationParams<'w, 's> {
 
 pub(crate) fn validate_door_density_fixture_system(mut params: DoorDensityValidationParams) {
     if !params.config.enabled()
-        || params.config.workload != PerfWorkload::DoorDensity
+        || params.config.workload() != PerfWorkload::DoorDensity
         || matches!(
             params.state.phase,
             DoorDensityFixturePhase::Inactive

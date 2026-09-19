@@ -290,7 +290,8 @@ pub(crate) fn drive_deconstruction_perf_workload_system(params: DeconstructionPe
         q_targets,
         q_items,
     } = params;
-    if !applied.complete() || !config.enabled() || config.workload != PerfWorkload::Deconstruction {
+    if !applied.complete() || !config.enabled() || config.workload() != PerfWorkload::Deconstruction
+    {
         return;
     }
 

@@ -114,3 +114,112 @@ pub(super) fn spawn_construction_refunds(
         secondary_amount,
     );
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use hw_core::{
+        area::TaskArea,
+        events::{OnTaskAbandoned, ResourceReservationOp, ResourceReservationRequest},
+        relationships::DeliveringTo,
+    };
+    use hw_jobs::construction::{
+        FloorConstructionCancelRequested, WallConstructionCancelRequested,
+    };
+    use hw_jobs::{FloorConstructionSite, HaulData, HaulPhase, WallConstructionSite};
+    use hw_logistics::{SharedResourceCache, tile_index::TileSiteIndex};
+
+    #[test]
+    fn construction_cancellation_releases_secondary_destination_test() {
+        for floor in [false, true] {
+            for with_working_on in [false, true] {
+                let mut app = App::new();
+                app.add_plugins(MinimalPlugins)
+                    .init_resource::<WorldMap>()
+                    .init_resource::<SharedResourceCache>()
+                    .init_resource::<TileSiteIndex>()
+                    .insert_resource(ResourceItemVisualHandles {
+                        icon_bone_small: default(),
+                        icon_wood_small: default(),
+                        icon_rock_small: default(),
+                        icon_sand_small: default(),
+                        icon_stasis_mud_small: default(),
+                    })
+                    .add_message::<ResourceReservationRequest>()
+                    .add_message::<OnTaskAbandoned>();
+                let area = TaskArea::from_points(Vec2::ZERO, Vec2::ZERO);
+                let site = app.world_mut().spawn(Transform::default()).id();
+                if floor {
+                    app.world_mut().entity_mut(site).insert((
+                        FloorConstructionSite::new(area, Vec2::ZERO, 0),
+                        FloorConstructionCancelRequested,
+                    ));
+                    app.add_systems(Update, super::super::floor_construction::cancellation::floor_construction_cancellation_system);
+                } else {
+                    app.world_mut().entity_mut(site).insert((
+                        WallConstructionSite::new(area, Vec2::ZERO, 0),
+                        WallConstructionCancelRequested,
+                    ));
+                    app.add_systems(Update, super::super::wall_construction::cancellation::wall_construction_cancellation_system);
+                }
+                let item = app.world_mut().spawn(DeliveringTo(site)).id();
+                let soul = app
+                    .world_mut()
+                    .spawn((
+                        Transform::default(),
+                        DamnedSoul::default(),
+                        Path::default(),
+                        Inventory::default(),
+                        AssignedTask::Haul(HaulData {
+                            item,
+                            stockpile: site,
+                            phase: HaulPhase::GoingToItem,
+                        }),
+                    ))
+                    .id();
+                if with_working_on {
+                    app.world_mut().entity_mut(soul).insert(WorkingOn(item));
+                }
+                app.update();
+                assert!(matches!(
+                    app.world().get::<AssignedTask>(soul),
+                    Some(AssignedTask::None)
+                ));
+                assert!(app.world().get::<WorkingOn>(soul).is_none());
+                assert!(app.world().get::<DeliveringTo>(item).is_none());
+                assert!(app.world().get_entity(site).is_err());
+                let reservations: Vec<_> = app
+                    .world_mut()
+                    .resource_mut::<Messages<ResourceReservationRequest>>()
+                    .drain()
+                    .map(|message| message.op)
+                    .collect();
+                assert_eq!(
+                    reservations,
+                    vec![ResourceReservationOp::ReleaseSource {
+                        source: item.into(),
+                        amount: 1
+                    }]
+                );
+                assert_eq!(
+                    app.world_mut()
+                        .resource_mut::<Messages<OnTaskAbandoned>>()
+                        .drain()
+                        .count(),
+                    1
+                );
+                app.update();
+                assert!(
+                    app.world()
+                        .resource::<Messages<ResourceReservationRequest>>()
+                        .is_empty()
+                );
+                assert!(
+                    app.world()
+                        .resource::<Messages<OnTaskAbandoned>>()
+                        .is_empty()
+                );
+            }
+        }
+    }
+}

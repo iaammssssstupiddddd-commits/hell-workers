@@ -77,6 +77,7 @@
 - [plans/hvac-plumbing-plan-2026-07-13.md](plans/hvac-plumbing-plan-2026-07-13.md): 換気・導水・Room 認可を M0〜M4 で導入する実装計画。
 - [plans/3d-rtt/single-scene-rtt-indoor-light-field-migration-plan-2026-08-03.md](plans/3d-rtt/single-scene-rtt-indoor-light-field-migration-plan-2026-08-03.md): Scene RtT 1枚、TopDown表示、Wall / Door遮光の放射状Indoor Light Fieldへ移行する9分割計画の親ロードマップ。
 - [proposals/README.md](proposals/README.md): 提案書一覧とテンプレート。
+- [proposals/implementation-refactor-audit-proposal-2026-09-17.md](proposals/implementation-refactor-audit-proposal-2026-09-17.md): 全13 crateの実装横断レビューとR01〜R14の個別実装計画への入口。優先順位・依存・根拠・検証条件。
 - [proposals/library-tooling-evaluation-proposal-2026-09-13.md](proposals/library-tooling-evaluation-proposal-2026-09-13.md): ライブラリ・開発ツールの導入／置換候補、現行構成との重複、優先順位と採用条件。
 - [proposals/progression-and-choice-proposal-2026-08-09.md](proposals/progression-and-choice-proposal-2026-08-09.md): Track D の Dream Edict、Contract、Familiar 昇格を扱う進行・選択提案。
 - [proposals/archive/gameplay-management-improvements-proposal-2026-07-17.md](proposals/archive/gameplay-management-improvements-proposal-2026-07-17.md): Track A〜C のロードマップと完了履歴を保持するアーカイブ提案。

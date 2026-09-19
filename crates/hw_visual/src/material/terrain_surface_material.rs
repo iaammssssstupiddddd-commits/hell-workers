@@ -3,10 +3,24 @@ use bevy::pbr::{ExtendedMaterial, MaterialExtension, StandardMaterial};
 use bevy::prelude::*;
 use bevy::render::render_resource::{AsBindGroup, ShaderType};
 use bevy::shader::ShaderRef;
+
+#[cfg(test)]
+#[path = "terrain_surface_material_abi_tests.rs"]
+mod abi_tests;
 use hw_core::constants::{
     MAP_HEIGHT, MAP_WIDTH, TILE_SIZE, topdown_shadow_style_blur, topdown_shadow_style_params,
     topdown_shadow_style_tint,
 };
+
+fn terrain_base_material() -> StandardMaterial {
+    StandardMaterial {
+        base_color: Color::WHITE,
+        perceptual_roughness: 1.0,
+        reflectance: 0.0,
+        opaque_render_method: OpaqueRendererMethod::Forward,
+        ..default()
+    }
+}
 
 #[derive(Clone, Copy, Debug, ShaderType, Reflect)]
 pub struct TerrainSurfaceUniform {
@@ -126,13 +140,7 @@ pub fn make_terrain_surface_material(
     extension: TerrainSurfaceMaterialExt,
 ) -> TerrainSurfaceMaterial {
     TerrainSurfaceMaterial {
-        base: StandardMaterial {
-            base_color: Color::WHITE,
-            perceptual_roughness: 1.0,
-            reflectance: 0.0,
-            opaque_render_method: OpaqueRendererMethod::Forward,
-            ..default()
-        },
+        base: terrain_base_material(),
         extension,
     }
 }
@@ -217,13 +225,7 @@ pub fn make_terrain_surface_material_lod1_lite(
     extension: TerrainSurfaceMaterialExtLod1Lite,
 ) -> TerrainSurfaceMaterialLod1Lite {
     TerrainSurfaceMaterialLod1Lite {
-        base: StandardMaterial {
-            base_color: Color::WHITE,
-            perceptual_roughness: 1.0,
-            reflectance: 0.0,
-            opaque_render_method: OpaqueRendererMethod::Forward,
-            ..default()
-        },
+        base: terrain_base_material(),
         extension,
     }
 }
@@ -307,13 +309,7 @@ pub fn make_terrain_surface_material_lod2(
     extension: TerrainSurfaceMaterialExtLod2,
 ) -> TerrainSurfaceMaterialLod2 {
     TerrainSurfaceMaterialLod2 {
-        base: StandardMaterial {
-            base_color: Color::WHITE,
-            perceptual_roughness: 1.0,
-            reflectance: 0.0,
-            opaque_render_method: OpaqueRendererMethod::Forward,
-            ..default()
-        },
+        base: terrain_base_material(),
         extension,
     }
 }
@@ -407,11 +403,13 @@ mod tests {
             include_str!("../../../../assets/shaders/terrain_surface_material_lod2.wgsl"),
         ];
 
+        let bindings = include_str!("../../../../assets/shaders/terrain_surface_bindings.wgsl");
+        assert!(bindings.contains("@binding(133) var indoor_light_field"));
+        assert!(bindings.contains("@binding(134) var indoor_light_sampler"));
         for source in terrain_sources {
             // Keep the shared P06 resource topology, but do not reactivate the fragment
             // reads: they make normal startup terrain or structures produce no scene pixels.
-            assert!(source.contains("@binding(133) var indoor_light_field"));
-            assert!(source.contains("@binding(134) var indoor_light_sampler"));
+            assert!(source.contains("#import \"shaders/terrain_surface_bindings.wgsl\"::{"));
             assert!(!source.contains("let local_light = sample_indoor_light_field("));
         }
     }

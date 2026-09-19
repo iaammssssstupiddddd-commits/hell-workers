@@ -22,6 +22,19 @@ use crate::soul_ai::helpers::work::{
     SoulDropCtx, unassign_task, unassign_task_preserving_wheelbarrow_cargo,
 };
 
+fn task_shell_references_entity(
+    task: &AssignedTask,
+    identity: Option<&ActiveTaskIdentity>,
+    working_on: Option<&WorkingOn>,
+    entity: Entity,
+) -> bool {
+    task.references_entity(entity)
+        || identity.is_some_and(|identity| {
+            identity.assignment_entity == entity || identity.current_target_entity == entity
+        })
+        || working_on.is_some_and(|working_on| working_on.0 == entity)
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ExactTaskTerminalDisposition {
     Complete,
@@ -44,10 +57,7 @@ impl ExactTaskExpectation {
     ) -> bool {
         match self {
             Self::References(entity) => {
-                task.references_entity(entity)
-                    || identity.assignment_entity == entity
-                    || identity.current_target_entity == entity
-                    || working_on.is_some_and(|working_on| working_on.0 == entity)
+                task_shell_references_entity(task, Some(identity), working_on, entity)
             }
             Self::DeconstructionAwaitingCommit { order, target } => matches!(
                 task,
@@ -323,6 +333,151 @@ mod tests {
             .id();
         world.flush();
         (worker, identity)
+    }
+
+    #[test]
+    fn external_terminal_accepts_identity_only_reference_test() {
+        for assignment_only in [true, false] {
+            let mut world = test_world();
+            let order = world.spawn_empty().id();
+            let target = world.spawn_empty().id();
+            let owner = world.spawn_empty().id();
+            let (worker, mut identity) = spawn_worker(&mut world, order, target);
+            if assignment_only {
+                identity.assignment_entity = owner;
+            } else {
+                identity.current_target_entity = owner;
+                identity.detach_from_working_on();
+                world.entity_mut(worker).remove::<WorkingOn>();
+            }
+            world.entity_mut(worker).insert(identity);
+            let requests = prepare_owner_task_terminals(&mut world, &[owner], None, &[]).unwrap();
+            assert_eq!(requests.len(), 1);
+            assert_eq!(requests[0].worker, worker);
+            assert_eq!(
+                terminalize_exact_tasks(&mut world, &requests)[0].result,
+                ExactTaskTerminalResult::Applied
+            );
+        }
+    }
+
+    #[test]
+    fn move_order_and_building_cleanup_select_distinct_workers_and_are_idempotent_test() {
+        use hw_jobs::{MovePlantData, MovePlantPhase};
+        let mut world = test_world();
+        let building = world.spawn_empty().id();
+        let orders = [world.spawn_empty().id(), world.spawn_empty().id()];
+        let workers = orders.map(|order| {
+            world
+                .spawn((
+                    Transform::default(),
+                    DamnedSoul::default(),
+                    Path::default(),
+                    Inventory::default(),
+                    AssignedTask::MovePlant(MovePlantData {
+                        task_entity: order,
+                        building,
+                        destination_grid: (20, 20),
+                        destination_pos: Vec2::ZERO,
+                        companion_anchor: None,
+                        phase: MovePlantPhase::GoToBuilding,
+                    }),
+                    ActiveTaskIdentity::new(order, order, WorkType::Move),
+                    WorkingOn(order),
+                ))
+                .id()
+        });
+        let by_building = prepare_owner_task_terminals(&mut world, &[building], None, &[]).unwrap();
+        assert_eq!(by_building.len(), 2);
+        let by_order = prepare_owner_task_terminals(&mut world, &[orders[0]], None, &[]).unwrap();
+        assert_eq!(by_order.len(), 1);
+        assert_eq!(by_order[0].worker, workers[0]);
+        assert_eq!(
+            terminalize_exact_tasks(&mut world, &by_order)[0].result,
+            ExactTaskTerminalResult::Applied
+        );
+        assert!(matches!(
+            world.get::<AssignedTask>(workers[0]),
+            Some(AssignedTask::None)
+        ));
+        assert!(world.get::<ActiveTaskIdentity>(workers[0]).is_none());
+        assert!(world.get::<WorkingOn>(workers[0]).is_none());
+        assert!(
+            matches!(world.get::<AssignedTask>(workers[1]), Some(AssignedTask::MovePlant(data)) if data.task_entity == orders[1] && data.building == building)
+        );
+        assert_eq!(world.get::<WorkingOn>(workers[1]).unwrap().0, orders[1]);
+        assert_eq!(
+            world
+                .get::<ActiveTaskIdentity>(workers[1])
+                .unwrap()
+                .assignment_entity,
+            orders[1]
+        );
+        assert_eq!(
+            terminalize_exact_tasks(&mut world, &by_order)[0].result,
+            ExactTaskTerminalResult::MissingWorker
+        );
+        assert!(
+            prepare_owner_task_terminals(&mut world, &[orders[0]], None, &[])
+                .unwrap()
+                .is_empty()
+        );
+        let remaining = prepare_owner_task_terminals(&mut world, &[building], None, &[]).unwrap();
+        assert_eq!(remaining.len(), 1);
+        assert_eq!(remaining[0].worker, workers[1]);
+        assert_eq!(
+            terminalize_exact_tasks(&mut world, &remaining)[0].result,
+            ExactTaskTerminalResult::Applied
+        );
+        assert_eq!(
+            terminalize_exact_tasks(&mut world, &remaining)[0].result,
+            ExactTaskTerminalResult::MissingWorker
+        );
+        for owner in [building, orders[0], orders[1]] {
+            assert!(world.get_entity(owner).is_ok());
+        }
+        assert!(
+            world
+                .resource::<Messages<ResourceReservationRequest>>()
+                .is_empty()
+        );
+        assert!(world.resource::<Messages<OnTaskAbandoned>>().is_empty());
+        assert!(
+            world
+                .resource::<Messages<TaskCompletedVisualMessage>>()
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn external_terminal_rejects_changed_identity_atomically_test() {
+        let mut world = test_world();
+        let owner = world.spawn_empty().id();
+        let target = world.spawn_empty().id();
+        let (first, _) = spawn_worker(&mut world, owner, target);
+        let (second, mut identity) = spawn_worker(&mut world, owner, target);
+        let requests = prepare_owner_task_terminals(&mut world, &[owner], None, &[]).unwrap();
+        identity.assignment_entity = world.spawn_empty().id();
+        world.entity_mut(second).insert(identity);
+        let outcomes = terminalize_exact_tasks(&mut world, &requests);
+        assert!(
+            outcomes
+                .iter()
+                .all(|outcome| outcome.result != ExactTaskTerminalResult::Applied)
+        );
+        for worker in [first, second] {
+            assert!(matches!(
+                world.get::<AssignedTask>(worker),
+                Some(AssignedTask::Deconstruct(_))
+            ));
+            assert_eq!(world.get::<WorkingOn>(worker).unwrap().0, owner);
+        }
+        assert!(
+            world
+                .resource::<Messages<ResourceReservationRequest>>()
+                .is_empty()
+        );
+        assert!(world.resource::<Messages<OnTaskAbandoned>>().is_empty());
     }
 
     #[test]

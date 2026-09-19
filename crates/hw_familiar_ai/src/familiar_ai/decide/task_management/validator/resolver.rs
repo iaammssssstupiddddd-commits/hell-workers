@@ -2,8 +2,8 @@ use bevy::prelude::*;
 use hw_core::logistics::ResourceType;
 use hw_logistics::transport_request::{TransportRequestKind, WheelbarrowDestination};
 use hw_logistics::{
-    StockpilePolicyInput, StockpileTransferPhase, evaluate_stockpile_policy,
-    stockpile_owner_accepts_item,
+    InboundReservationSnapshot, StockpileContentsSnapshot, StockpileTransferPhase,
+    evaluate_stockpile_policy, stockpile_owner_accepts_item,
 };
 
 use super::capacity_helpers::check_stockpile_capacity;
@@ -100,19 +100,20 @@ pub fn resolve_consolidation_inputs(
                 return false;
             };
             let stored_amount = stored.map(|items| items.len()).unwrap_or(0);
-            evaluate_stockpile_policy(StockpilePolicyInput {
-                phase: StockpileTransferPhase::NewOutbound,
-                policy: *policy,
-                capacity: stockpile.capacity,
-                stored_amount,
-                stored_resource: stockpile.resource_type,
-                transfer_resource: resource_type,
-                requested_amount: 1,
-                incoming_reserved: 0,
-                incoming_reserved_other_resource: 0,
-                cycle_reserved: 0,
-                cycle_reserved_other_resource: 0,
-            })
+            evaluate_stockpile_policy(
+                StockpileContentsSnapshot {
+                    policy: *policy,
+                    capacity: stockpile.capacity,
+                    stored_amount,
+                    stored_resource: stockpile.resource_type,
+                }
+                .policy_input(
+                    StockpileTransferPhase::NewOutbound,
+                    resource_type,
+                    1,
+                    InboundReservationSnapshot::default(),
+                ),
+            )
             .allowed_amount
                 == 1
         })
