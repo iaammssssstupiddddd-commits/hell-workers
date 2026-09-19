@@ -1,7 +1,10 @@
 use bevy::prelude::*;
 use hw_core::logistics::ResourceType;
 use hw_logistics::transport_request::TransportPriority;
-use hw_logistics::{StockpilePolicyInput, StockpileTransferPhase, evaluate_stockpile_policy};
+use hw_logistics::{
+    InboundReservationSnapshot, StockpileContentsSnapshot, StockpileTransferPhase,
+    evaluate_stockpile_policy,
+};
 
 use crate::familiar_ai::decide::task_management::{
     FamiliarTaskAssignmentQueries, IncomingDeliverySnapshot, ReservationShadow,
@@ -32,19 +35,21 @@ pub(super) fn check_stockpile_capacity(
     let incoming_matching = incoming_snapshot.count_exact(cell, resource_type) as usize;
     let shadow_incoming = shadow.destination_reserved_total(cell);
     let shadow_matching = shadow.destination_reserved_resource(cell, resource_type);
-    let evaluation = evaluate_stockpile_policy(StockpilePolicyInput {
-        phase: StockpileTransferPhase::NewInbound,
-        policy,
-        capacity: stock.capacity,
-        stored_amount: stored,
-        stored_resource: stock.resource_type,
-        transfer_resource: resource_type,
-        requested_amount: 0,
-        incoming_reserved: incoming,
-        incoming_reserved_other_resource: incoming.saturating_sub(incoming_matching),
-        cycle_reserved: shadow_incoming,
-        cycle_reserved_other_resource: shadow_incoming.saturating_sub(shadow_matching),
-    });
+    let evaluation = evaluate_stockpile_policy(
+        StockpileContentsSnapshot {
+            policy,
+            capacity: stock.capacity,
+            stored_amount: stored,
+            stored_resource: stock.resource_type,
+        }
+        .policy_input(
+            StockpileTransferPhase::NewInbound,
+            resource_type,
+            0,
+            InboundReservationSnapshot::from_counts(incoming, incoming_matching, 0)
+                .with_cycle_counts(shadow_incoming, shadow_matching),
+        ),
+    );
 
     (evaluation.available_amount > 0).then_some(evaluation.available_amount)
 }

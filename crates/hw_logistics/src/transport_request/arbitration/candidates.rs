@@ -9,8 +9,8 @@ use hw_jobs::{Blueprint, Designation};
 
 use crate::resource_cache::SharedResourceCache;
 use crate::stockpile_policy::{
-    StockpilePolicyInput, StockpilePolicyRejection, StockpileTransferPhase,
-    evaluate_stockpile_policy,
+    InboundReservationSnapshot, StockpileContentsSnapshot, StockpilePolicyRejection,
+    StockpileTransferPhase, evaluate_stockpile_policy,
 };
 use crate::transport_request::{
     ManualHaulPinnedSource, ManualTransportRequest, ReceiverPolicyTier, TransportDemand,
@@ -132,13 +132,11 @@ pub(super) fn evaluate_stockpile_cell(
             })
             .count()
     });
-    let incoming_other = incoming_reserved.saturating_sub(incoming_matching);
     let cycle_reserved = cycle_reserved_by_resource.map_or(0, |counts| counts.values().sum());
     let cycle_matching = cycle_reserved_by_resource
         .and_then(|counts| counts.get(&resource_type))
         .copied()
         .unwrap_or(0);
-    let cycle_other = cycle_reserved.saturating_sub(cycle_matching);
 
     if let Some(policy) = policy {
         if policy.inbound_priority != receiver_priority {
@@ -147,19 +145,21 @@ pub(super) fn evaluate_stockpile_cell(
                 blocked_by_reservation: false,
             });
         }
-        let evaluation = evaluate_stockpile_policy(StockpilePolicyInput {
-            phase: StockpileTransferPhase::NewInbound,
-            policy: *policy,
-            capacity: stockpile.capacity,
-            stored_amount,
-            stored_resource: stockpile.resource_type,
-            transfer_resource: resource_type,
-            requested_amount: 0,
-            incoming_reserved,
-            incoming_reserved_other_resource: incoming_other,
-            cycle_reserved,
-            cycle_reserved_other_resource: cycle_other,
-        });
+        let evaluation = evaluate_stockpile_policy(
+            StockpileContentsSnapshot {
+                policy: *policy,
+                capacity: stockpile.capacity,
+                stored_amount,
+                stored_resource: stockpile.resource_type,
+            }
+            .policy_input(
+                StockpileTransferPhase::NewInbound,
+                resource_type,
+                0,
+                InboundReservationSnapshot::from_counts(incoming_reserved, incoming_matching, 0)
+                    .with_cycle_counts(cycle_reserved, cycle_matching),
+            ),
+        );
         return Some(StockpileCellAvailability {
             available: evaluation.available_amount,
             blocked_by_reservation: matches!(

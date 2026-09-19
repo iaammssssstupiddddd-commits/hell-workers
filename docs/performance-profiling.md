@@ -280,6 +280,20 @@ PYTHONDONTWRITEBYTECODE=1 python3 \
 
 helperはUUID付きの一意なartifact rootとatomicな`job.json`を使い、fixed audit、実window Capture、native Memoryをrepository-wide lockの内側で逐次実行する。各sessionは`perf.py`自身に対応featureのbuildを行わせ、`--skip-build`と任意`--binary`を使わない。これにより、`target/profiling/bevy_app`が直前のMemory flavorであるのにCaptureとして記録する取り違えを防ぐ。CaptureとMemoryの間ではbinary hashが変わり、fixed auditとCaptureでは一致することをfail-closedで検証する。
 
+2026-09-19の設定型・validator整理後、`refactor-task-dashboard-20260919-b`でhidden／visible／
+active-filterの固定audit各1回、X11 Capture／Memory各3回（計21 process）が成功した。
+Intel Arc Graphics (MTL) / Vulkan / Mesa 26.1.8で、gameplay結果一致、hiddenの表示処理0、
+visibleの行構築、active-filterの行絞込み、allocator収支とbinary分離を独立verifierで確認した。
+source fingerprintは`28fe99f986431c66a080f9aeec09e91f299911ebfa6ff79713d33da24627978d`。
+warm-up 1秒／measure 2秒の受入smokeであり、変更前後の性能改善率や全workloadの実機受入は示さない。
+
+同じ変更のIndoorLight／RenderDoc代表経路は`refactor-p08-closure-20260919-c`で受け入れ、
+Captureと二重replay、CPU/GPU/Soul/Roomの一致を独立verifierで確認した。
+結果は[描画仕様のP06記録](rendering-performance.md#p06-shared-light-field-runtime-inventory)に集約する。
+設定の互換性は11 workloadのseed・人数・clock・window・phase・出力の固定projection、
+default／profiling／profiling-renderdocのエラー優先順、Pythonのdeconstruction／behavior／field-core正規化の冪等性で確認した。
+runner・検証ツールの変更は通常プレイヤーの操作・表示・設定を変えないため、R14自体のHelp判断はNo impactである。
+
 配置不能理由、save/load結果通知、dedupe、Pause中expiry、toast/history入力境界のTrack A2受入は、
 性能recipeへ混ぜず専用actual-window profileを使う。
 
@@ -715,6 +729,9 @@ Haulはsource selector、Chopはconnectivity cacheを正規経路で通す。run
 dashboard表示条件はこのmatrixへ混ぜず、Task Dashboard性能計画が所有する。
 
 Task Dashboardの正式matrixは、固定step監査、Capture、Memoryを別sessionで採る。
+fixtureは`visible` / `active-filter`で管理workspaceを開いてTaskListを選び、後者だけChopで絞り込む。
+`hidden`はworkspaceを閉じる。LeftPanelModeだけの変更では描画経路へ入らないため、
+shell開閉・filter・UI設定完了を同じsetup systemの回帰で確認する。
 
 ```bash
 PYTHONDONTWRITEBYTECODE=1 python3 \
@@ -851,9 +868,20 @@ python3 scripts/perf.py compare \
 
 ## 新しい workload への展開
 
+Rustの`PerfScenarioConfig`はprivateな共通設定と`Disabled / Enabled(ValidatedWorkload)`を保持する。
+workload固有値は`config/validated.rs`のvariant payloadに置き、consumerはread-only accessorから取得する。
+`try_from_process`がargs・`OsString`環境reader・seed生成関数を注入し、`try_from_input`が既存順序で
+検証してからvalidated stateを構築する。disabled時は既定値を返し、残りのperf引数を検証せずseedも生成しない。
+seedの遅延生成位置はduration／RenderDoc検証より前という既存契約を維持する。
+
+Pythonの`arguments.py`は公開parserとdispatchを所有し、検証本体は
+`argument_validation/{common,density,specialized,indoor_light}.py`が持つ。
+common→density→specialized→indoor_lightの順序と専用workloadの早期returnを維持する。
+workload sidecarのdispatchは`artifact_readers/workload.py`、各artifactの独立した期待値・検証は既存readerが所有する。
+
 別の最適化対象でも、同じrunnerとartifact契約を使う。新しいworkloadは、手操作や既存saveへ依存させず、次の順に追加・採取する。
 
-1. `PerfWorkload`とscenario setupに名前・決定的な操作列・必要entity数を追加する。初期fixture checkpointより前に配置を完了し、master seedから専用substreamを分ける。
+1. `PerfWorkload`、`ValidatedWorkload`のpayload／accessor、Python validator／sidecar dispatchとscenario setupに名前・決定的な操作列・必要entity数を追加する。初期fixture checkpointより前に配置を完了し、master seedから専用substreamを分ける。
 2. `--workload <name> --sizes small,medium,large --renders cpu,gpu`の短縮runを3反復し、initial fixture、実adapter/backend、marker前logが全て有効であることを確認する。失格artifactは診断中保持し、比較値にはしない。診断終了・打切り時は理由を記録し、用途のなくなったrawを削除する。
 3. 標準の30秒warm-up / 60秒measure matrixを3反復する。frame-timeはCaptureだけ、対象system CPUは専用sidecarまたはTracy、allocation / RSSはMemory、draw/passはRenderDocへ分ける。
 4. 最適化前後は同じseed、population、window/backend、adapter、present mode、runner versionを使い、`compare`でcaseごとに比較する。workloadの意味やfixtureが変わった場合は新しいbaselineとして扱う。

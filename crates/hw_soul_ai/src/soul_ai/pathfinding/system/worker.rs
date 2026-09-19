@@ -10,7 +10,7 @@ pub(super) fn process_worker_pathfinding(
     world_pf: WorldPfCtx<'_>,
     work_queue: &mut RuntimePathWorkQueue,
     q_rest_areas: &Query<&Transform, With<hw_jobs::RestArea>>,
-    queries: &mut crate::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
+    queries: &mut crate::soul_ai::execute::task_execution::context::TaskUnassignQueries,
 ) -> WorkerPathfindingOutcome {
     let entity = soul.entity;
     let transform = soul.transform;

@@ -21,6 +21,8 @@ pub use perf_scenario::{
 pub(crate) use perf_scenario::{
     does_not_require_precheckpoint_fixture_spawn, is_fixed_step_behavior, is_not_fixed_step_audit,
 };
+#[cfg(feature = "profiling")]
+pub(crate) use rtt_composite::RttCompositeMaterial;
 pub use rtt_composite::RttCompositeSprite;
 pub(crate) use rtt_composite::composite_logical_size;
 pub use rtt_setup::{

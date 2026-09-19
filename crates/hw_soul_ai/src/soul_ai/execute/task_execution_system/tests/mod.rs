@@ -138,6 +138,8 @@ fn assert_component_unchanged<T: Component>(world: &mut World, entity: Entity) {
 
 mod aborts;
 mod completion;
+mod construction_navigation;
 mod deconstruct;
+mod gather_chain;
 mod guards;
 mod stockpile_policy;

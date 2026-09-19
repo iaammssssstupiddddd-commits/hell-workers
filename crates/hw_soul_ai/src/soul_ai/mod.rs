@@ -13,8 +13,22 @@ pub mod update;
 
 pub struct SoulAiCorePlugin;
 
+/// Register the execution/reservation boundary shared by the game and focused
+/// integration fixtures. Reservation requests must apply in the same cycle.
+pub fn register_task_execution_system(app: &mut App) {
+    app.add_systems(
+        Update,
+        execute::task_execution_system::task_execution_system
+            .before(hw_logistics::apply_reservation_requests_system)
+            .after(execute::task_assignment_apply::apply_task_assignment_requests_system)
+            .after(execute::drifting::drifting_behavior_system)
+            .in_set(SoulAiSystemSet::Execute),
+    );
+}
+
 impl Plugin for SoulAiCorePlugin {
     fn build(&self, app: &mut App) {
+        register_task_execution_system(app);
         #[cfg(feature = "profiling")]
         app.init_resource::<execute::task_execution::TaskExecutionPerfMetrics>()
             .init_resource::<pathfinding::RuntimePathDeferMetrics>()
@@ -111,13 +125,13 @@ impl Plugin for SoulAiCorePlugin {
                         )
                         .after(execute::drifting::drifting_behavior_system)
                         .before(execute::task_execution_system::task_execution_system),
-                    execute::task_execution_system::task_execution_system
-                        .after(
-                            execute::task_assignment_apply::apply_task_assignment_requests_system,
-                        )
-                        .after(execute::drifting::drifting_behavior_system),
                     execute::task_execution::move_plant::apply_pending_building_move_system
                         .after(execute::task_execution_system::task_execution_system),
+                    ApplyDeferred
+                        .after(execute::task_execution_system::task_execution_system)
+                        .before(
+                            execute::task_execution::move_plant::apply_pending_building_move_system,
+                        ),
                     execute::idle_behavior_apply::idle_behavior_apply_system,
                     execute::escaping_apply::escaping_apply_system,
                     execute::cleanup::cleanup_commanded_souls_system,

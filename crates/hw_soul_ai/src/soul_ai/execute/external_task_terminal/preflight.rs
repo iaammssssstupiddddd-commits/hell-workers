@@ -34,12 +34,7 @@ pub fn prepare_owner_task_terminals(
     let mut requests = Vec::new();
     for (worker, task, identity, working_on) in query.iter(world) {
         let Some(reference) = cleanup_references.iter().copied().find(|&reference| {
-            task.references_entity(reference)
-                || identity.is_some_and(|identity| {
-                    identity.assignment_entity == reference
-                        || identity.current_target_entity == reference
-                })
-                || working_on.is_some_and(|working_on| working_on.0 == reference)
+            super::task_shell_references_entity(task, identity, working_on, reference)
         }) else {
             continue;
         };

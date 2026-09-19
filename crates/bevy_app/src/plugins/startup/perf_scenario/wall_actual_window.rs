@@ -180,15 +180,15 @@ impl WallActualWindowAcceptance {
             && !self.completed
             && !self.failed
             && config.enabled()
-            && config.workload == PerfWorkload::WallDensity
-            && (config.size == PerfScenarioSize::Small
-                || (formwork_acceptance_requested() && config.size == PerfScenarioSize::Medium))
+            && config.workload() == PerfWorkload::WallDensity
+            && (config.size() == PerfScenarioSize::Small
+                || (formwork_acceptance_requested() && config.size() == PerfScenarioSize::Medium))
             && accepted_wall_phase(
                 config.wall_phase(),
                 art_preview_requested(),
                 formwork_acceptance_requested(),
             )
-            && config.render_mode == PerfRenderMode::Gpu
+            && config.render_mode() == PerfRenderMode::Gpu
             && fixture.actual_window_subject().is_some()
     }
 

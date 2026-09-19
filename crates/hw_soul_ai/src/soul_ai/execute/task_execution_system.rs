@@ -130,6 +130,7 @@ pub fn task_execution_system(params: TaskExecutionParams) {
     #[cfg(feature = "profiling")]
     let mut handler_runs = 0u32;
 
+    let mut chain_shadow = super::task_execution::chain::ChainAdmissionShadow::default();
     for offset in 0..task_count {
         let entity = task_round_robin.entities[(task_start + offset) % task_count];
         let Ok((
@@ -234,6 +235,7 @@ pub fn task_execution_system(params: TaskExecutionParams) {
                 pf_context: &mut res.pf_context,
                 path_budget: &mut res.path_budget,
                 path_search_progress,
+                chain_shadow: &mut chain_shadow,
                 queries: &mut queries,
                 world_epoch: world_epoch.get(),
                 deconstruction_commit_request: None,

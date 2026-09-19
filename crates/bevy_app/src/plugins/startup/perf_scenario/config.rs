@@ -1,7 +1,9 @@
 use super::*;
 
 mod parse;
+mod validated;
 use parse::*;
+use validated::{PerfCommonConfig, PerfScenarioState, ValidatedWorkload};
 
 const DEFAULT_WARMUP_SECS: f32 = 30.0;
 const DEFAULT_MEASURE_SECS: f32 = 60.0;
@@ -539,35 +541,8 @@ impl PerfRandomStream {
 /// perf起動時だけ使用する、起動前に一度だけ解釈された計測条件。
 #[derive(Resource, Debug, Clone)]
 pub struct PerfScenarioConfig {
-    enabled: bool,
-    pub master_seed: u64,
-    pub workload: PerfWorkload,
-    pub size: PerfScenarioSize,
-    pub soul_count: u32,
-    pub familiar_count: u32,
-    pub render_mode: PerfRenderMode,
-    pub familiar_policy_mode: PerfFamiliarPolicyMode,
-    pub operation_dialog_mode: PerfOperationDialogMode,
-    pub dashboard_mode: PerfDashboardMode,
-    pub warmup_secs: f32,
-    pub measure_secs: f32,
-    pub output_dir: Option<PathBuf>,
-    #[cfg(feature = "profiling-renderdoc")]
-    renderdoc_capture: bool,
-    rtt_light: Option<PerfRttLightSelection>,
-    behavior_case: Option<PerfBehaviorCase>,
-    wall_phase: Option<PerfWallPhase>,
-    wall_presentation: Option<PerfWallPresentation>,
-    door_presentation: Option<PerfDoorPresentation>,
-    wall_door_joint_actual_window: bool,
-    window_width: Option<u32>,
-    window_height: Option<u32>,
-    window_scale_factor: Option<f32>,
-    rtt_quality: Option<RttQualityPreset>,
-    clock_mode: PerfClockMode,
-    fixed_step_hz: u32,
-    fixed_warmup_ticks: u64,
-    fixed_audit_ticks: u64,
+    common: PerfCommonConfig,
+    state: PerfScenarioState,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -612,8 +587,24 @@ impl std::error::Error for PerfScenarioConfigError {}
 impl PerfScenarioConfig {
     pub fn try_from_process() -> Result<Self, PerfScenarioConfigError> {
         let args = env::args().collect::<Vec<_>>();
-        let enabled = has_flag(&args, "--perf-scenario")
-            || env::var("HW_PERF_SCENARIO").is_ok_and(|value| value == "1");
+        Self::try_from_input(
+            &PerfConfigInput {
+                args: &args,
+                environment: &|key| env::var_os(key),
+            },
+            rand::random,
+        )
+    }
+
+    fn try_from_input(
+        input: &PerfConfigInput<'_>,
+        seed: impl FnOnce() -> u64,
+    ) -> Result<Self, PerfScenarioConfigError> {
+        let args = input.args;
+        let enabled = has_flag(args, "--perf-scenario")
+            || input
+                .env_text("HW_PERF_SCENARIO")
+                .is_some_and(|value| value == "1");
 
         if !enabled {
             return Ok(Self::default());
@@ -627,66 +618,66 @@ impl PerfScenarioConfig {
         }
 
         let workload = parse_value_or_default(
-            value_from_args_or_env(&args, "--perf-workload", "HW_PERF_WORKLOAD")?,
+            input.value("--perf-workload", "HW_PERF_WORKLOAD")?,
             "--perf-workload",
             "gather|path-door|construction|ui-gpu|task-dashboard|dream-ui-burst|indoor-light|wall-density|door-density|deconstruction|save-transaction",
             PerfWorkload::parse,
             PerfWorkload::Gather,
         )?;
         let size = parse_value_or_default(
-            value_from_args_or_env(&args, "--perf-size", "HW_PERF_SIZE")?,
+            input.value("--perf-size", "HW_PERF_SIZE")?,
             "--perf-size",
             "small|medium|large",
             PerfScenarioSize::parse,
             PerfScenarioSize::Medium,
         )?;
         let render_mode = parse_value_or_default(
-            value_from_args_or_env(&args, "--perf-render", "HW_PERF_RENDER")?,
+            input.value("--perf-render", "HW_PERF_RENDER")?,
             "--perf-render",
             "cpu|gpu",
             PerfRenderMode::parse,
             PerfRenderMode::Gpu,
         )?;
         let familiar_policy_mode = parse_value_or_default(
-            value_from_args_or_env(&args, "--perf-familiar-policy", "HW_PERF_FAMILIAR_POLICY")?,
+            input.value("--perf-familiar-policy", "HW_PERF_FAMILIAR_POLICY")?,
             "--perf-familiar-policy",
             "baseline|default|disabled",
             PerfFamiliarPolicyMode::parse,
             PerfFamiliarPolicyMode::Baseline,
         )?;
         let operation_dialog_mode = parse_value_or_default(
-            value_from_args_or_env(&args, "--perf-operation-dialog", "HW_PERF_OPERATION_DIALOG")?,
+            input.value("--perf-operation-dialog", "HW_PERF_OPERATION_DIALOG")?,
             "--perf-operation-dialog",
             "hidden|open",
             PerfOperationDialogMode::parse,
             PerfOperationDialogMode::Hidden,
         )?;
         let dashboard_mode = parse_value_or_default(
-            value_from_args_or_env(&args, "--perf-dashboard", "HW_PERF_DASHBOARD")?,
+            input.value("--perf-dashboard", "HW_PERF_DASHBOARD")?,
             "--perf-dashboard",
             "hidden|visible|active-filter",
             PerfDashboardMode::parse,
             PerfDashboardMode::Hidden,
         )?;
         let clock_mode = parse_value_or_default(
-            value_from_args_or_env(&args, "--perf-clock", "HW_PERF_CLOCK")?,
+            input.value("--perf-clock", "HW_PERF_CLOCK")?,
             "--perf-clock",
             "realtime|fixed|fixed-behavior",
             PerfClockMode::parse,
             PerfClockMode::Realtime,
         )?;
         let fixed_step_hz = parse_u32_value_or_default(
-            value_from_args_or_env(&args, "--perf-fixed-hz", "HW_PERF_FIXED_HZ")?,
+            input.value("--perf-fixed-hz", "HW_PERF_FIXED_HZ")?,
             "--perf-fixed-hz",
             DEFAULT_FIXED_STEP_HZ,
         )?;
         let fixed_warmup_ticks = parse_u64_value_or_default(
-            value_from_args_or_env(&args, "--perf-warmup-ticks", "HW_PERF_WARMUP_TICKS")?,
+            input.value("--perf-warmup-ticks", "HW_PERF_WARMUP_TICKS")?,
             "--perf-warmup-ticks",
             DEFAULT_FIXED_WARMUP_TICKS,
         )?;
         let fixed_audit_ticks = parse_u64_value_or_default(
-            value_from_args_or_env(&args, "--perf-audit-ticks", "HW_PERF_AUDIT_TICKS")?,
+            input.value("--perf-audit-ticks", "HW_PERF_AUDIT_TICKS")?,
             "--perf-audit-ticks",
             DEFAULT_FIXED_AUDIT_TICKS,
         )?;
@@ -713,12 +704,12 @@ impl PerfScenarioConfig {
         }
         let (default_souls, default_familiars) = size.population();
         let soul_count = parse_u32_value_or_default(
-            value_from_args_or_env(&args, "--spawn-souls", "HW_SPAWN_SOULS")?,
+            input.value("--spawn-souls", "HW_SPAWN_SOULS")?,
             "--spawn-souls",
             default_souls,
         )?;
         let familiar_count = parse_u32_value_or_default(
-            value_from_args_or_env(&args, "--spawn-familiars", "HW_SPAWN_FAMILIARS")?,
+            input.value("--spawn-familiars", "HW_SPAWN_FAMILIARS")?,
             "--spawn-familiars",
             default_familiars,
         )?;
@@ -816,7 +807,8 @@ impl PerfScenarioConfig {
             ));
         }
         if workload == PerfWorkload::SaveTransaction {
-            let runtime_root = env::var_os("HW_PERF_SAVE_RUNTIME_ROOT")
+            let runtime_root = input
+                .env_os("HW_PERF_SAVE_RUNTIME_ROOT")
                 .map(PathBuf::from)
                 .filter(|path| path.is_absolute() && !path.as_os_str().is_empty());
             if runtime_root.is_none() {
@@ -826,34 +818,38 @@ impl PerfScenarioConfig {
             }
         }
         let master_seed = parse_u64_value_or_random(
-            value_from_args_or_env(&args, "--perf-seed", "HW_PERF_SEED")?
-                .or_else(|| env::var("HELL_WORKERS_WORLDGEN_SEED").ok()),
+            input
+                .value("--perf-seed", "HW_PERF_SEED")?
+                .or_else(|| input.env_text("HELL_WORKERS_WORLDGEN_SEED")),
             "--perf-seed",
+            seed,
         )?;
         let warmup_secs = parse_duration_secs(
-            value_from_args_or_env(&args, "--perf-warmup-secs", "HW_PERF_WARMUP_SECS")?,
+            input.value("--perf-warmup-secs", "HW_PERF_WARMUP_SECS")?,
             "--perf-warmup-secs",
             DEFAULT_WARMUP_SECS,
             true,
         )?;
         let measure_secs = parse_duration_secs(
-            value_from_args_or_env(&args, "--perf-measure-secs", "HW_PERF_MEASURE_SECS")?,
+            input.value("--perf-measure-secs", "HW_PERF_MEASURE_SECS")?,
             "--perf-measure-secs",
             DEFAULT_MEASURE_SECS,
             false,
         )?;
-        let output_dir = value_from_args_or_env(&args, "--perf-output-dir", "HW_PERF_OUTPUT_DIR")?
+        let output_dir = input
+            .value("--perf-output-dir", "HW_PERF_OUTPUT_DIR")?
             .map(PathBuf::from)
             .filter(|path| !path.as_os_str().is_empty());
-        let renderdoc_requested = has_flag(&args, "--perf-renderdoc-capture")
-            || env::var("HW_PERF_RENDERDOC_CAPTURE").is_ok_and(|value| value == "1");
+        let renderdoc_requested = has_flag(args, "--perf-renderdoc-capture")
+            || input
+                .env_text("HW_PERF_RENDERDOC_CAPTURE")
+                .is_some_and(|value| value == "1");
         #[cfg(feature = "profiling-renderdoc")]
         let renderdoc_capture = resolve_renderdoc_capture(renderdoc_requested)?;
         #[cfg(not(feature = "profiling-renderdoc"))]
         resolve_renderdoc_capture(renderdoc_requested)?;
-        let rtt_light = parse_rtt_light_selection(&args, workload)?;
-        let behavior_case_value =
-            value_from_args_or_env(&args, "--perf-behavior-case", "HW_PERF_BEHAVIOR_CASE")?;
+        let rtt_light = parse_rtt_light_selection(input, workload)?;
+        let behavior_case_value = input.value("--perf-behavior-case", "HW_PERF_BEHAVIOR_CASE")?;
         let behavior_case = match behavior_case_value {
             Some(value) => Some(PerfBehaviorCase::parse(&value).ok_or_else(|| {
                 PerfScenarioConfigError(format!(
@@ -862,8 +858,7 @@ impl PerfScenarioConfig {
             })?),
             None => None,
         };
-        let wall_phase_value =
-            value_from_args_or_env(&args, "--perf-wall-phase", "HW_PERF_WALL_PHASE")?;
+        let wall_phase_value = input.value("--perf-wall-phase", "HW_PERF_WALL_PHASE")?;
         let wall_phase = match wall_phase_value {
             Some(value) if workload == PerfWorkload::WallDensity => {
                 Some(PerfWallPhase::parse(&value).ok_or_else(|| {
@@ -885,8 +880,8 @@ impl PerfScenarioConfig {
             }
             None => None,
         };
-        let wall_presentation_flag = value_from_args(&args, "--perf-wall-presentation")?;
-        let wall_presentation_environment = env::var("HW_WALL_PERF_PRESENTATION").ok();
+        let wall_presentation_flag = value_from_args(args, "--perf-wall-presentation")?;
+        let wall_presentation_environment = input.env_text("HW_WALL_PERF_PRESENTATION");
         if wall_presentation_flag != wall_presentation_environment {
             return Err(PerfScenarioConfigError(
                 "--perf-wall-presentation and HW_WALL_PERF_PRESENTATION must be paired and equal"
@@ -902,8 +897,8 @@ impl PerfScenarioConfig {
                 })
             })
             .transpose()?;
-        let door_presentation_flag = value_from_args(&args, "--perf-door-presentation")?;
-        let door_presentation_environment = env::var("HW_DOOR_PERF_PRESENTATION").ok();
+        let door_presentation_flag = value_from_args(args, "--perf-door-presentation")?;
+        let door_presentation_environment = input.env_text("HW_DOOR_PERF_PRESENTATION");
         if door_presentation_flag != door_presentation_environment {
             return Err(PerfScenarioConfigError(
                 "--perf-door-presentation and HW_DOOR_PERF_PRESENTATION must be paired and equal"
@@ -919,9 +914,10 @@ impl PerfScenarioConfig {
                 })
             })
             .transpose()?;
-        let wall_door_joint_flag = has_flag(&args, "--perf-wall-door-joint-actual-window");
-        let wall_door_joint_environment =
-            env::var("HW_WALL_DOOR_JOINT_ACTUAL_WINDOW").is_ok_and(|value| value == "1");
+        let wall_door_joint_flag = has_flag(args, "--perf-wall-door-joint-actual-window");
+        let wall_door_joint_environment = input
+            .env_text("HW_WALL_DOOR_JOINT_ACTUAL_WINDOW")
+            .is_some_and(|value| value == "1");
         if wall_door_joint_flag != wall_door_joint_environment {
             return Err(PerfScenarioConfigError(
                 "--perf-wall-door-joint-actual-window and HW_WALL_DOOR_JOINT_ACTUAL_WINDOW=1 must be paired"
@@ -929,8 +925,11 @@ impl PerfScenarioConfig {
             ));
         }
         let wall_door_joint_actual_window = wall_door_joint_flag && wall_door_joint_environment;
-        let joint_release = has_flag(&args, "--perf-wall-door-joint-release");
-        if joint_release != env::var("HW_WALL_DOOR_JOINT_RELEASE").is_ok_and(|value| value == "1")
+        let joint_release = has_flag(args, "--perf-wall-door-joint-release");
+        if joint_release
+            != input
+                .env_text("HW_WALL_DOOR_JOINT_RELEASE")
+                .is_some_and(|value| value == "1")
             || (joint_release && !wall_door_joint_actual_window)
         {
             return Err(PerfScenarioConfigError(
@@ -938,9 +937,10 @@ impl PerfScenarioConfig {
                     .to_string(),
             ));
         }
-        let wall_actual_window_flag = has_flag(&args, "--perf-wall-actual-window");
-        let wall_actual_window_environment =
-            env::var("HW_WALL_ART_ACTUAL_WINDOW").is_ok_and(|value| value == "1");
+        let wall_actual_window_flag = has_flag(args, "--perf-wall-actual-window");
+        let wall_actual_window_environment = input
+            .env_text("HW_WALL_ART_ACTUAL_WINDOW")
+            .is_some_and(|value| value == "1");
         if wall_actual_window_flag != wall_actual_window_environment {
             return Err(PerfScenarioConfigError(
                 "--perf-wall-actual-window and HW_WALL_ART_ACTUAL_WINDOW=1 must be paired"
@@ -948,10 +948,13 @@ impl PerfScenarioConfig {
             ));
         }
         let wall_actual_window = wall_actual_window_flag && wall_actual_window_environment;
-        let wall_art_preview = env::var("HW_WALL_ART_PREVIEW").is_ok_and(|value| value == "1");
-        let wall_art_matrix_flag = has_flag(&args, "--perf-wall-art-matrix");
-        let wall_art_matrix_environment =
-            env::var("HW_WALL_ART_MATRIX").is_ok_and(|value| value == "1");
+        let wall_art_preview = input
+            .env_text("HW_WALL_ART_PREVIEW")
+            .is_some_and(|value| value == "1");
+        let wall_art_matrix_flag = has_flag(args, "--perf-wall-art-matrix");
+        let wall_art_matrix_environment = input
+            .env_text("HW_WALL_ART_MATRIX")
+            .is_some_and(|value| value == "1");
         if wall_art_matrix_flag != wall_art_matrix_environment {
             return Err(PerfScenarioConfigError(
                 "--perf-wall-art-matrix and HW_WALL_ART_MATRIX=1 must be paired".to_string(),
@@ -963,9 +966,10 @@ impl PerfScenarioConfig {
                 "Wall art matrix requires the current-Wall actual-window profile".to_string(),
             ));
         }
-        let wall_formwork_acceptance_flag = has_flag(&args, "--perf-wall-formwork-acceptance");
-        let wall_formwork_acceptance_environment =
-            env::var("HW_WALL_FORMWORK_ACCEPTANCE").is_ok_and(|value| value == "1");
+        let wall_formwork_acceptance_flag = has_flag(args, "--perf-wall-formwork-acceptance");
+        let wall_formwork_acceptance_environment = input
+            .env_text("HW_WALL_FORMWORK_ACCEPTANCE")
+            .is_some_and(|value| value == "1");
         if wall_formwork_acceptance_flag != wall_formwork_acceptance_environment {
             return Err(PerfScenarioConfigError(
                 "--perf-wall-formwork-acceptance and HW_WALL_FORMWORK_ACCEPTANCE=1 must be paired"
@@ -974,8 +978,9 @@ impl PerfScenarioConfig {
         }
         let wall_formwork_acceptance =
             wall_formwork_acceptance_flag && wall_formwork_acceptance_environment;
-        let wall_candidate_requested =
-            env::var("HW_WALL_CANDIDATE").is_ok_and(|value| value == "1");
+        let wall_candidate_requested = input
+            .env_text("HW_WALL_CANDIDATE")
+            .is_some_and(|value| value == "1");
         if wall_formwork_acceptance
             && (!wall_actual_window
                 || !wall_art_matrix
@@ -989,13 +994,14 @@ impl PerfScenarioConfig {
             ));
         }
         wall_art_zoom_selection(
-            value_from_args(&args, "--perf-wall-art-zoom")?.as_deref(),
-            env::var("HW_WALL_ART_ZOOM").ok().as_deref(),
+            value_from_args(args, "--perf-wall-art-zoom")?.as_deref(),
+            input.env_text("HW_WALL_ART_ZOOM").as_deref(),
             wall_actual_window,
         )?;
-        let wall_color_actual_window_flag = has_flag(&args, "--perf-wall-color-actual-window");
-        let wall_color_actual_window_environment =
-            env::var("HW_WALL_COLOR_ACTUAL_WINDOW").is_ok_and(|value| value == "1");
+        let wall_color_actual_window_flag = has_flag(args, "--perf-wall-color-actual-window");
+        let wall_color_actual_window_environment = input
+            .env_text("HW_WALL_COLOR_ACTUAL_WINDOW")
+            .is_some_and(|value| value == "1");
         if wall_color_actual_window_flag != wall_color_actual_window_environment {
             return Err(PerfScenarioConfigError(
                 "--perf-wall-color-actual-window and HW_WALL_COLOR_ACTUAL_WINDOW=1 must be paired"
@@ -1072,12 +1078,16 @@ impl PerfScenarioConfig {
                 || !joint_asset_opt_ins_match(
                     joint_release,
                     ["HW_WALL_CANDIDATE", "HW_DOOR_CANDIDATE"]
-                        .map(|key| env::var(key).is_ok_and(|value| value == "1")),
+                        .map(|key| input.env_text(key).is_some_and(|value| value == "1")),
                     ["HW_WALL_ART_PREVIEW", "HW_DOOR_ART_PREVIEW"]
-                        .map(|key| env::var(key).is_ok_and(|value| value == "1")),
+                        .map(|key| input.env_text(key).is_some_and(|value| value == "1")),
                 )
-                || env::var("HW_WALL_ART_ACTUAL_WINDOW").is_ok_and(|value| value == "1")
-                || env::var("HW_DOOR_ART_ACTUAL_WINDOW").is_ok_and(|value| value == "1"))
+                || input
+                    .env_text("HW_WALL_ART_ACTUAL_WINDOW")
+                    .is_some_and(|value| value == "1")
+                || input
+                    .env_text("HW_DOOR_ART_ACTUAL_WINDOW")
+                    .is_some_and(|value| value == "1"))
         {
             return Err(PerfScenarioConfigError(
                 "Wall/Door joint actual-window requires door-density/small/production, both isolated candidates or explicit release, and no art-preview or single-track actual-window profile"
@@ -1133,11 +1143,11 @@ impl PerfScenarioConfig {
             _ => {}
         }
         let window_width = parse_optional_u32(
-            value_from_args_or_env(&args, "--perf-window-width", "HW_PERF_WINDOW_WIDTH")?,
+            input.value("--perf-window-width", "HW_PERF_WINDOW_WIDTH")?,
             "--perf-window-width",
         )?;
         let window_height = parse_optional_u32(
-            value_from_args_or_env(&args, "--perf-window-height", "HW_PERF_WINDOW_HEIGHT")?,
+            input.value("--perf-window-height", "HW_PERF_WINDOW_HEIGHT")?,
             "--perf-window-height",
         )?;
         if (window_width.is_some()) != (window_height.is_some()) {
@@ -1152,27 +1162,22 @@ impl PerfScenarioConfig {
             ));
         }
         let window_scale_factor = parse_optional_positive_f32(
-            value_from_args_or_env(
-                &args,
-                "--perf-window-scale-factor",
-                "HW_PERF_WINDOW_SCALE_FACTOR",
-            )?,
+            input.value("--perf-window-scale-factor", "HW_PERF_WINDOW_SCALE_FACTOR")?,
             "--perf-window-scale-factor",
         )?;
-        let rtt_quality =
-            match value_from_args_or_env(&args, "--perf-rtt-quality", "HW_PERF_RTT_QUALITY")? {
-                Some(value) => Some(match value.as_str() {
-                    "high" => RttQualityPreset::High,
-                    "medium" => RttQualityPreset::Medium,
-                    "low" => RttQualityPreset::Low,
-                    _ => {
-                        return Err(PerfScenarioConfigError(format!(
-                            "--perf-rtt-quality must be one of high|medium|low; got '{value}'"
-                        )));
-                    }
-                }),
-                None => None,
-            };
+        let rtt_quality = match input.value("--perf-rtt-quality", "HW_PERF_RTT_QUALITY")? {
+            Some(value) => Some(match value.as_str() {
+                "high" => RttQualityPreset::High,
+                "medium" => RttQualityPreset::Medium,
+                "low" => RttQualityPreset::Low,
+                _ => {
+                    return Err(PerfScenarioConfigError(format!(
+                        "--perf-rtt-quality must be one of high|medium|low; got '{value}'"
+                    )));
+                }
+            }),
+            None => None,
+        };
         let wall_window_contract = wall_density_window_contract_matches(
             wall_art_matrix,
             window_width,
@@ -1247,105 +1252,212 @@ impl PerfScenarioConfig {
             ));
         }
 
+        let workload = match workload {
+            PerfWorkload::Gather => ValidatedWorkload::Gather {
+                familiar_policy_mode,
+                operation_dialog_mode,
+            },
+            PerfWorkload::TaskDashboard => ValidatedWorkload::TaskDashboard { dashboard_mode },
+            PerfWorkload::IndoorLight => ValidatedWorkload::IndoorLight {
+                selection: rtt_light.expect("validated indoor-light selection"),
+                behavior_case,
+            },
+            PerfWorkload::WallDensity => ValidatedWorkload::WallDensity {
+                phase: wall_phase.expect("validated wall phase"),
+                presentation: wall_presentation,
+            },
+            PerfWorkload::DoorDensity => ValidatedWorkload::DoorDensity {
+                presentation: door_presentation.expect("validated door presentation"),
+                joint_actual_window: wall_door_joint_actual_window,
+            },
+            PerfWorkload::PathDoor => ValidatedWorkload::PathDoor,
+            PerfWorkload::Construction => ValidatedWorkload::Construction,
+            PerfWorkload::UiGpu => ValidatedWorkload::UiGpu,
+            PerfWorkload::DreamUiBurst => ValidatedWorkload::DreamUiBurst,
+            PerfWorkload::Deconstruction => ValidatedWorkload::Deconstruction,
+            PerfWorkload::SaveTransaction => ValidatedWorkload::SaveTransaction,
+        };
         Ok(Self {
-            enabled,
-            master_seed,
-            workload,
-            size,
-            soul_count,
-            familiar_count,
-            render_mode,
-            familiar_policy_mode,
-            operation_dialog_mode,
-            dashboard_mode,
-            warmup_secs,
-            measure_secs,
-            output_dir,
-            #[cfg(feature = "profiling-renderdoc")]
-            renderdoc_capture,
-            rtt_light,
-            behavior_case,
-            wall_phase,
-            wall_presentation,
-            door_presentation,
-            wall_door_joint_actual_window,
-            window_width,
-            window_height,
-            window_scale_factor,
-            rtt_quality,
-            clock_mode,
-            fixed_step_hz,
-            fixed_warmup_ticks,
-            fixed_audit_ticks,
+            common: PerfCommonConfig {
+                master_seed,
+                size,
+                soul_count,
+                familiar_count,
+                render_mode,
+                warmup_secs,
+                measure_secs,
+                output_dir,
+                #[cfg(feature = "profiling-renderdoc")]
+                renderdoc_capture,
+                window_width,
+                window_height,
+                window_scale_factor,
+                rtt_quality,
+                clock_mode,
+                fixed_step_hz,
+                fixed_warmup_ticks,
+                fixed_audit_ticks,
+            },
+            state: PerfScenarioState::Enabled(workload),
         })
     }
 
+    pub const fn master_seed(&self) -> u64 {
+        self.common.master_seed
+    }
+    pub const fn size(&self) -> PerfScenarioSize {
+        self.common.size
+    }
+    pub const fn soul_count(&self) -> u32 {
+        self.common.soul_count
+    }
+    pub const fn familiar_count(&self) -> u32 {
+        self.common.familiar_count
+    }
+    pub const fn render_mode(&self) -> PerfRenderMode {
+        self.common.render_mode
+    }
+    pub const fn warmup_secs(&self) -> f32 {
+        self.common.warmup_secs
+    }
+    pub const fn measure_secs(&self) -> f32 {
+        self.common.measure_secs
+    }
+
+    pub fn output_dir(&self) -> Option<&std::path::Path> {
+        self.common.output_dir.as_deref()
+    }
+
+    pub const fn workload(&self) -> PerfWorkload {
+        match self.state {
+            PerfScenarioState::Disabled => PerfWorkload::Gather,
+            PerfScenarioState::Enabled(workload) => workload.kind(),
+        }
+    }
+    pub const fn familiar_policy_mode(&self) -> PerfFamiliarPolicyMode {
+        match self.state {
+            PerfScenarioState::Enabled(ValidatedWorkload::Gather {
+                familiar_policy_mode,
+                ..
+            }) => familiar_policy_mode,
+            _ => PerfFamiliarPolicyMode::Baseline,
+        }
+    }
+    pub const fn operation_dialog_mode(&self) -> PerfOperationDialogMode {
+        match self.state {
+            PerfScenarioState::Enabled(ValidatedWorkload::Gather {
+                operation_dialog_mode,
+                ..
+            }) => operation_dialog_mode,
+            _ => PerfOperationDialogMode::Hidden,
+        }
+    }
+    pub const fn dashboard_mode(&self) -> PerfDashboardMode {
+        match self.state {
+            PerfScenarioState::Enabled(ValidatedWorkload::TaskDashboard { dashboard_mode }) => {
+                dashboard_mode
+            }
+            _ => PerfDashboardMode::Hidden,
+        }
+    }
     pub const fn enabled(&self) -> bool {
-        self.enabled
+        matches!(self.state, PerfScenarioState::Enabled(_))
     }
 
     pub const fn requested_window_size(&self) -> Option<(u32, u32)> {
-        if !self.enabled {
+        if !self.enabled() {
             return None;
         }
-        match (self.window_width, self.window_height) {
+        match (self.common.window_width, self.common.window_height) {
             (Some(width), Some(height)) => Some((width, height)),
             _ => None,
         }
     }
 
     pub const fn rtt_light_selection(&self) -> Option<PerfRttLightSelection> {
-        self.rtt_light
+        match self.state {
+            PerfScenarioState::Enabled(ValidatedWorkload::IndoorLight { selection, .. }) => {
+                Some(selection)
+            }
+            _ => None,
+        }
     }
 
     #[cfg(feature = "profiling-renderdoc")]
     pub(crate) const fn renderdoc_capture_enabled(&self) -> bool {
-        self.enabled && self.renderdoc_capture
+        self.enabled() && self.common.renderdoc_capture
     }
 
-    #[cfg(feature = "profiling")]
     pub(super) const fn behavior_case(&self) -> Option<PerfBehaviorCase> {
-        self.behavior_case
+        match self.state {
+            PerfScenarioState::Enabled(ValidatedWorkload::IndoorLight {
+                behavior_case, ..
+            }) => behavior_case,
+            _ => None,
+        }
     }
 
     pub const fn behavior_case_as_str(&self) -> Option<&'static str> {
-        match self.behavior_case {
+        match self.behavior_case() {
             Some(case) => Some(case.as_str()),
             None => None,
         }
     }
 
     pub const fn wall_phase(&self) -> Option<PerfWallPhase> {
-        self.wall_phase
+        match self.state {
+            PerfScenarioState::Enabled(ValidatedWorkload::WallDensity { phase, .. }) => Some(phase),
+            _ => None,
+        }
     }
 
     pub const fn wall_presentation(&self) -> Option<PerfWallPresentation> {
-        self.wall_presentation
+        match self.state {
+            PerfScenarioState::Enabled(ValidatedWorkload::WallDensity { presentation, .. }) => {
+                presentation
+            }
+            _ => None,
+        }
     }
 
     pub const fn door_presentation(&self) -> Option<PerfDoorPresentation> {
-        self.door_presentation
+        match self.state {
+            PerfScenarioState::Enabled(ValidatedWorkload::DoorDensity { presentation, .. }) => {
+                Some(presentation)
+            }
+            _ => None,
+        }
     }
 
     pub const fn wall_door_joint_actual_window(&self) -> bool {
-        self.enabled && self.wall_door_joint_actual_window
+        matches!(
+            self.state,
+            PerfScenarioState::Enabled(ValidatedWorkload::DoorDensity {
+                joint_actual_window: true,
+                ..
+            })
+        )
     }
 
     pub const fn requested_window_scale_factor(&self) -> Option<f32> {
-        if self.enabled {
-            self.window_scale_factor
+        if self.enabled() {
+            self.common.window_scale_factor
         } else {
             None
         }
     }
 
     pub const fn requested_rtt_quality(&self) -> Option<RttQualityPreset> {
-        if self.enabled { self.rtt_quality } else { None }
+        if self.enabled() {
+            self.common.rtt_quality
+        } else {
+            None
+        }
     }
 
     pub const fn uses_fixed_timesteps(&self) -> bool {
         matches!(
-            self.clock_mode,
+            self.common.clock_mode,
             PerfClockMode::Fixed | PerfClockMode::FixedBehavior
         )
     }
@@ -1356,7 +1468,7 @@ impl PerfScenarioConfig {
         // actors.  Otherwise a realtime workload records its "initial" state
         // on the next frame after a variable-delta movement step, so repeated
         // runs with the same seed fail the mandatory checksum contract.
-        self.enabled
+        self.enabled()
     }
 
     /// Indoor-light lanes other than behavior treat their seeded Door states as
@@ -1364,10 +1476,10 @@ impl PerfScenarioConfig {
     /// so Door automation must be excluded explicitly instead of relying on
     /// pause.
     pub fn freezes_indoor_light_door_automation(&self) -> bool {
-        self.enabled
-            && self.workload == PerfWorkload::IndoorLight
+        self.enabled()
+            && self.workload() == PerfWorkload::IndoorLight
             && self
-                .rtt_light
+                .rtt_light_selection()
                 .is_some_and(|selection| selection.lane() != "behavior")
     }
 
@@ -1383,10 +1495,10 @@ impl PerfScenarioConfig {
         #[cfg(not(feature = "profiling"))]
         let door_gallery_requested = false;
 
-        self.enabled
+        self.enabled()
             && !self.uses_fixed_timesteps()
             && (matches!(
-                self.workload,
+                self.workload(),
                 PerfWorkload::IndoorLight | PerfWorkload::WallDensity | PerfWorkload::DoorDensity
             ) || door_gallery_requested)
     }
@@ -1397,33 +1509,33 @@ impl PerfScenarioConfig {
     /// rocks, facilities, and regrowth targets must not reserve cells or add
     /// unrelated draw work before the fixed wall fixture is installed.
     pub const fn uses_isolated_density_world(&self) -> bool {
-        self.enabled
+        self.enabled()
             && matches!(
-                self.workload,
+                self.workload(),
                 PerfWorkload::WallDensity | PerfWorkload::DoorDensity
             )
     }
 
     pub fn is_field_core(&self) -> bool {
-        self.enabled
-            && self.workload == PerfWorkload::IndoorLight
+        self.enabled()
+            && self.workload() == PerfWorkload::IndoorLight
             && self
-                .rtt_light
+                .rtt_light_selection()
                 .is_some_and(|selection| selection.lane() == "field-core")
     }
 
     pub fn is_pure_field_core(&self) -> bool {
         self.is_field_core()
             && self
-                .rtt_light
+                .rtt_light_selection()
                 .is_some_and(|selection| selection.stage_id() == "p03")
     }
 
     pub fn is_consumer_core(&self) -> bool {
-        self.enabled
-            && self.workload == PerfWorkload::IndoorLight
+        self.enabled()
+            && self.workload() == PerfWorkload::IndoorLight
             && self
-                .rtt_light
+                .rtt_light_selection()
                 .is_some_and(|selection| selection.lane() == "consumer-core")
     }
 
@@ -1432,9 +1544,9 @@ impl PerfScenarioConfig {
     /// fixture again. Other stages and lanes must retain their existing setup
     /// timing.
     pub fn requires_p08_cross_consumer_setup_step(&self) -> bool {
-        self.enabled
-            && self.workload == PerfWorkload::IndoorLight
-            && self.rtt_light.is_some_and(|selection| {
+        self.enabled()
+            && self.workload() == PerfWorkload::IndoorLight
+            && self.rtt_light_selection().is_some_and(|selection| {
                 selection.stage_id() == "p08" && selection.lane() == "static"
             })
     }
@@ -1446,7 +1558,7 @@ impl PerfScenarioConfig {
     pub fn pauses_virtual_time_for_field_core(&self) -> bool {
         self.is_field_core()
             && self
-                .rtt_light
+                .rtt_light_selection()
                 .is_some_and(|selection| selection.uses_runtime_field())
     }
 
@@ -1455,43 +1567,43 @@ impl PerfScenarioConfig {
     /// これは起動時 fixture の生成だけに使う。通常プレイと、実行中の F8/F3
     /// 切替は既存どおり scene root を維持する。
     pub const fn omits_3d_scene_roots(&self) -> bool {
-        self.enabled && matches!(self.render_mode, PerfRenderMode::Cpu)
+        self.enabled() && matches!(self.common.render_mode, PerfRenderMode::Cpu)
     }
 
     pub const fn clock_mode_as_str(&self) -> &'static str {
-        self.clock_mode.as_str()
+        self.common.clock_mode.as_str()
     }
 
     pub const fn fixed_step_hz(&self) -> u32 {
-        self.fixed_step_hz
+        self.common.fixed_step_hz
     }
 
     pub const fn fixed_warmup_ticks(&self) -> u64 {
-        self.fixed_warmup_ticks
+        self.common.fixed_warmup_ticks
     }
 
     pub const fn fixed_audit_ticks(&self) -> u64 {
-        self.fixed_audit_ticks
+        self.common.fixed_audit_ticks
     }
 
     #[cfg(feature = "profiling")]
     pub(super) const fn fixed_audit_end_tick(&self) -> u64 {
-        self.fixed_warmup_ticks + self.fixed_audit_ticks
+        self.common.fixed_warmup_ticks + self.common.fixed_audit_ticks
     }
 
     pub fn initial_render_resources(&self) -> (Render3dVisible, RenderPerfToggles) {
-        if !self.enabled {
+        if !self.enabled() {
             return (Render3dVisible::default(), RenderPerfToggles::default());
         }
 
-        match self.render_mode {
+        match self.common.render_mode {
             PerfRenderMode::Cpu => (Render3dVisible(false), RenderPerfToggles::all_disabled()),
             PerfRenderMode::Gpu => (Render3dVisible(true), RenderPerfToggles::gpu_baseline()),
         }
     }
 
     fn stream_seed(&self, stream: PerfRandomStream) -> u64 {
-        splitmix64(self.master_seed ^ stream.salt())
+        splitmix64(self.common.master_seed ^ stream.salt())
     }
 }
 
@@ -1569,8 +1681,9 @@ fn resolve_renderdoc_capture(requested: bool) -> Result<bool, PerfScenarioConfig
 /// 専用経路と通常経路を相互排他的にするために使う。
 #[cfg(feature = "profiling")]
 pub(crate) fn is_fixed_step_audit(config: Option<Res<PerfScenarioConfig>>) -> bool {
-    config
-        .is_some_and(|config| config.enabled() && matches!(config.clock_mode, PerfClockMode::Fixed))
+    config.is_some_and(|config| {
+        config.enabled() && matches!(config.common.clock_mode, PerfClockMode::Fixed)
+    })
 }
 
 #[cfg(feature = "profiling")]
@@ -1581,7 +1694,7 @@ pub(crate) fn is_not_fixed_step_audit(config: Option<Res<PerfScenarioConfig>>) -
 #[cfg(feature = "profiling")]
 pub(crate) fn is_fixed_step_behavior(config: Option<Res<PerfScenarioConfig>>) -> bool {
     config.is_some_and(|config| {
-        config.enabled() && matches!(config.clock_mode, PerfClockMode::FixedBehavior)
+        config.enabled() && matches!(config.common.clock_mode, PerfClockMode::FixedBehavior)
     })
 }
 
@@ -1640,12 +1753,12 @@ pub(crate) fn is_not_renderdoc_capture(_config: Option<Res<PerfScenarioConfig>>)
 }
 
 fn parse_rtt_light_selection(
-    args: &[String],
+    input: &PerfConfigInput<'_>,
     workload: PerfWorkload,
 ) -> Result<Option<PerfRttLightSelection>, PerfScenarioConfigError> {
-    let contract = value_from_args_or_env(args, "--perf-contract", "HW_PERF_CONTRACT")?;
-    let stage = value_from_args_or_env(args, "--perf-stage", "HW_PERF_STAGE")?;
-    let lane = value_from_args_or_env(args, "--perf-lane", "HW_PERF_LANE")?;
+    let contract = input.value("--perf-contract", "HW_PERF_CONTRACT")?;
+    let stage = input.value("--perf-stage", "HW_PERF_STAGE")?;
+    let lane = input.value("--perf-lane", "HW_PERF_LANE")?;
     let any_selected = contract.is_some() || stage.is_some() || lane.is_some();
 
     if workload != PerfWorkload::IndoorLight {
@@ -1704,35 +1817,27 @@ impl Default for PerfScenarioConfig {
     fn default() -> Self {
         let (soul_count, familiar_count) = PerfScenarioSize::Medium.population();
         Self {
-            enabled: false,
-            master_seed: 0,
-            workload: PerfWorkload::Gather,
-            size: PerfScenarioSize::Medium,
-            soul_count,
-            familiar_count,
-            render_mode: PerfRenderMode::Gpu,
-            familiar_policy_mode: PerfFamiliarPolicyMode::Baseline,
-            operation_dialog_mode: PerfOperationDialogMode::Hidden,
-            dashboard_mode: PerfDashboardMode::Hidden,
-            warmup_secs: DEFAULT_WARMUP_SECS,
-            measure_secs: DEFAULT_MEASURE_SECS,
-            output_dir: None,
-            #[cfg(feature = "profiling-renderdoc")]
-            renderdoc_capture: false,
-            rtt_light: None,
-            behavior_case: None,
-            wall_phase: None,
-            wall_presentation: None,
-            door_presentation: None,
-            wall_door_joint_actual_window: false,
-            window_width: None,
-            window_height: None,
-            window_scale_factor: None,
-            rtt_quality: None,
-            clock_mode: PerfClockMode::Realtime,
-            fixed_step_hz: DEFAULT_FIXED_STEP_HZ,
-            fixed_warmup_ticks: DEFAULT_FIXED_WARMUP_TICKS,
-            fixed_audit_ticks: DEFAULT_FIXED_AUDIT_TICKS,
+            common: PerfCommonConfig {
+                master_seed: 0,
+                size: PerfScenarioSize::Medium,
+                soul_count,
+                familiar_count,
+                render_mode: PerfRenderMode::Gpu,
+                warmup_secs: DEFAULT_WARMUP_SECS,
+                measure_secs: DEFAULT_MEASURE_SECS,
+                output_dir: None,
+                #[cfg(feature = "profiling-renderdoc")]
+                renderdoc_capture: false,
+                window_width: None,
+                window_height: None,
+                window_scale_factor: None,
+                rtt_quality: None,
+                clock_mode: PerfClockMode::Realtime,
+                fixed_step_hz: DEFAULT_FIXED_STEP_HZ,
+                fixed_warmup_ticks: DEFAULT_FIXED_WARMUP_TICKS,
+                fixed_audit_ticks: DEFAULT_FIXED_AUDIT_TICKS,
+            },
+            state: PerfScenarioState::Disabled,
         }
     }
 }

@@ -47,7 +47,7 @@ pub(crate) struct SaveTransactionCaptureParams<'w, 's> {
 
 pub(crate) fn drive_save_transaction_capture_system(mut params: SaveTransactionCaptureParams) {
     if !params.config.enabled()
-        || params.config.workload != PerfWorkload::SaveTransaction
+        || params.config.workload() != PerfWorkload::SaveTransaction
         || !params.applied.complete()
     {
         return;

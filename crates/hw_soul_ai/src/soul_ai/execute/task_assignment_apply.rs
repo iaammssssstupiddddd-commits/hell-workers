@@ -127,7 +127,10 @@ fn apply_assignment_reservations(
     }
 }
 
-fn attach_delivering_to_relationship(commands: &mut Commands, assigned_task: &AssignedTask) {
+pub(super) fn attach_delivering_to_relationship(
+    commands: &mut Commands,
+    assigned_task: &AssignedTask,
+) {
     match assigned_task {
         AssignedTask::Haul(data) => {
             commands
@@ -801,9 +804,20 @@ mod tests {
         app.world_mut()
             .entity_mut(pending_target)
             .insert(PendingBuildingMove {
+                worker: workers[0],
+                task_entity: pending_order,
+                expected_identity: ActiveTaskIdentity::new(
+                    pending_order,
+                    pending_order,
+                    WorkType::Move,
+                ),
+                expected_transform: Transform::default(),
+                proposed_transform: Transform::default(),
+                expected_kind: BuildingType::MudMixer,
                 old_occupied: vec![(1, 1)],
                 new_occupied: vec![(2, 2)],
                 companion_anchor: None,
+                rejected: false,
             });
         let (durable_order, durable_target) = spawn_deconstruction_order(&mut app);
         app.world_mut().spawn(MovePlantTask {

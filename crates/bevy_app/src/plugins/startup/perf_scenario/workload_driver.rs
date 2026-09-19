@@ -12,7 +12,7 @@ pub(crate) fn drive_perf_workload_system(
     mut world_map: WorldMapWrite,
     mut q_doors: Query<(&PerfFixtureMarker, &Transform, &mut Door)>,
 ) {
-    if !applied.complete() || !config.enabled() || config.workload != PerfWorkload::PathDoor {
+    if !applied.complete() || !config.enabled() || config.workload() != PerfWorkload::PathDoor {
         return;
     }
 

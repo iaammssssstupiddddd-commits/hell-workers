@@ -17,8 +17,13 @@ use hw_ui::panels::task_list::{
 };
 use serde_json::{Value, json};
 
+use crate::interface::ui::panels::task_list::TaskActionOutcome;
 use crate::systems::save::{SaveLoadOutcome, SaveStorageRoot};
 use crate::systems::settings::SettingsStorageRoot;
+
+mod progress_bars;
+mod refactor_rows;
+mod terrain_materials;
 
 pub struct NativeUiAcceptancePlugin {
     root: PathBuf,
@@ -29,8 +34,15 @@ pub struct NativeUiAcceptancePlugin {
 
 impl NativeUiAcceptancePlugin {
     pub fn window_resolution(&self) -> bevy::window::WindowResolution {
-        bevy::window::WindowResolution::new(self.size.x as u32, self.size.y as u32)
-            .with_scale_factor_override(1.0)
+        let resolution =
+            bevy::window::WindowResolution::new(self.size.x as u32, self.size.y as u32);
+        if terrain_materials::enabled() {
+            // Start below the desktop bounds even at native high DPI. The fixture
+            // requests its physical viewport once the backend scale is known.
+            bevy::window::WindowResolution::new(640, 360)
+        } else {
+            resolution.with_scale_factor_override(1.0)
+        }
     }
 
     pub fn try_from_process() -> Result<Option<Self>, String> {
@@ -84,6 +96,9 @@ impl NativeUiAcceptancePlugin {
 
 impl Plugin for NativeUiAcceptancePlugin {
     fn build(&self, app: &mut App) {
+        if terrain_materials::enabled() {
+            terrain_materials::register(app);
+        }
         app.insert_resource(SaveStorageRoot::new(self.root.join("saves")))
             .insert_resource(SettingsStorageRoot::new(self.root.join("settings")))
             .insert_resource(UiObserver {
@@ -95,11 +110,15 @@ impl Plugin for NativeUiAcceptancePlugin {
                 started: Instant::now(),
                 save_cursor: MessageCursor::default(),
                 outcomes: Vec::new(),
+                task_cursor: MessageCursor::default(),
+                task_outcomes: Vec::new(),
             })
             .add_systems(
                 PostUpdate,
                 observe_ui
                     .after(bevy::camera::visibility::VisibilitySystems::VisibilityPropagate)
+                    .after(bevy::camera::visibility::VisibilitySystems::CheckVisibility)
+                    .after(bevy::camera::visibility::VisibilitySystems::MarkNewlyHiddenEntitiesInvisible)
                     .after(bevy::ui::UiSystems::PostLayout)
                     .after(bevy::ui::UiSystems::Stack),
             );
@@ -116,12 +135,26 @@ struct UiObserver {
     started: Instant,
     save_cursor: MessageCursor<SaveLoadOutcome>,
     outcomes: Vec<String>,
+    task_cursor: MessageCursor<TaskActionOutcome>,
+    task_outcomes: Vec<Value>,
 }
 
 fn prepare_fixture(world: &mut World, scale: f32) {
     use hw_core::familiar::FamiliarPolicy;
     use hw_jobs::{Designation, PlayerIssuedDesignation, Priority, TaskSlots, Tree};
     world.resource_mut::<GameSettings>().ui_scale = scale;
+    if terrain_materials::enabled() {
+        terrain_materials::prepare(world);
+        return;
+    }
+    if std::env::var("HW_NATIVE_UI_CASE").as_deref() == Ok("progress-bars") {
+        progress_bars::prepare(world);
+        return;
+    }
+    if std::env::var("HW_NATIVE_UI_CASE").as_deref() == Ok("refactor-rows") {
+        refactor_rows::prepare(world);
+        return;
+    }
     if std::env::var("HW_NATIVE_UI_LAYOUT_ONLY").as_deref() == Ok("1") {
         if std::env::var("HW_NATIVE_UI_LAYOUT_MENU").as_deref() == Ok("1") {
             *world.resource_mut::<MenuState>() = MenuState::Zones;
@@ -274,6 +307,18 @@ fn visible_rect(world: &World, entity: Entity, viewport: Vec2) -> Option<[f32; 4
 }
 
 fn node_key(world: &World, entity: Entity) -> Option<String> {
+    if let Some(item) = world.get::<SoulListItem>(entity) {
+        return Some(format!("soul:{}", item.0.to_bits()));
+    }
+    if world.get::<SoulRenameButton>(entity).is_some() {
+        return Some("soul-rename".into());
+    }
+    if let Some(toggle) = world.get::<SectionToggle>(entity) {
+        return Some(match toggle.0 {
+            EntityListSectionType::Familiar(entity) => format!("fold:{}", entity.to_bits()),
+            EntityListSectionType::Unassigned => "fold:unassigned".into(),
+        });
+    }
     if world.get::<Text>(entity).is_some()
         && let Some(parent) = world.get::<ChildOf>(entity).map(ChildOf::parent)
         && (world
@@ -399,6 +444,7 @@ fn snapshot(world: &mut World, observer: &UiObserver) -> Value {
             let fully_visible = raw.iter().zip(rect).all(|(a, b)| (a - b).abs() <= 1.0);
             controls.insert(key, json!({"rect": rect, "unclipped_rect": raw, "fully_visible": fully_visible, "entity": entity.to_bits(),
                 "text": world.get::<Text>(entity).map(|text| &text.0),
+                "focused": world.resource::<bevy::input_focus::InputFocus>().get() == Some(entity),
                 "interaction": world.get::<Interaction>(entity).map(|value| format!("{value:?}")),
                 "scroll": world.get::<ScrollPosition>(entity).map(|scroll| [scroll.0.x, scroll.0.y])}));
         }
@@ -539,7 +585,8 @@ fn snapshot(world: &mut World, observer: &UiObserver) -> Value {
         "elapsed": observer.started.elapsed().as_secs_f64(), "ready": observer.prepared && observer.frame > 90,
         "world_epoch": world.resource::<WorldEpoch>().get(),
         "viewport": [viewport.x, viewport.y], "scale_factor": scale_factor,
-        "base_scale_factor": base_scale_factor, "dpi_mode": "viewport-override",
+        "base_scale_factor": base_scale_factor,
+        "dpi_mode": if terrain_materials::enabled() { "native" } else { "viewport-override" },
         "cursor": cursor,
         "mouse_left_pressed": world.resource::<ButtonInput<MouseButton>>().pressed(MouseButton::Left),
         "world_input_captured": world.resource::<UiInputState>().world_input_captured,
@@ -557,11 +604,15 @@ fn snapshot(world: &mut World, observer: &UiObserver) -> Value {
         "catalog": format!("{:?}", world.resource::<crate::systems::save::SaveCatalogUi>().mode),
         "save_session": world.resource::<crate::systems::save::SaveCatalogUi>().session,
         "save_outcomes": observer.outcomes,
+        "task_outcomes": observer.task_outcomes,
         "context_menus": context_menus,
         "camera": camera,
         "selected": world.resource::<hw_ui::selection::SelectedEntity>().0.map(Entity::to_bits),
         "controls": controls,
     });
+    value["refactor_rows"] = refactor_rows::snapshot(world, viewport);
+    value["progress_bars"] = progress_bars::snapshot(world);
+    value["terrain_materials"] = terrain_materials::snapshot(world, observer);
     value
         .as_object_mut()
         .expect("snapshot object")
@@ -598,6 +649,16 @@ fn observe_ui(world: &mut World) {
             .map(|outcome| format!("{:?}:{:?}", outcome.operation, outcome.result))
             .collect();
         observer.outcomes.extend(outcomes);
+        let frame = observer.frame;
+        let task_outcomes = observer.task_cursor.read(world.resource::<Messages<TaskActionOutcome>>())
+            .map(|outcome| json!({"entity": outcome.entity.to_bits(),
+                "action": format!("{:?}", outcome.action), "result": format!("{:?}", outcome.result),
+                "epoch": world.resource::<WorldEpoch>().get(), "frame": frame,
+            })).collect::<Vec<_>>();
+        observer.task_outcomes.extend(task_outcomes);
+        if observer.task_outcomes.len() > 64 {
+            observer.task_outcomes.drain(..32);
+        }
         if observer.outcomes.len() > 32 {
             observer.outcomes.drain(..16);
         }

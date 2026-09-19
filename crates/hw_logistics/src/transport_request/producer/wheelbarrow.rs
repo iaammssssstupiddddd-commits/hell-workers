@@ -80,7 +80,18 @@ pub fn wheelbarrow_auto_haul_system(
         }
     }
 
-    let mut seen_return = std::collections::HashSet::new();
+    let seen_return = super::upsert::select_canonical_requests(
+        q_wb_requests
+            .iter()
+            .filter(|(_, request, _, _)| request.kind == TransportRequestKind::ReturnWheelbarrow)
+            .map(|(entity, request, workers, _)| {
+                (
+                    request.anchor,
+                    entity,
+                    workers.map_or(0, |workers| workers.len()),
+                )
+            }),
+    );
     for (req_entity, req, workers_opt, current) in q_wb_requests.iter() {
         let wb_entity = req.anchor;
         let workers = workers_opt.map(|w| w.len()).unwrap_or(0);
@@ -95,12 +106,14 @@ pub fn wheelbarrow_auto_haul_system(
                 }
             }
             TransportRequestKind::ReturnWheelbarrow => {
-                if !super::upsert::process_duplicate_key(
+                if !super::upsert::reconcile_duplicate_request(
                     &mut commands,
                     req_entity,
                     workers,
-                    &mut seen_return,
-                    wb_entity,
+                    seen_return
+                        .get(&wb_entity)
+                        .is_some_and(|(kept, _)| *kept == req_entity),
+                    super::upsert::RequestSlotSnapshot::from_runtime(current),
                 ) {
                     continue;
                 }
@@ -115,7 +128,7 @@ pub fn wheelbarrow_auto_haul_system(
                             key: (wb_entity, ResourceType::Wheelbarrow),
                             site_pos: desired.wb_pos,
                             issued_by: desired.issued_by,
-                            desired_slots: 1,
+                            slots: super::upsert::RequestSlots::TotalSlots(1),
                             inflight,
                             priority: RETURN_REQUEST_PRIORITY,
                             transport_priority: TransportPriority::Low,
@@ -140,7 +153,7 @@ pub fn wheelbarrow_auto_haul_system(
     }
 
     for (wb_entity, desired) in desired_return_requests {
-        if seen_return.contains(&wb_entity) {
+        if seen_return.contains_key(&wb_entity) {
             continue;
         }
 

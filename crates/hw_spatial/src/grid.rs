@@ -7,9 +7,9 @@ pub use hw_world::SpatialGridOps;
 /// 汎用的なグリッドデータ構造
 #[derive(Clone)]
 pub struct GridData {
-    pub cell_size: f32,
-    pub grid: HashMap<(i32, i32), HashSet<Entity>>,
-    pub positions: HashMap<Entity, Vec2>,
+    cell_size: f32,
+    grid: HashMap<(i32, i32), HashSet<Entity>>,
+    positions: HashMap<Entity, Vec2>,
 }
 
 impl Default for GridData {
@@ -35,9 +35,40 @@ impl GridData {
     }
 
     pub fn insert(&mut self, entity: Entity, pos: Vec2) {
+        self.upsert(entity, pos);
+    }
+
+    pub fn cell_size(&self) -> f32 {
+        self.cell_size
+    }
+
+    pub fn position(&self, entity: Entity) -> Option<Vec2> {
+        self.positions.get(&entity).copied()
+    }
+
+    pub fn positions(&self) -> impl Iterator<Item = (Entity, Vec2)> + '_ {
+        self.positions
+            .iter()
+            .map(|(&entity, &position)| (entity, position))
+    }
+
+    /// Registers or moves an entity, keeping exactly one bucket membership.
+    fn upsert(&mut self, entity: Entity, pos: Vec2) -> bool {
+        if self.position(entity) == Some(pos) {
+            return false;
+        }
+        if self
+            .position(entity)
+            .is_some_and(|old| self.pos_to_cell(old) == self.pos_to_cell(pos))
+        {
+            self.positions.insert(entity, pos);
+            return true;
+        }
+        self.remove(entity);
         let cell = self.pos_to_cell(pos);
         self.grid.entry(cell).or_default().insert(entity);
         self.positions.insert(entity, pos);
+        true
     }
 
     pub fn get_nearby_in_radius(&self, pos: Vec2, radius: f32) -> Vec<Entity> {
@@ -160,32 +191,7 @@ impl GridData {
     }
 
     pub fn update(&mut self, entity: Entity, new_pos: Vec2) {
-        if let Some(&old_pos) = self.positions.get(&entity) {
-            if old_pos == new_pos {
-                return;
-            }
-
-            let old_cell = self.pos_to_cell(old_pos);
-            let new_cell = self.pos_to_cell(new_pos);
-
-            if old_cell == new_cell {
-                // セルが変わらない場合は位置情報のみ更新（高速パス）
-                self.positions.insert(entity, new_pos);
-            } else {
-                // セルが変わる場合は移動処理
-                if let Some(entities) = self.grid.get_mut(&old_cell) {
-                    entities.remove(&entity);
-                    if entities.is_empty() {
-                        self.grid.remove(&old_cell);
-                    }
-                }
-                self.grid.entry(new_cell).or_default().insert(entity);
-                self.positions.insert(entity, new_pos);
-            }
-        } else {
-            // 新規登録
-            self.insert(entity, new_pos);
-        }
+        self.upsert(entity, new_pos);
     }
 
     pub fn clear(&mut self) {
@@ -325,9 +331,31 @@ impl<Tag> SpatialIndex<Tag> {
         &self.data
     }
 
-    /// Returns the underlying grid data for explicit grid configuration.
-    pub fn data_mut(&mut self) -> &mut GridData {
-        &mut self.data
+    pub fn position(&self, entity: Entity) -> Option<Vec2> {
+        self.data.position(entity)
+    }
+
+    pub fn positions(&self) -> impl Iterator<Item = (Entity, Vec2)> + '_ {
+        self.data.positions()
+    }
+
+    pub fn clear(&mut self) {
+        if !self.data.positions.is_empty() {
+            self.data.clear();
+            self.generation = self.generation.wrapping_add(1);
+        }
+    }
+
+    /// Rebuilds membership without resetting the semantic generation.
+    pub fn replace_positions(&mut self, positions: HashMap<Entity, Vec2>) {
+        if self.data.positions == positions {
+            return;
+        }
+        self.data.clear();
+        for (entity, position) in positions {
+            self.data.upsert(entity, position);
+        }
+        self.generation = self.generation.wrapping_add(1);
     }
 
     /// Semantic generation used by readers that cache search results.
@@ -373,9 +401,7 @@ impl<Tag> From<GridData> for SpatialIndex<Tag> {
 
 impl<Tag: Send + Sync + 'static> SpatialGridOps for SpatialIndex<Tag> {
     fn insert(&mut self, entity: Entity, pos: Vec2) {
-        let changed = self.data.positions.get(&entity).copied() != Some(pos);
-        self.data.insert(entity, pos);
-        if changed {
+        if self.data.upsert(entity, pos) {
             self.generation = self.generation.wrapping_add(1);
         }
     }
@@ -389,9 +415,7 @@ impl<Tag: Send + Sync + 'static> SpatialGridOps for SpatialIndex<Tag> {
     }
 
     fn update(&mut self, entity: Entity, pos: Vec2) {
-        let changed = self.data.positions.get(&entity).copied() != Some(pos);
-        self.data.update(entity, pos);
-        if changed {
+        if self.data.upsert(entity, pos) {
             self.generation = self.generation.wrapping_add(1);
         }
     }
@@ -499,10 +523,59 @@ mod tests {
     #[test]
     fn index_keeps_custom_grid_data_available() {
         let mut index = SpatialIndex::<FirstTag>::new(GridData::new(48.0));
-        assert_eq!(index.data().cell_size, 48.0);
+        assert_eq!(index.data().cell_size(), 48.0);
 
-        index.data_mut().clear();
-        assert_eq!(index.into_data().cell_size, 48.0);
+        index.clear();
+        assert_eq!(index.into_data().cell_size(), 48.0);
+    }
+
+    #[test]
+    fn reinsert_moves_unique_bucket_membership_test() {
+        let mut index = SpatialIndex::<FirstTag>::new(GridData::new(64.0));
+        let entity = Entity::from_bits(1);
+        index.insert(entity, Vec2::splat(8.0));
+        index.insert(entity, Vec2::splat(8.0));
+        assert_eq!(index.generation(), 1);
+        index.insert(entity, Vec2::new(136.0, 8.0));
+        assert_eq!(index.generation(), 2);
+        assert!(!index.data.grid.contains_key(&(0, 0)));
+        assert_eq!(
+            index.get_in_area(Vec2::ZERO, Vec2::splat(200.0)),
+            vec![entity]
+        );
+    }
+
+    #[test]
+    fn spatial_noops_keep_generation_test() {
+        let mut index = SpatialIndex::<FirstTag>::default();
+        let entity = Entity::from_bits(1);
+        index.clear();
+        index.remove(entity);
+        assert_eq!(index.generation(), 0);
+        index.insert(entity, Vec2::ZERO);
+        index.update(entity, Vec2::ZERO);
+        assert_eq!(index.generation(), 1);
+        index.remove(entity);
+        index.remove(entity);
+        assert_eq!(index.generation(), 2);
+        index.insert(entity, Vec2::ONE);
+        index.clear();
+        index.clear();
+        assert_eq!(index.generation(), 4);
+    }
+
+    #[test]
+    fn replace_positions_preserves_generation_history_test() {
+        let mut index = SpatialIndex::<FirstTag>::default();
+        let entity = Entity::from_bits(1);
+        index.insert(entity, Vec2::ZERO);
+        let before = index.generation();
+        index.replace_positions(HashMap::from([(entity, Vec2::ZERO)]));
+        assert_eq!(index.generation(), before);
+        index.replace_positions(HashMap::from([(entity, Vec2::ONE)]));
+        assert_eq!(index.generation(), before + 1);
+        assert_eq!(index.position(entity), Some(Vec2::ONE));
+        assert_eq!(index.positions().count(), 1);
     }
 
     #[test]

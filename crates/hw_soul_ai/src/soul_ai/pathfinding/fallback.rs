@@ -10,7 +10,7 @@ use hw_world::{
 };
 
 use crate::soul_ai::execute::task_execution::AssignedTask;
-use crate::soul_ai::execute::task_execution::context::TaskAssignmentQueries;
+use crate::soul_ai::execute::task_execution::context::TaskUnassignQueries;
 use crate::soul_ai::helpers::work::{SoulDropCtx, unassign_task};
 
 use super::PathCooldown;
@@ -178,7 +178,7 @@ pub(super) fn cleanup_unreachable_destination(
     soul: SoulEntityCtx<'_>,
     state: SoulMoveState<'_>,
     mut inventory_opt: Option<Mut<'_, hw_logistics::Inventory>>,
-    queries: &mut TaskAssignmentQueries,
+    queries: &mut TaskUnassignQueries,
     world_map: &WorldMap,
 ) {
     state.path.waypoints.clear();

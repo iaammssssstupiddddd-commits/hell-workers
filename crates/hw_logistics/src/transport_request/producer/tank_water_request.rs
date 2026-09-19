@@ -98,7 +98,18 @@ pub fn tank_water_request_system(params: TankWaterRequestParams) {
         }
     }
 
-    let mut seen_existing = std::collections::HashSet::<Entity>::new();
+    let seen_existing = super::upsert::select_canonical_requests(
+        q_tank_requests
+            .iter()
+            .filter(|(_, request, _, _)| request.kind == TransportRequestKind::GatherWaterToTank)
+            .map(|(entity, request, workers, _)| {
+                (
+                    request.anchor,
+                    entity,
+                    workers.map_or(0, |workers| workers.len()),
+                )
+            }),
+    );
 
     for (request_entity, request, workers_opt, current) in q_tank_requests.iter() {
         if request.kind != TransportRequestKind::GatherWaterToTank {
@@ -107,12 +118,14 @@ pub fn tank_water_request_system(params: TankWaterRequestParams) {
         let tank_entity = request.anchor;
         let workers = workers_opt.map(|w| w.len()).unwrap_or(0);
 
-        if !super::upsert::process_duplicate_key(
+        if !super::upsert::reconcile_duplicate_request(
             &mut commands,
             request_entity,
             workers,
-            &mut seen_existing,
-            tank_entity,
+            seen_existing
+                .get(&tank_entity)
+                .is_some_and(|(kept, _)| *kept == request_entity),
+            super::upsert::RequestSlotSnapshot::from_runtime(current),
         ) {
             continue;
         }
@@ -127,7 +140,7 @@ pub fn tank_water_request_system(params: TankWaterRequestParams) {
                     key: (tank_entity, ResourceType::Water),
                     site_pos: *tank_pos,
                     issued_by: *issued_by,
-                    desired_slots: *slots,
+                    slots: super::upsert::RequestSlots::TotalSlots(*slots),
                     inflight: super::to_u32_saturating(workers),
                     priority: 3,
                     transport_priority: TransportPriority::Normal,
@@ -145,7 +158,7 @@ pub fn tank_water_request_system(params: TankWaterRequestParams) {
     }
 
     for (tank_entity, (issued_by, slots, tank_pos)) in desired_requests {
-        if seen_existing.contains(&tank_entity) {
+        if seen_existing.contains_key(&tank_entity) {
             continue;
         }
 

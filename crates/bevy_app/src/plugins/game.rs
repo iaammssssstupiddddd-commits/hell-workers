@@ -70,7 +70,8 @@ impl Plugin for HellWorkersGamePlugin {
 
         let (render3d_visible, render_perf_toggles) = self.perf_config.initial_render_resources();
         #[cfg(feature = "profiling")]
-        if self.perf_config.enabled() && self.perf_config.workload == PerfWorkload::SaveTransaction
+        if self.perf_config.enabled()
+            && self.perf_config.workload() == PerfWorkload::SaveTransaction
         {
             let runtime_root = std::env::var_os("HW_PERF_SAVE_RUNTIME_ROOT")
                 .map(PathBuf::from)
@@ -98,7 +99,7 @@ impl Plugin for HellWorkersGamePlugin {
                 self.perf_config.fixed_step_hz() as f64
             ));
             app.insert_resource(TimeUpdateStrategy::FixedTimesteps(1));
-            app.insert_resource(FixedAuditSeed(self.perf_config.master_seed));
+            app.insert_resource(FixedAuditSeed(self.perf_config.master_seed()));
         }
 
         app.insert_resource(ClearColor(Color::srgb(0.1, 0.1, 0.1)))
@@ -137,26 +138,26 @@ fn report_perf_scenario(perf_config: &PerfScenarioConfig) {
     if perf_config.enabled() {
         eprintln!(
             "PERF_SCENARIO: seed={} workload={} size={} souls={} familiars={} render={} clock={} behavior_case={} wall_phase={} familiar_policy={} operation_dialog={} dashboard_mode={} warmup={}s measure={}s fixed_hz={} fixed_warmup_ticks={} fixed_audit_ticks={} virtual_speed=1.0 output_dir={}",
-            perf_config.master_seed,
-            perf_config.workload.as_str(),
-            perf_config.size.as_str(),
-            perf_config.soul_count,
-            perf_config.familiar_count,
-            perf_config.render_mode.as_str(),
+            perf_config.master_seed(),
+            perf_config.workload().as_str(),
+            perf_config.size().as_str(),
+            perf_config.soul_count(),
+            perf_config.familiar_count(),
+            perf_config.render_mode().as_str(),
             perf_config.clock_mode_as_str(),
             perf_config.behavior_case_as_str().unwrap_or("none"),
             perf_config
                 .wall_phase()
                 .map_or("none", |phase| phase.as_str()),
-            perf_config.familiar_policy_mode.as_str(),
-            perf_config.operation_dialog_mode.as_str(),
-            perf_config.dashboard_mode.as_str(),
-            perf_config.warmup_secs,
-            perf_config.measure_secs,
+            perf_config.familiar_policy_mode().as_str(),
+            perf_config.operation_dialog_mode().as_str(),
+            perf_config.dashboard_mode().as_str(),
+            perf_config.warmup_secs(),
+            perf_config.measure_secs(),
             perf_config.fixed_step_hz(),
             perf_config.fixed_warmup_ticks(),
             perf_config.fixed_audit_ticks(),
-            perf_config.output_dir.as_deref().map_or_else(
+            perf_config.output_dir().map_or_else(
                 || "<default>".to_string(),
                 |path| path.display().to_string()
             ),

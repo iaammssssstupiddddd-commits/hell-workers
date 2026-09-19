@@ -8,6 +8,34 @@ from scripts.native_ui_portal import PortalSession, PortalX11Input, physical_mon
 
 
 class PortalInputTests(unittest.TestCase):
+    def test_parent_is_presented_then_focus_is_required_after_consent(self):
+        bridge = PortalX11Input.__new__(PortalX11Input)
+        bridge.window = 100
+        bridge._check_owner = mock.Mock()
+        bridge.root_size = mock.Mock(return_value=(2880, 1800))
+        bridge.portal = mock.Mock()
+        events = []
+        bridge._request_activation = mock.Mock(side_effect=lambda: events.append("present"))
+        bridge.portal.start.side_effect = lambda window: events.append("consent")
+        with mock.patch("scripts.native_ui_input.X11Input.activate",
+                        side_effect=lambda: events.append("focus")):
+            bridge.activate()
+        self.assertEqual(events, ["present", "consent", "focus"])
+
+    def test_missing_focus_after_consent_still_rejects_input(self):
+        bridge = PortalX11Input.__new__(PortalX11Input)
+        bridge.window = 100
+        bridge._check_owner = mock.Mock()
+        bridge._request_activation = mock.Mock()
+        bridge.root_size = mock.Mock(return_value=(2880, 1800))
+        bridge.portal = mock.Mock()
+        with mock.patch("scripts.native_ui_input.X11Input.activate",
+                        side_effect=InputRejected("parent not active")):
+            with self.assertRaises(InputRejected):
+                bridge.activate()
+        bridge.portal.start.assert_called_once_with(100)
+        bridge.portal.notify.assert_not_called()
+
     def test_no_notify_before_consent_or_after_closed(self):
         session = PortalSession.__new__(PortalSession)
         session.ready = False

@@ -14,6 +14,8 @@ use hw_logistics::{ResourceItem, ResourceType, Stockpile, StockpilePolicy, Wheel
 use hw_ui::components::{LeftPanelMode, OperationDialog, OperationDialogState};
 #[cfg(feature = "profiling")]
 use hw_ui::panels::task_list::{TaskDashboardViewState, TaskListDirty, TaskWorkTypeFilter};
+#[cfg(feature = "profiling")]
+use hw_ui::shell::{UiShellState, WorkspaceAction};
 
 #[cfg(feature = "profiling")]
 #[derive(Resource, Default)]
@@ -165,6 +167,7 @@ pub struct PerfUiModeSetupParams<'w, 's> {
     applied: ResMut<'w, PerfScenarioApplied>,
     dialog_state: ResMut<'w, OperationDialogState>,
     left_panel_mode: ResMut<'w, LeftPanelMode>,
+    shell: ResMut<'w, UiShellState>,
     dashboard_view_state: ResMut<'w, TaskDashboardViewState>,
     task_list_dirty: ResMut<'w, TaskListDirty>,
     q_familiars: Query<'w, 's, Entity, With<Familiar>>,
@@ -226,7 +229,7 @@ fn setup_perf_workload_if_needed(params: PerfWorkloadSetupParams) {
         return;
     }
 
-    if config.workload == PerfWorkload::WallDensity {
+    if config.workload() == PerfWorkload::WallDensity {
         super::wall_density_fixture::begin_wall_density_fixture(
             &config,
             super::wall_density_fixture::WallDensitySetupContext {
@@ -242,7 +245,7 @@ fn setup_perf_workload_if_needed(params: PerfWorkloadSetupParams) {
         return;
     }
 
-    if config.workload == PerfWorkload::DoorDensity {
+    if config.workload() == PerfWorkload::DoorDensity {
         super::door_density_fixture::begin_door_density_fixture(
             &config,
             super::door_density_fixture::DoorDensitySetupContext {
@@ -261,7 +264,7 @@ fn setup_perf_workload_if_needed(params: PerfWorkloadSetupParams) {
         return;
     }
 
-    if config.workload == PerfWorkload::IndoorLight {
+    if config.workload() == PerfWorkload::IndoorLight {
         settings.power_priority_enabled = true;
         super::indoor_light_fixture::begin_indoor_light_fixture(
             &config,
@@ -306,6 +309,7 @@ pub fn setup_perf_ui_mode_if_enabled(params: PerfUiModeSetupParams) {
         mut applied,
         mut dialog_state,
         mut left_panel_mode,
+        mut shell,
         mut dashboard_view_state,
         mut task_list_dirty,
         q_familiars,
@@ -318,7 +322,7 @@ pub fn setup_perf_ui_mode_if_enabled(params: PerfUiModeSetupParams) {
         return;
     };
 
-    match config.operation_dialog_mode {
+    match config.operation_dialog_mode() {
         PerfOperationDialogMode::Hidden => {
             dialog_state.target = None;
             dialog.display = Display::None;
@@ -333,11 +337,23 @@ pub fn setup_perf_ui_mode_if_enabled(params: PerfUiModeSetupParams) {
     }
 
     *dashboard_view_state = TaskDashboardViewState::default();
-    *left_panel_mode = match config.dashboard_mode {
+    *left_panel_mode = match config.dashboard_mode() {
         PerfDashboardMode::Hidden => LeftPanelMode::EntityList,
         PerfDashboardMode::Visible | PerfDashboardMode::ActiveFilter => LeftPanelMode::TaskList,
     };
-    if matches!(config.dashboard_mode, PerfDashboardMode::ActiveFilter) {
+    if config.workload() == PerfWorkload::TaskDashboard {
+        shell.apply(
+            match config.dashboard_mode() {
+                PerfDashboardMode::Hidden => WorkspaceAction::Close,
+                PerfDashboardMode::Visible | PerfDashboardMode::ActiveFilter => {
+                    WorkspaceAction::OpenEntities
+                }
+            },
+            None,
+            None,
+        );
+    }
+    if matches!(config.dashboard_mode(), PerfDashboardMode::ActiveFilter) {
         dashboard_view_state.work_type = TaskWorkTypeFilter::Only(WorkType::Chop);
     }
     task_list_dirty.mark_all();
@@ -369,7 +385,7 @@ fn configure_perf_workload(
         world_map,
         deconstruction_fixture,
     } = context;
-    match config.workload {
+    match config.workload() {
         PerfWorkload::Gather => {
             configure_gather_baseline(config, commands, q_familiars, q_souls, q_trees, q_rocks);
             true
@@ -378,17 +394,17 @@ fn configure_perf_workload(
             configure_path_door_fixture(commands, q_familiars, q_souls, world_map)
         }
         PerfWorkload::Construction => {
-            configure_construction_fixture(commands, q_familiars, world_map, config.size)
+            configure_construction_fixture(commands, q_familiars, world_map, config.size())
         }
         PerfWorkload::UiGpu => {
-            configure_ui_gpu_fixture(commands, q_familiars, world_map, config.size)
+            configure_ui_gpu_fixture(commands, q_familiars, world_map, config.size())
         }
         PerfWorkload::TaskDashboard => {
-            configure_task_dashboard_fixture(commands, q_familiars, config.size)
+            configure_task_dashboard_fixture(commands, q_familiars, config.size())
         }
         PerfWorkload::DreamUiBurst => {
             commands.insert_resource(hw_visual::dream::DreamUiPerfControl::new(
-                config.master_seed,
+                config.master_seed(),
                 config.uses_fixed_timesteps(),
             ));
             commands.insert_resource(hw_visual::dream::DreamUiPerfMetrics::default());
@@ -415,7 +431,7 @@ fn configure_perf_workload(
             q_familiars,
             q_souls,
             world_map,
-            config.size,
+            config.size(),
             deconstruction_fixture,
         ),
         PerfWorkload::SaveTransaction => {
@@ -681,11 +697,11 @@ fn configure_gather_baseline(
 
     for (fam_entity, transform, mut command, mut operation, mut policy) in q_familiars.iter_mut() {
         command.command = FamiliarCommand::GatherResources;
-        if config.familiar_policy_mode.uses_controlled_fixture() {
+        if config.familiar_policy_mode().uses_controlled_fixture() {
             let policy = policy.bypass_change_detection();
             *policy = FamiliarPolicy::default();
             if matches!(
-                config.familiar_policy_mode,
+                config.familiar_policy_mode(),
                 PerfFamiliarPolicyMode::Disabled
             ) {
                 policy.set_all_allowed(false);
@@ -698,7 +714,7 @@ fn configure_gather_baseline(
     }
     familiar_positions.sort_unstable_by_key(|(entity, _)| entity.to_bits());
 
-    if config.familiar_policy_mode.uses_controlled_fixture() {
+    if config.familiar_policy_mode().uses_controlled_fixture() {
         if let Some(tree_entity) = q_trees.iter().min_by_key(|entity| entity.to_bits()) {
             commands.entity(tree_entity).insert((
                 Designation {
@@ -730,7 +746,7 @@ fn configure_gather_baseline(
         }
     }
 
-    if config.familiar_policy_mode.uses_controlled_fixture() {
+    if config.familiar_policy_mode().uses_controlled_fixture() {
         configure_controlled_familiar_policy_fixture(commands, q_souls, &familiar_positions);
     }
 }
@@ -980,12 +996,15 @@ fn configure_construction_fixture(
             Name::new("PerfConstructionSiteFixture"),
         ))
         .id();
+    world_map.reserve_building_footprint_tiles(grids.iter().copied());
     for (ordinal, grid) in grids.into_iter().enumerate() {
         let tile_position = WorldMap::grid_to_world(grid.0, grid.1);
         let mut tile = FloorTileBlueprint::new(site_entity, grid);
         tile.state = FloorTileState::Complete;
         commands.spawn((
             tile,
+            hw_jobs::ObstaclePosition(grid.0, grid.1),
+            hw_jobs::ObstacleSourceKind::ConstructionProtection,
             Transform::from_translation(tile_position.extend(Z_MAP)),
             PerfFixtureMarker {
                 kind: PerfFixtureKind::ConstructionTile,

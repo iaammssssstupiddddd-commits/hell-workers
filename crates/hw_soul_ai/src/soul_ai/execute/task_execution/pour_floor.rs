@@ -18,7 +18,6 @@ pub fn handle_pour_floor_task(
     let PourFloorTileData { tile, site, phase } = data;
     let tile_entity = tile;
     let site_entity = site;
-    let soul_pos = ctx.soul_pos();
 
     match phase {
         PourFloorPhase::GoingToMaterialCenter => {
@@ -36,25 +35,24 @@ pub fn handle_pour_floor_task(
             let material_center = site_transform.translation.truncate();
 
             // Navigate to material center
-            if matches!(
-                update_task_destination_to_adjacent(ctx, material_center),
-                PathSearchResult::Deferred
-            ) {
-                return TaskHandlerControl::Continue;
+            match navigate_to_construction_target(ctx, material_center) {
+                NavOutcome::Arrived => {}
+                NavOutcome::Unreachable => {
+                    return ctx.abort_retryable(commands, "construction target unreachable");
+                }
+                NavOutcome::Ended(control) => return control,
+                NavOutcome::Moving | NavOutcome::Deferred => return TaskHandlerControl::Continue,
             }
 
-            // Check if near material center (target or adjacent destination)
-            if is_near_target_or_dest(soul_pos, material_center, ctx.dest.0) {
-                *ctx.task = AssignedTask::PourFloorTile(PourFloorTileData {
-                    tile: tile_entity,
-                    site: site_entity,
-                    phase: PourFloorPhase::PickingUpMud,
-                });
-                debug!(
-                    "POUR_FLOOR: Soul {:?} arrived at material center",
-                    ctx.soul_entity
-                );
-            }
+            *ctx.task = AssignedTask::PourFloorTile(PourFloorTileData {
+                tile: tile_entity,
+                site: site_entity,
+                phase: PourFloorPhase::PickingUpMud,
+            });
+            debug!(
+                "POUR_FLOOR: Soul {:?} arrived at material center",
+                ctx.soul_entity
+            );
         }
 
         PourFloorPhase::PickingUpMud => {
@@ -110,26 +108,25 @@ pub fn handle_pour_floor_task(
                 WorldMap::grid_to_world(tile_blueprint.grid_pos.0, tile_blueprint.grid_pos.1);
 
             // Navigate to tile
-            if matches!(
-                update_task_destination_to_adjacent(ctx, tile_pos),
-                PathSearchResult::Deferred
-            ) {
-                return TaskHandlerControl::Continue;
+            match navigate_to_construction_target(ctx, tile_pos) {
+                NavOutcome::Arrived => {}
+                NavOutcome::Unreachable => {
+                    return ctx.abort_retryable(commands, "construction target unreachable");
+                }
+                NavOutcome::Ended(control) => return control,
+                NavOutcome::Moving | NavOutcome::Deferred => return TaskHandlerControl::Continue,
             }
 
-            // Check if near tile (target or adjacent destination)
-            if is_near_target_or_dest(soul_pos, tile_pos, ctx.dest.0) {
-                *ctx.task = AssignedTask::PourFloorTile(PourFloorTileData {
-                    tile: tile_entity,
-                    site: site_entity,
-                    phase: PourFloorPhase::Pouring { progress_bp: 0 },
-                });
-                ctx.path.waypoints.clear();
-                debug!(
-                    "POUR_FLOOR: Soul {:?} started pouring tile {:?}",
-                    ctx.soul_entity, tile_entity
-                );
-            }
+            *ctx.task = AssignedTask::PourFloorTile(PourFloorTileData {
+                tile: tile_entity,
+                site: site_entity,
+                phase: PourFloorPhase::Pouring { progress_bp: 0 },
+            });
+            ctx.path.waypoints.clear();
+            debug!(
+                "POUR_FLOOR: Soul {:?} started pouring tile {:?}",
+                ctx.soul_entity, tile_entity
+            );
         }
 
         PourFloorPhase::Pouring { progress_bp } => {

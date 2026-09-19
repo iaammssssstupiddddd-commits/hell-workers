@@ -8,8 +8,8 @@ use bevy::math::Vec2;
 use bevy::prelude::Entity;
 
 use crate::stockpile_policy::{
-    StockpilePolicyInput, StockpileTransferPhase, evaluate_stockpile_policy,
-    stockpile_owner_accepts_item,
+    InboundReservationSnapshot, StockpileContentsSnapshot, StockpileTransferPhase,
+    evaluate_stockpile_policy, stockpile_owner_accepts_item,
 };
 use crate::types::ResourceType;
 use crate::zone::StockpilePolicy;
@@ -79,19 +79,26 @@ pub fn select_stockpile_anchor(
         let dist_sq = c.pos.distance_squared(source_pos);
 
         if let Some(policy) = c.policy {
-            let evaluation = evaluate_stockpile_policy(StockpilePolicyInput {
-                phase: StockpileTransferPhase::NewInbound,
-                policy,
-                capacity: c.capacity,
-                stored_amount: c.current_stored,
-                stored_resource: c.resource_type,
-                transfer_resource: resource_type,
-                requested_amount: 1,
-                incoming_reserved: c.incoming_reserved,
-                incoming_reserved_other_resource: c.incoming_reserved_other_resource,
-                cycle_reserved: c.cycle_reserved,
-                cycle_reserved_other_resource: c.cycle_reserved_other_resource,
-            });
+            let evaluation = evaluate_stockpile_policy(
+                StockpileContentsSnapshot {
+                    policy,
+                    capacity: c.capacity,
+                    stored_amount: c.current_stored,
+                    stored_resource: c.resource_type,
+                }
+                .policy_input(
+                    StockpileTransferPhase::NewInbound,
+                    resource_type,
+                    1,
+                    InboundReservationSnapshot {
+                        incoming_reserved: c.incoming_reserved,
+                        incoming_reserved_other_resource: c.incoming_reserved_other_resource,
+                        cycle_reserved: c.cycle_reserved,
+                        cycle_reserved_other_resource: c.cycle_reserved_other_resource,
+                        ..Default::default()
+                    },
+                ),
+            );
             if evaluation.allowed_amount == 0 {
                 continue;
             }

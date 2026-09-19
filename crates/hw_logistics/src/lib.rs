@@ -39,9 +39,9 @@ pub use spatial_sync::{
     update_transport_request_spatial_grid_system_transport_request,
 };
 pub use stockpile_policy::{
-    StockpilePolicyEvaluation, StockpilePolicyInput, StockpilePolicyRejection,
-    StockpilePolicyState, StockpileTransferPhase, derive_stockpile_policy_state,
-    evaluate_stockpile_policy, stockpile_owner_accepts_item,
+    InboundReservationSnapshot, StockpileContentsSnapshot, StockpilePolicyEvaluation,
+    StockpilePolicyInput, StockpilePolicyRejection, StockpilePolicyState, StockpileTransferPhase,
+    derive_stockpile_policy_state, evaluate_stockpile_policy, stockpile_owner_accepts_item,
 };
 pub use stockpile_policy_change::{
     StockpilePolicyChangeOutcome, StockpilePolicyChangeRequest,

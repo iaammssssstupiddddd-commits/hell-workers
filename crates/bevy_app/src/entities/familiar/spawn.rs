@@ -57,7 +57,7 @@ pub fn spawn_familiar(
     mut perf_rngs: ResMut<PerfScenarioRandomStreams>,
 ) {
     let spawn_count = if perf_config.enabled() {
-        perf_config.familiar_count as usize
+        perf_config.familiar_count() as usize
     } else {
         spawn_args::parse_spawn_count_from_args_or_env("--spawn-familiars", "HW_SPAWN_FAMILIARS", 2)
             as usize

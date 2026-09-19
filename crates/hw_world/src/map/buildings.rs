@@ -3,6 +3,13 @@ use bevy::prelude::*;
 use hw_core::world::DoorState;
 use hw_jobs::BuildingType;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct OccupancyConflict {
+    pub grid: (i32, i32),
+    pub expected: Entity,
+    pub actual: Option<Entity>,
+}
+
 impl WorldMap {
     pub fn building_entity(&self, grid: (i32, i32)) -> Option<Entity> {
         self.buildings.get(&grid).copied()
@@ -52,15 +59,6 @@ impl WorldMap {
         entity
     }
 
-    pub fn clear_building_footprint<I>(&mut self, grids: I)
-    where
-        I: IntoIterator<Item = (i32, i32)>,
-    {
-        for grid in grids {
-            self.clear_building_occupancy(grid);
-        }
-    }
-
     pub fn clear_building_occupancy_if_owned(&mut self, grid: (i32, i32), entity: Entity) -> bool {
         if !self.clear_building_if_owned(grid, entity) {
             return false;
@@ -70,53 +68,47 @@ impl WorldMap {
     }
 
     pub fn release_building_grid_if_owned(&mut self, grid: (i32, i32), entity: Entity) -> bool {
-        if self.clear_building_occupancy_if_owned(grid, entity) {
-            return true;
-        }
-        self.remove_grid_obstacle(grid);
-        false
+        self.clear_building_occupancy_if_owned(grid, entity)
     }
 
-    pub fn release_building_grids_if_owned<I>(&mut self, entity: Entity, grids: I)
+    /// Validate the entire footprint before callers change either ECS or map state.
+    pub fn validate_owned_footprint<I>(
+        &self,
+        entity: Entity,
+        grids: I,
+    ) -> Result<(), OccupancyConflict>
     where
         I: IntoIterator<Item = (i32, i32)>,
     {
         for grid in grids {
-            self.release_building_grid_if_owned(grid, entity);
+            let actual = self.building_entity(grid);
+            if actual != Some(entity) {
+                return Err(OccupancyConflict {
+                    grid,
+                    expected: entity,
+                    actual,
+                });
+            }
         }
+        Ok(())
     }
 
-    pub fn release_building_footprint_if_owned<I>(&mut self, entity: Entity, grids: I)
+    /// An ownership conflict never releases even the matching subset.
+    pub fn release_building_footprint_if_owned<I>(&mut self, entity: Entity, grids: I) -> bool
     where
         I: IntoIterator<Item = (i32, i32)>,
     {
-        self.release_building_grids_if_owned(entity, grids);
-    }
-
-    pub fn release_building_footprint_if_matches<I>(&mut self, entity: Entity, grids: I)
-    where
-        I: IntoIterator<Item = ((i32, i32), Option<Entity>)>,
-    {
-        for (grid, alternate) in grids {
-            self.release_building_grid_if_matches(grid, entity, alternate);
-        }
-    }
-
-    pub fn release_building_grid_if_matches(
-        &mut self,
-        grid: (i32, i32),
-        entity: Entity,
-        alternate: Option<Entity>,
-    ) -> bool {
+        let grids: Vec<_> = grids.into_iter().collect();
         if self
-            .building_entity(grid)
-            .is_some_and(|current| current == entity || Some(current) == alternate)
+            .validate_owned_footprint(entity, grids.iter().copied())
+            .is_err()
         {
-            self.clear_building_occupancy(grid);
-            return true;
+            return false;
         }
-        self.remove_grid_obstacle(grid);
-        false
+        for grid in grids {
+            self.clear_building_occupancy(grid);
+        }
+        true
     }
 
     pub fn building_entries(&self) -> impl Iterator<Item = (&(i32, i32), &Entity)> {
@@ -149,6 +141,38 @@ impl WorldMap {
     ) where
         I: IntoIterator<Item = (i32, i32)>,
     {
+        self.register_completed_footprint(building_type, entity, grids, &Default::default());
+    }
+
+    /// Atomically transfer a verified Blueprint footprint. The caller supplies
+    /// live obstacle sources that survive removal of its placement markers.
+    pub fn complete_owned_building_footprint(
+        &mut self,
+        expected: Entity,
+        entity: Entity,
+        building_type: BuildingType,
+        grids: &[(i32, i32)],
+        retained_obstacles: &std::collections::HashSet<(i32, i32)>,
+    ) -> Result<(), OccupancyConflict> {
+        self.validate_owned_footprint(expected, grids.iter().copied())?;
+        self.register_completed_footprint(
+            building_type,
+            entity,
+            grids.iter().copied(),
+            retained_obstacles,
+        );
+        Ok(())
+    }
+
+    fn register_completed_footprint<I>(
+        &mut self,
+        building_type: BuildingType,
+        entity: Entity,
+        grids: I,
+        retained_obstacles: &std::collections::HashSet<(i32, i32)>,
+    ) where
+        I: IntoIterator<Item = (i32, i32)>,
+    {
         match building_type {
             BuildingType::Bridge => {
                 for grid in grids {
@@ -166,7 +190,9 @@ impl WorldMap {
                     // Every non-Bridge Blueprint reserves a raw obstacle while
                     // it exists. Passable completed buildings retain logical
                     // occupancy but must release that placement reservation.
-                    self.clear_building_occupancy(grid);
+                    if !retained_obstacles.contains(&grid) {
+                        self.remove_grid_obstacle(grid);
+                    }
                     self.set_building(grid, entity);
                 }
             }
@@ -177,6 +203,77 @@ impl WorldMap {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn owned_footprint_release_is_atomic_and_mismatch_preserves_all_layers_test() {
+        let mut map = WorldMap::default();
+        let owner = Entity::from_bits(1);
+        let other = Entity::from_bits(2);
+        map.set_building_occupancies(owner, [(20, 20), (21, 20)]);
+        map.set_building((21, 20), other);
+        map.register_door((22, 20), other, DoorState::Locked);
+        map.register_bridge_tile((23, 20), other);
+        let layers = (
+            map.buildings.clone(),
+            map.obstacles.clone(),
+            map.doors.clone(),
+            map.door_states.clone(),
+            map.bridged_tiles.clone(),
+            map.obstacle_version,
+        );
+        assert!(!map.release_building_footprint_if_owned(owner, [(20, 20), (21, 20)]));
+        for grid in [(21, 20), (22, 20), (23, 20), (24, 20)] {
+            assert!(!map.release_building_grid_if_owned(grid, owner));
+        }
+        assert_eq!(
+            layers,
+            (
+                map.buildings.clone(),
+                map.obstacles.clone(),
+                map.doors.clone(),
+                map.door_states.clone(),
+                map.bridged_tiles.clone(),
+                map.obstacle_version
+            )
+        );
+        map.set_building((21, 20), owner);
+        assert!(map.release_building_footprint_if_owned(owner, [(20, 20), (21, 20)]));
+        assert!(map.is_walkable(20, 20));
+        assert!(map.is_walkable(21, 20));
+    }
+
+    #[test]
+    fn completion_transfer_preserves_other_sources_and_rejects_stale_owner_test() {
+        let mut map = WorldMap::default();
+        let blueprint = Entity::from_bits(1);
+        let building = Entity::from_bits(2);
+        let grids = [(30, 30), (31, 30)];
+        map.reserve_building_footprint(BuildingType::OutdoorLamp, blueprint, grids);
+        let before = map.obstacle_version;
+        map.complete_owned_building_footprint(
+            blueprint,
+            building,
+            BuildingType::OutdoorLamp,
+            &grids,
+            &grids.into_iter().collect(),
+        )
+        .unwrap();
+        assert_eq!(map.obstacle_version, before);
+        assert!(map.has_raw_obstacle(30, 30));
+        assert!(!map.release_building_footprint_if_owned(blueprint, grids));
+        assert!(
+            map.complete_owned_building_footprint(
+                blueprint,
+                Entity::from_bits(3),
+                BuildingType::OutdoorLamp,
+                &grids,
+                &Default::default()
+            )
+            .is_err()
+        );
+        assert_eq!(map.building_entity(grids[0]), Some(building));
+        assert_eq!(map.obstacle_version, before);
+    }
 
     #[test]
     fn passable_completion_transfers_owner_and_releases_blueprint_obstacle() {
