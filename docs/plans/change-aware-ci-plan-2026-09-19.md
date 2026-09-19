@@ -28,7 +28,7 @@
 | 新workflowを含むPRで「文書のみ」を実証できない | 候補branchをbaseとする子PRと、default branch反映後の手動／日次受入に分割 |
 | 新ルール有効化とM6完了が循環 | 未導入環境では旧全verifyへ戻る条件付きルールを定義し、M6前後の証拠と完了状態を分離 |
 
-M1〜M5とM6aは完了。M6bはmaster push・手動fullが成功し、独立監査の入力なしイベント不具合を修正して再受入中。自然scheduleは2026-09-20 03:17 UTCの発火を未観測のため、計画はIn Progressを維持する。
+M1〜M5とM6aは完了。M6bは独立監査の入力なしイベント不具合も修正してmasterへ反映済み。最終masterのpush・手動full・独立監査はすべて成功し、専用環境も整理した。残る受入は自然scheduleの観測だけ。2026-09-20 03:17 UTCの発火を未観測のため、計画はIn Progressを維持する。
 
 ## 1. 目的
 
@@ -336,13 +336,13 @@ CI導入の完了条件はM6a＋M6bの品質／監査確認、rules同期、不�
 
 公開候補は`134fe6c3b0cbcb7fe2c23555ec8d13d1d9010da1`、baseはmaster `52913b61ca524f1cd429d3d73a0468faf3d0999b`。別PR #19と建築アート文書のcommitは含めない。子PRのbaseはすべて候補の固定SHAで、masterへmergeしない。既定branchの保護は新設せず、保護なしのままとする。
 
-| ケース | PR / run | 結果 |
-| --- | --- | --- |
-| 実装全群 | [#20](https://github.com/iaammssssstupiddddd-commits/hell-workers/pull/20) / [35459170013](https://github.com/iaammssssstupiddddd-commits/hell-workers/actions/runs/35459170013) | C/T/D/R・集約success、masterへmerge済み |
-| 文書のみ | [#21](https://github.com/iaammssssstupiddddd-commits/hell-workers/pull/21) / [35459220974](https://github.com/iaammssssstupiddddd-commits/hell-workers/actions/runs/35459220974) | 成功。Cのみ、T/D/R skip、集約success。実行jobにnative apt・Cargo cache stepなし |
-| Toolingのみ | [#22](https://github.com/iaammssssstupiddddd-commits/hell-workers/pull/22) / [35459250390](https://github.com/iaammssssstupiddddd-commits/hell-workers/actions/runs/35459250390) | 成功。C/T、D/R skip、集約success |
-| Rust testのみ | [#23](https://github.com/iaammssssstupiddddd-commits/hell-workers/pull/23) / [35459267058](https://github.com/iaammssssstupiddddd-commits/hell-workers/actions/runs/35459267058) | C/T/R・集約success、D skipでもRを完走 |
-| Rust選択＋意図した契約失敗 | [#24](https://github.com/iaammssssstupiddddd-commits/hell-workers/pull/24) / [35459294822](https://github.com/iaammssssstupiddddd-commits/hell-workers/actions/runs/35459294822) | 期待どおりfailure。C failure、T/R未起動、集約failure |
+| ケース | PR / run | 結果 | 所要時間 / Rust cache |
+| --- | --- | --- | --- |
+| 実装全群 | [#20](https://github.com/iaammssssstupiddddd-commits/hell-workers/pull/20) / [35459170013](https://github.com/iaammssssstupiddddd-commits/hell-workers/actions/runs/35459170013) | C/T/D/R・集約success、masterへmerge済み | 9分21秒 / warm、exact hit |
+| 文書のみ | [#21](https://github.com/iaammssssstupiddddd-commits/hell-workers/pull/21) / [35459220974](https://github.com/iaammssssstupiddddd-commits/hell-workers/actions/runs/35459220974) | 成功。Cのみ、T/D/R skip、集約success。実行jobにnative apt・Cargo cache stepなし | 32秒 / 未使用 |
+| Toolingのみ | [#22](https://github.com/iaammssssstupiddddd-commits/hell-workers/pull/22) / [35459250390](https://github.com/iaammssssstupiddddd-commits/hell-workers/actions/runs/35459250390) | 成功。C/T、D/R skip、集約success | 1分24秒 / 未使用 |
+| Rust testのみ | [#23](https://github.com/iaammssssstupiddddd-commits/hell-workers/pull/23) / [35459267058](https://github.com/iaammssssstupiddddd-commits/hell-workers/actions/runs/35459267058) | C/T/R・集約success、D skipでもRを完走 | 10分20秒 / warm、exact hit |
+| Rust選択＋意図した契約失敗 | [#24](https://github.com/iaammssssstupiddddd-commits/hell-workers/pull/24) / [35459294822](https://github.com/iaammssssstupiddddd-commits/hell-workers/actions/runs/35459294822) | 期待どおりfailure。C failure、T/R未起動、集約failure | 34秒 / 未使用 |
 
 文書caseのtested merge SHAは`2db4bbf79c9a41f4171b34151f33038ac0cf62a0`、Toolingは`34c4a4e20fcdd1c49f77ff531a2957ab33545005`、意図した失敗は`0ba88bfa5e0732d86e3e90310c95888555c5b573`。成功／失敗とplanのSHAはjob logで照合した。自然scheduleは03:17 UTCを維持し、手動実行と区別して観測する。
 
@@ -354,7 +354,15 @@ PR #21〜#24は証拠保存後にmergeせずclose済み。4本の受入専用bra
 
 master merge SHA `a0b515a8f44711ca81a3713a5aece4e5f6ef44a2`で[push full 35459807499](https://github.com/iaammssssstupiddddd-commits/hell-workers/actions/runs/35459807499)と[手動full 35459817786](https://github.com/iaammssssstupiddddd-commits/hell-workers/actions/runs/35459817786)が全群成功。手動baseは`52913b61ca524f1cd429d3d73a0468faf3d0999b`。
 
-独立監査の[初回 35459819407](https://github.com/iaammssssstupiddddd-commits/hell-workers/actions/runs/35459819407)は`workflow_dispatch`の`inputs:null`をdictとして処理して準備段階で失敗した。PR #25（head `4a339c657cc9c529dfe429922a37b871b825a852`）で修正し、null／省略／空inputsとscheduleの回帰test、手動品質planのbase必須条件を確認した。ローカルtooling全群成功（Python 205、Blender tooling 151、perf self-test・lint）。[修正branchの独立監査 35460335250](https://github.com/iaammssssstupiddddd-commits/hell-workers/actions/runs/35460335250)は成功し、jobはDaily dependency auditだけ、Quality gatesは生成されない。PR全群と反映後の再受入を継続する。
+独立監査の[初回 35459819407](https://github.com/iaammssssstupiddddd-commits/hell-workers/actions/runs/35459819407)は`workflow_dispatch`の`inputs:null`をdictとして処理して準備段階で失敗した。PR #25（head `4a339c657cc9c529dfe429922a37b871b825a852`）で修正し、null／省略／空inputsとscheduleの回帰test、手動品質planのbase必須条件を確認した。ローカルtooling全群成功（Python 205、Blender tooling 151、perf self-test・lint）。[修正branchの独立監査 35460335250](https://github.com/iaammssssstupiddddd-commits/hell-workers/actions/runs/35460335250)は成功し、jobはDaily dependency auditだけ、Quality gatesは生成されない。
+
+[修正PR全群 35460335473](https://github.com/iaammssssstupiddddd-commits/hell-workers/actions/runs/35460335473)も成功。base=`a0b515a8f44711ca81a3713a5aece4e5f6ef44a2`、head=`4a339c657cc9c529dfe429922a37b871b825a852`、tested=`5b47054ceed2ac6c18846fd18e6eec2c58113007`。PR #25をmaster `b68bafd7358580ff8ad77962fa02987a215b5b60`へmergeした。
+
+最終masterの[push full 35460869075](https://github.com/iaammssssstupiddddd-commits/hell-workers/actions/runs/35460869075)と[手動full 35460868974](https://github.com/iaammssssstupiddddd-commits/hell-workers/actions/runs/35460868974)はC/T/D/R・集約を含む全群success。両runのtested SHAは`b68bafd7358580ff8ad77962fa02987a215b5b60`、baseは`a0b515a8f44711ca81a3713a5aece4e5f6ef44a2`。[同じmasterの独立監査 35460870538](https://github.com/iaammssssstupiddddd-commits/hell-workers/actions/runs/35460870538)も成功し、品質checkは生成しない。
+
+所要時間は最終push fullが16分34秒、手動fullが9分26秒、独立監査が23秒。両fullはwarm/exact cache hit、独立監査はRust cacheを使用しない。修正PRのfullは9分28秒、warm/exact hit。run作成から完了までの時間で、待機・setup・cache復元を含むため固定の短縮率とはしない。
+
+日次監査workflow ID `362214998` は`active`。cronは既存の`17 3 * * *`を維持した。2026-09-19 18:31 UTC時点のAPI確認では`event=schedule`のrunは0件。初回の自然scheduleは2026-09-20 03:17 UTC以後に観測する必要がある。masterは`protected=false`で、任意CIとして導入した。
 
 ## 6. リスクと対策
 
@@ -419,9 +427,10 @@ ToolingにはRust／Blender実行ファイルのstubを置いた環境でも通�
 
 - 正本: `docs/development-infra/validation-storage-workflow.md`。ローカルの検証workspace／jobを作る場合はprimaryの `dev.py validation` で登録・結果確定・整理する。
 - 今回の所有者: Codex / change-aware-ci。Git common directoryのretain IDは`change-aware-ci-candidate`、consumerは`change-aware-ci-implementation`。通常の品質検証はprimaryの既存開発cacheを再利用し、native job・binary copyは作らない。
-- 保持path: `target/change-aware-ci`、branch `codex/change-aware-ci`、base `3ec4a76bbb2a2b1f7ad5f32a38a308bb036ae944`。開始27,004,928 bytes、2026-09-20時点27,435,008 bytes。コード候補のレビューと公開準備に使用し、docs正本はprimaryに限定する。
-- 次の作業: primaryの確定docsと実装差分を、commit/公開が依頼された際に候補branchへ集約する。release_when: primaryへ採用済みかつ候補のreview/CI consumerが終了した時。修正中は同じworktreeを再利用する。
-- 回収量0 bytes。共有の既存cacheは本計画の所有物とせず、既存consumerを変更しない。テスト用一時Git repositoryとcompiler stubは各テスト終了時に撤去済み。
+- 使用済みpath: `target/change-aware-ci`、初期branch `codex/change-aware-ci`、base `3ec4a76bbb2a2b1f7ad5f32a38a308bb036ae944`。開始27,004,928 bytes。公開はmasterを基点とする専用branchへ切り替え、docs正本はprimaryに限定した。
+- primaryへ実装と修正をcommit `86eec196`で採用し、`caa5188a`でmasterの検証済み履歴を統合済み。統合時のtree差分は0件で、既存refactor・建築アートの履歴と内容を保持した。candidateのdirty/untrackedなし、専用branchの全履歴がprimaryへ到達することを確認し、retain consumerをreleaseして`git worktree remove target/change-aware-ci`を実行した。
+- 回収量 **26,660,864 bytes（約25.4 MiB）**。CI専用worktreeとlocal専用branch 7本、公開したremote専用branch 6本は撤去済み。検証用PR 4件はmergeせずclose、実装・修正PR 2件はmerge済み。共有cacheと別作業のworktree 2件は保持した。テスト用一時Git repositoryとcompiler stubも撤去済み。
+- 整理後のstorage gate: pass、allocated_bytes=`341438963712`、既存batch 73、untriaged 0。GitHubの後続実行は固定SHAを参照し、削除したlocal環境を必要としない。
 - 実装時に記録する項目: batch ID、判断対象、責任者／consumer、base/head/tested SHA、worktree／job roots、開始bytes、結果、採用証拠、削除path／回収bytes、残存理由と終了条件。
 - GitHub evidenceはrun URL・必要なSummary／結果を正本へ記録する。全ログ・全jobのcapsule化は不要。
 - 一時検証環境を作った場合は最終consumer終了後に撤去する。保存すべき証拠があれば小さなcapsuleへ集約し、hashと回収量を記録する。既存・並行作業の変更やcacheを削除しない。
@@ -437,15 +446,15 @@ ToolingにはRust／Blender実行ファイルのstubを置いた環境でも通�
 
 ### 現在地
 
-- M1〜M5・M6a完了。M6bのmaster pushと手動fullは成功。独立監査の不具合修正と自然schedule観測を継続中。詳細は「M6受入記録」を参照。
+- M1〜M5・M6a完了。PR #20/#25はmasterへ反映済みで、最終masterのpush/full/独立監査が成功し、専用環境整理も完了。M6bの自然schedule観測だけが残る。詳細は「M6受入記録」を参照。
 - primaryのCI・driver・rules・Skill・開発ガイド・templateを更新済み。全verify成功後の分類修正はfocused testとtooling検証で確認した。ゲームのRust/runtime assetは変更していない。
 - 作業開始時の既存差分: `docs/README.md` の建築art文書リンク、`docs/art-style-criteria.md`、未追跡の `docs/building-art-direction.md`。本計画とは別の変更として保持する。
 
 ### 次のAIが最初にやること
 
-1. primary/candidateのstatusとHEADを再確認する。別sessionの建築アートcommit・差分を変更しない。
-2. PR #25の全群成功を確認してmasterへ反映し、修正後のmasterと手動監査結果を記録する。M6の公開・merge・整理はユーザーから許可済み。
-3. 2026-09-20 03:17 UTC以後のDependency auditの`event=schedule`を確認する。起動遅延は許容し、手動成功で代用しない。自然起動成功と環境整理の完了後、本計画をarchive／削除して両indexを更新する。
+1. primaryのstatusとHEADを再確認する。candidateは撤去済み。別sessionの建築アートcommit・差分を変更しない。
+2. 2026-09-20 03:17 UTC以後のDependency auditの`event=schedule`を確認する。`gh run list --workflow dependency-audit.yml --event schedule --limit 5`でrunを探し、event・head SHA・job内容・結果を確認する。起動遅延は許容し、手動成功で代用しない。CIコードに追加変更がなければ実施済みM6aを繰り返す必要はない。
+3. 自然起動成功後、run URLとSHAを追記し、受入記録を永続文書へ移す。本計画をarchive／削除して両indexを更新する。M6の公開・merge・整理はユーザーから許可済み。現時点の最新受入記録はprimaryの本書を正本とし、master上の実装時snapshotとは区別する。
 
 ### ブロッカー／注意点
 
@@ -486,8 +495,8 @@ ToolingにはRust／Blender実行ファイルのstubを置いた環境でも通�
 - [x] required check新設の採否を記録した。採用時は実際の保護を確認し、未採用時は「保護なし」と報告した。
 - [x] ルール・Skill・task lifecycle・開発ガイド・templateの完了条件を同期した。
 - [x] 通常開発のbranch作成／再利用、PRによるCI開始、同目的修正の継続、終了後の整理をルールに反映した。
-- [ ] Help実レビュー、必要な実機受入、元環境のstorage整理を別途完了した。
-- [ ] SHA・実行範囲・CI URLと残務を記録し、専用検証環境を整理した。
+- [x] Help実レビュー、必要な実機受入、元環境のstorage整理を別途完了した（nativeは対象外）。
+- [x] SHA・実行範囲・CI URLと残務を記録し、専用検証環境を整理した。
 - [ ] 永続仕様への反映、本計画のarchive／削除、両indexの再生成を完了した。
 
 ## 10. 更新履歴
@@ -499,3 +508,4 @@ ToolingにはRust／Blender実行ファイルのstubを置いた環境でも通�
 | 2026-09-19 | Codex | 通常開発のbranch作成／再利用基準、PRによる自動CI開始、並行作業の保全、終了後の整理を追加し、M4とDoDへ反映 |
 | 2026-09-20 | Codex | 品質群・Git分類・集約・Actions・rules/Skill/docsを実装し、ローカル全verifyと異常系fixtureを確認。GitHub受入・公開・導入は未実施として継続 |
 | 2026-09-20 | Codex | M6aの全分類・失敗伝播・取消分離を受入、PR #20をmasterへ反映。M6bのpush/full成功、独立監査のnull inputs不具合を修正。子PR・branchを整理し、自然schedule待ちを明記 |
+| 2026-09-20 | Codex | PR #25を反映し最終masterのpush/full/独立監査成功を確認。primaryへ履歴統合し専用環境を整理（26,660,864 bytes回収）。残務を自然schedule観測と計画closeに限定 |
