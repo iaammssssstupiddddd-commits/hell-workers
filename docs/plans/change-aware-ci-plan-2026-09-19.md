@@ -201,7 +201,7 @@ lintは現行の `run_quality_tools(lint=True)` を共有する。Lint用のCarg
 5. `quality` のjob名は既存の `Quality gates` を維持する。日次workflowはこの名前を使用しない。
 
 concurrencyは `workflow + event + PR番号またはref + 手動mode`。PR autoの古いrunだけを置き換え、fullとauto、監査と品質を相互cancelしない。
-SHA固定Action・`contents: read`・現行Rust/tool版を維持する。cacheはRust jobだけが現行key／保存対象を利用し、初期導入でcache方式の変更は混ぜない。cold/warmの双方を受入に記録する。
+SHA固定Action・`contents: read`・現行Rust/tool版を維持する。cacheはRust jobだけが現行key／保存対象を利用し、初期導入でcache方式の変更は混ぜない。各runでcold/warmの区分を記録する。共有cacheの削除は受入に含めず、coldが未観測なら未測定と記録し、性能比較の対象外にする。
 Python tool群の分割導入は既存installerの `--tool` を使う。各jobのsetupとpreflightに必要なものだけ導入し、共通契約から全toolのdoctorを呼ばない。
 
 required checkの新設は別の設定変更として、`Quality gates`、source=GitHub Actions、最新baseを要求するstrict設定を推奨する。既存のmaster直push運用への影響を示してから反映する。現時点では未設定なので、新設しない場合も自動CIの導入は可能だが「mergeを強制的に防ぐ」とは報告しない。
