@@ -266,6 +266,19 @@ class GitScopeTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "checkout"):
             ci_scope.github_plan(self.root, {"before": self.base, "after": self.base}, self.env())
 
+    def test_audit_setup_accepts_inputless_events_but_quality_requires_base(self):
+        with tempfile.TemporaryDirectory() as directory:
+            event_path = Path(directory) / "event.json"
+            for event in ({}, {"inputs": None}, {"inputs": {}}):
+                event_path.write_text(json.dumps(event))
+                for name in ("workflow_dispatch", "schedule"):
+                    with self.subTest(event=event, name=name):
+                        environment = {**self.env(name), "GITHUB_EVENT_PATH": str(event_path)}
+                        ci_scope.fetch_event_history(self.root, environment)
+                        self.assertEqual(self.git("rev-parse", "HEAD"), self.base)
+                with self.assertRaises(ValueError):
+                    ci_scope.github_plan(self.root, event, self.env("workflow_dispatch"))
+
     def test_setup_fetches_missing_event_commit_without_moving_checkout(self):
         self.write("docs/topic.md", "topic\n")
         head = self.commit()

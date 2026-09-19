@@ -78,8 +78,10 @@ def fetch_event_history(root: Path, environment: Mapping[str, str]) -> None:
         revisions.extend(event["pull_request"][side]["sha"] for side in ("base", "head"))
     elif name == "push":
         revisions.extend(event[key] for key in ("before", "after"))
-    elif name == "workflow_dispatch" and event.get("inputs", {}).get("base_sha"):
-        revisions.append(event["inputs"]["base_sha"])
+    elif name == "workflow_dispatch":
+        inputs = event.get("inputs") or {}
+        if inputs.get("base_sha"):
+            revisions.append(inputs["base_sha"])
     for revision in revisions:
         sha = sha_value(revision)
         try:
@@ -246,7 +248,7 @@ def github_plan(root: Path, event: dict, environment: Mapping[str, str]) -> dict
             pairs.extend([[common, base], [common, head]])
             help_base, force_full = common, True
     elif event_name == "workflow_dispatch":
-        inputs = event.get("inputs", {})
+        inputs = event.get("inputs") or {}
         mode = inputs.get("mode", "auto")
         if mode not in {"auto", "full"}:
             raise ValueError("manual quality mode must be auto or full")
