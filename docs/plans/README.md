@@ -30,6 +30,7 @@
 | [3d-rtt/door-preview-alignment-plan-2026-09-11.md](3d-rtt/door-preview-alignment-plan-2026-09-11.md) | In Progress | ドア設計図の表示位置修正と正式反映への引継ぎ |
 | [3d-rtt/lighting-visual-plan-2026-04-04.md](3d-rtt/lighting-visual-plan-2026-04-04.md) | Superseded | Outdoor Lamp のローカル照明で Soul / 建物に落ちる影を追加する計画 |
 | [3d-rtt/milestone-roadmap.md](3d-rtt/milestone-roadmap.md) | Superseded（完了済み実装の履歴。未完項目は凍結） | 3D-RtT 移行ロードマップ |
+| [3d-rtt/non-wall-floor-building-art-migration-plan-2026-09-19.md](3d-rtt/non-wall-floor-building-art-migration-plan-2026-09-19.md) | Draft | 設備の共通Cuboid、建物間の画風差、完成表示と旧previewの不一致により、地図上で用途・状態を読み取りにくいの計画。 |
 | [3d-rtt/production-door-art-plan-2026-09-05.md](3d-rtt/production-door-art-plan-2026-09-05.md) | In Progress — 通常版導入・通常quality受入済み／共通close残件 | 木・骨の両開きドア、固定枠＋3状態mesh、2軸previewとWall接続・実機受入の計画。 |
 | [3d-rtt/provisional-wall-formwork-plan-2026-09-05.md](3d-rtt/provisional-wall-formwork-plan-2026-09-05.md) | In Progress — 通常版導入済み／型枠release全品質・close残件 | 木製型枠6形状、タイル単位の本設mesh切替、混在接続と実機受入の計画。 |
 | [3d-rtt/single-scene-light-field/00-baseline-gates-plan-2026-08-03.md](3d-rtt/single-scene-light-field/00-baseline-gates-plan-2026-08-03.md) | Completed | Audit、Capture、Memory、RenderDocのbaselineと数値gateを実装前に固定するP00。 |
