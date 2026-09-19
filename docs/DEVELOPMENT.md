@@ -100,13 +100,39 @@ python3 scripts/dev.py doctor
 # 日常の高速ゲート
 python3 scripts/dev.py check
 
-# 完了前の全ゲート（CIも同じ入口）
+# 変更内容に応じた完了検証（比較基点は意図したfull commit SHA）
+python3 scripts/dev.py ci check --base <full-SHA> --mode auto
+
+# 分類を使わない全ゲート
 python3 scripts/dev.py verify
 ```
 
-`verify` は固定版toolのpreflight、Ruff・actionlint・online依存監査、Python tooling test、性能runner self-test、AIルール・secret・docs契約、
-fmt、workspace check、profiling最小feature check、Clippy、全test、diff hygieneを順に実行する。
-diff hygiene はローカルでは `HEAD` からの作業差分、CIではeventのbaseから`HEAD`までを検査する。
+`ci check` は比較基点とのmerge-base以後のcommitと、staged・unstaged・未追跡の差分を合算する。
+検証前後のHEAD・index・source fingerprintが変われば失敗する。`--mode full`は全群を選ぶ。
+比較基点を解決できない場合は、検査を省略せず失敗する。単群の切り分けは
+`python3 scripts/dev.py quality --group contracts|tooling|rust|deps`を使う（完成証拠の代用ではない）。
+
+| 群 | 検査内容 | 主な選択条件 |
+| --- | --- | --- |
+| contracts | storage、AIルール、Help impact、repo hygiene、crate依存、docs/index、Clippy抑制、diff hygiene | 全変更・空差分でも必須 |
+| tooling | 固定版Ruff/actionlint、Python・Blender tooling test、perf self-test | Python/tooling、Rust変更 |
+| rust | fmt、workspace check、profiling/通常workspace test、memory/tracy/renderdoc最小feature、Clippy警告0 | Rust source・snapshot・regression |
+| deps | 固定版cargo-denyによるonline依存監査 | Cargo/lock・品質制御・設定等の全群対象 |
+
+通常のMarkdown/README変更はcontracts、tooling変更はcontracts+tooling、Rust変更は
+contracts+tooling+rust。Rust fixtureを読むtooling testがあるためRust変更でもtoolingを外さない。
+Cargo/build、CI、driver・gate、AIルール/Skill、開発運用ガイド/plan template、runtime asset、未知pathは全群を選ぶ。
+分類の正本は`scripts/ci_scope.py`。renameは旧名の削除と新名の追加として両方判定する。
+`verify` は固定版toolを先に検査し、同じ群をcontracts→tooling→deps→rustの順にすべて実行する。
+`ci check`のdiff hygieneはcommit区間・dirty・未追跡fileを検査する。CIではplanの全区間を検査する。
+従来の`verify`もHEADのdirty・未追跡差分と、指定された`HELL_WORKERS_DIFF_BASE`の区間を検査する。
+
+独立した変更は目的別branchを作り、同じ目的の修正では再利用する。共有branchを切り替える前に並行作業を確認し、
+必要ならworktreeを分ける。docs正本はprimaryの`docs/`で管理する。公開が承認されたPRが自動CIの入口となる。
+完了報告では、意図したbase/head/tested SHA・必要群が一致するCI URLと結果、またはローカルの
+`ci check`対象・結果・fingerprintを示す。CI後にdirty変更を追加した場合や証拠対象が違う場合は再検証する。
+CI未利用時はローカル`ci check`、分類を信頼できない場合はfullまたは`verify`へ戻す。
+Help実レビュー、必要なnative受入、primary storage整理はCI成功と独立した義務である。
 通常のcheck/buildは暗黙のログ作成や`target/`削除を行わない。容量整理は専用maintenance
 scriptを明示的に実行する。検証用job・binary copy・worktreeは
 [検証データ管理](development-infra/validation-storage-workflow.md)に従い、成功・失敗・中断を問わず
@@ -515,15 +541,28 @@ Cargo manifest/lockはdev-dependency更新でもHelp gateの対象である。bo
 全更新commitの子孫となる末尾commitの`Help-Impact: none` / 具体的な`Help-Impact-Reason`を残す。
 PR本文・CI環境変数・固定理由の自動注入で代用しない。bot再更新/rebase後は再判断し、squash後も判断を保持する。
 
-CIは公式SHA固定Action、manifestからの明示Rust/tool供給、read権限で同じ`verify`を実行する。
-quality jobは画像処理testに必要なPillow 12.3.0をrunnerの一時venvへPyPI wheelから明示導入し、
-そのPythonで`verify`を実行する。Ubuntu標準Pillow 10.2では既存の`get_flattened_data`が使えないため、
-導入直後に同APIの存在を確認する。venvはjob終了時にrunnerとともに破棄し、Cargo cacheへ含めない。
-quality jobは依存更新後のprofiling / dynamic-linking両構成の再buildを許す90分上限とする。
-日次03:17 UTCは`deps`だけを走らせ、game buildやHelp gateを呼ばない。
-ActionsのRun workflow（`workflow_dispatch`）も同じ依存監査jobだけを実行する。
-初回受入・監査障害の再確認に使い、定刻scheduleの発火確認とは分けて記録する。
-concurrencyにはevent名を含め、scheduleがmaster pushのqualityをcancelしない。
+CIは公式SHA固定Action、read権限で`verify`と同じ群を選択実行する。
+`.github/workflows/ci.yml`はPR（draftも含む）、master push、手動実行に対応する。
+手動実行は`mode=auto|full`と、対象の厳密な祖先である非zeroのfull `base_sha`が必要。
+PRはeventのbase B/head H、merge-base G、実際のmerge commit Tを固定し、Tの親がB,Hかを確認して
+G..HとB..Tを合算する。master pushはbefore..after、non-FFはG..before/G..afterも加えてfullにする。
+Help基点はPRのB、通常pushのbefore、non-FFのG、手動のbase。取得不能なSHAや不正eventは失敗する。
+
+`changes`がschema v1のplanを作り、各群と集約が同じeventから再計算して照合する。
+成功jobはtested SHAとplan digestを出力する。digestはrun IDを含み、failed-job再実行のためattemptのみ除外する。
+contracts成功後にtooling/deps、必要群成功後にrustを実行する。rustだけにnative toolとCargo cacheを供給し、
+既存cache keyを維持する。toolingにはPillow 12.3.0を一時venvへ導入し、`get_flattened_data`の存在を確認する。
+rustは90分上限。各群の固定版toolは`.github/actions/prepare-quality/action.yml`が必要分だけ供給する。
+
+常設job `quality`（表示名`Quality gates`）は`always()`で、選択群のsuccess・SHA/digest一致と
+未選択群のskippedを確認する。失敗・取消・選択群のskip・欠損は通過させない。
+Summaryにはbase/head/tested SHA、選択理由・群、path件数/digest、結果、run URLを記録する。
+branch保護はworkflowと別のGitHub設定であり、check成功だけでmerge強制とはしない。
+
+`.github/workflows/dependency-audit.yml`は日次03:17 UTCと独立した手動実行で`deps`だけを走らせる。
+game build・Help gate・`Quality gates`を作らず、CI workflowの手動fullとは区別する。
+concurrencyはworkflow/event/PRまたはrefで分離し、通常CIは手動modeも分ける。
+手動監査成功と実際のschedule発火は別々に受入記録へ残す。
 
 2026-09-13の導入受入では、`ecf2ab7d`で5項目を公開し、`c870bfea`でCIのPillow供給を固定した。
 [通常CI](https://github.com/iaammssssstupiddddd-commits/hell-workers/actions/runs/34748374154)は

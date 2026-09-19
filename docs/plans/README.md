@@ -45,7 +45,7 @@
 | [3d-rtt/single-scene-light-field/08-legacy-cleanup-release-plan-2026-08-03.md](3d-rtt/single-scene-light-field/08-legacy-cleanup-release-plan-2026-08-03.md) | Completed — bounded P08 release closure valid; historical performance bootstrap intentionally not resumed | Soul projector／section／legacy mirrorを撤去し、最終GPU経路・cross-consumer・Help gateを閉じるP08。 |
 | [3d-rtt/single-scene-rtt-indoor-light-field-migration-plan-2026-08-03.md](3d-rtt/single-scene-rtt-indoor-light-field-migration-plan-2026-08-03.md) | Completed — P00〜P08 and P02-A complete; P08 bounded release closure valid | Scene RtT 1枚、TopDown表示、放射状Indoor Light Fieldへの9分割親ロードマップ。 |
 | [3d-rtt/terrain-lod-switch-flicker-plan-2026-04-17.md](3d-rtt/terrain-lod-switch-flicker-plan-2026-04-17.md) | Draft | 地形 LOD の単発切替ポップを観測し、短い dither 遷移で抑える計画 |
-| [change-aware-ci-plan-2026-09-19.md](change-aware-ci-plan-2026-09-19.md) | Draft | 変更内容に応じたCI自動実行、検証群分割、集約判定、各エージェント向け完了ルールの同期計画。 |
+| [change-aware-ci-plan-2026-09-19.md](change-aware-ci-plan-2026-09-19.md) | In Progress | 変更内容に応じたCI自動実行、検証群分割、集約判定、各エージェント向け完了ルールの同期計画。 |
 | [development-workstation-blender-migration-plan-2026-07-29.md](development-workstation-blender-migration-plan-2026-07-29.md) | In Progress | 新PCへの開発環境移行と、現PCでのBlender／asset新規構築計画。 |
 | [hvac-plumbing-plan-2026-07-13.md](hvac-plumbing-plan-2026-07-13.md) | Draft | 地獄のインフラ（換気・導水・部屋認可）実装計画 |
 | [native-acceptance-resource-safety-plan-2026-08-05.md](native-acceptance-resource-safety-plan-2026-08-05.md) | Complete | tmpfs上のCargo出力を永続storageへ固定し、実機検証のRAM圧迫を防ぐ計画。 |

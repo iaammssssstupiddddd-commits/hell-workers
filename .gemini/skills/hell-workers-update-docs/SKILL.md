@@ -55,5 +55,12 @@ description: Update project documentation, READMEs, and indices after code chang
 3. Run `python3 scripts/check_agent_rules.py` after rule or skill changes.
 4. Run `python3 scripts/check_help_impact.py`; if Help is unchanged, ensure one exact non-empty no-impact trailer decision descends from every production commit in the change batch.
 5. Run `python3 scripts/dev.py check` when Rust code changed and has not been verified.
-6. Before broad completion, run `python3 scripts/dev.py verify`.
+6. Before completion, apply the change-aware completion policy below; preserve mandatory Help/native/storage review.
 7. Report the changed files and the contract each update keeps in sync.
+
+## Change-aware completion and branches
+
+- Before completion, use same-subject CI evidence or `python3 scripts/dev.py ci check --base <full-SHA> --mode auto`; use `python3 scripts/dev.py verify` for full fallback.
+- Use a dedicated branch for an independent change; reuse the branch for fixes to the same purpose. Preserve parallel work, and use a PR as the automatic CI entry point; publishing still requires task authorization.
+- Accept CI only for the intended base/head/tested SHA and selected groups, with no additional dirty source; record the run URL and scope. CI does not replace Help review, required native acceptance, or primary storage cleanup.
+- Unknown scope or unavailable CI requires local verification. Use full mode or `verify` when classification cannot be trusted; never treat a missing diff base as success.

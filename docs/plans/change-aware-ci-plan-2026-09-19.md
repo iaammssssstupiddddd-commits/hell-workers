@@ -5,15 +5,17 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `change-aware-ci-plan-2026-09-19` |
-| ステータス | Draft |
+| ステータス | In Progress |
 | 作成日 | 2026-09-19 |
-| 最終更新日 | 2026-09-19 |
+| 最終更新日 | 2026-09-20 |
 | 作成者 | Codex |
 | 関連提案 | N/A（ユーザーとのCI運用検討から作成） |
-| 関連Issue/PR | N/A |
+| 関連Issue/PR | [#20](https://github.com/iaammssssstupiddddd-commits/hell-workers/pull/20)、[#25](https://github.com/iaammssssstupiddddd-commits/hell-workers/pull/25) |
 
-本書は実装前の計画である。CI設定・現行の完了規則はまだ変更していない。
+2026-09-19に実装開始。コードは `target/change-aware-ci` の `codex/change-aware-ci` branch（base `3ec4a76b`）で分離し、docs正本はprimaryで更新した。2026-09-20に並行変更のない実装ファイルだけをprimaryへ反映し、既存Cargo cacheで全verifyを実施した。primaryの建築アート文書・他sessionのcommitを保持した。実装はPR #20でmasterへ反映済み。
 ユーザーの優先事項は「変更内容に応じてCIを自動実行すること」であり、ルール更新も実装範囲に含める。
+
+2026-09-20: ユーザーの「受け入れを完了させてください」によりM6のcommit・push・PR・merge・トリガー確認・専用環境整理へ進む。別PR #19の未merge refactorを含めないため、同じcandidate worktreeを`codex/change-aware-ci-acceptance`へ切り替え、master `52913b61ca524f1cd429d3d73a0468faf3d0999b`を基点にCI差分だけを載せる。candidate内のdocsはprimary正本からの公開用snapshotであり、計画編集は引き続きprimaryで行う。required check新設は今回は行わず、既存の保護なし設定を維持する。
 
 ### レビューで修正した点（2026-09-19）
 
@@ -26,7 +28,7 @@
 | 新workflowを含むPRで「文書のみ」を実証できない | 候補branchをbaseとする子PRと、default branch反映後の手動／日次受入に分割 |
 | 新ルール有効化とM6完了が循環 | 未導入環境では旧全verifyへ戻る条件付きルールを定義し、M6前後の証拠と完了状態を分離 |
 
-レビュー後も実装進捗は0%。以下のCLI・ファイル・job名で「新規」と記したものは未実装である。
+M1〜M5とM6aは完了。M6bはmaster push・手動fullが成功し、独立監査の入力なしイベント不具合を修正して再受入中。自然scheduleは2026-09-20 03:17 UTCの発火を未観測のため、計画はIn Progressを維持する。
 
 ## 1. 目的
 
@@ -305,7 +307,7 @@ M4でroot rulesとtask lifecycleの「開始時」に本節を反映し、終了
 - `hell-workers-review-help-impact` Skillに従い、完成した開発tool変更が通常ゲームの入力・状態・表示へ到達するか確認して判断する。
 - 開発用変更という名前だけでNo impactにしない。runtimeへの影響がなければ具体的根拠を記録し、commitが許可された場合だけ必要なtrailerを残す。
 - 完了条件: Help検査の既存対象・レビュー義務を維持し、CIへ移したことによる免除がない。docs・rules・コードが同じ分類を説明する。
-- 検証: Help gate、rule／docs検査、全verify。計画作成のみの今回の差分はゲーム実装・runtime dataを変更しない。
+- 検証: Help gate、rule／docs検査、全verify。本実装は開発品質検証に限定し、ゲーム実装・runtime dataを変更しない。
 - M5は最終整合レビューの工程名であり、途中でcommit／完了報告する場合のHelp Skill必須実施を延期する理由にはしない。
 
 ### M6: GitHub受入・導入確認・close
@@ -329,6 +331,30 @@ M6aとM6bを分ける。CI定義を含む実装PRへ文書commitを追加して�
 文書caseはRust job・native apt・Cargo target cache復元が0件であることをjob/stepから確認する。各runに分類・cache hit・cold/warm・実行時間を記録する。
 CI導入の完了条件はM6a＋M6bの品質／監査確認、rules同期、不要受入branch／PR／workspaceの整理。保護新設の採否は別項目として記録し、未設定なのに保護済みとしない。
 永続仕様を `docs/DEVELOPMENT.md` 等へ反映し、本計画はarchiveまたは削除してindexを再生成する。
+
+### M6受入記録（2026-09-20、進行中）
+
+公開候補は`134fe6c3b0cbcb7fe2c23555ec8d13d1d9010da1`、baseはmaster `52913b61ca524f1cd429d3d73a0468faf3d0999b`。別PR #19と建築アート文書のcommitは含めない。子PRのbaseはすべて候補の固定SHAで、masterへmergeしない。既定branchの保護は新設せず、保護なしのままとする。
+
+| ケース | PR / run | 結果 |
+| --- | --- | --- |
+| 実装全群 | [#20](https://github.com/iaammssssstupiddddd-commits/hell-workers/pull/20) / [35459170013](https://github.com/iaammssssstupiddddd-commits/hell-workers/actions/runs/35459170013) | C/T/D/R・集約success、masterへmerge済み |
+| 文書のみ | [#21](https://github.com/iaammssssstupiddddd-commits/hell-workers/pull/21) / [35459220974](https://github.com/iaammssssstupiddddd-commits/hell-workers/actions/runs/35459220974) | 成功。Cのみ、T/D/R skip、集約success。実行jobにnative apt・Cargo cache stepなし |
+| Toolingのみ | [#22](https://github.com/iaammssssstupiddddd-commits/hell-workers/pull/22) / [35459250390](https://github.com/iaammssssstupiddddd-commits/hell-workers/actions/runs/35459250390) | 成功。C/T、D/R skip、集約success |
+| Rust testのみ | [#23](https://github.com/iaammssssstupiddddd-commits/hell-workers/pull/23) / [35459267058](https://github.com/iaammssssstupiddddd-commits/hell-workers/actions/runs/35459267058) | C/T/R・集約success、D skipでもRを完走 |
+| Rust選択＋意図した契約失敗 | [#24](https://github.com/iaammssssstupiddddd-commits/hell-workers/pull/24) / [35459294822](https://github.com/iaammssssstupiddddd-commits/hell-workers/actions/runs/35459294822) | 期待どおりfailure。C failure、T/R未起動、集約failure |
+
+文書caseのtested merge SHAは`2db4bbf79c9a41f4171b34151f33038ac0cf62a0`、Toolingは`34c4a4e20fcdd1c49f77ff531a2957ab33545005`、意図した失敗は`0ba88bfa5e0732d86e3e90310c95888555c5b573`。成功／失敗とplanのSHAはjob logで照合した。自然scheduleは03:17 UTCを維持し、手動実行と区別して観測する。
+
+PR #24の連続pushで[旧run 35459533448](https://github.com/iaammssssstupiddddd-commits/hell-workers/actions/runs/35459533448)のみcancelled、[新run 35459541624](https://github.com/iaammssssstupiddddd-commits/hell-workers/actions/runs/35459541624)は意図した契約エラーでfailure。他PR #20/#23のRust実行は継続し、PR間の取消分離を確認した。
+
+PR #20のtested merge SHAは`1697b499ecbe60f98723bf5c3b6860c2123ffdaa`、Rust子PRは`bd83ece0b00c5c22b6e046b90d26d3f1aad52c33`。実装PRは9分21秒（Rust 7分55秒、既存cache exact hit）、文書のみ32秒、Toolingのみ84秒。文書・ToolingではRust cache自体を使わない。cold cacheの新規実測は行っておらず、cold時の時間短縮は主張しない。
+
+PR #21〜#24は証拠保存後にmergeせずclose済み。4本の受入専用branchは既知SHAと全diffを確認してremote/local双方から削除済み。fixtureはmasterへ入れていない。
+
+master merge SHA `a0b515a8f44711ca81a3713a5aece4e5f6ef44a2`で[push full 35459807499](https://github.com/iaammssssstupiddddd-commits/hell-workers/actions/runs/35459807499)と[手動full 35459817786](https://github.com/iaammssssstupiddddd-commits/hell-workers/actions/runs/35459817786)が全群成功。手動baseは`52913b61ca524f1cd429d3d73a0468faf3d0999b`。
+
+独立監査の[初回 35459819407](https://github.com/iaammssssstupiddddd-commits/hell-workers/actions/runs/35459819407)は`workflow_dispatch`の`inputs:null`をdictとして処理して準備段階で失敗した。PR #25（head `4a339c657cc9c529dfe429922a37b871b825a852`）で修正し、null／省略／空inputsとscheduleの回帰test、手動品質planのbase必須条件を確認した。ローカルtooling全群成功（Python 205、Blender tooling 151、perf self-test・lint）。[修正branchの独立監査 35460335250](https://github.com/iaammssssstupiddddd-commits/hell-workers/actions/runs/35460335250)は成功し、jobはDaily dependency auditだけ、Quality gatesは生成されない。PR全群と反映後の再受入を継続する。
 
 ## 6. リスクと対策
 
@@ -392,8 +418,10 @@ ToolingにはRust／Blender実行ファイルのstubを置いた環境でも通�
 ### 検証データ管理（各バッチの開始前・報告前に更新）
 
 - 正本: `docs/development-infra/validation-storage-workflow.md`。ローカルの検証workspace／jobを作る場合はprimaryの `dev.py validation` で登録・結果確定・整理する。
-- 今回のbatch: 計画書整備のみ。責任者Codex、consumerは計画レビュー。専用worktree・branch・job・binary copyを作成しない。
-- 開始／残存bytes: 専用検証データ0 bytes。回収対象なし、回収量0 bytes。共有の既存cacheは計画の所有物としない。
+- 今回の所有者: Codex / change-aware-ci。Git common directoryのretain IDは`change-aware-ci-candidate`、consumerは`change-aware-ci-implementation`。通常の品質検証はprimaryの既存開発cacheを再利用し、native job・binary copyは作らない。
+- 保持path: `target/change-aware-ci`、branch `codex/change-aware-ci`、base `3ec4a76bbb2a2b1f7ad5f32a38a308bb036ae944`。開始27,004,928 bytes、2026-09-20時点27,435,008 bytes。コード候補のレビューと公開準備に使用し、docs正本はprimaryに限定する。
+- 次の作業: primaryの確定docsと実装差分を、commit/公開が依頼された際に候補branchへ集約する。release_when: primaryへ採用済みかつ候補のreview/CI consumerが終了した時。修正中は同じworktreeを再利用する。
+- 回収量0 bytes。共有の既存cacheは本計画の所有物とせず、既存consumerを変更しない。テスト用一時Git repositoryとcompiler stubは各テスト終了時に撤去済み。
 - 実装時に記録する項目: batch ID、判断対象、責任者／consumer、base/head/tested SHA、worktree／job roots、開始bytes、結果、採用証拠、削除path／回収bytes、残存理由と終了条件。
 - GitHub evidenceはrun URL・必要なSummary／結果を正本へ記録する。全ログ・全jobのcapsule化は不要。
 - 一時検証環境を作った場合は最終consumer終了後に撤去する。保存すべき証拠があれば小さなcapsuleへ集約し、hashと回収量を記録する。既存・並行作業の変更やcacheを削除しない。
@@ -409,20 +437,20 @@ ToolingにはRust／Blender実行ファイルのstubを置いた環境でも通�
 
 ### 現在地
 
-- 実装進捗: 0%。計画書のレビュー・具体化済み、M1〜M6は未着手。
-- 現行のCI・ルールは未変更。今回の依頼は計画書整備まで。
+- M1〜M5・M6a完了。M6bのmaster pushと手動fullは成功。独立監査の不具合修正と自然schedule観測を継続中。詳細は「M6受入記録」を参照。
+- primaryのCI・driver・rules・Skill・開発ガイド・templateを更新済み。全verify成功後の分類修正はfocused testとtooling検証で確認した。ゲームのRust/runtime assetは変更していない。
 - 作業開始時の既存差分: `docs/README.md` の建築art文書リンク、`docs/art-style-criteria.md`、未追跡の `docs/building-art-direction.md`。本計画とは別の変更として保持する。
 
 ### 次のAIが最初にやること
 
-1. ユーザーの実装指示を確認し、現行のrulesと本計画を読み、既存差分を再確認する。
-2. 4.1のコマンド対応表を現行コードへ再照合し、CI／保護設定の最新状態をread-only確認する。
-3. M1→M2→M3→M4→M5→M6aを進める。許可されたdefault branch反映後にM6bを実施し、未反映・日次未観測を完了扱いにしない。
+1. primary/candidateのstatusとHEADを再確認する。別sessionの建築アートcommit・差分を変更しない。
+2. PR #25の全群成功を確認してmasterへ反映し、修正後のmasterと手動監査結果を記録する。M6の公開・merge・整理はユーザーから許可済み。
+3. 2026-09-20 03:17 UTC以後のDependency auditの`event=schedule`を確認する。起動遅延は許容し、手動成功で代用しない。自然起動成功と環境整理の完了後、本計画をarchive／削除して両indexを更新する。
 
 ### ブロッカー／注意点
 
 - 技術上の確定ブロッカーなし。CLI・schema・job・diff式・分類優先順は本書で確定済み。実装時の外部確認は公開許可、最新の保護設定、required check新設の採否、実際のrun結果。
-- コード編集は主担当が直接行い、subagentへ委譲しない。計画の実装を今回の依頼から推測して開始しない。
+- コード編集は主担当が直接行い、subagentへ委譲しない。実装はユーザーの「実装してください」に基づく。公開・merge・保護設定は各操作の許可範囲に従う。
 - 差分基点不足でHelp gateを迂回しない。CI成功と実レビューは別の義務。
 
 ### 参照必須ファイル
@@ -439,19 +467,25 @@ ToolingにはRust／Blender実行ファイルのstubを置いた環境でも通�
 - 2026-09-19: `python3 scripts/check_agent_rules.py` 成功。`python3 scripts/check_help_impact.py` も成功（既存branchのproduction batchに対する結果。今回の文書差分の実装レビューを意味しない）。
 - 2026-09-19レビュー: master protectionは `Branch not protected`、適用rulesは `[]`、default branchはmaster／publicとread-only確認。Rust fixtureを読むperf self-test、Helpのmerge-base／commit列挙、GitHubのskip／手動check仕様を確認して計画を修正。
 - 2026-09-19レビュー後: docs生成／freshness、文書リンク、AI rule、既存Help gateを再確認してpass。tracked diffの空白検査と未追跡の本計画の空白検査に指摘なし。`git diff --no-index --check` は新規ファイルとの差分ありでexit 1になり得るため、診断出力の有無も確認する。
-- Rust check／Clippy／test／verify: 今回未実行（計画文書のみ）。実装の検証成功を示すものではない。
-- GitHub受入: 未実施。
+- 2026-09-20: primaryで`python3 scripts/dev.py verify`成功。contracts/tooling/deps/rust全群、通常・profiling workspace test、memory/tracy/renderdoc最小feature、Clippy `-D warnings`、online依存監査を通過。`python3 scripts/dev.py check`も成功。
+- 2026-09-20最終: `python3 scripts/dev.py ci check --base 3ec4a76bbb2a2b1f7ad5f32a38a308bb036ae944 --mode auto`も全4群成功。HEAD=`a5bd322e68892a77abb106ee1cdce381a2526748`、開始/終了source fingerprint=`01457ff9ce48d96d95971d00c2d52a4f5aa8e799f7d966e43a1771cf1c856084`（この結果追記前のsnapshot）。途中の試行はMemAvailableが8 GiB未満のためRust開始前に拒否され、メモリ回復後に同じコマンドを成功させた。ガードは変更していない。
+- 2026-09-20: Python tooling 238件＋Blender tooling 151件、perf self-test成功。Cargo/rustc/rustup/Blenderを失敗するstubに置換したPATHでもtooling全群成功、実compiler呼出し0件。追加の分類中変更・SHA取得fixtureを含むfocused CI/rule testも成功。
+- 2026-09-20: reviewでGitHub output名`plan_sha256`の数字許可、stagedとunstagedの相殺による見落とし、分類中のsource変更を修正。plan→group→aggregateの実output接続、revert済みproduction commitのHelp拒否、欠落event SHA取得/失敗、未選択depsと選択rustの集約をfixtureで確認。
+- Help実レビュー: **No impact**。変更経路は`dev.py`→品質群／Git分類／Actions結果出力と開発用ルールで完結する。`build_help_panel_content`→`manifest::feature_specs()`／provider→`hw_ui`の静的表示、InputAction・UiIntent・通常ゲーム状態・runtime assetへ変更を加えておらず、プレイヤー操作・文言・成立条件は不変。`3ec4a76b`以後とdirtyを対象にHelp gateも「no production changes」で成功。理由の自動注入・Help sourceへの空変更は行っていない。
+- Rust sourceは未変更のためrust-analyzer診断の新規取得とnative受入は対象外。workspace compile/Clippy/testで既存Rust契約を確認した。
+- sandbox内で一部testのIPCと`.git`台帳lockが拒否された実行は成功扱いにせず、同じ検証を承認済みの制限外実行で再確認した。
+- GitHub受入: M6a完了、M6b進行中。「M6受入記録」にURL・SHA・群・cache・時間を記録。required checkは新設しない判断とし、保護なしを維持。
 
 ### Definition of Done（実装完了時）
 
 - [ ] M1〜M6を完了し、分類別の必要検証と失敗伝播を確認した。
-- [ ] 全verifyとの対応表があり、既存検証の意図しない脱落がない。
-- [ ] 文書のみのCIでRust buildが0件、Rust変更ではworkspace全体を検証する。
-- [ ] 対象変更のcheck・Clippy警告0・全Rust testを含む初回導入の全検証が成功した。
-- [ ] 集約は必要jobのskip／cancel／欠損を成功扱いせず、独立した依存監査から品質checkを作らない。
-- [ ] required check新設の採否を記録した。採用時は実際の保護を確認し、未採用時は「保護なし」と報告した。
-- [ ] ルール・Skill・task lifecycle・開発ガイド・templateの完了条件を同期した。
-- [ ] 通常開発のbranch作成／再利用、PRによるCI開始、同目的修正の継続、終了後の整理をルールに反映した。
+- [x] 全verifyとの対応表があり、既存検証の意図しない脱落がない。
+- [x] 文書のみのCIでRust buildが0件、Rust変更ではworkspace全体を検証する。
+- [x] 対象変更のcheck・Clippy警告0・全Rust testを含む初回導入の全検証が成功した。
+- [x] 集約は必要jobのskip／cancel／欠損を成功扱いせず、独立した依存監査から品質checkを作らない。
+- [x] required check新設の採否を記録した。採用時は実際の保護を確認し、未採用時は「保護なし」と報告した。
+- [x] ルール・Skill・task lifecycle・開発ガイド・templateの完了条件を同期した。
+- [x] 通常開発のbranch作成／再利用、PRによるCI開始、同目的修正の継続、終了後の整理をルールに反映した。
 - [ ] Help実レビュー、必要な実機受入、元環境のstorage整理を別途完了した。
 - [ ] SHA・実行範囲・CI URLと残務を記録し、専用検証環境を整理した。
 - [ ] 永続仕様への反映、本計画のarchive／削除、両indexの再生成を完了した。
@@ -463,3 +497,5 @@ ToolingにはRust／Blender実行ファイルのstubを置いた環境でも通�
 | 2026-09-19 | Codex | 変更別CI分類、検証群分割、集約判定、ルール同期、GitHub受入と完了条件を含む初版を作成 |
 | 2026-09-19 | Codex | 計画レビュー。Rust→Tooling依存、保護未設定、監査workflow分離、CLI／schema／diff／job仕様、local dirty検証、M6a/M6b導入順と受入fixtureを具体化 |
 | 2026-09-19 | Codex | 通常開発のbranch作成／再利用基準、PRによる自動CI開始、並行作業の保全、終了後の整理を追加し、M4とDoDへ反映 |
+| 2026-09-20 | Codex | 品質群・Git分類・集約・Actions・rules/Skill/docsを実装し、ローカル全verifyと異常系fixtureを確認。GitHub受入・公開・導入は未実施として継続 |
+| 2026-09-20 | Codex | M6aの全分類・失敗伝播・取消分離を受入、PR #20をmasterへ反映。M6bのpush/full成功、独立監査のnull inputs不具合を修正。子PR・branchを整理し、自然schedule待ちを明記 |

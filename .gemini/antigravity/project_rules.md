@@ -12,7 +12,7 @@
 ## 技術的制約・ルール
 - **エンジン**: Bevy 0.19 を使用。
 - **ECS Relationships**: エンティティ間の参照には必ず Relationship を使用する。
-- **検証**: 完了報告の前に必ず `python3 scripts/dev.py check` を実行し、Rust-analyzer の警告・エラーをゼロにすること。
+- **検証**: 完了判定は末尾の変更別CIルールに従う。Rust変更時は `python3 scripts/dev.py check` とRust-analyzer診断を確認する。
 - **画像生成**: [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) に記載されたマゼンタ背景のワークフローを厳守すること。
 - You MUST use the repository `hell-workers-review-help-impact` Skill after implementing, changing, or removing functionality, code, or runtime data and before reporting completion, committing, or publishing.
 - Complete the Skill's `Update required` / `No impact` decision from the actual player-visible path; a passing Help impact gate alone does not count as the review.
@@ -26,3 +26,10 @@
 
 ## ドキュメントの更新
 機能の追加や大規模な変更を行った際は、`docs/` 内の関連ドキュメントを最新の状態に更新すること。
+
+## Change-aware completion and branches
+
+- Before completion, use same-subject CI evidence or `python3 scripts/dev.py ci check --base <full-SHA> --mode auto`; use `python3 scripts/dev.py verify` for full fallback.
+- Use a dedicated branch for an independent change; reuse the branch for fixes to the same purpose. Preserve parallel work, and use a PR as the automatic CI entry point; publishing still requires task authorization.
+- Accept CI only for the intended base/head/tested SHA and selected groups, with no additional dirty source; record the run URL and scope. CI does not replace Help review, required native acceptance, or primary storage cleanup.
+- Unknown scope or unavailable CI requires local verification. Use full mode or `verify` when classification cannot be trusted; never treat a missing diff base as success.

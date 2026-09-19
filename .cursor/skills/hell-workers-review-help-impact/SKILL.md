@@ -71,11 +71,11 @@ HELL_WORKERS_HELP_IMPACT_REASON='具体的なno-impact理由' \
   python3 scripts/check_help_impact.py
 ```
 
-全体検証にも同じ理由を明示する。
+ローカルの変更別検証にも同じ理由を明示する（`<full-SHA>` は意図した比較基点）。
 
 ```bash
 HELL_WORKERS_HELP_IMPACT_REASON='具体的なno-impact理由' \
-  python3 scripts/dev.py verify
+  python3 scripts/dev.py ci check --base <full-SHA> --mode auto
 ```
 
 この環境変数は判断を永続化せず、CIでは無効である。commitが明示的に依頼された場合だけ、全production変更の
@@ -99,9 +99,10 @@ python3 scripts/dev.py cargo -- test -p bevy_app@0.1.0 help_
 python3 scripts/dev.py cargo -- test -p hw_ui help
 python3 -m unittest scripts.tests.test_check_help_impact
 python3 scripts/check_help_impact.py
-python3 scripts/dev.py verify
+python3 scripts/dev.py ci check --base <full-SHA> --mode auto
 ```
 
+同一対象の成功CIを使う場合は末尾の証拠条件を満たす。全検証fallbackは`dev.py verify`を使う。
 Rustを変更した場合はrust-analyzer診断も0件にする。最後に`git diff --check`を実行する。
 
 ## 6. 報告する
@@ -113,3 +114,10 @@ Rustを変更した場合はrust-analyzer診断も0件にする。最後に`git 
 - 更新したmanifest/provider/coverage/snapshot/docs、またはexact no-impact理由。
 - 実行した検証と結果。
 - 未確認の並行差分やブロッカー。
+
+## Change-aware completion and branches
+
+- Before completion, use same-subject CI evidence or `python3 scripts/dev.py ci check --base <full-SHA> --mode auto`; use `python3 scripts/dev.py verify` for full fallback.
+- Use a dedicated branch for an independent change; reuse the branch for fixes to the same purpose. Preserve parallel work, and use a PR as the automatic CI entry point; publishing still requires task authorization.
+- Accept CI only for the intended base/head/tested SHA and selected groups, with no additional dirty source; record the run URL and scope. CI does not replace Help review, required native acceptance, or primary storage cleanup.
+- Unknown scope or unavailable CI requires local verification. Use full mode or `verify` when classification cannot be trusted; never treat a missing diff base as success.

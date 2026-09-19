@@ -24,7 +24,7 @@ After any code change, ensure zero compilation errors:
 3. Fix errors immediately before any other work
 4. Minimize warnings (remove unused imports/variables)
 
-**Completion criteria**: `python3 scripts/dev.py verify` succeeds.
+**Completion criteria**: The change-aware completion policy below is satisfied.
 **Never report completion with errors remaining.**
 
 - You MUST use the repository `hell-workers-review-help-impact` Skill after implementing, changing, or removing functionality, code, or runtime data and before reporting completion, committing, or publishing.
@@ -98,7 +98,7 @@ Reasons:
   1. すでに正しく動いている他のプロジェクト内ソースコードの書き方を参考にする
   2. Web検索ツール等で `https://docs.rs/bevy/0.19.0/bevy/` や関連ドキュメントを確認する
   3. ローカルの `~/.cargo/registry/src/` にあるBevyのソースコード（関数のシグネチャ）を検索して直接確認する
-- 実装後は `python3 scripts/dev.py check` を実行し、APIの変更によるエラー（メソッドが存在しない等）がないか必ず確認すること。
+- Rust実装後は `python3 scripts/dev.py check` を実行し、APIの変更によるエラー（メソッドが存在しない等）がないか必ず確認すること。
 
 ### 6. WGSL シェーダー検証ルール
 
@@ -122,7 +122,7 @@ Reasons:
 - ローカルコード解析（定義ジャンプ、参照、型確認）は `rust-analyzer-mcp` を優先する。
 - 外部 crate API の仕様確認は `docsrs-mcp` を優先し、推測で実装しない。
 - Bevy API は必ず 0.19 系の情報で確認する（`docsrs-mcp` / `~/.cargo/registry/src/`）。
-- 実装後は rust-analyzer 診断確認に加えて `python3 scripts/dev.py check` を実行する。
+- Rust実装後は rust-analyzer 診断確認に加えて `python3 scripts/dev.py check` を実行する。
 - MCP が利用できない場合は、`~/.cargo/registry/src/` と `docs.rs` の一次情報を使って代替確認する。
 
 ---
@@ -252,3 +252,10 @@ Refer to `docs/` for specific system details:
 - `logistics.md` - Resource hauling and stockpiles
 - `building.md` - Building process and blueprints
 - `architecture.md` - Overall structure and dependencies
+
+## Change-aware completion and branches
+
+- Before completion, use same-subject CI evidence or `python3 scripts/dev.py ci check --base <full-SHA> --mode auto`; use `python3 scripts/dev.py verify` for full fallback.
+- Use a dedicated branch for an independent change; reuse the branch for fixes to the same purpose. Preserve parallel work, and use a PR as the automatic CI entry point; publishing still requires task authorization.
+- Accept CI only for the intended base/head/tested SHA and selected groups, with no additional dirty source; record the run URL and scope. CI does not replace Help review, required native acceptance, or primary storage cleanup.
+- Unknown scope or unavailable CI requires local verification. Use full mode or `verify` when classification cannot be trusted; never treat a missing diff base as success.

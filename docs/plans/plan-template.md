@@ -39,6 +39,8 @@
 - 方針:
 - 設計上の前提:
 - Bevy 0.19 APIでの注意点:
+- 作業branch / 独立変更で新規作成か同目的branch再利用か / 比較基点:
+- PRによるCI開始 / 公開の許可範囲 / 並行作業の保全:
 
 ## 5. マイルストーン
 
@@ -51,8 +53,8 @@
 - 完了条件:
   - [ ] 
 - 検証:
-  - `python3 scripts/dev.py check`
-  - `python3 scripts/dev.py cargo -- clippy --workspace --all-targets -- -D warnings`
+  - 同一対象の成功CI、または `python3 scripts/dev.py ci check --base <full-SHA> --mode auto`
+  - Rust変更の開発中は `python3 scripts/dev.py check`、完了時のrust群はClippy警告0・workspace全testを含む。
 
 ## M2: [マイルストーン名]
 
@@ -63,8 +65,8 @@
 - 完了条件:
   - [ ] 
 - 検証:
-  - `python3 scripts/dev.py check`
-  - `python3 scripts/dev.py cargo -- clippy --workspace --all-targets -- -D warnings`
+  - 同一対象の成功CI、または `python3 scripts/dev.py ci check --base <full-SHA> --mode auto`
+  - Rust変更の開発中は `python3 scripts/dev.py check`、完了時のrust群はClippy警告0・workspace全testを含む。
 
 ## M3: [マイルストーン名]
 
@@ -75,8 +77,8 @@
 - 完了条件:
   - [ ] 
 - 検証:
-  - `python3 scripts/dev.py check`
-  - `python3 scripts/dev.py cargo -- clippy --workspace --all-targets -- -D warnings`
+  - 同一対象の成功CI、または `python3 scripts/dev.py ci check --base <full-SHA> --mode auto`
+  - Rust変更の開発中は `python3 scripts/dev.py check`、完了時のrust群はClippy警告0・workspace全testを含む。
 
 ## 6. リスクと対策
 
@@ -87,10 +89,10 @@
 ## 7. 検証計画
 
 - 必須:
-  - `python3 scripts/dev.py check`
-  - `python3 scripts/dev.py cargo -- clippy --workspace --all-targets -- -D warnings`
+  - 同一対象の成功CI、または `python3 scripts/dev.py ci check --base <full-SHA> --mode auto`
+  - Rust変更の開発中は `python3 scripts/dev.py check`、完了時のrust群はClippy警告0・workspace全testを含む。
 - 計画完了時:
-  - `python3 scripts/dev.py cargo -- test --workspace`
+  - 分類が不確実な場合は `python3 scripts/dev.py ci check --base <full-SHA> --mode full` または `python3 scripts/dev.py verify`
   - `git diff --check`
 - 手動確認シナリオ:
 - パフォーマンス確認（必要時）:
@@ -147,15 +149,19 @@
 - 最終 `python3 scripts/dev.py check`: `YYYY-MM-DD` / `pass or fail`
 - 最終 `python3 scripts/dev.py cargo -- clippy --workspace --all-targets -- -D warnings`: `YYYY-MM-DD` / `pass or fail`
 - 最終 `python3 scripts/dev.py cargo -- test --workspace`: `YYYY-MM-DD` / `pass or fail`
+- CI run URL / base・head・tested SHA / mode・選択群・結果:
+- ローカル代替command / 比較基点・dirty範囲・source fingerprint / 結果:
+- Help実レビュー / native受入要否・結果 / primary storage確認:
 - 未解決エラー:
 
 ### Definition of Done
 
 - [ ] 目的に対応するマイルストーンが全て完了
 - [ ] 影響ドキュメントが更新済み
-- [ ] `python3 scripts/dev.py check` が成功
-- [ ] `python3 scripts/dev.py cargo -- clippy --workspace --all-targets -- -D warnings` が成功
-- [ ] `python3 scripts/dev.py cargo -- test --workspace` が成功
+- [ ] 同一base/head/tested SHA・選択群の成功CIとURL、またはdirtyを含むローカル変更別検証を記録した。
+- [ ] 検証後の追加差分がなく、必要群のskip/cancel/欠損を成功扱いしていない。
+- [ ] Help実レビュー、必要なnative受入、storage整理をCIとは別に確認した。
+- [ ] Rust対象ではcheck・Clippy警告0・workspace testが成功した（非対象なら理由を記録）。
 - [ ] 各検証バッチの結果確定・不要job / binary copy / worktree / clone整理を報告前に実施した。
 - [ ] 最終close時に本計画のconsumerは0。共有残存は別consumer・担当者・bytes・終了条件を引継ぎ済み。
       削除path、前後bytes / filesystem空き差と最終結果を記録し、採用成果物を正本へ集約した。

@@ -82,5 +82,23 @@ class CargoGuardRuleTests(unittest.TestCase):
         )
 
 
+class ChangeAwareRuleTests(unittest.TestCase):
+    def test_ci_branch_and_evidence_rules_are_required_on_all_surfaces(self):
+        self.assertEqual(set(check_agent_rules.CI_RULE_FILES), EXPECTED_ROOT_RULE_FILES | {
+            ".agent/workflows/task-lifecycle.md", ".cursor/workflows/task-lifecycle.md",
+            ".cursor/skills/hell-workers-update-docs/SKILL.md",
+            ".cursor/skills/hell-workers-review-help-impact/SKILL.md",
+        })
+        self.assertEqual(check_agent_rules.missing_ci_rules(
+            check_agent_rules.REPO_ROOT / name for name in check_agent_rules.CI_RULE_FILES
+        ), ())
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "rules.md"
+            for omitted in check_agent_rules.CI_RULE_MARKERS:
+                path.write_text("\n".join(marker for marker in check_agent_rules.CI_RULE_MARKERS
+                                          if marker != omitted))
+                self.assertEqual(check_agent_rules.missing_ci_rules([path]), (path,))
+
+
 if __name__ == "__main__":
     unittest.main()
