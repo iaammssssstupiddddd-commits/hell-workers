@@ -21,7 +21,7 @@
 - `python3 scripts/dev.py cargo -- <subcommand> ...`: run any other Cargo subcommand through the same guard.
 - `python3 scripts/dev.py doctor`: diagnose required and optional local tools.
 - `python3 scripts/dev.py check`: fast local gate (format, policy, workspace compile).
-- `python3 scripts/dev.py verify`: full local/CI gate; required before reporting broad work as complete.
+- `python3 scripts/dev.py verify`: full local/CI fallback; the change-aware completion policy below selects the required scope.
 - `python scripts/convert_to_png.py "src" "assets/textures/dest.png"`: convert magenta-backed images to transparent PNGs.
 - `trunk serve`: serve the web build using `Trunk.toml` (optional; for WASM workflows).
 
@@ -131,15 +131,22 @@ Create an implementation plan in `docs/plans/` when:
   1. すでに正しく動いている他のプロジェクト内ソースコードの書き方を参考にする
   2. Web検索ツール等で `https://docs.rs/bevy/0.19.0/bevy/` や関連ドキュメントを確認する
   3. ローカルの `~/.cargo/registry/src/` にあるBevyのソースコード（関数のシグネチャ）を検索して直接確認する
-- 実装後は `python3 scripts/dev.py check` を実行し、APIの変更によるエラー（メソッドが存在しない等）がないか必ず確認すること。
+- Rust実装後は `python3 scripts/dev.py check` を実行し、APIの変更によるエラー（メソッドが存在しない等）がないか必ず確認すること。
 
 ### MCP ツール運用フロー（rust-analyzer-mcp / docsrs-mcp）
 - ローカルコード解析（定義ジャンプ、参照、型確認）は `rust-analyzer-mcp` を優先する。
 - 外部 crate API の仕様確認は `docsrs-mcp` を優先し、推測で実装しない。
 - Bevy API は必ず 0.19 系の情報で確認する（`docsrs-mcp` / `~/.cargo/registry/src/`）。
-- 実装後は rust-analyzer 診断確認に加えて `python3 scripts/dev.py check` を実行する。
+- Rust実装後は rust-analyzer 診断確認に加えて `python3 scripts/dev.py check` を実行する。
 - MCP が利用できない場合は、`~/.cargo/registry/src/` と `docs.rs` の一次情報を使って代替確認する。
 
 ## Assets & Configuration Tips
 - For generated icons or sprites, create with magenta background (`#FF00FF`) and convert via `scripts/convert_to_png.py`.
 - If Windows linking fails with too many symbols, disable `dynamic_linking` in `Cargo.toml` as documented in `docs/DEVELOPMENT.md`.
+
+## Change-aware completion and branches
+
+- Before completion, use same-subject CI evidence or `python3 scripts/dev.py ci check --base <full-SHA> --mode auto`; use `python3 scripts/dev.py verify` for full fallback.
+- Use a dedicated branch for an independent change; reuse the branch for fixes to the same purpose. Preserve parallel work, and use a PR as the automatic CI entry point; publishing still requires task authorization.
+- Accept CI only for the intended base/head/tested SHA and selected groups, with no additional dirty source; record the run URL and scope. CI does not replace Help review, required native acceptance, or primary storage cleanup.
+- Unknown scope or unavailable CI requires local verification. Use full mode or `verify` when classification cannot be trusted; never treat a missing diff base as success.
