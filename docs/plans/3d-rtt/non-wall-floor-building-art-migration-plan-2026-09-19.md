@@ -739,6 +739,23 @@ canonical・runtime asset・他sessionの原本／検証cacheは変更してい�
   失敗をsealし、不要job `target/native-acceptance/building-art-static-20260920T031838Z-107ba24e`を削除（復元不可、90,112→0 allocated bytes）。
   finalize/storage check成功。filesystem availableは661,738,901,504→662,169,714,688 bytes（同時のbuild等を含む共有差）。
   同じcacheを使って新subjectで再検証する。橋の条件・地形は変更しない。
+- camera修正を`a25ee8c577b669d3c225d55f0036f2d6ef9e0b3f`でcommit。
+  `dev.py check`、通常/profiling Clippy警告0、変更別contracts/tooling/rustが成功
+  （base `8a2d0649d53a0f804733285f3c277f466efc0316`、source `a10d49ac20986dbb9be06ef9dc1be8a83864d1a997f7f9c4c914def352a82640`）。
+- native v4はcameraの即時エラーが再発せず、small初回が準備未完了のまま300秒timeout（exit 124）。
+  2回目をowned helperへのSIGINTで打ち切り、helper/runner/gameの終了を確認、interruptedとしてseal。
+  sidecar・window/summary・完了markerがなく、正式Capture/Memoryは引き続き0。値を採用しない。
+- コード経路からSpaの初期化漏れを確認した。factoryのdefault phaseはConstructingで、搬入量のみ完了値へ変更していた。
+  通常deliveryは新規Bone消費が0ならphaseを遷移させず、停止fixtureではそのLogic処理自体も走らない。
+  完成済み参照として初期phaseも一度だけOperationalへ設定し、通常tile activationを通す回帰testを追加。
+  通常ゲームの建設・配送や毎frameの状態修復は変更しない。native再試行前に同修正を検証・commitする。
+  修正後のfocused Rust 7件、`dev.py check`、通常/profiling Clippy警告0が成功。
+  対象fileのrust-analyzer診断は0件。ただし専用featureの保証はprofiling compiler/testで行う。
+  HelpはNo impact（明示profiling fixtureの完成済み初期状態だけ）。修正後のnative再計測は未実施。
+- v4の不要job `target/native-acceptance/building-art-static-20260920T034737Z-874abd24`を削除
+  （復元不可、49,152→0 allocated bytes）。finalize/storage check成功。
+  filesystem availableは661,976,092,672→661,975,867,392 bytes（同時buildを含む共有差、削除量ではない）。
+  primary checkout/Cargo cacheのreview holdは継続し、専用worktree・binary copyは作っていない。
 
 ### Definition of Done
 

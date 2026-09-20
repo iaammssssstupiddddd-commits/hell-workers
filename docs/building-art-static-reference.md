@@ -46,6 +46,8 @@ TaskWorkers / RestAreaOccupants / StoredItemsを直接偽造せず、workerのAs
   Bevy 0.19の操作処理が毎回zoom_factorからscaleを書き戻すため、Transformだけの設定は無効。
   準備後の入力・倍率変化を修復せず検査で拒否する。通常プレイの操作・倍率範囲は変更しない。
 - `IndoorSettle`で通常の建設完了→worker設定→Spa activation→Mixer mirror→電力topology/output/allocationを順に実行する。
+  Spaはfactory生成後、完成済みの搬入量と`Operational` phaseを一度だけ設定する。
+  搬入量だけでは通常deliveryのphase遷移は発生しない。tileのDesignation/TaskSlotsは通常activationに任せる。
   完了ポップアップ・bounceだけは準備時に一度終了する。Virtual Time停止下で永続化させない。
   初期化完了後にタスク・水・人数・通電を再設定せず、完了演出の再出現も修復せず失敗扱いにする。
 - `PostUpdate`のvisibility確定後、owner/占有/支持物/companion/状態/cameraを検査する。
@@ -91,6 +93,9 @@ python3 scripts/dev.py cargo -- test -p bevy_app@0.1.0 --lib --features profilin
   有効なframe-time測定は0、medium CaptureとMemoryは未実行。基準値や性能改善率を出さない。
 - 幅5の計測専用川という案は不採用。Bridgeの問題は残り9種の進行条件にしない。
   9種の基準を全10種の基準へ読み替えず、橋の再合流時に別の比較・受入を追加する。
+- 9種版も正式値は未取得。v3のcamera初期化不一致を修正したv4は、準備完了に至らずsmall初回が300秒でtimeout。
+  後続試行を中断して調べた結果、Spaの初期phaseがConstructingに残る不備を確認した。
+  初期phase修正後のnative結果を得るまでは、9種版のrenderer・性能合格を主張しない。
 - 回転、Dream粒子、稼働中の状態遷移、搬送・生産継続、save/load、preview、GPU draw-call詳細は未測定。
 - Mixerは初期Refining状態を停止保持する。入力や進捗を毎frame補充・巻戻しして稼働負荷を捏造しない。
 - この静止参照だけではM1-0は閉じない。稼働fixtureと基盤budgetの確定前に新しい表示基盤を導入しない。

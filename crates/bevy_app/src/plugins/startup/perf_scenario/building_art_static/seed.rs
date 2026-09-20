@@ -113,11 +113,7 @@ pub(crate) fn setup_building_art_static_system(mut p: SetupParams) {
                 &p.assets,
                 &p.handles,
             );
-            let site = SoulSpaSite::default();
-            p.commands.entity(owner).insert(SoulSpaSite {
-                bones_delivered: site.bones_required,
-                ..site
-            });
+            p.commands.entity(owner).insert(operational_spa_state());
             continue;
         }
         let mut blueprint = Blueprint::new(spec.kind, spec.tiles.clone());
@@ -160,6 +156,18 @@ pub(crate) fn setup_building_art_static_system(mut p: SetupParams) {
     p.state.specs = specs;
     p.state.actors = actors;
     p.state.phase = Phase::Spawned;
+}
+
+fn operational_spa_state() -> SoulSpaSite {
+    let site = SoulSpaSite::default();
+    // This paused reference starts after construction, not during delivery.
+    // Setting the count alone does not transition the production phase: the
+    // delivery system requires a newly consumed Bone before doing that.
+    SoulSpaSite {
+        bones_delivered: site.bones_required,
+        phase: SoulSpaPhase::Operational,
+        ..site
+    }
 }
 
 fn initialize_camera(camera: &mut Transform, controller: &mut PanCamera) {
@@ -404,6 +412,56 @@ pub(crate) fn seed_building_art_static_system(mut p: SeedParams) {
 mod tests {
     use super::super::super::PerfScenarioSize;
     use super::*;
+
+    #[test]
+    fn completed_spa_seed_activates_real_tiles_while_paused() {
+        use crate::systems::jobs::soul_spa_construction::soul_spa_tile_activate_system;
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins)
+            .add_systems(Update, soul_spa_tile_activate_system);
+        app.world_mut().resource_mut::<Time<Virtual>>().pause();
+        let site = app.world_mut().spawn(SoulSpaSite::default()).id();
+        let tiles = (0..4)
+            .map(|index| {
+                app.world_mut()
+                    .spawn(SoulSpaTile {
+                        parent_site: site,
+                        grid_pos: (index % 2, index / 2),
+                    })
+                    .id()
+            })
+            .collect::<Vec<_>>();
+
+        // Reproduce the old setup: completed counts do not activate a site.
+        let mut old_seed = SoulSpaSite::default();
+        old_seed.bones_delivered = old_seed.bones_required;
+        app.world_mut().entity_mut(site).insert(old_seed);
+        app.update();
+        assert!(
+            tiles
+                .iter()
+                .all(|&tile| app.world().get::<hw_jobs::Designation>(tile).is_none())
+        );
+
+        app.world_mut()
+            .entity_mut(site)
+            .insert(operational_spa_state());
+        app.update();
+        assert!(app.world().resource::<Time<Virtual>>().is_paused());
+        let state = app.world().get::<SoulSpaSite>(site).unwrap();
+        assert_eq!(state.phase, SoulSpaPhase::Operational);
+        assert_eq!(state.bones_delivered, state.bones_required);
+        for tile in tiles {
+            assert_eq!(
+                app.world()
+                    .get::<hw_jobs::Designation>(tile)
+                    .unwrap()
+                    .work_type,
+                WorkType::GeneratePower
+            );
+            assert_eq!(app.world().get::<hw_jobs::TaskSlots>(tile).unwrap().max, 1);
+        }
+    }
 
     #[test]
     fn camera_initialization_survives_production_controller_without_repair() {
