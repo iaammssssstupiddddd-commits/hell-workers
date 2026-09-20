@@ -51,9 +51,18 @@ Bridgeは別件。地形・建築ルール・通常AIを変更しない。静止
 
 ### A1: fixtureと検査
 
-- [ ] 一度限りの初期化、通常ドメイン処理、観測sidecarを実装。
-- [ ] config/負荷検査の拒否test、静止v2の回帰testを実行。
-- [ ] Help実経路レビュー、docs更新、check/Clippy/CIを実行してcommit。
+- [x] 一度限りの初期化、通常ドメイン処理、観測sidecarを実装。
+- [x] config/負荷検査の拒否test、静止v2の回帰testを実行。
+- [x] Help実経路レビュー、docs更新、check/Clippy/CIを実行してcommit。
+
+実装commit `ca65338591a8c436cbf569aa7639e5f414db4485`。
+比較base `daf6dfed726cf733c4d07b880a109837f47bb469` の変更別contracts/tooling/rust全群が成功。
+tested source `f32ddc26d0098a352bb04390272b47f6c120a0bd9822feda6855163c4f6ef439`。
+workspace test（通常/profiling）、Memory/Tracy/RenderDoc check、workspace Clippyが成功。
+追加のprofiling全target Clippyと `dev.py check` も成功。Python静止/稼働17件、script全258件、
+Blender tooling164件とperf self-testを通過。Help: No impact。
+rust-analyzerの変更10ファイルはerrors/warnings 0。ただし既定featureではprofiling部がinactive/unlinkedで、
+workspace診断APIは形式不正を返したため、profiling部分の正当性は上記の実compile/testでも確認した。
 
 ### A2: 実機の稼働校正
 
@@ -89,6 +98,6 @@ jobはclean commit後のplanで作成する。まだ実機は未起動。最終�
 
 ## 9. AI引継ぎメモ
 
-- A1実装中。A2未着手。M1-0全体未完。新runtime基盤へ進む前に稼働参照とbudgetが必要。
+- A1完了、A2のclean-subject実機計測へ進む。M1-0全体未完。新runtime基盤へ進む前に稼働参照とbudgetが必要。
 - 読む場所: 移行計画、静止参照記録、本計画、`perf_scenario/building_art_static/`、native Skill。
 - 完了後は有効契約/結果を恒久docsへ移し、本計画を閉じて索引を更新する。
