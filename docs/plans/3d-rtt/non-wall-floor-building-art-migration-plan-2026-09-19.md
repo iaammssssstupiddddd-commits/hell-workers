@@ -727,6 +727,18 @@ canonical・runtime asset・他sessionの原本／検証cacheは変更してい�
   profilingの検証は実compiler・focused test・Clippyで行う。変更別全体gateとnativeの結果は完了時に追記する。
 - 同じprimary checkout/targetを修正・計測に再利用し、新しい専用worktreeやbinary copyは作らない。
   保持owner/consumer/release_whenは上記review holdを継続し、次の作業を9種基準取得へ更新した。
+- `8a2d0649d53a0f804733285f3c277f466efc0316`で9種切替をcommit。`dev.py check`、通常/profiling Clippy警告0、
+  変更別contracts/tooling/rustが成功（base `18e24cef3132b16d009ab01133e89795b553f9e5`、
+  source `5437f6c837e018ae17d07d6a764bd69facedd3ec174318bcf0c2ab9b914bb79c`）。
+  scripts 251件、Blender tooling 164件、通常/profiling workspace testと計測feature checkを含む。
+- native batch `building-art-static-nine-20260920-v3`は配置検査を通過したが、smallの3試行とも準備完了前にcamera不一致で失敗。
+  `PanCamera.zoom_factor`を初期化せずTransformだけ設定していたため、Bevy 0.19の操作処理が倍率を戻していた。
+  正式frame-time/Memoryは0。controllerとTransformの一度限りの初期化、および実PanCameraPluginを通す回帰testを追加。
+  修正前の倍率resetを再現し、修正後の3 frame維持と後続変更を修復しないことを確認、Rust focused 6件成功。
+  Helpは引き続きNo impact。変更は明示profiling fixtureのカメラ初期化だけで、通常入力・倍率範囲・描画・地形は不変。
+  失敗をsealし、不要job `target/native-acceptance/building-art-static-20260920T031838Z-107ba24e`を削除（復元不可、90,112→0 allocated bytes）。
+  finalize/storage check成功。filesystem availableは661,738,901,504→662,169,714,688 bytes（同時のbuild等を含む共有差）。
+  同じcacheを使って新subjectで再検証する。橋の条件・地形は変更しない。
 
 ### Definition of Done
 

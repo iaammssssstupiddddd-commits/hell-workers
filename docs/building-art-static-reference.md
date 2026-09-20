@@ -42,6 +42,9 @@ TaskWorkers / RestAreaOccupants / StoredItemsを直接偽造せず、workerのAs
 
 - profiling featureかつ明示workload時のみ有効。通常起動の入力・建設・描画・保存・Helpへ接続しない。
 - `Setup`で合法配置と実actor数を確認して既存Blueprint／Spa factoryへ渡す。
+- カメラは準備時に一度だけ位置・`PanCamera.zoom_factor`・Transformの全scale軸を設定する。
+  Bevy 0.19の操作処理が毎回zoom_factorからscaleを書き戻すため、Transformだけの設定は無効。
+  準備後の入力・倍率変化を修復せず検査で拒否する。通常プレイの操作・倍率範囲は変更しない。
 - `IndoorSettle`で通常の建設完了→worker設定→Spa activation→Mixer mirror→電力topology/output/allocationを順に実行する。
   完了ポップアップ・bounceだけは準備時に一度終了する。Virtual Time停止下で永続化させない。
   初期化完了後にタスク・水・人数・通電を再設定せず、完了演出の再出現も修復せず失敗扱いにする。

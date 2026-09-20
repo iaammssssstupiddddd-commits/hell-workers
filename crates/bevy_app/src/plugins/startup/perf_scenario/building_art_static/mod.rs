@@ -217,9 +217,12 @@ fn inspect(params: &InspectParams) -> Result<Option<Value>, String> {
         .single()
         .map_err(|_| "main camera count differs")?;
     if camera.translation.truncate() != hw_world::WorldMap::grid_to_world(46, 37)
-        || camera.scale != Vec3::new(layout::CAMERA_SCALE, layout::CAMERA_SCALE, 1.0)
+        || camera.scale != Vec3::splat(layout::CAMERA_SCALE)
     {
-        return Err("static fixture camera changed".into());
+        return Err(format!(
+            "static fixture camera changed: translation={:?}, scale={:?}",
+            camera.translation, camera.scale
+        ));
     }
     let Some(door_assets) = params.door_pool.resolved.as_ref() else {
         return Ok(None);

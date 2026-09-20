@@ -1,4 +1,3 @@
-use super::super::fixture::PerfMainCameraQuery;
 use super::*;
 use crate::assets::GameAssets;
 use crate::interface::selection::{
@@ -7,6 +6,7 @@ use crate::interface::selection::{
 };
 use crate::plugins::startup::Building3dHandles;
 use crate::world::map::WorldMapRef;
+use bevy::camera_controller::pan_camera::PanCamera;
 use hw_core::relationships::{RestingIn, StoredIn, WorkingOn};
 use hw_core::soul::{DamnedSoul, Destination, IdleBehavior, IdleState, Path};
 use hw_energy::SoulSpaSite;
@@ -28,7 +28,12 @@ pub(crate) struct SetupParams<'w, 's> {
     assets: Res<'w, GameAssets>,
     handles: Res<'w, Building3dHandles>,
     actors: Query<'w, 's, Entity, With<DamnedSoul>>,
-    camera: PerfMainCameraQuery<'w, 's>,
+    camera: Query<
+        'w,
+        's,
+        (&'static mut Transform, &'static mut PanCamera),
+        With<hw_ui::camera::MainCamera>,
+    >,
     time: ResMut<'w, Time<Virtual>>,
     exit: MessageWriter<'w, AppExit>,
 }
@@ -51,7 +56,7 @@ pub(crate) fn setup_building_art_static_system(mut p: SetupParams) {
         fail(&mut p.state, &mut p.exit, reason);
         return;
     }
-    let Ok(mut camera) = p.camera.single_mut() else {
+    let Ok((mut camera, mut controller)) = p.camera.single_mut() else {
         fail(
             &mut p.state,
             &mut p.exit,
@@ -59,10 +64,7 @@ pub(crate) fn setup_building_art_static_system(mut p: SetupParams) {
         );
         return;
     };
-    let center = WorldMap::grid_to_world(46, 37);
-    camera.translation.x = center.x;
-    camera.translation.y = center.y;
-    camera.scale = Vec3::new(layout::CAMERA_SCALE, layout::CAMERA_SCALE, 1.0);
+    initialize_camera(&mut camera, &mut controller);
     p.commands
         .spawn((layout::site(), Name::new("BuildingArtStatic Site")));
     for yard in layout::yards(p.config.size()) {
@@ -158,6 +160,16 @@ pub(crate) fn setup_building_art_static_system(mut p: SetupParams) {
     p.state.specs = specs;
     p.state.actors = actors;
     p.state.phase = Phase::Spawned;
+}
+
+fn initialize_camera(camera: &mut Transform, controller: &mut PanCamera) {
+    let center = WorldMap::grid_to_world(46, 37);
+    camera.translation.x = center.x;
+    camera.translation.y = center.y;
+    // Bevy 0.19 writes all scale axes from zoom_factor even without input.
+    // Seed both once; never overwrite later input to conceal camera drift.
+    controller.zoom_factor = layout::CAMERA_SCALE;
+    camera.scale = Vec3::splat(layout::CAMERA_SCALE);
 }
 
 fn validate_layout(
@@ -392,6 +404,52 @@ pub(crate) fn seed_building_art_static_system(mut p: SeedParams) {
 mod tests {
     use super::super::super::PerfScenarioSize;
     use super::*;
+
+    #[test]
+    fn camera_initialization_survives_production_controller_without_repair() {
+        use bevy::camera_controller::pan_camera::PanCameraPlugin;
+        let mut app = App::new();
+        app.add_plugins((MinimalPlugins, PanCameraPlugin))
+            .init_resource::<ButtonInput<KeyCode>>()
+            .init_resource::<bevy::input::mouse::AccumulatedMouseScroll>();
+        let camera = app
+            .world_mut()
+            .spawn((
+                Camera::default(),
+                Transform::from_scale(Vec3::new(5.0, 5.0, 1.0)),
+                PanCamera::default(),
+            ))
+            .id();
+        app.update();
+        assert_eq!(
+            app.world().get::<Transform>(camera).unwrap().scale,
+            Vec3::ONE
+        );
+        {
+            let world = app.world_mut();
+            let mut query = world.query::<(&mut Transform, &mut PanCamera)>();
+            let (mut transform, mut controller) = query.single_mut(world).unwrap();
+            initialize_camera(&mut transform, &mut controller);
+        }
+        for _ in 0..3 {
+            app.update();
+            let transform = app.world().get::<Transform>(camera).unwrap();
+            assert_eq!(
+                transform.translation.truncate(),
+                WorldMap::grid_to_world(46, 37)
+            );
+            assert_eq!(transform.scale, Vec3::splat(layout::CAMERA_SCALE));
+        }
+        app.world_mut()
+            .get_mut::<PanCamera>(camera)
+            .unwrap()
+            .zoom_factor = 4.0;
+        app.update();
+        assert_eq!(
+            app.world().get::<Transform>(camera).unwrap().scale,
+            Vec3::splat(4.0)
+        );
+    }
 
     #[test]
     fn nine_kinds_place_on_actual_generated_terrain_without_rewriting_it() {
