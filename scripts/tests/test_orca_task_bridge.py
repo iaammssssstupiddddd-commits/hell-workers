@@ -120,7 +120,7 @@ class TaskBridgeTests(unittest.TestCase):
         self.runtime = Runtime(self.repo)
         self.binding = bridge.wire.Binding.discover(self.runtime, HANDLE, self.repo)
         self.subject = Mock()
-        for module in (bridge, host_coordination, roles):
+        for module in (bridge, host_coordination, roles, roles.bindings):
             patcher = patch.object(module, "state_root", return_value=self.repo / "state/coordination")
             patcher.start()
             self.addCleanup(patcher.stop)
