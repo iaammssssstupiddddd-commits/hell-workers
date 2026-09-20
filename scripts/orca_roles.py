@@ -448,22 +448,38 @@ def reconcile_bridge(ticket: dict, slot: str, attempt_id: str, observed_source: 
                    "common": git(repo, "rev-parse", "--path-format=absolute", "--git-common-dir")}
         key = "fixed-reviewer" if slot == "reviewer" else bindings.digest({
             "common": subject["common"], "id": ticket["id"]})
+        recorded_exit = (last.get("phase") == "unknown"
+                         and last.get("process_exited") is True
+                         and type(last.get("exit_code")) is int) if isinstance(last, dict) else False
+        interrupted_exit = (last.get("phase") == "starting"
+                            and last.get("process_exited") is False
+                            and last.get("exit_code") is None) if isinstance(last, dict) else False
         if (not isinstance(last, dict) or last.get("attempt_id") != attempt_id
-                or last.get("key") != key or last.get("phase") != "unknown"
-                or last.get("process_exited") is not True
-                or type(last.get("exit_code")) is not int
-                or last.get("source_before") != observed_source
-                or last.get("orca_bridge") is None):
+                or last.get("key") != key or not (recorded_exit or interrupted_exit)
+                or last.get("source_before") != observed_source or last.get("orca_bridge") is None):
             raise ValueError("requires the exact exited unknown bridge attempt")
         bridge_id = bindings.identity(last["orca_bridge"])
         directory = task_bridge.root() / bridge_id
         journal = bindings.storage.read_private_json(directory / "journal.json", {})
         identity = bindings.storage.read_private_json(directory / "identity.json", {})
         authority = bindings.storage.read_private_json(directory / "arm.json", {})
+        operations = journal.get("operations") if isinstance(journal, dict) else None
+        mutation_free = journal.get("authority") is None and operations == {} if isinstance(journal, dict) else False
+        ambiguous = (journal.get("authority") == authority and isinstance(operations, dict)
+                     and bool(operations) and all(
+                         isinstance(operation, str) and isinstance(row, dict)
+                         and set(row) == {"signature", "phase"}
+                         and isinstance(row["signature"], str)
+                         and re.fullmatch(r"[a-f0-9]{64}", row["signature"])
+                         and row["phase"] == "pending"
+                         for operation, row in operations.items())) if isinstance(journal, dict) else False
         if (not isinstance(journal, dict) or journal.get("phase") != "unknown"
-                or journal.get("revoked") is not True or journal.get("authority") is not None
-                or journal.get("operations") != {} or journal.get("settled_status") is not None):
-            raise ValueError("bridge journal is not a mutation-free unknown attempt")
+                or journal.get("revoked") is not True or not (mutation_free or ambiguous)
+                or journal.get("settled_status") is not None):
+            raise ValueError("bridge journal is not a recoverable unknown attempt")
+        ambiguous_operations = []
+        if ambiguous:
+            ambiguous_operations = sorted(bindings.identity(operation) for operation in operations)
         if (not isinstance(identity, dict) or identity.get("terminal") != last.get("terminal")
                 or identity.get("repo") != str(repo) or type(identity.get("pid")) is not int
                 or identity["pid"] <= 0):
@@ -500,6 +516,8 @@ def reconcile_bridge(ticket: dict, slot: str, attempt_id: str, observed_source: 
                 or worker.get("state") not in {"abandoned", "failed", "stopped"}
                 or observation.get("exactWorker") is not True):
             raise ValueError("failed Dispatch identity or settlement is unproven")
+        if interrupted_exit and observation.get("status") != "exited":
+            raise ValueError("interrupted bridge launcher exit is unproven")
         latest = task_bridge.wire.mapping(upstream.call(
             "orchestration.dispatchShow", {"task": authority["task"]}).get("dispatch"))
         same_attempt = latest.get("id") == authority["dispatch"] and latest.get("status") == "failed"
@@ -516,7 +534,12 @@ def reconcile_bridge(ticket: dict, slot: str, attempt_id: str, observed_source: 
         evidence = {"run": authority["run"], "task": authority["task"],
                     "dispatch": authority["dispatch"], "terminal": identity["terminal"],
                     "worker_state": worker["state"], **snapshot,
-                    "current_source_sha256": fingerprint(repo), "reason": reason.strip()}
+                    "current_source_sha256": fingerprint(repo), "reason": reason.strip(),
+                    "exit_observation": ("external_terminal_exited" if interrupted_exit
+                                         else "launcher_recorded"),
+                    "ambiguous_operations": ambiguous_operations}
+        if interrupted_exit:
+            last.update(process_exited=True)
         if previous:
             previous["session_sha256"] = snapshot["session_sha256"]
             last.update(phase="recorded", bridge_reconciliation=evidence)

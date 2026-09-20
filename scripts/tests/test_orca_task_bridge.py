@@ -75,6 +75,7 @@ class Runtime:
                 result = {"message": {"id": "msg_sent", "run_id": AUTHORITY["run"], "from_handle": HANDLE,
                           "to_handle": "run:" + AUTHORITY["run"],
                           **{k: params[k] for k in ("type", "subject", "body", "payload") if k in params}}}
+                result["message"].setdefault("body", "")
                 if params["type"] == "worker_done":
                     outcome = json.loads(params["payload"])["outcome"]
                     state = "completed" if outcome == "succeeded" else "failed"
@@ -169,6 +170,7 @@ class TaskBridgeTests(unittest.TestCase):
         self.runtime.before_mutation = inspect
         reply = self.policy.handle(self.request())
         self.assertTrue(reply["ok"], reply)
+        self.assertNotIn("body", reply["result"]["message"])
         self.assertEqual(self.mutations()[0][2]["orchestrationCapability"], CAP)
         journal = (self.policy.directory / "journal.json").read_text()
         for secret in (SECRET, CAP, self.policy.token):
@@ -466,6 +468,62 @@ class TaskBridgeTests(unittest.TestCase):
         self.assertEqual(data["last"]["bridge_reconciliation"]["dispatch"], AUTHORITY["dispatch"])
         self.assertEqual(previous["ticket_sha256"], "1" * 64)
         self.assertNotIn("approved", json.dumps(data))
+
+    def test_interrupted_launcher_reconciles_ambiguous_send_after_dispatch_is_fenced(self):
+        bridge_id = str(uuid.uuid4())
+        operation = str(uuid.uuid4())
+        directory = self.root / bridge_id
+        directory.mkdir(mode=0o700)
+        bridge.write_ledger(directory / "journal.json", {
+            "schema": 1, "phase": "unknown", "revoked": True, "authority": AUTHORITY,
+            "capability_sha256": "1" * 64,
+            "operations": {operation: {"signature": "2" * 64, "phase": "pending"}},
+            "settled_status": None,
+        })
+        bridge.write_ledger(directory / "identity.json", {
+            "runtime": RUNTIME, "terminal": HANDLE, "incarnation": INCARNATION,
+            "repo": str(self.repo), "pid": 999_999_999,
+        })
+        bridge.write_ledger(directory / "arm.json", AUTHORITY)
+        self.runtime.latest.update(status="failed")
+        self.runtime.observed["dispatch"].update(status="failed", capabilityRevokedAt=1)
+        self.runtime.observed["worker"].update(state="abandoned", stage="abandoned")
+        self.runtime.observed["observation"]["status"] = "exited"
+        attempt_id = str(uuid.uuid4())
+        observed_source = "4" * 64
+        ticket = {"id": "read-only-worker", "repo": str(self.repo), "branch": "task",
+                  "base": "1" * 40, "read_only": True, "allowed_directories": [],
+                  "prompt": "inspect"}
+        task_key = roles.bindings.digest({"common": str(self.repo / ".git"), "id": ticket["id"]})
+        data = {"schema": 1, "slot": "worker-a", "provider": "codex", "tasks": {},
+                "last": {"attempt_id": attempt_id, "key": task_key, "phase": "starting",
+                         "process_exited": False, "exit_code": None,
+                         "source_before": observed_source, "terminal": HANDLE,
+                         "orca_bridge": bridge_id}}
+        snapshot = {"session_id": str(uuid.uuid4()), "session_sha256": "5" * 64}
+        with patch.object(roles, "acquire_host"), patch.object(roles, "validate_ticket"), \
+                patch.object(roles, "git", return_value=str(self.repo / ".git")), \
+                patch.object(roles, "fingerprint", return_value=observed_source), \
+                patch.object(roles, "prepare_runtime", return_value=self.repo / "runtime"), \
+                patch.object(roles.bindings, "read_state", return_value=data), \
+                patch.object(roles.bindings, "session_snapshot", return_value=snapshot), \
+                patch.object(roles.bindings, "save_state") as save, \
+                patch.object(bridge.Upstream, "load", return_value=self.runtime):
+            roles.reconcile_bridge(ticket, "worker-a", attempt_id, observed_source,
+                                   "Heartbeat landed but its response was rejected", self.root)
+        save.assert_called_once_with(data)
+        last = data["last"]
+        self.assertEqual(last["phase"], "abandoned")
+        self.assertTrue(last["process_exited"])
+        self.assertIsNone(last["exit_code"])
+        evidence = last["bridge_reconciliation"]
+        self.assertEqual(evidence["exit_observation"], "external_terminal_exited")
+        self.assertEqual(evidence["ambiguous_operations"], [operation])
+        self.assertTrue(roles.bindings.valid_bridge_reconciliation(evidence))
+        self.assertEqual(data["abandoned"][task_key], last)
+        self.assertNotIn("approved", json.dumps(data))
+        roles.bindings.save_state(data)
+        self.assertEqual(roles.bindings.read_state("worker-a", "codex"), data)
 
     def test_non_ascii_auth_token_revokes_and_records_unknown_without_forwarding(self):
         session = self.wire_session()

@@ -293,6 +293,12 @@ class TaskPolicy:
         result["subject"] = self.text(message.get("subject"), limit=500)
         for name in ("body", "payload"):
             if name in message:
+                # Orca 1.4.205 materializes an omitted send body as the empty
+                # string in its durable receipt.  The bridge rejects empty
+                # caller input, so this value can only be Orca's default; omit
+                # it again before comparing the receipt with the request.
+                if not inbound and name == "body" and message[name] == "":
+                    continue
                 result[name] = self.text(message[name], optional=True)
         return result
 
