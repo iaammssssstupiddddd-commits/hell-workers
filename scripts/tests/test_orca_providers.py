@@ -100,6 +100,21 @@ class ProviderTests(unittest.TestCase):
         self.assertEqual(policy["deny"], ["Shell(*)", "Mcp(*:*)", "WebFetch(*)"])
         self.assertEqual(policy["allow"], ["Read(**)", "Write(crates/hw_ui/src/interaction/help/**)"])
 
+    def test_cursor_hook_policy_keeps_agent_tools_denied(self) -> None:
+        ticket = {**self.simple(), "read_only": True, "allowed_directories": []}
+        policy = providers.cursor_permissions(
+            ticket, denied_reads=("/private/bridge", "/proc"))["permissions"]
+        self.assertEqual(policy["allow"], ["Read(**)"])
+        for denied in ("Shell(*)", "Mcp(*:*)", "WebFetch(*)", "Write(**)",
+                       "Read(/private/bridge/**)", "Read(/proc/**)"):
+            self.assertIn(denied, policy["deny"])
+        hooks = providers.cursor_hook_config(Path("/repo"))
+        self.assertEqual(set(hooks["hooks"]), {"beforeSubmitPrompt", "afterAgentResponse", "stop"})
+        for rows in hooks["hooks"].values():
+            self.assertEqual(len(rows), 1)
+            self.assertTrue(rows[0]["failClosed"])
+            self.assertIn("orca_cursor_bridge_hook.py", rows[0]["command"])
+
 
 if __name__ == "__main__":
     unittest.main()

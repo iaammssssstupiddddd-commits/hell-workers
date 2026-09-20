@@ -1,4 +1,4 @@
-"""Single-Dispatch, host-owned Orca bridge for guarded read-only Codex roles.
+"""Single-Dispatch, host-owned Orca bridge for guarded read-only agent roles.
 
 This does not create a Run/Task, start a worker or approve a review. The host
 arms one observed supervised Dispatch after readiness. Never reassign its
@@ -39,6 +39,7 @@ REQUEST_SECONDS = 45
 KEEPALIVE_SECONDS = 1
 METHODS = {"orchestration.send", "orchestration.check", "orchestration.ask"}
 FIELDS = {"orchestrationContractVersion", "orchestrationRequestId", "compatibilityInvocationId"}
+CURSOR_HOOK_METHOD = "cursor.hook"
 
 
 def key(value: object) -> str:
@@ -67,6 +68,77 @@ def exact_process(observed: dict, *, terminal: str, incarnation: str,
 
 def digest(value: object) -> str:
     return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+
+def cursor_preamble(value: object) -> dict:
+    """Extract one live Dispatch identity without retaining the Task body."""
+    if not isinstance(value, str) or len(value.encode()) > 128 * 1024:
+        raise wire.Refused("invalid Cursor Dispatch preamble")
+    prefix, separator, _ = value.partition("\n=== TASK ===\n")
+    if (not separator or not prefix.startswith(
+            "You are working inside Orca, a multi-agent IDE. You are a dispatched worker.\n")):
+        raise wire.Refused("invalid Cursor Dispatch preamble")
+    task_match = re.search(r"^Your task ID is: ([A-Za-z0-9_-]+)$", prefix, re.MULTILINE)
+    coordinator_match = re.search(
+        r"^Your coordinator's terminal handle is: (term_[A-Za-z0-9_-]+)$", prefix, re.MULTILINE)
+    if not task_match or not coordinator_match:
+        raise wire.Refused("incomplete Cursor Dispatch preamble")
+    task = key(task_match.group(1))
+    coordinator = wire.identifier(coordinator_match.group(1), prefix="term_")
+    commands = []
+    for line in prefix.splitlines():
+        stripped = line.strip()
+        if " orchestration " not in stripped or not stripped.startswith(("orca ", "/")):
+            continue
+        try:
+            argv = shlex.split(stripped)
+        except ValueError as error:
+            raise wire.Refused("invalid Cursor Dispatch command") from error
+        if "orchestration" not in argv:
+            continue
+        commands.append(argv)
+    lifecycle = []
+    for argv in commands:
+        if "--dispatch-capability" not in argv:
+            continue
+        try:
+            capability = argv[argv.index("--dispatch-capability") + 1]
+            terminal = argv[argv.index("--from") + 1]
+        except (ValueError, IndexError) as error:
+            raise wire.Refused("incomplete Cursor Dispatch command") from error
+        if not capability.startswith("dcap_") or not 16 <= len(capability) <= 4096:
+            raise wire.Refused("invalid Cursor Dispatch capability")
+        lifecycle.append((terminal, capability, argv))
+    def flag(argv: list[str], name: str) -> str | None:
+        try:
+            return argv[argv.index(name) + 1]
+        except (ValueError, IndexError):
+            return None
+
+    done = [item for item in lifecycle if flag(item[2], "--type") == "worker_done"]
+    heartbeat = [item for item in lifecycle if flag(item[2], "--type") == "heartbeat"]
+    if len(done) != 1 or len(heartbeat) != 1:
+        raise wire.Refused("Cursor Dispatch preamble lacks canonical lifecycle commands")
+    terminal, capability, argv = done[0]
+    if any(item[0] != terminal or item[1] != capability for item in lifecycle):
+        raise wire.Refused("Cursor Dispatch authority changed within the preamble")
+    try:
+        command_task = argv[argv.index("--task-id") + 1]
+        dispatch = argv[argv.index("--dispatch-id") + 1]
+    except (ValueError, IndexError) as error:
+        raise wire.Refused("Cursor Dispatch completion identity is incomplete") from error
+    heartbeat_argv = heartbeat[0][2]
+    try:
+        heartbeat_task = heartbeat_argv[heartbeat_argv.index("--task-id") + 1]
+        heartbeat_dispatch = heartbeat_argv[heartbeat_argv.index("--dispatch-id") + 1]
+    except (ValueError, IndexError) as error:
+        raise wire.Refused("Cursor Dispatch heartbeat identity is incomplete") from error
+    terminal = wire.identifier(terminal, prefix="term_")
+    dispatch = key(dispatch)
+    if command_task != task or heartbeat_task != task or heartbeat_dispatch != dispatch:
+        raise wire.Refused("Cursor Dispatch lifecycle identity differs")
+    return {"task": task, "dispatch": dispatch, "terminal": terminal,
+            "coordinator": coordinator, "capability": capability}
 
 
 def root() -> Path:
@@ -111,7 +183,8 @@ class Upstream(wire.Upstream):
 
 
 class TaskPolicy:
-    def __init__(self, upstream: Upstream, binding: wire.Binding, directory: Path, verify_subject):
+    def __init__(self, upstream: Upstream, binding: wire.Binding, directory: Path, verify_subject,
+                 *, cursor_hooks: bool = False):
         self.upstream, self.binding, self.directory = upstream, binding, directory
         self.verify_subject = verify_subject
         self.token = secrets.token_hex(32)
@@ -125,6 +198,11 @@ class TaskPolicy:
         self.pending_question = None
         self.operations = {}
         self.settled_status = None
+        self.cursor_hooks = cursor_hooks
+        self.cursor_hook_token = secrets.token_hex(32) if cursor_hooks else None
+        self.cursor_authority = None
+        self.cursor_conversation = None
+        self.cursor_response = None
 
     def text(self, value: object, *, optional: bool = False, limit: int = 32000) -> str | None:
         if value is None and optional:
@@ -140,6 +218,7 @@ class TaskPolicy:
             "schema": 1, "phase": self.phase, "revoked": self.revoked,
             "authority": self.authority, "capability_sha256": self.capability_hash,
             "operations": self.operations, "settled_status": self.settled_status,
+            "cursor_hooks": self.cursor_hooks,
         })
 
     def terminal_current(self):
@@ -279,6 +358,139 @@ class TaskPolicy:
     def timeout(value):
         if type(value) is not int or not 1 <= value <= wire.MAX_WAIT_MS:
             raise wire.Refused("explicit bounded wait required")
+
+    def cursor_request(self, method: str, params: dict, *, capability: bool = False,
+                       deadline: float | None = None) -> dict:
+        operation = str(uuid.uuid4())
+        request = {
+            "id": str(uuid.uuid4()), "authToken": self.token, "method": method,
+            "params": params, "orchestrationContractVersion": 1,
+            "orchestrationRequestId": operation, "compatibilityInvocationId": operation,
+        }
+        if capability:
+            request["orchestrationCapability"] = self.cursor_authority["capability"]
+        reply = self.handle(request, deadline=deadline)
+        if reply.get("ok") is not True:
+            raise wire.Refused("Cursor lifecycle mutation was refused")
+        return wire.mapping(reply.get("result"))
+
+    def cursor_finish(self, status: str, deadline: float) -> dict:
+        self.await_arm()
+        observed = self.cursor_authority
+        authority = self.authority
+        if (observed.get("terminal") != self.binding.terminal
+                or observed.get("task") != authority["task"]
+                or observed.get("dispatch") != authority["dispatch"]
+                or observed.get("coordinator") != authority["coordinator"]):
+            raise wire.Refused("Cursor hook authority differs from the armed Dispatch")
+        self.current()
+        if status == "completed":
+            result = wire.decode(self.text(self.cursor_response).encode())
+            if set(result) != {"outcome", "subject", "body"} or result.get("outcome") not in {"succeeded", "failed"}:
+                raise wire.Refused("Cursor final response must be the lifecycle result object")
+            outcome = result["outcome"]
+            subject = self.text(result["subject"], limit=500)
+            body = self.text(result["body"])
+        else:
+            outcome = "failed"
+            subject = "Cursor B stopped before completion"
+            body = ("Cursor B ended without a completed agent turn. "
+                    "The controller recorded no accepted task result. "
+                    "The coordinator must inspect the exact Dispatch before retrying.")
+        common = {"from": self.binding.terminal, "devMode": False}
+        self.cursor_request("orchestration.send", {
+            **common, "type": "heartbeat", "subject": "Cursor B lifecycle hook",
+            "payload": json.dumps({"taskId": authority["task"], "dispatchId": authority["dispatch"],
+                                   "phase": "reviewing"}, separators=(",", ":")),
+        }, capability=True, deadline=deadline)
+        checked = self.cursor_request("orchestration.check", {
+            "terminal": self.binding.terminal, "compatibilityCliCommand": "orca-ide",
+        }, deadline=deadline)
+        if checked.get("count") != 0 or checked.get("deliveryId") is not None:
+            raise wire.Refused("Cursor B cannot settle while coordinator follow-ups are pending")
+        done = self.cursor_request("orchestration.send", {
+            **common, "type": "worker_done", "subject": subject, "body": body,
+            "waitForLifecycleSettlement": True,
+            "payload": json.dumps({"taskId": authority["task"], "dispatchId": authority["dispatch"],
+                                   "outcome": outcome}, separators=(",", ":")),
+        }, capability=True, deadline=deadline)
+        return {"settled": True, "outcome": outcome,
+                "lifecycle": wire.mapping(done.get("lifecycle"))}
+
+    def handle_cursor_hook(self, request: dict, *, deadline: float | None = None) -> dict:
+        request_id = "refused"
+        absolute_deadline = deadline if deadline is not None else time.monotonic() + REQUEST_SECONDS
+        self.upstream.deadline = absolute_deadline
+        try:
+            if not self.cursor_hooks:
+                raise wire.Refused("Cursor hooks are disabled")
+            request_id = wire.identifier(wire.mapping(request).get("id"))
+            if (set(request) != {"id", "authToken", "method", "params"}
+                    or request.get("method") != CURSOR_HOOK_METHOD
+                    or not isinstance(request.get("authToken"), str)
+                    or not hmac.compare_digest(request["authToken"], self.cursor_hook_token)):
+                raise wire.Refused("Cursor hook authentication denied")
+            params = wire.mapping(request["params"])
+            event = params.get("hook_event_name")
+            if event not in {"beforeSubmitPrompt", "afterAgentResponse", "stop"}:
+                raise wire.Refused("Cursor hook event denied")
+            roots = params.get("workspace_roots")
+            conversation = params.get("conversation_id")
+            generation = params.get("generation_id")
+            if (roots != [str(self.binding.repo)] or not isinstance(conversation, str)
+                    or not 1 <= len(conversation) <= 200 or not isinstance(generation, str)
+                    or not 1 <= len(generation) <= 200):
+                raise wire.Refused("Cursor hook identity denied")
+            if self.cursor_conversation not in (None, conversation):
+                raise wire.Refused("Cursor conversation changed")
+            self.cursor_conversation = conversation
+            if event == "beforeSubmitPrompt":
+                prompt = params.get("prompt")
+                if not isinstance(prompt, str) or len(prompt.encode()) > 256 * 1024:
+                    raise wire.Refused("invalid Cursor prompt hook")
+                if prompt.startswith("You are working inside Orca, a multi-agent IDE. You are a dispatched worker.\n"):
+                    observed = cursor_preamble(prompt)
+                    if self.cursor_authority not in (None, observed):
+                        raise wire.Refused("Cursor Dispatch preamble changed")
+                    if observed["terminal"] != self.binding.terminal:
+                        raise wire.Refused("Cursor Dispatch targets another terminal")
+                    self.cursor_authority = observed
+                result = {"observed": self.cursor_authority is not None}
+            elif event == "afterAgentResponse":
+                if self.cursor_authority is None:
+                    result = {"observed": False}
+                else:
+                    self.cursor_response = self.text(params.get("text"))
+                    result = {"observed": True}
+            else:
+                if self.phase == "settled":
+                    result = {"settled": True, "outcome": self.settled_status}
+                elif self.cursor_authority is None:
+                    result = {"observed": False}
+                else:
+                    status = params.get("status")
+                    if status not in {"completed", "aborted", "error"} or type(params.get("loop_count")) is not int:
+                        raise wire.Refused("invalid Cursor stop hook")
+                    if status == "completed" and self.cursor_response is None:
+                        raise wire.Refused("Cursor completed without a final response")
+                    result = self.cursor_finish(status, absolute_deadline)
+            if time.monotonic() >= absolute_deadline:
+                raise wire.Refused("absolute Cursor hook deadline exceeded")
+            return {"id": request_id, "ok": True, "result": result,
+                    "_meta": {"runtimeId": self.upstream.runtime_id}}
+        except (OSError, ValueError, TypeError, KeyError, RuntimeError):
+            self.revoked = True
+            self.phase = "unknown"
+            try:
+                self.save()
+            except (OSError, ValueError, RuntimeError):
+                pass
+            return {"id": request_id, "ok": False, "error": {
+                "code": "cursor_hook_refused",
+                "message": "Preserve this Cursor attempt and reconcile; do not resend."},
+                "_meta": {"runtimeId": self.upstream.runtime_id}}
+        finally:
+            self.upstream.deadline = None
 
     def project_message(self, value: object, *, inbound: bool) -> dict:
         message = wire.mapping(value)
@@ -484,7 +696,10 @@ class Handler(socketserver.BaseRequestHandler):
             if isinstance(request.get("authToken"), str) and hmac.compare_digest(request["authToken"], policy.token):
                 thread = threading.Thread(target=keepalive)
                 thread.start()
-            result = policy.handle(request, deadline=deadline)
+            if request.get("method") == CURSOR_HOOK_METHOD:
+                result = policy.handle_cursor_hook(request, deadline=deadline)
+            else:
+                result = policy.handle(request, deadline=deadline)
             stop.set()
             if thread:
                 thread.join()
@@ -514,7 +729,8 @@ class Proxy(socketserver.UnixStreamServer):
 
 class Session:
     """One launcher-owned generation; source/slot leases must enclose its lifetime."""
-    def __init__(self, executable: Path, metadata_dir: Path, terminal: str, repo: Path, verify_subject):
+    def __init__(self, executable: Path, metadata_dir: Path, terminal: str, repo: Path, verify_subject,
+                 *, cursor_hooks: bool = False):
         if not executable.is_absolute() or not executable.is_file() or executable.is_symlink():
             raise wire.Refused("explicit installed CLI path required")
         self.executable = executable
@@ -524,8 +740,10 @@ class Session:
         self.directory = checked_directory(root() / self.identifier)
         # The account-root path plus a UUID must fit Linux sockaddr_un (107 bytes).
         self.public = checked_directory(self.directory / "p")
+        self.cursor_hooks = cursor_hooks
         self.client = self.public / "orca"
-        self.policy = TaskPolicy(self.upstream, self.binding, self.directory, verify_subject)
+        self.policy = TaskPolicy(self.upstream, self.binding, self.directory, verify_subject,
+                                 cursor_hooks=cursor_hooks)
         self.server = None
         self.thread = None
         self.terminal_lease = None
@@ -559,15 +777,20 @@ class Session:
         self.server = Proxy(endpoint, self.policy)
         self.thread = threading.Thread(target=self.server.serve_forever, kwargs={"poll_interval": 0.05})
         self.thread.start()
-        print(json.dumps({"orca_bridge": self.identifier, "phase": "bootstrap", "dispatch_allowed": False}), flush=True)
+        print(json.dumps({"orca_bridge": self.identifier, "phase": "bootstrap", "dispatch_allowed": False,
+                          "cursor_hooks": self.cursor_hooks}), flush=True)
         return self
 
     def mounts(self) -> list[str]:
-        return ["--tmpfs", str(self.upstream.metadata_path.parent),
+        result = ["--tmpfs", str(self.upstream.metadata_path.parent),
                 "--ro-bind", "/dev/null", str(self.upstream.endpoint),
                 "--ro-bind", str(self.executable), str(self.executable),
                 "--ro-bind", str(self.public), str(self.public),
                 "--setenv", "ORCA_USER_DATA_PATH", str(self.public)]
+        if self.cursor_hooks:
+            result.extend(["--setenv", "ORCA_CURSOR_HOOK_ENDPOINT", str(self.public / "rpc.sock"),
+                           "--setenv", "ORCA_CURSOR_HOOK_TOKEN", self.policy.cursor_hook_token])
+        return result
 
     def __exit__(self, *_):
         self.policy.revoked = True

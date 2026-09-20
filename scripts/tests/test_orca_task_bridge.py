@@ -8,6 +8,7 @@ import os
 import shutil
 import socket
 import socketserver
+import subprocess
 import sys
 import tempfile
 import threading
@@ -129,11 +130,34 @@ class TaskBridgeTests(unittest.TestCase):
         self.addCleanup(patcher.stop)
         self.policy = self.new_policy()
 
-    def new_policy(self):
+    def new_policy(self, *, cursor_hooks=False):
         directory = self.root / str(uuid.uuid4())
         directory.mkdir(mode=0o700)
         bridge.write_ledger(directory / "arm.json", AUTHORITY)
-        return bridge.TaskPolicy(self.runtime, self.binding, directory, self.subject)
+        return bridge.TaskPolicy(self.runtime, self.binding, directory, self.subject,
+                                 cursor_hooks=cursor_hooks)
+
+    @staticmethod
+    def cursor_preamble(capability=CAP, *, task=AUTHORITY["task"], dispatch=AUTHORITY["dispatch"]):
+        return f"""You are working inside Orca, a multi-agent IDE. You are a dispatched worker.
+Your coordinator's terminal handle is: {COORDINATOR}
+Your task ID is: {task}
+
+=== CLI COMMANDS ===
+  orca orchestration send --from {HANDLE} --dispatch-capability {capability} --type worker_done --subject "<short status>" --body "<summary>" --task-id {task} --dispatch-id {dispatch} --outcome succeeded
+  orca orchestration send --from {HANDLE} --dispatch-capability {capability} --type heartbeat --subject alive --task-id {task} --dispatch-id {dispatch} --phase reviewing
+
+=== TASK ===
+Read the two requested files without editing them.
+"""
+
+    def hook(self, policy, event, **values):
+        params = {"conversation_id": "cursor-conversation", "generation_id": str(uuid.uuid4()),
+                  "hook_event_name": event, "cursor_version": "fixture",
+                  "workspace_roots": [str(self.repo)], "user_email": None,
+                  "transcript_path": None, **values}
+        return {"id": str(uuid.uuid4()), "authToken": policy.cursor_hook_token,
+                "method": bridge.CURSOR_HOOK_METHOD, "params": params}
 
     def request(self, method="orchestration.send", params=None, **changes):
         operation = str(uuid.uuid4())
@@ -162,6 +186,64 @@ class TaskBridgeTests(unittest.TestCase):
 
     def mutations(self):
         return [c for c in self.runtime.calls if c[0] in bridge.METHODS]
+
+    def test_cursor_hook_settles_one_read_only_result_without_exposing_capability(self):
+        policy = self.new_policy(cursor_hooks=True)
+        observed = policy.handle_cursor_hook(self.hook(
+            policy, "beforeSubmitPrompt", prompt=self.cursor_preamble(), attachments=[]))
+        self.assertTrue(observed["ok"], observed)
+        response = json.dumps({
+            "outcome": "succeeded", "subject": "Cursor B inspection complete",
+            "body": "The requested source was inspected read-only. The two entry points use the guarded bridge. No work remains for this leaf task.",
+        })
+        self.assertTrue(policy.handle_cursor_hook(self.hook(
+            policy, "afterAgentResponse", text=response))["ok"])
+        settled = policy.handle_cursor_hook(self.hook(
+            policy, "stop", status="completed", loop_count=0))
+        self.assertTrue(settled["ok"], settled)
+        self.assertEqual(settled["result"]["outcome"], "succeeded")
+        self.assertEqual([call[1].get("type") for call in self.mutations()],
+                         ["heartbeat", None, "worker_done"])
+        journal = (policy.directory / "journal.json").read_text()
+        self.assertNotIn(CAP, journal)
+        self.assertNotIn(policy.cursor_hook_token, journal)
+        self.assertEqual(json.loads(journal)["settled_status"], "completed")
+
+    def test_cursor_hook_ignores_bootstrap_turn_but_rejects_changed_or_pending_authority(self):
+        policy = self.new_policy(cursor_hooks=True)
+        bootstrap = policy.handle_cursor_hook(self.hook(
+            policy, "beforeSubmitPrompt", prompt="Wait for the supervised task.", attachments=[]))
+        self.assertEqual(bootstrap["result"], {"observed": False})
+        ignored = policy.handle_cursor_hook(self.hook(
+            policy, "afterAgentResponse", text="Waiting."))
+        self.assertEqual(ignored["result"], {"observed": False})
+        bad = policy.handle_cursor_hook(self.hook(
+            policy, "beforeSubmitPrompt", prompt=self.cursor_preamble(dispatch="dispatch_other"), attachments=[]))
+        self.assertTrue(bad["ok"])
+        policy.cursor_response = json.dumps({"outcome": "succeeded", "subject": "Done",
+                                             "body": "Read only. Found the entry. Nothing remains."})
+        refused = policy.handle_cursor_hook(self.hook(
+            policy, "stop", status="completed", loop_count=0))
+        self.assertFalse(refused["ok"])
+        self.assertEqual(policy.phase, "unknown")
+
+        policy = self.new_policy(cursor_hooks=True)
+        self.assertTrue(policy.handle_cursor_hook(self.hook(
+            policy, "beforeSubmitPrompt", prompt=self.cursor_preamble(), attachments=[]))["ok"])
+        self.assertTrue(policy.handle_cursor_hook(self.hook(
+            policy, "afterAgentResponse", text=json.dumps({
+                "outcome": "succeeded", "subject": "Done",
+                "body": "Read only. Found the entry. Nothing remains.",
+            })))["ok"])
+        self.runtime.check_result.update(deliveryId="delivery_pending", count=1, messages=[{
+            "id": "msg_pending", "run_id": AUTHORITY["run"], "from_handle": COORDINATOR,
+            "to_handle": "dispatch:" + AUTHORITY["dispatch"], "type": "status",
+            "subject": "Please inspect one more file",
+        }])
+        refused = policy.handle_cursor_hook(self.hook(
+            policy, "stop", status="completed", loop_count=0))
+        self.assertFalse(refused["ok"])
+        self.assertEqual(policy.phase, "unknown")
 
     def test_pending_journal_precedes_exact_capability_forward_and_no_secrets_escape(self):
         def inspect():
@@ -368,7 +450,7 @@ class TaskBridgeTests(unittest.TestCase):
             self.assertFalse(self.policy.handle(self.request())["ok"])
         self.assertEqual(self.mutations(), [])
 
-    def wire_session(self):
+    def wire_session(self, *, cursor_hooks=False):
         config = self.root / "upstream"
         config.mkdir(mode=0o700, exist_ok=True)
         server = socketserver.UnixStreamServer(str(self.root / "upstream.sock"), RuntimeHandler)
@@ -383,7 +465,8 @@ class TaskBridgeTests(unittest.TestCase):
         bridge.write_ledger(config / "orca-runtime.json", {"runtimeId": RUNTIME, "authToken": SECRET,
                             "transports": [{"kind": "unix", "endpoint": str(self.root / "upstream.sock")}]})
         executable = CLI if CLI.is_file() else Path("/usr/bin/true")
-        return bridge.Session(executable, config, HANDLE, self.repo, self.subject)
+        return bridge.Session(executable, config, HANDLE, self.repo, self.subject,
+                              cursor_hooks=cursor_hooks)
 
     def test_session_arm_is_host_only_exact_once_and_teardown_removes_transport(self):
         session = self.wire_session()
@@ -623,13 +706,49 @@ print('isolated')
             self.assertEqual(session.policy.phase, "settled")
         self.assertEqual(len(self.mutations()), 5)
 
-    def test_cursor_editing_and_dry_run_bridges_are_rejected_before_launch(self):
+    def test_editing_and_dry_run_bridges_are_rejected_before_launch(self):
         settings = (Path("/usr/bin/true"), self.root)
         ticket = {"read_only": True}
-        for slot, dry_run, read_only in (("worker-b", False, True), ("worker-a", True, True), ("worker-a", False, False)):
+        for slot, dry_run, read_only in (("worker-a", True, True), ("worker-a", False, False),
+                                         ("worker-b", False, False)):
             ticket["read_only"] = read_only
             with self.subTest(slot=slot, dry_run=dry_run), self.assertRaises(ValueError):
                 roles.launch(ticket, slot, dry_run=dry_run, bridge_settings=settings)
+
+    @unittest.skipUnless(shutil.which("bwrap"), "bubblewrap required")
+    def test_cursor_hook_reaches_only_its_private_bridge_through_read_only_mount(self):
+        session = self.wire_session(cursor_hooks=True)
+        runtime = self.repo / "cursor-runtime"
+        for child in ("cursor", "cursor-data", "xdg/cursor", "cache", "tmp", "codex"):
+            (runtime / child).mkdir(parents=True, exist_ok=True)
+        (self.repo / ".cursor").mkdir()
+        script_dir = self.repo / "scripts"
+        script_dir.mkdir()
+        source = Path(__file__).resolve().parents[1] / "orca_cursor_bridge_hook.py"
+        shutil.copyfile(source, script_dir / source.name)
+        ticket = {"repo": str(self.repo), "read_only": True, "allowed_directories": []}
+        with session, patch.object(roles, "git", return_value=str(self.repo / ".git")):
+            policy_dir = session.public / "cursor-policy"
+            policy_dir.mkdir(mode=0o700)
+            denied_reads = (str(session.public), "/proc")
+            policy = policy_dir / "cli.json"
+            roles.write_cursor_policy(ticket, policy, project=True, denied_reads=denied_reads)
+            roles.write_cursor_hooks(self.repo, policy_dir / "hooks.json")
+            command = roles.sandbox_command(
+                ticket, "worker", runtime, [sys.executable, str(script_dir / source.name)],
+                provider="cursor", policy=policy, bridge=session)
+            event = {"conversation_id": "fixture-conversation", "generation_id": "fixture-generation",
+                     "hook_event_name": "beforeSubmitPrompt", "cursor_version": "fixture",
+                     "workspace_roots": [str(self.repo)], "user_email": None,
+                     "transcript_path": None, "prompt": "bootstrap", "attachments": []}
+            completed = subprocess.run(command, input=json.dumps(event), text=True,
+                                       capture_output=True, timeout=8, check=True)
+            self.assertEqual(json.loads(completed.stdout), {"continue": True})
+            policy_text = policy.read_text()
+            self.assertIn("Shell(*)", policy_text)
+            self.assertIn("Mcp(*:*)", policy_text)
+            self.assertIn("Write(**)", policy_text)
+            self.assertNotIn(session.policy.cursor_hook_token, policy_text)
 
     @unittest.skipUnless(CLI.is_file() and shutil.which("bwrap"), "installed Orca and bubblewrap required")
     def test_delayed_arm_and_ask_do_not_exhaust_stock_cli_inactivity_budget(self):

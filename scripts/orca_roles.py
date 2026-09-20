@@ -24,12 +24,14 @@ try:
     import orca_role_state as bindings
     import orca_task_bridge as task_bridge
     from host_coordination import acquire_host, state_root
-    from orca_providers import command_for, cursor_permissions, provider_for, write_cursor_policy
+    from orca_providers import (command_for, cursor_hook_config, cursor_permissions, provider_for,
+                                write_cursor_hooks, write_cursor_policy)
 except ModuleNotFoundError:
     from scripts import orca_role_state as bindings
     from scripts import orca_task_bridge as task_bridge
     from scripts.host_coordination import acquire_host, state_root
-    from scripts.orca_providers import command_for, cursor_permissions, provider_for, write_cursor_policy
+    from scripts.orca_providers import (command_for, cursor_hook_config, cursor_permissions, provider_for,
+                                        write_cursor_hooks, write_cursor_policy)
 
 
 def git(repo: Path, *args: str) -> str:
@@ -148,10 +150,16 @@ def sandbox_command(ticket: dict, role: str, runtime: Path, command: list[str],
         if policy is None or not policy.is_file():
             raise RuntimeError("Cursor isolation requires a read-only permission policy")
         bindings.safe_file(policy)
-        if (policy.name != "cli.json" or set(policy.parent.iterdir()) != {policy}
-                or json.loads(policy.read_text()) != {"permissions": cursor_permissions(ticket)["permissions"]}
+        hook_path = policy.parent / "hooks.json"
+        denied_reads = (str(bridge.public), "/proc") if bridge is not None else ()
+        expected_files = {policy, hook_path} if bridge is not None else {policy}
+        if (policy.name != "cli.json" or set(policy.parent.iterdir()) != expected_files
+                or json.loads(policy.read_text()) != {
+                    "permissions": cursor_permissions(ticket, denied_reads=denied_reads)["permissions"]}
                 or not (repo / ".cursor").is_dir() or (repo / ".cursor").is_symlink()):
             raise RuntimeError("Cursor requires an exact sanitized project permission directory")
+        if bridge is not None and json.loads(hook_path.read_text()) != cursor_hook_config(repo):
+            raise RuntimeError("Cursor requires the exact controller hook policy")
         result.extend(["--setenv", "CURSOR_CONFIG_DIR", str(runtime / "cursor"),
                        "--setenv", "CURSOR_DATA_DIR", str(runtime / "cursor-data"),
                        "--setenv", "XDG_CONFIG_HOME", str(runtime / "xdg"),
@@ -179,8 +187,11 @@ def sandbox_command(ticket: dict, role: str, runtime: Path, command: list[str],
             path = repo / relative
             result.extend(["--bind", str(path), str(path)])
     if bridge is not None:
-        if provider != "codex" or (role != "reviewer" and not ticket.get("read_only")):
-            raise ValueError("Task bridge currently supports read-only Codex only")
+        codex_allowed = provider == "codex" and (role == "reviewer" or ticket.get("read_only"))
+        cursor_allowed = (provider == "cursor" and role == "worker" and ticket.get("read_only")
+                          and bridge.cursor_hooks)
+        if not (codex_allowed or cursor_allowed):
+            raise ValueError("Task bridge requires an approved read-only provider path")
         result.extend(bridge.mounts())
     result.extend(["--chdir", str(repo), "--", *command])
     return result
@@ -271,8 +282,9 @@ def launch(ticket: dict, slot: str, *, dry_run: bool, resume_session: str | None
     role = "reviewer" if slot == "reviewer" else "worker"
     read_only = role == "reviewer" or ticket.get("read_only") is True
     provider = provider_for(ticket, slot)
-    if bridge_settings and (provider != "codex" or not read_only or dry_run):
-        raise ValueError("Task bridge requires a real read-only Codex launch; Cursor remains denied")
+    if bridge_settings and (provider not in {"codex", "cursor"} or not read_only or dry_run
+                            or (provider == "cursor" and slot != "worker-b")):
+        raise ValueError("Task bridge requires a real approved read-only role launch")
     if resume_session:
         bindings.identity(resume_session)
     if follow_up is not None and (not follow_up.strip() or len(follow_up) > 32_000):
@@ -289,12 +301,20 @@ def launch(ticket: dict, slot: str, *, dry_run: bool, resume_session: str | None
         + (follow_up if follow_up is not None else ticket["prompt"])
     )
     if bridge_settings:
-        prompt += ("\nTask bridge bootstrap only: do not invent lifecycle IDs or send any Orca RPC until a live "
-                   "Orca preamble arrives. Do not create runs, tasks, workers or gates. When dispatched, copy "
-                   "its executable, terminal, capability and IDs exactly; use --json. Ask/check waits require "
-                   "--timeout-ms 10000. Process all delivered messages before explicit check --ack. "
-                   "A bridge refusal means stop and ask the host coordinator to reconcile, never resend. "
-                   "worker_done is not review approval. No edits or builds are allowed.")
+        if provider == "cursor":
+            prompt += ("\nCursor B lifecycle is handled only by controller-owned hooks. Never invoke Orca, Shell, "
+                       "MCP, web, subagents, builds, or tests, and do not ask an interactive question. If the "
+                       "task is unclear or blocked, report a failed outcome. Your final response must be exactly "
+                       "one JSON object with string keys outcome, subject, body; outcome is succeeded or failed, "
+                       "subject is short, and body is a three-sentence executive summary. Do not wrap it in a "
+                       "code fence or add other text. No edits are allowed.")
+        else:
+            prompt += ("\nTask bridge bootstrap only: do not invent lifecycle IDs or send any Orca RPC until a live "
+                       "Orca preamble arrives. Do not create runs, tasks, workers or gates. When dispatched, copy "
+                       "its executable, terminal, capability and IDs exactly; use --json. Ask/check waits require "
+                       "--timeout-ms 10000. Process all delivered messages before explicit check --ack. "
+                       "A bridge refusal means stop and ask the host coordinator to reconcile, never resend. "
+                       "worker_done is not review approval. No edits or builds are allowed.")
     if dry_run:
         command = command_for(provider, repo, role, prompt, resume_session, read_only=read_only)
         print(json.dumps({"slot": slot, "role": role, "provider": provider, "repo": str(repo),
@@ -332,8 +352,6 @@ def launch(ticket: dict, slot: str, *, dry_run: bool, resume_session: str | None
             raise ValueError("unbound provider history; never start a replacement session")
         policy = None
         if provider == "cursor":
-            policy = bindings.storage.checked_directory(state_root() / "worker-b-cursor-policy") / "cli.json"
-            write_cursor_policy(ticket, policy, project=True)
             config = runtime / "cursor/cli-config.json"
             if not config.exists() and not config.is_symlink():
                 write_cursor_policy(ticket, config)
@@ -351,12 +369,25 @@ def launch(ticket: dict, slot: str, *, dry_run: bool, resume_session: str | None
                     if fingerprint(repo) != before:
                         raise ValueError("bridge source changed; preserve and reconcile")
                 bridge = channels.enter_context(task_bridge.Session(
-                    *bridge_settings, os.environ.get("ORCA_TERMINAL_HANDLE"), repo, verify_subject))
-                prompt += (f"\nFor every Orca CLI invocation use exactly {bridge.client}; "
-                           "never use bare `orca` or the installed client directly. Do not read or print "
-                           "the bridge metadata; the wrapper supplies its private transport path.")
+                    *bridge_settings, os.environ.get("ORCA_TERMINAL_HANDLE"), repo, verify_subject,
+                    cursor_hooks=provider == "cursor"))
+                if provider == "codex":
+                    prompt += (f"\nFor every Orca CLI invocation use exactly {bridge.client}; "
+                               "never use bare `orca` or the installed client directly. Do not read or print "
+                               "the bridge metadata; the wrapper supplies its private transport path.")
+            if provider == "cursor":
+                if bridge is None:
+                    policy = bindings.storage.checked_directory(
+                        state_root() / "worker-b-cursor-policy") / "cli.json"
+                    write_cursor_policy(ticket, policy, project=True)
+                else:
+                    policy_dir = bindings.storage.checked_directory(bridge.public / "cursor-policy")
+                    policy = policy_dir / "cli.json"
+                    denied_reads = (str(bridge.public), "/proc")
+                    write_cursor_policy(ticket, policy, project=True, denied_reads=denied_reads)
+                    write_cursor_hooks(repo, policy_dir / "hooks.json")
             command = command_for(provider, repo, role, prompt, resume_session, read_only=read_only,
-                                  externally_sandboxed=bridge is not None)
+                                  externally_sandboxed=bridge is not None and provider == "codex")
             command = sandbox_command(ticket, role, runtime, command, provider=provider, policy=policy, bridge=bridge)
             data["last"] = {"attempt_id": str(uuid.uuid4()), "key": key, "phase": "starting",
                             "process_exited": False, "exit_code": None, "source_before": before,

@@ -5,7 +5,9 @@ from __future__ import annotations
 import shutil
 import json
 import os
+import shlex
 import stat
+import sys
 import tempfile
 from pathlib import Path
 
@@ -60,7 +62,7 @@ def command_for(provider: str, repo: Path, role: str, prompt: str,
             "--disable", "multi_agent", "--no-alt-screen", prompt]
 
 
-def cursor_permissions(ticket: dict) -> dict:
+def cursor_permissions(ticket: dict, *, denied_reads: tuple[str, ...] = ()) -> dict:
     """Permissions are an additional fence, not a replacement for mount isolation."""
     # Cursor's global config schema requires both fields. An incomplete config
     # triggers repair; a read-only repair failure falls back to default permissions.
@@ -68,11 +70,14 @@ def cursor_permissions(ticket: dict) -> dict:
     return {"version": 1, "editor": {"vimMode": False}, "permissions": {
         "allow": ["Read(**)", *([] if read_only else
                    [f"Write({scope}/**)" for scope in ticket["allowed_directories"]])],
-        "deny": ["Shell(*)", "Mcp(*:*)", "WebFetch(*)", *(["Write(**)"] if read_only else [])],
+        "deny": ["Shell(*)", "Mcp(*:*)", "WebFetch(*)",
+                 *(f"Read({path}/**)" for path in denied_reads),
+                 *(["Write(**)"] if read_only else [])],
     }}
 
 
-def write_cursor_policy(ticket: dict, path: Path, *, project: bool = False) -> None:
+def write_cursor_policy(ticket: dict, path: Path, *, project: bool = False,
+                        denied_reads: tuple[str, ...] = ()) -> None:
     if path.exists() or path.is_symlink():
         info = path.lstat()
         if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid()
@@ -81,8 +86,33 @@ def write_cursor_policy(ticket: dict, path: Path, *, project: bool = False) -> N
     fd, temporary = tempfile.mkstemp(prefix=".cursor-policy-", dir=path.parent)
     try:
         with os.fdopen(fd, "w") as handle:
-            config = cursor_permissions(ticket)
+            config = cursor_permissions(ticket, denied_reads=denied_reads)
             json.dump({"permissions": config["permissions"]} if project else config, handle)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
+
+
+def cursor_hook_config(repo: Path) -> dict:
+    """Controller-owned lifecycle hooks; they do not grant an agent tool."""
+    command = f"{shlex.quote(sys.executable)} {shlex.quote(str(repo / 'scripts/orca_cursor_bridge_hook.py'))}"
+    return {"version": 1, "hooks": {
+        "beforeSubmitPrompt": [{"command": command, "timeout": 5, "failClosed": True}],
+        "afterAgentResponse": [{"command": command, "timeout": 5, "failClosed": True}],
+        "stop": [{"command": command, "timeout": 50, "failClosed": True}],
+    }}
+
+
+def write_cursor_hooks(repo: Path, path: Path) -> None:
+    if path.exists() or path.is_symlink():
+        raise RuntimeError("Cursor hook policy must be created once per bridge")
+    fd, temporary = tempfile.mkstemp(prefix=".cursor-hooks-", dir=path.parent)
+    try:
+        with os.fdopen(fd, "w") as handle:
+            json.dump(cursor_hook_config(repo), handle)
             handle.flush()
             os.fsync(handle.fileno())
         os.replace(temporary, path)
