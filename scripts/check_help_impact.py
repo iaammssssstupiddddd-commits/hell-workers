@@ -15,7 +15,7 @@ from pathlib import Path, PurePosixPath
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
-RUNTIME_DATA_EXTENSIONS = {".ron", ".json", ".yaml", ".yml", ".toml", ".ftl"}
+RUNTIME_DATA_EXTENSIONS = {".ron", ".json", ".yaml", ".yml", ".toml", ".ftl", ".buildingset"}
 HELP_UPDATE_PREFIXES = ("crates/bevy_app/src/interface/ui/help_content/",)
 HELP_RENDER_SOURCE_PATHS = frozenset({"crates/hw_ui/src/help.rs"})
 HELP_APPROVAL_SNAPSHOT = (

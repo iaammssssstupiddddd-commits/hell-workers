@@ -500,11 +500,6 @@ pub(crate) fn drive_perf_capture_system(
             let result =
                 result.and_then(|()| params.building_art_static.write_sidecar(&params.config));
             let result = result.and_then(|()| {
-                params
-                    .building_art_active
-                    .write_sidecar(&params.config, &params.building_art_static)
-            });
-            let result = result.and_then(|()| {
                 let final_evidence = final_wall_density_presentation
                     .as_ref()
                     .ok()

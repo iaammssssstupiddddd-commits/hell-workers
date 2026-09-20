@@ -178,9 +178,7 @@ def validate_density(args: argparse.Namespace, matrix: ParsedMatrix) -> bool:
         return True
     if args.door_presentation is not None:
         raise ValueError("--door-presentation is reserved for --workload door-density")
-    if args.workload in {"building-art-static", "building-art-active"}:
-        active = args.workload == "building-art-active"
-        small = matrix.sizes == ["small"]
+    if args.workload == "building-art-static":
         if (
             args.command != "run" or matrix.selected_rtt_light
             or matrix.sizes not in (["small"], ["medium"])
@@ -194,10 +192,9 @@ def validate_density(args: argparse.Namespace, matrix: ParsedMatrix) -> bool:
             or args.window_scale_factor != 1.0 or args.rtt_quality != "high"
             or matrix.familiar_policies != ["baseline"]
             or matrix.operation_dialog_modes != ["hidden"]
-            or matrix.dashboard_modes != ["hidden"]
-            or args.familiars != ((2 if small else 8) if active else 0)
-            or args.souls != ((29 if small else 116) if active else (15 if small else 60))
+            or matrix.dashboard_modes != ["hidden"] or args.familiars != 0
+            or args.souls != (15 if matrix.sizes == ["small"] else 60)
         ):
-            raise ValueError("building-art requires one size: static small/15/0 or medium/60/0, active small/29/2 or medium/116/8 Souls/Familiars; GPU Capture|Memory, seed 20260920, three 30/60s runs without preflight, X11/Vulkan/novsync/1280x720/high/DPI-1 and baseline hidden UI")
+            raise ValueError("building-art-static requires one size (small/15 Souls or medium/60 Souls), zero Familiars, GPU Capture|Memory, seed 20260920, three 30/60s runs without preflight, X11/Vulkan/novsync/1280x720/high/DPI-1 and baseline hidden UI")
         return True
     return False

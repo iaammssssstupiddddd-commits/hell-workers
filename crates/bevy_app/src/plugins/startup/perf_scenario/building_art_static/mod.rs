@@ -2,7 +2,6 @@
 //! Production factories and domain projections run during setup only; inspection
 //! never repairs a specimen once measurement readiness has been published.
 
-pub(crate) mod active;
 mod layout;
 mod seed;
 
@@ -100,10 +99,7 @@ pub(crate) fn should_settle_building_art_static(
     state: Res<BuildingArtStaticState>,
 ) -> bool {
     config.enabled()
-        && matches!(
-            config.workload(),
-            PerfWorkload::BuildingArtStatic | PerfWorkload::BuildingArtActive
-        )
+        && config.workload() == PerfWorkload::BuildingArtStatic
         && matches!(state.phase, Phase::Spawned | Phase::Seeded)
 }
 
@@ -182,13 +178,8 @@ pub(crate) struct InspectParams<'w, 's> {
 
 pub(crate) fn inspect_building_art_static_system(mut params: InspectParams) {
     if !params.config.enabled()
-        || !matches!(
-            params.config.workload(),
-            PerfWorkload::BuildingArtStatic | PerfWorkload::BuildingArtActive
-        )
+        || params.config.workload() != PerfWorkload::BuildingArtStatic
         || !matches!(params.state.phase, Phase::Seeded | Phase::Ready)
-        || (params.config.workload() == PerfWorkload::BuildingArtActive
-            && params.state.phase == Phase::Ready)
     {
         return;
     }
@@ -206,8 +197,7 @@ pub(crate) fn inspect_building_art_static_system(mut params: InspectParams) {
             if params.state.evidence.is_none() {
                 params.state.evidence = Some(evidence);
                 params.state.phase = Phase::Ready;
-                params.applied.workload =
-                    params.config.workload() == PerfWorkload::BuildingArtStatic;
+                params.applied.workload = true;
             }
             params.state.stable_frames += 1;
         }

@@ -1919,7 +1919,7 @@ def validate_run(
             reasons.append("summary initial population is invalid for scene root validation")
         else:
             if (
-                expected_case.workload in {"building-art-static", "building-art-active"}
+                expected_case.workload == "building-art-static"
                 or expected_actor_billboard_presentation
                 or expected_stage in {"p02", "p03", "p04", "p05", "p06", "p07", "p08"}
             ):

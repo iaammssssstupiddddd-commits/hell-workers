@@ -228,10 +228,7 @@ fn setup_perf_workload_if_needed(params: PerfWorkloadSetupParams) {
     if applied.workload || !config.enabled() {
         return;
     }
-    if matches!(
-        config.workload(),
-        PerfWorkload::BuildingArtStatic | PerfWorkload::BuildingArtActive
-    ) {
+    if config.workload() == PerfWorkload::BuildingArtStatic {
         // Own setup system uses the same pre-checkpoint ordering, with no Familiar requirement.
         return;
     }
@@ -433,7 +430,7 @@ fn configure_perf_workload(
         PerfWorkload::DoorDensity => {
             unreachable!("door-density uses the production-Door fixture pipeline")
         }
-        PerfWorkload::BuildingArtStatic | PerfWorkload::BuildingArtActive => {
+        PerfWorkload::BuildingArtStatic => {
             unreachable!("building-art-static owns its setup pipeline")
         }
         PerfWorkload::Deconstruction => deconstruction_fixture::configure_deconstruction_fixture(

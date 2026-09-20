@@ -22,23 +22,18 @@ fn parse_input(
 
 #[cfg(feature = "profiling")]
 #[test]
-fn building_art_rejects_wrong_population_clock_and_measurement_contract() {
-    for (workload, size, souls, familiars) in [
-        ("building-art-static", "small", "15", "0"),
-        ("building-art-static", "medium", "60", "0"),
-        ("building-art-active", "small", "29", "2"),
-        ("building-art-active", "medium", "116", "8"),
-    ] {
+fn building_art_static_rejects_wrong_population_clock_and_measurement_contract() {
+    for (size, souls) in [("small", "15"), ("medium", "60")] {
         let args = vec![
             "--perf-scenario",
             "--perf-workload",
-            workload,
+            "building-art-static",
             "--perf-size",
             size,
             "--spawn-souls",
             souls,
             "--spawn-familiars",
-            familiars,
+            "0",
             "--perf-seed",
             "20260920",
             "--perf-output-dir",
@@ -53,10 +48,7 @@ fn building_art_rejects_wrong_population_clock_and_measurement_contract() {
             "high",
         ];
         let config = parse_input(&args, &[]).unwrap();
-        assert_eq!(
-            config.keeps_virtual_time_paused_during_capture(),
-            workload == "building-art-static"
-        );
+        assert!(config.keeps_virtual_time_paused_during_capture());
         assert!(config.uses_isolated_density_world());
         assert_eq!(config.soul_count().to_string(), souls);
         for (flag, bad) in [

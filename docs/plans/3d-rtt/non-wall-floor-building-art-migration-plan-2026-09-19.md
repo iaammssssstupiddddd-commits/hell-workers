@@ -7,7 +7,7 @@
 | 計画ID | `non-wall-floor-building-art-migration-plan-2026-09-19` |
 | ステータス | `In Progress` |
 | 作成日 | `2026-09-19` |
-| 最終更新日 | `2026-09-20` |
+| 最終更新日 | `2026-09-21` |
 | 作成者 | `Codex` |
 | 関連提案 | `N/A`（ユーザー依頼による計画） |
 | 関連Issue/PR | `N/A` |
@@ -16,7 +16,8 @@
 
 本書は全10種の移行順、制作物、表示接続、受入条件を所有する。M0の制作・検査toolingと先行無地原本を実装済み。
 M1-0のnativeでBridgeと現行川生成の不整合を検出した。ユーザー判断により橋は別途解決し、残る9種を先行する。
-runtime表示接続・正式baseline完了・ゲーム内アート受入は未実施。
+Door catalogの既存preview接続と、新設備8種のmanifest／依存バイト検証loaderを実装。
+新設備のruntime表示接続・正式baseline完了・ゲーム内アート受入は未実施。
 個別意匠の最終判断はゲーム内の候補画像で行い、本計画の作成をアート受入やreleaseとして扱わない。
 
 自己レビューでは、全種の美術数値を先行2種の試作だけで決める前提を撤回し、共通契約と群別の確定点を分離した。
@@ -169,7 +170,8 @@ Doorの既存doorsetは維持する。9個のloader複製や全建物一括で�
 - 切替前のセットを旧参照が残る間に破棄しない。切替後は退役世代のpartと強参照を解放し、世代切替の反復でpoolが増えないことを確認する。同世代の非表示／消灯partは保持する。
 - 既存のstaging、ArtPreview、承認済みcandidate、releaseのauthorityを新設備にも適用する。未承認assetの通常起動への流入を防ぐ。既存Wall/Doorの検査を緩めない。
 
-runtime projectionは新しい`building asset-set v1`、拡張子`.buildingset`を採用予定とする。
+runtime projectionは新しい`building asset-set v1`、拡張子`.buildingset`を採用する。
+M1-a1の現行入力境界は[読み込み仕様](../../building-asset-sets.md)を参照。以下のreadiness・公開処理はM1-a2以降の目標である。
 authoring manifestとは分離し、`schema_version / asset_set_id / kind / generation / manifest_sha256 /
 authority / approval・receipt identity / artifacts / parts / previews / geometry_contract_sha256`を持つ。
 artifactsはrole・相対path・byte長・SHA-256、partsはmesh/material roleとlocal transform、previewsは用途別の
@@ -304,6 +306,7 @@ maskは全16通りをtestし、各slotのlocal位置も同じshapeの中心offse
 ## 5. マイルストーン
 
 先行順は **M0 → M1 → M2 → M3 → M4-Door → M5 → M6（9種）**。M4-Bridgeは別件解決後に再合流する。
+ただし既に承認済みのDoor assetを使うカタログ接続は独立して先行する。新規制作や共通loaderを必要とせず、M4-Door全体の完了とは区別する。
 M2の2設備で制作・動作・preview・releaseまで一巡させ、その確定した方法を後続へ適用する。
 各群を受入後に独立導入できるようにし、全10種の制作が終わるまで先行群を未releaseに留めない。
 
@@ -313,12 +316,14 @@ M2の2設備で制作・動作・preview・releaseまで一巡させ、その確
 | --- | --- | --- |
 | M0-a 現行契約 | 本計画 | 全10種のshape・状態・consumer一覧、対象外画像hash。Tank寸法の文書訂正 |
 | M0-b 先行仕様 | M0-a | Tank/Mixerのrole契約・無地案、共通schemaのfield定義、比較fixtureと予算項目・決定根拠 |
-| M1-0 基準取得 | M0-b | Bridgeを除く9種の共通profiling fixtureだけを先行導入・検証。baseline sourceを記録し、基盤予算を候補実装前にfreeze |
-| M1-a 読み込み | M1-0 | schema validatorとloader、authority、active/pendingのunit test。新assetはまだ通常起動へ公開しない |
+| M1-0 基準取得 | M0-b | Bridgeを除く9種の静止参照を取得済み。sourceと限界を記録。予算は正式性能判定前に確定し、破棄した稼働計測を再実装の前提にしない |
+| M1-a1 入力検証 | 静止参照取得済み、schema契約 | Bridge以外の新規8種のschema・authority・依存バイト検証loader。登録のみで通常起動ではloadしない |
+| M1-a2 解決・世代管理 | M1-a1 | typed Mesh/Image解決、実データとpreview寸法の照合、readiness、active/pending/退役poolのunit test。新assetはまだ通常起動へ公開しない |
 | M1-b 表示接続 | M1-a | root/part factory・共通descriptor・全consumer・reset。従来fallbackの実画面同等性 |
 | M1-c 導入経路 | M1-b | export/projection/promotion/rollback dispatch、新設備recipe、基盤だけの前後比較。正式asset承認はまだしない |
 | M2 Tank/Mixer | M1-c | 2種のゲーム内無地判定→数値fixture固定→描線→全状態→候補受入→許可後release |
 | M3 / M4-Door / M5 | M2で制作経路確定 | 各群で同じ順を反復。橋の未解決をDoor・小物の着手条件にしない |
+| M4-Door catalog先行 | 既存Doorのreadiness / 承認済みpreview | Closed EWをカタログへ接続。後着・世代切替・失効・新規カードを同期し、UI枠と既存fallbackを保持 |
 | M4-Bridge（保留） | 別件の地形／配置問題解決、Bridge専用基準 | 橋の制作・lifecycle・性能受入。9種の結果を流用して完了にしない |
 | M6 先行混在close | 9種のreleaseとDoor差分処置 | 9種の混在回帰、累積資源・性能、恒久仕様同期。橋の未完・再合流条件を明記 |
 
@@ -332,7 +337,7 @@ M1では全9種の美術制作や専用systemを先作りせず、kind別role表
 - 完了条件:
   - [x] 表の全10種と`BuildingType::ALL`が一致し、Tank寸法・旧アセット計画の新規制作範囲を文書同期。
   - [ ] 5種の接地方式・part構成、9種のexact role、descriptor fieldと検査方式が確定。未制作群の美術数値は未確定と明記。
-  - [ ] 基盤比較のfixture・状態・環境・予算項目と決定根拠が確定。数値はM1-0の基準取得後、候補実装前にfreeze。後続群は各群の候補比較前にfreezeする。
+  - [ ] 基盤比較のfixture・状態・環境・予算項目と決定根拠が確定。数値は静止参照を基に正式性能判定前にfreeze。実装着手とは分離し、後続群も各群の正式比較前にfreezeする。
   - [x] Door g7の継承範囲と、既存計画所有の残件を記録。
 - 検証: schema/geometryのfocused検査、docs検査。無地の原本previewを本番表示の合格証拠にはしない。
 
@@ -342,6 +347,8 @@ M1では全9種の美術制作や専用systemを先作りせず、kind別role表
 - 変更ファイル: §4.5のasset・visual・factory・preview・save入口、authoring/tooling、native helperとprofiling fixture。
 - 完了条件:
   - [ ] M1-0→a→b→cの順で閉じ、§4のschema/role契約と退役pool管理、既存Wall/Doorのvalidator回帰が通る。
+  - [ ] M1-a1: 共通入力検証のfocused test・品質gate。実装範囲は[読み込み仕様](../../building-asset-sets.md)に記録し、AssetServerのLoadedを描画readinessと混同しない。
+  - [ ] M1-a2: 上記のtyped解決と世代管理。Bridge追加は別件解決後、既存Wall/Doorは専用経路を維持。
   - [ ] fallbackが従来と同じ形・位置・状態を保ち、5種のroot/child管理と通常生成・load・cleanupが通る。完成bounceの開始・中間・終了とmode切替中も旧pivotを照合する。
   - [ ] 同一kindのmesh/texture/previewをatomicに切り替え、cold失敗／pending失敗／active失効を区別して検証。
   - [ ] root countとpart count、pool上限、pause中の後着・load、既存カタログ更新を確認。
@@ -494,11 +501,9 @@ Doorを改変しない場合は、新規gallery内の混在確認と変更した
 M0で新profileのN/4N分布、停止・稼働割合、画面内面積、warmup/measurement、比較方式を固定する。
 先行fixtureはBridgeを除く9種各4棟のN=36、各16棟の4N=144とする。companion・支持壁床は別集計。
 `building-art-static-nine-v2`を旧10種の無効な契約から分離し、現行生成地形と通常validatorで成立を確認する。
-静止galleryに加え、Mixer稼働・Spa区画・Rest粒子を含む動作caseを設ける。停止中だけの測定を動作時へ一般化しない。
-動作caseの4棟blockはTank=Empty/Partial/Full/Full、Mixer=Idle/Idle/Active/Active、
-Rest occupants=0/1/capacity/0、Spa mask=0/1/3/15、Lamp=off/off/on/onを初期案とする。
-Nと4Nでこのblockを同じ比率で繰り返し、domain状態を成立させる人数・資源・電力をfixtureへ固定する。
-test用のmirror値の直書きだけで稼働性能を測定しない。通常の更新で状態を維持できないfixtureは採用しない。
+停止中だけの測定を動作時へ一般化しない。Mixer回転・Spa区画・Rest粒子など変更した表示の動作は、
+対象の状態遷移testとstoryboardで確認する。通常AIの継続生産・給水・搬出やworker/occupant人数固定を
+表示移行の事前gateにしない。不備のある`building-art-active`は破棄し、代替計測fixtureの再制作も要求しない。
 
 | 比較 | 時点・対照 | 見落とさないコスト |
 | --- | --- | --- |
@@ -515,7 +520,7 @@ legacy-controlはprofiling専用の明示modeとし、asset欠落を故意に起
 - 各対照は隣接・順序反転を含む3反復、正式な時間比較は30秒warmup＋60秒measureを基本とする。中央値とMADを併記する。
 - 基盤budgetはM1-0、群別budgetは当該群のbaseline取得後・候補比較前に固定。`p95_ms/p99_msの増分、native_peak_bytes、RSS、texture/mesh展開bytes上限、許容ばらつき、設定根拠`をfixtureへ数値で記録する。未記入では性能受入を開始しない。
 - 基盤baselineと予算は候補を測る前にレビューする。後続群も予算を結果へ合わせて緩めない。ノイズが許容幅を超える場合は判定不能とし環境を再確認する。壁用+5%/+4 MiBの無条件流用もしない。
-- 動作caseは稼働数・worker/occupant数・粒子数を併記する。Dreamは既存乱数を含むためseedだけで同一と主張せず、状態/負荷が異なるrunを除外する基準を事前固定する。fixture都合で通常の乱数ruleを変更しない。
+- 動作負荷を別途評価する場合は実際の稼働数・粒子数と対象範囲を明記し、異なる負荷を同等と主張しない。人数固定のために通常AI・物流・乱数ruleを変更しない。
 - N→4Nで共有asset数が増えないこと、世代切替・load反復後に退役poolのアプリ所有強参照が残らないことを必須とする。entity/instance bufferの必要な増加は別計上する。
 - 描画構造の説明が必要な場合だけRenderDocを追加する。部品数をdraw call実測値と呼ばない。
 
@@ -562,15 +567,15 @@ legacy-controlはprofiling専用の明示modeとし、asset欠落を故意に起
 
 ### 現在地
 
-- 実装進捗: M0の制作・検査toolingに続き、M1-0の静止fixture・原本検証helperを実装。M0全体、M1〜M6は未完。
+- 実装進捗: M0の制作・検査tooling、M1-0の静止fixture・原本検証helper、Door catalog接続、M1-a1の入力検証loaderを実装。M0全体、M1〜M6は未完。
 - 作業branch: `codex/building-art-migration`、実装基点: `53c8b6fb8f2d17e8cca4458d098060d2d9fb1e42`。
 - 全10種・Rust shapeとの照合、9種のrole・consumer・単位契約、非対象4画像hash、Tank寸法訂正、Door g7継承を追加。
 - Tank/Mixerのidentity原本、neutral albedo、計4 role GLB、計5状態PNG、projectionとexport後検査を実装。
   `build_building_clay.py build/verify`で既存scene/export/Khronos gateを再利用する。詳細は`docs/blender-setup.md`。
-- 次の作業: 9種の静止実機参照を取得済み（v7: Capture6 / Memory3、独立検証成功）。稼働fixtureと予算校正へ進む。
-  通常ゲームの橋／地形ruleは変更しない。稼働fixture・共通runtime schema詳細は残る。
-  baseline sourceと基盤budgetをfreezeする前にruntime表示基盤を変えない。
-- Rustのprofiling専用経路のみ変更。通常表示・repo assets・canonical・Help本文は未変更。外部原本は未承認stagingのみ。
+- 9種の静止実機参照を取得済み（v7: Capture6 / Memory3、独立検証成功）。不備のある稼働計測はユーザー指示で破棄し、表示実装を再開する。
+  Door catalog接続を独立先行し、M1-a1のschema／バイト検証を追加。次はM1-a2のtyped解決・世代管理へ進む。稼働fixtureや予算確定を着手条件にしない。
+  正式性能判定前の予算確定と、新asset公開前の承認は維持する。橋／地形ruleは変更しない。
+- 通常表示の変更は既存Door previewのcatalog接続。repo assets・canonical・Help本文は未変更。外部原本は未承認stagingのみ。
 - 無地の寸法・UV・法線処理・canvasは`clay_draft`。ゲーム内判定、最終atlas、アート承認、releaseではない。
 
 ### 次のAIが最初にやること
@@ -578,6 +583,7 @@ legacy-controlはprofiling専用の明示modeとし、asset欠落を故意に起
 1. 現在のdirty差分・並行sessionと本計画の作業範囲を分ける。別sessionのCI計画や新しい変更を破棄しない。
 2. `building-art-direction.md`と下記参照を読み、M0の論理寸法・状態・role表を固定する。全群の美術数値を先行2種のラフだけで確定しない。
 3. asset原本と候補の制作は既定stagingで開始する。モデル／画像制作時は該当Skillを使い、アートを最終判断する前に具体的なゲーム内比較を用意する。
+4. M1-a2は新loaderのバイト検証とMesh／Imageのresident判定を分け、GLB／PNG実データ・preview寸法を照合する。active/pending失敗・退役・後着のtestを先に用意する。Doorの実画面未確認は保持し、稼働計測を再導入しない。
 
 ### ブロッカー/注意点
 
@@ -586,7 +592,7 @@ legacy-controlはprofiling専用の明示modeとし、asset欠落を故意に起
 - 現行mapgenは幅2〜4の川、Bridge validatorは2×5全セルが川であることを要求する。
   fixtureの旧固定川定数に基づく配置がnativeで拒否された。ユーザーは計測専用地形案を却下し、橋以外を先行するよう指示済み。
   橋の修正は別件であり、9種の制作・表示接続・受入を停止する理由にしない。
-- 静止参照のnative helperを追加したが、全設備の美術・稼働受入recipeとruntime asset schemaは未実装。
+- 静止参照のnative helperと初期runtime schemaを追加したが、全設備の美術・稼働受入recipe、typed解決・描画公開は未実装。
   既存Wall/Door recipeや静止計測を設備の受入済みへ読み替えない。
 - 新root形式はroot数だけの既存監査では不十分。visible part、材質、layer、asset readinessまで調べる。
 - SpaのConstructing、Tank companion、カタログ後着、砂icon共有が取りこぼしやすい。
@@ -676,7 +682,7 @@ canonical・runtime asset・他sessionの原本／検証cacheは変更してい�
 - 原本検査は独立layout、実owner・状態・resident/visible handle、承認Door g7、実adapter/window、Capture/Memory分離を要求する。
 - Rust focused 4 test、Python 9 testは成功。全体検証とnative実測は別gateで、両方の結果を得るまで完了扱いしない。
 - Help review: **No impact**。明示profiling入力からのみ到達する計測経路。通常の建築操作・前提・描画・保存・Help providerは不変。
-- 静止参照は稼働性能の証拠ではない。Mixer回転・Dream粒子・継続生産、基盤budgetは未確定でM1-0を完了扱いしない。
+- 静止参照は稼働性能の証拠ではない。Mixer回転・Dream粒子・継続生産は未測定、基盤budgetも未確定。稼働計測を実装着手条件にした旧判断は後述の破棄判断で撤回した。
 - `c3733fc1`でfixtureをcommit。変更別contracts/tooling/rust gate（通常/profiling workspace test、計測feature check、Clippy）、`dev.py check`は成功。
   profiling専用Clippyも成功。rust-analyzerはstartup入口のerror/warning 0。profiling専用moduleはdefault featureの解析対象外で、compiler/testで検証した。
 - 最初のnative batch `building-art-static-20260920-v1`は、停止中に完了ポップアップが残る経路を発見したためCapture build中に中止。
@@ -789,21 +795,69 @@ canonical・runtime asset・他sessionの原本／検証cacheは変更してい�
   `target/native-acceptance/building-art-static-20260920T050353Z-3d819863`を削除（復元不可、1,671,168→0 allocated bytes）。
   filesystem availableは660,494,188,544→660,494,188,544 bytes（共有filesystemの観測差）。
   v7原本2,105,344 bytesは結果レビュー／予算校正の具体的用途で保持。primary Cargo cacheも修正・継続開発用に保持する。
-- 次の実装は通常の再割当・給水・搬出を含む稼働fixture。Mixerは1回生産でDoneになり、材料容量5・泥容量10のため、
-  停止解除だけでは90秒の継続負荷にならない。worker/occupant/粒子の負荷検査・除外条件を測定前に定義する。
-  稼働参照・ばらつき校正・基盤budgetをfreezeするまでM1-aへ進めず、静止passを生産性能・アート承認へ読み替えない。
-  Bridgeは別件のまま。通常表示・asset・地形・Help本文は変更していない。
+- 静止passを生産性能・アート承認へ読み替えない。稼働参照をM1-a着手条件にする旧判断は撤回し、Bridgeは別件のまま表示実装を進める。
 
-### 9種の稼働fixture実装（2026-09-20）
+### 稼働計測の破棄と表示実装の再開（2026-09-20）
 
-- `building-art-active` を追加。詳細な初期条件・通常処理・除外条件は
-  [稼働参照仕様](../../building-art-active-reference.md)、実施状況は
-  [稼働参照計画](building-art-active-reference-plan-2026-09-20.md)へ分離した。
-- Small 29 Souls / 2 Familiars、Medium 116 / 8。実使い魔の通常再割当、Tank給水、
-  SandPile採取、岩搬入、泥専用Stockpileへの搬出を使用する。一度だけ初期化し、実行中は読取専用。
-- 生産の前中後20秒分布、資材収支、実到着Entity、稼働frame、Rest/Spa人数、Dream粒子を検査する。
-  コンパイルやvalidatorの単体testは実機の継続生産証拠ではない。実測・予算freezeは未完。
-- 静止v2・Bridge除外・M1-a開始条件は維持。通常プレイ/出荷assetに変更はなくHelpはNo impact。
+- active正式試行3回と診断3回はRest/Spa人数検査を通らず、採用可能な計測0、Memory未実施。
+  ゲーム側の不具合は確定していない。ユーザー指示により計測実装の修正・原因追跡を打ち切った。
+- activeのfixture、起動処理、CLI、専用検証器・test、参照仕様と作業計画を撤去。共通部は静止v2だけの構成へ戻した。
+  AI・物流・地形を変更せず、同じ計測の再導入を次の前提にしない。
+- finalized済みで固有source/assetや使用processのないactive出力2件を削除（rawは復元不可、codeはGit履歴に残る）。
+  `target/native-acceptance/building-art-active-20260920T083721Z-793056bf`: 139,264→0 bytes。
+  `target/perf-runs/building-art-active-worker-debug-20260920-v2`: 53,796,864→0 bytes。
+  合計53,936,128 allocated bytesを解放。filesystem availableは659,327,057,920→659,407,482,880 bytes（共有filesystem観測）。
+  active専用consumerを解除し、有効な静止v7原本とprimary通常Cargo cacheは保持する。
+- Door catalogは既存承認済みClosed EW previewを使い、identity一致時だけ切替。後着・世代切替・失効・新規カード・pauseを対象に検証する。
+  カードの寸法・色・入力・文言、他11種は不変。Help影響はNo impact。M4全体や新規アートの受入完了にはしない。
+- 撤去後のstartup/perf toolingは`ca653385^`と完全一致。Door focused 3 testと`dev.py verify`全群が成功した。
+  通常/profiling workspace test、Memory/Tracy/RenderDoc feature check、Clippy警告0、Python 252件＋Blender tooling 164件を含む。
+  Door adapter・plugin・UI marker/spawnerとstartup入口のrust-analyzer診断はerror/warning 0。
+  profiling専用部はinactive hintのため、上記feature compile/testで確認した。
+- 別実行の`dev.py check`はCargo開始時のMemAvailable 7.98 GiBで8 GiB安全下限により停止。
+  同じworkspace checkは直前の全体verifyで成功しており、コンパイル不具合による失敗ではない。
+- カタログ実画面は未確認。既存native Skillの`ui_usability_acceptance.py plan --smoke --input-backend none --layout-scene build`は
+  MemAvailable 7.88 GiBで10 GiB開始下限に達せず、job/binary/gameを作らず停止した。独自の代替計測やguard回避は行っていない。
+  再開時は同じprimary/cacheでこの画面だけ確認する。次の共通loader実装を稼働計測の修復待ちにはしない。
+- Help no-impactの根拠は`MenuAction::SelectBuild → UiIntent::SelectBuild → set_build_mode`が不変で、
+  既存`architect-building`本文の種類・入力・成立条件・結果に変更がないこと。UI画像同期とprofiling専用計測撤去のみで、本文/snapshotの更新不要をgateでも確認した。
+  storage checkはpass、未finalize batchなし。primaryの`building-door-catalog-review`は今回の画像接続の確認・feedback修正用に保持する。
+
+### 2026-09-20 M1-a1 入力検証の実装（品質確認一部未完）
+
+- `assets/building_asset_set/`へ新規8種のschema／loaderを追加。Bridgeは未対応、Wall/Doorの専用loaderは不変。
+  exact role・part/material・preview契約、canonical JSON、kind/generation/content path、内容hash、receiptとauthorityを検査する。
+  登録時のroot policyを固定し、候補の不許可は依存I/Oより前に返す。通常startupは登録だけでload・描画公開しない。
+- [恒久仕様](../../building-asset-sets.md)を追加し、M1-aを入力検証a1とtyped解決・世代管理a2に分割。
+  source/export/geometry hashは現段階ではidentity書式の検査のみ。GLB／PNG実データ、常駐、公開・退役、生成器は未実装。
+- 成功: 通常版focused 8 test、`dev.py check`、profiling workspace test、Memory/Tracy/RenderDoc feature check。
+  `quality --group contracts`、`tooling`（Python 252＋164件、lint、perf self-test）、`deps`も成功。
+  depsには既存のduplicate/yanked warningがあるがpolicy gateはpass。Clippyの結果ではない。
+- rust-analyzer: 新moduleの5 fileとassets/startup入口のerror/warningは0。startupのprofiling無効hintは上記feature検証で補完。
+- 未完: 通常版workspace全test、Clippy、全体`dev.py verify`の成功。
+  verify初回は並行Orca workspaceの未登録で停止したが、後のstorage/contracts再検証はpass。
+  Rust群はfeature check後のClippy開始時にMemAvailable 4.97 GiBで8 GiB開始下限に達せず停止した。
+  RAM回復後のverify再実行もcontracts/tooling/depsはpassし、workspace check開始時の7.88 GiBで停止した。
+  guard回避や他sessionの停止、キャッシュ削除は行わない。RAMに余裕が戻ったら同じprimary/cacheで残るgateを再実行する。
+- Help Skillの判断はNo impact。loader登録から通常のload要求・player-visible consumerへ至る経路はまだなく、
+  Door catalogの既存画像同期とprofiling計測撤去を含めて、建築操作・種類・条件・文言・結果は不変。
+  `.buildingset`をruntime data分類へ追加し、そのfixtureとHelp gateはpass。本文/snapshotの更新は不要。
+- 新しいnative job／binary copy／専用workspaceは作成していない。既存のprimary開発・feedback cacheを再利用。
+  新設備の描画は未接続なので今回のloader testを実画面・GPU・美術受入へ読み替えない。Door catalogの実画面未確認も継続。
+
+### 2026-09-21 中間コミット前の再検証
+
+- ユーザーの「一度コミット」指示により、稼働計測撤去・Door catalog接続・M1-a1を一つの区切りとして保存する。
+  並行Orca文書の未commit差分は対象から除外し、既存のstage／作業内容を保持する。
+- `dev.py ci check --base 6abeeed92cf14e2e5aafc8240e1c64989b609a84 --mode auto`を実行。
+  contracts／tooling／deps／rustの4群は成功。通常・profiling workspace test、3種のfeature check、Clippy警告0を確認した。
+  前日のRAM不足によるClippy・通常workspace testの未実施は解消。
+- ただし実行中に並行文書commit `899a8b04`が入り、最後のsource fingerprint検査は対象変更として失敗。
+  各群の成功を同一subjectの一括CI成功とは扱わず、M1-a1の最終品質gateは未確定のまま維持する。
+  game codeは今回追加変更していない。前日のrust-analyzer error/warning 0と`dev.py check`成功の対象を維持。
+- Helpを実経路から再確認しNo impact。loaderは登録のみ、Doorは画像だけの同期、撤去はprofiling専用経路。
+  操作・文言・成立条件・結果は不変で、no-impact理由をcommit trailerへ記録する。
+  Doorの実画面確認、設備の描画接続・美術受入・正式公開は引き続き未完。
 
 ### Definition of Done
 
@@ -825,3 +879,6 @@ canonical・runtime asset・他sessionの原本／検証cacheは変更してい�
 | `2026-09-20` | `Codex` | M1-0用の静止fixture、独立sidecar検証、Capture→Memory helperを追加。通常表示とassetは不変、稼働fixture・budget・実測は未完 |
 | `2026-09-20` | `Codex` | 検証・commit後のnativeでBridgeと現行川生成の不整合を検出。正式値なし、無効job整理完了、計測専用地形の方針確認待ち |
 | `2026-09-20` | `Codex` | ユーザー判断で計測専用川を不採用とし、Bridgeを別件へ分離。残る9種の基準・導入・混在closeを先行、Doorを橋の依存から分離 |
+| `2026-09-20` | `Codex` | ユーザー指示で不備のある稼働計測を破棄し、着手gateを撤回。静止参照を保持してDoor catalogの既存preview接続を先行 |
+| `2026-09-20` | `Codex` | M1-a1の共通schema／バイト検証loaderを追加。新8種の通常表示は未接続。focused/check/profilingは成功、Clippy等の残る品質確認はRAM下限により未完 |
+| `2026-09-21` | `Codex` | 中間commit前にClippyと通常workspace testを含む全4群を確認。検証中の並行文書commitでsource判定は不成立。未受入範囲を維持して今回分だけを保存 |

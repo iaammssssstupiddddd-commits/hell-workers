@@ -106,7 +106,7 @@ python3 scripts/dev.py cargo -- test -p bevy_app@0.1.0 --lib --features profilin
 原本は`target/native-acceptance/building-art-static-20260920T054051Z-f4e2aa28`（2,105,344 allocated bytes）。
 ownerはbuilding-art-migration、用途は提示結果レビューとM1-0の予算校正、終了／置換／打切り時に解放する。
 元sourceでの独立検証は済ませており、旧verifier再実行のためにprimaryやbinaryを凍結し続けない。
-稼働fixtureと予算が未確定のため、新旧表示基盤の比較はまだ開始していない。
+新旧表示基盤の比較は未実施。静止参照は表示実装の開発入力として使い、正式な性能判定の前に予算を確定する。
 
 ## 現在の限界と無効試行の履歴
 
@@ -128,5 +128,5 @@ ownerはbuilding-art-migration、用途は提示結果レビューとM1-0の予�
   無効試行を合格へ読み替えず、上表はv7だけから集計した。計測windowへの入力を避け、条件変化の拒否は維持する。
 - 回転、Dream粒子、稼働中の状態遷移、搬送・生産継続、save/load、preview、GPU draw-call詳細は未測定。
 - Mixerは初期Refining状態を停止保持する。入力や進捗を毎frame補充・巻戻しして稼働負荷を捏造しない。
-- この静止参照だけではM1-0は閉じない。稼働fixtureと基盤budgetの確定前に新しい表示基盤を導入しない。
+- 不備のある稼働計測はユーザー指示で破棄した。静止参照を稼働時の性能証拠にはしないが、稼働fixtureの再実装や予算確定を表示実装の着手条件にしない。
 - Help impactは **No impact**。明示profiling CLIの検査経路だけで、通常プレイヤーの操作・成立条件・表示意味は不変。

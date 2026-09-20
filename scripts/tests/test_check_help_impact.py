@@ -39,6 +39,8 @@ class HelpImpactPathTests(unittest.TestCase):
             "crates/hw_ui/Cargo.toml",
             "Cargo.lock",
             "assets/catalog/help.ron",
+            "assets/manifests/tank.buildingset",
+            "crates/bevy_app/assets/manifests/lamp.buildingset",
             "crates/hw_ui/assets/labels.ftl",
             "settings/defaults.toml",
         ):

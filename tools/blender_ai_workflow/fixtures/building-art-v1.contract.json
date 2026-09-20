@@ -3,7 +3,7 @@
   "contract_id": "building-art-v1",
   "tile_size_wu": 32,
   "shape_source": "crates/hw_jobs/src/placement_geometry.rs",
-  "runtime_schema": "building-asset-set-v1 (M1; not implemented)",
+  "runtime_schema": "building-asset-set-v1 (manifest/byte loader; runtime activation pending)",
   "excluded": ["Wall", "Floor"],
   "kinds": {
     "Tank": {"slug": "tank", "shape": "two_by_two", "presentation": "Structural3d", "mesh_roles": ["body", "water"], "image_roles": ["albedo", "world_preview", "catalog"], "leaf_count": 2, "representative_state": "Empty", "state_source": "StoredItems / Stockpile.capacity", "movable": true},

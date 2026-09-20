@@ -28,7 +28,6 @@ pub enum PerfWorkload {
     WallDensity,
     DoorDensity,
     BuildingArtStatic,
-    BuildingArtActive,
     Deconstruction,
     SaveTransaction,
 }
@@ -46,7 +45,6 @@ impl PerfWorkload {
             "wall-density" => Some(Self::WallDensity),
             "door-density" => Some(Self::DoorDensity),
             "building-art-static" => Some(Self::BuildingArtStatic),
-            "building-art-active" => Some(Self::BuildingArtActive),
             "deconstruction" => Some(Self::Deconstruction),
             "save-transaction" => Some(Self::SaveTransaction),
             _ => None,
@@ -65,7 +63,6 @@ impl PerfWorkload {
             Self::WallDensity => "wall-density",
             Self::DoorDensity => "door-density",
             Self::BuildingArtStatic => "building-art-static",
-            Self::BuildingArtActive => "building-art-active",
             Self::Deconstruction => "deconstruction",
             Self::SaveTransaction => "save-transaction",
         }
@@ -626,7 +623,7 @@ impl PerfScenarioConfig {
         let workload = parse_value_or_default(
             input.value("--perf-workload", "HW_PERF_WORKLOAD")?,
             "--perf-workload",
-            "gather|path-door|construction|ui-gpu|task-dashboard|dream-ui-burst|indoor-light|wall-density|door-density|building-art-static|building-art-active|deconstruction|save-transaction",
+            "gather|path-door|construction|ui-gpu|task-dashboard|dream-ui-burst|indoor-light|wall-density|door-density|building-art-static|deconstruction|save-transaction",
             PerfWorkload::parse,
             PerfWorkload::Gather,
         )?;
@@ -1238,33 +1235,30 @@ impl PerfScenarioConfig {
                     .to_string(),
             ));
         }
-        let building_art_population = match (workload, size) {
-            (PerfWorkload::BuildingArtActive, PerfScenarioSize::Small) => (29, 2),
-            (PerfWorkload::BuildingArtActive, _) => (116, 8),
-            (_, PerfScenarioSize::Small) => (15, 0),
-            _ => (60, 0),
-        };
-        if matches!(
-            workload,
-            PerfWorkload::BuildingArtStatic | PerfWorkload::BuildingArtActive
-        ) && (!matches!(size, PerfScenarioSize::Small | PerfScenarioSize::Medium)
-            || render_mode != PerfRenderMode::Gpu
-            || soul_count != building_art_population.0
-            || familiar_count != building_art_population.1
-            || !matches!(familiar_policy_mode, PerfFamiliarPolicyMode::Baseline)
-            || !matches!(operation_dialog_mode, PerfOperationDialogMode::Hidden)
-            || !matches!(dashboard_mode, PerfDashboardMode::Hidden)
-            || !matches!(clock_mode, PerfClockMode::Realtime)
-            || master_seed != 20_260_920
-            || warmup_secs != 30.0
-            || measure_secs != 60.0
-            || output_dir.is_none()
-            || window_width != Some(1280)
-            || window_height != Some(720)
-            || window_scale_factor != Some(1.0)
-            || rtt_quality != Some(RttQualityPreset::High))
+        if workload == PerfWorkload::BuildingArtStatic
+            && (!matches!(size, PerfScenarioSize::Small | PerfScenarioSize::Medium)
+                || render_mode != PerfRenderMode::Gpu
+                || soul_count
+                    != if size == PerfScenarioSize::Small {
+                        15
+                    } else {
+                        60
+                    }
+                || familiar_count != 0
+                || !matches!(familiar_policy_mode, PerfFamiliarPolicyMode::Baseline)
+                || !matches!(operation_dialog_mode, PerfOperationDialogMode::Hidden)
+                || !matches!(dashboard_mode, PerfDashboardMode::Hidden)
+                || !matches!(clock_mode, PerfClockMode::Realtime)
+                || master_seed != 20_260_920
+                || warmup_secs != 30.0
+                || measure_secs != 60.0
+                || output_dir.is_none()
+                || window_width != Some(1280)
+                || window_height != Some(720)
+                || window_scale_factor != Some(1.0)
+                || rtt_quality != Some(RttQualityPreset::High))
         {
-            return Err(PerfScenarioConfigError("building-art requires small/medium: static 15/60 Souls and no Familiars; active 29/116 Souls and 2/8 Familiars; gpu/realtime, seed 20260920, 30s/60s, output directory, baseline policies and 1280x720/high/DPI-1".into()));
+            return Err(PerfScenarioConfigError("building-art-static requires small/15 Souls or medium/60 Souls, zero Familiars, gpu/realtime, seed 20260920, 30s/60s, output directory, baseline policies and 1280x720/high/DPI-1".into()));
         }
         #[cfg(feature = "profiling-renderdoc")]
         if renderdoc_capture
@@ -1305,7 +1299,6 @@ impl PerfScenarioConfig {
                 joint_actual_window: wall_door_joint_actual_window,
             },
             PerfWorkload::BuildingArtStatic => ValidatedWorkload::BuildingArtStatic,
-            PerfWorkload::BuildingArtActive => ValidatedWorkload::BuildingArtActive,
             PerfWorkload::PathDoor => ValidatedWorkload::PathDoor,
             PerfWorkload::Construction => ValidatedWorkload::Construction,
             PerfWorkload::UiGpu => ValidatedWorkload::UiGpu,
@@ -1554,7 +1547,6 @@ impl PerfScenarioConfig {
                 PerfWorkload::WallDensity
                     | PerfWorkload::DoorDensity
                     | PerfWorkload::BuildingArtStatic
-                    | PerfWorkload::BuildingArtActive
             )
     }
 

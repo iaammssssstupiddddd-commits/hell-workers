@@ -1,6 +1,6 @@
 # Plans Index
 
-`docs/plans` の文書ステータス一覧（更新日: 2026-09-20）。
+`docs/plans` の文書ステータス一覧（更新日: 2026-09-21）。
 
 ## 新規計画書の作り方
 
@@ -27,7 +27,6 @@
 | Document | Status | Notes |
 |---|---|---|
 | [3d-rtt/asset-milestones-2026-03-17.md](3d-rtt/asset-milestones-2026-03-17.md) | 進行中（建築・terrain track継続、Soul GLB runtime trackはSuperseded） | アセット作成マイルストーン |
-| [3d-rtt/building-art-active-reference-plan-2026-09-20.md](3d-rtt/building-art-active-reference-plan-2026-09-20.md) | In Progress | 9種建築物の通常稼働参照 |
 | [3d-rtt/door-preview-alignment-plan-2026-09-11.md](3d-rtt/door-preview-alignment-plan-2026-09-11.md) | In Progress | ドア設計図の表示位置修正と正式反映への引継ぎ |
 | [3d-rtt/lighting-visual-plan-2026-04-04.md](3d-rtt/lighting-visual-plan-2026-04-04.md) | Superseded | Outdoor Lamp のローカル照明で Soul / 建物に落ちる影を追加する計画 |
 | [3d-rtt/milestone-roadmap.md](3d-rtt/milestone-roadmap.md) | Superseded（完了済み実装の履歴。未完項目は凍結） | 3D-RtT 移行ロードマップ |
