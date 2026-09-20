@@ -8,6 +8,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from scripts import orca_roles as roles
 
@@ -93,6 +94,70 @@ class OrcaRoleTests(unittest.TestCase):
         (self.repo / "src/content.txt").write_text("changed after approval")
         with self.assertRaisesRegex(ValueError, "stale"):
             roles.verify_review(ticket, record)
+
+    @patch("scripts.orca_roles.command_for", return_value=["/fake/codex"])
+    def test_admission_rechecks_ticket_after_leases(self, _) -> None:
+        ticket = self.load()
+        with patch.object(roles, "acquire_host"), patch.object(roles, "validate_ticket",
+                side_effect=ValueError("branch changed")) as validate:
+            with self.assertRaisesRegex(ValueError, "branch changed"):
+                roles.launch(ticket, "worker-a", dry_run=False)
+        validate.assert_called_once_with(ticket)
+
+    @patch("scripts.orca_roles.command_for", return_value=["/fake/codex"])
+    def test_unknown_reviewer_session_refuses_before_provider_launch(self, _) -> None:
+        ticket = self.load()
+        runtime = self.root / "empty-runtime"
+        runtime.mkdir()
+        with patch.object(roles, "acquire_host"), patch.object(roles, "prepare_runtime", return_value=runtime):
+            with self.assertRaisesRegex(ValueError, "does not exist"):
+                roles.launch(ticket, "reviewer", dry_run=False,
+                             resume_session="e1fd2684-d55a-4794-9741-903c92b7dbea")
+
+    @unittest.skipUnless(sys.platform == "linux" and shutil.which("bwrap"), "Linux bubblewrap required")
+    def test_cursor_mount_hides_project_config_and_policy_is_read_only(self) -> None:
+        ticket = self.load()
+        runtime = self.root / "cursor-runtime"
+        for child in ("cursor", "cursor-data", "xdg/cursor", "cache", "tmp", "codex"):
+            (runtime / child).mkdir(parents=True, exist_ok=True)
+        for child in (".cursor", ".claude"):
+            directory = self.repo / child
+            directory.mkdir()
+            (directory / "mcp.json").write_text('{"fixture":true}')
+        policy = self.root / "policy.json"
+        roles.write_cursor_policy(ticket, policy)
+        original_config = self.root / "original-config"
+        (original_config / "cursor").mkdir(parents=True)
+        original_auth = original_config / "cursor/auth.json"
+        original_auth.write_text('{"fixture": "not-a-credential"}')
+        script = """import json, os, pathlib, sys
+repo, runtime = map(pathlib.Path, sys.argv[1:])
+assert os.environ['CURSOR_CONFIG_DIR'] == str(runtime / 'cursor')
+assert os.environ['CURSOR_DATA_DIR'] == str(runtime / 'cursor-data')
+assert 'CURSOR_API_KEY' not in os.environ
+assert not (repo / '.cursor/mcp.json').exists()
+assert not (repo / '.claude/mcp.json').exists()
+policy = runtime / 'cursor/cli-config.json'
+assert 'Shell(*)' in json.loads(policy.read_text())['permissions']['deny']
+auth = runtime / 'xdg/cursor/auth.json'
+assert json.loads(auth.read_text()) == {'fixture': 'not-a-credential'}
+for path in (policy, auth, repo / 'docs/content.txt'):
+    try:
+        path.write_text('escape')
+    except OSError:
+        continue
+    raise AssertionError('write escaped: ' + str(path))
+(repo / 'src/content.txt').write_text('allowed')
+print('pass')
+"""
+        with patch.dict(os.environ, {"XDG_CONFIG_HOME": str(original_config), "CURSOR_API_KEY": "fixture"}):
+            command = roles.sandbox_command(ticket, "worker", runtime,
+                                           [sys.executable, "-c", script, str(self.repo), str(runtime)],
+                                           provider="cursor", policy=policy)
+            result = subprocess.run(command, capture_output=True, text=True, check=True)
+        self.assertEqual(result.stdout.strip(), "pass")
+        self.assertEqual((self.repo / "docs/content.txt").read_text(), "original")
+        self.assertEqual(original_auth.read_text(), '{"fixture": "not-a-credential"}')
 
     @unittest.skipUnless(sys.platform == "linux" and shutil.which("bwrap"), "Linux bubblewrap required")
     def test_real_mount_boundary_blocks_reviewer_and_worker_escape(self) -> None:

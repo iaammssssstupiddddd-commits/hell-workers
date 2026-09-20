@@ -15,13 +15,16 @@ import re
 import shutil
 import subprocess
 import sys
+import uuid
 from contextlib import ExitStack
 from pathlib import Path
 
 try:
     from host_coordination import acquire_host, state_root
+    from orca_providers import command_for, provider_for, write_cursor_policy
 except ModuleNotFoundError:
     from scripts.host_coordination import acquire_host, state_root
+    from scripts.orca_providers import command_for, provider_for, write_cursor_policy
 
 
 def git(repo: Path, *args: str) -> str:
@@ -30,6 +33,10 @@ def git(repo: Path, *args: str) -> str:
 
 def load_ticket(path: Path) -> dict:
     ticket = json.loads(path.read_text(encoding="utf-8"))
+    return validate_ticket(ticket)
+
+
+def validate_ticket(ticket: dict) -> dict:
     if not isinstance(ticket, dict) or ticket.get("schema") != 1:
         raise ValueError("ticket schema must be 1")
     for key in ("id", "branch", "base", "prompt"):
@@ -97,7 +104,8 @@ def fingerprint(repo: Path) -> str:
     return digest.hexdigest()
 
 
-def sandbox_command(ticket: dict, role: str, runtime: Path, command: list[str]) -> list[str]:
+def sandbox_command(ticket: dict, role: str, runtime: Path, command: list[str],
+                    *, provider: str = "codex", policy: Path | None = None) -> list[str]:
     """Outer mount namespace constrains every process, including MCPs and hooks."""
     bwrap = shutil.which("bwrap")
     if not bwrap or sys.platform != "linux":
@@ -117,12 +125,27 @@ def sandbox_command(ticket: dict, role: str, runtime: Path, command: list[str]) 
                    "--setenv", "TMPDIR", str(runtime / "tmp"),
                    "--setenv", "PYTHONDONTWRITEBYTECODE", "1"])
     # Account credentials are mounted read-only, never copied or printed.
-    auth = Path(os.environ.get("CODEX_HOME", str(Path.home() / ".codex"))) / "auth.json"
-    if auth.is_file():
-        result.extend(["--ro-bind", str(auth), str(runtime / "codex/auth.json")])
+    if provider == "codex":
+        auth = Path(os.environ.get("CODEX_HOME", str(Path.home() / ".codex"))) / "auth.json"
+        if auth.is_file():
+            result.extend(["--ro-bind", str(auth), str(runtime / "codex/auth.json")])
+    else:
+        if policy is None or not policy.is_file():
+            raise RuntimeError("Cursor isolation requires a read-only permission policy")
+        result.extend(["--setenv", "CURSOR_CONFIG_DIR", str(runtime / "cursor"),
+                       "--setenv", "CURSOR_DATA_DIR", str(runtime / "cursor-data"),
+                       "--setenv", "XDG_CONFIG_HOME", str(runtime / "xdg"),
+                       "--setenv", "XDG_CACHE_HOME", str(runtime / "cache"),
+                       "--setenv", "AGENT_CLI_CREDENTIAL_STORE", "file",
+                       "--ro-bind", str(policy), str(runtime / "cursor/cli-config.json")])
+        auth = Path(os.environ.get("XDG_CONFIG_HOME", str(Path.home() / ".config"))) / "cursor/auth.json"
+        if auth.is_file():
+            result.extend(["--ro-bind", str(auth), str(runtime / "xdg/cursor/auth.json")])
     # Hide inherited config/MCP transports; the agent gets a clean Codex home.
-    for path in (Path.home() / ".codex", Path.home() / ".orca",
-                 Path.home() / ".config/orca", repo / ".codex"):
+    for path in (Path.home() / ".codex", Path.home() / ".orca", Path.home() / ".cursor",
+                 Path.home() / ".claude", repo / ".claude",
+                 Path.home() / ".config/cursor", Path.home() / ".config/orca",
+                 repo / ".codex", repo / ".cursor"):
         if path.is_dir() and not runtime.is_relative_to(path):
             result.extend(["--tmpfs", str(path)])
     if role == "worker":
@@ -137,7 +160,8 @@ def prepare_runtime(slot: str) -> Path:
     runtime = state_root().parent / "agents" / slot
     if runtime.resolve() != runtime:
         raise RuntimeError("agent runtime must not contain symlinks")
-    for path in (runtime, runtime / "codex", runtime / "tmp"):
+    for path in (runtime, runtime / "codex", runtime / "tmp", runtime / "cursor",
+                 runtime / "xdg", runtime / "xdg/cursor", runtime / "cache", runtime / "cursor-data"):
         path.mkdir(parents=True, exist_ok=True, mode=0o700)
         if path.stat().st_uid != os.getuid() or path.stat().st_mode & 0o077:
             raise RuntimeError(f"unsafe agent runtime permissions: {path}")
@@ -159,8 +183,10 @@ def verify_review(ticket: dict, record: dict) -> None:
 
 def launch(ticket: dict, slot: str, *, dry_run: bool, resume_session: str | None = None) -> int:
     role = "reviewer" if slot == "reviewer" else "worker"
-    if resume_session and (role != "reviewer" or not re.fullmatch(r"[a-f0-9-]{36}", resume_session)):
-        raise ValueError("resume requires a reviewer session UUID")
+    provider = provider_for(ticket, slot)
+    if resume_session:
+        if role != "reviewer" or str(uuid.UUID(resume_session)) != resume_session:
+            raise ValueError("resume requires a reviewer session UUID")
     if role == "worker" and not ticket.get("allowed_directories"):
         raise ValueError("worker needs a nonempty writable directory scope")
     repo = Path(ticket["repo"])
@@ -173,14 +199,9 @@ def launch(ticket: dict, slot: str, *, dry_run: bool, resume_session: str | None
         f"Allowed directories: {ticket['allowed_directories'] if role == 'worker' else []}.\n"
         + ticket["prompt"]
     )
-    codex = shutil.which("codex")
-    if not codex:
-        raise RuntimeError("codex is not installed")
-    command = [codex, *(["resume", resume_session] if resume_session else []),
-               "--cd", str(repo), "--sandbox", "read-only" if role == "reviewer" else "workspace-write",
-               "--ask-for-approval", "never", "--disable", "multi_agent", "--no-alt-screen", prompt]
+    command = command_for(provider, repo, role, prompt, resume_session)
     if dry_run:
-        print(json.dumps({"slot": slot, "role": role, "repo": str(repo),
+        print(json.dumps({"slot": slot, "role": role, "provider": provider, "repo": str(repo),
                           "allowed_directories": ticket["allowed_directories"] if role == "worker" else [],
                           "command": command}, ensure_ascii=False, indent=2))
         return 0
@@ -188,16 +209,27 @@ def launch(ticket: dict, slot: str, *, dry_run: bool, resume_session: str | None
     with ExitStack() as leases:
         leases.enter_context(acquire_host(slot, inherit=False))
         leases.enter_context(acquire_host(workspace_slot, inherit=False))
+        validate_ticket(ticket)
+        if role == "worker" and git(repo, "status", "--porcelain"):
+            raise ValueError("worker checkout changed before admission; preserve existing changes")
         runtime = prepare_runtime(slot)
         if role == "reviewer" and not resume_session and any((runtime / "codex/sessions").glob("**/*.jsonl")):
             raise ValueError("reviewer history exists; reuse the terminal or pass --resume-session")
+        if resume_session and not any((runtime / "codex/sessions").glob(f"**/*-{resume_session}.jsonl")):
+            raise ValueError("reviewer session does not exist in the fixed reviewer runtime")
         before = fingerprint(repo)
         if role == "reviewer" and ticket.get("source_sha256") != before:
             raise ValueError("review ticket needs the current source_sha256; regenerate after changes")
-        result = subprocess.run(sandbox_command(ticket, role, runtime, command), check=False)
+        policy = None
+        if provider == "cursor":
+            policy = state_root() / "worker-b-cursor-policy.json"
+            write_cursor_policy(ticket, policy)
+        result = subprocess.run(sandbox_command(ticket, role, runtime, command,
+                                               provider=provider, policy=policy), check=False)
         if role == "reviewer" and fingerprint(repo) != before:
             raise RuntimeError("source changed during review; review is invalid")
-        print(json.dumps({"ticket": ticket["id"], "role": role, "exit_code": result.returncode,
+        print(json.dumps({"ticket": ticket["id"], "role": role, "provider": provider,
+                          "exit_code": result.returncode,
                           "source_sha256": fingerprint(repo), "approved": False}))
         return result.returncode
 

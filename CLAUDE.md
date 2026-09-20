@@ -77,8 +77,9 @@ python3 scripts/dev.py cargo -- clippy --workspace --all-targets -- -D warnings
 ### 4.5. Agent editing boundaries (STRICT)
 Shared-checkout/background editing remains forbidden. Read-only exploration and
 review are permitted. Editing delegation is allowed only through the supervised
-Orca workflow below. Its initial launcher supports Codex on Linux; other agent
-CLIs remain read-only delegates until their isolation path is verified.
+Orca workflow below. The Linux launcher maps A/reviewer to Codex and simple B
+tasks to Cursor CLI. Production dispatch remains disabled until provider and
+orchestration lifecycle acceptance; other CLIs are not permitted editors.
 
 **`git checkout --` and revert policy:**
 - NEVER run `git checkout -- <file>` or any revert command without first running `git log --oneline -5` and `git diff HEAD -- <file>` to confirm the change is truly unwanted
@@ -250,6 +251,7 @@ Refer to `docs/` for specific system details:
 
 - Parallel editing is allowed only through the ticketed `scripts/orca_roles.py` launcher in separate worktrees; never delegate edits in a shared checkout.
 - Use at most two implementation slots and one fixed read-only reviewer; reuse the same reviewer terminal for the workstream. Workers must not delegate again.
+- Fixed providers: worker-a uses Codex, worker-b uses Cursor CLI for simple leaf tasks only, and the reviewer uses Codex. Require complexity rationale and acceptance criteria for worker-b; route shared-contract, save, renderer and infrastructure work to A/coordinator.
 - The coordinator owns authoritative primary docs, shared contracts, builds/tests, commits and serial integration. Workers cannot write Git metadata or approve their own changes.
 - Bind review to base/head and the exact source fingerprint; any source/index change invalidates approval. Do not integrate without the fixed reviewer's explicit approval and same-subject validation.
 - Use guarded project entrypoints for all heavy work. One host-wide heavy slot, one Cargo job and one Rust test thread; busy means defer, never bypass the guard.
