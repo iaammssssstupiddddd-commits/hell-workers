@@ -232,6 +232,7 @@ Read the two requested files without editing them.
         self.assertTrue(stopped[0]["ok"], stopped[0])
         self.assertEqual(stopped[0]["result"]["outcome"], "succeeded")
         self.assertEqual(policy.phase, "settled")
+        self.assertEqual(policy.cursor_stage, "settled")
 
     def test_cursor_hook_ignores_bootstrap_turn_but_rejects_changed_or_pending_authority(self):
         policy = self.new_policy(cursor_hooks=True)
@@ -531,7 +532,7 @@ Read the two requested files without editing them.
         directory = self.root / bridge_id
         directory.mkdir(mode=0o700)
         bridge.write_ledger(directory / "journal.json", {
-            "schema": 1, "phase": "unknown", "revoked": True, "authority": None,
+            "schema": 1, "phase": "unknown", "revoked": True, "authority": AUTHORITY,
             "capability_sha256": None, "operations": {}, "settled_status": None,
         })
         bridge.write_ledger(directory / "identity.json", {

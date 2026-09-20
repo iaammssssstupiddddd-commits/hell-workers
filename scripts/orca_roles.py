@@ -495,7 +495,8 @@ def reconcile_bridge(ticket: dict, slot: str, attempt_id: str, observed_source: 
         identity = bindings.storage.read_private_json(directory / "identity.json", {})
         authority = bindings.storage.read_private_json(directory / "arm.json", {})
         operations = journal.get("operations") if isinstance(journal, dict) else None
-        mutation_free = journal.get("authority") is None and operations == {} if isinstance(journal, dict) else False
+        mutation_free = (operations == {} and journal.get("authority") in (None, authority)
+                         if isinstance(journal, dict) else False)
         ambiguous = (journal.get("authority") == authority and isinstance(operations, dict)
                      and bool(operations) and all(
                          isinstance(operation, str) and isinstance(row, dict)

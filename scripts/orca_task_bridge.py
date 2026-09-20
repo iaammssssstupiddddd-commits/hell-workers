@@ -203,6 +203,7 @@ class TaskPolicy:
         self.cursor_authority = None
         self.cursor_conversation = None
         self.cursor_response = None
+        self.cursor_stage = "bootstrap"
         self.cursor_condition = threading.Condition()
 
     def text(self, value: object, *, optional: bool = False, limit: int = 32000) -> str | None:
@@ -219,7 +220,7 @@ class TaskPolicy:
             "schema": 1, "phase": self.phase, "revoked": self.revoked,
             "authority": self.authority, "capability_sha256": self.capability_hash,
             "operations": self.operations, "settled_status": self.settled_status,
-            "cursor_hooks": self.cursor_hooks,
+            "cursor_hooks": self.cursor_hooks, "cursor_stage": self.cursor_stage,
         })
 
     def terminal_current(self):
@@ -376,6 +377,7 @@ class TaskPolicy:
         return wire.mapping(reply.get("result"))
 
     def cursor_finish(self, status: str, deadline: float) -> dict:
+        self.cursor_stage = "authority_binding"
         self.await_arm()
         observed = self.cursor_authority
         authority = self.authority
@@ -384,7 +386,9 @@ class TaskPolicy:
                 or observed.get("dispatch") != authority["dispatch"]
                 or observed.get("coordinator") != authority["coordinator"]):
             raise wire.Refused("Cursor hook authority differs from the armed Dispatch")
+        self.cursor_stage = "worker_identity"
         self.current()
+        self.cursor_stage = "result_validation"
         if status == "completed":
             result = wire.decode(self.text(self.cursor_response).encode())
             if set(result) != {"outcome", "subject", "body"} or result.get("outcome") not in {"succeeded", "failed"}:
@@ -399,22 +403,26 @@ class TaskPolicy:
                     "The controller recorded no accepted task result. "
                     "The coordinator must inspect the exact Dispatch before retrying.")
         common = {"from": self.binding.terminal, "devMode": False}
+        self.cursor_stage = "heartbeat"
         self.cursor_request("orchestration.send", {
             **common, "type": "heartbeat", "subject": "Cursor B lifecycle hook",
             "payload": json.dumps({"taskId": authority["task"], "dispatchId": authority["dispatch"],
                                    "phase": "reviewing"}, separators=(",", ":")),
         }, capability=True, deadline=deadline)
+        self.cursor_stage = "follow_up_check"
         checked = self.cursor_request("orchestration.check", {
             "terminal": self.binding.terminal, "compatibilityCliCommand": "orca-ide",
         }, deadline=deadline)
         if checked.get("count") != 0 or checked.get("deliveryId") is not None:
             raise wire.Refused("Cursor B cannot settle while coordinator follow-ups are pending")
+        self.cursor_stage = "worker_done"
         done = self.cursor_request("orchestration.send", {
             **common, "type": "worker_done", "subject": subject, "body": body,
             "waitForLifecycleSettlement": True,
             "payload": json.dumps({"taskId": authority["task"], "dispatchId": authority["dispatch"],
                                    "outcome": outcome}, separators=(",", ":")),
         }, capability=True, deadline=deadline)
+        self.cursor_stage = "settled"
         return {"settled": True, "outcome": outcome,
                 "lifecycle": wire.mapping(done.get("lifecycle"))}
 
@@ -431,6 +439,8 @@ class TaskPolicy:
         try:
             if not self.cursor_hooks:
                 raise wire.Refused("Cursor hooks are disabled")
+            if self.revoked:
+                raise wire.Refused("Cursor hook bridge is revoked")
             request_id = wire.identifier(wire.mapping(request).get("id"))
             if (set(request) != {"id", "authToken", "method", "params"}
                     or request.get("method") != CURSOR_HOOK_METHOD
