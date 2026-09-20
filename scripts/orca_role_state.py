@@ -31,11 +31,16 @@ def identity(value: str) -> str:
 
 
 def valid_bridge_reconciliation(value: object) -> bool:
-    required = {"run", "task", "dispatch", "terminal", "worker_state", "session_id",
-                "session_sha256", "current_source_sha256", "reason"}
-    optional = {"exit_observation", "ambiguous_operations"}
+    required = {"run", "task", "dispatch", "terminal", "worker_state",
+                "current_source_sha256", "reason"}
+    session = {"session_id", "session_sha256"}
+    optional = {"exit_observation", "ambiguous_operations", "session_absent", *session}
     if (not isinstance(value, dict) or not required <= set(value)
             or set(value) - required - optional):
+        return False
+    has_session = session <= set(value) and "session_absent" not in value
+    absent_session = value.get("session_absent") is True and not set(value) & session
+    if not (has_session or absent_session):
         return False
     if not all(isinstance(value.get(name), str) and value[name]
                for name in ("run", "task", "dispatch", "terminal", "worker_state", "reason")):
@@ -44,10 +49,11 @@ def valid_bridge_reconciliation(value: object) -> bool:
         return False
     if len(value["reason"]) > 2000:
         return False
-    try:
-        identity(value["session_id"])
-    except (TypeError, ValueError):
-        return False
+    if has_session:
+        try:
+            identity(value["session_id"])
+        except (TypeError, ValueError):
+            return False
     if value.get("exit_observation") not in (None, "launcher_recorded", "external_terminal_exited"):
         return False
     operations = value.get("ambiguous_operations", [])
@@ -60,8 +66,9 @@ def valid_bridge_reconciliation(value: object) -> bool:
             identity(operation)
     except (TypeError, ValueError):
         return False
+    hashes = ["current_source_sha256", *(("session_sha256",) if has_session else ())]
     return all(isinstance(value.get(name), str) and re.fullmatch(r"[a-f0-9]{64}", value[name])
-               for name in ("session_sha256", "current_source_sha256"))
+               for name in hashes)
 
 
 def digest(value: dict) -> str:

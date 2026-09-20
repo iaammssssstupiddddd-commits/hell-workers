@@ -468,8 +468,8 @@ def reconcile_bridge(ticket: dict, slot: str, attempt_id: str, observed_source: 
     if not metadata_dir.is_absolute() or not metadata_dir.is_dir():
         raise ValueError("reconciliation requires an absolute Orca metadata directory")
     provider = provider_for(ticket, slot)
-    if provider != "codex" or (slot != "reviewer" and ticket.get("read_only") is not True):
-        raise ValueError("only a failed read-only Codex bridge can be reconciled")
+    if slot != "reviewer" and ticket.get("read_only") is not True:
+        raise ValueError("only a failed read-only bridge can be reconciled")
     repo = Path(ticket["repo"])
     with acquire_host(slot, inherit=False), acquire_host(workspace_slot(repo), inherit=False):
         validate_ticket(ticket)
@@ -559,7 +559,9 @@ def reconcile_bridge(ticket: dict, slot: str, attempt_id: str, observed_source: 
         runtime = prepare_runtime(slot if slot == "reviewer" else f"{slot}/tasks/{key}")
         previous = data["tasks"].get(key)
         origin = Path(previous["origin"]) if previous else repo
-        snapshot = bindings.session_snapshot(runtime, provider, origin)
+        snapshot = (bindings.session_snapshot(runtime, provider, origin)
+                    if previous or bindings.history_exists(runtime)
+                    else {"session_absent": True})
         if previous and snapshot["session_id"] != previous["session_id"]:
             raise ValueError("provider switched session during the failed bridge attempt")
         evidence = {"run": authority["run"], "task": authority["task"],

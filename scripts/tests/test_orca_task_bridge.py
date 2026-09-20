@@ -552,7 +552,7 @@ Read the two requested files without editing them.
         self.assertEqual(previous["ticket_sha256"], "1" * 64)
         self.assertNotIn("approved", json.dumps(data))
 
-    def test_interrupted_launcher_reconciles_ambiguous_send_after_dispatch_is_fenced(self):
+    def test_interrupted_cursor_launcher_reconciles_ambiguous_send_after_dispatch_is_fenced(self):
         bridge_id = str(uuid.uuid4())
         operation = str(uuid.uuid4())
         directory = self.root / bridge_id
@@ -576,24 +576,27 @@ Read the two requested files without editing them.
         observed_source = "4" * 64
         ticket = {"id": "read-only-worker", "repo": str(self.repo), "branch": "task",
                   "base": "1" * 40, "read_only": True, "allowed_directories": [],
-                  "prompt": "inspect"}
+                  "prompt": "inspect", "provider": "cursor", "complexity": "simple",
+                  "task_kind": "acceptance-probe", "complexity_reason": "read-only probe",
+                  "acceptance": "Report the inspected source without edits."}
         task_key = roles.bindings.digest({"common": str(self.repo / ".git"), "id": ticket["id"]})
-        data = {"schema": 1, "slot": "worker-a", "provider": "codex", "tasks": {},
+        data = {"schema": 1, "slot": "worker-b", "provider": "cursor", "tasks": {},
                 "last": {"attempt_id": attempt_id, "key": task_key, "phase": "starting",
                          "process_exited": False, "exit_code": None,
                          "source_before": observed_source, "terminal": HANDLE,
                          "orca_bridge": bridge_id}}
-        snapshot = {"session_id": str(uuid.uuid4()), "session_sha256": "5" * 64}
         with patch.object(roles, "acquire_host"), patch.object(roles, "validate_ticket"), \
                 patch.object(roles, "git", return_value=str(self.repo / ".git")), \
                 patch.object(roles, "fingerprint", return_value=observed_source), \
                 patch.object(roles, "prepare_runtime", return_value=self.repo / "runtime"), \
                 patch.object(roles.bindings, "read_state", return_value=data), \
-                patch.object(roles.bindings, "session_snapshot", return_value=snapshot), \
+                patch.object(roles.bindings, "history_exists", return_value=False), \
+                patch.object(roles.bindings, "session_snapshot") as snapshot, \
                 patch.object(roles.bindings, "save_state") as save, \
                 patch.object(bridge.Upstream, "load", return_value=self.runtime):
-            roles.reconcile_bridge(ticket, "worker-a", attempt_id, observed_source,
+            roles.reconcile_bridge(ticket, "worker-b", attempt_id, observed_source,
                                    "Heartbeat landed but its response was rejected", self.root)
+        snapshot.assert_not_called()
         save.assert_called_once_with(data)
         last = data["last"]
         self.assertEqual(last["phase"], "abandoned")
@@ -602,11 +605,13 @@ Read the two requested files without editing them.
         evidence = last["bridge_reconciliation"]
         self.assertEqual(evidence["exit_observation"], "external_terminal_exited")
         self.assertEqual(evidence["ambiguous_operations"], [operation])
+        self.assertIs(evidence["session_absent"], True)
+        self.assertNotIn("session_id", evidence)
         self.assertTrue(roles.bindings.valid_bridge_reconciliation(evidence))
         self.assertEqual(data["abandoned"][task_key], last)
         self.assertNotIn("approved", json.dumps(data))
         roles.bindings.save_state(data)
-        self.assertEqual(roles.bindings.read_state("worker-a", "codex"), data)
+        self.assertEqual(roles.bindings.read_state("worker-b", "cursor"), data)
 
     def test_non_ascii_auth_token_revokes_and_records_unknown_without_forwarding(self):
         session = self.wire_session()
@@ -740,10 +745,20 @@ print('isolated')
             event = {"conversation_id": "fixture-conversation", "generation_id": "fixture-generation",
                      "hook_event_name": "beforeSubmitPrompt", "cursor_version": "fixture",
                      "workspace_roots": [str(self.repo)], "user_email": None,
-                     "transcript_path": None, "prompt": "bootstrap", "attachments": []}
-            completed = subprocess.run(command, input=json.dumps(event), text=True,
-                                       capture_output=True, timeout=8, check=True)
+                     "transcript_path": None, "prompt": "bootstrap", "attachments": [],
+                     "future_controller_field": "must-not-cross-the-bridge"}
+            captured = []
+            original = session.policy.handle_cursor_hook
+
+            def capture(request, **kwargs):
+                captured.append(request)
+                return original(request, **kwargs)
+
+            with patch.object(session.policy, "handle_cursor_hook", side_effect=capture):
+                completed = subprocess.run(command, input=json.dumps(event), text=True,
+                                           capture_output=True, timeout=8, check=True)
             self.assertEqual(json.loads(completed.stdout), {"continue": True})
+            self.assertNotIn("future_controller_field", captured[0]["params"])
             policy_text = policy.read_text()
             self.assertIn("Shell(*)", policy_text)
             self.assertIn("Mcp(*:*)", policy_text)

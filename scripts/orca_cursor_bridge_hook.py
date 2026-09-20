@@ -45,9 +45,13 @@ def read_event() -> dict:
     if not isinstance(value, dict):
         raise ValueError("Cursor hook input must be an object")
     event = value.get("hook_event_name")
-    if event not in EVENT_FIELDS or value.keys() - COMMON_FIELDS - EVENT_FIELDS[event]:
+    if event not in EVENT_FIELDS:
         raise ValueError("unsupported Cursor hook event")
-    return value
+    # Cursor may add controller-owned metadata to hook payloads between CLI
+    # releases. Keep the wire contract forward-compatible without forwarding
+    # unknown values (which may contain data the bridge never requested).
+    allowed = COMMON_FIELDS | EVENT_FIELDS[event]
+    return {key: item for key, item in value.items() if key in allowed}
 
 
 def exchange(event: dict) -> dict:
