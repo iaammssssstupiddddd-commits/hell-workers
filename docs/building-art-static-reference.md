@@ -5,7 +5,7 @@
 
 `2026-09-20`のユーザー判断により、Bridgeは別件へ分離し、残る9種を先行する。
 計測専用の川は作らず、通常地形・橋・配置ruleを変更しない。旧10種の無効な結果は基準に使わない。
-以下の9種契約で再検証・基準取得する（正式結果は移行計画§9へ記録）。
+以下の9種契約で静止参照を取得済み。M1-0全体のbaseline/budget確定とは区別する（経緯は移行計画§9）。
 
 ## 固定する条件
 
@@ -84,7 +84,31 @@ python3 -m unittest scripts.tests.test_building_art_static
 python3 scripts/dev.py cargo -- test -p bevy_app@0.1.0 --lib --features profiling building_art_static
 ```
 
-## 現在の限界
+## 静止参照の実測（2026-09-20）
+
+- clean subject `353fc4cd85b7eaf88737ec36bafa909841289f08`、source
+  `84cf072b6615ba0e26eedde41c0786abfbf538f7a0ead7c25f9f44c0e068857b`。
+- native v7でCapture N×3 / 4N×3、Memory 4N×3が全て有効。登録済み独立verifierとsealも成功。
+  実adapterはIntel Arc (MTL)、Mesa 26.1.8、Vulkan / X11 / 1280×720 / DPI1 / high / immediate。
+- Capture binary `0fbecc9281f0283c383df395744d72b100b91246d12e17b823eae9210d4790a9`、
+  Memory binary `f108fb4d44dcb1a93e637a48ce00fdbaf2ddd9332f91e7d2afeef0c7357a98bb`。
+
+各3回の中央値 / MAD。これは測定成立の証拠であり、性能予算への合格判定ではない。
+
+| 指標 | N=36 | 4N=144 |
+| --- | ---: | ---: |
+| Capture p95 (ms) | 8.629081 / 0.001453 | 14.379702 / 0.774638 |
+| Capture p99 (ms) | 9.117201 / 0.008431 | 57.037860 / 1.923346 |
+| Memory peak live (bytes) | 未測定 | 671,045,869 / 770,472 |
+| Memory max RSS (KiB) | 未測定 | 1,338,420 / 6,740 |
+
+4Nのtail latencyを平均値で隠さず、raw分布と環境ばらつきの校正を予算決定へ含める。
+原本は`target/native-acceptance/building-art-static-20260920T054051Z-f4e2aa28`（2,105,344 allocated bytes）。
+ownerはbuilding-art-migration、用途は提示結果レビューとM1-0の予算校正、終了／置換／打切り時に解放する。
+元sourceでの独立検証は済ませており、旧verifier再実行のためにprimaryやbinaryを凍結し続けない。
+稼働fixtureと予算が未確定のため、新旧表示基盤の比較はまだ開始していない。
+
+## 現在の限界と無効試行の履歴
 
 - 旧10種の履歴: `2026-09-20`、clean subject `9a46751af0a92671c22718dcbc7fa6f0700ca550` のnative v2で、
   small Captureの3回すべてが準備完了前に `Bridge/0` の `(8,65)` を `NotRiverTile` として拒否した。
@@ -95,11 +119,13 @@ python3 scripts/dev.py cargo -- test -p bevy_app@0.1.0 --lib --features profilin
   有効なframe-time測定は0、medium CaptureとMemoryは未実行。基準値や性能改善率を出さない。
 - 幅5の計測専用川という案は不採用。Bridgeの問題は残り9種の進行条件にしない。
   9種の基準を全10種の基準へ読み替えず、橋の再合流時に別の比較・受入を追加する。
-- 9種版も正式値は未取得。v3のcamera初期化不一致を修正したv4は、準備完了に至らずsmall初回が300秒でtimeout。
+- v3のcamera初期化不一致を修正したv4は、準備完了に至らずsmall初回が300秒でtimeout。
   後続試行を中断して調べた結果、Spaの初期phaseがConstructingに残る不備を確認した。
   修正後のv5は準備を通過しsmall初回の30/60秒計測を終えたが、共通validatorが旧Soul proxy各15体を要求して不合格。
-  現行方式を明示した診断再計算では他の全検査が通った。dispatchを修正し、旧方式と旧proxy混入の拒否を回帰testする。
-  無効v5をbaselineへ読み替えず、修正後のclean subjectで再実行する。
+  現行方式を明示した診断再計算では他の全検査が通った。dispatchを修正し、旧方式と旧proxy混入の拒否を回帰test済み。
+- v6はCapture6回・Memory後続2回が有効だったが、Memory初回でcamera scaleが5.0→4.9に変わり全体不合格。
+  Bevyのzoom入力経路と整合するが入力原本がないため原因は断定しない。同一source・条件のv7では全9回で再発なし。
+  無効試行を合格へ読み替えず、上表はv7だけから集計した。計測windowへの入力を避け、条件変化の拒否は維持する。
 - 回転、Dream粒子、稼働中の状態遷移、搬送・生産継続、save/load、preview、GPU draw-call詳細は未測定。
 - Mixerは初期Refining状態を停止保持する。入力や進捗を毎frame補充・巻戻しして稼働負荷を捏造しない。
 - この静止参照だけではM1-0は閉じない。稼働fixtureと基盤budgetの確定前に新しい表示基盤を導入しない。

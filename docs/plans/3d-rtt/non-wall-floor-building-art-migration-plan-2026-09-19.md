@@ -567,7 +567,7 @@ legacy-controlはprofiling専用の明示modeとし、asset欠落を故意に起
 - 全10種・Rust shapeとの照合、9種のrole・consumer・単位契約、非対象4画像hash、Tank寸法訂正、Door g7継承を追加。
 - Tank/Mixerのidentity原本、neutral albedo、計4 role GLB、計5状態PNG、projectionとexport後検査を実装。
   `build_building_clay.py build/verify`で既存scene/export/Khronos gateを再利用する。詳細は`docs/blender-setup.md`。
-- 次の作業: 9種fixture・camera・Spa初期化の修正はcommit済み。現行描画方式の検証dispatchを修正し、静止実機参照を再取得する。
+- 次の作業: 9種の静止実機参照を取得済み（v7: Capture6 / Memory3、独立検証成功）。稼働fixtureと予算校正へ進む。
   通常ゲームの橋／地形ruleは変更しない。稼働fixture・共通runtime schema詳細は残る。
   baseline sourceと基盤budgetをfreezeする前にruntime表示基盤を変えない。
 - Rustのprofiling専用経路のみ変更。通常表示・repo assets・canonical・Help本文は未変更。外部原本は未承認stagingのみ。
@@ -582,7 +582,7 @@ legacy-controlはprofiling専用の明示modeとし、asset欠落を故意に起
 ### ブロッカー/注意点
 
 - 正式baselineは新しい計測fixtureを含むclean subjectが必要。ユーザーは検証後のcommitと計測続行を許可済み。
-  `c3733fc1`と`9a46751a`で実行したが、後述の配置失敗で正式値は0。commitをM1-0の完了や性能baselineと扱わない。
+  `c3733fc1`と`9a46751a`の旧試行は配置失敗で有効測定0。後述v7で静止参照は得たが、M1-0全体の完了ではない。
 - 現行mapgenは幅2〜4の川、Bridge validatorは2×5全セルが川であることを要求する。
   fixtureの旧固定川定数に基づく配置がnativeで拒否された。ユーザーは計測専用地形案を却下し、橋以外を先行するよう指示済み。
   橋の修正は別件であり、9種の制作・表示接続・受入を停止する理由にしない。
@@ -774,6 +774,25 @@ canonical・runtime asset・他sessionの原本／検証cacheは変更してい�
   診断完了後、不要job `target/native-acceptance/building-art-static-20260920T043139Z-6180a892`を削除（復元不可）。
   204,800→0 allocated bytes、filesystem availableは661,578,760,192→661,579,190,272 bytes（共有差）。
   finalize/storage check成功。primary checkout/Cargo cacheは次の再計測に継続使用する。
+
+### 9種の静止実測取得（2026-09-20）
+
+- validator修正は`353fc4cd85b7eaf88737ec36bafa909841289f08`。focused Python 11 testと変更別contracts/tooling成功。
+  検証base `43d4471398421be3cde8c7803e0d1dec43e2291d`、tested source
+  `333417949d3427f562f19b3c1c61a18230cbe536accddc05e3eb007e637fbef3`。Help: No impact。
+- v6はCapture6回・Memory2回が有効、Memory初回だけcamera scale 5.0→4.9で拒否しbatch invalid。
+  入力経路と整合するが入力自体は未記録。sourceや検査条件を変更せずv7を実行し、全9回で再発なし。
+- v7は同commit、source `84cf072b6615ba0e26eedde41c0786abfbf538f7a0ead7c25f9f44c0e068857b`。
+  Capture6回→Memory3回が有効で、登録済み独立verify / seal / storage checkが成功。
+  実機条件・binary identity・中央値/MADは[静止参照仕様](../../building-art-static-reference.md#静止参照の実測2026-09-20)へ集約。
+- v6診断は終了。owned process終了と原本に固有code/assetがないことを確認後、
+  `target/native-acceptance/building-art-static-20260920T050353Z-3d819863`を削除（復元不可、1,671,168→0 allocated bytes）。
+  filesystem availableは660,494,188,544→660,494,188,544 bytes（共有filesystemの観測差）。
+  v7原本2,105,344 bytesは結果レビュー／予算校正の具体的用途で保持。primary Cargo cacheも修正・継続開発用に保持する。
+- 次の実装は通常の再割当・給水・搬出を含む稼働fixture。Mixerは1回生産でDoneになり、材料容量5・泥容量10のため、
+  停止解除だけでは90秒の継続負荷にならない。worker/occupant/粒子の負荷検査・除外条件を測定前に定義する。
+  稼働参照・ばらつき校正・基盤budgetをfreezeするまでM1-aへ進めず、静止passを生産性能・アート承認へ読み替えない。
+  Bridgeは別件のまま。通常表示・asset・地形・Help本文は変更していない。
 
 ### Definition of Done
 
