@@ -3,25 +3,27 @@
 `building-art-static` は表示基盤を変更する前の比較入力。新アートの採用や稼働中の生産性能を証明するものではない。
 移行全体と未完条件は[移行計画](plans/3d-rtt/non-wall-floor-building-art-migration-plan-2026-09-19.md)が所有する。
 
-**現在は配置前提の不整合で停止中。正式な性能基準は未取得。** 下記は実装した検査契約であり、
-現行mapgen上での成立を受け入れた仕様ではない。計測専用地形の採否を確認するまで再計測しない。
+`2026-09-20`のユーザー判断により、Bridgeは別件へ分離し、残る9種を先行する。
+計測専用の川は作らず、通常地形・橋・配置ruleを変更しない。旧10種の無効な結果は基準に使わない。
+以下の9種契約で再検証・基準取得する（正式結果は移行計画§9へ記録）。
 
 ## 固定する条件
 
 | 項目 | 契約 |
 | --- | --- |
-| fixture | `building-art-static-v1`、seed `20260920` |
-| 対象 | Tank / MudMixer / RestArea / SoulSpa / WheelbarrowParking / SandPile / BonePile / Door / OutdoorLamp / Bridge |
-| N / 4N | 各4棟 / 16棟、計40 / 160棟。実Soul 15 / 60体、Familiar 0体 |
+| fixture / native profile | `building-art-static-nine-v2` / `building-art-static-nine-reference-v2`、seed `20260920` |
+| 対象 | Tank / MudMixer / RestArea / SoulSpa / WheelbarrowParking / SandPile / BonePile / Door / OutdoorLamp |
+| 除外 | Bridge。配置・地形の問題は別途解決し、再合流時の専用基準と回帰確認が必要 |
+| N / 4N | 各4棟 / 16棟、計36 / 144棟。実Soul 15 / 60体、Familiar 0体 |
 | 支持物 | Doorごとに既存Wall 2枚とFloor 2枚。Tankごとに既存companion 2セル。対象建物数には含めない |
 | 環境 | GPU Vulkan、X11、1280×720、DPI 1、RtT high、novsync、UI dialog/dashboard hidden |
 | 時間 | Virtual Time停止、実時間warmup 30秒＋計測60秒、各3回、preflight 0 |
 | カメラ | grid `(46,37)`、scale 5。Nと4Nで位置・縮尺を変えない |
 | Door | 現行承認済みgeneration 7、Closed、東西支持壁 |
 
-列は `x=8+5*ordinal`、建物種ごとの行は `y=8+5*row`。Bridgeは旧固定川の定数を前提に `y=65..69` を指定している。
-通常のplacement geometry・配置validatorを通し、地形を書き換えないため、現行mapgenではこの配置に失敗する。
-Nは4Nの最初の4列と一致する。
+列は `x=8+5*ordinal`、建物種ごとの行は `y=8+5*row`。9種の座標・状態・cameraは旧案から維持する。
+通常のplacement geometry・配置validatorを通し、地形を書き換えない。生成済みの実WorldMapを使う配置testも行う。
+Nは4Nの最初の4列と一致する。Bridgeの混入と旧contract IDを拒否し、橋の成功を主張しない。
 ordinalを4で割った余りに応じて、次の状態を繰り返す。
 
 | 状態 | 0 | 1 | 2 | 3 |
@@ -44,7 +46,8 @@ TaskWorkers / RestAreaOccupants / StoredItemsを直接偽造せず、workerのAs
   完了ポップアップ・bounceだけは準備時に一度終了する。Virtual Time停止下で永続化させない。
   初期化完了後にタスク・水・人数・通電を再設定せず、完了演出の再出現も修復せず失敗扱いにする。
 - `PostUpdate`のvisibility確定後、owner/占有/支持物/companion/状態/cameraを検査する。
-  現行の共有mesh 3種・対象3D root `6N`・対象foreground `4N`と、実resident handle・可視性を要求する。
+  各kindをk棟として、現行の共有mesh 2種・対象3D root `5k`・対象foreground `4k`と、実resident handle・可視性を要求する。
+  対象は`9k`、支持Wall/Floorを含むBuilding全数は`13k`。Bridgeのmeshを対象poolへ計上しない。
   準備完了前のasset待ちは許すが、完了後の不一致・消失はエラー終了。
 - `building_art_static.json`に初期状態と同じ不変条件を最後まで満たした証拠を出す。
   Python側は独立した固定layout/state期待値、厳密JSON、SHA-256を検査する。自己申告したhashだけでは通らない。
@@ -76,16 +79,15 @@ python3 scripts/dev.py cargo -- test -p bevy_app@0.1.0 --lib --features profilin
 
 ## 現在の限界
 
-- `2026-09-20`、clean subject `9a46751af0a92671c22718dcbc7fa6f0700ca550` のnative v2で、
+- 旧10種の履歴: `2026-09-20`、clean subject `9a46751af0a92671c22718dcbc7fa6f0700ca550` のnative v2で、
   small Captureの3回すべてが準備完了前に `Bridge/0` の `(8,65)` を `NotRiverTile` として拒否した。
   `hw_world/src/river/channel.rs`の現行生成は幅2〜4、Bridgeは2×5全セルがRiverであることを
   `hw_ui/src/selection/placement/validation.rs`で要求する。旧`RIVER_Y_MIN/MAX`は生成済み地形の保証ではない。
   layout単体testは数・重複・状態を検査するが、実mapgenとの成立を証明していなかった。
-- X11 window生成とIntel Arc/Vulkan adapterのログは得たが、window/readiness原本がなくrenderer受入には使えない。
+- 同旧試行ではX11 window生成とIntel Arc/Vulkan adapterのログは得たが、window/readiness原本がなくrenderer受入には使えない。
   有効なframe-time測定は0、medium CaptureとMemoryは未実行。基準値や性能改善率を出さない。
-- 次の判断案は、通常の地形・橋・配置validatorを変更せず、明示profiling fixture専用の幅5の川を用意すること。
-  採用時はterrain期待値・生成済みWorldMapとの配置test・独立原本検査を更新して新しいclean subjectで再計測する。
-  通常ゲームの地形／橋の仕様修正は本アート移行とは別の判断とし、暗黙に実施しない。
+- 幅5の計測専用川という案は不採用。Bridgeの問題は残り9種の進行条件にしない。
+  9種の基準を全10種の基準へ読み替えず、橋の再合流時に別の比較・受入を追加する。
 - 回転、Dream粒子、稼働中の状態遷移、搬送・生産継続、save/load、preview、GPU draw-call詳細は未測定。
 - Mixerは初期Refining状態を停止保持する。入力や進捗を毎frame補充・巻戻しして稼働負荷を捏造しない。
 - この静止参照だけではM1-0は閉じない。稼働fixtureと基盤budgetの確定前に新しい表示基盤を導入しない。

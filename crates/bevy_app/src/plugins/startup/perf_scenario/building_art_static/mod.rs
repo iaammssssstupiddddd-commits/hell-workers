@@ -239,7 +239,7 @@ fn inspect(params: &InspectParams) -> Result<Option<Value>, String> {
         return Ok(None);
     }
     let copies = layout::copies(params.config.size());
-    if params.buildings.iter().count() != copies * 14 || params.state.owners.len() != copies * 10 {
+    if params.buildings.iter().count() != copies * 13 || params.state.owners.len() != copies * 9 {
         return Err("target/support building inventory differs".into());
     }
     let mut visuals = HashMap::<Entity, Vec<_>>::new();
@@ -294,12 +294,10 @@ fn inspect(params: &InspectParams) -> Result<Option<Value>, String> {
         for (_, mesh, material, visibility) in owner_visuals {
             let expected_mesh = match spec.kind {
                 BuildingType::Door => &door_assets.meshes[0],
-                BuildingType::Bridge => &params.handles.bridge_mesh,
                 _ => &params.handles.equipment_2x2_mesh,
             };
             let expected_material = match spec.kind {
                 BuildingType::Door => door_material,
-                BuildingType::Bridge => &params.handles.bridge_material,
                 BuildingType::Tank if spec.quarter() == 1 => &params.handles.tank_partial_material,
                 BuildingType::Tank if spec.quarter() >= 2 => &params.handles.tank_full_material,
                 BuildingType::MudMixer if spec.quarter() >= 2 => {
@@ -432,7 +430,7 @@ fn inspect(params: &InspectParams) -> Result<Option<Value>, String> {
                 "anchor": spec.anchor, "tiles": spec.tiles, "center": [spec.center.x, spec.center.y], "state": state}));
         }
     }
-    if active_meshes.len() != 3 {
+    if active_meshes.len() != 2 {
         return Err("legacy shared mesh count differs".into());
     }
     let Some(records) = records else {
@@ -440,7 +438,7 @@ fn inspect(params: &InspectParams) -> Result<Option<Value>, String> {
     };
     Ok(Some(
         json!({"records": records, "target_count": params.state.specs.len(),
-        "target_structural_roots": layout::copies(params.config.size()) * 6,
+        "target_structural_roots": layout::copies(params.config.size()) * 5,
         "target_foreground_owners": layout::copies(params.config.size()) * 4,
         "target_active_unique_meshes": active_meshes.len(), "souls": params.state.actors.len(), "completion_effects": 0}),
     ))
@@ -461,7 +459,7 @@ impl BuildingArtStaticState {
             .as_ref()
             .ok_or_else(|| std::io::Error::other("missing fixture evidence"))?;
         let bytes = serde_json::to_vec(evidence)?;
-        let summary = json!({"schema_version": 1, "contract_id": "building-art-static-v1",
+        let summary = json!({"schema_version": 1, "contract_id": "building-art-static-nine-v2",
             "evidence_kind": "paused-static-only", "active_simulation_evidence": false,
             "camera_scale": layout::CAMERA_SCALE, "stable_frames": self.stable_frames,
             "layout_sha256": hw_infra::lighting::digest_hex(&Sha256::digest(&bytes).into()), "initial": evidence, "final": evidence});

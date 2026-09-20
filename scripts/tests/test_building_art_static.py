@@ -20,11 +20,11 @@ import building_art_static_acceptance as acceptance
 
 
 def sidecar(copies):
-    evidence = {"records": expected_records(copies), "target_count": copies * 10,
-                "target_structural_roots": copies * 6, "target_foreground_owners": copies * 4,
-                "target_active_unique_meshes": 3, "souls": copies // 4 * 15, "completion_effects": 0}
+    evidence = {"records": expected_records(copies), "target_count": copies * 9,
+                "target_structural_roots": copies * 5, "target_foreground_owners": copies * 4,
+                "target_active_unique_meshes": 2, "souls": copies // 4 * 15, "completion_effects": 0}
     digest = hashlib.sha256(json.dumps(evidence, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
-    return {"schema_version": 1, "contract_id": "building-art-static-v1", "evidence_kind": "paused-static-only",
+    return {"schema_version": 1, "contract_id": "building-art-static-nine-v2", "evidence_kind": "paused-static-only",
             "active_simulation_evidence": False, "camera_scale": 5.0, "stable_frames": 100,
             "initial": evidence, "final": copy.deepcopy(evidence), "layout_sha256": digest}
 
@@ -39,6 +39,20 @@ class BuildingArtStaticTests(unittest.TestCase):
     def test_exact_small_and_medium(self):
         for size, copies in (("small", 4), ("medium", 16)):
             self.assertEqual(self.check_value(sidecar(copies), size=size)[1], [])
+            records = expected_records(copies)
+            self.assertEqual(len(records), copies * 9)
+            self.assertEqual(len({row["kind"] for row in records}), 9)
+            self.assertNotIn("Bridge", {row["kind"] for row in records})
+
+    def test_old_ten_kind_contract_and_bridge_injection_are_rejected(self):
+        value = sidecar(4)
+        value["contract_id"] = "building-art-static-v1"
+        self.assertTrue(self.check_value(value)[1])
+        value = sidecar(4)
+        value["initial"]["records"][0]["kind"] = "Bridge"
+        value["final"] = copy.deepcopy(value["initial"])
+        value["layout_sha256"] = hashlib.sha256(json.dumps(value["initial"], sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+        self.assertTrue(self.check_value(value)[1])
 
     def test_corruption_and_false_active_claim_are_rejected(self):
         for key, invalid in (("schema_version", True), ("active_simulation_evidence", True), ("stable_frames", True),

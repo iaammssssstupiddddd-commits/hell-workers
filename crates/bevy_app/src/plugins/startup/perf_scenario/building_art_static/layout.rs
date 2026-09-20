@@ -8,7 +8,8 @@ use super::super::PerfScenarioSize;
 use crate::interface::selection::placement_geometry::building_geometry;
 
 pub(super) const CAMERA_SCALE: f32 = 5.0;
-pub(super) const KINDS: [BuildingType; 10] = [
+// Bridge placement/worldgen is a separate issue; it must not gate this reference.
+pub(super) const KINDS: [BuildingType; 9] = [
     BuildingType::Tank,
     BuildingType::MudMixer,
     BuildingType::RestArea,
@@ -18,7 +19,6 @@ pub(super) const KINDS: [BuildingType; 10] = [
     BuildingType::BonePile,
     BuildingType::Door,
     BuildingType::OutdoorLamp,
-    BuildingType::Bridge,
 ];
 
 #[derive(Clone, Debug)]
@@ -74,14 +74,7 @@ pub(super) fn layout(size: PerfScenarioSize) -> Vec<Specimen> {
         .flat_map(|(row, kind)| {
             (0..copies(size)).map(move |ordinal| {
                 let x = 8 + i32::try_from(ordinal).expect("bounded column") * 5;
-                let anchor = (
-                    x,
-                    if kind == BuildingType::Bridge {
-                        RIVER_Y_MIN
-                    } else {
-                        8 + i32::try_from(row).expect("bounded row") * 5
-                    },
-                );
+                let anchor = (x, 8 + i32::try_from(row).expect("bounded row") * 5);
                 let geometry = building_geometry(kind, anchor, RIVER_Y_MIN);
                 Specimen {
                     ordinal,
@@ -133,7 +126,8 @@ mod tests {
     fn exact_inventory_and_disjoint_footprints_include_supports_and_companions() {
         for size in [PerfScenarioSize::Small, PerfScenarioSize::Medium] {
             let specs = layout(size);
-            assert_eq!(specs.len(), copies(size) * 10);
+            assert_eq!(specs.len(), copies(size) * 9);
+            assert!(!KINDS.contains(&BuildingType::Bridge));
             let mut cells = HashSet::new();
             for spec in &specs {
                 for &(x, y) in &spec.tiles {
@@ -169,9 +163,7 @@ mod tests {
             let yards = yards(size);
             for s in &specs {
                 assert!(site().contains(s.center));
-                if s.kind != BuildingType::Bridge {
-                    assert_eq!(yards.iter().filter(|y| y.contains(s.center)).count(), 1);
-                }
+                assert_eq!(yards.iter().filter(|y| y.contains(s.center)).count(), 1);
             }
         }
     }

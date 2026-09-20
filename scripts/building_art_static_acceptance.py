@@ -20,7 +20,7 @@ from perf_tool.artifacts import frame_summary, read_frames, validate_run  # noqa
 from perf_tool.execution import read_native_memory, read_resource_usage  # noqa: E402
 from perf_tool.model import Case  # noqa: E402
 
-PROFILE = "building-art-static-reference-v1"
+PROFILE = "building-art-static-nine-reference-v2"
 MATRIX = (("capture", "small", 15), ("capture", "medium", 60), ("memory", "medium", 60))
 SEED = 20260920
 

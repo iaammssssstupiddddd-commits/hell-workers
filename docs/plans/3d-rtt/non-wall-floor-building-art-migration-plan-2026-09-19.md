@@ -15,7 +15,7 @@
 | 調査基点 | 初稿: `94ccdf23`。自己レビュー: `43ca0cb1`の計画と現行実装（文書変更のみ） |
 
 本書は全10種の移行順、制作物、表示接続、受入条件を所有する。M0の制作・検査toolingと先行無地原本を実装済み。
-M1-0に向けた静止計測fixtureを検証・commitしたが、nativeでBridgeと現行川生成の不整合を検出し方針確認待ち。
+M1-0のnativeでBridgeと現行川生成の不整合を検出した。ユーザー判断により橋は別途解決し、残る9種を先行する。
 runtime表示接続・正式baseline完了・ゲーム内アート受入は未実施。
 個別意匠の最終判断はゲーム内の候補画像で行い、本計画の作成をアート受入やreleaseとして扱わない。
 
@@ -36,6 +36,10 @@ role別GLB、active/pendingの切替、再利用ghostのanchor復元、移動依
 `BuildingType::ALL`のうちWall / Floorを除く10種。Doorは既存productionの適合監査と不足経路の修正を行う。
 建築用asset原本、モデル、テクスチャ、2D画像、preview、asset読み込み・切替・fallback、表示用状態、検証用scenarioを含む。
 TankのBucketStorage、Parkingの実物の猫車、休憩者やSpa workerは既存entityを維持し、表示の位置・重なりを確認する。
+
+`2026-09-20`の進行範囲: **Bridge以外の9種を先行**。Bridgeの地形／配置問題と美術導入は別の着手単位へ保留する。
+計測専用の川を作る案は不採用。以下の全10種の契約表は再合流時の要件を保持するが、橋の完了を先行9種の依存条件にしない。
+先行基盤のruntime接続は新規設備4種＋小物4種、Doorは既存経路の監査。Bridgeのfactory/transform/material/previewは従来経路を維持する。
 
 ### 非対象（Out of Scope）
 
@@ -299,7 +303,7 @@ maskは全16通りをtestし、各slotのlocal位置も同じshapeの中心offse
 
 ## 5. マイルストーン
 
-推奨順は **M0 → M1 → M2 → M3 → M4 → M5 → M6**。
+先行順は **M0 → M1 → M2 → M3 → M4-Door → M5 → M6（9種）**。M4-Bridgeは別件解決後に再合流する。
 M2の2設備で制作・動作・preview・releaseまで一巡させ、その確定した方法を後続へ適用する。
 各群を受入後に独立導入できるようにし、全10種の制作が終わるまで先行群を未releaseに留めない。
 
@@ -309,13 +313,14 @@ M2の2設備で制作・動作・preview・releaseまで一巡させ、その確
 | --- | --- | --- |
 | M0-a 現行契約 | 本計画 | 全10種のshape・状態・consumer一覧、対象外画像hash。Tank寸法の文書訂正 |
 | M0-b 先行仕様 | M0-a | Tank/Mixerのrole契約・無地案、共通schemaのfield定義、比較fixtureと予算項目・決定根拠 |
-| M1-0 基準取得 | M0-b | 新表示処理を含まない共通profiling fixtureだけを先行導入・検証。baseline sourceを記録し、基盤予算を候補実装前にfreeze |
+| M1-0 基準取得 | M0-b | Bridgeを除く9種の共通profiling fixtureだけを先行導入・検証。baseline sourceを記録し、基盤予算を候補実装前にfreeze |
 | M1-a 読み込み | M1-0 | schema validatorとloader、authority、active/pendingのunit test。新assetはまだ通常起動へ公開しない |
 | M1-b 表示接続 | M1-a | root/part factory・共通descriptor・全consumer・reset。従来fallbackの実画面同等性 |
 | M1-c 導入経路 | M1-b | export/projection/promotion/rollback dispatch、新設備recipe、基盤だけの前後比較。正式asset承認はまだしない |
 | M2 Tank/Mixer | M1-c | 2種のゲーム内無地判定→数値fixture固定→描線→全状態→候補受入→許可後release |
-| M3 / M4 / M5 | M2で制作経路確定 | 各群で同じ順を反復。M3→M4→M5を推奨するが、相互の未制作assetには依存させない |
-| M6 混在close | 各群releaseとDoor差分処置 | 全10種の混在回帰、累積資源・性能、恒久仕様同期、保存管理close |
+| M3 / M4-Door / M5 | M2で制作経路確定 | 各群で同じ順を反復。橋の未解決をDoor・小物の着手条件にしない |
+| M4-Bridge（保留） | 別件の地形／配置問題解決、Bridge専用基準 | 橋の制作・lifecycle・性能受入。9種の結果を流用して完了にしない |
+| M6 先行混在close | 9種のreleaseとDoor差分処置 | 9種の混在回帰、累積資源・性能、恒久仕様同期。橋の未完・再合流条件を明記 |
 
 各実装単位はcode・test・必要なdocsをそろえて区切る。コードの導入と未承認assetの通常版公開を同じ操作にしない。
 M1では全9種の美術制作や専用systemを先作りせず、kind別role表を共通基盤へ接続するところまでに限定する。
@@ -371,6 +376,7 @@ M1では全9種の美術制作や専用systemを先作りせず、kind別role表
 
 - 変更内容: 2×5固定橋のモデル・texture・previewを制作。Doorはg7を制作仕様へ照合し、旧カタログ画像をproductionへ接続。
 - 変更ファイル: Bridge原本・assetset、factory/transform/preview入口、DoorのUI画像解決、関連仕様。不適合がある場合だけdoorset revision。
+- 実施順: Door監査を先行。Bridgeの以下2項目は別件解決後まで保留し、Doorの完了条件と分離する。
 - 完了条件:
   - [ ] 着色前にBridgeの両岸接続、橋端／中央でのSoul通過、隣接橋を確認し高さを固定。完成bounceも確認し、actor height変更を前提にしない。
   - [ ] Bridgeの通常建設／Instant Build／施工cancel／load／解体後の川の通行復元が既存ruleと一致。
@@ -390,6 +396,9 @@ M1では全9種の美術制作や専用systemを先作りせず、kind別role表
 - 検証: 画像役割の分離・power状態のfocused test、密集時・壁/Soul付近・明暗場所のactual-window確認。2Dの常時前景を3D depth対応済みと扱わない。
 
 ### M6: 全10種の共存確認・文書同期・close
+
+まずBridgeを除く9種で混在・累積比較を閉じる。下記全10種条件のうちBridge分は未完として再合流時へ残し、
+9種の先行導入を妨げない。橋の再合流では通常配置成立、専用baseline、橋と先行9種の混在回帰を追加する。
 
 - 変更内容: 通常authorityの同一現場に全10種と現行Wall/Floor/Soulを置き、画風・識別・preview・lifecycleを確認。
 - 変更ファイル: `docs/building.md`、`docs/art-style-criteria.md`、`docs/assets_workflow.md`、`docs/blender-setup.md`、`docs/rendering-performance.md`、必要なrest/energy/save仕様・crate README・Help、本計画と索引。
@@ -483,7 +492,8 @@ Doorを改変しない場合は、新規gallery内の混在確認と変更した
 ### 性能と資源の予算
 
 M0で新profileのN/4N分布、停止・稼働割合、画面内面積、warmup/measurement、比較方式を固定する。
-初期fixture案は全10種各4棟のN=40、各16棟の4N=160とし、Bridgeやcompanionを含め合法配置できる範囲へ確定する。
+先行fixtureはBridgeを除く9種各4棟のN=36、各16棟の4N=144とする。companion・支持壁床は別集計。
+`building-art-static-nine-v2`を旧10種の無効な契約から分離し、現行生成地形と通常validatorで成立を確認する。
 静止galleryに加え、Mixer稼働・Spa区画・Rest粒子を含む動作caseを設ける。停止中だけの測定を動作時へ一般化しない。
 動作caseの4棟blockはTank=Empty/Partial/Full/Full、Mixer=Idle/Idle/Active/Active、
 Rest occupants=0/1/capacity/0、Spa mask=0/1/3/15、Lamp=off/off/on/onを初期案とする。
@@ -511,6 +521,8 @@ legacy-controlはprofiling専用の明示modeとし、asset欠落を故意に起
 
 全10種を完成済み（SpaはOperational）で各k棟置いたとき、建物用3D rootは`6k`、productionの描画mesh entityは`12k`
 （新設備のchild `11k`＋Door root `k`）が初期構成の期待値。fallbackでは描画mesh entity `6k`。
+先行9種ではそれぞれ`5k`、`11k`（新設備child `10k`＋Door root `k`）、fallback `5k`へ読み替える。
+基盤比較・先行累積比較は9種同士で固定し、橋を追加した負荷と直接比較しない。
 水面非表示やslot消灯でも割当数は変わらない。4種の2D owner、companion、Soul、粒子、壁床は別集計する。
 この期待値はroot/part増殖の検査であり、visible drawや総frame負荷の見積もりではない。
 
@@ -555,7 +567,7 @@ legacy-controlはprofiling専用の明示modeとし、asset欠落を故意に起
 - 全10種・Rust shapeとの照合、9種のrole・consumer・単位契約、非対象4画像hash、Tank寸法訂正、Door g7継承を追加。
 - Tank/Mixerのidentity原本、neutral albedo、計4 role GLB、計5状態PNG、projectionとexport後検査を実装。
   `build_building_clay.py build/verify`で既存scene/export/Khronos gateを再利用する。詳細は`docs/blender-setup.md`。
-- 次の作業: 計測専用の幅5の川を採用するかユーザーへ確認し、fixture修正・生成地形との配置test・検証・commit後に静止実機参照を取得する。
+- 次の作業: 橋を除く9種fixtureへ更新し、生成地形との配置test・検証・commit後に静止実機参照を取得する。
   通常ゲームの橋／地形ruleは変更しない。稼働fixture・共通runtime schema詳細は残る。
   baseline sourceと基盤budgetをfreezeする前にruntime表示基盤を変えない。
 - Rustのprofiling専用経路のみ変更。通常表示・repo assets・canonical・Help本文は未変更。外部原本は未承認stagingのみ。
@@ -572,7 +584,8 @@ legacy-controlはprofiling専用の明示modeとし、asset欠落を故意に起
 - 正式baselineは新しい計測fixtureを含むclean subjectが必要。ユーザーは検証後のcommitと計測続行を許可済み。
   `c3733fc1`と`9a46751a`で実行したが、後述の配置失敗で正式値は0。commitをM1-0の完了や性能baselineと扱わない。
 - 現行mapgenは幅2〜4の川、Bridge validatorは2×5全セルが川であることを要求する。
-  fixtureの旧固定川定数に基づく配置がnativeで拒否された。計測専用地形の追加か別scopeのゲーム仕様修正か、判断前に進めない。
+  fixtureの旧固定川定数に基づく配置がnativeで拒否された。ユーザーは計測専用地形案を却下し、橋以外を先行するよう指示済み。
+  橋の修正は別件であり、9種の制作・表示接続・受入を停止する理由にしない。
 - 静止参照のnative helperを追加したが、全設備の美術・稼働受入recipeとruntime asset schemaは未実装。
   既存Wall/Door recipeや静止計測を設備の受入済みへ読み替えない。
 - 新root形式はroot数だけの既存監査では不十分。visible part、材質、layer、asset readinessまで調べる。
@@ -685,8 +698,8 @@ canonical・runtime asset・他sessionの原本／検証cacheは変更してい�
   Bridgeの2×5全セルRiver条件とfixture配置が不整合。単体layout検査だけでは実地形との成立を確認できていなかった。
 - X11 window生成・Intel Arc/Vulkan adapterログは診断情報だけ。window/readiness原本を得ておらずrenderer受入ではない。
   frame-time有効測定0、medium CaptureとMemory未実行、baseline・budget未確定。新表示基盤は変更しない。
-- 推奨する次の判断は明示profiling fixture専用の幅5の川。通常ゲームの地形／橋／配置ruleは対象外として保持する。
-  ユーザーの方針確認後、terrain検査と実WorldMapの配置testを含めて修正・再検証し、新しいclean subject/jobで計測する。
+- 当時の提案だった計測専用の幅5の川はユーザー判断で不採用。橋は別途解決し、9種を先行する。
+  通常ゲームの地形／橋／配置ruleは変更しない。旧jobを再開せず9種契約の新subject/jobで計測する。
 - v2は`invalid`でseal、使用中processと固有成果物がないことを確認してjobを削除、finalize/storage check成功。
   削除rootはprimaryの`target/native-acceptance/`配下の次の2つ（復元不可、成果・失敗理由は本書へ集約）:
 
@@ -697,9 +710,23 @@ canonical・runtime asset・他sessionの原本／検証cacheは変更してい�
   共有filesystemの差は他の書込み・圧縮等を含むため、job削除による空き容量増加とは主張しない。
 - 保持: `/home/satotakumi/projects/hell-workers`の同一checkout/Cargo target。専用worktree・binary copyは作成していない。
   hold=`building-art-static-reference-review`、owner=`building-art-migration`、consumer=`building-art-static-reference-v1`。
-  次は方針確認後のfixture修正・差分ビルド・再計測。accept/abandonと修正・レビュー完了まで保持する。
+  次は9種fixture修正・差分ビルド・再計測。accept/abandonと修正・レビュー完了まで保持する。
   primary台帳の実測値は297,874,731,008 allocated bytes（共有primary全体であり新規専用消費量ではない）。
   通常開発cacheの寿命と他sessionのholdは変更しない。
+
+### 9種先行への切替（2026-09-20）
+
+- `building-art-static-nine-v2` / native profile `building-art-static-nine-reference-v2`へ改訂。
+  対象36/144棟、3D root `5k`、foreground `4k`、対象の共有mesh 2種。9種の座標・状態・camera・Soul数は維持。
+  Bridgeの混入と旧10種contractを拒否する。通常地形・橋のvalidator・runtime表示・assetは未変更。
+- 実`generate_world_layout(20260920)`をWorldMapへ反映し、N/4Nとも通常配置validator・支持物・companion検査が通るtestを追加。
+  Rust focused 5件、Python focused 10件が成功。旧10種の失敗を新契約の結果に読み替えない。
+- Help review: **No impact**。`profiling` feature＋明示`BuildingArtStatic`入力からだけ到達するsetup/inspectと独立検証の対象変更。
+  通常プレイヤーの建設条件・地形・描画・保存・Help本文のconsumerは変更していない。
+- rust-analyzerはprofiling専用fileにerror/warning 0、default featureで対象外の`unlinked-file` hintあり。
+  profilingの検証は実compiler・focused test・Clippyで行う。変更別全体gateとnativeの結果は完了時に追記する。
+- 同じprimary checkout/targetを修正・計測に再利用し、新しい専用worktreeやbinary copyは作らない。
+  保持owner/consumer/release_whenは上記review holdを継続し、次の作業を9種基準取得へ更新した。
 
 ### Definition of Done
 
@@ -720,3 +747,4 @@ canonical・runtime asset・他sessionの原本／検証cacheは変更してい�
 | `2026-09-20` | `Codex` | M0のshape/role/保護画像契約、先行2種の無地原本生成・GLB/PNG検査・13 testを実装。stagingのみ。runtimeとM1-0以降は未着手 |
 | `2026-09-20` | `Codex` | M1-0用の静止fixture、独立sidecar検証、Capture→Memory helperを追加。通常表示とassetは不変、稼働fixture・budget・実測は未完 |
 | `2026-09-20` | `Codex` | 検証・commit後のnativeでBridgeと現行川生成の不整合を検出。正式値なし、無効job整理完了、計測専用地形の方針確認待ち |
+| `2026-09-20` | `Codex` | ユーザー判断で計測専用川を不採用とし、Bridgeを別件へ分離。残る9種の基準・導入・混在closeを先行、Doorを橋の依存から分離 |

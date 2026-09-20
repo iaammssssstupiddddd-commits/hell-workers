@@ -175,6 +175,12 @@ fn validate_layout(
     let read = WorldMapRef(map);
     let mut occupied = HashSet::new();
     for spec in specs {
+        if !layout::KINDS.contains(&spec.kind) {
+            return Err(format!(
+                "kind excluded from nine-building reference: {:?}",
+                spec.kind
+            ));
+        }
         let geometry = building_geometry(spec.kind, spec.anchor, RIVER_Y_MIN);
         let context = BuildingPlacementContext {
             world: &read,
@@ -202,19 +208,9 @@ fn validate_layout(
             if !occupied.insert(cell) {
                 return Err(format!("overlap at {cell:?}"));
             }
-            if spec.kind != BuildingType::Bridge
-                && (!map.is_walkable(cell.0, cell.1)
-                    || map.has_building(cell)
-                    || map.has_stockpile(cell))
+            if !map.is_walkable(cell.0, cell.1) || map.has_building(cell) || map.has_stockpile(cell)
             {
                 return Err(format!("occupied support/companion at {cell:?}"));
-            }
-        }
-        if spec.kind == BuildingType::Bridge {
-            for x in spec.anchor.0..=spec.anchor.0 + 1 {
-                if !map.is_walkable(x, RIVER_Y_MIN - 1) || !map.is_walkable(x, RIVER_Y_MIN + 5) {
-                    return Err("Bridge banks are not walkable".into());
-                }
             }
         }
     }
@@ -390,4 +386,30 @@ pub(crate) fn seed_building_art_static_system(mut p: SeedParams) {
     }
     p.state.owners = owners;
     p.state.phase = Phase::Seeded;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::super::PerfScenarioSize;
+    use super::*;
+
+    #[test]
+    fn nine_kinds_place_on_actual_generated_terrain_without_rewriting_it() {
+        let generated = hw_world::generate_world_layout(20260920);
+        let mut map = WorldMap::default();
+        for (index, &terrain) in generated.terrain_tiles.iter().enumerate() {
+            map.set_terrain_at_idx(index, terrain);
+        }
+        for size in [PerfScenarioSize::Small, PerfScenarioSize::Medium] {
+            let specs = layout::layout(size);
+            assert_eq!(validate_layout(&specs, &map, size), Ok(()));
+            let mut with_bridge = specs;
+            with_bridge[0].kind = BuildingType::Bridge;
+            assert!(
+                validate_layout(&with_bridge, &map, size)
+                    .unwrap_err()
+                    .contains("excluded from nine-building reference")
+            );
+        }
+    }
 }
