@@ -18,7 +18,8 @@ import uuid
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-from scripts import host_coordination, orca_roles as roles, orca_task_bridge as bridge
+from scripts import (host_coordination, orca_cursor_bridge_hook as cursor_hook,
+                     orca_roles as roles, orca_task_bridge as bridge)
 from scripts.tests.test_orca_preflight import CLI, HANDLE, INCARNATION, RUNTIME, SECRET
 
 
@@ -261,6 +262,38 @@ Read the two requested files without editing them.
         self.assertTrue(settled["ok"], settled)
         self.assertEqual(settled["result"]["outcome"], "succeeded")
 
+    def test_cursor_hook_retries_non_json_result_once_without_lifecycle_mutation(self):
+        policy = self.new_policy(cursor_hooks=True)
+        self.assertTrue(policy.handle_cursor_hook(self.hook(
+            policy, "beforeSubmitPrompt", generation_id="dispatch-generation",
+            prompt=self.cursor_preamble(), attachments=[]))["ok"])
+        self.assertTrue(policy.handle_cursor_hook(self.hook(
+            policy, "afterAgentResponse", generation_id="dispatch-generation",
+            text="Completed the requested inspection."))["ok"])
+        retry = policy.handle_cursor_hook(self.hook(
+            policy, "stop", generation_id="dispatch-generation", status="completed", loop_count=0))
+        self.assertTrue(retry["ok"], retry)
+        self.assertEqual(retry["result"], {"followup_message": bridge.CURSOR_RESULT_FOLLOWUP})
+        self.assertEqual(self.mutations(), [])
+        self.assertEqual(policy.phase, "active")
+        self.assertEqual(cursor_hook.hook_output(
+            {"hook_event_name": "stop"}, retry),
+            {"followup_message": cursor_hook.CURSOR_RESULT_FOLLOWUP})
+        followup = policy.handle_cursor_hook(self.hook(
+            policy, "beforeSubmitPrompt", generation_id="retry-generation",
+            prompt=bridge.CURSOR_RESULT_FOLLOWUP, attachments=[]))
+        self.assertEqual(followup["result"], {"observed": True})
+        final = json.dumps({"outcome": "succeeded", "subject": "Current Dispatch",
+                            "body": "Read only. The requested entry points were inspected. Nothing remains."})
+        self.assertTrue(policy.handle_cursor_hook(self.hook(
+            policy, "afterAgentResponse", generation_id="retry-generation", text=final))["ok"])
+        settled = policy.handle_cursor_hook(self.hook(
+            policy, "stop", generation_id="retry-generation", status="completed", loop_count=1))
+        self.assertTrue(settled["ok"], settled)
+        self.assertEqual(settled["result"]["outcome"], "succeeded")
+        self.assertEqual([call[1].get("type") for call in self.mutations()],
+                         ["heartbeat", None, "worker_done"])
+
     def test_cursor_hook_ignores_bootstrap_turn_but_rejects_changed_or_pending_authority(self):
         policy = self.new_policy(cursor_hooks=True)
         bootstrap = policy.handle_cursor_hook(self.hook(
@@ -284,10 +317,11 @@ Read the two requested files without editing them.
             policy, "beforeSubmitPrompt", prompt=self.cursor_preamble(), attachments=[]))["ok"])
         self.assertTrue(policy.handle_cursor_hook(self.hook(
             policy, "afterAgentResponse", text='{"outcome":"succeeded","subject":"Done","body":"Complete","extra":true}'))["ok"])
-        refused = policy.handle_cursor_hook(self.hook(
+        retry = policy.handle_cursor_hook(self.hook(
             policy, "stop", status="completed", loop_count=0))
-        self.assertFalse(refused["ok"])
-        self.assertEqual(policy.cursor_stage, "result_schema")
+        self.assertTrue(retry["ok"], retry)
+        self.assertEqual(retry["result"], {"followup_message": bridge.CURSOR_RESULT_FOLLOWUP})
+        self.assertEqual(policy.cursor_stage, "result_retry")
 
         policy = self.new_policy(cursor_hooks=True)
         self.assertTrue(policy.handle_cursor_hook(self.hook(

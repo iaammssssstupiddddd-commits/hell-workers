@@ -40,6 +40,15 @@ KEEPALIVE_SECONDS = 1
 METHODS = {"orchestration.send", "orchestration.check", "orchestration.ask"}
 FIELDS = {"orchestrationContractVersion", "orchestrationRequestId", "compatibilityInvocationId"}
 CURSOR_HOOK_METHOD = "cursor.hook"
+CURSOR_RESULT_FOLLOWUP = (
+    "Return exactly one JSON object with only string keys outcome, subject, and body. "
+    "Use outcome succeeded or failed, a short subject, and a three-sentence body. "
+    "Do not invoke tools, mention lifecycle commands, use a code fence, or add any other text."
+)
+
+
+class CursorResultRetry(Exception):
+    """One controller-owned format retry before any lifecycle mutation."""
 
 
 def key(value: object) -> str:
@@ -204,6 +213,8 @@ class TaskPolicy:
         self.cursor_conversation = None
         self.cursor_generation = None
         self.cursor_response = None
+        self.cursor_result_retries = 0
+        self.cursor_retry_pending = False
         self.cursor_stage = "bootstrap"
         self.cursor_condition = threading.Condition()
 
@@ -394,10 +405,16 @@ class TaskPolicy:
             self.cursor_stage = "result_text"
             response = self.text(self.cursor_response)
             self.cursor_stage = "result_json"
-            result = wire.decode(response.encode())
+            try:
+                result = wire.decode(response.encode())
+            except (json.JSONDecodeError, UnicodeError, wire.Refused) as error:
+                raise CursorResultRetry from error
             self.cursor_stage = "result_schema"
             if set(result) != {"outcome", "subject", "body"} or result.get("outcome") not in {"succeeded", "failed"}:
-                raise wire.Refused("Cursor final response must be the lifecycle result object")
+                raise CursorResultRetry
+            if (not isinstance(result["subject"], str) or not result["subject"].strip()
+                    or not isinstance(result["body"], str) or not result["body"].strip()):
+                raise CursorResultRetry
             outcome = result["outcome"]
             self.cursor_stage = "result_subject"
             subject = self.text(result["subject"], limit=500)
@@ -472,7 +489,13 @@ class TaskPolicy:
                 prompt = params.get("prompt")
                 if not isinstance(prompt, str) or len(prompt.encode()) > 256 * 1024:
                     raise wire.Refused("invalid Cursor prompt hook")
-                if prompt.startswith("You are working inside Orca, a multi-agent IDE. You are a dispatched worker.\n"):
+                if (self.cursor_retry_pending and self.cursor_authority is not None
+                        and prompt == CURSOR_RESULT_FOLLOWUP):
+                    self.cursor_generation = generation
+                    self.cursor_response = None
+                    self.cursor_retry_pending = False
+                    self.cursor_stage = "result_retry_prompt"
+                elif prompt.startswith("You are working inside Orca, a multi-agent IDE. You are a dispatched worker.\n"):
                     observed = cursor_preamble(prompt)
                     if self.cursor_authority not in (None, observed):
                         raise wire.Refused("Cursor Dispatch preamble changed")
@@ -507,7 +530,17 @@ class TaskPolicy:
                             raise wire.Refused("Cursor completed without a final response")
                         self.cursor_condition.wait(remaining)
                     self.upstream.deadline = absolute_deadline
-                    result = self.cursor_finish(status, absolute_deadline)
+                    try:
+                        result = self.cursor_finish(status, absolute_deadline)
+                    except CursorResultRetry:
+                        if self.cursor_result_retries >= 1 or self.operations:
+                            raise wire.Refused("Cursor result retry exhausted")
+                        self.cursor_result_retries += 1
+                        self.cursor_retry_pending = True
+                        self.cursor_response = None
+                        self.cursor_stage = "result_retry"
+                        self.save()
+                        result = {"followup_message": CURSOR_RESULT_FOLLOWUP}
             if time.monotonic() >= absolute_deadline:
                 raise wire.Refused("absolute Cursor hook deadline exceeded")
             return {"id": request_id, "ok": True, "result": result,

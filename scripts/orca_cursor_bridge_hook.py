@@ -16,6 +16,11 @@ import uuid
 
 
 MAX_INPUT = 512 * 1024
+CURSOR_RESULT_FOLLOWUP = (
+    "Return exactly one JSON object with only string keys outcome, subject, and body. "
+    "Use outcome succeeded or failed, a short subject, and a three-sentence body. "
+    "Do not invoke tools, mention lifecycle commands, use a code fence, or add any other text."
+)
 EVENT_FIELDS = {
     "beforeSubmitPrompt": {"prompt", "attachments"},
     "afterAgentResponse": {"text"},
@@ -78,11 +83,27 @@ def exchange(event: dict) -> dict:
     return response
 
 
+def hook_output(event: dict, response: dict) -> dict:
+    if event["hook_event_name"] == "beforeSubmitPrompt":
+        return {"continue": True}
+    if event["hook_event_name"] != "stop":
+        return {}
+    result = response.get("result")
+    if not isinstance(result, dict):
+        raise ValueError("invalid Cursor hook bridge result")
+    followup = result.get("followup_message")
+    if followup is None:
+        return {}
+    if followup != CURSOR_RESULT_FOLLOWUP:
+        raise ValueError("invalid Cursor result follow-up")
+    return {"followup_message": followup}
+
+
 def main() -> int:
     try:
         event = read_event()
-        exchange(event)
-        output = {"continue": True} if event["hook_event_name"] == "beforeSubmitPrompt" else {}
+        response = exchange(event)
+        output = hook_output(event, response)
         print(json.dumps(output, separators=(",", ":")))
         return 0
     except (OSError, ValueError, TypeError, json.JSONDecodeError):
