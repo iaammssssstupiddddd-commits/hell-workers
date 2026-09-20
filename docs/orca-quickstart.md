@@ -4,7 +4,7 @@ Hell Workersで「統括1名・実装最大2名・専任レビュー1名」を�
 詳細な権限・資源管理は [分離開発の運用仕様](development-infra/orca-development.md) を参照してください。
 
 > Linearの専用試験issueから統括へ相談し、同じ会話へ追記できるところまで受入済みです。現段階は読み取り専用の相談・タスク分割です。
-> Codex固定reviewerとCodex Aのread-only Task lifecycleは一巡済みです。編集担当・Cursor B・検証を含む自動運用は未完です。
+> Codex固定reviewer、Codex A、Cursor Bのread-only Task lifecycleは一巡済みです。編集担当・検証を含む自動運用は未完です。
 > 最新の編集委譲禁止ルールに従い、現在の実agent受入もread-onlyに限定しています。
 > 通常の「Codexを起動」操作では担当範囲の制限が入りません。実装担当とレビュー担当は必ず専用launcherから起動します。
 
@@ -17,7 +17,7 @@ Hell Workersで「統括1名・実装最大2名・専任レビュー1名」を�
 | --- | --- | --- |
 | 課題管理（L1） | OrcaのLinear課題一覧・詳細 | 専用試験issue [`TAK-5`](https://linear.app/takumi-sato/issue/TAK-5/orca-integration-acceptance-hell-workers) の作成・コメント更新・再読・worktree関連付けを受入済み。権限/通信異常系は未受入 |
 | 統括相談（L2） | Linear課題の固定snapshotから既存統括を明示起動 | `TAK-5` の固定snapshot取込、初回相談、同一session追記を受入済み。旧受付移行・異常復旧は未受入 |
-| 自動受け渡し（L3） | Orca Taskと既存launcher、固定reviewer | Codex固定reviewerとCodex Aのread-only一巡を実Taskで受入済み。Cursor B通信・編集運用は未受入 |
+| 自動受け渡し（L3） | Orca Taskと既存launcher、固定reviewer | Codex固定reviewer・Codex A・Cursor Bのread-only一巡を実Taskで受入済み。受付からの自動接続・編集運用は未受入 |
 
 Linearへ接続しただけでは統括agentは起動・常駐しません。初期の課題更新は統括の明示操作とし、
 常時同期や課題の担当変更による自動起動は追加しません。仕様書は引き続きprimary `docs/`が正本です。
@@ -121,10 +121,10 @@ docs/orca-quickstart.md と docs/development-infra/orca-development.md に従っ
 ## 3. 統括が作業場を準備する
 
 新規worktreeの既定基点は `iaammssssstupiddddd-commits/orca-parallel-development`。
-最新commitは `1673c6be9d737fc10228ae635557f95c7b687547` です。
+最新commitは `09642de4022577fd442c4c9971c64a4d1f649e26` です。
 受付・統括相談、同一task再開・固定reviewer拘束、read-only workerとCursor起動修正、制限通信診断、
-Codex限定の単一Dispatch通信bridge（固定reviewerのread-only実Task一巡を受入済み）を含みます。
-いずれもローカルのみ。新規treeは最新commitを継承しますが、編集worker・Cursor Bの運用受入は未完です。
+Codex用の単一Dispatch通信bridge、Cursor hook bridgeを含みます。固定reviewer・Codex A・Cursor Bの
+read-only実Task一巡を受入済みです。いずれもローカルのみで、編集workerの運用受入は未完です。
 以下は受入時に統括が使う手順であり、現在の自動運用手順ではありません。
 
 ```bash
@@ -166,14 +166,17 @@ orca terminal wait --terminal <handle> --for tui-idle --timeout-ms 30000 --json
 ### Task bridgeの受入経路は別扱い
 
 上記はticketの指示を直接読む手動起動です。Task通信bridgeは受入済みの限定経路で、受付からは自動接続しません。
-Codex A / 固定reviewerのread-onlyだけが対象で、Cursor Bにはまだ接続できません。Shell denyは維持します。
+Codex A / 固定reviewer / Cursor Bのread-onlyだけが対象です。Cursor BのShell/MCP/WebFetch denyは維持します。
 bootstrap専用ticketで待機させ、readiness→worker-start成功→host armの順を確認して初めてlive Taskへ結び付けます。
 armの成功だけではTask受入成功ではありません。詳細は
-[単一Dispatch通信bridge](development-infra/orca-development.md#単一dispatch通信bridger3固定reviewercodex-a-read-only実task受入済み) を参照してください。
-read-only一巡の成功を本番編集やCursor B投入の許可に読み替えないでください。
+[単一Dispatch通信bridge](development-infra/orca-development.md#単一dispatch通信bridger3固定reviewercodex-acursor-b-read-only実task受入済み) を参照してください。
+read-only一巡の成功を本番編集の許可に読み替えないでください。
 `escalation`のJSON整形差はcandidateでJSON内容比較へ修正し、空白・キー順・escape差の同値と
 値・型・Task相違の拒否を回帰確認済みです。Orcaが未指定本文をreceipt上の空文字へ補う差も正規化し、
-Codex Aでheartbeat・ask timeout後の同一質問resume・escalation・最終check・worker_doneを受入済みです。本番編集はまだ行いません。
+Codex Aでheartbeat・ask timeout後の同一質問resume・escalation・最終check・worker_doneを受入済みです。
+Cursor Bはlauncher所有のprivate Unix socketと3つの公式hookだけを使い、generationをlive Dispatchへ拘束します。
+結果JSONが不正な場合は、上流mutation前にcontroller固定文を1回だけ返して整形を求め、2回目はfail-closedで停止します。
+実受入ではheartbeat・check・worker_done、settlement、capability失効、Delivery ACK、source不変を確認しました。本番編集はまだ行いません。
 Linearの課題管理や統括相談の導入は、このbridge受入と分けて進めます。
 
 ## 5. 検証して専任reviewerへ渡す
@@ -194,7 +197,7 @@ python3 /absolute/worktree/scripts/orca_roles.py launch --ticket /absolute/revie
 第3batchのlauncherは終了時にreviewerのsession UUIDとticket IDを表示し、制御台帳へ固定します。
 終了まではslotを保持し、新規/別UUIDへの切替を許しません。
 固定reviewer・Codex A・Cursor Bはread-only実TUIで正常終了・同会話再開を確認しました。
-Cursor Bの起動時設定保存エラーも修正済みです。実編集・実tool deny・Task接続は別途未受入です。
+Cursor Bの起動時設定保存エラーとread-only Task接続も修正・受入済みです。実編集と編集時のtool denyは別途未受入です。
 再開時のUUIDが不明なら新reviewerを作らず、既存履歴を確認します。
 レビュー中にsourceやHEADが変われば再レビューです。指摘修正は統括または実装担当が行い、reviewerは編集しません。
 編集workerの初回起動はclean必須です。第3batchでは、前回のprocess終了と会話IDが保存され、
