@@ -40,7 +40,7 @@ def state_path(slot: str) -> Path:
     return storage.checked_directory(state_root().parent / "role-state") / f"{slot}.json"
 
 
-def read_state(slot: str, provider: str) -> dict:
+def read_state(slot: str, provider: str, *, allow_pending: bool = False) -> dict:
     data = storage.read_private_json(state_path(slot), {
         "schema": 1, "slot": slot, "provider": provider, "tasks": {}, "last": None,
     })
@@ -48,12 +48,27 @@ def read_state(slot: str, provider: str) -> dict:
             or data.get("provider") != provider or not isinstance(data.get("tasks"), dict)):
         raise ValueError("invalid role state; preserve for reconciliation")
     last = data.get("last")
-    if "last" not in data or (last is None and data["tasks"]):
+    abandoned = data.get("abandoned", {})
+    if not isinstance(abandoned, dict):
+        raise ValueError("invalid abandoned attempts")
+    for key, attempt in abandoned.items():
+        if (not isinstance(attempt, dict) or attempt.get("key") != key or key in data["tasks"]
+                or attempt.get("phase") != "abandoned" or attempt.get("process_exited") is not True
+                or type(attempt.get("exit_code")) is not int or attempt["exit_code"] == 0
+                or not isinstance(attempt.get("reason"), str) or not attempt["reason"].strip()
+                or not all(isinstance(attempt.get(name), str) and re.fullmatch(r"[a-f0-9]{64}", attempt[name])
+                           for name in ("ticket_sha256", "observed_source_sha256"))):
+            raise ValueError("invalid abandoned attempt evidence")
+        identity(attempt["attempt_id"])
+    if "last" not in data or (last is None and (data["tasks"] or abandoned)):
         raise ValueError("missing role attempt barrier; preserve for reconciliation")
     if last is not None:
-        if (not isinstance(last, dict) or last.get("phase") != "recorded"
-                or last.get("process_exited") is not True or type(last.get("exit_code")) is not int
-                or last.get("key") not in data["tasks"]):
+        recorded = (isinstance(last, dict) and last.get("phase") == "recorded"
+                    and last.get("process_exited") is True and type(last.get("exit_code")) is int
+                    and last.get("key") in data["tasks"])
+        reconciled = isinstance(last, dict) and last.get("phase") == "abandoned" and abandoned.get(last.get("key")) == last
+        pending = allow_pending and isinstance(last, dict) and last.get("phase") in {"starting", "unknown"}
+        if not (recorded or reconciled or pending):
             raise ValueError("unknown role attempt; reconcile before any new launch")
         identity(last["attempt_id"])
     for key, task in data["tasks"].items():
@@ -163,6 +178,8 @@ def admit(data: dict, ticket: dict, subject: dict, source: str,
           resume_session: str | None, follow_up: str | None) -> tuple[str, dict | None]:
     reviewer = data["slot"] == "reviewer"
     key = "fixed-reviewer" if reviewer else digest({"common": subject["common"], "id": ticket["id"]})
+    if key in data.get("abandoned", {}):
+        raise ValueError("abandoned ticket cannot be replayed; issue a new explicit task")
     previous = data["tasks"].get(key)
     if previous is None:
         if resume_session:

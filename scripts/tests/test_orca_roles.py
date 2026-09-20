@@ -69,6 +69,17 @@ class OrcaRoleTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "symlink/hardlink"):
             self.load()
 
+    def test_read_only_ticket_rejects_coercion_and_writable_scope(self) -> None:
+        for value in ("true", 1, None):
+            self.ticket.update(read_only=value, allowed_directories=[])
+            with self.subTest(value=value), self.assertRaisesRegex(ValueError, "boolean"):
+                self.load()
+        self.ticket.update(read_only=True, allowed_directories=["src"])
+        with self.assertRaisesRegex(ValueError, "no writable"):
+            self.load()
+        self.ticket["allowed_directories"] = []
+        self.assertTrue(self.load()["read_only"])
+
     def test_fingerprint_invalidates_dirty_untracked_mode_and_index(self) -> None:
         before = roles.fingerprint(self.repo)
         (self.repo / "src/new.txt").write_text("new")
@@ -124,44 +135,63 @@ class OrcaRoleTests(unittest.TestCase):
         runtime = self.root / "cursor-runtime"
         for child in ("cursor", "cursor-data", "xdg/cursor", "cache", "tmp", "codex"):
             (runtime / child).mkdir(parents=True, exist_ok=True)
-        for child in (".cursor", ".claude"):
-            directory = self.repo / child
-            directory.mkdir()
-            (directory / "mcp.json").write_text('{"fixture":true}')
-        policy = self.root / "policy.json"
-        roles.write_cursor_policy(ticket, policy)
+        for root in (self.repo, self.primary):
+            for child in (".codex", ".cursor", ".claude"):
+                directory = root / child
+                directory.mkdir()
+                (directory / "mcp.json").write_text('{"fixture":true}')
+            (root / "AGENTS.md").write_text("fixture rules")
+        policy = self.root / "policy/cli.json"
+        policy.parent.mkdir()
+        roles.write_cursor_policy(ticket, policy, project=True)
+        roles.write_cursor_policy(ticket, runtime / "cursor/cli-config.json")
         original_config = self.root / "original-config"
         (original_config / "cursor").mkdir(parents=True)
         original_auth = original_config / "cursor/auth.json"
         original_auth.write_text('{"fixture": "not-a-credential"}')
         script = """import json, os, pathlib, sys
-repo, runtime = map(pathlib.Path, sys.argv[1:])
+repo, runtime, primary = map(pathlib.Path, sys.argv[1:])
 assert os.environ['CURSOR_CONFIG_DIR'] == str(runtime / 'cursor')
 assert os.environ['CURSOR_DATA_DIR'] == str(runtime / 'cursor-data')
 assert 'CURSOR_API_KEY' not in os.environ
 assert not (repo / '.cursor/mcp.json').exists()
 assert not (repo / '.claude/mcp.json').exists()
-policy = runtime / 'cursor/cli-config.json'
+for root in (repo, primary):
+    for name in ('.codex', '.cursor', '.claude'):
+        assert not (root / name / 'mcp.json').exists()
+    assert (root / 'AGENTS.md').read_text() == 'fixture rules'
+policy = repo / '.cursor/cli.json'
 assert 'Shell(*)' in json.loads(policy.read_text())['permissions']['deny']
 auth = runtime / 'xdg/cursor/auth.json'
 assert json.loads(auth.read_text()) == {'fixture': 'not-a-credential'}
-for path in (policy, auth, repo / 'docs/content.txt'):
+for path in (policy, policy.parent / 'mcp.json', auth, repo / 'docs/content.txt'):
     try:
         path.write_text('escape')
     except OSError:
         continue
     raise AssertionError('write escaped: ' + str(path))
+global_config = runtime / 'cursor/cli-config.json'
+replacement = global_config.with_suffix('.tmp')
+replacement.write_text(global_config.read_text())
+replacement.replace(global_config)
 (repo / 'src/content.txt').write_text('allowed')
 print('pass')
 """
         with patch.dict(os.environ, {"XDG_CONFIG_HOME": str(original_config), "CURSOR_API_KEY": "fixture"}):
             command = roles.sandbox_command(ticket, "worker", runtime,
-                                           [sys.executable, "-c", script, str(self.repo), str(runtime)],
+                                           [sys.executable, "-c", script, str(self.repo), str(runtime), str(self.primary)],
                                            provider="cursor", policy=policy)
             result = subprocess.run(command, capture_output=True, text=True, check=True)
         self.assertEqual(result.stdout.strip(), "pass")
         self.assertEqual((self.repo / "docs/content.txt").read_text(), "original")
         self.assertEqual(original_auth.read_text(), '{"fixture": "not-a-credential"}')
+        policy.write_text('{}')
+        with self.assertRaisesRegex(RuntimeError, "exact sanitized"):
+            roles.sandbox_command(ticket, "worker", runtime, ["true"], provider="cursor", policy=policy)
+        roles.write_cursor_policy(ticket, policy, project=True)
+        (policy.parent / "mcp.json").write_text('{}')
+        with self.assertRaisesRegex(RuntimeError, "exact sanitized"):
+            roles.sandbox_command(ticket, "worker", runtime, ["true"], provider="cursor", policy=policy)
 
     @unittest.skipUnless(sys.platform == "linux" and shutil.which("bwrap"), "Linux bubblewrap required")
     def test_real_mount_boundary_blocks_reviewer_and_worker_escape(self) -> None:
@@ -188,6 +218,11 @@ print(json.dumps(results))
                                                 [sys.executable, "-c", script, *map(str, paths)])
                 result = subprocess.run(command, capture_output=True, text=True, check=True)
                 self.assertEqual(json.loads(result.stdout), expected)
+        ticket.update(read_only=True, allowed_directories=[])
+        command = roles.sandbox_command(ticket, "worker", runtime,
+                                        [sys.executable, "-c", script, *map(str, paths)])
+        result = subprocess.run(command, capture_output=True, text=True, check=True)
+        self.assertEqual(json.loads(result.stdout), [False] * 4)
         self.assertEqual((self.primary / "src/content.txt").read_text(), "original")
 
 

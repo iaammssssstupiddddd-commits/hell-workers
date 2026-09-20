@@ -23,11 +23,11 @@ from pathlib import Path
 try:
     import orca_role_state as bindings
     from host_coordination import acquire_host, state_root
-    from orca_providers import command_for, provider_for, write_cursor_policy
+    from orca_providers import command_for, cursor_permissions, provider_for, write_cursor_policy
 except ModuleNotFoundError:
     from scripts import orca_role_state as bindings
     from scripts.host_coordination import acquire_host, state_root
-    from scripts.orca_providers import command_for, provider_for, write_cursor_policy
+    from scripts.orca_providers import command_for, cursor_permissions, provider_for, write_cursor_policy
 
 
 def git(repo: Path, *args: str) -> str:
@@ -64,6 +64,10 @@ def validate_ticket(ticket: dict) -> dict:
     allowed = ticket.get("allowed_directories", [])
     if not isinstance(allowed, list):
         raise ValueError("allowed_directories must be a list")
+    if type(ticket.get("read_only", False)) is not bool:
+        raise ValueError("read_only must be a boolean")
+    if ticket.get("read_only") and allowed:
+        raise ValueError("read-only ticket must have no writable directories")
     paths: list[Path] = []
     for value in allowed:
         if not isinstance(value, str):
@@ -135,23 +139,34 @@ def sandbox_command(ticket: dict, role: str, runtime: Path, command: list[str],
     else:
         if policy is None or not policy.is_file():
             raise RuntimeError("Cursor isolation requires a read-only permission policy")
+        bindings.safe_file(policy)
+        if (policy.name != "cli.json" or set(policy.parent.iterdir()) != {policy}
+                or json.loads(policy.read_text()) != {"permissions": cursor_permissions(ticket)["permissions"]}
+                or not (repo / ".cursor").is_dir() or (repo / ".cursor").is_symlink()):
+            raise RuntimeError("Cursor requires an exact sanitized project permission directory")
         result.extend(["--setenv", "CURSOR_CONFIG_DIR", str(runtime / "cursor"),
                        "--setenv", "CURSOR_DATA_DIR", str(runtime / "cursor-data"),
                        "--setenv", "XDG_CONFIG_HOME", str(runtime / "xdg"),
                        "--setenv", "XDG_CACHE_HOME", str(runtime / "cache"),
-                       "--setenv", "AGENT_CLI_CREDENTIAL_STORE", "file",
-                       "--ro-bind", str(policy), str(runtime / "cursor/cli-config.json")])
+                       "--setenv", "AGENT_CLI_CREDENTIAL_STORE", "file"])
         auth = Path(os.environ.get("XDG_CONFIG_HOME", str(Path.home() / ".config"))) / "cursor/auth.json"
         if auth.is_file():
             result.extend(["--ro-bind", str(auth), str(runtime / "xdg/cursor/auth.json")])
     # Hide inherited config/MCP transports; the agent gets a clean Codex home.
+    primary = Path(git(repo, "rev-parse", "--path-format=absolute", "--git-common-dir")).parent
+    config_paths = [root / name for root in dict.fromkeys((repo, primary))
+                    for name in (".codex", ".cursor", ".claude")]
     for path in (Path.home() / ".codex", Path.home() / ".orca", Path.home() / ".cursor",
-                 Path.home() / ".claude", repo / ".claude",
+                 Path.home() / ".claude",
                  Path.home() / ".config/cursor", Path.home() / ".config/orca",
-                 repo / ".codex", repo / ".cursor"):
+                 *config_paths):
         if path.is_dir() and not runtime.is_relative_to(path):
             result.extend(["--tmpfs", str(path)])
-    if role == "worker":
+    if provider == "cursor":
+        # Global CLI metadata must remain writable (model/cache startup uses
+        # atomic rename). Project permissions override it and cannot be changed.
+        result.extend(["--ro-bind", str(policy.parent), str(repo / ".cursor")])
+    if role == "worker" and not ticket.get("read_only"):
         for relative in ticket["allowed_directories"]:
             path = repo / relative
             result.extend(["--bind", str(path), str(path)])
@@ -219,7 +234,7 @@ def worker_scope(ticket: dict, *, initial: bool) -> None:
 def run_provider(command: list[str], data: dict) -> int:
     child = None
     try:
-        child = subprocess.Popen(command, start_new_session=True)
+        child = subprocess.Popen(command, start_new_session=True, umask=0o077)
         return child.wait()
     finally:
         if child is not None:
@@ -242,25 +257,28 @@ def run_provider(command: list[str], data: dict) -> int:
 def launch(ticket: dict, slot: str, *, dry_run: bool, resume_session: str | None = None,
            follow_up: str | None = None) -> int:
     role = "reviewer" if slot == "reviewer" else "worker"
+    read_only = role == "reviewer" or ticket.get("read_only") is True
     provider = provider_for(ticket, slot)
     if resume_session:
         bindings.identity(resume_session)
     if follow_up is not None and (not follow_up.strip() or len(follow_up) > 32_000):
         raise ValueError("follow-up must contain 1..32000 characters")
-    if role == "worker" and not ticket.get("allowed_directories"):
+    if role == "worker" and not read_only and not ticket.get("allowed_directories"):
         raise ValueError("worker needs a nonempty writable directory scope")
     repo = Path(ticket["repo"])
     prompt = (
         f"Role: {role}. Ticket: {ticket['id']}. Read AGENTS.md. No subagents, no commit, "
         "no push, no changes outside assigned directories. Do not start builds/tests/analysis "
         "servers; ask the coordinator for validation. Report findings and stop. "
-        f"Allowed directories: {ticket['allowed_directories'] if role == 'worker' else []}.\n"
+        f"Source access: {'read-only; never edit files' if read_only else 'assigned directories only'}. "
+        f"Allowed directories: {[] if read_only else ticket['allowed_directories']}.\n"
         + (follow_up if follow_up is not None else ticket["prompt"])
     )
-    command = command_for(provider, repo, role, prompt, resume_session)
+    command = command_for(provider, repo, role, prompt, resume_session, read_only=read_only)
     if dry_run:
         print(json.dumps({"slot": slot, "role": role, "provider": provider, "repo": str(repo),
-                          "allowed_directories": ticket["allowed_directories"] if role == "worker" else [],
+                          "read_only": read_only,
+                          "allowed_directories": [] if read_only else ticket["allowed_directories"],
                           "command": command}, ensure_ascii=False, indent=2))
         return 0
     with ExitStack() as leases:
@@ -272,8 +290,11 @@ def launch(ticket: dict, slot: str, *, dry_run: bool, resume_session: str | None
                    "common": git(repo, "rev-parse", "--path-format=absolute", "--git-common-dir")}
         data = bindings.read_state(slot, provider)
         key, previous = bindings.admit(data, ticket, subject, before, resume_session, follow_up)
+        if read_only and ticket.get("source_sha256") != before:
+            raise ValueError("read-only ticket needs the current source_sha256; regenerate after changes")
         if role == "worker":
-            worker_scope(ticket, initial=previous is None)
+            if not read_only:
+                worker_scope(ticket, initial=previous is None)
             task_key = bindings.digest({"common": subject["common"], "id": ticket["id"]})
             leases.enter_context(acquire_host("workspace-" + task_key, inherit=False))
             bindings.claim_task(task_key, slot, provider, ticket, subject)
@@ -288,12 +309,19 @@ def launch(ticket: dict, slot: str, *, dry_run: bool, resume_session: str | None
                 raise ValueError("provider session changed since observed exit; reconcile before resume")
         elif bindings.history_exists(runtime):
             raise ValueError("unbound provider history; never start a replacement session")
-        if role == "reviewer" and ticket.get("source_sha256") != before:
-            raise ValueError("review ticket needs the current source_sha256; regenerate after changes")
         policy = None
         if provider == "cursor":
-            policy = state_root() / "worker-b-cursor-policy.json"
-            write_cursor_policy(ticket, policy)
+            policy = bindings.storage.checked_directory(state_root() / "worker-b-cursor-policy") / "cli.json"
+            write_cursor_policy(ticket, policy, project=True)
+            config = runtime / "cursor/cli-config.json"
+            if not config.exists() and not config.is_symlink():
+                write_cursor_policy(ticket, config)
+            else:
+                current = bindings.storage.read_private_json(config, {})
+                if (not isinstance(current, dict) or current.get("version") != 1
+                        or not isinstance(current.get("editor"), dict)
+                        or not isinstance(current["editor"].get("vimMode"), bool)):
+                    raise ValueError("invalid Cursor runtime configuration; preserve for reconciliation")
         command = sandbox_command(ticket, role, runtime, command, provider=provider, policy=policy)
         data["last"] = {"attempt_id": str(uuid.uuid4()), "key": key, "phase": "starting",
                         "process_exited": False, "exit_code": None, "source_before": before,
@@ -303,9 +331,9 @@ def launch(ticket: dict, slot: str, *, dry_run: bool, resume_session: str | None
         code = run_provider(command, data)
         validate_ticket(ticket)
         after = fingerprint(repo)
-        if role == "reviewer" and after != before:
-            raise RuntimeError("source changed during review; review is invalid")
-        if role == "worker":
+        if read_only and after != before:
+            raise RuntimeError("source changed during read-only observation; result is invalid")
+        if role == "worker" and not read_only:
             worker_scope(ticket, initial=False)
         snapshot = bindings.session_snapshot(runtime, provider, origin)
         if previous and snapshot["session_id"] != previous["session_id"]:
@@ -320,15 +348,55 @@ def launch(ticket: dict, slot: str, *, dry_run: bool, resume_session: str | None
         return code
 
 
+def abandon_start(ticket: dict, slot: str, attempt_id: str, observed_source: str, reason: str) -> None:
+    """Explicitly close a failed read-only first start; never retry or erase it."""
+    if slot == "reviewer" or ticket.get("read_only") is not True:
+        raise ValueError("only a read-only worker's empty first start can be abandoned")
+    bindings.identity(attempt_id)
+    if not isinstance(reason, str) or not reason.strip() or len(reason) > 2000:
+        raise ValueError("abandonment requires a bounded reconciliation reason")
+    provider = provider_for(ticket, slot)
+    repo = Path(ticket["repo"])
+    with acquire_host(slot, inherit=False), acquire_host(workspace_slot(repo), inherit=False):
+        validate_ticket(ticket)
+        if fingerprint(repo) != observed_source:
+            raise ValueError("observed source changed; inspect the current diff before reconciliation")
+        data = bindings.read_state(slot, provider, allow_pending=True)
+        last = data["last"]
+        subject = {"repo": str(repo), "branch": ticket["branch"], "base": ticket["base"],
+                   "common": git(repo, "rev-parse", "--path-format=absolute", "--git-common-dir")}
+        key = bindings.digest({"common": subject["common"], "id": ticket["id"]})
+        if (not isinstance(last, dict) or last.get("attempt_id") != attempt_id or last.get("key") != key
+                or last.get("phase") != "unknown" or last.get("process_exited") is not True
+                or type(last.get("exit_code")) is not int or last["exit_code"] == 0 or key in data["tasks"]):
+            raise ValueError("requires exact failed first attempt and positive process-exit evidence")
+        with acquire_host("workspace-" + key, inherit=False):
+            assignment = bindings.state_path(slot).parent / "assignments" / f"{key}.json"
+            expected = {"schema": 1, "slot": slot, "provider": provider,
+                        "ticket_sha256": bindings.digest(ticket), "subject": subject}
+            if bindings.storage.read_private_json(assignment, {}) != expected:
+                raise ValueError("failed start ownership differs from the supplied ticket")
+            runtime = prepare_runtime(f"{slot}/tasks/{key}")
+            if bindings.history_exists(runtime) or bindings.history_exists(prepare_runtime(slot)):
+                raise ValueError("provider history exists; preserve and reconcile the existing session")
+            last.update(phase="abandoned", ticket_sha256=bindings.digest(ticket),
+                        observed_source_sha256=observed_source, reason=reason)
+            data.setdefault("abandoned", {})[key] = dict(last)
+            bindings.save_state(data)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=("launch", "fingerprint", "verify-review"))
+    parser.add_argument("action", choices=("launch", "fingerprint", "verify-review", "abandon-start"))
     parser.add_argument("--ticket", type=Path, required=True)
     parser.add_argument("--slot", choices=("worker-a", "worker-b", "reviewer"), default="reviewer")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--resume-session")
     parser.add_argument("--follow-up-file", type=Path)
     parser.add_argument("--review-record", type=Path)
+    parser.add_argument("--attempt-id")
+    parser.add_argument("--observed-source")
+    parser.add_argument("--reason")
     args = parser.parse_args()
     try:
         ticket = load_ticket(args.ticket)
@@ -340,6 +408,12 @@ def main() -> int:
                 raise ValueError("--review-record is required")
             verify_review(ticket, json.loads(args.review_record.read_text()))
             print("Review matches the exact source; this command does not integrate or publish.")
+            return 0
+        if args.action == "abandon-start":
+            if args.dry_run:
+                raise ValueError("abandon-start does not support --dry-run; no state changed")
+            abandon_start(ticket, args.slot, args.attempt_id, args.observed_source, args.reason)
+            print("Failed read-only start preserved as abandoned; no agent started and no task approved.")
             return 0
         return launch(ticket, args.slot, dry_run=args.dry_run, resume_session=args.resume_session,
                       follow_up=args.follow_up_file.read_text() if args.follow_up_file else None)

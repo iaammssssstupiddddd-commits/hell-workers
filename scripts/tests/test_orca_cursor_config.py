@@ -15,6 +15,7 @@ import unittest
 from pathlib import Path
 
 from scripts.orca_providers import cursor_permissions
+from scripts.tests import test_orca_roles as fixtures
 
 
 LOADER_PROBE = r'''
@@ -49,6 +50,25 @@ const path = require("node:path");
     return;
   }
   const config = isolated.exports("../cursor-config/dist/index.js");
+  if (expectedFallback === "project") {
+    const project = path.join(process.cwd(), ".cursor", "cli.json");
+    const original = fs.readFileSync(project, "utf8");
+    const permissions = JSON.parse(original).permissions;
+    const provider = await config.FO.loadFromDefaults(null, {
+      onError: (_code, message) => { throw Error(message); },
+    });
+    assert.equal(provider.getConfigFilePath(), expectedPath);
+    assert.deepStrictEqual(provider.get().permissions, permissions);
+    await provider.transform(value => ({...value, hints: false,
+      permissions: {allow: ["Shell(*)", "Write(**)"], deny: []}}));
+    assert.deepStrictEqual(provider.get().permissions, permissions);
+    assert.deepStrictEqual((await provider.reload()).permissions, permissions);
+    assert.deepStrictEqual(JSON.parse(fs.readFileSync(expectedPath, "utf8")).permissions.deny, []);
+    assert.equal(fs.readFileSync(project, "utf8"), original);
+    assert.throws(() => fs.writeFileSync(project, "{}"), /EROFS|EACCES/);
+    console.log("mutable metadata + immutable project permissions: pass");
+    return;
+  }
   const messages = [];
   const provider = await config.FO.loadFromDefaults(null, {
     skipGitRootDetection: true,
@@ -70,6 +90,32 @@ const path = require("node:path");
 @unittest.skipUnless(sys.platform == "linux" and all(shutil.which(name) for name in
                      ("bwrap", "node", "cursor-agent")), "installed Cursor, Node and Linux bubblewrap required")
 class CursorConfigCompatibilityTests(unittest.TestCase):
+    run_git = staticmethod(fixtures.OrcaRoleTests.run_git)
+
+    def test_project_policy_survives_global_rewrite_in_linked_worktree(self) -> None:
+        fixtures.OrcaRoleTests.setUp(self)
+        bundle = Path(shutil.which("cursor-agent")).resolve().parent / "index.js"
+        project = self.repo / ".cursor/cli.json"
+        project.parent.mkdir()
+        global_dir = self.root / "cursor-global"
+        global_dir.mkdir()
+        global_config = global_dir / "cli-config.json"
+        for readonly in (False, True):
+            with self.subTest(readonly=readonly):
+                config = cursor_permissions({"allowed_directories": ["src"], "read_only": readonly})
+                project.write_text(json.dumps({"permissions": config["permissions"]}))
+                global_config.write_text(json.dumps(config))
+                result = subprocess.run([
+                    shutil.which("bwrap"), "--die-with-parent", "--unshare-net", "--unshare-pid",
+                    "--ro-bind", "/", "/", "--proc", "/proc", "--dev", "/dev", "--tmpfs", "/tmp",
+                    "--bind", str(global_dir), str(global_dir), "--clearenv",
+                    "--setenv", "PATH", "/usr/bin:/bin", "--setenv", "HOME", "/tmp",
+                    "--setenv", "CURSOR_CONFIG_DIR", str(global_dir), "--chdir", str(self.repo),
+                    "--", shutil.which("node"), "-e", LOADER_PROBE, str(bundle), str(global_config), "project",
+                ], text=True, capture_output=True, timeout=20, umask=0o077)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn("immutable project permissions: pass", result.stdout)
+
     def test_installed_session_workspace_key_and_metadata_encoding(self) -> None:
         bundle = Path(shutil.which("cursor-agent")).resolve().parent / "index.js"
         result = subprocess.run([
@@ -89,7 +135,9 @@ class CursorConfigCompatibilityTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(dir=target) as directory:
             fixture = Path(directory) / "cli-config.json"
             complete = cursor_permissions({"allowed_directories": ["crates/hw_ui/src/interaction/help"]})
-            for config, fallback in (({"permissions": complete["permissions"]}, True), (complete, False)):
+            readonly = cursor_permissions({"allowed_directories": [], "read_only": True})
+            for config, fallback in (({"permissions": complete["permissions"]}, True),
+                                     (complete, False), (readonly, False)):
                 with self.subTest(fallback=fallback):
                     fixture.write_text(json.dumps(config))
                     result = subprocess.run([
@@ -103,7 +151,7 @@ class CursorConfigCompatibilityTests(unittest.TestCase):
                     self.assertEqual(result.returncode, 0, result.stderr)
                     output = json.loads(result.stdout)
                     self.assertEqual(output["fallback"], fallback)
-                    self.assertEqual(output["deny"], [] if fallback else complete["permissions"]["deny"])
+                    self.assertEqual(output["deny"], [] if fallback else config["permissions"]["deny"])
 
 
 if __name__ == "__main__":

@@ -75,7 +75,7 @@ class RoleContinuationTests(unittest.TestCase):
         patcher.start()
         self.addCleanup(patcher.stop)
 
-    def command(self, provider, repo, role, prompt, resume):
+    def command(self, provider, repo, role, prompt, resume, *, read_only=False):
         self.commands.append((provider, role, prompt, resume))
         return [sys.executable, "-c", FAKE, json.dumps({**self.options, "provider": provider,
                 "control": str(state.state_path("reviewer" if role == "reviewer" else
@@ -89,6 +89,7 @@ class RoleContinuationTests(unittest.TestCase):
         self.ticket["source_sha256"] = roles.fingerprint(self.repo)
 
     def cursor(self):
+        (self.repo / ".cursor").mkdir(exist_ok=True)
         scope = "crates/hw_ui/src/interaction/help"
         path = self.repo / scope
         path.mkdir(parents=True)
@@ -122,6 +123,119 @@ class RoleContinuationTests(unittest.TestCase):
         first = state.session_snapshot(runtime, "cursor", self.repo)
         self.assertEqual(first, state.session_snapshot(runtime, "cursor", self.repo))
         self.assertEqual(first["session_id"], SESSION)
+
+    def test_read_only_workers_bind_dirty_source_and_cannot_gain_write_access(self):
+        for slot in ("worker-a", "worker-b"):
+            with self.subTest(slot=slot):
+                if slot == "worker-b":
+                    self.cursor()
+                write_scope = list(self.ticket["allowed_directories"])
+                (self.repo / "src/content.txt").write_text("coordinator-owned dirty input")
+                self.ticket.update(id="readonly-" + slot, read_only=True, allowed_directories=[],
+                                   complexity="simple", task_kind="test-addition",
+                                   complexity_reason="only checks conversation continuity",
+                                   acceptance="same session, unchanged source",
+                                   source_sha256=roles.fingerprint(self.repo))
+                self.assertEqual(self.launch(slot), 0)
+                self.assertEqual(self.launch(slot, SESSION, "Recall prior turn, no edits."), 0)
+                self.ticket["read_only"] = False
+                self.ticket["allowed_directories"] = write_scope
+                with self.assertRaisesRegex(ValueError, "exact same task"):
+                    self.launch(slot, SESSION, "Cannot change access.")
+
+    def test_read_only_worker_rejects_stale_source_before_claim(self):
+        self.ticket.update(read_only=True, allowed_directories=[], source_sha256="0" * 64)
+        with self.assertRaisesRegex(ValueError, "current source_sha256"):
+            self.launch()
+        self.assertFalse((self.coordination.parent / "role-state/assignments").exists())
+
+    def test_read_only_worker_mount_blocks_fake_provider_edit(self):
+        self.ticket.update(read_only=True, allowed_directories=[], source_sha256=roles.fingerprint(self.repo))
+        self.options["edit"] = "src/content.txt"
+        self.assertNotEqual(self.launch(), 0)
+        self.assertEqual((self.repo / "src/content.txt").read_text(), "original")
+
+    def failed_read_only_start(self):
+        self.ticket.update(read_only=True, allowed_directories=[], source_sha256=roles.fingerprint(self.repo))
+        self.options.update(history=False, code=1)
+        with self.assertRaisesRegex(ValueError, "exactly one"):
+            self.launch()
+        return state.read_state("worker-a", "codex", allow_pending=True)
+
+    def test_abandon_preserves_failed_empty_start_and_refuses_replay(self):
+        failed = self.failed_read_only_start()
+        attempt = failed["last"]["attempt_id"]
+        source = roles.fingerprint(self.repo)
+        with self.assertRaisesRegex(ValueError, "observed source"):
+            roles.abandon_start(self.load(), "worker-a", attempt, "0" * 64, "Inspected startup failure")
+        original = dict(self.ticket)
+        self.ticket["prompt"] = "different instruction"
+        with self.assertRaisesRegex(ValueError, "ownership differs"):
+            roles.abandon_start(self.load(), "worker-a", attempt, source, "Inspected startup failure")
+        self.ticket = original
+        with self.assertRaisesRegex(ValueError, "exact failed"):
+            roles.abandon_start(self.load(), "worker-a", OTHER, source, "Inspected startup failure")
+        roles.abandon_start(self.load(), "worker-a", attempt, source, "Inspected startup failure")
+        data = state.read_state("worker-a", "codex")
+        self.assertEqual(data["last"]["phase"], "abandoned")
+        self.assertEqual(data["abandoned"][failed["last"]["key"]]["attempt_id"], attempt)
+        self.assertEqual(data["last"]["source_before"], failed["last"]["source_before"])
+        self.assertEqual(data["last"]["exit_code"], 1)
+        with self.assertRaisesRegex(ValueError, "abandoned ticket"):
+            self.launch()
+        self.ticket["id"] = "explicit-new-inspection"
+        self.options.update(history=True, code=0)
+        self.assertEqual(self.launch(), 0)
+        self.assertIn(failed["last"]["key"], state.read_state("worker-a", "codex")["abandoned"])
+
+    def test_abandon_refuses_unknown_exit_success_history_or_editing(self):
+        failed = self.failed_read_only_start()
+        attempt = failed["last"]["attempt_id"]
+        source = roles.fingerprint(self.repo)
+        for change in ({"process_exited": False}, {"exit_code": 0}, {"exit_code": None}, {"phase": "starting"}):
+            mutated = json.loads(json.dumps(failed))
+            mutated["last"].update(change)
+            state.save_state(mutated)
+            with self.subTest(change=change), self.assertRaisesRegex(ValueError, "positive process-exit"):
+                roles.abandon_start(self.load(), "worker-a", attempt, source, "Inspected")
+        state.save_state(failed)
+        with self.assertRaisesRegex(ValueError, "read-only worker"):
+            roles.abandon_start({**self.load(), "read_only": False}, "worker-a", attempt, source, "Inspected")
+        with self.assertRaisesRegex(ValueError, "read-only worker"):
+            roles.abandon_start(self.load(), "reviewer", attempt, source, "Inspected")
+        runtime = roles.prepare_runtime("worker-a/tasks/" + failed["last"]["key"])
+        path = runtime / "codex/sessions/unbound.jsonl"
+        path.parent.mkdir()
+        path.write_text('{}')
+        with self.assertRaisesRegex(ValueError, "history exists"):
+            roles.abandon_start(self.load(), "worker-a", attempt, source, "Inspected")
+        with self.assertRaisesRegex(ValueError, "unknown"):
+            self.launch()
+
+    def test_abandon_save_failure_never_starts_agent(self):
+        failed = self.failed_read_only_start()
+        with patch.object(state, "save_state", side_effect=OSError("disk")), \
+                patch.object(roles, "run_provider") as run:
+            with self.assertRaises(OSError):
+                roles.abandon_start(self.load(), "worker-a", failed["last"]["attempt_id"],
+                                    roles.fingerprint(self.repo), "Inspected startup failure")
+            run.assert_not_called()
+        with self.assertRaisesRegex(ValueError, "unknown"):
+            self.launch()
+
+    def test_abandon_dry_run_flag_refuses_without_mutation(self):
+        failed = self.failed_read_only_start()
+        self.load()
+        with patch.object(sys, "argv", ["orca_roles", "abandon-start", "--ticket", str(self.path),
+                                       "--slot", "worker-a", "--dry-run",
+                                       "--attempt-id", failed["last"]["attempt_id"],
+                                       "--observed-source", roles.fingerprint(self.repo),
+                                       "--reason", "Inspected startup failure"]), \
+                patch.object(state, "save_state") as save, patch.object(roles, "run_provider") as run:
+            self.assertEqual(roles.main(), 1)
+            save.assert_not_called()
+            run.assert_not_called()
+        self.assertEqual(state.read_state("worker-a", "codex", allow_pending=True), failed)
 
     def test_cursor_wal_is_read_and_snapshot_is_stable_after_close(self):
         self.cursor()
@@ -328,6 +442,19 @@ class RoleContinuationTests(unittest.TestCase):
             return code
         with patch.object(roles, "run_provider", side_effect=run):
             with self.assertRaisesRegex(ValueError, "outside"):
+                self.launch()
+        with self.assertRaisesRegex(ValueError, "unknown"):
+            self.launch()
+
+    def test_external_change_during_read_only_worker_keeps_unknown(self):
+        self.ticket.update(read_only=True, allowed_directories=[], source_sha256=roles.fingerprint(self.repo))
+        real = roles.run_provider
+        def run(command, data):
+            code = real(command, data)
+            (self.repo / "src/content.txt").write_text("parallel edit")
+            return code
+        with patch.object(roles, "run_provider", side_effect=run):
+            with self.assertRaisesRegex(RuntimeError, "source changed during read-only"):
                 self.launch()
         with self.assertRaisesRegex(ValueError, "unknown"):
             self.launch()

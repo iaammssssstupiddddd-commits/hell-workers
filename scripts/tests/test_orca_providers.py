@@ -36,6 +36,13 @@ class ProviderTests(unittest.TestCase):
             with self.subTest(scope=scope), self.assertRaisesRegex(ValueError, "leaf scope"):
                 providers.provider_for({**self.simple(), "allowed_directories": [scope]}, "worker-b")
 
+    def test_b_acceptance_probe_requires_explicit_read_only(self) -> None:
+        ticket = {**self.simple(), "allowed_directories": [], "task_kind": "acceptance-probe"}
+        self.assertEqual(providers.provider_for({**ticket, "read_only": True}, "worker-b"), "cursor")
+        for value in (False, "true", None):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                providers.provider_for({**ticket, "read_only": value}, "worker-b")
+
     @patch("scripts.orca_providers.shutil.which", side_effect=lambda name: f"/bin/{name}")
     def test_commands_never_fall_back_to_another_provider(self, _) -> None:
         cursor = providers.command_for("cursor", Path("/repo"), "worker", "task")
@@ -57,6 +64,19 @@ class ProviderTests(unittest.TestCase):
     def test_missing_provider_stops(self, _) -> None:
         with self.assertRaisesRegex(RuntimeError, "cursor CLI"):
             providers.command_for("cursor", Path("/repo"), "worker", "task")
+
+    @patch("scripts.orca_providers.shutil.which", side_effect=lambda name: f"/bin/{name}")
+    def test_read_only_workers_keep_provider_and_exact_resume(self, _) -> None:
+        session = "e1fd2684-d55a-4794-9741-903c92b7dbea"
+        cursor = providers.command_for("cursor", Path("/repo"), "worker", "next", session, read_only=True)
+        self.assertEqual(cursor[cursor.index("--mode") + 1], "ask")
+        self.assertEqual(cursor[cursor.index("--resume") + 1], session)
+        codex = providers.command_for("codex", Path("/repo"), "worker", "next", session, read_only=True)
+        self.assertEqual(codex[codex.index("--sandbox") + 1], "read-only")
+        self.assertEqual(codex[1:3], ["resume", session])
+        policy = providers.cursor_permissions({**self.simple(), "read_only": True})["permissions"]
+        self.assertEqual(policy["allow"], ["Read(**)"])
+        self.assertIn("Write(**)", policy["deny"])
 
     def test_cursor_permissions_limit_writes_and_disable_shell_mcp(self) -> None:
         config = providers.cursor_permissions(self.simple())
