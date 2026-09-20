@@ -86,7 +86,10 @@ class OrcaRoleTests(unittest.TestCase):
                   "source_sha256": roles.fingerprint(self.repo), "verdict": "approved",
                   "reviewer_session": "fixture-reviewer", "validation_evidence": "fixture-pass",
                   "blocking_findings": []}
-        roles.verify_review(ticket, record)
+        with patch.object(roles, "acquire_host"), \
+                patch.object(roles.bindings, "read_state", return_value={"tasks": {}}), \
+                self.assertRaisesRegex(ValueError, "fixed reviewer's"):
+            roles.verify_review(ticket, record)
         with self.assertRaisesRegex(ValueError, "blocking"):
             roles.verify_review(ticket, {**record, "blocking_findings": ["bug"]})
         with self.assertRaisesRegex(ValueError, "evidence"):
@@ -109,7 +112,8 @@ class OrcaRoleTests(unittest.TestCase):
         ticket = self.load()
         runtime = self.root / "empty-runtime"
         runtime.mkdir()
-        with patch.object(roles, "acquire_host"), patch.object(roles, "prepare_runtime", return_value=runtime):
+        with patch.object(roles, "acquire_host"), patch.object(roles, "prepare_runtime", return_value=runtime), \
+                patch.object(roles.bindings, "read_state", return_value={"slot": "reviewer", "tasks": {}}):
             with self.assertRaisesRegex(ValueError, "does not exist"):
                 roles.launch(ticket, "reviewer", dry_run=False,
                              resume_session="e1fd2684-d55a-4794-9741-903c92b7dbea")

@@ -41,9 +41,10 @@ def command_for(provider: str, repo: Path, role: str, prompt: str,
     if not executable:
         raise RuntimeError(f"{provider} CLI is not installed")
     if provider == "cursor":
-        if role != "worker" or resume_session:
-            raise ValueError("Cursor is worker-b only; continuation needs the durable task protocol")
-        return [executable, "--workspace", str(repo), "--sandbox", "enabled", "--trust", prompt]
+        if role != "worker":
+            raise ValueError("Cursor is worker-b only")
+        return [executable, "--workspace", str(repo), "--sandbox", "enabled", "--trust",
+                *(["--resume", resume_session] if resume_session else []), prompt]
     return [executable, *(["resume", resume_session] if resume_session else []),
             "--cd", str(repo), "--sandbox", "read-only" if role == "reviewer" else "workspace-write",
             "--ask-for-approval", "never", "--disable", "multi_agent", "--no-alt-screen", prompt]

@@ -46,6 +46,10 @@ class ProviderTests(unittest.TestCase):
         codex = providers.command_for("codex", Path("/repo"), "reviewer", "review")
         self.assertIn("read-only", codex)
         self.assertNotIn("--model", codex)
+        session = "e1fd2684-d55a-4794-9741-903c92b7dbea"
+        resumed = providers.command_for("cursor", Path("/repo"), "worker", "next", session)
+        self.assertEqual(resumed[resumed.index("--resume") + 1], session)
+        self.assertNotIn("--continue", resumed)
         with self.assertRaises(ValueError):
             providers.command_for("cursor", Path("/repo"), "reviewer", "wrong")
 

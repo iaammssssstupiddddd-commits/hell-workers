@@ -13,6 +13,7 @@ import json
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import uuid
@@ -20,9 +21,11 @@ from contextlib import ExitStack
 from pathlib import Path
 
 try:
+    import orca_role_state as bindings
     from host_coordination import acquire_host, state_root
     from orca_providers import command_for, provider_for, write_cursor_policy
 except ModuleNotFoundError:
+    from scripts import orca_role_state as bindings
     from scripts.host_coordination import acquire_host, state_root
     from scripts.orca_providers import command_for, provider_for, write_cursor_policy
 
@@ -179,25 +182,80 @@ def verify_review(ticket: dict, record: dict) -> None:
         raise ValueError("review requires fixed reviewer session and same-subject validation evidence")
     if record.get("blocking_findings") != []:
         raise ValueError("review has unresolved or unrecorded blocking findings")
+    with acquire_host("reviewer", inherit=False), acquire_host(workspace_slot(repo), inherit=False):
+        validate_ticket(ticket)
+        data = bindings.read_state("reviewer", "codex")
+        bound = data["tasks"].get("fixed-reviewer")
+        if (not bound or record["reviewer_session"] != bound["session_id"]
+                or bound["ticket_sha256"] != bindings.digest(ticket)
+                or bound["source_sha256"] != fingerprint(repo)
+                or data["last"]["exit_code"] != 0):
+            raise ValueError("review does not match the fixed reviewer's latest observed subject")
+        snapshot = bindings.session_snapshot(prepare_runtime("reviewer"), "codex", Path(bound["origin"]))
+        if any(snapshot[key] != bound[key] for key in snapshot):
+            raise ValueError("fixed reviewer history changed; reconcile before accepting review")
 
 
-def launch(ticket: dict, slot: str, *, dry_run: bool, resume_session: str | None = None) -> int:
+def workspace_slot(repo: Path) -> str:
+    return "workspace-" + hashlib.sha256(str(repo).encode()).hexdigest()
+
+
+def worker_scope(ticket: dict, *, initial: bool) -> None:
+    repo = Path(ticket["repo"])
+    if initial and git(repo, "status", "--porcelain"):
+        raise ValueError("worker launch requires a clean checkout; preserve existing changes")
+    if git(repo, "diff", "--cached", "--name-only"):
+        raise ValueError("worker index changed; coordinator must reconcile")
+    names = set()
+    for args in (("diff", "HEAD", "--no-renames", "--name-only", "-z"),
+                 ("ls-files", "--others", "--exclude-standard", "-z")):
+        names.update(subprocess.check_output(["git", "-C", str(repo), *args]).split(b"\0"))
+    for name in names - {b""}:
+        path = Path(os.fsdecode(name))
+        if not any(path.is_relative_to(scope) for scope in map(Path, ticket["allowed_directories"])):
+            raise ValueError("worker has changes outside the assigned scope; preserve and reconcile")
+
+
+def run_provider(command: list[str], data: dict) -> int:
+    child = None
+    try:
+        child = subprocess.Popen(command, start_new_session=True)
+        return child.wait()
+    finally:
+        if child is not None:
+            if child.poll() is None:
+                try:
+                    os.killpg(child.pid, signal.SIGTERM)
+                except ProcessLookupError:
+                    pass
+                try:
+                    child.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    os.killpg(child.pid, signal.SIGKILL)
+                    child.wait(timeout=5)
+            data["last"].update(process_exited=True, exit_code=child.returncode)
+        # Until all postconditions pass this stays unknown, even after exit 0.
+        data["last"]["phase"] = "unknown"
+        bindings.save_state(data)
+
+
+def launch(ticket: dict, slot: str, *, dry_run: bool, resume_session: str | None = None,
+           follow_up: str | None = None) -> int:
     role = "reviewer" if slot == "reviewer" else "worker"
     provider = provider_for(ticket, slot)
     if resume_session:
-        if role != "reviewer" or str(uuid.UUID(resume_session)) != resume_session:
-            raise ValueError("resume requires a reviewer session UUID")
+        bindings.identity(resume_session)
+    if follow_up is not None and (not follow_up.strip() or len(follow_up) > 32_000):
+        raise ValueError("follow-up must contain 1..32000 characters")
     if role == "worker" and not ticket.get("allowed_directories"):
         raise ValueError("worker needs a nonempty writable directory scope")
     repo = Path(ticket["repo"])
-    if role == "worker" and git(repo, "status", "--porcelain"):
-        raise ValueError("worker launch requires a clean checkout; preserve existing changes")
     prompt = (
         f"Role: {role}. Ticket: {ticket['id']}. Read AGENTS.md. No subagents, no commit, "
         "no push, no changes outside assigned directories. Do not start builds/tests/analysis "
         "servers; ask the coordinator for validation. Report findings and stop. "
         f"Allowed directories: {ticket['allowed_directories'] if role == 'worker' else []}.\n"
-        + ticket["prompt"]
+        + (follow_up if follow_up is not None else ticket["prompt"])
     )
     command = command_for(provider, repo, role, prompt, resume_session)
     if dry_run:
@@ -205,33 +263,61 @@ def launch(ticket: dict, slot: str, *, dry_run: bool, resume_session: str | None
                           "allowed_directories": ticket["allowed_directories"] if role == "worker" else [],
                           "command": command}, ensure_ascii=False, indent=2))
         return 0
-    workspace_slot = "workspace-" + hashlib.sha256(str(repo).encode()).hexdigest()
     with ExitStack() as leases:
         leases.enter_context(acquire_host(slot, inherit=False))
-        leases.enter_context(acquire_host(workspace_slot, inherit=False))
+        leases.enter_context(acquire_host(workspace_slot(repo), inherit=False))
         validate_ticket(ticket)
-        if role == "worker" and git(repo, "status", "--porcelain"):
-            raise ValueError("worker checkout changed before admission; preserve existing changes")
-        runtime = prepare_runtime(slot)
-        if role == "reviewer" and not resume_session and any((runtime / "codex/sessions").glob("**/*.jsonl")):
-            raise ValueError("reviewer history exists; reuse the terminal or pass --resume-session")
-        if resume_session and not any((runtime / "codex/sessions").glob(f"**/*-{resume_session}.jsonl")):
-            raise ValueError("reviewer session does not exist in the fixed reviewer runtime")
         before = fingerprint(repo)
+        subject = {"repo": str(repo), "branch": ticket["branch"], "base": ticket["base"],
+                   "common": git(repo, "rev-parse", "--path-format=absolute", "--git-common-dir")}
+        data = bindings.read_state(slot, provider)
+        key, previous = bindings.admit(data, ticket, subject, before, resume_session, follow_up)
+        if role == "worker":
+            worker_scope(ticket, initial=previous is None)
+            task_key = bindings.digest({"common": subject["common"], "id": ticket["id"]})
+            leases.enter_context(acquire_host("workspace-" + task_key, inherit=False))
+            bindings.claim_task(task_key, slot, provider, ticket, subject)
+            # Do not silently adopt pre-ledger slot history when moving to task runtimes.
+            if bindings.history_exists(prepare_runtime(slot)):
+                raise ValueError("unbound legacy worker history; reconcile before launch")
+        runtime = prepare_runtime(slot if role == "reviewer" else f"{slot}/tasks/{key}")
+        origin = Path(previous["origin"]) if previous else repo
+        if previous:
+            snapshot = bindings.session_snapshot(runtime, provider, origin)
+            if any(snapshot[name] != previous[name] for name in snapshot):
+                raise ValueError("provider session changed since observed exit; reconcile before resume")
+        elif bindings.history_exists(runtime):
+            raise ValueError("unbound provider history; never start a replacement session")
         if role == "reviewer" and ticket.get("source_sha256") != before:
             raise ValueError("review ticket needs the current source_sha256; regenerate after changes")
         policy = None
         if provider == "cursor":
             policy = state_root() / "worker-b-cursor-policy.json"
             write_cursor_policy(ticket, policy)
-        result = subprocess.run(sandbox_command(ticket, role, runtime, command,
-                                               provider=provider, policy=policy), check=False)
-        if role == "reviewer" and fingerprint(repo) != before:
+        command = sandbox_command(ticket, role, runtime, command, provider=provider, policy=policy)
+        data["last"] = {"attempt_id": str(uuid.uuid4()), "key": key, "phase": "starting",
+                        "process_exited": False, "exit_code": None, "source_before": before,
+                        "input_sha256": hashlib.sha256(prompt.encode()).hexdigest(),
+                        "terminal": os.environ.get("ORCA_TERMINAL_HANDLE")}
+        bindings.save_state(data)
+        code = run_provider(command, data)
+        validate_ticket(ticket)
+        after = fingerprint(repo)
+        if role == "reviewer" and after != before:
             raise RuntimeError("source changed during review; review is invalid")
+        if role == "worker":
+            worker_scope(ticket, initial=False)
+        snapshot = bindings.session_snapshot(runtime, provider, origin)
+        if previous and snapshot["session_id"] != previous["session_id"]:
+            raise ValueError("provider switched session; preserve for reconciliation")
+        data["tasks"][key] = {"key": key, "ticket_sha256": bindings.digest(ticket), "subject": subject,
+                              "origin": str(origin), "source_sha256": after, **snapshot}
+        data["last"]["phase"] = "recorded"
+        bindings.save_state(data)
         print(json.dumps({"ticket": ticket["id"], "role": role, "provider": provider,
-                          "exit_code": result.returncode,
-                          "source_sha256": fingerprint(repo), "approved": False}))
-        return result.returncode
+                          "exit_code": code, "session_id": snapshot["session_id"],
+                          "source_sha256": after, "approved": False}))
+        return code
 
 
 def main() -> int:
@@ -241,6 +327,7 @@ def main() -> int:
     parser.add_argument("--slot", choices=("worker-a", "worker-b", "reviewer"), default="reviewer")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--resume-session")
+    parser.add_argument("--follow-up-file", type=Path)
     parser.add_argument("--review-record", type=Path)
     args = parser.parse_args()
     try:
@@ -254,7 +341,8 @@ def main() -> int:
             verify_review(ticket, json.loads(args.review_record.read_text()))
             print("Review matches the exact source; this command does not integrate or publish.")
             return 0
-        return launch(ticket, args.slot, dry_run=args.dry_run, resume_session=args.resume_session)
+        return launch(ticket, args.slot, dry_run=args.dry_run, resume_session=args.resume_session,
+                      follow_up=args.follow_up_file.read_text() if args.follow_up_file else None)
     except (OSError, ValueError, RuntimeError, subprocess.CalledProcessError) as error:
         print(f"Orca role refused: {error}", file=sys.stderr)
         return 1
