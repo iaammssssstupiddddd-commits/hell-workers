@@ -95,6 +95,15 @@ class FrontdeskTests(unittest.TestCase):
             desk.menu_action("3")
             module.return_value.consult.assert_not_called()
 
+    def test_linear_menu_imports_through_adapter(self) -> None:
+        module = unittest.mock.Mock()
+        module.import_issue.return_value = {"request_id": "e1fd2684-d55a-4794-9741-903c92b7dbea"}
+        with patch("builtins.input", side_effect=["HW-42", "eeac8301-ddb2-4c31-8a6c-e2a7f2fc7efb"]), patch.object(
+            desk, "linear_module", return_value=module
+        ), patch("builtins.print"):
+            desk.menu_action("1")
+        module.import_issue.assert_called_once_with("HW-42", "eeac8301-ddb2-4c31-8a6c-e2a7f2fc7efb")
+
     def test_invalid_content_timestamp_and_dispatch_identity_preserved(self) -> None:
         first = desk.submit("task")
         for change in ({"request": " "}, {"request": 1}, {"created_at": "invalid"},

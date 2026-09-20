@@ -82,9 +82,12 @@ class HostCoordinationTests(unittest.TestCase):
             host.acquire_host()
 
     def test_role_slots_are_bounded_and_independent_of_heavy_work(self) -> None:
-        with host.acquire_host("reviewer"), host.acquire_host("worker-a"), host.acquire_host("worker-b"):
+        with (host.acquire_host("reviewer"), host.acquire_host("worker-a"), host.acquire_host("worker-b"),
+              host.acquire_host("linear-intake-state")):
             with self.assertRaises(host.HostBusyError):
                 host.acquire_host("reviewer")
+            with self.assertRaises(host.HostBusyError):
+                host.acquire_host("linear-intake-state")
             with host.acquire_host():
                 pass
 

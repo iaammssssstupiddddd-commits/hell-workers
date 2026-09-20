@@ -252,7 +252,18 @@ class TaskPolicy:
     def project(self, method: str, params: dict, value: dict) -> dict:
         if method == "orchestration.send":
             message = self.project_message(value.get("message"), inbound=False)
-            if any(message.get(name) != params.get(name) for name in ("type", "subject", "body", "payload")):
+            if any(message.get(name) != params.get(name) for name in ("type", "subject", "body")):
+                raise wire.Refused("send receipt differs from this request")
+            # Orca 1.4.205 parses and reserializes some lifecycle payloads before
+            # returning the receipt. Compare the already schema-checked JSON value,
+            # not insignificant wire whitespace, while still rejecting duplicates,
+            # type changes and any content change through wire.decode.
+            try:
+                request_payload = wire.decode(params["payload"].encode())
+                receipt_payload = wire.decode(message["payload"].encode())
+            except (AttributeError, KeyError, TypeError, UnicodeEncodeError) as error:
+                raise wire.Refused("send receipt has invalid payload") from error
+            if receipt_payload != request_payload:
                 raise wire.Refused("send receipt differs from this request")
             result = {"message": message}
             if params["type"] == "worker_done":

@@ -141,6 +141,14 @@ def coordinator_module():
     return orca_coordinator
 
 
+def linear_module():
+    try:
+        import orca_issue_context
+    except ModuleNotFoundError:
+        from scripts import orca_issue_context
+    return orca_issue_context
+
+
 def multiline() -> str:
     print("単独の . で確定、空なら取消。", flush=True)
     lines = []
@@ -177,11 +185,18 @@ def show_reply(turn: dict) -> None:
 
 def menu_action(choice: str) -> None:
     if choice == "1":
+        issue = input("Linear課題IDまたはURL（空で取消）: ").strip()
+        if not issue:
+            return
+        workspace = input("Linear workspace UUID: ").strip()
+        result = linear_module().import_issue(issue, workspace)
+        print(f"Linear受付済み（未dispatch）: {result['request_id']}", flush=True)
+    elif choice == "7":
         print("目的・完了条件・変更禁止事項を入力。", flush=True)
         text = multiline()
         if text:
             item = submit(text)
-            print(f"受付済み（未dispatch）: {item['id']}", flush=True)
+            print(f"手入力受付済み（未dispatch）: {item['id']}", flush=True)
     elif choice == "2":
         print(json.dumps(list_requests(), ensure_ascii=False, indent=2), flush=True)
     elif choice in {"3", "4", "5", "6"}:
@@ -212,7 +227,8 @@ def menu() -> None:
         print("Hell Workers | 開発受付・統括相談", flush=True)
         print("統括は選択時だけ起動。相談/分割はread-only、実装の自動投入は未対応です。", flush=True)
         while True:
-            print("\n1: 依頼を保存  2: 一覧  3: 統括へ相談  4: 追記  5: 状態/回答  6: 異常終了後の照合  q: 閉じる", flush=True)
+            print("\n1: Linear課題を受付  2: 一覧  3: 統括へ相談  4: 追記  5: 状態/回答  "
+                  "6: 異常終了後の照合  7: 手入力fallback  q: 閉じる", flush=True)
             try:
                 choice = input("> ").strip()
                 if choice == "q":

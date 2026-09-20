@@ -169,6 +169,50 @@ class TaskBridgeTests(unittest.TestCase):
         for secret in (SECRET, CAP, self.policy.token):
             self.assertNotIn(secret, json.dumps(reply) + journal)
 
+    def test_send_receipt_accepts_equivalent_json_serialization(self):
+        request = self.request()
+        request["params"]["type"] = "escalation"
+        request["params"]["subject"] = "Need a decision"
+        request["params"]["payload"] = json.dumps({
+            "taskId": AUTHORITY["task"],
+            "dispatchId": AUTHORITY["dispatch"],
+            "phase": "blocked",
+        }, indent=2)
+
+        def compact_payload(method, result):
+            if method == "orchestration.send":
+                result["message"]["payload"] = (
+                    '{"phase":"\\u0062locked","dispatchId":"dispatch_fixture",'
+                    '"taskId":"task_fixture"}'
+                )
+
+        self.runtime.change = compact_payload
+        reply = self.policy.handle(request)
+        self.assertTrue(reply["ok"], reply)
+        self.assertEqual(len(self.mutations()), 1)
+
+    def test_send_receipt_rejects_json_content_or_type_change(self):
+        for replacement in (
+            {"taskId": AUTHORITY["task"], "dispatchId": AUTHORITY["dispatch"], "phase": "changed"},
+            {"taskId": "other", "dispatchId": AUTHORITY["dispatch"], "phase": "reading"},
+            [
+                {"taskId": AUTHORITY["task"], "dispatchId": AUTHORITY["dispatch"], "phase": "reading"}
+            ],
+        ):
+            with self.subTest(replacement=replacement):
+                self.runtime = Runtime(self.repo)
+                self.policy = self.new_policy()
+
+                def change_payload(method, result, replacement=replacement):
+                    if method == "orchestration.send":
+                        result["message"]["payload"] = json.dumps(replacement)
+
+                self.runtime.change = change_payload
+                reply = self.policy.handle(self.request())
+                self.assertFalse(reply["ok"])
+                self.assertEqual(self.policy.phase, "unknown")
+                self.assertEqual(len(self.mutations()), 1)
+
     def test_settlement_requires_exact_live_verdict_and_supports_failed_outcome(self):
         for outcome, state in (("succeeded", "completed"), ("failed", "failed")):
             with self.subTest(outcome=outcome):

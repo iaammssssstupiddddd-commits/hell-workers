@@ -37,7 +37,8 @@ def state_root() -> Path:
 
 
 def lock_path(name: str = "heavy") -> Path:
-    if (name not in {"heavy", "reviewer", "worker-a", "worker-b", "coordinator", "frontdesk-state", "frontdesk-ui"}
+    if (name not in {"heavy", "reviewer", "worker-a", "worker-b", "coordinator", "frontdesk-state",
+                     "frontdesk-ui", "linear-intake-state"}
             and not re.fullmatch(r"workspace-[a-f0-9]{64}", name)):
         raise ValueError(f"unknown host slot: {name}")
     root = state_root()
