@@ -70,6 +70,12 @@ workspace診断APIは形式不正を返したため、profiling部分の正当�
 - [ ] 負荷証拠・source/asset/binary同一性・全runの独立検証。失敗は失敗のまま記録。
 - [ ] 同環境の静止/稼働の分布とばらつきから候補実装前のbudgetを別途freeze。
 
+2026-09-20 06:42 UTC、検証記録commit `d51bb45fca327bd65e1b8bd9387592f77915157d` を
+clean subjectとしてcoordinator planを実行したが、MemAvailable 9.66 GiBがnative開始下限10 GiBに
+足りずblocked。RAの自動解放と全Cargo終了後も不足しており、他アプリの終了や下限の緩和はしていない。
+launcher未実行、active実機runは0、job directory/batchは未作成（既存台帳80 batchのまま）。
+RAM確保後、同じcheckout/cacheから新しいplanを取得する。未起動planのlauncherは流用しない。
+
 ## 6. リスクと対策
 
 - 搬送距離/疲労で生産停止: 通常taskと所有者・対象を追い、値を毎frame固定して隠さない。
@@ -98,6 +104,7 @@ jobはclean commit後のplanで作成する。まだ実機は未起動。最終�
 
 ## 9. AI引継ぎメモ
 
-- A1完了、A2のclean-subject実機計測へ進む。M1-0全体未完。新runtime基盤へ進む前に稼働参照とbudgetが必要。
+- A1完了。A2は開始RAM条件で停止中。空きRAM10 GiB以上の環境で再planする。
+  M1-0全体未完。新runtime基盤へ進む前に稼働参照とbudgetが必要。
 - 読む場所: 移行計画、静止参照記録、本計画、`perf_scenario/building_art_static/`、native Skill。
 - 完了後は有効契約/結果を恒久docsへ移し、本計画を閉じて索引を更新する。

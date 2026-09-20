@@ -5,6 +5,9 @@
 全体の順序は[移行計画](plans/3d-rtt/non-wall-floor-building-art-migration-plan-2026-09-19.md) M1-0、
 実施状況は[稼働参照計画](plans/3d-rtt/building-art-active-reference-plan-2026-09-20.md)が所有する。
 
+2026-09-20: fixtureは `ca653385` でcommitし、変更別全品質ゲート・通常/profiling Clippyを通過。
+native planは空きRAM9.66 GiBが開始下限10 GiBに足りず起動前に停止した。有効な稼働runはまだ0。
+
 ## 固定条件
 
 - fixture `building-art-active-nine-v1`、native profile `building-art-active-nine-reference-v1`、seed20260920。
