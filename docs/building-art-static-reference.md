@@ -37,7 +37,8 @@ TaskWorkers / RestAreaOccupants / StoredItemsを直接偽造せず、workerのAs
 - profiling featureかつ明示workload時のみ有効。通常起動の入力・建設・描画・保存・Helpへ接続しない。
 - `Setup`で合法配置と実actor数を確認して既存Blueprint／Spa factoryへ渡す。
 - `IndoorSettle`で通常の建設完了→worker設定→Spa activation→Mixer mirror→電力topology/output/allocationを順に実行する。
-  初期化完了後にタスク・水・人数・通電を再設定しない。
+  完了ポップアップ・bounceだけは準備時に一度終了する。Virtual Time停止下で永続化させない。
+  初期化完了後にタスク・水・人数・通電を再設定せず、完了演出の再出現も修復せず失敗扱いにする。
 - `PostUpdate`のvisibility確定後、owner/占有/支持物/companion/状態/cameraを検査する。
   現行の共有mesh 3種・対象3D root `6N`・対象foreground `4N`と、実resident handle・可視性を要求する。
   準備完了前のasset待ちは許すが、完了後の不一致・消失はエラー終了。

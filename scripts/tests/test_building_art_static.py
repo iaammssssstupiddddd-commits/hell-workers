@@ -22,7 +22,7 @@ import building_art_static_acceptance as acceptance
 def sidecar(copies):
     evidence = {"records": expected_records(copies), "target_count": copies * 10,
                 "target_structural_roots": copies * 6, "target_foreground_owners": copies * 4,
-                "target_active_unique_meshes": 3, "souls": copies // 4 * 15}
+                "target_active_unique_meshes": 3, "souls": copies // 4 * 15, "completion_effects": 0}
     digest = hashlib.sha256(json.dumps(evidence, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
     return {"schema_version": 1, "contract_id": "building-art-static-v1", "evidence_kind": "paused-static-only",
             "active_simulation_evidence": False, "camera_scale": 5.0, "stable_frames": 100,

@@ -71,7 +71,7 @@ def read_building_art_static(data_dir: Path, *, expected_case: Case) -> tuple[di
             raise ValueError("case differs from frozen static contract")
         expected = {"records": expected_records(copies), "target_count": copies * 10,
                     "target_structural_roots": copies * 6, "target_foreground_owners": copies * 4,
-                    "target_active_unique_meshes": 3, "souls": copies // 4 * 15}
+                    "target_active_unique_meshes": 3, "souls": copies // 4 * 15, "completion_effects": 0}
         keys = {"schema_version", "contract_id", "evidence_kind", "active_simulation_evidence",
                 "camera_scale", "stable_frames", "layout_sha256", "initial", "final"}
         if not isinstance(value, dict) or set(value) != keys:

@@ -39,6 +39,38 @@ pub(crate) fn settle_refine_visuals(world: &mut World) {
     world
         .run_system_cached(hw_jobs::visual_sync::sync_mud_mixer_active_system)
         .expect("profiling setup has the production visual resources");
+    settle_completion_effects(world);
+}
+
+/// A paused reference must not retain the factories' one-shot completion text
+/// or completion bounce forever. This is setup, never per-frame repair.
+fn settle_completion_effects(world: &mut World) {
+    use hw_visual::blueprint::{BuildingBounceEffect, CompletionText};
+    let state = world.resource::<BuildingArtStaticState>();
+    if state.phase != Phase::Seeded || state.completion_effects_settled {
+        return;
+    }
+    let texts = world
+        .query_filtered::<Entity, With<CompletionText>>()
+        .iter(world)
+        .collect::<Vec<_>>();
+    for entity in texts {
+        world.despawn(entity);
+    }
+    let owners = world
+        .query_filtered::<(Entity, &mut Transform), With<BuildingBounceEffect>>()
+        .iter_mut(world)
+        .map(|(entity, mut transform)| {
+            transform.scale = Vec3::ONE;
+            entity
+        })
+        .collect::<Vec<_>>();
+    for owner in owners {
+        world.entity_mut(owner).remove::<BuildingBounceEffect>();
+    }
+    world
+        .resource_mut::<BuildingArtStaticState>()
+        .completion_effects_settled = true;
 }
 
 #[derive(Default, PartialEq, Eq, Debug)]
@@ -59,6 +91,7 @@ pub(crate) struct BuildingArtStaticState {
     owners: Vec<Entity>,
     evidence: Option<Value>,
     stable_frames: u64,
+    completion_effects_settled: bool,
 }
 
 pub(crate) fn should_settle_building_art_static(
@@ -107,6 +140,15 @@ type SpriteQuery<'w, 's> = Query<
     (&'static ChildOf, &'static Sprite, &'static ViewVisibility),
     With<hw_visual::layer::VisualLayerKind>,
 >;
+type CompletionEffects<'w, 's> = Query<
+    'w,
+    's,
+    (),
+    Or<(
+        With<hw_visual::blueprint::CompletionText>,
+        With<hw_visual::blueprint::BuildingBounceEffect>,
+    )>,
+>;
 
 #[derive(SystemParam)]
 pub(crate) struct InspectParams<'w, 's> {
@@ -127,6 +169,7 @@ pub(crate) struct InspectParams<'w, 's> {
     stockpiles: Query<'w, 's, &'static hw_logistics::Stockpile>,
     companions: Query<'w, 's, &'static hw_logistics::BelongsTo, With<hw_logistics::BucketStorage>>,
     camera: Query<'w, 's, &'static Transform, With<hw_ui::camera::MainCamera>>,
+    completion_effects: CompletionEffects<'w, 's>,
     spas: Query<'w, 's, &'static SoulSpaSite>,
     tiles: Query<'w, 's, (&'static SoulSpaTile, Option<&'static TaskWorkers>)>,
     time: Res<'w, Time<Virtual>>,
@@ -165,6 +208,9 @@ pub(crate) fn inspect_building_art_static_system(mut params: InspectParams) {
 fn inspect(params: &InspectParams) -> Result<Option<Value>, String> {
     if !params.time.is_paused() {
         return Err("static fixture Virtual Time is not paused".into());
+    }
+    if !params.state.completion_effects_settled || !params.completion_effects.is_empty() {
+        return Err("static fixture has unfinished completion effects".into());
     }
     let camera = params
         .camera
@@ -396,7 +442,7 @@ fn inspect(params: &InspectParams) -> Result<Option<Value>, String> {
         json!({"records": records, "target_count": params.state.specs.len(),
         "target_structural_roots": layout::copies(params.config.size()) * 6,
         "target_foreground_owners": layout::copies(params.config.size()) * 4,
-        "target_active_unique_meshes": active_meshes.len(), "souls": params.state.actors.len()}),
+        "target_active_unique_meshes": active_meshes.len(), "souls": params.state.actors.len(), "completion_effects": 0}),
     ))
 }
 
@@ -426,5 +472,50 @@ impl BuildingArtStaticState {
             .create_new(true)
             .open(directory.join("building_art_static.json"))?;
         serde_json::to_writer_pretty(file, &summary).map_err(std::io::Error::other)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use hw_visual::blueprint::{BuildingBounceEffect, CompletionText};
+    use hw_visual::floating_text::FloatingText;
+
+    #[test]
+    fn completion_effects_settle_once_and_never_repair_measured_state() {
+        let mut world = World::new();
+        world.init_resource::<BuildingArtStaticState>();
+        let owner = world
+            .spawn((
+                BuildingBounceEffect::completion(),
+                Transform::from_scale(Vec3::splat(1.2)),
+            ))
+            .id();
+        let text = world
+            .spawn(CompletionText {
+                floating_text: FloatingText {
+                    lifetime: 1.0,
+                    config: default(),
+                },
+            })
+            .id();
+        settle_completion_effects(&mut world);
+        assert!(world.get::<BuildingBounceEffect>(owner).is_some());
+        assert!(world.get_entity(text).is_ok());
+
+        world.resource_mut::<BuildingArtStaticState>().phase = Phase::Seeded;
+        settle_completion_effects(&mut world);
+        assert!(world.get::<BuildingBounceEffect>(owner).is_none());
+        assert_eq!(world.get::<Transform>(owner).unwrap().scale, Vec3::ONE);
+        assert!(world.get_entity(text).is_err());
+
+        world
+            .entity_mut(owner)
+            .insert(BuildingBounceEffect::completion());
+        settle_completion_effects(&mut world);
+        assert!(
+            world.get::<BuildingBounceEffect>(owner).is_some(),
+            "a later transient must remain observable to the fail-closed inspector"
+        );
     }
 }

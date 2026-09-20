@@ -659,6 +659,11 @@ canonical・runtime asset・他sessionの原本／検証cacheは変更してい�
 - Rust focused 3 test、Python 9 testは成功。全体検証とnative実測は別gateで、両方の結果を得るまで完了扱いしない。
 - Help review: **No impact**。明示profiling入力からのみ到達する計測経路。通常の建築操作・前提・描画・保存・Help providerは不変。
 - 静止参照は稼働性能の証拠ではない。Mixer回転・Dream粒子・継続生産、基盤budgetは未確定でM1-0を完了扱いしない。
+- `c3733fc1`でfixtureをcommit。変更別contracts/tooling/rust gate（通常/profiling workspace test、計測feature check、Clippy）、`dev.py check`は成功。
+  profiling専用Clippyも成功。rust-analyzerはstartup入口のerror/warning 0。profiling専用moduleはdefault featureの解析対象外で、compiler/testで検証した。
+- 最初のnative batch `building-art-static-20260920-v1`は、停止中に完了ポップアップが残る経路を発見したためCapture build中に中止。
+  ゲーム計測は0回、基準値の採用なし。中止jobの8,192 allocated bytesを削除し、cacheは保持、seal/finalize/storage checkを完了。
+  準備時だけ完了演出を除き、その後の再出現を拒否する修正を追加する。
 
 ### Definition of Done
 
