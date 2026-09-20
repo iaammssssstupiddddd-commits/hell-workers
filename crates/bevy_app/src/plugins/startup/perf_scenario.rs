@@ -729,6 +729,7 @@ pub(crate) struct PerfCaptureParams<'w, 's> {
     wall_density_fixture: Res<'w, WallDensityFixtureState>,
     door_density_fixture: Res<'w, DoorDensityFixtureState>,
     building_art_static: Res<'w, building_art_static::BuildingArtStaticState>,
+    building_art_active: Res<'w, building_art_static::active::BuildingArtActiveState>,
     indoor_light_runtime: Res<'w, crate::systems::lighting::IndoorLightRuntime>,
     indoor_light_texture: Res<'w, crate::systems::visual::indoor_light_texture::IndoorLightTexture>,
     room_lookup: Res<'w, hw_world::RoomTileLookup>,

@@ -39,13 +39,18 @@ pub(crate) struct SetupParams<'w, 's> {
 }
 
 pub(crate) fn setup_building_art_static_system(mut p: SetupParams) {
-    if !p.config.enabled() || p.config.workload() != PerfWorkload::BuildingArtStatic {
+    if !p.config.enabled()
+        || !matches!(
+            p.config.workload(),
+            PerfWorkload::BuildingArtStatic | PerfWorkload::BuildingArtActive
+        )
+    {
         return;
     }
-    p.time.pause();
     if p.state.phase != Phase::Inactive {
         return;
     }
+    p.time.pause();
     let mut actors = p.actors.iter().collect::<Vec<_>>();
     if actors.len() != p.config.soul_count() as usize {
         return;
@@ -252,6 +257,7 @@ type SeedActors<'w, 's> = Query<
 
 #[derive(SystemParam)]
 pub(crate) struct SeedParams<'w, 's> {
+    config: Res<'w, PerfScenarioConfig>,
     state: ResMut<'w, BuildingArtStaticState>,
     world_map: WorldMapRead<'w>,
     commands: Commands<'w, 's>,
@@ -400,7 +406,7 @@ pub(crate) fn seed_building_art_static_system(mut p: SeedParams) {
             }
         }
     }
-    if actor_index != p.state.actors.len() {
+    if actor_index != layout::copies(p.config.size()) / 4 * 15 {
         fail(&mut p.state, &mut p.exit, "unused real Souls".into());
         return;
     }

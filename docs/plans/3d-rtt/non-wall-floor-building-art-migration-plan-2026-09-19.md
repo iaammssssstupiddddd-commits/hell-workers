@@ -794,6 +794,17 @@ canonical・runtime asset・他sessionの原本／検証cacheは変更してい�
   稼働参照・ばらつき校正・基盤budgetをfreezeするまでM1-aへ進めず、静止passを生産性能・アート承認へ読み替えない。
   Bridgeは別件のまま。通常表示・asset・地形・Help本文は変更していない。
 
+### 9種の稼働fixture実装（2026-09-20）
+
+- `building-art-active` を追加。詳細な初期条件・通常処理・除外条件は
+  [稼働参照仕様](../../building-art-active-reference.md)、実施状況は
+  [稼働参照計画](building-art-active-reference-plan-2026-09-20.md)へ分離した。
+- Small 29 Souls / 2 Familiars、Medium 116 / 8。実使い魔の通常再割当、Tank給水、
+  SandPile採取、岩搬入、泥専用Stockpileへの搬出を使用する。一度だけ初期化し、実行中は読取専用。
+- 生産の前中後20秒分布、資材収支、実到着Entity、稼働frame、Rest/Spa人数、Dream粒子を検査する。
+  コンパイルやvalidatorの単体testは実機の継続生産証拠ではない。実測・予算freezeは未完。
+- 静止v2・Bridge除外・M1-a開始条件は維持。通常プレイ/出荷assetに変更はなくHelpはNo impact。
+
 ### Definition of Done
 
 - [ ] M0〜M6の完了条件と全10種の処置が確定。

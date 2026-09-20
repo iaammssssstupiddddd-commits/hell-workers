@@ -164,6 +164,7 @@ impl Plugin for StartupPlugin {
             }
             app.init_resource::<PerfScenarioApplied>()
                 .init_resource::<perf_scenario::building_art_static::BuildingArtStaticState>()
+                .init_resource::<perf_scenario::building_art_static::active::BuildingArtActiveState>()
                 .init_resource::<perf_scenario::PerfScenarioDriverState>()
                 .init_resource::<perf_scenario::DeconstructionPerfFixtureState>()
                 .init_resource::<perf_scenario::IndoorLightFixtureState>()
@@ -173,6 +174,9 @@ impl Plugin for StartupPlugin {
                 .init_resource::<crate::systems::save::PerfLoadFaultInjection>()
                 .init_resource::<perf_scenario::FieldCoreDriverState>()
                 .add_systems(Update, perf_scenario::building_art_static::setup_building_art_static_system.in_set(PerfScenarioSet::Setup))
+                .add_systems(Update, perf_scenario::building_art_static::active::setup.in_set(PerfScenarioSet::Setup))
+                .add_systems(Update, perf_scenario::building_art_static::active::observe
+                    .in_set(PerfScenarioSet::Capture).before(perf_scenario::drive_perf_capture_system))
                 .add_systems(Update, (
                     crate::systems::jobs::building_completion_system,
                     bevy::ecs::schedule::ApplyDeferred,

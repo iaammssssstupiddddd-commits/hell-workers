@@ -7,6 +7,7 @@ from typing import Any
 
 from ..model import Case
 from .building_art_static import read_building_art_static
+from .building_art_active import read_building_art_active
 from . import (
     read_deconstruction_fixture,
     read_indoor_light_consumers,
@@ -52,6 +53,13 @@ def read_workload_sidecars(
     indoor_sidecar_paths = tuple(data_dir / name for name in (
         "indoor_light_fixture.csv", "indoor_light_layout.csv", "indoor_light_presentation.csv",
     ))
+    if expected_case.workload == "building-art-active":
+        if capture_kind != "frame-time":
+            reasons.append("building-art-active requires a frame-time capture")
+        _, errors = read_building_art_active(data_dir, expected_case=expected_case)
+        reasons.extend(errors)
+    elif (data_dir / "building_art_active.json").exists():
+        reasons.append("building-art-active sidecar is forbidden for another workload")
     if expected_case.workload == "building-art-static":
         if capture_kind != "frame-time":
             reasons.append("building-art-static requires a frame-time capture")

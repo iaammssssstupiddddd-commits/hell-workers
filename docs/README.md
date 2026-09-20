@@ -40,6 +40,7 @@
 - [art-style-criteria.md](art-style-criteria.md): アートスタイルの受入基準と検証観点。
 - [building-art-direction.md](building-art-direction.md): 建築物の形状・手描きテクスチャ・UV・光の役割分担、素材表現、制作順と採用条件。
 - [building-art-static-reference.md](building-art-static-reference.md): Bridgeを除く9種の静止性能参照、実地形の配置・状態検査、Capture/Memoryの逐次計測と未測定範囲。
+- [building-art-active-reference.md](building-art-active-reference.md): 同9種の通常生産・給水・搬出を使う稼働参照、負荷証拠と独立検査。実測・性能予算は未確定。
 - [plans/3d-rtt/non-wall-floor-building-art-migration-plan-2026-09-19.md](plans/3d-rtt/non-wall-floor-building-art-migration-plan-2026-09-19.md): 壁・床を除く10種のアート移行、モデルとpreviewの接続、状態表示、段階導入と受入の計画。
 - [world_lore.md](world_lore.md): 世界観設定書。アセットデザインのための世界観・視覚指針（アートスタイル含む）。
 - [assets_workflow.md](assets_workflow.md): `Syncthing` を前提にした原本共有、`exports/` 運用、`assets/` 反映手順。
