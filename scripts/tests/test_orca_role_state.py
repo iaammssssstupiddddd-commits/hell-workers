@@ -76,8 +76,9 @@ class RoleContinuationTests(unittest.TestCase):
         patcher.start()
         self.addCleanup(patcher.stop)
 
-    def command(self, provider, repo, role, prompt, resume, *, read_only=False):
-        self.commands.append((provider, role, prompt, resume))
+    def command(self, provider, repo, role, prompt, resume, *, read_only=False,
+                externally_sandboxed=False):
+        self.commands.append((provider, role, prompt, resume, externally_sandboxed))
         return [sys.executable, "-c", FAKE, json.dumps({**self.options, "provider": provider,
                 "control": str(state.state_path("reviewer" if role == "reviewer" else
                                                 "worker-b" if provider == "cursor" else "worker-a"))})]
@@ -163,6 +164,7 @@ class RoleContinuationTests(unittest.TestCase):
         self.assertTrue(data["last"]["process_exited"])
         self.assertEqual(data["last"]["exit_code"], 0)
         self.assertFalse(data["tasks"])
+        self.assertTrue(self.commands[-1][4])
         for resume, follow_up in ((None, None), (SESSION, "Continue")):
             with self.subTest(resume=resume), self.assertRaises(ValueError):
                 self.launch(resume=resume, follow_up=follow_up)

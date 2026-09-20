@@ -355,7 +355,8 @@ def launch(ticket: dict, slot: str, *, dry_run: bool, resume_session: str | None
                 prompt += (f"\nFor every Orca CLI invocation use exactly {bridge.client}; "
                            "never use bare `orca` or the installed client directly. Do not read or print "
                            "the bridge metadata; the wrapper supplies its private transport path.")
-            command = command_for(provider, repo, role, prompt, resume_session, read_only=read_only)
+            command = command_for(provider, repo, role, prompt, resume_session, read_only=read_only,
+                                  externally_sandboxed=bridge is not None)
             command = sandbox_command(ticket, role, runtime, command, provider=provider, policy=policy, bridge=bridge)
             data["last"] = {"attempt_id": str(uuid.uuid4()), "key": key, "phase": "starting",
                             "process_exited": False, "exit_code": None, "source_before": before,

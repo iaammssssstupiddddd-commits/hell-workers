@@ -37,20 +37,27 @@ def provider_for(ticket: dict, slot: str) -> str:
 
 
 def command_for(provider: str, repo: Path, role: str, prompt: str,
-                resume_session: str | None = None, *, read_only: bool = False) -> list[str]:
+                resume_session: str | None = None, *, read_only: bool = False,
+                externally_sandboxed: bool = False) -> list[str]:
     executable = shutil.which("cursor-agent" if provider == "cursor" else "codex")
     if not executable:
         raise RuntimeError(f"{provider} CLI is not installed")
     if provider == "cursor":
+        if externally_sandboxed:
+            raise ValueError("Cursor cannot bypass its own sandbox")
         if role != "worker":
             raise ValueError("Cursor is worker-b only")
         return [executable, "--workspace", str(repo), "--sandbox", "enabled", "--trust",
                 *(["--mode", "ask"] if read_only else []),
                 *(["--resume", resume_session] if resume_session else []), prompt]
+    if externally_sandboxed and role != "reviewer" and not read_only:
+        raise ValueError("Codex may rely on the outer sandbox only for read-only roles")
+    isolation = (["--dangerously-bypass-approvals-and-sandbox"] if externally_sandboxed else
+                 ["--sandbox", "read-only" if role == "reviewer" or read_only else "workspace-write",
+                  "--ask-for-approval", "never"])
     return [executable, *(["resume", resume_session] if resume_session else []),
-            "--cd", str(repo), "--sandbox",
-            "read-only" if role == "reviewer" or read_only else "workspace-write",
-            "--ask-for-approval", "never", "--disable", "multi_agent", "--no-alt-screen", prompt]
+            "--cd", str(repo), *isolation,
+            "--disable", "multi_agent", "--no-alt-screen", prompt]
 
 
 def cursor_permissions(ticket: dict) -> dict:
