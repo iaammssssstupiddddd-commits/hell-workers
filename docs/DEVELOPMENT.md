@@ -8,6 +8,31 @@
 2.  **Execution**: 責務に合う crate で実装し、root 側は app shell と薄い互換層に保つ。初回は `python3 scripts/dev.py doctor` で環境を診断し、作業中は `python3 scripts/dev.py check` を使う。
 3.  **Verification**: 修正中の見た目・操作確認には `python3 scripts/dev.py feedback` を使い、同じ作業場で差分ビルドを続ける。完了前は `python3 scripts/dev.py verify` と変更に必要な正式受入を通し、仕様変更を対応する `docs/*.md` に反映する。
 
+## Orcaによる分離開発（Linear受付を段階受入中）
+
+[Orca運用手順](development-infra/orca-development.md)に、条件付き編集委譲、実装2枠・専任reviewer1枠、
+host重実行1枠、ticket/承認の手順をまとめた。基盤は専用branchの`d85dba0f`へローカルcommitし、
+Orcaの新規treeの既定基点に設定済み。受付・統括相談・Cursor Bも`a03c4d54`へ追加commit済み。
+primary未統合。受付からの統括相談・同一会話の再開は実LLMで受入済み。
+実装AはCodex、実装Bは軽量task専用のCursor CLI、reviewerは固定Codex sessionとする。
+同一task/sessionのworker再開と固定reviewer拘束も`074f47bc`へcommit済み（模擬provider試験・全群gate成功）。
+`5abe7db6`ではA/B・固定reviewerのread-only実TUI起動/同会話再開、Cursor起動設定の分離を受入済み。
+R3第1batchで対象terminal限定のread-only通信診断を`d06e912e`へcommitした（全群gate成功）。
+通信成功をTask投入許可としない。
+candidateではLinear snapshot adapterと受付UI、単一Dispatch bridgeのJSON内容比較・失敗照合・
+Codex内側sandboxとOrca IPCの競合回避を実装した。最新基盤は`1673c6be`で、固定reviewerの
+read-only実Taskを受付からsettlement・通知ACK・role終了まで一巡済み。Linearはworkspace `takumi sato` / team `TAK`の
+専用試験issue `TAK-5` で作成・コメント更新・再読・worktree関連付けを受入済み。固定snapshotからの初回統括相談と
+同一sessionへの追記も成功し、受付はqueued、Run/Task/Dispatchは未作成のまま維持した。
+今後は[現行計画L0〜L4](plans/orca-parallel-development-plan-2026-09-20.md)に従い、
+Linearを受付・進捗の正本にし、既存launcher・資源制御・固定reviewer・統括の会話再開を再利用する。
+残る異常系、Codex A/Cursor Bのread-only連携、受付からレビューまでの一巡、旧受付切替を順に受け入れる。
+今回の運用基盤整備ではユーザー指定によりゲーム実装テストを実行せず、関連tooling・連携・文書/storageに限定する。
+この限定は下記の通常ゲーム開発の品質規則を変更しない。詳細な対象・未実施群は計画§7で管理する。
+最新提示ルールの編集委譲禁止を維持し、編集を伴う実装→検証→reviewとCursor BのTask連携は未受入。
+[運用ガイド](orca-quickstart.md)に現在の「開発受付・統括相談」の操作を示す。
+以下の既存checkoutの資源仕様を無条件に置き換えたとは扱わず、採用対象を確認してから使う。
+
 ## 開発ルール
 
 ### 1. Rust-analyzer 診断の厳守
