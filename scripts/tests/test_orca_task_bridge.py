@@ -37,14 +37,19 @@ class Runtime:
         self.row = {"handle": HANDLE, "incarnationId": INCARNATION,
                     "worktreeId": "fixture::" + str(repo), "worktreePath": str(repo),
                     "executionHostId": "local", "connected": True, "orphaned": False}
+        endpoint_incarnation = self.row["worktreeId"] + "@@fixture:" + INCARNATION
         self.latest = {"id": AUTHORITY["dispatch"], "task_id": AUTHORITY["task"], "status": "dispatched"}
         self.observed = {
             "dispatch": {"id": AUTHORITY["dispatch"], "taskId": AUTHORITY["task"], "runId": AUTHORITY["run"],
-                         "assigneeHandle": HANDLE, "processIncarnation": INCARNATION,
+                         "assigneeHandle": HANDLE, "processIncarnation": endpoint_incarnation,
                          "status": "dispatched", "capabilityRevokedAt": None},
             "worker": {"dispatchId": AUTHORITY["dispatch"], "runtimeEpoch": RUNTIME,
                        "agentTerminalHandle": HANDLE, "worktreeId": self.row["worktreeId"], "state": "ready"},
             "observation": {"exactWorker": True, "status": "live"},
+            "terminal": copy.deepcopy(self.row),
+            "terminalResource": {"terminalHandle": HANDLE, "worktreeId": self.row["worktreeId"],
+                                 "ownerDispatchId": AUTHORITY["dispatch"],
+                                 "endpointIncarnation": endpoint_incarnation},
         }
         self.check_result = {"runId": AUTHORITY["run"], "dispatchId": AUTHORITY["dispatch"],
                              "deliveryId": None, "messages": [], "count": 0, "acknowledged": None, **FLAGS}
@@ -329,6 +334,16 @@ class TaskBridgeTests(unittest.TestCase):
                 self.policy = self.new_policy()
                 self.assertFalse(self.policy.handle(self.request())["ok"])
                 self.assertEqual(self.mutations(), [])
+        for section, field in (("dispatch", "processIncarnation"),
+                               ("terminal", "incarnationId"),
+                               ("terminalResource", "endpointIncarnation"),
+                               ("terminalResource", "ownerDispatchId")):
+            with self.subTest(section=section, field=field):
+                self.runtime = Runtime(self.repo)
+                self.runtime.observed[section][field] = "other"
+                self.policy = self.new_policy()
+                self.assertFalse(self.policy.handle(self.request())["ok"])
+                self.assertEqual(self.mutations(), [])
         self.runtime = Runtime(self.repo)
         self.policy = self.new_policy()
         self.subject.side_effect = ValueError("source changed")
@@ -374,7 +389,7 @@ class TaskBridgeTests(unittest.TestCase):
             bridge.arm(session.identifier, AUTHORITY)
             with self.assertRaises(bridge.wire.Refused):
                 bridge.arm(session.identifier, AUTHORITY)
-            self.assertEqual(set(p.name for p in session.public.iterdir()), {"orca-runtime.json", "rpc.sock"})
+            self.assertEqual(set(p.name for p in session.public.iterdir()), {"orca-runtime.json", "rpc.sock", "orca"})
             self.assertEqual(session.policy.phase, "bootstrap")
         self.assertEqual(list(session.public.iterdir()), [])
         self.assertEqual(session.policy.phase, "unknown")
@@ -401,6 +416,56 @@ class TaskBridgeTests(unittest.TestCase):
         duplicate = bridge.Session(session.executable, session.upstream.metadata_path.parent, HANDLE, self.repo, self.subject)
         with session, self.assertRaises(host_coordination.HostBusyError):
             duplicate.__enter__()
+
+    def test_failed_dispatch_reconciliation_preserves_fixed_reviewer_without_approval(self):
+        bridge_id = str(uuid.uuid4())
+        directory = self.root / bridge_id
+        directory.mkdir(mode=0o700)
+        bridge.write_ledger(directory / "journal.json", {
+            "schema": 1, "phase": "unknown", "revoked": True, "authority": None,
+            "capability_sha256": None, "operations": {}, "settled_status": None,
+        })
+        bridge.write_ledger(directory / "identity.json", {
+            "runtime": RUNTIME, "terminal": HANDLE, "incarnation": INCARNATION,
+            "repo": str(self.repo), "pid": 999_999_999,
+        })
+        bridge.write_ledger(directory / "arm.json", AUTHORITY)
+        self.runtime.latest.update(id="dispatch_retry", status="failed",
+                                   retry_of_dispatch_id=AUTHORITY["dispatch"])
+        self.runtime.observed["dispatch"].update(status="failed", capabilityRevokedAt=1)
+        self.runtime.observed["worker"].update(state="abandoned", stage="abandoned")
+        session_id = str(uuid.uuid4())
+        previous = {"key": "fixed-reviewer", "ticket_sha256": "1" * 64,
+                    "subject": {"repo": str(self.repo), "common": str(self.repo / ".git"),
+                                "branch": "task", "base": "1" * 40},
+                    "origin": str(self.repo), "source_sha256": "2" * 64,
+                    "session_id": session_id, "session_sha256": "3" * 64}
+        attempt_id = str(uuid.uuid4())
+        observed_source = "4" * 64
+        data = {"schema": 1, "slot": "reviewer", "provider": "codex",
+                "tasks": {"fixed-reviewer": previous},
+                "last": {"attempt_id": attempt_id, "key": "fixed-reviewer", "phase": "unknown",
+                         "process_exited": True, "exit_code": 0, "source_before": observed_source,
+                         "terminal": HANDLE, "orca_bridge": bridge_id}}
+        ticket = {"id": "review", "repo": str(self.repo), "branch": "task", "base": "1" * 40,
+                  "read_only": True, "allowed_directories": [], "prompt": "review"}
+        snapshot = {"session_id": session_id, "session_sha256": "5" * 64}
+        with patch.object(roles, "acquire_host"), patch.object(roles, "validate_ticket"), \
+                patch.object(roles, "git", return_value=str(self.repo / ".git")), \
+                patch.object(roles, "fingerprint", return_value="6" * 64), \
+                patch.object(roles, "prepare_runtime", return_value=self.repo / "runtime"), \
+                patch.object(roles.bindings, "read_state", return_value=data), \
+                patch.object(roles.bindings, "session_snapshot", return_value=snapshot), \
+                patch.object(roles.bindings, "save_state") as save, \
+                patch.object(bridge.Upstream, "load", return_value=self.runtime):
+            roles.reconcile_bridge(ticket, "reviewer", attempt_id, observed_source,
+                                   "CLI could not reach the private bridge", self.root)
+        save.assert_called_once_with(data)
+        self.assertEqual(previous["session_sha256"], snapshot["session_sha256"])
+        self.assertEqual(data["last"]["phase"], "recorded")
+        self.assertEqual(data["last"]["bridge_reconciliation"]["dispatch"], AUTHORITY["dispatch"])
+        self.assertEqual(previous["ticket_sha256"], "1" * 64)
+        self.assertNotIn("approved", json.dumps(data))
 
     def test_non_ascii_auth_token_revokes_and_records_unknown_without_forwarding(self):
         session = self.wire_session()
@@ -453,6 +518,25 @@ print('isolated')
             result = bridge.wire.run_cli(command, 8)
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(result.stdout.strip(), b"isolated")
+
+    @unittest.skipUnless(CLI.is_file() and shutil.which("bwrap"), "installed Orca and bubblewrap required")
+    def test_bridge_client_carries_private_transport_into_role_shell(self):
+        session = self.wire_session()
+        private = self.repo / "state"
+        runtime = private / "agents/reviewer"
+        for name in ("codex", "tmp"):
+            (runtime / name).mkdir(parents=True, exist_ok=True)
+        ticket = {"repo": str(self.repo), "read_only": True, "allowed_directories": []}
+        with session, patch.object(roles, "git", return_value=str(self.repo / ".git")), \
+                patch.dict(os.environ, {"CODEX_HOME": str(self.repo / "no-auth"),
+                                        "ORCA_TERMINAL_HANDLE": HANDLE}):
+            command = roles.sandbox_command(
+                ticket, "reviewer", runtime, [str(session.client), "status", "--json"], bridge=session)
+            completed = bridge.wire.run_cli(command, 8)
+            output = bridge.wire.decode(completed.stdout)
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            self.assertTrue(output["result"]["runtime"]["reachable"])
+            self.assertFalse(session.policy.revoked)
 
     @unittest.skipUnless(CLI.is_file() and shutil.which("bwrap"), "installed Orca and bubblewrap required")
     def test_stock_cli_messages_checks_asks_and_settlement_through_proxy(self):

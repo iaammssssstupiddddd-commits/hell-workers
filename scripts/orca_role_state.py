@@ -30,6 +30,26 @@ def identity(value: str) -> str:
     return value
 
 
+def valid_bridge_reconciliation(value: object) -> bool:
+    if not isinstance(value, dict) or set(value) != {
+            "run", "task", "dispatch", "terminal", "worker_state", "session_id",
+            "session_sha256", "current_source_sha256", "reason"}:
+        return False
+    if not all(isinstance(value.get(name), str) and value[name]
+               for name in ("run", "task", "dispatch", "terminal", "worker_state", "reason")):
+        return False
+    if value["worker_state"] not in {"abandoned", "failed", "stopped"}:
+        return False
+    if len(value["reason"]) > 2000:
+        return False
+    try:
+        identity(value["session_id"])
+    except (TypeError, ValueError):
+        return False
+    return all(isinstance(value.get(name), str) and re.fullmatch(r"[a-f0-9]{64}", value[name])
+               for name in ("session_sha256", "current_source_sha256"))
+
+
 def digest(value: dict) -> str:
     return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
@@ -52,9 +72,11 @@ def read_state(slot: str, provider: str, *, allow_pending: bool = False) -> dict
     if not isinstance(abandoned, dict):
         raise ValueError("invalid abandoned attempts")
     for key, attempt in abandoned.items():
+        reconciled_bridge = valid_bridge_reconciliation(attempt.get("bridge_reconciliation"))
         if (not isinstance(attempt, dict) or attempt.get("key") != key or key in data["tasks"]
                 or attempt.get("phase") != "abandoned" or attempt.get("process_exited") is not True
-                or type(attempt.get("exit_code")) is not int or attempt["exit_code"] == 0
+                or type(attempt.get("exit_code")) is not int
+                or (attempt["exit_code"] == 0 and not reconciled_bridge)
                 or not isinstance(attempt.get("reason"), str) or not attempt["reason"].strip()
                 or not all(isinstance(attempt.get(name), str) and re.fullmatch(r"[a-f0-9]{64}", attempt[name])
                            for name in ("ticket_sha256", "observed_source_sha256"))):

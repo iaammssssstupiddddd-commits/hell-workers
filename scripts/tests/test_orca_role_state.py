@@ -152,7 +152,8 @@ class RoleContinuationTests(unittest.TestCase):
 
     def test_unsettled_bridge_prevents_checkpoint_and_fresh_or_resumed_role(self):
         self.ticket.update(read_only=True, allowed_directories=[], source_sha256=roles.fingerprint(self.repo))
-        channel = SimpleNamespace(identifier=OTHER, policy=SimpleNamespace(phase="unknown"), mounts=lambda: [])
+        channel = SimpleNamespace(identifier=OTHER, client=self.root / "bridge-client",
+                                  policy=SimpleNamespace(phase="unknown"), mounts=lambda: [])
         with patch.object(roles.task_bridge, "Session", return_value=nullcontext(channel)):
             with self.assertRaisesRegex(RuntimeError, "Task bridge outcome unknown"):
                 roles.launch(self.load(), "worker-a", dry_run=False, bridge_settings=(self.root, self.root))

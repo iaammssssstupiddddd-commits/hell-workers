@@ -295,8 +295,8 @@ def launch(ticket: dict, slot: str, *, dry_run: bool, resume_session: str | None
                    "--timeout-ms 10000. Process all delivered messages before explicit check --ack. "
                    "A bridge refusal means stop and ask the host coordinator to reconcile, never resend. "
                    "worker_done is not review approval. No edits or builds are allowed.")
-    command = command_for(provider, repo, role, prompt, resume_session, read_only=read_only)
     if dry_run:
+        command = command_for(provider, repo, role, prompt, resume_session, read_only=read_only)
         print(json.dumps({"slot": slot, "role": role, "provider": provider, "repo": str(repo),
                           "read_only": read_only,
                           "allowed_directories": [] if read_only else ticket["allowed_directories"],
@@ -352,6 +352,10 @@ def launch(ticket: dict, slot: str, *, dry_run: bool, resume_session: str | None
                         raise ValueError("bridge source changed; preserve and reconcile")
                 bridge = channels.enter_context(task_bridge.Session(
                     *bridge_settings, os.environ.get("ORCA_TERMINAL_HANDLE"), repo, verify_subject))
+                prompt += (f"\nFor every Orca CLI invocation use exactly {bridge.client}; "
+                           "never use bare `orca` or the installed client directly. Do not read or print "
+                           "the bridge metadata; the wrapper supplies its private transport path.")
+            command = command_for(provider, repo, role, prompt, resume_session, read_only=read_only)
             command = sandbox_command(ticket, role, runtime, command, provider=provider, policy=policy, bridge=bridge)
             data["last"] = {"attempt_id": str(uuid.uuid4()), "key": key, "phase": "starting",
                             "process_exited": False, "exit_code": None, "source_before": before,
@@ -420,9 +424,113 @@ def abandon_start(ticket: dict, slot: str, attempt_id: str, observed_source: str
             bindings.save_state(data)
 
 
+def reconcile_bridge(ticket: dict, slot: str, attempt_id: str, observed_source: str,
+                     reason: str, metadata_dir: Path) -> None:
+    """Record one proven failed Dispatch without accepting its task result."""
+    bindings.identity(attempt_id)
+    if (not isinstance(observed_source, str)
+            or not re.fullmatch(r"[a-f0-9]{64}", observed_source)):
+        raise ValueError("reconciliation requires the observed source fingerprint")
+    if not isinstance(reason, str) or not reason.strip() or len(reason) > 2000:
+        raise ValueError("reconciliation requires a bounded reason")
+    if not metadata_dir.is_absolute() or not metadata_dir.is_dir():
+        raise ValueError("reconciliation requires an absolute Orca metadata directory")
+    provider = provider_for(ticket, slot)
+    if provider != "codex" or (slot != "reviewer" and ticket.get("read_only") is not True):
+        raise ValueError("only a failed read-only Codex bridge can be reconciled")
+    repo = Path(ticket["repo"])
+    with acquire_host(slot, inherit=False), acquire_host(workspace_slot(repo), inherit=False):
+        validate_ticket(ticket)
+        data = bindings.read_state(slot, provider, allow_pending=True)
+        last = data["last"]
+        subject = {"repo": str(repo), "branch": ticket["branch"], "base": ticket["base"],
+                   "common": git(repo, "rev-parse", "--path-format=absolute", "--git-common-dir")}
+        key = "fixed-reviewer" if slot == "reviewer" else bindings.digest({
+            "common": subject["common"], "id": ticket["id"]})
+        if (not isinstance(last, dict) or last.get("attempt_id") != attempt_id
+                or last.get("key") != key or last.get("phase") != "unknown"
+                or last.get("process_exited") is not True
+                or type(last.get("exit_code")) is not int
+                or last.get("source_before") != observed_source
+                or last.get("orca_bridge") is None):
+            raise ValueError("requires the exact exited unknown bridge attempt")
+        bridge_id = bindings.identity(last["orca_bridge"])
+        directory = task_bridge.root() / bridge_id
+        journal = bindings.storage.read_private_json(directory / "journal.json", {})
+        identity = bindings.storage.read_private_json(directory / "identity.json", {})
+        authority = bindings.storage.read_private_json(directory / "arm.json", {})
+        if (not isinstance(journal, dict) or journal.get("phase") != "unknown"
+                or journal.get("revoked") is not True or journal.get("authority") is not None
+                or journal.get("operations") != {} or journal.get("settled_status") is not None):
+            raise ValueError("bridge journal is not a mutation-free unknown attempt")
+        if (not isinstance(identity, dict) or identity.get("terminal") != last.get("terminal")
+                or identity.get("repo") != str(repo) or type(identity.get("pid")) is not int
+                or identity["pid"] <= 0):
+            raise ValueError("bridge launcher identity differs from the role attempt")
+        try:
+            os.kill(identity["pid"], 0)
+        except ProcessLookupError:
+            pass
+        else:
+            raise ValueError("bridge launcher is still live")
+        if (not isinstance(authority, dict)
+                or set(authority) != {"run", "task", "dispatch", "coordinator"}):
+            raise ValueError("bridge authority is missing or incomplete")
+        for value in authority.values():
+            task_bridge.key(value)
+        upstream = task_bridge.Upstream.load(metadata_dir)
+        if identity.get("runtime") != upstream.runtime_id:
+            raise ValueError("bridge belongs to a different Orca runtime")
+        observed = upstream.call("orchestration.workerShow", {"dispatch": authority["dispatch"]})
+        dispatch = task_bridge.wire.mapping(observed.get("dispatch"))
+        worker = task_bridge.wire.mapping(observed.get("worker"))
+        observation = task_bridge.wire.mapping(observed.get("observation"))
+        expected = {"id": authority["dispatch"], "taskId": authority["task"],
+                    "runId": authority["run"], "assigneeHandle": identity["terminal"],
+                    "status": "failed"}
+        if (any(dispatch.get(name) != value for name, value in expected.items())
+                or not task_bridge.exact_process(
+                    observed, terminal=identity["terminal"], incarnation=identity.get("incarnation"),
+                    worktree=worker.get("worktreeId"), dispatch_id=authority["dispatch"])
+                or dispatch.get("capabilityRevokedAt") is None
+                or worker.get("dispatchId") != authority["dispatch"]
+                or worker.get("runtimeEpoch") != upstream.runtime_id
+                or worker.get("agentTerminalHandle") != identity["terminal"]
+                or worker.get("state") not in {"abandoned", "failed", "stopped"}
+                or observation.get("exactWorker") is not True):
+            raise ValueError("failed Dispatch identity or settlement is unproven")
+        latest = task_bridge.wire.mapping(upstream.call(
+            "orchestration.dispatchShow", {"task": authority["task"]}).get("dispatch"))
+        same_attempt = latest.get("id") == authority["dispatch"] and latest.get("status") == "failed"
+        directly_retried = (latest.get("retry_of_dispatch_id") == authority["dispatch"]
+                            and latest.get("status") in {"failed", "completed"})
+        if latest.get("task_id") != authority["task"] or not (same_attempt or directly_retried):
+            raise ValueError("failed Dispatch is not the latest attempt or its direct predecessor")
+        runtime = prepare_runtime(slot if slot == "reviewer" else f"{slot}/tasks/{key}")
+        previous = data["tasks"].get(key)
+        origin = Path(previous["origin"]) if previous else repo
+        snapshot = bindings.session_snapshot(runtime, provider, origin)
+        if previous and snapshot["session_id"] != previous["session_id"]:
+            raise ValueError("provider switched session during the failed bridge attempt")
+        evidence = {"run": authority["run"], "task": authority["task"],
+                    "dispatch": authority["dispatch"], "terminal": identity["terminal"],
+                    "worker_state": worker["state"], **snapshot,
+                    "current_source_sha256": fingerprint(repo), "reason": reason.strip()}
+        if previous:
+            previous["session_sha256"] = snapshot["session_sha256"]
+            last.update(phase="recorded", bridge_reconciliation=evidence)
+        else:
+            last.update(phase="abandoned", ticket_sha256=bindings.digest(ticket),
+                        observed_source_sha256=observed_source, reason=reason.strip(),
+                        bridge_reconciliation=evidence)
+            data.setdefault("abandoned", {})[key] = dict(last)
+        bindings.save_state(data)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=("launch", "fingerprint", "verify-review", "abandon-start"))
+    parser.add_argument("action", choices=("launch", "fingerprint", "verify-review", "abandon-start",
+                                           "reconcile-bridge"))
     parser.add_argument("--ticket", type=Path, required=True)
     parser.add_argument("--slot", choices=("worker-a", "worker-b", "reviewer"), default="reviewer")
     parser.add_argument("--dry-run", action="store_true")
@@ -437,10 +545,12 @@ def main() -> int:
     args = parser.parse_args()
     try:
         bridge_settings = None
-        if args.bridge_orca or args.bridge_metadata:
-            if args.action != "launch" or not (args.bridge_orca and args.bridge_metadata):
+        if args.action == "launch" and (args.bridge_orca or args.bridge_metadata):
+            if not (args.bridge_orca and args.bridge_metadata):
                 raise ValueError("launch needs both --bridge-orca and --bridge-metadata")
             bridge_settings = (args.bridge_orca, args.bridge_metadata)
+        elif args.action != "reconcile-bridge" and (args.bridge_orca or args.bridge_metadata):
+            raise ValueError("bridge options are not valid for this action")
         ticket = load_ticket(args.ticket)
         if args.action == "fingerprint":
             print(fingerprint(Path(ticket["repo"])))
@@ -456,6 +566,13 @@ def main() -> int:
                 raise ValueError("abandon-start does not support --dry-run; no state changed")
             abandon_start(ticket, args.slot, args.attempt_id, args.observed_source, args.reason)
             print("Failed read-only start preserved as abandoned; no agent started and no task approved.")
+            return 0
+        if args.action == "reconcile-bridge":
+            if args.dry_run or args.bridge_orca or args.bridge_metadata is None:
+                raise ValueError("reconcile-bridge needs --bridge-metadata and does not support dry-run/--bridge-orca")
+            reconcile_bridge(ticket, args.slot, args.attempt_id, args.observed_source,
+                             args.reason, args.bridge_metadata)
+            print("Failed bridge reconciled; no task result was accepted or approved.")
             return 0
         return launch(ticket, args.slot, dry_run=args.dry_run, resume_session=args.resume_session,
                       follow_up=args.follow_up_file.read_text() if args.follow_up_file else None,

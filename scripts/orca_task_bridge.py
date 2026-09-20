@@ -15,7 +15,9 @@ import json
 import os
 import re
 import secrets
+import shlex
 import socketserver
+import stat
 import threading
 import time
 import uuid
@@ -45,6 +47,24 @@ def key(value: object) -> str:
     return value
 
 
+def exact_process(observed: dict, *, terminal: str, incarnation: str,
+                  worktree: str, dispatch_id: str) -> bool:
+    """Match Orca's terminal UUID to its composite Dispatch incarnation."""
+    dispatch = wire.mapping(observed.get("dispatch"))
+    terminal_row = wire.mapping(observed.get("terminal"))
+    resource = wire.mapping(observed.get("terminalResource"))
+    process = dispatch.get("processIncarnation")
+    if (terminal_row.get("handle") != terminal
+            or terminal_row.get("incarnationId") != incarnation
+            or terminal_row.get("worktreeId") != worktree
+            or resource.get("terminalHandle") != terminal
+            or resource.get("worktreeId") != worktree
+            or resource.get("ownerDispatchId") != dispatch_id):
+        return False
+    endpoint = resource.get("endpointIncarnation")
+    return process == incarnation or (isinstance(endpoint, str) and process == endpoint)
+
+
 def digest(value: object) -> str:
     return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
@@ -55,6 +75,29 @@ def root() -> Path:
 
 def lease_name(directory: Path) -> str:
     return "workspace-" + hashlib.sha256(str(directory).encode()).hexdigest()
+
+
+def write_client(path: Path, executable: Path, metadata: Path) -> None:
+    """Create one immutable wrapper that carries the proxy path across agent shells."""
+    payload = ("#!/bin/sh\n"
+               f"ORCA_USER_DATA_PATH={shlex.quote(str(metadata))}\n"
+               "export ORCA_USER_DATA_PATH\n"
+               f"exec {shlex.quote(str(executable))} \"$@\"\n").encode()
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    descriptor = os.open(path, flags, 0o500)
+    try:
+        offset = 0
+        while offset < len(payload):
+            offset += os.write(descriptor, payload[offset:])
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+    info = path.lstat()
+    if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid()
+            or info.st_nlink != 1 or info.st_mode & 0o077):
+        raise wire.Refused("unsafe bridge client")
 
 
 class Upstream(wire.Upstream):
@@ -158,8 +201,12 @@ class TaskPolicy:
         worker = wire.mapping(observed.get("worker"))
         observation = wire.mapping(observed.get("observation"))
         expected = {"id": authority["dispatch"], "taskId": authority["task"], "runId": authority["run"],
-                    "assigneeHandle": self.binding.terminal, "processIncarnation": self.binding.incarnation}
+                    "assigneeHandle": self.binding.terminal}
         if (any(dispatch.get(name) != value for name, value in expected.items())
+                or not exact_process(observed, terminal=self.binding.terminal,
+                                     incarnation=self.binding.incarnation,
+                                     worktree=self.binding.worktree,
+                                     dispatch_id=authority["dispatch"])
                 or worker.get("dispatchId") != authority["dispatch"]
                 or worker.get("runtimeEpoch") != self.upstream.runtime_id
                 or worker.get("agentTerminalHandle") != self.binding.terminal
@@ -471,6 +518,7 @@ class Session:
         self.directory = checked_directory(root() / self.identifier)
         # The account-root path plus a UUID must fit Linux sockaddr_un (107 bytes).
         self.public = checked_directory(self.directory / "p")
+        self.client = self.public / "orca"
         self.policy = TaskPolicy(self.upstream, self.binding, self.directory, verify_subject)
         self.server = None
         self.thread = None
@@ -494,6 +542,7 @@ class Session:
             "incarnation": self.binding.incarnation, "repo": str(self.binding.repo), "pid": os.getpid(),
         })
         self.policy.save()
+        write_client(self.client, self.executable, self.public)
         endpoint = self.public / "rpc.sock"
         if len(os.fsencode(endpoint)) > 107:
             raise wire.Refused("account socket path is too long")
@@ -530,7 +579,7 @@ class Session:
         finally:
             try:
                 # Even a failed journal lease/write must remove usable transport.
-                for name in ("orca-runtime.json", "rpc.sock"):
+                for name in ("orca-runtime.json", "rpc.sock", "orca"):
                     (self.public / name).unlink(missing_ok=True)
             finally:
                 if self.terminal_lease:
