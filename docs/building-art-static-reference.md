@@ -54,6 +54,8 @@ TaskWorkers / RestAreaOccupants / StoredItemsを直接偽造せず、workerのAs
   各kindをk棟として、現行の共有mesh 2種・対象3D root `5k`・対象foreground `4k`と、実resident handle・可視性を要求する。
   対象は`9k`、支持Wall/Floorを含むBuilding全数は`13k`。Bridgeのmeshを対象poolへ計上しない。
   準備完了前のasset待ちは許すが、完了後の不一致・消失はエラー終了。
+- 共通run validatorでは現行ActorBillboard描画方式を選び、旧Soul proxy/mask/shadowとFamiliar proxyは0を要求する。
+  旧stageの期待数は変更しない。この検査は旧proxyの不在検査であり、Soulの全billboard可視性の証明ではない。
 - `building_art_static.json`に初期状態と同じ不変条件を最後まで満たした証拠を出す。
   Python側は独立した固定layout/state期待値、厳密JSON、SHA-256を検査する。自己申告したhashだけでは通らない。
 - 現行表示専用の初期参照であり、後続candidateのroot/part数をこのlegacy検査へ無理に合わせない。
@@ -95,7 +97,9 @@ python3 scripts/dev.py cargo -- test -p bevy_app@0.1.0 --lib --features profilin
   9種の基準を全10種の基準へ読み替えず、橋の再合流時に別の比較・受入を追加する。
 - 9種版も正式値は未取得。v3のcamera初期化不一致を修正したv4は、準備完了に至らずsmall初回が300秒でtimeout。
   後続試行を中断して調べた結果、Spaの初期phaseがConstructingに残る不備を確認した。
-  初期phase修正後のnative結果を得るまでは、9種版のrenderer・性能合格を主張しない。
+  修正後のv5は準備を通過しsmall初回の30/60秒計測を終えたが、共通validatorが旧Soul proxy各15体を要求して不合格。
+  現行方式を明示した診断再計算では他の全検査が通った。dispatchを修正し、旧方式と旧proxy混入の拒否を回帰testする。
+  無効v5をbaselineへ読み替えず、修正後のclean subjectで再実行する。
 - 回転、Dream粒子、稼働中の状態遷移、搬送・生産継続、save/load、preview、GPU draw-call詳細は未測定。
 - Mixerは初期Refining状態を停止保持する。入力や進捗を毎frame補充・巻戻しして稼働負荷を捏造しない。
 - この静止参照だけではM1-0は閉じない。稼働fixtureと基盤budgetの確定前に新しい表示基盤を導入しない。

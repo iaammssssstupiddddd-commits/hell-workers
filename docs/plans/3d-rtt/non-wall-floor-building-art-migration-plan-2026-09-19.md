@@ -567,7 +567,7 @@ legacy-controlはprofiling専用の明示modeとし、asset欠落を故意に起
 - 全10種・Rust shapeとの照合、9種のrole・consumer・単位契約、非対象4画像hash、Tank寸法訂正、Door g7継承を追加。
 - Tank/Mixerのidentity原本、neutral albedo、計4 role GLB、計5状態PNG、projectionとexport後検査を実装。
   `build_building_clay.py build/verify`で既存scene/export/Khronos gateを再利用する。詳細は`docs/blender-setup.md`。
-- 次の作業: 橋を除く9種fixtureへ更新し、生成地形との配置test・検証・commit後に静止実機参照を取得する。
+- 次の作業: 9種fixture・camera・Spa初期化の修正はcommit済み。現行描画方式の検証dispatchを修正し、静止実機参照を再取得する。
   通常ゲームの橋／地形ruleは変更しない。稼働fixture・共通runtime schema詳細は残る。
   baseline sourceと基盤budgetをfreezeする前にruntime表示基盤を変えない。
 - Rustのprofiling専用経路のみ変更。通常表示・repo assets・canonical・Help本文は未変更。外部原本は未承認stagingのみ。
@@ -756,6 +756,24 @@ canonical・runtime asset・他sessionの原本／検証cacheは変更してい�
   （復元不可、49,152→0 allocated bytes）。finalize/storage check成功。
   filesystem availableは661,976,092,672→661,975,867,392 bytes（同時buildを含む共有差、削除量ではない）。
   primary checkout/Cargo cacheのreview holdは継続し、専用worktree・binary copyは作っていない。
+
+### 静止基準の再開（2026-09-20）
+
+- Spa初期化修正は`43d4471398421be3cde8c7803e0d1dec43e2291d`でcommit済み。
+  変更別contracts/tooling/rust成功（base `a25ee8c577b669d3c225d55f0036f2d6ef9e0b3f`、
+  tested source `21d0b4ce47a385d5c2e08822cb397449f1361d1f6c8a5df6fdd595f7f2137a0e`）。
+- native v5は同commit/source `824863e1dfc3bd1ec53fd03a925111c79488f07f32cee96c4ebae141e41abed3`で実行。
+  small初回は準備完了→30秒warmup→60秒measureを完走。9種sidecarとIntel Arc (MTL) / Mesa 26.1.8 /
+  Vulkan / X11 / 1280×720 / DPI1 / high / immediateのwindow原本を得た。
+- ただし共通validatorの旧Soul proxy/mask/shadow各15体という期待に対し、現行ActorBillboard方式では全て0となり不合格。
+  既存の明示ActorBillboard検査オプションを使った元runのread-only診断では全検査が通ったため、修正対象をdispatchへ限定。
+  `building-art-static`だけを現行方式へ振り分け、旧方式の条件は維持する。旧proxy混入の拒否と旧workloadの期待を回帰test。
+  Rust・通常描画・asset・地形・橋は変更しない。Help: No impact（計測データ検証だけ）。
+- small 2回目でowned helperへSIGINTを送り、helper/runner/game終了確認後にinterruptedとしてseal。
+  正式baselineは未取得、medium/Memory未実行。v5の結果は新subjectの成功へ流用しない。
+  診断完了後、不要job `target/native-acceptance/building-art-static-20260920T043139Z-6180a892`を削除（復元不可）。
+  204,800→0 allocated bytes、filesystem availableは661,578,760,192→661,579,190,272 bytes（共有差）。
+  finalize/storage check成功。primary checkout/Cargo cacheは次の再計測に継続使用する。
 
 ### Definition of Done
 

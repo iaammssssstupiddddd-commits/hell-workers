@@ -12,7 +12,8 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from perf_tool.artifact_readers.building_art_static import expected_records, read_building_art_static
 from perf_tool.artifact_readers.workload import read_workload_sidecars
-from perf_tool.artifacts import measurement_duration_clock
+from perf_tool.artifacts import measurement_duration_clock, validate_run
+from perf_tool.fixtures import write_fixture_run
 from perf_tool.arguments import build_parser, validate_arguments
 from perf_tool.model import Case
 from perf_tool.model import Validation
@@ -93,6 +94,27 @@ class BuildingArtStaticTests(unittest.TestCase):
     def test_static_uses_real_clock_only(self):
         self.assertEqual(measurement_duration_clock("building-art-static"), ("real", True))
         self.assertEqual(measurement_duration_clock("gather"), ("virtual", False))
+
+    def test_raw_validator_uses_current_renderer_without_weakening_legacy_checks(self):
+        for workload, legacy_count, expected_valid in (
+            ("building-art-static", "0", True),
+            ("building-art-static", "15", False),
+            ("gather", "0", False),
+            ("gather", "15", True),
+        ):
+            with self.subTest(workload=workload, legacy_count=legacy_count), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                write_fixture_run(root, workload=workload, seed=20260920, render="gpu",
+                    scene_roots={key: legacy_count for key in ("soul_proxy_3d", "soul_mask_proxy_3d", "soul_shadow_proxy_3d")},
+                    summary_overrides={"initial_souls": "15", "initial_familiars": "0"})
+                if workload == "building-art-static":
+                    (root / "data/building_art_static.json").write_text(json.dumps(sidecar(4)))
+                result = validate_run(root, returncode=0,
+                    expected_case=Case(workload, "small", "gpu", 20260920, 15, 0),
+                    expected_adapter="Test", expected_backend="vulkan", allow_log_patterns=[])
+                self.assertEqual(result.valid, expected_valid, result.reasons)
+                if not expected_valid:
+                    self.assertTrue(any("scene_roots.csv soul_proxy_3d" in reason for reason in result.reasons), result.reasons)
 
     def test_cli_requires_exact_formal_contract(self):
         argv = ["run", "--workload", "building-art-static", "--sizes", "small", "--renders", "gpu",

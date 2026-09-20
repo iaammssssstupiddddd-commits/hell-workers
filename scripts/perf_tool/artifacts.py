@@ -1918,19 +1918,17 @@ def validate_run(
         except (KeyError, ValueError):
             reasons.append("summary initial population is invalid for scene root validation")
         else:
-            if expected_actor_billboard_presentation or expected_stage in {
-                "p02",
-                "p03",
-                "p04",
-                "p05",
-                "p06",
-                "p07",
-                "p08",
-            }:
+            if (
+                expected_case.workload == "building-art-static"
+                or expected_actor_billboard_presentation
+                or expected_stage in {"p02", "p03", "p04", "p05", "p06", "p07", "p08"}
+            ):
                 # P02 replaces the legacy Soul proxy family with
                 # ActorBillboard3d and keeps Familiar presentation in the 2D
                 # foreground pass. Their counts are validated by the P02
-                # presentation sidecar, so every legacy proxy count is zero.
+                # presentation sidecar. The current-source building reference
+                # also uses this renderer, never the historical proxy family.
+                # This checks absence of legacy proxies, not billboard coverage.
                 expected_counts = {
                     "soul_proxy_3d": 0,
                     "soul_mask_proxy_3d": 0,
