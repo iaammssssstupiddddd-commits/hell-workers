@@ -390,11 +390,17 @@ class TaskPolicy:
         self.current()
         self.cursor_stage = "result_validation"
         if status == "completed":
-            result = wire.decode(self.text(self.cursor_response).encode())
+            self.cursor_stage = "result_text"
+            response = self.text(self.cursor_response)
+            self.cursor_stage = "result_json"
+            result = wire.decode(response.encode())
+            self.cursor_stage = "result_schema"
             if set(result) != {"outcome", "subject", "body"} or result.get("outcome") not in {"succeeded", "failed"}:
                 raise wire.Refused("Cursor final response must be the lifecycle result object")
             outcome = result["outcome"]
+            self.cursor_stage = "result_subject"
             subject = self.text(result["subject"], limit=500)
+            self.cursor_stage = "result_body"
             body = self.text(result["body"])
         else:
             outcome = "failed"

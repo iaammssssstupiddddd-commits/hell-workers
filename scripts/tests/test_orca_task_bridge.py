@@ -256,6 +256,16 @@ Read the two requested files without editing them.
         self.assertTrue(policy.handle_cursor_hook(self.hook(
             policy, "beforeSubmitPrompt", prompt=self.cursor_preamble(), attachments=[]))["ok"])
         self.assertTrue(policy.handle_cursor_hook(self.hook(
+            policy, "afterAgentResponse", text='{"outcome":"succeeded","subject":"Done","body":"Complete","extra":true}'))["ok"])
+        refused = policy.handle_cursor_hook(self.hook(
+            policy, "stop", status="completed", loop_count=0))
+        self.assertFalse(refused["ok"])
+        self.assertEqual(policy.cursor_stage, "result_schema")
+
+        policy = self.new_policy(cursor_hooks=True)
+        self.assertTrue(policy.handle_cursor_hook(self.hook(
+            policy, "beforeSubmitPrompt", prompt=self.cursor_preamble(), attachments=[]))["ok"])
+        self.assertTrue(policy.handle_cursor_hook(self.hook(
             policy, "afterAgentResponse", text=json.dumps({
                 "outcome": "succeeded", "subject": "Done",
                 "body": "Read only. Found the entry. Nothing remains.",
