@@ -3,6 +3,9 @@
 `building-art-static` は表示基盤を変更する前の比較入力。新アートの採用や稼働中の生産性能を証明するものではない。
 移行全体と未完条件は[移行計画](plans/3d-rtt/non-wall-floor-building-art-migration-plan-2026-09-19.md)が所有する。
 
+**現在は配置前提の不整合で停止中。正式な性能基準は未取得。** 下記は実装した検査契約であり、
+現行mapgen上での成立を受け入れた仕様ではない。計測専用地形の採否を確認するまで再計測しない。
+
 ## 固定する条件
 
 | 項目 | 契約 |
@@ -16,8 +19,9 @@
 | カメラ | grid `(46,37)`、scale 5。Nと4Nで位置・縮尺を変えない |
 | Door | 現行承認済みgeneration 7、Closed、東西支持壁 |
 
-列は `x=8+5*ordinal`、建物種ごとの行は `y=8+5*row`。Bridgeだけ既存川の `y=65..69` を使用する。
-通常のplacement geometry・配置validatorを通し、地形を書き換えない。Nは4Nの最初の4列と一致する。
+列は `x=8+5*ordinal`、建物種ごとの行は `y=8+5*row`。Bridgeは旧固定川の定数を前提に `y=65..69` を指定している。
+通常のplacement geometry・配置validatorを通し、地形を書き換えないため、現行mapgenではこの配置に失敗する。
+Nは4Nの最初の4列と一致する。
 ordinalを4で割った余りに応じて、次の状態を繰り返す。
 
 | 状態 | 0 | 1 | 2 | 3 |
@@ -72,6 +76,16 @@ python3 scripts/dev.py cargo -- test -p bevy_app@0.1.0 --lib --features profilin
 
 ## 現在の限界
 
+- `2026-09-20`、clean subject `9a46751af0a92671c22718dcbc7fa6f0700ca550` のnative v2で、
+  small Captureの3回すべてが準備完了前に `Bridge/0` の `(8,65)` を `NotRiverTile` として拒否した。
+  `hw_world/src/river/channel.rs`の現行生成は幅2〜4、Bridgeは2×5全セルがRiverであることを
+  `hw_ui/src/selection/placement/validation.rs`で要求する。旧`RIVER_Y_MIN/MAX`は生成済み地形の保証ではない。
+  layout単体testは数・重複・状態を検査するが、実mapgenとの成立を証明していなかった。
+- X11 window生成とIntel Arc/Vulkan adapterのログは得たが、window/readiness原本がなくrenderer受入には使えない。
+  有効なframe-time測定は0、medium CaptureとMemoryは未実行。基準値や性能改善率を出さない。
+- 次の判断案は、通常の地形・橋・配置validatorを変更せず、明示profiling fixture専用の幅5の川を用意すること。
+  採用時はterrain期待値・生成済みWorldMapとの配置test・独立原本検査を更新して新しいclean subjectで再計測する。
+  通常ゲームの地形／橋の仕様修正は本アート移行とは別の判断とし、暗黙に実施しない。
 - 回転、Dream粒子、稼働中の状態遷移、搬送・生産継続、save/load、preview、GPU draw-call詳細は未測定。
 - Mixerは初期Refining状態を停止保持する。入力や進捗を毎frame補充・巻戻しして稼働負荷を捏造しない。
 - この静止参照だけではM1-0は閉じない。稼働fixtureと基盤budgetの確定前に新しい表示基盤を導入しない。
