@@ -7,6 +7,7 @@ import subprocess
 import sys
 import unittest
 from contextlib import nullcontext
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from scripts import orca_role_state as state, orca_roles as roles
@@ -149,6 +150,22 @@ class RoleContinuationTests(unittest.TestCase):
             self.launch()
         self.assertFalse((self.coordination.parent / "role-state/assignments").exists())
 
+    def test_unsettled_bridge_prevents_checkpoint_and_fresh_or_resumed_role(self):
+        self.ticket.update(read_only=True, allowed_directories=[], source_sha256=roles.fingerprint(self.repo))
+        channel = SimpleNamespace(identifier=OTHER, policy=SimpleNamespace(phase="unknown"), mounts=lambda: [])
+        with patch.object(roles.task_bridge, "Session", return_value=nullcontext(channel)):
+            with self.assertRaisesRegex(RuntimeError, "Task bridge outcome unknown"):
+                roles.launch(self.load(), "worker-a", dry_run=False, bridge_settings=(self.root, self.root))
+        data = state.read_state("worker-a", "codex", allow_pending=True)
+        self.assertEqual(data["last"]["phase"], "unknown")
+        self.assertEqual(data["last"]["orca_bridge"], OTHER)
+        self.assertTrue(data["last"]["process_exited"])
+        self.assertEqual(data["last"]["exit_code"], 0)
+        self.assertFalse(data["tasks"])
+        for resume, follow_up in ((None, None), (SESSION, "Continue")):
+            with self.subTest(resume=resume), self.assertRaises(ValueError):
+                self.launch(resume=resume, follow_up=follow_up)
+
     def test_read_only_worker_mount_blocks_fake_provider_edit(self):
         self.ticket.update(read_only=True, allowed_directories=[], source_sha256=roles.fingerprint(self.repo))
         self.options["edit"] = "src/content.txt"
@@ -192,6 +209,12 @@ class RoleContinuationTests(unittest.TestCase):
         failed = self.failed_read_only_start()
         attempt = failed["last"]["attempt_id"]
         source = roles.fingerprint(self.repo)
+        bridge_attempt = json.loads(json.dumps(failed))
+        bridge_attempt["last"]["orca_bridge"] = OTHER
+        state.save_state(bridge_attempt)
+        with self.assertRaisesRegex(ValueError, "supervised lifecycle"):
+            roles.abandon_start(self.load(), "worker-a", attempt, source, "No provider history but Task may exist")
+        state.save_state(failed)
         for change in ({"process_exited": False}, {"exit_code": 0}, {"exit_code": None}, {"phase": "starting"}):
             mutated = json.loads(json.dumps(failed))
             mutated["last"].update(change)

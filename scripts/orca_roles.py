@@ -22,10 +22,12 @@ from pathlib import Path
 
 try:
     import orca_role_state as bindings
+    import orca_task_bridge as task_bridge
     from host_coordination import acquire_host, state_root
     from orca_providers import command_for, cursor_permissions, provider_for, write_cursor_policy
 except ModuleNotFoundError:
     from scripts import orca_role_state as bindings
+    from scripts import orca_task_bridge as task_bridge
     from scripts.host_coordination import acquire_host, state_root
     from scripts.orca_providers import command_for, cursor_permissions, provider_for, write_cursor_policy
 
@@ -112,7 +114,8 @@ def fingerprint(repo: Path) -> str:
 
 
 def sandbox_command(ticket: dict, role: str, runtime: Path, command: list[str],
-                    *, provider: str = "codex", policy: Path | None = None) -> list[str]:
+                    *, provider: str = "codex", policy: Path | None = None,
+                    bridge: task_bridge.Session | None = None) -> list[str]:
     """Outer mount namespace constrains every process, including MCPs and hooks."""
     bwrap = shutil.which("bwrap")
     if not bwrap or sys.platform != "linux":
@@ -127,6 +130,11 @@ def sandbox_command(ticket: dict, role: str, runtime: Path, command: list[str],
     for key in ("PATH", "HOME", "USER", "LOGNAME", "TERM", "LANG", "COLORTERM"):
         if key in os.environ:
             result.extend(["--setenv", key, os.environ[key]])
+    # Same-UID role processes must not read each other's proxy tokens, controller
+    # journals or live capability-bearing transcripts. Re-expose only this runtime.
+    private_state = state_root().parent
+    if private_state.is_dir():
+        result.extend(["--tmpfs", str(private_state)])
     result.extend(["--bind", str(runtime), str(runtime),
                    "--setenv", "CODEX_HOME", str(runtime / "codex"),
                    "--setenv", "TMPDIR", str(runtime / "tmp"),
@@ -170,6 +178,10 @@ def sandbox_command(ticket: dict, role: str, runtime: Path, command: list[str],
         for relative in ticket["allowed_directories"]:
             path = repo / relative
             result.extend(["--bind", str(path), str(path)])
+    if bridge is not None:
+        if provider != "codex" or (role != "reviewer" and not ticket.get("read_only")):
+            raise ValueError("Task bridge currently supports read-only Codex only")
+        result.extend(bridge.mounts())
     result.extend(["--chdir", str(repo), "--", *command])
     return result
 
@@ -255,10 +267,12 @@ def run_provider(command: list[str], data: dict) -> int:
 
 
 def launch(ticket: dict, slot: str, *, dry_run: bool, resume_session: str | None = None,
-           follow_up: str | None = None) -> int:
+           follow_up: str | None = None, bridge_settings: tuple[Path, Path] | None = None) -> int:
     role = "reviewer" if slot == "reviewer" else "worker"
     read_only = role == "reviewer" or ticket.get("read_only") is True
     provider = provider_for(ticket, slot)
+    if bridge_settings and (provider != "codex" or not read_only or dry_run):
+        raise ValueError("Task bridge requires a real read-only Codex launch; Cursor remains denied")
     if resume_session:
         bindings.identity(resume_session)
     if follow_up is not None and (not follow_up.strip() or len(follow_up) > 32_000):
@@ -274,6 +288,13 @@ def launch(ticket: dict, slot: str, *, dry_run: bool, resume_session: str | None
         f"Allowed directories: {[] if read_only else ticket['allowed_directories']}.\n"
         + (follow_up if follow_up is not None else ticket["prompt"])
     )
+    if bridge_settings:
+        prompt += ("\nTask bridge bootstrap only: do not invent lifecycle IDs or send any Orca RPC until a live "
+                   "Orca preamble arrives. Do not create runs, tasks, workers or gates. When dispatched, copy "
+                   "its executable, terminal, capability and IDs exactly; use --json. Ask/check waits require "
+                   "--timeout-ms 10000. Process all delivered messages before explicit check --ack. "
+                   "A bridge refusal means stop and ask the host coordinator to reconcile, never resend. "
+                   "worker_done is not review approval. No edits or builds are allowed.")
     command = command_for(provider, repo, role, prompt, resume_session, read_only=read_only)
     if dry_run:
         print(json.dumps({"slot": slot, "role": role, "provider": provider, "repo": str(repo),
@@ -322,13 +343,25 @@ def launch(ticket: dict, slot: str, *, dry_run: bool, resume_session: str | None
                         or not isinstance(current.get("editor"), dict)
                         or not isinstance(current["editor"].get("vimMode"), bool)):
                     raise ValueError("invalid Cursor runtime configuration; preserve for reconciliation")
-        command = sandbox_command(ticket, role, runtime, command, provider=provider, policy=policy)
-        data["last"] = {"attempt_id": str(uuid.uuid4()), "key": key, "phase": "starting",
-                        "process_exited": False, "exit_code": None, "source_before": before,
-                        "input_sha256": hashlib.sha256(prompt.encode()).hexdigest(),
-                        "terminal": os.environ.get("ORCA_TERMINAL_HANDLE")}
-        bindings.save_state(data)
-        code = run_provider(command, data)
+        with ExitStack() as channels:
+            bridge = None
+            if bridge_settings:
+                def verify_subject():
+                    validate_ticket(ticket)
+                    if fingerprint(repo) != before:
+                        raise ValueError("bridge source changed; preserve and reconcile")
+                bridge = channels.enter_context(task_bridge.Session(
+                    *bridge_settings, os.environ.get("ORCA_TERMINAL_HANDLE"), repo, verify_subject))
+            command = sandbox_command(ticket, role, runtime, command, provider=provider, policy=policy, bridge=bridge)
+            data["last"] = {"attempt_id": str(uuid.uuid4()), "key": key, "phase": "starting",
+                            "process_exited": False, "exit_code": None, "source_before": before,
+                            "input_sha256": hashlib.sha256(prompt.encode()).hexdigest(),
+                            "terminal": os.environ.get("ORCA_TERMINAL_HANDLE"),
+                            **({"orca_bridge": bridge.identifier} if bridge else {})}
+            bindings.save_state(data)
+            code = run_provider(command, data)
+        if bridge and bridge.policy.phase == "unknown":
+            raise RuntimeError("Task bridge outcome unknown; preserve role and reconcile before resuming")
         validate_ticket(ticket)
         after = fingerprint(repo)
         if read_only and after != before:
@@ -370,6 +403,8 @@ def abandon_start(ticket: dict, slot: str, attempt_id: str, observed_source: str
                 or last.get("phase") != "unknown" or last.get("process_exited") is not True
                 or type(last.get("exit_code")) is not int or last["exit_code"] == 0 or key in data["tasks"]):
             raise ValueError("requires exact failed first attempt and positive process-exit evidence")
+        if "orca_bridge" in last:
+            raise ValueError("Task bridge attempt needs supervised lifecycle reconciliation; abandon-start is not sufficient")
         with acquire_host("workspace-" + key, inherit=False):
             assignment = bindings.state_path(slot).parent / "assignments" / f"{key}.json"
             expected = {"schema": 1, "slot": slot, "provider": provider,
@@ -397,8 +432,15 @@ def main() -> int:
     parser.add_argument("--attempt-id")
     parser.add_argument("--observed-source")
     parser.add_argument("--reason")
+    parser.add_argument("--bridge-orca", type=Path)
+    parser.add_argument("--bridge-metadata", type=Path)
     args = parser.parse_args()
     try:
+        bridge_settings = None
+        if args.bridge_orca or args.bridge_metadata:
+            if args.action != "launch" or not (args.bridge_orca and args.bridge_metadata):
+                raise ValueError("launch needs both --bridge-orca and --bridge-metadata")
+            bridge_settings = (args.bridge_orca, args.bridge_metadata)
         ticket = load_ticket(args.ticket)
         if args.action == "fingerprint":
             print(fingerprint(Path(ticket["repo"])))
@@ -416,7 +458,8 @@ def main() -> int:
             print("Failed read-only start preserved as abandoned; no agent started and no task approved.")
             return 0
         return launch(ticket, args.slot, dry_run=args.dry_run, resume_session=args.resume_session,
-                      follow_up=args.follow_up_file.read_text() if args.follow_up_file else None)
+                      follow_up=args.follow_up_file.read_text() if args.follow_up_file else None,
+                      bridge_settings=bridge_settings)
     except (OSError, ValueError, RuntimeError, subprocess.CalledProcessError) as error:
         print(f"Orca role refused: {error}", file=sys.stderr)
         return 1

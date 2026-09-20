@@ -2,7 +2,7 @@
 
 Only the host holds Orca's real token. The stock CLI sees an ephemeral proxy
 bootstrap bound to one runtime, terminal incarnation and canonical worktree.
-This is a preflight boundary, NOT the still-unimplemented Task lifecycle bridge.
+This is a preflight boundary, NOT the separate Task lifecycle bridge.
 """
 
 from __future__ import annotations
@@ -146,15 +146,29 @@ class Upstream:
         # Even host-side callers cannot accidentally turn this into a mutation client.
         if method not in {"status.get", "terminal.show", "terminal.wait"}:
             raise Refused("upstream method denied")
+        return self._exchange(method, params)
+
+    def _exchange(self, method: str, params: dict | None, envelope: dict | None = None,
+                  *, absolute_deadline: float | None = None) -> dict:
+        # Task policies use a separate allowlist; the public preflight stays read-only.
         latest = self.load(self.metadata_path.parent)
         if (latest.runtime_id != self.runtime_id or latest.endpoint != self.endpoint
                 or not hmac.compare_digest(latest.token, self.token)):
             raise Refused("upstream identity changed")
         request_id = str(uuid.uuid4())
         request = {"id": request_id, "authToken": self.token, "method": method}
+        if envelope:
+            if envelope.keys() - {"orchestrationCapability", "orchestrationContractVersion",
+                                  "orchestrationRequestId", "compatibilityInvocationId"}:
+                raise Refused("unsupported transport envelope")
+            request.update(envelope)
         if params is not None:
             request["params"] = params
         timeout = 3 + (params.get("timeoutMs", 0) / 1000 if params else 0)
+        if absolute_deadline is not None:
+            timeout = min(timeout, absolute_deadline - time.monotonic())
+        if timeout <= 0:
+            raise Refused("absolute operation deadline exceeded")
         deadline = time.monotonic() + timeout
         with socket.socket(socket.AF_UNIX) as stream:
             stream.settimeout(timeout)
