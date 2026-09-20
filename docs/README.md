@@ -68,7 +68,7 @@
 - [development-infra/validation-storage-workflow-review-2026-09-13.md](development-infra/validation-storage-workflow-review-2026-09-13.md): 保存規則の自己レビューと修正結果。差分ビルド保全、primary coordinator・台帳・整理gateの適用範囲と検証記録。
 - [linux-setup.md](linux-setup.md): Linux ネイティブ環境でのビルド・実行セットアップ手順。
 - [plans/README.md](plans/README.md): フェーズ分割した実装計画ドキュメント。
-- [plans/change-aware-ci-plan-2026-09-19.md](plans/change-aware-ci-plan-2026-09-19.md): 変更内容に応じたCI自動実行、検証群分割、集約判定と各エージェント向け完了ルールの同期計画。
+- [development-infra/change-aware-ci-acceptance-2026-09-20.md](development-infra/change-aware-ci-acceptance-2026-09-20.md): 変更内容に応じたCI・開発ルール更新の完了記録。受入証拠と既存の日次監査の位置づけ。
 - [plans/archive/priority-development-tools-plan-2026-09-13.md](plans/archive/priority-development-tools-plan-2026-09-13.md): cargo-deny、Dependabot、Ruff、actionlint、proptestの導入・GitHub受入完了記録。
 - [plans/3d-rtt/provisional-wall-formwork-plan-2026-09-05.md](plans/3d-rtt/provisional-wall-formwork-plan-2026-09-05.md): 木材を使う仮設壁の型枠表現、段階別mesh切替、混在接続・実機受入の計画。
 - [plans/3d-rtt/production-door-art-plan-2026-09-05.md](plans/3d-rtt/production-door-art-plan-2026-09-05.md): 木・骨の両開きドア、固定枠と開閉／施錠の3状態、2軸preview・壁との接続・実機受入の計画。
