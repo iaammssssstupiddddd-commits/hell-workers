@@ -14,8 +14,8 @@
 | 制作仕様 | [building-art-direction.md](../../building-art-direction.md) |
 | 調査基点 | 初稿: `94ccdf23`。自己レビュー: `43ca0cb1`の計画と現行実装（文書変更のみ） |
 
-本書は全10種の移行順、制作物、表示接続、受入条件を所有する。M0の制作・検査toolingと先行無地原本を実装中。
-runtime表示接続・正式baseline・ゲーム内アート受入は未着手。
+本書は全10種の移行順、制作物、表示接続、受入条件を所有する。M0の制作・検査toolingと先行無地原本を実装済み。
+M1-0に向けた静止計測fixtureを実装中。runtime表示接続・正式baseline完了・ゲーム内アート受入は未実施。
 個別意匠の最終判断はゲーム内の候補画像で行い、本計画の作成をアート受入やreleaseとして扱わない。
 
 自己レビューでは、全種の美術数値を先行2種の試作だけで決める前提を撤回し、共通契約と群別の確定点を分離した。
@@ -549,14 +549,14 @@ legacy-controlはprofiling専用の明示modeとし、asset欠落を故意に起
 
 ### 現在地
 
-- 実装進捗: M0の制作・検査toolingを実装。M0全体、M1〜M6は未完。
+- 実装進捗: M0の制作・検査toolingに続き、M1-0の静止fixture・原本検証helperを実装。M0全体、M1〜M6は未完。
 - 作業branch: `codex/building-art-migration`、実装基点: `53c8b6fb8f2d17e8cca4458d098060d2d9fb1e42`。
 - 全10種・Rust shapeとの照合、9種のrole・consumer・単位契約、非対象4画像hash、Tank寸法訂正、Door g7継承を追加。
 - Tank/Mixerのidentity原本、neutral albedo、計4 role GLB、計5状態PNG、projectionとexport後検査を実装。
   `build_building_clay.py build/verify`で既存scene/export/Khronos gateを再利用する。詳細は`docs/blender-setup.md`。
-- 次の作業: M0-bの共通runtime schema詳細・比較fixture/負荷の確定→M1-0のprofiling fixture導入とbaseline。
+- 次の作業: 静止fixtureの全体検証→ユーザー許可済みcommit→静止実機参照取得。稼働fixture・共通runtime schema詳細は残る。
   baseline sourceと基盤budgetをfreezeする前にruntime表示基盤を変えない。
-- Rust/runtime・repo assets・canonical・Help本文は未変更。今回の外部原本は未承認stagingのみ。
+- Rustのprofiling専用経路のみ変更。通常表示・repo assets・canonical・Help本文は未変更。外部原本は未承認stagingのみ。
 - 無地の寸法・UV・法線処理・canvasは`clay_draft`。ゲーム内判定、最終atlas、アート承認、releaseではない。
 
 ### 次のAIが最初にやること
@@ -567,9 +567,10 @@ legacy-controlはprofiling専用の明示modeとし、asset欠落を故意に起
 
 ### ブロッカー/注意点
 
-- 正式baselineは新しい計測fixtureを含むclean subjectが必要。commitはユーザー指示後に行う。
+- 正式baselineは新しい計測fixtureを含むclean subjectが必要。ユーザーは検証後のcommitと計測続行を許可済み。
   現在の制作toolingだけのcommitをM1-0の完了や性能baselineと扱わない。
-- 全設備用のnative recipe・asset schemaは未実装。既存Wall/Door recipeを名前だけ変えて設備の受入済みにしない。
+- 静止参照のnative helperを追加したが、全設備の美術・稼働受入recipeとruntime asset schemaは未実装。
+  既存Wall/Door recipeや静止計測を設備の受入済みへ読み替えない。
 - 新root形式はroot数だけの既存監査では不十分。visible part、材質、layer、asset readinessまで調べる。
 - SpaのConstructing、Tank companion、カタログ後着、砂icon共有が取りこぼしやすい。
 - `MovePlantTask`の確定行先を配置ghostと混同しない。loadではtaskが復元されず、Mixer/Spaの稼働やLampの供給結果も保存前とは限らない。
@@ -650,6 +651,15 @@ build・実機・性能検証用の出力や専用workspaceは作成していな
 canonical・runtime asset・他sessionの原本／検証cacheは変更していない。trash移動のためdisk解放量は主張しない。
 本件のゲーム受入jobは0で、既存primary開発cacheの保持者も変更していない。
 
+### M1-0静止fixtureの実装記録（2026-09-20）
+
+- [静止参照仕様](../../building-art-static-reference.md)を追加。各4棟／16棟、実Soul 15／60体、合法な川・支持壁・companionを固定。
+- `building-art-static`はprofiling限定。建設完了・relationship・発電／表示mirrorは既存systemを使い、通常表示基盤は変更しない。
+- 原本検査は独立layout、実owner・状態・resident/visible handle、承認Door g7、実adapter/window、Capture/Memory分離を要求する。
+- Rust focused 3 test、Python 9 testは成功。全体検証とnative実測は別gateで、両方の結果を得るまで完了扱いしない。
+- Help review: **No impact**。明示profiling入力からのみ到達する計測経路。通常の建築操作・前提・描画・保存・Help providerは不変。
+- 静止参照は稼働性能の証拠ではない。Mixer回転・Dream粒子・継続生産、基盤budgetは未確定でM1-0を完了扱いしない。
+
 ### Definition of Done
 
 - [ ] M0〜M6の完了条件と全10種の処置が確定。
@@ -667,3 +677,4 @@ canonical・runtime asset・他sessionの原本／検証cacheは変更してい�
 | `2026-09-19` | `Codex` | 制作仕様を前提に全10種の移行、9種の新asset経路、Door監査、段階導入・全表示consumer・受入・保存管理を計画。実装未着手 |
 | `2026-09-20` | `Codex` | 実装照合の自己レビュー。role別export、群別freeze、active/pending、表示順、preview全経路、load期待値、試験入出力、基盤比較を具体化。code・assetは未変更 |
 | `2026-09-20` | `Codex` | M0のshape/role/保護画像契約、先行2種の無地原本生成・GLB/PNG検査・13 testを実装。stagingのみ。runtimeとM1-0以降は未着手 |
+| `2026-09-20` | `Codex` | M1-0用の静止fixture、独立sidecar検証、Capture→Memory helperを追加。通常表示とassetは不変、稼働fixture・budget・実測は未完 |

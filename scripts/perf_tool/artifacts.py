@@ -1488,7 +1488,7 @@ def read_behavior_timeline(
 
 def measurement_duration_clock(workload: str) -> tuple[str, bool]:
     """Return the advancing capture clock and whether virtual time must stay frozen."""
-    pauses_virtual_time = workload in {"indoor-light", "wall-density", "door-density"}
+    pauses_virtual_time = workload in {"indoor-light", "wall-density", "door-density", "building-art-static"}
     return ("real" if pauses_virtual_time else "virtual"), pauses_virtual_time
 
 

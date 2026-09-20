@@ -98,6 +98,8 @@ mod audit_encoding;
 #[cfg(feature = "profiling")]
 mod behavior_driver;
 #[cfg(feature = "profiling")]
+pub(crate) mod building_art_static;
+#[cfg(feature = "profiling")]
 mod capture_driver;
 mod config;
 #[cfg(feature = "profiling")]
@@ -726,6 +728,7 @@ pub(crate) struct PerfCaptureParams<'w, 's> {
     indoor_light_fixture: Res<'w, IndoorLightFixtureState>,
     wall_density_fixture: Res<'w, WallDensityFixtureState>,
     door_density_fixture: Res<'w, DoorDensityFixtureState>,
+    building_art_static: Res<'w, building_art_static::BuildingArtStaticState>,
     indoor_light_runtime: Res<'w, crate::systems::lighting::IndoorLightRuntime>,
     indoor_light_texture: Res<'w, crate::systems::visual::indoor_light_texture::IndoorLightTexture>,
     room_lookup: Res<'w, hw_world::RoomTileLookup>,

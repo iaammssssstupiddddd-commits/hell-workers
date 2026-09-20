@@ -22,6 +22,62 @@ fn parse_input(
 
 #[cfg(feature = "profiling")]
 #[test]
+fn building_art_static_rejects_wrong_population_clock_and_measurement_contract() {
+    for (size, souls) in [("small", "15"), ("medium", "60")] {
+        let args = vec![
+            "--perf-scenario",
+            "--perf-workload",
+            "building-art-static",
+            "--perf-size",
+            size,
+            "--spawn-souls",
+            souls,
+            "--spawn-familiars",
+            "0",
+            "--perf-seed",
+            "20260920",
+            "--perf-output-dir",
+            "/tmp/unused-building-art-config-test",
+            "--perf-window-width",
+            "1280",
+            "--perf-window-height",
+            "720",
+            "--perf-window-scale-factor",
+            "1",
+            "--perf-rtt-quality",
+            "high",
+        ];
+        let config = parse_input(&args, &[]).unwrap();
+        assert!(config.keeps_virtual_time_paused_during_capture());
+        assert!(config.uses_isolated_density_world());
+        assert_eq!(config.soul_count().to_string(), souls);
+        for (flag, bad) in [
+            ("--spawn-souls", "0"),
+            ("--spawn-familiars", "1"),
+            ("--perf-size", "large"),
+            ("--perf-seed", "20260906"),
+            ("--perf-window-width", "1920"),
+        ] {
+            let mut invalid = args.clone();
+            let index = invalid.iter().position(|&arg| arg == flag).unwrap();
+            invalid[index + 1] = bad;
+            assert!(parse_input(&invalid, &[]).is_err(), "{flag}={bad}");
+        }
+        for extra in [
+            ["--perf-render", "cpu"],
+            ["--perf-clock", "fixed"],
+            ["--perf-warmup-secs", "1"],
+            ["--perf-measure-secs", "2"],
+        ] {
+            let mut invalid = args.clone();
+            invalid.extend(extra);
+            assert!(parse_input(&invalid, &[]).is_err(), "{extra:?}");
+        }
+    }
+}
+
+#[cfg(feature = "profiling")]
+#[test]
 fn dashboard_fixture_opens_the_management_shell_for_visible_modes_test() {
     use super::super::fixture::{PerfScenarioApplied, setup_perf_ui_mode_if_enabled};
     use bevy::prelude::*;

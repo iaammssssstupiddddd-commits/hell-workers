@@ -27,6 +27,7 @@ pub enum PerfWorkload {
     IndoorLight,
     WallDensity,
     DoorDensity,
+    BuildingArtStatic,
     Deconstruction,
     SaveTransaction,
 }
@@ -43,6 +44,7 @@ impl PerfWorkload {
             "indoor-light" => Some(Self::IndoorLight),
             "wall-density" => Some(Self::WallDensity),
             "door-density" => Some(Self::DoorDensity),
+            "building-art-static" => Some(Self::BuildingArtStatic),
             "deconstruction" => Some(Self::Deconstruction),
             "save-transaction" => Some(Self::SaveTransaction),
             _ => None,
@@ -60,6 +62,7 @@ impl PerfWorkload {
             Self::IndoorLight => "indoor-light",
             Self::WallDensity => "wall-density",
             Self::DoorDensity => "door-density",
+            Self::BuildingArtStatic => "building-art-static",
             Self::Deconstruction => "deconstruction",
             Self::SaveTransaction => "save-transaction",
         }
@@ -620,7 +623,7 @@ impl PerfScenarioConfig {
         let workload = parse_value_or_default(
             input.value("--perf-workload", "HW_PERF_WORKLOAD")?,
             "--perf-workload",
-            "gather|path-door|construction|ui-gpu|task-dashboard|dream-ui-burst|indoor-light|wall-density|door-density|deconstruction|save-transaction",
+            "gather|path-door|construction|ui-gpu|task-dashboard|dream-ui-burst|indoor-light|wall-density|door-density|building-art-static|deconstruction|save-transaction",
             PerfWorkload::parse,
             PerfWorkload::Gather,
         )?;
@@ -1232,6 +1235,31 @@ impl PerfScenarioConfig {
                     .to_string(),
             ));
         }
+        if workload == PerfWorkload::BuildingArtStatic
+            && (!matches!(size, PerfScenarioSize::Small | PerfScenarioSize::Medium)
+                || render_mode != PerfRenderMode::Gpu
+                || soul_count
+                    != if size == PerfScenarioSize::Small {
+                        15
+                    } else {
+                        60
+                    }
+                || familiar_count != 0
+                || !matches!(familiar_policy_mode, PerfFamiliarPolicyMode::Baseline)
+                || !matches!(operation_dialog_mode, PerfOperationDialogMode::Hidden)
+                || !matches!(dashboard_mode, PerfDashboardMode::Hidden)
+                || !matches!(clock_mode, PerfClockMode::Realtime)
+                || master_seed != 20_260_920
+                || warmup_secs != 30.0
+                || measure_secs != 60.0
+                || output_dir.is_none()
+                || window_width != Some(1280)
+                || window_height != Some(720)
+                || window_scale_factor != Some(1.0)
+                || rtt_quality != Some(RttQualityPreset::High))
+        {
+            return Err(PerfScenarioConfigError("building-art-static requires small/15 Souls or medium/60 Souls, zero Familiars, gpu/realtime, seed 20260920, 30s/60s, output directory, baseline policies and 1280x720/high/DPI-1".into()));
+        }
         #[cfg(feature = "profiling-renderdoc")]
         if renderdoc_capture
             && workload != PerfWorkload::WallDensity
@@ -1270,6 +1298,7 @@ impl PerfScenarioConfig {
                 presentation: door_presentation.expect("validated door presentation"),
                 joint_actual_window: wall_door_joint_actual_window,
             },
+            PerfWorkload::BuildingArtStatic => ValidatedWorkload::BuildingArtStatic,
             PerfWorkload::PathDoor => ValidatedWorkload::PathDoor,
             PerfWorkload::Construction => ValidatedWorkload::Construction,
             PerfWorkload::UiGpu => ValidatedWorkload::UiGpu,
@@ -1499,7 +1528,10 @@ impl PerfScenarioConfig {
             && !self.uses_fixed_timesteps()
             && (matches!(
                 self.workload(),
-                PerfWorkload::IndoorLight | PerfWorkload::WallDensity | PerfWorkload::DoorDensity
+                PerfWorkload::IndoorLight
+                    | PerfWorkload::WallDensity
+                    | PerfWorkload::DoorDensity
+                    | PerfWorkload::BuildingArtStatic
             ) || door_gallery_requested)
     }
 
@@ -1512,7 +1544,9 @@ impl PerfScenarioConfig {
         self.enabled()
             && matches!(
                 self.workload(),
-                PerfWorkload::WallDensity | PerfWorkload::DoorDensity
+                PerfWorkload::WallDensity
+                    | PerfWorkload::DoorDensity
+                    | PerfWorkload::BuildingArtStatic
             )
     }
 

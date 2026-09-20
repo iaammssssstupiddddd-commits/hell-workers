@@ -39,6 +39,7 @@
 ## 世界観・アセット
 - [art-style-criteria.md](art-style-criteria.md): アートスタイルの受入基準と検証観点。
 - [building-art-direction.md](building-art-direction.md): 建築物の形状・手描きテクスチャ・UV・光の役割分担、素材表現、制作順と採用条件。
+- [building-art-static-reference.md](building-art-static-reference.md): 全10種の静止性能参照、合法配置・実状態検査、Capture/Memoryの逐次計測と未測定範囲。
 - [plans/3d-rtt/non-wall-floor-building-art-migration-plan-2026-09-19.md](plans/3d-rtt/non-wall-floor-building-art-migration-plan-2026-09-19.md): 壁・床を除く10種のアート移行、モデルとpreviewの接続、状態表示、段階導入と受入の計画。
 - [world_lore.md](world_lore.md): 世界観設定書。アセットデザインのための世界観・視覚指針（アートスタイル含む）。
 - [assets_workflow.md](assets_workflow.md): `Syncthing` を前提にした原本共有、`exports/` 運用、`assets/` 反映手順。

@@ -497,6 +497,8 @@ pub(crate) fn drive_perf_capture_system(
             let result = result.and_then(|()| {
                 write_door_density_fixture_sidecars(&params.config, &params.door_density_fixture)
             });
+            let result =
+                result.and_then(|()| params.building_art_static.write_sidecar(&params.config));
             let result = result.and_then(|()| {
                 let final_evidence = final_wall_density_presentation
                     .as_ref()

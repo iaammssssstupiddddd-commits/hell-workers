@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from ..model import Case
+from .building_art_static import read_building_art_static
 from . import (
     read_deconstruction_fixture,
     read_indoor_light_consumers,
@@ -51,6 +52,13 @@ def read_workload_sidecars(
     indoor_sidecar_paths = tuple(data_dir / name for name in (
         "indoor_light_fixture.csv", "indoor_light_layout.csv", "indoor_light_presentation.csv",
     ))
+    if expected_case.workload == "building-art-static":
+        if capture_kind != "frame-time":
+            reasons.append("building-art-static requires a frame-time capture")
+        _, errors = read_building_art_static(data_dir, expected_case=expected_case)
+        reasons.extend(errors)
+    elif (data_dir / "building_art_static.json").exists():
+        reasons.append("building-art-static sidecar is forbidden for another workload")
     if expected_case.workload == "wall-density":
         if capture_kind != "frame-time":
             reasons.append("wall-density validation requires a frame-time capture")

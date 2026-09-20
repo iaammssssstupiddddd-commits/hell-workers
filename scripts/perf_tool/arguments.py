@@ -49,6 +49,7 @@ def add_run_arguments(
             "save-transaction",
             "wall-density",
             "door-density",
+            "building-art-static",
         ],
     )
     parser.add_argument("--contract", choices=sorted(CONTRACT_FILES))

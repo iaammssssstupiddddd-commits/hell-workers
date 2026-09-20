@@ -163,6 +163,7 @@ impl Plugin for StartupPlugin {
                 app.init_resource::<perf_scenario::WallColorActualWindowAcceptance>();
             }
             app.init_resource::<PerfScenarioApplied>()
+                .init_resource::<perf_scenario::building_art_static::BuildingArtStaticState>()
                 .init_resource::<perf_scenario::PerfScenarioDriverState>()
                 .init_resource::<perf_scenario::DeconstructionPerfFixtureState>()
                 .init_resource::<perf_scenario::IndoorLightFixtureState>()
@@ -171,6 +172,25 @@ impl Plugin for StartupPlugin {
                 .init_resource::<perf_scenario::PerfBehaviorCapture>()
                 .init_resource::<crate::systems::save::PerfLoadFaultInjection>()
                 .init_resource::<perf_scenario::FieldCoreDriverState>()
+                .add_systems(Update, perf_scenario::building_art_static::setup_building_art_static_system.in_set(PerfScenarioSet::Setup))
+                .add_systems(Update, (
+                    crate::systems::jobs::building_completion_system,
+                    bevy::ecs::schedule::ApplyDeferred,
+                    perf_scenario::building_art_static::seed_building_art_static_system,
+                    crate::systems::jobs::soul_spa_construction::soul_spa_tile_activate_system,
+                    bevy::ecs::schedule::ApplyDeferred,
+                    perf_scenario::building_art_static::settle_refine_visuals,
+                    crate::systems::energy::grid_recalc::sync_power_allocation_mode_from_settings_system,
+                    crate::systems::energy::grid_recalc::detect_energy_update_dirty_system,
+                    crate::systems::energy::grid_lifecycle::reconcile_power_grid_topology_system,
+                    bevy::ecs::schedule::ApplyDeferred,
+                    crate::systems::energy::power_output::soul_spa_power_output_system,
+                    crate::systems::energy::grid_recalc::grid_recalc_system,
+                    bevy::ecs::schedule::ApplyDeferred,
+                ).chain().in_set(PerfScenarioSet::IndoorSettle)
+                    .run_if(perf_scenario::building_art_static::should_settle_building_art_static))
+                .add_systems(PostUpdate, perf_scenario::building_art_static::inspect_building_art_static_system
+                    .after(bevy::camera::visibility::VisibilitySystems::CheckVisibility))
                 .add_systems(
                     PostStartup,
                     setup_perf_scenario_if_enabled
