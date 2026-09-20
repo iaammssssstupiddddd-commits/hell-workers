@@ -209,6 +209,30 @@ Read the two requested files without editing them.
         self.assertNotIn(policy.cursor_hook_token, journal)
         self.assertEqual(json.loads(journal)["settled_status"], "completed")
 
+    def test_cursor_stop_waits_for_concurrent_final_response_before_settlement(self):
+        self.assertTrue(issubclass(bridge.Proxy, socketserver.ThreadingMixIn))
+        policy = self.new_policy(cursor_hooks=True)
+        self.assertTrue(policy.handle_cursor_hook(self.hook(
+            policy, "beforeSubmitPrompt", prompt=self.cursor_preamble(), attachments=[]))["ok"])
+        final = json.dumps({
+            "outcome": "succeeded", "subject": "Cursor B inspection complete",
+            "body": "The requested source was inspected read-only. The guarded hooks were confirmed. No work remains.",
+        })
+        stopped = []
+        thread = threading.Thread(target=lambda: stopped.append(policy.handle_cursor_hook(
+            self.hook(policy, "stop", status="completed", loop_count=0),
+            deadline=time.monotonic() + 2)))
+        thread.start()
+        time.sleep(0.05)
+        response = policy.handle_cursor_hook(self.hook(
+            policy, "afterAgentResponse", text=final), deadline=time.monotonic() + 2)
+        thread.join(timeout=2)
+        self.assertFalse(thread.is_alive())
+        self.assertTrue(response["ok"], response)
+        self.assertTrue(stopped[0]["ok"], stopped[0])
+        self.assertEqual(stopped[0]["result"]["outcome"], "succeeded")
+        self.assertEqual(policy.phase, "settled")
+
     def test_cursor_hook_ignores_bootstrap_turn_but_rejects_changed_or_pending_authority(self):
         policy = self.new_policy(cursor_hooks=True)
         bootstrap = policy.handle_cursor_hook(self.hook(

@@ -203,6 +203,7 @@ class TaskPolicy:
         self.cursor_authority = None
         self.cursor_conversation = None
         self.cursor_response = None
+        self.cursor_condition = threading.Condition()
 
     def text(self, value: object, *, optional: bool = False, limit: int = 32000) -> str | None:
         if value is None and optional:
@@ -418,9 +419,15 @@ class TaskPolicy:
                 "lifecycle": wire.mapping(done.get("lifecycle"))}
 
     def handle_cursor_hook(self, request: dict, *, deadline: float | None = None) -> dict:
+        # Cursor may emit stop just before afterAgentResponse for the same turn.
+        # Serialize all hook state, while allowing that response hook to wake a
+        # completed stop hook before its absolute deadline.
+        with self.cursor_condition:
+            return self._handle_cursor_hook_locked(request, deadline=deadline)
+
+    def _handle_cursor_hook_locked(self, request: dict, *, deadline: float | None = None) -> dict:
         request_id = "refused"
         absolute_deadline = deadline if deadline is not None else time.monotonic() + REQUEST_SECONDS
-        self.upstream.deadline = absolute_deadline
         try:
             if not self.cursor_hooks:
                 raise wire.Refused("Cursor hooks are disabled")
@@ -461,6 +468,7 @@ class TaskPolicy:
                     result = {"observed": False}
                 else:
                     self.cursor_response = self.text(params.get("text"))
+                    self.cursor_condition.notify_all()
                     result = {"observed": True}
             else:
                 if self.phase == "settled":
@@ -471,8 +479,12 @@ class TaskPolicy:
                     status = params.get("status")
                     if status not in {"completed", "aborted", "error"} or type(params.get("loop_count")) is not int:
                         raise wire.Refused("invalid Cursor stop hook")
-                    if status == "completed" and self.cursor_response is None:
-                        raise wire.Refused("Cursor completed without a final response")
+                    while status == "completed" and self.cursor_response is None:
+                        remaining = absolute_deadline - time.monotonic()
+                        if self.revoked or remaining <= 0:
+                            raise wire.Refused("Cursor completed without a final response")
+                        self.cursor_condition.wait(remaining)
+                    self.upstream.deadline = absolute_deadline
                     result = self.cursor_finish(status, absolute_deadline)
             if time.monotonic() >= absolute_deadline:
                 raise wire.Refused("absolute Cursor hook deadline exceeded")
@@ -718,8 +730,10 @@ class Handler(socketserver.BaseRequestHandler):
                     pass
 
 
-class Proxy(socketserver.UnixStreamServer):
+class Proxy(socketserver.ThreadingMixIn, socketserver.UnixStreamServer):
     request_queue_size = 2
+    daemon_threads = False
+    block_on_close = True
 
     def __init__(self, path: Path, policy: TaskPolicy):
         self.policy = policy
@@ -793,7 +807,9 @@ class Session:
         return result
 
     def __exit__(self, *_):
-        self.policy.revoked = True
+        with self.policy.cursor_condition:
+            self.policy.revoked = True
+            self.policy.cursor_condition.notify_all()
         if self.thread and self.thread.is_alive():
             self.server.shutdown()
             self.thread.join()
