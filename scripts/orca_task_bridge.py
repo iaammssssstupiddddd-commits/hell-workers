@@ -202,6 +202,7 @@ class TaskPolicy:
         self.cursor_hook_token = secrets.token_hex(32) if cursor_hooks else None
         self.cursor_authority = None
         self.cursor_conversation = None
+        self.cursor_generation = None
         self.cursor_response = None
         self.cursor_stage = "bootstrap"
         self.cursor_condition = threading.Condition()
@@ -477,10 +478,15 @@ class TaskPolicy:
                         raise wire.Refused("Cursor Dispatch preamble changed")
                     if observed["terminal"] != self.binding.terminal:
                         raise wire.Refused("Cursor Dispatch targets another terminal")
-                    self.cursor_authority = observed
+                    if self.cursor_authority is None:
+                        self.cursor_authority = observed
+                        self.cursor_generation = generation
+                        self.cursor_response = None
+                    elif self.cursor_generation != generation:
+                        raise wire.Refused("Cursor Dispatch generation changed")
                 result = {"observed": self.cursor_authority is not None}
             elif event == "afterAgentResponse":
-                if self.cursor_authority is None:
+                if self.cursor_authority is None or generation != self.cursor_generation:
                     result = {"observed": False}
                 else:
                     self.cursor_response = self.text(params.get("text"))
@@ -489,7 +495,7 @@ class TaskPolicy:
             else:
                 if self.phase == "settled":
                     result = {"settled": True, "outcome": self.settled_status}
-                elif self.cursor_authority is None:
+                elif self.cursor_authority is None or generation != self.cursor_generation:
                     result = {"observed": False}
                 else:
                     status = params.get("status")

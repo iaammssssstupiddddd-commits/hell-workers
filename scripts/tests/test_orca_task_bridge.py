@@ -152,7 +152,8 @@ Read the two requested files without editing them.
 """
 
     def hook(self, policy, event, **values):
-        params = {"conversation_id": "cursor-conversation", "generation_id": str(uuid.uuid4()),
+        generation = values.pop("generation_id", "cursor-generation")
+        params = {"conversation_id": "cursor-conversation", "generation_id": generation,
                   "hook_event_name": event, "cursor_version": "fixture",
                   "workspace_roots": [str(self.repo)], "user_email": None,
                   "transcript_path": None, **values}
@@ -233,6 +234,32 @@ Read the two requested files without editing them.
         self.assertEqual(stopped[0]["result"]["outcome"], "succeeded")
         self.assertEqual(policy.phase, "settled")
         self.assertEqual(policy.cursor_stage, "settled")
+
+    def test_cursor_hook_ignores_stale_bootstrap_completion_after_dispatch_arrives(self):
+        policy = self.new_policy(cursor_hooks=True)
+        bootstrap = policy.handle_cursor_hook(self.hook(
+            policy, "beforeSubmitPrompt", generation_id="bootstrap-generation",
+            prompt="Wait for the supervised task.", attachments=[]))
+        self.assertEqual(bootstrap["result"], {"observed": False})
+        dispatched = policy.handle_cursor_hook(self.hook(
+            policy, "beforeSubmitPrompt", generation_id="dispatch-generation",
+            prompt=self.cursor_preamble(), attachments=[]))
+        self.assertEqual(dispatched["result"], {"observed": True})
+        stale_response = policy.handle_cursor_hook(self.hook(
+            policy, "afterAgentResponse", generation_id="bootstrap-generation",
+            text='{"outcome":"failed","subject":"Stale","body":"Bootstrap turn only."}'))
+        stale_stop = policy.handle_cursor_hook(self.hook(
+            policy, "stop", generation_id="bootstrap-generation", status="completed", loop_count=0))
+        self.assertEqual(stale_response["result"], {"observed": False})
+        self.assertEqual(stale_stop["result"], {"observed": False})
+        final = json.dumps({"outcome": "succeeded", "subject": "Current Dispatch",
+                            "body": "Read only. The requested entry points were inspected. Nothing remains."})
+        self.assertTrue(policy.handle_cursor_hook(self.hook(
+            policy, "afterAgentResponse", generation_id="dispatch-generation", text=final))["ok"])
+        settled = policy.handle_cursor_hook(self.hook(
+            policy, "stop", generation_id="dispatch-generation", status="completed", loop_count=0))
+        self.assertTrue(settled["ok"], settled)
+        self.assertEqual(settled["result"]["outcome"], "succeeded")
 
     def test_cursor_hook_ignores_bootstrap_turn_but_rejects_changed_or_pending_authority(self):
         policy = self.new_policy(cursor_hooks=True)
