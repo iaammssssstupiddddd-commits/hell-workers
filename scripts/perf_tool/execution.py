@@ -1,5 +1,10 @@
 from __future__ import annotations
 
+try:
+    from host_coordination import host_pass_fds
+except ModuleNotFoundError:
+    from scripts.host_coordination import host_pass_fds
+
 import argparse
 import csv
 import hashlib
@@ -425,6 +430,7 @@ def build_binary(args: argparse.Namespace) -> Path:
         command,
         cwd=REPO_ROOT,
         env=performance_environment(),
+        pass_fds=host_pass_fds(os.environ),
         check=False,
     )
     if completed.returncode != 0:
@@ -689,6 +695,7 @@ def run_csvexport(
                 [str(csvexport), *arguments, str(trace_path)],
                 cwd=REPO_ROOT,
                 env=environment,
+                pass_fds=host_pass_fds(environment),
                 stdout=output_handle,
                 stderr=log_handle,
                 check=False,
@@ -1135,6 +1142,7 @@ def run_one(
             trace_command,
             cwd=REPO_ROOT,
             env=env,
+            pass_fds=host_pass_fds(env),
             stdout=trace_log_handle,
             stderr=subprocess.STDOUT,
             creationflags=(
@@ -1151,6 +1159,7 @@ def run_one(
                         launch_command,
                         cwd=REPO_ROOT,
                         env=env,
+                        pass_fds=host_pass_fds(env),
                         stdout=log_handle,
                         stderr=subprocess.STDOUT,
                         check=False,
@@ -1167,6 +1176,7 @@ def run_one(
                     launch_command,
                     cwd=REPO_ROOT,
                     env=env,
+                    pass_fds=host_pass_fds(env),
                     stdout=log_handle,
                     stderr=subprocess.STDOUT,
                 )

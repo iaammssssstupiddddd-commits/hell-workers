@@ -23,6 +23,8 @@ ROOT_RULE_FILES = (
     ".gemini/antigravity/project_rules.md",
 )
 
+MANDATORY_ORCA_RULE = "Parallel editing is allowed only through the ticketed `scripts/orca_roles.py` launcher in separate worktrees; never delegate edits in a shared checkout."
+
 MANDATORY_STORAGE_RULE = (
     "Use the primary repository's `python3 scripts/dev.py validation` coordinator "
     "for validation planning/execution and pass its storage check before reporting."
@@ -216,6 +218,10 @@ def missing_mandatory_help_review_rules(
 def find_violations() -> list[str]:
     expected_bevy = bevy_version()
     violations: list[str] = []
+    for name in ROOT_RULE_FILES:
+        path = REPO_ROOT / name
+        if not path.is_file() or MANDATORY_ORCA_RULE not in path.read_text(encoding="utf-8"):
+            violations.append(f"{name}: mandatory supervised Orca boundary is missing")
     for path in missing_ci_rules(REPO_ROOT / name for name in CI_RULE_FILES):
         violations.append(f"{path.relative_to(REPO_ROOT)}: mandatory CI/branch rule is missing")
     for path in missing_storage_rules(REPO_ROOT / name for name in STORAGE_RULE_FILES):

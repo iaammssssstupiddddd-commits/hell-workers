@@ -1,0 +1,9 @@
+# Basic preflight only: builds/tests are coordinator-owned and host-admitted.
+# Local repository hook overrides must be aligned with this file in Orca settings.
+setupAgentStartupPolicy: wait-for-setup
+scripts:
+  setup: python3 scripts/dev.py doctor
+# Do not share target/save/settings or start agents automatically.
+defaultTabs:
+  - title: Development
+    command: python3 scripts/dev.py doctor

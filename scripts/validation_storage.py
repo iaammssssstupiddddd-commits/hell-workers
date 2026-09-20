@@ -500,7 +500,19 @@ def require_admission(repo: Path, paths: list[Path]) -> None:
 
 
 def tracked_command(primary: Path, identity: str, command: list[str], repo: str, env: dict, *, capture: bool = False):
+    try:
+        from host_coordination import acquire_host
+    except ModuleNotFoundError:
+        from scripts.host_coordination import acquire_host
+    with acquire_host() as host:
+        return _tracked_admitted_command(primary, identity, command, repo, host.environment(env),
+                                         capture=capture, pass_fds=(host.fd,))
+
+
+def _tracked_admitted_command(primary: Path, identity: str, command: list[str], repo: str,
+                              env: dict, *, capture: bool, pass_fds: tuple[int, ...]):
     with subprocess.Popen(command, cwd=repo, env=env, text=True,
+                          pass_fds=pass_fds,
                           stdout=subprocess.PIPE if capture else None,
                           stderr=subprocess.PIPE if capture else None) as child:
         with locked(primary) as ledger:

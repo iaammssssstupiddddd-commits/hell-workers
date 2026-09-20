@@ -61,18 +61,12 @@
 - フレームワークやライブラリ依存の挙動は推測で説明しない。必要なら `docs.rs` や `~/.cargo/registry/src/` などの一次情報を確認してから説明する。
 - probe / debug material / 一時設定変更は最小限に留め、原因切り分け後は必ず撤去する。恒久実装と診断実装を混在させない。
 
-### Background Agent Policy (STRICT — DO NOT VIOLATE)
-**Do NOT use background or subprocess agents for code editing tasks** — including Cursor’s `Task` tool with `run_in_background`, or a `general-purpose` / file-editing subagent.
-
-Reasons:
-- Agents share the same repository and routinely make out-of-scope changes to unrelated files
-- Progress cannot be monitored in real time; damage is discovered only after the fact
-- Multiple agents running in parallel conflict with each other and with other ongoing sessions
-
-**Permitted agent uses:**
-- `explore` agent — read-only codebase investigation only
-- `code-review` agent — read-only review only
-- All code edits must be made directly by the main agent (IDE patch/apply tools — e.g. `StrReplace` / `apply_patch` — not delegated editors)
+### Agent editing boundaries (STRICT)
+Shared-checkout/background editing remains forbidden. Read-only exploration and
+review are permitted. The sole editing-delegation exception is the supervised
+Orca workflow below: separate worktrees, ticketed mount isolation, bounded slots,
+fixed read-only review and coordinator-owned integration. The main agent makes
+all edits outside that controlled path.
 
 ### Git Revert Policy
 **NEVER run `git checkout -- <file>` or any destructive git command without first:**
@@ -143,6 +137,15 @@ Create an implementation plan in `docs/plans/` when:
 ## Assets & Configuration Tips
 - For generated icons or sprites, create with magenta background (`#FF00FF`) and convert via `scripts/convert_to_png.py`.
 - If Windows linking fails with too many symbols, disable `dynamic_linking` in `Cargo.toml` as documented in `docs/DEVELOPMENT.md`.
+
+## Supervised Orca development
+
+- Parallel editing is allowed only through the ticketed `scripts/orca_roles.py` launcher in separate worktrees; never delegate edits in a shared checkout.
+- Use at most two implementation slots and one fixed read-only reviewer; reuse the same reviewer terminal for the workstream. Workers must not delegate again.
+- The coordinator owns authoritative primary docs, shared contracts, builds/tests, commits and serial integration. Workers cannot write Git metadata or approve their own changes.
+- Bind review to base/head and the exact source fingerprint; any source/index change invalidates approval. Do not integrate without the fixed reviewer's explicit approval and same-subject validation.
+- Use guarded project entrypoints for all heavy work. One host-wide heavy slot, one Cargo job and one Rust test thread; busy means defer, never bypass the guard.
+- Raw Orca agent buttons/default YOLO launches are not the controlled worker path. Unsupported isolation or missing admission evidence means stop; see the primary docs/development-infra/orca-development.md.
 
 ## Change-aware completion and branches
 

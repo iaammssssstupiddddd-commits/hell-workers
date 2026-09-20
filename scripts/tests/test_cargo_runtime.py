@@ -49,7 +49,7 @@ class CargoRuntimeTests(unittest.TestCase):
         )
         self.assertEqual(
             cargo_runtime.cargo_build_jobs(16 * cargo_runtime.GIB),
-            2,
+            1,
         )
         self.assertIsNotNone(
             cargo_runtime.cargo_memory_error(

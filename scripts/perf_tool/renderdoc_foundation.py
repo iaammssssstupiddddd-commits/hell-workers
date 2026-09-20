@@ -2,6 +2,11 @@
 
 from __future__ import annotations
 
+try:
+    from host_coordination import host_pass_fds
+except ModuleNotFoundError:
+    from scripts.host_coordination import host_pass_fds
+
 import hashlib
 import json
 import os
@@ -814,6 +819,7 @@ def run_with_deadline(
         command,
         cwd=cwd,
         env=env,
+        pass_fds=host_pass_fds(env),
         start_new_session=True,
         stdout=stdout,
         stderr=stderr,
