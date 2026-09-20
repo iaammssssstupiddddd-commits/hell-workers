@@ -11,7 +11,7 @@
 Linearのworkspace/team読取りに加え、専用試験issue `TAK-5` の作成・コメント更新・再読・worktree関連付けを受入済み。
 入力adapterはcandidateへ実装済みで、`TAK-5` の固定snapshot取込、初回統括相談、同一session追記も受け入れた。
 受付からTaskへの自動受け渡し、権限/通信異常系、旧受付移行は未受入。
-独立したCodex固定reviewerのread-only実Task一巡は受入済み。
+独立したCodex固定reviewerとCodex Aのread-only実Task lifecycleは受入済み。
 以下の現行launcherや旧受付の実績と区別する。
 
 - Linearは依頼・優先順位・結果要約、Orcaは作業場・terminal・監督付きTaskを管理する。
@@ -28,8 +28,8 @@ Linearのworkspace/team読取りに加え、専用試験issue `TAK-5` の作成�
   preflight/bridge/role stateが使うowner-only・atomic保存関数を含むため、menuと一緒にmodule全体を削除しない。
 - 選択された旧依頼だけを移行する。既存会話・未知attemptを保全し、対応付けと旧入口の二重開始拒否を確認して切り替える。
   外部反映に失敗してもworkerを再実行せず、実結果とLinear反映待ちを分けて扱う。
-- 自動Task連携は別段階。Codex bridgeの固定reviewer read-only一巡はcandidateで完了したが、受付からの自動接続、
-  Codex AとCursor Bの制限通信、編集運用の受入を必要とする。
+- 自動Task連携は別段階。Codex bridgeの固定reviewerとCodex Aのread-only一巡はcandidateで完了したが、受付からの自動接続、
+  Cursor Bの制限通信、編集運用の受入を必要とする。
   A=Codex/B=軽量Cursor/固定reviewerの構成と、現行の編集委譲禁止は変えない。
 
 今回の環境整備はゲーム実装テストを対象外とする。関連Python/連携/文書・storageの検査に限定し、
@@ -63,8 +63,10 @@ Linear固定snapshot adapter・受付UI・専用排他とP2修正は、tooling�
 `6210b885b429341b5a9101c77332d57af008b0d8` へローカルcommitした。
 実Task失敗時のexact identity照合、mutation-free限定復旧、task-private CLI wrapperを
 `bdf0ea8bdab1e39ff14605aa10b5debfc4947714` へ、Codex内側sandboxとローカルOrca IPCの競合回避を
-`1673c6be9d737fc10228ae635557f95c7b687547` へローカルcommitした。候補code worktreeはclean。
-実Linear課題 `TAK-5` のL1正常系とL2相談継続は受入済み。固定reviewerのread-only実Taskも最新commitで一巡済み。
+`1673c6be9d737fc10228ae635557f95c7b687547` へローカルcommitした。実receiptの空本文正規化と
+fenced Dispatchの曖昧mutation照合を`fca4fd43bda7696246be481039af4d6469f9a4c5`へ、test state隔離を
+`422a74d6`へcommitした。候補code worktreeはclean。
+実Linear課題 `TAK-5` のL1正常系とL2相談継続は受入済み。固定reviewerとCodex Aのread-only実Taskも一巡済み。
 primary文書正本の変更は別作業と混在するため、これらの専用branch code commitには含めていない。
 primaryへの統合、push、PR作成は行っていない。
 文書正本はこのprimaryの `docs/` に置く。primaryの別作業中のsource・ルールは変更していない。
@@ -357,12 +359,13 @@ ANSIの画面全消去・絶対位置移動の扱いも完全なterminal emulato
 偽headerの出力、行埋め、外側隔離なしのsandbox解除、idle未達での直接Dispatchは解決策にしない。
 続く第2batchでTask専用policyを追加する。実agentのreadiness再観測・監督付き受入は依然必要。
 
-### 単一Dispatch通信bridge（R3・固定reviewer read-only実Task受入済み）
+### 単一Dispatch通信bridge（R3・固定reviewer/Codex A read-only実Task受入済み）
 
 既知P2はcandidateで修正済み。`escalation`の空白付きraw JSON payloadを導入版Orcaが再serializeしても、
 payloadだけをduplicate key・非objectを拒否する厳密なJSON内容比較で照合する。
 空白・キー順・escape差の同値と、値・型・Task相違の拒否を模擬runtimeで回帰確認した。
-ID/capability/type/subject/bodyの照合は緩めていない。固定reviewer read-only以外へはまだ本運用しない。
+ID/capability/type/subject/bodyの照合は緩めていない。Orca 1.4.205が未指定のsend本文をdurable receiptで
+空文字へ補う場合だけ未指定へ戻し、callerからの空本文入力は引き続き拒否する。Cursor B・編集roleへはまだ本運用しない。
 Linearの標準課題管理（L1）と統括相談（L2）は、このTask bridgeの完了を前提にしない。
 
 `scripts/orca_task_bridge.py` はread-only Codex A / 固定reviewerだけの実験的な通信経路。
@@ -428,8 +431,10 @@ bridge全生存期間の上限ではない。期限切れは成功ではなくun
 arm指示後にworkerが一度も通信しないまま終了した場合もunknownで、通常のrole checkpointや再開を許さない。
 host journalのownerは統括、consumerは未決attemptの照合、next_actionは実receiptとの照合、
 release_whenはsettlement/明示終了と必要な結果の正本文書への集約。恒久的なjob archiveは作らない。
-失敗Dispatchがhost側でabandon済み、launcher終了済み、source不変、bridge journalがmutation-freeの場合だけ、
-`python3 scripts/orca_roles.py reconcile-bridge ...` で失敗事実をrole stateへ記録できる。
+失敗Dispatchがhost側でabandon済み、capability失効済み、exact terminal/launcher終了済みの場合だけ、
+`python3 scripts/orca_roles.py reconcile-bridge ...` で失敗事実をrole stateへ記録できる。journalがmutation-freeなら
+従来どおり照合し、pending mutationが残る場合はauthority一致・未settled・pending IDの形式と実runtimeの失敗状態を確認して
+曖昧request IDを証跡へ残す。`orca orchestration request-show --request <ID> --json`で上流receiptも別途確認し、元要求は再送しない。
 この操作はTask結果・レビュー承認を作らず、live runtime、exact terminal/process incarnation、最新または直接retryの
 Dispatch、capability失効をすべて再照合する。条件を満たさないunknownは保全して手動調査する。
 
@@ -438,6 +443,8 @@ Dispatch、capability失効をすべて再照合する。条件を満たさな�
 固定reviewer session `01a0bfc7-0a67-7c33-a55f-b215b411c3de` がHEAD `1673c6be`をread-only確認した。
 最初と最後のcheck、source読取り、`worker_done` succeeded、Task/Dispatch settlement、capability失効、
 coordinator Delivery ACK、role exit 0と同一session記録まで一巡し、変更fileは0件だった。
+さらにHEAD `fca4fd43`のCodex Aでheartbeat、ask timeout後の同一message ID resume、統括回答、escalation、
+指定source読取り、最終check、`worker_done` succeeded、capability失効、role exit 0を一巡し、変更fileは0件だった。
 これは限定read-only受入であり、受付→割当→検証→固定reviewerの自動接続や編集運用の受入ではない。
 
 ## レビューと採用
@@ -515,7 +522,7 @@ bubblewrap内の `codex --version` とDNS解決は実行確認済み。
 第4batchではA/B/固定reviewerの実TUI各2turnをread-onlyで受け入れた。
 Cursor初回はreadonly global設定へのatomic renameで失敗し、終了・履歴不在の明示照合後に失敗証拠を保全した。
 global metadataと不変project permissionsを分離した新ticketでは、同じ会話の再開まで正常終了した。
-一方、Codex AのOrca readinessは画面の入力待ちと一致せず、Task投入を止めている。
+Codex Aは後続のTask bridge受入でreadinessからsettlement・role終了まで成功した。
 CLI応答の成功はOrca supervision・review承認・編集運用の成功を意味しない。
 第4batchの最終sourceもcontracts/tooling/deps/rust全群成功（Python291件、Blender151件、
 通常/profiling Rust tests、Clippy警告0）。exact SHA/fingerprintは実装計画へ記録した。
@@ -528,7 +535,7 @@ R3第2batchはbridge境界24 testとroleのunknown再開拒否testを含む当�
 続くL3実Task受入では、最初の2件と修正後の1件目がagent内の最初の`check`で`runtime_unavailable`となり、
 source未読・mutation 0のままabandon/reconcileした。task-private wrapperで裸のCLI取り違えを除外した後も再現したため、
 Codex内側sandboxによるUnix IPC遮断と切り分け、bridge付きread-only Codexだけ外側bubblewrapへ一本化した。
-最新candidateではOrca系139件、lint、Help No impact、diff検査に成功し、上記の実Task一巡も成功した。
+最新candidateではOrca系140件、Help No impact、diff検査に成功し、上記2種類の実Task一巡も成功した。
 実Taskの失敗を成功へ読み替えず、失敗Run/Task/Dispatchとjournalは照合記録として区別する。
 
 Help影響は今回scopeで **No impact**。変更producerは開発時のPython driver・role起動・ルールで、
@@ -537,7 +544,7 @@ gameの入力/状態/UI/runtime dataは不変。`build_help_panel_content` は�
 
 storageのownerはOrca環境実装/統括、consumerは本実装の検証とレビュー。専用worktreeはprimary台帳へ
 `orca-development-environment` として保持登録済み。修正中cacheを日数だけで撤去しない。
-継続consumerはL1/L2の権限/通信異常系・旧受付移行、L3のCodex A/Cursor B・編集連携受入。既存candidateを再利用し、
+継続consumerはL1/L2の権限/通信異常系・旧受付移行、L3のCursor B・編集連携受入。既存candidateを再利用し、
 review-active cacheは保全するが、過去のゲーム検証結果を再現するためだけの再実行は行わない。
 preflightの一時socket/metadataは各実行後に除去済み。空のpreflight rootは次の明示診断で再利用する。
 同じcandidate/cacheの最新storage台帳実測は27,607,179,264 bytes（`du -sb` apparent 27,556,122,983 bytes）。

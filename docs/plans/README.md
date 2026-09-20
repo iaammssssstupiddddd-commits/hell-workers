@@ -48,6 +48,7 @@
 | [development-workstation-blender-migration-plan-2026-07-29.md](development-workstation-blender-migration-plan-2026-07-29.md) | In Progress | 新PCへの開発環境移行と、現PCでのBlender／asset新規構築計画。 |
 | [hvac-plumbing-plan-2026-07-13.md](hvac-plumbing-plan-2026-07-13.md) | Draft | 地獄のインフラ（換気・導水・部屋認可）実装計画 |
 | [native-acceptance-resource-safety-plan-2026-08-05.md](native-acceptance-resource-safety-plan-2026-08-05.md) | Complete | tmpfs上のCargo出力を永続storageへ固定し、実機検証のRAM圧迫を防ぐ計画。 |
+| [orca-parallel-development-plan-2026-09-20.md](orca-parallel-development-plan-2026-09-20.md) | In Progress — Linear L1/L2正常系とCodex固定reviewer/Codex Aのread-only実Taskを受入。異常系・Cursor B・編集運用は未受入 | Linear受付・Orca実行基盤の統合。既存guard/session再利用、段階移行と限定検証 |
 
 ## アーカイブ計画書一覧 (`archive/` / `**/archived/`)
 
