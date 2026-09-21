@@ -68,7 +68,9 @@ Linear固定snapshot adapter・受付UI・専用排他とP2修正は、tooling�
 fenced Dispatchの曖昧mutation照合を`fca4fd43bda7696246be481039af4d6469f9a4c5`へ、test state隔離を
 `422a74d6`へcommitした。Cursor hook bridge、失敗照合、同時hook直列化、generation拘束、結果整形の一回限りの
 再試行を`1c11b068`〜`29b9cb51`の7 commitへ追加し、hookのGit実行属性を
-`09642de4022577fd442c4c9971c64a4d1f649e26`で修正した。候補code worktreeはclean。
+`09642de4022577fd442c4c9971c64a4d1f649e26`で修正した。実編集受入用のA/B分離fixtureと、
+Cursor Bの`acceptance-edit`を専用fixture 1 directoryだけに限定するadmissionを`0a32de46`へ追加し、
+fixtureをtooling分類可能な形式へ直した`85cf28431a7fa367367d5bd933bf6709024c0ee7`が最新。候補code worktreeはclean。
 実Linear課題 `TAK-5` のL1正常系とL2相談継続は受入済み。固定reviewer、Codex A、Cursor Bのread-only実Taskも一巡済み。
 primary文書正本の変更は別作業と混在するため、これらの専用branch code commitには含めていない。
 primaryへの統合、push、PR作成は行っていない。
@@ -548,9 +550,12 @@ R3第2batchはbridge境界24 testとroleのunknown再開拒否testを含む当�
 続くL3実Task受入では、最初の2件と修正後の1件目がagent内の最初の`check`で`runtime_unavailable`となり、
 source未読・mutation 0のままabandon/reconcileした。task-private wrapperで裸のCLI取り違えを除外した後も再現したため、
 Codex内側sandboxによるUnix IPC遮断と切り分け、bridge付きread-only Codexだけ外側bubblewrapへ一本化した。
-最新candidate `09642de4022577fd442c4c9971c64a4d1f649e26`ではOrca系147件のfocused検査に加え、
+read-only bridge受入時のcandidate `09642de4022577fd442c4c9971c64a4d1f649e26`ではOrca系147件のfocused検査に加え、
 変更範囲判定のcontracts/tooling（Python 361件、Blender tooling 151件、Ruff、repository hygiene、
 Help No impact）とdiff検査に成功し、固定reviewer・Codex A・Cursor Bの実Task一巡も成功した。
+編集fixture追加後のclean HEAD `85cf28431a7fa367367d5bd933bf6709024c0ee7`でもOrca系148件と
+変更範囲判定contracts/tooling（Python 362件、Blender tooling 151件、Ruff、repository hygiene、
+Help No impact）がpassした。Rust/Bevyゲーム検証は選択していない。
 実Taskの失敗を成功へ読み替えず、失敗Run/Task/Dispatchとjournalは照合記録として区別する。
 
 Help影響は今回scopeで **No impact**。変更producerは開発時のPython driver・role起動・ルールで、

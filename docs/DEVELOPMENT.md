@@ -20,7 +20,7 @@ primary未統合。受付からの統括相談・同一会話の再開は実LLM�
 R3第1batchで対象terminal限定のread-only通信診断を`d06e912e`へcommitした（全群gate成功）。
 通信成功をTask投入許可としない。
 candidateではLinear snapshot adapterと受付UI、単一Dispatch bridgeのJSON内容比較・失敗照合、
-Codex内側sandboxとOrca IPCの競合回避、Cursor hook bridgeを実装した。最新基盤は`09642de4`で、
+Codex内側sandboxとOrca IPCの競合回避、Cursor hook bridgeを実装した。最新基盤は`85cf2843`で、
 固定reviewer・Codex A・Cursor Bのread-only実Taskをheartbeat・質問再開・escalation・settlement・role終了まで一巡済み。Linearはworkspace `takumi sato` / team `TAK`の
 専用試験issue `TAK-5` で作成・コメント更新・再読・worktree関連付けを受入済み。固定snapshotからの初回統括相談と
 同一sessionへの追記も成功し、受付はqueued、Run/Task/Dispatchは未作成のまま維持した。
@@ -32,6 +32,7 @@ Linearを受付・進捗の正本にし、既存launcher・資源制御・固定
 共有checkoutと任意のbackground編集は禁止を維持する。primaryのルールは、別worktree・固定ticket・mount境界・
 最大2 worker・固定read-only reviewer・統括所有の検証/commit/直列統合を満たす専用launcherだけを条件付き例外とする。
 編集を伴う実装→検証→reviewは未受入であり、ルール採用だけでworkerを本番投入しない。
+非ゲームのA/B専用編集fixtureと、Cursor Bの`acceptance-edit`を同fixtureだけに限定するadmissionは実装・検証済み。
 [運用ガイド](orca-quickstart.md)に現在の「開発受付・統括相談」の操作を示す。
 以下の既存checkoutの資源仕様を無条件に置き換えたとは扱わず、採用対象を確認してから使う。
 

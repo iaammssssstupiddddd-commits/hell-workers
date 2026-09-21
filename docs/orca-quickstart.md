@@ -121,7 +121,7 @@ docs/orca-quickstart.md と docs/development-infra/orca-development.md に従っ
 ## 3. 統括が作業場を準備する
 
 新規worktreeの既定基点は `iaammssssstupiddddd-commits/orca-parallel-development`。
-最新commitは `09642de4022577fd442c4c9971c64a4d1f649e26` です。
+最新commitは `85cf28431a7fa367367d5bd933bf6709024c0ee7` です。
 受付・統括相談、同一task再開・固定reviewer拘束、read-only workerとCursor起動修正、制限通信診断、
 Codex用の単一Dispatch通信bridge、Cursor hook bridgeを含みます。固定reviewer・Codex A・Cursor Bの
 read-only実Task一巡を受入済みです。いずれもローカルのみで、編集workerの運用受入は未完です。

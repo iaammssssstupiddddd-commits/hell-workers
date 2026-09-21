@@ -44,7 +44,7 @@ L3の実agent受入はread-onlyで完了したが、編集委譲は下記L3Eの�
 
 ### 実装済み資産の採否
 
-codeの参照元は専用candidateの `09642de4022577fd442c4c9971c64a4d1f649e26`。primary未統合。
+codeの参照元は専用candidateの `85cf28431a7fa367367d5bd933bf6709024c0ee7`。primary未統合。
 以下の再利用は既存コードと検証済み境界の採用であり、Linear対応済みという意味ではない。
 
 | 資産（candidateの `scripts/`） | 方針 | 実績と追加作業 |
@@ -144,6 +144,8 @@ owner-only/atomic replace/fsyncの共通処理は互換保持する。Linearの�
   統括所有の検証・commit・直列統合、同一sessionの固定read-only reviewer。通常のOrca agent起動や共有checkoutは対象外。
 - [x] primaryの全面禁止を、上記専用経路だけを許す限定例外へ改訂する。worker自身のcommit、再委譲、
   重いbuild/test、shared contract・save・renderer・infrastructure変更は禁止を維持する。
+- [x] A/Bが共有fileを触らず試せる非ゲームfixtureを別directoryへ追加し、Cursor Bの`acceptance-edit`は
+  `scripts/tests/fixtures/orca_edit_acceptance/worker-b` だけをexact許可する。通常のsimple leaf制約は緩めない。
 - [ ] Codex Aで単一leafの非ゲームfixtureを1件編集し、許可scope外・Git metadata・primary・他worktreeが不変であることを確認する。
 - [ ] Cursor Bで既存patternに沿う単純な単一leaf変更を1件編集し、Shell/MCP/WebFetch deny、許可scopeだけのwrite、
   provider固定、complexity/task_kind/acceptance検査、終了後source/index照合を確認する。
@@ -818,7 +820,7 @@ Rust/Bevyのbuild・workspace test・Clippy、Blender test、ゲームwindow/GPU
 - Orcaをprimaryへ登録し起動中。user-local CLIは`orca-ide`、desktop名は`Orca IDE`。
 - candidateのdriverはprimary未統合。監督付きOrcaだけを許す限定ルールはprimaryへ採用したが、
   global agent既定権限は変更せず、実編集はL3Eの受入完了まで開始しない。
-- 最新基盤は`09642de4022577fd442c4c9971c64a4d1f649e26`。受付の実Codex相談/同会話再開を確認済み。
+- 最新基盤は`85cf28431a7fa367367d5bd933bf6709024c0ee7`。受付の実Codex相談/同会話再開を確認済み。
   worker同task継続・固定reviewer拘束も実装済み。A/B・固定reviewerはread-only実TUIで各2turn受入済み。
   制限通信preflight、Codex用単一Dispatch bridge、Cursor hook bridge、Linear snapshot取込の模擬検証も追加済み。
   3 roleの実Task bridge接続はread-onlyで一巡済み。実TUIの編集・編集時の実tool deny・編集review一巡は未受入。
@@ -1029,3 +1031,4 @@ Rust/Bevyのbuild・workspace test・Clippy、Blender test、ゲームwindow/GPU
 | 2026-09-21 | Codex | Cursor Bをprivate hook bridgeへ接続し、同時hook直列化・generation拘束・一回限りの結果整形retryを実装。Shell/MCP/WebFetch denyとsource不変を維持してread-only lifecycleを実Taskで受入 |
 | 2026-09-21 | Codex | 変更範囲gateでCursor hookのGit実行属性不足を検出・修正。clean HEADでcontracts/tooling全群を再実行し、Python 361件・Blender tooling 151件を含めてpass |
 | 2026-09-21 | Codex | primaryの全面的な編集委譲禁止を、別worktree・固定ticket・mount境界・固定reviewer・統括所有の検証/commitを満たす監督付きOrcaだけの限定例外へ改訂。L3Eの実編集受入完了まではread-only運用を維持 |
+| 2026-09-21 | Codex | L3E用のA/B非ゲームfixtureを分離し、Cursor Bの編集受入taskを専用fixture exact scopeへ限定。Orca系148件とcontracts/tooling全群をclean HEADでpass |
