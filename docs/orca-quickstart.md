@@ -16,7 +16,7 @@ Hell Workersで「統括1名・実装最大2名・専任レビュー1名」を�
 | 段階 | 利用する入口 | 現在地 |
 | --- | --- | --- |
 | 課題管理（L1） | OrcaのLinear課題一覧・詳細 | 専用試験issue [`TAK-5`](https://linear.app/takumi-sato/issue/TAK-5/orca-integration-acceptance-hell-workers) の作成・コメント更新・再読・worktree関連付けを受入済み。権限/通信異常系は未受入 |
-| 統括相談（L2） | Linear課題の固定snapshotから既存統括を明示起動 | `TAK-5` の固定snapshot取込、初回相談、同一session追記を受入済み。旧受付移行・異常復旧は未受入 |
+| 統括相談（L2） | Linear課題の固定snapshotから既存統括を明示起動 | `TAK-5` の固定snapshot取込、初回相談、同一session追記を受入済み。旧受付の1対1移行ガードは実装済み、実依頼の移行・異常復旧は未受入 |
 | 自動受け渡し（L3/L3E） | Orca Taskと既存launcher、固定reviewer | 3 roleのread-only一巡、A/B限定編集、統括検証、同一固定reviewer、別worktreeの2レーン並列実行を受入済み。受付からの自動接続は未受入 |
 
 Linearへ接続しただけでは統括agentは起動・常駐しません。初期の課題更新は統括の明示操作とし、
@@ -87,6 +87,19 @@ python3 scripts/orca_issue_context.py HW-42 --workspace <workspace-UUID>
 「相談ターン終了」は実装完了・承認ではありません。Orca Task連携の受入まではworkerへ本番投入しません。
 結果不明かつprocessの終了を確認できない場合、`6` でも停止します。別agentの自動起動や元指示の自動再送はしません。
 
+既存の手入力受付をLinear受付へ移す場合は、利用者が旧受付UUIDと移行先のLinear受付UUIDを選び、
+candidate作業場で次を実行します。対象を本文や題名から自動推定してはいけません。
+
+```bash
+python3 scripts/orca_intake_migration.py link \
+  --legacy-request <旧受付UUID> \
+  --linear-request <Linear受付UUID>
+python3 scripts/orca_intake_migration.py list
+```
+
+対応後は旧受付からの `3` / `4` / `6` がモデル起動前に拒否されます。旧依頼・会話履歴は削除されず、
+`5` などの読取り確認に残ります。実旧依頼の移行受入はまだ行っていないため、対象選択なしにこのcommandを実行しないでください。
+
 保存する依頼本文の例:
 
 ```text
@@ -121,7 +134,7 @@ docs/orca-quickstart.md と docs/development-infra/orca-development.md に従っ
 ## 3. 統括が作業場を準備する
 
 新規worktreeの既定基点は `iaammssssstupiddddd-commits/orca-parallel-development`。
-最新commitは `55b27f6e1d9103d7985941c3cbbf135c7299be91` です。
+最新commitは `93f989644e252391efce49b698fac1f4aa205041` です。
 受付・統括相談、同一task再開・固定reviewer拘束、read-only workerとCursor起動修正、制限通信診断、
 Codex用の単一Dispatch通信bridge、Cursor hook bridgeを含みます。固定reviewer・Codex A・Cursor Bの
 read-only実Task一巡に加え、A/B限定編集、統括検証、固定reviewer、別worktreeの2レーン並列実行を受入済みです。

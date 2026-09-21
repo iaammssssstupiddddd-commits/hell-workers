@@ -5,7 +5,7 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `orca-parallel-development-plan-2026-09-20` |
-| ステータス | In Progress — Linear `TAK-5` のL1正常系・L2相談継続、3 roleのread-only実Task、A/B限定編集と2レーン並列実行を受入。自動配車・異常系・L4切替は未完 |
+| ステータス | In Progress — Linear `TAK-5` のL1正常系・L2相談継続、旧受付移行ガード実装、3 roleのread-only実Task、A/B限定編集と2レーン並列実行を受入。実依頼の移行受入・自動配車・異常系・L4切替は未完 |
 | 作成日 / 最終更新日 | 2026-09-20 / 2026-09-21 |
 | 作成者 | Codex |
 | 関連提案 | [並列実装と専任レビューの運用素案](../proposals/orca-parallel-development-proposal-2026-09-20.md) |
@@ -46,7 +46,7 @@ Linear受付からの自動配車、通常のOrca agent起動、共有file/API�
 
 ### 実装済み資産の採否
 
-codeの参照元は専用candidateの `55b27f6e1d9103d7985941c3cbbf135c7299be91`。primary未統合。
+codeの参照元は専用candidateの `93f989644e252391efce49b698fac1f4aa205041`。primary未統合。
 以下の再利用は既存コードと検証済み境界の採用であり、Linear対応済みという意味ではない。
 
 | 資産（candidateの `scripts/`） | 方針 | 実績と追加作業 |
@@ -56,6 +56,7 @@ codeの参照元は専用candidateの `55b27f6e1d9103d7985941c3cbbf135c7299be91`
 | `orca_role_state.py` / fingerprint / `verify-review` | 再利用 | 同一ticket/session、unknown停止、固定reviewer、変更後の承認失効。承認記録の整合性検査であって署名検証ではない |
 | `orca_coordinator.py` | 入力adapterを追加して再利用 | 明示起動・相談/追記・同UUID再開は実受入済み。既存のrequest ID/本文入力へ固定snapshotを渡し、実行処理は作り直さない |
 | `orca_frontdesk.py` | 内部snapshot保存を再利用し、candidateのUIをLinear優先へ変更 | `submit()`のUUID/本文拘束を使う。queuedは進捗ではなく内部受付状態として保持し、Linearとの常時双方向同期は作らない |
+| `orca_intake_migration.py` | 明示した旧受付とLinear受付を1対1で対応付け | owner-only台帳、専用排他、別名/循環/破損拒否を実装。対応済み旧受付の相談開始・追記・復旧をprovider起動前に拒否し、旧依頼・相談履歴は読取り可能なまま保持する |
 | `orca_preflight.py` | 再利用 | 対象terminal限定のread-only通信診断。結果は常にdispatch許可と別扱い |
 | `orca_task_bridge.py` / `orca_cursor_bridge_hook.py` | 監督付き経路だけ段階採用 | JSON内容比較、exact identity、限定復旧、3 roleの実Task、A/B限定編集と並列実行まで完了。受付からの自動接続は未接続 |
 | `orca.yaml`、専用branch/worktree、既存tests | 再利用 | setup/待機、通常agent起動の迂回禁止、回帰fixtureを維持。既存会話・成果・review-active cacheを消さない |
@@ -120,7 +121,8 @@ owner-only/atomic replace/fsyncの共通処理は互換保持する。Linearの�
   L1の画面に表示できただけではこのcheckboxを閉じない。起動入口とcommandは実装後にQuickstartへ記載する。
 - [x] 同じissue/snapshotの二重選択、本文変更、別workspace、不完全context、保存失敗の拒否・復旧試験を追加する。
   古いreview対象の受入は実相談・実review一巡で確認する。
-- [ ] 選択した旧依頼の対応付けと、移行済み依頼の旧入口からの重複開始拒否を確認する。
+- [x] 旧依頼とimmutable Linear受付の明示的な1対1対応、移行済み旧依頼の相談開始・追記・復旧拒否、履歴保持をcandidateへ実装し、模擬状態で確認する。
+- [ ] ユーザーが選択した実旧依頼を実Linear受付へ対応付け、旧入口からの重複開始拒否と旧履歴の読取りを実状態で受け入れる。
 - 完了条件: Linearを人向け受付として使い、既存統括の相談・再開が失われない。更新は統括の明示操作で、worker自動投入はまだ無効。
 
 ### L3: 既存Task bridgeを修正し、read-onlyの一巡を受け入れる
@@ -813,7 +815,8 @@ Rust/Bevyのbuild・workspace test・Clippy、Blender test、ゲームwindow/GPU
 - 現行計画はL0完了。L2のsnapshot adapterとL3のP2/復旧/IPC修正はcandidate実装済みで、
   固定reviewer・Codex A・Cursor Bのread-only実Task一巡、Linear `TAK-5` のL1正常系、
   L2の実issue相談・同一session追記、L3EのA/B限定編集と2レーン並列実行を受入済み。
-  権限/通信異常系、旧受付移行、受付からの自動一巡、L4切替は未受入。
+  旧受付→Linear受付の1対1移行ガードは実装・模擬検証済み。権限/通信異常系、実旧依頼の移行受入、
+  受付からの自動一巡、L4切替は未受入。
 - `a7c1bbb`で確認したP2（escalation JSON正規化で送信済みreceiptをunknown化）は、candidateで
   payloadの厳密なJSON内容比較へ修正した。ID/capability/他fieldの照合は維持している。
 - M0/M1調査済み、M2/M3候補実装と拒否test済み、M4の3 role Task lifecycleとM5の限定編集並列試行を受入済み。
@@ -823,7 +826,7 @@ Rust/Bevyのbuild・workspace test・Clippy、Blender test、ゲームwindow/GPU
 - Orcaをprimaryへ登録し起動中。user-local CLIは`orca-ide`、desktop名は`Orca IDE`。
 - candidateのdriverはprimary未統合。監督付きOrcaだけを許す限定ルールはprimaryへ採用し、
   global agent既定権限は変更していない。実編集は専用launcher経由だけを許可する。
-- 最新基盤は`55b27f6e1d9103d7985941c3cbbf135c7299be91`。受付の実Codex相談/同会話再開を確認済み。
+- 最新基盤は`93f989644e252391efce49b698fac1f4aa205041`。受付の実Codex相談/同会話再開を確認済み。
   worker同task継続・固定reviewer拘束も実装済み。A/B・固定reviewerはread-only実TUIで各2turn受入済み。
   制限通信preflight、Codex用単一Dispatch bridge、Cursor hook bridge、Linear snapshot取込の模擬検証も追加済み。
   3 roleの実Task bridge接続、A/B実編集、Cursor Bのtool deny、固定reviewerによる編集review、2レーン並列実行を受入済み。
@@ -833,7 +836,8 @@ Rust/Bevyのbuild・workspace test・Clippy、Blender test、ゲームwindow/GPU
 
 1. 冒頭のcandidateとprimaryのdirty差分を区別し、下記の成功gateとsource fingerprintを確認する。既存成果を消さない。
 2. CLI/runtime版、現行docs、storage状態を読む。採用前は旧driver/解析backendとの並行実行を調整する。
-3. Linear `TAK-5` のL1正常系とL2相談継続は受入済み。権限不足・別team・通信失敗、後編集、新旧入口の二重開始を確認する。
+3. Linear `TAK-5` のL1正常系とL2相談継続、旧入口の二重開始を止める移行ガードの模擬検証は完了済み。
+   権限不足・別team・通信失敗・後編集を確認し、ユーザーが選んだ実旧依頼だけを明示対応付けして実状態で受け入れる。
    初期は標準連携だけを使い、旧受付の常時同期を実装しない。既存会話や台帳を改名せず、移行対象以外をuploadしない。
 4. 3 roleのread-only lifecycleとL3E限定編集は受入済み。host限定認証・exact Task/Dispatch/terminal・旧bridge失効を維持し、
    Linear反映を含む受付からの一巡を確認してL4へ進む。CursorのShell/MCP/WebFetch denyを解除せず、
@@ -994,6 +998,12 @@ Rust/Bevyのbuild・workspace test・Clippy、Blender test、ゲームwindow/GPU
   Ruff/actionlint/docs/hygiene/help/perf self-testがpass。source fingerprintは
   `c4ba881001b7df3acbb0d388ce69ad36dd394dfc5f7956131b5bb8d49d65ee1f`。
   candidateではユーザー指定によりRust/Bevyゲームtest、native/GPU/performance受入を選択していない。
+- 旧受付移行ガードcommit `93f989644e252391efce49b698fac1f4aa205041` は、旧依頼/Linear受付の1対1対応、
+  alias・循環・破損・排他競合のfail-closed、対応済み旧依頼のprovider起動前拒否、旧履歴の読取り維持を追加した。
+  base `55b27f6e1d9103d7985941c3cbbf135c7299be91` からのclean HEADで変更範囲gateがcontracts/toolingを選択し、
+  Python 371件、Blender tooling 151件、Ruff/actionlint/docs/hygiene/help/perf self-testを含めてpassした。
+  source fingerprintは`aea0bf50818a9b98b5ffffd09e00d67d2b2aef3bce0d7271b6e1378c8049f0ad`。
+  実旧依頼との対応付けは対象未選択のため行っておらず、この成功をL4入口切替の受入には読み替えない。
 - primary文書commit `575a0db4d3e2d66401fa46d0271f36a2c38072c9` の変更範囲gateはcontrol文書を理由に
   contracts/tooling/deps/rustを自動選択し、全群passした。source fingerprintは
   `754c572178acbca3bf03b317c25f6ff9aa64edbe99f085fed66695358f9435ed`。これは文書commitの自動gateであり、
@@ -1071,3 +1081,4 @@ Rust/Bevyのbuild・workspace test・Clippy、Blender test、ゲームwindow/GPU
 | 2026-09-21 | Codex | primaryの全面的な編集委譲禁止を、別worktree・固定ticket・mount境界・固定reviewer・統括所有の検証/commitを満たす監督付きOrcaだけの限定例外へ改訂。L3Eの実編集受入完了まではread-only運用を維持 |
 | 2026-09-21 | Codex | L3E用のA/B非ゲームfixtureを分離し、Cursor Bの編集受入taskを専用fixture exact scopeへ限定。Orca系148件とcontracts/tooling全群をclean HEADでpass |
 | 2026-09-21 | Codex | L3EのA/B直列編集、固定reviewer、統括検証/commitと、別worktreeのA/B同時編集を受入。candidate `55b27f6e`、A `f66a9a55`、B `3711ae70`をcleanに確定 |
+| 2026-09-21 | Codex | 旧受付とimmutable Linear受付の明示1対1対応、移行済み旧依頼の二重相談開始拒否、旧履歴保持をcandidate `93f98964`へ実装。模擬検証とcontracts/tooling gateを完了し、実依頼の選択・移行受入は未完として分離 |

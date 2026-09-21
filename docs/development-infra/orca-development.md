@@ -10,7 +10,8 @@
 移行順・完了条件は[現行計画L0〜L4](../plans/orca-parallel-development-plan-2026-09-20.md)を正本とする。
 Linearのworkspace/team読取りに加え、専用試験issue `TAK-5` の作成・コメント更新・再読・worktree関連付けを受入済み。
 入力adapterはcandidateへ実装済みで、`TAK-5` の固定snapshot取込、初回統括相談、同一session追記も受け入れた。
-受付からTaskへの自動受け渡し、権限/通信異常系、旧受付移行は未受入。
+旧受付→Linear受付の1対1移行ガードはcandidateへ実装・模擬検証済み。
+受付からTaskへの自動受け渡し、権限/通信異常系、実旧依頼を使う移行受入は未完。
 独立したCodex固定reviewer、Codex A、Cursor Bのread-only実Task lifecycleは受入済み。
 別worktreeのA/B限定編集、統括検証、固定reviewer、2レーン同時実行も受入済み。
 以下の現行launcherや旧受付の実績と区別する。
@@ -27,7 +28,8 @@ Linearのworkspace/team読取りに加え、専用試験issue `TAK-5` の作成�
   Linearの後編集を実行中ticketへ上書きせず、明示追記または新snapshotとして扱う。
 - frontdeskのqueued台帳は内部snapshot保管として再利用し、Linear進捗の複製にはしない。
   preflight/bridge/role stateが使うowner-only・atomic保存関数を含むため、menuと一緒にmodule全体を削除しない。
-- 選択された旧依頼だけを移行する。既存会話・未知attemptを保全し、対応付けと旧入口の二重開始拒否を確認して切り替える。
+- 選択された旧依頼だけを移行する。既存会話・未知attemptを保全する1対1対応と旧入口の二重開始拒否は実装済み。
+  実依頼を選択して旧履歴の読取りまで確認してから入口を切り替える。
   外部反映に失敗してもworkerを再実行せず、実結果とLinear反映待ちを分けて扱う。
 - 自動Task連携は別段階。Codex bridgeの固定reviewerとCodex A、Cursor hook bridgeのCursor Bについて
   read-only一巡と監督付き限定編集はcandidateで完了したが、受付からの自動接続は未受入。
@@ -76,7 +78,8 @@ Cursor Bの`acceptance-edit`を専用fixture 1 directoryだけに限定するadm
 fixtureをtooling分類可能な形式へ直した`85cf28431a7fa367367d5bd933bf6709024c0ee7`に続き、
 実編集時のCodex二重sandbox、tracked project設定のreview可視性、fresh MCP設定、限定失敗復旧を
 `3d6e2032`、`e5ff06dc`、`8ddad3ce`、`55b27f6e1d9103d7985941c3cbbf135c7299be91`で修正した。
-`55b27f6e1d9103d7985941c3cbbf135c7299be91`が最新で、候補code worktreeはclean。
+旧受付の1対1移行台帳、移行済み旧依頼の相談開始拒否、旧履歴保持を
+`93f989644e252391efce49b698fac1f4aa205041`へ追加した。このcommitが最新で、候補code worktreeはclean。
 実Linear課題 `TAK-5` のL1正常系とL2相談継続は受入済み。固定reviewer、Codex A、Cursor Bのread-only実Taskも一巡済み。
 実編集はA/Bの直列一巡と、別worktreeでの2レーン同時実行まで受入済み。
 primary文書正本の変更は別作業と混在するため、これらの専用branch code commitには含めていない。
@@ -233,6 +236,26 @@ CLI利用時は `consult --request-id <UUID>`、`consultation --request-id <UUID
 その後の説明更新はCLIが`linear_write_unconfirmed`を返したため再送せず、full再読取りで反映済みと確定した。
 更新後snapshot `26c213cac8f8ab1ca50275a586cae09fe9287d061c3825457e9d9fb756376c47`は旧受付を上書きせず、
 別受付ID `28971b6b-f77c-5a61-9d7e-3f8dc1cbf00c`としてqueued保存した。旧相談sessionは変更していない。
+
+### 旧受付をLinear受付へ対応付ける
+
+candidateの `scripts/orca_intake_migration.py` は、手入力fallback等の旧受付UUIDと、
+`orca_issue_context.py` が取り込んだimmutable Linear受付UUIDを明示的に1対1対応付けする。
+自動推定、本文upload、履歴移動、agent起動、Run/Task/Dispatch作成、Linear更新は行わない。
+
+```bash
+python3 scripts/orca_intake_migration.py link \
+  --legacy-request <旧受付UUID> \
+  --linear-request <Linear受付UUID>
+python3 scripts/orca_intake_migration.py list
+```
+
+対応表は `.local/state/hell-workers/intake-migration/mappings.json` へowner-only・atomic保存する。
+両受付の存在、Linear snapshot対応、UUID、1対1性を確認し、別名・循環・破損・排他競合は変更せず停止する。
+対応後の旧受付は `orca_coordinator.py` の初回相談・追記・復旧をprovider起動前に拒否するが、
+旧依頼、consultation state、session runtimeは削除・改名せず、状態表示と照合のため読取り可能なまま残す。
+未対応の旧依頼とLinear受付は従来どおり保持する。実依頼の対応付けは、旧UUIDと移行先UUIDを利用者が選択し、
+履歴を読めることと旧入口の拒否を同時に確認する受入作業であり、現時点では未実施。
 
 ## 依頼票と起動
 
@@ -577,6 +600,11 @@ Codex AとCursor Bは別worktreeで同時に各1 fixtureだけを編集し、固
 統括がA `f66a9a55aa4ed9f0a71f6bc57e8aadfc8b2c5cd0`、B `3711ae70c0da88c2c42b153298bdeb5face0b6ae`へcommitした。
 exact session・fingerprint・失敗経路は[実装計画のL3E受入](../plans/orca-parallel-development-plan-2026-09-20.md#l3e監督付き実編集並列受入2026-09-21)を正本とする。
 Rust/Bevyゲーム検証はユーザー指定により選択していない。
+旧受付移行ガードのclean HEAD `93f989644e252391efce49b698fac1f4aa205041`ではOrca系157件、
+変更範囲判定contracts/tooling（Python 371件、Blender tooling 151件、Ruff/actionlint、docs/hygiene/help/perf self-test）、
+Help No impact、`git diff --check`がpassした。source fingerprintは
+`aea0bf50818a9b98b5ffffd09e00d67d2b2aef3bce0d7271b6e1378c8049f0ad`。
+これは模擬状態とcode境界の証拠で、実旧依頼の選択・対応付け・L4入口切替の受入ではない。
 実Taskの失敗を成功へ読み替えず、失敗Run/Task/Dispatchとjournalは照合記録として区別する。
 
 Help影響は今回scopeで **No impact**。変更producerは開発時のPython driver・role起動・ルールで、
@@ -585,7 +613,7 @@ gameの入力/状態/UI/runtime dataは不変。`build_help_panel_content` は�
 
 storageのownerはOrca環境実装/統括、consumerは本実装の検証とレビュー。専用worktreeはprimary台帳へ
 `orca-development-environment` として保持登録済み。修正中cacheを日数だけで撤去しない。
-継続consumerはL1/L2の権限/通信異常系・旧受付移行、L3の受付からの一巡・編集連携受入。既存candidateを再利用し、
+継続consumerはL1/L2の権限/通信異常系・実旧依頼の移行受入、L3の受付からの一巡・編集連携受入。既存candidateを再利用し、
 review-active cacheは保全するが、過去のゲーム検証結果を再現するためだけの再実行は行わない。
 preflightの一時socket/metadataは各実行後に除去済み。空のpreflight rootは次の明示診断で再利用する。
 同じcandidate/cacheの最新storage台帳実測は27,607,179,264 bytes（`du -sb` apparent 27,556,122,983 bytes）。
@@ -604,6 +632,7 @@ Task bridgeのsocket/proxy credentialは各launcher終了時に除去し、実Ta
 | `.local/state/hell-workers/agents/coordinator` | 85,181,595 | `TAK-5`の初回相談・同一session追記と今後のR3接続受入。受入または打切り後に試験runtimeを解除 |
 | `.local/state/hell-workers/frontdesk` | 16,051 | `TAK-5`の旧/更新後snapshotと相談対応の制御正本。試験依頼は受入または打切りで解除。運用中の依頼は別扱い |
 | `.local/state/hell-workers/linear-intake` | 777 | `TAK-5`のsnapshot→受付ID対応。移行完了または打切り後、frontdeskとの対応を保って解除 |
+| `.local/state/hell-workers/intake-migration` | 0 | 旧受付→Linear受付の1対1対応表。現時点は実対象未選択で空、実移行受入時に作成し、旧履歴との対応が不要になるまで保持 |
 
 旧worker ticketはsource/HEAD変更後の再開を許可しない。保持履歴を使う比較と旧taskの再開は区別する。
 既存cache・成果・会話履歴の削除はしていない。
