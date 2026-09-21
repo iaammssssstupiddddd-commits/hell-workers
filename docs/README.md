@@ -51,7 +51,7 @@
 - [events.md](events.md): **イベントカタログ**。全イベントの Producer / Consumer / Timing 一覧。イベント追加時は必ず更新。
 
 ## 開発ガイド
-- [orca-quickstart.md](orca-quickstart.md): Orca UIから開く運用ガイド。現在の受付・相談、受入済みread-only Taskと監督付きA/B並列編集、担当分担と停止/再開。
+- [orca-quickstart.md](orca-quickstart.md): Orca UIから開く運用ガイド。Linear受付・相談からguard付き配車する入口、受入済みread-only Taskと監督付きA/B並列編集、担当分担と停止/再開。
 - [architecture.md](architecture.md): 全体構造、システム依存関係、GameTime、空間グリッド一覧。
 - [crate-boundaries.md](crate-boundaries.md): crate 間の依存方向とコアロジック分離の原則。
 - [cargo_workspace.md](cargo_workspace.md): Cargo workspace の crate 責務、依存方向、分割ルール（hw_core / hw_energy / hw_infra / hw_world / hw_logistics / hw_jobs / hw_familiar_ai / hw_soul_ai / hw_spatial / hw_ui / hw_visual）。
@@ -65,7 +65,7 @@
 - [visual_test.md](visual_test.md): productionとは独立したTopDown建物・地形visual testの操作とScene RtT構造。
 - [DEVELOPMENT.md](DEVELOPMENT.md): 開発規約・MCP活用、固定品質ツール、依存監査・Dependabot更新、property testの再現手順。
 - [development-infra/rust-analyzer-mcp.md](development-infra/rust-analyzer-mcp.md): 複数エージェントでrust-analyzer MCP backendを共有するadapter、idle解放、IDE側の常駐コスト削減設定。
-- [development-infra/orca-development.md](development-infra/orca-development.md): Orca分離開発の詳細仕様。Linear受付への移行境界、Codex/Cursor Task bridge、受入済み監督付き並列編集、固定reviewer・host資源制御の再利用。
+- [development-infra/orca-development.md](development-infra/orca-development.md): Orca分離開発の詳細仕様。Linear受付、guard付きhost controller、Codex/Cursor Task bridge、受入済み監督付き並列編集、固定reviewer・host資源制御の再利用。
 - [development-infra/validation-storage-audit-2026-09-13.md](development-infra/validation-storage-audit-2026-09-13.md): 検証データの容量実測、track close時の撤去規則と実装の差、旧checkout・共有worktreeの残存調査。
 - [development-infra/validation-storage-workflow.md](development-infra/validation-storage-workflow.md): 終了データの整理、現在の用途による保持、フィードバック中の差分ビルド保全。全job保存・固定日数の義務は設けない。
 - [development-infra/validation-storage-workflow-review-2026-09-13.md](development-infra/validation-storage-workflow-review-2026-09-13.md): 保存規則の自己レビューと修正結果。差分ビルド保全、primary coordinator・台帳・整理gateの適用範囲と検証記録。
@@ -87,7 +87,7 @@
 - [proposals/implementation-refactor-audit-proposal-2026-09-17.md](proposals/implementation-refactor-audit-proposal-2026-09-17.md): 全13 crateの実装横断レビューとR01〜R14の個別実装計画への入口。優先順位・依存・根拠・検証条件。
 - [proposals/library-tooling-evaluation-proposal-2026-09-13.md](proposals/library-tooling-evaluation-proposal-2026-09-13.md): ライブラリ・開発ツールの導入／置換候補、現行構成との重複、優先順位と採用条件。
 - [proposals/orca-parallel-development-proposal-2026-09-20.md](proposals/orca-parallel-development-proposal-2026-09-20.md): Orcaでの実装2名・専任レビュー1名・統括の運用素案。Orca導入済み、host資源制御・変更所有権・統合運用は計画化。
-- [plans/orca-parallel-development-plan-2026-09-20.md](plans/orca-parallel-development-plan-2026-09-20.md): Linear受付とOrca実行基盤の統合計画。既存実装の再利用、L0〜L4の移行・受入、ゲーム検証を除いた今回の範囲。
+- [plans/orca-parallel-development-plan-2026-09-20.md](plans/orca-parallel-development-plan-2026-09-20.md): Linear受付とOrca実行基盤の統合計画。既存実装の再利用、L0〜L4の実装・受入、ゲーム検証を除いた今回の範囲。
 - [proposals/progression-and-choice-proposal-2026-08-09.md](proposals/progression-and-choice-proposal-2026-08-09.md): Track D の Dream Edict、Contract、Familiar 昇格を扱う進行・選択提案。
 - [proposals/archive/gameplay-management-improvements-proposal-2026-07-17.md](proposals/archive/gameplay-management-improvements-proposal-2026-07-17.md): Track A〜C のロードマップと完了履歴を保持するアーカイブ提案。
 - [proposals/hvac-plumbing-proposal.md](proposals/hvac-plumbing-proposal.md): 採用済みの空調・衛生インフラ提案（世界観・採否理由）。

@@ -62,7 +62,7 @@
 
 [Orca 運用ガイド](docs/orca-quickstart.md) — 依頼の出し方、担当分担、専用launcherでの開始、レビュー・再開の手順。
 文書の正本はprimary作業場に置き、Orca内のエディタから参照します。
-Linear標準受付へ移行する[現行計画](docs/plans/orca-parallel-development-plan-2026-09-20.md)では、既存の権限・資源制御と固定reviewerを再利用します。専用試験issue `TAK-5` の正常系、Codex固定reviewer・Codex A・Cursor Bのread-only Task lifecycleに加え、別worktreeでのA/B限定編集・統括検証・固定review・2レーン並列実行を受入済みです。Linear受付からの完全自動一巡と異常系は受入前です。
+Linear標準受付を使う[現行計画](docs/plans/orca-parallel-development-plan-2026-09-20.md)では、既存の権限・資源制御と固定reviewerを再利用します。専用試験issue `TAK-5` の正常系、Codex固定reviewer・Codex A・Cursor Bのread-only Task lifecycleに加え、別worktreeでのA/B限定編集・統括検証・固定review・2レーン並列実行を受入済みです。Linear受付と成功済み統括相談から専用Task bridgeへ渡すguard付きcontrollerも実装・tooling検証済みで、実Linear課題を使う編集→検証→review一巡と異常系の実受入が残っています。
 
 ### ビルドと実行
 ```bash

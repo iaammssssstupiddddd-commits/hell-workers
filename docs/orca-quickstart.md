@@ -5,10 +5,10 @@ Hell Workersで「統括1名・実装最大2名・専任レビュー1名」を�
 
 > Linearの専用試験issueから統括へ相談し、同じ会話へ追記できる正常系まで受入済みです。
 > Codex固定reviewer、Codex A、Cursor Bのread-only Task lifecycleと、別worktree・固定ticket・統括検証・固定reviewを通るA/B限定編集および2レーン並列実行を受入済みです。
-> 監督付きOrca launcher経由の編集は利用できます。Linear受付からの自動配車、共有file/APIを含む並列化、異常系の全受入は未完です。
+> 監督付きOrca launcher経由の編集は利用できます。Linear受付と成功済み統括相談から、Codex A・Cursor B・固定reviewerをguard付きで配車するhost controllerを実装済みです。実Linear課題を使う編集→検証→review一巡と異常系の実受入は未完です。
 > 通常の「Codexを起動」操作では担当範囲の制限が入りません。実装担当とレビュー担当は必ず専用launcherから起動します。
 
-## Linearへの段階移行と現在地
+## Linear運用の現在地
 
 依頼受付・進捗管理をOrca標準のLinear連携へ移し、既存の統括相談・権限制御・固定reviewerを再利用する計画です。
 詳細は[現行計画L0〜L4](plans/orca-parallel-development-plan-2026-09-20.md)を参照してください。
@@ -16,13 +16,14 @@ Hell Workersで「統括1名・実装最大2名・専任レビュー1名」を�
 | 段階 | 利用する入口 | 現在地 |
 | --- | --- | --- |
 | 課題管理（L1） | OrcaのLinear課題一覧・詳細 | 専用試験issue [`TAK-5`](https://linear.app/takumi-sato/issue/TAK-5/orca-integration-acceptance-hell-workers) の作成・コメント更新・再読・worktree関連付けを受入済み。権限/通信異常系は未受入 |
-| 統括相談（L2） | Linear課題の固定snapshotから既存統括を明示起動 | `TAK-5` の固定snapshot取込、初回相談、同一session追記を受入済み。旧受付の1対1移行ガードは実装済み、実依頼の移行・異常復旧は未受入 |
-| 自動受け渡し（L3/L3E） | Orca Taskと既存launcher、固定reviewer | 3 roleのread-only一巡、A/B限定編集、統括検証、同一固定reviewer、別worktreeの2レーン並列実行を受入済み。受付からの自動接続は未受入 |
+| 統括相談（L2） | Linear課題の固定snapshotから既存統括を明示起動 | `TAK-5` の固定snapshot取込、初回相談、同一session追記を受入済み。異常復旧は未受入 |
+| 監督付き受け渡し（L3/L3E） | Orca Taskと既存launcher、固定reviewer | 3 roleのread-only一巡、A/B限定編集、統括検証、同一固定reviewer、別worktreeの2レーン並列実行を受入済み。受付からRun/Task/Dispatch/bridgeを作るcontrollerはtooling検証済み、実一巡は未受入 |
 
 Linearへ接続しただけでは統括agentは起動・常駐しません。初期の課題更新は統括の明示操作とし、
 常時同期や課題の担当変更による自動起動は追加しません。仕様書は引き続きprimary `docs/`が正本です。
 利用対象はworkspace `takumi sato` / team `TAK` / 試験issue `TAK-5` に限定しています。認証値をこの会話やrepoへ貼らないでください。
-移行が受け入れられるまでは下記の手入力fallbackを保持し、依頼・会話の削除や同じ依頼の二重投入は行いません。
+手入力menuは開発途中のfallbackであり、移行対象となる別システムではありません。通常運用の入口はLinearへ統一し、
+fallbackから依頼を重複投入しません。
 
 この環境整備ではゲーム実装のテストは実行せず、変更した運用ツールと連携・文書の検査に限定します。
 
@@ -45,7 +46,7 @@ orca file open docs/orca-quickstart.md --worktree path:/home/satotakumi/projects
 
 「統括agent」は自動で常駐しているサービスではありません。過去の会話を探して依頼する方式を廃止するため、
 固定の受付から必要なときだけ起動し、回答後はprocessを終了します。次の追記では保存済みの会話IDを再開します。
-旧受付の実績とLinearへの移行順は [現行計画L0〜L4](plans/orca-parallel-development-plan-2026-09-20.md) を参照してください。
+実装順と受入状態は [現行計画L0〜L4](plans/orca-parallel-development-plan-2026-09-20.md) を参照してください。
 
 Orcaの作業場一覧で **`orca-parallel-development`** を選び、terminalタブの
 **「Linear受付・統括相談」** を開いてください。現在このタブは設置・起動済みです。
@@ -66,6 +67,7 @@ python3 scripts/orca_frontdesk.py menu
 | `5` | 会話ID・ターン状態・保存済み回答を確認。LLMは起動しない |
 | `6` | 異常終了した相談を照合。終了確認済みprocessと既知の会話IDがある場合だけ、新しい確認ターンを起動 |
 | `7` | Linear障害時の手入力fallback。目的・完了条件・変更禁止事項を入力し、単独の `.` で保存 |
+| `8` | 受付番号、統括が確定した固定ticket、`worker-a` / `worker-b` / `reviewer`を選び、監督付きTaskを開始 |
 | `q` | 受付を終了。依頼・会話は保持 |
 
 `3` / `4` / `6` は確認後にCodexを1ターン起動し、モデルの利用が発生します。
@@ -84,21 +86,9 @@ python3 scripts/orca_issue_context.py HW-42 --workspace <workspace-UUID>
 `.local/state/hell-workers/frontdesk/requests.json` にowner-only・atomic保存され、terminalを閉じても消えません。
 相談状態は同じdirectoryの `consultations/<受付UUID>.json`。会話runtimeは別の
 `.local/state/hell-workers/agents/coordinator/<受付UUID>/` にあります。手動でIDや成功状態を書き換えないでください。
-「相談ターン終了」は実装完了・承認ではありません。Orca Task連携の受入まではworkerへ本番投入しません。
+「相談ターン終了」は実装完了・承認ではありません。`8` は成功済み相談とimmutable Linear受付を必須にし、
+Run作成→専用launcher terminal→`worker-start`→private bridge armを行います。未知結果は再送せず保全します。
 結果不明かつprocessの終了を確認できない場合、`6` でも停止します。別agentの自動起動や元指示の自動再送はしません。
-
-既存の手入力受付をLinear受付へ移す場合は、利用者が旧受付UUIDと移行先のLinear受付UUIDを選び、
-candidate作業場で次を実行します。対象を本文や題名から自動推定してはいけません。
-
-```bash
-python3 scripts/orca_intake_migration.py link \
-  --legacy-request <旧受付UUID> \
-  --linear-request <Linear受付UUID>
-python3 scripts/orca_intake_migration.py list
-```
-
-対応後は旧受付からの `3` / `4` / `6` がモデル起動前に拒否されます。旧依頼・会話履歴は削除されず、
-`5` などの読取り確認に残ります。実旧依頼の移行受入はまだ行っていないため、対象選択なしにこのcommandを実行しないでください。
 
 保存する依頼本文の例:
 
@@ -134,11 +124,11 @@ docs/orca-quickstart.md と docs/development-infra/orca-development.md に従っ
 ## 3. 統括が作業場を準備する
 
 新規worktreeの既定基点は `iaammssssstupiddddd-commits/orca-parallel-development`。
-最新commitは `93f989644e252391efce49b698fac1f4aa205041` です。
+最新commitは `5cb73cac` です。
 受付・統括相談、同一task再開・固定reviewer拘束、read-only workerとCursor起動修正、制限通信診断、
 Codex用の単一Dispatch通信bridge、Cursor hook bridgeを含みます。固定reviewer・Codex A・Cursor Bの
 read-only実Task一巡に加え、A/B限定編集、統括検証、固定reviewer、別worktreeの2レーン並列実行を受入済みです。
-いずれもローカルのみです。以下は統括が使う監督付き運用手順であり、Linearからの自動運用手順ではありません。
+いずれもローカルのみです。以下はticketを作る詳細手順です。通常の開始は受付menuの`8`から行えます。
 
 ```bash
 orca repo show --repo path:/home/satotakumi/projects/hell-workers --json
@@ -178,7 +168,7 @@ orca terminal wait --terminal <handle> --for tui-idle --timeout-ms 30000 --json
 
 ### Task bridgeの受入経路は別扱い
 
-上記はticketの指示を直接読む手動起動です。Task通信bridgeは受入済みの限定経路で、受付からは自動接続しません。
+上記はticketの指示を直接読む手動診断です。通常運用では受付menuの`8`がTask通信bridgeへ接続します。
 Codex A / 固定reviewer / Cursor Bのread-onlyに加え、固定ticketと別worktreeを使う監督付き編集が対象です。Cursor BのShell/MCP/WebFetch denyは維持します。
 bootstrap専用ticketで待機させ、readiness→worker-start成功→host armの順を確認して初めてlive Taskへ結び付けます。
 armの成功だけではTask受入成功ではありません。詳細は
@@ -191,7 +181,8 @@ Cursor Bはlauncher所有のprivate Unix socketと3つの公式hookだけを使�
 結果JSONが不正な場合は、上流mutation前にcontroller固定文を1回だけ返して整形を求め、2回目はfail-closedで停止します。
 実受入ではheartbeat・check・worker_done、settlement、capability失効、Delivery ACK、source不変を確認しました。
 後続L3EではA/Bそれぞれの限定編集と2レーン同時実行も受け入れました。
-Linearの課題管理や統括相談の導入は、このbridge受入と分けて進めます。
+controllerはRun/Task/Dispatch IDとterminal/bridge IDをowner-only stateへ保存し、同じrequest/ticketの重複開始を拒否します。
+worker完了後の検証、review ticket作成、review結果の採否、commit、Linear更新は引き続き統括が明示実行します。
 
 ## 5. 検証して専任reviewerへ渡す
 
@@ -223,8 +214,8 @@ python3 /absolute/worktree/scripts/orca_roles.py launch --ticket /absolute/task-
 ```
 
 `worker-a` も同じ形式です。外部編集・commit・stagingで対象が変わった場合は停止し、統括へ戻します。
-自動reset、別sessionへのfallback、元指示の自動再送はありません。これは手動launcherの継続条件であり、
-Orca Task/Dispatchへの自動接続や重複送信の受入を完了したものではありません。
+自動reset、別sessionへのfallback、元指示の自動再送はありません。手動launcherでもcontroller経由でも
+同じ継続条件を使い、controllerは同じrequest/ticketの重複開始とunknown状態の自動再送を拒否します。
 
 読み取り専用の確認には、ticketに `read_only: true`、`allowed_directories: []`、
 現在の `source_sha256` を設定します。dirtyでも観察できますが、前後でsourceが変わると無効です。

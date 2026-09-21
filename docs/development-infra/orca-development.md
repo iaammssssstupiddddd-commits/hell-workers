@@ -4,17 +4,17 @@
 
 日常操作は [Orca 運用ガイド](../orca-quickstart.md) を入口にする。本書は権限・ticket・資源管理の詳細仕様。
 
-## Linear受付への移行方針
+## Linear受付の運用方針
 
-依頼受付と人向けの進捗はOrca標準のLinear連携へ移し、以下の既存guardを再利用する。
-移行順・完了条件は[現行計画L0〜L4](../plans/orca-parallel-development-plan-2026-09-20.md)を正本とする。
+依頼受付と人向けの進捗はOrca標準のLinear連携を使い、以下の既存guardを再利用する。
+実装順・完了条件は[現行計画L0〜L4](../plans/orca-parallel-development-plan-2026-09-20.md)を正本とする。
 Linearのworkspace/team読取りに加え、専用試験issue `TAK-5` の作成・コメント更新・再読・worktree関連付けを受入済み。
 入力adapterはcandidateへ実装済みで、`TAK-5` の固定snapshot取込、初回統括相談、同一session追記も受け入れた。
-旧受付→Linear受付の1対1移行ガードはcandidateへ実装・模擬検証済み。
-受付からTaskへの自動受け渡し、権限/通信異常系、実旧依頼を使う移行受入は未完。
+編集Task bridgeと受付からTaskへの監督付き受け渡しcontrollerはcandidateへ実装・tooling検証済み。
+実Linear課題を使う編集→検証→review一巡と権限/通信異常系の実受入は未完。
 独立したCodex固定reviewer、Codex A、Cursor Bのread-only実Task lifecycleは受入済み。
 別worktreeのA/B限定編集、統括検証、固定reviewer、2レーン同時実行も受入済み。
-以下の現行launcherや旧受付の実績と区別する。
+以下の現行launcherと手入力fallbackの実績を区別する。
 
 - Linearは依頼・優先順位・結果要約、Orcaは作業場・terminal・監督付きTaskを管理する。
   固定ticket、実process/session、排他、承認対象の正本は既存host台帳に残す。仕様正本はprimary `docs/`。
@@ -28,11 +28,11 @@ Linearのworkspace/team読取りに加え、専用試験issue `TAK-5` の作成�
   Linearの後編集を実行中ticketへ上書きせず、明示追記または新snapshotとして扱う。
 - frontdeskのqueued台帳は内部snapshot保管として再利用し、Linear進捗の複製にはしない。
   preflight/bridge/role stateが使うowner-only・atomic保存関数を含むため、menuと一緒にmodule全体を削除しない。
-- 選択された旧依頼だけを移行する。既存会話・未知attemptを保全する1対1対応と旧入口の二重開始拒否は実装済み。
-  実依頼を選択して旧履歴の読取りまで確認してから入口を切り替える。
-  外部反映に失敗してもworkerを再実行せず、実結果とLinear反映待ちを分けて扱う。
-- 自動Task連携は別段階。Codex bridgeの固定reviewerとCodex A、Cursor hook bridgeのCursor Bについて
-  read-only一巡と監督付き限定編集はcandidateで完了したが、受付からの自動接続は未受入。
+- 手入力menuは開発途中の診断・復旧fallbackであり、移行対象の独立運用ではない。通常入口をLinearへ統一し、
+  fallbackから同じ依頼を重複投入しない。外部反映に失敗してもworkerを再実行せず、実結果とLinear反映待ちを分けて扱う。
+- Task連携は、Codex bridgeの固定reviewerとCodex A、Cursor hook bridgeのCursor Bについて
+  read-only一巡と監督付き限定編集を完了し、受付から同じ専用経路へ接続するcontrollerも実装・tooling検証した。
+  controllerはworker完了後の検証、review ticket作成、採否、commit、Linear更新を代行しない。
   A=Codex/B=軽量Cursor/固定reviewerの構成を維持する。共有checkout/background編集は禁止し、
   primaryルールが許す専用launcherの限定例外だけを使う。通常のOrca agent起動へ許可を拡大しない。
 
@@ -78,8 +78,9 @@ Cursor Bの`acceptance-edit`を専用fixture 1 directoryだけに限定するadm
 fixtureをtooling分類可能な形式へ直した`85cf28431a7fa367367d5bd933bf6709024c0ee7`に続き、
 実編集時のCodex二重sandbox、tracked project設定のreview可視性、fresh MCP設定、限定失敗復旧を
 `3d6e2032`、`e5ff06dc`、`8ddad3ce`、`55b27f6e1d9103d7985941c3cbbf135c7299be91`で修正した。
-旧受付の1対1移行台帳、移行済み旧依頼の相談開始拒否、旧履歴保持を
-`93f989644e252391efce49b698fac1f4aa205041`へ追加した。このcommitが最新で、候補code worktreeはclean。
+編集workerのTask bridgeを`6cba754fc9a58c8adcccde143425554da73460b6`で有効化し、Linear受付・成功済み統括相談・
+固定ticketからRun→専用terminal→worker-start→bridge armを順序付けるcontrollerを
+`5cb73cac`で追加した。このcommitを新規worktreeの最新基点とする。
 実Linear課題 `TAK-5` のL1正常系とL2相談継続は受入済み。固定reviewer、Codex A、Cursor Bのread-only実Taskも一巡済み。
 実編集はA/Bの直列一巡と、別worktreeでの2レーン同時実行まで受入済み。
 primary文書正本の変更は別作業と混在するため、これらの専用branch code commitには含めていない。
@@ -103,11 +104,11 @@ repoの `worktreeBaseRef` は上記専用branchへ設定済み（設定後の `r
 
 ## 開始入口
 
-この設定は旧基盤の分離作業場を作る入口であり、常設統括や自動運用の完成を意味しない。
+この設定は分離作業場と監督付き配車を開始する入口であり、統括LLMの常駐や無監督の自動運用を意味しない。
 Codex A・Cursor B・固定reviewerのread-only実TUI起動・正常終了・同UUID再開は確認済みで、
 3 roleのread-only Orca Task連携も一巡した。A/B限定編集、編集時のwrite/tool境界、統括検証、
-固定reviewer、2レーン同時実行も受入済み。ただし受付からの自動配車や共有変更の並列化は未受入で、
-定常運用の全受入完了とは区別する。
+固定reviewer、2レーン同時実行も受入済み。受付からのguard付き配車はtooling検証済みだが、
+実Linear課題を使う一巡と共有変更の並列化は未受入で、定常運用の全受入完了とは区別する。
 統括が最初の独立taskを選び、次のように基点指定を省略して分離treeを作る（task名は都度一意にする）。
 
 ```bash
@@ -135,12 +136,12 @@ orca worktree create --repo id:88983a13-d1dd-47a0-8ffb-3772ea15d3f1 --name leaf-
 reviewer履歴があるのに新規sessionを暗黙に作ることは拒否する。contextを失った場合は投入を止め、
 統括が承認済み仕様・未解決事項・対象fingerprintを再提示し、再レビューする。
 
-最新のユーザー提示ルールでは編集agentへの委譲は禁止されているため、現時点の実agent受入は
-read-onlyだけに限定する。候補branchにある分離worker例外は、上位の最新ルールを上書きしない。
-将来編集を許可する場合も `scripts/orca_roles.py` の分離worker経路だけを対象とし、
+編集agentへの委譲は、別worktree・固定ticket・mount境界・最大2 worker・固定read-only reviewer・
+統括所有の検証/commitを満たす専用経路だけを条件付きで許可する。
+`scripts/orca_roles.py` と `scripts/orca_dispatch.py` の分離worker経路だけを対象とし、
 Orcaの通常agent起動ボタンや裸の `worker-start --agent codex` を例外経路にしない。
 多段委譲、worker自身のcommit/push、workerによる重いbuild/test/解析server起動は禁止する。
-本launcherは独自schedulerではなく、初期の手動運用境界である。Task/DAGの自動dispatchは未導入。
+controllerは汎用schedulerではなく、固定された1件の受付・ticket・slotを監督付きTaskへ渡すhost境界である。
 
 ### Cursor Bの依頼条件
 
@@ -234,28 +235,8 @@ CLI利用時は `consult --request-id <UUID>`、`consultation --request-id <UUID
 受付はqueued、Run/Task/Dispatch IDはnullで、自動投入・承認・Linear status同期は発生していない。
 同じsnapshotの再取込は同じ受付IDを返して台帳1件を維持し、同じturn UUID/本文の再送は保存済み回答を返してCodexを再起動しなかった。
 その後の説明更新はCLIが`linear_write_unconfirmed`を返したため再送せず、full再読取りで反映済みと確定した。
-更新後snapshot `26c213cac8f8ab1ca50275a586cae09fe9287d061c3825457e9d9fb756376c47`は旧受付を上書きせず、
+更新後snapshot `26c213cac8f8ab1ca50275a586cae09fe9287d061c3825457e9d9fb756376c47`は既存相談を上書きせず、
 別受付ID `28971b6b-f77c-5a61-9d7e-3f8dc1cbf00c`としてqueued保存した。旧相談sessionは変更していない。
-
-### 旧受付をLinear受付へ対応付ける
-
-candidateの `scripts/orca_intake_migration.py` は、手入力fallback等の旧受付UUIDと、
-`orca_issue_context.py` が取り込んだimmutable Linear受付UUIDを明示的に1対1対応付けする。
-自動推定、本文upload、履歴移動、agent起動、Run/Task/Dispatch作成、Linear更新は行わない。
-
-```bash
-python3 scripts/orca_intake_migration.py link \
-  --legacy-request <旧受付UUID> \
-  --linear-request <Linear受付UUID>
-python3 scripts/orca_intake_migration.py list
-```
-
-対応表は `.local/state/hell-workers/intake-migration/mappings.json` へowner-only・atomic保存する。
-両受付の存在、Linear snapshot対応、UUID、1対1性を確認し、別名・循環・破損・排他競合は変更せず停止する。
-対応後の旧受付は `orca_coordinator.py` の初回相談・追記・復旧をprovider起動前に拒否するが、
-旧依頼、consultation state、session runtimeは削除・改名せず、状態表示と照合のため読取り可能なまま残す。
-未対応の旧依頼とLinear受付は従来どおり保持する。実依頼の対応付けは、旧UUIDと移行先UUIDを利用者が選択し、
-履歴を読めることと旧入口の拒否を同時に確認する受入作業であり、現時点では未実施。
 
 ## 依頼票と起動
 
@@ -406,14 +387,30 @@ ID/capability/type/subject/bodyの照合は緩めていない。Orca 1.4.205が�
 空文字へ補う場合だけ未指定へ戻し、callerからの空本文入力は引き続き拒否する。編集roleへはまだ本運用しない。
 Linearの標準課題管理（L1）と統括相談（L2）は、このTask bridgeの完了を前提にしない。
 
-`scripts/orca_task_bridge.py` はread-only Codex A / 固定reviewer / Cursor Bだけの実験的な通信経路。
-受付からは自動接続せず、Run/Task/workerの作成・承認・レビュー判定を代行しない。
-編集worker・dry-runとの組合せは起動前に拒否する。CursorのShell/MCP/WebFetch denyは変更しない。
-Task bridge付きCodexだけは、Codex自身の内側sandboxを使わず、既存の外側bubblewrapを強制境界とする。
-これは内側sandboxがUnix socketによるOrca IPCを拒否したためで、read-only role以外と通常起動には適用しない。
+`scripts/orca_task_bridge.py` はCodex A / 固定reviewer / Cursor BをOrca Taskへ接続する専用通信経路。
+`scripts/orca_dispatch.py` はimmutableなLinear受付、成功済み統括相談、固定ticketを照合して
+Run作成→role terminal作成→既存terminal指定の`worker-start`→private bridge armを順序付ける。
+同じrequest/ticketのarmed状態は同じ記録を返し、pending/unknownは自動再送しない。
+承認・レビュー判定・検証・commit・Linear更新は代行しない。dry-run ticketとの組合せは起動前に拒否する。
+CursorのShell/MCP/WebFetch denyは変更しない。
+Task bridge付きCodexはCodex自身の内側sandboxを使わず、既存の外側bubblewrapを強制境界とする。
+これは内側sandboxがUnix socketによるOrca IPCを拒否したためで、通常起動には適用しない。
 外側はrootをread-only bindし、role runtime以外のprivate stateをmaskし、Task専用proxyだけをread-onlyで再公開する。
 
-統括が受入用に使うlauncher引数（通常運用の開始指示ではない）:
+通常運用はOrca管理下の統括terminalで受付menuの`8`を選ぶ。CLIから同じcontrollerを使う場合:
+
+```bash
+python3 scripts/orca_dispatch.py start \
+  --request-id <受付UUID> \
+  --ticket /absolute/task-ticket.json \
+  --slot worker-a
+```
+
+`worker-b`も同形式。reviewerは`read_only: true`、空の`allowed_directories`、exactな`source_sha256`を持つ
+review ticketで`--slot reviewer`を指定する。保存済み固定reviewer sessionがある場合、controllerが同じUUIDを再利用する。
+`ORCA_TERMINAL_HANDLE`がない環境では`--coordinator <統括terminal-handle>`を明示する。
+
+以下はbridge単体の受入・診断で使うlauncher引数であり、通常の開始入口ではない:
 
 ```bash
 python3 scripts/orca_roles.py launch --ticket /absolute/readonly-bootstrap-ticket.json --slot worker-a \
@@ -600,11 +597,6 @@ Codex AとCursor Bは別worktreeで同時に各1 fixtureだけを編集し、固
 統括がA `f66a9a55aa4ed9f0a71f6bc57e8aadfc8b2c5cd0`、B `3711ae70c0da88c2c42b153298bdeb5face0b6ae`へcommitした。
 exact session・fingerprint・失敗経路は[実装計画のL3E受入](../plans/orca-parallel-development-plan-2026-09-20.md#l3e監督付き実編集並列受入2026-09-21)を正本とする。
 Rust/Bevyゲーム検証はユーザー指定により選択していない。
-旧受付移行ガードのclean HEAD `93f989644e252391efce49b698fac1f4aa205041`ではOrca系157件、
-変更範囲判定contracts/tooling（Python 371件、Blender tooling 151件、Ruff/actionlint、docs/hygiene/help/perf self-test）、
-Help No impact、`git diff --check`がpassした。source fingerprintは
-`aea0bf50818a9b98b5ffffd09e00d67d2b2aef3bce0d7271b6e1378c8049f0ad`。
-これは模擬状態とcode境界の証拠で、実旧依頼の選択・対応付け・L4入口切替の受入ではない。
 実Taskの失敗を成功へ読み替えず、失敗Run/Task/Dispatchとjournalは照合記録として区別する。
 
 Help影響は今回scopeで **No impact**。変更producerは開発時のPython driver・role起動・ルールで、
@@ -613,7 +605,7 @@ gameの入力/状態/UI/runtime dataは不変。`build_help_panel_content` は�
 
 storageのownerはOrca環境実装/統括、consumerは本実装の検証とレビュー。専用worktreeはprimary台帳へ
 `orca-development-environment` として保持登録済み。修正中cacheを日数だけで撤去しない。
-継続consumerはL1/L2の権限/通信異常系・実旧依頼の移行受入、L3の受付からの一巡・編集連携受入。既存candidateを再利用し、
+継続consumerはL1/L2の権限/通信異常系、L3の受付からの一巡・編集連携受入。既存candidateを再利用し、
 review-active cacheは保全するが、過去のゲーム検証結果を再現するためだけの再実行は行わない。
 preflightの一時socket/metadataは各実行後に除去済み。空のpreflight rootは次の明示診断で再利用する。
 同じcandidate/cacheの最新storage台帳実測は27,607,179,264 bytes（`du -sb` apparent 27,556,122,983 bytes）。
@@ -632,7 +624,7 @@ Task bridgeのsocket/proxy credentialは各launcher終了時に除去し、実Ta
 | `.local/state/hell-workers/agents/coordinator` | 85,181,595 | `TAK-5`の初回相談・同一session追記と今後のR3接続受入。受入または打切り後に試験runtimeを解除 |
 | `.local/state/hell-workers/frontdesk` | 16,051 | `TAK-5`の旧/更新後snapshotと相談対応の制御正本。試験依頼は受入または打切りで解除。運用中の依頼は別扱い |
 | `.local/state/hell-workers/linear-intake` | 777 | `TAK-5`のsnapshot→受付ID対応。移行完了または打切り後、frontdeskとの対応を保って解除 |
-| `.local/state/hell-workers/intake-migration` | 0 | 旧受付→Linear受付の1対1対応表。現時点は実対象未選択で空、実移行受入時に作成し、旧履歴との対応が不要になるまで保持 |
+| `.local/state/hell-workers/dispatches` | 起動件数依存 | controllerのRun/Task/Dispatch/terminal/bridge IDとunknown再送拒否の正本。統括が一巡の照合に使用し、依頼close後に対応する記録を解除 |
 
 旧worker ticketはsource/HEAD変更後の再開を許可しない。保持履歴を使う比較と旧taskの再開は区別する。
 既存cache・成果・会話履歴の削除はしていない。

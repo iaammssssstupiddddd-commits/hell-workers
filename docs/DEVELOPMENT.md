@@ -20,22 +20,22 @@ primary未統合。受付からの統括相談・同一会話の再開は実LLM�
 R3第1batchで対象terminal限定のread-only通信診断を`d06e912e`へcommitした（全群gate成功）。
 通信成功をTask投入許可としない。
 candidateではLinear snapshot adapterと受付UI、単一Dispatch bridgeのJSON内容比較・失敗照合、
-Codex内側sandboxとOrca IPCの競合回避、Cursor hook bridgeを実装した。最新基盤は`93f98964`で、
+Codex内側sandboxとOrca IPCの競合回避、Cursor hook bridge、受付から専用Task bridgeへ渡すguard付きcontrollerを実装した。最新基点は`5cb73cac`で、
 固定reviewer・Codex A・Cursor Bのread-only実Taskをheartbeat・質問再開・escalation・settlement・role終了まで一巡済み。
 さらにA/Bの限定実編集、統括検証、固定reviewer、別worktreeの2レーン同時実行も受入済み。Linearはworkspace `takumi sato` / team `TAK`の
 専用試験issue `TAK-5` で作成・コメント更新・再読・worktree関連付けを受入済み。固定snapshotからの初回統括相談と
 同一sessionへの追記も成功し、受付はqueued、Run/Task/Dispatchは未作成のまま維持した。
-旧受付とimmutable Linear受付の明示1対1対応、移行済み旧受付の相談開始拒否、旧履歴保持も実装・模擬検証済み。
 今後は[現行計画L0〜L4](plans/orca-parallel-development-plan-2026-09-20.md)に従い、
 Linearを受付・進捗の正本にし、既存launcher・資源制御・固定reviewer・統括の会話再開を再利用する。
-残る異常系、実旧依頼の移行、受付からレビューまでの自動一巡、旧受付切替を順に受け入れる。
+開発途中の手入力menuは別系統の移行対象にせず、Linear受付・配車の操作入口兼診断fallbackとして使う。
+controllerのtooling検証は完了しており、残る異常系と実Linear課題を使う編集→検証→review一巡を受け入れる。
 candidateの運用基盤受入はユーザー指定によりゲーム実装テストを実行せず、関連tooling・連携・文書/storageに限定した。
 primary文書commit後の変更範囲gateはcontrol文書を理由にdeps/rustも自動選択してpassしたが、ゲームnative受入ではない。
 この扱いは下記の通常ゲーム開発の品質規則を変更しない。詳細な対象・未実施群は計画§7で管理する。
 共有checkoutと任意のbackground編集は禁止を維持する。primaryのルールは、別worktree・固定ticket・mount境界・
 最大2 worker・固定read-only reviewer・統括所有の検証/commit/直列統合を満たす専用launcherだけを条件付き例外とする。
 編集を伴う実装→検証→reviewは専用launcherの限定経路で受入済み。通常のOrca agent起動、共有checkout、
-共有file/APIを含む並列化、受付からの自動配車へ許可を拡大しない。
+共有file/APIを含む並列化へ許可を拡大しない。受付からの配車は専用launcherとTask bridgeを通る監督付き経路だけを許可する。
 非ゲームのA/B専用編集fixtureと、Cursor Bの`acceptance-edit`を同fixtureだけに限定するadmissionは実装・検証済み。
 [運用ガイド](orca-quickstart.md)に現在の「開発受付・統括相談」の操作を示す。
 以下の既存checkoutの資源仕様を無条件に置き換えたとは扱わず、採用対象を確認してから使う。
