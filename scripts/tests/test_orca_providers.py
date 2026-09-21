@@ -96,18 +96,18 @@ class ProviderTests(unittest.TestCase):
         self.assertIn("Write(**)", policy["deny"])
 
     @patch("scripts.orca_providers.shutil.which", side_effect=lambda name: f"/bin/{name}")
-    def test_codex_bridge_relies_on_the_outer_sandbox(self, _) -> None:
-        codex = providers.command_for(
-            "codex", Path("/repo"), "reviewer", "review", externally_sandboxed=True)
-        self.assertIn("--dangerously-bypass-approvals-and-sandbox", codex)
-        self.assertNotIn("--sandbox", codex)
-        self.assertNotIn("--ask-for-approval", codex)
+    def test_codex_roles_can_rely_on_the_outer_sandbox(self, _) -> None:
+        for role, read_only in (("reviewer", True), ("worker", True), ("worker", False)):
+            with self.subTest(role=role, read_only=read_only):
+                codex = providers.command_for(
+                    "codex", Path("/repo"), role, "task", read_only=read_only,
+                    externally_sandboxed=True)
+                self.assertIn("--dangerously-bypass-approvals-and-sandbox", codex)
+                self.assertNotIn("--sandbox", codex)
+                self.assertNotIn("--ask-for-approval", codex)
         with self.assertRaisesRegex(ValueError, "Cursor cannot bypass"):
             providers.command_for(
                 "cursor", Path("/repo"), "worker", "task", externally_sandboxed=True)
-        with self.assertRaisesRegex(ValueError, "read-only roles"):
-            providers.command_for(
-                "codex", Path("/repo"), "worker", "task", externally_sandboxed=True)
 
     def test_cursor_permissions_limit_writes_and_disable_shell_mcp(self) -> None:
         config = providers.cursor_permissions(self.simple())

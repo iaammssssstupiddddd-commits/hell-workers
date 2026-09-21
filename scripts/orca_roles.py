@@ -316,7 +316,8 @@ def launch(ticket: dict, slot: str, *, dry_run: bool, resume_session: str | None
                        "A bridge refusal means stop and ask the host coordinator to reconcile, never resend. "
                        "worker_done is not review approval. No edits or builds are allowed.")
     if dry_run:
-        command = command_for(provider, repo, role, prompt, resume_session, read_only=read_only)
+        command = command_for(provider, repo, role, prompt, resume_session, read_only=read_only,
+                              externally_sandboxed=provider == "codex")
         print(json.dumps({"slot": slot, "role": role, "provider": provider, "repo": str(repo),
                           "read_only": read_only,
                           "allowed_directories": [] if read_only else ticket["allowed_directories"],
@@ -386,8 +387,12 @@ def launch(ticket: dict, slot: str, *, dry_run: bool, resume_session: str | None
                     denied_reads = (str(bridge.public), "/proc")
                     write_cursor_policy(ticket, policy, project=True, denied_reads=denied_reads)
                     write_cursor_hooks(repo, policy_dir / "hooks.json")
+            # The outer bubblewrap namespace is the authoritative write boundary
+            # for every Codex role. A second Codex sandbox tries to create its
+            # project-local mount points inside the read-only portion of that
+            # namespace before any command can run.
             command = command_for(provider, repo, role, prompt, resume_session, read_only=read_only,
-                                  externally_sandboxed=bridge is not None and provider == "codex")
+                                  externally_sandboxed=provider == "codex")
             command = sandbox_command(ticket, role, runtime, command, provider=provider, policy=policy, bridge=bridge)
             data["last"] = {"attempt_id": str(uuid.uuid4()), "key": key, "phase": "starting",
                             "process_exited": False, "exit_code": None, "source_before": before,

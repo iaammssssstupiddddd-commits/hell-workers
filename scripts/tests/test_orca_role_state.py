@@ -107,6 +107,7 @@ class RoleContinuationTests(unittest.TestCase):
     def test_dirty_codex_resume_requires_same_task_uuid_and_explicit_followup(self):
         self.options["edit"] = "src/content.txt"
         self.assertEqual(self.launch(), 0)
+        self.assertTrue(self.commands[-1][4])
         self.assertTrue(roles.git(self.repo, "status", "--porcelain"))
         for resume, follow in ((None, None), (OTHER, "next"), (SESSION, None)):
             with self.subTest(resume=resume, follow=follow), self.assertRaises(ValueError):

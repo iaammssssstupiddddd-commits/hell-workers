@@ -59,8 +59,6 @@ def command_for(provider: str, repo: Path, role: str, prompt: str,
         return [executable, "--workspace", str(repo), "--sandbox", "enabled", "--trust",
                 *(["--mode", "ask"] if read_only else []),
                 *(["--resume", resume_session] if resume_session else []), prompt]
-    if externally_sandboxed and role != "reviewer" and not read_only:
-        raise ValueError("Codex may rely on the outer sandbox only for read-only roles")
     isolation = (["--dangerously-bypass-approvals-and-sandbox"] if externally_sandboxed else
                  ["--sandbox", "read-only" if role == "reviewer" or read_only else "workspace-write",
                   "--ask-for-approval", "never"])
