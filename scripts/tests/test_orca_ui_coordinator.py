@@ -77,12 +77,23 @@ class UiCoordinatorTests(unittest.TestCase):
         self.assertIn("acknowledge", value)
 
     def test_provider_is_workspace_sandboxed_and_has_project_control_paths(self) -> None:
-        command = ui.provider_command("/bin/codex", "prompt", ui.REPO)
-        self.assertEqual(command[command.index("--sandbox") + 1], "workspace-write")
-        self.assertEqual(command[command.index("--ask-for-approval") + 1], "never")
-        self.assertNotIn("--dangerously-bypass-approvals-and-sandbox", command)
-        added = [command[index + 1] for index, value in enumerate(command) if value == "--add-dir"]
-        self.assertEqual(added, [str(self.root), str(ui.REPO.parent), str(ui.REPO)])
+        provider = ui.provider_command("/bin/codex", "prompt")
+        self.assertIn("--dangerously-bypass-approvals-and-sandbox", provider)
+        self.assertIn("gpt-5.6-sol", provider)
+        self.assertIn('model_reasoning_effort="high"', provider)
+        self.assertIn("mcp_servers.rust-analyzer-mcp.enabled=false", provider)
+        runtime = ui.prepare_runtime(ui.REPO)
+        config = runtime / "codex/config.toml"
+        self.assertEqual(config.stat().st_mode & 0o777, 0o600)
+        self.assertIn(f'[projects."{ui.REPO}"]', config.read_text(encoding="utf-8"))
+        with patch.object(ui.shutil, "which", return_value="/usr/bin/bwrap"):
+            command = ui.sandbox_command(provider, ui.REPO, runtime)
+        self.assertEqual(command[0], "/usr/bin/bwrap")
+        self.assertIn("--ro-bind", command)
+        self.assertNotIn("--unshare-net", command)
+        binds = [command[index + 1] for index, value in enumerate(command) if value == "--bind"]
+        self.assertEqual(binds, [str(self.root), str(ui.REPO.parent), str(ui.REPO)])
+        self.assertEqual(command[command.index("--chdir") + 1], str(ui.REPO))
 
 
 if __name__ == "__main__":

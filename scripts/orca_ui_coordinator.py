@@ -14,15 +14,18 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
 try:
     import orca_frontdesk as frontdesk
     import orca_issue_context as intake
+    import orca_providers as providers
     from host_coordination import acquire_host, state_root
 except ModuleNotFoundError:
-    from scripts import orca_frontdesk as frontdesk, orca_issue_context as intake
+    from scripts import (orca_frontdesk as frontdesk, orca_issue_context as intake,
+                         orca_providers as providers)
     from scripts.host_coordination import acquire_host, state_root
 
 
@@ -205,18 +208,77 @@ read-onlyとします。最大A/Bの2実装＋レビュー1、build/test/commit/
 """
 
 
-def provider_command(executable: str, initial_prompt: str, primary: Path) -> list[str]:
+def provider_command(executable: str, initial_prompt: str) -> list[str]:
     return [
         executable,
-        "--sandbox", "workspace-write",
-        "--ask-for-approval", "never",
+        "--dangerously-bypass-approvals-and-sandbox",
+        "--model", "gpt-5.6-sol",
+        "--config", 'model_reasoning_effort="high"',
+        *providers.codex_project_mcp_overrides(REPO),
         "--disable", "multi_agent",
-        "--add-dir", str(state_root().parent),
-        "--add-dir", str(REPO.parent),
-        "--add-dir", str(primary),
         "--no-alt-screen",
         initial_prompt,
     ]
+
+
+def prepare_runtime(primary: Path) -> Path:
+    runtime = coordinator_root() / "runtime"
+    for path in (runtime, runtime / "codex", runtime / "tmp"):
+        path.mkdir(parents=True, exist_ok=True, mode=0o700)
+        if path.resolve() != path or path.stat().st_uid != os.getuid() or path.stat().st_mode & 0o077:
+            raise UiCoordinatorError(f"統括runtimeの権限が不正です: {path}")
+    config = runtime / "codex/config.toml"
+    content = (
+        f"[projects.{json.dumps(str(primary))}]\n"
+        'trust_level = "trusted"\n'
+    )
+    fd, temporary = tempfile.mkstemp(prefix=".config-", dir=config.parent)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(content)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.chmod(temporary, 0o600)
+        os.replace(temporary, config)
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
+    return runtime
+
+
+def sandbox_command(command: list[str], primary: Path, runtime: Path) -> list[str]:
+    """Use one outer sandbox so the trusted coordinator can reach Orca IPC."""
+    bwrap = shutil.which("bwrap")
+    if sys.platform != "linux" or bwrap is None:
+        raise UiCoordinatorError("可視統括にはLinux bubblewrapが必要です")
+    result = [
+        bwrap,
+        "--die-with-parent", "--new-session", "--unshare-pid",
+        "--ro-bind", "/", "/", "--proc", "/proc", "--dev", "/dev",
+        "--tmpfs", "/tmp", "--tmpfs", "/run", "--clearenv",
+    ]
+    resolver = Path("/etc/resolv.conf").resolve(strict=True)
+    result.extend(["--ro-bind", str(resolver), str(resolver)])
+    for name in (
+        "PATH", "HOME", "USER", "LOGNAME", "TERM", "LANG", "COLORTERM",
+        "ORCA_TERMINAL_HANDLE", "ORCA_USER_DATA_PATH", "ORCA_WORKSPACE_ID", "ORCA_WORKTREE_ID",
+    ):
+        value = os.environ.get(name)
+        if value:
+            result.extend(["--setenv", name, value])
+    result.extend([
+        "--bind", str(state_root().parent), str(state_root().parent),
+        "--bind", str(REPO.parent), str(REPO.parent),
+        "--bind", str(primary), str(primary),
+        "--setenv", "CODEX_HOME", str(runtime / "codex"),
+        "--setenv", "TMPDIR", str(runtime / "tmp"),
+        "--setenv", "PYTHONDONTWRITEBYTECODE", "1",
+    ])
+    auth = Path(os.environ.get("CODEX_HOME", str(Path.home() / ".codex"))) / "auth.json"
+    if auth.is_file():
+        result.extend(["--ro-bind", str(auth), str(runtime / "codex/auth.json")])
+    result.extend(["--chdir", str(REPO), "--", *command])
+    return result
 
 
 def launch() -> int:
@@ -226,11 +288,11 @@ def launch() -> int:
     with acquire_host("ui-coordinator", inherit=False) as lease:
         imported, data = prepare()
         primary = primary_repo()
-        argv = provider_command(
+        command = provider_command(
             executable,
             prompt(imported["request_id"], data["linear_identifier"], primary),
-            primary,
         )
+        argv = sandbox_command(command, primary, prepare_runtime(primary))
         completed = subprocess.run(argv, check=False, pass_fds=(lease.fd,))
     with acquire_host("coordinator", inherit=False):
         current = load_state(imported["request_id"])
