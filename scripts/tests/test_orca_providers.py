@@ -109,6 +109,23 @@ class ProviderTests(unittest.TestCase):
             providers.command_for(
                 "cursor", Path("/repo"), "worker", "task", externally_sandboxed=True)
 
+    @patch("scripts.orca_providers.shutil.which", return_value="/bin/codex")
+    def test_codex_disables_project_mcps_without_hiding_tracked_config(self, _) -> None:
+        with unittest.mock.patch.object(Path, "is_file", return_value=True), \
+                unittest.mock.patch.object(Path, "read_text", return_value="""
+[mcp_servers.rust-analyzer-mcp]
+command = "rust-analyzer-mcp"
+[mcp_servers.docsrs]
+command = "docsrs-mcp"
+"""):
+            command = providers.command_for("codex", Path("/repo"), "reviewer", "review")
+        overrides = [command[index + 1] for index, value in enumerate(command[:-1])
+                     if value == "--config"]
+        self.assertEqual(overrides, [
+            'mcp_servers."docsrs".enabled=false',
+            'mcp_servers."rust-analyzer-mcp".enabled=false',
+        ])
+
     def test_cursor_permissions_limit_writes_and_disable_shell_mcp(self) -> None:
         config = providers.cursor_permissions(self.simple())
         self.assertEqual(config["version"], 1)

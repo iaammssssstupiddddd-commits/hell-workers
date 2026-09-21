@@ -168,10 +168,13 @@ def sandbox_command(ticket: dict, role: str, runtime: Path, command: list[str],
         auth = Path(os.environ.get("XDG_CONFIG_HOME", str(Path.home() / ".config"))) / "cursor/auth.json"
         if auth.is_file():
             result.extend(["--ro-bind", str(auth), str(runtime / "xdg/cursor/auth.json")])
-    # Hide inherited config/MCP transports; the agent gets a clean Codex home.
+    # Hide inherited config/MCP transports; the agent gets a clean provider home.
+    # Codex keeps repository-owned dot-directories visible so read-only review
+    # sees the real Git subject. command_for disables every project MCP entry.
     primary = Path(git(repo, "rev-parse", "--path-format=absolute", "--git-common-dir")).parent
-    config_paths = [root / name for root in dict.fromkeys((repo, primary))
-                    for name in (".codex", ".cursor", ".claude")]
+    config_paths = ([root / name for root in dict.fromkeys((repo, primary))
+                     for name in (".codex", ".cursor", ".claude")]
+                    if provider == "cursor" else [])
     for path in (Path.home() / ".codex", Path.home() / ".orca", Path.home() / ".cursor",
                  Path.home() / ".claude",
                  Path.home() / ".config/cursor", Path.home() / ".config/orca",

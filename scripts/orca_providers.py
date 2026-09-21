@@ -9,12 +9,29 @@ import shlex
 import stat
 import sys
 import tempfile
+import tomllib
 from pathlib import Path
 
 
 PROVIDERS = {"worker-a": "codex", "worker-b": "cursor", "reviewer": "codex"}
 SIMPLE_KINDS = {"local-fix", "mechanical-change", "test-addition"}
 CURSOR_EDIT_ACCEPTANCE_SCOPE = "scripts/tests/fixtures/orca_edit_acceptance/worker-b"
+
+
+def codex_project_mcp_overrides(repo: Path) -> list[str]:
+    """Disable repository MCPs without hiding tracked files from review Git commands."""
+    config = repo / ".codex/config.toml"
+    if not config.is_file():
+        return []
+    try:
+        data = tomllib.loads(config.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as error:
+        raise RuntimeError(f"cannot safely inspect project Codex configuration: {error}") from error
+    servers = data.get("mcp_servers", {})
+    if not isinstance(servers, dict) or not all(isinstance(name, str) for name in servers):
+        raise RuntimeError("project Codex MCP configuration must be a table")
+    return [item for name in sorted(servers)
+            for item in ("--config", f"mcp_servers.{json.dumps(name)}.enabled=false")]
 
 
 def provider_for(ticket: dict, slot: str) -> str:
@@ -63,7 +80,7 @@ def command_for(provider: str, repo: Path, role: str, prompt: str,
                  ["--sandbox", "read-only" if role == "reviewer" or read_only else "workspace-write",
                   "--ask-for-approval", "never"])
     return [executable, *(["resume", resume_session] if resume_session else []),
-            "--cd", str(repo), *isolation,
+            "--cd", str(repo), *isolation, *codex_project_mcp_overrides(repo),
             "--disable", "multi_agent", "--no-alt-screen", prompt]
 
 

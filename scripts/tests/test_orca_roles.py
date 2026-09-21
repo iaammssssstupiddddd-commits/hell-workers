@@ -225,6 +225,26 @@ print(json.dumps(results))
         self.assertEqual(json.loads(result.stdout), [False] * 4)
         self.assertEqual((self.primary / "src/content.txt").read_text(), "original")
 
+    @unittest.skipUnless(sys.platform == "linux" and shutil.which("bwrap"), "Linux bubblewrap required")
+    def test_codex_review_keeps_tracked_project_config_visible(self) -> None:
+        ticket = self.load()
+        runtime = self.root / "codex-review-runtime"
+        for child in ("codex", "tmp"):
+            (runtime / child).mkdir(parents=True, exist_ok=True)
+        project_config = self.repo / ".codex/config.toml"
+        project_config.parent.mkdir()
+        project_config.write_text('[mcp_servers.fixture]\ncommand = "false"\n')
+        script = """import pathlib, sys
+path = pathlib.Path(sys.argv[1])
+assert path.read_text() == '[mcp_servers.fixture]\\ncommand = \"false\"\\n'
+print('pass')
+"""
+        command = roles.sandbox_command(
+            ticket, "reviewer", runtime,
+            [sys.executable, "-c", script, str(project_config)], provider="codex")
+        result = subprocess.run(command, capture_output=True, text=True, check=True)
+        self.assertEqual(result.stdout.strip(), "pass")
+
 
 if __name__ == "__main__":
     unittest.main()
