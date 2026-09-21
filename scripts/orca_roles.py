@@ -190,11 +190,10 @@ def sandbox_command(ticket: dict, role: str, runtime: Path, command: list[str],
             path = repo / relative
             result.extend(["--bind", str(path), str(path)])
     if bridge is not None:
-        codex_allowed = provider == "codex" and (role == "reviewer" or ticket.get("read_only"))
-        cursor_allowed = (provider == "cursor" and role == "worker" and ticket.get("read_only")
-                          and bridge.cursor_hooks)
+        codex_allowed = provider == "codex" and role in {"worker", "reviewer"}
+        cursor_allowed = provider == "cursor" and role == "worker" and bridge.cursor_hooks
         if not (codex_allowed or cursor_allowed):
-            raise ValueError("Task bridge requires an approved read-only provider path")
+            raise ValueError("Task bridge requires an approved role/provider path")
         result.extend(bridge.mounts())
     result.extend(["--chdir", str(repo), "--", *command])
     return result
@@ -285,9 +284,9 @@ def launch(ticket: dict, slot: str, *, dry_run: bool, resume_session: str | None
     role = "reviewer" if slot == "reviewer" else "worker"
     read_only = role == "reviewer" or ticket.get("read_only") is True
     provider = provider_for(ticket, slot)
-    if bridge_settings and (provider not in {"codex", "cursor"} or not read_only or dry_run
+    if bridge_settings and (provider not in {"codex", "cursor"} or dry_run
                             or (provider == "cursor" and slot != "worker-b")):
-        raise ValueError("Task bridge requires a real approved read-only role launch")
+        raise ValueError("Task bridge requires a real approved role launch")
     if resume_session:
         bindings.identity(resume_session)
     if follow_up is not None and (not follow_up.strip() or len(follow_up) > 32_000):
@@ -295,10 +294,15 @@ def launch(ticket: dict, slot: str, *, dry_run: bool, resume_session: str | None
     if role == "worker" and not read_only and not ticket.get("allowed_directories"):
         raise ValueError("worker needs a nonempty writable directory scope")
     repo = Path(ticket["repo"])
+    assignment = (
+        "Inspect and report only"
+        if read_only
+        else "Implement only the assigned change and leave validation and commit to the coordinator"
+    )
     prompt = (
         f"Role: {role}. Ticket: {ticket['id']}. Read AGENTS.md. No subagents, no commit, "
         "no push, no changes outside assigned directories. Do not start builds/tests/analysis "
-        "servers; ask the coordinator for validation. Report findings and stop. "
+        f"servers; ask the coordinator for validation. {assignment}. "
         f"Source access: {'read-only; never edit files' if read_only else 'assigned directories only'}. "
         f"Allowed directories: {[] if read_only else ticket['allowed_directories']}.\n"
         + (follow_up if follow_up is not None else ticket["prompt"])
@@ -310,14 +314,18 @@ def launch(ticket: dict, slot: str, *, dry_run: bool, resume_session: str | None
                        "task is unclear or blocked, report a failed outcome. Your final response must be exactly "
                        "one JSON object with string keys outcome, subject, body; outcome is succeeded or failed, "
                        "subject is short, and body is a three-sentence executive summary. Do not wrap it in a "
-                       "code fence or add other text. No edits are allowed.")
+                       "code fence or add other text. "
+                       + ("No edits are allowed." if read_only else
+                          "Edit only the ticket's allowed directories; do not validate or commit."))
         else:
             prompt += ("\nTask bridge bootstrap only: do not invent lifecycle IDs or send any Orca RPC until a live "
                        "Orca preamble arrives. Do not create runs, tasks, workers or gates. When dispatched, copy "
                        "its executable, terminal, capability and IDs exactly; use --json. Ask/check waits require "
                        "--timeout-ms 10000. Process all delivered messages before explicit check --ack. "
                        "A bridge refusal means stop and ask the host coordinator to reconcile, never resend. "
-                       "worker_done is not review approval. No edits or builds are allowed.")
+                       "worker_done is not review approval. "
+                       + ("No edits or builds are allowed." if read_only else
+                          "Edit only the ticket's allowed directories; builds and commits are not allowed."))
     if dry_run:
         command = command_for(provider, repo, role, prompt, resume_session, read_only=read_only,
                               externally_sandboxed=provider == "codex")
@@ -370,8 +378,10 @@ def launch(ticket: dict, slot: str, *, dry_run: bool, resume_session: str | None
             if bridge_settings:
                 def verify_subject():
                     validate_ticket(ticket)
-                    if fingerprint(repo) != before:
+                    if read_only and fingerprint(repo) != before:
                         raise ValueError("bridge source changed; preserve and reconcile")
+                    if not read_only:
+                        worker_scope(ticket, initial=False)
                 bridge = channels.enter_context(task_bridge.Session(
                     *bridge_settings, os.environ.get("ORCA_TERMINAL_HANDLE"), repo, verify_subject,
                     cursor_hooks=provider == "cursor"))

@@ -22,15 +22,10 @@ from pathlib import Path
 
 try:
     import orca_frontdesk as desk
-    import orca_intake_migration as migration
     import orca_roles as roles
     from host_coordination import acquire_host
 except ModuleNotFoundError:
-    from scripts import (
-        orca_frontdesk as desk,
-        orca_intake_migration as migration,
-        orca_roles as roles,
-    )
+    from scripts import orca_frontdesk as desk, orca_roles as roles
     from scripts.host_coordination import acquire_host
 
 
@@ -230,7 +225,6 @@ def execute_stream(command: list[str], prompt_input, data: dict, turn: dict) -> 
 
 def consult(request_id: str, message: str | None = None, turn_id: str | None = None,
             *, recover: bool = False) -> dict:
-    migration.ensure_start_allowed(request_id)
     item = request(request_id)
     initial = message is None
     if recover and initial:

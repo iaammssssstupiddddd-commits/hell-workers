@@ -807,17 +807,51 @@ print('isolated')
             self.assertEqual(session.policy.phase, "settled")
         self.assertEqual(len(self.mutations()), 5)
 
-    def test_editing_and_dry_run_bridges_are_rejected_before_launch(self):
+    def test_dry_run_bridge_is_rejected_before_launch(self):
         settings = (Path("/usr/bin/true"), self.root)
         ticket = {"read_only": True}
-        for slot, dry_run, read_only in (("worker-a", True, True), ("worker-a", False, False),
-                                         ("worker-b", False, False)):
-            ticket["read_only"] = read_only
-            with self.subTest(slot=slot, dry_run=dry_run), self.assertRaises(ValueError):
-                roles.launch(ticket, slot, dry_run=dry_run, bridge_settings=settings)
+        with self.assertRaisesRegex(ValueError, "real approved"):
+            roles.launch(ticket, "worker-a", dry_run=True, bridge_settings=settings)
+
+    @unittest.skipUnless(CLI.is_file() and shutil.which("bwrap"), "installed Orca and bubblewrap required")
+    def test_codex_editing_worker_keeps_bridge_and_write_scope(self):
+        session = self.wire_session()
+        runtime = self.repo / "codex-edit-runtime"
+        for name in ("codex", "tmp"):
+            (runtime / name).mkdir(parents=True, exist_ok=True)
+        allowed = self.repo / "src"
+        blocked = self.repo / "docs"
+        allowed.mkdir()
+        blocked.mkdir()
+        ticket = {"repo": str(self.repo), "read_only": False,
+                  "allowed_directories": ["src"]}
+        script = """import json, pathlib, subprocess, sys
+allowed, blocked, client = sys.argv[1:]
+pathlib.Path(allowed).write_text('allowed')
+try:
+    pathlib.Path(blocked).write_text('forbidden')
+    raise AssertionError('write escaped assigned scope')
+except OSError:
+    pass
+status = subprocess.run([client, 'status', '--json'], capture_output=True, text=True, check=True)
+assert json.loads(status.stdout)['result']['runtime']['reachable'] is True
+print('scoped')
+"""
+        with session, patch.object(roles, "git", return_value=str(self.repo / ".git")), \
+                patch.dict(os.environ, {"CODEX_HOME": str(self.repo / "no-auth"),
+                                        "ORCA_TERMINAL_HANDLE": HANDLE}):
+            command = roles.sandbox_command(
+                ticket, "worker", runtime,
+                [sys.executable, "-c", script, str(allowed / "change.txt"),
+                 str(blocked / "escape.txt"), str(session.client)], bridge=session)
+            completed = bridge.wire.run_cli(command, 8)
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            self.assertEqual(completed.stdout.strip(), b"scoped")
+            self.assertEqual((allowed / "change.txt").read_text(), "allowed")
+            self.assertFalse((blocked / "escape.txt").exists())
 
     @unittest.skipUnless(shutil.which("bwrap"), "bubblewrap required")
-    def test_cursor_hook_reaches_only_its_private_bridge_through_read_only_mount(self):
+    def test_cursor_editing_worker_reaches_only_private_bridge_and_scope(self):
         session = self.wire_session(cursor_hooks=True)
         runtime = self.repo / "cursor-runtime"
         for child in ("cursor", "cursor-data", "xdg/cursor", "cache", "tmp", "codex"):
@@ -827,7 +861,8 @@ print('isolated')
         script_dir.mkdir()
         source = Path(__file__).resolve().parents[1] / "orca_cursor_bridge_hook.py"
         shutil.copyfile(source, script_dir / source.name)
-        ticket = {"repo": str(self.repo), "read_only": True, "allowed_directories": []}
+        (self.repo / "src").mkdir()
+        ticket = {"repo": str(self.repo), "read_only": False, "allowed_directories": ["src"]}
         with session, patch.object(roles, "git", return_value=str(self.repo / ".git")):
             policy_dir = session.public / "cursor-policy"
             policy_dir.mkdir(mode=0o700)
@@ -858,7 +893,8 @@ print('isolated')
             policy_text = policy.read_text()
             self.assertIn("Shell(*)", policy_text)
             self.assertIn("Mcp(*:*)", policy_text)
-            self.assertIn("Write(**)", policy_text)
+            self.assertIn("Write(src/**)", policy_text)
+            self.assertNotIn("Write(**)", policy_text)
             self.assertNotIn(session.policy.cursor_hook_token, policy_text)
 
     @unittest.skipUnless(CLI.is_file() and shutil.which("bwrap"), "installed Orca and bubblewrap required")
