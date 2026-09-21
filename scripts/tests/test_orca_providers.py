@@ -46,8 +46,8 @@ class ProviderTests(unittest.TestCase):
     def test_b_edit_acceptance_is_restricted_to_dedicated_fixture(self) -> None:
         root = Path(__file__).resolve().parents[2]
         for slot in ("worker-a", "worker-b"):
-            fixture = root / f"scripts/tests/fixtures/orca_edit_acceptance/{slot}/result.fixture"
-            self.assertTrue(fixture.read_text().startswith("READY:"))
+            fixture = root / f"scripts/tests/fixtures/orca_edit_acceptance/{slot}/result.py"
+            self.assertIn('RESULT = "READY:', fixture.read_text())
         ticket = {**self.simple(), "task_kind": "acceptance-edit",
                   "allowed_directories": [providers.CURSOR_EDIT_ACCEPTANCE_SCOPE]}
         self.assertEqual(providers.provider_for(ticket, "worker-b"), "cursor")
