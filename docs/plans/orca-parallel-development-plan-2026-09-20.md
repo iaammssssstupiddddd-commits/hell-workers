@@ -5,7 +5,7 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `orca-parallel-development-plan-2026-09-20` |
-| ステータス | In Progress — Linear `TAK-5` のL1正常系・L2相談継続、固定reviewer/Codex A/Cursor Bのread-only実Taskを受入。監督付き編集の限定ルールをprimaryへ採用し、実編集受入は未実施 |
+| ステータス | In Progress — Linear `TAK-5` のL1正常系・L2相談継続、3 roleのread-only実Task、A/B限定編集と2レーン並列実行を受入。自動配車・異常系・L4切替は未完 |
 | 作成日 / 最終更新日 | 2026-09-20 / 2026-09-21 |
 | 作成者 | Codex |
 | 関連提案 | [並列実装と専任レビューの運用素案](../proposals/orca-parallel-development-proposal-2026-09-20.md) |
@@ -26,6 +26,7 @@
 L0改訂時は計画と関連文書のみで、Linear認証・課題作成/更新・既存依頼のuploadは行っていなかった。
 後続L1/L2では専用試験issue `TAK-5` に範囲を限定して接続・更新・固定snapshot取込を受け入れた。
 L3では固定reviewer、Codex A、Cursor Bのread-only実Taskを起動して受け入れた。
+L3Eでは別worktreeのA/B限定編集、統括検証、同一固定reviewer、2レーン同時実行まで受け入れた。
 
 ### 正本と責務
 
@@ -40,22 +41,23 @@ Linearは常設の受付・可視化先であり、統括LLMの常駐や自動�
 統括は明示操作で起動し、A=Codex、B=単純task専用Cursor CLI、reviewer=固定Codex session 1つを維持する。
 共有checkoutと任意のbackground編集は禁止を維持する。primaryのルールは、別worktree・固定ticket・mount境界・
 最大2 worker・固定read-only reviewer・統括所有の検証/commit/直列統合を満たす専用Orca launcherだけを条件付き例外とする。
-L3の実agent受入はread-onlyで完了したが、編集委譲は下記L3Eの実受入が成功するまで本番利用しない。
+L3Eの実受入は完了したため、明示ticketと専用launcherを通る監督付き編集だけを利用できる。
+Linear受付からの自動配車、通常のOrca agent起動、共有file/APIを含む並列化は引き続き許可しない。
 
 ### 実装済み資産の採否
 
-codeの参照元は専用candidateの `85cf28431a7fa367367d5bd933bf6709024c0ee7`。primary未統合。
+codeの参照元は専用candidateの `55b27f6e1d9103d7985941c3cbbf135c7299be91`。primary未統合。
 以下の再利用は既存コードと検証済み境界の採用であり、Linear対応済みという意味ではない。
 
 | 資産（candidateの `scripts/`） | 方針 | 実績と追加作業 |
 | --- | --- | --- |
 | `host_coordination.py` とbuild/validation driver | 再利用 | host重実行1枠・role/workspace排他・子へのlease継承。Linear状態をlockの代わりにしない |
-| `orca_roles.py` / `orca_providers.py` | 再利用 | A/Bのprovider固定、Bの単純task制限、mount/policy分離。実TUI read-only起動・再開済み、編集/tool denyの実受入は未完 |
+| `orca_roles.py` / `orca_providers.py` | 再利用 | A/Bのprovider固定、Bの単純task制限、mount/policy分離。read-only起動・再開とA/B限定編集、Cursor Bのtool denyを実受入済み |
 | `orca_role_state.py` / fingerprint / `verify-review` | 再利用 | 同一ticket/session、unknown停止、固定reviewer、変更後の承認失効。承認記録の整合性検査であって署名検証ではない |
 | `orca_coordinator.py` | 入力adapterを追加して再利用 | 明示起動・相談/追記・同UUID再開は実受入済み。既存のrequest ID/本文入力へ固定snapshotを渡し、実行処理は作り直さない |
 | `orca_frontdesk.py` | 内部snapshot保存を再利用し、candidateのUIをLinear優先へ変更 | `submit()`のUUID/本文拘束を使う。queuedは進捗ではなく内部受付状態として保持し、Linearとの常時双方向同期は作らない |
 | `orca_preflight.py` | 再利用 | 対象terminal限定のread-only通信診断。結果は常にdispatch許可と別扱い |
-| `orca_task_bridge.py` / `orca_cursor_bridge_hook.py` | read-only限定で段階採用 | JSON内容比較、exact identity、限定復旧、固定reviewer/Codex A/Cursor Bの実Task一巡まで完了。受付からの自動接続と編集運用は未接続 |
+| `orca_task_bridge.py` / `orca_cursor_bridge_hook.py` | 監督付き経路だけ段階採用 | JSON内容比較、exact identity、限定復旧、3 roleの実Task、A/B限定編集と並列実行まで完了。受付からの自動接続は未接続 |
 | `orca.yaml`、専用branch/worktree、既存tests | 再利用 | setup/待機、通常agent起動の迂回禁止、回帰fixtureを維持。既存会話・成果・review-active cacheを消さない |
 
 host側の薄いissue入力adapter `scripts/orca_issue_context.py` と対応testsをcandidateへ追加した。
@@ -146,14 +148,14 @@ owner-only/atomic replace/fsyncの共通処理は互換保持する。Linearの�
   重いbuild/test、shared contract・save・renderer・infrastructure変更は禁止を維持する。
 - [x] A/Bが共有fileを触らず試せる非ゲームfixtureを別directoryへ追加し、Cursor Bの`acceptance-edit`は
   `scripts/tests/fixtures/orca_edit_acceptance/worker-b` だけをexact許可する。通常のsimple leaf制約は緩めない。
-- [ ] Codex Aで単一leafの非ゲームfixtureを1件編集し、許可scope外・Git metadata・primary・他worktreeが不変であることを確認する。
-- [ ] Cursor Bで既存patternに沿う単純な単一leaf変更を1件編集し、Shell/MCP/WebFetch deny、許可scopeだけのwrite、
+- [x] Codex Aで単一leafの非ゲームfixtureを1件編集し、許可scope外・Git metadata・primary・他worktreeが不変であることを確認する。
+- [x] Cursor Bで既存patternに沿う単純な単一leaf変更を1件編集し、Shell/MCP/WebFetch deny、許可scopeだけのwrite、
   provider固定、complexity/task_kind/acceptance検査、終了後source/index照合を確認する。
-- [ ] 統括が同じcandidateで必要なtooling検証を実行し、worker終了後に固定reviewerを同一sessionで起動する。
+- [x] 統括が同じcandidateで必要なtooling検証を実行し、worker終了後に固定reviewerを同一sessionで起動する。
   reviewerはbase/head・差分・scope・検証証拠を読み、sourceへ書き込まず承認/差戻しを返す。
-- [ ] 指摘修正が必要なら元workerを同じticket/session/worktreeで再開し、source/index/session不一致時は停止する。
-  approval後の変更が承認を失効させることを確認してから、統括だけがcommitする。
-- [ ] A/Bの独立leaf 2件を別worktreeで同時に開始し、実装slot最大2・reviewer最大1・重い実行最大1、
+- [x] 実reviewerからの指摘修正は発生しなかった。同一ticket/session/worktreeでの再開境界、
+  source/index/session不一致の停止、approval後変更による承認失効を自動testで確認し、統括だけがcommitした。
+- [x] A/Bの独立leaf 2件を別worktreeで同時に開始し、実装slot最大2・reviewer最大1・重い実行最大1、
   共有file/APIなし、レビューと統合は直列、という資源・所有権条件を受け入れる。
 - 完了条件: AとBの各編集一巡および独立2件の並列試行が、範囲外変更・自己承認・重い処理競合なしに完了する。
   失敗時は成果を保全して新規投入を止め、全面禁止へ戻せる。
@@ -163,7 +165,7 @@ owner-only/atomic replace/fsyncの共通処理は互換保持する。Linearの�
 - [ ] L2/L3の証拠を確認し、Orca UIの入口をLinearと明示起動の統括へ統一する。
 - [ ] 旧受付menuは新規運用から外し、未移行依頼/既存会話の参照・復旧consumerを解消してから不要なUI部分を撤去する。
   再利用する保存/lock/復旧処理は残す。既存の未確定attemptを「移行済み」として捨てない。
-- [ ] 運用ガイドを実操作で確認し、「課題管理」「統括相談」「read-only監督」「並列編集」の受入状態を別々に表示する。
+- [x] 運用ガイドを実操作で確認し、「課題管理」「統括相談」「read-only監督」「並列編集」の受入状態を別々に表示する。
 - [ ] 同目的branchの採用、ローカルcommit/基点変更はその時点の許可を確認する。push/PR/primaryのゲーム変更は含めない。
 - [ ] storageの残るconsumerを確認し、成果・会話・review-active cacheを保持したまま不要な試験出力だけ整理する。
 
@@ -810,20 +812,21 @@ Rust/Bevyのbuild・workspace test・Clippy、Blender test、ゲームwindow/GPU
 
 - 現行計画はL0完了。L2のsnapshot adapterとL3のP2/復旧/IPC修正はcandidate実装済みで、
   固定reviewer・Codex A・Cursor Bのread-only実Task一巡、Linear `TAK-5` のL1正常系、
-  L2の実issue相談・同一session追記を受入済み。権限/通信異常系、旧受付移行、受付からの一巡、編集運用、L4切替は未受入。
+  L2の実issue相談・同一session追記、L3EのA/B限定編集と2レーン並列実行を受入済み。
+  権限/通信異常系、旧受付移行、受付からの自動一巡、L4切替は未受入。
 - `a7c1bbb`で確認したP2（escalation JSON正規化で送信済みreceiptをunknown化）は、candidateで
   payloadの厳密なJSON内容比較へ修正した。ID/capability/他fieldの照合は維持している。
-- M0/M1調査済み、M2/M3候補実装と拒否test済み、M4初期設定・read-only実CLI継続済み。
-  M4の固定reviewer/Codex A/Cursor B監督付きTask lifecycleは限定受入済み。M5の編集並列試行は未実施。
-- 編集workerは起動していない。初期基盤では専任read-onlyレビューの指摘5件を修正し、再レビューを受けた。
+- M0/M1調査済み、M2/M3候補実装と拒否test済み、M4の3 role Task lifecycleとM5の限定編集並列試行を受入済み。
+- 編集workerはA/Bを直列・並列の両方で起動し、exact fixtureだけの変更、統括検証、固定reviewer承認、統括commitを確認した。
+  初期基盤では専任read-onlyレビューの指摘5件を修正し、再レビューを受けた。
   後日にP2を発見した時点では未修正だった事実と、この文書レビューはそれぞれ別の結果として扱う。
 - Orcaをprimaryへ登録し起動中。user-local CLIは`orca-ide`、desktop名は`Orca IDE`。
-- candidateのdriverはprimary未統合。監督付きOrcaだけを許す限定ルールはprimaryへ採用したが、
-  global agent既定権限は変更せず、実編集はL3Eの受入完了まで開始しない。
-- 最新基盤は`85cf28431a7fa367367d5bd933bf6709024c0ee7`。受付の実Codex相談/同会話再開を確認済み。
+- candidateのdriverはprimary未統合。監督付きOrcaだけを許す限定ルールはprimaryへ採用し、
+  global agent既定権限は変更していない。実編集は専用launcher経由だけを許可する。
+- 最新基盤は`55b27f6e1d9103d7985941c3cbbf135c7299be91`。受付の実Codex相談/同会話再開を確認済み。
   worker同task継続・固定reviewer拘束も実装済み。A/B・固定reviewerはread-only実TUIで各2turn受入済み。
   制限通信preflight、Codex用単一Dispatch bridge、Cursor hook bridge、Linear snapshot取込の模擬検証も追加済み。
-  3 roleの実Task bridge接続はread-onlyで一巡済み。実TUIの編集・編集時の実tool deny・編集review一巡は未受入。
+  3 roleの実Task bridge接続、A/B実編集、Cursor Bのtool deny、固定reviewerによる編集review、2レーン並列実行を受入済み。
   primary文書の未commit変更は正本に保持し、専用branchのcode commitと区別する。
 
 ### 次のAIが最初にやること
@@ -832,9 +835,9 @@ Rust/Bevyのbuild・workspace test・Clippy、Blender test、ゲームwindow/GPU
 2. CLI/runtime版、現行docs、storage状態を読む。採用前は旧driver/解析backendとの並行実行を調整する。
 3. Linear `TAK-5` のL1正常系とL2相談継続は受入済み。権限不足・別team・通信失敗、後編集、新旧入口の二重開始を確認する。
    初期は標準連携だけを使い、旧受付の常時同期を実装しない。既存会話や台帳を改名せず、移行対象以外をuploadしない。
-4. 3 roleのread-only lifecycleは受入済み。host限定認証・exact Task/Dispatch/terminal・旧bridge失効を維持し、
-   Linear反映を含む受付からのread-only一巡を確認してL4へ進む。CursorのShell/MCP/WebFetch denyを解除せず、
-   編集委譲の許可やM5の効果測定とは別扱いにする。
+4. 3 roleのread-only lifecycleとL3E限定編集は受入済み。host限定認証・exact Task/Dispatch/terminal・旧bridge失効を維持し、
+   Linear反映を含む受付からの一巡を確認してL4へ進む。CursorのShell/MCP/WebFetch denyを解除せず、
+   共有file/APIを含む並列化や通常agent起動へ許可を拡大しない。
 
 ### 参照必須ファイル
 
@@ -924,8 +927,8 @@ Rust/Bevyのbuild・workspace test・Clippy、Blender test、ゲームwindow/GPU
   固定reviewer session `01a0bfc7-0a67-7c33-a55f-b215b411c3de`がHEAD `1673c6be`をread-only確認した。
   check成功、指定source読取り、5条件の行番号証拠、`worker_done` succeeded、Task/Dispatch completed、
   capability失効、coordinator Delivery ACK、exit 0、同一session記録を確認。変更fileは0件。
-- この成功は固定reviewerの限定read-only lifecycleだけを受け入れる。Linear L1/L2正常系は上記で別途受入済みだが、受付からの自動接続、
-  Cursor B、編集・検証・review一巡、並列効果測定は未受入のまま残す。
+- この成功は当時の固定reviewer限定read-only lifecycleだけを受け入れた。Linear L1/L2正常系は別途受入済みだが、
+  この時点では受付からの自動接続、Cursor B、編集・検証・review一巡、並列効果測定を未受入として残した。
 
 ### L3 Codex A実Task受入（2026-09-21）
 
@@ -960,8 +963,37 @@ Rust/Bevyのbuild・workspace test・Clippy、Blender test、ゲームwindow/GPU
   同clean HEADでOrca系147件のfocused検査と、変更範囲判定のcontracts/tooling（Python 361件、
   Blender tooling 151件、Ruff、repository hygiene、Help No impact）、`git diff --check`がpassした。
   Rust/Bevyのゲームbuild/test・Clippy・nativeはユーザー指定どおり非対象。
-- これはCursor Bの限定read-only Task lifecycle受入である。単純なleaf taskへ実編集を委譲する許可、
-  編集時のWrite境界、A/B並列編集、固定reviewerを含む編集一巡の受入には読み替えない。
+- これは当時のCursor B限定read-only Task lifecycle受入であり、この時点では実編集の許可に読み替えなかった。
+  後続の編集時Write境界、A/B並列編集、固定reviewerを含む受入結果は次節へ記録する。
+
+### L3E監督付き実編集・並列受入（2026-09-21）
+
+- candidateへCodex二重sandbox回避、review時のtracked project設定可視化、fresh `CODEX_HOME`でも妥当な
+  MCP無効化、source不変の初回失敗を閉じる限定復旧を順に追加した。採用commitは
+  `3d6e2032cac5e73fb07c6f07d094772216a490ef`、`e5ff06dc8a4a15c34bbd682d5f1a54a38a6981e1`、
+  `8ddad3ce6e6d7926e1c5362e02f1b82eb1e6df7e`、`55b27f6e1d9103d7985941c3cbbf135c7299be91`。
+  Codex内側sandboxを無効化しても、外側bubblewrapのexact write scope、private state mask、Git metadata read-onlyは維持する。
+- 直列受入ではCodex Aが`worker-a/result.py`だけを`CODEX_A_EDIT_ACCEPTED`へ、Cursor Bが
+  `worker-b/result.py`だけを`CURSOR_B_EDIT_ACCEPTED`へ変更した。Cursor BはShell/MCP/WebFetchを使わず、
+  固定reviewer session `01a0bfc7-0a67-7c33-a55f-b215b411c3de`が各差分と検証証拠を承認した。
+  統括commitはA `1a0ec765`、B `b4501cdf`。
+- 最終並列受入では別worktreeで同時に起動した。Codex A session
+  `01a0c478-2f25-7bc2-bda8-c368aca986c5`、source fingerprint
+  `c5d2a5aa95432a221084e3a4be6ede025dfe485be750a34f566c85859b87b11c`はA fixtureだけを
+  `CODEX_A_PARALLEL_ACCEPTED`へ変更した。Cursor B session
+  `4b8caf79-260d-498d-a63f-54def4b43ed8`、source fingerprint
+  `796472fcb70b86080ed4d0ba842d35cbefd9a211386b69e8c3f25592948b1923`はB fixtureだけを
+  `CURSOR_B_PARALLEL_ACCEPTED_2`へ変更した。固定reviewerを直列再開して両方を承認し、統括がA
+  `f66a9a55aa4ed9f0a71f6bc57e8aadfc8b2c5cd0`、B `3711ae70c0da88c2c42b153298bdeb5face0b6ae`へcommitした。
+- 初期のCodex二重sandbox、reviewerからtracked dot-directoryを隠したことによる偽差分、fresh configでの
+  MCP transport不足は、いずれも成功へ読み替えなかった。source不変とprocess終了を照合し、失敗attemptを閉じ、
+  修正後は同じ受入条件を再実行した。reviewerからの実指摘修正は不要だったため同一worker再開は発生していないが、
+  source/index/session不一致拒否とapproval後変更による失効は自動testで維持した。
+- 最終candidateではOrca focused 151件、`python3 scripts/dev.py lint`、repository hygiene、Help No impact、
+  `git diff --check`がpassした。変更別gateはcontracts/toolingを選択し、Python 365件、Blender tooling 151件、
+  Ruff/actionlint/docs/hygiene/help/perf self-testがpass。source fingerprintは
+  `c4ba881001b7df3acbb0d388ce69ad36dd394dfc5f7956131b5bb8d49d65ee1f`。
+  ユーザー指定によりRust/Bevyゲームtest、native/GPU/performance受入は選択していない。
 
 ### 初回導入時の確認ログ（移行後gateとは別）
 
@@ -1001,7 +1033,8 @@ Rust/Bevyのbuild・workspace test・Clippy、Blender test、ゲームwindow/GPU
   固定tagのschema/handler確認後に公式runtime APIを使用した。再起動・直接config上書きなし。
 - Orca内の専用shellから`python3 scripts/dev.py doctor`を実行しreadyを確認、確認用terminalだけcloseし
   `ptyKilled: true`を確認した。既存のユーザーsessionは変更していない。
-- 実LLM並列試行/ゲームnative受入/公開は未実施。primary別作業のdirty差分は今回の検証対象外。
+- この移行後gate時点では実LLM並列試行/ゲームnative受入/公開は未実施だった。後続L3Eの並列受入は上記に別記した。
+  primary別作業のdirty差分は今回の検証対象外。
 - primary文書はdocs/indexとdiff hygieneを確認する。primary全体のdirty production変更へ、candidateの成功証拠を転用しない。
 
 ### Definition of Done
@@ -1009,7 +1042,8 @@ Rust/Bevyのbuild・workspace test・Clippy、Blender test、ゲームwindow/GPU
 - [x] 今回依頼の導入と固定版仕様確認ができ、未検証事項を計画へ移した。
 - [x] Linear受付への再計画、既存資産の採否、ゲーム検証を除いた受入範囲を文書化した（L0）。
 - [ ] L1〜L4の接続・統括再利用・read-only監督・入口切替を完了した。
-- [x] 改訂後の同一対象で§7の限定検証とHelp/storage確認が成功し、未受入の編集運用と区別した。
+- [x] L3EのA/B限定編集、統括検証、固定reviewer、別worktreeの2レーン並列実行を受け入れた。
+- [x] 改訂後の同一対象で§7の限定検証とHelp/storage確認が成功し、受入済み限定編集と未受入の自動運用を区別した。
 - [x] 旧環境candidate採用時には全必要群・Help No impact・primary storageを確認した（改訂後のL1〜L4受入とは別）。
 - [ ] 最終closeで本計画の検証consumerを解消し、継続利用アプリは通常運用へ引き継いだ。
 
@@ -1032,3 +1066,4 @@ Rust/Bevyのbuild・workspace test・Clippy、Blender test、ゲームwindow/GPU
 | 2026-09-21 | Codex | 変更範囲gateでCursor hookのGit実行属性不足を検出・修正。clean HEADでcontracts/tooling全群を再実行し、Python 361件・Blender tooling 151件を含めてpass |
 | 2026-09-21 | Codex | primaryの全面的な編集委譲禁止を、別worktree・固定ticket・mount境界・固定reviewer・統括所有の検証/commitを満たす監督付きOrcaだけの限定例外へ改訂。L3Eの実編集受入完了まではread-only運用を維持 |
 | 2026-09-21 | Codex | L3E用のA/B非ゲームfixtureを分離し、Cursor Bの編集受入taskを専用fixture exact scopeへ限定。Orca系148件とcontracts/tooling全群をclean HEADでpass |
+| 2026-09-21 | Codex | L3EのA/B直列編集、固定reviewer、統括検証/commitと、別worktreeのA/B同時編集を受入。candidate `55b27f6e`、A `f66a9a55`、B `3711ae70`をcleanに確定 |
