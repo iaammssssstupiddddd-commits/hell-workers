@@ -3,7 +3,8 @@
 setupAgentStartupPolicy: wait-for-setup
 scripts:
   setup: python3 scripts/dev.py doctor
-# Do not share target/save/settings or start agents automatically.
+# Linear-linked worktrees open one visible coordinator. It creates the guarded
+# A/B/review tabs only when their bounded tickets are ready.
 defaultTabs:
-  - title: Development
-    command: python3 scripts/dev.py doctor
+  - title: 統括
+    command: python3 scripts/orca_ui_coordinator.py launch || exit

@@ -24,11 +24,13 @@ try:
     import orca_role_state as bindings
     import orca_roles as roles
     import orca_task_bridge as task_bridge
+    import orca_ui_coordinator as ui_coordinator
     from host_coordination import acquire_host, state_root
 except ModuleNotFoundError:
     from scripts import (orca_coordinator as coordinator, orca_frontdesk as frontdesk,
                          orca_issue_context as intake, orca_role_state as bindings,
-                         orca_roles as roles, orca_task_bridge as task_bridge)
+                         orca_roles as roles, orca_task_bridge as task_bridge,
+                         orca_ui_coordinator as ui_coordinator)
     from scripts.host_coordination import acquire_host, state_root
 
 
@@ -63,6 +65,17 @@ def checked_consultation(request_id: str) -> dict:
     if not data["turns"] or data["turns"][-1].get("phase") != "succeeded":
         raise DispatchError("a successful coordinator consultation is required before dispatch")
     return data
+
+
+def checked_coordinator(request_id: str, terminal: str) -> dict:
+    """Accept the visible UI coordinator, retaining old saved consultations for recovery."""
+    path = ui_coordinator.state_path(request_id)
+    if path.exists() or path.is_symlink():
+        try:
+            return ui_coordinator.require_ready(request_id, terminal)
+        except ui_coordinator.UiCoordinatorError as error:
+            raise DispatchError(str(error)) from error
+    return checked_consultation(request_id)
 
 
 def decode_cli(completed: subprocess.CompletedProcess[str], operation: str) -> dict:
@@ -143,7 +156,7 @@ def start(request_id: str, ticket_path: Path, slot: str, coordinator_handle: str
         raise DispatchError("review dispatch requires a read-only ticket with source_sha256")
     roles.provider_for(ticket, slot)
     record = linear_record(request_id)
-    checked_consultation(request_id)
+    checked_coordinator(request_id, coordinator_handle)
     executable = intake.checked_orca_cli(orca_cli or intake.default_orca_cli())
     metadata = metadata or Path.home() / ".config/orca"
     if not metadata.is_absolute() or not metadata.is_dir() or metadata.resolve() != metadata:
@@ -187,10 +200,15 @@ def start(request_id: str, ticket_path: Path, slot: str, coordinator_handle: str
                 if fixed:
                     launcher_argv.extend(["--resume-session", fixed["session_id"]])
             launcher = shlex.join(launcher_argv)
+            titles = {
+                "worker-a": "実装A（Codex）",
+                "worker-b": "実装B（Cursor）",
+                "reviewer": "レビュー（固定Codex）",
+            }
             terminal_result = run_cli(
                 executable,
                 ["terminal", "create", "--worktree", f"path:{ticket['repo']}",
-                 "--title", f"{slot} | {ticket['id']}", "--command", launcher],
+                 "--title", f"{titles[slot]} | {ticket['id']}", "--command", launcher],
                 "terminal-create",
             )
             terminal_row = terminal_result.get("terminal")

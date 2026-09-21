@@ -1,6 +1,8 @@
-"""Durable local Orca intake. No agent is started by opening the front desk.
+"""Durable internal Orca intake state and legacy recovery commands.
 
 The request file records intake, not an alternative to Orca Task/Dispatch state.
+The former interactive menu is retired; operators use Orca Tasks and the visible
+coordinator tab instead.
 Requests stay queued until an operator starts the guarded orchestration bridge.
 An explicit consultation starts a read-only coordinator; supervised editing is a
 separate confirmed action using a fixed ticket and worker slot.
@@ -247,21 +249,9 @@ def menu_action(choice: str) -> None:
 
 
 def menu() -> None:
-    with acquire_host("frontdesk-ui", inherit=False):
-        print("Hell Workers | 開発受付・統括相談", flush=True)
-        print("統括は選択時だけ起動。相談後、固定ticketから監督付き編集Taskを開始できます。", flush=True)
-        while True:
-            print("\n1: Linear課題を受付  2: 一覧  3: 統括へ相談  4: 追記  5: 状態/回答  "
-                  "6: 異常終了後の照合  7: 手入力fallback  8: 実装/レビューTask開始  q: 閉じる", flush=True)
-            try:
-                choice = input("> ").strip()
-                if choice == "q":
-                    return
-                menu_action(choice)
-            except (EOFError, KeyboardInterrupt):
-                return
-            except (OSError, ValueError, RuntimeError, KeyError, TypeError) as error:
-                print(f"操作を停止しました（状態は保全）: {error}", flush=True)
+    print("このterminal受付menuは廃止されました。", flush=True)
+    print("OrcaのTasks → Linearから課題を選び、その課題から新しいworktreeを作成してください。", flush=True)
+    print("統括・実装A・実装B・レビューはOrca上の別tabに表示されます。", flush=True)
 
 
 def main() -> int:

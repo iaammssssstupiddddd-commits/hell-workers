@@ -110,14 +110,15 @@ def decode_response(raw: str) -> dict:
     return mapping(value, "Orca Linear response")
 
 
-def read_issue(issue_ref: str, workspace_id: str, orca_cli: Path | None = None) -> dict:
-    workspace_id = canonical_uuid(workspace_id, "Linear workspace id")
-    if (not isinstance(issue_ref, str) or not issue_ref.strip() or len(issue_ref) > 512
-            or issue_ref.startswith("-") or "\x00" in issue_ref):
-        raise LinearIntakeError("invalid Linear issue reference")
+def read_issue_response(arguments: list[str], orca_cli: Path | None = None) -> dict:
+    """Read one issue through Orca without exposing provider credentials."""
+    if (not arguments or any(
+        not isinstance(argument, str) or not argument or len(argument) > 2048
+        or "\x00" in argument for argument in arguments
+    )):
+        raise LinearIntakeError("invalid Orca Linear arguments")
     executable = checked_orca_cli(orca_cli or default_orca_cli())
-    command = [str(executable), "linear", "issue", issue_ref, "--full",
-               "--workspace", workspace_id, "--json"]
+    command = [str(executable), "linear", "issue", *arguments, "--json"]
     try:
         completed = subprocess.run(
             command,
@@ -137,10 +138,32 @@ def read_issue(issue_ref: str, workspace_id: str, orca_cli: Path | None = None) 
         code = error.get("code") if isinstance(error, dict) else None
         if code == "linear_not_connected":
             raise LinearIntakeError("Linear is not connected in Orca settings")
+        if code == "linear_no_linked_issue":
+            raise LinearIntakeError("current Orca worktree is not linked to a Linear issue")
         raise LinearIntakeError(f"Orca Linear read failed ({code or 'unknown_error'})")
     canonical_uuid(mapping(response.get("_meta"), "Orca metadata").get("runtimeId"),
                    "Orca runtime id")
-    return normalize_issue(mapping(response.get("result"), "Linear result"), workspace_id)
+    return mapping(response.get("result"), "Linear result")
+
+
+def read_issue(issue_ref: str, workspace_id: str, orca_cli: Path | None = None) -> dict:
+    workspace_id = canonical_uuid(workspace_id, "Linear workspace id")
+    if (not isinstance(issue_ref, str) or not issue_ref.strip() or len(issue_ref) > 512
+            or issue_ref.startswith("-") or "\x00" in issue_ref):
+        raise LinearIntakeError("invalid Linear issue reference")
+    result = read_issue_response(
+        [issue_ref, "--full", "--workspace", workspace_id], orca_cli
+    )
+    return normalize_issue(result, workspace_id)
+
+
+def read_current_issue(orca_cli: Path | None = None) -> dict:
+    """Read the Linear issue linked to the current Orca worktree."""
+    result = read_issue_response(["--current", "--full"], orca_cli)
+    resolved = mapping(mapping(result.get("meta"), "Linear metadata").get("resolved"),
+                       "resolved Linear metadata")
+    workspace_id = canonical_uuid(resolved.get("workspaceId"), "Linear workspace id")
+    return normalize_issue(result, workspace_id)
 
 
 def normalize_issue(result: dict, workspace_id: str) -> dict:
@@ -159,7 +182,10 @@ def normalize_issue(result: dict, workspace_id: str) -> dict:
     ):
         raise LinearIntakeError("Linear full issue context is capped or invalid")
 
+    resolved = meta.get("resolved")
     observed_workspaces = [meta.get("workspaceId")]
+    if isinstance(resolved, dict):
+        observed_workspaces.append(resolved.get("workspaceId"))
     workspace = issue.get("workspace")
     if isinstance(workspace, dict):
         observed_workspaces.append(workspace.get("id"))
@@ -299,8 +325,7 @@ def read_ledger(path: Path) -> dict:
     return data
 
 
-def import_issue(issue_ref: str, workspace_id: str, orca_cli: Path | None = None) -> dict:
-    snapshot = read_issue(issue_ref, workspace_id, orca_cli)
+def import_snapshot(snapshot: dict) -> dict:
     identity = str(uuid.uuid5(
         REQUEST_NAMESPACE,
         f"{snapshot['workspace_id']}\n{snapshot['issue_id']}\n{snapshot['sha256']}",
@@ -337,6 +362,15 @@ def import_issue(issue_ref: str, workspace_id: str, orca_cli: Path | None = None
         "linear_identifier": record["identifier"],
         "snapshot_sha256": record["snapshot_sha256"],
     }
+
+
+def import_issue(issue_ref: str, workspace_id: str, orca_cli: Path | None = None) -> dict:
+    return import_snapshot(read_issue(issue_ref, workspace_id, orca_cli))
+
+
+def import_current_issue(orca_cli: Path | None = None) -> dict:
+    """Import the issue linked by Orca; no workspace UUID is user-facing."""
+    return import_snapshot(read_current_issue(orca_cli))
 
 
 def main() -> int:

@@ -35,6 +35,7 @@ def response(*, description: str = "Implement the bounded adapter.", workspace: 
             "inlineMedia": [],
             "meta": {
                 "workspaceId": workspace,
+                "resolved": {"workspaceId": workspace, "identifier": "HW-42"},
                 "includeErrors": [],
                 "sections": {
                     "comments": {"returned": 0, "cap": 100, "capReached": False},
@@ -81,6 +82,19 @@ class LinearIntakeTests(unittest.TestCase):
         for call in run.call_args_list:
             self.assertIs(call.kwargs["stdin"], subprocess.DEVNULL)
             self.assertFalse(call.kwargs["check"])
+
+    def test_current_worktree_import_needs_no_workspace_input(self) -> None:
+        value = response()
+        value["result"]["meta"].pop("workspaceId")
+        value["result"]["issue"]["team"] = {"id": "team", "key": "HW"}
+        with patch.object(intake.subprocess, "run", return_value=self.completed(value)) as run:
+            imported = intake.import_current_issue(self.cli)
+
+        self.assertEqual(imported["linear_identifier"], "HW-42")
+        self.assertEqual(
+            run.call_args.args[0],
+            [str(self.cli), "linear", "issue", "--current", "--full", "--json"],
+        )
 
     def test_snapshot_wraps_untrusted_content_without_executing_it(self) -> None:
         marker = self.root / "must-not-exist"

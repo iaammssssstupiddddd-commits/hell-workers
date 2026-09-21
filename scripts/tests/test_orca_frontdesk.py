@@ -89,6 +89,14 @@ class FrontdeskTests(unittest.TestCase):
             with self.assertRaises(host_coordination.HostBusyError):
                 desk.submit("task")
 
+    def test_menu_is_retired_in_favor_of_orca_tasks(self) -> None:
+        with patch("builtins.input") as input_value, patch("builtins.print") as output:
+            desk.menu()
+        input_value.assert_not_called()
+        text = "\n".join(call.args[0] for call in output.call_args_list)
+        self.assertIn("Tasks → Linear", text)
+        self.assertIn("別tab", text)
+
     def test_declining_menu_start_does_not_start_coordinator(self) -> None:
         item = desk.submit("task")
         with patch("builtins.input", side_effect=[item["id"], "no"]), patch.object(desk, "coordinator_module") as module:
