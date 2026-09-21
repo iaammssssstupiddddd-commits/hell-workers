@@ -140,6 +140,8 @@ Create an implementation plan in `docs/plans/` when:
 
 ## Supervised Orca development
 
+- The operator-facing entrypoint is Orca Tasks → Linear → a Linear-linked worktree. Its `統括` tab owns intake and routing; never ask the operator for a Linear workspace UUID, intake UUID, ticket path, or internal worker slot.
+- Keep coordinator, implementation A, implementation B, and fixed review visible as separate Orca tabs. Create A/B/review tabs only through the guarded dispatcher; a shell menu or raw terminal command is not the operator workflow.
 - Parallel editing is allowed only through the ticketed `scripts/orca_roles.py` launcher in separate worktrees; never delegate edits in a shared checkout.
 - Use at most two implementation slots and one fixed read-only reviewer; reuse the same reviewer terminal for the workstream. Workers must not delegate again.
 - Fixed providers: worker-a uses Codex, worker-b uses Cursor CLI for simple leaf tasks only, and the reviewer uses Codex. Require complexity rationale and acceptance criteria for worker-b; route shared-contract, save, renderer and infrastructure work to A/coordinator.

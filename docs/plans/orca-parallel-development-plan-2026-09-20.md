@@ -5,8 +5,8 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `orca-parallel-development-plan-2026-09-20` |
-| ステータス | In Progress — Linear `TAK-5` のL1正常系・L2相談継続、3 roleのread-only実Task、A/B限定編集と2レーン並列実行を受入。Linear受付からA/B・固定reviewerへguard付き配車するcontrollerを実装済み、実一巡と異常系は未受入 |
-| 作成日 / 最終更新日 | 2026-09-20 / 2026-09-21 |
+| ステータス | In Progress — Orca Tasksを唯一の利用者向け受付とし、Linear-linked worktreeの可視統括と日本語A/B/review tabを実装。3 roleの権限制御と2レーン並列実行は受入済み、UIからの実案件一巡と異常系は未受入 |
+| 作成日 / 最終更新日 | 2026-09-20 / 2026-09-22 |
 | 作成者 | Codex |
 | 関連提案 | [並列実装と専任レビューの運用素案](../proposals/orca-parallel-development-proposal-2026-09-20.md) |
 | 関連Issue/PR | N/A（公開なし） |
@@ -27,6 +27,8 @@ L0改訂時は計画と関連文書のみで、Linear認証・課題作成/更�
 後続L1/L2では専用試験issue `TAK-5` に範囲を限定して接続・更新・固定snapshot取込を受け入れた。
 L3では固定reviewer、Codex A、Cursor Bのread-only実Taskを起動して受け入れた。
 L3Eでは別worktreeのA/B限定編集、統括検証、同一固定reviewer、2レーン同時実行まで受け入れた。
+L4では利用者がterminal menuを操作する設計を撤回し、Orca Tasks → Linear → worktree作成を唯一の入口にする。
+新規worktreeは`統括`を可視tabで起動し、A/B/reviewerも配車時に別の日本語tabとして表示する。
 
 ### 正本と責務
 
@@ -37,8 +39,8 @@ L3Eでは別worktreeのA/B限定編集、統括検証、同一固定reviewer、2
 | 既存host制御台帳・固定ticket | 開始時の依頼snapshot、scope、source/index、provider/session、排他、承認対象 | Linear本文の後編集で実行中ticketや承認対象を変更しない |
 | Orca runtime | worktree/terminal、監督付き実行のRun/Task/Dispatch・receipt | UIの表示状態やLLMのexit 0だけでTaskを成功にしない |
 
-Linearは常設の受付・可視化先であり、統括LLMの常駐や自動配車を提供したことにはならない。
-統括は明示操作で起動し、A=Codex、B=単純task専用Cursor CLI、reviewer=固定Codex session 1つを維持する。
+LinearはOrca Tasks内の受付・可視化先である。課題からworktreeを作る明示操作で統括を一つ起動し、
+常時稼働serviceや無監督自動配車にはしない。A=Codex、B=単純task専用Cursor CLI、reviewer=固定Codex session 1つを維持する。
 共有checkoutと任意のbackground編集は禁止を維持する。primaryのルールは、別worktree・固定ticket・mount境界・
 最大2 worker・固定read-only reviewer・統括所有の検証/commit/直列統合を満たす専用Orca launcherだけを条件付き例外とする。
 L3Eの実受入は完了したため、明示ticketと専用launcherを通る監督付き編集だけを利用できる。
@@ -47,7 +49,7 @@ L3Eの実受入は完了したため、明示ticketと専用launcherを通る監
 
 ### 実装済み資産の採否
 
-codeの最新参照元は専用candidateの `5cb73cac`。primary未統合。
+codeの最新参照元は専用candidate `6453f8cd1ba417202db100e2a635bfd62e70b564`。primary未統合。
 以下の再利用は既存コードと検証済み境界の採用であり、Linear対応済みという意味ではない。
 
 | 資産（candidateの `scripts/`） | 方針 | 実績と追加作業 |
@@ -55,12 +57,13 @@ codeの最新参照元は専用candidateの `5cb73cac`。primary未統合。
 | `host_coordination.py` とbuild/validation driver | 再利用 | host重実行1枠・role/workspace排他・子へのlease継承。Linear状態をlockの代わりにしない |
 | `orca_roles.py` / `orca_providers.py` | 再利用 | A/Bのprovider固定、Bの単純task制限、mount/policy分離。read-only起動・再開とA/B限定編集、Cursor Bのtool denyを実受入済み |
 | `orca_role_state.py` / fingerprint / `verify-review` | 再利用 | 同一ticket/session、unknown停止、固定reviewer、変更後の承認失効。承認記録の整合性検査であって署名検証ではない |
-| `orca_coordinator.py` | 入力adapterを追加して再利用 | 明示起動・相談/追記・同UUID再開は実受入済み。既存のrequest ID/本文入力へ固定snapshotを渡し、実行処理は作り直さない |
-| `orca_frontdesk.py` | 内部snapshot保存を再利用し、candidateのUIをLinear優先へ変更 | `submit()`のUUID/本文拘束を使う。queuedは進捗ではなく内部受付状態として保持し、Linearとの常時双方向同期は作らない |
+| `orca_ui_coordinator.py` | 新規の可視統括入口 | linked issueを`--current`で取り込み、exact Orca terminalを登録してinteractive Codexを同じtabに起動。外側bubblewrapからOrca IPCへ接続し、初回確認や内部ID・ticket path・slot入力を利用者に要求しない |
+| `orca_coordinator.py` | 旧相談sessionの復旧互換に保持 | 明示起動・相談/追記・同UUID再開は実受入済み。通常の新規受付・配車UIには使わない |
+| `orca_frontdesk.py` | UIではなく内部snapshot保存を再利用 | `submit()`のUUID/本文拘束と安全な台帳関数を使う。menuは利用者向け入口から外す |
 | `orca_preflight.py` | 再利用 | 対象terminal限定のread-only通信診断。結果は常にdispatch許可と別扱い |
 | `orca_task_bridge.py` / `orca_cursor_bridge_hook.py` | 監督付き経路だけ段階採用 | JSON内容比較、exact identity、限定復旧、3 roleの実Task、A/B限定編集と並列実行まで完了。`orca_dispatch.py`から編集worker/reviewerへ接続済み |
-| `orca_dispatch.py` | host側の監督付き配車に採用 | immutable Linear受付と成功済み統括相談、固定ticketを照合し、Run→専用terminal→worker-start→bridge armを順序付ける。unknownを再送せず、A/B・固定reviewerの同じ入口を提供 |
-| `orca.yaml`、専用branch/worktree、既存tests | 再利用 | setup/待機、通常agent起動の迂回禁止、回帰fixtureを維持。既存会話・成果・review-active cacheを消さない |
+| `orca_dispatch.py` | host側の監督付き配車に採用 | immutable Linear受付とexact可視統括、固定ticketを照合し、Run→日本語role tab→worker-start→bridge armを順序付ける。旧成功済み相談は復旧互換として受理 |
+| `orca.yaml`、専用branch/worktree、既存tests | 再利用・更新 | setup後の既定`統括` tab、通常agent起動の迂回禁止、回帰fixtureを維持。既存会話・成果・review-active cacheを消さない |
 
 host側の薄いissue入力adapter `scripts/orca_issue_context.py` と対応testsをcandidateへ追加した。
 最小接続は `Linear snapshot → orca_frontdesk.submit(text, stable local UUID) → 既存統括相談`。
@@ -89,8 +92,8 @@ owner-only/atomic replace/fsyncの共通処理は互換保持する。Linearの�
   許可された採用処理の確認後に更新する。利用者が手動でDoneにしても内部承認を生成しない。
 - 外部更新の応答が不明なら、issue/commentを再読して照合する。自動再投稿・完了化をしない。
   Linear更新の失敗を理由にworkerを再実行せず、内部の実結果と「Linear反映待ち」を区別して報告する。
-- 手入力menuは開発中のfallbackであり、移行台帳を必要とする本番受付ではない。Linearを唯一の運用入口にし、
-  fallbackは異常時の診断・復旧用として明示表示する。会話全文・認証・全ローカル履歴はuploadしない。
+- 手入力menuを利用者向けfallbackとして提示しない。Linearを唯一の運用入口にし、接続障害時は修復してから再開する。
+  既存台帳と旧相談は内部復旧用に保持し、会話全文・認証・全ローカル履歴はuploadしない。
 
 ### L0: 再計画と実装資産の棚卸し
 
@@ -112,7 +115,7 @@ owner-only/atomic replace/fsyncの共通処理は互換保持する。Linearの�
   権限不足・別team・通信失敗と、In Progress自動同期が無効であることは接続後に確認する。
 - 完了条件: 認証値を露出せず、許可されたissueだけを読み書きできる。これは「課題管理接続」の受入であり自動開発の受入ではない。
 
-### L2: Linear入力から既存統括・ticketへ接続する
+### L2: Linear入力から統括・ticketへ接続する
 
 - 対象: issue入力adapter、`orca_coordinator.py` / `orca_frontdesk.py`の入力境界と対応tests。
 - [x] snapshot・外部ID対応をcandidateへ追加し、既存のcoordinator slot、turn UUID重複排除、session照合・unknown停止を維持する。
@@ -121,6 +124,8 @@ owner-only/atomic replace/fsyncの共通処理は互換保持する。Linearの�
 - [x] 同じissue/snapshotの二重選択、本文変更、別workspace、不完全context、保存失敗の拒否・復旧試験を追加する。
   古いreview対象の受入は実相談・実review一巡で確認する。
 - [x] 開発途中の手入力menuを移行対象にしないと確定し、不要な移行guard・台帳・運用手順を撤去する。
+- [x] `--current`でlinked issueを取り込み、workspace UUID入力なしで可視統括をOrca tabに起動する。
+- [x] exact統括terminalを登録し、dispatcherがA/B/reviewerを日本語名の別tabとして作る。
 - 完了条件: Linearを人向け受付として使い、既存統括の相談・再開が失われない。更新は統括の明示操作で、worker自動投入はまだ無効。
 
 ### L3: 既存Task bridgeを修正し、read-onlyの一巡を受け入れる
@@ -164,9 +169,12 @@ owner-only/atomic replace/fsyncの共通処理は互換保持する。Linearの�
 
 ### L4: 運用入口の確定と引継ぎ
 
-- [ ] L2/L3の証拠を確認し、Orca UIの入口をLinearと明示起動の統括へ統一する。
-- [ ] Linearを通常運用の唯一の入口としてUIへ明示し、手入力menuは診断・復旧fallbackに限定する。
+- [x] L2/L3の実装を再利用し、Orca UIの入口をTasks/Linearと自動表示される統括tabへ統一する。
+- [x] Linearを通常運用の唯一の入口として明示し、手入力menuを利用者の受付・配車手順から削除する。
   再利用する保存/lock/復旧処理は残し、既存の未確定attemptを捨てない。
+- [x] 基盤worktreeの`統括` tabを初回確認なしで起動し、exact terminal登録、runtime ready/connected、
+  linked issue `TAK-5`の現在課題取得を実runtimeで確認する。
+- [ ] Orca Tasksから試験issueの新規worktreeを作り、統括・A・B・レビューを画面上で順に確認する。
 - [x] 運用ガイドを実操作で確認し、「課題管理」「統括相談」「read-only監督」「並列編集」の受入状態を別々に表示する。
 - [ ] 同目的branchの採用、ローカルcommit/基点変更はその時点の許可を確認する。push/PR/primaryのゲーム変更は含めない。
 - [ ] storageの残るconsumerを確認し、成果・会話・review-active cacheを保持したまま不要な試験出力だけ整理する。
@@ -815,8 +823,9 @@ Rust/Bevyのbuild・workspace test・Clippy、Blender test、ゲームwindow/GPU
 - 現行計画はL0完了。L2のsnapshot adapterとL3のP2/復旧/IPC修正はcandidate実装済みで、
   固定reviewer・Codex A・Cursor Bのread-only実Task一巡、Linear `TAK-5` のL1正常系、
   L2の実issue相談・同一session追記、L3EのA/B限定編集と2レーン並列実行を受入済み。
-  開発途中の手入力menuを移行対象にしないと確定し、不要な移行guardを撤去した。権限/通信異常系、
-  controllerを使う実編集→検証→固定reviewer一巡、L4入口確定は未受入。
+  開発途中の手入力menuを利用者向け入口から外し、Tasks/Linear-linked worktreeの可視統括と
+  日本語A/B/reviewer tabをcandidateへ実装した。権限/通信異常系と、UIからcontrollerを使う
+  実編集→検証→固定reviewer一巡は未受入。
 - `a7c1bbb`で確認したP2（escalation JSON正規化で送信済みreceiptをunknown化）は、candidateで
   payloadの厳密なJSON内容比較へ修正した。ID/capability/他fieldの照合は維持している。
 - M0/M1調査済み、M2/M3候補実装と拒否test済み、M4の3 role Task lifecycleとM5の限定編集並列試行を受入済み。
@@ -826,7 +835,8 @@ Rust/Bevyのbuild・workspace test・Clippy、Blender test、ゲームwindow/GPU
 - Orcaをprimaryへ登録し起動中。user-local CLIは`orca-ide`、desktop名は`Orca IDE`。
 - candidateのdriverはprimary未統合。監督付きOrcaだけを許す限定ルールはprimaryへ採用し、
   global agent既定権限は変更していない。実編集は専用launcher経由だけを許可する。
-- 最新基盤は`5cb73cac`。受付の実Codex相談/同会話再開を確認済み。
+- 最新基盤は`6453f8cd`。受付の旧実Codex相談/同会話再開に加え、可視統括の初回確認なしの実起動、
+  TAK-5自動取込・acknowledge、同じ統括からのruntime ready/connectedと現在課題再取得を確認済み。
   worker同task継続・固定reviewer拘束も実装済み。A/B・固定reviewerはread-only実TUIで各2turn受入済み。
   制限通信preflight、Codex用単一Dispatch bridge、Cursor hook bridge、Linear snapshot取込の模擬検証も追加済み。
   3 roleの実Task bridge接続、A/B実編集、Cursor Bのtool deny、固定reviewerによる編集review、2レーン並列実行を受入済み。
@@ -836,8 +846,9 @@ Rust/Bevyのbuild・workspace test・Clippy、Blender test、ゲームwindow/GPU
 
 1. 冒頭のcandidateとprimaryのdirty差分を区別し、下記の成功gateとsource fingerprintを確認する。既存成果を消さない。
 2. CLI/runtime版、現行docs、storage状態を読む。採用前は旧driver/解析backendとの並行実行を調整する。
-3. Linear `TAK-5` のL1正常系とL2相談継続は完了済み。権限不足・別team・通信失敗・後編集を確認する。
-   通常入口はLinearだけとし、手入力menuは診断・復旧fallbackに限定する。既存会話や台帳を改名せず、会話全文をuploadしない。
+3. Linear `TAK-5` のL1正常系と旧L2相談継続は完了済み。次はOrca Tasksからlinked worktreeを作り、
+   `統括`、A、B、固定reviewerの可視tabを一巡する。手入力menuを利用者向けfallbackに戻さない。
+   既存会話や台帳を改名せず、会話全文をuploadしない。
 4. 3 roleのread-only lifecycleとL3E限定編集は受入済み。host限定認証・exact Task/Dispatch/terminal・旧bridge失効を維持し、
    Linear反映を含む受付からの一巡を確認してL4へ進む。CursorのShell/MCP/WebFetch denyを解除せず、
    共有file/APIを含む並列化や通常agent起動へ許可を拡大しない。
@@ -1076,3 +1087,5 @@ Rust/Bevyのbuild・workspace test・Clippy、Blender test、ゲームwindow/GPU
 | 2026-09-21 | Codex | L3EのA/B直列編集、固定reviewer、統括検証/commitと、別worktreeのA/B同時編集を受入。candidate `55b27f6e`、A `f66a9a55`、B `3711ae70`をcleanに確定 |
 | 2026-09-21 | Codex | 開発途中の手入力menuを移行対象と誤認した変更を撤去し、Linear入口から編集Task bridge・固定reviewerまでの実装へ戻した |
 | 2026-09-21 | Codex | 編集workerのTask bridgeを有効化し、Linear受付・成功済み統括相談・固定ticketからA/Bまたは固定reviewerへguard付き配車するhost controllerとmenu入口をcandidate `5cb73cac`へ実装 |
+| 2026-09-22 | Codex | UUID・ticket path・slot入力を利用者経路から撤去。Orca Tasksを受付とし、linked worktreeの可視統括、exact terminal拘束、日本語A/B/reviewer tabをcandidate `767ca7f6`へ実装・commit。実runtimeでTAK-5取込とacknowledgeを確認 |
+| 2026-09-22 | Codex | 可視統括を外側bubblewrapへ一本化し、初回trust入力を専用設定で撤去。candidate `6453f8cd`を最新基点とし、統括自身からOrca runtime ready/connectedと現在課題`TAK-5`の取得を確認 |
