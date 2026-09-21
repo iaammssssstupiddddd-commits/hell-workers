@@ -993,7 +993,11 @@ Rust/Bevyのbuild・workspace test・Clippy、Blender test、ゲームwindow/GPU
   `git diff --check`がpassした。変更別gateはcontracts/toolingを選択し、Python 365件、Blender tooling 151件、
   Ruff/actionlint/docs/hygiene/help/perf self-testがpass。source fingerprintは
   `c4ba881001b7df3acbb0d388ce69ad36dd394dfc5f7956131b5bb8d49d65ee1f`。
-  ユーザー指定によりRust/Bevyゲームtest、native/GPU/performance受入は選択していない。
+  candidateではユーザー指定によりRust/Bevyゲームtest、native/GPU/performance受入を選択していない。
+- primary文書commit `575a0db4d3e2d66401fa46d0271f36a2c38072c9` の変更範囲gateはcontrol文書を理由に
+  contracts/tooling/deps/rustを自動選択し、全群passした。source fingerprintは
+  `754c572178acbca3bf03b317c25f6ff9aa64edbe99f085fed66695358f9435ed`。これは文書commitの自動gateであり、
+  ゲーム実装変更やnative/window/GPU受入を追加したものではない。
 
 ### 初回導入時の確認ログ（移行後gateとは別）
 

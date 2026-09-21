@@ -28,8 +28,9 @@ Codex内側sandboxとOrca IPCの競合回避、Cursor hook bridgeを実装した
 今後は[現行計画L0〜L4](plans/orca-parallel-development-plan-2026-09-20.md)に従い、
 Linearを受付・進捗の正本にし、既存launcher・資源制御・固定reviewer・統括の会話再開を再利用する。
 残る異常系、受付からレビューまでの自動一巡、旧受付切替を順に受け入れる。
-今回の運用基盤整備ではユーザー指定によりゲーム実装テストを実行せず、関連tooling・連携・文書/storageに限定する。
-この限定は下記の通常ゲーム開発の品質規則を変更しない。詳細な対象・未実施群は計画§7で管理する。
+candidateの運用基盤受入はユーザー指定によりゲーム実装テストを実行せず、関連tooling・連携・文書/storageに限定した。
+primary文書commit後の変更範囲gateはcontrol文書を理由にdeps/rustも自動選択してpassしたが、ゲームnative受入ではない。
+この扱いは下記の通常ゲーム開発の品質規則を変更しない。詳細な対象・未実施群は計画§7で管理する。
 共有checkoutと任意のbackground編集は禁止を維持する。primaryのルールは、別worktree・固定ticket・mount境界・
 最大2 worker・固定read-only reviewer・統括所有の検証/commit/直列統合を満たす専用launcherだけを条件付き例外とする。
 編集を伴う実装→検証→reviewは専用launcherの限定経路で受入済み。通常のOrca agent起動、共有checkout、

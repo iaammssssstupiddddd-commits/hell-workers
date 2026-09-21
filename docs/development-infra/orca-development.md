@@ -34,9 +34,10 @@ Linearのworkspace/team読取りに加え、専用試験issue `TAK-5` の作成�
   A=Codex/B=軽量Cursor/固定reviewerの構成を維持する。共有checkout/background編集は禁止し、
   primaryルールが許す専用launcherの限定例外だけを使う。通常のOrca agent起動へ許可を拡大しない。
 
-今回の環境整備はゲーム実装テストを対象外とする。関連Python/連携/文書・storageの検査に限定し、
-Rust/Bevyのbuild・Clippy・workspace test、Blender実行、ゲームnative/GPU/performanceを実行しない。
-変更範囲gateが選んだBlender用Python tooling testは実行対象に含む。
+candidateの環境整備受入はゲーム実装テストを対象外とし、関連Python/連携/文書・storageの検査に限定した。
+Rust/Bevyのbuild・Clippy・workspace test、Blender実行、ゲームnative/GPU/performanceはcandidateでは実行していない。
+変更範囲gateが選んだBlender用Python tooling testは実行対象に含む。primary文書commit後のgateはcontrol文書を理由に
+deps/rustも自動選択してpassしたが、native/window/GPU受入は行っていない。
 通常のゲーム変更の検証規則を緩和するものではない。過去の全群結果は当時の証拠として下記に保持する。
 
 標準機能の根拠は[Orca Linear仕様](https://www.onorca.dev/docs/review/linear)。
