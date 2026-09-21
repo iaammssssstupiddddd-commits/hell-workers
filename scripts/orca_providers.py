@@ -5,6 +5,7 @@ from __future__ import annotations
 import shutil
 import json
 import os
+import re
 import shlex
 import stat
 import sys
@@ -28,10 +29,12 @@ def codex_project_mcp_overrides(repo: Path) -> list[str]:
     except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as error:
         raise RuntimeError(f"cannot safely inspect project Codex configuration: {error}") from error
     servers = data.get("mcp_servers", {})
-    if not isinstance(servers, dict) or not all(isinstance(name, str) for name in servers):
-        raise RuntimeError("project Codex MCP configuration must be a table")
+    if (not isinstance(servers, dict)
+            or not all(isinstance(name, str) and re.fullmatch(r"[A-Za-z0-9_-]+", name)
+                       for name in servers)):
+        raise RuntimeError("project Codex MCP configuration must use bare TOML server keys")
     return [item for name in sorted(servers)
-            for item in ("--config", f"mcp_servers.{json.dumps(name)}.enabled=false")]
+            for item in ("--config", f"mcp_servers.{name}.enabled=false")]
 
 
 def provider_for(ticket: dict, slot: str) -> str:

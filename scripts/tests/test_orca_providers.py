@@ -122,8 +122,8 @@ command = "docsrs-mcp"
         overrides = [command[index + 1] for index, value in enumerate(command[:-1])
                      if value == "--config"]
         self.assertEqual(overrides, [
-            'mcp_servers."docsrs".enabled=false',
-            'mcp_servers."rust-analyzer-mcp".enabled=false',
+            "mcp_servers.docsrs.enabled=false",
+            "mcp_servers.rust-analyzer-mcp.enabled=false",
         ])
 
     def test_cursor_permissions_limit_writes_and_disable_shell_mcp(self) -> None:
