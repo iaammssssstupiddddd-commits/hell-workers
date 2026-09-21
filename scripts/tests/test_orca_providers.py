@@ -122,7 +122,9 @@ command = "docsrs-mcp"
         overrides = [command[index + 1] for index, value in enumerate(command[:-1])
                      if value == "--config"]
         self.assertEqual(overrides, [
+            'mcp_servers.docsrs.command="false"',
             "mcp_servers.docsrs.enabled=false",
+            'mcp_servers.rust-analyzer-mcp.command="false"',
             "mcp_servers.rust-analyzer-mcp.enabled=false",
         ])
 

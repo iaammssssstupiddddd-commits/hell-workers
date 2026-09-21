@@ -33,8 +33,12 @@ def codex_project_mcp_overrides(repo: Path) -> list[str]:
             or not all(isinstance(name, str) and re.fullmatch(r"[A-Za-z0-9_-]+", name)
                        for name in servers)):
         raise RuntimeError("project Codex MCP configuration must use bare TOML server keys")
+    # A fresh, not-yet-trusted Codex session validates CLI overrides before it
+    # merges repository configuration. Supply a harmless transport as well as
+    # enabled=false so the temporary table is valid at every merge stage.
     return [item for name in sorted(servers)
-            for item in ("--config", f"mcp_servers.{name}.enabled=false")]
+            for item in ("--config", f'mcp_servers.{name}.command="false"',
+                         "--config", f"mcp_servers.{name}.enabled=false")]
 
 
 def provider_for(ticket: dict, slot: str) -> str:

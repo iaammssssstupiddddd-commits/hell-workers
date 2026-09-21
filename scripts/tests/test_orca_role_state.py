@@ -209,7 +209,7 @@ class RoleContinuationTests(unittest.TestCase):
         self.assertEqual(self.launch(), 0)
         self.assertIn(failed["last"]["key"], state.read_state("worker-a", "codex")["abandoned"])
 
-    def test_abandon_refuses_unknown_exit_success_history_or_editing(self):
+    def test_abandon_refuses_unknown_exit_success_history_or_reviewer(self):
         failed = self.failed_read_only_start()
         attempt = failed["last"]["attempt_id"]
         source = roles.fingerprint(self.repo)
@@ -226,9 +226,7 @@ class RoleContinuationTests(unittest.TestCase):
             with self.subTest(change=change), self.assertRaisesRegex(ValueError, "positive process-exit"):
                 roles.abandon_start(self.load(), "worker-a", attempt, source, "Inspected")
         state.save_state(failed)
-        with self.assertRaisesRegex(ValueError, "read-only worker"):
-            roles.abandon_start({**self.load(), "read_only": False}, "worker-a", attempt, source, "Inspected")
-        with self.assertRaisesRegex(ValueError, "read-only worker"):
+        with self.assertRaisesRegex(ValueError, "fixed reviewer"):
             roles.abandon_start(self.load(), "reviewer", attempt, source, "Inspected")
         runtime = roles.prepare_runtime("worker-a/tasks/" + failed["last"]["key"])
         path = runtime / "codex/sessions/unbound.jsonl"
@@ -238,6 +236,19 @@ class RoleContinuationTests(unittest.TestCase):
             roles.abandon_start(self.load(), "worker-a", attempt, source, "Inspected")
         with self.assertRaisesRegex(ValueError, "unknown"):
             self.launch()
+
+    def test_abandon_preserves_failed_source_unchanged_edit_start(self):
+        self.options.update(history=False, code=1)
+        with self.assertRaisesRegex(ValueError, "exactly one"):
+            self.launch()
+        failed = state.read_state("worker-a", "codex", allow_pending=True)
+        source = roles.fingerprint(self.repo)
+        roles.abandon_start(self.load(), "worker-a", failed["last"]["attempt_id"], source,
+                            "Fresh Codex configuration failed before editing")
+        data = state.read_state("worker-a", "codex")
+        self.assertEqual(data["last"]["phase"], "abandoned")
+        self.assertEqual(data["last"]["observed_source_sha256"], source)
+        self.assertFalse(data["tasks"])
 
     def test_abandon_save_failure_never_starts_agent(self):
         failed = self.failed_read_only_start()

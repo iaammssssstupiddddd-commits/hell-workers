@@ -426,9 +426,9 @@ def launch(ticket: dict, slot: str, *, dry_run: bool, resume_session: str | None
 
 
 def abandon_start(ticket: dict, slot: str, attempt_id: str, observed_source: str, reason: str) -> None:
-    """Explicitly close a failed read-only first start; never retry or erase it."""
-    if slot == "reviewer" or ticket.get("read_only") is not True:
-        raise ValueError("only a read-only worker's empty first start can be abandoned")
+    """Explicitly close a failed, source-unchanged worker start; never erase it."""
+    if slot == "reviewer":
+        raise ValueError("a fixed reviewer start cannot be abandoned")
     bindings.identity(attempt_id)
     if not isinstance(reason, str) or not reason.strip() or len(reason) > 2000:
         raise ValueError("abandonment requires a bounded reconciliation reason")
@@ -631,7 +631,7 @@ def main() -> int:
             if args.dry_run:
                 raise ValueError("abandon-start does not support --dry-run; no state changed")
             abandon_start(ticket, args.slot, args.attempt_id, args.observed_source, args.reason)
-            print("Failed read-only start preserved as abandoned; no agent started and no task approved.")
+            print("Failed source-unchanged start preserved as abandoned; no task result accepted or approved.")
             return 0
         if args.action == "reconcile-bridge":
             if args.dry_run or args.bridge_orca or args.bridge_metadata is None:
