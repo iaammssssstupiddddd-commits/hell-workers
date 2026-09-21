@@ -5,7 +5,7 @@ Hell Workersで「統括1名・実装最大2名・専任レビュー1名」を�
 
 > Linearの専用試験issueから統括へ相談し、同じ会話へ追記できるところまで受入済みです。現段階は読み取り専用の相談・タスク分割です。
 > Codex固定reviewer、Codex A、Cursor Bのread-only Task lifecycleは一巡済みです。編集担当・検証を含む自動運用は未完です。
-> 最新の編集委譲禁止ルールに従い、現在の実agent受入もread-onlyに限定しています。
+> primaryルールは監督付きOrca launcherだけを編集委譲の例外にしましたが、実編集の受入完了までは実agentをread-onlyに限定します。
 > 通常の「Codexを起動」操作では担当範囲の制限が入りません。実装担当とレビュー担当は必ず専用launcherから起動します。
 
 ## Linearへの段階移行と現在地

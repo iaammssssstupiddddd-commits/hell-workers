@@ -5,7 +5,7 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `orca-parallel-development-plan-2026-09-20` |
-| ステータス | In Progress — Linear `TAK-5` のL1正常系・L2相談継続、固定reviewer/Codex A/Cursor Bのread-only実Taskを受入。異常系・受付からの一巡・編集運用は未受入 |
+| ステータス | In Progress — Linear `TAK-5` のL1正常系・L2相談継続、固定reviewer/Codex A/Cursor Bのread-only実Taskを受入。監督付き編集の限定ルールをprimaryへ採用し、実編集受入は未実施 |
 | 作成日 / 最終更新日 | 2026-09-20 / 2026-09-21 |
 | 作成者 | Codex |
 | 関連提案 | [並列実装と専任レビューの運用素案](../proposals/orca-parallel-development-proposal-2026-09-20.md) |
@@ -38,8 +38,9 @@ L3では固定reviewer、Codex A、Cursor Bのread-only実Taskを起動して受
 
 Linearは常設の受付・可視化先であり、統括LLMの常駐や自動配車を提供したことにはならない。
 統括は明示操作で起動し、A=Codex、B=単純task専用Cursor CLI、reviewer=固定Codex session 1つを維持する。
-現行ユーザールールの編集委譲禁止は変更しない。L3の実agent受入はread-onlyに限定し、
-編集委譲の再許可と担当内編集の受入は本計画だけで成立させない。
+共有checkoutと任意のbackground編集は禁止を維持する。primaryのルールは、別worktree・固定ticket・mount境界・
+最大2 worker・固定read-only reviewer・統括所有の検証/commit/直列統合を満たす専用Orca launcherだけを条件付き例外とする。
+L3の実agent受入はread-onlyで完了したが、編集委譲は下記L3Eの実受入が成功するまで本番利用しない。
 
 ### 実装済み資産の採否
 
@@ -136,6 +137,24 @@ owner-only/atomic replace/fsyncの共通処理は互換保持する。Linearの�
   A/Bは開発ツールの既存仕様確認など非ゲーム課題を使う。コード編集が必要な修正はmainが行う。
 - [ ] 実行中の課題編集、Linear通信断、Orca再起動/古いhandle、終了不明、旧Dispatchの通知で重複起動・誤承認しない。
 - 完了条件: 固定reviewerと既存安全境界を通したread-only監督運用が成立する。並列編集の運用許可は別判定のまま残す。
+
+### L3E: 監督付き編集を段階受入する
+
+- 対象: 専用branchから作るcleanな別worktree、固定ticket、`orca_roles.py`の編集worker経路、
+  統括所有の検証・commit・直列統合、同一sessionの固定read-only reviewer。通常のOrca agent起動や共有checkoutは対象外。
+- [x] primaryの全面禁止を、上記専用経路だけを許す限定例外へ改訂する。worker自身のcommit、再委譲、
+  重いbuild/test、shared contract・save・renderer・infrastructure変更は禁止を維持する。
+- [ ] Codex Aで単一leafの非ゲームfixtureを1件編集し、許可scope外・Git metadata・primary・他worktreeが不変であることを確認する。
+- [ ] Cursor Bで既存patternに沿う単純な単一leaf変更を1件編集し、Shell/MCP/WebFetch deny、許可scopeだけのwrite、
+  provider固定、complexity/task_kind/acceptance検査、終了後source/index照合を確認する。
+- [ ] 統括が同じcandidateで必要なtooling検証を実行し、worker終了後に固定reviewerを同一sessionで起動する。
+  reviewerはbase/head・差分・scope・検証証拠を読み、sourceへ書き込まず承認/差戻しを返す。
+- [ ] 指摘修正が必要なら元workerを同じticket/session/worktreeで再開し、source/index/session不一致時は停止する。
+  approval後の変更が承認を失効させることを確認してから、統括だけがcommitする。
+- [ ] A/Bの独立leaf 2件を別worktreeで同時に開始し、実装slot最大2・reviewer最大1・重い実行最大1、
+  共有file/APIなし、レビューと統合は直列、という資源・所有権条件を受け入れる。
+- 完了条件: AとBの各編集一巡および独立2件の並列試行が、範囲外変更・自己承認・重い処理競合なしに完了する。
+  失敗時は成果を保全して新規投入を止め、全面禁止へ戻せる。
 
 ### L4: 入口の切替と引継ぎ
 
@@ -797,7 +816,8 @@ Rust/Bevyのbuild・workspace test・Clippy、Blender test、ゲームwindow/GPU
 - 編集workerは起動していない。初期基盤では専任read-onlyレビューの指摘5件を修正し、再レビューを受けた。
   後日にP2を発見した時点では未修正だった事実と、この文書レビューはそれぞれ別の結果として扱う。
 - Orcaをprimaryへ登録し起動中。user-local CLIは`orca-ide`、desktop名は`Orca IDE`。
-- 候補branchでルール・driverを変更したがprimary未統合。global agent既定権限は変更せず、許可はrole launcherだけ。
+- candidateのdriverはprimary未統合。監督付きOrcaだけを許す限定ルールはprimaryへ採用したが、
+  global agent既定権限は変更せず、実編集はL3Eの受入完了まで開始しない。
 - 最新基盤は`09642de4022577fd442c4c9971c64a4d1f649e26`。受付の実Codex相談/同会話再開を確認済み。
   worker同task継続・固定reviewer拘束も実装済み。A/B・固定reviewerはread-only実TUIで各2turn受入済み。
   制限通信preflight、Codex用単一Dispatch bridge、Cursor hook bridge、Linear snapshot取込の模擬検証も追加済み。
@@ -1008,3 +1028,4 @@ Rust/Bevyのbuild・workspace test・Clippy、Blender test、ゲームwindow/GPU
 | 2026-09-21 | Codex | Codex Aの空本文receipt差を修正し、曖昧heartbeatをfenced復旧。heartbeat・質問resume・回答・escalation・source確認・worker_done・role終了のread-only lifecycleを実Taskで受入 |
 | 2026-09-21 | Codex | Cursor Bをprivate hook bridgeへ接続し、同時hook直列化・generation拘束・一回限りの結果整形retryを実装。Shell/MCP/WebFetch denyとsource不変を維持してread-only lifecycleを実Taskで受入 |
 | 2026-09-21 | Codex | 変更範囲gateでCursor hookのGit実行属性不足を検出・修正。clean HEADでcontracts/tooling全群を再実行し、Python 361件・Blender tooling 151件を含めてpass |
+| 2026-09-21 | Codex | primaryの全面的な編集委譲禁止を、別worktree・固定ticket・mount境界・固定reviewer・統括所有の検証/commitを満たす監督付きOrcaだけの限定例外へ改訂。L3Eの実編集受入完了まではread-only運用を維持 |

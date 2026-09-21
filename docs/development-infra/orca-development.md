@@ -30,7 +30,8 @@ Linearのworkspace/team読取りに加え、専用試験issue `TAK-5` の作成�
   外部反映に失敗してもworkerを再実行せず、実結果とLinear反映待ちを分けて扱う。
 - 自動Task連携は別段階。Codex bridgeの固定reviewerとCodex A、Cursor hook bridgeのCursor Bについて
   read-only一巡はcandidateで完了したが、受付からの自動接続と編集運用の受入を必要とする。
-  A=Codex/B=軽量Cursor/固定reviewerの構成と、現行の編集委譲禁止は変えない。
+  A=Codex/B=軽量Cursor/固定reviewerの構成を維持する。共有checkout/background編集は禁止し、
+  primaryルールが許す専用launcherの限定例外も実編集一巡の受入完了までは本番利用しない。
 
 今回の環境整備はゲーム実装テストを対象外とする。関連Python/連携/文書・storageの検査に限定し、
 Rust/Bevyのbuild・Clippy・workspace test、Blender、ゲームnative/GPU/performanceを実行しない。
