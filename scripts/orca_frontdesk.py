@@ -1,8 +1,9 @@
 """Durable local Orca intake. No agent is started by opening the front desk.
 
 The request file records intake, not an alternative to Orca Task/Dispatch state.
-Requests stay queued until the orchestration bridge passes acceptance. An explicit
-consultation starts a read-only coordinator, never an implementation worker.
+Requests stay queued until an operator starts the guarded orchestration bridge.
+An explicit consultation starts a read-only coordinator; supervised editing is a
+separate confirmed action using a fixed ticket and worker slot.
 """
 
 from __future__ import annotations
@@ -149,6 +150,14 @@ def linear_module():
     return orca_issue_context
 
 
+def dispatch_module():
+    try:
+        import orca_dispatch
+    except ModuleNotFoundError:
+        from scripts import orca_dispatch
+    return orca_dispatch
+
+
 def multiline() -> str:
     print("単独の . で確定、空なら取消。", flush=True)
     lines = []
@@ -199,9 +208,24 @@ def menu_action(choice: str) -> None:
             print(f"手入力受付済み（未dispatch）: {item['id']}", flush=True)
     elif choice == "2":
         print(json.dumps(list_requests(), ensure_ascii=False, indent=2), flush=True)
-    elif choice in {"3", "4", "5", "6"}:
+    elif choice in {"3", "4", "5", "6", "8"}:
         request_id = select_request()
         if not request_id:
+            return
+        if choice == "8":
+            ticket = input("固定ticketの絶対path（空で取消）: ").strip()
+            if not ticket:
+                return
+            slot = input("担当（worker-a / worker-b / reviewer、空で取消）: ").strip()
+            if not slot:
+                return
+            if input("監督付きTaskを開始します。開始する場合 yes: ").strip() != "yes":
+                return
+            handle = os.environ.get("ORCA_TERMINAL_HANDLE")
+            if not handle:
+                raise RuntimeError("Orca管理terminalから実行してください")
+            result = dispatch_module().start(request_id, Path(ticket).resolve(), slot, handle)
+            print(json.dumps(result, ensure_ascii=False, indent=2), flush=True)
             return
         coordinator = coordinator_module()
         if choice == "5":
@@ -225,10 +249,10 @@ def menu_action(choice: str) -> None:
 def menu() -> None:
     with acquire_host("frontdesk-ui", inherit=False):
         print("Hell Workers | 開発受付・統括相談", flush=True)
-        print("統括は選択時だけ起動。相談/分割はread-only、実装の自動投入は未対応です。", flush=True)
+        print("統括は選択時だけ起動。相談後、固定ticketから監督付き編集Taskを開始できます。", flush=True)
         while True:
             print("\n1: Linear課題を受付  2: 一覧  3: 統括へ相談  4: 追記  5: 状態/回答  "
-                  "6: 異常終了後の照合  7: 手入力fallback  q: 閉じる", flush=True)
+                  "6: 異常終了後の照合  7: 手入力fallback  8: 実装/レビューTask開始  q: 閉じる", flush=True)
             try:
                 choice = input("> ").strip()
                 if choice == "q":

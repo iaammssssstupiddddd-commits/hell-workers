@@ -2,7 +2,8 @@
 
 Workers edit existing, explicitly assigned directories; Git and authoritative
 docs stay read-only. The coordinator builds, reviews evidence and commits.
-No model/effort choice, publishing, agent nesting or automatic task dispatch.
+No model/effort choice, publishing or agent nesting. Task dispatch is accepted
+only through the host-owned guarded controller and private bridge.
 """
 
 from __future__ import annotations

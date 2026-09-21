@@ -104,6 +104,18 @@ class FrontdeskTests(unittest.TestCase):
             desk.menu_action("1")
         module.import_issue.assert_called_once_with("HW-42", "eeac8301-ddb2-4c31-8a6c-e2a7f2fc7efb")
 
+    def test_dispatch_menu_requires_confirmation_and_uses_current_terminal(self) -> None:
+        item = desk.submit("task")
+        module = unittest.mock.Mock()
+        module.start.return_value = {"phase": "armed"}
+        ticket = self.root / "ticket.json"
+        inputs = [item["id"], str(ticket), "worker-b", "yes"]
+        with patch("builtins.input", side_effect=inputs), patch.object(
+            desk, "dispatch_module", return_value=module
+        ), patch.dict(os.environ, {"ORCA_TERMINAL_HANDLE": "term_fixture"}), patch("builtins.print"):
+            desk.menu_action("8")
+        module.start.assert_called_once_with(item["id"], ticket, "worker-b", "term_fixture")
+
     def test_invalid_content_timestamp_and_dispatch_identity_preserved(self) -> None:
         first = desk.submit("task")
         for change in ({"request": " "}, {"request": 1}, {"created_at": "invalid"},
