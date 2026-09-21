@@ -14,6 +14,7 @@ from pathlib import Path
 
 PROVIDERS = {"worker-a": "codex", "worker-b": "cursor", "reviewer": "codex"}
 SIMPLE_KINDS = {"local-fix", "mechanical-change", "test-addition"}
+CURSOR_EDIT_ACCEPTANCE_SCOPE = "scripts/tests/fixtures/orca_edit_acceptance/worker-b"
 
 
 def provider_for(ticket: dict, slot: str) -> str:
@@ -21,20 +22,26 @@ def provider_for(ticket: dict, slot: str) -> str:
     if ticket.get("provider", provider) != provider:
         raise ValueError(f"{slot} requires provider {provider}")
     if slot == "worker-b":
-        kinds = SIMPLE_KINDS | ({"acceptance-probe"} if ticket.get("read_only") is True else set())
+        read_only = ticket.get("read_only") is True
+        kinds = SIMPLE_KINDS | {"acceptance-edit"} | ({"acceptance-probe"} if read_only else set())
         if ticket.get("complexity") != "simple" or ticket.get("task_kind") not in kinds:
             raise ValueError("Cursor worker-b requires a simple, classified leaf task; route complex work to A")
         for key in ("complexity_reason", "acceptance"):
             if not isinstance(ticket.get(key), str) or not ticket[key].strip():
                 raise ValueError(f"Cursor worker-b requires {key}")
-        # Infrastructure, shared contracts, save and renderer work stay coordinator/A-owned.
-        for scope in ticket.get("allowed_directories", []):
-            parts = Path(scope).parts
-            if (len(parts) < 4 or parts[:1] != ("crates",) or parts[2] != "src"
-                    or parts[1] in {"hw_core", "hw_jobs", "hw_world", "hw_visual", "visual_test"}
-                    or any(word in part.lower() for part in parts
-                           for word in ("save", "load", "render", "asset", "startup", "plugin"))):
-                raise ValueError(f"Cursor worker-b needs a narrow non-shared leaf scope: {scope}")
+        scopes = ticket.get("allowed_directories", [])
+        if ticket.get("task_kind") == "acceptance-edit":
+            if read_only or scopes != [CURSOR_EDIT_ACCEPTANCE_SCOPE]:
+                raise ValueError("Cursor edit acceptance is restricted to its dedicated fixture")
+        else:
+            # Infrastructure, shared contracts, save and renderer work stay coordinator/A-owned.
+            for scope in scopes:
+                parts = Path(scope).parts
+                if (len(parts) < 4 or parts[:1] != ("crates",) or parts[2] != "src"
+                        or parts[1] in {"hw_core", "hw_jobs", "hw_world", "hw_visual", "visual_test"}
+                        or any(word in part.lower() for part in parts
+                               for word in ("save", "load", "render", "asset", "startup", "plugin"))):
+                    raise ValueError(f"Cursor worker-b needs a narrow non-shared leaf scope: {scope}")
     return provider
 
 

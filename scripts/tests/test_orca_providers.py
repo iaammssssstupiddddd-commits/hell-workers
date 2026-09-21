@@ -43,6 +43,23 @@ class ProviderTests(unittest.TestCase):
             with self.subTest(value=value), self.assertRaises(ValueError):
                 providers.provider_for({**ticket, "read_only": value}, "worker-b")
 
+    def test_b_edit_acceptance_is_restricted_to_dedicated_fixture(self) -> None:
+        root = Path(__file__).resolve().parents[2]
+        for slot in ("worker-a", "worker-b"):
+            fixture = root / f"scripts/tests/fixtures/orca_edit_acceptance/{slot}/result.fixture"
+            self.assertTrue(fixture.read_text().startswith("READY:"))
+        ticket = {**self.simple(), "task_kind": "acceptance-edit",
+                  "allowed_directories": [providers.CURSOR_EDIT_ACCEPTANCE_SCOPE]}
+        self.assertEqual(providers.provider_for(ticket, "worker-b"), "cursor")
+        for change in (
+            {"read_only": True},
+            {"allowed_directories": ["scripts/tests/fixtures/orca_edit_acceptance/worker-a"]},
+            {"allowed_directories": [providers.CURSOR_EDIT_ACCEPTANCE_SCOPE,
+                                     "crates/hw_ui/src/interaction/help"]},
+        ):
+            with self.subTest(change=change), self.assertRaisesRegex(ValueError, "dedicated fixture"):
+                providers.provider_for({**ticket, **change}, "worker-b")
+
     @patch("scripts.orca_providers.shutil.which", side_effect=lambda name: f"/bin/{name}")
     def test_commands_never_fall_back_to_another_provider(self, _) -> None:
         cursor = providers.command_for("cursor", Path("/repo"), "worker", "task")
