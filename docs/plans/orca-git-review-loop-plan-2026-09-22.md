@@ -703,8 +703,6 @@ issue:  integrated → combined_validation → final_review → awaiting_ci → 
     新規の恒久worktree/jobや実Orca Run/Task、PRは作成しない。別作業のmissing resourceは変更しない。
 - 未解決エラー: `実UI/provider受入、統合の競合/検証失敗/base更新修正、公開/配備は未完。Linearの全automation設定・別targetのrule・native review eventは未確認。既存storage台帳の使用中登録3件で実pathが存在しない。消失原因・現consumerの要否は未確認であり、本作業では削除・復元・台帳解放を行わない。`
 
-### Definition of Done
-
 ### 保存領域欠損を使う実runtime試運転（2026-09-22）
 
 - ユーザーが統括→実装→固定reviewの実運用試験として指示。専用TAK-8と
