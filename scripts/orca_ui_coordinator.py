@@ -201,6 +201,7 @@ def acknowledge(request_id: str) -> dict:
         if data["phase"] != "starting":
             raise UiCoordinatorError("統括タブは開始待ち状態ではありません")
         linear_record(request_id)
+        pin_coordinator_title(terminal)
         data["phase"] = "ready"
         data["acknowledged_at"] = data["acknowledged_at"] or now()
         save_state(data)
@@ -417,11 +418,28 @@ def validated_terminal(value: object, worktree_id: str) -> dict:
         not isinstance(handle, str)
         or not TERMINAL.fullmatch(handle)
         or terminal.get("worktreeId") != worktree_id
-        or terminal.get("title") != "統括"
         or terminal.get("orphaned") is True
     ):
         raise UiCoordinatorError("引継ぎ先の統括タブ応答が不正です")
     return {"handle": handle}
+
+
+def registered_coordinator_handles(worktree_id: str) -> set[str]:
+    handles: set[str] = set()
+    for path in coordinator_root().glob("*.json"):
+        if path.is_symlink() or not path.is_file():
+            raise UiCoordinatorError("統括タブの登録状態が不正です")
+        try:
+            request_id = intake.canonical_uuid(path.stem, "request id")
+        except intake.LinearIntakeError as error:
+            raise UiCoordinatorError("統括タブの登録状態が不正です") from error
+        state = load_state(request_id)
+        if state["worktree_id"] == worktree_id and state["phase"] in {
+            "starting",
+            "ready",
+        }:
+            handles.add(state["terminal"])
+    return handles
 
 
 def list_coordinator_terminals(worktree_id: str) -> list[dict]:
@@ -435,15 +453,29 @@ def list_coordinator_terminals(worktree_id: str) -> list[dict]:
     terminals = result.get("terminals")
     if not isinstance(terminals, list):
         raise UiCoordinatorError("Orca terminal一覧の応答が不正です")
+    registered = registered_coordinator_handles(worktree_id)
     matches = [
         item
         for item in terminals
         if isinstance(item, dict)
         and item.get("worktreeId") == worktree_id
-        and item.get("title") == "統括"
+        and (item.get("title") == "統括" or item.get("handle") in registered)
         and item.get("orphaned") is not True
     ]
     return [validated_terminal(item, worktree_id) for item in matches]
+
+
+def pin_coordinator_title(terminal: str) -> None:
+    if not TERMINAL.fullmatch(terminal):
+        raise UiCoordinatorError("統括タブのterminal識別子が不正です")
+    returncode, response = run_orca_response(
+        ["terminal", "rename", "--terminal", terminal, "--title", "統括"]
+    )
+    if returncode != 0 or response.get("ok") is not True:
+        code, _ = response_error_code(response)
+        raise UiCoordinatorError(
+            f"統括タブ名を固定できませんでした ({code or 'unknown_error'})"
+        )
 
 
 def ensure_coordinator_terminal(worktree_id: str) -> str:

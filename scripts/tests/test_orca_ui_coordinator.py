@@ -67,7 +67,9 @@ class UiCoordinatorTests(unittest.TestCase):
         imported = {"request_id": REQUEST, "linear_identifier": "HW-42"}
         with patch.object(ui.intake, "import_current_issue", return_value=imported):
             ui.prepare()
-        ui.acknowledge(REQUEST)
+        with patch.object(ui, "pin_coordinator_title") as pin:
+            ui.acknowledge(REQUEST)
+        pin.assert_called_once_with(TERMINAL)
 
     def handoff_body(
         self, content: str = "目的: 新仕様を実装する\n受入条件: 既存仕様を置換する"
@@ -115,7 +117,9 @@ class UiCoordinatorTests(unittest.TestCase):
 
         self.assertEqual(result, imported)
         self.assertEqual(state["phase"], "starting")
-        ready = ui.acknowledge(REQUEST)
+        with patch.object(ui, "pin_coordinator_title") as pin:
+            ready = ui.acknowledge(REQUEST)
+        pin.assert_called_once_with(TERMINAL)
         self.assertTrue(ready["ready"])
         self.assertEqual(ui.require_ready(REQUEST, TERMINAL)["phase"], "ready")
         with self.assertRaisesRegex(ui.UiCoordinatorError, "配車元"):
@@ -350,6 +354,25 @@ class UiCoordinatorTests(unittest.TestCase):
         body = self.handoff_body("内部: /home/example/session")
         with self.assertRaisesRegex(ui.UiCoordinatorError, "ローカルパス"):
             ui.read_handoff_body(str(body))
+
+    def test_registered_coordinator_survives_orca_title_rename(self) -> None:
+        self.ready_coordinator()
+        response = {
+            "ok": True,
+            "result": {
+                "terminals": [
+                    {
+                        "handle": TERMINAL,
+                        "worktreeId": f"fixture::{ui.REPO}",
+                        "title": "確認する HW-42依頼 | fixture",
+                        "orphaned": False,
+                    }
+                ]
+            },
+        }
+        with patch.object(ui, "run_orca_response", return_value=(0, response)):
+            terminals = ui.list_coordinator_terminals(f"fixture::{ui.REPO}")
+        self.assertEqual(terminals, [{"handle": TERMINAL}])
 
     def test_launch_wait_retries_only_busy_coordinator(self) -> None:
         with (
