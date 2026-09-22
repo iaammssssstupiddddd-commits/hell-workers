@@ -99,6 +99,15 @@ class UiCoordinatorTests(unittest.TestCase):
             "linkedLinearIssue": identifier,
         }
 
+    @staticmethod
+    def coordinator_terminal() -> dict:
+        return {
+            "handle": "term_8e4142eb-9cc8-4271-885f-4146b1d312fd",
+            "worktreeId": "fixture::/tmp/orca-hw-43",
+            "title": "統括",
+            "orphaned": False,
+        }
+
     def test_prepare_and_acknowledge_bind_visible_terminal(self) -> None:
         imported = {"request_id": REQUEST, "linear_identifier": "HW-42"}
         with patch.object(ui.intake, "import_current_issue", return_value=imported):
@@ -136,6 +145,15 @@ class UiCoordinatorTests(unittest.TestCase):
             (0, {"ok": True, "result": {"worktrees": []}}),
             (0, {"ok": True, "result": {}}),
             (0, {"ok": True, "result": {"worktrees": [self.worktree()]}}),
+            (0, {"ok": True, "result": {"terminals": []}}),
+            (0, {"ok": True, "result": {}}),
+            (
+                0,
+                {
+                    "ok": True,
+                    "result": {"terminals": [self.coordinator_terminal()]},
+                },
+            ),
         ]
         with (
             patch.object(
@@ -153,13 +171,21 @@ class UiCoordinatorTests(unittest.TestCase):
         self.assertEqual(linear_args[:2], ["linear", "create"])
         self.assertNotIn("--parent", linear_args)
         self.assertEqual(linear_args[linear_args.index("--workspace") + 1], WORKSPACE)
-        self.assertTrue(uuid.UUID(linear_args[linear_args.index("--write-id") + 1]))
+        write_id = uuid.UUID(linear_args[linear_args.index("--write-id") + 1])
+        self.assertEqual(write_id.version, 4)
         self.assertIn("目的: 新仕様を実装する", linear_body)
         create_args = run.call_args_list[2].args[0]
         self.assertIn("--linear-issue", create_args)
         self.assertIn("--activate", create_args)
         self.assertIn("--no-parent", create_args)
-        self.assertEqual(run.call_count, 4)
+        terminal_args = run.call_args_list[5].args[0]
+        self.assertEqual(terminal_args[:2], ["terminal", "create"])
+        self.assertEqual(terminal_args[terminal_args.index("--title") + 1], "統括")
+        self.assertIn(
+            "launch-wait", terminal_args[terminal_args.index("--command") + 1]
+        )
+        self.assertIn("--focus", terminal_args)
+        self.assertEqual(run.call_count, 7)
 
         with (
             patch.object(
@@ -179,6 +205,13 @@ class UiCoordinatorTests(unittest.TestCase):
         responses = [
             (0, self.issue_response()),
             (0, {"ok": True, "result": {"worktrees": [self.worktree()]}}),
+            (
+                0,
+                {
+                    "ok": True,
+                    "result": {"terminals": [self.coordinator_terminal()]},
+                },
+            ),
         ]
         with (
             patch.object(ui, "resolve_source_ref", return_value=(None, "b" * 40)),
@@ -186,7 +219,7 @@ class UiCoordinatorTests(unittest.TestCase):
         ):
             result = ui.handoff(REQUEST, "局所修正", str(body), None)
         self.assertTrue(result["ready"])
-        self.assertEqual(run.call_count, 2)
+        self.assertEqual(run.call_count, 3)
 
     def test_handoff_retries_unconfirmed_write_once_and_stops(self) -> None:
         self.ready_coordinator()
@@ -213,7 +246,105 @@ class UiCoordinatorTests(unittest.TestCase):
         )
         state = orca_frontdesk.read_private_json(state_file, {})
         self.assertEqual(state["phase"], "unknown")
+        self.assertEqual(state["last_error_code"], "linear_write_unconfirmed")
         self.assertIsNone(state["issue_identifier"])
+
+        responses = [
+            (0, self.issue_response()),
+            (0, {"ok": True, "result": {"worktrees": [self.worktree()]}}),
+            (
+                0,
+                {
+                    "ok": True,
+                    "result": {"terminals": [self.coordinator_terminal()]},
+                },
+            ),
+        ]
+        with (
+            patch.object(ui, "resolve_source_ref", return_value=(None, "b" * 40)),
+            patch.object(ui, "run_orca_response", side_effect=responses) as resumed,
+        ):
+            result = ui.handoff(REQUEST, "重複させない", str(body), None)
+        self.assertTrue(result["ready"])
+        resumed_args = resumed.call_args_list[0].args[0]
+        self.assertEqual(
+            resumed_args[resumed_args.index("--write-id") + 1],
+            state["linear_write_id"],
+        )
+
+    def test_handoff_marks_confirmed_write_failure_without_retry(self) -> None:
+        self.ready_coordinator()
+        body = self.handoff_body()
+        response = (1, {"ok": False, "error": {"code": "linear_write_failed"}})
+        with (
+            patch.object(ui, "resolve_source_ref", return_value=(None, "b" * 40)),
+            patch.object(ui, "run_orca_response", return_value=response) as run,
+        ):
+            with self.assertRaisesRegex(ui.UiCoordinatorError, "linear_write_failed"):
+                ui.handoff(REQUEST, "確定失敗", str(body), None)
+        self.assertEqual(run.call_count, 1)
+        state_file = next(
+            ui.handoff_root().glob("????????-????-????-????-????????????.json")
+        )
+        state = orca_frontdesk.read_private_json(state_file, {})
+        self.assertEqual(state["phase"], "failed")
+        self.assertEqual(state["last_error_code"], "linear_write_failed")
+
+    def test_handoff_recovers_legacy_uuid5_unknown_state(self) -> None:
+        self.ready_coordinator()
+        body = self.handoff_body()
+        legacy_write_id = str(uuid.uuid5(uuid.NAMESPACE_URL, "legacy"))
+
+        def unconfirmed(
+            arguments: list[str], _input: str | None = None
+        ) -> tuple[int, dict]:
+            write_id = arguments[arguments.index("--write-id") + 1]
+            return 1, {
+                "ok": False,
+                "error": {
+                    "code": "linear_write_unconfirmed",
+                    "writeId": write_id,
+                },
+            }
+
+        with (
+            patch.object(ui, "resolve_source_ref", return_value=(None, "b" * 40)),
+            patch.object(ui, "run_orca_response", side_effect=unconfirmed),
+        ):
+            with self.assertRaises(ui.UiCoordinatorError):
+                ui.handoff(REQUEST, "旧状態復旧", str(body), None)
+        state_file = next(
+            ui.handoff_root().glob("????????-????-????-????-????????????.json")
+        )
+        state = orca_frontdesk.read_private_json(state_file, {})
+        self.assertEqual(state["phase"], "unknown")
+        state["schema"] = 1
+        state["linear_write_id"] = legacy_write_id
+        del state["last_error_code"]
+        del state["coordinator_terminal"]
+        orca_frontdesk.write_ledger(state_file, state)
+
+        recovered_write_id = uuid.UUID("58d5bf9b-25c6-43ff-8939-c329182ff729")
+        responses = [
+            (0, self.issue_response()),
+            (0, {"ok": True, "result": {"worktrees": [self.worktree()]}}),
+            (
+                0,
+                {
+                    "ok": True,
+                    "result": {"terminals": [self.coordinator_terminal()]},
+                },
+            ),
+        ]
+        with (
+            patch.object(ui, "resolve_source_ref", return_value=(None, "b" * 40)),
+            patch.object(ui.uuid, "uuid4", return_value=recovered_write_id),
+            patch.object(ui, "run_orca_response", side_effect=responses) as run,
+        ):
+            result = ui.handoff(REQUEST, "旧状態復旧", str(body), None)
+        self.assertTrue(result["ready"])
+        args = run.call_args_list[0].args[0]
+        self.assertEqual(args[args.index("--write-id") + 1], str(recovered_write_id))
 
     def test_handoff_body_rejects_internal_context(self) -> None:
         body = self.handoff_body("内部: /home/example/session")

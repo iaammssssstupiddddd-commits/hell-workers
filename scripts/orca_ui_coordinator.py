@@ -42,8 +42,7 @@ TERMINAL = re.compile(r"term_[A-Za-z0-9_-]{1,128}")
 SAFE_REF = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/-]{0,254}")
 SAFE_NAME = re.compile(r"[^a-z0-9]+")
 HANDOFF_NAMESPACE = uuid.UUID("b381ec1e-dabc-5352-b55d-e12462b45cc3")
-LINEAR_WRITE_NAMESPACE = uuid.UUID("22e81fa5-ac0e-5e9a-930d-d40802d239cf")
-HANDOFF_SCHEMA = 1
+HANDOFF_SCHEMA = 3
 HANDOFF_TIMEOUT_SECONDS = 130
 MAX_HANDOFF_BODY_CHARS = 24_000
 LAUNCH_WAIT_SECONDS = 120
@@ -358,6 +357,19 @@ def response_error_code(response: dict) -> tuple[str | None, str | None]:
     )
 
 
+def canonical_write_id(value: object, *, allow_legacy_v5: bool = False) -> str:
+    if not isinstance(value, str):
+        raise UiCoordinatorError("Linear書き込み識別子が不正です")
+    try:
+        parsed = uuid.UUID(value)
+    except (ValueError, AttributeError) as error:
+        raise UiCoordinatorError("Linear書き込み識別子が不正です") from error
+    allowed_versions = {4, 5} if allow_legacy_v5 else {4}
+    if str(parsed) != value or parsed.version not in allowed_versions:
+        raise UiCoordinatorError("Linear書き込み識別子が不正です")
+    return value
+
+
 def validated_issue(response: dict) -> tuple[str, str]:
     result = intake.mapping(response.get("result"), "Linear create result")
     issue = result.get("issue", result)
@@ -398,6 +410,76 @@ def validated_worktree(value: object, repo_id: str, identifier: str) -> dict:
     return {"id": worktree_id, "path": path}
 
 
+def validated_terminal(value: object, worktree_id: str) -> dict:
+    terminal = intake.mapping(value, "Orca terminal")
+    handle = terminal.get("handle")
+    if (
+        not isinstance(handle, str)
+        or not TERMINAL.fullmatch(handle)
+        or terminal.get("worktreeId") != worktree_id
+        or terminal.get("title") != "統括"
+        or terminal.get("orphaned") is True
+    ):
+        raise UiCoordinatorError("引継ぎ先の統括タブ応答が不正です")
+    return {"handle": handle}
+
+
+def list_coordinator_terminals(worktree_id: str) -> list[dict]:
+    returncode, response = run_orca_response(["terminal", "list"])
+    if returncode != 0 or response.get("ok") is not True:
+        code, _ = response_error_code(response)
+        raise UiCoordinatorError(
+            f"Orca terminal一覧の取得に失敗しました ({code or 'unknown_error'})"
+        )
+    result = intake.mapping(response.get("result"), "Orca terminal list result")
+    terminals = result.get("terminals")
+    if not isinstance(terminals, list):
+        raise UiCoordinatorError("Orca terminal一覧の応答が不正です")
+    matches = [
+        item
+        for item in terminals
+        if isinstance(item, dict)
+        and item.get("worktreeId") == worktree_id
+        and item.get("title") == "統括"
+        and item.get("orphaned") is not True
+    ]
+    return [validated_terminal(item, worktree_id) for item in matches]
+
+
+def ensure_coordinator_terminal(worktree_id: str) -> str:
+    matches = list_coordinator_terminals(worktree_id)
+    if len(matches) > 1:
+        raise UiCoordinatorError("引継ぎ先に複数の統括タブが存在します")
+    if matches:
+        return matches[0]["handle"]
+    returncode, response = run_orca_response(
+        [
+            "terminal",
+            "create",
+            "--worktree",
+            f"id:{worktree_id}",
+            "--title",
+            "統括",
+            "--command",
+            "python3 scripts/orca_ui_coordinator.py launch-wait",
+            "--focus",
+        ]
+    )
+    for _ in range(5):
+        matches = list_coordinator_terminals(worktree_id)
+        if len(matches) == 1:
+            return matches[0]["handle"]
+        if len(matches) > 1:
+            raise UiCoordinatorError("引継ぎ先に複数の統括タブが存在します")
+        time.sleep(0.2)
+    code, _ = response_error_code(response)
+    if returncode == 0 and response.get("ok") is True:
+        code = "terminal_reconciliation_failed"
+    raise UiCoordinatorError(
+        f"新しい統括タブの作成を確定できませんでした ({code or 'unknown_error'})"
+    )
+
+
 def list_linked_worktrees(repo_id: str, identifier: str) -> list[dict]:
     returncode, response = run_orca_response(
         ["worktree", "list", "--repo", f"id:{repo_id}"]
@@ -421,7 +503,7 @@ def list_linked_worktrees(repo_id: str, identifier: str) -> list[dict]:
 
 def load_handoff(handoff_id: str) -> dict:
     data = frontdesk.read_private_json(handoff_state_path(handoff_id), {})
-    required = {
+    required_v1 = {
         "schema",
         "handoff_id",
         "source_request_id",
@@ -443,23 +525,61 @@ def load_handoff(handoff_id: str) -> dict:
         "created_at",
         "completed_at",
     }
+    required_v2 = required_v1 | {"last_error_code"}
+    required = required_v2 | {"coordinator_terminal"}
+    if (
+        isinstance(data, dict)
+        and data.get("schema") == 1
+        and set(data) == required_v1
+    ):
+        data = {**data, "schema": 2, "last_error_code": None}
+    if (
+        isinstance(data, dict)
+        and data.get("schema") == 2
+        and set(data) == required_v2
+    ):
+        data = {**data, "schema": HANDOFF_SCHEMA, "coordinator_terminal": None}
+        if data.get("phase") == "ready":
+            data["phase"] = "worktree_created"
+            data["completed_at"] = None
     if (
         not isinstance(data, dict)
         or set(data) != required
         or data.get("schema") != HANDOFF_SCHEMA
         or data.get("handoff_id") != handoff_id
         or data.get("phase")
-        not in {"creating_issue", "issue_created", "ready", "unknown"}
+        not in {
+            "creating_issue",
+            "issue_created",
+            "worktree_created",
+            "ready",
+            "unknown",
+            "failed",
+        }
         or type(data.get("linear_attempts")) is not int
         or not 0 <= data["linear_attempts"] <= 2
+        or (
+            data.get("last_error_code") is not None
+            and (
+                not isinstance(data["last_error_code"], str)
+                or not re.fullmatch(r"[a-z0-9_]{1,80}", data["last_error_code"])
+            )
+        )
     ):
         raise UiCoordinatorError("統括引継ぎ状態が不正です。上書きせず照合してください")
-    if data["phase"] == "creating_issue" and any(
+    canonical_write_id(data.get("linear_write_id"), allow_legacy_v5=True)
+    if data["phase"] in {"creating_issue", "unknown", "failed"} and any(
         data[key] is not None
-        for key in ("issue_identifier", "issue_url", "worktree_id", "worktree_path")
+        for key in (
+            "issue_identifier",
+            "issue_url",
+            "worktree_id",
+            "worktree_path",
+            "coordinator_terminal",
+        )
     ):
         raise UiCoordinatorError("統括引継ぎ状態が不正です。上書きせず照合してください")
-    if data["phase"] in {"issue_created", "ready"}:
+    if data["phase"] in {"issue_created", "worktree_created", "ready"}:
         identifier = data["issue_identifier"]
         issue_url = data["issue_url"]
         parsed = urlparse(issue_url) if isinstance(issue_url, str) else None
@@ -479,12 +599,33 @@ def load_handoff(handoff_id: str) -> dict:
             )
     if data["phase"] == "issue_created" and any(
         data[key] is not None
-        for key in ("worktree_id", "worktree_path", "completed_at")
+        for key in (
+            "worktree_id",
+            "worktree_path",
+            "coordinator_terminal",
+            "completed_at",
+        )
     ):
         raise UiCoordinatorError("統括引継ぎ状態が不正です。上書きせず照合してください")
-    if data["phase"] == "ready" and not all(
-        isinstance(data[key], str)
-        for key in ("worktree_id", "worktree_path", "completed_at")
+    if data["phase"] == "worktree_created" and (
+        not all(
+            isinstance(data[key], str) for key in ("worktree_id", "worktree_path")
+        )
+        or data["coordinator_terminal"] is not None
+        or data["completed_at"] is not None
+    ):
+        raise UiCoordinatorError("統括引継ぎ状態が不正です。上書きせず照合してください")
+    if data["phase"] == "ready" and (
+        not all(
+            isinstance(data[key], str)
+            for key in (
+                "worktree_id",
+                "worktree_path",
+                "coordinator_terminal",
+                "completed_at",
+            )
+        )
+        or not TERMINAL.fullmatch(data["coordinator_terminal"])
     ):
         raise UiCoordinatorError("統括引継ぎ状態が不正です。上書きせず照合してください")
     return data
@@ -546,7 +687,6 @@ def handoff(
         f"{request_id}\n{title}\n{body_sha256}\n{source_commit}".encode("utf-8")
     ).hexdigest()
     handoff_id = str(uuid.uuid5(HANDOFF_NAMESPACE, digest))
-    write_id = str(uuid.uuid5(LINEAR_WRITE_NAMESPACE, handoff_id))
     path = handoff_state_path(handoff_id)
     completed_path = handoff_complete_path(request_id)
     if completed_path.exists() or completed_path.is_symlink():
@@ -559,7 +699,9 @@ def handoff(
             raise UiCoordinatorError("統括引継ぎ完了記録が不正です")
         if completed["handoff_id"] != handoff_id:
             raise UiCoordinatorError("この受付は既に別の実装用課題へ引き継がれています")
-        return public_handoff(load_handoff(handoff_id))
+        completed_state = load_handoff(handoff_id)
+        if completed_state["phase"] == "ready":
+            return public_handoff(completed_state)
 
     if path.exists() or path.is_symlink():
         data = load_handoff(handoff_id)
@@ -573,15 +715,27 @@ def handoff(
             "body_sha256": body_sha256,
             "source_ref": source_ref,
             "source_commit": source_commit,
-            "linear_write_id": write_id,
         }
         if any(data[key] != value for key, value in expected.items()):
             raise UiCoordinatorError("統括引継ぎ状態と今回の依頼が一致しません")
         if data["phase"] == "ready":
             return public_handoff(data)
+        write_uuid = uuid.UUID(data["linear_write_id"])
         if data["phase"] == "unknown":
+            # Schema 1 generated deterministic UUIDv5 values. Linear's create
+            # endpoint rejects those despite the generic "UUID" wording. No
+            # issue can have been created with that id, so replace only this
+            # known-invalid legacy value. UUIDv4 unknown writes are retried
+            # with the same id and therefore remain idempotent.
+            if write_uuid.version == 5:
+                data["linear_write_id"] = str(uuid.uuid4())
+            data["phase"] = "creating_issue"
+            data["linear_attempts"] = 0
+            data["last_error_code"] = None
+            save_handoff(data)
+        if data["phase"] == "failed":
             raise UiCoordinatorError(
-                "Linear書き込み結果が不明です。重複防止のため照合が必要です"
+                "Linear課題作成は確定失敗しています。原因を解消してから再実行してください"
             )
     else:
         data = {
@@ -596,17 +750,23 @@ def handoff(
             "body_sha256": body_sha256,
             "source_ref": source_ref,
             "source_commit": source_commit,
-            "linear_write_id": write_id,
+            # Linear currently accepts a client supplied v4 id for idempotent
+            # create/retry, but rejects UUIDv5 values as invalid mutation ids.
+            "linear_write_id": str(uuid.uuid4()),
             "linear_attempts": 0,
             "phase": "creating_issue",
+            "last_error_code": None,
             "issue_identifier": None,
             "issue_url": None,
             "worktree_id": None,
             "worktree_path": None,
+            "coordinator_terminal": None,
             "created_at": now(),
             "completed_at": None,
         }
         save_handoff(data)
+
+    write_id = canonical_write_id(data["linear_write_id"])
 
     linear_body = (
         f"{body}\n\n"
@@ -650,57 +810,73 @@ def handoff(
                 and data["linear_attempts"] < 2
             ):
                 continue
-            data["phase"] = "unknown"
+            data["phase"] = (
+                "unknown" if code in {None, "linear_write_unconfirmed"} else "failed"
+            )
+            data["last_error_code"] = code or "unknown_error"
             save_handoff(data)
             raise UiCoordinatorError(
                 f"Linear課題作成を確定できませんでした ({code or 'unknown_error'})"
             )
         if data["phase"] == "creating_issue":
             data["phase"] = "unknown"
+            data["last_error_code"] = "linear_write_unconfirmed"
             save_handoff(data)
             raise UiCoordinatorError("Linear課題作成を確定できませんでした")
 
-    assert isinstance(data["issue_identifier"], str)
-    matches = list_linked_worktrees(repo_id, data["issue_identifier"])
-    if len(matches) > 1:
-        raise UiCoordinatorError("同じLinear課題に複数のOrca worktreeが紐づいています")
-    if matches:
-        target = matches[0]
-    else:
-        slug = SAFE_NAME.sub("-", title.lower()).strip("-")[:48] or "implementation"
-        returncode, response = run_orca_response(
-            [
-                "worktree",
-                "create",
-                "--repo",
-                f"id:{repo_id}",
-                "--name",
-                f"{data['issue_identifier'].lower()}-{slug}",
-                "--linear-issue",
-                data["issue_identifier"],
-                "--comment",
-                f"{source_identifier}から統括が実装文脈を引き継ぎ",
-                "--setup",
-                "run",
-                "--no-parent",
-                "--activate",
-            ]
-        )
+    if data["phase"] == "issue_created":
+        assert isinstance(data["issue_identifier"], str)
         matches = list_linked_worktrees(repo_id, data["issue_identifier"])
-        if len(matches) != 1:
-            code, _ = response_error_code(response)
-            if returncode == 0 and response.get("ok") is True:
-                code = "worktree_reconciliation_failed"
-            raise UiCoordinatorError(
-                f"実装用Orca worktreeの作成を確定できませんでした ({code or 'unknown_error'})"
+        if len(matches) > 1:
+            raise UiCoordinatorError("同じLinear課題に複数のOrca worktreeが紐づいています")
+        if matches:
+            target = matches[0]
+        else:
+            slug = SAFE_NAME.sub("-", title.lower()).strip("-")[:48] or "implementation"
+            returncode, response = run_orca_response(
+                [
+                    "worktree",
+                    "create",
+                    "--repo",
+                    f"id:{repo_id}",
+                    "--name",
+                    f"{data['issue_identifier'].lower()}-{slug}",
+                    "--linear-issue",
+                    data["issue_identifier"],
+                    "--comment",
+                    f"{source_identifier}から統括が実装文脈を引き継ぎ",
+                    "--setup",
+                    "run",
+                    "--no-parent",
+                    "--activate",
+                ]
             )
-        target = matches[0]
+            matches = list_linked_worktrees(repo_id, data["issue_identifier"])
+            if len(matches) != 1:
+                code, _ = response_error_code(response)
+                if returncode == 0 and response.get("ok") is True:
+                    code = "worktree_reconciliation_failed"
+                raise UiCoordinatorError(
+                    "実装用Orca worktreeの作成を確定できませんでした "
+                    f"({code or 'unknown_error'})"
+                )
+            target = matches[0]
+        data["phase"] = "worktree_created"
+        data["worktree_id"] = target["id"]
+        data["worktree_path"] = target["path"]
+        save_handoff(data)
 
-    data["phase"] = "ready"
-    data["worktree_id"] = target["id"]
-    data["worktree_path"] = target["path"]
-    data["completed_at"] = now()
-    save_handoff(data)
+    if data["phase"] == "worktree_created":
+        assert isinstance(data["worktree_id"], str)
+        data["coordinator_terminal"] = ensure_coordinator_terminal(
+            data["worktree_id"]
+        )
+        data["phase"] = "ready"
+        data["completed_at"] = now()
+        save_handoff(data)
+
+    if data["phase"] != "ready":
+        raise UiCoordinatorError("統括引継ぎが完了状態へ遷移しませんでした")
     frontdesk.write_ledger(
         completed_path,
         {
