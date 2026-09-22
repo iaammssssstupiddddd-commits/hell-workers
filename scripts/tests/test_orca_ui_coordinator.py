@@ -150,6 +150,20 @@ class UiCoordinatorTests(unittest.TestCase):
             (0, {"ok": True, "result": {}}),
             (0, {"ok": True, "result": {"worktrees": [self.worktree()]}}),
             (0, {"ok": True, "result": {"terminals": []}}),
+            (
+                0,
+                {
+                    "ok": True,
+                    "result": {
+                        "visualLayouts": [
+                            {
+                                "worktreeId": "fixture::/tmp/orca-hw-43",
+                                "root": {"type": "group", "tabs": []},
+                            }
+                        ]
+                    },
+                },
+            ),
             (0, {"ok": True, "result": {}}),
             (
                 0,
@@ -182,14 +196,14 @@ class UiCoordinatorTests(unittest.TestCase):
         self.assertIn("--linear-issue", create_args)
         self.assertIn("--activate", create_args)
         self.assertIn("--no-parent", create_args)
-        terminal_args = run.call_args_list[5].args[0]
+        terminal_args = run.call_args_list[6].args[0]
         self.assertEqual(terminal_args[:2], ["terminal", "create"])
         self.assertEqual(terminal_args[terminal_args.index("--title") + 1], "統括")
         self.assertIn(
             "launch-wait", terminal_args[terminal_args.index("--command") + 1]
         )
         self.assertIn("--focus", terminal_args)
-        self.assertEqual(run.call_count, 7)
+        self.assertEqual(run.call_count, 8)
 
         with (
             patch.object(
@@ -373,6 +387,60 @@ class UiCoordinatorTests(unittest.TestCase):
         with patch.object(ui, "run_orca_response", return_value=(0, response)):
             terminals = ui.list_coordinator_terminals(f"fixture::{ui.REPO}")
         self.assertEqual(terminals, [{"handle": TERMINAL}])
+
+    def test_coordinator_reuses_default_visual_tab(self) -> None:
+        visual_terminal = "term_92b16a67-b67d-469e-8de1-0c077a5357d8"
+        worktree_id = "fixture::/tmp/orca-hw-43"
+        responses = [
+            (0, {"ok": True, "result": {"terminals": []}}),
+            (
+                0,
+                {
+                    "ok": True,
+                    "result": {
+                        "visualLayouts": [
+                            {
+                                "worktreeId": worktree_id,
+                                "root": {
+                                    "type": "group",
+                                    "tabs": [
+                                        {
+                                            "title": "統括",
+                                            "panes": {
+                                                "type": "terminal",
+                                                "handle": visual_terminal,
+                                            },
+                                        },
+                                        {
+                                            "title": "Setup",
+                                            "panes": {
+                                                "type": "terminal",
+                                                "handle": "term_8ccad957-a661-43d8-867d-a86e1d566a78",
+                                            },
+                                        },
+                                    ],
+                                },
+                            }
+                        ]
+                    },
+                },
+            ),
+            (
+                0,
+                {
+                    "ok": True,
+                    "result": {
+                        "send": {"handle": visual_terminal, "accepted": True}
+                    },
+                },
+            ),
+        ]
+        with patch.object(ui, "run_orca_response", side_effect=responses) as run:
+            result = ui.ensure_coordinator_terminal(worktree_id)
+        self.assertEqual(result, visual_terminal)
+        send_args = run.call_args_list[2].args[0]
+        self.assertEqual(send_args[:2], ["terminal", "send"])
+        self.assertIn("launch-wait", send_args[send_args.index("--text") + 1])
 
     def test_launch_wait_retries_only_busy_coordinator(self) -> None:
         with (

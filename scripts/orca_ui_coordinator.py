@@ -465,6 +465,108 @@ def list_coordinator_terminals(worktree_id: str) -> list[dict]:
     return [validated_terminal(item, worktree_id) for item in matches]
 
 
+def collect_terminal_handles(value: object, depth: int = 0) -> list[str]:
+    if depth > 16:
+        raise UiCoordinatorError("Orca tab構成が深すぎます")
+    if isinstance(value, list):
+        result: list[str] = []
+        for item in value:
+            result.extend(collect_terminal_handles(item, depth + 1))
+        return result
+    if not isinstance(value, dict):
+        return []
+    if value.get("type") == "terminal":
+        handle = value.get("handle")
+        if not isinstance(handle, str) or not TERMINAL.fullmatch(handle):
+            raise UiCoordinatorError("Orca tabのterminal識別子が不正です")
+        return [handle]
+    result = []
+    for item in value.values():
+        if isinstance(item, (dict, list)):
+            result.extend(collect_terminal_handles(item, depth + 1))
+    return result
+
+
+def list_visual_coordinator_terminals(worktree_id: str) -> list[str]:
+    returncode, response = run_orca_response(
+        [
+            "terminal",
+            "list",
+            "--worktree",
+            f"id:{worktree_id}",
+            "--include-visual-layouts",
+        ]
+    )
+    if returncode != 0 or response.get("ok") is not True:
+        code, _ = response_error_code(response)
+        raise UiCoordinatorError(
+            f"Orca tab一覧の取得に失敗しました ({code or 'unknown_error'})"
+        )
+    result = intake.mapping(response.get("result"), "Orca visual layout result")
+    layouts = result.get("visualLayouts")
+    if not isinstance(layouts, list):
+        raise UiCoordinatorError("Orca tab一覧の応答が不正です")
+    selected = [
+        layout
+        for layout in layouts
+        if isinstance(layout, dict) and layout.get("worktreeId") == worktree_id
+    ]
+    if len(selected) != 1:
+        raise UiCoordinatorError("引継ぎ先のOrca tab構成が一意ではありません")
+    tabs: list[dict] = []
+
+    def visit(value: object, depth: int = 0) -> None:
+        if depth > 16:
+            raise UiCoordinatorError("Orca tab構成が深すぎます")
+        if isinstance(value, list):
+            for item in value:
+                visit(item, depth + 1)
+        elif isinstance(value, dict):
+            if value.get("title") == "統括" and "panes" in value:
+                tabs.append(value)
+            for key, item in value.items():
+                if key != "panes" and isinstance(item, (dict, list)):
+                    visit(item, depth + 1)
+
+    visit(selected[0].get("root"))
+    handles: list[str] = []
+    for tab in tabs:
+        tab_handles = collect_terminal_handles(tab.get("panes"))
+        if len(tab_handles) != 1:
+            raise UiCoordinatorError("統括tabのterminal構成が一意ではありません")
+        handles.extend(tab_handles)
+    if len(handles) != len(set(handles)):
+        raise UiCoordinatorError("統括tabのterminal構成が重複しています")
+    return handles
+
+
+def launch_coordinator_in_terminal(terminal: str) -> None:
+    if not TERMINAL.fullmatch(terminal):
+        raise UiCoordinatorError("統括tabのterminal識別子が不正です")
+    returncode, response = run_orca_response(
+        [
+            "terminal",
+            "send",
+            "--terminal",
+            terminal,
+            "--text",
+            "python3 scripts/orca_ui_coordinator.py launch-wait",
+            "--enter",
+            "--wait-submit",
+            "10",
+        ]
+    )
+    if returncode != 0 or response.get("ok") is not True:
+        code, _ = response_error_code(response)
+        raise UiCoordinatorError(
+            f"新しい統括を開始できませんでした ({code or 'unknown_error'})"
+        )
+    result = intake.mapping(response.get("result"), "Orca terminal send result")
+    sent = intake.mapping(result.get("send"), "Orca terminal send receipt")
+    if sent.get("handle") != terminal or sent.get("accepted") is not True:
+        raise UiCoordinatorError("新しい統括の開始応答が不正です")
+
+
 def pin_coordinator_title(terminal: str) -> None:
     if not TERMINAL.fullmatch(terminal):
         raise UiCoordinatorError("統括タブのterminal識別子が不正です")
@@ -484,6 +586,12 @@ def ensure_coordinator_terminal(worktree_id: str) -> str:
         raise UiCoordinatorError("引継ぎ先に複数の統括タブが存在します")
     if matches:
         return matches[0]["handle"]
+    visual_matches = list_visual_coordinator_terminals(worktree_id)
+    if len(visual_matches) > 1:
+        raise UiCoordinatorError("引継ぎ先に複数の統括tabが存在します")
+    if visual_matches:
+        launch_coordinator_in_terminal(visual_matches[0])
+        return visual_matches[0]
     returncode, response = run_orca_response(
         [
             "terminal",
