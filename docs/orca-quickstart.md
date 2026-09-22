@@ -20,6 +20,8 @@ Linearの内部IDやworkspace UUIDはOrcaと統括が処理します。
 worktreeを作り直す必要はありません。統括へ実装目的を伝えると、統括が実装用Linear課題を作成し、
 目的・完了条件・制約・既存branch/commit・次工程を移して専用worktreeを開きます。元の統括タブは
 引継ぎ成功後に終了し、新しいworktreeの **「統括」** タブが処理を継続します。
+Orcaのtab名は **「統括」** のままです。内部terminalの表示が作業内容に応じて変わっても、同じtabを
+開いてください。統括は登録済みterminalと画面layoutを照合し、同名tabを重複生成しません。
 
 ## 画面上の役割
 
@@ -101,12 +103,13 @@ orca file open docs/orca-quickstart.md --worktree path:/home/satotakumi/projects
 - 統括、Codex A、Cursor B、固定Codex reviewerの権限分離とA/B二レーン編集は受入済みです。
 - UI入口からの可視統括起動と日本語role tab生成をtooling testで検査しています。
 - 試験専用・別目的の課題から、Linearが受理するUUIDv4の固定write IDで課題を作成し、関連worktreeを
-  一意照合して **「統括」** タブを明示生成するところまで自動化しました。結果不明時は同じIDだけを
+  一意照合して既定の **「統括」** タブを再利用し、必要な場合だけ明示生成するところまで自動化しました。結果不明時は同じIDだけを
   再利用し、確定失敗と区別して停止します。
 - 基盤worktreeの`統括` tabで初回確認なしにinteractive Codexを実起動し、`TAK-5`の自動取込、統括terminal登録、
   Orca runtimeのready/connectedと現在課題の再取得を確認済みです。
 - `TAK-5`を実装へ転用せず、実装課題`TAK-6`、専用worktree、可視`統括` tabを実runtimeで一括作成し、
-  新しい統括が`TAK-6`を取得・acknowledgeして待機することを確認済みです。A/B/reviewerは未dispatchです。
+  新しい統括が`TAK-6`を取得・acknowledgeして待機すること、terminalの作業名表示が変わっても
+  Orca上の`統括` tabが一つだけ保たれることを確認済みです。A/B/reviewerは未dispatchです。
 - 実案件によるUIから編集→検証→固定レビューの一巡は、最初の対象課題で最終受入します。
 
 ## 関連文書

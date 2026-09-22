@@ -49,7 +49,7 @@ L3Eの実受入は完了したため、明示ticketと専用launcherを通る監
 
 ### 実装済み資産の採否
 
-codeの最新参照元は専用candidate `bbf746d59717618ce7c5a9510584eac822468174`。primary未統合。
+codeの最新参照元は専用candidate `518102b337f67eaf30a72e990a177b3739dce91f`。primary未統合。
 以下の再利用は既存コードと検証済み境界の採用であり、Linear対応済みという意味ではない。
 
 | 資産（candidateの `scripts/`） | 方針 | 実績と追加作業 |
@@ -178,7 +178,9 @@ owner-only/atomic replace/fsyncの共通処理は互換保持する。Linearの�
   新しいLinear実課題、専用worktree、可視統括を一度に作成して依頼・完了条件・既存branch/commit・次工程を引き継ぐ。
   Linear作成はUUIDv4の固定write ID、worktreeと`統括` tabは一覧照合で再実行可能にし、曖昧な外部書込みや重複を成功にしない。
   `TAK-5`から`TAK-6`・専用worktree・可視`統括` tabを実runtimeで作成し、TAK-6の取込・acknowledge・待機を確認した。
-  UUIDv5拒否とworktree作成だけでtab未生成となる初回欠陥は修正・回帰test済み。TAK-5から実装roleは起動していない。
+  UUIDv5拒否とworktree作成だけでtab未生成となる初回欠陥を修正し、setupが作成した既定の可視`統括` tabを再利用する。
+  terminalの作業名表示が変わっても登録済みidentityとvisual layoutを照合して同名tabを重複生成しないことを回帰test・実画面で確認した。
+  TAK-5から実装roleは起動していない。
 - [ ] Orca Tasksから試験issueの新規worktreeを作り、統括・A・B・レビューを画面上で順に確認する。
 - [x] 運用ガイドを実操作で確認し、「課題管理」「統括相談」「read-only監督」「並列編集」の受入状態を別々に表示する。
 - [ ] 同目的branchの採用、ローカルcommit/基点変更はその時点の許可を確認する。push/PR/primaryのゲーム変更は含めない。
@@ -1094,3 +1096,4 @@ Rust/Bevyのbuild・workspace test・Clippy、Blender test、ゲームwindow/GPU
 | 2026-09-21 | Codex | 編集workerのTask bridgeを有効化し、Linear受付・成功済み統括相談・固定ticketからA/Bまたは固定reviewerへguard付き配車するhost controllerとmenu入口をcandidate `5cb73cac`へ実装 |
 | 2026-09-22 | Codex | UUID・ticket path・slot入力を利用者経路から撤去。Orca Tasksを受付とし、linked worktreeの可視統括、exact terminal拘束、日本語A/B/reviewer tabをcandidate `767ca7f6`へ実装・commit。実runtimeでTAK-5取込とacknowledgeを確認 |
 | 2026-09-22 | Codex | 可視統括を外側bubblewrapへ一本化し、初回trust入力を専用設定で撤去。candidate `6453f8cd`を最新基点とし、統括自身からOrca runtime ready/connectedと現在課題`TAK-5`の取得を確認 |
+| 2026-09-22 | Codex | 試験専用`TAK-5`から実装用`TAK-6`・専用worktree・次の可視統括への自動引継ぎを実装。UUIDv4、結果不明復旧、登録済みterminal identity、既定`統括` tab再利用をcandidate `518102b3`まで修正し、TAK-6統括の取得・acknowledge・待機と重複tabなしを実runtimeで確認 |

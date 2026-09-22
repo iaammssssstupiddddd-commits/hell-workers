@@ -95,11 +95,14 @@ primaryの現行ゲーム履歴を`732cb43ad93bb9d6b4ae048c37f7c235566efe9d`で�
 自動課題/worktree引継ぎ、旧統括の自動終了、次統括のlock待ち、package import分離を
 `7cb081e578cac74ed74bf4dcabf5daef6227ffd3`で追加した。Linear mutation IDをUUIDv4へ限定し、
 確定失敗と結果不明を分離して旧UUIDv5台帳を復旧し、worktree作成後に可視`統括` tabを一意照合・明示生成する修正を
-`bbf746d59717618ce7c5a9510584eac822468174`で追加した。後者を新規worktreeの最新基点とする。
+`bbf746d59717618ce7c5a9510584eac822468174`で追加した。terminalの作業名変更後も登録済みidentityを維持する修正を
+`4a257ee10c5be3552d7119132b30cdf144ac11ff`で追加し、worktree setupが作成した既定の可視`統括` tabへ
+launcherを送って再利用し、同名tabを重複生成しない修正を
+`518102b337f67eaf30a72e990a177b3739dce91f`で追加した。後者を新規worktreeの最新基点とする。
 実Linear課題 `TAK-5` のL1正常系とL2相談継続は受入済み。固定reviewer、Codex A、Cursor Bのread-only実Taskも一巡済み。
 実編集はA/Bの直列一巡と、別worktreeでの2レーン同時実行まで受入済み。
 primary文書正本の変更は別作業と混在するため、これらの専用branch code commitには含めていない。
-primaryへの統合、push、PR作成は行っていない。
+candidate branchとprimary文書branchはpush済み。candidate codeのprimaryへの統合とPR作成、primaryのゲーム変更は行っていない。
 文書正本はこのprimaryの `docs/` に置く。primaryの別作業中のsource・ルールは変更していない。
 従って、**旧checkoutを含むhost全体で並列開発の安全性を確立済みとは扱わない**。
 採用前に対象checkoutを更新し、旧解析backend/旧driverを利用中のsessionと実行順を調整する。
