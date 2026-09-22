@@ -51,6 +51,10 @@ class Refused(RuntimeError):
     """Fail-closed refusal with no raw upstream content or credentials."""
 
 
+class ObservationUnavailable(Refused):
+    """An identity-checked read was not confirmed; it proves no process outcome."""
+
+
 def mapping(value: object) -> dict:
     if not isinstance(value, dict):
         raise Refused("expected an object")
@@ -90,11 +94,11 @@ def receive(stream: socket.socket, deadline: float) -> dict:
     while True:
         remaining = deadline - time.monotonic()
         if remaining <= 0:
-            raise Refused("absolute response deadline exceeded")
+            raise ObservationUnavailable("absolute response deadline exceeded")
         stream.settimeout(remaining)
         block = stream.recv(min(65536, MAX_FRAME + 1 - len(pending)))
         if not block:
-            raise Refused("connection closed before response")
+            raise ObservationUnavailable("connection closed before response")
         pending += block
         total += len(block)
         if total > MAX_FRAME:
@@ -182,9 +186,13 @@ class Upstream:
         if (response.get("id") != request_id
                 or mapping(response.get("_meta")).get("runtimeId") != self.runtime_id):
             raise Refused("upstream response identity differs")
-        if response.get("ok") is not True or not isinstance(response.get("result"), dict):
+        if response.get("ok") is not True:
             # Raw errors may contain tokens, prompts or other terminal information.
+            if method in {"terminal.show", "terminal.wait", "status.get"}:
+                raise ObservationUnavailable("upstream did not confirm the observation")
             raise Refused("upstream did not confirm the observation")
+        if not isinstance(response.get("result"), dict):
+            raise Refused("invalid upstream result")
         return response["result"]
 
 

@@ -277,7 +277,7 @@ def verify_review(ticket: dict, record: dict) -> None:
         validate_ticket(ticket)
         if record["source_sha256"] != fingerprint(repo):
             raise ValueError("review source changed while acquiring leases")
-        data = bindings.read_state("reviewer", "codex")
+        data = bindings.read_state("reviewer", "codex", allow_pending=bool(record.get("receipt_id")))
         bound = data["tasks"].get("fixed-reviewer")
         if record.get("receipt_id"):
             receipt = read_review_receipt(record["receipt_id"])
@@ -396,10 +396,15 @@ def settlement_exit(bridge: task_bridge.Session) -> dict | None:
     if observer.runtime_id != bridge.upstream.runtime_id:
         raise ValueError("Orca runtime changed before provider exit")
     terminal = bridge.binding.terminal
-    bridge.binding.validate(observer.call("terminal.show", {"terminal": terminal}).get("terminal"))
-    result = observer.call("terminal.wait", {"terminal": terminal, "for": "tui-idle", "timeoutMs": 1000})
-    wait = task_bridge.wire.project_wait(result.get("wait"), bridge.binding)
-    bridge.binding.validate(observer.call("terminal.show", {"terminal": terminal}).get("terminal"))
+    try:
+        bridge.binding.validate(observer.call("terminal.show", {"terminal": terminal}).get("terminal"))
+        result = observer.call("terminal.wait", {"terminal": terminal, "for": "tui-idle", "timeoutMs": 1000})
+        wait = task_bridge.wire.project_wait(result.get("wait"), bridge.binding)
+        bridge.binding.validate(observer.call("terminal.show", {"terminal": terminal}).get("terminal"))
+    except (task_bridge.wire.ObservationUnavailable, TimeoutError, ConnectionError):
+        # A read failure is neither idle nor a failed Task. Keep the owned child
+        # alive and observe the same confirmed settlement again on the next tick.
+        return None
     if wait["satisfied"] is not True:
         return None
     return {"bridge_id": bridge.identifier, "authority": authority, "outcome": outcome,

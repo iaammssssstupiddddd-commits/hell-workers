@@ -174,6 +174,16 @@ class PreflightTests(unittest.TestCase):
                 self.assertFalse(response["ok"])
                 self.assertNotIn(SECRET, json.dumps(response))
 
+    def test_unconfirmed_read_is_distinct_from_identity_corruption(self):
+        self.server.response_change = lambda response: response.update(ok=False, error={"message": SECRET})
+        with self.assertRaises(probe.ObservationUnavailable) as failure:
+            self.upstream.call("terminal.show", {"terminal": HANDLE})
+        self.assertNotIn(SECRET, str(failure.exception))
+        self.server.response_change = lambda response: response.update(id="wrong", ok=False)
+        with self.assertRaises(probe.Refused) as failure:
+            self.upstream.call("terminal.show", {"terminal": HANDLE})
+        self.assertNotIsInstance(failure.exception, probe.ObservationUnavailable)
+
     def test_malformed_nested_upstream_objects_revoke_without_leaking(self):
         for key in ("_meta", "result", "terminal", "wait"):
             for value in (None, [SECRET], SECRET):

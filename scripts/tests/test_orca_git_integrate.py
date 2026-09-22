@@ -7,7 +7,7 @@ import unittest
 from unittest.mock import patch
 
 from scripts import (host_coordination, orca_git_integrate as integration,
-                     orca_review_loop as loop, orca_roles as roles)
+                     orca_review_loop as loop, orca_roles as roles, orca_settlement_recovery as recovery)
 from scripts.tests import test_orca_review_loop as fixtures
 from scripts.tests.test_orca_dispatch import REQUEST, COORDINATOR
 
@@ -152,6 +152,45 @@ class IntegrationTests(unittest.TestCase):
         self.assertEqual(self.fixture.tick(), result)
         (self.repo / "src/content.txt").write_text("after approval")
         self.assertEqual(self.fixture.tick()["phase"], "paused")
+
+    def test_settled_final_review_recovery_resumes_same_driver_without_new_dispatch(self):
+        self.enable()
+        self.fixture.register()
+        for _ in range(60):
+            data = self.fixture.tick()
+            if data["integration"]["phase"] == "reviewing":
+                break
+        else:
+            self.fail("final reviewer did not start")
+        state = loop.bindings.read_state("reviewer", "codex")
+        state["last"].update(phase="unknown", process_exited=True, exit_code=-15,
+                             orca_bridge=data["integration"]["attempt"]["bridge_id"],
+                             terminal=data["integration"]["attempt"]["terminal"])
+        loop.bindings.save_state(state)
+        loop.transition(data, "worker-a", "paused",
+                        reason="approval invalidated: unknown role attempt; reconcile before any new launch")
+        data["phase"] = "paused"
+        loop.save(data)
+        starts = len(self.fixture.starts)
+        def reconcile(ticket, expected, metadata):
+            self.assertEqual(expected, loop.bindings.digest(state))
+            restored = copy.deepcopy(state)
+            restored["last"].update(phase="recorded", exit_code=0, provider_exit_code=-15)
+            loop.bindings.save_state(restored)
+            return {"outcome": "completed"}
+        with patch.object(recovery, "recover_role", side_effect=reconcile), \
+                patch.object(loop.dispatch.ui_coordinator, "read_registered_state",
+                             return_value={"phase": "ready", "terminal": COORDINATOR}):
+            with self.assertRaisesRegex(ValueError, "exact paused"):
+                recovery.recover(REQUEST, "0" * 64, loop.bindings.digest(state), self.fixture.root)
+            recovery.recover(REQUEST, loop.bindings.digest(data), loop.bindings.digest(state), self.fixture.root)
+        # This suite's start/completion adapter does not instantiate wire bridges;
+        # the recovery suite separately checks real journals and exact read-back.
+        with patch.object(roles, "require_completed_bridge"):
+            result = self.fixture.finish()
+        self.assertEqual(result["phase"], "approved", result["integration"].get("reason"))
+        self.assertEqual(len(self.fixture.starts), starts)
+        self.assertEqual(result["integration"]["review"]["head"], data["integration"]["receipt"]["head"])
 
     def test_combined_failure_or_findings_never_reuses_worker_approval(self):
         self.enable()

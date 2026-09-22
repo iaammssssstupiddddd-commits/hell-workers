@@ -198,6 +198,9 @@ class CheckpointTests(unittest.TestCase):
                 "message": {"type": "worker_done"},
                 "lifecycle": {"action": "completed", "taskId": "task_fixture", "dispatchId": "ctx_fixture"}}}
             state.storage.write_ledger(directory / "journal.json", journal)
+            for failure in (roles.task_bridge.wire.ObservationUnavailable("unconfirmed"), TimeoutError(), ConnectionError()):
+                observer.call.side_effect = failure
+                self.assertIsNone(roles.settlement_exit(bridge))
             for idle in (False, True):
                 observer.call.side_effect = [{"terminal": {}}, {"wait": {
                     "handle": "term_fixture", "condition": "tui-idle", "satisfied": idle, "status": "running"}},
@@ -272,6 +275,17 @@ class CheckpointTests(unittest.TestCase):
         other["tasks"]["fixed-reviewer"].update(ticket_sha256="b" * 64, session_sha256="c" * 64)
         state.save_state(other)
         roles.verify_review(ticket, sealed)
+        for phase in ("starting", "unknown"):
+            other["last"]["phase"] = phase
+            state.save_state(other)
+            roles.verify_review(ticket, sealed)
+            with self.assertRaisesRegex(ValueError, "unknown role attempt"):
+                state.read_state("reviewer", "codex")
+        other["tasks"]["fixed-reviewer"]["session_id"] = str(uuid.uuid4())
+        state.save_state(other)
+        with self.assertRaisesRegex(ValueError, "fixed reviewer"):
+            roles.verify_review(ticket, sealed)
+        state.save_state(data)
         with self.assertRaisesRegex(ValueError, "stale"):
             roles.verify_review(ticket, {**sealed, "validation_evidence": "forged"})
         (self.repo / "src/content.txt").write_text("changed after review")
