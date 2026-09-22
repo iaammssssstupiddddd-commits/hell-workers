@@ -11,9 +11,14 @@
 ## 1. 全体方針
 
 本作のアートスタイルは **「手描き感の強いラフなベクターイラスト（Rough Vector Sketch）」** で統一する。
-3Dモデルを使用する場合も、assetごとにnative受入で確定したlightingとtexture-baked lineworkを使い、**「体積のある存在に見えない」** 2Dイラスト的外見を担保する。
+3Dモデルは用途が読める外形・厚み・開口・前後関係を作り、テクスチャは手描きの線・色面・材質を担う。
+assetごとにnative受入で確定したlightingとtexture-baked lineworkを使い、立体の構造を読める
+平面的な挿絵として成立させる。立体の陰影は構造を読む補助とし、細かな凹凸や光沢へ情報を分散させない。
 
-> 判断基準: 「これは3Dモデルである」と感じられるかどうかではなく、「平面的なイラストとして成立しているか」で合否を判断する。
+> 判断基準: ゲーム画面で施設の用途と状態が読め、手描きの線と大きな色面が同じ世界の表現として成立すること。
+
+建築物の具体的な役割分担、UV、陰の描き込み、素材、制作順は
+[building-art-direction.md](building-art-direction.md) を正本とする。個別assetの寸法・表示分類・release契約は維持する。
 
 ---
 
@@ -95,6 +100,14 @@ shared Rectangle mesh
 ## 5. 建築物・地形基準
 
 ### 5.1 建築物（確定済み）
+
+新規設備の制作では [モデリング・テクスチャ制作仕様](building-art-direction.md) を併用する。
+下表の世界観モチーフを全ての面へ一律に描かず、通常表示で読める形・線・色面へ整理する。
+現行本設Wallの面別UVと弱い目地・断面表現は [Blender制作仕様](blender-setup.md#本設wallの面別uv) を参照する。
+
+新規設備の無地制作は[移行計画](plans/3d-rtt/non-wall-floor-building-art-migration-plan-2026-09-19.md)に従う。
+Tank/Mixerの`clay_draft` fixtureと自動検査は制作時の技術契約で、最終高さ・triangle予算・atlas・
+previewのアート受入ではない。無地で形を確認した後に面別UV・描線・surface別法線を確定する。
 
 | 要素 | 基準 |
 | --- | --- |
@@ -215,16 +228,15 @@ Doorは高さ32 wu、左右jambの外端X=`±16`、前後Z=`±4.8`をWall port�
 
 ---
 
-### 5.3 壁ノーマルマップ（PoC待ち）
+### 5.3 建築物の表面マップ
 
-> **判断タイミング**: MS-Asset-Build-A（壁 GLB PoC）の目視確認後に確定する。
+本設Wallのnormal mapは§5.1のとおり不採用であり、lightingはlit経路を維持する。
+normal mapを使用しないこととunlitで描画することは別の判断である。
+型枠・Doorも各asset契約のalbedoを使用し、normal mapを追加しない。
 
-| 選択肢 | トレードオフ |
-| --- | --- |
-| あり | 石積みの立体感・凹凸が強調される。ポスタライズと相性確認が必要 |
-| なし | Unlit 一貫性。手描き感との整合性が高い |
-
-**仮方針**: **なし** で実装開始し、PoC で比較検証する。
+新規設備の初期仕様はalbedoと必要箇所のemissiveを用い、normal・height・独立AO・
+metallic/roughness mapは使用しない。材質差は形・色面・描線で表す。
+具体的な光と陰の分担は [制作仕様§5](building-art-direction.md#5-光陰発光の分担) を参照する。
 
 ---
 
@@ -250,5 +262,3 @@ Doorは高さ32 wu、左右jambの外端X=`±16`、前後Z=`±4.8`をWall port�
 | --- | --- |
 | billboardアウトライン線幅・ゆらぎ・色 | 新しいbillboard outline提案とnative比較 |
 | ズームアウト時の表示調整 | production camera / DPI / qualityのnative比較 |
-| 壁ノーマルマップ あり/なし | MS-Asset-Build-A（壁 GLB PoC）目視後 |
-| キャラクター向き管理方式 | 同上（左右ミラーのみ vs フル8方向） |

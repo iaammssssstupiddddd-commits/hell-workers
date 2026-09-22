@@ -7,7 +7,6 @@ use crate::systems::jobs::construction_cancellation::{
     release_matching_workers, spawn_construction_refunds,
 };
 use crate::systems::soul_ai::execute::task_execution::context::TaskQueries;
-use crate::systems::soul_ai::execute::task_execution::types::AssignedTask;
 use crate::world::map::WorldMapWrite;
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
@@ -21,14 +20,6 @@ struct SiteTileSnapshot {
     grid_pos: (i32, i32),
     bones_delivered: u32,
     mud_delivered: u32,
-}
-
-fn is_floor_task_for_site(task: &AssignedTask, site_entity: Entity) -> bool {
-    match task {
-        AssignedTask::ReinforceFloorTile(data) => data.site == site_entity,
-        AssignedTask::PourFloorTile(data) => data.site == site_entity,
-        _ => false,
-    }
 }
 
 #[derive(SystemParam)]
@@ -112,11 +103,11 @@ pub fn floor_construction_cancellation_system(
             &mut reservation_queries,
             &world_map,
             |assigned_task, working_on_opt| {
-                let matches_site_task = is_floor_task_for_site(assigned_task, site_entity);
-                let matches_working_on = working_on_opt
-                    .map(|working_on| related_targets.contains(&working_on.0))
-                    .unwrap_or(false);
-                matches_site_task || matches_working_on
+                related_targets
+                    .iter()
+                    .any(|&target| assigned_task.references_entity(target))
+                    || working_on_opt
+                        .is_some_and(|working_on| related_targets.contains(&working_on.0))
             },
         );
 
@@ -162,7 +153,7 @@ mod tests {
     use hw_core::events::{OnTaskAbandoned, ResourceReservationRequest};
     use hw_core::relationships::WorkingOn;
     use hw_jobs::construction::{FloorConstructionSite, FloorTileBlueprint};
-    use hw_jobs::{ReinforceFloorPhase, ReinforceFloorTileData};
+    use hw_jobs::{AssignedTask, ReinforceFloorPhase, ReinforceFloorTileData};
     use hw_logistics::SharedResourceCache;
     use hw_logistics::transport_request::{
         TransportPriority, TransportRequest, TransportRequestKind,

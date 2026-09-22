@@ -15,10 +15,10 @@ pub(crate) fn start_perf_capture_system(
         return;
     }
 
-    if !params.config.workload.has_automated_setup() {
+    if !params.config.workload().has_automated_setup() {
         error!(
             "PERF_CAPTURE: workload '{}' has no automated setup yet; use gather",
-            params.config.workload.as_str()
+            params.config.workload().as_str()
         );
         capture.phase = PerfCapturePhase::Finished;
         exit.write(AppExit::error());
@@ -64,8 +64,8 @@ pub(crate) fn start_perf_capture_system(
     };
 
     let initial_checksum = calculate_checksum(&params.checksum_queries);
-    let expected_souls = params.config.soul_count as usize;
-    let expected_familiars = params.config.familiar_count as usize;
+    let expected_souls = params.config.soul_count() as usize;
+    let expected_familiars = params.config.familiar_count() as usize;
     if initial_checksum.souls != expected_souls || initial_checksum.familiars != expected_familiars
     {
         if !capture.fixture_wait_reported {
@@ -172,7 +172,7 @@ pub(crate) fn start_perf_capture_system(
             save_transaction::save_transaction_sample_kind_from_env().to_string();
         eprintln!(
             "PERF_CAPTURE: phase=warmup virtual_speed=1.0 target_secs={}",
-            params.config.warmup_secs
+            params.config.warmup_secs()
         );
     }
 }
@@ -240,7 +240,7 @@ pub(crate) fn drive_perf_capture_system(
                 capture.elapsed_secs += realtime_capture_delta_secs(&params);
                 capture.warmup_virtual_secs += params.time.delta_secs_f64();
                 capture.warmup_real_secs += params.real_time.delta_secs_f64();
-                if capture.elapsed_secs >= f64::from(params.config.warmup_secs) {
+                if capture.elapsed_secs >= f64::from(params.config.warmup_secs()) {
                     if let Err(error) = validate_realtime_indoor_light_checkpoint(
                         &params.config,
                         &params.checksum_queries,
@@ -277,7 +277,7 @@ pub(crate) fn drive_perf_capture_system(
                     reset_dream_ui_measurement(&mut params);
                     eprintln!(
                         "PERF_CAPTURE: phase=measure target_secs={}",
-                        params.config.measure_secs
+                        params.config.measure_secs()
                     );
                     #[cfg(feature = "profiling-memory")]
                     crate::profiling_allocator::begin_measurement();
@@ -285,7 +285,7 @@ pub(crate) fn drive_perf_capture_system(
             }
         }
         PerfCapturePhase::Measure => {
-            if params.config.workload == PerfWorkload::SaveTransaction {
+            if params.config.workload() == PerfWorkload::SaveTransaction {
                 // This workload has exactly one timed transaction, but it still
                 // owns the declared realtime measurement window. Keep the
                 // process alive through that window so the scalar transaction
@@ -293,7 +293,7 @@ pub(crate) fn drive_perf_capture_system(
                 capture.elapsed_secs += params.time.delta_secs_f64();
                 capture.measure_virtual_secs += params.time.delta_secs_f64();
                 capture.measure_real_secs += params.real_time.delta_secs_f64();
-                if capture.measure_virtual_secs < f64::from(params.config.measure_secs) {
+                if capture.measure_virtual_secs < f64::from(params.config.measure_secs()) {
                     return;
                 }
                 if !capture.has_save_transaction_sample() {
@@ -336,7 +336,7 @@ pub(crate) fn drive_perf_capture_system(
                 {
                     capture.frame_times_ms.push(frame_time_ms);
                 }
-                if capture.elapsed_secs >= f64::from(params.config.measure_secs) {
+                if capture.elapsed_secs >= f64::from(params.config.measure_secs()) {
                     #[cfg(feature = "profiling-memory")]
                     {
                         capture.memory_measurement = crate::profiling_allocator::end_measurement();
@@ -390,7 +390,7 @@ pub(crate) fn drive_perf_capture_system(
                     &capture.determinism_checkpoints,
                     &capture.determinism_actor_records,
                 )
-            } else if params.config.workload == PerfWorkload::SaveTransaction {
+            } else if params.config.workload() == PerfWorkload::SaveTransaction {
                 match (
                     capture.initial_checksum,
                     capture.take_save_transaction_sample(),
@@ -462,7 +462,7 @@ pub(crate) fn drive_perf_capture_system(
             });
             let result = result.and_then(|()| {
                 #[cfg(feature = "profiling-memory")]
-                if params.config.workload == PerfWorkload::SaveTransaction {
+                if params.config.workload() == PerfWorkload::SaveTransaction {
                     super::output::write_save_transaction_memory_csv(
                         &params.config,
                         &capture.memory_measurement,
@@ -497,6 +497,8 @@ pub(crate) fn drive_perf_capture_system(
             let result = result.and_then(|()| {
                 write_door_density_fixture_sidecars(&params.config, &params.door_density_fixture)
             });
+            let result =
+                result.and_then(|()| params.building_art_static.write_sidecar(&params.config));
             let result = result.and_then(|()| {
                 let final_evidence = final_wall_density_presentation
                     .as_ref()
@@ -515,7 +517,7 @@ pub(crate) fn drive_perf_capture_system(
                 )
             });
             let result = result.and_then(|()| {
-                if params.config.workload == PerfWorkload::SaveTransaction {
+                if params.config.workload() == PerfWorkload::SaveTransaction {
                     return Ok(());
                 }
                 let inventory = capture.initial_render_inventory.as_ref().ok_or_else(|| {
@@ -578,7 +580,7 @@ fn validate_realtime_indoor_light_checkpoint(
     virtual_time: &Time<Virtual>,
     checkpoint: &str,
 ) -> Result<(), String> {
-    if config.workload != PerfWorkload::IndoorLight {
+    if config.workload() != PerfWorkload::IndoorLight {
         return Ok(());
     }
     if !virtual_time.is_paused() {

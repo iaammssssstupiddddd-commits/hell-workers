@@ -240,7 +240,7 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 - `soul_ai::execute::gathering_spawn` — 集会発生判定と `GatheringSpawnRequest` 発行
 - `soul_ai::execute::task_assignment_apply` — `TaskAssignmentRequest` 適用。system 登録責務も `hw_soul_ai::SoulAiCorePlugin` が持つ
 - `soul_ai::pathfinding` — `pathfinding_system`（パス再利用・再探索・フォールバック）と `soul_stuck_escape_system`。`GameSystemSet::Actor` で登録。`hw_world::pathfinding` の探索関数を呼び出す
-- `soul_ai::building_completed::on_building_completed` — `BuildingCompletedEvent` Observer。WorldMap 更新・ObstaclePosition spawn・Soul 押し出しを担当。`SoulAiCorePlugin` が `app.add_observer()` で登録
+- `soul_ai::building_completed::on_building_completed` — `BuildingCompletedEvent` Observer。rootで占有移譲済みのWorldMapを読み、ObstaclePosition spawn・Soul押し出しを担当。`SoulAiCorePlugin`が`app.add_observer()`で登録
 - `soul_ai::decide::idle_behavior::idle_behavior_decision_system` — IdleBehavior 決定本体
 - `soul_ai::decide::idle_behavior::transitions` — IdleBehavior 遷移判定ヘルパー（次の行動選択・持続時間計算）
 - `soul_ai::decide::idle_behavior::task_override` — タスク割り当て時の集会・休憩解除ヘルパー
@@ -250,7 +250,7 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 - `soul_ai::helpers::gathering_motion` — 集会中移動先選定（Wandering / Still retreat）
 - `soul_ai::helpers::work::{is_soul_available_for_work, unassign_task, cleanup_task_assignment}` — 作業可否判定・タスク解除・後片付けヘルパー
 - `hw_jobs::tasks::AssignedTask`（`crates/hw_jobs/src/tasks/mod.rs`）— タスク実行バリアントの正本。`soul_ai::execute::task_execution::types`はhandler向けの選択的re-export
-- `soul_ai::execute::task_execution::context::{TaskExecutionContext, TaskQueries, TaskAssignmentQueries, ConstructionSiteAccess}` — タスク実行/割り当て用 context・SystemParam
+- `soul_ai::execute::task_execution::context::{TaskExecutionContext, TaskQueries, TaskUnassignQueries, ConstructionSiteAccess}` — タスク実行/解除用context・SystemParam。解除queryは予約とdesignationに限定し、割当適用systemは固有queryを使う
 - `soul_ai::execute::task_execution::handler::{TaskHandler, run_task_handler, execute_haul_with_wheelbarrow}` — タスクハンドラトレイト・ディスパッチ
 - `soul_ai::execute::task_execution::{gather, build, coat_wall, collect_bone, collect_sand, frame_wall, haul, haul_to_blueprint, haul_to_mixer, move_plant, pour_floor, refine, reinforce_floor, common}` — 各タスク種別実装
 - `soul_ai::execute::task_execution::{haul_with_wheelbarrow, bucket_transport, transport_common}` — 輸送系タスク実装
@@ -638,6 +638,7 @@ root (`bevy_app`) は app shell として `init_resource::<WorldMap>()`、startu
 
 - terrain / building / stockpile / obstacle の状態保持。`tile_entities`は旧Dense save互換fieldで、current runtimeでは全slot `None`
 - occupancy / footprint / door / stockpile の更新 API
+- owner付きfootprint解放は全セル一致を先に検証し、競合時は一致部分も変更しない。runtime完成・移設のlive検証とECS副作用は各lifecycle ownerが持つ
 - Bevy resource としての公開面（型は `hw_world`、初期化と app 配線は root）
 
 `hw_world` 側へ寄せる責務:

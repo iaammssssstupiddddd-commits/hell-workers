@@ -38,6 +38,10 @@
 
 ## 世界観・アセット
 - [art-style-criteria.md](art-style-criteria.md): アートスタイルの受入基準と検証観点。
+- [building-art-direction.md](building-art-direction.md): 建築物の形状・手描きテクスチャ・UV・光の役割分担、素材表現、制作順と採用条件。
+- [building-asset-sets.md](building-asset-sets.md): 新設備8種のmanifest・authority・依存バイト検証。描画への接続は未実装。
+- [building-art-static-reference.md](building-art-static-reference.md): Bridgeを除く9種の静止性能参照、実地形の配置・状態検査、Capture/Memoryの逐次計測と未測定範囲。
+- [plans/3d-rtt/non-wall-floor-building-art-migration-plan-2026-09-19.md](plans/3d-rtt/non-wall-floor-building-art-migration-plan-2026-09-19.md): 壁・床を除く10種のアート移行、モデルとpreviewの接続、状態表示、段階導入と受入の計画。
 - [world_lore.md](world_lore.md): 世界観設定書。アセットデザインのための世界観・視覚指針（アートスタイル含む）。
 - [assets_workflow.md](assets_workflow.md): `Syncthing` を前提にした原本共有、`exports/` 運用、`assets/` 反映手順。
 - [blender-setup.md](blender-setup.md): AI支援Blender編集、MCP安全境界、staging品質gate、GLB検証の手順。
@@ -47,6 +51,7 @@
 - [events.md](events.md): **イベントカタログ**。全イベントの Producer / Consumer / Timing 一覧。イベント追加時は必ず更新。
 
 ## 開発ガイド
+- [orca-quickstart.md](orca-quickstart.md): Orca UIから開く運用ガイド。Linear受付・相談からguard付き配車する入口、受入済みread-only Taskと監督付きA/B並列編集、担当分担と停止/再開。
 - [architecture.md](architecture.md): 全体構造、システム依存関係、GameTime、空間グリッド一覧。
 - [crate-boundaries.md](crate-boundaries.md): crate 間の依存方向とコアロジック分離の原則。
 - [cargo_workspace.md](cargo_workspace.md): Cargo workspace の crate 責務、依存方向、分割ルール（hw_core / hw_energy / hw_infra / hw_world / hw_logistics / hw_jobs / hw_familiar_ai / hw_soul_ai / hw_spatial / hw_ui / hw_visual）。
@@ -60,12 +65,13 @@
 - [visual_test.md](visual_test.md): productionとは独立したTopDown建物・地形visual testの操作とScene RtT構造。
 - [DEVELOPMENT.md](DEVELOPMENT.md): 開発規約・MCP活用、固定品質ツール、依存監査・Dependabot更新、property testの再現手順。
 - [development-infra/rust-analyzer-mcp.md](development-infra/rust-analyzer-mcp.md): 複数エージェントでrust-analyzer MCP backendを共有するadapter、idle解放、IDE側の常駐コスト削減設定。
+- [development-infra/orca-development.md](development-infra/orca-development.md): Orca分離開発の詳細仕様。Linear受付、guard付きhost controller、Codex/Cursor Task bridge、受入済み監督付き並列編集、固定reviewer・host資源制御の再利用。
 - [development-infra/validation-storage-audit-2026-09-13.md](development-infra/validation-storage-audit-2026-09-13.md): 検証データの容量実測、track close時の撤去規則と実装の差、旧checkout・共有worktreeの残存調査。
 - [development-infra/validation-storage-workflow.md](development-infra/validation-storage-workflow.md): 終了データの整理、現在の用途による保持、フィードバック中の差分ビルド保全。全job保存・固定日数の義務は設けない。
 - [development-infra/validation-storage-workflow-review-2026-09-13.md](development-infra/validation-storage-workflow-review-2026-09-13.md): 保存規則の自己レビューと修正結果。差分ビルド保全、primary coordinator・台帳・整理gateの適用範囲と検証記録。
 - [linux-setup.md](linux-setup.md): Linux ネイティブ環境でのビルド・実行セットアップ手順。
 - [plans/README.md](plans/README.md): フェーズ分割した実装計画ドキュメント。
-- [plans/change-aware-ci-plan-2026-09-19.md](plans/change-aware-ci-plan-2026-09-19.md): 変更内容に応じたCI自動実行、検証群分割、集約判定と各エージェント向け完了ルールの同期計画。
+- [development-infra/change-aware-ci-acceptance-2026-09-20.md](development-infra/change-aware-ci-acceptance-2026-09-20.md): 変更内容に応じたCI・開発ルール更新の完了記録。受入証拠と既存の日次監査の位置づけ。
 - [plans/archive/priority-development-tools-plan-2026-09-13.md](plans/archive/priority-development-tools-plan-2026-09-13.md): cargo-deny、Dependabot、Ruff、actionlint、proptestの導入・GitHub受入完了記録。
 - [plans/3d-rtt/provisional-wall-formwork-plan-2026-09-05.md](plans/3d-rtt/provisional-wall-formwork-plan-2026-09-05.md): 木材を使う仮設壁の型枠表現、段階別mesh切替、混在接続・実機受入の計画。
 - [plans/3d-rtt/production-door-art-plan-2026-09-05.md](plans/3d-rtt/production-door-art-plan-2026-09-05.md): 木・骨の両開きドア、固定枠と開閉／施錠の3状態、2軸preview・壁との接続・実機受入の計画。
@@ -78,7 +84,10 @@
 - [plans/hvac-plumbing-plan-2026-07-13.md](plans/hvac-plumbing-plan-2026-07-13.md): 換気・導水・Room 認可を M0〜M4 で導入する実装計画。
 - [plans/3d-rtt/single-scene-rtt-indoor-light-field-migration-plan-2026-08-03.md](plans/3d-rtt/single-scene-rtt-indoor-light-field-migration-plan-2026-08-03.md): Scene RtT 1枚、TopDown表示、Wall / Door遮光の放射状Indoor Light Fieldへ移行する9分割計画の親ロードマップ。
 - [proposals/README.md](proposals/README.md): 提案書一覧とテンプレート。
+- [proposals/implementation-refactor-audit-proposal-2026-09-17.md](proposals/implementation-refactor-audit-proposal-2026-09-17.md): 全13 crateの実装横断レビューとR01〜R14の個別実装計画への入口。優先順位・依存・根拠・検証条件。
 - [proposals/library-tooling-evaluation-proposal-2026-09-13.md](proposals/library-tooling-evaluation-proposal-2026-09-13.md): ライブラリ・開発ツールの導入／置換候補、現行構成との重複、優先順位と採用条件。
+- [proposals/orca-parallel-development-proposal-2026-09-20.md](proposals/orca-parallel-development-proposal-2026-09-20.md): Orcaでの実装2名・専任レビュー1名・統括の運用素案。Orca導入済み、host資源制御・変更所有権・統合運用は計画化。
+- [plans/orca-parallel-development-plan-2026-09-20.md](plans/orca-parallel-development-plan-2026-09-20.md): Linear受付とOrca実行基盤の統合計画。既存実装の再利用、L0〜L4の実装・受入、ゲーム検証を除いた今回の範囲。
 - [proposals/progression-and-choice-proposal-2026-08-09.md](proposals/progression-and-choice-proposal-2026-08-09.md): Track D の Dream Edict、Contract、Familiar 昇格を扱う進行・選択提案。
 - [proposals/archive/gameplay-management-improvements-proposal-2026-07-17.md](proposals/archive/gameplay-management-improvements-proposal-2026-07-17.md): Track A〜C のロードマップと完了履歴を保持するアーカイブ提案。
 - [proposals/hvac-plumbing-proposal.md](proposals/hvac-plumbing-proposal.md): 採用済みの空調・衛生インフラ提案（世界観・採否理由）。

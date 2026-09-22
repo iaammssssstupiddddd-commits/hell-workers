@@ -85,6 +85,13 @@ Soul行は最小32pxの1段グリッド、上下padding各1px・行間margin1px�
 `EntityListDirty` を **structure dirty / value dirty** に分離し、行の増減・並び替え（重い再構築）と
 バイタル値の更新（軽量なテキスト差し替え）を別 system・別 run_if で処理する。
 
+折りたたみマーカー`SectionFolded` / `UnassignedFolded`の追加・変更と削除の両方を構造変更として検知する。
+展開はマーカー削除で行うため、削除通知も毎回消費し、pause中でも行を再生成する。
+
+Soul名は単語が列幅を超える場合に文字単位で折り返す。長い英字名でも隣の疲労値と重ならず、行は内容に応じて高さを確保する。
+
+2026-09-19のR04／R08実機受入では、1920×1080／UI scale 1、Intel Arc MTL／Vulkan／X11 under Waylandでportal入力の13 checkpointを確認した。解体・発電・給水の同じSoulについて一覧／詳細／Tooltipの意味が一致し、改名・検索／解除・折りたたみ／再展開と、通常simulationによる疲労25→26%の同一row更新が成立した。全13画像の可読性、長い名前の折返し、独立verifierと無警告ログも確認済み。この結果はIME composition、他viewport／DPI入力、全UI操作や性能改善率の受入を含まない。
+
 - `build_entity_list_view_model_system`（run_if: `needs_structure_sync() || needs_value_sync_only()`）
   - `current/previous` スナップショット構築。構造・値どちらの変化でも VM を作り直す
 - `sync_entity_list_from_view_model_system`（run_if: **`needs_structure_sync()` のみ**）
@@ -93,6 +100,7 @@ Soul行は最小32pxの1段グリッド、上下padding各1px・行間margin1px�
   - 表示順は `replace_children` でビュー順へ再整列
   - 行の生成時に値も設定するため、構造変化フレームでは値行 system は走らせない
 - `sync_entity_list_value_rows_system`（run_if: **`needs_value_sync_only()` のみ**）
+  - 生成時の`SoulRowNodes`がgender/name/fatigue/stress/dream/task icon/task labelの7 Entityを保持し、`hw_ui::list::values`がその参照で更新する。childの並び順には依存しない。生成と更新は`list/style.rs`を共有する
   - 既存行の `Text` / `TextColor` / `TextFont` / `ImageNode` を in-place 更新
   - **代入前に現値と比較し、変化した項目だけ書き込む**（`get_mut` の DerefMut を避けることで、値が変わらない vitals 更新で `Changed` が立って UI が再レイアウトされるのを防ぐ）
   - 二つの run_if は排他（structure 変化フレームは全再構築側が値も含めて処理する）
@@ -182,6 +190,7 @@ Soul行は最小32pxの1段グリッド、上下padding各1px・行間margin1px�
 
 ### `hw_ui` 側（移設済み）
 - `crates/hw_ui/src/list/models.rs` - ビューモデル型・`EntityListNodeIndex`・`FamiliarSectionNodes`
+- `crates/hw_ui/src/list/values.rs`, `style.rs` - typed node経由の差分値更新と共通表示規則
 - `crates/hw_ui/src/list/spawn.rs` - `spawn_familiar_section`, `spawn_soul_list_item_entity` 等（`dyn UiAssets` 経由）
 - `crates/hw_ui/src/list/sync.rs` - `sync_familiar_sections`, `sync_unassigned_souls`（`dyn UiAssets` 経由）
 - `crates/hw_ui/src/list/section_toggle.rs` - `entity_list_section_toggle_system`（折りたたみ純UI操作）

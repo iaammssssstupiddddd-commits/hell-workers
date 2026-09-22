@@ -1,0 +1,37 @@
+#import "shaders/terrain_surface_types.wgsl"::TerrainSurfaceUniforms
+
+@group(#{MATERIAL_BIND_GROUP}) @binding(100) var<uniform> tsm: TerrainSurfaceUniforms;
+@group(#{MATERIAL_BIND_GROUP}) @binding(101) var terrain_id_map: texture_2d<f32>;
+@group(#{MATERIAL_BIND_GROUP}) @binding(102) var terrain_feature_map: texture_2d<f32>;
+@group(#{MATERIAL_BIND_GROUP}) @binding(103) var grass_albedo: texture_2d<f32>;
+@group(#{MATERIAL_BIND_GROUP}) @binding(104) var grass_sampler: sampler;
+@group(#{MATERIAL_BIND_GROUP}) @binding(105) var dirt_albedo: texture_2d<f32>;
+@group(#{MATERIAL_BIND_GROUP}) @binding(106) var dirt_sampler: sampler;
+@group(#{MATERIAL_BIND_GROUP}) @binding(107) var sand_albedo: texture_2d<f32>;
+@group(#{MATERIAL_BIND_GROUP}) @binding(108) var sand_sampler: sampler;
+@group(#{MATERIAL_BIND_GROUP}) @binding(109) var river_albedo: texture_2d<f32>;
+@group(#{MATERIAL_BIND_GROUP}) @binding(110) var river_sampler: sampler;
+@group(#{MATERIAL_BIND_GROUP}) @binding(111) var terrain_macro_noise: texture_2d<f32>;
+@group(#{MATERIAL_BIND_GROUP}) @binding(112) var macro_noise_sampler: sampler;
+@group(#{MATERIAL_BIND_GROUP}) @binding(113) var grass_macro_overlay: texture_2d<f32>;
+@group(#{MATERIAL_BIND_GROUP}) @binding(114) var grass_overlay_sampler: sampler;
+@group(#{MATERIAL_BIND_GROUP}) @binding(115) var dirt_macro_overlay: texture_2d<f32>;
+@group(#{MATERIAL_BIND_GROUP}) @binding(116) var dirt_overlay_sampler: sampler;
+@group(#{MATERIAL_BIND_GROUP}) @binding(117) var sand_macro_overlay: texture_2d<f32>;
+@group(#{MATERIAL_BIND_GROUP}) @binding(118) var sand_overlay_sampler: sampler;
+@group(#{MATERIAL_BIND_GROUP}) @binding(119) var terrain_blend_mask_soft: texture_2d<f32>;
+@group(#{MATERIAL_BIND_GROUP}) @binding(120) var blend_mask_sampler: sampler;
+@group(#{MATERIAL_BIND_GROUP}) @binding(121) var river_flow_noise: texture_2d<f32>;
+@group(#{MATERIAL_BIND_GROUP}) @binding(122) var river_flow_sampler: sampler;
+@group(#{MATERIAL_BIND_GROUP}) @binding(123) var river_normal_like: texture_2d<f32>;
+@group(#{MATERIAL_BIND_GROUP}) @binding(124) var river_normal_sampler: sampler;
+@group(#{MATERIAL_BIND_GROUP}) @binding(125) var shoreline_detail: texture_2d<f32>;
+@group(#{MATERIAL_BIND_GROUP}) @binding(126) var shoreline_detail_sampler: sampler;
+@group(#{MATERIAL_BIND_GROUP}) @binding(127) var terrain_feature_lut: texture_2d<f32>;
+@group(#{MATERIAL_BIND_GROUP}) @binding(128) var feature_lut_sampler: sampler;
+@group(#{MATERIAL_BIND_GROUP}) @binding(129) var boundary_mask: texture_2d<f32>;
+@group(#{MATERIAL_BIND_GROUP}) @binding(130) var boundary_mask_sampler: sampler;
+@group(#{MATERIAL_BIND_GROUP}) @binding(131) var boundary_proximity_mask: texture_2d<f32>;
+@group(#{MATERIAL_BIND_GROUP}) @binding(132) var boundary_proximity_sampler: sampler;
+@group(#{MATERIAL_BIND_GROUP}) @binding(133) var indoor_light_field: texture_2d<f32>;
+@group(#{MATERIAL_BIND_GROUP}) @binding(134) var indoor_light_sampler: sampler;

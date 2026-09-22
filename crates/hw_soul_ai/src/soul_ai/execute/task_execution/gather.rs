@@ -1,17 +1,13 @@
 //! 収集タスクの実行処理
 
 use crate::soul_ai::execute::task_execution::{
-    chain::{self, GatherHaulChain},
+    chain,
     common::*,
     context::{TaskExecutionContext, TaskHandlerControl},
-    types::{
-        AssignedTask, GatherData, GatherPhase, HaulData, HaulPhase, HaulToBlueprintData,
-        HaulToBpPhase, HaulToMixerData, HaulToMixerPhase,
-    },
+    types::{AssignedTask, GatherData, GatherPhase},
 };
 use bevy::prelude::*;
 use hw_core::constants::*;
-use hw_core::relationships::WorkingOn;
 use hw_core::visual::{FadeOut, SoulTaskHandles};
 use hw_jobs::{Designation, WorkType};
 use hw_logistics::{ResourceItem, ResourceType};
@@ -188,54 +184,10 @@ pub fn handle_gather_task(
             };
 
             if let Some(resource_type) = resource_type
-                && let Some(chain) =
-                    chain::find_haul_chain_after_gather(resource_type, soul_pos, ctx)
+                && let Some(prepared) =
+                    chain::prepare_gather_haul_segment(resource_type, soul_pos, ctx)
             {
-                commands.entity(ctx.soul_entity).remove::<WorkingOn>();
-                ctx.path.waypoints.clear();
-                match chain {
-                    GatherHaulChain::Storage { item, destination } => {
-                        commands.entity(ctx.soul_entity).insert(WorkingOn(item));
-                        ctx.transition_task_identity(item, WorkType::Haul);
-                        *ctx.task = AssignedTask::Haul(HaulData {
-                            item,
-                            stockpile: destination,
-                            phase: HaulPhase::GoingToItem,
-                        });
-                        debug!(
-                            "GATHER_CHAIN: Soul {:?} chained to haul {:?} ({:?}) to storage {:?}",
-                            ctx.soul_entity, item, resource_type, destination
-                        );
-                    }
-                    GatherHaulChain::Blueprint { item, blueprint } => {
-                        commands.entity(ctx.soul_entity).insert(WorkingOn(item));
-                        ctx.transition_task_identity(item, WorkType::Haul);
-                        *ctx.task = AssignedTask::HaulToBlueprint(HaulToBlueprintData {
-                            item,
-                            blueprint,
-                            phase: HaulToBpPhase::GoingToItem,
-                        });
-                        debug!(
-                            "GATHER_CHAIN: Soul {:?} chained to haul {:?} ({:?}) to blueprint {:?}",
-                            ctx.soul_entity, item, resource_type, blueprint
-                        );
-                    }
-                    GatherHaulChain::Mixer { item, mixer } => {
-                        commands.entity(ctx.soul_entity).insert(WorkingOn(item));
-                        ctx.transition_task_identity(item, WorkType::HaulToMixer);
-                        *ctx.task = AssignedTask::HaulToMixer(HaulToMixerData {
-                            item,
-                            mixer,
-                            resource_type,
-                            phase: HaulToMixerPhase::GoingToItem,
-                        });
-                        debug!(
-                            "GATHER_CHAIN: Soul {:?} chained to haul {:?} ({:?}) to mixer {:?}",
-                            ctx.soul_entity, item, resource_type, mixer
-                        );
-                    }
-                }
-                return TaskHandlerControl::Continue;
+                return chain::commit_gather_haul_segment(prepared, ctx, commands);
             }
 
             return ctx.complete_task(commands, "gather done without chain");

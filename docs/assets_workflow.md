@@ -76,6 +76,11 @@
 Blender AI編集、品質gate、MCPの安全境界は
 [`blender-setup.md`](blender-setup.md) を参照する。
 
+壁・床以外の移行M0では、`build_building_clay.py`がTank/Mixerのrole別原本・GLB・neutral albedo・
+状態PNGをstagingへ作る。`verify`は実bytesを再検証するが、出力は`technical_clay_only`であり、
+`.buildingset`、ArtPreview/candidate authority、art approval、promotion receiptを発行しない。
+通常runtimeへのcopy・locator切替は実装も実行もしていない。既存Wall/Doorの承認経路は不変。
+
 production Wall M1候補は1つの`.blend`にあるexact named collectionを個別に検査・exportする。各GLBは
 Khronos validatorの後に`tools/blender_ai_workflow/bin/validate-wall-glb`で実bytesを再検査し、scene reportだけを
 合格根拠にしない。M1中の`.blend`、GLB、texture、reportはすべて`staging/`に留め、asset-set manifestと

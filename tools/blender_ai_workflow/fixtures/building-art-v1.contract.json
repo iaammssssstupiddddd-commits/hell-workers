@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "contract_id": "building-art-v1",
+  "tile_size_wu": 32,
+  "shape_source": "crates/hw_jobs/src/placement_geometry.rs",
+  "runtime_schema": "building-asset-set-v1 (manifest/byte loader; runtime activation pending)",
+  "excluded": ["Wall", "Floor"],
+  "kinds": {
+    "Tank": {"slug": "tank", "shape": "two_by_two", "presentation": "Structural3d", "mesh_roles": ["body", "water"], "image_roles": ["albedo", "world_preview", "catalog"], "leaf_count": 2, "representative_state": "Empty", "state_source": "StoredItems / Stockpile.capacity", "movable": true},
+    "MudMixer": {"slug": "mud-mixer", "shape": "two_by_two", "presentation": "Structural3d", "mesh_roles": ["body", "rotor"], "image_roles": ["albedo", "world_preview", "catalog"], "leaf_count": 2, "representative_state": "IdleAngleZero", "state_source": "MudMixerVisualState.is_active / Time<Virtual>", "movable": true},
+    "RestArea": {"slug": "rest-area", "shape": "two_by_two", "presentation": "Structural3d", "mesh_roles": ["body"], "image_roles": ["albedo", "world_preview", "catalog"], "leaf_count": 1, "representative_state": "Empty", "state_source": "RestAreaOccupants (existing Dream particles only)", "movable": false},
+    "SoulSpa": {"slug": "soul-spa", "shape": "soul_spa", "presentation": "Structural3d", "mesh_roles": ["body", "slot"], "image_roles": ["albedo", "slot_emissive", "world_preview", "catalog"], "leaf_count": 5, "representative_state": "OperationalMaskZero", "state_source": "SoulSpaPhase / parent_site / grid_pos / nonempty TaskWorkers", "movable": false},
+    "Bridge": {"slug": "bridge", "shape": "bridge", "presentation": "Structural3d", "mesh_roles": ["body"], "image_roles": ["albedo", "world_preview", "catalog"], "leaf_count": 1, "representative_state": "Complete", "state_source": "Building lifecycle", "movable": false},
+    "WheelbarrowParking": {"slug": "wheelbarrow-parking", "shape": "two_by_two", "presentation": "Foreground2d", "mesh_roles": [], "image_roles": ["world", "catalog"], "leaf_count": 0, "representative_state": "WithoutVehicle", "state_source": "Static; vehicle is a separate owner", "movable": false},
+    "SandPile": {"slug": "sand-pile", "shape": "single_tile", "presentation": "Foreground2d", "mesh_roles": [], "image_roles": ["world", "catalog"], "leaf_count": 0, "representative_state": "Static", "state_source": "Static infinite source", "movable": false},
+    "BonePile": {"slug": "bone-pile", "shape": "single_tile", "presentation": "Foreground2d", "mesh_roles": [], "image_roles": ["world", "catalog"], "leaf_count": 0, "representative_state": "Static", "state_source": "Static infinite source", "movable": false},
+    "OutdoorLamp": {"slug": "outdoor-lamp", "shape": "single_tile", "presentation": "Foreground2d", "mesh_roles": [], "image_roles": ["world_off", "world_on", "catalog"], "leaf_count": 0, "representative_state": "Off", "state_source": "PoweredVisualState (paused load starts off)", "movable": false}
+  },
+  "inherited": {"Door": {"asset_set_id": "door-production-v1", "generation": 7, "schema": "doorset", "catalog_role": "preview:ew", "shape": "single_tile", "ownership": "Existing Door plans own release closure; this track audits art and catalog only"}},
+  "shapes": {
+    "single_tile": {"ordered_tiles": [[0, 0]], "center_tiles": [0, 0], "size_tiles": [1, 1], "anchor_basis": "ClickedGrid"},
+    "two_by_two": {"ordered_tiles": [[0, 0], [1, 0], [0, 1], [1, 1]], "center_tiles": [0.5, 0.5], "size_tiles": [2, 2], "anchor_basis": "ClickedGrid"},
+    "soul_spa": {"ordered_tiles": [[0, 0], [1, 0], [0, -1], [1, -1]], "center_tiles": [0.5, -0.5], "size_tiles": [2, 2], "anchor_basis": "ClickedGrid"},
+    "bridge": {"ordered_tiles": [[0, 0], [1, 0], [0, 1], [1, 1], [0, 2], [1, 2], [0, 3], [1, 3], [0, 4], [1, 4]], "center_tiles": [0.5, 2], "size_tiles": [2, 5], "anchor_basis": "RiverYMin"}
+  },
+  "preview_fields": ["image", "canvas_px", "canvas_wu", "anchor_px", "representative_state", "revision"],
+  "consumers": {
+    "placement_and_locked_companion": "crates/bevy_app/src/systems/visual/placement_ghost.rs",
+    "blueprint": "crates/bevy_app/src/interface/selection/building_place/placement.rs",
+    "late_pulse": "crates/hw_visual/src/blueprint",
+    "moving_ghost": "crates/bevy_app/src/interface/selection/building_move/preview.rs",
+    "confirmed_move_destination": "crates/bevy_app/src/interface/selection/building_move/finalization.rs",
+    "catalog": "crates/hw_ui/src/setup/submenus.rs",
+    "spa_construction": "crates/bevy_app/src/interface/selection/soul_spa_place/spawn.rs",
+    "load_shell": "crates/bevy_app/src/systems/save/rehydrate"
+  },
+  "companion": {"kind": "BucketStorage", "size_tiles": [2, 1], "new_tank_art": false},
+  "coordinates": {"glb": "X right, Y up, Z = -logical world Y", "body_origin": "ground center", "state_part_origin": "local pivot", "part_translation_unit": "world unit", "node_transform": "identity", "fallback_root_y_tiles": {"equipment": 0.4, "bridge": 0.09}},
+  "glb": {"nodes": 1, "meshes": 1, "primitives": 1, "attributes": ["POSITION", "NORMAL", "TEXCOORD_0"], "animations": false, "skins": false, "morphs": false, "embedded_images": false},
+  "art_freeze": "Per-group in-game clay decision before painting; draft dimensions are not final approval"
+}

@@ -14,7 +14,7 @@
 //   - boundary_proximity_mask early-out を維持（内部タイルはバイリニア不要）。
 //   - albedo UV 量子化なし（LOD2 の LOD2_ALBEDO_WORLD_TEXEL 処理なし）。
 //
-// バインドグループは 100〜132 が LOD1/LOD2 と同一。
+// バインドグループ宣言は共通moduleからimportし、100〜134の番号を維持する。
 // LOD1-lite で未参照のスロット（111〜124）はバインドされるが GPU からアクセスされない。
 
 #import bevy_pbr::{
@@ -26,59 +26,43 @@
 #import "shaders/shadow_style.wgsl"::apply_directional_shadow_style
 #import hell_workers::indoor_light_field::sample_indoor_light_field
 
-struct TerrainSurfaceUniforms {
-    map_world_width:            f32,
-    map_world_height:           f32,
-    uv_scale:                   f32,
-    blend_strength:             f32,
-    macro_noise_scale:          f32,
-    overlay_scale:              f32,
-    lut_shore:                  vec4<f32>,
-    lut_inland:                 vec4<f32>,
-    lut_rock:                   vec4<f32>,
-    feature_lut_constants_ready: f32,
-    shadow_style_params:        vec4<f32>,
-    shadow_style_tint:          vec4<f32>,
-    shadow_style_blur:          vec4<f32>,
-    indoor_light_params:        vec4<f32>,
+#import "shaders/terrain_surface_bindings.wgsl"::{
+    tsm,
+    terrain_id_map,
+    terrain_feature_map,
+    grass_albedo,
+    grass_sampler,
+    dirt_albedo,
+    dirt_sampler,
+    sand_albedo,
+    sand_sampler,
+    river_albedo,
+    river_sampler,
+    terrain_macro_noise,
+    macro_noise_sampler,
+    grass_macro_overlay,
+    grass_overlay_sampler,
+    dirt_macro_overlay,
+    dirt_overlay_sampler,
+    sand_macro_overlay,
+    sand_overlay_sampler,
+    terrain_blend_mask_soft,
+    blend_mask_sampler,
+    river_flow_noise,
+    river_flow_sampler,
+    river_normal_like,
+    river_normal_sampler,
+    shoreline_detail,
+    shoreline_detail_sampler,
+    terrain_feature_lut,
+    feature_lut_sampler,
+    boundary_mask,
+    boundary_mask_sampler,
+    boundary_proximity_mask,
+    boundary_proximity_sampler,
+    indoor_light_field,
+    indoor_light_sampler,
 }
-
-@group(#{MATERIAL_BIND_GROUP}) @binding(100) var<uniform> tsm: TerrainSurfaceUniforms;
-@group(#{MATERIAL_BIND_GROUP}) @binding(101) var terrain_id_map: texture_2d<f32>;
-@group(#{MATERIAL_BIND_GROUP}) @binding(102) var terrain_feature_map: texture_2d<f32>;
-@group(#{MATERIAL_BIND_GROUP}) @binding(103) var grass_albedo: texture_2d<f32>;
-@group(#{MATERIAL_BIND_GROUP}) @binding(104) var grass_sampler: sampler;
-@group(#{MATERIAL_BIND_GROUP}) @binding(105) var dirt_albedo: texture_2d<f32>;
-@group(#{MATERIAL_BIND_GROUP}) @binding(106) var dirt_sampler: sampler;
-@group(#{MATERIAL_BIND_GROUP}) @binding(107) var sand_albedo: texture_2d<f32>;
-@group(#{MATERIAL_BIND_GROUP}) @binding(108) var sand_sampler: sampler;
-@group(#{MATERIAL_BIND_GROUP}) @binding(109) var river_albedo: texture_2d<f32>;
-@group(#{MATERIAL_BIND_GROUP}) @binding(110) var river_sampler: sampler;
-// binding 111〜126: LOD1 との AsBindGroup レイアウト一致のために宣言。LOD1-lite では未参照。
-@group(#{MATERIAL_BIND_GROUP}) @binding(111) var terrain_macro_noise: texture_2d<f32>;
-@group(#{MATERIAL_BIND_GROUP}) @binding(112) var macro_noise_sampler: sampler;
-@group(#{MATERIAL_BIND_GROUP}) @binding(113) var grass_macro_overlay: texture_2d<f32>;
-@group(#{MATERIAL_BIND_GROUP}) @binding(114) var grass_overlay_sampler: sampler;
-@group(#{MATERIAL_BIND_GROUP}) @binding(115) var dirt_macro_overlay: texture_2d<f32>;
-@group(#{MATERIAL_BIND_GROUP}) @binding(116) var dirt_overlay_sampler: sampler;
-@group(#{MATERIAL_BIND_GROUP}) @binding(117) var sand_macro_overlay: texture_2d<f32>;
-@group(#{MATERIAL_BIND_GROUP}) @binding(118) var sand_overlay_sampler: sampler;
-@group(#{MATERIAL_BIND_GROUP}) @binding(119) var terrain_blend_mask_soft: texture_2d<f32>;
-@group(#{MATERIAL_BIND_GROUP}) @binding(120) var blend_mask_soft_sampler: sampler;
-@group(#{MATERIAL_BIND_GROUP}) @binding(121) var river_flow_noise: texture_2d<f32>;
-@group(#{MATERIAL_BIND_GROUP}) @binding(122) var river_flow_sampler: sampler;
-@group(#{MATERIAL_BIND_GROUP}) @binding(123) var river_normal_like: texture_2d<f32>;
-@group(#{MATERIAL_BIND_GROUP}) @binding(124) var river_normal_sampler: sampler;
-@group(#{MATERIAL_BIND_GROUP}) @binding(125) var shoreline_detail: texture_2d<f32>;
-@group(#{MATERIAL_BIND_GROUP}) @binding(126) var shoreline_detail_sampler: sampler;
-@group(#{MATERIAL_BIND_GROUP}) @binding(127) var terrain_feature_lut: texture_2d<f32>;
-@group(#{MATERIAL_BIND_GROUP}) @binding(128) var feature_lut_sampler: sampler;
-@group(#{MATERIAL_BIND_GROUP}) @binding(129) var boundary_mask: texture_2d<f32>;
-@group(#{MATERIAL_BIND_GROUP}) @binding(130) var boundary_mask_sampler: sampler;
-@group(#{MATERIAL_BIND_GROUP}) @binding(131) var boundary_proximity_mask: texture_2d<f32>;
-@group(#{MATERIAL_BIND_GROUP}) @binding(132) var boundary_proximity_sampler: sampler;
-@group(#{MATERIAL_BIND_GROUP}) @binding(133) var indoor_light_field: texture_2d<f32>;
-@group(#{MATERIAL_BIND_GROUP}) @binding(134) var indoor_light_sampler: sampler;
 
 fn tile_size() -> f32 {
     return 1.0 / tsm.uv_scale;

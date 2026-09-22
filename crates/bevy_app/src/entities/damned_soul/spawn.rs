@@ -17,7 +17,7 @@ pub use hw_core::population::PopulationManager;
 
 fn initial_spawn_count(perf_config: &PerfScenarioConfig) -> u32 {
     if perf_config.enabled() {
-        perf_config.soul_count
+        perf_config.soul_count()
     } else {
         spawn_args::parse_spawn_count_from_args_or_env(
             "--spawn-souls",

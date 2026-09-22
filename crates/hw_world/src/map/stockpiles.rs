@@ -22,18 +22,6 @@ impl WorldMap {
         self.set_stockpile(grid, entity);
     }
 
-    pub fn move_stockpile_tile(
-        &mut self,
-        entity: Entity,
-        old_grid: (i32, i32),
-        new_grid: (i32, i32),
-    ) {
-        if self.stockpile_entity(old_grid) == Some(entity) {
-            self.clear_stockpile(old_grid);
-        }
-        self.set_stockpile(new_grid, entity);
-    }
-
     pub fn clear_stockpile_tile_if_owned(&mut self, grid: (i32, i32), entity: Entity) -> bool {
         if self.stockpile_entity(grid) != Some(entity) {
             return false;

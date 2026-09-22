@@ -3001,6 +3001,9 @@ def self_test() -> int:
         assert field_core_args.allow_log_pattern == rtt_contract["allow_log_patterns"][
             "headless_audit"
         ]
+        normalized_field_core = vars(field_core_args).copy()
+        validate_arguments(field_core_args)
+        assert vars(field_core_args) == normalized_field_core
         p04_field_core_args = build_parser().parse_args(
             ["field-core", "--dry-run", "--stage", "p04"]
         )
@@ -3266,6 +3269,23 @@ def self_test() -> int:
         assert deconstruction_args.allow_log_pattern == [
             DECONSTRUCTION_HEADLESS_SOFTWARE_RENDERING_WARNING
         ]
+        behavior_args = build_parser().parse_args([
+            "behavior", "--dry-run", "--workload", "indoor-light",
+            "--contract", "rtt-light-v1", "--stage", "p08", "--lane", "behavior",
+            "--sizes", "small", "--renders", "cpu", "--seed", "20260803",
+            "--window-backend", "headless", "--repeat", "3", "--preflight-runs", "0",
+        ])
+        expected_cases = load_rtt_light_contract("rtt-light-v1")["stages"]["p08"]["required_behavior_cases"]
+        assert behavior_args.behavior_cases is None
+        validate_arguments(behavior_args)
+        assert behavior_args.behavior_cases == ",".join(expected_cases)
+        normalized_behavior = vars(behavior_args).copy()
+        validate_arguments(behavior_args)
+        assert vars(behavior_args) == normalized_behavior
+        explicit_cases = " , ".join(expected_cases)
+        behavior_args.behavior_cases = explicit_cases
+        validate_arguments(behavior_args)
+        assert behavior_args.behavior_cases == explicit_cases
         rejected_deconstruction_allowance = build_parser().parse_args(
             [
                 "audit",

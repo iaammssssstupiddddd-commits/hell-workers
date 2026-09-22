@@ -29,6 +29,26 @@ except ModuleNotFoundError:
 from .artifacts import sha256 as file_sha256
 
 RENDERDOC_REQUESTED_API_VERSION: Final = "1.6.0"
+
+
+def validate_light_field_binding_evidence(
+    probe: dict[str, Any], bindings: list[dict[str, Any]]
+) -> None:
+    """Tie the pixel proof to raw binding rows, independently of extraction."""
+    matches = [row for row in bindings if row["resource_id"] == probe["resource_id"]]
+    if (
+        len(matches) != probe["binding_count"]
+        or not any(row["category"].endswith(":read-only") for row in matches)
+        or any(
+            row["resource_id"] != probe["resource_id"]
+            or row["fixed_bind_set_or_space"] != 3
+            for row in bindings
+            if row["category"] == "bound:read-only"
+        )
+    ):
+        raise RuntimeError("Light Field pixel proof differs from raw material bindings")
+
+
 RUNTIME_CHECKPOINT_SCHEMA_V3: Final = 3
 RUNTIME_CHECKPOINT_SCHEMA_V4: Final = 4
 ENVIRONMENT_LOCK_SCHEMA_V2: Final = 2

@@ -120,6 +120,26 @@ fn construction_shell_rehydrate_restores_saved_state_while_logic_is_paused() {
         world.query::<&Sprite>().iter(&world).count(),
         restored_sprite_count
     );
+    for site in [floor_site_entity, wall_site_entity] {
+        assert_eq!(world.get::<Visibility>(site), Some(&Visibility::Inherited));
+        assert!(world.get::<InheritedVisibility>(site).is_some());
+        assert!(world.get::<ViewVisibility>(site).is_some());
+        world
+            .entity_mut(site)
+            .remove::<(Visibility, InheritedVisibility, ViewVisibility)>();
+    }
+    // Mirrors and names alone do not constitute a complete presentation shell.
+    rehydrate_construction_shells(&mut world, &BlueprintSpriteHandles::default());
+    world.flush();
+    for site in [floor_site_entity, wall_site_entity] {
+        assert_eq!(world.get::<Visibility>(site), Some(&Visibility::Inherited));
+        world.entity_mut(site).insert(Visibility::Hidden);
+    }
+    rehydrate_construction_shells(&mut world, &BlueprintSpriteHandles::default());
+    world.flush();
+    for site in [floor_site_entity, wall_site_entity] {
+        assert_eq!(world.get::<Visibility>(site), Some(&Visibility::Hidden));
+    }
 }
 
 #[test]
@@ -256,6 +276,17 @@ fn paused_visual_phase_rebuilds_construction_without_delivery_replay() {
         component_count::<WallConstructionProgressBar>(app.world_mut()),
         2
     );
+    for parent in app
+        .world_mut()
+        .query_filtered::<&ChildOf, With<hw_visual::progress_bar::GenericProgressBar>>()
+        .iter(app.world())
+    {
+        assert!(
+            app.world()
+                .get::<InheritedVisibility>(parent.parent())
+                .is_some()
+        );
+    }
 }
 
 pub(super) fn floor_site(phase: FloorConstructionPhase) -> FloorConstructionSite {

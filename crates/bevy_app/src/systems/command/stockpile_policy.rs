@@ -38,9 +38,11 @@ pub fn resolve_stockpile_policy_targets(
             let area_min = min.min(max);
             let area_max = min.max(max);
             let mut targets = stockpile_grid.get_in_area(area_min, area_max);
-            let positions = &stockpile_grid.data().positions;
             targets.sort_unstable_by(|left, right| {
-                match (positions.get(left), positions.get(right)) {
+                match (
+                    stockpile_grid.position(*left),
+                    stockpile_grid.position(*right),
+                ) {
                     (Some(left_pos), Some(right_pos)) => left_pos
                         .y
                         .total_cmp(&right_pos.y)

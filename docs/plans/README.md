@@ -1,6 +1,6 @@
 # Plans Index
 
-`docs/plans` の文書ステータス一覧（更新日: 2026-09-20）。
+`docs/plans` の文書ステータス一覧（更新日: 2026-09-22）。
 
 ## 新規計画書の作り方
 
@@ -30,6 +30,7 @@
 | [3d-rtt/door-preview-alignment-plan-2026-09-11.md](3d-rtt/door-preview-alignment-plan-2026-09-11.md) | In Progress | ドア設計図の表示位置修正と正式反映への引継ぎ |
 | [3d-rtt/lighting-visual-plan-2026-04-04.md](3d-rtt/lighting-visual-plan-2026-04-04.md) | Superseded | Outdoor Lamp のローカル照明で Soul / 建物に落ちる影を追加する計画 |
 | [3d-rtt/milestone-roadmap.md](3d-rtt/milestone-roadmap.md) | Superseded（完了済み実装の履歴。未完項目は凍結） | 3D-RtT 移行ロードマップ |
+| [3d-rtt/non-wall-floor-building-art-migration-plan-2026-09-19.md](3d-rtt/non-wall-floor-building-art-migration-plan-2026-09-19.md) | In Progress | 壁・床を除く10種の制作role、表示・preview・load契約、段階導入と具体的な受入条件。 |
 | [3d-rtt/production-door-art-plan-2026-09-05.md](3d-rtt/production-door-art-plan-2026-09-05.md) | In Progress — 通常版導入・通常quality受入済み／共通close残件 | 木・骨の両開きドア、固定枠＋3状態mesh、2軸previewとWall接続・実機受入の計画。 |
 | [3d-rtt/provisional-wall-formwork-plan-2026-09-05.md](3d-rtt/provisional-wall-formwork-plan-2026-09-05.md) | In Progress — 通常版導入済み／型枠release全品質・close残件 | 木製型枠6形状、タイル単位の本設mesh切替、混在接続と実機受入の計画。 |
 | [3d-rtt/single-scene-light-field/00-baseline-gates-plan-2026-08-03.md](3d-rtt/single-scene-light-field/00-baseline-gates-plan-2026-08-03.md) | Completed | Audit、Capture、Memory、RenderDocのbaselineと数値gateを実装前に固定するP00。 |
@@ -44,10 +45,10 @@
 | [3d-rtt/single-scene-light-field/08-legacy-cleanup-release-plan-2026-08-03.md](3d-rtt/single-scene-light-field/08-legacy-cleanup-release-plan-2026-08-03.md) | Completed — bounded P08 release closure valid; historical performance bootstrap intentionally not resumed | Soul projector／section／legacy mirrorを撤去し、最終GPU経路・cross-consumer・Help gateを閉じるP08。 |
 | [3d-rtt/single-scene-rtt-indoor-light-field-migration-plan-2026-08-03.md](3d-rtt/single-scene-rtt-indoor-light-field-migration-plan-2026-08-03.md) | Completed — P00〜P08 and P02-A complete; P08 bounded release closure valid | Scene RtT 1枚、TopDown表示、放射状Indoor Light Fieldへの9分割親ロードマップ。 |
 | [3d-rtt/terrain-lod-switch-flicker-plan-2026-04-17.md](3d-rtt/terrain-lod-switch-flicker-plan-2026-04-17.md) | Draft | 地形 LOD の単発切替ポップを観測し、短い dither 遷移で抑える計画 |
-| [change-aware-ci-plan-2026-09-19.md](change-aware-ci-plan-2026-09-19.md) | In Progress | 変更内容に応じたCI自動実行、検証群分割、集約判定、各エージェント向け完了ルールの同期計画。 |
 | [development-workstation-blender-migration-plan-2026-07-29.md](development-workstation-blender-migration-plan-2026-07-29.md) | In Progress | 新PCへの開発環境移行と、現PCでのBlender／asset新規構築計画。 |
 | [hvac-plumbing-plan-2026-07-13.md](hvac-plumbing-plan-2026-07-13.md) | Draft | 地獄のインフラ（換気・導水・部屋認可）実装計画 |
 | [native-acceptance-resource-safety-plan-2026-08-05.md](native-acceptance-resource-safety-plan-2026-08-05.md) | Complete | tmpfs上のCargo出力を永続storageへ固定し、実機検証のRAM圧迫を防ぐ計画。 |
+| [orca-parallel-development-plan-2026-09-20.md](orca-parallel-development-plan-2026-09-20.md) | In Progress — Orca Tasksを唯一の利用者向け受付とし、Linear-linked worktreeの可視統括と日本語A/B/review tabを実装。3 roleの権限制御と2レーン並列実行は受入済み、UIからの実案件一巡と異常系は未受入 | Linear受付・Orca実行基盤の統合。既存guard/session再利用、段階移行と限定検証 |
 
 ## アーカイブ計画書一覧 (`archive/` / `**/archived/`)
 
@@ -112,6 +113,20 @@
 | [archive/task-execution-refactor-plan-2026-07-07.md](archive/task-execution-refactor-plan-2026-07-07.md) | Archived | task_execution リファクタリング計画（コンテキスト集約・完了/中断区別・ログ降格・boundary.rs 分割） |
 | [archive/text-input-ui-plan-2026-07-05.md](archive/text-input-ui-plan-2026-07-05.md) | Archived | テキスト入力 UI — EditableText + clipboard 実装計画 |
 | [archive/wall-surface-uv-plan-2026-09-12.md](archive/wall-surface-uv-plan-2026-09-12.md) | Archived | 本設壁の側面UV・上面断面修正 |
+| [refactor/archived/refactor-r01-construction-navigation-plan-2026-09-18.md](refactor/archived/refactor-r01-construction-navigation-plan-2026-09-18.md) | Archived | 到達不能な建設タスクが旧Destinationへの近接から作業開始判定へ進める分岐を解消するの計画。 |
+| [refactor/archived/refactor-r02-gather-haul-chain-plan-2026-09-18.md](refactor/archived/refactor-r02-gather-haul-chain-plan-2026-09-18.md) | Archived | 採集後の連続搬送が通常割当と異なるsource claim・予約・搬入先受理を使う入口差を解消するの計画。 |
+| [refactor/archived/refactor-r03-worldmap-owner-release-plan-2026-09-18.md](refactor/archived/refactor-r03-worldmap-owner-release-plan-2026-09-18.md) | Archived | owner不一致でもraw障害物を消すrelease APIと、無変更を保証するclear APIの契約差を解消するの計画。 |
+| [refactor/archived/refactor-r04-task-presentation-plan-2026-09-18.md](refactor/archived/refactor-r04-task-presentation-plan-2026-09-18.md) | Archived | 解体taskが詳細/TooltipでBucketTransportへ落ちる表示分類の不整合を解消するの計画。 |
+| [refactor/archived/refactor-r05-transport-request-reconcile-plan-2026-09-18.md](refactor/archived/refactor-r05-transport-request-reconcile-plan-2026-09-18.md) | Archived | producerごとに異なる重複request選択、worker保持、spawn/updateを揃えて追従漏れを減らすの計画。 |
+| [refactor/archived/refactor-r06-stockpile-inbound-snapshot-plan-2026-09-18.md](refactor/archived/refactor-r06-stockpile-inbound-snapshot-plan-2026-09-18.md) | Archived | 共通evaluatorへ渡す内容・予約数の構築がproducer/arbitration/AIへ分散している状態を整理するの計画。 |
+| [refactor/archived/refactor-r07-task-entity-references-plan-2026-09-18.md](refactor/archived/refactor-r07-task-entity-references-plan-2026-09-18.md) | Archived | payloadのsecondary参照やWorkingOnの有無により取消対象workerの抽出が経路ごとに異なる状態を減らすの計画。 |
+| [refactor/archived/refactor-r08-soul-row-node-ownership-plan-2026-09-18.md](refactor/archived/refactor-r08-soul-row-node-ownership-plan-2026-09-18.md) | Archived | hw_uiが生成するChildrenの位置をrootが添字で更新し、表示規則も複製されている状態を解消するの計画。 |
+| [refactor/archived/refactor-r09-task-unassign-context-plan-2026-09-18.md](refactor/archived/refactor-r09-task-unassign-context-plan-2026-09-18.md) | Archived | cleanup/pathfinding/observerが解除だけのために大きなTaskAssignmentQueriesを要求している状態を整理するの計画。 |
+| [refactor/archived/refactor-r10-spatial-index-mutation-plan-2026-09-18.md](refactor/archived/refactor-r10-spatial-index-mutation-plan-2026-09-18.md) | Archived | public raw storageとdata_mutでgenerationを迂回でき、再insertで旧bucketが残り得るAPI面を閉じるの計画。 |
+| [refactor/archived/refactor-r11-obsolete-tooltip-cleanup-plan-2026-09-18.md](refactor/archived/refactor-r11-obsolete-tooltip-cleanup-plan-2026-09-18.md) | Archived | 移設後にmodule treeから外れた旧Tooltipソースと、現行所有先に合わない案内を除去するの計画。 |
+| [refactor/archived/refactor-r12-progress-bar-lifecycle-plan-2026-09-18.md](refactor/archived/refactor-r12-progress-bar-lifecycle-plan-2026-09-18.md) | Archived | 親引数を受けながら接続しないProgressBar APIと、callerに分散した親子付与・生成破棄を明確にするの計画。 |
+| [refactor/archived/refactor-r13-terrain-material-abi-plan-2026-09-18.md](refactor/archived/refactor-r13-terrain-material-abi-plan-2026-09-18.md) | Archived | LOD別Rust extensionと4 shaderに重複するuniform/binding宣言の同時更新負担を減らすの計画。 |
+| [refactor/archived/refactor-r14-perf-workload-config-plan-2026-09-18.md](refactor/archived/refactor-r14-perf-workload-config-plan-2026-09-18.md) | Archived | workload固有Option/flagと複数箇所の長い条件分岐を整理し、制約変更の追従漏れを減らすの計画。 |
 | [soul-energy/archived/milestone-roadmap.md](soul-energy/archived/milestone-roadmap.md) | Archived | Soul Energy System — Milestone Roadmap |
 | [soul-energy/archived/phase1a-data-model.md](soul-energy/archived/phase1a-data-model.md) | Archived | Phase 1a: Data Model + Grid Infrastructure |
 | [soul-energy/archived/phase1b-soul-spa.md](soul-energy/archived/phase1b-soul-spa.md) | Archived | Phase 1b: Soul Spa + GeneratePower Task |

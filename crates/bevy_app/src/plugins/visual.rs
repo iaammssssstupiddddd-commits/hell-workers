@@ -28,7 +28,9 @@ use crate::systems::visual::building3d_cleanup::{
     sync_door_presentation_system, sync_structural_presentation_state_system,
 };
 use crate::systems::visual::camera_sync::sync_camera3d_system;
-use crate::systems::visual::door_preview::sync_door_preview_system;
+use crate::systems::visual::door_preview::{
+    sync_door_catalog_preview_system, sync_door_preview_system,
+};
 use crate::systems::visual::indoor_light_texture::{
     IndoorLightUploadSet, reset_indoor_light_texture_for_world_replace,
     upload_indoor_light_texture_system,
@@ -259,6 +261,12 @@ impl Plugin for VisualPlugin {
             PostUpdate,
             (sync_door_presentation_system, sync_door_preview_system)
                 .in_set(DoorPresentationSyncSet),
+        );
+        app.add_systems(
+            PostUpdate,
+            sync_door_catalog_preview_system
+                .in_set(DoorPresentationSyncSet)
+                .before(bevy::ui::UiSystems::Prepare),
         );
         app.add_systems(
             PostUpdate,

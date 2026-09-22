@@ -278,6 +278,7 @@ fn spawn_building_panel(
             .with_children(|card| {
                 card.spawn((
                     ImageNode::new(assets.building_preview(kind).clone()),
+                    crate::components::BuildingCatalogPreview(kind),
                     Node {
                         width: Val::Px(32.0),
                         height: Val::Px(32.0),

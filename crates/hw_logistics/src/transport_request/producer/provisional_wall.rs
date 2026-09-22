@@ -105,7 +105,20 @@ pub fn provisional_wall_auto_haul_system(
         desired_requests.insert(wall_entity, (fam_entity, wall_pos, 1));
     }
 
-    let mut seen_existing = std::collections::HashSet::<Entity>::new();
+    let seen_existing = super::upsert::select_canonical_requests(
+        q_requests
+            .iter()
+            .filter(|(_, request, _, _)| {
+                request.kind == TransportRequestKind::DeliverToProvisionalWall
+            })
+            .map(|(entity, request, workers, _)| {
+                (
+                    request.anchor,
+                    entity,
+                    workers.map_or(0, |workers| workers.len()),
+                )
+            }),
+    );
     for (request_entity, request, workers_opt, current) in q_requests.iter() {
         if request.kind != TransportRequestKind::DeliverToProvisionalWall {
             continue;
@@ -113,12 +126,14 @@ pub fn provisional_wall_auto_haul_system(
 
         let key = request.anchor;
         let workers = workers_opt.map(|w| w.len()).unwrap_or(0);
-        if !super::upsert::process_duplicate_key(
+        if !super::upsert::reconcile_duplicate_request(
             &mut commands,
             request_entity,
             workers,
-            &mut seen_existing,
-            key,
+            seen_existing
+                .get(&key)
+                .is_some_and(|(kept, _)| *kept == request_entity),
+            super::upsert::RequestSlotSnapshot::from_runtime(current),
         ) {
             continue;
         }
@@ -134,7 +149,7 @@ pub fn provisional_wall_auto_haul_system(
                     key: (key, ResourceType::StasisMud),
                     site_pos: *wall_pos,
                     issued_by: *issued_by,
-                    desired_slots: *slots,
+                    slots: super::upsert::RequestSlots::TotalSlots(*slots),
                     inflight,
                     priority: PROVISIONAL_WALL_PRIORITY,
                     transport_priority: TransportPriority::Low,
@@ -155,7 +170,7 @@ pub fn provisional_wall_auto_haul_system(
     }
 
     for (wall_entity, (issued_by, wall_pos, slots)) in desired_requests {
-        if seen_existing.contains(&wall_entity) {
+        if seen_existing.contains_key(&wall_entity) {
             continue;
         }
 

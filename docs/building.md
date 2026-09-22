@@ -46,7 +46,7 @@ Logic の次回同期へ委ねてはならない。
 | `Floor` | Structure | 床（エリア指定型建設） |
 | `Bridge` | Structure | 橋（木材/岩 代替可） |
 | `Door` | Architecture | 扉（Open/Closed/Locked） |
-| `Tank` | Plant | 水タンク（2×1、BucketStorage companion必須） |
+| `Tank` | Plant | 水タンク（本体2×2、別配置のBucketStorage companion 2×1が必須） |
 | `MudMixer` | Plant | 泥ミキサー（2×2） |
 | `WheelbarrowParking` | Temporary | 猫車置き場 |
 | `SandPile` | Temporary | 無限砂ソース |
@@ -88,6 +88,8 @@ Logic の次回同期へ委ねてはならない。
 プレイヤーが Blueprint を配置 → 資材搬入完了 → ソウルが建築作業（約3秒）→ `progress >= 1.0` で完成。全資材が揃っていれば本設、未揃いなら仮設 `Building` として完成し、追加資材搬入後に `CoatWall` で本設化。
 
 ### 通行性と障害物同期
+
+Blueprint完成はexclusive commitでliveな資材・進捗・取消marker・Transform・全footprint ownerを再検証する。1セルでも競合すればmap、完成Entity、companion昇格を適用しない。移管後の`BuildingCompletedEvent` Observerはmapを読み、marker生成とSoul退避を行う。床の養生完了と壁完成もcommit時に全tileの親・状態・ownerを照合し、完了済みの一部だけを先に解放しない。
 
 - non-Bridge の Blueprint は建設中の予約として通行を塞ぐ。完成後は `BuildingType::blocks_movement()` が true の Building だけが movement blocker を維持し、Bridge は川を歩行可能にする。
 - `blocks_movement() == false` の完成建物も論理的な配置占有は維持する。Blueprint 完成時は `WorldMap.buildings` の owner を同じセルの完成 Building へ移譲し、予約 obstacle だけを解除する。したがって Outdoor Lamp などは通行できても別建物を同じタイルへ重ねられない。
@@ -299,14 +301,16 @@ releaseで最新条件を再検証し、直前の表示と一致しなければ�
   - `MovePlanned` 中の建物は生産系リクエストを新規生成しない
   - 既存の関連 `TransportRequest` / 実行中タスクは移動確定時にキャンセル
 
+Moving handlerは建物を直接動かさず、worker・task identity・旧Transform・kind・新旧footprintを持つ`PendingBuildingMove`を発行する。実行後の`ApplyDeferred`に続く`apply_pending_building_move_system`が作業shell、移動予約marker、旧owner、Tank companion2セル、移動先の競合を再検証する。成功時だけmap・marker・companion／所有物Transformを更新してDoneへ進む。不成立なら旧位置を維持し、同identityのhandlerで取消cleanupへ進む。別sourceの障害物は保持する。
+
 ## 8. ビジュアルフィードバック (Visual Feedback)
 
 `visual/blueprint/` モジュールによって、設計図の状態をプレイヤーに視覚的に伝えます。
 
-このモジュールは、汎用的なビジュアルユーティリティ（`systems/utils/`）を使用して実装されています：
-- **`utils/progress_bar.rs`**: プログレスバーの生成・更新
-- **`utils/animations.rs`**: パルス・バウンスアニメーション
-- **`utils/floating_text.rs`**: フローティングテキスト（ポップアップ）の表示・アニメーション
+共通表示は`hw_visual`が所有します。
+- **`progress_bar.rs`**: `spawn_progress_bar(commands, owner, config)`が背景とfillをownerの兄弟childとして生成。床／壁は共通lifecycle helperでactive ownerごとの1組を維持し、phase終了・owner除去で破棄する。色・比率・位置は各callerが決め、fillの左端を固定する。
+- **`animations.rs`**: パルス・バウンスアニメーション
+- **`floating_text.rs`**: フローティングテキスト（ポップアップ）の表示・アニメーション
 
 ### コンポーネント
 
@@ -356,6 +360,10 @@ Door設計図の資材アイコンと数量は、両軸の支持壁に重なら�
   `Transform` を初期化時に持つため、親の位置に追従するだけの毎フレーム同期は不要である。
   fill は `BlueprintVisualState` の変更時だけ更新し、visual state が除去された時は所有linkから
   子を破棄する。
+
+床・壁siteも背景とfillを同じ親へ接続する。ロード時はsiteの欠損した`Visibility`を補完して、子へ`InheritedVisibility`を伝播できる状態をVisual phaseより前に復元する。既存の非表示状態は上書きしない。
+
+2026-09-19のR12実機受入は、1920×1080／UI scale 1、Intel Arc MTL／Vulkan／X11 under Waylandのportal実入力で5 checkpointを通過した。Soul・Blueprint・床・壁の4 callerの中間bar、通常simulationでの完了時消滅、保存／読込後の建設bar再構成、読込後の対象への取消と消滅を確認した。Soulのruntime割当はLoadで解除され、barも復元しない。親のscaleを含む完全な行列とlocal座標で位置を独立照合し、全5画像とWARN／ERRORなしを確認済み。境界値0／1・同frame終了はECS回帰の範囲とし、この実機結果を全DPI・性能比較へ拡張しない。
 
 ### 完成建築物のエンティティ構造
 

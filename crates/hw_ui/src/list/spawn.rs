@@ -1,9 +1,7 @@
 // エンティティリストUIノードのスポーン helpers
 
-use super::models::{
-    FamiliarRowViewModel, FamiliarSectionNodes, SoulGender, SoulRowViewModel, StressBucket,
-    TaskVisual,
-};
+use super::models::{FamiliarRowViewModel, FamiliarSectionNodes, SoulRowNodes, SoulRowViewModel};
+use super::style::*;
 use crate::components::{
     EntityListSectionType, FamiliarListItem, FamiliarMaxSoulAdjustButton, MenuAction, MenuButton,
     SectionToggle, SoulListItem, UiTooltip,
@@ -11,6 +9,7 @@ use crate::components::{
 use crate::setup::UiAssets;
 use crate::theme::UiTheme;
 use bevy::prelude::*;
+use bevy::text::LineBreak;
 
 // ============================================================
 // Node generation helpers (private)
@@ -23,20 +22,22 @@ fn spawn_icon(
     color: Color,
     size: f32,
     placement: Node,
-) {
-    parent.spawn((
-        ImageNode {
-            image,
-            color,
-            ..default()
-        },
-        Node {
-            width: Val::Px(size),
-            height: Val::Px(size),
-            flex_shrink: 0.0,
-            ..placement
-        },
-    ));
+) -> Entity {
+    parent
+        .spawn((
+            ImageNode {
+                image,
+                color,
+                ..default()
+            },
+            Node {
+                width: Val::Px(size),
+                height: Val::Px(size),
+                flex_shrink: 0.0,
+                ..placement
+            },
+        ))
+        .id()
 }
 
 /// テキストノード（Text + TextFont + TextColor + Node）をスポーンする。
@@ -49,7 +50,7 @@ fn spawn_text(
     color: Color,
     weight: FontWeight,
     placement: Node,
-) {
+) -> Entity {
     let mut text_font = TextFont {
         font_size: FontSize::Px(font_size),
         weight,
@@ -58,17 +59,19 @@ fn spawn_text(
     if let Some(f) = font {
         text_font.font = f.into();
     }
-    parent.spawn((
-        Text::new(text),
-        text_font,
-        TextColor(color),
-        bevy::text::LineHeight::Px(16.0),
-        Node {
-            width: Val::Percent(100.0),
-            min_width: Val::Px(0.0),
-            ..placement
-        },
-    ));
+    parent
+        .spawn((
+            Text::new(text),
+            text_font,
+            TextColor(color),
+            bevy::text::LineHeight::Px(16.0),
+            Node {
+                width: Val::Percent(100.0),
+                min_width: Val::Px(0.0),
+                ..placement
+            },
+        ))
+        .id()
 }
 
 /// familiar の使役数調整ボタン（-/+）をスポーンして `parent` に追加する。
@@ -332,7 +335,7 @@ pub fn spawn_empty_squad_hint_entity(
 // Soul Row
 // ============================================================
 
-// Keep direct children in the value-sync order; grid placement owns presentation only.
+// Grid placement owns presentation; SoulRowNodes owns value update targets.
 fn soul_cell(row: i16, column: i16, span: u16) -> Node {
     Node {
         grid_row: GridPlacement::start(row),
@@ -341,65 +344,6 @@ fn soul_cell(row: i16, column: i16, span: u16) -> Node {
         align_self: AlignSelf::Center,
         justify_self: JustifySelf::Start,
         ..default()
-    }
-}
-
-fn get_gender_icon_and_color(
-    gender: SoulGender,
-    assets: &dyn UiAssets,
-    theme: &UiTheme,
-) -> (Handle<Image>, Color) {
-    match gender {
-        SoulGender::Male => (assets.icon_male().clone(), theme.colors.male),
-        SoulGender::Female => (assets.icon_female().clone(), theme.colors.female),
-    }
-}
-
-fn get_task_icon_and_color(
-    task: TaskVisual,
-    assets: &dyn UiAssets,
-    theme: &UiTheme,
-) -> (Handle<Image>, Color) {
-    match task {
-        TaskVisual::Idle => (assets.icon_idle().clone(), theme.colors.idle),
-        TaskVisual::Chop => (assets.icon_axe().clone(), theme.colors.chop),
-        TaskVisual::Mine => (assets.icon_pick().clone(), theme.colors.mine),
-        TaskVisual::GatherDefault => (assets.icon_pick().clone(), theme.colors.gather_default),
-        TaskVisual::Haul => (assets.icon_haul().clone(), theme.colors.haul),
-        TaskVisual::Build => (assets.icon_pick().clone(), theme.colors.build),
-        TaskVisual::HaulToBlueprint => (assets.icon_haul().clone(), theme.colors.haul_to_bp),
-        TaskVisual::Water => (assets.icon_haul().clone(), theme.colors.water),
-        TaskVisual::GeneratePower => (assets.icon_fatigue().clone(), theme.colors.text_accent),
-        TaskVisual::Deconstruct => (assets.icon_hammer().clone(), theme.colors.stress_high),
-        TaskVisual::Move => (assets.icon_haul().clone(), theme.colors.build),
-        TaskVisual::Refine => (assets.icon_hammer().clone(), theme.colors.build),
-        TaskVisual::CollectBone => (
-            assets.icon_bone_small().clone(),
-            theme.colors.gather_default,
-        ),
-    }
-}
-
-fn get_stress_color(bucket: StressBucket, theme: &UiTheme) -> Color {
-    match bucket {
-        StressBucket::Low => Color::WHITE,
-        StressBucket::Medium => theme.colors.stress_medium,
-        StressBucket::High => theme.colors.stress_high,
-    }
-}
-
-fn get_dream_color(dream_empty: bool, theme: &UiTheme) -> Color {
-    if dream_empty {
-        theme.colors.stress_medium
-    } else {
-        theme.colors.fatigue_text
-    }
-}
-
-fn stress_weight(bucket: StressBucket) -> FontWeight {
-    match bucket {
-        StressBucket::High => FontWeight::BOLD,
-        _ => FontWeight::default(),
     }
 }
 
@@ -415,7 +359,8 @@ pub fn spawn_soul_list_item(
     let stress_color = get_stress_color(soul_vm.stress_bucket, theme);
     let dream_color = get_dream_color(soul_vm.dream_empty, theme);
 
-    parent
+    let mut value_nodes = None;
+    let row = parent
         .spawn((
             Button,
             Node {
@@ -453,14 +398,14 @@ pub fn spawn_soul_list_item(
             SoulListItem(soul_vm.entity),
         ))
         .with_children(|item| {
-            spawn_icon(
+            let gender_icon = spawn_icon(
                 item,
                 gender_handle,
                 gender_color,
                 theme.sizes.icon_size,
                 soul_cell(1, 1, 1),
             );
-            spawn_text(
+            let name_text = spawn_text(
                 item,
                 soul_vm.name.clone(),
                 Some(assets.font_ui().clone()),
@@ -469,6 +414,9 @@ pub fn spawn_soul_list_item(
                 FontWeight::default(),
                 soul_cell(1, 2, 1),
             );
+            item.commands()
+                .entity(name_text)
+                .insert(TextLayout::new(Justify::Left, LineBreak::WordOrCharacter));
             spawn_icon(
                 item,
                 assets.icon_fatigue().clone(),
@@ -476,7 +424,7 @@ pub fn spawn_soul_list_item(
                 theme.sizes.icon_size,
                 soul_cell(1, 3, 1),
             );
-            spawn_text(
+            let fatigue_text = spawn_text(
                 item,
                 soul_vm.fatigue_text.clone(),
                 Some(assets.font_ui().clone()),
@@ -492,7 +440,7 @@ pub fn spawn_soul_list_item(
                 theme.sizes.icon_size,
                 soul_cell(1, 5, 1),
             );
-            spawn_text(
+            let stress_text = spawn_text(
                 item,
                 soul_vm.stress_text.clone(),
                 Some(assets.font_ui().clone()),
@@ -501,8 +449,7 @@ pub fn spawn_soul_list_item(
                 stress_weight(soul_vm.stress_bucket),
                 soul_cell(1, 6, 1),
             );
-            // children[6]: dream text
-            spawn_text(
+            let dream_text = spawn_text(
                 item,
                 soul_vm.dream_text.clone(),
                 Some(assets.font_ui().clone()),
@@ -511,14 +458,14 @@ pub fn spawn_soul_list_item(
                 FontWeight::default(),
                 soul_cell(1, 7, 1),
             );
-            spawn_icon(
+            let task_icon = spawn_icon(
                 item,
                 task_handle,
                 task_color,
                 theme.sizes.icon_size,
                 soul_cell(1, 8, 1),
             );
-            spawn_text(
+            let task_label = spawn_text(
                 item,
                 soul_vm.task_visual.label().into(),
                 Some(assets.font_ui().clone()),
@@ -527,9 +474,23 @@ pub fn spawn_soul_list_item(
                 FontWeight::default(),
                 soul_cell(1, 9, 1),
             );
+            value_nodes = Some(SoulRowNodes {
+                gender_icon,
+                name_text,
+                fatigue_text,
+                stress_text,
+                dream_text,
+                task_icon,
+                task_label,
+            });
             spawn_entity_focus_button(item, soul_vm.entity, assets, theme, soul_cell(1, 10, 1));
         })
-        .id()
+        .id();
+    parent
+        .commands()
+        .entity(row)
+        .insert(value_nodes.expect("Soul row children were spawned"));
+    row
 }
 
 pub(crate) fn spawn_entity_focus_button(

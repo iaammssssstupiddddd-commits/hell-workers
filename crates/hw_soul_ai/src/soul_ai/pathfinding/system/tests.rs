@@ -3,7 +3,6 @@ use bevy::ecs::schedule::ApplyDeferred;
 use hw_core::constants::MAP_HEIGHT;
 use hw_core::events::{ResourceReservationOp, ResourceReservationRequest};
 use hw_core::relationships::WorkingOn;
-use hw_jobs::events::TaskAssignmentRequest;
 use hw_jobs::{ActiveTaskIdentity, GeneratePowerData, GeneratePowerPhase, WorkType};
 use hw_logistics::SharedResourceCache;
 
@@ -133,7 +132,6 @@ fn arrived_idle_soul_does_not_regenerate_a_completed_path() {
         .insert_resource(RuntimePathSearchBudget::new(1))
         .init_resource::<SharedResourceCache>()
         .add_message::<ResourceReservationRequest>()
-        .add_message::<TaskAssignmentRequest>()
         .add_systems(Update, pathfinding_system);
     #[cfg(feature = "profiling")]
     app.init_resource::<RuntimePathDeferMetrics>();
@@ -167,7 +165,6 @@ fn successful_idle_path_search_preserves_inventory_change_tick() {
         .insert_resource(RuntimePathSearchBudget::new(1))
         .init_resource::<SharedResourceCache>()
         .add_message::<ResourceReservationRequest>()
-        .add_message::<TaskAssignmentRequest>()
         .add_systems(PreUpdate, reset_runtime_path_search_budget_system)
         .add_systems(Update, pathfinding_system);
     #[cfg(feature = "profiling")]
@@ -293,7 +290,6 @@ fn unreachable_task_destination_unassigns_and_releases_its_reservation() {
         .init_resource::<SharedResourceCache>()
         .init_resource::<ReservationReceipts>()
         .add_message::<ResourceReservationRequest>()
-        .add_message::<TaskAssignmentRequest>()
         .add_systems(
             Update,
             (pathfinding_system, ApplyDeferred, collect_reservations).chain(),
@@ -353,7 +349,6 @@ fn exhausted_core_budget_defers_task_pathfinding_without_unassigning() {
         .init_resource::<SharedResourceCache>()
         .init_resource::<ReservationReceipts>()
         .add_message::<ResourceReservationRequest>()
-        .add_message::<TaskAssignmentRequest>()
         .add_systems(
             Update,
             (pathfinding_system, ApplyDeferred, collect_reservations).chain(),

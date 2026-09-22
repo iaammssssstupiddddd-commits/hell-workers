@@ -4,7 +4,6 @@ use super::{
 use crate::entities::damned_soul::{DamnedSoul, Gender, SoulIdentity};
 use crate::entities::familiar::{Familiar, FamiliarOperation};
 use crate::systems::familiar_ai::FamiliarAiState;
-use crate::systems::jobs::WorkType;
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;
 use bevy::prelude::*;
 use hw_core::relationships::{CommandedBy, Commanding};
@@ -52,7 +51,9 @@ type AllSoulsQuery<'w, 's> = Query<
     Without<Familiar>,
 >;
 
-use super::{StressBucket, TaskVisual};
+use super::StressBucket;
+#[cfg(test)]
+use super::TaskVisual;
 
 pub fn familiar_state_label(ai_state: &FamiliarAiState) -> &'static str {
     match ai_state {
@@ -76,32 +77,6 @@ pub(super) fn familiar_label(
         op.max_controlled_soul,
         familiar_state_label(ai_state)
     )
-}
-
-fn task_visual(task: &AssignedTask) -> TaskVisual {
-    match task {
-        AssignedTask::None => TaskVisual::Idle,
-        AssignedTask::Gather(data) => match data.work_type {
-            WorkType::Chop => TaskVisual::Chop,
-            WorkType::Mine => TaskVisual::Mine,
-            _ => TaskVisual::GatherDefault,
-        },
-        AssignedTask::Haul { .. } => TaskVisual::Haul,
-        AssignedTask::Build { .. } => TaskVisual::Build,
-        AssignedTask::MovePlant { .. } => TaskVisual::Move,
-        AssignedTask::HaulToBlueprint { .. } => TaskVisual::HaulToBlueprint,
-        AssignedTask::CollectBone { .. } => TaskVisual::CollectBone,
-        AssignedTask::Refine { .. } => TaskVisual::Refine,
-        AssignedTask::HaulToMixer { .. } => TaskVisual::HaulToBlueprint,
-        AssignedTask::HaulWithWheelbarrow { .. } => TaskVisual::Haul,
-        AssignedTask::ReinforceFloorTile { .. } => TaskVisual::Build,
-        AssignedTask::PourFloorTile { .. } => TaskVisual::Build,
-        AssignedTask::FrameWallTile { .. } => TaskVisual::Build,
-        AssignedTask::CoatWall { .. } => TaskVisual::Build,
-        AssignedTask::BucketTransport(_) => TaskVisual::Water,
-        AssignedTask::GeneratePower(_) => TaskVisual::GeneratePower,
-        AssignedTask::Deconstruct(_) => TaskVisual::Deconstruct,
-    }
 }
 
 fn stress_bucket(stress: f32) -> StressBucket {
@@ -132,7 +107,7 @@ pub(super) fn build_soul_view_model(
         stress_bucket: stress_bucket(soul.stress),
         dream_text: format!("{:.0}", soul.dream),
         dream_empty: soul.dream <= 0.0,
-        task_visual: task_visual(task),
+        task_visual: crate::interface::ui::presentation::task_kind_presentation(task).list_visual,
     }
 }
 
@@ -278,10 +253,26 @@ mod tests {
             target: Entity::PLACEHOLDER,
             phase: default(),
         });
-        assert_eq!(task_visual(&power), TaskVisual::GeneratePower);
-        assert_eq!(task_visual(&deconstruct), TaskVisual::Deconstruct);
-        assert_eq!(task_visual(&power).label(), "発電");
-        assert_eq!(task_visual(&deconstruct).label(), "解体");
+        assert_eq!(
+            crate::interface::ui::presentation::task_kind_presentation(&power).list_visual,
+            TaskVisual::GeneratePower
+        );
+        assert_eq!(
+            crate::interface::ui::presentation::task_kind_presentation(&deconstruct).list_visual,
+            TaskVisual::Deconstruct
+        );
+        assert_eq!(
+            crate::interface::ui::presentation::task_kind_presentation(&power)
+                .list_visual
+                .label(),
+            "発電"
+        );
+        assert_eq!(
+            crate::interface::ui::presentation::task_kind_presentation(&deconstruct)
+                .list_visual
+                .label(),
+            "解体"
+        );
     }
 
     #[test]

@@ -31,6 +31,7 @@ from .renderdoc_foundation import (
     classify_renderdoc_log_lines,
     transition_foundation_state,
     validate_runtime_checkpoint_v3,
+    validate_light_field_binding_evidence,
 )
 from .rtt_light_contract import (
     build_fixture_layout,
@@ -1771,6 +1772,8 @@ def _load_renderdoc_evidence(
                 not isinstance(row["category"], str) or ":" not in row["category"]
             ):
                 raise RuntimeError("RenderDoc binding category is invalid")
+    if stage in {"p06", "p08"}:
+        validate_light_field_binding_evidence(p06_pixel_probe, bindings)
     if extracted["event_count"] < extracted["draw_count"]:
         raise RuntimeError("RenderDoc event count is smaller than draw_count")
     tracked_resources = extracted["tracked_resources"]
