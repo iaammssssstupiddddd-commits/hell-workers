@@ -19,6 +19,41 @@ SIMPLE_KINDS = {"local-fix", "mechanical-change", "test-addition"}
 CURSOR_EDIT_ACCEPTANCE_SCOPE = "scripts/tests/fixtures/orca_edit_acceptance/worker-b"
 
 
+def prepare_codex_trust(runtime: Path, roots: tuple[Path, ...]) -> None:
+    """The TUI onboarding reads the user file before applying CLI overrides."""
+    path = runtime / "codex/config.toml"
+    original = ""
+    if path.exists() or path.is_symlink():
+        info = path.lstat()
+        if (path.resolve() != path or not stat.S_ISREG(info.st_mode)
+                or info.st_uid != os.getuid() or info.st_nlink != 1 or info.st_mode & 0o077):
+            raise ValueError("unsafe controlled Codex config")
+        original = path.read_text(encoding="utf-8")
+    data = tomllib.loads(original)
+    additions = []
+    for root in dict.fromkeys(roots):
+        if not root.is_absolute() or root.resolve() != root:
+            raise ValueError("trusted repository root must be canonical and absolute")
+        existing = data.get("projects", {}).get(str(root))
+        if existing is not None:
+            if existing.get("trust_level") != "trusted":
+                raise ValueError("existing project trust conflicts with controlled launch")
+        else:
+            additions.append(f'\n[projects.{json.dumps(str(root))}]\ntrust_level = "trusted"\n')
+    if not additions:
+        return
+    fd, temporary = tempfile.mkstemp(prefix=".trust-", dir=path.parent)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(original + "".join(additions))
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
+
+
 def codex_project_mcp_overrides(repo: Path) -> list[str]:
     """Disable repository MCPs without hiding tracked files from review Git commands."""
     config = repo / ".codex/config.toml"

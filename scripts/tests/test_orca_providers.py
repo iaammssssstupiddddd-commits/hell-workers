@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import unittest
+import tempfile
+import tomllib
 from pathlib import Path
 from unittest.mock import patch
 
@@ -8,6 +10,39 @@ from scripts import orca_providers as providers
 
 
 class ProviderTests(unittest.TestCase):
+    def test_trust_file_precedes_tui_boot_and_preserves_other_settings(self):
+        with tempfile.TemporaryDirectory() as temp:
+            runtime = Path(temp).resolve()
+            (runtime / "codex").mkdir()
+            config = runtime / "codex/config.toml"
+            config.write_text('model = "chosen-model"\n')
+            config.chmod(0o600)
+            roots = (runtime / "worktree", runtime / "primary")
+            providers.prepare_codex_trust(runtime, roots)
+            content = config.read_text()
+            parsed = tomllib.loads(content)
+            self.assertEqual(parsed["model"], "chosen-model")
+            self.assertEqual(set(parsed["projects"]), {str(root) for root in roots})
+            self.assertTrue(all(row["trust_level"] == "trusted" for row in parsed["projects"].values()))
+            providers.prepare_codex_trust(runtime, roots)
+            self.assertEqual(config.read_text(), content)
+
+    def test_trust_file_refuses_symlink_and_conflicting_user_setting(self):
+        with tempfile.TemporaryDirectory() as temp:
+            runtime = Path(temp).resolve()
+            (runtime / "codex").mkdir()
+            config = runtime / "codex/config.toml"
+            config.write_text('[projects."/repo"]\ntrust_level="untrusted"\n')
+            config.chmod(0o600)
+            with self.assertRaisesRegex(ValueError, "conflicts"):
+                providers.prepare_codex_trust(runtime, (Path("/repo"),))
+            original = config.read_text()
+            config.rename(runtime / "original")
+            config.symlink_to(runtime / "original")
+            with self.assertRaisesRegex(ValueError, "unsafe"):
+                providers.prepare_codex_trust(runtime, (Path("/repo"),))
+            self.assertEqual((runtime / "original").read_text(), original)
+
     def simple(self) -> dict:
         return {"complexity": "simple", "task_kind": "test-addition",
                 "complexity_reason": "existing pattern, one leaf, no API change",

@@ -576,6 +576,19 @@ Read the two requested files without editing them.
         self.assertEqual(session.policy.phase, "unknown")
         self.assertLessEqual(len(os.fsencode(session.public / "rpc.sock")), 107)
 
+    def test_arm_uses_live_incarnation_lease_not_host_pid_visibility(self):
+        session = self.wire_session()
+        with session, patch.object(bridge.os, "kill", side_effect=ProcessLookupError):
+            bridge.arm(session.identifier, AUTHORITY)
+            self.assertTrue((session.directory / "arm.json").is_file())
+
+    def test_arm_refuses_an_exited_launcher_lease(self):
+        session = self.wire_session()
+        with session:
+            session.terminal_lease.close()
+            with self.assertRaisesRegex(bridge.wire.Refused, "lease is not live"):
+                bridge.arm(session.identifier, AUTHORITY)
+
     def test_enter_failure_drains_server_and_removes_credentials(self):
         session = self.wire_session()
         with patch("builtins.print", side_effect=BrokenPipeError), self.assertRaises(BrokenPipeError):

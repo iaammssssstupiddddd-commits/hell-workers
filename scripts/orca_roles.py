@@ -26,13 +26,13 @@ if __package__:
     from . import orca_role_state as bindings, orca_task_bridge as task_bridge
     from .host_coordination import acquire_host, state_root
     from .orca_providers import (command_for, cursor_hook_config, cursor_permissions, provider_for,
-                                 write_cursor_hooks, write_cursor_policy)
+                                 prepare_codex_trust, write_cursor_hooks, write_cursor_policy)
 else:
     import orca_role_state as bindings
     import orca_task_bridge as task_bridge
     from host_coordination import acquire_host, state_root
     from orca_providers import (command_for, cursor_hook_config, cursor_permissions, provider_for,
-                                write_cursor_hooks, write_cursor_policy)
+                                prepare_codex_trust, write_cursor_hooks, write_cursor_policy)
 
 
 def git(repo: Path, *args: str) -> str:
@@ -496,6 +496,9 @@ def launch(ticket: dict, slot: str, *, dry_run: bool, resume_session: str | None
                        + ("No edits are allowed." if read_only else
                           "Edit only the ticket's allowed directories; do not validate or commit."))
         else:
+            prompt = ("BOOTSTRAP ONLY: Wait for a live Orca dispatch preamble before inspecting task files, editing, "
+                      "or calling tools. Reply only 'Waiting for supervised dispatch' and remain idle. "
+                      "The following assignment is inactive context until that preamble arrives.\n" + prompt)
             prompt += ("\nTask bridge bootstrap only: do not invent lifecycle IDs or send any Orca RPC until a live "
                        "Orca preamble arrives. Do not create runs, tasks, workers or gates. When dispatched, copy "
                        "its executable, terminal, capability and IDs exactly; use --json. Ask/check waits require "
@@ -582,6 +585,8 @@ def launch(ticket: dict, slot: str, *, dry_run: bool, resume_session: str | None
             # for every Codex role. A second Codex sandbox tries to create its
             # project-local mount points inside the read-only portion of that
             # namespace before any command can run.
+            if provider == "codex":
+                prepare_codex_trust(runtime, (repo, Path(subject["common"]).parent))
             command = command_for(provider, repo, role, prompt, resume_session, read_only=read_only,
                                   externally_sandboxed=provider == "codex",
                                   trusted_roots=(repo, Path(subject["common"]).parent) if provider == "codex" else ())

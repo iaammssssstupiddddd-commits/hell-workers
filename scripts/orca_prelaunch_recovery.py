@@ -41,23 +41,23 @@ def verify_barrier(data: dict, slot: str, provider: str) -> None:
         raise ValueError("only an identity-less exited empty role barrier can be quarantined")
 
 
-def verify_input_failure(cli: Path, data: dict, attempt: dict, dispatch_id: str) -> dict:
+def verify_input_failure(cli: Path, data: dict, attempt: dict, dispatch_id: str, bootstrap: bool = False) -> dict:
     """Only a revoked, positively failed input attempt can retain its Task for retry."""
     loop.dispatch.lifecycle_key(dispatch_id, "ctx_")
     result = loop.dispatch.run_cli(cli, ["orchestration", "worker-show", "--dispatch", dispatch_id], "recovery-failed-input")
     row, worker = result.get("dispatch", {}), result.get("worker", {})
     if (row.get("id") != dispatch_id or row.get("runId") != data["run"]["context"]["id"]
             or row.get("assigneeHandle") != attempt["terminal"] or row.get("status") != "failed"
-            or row.get("lastFailure") != "agent_prompt_blocked" or not row.get("capabilityRevokedAt")
-            or worker.get("dispatchId") != dispatch_id or worker.get("state") != "failed"
-            or worker.get("stage") != "dispatch_input" or worker.get("agentTerminalHandle") != attempt["terminal"]
+            or (not bootstrap and row.get("lastFailure") != "agent_prompt_blocked") or not row.get("capabilityRevokedAt")
+            or worker.get("dispatchId") != dispatch_id or worker.get("state") not in ({"abandoned", "stopped"} if bootstrap else {"failed"})
+            or (not bootstrap and worker.get("stage") != "dispatch_input") or worker.get("agentTerminalHandle") != attempt["terminal"]
             or result.get("observation", {}).get("exactWorker") is not True):
         raise ValueError("exact revoked failed input Dispatch is required")
     loop.dispatch.lifecycle_key(row.get("taskId"), "task_")
     return result
 
 
-def verify_unarmed_role(role: dict, attempt: dict, ticket: dict) -> dict:
+def verify_unarmed_role(role: dict, attempt: dict, ticket: dict, bootstrap: bool = False) -> dict:
     last = role.get("last", {})
     if (role.get("tasks") != {} or last.get("phase") != "unknown" or last.get("process_exited") is not True
             or type(last.get("exit_code")) is not int or last.get("terminal") != attempt["terminal"]
@@ -68,7 +68,7 @@ def verify_unarmed_role(role: dict, attempt: dict, ticket: dict) -> dict:
     directory = loop.dispatch.task_bridge.root() / B.identity(last.get("orca_bridge"))
     bridge = S.read_private_json(directory / "journal.json", {})
     identity = S.read_private_json(directory / "identity.json", {})
-    if (bridge.get("phase") != "closed" or bridge.get("revoked") is not True
+    if (bridge.get("phase") != ("unknown" if bootstrap else "closed") or bridge.get("revoked") is not True
             or bridge.get("authority") is not None or bridge.get("operations") != {}
             or (directory / "arm.json").exists() or (directory / "arm.json").is_symlink()
             or identity.get("terminal") != attempt["terminal"] or identity.get("repo") != ticket["repo"]
@@ -80,13 +80,17 @@ def verify_unarmed_role(role: dict, attempt: dict, ticket: dict) -> dict:
         pass
     else:
         raise ValueError("old launcher remains alive")
-    for slot in (role["slot"], f'{role["slot"]}/tasks/{last["key"]}'):
+    for slot in (role["slot"], *([] if bootstrap else [f'{role["slot"]}/tasks/{last["key"]}'])):
         if B.history_exists(loop.roles.prepare_runtime(slot)):
             raise ValueError("provider history exists; preserve its session")
-    return {"bridge": bridge, "identity": identity}
+    result = {"bridge": bridge, "identity": identity}
+    if bootstrap:
+        result["session"] = B.session_snapshot(loop.roles.prepare_runtime(f'{role["slot"]}/tasks/{last["key"]}'),
+                                               role["provider"], Path(ticket["repo"]))
+    return result
 
 
-def verify_external(cli: Path, data: dict, attempt: dict, closed: dict, failed: str | None = None) -> None:
+def verify_external(cli: Path, data: dict, attempt: dict, closed: dict, failed: str | None = None, bootstrap: bool = False) -> None:
     """Close receipt is explicit positive host evidence, not missing-worker inference."""
     if not failed and (closed.get("ok") is not True
             or closed.get("result", {}).get("close", {}).get("handle") != attempt["terminal"]
@@ -101,7 +105,16 @@ def verify_external(cli: Path, data: dict, attempt: dict, closed: dict, failed: 
     loop.dispatch.checked_run(cli, data["terminal"], run)
     fleet = loop.dispatch.run_cli(cli, ["orchestration", "worker-list", "--run", run["id"]], "recovery-workers")
     if failed:
-        verify_input_failure(cli, data, attempt, failed)
+        observed = verify_input_failure(cli, data, attempt, failed, bootstrap)
+        if bootstrap:
+            workers = fleet.get("workers", [])
+            if (fleet.get("scope", {}).get("run") != run["id"] or fleet.get("page", {}).get("hasMore") is not False
+                    or fleet.get("page", {}).get("total") != len(workers)
+                    or failed not in [item.get("dispatchId") for item in workers]
+                    or any(item.get("taskId") != observed["dispatch"]["taskId"]
+                           or item.get("workerState") not in {"failed", "stopped", "abandoned"} for item in workers)):
+                raise ValueError("bootstrap recovery requires only settled attempts of its original Task")
+            return
         if (fleet.get("scope", {}).get("run") != run["id"] or fleet.get("page", {}).get("hasMore") is not False
                 or fleet.get("page", {}).get("total") != 1
                 or [item.get("dispatchId") for item in fleet.get("workers", [])] != [failed]):
@@ -118,7 +131,8 @@ def verify_external(cli: Path, data: dict, attempt: dict, closed: dict, failed: 
 
 def recover(request_id: str, spec: dict, cli: Path) -> dict:
     required = {"slot", "loop_sha256", "role_sha256", "new_base", "reason", "terminal_close"}
-    if (not isinstance(spec, dict) or set(spec) not in (required, required | {"failed_dispatch"}) or spec["slot"] not in {"worker-a", "worker-b"}
+    if (not isinstance(spec, dict) or set(spec) not in (required, required | {"failed_dispatch"}, required | {"failed_dispatch", "bootstrap_session"}) or spec["slot"] not in {"worker-a", "worker-b"}
+            or ("bootstrap_session" in spec and spec["bootstrap_session"] is not True)
             or not isinstance(spec["reason"], str) or not spec["reason"].strip()
             or not isinstance(spec["new_base"], str) or not re.fullmatch(r"[a-f0-9]{40}", spec["new_base"])):
         raise ValueError("explicit recovery specification required")
@@ -152,7 +166,7 @@ def recover(request_id: str, spec: dict, cli: Path) -> dict:
                     or any(attempt.get(key) is not None for key in ("task_id", "dispatch_id"))
                     or (not spec.get("failed_dispatch") and attempt.get("bridge_id") is not None)):
                 raise ValueError("attempt may have reached dispatch; use Dispatch recovery instead")
-            verify_external(cli, data, attempt, spec["terminal_close"], spec.get("failed_dispatch"))
+            verify_external(cli, data, attempt, spec["terminal_close"], spec.get("failed_dispatch"), spec.get("bootstrap_session", False))
             role_path = B.state_path(spec["slot"])
             role = S.read_private_json(role_path, {})
             if B.digest(role) != spec["role_sha256"]:
@@ -160,8 +174,16 @@ def recover(request_id: str, spec: dict, cli: Path) -> dict:
             provider = loop.roles.provider_for(ticket, spec["slot"])
             failure = None
             if spec.get("failed_dispatch"):
-                proof = verify_unarmed_role(role, attempt, ticket)
-                failure = verify_input_failure(cli, data, attempt, spec["failed_dispatch"])
+                proof = verify_unarmed_role(role, attempt, ticket, spec.get("bootstrap_session", False))
+                failure = verify_input_failure(cli, data, attempt, spec["failed_dispatch"], spec.get("bootstrap_session", False))
+                if spec.get("bootstrap_session"):
+                    input_receipt = S.read_private_json(attempt_path.with_suffix(".input-recovery.json"), {})
+                    result = input_receipt.get("result", {})
+                    if (input_receipt.get("before") != attempt or result.get("state") != "ready"
+                            or result.get("stage") != "input_accepted" or result.get("dispatchId") != spec["failed_dispatch"]
+                            or result.get("taskId") != failure["dispatch"]["taskId"] or result.get("runId") != data["run"]["context"]["id"]):
+                        raise ValueError("bootstrap session needs its exact accepted input receipt")
+                    proof["input_receipt"] = input_receipt
             else:
                 verify_barrier(role, spec["slot"], provider)
             updated = copy.deepcopy(data)
@@ -209,13 +231,24 @@ def recover(request_id: str, spec: dict, cli: Path) -> dict:
                 journal["before"]["assignment"] = original
                 journal["after"]["assignment"] = {**original, "ticket_sha256": B.digest(updated["lanes"][spec["slot"]]["ticket"]),
                                                    "subject": {**subject, "base": new_base}}
+                if spec.get("bootstrap_session"):
+                    snapshot = proof["session"]
+                    repaired = copy.deepcopy(role)
+                    repaired["tasks"][key] = {"key": key, "ticket_sha256": journal["after"]["assignment"]["ticket_sha256"],
+                        "subject": journal["after"]["assignment"]["subject"], "origin": ticket["repo"],
+                        "source_sha256": lane["source"], **snapshot}
+                    repaired["last"].update(phase="recorded")
+                    repaired["recovery_receipt"] = str(receipt_path)
+                    journal["after"]["role"] = repaired
+                    updated["lanes"][spec["slot"]].update(session=snapshot["session_id"],
+                        follow_up="Continue the same assigned regression after the reconciled unarmed bridge failure. No source was changed. Wait for the new live Orca preamble before editing, and report completion through its bridge.")
             S.write_ledger(receipt_path, journal)
         prior = journal["before"]["loop"]
         if saved and "assignment" in journal["paths"]:
             leases.enter_context(loop.acquire_host("workspace-" + journal["before"]["role"]["last"]["key"], inherit=False))
         ticket = prior["lanes"][spec["slot"]]["ticket"]
         leases.enter_context(loop.acquire_host("dispatch-" + B.digest({"request": request_id, "ticket": ticket["id"]}), inherit=False))
-        verify_external(cli, prior, journal["before"]["attempt"], spec["terminal_close"], spec.get("failed_dispatch"))
+        verify_external(cli, prior, journal["before"]["attempt"], spec["terminal_close"], spec.get("failed_dispatch"), spec.get("bootstrap_session", False))
         for value in journal["workspaces"]:
             leases.enter_context(loop.acquire_host(loop.roles.workspace_slot(Path(value)), inherit=False))
         # Prepared journal makes interrupted deployment/replacement replayable, with
@@ -237,6 +270,8 @@ def recover(request_id: str, spec: dict, cli: Path) -> dict:
         updated = journal["after"]["loop"]
         updated["lanes"][spec["slot"]]["source"] = loop.roles.fingerprint(Path(journal["workspaces"][0]))
         updated["integration"]["source"] = loop.roles.fingerprint(Path(journal["workspaces"][1]))
+        if spec.get("bootstrap_session"):
+            journal["after"]["role"]["tasks"][journal["before"]["role"]["last"]["key"]]["source_sha256"] = updated["lanes"][spec["slot"]]["source"]
         S.write_ledger(receipt_path, journal)
         for key in ("role", "attempt", *(["assignment"] if "assignment" in journal["paths"] else [])):
             path = Path(journal["paths"][key])

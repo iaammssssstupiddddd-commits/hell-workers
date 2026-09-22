@@ -51,7 +51,8 @@ class PrelaunchRecoveryTests(unittest.TestCase):
             return {"run": {**self.before["run"]["context"], "coordinator_handle": self.before["terminal"], "legacy": 0}}
         if operation == "recovery-workers":
             if self.spec.get("failed_dispatch"):
-                return {"workers": [{"dispatchId": "ctx_blocked"}], "scope": {"run": "run_fixture"},
+                return {"workers": [{"dispatchId": "ctx_blocked", "taskId": "task_blocked",
+                                     "workerState": self.failed["worker"]["state"]}], "scope": {"run": "run_fixture"},
                         "page": {"total": 1, "hasMore": False}}
             return {"workers": [], "scope": {"run": "run_fixture"}, "page": {"total": 0, "hasMore": False}}
         if operation == "recovery-failed-input":
@@ -171,6 +172,33 @@ class PrelaunchRecoveryTests(unittest.TestCase):
         self.failed_input()
         self.failed["dispatch"]["status"] = "dispatched"
         with self.assertRaisesRegex(ValueError, "failed input"):
+            self.recover()
+
+    def bootstrap_input(self):
+        self.failed_input()
+        self.spec["bootstrap_session"] = True
+        self.failed["worker"].update(state="abandoned", stage="abandoned")
+        self.failed["dispatch"]["lastFailure"] = None
+        L.STORAGE.write_ledger(self.directory / "journal.json", {"phase": "unknown", "revoked": True,
+                                                               "authority": None, "operations": {}})
+        L.STORAGE.write_ledger(self.attempt_path.with_suffix(".input-recovery.json"), {
+            "before": self.attempt, "result": {"state": "ready", "stage": "input_accepted", "runId": "run_fixture",
+                                               "taskId": "task_blocked", "dispatchId": "ctx_blocked"}})
+
+    def test_unarmed_bootstrap_preserves_the_exact_provider_session(self):
+        self.bootstrap_input()
+        result = self.recover()
+        data = L.load(self.request)
+        self.assertEqual(data["lanes"]["worker-a"]["session"], self.fixture.sessions["worker-a"])
+        role = B.read_state("worker-a", "codex")
+        self.assertEqual(role["tasks"][self.role["last"]["key"]]["session_id"], self.fixture.sessions["worker-a"])
+        self.assertEqual(role["last"]["phase"], "recorded")
+        self.assertEqual(self.recover(), result)
+
+    def test_arbitrary_bootstrap_history_without_accepted_input_is_not_adopted(self):
+        self.bootstrap_input()
+        L.STORAGE.write_ledger(self.attempt_path.with_suffix(".input-recovery.json"), {})
+        with self.assertRaisesRegex(ValueError, "accepted input"):
             self.recover()
 
 

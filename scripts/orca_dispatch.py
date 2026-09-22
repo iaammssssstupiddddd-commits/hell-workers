@@ -203,14 +203,16 @@ def start(request_id: str, ticket_path: Path, slot: str, coordinator_handle: str
                 if (receipt.get("phase") != "complete" or receipt.get("request_id") != request_id
                         or lane.get("ticket") != ticket or restored.get("terminal") != coordinator_handle
                         or restored.get("run", {}).get("context") != run_context
-                        or resume_session is not None or follow_up is not None
+                        or resume_session != lane.get("session") or follow_up != lane.get("follow_up")
                         or receipt.get("before", {}).get("attempt", {}).get("exit_on_settlement", False) != exit_on_settlement):
                     raise DispatchError("prelaunch recovery receipt does not authorize this retry")
                 retry = current.get("retry")
                 if retry is not None:
                     failed = receipt.get("failed_input", {}).get("observed", {}).get("dispatch", {})
                     if (retry != {"task": failed.get("taskId"), "dispatch": failed.get("id")}
-                            or failed.get("status") != "failed" or failed.get("lastFailure") != "agent_prompt_blocked"):
+                            or failed.get("status") != "failed"
+                            or (failed.get("lastFailure") != "agent_prompt_blocked"
+                                and receipt.get("spec", {}).get("bootstrap_session") is not True)):
                         raise DispatchError("failed input retry is not authorized")
             else:
                 return existing_dispatch(current, ticket, slot, resume_session, follow_up,

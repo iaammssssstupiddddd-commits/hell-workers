@@ -26,11 +26,11 @@ from pathlib import Path
 if __package__:
     from . import orca_preflight as wire
     from .orca_frontdesk import read_private_json, write_ledger, checked_directory
-    from .host_coordination import acquire_host, state_root
+    from .host_coordination import HostBusyError, acquire_host, state_root
 else:
     import orca_preflight as wire
     from orca_frontdesk import read_private_json, write_ledger, checked_directory
-    from host_coordination import acquire_host, state_root
+    from host_coordination import HostBusyError, acquire_host, state_root
 
 
 CONTRACT = "orchestration.contract.v1"
@@ -893,7 +893,16 @@ def arm(bridge_id: str, authority: dict) -> None:
         identity = wire.mapping(read_private_json(directory / "identity.json", {}))
         if state.get("phase") != "bootstrap" or state.get("revoked") is not False:
             raise wire.Refused("bridge is not awaiting a first Dispatch")
-        os.kill(identity["pid"], 0)
+        # Host PIDs are not visible from the coordinator's PID namespace.
+        # The launcher-held incarnation lease is shared across those namespaces.
+        lease_identity = identity["runtime"] + identity["terminal"] + identity["incarnation"]
+        try:
+            lease = acquire_host("workspace-" + hashlib.sha256(lease_identity.encode()).hexdigest(), inherit=False)
+        except HostBusyError:
+            pass
+        else:
+            lease.close()
+            raise wire.Refused("bridge launcher incarnation lease is not live")
         if set(authority) != {"run", "task", "dispatch", "coordinator"}:
             raise wire.Refused("incomplete authority")
         for value in authority.values():

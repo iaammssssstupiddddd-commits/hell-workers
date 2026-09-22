@@ -7,6 +7,7 @@ import subprocess
 import sys
 import unittest
 from contextlib import nullcontext
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -77,7 +78,11 @@ class RoleContinuationTests(unittest.TestCase):
         self.addCleanup(patcher.stop)
 
     def command(self, provider, repo, role, prompt, resume, *, read_only=False,
-                externally_sandboxed=False):
+                externally_sandboxed=False, trusted_roots=()):
+        if provider == "codex":
+            self.assertEqual(trusted_roots, (repo, Path(roles.git(repo, "rev-parse", "--path-format=absolute", "--git-common-dir")).parent))
+        else:
+            self.assertEqual(trusted_roots, ())
         self.commands.append((provider, role, prompt, resume, externally_sandboxed))
         return [sys.executable, "-c", FAKE, json.dumps({**self.options, "provider": provider,
                 "control": str(state.state_path("reviewer" if role == "reviewer" else
