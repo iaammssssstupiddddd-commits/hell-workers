@@ -189,6 +189,23 @@ Read the two requested files without editing them.
     def mutations(self):
         return [c for c in self.runtime.calls if c[0] in bridge.METHODS]
 
+    def test_standard_completion_files_and_report_metadata_are_accepted(self):
+        request = self.done()
+        payload = json.loads(request["params"]["payload"])
+        payload.update(filesModified=["scripts/tests/test_storage.py"], reportPath="report.md")
+        request["params"]["payload"] = json.dumps(payload)
+        result = self.policy.handle(request)
+        self.assertTrue(result["ok"], result)
+        self.assertEqual(self.policy.phase, "settled")
+
+    def test_completion_file_metadata_does_not_grant_outside_paths(self):
+        request = self.done()
+        payload = json.loads(request["params"]["payload"])
+        payload["filesModified"] = ["../outside"]
+        request["params"]["payload"] = json.dumps(payload)
+        self.assertFalse(self.policy.handle(request)["ok"])
+        self.assertEqual(self.mutations(), [])
+
     def test_cursor_hook_settles_one_read_only_result_without_exposing_capability(self):
         policy = self.new_policy(cursor_hooks=True)
         observed = policy.handle_cursor_hook(self.hook(

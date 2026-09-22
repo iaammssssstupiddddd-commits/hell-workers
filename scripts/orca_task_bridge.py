@@ -330,8 +330,18 @@ class TaskPolicy:
             payload = wire.decode(self.text(params.get("payload")).encode())
             done = params["type"] == "worker_done"
             if (payload.get("taskId") != authority["task"] or payload.get("dispatchId") != authority["dispatch"]
-                    or payload.keys() - {"taskId", "dispatchId", *( {"outcome"} if done else {"phase"})}):
+                    or payload.keys() - {"taskId", "dispatchId", *( {"outcome", "filesModified", "reportPath"} if done else {"phase"})}):
                 raise wire.Refused("message lifecycle identity denied")
+            if "filesModified" in payload:
+                files = payload["filesModified"]
+                if (not isinstance(files, list) or len(files) > 256 or len(set(map(str, files))) != len(files)
+                        or any(not isinstance(name, str) or not name or len(name) > 2048 or "\0" in name
+                               or Path(name).is_absolute() or ".." in Path(name).parts for name in files)):
+                    raise wire.Refused("invalid completion file metadata")
+            if "reportPath" in payload:
+                report = Path(self.text(payload["reportPath"], limit=4096))
+                if ".." in report.parts or (report.is_absolute() and not report.is_relative_to(self.binding.repo)):
+                    raise wire.Refused("invalid completion report metadata")
             if done:
                 if (payload.get("outcome") not in {"succeeded", "failed"}
                         or params.get("waitForLifecycleSettlement") is not True or self.pending_question
