@@ -291,6 +291,12 @@ def start(request_id: str, ticket_path: Path, slot: str, coordinator_handle: str
 
             data["bridge_id"] = wait_for_bridge(ticket, slot, data["terminal"])
             save(path, data)
+            # Bridge availability precedes provider startup. Injecting while the
+            # bootstrap turn is busy can leave the preamble in the input buffer.
+            idle = run_cli(executable, ["terminal", "wait", "--terminal", data["terminal"],
+                                       "--for", "tui-idle", "--timeout-ms", "60000"], "terminal-idle")
+            if idle.get("wait", {}).get("satisfied") is not True:
+                raise DispatchError("provider bootstrap is not idle; no Task input sent")
             worker = run_cli(
                 executable,
                 ["orchestration", "worker-start", "--run", data["run_id"],

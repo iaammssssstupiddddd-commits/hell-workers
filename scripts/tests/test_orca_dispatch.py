@@ -98,6 +98,7 @@ class OrcaDispatchTests(unittest.TestCase):
         receipts = [
             {"run": {"id": "run_fixture"}},
             {"terminal": {"handle": TERMINAL}},
+            {"wait": {"satisfied": True}},
             {"runId": "run_fixture", "taskId": "task_fixture",
              "dispatchId": "ctx_fixture", "state": "ready", "stage": "input_accepted"},
         ]
@@ -122,9 +123,10 @@ class OrcaDispatchTests(unittest.TestCase):
             "実装A（Codex） | edit-leaf",
         )
         self.assertIn("--bridge-orca", commands[1][commands[1].index("--command") + 1])
-        self.assertEqual(commands[2][:2], ["orchestration", "worker-start"])
-        self.assertIn("--terminal", commands[2])
-        self.assertIn(TERMINAL, commands[2])
+        self.assertEqual(commands[2][:2], ["terminal", "wait"])
+        self.assertEqual(commands[3][:2], ["orchestration", "worker-start"])
+        self.assertIn("--terminal", commands[3])
+        self.assertIn(TERMINAL, commands[3])
 
         with patch.object(dispatch, "run_cli") as repeated:
             self.assertEqual(
@@ -143,12 +145,28 @@ class OrcaDispatchTests(unittest.TestCase):
         self.assertEqual(state["phase"], "unknown")
         with self.assertRaisesRegex(dispatch.DispatchError, "previous dispatch"):
             dispatch.start(REQUEST, self.ticket_path, "worker-a", COORDINATOR,
-                           orca_cli=self.cli, metadata=self.metadata)
+                               orca_cli=self.cli, metadata=self.metadata)
+
+    def test_busy_bootstrap_never_receives_task_input(self):
+        receipts = [{"run": {"id": "run_fixture"}}, {"terminal": {"handle": TERMINAL}},
+                    {"wait": {"satisfied": False}}]
+        with patch.object(dispatch, "run_cli", side_effect=receipts) as cli, \
+                patch.object(dispatch, "wait_for_bridge", return_value=BRIDGE), \
+                patch.object(dispatch.task_bridge, "arm") as arm:
+            with self.assertRaisesRegex(dispatch.DispatchError, "not idle"):
+                dispatch.start(REQUEST, self.ticket_path, "worker-a", COORDINATOR,
+                               orca_cli=self.cli, metadata=self.metadata)
+        self.assertEqual(len(cli.call_args_list), 3)
+        arm.assert_not_called()
+        record = orca_frontdesk.read_private_json(dispatch.dispatch_path(REQUEST, self.ticket), {})
+        self.assertEqual(record["phase"], "unknown")
+        self.assertIsNone(record.get("task_id"))
 
     def test_shared_run_does_not_create_or_rebind_a_run(self):
         run = {"id": "run_fixture", "consumer_generation": 1}
         receipts = [{"run": {**run, "coordinator_handle": COORDINATOR, "legacy": 0}},
                     {"terminal": {"handle": TERMINAL}},
+                    {"wait": {"satisfied": True}},
                     {"runId": "run_fixture", "taskId": "task_fixture", "dispatchId": "ctx_fixture",
                      "state": "ready", "stage": "input_accepted"}]
         with patch.object(dispatch, "run_cli", side_effect=receipts) as cli, \
@@ -156,7 +174,8 @@ class OrcaDispatchTests(unittest.TestCase):
             result = dispatch.start(REQUEST, self.ticket_path, "worker-a", COORDINATOR,
                                     orca_cli=self.cli, metadata=self.metadata, run_context=run)
         self.assertEqual(result["shared_run"], run)
-        self.assertEqual([call.args[2] for call in cli.call_args_list], ["run-current", "terminal-create", "worker-start"])
+        self.assertEqual([call.args[2] for call in cli.call_args_list],
+                         ["run-current", "terminal-create", "terminal-idle", "worker-start"])
         with patch.object(dispatch, "run_cli", return_value={"run": {**run, "coordinator_handle": "term_other", "legacy": 0}}):
             with self.assertRaisesRegex(dispatch.DispatchError, "consumer changed"):
                 dispatch.start(REQUEST, self.ticket_path, "worker-a", COORDINATOR,
@@ -169,6 +188,7 @@ class OrcaDispatchTests(unittest.TestCase):
         receipts = [
             {"run": {"id": "run_fixture"}},
             {"terminal": {"handle": TERMINAL}},
+            {"wait": {"satisfied": True}},
             {"runId": "run_fixture", "taskId": "task_fixture",
              "dispatchId": "ctx_fixture", "state": "ready", "stage": "input_accepted"},
         ]
@@ -185,7 +205,7 @@ class OrcaDispatchTests(unittest.TestCase):
         launcher = commands[1][commands[1].index("--command") + 1]
         self.assertIn("--resume-session " + session, launcher)
         self.assertIn("--follow-up-json", launcher)
-        spec = commands[2][commands[2].index("--spec") + 1]
+        spec = commands[3][commands[3].index("--spec") + 1]
         self.assertIn("Fix finding R1 only", spec)
         self.assertNotIn(self.ticket["prompt"], spec)
         self.assertNotEqual(dispatch.dispatch_path(REQUEST, self.ticket),
@@ -209,6 +229,7 @@ class OrcaDispatchTests(unittest.TestCase):
                       "retry": {"task": "task_original", "dispatch": "ctx_previous"}})
         receipts = [{"run": {**run, "coordinator_handle": COORDINATOR, "legacy": 0}},
                     {"terminal": {"handle": TERMINAL}},
+                    {"wait": {"satisfied": True}},
                     {"runId": "run_fixture", "taskId": "task_original", "dispatchId": "ctx_retry",
                      "state": "ready", "stage": "input_accepted"}]
         with patch.object(dispatch, "run_cli", side_effect=receipts) as cli, \
