@@ -1,8 +1,144 @@
 # Orcaによる分離開発の運用
 
-更新日: 2026-09-22。対象: Orca 1.4.205 / Linux / Codex CLI 0.155.1 / Cursor CLI 2026.08.04-aaa8809。
+更新日: 2026-09-22。対象: Orca 1.4.205 / Linux / Codex CLI 0.155.1。
+Cursor実Task受入は2026.08.04-aaa8809。現在のinstalled版2026.09.18-9a7762bは設定/sessionのoffline互換検査まで。
 
 日常操作は [Orca 運用ガイド](../orca-quickstart.md) を入口にする。本書は権限・ticket・資源管理の詳細仕様。
+
+## Git checkpointと差戻しの実装状況（2026-09-22）
+
+[Git基点レビュー反復計画](../plans/orca-git-review-loop-plan-2026-09-22.md)の第1〜第4実装batchとして、
+専用candidateに以下を追加し、`535d4d86`へローカルcommitした。実runtime受入前の候補である。
+Orcaの既定base refがこのbranchを指すため、新規treeはこの版を含む。既存processは差し替えていない。
+**統括による自動反復・自動統合・PR/Linear同期が完成したという意味ではない。**
+
+- `orca_git_checkpoint.py validate`: 統括が選んだ検証argvを、worker正常終了、同じsession履歴、
+  exact source/index、編集scope、host重実行lockの下で実行する。終了コードと出力hash・Help判断をprivate evidenceへ保存する。
+  失敗、検証中のsource変更、他担当の稼働中はcommitを許可しない。検証コマンドの選定とHelp判断は統括の責務である。
+- `orca_git_checkpoint.py commit`: 成功evidenceに一致する差分だけを一時indexでtree化し、親SHA固定のcommitを作る。
+  prepared journalを保存してからbranchをcompare-and-swap更新し、照合済みindexだけを更新する。
+  ref更新直後に停止しても同じcommitから復旧する。未知のHEAD/index/外部編集は保全して停止する。
+- commit結果の`next_ticket`はscope/provider/task/sessionを維持し、baseとgenerationを更新する。
+  host所有のgeneration receiptが旧task/assignmentと新ticket/sourceの対応を証明した場合だけ、
+  `orca_role_state`が同担当の再開を許可する。ticket書換え一般や任意dirty許可ではない。
+- `orca_dispatch.py start`はgeneration別の記録を使い、次世代workerに正確なresume sessionと指摘本文を要求する。
+  起動前の認可、再送時のticket/slot/follow-up照合を追加した。利用者へこれらの引数を入力させない。
+- checkpoint結果の`review_ticket`は、launcherのHEAD拘束用`base`と差分比較用`review_base`を分離する。
+  修正後も初回assignment baseからの差分を審査し、cleanなcandidate SHAとvalidation evidenceへ結び付ける。
+- `orca_roles.py seal-review`は、固定reviewerの今回の正常終了・履歴・対象・構造化verdictを照合して
+  subject別receiptを確定する。`verify-review`はreceipt付きなら後続の別対象審査で古い承認を失わない。
+  source/index/evidence変更や別reviewer sessionは依然拒否する。本人署名やGitHub native approvalの代用ではない。
+- `--exit-on-settlement`をdispatcher/launcherへ明示した場合だけ、confirmed worker_done、exact terminalの
+  idle観測、同runtimeを照合して自分のprovider子processを終了・waitする。実process終了コードとTask outcomeを
+  別々に保存し、source変化や不明な結果は成功にしない。通常起動の既定は変更しておらず、実agent受入が必要である。
+  Task bridgeがある検証/commit/reviewでは、provider exit 0に加えてcompleted settlementと閉じたbridgeを要求する。
+
+保存先は既存private `role-state/`配下の`checkpoints/`（検証結果・commit intent）、`generations/`
+（次世代認可）、`reviews/`（不変審査記録）。workerには公開しない。ownerは統括、consumerは当該taskの
+差戻し・採否・中断復旧、release_whenは採用または放棄が確定し復旧用途がなくなった時点とする。
+今回の試験は一時Git repositoryと模擬provider証拠だけを使い、実際の運用台帳やagent sessionは変更していない。
+
+### 可視統括へ接続した反復driver（candidate・実runtime未受入）
+
+`orca_review_loop.py`を追加し、可視統括launcherの寿命内でhost threadとして動かす。
+別の編集agentや常駐daemonではない。統括が内部で登録した1〜2 laneの割当だけを進め、
+登録だけでは完了を報告しない。利用者にUUID・spec・slot・コマンドを入力させない。
+既に動いている統括processは自動差替えせず、新しいcandidate launcherだけが対象になる。
+
+- `実装 → 終了/settlement照合 → resource release → 検証 → checkpoint → 固定review → 採否`を
+  private `role-state/loops/`へ保存する。UI launcherごとにdriver leaseを取り、heartbeatと停止理由を記録する。
+  global schedulerとrole/workspace lockで同時更新・重複driver・固定reviewerの競合を防ぐ。
+- 検証失敗はcommitせず、失敗evidenceと同じdirty sourceを拘束した次世代receiptで同worker sessionへ戻す。
+  review差戻しは必須指摘だけを渡し、同じbranch/sessionで後続commitを作って再reviewする。
+  修正は最大3回。同一未解消指摘、scope変更、結果不明は停止する。
+- review本文の一意な`ORCA_REVIEW_JSON:`行を厳密解析する。文章から承認を推測しない。
+  不正なverdictでも受理済みsettlementを保存し、resource release後に停止する。
+  releaseは公式APIの再読で確認し、reused/external terminalを勝手に閉じない。
+- 配車・検証・checkpoint・採否前にLinearの現在状態を再読する。取消/完了では新しい工程を止める。
+  動作中providerの即時取消は未実装で、settlement/終了の照合と後処理は継続する。
+- 成否不明の検証や配車を自動再送しない。中断したcommitは既存receiptで照合する。
+  `paused`は解除API未実装の明示照合待ちであり、別依頼登録による回避も拒否する。
+  承認後のsource/evidence変更も再照合で失効させる。
+- production差分は事前登録のHelp理由だけで進めず、実差分に基づく新しいHelpレビュー待ちで停止する。
+  現段階で自動反復できる検証対象は非production fixtureに限る。
+
+非ゲームfixtureでは実Git commitと模擬providerを使い、review差戻し→同担当修正→再review承認まで確認した。
+これは実Orca/実LLM一巡の証拠ではない。integration未指定の既存登録は承認済みworker checkpointで止まる。
+第4batchでは明示した課題用targetへの統合・combined-head reviewを接続した（下記）。公開はしない。
+共有Runとinbox/質問・escalationの内部APIは第3batchで接続した（下記）。
+未完なのは実UI統括の待機/回答受入、pausedの明示復旧、runtime変更時の再接続、
+統合後の検証失敗・競合・base更新の修正経路、GitHub公開adapter、新規treeへの配備である。
+`--exit-on-settlement`も新driverが明示使用するだけで、実provider終了と同session再開の受入は残る。
+`worker_done`だけで実process終了を偽装せず、稼働中の編集lockを解放してcommitする迂回は追加していない。
+GitHub→Linear単独の外部正常系は[TAK-7 / PR #26の隔離試験](orca-github-linear-acceptance-2026-09-22.md)で受入済み。
+これを上記driverの一巡や運用開始の証拠にはしない。
+
+第2batch検証中、installed Cursorが2026.09.18-9a7762bへ変わり、旧内部module/chunkを参照する
+互換testが6 subcaseで停止した。新版bundleの設定ローダーとstate path実装を読み、
+version別の明示mappingへ更新した。実CLI main・認証・modelを起動せず、network無効のbubblewrap内で
+設定のfallback、immutable project permissions、session metadata/workspace keyを検査する。
+未知versionはskip/fallbackせず再監査待ちで失敗する。新版の実Task/hooks受入を済ませた意味ではない。
+
+### 共有Runと通知の所有権（第3batch・candidate）
+
+`orca_loop_mail.py`が1依頼に1つのRunを作成し、Run IDとconsumer generationをloop schema 2へ保存する。
+以降の実装A/B・固定review・差戻し配車は同じRunを使う。配車前に現在のRun/統括handle/generationを再読し、
+別Runへの黙示切替はしない。統括が既に別Runを持つ場合、新Run作成でその受信先を上書きせず停止する。
+schema 1の台帳は表示用に読めるが、Runを推定して自動移行・再配車しない。
+
+- host driverだけがOrcaのconsuming `check`を実行する。FIFO全件（最大50件）をprivate台帳へ保持し、
+  種別filterで古い質問を飛ばさない。消化済みmessageはdigestで保持し、4096件で明示判断待ちにする。
+- message IDだけでなく、保存済みattemptとbridgeのconfirmed receiptへ照合する。
+  `question`の送信元はterminalではなく`dispatch:<id>`であり、task/payload/threadとask receiptを照合する。
+  `worker_done`/heartbeat/escalationは確定済みsend receiptの本文・routingへ照合する。
+  未確定askの有限待機中は保留する。未知送信元・未確認receipt・不正batchは保存して停止する。
+- 質問/例外が未処理なら新規配車・検証・commit等を止めるが、既存担当の終了照合・releaseは進められる。
+  質問は統括が`decide`で回答する。回答対象Run/Dispatch/thread/bodyと回答したconsumer世代をreceiptで確認する。
+  escalationは統括が理由付きで`continue`/`pause`を選ぶ。本文を実行権限やscope拡張と解釈しない。
+- 完了通知は実process終了とreleaseを既存loopが確認してから処理済みにする。
+  全message処理後だけDeliveryをACKし、全attemptの完了通知ACKまでglobal `approved`にしない。
+  空受信やreleaseだけでは通知確認済みにならない。
+- Run作成・check/ACK・replyは送信前にintentを保存する。不明結果、中断、同じ回答の内容変更を自動再送しない。
+  `pause`は成果・残る通知・所有権を保全する停止であり、動作中processの終了やresource解放の証拠ではない。
+- UI統括は登録後にread-only `watch`を繰り返す。1回最大25秒で、timeoutは終了条件ではない。
+  判断事項が返れば内部`decide`で処理し、利用者へmessage IDやコマンドを返さない。
+  別のconsuming check/ACKを実行しない。busyなTUIへのキー注入やnudgeだけを応答開始の証拠にする実装はない。
+  providerがこの監督手順を実際に継続することは実runtime受入で別途確認する。
+
+模擬Orca receiptと実Gitの通しfixtureでは、1 Run内で実装→review→修正→再reviewの4 Dispatchを進め、
+4完了DeliveryをすべてACKしてから承認済みになった。質問と完了が同じbatchにある場合、回答後も
+完了担当のreleaseまでACKしないこと、未知回答/ACKの再送拒否、consumer交代・送信元偽装の拒否を検査した。
+今回は稼働中のOrcaへ新しいRun/Task/agentを作っていない。実動作済み・配備済みとは区別する。
+
+### 承認済み成果の統合と最終review（第4batch・candidate）
+
+新規specでは`integration: {target: {repo, branch, base}, validation: {argv, help_reason, help_decision}}`を
+統括が内部指定する。targetはworkerと異なるcleanなlinked worktree、同じGit common directory、
+全worker共通の初期base、課題identifier入りbranchを要求する。利用者の入力項目は増やさない。
+
+- 全laneの不変approvalと完了通知ACKが揃った後、`orca_git_integrate.py`がA→Bの順で統合する。
+  全merge treeを先に計算し、競合ならtarget ref/index/worktreeを一切変更しない。
+  worker commitを親に残す2-parent merge commitを作り、prepared intentをprivate `role-state/integrations/`へ保存する。
+- 反映は`read-tree -m -u`と比較更新の`update-ref`を使う。reset/force/自動競合解消は使わない。
+  dirty target、承認後のworker変更、未知のindex/head、ignoredファイルへの上書きを拒否する。
+  checkout後/ref更新後の中断は、Gitがexact前後状態と一致する場合だけ同じprepared commitから復旧する。
+- combined headでは新しいvalidation evidenceを作り、固定reviewerを同Runで再配車する。
+  個別worker approval・validationを最終承認へ流用しない。最終担当のreleaseと完了ACKまでglobal承認にしない。
+  検証によるsource変更、取消、最終承認後の編集で停止する。検証コマンドの結果不明は再実行しない。
+- 最終reviewの`changes_requested`は`watch`の`combined_review`判断事項として統括へ返す。
+  統括が全指摘を既存1担当のscope内で解決できると判断した場合だけ、内部`route`へ
+  `{head, slot, reason}`を渡す。同session・同scope・既存checkpointの次世代ticketで修正し、
+  worker再review→再統合→combined再検証/reviewを続ける。branch履歴は書き換えない。
+  統合SHAはread-onlyの参照contextであり、workerのbaseを勝手に更新しない。
+- routeはhead固定・同じ判断の冪等再読・同一指摘/3回budget停止を持つ。
+  複数scope、base更新、競合解消、統合後validation失敗の修正は未接続で、無理にBへ割り当てない。
+  `approved`は最終review承認であり、PR作成・公開・merge済みを意味しない。
+- 承認済みlaneの再照合がreviewer leaseと競合しても、hostはinbox処理を続ける。
+  別subjectのreviewerが質問待ちになった際、承認照合によって回答経路が止まらないようにする。
+
+実Git fixtureで単laneの差戻し→統合→最終差戻し→同worker修正→再統合→最終承認、
+2 laneの直列merge、競合時の無変更、checkout/ref更新後の復旧、dirty/stale/ignored衝突拒否を確認する。
+実runtime、GitHub adapter、運用版としての配備受入は別の未完gateである。
 
 ## Linear受付の運用方針
 
@@ -37,7 +173,8 @@ Linearのworkspace/team読取りに加え、専用試験issue `TAK-5` の作成�
   UUID、ticket path、slot選択を利用者へ要求しない。外部反映に失敗してもworkerを再実行せず、実結果とLinear反映待ちを分けて扱う。
 - Task連携は、Codex bridgeの固定reviewerとCodex A、Cursor hook bridgeのCursor Bについて
   read-only一巡と監督付き限定編集を完了し、受付から同じ専用経路へ接続するcontrollerも実装・tooling検証した。
-  controllerはworker完了後の検証、review ticket作成、採否、commit、Linear更新を代行しない。
+  単一配車controller自体は検証・採否を行わない。第2batchの反復driverが完了照合後の検証、
+  review ticket作成、採否、checkpointを接続するが、実runtime受入・統合・公開はまだ完了していない。
   A=Codex/B=軽量Cursor/固定reviewerの構成を維持する。共有checkout/background編集は禁止し、
   primaryルールが許す専用launcherの限定例外だけを使う。通常のOrca agent起動へ許可を拡大しない。
 
@@ -328,6 +465,7 @@ task-keyはcommon Git directoryとticket IDから生成し、別slotへの暗黙
 
 - 初回の編集workerはclean、継続は同じticket全文のdigest・provider/slot・repo/common dir・branch/base・
   scopeと正確なsession UUIDを要求する。Bのcomplexity/acceptanceもticket digestに含む。
+  新しいcheckpoint経路では、上記のhost-owned generation receiptがある場合だけbase/generation更新を認可する。
 - 起動前intentを保存し、子processの終了をcontrollerがwaitした後だけcheckpointを保存する。
   checkpointはsource/index fingerprintと会話fileのdigestを持つ。外部編集やstagingを継続成果に混ぜない。
 - worker再開は `--resume-session <UUID> --follow-up-file <本文file>` を指定する。元task本文を再送せず、
@@ -434,7 +572,7 @@ Linearの標準課題管理（L1）と統括相談（L2）は、このTask bridg
 `scripts/orca_dispatch.py` はimmutableなLinear受付、acknowledge済みのexact可視統括terminal、固定ticketを照合して
 Run作成→日本語role tab作成→既存terminal指定の`worker-start`→private bridge armを順序付ける。
 既存の成功済みread-only相談は復旧互換として受理するが、新規通常運用では可視統括を使う。
-同じrequest/ticketのarmed状態は同じ記録を返し、pending/unknownは自動再送しない。
+同じrequest/ticket/generationのarmed状態は同じ記録を返し、ticket・slot・追記本文が異なる再送とpending/unknownは拒否する。
 承認・レビュー判定・検証・commit・Linear更新は代行しない。dry-run ticketとの組合せは起動前に拒否する。
 CursorのShell/MCP/WebFetch denyは変更しない。
 Task bridge付きCodexはCodex自身の内側sandboxを使わず、既存の外側bubblewrapを強制境界とする。

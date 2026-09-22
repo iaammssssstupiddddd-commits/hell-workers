@@ -48,6 +48,7 @@
 | [development-workstation-blender-migration-plan-2026-07-29.md](development-workstation-blender-migration-plan-2026-07-29.md) | In Progress | 新PCへの開発環境移行と、現PCでのBlender／asset新規構築計画。 |
 | [hvac-plumbing-plan-2026-07-13.md](hvac-plumbing-plan-2026-07-13.md) | Draft | 地獄のインフラ（換気・導水・部屋認可）実装計画 |
 | [native-acceptance-resource-safety-plan-2026-08-05.md](native-acceptance-resource-safety-plan-2026-08-05.md) | Complete | tmpfs上のCargo出力を永続storageへ固定し、実機検証のRAM圧迫を防ぐ計画。 |
+| [orca-git-review-loop-plan-2026-09-22.md](orca-git-review-loop-plan-2026-09-22.md) | In Progress（統合・最終review差戻しのfixture接続、実runtime・公開未完） | Git基点の実装・差戻し・再review・統合ループ。統括event駆動、GitHub/Linear連携、運用基盤配備の計画。 |
 | [orca-parallel-development-plan-2026-09-20.md](orca-parallel-development-plan-2026-09-20.md) | In Progress — Orca Tasksを唯一の利用者向け受付とし、Linear-linked worktreeの可視統括と日本語A/B/review tabを実装。試験課題・別目的課題から実装用Linear課題・分離worktree・次の統括tabへの自動引継ぎを実装し、実runtime受入待ち | Linear受付・Orca実行基盤の統合。既存guard/session再利用、段階移行と限定検証 |
 
 ## アーカイブ計画書一覧 (`archive/` / `**/archived/`)

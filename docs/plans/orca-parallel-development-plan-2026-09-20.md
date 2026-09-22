@@ -13,6 +13,14 @@
 | 調査対象 | Orca `v1.4.205`、Fedora 44 x86_64 / Wayland |
 | repository基点 | `6abeeed92cf14e2e5aafc8240e1c64989b609a84`、primaryに別作業のdirty変更あり |
 
+実装→固定review→差戻し→同じ実装担当での修正→再reviewをGit commit SHAへ固定し、課題用Draft PRと
+Linear GitHub標準連携へ接続する後続作業は、
+[Orca Git基点レビュー反復計画](orca-git-review-loop-plan-2026-09-22.md)を正本とする。
+本計画の既存launcher・資源制御・固定session・Task bridgeを再利用し、Linear Webhookを実行loopの正本にはしない。
+2026-09-22のコード照合で、commit後の同担当再開、subject別承認保存、統括event駆動が未接続と判明した。
+後続計画に修正と受入条件を追加し、同日の実装でcheckpoint・世代認可・subject別承認と
+opt-inのsettlement後終了処理を追加した。統括event駆動と統合以後は未接続で、反復loopを運用可能とするものではない。
+
 初回依頼の導入・仕様確認後、ユーザーがOrcaへ移行し、ルール見直しを含む環境実装を依頼した。
 主担当が専用作業場でM2/M3を実装し、拒否試験を通した経路だけを条件付きで許可する。
 ゲーム変更・公開は含めない。既存のprimary上の並行変更は保全する。
