@@ -705,6 +705,21 @@ issue:  integrated → combined_validation → final_review → awaiting_ci → 
 
 ### Definition of Done
 
+### 保存領域欠損を使う実runtime試運転（2026-09-22）
+
+- ユーザーが統括→実装→固定reviewの実運用試験として指示。専用TAK-8と
+  `tak-8-storage-recovery-trial` worktreeを作成し、review holdを登録した。
+- 基盤は`535d4d86`にcommit済み。起動時に共有統括台帳の別repo記録を自身の記録として検査する不具合を検出し、
+  `b9b63c50`で共通record検証と自身のrepo admissionを分離。既存記録は削除しない。
+  回帰2件を含むPython 508件、Blender tooling 164件、Ruff/actionlint、perf self-testが成功。
+- 試運転worktreeを同commitへfast-forwardし、可視`統括`の起動・TAK-8取込・acknowledgeを確認した。
+  実装/reviewの完遂はまだ未確認。AはCodex、Bは単純な独立処理に限るCursor、reviewは固定Codexを維持する。
+- 欠損は`formwork-release-candidate`、`refactor-r01-r14-candidate`、`tak6-orca-implementation-worktree`。
+  変更別gateはこの3件で停止したまま。根拠なしrelease、空directoryの偽復元、検査無効化は禁止。
+  正本台帳の是正は調査・固定review後に統括が行う。ゲーム/Rust/nativeテスト、push/PR/製品mergeは行わない。
+
+### Definition of Done（全体計画）
+
 - [ ] M0〜M7が完了し、Git SHA基点の実装/review差戻しループを実runtimeで受け入れた。
 - [ ] 影響ドキュメントが更新済み。
 - [ ] 同一base/head/tested SHA・選択群の成功CIとURL、またはdirtyを含むローカル変更別検証を記録した。
