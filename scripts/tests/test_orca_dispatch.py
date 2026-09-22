@@ -135,6 +135,70 @@ class OrcaDispatchTests(unittest.TestCase):
             dispatch.start(REQUEST, self.ticket_path, "worker-a", COORDINATOR,
                            orca_cli=self.cli, metadata=self.metadata)
 
+    def test_shared_run_does_not_create_or_rebind_a_run(self):
+        run = {"id": "run_fixture", "consumer_generation": 1}
+        receipts = [{"run": {**run, "coordinator_handle": COORDINATOR, "legacy": 0}},
+                    {"terminal": {"handle": TERMINAL}},
+                    {"runId": "run_fixture", "taskId": "task_fixture", "dispatchId": "ctx_fixture",
+                     "state": "ready", "stage": "input_accepted"}]
+        with patch.object(dispatch, "run_cli", side_effect=receipts) as cli, \
+                patch.object(dispatch, "wait_for_bridge", return_value=BRIDGE), patch.object(dispatch.task_bridge, "arm"):
+            result = dispatch.start(REQUEST, self.ticket_path, "worker-a", COORDINATOR,
+                                    orca_cli=self.cli, metadata=self.metadata, run_context=run)
+        self.assertEqual(result["shared_run"], run)
+        self.assertEqual([call.args[2] for call in cli.call_args_list], ["run-current", "terminal-create", "worker-start"])
+        with patch.object(dispatch, "run_cli", return_value={"run": {**run, "coordinator_handle": "term_other", "legacy": 0}}):
+            with self.assertRaisesRegex(dispatch.DispatchError, "consumer changed"):
+                dispatch.start(REQUEST, self.ticket_path, "worker-a", COORDINATOR,
+                               orca_cli=self.cli, metadata=self.metadata, run_context=run)
+
+    def test_generation_resume_is_explicit_and_followup_replaces_original_prompt(self) -> None:
+        self.ticket["generation"] = 1
+        self.ticket_path.write_text(json.dumps(self.ticket))
+        session = "e1fd2684-d55a-4794-9741-903c92b7dbea"
+        receipts = [
+            {"run": {"id": "run_fixture"}},
+            {"terminal": {"handle": TERMINAL}},
+            {"runId": "run_fixture", "taskId": "task_fixture",
+             "dispatchId": "ctx_fixture", "state": "ready", "stage": "input_accepted"},
+        ]
+        with patch.object(dispatch.bindings, "admit") as admit, \
+                patch.object(dispatch, "run_cli", side_effect=receipts) as cli, \
+                patch.object(dispatch, "wait_for_bridge", return_value=BRIDGE), \
+                patch.object(dispatch.task_bridge, "arm"):
+            result = dispatch.start(REQUEST, self.ticket_path, "worker-a", COORDINATOR,
+                                    orca_cli=self.cli, metadata=self.metadata,
+                                    resume_session=session, follow_up="Fix finding R1 only")
+        admit.assert_called_once()
+        self.assertEqual(result["generation"], 1)
+        commands = [entry.args[1] for entry in cli.call_args_list]
+        launcher = commands[1][commands[1].index("--command") + 1]
+        self.assertIn("--resume-session " + session, launcher)
+        self.assertIn("--follow-up-json", launcher)
+        spec = commands[2][commands[2].index("--spec") + 1]
+        self.assertIn("Fix finding R1 only", spec)
+        self.assertNotIn(self.ticket["prompt"], spec)
+        self.assertNotEqual(dispatch.dispatch_path(REQUEST, self.ticket),
+                            dispatch.dispatch_path(REQUEST, {**self.ticket, "generation": 0}))
+        with patch.object(dispatch, "run_cli") as repeated, self.assertRaisesRegex(dispatch.DispatchError, "different"):
+            dispatch.start(REQUEST, self.ticket_path, "worker-a", COORDINATOR,
+                           orca_cli=self.cli, metadata=self.metadata,
+                           resume_session=session, follow_up="different fix")
+        repeated.assert_not_called()
+
+    def test_forged_generation_is_refused_before_external_mutation(self) -> None:
+        self.ticket["generation"] = 1
+        self.ticket_path.write_text(json.dumps(self.ticket))
+        with patch.object(dispatch, "run_cli") as cli, self.assertRaises(ValueError):
+            dispatch.start(REQUEST, self.ticket_path, "worker-a", COORDINATOR,
+                           orca_cli=self.cli, metadata=self.metadata,
+                           resume_session="e1fd2684-d55a-4794-9741-903c92b7dbea", follow_up="fix")
+        cli.assert_not_called()
+        with patch.object(dispatch, "run_cli") as cli, self.assertRaisesRegex(dispatch.DispatchError, "same session"):
+            dispatch.start(REQUEST, self.ticket_path, "worker-a", COORDINATOR,
+                           orca_cli=self.cli, metadata=self.metadata)
+        cli.assert_not_called()
+
     def test_requires_linear_intake_and_successful_consultation(self) -> None:
         ledger = orca_issue_context.ledger_path()
         orca_frontdesk.write_ledger(ledger, {"schema": 1, "imports": []})

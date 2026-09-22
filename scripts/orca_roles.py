@@ -17,6 +17,7 @@ import shutil
 import signal
 import subprocess
 import sys
+import time
 import uuid
 from contextlib import ExitStack
 from pathlib import Path
@@ -51,6 +52,8 @@ def validate_ticket(ticket: dict) -> dict:
             raise ValueError(f"ticket requires {key}")
     if not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,63}", ticket["id"]):
         raise ValueError("invalid ticket id")
+    if type(ticket.get("generation", 0)) is not int or ticket.get("generation", 0) < 0:
+        raise ValueError("generation must be a non-negative integer")
     repo = Path(ticket["repo"])
     if not repo.is_absolute() or repo.resolve() != repo:
         raise ValueError("ticket repo must be a canonical absolute path")
@@ -72,6 +75,12 @@ def validate_ticket(ticket: dict) -> dict:
         raise ValueError("read_only must be a boolean")
     if ticket.get("read_only") and allowed:
         raise ValueError("read-only ticket must have no writable directories")
+    if "review_base" in ticket:
+        review_base = ticket["review_base"]
+        if (ticket.get("read_only") is not True or not isinstance(review_base, str)
+                or not re.fullmatch(r"[a-f0-9]{40}", review_base)):
+            raise ValueError("review_base requires a read-only ticket and full SHA")
+        git(repo, "merge-base", "--is-ancestor", review_base, ticket["base"])
     paths: list[Path] = []
     for value in allowed:
         if not isinstance(value, str):
@@ -211,11 +220,53 @@ def prepare_runtime(slot: str) -> Path:
     return runtime
 
 
+def settled_bridge(last: dict, repo: Path) -> dict:
+    """Read one confirmed settlement; neither idle nor exit zero is settlement."""
+    directory = task_bridge.root() / bindings.identity(last["orca_bridge"])
+    journal = bindings.storage.read_private_json(directory / "journal.json", {})
+    authority = bindings.storage.read_private_json(directory / "arm.json", {})
+    identity = bindings.storage.read_private_json(directory / "identity.json", {})
+    outcome = journal.get("settled_status")
+    if (journal.get("phase") != "settled" or outcome not in {"completed", "failed"}
+            or journal.get("revoked") is not True or journal.get("authority") != authority
+            or set(authority) != {"run", "task", "dispatch", "coordinator"}
+            or identity.get("repo") != str(repo) or identity.get("terminal") != last.get("terminal")
+            or not isinstance(journal.get("operations"), dict)):
+        raise ValueError("successful Orca settlement and closed bridge are required")
+    accepted = []
+    for operation in journal["operations"].values():
+        if operation.get("phase") != "confirmed":
+            raise ValueError("bridge has an unconfirmed operation; reconcile before proceeding")
+        result = operation.get("result", {})
+        message = result.get("message", {})
+        if message.get("type") == "worker_done":
+            if (operation.get("phase") != "confirmed"
+                    or result.get("lifecycle") != {"action": outcome, "taskId": authority["task"],
+                                                  "dispatchId": authority["dispatch"]}
+                    or message.get("from_handle") != last["terminal"]
+                    or message.get("run_id") != authority["run"]):
+                raise ValueError("completion receipt differs from the exact Dispatch")
+            accepted.append(message)
+    if len(accepted) != 1:
+        raise ValueError("settlement requires one accepted worker_done")
+    return {"outcome": outcome, "message": accepted[0], "authority": authority}
+
+
+def require_completed_bridge(last: dict, repo: Path) -> None:
+    """A provider's exit 0 must not promote a failed or unproven Orca Task."""
+    if "orca_bridge" not in last:
+        return  # Legacy direct launcher has no Orca lifecycle to claim.
+    if settled_bridge(last, repo)["outcome"] != "completed":
+        raise ValueError("successful Orca settlement and closed bridge are required")
+
+
 def verify_review(ticket: dict, record: dict) -> None:
     repo = Path(ticket["repo"])
-    expected = {"ticket": ticket["id"], "base": ticket["base"],
+    expected = {"ticket": ticket["id"], "base": ticket.get("review_base", ticket["base"]),
                 "head": git(repo, "rev-parse", "HEAD"),
                 "source_sha256": fingerprint(repo), "verdict": "approved"}
+    if "validation_evidence" in ticket:
+        expected["validation_evidence"] = ticket["validation_evidence"]
     if any(record.get(key) != value for key, value in expected.items()):
         raise ValueError("review is stale or not approved for this exact subject")
     if not record.get("reviewer_session") or not record.get("validation_evidence"):
@@ -224,8 +275,17 @@ def verify_review(ticket: dict, record: dict) -> None:
         raise ValueError("review has unresolved or unrecorded blocking findings")
     with acquire_host("reviewer", inherit=False), acquire_host(workspace_slot(repo), inherit=False):
         validate_ticket(ticket)
+        if record["source_sha256"] != fingerprint(repo):
+            raise ValueError("review source changed while acquiring leases")
         data = bindings.read_state("reviewer", "codex")
         bound = data["tasks"].get("fixed-reviewer")
+        if record.get("receipt_id"):
+            receipt = read_review_receipt(record["receipt_id"])
+            if (receipt["record"] != {key: value for key, value in record.items() if key != "receipt_id"}
+                    or receipt["ticket_sha256"] != bindings.digest(ticket)
+                    or not bound or receipt["record"]["reviewer_session"] != bound["session_id"]):
+                raise ValueError("review receipt does not match the fixed reviewer and subject")
+            return
         if (not bound or record["reviewer_session"] != bound["session_id"]
                 or bound["ticket_sha256"] != bindings.digest(ticket)
                 or bound["source_sha256"] != fingerprint(repo)
@@ -234,6 +294,64 @@ def verify_review(ticket: dict, record: dict) -> None:
         snapshot = bindings.session_snapshot(prepare_runtime("reviewer"), "codex", Path(bound["origin"]))
         if any(snapshot[key] != bound[key] for key in snapshot):
             raise ValueError("fixed reviewer history changed; reconcile before accepting review")
+        require_completed_bridge(data["last"], repo)
+
+
+def read_review_receipt(identifier: str) -> dict:
+    if not isinstance(identifier, str) or not re.fullmatch(r"[a-f0-9]{64}", identifier):
+        raise ValueError("invalid review receipt identity")
+    path = bindings.state_path("reviewer").parent / "reviews" / f"{identifier}.json"
+    receipt = bindings.storage.read_private_json(path, {})
+    if receipt.get("schema") != 1 or bindings.digest(receipt) != identifier:
+        raise ValueError("review receipt missing or changed")
+    return receipt
+
+
+def seal_review(ticket: dict, record: dict) -> dict:
+    """Seal a completed review before the same reviewer moves to another subject."""
+    repo = Path(ticket["repo"])
+    if "receipt_id" in record:
+        raise ValueError("supply an unsealed review record")
+    expected = {"ticket": ticket["id"], "base": ticket.get("review_base", ticket["base"]), "head": git(repo, "rev-parse", "HEAD"),
+                "source_sha256": fingerprint(repo)}
+    if "validation_evidence" in ticket:
+        expected["validation_evidence"] = ticket["validation_evidence"]
+    if any(record.get(key) != value for key, value in expected.items()):
+        raise ValueError("review record is stale")
+    verdict, findings = record.get("verdict"), record.get("blocking_findings")
+    if (verdict not in {"approved", "changes_requested"} or not isinstance(findings, list)
+            or (verdict == "approved" and findings) or (verdict == "changes_requested" and not findings)
+            or not record.get("validation_evidence")):
+        raise ValueError("review requires typed verdict, findings and validation evidence")
+    for finding in findings:
+        if (not isinstance(finding, dict) or set(finding) != {"id", "message", "acceptance"}
+                or not all(isinstance(value, str) and value.strip() and len(value) <= 4000
+                           for value in finding.values())):
+            raise ValueError("blocking findings require id, message and acceptance")
+    with acquire_host("reviewer", inherit=False), acquire_host(workspace_slot(repo), inherit=False):
+        validate_ticket(ticket)
+        data = bindings.read_state("reviewer", "codex")
+        bound = data["tasks"].get("fixed-reviewer")
+        last = data.get("last") or {}
+        if (not bound or bound["ticket_sha256"] != bindings.digest(ticket)
+                or bound["source_sha256"] != fingerprint(repo)
+                or bound["session_id"] != record.get("reviewer_session")
+                or last.get("phase") != "recorded" or last.get("process_exited") is not True
+                or last.get("exit_code") != 0):
+            raise ValueError("review is not the fixed reviewer's successful current subject")
+        snapshot = bindings.session_snapshot(prepare_runtime("reviewer"), "codex", Path(bound["origin"]))
+        if any(bound[name] != value for name, value in snapshot.items()):
+            raise ValueError("reviewer history changed before sealing")
+        require_completed_bridge(last, repo)
+        receipt = {"schema": 1, "ticket_sha256": bindings.digest(ticket), "record": record,
+                   "attempt_id": last["attempt_id"], **snapshot}
+        identifier = bindings.digest(receipt)
+        path = bindings.storage.checked_directory(bindings.state_path("reviewer").parent / "reviews") / f"{identifier}.json"
+        existing = bindings.storage.read_private_json(path, receipt)
+        if existing != receipt:
+            raise ValueError("immutable review receipt changed")
+        bindings.storage.write_ledger(path, receipt)
+        return {**record, "receipt_id": identifier}
 
 
 def workspace_slot(repo: Path) -> str:
@@ -256,11 +374,65 @@ def worker_scope(ticket: dict, *, initial: bool) -> None:
             raise ValueError("worker has changes outside the assigned scope; preserve and reconcile")
 
 
-def run_provider(command: list[str], data: dict) -> int:
+def settlement_exit(bridge: task_bridge.Session) -> dict | None:
+    """Observe a confirmed settlement AND exact idle process, without sending input."""
+    journal = bindings.storage.read_private_json(bridge.directory / "journal.json", {})
+    if journal.get("phase") != "settled":
+        return None
+    outcome = journal.get("settled_status")
+    authority = journal.get("authority")
+    if outcome not in {"completed", "failed"} or authority != bridge.policy.authority:
+        raise ValueError("settlement changed before provider exit")
+    operations = journal.get("operations", {})
+    if not isinstance(operations, dict) or any(row.get("phase") != "confirmed" for row in operations.values()):
+        return None  # The bridge has not finished returning its final receipt yet.
+    done = [row["result"] for row in operations.values()
+            if row.get("result", {}).get("message", {}).get("type") == "worker_done"]
+    expected = {"action": outcome, "taskId": authority["task"], "dispatchId": authority["dispatch"]}
+    if len(done) != 1 or done[0].get("lifecycle") != expected:
+        raise ValueError("settlement requires exactly one confirmed completion receipt")
+    # Separate read-only connection: do not share the bridge server's RPC deadline.
+    observer = task_bridge.wire.Upstream.load(bridge.upstream.metadata_path.parent)
+    if observer.runtime_id != bridge.upstream.runtime_id:
+        raise ValueError("Orca runtime changed before provider exit")
+    terminal = bridge.binding.terminal
+    bridge.binding.validate(observer.call("terminal.show", {"terminal": terminal}).get("terminal"))
+    result = observer.call("terminal.wait", {"terminal": terminal, "for": "tui-idle", "timeoutMs": 1000})
+    wait = task_bridge.wire.project_wait(result.get("wait"), bridge.binding)
+    bridge.binding.validate(observer.call("terminal.show", {"terminal": terminal}).get("terminal"))
+    if wait["satisfied"] is not True:
+        return None
+    return {"bridge_id": bridge.identifier, "authority": authority, "outcome": outcome,
+            "terminal": terminal, "source_sha256": fingerprint(bridge.binding.repo)}
+
+
+def run_provider(command: list[str], data: dict, *, completion_probe=None) -> int:
     child = None
+    completed = None
     try:
         child = subprocess.Popen(command, start_new_session=True, umask=0o077)
-        return child.wait()
+        if completion_probe is None:
+            return child.wait()
+        while True:
+            try:
+                return child.wait(timeout=0.5)
+            except subprocess.TimeoutExpired:
+                receipt = completion_probe()
+                if receipt is None:
+                    continue
+                # An accepted, idle Dispatch has ended its turn. Stop only our
+                # own child group; never kill a terminal or an unknown worker.
+                data["last"]["settlement_exit_intent"] = receipt
+                bindings.save_state(data)
+                try:
+                    os.killpg(child.pid, signal.SIGTERM)
+                except ProcessLookupError:
+                    pass  # It may have exited naturally after the idle observation.
+                code = child.wait(timeout=5)
+                if code not in (0, -signal.SIGTERM):
+                    return code
+                completed = receipt
+                return 0 if receipt["outcome"] == "completed" else 1
     finally:
         if child is not None:
             if child.poll() is None:
@@ -273,17 +445,23 @@ def run_provider(command: list[str], data: dict) -> int:
                 except subprocess.TimeoutExpired:
                     os.killpg(child.pid, signal.SIGKILL)
                     child.wait(timeout=5)
-            data["last"].update(process_exited=True, exit_code=child.returncode)
+            effective = (0 if completed["outcome"] == "completed" else 1) if completed else child.returncode
+            data["last"].update(process_exited=True, exit_code=effective)
+            if completed:
+                data["last"].update(provider_exit_code=child.returncode, settlement_exit=completed)
         # Until all postconditions pass this stays unknown, even after exit 0.
         data["last"]["phase"] = "unknown"
         bindings.save_state(data)
 
 
 def launch(ticket: dict, slot: str, *, dry_run: bool, resume_session: str | None = None,
-           follow_up: str | None = None, bridge_settings: tuple[Path, Path] | None = None) -> int:
+           follow_up: str | None = None, bridge_settings: tuple[Path, Path] | None = None,
+           exit_on_settlement: bool = False) -> int:
     role = "reviewer" if slot == "reviewer" else "worker"
     read_only = role == "reviewer" or ticket.get("read_only") is True
     provider = provider_for(ticket, slot)
+    if exit_on_settlement and (bridge_settings is None or dry_run):
+        raise ValueError("settlement exit requires a real supervised bridge")
     if bridge_settings and (provider not in {"codex", "cursor"} or dry_run
                             or (provider == "cursor" and slot != "worker-b")):
         raise ValueError("Task bridge requires a real approved role launch")
@@ -413,11 +591,25 @@ def launch(ticket: dict, slot: str, *, dry_run: bool, resume_session: str | None
                             "terminal": os.environ.get("ORCA_TERMINAL_HANDLE"),
                             **({"orca_bridge": bridge.identifier} if bridge else {})}
             bindings.save_state(data)
-            code = run_provider(command, data)
+            if exit_on_settlement:
+                # A false idle observation never stops the child; the next
+                # bounded observation waits for the same accepted Dispatch.
+                last_probe = 0.0
+                def probe():
+                    nonlocal last_probe
+                    if time.monotonic() - last_probe < 2:
+                        return None
+                    last_probe = time.monotonic()
+                    return settlement_exit(bridge)
+                code = run_provider(command, data, completion_probe=probe)
+            else:
+                code = run_provider(command, data)
         if bridge and bridge.policy.phase == "unknown":
             raise RuntimeError("Task bridge outcome unknown; preserve role and reconcile before resuming")
         validate_ticket(ticket)
         after = fingerprint(repo)
+        if data["last"].get("settlement_exit", {}).get("source_sha256", after) != after:
+            raise RuntimeError("source changed after settlement; preserve and reconcile")
         if read_only and after != before:
             raise RuntimeError("source changed during read-only observation; result is invalid")
         if role == "worker" and not read_only:
@@ -605,19 +797,22 @@ def reconcile_bridge(ticket: dict, slot: str, attempt_id: str, observed_source: 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=("launch", "fingerprint", "verify-review", "abandon-start",
+    parser.add_argument("action", choices=("launch", "fingerprint", "verify-review", "seal-review", "abandon-start",
                                            "reconcile-bridge"))
     parser.add_argument("--ticket", type=Path, required=True)
     parser.add_argument("--slot", choices=("worker-a", "worker-b", "reviewer"), default="reviewer")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--resume-session")
-    parser.add_argument("--follow-up-file", type=Path)
+    follow_group = parser.add_mutually_exclusive_group()
+    follow_group.add_argument("--follow-up-file", type=Path)
+    follow_group.add_argument("--follow-up-json", type=Path)
     parser.add_argument("--review-record", type=Path)
     parser.add_argument("--attempt-id")
     parser.add_argument("--observed-source")
     parser.add_argument("--reason")
     parser.add_argument("--bridge-orca", type=Path)
     parser.add_argument("--bridge-metadata", type=Path)
+    parser.add_argument("--exit-on-settlement", action="store_true")
     args = parser.parse_args()
     try:
         bridge_settings = None
@@ -631,9 +826,12 @@ def main() -> int:
         if args.action == "fingerprint":
             print(fingerprint(Path(ticket["repo"])))
             return 0
-        if args.action == "verify-review":
+        if args.action in {"verify-review", "seal-review"}:
             if args.review_record is None:
                 raise ValueError("--review-record is required")
+            if args.action == "seal-review":
+                print(json.dumps(seal_review(ticket, json.loads(args.review_record.read_text())), indent=2))
+                return 0
             verify_review(ticket, json.loads(args.review_record.read_text()))
             print("Review matches the exact source; this command does not integrate or publish.")
             return 0
@@ -650,10 +848,16 @@ def main() -> int:
                              args.reason, args.bridge_metadata)
             print("Failed bridge reconciled; no task result was accepted or approved.")
             return 0
+        follow_up = args.follow_up_file.read_text() if args.follow_up_file else None
+        if args.follow_up_json:
+            value = bindings.storage.read_private_json(args.follow_up_json, {})
+            if set(value) != {"follow_up"} or not isinstance(value["follow_up"], str):
+                raise ValueError("invalid private follow-up record")
+            follow_up = value["follow_up"]
         return launch(ticket, args.slot, dry_run=args.dry_run, resume_session=args.resume_session,
-                      follow_up=args.follow_up_file.read_text() if args.follow_up_file else None,
-                      bridge_settings=bridge_settings)
-    except (OSError, ValueError, RuntimeError, subprocess.CalledProcessError) as error:
+                      follow_up=follow_up,
+                      bridge_settings=bridge_settings, exit_on_settlement=args.exit_on_settlement)
+    except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
         print(f"Orca role refused: {error}", file=sys.stderr)
         return 1
 

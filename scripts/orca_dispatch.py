@@ -44,7 +44,11 @@ class DispatchError(RuntimeError):
 
 def dispatch_path(request_id: str, ticket: dict) -> Path:
     request_id = coordinator.identity(request_id)
-    name = f"{request_id}-{ticket['id']}.json"
+    generation = ticket.get("generation", 0)
+    if type(generation) is not int or generation < 0:
+        raise DispatchError("invalid dispatch generation")
+    suffix = f"-g{generation}" if generation else ""
+    name = f"{request_id}-{ticket['id']}{suffix}.json"
     return frontdesk.checked_directory(state_root().parent / "dispatches") / name
 
 
@@ -107,6 +111,19 @@ def lifecycle_key(value: object, prefix: str) -> str:
     return value
 
 
+def checked_run(executable: Path, terminal: str, expected: dict) -> dict:
+    if (not isinstance(expected, dict) or set(expected) != {"id", "consumer_generation"}
+            or type(expected["consumer_generation"]) is not int or expected["consumer_generation"] < 1):
+        raise DispatchError("invalid shared Run binding")
+    lifecycle_key(expected["id"], "run_")
+    result = run_cli(executable, ["orchestration", "run-current", "--from", terminal], "run-current")
+    run = result.get("run")
+    if (not isinstance(run, dict) or run.get("coordinator_handle") != terminal or run.get("legacy") != 0
+            or any(run.get(key) != value for key, value in expected.items())):
+        raise DispatchError("shared Run consumer changed; do not rebind implicitly")
+    return run
+
+
 def task_spec(ticket: dict, slot: str) -> str:
     reviewer = slot == "reviewer"
     scope = (", ".join(ticket["allowed_directories"])
@@ -143,7 +160,9 @@ def wait_for_bridge(ticket: dict, slot: str, terminal: str) -> str:
 
 
 def start(request_id: str, ticket_path: Path, slot: str, coordinator_handle: str,
-          *, orca_cli: Path | None = None, metadata: Path | None = None) -> dict:
+          *, orca_cli: Path | None = None, metadata: Path | None = None,
+          resume_session: str | None = None, follow_up: str | None = None,
+          exit_on_settlement: bool = False, run_context: dict | None = None) -> dict:
     if slot not in {"worker-a", "worker-b", "reviewer"}:
         raise DispatchError("dispatch supports worker-a, worker-b, or the fixed reviewer")
     task_bridge.wire.identifier(coordinator_handle, prefix="term_")
@@ -155,9 +174,19 @@ def start(request_id: str, ticket_path: Path, slot: str, coordinator_handle: str
     if slot == "reviewer" and (ticket.get("read_only") is not True or not ticket.get("source_sha256")):
         raise DispatchError("review dispatch requires a read-only ticket with source_sha256")
     roles.provider_for(ticket, slot)
+    if resume_session is not None:
+        bindings.identity(resume_session)
+    if follow_up is not None and (not follow_up.strip() or len(follow_up) > 32_000):
+        raise DispatchError("follow-up must contain 1..32000 characters")
+    if slot == "reviewer" and (follow_up is not None or resume_session is not None):
+        raise DispatchError("reviewer session is resolved only from its fixed binding")
+    if slot != "reviewer" and ticket.get("generation", 0) and not (resume_session and follow_up):
+        raise DispatchError("worker generation requires the same session and explicit follow-up")
     record = linear_record(request_id)
     checked_coordinator(request_id, coordinator_handle)
     executable = intake.checked_orca_cli(orca_cli or intake.default_orca_cli())
+    if run_context is not None:
+        checked_run(executable, coordinator_handle, run_context)
     metadata = metadata or Path.home() / ".config/orca"
     if not metadata.is_absolute() or not metadata.is_dir() or metadata.resolve() != metadata:
         raise DispatchError("Orca metadata directory is unavailable")
@@ -166,26 +195,45 @@ def start(request_id: str, ticket_path: Path, slot: str, coordinator_handle: str
                       inherit=False):
         if path.exists() or path.is_symlink():
             current = frontdesk.read_private_json(path, {})
+            if (current.get("ticket_sha256") != bindings.digest(ticket) or current.get("slot") != slot
+                    or current.get("resume_session") != resume_session
+                    or current.get("shared_run") != run_context
+                    or current.get("exit_on_settlement", False) != exit_on_settlement
+                    or current.get("follow_up_sha256") != (bindings.digest({"text": follow_up}) if follow_up else None)):
+                raise DispatchError("existing dispatch belongs to a different ticket, owner or follow-up")
             if current.get("phase") == "armed":
                 return current
             raise DispatchError("a previous dispatch attempt exists; inspect it instead of starting a duplicate")
+        if slot != "reviewer" and (resume_session or follow_up or ticket.get("generation", 0)):
+            repo = Path(ticket["repo"])
+            subject = {"repo": str(repo), "branch": ticket["branch"], "base": ticket["base"],
+                       "common": roles.git(repo, "rev-parse", "--path-format=absolute", "--git-common-dir")}
+            bindings.admit(bindings.read_state(slot, roles.provider_for(ticket, slot)), ticket,
+                           subject, roles.fingerprint(repo), resume_session, follow_up)
         data = {
             "schema": 1, "request_id": request_id, "linear_identifier": record["identifier"],
             "ticket_id": ticket["id"], "ticket_sha256": bindings.digest(ticket), "slot": slot,
             "repo": ticket["repo"], "phase": "starting", "run_id": None, "terminal": None,
             "bridge_id": None, "task_id": None, "dispatch_id": None,
+            "generation": ticket.get("generation", 0), "resume_session": resume_session,
+            "follow_up_sha256": bindings.digest({"text": follow_up}) if follow_up else None,
+            "exit_on_settlement": exit_on_settlement,
+            "shared_run": run_context,
         }
         save(path, data)
         try:
-            run_result = run_cli(
-                executable,
-                ["orchestration", "run-create", "--objective",
-                 f"{record['identifier']}: {ticket['id']}", "--from", coordinator_handle],
-                "run-create",
-            )
-            run = run_result.get("run")
-            if not isinstance(run, dict):
-                raise DispatchError("Orca run-create receipt is incomplete")
+            if run_context is None:
+                run_result = run_cli(
+                    executable,
+                    ["orchestration", "run-create", "--objective",
+                     f"{record['identifier']}: {ticket['id']}", "--from", coordinator_handle],
+                    "run-create",
+                )
+                run = run_result.get("run")
+                if not isinstance(run, dict):
+                    raise DispatchError("Orca run-create receipt is incomplete")
+            else:
+                run = run_context
             data["run_id"] = lifecycle_key(run.get("id"), "run_")
             save(path, data)
 
@@ -194,6 +242,14 @@ def start(request_id: str, ticket_path: Path, slot: str, coordinator_handle: str
                 "--ticket", str(ticket_path), "--slot", slot,
                 "--bridge-orca", str(executable), "--bridge-metadata", str(metadata),
             ]
+            if exit_on_settlement:
+                launcher_argv.append("--exit-on-settlement")
+            if resume_session:
+                launcher_argv.extend(["--resume-session", resume_session])
+            if follow_up is not None:
+                follow_path = path.with_suffix(".follow-up.json")
+                frontdesk.write_ledger(follow_path, {"follow_up": follow_up})
+                launcher_argv.extend(["--follow-up-json", str(follow_path)])
             if slot == "reviewer":
                 reviewer_state = bindings.read_state("reviewer", "codex")
                 fixed = reviewer_state["tasks"].get("fixed-reviewer")
@@ -222,7 +278,8 @@ def start(request_id: str, ticket_path: Path, slot: str, coordinator_handle: str
             worker = run_cli(
                 executable,
                 ["orchestration", "worker-start", "--run", data["run_id"],
-                 "--spec", task_spec(ticket, slot), "--task-title", ticket["id"],
+                 "--spec", task_spec({**ticket, "prompt": follow_up} if follow_up else ticket, slot),
+                 "--task-title", ticket["id"],
                  "--worktree", f"path:{ticket['repo']}", "--terminal", data["terminal"],
                  "--from", coordinator_handle, "--timeout-ms", "60000"],
                 "worker-start",
@@ -256,13 +313,18 @@ def main() -> int:
     parser.add_argument("--coordinator", default=os.environ.get("ORCA_TERMINAL_HANDLE"))
     parser.add_argument("--orca", type=Path)
     parser.add_argument("--metadata", type=Path)
+    parser.add_argument("--resume-session")
+    parser.add_argument("--follow-up-file", type=Path)
+    parser.add_argument("--exit-on-settlement", action="store_true")
     args = parser.parse_args()
     try:
         if args.action == "start":
             if args.ticket is None or args.slot is None or args.coordinator is None:
                 raise DispatchError("start requires ticket, slot, and an Orca coordinator terminal")
             result = start(args.request_id, args.ticket.resolve(), args.slot, args.coordinator,
-                           orca_cli=args.orca, metadata=args.metadata)
+                           orca_cli=args.orca, metadata=args.metadata, resume_session=args.resume_session,
+                           follow_up=args.follow_up_file.read_text() if args.follow_up_file else None,
+                           exit_on_settlement=args.exit_on_settlement)
         else:
             if args.ticket is None:
                 raise DispatchError("show requires the ticket path")

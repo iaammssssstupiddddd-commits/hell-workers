@@ -150,8 +150,32 @@ def claim_task(key: str, slot: str, provider: str, ticket: dict, subject: dict) 
                 "ticket_sha256": digest(ticket), "subject": subject}
     current = storage.read_private_json(path, expected)
     if current != expected:
-        raise ValueError("task is already bound to different ownership; do not reassign implicitly")
+        receipt = generation_receipt(ticket, slot, provider)
+        if receipt.get("previous_assignment") != current or receipt.get("next_assignment") != expected:
+            raise ValueError("task is already bound to different ownership; do not reassign implicitly")
     storage.write_ledger(path, expected)
+
+
+def generation_path(ticket: dict, slot: str) -> Path:
+    return storage.checked_directory(state_path(slot).parent / "generations") / f"{digest(ticket)}.json"
+
+
+def generation_receipt(ticket: dict, slot: str, provider: str) -> dict:
+    """Only the host checkpoint writer can authorize a new ticket generation."""
+    receipt = storage.read_private_json(generation_path(ticket, slot), {})
+    if (receipt.get("schema") != 1 or receipt.get("slot") != slot
+            or receipt.get("provider") != provider or receipt.get("next_ticket") != ticket
+            or receipt.get("phase") not in {"committed", "validation_retry"}):
+        raise ValueError("task is already bound to different ownership; no committed generation receipt")
+    if receipt["phase"] == "validation_retry":
+        old = receipt.get("ticket", {})
+        evidence = receipt.get("validation", {})
+        if (ticket != {**old, "generation": old.get("generation", 0) + 1}
+                or evidence.get("ticket_sha256") != digest(old) or evidence.get("slot") != slot
+                or evidence.get("source_sha256") != receipt.get("source_after")
+                or type(evidence.get("exit_code")) is not int or evidence["exit_code"] == 0):
+            raise ValueError("invalid failed-validation generation receipt")
+    return receipt
 
 
 def safe_file(path: Path) -> None:
@@ -232,6 +256,8 @@ def admit(data: dict, ticket: dict, subject: dict, source: str,
         raise ValueError("abandoned ticket cannot be replayed; issue a new explicit task")
     previous = data["tasks"].get(key)
     if previous is None:
+        if not reviewer and ticket.get("generation", 0):
+            raise ValueError("generation requires an existing worker binding")
         if resume_session:
             raise ValueError("session does not exist in the controller binding; never adopt arbitrary history")
         if follow_up:
@@ -243,8 +269,15 @@ def admit(data: dict, ticket: dict, subject: dict, source: str,
             raise ValueError("role session belongs to a different repository")
         if not reviewer:
             if previous["ticket_sha256"] != digest(ticket) or previous["subject"] != subject:
-                raise ValueError("worker continuation must keep the exact same task and ownership")
-            if previous["source_sha256"] != source:
+                try:
+                    receipt = generation_receipt(ticket, data["slot"], data["provider"])
+                except ValueError as error:
+                    raise ValueError("worker continuation must keep the exact same task and ownership") from error
+                if (receipt.get("previous_task") != previous
+                        or receipt.get("next_assignment", {}).get("subject") != subject
+                        or receipt.get("source_after") != source):
+                    raise ValueError("worker continuation must keep the exact same task and ownership")
+            elif previous["source_sha256"] != source:
                 raise ValueError("source/index changed since worker exit; preserve changes and reconcile")
             if not follow_up or not follow_up.strip():
                 raise ValueError("worker resume requires an explicit follow-up, never replay the original task")

@@ -25,6 +25,13 @@ const { Module } = require("node:module");
 const path = require("node:path");
 (async () => {
   const [filename, expectedPath, expectedFallback] = process.argv.slice(1);
+  // Audited bundle layouts only. Do not guess exports or skip a changed loader.
+  const layouts = {
+    "2026.08.04-aaa8809": {config: "../cursor-config/dist/index.js", export: "FO", stateChunk: 8176},
+    "2026.09.18-9a7762b": {config: "../cursor-config/dist/file-based-config-provider.js", export: "F", stateChunk: 2969},
+  };
+  const layout = layouts[path.basename(path.dirname(filename))];
+  assert(layout, "Cursor bundle version changed; re-audit first");
   const source = fs.readFileSync(filename, "utf8");
   const entry = 'var __webpack_exports__=__webpack_require__("./src/main.tsx")';
   assert(source.endsWith(entry + "})();"), "Cursor bootstrap changed; re-audit first");
@@ -41,7 +48,7 @@ const path = require("node:path");
     const metadata = JSON.parse(Buffer.from(serialized, "hex").toString("utf8"));
     assert.equal(metadata.agentId, id);
     assert.equal(metadata.latestRootBlobId, "0102");
-    await isolated.exports.e(8176);
+    await isolated.exports.e(layout.stateChunk);
     const state = isolated.exports("./src/state/index.ts");
     const crypto = require("node:crypto");
     assert.equal(state.wk("/fixture"), path.join(expectedPath, "chats",
@@ -49,12 +56,13 @@ const path = require("node:path");
     console.log("session metadata contract: pass");
     return;
   }
-  const config = isolated.exports("../cursor-config/dist/index.js");
+  const Config = isolated.exports(layout.config)[layout.export];
+  assert.equal(typeof Config.loadFromDefaults, "function");
   if (expectedFallback === "project") {
     const project = path.join(process.cwd(), ".cursor", "cli.json");
     const original = fs.readFileSync(project, "utf8");
     const permissions = JSON.parse(original).permissions;
-    const provider = await config.FO.loadFromDefaults(null, {
+    const provider = await Config.loadFromDefaults(null, {
       onError: (_code, message) => { throw Error(message); },
     });
     assert.equal(provider.getConfigFilePath(), expectedPath);
@@ -70,7 +78,7 @@ const path = require("node:path");
     return;
   }
   const messages = [];
-  const provider = await config.FO.loadFromDefaults(null, {
+  const provider = await Config.loadFromDefaults(null, {
     skipGitRootDetection: true,
     disableProjectConfigs: true,
     onDebugLog: message => messages.push(String(message)),
