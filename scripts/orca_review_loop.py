@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 import threading
@@ -50,6 +51,12 @@ def root() -> Path:
 def state_path(request_id: str) -> Path:
     dispatch.coordinator.identity(request_id)
     return root() / f"{request_id}.json"
+
+
+def loop_paths() -> list[Path]:
+    """Only UUID-named ledgers own role bindings; specs/tickets are not loops."""
+    return sorted(path for path in root().glob("*.json")
+                  if re.fullmatch(r"[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}", path.stem))
 
 
 def save(data: dict) -> None:
@@ -109,8 +116,8 @@ def register(request_id: str, terminal: str, spec: dict) -> dict:
             if current["spec_sha256"] != bindings.digest(spec) or current["terminal"] != terminal:
                 raise ValueError("loop already belongs to another specification or coordinator")
             return current
-        for path in root().glob("*.json"):
-            if not path.name.startswith("ticket-") and load(path.stem)["phase"] in {"active", "paused"}:
+        for path in loop_paths():
+            if load(path.stem)["phase"] in {"active", "paused"}:
                 raise ValueError("another unresolved loop owns the fixed role bindings; reconcile before registering")
         lanes, repos, scopes, commons, ids = {}, set(), [], set(), set()
         for item in spec["lanes"]:
@@ -351,9 +358,7 @@ def step(data: dict, slot: str) -> None:
             transition(data, slot, "review_pending", checkpoint=receipt, review_ticket=checkpoints.review_ticket(receipt))
     elif phase == "review_pending":
         # The fixed reviewer must seal A before moving to B, even after process exit.
-        for path in root().glob("*.json"):
-            if path.name.startswith("ticket-"):
-                continue
+        for path in loop_paths():
             other = load(path.stem)
             if any(item["phase"] in REVIEW_PHASES for item in other["lanes"].values()):
                 return
@@ -586,6 +591,44 @@ context; changes requiring a wider scope or a different base remain a decision.
         return data
 
 
+def resume_review_wait(request_id: str, terminal: str, slot: str, expected: str) -> dict:
+    """Reconcile an inspected pre-dispatch scheduler failure, never an unknown launch."""
+    with acquire_host(LOCK, inherit=False):
+        data = load(request_id)
+        if dispatch.ui_coordinator.state_path(request_id).exists():
+            registered = dispatch.ui_coordinator.read_registered_state(request_id)
+            if registered["terminal"] != terminal or registered["phase"] != "ready":
+                raise ValueError("registered ready coordinator required")
+            dispatch.linear_record(request_id)
+        else:
+            dispatch.checked_coordinator(request_id, terminal)
+        lane = data["lanes"][slot]
+        if (data["terminal"] != terminal or data["phase"] != "paused"
+                or bindings.digest(data) != expected or lane["phase"] != "paused"
+                or not lane["history"] or lane["history"][-1].get("from") != "review_pending"
+                or lane["history"][-1].get("to") != "paused"):
+            raise ValueError("exact inspected pre-review pause required")
+        ticket = lane["review_ticket"]
+        with acquire_host(roles.workspace_slot(Path(ticket["repo"])), inherit=False):
+            roles.validate_ticket(ticket)
+            if (roles.fingerprint(Path(ticket["repo"])) != ticket["source_sha256"]
+                    or checkpoints.review_ticket(lane["checkpoint"]) != ticket
+                    or lane["checkpoint"]["phase"] != "committed"
+                    or lane["evidence"]["exit_code"] != 0
+                    or not data["attempts"][lane["attempt"]["dispatch_id"]]["released"]
+                    or dispatch.dispatch_path(request_id, ticket).exists()):
+                raise ValueError("review subject changed or review dispatch already exists")
+            # Validate every owning ledger before recording a resumable decision.
+            for path in loop_paths():
+                load(path.stem)
+            directory = STORAGE.checked_directory(root() / "review-wait-recoveries")
+            STORAGE.write_ledger(directory / f"{expected}.json", {"before": data, "sha256": expected})
+            transition(data, slot, "review_pending", reason=None)
+            data.update(phase="active", reason=None)
+            save(data)
+            return data
+
+
 def decide(request_id: str, terminal: str, message_id: str, body: str, disposition: str) -> dict:
     with acquire_host(LOCK, inherit=False):
         data = load(request_id)
@@ -683,16 +726,22 @@ class Driver:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=("register", "show", "tick", "watch", "decide", "route"))
+    parser.add_argument("action", choices=("register", "show", "tick", "watch", "decide", "route", "resume-review-wait"))
     parser.add_argument("--request-id", required=True)
     parser.add_argument("--coordinator", required=True)
     parser.add_argument("--spec", type=Path)
     parser.add_argument("--message-id")
     parser.add_argument("--body-file", type=Path)
     parser.add_argument("--disposition", choices=("reply", "continue", "pause"))
+    parser.add_argument("--slot", choices=("worker-a", "worker-b"))
+    parser.add_argument("--expected-sha256")
     args = parser.parse_args()
     try:
-        if args.action == "register":
+        if args.action == "resume-review-wait":
+            if not args.slot or not args.expected_sha256:
+                raise ValueError("review wait recovery requires slot and inspected ledger digest")
+            result = resume_review_wait(args.request_id, args.coordinator, args.slot, args.expected_sha256)
+        elif args.action == "register":
             if args.spec is None:
                 raise ValueError("registration requires a trusted private spec")
             result = register(args.request_id, args.coordinator, STORAGE.read_private_json(args.spec, {}))

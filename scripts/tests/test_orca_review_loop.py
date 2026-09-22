@@ -383,6 +383,36 @@ class ReviewLoopTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "unresolved loop"):
                 loop.register(str(uuid.uuid4()), fixtures.COORDINATOR, self.spec)
 
+    def test_auxiliary_specs_do_not_own_loop_bindings(self):
+        loop.STORAGE.write_ledger(loop.root() / "recovery-spec.json", {"purpose": "maintenance"})
+        self.register()
+        for _ in range(8):
+            data = self.tick()
+        self.assertEqual(data["lanes"]["worker-a"]["phase"], "reviewing")
+
+    def test_canonical_invalid_ledger_still_refuses_registration(self):
+        loop.STORAGE.write_ledger(loop.root() / f"{uuid.uuid4()}.json", {})
+        with self.assertRaisesRegex(ValueError, "invalid review loop ledger"):
+            self.register()
+
+    def test_reconcile_only_inspected_pause_before_review_dispatch(self):
+        self.register()
+        for _ in range(6):
+            data = self.tick()
+        self.assertEqual(data["lanes"]["worker-a"]["phase"], "review_pending")
+        loop.transition(data, "worker-a", "paused", reason="scheduler catalog error")
+        data["phase"] = "paused"
+        loop.save(data)
+        expected = bindings.digest(data)
+        with self.assertRaisesRegex(ValueError, "exact inspected"):
+            loop.resume_review_wait(fixtures.REQUEST, fixtures.COORDINATOR, "worker-a", "0" * 64)
+        result = loop.resume_review_wait(fixtures.REQUEST, fixtures.COORDINATOR, "worker-a", expected)
+        self.assertEqual(result["lanes"]["worker-a"]["phase"], "review_pending")
+        self.assertEqual(len(self.starts), 1)
+        self.assertTrue((loop.root() / "review-wait-recoveries" / f"{expected}.json").exists())
+        with self.assertRaisesRegex(ValueError, "exact inspected"):
+            loop.resume_review_wait(fixtures.REQUEST, fixtures.COORDINATOR, "worker-a", expected)
+
     def test_production_help_review_is_not_replaced_by_predeclared_text(self):
         self.register()
         for _ in range(4):
