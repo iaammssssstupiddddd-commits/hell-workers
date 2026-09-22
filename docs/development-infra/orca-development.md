@@ -15,6 +15,10 @@ Linearのworkspace/team読取りに加え、専用試験issue `TAK-5` の作成�
 独立したCodex固定reviewer、Codex A、Cursor Bのread-only実Task lifecycleは受入済み。
 別worktreeのA/B限定編集、統括検証、固定reviewer、2レーン同時実行も受入済み。
 2026-09-22に利用者向け入口をOrca Tasksへ一本化し、Linear-linked worktreeの既定tabとして可視統括を起動する構成へ変更した。
+同日に、試験専用・別目的の課題で実装依頼を受けた場合も利用者へ課題/worktree作成を返さず、統括が
+実装用Linear課題、専用worktree、次の可視統括を一括作成する引継ぎ経路を追加した。
+実runtimeでは`TAK-5`から`TAK-6`へこの経路を通し、`TAK-6`の専用worktreeと **「統括」** tabを作成、
+新しい統括のissue取込・acknowledge・待機まで確認した。TAK-5から実装roleは起動していない。
 以下の現行launcherと内部保存・復旧資産の実績を区別する。
 
 - Linearは依頼・優先順位・結果要約、Orcaは作業場・terminal・監督付きTaskを管理する。
@@ -45,8 +49,10 @@ deps/rustも自動選択してpassしたが、native/window/GPU受入は行っ�
 
 標準機能の根拠は[Orca Linear仕様](https://www.onorca.dev/docs/review/linear)。
 公式CLIでworkspace `takumi sato`（`68abc67b-ca1b-407b-be63-99dd91321b26`）とteam `TAK`の読取りを確認した。
-利用対象・書込み範囲は専用試験issue [`TAK-5`](https://linear.app/takumi-sato/issue/TAK-5/orca-integration-acceptance-hell-workers)
+初期連携の書込み受入は専用試験issue [`TAK-5`](https://linear.app/takumi-sato/issue/TAK-5/orca-integration-acceptance-hell-workers)
 自身の説明・コメントとworktree関連付けに限定し、作成・コメント更新・full再読取りを確認した。
+通常の実装引継ぎでは、acknowledge済み可視統括だけが同じworkspace/teamへ新しい実装課題を作成できる。
+TAK-5自体を実装課題へ転用せず、移行元として本文へ記録する。
 課題からの通常agent起動で専用launcherを迂回しない。
 
 ## 適用状態
@@ -84,7 +90,12 @@ fixtureをtooling分類可能な形式へ直した`85cf28431a7fa367367d5bd933bf6
 `5cb73cac`で追加した。Orca Tasksを入口にする可視統括、`--current`取込、exact統括terminal拘束、
 日本語A/B/reviewer tab、旧terminal menu廃止を`767ca7f6a13ed9c3404d458b05a5edc4d0dc45a9`で追加し、
 可視統括からOrca runtimeへ接続できる外側bubblewrap境界、初回確認不要の専用Codex設定、project MCP停止を
-`6453f8cd1ba417202db100e2a635bfd62e70b564`で追加した。後者を新規worktreeの最新基点とする。
+`6453f8cd1ba417202db100e2a635bfd62e70b564`で追加した。
+primaryの現行ゲーム履歴を`732cb43ad93bb9d6b4ae048c37f7c235566efe9d`で基盤branchへ同期し、
+自動課題/worktree引継ぎ、旧統括の自動終了、次統括のlock待ち、package import分離を
+`7cb081e578cac74ed74bf4dcabf5daef6227ffd3`で追加した。Linear mutation IDをUUIDv4へ限定し、
+確定失敗と結果不明を分離して旧UUIDv5台帳を復旧し、worktree作成後に可視`統括` tabを一意照合・明示生成する修正を
+`bbf746d59717618ce7c5a9510584eac822468174`で追加した。後者を新規worktreeの最新基点とする。
 実Linear課題 `TAK-5` のL1正常系とL2相談継続は受入済み。固定reviewer、Codex A、Cursor Bのread-only実Taskも一巡済み。
 実編集はA/Bの直列一巡と、別worktreeでの2レーン同時実行まで受入済み。
 primary文書正本の変更は別作業と混在するため、これらの専用branch code commitには含めていない。
@@ -101,7 +112,7 @@ Orcaの当該repoのlocal設定には、次をruntime APIから反映した。
 - target共有、全体のagent既定引数、既存terminal/sessionには変更なし。
 
 candidateの `orca.yaml` は同じsetupと待機順に加え、既定tab `統括` から
-`scripts/orca_ui_coordinator.py launch` を起動する。local-only設定下ではlocal commandが正本であり、
+`scripts/orca_ui_coordinator.py launch-wait` を起動する。local-only設定下ではlocal commandが正本であり、
 新規Linear-linked worktreeがこの設定を読み込む。setupは軽い診断だけで、sandbox/検証gateではない。
 repoの `worktreeBaseRef` は上記専用branchへ設定済み（設定後の `repo show` でも確認）。
 明示的な別baseやparentを指定しない新規treeは、commit済み基盤を継承する。
@@ -116,6 +127,12 @@ snapshot取込、exact terminalのacknowledgeに加え、同じCodexから`statu
 利用者の開始入口はOrca Tasks → Linear → 課題選択/作成 → worktree作成である。
 setup後に`統括` tabが一つ開き、現在worktreeへ紐づくissueを`--current`で取得する。
 利用者がworkspace UUID、受付UUID、ticket path、内部slotを入力する操作はない。
+現在課題が連携試験専用・実装対象外・別目的の場合、可視統括は目的・受入条件・制約・既存branch/commit・
+次工程を自己完結した本文へまとめる。Linearが受理するUUIDv4のwrite IDを台帳へ固定して新しい課題を作成し、
+結果不明時だけ同じIDで再開する。同課題に紐づくworktreeを一覧で一意照合してから、そのworktreeに
+**「統括」** terminalを明示生成・focusする。terminal一覧で一意に確認できた時だけ完了markerを保存して旧統括を終了し、
+新しい統括は旧lockの解放を有限時間待つ。Linear書込み結果が不明、worktree作成後も紐づきが0件または複数、
+統括tabが0件または複数、移植元commitがOrca基点の祖先でない場合は、重複作成や文脈欠落を避けて停止する。
 この設定は統括LLMの無期限常駐や無監督の自動運用を意味せず、課題worktreeを開いた明示操作に対して一つ起動する。
 Codex A・Cursor B・固定reviewerのread-only実TUI起動・正常終了・同UUID再開は確認済みで、
 3 roleのread-only Orca Task連携も一巡した。A/B限定編集、編集時のwrite/tool境界、統括検証、

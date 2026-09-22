@@ -5,7 +5,7 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `orca-parallel-development-plan-2026-09-20` |
-| ステータス | In Progress — Orca Tasksを唯一の利用者向け受付とし、Linear-linked worktreeの可視統括と日本語A/B/review tabを実装。3 roleの権限制御と2レーン並列実行は受入済み、UIからの実案件一巡と異常系は未受入 |
+| ステータス | In Progress — Orca Tasksを唯一の利用者向け受付とし、Linear-linked worktreeの可視統括と日本語A/B/review tabを実装。試験課題`TAK-5`から実装課題`TAK-6`・分離worktree・次の可視統括tabへの自動引継ぎを実runtime受入済み。実案件の編集→検証→固定review一巡を残す |
 | 作成日 / 最終更新日 | 2026-09-20 / 2026-09-22 |
 | 作成者 | Codex |
 | 関連提案 | [並列実装と専任レビューの運用素案](../proposals/orca-parallel-development-proposal-2026-09-20.md) |
@@ -49,7 +49,7 @@ L3Eの実受入は完了したため、明示ticketと専用launcherを通る監
 
 ### 実装済み資産の採否
 
-codeの最新参照元は専用candidate `6453f8cd1ba417202db100e2a635bfd62e70b564`。primary未統合。
+codeの最新参照元は専用candidate `bbf746d59717618ce7c5a9510584eac822468174`。primary未統合。
 以下の再利用は既存コードと検証済み境界の採用であり、Linear対応済みという意味ではない。
 
 | 資産（candidateの `scripts/`） | 方針 | 実績と追加作業 |
@@ -57,7 +57,7 @@ codeの最新参照元は専用candidate `6453f8cd1ba417202db100e2a635bfd62e70b5
 | `host_coordination.py` とbuild/validation driver | 再利用 | host重実行1枠・role/workspace排他・子へのlease継承。Linear状態をlockの代わりにしない |
 | `orca_roles.py` / `orca_providers.py` | 再利用 | A/Bのprovider固定、Bの単純task制限、mount/policy分離。read-only起動・再開とA/B限定編集、Cursor Bのtool denyを実受入済み |
 | `orca_role_state.py` / fingerprint / `verify-review` | 再利用 | 同一ticket/session、unknown停止、固定reviewer、変更後の承認失効。承認記録の整合性検査であって署名検証ではない |
-| `orca_ui_coordinator.py` | 新規の可視統括入口 | linked issueを`--current`で取り込み、exact Orca terminalを登録してinteractive Codexを同じtabに起動。外側bubblewrapからOrca IPCへ接続し、初回確認や内部ID・ticket path・slot入力を利用者に要求しない |
+| `orca_ui_coordinator.py` | 新規の可視統括入口 | linked issueを`--current`で取り込み、exact Orca terminalを登録してinteractive Codexを同じtabに起動。試験専用・別目的課題ではUUIDv4 write IDで実装課題を作り、一意なlinked worktreeへ文脈と統括lockを移し、次の可視`統括` tabを明示生成する。初回確認や内部ID・ticket path・slot入力を利用者に要求しない |
 | `orca_coordinator.py` | 旧相談sessionの復旧互換に保持 | 明示起動・相談/追記・同UUID再開は実受入済み。通常の新規受付・配車UIには使わない |
 | `orca_frontdesk.py` | UIではなく内部snapshot保存を再利用 | `submit()`のUUID/本文拘束と安全な台帳関数を使う。menuは利用者向け入口から外す |
 | `orca_preflight.py` | 再利用 | 対象terminal限定のread-only通信診断。結果は常にdispatch許可と別扱い |
@@ -174,6 +174,11 @@ owner-only/atomic replace/fsyncの共通処理は互換保持する。Linearの�
   再利用する保存/lock/復旧処理は残し、既存の未確定attemptを捨てない。
 - [x] 基盤worktreeの`統括` tabを初回確認なしで起動し、exact terminal登録、runtime ready/connected、
   linked issue `TAK-5`の現在課題取得を実runtimeで確認する。
+- [x] 現在の課題が試験専用または依頼目的と不一致でも、利用者へ課題/worktreeの作り直しを返さず、統括が
+  新しいLinear実課題、専用worktree、可視統括を一度に作成して依頼・完了条件・既存branch/commit・次工程を引き継ぐ。
+  Linear作成はUUIDv4の固定write ID、worktreeと`統括` tabは一覧照合で再実行可能にし、曖昧な外部書込みや重複を成功にしない。
+  `TAK-5`から`TAK-6`・専用worktree・可視`統括` tabを実runtimeで作成し、TAK-6の取込・acknowledge・待機を確認した。
+  UUIDv5拒否とworktree作成だけでtab未生成となる初回欠陥は修正・回帰test済み。TAK-5から実装roleは起動していない。
 - [ ] Orca Tasksから試験issueの新規worktreeを作り、統括・A・B・レビューを画面上で順に確認する。
 - [x] 運用ガイドを実操作で確認し、「課題管理」「統括相談」「read-only監督」「並列編集」の受入状態を別々に表示する。
 - [ ] 同目的branchの採用、ローカルcommit/基点変更はその時点の許可を確認する。push/PR/primaryのゲーム変更は含めない。

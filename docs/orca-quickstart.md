@@ -16,6 +16,11 @@ Hell Workersでは、Orcaの画面だけを入口にして「統括・実装A・
 課題とは、一件の開発依頼です。タイトルに目的、本文に完了条件と変更してはいけない範囲を書けば十分です。
 Linearの内部IDやworkspace UUIDはOrcaと統括が処理します。
 
+過去の会話を引き継いだ時など、現在の課題が連携試験専用または別目的でも、利用者がLinear課題や
+worktreeを作り直す必要はありません。統括へ実装目的を伝えると、統括が実装用Linear課題を作成し、
+目的・完了条件・制約・既存branch/commit・次工程を移して専用worktreeを開きます。元の統括タブは
+引継ぎ成功後に終了し、新しいworktreeの **「統括」** タブが処理を継続します。
+
 ## 画面上の役割
 
 | Orca上の表示 | 担当 | 用途 |
@@ -46,6 +51,7 @@ A/B/レビューは統括が監督付きの分離worktreeへ配車した時だ�
 - ticket JSONのpath
 - `worker-a` / `worker-b` / `reviewer` の選択
 - 手動の配車command
+- 試験課題から実装課題への付け替え、Linear課題作成、worktree作成
 
 ## Linearを使う理由
 
@@ -69,6 +75,7 @@ Linearに接続できない場合は、Orcaの接続設定を直してから再�
 | 表示・状態 | 対応 |
 | --- | --- |
 | 統括タブに「Linear課題に紐づいていない」 | Tasks → Linearで課題を選び、その課題から新しいworktreeを作る |
+| 現在の課題が試験専用・別目的 | 統括へ実装目的を伝える。課題作成とworktree切替は統括が行う |
 | 統括タブが既に存在する | 新しく起動せず、Orca上の既存の統括タブを開く |
 | 実装A/Bが現れない | 統括タブで分割判断または未解決仕様を確認する。利用者がslotを選ばない |
 | slot / workspace / host がbusy | 既存タブの処理を待つ。lock削除や裸のagent起動で迂回しない |
@@ -93,8 +100,13 @@ orca file open docs/orca-quickstart.md --worktree path:/home/satotakumi/projects
 - Linear-linked worktreeから`--current`で固定snapshotを取り込み、UUID入力を不要にする実装を追加しました。
 - 統括、Codex A、Cursor B、固定Codex reviewerの権限分離とA/B二レーン編集は受入済みです。
 - UI入口からの可視統括起動と日本語role tab生成をtooling testで検査しています。
+- 試験専用・別目的の課題から、Linearが受理するUUIDv4の固定write IDで課題を作成し、関連worktreeを
+  一意照合して **「統括」** タブを明示生成するところまで自動化しました。結果不明時は同じIDだけを
+  再利用し、確定失敗と区別して停止します。
 - 基盤worktreeの`統括` tabで初回確認なしにinteractive Codexを実起動し、`TAK-5`の自動取込、統括terminal登録、
   Orca runtimeのready/connectedと現在課題の再取得を確認済みです。
+- `TAK-5`を実装へ転用せず、実装課題`TAK-6`、専用worktree、可視`統括` tabを実runtimeで一括作成し、
+  新しい統括が`TAK-6`を取得・acknowledgeして待機することを確認済みです。A/B/reviewerは未dispatchです。
 - 実案件によるUIから編集→検証→固定レビューの一巡は、最初の対象課題で最終受入します。
 
 ## 関連文書
