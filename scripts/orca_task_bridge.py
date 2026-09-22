@@ -23,14 +23,14 @@ import time
 import uuid
 from pathlib import Path
 
-try:
+if __package__:
+    from . import orca_preflight as wire
+    from .orca_frontdesk import read_private_json, write_ledger, checked_directory
+    from .host_coordination import acquire_host, state_root
+else:
     import orca_preflight as wire
     from orca_frontdesk import read_private_json, write_ledger, checked_directory
     from host_coordination import acquire_host, state_root
-except ModuleNotFoundError:
-    from scripts import orca_preflight as wire
-    from scripts.orca_frontdesk import read_private_json, write_ledger, checked_directory
-    from scripts.host_coordination import acquire_host, state_root
 
 
 CONTRACT = "orchestration.contract.v1"

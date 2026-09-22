@@ -17,7 +17,13 @@ import sys
 import time
 from pathlib import Path
 
-try:
+if __package__:
+    from . import (orca_coordinator as coordinator, orca_frontdesk as frontdesk,
+                   orca_issue_context as intake, orca_role_state as bindings,
+                   orca_roles as roles, orca_task_bridge as task_bridge,
+                   orca_ui_coordinator as ui_coordinator)
+    from .host_coordination import acquire_host, state_root
+else:
     import orca_coordinator as coordinator
     import orca_frontdesk as frontdesk
     import orca_issue_context as intake
@@ -26,12 +32,6 @@ try:
     import orca_task_bridge as task_bridge
     import orca_ui_coordinator as ui_coordinator
     from host_coordination import acquire_host, state_root
-except ModuleNotFoundError:
-    from scripts import (orca_coordinator as coordinator, orca_frontdesk as frontdesk,
-                         orca_issue_context as intake, orca_role_state as bindings,
-                         orca_roles as roles, orca_task_bridge as task_bridge,
-                         orca_ui_coordinator as ui_coordinator)
-    from scripts.host_coordination import acquire_host, state_root
 
 
 KEY = re.compile(r"[A-Za-z0-9_-]{1,128}")

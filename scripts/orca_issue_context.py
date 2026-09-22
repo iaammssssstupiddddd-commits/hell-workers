@@ -19,12 +19,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlparse
 
-try:
+if __package__:
+    from . import orca_frontdesk as frontdesk
+    from .host_coordination import acquire_host, state_root
+else:
     import orca_frontdesk as frontdesk
     from host_coordination import acquire_host, state_root
-except ModuleNotFoundError:
-    from scripts import orca_frontdesk as frontdesk
-    from scripts.host_coordination import acquire_host, state_root
 
 
 REQUEST_NAMESPACE = uuid.UUID("9dc31d47-bb55-52c8-8f15-3bec8092cf21")

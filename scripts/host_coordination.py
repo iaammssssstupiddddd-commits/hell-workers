@@ -19,10 +19,10 @@ try:
 except ImportError:
     fcntl = None  # type: ignore[assignment]
 
-try:
+if __package__:
+    from .cargo_runtime import account_home, persistent_storage_error
+else:
     from cargo_runtime import account_home, persistent_storage_error
-except ModuleNotFoundError:
-    from scripts.cargo_runtime import account_home, persistent_storage_error
 
 
 HOST_FD_ENV = "HELL_WORKERS_HOST_LOCK_FD"

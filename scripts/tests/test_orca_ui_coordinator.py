@@ -6,16 +6,20 @@ import uuid
 from pathlib import Path
 from unittest.mock import patch
 
-from scripts import (host_coordination, orca_frontdesk, orca_issue_context,
-                     orca_ui_coordinator as ui)
+from scripts import (
+    host_coordination,
+    orca_frontdesk,
+    orca_issue_context,
+    orca_ui_coordinator as ui,
+)
 
 
 WORKSPACE = "eeac8301-ddb2-4c31-8a6c-e2a7f2fc7efb"
 ISSUE = "884ddcd2-cef6-4869-a88d-14512684cce7"
 DIGEST = "a" * 64
-REQUEST = str(uuid.uuid5(
-    orca_issue_context.REQUEST_NAMESPACE, f"{WORKSPACE}\n{ISSUE}\n{DIGEST}"
-))
+REQUEST = str(
+    uuid.uuid5(orca_issue_context.REQUEST_NAMESPACE, f"{WORKSPACE}\n{ISSUE}\n{DIGEST}")
+)
 TERMINAL = "term_175c1be5-9f01-4a44-8268-a0542fa4e781"
 
 
@@ -23,25 +27,34 @@ class UiCoordinatorTests(unittest.TestCase):
     def setUp(self) -> None:
         target = Path(__file__).resolve().parents[2] / "target"
         target.mkdir(exist_ok=True)
-        temporary = tempfile.TemporaryDirectory(prefix="orca-ui-coordinator-", dir=target)
+        temporary = tempfile.TemporaryDirectory(
+            prefix="orca-ui-coordinator-", dir=target
+        )
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
         for module in (host_coordination, orca_frontdesk, orca_issue_context, ui):
-            mock = patch.object(module, "state_root", return_value=self.root / "coordination")
+            mock = patch.object(
+                module, "state_root", return_value=self.root / "coordination"
+            )
             mock.start()
             self.addCleanup(mock.stop)
         orca_frontdesk.submit("immutable Linear request", REQUEST)
-        orca_frontdesk.write_ledger(orca_issue_context.ledger_path(), {
-            "schema": 1,
-            "imports": [{
-                "request_id": REQUEST,
-                "workspace_id": WORKSPACE,
-                "issue_id": ISSUE,
-                "identifier": "HW-42",
-                "snapshot_sha256": DIGEST,
-                "created_at": "2026-09-22T00:00:00+00:00",
-            }],
-        })
+        orca_frontdesk.write_ledger(
+            orca_issue_context.ledger_path(),
+            {
+                "schema": 1,
+                "imports": [
+                    {
+                        "request_id": REQUEST,
+                        "workspace_id": WORKSPACE,
+                        "issue_id": ISSUE,
+                        "identifier": "HW-42",
+                        "snapshot_sha256": DIGEST,
+                        "created_at": "2026-09-22T00:00:00+00:00",
+                    }
+                ],
+            },
+        )
         environment = {
             "ORCA_TERMINAL_HANDLE": TERMINAL,
             "ORCA_WORKTREE_ID": f"fixture::{ui.REPO}",
@@ -49,6 +62,42 @@ class UiCoordinatorTests(unittest.TestCase):
         env = patch.dict(ui.os.environ, environment, clear=False)
         env.start()
         self.addCleanup(env.stop)
+
+    def ready_coordinator(self) -> None:
+        imported = {"request_id": REQUEST, "linear_identifier": "HW-42"}
+        with patch.object(ui.intake, "import_current_issue", return_value=imported):
+            ui.prepare()
+        ui.acknowledge(REQUEST)
+
+    def handoff_body(
+        self, content: str = "目的: 新仕様を実装する\n受入条件: 既存仕様を置換する"
+    ) -> Path:
+        path = self.root / "handoff.md"
+        path.write_text(content, encoding="utf-8")
+        path.chmod(0o600)
+        return path
+
+    @staticmethod
+    def issue_response(identifier: str = "HW-43") -> dict:
+        return {
+            "ok": True,
+            "result": {
+                "issue": {
+                    "identifier": identifier,
+                    "url": f"https://linear.app/example/issue/{identifier}",
+                },
+            },
+        }
+
+    @staticmethod
+    def worktree(identifier: str = "HW-43") -> dict:
+        path = "/tmp/orca-hw-43"
+        return {
+            "id": f"fixture::{path}",
+            "path": path,
+            "repoId": "fixture",
+            "linkedLinearIssue": identifier,
+        }
 
     def test_prepare_and_acknowledge_bind_visible_terminal(self) -> None:
         imported = {"request_id": REQUEST, "linear_identifier": "HW-42"}
@@ -75,8 +124,117 @@ class UiCoordinatorTests(unittest.TestCase):
         self.assertIn("入力・選択させてはいけません", value)
         self.assertIn("実装BはCursor CLI", value)
         self.assertIn("acknowledge", value)
+        self.assertIn("利用者へ課題作成や", value)
+        self.assertIn("orca_ui_coordinator.py handoff", value)
+        self.assertIn("旧タブは\n自動終了", value)
 
-    def test_provider_is_workspace_sandboxed_and_has_project_control_paths(self) -> None:
+    def test_handoff_creates_child_issue_and_activated_worktree(self) -> None:
+        self.ready_coordinator()
+        body = self.handoff_body()
+        responses = [
+            (0, self.issue_response()),
+            (0, {"ok": True, "result": {"worktrees": []}}),
+            (0, {"ok": True, "result": {}}),
+            (0, {"ok": True, "result": {"worktrees": [self.worktree()]}}),
+        ]
+        with (
+            patch.object(
+                ui, "resolve_source_ref", return_value=("feature/source", "b" * 40)
+            ),
+            patch.object(ui, "run_orca_response", side_effect=responses) as run,
+        ):
+            result = ui.handoff(
+                REQUEST, "新仕様へ切り替える", str(body), "feature/source"
+            )
+
+        self.assertTrue(result["ready"])
+        self.assertEqual(result["linear_identifier"], "HW-43")
+        linear_args, linear_body = run.call_args_list[0].args
+        self.assertEqual(linear_args[:2], ["linear", "create"])
+        self.assertNotIn("--parent", linear_args)
+        self.assertEqual(linear_args[linear_args.index("--workspace") + 1], WORKSPACE)
+        self.assertTrue(uuid.UUID(linear_args[linear_args.index("--write-id") + 1]))
+        self.assertIn("目的: 新仕様を実装する", linear_body)
+        create_args = run.call_args_list[2].args[0]
+        self.assertIn("--linear-issue", create_args)
+        self.assertIn("--activate", create_args)
+        self.assertIn("--no-parent", create_args)
+        self.assertEqual(run.call_count, 4)
+
+        with (
+            patch.object(
+                ui, "resolve_source_ref", return_value=("feature/source", "b" * 40)
+            ),
+            patch.object(ui, "run_orca_response") as second_run,
+        ):
+            repeated = ui.handoff(
+                REQUEST, "新仕様へ切り替える", str(body), "feature/source"
+            )
+        self.assertEqual(repeated, result)
+        second_run.assert_not_called()
+
+    def test_handoff_reuses_existing_linked_worktree(self) -> None:
+        self.ready_coordinator()
+        body = self.handoff_body()
+        responses = [
+            (0, self.issue_response()),
+            (0, {"ok": True, "result": {"worktrees": [self.worktree()]}}),
+        ]
+        with (
+            patch.object(ui, "resolve_source_ref", return_value=(None, "b" * 40)),
+            patch.object(ui, "run_orca_response", side_effect=responses) as run,
+        ):
+            result = ui.handoff(REQUEST, "局所修正", str(body), None)
+        self.assertTrue(result["ready"])
+        self.assertEqual(run.call_count, 2)
+
+    def test_handoff_retries_unconfirmed_write_once_and_stops(self) -> None:
+        self.ready_coordinator()
+        body = self.handoff_body()
+
+        def unconfirmed(
+            arguments: list[str], _input: str | None = None
+        ) -> tuple[int, dict]:
+            write_id = arguments[arguments.index("--write-id") + 1]
+            return 1, {
+                "ok": False,
+                "error": {"code": "linear_write_unconfirmed", "writeId": write_id},
+            }
+
+        with (
+            patch.object(ui, "resolve_source_ref", return_value=(None, "b" * 40)),
+            patch.object(ui, "run_orca_response", side_effect=unconfirmed) as run,
+        ):
+            with self.assertRaisesRegex(ui.UiCoordinatorError, "確定できません"):
+                ui.handoff(REQUEST, "重複させない", str(body), None)
+        self.assertEqual(run.call_count, 2)
+        state_file = next(
+            ui.handoff_root().glob("????????-????-????-????-????????????.json")
+        )
+        state = orca_frontdesk.read_private_json(state_file, {})
+        self.assertEqual(state["phase"], "unknown")
+        self.assertIsNone(state["issue_identifier"])
+
+    def test_handoff_body_rejects_internal_context(self) -> None:
+        body = self.handoff_body("内部: /home/example/session")
+        with self.assertRaisesRegex(ui.UiCoordinatorError, "ローカルパス"):
+            ui.read_handoff_body(str(body))
+
+    def test_launch_wait_retries_only_busy_coordinator(self) -> None:
+        with (
+            patch.object(
+                ui, "launch", side_effect=[host_coordination.HostBusyError("busy"), 0]
+            ) as launch,
+            patch.object(ui.time, "sleep") as sleep,
+            patch.object(ui.time, "monotonic", side_effect=[0.0, 0.0]),
+        ):
+            self.assertEqual(ui.launch_wait(timeout_seconds=5), 0)
+        self.assertEqual(launch.call_count, 2)
+        sleep.assert_called_once_with(1)
+
+    def test_provider_is_workspace_sandboxed_and_has_project_control_paths(
+        self,
+    ) -> None:
         provider = ui.provider_command("/bin/codex", "prompt")
         self.assertIn("--dangerously-bypass-approvals-and-sandbox", provider)
         self.assertIn("gpt-5.6-sol", provider)
@@ -91,7 +249,11 @@ class UiCoordinatorTests(unittest.TestCase):
         self.assertEqual(command[0], "/usr/bin/bwrap")
         self.assertIn("--ro-bind", command)
         self.assertNotIn("--unshare-net", command)
-        binds = [command[index + 1] for index, value in enumerate(command) if value == "--bind"]
+        binds = [
+            command[index + 1]
+            for index, value in enumerate(command)
+            if value == "--bind"
+        ]
         self.assertEqual(binds, [str(self.root), str(ui.REPO.parent), str(ui.REPO)])
         self.assertEqual(command[command.index("--chdir") + 1], str(ui.REPO))
 

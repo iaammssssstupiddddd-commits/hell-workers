@@ -27,12 +27,12 @@ import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 
-try:
+if __package__:
+    from .host_coordination import state_root
+    from .orca_frontdesk import checked_directory, write_ledger
+else:
     from host_coordination import state_root
     from orca_frontdesk import checked_directory, write_ledger
-except ModuleNotFoundError:
-    from scripts.host_coordination import state_root
-    from scripts.orca_frontdesk import checked_directory, write_ledger
 
 
 VERSION = "1.4.205"

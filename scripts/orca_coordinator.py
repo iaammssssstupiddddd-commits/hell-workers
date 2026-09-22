@@ -20,13 +20,13 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
-try:
+if __package__:
+    from . import orca_frontdesk as desk, orca_roles as roles
+    from .host_coordination import acquire_host
+else:
     import orca_frontdesk as desk
     import orca_roles as roles
     from host_coordination import acquire_host
-except ModuleNotFoundError:
-    from scripts import orca_frontdesk as desk, orca_roles as roles
-    from scripts.host_coordination import acquire_host
 
 
 REPO = Path(__file__).resolve().parents[1]

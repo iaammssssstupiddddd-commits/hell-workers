@@ -7,4 +7,4 @@ scripts:
 # A/B/review tabs only when their bounded tickets are ready.
 defaultTabs:
   - title: 統括
-    command: python3 scripts/orca_ui_coordinator.py launch || exit
+    command: python3 scripts/orca_ui_coordinator.py launch-wait || exit

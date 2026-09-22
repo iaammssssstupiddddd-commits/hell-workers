@@ -16,12 +16,12 @@ import uuid
 from contextlib import closing
 from pathlib import Path
 
-try:
+if __package__:
+    from . import orca_frontdesk as storage
+    from .host_coordination import state_root
+else:
     import orca_frontdesk as storage
     from host_coordination import state_root
-except ModuleNotFoundError:
-    from scripts import orca_frontdesk as storage
-    from scripts.host_coordination import state_root
 
 
 def identity(value: str) -> str:

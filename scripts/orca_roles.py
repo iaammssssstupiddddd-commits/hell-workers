@@ -21,18 +21,17 @@ import uuid
 from contextlib import ExitStack
 from pathlib import Path
 
-try:
+if __package__:
+    from . import orca_role_state as bindings, orca_task_bridge as task_bridge
+    from .host_coordination import acquire_host, state_root
+    from .orca_providers import (command_for, cursor_hook_config, cursor_permissions, provider_for,
+                                 write_cursor_hooks, write_cursor_policy)
+else:
     import orca_role_state as bindings
     import orca_task_bridge as task_bridge
     from host_coordination import acquire_host, state_root
     from orca_providers import (command_for, cursor_hook_config, cursor_permissions, provider_for,
                                 write_cursor_hooks, write_cursor_policy)
-except ModuleNotFoundError:
-    from scripts import orca_role_state as bindings
-    from scripts import orca_task_bridge as task_bridge
-    from scripts.host_coordination import acquire_host, state_root
-    from scripts.orca_providers import (command_for, cursor_hook_config, cursor_permissions, provider_for,
-                                        write_cursor_hooks, write_cursor_policy)
 
 
 def git(repo: Path, *args: str) -> str:

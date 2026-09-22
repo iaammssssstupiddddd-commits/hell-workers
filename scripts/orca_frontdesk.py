@@ -20,10 +20,10 @@ from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
-try:
+if __package__:
+    from .host_coordination import acquire_host, state_root
+else:
     from host_coordination import acquire_host, state_root
-except ModuleNotFoundError:
-    from scripts.host_coordination import acquire_host, state_root
 
 
 def checked_directory(path: Path) -> Path:
