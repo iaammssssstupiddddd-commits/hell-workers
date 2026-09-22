@@ -736,6 +736,20 @@ exact digest、commit済みcheckpoint、成功検証、source fingerprint、実�
 review dispatchが既に存在する場合は拒否する。停止前台帳を`review-wait-recoveries/`へ保持してから
 同じlaneをreview待ちへ戻す。結果不明の起動、review中断、判定エラーには適用しない。
 
+Task settlementと画面のidle観測は別の事実として扱う。完了通知の確定後、`terminal.show/wait`の
+未確認応答・応答断・timeoutだけではowned providerを終了させず、同じsettlementを保持して再観測する。
+別runtime/terminal incarnation、壊れた応答、source変化は引き続き拒否する。
+subject別にseal済みのreview receiptは、固定reviewerの次のsubjectがpending/unknownという理由だけでは
+失効させない。元subjectのHEAD/source/検証証拠・receipt hash・固定sessionは再照合し、
+新reviewのsealや新しい担当起動ではunknown barrierを維持する。
+
+既に終了したread-only reviewerだけは`scripts/orca_settlement_recovery.py`で明示照合できる。
+exact停止loop/role digest、同じ固定session、source不変、全operation確定済みのclosed bridge、
+同runtime/terminal incarnationの実Orca completed Dispatch、後継attemptがないことを要求する。
+旧role、実process終了コード、照合証拠を先行receiptに保存し、Task outcomeとprocess exitを区別する。
+完了通知・Task・Dispatch・providerを再作成せず、既存driverだけがverdictのseal・release・ACKを行う。
+改変source・未確定mutation・別session・稼働中launcher・無関係なpauseには適用しない。
+
 worker終了後、統括が差分と範囲を点検し、必要な検証を直列実行する。review用ticketでは
 `allowed_directories` を空にし、次の結果を `source_sha256` として追加する。
 

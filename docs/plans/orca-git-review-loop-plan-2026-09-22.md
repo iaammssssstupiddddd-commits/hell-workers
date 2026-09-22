@@ -7,7 +7,7 @@
 | 計画ID | `orca-git-review-loop-plan-2026-09-22` |
 | ステータス | `In Progress（統合・最終review差戻しのfixture接続、実runtime・公開未完）` |
 | 作成日 | `2026-09-22` |
-| 最終更新日 | `2026-09-22` |
+| 最終更新日 | `2026-09-23` |
 | 作成者 | `Codex` |
 | 関連提案 | `docs/proposals/orca-parallel-development-proposal-2026-09-20.md` |
 | 関連Issue/PR | 外部連携の隔離試験: `TAK-7` / [PR #26](https://github.com/iaammssssstupiddddd-commits/hell-workers/pull/26)（merged、製品master未変更） |
@@ -805,6 +805,36 @@ launcherのfinally処理がproviderをSIGTERMで終了させ、roleをunknownに
 このため試運転全体の完了は宣言しない。次工程は、確認済みsettlementと観測失敗を分離する終了処理の修正、
 同attempt/source/sessionの明示照合であり、新規Run/sessionやunknownの無条件解除は禁止。
 欠損3件は未修復で、hold解除・空directory作成による検証回避はしていない。
+
+### 終了観測と確定済みreviewの分離修正（2026-09-23）
+
+- read-only観測の未確認応答を型付きで区別し、identity破損・権限変更とは混同しない。
+  観測未確認だけでproviderをkillせず、同じconfirmed settlementに対して観測を待つ。
+- 不変のsubject別review receiptは、固定reviewerの別subjectがpending/unknownになっただけで失効させない。
+  source変更・receipt改変・固定session差替えは引き続き拒否する。
+- 既に停止したread-only reviewerは、exact role digest・終了記録・source・session・closed bridge・
+  実Orcaの同Dispatch settlementを照合する明示経路でのみ復旧する。raw exitと旧roleを保存し、
+  lifecycle成功と実process exitを別項目にする。新しいTaskや完了通知を発行しない。
+- 同Runのfinal review受領、既存driverによるrelease/ACKと最終approvalまで再開して実確認する。
+  ゲームテスト・保存領域hold変更・push/PR・製品mergeはこの修正に含めない。
+- 回帰対象: 観測失敗→再観測成功、identity不一致、改変source、未確定mutation、別session、
+  stale digest、途中復旧後のreplay。Helpは開発hostのみのNo impactを実差分から再確認する。
+
+実受入結果: 同じ`ctx_3a3d8b4a7d37`と固定sessionのまま照合復旧し、既存統括driverが
+`1506693806fc1442b50da950bebfdae02f788911`の最終reviewをsealした。receiptは
+`618771e3fa2dd0e7e02ad540b779aa8d3e0c03b9ad09eec405e3a1b4a280956f`。
+loop/lane/integrationはすべてapproved、未処理通知0件、Deliveryなし、最終通知ACK済み、
+全settled attemptのrelease処理済み、Orcaのreclaimable terminal一覧0件を確認。
+providerの実終了コード-15はreceiptとroleの`provider_exit_code`へ残し、終了0という観測には書き換えない。
+実装・統合SHA、reviewer UUID、Run/Task/Dispatchは変更せず、ゲームテスト・push/PRは実行していない。
+この承認は保存領域回帰テストの試運転であり、既存active resource欠損3件の復旧完了ではない。
+今回の終了観測修正自体はfixtureと実状態照合で検証し、新たなproviderへの通信障害注入は行っていない。
+修正commitは`49c113d8`。tooling検証はPython557件、Blender tooling164件、Ruff/actionlint、
+perf self-testが成功。Help No impact（開発hostの観測・review復旧のみ、game input/state/visual/Help不変）。
+変更別gate（base `e279bd5d0ff2a564d1feac75e3dbb5dd79fdb20d`）はcontracts/toolingを選択し、
+storageの同じ欠損3件でcontractsが停止。全gate成功とは扱わない。Orcaの新規worktree基点は
+修正commitを含む`iaammssssstupiddddd-commits/orca-parallel-development`のまま維持し、
+承認済みのtrial/A checkoutへ新toolingを混ぜず、同SHA/sourceを保持する。
 
 - [ ] M0〜M7が完了し、Git SHA基点の実装/review差戻しループを実runtimeで受け入れた。
 - [ ] 影響ドキュメントが更新済み。
