@@ -110,6 +110,14 @@ class ProviderTests(unittest.TestCase):
                 "cursor", Path("/repo"), "worker", "task", externally_sandboxed=True)
 
     @patch("scripts.orca_providers.shutil.which", return_value="/bin/codex")
+    def test_codex_trusts_only_explicit_worktree_and_primary_roots(self, _) -> None:
+        command = providers.command_for("codex", Path('/work/tree'), "worker", "task",
+                                        trusted_roots=(Path('/work/tree'), Path('/primary/project')))
+        self.assertIn('projects."/work/tree".trust_level="trusted"', command)
+        self.assertIn('projects."/primary/project".trust_level="trusted"', command)
+        self.assertNotIn('projects."/".trust_level="trusted"', command)
+
+    @patch("scripts.orca_providers.shutil.which", return_value="/bin/codex")
     def test_codex_disables_project_mcps_without_hiding_tracked_config(self, _) -> None:
         with unittest.mock.patch.object(Path, "is_file", return_value=True), \
                 unittest.mock.patch.object(Path, "read_text", return_value="""

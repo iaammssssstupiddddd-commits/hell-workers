@@ -191,6 +191,7 @@ def start(request_id: str, ticket_path: Path, slot: str, coordinator_handle: str
     if not metadata.is_absolute() or not metadata.is_dir() or metadata.resolve() != metadata:
         raise DispatchError("Orca metadata directory is unavailable")
     path = dispatch_path(request_id, ticket)
+    retry = None
     with acquire_host("dispatch-" + bindings.digest({"request": request_id, "ticket": ticket["id"]}),
                       inherit=False):
         if path.exists() or path.is_symlink():
@@ -205,6 +206,12 @@ def start(request_id: str, ticket_path: Path, slot: str, coordinator_handle: str
                         or resume_session is not None or follow_up is not None
                         or receipt.get("before", {}).get("attempt", {}).get("exit_on_settlement", False) != exit_on_settlement):
                     raise DispatchError("prelaunch recovery receipt does not authorize this retry")
+                retry = current.get("retry")
+                if retry is not None:
+                    failed = receipt.get("failed_input", {}).get("observed", {}).get("dispatch", {})
+                    if (retry != {"task": failed.get("taskId"), "dispatch": failed.get("id")}
+                            or failed.get("status") != "failed" or failed.get("lastFailure") != "agent_prompt_blocked"):
+                        raise DispatchError("failed input retry is not authorized")
             else:
                 return existing_dispatch(current, ticket, slot, resume_session, follow_up,
                                          run_context, exit_on_settlement)
@@ -285,8 +292,9 @@ def start(request_id: str, ticket_path: Path, slot: str, coordinator_handle: str
             worker = run_cli(
                 executable,
                 ["orchestration", "worker-start", "--run", data["run_id"],
-                 "--spec", task_spec({**ticket, "prompt": follow_up} if follow_up else ticket, slot),
-                 "--task-title", ticket["id"],
+                 *(["--task", retry["task"], "--retry-of", retry["dispatch"]] if retry else
+                   ["--spec", task_spec({**ticket, "prompt": follow_up} if follow_up else ticket, slot),
+                    "--task-title", ticket["id"]]),
                  "--worktree", f"path:{ticket['repo']}", "--terminal", data["terminal"],
                  "--from", coordinator_handle, "--timeout-ms", "60000"],
                 "worker-start",

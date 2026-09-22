@@ -196,6 +196,30 @@ class OrcaDispatchTests(unittest.TestCase):
                            resume_session=session, follow_up="different fix")
         repeated.assert_not_called()
 
+    def test_reconciled_input_failure_retries_original_task_without_new_spec(self):
+        run = {"id": "run_fixture", "consumer_generation": 1}
+        receipt = self.root / "recovery.json"
+        orca_frontdesk.write_ledger(receipt, {"phase": "complete", "request_id": REQUEST,
+            "after": {"loop": {"lanes": {"worker-a": {"ticket": self.ticket}},
+                               "terminal": COORDINATOR, "run": {"context": run}}},
+            "before": {"attempt": {"exit_on_settlement": True}},
+            "failed_input": {"observed": {"dispatch": {"id": "ctx_previous", "taskId": "task_original",
+                                                      "status": "failed", "lastFailure": "agent_prompt_blocked"}}}})
+        dispatch.save(dispatch.dispatch_path(REQUEST, self.ticket), {"phase": "retry_ready", "recovery": str(receipt),
+                      "retry": {"task": "task_original", "dispatch": "ctx_previous"}})
+        receipts = [{"run": {**run, "coordinator_handle": COORDINATOR, "legacy": 0}},
+                    {"terminal": {"handle": TERMINAL}},
+                    {"runId": "run_fixture", "taskId": "task_original", "dispatchId": "ctx_retry",
+                     "state": "ready", "stage": "input_accepted"}]
+        with patch.object(dispatch, "run_cli", side_effect=receipts) as cli, \
+                patch.object(dispatch, "wait_for_bridge", return_value=BRIDGE), patch.object(dispatch.task_bridge, "arm"):
+            result = dispatch.start(REQUEST, self.ticket_path, "worker-a", COORDINATOR,
+                                    orca_cli=self.cli, metadata=self.metadata, run_context=run, exit_on_settlement=True)
+        self.assertEqual(result["task_id"], "task_original")
+        argv = cli.call_args_list[-1].args[1]
+        self.assertEqual(argv[argv.index("--retry-of") + 1], "ctx_previous")
+        self.assertNotIn("--spec", argv)
+
     def test_forged_generation_is_refused_before_external_mutation(self) -> None:
         self.ticket["generation"] = 1
         self.ticket_path.write_text(json.dumps(self.ticket))

@@ -1,8 +1,10 @@
-"""Explicit host recovery for a refused launcher before any Task was dispatched.
+"""Explicit host recovery for a refused launcher before any implementation input.
 
 This is not recovery of a running/unknown Orca Dispatch. It requires a stopped
 coordinator, a positively closed refused terminal, an empty Run, unchanged source,
-and the exact identity-less exited role barrier. Preserve all prior state before
+and the exact identity-less exited role barrier. Alternatively, a positively
+failed input Dispatch with a closed unarmed bridge and no provider history can
+retry its original Task. Preserve all prior state before
 re-enabling the same request, Run and workspaces. Never reset provider histories.
 """
 from __future__ import annotations
@@ -10,6 +12,7 @@ from __future__ import annotations
 import argparse
 import copy
 import json
+import os
 import re
 from contextlib import ExitStack
 from pathlib import Path
@@ -38,9 +41,54 @@ def verify_barrier(data: dict, slot: str, provider: str) -> None:
         raise ValueError("only an identity-less exited empty role barrier can be quarantined")
 
 
-def verify_external(cli: Path, data: dict, attempt: dict, closed: dict) -> None:
+def verify_input_failure(cli: Path, data: dict, attempt: dict, dispatch_id: str) -> dict:
+    """Only a revoked, positively failed input attempt can retain its Task for retry."""
+    loop.dispatch.lifecycle_key(dispatch_id, "ctx_")
+    result = loop.dispatch.run_cli(cli, ["orchestration", "worker-show", "--dispatch", dispatch_id], "recovery-failed-input")
+    row, worker = result.get("dispatch", {}), result.get("worker", {})
+    if (row.get("id") != dispatch_id or row.get("runId") != data["run"]["context"]["id"]
+            or row.get("assigneeHandle") != attempt["terminal"] or row.get("status") != "failed"
+            or row.get("lastFailure") != "agent_prompt_blocked" or not row.get("capabilityRevokedAt")
+            or worker.get("dispatchId") != dispatch_id or worker.get("state") != "failed"
+            or worker.get("stage") != "dispatch_input" or worker.get("agentTerminalHandle") != attempt["terminal"]
+            or result.get("observation", {}).get("exactWorker") is not True):
+        raise ValueError("exact revoked failed input Dispatch is required")
+    loop.dispatch.lifecycle_key(row.get("taskId"), "task_")
+    return result
+
+
+def verify_unarmed_role(role: dict, attempt: dict, ticket: dict) -> dict:
+    last = role.get("last", {})
+    if (role.get("tasks") != {} or last.get("phase") != "unknown" or last.get("process_exited") is not True
+            or type(last.get("exit_code")) is not int or last.get("terminal") != attempt["terminal"]
+            or last.get("orca_bridge") != attempt["bridge_id"]
+            or last.get("source_before") != loop.roles.fingerprint(Path(ticket["repo"]))):
+        raise ValueError("only an exited source-unchanged first input attempt is recoverable")
+    B.identity(last.get("attempt_id"))
+    directory = loop.dispatch.task_bridge.root() / B.identity(last.get("orca_bridge"))
+    bridge = S.read_private_json(directory / "journal.json", {})
+    identity = S.read_private_json(directory / "identity.json", {})
+    if (bridge.get("phase") != "closed" or bridge.get("revoked") is not True
+            or bridge.get("authority") is not None or bridge.get("operations") != {}
+            or (directory / "arm.json").exists() or (directory / "arm.json").is_symlink()
+            or identity.get("terminal") != attempt["terminal"] or identity.get("repo") != ticket["repo"]
+            or type(identity.get("pid")) is not int or identity["pid"] <= 0):
+        raise ValueError("input attempt bridge must be closed, unarmed and mutation-free")
+    try:
+        os.kill(identity["pid"], 0)
+    except ProcessLookupError:
+        pass
+    else:
+        raise ValueError("old launcher remains alive")
+    for slot in (role["slot"], f'{role["slot"]}/tasks/{last["key"]}'):
+        if B.history_exists(loop.roles.prepare_runtime(slot)):
+            raise ValueError("provider history exists; preserve its session")
+    return {"bridge": bridge, "identity": identity}
+
+
+def verify_external(cli: Path, data: dict, attempt: dict, closed: dict, failed: str | None = None) -> None:
     """Close receipt is explicit positive host evidence, not missing-worker inference."""
-    if (closed.get("ok") is not True
+    if not failed and (closed.get("ok") is not True
             or closed.get("result", {}).get("close", {}).get("handle") != attempt["terminal"]
             or closed.get("result", {}).get("close", {}).get("ptyKilled") is not True):
         raise ValueError("exact refused terminal needs a positive close receipt")
@@ -52,6 +100,13 @@ def verify_external(cli: Path, data: dict, attempt: dict, closed: dict) -> None:
     run = data["run"]["context"]
     loop.dispatch.checked_run(cli, data["terminal"], run)
     fleet = loop.dispatch.run_cli(cli, ["orchestration", "worker-list", "--run", run["id"]], "recovery-workers")
+    if failed:
+        verify_input_failure(cli, data, attempt, failed)
+        if (fleet.get("scope", {}).get("run") != run["id"] or fleet.get("page", {}).get("hasMore") is not False
+                or fleet.get("page", {}).get("total") != 1
+                or [item.get("dispatchId") for item in fleet.get("workers", [])] != [failed]):
+            raise ValueError("failed input recovery requires exactly its single Dispatch")
+        return
     if (fleet.get("scope", {}).get("run") != run["id"] or fleet.get("workers") != []
             or fleet.get("page", {}).get("total") != 0 or fleet.get("page", {}).get("hasMore") is not False):
         raise ValueError("prelaunch recovery requires a positively enumerated empty Run")
@@ -63,7 +118,7 @@ def verify_external(cli: Path, data: dict, attempt: dict, closed: dict) -> None:
 
 def recover(request_id: str, spec: dict, cli: Path) -> dict:
     required = {"slot", "loop_sha256", "role_sha256", "new_base", "reason", "terminal_close"}
-    if (not isinstance(spec, dict) or set(spec) != required or spec["slot"] not in {"worker-a", "worker-b"}
+    if (not isinstance(spec, dict) or set(spec) not in (required, required | {"failed_dispatch"}) or spec["slot"] not in {"worker-a", "worker-b"}
             or not isinstance(spec["reason"], str) or not spec["reason"].strip()
             or not isinstance(spec["new_base"], str) or not re.fullmatch(r"[a-f0-9]{40}", spec["new_base"])):
         raise ValueError("explicit recovery specification required")
@@ -94,15 +149,21 @@ def recover(request_id: str, spec: dict, cli: Path) -> dict:
             if (attempt.get("phase") != "unknown" or attempt.get("slot") != spec["slot"]
                     or attempt.get("ticket_sha256") != B.digest(ticket)
                     or attempt.get("shared_run") != data["run"]["context"]
-                    or any(attempt.get(key) is not None for key in ("bridge_id", "task_id", "dispatch_id"))):
+                    or any(attempt.get(key) is not None for key in ("task_id", "dispatch_id"))
+                    or (not spec.get("failed_dispatch") and attempt.get("bridge_id") is not None)):
                 raise ValueError("attempt may have reached dispatch; use Dispatch recovery instead")
-            verify_external(cli, data, attempt, spec["terminal_close"])
+            verify_external(cli, data, attempt, spec["terminal_close"], spec.get("failed_dispatch"))
             role_path = B.state_path(spec["slot"])
             role = S.read_private_json(role_path, {})
             if B.digest(role) != spec["role_sha256"]:
                 raise ValueError("role changed; inspect before recovery")
             provider = loop.roles.provider_for(ticket, spec["slot"])
-            verify_barrier(role, spec["slot"], provider)
+            failure = None
+            if spec.get("failed_dispatch"):
+                proof = verify_unarmed_role(role, attempt, ticket)
+                failure = verify_input_failure(cli, data, attempt, spec["failed_dispatch"])
+            else:
+                verify_barrier(role, spec["slot"], provider)
             updated = copy.deepcopy(data)
             target = updated["integration"]["target"]
             old_base = ticket["base"]
@@ -132,11 +193,29 @@ def recover(request_id: str, spec: dict, cli: Path) -> dict:
                        "before": {"loop": data, "role": role, "attempt": attempt},
                        "after": {"loop": updated, "role": empty_role(spec["slot"], provider, str(receipt_path)), "attempt": replacement},
                        "paths": {"attempt": str(attempt_path), "role": str(role_path)}, "workspaces": workspaces}
+            if failure:
+                journal["failed_input"] = {"observed": failure, **proof}
+                replacement["retry"] = {"task": failure["dispatch"]["taskId"], "dispatch": spec["failed_dispatch"]}
+                key = role["last"]["key"]
+                leases.enter_context(loop.acquire_host("workspace-" + key, inherit=False))
+                assignment = role_path.parent / "assignments" / f"{key}.json"
+                original = S.read_private_json(assignment, {})
+                common = loop.roles.git(repo, "rev-parse", "--path-format=absolute", "--git-common-dir")
+                subject = {"repo": ticket["repo"], "common": common, "branch": ticket["branch"], "base": old_base}
+                if original != {"schema": 1, "slot": spec["slot"], "provider": provider,
+                                "ticket_sha256": B.digest(ticket), "subject": subject}:
+                    raise ValueError("original failed assignment differs")
+                journal["paths"]["assignment"] = str(assignment)
+                journal["before"]["assignment"] = original
+                journal["after"]["assignment"] = {**original, "ticket_sha256": B.digest(updated["lanes"][spec["slot"]]["ticket"]),
+                                                   "subject": {**subject, "base": new_base}}
             S.write_ledger(receipt_path, journal)
         prior = journal["before"]["loop"]
+        if saved and "assignment" in journal["paths"]:
+            leases.enter_context(loop.acquire_host("workspace-" + journal["before"]["role"]["last"]["key"], inherit=False))
         ticket = prior["lanes"][spec["slot"]]["ticket"]
         leases.enter_context(loop.acquire_host("dispatch-" + B.digest({"request": request_id, "ticket": ticket["id"]}), inherit=False))
-        verify_external(cli, prior, journal["before"]["attempt"], spec["terminal_close"])
+        verify_external(cli, prior, journal["before"]["attempt"], spec["terminal_close"], spec.get("failed_dispatch"))
         for value in journal["workspaces"]:
             leases.enter_context(loop.acquire_host(loop.roles.workspace_slot(Path(value)), inherit=False))
         # Prepared journal makes interrupted deployment/replacement replayable, with
@@ -159,7 +238,7 @@ def recover(request_id: str, spec: dict, cli: Path) -> dict:
         updated["lanes"][spec["slot"]]["source"] = loop.roles.fingerprint(Path(journal["workspaces"][0]))
         updated["integration"]["source"] = loop.roles.fingerprint(Path(journal["workspaces"][1]))
         S.write_ledger(receipt_path, journal)
-        for key in ("role", "attempt"):
+        for key in ("role", "attempt", *(["assignment"] if "assignment" in journal["paths"] else [])):
             path = Path(journal["paths"][key])
             current = S.read_private_json(path, {})
             if current not in (journal["before"][key], journal["after"][key]):

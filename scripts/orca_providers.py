@@ -71,7 +71,7 @@ def provider_for(ticket: dict, slot: str) -> str:
 
 def command_for(provider: str, repo: Path, role: str, prompt: str,
                 resume_session: str | None = None, *, read_only: bool = False,
-                externally_sandboxed: bool = False) -> list[str]:
+                externally_sandboxed: bool = False, trusted_roots: tuple[Path, ...] = ()) -> list[str]:
     executable = shutil.which("cursor-agent" if provider == "cursor" else "codex")
     if not executable:
         raise RuntimeError(f"{provider} CLI is not installed")
@@ -88,6 +88,8 @@ def command_for(provider: str, repo: Path, role: str, prompt: str,
                   "--ask-for-approval", "never"])
     return [executable, *(["resume", resume_session] if resume_session else []),
             "--cd", str(repo), *isolation, *codex_project_mcp_overrides(repo),
+            *(item for root in trusted_roots for item in
+              ("--config", f'projects.{json.dumps(str(root))}.trust_level="trusted"')),
             "--disable", "multi_agent", "--no-alt-screen", prompt]
 
 

@@ -50,7 +50,12 @@ class PrelaunchRecoveryTests(unittest.TestCase):
         if operation == "run-current":
             return {"run": {**self.before["run"]["context"], "coordinator_handle": self.before["terminal"], "legacy": 0}}
         if operation == "recovery-workers":
+            if self.spec.get("failed_dispatch"):
+                return {"workers": [{"dispatchId": "ctx_blocked"}], "scope": {"run": "run_fixture"},
+                        "page": {"total": 1, "hasMore": False}}
             return {"workers": [], "scope": {"run": "run_fixture"}, "page": {"total": 0, "hasMore": False}}
+        if operation == "recovery-failed-input":
+            return self.failed
         if operation == "recovery-terminals":
             return {"terminals": [], "truncated": False}
         self.fail(operation)
@@ -118,6 +123,55 @@ class PrelaunchRecoveryTests(unittest.TestCase):
             with self.assertRaisesRegex(OSError, "power loss"):
                 self.recover()
         self.assertTrue(self.recover()["recovered"])
+
+    def failed_input(self):
+        ticket = self.fixture.ticket
+        common = L.roles.git(self.fixture.repo, "rev-parse", "--path-format=absolute", "--git-common-dir")
+        subject = {"repo": str(self.fixture.repo), "common": common, "branch": ticket["branch"], "base": ticket["base"]}
+        key = B.digest({"common": common, "id": ticket["id"]})
+        bridge_id = "e1fd2684-d55a-4794-9741-903c92b7dbea"
+        self.role["last"] = {"phase": "unknown", "process_exited": True, "exit_code": 0,
+                             "key": key, "attempt_id": bridge_id, "terminal": "term_refused",
+                             "orca_bridge": bridge_id, "source_before": self.before["lanes"]["worker-a"]["source"]}
+        B.save_state(self.role)
+        B.claim_task(key, "worker-a", "codex", ticket, subject)
+        self.attempt["bridge_id"] = bridge_id
+        L.dispatch.save(self.attempt_path, self.attempt)
+        self.directory = L.dispatch.task_bridge.root() / bridge_id
+        L.STORAGE.write_ledger(self.directory / "journal.json", {"phase": "closed", "revoked": True,
+                                                               "authority": None, "operations": {}})
+        L.STORAGE.write_ledger(self.directory / "identity.json", {"terminal": "term_refused",
+                                                                "repo": str(self.fixture.repo), "pid": 12345})
+        p = patch.object(recovery.os, "kill", side_effect=ProcessLookupError)
+        p.start()
+        self.addCleanup(p.stop)
+        self.failed = {"dispatch": {"id": "ctx_blocked", "taskId": "task_blocked", "runId": "run_fixture",
+                                   "assigneeHandle": "term_refused", "status": "failed", "capabilityRevokedAt": "now",
+                                   "lastFailure": "agent_prompt_blocked"},
+                       "worker": {"dispatchId": "ctx_blocked", "state": "failed", "stage": "dispatch_input",
+                                  "agentTerminalHandle": "term_refused"}, "observation": {"exactWorker": True}}
+        self.spec.update(failed_dispatch="ctx_blocked", terminal_close=None, role_sha256=B.digest(self.role))
+
+    def test_failed_unarmed_input_preserves_original_task_for_retry(self):
+        self.failed_input()
+        result = self.recover()
+        receipt = L.STORAGE.read_private_json(recovery.Path(result["receipt"]), {})
+        self.assertEqual(receipt["after"]["attempt"]["retry"], {"task": "task_blocked", "dispatch": "ctx_blocked"})
+        self.assertEqual(receipt["before"]["role"], self.role)
+        self.assertEqual(receipt["after"]["assignment"]["subject"]["base"], self.spec["new_base"])
+        self.assertEqual(self.recover(), result)
+
+    def test_armed_input_cannot_be_recovered_as_unstarted(self):
+        self.failed_input()
+        L.STORAGE.write_ledger(self.directory / "arm.json", {"dispatch": "ctx_blocked"})
+        with self.assertRaisesRegex(ValueError, "unarmed"):
+            self.recover()
+
+    def test_failure_must_be_positive_and_input_specific(self):
+        self.failed_input()
+        self.failed["dispatch"]["status"] = "dispatched"
+        with self.assertRaisesRegex(ValueError, "failed input"):
+            self.recover()
 
 
 if __name__ == "__main__":

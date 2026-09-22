@@ -583,7 +583,8 @@ def launch(ticket: dict, slot: str, *, dry_run: bool, resume_session: str | None
             # project-local mount points inside the read-only portion of that
             # namespace before any command can run.
             command = command_for(provider, repo, role, prompt, resume_session, read_only=read_only,
-                                  externally_sandboxed=provider == "codex")
+                                  externally_sandboxed=provider == "codex",
+                                  trusted_roots=(repo, Path(subject["common"]).parent) if provider == "codex" else ())
             command = sandbox_command(ticket, role, runtime, command, provider=provider, policy=policy, bridge=bridge)
             data["last"] = {"attempt_id": str(uuid.uuid4()), "key": key, "phase": "starting",
                             "process_exited": False, "exit_code": None, "source_before": before,
