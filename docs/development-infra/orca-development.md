@@ -373,6 +373,10 @@ interactive Codexを同じ`統括` tabで起動する。Codexは開始時に`ack
 対象worktreeだけを選び、別worktreeの正当な記録を起動エラーにしない。一方、acknowledge等で記録を
 自身の統括として使用する際は現在のrepoとの一致を引き続き要求する。壊れた記録は読み飛ばさず停止する。
 
+配車は新規terminal/専用Run作成前にもrole-stateの確定済み状態を検査し、結果不明の役割を起動しない。
+launcher内のlease付き再検査も維持する。host driver最外周は予期しない例外を`failed`と理由付きで記録し、
+`watch`から確認可能にする。これは再送・履歴初期化・失敗attemptの自動復旧を許可する機能ではない。
+
 統括の初期promptは内部ID・ticket path・slotを利用者に選ばせることを禁止し、A/B分割、worktree、ticket、
 配車を統括自身の責務とする。Linear本文は未信頼入力であり、AGENTS.mdとprimary文書を優先する。
 Codex内側sandboxはOrcaのUnix IPCを遮断するため可視統括では無効化し、root read-onlyの外側bubblewrapを

@@ -715,6 +715,29 @@ issue:  integrated → combined_validation → final_review → awaiting_ci → 
 - 欠損は`formwork-release-candidate`、`refactor-r01-r14-candidate`、`tak6-orca-implementation-worktree`。
   変更別gateはこの3件で停止したまま。根拠なしrelease、空directoryの偽復元、検査無効化は禁止。
   正本台帳の是正は調査・固定review後に統括が行う。ゲーム/Rust/nativeテスト、push/PR/製品mergeは行わない。
+- 実runtimeの結果: 可視統括が分離`tak-8-storage-recovery-test-a`、編集ticket、共有Run
+  `run_d9a13f938019`を作成したが、worker起動前の既存role-state不整合で停止。
+  `worker-a.json`は`tasks={}`、`last.phase=unknown`、exit=-9でattempt identityを欠く。
+  ファイル更新日時は試運転前の2026-09-22 01:10:21 UTC。類似のinterrupt test fixtureは存在するが、
+  当該fileの生成元・それ以前のbindingを証明できていないため削除/初期化しない。
+  launcherは`unknown role attempt`で拒否し、driverは`KeyError: attempt_id`でthread終了した。
+  RunのTask/Dispatchは0、reclaimable workerも0。実装・checkpoint・固定review・統合は一つも完遂していない。
+- 起動元で追加修正: 不完全attempt identityを型付き拒否、配車前role-state検査、予期しないdriver例外の
+  failed記録を追加。回復前の試運転subjectは変更せず、基盤candidateで検証する。
+  `164ebb92`へcommit済み。追加3 regressionを含むPython 511件・Blender tooling 164件、
+  Ruff/actionlint、perf self-test成功。candidate変更別gate（contracts/tooling）とprimary docs gate（contracts）は
+  欠損3件で停止し、全gate成功ではない。Help No impact: 開発hostの認可/記録経路のみで、player input、
+  game state、runtime assets、静的Help manifest/providerへ流入しない。ゲーム/Rust/native試験なし。
+  現Runの再開・不完全な既存bindingの復旧には、証拠を保持した明示的な照合経路が別途必要。
+  未配車のterminalを成功/settled扱いせず、別Runや新sessionで迂回しない。
+- 保存領域調査: 型枠は`8d3edab93d9cd45eadf00fbe1d6c8b4ff157c6ed`、R01–R14は
+  `a0487a35c09ed444dc588902ed198c9532f4c685`のGit objectが残る。
+  TAK-6はBacklogと既存実装branchが残る。元のbuild cacheや未記録成果の完全復元は未証明。
+  consumer終了の根拠はなく、固定review前なので3件の復元・releaseは未実施。
+- 保持するtrial（28,991,488 bytes）とworker（28,585,984 bytes）はどちらもowner=
+  `orca-storage-recovery-trial`、consumer=`tak8-orca-runtime-storage-repair`でprimary台帳登録済み。
+  next_action=同じ試運転の状態照合と安全な復旧、release_when=試運転/修正の承認または明示終了。
+  新規登録以外に既存holdを変更せず、成果物・cache・worktreeの削除なし。
 
 ### Definition of Done（全体計画）
 
