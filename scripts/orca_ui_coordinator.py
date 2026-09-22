@@ -89,7 +89,8 @@ def state_path(request_id: str) -> Path:
     return coordinator_root() / f"{request_id}.json"
 
 
-def load_state(request_id: str) -> dict:
+def read_registered_state(request_id: str) -> dict:
+    """Validate a shared registry record without adopting its repository."""
     data = frontdesk.read_private_json(state_path(request_id), {})
     required = {
         "schema",
@@ -109,7 +110,11 @@ def load_state(request_id: str) -> dict:
         or set(data) != required
         or data.get("schema") != 1
         or data.get("request_id") != request_id
-        or data.get("repo") != str(REPO)
+        or not isinstance(data.get("repo"), str)
+        or not Path(data["repo"]).is_absolute()
+        or not isinstance(data.get("worktree_id"), str)
+        or data["worktree_id"].partition("::")[2] != data["repo"]
+        or not data["worktree_id"].partition("::")[0]
         or data.get("phase") not in {"starting", "ready", "exited"}
         or not TERMINAL.fullmatch(data.get("terminal", ""))
     ):
@@ -128,6 +133,13 @@ def load_state(request_id: str) -> dict:
         raise UiCoordinatorError(
             "統括タブのlifecycle記録が不正です。上書きせず照合してください"
         )
+    return data
+
+
+def load_state(request_id: str) -> dict:
+    data = read_registered_state(request_id)
+    if data["repo"] != str(REPO):
+        raise UiCoordinatorError("統括タブの作業場所が一致しません")
     return data
 
 
@@ -433,7 +445,7 @@ def registered_coordinator_handles(worktree_id: str) -> set[str]:
             request_id = intake.canonical_uuid(path.stem, "request id")
         except intake.LinearIntakeError as error:
             raise UiCoordinatorError("統括タブの登録状態が不正です") from error
-        state = load_state(request_id)
+        state = read_registered_state(request_id)
         if state["worktree_id"] == worktree_id and state["phase"] in {
             "starting",
             "ready",

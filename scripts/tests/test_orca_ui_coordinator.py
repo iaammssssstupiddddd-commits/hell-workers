@@ -388,6 +388,40 @@ class UiCoordinatorTests(unittest.TestCase):
             terminals = ui.list_coordinator_terminals(f"fixture::{ui.REPO}")
         self.assertEqual(terminals, [{"handle": TERMINAL}])
 
+    def test_registry_accepts_other_worktrees_without_adopting_their_state(self) -> None:
+        self.ready_coordinator()
+        foreign_id = str(uuid.uuid4())
+        foreign = {
+            **ui.load_state(REQUEST),
+            "request_id": foreign_id,
+            "repo": "/tmp/other-worktree",
+            "worktree_id": "fixture::/tmp/other-worktree",
+            "terminal": "term_other",
+        }
+        ui.save_state(foreign)
+        self.assertEqual(
+            ui.registered_coordinator_handles(f"fixture::{ui.REPO}"), {TERMINAL}
+        )
+        self.assertEqual(
+            ui.registered_coordinator_handles(foreign["worktree_id"]),
+            {"term_other"},
+        )
+        with self.assertRaisesRegex(ui.UiCoordinatorError, "作業場所"):
+            ui.load_state(foreign_id)
+
+    def test_registry_rejects_mismatched_foreign_worktree_identity(self) -> None:
+        self.ready_coordinator()
+        foreign_id = str(uuid.uuid4())
+        ui.save_state(
+            {
+                **ui.load_state(REQUEST),
+                "request_id": foreign_id,
+                "repo": "/tmp/other-worktree",
+            }
+        )
+        with self.assertRaisesRegex(ui.UiCoordinatorError, "状態が不正"):
+            ui.registered_coordinator_handles(f"fixture::{ui.REPO}")
+
     def test_coordinator_reuses_default_visual_tab(self) -> None:
         visual_terminal = "term_92b16a67-b67d-469e-8de1-0c077a5357d8"
         worktree_id = "fixture::/tmp/orca-hw-43"
