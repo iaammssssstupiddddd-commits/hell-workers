@@ -377,6 +377,47 @@ interactive Codexを同じ`統括` tabで起動する。Codexは開始時に`ack
 launcher内のlease付き再検査も維持する。host driver最外周は予期しない例外を`failed`と理由付きで記録し、
 `watch`から確認可能にする。これは再送・履歴初期化・失敗attemptの自動復旧を許可する機能ではない。
 
+`scripts/orca_prelaunch_recovery.py`は、利用者が再試行を指示した拒否起動専用のhost保守経路である。
+停止済み統括/driver/roleのlease、拒否terminalのpositive close receipt、同Runの完全なworker一覧0件、
+bridge/Task/Dispatch未発行、正確なloop/role hash、cleanな未着手sourceを必要とする。
+task履歴が空でattempt identityを欠くexited barrierだけを旧stateごと先行journalへ隔離し、
+provider履歴・固定reviewer・既存assignmentを消さずに同Run/同worktreeを再認可する。
+必要な基盤配備は`scripts/`だけのfast-forwardに限定する。途中中断はjournalのexact before/after照合で再開し、
+通常のunknown Dispatchや編集中sourceには適用しない。統括再起動時のdriverはacknowledgeまで待機する。
+
+`scripts/orca_notice_recovery.py`は、decoderが拒否した未ACKの初回FIFO batchに限り、
+統括が確認した`status`通知全件のimmutable hashと処理理由を照合する保守経路である。
+同Runの本人terminalから実行し、内容とACK retry identityを先行journalへ保存する。
+worker lifecycle通知は対象外。ACK応答の次batchは通常decoderへ渡し、不明な通知を黙って捨てない。
+
+初回Codexのtrust dialogを防ぐため、guarded launcherは承認対象worktreeとGit common rootだけに
+`projects.<path>.trust_level`を明示する（[公式設定仕様](https://learn.chatgpt.com/docs/config-file/config-reference)）。
+Codex 0.155.1の初回trust画面はCLI overrideより先にuser設定を参照するため、専用runtimeの
+0600 `codex/config.toml`へ起動前に保存する。既存の他設定は保持し、symlink・競合trustは拒否する。
+書込み境界は従来のbubblewrap、MCP無効化も維持する。初回確認で`agent_prompt_blocked`となった場合、
+failed/revoked Dispatch、launcher終了、source不変、session履歴なし、closed/unarmed/mutation-free bridgeを
+全て証明したときだけprelaunch recoveryの`failed_dispatch`を使用できる。原Taskを`--retry-of`で再試行し、
+新Run/Taskへ付け替えない。旧role/assignment/bridge/Dispatch証拠は先行receiptに残す。
+
+bridge armの生存判定はhost PIDではなく、launcherが保持するruntime/terminal/incarnation固有の
+共有leaseを使う。統括のPID namespaceからhost PIDが見えないことを異常終了と誤認しない。
+bootstrap中のCodexはlive preambleまでtaskファイル調査・編集を開始しない。
+既存の停止したbootstrap sessionを復旧する場合は、同一Taskのaccepted-input receipt、exact role/bridge、
+source不変、unarmedかつmutation-free、provider終了と唯一の同origin sessionを照合する。
+`bootstrap_session`の明示復旧は失敗試行を保全し、同じsessionを原Taskのretryへ引継ぐ。
+一般のunknown mutation、変更済みsource、任意sessionの取り込みには使わない。
+
+`orca_input_recovery.py`は、既存の明示復旧receiptがある未開始retryを、同じlive terminalと原Taskに
+再接続するための保守経路。先行retry-requestとready応答を保存してからarmし、loopへ引継ぐ。
+source不変とexact launcherを要求し、新terminal/Run/Taskを作らない。
+
+標準`worker_done`の`filesModified`/`reportPath`はboundedな補助metadataとして受け入れる。
+Task/Dispatch/outcomeのauthorityは従来どおり固定し、metadataから編集・完了権限を推定しない。
+旧allowlistで送信前に拒否された既存完了だけは`orca_completion_recovery.py`で明示照合する。
+provider終了、exact source、編集scope、同sessionの記録済みtool call、confirmedの空checkだけという
+bridge履歴を確認し、元terminalからdurable retry identity付きで元の完了内容を送る。
+実Orca settlementをread-backしてからrole/loopへ記録する。pending mutationや任意の完了文は受け付けない。
+
 統括の初期promptは内部ID・ticket path・slotを利用者に選ばせることを禁止し、A/B分割、worktree、ticket、
 配車を統括自身の責務とする。Linear本文は未信頼入力であり、AGENTS.mdとprimary文書を優先する。
 Codex内側sandboxはOrcaのUnix IPCを遮断するため可視統括では無効化し、root read-onlyの外側bubblewrapを
@@ -683,6 +724,17 @@ coordinator Delivery `delivery_02aace26e50b`のACK、exit 0を一巡した。sou
 これは限定read-only受入であり、受付→割当→検証→固定reviewerの自動接続や編集運用の受入ではない。
 
 ## レビューと採用
+
+レビュー待ち台帳の列挙対象はcanonical UUID名のJSONに限定する。ticket、復旧spec、receiptは
+loopではなく、UUID台帳の内容破損は引き続きfail closedとする。復旧specは`loops/recoveries/specs/`へ置く。
+bridgeの起動完了とproviderの入力待機は区別し、`terminal wait --for tui-idle`の`satisfied: true`を
+確認してからTaskを投入する。timeout時はTaskを作成・送信せずfail closedとし、自動再送しない。
+`input_accepted`単独では実際のturn開始やreview完了の証拠にしない。
+`review_pending`から、外部review dispatch作成前のscheduler例外で停止した場合のみ、hostの
+`orca_review_loop.py resume-review-wait`で明示再開できる。照合対象は受付・統括・slot・停止台帳の
+exact digest、commit済みcheckpoint、成功検証、source fingerprint、実装lease解放であり、
+review dispatchが既に存在する場合は拒否する。停止前台帳を`review-wait-recoveries/`へ保持してから
+同じlaneをreview待ちへ戻す。結果不明の起動、review中断、判定エラーには適用しない。
 
 worker終了後、統括が差分と範囲を点検し、必要な検証を直列実行する。review用ticketでは
 `allowed_directories` を空にし、次の結果を `source_sha256` として追加する。

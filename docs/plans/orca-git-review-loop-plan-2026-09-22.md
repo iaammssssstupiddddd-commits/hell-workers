@@ -739,7 +739,72 @@ issue:  integrated → combined_validation → final_review → awaiting_ci → 
   next_action=同じ試運転の状態照合と安全な復旧、release_when=試運転/修正の承認または明示終了。
   新規登録以外に既存holdを変更せず、成果物・cache・worktreeの削除なし。
 
-### Definition of Done（全体計画）
+### 実装A起動拒否の恒久修正・再試行（2026-09-22）
+
+- ユーザーの実画面でlauncher拒否とshell復帰を確認。単なるtab作成を実装A起動成功と扱わない。
+- 起動元がprelaunch専用の明示復旧helperを実装する。統括/driver/roleのlease解放、拒否terminalの
+  positive close、同Runの全worker 0、Task/Dispatch/bridge未発行、source不変とexact台帳hashを要求する。
+- 対象はtask履歴のないidentity-less exited barrierだけ。通常の結果不明Dispatch、稼働中agent、
+  固定reviewer、provider履歴を初期化する機能にはしない。旧台帳・拒否試行・理由を先行journalへ保全する。
+- 未着手worker/統合treeだけにtooling commitをfast-forward配備し、既存受付/Run/担当範囲を維持して再試行する。
+  journalの各置換はexact before/after比較で再開し、途中中断・stale record・dirty sourceの拒否をtestする。
+- 再受入は実装Aの実provider起動、実変更、統括検証、固定reviewer承認、課題branchへの統合を実runtimeで確認する。
+  保存領域3件の修復は引き続き固定review後。ゲーム/Rust/nativeテスト、push/PRは対象外。
+- `86a407c7`をcommitし、同Runの空worker一覧・拒否terminal終了・clean sourceを確認して復旧helperを実行済み。
+  元のrole/loop/dispatchはreceiptへ保全し、同じtrial/A作業場へfast-forward配備した。
+- 再開時に起動元の2件の`status`通知で既存FIFO decoderが停止したため、明示的な通知照合helperを追加。
+  統括本人のRunで未ACK batchを再取得し、確認済みstatusのimmutable hash全件一致を要求する。
+  内容/理由/ACK retry identityを先行保存し、lifecycle通知の破棄・別Runによる消費を禁止する。
+- `6ac03b4a`で通知復旧をcommitし、実統括から照合/ACK成功。次にCodex初回trust dialogで
+  `ctx_a35c710d85dc`が`failed/dispatch_input/agent_prompt_blocked`となった。providerはNo,quitで終了し、
+  source不変・sessionなし・closed/unarmed bridgeを確認した。コード上の起動成功扱いはしていない。
+- `b83d817d`で承認対象rootのtrust明示と、原Task `task_5092881be476`を`--retry-of`で維持する復旧を追加。
+  明示helperが旧role/assignment/Dispatch/bridgeをreceiptへ保全し、同trial/Aへfast-forward配備した。
+  保守復旧は一般の結果不明Dispatch・編集済みsource・既存sessionには適用しない。
+- 実runtimeでCLI trust overrideだけでは初回確認が残ること、および統括PID namespace内の
+  `os.kill(host_pid, 0)`が生存中launcherを見つけられないことを確認。`5cd15b87`で専用config保存、
+  incarnation leaseによるarm生存判定、live preamble前の編集待機、証拠付きbootstrap session継続へ修正。
+  failed/abandoned試行は保存し、同session `01a0c9f2-848e-70c2-9875-305b71796fa5`を引継いだ。
+  `ctx_8edf4f3ac451`で原Taskのready/input_accepted、bridge active、loop implementingを実確認。
+- `5cd15b87`のtooling検証はPython 540件、Blender tooling 164件、Ruff/actionlint、perf self-testが成功。
+  Help No impact: 開発host/復旧とtestsのみでgame input/state/assets/Help providersへの経路は不変。
+  変更別gate（base `164ebb922d7da3683ff688a564934350e9030f43`、contracts/tooling）は既存欠損3件で停止中。
+  全gate成功・欠損修復完了・試運転review完了はまだ宣言しない。
+- Aは`test_validation_storage.py`へ23行の自己完結回帰を実装。標準完了flagの`filesModified`が
+  bridge allowlistから漏れていたため、完了通知だけがpreflight拒否された。追加対応はmetadataの
+  bounded受理と、記録済みexact callに限る明示照合。未送信を橋渡し履歴で確認し、元terminal/同Taskへ
+  実完了を送り直してread-backした。`ctx_8edf4f3ac451`は`succeeded`、bridgeは`settled/completed`。
+  実装の作り直し・任意の成功記録・session破棄はしていない。focused storage unittest 30件は起動元でpass。
+
+### Definition of Done（全体計画・継続）
+
+2026-09-23追記: Aのcheckpoint `ca371cec704933a609c68ca609c7bd058e1d9e98`を統括が作成済み。
+`fa4e7293`のPython全体再実行は546件成功。続くreview開始前に補助spec名をUUIDと解釈する
+catalog不具合を実確認し、`7c5f424a`でcanonical UUID台帳だけを列挙するよう修正した。
+関連31テスト成功。exact停止台帳・source・checkpointを照合して同laneを再開し、復旧specは
+`loops/recoveries/specs/`へ移動保全した。欠損3件の実resource復旧および最終review完了とは分けて扱う。
+`7c5f424a`の全toolingはPython549件・Blender164件・Ruff/actionlint・perf self-testが成功。
+固定reviewerの元sessionへ接続し、`ca371cec`をapprovedとするreceipt
+`0751b7eec08e840e42c04743030f469fcdaa97caa5d88203692d326c19fa2d70`を確認。
+この実起動ではbootstrap中の投入が入力欄に残る競合も観測し、既存本文へEnterだけを送りレビューを開始した。
+恒久対策`e279bd5d`はTask投入前のTUI idle確認を追加（focused dispatch 11件成功）。
+稼働中の凍結subjectへ新toolingを混入せず、起動タイミング修正の新規配備受入は別途必要。
+`e279bd5d`の全toolingはPython550件・Blender164件・Ruff/actionlint・perf self-testが成功。
+同headに対する変更別gate（base `164ebb922d7da3683ff688a564934350e9030f43`）はcontracts/toolingを
+選択し、contractsが同じactive resource欠損3件で停止。ゲーム/Rust/nativeテストは実行していない。
+TAK-8試験worktreeは欠損修復の継続用途で保持する。実測apparent bytesはA 25,963,284、統合tree 26,354,556。
+owner=orca-storage-recovery-trial、consumer=tak8-orca-runtime-storage-repair、next_action=試験レビュー結果を
+起点とした既存欠損resourceの復旧判断、release_when=復旧試運転の承認または明示終了。成果物/cache削除なし。
+
+再試行の最終観測: 統括が試験branchへ`1506693806fc1442b50da950bebfdae02f788911`を統合し、
+同headのfocused storage検証はexit 0。固定reviewerは最終review Taskでもapproved本文を送信し、
+`ctx_3a3d8b4a7d37`のbridgeは`settled/completed`、完了通知`msg_8e5060437d92`は統括inboxへ到着した。
+しかし完了後の`settlement_exit`によるupstream観測が`upstream did not confirm the observation`を返し、
+launcherのfinally処理がproviderをSIGTERMで終了させ、roleをunknownにした。driverは既承認laneの
+再検査で`approval invalidated: unknown role attempt`としてpausedになった。最終承認receiptとACKは未確定。
+このため試運転全体の完了は宣言しない。次工程は、確認済みsettlementと観測失敗を分離する終了処理の修正、
+同attempt/source/sessionの明示照合であり、新規Run/sessionやunknownの無条件解除は禁止。
+欠損3件は未修復で、hold解除・空directory作成による検証回避はしていない。
 
 - [ ] M0〜M7が完了し、Git SHA基点の実装/review差戻しループを実runtimeで受け入れた。
 - [ ] 影響ドキュメントが更新済み。
