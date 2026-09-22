@@ -647,7 +647,9 @@ class Driver:
                 tick(self.request_id, self.terminal)
             except HostBusyError:
                 pass
-            except (OSError, ValueError, RuntimeError) as error:
+            except Exception as error:
+                # Last-resort reporting boundary: never leave a dead driver marked
+                # running after an unexpected decoder/programming exception.
                 self.status("failed", f"{type(error).__name__}: {error}"[:2000])
                 print(f"Orca review loop paused: {type(error).__name__}: {error}", file=sys.stderr, flush=True)
                 return

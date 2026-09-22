@@ -210,6 +210,9 @@ def start(request_id: str, ticket_path: Path, slot: str, coordinator_handle: str
                        "common": roles.git(repo, "rev-parse", "--path-format=absolute", "--git-common-dir")}
             bindings.admit(bindings.read_state(slot, roles.provider_for(ticket, slot)), ticket,
                            subject, roles.fingerprint(repo), resume_session, follow_up)
+        # Reject unresolved role ownership before creating an Orca terminal or Run.
+        # The launcher repeats this check under its role lease to close the race.
+        bindings.read_state(slot, roles.provider_for(ticket, slot))
         data = {
             "schema": 1, "request_id": request_id, "linear_identifier": record["identifier"],
             "ticket_id": ticket["id"], "ticket_sha256": bindings.digest(ticket), "slot": slot,

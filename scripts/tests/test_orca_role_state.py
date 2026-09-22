@@ -374,6 +374,16 @@ class RoleContinuationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "unknown"):
             state.read_state("worker-a", "codex")
 
+    def test_pending_attempt_without_identity_is_rejected_without_mutation(self):
+        data = {"schema": 1, "slot": "worker-a", "provider": "codex", "tasks": {},
+                "last": {"phase": "unknown", "process_exited": True, "exit_code": -9}}
+        state.save_state(data)
+        path = state.state_path("worker-a")
+        original = path.read_bytes()
+        with self.assertRaisesRegex(ValueError, "canonical UUID"):
+            state.read_state("worker-a", "codex", allow_pending=True)
+        self.assertEqual(path.read_bytes(), original)
+
     def test_missing_barrier_and_broken_subject_are_not_resumable(self):
         self.launch()
         original = state.read_state("worker-a", "codex")

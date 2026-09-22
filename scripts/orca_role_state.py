@@ -120,7 +120,7 @@ def read_state(slot: str, provider: str, *, allow_pending: bool = False) -> dict
         pending = allow_pending and isinstance(last, dict) and last.get("phase") in {"starting", "unknown"}
         if not (recorded or reconciled or pending):
             raise ValueError("unknown role attempt; reconcile before any new launch")
-        identity(last["attempt_id"])
+        identity(last.get("attempt_id"))
     for key, task in data["tasks"].items():
         if (not isinstance(task, dict) or task.get("key") != key
                 or not isinstance(task.get("subject"), dict)

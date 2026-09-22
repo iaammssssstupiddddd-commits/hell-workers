@@ -283,6 +283,17 @@ class ReviewLoopTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "authority"):
             COMPLETION(self.ticket, "worker-a", attempt)
 
+    def test_unexpected_driver_exception_is_reported_without_retry(self):
+        self.register()
+        with patch.object(loop, "tick", side_effect=KeyError("attempt_id")) as tick:
+            with loop.Driver(fixtures.REQUEST, fixtures.COORDINATOR) as driver:
+                driver.thread.join(timeout=5)
+                self.assertFalse(driver.thread.is_alive())
+                observed = loop.watch(fixtures.REQUEST, fixtures.COORDINATOR, timeout=0)
+                self.assertEqual(observed["driver"]["phase"], "failed")
+                self.assertIn("KeyError", observed["driver"]["reason"])
+        tick.assert_called_once()
+
     def test_duplicate_driver_does_not_run_another_tick(self):
         with patch.object(loop, "tick"):
             with loop.Driver(fixtures.REQUEST, fixtures.COORDINATOR):

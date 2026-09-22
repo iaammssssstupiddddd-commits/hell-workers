@@ -84,6 +84,16 @@ class OrcaDispatchTests(unittest.TestCase):
         import subprocess
         subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True)
 
+    def test_unknown_role_is_rejected_before_external_mutations(self) -> None:
+        orca_role_state.save_state({"schema": 1, "slot": "worker-a", "provider": "codex",
+                                   "tasks": {}, "last": {"phase": "unknown"}})
+        with patch.object(dispatch, "run_cli") as cli:
+            with self.assertRaisesRegex(ValueError, "unknown role attempt"):
+                dispatch.start(REQUEST, self.ticket_path, "worker-a", COORDINATOR,
+                               orca_cli=self.cli, metadata=self.metadata)
+        cli.assert_not_called()
+        self.assertFalse(dispatch.dispatch_path(REQUEST, self.ticket).exists())
+
     def test_start_creates_run_controlled_terminal_dispatch_then_arms(self) -> None:
         receipts = [
             {"run": {"id": "run_fixture"}},
