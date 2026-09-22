@@ -294,6 +294,20 @@ class ReviewLoopTests(unittest.TestCase):
                 self.assertIn("KeyError", observed["driver"]["reason"])
         tick.assert_called_once()
 
+    def test_resumed_driver_waits_for_ui_acknowledgement(self):
+        ui = dispatch.ui_coordinator
+        path = self.root / "starting-ui.json"
+        path.write_text("{}")
+        states = [{"terminal": fixtures.COORDINATOR, "phase": phase} for phase in ("starting", "ready")]
+        with (patch.object(ui, "state_path", return_value=path),
+              patch.object(ui, "load_state", side_effect=states) as read,
+              patch.object(loop, "tick", side_effect=RuntimeError("end fixture")) as tick):
+            with loop.Driver(fixtures.REQUEST, fixtures.COORDINATOR) as driver:
+                driver.thread.join(timeout=5)
+                self.assertFalse(driver.thread.is_alive())
+        self.assertEqual(read.call_count, 2)
+        tick.assert_called_once()
+
     def test_duplicate_driver_does_not_run_another_tick(self):
         with patch.object(loop, "tick"):
             with loop.Driver(fixtures.REQUEST, fixtures.COORDINATOR):

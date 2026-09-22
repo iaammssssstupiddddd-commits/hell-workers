@@ -643,6 +643,15 @@ class Driver:
     def run(self):
         while not self.stopped.is_set():
             try:
+                ui = dispatch.ui_coordinator
+                if ui.state_path(self.request_id).exists():
+                    coordinator = ui.load_state(self.request_id)
+                    if coordinator["terminal"] != self.terminal:
+                        raise ValueError("driver coordinator changed")
+                    if coordinator["phase"] == "starting":
+                        self.status("waiting_for_coordinator")
+                        self.stopped.wait(2)
+                        continue
                 self.status("running")
                 tick(self.request_id, self.terminal)
             except HostBusyError:

@@ -195,15 +195,19 @@ def start(request_id: str, ticket_path: Path, slot: str, coordinator_handle: str
                       inherit=False):
         if path.exists() or path.is_symlink():
             current = frontdesk.read_private_json(path, {})
-            if (current.get("ticket_sha256") != bindings.digest(ticket) or current.get("slot") != slot
-                    or current.get("resume_session") != resume_session
-                    or current.get("shared_run") != run_context
-                    or current.get("exit_on_settlement", False) != exit_on_settlement
-                    or current.get("follow_up_sha256") != (bindings.digest({"text": follow_up}) if follow_up else None)):
-                raise DispatchError("existing dispatch belongs to a different ticket, owner or follow-up")
-            if current.get("phase") == "armed":
-                return current
-            raise DispatchError("a previous dispatch attempt exists; inspect it instead of starting a duplicate")
+            if current.get("phase") == "retry_ready":
+                receipt = frontdesk.read_private_json(Path(current.get("recovery", "")), {})
+                restored = receipt.get("after", {}).get("loop", {})
+                lane = restored.get("lanes", {}).get(slot, {})
+                if (receipt.get("phase") != "complete" or receipt.get("request_id") != request_id
+                        or lane.get("ticket") != ticket or restored.get("terminal") != coordinator_handle
+                        or restored.get("run", {}).get("context") != run_context
+                        or resume_session is not None or follow_up is not None
+                        or receipt.get("before", {}).get("attempt", {}).get("exit_on_settlement", False) != exit_on_settlement):
+                    raise DispatchError("prelaunch recovery receipt does not authorize this retry")
+            else:
+                return existing_dispatch(current, ticket, slot, resume_session, follow_up,
+                                         run_context, exit_on_settlement)
         if slot != "reviewer" and (resume_session or follow_up or ticket.get("generation", 0)):
             repo = Path(ticket["repo"])
             subject = {"repo": str(repo), "branch": ticket["branch"], "base": ticket["base"],
@@ -305,6 +309,19 @@ def start(request_id: str, ticket_path: Path, slot: str, coordinator_handle: str
             data["phase"] = "unknown"
             save(path, data)
             raise
+
+
+def existing_dispatch(current: dict, ticket: dict, slot: str, resume_session: str | None,
+                      follow_up: str | None, run_context: dict | None, exit_on_settlement: bool) -> dict:
+    if (current.get("ticket_sha256") != bindings.digest(ticket) or current.get("slot") != slot
+            or current.get("resume_session") != resume_session
+            or current.get("shared_run") != run_context
+            or current.get("exit_on_settlement", False) != exit_on_settlement
+            or current.get("follow_up_sha256") != (bindings.digest({"text": follow_up}) if follow_up else None)):
+        raise DispatchError("existing dispatch belongs to a different ticket, owner or follow-up")
+    if current.get("phase") == "armed":
+        return current
+    raise DispatchError("a previous dispatch attempt exists; inspect it instead of starting a duplicate")
 
 
 def main() -> int:
