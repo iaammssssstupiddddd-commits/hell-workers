@@ -4,6 +4,12 @@ Hell Workersでは、Orcaの画面だけを入口にして「統括・実装A・
 利用者がterminal menu、workspace UUID、受付UUID、ticket path、内部slot名を入力する必要はありません。
 詳細な権限・復旧手順は[分離開発の運用仕様](development-infra/orca-development.md)を参照してください。
 
+固定の受付先、案件内から各役割を開く導線、作業場一覧の整理、終了・再開を一体化する改善は
+[UI・受付・終了ライフサイクル統合計画](plans/orca-ui-lifecycle-plan-2026-09-23.md)に沿って実装中です。
+本体側の固定パネルは[隔離した開発ビルド](development-infra/orca-ui-extension.md)へ追加していますが、
+受付台帳へのbridgeと内部課題・分離worktree作成の候補があり、専用試験`TAK-9`では実OrcaのCLI/controller経路で可視統括1タブの起動とidle終了を確認しました。ただし固定パネルからの実経路、A/B/reviewを経た案件の終了、稼働中agentの安全停止は未受入で、現在のOrcaには配備していません。
+以下は現行の入口と実装範囲であり、その改善が実装・受入済みという意味ではありません。
+
 ## まず覚える操作
 
 1. Orca左側の **Tasks** を開き、task sourceを **Linear** にします。

@@ -103,8 +103,11 @@ controllerは時刻更新だけではrevisionを変更せず、受付・route・
   下記の永続結果照合が接続されるまではパネル再表示をまたぐ二重操作防止を保証しない。
 - UI/APIの受理可能actionはcontrollerが提供するものに限定する。`closed / closing / unknown`では受理しない。
 - 候補`d41887aa`は、実装経路が`ready`で統括が所有するidle shellに戻った場合だけ
-  中断・再開を受け付ける。終了はclean作業場、worker/reviewer tabなし、統括1tabを確認し、
-  terminal出力保全とpane closeのread-backを行う。稼働中agentや複数tabは強制終了しない。
+  中断・再開を受け付ける。`56accc4e`では、監督loopが承認済みで全attemptがrelease済み、
+  最終reviewが承認済み、通知が排出済みの場合に限り、登録済みA/B/reviewerのterminal identityと
+  cleanな各作業場を照合して担当paneを直列に保全・終了し、最後に統括paneを閉じる。
+  終了対象はlifecycle journalに固定し、応答不明時は既存close receiptとtab不存在を読んでから再開する。
+  稼働中loopでは統括だけの中断・終了をUIに出さず、agentを強制終了しない。
   操作はworkflow revisionと同じoperation IDで照合し、拒否理由／結果不明をsnapshotへ表示する。
   本体`9fb9f672`はrevisionが変わった後にだけ操作待機を解除する。
 - 不明な終了の再送、process停止、通知ACK、所有資源解放、履歴保全、pane close、統括自身の最後の終了は
@@ -116,7 +119,7 @@ controllerは時刻更新だけではrevisionを変更せず、受付・route・
 
 1. 実Orcaの課題・worktree・可視統括タブ作成は専用`TAK-9`で確認した。固定受付パネルからその経路を操作し、画面のrole移動まで通す実受入は未実施。
 2. queue→受付台帳の消費と相談起動intentは隔離Orca画面から確認したが、実providerの相談結果照合、パネル再表示／アプリ再起動をまたぐ受入。
-3. 限定的なidle案件の中断・再開・終了候補は実装した。worker/reviewerを経た案件、稼働中agentの安全停止、通知排出、close journal/finalizerの全面受入は未実施。確認待ちの作業場とcacheは保持する。
+3. 限定的なidle案件の中断・再開・終了候補と、承認・release済みloopの担当タブを直列に閉じる候補は実装した。worker/reviewerを経た実案件での終了、稼働中agentの安全停止、再起動後の部分失敗復旧、close journal/finalizerの全面受入は未実施。確認待ちの作業場とcacheは保持する。
 4. 実providerによる新規依頼→役割移動→差戻し→確認待ち→再開→最終終了。
 5. 既存作業場の非破壊移行、配備版の選択と復旧手順。
 

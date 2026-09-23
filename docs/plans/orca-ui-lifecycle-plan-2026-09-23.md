@@ -5,7 +5,7 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `orca-ui-lifecycle-plan-2026-09-23` |
-| ステータス | In Progress — 実Orcaの統括1tab経路を部分受入。再handoff防止と限定的な中断・再開・終了候補を追加。固定パネルからの全経路、A/B/review、実agent終了、配備は未受入。稼働版は変更しない |
+| ステータス | In Progress — 実Orcaの統括1tab・idle終了を部分受入。承認済みloopのA/B/reviewタブ直列終了候補を追加。固定パネルからの全経路、A/B/review実案件の終了、稼働中agent停止、配備は未受入。稼働版は変更しない |
 | 作成日 / 最終更新日 | 2026-09-23 / 2026-09-23 |
 | 作成者 | Codex |
 | 関連提案 | [Orca運用素案](../proposals/orca-parallel-development-proposal-2026-09-20.md) |
@@ -160,7 +160,7 @@ UI実現方法はM0で固定する。名前変更と文書リンクだけでは�
 - 再利用: `orca_role_tabs.py`、`orca_ui_coordinator.py`、`orca_dispatch.py`、`orca_review_loop.py`、Git checkpoint/統合、固定reviewer、host lock、既存Linear adapter、primary validation台帳。
 - 追加: 状態の読取・UI投影、案件単位のrole navigation、再開可能なclose journal/finalizer、固定受付の起動/所有権移送。新しい配車方式や並列編集の抜け道を作らない。
 - 実装は同目的の基盤branch `iaammssssstupiddddd-commits/orca-parallel-development`を再利用する案。開始時にHEAD・dirty・現行ルールを再確認し、主担当が編集する。
-- 現在のcandidate参照は`3bf2a999`、Orca本体cloneは`9fb9f672`、primary文書の基点は`3a2088bc23d31fe8f58fedf876ed4d9e15a377d2`。文書正本はprimaryのみ。
+- 現在のcandidate参照は`56accc4e`、Orca本体cloneは`9fb9f672`、primary文書の基点は`fd138cfecf41c891dc13633a6122a4be63c0f801`。文書正本はprimaryのみ。
 - base ref変更は新規worktreeだけに効く。既存process・TAK-6・凍結candidateを更新済みと扱わない。launcher版とstate schemaを記録し、idle確認・移行preview・backup・再照合を経て切り替える。
 - 公開/PRによるCIはその時点の許可範囲を確認する。本計画は公開権限を追加しない。
 - Bevy API変更なし。レビュー待ちのゲーム環境へOrca codeをコピーしない。
@@ -253,6 +253,12 @@ worktree・host・incarnationを読取照合してA/B/reviewerを投影する。
 `3bf2a999`はroute・統括・loop・lifecycle台帳の変化をworkflow revisionへ反映し、
 古い版の操作はrejected receiptとして消費する。これにより画面の再表示後に同じ終了を
 別operation IDで重ねてもcontroller全体が停止しない。実Orcaでの再起動・競合受入は未実施。
+`56accc4e`は監督loopの最終承認、attempt release、最終review、通知排出と全対象worktreeの
+clean状態をclose前に照合し、A/B/reviewerの登録tabを順に保全・閉鎖してから統括tabを閉じる。
+対象identityを永続journalに固定し、部分終了後の再照合ではclose-returned receiptを読んで
+同一paneを再度閉じない。監督loopが未解決なら中断・終了actionを画面から隠し、統括だけを
+休止させない。Python関連36件とtooling 620件は通過。実agentのA/B/reviewを経たclose、
+partially closed案件のOrca再起動復旧、固定パネルからの終了はまだ受入前である。
 
 ### M3: 既存作業場の移行と整理
 
@@ -271,6 +277,11 @@ worktree・host・incarnationを読取照合してA/B/reviewerを投影する。
 - [ ] 保守・検証保持を非破壊で区別する。collapse/filter/Sleepの採否はM0の確認結果に従う。`rm`で非表示を代用しない。
 - [ ] 移行前後のidentity・表示・dirty・hold・sessionを比較し、終了した案件のタブが再起動で復活しない。
 - [ ] runtime登録とfilesystemの欠損を検出し、空directoryを作ってcheckを通す復旧をしない。
+
+現存するhell-workers作業場3件を再照合し、Orca metadataだけを非破壊で
+「開発・建築ビジュアル」「保守・Orca基盤」「検証保持・壁と扉」へ分類した。
+後者の保持consumerは解除していない。TAK-9/10の専用試験worktreeは成果・terminal・
+holdを照合して撤去済み。既存sidebarの用途別filter/Sleepや再起動後の見え方は未受入。
 
 ### M4: 実Orca受入・配備・運用文書
 
@@ -340,7 +351,7 @@ worktree・host・incarnationを読取照合してA/B/reviewerを投影する。
 ### 次のAIが最初にやること
 
 1. 実装指示の有無を確認し、primary文書・candidate HEAD/dirty・当日のruntime/holdを再照合する。
-2. 本体拡張仕様、`7932a355`、`attempt-9`/`attempt-16`と専用`TAK-9`の実経路証拠を確認する。固定パネルから同じ経路とrole移動を受け入れ、M2のclose journal/finalizerを実装・試験する。稼働版の置換は受入後に扱う。
+2. 本体拡張仕様、`56accc4e`、`attempt-9`/`attempt-16`と専用`TAK-9`の実経路証拠を確認する。固定パネルから同じ経路とrole移動を受け入れ、承認済みloopの実role終了と再起動後のclose journal/finalizerを実験する。稼働版の置換は受入後に扱う。
 3. M1→M2→M3→M4の順に進める。途中のunit passを「もう運用可能」と報告しない。
 
 ### 参照必須ファイル
