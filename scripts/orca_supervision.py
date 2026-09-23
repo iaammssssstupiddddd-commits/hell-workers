@@ -650,6 +650,7 @@ def preflight_close(root: Path, request_id: str, intake_receipt: dict) -> list[d
             raise ValueError("supervised notifications are not drained")
     targets = settled_role_targets(child, loop)
     state = ui.read_registered_state(child)
+    checked_routed_worktree(data, state["worktree_id"])
     worktree = Path(state["worktree_id"].partition("::")[2])
     handles: dict[str, set[str]] = {str(worktree): {state["terminal"]}}
     for target in targets:
@@ -725,6 +726,37 @@ def close_target(target: dict) -> None:
     role_tabs.retire(close_call, None, repo, identity)
 
 
+def checked_routed_worktree(route: dict, expected_id: str) -> dict:
+    selector = f"id:{expected_id}"
+    expected_path = expected_id.partition("::")[2]
+    if not expected_path or not Path(expected_path).is_absolute():
+        raise ValueError("routed worktree identity is incomplete")
+    code, response = ui.run_orca_response(["worktree", "show", "--worktree", selector])
+    row = response.get("result", {}).get("worktree", {})
+    if (code or response.get("ok") is not True or row.get("id") != expected_id
+            or row.get("path") != expected_path
+            or row.get("linkedLinearIssue") != route.get("issueIdentifier")):
+        raise ValueError("routed worktree metadata is unconfirmed")
+    return row
+
+
+def complete_worktree(route: dict, expected_id: str) -> None:
+    """Move only the routed worktree card out of the active board after pane closure."""
+    current = checked_routed_worktree(route, expected_id)
+    if current.get("workspaceStatus") == "completed":
+        return
+    if current.get("workspaceStatus") not in {"todo", "in-progress", "in-review"}:
+        raise ValueError("routed worktree status changed unexpectedly")
+    # A lost set response is resolved by read-back, not a second metadata write.
+    try:
+        ui.run_orca_response(["worktree", "set", "--worktree", f"id:{expected_id}",
+                              "--workspace-status", "completed"])
+    except (OSError, RuntimeError, ValueError):
+        pass
+    if checked_routed_worktree(route, expected_id).get("workspaceStatus") != "completed":
+        raise ValueError("worktree completion is not confirmed")
+
+
 def finish_close(root: Path, request_id: str, expected: dict, intake_receipt: dict) -> None:
     if intake_receipt.get("action") == "implement":
         targets = checked_close_targets(expected.get("closeTargets", []))
@@ -744,6 +776,7 @@ def finish_close(root: Path, request_id: str, expected: dict, intake_receipt: di
         verify_tab_free(worktree)
         for repo in {target["repo"] for target in targets} - {str(worktree)}:
             verify_tab_free(Path(repo))
+        complete_worktree(data, state["worktree_id"])
     completed = {key: value for key, value in expected.items() if key != "message"}
     frontdesk.write_ledger(lifecycle_path(root, request_id), {**completed, "phase": "closed"})
 
@@ -789,6 +822,7 @@ def reconcile_unfinished_close(root: Path, request_id: str) -> dict:
             verify_tab_free(worktree)
             for repo in {target["repo"] for target in targets} - {str(worktree)}:
                 verify_tab_free(Path(repo))
+            complete_worktree(route, state["worktree_id"])
             completed = {key: value for key, value in current.items() if key != "message"}
             frontdesk.write_ledger(lifecycle_path(root, request_id), {**completed, "phase": "closed"})
             return lifecycle(root, request_id)

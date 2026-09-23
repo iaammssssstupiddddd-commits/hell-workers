@@ -214,6 +214,7 @@ class SupervisionTests(unittest.TestCase):
                          "visualLayouts": [{"root": {"tabs": [{}]}}], "truncated": False,
                          "hostScope": {"omittedHostIds": []}}})]
         with patch.object(supervision.ui, "read_registered_state", return_value=state), \
+                patch.object(supervision, "checked_routed_worktree"), \
                 patch.object(supervision.ui, "run_orca_response", side_effect=responses), \
                 patch.object(supervision.role_tabs, "identity", return_value=identity), \
                 patch.object(supervision.role_tabs, "idle_shell"), \
@@ -292,6 +293,7 @@ class SupervisionTests(unittest.TestCase):
                         "released": True}}}), \
                 patch.object(supervision.ui, "read_registered_state", return_value={
                     "worktree_id": worktree_id, "terminal": "term_coordinator"}), \
+                patch.object(supervision, "checked_routed_worktree"), \
                 patch.object(supervision.ui, "run_orca_response", side_effect=[
                     (0, {"ok": True, "result": {"terminal": terminal}}),
                     inventory("term_coordinator"), inventory("term_worker")]), \
@@ -347,7 +349,8 @@ class SupervisionTests(unittest.TestCase):
                     "worktreeId": state["worktree_id"]}), \
                 patch.object(supervision, "close_target", side_effect=lambda _: order.append("worker")), \
                 patch.object(supervision.role_tabs, "retire", side_effect=lambda *args: order.append("coordinator")), \
-                patch.object(supervision, "verify_tab_free") as verify:
+                patch.object(supervision, "verify_tab_free") as verify, \
+                patch.object(supervision, "complete_worktree"):
             supervision.finish_close(self.state, request_id, {
                 "schema": 1, "requestId": request_id, "revision": 2,
                 "operationId": str(uuid.uuid4()), "phase": "closing", "outcome": "accepted",
@@ -355,6 +358,26 @@ class SupervisionTests(unittest.TestCase):
         self.assertEqual(order, ["worker", "coordinator"])
         self.assertEqual(verify.call_count, 2)
         self.assertEqual(supervision.lifecycle(self.state, request_id)["phase"], "closed")
+
+    def test_worktree_status_uses_exact_issue_and_read_back(self) -> None:
+        worktree_id = f"repo::{self.root}"
+        route = {"issueIdentifier": "TAK-99"}
+        def shown(status: str) -> tuple[int, dict]:
+            return (0, {"ok": True, "result": {"worktree": {
+                "id": worktree_id, "path": str(self.root), "linkedLinearIssue": "TAK-99",
+                "workspaceStatus": status}}})
+        with patch.object(supervision.ui, "run_orca_response", side_effect=[
+                    shown("in-progress"), RuntimeError("set response lost"), shown("completed")]) as call:
+            supervision.complete_worktree(route, worktree_id)
+        self.assertEqual(call.call_count, 3)
+        self.assertIn("--workspace-status", call.call_args_list[1].args[0])
+        with patch.object(supervision.ui, "run_orca_response", return_value=(0, {
+                "ok": True, "result": {"worktree": {"id": worktree_id,
+                    "path": str(self.root), "linkedLinearIssue": "TAK-100",
+                    "workspaceStatus": "in-progress"}}})) as call:
+            with self.assertRaisesRegex(ValueError, "metadata is unconfirmed"):
+                supervision.complete_worktree(route, worktree_id)
+        call.assert_called_once()
 
     def test_close_refuses_a_replacement_default_tab(self) -> None:
         request_id = self.accepted_implementation()
@@ -432,6 +455,7 @@ class SupervisionTests(unittest.TestCase):
                     "worktree_id": worktree_id, "terminal": "term_fixture"}), \
                 patch.object(supervision.role_tabs, "root", return_value=retired_root), \
                 patch.object(supervision, "verify_tab_free") as verified, \
+                patch.object(supervision, "complete_worktree"), \
                 patch.object(supervision, "finish_close") as finish:
             result = supervision.reconcile_unfinished_close(self.state, request_id)
         self.assertEqual(result["phase"], "closed")
