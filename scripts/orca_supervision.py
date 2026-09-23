@@ -555,6 +555,12 @@ def preflight_close(root: Path, request_id: str, intake_receipt: dict) -> None:
     preflight_pause(root, request_id, intake_receipt, allow_exited=True)
     data = route_record(root, request_id)
     child = data["childRequestId"]
+    loop_path = review_loop.state_path(child)
+    if loop_path.exists() or loop_path.is_symlink():
+        loop = review_loop.load(child)
+        if loop["phase"] != "approved" or any(
+                attempt.get("released") is not True for attempt in loop.get("attempts", {}).values()):
+            raise ValueError("supervised implementation or review is not fully settled")
     for path in role_tabs.root().glob("*.json"):
         record = frontdesk.read_private_json(path, {})
         if record.get("request") == child:

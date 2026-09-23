@@ -204,6 +204,20 @@ class SupervisionTests(unittest.TestCase):
                     returncode=0, stdout="", stderr="")):
             supervision.preflight_close(self.state, request_id, {"action": "implement"})
 
+    def test_active_supervised_loop_blocks_final_close(self) -> None:
+        request_id = self.accepted_implementation()
+        child = str(uuid.uuid4())
+        frontdesk.write_ledger(supervision.routing.route_path(self.state, request_id), {
+            "schema": 1, "requestId": request_id, "phase": "ready", "childRequestId": child})
+        loop_path = self.root / "active-loop.json"
+        loop_path.write_text("fixture")
+        with patch.object(supervision, "preflight_pause"), \
+                patch.object(supervision.review_loop, "state_path", return_value=loop_path), \
+                patch.object(supervision.review_loop, "load", return_value={
+                    "phase": "active", "attempts": {}}):
+            with self.assertRaisesRegex(ValueError, "not fully settled"):
+                supervision.preflight_close(self.state, request_id, {"action": "implement"})
+
     def test_close_refuses_a_replacement_default_tab(self) -> None:
         request_id = self.accepted_implementation()
         child = str(uuid.uuid4())
