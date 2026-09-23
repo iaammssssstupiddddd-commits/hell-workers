@@ -303,6 +303,31 @@ class SupervisionTests(unittest.TestCase):
             targets = supervision.preflight_close(self.state, request_id, {"action": "implement"})
         self.assertEqual(targets, [{"repo": str(worker), "role": "worker-a", "identity": identity}])
 
+    def test_previous_role_tab_requires_a_positive_close_receipt(self) -> None:
+        child = str(uuid.uuid4())
+        worker = self.root / "worker"
+        worker.mkdir()
+        identity = {"handle": "term_current", "incarnationId": "inc_current",
+                    "worktreeId": f"repo::{worker}"}
+        frontdesk.write_ledger(supervision.role_tabs.registry_path(child, str(worker), "reviewer"), {
+            "schema": 1, "request": child, "repo": str(worker), "slot": "reviewer",
+            "phase": "known", "identity": identity})
+        loop = {"attempts": {
+            "first": {"role": "reviewer", "repo": str(worker), "terminal": "term_old",
+                      "released": True},
+            "second": {"role": "reviewer", "repo": str(worker), "terminal": "term_current",
+                       "released": True}}}
+        with self.assertRaisesRegex(ValueError, "previous role tab close is unconfirmed"):
+            supervision.settled_role_targets(child, loop)
+        retired = supervision.role_tabs.root() / "retired" / "old.json"
+        frontdesk.write_ledger(retired, {"repo": str(worker),
+            "identity": {"handle": "term_old", "incarnationId": "inc_old",
+                         "worktreeId": f"repo::{worker}"},
+            "phase": "close-returned", "receipt": {"close": {
+                "handle": "term_old", "ptyKilled": True}}})
+        self.assertEqual(supervision.settled_role_targets(child, loop), [
+            {"repo": str(worker), "role": "reviewer", "identity": identity}])
+
     def test_returned_role_close_is_read_back_without_replaying(self) -> None:
         worker = self.root / "worker"
         worker.mkdir()

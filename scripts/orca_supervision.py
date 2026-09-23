@@ -590,7 +590,7 @@ def preflight_pause(root: Path, request_id: str, intake_receipt: dict, *, allow_
 
 def settled_role_targets(child: str, loop: dict | None) -> list[dict]:
     """Bind every settled attempt to its exact registered tab before closure."""
-    expected: dict[tuple[str, str], str] = {}
+    expected: dict[tuple[str, str], set[str]] = {}
     if loop is not None:
         for attempt in loop.get("attempts", {}).values():
             role, repo, handle = (attempt.get(key) for key in ("role", "repo", "terminal"))
@@ -598,9 +598,7 @@ def settled_role_targets(child: str, loop: dict | None) -> list[dict]:
                     or not isinstance(handle, str) or not handle or attempt.get("released") is not True):
                 raise ValueError("settled role attempt has incomplete terminal ownership")
             key = (repo, role)
-            if key in expected and expected[key] != handle:
-                raise ValueError("role terminal changed across attempts; reconcile before closure")
-            expected[key] = handle
+            expected.setdefault(key, set()).add(handle)
     targets = []
     seen: set[tuple[str, str]] = set()
     for path in sorted(role_tabs.root().glob("*.json")):
@@ -613,8 +611,22 @@ def settled_role_targets(child: str, loop: dict | None) -> list[dict]:
                 or record.get("phase") != "known"
                 or path != role_tabs.registry_path(child, repo, role)
                 or not isinstance(record.get("identity"), dict)
-                or record["identity"].get("handle") != expected[key]):
+                or record["identity"].get("handle") not in expected[key]):
             raise ValueError("worker or reviewer tab registry is unresolved")
+        for old_handle in expected[key] - {record["identity"]["handle"]}:
+            retired = []
+            retired_dir = frontdesk.checked_directory(role_tabs.root() / "retired")
+            for receipt_path in retired_dir.glob("*.json"):
+                receipt = frontdesk.read_private_json(receipt_path, {})
+                identity = receipt.get("identity")
+                if (receipt.get("repo") == repo and isinstance(identity, dict)
+                        and identity.get("handle") == old_handle):
+                    retired.append(receipt)
+            if (len(retired) != 1 or retired[0].get("phase") != "close-returned"
+                    or retired[0].get("receipt", {}).get("close", {}).get("handle") != old_handle
+                    or retired[0]["receipt"]["close"].get("ptyKilled") is not True
+                    or ("shell" in retired[0] and not role_tabs.shell_stopped(retired[0]["shell"]))):
+                raise ValueError("previous role tab close is unconfirmed")
         seen.add(key)
         targets.append({"repo": repo, "role": role, "identity": record["identity"]})
     if seen != set(expected):
