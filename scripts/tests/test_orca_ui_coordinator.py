@@ -144,6 +144,16 @@ class UiCoordinatorTests(unittest.TestCase):
         self.assertIn("orca_ui_coordinator.py handoff", value)
         self.assertIn("旧タブは\n自動終了", value)
 
+    def test_route_created_issue_cannot_handoff_again(self) -> None:
+        self.ready_coordinator()
+        parent = "4252a97e-396b-4779-8ed8-a032f6f0dcda"
+        ui.record_supervision_origin(parent, REQUEST, "HW-42", f"fixture::{ui.REPO}")
+        self.assertIn("別のLinear課題やworktreeへ再handoffしない", ui.prompt(REQUEST, "HW-42", ui.REPO))
+        with patch.object(ui, "run_orca_response") as run:
+            with self.assertRaisesRegex(ui.UiCoordinatorError, "再handoff"):
+                ui.handoff(REQUEST, "別課題", str(self.handoff_body()), None)
+        run.assert_not_called()
+
     def test_handoff_creates_child_issue_and_activated_worktree(self) -> None:
         self.ready_coordinator()
         body = self.handoff_body()
@@ -199,6 +209,7 @@ class UiCoordinatorTests(unittest.TestCase):
         self.assertIn("--linear-issue", create_args)
         self.assertIn("--activate", create_args)
         self.assertIn("--no-parent", create_args)
+        self.assertEqual(create_args[create_args.index("--setup") + 1], "skip")
         terminal_args = run.call_args_list[6].args[0]
         self.assertEqual(terminal_args[:2], ["terminal", "create"])
         self.assertEqual(terminal_args[terminal_args.index("--title") + 1], "統括")

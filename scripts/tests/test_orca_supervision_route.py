@@ -46,6 +46,9 @@ class RouteTests(unittest.TestCase):
         coordinator_launch = patch.object(routing.ui, "ensure_coordinator_terminal", return_value="term_fixture")
         self.coordinator_launch = coordinator_launch.start()
         self.addCleanup(coordinator_launch.stop)
+        origin = patch.object(routing.ui, "record_supervision_origin")
+        self.origin = origin.start()
+        self.addCleanup(origin.stop)
 
     def call(self, args: list[str], text: str | None = None) -> tuple[int, dict]:
         self.calls.append((args, text))
@@ -77,6 +80,7 @@ class RouteTests(unittest.TestCase):
         self.assertEqual(self.calls[2][1], "保存領域の修正を実装してください")
         self.assertEqual(self.calls[3][0][:2], ["worktree", "create"])
         self.coordinator_launch.assert_called_once_with(first["worktreeId"], focus=False)
+        self.origin.assert_called_once_with(REQUEST, CHILD, "TAK-99", first["worktreeId"])
         second = routing.route(self.panel, REQUEST, self.primary, self.call)
         self.assertEqual(second, first)
         self.assertEqual(len(self.calls), 4)

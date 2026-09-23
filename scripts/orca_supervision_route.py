@@ -152,6 +152,8 @@ def route(root: Path, request_id: str, primary: Path, call) -> dict:
                 save(path, data)
             else:
                 intake.canonical_uuid(child_id, "child request id")
+            ui.record_supervision_origin(request_id, child_id, data["issueIdentifier"],
+                                         data["worktreeId"])
             # This durable boundary precedes terminal creation. If the Orca
             # response is lost, a later tick may only read back the result;
             # it must not create a second coordinator tab.
