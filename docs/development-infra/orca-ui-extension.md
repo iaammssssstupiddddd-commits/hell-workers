@@ -109,6 +109,8 @@ controllerは時刻更新だけではrevisionを変更せず、受付・route・
   終了対象はlifecycle journalに固定し、応答不明時は既存close receiptとtab不存在を読んでから再開する。
   `d5572d8f`では元shellのPID・開始時刻もreceiptへ保存して終了を照合し、後からdirtyになった
   担当作業場があれば残りのcloseを保留する。
+  `4ad62830`は終了済み担当を画面で「未割当」と誤表示しない。`8ca7b917`は所有する作業場の
+  Orca board statusを`completed`へ移して再読する。作業場の削除や他案件のstatus変更は行わない。
   稼働中loopでは統括だけの中断・終了をUIに出さず、agentを強制終了しない。
   操作はworkflow revisionと同じoperation IDで照合し、拒否理由／結果不明をsnapshotへ表示する。
   本体`9fb9f672`はrevisionが変わった後にだけ操作待機を解除する。
