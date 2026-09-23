@@ -36,11 +36,12 @@ class SupervisionTests(unittest.TestCase):
         frontdesk.write_ledger(requests / f"{operation}.json", value)
         return value
 
-    def lifecycle_request(self, workflow_id: str, action: str, revision: str = "1") -> dict:
+    def lifecycle_request(self, workflow_id: str, action: str, revision: str | None = None) -> dict:
         operation = str(uuid.uuid4())
         value = {"schema": 1, "runtimeId": RUNTIME, "expectedRuntimeId": RUNTIME,
                  "operationId": operation, "workflowId": workflow_id,
-                 "revision": revision, "action": action, "text": ""}
+                 "revision": revision or supervision.task_revision(self.state, workflow_id),
+                 "action": action, "text": ""}
         _, requests, _ = supervision.directories(self.state)
         frontdesk.write_ledger(requests / f"{operation}.json", value)
         return value
@@ -98,16 +99,17 @@ class SupervisionTests(unittest.TestCase):
                 patch.object(supervision, "route_view", return_value=("working", "作業中", supervision.roles())):
             pause = self.lifecycle_request(request_id, "pause")
             paused = supervision.tick(self.state, RUNTIME)["workflows"][1]
-            self.assertEqual((paused["state"], paused["revision"], paused["actions"]),
-                             ("paused", "2", ["resume", "close"]))
+            self.assertEqual((paused["state"], paused["actions"]), ("paused", ["resume", "close"]))
+            self.assertTrue(paused["revision"].startswith("2-"))
             self.assertEqual(preflight.call_count, 1)
-            self.assertEqual(supervision.tick(self.state, RUNTIME)["workflows"][1]["revision"], "2")
+            self.assertEqual(supervision.tick(self.state, RUNTIME)["workflows"][1]["revision"],
+                             paused["revision"])
             self.assertEqual(frontdesk.read_private_json(
                 self.state / "receipts" / f"{pause['operationId']}.json", {})["phase"], "accepted")
-            self.lifecycle_request(request_id, "resume", "2")
+            self.lifecycle_request(request_id, "resume", paused["revision"])
             active = supervision.tick(self.state, RUNTIME)["workflows"][1]
-            self.assertEqual((active["state"], active["revision"], active["actions"]),
-                             ("working", "3", ["pause", "close"]))
+            self.assertEqual((active["state"], active["actions"]), ("working", ["pause", "close"]))
+            self.assertTrue(active["revision"].startswith("3-"))
             self.assertEqual(preflight.call_count, 2)
 
     def test_busy_close_is_rejected_without_closing_any_terminal(self) -> None:
@@ -117,7 +119,8 @@ class SupervisionTests(unittest.TestCase):
                 patch.object(supervision, "route_view", return_value=("working", "作業中", supervision.roles())):
             close = self.lifecycle_request(request_id, "close")
             workflow = supervision.tick(self.state, RUNTIME)["workflows"][1]
-            self.assertEqual((workflow["state"], workflow["revision"]), ("working", "2"))
+            self.assertEqual(workflow["state"], "working")
+            self.assertTrue(workflow["revision"].startswith("2-"))
             self.assertIn("agent is busy", workflow["detail"])
             self.assertEqual(frontdesk.read_private_json(
                 self.state / "receipts" / f"{close['operationId']}.json", {})["phase"], "rejected")
@@ -141,7 +144,31 @@ class SupervisionTests(unittest.TestCase):
             self.assertEqual(supervision.lifecycle(self.state, request_id)["phase"], "paused")
             supervision.tick(self.state, RUNTIME)
             preflight.assert_called_once()
-            self.assertEqual(supervision.task_revision(self.state, request_id), "2")
+            self.assertTrue(supervision.task_revision(self.state, request_id).startswith("2-"))
+
+    def test_stale_lifecycle_revision_is_rejected_without_stalling_panel(self) -> None:
+        request_id = self.accepted_implementation()
+        with patch.object(supervision, "preflight_pause"), \
+                patch.object(supervision, "route_view", return_value=("working", "作業中", supervision.roles())):
+            stale_revision = supervision.task_revision(self.state, request_id)
+            self.lifecycle_request(request_id, "pause")
+            supervision.tick(self.state, RUNTIME)
+            stale = self.lifecycle_request(request_id, "close", stale_revision)
+            snapshot = supervision.tick(self.state, RUNTIME)
+        self.assertEqual(snapshot["workflows"][1]["state"], "paused")
+        self.assertEqual(frontdesk.read_private_json(
+            self.state / "receipts" / f"{stale['operationId']}.json", {})["phase"], "rejected")
+        self.assertEqual(list((self.state / "requests").iterdir()), [])
+
+    def test_route_progress_invalidates_the_visible_revision(self) -> None:
+        request_id = self.accepted_implementation()
+        before = supervision.task_revision(self.state, request_id)
+        frontdesk.write_ledger(supervision.routing.route_path(self.state, request_id), {
+            "schema": 1, "requestId": request_id, "phase": "terminal_starting"})
+        after = supervision.task_revision(self.state, request_id)
+        self.assertNotEqual(before, after)
+        self.assertTrue(before.startswith("1-"))
+        self.assertTrue(after.startswith("1-"))
 
     def test_closed_consultation_is_retained_without_a_terminal(self) -> None:
         request = self.request()
@@ -149,8 +176,8 @@ class SupervisionTests(unittest.TestCase):
         supervision.write_consult_phase(self.state, request["operationId"], "settled")
         self.lifecycle_request(request["operationId"], "close")
         workflow = supervision.tick(self.state, RUNTIME)["workflows"][1]
-        self.assertEqual((workflow["state"], workflow["revision"], workflow["actions"]),
-                         ("closed", "2", []))
+        self.assertEqual((workflow["state"], workflow["actions"]), ("closed", []))
+        self.assertTrue(workflow["revision"].startswith("2-"))
         self.assertTrue(all(role["terminal"] is None for role in workflow["roles"]))
 
     def test_clean_exited_coordinator_can_preflight_close(self) -> None:

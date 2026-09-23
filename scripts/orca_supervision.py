@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -199,7 +200,26 @@ def lifecycle(root: Path, request_id: str) -> dict:
 
 
 def task_revision(root: Path, request_id: str) -> str:
-    return str(lifecycle(root, request_id).get("revision", 1))
+    current = lifecycle(root, request_id)
+    receipt = frontdesk.read_private_json(root / "receipts" / f"{request_id}.json", {})
+    material: dict = {"generation": current.get("revision", 1), "lifecycle": current}
+    if receipt.get("action") == "implement":
+        route = route_record(root, request_id)
+        material["route"] = route
+        child = route.get("childRequestId")
+        if child:
+            path = ui.state_path(child)
+            if path.exists() or path.is_symlink():
+                material["coordinator"] = ui.read_registered_state(child)
+            loop_path = review_loop.state_path(child)
+            if loop_path.exists() or loop_path.is_symlink():
+                loop = review_loop.load(child)
+                material["loop"] = {"phase": loop["phase"], "lanes": loop["lanes"],
+                                    "attempts": loop.get("attempts", {})}
+    else:
+        material["consult"] = consult_intent(root, request_id)
+    digest = hashlib.sha256(json.dumps(material, sort_keys=True, ensure_ascii=False).encode()).hexdigest()[:12]
+    return f"{material['generation']}-{digest}"
 
 
 def task_actions(root: Path, request_id: str, action: str) -> list[str]:
@@ -412,7 +432,7 @@ def checked_request(path: Path) -> dict:
                 or not data["text"].strip()):
             raise ValueError("supervision intake request is invalid")
     elif (data["workflowId"] == RECEPTION_ID or data["text"]
-          or not re.fullmatch(r"[1-9][0-9]*", data["revision"])):
+          or not re.fullmatch(r"[1-9][0-9]*-[0-9a-f]{12}", data["revision"])):
         raise ValueError("supervision lifecycle request is invalid")
     canonical_uuid(data["workflowId"], "workflow ID")
     return data
@@ -435,7 +455,7 @@ def lifecycle_receipt(root: Path, request: dict, current_runtime: str) -> dict:
             raise ValueError("lifecycle receipt conflicts with the request")
         return existing
     if (current.get("operationId") == request["operationId"]
-            and current.get("revision") == int(request["revision"]) + 1):
+            and current.get("requestRevision") == request["revision"]):
         # The prior controller may have committed the lifecycle transition but
         # lost its receipt. Never repeat a close or send a second stop.
         receipt = {"schema": 1, "runtimeId": current_runtime,
@@ -445,13 +465,29 @@ def lifecycle_receipt(root: Path, request: dict, current_runtime: str) -> dict:
                    "phase": current.get("outcome", "accepted")}
         frontdesk.write_ledger(path, receipt)
         return receipt
-    if request["revision"] != str(current.get("revision", 1)):
-        raise ValueError("workflow revision changed; refresh before changing lifecycle")
+    if request["revision"] != task_revision(root, request_id):
+        rejected = {"schema": 1, "runtimeId": current_runtime,
+                    "operationId": request["operationId"], "workflowId": request_id,
+                    "revision": request["revision"], "action": request["action"],
+                    "text": "", "intakeId": request_id, "phase": "rejected"}
+        frontdesk.write_ledger(path, rejected)
+        return rejected
     if request["action"] not in task_actions(root, request_id, intake_receipt.get("action")):
-        raise ValueError("workflow action is not available in this phase")
+        frontdesk.write_ledger(lifecycle_path(root, request_id), {
+            "schema": 1, "requestId": request_id, "revision": current.get("revision", 1) + 1,
+            "requestRevision": request["revision"], "operationId": request["operationId"],
+            "phase": current.get("phase", "active"), "outcome": "rejected",
+            "message": "操作対象の工程が変わりました。状態を再確認してください。"})
+        rejected = {"schema": 1, "runtimeId": current_runtime,
+                    "operationId": request["operationId"], "workflowId": request_id,
+                    "revision": request["revision"], "action": request["action"],
+                    "text": "", "intakeId": request_id, "phase": "rejected"}
+        frontdesk.write_ledger(path, rejected)
+        return rejected
     phase = {"pause": "paused", "close": "closing", "resume": "active"}[request["action"]]
-    expected = {"schema": 1, "requestId": request_id, "revision": int(request["revision"]) + 1,
-                "operationId": request["operationId"], "phase": phase, "outcome": "accepted"}
+    expected = {"schema": 1, "requestId": request_id, "revision": current.get("revision", 1) + 1,
+                "requestRevision": request["revision"], "operationId": request["operationId"],
+                "phase": phase, "outcome": "accepted"}
     try:
         if request["action"] == "close":
             preflight_close(root, request_id, intake_receipt)
