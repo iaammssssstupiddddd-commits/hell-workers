@@ -25,7 +25,7 @@ class RoleTabTests(unittest.TestCase):
             p = patch.object(module, "state_root", return_value=self.root / "coordination")
             p.start()
             self.addCleanup(p.stop)
-        p = patch.object(tabs, "idle_shell", return_value={"pid": 2147483647})
+        p = patch.object(tabs, "idle_shell", return_value={"pid": 2147483647, "start": "1"})
         self.idle = p.start()
         self.addCleanup(p.stop)
 
@@ -160,6 +160,10 @@ class RoleTabTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "already attempted"):
             tabs.retire(self.call, Path("orca"), self.repo, owned)
         self.assertEqual(self.commands.count("role-tab-close"), 1)
+
+    def test_shell_stopped_rejects_invalid_journal_identity(self):
+        with self.assertRaisesRegex(ValueError, "incomplete"):
+            tabs.shell_stopped({"pid": 42})
 
     def test_retire_pages_a_character_limited_preview(self):
         self.rows = [self.row]

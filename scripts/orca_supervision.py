@@ -699,6 +699,7 @@ def close_call(_cli: object, args: list[str], _purpose: str) -> dict:
 
 def close_target(target: dict) -> None:
     repo, identity = target["repo"], target["identity"]
+    checked_clean_worktree(Path(repo))
     retired = role_tabs.root() / "retired" / f"{role_tabs.bindings.digest(identity)}.json"
     if retired.exists() or retired.is_symlink():
         record = frontdesk.read_private_json(retired, {})
@@ -706,7 +707,8 @@ def close_target(target: dict) -> None:
         if (record.get("identity") != identity or record.get("repo") != repo
                 or record.get("phase") != "close-returned"
                 or closed.get("handle") != identity["handle"]
-                or closed.get("ptyKilled") is not True):
+                or closed.get("ptyKilled") is not True
+                or not role_tabs.shell_stopped(record.get("shell", {}))):
             raise ValueError("role tab close result is uncertain; do not replay")
         code, response = ui.run_orca_response(["terminal", "list", "--worktree", f"path:{repo}"])
         inventory = response.get("result", {})
@@ -778,7 +780,8 @@ def reconcile_unfinished_close(root: Path, request_id: str) -> dict:
             closed = retired.get("receipt", {}).get("close", {})
             if (retired.get("phase") != "close-returned"
                     or closed.get("handle") != state["terminal"]
-                    or closed.get("ptyKilled") is not True):
+                    or closed.get("ptyKilled") is not True
+                    or ("shell" in retired and not role_tabs.shell_stopped(retired["shell"]))):
                 raise ValueError("terminal close result is uncertain; do not replay")
             verify_tab_free(worktree)
             for repo in {target["repo"] for target in targets} - {str(worktree)}:

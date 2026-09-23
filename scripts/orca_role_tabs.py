@@ -76,6 +76,22 @@ def idle_shell(handle: str, repo: str, proc: Path = Path("/proc")) -> dict:
     return shell
 
 
+def shell_stopped(shell: dict, proc: Path = Path("/proc")) -> bool:
+    """A reused PID is not the shell whose closure was journaled."""
+    pid, start = shell.get("pid"), shell.get("start")
+    if type(pid) is not int or pid <= 0 or not isinstance(start, str) or not start.isdecimal():
+        raise ValueError("retired shell identity is incomplete")
+    try:
+        observed = (proc / str(pid) / "stat").read_text().rsplit(")", 1)[1].split()
+    except FileNotFoundError:
+        return True
+    except (IndexError, OSError) as error:
+        raise ValueError("retired shell process cannot be verified") from error
+    if len(observed) <= 19 or not observed[19].isdecimal():
+        raise ValueError("retired shell process cannot be verified")
+    return observed[19] != start
+
+
 def inventory(call, cli, repo: str) -> tuple[list, list]:
     result = call(cli, ["terminal", "list", "--worktree", f"path:{repo}",
                         "--include-visual-layouts"], "role-tab-list")
@@ -161,23 +177,23 @@ def retire(call, cli, repo: str, expected: dict) -> Path:
             raise ValueError("obsolete tab identity changed")
         before = idle_shell(handle, repo)
         output = complete_output(call, cli, handle)
-        storage.write_ledger(path, {"identity": expected, "repo": repo, "output": output, "phase": "prepared"})
+        storage.write_ledger(path, {"identity": expected, "repo": repo, "shell": before,
+                                    "output": output, "phase": "prepared"})
         row = call(cli, ["terminal", "show", "--terminal", handle], "role-tab-show")["terminal"]
         if identity(row, repo) != expected or idle_shell(handle, repo) != before:
             raise ValueError("obsolete shell changed before closure")
         # Close only this pane, never another user's split in the same tab.
         receipt = call(cli, ["terminal", "close", "--terminal", handle], "role-tab-close")
-        storage.write_ledger(path, {"identity": expected, "repo": repo, "output": output,
+        storage.write_ledger(path, {"identity": expected, "repo": repo, "shell": before, "output": output,
                                    "phase": "close-returned", "receipt": receipt})
         rows, _ = inventory(call, cli, repo)
         if any(row.get("handle") == handle for row in rows):
             raise ValueError("obsolete tab closure unconfirmed")
-        process = Path("/proc") / str(before["pid"])
         for _ in range(20):
-            if not process.exists():
+            if shell_stopped(before):
                 break
             time.sleep(0.1)
-        if process.exists():
+        if not shell_stopped(before):
             raise ValueError("tab closed but shell exit unconfirmed; preserve receipt")
         return path
 

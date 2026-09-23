@@ -293,11 +293,13 @@ class SupervisionTests(unittest.TestCase):
         retired = (supervision.role_tabs.root() / "retired" /
                    f"{supervision.role_tabs.bindings.digest(identity)}.json")
         frontdesk.write_ledger(retired, {"identity": identity, "repo": str(worker),
+                                       "shell": {"pid": 2147483647, "start": "1"},
                                        "phase": "close-returned", "receipt": {
                                            "close": {"handle": "term_worker", "ptyKilled": True}}})
         with patch.object(supervision.ui, "run_orca_response", return_value=(0, {
                     "ok": True, "result": {"terminals": [], "truncated": False,
                                             "hostScope": {"omittedHostIds": []}}})), \
+                patch.object(supervision, "checked_clean_worktree"), \
                 patch.object(supervision.role_tabs, "retire") as retire:
             supervision.close_target(target)
         retire.assert_not_called()
