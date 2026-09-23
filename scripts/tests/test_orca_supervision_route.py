@@ -43,6 +43,9 @@ class RouteTests(unittest.TestCase):
         coordinator_state = patch.object(routing.ui, "state_path", return_value=self.root / "missing-state.json")
         coordinator_state.start()
         self.addCleanup(coordinator_state.stop)
+        coordinator_launch = patch.object(routing.ui, "ensure_coordinator_terminal", return_value="term_fixture")
+        self.coordinator_launch = coordinator_launch.start()
+        self.addCleanup(coordinator_launch.stop)
 
     def call(self, args: list[str], text: str | None = None) -> tuple[int, dict]:
         self.calls.append((args, text))
@@ -67,15 +70,40 @@ class RouteTests(unittest.TestCase):
 
     def test_one_issue_and_worktree_then_exact_journal_replay(self) -> None:
         first = routing.route(self.panel, REQUEST, self.primary, self.call)
-        self.assertEqual(first["phase"], "worktree_created")
+        self.assertEqual(first["phase"], "terminal_starting")
         self.assertEqual(first["issueIdentifier"], "TAK-99")
         self.assertEqual(len(self.calls), 4)
         self.assertEqual(self.calls[2][0][:2], ["linear", "create"])
         self.assertEqual(self.calls[2][1], "保存領域の修正を実装してください")
         self.assertEqual(self.calls[3][0][:2], ["worktree", "create"])
+        self.coordinator_launch.assert_called_once_with(first["worktreeId"], focus=False)
         second = routing.route(self.panel, REQUEST, self.primary, self.call)
         self.assertEqual(second, first)
         self.assertEqual(len(self.calls), 4)
+        self.coordinator_launch.assert_called_once()
+
+    def test_only_the_matching_ready_coordinator_completes_route(self) -> None:
+        first = routing.route(self.panel, REQUEST, self.primary, self.call)
+        state_path = self.root / "coordinator.json"
+        state_path.write_text("registered", encoding="utf-8")
+        with patch.object(routing.ui, "state_path", return_value=state_path), \
+                patch.object(routing.ui, "read_registered_state", return_value={
+                    "worktree_id": first["worktreeId"], "linear_identifier": "TAK-99",
+                    "phase": "ready"}):
+            ready = routing.route(self.panel, REQUEST, self.primary, self.call)
+        self.assertEqual(ready["phase"], "ready")
+        self.assertEqual(len(self.calls), 4)
+        self.coordinator_launch.assert_called_once()
+
+    def test_unconfirmed_terminal_launch_does_not_launch_twice(self) -> None:
+        self.coordinator_launch.side_effect = RuntimeError("terminal creation unconfirmed")
+        with self.assertRaisesRegex(RuntimeError, "unconfirmed"):
+            routing.route(self.panel, REQUEST, self.primary, self.call)
+        self.assertEqual(desk.read_private_json(routing.route_path(self.panel, REQUEST), {})["phase"],
+                         "terminal_starting")
+        self.coordinator_launch.side_effect = None
+        routing.route(self.panel, REQUEST, self.primary, self.call)
+        self.coordinator_launch.assert_called_once()
 
     def test_unconfirmed_linear_write_is_not_retried(self) -> None:
         self.fail_on = ["linear", "create"]

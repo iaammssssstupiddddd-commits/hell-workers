@@ -168,7 +168,8 @@ def route_record(root: Path, request_id: str) -> dict:
     if data and (not isinstance(data, dict) or data.get("schema") != 1
                  or data.get("requestId") != request_id
                  or data.get("phase") not in {"prepared", "issue_creating", "issue_created",
-                                               "worktree_creating", "worktree_created", "ready"}):
+                                               "worktree_creating", "worktree_created",
+                                               "terminal_starting", "ready"}):
         raise ValueError("invalid implementation route; preserve for reconciliation")
     return data
 
@@ -188,6 +189,8 @@ def route_view(root: Path, request_id: str) -> tuple[str, str, list[dict]]:
         return ("queued", "分離作業場を作成しました。統括タブの登録待ちです。", role_views)
     state_path = ui.state_path(child_id)
     if not state_path.exists() and not state_path.is_symlink():
+        if phase == "terminal_starting":
+            return ("unknown", "統括タブの起動結果を確認できません。二重起動せず照合待ちです。", role_views)
         return ("queued", "分離作業場を作成しました。統括タブの起動待ちです。", role_views)
     state = ui.read_registered_state(child_id)
     if (state["worktree_id"] != data.get("worktreeId")

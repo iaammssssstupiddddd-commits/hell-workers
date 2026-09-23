@@ -518,6 +518,15 @@ class UiCoordinatorTests(unittest.TestCase):
 
 
 class DefaultEntryTests(unittest.TestCase):
+    def test_background_coordinator_creation_does_not_take_focus(self):
+        with patch.object(ui, "list_coordinator_terminals", side_effect=[[], [{"handle": "term_fixture"}]]), \
+             patch.object(ui, "list_visual_coordinator_terminals", return_value=[]), \
+             patch.object(ui, "run_orca_response", return_value=(0, {"ok": True})) as run:
+            self.assertEqual(ui.ensure_coordinator_terminal("repo::/worktree", focus=False), "term_fixture")
+        args = run.call_args.args[0]
+        self.assertEqual(args[:2], ["terminal", "create"])
+        self.assertNotIn("--focus", args)
+
     def test_exited_coordinator_restarts_in_same_idle_tab(self):
         with patch.object(ui, "list_coordinator_terminals", return_value=[]), \
              patch.object(ui, "list_visual_coordinator_terminals", return_value=["term_fixture"]), \

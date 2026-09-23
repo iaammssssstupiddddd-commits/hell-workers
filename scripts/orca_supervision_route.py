@@ -139,7 +139,7 @@ def route(root: Path, request_id: str, primary: Path, call) -> dict:
             phase = data["phase"]
         if phase == "worktree_creating":
             raise RuntimeError("worktree creation is unresolved; do not create another checkout")
-        if phase not in {"worktree_created", "ready"}:
+        if phase not in {"worktree_created", "terminal_starting", "ready"}:
             raise ValueError("unknown route phase; preserve journal")
         if phase == "worktree_created":
             child_id = data["childRequestId"]
@@ -152,12 +152,25 @@ def route(root: Path, request_id: str, primary: Path, call) -> dict:
                 save(path, data)
             else:
                 intake.canonical_uuid(child_id, "child request id")
+            # This durable boundary precedes terminal creation. If the Orca
+            # response is lost, a later tick may only read back the result;
+            # it must not create a second coordinator tab.
+            data["phase"] = "terminal_starting"
+            save(path, data)
+            coordinator_path = ui.state_path(child_id)
+            if not coordinator_path.exists() and not coordinator_path.is_symlink():
+                ui.ensure_coordinator_terminal(data["worktreeId"], focus=False)
+            phase = data["phase"]
+        if phase == "terminal_starting":
+            child_id = intake.canonical_uuid(data.get("childRequestId"), "child request id")
             coordinator_path = ui.state_path(child_id)
             if coordinator_path.exists() or coordinator_path.is_symlink():
                 state = ui.read_registered_state(child_id)
                 if (state["worktree_id"] != data["worktreeId"]
                         or state["linear_identifier"] != data["issueIdentifier"]):
                     raise ValueError("visible coordinator belongs to another route")
+                if state["phase"] == "exited":
+                    raise RuntimeError("coordinator exited before acknowledging the route")
                 if state["phase"] == "ready":
                     data["phase"] = "ready"
                     save(path, data)

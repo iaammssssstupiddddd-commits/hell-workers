@@ -594,7 +594,7 @@ def pin_coordinator_title(terminal: str, title: str = "統括") -> None:
         )
 
 
-def ensure_coordinator_terminal(worktree_id: str) -> str:
+def ensure_coordinator_terminal(worktree_id: str, *, focus: bool = True) -> str:
     matches = list_coordinator_terminals(worktree_id)
     if len(matches) > 1:
         raise UiCoordinatorError("引継ぎ先に複数の統括タブが存在します")
@@ -617,19 +617,19 @@ def ensure_coordinator_terminal(worktree_id: str) -> str:
         role_tabs.idle_shell(visual_matches[0], repo)
         launch_coordinator_in_terminal(visual_matches[0])
         return visual_matches[0]
-    returncode, response = run_orca_response(
-        [
-            "terminal",
-            "create",
-            "--worktree",
-            f"id:{worktree_id}",
-            "--title",
-            "統括",
-            "--command",
-            "python3 scripts/orca_ui_coordinator.py default-entry",
-            "--focus",
-        ]
-    )
+    command = [
+        "terminal",
+        "create",
+        "--worktree",
+        f"id:{worktree_id}",
+        "--title",
+        "統括",
+        "--command",
+        "python3 scripts/orca_ui_coordinator.py default-entry",
+    ]
+    if focus:
+        command.append("--focus")
+    returncode, response = run_orca_response(command)
     for _ in range(5):
         matches = list_coordinator_terminals(worktree_id)
         if len(matches) == 1:
