@@ -80,6 +80,8 @@ def inventory(call, cli, repo: str) -> tuple[list, list]:
     result = call(cli, ["terminal", "list", "--worktree", f"path:{repo}",
                         "--include-visual-layouts"], "role-tab-list")
     rows, layouts = result.get("terminals"), result.get("visualLayouts")
+    if rows == [] and layouts is None and result.get("totalCount") == 0:
+        layouts = []
     if (not isinstance(rows, list) or not isinstance(layouts, list)
             or result.get("truncated") is not False
             or result.get("hostScope", {}).get("omittedHostIds") != []):
@@ -158,9 +160,7 @@ def retire(call, cli, repo: str, expected: dict) -> Path:
         if identity(row, repo) != expected:
             raise ValueError("obsolete tab identity changed")
         before = idle_shell(handle, repo)
-        output = call(cli, ["terminal", "read", "--terminal", handle, "--limit", "2000"], "role-tab-read")["terminal"]
-        if output.get("handle") != handle or output.get("limited") is not False or output.get("truncated") is not False:
-            raise ValueError("scrollback preservation incomplete; do not close")
+        output = complete_output(call, cli, handle)
         storage.write_ledger(path, {"identity": expected, "repo": repo, "output": output, "phase": "prepared"})
         row = call(cli, ["terminal", "show", "--terminal", handle], "role-tab-show")["terminal"]
         if identity(row, repo) != expected or idle_shell(handle, repo) != before:
@@ -180,6 +180,47 @@ def retire(call, cli, repo: str, expected: dict) -> Path:
         if process.exists():
             raise ValueError("tab closed but shell exit unconfirmed; preserve receipt")
         return path
+
+
+def complete_output(call, cli, handle: str) -> dict:
+    """Preserve a capped preview or all retained completed lines by cursor."""
+    preview = call(cli, ["terminal", "read", "--terminal", handle, "--limit", "2000"],
+                   "role-tab-read")["terminal"]
+    if preview.get("handle") != handle or preview.get("truncated") is not False:
+        raise ValueError("scrollback preservation incomplete; do not close")
+    if preview.get("limited") is False:
+        return preview
+    if preview.get("oldestCursor") != "0" or not str(preview.get("latestCursor", "")).isdecimal():
+        raise ValueError("scrollback preservation incomplete; do not close")
+    latest = int(preview["latestCursor"])
+    cursor = 0
+    lines: list[str] = []
+    for _ in range(20):
+        if cursor >= latest:
+            break
+        page = call(cli, ["terminal", "read", "--terminal", handle,
+                          "--cursor", str(cursor), "--limit", "1000"], "role-tab-read")["terminal"]
+        if (page.get("handle") != handle or page.get("truncated") is not False
+                or page.get("latestCursor") != str(latest)
+                or not isinstance(page.get("tail"), list)
+                or page.get("returnedLineCount") != len(page["tail"])
+                or not str(page.get("nextCursor", "")).isdecimal()):
+            raise ValueError("scrollback preservation incomplete; do not close")
+        next_cursor = int(page["nextCursor"])
+        if next_cursor <= cursor or next_cursor > latest:
+            raise ValueError("scrollback preservation incomplete; do not close")
+        lines.extend(page["tail"])
+        cursor = next_cursor
+    if cursor != latest:
+        raise ValueError("scrollback preservation exceeds the bounded archive; do not close")
+    confirmed = call(cli, ["terminal", "read", "--terminal", handle, "--limit", "2000"],
+                     "role-tab-read")["terminal"]
+    if (confirmed.get("handle") != handle or confirmed.get("truncated") is not False
+            or confirmed.get("latestCursor") != str(latest)):
+        raise ValueError("scrollback changed during preservation; do not close")
+    return {"handle": handle, "tail": lines, "limited": False, "truncated": False,
+            "oldestCursor": "0", "nextCursor": str(latest), "latestCursor": str(latest),
+            "returnedLineCount": len(lines), "preview": confirmed}
 
 
 def launch(call, cli, request: str, repo: str, slot: str, command: str,

@@ -4,6 +4,7 @@ import tempfile
 import unittest
 import uuid
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from scripts import host_coordination, orca_frontdesk as frontdesk
@@ -145,6 +146,112 @@ class SupervisionTests(unittest.TestCase):
         self.assertEqual((workflow["state"], workflow["revision"], workflow["actions"]),
                          ("closed", "2", []))
         self.assertTrue(all(role["terminal"] is None for role in workflow["roles"]))
+
+    def test_clean_exited_coordinator_can_preflight_close(self) -> None:
+        request_id = self.accepted_implementation()
+        child = str(uuid.uuid4())
+        worktree_id = f"repo::{self.root}"
+        frontdesk.write_ledger(supervision.routing.route_path(self.state, request_id), {
+            "schema": 1, "requestId": request_id, "phase": "ready",
+            "childRequestId": child, "worktreeId": worktree_id})
+        state = {"phase": "exited", "exit_code": 0,
+                 "worktree_id": worktree_id, "terminal": "term_fixture"}
+        identity = {"handle": "term_fixture", "worktreeId": worktree_id,
+                    "incarnationId": "inc_fixture"}
+        responses = [(0, {"ok": True, "result": {"terminal": {"handle": "term_fixture"}}}),
+                     (0, {"ok": True, "result": {
+                         "terminals": [{"handle": "term_fixture"}],
+                         "visualLayouts": [{"root": {"tabs": [{}]}}], "truncated": False,
+                         "hostScope": {"omittedHostIds": []}}})]
+        with patch.object(supervision.ui, "read_registered_state", return_value=state), \
+                patch.object(supervision.ui, "run_orca_response", side_effect=responses), \
+                patch.object(supervision.role_tabs, "identity", return_value=identity), \
+                patch.object(supervision.role_tabs, "idle_shell"), \
+                patch.object(supervision.subprocess, "run", return_value=SimpleNamespace(
+                    returncode=0, stdout="", stderr="")):
+            supervision.preflight_close(self.state, request_id, {"action": "implement"})
+
+    def test_close_refuses_a_replacement_default_tab(self) -> None:
+        request_id = self.accepted_implementation()
+        child = str(uuid.uuid4())
+        worktree_id = f"repo::{self.root}"
+        frontdesk.write_ledger(supervision.routing.route_path(self.state, request_id), {
+            "schema": 1, "requestId": request_id, "phase": "ready",
+            "childRequestId": child, "worktreeId": worktree_id})
+        state = {"worktree_id": worktree_id, "terminal": "term_fixture"}
+        responses = [(0, {"ok": True, "result": {"terminal": {"handle": "term_fixture"}}}),
+                     (0, {"ok": True, "result": {"terminals": [{"handle": "new_default"}],
+                                              "truncated": False,
+                                              "hostScope": {"omittedHostIds": []}}})]
+        with patch.object(supervision.ui, "read_registered_state", return_value=state), \
+                patch.object(supervision.ui, "run_orca_response", side_effect=responses), \
+                patch.object(supervision.role_tabs, "identity", return_value={
+                    "handle": "term_fixture", "worktreeId": worktree_id}), \
+                patch.object(supervision.role_tabs, "retire") as retire:
+            with self.assertRaisesRegex(ValueError, "not tab-free"):
+                supervision.finish_close(self.state, request_id, {"schema": 1}, {"action": "implement"})
+            retire.assert_called_once()
+
+    def test_uncertain_close_never_replays_an_existing_retirement(self) -> None:
+        request_id = self.accepted_implementation()
+        operation = str(uuid.uuid4())
+        worktree_id = f"repo::{self.root}"
+        child = str(uuid.uuid4())
+        frontdesk.write_ledger(supervision.routing.route_path(self.state, request_id), {
+            "schema": 1, "requestId": request_id, "phase": "ready",
+            "childRequestId": child, "worktreeId": worktree_id})
+        frontdesk.write_ledger(supervision.lifecycle_path(self.state, request_id), {
+            "schema": 1, "requestId": request_id, "revision": 2,
+            "operationId": operation, "phase": "unknown", "outcome": "accepted"})
+        frontdesk.write_ledger(self.state / "receipts" / f"{operation}.json", {
+            "operationId": operation, "workflowId": request_id,
+            "action": "close", "phase": "accepted"})
+        identity = {"handle": "term_fixture", "worktreeId": worktree_id,
+                    "incarnationId": "inc_fixture"}
+        retired_root = self.root / "role-tabs"
+        frontdesk.write_ledger(retired_root / "retired" /
+                               f"{supervision.role_tabs.bindings.digest(identity)}.json",
+                               {"phase": "prepared", "identity": identity})
+        with patch.object(supervision, "preflight_close"), \
+                patch.object(supervision.ui, "read_registered_state", return_value={
+                    "worktree_id": worktree_id, "terminal": "term_fixture"}), \
+                patch.object(supervision.ui, "run_orca_response", return_value=(0, {
+                    "ok": True, "result": {"terminal": {"handle": "term_fixture"}}})), \
+                patch.object(supervision.role_tabs, "identity", return_value=identity), \
+                patch.object(supervision.role_tabs, "root", return_value=retired_root), \
+                patch.object(supervision, "finish_close") as finish:
+            with self.assertRaisesRegex(ValueError, "close result is uncertain"):
+                supervision.reconcile_unfinished_close(self.state, request_id)
+            finish.assert_not_called()
+
+    def test_returned_close_receipt_completes_by_readback_without_replay(self) -> None:
+        request_id = self.accepted_implementation()
+        operation = str(uuid.uuid4())
+        worktree_id = f"repo::{self.root}"
+        child = str(uuid.uuid4())
+        frontdesk.write_ledger(supervision.routing.route_path(self.state, request_id), {
+            "schema": 1, "requestId": request_id, "phase": "ready",
+            "childRequestId": child, "worktreeId": worktree_id})
+        frontdesk.write_ledger(supervision.lifecycle_path(self.state, request_id), {
+            "schema": 1, "requestId": request_id, "revision": 2,
+            "operationId": operation, "phase": "unknown", "outcome": "accepted"})
+        frontdesk.write_ledger(self.state / "receipts" / f"{operation}.json", {
+            "operationId": operation, "workflowId": request_id,
+            "action": "close", "phase": "accepted"})
+        retired_root = self.root / "role-tabs"
+        frontdesk.write_ledger(retired_root / "retired" / "fixture.json", {
+            "identity": {"handle": "term_fixture", "worktreeId": worktree_id},
+            "phase": "close-returned", "receipt": {"close": {
+                "handle": "term_fixture", "ptyKilled": True}}})
+        with patch.object(supervision.ui, "read_registered_state", return_value={
+                    "worktree_id": worktree_id, "terminal": "term_fixture"}), \
+                patch.object(supervision.role_tabs, "root", return_value=retired_root), \
+                patch.object(supervision, "verify_tab_free") as verified, \
+                patch.object(supervision, "finish_close") as finish:
+            result = supervision.reconcile_unfinished_close(self.state, request_id)
+        self.assertEqual(result["phase"], "closed")
+        verified.assert_called_once_with(self.root)
+        finish.assert_not_called()
 
     def test_implementation_route_exposes_only_a_verified_coordinator_terminal(self) -> None:
         request = self.request()

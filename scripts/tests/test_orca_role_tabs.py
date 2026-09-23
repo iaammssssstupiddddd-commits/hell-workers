@@ -136,6 +136,12 @@ class RoleTabTests(unittest.TestCase):
         self.assertIsNone(tabs.default_shell([self.row], [{"title": "統括", "panes": pane}]))
         self.assertIsNone(tabs.default_shell([self.row], [{"title": "作業シェル", "panes": {"type": "split"}}]))
 
+    def test_empty_authoritative_inventory_may_omit_visual_layouts(self):
+        def empty(_cli, _argv, _purpose):
+            return {"terminals": [], "totalCount": 0, "truncated": False,
+                    "hostScope": {"omittedHostIds": []}}
+        self.assertEqual(tabs.inventory(empty, Path("orca"), self.repo), ([], []))
+
     def test_explicit_adoption_preserves_identity_and_refuses_overwrite(self):
         self.rows = [self.row]
         owned = tabs.identity(self.row, self.repo)
@@ -153,6 +159,26 @@ class RoleTabTests(unittest.TestCase):
         self.assertEqual(self.commands.count("role-tab-close"), 1)
         with self.assertRaisesRegex(ValueError, "already attempted"):
             tabs.retire(self.call, Path("orca"), self.repo, owned)
+        self.assertEqual(self.commands.count("role-tab-close"), 1)
+
+    def test_retire_pages_a_character_limited_preview(self):
+        self.rows = [self.row]
+        owned = tabs.identity(self.row, self.repo)
+        original = self.call
+
+        def paged(cli, argv, operation):
+            if operation == "role-tab-read":
+                if "--cursor" in argv:
+                    return {"terminal": {"handle": owned["handle"], "tail": ["one", "two"],
+                                         "truncated": False, "latestCursor": "2",
+                                         "nextCursor": "2", "returnedLineCount": 2}}
+                return {"terminal": {"handle": owned["handle"], "tail": ["two"],
+                                     "limited": True, "truncated": False,
+                                     "oldestCursor": "0", "latestCursor": "2"}}
+            return original(cli, argv, operation)
+
+        path = tabs.retire(paged, Path("orca"), self.repo, owned)
+        self.assertEqual(tabs.storage.read_private_json(path, {})["output"]["tail"], ["one", "two"])
         self.assertEqual(self.commands.count("role-tab-close"), 1)
 
     def test_retire_refuses_busy_or_unpreserved_output(self):

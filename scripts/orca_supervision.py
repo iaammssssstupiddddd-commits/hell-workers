@@ -230,8 +230,7 @@ def lifecycle_view(root: Path, request_id: str, original: tuple[str, str, list[d
                 role["state"] = "paused"
         return ("paused", "中断中。作業場と会話・cacheを保持しています。", role_views)
     if phase == "closed":
-        for role in role_views:
-            role.update(state="ended", terminal=None)
+        role_views[0].update(state="ended", detail="統括の処理は終了しました", terminal=None)
         return ("closed", "安全終了済み。成果と作業場は保持しています。", role_views)
     return ("unknown", current.get("message") or "終了の照合が未完了です。再起動・再送せず確認してください。", role_views)
 
@@ -423,7 +422,7 @@ def lifecycle_receipt(root: Path, request: dict, current_runtime: str) -> dict:
     return receipt
 
 
-def preflight_pause(root: Path, request_id: str, intake_receipt: dict) -> None:
+def preflight_pause(root: Path, request_id: str, intake_receipt: dict, *, allow_exited: bool = False) -> None:
     if intake_receipt.get("action") != "implement":
         raise ValueError("only a prepared implementation can be paused")
     data = route_record(root, request_id)
@@ -433,7 +432,9 @@ def preflight_pause(root: Path, request_id: str, intake_receipt: dict) -> None:
     if not child:
         raise ValueError("coordinator ownership is missing")
     state = ui.read_registered_state(child)
-    if state["phase"] != "ready" or state["worktree_id"] != data.get("worktreeId"):
+    phase_ok = state["phase"] == "ready" or (allow_exited and state["phase"] == "exited"
+                                                and state.get("exit_code") == 0)
+    if not phase_ok or state["worktree_id"] != data.get("worktreeId"):
         raise ValueError("coordinator ownership changed")
     worktree = Path(state["worktree_id"].partition("::")[2])
     code, response = ui.run_orca_response(["terminal", "show", "--terminal", state["terminal"]])
@@ -450,7 +451,7 @@ def preflight_close(root: Path, request_id: str, intake_receipt: dict) -> None:
         if consult_intent(root, request_id).get("phase") != "settled":
             raise ValueError("consultation is not settled")
         return
-    preflight_pause(root, request_id)
+    preflight_pause(root, request_id, intake_receipt, allow_exited=True)
     data = route_record(root, request_id)
     child = data["childRequestId"]
     for path in role_tabs.root().glob("*.json"):
@@ -478,6 +479,20 @@ def preflight_close(root: Path, request_id: str, intake_receipt: dict) -> None:
         raise ValueError("worktree has unverified changes; preserve the workflow")
 
 
+def verify_tab_free(worktree: Path) -> None:
+    for attempt in range(2):
+        if attempt:
+            time.sleep(1)
+        result_code, result_response = ui.run_orca_response([
+            "terminal", "list", "--worktree", f"path:{worktree}"])
+        inventory = result_response.get("result", {})
+        if (result_code or result_response.get("ok") is not True
+                or inventory.get("truncated") is not False
+                or inventory.get("hostScope", {}).get("omittedHostIds") != []
+                or inventory.get("terminals") != []):
+            raise ValueError("terminal was closed but worktree is not tab-free")
+
+
 def finish_close(root: Path, request_id: str, expected: dict, intake_receipt: dict) -> None:
     if intake_receipt.get("action") == "implement":
         data = route_record(root, request_id)
@@ -496,7 +511,64 @@ def finish_close(root: Path, request_id: str, expected: dict, intake_receipt: di
                 raise ValueError("terminal close result is unconfirmed")
             return result_response["result"]
         role_tabs.retire(call, None, str(worktree), identity)
-    frontdesk.write_ledger(lifecycle_path(root, request_id), {**expected, "phase": "closed"})
+        verify_tab_free(worktree)
+    completed = {key: value for key, value in expected.items() if key != "message"}
+    frontdesk.write_ledger(lifecycle_path(root, request_id), {**completed, "phase": "closed"})
+
+
+def reconcile_unfinished_close(root: Path, request_id: str) -> dict:
+    """Resume only a close proven to have stopped before any terminal mutation."""
+    with acquire_host("frontdesk-ui", inherit=False):
+        current = lifecycle(root, request_id)
+        if current.get("phase") != "unknown" or current.get("outcome") != "accepted":
+            raise ValueError("no uncertain close is available for reconciliation")
+        receipt = frontdesk.read_private_json(root / "receipts" / f"{current['operationId']}.json", {})
+        if (receipt.get("operationId") != current["operationId"]
+                or receipt.get("workflowId") != request_id
+                or receipt.get("action") != "close" or receipt.get("phase") != "accepted"):
+            raise ValueError("close receipt is not durable")
+        intake_receipt = frontdesk.read_private_json(root / "receipts" / f"{request_id}.json", {})
+        if intake_receipt.get("action") != "implement":
+            raise ValueError("only an owned implementation close can be reconciled")
+        route = route_record(root, request_id)
+        state = ui.read_registered_state(route["childRequestId"])
+        worktree = Path(state["worktree_id"].partition("::")[2])
+        retired_dir = frontdesk.checked_directory(role_tabs.root() / "retired")
+        candidates = []
+        for path in retired_dir.glob("*.json"):
+            data = frontdesk.read_private_json(path, {})
+            identity = data.get("identity", {})
+            if (identity.get("handle") == state["terminal"]
+                    and identity.get("worktreeId") == state["worktree_id"]):
+                candidates.append(data)
+        if len(candidates) > 1:
+            raise ValueError("multiple retirement receipts match this coordinator")
+        if candidates:
+            retired = candidates[0]
+            closed = retired.get("receipt", {}).get("close", {})
+            if (retired.get("phase") != "close-returned"
+                    or closed.get("handle") != state["terminal"]
+                    or closed.get("ptyKilled") is not True):
+                raise ValueError("terminal close result is uncertain; do not replay")
+            verify_tab_free(worktree)
+            completed = {key: value for key, value in current.items() if key != "message"}
+            frontdesk.write_ledger(lifecycle_path(root, request_id), {**completed, "phase": "closed"})
+            return lifecycle(root, request_id)
+        preflight_close(root, request_id, intake_receipt)
+        code, response = ui.run_orca_response(["terminal", "show", "--terminal", state["terminal"]])
+        if code or response.get("ok") is not True:
+            raise ValueError("coordinator terminal is unconfirmed")
+        identity = role_tabs.identity(response.get("result", {}).get("terminal", {}), str(worktree))
+        retired = retired_dir / f"{role_tabs.bindings.digest(identity)}.json"
+        if retired.exists() or retired.is_symlink():
+            raise ValueError("terminal closure may already have started; read back its receipt")
+        try:
+            finish_close(root, request_id, current, intake_receipt)
+        except Exception as error:
+            frontdesk.write_ledger(lifecycle_path(root, request_id), {
+                **current, "message": f"終了照合が未確定: {error}"[:2048]})
+            raise
+        return lifecycle(root, request_id)
 
 
 def accept(root: Path, request: dict, current_runtime: str) -> dict:
@@ -654,13 +726,20 @@ def start_route(root: Path, cli: Path | None = None) -> tuple[str, subprocess.Po
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=("once", "serve"))
+    parser.add_argument("action", choices=("once", "serve", "reconcile-close"))
     parser.add_argument("--state-dir", type=Path, required=True)
     parser.add_argument("--orca-cli", type=Path)
     parser.add_argument("--expected-runtime-id", required=True)
+    parser.add_argument("--request-id")
     args = parser.parse_args()
     configure_test_state(args.state_dir)
     expected = canonical_uuid(args.expected_runtime_id, "expected runtime ID")
+    if args.action == "reconcile-close":
+        if not args.request_id or runtime_id(args.orca_cli) != expected:
+            raise RuntimeChangedError("close reconciliation requires the matching Orca runtime and request")
+        result = reconcile_unfinished_close(args.state_dir, args.request_id)
+        print(json.dumps({"requestId": args.request_id, "phase": result["phase"]}, ensure_ascii=False))
+        return 0
     if args.action == "once":
         observed = runtime_id(args.orca_cli)
         if observed != expected:
