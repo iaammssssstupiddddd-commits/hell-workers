@@ -20,7 +20,7 @@ Linearの内部IDやworkspace UUIDはOrcaと統括が処理します。
 worktreeを作り直す必要はありません。統括へ実装目的を伝えると、統括が実装用Linear課題を作成し、
 目的・完了条件・制約・既存branch/commit・次工程を移して専用worktreeを開きます。元の統括タブは
 引継ぎ成功後に終了し、新しいworktreeの **「統括」** タブが処理を継続します。
-Orcaのtab名は **「統括」** のままです。内部terminalの表示が作業内容に応じて変わっても、同じtabを
+稼働中のOrcaのtab名は **「統括」** です。内部terminalの表示が作業内容に応じて変わっても、同じtabを
 開いてください。統括は登録済みterminalと画面layoutを照合し、同名tabを重複生成しません。
 
 ## 画面上の役割
@@ -34,6 +34,26 @@ Orcaのtab名は **「統括」** のままです。内部terminalの表示が�
 
 A/B/レビューは統括が監督付きの分離worktreeへ配車した時だけ現れます。
 同じファイルや共有契約を同時に変更する場合、Bに適した単純作業がない場合は、統括が並列化を見送ります。
+
+### タブの場所・再試行・終了表示
+
+- **依頼を伝える統括は課題に紐づく親作業場にあります。** 実装用の子作業場に統括を複製しません。
+- 未配車の子作業場の既定タブは「作業シェル」です。担当agentではありません。
+  既定入口が登録した未使用shellだけを、最初の担当タブとして再利用します。
+- 同じ依頼・作業場・役割の再試行や修正では、登録済みの同じタブを再利用します。
+  実装Aが失敗するたびに「実装A」を追加する動作は不具合です。
+- 役割タブは「起動中」「実行中」「終了・結果確認済み」「停止・要確認」を表示します。
+  終了後のshellや履歴表示は、agentが常駐しているという意味ではありません。
+- 起動中の統括は「統括・起動中」、登録成功後に「統括」、終了後は「統括・終了」です。
+  課題に紐づかない子作業場では統括を起動しません。
+- 再利用は作業場・端末incarnation・所有台帳と実processを照合します。
+  busy、所有不明、消えた登録タブ、送信結果不明は停止し、新しいタブで迂回しません。
+  タイトルだけで他のタブを採用したり、稼働中のagentを閉じたりしません。
+
+統括は内部保守用の `scripts/orca_role_tabs.py adopt / retire` で既存タブを照合できます。
+`retire` は明示指定の終了済みshellだけを対象に、privateな`role-tabs/retired`台帳へ出力を
+保全してからそのpaneを閉じます。利用者へterminal ID等の入力は求めません。
+create/send/closeが結果不明なら自動再送せず、同じ記録から照合します。
 
 ## 統括への依頼例
 
@@ -111,6 +131,32 @@ orca file open docs/orca-quickstart.md --worktree path:/home/satotakumi/projects
   新しい統括が`TAK-6`を取得・acknowledgeして待機すること、terminalの作業名表示が変わっても
   Orca上の`統括` tabが一つだけ保たれることを確認済みです。A/B/reviewerは未dispatchです。
 - 実案件によるUIから編集→検証→固定レビューの一巡は、最初の対象課題で最終受入します。
+
+### 2026-09-23のタブ管理修正
+
+TAK-8で確認した「空の統括＋実装A三つ＋レビュー」の5タブを契機に、
+配車で毎回terminal createしていた処理を役割台帳付き再利用へ変更した。
+通常の差戻しは同じ端末を使い、保守復旧で端末を閉じた場合だけ、検証済みのpositive close receiptと
+現在の不存在を照合して置換する。消失だけを根拠に新しい端末を作らない。
+固定reviewerのsession拘束、unknown role barrier、Task/Dispatch・承認の成立条件は維持した。
+
+Orca 1.4.205で、無害なshell commandを3回起動しても同一handle/incarnationの1タブであること、
+出力を保全した上でその確認用paneとprocessを終了できることを実確認した。
+LLMを使った実装・レビュー一巡の再実行ではない。報告された子作業場は並行していた統括が
+終了処理で撤去済みとなり、本修正担当はその5タブを個別削除していない。
+試験用Taskや製品変更を再作成せず、既存の統括・最終レビューは保護した。
+
+Help実レビューはNo impact: 変更経路はOrcaホストの配車・端末管理・起動設定だけで、
+ゲームの入力、状態、asset、root `build_help_panel_content` / `build_help_panel_chrome` から
+生成する静的Helpの操作・内容には到達しない。運用手順だけを更新した。
+`ci check --base 49c113d83483cf278c0919f9b9540b8b94fad360 --mode auto` は
+`orca.yaml`のunknown-path分類により全群を選択したため、ゲームテストを除外するユーザー指定に従って
+中断し、contracts/toolingを明示実行した。全群CI成功とは扱わない。
+最終版のPython tooling 576件、Blender tooling 164件、Ruff/actionlint、perf self-testは成功。
+contracts、primary docs/index/storage検査も成功した。検証時の基盤source fingerprintは
+`767ff7e2b5cc1daee49cae9e8ac9f99ce59085760e729182596a331657fa964b`。
+ゲーム/Rust/native GPU検証、pushは対象外。確認用タブと一時fixtureは終了・撤去し、
+継続中の基盤candidateと既存build cacheは同じ作業場で保持する。
 
 ## 関連文書
 
