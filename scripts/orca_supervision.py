@@ -15,7 +15,7 @@ from pathlib import Path
 
 if __package__:
     from . import orca_coordinator as coordinator, orca_frontdesk as frontdesk, orca_issue_context as intake
-    from . import orca_role_tabs as role_tabs
+    from . import orca_role_tabs as role_tabs, orca_review_loop as review_loop
     from . import host_coordination, orca_supervision_route as routing, orca_ui_coordinator as ui
     from .host_coordination import acquire_host
 else:
@@ -23,6 +23,7 @@ else:
     import orca_frontdesk as frontdesk
     import orca_issue_context as intake
     import orca_role_tabs as role_tabs
+    import orca_review_loop as review_loop
     import host_coordination
     import orca_supervision_route as routing
     import orca_ui_coordinator as ui
@@ -235,6 +236,56 @@ def lifecycle_view(root: Path, request_id: str, original: tuple[str, str, list[d
     return ("unknown", current.get("message") or "終了の照合が未完了です。再起動・再送せず確認してください。", role_views)
 
 
+def supervised_view(child_id: str, original: tuple[str, str, list[dict]]) -> tuple[str, str, list[dict]]:
+    """Project the guarded loop without inventing tabs for unused roles."""
+    if not review_loop.state_path(child_id).exists():
+        return original
+    data = review_loop.load(child_id)
+    phase, detail, role_views = original
+    attempts = list(data.get("attempts", {}).values())
+    for index, role in enumerate(("worker-a", "worker-b", "reviewer"), start=1):
+        matches = [attempt for attempt in attempts if attempt.get("role") == role]
+        if not matches:
+            continue
+        attempt = matches[-1]
+        handle = attempt.get("terminal")
+        repo = attempt.get("repo")
+        if not isinstance(handle, str) or not isinstance(repo, str):
+            role_views[index].update(state="unknown", detail="担当の所在が未確定")
+            phase = "unknown"
+            continue
+        code, response = ui.run_orca_response(["terminal", "show", "--terminal", handle])
+        terminal = response.get("result", {}).get("terminal", {})
+        if (code or response.get("ok") is not True
+                or terminal.get("handle") != handle
+                or terminal.get("worktreePath") != repo
+                or not isinstance(terminal.get("worktreeId"), str)
+                or terminal["worktreeId"].partition("::")[2] != repo
+                or terminal.get("executionHostId") != "local"
+                or terminal.get("orphaned") is not False
+                or terminal.get("connected") is not True
+                or not isinstance(terminal.get("incarnationId"), str)
+                or not terminal["incarnationId"]):
+            role_views[index].update(state="unknown", detail="担当タブの所有を照合できません")
+            phase = "unknown"
+            continue
+        role_views[index].update(
+            state="waiting" if attempt.get("released") is True else "running",
+            detail="前回の実行は終了" if attempt.get("released") is True else "監督下で実行中",
+            terminal={key: terminal[key] for key in
+                      ("handle", "incarnationId", "worktreeId", "executionHostId")})
+    if data["phase"] == "paused":
+        return ("paused", data.get("reason") or "監督ループを中断中", role_views)
+    if data["phase"] == "approved":
+        return ("feedback", "実装・固定レビューの結果を確認してください。", role_views)
+    if phase == "unknown":
+        return ("unknown", "担当の状態を照合できません。配車を増やさず確認してください。", role_views)
+    reviewing = any(lane.get("phase") in review_loop.REVIEW_PHASES
+                    for lane in data["lanes"].values())
+    return ("review" if reviewing else "working",
+            "固定レビュー中" if reviewing else "監督下で実装・検証中", role_views)
+
+
 def route_view(root: Path, request_id: str) -> tuple[str, str, list[dict]]:
     data = route_record(root, request_id)
     role_views = roles()
@@ -297,13 +348,27 @@ def workflows(root: Path) -> list[dict]:
         if item["id"] in routed_children:
             continue
         receipt = frontdesk.read_private_json(root / "receipts" / f"{item['id']}.json", {})
+        if not receipt:
+            # The global frontdesk also contains manually imported issues and
+            # older CLI consultations. They are not owned by this fixed panel.
+            continue
+        if (receipt.get("schema") != 1 or receipt.get("intakeId") != item["id"]
+                or receipt.get("operationId") != item["id"]
+                or receipt.get("action") not in {"submit", "implement"}
+                or receipt.get("phase") != "accepted"
+                or receipt.get("text", "").strip() != item["request"]):
+            raise ValueError("panel intake receipt does not match its workflow")
         current = lifecycle(root, item["id"])
         if current.get("phase") == "closed":
             state, detail, role_views = lifecycle_view(root, item["id"], ("closed", "", roles()))
         else:
-            original = (route_view(root, item["id"])
-                        if receipt.get("action") == "implement"
-                        else consultation_view(root, item["id"]))
+            if receipt.get("action") == "implement":
+                original = route_view(root, item["id"])
+                child_id = route_record(root, item["id"]).get("childRequestId")
+                if child_id and original[0] == "working":
+                    original = supervised_view(child_id, original)
+            else:
+                original = consultation_view(root, item["id"])
             state, detail, role_views = lifecycle_view(root, item["id"], original)
         entries.append({"id": item["id"], "revision": task_revision(root, item["id"]),
                         "title": item["request"].strip().splitlines()[0][:120],

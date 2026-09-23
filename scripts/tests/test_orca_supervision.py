@@ -62,6 +62,12 @@ class SupervisionTests(unittest.TestCase):
         self.assertEqual(frontdesk.list_requests(), [])
         self.assertEqual((self.state / "snapshot.json").stat().st_mode & 0o777, 0o600)
 
+    def test_panel_does_not_list_unrelated_global_intakes(self) -> None:
+        unrelated = frontdesk.submit("別経路から取り込んだ相談", str(uuid.uuid4()))
+        snapshot = supervision.tick(self.state, RUNTIME)
+        self.assertEqual([item["id"] for item in snapshot["workflows"]], [supervision.RECEPTION_ID])
+        self.assertEqual(frontdesk.list_requests()[0]["id"], unrelated["id"])
+
     def test_submit_is_durable_and_replay_does_not_create_a_second_intake(self) -> None:
         request = self.request()
         first = supervision.tick(self.state, RUNTIME)
@@ -281,6 +287,26 @@ class SupervisionTests(unittest.TestCase):
             key: terminal[key] for key in
             ("handle", "incarnationId", "worktreeId", "executionHostId")})
         self.assertTrue(all(role["terminal"] is None for role in workflow["roles"][1:]))
+
+    def test_supervised_projection_shows_only_verified_assigned_roles(self) -> None:
+        child = str(uuid.uuid4())
+        path = self.root / "loop.json"
+        path.write_text("fixture")
+        data = {"phase": "active", "lanes": {"worker-a": {"phase": "implementing"}},
+                "attempts": {"dispatch": {"role": "worker-a", "repo": str(self.root),
+                                           "terminal": "term_a", "released": False}}}
+        terminal = {"handle": "term_a", "incarnationId": "inc_a",
+                    "worktreeId": f"repo::{self.root}", "worktreePath": str(self.root),
+                    "executionHostId": "local", "orphaned": False, "connected": True}
+        with patch.object(supervision.review_loop, "state_path", return_value=path), \
+                patch.object(supervision.review_loop, "load", return_value=data), \
+                patch.object(supervision.ui, "run_orca_response", return_value=(0, {
+                    "ok": True, "result": {"terminal": terminal}})):
+            phase, _, role_views = supervision.supervised_view(child, ("working", "", supervision.roles()))
+        self.assertEqual(phase, "working")
+        self.assertEqual(role_views[1]["state"], "running")
+        self.assertEqual(role_views[1]["terminal"]["handle"], "term_a")
+        self.assertEqual([role["state"] for role in role_views[2:]], ["unassigned", "unassigned"])
 
     def test_implementation_creation_unknown_never_spawns_another_router(self) -> None:
         request = self.request()
