@@ -282,7 +282,10 @@ def lifecycle_view(root: Path, request_id: str, original: tuple[str, str, list[d
         return ("paused", "中断中。作業場と会話・cacheを保持しています。", role_views)
     if phase == "closed":
         role_views[0].update(state="ended", detail="統括の処理は終了しました", terminal=None)
-        return ("closed", "安全終了済み。成果と作業場は保持しています。", role_views)
+        for target in checked_close_targets(current.get("closeTargets", [])):
+            role = next(row for row in role_views if row["role"] == target["role"])
+            role.update(state="ended", detail="担当タブは安全終了済み", terminal=None)
+        return ("closed", "終了済み。作業場の保持・撤去は別途照合します。", role_views)
     return ("unknown", current.get("message") or "終了の照合が未完了です。再起動・再送せず確認してください。", role_views)
 
 
@@ -746,7 +749,7 @@ def finish_close(root: Path, request_id: str, expected: dict, intake_receipt: di
 
 
 def reconcile_unfinished_close(root: Path, request_id: str) -> dict:
-    """Resume only a close proven to have stopped before any terminal mutation."""
+    """Read back journaled role/coordinator closure; replay only untouched targets."""
     with acquire_host("frontdesk-ui", inherit=False):
         current = lifecycle(root, request_id)
         if current.get("phase") != "unknown" or current.get("outcome") != "accepted":

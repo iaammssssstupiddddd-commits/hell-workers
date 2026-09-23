@@ -180,6 +180,23 @@ class SupervisionTests(unittest.TestCase):
         self.assertTrue(workflow["revision"].startswith("2-"))
         self.assertTrue(all(role["terminal"] is None for role in workflow["roles"]))
 
+    def test_closed_workflow_distinguishes_retired_roles_from_unused_roles(self) -> None:
+        request_id = str(uuid.uuid4())
+        worker = self.root / "worker"
+        worker.mkdir()
+        frontdesk.write_ledger(supervision.lifecycle_path(self.state, request_id), {
+            "schema": 1, "requestId": request_id, "revision": 2,
+            "operationId": str(uuid.uuid4()), "phase": "closed", "outcome": "accepted",
+            "closeTargets": [{"repo": str(worker), "role": "worker-a", "identity": {
+                "handle": "term_worker", "incarnationId": "inc_worker",
+                "worktreeId": f"repo::{worker}"}}]})
+        state, detail, role_views = supervision.lifecycle_view(
+            self.state, request_id, ("working", "", supervision.roles()))
+        self.assertEqual(state, "closed")
+        self.assertIn("作業場の保持・撤去は別途", detail)
+        self.assertEqual([role["state"] for role in role_views],
+                         ["ended", "ended", "unassigned", "unassigned"])
+
     def test_clean_exited_coordinator_can_preflight_close(self) -> None:
         request_id = self.accepted_implementation()
         child = str(uuid.uuid4())
