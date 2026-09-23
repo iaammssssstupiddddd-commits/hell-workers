@@ -35,6 +35,24 @@ class SupervisionTests(unittest.TestCase):
         frontdesk.write_ledger(requests / f"{operation}.json", value)
         return value
 
+    def lifecycle_request(self, workflow_id: str, action: str, revision: str = "1") -> dict:
+        operation = str(uuid.uuid4())
+        value = {"schema": 1, "runtimeId": RUNTIME, "expectedRuntimeId": RUNTIME,
+                 "operationId": operation, "workflowId": workflow_id,
+                 "revision": revision, "action": action, "text": ""}
+        _, requests, _ = supervision.directories(self.state)
+        frontdesk.write_ledger(requests / f"{operation}.json", value)
+        return value
+
+    def accepted_implementation(self) -> str:
+        request = self.request()
+        request["action"] = "implement"
+        frontdesk.write_ledger(self.state / "requests" / f"{request['operationId']}.json", request)
+        supervision.tick(self.state, RUNTIME)
+        frontdesk.write_ledger(supervision.routing.route_path(self.state, request["operationId"]), {
+            "schema": 1, "requestId": request["operationId"], "phase": "ready"})
+        return request["operationId"]
+
     def test_reception_publishes_without_an_agent_or_terminal(self) -> None:
         snapshot = supervision.tick(self.state, RUNTIME)
         self.assertEqual(len(snapshot["workflows"]), 1)
@@ -66,6 +84,67 @@ class SupervisionTests(unittest.TestCase):
         self.assertEqual(frontdesk.read_private_json(
             self.state / "receipts" / f"{request['operationId']}.json", {})["action"],
             "implement")
+
+    def test_pause_resume_uses_revisioned_receipts_without_new_tabs(self) -> None:
+        request_id = self.accepted_implementation()
+        with patch.object(supervision, "preflight_pause") as preflight, \
+                patch.object(supervision, "route_view", return_value=("working", "作業中", supervision.roles())):
+            pause = self.lifecycle_request(request_id, "pause")
+            paused = supervision.tick(self.state, RUNTIME)["workflows"][1]
+            self.assertEqual((paused["state"], paused["revision"], paused["actions"]),
+                             ("paused", "2", ["resume", "close"]))
+            self.assertEqual(preflight.call_count, 1)
+            self.assertEqual(supervision.tick(self.state, RUNTIME)["workflows"][1]["revision"], "2")
+            self.assertEqual(frontdesk.read_private_json(
+                self.state / "receipts" / f"{pause['operationId']}.json", {})["phase"], "accepted")
+            self.lifecycle_request(request_id, "resume", "2")
+            active = supervision.tick(self.state, RUNTIME)["workflows"][1]
+            self.assertEqual((active["state"], active["revision"], active["actions"]),
+                             ("working", "3", ["pause", "close"]))
+            self.assertEqual(preflight.call_count, 2)
+
+    def test_busy_close_is_rejected_without_closing_any_terminal(self) -> None:
+        request_id = self.accepted_implementation()
+        with patch.object(supervision, "preflight_close", side_effect=ValueError("agent is busy")), \
+                patch.object(supervision, "finish_close") as finish, \
+                patch.object(supervision, "route_view", return_value=("working", "作業中", supervision.roles())):
+            close = self.lifecycle_request(request_id, "close")
+            workflow = supervision.tick(self.state, RUNTIME)["workflows"][1]
+            self.assertEqual((workflow["state"], workflow["revision"]), ("working", "2"))
+            self.assertIn("agent is busy", workflow["detail"])
+            self.assertEqual(frontdesk.read_private_json(
+                self.state / "receipts" / f"{close['operationId']}.json", {})["phase"], "rejected")
+            finish.assert_not_called()
+
+    def test_lost_pause_receipt_recovers_without_repeating_preflight(self) -> None:
+        request_id = self.accepted_implementation()
+        request = self.lifecycle_request(request_id, "pause")
+        write = frontdesk.write_ledger
+
+        def interrupt(path: Path, value: dict) -> None:
+            if path == self.state / "receipts" / f"{request['operationId']}.json":
+                raise OSError("receipt write interrupted")
+            write(path, value)
+
+        with patch.object(supervision, "preflight_pause") as preflight, \
+                patch.object(supervision, "route_view", return_value=("working", "作業中", supervision.roles())):
+            with patch.object(frontdesk, "write_ledger", side_effect=interrupt):
+                with self.assertRaisesRegex(OSError, "receipt write interrupted"):
+                    supervision.tick(self.state, RUNTIME)
+            self.assertEqual(supervision.lifecycle(self.state, request_id)["phase"], "paused")
+            supervision.tick(self.state, RUNTIME)
+            preflight.assert_called_once()
+            self.assertEqual(supervision.task_revision(self.state, request_id), "2")
+
+    def test_closed_consultation_is_retained_without_a_terminal(self) -> None:
+        request = self.request()
+        supervision.tick(self.state, RUNTIME)
+        supervision.write_consult_phase(self.state, request["operationId"], "settled")
+        self.lifecycle_request(request["operationId"], "close")
+        workflow = supervision.tick(self.state, RUNTIME)["workflows"][1]
+        self.assertEqual((workflow["state"], workflow["revision"], workflow["actions"]),
+                         ("closed", "2", []))
+        self.assertTrue(all(role["terminal"] is None for role in workflow["roles"]))
 
     def test_implementation_route_exposes_only_a_verified_coordinator_terminal(self) -> None:
         request = self.request()

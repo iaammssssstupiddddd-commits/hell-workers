@@ -15,12 +15,14 @@ from pathlib import Path
 
 if __package__:
     from . import orca_coordinator as coordinator, orca_frontdesk as frontdesk, orca_issue_context as intake
+    from . import orca_role_tabs as role_tabs
     from . import host_coordination, orca_supervision_route as routing, orca_ui_coordinator as ui
     from .host_coordination import acquire_host
 else:
     import orca_coordinator as coordinator
     import orca_frontdesk as frontdesk
     import orca_issue_context as intake
+    import orca_role_tabs as role_tabs
     import host_coordination
     import orca_supervision_route as routing
     import orca_ui_coordinator as ui
@@ -33,6 +35,7 @@ MAX_DOCUMENT_BYTES = 256 * 1024
 REQUEST_KEYS = {"schema", "runtimeId", "expectedRuntimeId", "operationId",
                 "workflowId", "revision", "action", "text"}
 CONSULT_PHASES = {"ready", "launching", "settled", "unknown"}
+LIFECYCLE_PHASES = {"active", "paused", "closing", "closed", "unknown"}
 TEST_ISOLATED = False
 
 
@@ -174,6 +177,65 @@ def route_record(root: Path, request_id: str) -> dict:
     return data
 
 
+def lifecycle_path(root: Path, request_id: str) -> Path:
+    return frontdesk.checked_directory(private_root(root) / "lifecycle") / f"{canonical_uuid(request_id, 'workflow ID')}.json"
+
+
+def lifecycle(root: Path, request_id: str) -> dict:
+    data = frontdesk.read_private_json(lifecycle_path(root, request_id), {})
+    if data and (not isinstance(data, dict) or data.get("schema") != 1
+                 or data.get("requestId") != request_id
+                 or data.get("phase") not in LIFECYCLE_PHASES
+                 or not isinstance(data.get("revision"), int)
+                 or data["revision"] < 2
+                 or not isinstance(data.get("operationId"), str)
+                 or data.get("outcome") not in {"accepted", "rejected"}
+                 or (data.get("message") is not None and not isinstance(data["message"], str))):
+        raise ValueError("invalid workflow lifecycle; preserve for reconciliation")
+    if data:
+        canonical_uuid(data["operationId"], "lifecycle operation ID")
+    return data
+
+
+def task_revision(root: Path, request_id: str) -> str:
+    return str(lifecycle(root, request_id).get("revision", 1))
+
+
+def task_actions(root: Path, request_id: str, action: str) -> list[str]:
+    state = lifecycle(root, request_id).get("phase")
+    if state == "paused":
+        return ["resume", "close"]
+    if state in {"closing", "closed", "unknown"}:
+        return []
+    if action == "implement":
+        return ["pause", "close"] if route_record(root, request_id).get("phase") == "ready" else []
+    return ["close"] if consult_intent(root, request_id).get("phase") == "settled" else []
+
+
+def lifecycle_view(root: Path, request_id: str, original: tuple[str, str, list[dict]]) -> tuple[str, str, list[dict]]:
+    current = lifecycle(root, request_id)
+    phase = current.get("phase")
+    if not phase:
+        return original
+    _, _, role_views = original
+    if phase == "active":
+        if current.get("message"):
+            return (original[0], current["message"], original[2])
+        return original
+    if phase == "paused":
+        if original[0] == "unknown":
+            return original
+        for role in role_views:
+            if role["state"] in {"running", "waiting"}:
+                role["state"] = "paused"
+        return ("paused", "中断中。作業場と会話・cacheを保持しています。", role_views)
+    if phase == "closed":
+        for role in role_views:
+            role.update(state="ended", terminal=None)
+        return ("closed", "安全終了済み。成果と作業場は保持しています。", role_views)
+    return ("unknown", current.get("message") or "終了の照合が未完了です。再起動・再送せず確認してください。", role_views)
+
+
 def route_view(root: Path, request_id: str) -> tuple[str, str, list[dict]]:
     data = route_record(root, request_id)
     role_views = roles()
@@ -236,13 +298,19 @@ def workflows(root: Path) -> list[dict]:
         if item["id"] in routed_children:
             continue
         receipt = frontdesk.read_private_json(root / "receipts" / f"{item['id']}.json", {})
-        state, detail, role_views = (route_view(root, item["id"])
-                                     if receipt.get("action") == "implement"
-                                     else consultation_view(root, item["id"]))
-        entries.append({"id": item["id"], "revision": "1",
+        current = lifecycle(root, item["id"])
+        if current.get("phase") == "closed":
+            state, detail, role_views = lifecycle_view(root, item["id"], ("closed", "", roles()))
+        else:
+            original = (route_view(root, item["id"])
+                        if receipt.get("action") == "implement"
+                        else consultation_view(root, item["id"]))
+            state, detail, role_views = lifecycle_view(root, item["id"], original)
+        entries.append({"id": item["id"], "revision": task_revision(root, item["id"]),
                         "title": item["request"].strip().splitlines()[0][:120],
                         "kind": "task", "state": state,
-                        "detail": detail, "actions": [], "roles": role_views})
+                        "detail": detail, "actions": task_actions(root, item["id"], receipt.get("action")),
+                        "roles": role_views})
     if len(entries) > 100:
         raise ValueError("supervision workflow count exceeds the UI bound")
     return entries
@@ -269,11 +337,166 @@ def checked_request(path: Path) -> dict:
     if (not isinstance(data, dict) or set(data) != REQUEST_KEYS or data.get("schema") != 1
             or data.get("runtimeId") != data.get("expectedRuntimeId")
             or data.get("operationId") != path.stem
-            or data.get("workflowId") != RECEPTION_ID or data.get("revision") != "1"
-            or data.get("action") not in {"submit", "implement"} or not isinstance(data.get("text"), str)
-            or not data["text"].strip() or len(data["text"]) > 8192):
+            or not isinstance(data.get("workflowId"), str)
+            or not isinstance(data.get("revision"), str)
+            or data.get("action") not in {"submit", "implement", "pause", "resume", "close"}
+            or not isinstance(data.get("text"), str) or len(data["text"]) > 8192):
         raise ValueError("supervision request is invalid")
+    reception_action = data["action"] in {"submit", "implement"}
+    if reception_action:
+        if (data["workflowId"] != RECEPTION_ID or data["revision"] != "1"
+                or not data["text"].strip()):
+            raise ValueError("supervision intake request is invalid")
+    elif (data["workflowId"] == RECEPTION_ID or data["text"]
+          or not re.fullmatch(r"[1-9][0-9]*", data["revision"])):
+        raise ValueError("supervision lifecycle request is invalid")
+    canonical_uuid(data["workflowId"], "workflow ID")
     return data
+
+
+def lifecycle_receipt(root: Path, request: dict, current_runtime: str) -> dict:
+    request_id = request["workflowId"]
+    matches = [item for item in frontdesk.list_requests() if item["id"] == request_id]
+    if len(matches) != 1:
+        raise ValueError("lifecycle workflow does not exist")
+    intake_receipt = frontdesk.read_private_json(root / "receipts" / f"{request_id}.json", {})
+    if intake_receipt.get("phase") != "accepted":
+        raise ValueError("workflow intake is unconfirmed")
+    current = lifecycle(root, request_id)
+    path = root / "receipts" / f"{request['operationId']}.json"
+    existing = frontdesk.read_private_json(path, {})
+    if existing:
+        if (existing.get("schema") != 1 or existing.get("operationId") != request["operationId"]
+                or existing.get("workflowId") != request_id or existing.get("action") != request["action"]):
+            raise ValueError("lifecycle receipt conflicts with the request")
+        return existing
+    if (current.get("operationId") == request["operationId"]
+            and current.get("revision") == int(request["revision"]) + 1):
+        # The prior controller may have committed the lifecycle transition but
+        # lost its receipt. Never repeat a close or send a second stop.
+        receipt = {"schema": 1, "runtimeId": current_runtime,
+                   "operationId": request["operationId"], "workflowId": request_id,
+                   "revision": request["revision"], "action": request["action"],
+                   "text": "", "intakeId": request_id,
+                   "phase": current.get("outcome", "accepted")}
+        frontdesk.write_ledger(path, receipt)
+        return receipt
+    if request["revision"] != str(current.get("revision", 1)):
+        raise ValueError("workflow revision changed; refresh before changing lifecycle")
+    if request["action"] not in task_actions(root, request_id, intake_receipt.get("action")):
+        raise ValueError("workflow action is not available in this phase")
+    phase = {"pause": "paused", "close": "closing", "resume": "active"}[request["action"]]
+    expected = {"schema": 1, "requestId": request_id, "revision": int(request["revision"]) + 1,
+                "operationId": request["operationId"], "phase": phase, "outcome": "accepted"}
+    try:
+        if request["action"] == "close":
+            preflight_close(root, request_id, intake_receipt)
+        elif request["action"] == "pause":
+            preflight_pause(root, request_id, intake_receipt)
+        elif current.get("phase") != "paused":
+            raise ValueError("only a paused workflow can resume")
+        elif intake_receipt.get("action") == "implement":
+            preflight_pause(root, request_id, intake_receipt)
+    except ValueError as error:
+        expected = {**expected, "phase": current.get("phase", "active"), "outcome": "rejected",
+                    "message": f"操作を保留しました: {error}"[:2048]}
+        frontdesk.write_ledger(lifecycle_path(root, request_id), expected)
+        phase = "rejected"
+    else:
+        phase = "accepted"
+    receipt = {"schema": 1, "runtimeId": current_runtime, "operationId": request["operationId"],
+               "workflowId": request_id, "revision": request["revision"],
+               "action": request["action"], "text": "", "intakeId": request_id,
+               "phase": phase}
+    if phase == "rejected":
+        frontdesk.write_ledger(path, receipt)
+        return receipt
+    frontdesk.write_ledger(lifecycle_path(root, request_id), expected)
+    frontdesk.write_ledger(path, receipt)
+    if request["action"] == "close":
+        try:
+            finish_close(root, request_id, expected, intake_receipt)
+        except Exception as error:
+            frontdesk.write_ledger(lifecycle_path(root, request_id), {
+                **expected, "phase": "unknown", "message": f"終了照合が未確定: {error}"[:2048]})
+            raise
+    return receipt
+
+
+def preflight_pause(root: Path, request_id: str, intake_receipt: dict) -> None:
+    if intake_receipt.get("action") != "implement":
+        raise ValueError("only a prepared implementation can be paused")
+    data = route_record(root, request_id)
+    if data.get("phase") != "ready":
+        raise ValueError("implementation route is not ready for a pause")
+    child = data.get("childRequestId")
+    if not child:
+        raise ValueError("coordinator ownership is missing")
+    state = ui.read_registered_state(child)
+    if state["phase"] != "ready" or state["worktree_id"] != data.get("worktreeId"):
+        raise ValueError("coordinator ownership changed")
+    worktree = Path(state["worktree_id"].partition("::")[2])
+    code, response = ui.run_orca_response(["terminal", "show", "--terminal", state["terminal"]])
+    if code or response.get("ok") is not True:
+        raise ValueError("coordinator terminal is unconfirmed")
+    owned = role_tabs.identity(response.get("result", {}).get("terminal", {}), str(worktree))
+    if owned["handle"] != state["terminal"] or owned["worktreeId"] != state["worktree_id"]:
+        raise ValueError("coordinator terminal ownership changed")
+    role_tabs.idle_shell(state["terminal"], str(worktree))
+
+
+def preflight_close(root: Path, request_id: str, intake_receipt: dict) -> None:
+    if intake_receipt.get("action") != "implement":
+        if consult_intent(root, request_id).get("phase") != "settled":
+            raise ValueError("consultation is not settled")
+        return
+    preflight_pause(root, request_id)
+    data = route_record(root, request_id)
+    child = data["childRequestId"]
+    for path in role_tabs.root().glob("*.json"):
+        record = frontdesk.read_private_json(path, {})
+        if record.get("request") == child:
+            raise ValueError("worker or reviewer tab remains; preserve the workflow")
+    state = ui.read_registered_state(child)
+    worktree = Path(state["worktree_id"].partition("::")[2])
+    code, inventory_response = ui.run_orca_response([
+        "terminal", "list", "--worktree", f"path:{worktree}", "--include-visual-layouts"])
+    inventory = inventory_response.get("result", {})
+    terminals = inventory.get("terminals")
+    layouts = inventory.get("visualLayouts")
+    if (code or inventory_response.get("ok") is not True
+            or inventory.get("truncated") is not False
+            or inventory.get("hostScope", {}).get("omittedHostIds") != []
+            or not isinstance(terminals, list) or len(terminals) != 1
+            or terminals[0].get("handle") != state["terminal"]
+            or not isinstance(layouts, list) or len(layouts) != 1
+            or len(layouts[0].get("root", {}).get("tabs", [])) != 1):
+        raise ValueError("unexpected tab or split remains; preserve the workflow")
+    result = subprocess.run(["git", "-C", str(worktree), "status", "--porcelain", "--untracked-files=all"],
+                            capture_output=True, text=True, check=False)
+    if result.returncode or result.stdout or result.stderr:
+        raise ValueError("worktree has unverified changes; preserve the workflow")
+
+
+def finish_close(root: Path, request_id: str, expected: dict, intake_receipt: dict) -> None:
+    if intake_receipt.get("action") == "implement":
+        data = route_record(root, request_id)
+        state = ui.read_registered_state(data["childRequestId"])
+        worktree = Path(state["worktree_id"].partition("::")[2])
+        code, response = ui.run_orca_response(["terminal", "show", "--terminal", state["terminal"]])
+        row = response.get("result", {}).get("terminal", {})
+        if code or response.get("ok") is not True:
+            raise ValueError("coordinator terminal identity is unconfirmed")
+        identity = role_tabs.identity(row, str(worktree))
+        if identity["handle"] != state["terminal"]:
+            raise ValueError("coordinator terminal ownership changed")
+        def call(_cli: object, args: list[str], _purpose: str) -> dict:
+            result_code, result_response = ui.run_orca_response(args)
+            if result_code or result_response.get("ok") is not True:
+                raise ValueError("terminal close result is unconfirmed")
+            return result_response["result"]
+        role_tabs.retire(call, None, str(worktree), identity)
+    frontdesk.write_ledger(lifecycle_path(root, request_id), {**expected, "phase": "closed"})
 
 
 def accept(root: Path, request: dict, current_runtime: str) -> dict:
@@ -309,23 +532,25 @@ def tick_under_lock(root: Path, current_runtime: str) -> dict:
         if name.startswith(".") and name.endswith(".pending"):
             continue
         request = checked_request(requests / name)
+        is_intake = request["action"] in {"submit", "implement"}
         if request["runtimeId"] != current_runtime:
             receipt = frontdesk.read_private_json(root / "receipts" / name, {})
-            expected = {"schema": 1, "runtimeId": request["runtimeId"],
-                        "operationId": request["operationId"],
-                        "workflowId": RECEPTION_ID, "revision": "1",
+            expected = {"schema": 1, "runtimeId": request["runtimeId"], "operationId": request["operationId"],
+                        "workflowId": request["workflowId"], "revision": request["revision"],
                         "action": request["action"], "text": request["text"],
-                        "intakeId": request["operationId"], "phase": "accepted"}
-            if receipt != expected or not any(
-                item["id"] == request["operationId"]
-                and item["request"] == request["text"].strip()
-                for item in frontdesk.list_requests()
-            ):
+                        "intakeId": request["operationId"] if is_intake else request["workflowId"],
+                        "phase": "accepted" if is_intake else receipt.get("phase")}
+            if receipt != expected or (is_intake and not any(
+                item["id"] == request["operationId"] and item["request"] == request["text"].strip()
+                for item in frontdesk.list_requests())):
                 raise ValueError("unsettled supervision request belongs to another runtime")
-            if request["action"] == "submit":
+            if is_intake and request["action"] == "submit":
                 prepare_consult(root, request["operationId"])
         else:
-            accept(root, request, current_runtime)
+            if is_intake:
+                accept(root, request, current_runtime)
+            else:
+                lifecycle_receipt(root, request, current_runtime)
         (requests / name).unlink()
         frontdesk.sync_directory(requests)
     return publish(root, current_runtime)
