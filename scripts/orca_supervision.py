@@ -196,7 +196,29 @@ def lifecycle(root: Path, request_id: str) -> dict:
         raise ValueError("invalid workflow lifecycle; preserve for reconciliation")
     if data:
         canonical_uuid(data["operationId"], "lifecycle operation ID")
+        if "closeTargets" in data:
+            checked_close_targets(data["closeTargets"])
     return data
+
+
+def checked_close_targets(targets: object) -> list[dict]:
+    if not isinstance(targets, list) or len(targets) > 20:
+        raise ValueError("close target journal is invalid")
+    seen: set[tuple[str, str]] = set()
+    for target in targets:
+        if not isinstance(target, dict) or set(target) != {"repo", "role", "identity"}:
+            raise ValueError("close target journal is invalid")
+        repo, role, identity = target["repo"], target["role"], target["identity"]
+        if (not isinstance(repo, str) or not Path(repo).is_absolute()
+                or Path(repo).resolve() != Path(repo) or role not in role_tabs.TITLES
+                or not isinstance(identity, dict)
+                or set(identity) != {"handle", "incarnationId", "worktreeId"}
+                or not all(isinstance(value, str) and value for value in identity.values())
+                or identity["worktreeId"].partition("::")[2] != repo
+                or (repo, role) in seen):
+            raise ValueError("close target journal is invalid")
+        seen.add((repo, role))
+    return targets
 
 
 def task_revision(root: Path, request_id: str) -> str:
@@ -229,7 +251,15 @@ def task_actions(root: Path, request_id: str, action: str) -> list[str]:
     if state in {"closing", "closed", "unknown"}:
         return []
     if action == "implement":
-        return ["pause", "close"] if route_record(root, request_id).get("phase") == "ready" else []
+        route = route_record(root, request_id)
+        if route.get("phase") != "ready":
+            return []
+        child = route.get("childRequestId")
+        if child and review_loop.state_path(child).exists():
+            phase = review_loop.load(child)["phase"]
+            if phase != "approved":
+                return []
+        return ["pause", "close"]
     return ["close"] if consult_intent(root, request_id).get("phase") == "settled" else []
 
 
@@ -274,7 +304,12 @@ def supervised_view(child_id: str, original: tuple[str, str, list[dict]]) -> tup
             role_views[index].update(state="unknown", detail="担当の所在が未確定")
             phase = "unknown"
             continue
-        code, response = ui.run_orca_response(["terminal", "show", "--terminal", handle])
+        try:
+            code, response = ui.run_orca_response(["terminal", "show", "--terminal", handle])
+        except (OSError, RuntimeError, ValueError):
+            role_views[index].update(state="unknown", detail="担当タブの読取に失敗しました")
+            phase = "unknown"
+            continue
         terminal = response.get("result", {}).get("terminal", {})
         if (code or response.get("ok") is not True
                 or terminal.get("handle") != handle
@@ -490,7 +525,7 @@ def lifecycle_receipt(root: Path, request: dict, current_runtime: str) -> dict:
                 "phase": phase, "outcome": "accepted"}
     try:
         if request["action"] == "close":
-            preflight_close(root, request_id, intake_receipt)
+            expected["closeTargets"] = preflight_close(root, request_id, intake_receipt)
         elif request["action"] == "pause":
             preflight_pause(root, request_id, intake_receipt)
         elif current.get("phase") != "paused":
@@ -532,6 +567,9 @@ def preflight_pause(root: Path, request_id: str, intake_receipt: dict, *, allow_
     child = data.get("childRequestId")
     if not child:
         raise ValueError("coordinator ownership is missing")
+    loop_path = review_loop.state_path(child)
+    if (loop_path.exists() or loop_path.is_symlink()) and review_loop.load(child)["phase"] != "approved":
+        raise ValueError("supervised loop is unresolved; do not pause its coordinator alone")
     state = ui.read_registered_state(child)
     phase_ok = state["phase"] == "ready" or (allow_exited and state["phase"] == "exited"
                                                 and state.get("exit_code") == 0)
@@ -547,43 +585,95 @@ def preflight_pause(root: Path, request_id: str, intake_receipt: dict, *, allow_
     role_tabs.idle_shell(state["terminal"], str(worktree))
 
 
-def preflight_close(root: Path, request_id: str, intake_receipt: dict) -> None:
+def settled_role_targets(child: str, loop: dict | None) -> list[dict]:
+    """Bind every settled attempt to its exact registered tab before closure."""
+    expected: dict[tuple[str, str], str] = {}
+    if loop is not None:
+        for attempt in loop.get("attempts", {}).values():
+            role, repo, handle = (attempt.get(key) for key in ("role", "repo", "terminal"))
+            if (role not in role_tabs.TITLES or not isinstance(repo, str) or not repo
+                    or not isinstance(handle, str) or not handle or attempt.get("released") is not True):
+                raise ValueError("settled role attempt has incomplete terminal ownership")
+            key = (repo, role)
+            if key in expected and expected[key] != handle:
+                raise ValueError("role terminal changed across attempts; reconcile before closure")
+            expected[key] = handle
+    targets = []
+    seen: set[tuple[str, str]] = set()
+    for path in sorted(role_tabs.root().glob("*.json")):
+        record = frontdesk.read_private_json(path, {})
+        if record.get("request") != child:
+            continue
+        repo, role = record.get("repo"), record.get("slot")
+        key = (repo, role)
+        if (record.get("schema") != 1 or key not in expected or key in seen
+                or record.get("phase") != "known"
+                or path != role_tabs.registry_path(child, repo, role)
+                or not isinstance(record.get("identity"), dict)
+                or record["identity"].get("handle") != expected[key]):
+            raise ValueError("worker or reviewer tab registry is unresolved")
+        seen.add(key)
+        targets.append({"repo": repo, "role": role, "identity": record["identity"]})
+    if seen != set(expected):
+        raise ValueError("settled role tab registry is missing")
+    return checked_close_targets(targets)
+
+
+def checked_clean_worktree(worktree: Path) -> None:
+    result = subprocess.run(["git", "-C", str(worktree), "status", "--porcelain", "--untracked-files=all"],
+                            capture_output=True, text=True, check=False)
+    if result.returncode or result.stdout or result.stderr:
+        raise ValueError("worktree has unverified changes; preserve the workflow")
+
+
+def preflight_close(root: Path, request_id: str, intake_receipt: dict) -> list[dict]:
     if intake_receipt.get("action") != "implement":
         if consult_intent(root, request_id).get("phase") != "settled":
             raise ValueError("consultation is not settled")
-        return
+        return []
     preflight_pause(root, request_id, intake_receipt, allow_exited=True)
     data = route_record(root, request_id)
     child = data["childRequestId"]
     loop_path = review_loop.state_path(child)
+    loop = None
     if loop_path.exists() or loop_path.is_symlink():
         loop = review_loop.load(child)
         if loop["phase"] != "approved" or any(
                 attempt.get("released") is not True for attempt in loop.get("attempts", {}).values()):
             raise ValueError("supervised implementation or review is not fully settled")
-    for path in role_tabs.root().glob("*.json"):
-        record = frontdesk.read_private_json(path, {})
-        if record.get("request") == child:
-            raise ValueError("worker or reviewer tab remains; preserve the workflow")
+        if (loop.get("integration") and loop["integration"].get("phase") != "approved"):
+            raise ValueError("integration review is not approved")
+        if loop.get("schema") == 2 and not review_loop.mail.drained(loop):
+            raise ValueError("supervised notifications are not drained")
+    targets = settled_role_targets(child, loop)
     state = ui.read_registered_state(child)
     worktree = Path(state["worktree_id"].partition("::")[2])
-    code, inventory_response = ui.run_orca_response([
-        "terminal", "list", "--worktree", f"path:{worktree}", "--include-visual-layouts"])
-    inventory = inventory_response.get("result", {})
-    terminals = inventory.get("terminals")
-    layouts = inventory.get("visualLayouts")
-    if (code or inventory_response.get("ok") is not True
-            or inventory.get("truncated") is not False
-            or inventory.get("hostScope", {}).get("omittedHostIds") != []
-            or not isinstance(terminals, list) or len(terminals) != 1
-            or terminals[0].get("handle") != state["terminal"]
-            or not isinstance(layouts, list) or len(layouts) != 1
-            or len(layouts[0].get("root", {}).get("tabs", [])) != 1):
-        raise ValueError("unexpected tab or split remains; preserve the workflow")
-    result = subprocess.run(["git", "-C", str(worktree), "status", "--porcelain", "--untracked-files=all"],
-                            capture_output=True, text=True, check=False)
-    if result.returncode or result.stdout or result.stderr:
-        raise ValueError("worktree has unverified changes; preserve the workflow")
+    handles: dict[str, set[str]] = {str(worktree): {state["terminal"]}}
+    for target in targets:
+        repo, identity = target["repo"], target["identity"]
+        code, response = ui.run_orca_response(["terminal", "show", "--terminal", identity["handle"]])
+        if (code or response.get("ok") is not True
+                or role_tabs.identity(response.get("result", {}).get("terminal", {}), repo) != identity):
+            raise ValueError("settled role tab identity changed")
+        role_tabs.idle_shell(identity["handle"], repo)
+        handles.setdefault(repo, set()).add(identity["handle"])
+    for repo, owned in handles.items():
+        code, inventory_response = ui.run_orca_response([
+            "terminal", "list", "--worktree", f"path:{repo}", "--include-visual-layouts"])
+        inventory = inventory_response.get("result", {})
+        terminals = inventory.get("terminals")
+        layouts = inventory.get("visualLayouts")
+        if (code or inventory_response.get("ok") is not True
+                or inventory.get("truncated") is not False
+                or inventory.get("hostScope", {}).get("omittedHostIds") != []
+                or not isinstance(terminals, list)
+                or {row.get("handle") for row in terminals} != owned
+                or len(terminals) != len(owned)
+                or not isinstance(layouts, list) or len(layouts) != 1
+                or len(layouts[0].get("root", {}).get("tabs", [])) != len(owned)):
+            raise ValueError("unexpected tab or split remains; preserve the workflow")
+        checked_clean_worktree(Path(repo))
+    return targets
 
 
 def verify_tab_free(worktree: Path) -> None:
@@ -600,8 +690,41 @@ def verify_tab_free(worktree: Path) -> None:
             raise ValueError("terminal was closed but worktree is not tab-free")
 
 
+def close_call(_cli: object, args: list[str], _purpose: str) -> dict:
+    result_code, result_response = ui.run_orca_response(args)
+    if result_code or result_response.get("ok") is not True:
+        raise ValueError("terminal close result is unconfirmed")
+    return result_response["result"]
+
+
+def close_target(target: dict) -> None:
+    repo, identity = target["repo"], target["identity"]
+    retired = role_tabs.root() / "retired" / f"{role_tabs.bindings.digest(identity)}.json"
+    if retired.exists() or retired.is_symlink():
+        record = frontdesk.read_private_json(retired, {})
+        closed = record.get("receipt", {}).get("close", {})
+        if (record.get("identity") != identity or record.get("repo") != repo
+                or record.get("phase") != "close-returned"
+                or closed.get("handle") != identity["handle"]
+                or closed.get("ptyKilled") is not True):
+            raise ValueError("role tab close result is uncertain; do not replay")
+        code, response = ui.run_orca_response(["terminal", "list", "--worktree", f"path:{repo}"])
+        inventory = response.get("result", {})
+        if (code or response.get("ok") is not True
+                or inventory.get("truncated") is not False
+                or inventory.get("hostScope", {}).get("omittedHostIds") != []
+                or not isinstance(inventory.get("terminals"), list)
+                or any(row.get("handle") == identity["handle"] for row in inventory["terminals"])):
+            raise ValueError("role tab close receipt has no matching read-back")
+        return
+    role_tabs.retire(close_call, None, repo, identity)
+
+
 def finish_close(root: Path, request_id: str, expected: dict, intake_receipt: dict) -> None:
     if intake_receipt.get("action") == "implement":
+        targets = checked_close_targets(expected.get("closeTargets", []))
+        for target in targets:
+            close_target(target)
         data = route_record(root, request_id)
         state = ui.read_registered_state(data["childRequestId"])
         worktree = Path(state["worktree_id"].partition("::")[2])
@@ -612,13 +735,10 @@ def finish_close(root: Path, request_id: str, expected: dict, intake_receipt: di
         identity = role_tabs.identity(row, str(worktree))
         if identity["handle"] != state["terminal"]:
             raise ValueError("coordinator terminal ownership changed")
-        def call(_cli: object, args: list[str], _purpose: str) -> dict:
-            result_code, result_response = ui.run_orca_response(args)
-            if result_code or result_response.get("ok") is not True:
-                raise ValueError("terminal close result is unconfirmed")
-            return result_response["result"]
-        role_tabs.retire(call, None, str(worktree), identity)
+        role_tabs.retire(close_call, None, str(worktree), identity)
         verify_tab_free(worktree)
+        for repo in {target["repo"] for target in targets} - {str(worktree)}:
+            verify_tab_free(Path(repo))
     completed = {key: value for key, value in expected.items() if key != "message"}
     frontdesk.write_ledger(lifecycle_path(root, request_id), {**completed, "phase": "closed"})
 
@@ -640,6 +760,9 @@ def reconcile_unfinished_close(root: Path, request_id: str) -> dict:
         route = route_record(root, request_id)
         state = ui.read_registered_state(route["childRequestId"])
         worktree = Path(state["worktree_id"].partition("::")[2])
+        targets = checked_close_targets(current.get("closeTargets", []))
+        for target in targets:
+            close_target(target)
         retired_dir = frontdesk.checked_directory(role_tabs.root() / "retired")
         candidates = []
         for path in retired_dir.glob("*.json"):
@@ -658,10 +781,15 @@ def reconcile_unfinished_close(root: Path, request_id: str) -> dict:
                     or closed.get("ptyKilled") is not True):
                 raise ValueError("terminal close result is uncertain; do not replay")
             verify_tab_free(worktree)
+            for repo in {target["repo"] for target in targets} - {str(worktree)}:
+                verify_tab_free(Path(repo))
             completed = {key: value for key, value in current.items() if key != "message"}
             frontdesk.write_ledger(lifecycle_path(root, request_id), {**completed, "phase": "closed"})
             return lifecycle(root, request_id)
-        preflight_close(root, request_id, intake_receipt)
+        # A role tab may already be retired. The durable target list, not a new
+        # preflight against a partly closed layout, owns this reconciliation.
+        if not targets:
+            preflight_close(root, request_id, intake_receipt)
         code, response = ui.run_orca_response(["terminal", "show", "--terminal", state["terminal"]])
         if code or response.get("ok") is not True:
             raise ValueError("coordinator terminal is unconfirmed")
