@@ -1050,7 +1050,6 @@ def handoff(
                     "--setup",
                     "skip",
                     "--no-parent",
-                    "--activate",
                 ]
             )
             matches = list_linked_worktrees(repo_id, data["issue_identifier"])

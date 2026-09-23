@@ -207,7 +207,7 @@ class UiCoordinatorTests(unittest.TestCase):
         self.assertIn("目的: 新仕様を実装する", linear_body)
         create_args = run.call_args_list[2].args[0]
         self.assertIn("--linear-issue", create_args)
-        self.assertIn("--activate", create_args)
+        self.assertNotIn("--activate", create_args)
         self.assertIn("--no-parent", create_args)
         self.assertEqual(create_args[create_args.index("--setup") + 1], "skip")
         terminal_args = run.call_args_list[6].args[0]
