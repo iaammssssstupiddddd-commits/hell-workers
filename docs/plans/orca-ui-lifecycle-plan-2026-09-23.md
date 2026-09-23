@@ -160,7 +160,7 @@ UI実現方法はM0で固定する。名前変更と文書リンクだけでは�
 - 再利用: `orca_role_tabs.py`、`orca_ui_coordinator.py`、`orca_dispatch.py`、`orca_review_loop.py`、Git checkpoint/統合、固定reviewer、host lock、既存Linear adapter、primary validation台帳。
 - 追加: 状態の読取・UI投影、案件単位のrole navigation、再開可能なclose journal/finalizer、固定受付の起動/所有権移送。新しい配車方式や並列編集の抜け道を作らない。
 - 実装は同目的の基盤branch `iaammssssstupiddddd-commits/orca-parallel-development`を再利用する案。開始時にHEAD・dirty・現行ルールを再確認し、主担当が編集する。
-- 現在のcandidate参照は`8ca7b917`、Orca本体cloneは`9fb9f672`、primary文書の基点は`9db39fb0`。文書正本はprimaryのみ。
+- 現在のcandidate参照は`3181baba`、Orca本体cloneは`9fb9f672`、primary文書の基点は`8a9d7555`。文書正本はprimaryのみ。
 - base ref変更は新規worktreeだけに効く。既存process・TAK-6・凍結candidateを更新済みと扱わない。launcher版とstate schemaを記録し、idle確認・移行preview・backup・再照合を経て切り替える。
 - 公開/PRによるCIはその時点の許可範囲を確認する。本計画は公開権限を追加しない。
 - Bevy API変更なし。レビュー待ちのゲーム環境へOrca codeをコピーしない。
@@ -265,6 +265,8 @@ Python 623件・Blender 164件、Ruff/actionlint、perf self-testとcontractsは
 `4ad62830`は閉じた案件の担当を「未割当」でなく「終了」と表示する。`8ca7b917`は終了時に
 課題と作業場identityを再照合してOrca board statusを`completed`へ移し、再読で確定する。
 作業場の削除は別操作とし、途中の更新結果不明では閉鎖完了を偽装しない。最終候補のtoolingは通過。
+`3181baba`は同じ役割の旧タブが正規のclose receiptで置換された履歴を照合し、現在の登録タブだけを
+終了対象とする。旧タブの閉鎖が不明なら保留し、再起動・checkout移動による誤終了を避ける。
 
 ### M3: 既存作業場の移行と整理
 
@@ -357,7 +359,7 @@ holdを照合して撤去済み。既存sidebarの用途別filter/Sleepや再起
 ### 次のAIが最初にやること
 
 1. 実装指示の有無を確認し、primary文書・candidate HEAD/dirty・当日のruntime/holdを再照合する。
-2. 本体拡張仕様、`8ca7b917`、`attempt-9`/`attempt-16`と専用`TAK-9`の実経路証拠を確認する。固定パネルから同じ経路とrole移動を受け入れ、承認済みloopの実role終了と再起動後のclose journal/finalizerを実験する。稼働版の置換は受入後に扱う。
+2. 本体拡張仕様、`3181baba`、`attempt-9`/`attempt-16`と専用`TAK-9`の実経路証拠を確認する。固定パネルから同じ経路とrole移動を受け入れ、承認済みloopの実role終了と再起動後のclose journal/finalizerを実験する。稼働版の置換は受入後に扱う。
 3. M1→M2→M3→M4の順に進める。途中のunit passを「もう運用可能」と報告しない。
 
 ### 参照必須ファイル

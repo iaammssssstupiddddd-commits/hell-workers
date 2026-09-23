@@ -111,6 +111,8 @@ controllerは時刻更新だけではrevisionを変更せず、受付・route・
   担当作業場があれば残りのcloseを保留する。
   `4ad62830`は終了済み担当を画面で「未割当」と誤表示しない。`8ca7b917`は所有する作業場の
   Orca board statusを`completed`へ移して再読する。作業場の削除や他案件のstatus変更は行わない。
+  `3181baba`は同じ担当の旧タブが正規receipt付きで置換された場合を識別し、未確定の旧タブが
+  一つでもあればcloseを止める。
   稼働中loopでは統括だけの中断・終了をUIに出さず、agentを強制終了しない。
   操作はworkflow revisionと同じoperation IDで照合し、拒否理由／結果不明をsnapshotへ表示する。
   本体`9fb9f672`はrevisionが変わった後にだけ操作待機を解除する。
