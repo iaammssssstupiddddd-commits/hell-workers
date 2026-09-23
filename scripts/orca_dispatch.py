@@ -21,6 +21,7 @@ if __package__:
     from . import (orca_coordinator as coordinator, orca_frontdesk as frontdesk,
                    orca_issue_context as intake, orca_role_state as bindings,
                    orca_roles as roles, orca_task_bridge as task_bridge,
+                   orca_role_tabs as role_tabs,
                    orca_ui_coordinator as ui_coordinator)
     from .host_coordination import acquire_host, state_root
 else:
@@ -30,6 +31,7 @@ else:
     import orca_role_state as bindings
     import orca_roles as roles
     import orca_task_bridge as task_bridge
+    import orca_role_tabs as role_tabs
     import orca_ui_coordinator as ui_coordinator
     from host_coordination import acquire_host, state_root
 
@@ -192,6 +194,7 @@ def start(request_id: str, ticket_path: Path, slot: str, coordinator_handle: str
         raise DispatchError("Orca metadata directory is unavailable")
     path = dispatch_path(request_id, ticket)
     retry = None
+    closed_receipt = None
     with acquire_host("dispatch-" + bindings.digest({"request": request_id, "ticket": ticket["id"]}),
                       inherit=False):
         if path.exists() or path.is_symlink():
@@ -207,6 +210,7 @@ def start(request_id: str, ticket_path: Path, slot: str, coordinator_handle: str
                         or receipt.get("before", {}).get("attempt", {}).get("exit_on_settlement", False) != exit_on_settlement):
                     raise DispatchError("prelaunch recovery receipt does not authorize this retry")
                 retry = current.get("retry")
+                closed_receipt = receipt.get("spec", {}).get("terminal_close")
                 if retry is not None:
                     failed = receipt.get("failed_input", {}).get("observed", {}).get("dispatch", {})
                     if (retry != {"task": failed.get("taskId"), "dispatch": failed.get("id")}
@@ -272,21 +276,13 @@ def start(request_id: str, ticket_path: Path, slot: str, coordinator_handle: str
                 if fixed:
                     launcher_argv.extend(["--resume-session", fixed["session_id"]])
             launcher = shlex.join(launcher_argv)
-            titles = {
-                "worker-a": "実装A（Codex）",
-                "worker-b": "実装B（Cursor）",
-                "reviewer": "レビュー（固定Codex）",
-            }
-            terminal_result = run_cli(
-                executable,
-                ["terminal", "create", "--worktree", f"path:{ticket['repo']}",
-                 "--title", f"{titles[slot]} | {ticket['id']}", "--command", launcher],
-                "terminal-create",
-            )
-            terminal_row = terminal_result.get("terminal")
+            terminal_row = role_tabs.launch(run_cli, executable, request_id,
+                                            ticket['repo'], slot, launcher,
+                                            closed_receipt=closed_receipt)
             if not isinstance(terminal_row, dict):
                 raise DispatchError("Orca terminal-create receipt is incomplete")
             data["terminal"] = task_bridge.wire.identifier(terminal_row.get("handle"), prefix="term_")
+            data["tab_launch_id"] = terminal_row.get("launch_id")
             save(path, data)
 
             data["bridge_id"] = wait_for_bridge(ticket, slot, data["terminal"])
@@ -320,10 +316,19 @@ def start(request_id: str, ticket_path: Path, slot: str, coordinator_handle: str
             })
             data["phase"] = "armed"
             save(path, data)
+            try:
+                role_tabs.label(run_cli, executable, data, "実行中")
+            except (OSError, ValueError, RuntimeError):
+                data["tab_status_unconfirmed"] = True
+                save(path, data)
             return data
         except BaseException:
             data["phase"] = "unknown"
             save(path, data)
+            try:
+                role_tabs.label(run_cli, executable, data, "停止・要確認")
+            except (OSError, ValueError, RuntimeError):
+                pass
             raise
 
 

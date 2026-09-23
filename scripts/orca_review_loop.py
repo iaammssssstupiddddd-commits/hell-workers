@@ -237,6 +237,8 @@ def release(attempt: dict) -> None:
             or resource.get("terminalState") not in {"released", "retained"}
             or resource.get("releaseState") in {"release_pending", "release_unknown"}):
         raise ValueError("release not confirmed; preserve exact recovery state")
+    dispatch.role_tabs.label(dispatch.run_cli, cli, attempt,
+                             "終了・結果確認済み" if attempt["outcome"] == "completed" else "失敗・要確認")
 
 
 def parse_review(body: str, session: str) -> dict:

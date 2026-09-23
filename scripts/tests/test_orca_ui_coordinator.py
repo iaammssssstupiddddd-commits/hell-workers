@@ -25,6 +25,9 @@ TERMINAL = "term_175c1be5-9f01-4a44-8268-a0542fa4e781"
 
 class UiCoordinatorTests(unittest.TestCase):
     def setUp(self) -> None:
+        idle = patch.object(ui.role_tabs, "idle_shell")
+        idle.start()
+        self.addCleanup(idle.stop)
         target = Path(__file__).resolve().parents[2] / "target"
         target.mkdir(exist_ok=True)
         temporary = tempfile.TemporaryDirectory(
@@ -32,7 +35,7 @@ class UiCoordinatorTests(unittest.TestCase):
         )
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
-        for module in (host_coordination, orca_frontdesk, orca_issue_context, ui):
+        for module in (host_coordination, orca_frontdesk, orca_issue_context, ui, ui.role_tabs):
             mock = patch.object(
                 module, "state_root", return_value=self.root / "coordination"
             )
@@ -200,7 +203,7 @@ class UiCoordinatorTests(unittest.TestCase):
         self.assertEqual(terminal_args[:2], ["terminal", "create"])
         self.assertEqual(terminal_args[terminal_args.index("--title") + 1], "統括")
         self.assertIn(
-            "launch-wait", terminal_args[terminal_args.index("--command") + 1]
+            "default-entry", terminal_args[terminal_args.index("--command") + 1]
         )
         self.assertIn("--focus", terminal_args)
         self.assertEqual(run.call_count, 8)
@@ -474,7 +477,7 @@ class UiCoordinatorTests(unittest.TestCase):
         self.assertEqual(result, visual_terminal)
         send_args = run.call_args_list[2].args[0]
         self.assertEqual(send_args[:2], ["terminal", "send"])
-        self.assertIn("launch-wait", send_args[send_args.index("--text") + 1])
+        self.assertIn("default-entry", send_args[send_args.index("--text") + 1])
 
     def test_launch_wait_retries_only_busy_coordinator(self) -> None:
         with (
@@ -512,6 +515,65 @@ class UiCoordinatorTests(unittest.TestCase):
         ]
         self.assertEqual(binds, [str(self.root), str(ui.REPO.parent), str(ui.REPO)])
         self.assertEqual(command[command.index("--chdir") + 1], str(ui.REPO))
+
+
+class DefaultEntryTests(unittest.TestCase):
+    def test_exited_coordinator_restarts_in_same_idle_tab(self):
+        with patch.object(ui, "list_coordinator_terminals", return_value=[]), \
+             patch.object(ui, "list_visual_coordinator_terminals", return_value=["term_fixture"]), \
+             patch.object(ui.role_tabs, "default_path", return_value=Path("/fixture")), \
+             patch.object(ui.frontdesk, "read_private_json", return_value={"purpose": "coordinator-exited"}), \
+             patch.object(ui.role_tabs, "idle_shell") as idle, \
+             patch.object(ui, "launch_coordinator_in_terminal") as launch:
+            self.assertEqual(ui.ensure_coordinator_terminal("repo::/worktree"), "term_fixture")
+            idle.assert_called_once_with("term_fixture", "/worktree")
+            launch.assert_called_once_with("term_fixture")
+
+    def test_starting_coordinator_is_not_sent_another_launch(self):
+        worktree = "repo::/worktree"
+        row = {"handle": "term_fixture", "incarnationId": "incarnation", "worktreeId": worktree,
+               "worktreePath": "/worktree", "executionHostId": "local", "connected": True,
+               "writable": True, "orphaned": False}
+        marker = {"purpose": "coordinator", "identity": ui.role_tabs.identity(row, "/worktree")}
+        with patch.object(ui, "list_coordinator_terminals", return_value=[]), \
+             patch.object(ui, "list_visual_coordinator_terminals", return_value=["term_fixture"]), \
+             patch.object(ui.role_tabs, "default_path", return_value=Path("/fixture")), \
+             patch.object(ui.frontdesk, "read_private_json", return_value=marker), \
+             patch.object(ui, "run_orca_response", return_value=(0, {"ok": True, "result": {"terminal": row}})), \
+             patch.object(ui, "launch_coordinator_in_terminal") as launch:
+            self.assertEqual(ui.ensure_coordinator_terminal(worktree), "term_fixture")
+            launch.assert_not_called()
+
+    def test_unlinked_child_does_not_start_coordinator(self):
+        from scripts import orca_ui_coordinator as ui
+        from scripts import orca_role_tabs
+        with patch.object(ui, "terminal_environment", return_value=("term_fixture", "repo::child")), \
+             patch.object(orca_role_tabs, "record_default") as record, \
+             patch.object(ui, "run_orca_response", return_value=(0, {"ok": True, "result": {
+                 "worktree": {"id": "repo::child", "linkedLinearIssue": None},
+                 "terminal": {"handle": "term_fixture", "worktreeId": "repo::child"}}})), \
+             patch.object(ui, "launch_wait") as launch:
+            self.assertEqual(ui.default_entry(), 0)
+            launch.assert_not_called()
+            record.assert_called_once()
+
+    def test_linked_entry_marks_exit_and_failure(self):
+        from scripts import orca_ui_coordinator as ui
+        for failure in (False, True):
+            with self.subTest(failure=failure), \
+                 patch.object(ui.role_tabs, "record_default"), \
+                 patch.object(ui, "terminal_environment", return_value=("term_fixture", "repo::linked")), \
+                 patch.object(ui, "run_orca_response", return_value=(0, {"ok": True, "result": {
+                     "worktree": {"id": "repo::linked", "linkedLinearIssue": "TAK-8"},
+                     "terminal": {"handle": "term_fixture", "worktreeId": "repo::linked"}}})) as call, \
+                 patch.object(ui, "launch_wait", side_effect=RuntimeError("fixture") if failure else None,
+                              return_value=0):
+                if failure:
+                    with self.assertRaises(RuntimeError):
+                        ui.default_entry()
+                else:
+                    self.assertEqual(ui.default_entry(), 0)
+                self.assertEqual(call.call_args.args[0][-1], "統括・起動失敗" if failure else "統括・終了")
 
 
 if __name__ == "__main__":

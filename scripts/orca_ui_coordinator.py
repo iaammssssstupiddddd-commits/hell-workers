@@ -28,12 +28,14 @@ if __package__:
         orca_frontdesk as frontdesk,
         orca_issue_context as intake,
         orca_providers as providers,
+        orca_role_tabs as role_tabs,
     )
     from .host_coordination import HostBusyError, acquire_host, state_root
 else:
     import orca_frontdesk as frontdesk
     import orca_issue_context as intake
     import orca_providers as providers
+    import orca_role_tabs as role_tabs
     from host_coordination import HostBusyError, acquire_host, state_root
 
 
@@ -534,7 +536,7 @@ def list_visual_coordinator_terminals(worktree_id: str) -> list[str]:
             for item in value:
                 visit(item, depth + 1)
         elif isinstance(value, dict):
-            if value.get("title") == "統括" and "panes" in value:
+            if value.get("title") in {"統括", "統括・起動中", "統括・終了", "統括・起動失敗", "作業シェル"} and "panes" in value:
                 tabs.append(value)
             for key, item in value.items():
                 if key != "panes" and isinstance(item, (dict, list)):
@@ -562,7 +564,7 @@ def launch_coordinator_in_terminal(terminal: str) -> None:
             "--terminal",
             terminal,
             "--text",
-            "python3 scripts/orca_ui_coordinator.py launch-wait",
+            "python3 scripts/orca_ui_coordinator.py default-entry",
             "--enter",
             "--wait-submit",
             "10",
@@ -579,11 +581,11 @@ def launch_coordinator_in_terminal(terminal: str) -> None:
         raise UiCoordinatorError("新しい統括の開始応答が不正です")
 
 
-def pin_coordinator_title(terminal: str) -> None:
+def pin_coordinator_title(terminal: str, title: str = "統括") -> None:
     if not TERMINAL.fullmatch(terminal):
         raise UiCoordinatorError("統括タブのterminal識別子が不正です")
     returncode, response = run_orca_response(
-        ["terminal", "rename", "--terminal", terminal, "--title", "統括"]
+        ["terminal", "rename", "--terminal", terminal, "--title", title]
     )
     if returncode != 0 or response.get("ok") is not True:
         code, _ = response_error_code(response)
@@ -602,6 +604,17 @@ def ensure_coordinator_terminal(worktree_id: str) -> str:
     if len(visual_matches) > 1:
         raise UiCoordinatorError("引継ぎ先に複数の統括tabが存在します")
     if visual_matches:
+        # A default-entry process can be importing Linear before prepare() has
+        # registered the coordinator. Never send a second launch into that tab.
+        repo = worktree_id.split("::", 1)[1]
+        marker = frontdesk.read_private_json(role_tabs.default_path(repo, visual_matches[0]), {})
+        if marker.get("purpose") == "coordinator":
+            code, shown = run_orca_response(["terminal", "show", "--terminal", visual_matches[0]])
+            if (code or shown.get("ok") is not True
+                    or role_tabs.identity(shown.get("result", {}).get("terminal", {}), repo) != marker.get("identity")):
+                raise UiCoordinatorError("起動中の統括タブの所有が変わりました")
+            return visual_matches[0]
+        role_tabs.idle_shell(visual_matches[0], repo)
         launch_coordinator_in_terminal(visual_matches[0])
         return visual_matches[0]
     returncode, response = run_orca_response(
@@ -613,7 +626,7 @@ def ensure_coordinator_terminal(worktree_id: str) -> str:
             "--title",
             "統括",
             "--command",
-            "python3 scripts/orca_ui_coordinator.py launch-wait",
+            "python3 scripts/orca_ui_coordinator.py default-entry",
             "--focus",
         ]
     )
@@ -1280,11 +1293,42 @@ def launch_wait(timeout_seconds: float = LAUNCH_WAIT_SECONDS) -> int:
             time.sleep(1)
 
 
+def default_entry() -> int:
+    """An unlinked implementation checkout has no coordinator of its own."""
+    terminal, worktree = terminal_environment()
+    code, response = run_orca_response(["worktree", "show", "--worktree", f"id:{worktree}"])
+    row = response.get("result", {}).get("worktree", {})
+    if code or response.get("ok") is not True or row.get("id") != worktree:
+        raise UiCoordinatorError("既定タブの作業場を確認できません")
+    code, shown = run_orca_response(["terminal", "show", "--terminal", terminal])
+    if code or shown.get("ok") is not True:
+        raise UiCoordinatorError("既定タブの所有を確認できません")
+    terminal_row = shown.get("result", {}).get("terminal", {})
+    if terminal_row.get("handle") != terminal or terminal_row.get("worktreeId") != worktree:
+        raise UiCoordinatorError("既定タブの識別子が一致しません")
+    role_tabs.record_default(terminal_row, str(REPO),
+                             "coordinator" if row.get("linkedLinearIssue") else "shell")
+    if not row.get("linkedLinearIssue"):
+        print("担当待機用の作業シェルです。依頼は親作業場の統括へ伝えてください。")
+        return 0
+    pin_coordinator_title(terminal, "統括・起動中")
+    try:
+        result = launch_wait()
+    except BaseException:
+        role_tabs.record_default(terminal_row, str(REPO), "coordinator-exited")
+        pin_coordinator_title(terminal, "統括・起動失敗")
+        raise
+    role_tabs.record_default(terminal_row, str(REPO), "coordinator-exited")
+    pin_coordinator_title(terminal, "統括・終了")
+    return result
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="action", required=True)
     subparsers.add_parser("launch")
     subparsers.add_parser("launch-wait")
+    subparsers.add_parser("default-entry")
     for action in ("acknowledge", "show"):
         command = subparsers.add_parser(action)
         command.add_argument("--request-id", required=True)
@@ -1295,6 +1339,8 @@ def main() -> int:
     handoff_parser.add_argument("--source-ref")
     args = parser.parse_args()
     try:
+        if args.action == "default-entry":
+            return default_entry()
         if args.action == "launch":
             return launch()
         if args.action == "launch-wait":

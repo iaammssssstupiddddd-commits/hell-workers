@@ -6,5 +6,5 @@ scripts:
 # Linear-linked worktrees open one visible coordinator. It creates the guarded
 # A/B/review tabs only when their bounded tickets are ready.
 defaultTabs:
-  - title: 統括
-    command: python3 scripts/orca_ui_coordinator.py launch-wait || exit
+  - title: 作業シェル
+    command: python3 scripts/orca_ui_coordinator.py default-entry

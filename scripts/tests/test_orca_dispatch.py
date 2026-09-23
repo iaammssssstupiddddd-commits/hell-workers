@@ -24,6 +24,15 @@ BRIDGE = "319674b0-1f30-4257-81dd-70f24553f24b"
 
 class OrcaDispatchTests(unittest.TestCase):
     def setUp(self) -> None:
+        # Dispatch protocol fixtures isolate the separately tested tab allocator.
+        def launch(call, cli, request, repo, slot, command, **kwargs):
+            return call(cli, ["terminal", "create", "--worktree", f"path:{repo}",
+                             "--title", dispatch.role_tabs.TITLES[slot] + " | edit-leaf",
+                             "--command", command], "terminal-create")["terminal"]
+        for name, options in (("launch", {"side_effect": launch}), ("label", {})):
+            patcher = patch.object(dispatch.role_tabs, name, **options)
+            patcher.start()
+            self.addCleanup(patcher.stop)
         target = Path(__file__).resolve().parents[2] / "target"
         target.mkdir(exist_ok=True)
         temporary = tempfile.TemporaryDirectory(prefix="orca-dispatch-", dir=target)
