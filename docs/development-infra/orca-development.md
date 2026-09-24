@@ -750,6 +750,33 @@ exact停止loop/role digest、同じ固定session、source不変、全operation�
 完了通知・Task・Dispatch・providerを再作成せず、既存driverだけがverdictのseal・release・ACKを行う。
 改変source・未確定mutation・別session・稼働中launcher・無関係なpauseには適用しない。
 
+### 実案件TAK-14で追加した回復・終端契約（2026-09-24）
+
+TAK-14ではRun `run_3236488f0dff`と同じ統括sessionを維持し、実装Aから最終固定reviewまでを完了した。
+途中停止を別Run・別worker・手書き承認で迂回せず、次の契約を追加してその場で再開した。
+
+- Help判断は`awaiting_help_review`として停止し、subject、base/head、tracked/index/untrackedを含む
+  source fingerprint、変更path、判断、理由を結ぶprivate receiptを要求する。表示時刻だけの変化は同一inspectionとし、
+  sourceや意味状態の変化は旧判断を失効させる。worker段階と統合後段階の両方で適用する。
+- 正常に完了した統括検証の後でcoordinator応答が遅れた場合は、同じsource、evidence ID、失敗settlement、
+  replacement argvを照合して`resume-coordinator-validation`する。検証やcheckpointを推測で再送しない。
+- Linear runtimeの一時停止は取消/完了と区別する。新しい作業を起動せず同じlaneを待機させ、復旧後は
+  exact inspection digestと直前の冪等工程を照合して`resume-linear-runtime`する。
+- workerの`ask`は`--timeout-ms 15000`で有限待機し、timeout後は同じmessage IDをresumeする。
+  未回答質問がある間は`worker_done`を拒否し、別質問や過去回答へ巻き戻さない。
+- 固定reviewerが統合後に文書だけを差し戻した場合、`orca_tooling_correction.py`はseal済み指摘に列挙された
+  docs pathだけを統括所有で修正できる。拒否HEADの直接子、元worker承認、全attempt release/ACK、clean対象、
+  exact inspection digestを要求し、新HEADを通常の検証・同じ固定reviewerへ戻す。ゲームsourceや承認生成は拒否する。
+- `finalize-tabs`はloopが最終承認、inbox排出、全attempt release/ACK済みのexact digestに一致する時だけ、
+  登録済みA/B/reviewerを一度ずつ終了する。保持中scrollbackを保全し、identity、tui-idle、`ptyKilled=true`、
+  terminal不存在を確認する。統括は閉じず、承認後の利用者の戻り先とする。
+
+最終統合HEADは`d8443c89cfe3399f3e0e1ca493f9d7efca254a88`。Help実レビューはNo impact。
+実案件の変更はopt-inの開発用asset poolと文書で、ゲーム起動時のHelp入力・表示・manifest/providerを変更しない。
+ユーザー指定によりゲーム実装テストは実行せず、同一subjectの`git diff --check`、exact source receipts、
+固定reviewerの構造化承認を用いた。制御基盤はPython 669件と`git diff --check`が成功した。
+これは障害を含む同一Runの回復受入であり、次の新規案件による無介入cold-startの計測は残る。
+
 worker終了後、統括が差分と範囲を点検し、必要な検証を直列実行する。review用ticketでは
 `allowed_directories` を空にし、次の結果を `source_sha256` として追加する。
 

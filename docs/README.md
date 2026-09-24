@@ -88,8 +88,10 @@
 - [proposals/implementation-refactor-audit-proposal-2026-09-17.md](proposals/implementation-refactor-audit-proposal-2026-09-17.md): 全13 crateの実装横断レビューとR01〜R14の個別実装計画への入口。優先順位・依存・根拠・検証条件。
 - [proposals/library-tooling-evaluation-proposal-2026-09-13.md](proposals/library-tooling-evaluation-proposal-2026-09-13.md): ライブラリ・開発ツールの導入／置換候補、現行構成との重複、優先順位と採用条件。
 - [proposals/orca-parallel-development-proposal-2026-09-20.md](proposals/orca-parallel-development-proposal-2026-09-20.md): Orcaでの実装2名・専任レビュー1名・統括の運用素案。Orca導入済み、host資源制御・変更所有権・統合運用は計画化。
-- [plans/orca-parallel-development-plan-2026-09-20.md](plans/orca-parallel-development-plan-2026-09-20.md): Linear受付とOrca実行基盤の統合計画。既存実装の再利用、L0〜L4の実装・受入、ゲーム検証を除いた今回の範囲。
-- [plans/orca-git-review-loop-plan-2026-09-22.md](plans/orca-git-review-loop-plan-2026-09-22.md): Git基点の実装・差戻し・再review・統合ループ計画。直列統合・最終reviewと単担当への最終差戻しをfixture接続。実runtime受入・公開・配備は未完。
+- [plans/orca-parallel-development-plan-2026-09-20.md](plans/orca-parallel-development-plan-2026-09-20.md): 固定受付とOrca実行基盤の統合計画。可視統括、A/B、固定reviewer、実案件一巡を受入済み。無介入cold-start等は継続。
+- [plans/orca-git-review-loop-plan-2026-09-22.md](plans/orca-git-review-loop-plan-2026-09-22.md): Git基点の実装・差戻し・再review・統合ループ計画。実runtimeの最終reviewまで受入済み。公開/PR自動同期は継続。
+- [plans/orca-ui-lifecycle-plan-2026-09-23.md](plans/orca-ui-lifecycle-plan-2026-09-23.md): Orcaの固定受付・役割表示・終了/再開・作業場整理を一体化する計画。通常起動と承認後role tab整理まで受入済み。
+- [development-infra/orca-ui-extension.md](development-infra/orca-ui-extension.md): 配備中のOrca本体UI/API、状態契約、既存controllerとの責務境界、受入済み範囲と残件。
 - [proposals/progression-and-choice-proposal-2026-08-09.md](proposals/progression-and-choice-proposal-2026-08-09.md): Track D の Dream Edict、Contract、Familiar 昇格を扱う進行・選択提案。
 - [proposals/archive/gameplay-management-improvements-proposal-2026-07-17.md](proposals/archive/gameplay-management-improvements-proposal-2026-07-17.md): Track A〜C のロードマップと完了履歴を保持するアーカイブ提案。
 - [proposals/hvac-plumbing-proposal.md](proposals/hvac-plumbing-proposal.md): 採用済みの空調・衛生インフラ提案（世界観・採否理由）。

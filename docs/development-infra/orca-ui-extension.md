@@ -5,7 +5,7 @@
 
 ## 一時配備と復帰
 
-本体sourceは `bb614da7`。配備先は `/home/satotakumi/.local/opt/orca-ide/ui-bb614da7`、
+本体sourceは `06cfe378`。配備先は `/home/satotakumi/.local/opt/orca-ide/ui-06cfe378`、
 既存のOrca IDEアイコンは同directoryの `launch-supervised` を起動する。
 サイドバーの `Reception & Coordination`（受付・統括）が固定入口。
 controllerは既存candidateの `scripts/orca_supervision.py`、状態保存先は
@@ -303,3 +303,18 @@ controllerは時刻更新だけではrevisionを変更せず、受付・route・
 
 fixtureのsnapshotは画面/API検証用であり、実agent稼働や実案件終了の証拠ではない。
 検証結果は計画書へ集約する。開発clone/cacheは同じ場所を修正・受入まで保持し、失敗jobを無期限には保持しない。
+
+### TAK-14後の受入更新（2026-09-24）
+
+- デスクトップ起動時に固定パネルだけが見え、プロジェクト一覧が消える回帰を修正した。
+  通常起動は標準Orca画面を維持し、固定受付はサイドバーから開く。非表示検証用の環境変数を通常launcherへ残さない。
+- `launch-supervised`はcandidateの`orca_ui_coordinator.py`を絶対pathで渡す。
+  課題worktreeに同scriptがなくても統括のdefault terminalが起動でき、既存windowへのsecond-instanceは再表示に使う。
+- TAK-14で同一Runの実装A、固定review、統合、最終reviewまで承認した。最終承認後の登録済みrole tab 3件と、
+  worker作業場に残った所有確認済み補助shell 2件は、出力保全とpositive closeを確認して整理した。
+  親作業場には統括1tabだけを残した。
+- 全Python基盤試験669件が成功した。ゲーム実装テストはユーザー指定により対象外。
+
+残る受入は、次の新規案件を固定受付から開始し、spec/ref訂正、外部保守resume、追加ID入力が0回の
+cold-startを測ること、および実行中agentをユーザーが中断した場合の安全停止・再起動後復旧である。
+今回のTAK-14は途中停止を同一Runで恒久修正して完了したため、無介入開始の成功証拠には読み替えない。

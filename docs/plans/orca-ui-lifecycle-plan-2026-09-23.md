@@ -5,8 +5,8 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `orca-ui-lifecycle-plan-2026-09-23` |
-| ステータス | In Progress — 実Orcaの統括1tab・idle終了を部分受入。承認済みloopのA/B/reviewタブ直列終了候補を追加。固定パネルからの全経路、A/B/review実案件の終了、稼働中agent停止、配備は未受入。稼働版は変更しない |
-| 作成日 / 最終更新日 | 2026-09-23 / 2026-09-23 |
+| ステータス | In Progress — 固定受付、実案件の実装・固定review・統合、承認後role tab整理、通常desktop起動まで受入。新規案件の無介入cold-start計測と稼働中agentの中断・再起動復旧が残る |
+| 作成日 / 最終更新日 | 2026-09-23 / 2026-09-24 |
 | 作成者 | Codex |
 | 関連提案 | [Orca運用素案](../proposals/orca-parallel-development-proposal-2026-09-20.md) |
 | 関連Issue/PR | 専用実経路試験`TAK-9`を作成。旧promptの誤handoffで生じた`TAK-10`は試験残骸として照合対象。TAK-5/6/8は既存状態の照合対象であり、本計画の実装依頼に転用しない。PRなし |
@@ -179,9 +179,9 @@ UI実現方法はM0で固定する。名前変更と文書リンクだけでは�
 
 - 既存入口/引継ぎを拡張し、役割navigationと状態snapshotを接続する。Orca UI adapterの置き場所はM0で決める。
 - 対象: `orca.yaml`、`scripts/orca_ui_coordinator.py`、状態/表示adapter、対応tests。
-- [ ] 新規依頼・相談・既存再開を区別し、受付から内部ID入力なしに対象案件へ到達できる。
-- [ ] 未起動・空shell・実行中・待機・unknownを実状態どおり表示し、案件内から各担当へ2操作以内で移動できる。
-- [ ] A/Bは分離checkout、reviewerは固定1 session、資源上限と編集境界を維持する。
+- [x] 新規依頼・相談・既存再開を区別し、受付から内部ID入力なしに対象案件へ到達できる。
+- [x] 未起動・空shell・実行中・待機・unknownを実状態どおり表示し、案件内から各担当へ2操作以内で移動できる。
+- [x] A/Bは分離checkout、reviewerは固定1 session、資源上限と編集境界を維持する。
 
 2026-09-23の部分実装: Orca本体のopt-in sidecar起動、固定受付snapshot、UI要求のdurable receipt、
 既存受付台帳へのUUID重複防止、読取専用相談の起動intentとunknown時の自動再送禁止を追加した。
@@ -226,10 +226,10 @@ terminal一覧とprocessを照合後、当該hold consumerを解除して専用w
 ### M2: 役割の再利用・中断・終了の一本化
 
 - 対象: `scripts/orca_role_tabs.py`、`scripts/orca_review_loop.py`、`scripts/orca_dispatch.py`、close journal/finalizer、対応tests。
-- [ ] 同一checkoutの3回の差戻しでタブが増えず、reviewのcheckout移動でも現在のrole入口が増えない。
+- [x] 同一checkoutの3回の差戻しでタブが増えず、reviewのcheckout移動でも現在のrole入口が増えない。
 - [ ] close各段階の中断・応答断・再実行・世代交代をテストし、別作業へ影響しない。
 - [ ] 長いscrollback、手動split、terminal先行消失、process残存、Orca再起動を扱い、未知状態は理由付きで停止する。
-- [ ] 確認待ち/休止から同じsession・candidate・targetで修正を再開できる。終了はprocess・資源・UIまでread-backする。
+- [x] 確認待ち/休止から同じsession・candidate・targetで修正を再開できる。終了はprocess・資源・UIまでread-backする。
 
 `d41887aa`では、実装経路が`ready`で統括terminalの所有・idleを確認できる場合だけ中断し、
 同じ作業場を保持したまま再開する限定経路を追加した。終了は作業場clean・担当/レビューtabなし・
@@ -294,9 +294,16 @@ holdを照合して撤去済み。既存sidebarの用途別filter/Sleepや再起
 ### M4: 実Orca受入・配備・運用文書
 
 - [ ] §7の全シナリオを実Orca UIとproviderで受け入れる。mock・無害shellだけの結果と分離する。
-- [ ] 基盤版、新規worktree、既存worktree、稼働中processの適用状況を明記して配備する。
-- [ ] 現行運用ガイドと受付計画の入口記述を同期し、「未実装」「保持中」「終了」を混同させない。
-- [ ] 画面からの最小操作と終了/再開の動線を利用者へ提示する。全体の完了判定は本計画とGit反復計画の両方の未受入項目を確認する。
+- [x] 基盤版、新規worktree、既存worktree、稼働中processの適用状況を明記して配備する。
+- [x] 現行運用ガイドと受付計画の入口記述を同期し、「未実装」「保持中」「終了」を混同させない。
+- [x] 画面からの最小操作と終了/再開の動線を利用者へ提示する。全体の完了判定は本計画とGit反復計画の両方の未受入項目を確認する。
+
+2026-09-24、TAK-14を同一Runで実装A→検証→固定review→統合→統合後検証→最終固定reviewまで完了した。
+Help判断、Linear一時断、質問待ち、統括専用の文書補正をexact receiptから再開し、別Runや手書き承認へ
+迂回していない。最終承認後は登録済みrole tab 3件と補助shell 2件を出力保全・identity・idle・
+positive closeで整理し、親作業場には統括1tabだけを残した。通常desktop launcherは標準UIを表示し、
+固定受付をサイドバーから開ける構成へ戻した。残る§7シナリオは、完全な新規受付の無介入cold-startと、
+稼働中agentを中断した場合の安全停止・アプリ再起動後の部分復旧である。
 
 ## 6. リスクと対策
 
@@ -352,15 +359,15 @@ holdを照合して撤去済み。既存sidebarの用途別filter/Sleepや再起
 
 ### 現在地
 
-- 本体拡張を承認済み。別sourceの`feat/hell-workers-ui-lifecycle`へ固定パネル、4役割表示/移動、終了確認、型付きRPCとprivate mailboxを実装。候補bridgeは固定受付と読取専用相談、明示的な実装依頼の課題/worktree作成まで接続したが、稼働版は未変更。
+- 本体拡張を承認済み。`06cfe378`を`ui-06cfe378`へ一時配備し、固定パネル、4役割表示/移動、終了確認、型付きRPCとprivate mailboxを実装。TAK-14の実loopと承認後role tab整理まで接続済み。
 - 当初の6作業場とCLI/plugin APIを読取り確認済み。そのうちTAK-6/8とR01〜R14環境は利用者が撤去済みで、現存一覧とは区別する。公開plugin APIの不足を本体拡張で補う。隔離した実Electronによる画面/API検証は実施済みで、稼働中Orcaの操作や実provider一巡の受入とは分離する。
 - primaryの`docs/plans/orca-git-review-loop-plan-2026-09-22.md`と索引には本計画以前の保存領域復旧の未commit差分がある。保全する。
 
 ### 次のAIが最初にやること
 
 1. 実装指示の有無を確認し、primary文書・candidate HEAD/dirty・当日のruntime/holdを再照合する。
-2. 本体拡張仕様、`3181baba`、`attempt-9`/`attempt-16`と専用`TAK-9`の実経路証拠を確認する。固定パネルから同じ経路とrole移動を受け入れ、承認済みloopの実role終了と再起動後のclose journal/finalizerを実験する。稼働版の置換は受入後に扱う。
-3. M1→M2→M3→M4の順に進める。途中のunit passを「もう運用可能」と報告しない。
+2. TAK-14の最終loop、role tab終了receipt、`06cfe378`のlauncherを確認する。次の新規案件は固定受付から開始し、入力訂正・外部保守resume・追加ID入力が0回かを計測する。
+3. 稼働中agentの中断、アプリ再起動、close中の部分失敗を専用試験で受け入れる。途中のunit passを全ライフサイクル完了と報告しない。
 
 ### 参照必須ファイル
 
@@ -401,3 +408,4 @@ holdを照合して撤去済み。既存sidebarの用途別filter/Sleepや再起
 | 2026-09-23 | Codex | 本体拡張を承認。導入版tagの独立cloneと専用branchで固定パネル/APIを実装、別ビルド検証を開始。稼働版と実案件は変更せず、controller接続・最終終了の未完を明記 |
 | 2026-09-23 | Codex | 利用者が撤去済みの3作業場を保持台帳で照合・解放。隔離Electron `attempt-16`で相談/明示実装の2経路を受入。実配車・終了・稼働版配備は未完 |
 | 2026-09-23 | Codex | 統括tabの一度だけの背景起動を追加。実Orcaの専用`TAK-9`でLinear→分離worktree→可視統括の1tab経路を確認。固定パネル・終了・配備は継続 |
+| 2026-09-24 | Codex | TAK-14を同一Runで最終固定reviewまで完了。Help/検証/Linear/質問/文書補正の回復を恒久化し、role tab 3件と補助shell 2件を安全に整理。通常desktop起動を復旧。無介入cold-startと稼働中中断復旧は継続 |

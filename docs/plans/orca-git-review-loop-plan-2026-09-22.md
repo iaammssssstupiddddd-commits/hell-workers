@@ -5,12 +5,16 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `orca-git-review-loop-plan-2026-09-22` |
-| ステータス | `In Progress（統合・最終review差戻しのfixture接続、実runtime・公開未完）` |
+| ステータス | `In Progress（実runtimeの実装・差戻し・統合・最終reviewを受入。GitHub公開/PR自動同期と無介入cold-startは未完）` |
 | 作成日 | `2026-09-22` |
-| 最終更新日 | `2026-09-23` |
+| 最終更新日 | `2026-09-24` |
 | 作成者 | `Codex` |
 | 関連提案 | `docs/proposals/orca-parallel-development-proposal-2026-09-20.md` |
 | 関連Issue/PR | 外部連携の隔離試験: `TAK-7` / [PR #26](https://github.com/iaammssssstupiddddd-commits/hell-workers/pull/26)（merged、製品master未変更） |
+
+UI上の固定受付・役割の移動先・案件の確認待ち/終了・作業場整理の横断設計は、
+[UI・受付・終了ライフサイクル統合計画](orca-ui-lifecycle-plan-2026-09-23.md)で扱う。
+本計画の実行loopと安全境界を再利用し、UI/closeの実受入を省略しない。TAK-14で実provider、統合、最終review、承認後role tab整理まで受け入れた。GitHub公開/PR自動同期と無介入cold-startは未完。
 
 ## 1. 目的
 
@@ -836,6 +840,34 @@ storageの同じ欠損3件でcontractsが停止。全gate成功とは扱わな�
 修正commitを含む`iaammssssstupiddddd-commits/orca-parallel-development`のまま維持し、
 承認済みのtrial/A checkoutへ新toolingを混ぜず、同SHA/sourceを保持する。
 
+### active resource 3件の実復旧（2026-09-23）
+
+- `formwork-release-candidate`は、保存済みsource commit
+  `8d3edab93d9cd45eadf00fbe1d6c8b4ff157c6ed`をcleanなdetached worktreeとして元pathへ復旧した。
+  復旧後のallocated bytesは19,181,568。元consumer `formwork-release-mixed-quality-matrix`とholdは維持した。
+- `refactor-r01-r14-candidate`は、danglingだったsource commit
+  `a0487a35c09ed444dc588902ed198c9532f4c685`を
+  `validation/refactor-r01-r14-candidate-recovered` branchで元pathへ復旧した。
+  復旧後のallocated bytesは26,923,008。元consumer `refactor-r01-r14-review`とholdは維持した。
+- `tak6-orca-implementation-worktree`は、Linear `TAK-6`へ紐付くOrca worktreeを元pathへ復旧した。
+  branchは`iaammssssstupiddddd-commits/tak-6-implementation`、復旧時headは
+  `192f7d20f97cf03385d894caa7a90f1593cdc732`、allocated bytesは27,762,688。
+  課題はBacklogのまま、元consumer `tak-6-implementation`とholdを維持した。
+- 3件とも空directoryによる検証回避は行わず、exact commit、clean status、path、consumerを照合して
+  `validation retain`した。既存revision履歴は保持され、復旧後の`validation check`はpass、
+  重複worker cleanup後の全体allocated bytesは326,710,960,128。storage regression unittestは30件成功した。
+- 旧validation jobs、Cargo target、約4.9GB/41.0GBの旧cache実体は復元していない。
+  sourceを再利用する場合は、各worktreeで必要な検証成果物を再生成する。
+- Help No impact: 変更対象は開発用validation台帳/worktreeとPython回帰testだけで、
+  game input/state/UI/runtime assets、Help manifest/providerのplayer-visible経路は変更していない。
+  ゲーム/Rust/native検証、push、PR、製品branchへのmerge、Linear更新は実施していない。
+- 最終検証はstorage regression unittest 30件とcontracts群が成功。変更別autoは
+  `scripts/tests/**`をquality-controlとしてcontracts/tooling/deps/rustへ保守的に分類したが、
+  初回contracts preflightは別の保持中worktree内の一時directory消失を`du`が横切って停止した。
+  単独再検査とcontracts再実行はpass。広域tooling群は隔離worktree配下fixtureのread-only mount、
+  AF_UNIX path長、環境固有tmpfs判定により541件中17 error・1 failureで、対象30件のpassとは分離して記録する。
+  scope外のdeps/rust群へ進まず、full gate成功とは扱わない。
+
 - [ ] M0〜M7が完了し、Git SHA基点の実装/review差戻しループを実runtimeで受け入れた。
 - [ ] 影響ドキュメントが更新済み。
 - [ ] 同一base/head/tested SHA・選択群の成功CIとURL、またはdirtyを含むローカル変更別検証を記録した。
@@ -857,3 +889,4 @@ storageの同じ欠損3件でcontractsが停止。全gate成功とは扱わな�
 | 2026-09-22 | Codex | 第2実装batch: 可視統括host driver・永続反復台帳・失敗検証の同session認可を接続。実Git/模擬providerの差戻し一巡を確認。共有Run/inbox・実runtime・統合/公開/配備は未完 |
 | 2026-09-22 | Codex | 第3実装batch: 共有Run、FIFO通知、回答/ACKの送信前intent、UI統括watch/decideを接続。1 Runで4 Dispatchの反復と全完了ACKをfixture確認。実UI/provider受入・統合/公開/配備は未完 |
 | 2026-09-22 | Codex | 第4実装batch: 承認済み直列merge・combined検証/固定review・単担当の最終差戻しを接続。実Gitで再統合まで一巡。競合等の修正・実runtime・公開/配備は未完 |
+| 2026-09-23 | Codex | TAK-8回帰試運転の最終承認後、欠損していたactive resource 3件をexact sourceで実復旧。元consumer/holdを維持し、旧Cargo cache非復旧と再生成条件を記録 |

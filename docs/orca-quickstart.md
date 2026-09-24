@@ -144,6 +144,27 @@ orca file open docs/orca-quickstart.md --worktree path:/home/satotakumi/projects
 - TAK-12で実A/B・固定reviewerの差戻し・再実装・統合・最終承認と8 attemptの通知排出を確認済みです。
   途中の保守介入を含むため無介入試験とは区別します。詳細は[実受入記録](development-infra/orca-ui-extension.md)を参照してください。
 
+### 2026-09-24 TAK-14 実運用ループ
+
+実際のゲーム変更TAK-14を、同じRun・同じ統括sessionのまま、実装A、統括検証、checkpoint、固定review、
+統合、統合後検証、最終固定reviewまで進めました。最終統合HEADは
+`d8443c89cfe3399f3e0e1ca493f9d7efca254a88`です。固定reviewerが指摘した文書の不整合は、
+workerへゲーム実装scope外の編集を許可せず、統括専用の文書補正を2回行って同じreviewerへ戻し、最終承認を得ています。
+
+この実案件から、次の運用を恒久化しました。
+
+- production差分のHelp判断は、実際のbase/head/sourceと変更pathへ拘束したreceiptだけを受理し、同じloopを再開する。
+- 検証済みsourceに対する統括回答の遅延や失敗settlementは、検証を再実行せずexact receiptから再開する。
+- Linearの一時的なruntime停止は新規配車を作らず待機し、復旧後はexact停止digestから同じ工程を再開する。
+- workerの質問は15秒の有限待機後も同じmessage IDを継続し、回答待ちのまま`worker_done`を送らない。
+- 最終承認後は実装A/B/reviewerの所有タブだけを、出力保全・identity・idle・PTY終了を確認して閉じる。
+  統括タブは利用者の戻り先として残す。補助shellも同じ安全条件で個別に整理し、bulk closeは使わない。
+
+TAK-14では利用者によるUUID、slot、ticket path、手動配車commandの入力はありませんでした。
+一方、最初の受付から一度も保守介入せず完走したcold-start試験ではありません。今回露出した停止を同一Runで
+修復・回復した受入であり、次の新規案件で「入力形式の訂正0回・手動再開0回」を確認するまで、開始速度の最終評価は保留します。
+制御基盤の全Python試験669件は成功しました。ユーザー指定によりゲーム実装テストは実行していません。
+
 ### 2026-09-23のタブ管理修正
 
 TAK-8で確認した「空の統括＋実装A三つ＋レビュー」の5タブを契機に、

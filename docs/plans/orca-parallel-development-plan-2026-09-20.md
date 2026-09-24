@@ -5,8 +5,8 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `orca-parallel-development-plan-2026-09-20` |
-| ステータス | In Progress — Orca Tasksを唯一の利用者向け受付とし、Linear-linked worktreeの可視統括と日本語A/B/review tabを実装。試験課題`TAK-5`から実装課題`TAK-6`・分離worktree・次の可視統括tabへの自動引継ぎを実runtime受入済み。実案件の編集→検証→固定review一巡を残す |
-| 作成日 / 最終更新日 | 2026-09-20 / 2026-09-22 |
+| ステータス | In Progress — 固定受付、Linear-linked worktreeの可視統括、日本語A/B/review tab、実案件の編集→検証→固定review→統合→最終reviewを受入。無介入cold-startと稼働中中断復旧を残す |
+| 作成日 / 最終更新日 | 2026-09-20 / 2026-09-24 |
 | 作成者 | Codex |
 | 関連提案 | [並列実装と専任レビューの運用素案](../proposals/orca-parallel-development-proposal-2026-09-20.md) |
 | 関連Issue/PR | N/A（公開なし） |
@@ -26,6 +26,10 @@ opt-inのsettlement後終了処理を追加した。統括event駆動と統合�
 ゲーム変更・公開は含めない。既存のprimary上の並行変更は保全する。
 
 ## 現行計画: Linear受付と既存Orca基盤の再利用
+
+2026-09-23の[UI・受付・終了ライフサイクル統合計画](orca-ui-lifecycle-plan-2026-09-23.md)は、
+下記のTasks経由だけの入口を「固定の受付・統括へ日本語で依頼する入口」へ改訂し、
+各担当の可視化と終了・再開まで一体化する。2026-09-24にTAK-14の実provider・実案件・最終review・承認後role tab整理まで受け入れた。無介入cold-startと稼働中agentの中断復旧は未完で、完了扱いしない。
 
 2026-09-21のユーザー指示により、依頼受付・進捗管理はLinearの標準連携へ寄せる。
 既存の資源制御、role launcher、固定reviewer、会話再開を再利用し、受付UIの自作拡張は止める。
