@@ -91,6 +91,7 @@
 - [plans/orca-parallel-development-plan-2026-09-20.md](plans/orca-parallel-development-plan-2026-09-20.md): 固定受付とOrca実行基盤の統合計画。可視統括、A/B、固定reviewer、実案件一巡を受入済み。無介入cold-start等は継続。
 - [plans/orca-git-review-loop-plan-2026-09-22.md](plans/orca-git-review-loop-plan-2026-09-22.md): Git基点の実装・差戻し・再review・統合ループ計画。実runtimeの最終reviewまで受入済み。公開/PR自動同期は継続。
 - [plans/orca-ui-lifecycle-plan-2026-09-23.md](plans/orca-ui-lifecycle-plan-2026-09-23.md): Orcaの固定受付・役割表示・終了/再開・作業場整理を一体化する計画。通常起動と承認後role tab整理まで受入済み。
+- [plans/orca-abcd-workflow-expansion-plan-2026-09-25.md](plans/orca-abcd-workflow-expansion-plan-2026-09-25.md): Orcaの自然文受付・状態パネル・自動loop、自己修復、A/B並列計画、統括判断によるLinear課題発行とGitHub/CI連携をA〜Dで段階実装する上位ロードマップ。
 - [development-infra/orca-ui-extension.md](development-infra/orca-ui-extension.md): 配備中のOrca本体UI/API、状態契約、既存controllerとの責務境界、受入済み範囲と残件。
 - [proposals/progression-and-choice-proposal-2026-08-09.md](proposals/progression-and-choice-proposal-2026-08-09.md): Track D の Dream Edict、Contract、Familiar 昇格を扱う進行・選択提案。
 - [proposals/archive/gameplay-management-improvements-proposal-2026-07-17.md](proposals/archive/gameplay-management-improvements-proposal-2026-07-17.md): Track A〜C のロードマップと完了履歴を保持するアーカイブ提案。
