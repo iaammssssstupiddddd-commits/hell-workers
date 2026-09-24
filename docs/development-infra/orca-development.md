@@ -5,6 +5,30 @@ Cursor実Task受入は2026.08.04-aaa8809。現在のinstalled版2026.09.18-9a776
 
 日常操作は [Orca 運用ガイド](../orca-quickstart.md) を入口にする。本書は権限・ticket・資源管理の詳細仕様。
 
+## A〜D拡張の第1実装batch（2026-09-25）
+
+[統合計画](../plans/orca-abcd-workflow-expansion-plan-2026-09-25.md)に基づき、host candidate
+`1312a652`とOrca本体UI candidate `8b4aa93e`を実装した。復帰可能な配備と隔離actual-window受入は完了し、
+次回通常起動後のcold-startと外部provider受入が残る。
+
+- 受付の外部write前に、統括所有のimmutableな判断を保存する。選択肢は`none`、`continue_existing`、
+  `create_child`、`create_standalone`だけである。利用者へLinear課題の事前作成や内部ID入力を求めない。
+- 新規実装は常に新規課題を作るのではない。同じ目的・受入条件なら既存課題または承認済みsuccessorを使い、
+  独立成果だけを子課題、新目的だけを独立課題にする。dirty/unknown/未承認loopから逃げるための新規発行は禁止する。
+- 計画は最大2 taskの依存DAGへ変換し、write pathだけでなく共有契約と順序依存も競合判定する。
+  Cursor Bは単純leaf、狭いwrite set、共有契約なし、依存なしの場合だけ使う。各ticketにはdigest付きの最小context packageを固定する。
+- reconcilerはreasonを型付き分類する。自動修復はsnapshot再投影、確定済みACK、同一session再接続、
+  終了済みterminal整理、idle controller再開に限定し、dirty source、unknown process、write結果不明は停止する。
+- 外部同期はoperation順のintent ledgerを正本とし、Linear/GitHub eventを未信頼の提案として扱う。
+  Draft PR intentはbase/head/tested/review SHAと公開権限が一致するまで送信可能にしない。
+  第1batchではledger・投影・gateまでで、実Linear/GitHub送信executorの受入は未完である。
+
+案件panelのschema 2はstage、wait reason、next action、observed time、受付判断、外部同期を追加した。
+schema 1はrollback用にread-only互換を維持し、未知versionは新規操作を拒否する。
+Linux packageと隔離actual-windowの固定受付表示は受入済み。配備先は
+`/home/satotakumi/.local/opt/orca-ide/ui-8b4aa93e`で、desktop iconとCLIは次回通常起動から使う。
+現在の旧main processとTAK-14は中断していないため、通常profileでのcold-start受入は次回起動後に行う。
+
 ## Git checkpointと差戻しの実装状況（2026-09-22）
 
 [Git基点レビュー反復計画](../plans/orca-git-review-loop-plan-2026-09-22.md)の第1〜第4実装batchとして、

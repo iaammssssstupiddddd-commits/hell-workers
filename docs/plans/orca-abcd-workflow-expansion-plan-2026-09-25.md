@@ -5,7 +5,7 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `orca-abcd-workflow-expansion-plan-2026-09-25` |
-| ステータス | `Draft — 計画策定完了・実装未着手` |
+| ステータス | `Active — 第1実装batch完了・実runtime受入待ち` |
 | 作成日 | `2026-09-25` |
 | 最終更新日 | `2026-09-25` |
 | 作成者 | `Codex` |
@@ -25,6 +25,25 @@
   - Linear新規課題は利用者の事前作成を要求せず、統括が根拠付きで「発行なし／既存継続／子課題／独立新規」を判断する。
 
 本計画は既存3計画の受入証拠を再利用し、未完項目をA〜Dの実装順へまとめる上位ロードマップである。既存計画を完了扱いにせず、そこで確定済みの安全境界・receipt・受入結果を複製しない。
+
+### 1.1 第1実装batch（2026-09-25）
+
+隔離したOrca worktreeへhost側の契約実装を`1312a652`、Orca本体cloneへ対応UIと表示E2Eを`8b4aa93e`としてcommitした。
+host側branchはremoteへpush済み。本体cloneは`stablyai/orca`へのwrite権限がないためlocal commitを正本候補として保持する。
+
+- M0/A: schema 1を読み取れるschema 2案件投影、未知versionのfail-closed、immutableな`intake_decision`、
+  stage・待ち理由・次操作・観測時刻・Linear判断・外部同期を一画面へ出す契約を実装した。
+- B: dirty source、unknown process、storage、runtime、stale snapshot、controller、terminal、session、ACK、bridge拒否を
+  型付き診断し、安全なsnapshot再投影・確定ACK・同一session再接続・終了済みterminal整理・idle controller再開だけを修復候補にした。
+- C: 最大2 taskの依存DAG、path/共有契約競合、Cursor Bの単純leaf適格性、digest付き最小context packageを実装し、
+  review loopとrole launcherへ拘束した。
+- D: 4択のLinear発行判断と固定write ID、冪等route journal、順序付き外部同期intent、Linear状態の非後退、
+  GitHub Draft PRのbase/head/tested/review SHAと公開権限gateを実装した。外部eventは提案としてのみ取り込む。
+
+Python Orca tooling 438件、Ruff/actionlint、差分検査、Orca UI unit 10件、web typecheck、変更行lintが成功した。
+Linux packageのglibc 2.31/native検査、隔離profileのactual-windowでschema 2受付表示も成功し、
+`/home/satotakumi/.local/opt/orca-ide/ui-8b4aa93e`へ復帰可能に配備した。desktop iconとCLIは次回通常起動から同buildを使う。
+稼働中TAK-14を中断しないため旧main processは終了していない。実Linear/GitHubへのadapter送信と中断注入を含むD4の完走は未完である。
 
 ## 2. スコープ
 
@@ -333,15 +352,15 @@
 
 ### 現在地
 
-- 進捗: `0%（計画策定のみ）`
-- 完了済み: A〜Dの境界、依存順、Linear統括判断、受入・rollback方針を文書化。
-- 未着手: M0以降のコード、schema、UI、外部adapter、実runtime受入。
+- 進捗: `65%（第1実装batch、隔離build配備、actual-window表示受入完了。通常runtime・外部provider E2E待ち）`
+- 完了済み: schema 2投影、Linear判断、route拘束、reconciler、DAG/context package、外部同期intent、UI表示と回帰試験。
+- 未完: 次回通常起動後のcold-start、実Linear/GitHub executor、代表中断、D4 E2E、最終資源解放。
 
 ### 次のAIが最初にやること
 
-1. activeなOrca案件を停止・変更せず、candidate、稼働Orca、本体拡張clone、現行台帳のHEAD/schema/dirty/processをread-only棚卸しする。
-2. M0の`case_state`と`intake_decision` schema、migration preview、fixtureを先に実装・reviewする。
-3. A1の受付分類を外部writeなしで接続し、相談では何も作らないことから受け入れる。
+1. activeなOrca案件を停止・変更せず、新しい本体buildとhost candidateを同じ隔離profileへ配備する。
+2. schema 1 rollback、schema 2表示、相談の`none`、実装の4択decisionをactual-windowで受け入れる。
+3. provider executorをintent ledgerへ接続し、試験専用Linear issue/Draft PRでtimeout・read-back・権限gateを検証する。
 
 ### ブロッカー/注意点
 
@@ -364,10 +383,10 @@
 ### 最終確認ログ
 
 - 最終docs/index/link検査: `2026-09-25` / pass（26 current、77 archived）
-- 最終Orca tooling: 未実施（計画文書のみで、実装は未着手）
+- 最終Orca tooling: candidate `1312a652`でPython Orca tooling 438件、Ruff/actionlint、diff checkがpass。Orca本体`8b4aa93e`でunit 10件、web typecheck、変更行lint、schema 2表示E2E 1件、Linux package検査、actual-window表示がpass
 - CI run URL / base・head・tested SHA / mode・選択群・結果: URLなし。`python3 scripts/dev.py ci check --base a75060baf151b750baa22546e5ee1df9ee2312cf --mode auto`、dirty文書を含むcontracts選択、pass
-- Help実レビュー / native受入要否・結果 / primary storage確認: No impact（計画・索引のみでゲームの入力、状態、player UI、asset、Help catalog/providerへ到達しない）/ native非対象 / validation storage pass
-- 未解決エラー: なし。実装は未着手。
+- Help実レビュー / native受入要否・結果 / primary storage確認: No impact（Orca host tooling、別アプリのOrca UI、配備metadata、運用文書だけを変更し、ゲームの入力、状態、player UI、asset、Help catalog/providerへ到達しない）/ nativeゲーム受入は非対象、Orca隔離actual-windowはpass / validation storage pass
+- 未解決事項: Orca本体commitのremote publish権限がなくlocal保持。実runtime配備と外部provider executor受入は未完。
 
 ### Definition of Done
 
@@ -384,3 +403,5 @@
 | 日付 | 変更者 | 内容 |
 | --- | --- | --- |
 | `2026-09-25` | `Codex` | A〜Dの統合ロードマップを作成。Linear新規発行を利用者の事前操作ではなく、統括の根拠付き4択判断へ固定 |
+| `2026-09-25` | `Codex` | 第1実装batchを反映。schema 2、受付判断、reconciler、DAG/context package、外部同期intent、対応UIを実装し、実runtime/外部provider受入を残件として明記 |
+| `2026-09-25` | `Codex` | schema 2表示E2EとLinux packageを追加し、隔離actual-windowを受入。新buildを復帰可能に配備し、稼働中案件を止めず次回通常起動へ設定 |

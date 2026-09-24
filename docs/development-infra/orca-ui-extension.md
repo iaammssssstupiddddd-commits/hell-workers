@@ -3,6 +3,23 @@
 2026-09-24。ユーザー許可のもと拡張ビルドへ一時切替し、実画面からの受入を進めている。
 全体の完了条件は[UIライフサイクル計画](../plans/orca-ui-lifecycle-plan-2026-09-23.md)に従う。
 
+## A〜D案件panel schema 2候補（2026-09-25）
+
+host candidate `1312a652`とOrca UI local commit `8b4aa93e`で、案件snapshotをschema 2へ拡張した。
+旧schema 1は表示互換を維持し、未知versionはfail-closedにする。新panelは既存role状態に加えて、
+現在工程、最終確認時刻、Linear発行判断と理由、待ち理由、次操作、外部同期状態と詳細を表示する。
+
+統括のLinear判断は`none / continue_existing / create_child / create_standalone`の4択であり、
+「実装依頼なら常に新規課題」という旧経路を置き換える。project-owned controllerがimmutable decisionを先に保存し、
+routeと固定write IDをそのdigestへ拘束する。外部同期は現段階ではdurable intentとUI投影であり、
+実Linear/GitHub executorが送信済みという意味ではない。
+
+UI contract unit 10件、web typecheck、変更行lint、schema 2表示E2E、host側Orca tooling 438件が成功した。
+Linux packageはglibc 2.31/native検査を通し、隔離actual-windowで固定受付の`Intake`、最終確認時刻、次操作、
+外部同期と相談・実装buttonを確認した。配備先は`/home/satotakumi/.local/opt/orca-ide/ui-8b4aa93e`。
+desktop iconとCLIは同buildへ切替済みだが、稼働中TAK-14を止めないため旧main processはそのままで、次回通常起動から有効になる。
+UI sourceは`stablyai/orca`へのwrite権限がないためlocal commitとして保持する。schema 1への通常profile復帰試験と外部provider受入は未完である。
+
 ## 一時配備と復帰
 
 本体sourceは `06cfe378`。配備先は `/home/satotakumi/.local/opt/orca-ide/ui-06cfe378`、
@@ -215,7 +232,7 @@ bridgeは固定受付と受付台帳の案件をsnapshotへ投影し、UIから�
 「要確認」とする。相談回答は案件詳細へ投影するが、実providerを使った受入は未実施。
 相談は実装dispatchでも、Orca上の可視「統括」agent tabでもない。ここを同一視しない。
 「実装を依頼」は相談と別の明示actionであり、`scripts/orca_supervision_route.py`が
-元依頼のreceiptを確認してから内部Linear課題と分離worktreeを一度だけ作成する。
+元依頼のreceiptとimmutableな受付判断を確認し、必要な場合だけ内部Linear課題と分離worktreeを一度だけ作成する。
 段階journalの`issue_creating`/`worktree_creating`で結果が不明なら自動再送せず要確認とする。
 linked issueから既定タブに可視統括が登録され、作業場・課題・terminal identityが一致した場合だけ
 パネルの統括移動ボタンを有効にする。担当A/Bとレビューは既存のguard付きdispatcher以外で起動しない。
