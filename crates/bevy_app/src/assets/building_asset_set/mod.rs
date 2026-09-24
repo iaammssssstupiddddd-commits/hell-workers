@@ -2,10 +2,13 @@
 //! Loading a manifest is not presentation activation or art approval.
 
 mod loader;
+mod pool;
+mod residency;
 mod schema;
 mod validation;
 
 pub use loader::{BuildingAssetLoadPolicy, BuildingAssetSetLoader};
+pub use pool::{BuildingAssetPool, BuildingAssetPoolFailure, BuildingAssetRequest};
 pub use schema::*;
 pub use validation::{BuildingAssetSetError, decode_buildingset};
 
