@@ -202,14 +202,18 @@ def complete_output(call, cli, handle: str) -> dict:
     """Preserve a capped preview or all retained completed lines by cursor."""
     preview = call(cli, ["terminal", "read", "--terminal", handle, "--limit", "2000"],
                    "role-tab-read")["terminal"]
-    if preview.get("handle") != handle or preview.get("truncated") is not False:
+    if preview.get("handle") != handle or type(preview.get("truncated")) is not bool:
         raise ValueError("scrollback preservation incomplete; do not close")
-    if preview.get("limited") is False:
+    if preview.get("limited") is False and preview.get("truncated") is False:
         return preview
-    if preview.get("oldestCursor") != "0" or not str(preview.get("latestCursor", "")).isdecimal():
+    if (not str(preview.get("oldestCursor", "")).isdecimal()
+            or not str(preview.get("latestCursor", "")).isdecimal()):
         raise ValueError("scrollback preservation incomplete; do not close")
+    oldest = int(preview["oldestCursor"])
     latest = int(preview["latestCursor"])
-    cursor = 0
+    if oldest > latest or (preview['truncated'] and oldest == 0):
+        raise ValueError("scrollback preservation incomplete; do not close")
+    cursor = oldest
     lines: list[str] = []
     for _ in range(20):
         if cursor >= latest:
@@ -217,13 +221,14 @@ def complete_output(call, cli, handle: str) -> dict:
         page = call(cli, ["terminal", "read", "--terminal", handle,
                           "--cursor", str(cursor), "--limit", "1000"], "role-tab-read")["terminal"]
         if (page.get("handle") != handle or page.get("truncated") is not False
+                or page.get("oldestCursor", str(oldest)) != str(oldest)
                 or page.get("latestCursor") != str(latest)
                 or not isinstance(page.get("tail"), list)
                 or page.get("returnedLineCount") != len(page["tail"])
                 or not str(page.get("nextCursor", "")).isdecimal()):
             raise ValueError("scrollback preservation incomplete; do not close")
         next_cursor = int(page["nextCursor"])
-        if next_cursor <= cursor or next_cursor > latest:
+        if next_cursor <= cursor or next_cursor > latest or next_cursor - cursor != len(page['tail']):
             raise ValueError("scrollback preservation incomplete; do not close")
         lines.extend(page["tail"])
         cursor = next_cursor
@@ -231,11 +236,13 @@ def complete_output(call, cli, handle: str) -> dict:
         raise ValueError("scrollback preservation exceeds the bounded archive; do not close")
     confirmed = call(cli, ["terminal", "read", "--terminal", handle, "--limit", "2000"],
                      "role-tab-read")["terminal"]
-    if (confirmed.get("handle") != handle or confirmed.get("truncated") is not False
+    if (confirmed.get("handle") != handle or confirmed.get("truncated") != preview['truncated']
+            or confirmed.get("oldestCursor") != str(oldest)
             or confirmed.get("latestCursor") != str(latest)):
         raise ValueError("scrollback changed during preservation; do not close")
-    return {"handle": handle, "tail": lines, "limited": False, "truncated": False,
-            "oldestCursor": "0", "nextCursor": str(latest), "latestCursor": str(latest),
+    return {"handle": handle, "tail": lines, "limited": False, "truncated": oldest > 0,
+            "retainedRangeComplete": True, "droppedBeforeCursor": str(oldest),
+            "oldestCursor": str(oldest), "nextCursor": str(latest), "latestCursor": str(latest),
             "returnedLineCount": len(lines), "preview": confirmed}
 
 

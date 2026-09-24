@@ -178,6 +178,21 @@ def wait_for_bridge(ticket: dict, slot: str, terminal: str) -> str:
     raise DispatchError("controlled role did not expose its bridge in time; preserve the terminal")
 
 
+def wait_for_cursor_bootstrap(bridge_id: str, timeout: float = BRIDGE_WAIT_SECONDS) -> None:
+    """A restored transcript's idle marker is not proof the new controller is ready."""
+    directory = task_bridge.root() / bindings.identity(bridge_id)
+    deadline = time.monotonic() + timeout
+    while True:
+        journal = frontdesk.read_private_json(directory / 'journal.json', {})
+        if journal.get('phase') != 'bootstrap' or journal.get('authority') is not None:
+            raise DispatchError('Cursor bootstrap authority is unexpected; no Task input sent')
+        if journal.get('cursor_stage') == 'bootstrap_rejected':
+            return
+        if time.monotonic() >= deadline:
+            raise DispatchError('Cursor initial prompt hook is not ready; no Task input sent')
+        time.sleep(0.1)
+
+
 def start(request_id: str, ticket_path: Path, slot: str, coordinator_handle: str,
           *, orca_cli: Path | None = None, metadata: Path | None = None,
           resume_session: str | None = None, follow_up: str | None = None,
@@ -310,6 +325,8 @@ def start(request_id: str, ticket_path: Path, slot: str, coordinator_handle: str
 
             data["bridge_id"] = wait_for_bridge(ticket, slot, data["terminal"])
             save(path, data)
+            if roles.provider_for(ticket, slot) == 'cursor':
+                wait_for_cursor_bootstrap(data['bridge_id'])
             # Bridge availability precedes provider startup. Injecting while the
             # bootstrap turn is busy can leave the preamble in the input buffer.
             idle = run_cli(executable, ["terminal", "wait", "--terminal", data["terminal"],

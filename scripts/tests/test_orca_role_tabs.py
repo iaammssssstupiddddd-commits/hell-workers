@@ -185,6 +185,23 @@ class RoleTabTests(unittest.TestCase):
         self.assertEqual(tabs.storage.read_private_json(path, {})["output"]["tail"], ["one", "two"])
         self.assertEqual(self.commands.count("role-tab-close"), 1)
 
+    def test_retire_preserves_entire_retained_range_and_marks_prior_ring_eviction(self):
+        preview = {'handle': 'term_fixture', 'tail': ['two'], 'limited': True,
+                   'truncated': True, 'oldestCursor': '400', 'latestCursor': '402'}
+        page = {**preview, 'tail': ['one', 'two'], 'truncated': False,
+                'nextCursor': '402', 'returnedLineCount': 2}
+        call = Mock(side_effect=[{'terminal': preview}, {'terminal': page}, {'terminal': preview}])
+        result = tabs.complete_output(call, Path('orca'), 'term_fixture')
+        self.assertEqual(result['tail'], ['one', 'two'])
+        self.assertTrue(result['retainedRangeComplete'])
+        self.assertTrue(result['truncated'])
+        self.assertEqual(result['droppedBeforeCursor'], '400')
+        self.assertIn('400', call.call_args_list[1].args[1])
+        moved = {**preview, 'oldestCursor': '401'}
+        call = Mock(side_effect=[{'terminal': preview}, {'terminal': page}, {'terminal': moved}])
+        with self.assertRaisesRegex(ValueError, 'changed'):
+            tabs.complete_output(call, Path('orca'), 'term_fixture')
+
     def test_retire_refuses_busy_or_unpreserved_output(self):
         owned = tabs.identity(self.row, self.repo)
         self.idle.side_effect = ValueError("busy")

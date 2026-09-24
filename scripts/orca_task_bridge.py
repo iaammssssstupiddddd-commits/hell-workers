@@ -576,6 +576,10 @@ class TaskPolicy:
                 else:
                     # No model turn, and therefore no editing, before a live
                     # preamble. Rejection is not a failed lifecycle mutation.
+                    if (self.authority is None and self.cursor_authority is None
+                            and prompt.startswith("BOOTSTRAP ONLY: Wait for the host's live supervised Dispatch.")):
+                        self.cursor_stage = "bootstrap_rejected"
+                        self.save()
                     return {"id": request_id, "ok": True, "result": {"observed": False, "continue": False},
                             "_meta": {"runtimeId": self.upstream.runtime_id}}
                 self.upstream.deadline = absolute_deadline

@@ -93,6 +93,19 @@ class OrcaDispatchTests(unittest.TestCase):
         import subprocess
         subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True)
 
+    def test_cursor_bootstrap_requires_new_controller_hook_not_old_idle_text(self):
+        with patch.object(dispatch.frontdesk, 'read_private_json', return_value={
+                'phase': 'bootstrap', 'authority': None, 'cursor_stage': 'initial'}):
+            with self.assertRaisesRegex(dispatch.DispatchError, 'initial prompt hook'):
+                dispatch.wait_for_cursor_bootstrap(BRIDGE, timeout=0)
+        with patch.object(dispatch.frontdesk, 'read_private_json', return_value={
+                'phase': 'bootstrap', 'authority': None, 'cursor_stage': 'bootstrap_rejected'}):
+            dispatch.wait_for_cursor_bootstrap(BRIDGE, timeout=0)
+        with patch.object(dispatch.frontdesk, 'read_private_json', return_value={
+                'phase': 'active', 'authority': {'dispatch': 'ctx_other'}, 'cursor_stage': 'bootstrap_rejected'}):
+            with self.assertRaisesRegex(dispatch.DispatchError, 'authority'):
+                dispatch.wait_for_cursor_bootstrap(BRIDGE, timeout=0)
+
     def test_unknown_role_is_rejected_before_external_mutations(self) -> None:
         orca_role_state.save_state({"schema": 1, "slot": "worker-a", "provider": "codex",
                                    "tasks": {}, "last": {"phase": "unknown"}})

@@ -364,6 +364,15 @@ Read the two requested files without editing them.
         self.assertEqual([call[1].get("type") for call in self.mutations()],
                          ["heartbeat", None, "worker_done"])
 
+    def test_cursor_initial_prompt_marks_hook_ready_without_admission(self):
+        policy = self.new_policy(cursor_hooks=True)
+        result = policy.handle_cursor_hook(self.hook(policy, 'beforeSubmitPrompt',
+            prompt="BOOTSTRAP ONLY: Wait for the host's live supervised Dispatch. Do not edit.", attachments=[]))
+        self.assertEqual(result['result'], {'observed': False, 'continue': False})
+        self.assertEqual(policy.cursor_stage, 'bootstrap_rejected')
+        self.assertIsNone(policy.authority)
+        self.assertEqual(self.mutations(), [])
+
     def test_cursor_automatic_format_followup_without_before_submit(self):
         policy = self.new_policy(cursor_hooks=True)
         policy.handle_cursor_hook(self.hook(policy, "beforeSubmitPrompt",
