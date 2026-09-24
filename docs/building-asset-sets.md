@@ -84,8 +84,9 @@ receiptは製品に同梱する承認記録の整合性検査であり、署名�
 
 ## typed residencyと世代pool
 
-- `BuildingAssetRequest`はkind・generationとmanifest handleを一組にし、同じkindの同世代以下を
-  再要求しない。より新しい世代だけをpendingとして開始する。
+- `BuildingAssetPool::request`はidentity（kind・generation）とmanifest handleをpending世代として
+  保持し、同じkindで試行済みのgeneration以下を再要求しない。戻り値`BuildingAssetRequest`は
+  `Started`／`PendingOccupied`／`AlreadyAttempted`の受付結果を表す。
 - mesh roleはglTFの`Mesh0/Primitive0`、image roleは通常の`Image`として読み込む。
   AssetServerのload失敗・再帰依存失敗はいずれも世代失敗として記録する。
 - world／catalog previewはmanifestの`canvas_px`と実画像寸法を照合する。不一致は昇格しない。
