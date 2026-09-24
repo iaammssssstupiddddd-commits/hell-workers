@@ -271,8 +271,8 @@ Linux packageのglibc 2.31/native検査、隔離profileのactual-windowでschema
 - 内部状態からLinearへ着手、review待ち、完了、停止要約を同期する。Linearの手動変更は提案eventとして取り込み、内部状態を直接変更しない。
 - Linear通信断では既知のローカル作業を保全し、外部同期待ちqueueを表示する。新規外部writeが必要な工程だけ待機する。
 - 完了条件:
-  - [ ] Linear Doneだけで内部review・merge・cleanupを成立させない。
-  - [ ] 復旧後にoperation ID順で同期し、古いstatusが新しい状態を上書きしない。
+  - [x] Linear Doneだけで内部review・merge・cleanupを成立させない。
+  - [x] 復旧後にoperation ID順で同期し、古いstatusが新しい状態を上書きしない。
 
 ### D3: GitHub Draft PR・CI・merge gate
 
@@ -280,8 +280,8 @@ Linux packageのglibc 2.31/native検査、隔離profileのactual-windowでschema
 - push/PR作成は案件の公開許可を満たした時だけ統括が実行する。許可がなければ準備状態で停止する。
 - CI successだけでHelp review、native受入、固定reviewer、storage cleanupを代替しない。
 - 完了条件:
-  - [ ] stale CI、別head、cancel/skip、base違いを成功扱いしない。
-  - [ ] fixed reviewer承認と必要gateの完了前にDraft解除・mergeできない。
+  - [x] stale CI、別head、cancel/skip、base違いを成功扱いしない。
+  - [x] fixed reviewer承認と必要gateの完了前にDraft解除・mergeできない。
   - [ ] GitHub→Linear標準連携は表示同期として使い、同じeventを独自adapterと二重投稿しない。
 
 ### D4: E2E実運用受入
@@ -352,15 +352,15 @@ Linux packageのglibc 2.31/native検査、隔離profileのactual-windowでschema
 
 ### 現在地
 
-- 進捗: `65%（第1実装batch、隔離build配備、actual-window表示受入完了。通常runtime・外部provider E2E待ち）`
-- 完了済み: schema 2投影、Linear判断、route拘束、reconciler、DAG/context package、外部同期intent、UI表示と回帰試験。
-- 未完: 次回通常起動後のcold-start、実Linear/GitHub executor、代表中断、D4 E2E、最終資源解放。
+- 進捗: `85%（外部sync executorと試験専用Linear/GitHub/merge受入まで完了。通常cold-startとD4全経路待ち）`
+- 完了済み: schema 2投影、Linear判断、route拘束、reconciler、DAG/context package、外部同期executor、UI表示、固定review、実Linear/GitHub E2E、試験branch merge。
+- 未完: 次回通常起動後のcold-start、固定受付からA/B/reviewまでを含むD4無介入正常系、app/controller/Linear/GitHub各中断の総合受入、最終資源解放。
 
 ### 次のAIが最初にやること
 
-1. activeなOrca案件を停止・変更せず、新しい本体buildとhost candidateを同じ隔離profileへ配備する。
-2. schema 1 rollback、schema 2表示、相談の`none`、実装の4択decisionをactual-windowで受け入れる。
-3. provider executorをintent ledgerへ接続し、試験専用Linear issue/Draft PRでtimeout・read-back・権限gateを検証する。
+1. activeなTAK-14が終了した次の通常起動で、`ui-dd50afed`とhost candidateのcold-startを確認する。
+2. 固定受付からA/B/review/CI/終了までの新規試験案件を、入力訂正・手動再開なしで一巡させる。
+3. app/controller/Linear/GitHubの各1回中断を同じ試験案件へ注入し、重複writeと成果消失がないことを確認する。
 
 ### ブロッカー/注意点
 
@@ -383,10 +383,10 @@ Linux packageのglibc 2.31/native検査、隔離profileのactual-windowでschema
 ### 最終確認ログ
 
 - 最終docs/index/link検査: `2026-09-25` / pass（26 current、77 archived）
-- 最終Orca tooling: candidate `1312a652`でPython Orca tooling 438件、Ruff/actionlint、diff checkがpass。Orca本体`8b4aa93e`でunit 10件、web typecheck、変更行lint、schema 2表示E2E 1件、Linux package検査、actual-window表示がpass
-- CI run URL / base・head・tested SHA / mode・選択群・結果: URLなし。`python3 scripts/dev.py ci check --base a75060baf151b750baa22546e5ee1df9ee2312cf --mode auto`、dirty文書を含むcontracts選択、pass
+- 最終Orca tooling: candidate `2897e3a1`でPython Orca tooling 460件、Ruff/actionlint、diff checkがpass。固定reviewerは同一HEADを承認。Orca本体`dd50afed`でcontract unit、web typecheck、変更行lint、Linux package/glibc検査、隔離actual-windowの表示・閉鎖がpass
+- CI run URL / base・head・tested SHA / mode・選択群・結果: [GitHub Actions 36070021122](https://github.com/iaammssssstupiddddd-commits/hell-workers/actions/runs/36070021122)。base `5a3cb0da7ba61a918620b6c9e214db713e8cf48c`、head/tested/review `2897e3a145a1b74d4aa790c94bafa87570128c79`。contracts/tooling/dependency auditはpass。ユーザー指定によりゲーム実装テストは本受入の完了条件に含めない
 - Help実レビュー / native受入要否・結果 / primary storage確認: No impact（Orca host tooling、別アプリのOrca UI、配備metadata、運用文書だけを変更し、ゲームの入力、状態、player UI、asset、Help catalog/providerへ到達しない）/ nativeゲーム受入は非対象、Orca隔離actual-windowはpass / validation storage pass
-- 未解決事項: Orca本体commitのremote publish権限がなくlocal保持。実runtime配備と外部provider executor受入は未完。
+- 未解決事項: Orca本体commitのremote publish権限がなくlocal保持。稼働中TAK-14を止めないため通常profile cold-startは次回起動待ち。D4の無介入全経路と代表中断matrixは未完。
 
 ### Definition of Done
 
@@ -405,3 +405,4 @@ Linux packageのglibc 2.31/native検査、隔離profileのactual-windowでschema
 | `2026-09-25` | `Codex` | A〜Dの統合ロードマップを作成。Linear新規発行を利用者の事前操作ではなく、統括の根拠付き4択判断へ固定 |
 | `2026-09-25` | `Codex` | 第1実装batchを反映。schema 2、受付判断、reconciler、DAG/context package、外部同期intent、対応UIを実装し、実runtime/外部provider受入を残件として明記 |
 | `2026-09-25` | `Codex` | schema 2表示E2EとLinux packageを追加し、隔離actual-windowを受入。新buildを復帰可能に配備し、稼働中案件を止めず次回通常起動へ設定 |
+| `2026-09-25` | `Codex` | external sync executorを実装。TAK-15とDraft PR #27でLinear status/comment、誤状態write拒否、SHA/権限gate、重複抑止、試験専用branch mergeを受入。host `2897e3a1`、UI `dd50afed`を固定review済み |

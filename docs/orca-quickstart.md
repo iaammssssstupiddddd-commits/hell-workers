@@ -131,9 +131,10 @@ orca file open docs/orca-quickstart.md --worktree path:/home/satotakumi/projects
 
 ## 現在の受入範囲
 
-2026-09-25のA〜D第1実装batchでは、案件panelへ工程、待ち理由、次操作、確認時刻、Linear判断、外部同期を
-表示するschema 2候補を実装した。host/UI契約、Linux package、隔離実画面の受付表示は成功し、
-desktop iconは次回通常起動から新buildを使う。稼働中案件を止めていないため、通常profileのcold-startと実Linear/GitHub executorは未完である。
+2026-09-25のA〜D実装では、案件panelへ工程、待ち理由、次操作、確認時刻、Linear判断、外部同期を
+表示するschema 2と、Linear/GitHubへ順序付きintentを安全に反映するexecutorを実装した。
+host/UI契約、Linux package、隔離実画面の受付表示とパネル閉鎖は成功し、desktop iconは次回通常起動から
+`ui-dd50afed`を使う。稼働中TAK-14を止めていないため、通常profileのcold-startだけは次回起動時に確認する。
 
 - Orca 1.4.205とLinear workspace `takumi sato` / team `TAK`の読取り接続を確認済みです。
 - Linear-linked worktreeから`--current`で固定snapshotを取り込み、UUID入力を不要にする実装を追加しました。
@@ -149,6 +150,10 @@ desktop iconは次回通常起動から新buildを使う。稼働中案件を止
   Orca上の`統括` tabが一つだけ保たれることを確認済みです。A/B/reviewerは未dispatchです。
 - TAK-12で実A/B・固定reviewerの差戻し・再実装・統合・最終承認と8 attemptの通知排出を確認済みです。
   途中の保守介入を含むため無介入試験とは区別します。詳細は[実受入記録](development-infra/orca-ui-extension.md)を参照してください。
+- 試験専用`TAK-15`で、Linearの着手・review・完了statusと結果commentをexecutorから送信し、read-backで確定しました。
+  実在するが種別の違う`Todo`をreview先に指定した異常系は`blocked_policy`で停止し、元の`In Progress`を変更していません。
+- 固定reviewerが承認し全460件のOrca系テストが成功したhost HEAD `2897e3a1`だけからDraft PR #27を作成しました。
+  同じoperationの再実行は`idle`となり重複PRを作らず、製品branchではなく試験専用targetへmergeして`TAK-15`をDoneにしました。
 
 ### 2026-09-24 TAK-14 実運用ループ
 

@@ -3,27 +3,36 @@
 2026-09-24。ユーザー許可のもと拡張ビルドへ一時切替し、実画面からの受入を進めている。
 全体の完了条件は[UIライフサイクル計画](../plans/orca-ui-lifecycle-plan-2026-09-23.md)に従う。
 
-## A〜D案件panel schema 2候補（2026-09-25）
+## A〜D案件panel schema 2と外部同期executor（2026-09-25）
 
-host candidate `1312a652`とOrca UI local commit `8b4aa93e`で、案件snapshotをschema 2へ拡張した。
+host candidate `2897e3a1`とOrca UI local commit `dd50afed`で、案件snapshotをschema 2へ拡張した。
 旧schema 1は表示互換を維持し、未知versionはfail-closedにする。新panelは既存role状態に加えて、
 現在工程、最終確認時刻、Linear発行判断と理由、待ち理由、次操作、外部同期状態と詳細を表示する。
 
 統括のLinear判断は`none / continue_existing / create_child / create_standalone`の4択であり、
 「実装依頼なら常に新規課題」という旧経路を置き換える。project-owned controllerがimmutable decisionを先に保存し、
-routeと固定write IDをそのdigestへ拘束する。外部同期は現段階ではdurable intentとUI投影であり、
-実Linear/GitHub executorが送信済みという意味ではない。
+routeと固定write IDをそのdigestへ拘束する。外部同期executorはoperation順にproviderを事前照合し、
+送信後のexact read-backが一致した時だけ`confirmed`にする。結果不明は`unknown`として再送せず、
+権限不足とpolicy不一致を別状態で表示する。
 
-UI contract unit 10件、web typecheck、変更行lint、schema 2表示E2E、host側Orca tooling 438件が成功した。
+UI contract unit、web typecheck、変更行lint、host側Orca tooling 460件が成功した。
 Linux packageはglibc 2.31/native検査を通し、隔離actual-windowで固定受付の`Intake`、最終確認時刻、次操作、
-外部同期と相談・実装buttonを確認した。配備先は`/home/satotakumi/.local/opt/orca-ide/ui-8b4aa93e`。
-desktop iconとCLIは同buildへ切替済みだが、稼働中TAK-14を止めないため旧main processはそのままで、次回通常起動から有効になる。
-UI sourceは`stablyai/orca`へのwrite権限がないためlocal commitとして保持する。schema 1への通常profile復帰試験と外部provider受入は未完である。
+外部同期と相談・実装button、パネルを閉じても別の稼働中Orcaが停止しないことを確認した。
+配備先は`/home/satotakumi/.local/opt/orca-ide/ui-dd50afed`。desktop iconとCLIは同buildへ切替済みだが、
+稼働中TAK-14を止めないため旧main processはそのままで、次回通常起動から有効になる。
+UI sourceは`stablyai/orca`へのwrite権限がないためlocal commitとして保持する。
+
+試験専用`TAK-15`では、着手・review・完了statusとcommentを実Linearへ同期し、read-backを確定した。
+`Todo`をreview先に指定した異常系はstate type不一致で送信前に停止した。固定reviewer承認・全host test済みの
+HEADだけからDraft PR #27を一度作成し、再実行が`idle`であることを確認した。PRは製品branchへ入れず、
+同一base SHAの試験専用targetへmergeした。試験merge commitは`eb5e3d2d60ac947a721d06a909317596d65cd976`。
 
 ## 一時配備と復帰
 
-本体sourceは `06cfe378`。配備先は `/home/satotakumi/.local/opt/orca-ide/ui-06cfe378`、
-既存のOrca IDEアイコンは同directoryの `launch-supervised` を起動する。
+現在の配備sourceはlocal commit `dd50afed`、配備先は
+`/home/satotakumi/.local/opt/orca-ide/ui-dd50afed`。Orca IDEアイコンは同directoryの
+`launch-supervised`を起動する。稼働中processはTAK-14保全のため旧`ui-06cfe378`のままであり、
+通常終了後の次回起動で新配備へ切り替わる。旧directoryとdesktop設定backupはcold-start確認まで復帰用に保持する。
 サイドバーの `Reception & Coordination`（受付・統括）が固定入口。
 controllerは既存candidateの `scripts/orca_supervision.py`、状態保存先は
 `/home/satotakumi/.local/state/hell-workers/supervision-panel`。

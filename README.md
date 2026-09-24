@@ -62,7 +62,7 @@
 
 [Orca 運用ガイド](docs/orca-quickstart.md) — 依頼の出し方、担当分担、専用launcherでの開始、レビュー・再開の手順。
 文書の正本はprimary作業場に置き、Orca内のエディタから参照します。
-Linear標準受付を使う[現行計画](docs/plans/orca-parallel-development-plan-2026-09-20.md)では、既存の権限・資源制御と固定reviewerを再利用します。A/B限定編集・統括検証・固定review・2レーン並列実行を受入済みです。[A〜D拡張計画](docs/plans/orca-abcd-workflow-expansion-plan-2026-09-25.md)の第1batchでは、統括によるLinear発行4択判断、案件状態schema 2、限定自己修復、依存DAG、最小context、外部同期intentと対応UIを実装し、復帰可能な配備と隔離実画面を受け入れました。次回通常起動後のcold-startと実Linear/GitHub executorの受入は継続中です。
+Linear標準受付を使う[現行計画](docs/plans/orca-parallel-development-plan-2026-09-20.md)では、既存の権限・資源制御と固定reviewerを再利用します。A/B限定編集・統括検証・固定review・2レーン並列実行を受入済みです。[A〜D拡張計画](docs/plans/orca-abcd-workflow-expansion-plan-2026-09-25.md)では、統括によるLinear発行4択判断、案件状態schema 2、限定自己修復、依存DAG、最小context、外部同期executorと対応UIを実装しました。試験専用`TAK-15`とDraft PR #27でLinear status/comment、GitHub Draft PR、重複抑止、誤状態へのwrite拒否、試験branch mergeを受入済みです。稼働中TAK-14を止めないため、通常profileのcold-startだけを次回Orca起動時の確認項目として残しています。
 
 ### ビルドと実行
 ```bash
