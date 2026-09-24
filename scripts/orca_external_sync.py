@@ -9,6 +9,7 @@ import re
 import subprocess
 import uuid
 from pathlib import Path
+from urllib.parse import quote
 
 if __package__:
     from . import orca_frontdesk as storage, orca_issue_context as intake
@@ -21,7 +22,8 @@ else:
 
 SCHEMA = 1
 NAMESPACE = uuid.UUID("6598f23d-5741-5aaf-988f-a13d7f9c6559")
-PHASES = {"queued", "sending", "confirmed", "unknown", "blocked_authority"}
+PHASES = {"queued", "sending", "confirmed", "unknown", "blocked_authority",
+          "blocked_policy"}
 LINEAR_STAGES = {"started": 1, "review": 2, "completed": 3, "stopped": 4}
 LINEAR_TARGETS = {
     "started": "In Progress", "review": "In Review",
@@ -119,17 +121,27 @@ def queue_linear_status(state_dir: Path, request_id: str, issue: str, stage: str
                         summary: str, *, target_state: str | None = None) -> dict:
     if stage not in LINEAR_STAGES or not isinstance(issue, str) or not issue:
         raise ValueError("invalid Linear sync target")
+    target = target_state or LINEAR_TARGETS[stage]
+    if not isinstance(target, str) or not target.strip():
+        raise ValueError("Linear sync requires an exact target state")
+    payload = {"issue": issue, "stage": stage, "summary": summary,
+               "targetState": target.strip()}
     current = read(state_dir, request_id)
+    operation_id = str(uuid.uuid5(
+        NAMESPACE, f"{request_id}\nlinear_status\n{payload_digest(payload)}",
+    ))
+    exact = [item for item in current["operations"] if item["id"] == operation_id]
+    if exact:
+        return exact[0]
+    unresolved = [item for item in current["operations"]
+                  if item["kind"] == "linear_status" and item["phase"] == "unknown"]
+    if unresolved:
+        raise ValueError("unknown Linear status must be reconciled before a new status")
     prior = [item for item in current["operations"] if item["kind"] == "linear_status"
              and item["phase"] != "unknown"]
     if prior and LINEAR_STAGES[prior[-1]["payload"]["stage"]] > LINEAR_STAGES[stage]:
         raise ValueError("stale Linear status cannot overwrite a newer case stage")
-    target = target_state or LINEAR_TARGETS[stage]
-    if not isinstance(target, str) or not target.strip():
-        raise ValueError("Linear sync requires an exact target state")
-    return enqueue(state_dir, request_id, "linear_status",
-                   {"issue": issue, "stage": stage, "summary": summary,
-                    "targetState": target.strip()})
+    return enqueue(state_dir, request_id, "linear_status", payload)
 
 
 def queue_linear_comment(state_dir: Path, request_id: str, issue: str, body: str) -> dict:
@@ -143,7 +155,8 @@ def queue_github_draft(state_dir: Path, request_id: str, *, branch: str, base: s
                        head: str, tested_sha: str, review_sha: str,
                        publication_authorized: bool, repository: str | None = None,
                        base_branch: str | None = None, title: str | None = None,
-                       body: str | None = None) -> dict:
+                       body: str | None = None,
+                       publication_receipt: str | None = None) -> dict:
     for value, label in ((base, "base"), (head, "head"), (tested_sha, "tested SHA"),
                          (review_sha, "review SHA")):
         if not isinstance(value, str) or not SHA.fullmatch(value):
@@ -160,6 +173,11 @@ def queue_github_draft(state_dir: Path, request_id: str, *, branch: str, base: s
         if not all(isinstance(value, str) and value.strip() for value in optional.values()):
             raise ValueError("Draft PR executor metadata must be complete")
         payload.update({key: value.strip() for key, value in optional.items()})
+        if publication_authorized:
+            if (not isinstance(publication_receipt, str)
+                    or not re.fullmatch(r"[A-Za-z0-9._:-]{1,200}", publication_receipt)):
+                raise ValueError("Draft PR publication requires an authority receipt")
+            payload["authorityReceipt"] = publication_receipt
     return enqueue(state_dir, request_id, "github_draft_pr", payload,
                    authorized=publication_authorized)
 
@@ -167,7 +185,7 @@ def queue_github_draft(state_dir: Path, request_id: str, *, branch: str, base: s
 def transition(state_dir: Path, request_id: str, operation_id: str, phase: str,
                result: dict | None = None) -> dict:
     intake.canonical_uuid(operation_id, "external operation id")
-    if phase not in {"sending", "confirmed", "unknown"}:
+    if phase not in {"sending", "confirmed", "unknown", "blocked_policy"}:
         raise ValueError("invalid external operation transition")
     with acquire_host("external-sync", inherit=False):
         data = read(state_dir, request_id)
@@ -175,16 +193,40 @@ def transition(state_dir: Path, request_id: str, operation_id: str, phase: str,
         if len(matches) != 1:
             raise ValueError("external operation is not unique")
         operation = matches[0]
-        allowed = {"queued": {"sending"}, "sending": {"confirmed", "unknown"},
-                   "confirmed": {"confirmed"}, "unknown": {"unknown"},
-                   "blocked_authority": set()}
+        allowed = {"queued": {"sending", "blocked_policy"},
+                   "sending": {"confirmed", "unknown"},
+                   "confirmed": {"confirmed"}, "unknown": {"confirmed", "unknown"},
+                   "blocked_authority": set(), "blocked_policy": set()}
         if phase not in allowed[operation["phase"]]:
             raise ValueError("external operation transition would replay or bypass authority")
         if operation["phase"] == phase:
             if operation["result"] != result:
                 raise ValueError("external operation result changed")
             return operation
-        operation.update(phase=phase, result=result)
+        next_result = operation["result"] if phase == "sending" and result is None else result
+        operation.update(phase=phase, result=next_result)
+        save(state_dir, data)
+        return operation
+
+
+def authorize_publication(state_dir: Path, request_id: str, operation_id: str,
+                          authority_receipt: str) -> dict:
+    intake.canonical_uuid(operation_id, "external operation id")
+    if (not isinstance(authority_receipt, str)
+            or not re.fullmatch(r"[A-Za-z0-9._:-]{1,200}", authority_receipt)):
+        raise ValueError("invalid publication authority receipt")
+    with acquire_host("external-sync", inherit=False):
+        data = read(state_dir, request_id)
+        matches = [item for item in data["operations"] if item["id"] == operation_id]
+        if len(matches) != 1 or matches[0]["kind"] != "github_draft_pr":
+            raise ValueError("Draft PR operation is not unique")
+        operation = matches[0]
+        if operation["phase"] == "queued" and operation["result"] == {
+                "authorityReceipt": authority_receipt}:
+            return operation
+        if operation["phase"] != "blocked_authority" or operation["result"] is not None:
+            raise ValueError("Draft PR operation cannot be authorized in its current phase")
+        operation.update(phase="queued", result={"authorityReceipt": authority_receipt})
         save(state_dir, data)
         return operation
 
@@ -215,6 +257,8 @@ def projection(state_dir: Path, request_id: str) -> dict:
         return {"state": "unknown", "detail": "外部書き込み結果を再照合中です"}
     if "blocked_authority" in phases:
         return {"state": "blocked_authority", "detail": "公開許可待ち。ローカル成果は保全済みです"}
+    if "blocked_policy" in phases:
+        return {"state": "blocked_policy", "detail": "外部状態が先行または対象SHAが変化したため停止しました"}
     if "sending" in phases:
         return {"state": "syncing", "detail": "外部サービスへ同期中です"}
     if "queued" in phases:
@@ -264,6 +308,7 @@ def _github_pr(payload: dict, operation_id: str, repo: Path) -> dict | None:
                and item.get("headRefName") == payload["branch"]
                and item.get("headRefOid") == payload["head"]
                and item.get("baseRefName") == payload["baseBranch"]
+               and item.get("baseRefOid") == payload["base"]
                and item.get("isDraft") is True
                and marker in item.get("body", "")]
     return matches[0] if len(matches) == 1 else None
@@ -297,6 +342,67 @@ def _read_back(operation: dict, orca_cli: Path, repo: Path) -> dict | None:
     return None
 
 
+def _github_ref(repository: str, branch: str, repo: Path) -> str | None:
+    code, response = _run([
+        "gh", "api", f"repos/{repository}/git/ref/heads/{quote(branch, safe='')}",
+    ], cwd=repo)
+    if code or not isinstance(response, dict):
+        return None
+    target = response.get("object")
+    sha = target.get("sha") if isinstance(target, dict) else None
+    return sha if isinstance(sha, str) and SHA.fullmatch(sha) else None
+
+
+def _linear_rank(state: dict) -> int | None:
+    state_type, name = state.get("type"), state.get("name")
+    if state_type in {"triage", "backlog", "unstarted"}:
+        return 0
+    if state_type == "started":
+        return 2 if isinstance(name, str) and "review" in name.lower() else 1
+    if state_type == "completed":
+        return 3
+    if state_type == "canceled":
+        return 4
+    return None
+
+
+def _preflight(operation: dict, orca_cli: Path, repo: Path) -> tuple[bool | None, str | None]:
+    payload = operation["payload"]
+    if operation["kind"] in {"linear_status", "linear_comment"}:
+        result = _linear_issue(orca_cli, payload.get("issue", ""))
+        issue = result.get("issue") if result else None
+        if not isinstance(issue, dict):
+            return None, "linear_read_unavailable"
+        if operation["kind"] == "linear_comment":
+            return True, None
+        state = issue.get("state")
+        if not isinstance(state, dict):
+            return None, "linear_state_unavailable"
+        if state.get("name") == payload.get("targetState"):
+            return True, None
+        current_rank = _linear_rank(state)
+        target_rank = LINEAR_STAGES.get(payload.get("stage"))
+        if current_rank is None or target_rank is None:
+            return None, "linear_state_unclassified"
+        if state.get("type") in {"completed", "canceled"} or current_rank > target_rank:
+            return False, "linear_state_would_regress"
+        return True, None
+    if operation["kind"] == "github_draft_pr":
+        required = ("repository", "baseBranch", "branch", "base", "head")
+        if not all(isinstance(payload.get(key), str) and payload[key] for key in required):
+            return False, "github_executor_metadata_missing"
+        remote_base = _github_ref(payload["repository"], payload["baseBranch"], repo)
+        remote_head = _github_ref(payload["repository"], payload["branch"], repo)
+        if remote_base is None or remote_head is None:
+            return None, "github_ref_read_unavailable"
+        if remote_base != payload["base"]:
+            return False, "github_base_sha_changed"
+        if remote_head != payload["head"]:
+            return False, "github_head_sha_changed"
+        return True, None
+    return False, "unsupported_external_sync_kind"
+
+
 def _send(operation: dict, orca_cli: Path, repo: Path) -> int:
     payload = operation["payload"]
     if operation["kind"] == "linear_status":
@@ -321,6 +427,11 @@ def _send(operation: dict, orca_cli: Path, repo: Path) -> int:
         required = ("repository", "baseBranch", "branch", "title", "body")
         if not all(isinstance(payload.get(key), str) and payload[key] for key in required):
             return 2
+        authority = payload.get("authorityReceipt")
+        if not authority and isinstance(operation.get("result"), dict):
+            authority = operation["result"].get("authorityReceipt")
+        if not isinstance(authority, str) or not authority:
+            return 2
         marked = f"{payload['body'].rstrip()}\n\n<!-- orca-op:{operation['id']} -->\n"
         code, _ = _run([
             "gh", "pr", "create", "--repo", payload["repository"], "--draft",
@@ -344,10 +455,16 @@ def execute_next(state_dir: Path, request_id: str, *, orca_cli: Path,
     operation = pending[0]
     if operation["phase"] == "blocked_authority":
         return {"state": "blocked_authority", "operation": operation}
+    if operation["phase"] == "blocked_policy":
+        return {"state": "blocked_policy", "operation": operation}
     verified = _read_back(operation, orca_cli, repo)
     if verified:
         if operation["phase"] == "queued":
             operation = transition(state_dir, request_id, operation["id"], "sending")
+        authority = operation.get("result", {}).get("authorityReceipt") \
+            if isinstance(operation.get("result"), dict) else None
+        if authority:
+            verified["authorityReceipt"] = authority
         operation = transition(state_dir, request_id, operation["id"], "confirmed", verified)
         return {"state": "confirmed", "operation": operation}
     if operation["phase"] in {"sending", "unknown"}:
@@ -355,10 +472,21 @@ def execute_next(state_dir: Path, request_id: str, *, orca_cli: Path,
             operation = transition(state_dir, request_id, operation["id"], "unknown",
                                    {"readBack": "not_confirmed"})
         return {"state": "unknown", "operation": operation}
+    allowed, reason = _preflight(operation, orca_cli, repo)
+    if allowed is None:
+        return {"state": "waiting_preflight", "reason": reason, "operation": operation}
+    if allowed is False:
+        operation = transition(state_dir, request_id, operation["id"], "blocked_policy",
+                               {"reason": reason})
+        return {"state": "blocked_policy", "operation": operation}
     operation = transition(state_dir, request_id, operation["id"], "sending")
     code = _send(operation, orca_cli, repo)
     verified = _read_back(operation, orca_cli, repo)
     if verified:
+        authority = operation.get("result", {}).get("authorityReceipt") \
+            if isinstance(operation.get("result"), dict) else None
+        if authority:
+            verified["authorityReceipt"] = authority
         operation = transition(state_dir, request_id, operation["id"], "confirmed", verified)
         return {"state": "confirmed", "operation": operation}
     operation = transition(state_dir, request_id, operation["id"], "unknown",
@@ -376,7 +504,9 @@ def main() -> int:
     result = execute_next(args.state_dir.resolve(), args.request_id,
                           orca_cli=args.orca_cli.resolve(), repo=args.repo.resolve())
     print(json.dumps(result, ensure_ascii=False, sort_keys=True))
-    return 0 if result["state"] in {"idle", "confirmed", "blocked_authority"} else 2
+    return 0 if result["state"] in {
+        "idle", "confirmed", "blocked_authority", "blocked_policy", "waiting_preflight",
+    } else 2
 
 
 if __name__ == "__main__":
