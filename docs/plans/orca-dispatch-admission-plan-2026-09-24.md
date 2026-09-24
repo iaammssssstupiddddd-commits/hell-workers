@@ -49,6 +49,10 @@ primaryの既存dirty docsは保全し、公開は許可済み試験範囲に限
 
 ### M3 実受入
 
+- 停止した統括の正常終了、既知Dispatchのsettlement/release、全作業場の正確なsourceと会話を照合してからtoolingのみを更新する。
+- 未配車B差分を回復台帳へ保存して同じ差分だけ取り消す。終了コードや成功Taskを捏造せず、端末closeの正の証拠を使用する。
+- 同じRun・作業場・provider sessionを維持し、新しい正確なsubjectでAを再レビュー、Bを正規配車する。中断した保守の無条件再実行は禁止する。
+- 統括も元のsessionを明示して再開する。採用済みコードの更新だけで起動中driverが更新されたとは扱わない。
 - [ ] 既存TAK-12のsource/Task/Dispatch/process証拠に基づく回復。
 - [ ] 実A/B・固定reviewerで差戻しを含むループ、重複タブなし、終了通知処理を確認。
 

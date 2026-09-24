@@ -90,6 +90,24 @@ candidateから直接旧loopをtickする試行は作業場一致guardで拒否�
 次は旧subject/session/終了証拠を保全する回復・配備経路を整え、同じ試験環境で再受入する。
 新規Runや手書き承認を使って未完の試験を迂回しない。
 
+停止中の保守は `scripts/orca_maintenance_recovery.py` が所有する。統括の正常終了、全Dispatchの
+settlement/release、全作業場のsource fingerprintを照合し、通常のmailbox経路で通知を処理する。
+tooling以外の変更・生存中process・未確定Dispatchがあれば更新しない。Aのcheckpointと会話を保持し、
+Bの未配車差分はprivate回復台帳へ保存してexact patchのみ取り消す。正のterminal close証拠を
+終了根拠とし、終了code 0や成功Taskを生成しない。更新後は同じRun・作業場・provider sessionで
+新subjectを再検証・再レビューする。保守中断時は再適用せず照合が必要。
+統括の `launch --resume-session` は保存会話のIDとcwdを確認してから起動状態を変更する。
+Help判断はNo impact（host管理と開発試験に限定、ゲーム側の入力・状態・文言の変更なし）。
+
+再受入で、固定reviewerの同じterminalを使った2回目の通知を、旧Dispatchとの曖昧性で
+停止する問題を確認した。通知の帰属はterminal単独ではなく、bridgeの確定送信receiptと
+Task/Dispatch/Run/本文の一致で決める。複数の確定owner、本文改変、権限不一致は拒否する。
+`resume-inbox`はexact停止台帳と全通知の確定receiptを再照合する保守で、手動ACKは行わない。
+統括の実作業場は起動cwdとOrca terminal identityから照合し、host制御コードの配置場所と分離する。
+dispatcherも制御コードと同じ配備のrole launcherを使う。凍結中のreview対象を更新せず制御を修正できる。
+Cursorのhook生成format再提出では、beforeSubmitPromptが省略される自動followupも、
+同じ会話に対する未消費のhost発行retryが1件ある場合だけ次generationへ結び付ける。
+
 復帰先の現行版は `/home/satotakumi/.local/opt/orca-ide/1.4.205/squashfs-root/orca-ide`。
 終了後・切替前の設定を `/home/satotakumi/.config/orca-pre-ui-bb614da7-20260924`、
 起動アイコンを `/home/satotakumi/.local/share/applications/stably-orca.desktop.pre-ui-bb614da7` に保全した。
