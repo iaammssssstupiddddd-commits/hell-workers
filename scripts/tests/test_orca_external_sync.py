@@ -272,6 +272,18 @@ class ExternalSyncTests(unittest.TestCase):
         )
         self.assertEqual(old["phase"], "superseded")
         self.assertEqual(old["result"]["supersededBy"], successor["id"])
+        self.assertEqual(
+            sync.supersede_policy_block(
+                self.root, REQUEST, blocked["id"], successor["id"],
+                "Workflow state name was corrected after read-back",
+            ),
+            old,
+        )
+        with self.assertRaisesRegex(ValueError, "different intent"):
+            sync.supersede_policy_block(
+                self.root, REQUEST, blocked["id"], successor["id"],
+                "A different retry reason",
+            )
         verified = {"provider": "linear", "issue": "TAK-99", "state": "In Progress"}
         with patch.object(sync, "_read_back", side_effect=[None, verified]), \
                 patch.object(sync, "_preflight", return_value=(True, None)), \

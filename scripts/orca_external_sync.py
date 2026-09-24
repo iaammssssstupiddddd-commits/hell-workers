@@ -245,6 +245,12 @@ def supersede_policy_block(state_dir: Path, request_id: str, operation_id: str,
         if len(blocked) != 1 or len(successors) != 1:
             raise ValueError("policy block and successor must be unique")
         old, new = blocked[0], successors[0]
+        if old["phase"] == "superseded":
+            recorded = old["result"] if isinstance(old["result"], dict) else {}
+            if (recorded.get("supersededBy") == successor_id
+                    and recorded.get("supersedeReason") == reason.strip()):
+                return old
+            raise ValueError("policy block was superseded by different intent")
         if (old["phase"] != "blocked_policy" or new["phase"] != "queued"
                 or old["kind"] != new["kind"] or new["sequence"] <= old["sequence"]):
             raise ValueError("invalid policy block successor")
