@@ -112,6 +112,14 @@ class ExternalSyncTests(unittest.TestCase):
                 publication_authorized=True, repository="owner/repo",
             )
 
+    def test_linear_comment_uses_marker_not_a_fresh_provider_retry_id(self) -> None:
+        operation = sync.queue_linear_comment(self.root, REQUEST, "TAK-99", "body")
+        with patch.object(sync, "_run", return_value=(0, {"ok": True})) as run:
+            self.assertEqual(sync._send(operation, self.cli, self.repo), 0)
+        command = run.call_args.args[0]
+        self.assertNotIn("--write-id", command)
+        self.assertIn(f"<!-- orca-op:{operation['id']} -->", run.call_args.kwargs["stdin"])
+
 
 if __name__ == "__main__":
     unittest.main()

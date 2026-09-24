@@ -311,9 +311,11 @@ def _send(operation: dict, orca_cli: Path, repo: Path) -> int:
         if not isinstance(issue, str) or not issue or not isinstance(body, str) or not body:
             return 2
         marked = f"{body}\n\n<!-- orca-op:{operation['id']} -->\n"
+        # Orca's --write-id is a provider-issued retry token, not a caller
+        # idempotency key. The durable operation marker plus the sending phase
+        # prevents a second initial submission and makes crash read-back exact.
         code, _ = _run([str(orca_cli), "linear", "comment", "add", issue,
-                        "--body-file", "-", "--write-id", operation["id"], "--json"],
-                       stdin=marked)
+                        "--body-file", "-", "--json"], stdin=marked)
         return code
     if operation["kind"] == "github_draft_pr":
         required = ("repository", "baseBranch", "branch", "title", "body")
