@@ -47,9 +47,27 @@ def message_subject(data: dict, row: dict) -> dict | None:
     question = row.get("type") == "question"
     matches = [item for item in data["attempts"].values()
                if ("dispatch:" + item["dispatch_id"] if question else item["terminal"]) == row.get("from_handle")]
-    if len(matches) != 1:
+    if not matches:
         raise ValueError("message has no unique owned Dispatch; coordinator reconciliation required")
-    attempt = matches[0]
+    confirmed, waiting = [], False
+    for attempt in matches:
+        result = attempt_message_subject(data, row, attempt)
+        if result is True:
+            confirmed.append(attempt)
+        elif result is None:
+            waiting = True
+    if len(confirmed) > 1:
+        raise ValueError("message has multiple confirmed Dispatch owners")
+    if confirmed:
+        return confirmed[0]
+    if waiting:
+        return None
+    raise ValueError("message has no confirmed bridge receipt; do not infer lifecycle authority")
+
+
+def attempt_message_subject(data: dict, row: dict, attempt: dict) -> bool | None:
+    """A reused terminal is only a candidate; the immutable receipt owns the message."""
+    question = row.get("type") == "question"
     if question:
         payload = dispatch.task_bridge.wire.decode(row.get("payload", "").encode())
         if (payload.get("taskId") != attempt["task_id"] or payload.get("dispatchId") != attempt["dispatch_id"]
@@ -77,12 +95,12 @@ def message_subject(data: dict, row: dict) -> dict | None:
             # Ignore runtime read flags/timestamps, but not body or routing changes.
             if any(row.get(key) != value for key, value in message.items()):
                 raise ValueError("message differs from the confirmed bridge receipt")
-            return attempt
+            return True
         if row["type"] == "question" and result.get("messageId") == row["id"]:
-            return attempt
+            return True
     if journal.get("phase") == "active" and any(item.get("phase") == "pending" for item in operations.values()):
         return None  # ask may be in its bounded wait before saving its receipt.
-    raise ValueError("message has no confirmed bridge receipt; do not infer lifecycle authority")
+    return False
 
 
 def accept_batch(data: dict, result: dict, expected_ack: str | None) -> None:

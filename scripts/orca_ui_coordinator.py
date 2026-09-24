@@ -39,7 +39,11 @@ else:
     from host_coordination import HostBusyError, acquire_host, state_root
 
 
-REPO = Path(__file__).resolve().parents[1]
+# The coordinator owns its Orca working directory, not the location of its
+# installed control code. This lets tooling be upgraded without changing a
+# frozen worker or integration subject. terminal_environment still verifies
+# the exact runtime-provided workspace identity before launch.
+REPO = Path.cwd().resolve()
 TERMINAL = re.compile(r"term_[A-Za-z0-9_-]{1,128}")
 SAFE_REF = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/-]{0,254}")
 SAFE_NAME = re.compile(r"[^a-z0-9]+")

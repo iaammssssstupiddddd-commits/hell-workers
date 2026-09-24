@@ -364,6 +364,24 @@ Read the two requested files without editing them.
         self.assertEqual([call[1].get("type") for call in self.mutations()],
                          ["heartbeat", None, "worker_done"])
 
+    def test_cursor_automatic_format_followup_without_before_submit(self):
+        policy = self.new_policy(cursor_hooks=True)
+        policy.handle_cursor_hook(self.hook(policy, "beforeSubmitPrompt",
+            generation_id="initial", prompt=self.cursor_preamble(), attachments=[]))
+        policy.handle_cursor_hook(self.hook(policy, "afterAgentResponse",
+            generation_id="initial", text="Non-JSON result"))
+        retry = policy.handle_cursor_hook(self.hook(policy, "stop",
+            generation_id="initial", status="completed", loop_count=0))
+        self.assertEqual(retry["result"]["followup_message"], bridge.CURSOR_RESULT_FOLLOWUP)
+        final = json.dumps({"outcome": "succeeded", "subject": "Done",
+                            "body": "Completed. Scope unchanged. No tests run."})
+        response = policy.handle_cursor_hook(self.hook(policy, "afterAgentResponse",
+            generation_id="automatic-retry", text=final))
+        self.assertTrue(response["result"]["observed"])
+        settled = policy.handle_cursor_hook(self.hook(policy, "stop",
+            generation_id="automatic-retry", status="completed", loop_count=1))
+        self.assertEqual(settled["result"]["outcome"], "succeeded")
+
     def test_cursor_hook_ignores_bootstrap_turn_but_rejects_changed_or_pending_authority(self):
         policy = self.new_policy(cursor_hooks=True)
         bootstrap = policy.handle_cursor_hook(self.hook(

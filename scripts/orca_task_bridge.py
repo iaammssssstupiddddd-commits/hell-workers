@@ -540,6 +540,17 @@ class TaskPolicy:
             if self.cursor_conversation not in (None, conversation):
                 raise wire.Refused("Cursor conversation changed")
             self.cursor_conversation = conversation
+            # Cursor's stop followup_message is controller-generated and may
+            # start its response without another beforeSubmitPrompt callback.
+            # Only the one outstanding host-issued formatting retry can bind
+            # that generation; ordinary unarmed responses remain ignored.
+            if (self.cursor_retry_pending and self.cursor_authority is not None
+                    and event in {"afterAgentResponse", "stop"}
+                    and generation != self.cursor_generation):
+                self.cursor_generation = generation
+                self.cursor_response = None
+                self.cursor_retry_pending = False
+                self.cursor_stage = "result_retry_prompt"
             if event == "beforeSubmitPrompt":
                 prompt = params.get("prompt")
                 if not isinstance(prompt, str) or len(prompt.encode()) > 256 * 1024:

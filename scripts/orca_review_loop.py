@@ -627,6 +627,26 @@ def resume_review_wait(request_id: str, terminal: str, slot: str, expected: str)
             return data
 
 
+def resume_inbox(request_id: str, terminal: str, expected: str) -> dict:
+    """Resume only a verified receipt-correlation pause, without acknowledging mail."""
+    with acquire_host(LOCK, inherit=False):
+        data = load(request_id)
+        dispatch.checked_coordinator(request_id, terminal)
+        if (data['terminal'] != terminal or bindings.digest(data) != expected
+                or data['phase'] != 'paused'
+                or data['reason'] != 'inbox: message has no unique owned Dispatch; coordinator reconciliation required'
+                or data['inbox']['operation'] is not None or not data['inbox']['messages']):
+            raise ValueError('exact inspected receipt-correlation pause required')
+        for item in data['inbox']['messages'].values():
+            if mail.message_subject(data, item['row']) is None:
+                raise ValueError('message receipt is not confirmed yet')
+        directory = STORAGE.checked_directory(root() / 'inbox-recoveries')
+        STORAGE.write_ledger(directory / f'{expected}.json', {'before': data, 'sha256': expected})
+        data.update(phase='active', reason=None)
+        save(data)
+        return data
+
+
 def decide(request_id: str, terminal: str, message_id: str, body: str, disposition: str) -> dict:
     with acquire_host(LOCK, inherit=False):
         data = load(request_id)
@@ -724,7 +744,7 @@ class Driver:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=("register", "show", "tick", "watch", "decide", "route", "resume-review-wait"))
+    parser.add_argument("action", choices=("register", "show", "tick", "watch", "decide", "route", "resume-review-wait", "resume-inbox"))
     parser.add_argument("--request-id", required=True)
     parser.add_argument("--coordinator", required=True)
     parser.add_argument("--spec", type=Path)
@@ -735,7 +755,11 @@ def main() -> int:
     parser.add_argument("--expected-sha256")
     args = parser.parse_args()
     try:
-        if args.action == "resume-review-wait":
+        if args.action == "resume-inbox":
+            if not args.expected_sha256:
+                raise ValueError('inbox recovery requires inspected ledger digest')
+            result = resume_inbox(args.request_id, args.coordinator, args.expected_sha256)
+        elif args.action == "resume-review-wait":
             if not args.slot or not args.expected_sha256:
                 raise ValueError("review wait recovery requires slot and inspected ledger digest")
             result = resume_review_wait(args.request_id, args.coordinator, args.slot, args.expected_sha256)

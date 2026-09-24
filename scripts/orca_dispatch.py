@@ -281,7 +281,7 @@ def start(request_id: str, ticket_path: Path, slot: str, coordinator_handle: str
             save(path, data)
 
             launcher_argv = [
-                sys.executable, str(Path(ticket["repo"]) / "scripts/orca_roles.py"), "launch",
+                sys.executable, str(Path(__file__).resolve().with_name("orca_roles.py")), "launch",
                 "--ticket", str(ticket_path), "--slot", slot,
                 "--bridge-orca", str(executable), "--bridge-metadata", str(metadata),
             ]

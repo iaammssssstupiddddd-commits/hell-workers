@@ -97,6 +97,40 @@ class LoopMailTests(unittest.TestCase):
         self.assertEqual(sum(call.args[2] == "run-create" for call in self.cli.call_args_list), 1)
         self.assertEqual(self.saved[0]["run"]["phase"], "creating")
 
+    def test_reused_terminal_is_correlated_by_confirmed_receipt(self):
+        row = self.row('worker_done', 'msg_current')
+        old = {**self.attempt, 'dispatch_id': 'ctx_previous', 'task_id': 'task_previous',
+               'bridge_id': 'fded5f49-0111-4f4b-89e8-84dab2b6ca43', 'released': True}
+        self.data['attempts'][old['dispatch_id']] = old
+        journal = {'phase': 'settled', 'authority': {
+            'run': old['run_id'], 'task': old['task_id'], 'dispatch': old['dispatch_id'],
+            'coordinator': self.data['terminal']}, 'operations': {}}
+        mail.storage.write_ledger(self.root / old['bridge_id'] / 'journal.json', journal)
+        self.assertEqual(mail.message_subject(self.data, row), self.attempt)
+        journal['operations'] = copy.deepcopy(self.journal['operations'])
+        mail.storage.write_ledger(self.root / old['bridge_id'] / 'journal.json', journal)
+        with self.assertRaisesRegex(ValueError, 'multiple confirmed'):
+            mail.message_subject(self.data, row)
+
+    def test_inbox_resume_requires_exact_verified_pause_and_does_not_ack(self):
+        from contextlib import nullcontext
+        from scripts import orca_review_loop as loop
+        row = self.row('worker_done', 'msg_current')
+        self.data.update(phase='paused', reason='inbox: message has no unique owned Dispatch; coordinator reconciliation required')
+        self.data['inbox']['messages'] = {row['id']: {'row': row, 'phase': 'received'}}
+        expected = loop.bindings.digest(self.data)
+        with patch.object(loop, 'load', return_value=self.data), \
+             patch.object(loop, 'save', side_effect=self.save), \
+             patch.object(loop, 'root', return_value=self.root), \
+             patch.object(loop, 'acquire_host', return_value=nullcontext()), \
+             patch.object(loop.dispatch, 'checked_coordinator'):
+            with self.assertRaises(ValueError):
+                loop.resume_inbox('fixture', 'term_coordinator', 'wrong')
+            restored = loop.resume_inbox('fixture', 'term_coordinator', expected)
+            self.assertEqual(restored['phase'], 'active')
+            self.assertEqual(self.acks, [])
+            self.assertEqual(restored['inbox']['messages'][row['id']]['phase'], 'received')
+
     def test_unknown_run_creation_is_not_replayed(self):
         self.data["run"] = {"phase": "planned"}
         self.bound = False
