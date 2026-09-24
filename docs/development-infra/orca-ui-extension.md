@@ -59,6 +59,37 @@ Help判断はNo impact。変更した2つのPython fixtureは開発用provider�
 launcher終了記録を照合した。消失したsourceへの再照合だけでpausedになった旧loopを、
 内容を変更せずprivate台帳の`loops/closed/`へ履歴退避した。これは明示保守であり自動終了の成功ではない。
 
+### TAK-12からの受付修正（2026-09-24、実provider再受入は未完）
+
+candidate `9cb4103e`で以下を実装した。旧試験の成功記録へ書き換えず、停止中の作業場・session・差分は維持する。
+
+- Cursor初期promptから実作業本文を除去。controller hookはlive preamble、host arm、
+  同一Task/Dispatch/coordinator・terminal incarnationを確認した時だけ`continue=true`を返す。
+  配車前の任意promptは`continue=false`、bridgeエラーも明示拒否とexit 2にする。
+  hookの15秒timeout内でhost armを最大5秒待つ。実作業とCursorの完了形式は配車specへ渡す。
+  拒否契約は[Cursor公式hook仕様](https://prod.cursor.com/docs/hooks)と照合した。
+- launcherがreview対象のticket/base/head/source/validationをbridgeへ固定する。
+  succeeded `worker_done`の構造化reviewをupstreamへ送る前に検査する。
+  JSONまたはfindings形式の不備は送信なしで最大2回まで同一Dispatchの再提出を受け付ける。
+  対象hashの不一致、通信・権限不明、予算超過は従来どおり停止する。
+  loopの読み取り側も同一parserを使い、後段のsession/source照合は省略しない。
+- paused loopでも通知処理を行う。release確認済みの完了だけを通常mailbox経路でACKし、
+  新規配車・統合・質問への自動回答は行わない。
+- 配車失敗では機械可読なerror codeとrequest IDを診断に残す。
+  provider本文、stderr、認証tokenは診断へ転記しない。
+
+関連テスト102件と、比較基点`7f7526c997eb1f4e8abb349bd54b097a60e14e17`からの
+変更別`contracts, tooling`が成功した。検証sourceは
+`d61e56a6f8a12dbb0547f50e23bca0a19caed27b10a4d23b98c1c2266fe2d08d`。
+Help実レビューはNo impact。host開発制御→Orca/CLI/private台帳だけの変更で、
+ゲーム入力・UI・保存処理・runtime dataへ到達しない。ゲームテストは実行していない。
+
+**既存TAK-12への配備・状態回復と、実A/B/reviewerによる再完走はまだ確認していない。**
+candidateから直接旧loopをtickする試行は作業場一致guardで拒否され、通知ACKも行っていない。
+既存統括のdriverは旧worktreeのmoduleを保持しているため、candidateの更新だけでは切り替わらない。
+次は旧subject/session/終了証拠を保全する回復・配備経路を整え、同じ試験環境で再受入する。
+新規Runや手書き承認を使って未完の試験を迂回しない。
+
 復帰先の現行版は `/home/satotakumi/.local/opt/orca-ide/1.4.205/squashfs-root/orca-ide`。
 終了後・切替前の設定を `/home/satotakumi/.config/orca-pre-ui-bb614da7-20260924`、
 起動アイコンを `/home/satotakumi/.local/share/applications/stably-orca.desktop.pre-ui-bb614da7` に保全した。
