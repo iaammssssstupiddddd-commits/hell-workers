@@ -1,0 +1,700 @@
+from __future__ import annotations
+
+import tempfile
+import unittest
+import uuid
+from pathlib import Path
+from unittest.mock import patch
+
+from scripts import (
+    host_coordination,
+    orca_frontdesk,
+    orca_issue_context,
+    orca_ui_coordinator as ui,
+)
+
+
+WORKSPACE = "eeac8301-ddb2-4c31-8a6c-e2a7f2fc7efb"
+ISSUE = "884ddcd2-cef6-4869-a88d-14512684cce7"
+DIGEST = "a" * 64
+REQUEST = str(
+    uuid.uuid5(orca_issue_context.REQUEST_NAMESPACE, f"{WORKSPACE}\n{ISSUE}\n{DIGEST}")
+)
+TERMINAL = "term_175c1be5-9f01-4a44-8268-a0542fa4e781"
+
+
+class UiCoordinatorTests(unittest.TestCase):
+    def test_primary_discovery_uses_control_installation_not_controller_cwd(self):
+        with patch.object(ui, "REPO", Path("/outside-git")), patch.object(
+            ui.subprocess, "check_output", return_value="/primary/.git\n"
+        ) as git:
+            self.assertEqual(ui.primary_repo(), Path("/primary"))
+        self.assertEqual(git.call_args.args[0][2], str(Path(ui.__file__).resolve().parents[1]))
+
+    def setUp(self) -> None:
+        idle = patch.object(ui.role_tabs, "idle_shell")
+        idle.start()
+        self.addCleanup(idle.stop)
+        target = Path(__file__).resolve().parents[2] / "target"
+        target.mkdir(exist_ok=True)
+        temporary = tempfile.TemporaryDirectory(
+            prefix="orca-ui-coordinator-", dir=target
+        )
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        for module in (host_coordination, orca_frontdesk, orca_issue_context, ui, ui.role_tabs):
+            mock = patch.object(
+                module, "state_root", return_value=self.root / "coordination"
+            )
+            mock.start()
+            self.addCleanup(mock.stop)
+        orca_frontdesk.submit("immutable Linear request", REQUEST)
+        orca_frontdesk.write_ledger(
+            orca_issue_context.ledger_path(),
+            {
+                "schema": 1,
+                "imports": [
+                    {
+                        "request_id": REQUEST,
+                        "workspace_id": WORKSPACE,
+                        "issue_id": ISSUE,
+                        "identifier": "HW-42",
+                        "snapshot_sha256": DIGEST,
+                        "created_at": "2026-09-22T00:00:00+00:00",
+                    }
+                ],
+            },
+        )
+        environment = {
+            "ORCA_TERMINAL_HANDLE": TERMINAL,
+            "ORCA_WORKTREE_ID": f"fixture::{ui.REPO}",
+        }
+        env = patch.dict(ui.os.environ, environment, clear=False)
+        env.start()
+        self.addCleanup(env.stop)
+
+    def ready_coordinator(self) -> None:
+        imported = {"request_id": REQUEST, "linear_identifier": "HW-42"}
+        with patch.object(ui.intake, "import_current_issue", return_value=imported):
+            ui.prepare()
+        with patch.object(ui, "pin_coordinator_title") as pin:
+            ui.acknowledge(REQUEST)
+        pin.assert_called_once_with(TERMINAL)
+
+    def handoff_body(
+        self, content: str = "目的: 新仕様を実装する\n受入条件: 既存仕様を置換する"
+    ) -> Path:
+        path = self.root / "handoff.md"
+        path.write_text(content, encoding="utf-8")
+        path.chmod(0o600)
+        return path
+
+    @staticmethod
+    def issue_response(identifier: str = "HW-43") -> dict:
+        return {
+            "ok": True,
+            "result": {
+                "issue": {
+                    "identifier": identifier,
+                    "url": f"https://linear.app/example/issue/{identifier}",
+                },
+            },
+        }
+
+    @staticmethod
+    def worktree(identifier: str = "HW-43") -> dict:
+        path = "/tmp/orca-hw-43"
+        return {
+            "id": f"fixture::{path}",
+            "path": path,
+            "repoId": "fixture",
+            "linkedLinearIssue": identifier,
+        }
+
+    @staticmethod
+    def coordinator_terminal() -> dict:
+        return {
+            "handle": "term_8e4142eb-9cc8-4271-885f-4146b1d312fd",
+            "worktreeId": "fixture::/tmp/orca-hw-43",
+            "title": "統括",
+            "orphaned": False,
+        }
+
+    def test_prepare_and_acknowledge_bind_visible_terminal(self) -> None:
+        imported = {"request_id": REQUEST, "linear_identifier": "HW-42"}
+        with patch.object(ui.intake, "import_current_issue", return_value=imported):
+            result, state = ui.prepare()
+
+        self.assertEqual(result, imported)
+        self.assertEqual(state["phase"], "starting")
+        with patch.object(ui, "pin_coordinator_title") as pin:
+            ready = ui.acknowledge(REQUEST)
+        pin.assert_called_once_with(TERMINAL)
+        self.assertTrue(ready["ready"])
+        self.assertEqual(ui.require_ready(REQUEST, TERMINAL)["phase"], "ready")
+        with self.assertRaisesRegex(ui.UiCoordinatorError, "配車元"):
+            ui.require_ready(REQUEST, "term_other")
+
+    def test_request_view_keeps_routing_internal(self) -> None:
+        view = ui.request_view(REQUEST)
+        self.assertEqual(view["linear_identifier"], "HW-42")
+        self.assertIn("immutable Linear request", view["immutable_request"])
+        self.assertIn("Cursor CLI", view["routing"]["implementation_b"])
+
+    def test_prompt_forbids_requesting_internal_ids_from_user(self) -> None:
+        value = ui.prompt(REQUEST, "HW-42", ui.REPO)
+        self.assertIn("workspace UUID", value)
+        self.assertIn("入力・選択させてはいけません", value)
+        self.assertIn("実装BはCursor CLI", value)
+        self.assertIn("acknowledge", value)
+        self.assertIn("利用者へ課題作成や", value)
+        self.assertIn("orca_ui_coordinator.py handoff", value)
+        self.assertIn("--spec '<private spec file path>'", value)
+        self.assertIn("submit-help-review", value)
+        self.assertIn("orca_ui_coordinator.py preflight", value)
+        self.assertIn("register-successor", value)
+        self.assertIn("同じRunを継承", value)
+        self.assertIn(str(Path(ui.__file__).resolve()), value)
+        self.assertIn(str(Path(ui.__file__).with_name("orca_review_loop.py").resolve()), value)
+        self.assertNotIn("--spec '<private spec>'", value)
+        self.assertIn("旧タブは\n自動終了", value)
+
+    def test_workflow_preflight_returns_exact_base_after_storage_check(self) -> None:
+        self.ready_coordinator()
+        base = "b" * 40
+        commands = []
+
+        def run(command, **_kwargs):
+            commands.append(command)
+            if "successor-preflight" in command:
+                return ui.subprocess.CompletedProcess(
+                    command, 0,
+                    stdout=(f'{{"schema":1,"mode":"initial","request_id":"{REQUEST}"}}'),
+                    stderr="",
+                )
+            return ui.subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+        with (
+            patch.object(ui, "primary_repo", return_value=Path("/primary")),
+            patch.object(ui.subprocess, "check_output", side_effect=[
+                base + "\n", "feature/work\n", base + "\n", "feature/work\n",
+            ]),
+            patch.object(ui.subprocess, "run", side_effect=run),
+        ):
+            result = ui.workflow_preflight(REQUEST)
+        self.assertEqual(result["mode"], "initial")
+        self.assertEqual(result["base"], base)
+        self.assertEqual(result["branch"], "feature/work")
+        self.assertEqual(result["storage"], "pass")
+        self.assertEqual(commands[-1][-2:], ["validation", "check"])
+
+    def test_workflow_preflight_uses_approved_successor_target_not_primary_head(self) -> None:
+        self.ready_coordinator()
+        base = "c" * 40
+        successor = {
+            "schema": 1,
+            "mode": "successor",
+            "request_id": REQUEST,
+            "repo": "/issue",
+            "branch": "hw-42",
+            "base": base,
+            "source_sha256": "d" * 64,
+            "loop_generation": 2,
+            "predecessor_loop_sha256": "e" * 64,
+            "run": {"id": "run_fixture", "consumer_generation": 1},
+        }
+        commands = []
+
+        def run(command, **_kwargs):
+            commands.append(command)
+            if "successor-preflight" in command:
+                return ui.subprocess.CompletedProcess(
+                    command, 0, stdout=__import__("json").dumps(successor), stderr=""
+                )
+            return ui.subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+        with (
+            patch.object(ui, "primary_repo") as primary,
+            patch.object(ui.subprocess, "check_output", side_effect=[base + "\n", "hw-42\n"]),
+            patch.object(ui.subprocess, "run", side_effect=run),
+        ):
+            result = ui.workflow_preflight(REQUEST)
+        primary.assert_not_called()
+        self.assertEqual(result["repo"], "/issue")
+        self.assertEqual(result["base"], base)
+        self.assertEqual(result["predecessor_loop_sha256"], "e" * 64)
+        self.assertIn("/issue/scripts/dev.py", commands[-1])
+
+    def test_route_created_issue_cannot_handoff_again(self) -> None:
+        self.ready_coordinator()
+        parent = "4252a97e-396b-4779-8ed8-a032f6f0dcda"
+        ui.record_supervision_origin(parent, REQUEST, "HW-42", f"fixture::{ui.REPO}")
+        self.assertIn("別のLinear課題やworktreeへ再handoffしない", ui.prompt(REQUEST, "HW-42", ui.REPO))
+        with patch.object(ui, "run_orca_response") as run:
+            with self.assertRaisesRegex(ui.UiCoordinatorError, "再handoff"):
+                ui.handoff(REQUEST, "別課題", str(self.handoff_body()), None)
+        run.assert_not_called()
+
+    def test_handoff_creates_child_issue_and_activated_worktree(self) -> None:
+        self.ready_coordinator()
+        body = self.handoff_body()
+        responses = [
+            (0, self.issue_response()),
+            (0, {"ok": True, "result": {"worktrees": []}}),
+            (0, {"ok": True, "result": {}}),
+            (0, {"ok": True, "result": {"worktrees": [self.worktree()]}}),
+            (0, {"ok": True, "result": {"terminals": []}}),
+            (
+                0,
+                {
+                    "ok": True,
+                    "result": {
+                        "visualLayouts": [
+                            {
+                                "worktreeId": "fixture::/tmp/orca-hw-43",
+                                "root": {"type": "group", "tabs": []},
+                            }
+                        ]
+                    },
+                },
+            ),
+            (0, {"ok": True, "result": {}}),
+            (
+                0,
+                {
+                    "ok": True,
+                    "result": {"terminals": [self.coordinator_terminal()]},
+                },
+            ),
+        ]
+        with (
+            patch.object(
+                ui, "resolve_source_ref", return_value=("feature/source", "b" * 40)
+            ),
+            patch.object(ui, "run_orca_response", side_effect=responses) as run,
+        ):
+            result = ui.handoff(
+                REQUEST, "新仕様へ切り替える", str(body), "feature/source"
+            )
+
+        self.assertTrue(result["ready"])
+        self.assertEqual(result["linear_identifier"], "HW-43")
+        linear_args, linear_body = run.call_args_list[0].args
+        self.assertEqual(linear_args[:2], ["linear", "create"])
+        self.assertNotIn("--parent", linear_args)
+        self.assertEqual(linear_args[linear_args.index("--workspace") + 1], WORKSPACE)
+        write_id = uuid.UUID(linear_args[linear_args.index("--write-id") + 1])
+        self.assertEqual(write_id.version, 4)
+        self.assertIn("目的: 新仕様を実装する", linear_body)
+        create_args = run.call_args_list[2].args[0]
+        self.assertIn("--linear-issue", create_args)
+        self.assertNotIn("--activate", create_args)
+        self.assertIn("--no-parent", create_args)
+        self.assertEqual(create_args[create_args.index("--setup") + 1], "skip")
+        terminal_args = run.call_args_list[6].args[0]
+        self.assertEqual(terminal_args[:2], ["terminal", "create"])
+        self.assertEqual(terminal_args[terminal_args.index("--title") + 1], "統括")
+        self.assertIn(
+            "default-entry", terminal_args[terminal_args.index("--command") + 1]
+        )
+        self.assertIn(
+            str(Path(ui.__file__).resolve()),
+            terminal_args[terminal_args.index("--command") + 1],
+        )
+        self.assertIn("--focus", terminal_args)
+        self.assertEqual(run.call_count, 8)
+
+        with (
+            patch.object(
+                ui, "resolve_source_ref", return_value=("feature/source", "b" * 40)
+            ),
+            patch.object(ui, "run_orca_response") as second_run,
+        ):
+            repeated = ui.handoff(
+                REQUEST, "新仕様へ切り替える", str(body), "feature/source"
+            )
+        self.assertEqual(repeated, result)
+        second_run.assert_not_called()
+
+    def test_handoff_reuses_existing_linked_worktree(self) -> None:
+        self.ready_coordinator()
+        body = self.handoff_body()
+        responses = [
+            (0, self.issue_response()),
+            (0, {"ok": True, "result": {"worktrees": [self.worktree()]}}),
+            (
+                0,
+                {
+                    "ok": True,
+                    "result": {"terminals": [self.coordinator_terminal()]},
+                },
+            ),
+        ]
+        with (
+            patch.object(ui, "resolve_source_ref", return_value=(None, "b" * 40)),
+            patch.object(ui, "run_orca_response", side_effect=responses) as run,
+        ):
+            result = ui.handoff(REQUEST, "局所修正", str(body), None)
+        self.assertTrue(result["ready"])
+        self.assertEqual(run.call_count, 3)
+
+    def test_handoff_retries_unconfirmed_write_once_and_stops(self) -> None:
+        self.ready_coordinator()
+        body = self.handoff_body()
+
+        def unconfirmed(
+            arguments: list[str], _input: str | None = None
+        ) -> tuple[int, dict]:
+            write_id = arguments[arguments.index("--write-id") + 1]
+            return 1, {
+                "ok": False,
+                "error": {"code": "linear_write_unconfirmed", "writeId": write_id},
+            }
+
+        with (
+            patch.object(ui, "resolve_source_ref", return_value=(None, "b" * 40)),
+            patch.object(ui, "run_orca_response", side_effect=unconfirmed) as run,
+        ):
+            with self.assertRaisesRegex(ui.UiCoordinatorError, "確定できません"):
+                ui.handoff(REQUEST, "重複させない", str(body), None)
+        self.assertEqual(run.call_count, 2)
+        state_file = next(
+            ui.handoff_root().glob("????????-????-????-????-????????????.json")
+        )
+        state = orca_frontdesk.read_private_json(state_file, {})
+        self.assertEqual(state["phase"], "unknown")
+        self.assertEqual(state["last_error_code"], "linear_write_unconfirmed")
+        self.assertIsNone(state["issue_identifier"])
+
+        responses = [
+            (0, self.issue_response()),
+            (0, {"ok": True, "result": {"worktrees": [self.worktree()]}}),
+            (
+                0,
+                {
+                    "ok": True,
+                    "result": {"terminals": [self.coordinator_terminal()]},
+                },
+            ),
+        ]
+        with (
+            patch.object(ui, "resolve_source_ref", return_value=(None, "b" * 40)),
+            patch.object(ui, "run_orca_response", side_effect=responses) as resumed,
+        ):
+            result = ui.handoff(REQUEST, "重複させない", str(body), None)
+        self.assertTrue(result["ready"])
+        resumed_args = resumed.call_args_list[0].args[0]
+        self.assertEqual(
+            resumed_args[resumed_args.index("--write-id") + 1],
+            state["linear_write_id"],
+        )
+
+    def test_handoff_marks_confirmed_write_failure_without_retry(self) -> None:
+        self.ready_coordinator()
+        body = self.handoff_body()
+        response = (1, {"ok": False, "error": {"code": "linear_write_failed"}})
+        with (
+            patch.object(ui, "resolve_source_ref", return_value=(None, "b" * 40)),
+            patch.object(ui, "run_orca_response", return_value=response) as run,
+        ):
+            with self.assertRaisesRegex(ui.UiCoordinatorError, "linear_write_failed"):
+                ui.handoff(REQUEST, "確定失敗", str(body), None)
+        self.assertEqual(run.call_count, 1)
+        state_file = next(
+            ui.handoff_root().glob("????????-????-????-????-????????????.json")
+        )
+        state = orca_frontdesk.read_private_json(state_file, {})
+        self.assertEqual(state["phase"], "failed")
+        self.assertEqual(state["last_error_code"], "linear_write_failed")
+
+    def test_handoff_recovers_legacy_uuid5_unknown_state(self) -> None:
+        self.ready_coordinator()
+        body = self.handoff_body()
+        legacy_write_id = str(uuid.uuid5(uuid.NAMESPACE_URL, "legacy"))
+
+        def unconfirmed(
+            arguments: list[str], _input: str | None = None
+        ) -> tuple[int, dict]:
+            write_id = arguments[arguments.index("--write-id") + 1]
+            return 1, {
+                "ok": False,
+                "error": {
+                    "code": "linear_write_unconfirmed",
+                    "writeId": write_id,
+                },
+            }
+
+        with (
+            patch.object(ui, "resolve_source_ref", return_value=(None, "b" * 40)),
+            patch.object(ui, "run_orca_response", side_effect=unconfirmed),
+        ):
+            with self.assertRaises(ui.UiCoordinatorError):
+                ui.handoff(REQUEST, "旧状態復旧", str(body), None)
+        state_file = next(
+            ui.handoff_root().glob("????????-????-????-????-????????????.json")
+        )
+        state = orca_frontdesk.read_private_json(state_file, {})
+        self.assertEqual(state["phase"], "unknown")
+        state["schema"] = 1
+        state["linear_write_id"] = legacy_write_id
+        del state["last_error_code"]
+        del state["coordinator_terminal"]
+        orca_frontdesk.write_ledger(state_file, state)
+
+        recovered_write_id = uuid.UUID("58d5bf9b-25c6-43ff-8939-c329182ff729")
+        responses = [
+            (0, self.issue_response()),
+            (0, {"ok": True, "result": {"worktrees": [self.worktree()]}}),
+            (
+                0,
+                {
+                    "ok": True,
+                    "result": {"terminals": [self.coordinator_terminal()]},
+                },
+            ),
+        ]
+        with (
+            patch.object(ui, "resolve_source_ref", return_value=(None, "b" * 40)),
+            patch.object(ui.uuid, "uuid4", return_value=recovered_write_id),
+            patch.object(ui, "run_orca_response", side_effect=responses) as run,
+        ):
+            result = ui.handoff(REQUEST, "旧状態復旧", str(body), None)
+        self.assertTrue(result["ready"])
+        args = run.call_args_list[0].args[0]
+        self.assertEqual(args[args.index("--write-id") + 1], str(recovered_write_id))
+
+    def test_handoff_body_rejects_internal_context(self) -> None:
+        body = self.handoff_body("内部: /home/example/session")
+        with self.assertRaisesRegex(ui.UiCoordinatorError, "ローカルパス"):
+            ui.read_handoff_body(str(body))
+
+    def test_registered_coordinator_survives_orca_title_rename(self) -> None:
+        self.ready_coordinator()
+        response = {
+            "ok": True,
+            "result": {
+                "terminals": [
+                    {
+                        "handle": TERMINAL,
+                        "worktreeId": f"fixture::{ui.REPO}",
+                        "title": "確認する HW-42依頼 | fixture",
+                        "orphaned": False,
+                    }
+                ]
+            },
+        }
+        with patch.object(ui, "run_orca_response", return_value=(0, response)):
+            terminals = ui.list_coordinator_terminals(f"fixture::{ui.REPO}")
+        self.assertEqual(terminals, [{"handle": TERMINAL}])
+
+    def test_registry_accepts_other_worktrees_without_adopting_their_state(self) -> None:
+        self.ready_coordinator()
+        foreign_id = str(uuid.uuid4())
+        foreign = {
+            **ui.load_state(REQUEST),
+            "request_id": foreign_id,
+            "repo": "/tmp/other-worktree",
+            "worktree_id": "fixture::/tmp/other-worktree",
+            "terminal": "term_other",
+        }
+        ui.save_state(foreign)
+        self.assertEqual(
+            ui.registered_coordinator_handles(f"fixture::{ui.REPO}"), {TERMINAL}
+        )
+        self.assertEqual(
+            ui.registered_coordinator_handles(foreign["worktree_id"]),
+            {"term_other"},
+        )
+        with self.assertRaisesRegex(ui.UiCoordinatorError, "作業場所"):
+            ui.load_state(foreign_id)
+
+    def test_registry_rejects_mismatched_foreign_worktree_identity(self) -> None:
+        self.ready_coordinator()
+        foreign_id = str(uuid.uuid4())
+        ui.save_state(
+            {
+                **ui.load_state(REQUEST),
+                "request_id": foreign_id,
+                "repo": "/tmp/other-worktree",
+            }
+        )
+        with self.assertRaisesRegex(ui.UiCoordinatorError, "状態が不正"):
+            ui.registered_coordinator_handles(f"fixture::{ui.REPO}")
+
+    def test_coordinator_reuses_default_visual_tab(self) -> None:
+        visual_terminal = "term_92b16a67-b67d-469e-8de1-0c077a5357d8"
+        worktree_id = "fixture::/tmp/orca-hw-43"
+        responses = [
+            (0, {"ok": True, "result": {"terminals": []}}),
+            (
+                0,
+                {
+                    "ok": True,
+                    "result": {
+                        "visualLayouts": [
+                            {
+                                "worktreeId": worktree_id,
+                                "root": {
+                                    "type": "group",
+                                    "tabs": [
+                                        {
+                                            "title": "統括",
+                                            "panes": {
+                                                "type": "terminal",
+                                                "handle": visual_terminal,
+                                            },
+                                        },
+                                        {
+                                            "title": "Setup",
+                                            "panes": {
+                                                "type": "terminal",
+                                                "handle": "term_8ccad957-a661-43d8-867d-a86e1d566a78",
+                                            },
+                                        },
+                                    ],
+                                },
+                            }
+                        ]
+                    },
+                },
+            ),
+            (
+                0,
+                {
+                    "ok": True,
+                    "result": {
+                        "send": {"handle": visual_terminal, "accepted": True}
+                    },
+                },
+            ),
+        ]
+        with patch.object(ui, "run_orca_response", side_effect=responses) as run:
+            result = ui.ensure_coordinator_terminal(worktree_id)
+        self.assertEqual(result, visual_terminal)
+        send_args = run.call_args_list[2].args[0]
+        self.assertEqual(send_args[:2], ["terminal", "send"])
+        self.assertIn("default-entry", send_args[send_args.index("--text") + 1])
+        self.assertIn(
+            str(Path(ui.__file__).resolve()), send_args[send_args.index("--text") + 1]
+        )
+
+    def test_launch_wait_retries_only_busy_coordinator(self) -> None:
+        with (
+            patch.object(
+                ui, "launch", side_effect=[host_coordination.HostBusyError("busy"), 0]
+            ) as launch,
+            patch.object(ui.time, "sleep") as sleep,
+            patch.object(ui.time, "monotonic", side_effect=[0.0, 0.0]),
+        ):
+            self.assertEqual(ui.launch_wait(timeout_seconds=5), 0)
+        self.assertEqual(launch.call_count, 2)
+        sleep.assert_called_once_with(1)
+
+    def test_provider_is_workspace_sandboxed_and_has_project_control_paths(
+        self,
+    ) -> None:
+        provider = ui.provider_command("/bin/codex", "prompt")
+        self.assertIn("--dangerously-bypass-approvals-and-sandbox", provider)
+        self.assertIn("gpt-5.6-sol", provider)
+        self.assertIn('model_reasoning_effort="high"', provider)
+        self.assertIn("mcp_servers.rust-analyzer-mcp.enabled=false", provider)
+        runtime = ui.prepare_runtime(ui.REPO)
+        config = runtime / "codex/config.toml"
+        self.assertEqual(config.stat().st_mode & 0o777, 0o600)
+        self.assertIn(f'[projects."{ui.REPO}"]', config.read_text(encoding="utf-8"))
+        with patch.object(ui.shutil, "which", return_value="/usr/bin/bwrap"):
+            command = ui.sandbox_command(provider, ui.REPO, runtime)
+        self.assertEqual(command[0], "/usr/bin/bwrap")
+        self.assertIn("--ro-bind", command)
+        self.assertNotIn("--unshare-net", command)
+        binds = [
+            command[index + 1]
+            for index, value in enumerate(command)
+            if value == "--bind"
+        ]
+        self.assertEqual(binds, [str(self.root), str(ui.REPO.parent), str(ui.REPO)])
+        self.assertEqual(command[command.index("--chdir") + 1], str(ui.REPO))
+
+
+class DefaultEntryTests(unittest.TestCase):
+    def test_background_coordinator_creation_does_not_take_focus(self):
+        with patch.object(ui, "list_coordinator_terminals", side_effect=[[], [{"handle": "term_fixture"}]]), \
+             patch.object(ui, "list_visual_coordinator_terminals", return_value=[]), \
+             patch.object(ui, "run_orca_response", return_value=(0, {"ok": True})) as run:
+            self.assertEqual(ui.ensure_coordinator_terminal("repo::/worktree", focus=False), "term_fixture")
+        args = run.call_args.args[0]
+        self.assertEqual(args[:2], ["terminal", "create"])
+        self.assertNotIn("--focus", args)
+
+    def test_exited_coordinator_restarts_in_same_idle_tab(self):
+        with patch.object(ui, "list_coordinator_terminals", return_value=[]), \
+             patch.object(ui, "list_visual_coordinator_terminals", return_value=["term_fixture"]), \
+             patch.object(ui.role_tabs, "default_path", return_value=Path("/fixture")), \
+             patch.object(ui.frontdesk, "read_private_json", return_value={"purpose": "coordinator-exited"}), \
+             patch.object(ui.role_tabs, "idle_shell") as idle, \
+             patch.object(ui, "launch_coordinator_in_terminal") as launch:
+            self.assertEqual(ui.ensure_coordinator_terminal("repo::/worktree"), "term_fixture")
+            idle.assert_called_once_with("term_fixture", "/worktree")
+            launch.assert_called_once_with("term_fixture")
+
+    def test_starting_coordinator_is_not_sent_another_launch(self):
+        worktree = "repo::/worktree"
+        row = {"handle": "term_fixture", "incarnationId": "incarnation", "worktreeId": worktree,
+               "worktreePath": "/worktree", "executionHostId": "local", "connected": True,
+               "writable": True, "orphaned": False}
+        marker = {"purpose": "coordinator", "identity": ui.role_tabs.identity(row, "/worktree")}
+        with patch.object(ui, "list_coordinator_terminals", return_value=[]), \
+             patch.object(ui, "list_visual_coordinator_terminals", return_value=["term_fixture"]), \
+             patch.object(ui.role_tabs, "default_path", return_value=Path("/fixture")), \
+             patch.object(ui.frontdesk, "read_private_json", return_value=marker), \
+             patch.object(ui, "run_orca_response", return_value=(0, {"ok": True, "result": {"terminal": row}})), \
+             patch.object(ui, "launch_coordinator_in_terminal") as launch:
+            self.assertEqual(ui.ensure_coordinator_terminal(worktree), "term_fixture")
+            launch.assert_not_called()
+
+    def test_unlinked_child_does_not_start_coordinator(self):
+        from scripts import orca_ui_coordinator as ui
+        from scripts import orca_role_tabs
+        with patch.object(ui, "terminal_environment", return_value=("term_fixture", "repo::child")), \
+             patch.object(orca_role_tabs, "record_default") as record, \
+             patch.object(ui, "run_orca_response", return_value=(0, {"ok": True, "result": {
+                 "worktree": {"id": "repo::child", "linkedLinearIssue": None},
+                 "terminal": {"handle": "term_fixture", "worktreeId": "repo::child"}}})), \
+             patch.object(ui, "launch_wait") as launch:
+            self.assertEqual(ui.default_entry(), 0)
+            launch.assert_not_called()
+            record.assert_called_once()
+
+    def test_linked_entry_marks_exit_and_failure(self):
+        from scripts import orca_ui_coordinator as ui
+        for failure in (False, True):
+            with self.subTest(failure=failure), \
+                 patch.object(ui.role_tabs, "record_default"), \
+                 patch.object(ui, "terminal_environment", return_value=("term_fixture", "repo::linked")), \
+                 patch.object(ui, "run_orca_response", return_value=(0, {"ok": True, "result": {
+                     "worktree": {"id": "repo::linked", "linkedLinearIssue": "TAK-8"},
+                     "terminal": {"handle": "term_fixture", "worktreeId": "repo::linked"}}})) as call, \
+                 patch.object(ui, "launch_wait", side_effect=RuntimeError("fixture") if failure else None,
+                              return_value=0):
+                if failure:
+                    with self.assertRaises(RuntimeError):
+                        ui.default_entry()
+                else:
+                    self.assertEqual(ui.default_entry(), 0)
+                self.assertEqual(call.call_args.args[0][-1], "統括・起動失敗" if failure else "統括・終了")
+
+
+class CoordinatorResumeTests(unittest.TestCase):
+    def test_resume_uses_exact_saved_session_not_last(self):
+        from scripts import orca_ui_coordinator as ui
+        session = "01a0d0d2-c64a-71a0-a2bd-4f44e1b15665"
+        command = ui.provider_command("codex", "resume intake", session)
+        self.assertEqual(command[:2], ["codex", "resume"])
+        self.assertEqual(command[-2:], [session, "resume intake"])
+        self.assertNotIn("--last", command)
+        with self.assertRaises(ValueError):
+            ui.provider_command("codex", "resume intake", "not-a-session")
+
+
+if __name__ == "__main__":
+    unittest.main()

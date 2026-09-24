@@ -53,7 +53,6 @@ SCHEMA_VERSION = 1
 RUNNING_EXIT_CODE = 2
 MIN_START_MEMORY_GIB = 10
 MIN_STAGE_START_MEMORY_GIB = 8
-TWO_JOB_MEMORY_GIB = 16
 MIN_WORKSPACE_FREE_GIB = 15
 RESOURCE_POLL_SECONDS = 1.0
 CAPTURE_TOOL_TIMEOUT_SECONDS = 5.0
@@ -705,7 +704,7 @@ def resource_snapshot(repo: Path, *, require_launcher: bool) -> dict[str, Any]:
         "swap_free_gib": optional_gib(memory["swap_free_bytes"]),
         "workspace_free_gib": gib(workspace_free),
         "tmp_free_gib": gib(tmp_free),
-        "cargo_jobs": 2 if available_memory >= TWO_JOB_MEMORY_GIB * GIB else 1,
+        "cargo_jobs": 1,
         "cargo_incremental": 0,
         "cargo_target": {
             "path": str(cargo_target),

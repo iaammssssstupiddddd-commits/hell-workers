@@ -11,20 +11,19 @@ from scripts.perf_tool import cli as perf_cli
 
 
 class BuildCoordinationTests(unittest.TestCase):
-    def test_shared_leases_can_coexist_but_exclusive_cannot(self) -> None:
+    def test_host_slot_serializes_even_shared_workspace_leases(self) -> None:
         with tempfile.TemporaryDirectory(
             dir=Path(__file__).resolve().parents[2] / "target"
         ) as directory:
             repo = Path(directory)
             first = build_coordination.acquire_activity(repo, "shared")
-            second = build_coordination.acquire_activity(repo, "shared")
             try:
                 self.assertEqual(first.mode, "shared")
-                self.assertEqual(second.mode, "shared")
+                with self.assertRaises(build_coordination.ActivityBusyError):
+                    build_coordination.acquire_activity(repo, "shared")
                 with self.assertRaises(build_coordination.ActivityBusyError):
                     build_coordination.acquire_activity(repo, "exclusive")
             finally:
-                second.close()
                 first.close()
 
             with build_coordination.acquire_activity(repo, "exclusive"):
@@ -67,7 +66,7 @@ class BuildCoordinationTests(unittest.TestCase):
             with build_coordination.acquire_activity(repo, "exclusive") as owner:
                 inherited = build_coordination.activity_lease_environment(owner)
                 self.assertEqual(
-                    build_coordination.activity_pass_fds(inherited), (owner.fd,)
+                    build_coordination.activity_pass_fds(inherited), (owner.fd, owner.host.fd)
                 )
                 with patch.dict("os.environ", inherited, clear=True):
                     with build_coordination.acquire_activity(repo, "exclusive") as borrowed:

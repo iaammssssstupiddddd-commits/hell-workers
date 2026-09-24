@@ -1,0 +1,10 @@
+# Basic preflight only: builds/tests are coordinator-owned and host-admitted.
+# Local repository hook overrides must be aligned with this file in Orca settings.
+setupAgentStartupPolicy: wait-for-setup
+scripts:
+  setup: python3 scripts/dev.py doctor
+# Linear-linked worktrees open one visible coordinator. It creates the guarded
+# A/B/review tabs only when their bounded tickets are ready.
+defaultTabs:
+  - title: 作業シェル
+    command: python3 "${ORCA_UI_COORDINATOR_SCRIPT:-scripts/orca_ui_coordinator.py}" default-entry

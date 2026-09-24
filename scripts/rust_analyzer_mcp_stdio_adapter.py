@@ -35,10 +35,17 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import BinaryIO, Iterator, Optional, Sequence
 
+try:
+    from host_coordination import HOST_FD_ENV, HostLease, acquire_host
+    from cargo_runtime import cargo_environment, require_cargo_memory
+except ModuleNotFoundError:
+    from scripts.host_coordination import HOST_FD_ENV, HostLease, acquire_host
+    from scripts.cargo_runtime import cargo_environment, require_cargo_memory
 
-DEFAULT_BACKEND_IDLE_SECONDS = 300.0
+
+DEFAULT_BACKEND_IDLE_SECONDS = 15.0
 DEFAULT_DAEMON_IDLE_SECONDS = 30.0
-RUNTIME_DIRECTORY_NAME = "hell-workers-rust-analyzer-mcp"
+RUNTIME_DIRECTORY_NAME = "hell-workers-rust-analyzer-mcp-host-v1"
 SOCKET_PATH_LIMIT = 100
 ENVIRONMENT_IDENTITY_KEYS = (
     "CARGO_TARGET_DIR",
@@ -392,6 +399,9 @@ def _start_daemon(
 ) -> None:
     subprocess.Popen(
         _daemon_command(workspace, endpoint, command, backend_idle, daemon_idle),
+        env={key: value for key, value in os.environ.items()
+             if key not in {HOST_FD_ENV, "HELL_WORKERS_ACTIVITY_LOCK_FD",
+                            "HELL_WORKERS_ACTIVITY_LOCK_MODE"}},
         stdin=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
@@ -468,19 +478,26 @@ class Backend:
         self._lock = threading.Lock()
         self._process: subprocess.Popen[bytes] | None = None
         self._last_request: float | None = None
+        self._host_lease: HostLease | None = None
 
     def _start_locked(self) -> None:
         if not self.command:
             raise RuntimeError("rust-analyzer-mcp command is empty")
-        self._process = subprocess.Popen(
-            [*self.command, str(self.workspace)],
-            cwd=self.workspace,
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            bufsize=0,
-            start_new_session=True,
-        )
+        self._host_lease = acquire_host(inherit=False)
+        try:
+            require_cargo_memory()
+            environment = cargo_environment(self.workspace, namespace=".ra-tmp", incremental=True)
+            environment = self._host_lease.environment(environment)
+            self._process = subprocess.Popen(
+                [*self.command, str(self.workspace)], cwd=self.workspace,
+                stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                bufsize=0, start_new_session=True, env=environment,
+                pass_fds=(self._host_lease.fd,),
+            )
+        except BaseException:
+            self._host_lease.close()
+            self._host_lease = None
+            raise
         assert self._process.stderr is not None
         threading.Thread(
             target=_drain_backend_stderr,
@@ -493,6 +510,9 @@ class Backend:
         self._process = None
         self._last_request = None
         if process is None:
+            if self._host_lease is not None:
+                self._host_lease.close()
+                self._host_lease = None
             return
         try:
             if process.stdin is not None and not process.stdin.closed:
@@ -516,6 +536,9 @@ class Backend:
             for stream in (process.stdin, process.stdout, process.stderr):
                 if stream is not None and not stream.closed:
                     stream.close()
+            if self._host_lease is not None:
+                self._host_lease.close()
+                self._host_lease = None
 
     @staticmethod
     def _terminate_process_group(process: subprocess.Popen[bytes], signal_number: int) -> None:

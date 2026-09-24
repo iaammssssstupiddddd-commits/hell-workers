@@ -40,8 +40,10 @@ except ModuleNotFoundError:
 
 try:
     from build_coordination import acquire_activity
+    from host_coordination import HOST_FD_ENV, host_pass_fds
 except ModuleNotFoundError:
     from scripts.build_coordination import acquire_activity
+    from scripts.host_coordination import HOST_FD_ENV, host_pass_fds
 
 try:
     from validation_storage import require_mutable
@@ -55,10 +57,6 @@ RUST_ATTRIBUTE = re.compile(r"#\s*!?\[(?P<body>.*?)]", re.DOTALL)
 CLIPPY_SUPPRESSION = re.compile(
     r"\b(?:allow|expect)\s*\([^)]*\bclippy::", re.DOTALL
 )
-CARGO_OUTPUT_CONFIG = re.compile(
-    r"(?:target-dir|build-dir)",
-    re.IGNORECASE,
-)
 
 
 def command_text(command: Sequence[str]) -> str:
@@ -69,6 +67,10 @@ def command_text(command: Sequence[str]) -> str:
 def reject_cargo_output_overrides(arguments: Sequence[str]) -> None:
     """Keep Cargo CLI options from bypassing the controlled output roots."""
     for index, argument in enumerate(arguments):
+        if (argument == "--jobs" or argument.startswith("--jobs=")
+                or argument.startswith("-j") or argument.startswith("+")
+                or argument.startswith("--test-threads")):
+            raise RuntimeError("Cargo toolchain/jobs/test-thread overrides are not supported")
         if argument == "--target-dir" or argument.startswith("--target-dir="):
             raise RuntimeError(
                 "Cargo target-dir overrides are not supported; use the controlled workspace or lane"
@@ -82,12 +84,12 @@ def reject_cargo_output_overrides(arguments: Sequence[str]) -> None:
         if config_value is None:
             continue
         config_text = config_value.strip()
-        config_override = CARGO_OUTPUT_CONFIG.search(config_text) is not None
+        config_override = re.search(r"target-dir|build-dir|\bjobs\b", config_text) is not None
         config_path = Path(config_text).expanduser()
         if not config_override and config_path.is_file():
             try:
                 config_override = (
-                    CARGO_OUTPUT_CONFIG.search(config_path.read_text(encoding="utf-8"))
+                    re.search(r"target-dir|build-dir|\bjobs\b", config_path.read_text(encoding="utf-8"))
                     is not None
                 )
             except OSError as error:
@@ -112,30 +114,30 @@ def run_command(
     env["PYTHONDONTWRITEBYTECODE"] = "1"
     if extra_env:
         env.update(extra_env)
+    # The quality runner itself keeps the host-wide lease. Unit tests patch
+    # coordination roots and must acquire fixture-local locks, so inheriting
+    # the real descriptor makes their otherwise isolated leases invalid.
+    if len(command) >= 3 and Path(command[0]).name.startswith("python") and command[1:3] == ["-m", "unittest"]:
+        env.pop(HOST_FD_ENV, None)
     lane = None
     requires_activity = False
     if command and Path(command[0]).name == "cargo":
         reject_cargo_output_overrides(command[1:])
+        if len(command) > 1 and command[1].startswith("-"):
+            raise RuntimeError("put the Cargo subcommand first; global overrides are not supported")
         lane = validate_inherited_lease(REPO_ROOT, env)
-        if len(command) > 1 and command[1] in {
-            "bench",
-            "build",
-            "check",
-            "clippy",
-            "doc",
-            "fix",
-            "install",
-            "run",
-            "rustc",
-            "test",
-        }:
-            requires_activity = True
+        # Aliases and external cargo commands may compile too; fail closed.
+        requires_activity = len(command) > 1 and command[1] not in {
+            "fmt", "metadata", "tree", "locate-project", "version",
+        }
     activity = None
     try:
         if requires_activity:
             require_mutable(REPO_ROOT)
             activity = acquire_activity(REPO_ROOT, "shared")
             require_cargo_memory()
+            assert activity.host is not None
+            env = activity.host.environment(env)
         if command and Path(command[0]).name == "cargo":
             env = cargo_environment(
                 REPO_ROOT,
@@ -144,7 +146,8 @@ def run_command(
                 incremental=incremental,
                 lane=lane,
             )
-        subprocess.run(command, cwd=REPO_ROOT, env=env, check=True)
+        subprocess.run(command, cwd=REPO_ROOT, env=env, check=True,
+                       pass_fds=host_pass_fds(env))
     finally:
         if activity is not None:
             activity.close()
@@ -303,9 +306,12 @@ def run_quality_tools(*, lint: bool = False, deps: bool = False, offline: bool =
     # Audits can use CPU/registry resources, so keep them out of native/perf captures.
     activity = acquire_activity(REPO_ROOT, "shared") if deps else None
     try:
+        if activity is not None and activity.host is not None:
+            environment.update(activity.host.environment(environment))
         for command in commands:
             print(f"+ {command_text(command)}", flush=True)
-            subprocess.run(command, cwd=REPO_ROOT, env=environment, check=True)
+            subprocess.run(command, cwd=REPO_ROOT, env=environment, check=True,
+                           pass_fds=host_pass_fds(environment))
     finally:
         if activity is not None:
             activity.close()

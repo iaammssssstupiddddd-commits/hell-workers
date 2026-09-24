@@ -11,8 +11,10 @@ import time
 import unittest
 from io import BytesIO
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 from scripts import rust_analyzer_mcp_stdio_adapter as adapter
+from scripts.cargo_runtime import cargo_memory_error
 
 
 FAKE_MCP_SERVER = r'''#!/usr/bin/env python3
@@ -45,10 +47,16 @@ for line in sys.stdin.buffer:
 
 class RustAnalyzerMcpStdioAdapterTests(unittest.TestCase):
     def setUp(self) -> None:
-        self.temporary_directory = tempfile.TemporaryDirectory()
+        target = Path(__file__).resolve().parents[2] / "target"
+        target.mkdir(exist_ok=True)
+        self.temporary_directory = tempfile.TemporaryDirectory(dir=target)
         self.root = Path(self.temporary_directory.name)
         self.workspace = self.root / "workspace"
         self.workspace.mkdir()
+        # This fixture lives under the repository's persistent target directory.
+        # Without its own Git root, the proxy resolves the parent checkout while
+        # teardown watches a different socket and misses its live backend.
+        subprocess.run(["git", "init", "-q", str(self.workspace)], check=True)
         (self.workspace / "Cargo.toml").write_text(
             "[workspace]\nmembers = []\n",
             encoding="utf-8",
@@ -160,6 +168,7 @@ class RustAnalyzerMcpStdioAdapterTests(unittest.TestCase):
         )
 
     def test_workspace_identity_keeps_incompatible_cargo_environments_separate(self) -> None:
+        self.assertEqual(adapter.workspace_root(self.workspace, {}), self.workspace)
         default_identity = adapter.workspace_identity(self.workspace, {})
         alternate_identity = adapter.workspace_identity(
             self.workspace,
@@ -168,6 +177,8 @@ class RustAnalyzerMcpStdioAdapterTests(unittest.TestCase):
 
         self.assertNotEqual(default_identity, alternate_identity)
 
+    @unittest.skipIf(cargo_memory_error() is not None,
+                     "host RAM guard prevents real backend startup")
     def test_concurrent_clients_share_one_backend_then_restart_after_idle(self) -> None:
         first = self._start_client()
         second = self._start_client()
@@ -235,6 +246,17 @@ class RustAnalyzerMcpStdioAdapterTests(unittest.TestCase):
             lambda: not adapter.socket_path(self.workspace, self.environment).exists(),
             timeout=3.0,
         )
+
+    def test_backend_admission_failure_releases_host_and_does_not_spawn(self) -> None:
+        backend = adapter.Backend(self.workspace, ["rust-analyzer-mcp"], 15)
+        lease = MagicMock()
+        with patch.object(adapter, "acquire_host", return_value=lease), \
+                patch.object(adapter, "require_cargo_memory", side_effect=RuntimeError("low RAM")), \
+                patch.object(adapter.subprocess, "Popen") as spawn:
+            with self.assertRaisesRegex(RuntimeError, "low RAM"):
+                backend._start_locked()
+        spawn.assert_not_called()
+        lease.close.assert_called_once()
 
 
 if __name__ == "__main__":

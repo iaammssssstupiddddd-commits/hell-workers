@@ -18,6 +18,11 @@ try:
 except ModuleNotFoundError:
     from scripts.cargo_runtime import persistent_storage_error, workspace_cargo_target
 
+try:
+    from host_coordination import HOST_FD_ENV, HostBusyError, HostLease, acquire_host, host_pass_fds
+except ModuleNotFoundError:
+    from scripts.host_coordination import HOST_FD_ENV, HostBusyError, HostLease, acquire_host, host_pass_fds
+
 
 ActivityMode = Literal["shared", "exclusive"]
 ACTIVITY_LOCK_NAME = ".cargo-activity.lock"
@@ -55,28 +60,54 @@ class ActivityLease:
     fd: int
     lock_path: Path
     borrowed: bool = False
+    host: HostLease | None = None
+    previous_host_fd: str | None = None
 
     def close(self) -> None:
+        if self.host is not None:
+            self.host.close()
+            self.host = None
         if self.fd < 0:
             return
         if self.borrowed:
             self.fd = -1
             return
-        try:
-            if fcntl is not None:
-                fcntl.flock(self.fd, fcntl.LOCK_UN)
-        finally:
-            os.close(self.fd)
-            self.fd = -1
+        os.close(self.fd)
+        self.fd = -1
 
     def __enter__(self) -> "ActivityLease":
+        # Recipe owners are single-threaded; descendants also need pass_fds.
+        self.previous_host_fd = os.environ.get(HOST_FD_ENV)
+        if self.host is not None:
+            os.environ[HOST_FD_ENV] = str(self.host.fd)
         return self
 
     def __exit__(self, *_: object) -> None:
+        if self.previous_host_fd is None:
+            os.environ.pop(HOST_FD_ENV, None)
+        else:
+            os.environ[HOST_FD_ENV] = self.previous_host_fd
         self.close()
 
 
 def acquire_activity(repo: Path, mode: ActivityMode) -> ActivityLease:
+    """Acquire host admission before the existing workspace activity lease."""
+    if mode not in {"shared", "exclusive"}:
+        raise ValueError(f"invalid Cargo activity mode: {mode!r}")
+    try:
+        host = acquire_host()
+    except HostBusyError as error:
+        raise ActivityBusyError(str(error)) from error
+    try:
+        lease = _acquire_workspace_activity(repo, mode)
+        lease.host = host
+        return lease
+    except BaseException:
+        host.close()
+        raise
+
+
+def _acquire_workspace_activity(repo: Path, mode: ActivityMode) -> ActivityLease:
     """Acquire a non-blocking shared/exclusive workspace activity lease."""
     _require_flock()
     if mode not in {"shared", "exclusive"}:
@@ -147,6 +178,8 @@ def activity_lease_environment(
     if lease.fd < 0 or lease.mode != "exclusive":
         raise RuntimeError("only an active exclusive Cargo lease can be inherited")
     inherited = dict(os.environ if environment is None else environment)
+    if lease.host is not None:
+        inherited = lease.host.environment(inherited)
     inherited[ACTIVITY_LOCK_FD_ENV] = str(lease.fd)
     inherited[ACTIVITY_LOCK_MODE_ENV] = lease.mode
     return inherited
@@ -157,7 +190,7 @@ def activity_pass_fds(environment: dict[str, str]) -> tuple[int, ...]:
     value = environment.get(ACTIVITY_LOCK_FD_ENV)
     mode = environment.get(ACTIVITY_LOCK_MODE_ENV)
     if value is None and mode is None:
-        return ()
+        return host_pass_fds(environment)
     if value is None or mode != "exclusive":
         raise RuntimeError("Cargo activity lease subprocess metadata is invalid")
     try:
@@ -165,4 +198,4 @@ def activity_pass_fds(environment: dict[str, str]) -> tuple[int, ...]:
         os.fstat(fd)
     except (OSError, ValueError) as error:
         raise RuntimeError("Cargo activity lease subprocess fd is invalid") from error
-    return (fd,)
+    return (fd, *host_pass_fds(environment))

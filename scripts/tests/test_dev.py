@@ -5,6 +5,7 @@ import unittest
 from contextlib import redirect_stderr
 from io import StringIO
 from pathlib import Path
+from unittest.mock import patch
 
 from scripts import dev
 
@@ -63,6 +64,15 @@ class DiffHygieneTests(unittest.TestCase):
             dev.diff_hygiene_command({}),
             ["git", "diff", "HEAD", "--check"],
         )
+
+    def test_unittest_subprocess_does_not_inherit_real_host_lease(self) -> None:
+        with (
+            patch.dict(dev.os.environ, {dev.HOST_FD_ENV: "123"}),
+            patch.object(dev.subprocess, "run") as run,
+        ):
+            dev.run_command([dev.sys.executable, "-m", "unittest", "scripts.tests.test_dev"])
+        self.assertNotIn(dev.HOST_FD_ENV, run.call_args.kwargs["env"])
+        self.assertEqual(run.call_args.kwargs["pass_fds"], ())
 
     def test_ci_check_uses_the_event_range(self) -> None:
         self.assertEqual(

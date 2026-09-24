@@ -83,6 +83,17 @@ class CargoGuardRuleTests(unittest.TestCase):
 
 
 class ChangeAwareRuleTests(unittest.TestCase):
+    def test_orca_boundary_and_provider_rules_are_required_on_all_surfaces(self):
+        self.assertEqual(check_agent_rules.missing_orca_rules(
+            check_agent_rules.REPO_ROOT / name for name in check_agent_rules.ROOT_RULE_FILES
+        ), ())
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "rules.md"
+            for marker in (check_agent_rules.MANDATORY_ORCA_RULE,
+                           check_agent_rules.MANDATORY_ORCA_PROVIDER_RULE):
+                path.write_text(marker)
+                self.assertEqual(check_agent_rules.missing_orca_rules([path]), (path,))
+
     def test_ci_branch_and_evidence_rules_are_required_on_all_surfaces(self):
         self.assertEqual(set(check_agent_rules.CI_RULE_FILES), EXPECTED_ROOT_RULE_FILES | {
             ".agent/workflows/task-lifecycle.md", ".cursor/workflows/task-lifecycle.md",

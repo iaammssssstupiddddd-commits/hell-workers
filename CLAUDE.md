@@ -74,18 +74,12 @@ python3 scripts/dev.py cargo -- clippy --workspace --all-targets -- -D warnings
 - Only request user debugging as last resort when cause cannot be identified
 - When debugging, first check implementation once cause is roughly estimated
 
-### 4.5. Background Agent Policy (STRICT)
-**Do NOT use background or subprocess agents for code editing tasks** — including Cursor’s `Task` tool with `run_in_background`, or legacy `task` / `general-purpose` agents that edit files.
-
-Reasons:
-- Background agents operate on the shared repository and can make out-of-scope changes (unrelated files, docs, refactors not asked for)
-- Their progress cannot be monitored in real time; by the time you notice a problem, damage is done
-- Multiple agents running simultaneously can conflict with each other and with other ongoing tasks
-
-**Allowed uses of agents:**
-- `explore` agent: read-only codebase investigation
-- `code-review` agent: read-only review
-- Direct editing by the main agent (patch/apply tools such as `StrReplace` / `apply_patch` — not delegated file-editing subagents)
+### 4.5. Agent editing boundaries (STRICT)
+Shared-checkout/background editing remains forbidden. Read-only exploration and
+review are permitted. Editing delegation is allowed only through the supervised
+Orca workflow below. The Linux launcher maps A/reviewer to Codex and simple B
+tasks to Cursor CLI. Production dispatch remains disabled until provider and
+orchestration lifecycle acceptance; other CLIs are not permitted editors.
 
 **`git checkout --` and revert policy:**
 - NEVER run `git checkout -- <file>` or any revert command without first running `git log --oneline -5` and `git diff HEAD -- <file>` to confirm the change is truly unwanted
@@ -252,6 +246,16 @@ Refer to `docs/` for specific system details:
 - `logistics.md` - Resource hauling and stockpiles
 - `building.md` - Building process and blueprints
 - `architecture.md` - Overall structure and dependencies
+
+## Supervised Orca development
+
+- Parallel editing is allowed only through the ticketed `scripts/orca_roles.py` launcher in separate worktrees; never delegate edits in a shared checkout.
+- Use at most two implementation slots and one fixed read-only reviewer; reuse the same reviewer terminal for the workstream. Workers must not delegate again.
+- Fixed providers: worker-a uses Codex, worker-b uses Cursor CLI for simple leaf tasks only, and the reviewer uses Codex. Require complexity rationale and acceptance criteria for worker-b; route shared-contract, save, renderer and infrastructure work to A/coordinator.
+- The coordinator owns authoritative primary docs, shared contracts, builds/tests, commits and serial integration. Workers cannot write Git metadata or approve their own changes.
+- Bind review to base/head and the exact source fingerprint; any source/index change invalidates approval. Do not integrate without the fixed reviewer's explicit approval and same-subject validation.
+- Use guarded project entrypoints for all heavy work. One host-wide heavy slot, one Cargo job and one Rust test thread; busy means defer, never bypass the guard.
+- Raw Orca agent buttons/default YOLO launches are not the controlled worker path. Unsupported isolation or missing admission evidence means stop; see the primary docs/development-infra/orca-development.md.
 
 ## Change-aware completion and branches
 

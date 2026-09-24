@@ -5,13 +5,14 @@ from __future__ import annotations
 import os
 import platform
 import re
+import shutil
 from pathlib import Path
 from typing import Mapping
 
 
 GIB = 1024**3
 MIN_CARGO_MEMORY_GIB = 8
-TWO_JOB_MEMORY_GIB = 16
+MIN_CARGO_FREE_DISK_GIB = 2
 MEMORY_FILESYSTEM_TYPES = frozenset({"tmpfs", "ramfs", "devtmpfs"})
 TMP_ROOT = Path("/tmp")
 INTERACTIVE_BUILD_LANES = ("a", "b")
@@ -172,8 +173,8 @@ def swap_memory_bytes() -> tuple[int | None, int | None]:
 
 
 def cargo_build_jobs(memory_available: int | None = None) -> int:
-    available = mem_available_bytes() if memory_available is None else memory_available
-    return 2 if available is not None and available >= TWO_JOB_MEMORY_GIB * GIB else 1
+    # Global heavy-work admission starts conservatively with one compiler job.
+    return 1
 
 
 def cargo_memory_error(
@@ -262,6 +263,11 @@ def cargo_environment(
         if storage_error:
             raise RuntimeError(storage_error)
     if create_temp_dir:
+        parent = target
+        while not parent.exists():
+            parent = parent.parent
+        if shutil.disk_usage(parent).free < MIN_CARGO_FREE_DISK_GIB * GIB:
+            raise RuntimeError(f"Cargo free disk is below the {MIN_CARGO_FREE_DISK_GIB} GiB safety floor")
         temporary.mkdir(parents=True, exist_ok=True)
 
     values = os.environ.copy() if environment is None else dict(environment)
@@ -290,6 +296,7 @@ def cargo_environment(
             "TMP": str(temporary),
             "TEMP": str(temporary),
             "CARGO_BUILD_JOBS": str(jobs),
+            "RUST_TEST_THREADS": "1",
         }
     )
     if incremental is not None:

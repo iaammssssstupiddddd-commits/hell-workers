@@ -23,6 +23,15 @@ ROOT_RULE_FILES = (
     ".gemini/antigravity/project_rules.md",
 )
 
+MANDATORY_ORCA_RULE = "Parallel editing is allowed only through the ticketed `scripts/orca_roles.py` launcher in separate worktrees; never delegate edits in a shared checkout."
+MANDATORY_ORCA_PROVIDER_RULE = "Fixed providers: worker-a uses Codex, worker-b uses Cursor CLI for simple leaf tasks only, and the reviewer uses Codex. Require complexity rationale and acceptance criteria for worker-b; route shared-contract, save, renderer and infrastructure work to A/coordinator."
+
+
+def missing_orca_rules(paths: Iterable[Path]) -> tuple[Path, ...]:
+    return tuple(path for path in paths if not path.is_file()
+                 or any(marker not in path.read_text(encoding="utf-8")
+                        for marker in (MANDATORY_ORCA_RULE, MANDATORY_ORCA_PROVIDER_RULE)))
+
 MANDATORY_STORAGE_RULE = (
     "Use the primary repository's `python3 scripts/dev.py validation` coordinator "
     "for validation planning/execution and pass its storage check before reporting."
@@ -216,6 +225,8 @@ def missing_mandatory_help_review_rules(
 def find_violations() -> list[str]:
     expected_bevy = bevy_version()
     violations: list[str] = []
+    for path in missing_orca_rules(REPO_ROOT / name for name in ROOT_RULE_FILES):
+        violations.append(f"{path.relative_to(REPO_ROOT)}: mandatory Orca boundary/provider rule is missing")
     for path in missing_ci_rules(REPO_ROOT / name for name in CI_RULE_FILES):
         violations.append(f"{path.relative_to(REPO_ROOT)}: mandatory CI/branch rule is missing")
     for path in missing_storage_rules(REPO_ROOT / name for name in STORAGE_RULE_FILES):

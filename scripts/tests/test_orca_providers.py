@@ -1,0 +1,212 @@
+from __future__ import annotations
+
+import ast
+import unittest
+import tempfile
+import tomllib
+from pathlib import Path
+from unittest.mock import patch
+
+from scripts import orca_providers as providers
+
+
+class ProviderTests(unittest.TestCase):
+    def test_trust_file_precedes_tui_boot_and_preserves_other_settings(self):
+        with tempfile.TemporaryDirectory() as temp:
+            runtime = Path(temp).resolve()
+            (runtime / "codex").mkdir()
+            config = runtime / "codex/config.toml"
+            config.write_text('model = "chosen-model"\n')
+            config.chmod(0o600)
+            roots = (runtime / "worktree", runtime / "primary")
+            providers.prepare_codex_trust(runtime, roots)
+            content = config.read_text()
+            parsed = tomllib.loads(content)
+            self.assertEqual(parsed["model"], "chosen-model")
+            self.assertEqual(set(parsed["projects"]), {str(root) for root in roots})
+            self.assertTrue(all(row["trust_level"] == "trusted" for row in parsed["projects"].values()))
+            providers.prepare_codex_trust(runtime, roots)
+            self.assertEqual(config.read_text(), content)
+
+    def test_trust_file_refuses_symlink_and_conflicting_user_setting(self):
+        with tempfile.TemporaryDirectory() as temp:
+            runtime = Path(temp).resolve()
+            (runtime / "codex").mkdir()
+            config = runtime / "codex/config.toml"
+            config.write_text('[projects."/repo"]\ntrust_level="untrusted"\n')
+            config.chmod(0o600)
+            with self.assertRaisesRegex(ValueError, "conflicts"):
+                providers.prepare_codex_trust(runtime, (Path("/repo"),))
+            original = config.read_text()
+            config.rename(runtime / "original")
+            config.symlink_to(runtime / "original")
+            with self.assertRaisesRegex(ValueError, "unsafe"):
+                providers.prepare_codex_trust(runtime, (Path("/repo"),))
+            self.assertEqual((runtime / "original").read_text(), original)
+
+    def simple(self) -> dict:
+        return {"complexity": "simple", "task_kind": "test-addition",
+                "complexity_reason": "existing pattern, one leaf, no API change",
+                "acceptance": "focused test added; coordinator runs it",
+                "allowed_directories": ["crates/hw_ui/src/interaction/help"]}
+
+    def test_fixed_provider_mapping(self) -> None:
+        self.assertEqual(providers.provider_for({}, "worker-a"), "codex")
+        self.assertEqual(providers.provider_for({}, "reviewer"), "codex")
+        self.assertEqual(providers.provider_for(self.simple(), "worker-b"), "cursor")
+        with self.assertRaisesRegex(ValueError, "requires provider"):
+            providers.provider_for({"provider": "cursor"}, "reviewer")
+
+    def test_b_rejects_missing_or_complex_classification(self) -> None:
+        for change in ({"complexity": "complex"}, {"complexity_reason": ""},
+                       {"acceptance": " "}, {"task_kind": "architecture"}):
+            with self.subTest(change=change), self.assertRaises(ValueError):
+                providers.provider_for({**self.simple(), **change}, "worker-b")
+        with self.assertRaises(ValueError):
+            providers.provider_for({}, "worker-b")
+
+    def test_b_rejects_shared_infrastructure_and_broad_scopes(self) -> None:
+        for scope in ("scripts/tests", "crates/hw_ui/src", "crates/hw_core/src/events",
+                      "crates/hw_jobs/src/tasks", "crates/bevy_app/src/plugins/startup",
+                      "crates/bevy_app/src/save", "crates/hw_visual/src/visual3d"):
+            with self.subTest(scope=scope), self.assertRaisesRegex(ValueError, "leaf scope"):
+                providers.provider_for({**self.simple(), "allowed_directories": [scope]}, "worker-b")
+
+    def test_b_acceptance_probe_requires_explicit_read_only(self) -> None:
+        ticket = {**self.simple(), "allowed_directories": [], "task_kind": "acceptance-probe"}
+        self.assertEqual(providers.provider_for({**ticket, "read_only": True}, "worker-b"), "cursor")
+        for value in (False, "true", None):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                providers.provider_for({**ticket, "read_only": value}, "worker-b")
+
+    def test_b_edit_acceptance_is_restricted_to_dedicated_fixture(self) -> None:
+        root = Path(__file__).resolve().parents[2]
+        for slot in ("worker-a", "worker-b"):
+            fixture = root / f"scripts/tests/fixtures/orca_edit_acceptance/{slot}/result.py"
+            # The supervised acceptance intentionally replaces the initial value.
+            # The provider contract is a writable isolated string fixture, not a
+            # requirement to keep the seed after a successful real edit.
+            assignments = [node for node in ast.parse(fixture.read_text()).body
+                           if isinstance(node, ast.Assign) and len(node.targets) == 1
+                           and isinstance(node.targets[0], ast.Name) and node.targets[0].id == "RESULT"]
+            self.assertEqual(len(assignments), 1)
+            self.assertIsInstance(assignments[0].value, ast.Constant)
+            self.assertIsInstance(assignments[0].value.value, str)
+        ticket = {**self.simple(), "task_kind": "acceptance-edit",
+                  "allowed_directories": [providers.CURSOR_EDIT_ACCEPTANCE_SCOPE]}
+        self.assertEqual(providers.provider_for(ticket, "worker-b"), "cursor")
+        for change in (
+            {"read_only": True},
+            {"allowed_directories": ["scripts/tests/fixtures/orca_edit_acceptance/worker-a"]},
+            {"allowed_directories": [providers.CURSOR_EDIT_ACCEPTANCE_SCOPE,
+                                     "crates/hw_ui/src/interaction/help"]},
+        ):
+            with self.subTest(change=change), self.assertRaisesRegex(ValueError, "dedicated fixture"):
+                providers.provider_for({**ticket, **change}, "worker-b")
+
+    def test_edit_acceptance_contract_accepts_completed_string_result(self) -> None:
+        with patch.object(Path, 'read_text', return_value='RESULT = "PASS: accepted edit"\n'):
+            self.test_b_edit_acceptance_is_restricted_to_dedicated_fixture()
+
+    @patch("scripts.orca_providers.shutil.which", side_effect=lambda name: f"/bin/{name}")
+    def test_commands_never_fall_back_to_another_provider(self, _) -> None:
+        cursor = providers.command_for("cursor", Path("/repo"), "worker", "task")
+        self.assertEqual(cursor[0], "/bin/cursor-agent")
+        self.assertIn("enabled", cursor)
+        self.assertNotIn("--force", cursor)
+        self.assertNotIn("--yolo", cursor)
+        codex = providers.command_for("codex", Path("/repo"), "reviewer", "review")
+        self.assertIn("read-only", codex)
+        self.assertNotIn("--model", codex)
+        session = "e1fd2684-d55a-4794-9741-903c92b7dbea"
+        resumed = providers.command_for("cursor", Path("/repo"), "worker", "next", session)
+        self.assertEqual(resumed[resumed.index("--resume") + 1], session)
+        self.assertNotIn("--continue", resumed)
+        with self.assertRaises(ValueError):
+            providers.command_for("cursor", Path("/repo"), "reviewer", "wrong")
+
+    @patch("scripts.orca_providers.shutil.which", return_value=None)
+    def test_missing_provider_stops(self, _) -> None:
+        with self.assertRaisesRegex(RuntimeError, "cursor CLI"):
+            providers.command_for("cursor", Path("/repo"), "worker", "task")
+
+    @patch("scripts.orca_providers.shutil.which", side_effect=lambda name: f"/bin/{name}")
+    def test_read_only_workers_keep_provider_and_exact_resume(self, _) -> None:
+        session = "e1fd2684-d55a-4794-9741-903c92b7dbea"
+        cursor = providers.command_for("cursor", Path("/repo"), "worker", "next", session, read_only=True)
+        self.assertEqual(cursor[cursor.index("--mode") + 1], "ask")
+        self.assertEqual(cursor[cursor.index("--resume") + 1], session)
+        codex = providers.command_for("codex", Path("/repo"), "worker", "next", session, read_only=True)
+        self.assertEqual(codex[codex.index("--sandbox") + 1], "read-only")
+        self.assertEqual(codex[1:3], ["resume", session])
+        policy = providers.cursor_permissions({**self.simple(), "read_only": True})["permissions"]
+        self.assertEqual(policy["allow"], ["Read(**)"])
+        self.assertIn("Write(**)", policy["deny"])
+
+    @patch("scripts.orca_providers.shutil.which", side_effect=lambda name: f"/bin/{name}")
+    def test_codex_roles_can_rely_on_the_outer_sandbox(self, _) -> None:
+        for role, read_only in (("reviewer", True), ("worker", True), ("worker", False)):
+            with self.subTest(role=role, read_only=read_only):
+                codex = providers.command_for(
+                    "codex", Path("/repo"), role, "task", read_only=read_only,
+                    externally_sandboxed=True)
+                self.assertIn("--dangerously-bypass-approvals-and-sandbox", codex)
+                self.assertNotIn("--sandbox", codex)
+                self.assertNotIn("--ask-for-approval", codex)
+        with self.assertRaisesRegex(ValueError, "Cursor cannot bypass"):
+            providers.command_for(
+                "cursor", Path("/repo"), "worker", "task", externally_sandboxed=True)
+
+    @patch("scripts.orca_providers.shutil.which", return_value="/bin/codex")
+    def test_codex_trusts_only_explicit_worktree_and_primary_roots(self, _) -> None:
+        command = providers.command_for("codex", Path('/work/tree'), "worker", "task",
+                                        trusted_roots=(Path('/work/tree'), Path('/primary/project')))
+        self.assertIn('projects."/work/tree".trust_level="trusted"', command)
+        self.assertIn('projects."/primary/project".trust_level="trusted"', command)
+        self.assertNotIn('projects."/".trust_level="trusted"', command)
+
+    @patch("scripts.orca_providers.shutil.which", return_value="/bin/codex")
+    def test_codex_disables_project_mcps_without_hiding_tracked_config(self, _) -> None:
+        with unittest.mock.patch.object(Path, "is_file", return_value=True), \
+                unittest.mock.patch.object(Path, "read_text", return_value="""
+[mcp_servers.rust-analyzer-mcp]
+command = "rust-analyzer-mcp"
+[mcp_servers.docsrs]
+command = "docsrs-mcp"
+"""):
+            command = providers.command_for("codex", Path("/repo"), "reviewer", "review")
+        overrides = [command[index + 1] for index, value in enumerate(command[:-1])
+                     if value == "--config"]
+        self.assertEqual(overrides, [
+            'mcp_servers.docsrs.command="false"',
+            "mcp_servers.docsrs.enabled=false",
+            'mcp_servers.rust-analyzer-mcp.command="false"',
+            "mcp_servers.rust-analyzer-mcp.enabled=false",
+        ])
+
+    def test_cursor_permissions_limit_writes_and_disable_shell_mcp(self) -> None:
+        config = providers.cursor_permissions(self.simple())
+        self.assertEqual(config["version"], 1)
+        self.assertEqual(config["editor"], {"vimMode": False})
+        policy = config["permissions"]
+        self.assertEqual(policy["deny"], ["Shell(*)", "Mcp(*:*)", "WebFetch(*)"])
+        self.assertEqual(policy["allow"], ["Read(**)", "Write(crates/hw_ui/src/interaction/help/**)"])
+
+    def test_cursor_hook_policy_keeps_agent_tools_denied(self) -> None:
+        ticket = {**self.simple(), "read_only": True, "allowed_directories": []}
+        policy = providers.cursor_permissions(
+            ticket, denied_reads=("/private/bridge", "/proc"))["permissions"]
+        self.assertEqual(policy["allow"], ["Read(**)"])
+        for denied in ("Shell(*)", "Mcp(*:*)", "WebFetch(*)", "Write(**)",
+                       "Read(/private/bridge/**)", "Read(/proc/**)"):
+            self.assertIn(denied, policy["deny"])
+        hooks = providers.cursor_hook_config(Path("/repo"))
+        self.assertEqual(set(hooks["hooks"]), {"beforeSubmitPrompt", "afterAgentResponse", "stop"})
+        for rows in hooks["hooks"].values():
+            self.assertEqual(len(rows), 1)
+            self.assertTrue(rows[0]["failClosed"])
+            self.assertIn("orca_cursor_bridge_hook.py", rows[0]["command"])
+
+
+if __name__ == "__main__":
+    unittest.main()
