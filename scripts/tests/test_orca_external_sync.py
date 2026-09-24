@@ -22,12 +22,18 @@ class ExternalSyncTests(unittest.TestCase):
         mocked = patch.object(host_coordination, "state_root", return_value=self.root / "coordination")
         mocked.start()
         self.addCleanup(mocked.stop)
+        self.cli = self.root / "orca-ide"
+        self.cli.touch()
+        self.repo = self.root / "repo"
+        self.repo.mkdir()
+        (self.repo / ".git").write_text("gitdir: fixture\n")
 
     def test_linear_queue_is_idempotent_and_ordered(self) -> None:
         first = sync.queue_linear_status(self.root, REQUEST, "TAK-14", "started", "着手")
         self.assertEqual(first, sync.queue_linear_status(self.root, REQUEST, "TAK-14", "started", "着手"))
         second = sync.queue_linear_status(self.root, REQUEST, "TAK-14", "review", "レビュー待ち")
         self.assertEqual((first["sequence"], second["sequence"]), (1, 2))
+        self.assertEqual(first["payload"]["targetState"], "In Progress")
         with self.assertRaisesRegex(ValueError, "stale"):
             sync.queue_linear_status(self.root, REQUEST, "TAK-14", "started", "巻き戻し")
 
@@ -58,6 +64,53 @@ class ExternalSyncTests(unittest.TestCase):
         proposal = sync.propose(self.root, REQUEST, "linear", "status_changed", {"to": "Done"})
         self.assertEqual(proposal["phase"], "proposed")
         self.assertEqual(sync.projection(self.root, REQUEST)["state"], "not_required")
+
+    def test_executor_sends_once_then_requires_read_back(self) -> None:
+        operation = sync.queue_linear_comment(self.root, REQUEST, "TAK-99", "完了しました")
+        verified = {"provider": "linear", "issue": "TAK-99", "commentId": "comment-1"}
+        with patch.object(sync, "_read_back", side_effect=[None, verified]) as read_back, \
+                patch.object(sync, "_send", return_value=0) as send:
+            result = sync.execute_next(
+                self.root, REQUEST, orca_cli=self.cli, repo=self.repo,
+            )
+        self.assertEqual(result["state"], "confirmed")
+        self.assertEqual(result["operation"]["id"], operation["id"])
+        self.assertEqual(read_back.call_count, 2)
+        send.assert_called_once()
+
+    def test_unknown_operation_is_read_back_but_never_replayed(self) -> None:
+        operation = sync.queue_linear_status(self.root, REQUEST, "TAK-99", "started", "着手")
+        sync.transition(self.root, REQUEST, operation["id"], "sending")
+        sync.transition(self.root, REQUEST, operation["id"], "unknown", {"readBack": "required"})
+        with patch.object(sync, "_read_back", return_value=None), \
+                patch.object(sync, "_send") as send:
+            result = sync.execute_next(
+                self.root, REQUEST, orca_cli=self.cli, repo=self.repo,
+            )
+        self.assertEqual(result["state"], "unknown")
+        send.assert_not_called()
+
+    def test_executor_processes_only_the_oldest_operation(self) -> None:
+        first = sync.queue_linear_comment(self.root, REQUEST, "TAK-99", "first")
+        sync.queue_linear_comment(self.root, REQUEST, "TAK-99", "second")
+        verified = {"provider": "linear", "issue": "TAK-99", "commentId": "comment-1"}
+        with patch.object(sync, "_read_back", side_effect=[None, verified]), \
+                patch.object(sync, "_send", return_value=0):
+            result = sync.execute_next(
+                self.root, REQUEST, orca_cli=self.cli, repo=self.repo,
+            )
+        self.assertEqual(result["operation"]["id"], first["id"])
+        ledger = sync.read(self.root, REQUEST)
+        self.assertEqual([item["phase"] for item in ledger["operations"]],
+                         ["confirmed", "queued"])
+
+    def test_draft_executor_metadata_is_all_or_nothing(self) -> None:
+        with self.assertRaisesRegex(ValueError, "metadata must be complete"):
+            sync.queue_github_draft(
+                self.root, REQUEST, branch="candidate", base="a" * 40,
+                head="b" * 40, tested_sha="b" * 40, review_sha="b" * 40,
+                publication_authorized=True, repository="owner/repo",
+            )
 
 
 if __name__ == "__main__":
