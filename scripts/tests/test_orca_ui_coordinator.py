@@ -152,6 +152,8 @@ class UiCoordinatorTests(unittest.TestCase):
         self.assertIn("--spec '<private spec file path>'", value)
         self.assertIn("submit-help-review", value)
         self.assertIn("orca_ui_coordinator.py preflight", value)
+        self.assertIn("register-successor", value)
+        self.assertIn("同じRunを継承", value)
         self.assertIn(str(Path(ui.__file__).resolve()), value)
         self.assertIn(str(Path(ui.__file__).with_name("orca_review_loop.py").resolve()), value)
         self.assertNotIn("--spec '<private spec>'", value)
@@ -160,17 +162,68 @@ class UiCoordinatorTests(unittest.TestCase):
     def test_workflow_preflight_returns_exact_base_after_storage_check(self) -> None:
         self.ready_coordinator()
         base = "b" * 40
+        commands = []
+
+        def run(command, **_kwargs):
+            commands.append(command)
+            if "successor-preflight" in command:
+                return ui.subprocess.CompletedProcess(
+                    command, 0,
+                    stdout=(f'{{"schema":1,"mode":"initial","request_id":"{REQUEST}"}}'),
+                    stderr="",
+                )
+            return ui.subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
         with (
             patch.object(ui, "primary_repo", return_value=Path("/primary")),
-            patch.object(ui.subprocess, "check_output", side_effect=[base + "\n", "feature/work\n"]),
-            patch.object(ui.subprocess, "run") as run,
+            patch.object(ui.subprocess, "check_output", side_effect=[
+                base + "\n", "feature/work\n", base + "\n", "feature/work\n",
+            ]),
+            patch.object(ui.subprocess, "run", side_effect=run),
         ):
-            run.return_value.returncode = 0
             result = ui.workflow_preflight(REQUEST)
+        self.assertEqual(result["mode"], "initial")
         self.assertEqual(result["base"], base)
         self.assertEqual(result["branch"], "feature/work")
         self.assertEqual(result["storage"], "pass")
-        self.assertEqual(run.call_args.args[0][-2:], ["validation", "check"])
+        self.assertEqual(commands[-1][-2:], ["validation", "check"])
+
+    def test_workflow_preflight_uses_approved_successor_target_not_primary_head(self) -> None:
+        self.ready_coordinator()
+        base = "c" * 40
+        successor = {
+            "schema": 1,
+            "mode": "successor",
+            "request_id": REQUEST,
+            "repo": "/issue",
+            "branch": "hw-42",
+            "base": base,
+            "source_sha256": "d" * 64,
+            "loop_generation": 2,
+            "predecessor_loop_sha256": "e" * 64,
+            "run": {"id": "run_fixture", "consumer_generation": 1},
+        }
+        commands = []
+
+        def run(command, **_kwargs):
+            commands.append(command)
+            if "successor-preflight" in command:
+                return ui.subprocess.CompletedProcess(
+                    command, 0, stdout=__import__("json").dumps(successor), stderr=""
+                )
+            return ui.subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+        with (
+            patch.object(ui, "primary_repo") as primary,
+            patch.object(ui.subprocess, "check_output", side_effect=[base + "\n", "hw-42\n"]),
+            patch.object(ui.subprocess, "run", side_effect=run),
+        ):
+            result = ui.workflow_preflight(REQUEST)
+        primary.assert_not_called()
+        self.assertEqual(result["repo"], "/issue")
+        self.assertEqual(result["base"], base)
+        self.assertEqual(result["predecessor_loop_sha256"], "e" * 64)
+        self.assertIn("/issue/scripts/dev.py", commands[-1])
 
     def test_route_created_issue_cannot_handoff_again(self) -> None:
         self.ready_coordinator()

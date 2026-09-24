@@ -59,6 +59,11 @@ def loop_paths() -> list[Path]:
                   if re.fullmatch(r"[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}", path.stem))
 
 
+def history_root(request_id: str) -> Path:
+    dispatch.coordinator.identity(request_id)
+    return STORAGE.checked_directory(root() / "history" / request_id)
+
+
 def save(data: dict) -> None:
     data["updated_at_ms"] = event_time_ms()
     STORAGE.write_ledger(state_path(data["request_id"]), {"data": data, "sha256": bindings.digest(data)})
@@ -95,6 +100,36 @@ def load(request_id: str) -> dict:
                 or not isinstance(inbox["messages"], dict) or len(inbox["messages"]) > 50
                 or not isinstance(inbox["handled"], dict) or len(inbox["handled"]) > 4096):
             raise ValueError("invalid Run/inbox state; preserve and reconcile")
+        generation = data.get("loop_generation", 1)
+        predecessor = data.get("predecessor")
+        if (type(generation) is not int or generation < 1
+                or (generation == 1 and predecessor is not None)
+                or (generation > 1 and (not isinstance(predecessor, dict)
+                    or set(predecessor) != {"generation", "loop_sha256", "archive", "head",
+                                            "target", "source_sha256", "run"}
+                    or predecessor.get("generation") != generation - 1
+                    or not re.fullmatch(r"[a-f0-9]{64}", predecessor.get("loop_sha256", ""))
+                    or not isinstance(predecessor.get("archive"), str)
+                    or not re.fullmatch(r"[a-f0-9]{40}", predecessor.get("head", ""))
+                    or not isinstance(predecessor.get("target"), dict)
+                    or not re.fullmatch(r"[a-f0-9]{64}", predecessor.get("source_sha256", ""))
+                    or not isinstance(predecessor.get("run"), dict)))):
+            raise ValueError("invalid review loop lineage; preserve and reconcile")
+        if generation > 1:
+            expected_archive = history_root(request_id) / (
+                f"{generation - 1:04d}-{predecessor['loop_sha256']}.json"
+            )
+            archived = STORAGE.read_private_json(expected_archive, {})
+            archived_loop = archived.get("loop")
+            if (Path(predecessor["archive"]) != expected_archive
+                    or set(predecessor["target"]) != {"repo", "branch"}
+                    or archived.get("schema") != 1
+                    or archived.get("request_id") != request_id
+                    or archived.get("loop_generation") != generation - 1
+                    or archived.get("loop_sha256") != predecessor["loop_sha256"]
+                    or not isinstance(archived_loop, dict)
+                    or inspection_digest(archived_loop) != predecessor["loop_sha256"]):
+                raise ValueError("predecessor archive changed; preserve and reconcile")
     if "integration" in data and (not isinstance(data["integration"], dict)
                                    or data["integration"].get("phase") not in INTEGRATION_PHASES
                                    or not isinstance(data["integration"].get("history", []), list)
@@ -183,6 +218,87 @@ def inspection(data: dict) -> dict:
         else:
             pending.append(current)
     return {"loop": data, "loop_sha256": inspection_digest(data), "pending_help_reviews": pending}
+
+
+def successor_context(data: dict) -> dict:
+    """Return a source-bound continuation only for one fully settled integrated loop."""
+    final = data.get("integration")
+    cleanup = data.get("ui_cleanup")
+    if (data.get("schema") != 2 or data.get("phase") != "approved"
+            or not isinstance(final, dict) or final.get("phase") != "approved"
+            or not isinstance(final.get("receipt"), dict)
+            or final.get("review", {}).get("verdict") != "approved"
+            or not mail.drained(data)
+            or any(item.get("released") is not True or item.get("completion_acknowledged") is not True
+                   for item in data.get("attempts", {}).values())
+            or not isinstance(cleanup, dict) or cleanup.get("phase") != "complete"):
+        raise ValueError("successor requires one settled integrated approval with completed UI cleanup")
+    integration.check_receipt(final["receipt"])
+    receipt = final["receipt"]
+    target = receipt["target"]
+    run = data.get("run", {}).get("context")
+    if (not isinstance(run, dict) or set(run) != {"id", "consumer_generation"}
+            or not isinstance(run.get("id"), str) or not run["id"]
+            or type(run.get("consumer_generation")) is not int
+            or run["consumer_generation"] < 1):
+        raise ValueError("successor requires the exact settled Run")
+    dispatch.checked_run(mail.cli(), data["terminal"], run)
+    generation = data.get("loop_generation", 1)
+    digest = inspection_digest(data)
+    return {
+        "schema": 1,
+        "mode": "successor",
+        "request_id": data["request_id"],
+        "repo": target["repo"],
+        "branch": target["branch"],
+        "base": receipt["head"],
+        "source_sha256": receipt["source_after"],
+        "loop_generation": generation + 1,
+        "predecessor_loop_sha256": digest,
+        "run": run,
+    }
+
+
+def successor_preflight(request_id: str, terminal: str) -> dict:
+    """Read-only initial/successor decision used by the visible coordinator."""
+    dispatch.checked_coordinator(request_id, terminal)
+    with acquire_host(LOCK, inherit=False):
+        if not state_path(request_id).exists():
+            return {"schema": 1, "mode": "initial", "request_id": request_id}
+        data = load(request_id)
+        if data["terminal"] != terminal:
+            raise ValueError("successor belongs to another coordinator")
+        return successor_context(data)
+
+
+def archive_approved_loop(data: dict) -> tuple[Path, dict]:
+    """Write the predecessor once before replacing the request's active ledger."""
+    context = successor_context(data)
+    generation = data.get("loop_generation", 1)
+    digest = context["predecessor_loop_sha256"]
+    path = history_root(data["request_id"]) / f"{generation:04d}-{digest}.json"
+    archived = {
+        "schema": 1,
+        "request_id": data["request_id"],
+        "loop_generation": generation,
+        "loop_sha256": digest,
+        "loop": data,
+    }
+    existing = STORAGE.read_private_json(path, {})
+    if existing and existing != archived:
+        raise ValueError("immutable predecessor archive changed; preserve and reconcile")
+    if not existing:
+        STORAGE.write_ledger(path, archived)
+    predecessor = {
+        "generation": generation,
+        "loop_sha256": digest,
+        "archive": str(path),
+        "head": context["base"],
+        "target": {"repo": context["repo"], "branch": context["branch"]},
+        "source_sha256": context["source_sha256"],
+        "run": context["run"],
+    }
+    return path, predecessor
 
 
 def pause_for_help_review(data: dict, subject: str) -> None:
@@ -387,13 +503,67 @@ def resume_coordinator_validation(request_id: str, terminal: str, spec: dict) ->
         return data
 
 
+def build_loop(request_id: str, terminal: str, spec: dict, record: dict, *,
+               loop_generation: int = 1, predecessor: dict | None = None,
+               run: dict | None = None) -> dict:
+    """Validate one generation without reading or replacing the request ledger."""
+    if (not isinstance(spec, dict) or set(spec) not in ({"lanes"}, {"lanes", "integration"})
+            or not isinstance(spec["lanes"], list) or not 1 <= len(spec["lanes"]) <= 2):
+        raise ValueError("spec requires one or two lane assignments")
+    lanes, repos, scopes, commons, ids = {}, set(), [], set(), set()
+    for item in spec["lanes"]:
+        if not isinstance(item, dict) or set(item) != {"slot", "ticket", "validation"}:
+            raise ValueError("lane requires slot, ticket and trusted validation")
+        slot, ticket, validation = item["slot"], item["ticket"], item["validation"]
+        if slot not in {"worker-a", "worker-b"} or slot in lanes:
+            raise ValueError("each worker has at most one assignment")
+        roles.validate_ticket(ticket)
+        roles.provider_for(ticket, slot)
+        if ticket.get("read_only") or not ticket["allowed_directories"] or ticket.get("generation", 0):
+            raise ValueError("register requires a fresh editing assignment")
+        repo = Path(ticket["repo"])
+        roles.worker_scope(ticket, initial=True)
+        if repo in repos or ticket["id"] in ids:
+            raise ValueError("workers need distinct worktrees and task identities")
+        for scope in map(Path, ticket["allowed_directories"]):
+            if any(scope.is_relative_to(other) or other.is_relative_to(scope) for other in scopes):
+                raise ValueError("parallel worker scopes must not overlap")
+            scopes.append(scope)
+        checked_validation(validation)
+        repos.add(repo)
+        ids.add(ticket["id"])
+        commons.add(checkpoints.subject(ticket)["common"])
+        lanes[slot] = {"phase": "planned", "ticket": ticket, "validation": validation,
+                       "source": roles.fingerprint(repo), "revisions": 0, "history": [],
+                       "session": None, "follow_up": None}
+    if len(commons) != 1:
+        raise ValueError("lanes must belong to the same repository")
+    data = {"schema": 2, "request_id": request_id, "terminal": terminal,
+            "spec_sha256": bindings.digest(spec), "phase": "active", "lanes": lanes,
+            "run": {"phase": "ready", "context": run} if run is not None else {"phase": "planned"},
+            "attempts": {},
+            "inbox": {"delivery": None, "messages": {}, "handled": {}, "operation": None},
+            "cursor": 0, "reason": None, "registered_at_ms": event_time_ms(),
+            "loop_generation": loop_generation, "predecessor": predecessor}
+    if "integration" in spec:
+        config = spec["integration"]
+        if not isinstance(config, dict) or set(config) != {"target", "validation"}:
+            raise ValueError("integration requires a target and trusted validation")
+        checked_validation(config["validation"])
+        target = config["target"]
+        repo = integration.check_target(target)
+        if (repo in repos or checkpoints.subject(integration.target_ticket(target))["common"] not in commons
+                or any(lane["ticket"]["base"] != target["base"] for lane in lanes.values())
+                or record["identifier"].lower() not in target["branch"].lower()):
+            raise ValueError("integration requires a distinct issue branch at every worker's initial base")
+        data["integration"] = {**config, "phase": "planned", "source": roles.fingerprint(repo), "reason": None}
+    return data
+
+
 def register(request_id: str, terminal: str, spec: dict) -> dict:
     """Internal UI-agent API. No UUID, path or slot selection is delegated to users."""
     dispatch.checked_coordinator(request_id, terminal)
     record = dispatch.linear_record(request_id)
-    if (not isinstance(spec, dict) or set(spec) not in ({"lanes"}, {"lanes", "integration"})
-            or not isinstance(spec["lanes"], list) or not 1 <= len(spec["lanes"]) <= 2):
-        raise ValueError("spec requires one or two lane assignments")
     with acquire_host(LOCK, inherit=False):
         if state_path(request_id).exists():
             current = load(request_id)
@@ -403,51 +573,39 @@ def register(request_id: str, terminal: str, spec: dict) -> dict:
         for path in loop_paths():
             if load(path.stem)["phase"] in {"active", "paused"}:
                 raise ValueError("another unresolved loop owns the fixed role bindings; reconcile before registering")
-        lanes, repos, scopes, commons, ids = {}, set(), [], set(), set()
-        for item in spec["lanes"]:
-            if not isinstance(item, dict) or set(item) != {"slot", "ticket", "validation"}:
-                raise ValueError("lane requires slot, ticket and trusted validation")
-            slot, ticket, validation = item["slot"], item["ticket"], item["validation"]
-            if slot not in {"worker-a", "worker-b"} or slot in lanes:
-                raise ValueError("each worker has at most one assignment")
-            roles.validate_ticket(ticket)
-            roles.provider_for(ticket, slot)
-            if ticket.get("read_only") or not ticket["allowed_directories"] or ticket.get("generation", 0):
-                raise ValueError("register requires a fresh editing assignment")
-            repo = Path(ticket["repo"])
-            roles.worker_scope(ticket, initial=True)
-            if repo in repos or ticket["id"] in ids:
-                raise ValueError("workers need distinct worktrees and task identities")
-            for scope in map(Path, ticket["allowed_directories"]):
-                if any(scope.is_relative_to(other) or other.is_relative_to(scope) for other in scopes):
-                    raise ValueError("parallel worker scopes must not overlap")
-                scopes.append(scope)
-            checked_validation(validation)
-            repos.add(repo)
-            ids.add(ticket["id"])
-            commons.add(checkpoints.subject(ticket)["common"])
-            lanes[slot] = {"phase": "planned", "ticket": ticket, "validation": validation,
-                           "source": roles.fingerprint(repo), "revisions": 0, "history": [],
-                           "session": None, "follow_up": None}
-        if len(commons) != 1:
-            raise ValueError("lanes must belong to the same repository")
-        data = {"schema": 2, "request_id": request_id, "terminal": terminal,
-                "spec_sha256": bindings.digest(spec), "phase": "active", "lanes": lanes,
-                "run": {"phase": "planned"}, "attempts": {},
-                "inbox": {"delivery": None, "messages": {}, "handled": {}, "operation": None},
-                "cursor": 0, "reason": None, "registered_at_ms": event_time_ms()}
-        if "integration" in spec:
-            config = spec["integration"]
-            if not isinstance(config, dict) or set(config) != {"target", "validation"}:
-                raise ValueError("integration requires a target and trusted validation")
-            checked_validation(config["validation"])
-            target = config["target"]
-            repo = integration.check_target(target)
-            if (repo in repos or checkpoints.subject(integration.target_ticket(target))["common"] not in commons
-                    or any(lane["ticket"]["base"] != target["base"] for lane in lanes.values())
-                    or record["identifier"].lower() not in target["branch"].lower()):
-                raise ValueError("integration requires a distinct issue branch at every worker's initial base")
-            data["integration"] = {**config, "phase": "planned", "source": roles.fingerprint(repo), "reason": None}
+        data = build_loop(request_id, terminal, spec, record)
+        save(data)
+        return data
+
+
+def register_successor(request_id: str, terminal: str, spec: dict, expected: str) -> dict:
+    """Atomically replace a settled generation while preserving its exact ledger and Run."""
+    dispatch.checked_coordinator(request_id, terminal)
+    record = dispatch.linear_record(request_id)
+    if not re.fullmatch(r"[a-f0-9]{64}", expected):
+        raise ValueError("successor requires the exact predecessor loop digest")
+    with acquire_host(LOCK, inherit=False):
+        current = load(request_id)
+        predecessor = current.get("predecessor")
+        if (isinstance(predecessor, dict) and predecessor.get("loop_sha256") == expected
+                and current["terminal"] == terminal and current["spec_sha256"] == bindings.digest(spec)):
+            return current
+        if current["terminal"] != terminal or inspection_digest(current) != expected:
+            raise ValueError("successor requires the exact inspected predecessor and coordinator")
+        for path in loop_paths():
+            if path.stem != request_id and load(path.stem)["phase"] in {"active", "paused"}:
+                raise ValueError("another unresolved loop owns the fixed role bindings; reconcile before successor")
+        context = successor_context(current)
+        if "integration" not in spec:
+            raise ValueError("successor requires an integration target on the same issue branch")
+        target = spec["integration"].get("target") if isinstance(spec["integration"], dict) else None
+        if (not isinstance(target, dict) or target.get("repo") != context["repo"]
+                or target.get("branch") != context["branch"] or target.get("base") != context["base"]):
+            raise ValueError("successor must continue the exact approved integration repo, branch and head")
+        _, archived = archive_approved_loop(current)
+        data = build_loop(request_id, terminal, spec, record,
+                          loop_generation=context["loop_generation"], predecessor=archived,
+                          run=context["run"])
         save(data)
         return data
 
@@ -1120,7 +1278,8 @@ class Driver:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=("register", "show", "tick", "watch", "decide", "route",
+    parser.add_argument("action", choices=("register", "register-successor", "successor-preflight",
+                                           "show", "tick", "watch", "decide", "route",
                                            "submit-help-review", "resume-coordinator-validation",
                                            "resume-review-wait", "resume-inbox", "resume-linear-runtime",
                                            "finalize-tabs"))
@@ -1164,6 +1323,15 @@ def main() -> int:
             if args.spec is None:
                 raise ValueError("registration requires a trusted private spec")
             result = register(args.request_id, args.coordinator, STORAGE.read_private_json(args.spec, {}))
+        elif args.action == "register-successor":
+            if args.spec is None or not args.expected_sha256:
+                raise ValueError("successor registration requires a trusted spec and predecessor digest")
+            result = register_successor(
+                args.request_id, args.coordinator, STORAGE.read_private_json(args.spec, {}),
+                args.expected_sha256,
+            )
+        elif args.action == "successor-preflight":
+            result = successor_preflight(args.request_id, args.coordinator)
         elif args.action == "route":
             if args.spec is None:
                 raise ValueError("correction routing requires a trusted private spec")

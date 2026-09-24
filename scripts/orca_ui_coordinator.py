@@ -1139,31 +1139,48 @@ def workflow_preflight(request_id: str) -> dict:
     """Return the exact immutable start point only after storage is healthy."""
     terminal, _ = terminal_environment()
     require_ready(request_id, terminal)
-    primary = primary_repo().resolve()
-    base = subprocess.check_output(
-        ["git", "-C", str(primary), "rev-parse", "HEAD"], text=True
-    ).strip()
-    branch = subprocess.check_output(
-        ["git", "-C", str(primary), "branch", "--show-current"], text=True
-    ).strip()
+    completed = subprocess.run(
+        [sys.executable, str(review_loop_script()), "successor-preflight",
+         "--request-id", request_id, "--coordinator", terminal],
+        text=True, capture_output=True, check=False,
+    )
+    try:
+        context = json.loads(completed.stdout)
+    except (TypeError, ValueError):
+        context = None
+    if (completed.returncode or not isinstance(context, dict)
+            or context.get("mode") not in {"initial", "successor"}
+            or context.get("request_id") != request_id):
+        detail = completed.stderr.strip().splitlines()
+        raise UiCoordinatorError(
+            "後継ループの開始条件を確認できません: " + (detail[-1] if detail else "詳細不明")
+        )
+    repo = primary_repo().resolve() if context["mode"] == "initial" else Path(context["repo"]).resolve()
+    base = (subprocess.check_output(
+        ["git", "-C", str(repo), "rev-parse", "HEAD"], text=True
+    ).strip() if context["mode"] == "initial" else context["base"])
+    branch = (subprocess.check_output(
+        ["git", "-C", str(repo), "branch", "--show-current"], text=True
+    ).strip() if context["mode"] == "initial" else context["branch"])
     if not re.fullmatch(r"[a-f0-9]{40}", base) or not branch:
         raise UiCoordinatorError("実装基点を一意なbranch/full SHAとして解決できません")
-    command = [sys.executable, str(primary / "scripts/dev.py"), "validation", "check"]
-    completed = subprocess.run(command, cwd=primary, text=True, capture_output=True, check=False)
-    if completed.returncode:
-        detail = (completed.stderr or completed.stdout).strip().splitlines()
+    command = [sys.executable, str(repo / "scripts/dev.py"), "validation", "check"]
+    storage = subprocess.run(command, cwd=repo, text=True, capture_output=True, check=False)
+    if storage.returncode:
+        detail = (storage.stderr or storage.stdout).strip().splitlines()
         raise UiCoordinatorError(
             "保存領域の開始前検査に失敗しました: " + (detail[-1] if detail else "詳細不明")
         )
-    return {
-        "schema": 1,
-        "request_id": request_id,
-        "repo": str(primary),
-        "branch": branch,
-        "base": base,
-        "storage": "pass",
-        "checked_at": now(),
-    }
+    observed_base = subprocess.check_output(
+        ["git", "-C", str(repo), "rev-parse", "HEAD"], text=True
+    ).strip()
+    observed_branch = subprocess.check_output(
+        ["git", "-C", str(repo), "branch", "--show-current"], text=True
+    ).strip()
+    if observed_base != base or observed_branch != branch:
+        raise UiCoordinatorError("保存検査中に実装基点が変化しました。作業場を照合してください")
+    return {**context, "repo": str(repo), "branch": branch, "base": base,
+            "storage": "pass", "checked_at": now()}
 
 
 def prompt(request_id: str, identifier: str, primary: Path | None = None) -> str:
@@ -1198,9 +1215,13 @@ read-onlyとします。最大A/Bの2実装＋レビュー1、build/test/commit/
 新しい実装作業場を作る直前に python3 {coordinator} preflight --request-id {request_id} を実行し、
 返されたbaseのfull SHAを文字列として書き直さず、そのまま全workerとintegration targetの共通基点に使ってください。
 preflightが保存欠損を報告した場合は作業場や担当を作らず停止理由を示してください。
+preflightのmodeがsuccessorなら、repo/branchは直前の承認済みintegration target、baseはその承認済みheadです。
+別課題・primary HEAD・旧初期baseへ戻さず、同じ課題branch上に新しい分離worker worktreeを作ってください。
 実装を進めるときは、分離worktreeの固定ticketと統括が選定したvalidation argv / Help判断を
-private JSON specのlanesへまとめ、python3 {review_loop} register --request-id {request_id}
---coordinator "$ORCA_TERMINAL_HANDLE" --spec '<private spec file path>' を統括自身が実行します。
+private JSON specのlanesへまとめます。preflightのmodeがinitialなら python3 {review_loop} register、
+successorなら python3 {review_loop} register-successor --expected-sha256 <predecessor_loop_sha256> を使い、
+いずれも --request-id {request_id} --coordinator "$ORCA_TERMINAL_HANDLE" --spec '<private spec file path>' を付けて
+統括自身が実行します。successorは同じRunを継承し、新しいTask/Dispatchだけを一度作成します。
 spec本体をコマンドラインへ直接貼り付けてはいけません。所有者だけが読める0700の一時ディレクトリ内へ
 0600のJSONファイルとして保存し、そのパスだけを--specへ渡してください。
 lanesの各要素はslot, ticket（JSON object）, validation（argv, help_reason, help_decision）を持ちます。
@@ -1222,6 +1243,8 @@ integrationを指定した場合のapprovedは統合後headの最終review承認
 integration未指定の既存登録のapprovedはworker checkpoint承認だけです。
 approved後はshowのloop_sha256を使い、同helperのfinalize-tabs --expected-sha256 <loop_sha256>を実行してください。
 これは完了済み担当タブのscrollbackを保存して閉じ、統括タブだけを残します。利用者へIDや終了操作を求めません。
+同じ課題に未完の次マイルストーンがある場合は、その後あらためてpreflightを実行し、successorとして次世代を開始します。
+承認済み旧世代はimmutable historyへ保全され、後継登録で承認結果や旧Taskを再利用・上書きしません。
 watchのcombined_reviewは固定reviewerの統合後指摘です。全指摘が既存1担当のscopeで解決可能か判断し、
 private JSON {{"head":"attentionのhead","slot":"元担当","reason":"scope内で解決できる根拠"}} を作り、
 同helperのroute --spec <private JSON>を同じrequest-id/coordinator付きで実行します。

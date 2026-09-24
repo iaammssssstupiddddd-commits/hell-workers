@@ -106,6 +106,29 @@ class ReviewLoopTests(unittest.TestCase):
                 return data
         self.fail("bounded fixture loop did not settle")
 
+    def finish_integrated(self):
+        target_repo = self.root / "integration"
+        base = self.ticket["base"]
+        self.run_git(self.primary, "worktree", "add", "-qb", "hw-42-integration", str(target_repo), base)
+        validation = {"argv": [sys.executable, "-c", "pass"],
+                      "help_decision": "none", "help_reason": "Test fixture only"}
+        self.spec["integration"] = {
+            "target": {"repo": str(target_repo), "branch": "hw-42-integration", "base": base},
+            "validation": validation,
+        }
+        self.register()
+        with patch.object(loop, "is_production_path", return_value=False):
+            data = self.finish()
+        self.assertEqual(data["phase"], "approved", data)
+        data["run"] = {"phase": "ready", "context": {
+            "id": "run_fixture", "consumer_generation": 1,
+        }}
+        for attempt in data["attempts"].values():
+            attempt["completion_acknowledged"] = True
+        data["ui_cleanup"] = {"phase": "complete", "receipts": [], "at_ms": loop.event_time_ms()}
+        loop.save(data)
+        return loop.load(fixtures.REQUEST), target_repo
+
     def test_review_revision_round_trip_real_git_same_worker_and_fixed_reviewer(self):
         self.register()
         data = self.finish()
@@ -120,6 +143,61 @@ class ReviewLoopTests(unittest.TestCase):
         self.assertEqual(roles.git(self.repo, "rev-list", "--count", "HEAD"), "3")
         self.assertEqual(roles.git(self.repo, "status", "--porcelain"), "")
         self.assertEqual(self.tick(), data)
+
+    def test_settled_integrated_loop_starts_one_successor_on_approved_head_and_same_run(self):
+        previous, target_repo = self.finish_integrated()
+        expected = loop.inspection_digest(previous)
+        approved_head = previous["integration"]["receipt"]["head"]
+        next_repo = self.root / "next-worker"
+        self.run_git(self.primary, "worktree", "add", "-qb", "hw-42-next", str(next_repo), approved_head)
+        ticket = {
+            **self.ticket,
+            "id": "edit-next-leaf",
+            "repo": str(next_repo),
+            "branch": "hw-42-next",
+            "base": approved_head,
+            "prompt": "Continue the next bounded milestone.",
+        }
+        validation = {"argv": [sys.executable, "-c", "pass"],
+                      "help_decision": "none", "help_reason": "Test fixture only"}
+        spec = {
+            "lanes": [{"slot": "worker-a", "ticket": ticket, "validation": validation}],
+            "integration": {
+                "target": {"repo": str(target_repo), "branch": "hw-42-integration", "base": approved_head},
+                "validation": validation,
+            },
+        }
+        with patch.object(dispatch, "checked_run", return_value=previous["run"]["context"]):
+            context = loop.successor_preflight(fixtures.REQUEST, fixtures.COORDINATOR)
+            wrong = copy.deepcopy(spec)
+            wrong["integration"]["target"]["branch"] = "hw-42-other"
+            with self.assertRaisesRegex(ValueError, "exact approved integration"):
+                loop.register_successor(fixtures.REQUEST, fixtures.COORDINATOR, wrong, expected)
+            self.assertEqual(list(loop.history_root(fixtures.REQUEST).glob("*.json")), [])
+            current = loop.register_successor(fixtures.REQUEST, fixtures.COORDINATOR, spec, expected)
+            repeated = loop.register_successor(fixtures.REQUEST, fixtures.COORDINATOR, spec, expected)
+        self.assertEqual(context["mode"], "successor")
+        self.assertEqual(context["base"], approved_head)
+        self.assertEqual(current["loop_generation"], 2)
+        self.assertEqual(current["run"], previous["run"])
+        self.assertEqual(current["predecessor"]["loop_sha256"], expected)
+        self.assertEqual(repeated, current)
+        archive = Path(current["predecessor"]["archive"])
+        archived = loop.STORAGE.read_private_json(archive, {})
+        self.assertEqual(archived["loop"], previous)
+        self.assertEqual(archived["loop_sha256"], expected)
+        loop.STORAGE.write_ledger(archive, {"schema": 1, "request_id": fixtures.REQUEST})
+        with self.assertRaisesRegex(ValueError, "predecessor archive changed"):
+            loop.load(fixtures.REQUEST)
+
+    def test_successor_rejects_unsettled_or_wrong_target_without_archiving(self):
+        data = self.register()
+        data["phase"] = "approved"
+        loop.save(data)
+        with patch.object(dispatch, "checked_run"):
+            with self.assertRaisesRegex(ValueError, "settled integrated approval"):
+                loop.successor_preflight(fixtures.REQUEST, fixtures.COORDINATOR)
+        self.assertEqual(list(loop.history_root(fixtures.REQUEST).glob("*.json")), [])
 
     def test_round_trip_uses_one_run_and_drains_every_real_mail_adapter_delivery(self):
         queued, acknowledgements, creates = [], [], []
