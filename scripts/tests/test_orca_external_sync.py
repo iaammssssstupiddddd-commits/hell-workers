@@ -255,6 +255,49 @@ class ExternalSyncTests(unittest.TestCase):
         self.assertEqual(result["operation"]["result"]["authorityReceipt"],
                          "user-thread-2026-09-22")
 
+    def test_policy_block_can_be_superseded_by_same_target_successor(self) -> None:
+        blocked = sync.queue_linear_status(
+            self.root, REQUEST, "TAK-99", "started", "着手", target_state="Old state",
+        )
+        sync.transition(
+            self.root, REQUEST, blocked["id"], "blocked_policy",
+            {"reason": "provider_rejected"},
+        )
+        successor = sync.queue_linear_status(
+            self.root, REQUEST, "TAK-99", "started", "着手", target_state="In Progress",
+        )
+        old = sync.supersede_policy_block(
+            self.root, REQUEST, blocked["id"], successor["id"],
+            "Workflow state name was corrected after read-back",
+        )
+        self.assertEqual(old["phase"], "superseded")
+        self.assertEqual(old["result"]["supersededBy"], successor["id"])
+        verified = {"provider": "linear", "issue": "TAK-99", "state": "In Progress"}
+        with patch.object(sync, "_read_back", side_effect=[None, verified]), \
+                patch.object(sync, "_preflight", return_value=(True, None)), \
+                patch.object(sync, "_send", return_value=SENT):
+            result = sync.execute_next(
+                self.root, REQUEST, orca_cli=self.cli, repo=self.repo,
+            )
+        self.assertEqual(result["operation"]["id"], successor["id"])
+        self.assertEqual(result["state"], "confirmed")
+
+    def test_policy_block_cannot_be_superseded_by_another_target(self) -> None:
+        blocked = sync.queue_linear_status(
+            self.root, REQUEST, "TAK-99", "started", "着手", target_state="Old state",
+        )
+        sync.transition(
+            self.root, REQUEST, blocked["id"], "blocked_policy",
+            {"reason": "provider_rejected"},
+        )
+        successor = sync.queue_linear_status(
+            self.root, REQUEST, "TAK-100", "started", "着手", target_state="In Progress",
+        )
+        with self.assertRaisesRegex(ValueError, "changes external target"):
+            sync.supersede_policy_block(
+                self.root, REQUEST, blocked["id"], successor["id"], "wrong target",
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

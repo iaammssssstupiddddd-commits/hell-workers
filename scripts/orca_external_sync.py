@@ -23,7 +23,7 @@ else:
 SCHEMA = 1
 NAMESPACE = uuid.UUID("6598f23d-5741-5aaf-988f-a13d7f9c6559")
 PHASES = {"queued", "sending", "confirmed", "unknown", "blocked_authority",
-          "blocked_policy"}
+          "blocked_policy", "superseded"}
 LINEAR_STAGES = {"started": 1, "review": 2, "completed": 3, "stopped": 4}
 LINEAR_TARGETS = {
     "started": "In Progress", "review": "In Review",
@@ -231,6 +231,38 @@ def authorize_publication(state_dir: Path, request_id: str, operation_id: str,
         return operation
 
 
+def supersede_policy_block(state_dir: Path, request_id: str, operation_id: str,
+                           successor_id: str, reason: str) -> dict:
+    intake.canonical_uuid(operation_id, "blocked operation id")
+    intake.canonical_uuid(successor_id, "successor operation id")
+    if (not isinstance(reason, str) or not reason.strip()
+            or len(reason.strip()) > 1000):
+        raise ValueError("policy supersede requires a bounded reason")
+    with acquire_host("external-sync", inherit=False):
+        data = read(state_dir, request_id)
+        blocked = [item for item in data["operations"] if item["id"] == operation_id]
+        successors = [item for item in data["operations"] if item["id"] == successor_id]
+        if len(blocked) != 1 or len(successors) != 1:
+            raise ValueError("policy block and successor must be unique")
+        old, new = blocked[0], successors[0]
+        if (old["phase"] != "blocked_policy" or new["phase"] != "queued"
+                or old["kind"] != new["kind"] or new["sequence"] <= old["sequence"]):
+            raise ValueError("invalid policy block successor")
+        if old["kind"] in {"linear_status", "linear_comment"}:
+            same_target = old["payload"].get("issue") == new["payload"].get("issue")
+        else:
+            same_target = (old["payload"].get("repository"), old["payload"].get("branch")) == (
+                new["payload"].get("repository"), new["payload"].get("branch"))
+        if not same_target:
+            raise ValueError("policy block successor changes external target")
+        prior = old["result"] if isinstance(old["result"], dict) else {}
+        old.update(phase="superseded", result={
+            **prior, "supersededBy": successor_id, "supersedeReason": reason.strip(),
+        })
+        save(state_dir, data)
+        return old
+
+
 def propose(state_dir: Path, request_id: str, source: str, event: str, payload: dict) -> dict:
     if source not in {"linear", "github"} or not isinstance(event, str) or not event.strip():
         raise ValueError("invalid external event proposal")
@@ -263,7 +295,9 @@ def projection(state_dir: Path, request_id: str) -> dict:
         return {"state": "syncing", "detail": "外部サービスへ同期中です"}
     if "queued" in phases:
         return {"state": "pending", "detail": "外部同期キュー待ちです"}
-    return {"state": "synced", "detail": "外部同期を確認済みです"}
+    if phases <= {"confirmed", "superseded"}:
+        return {"state": "synced", "detail": "外部同期または後継operationへの置換を確認済みです"}
+    return {"state": "unknown", "detail": "外部同期状態を再照合中です"}
 
 
 def _run(command: list[str], *, stdin: str | None = None,
@@ -459,7 +493,8 @@ def execute_next(state_dir: Path, request_id: str, *, orca_cli: Path,
     if not repo.is_absolute() or repo.resolve() != repo or not (repo / ".git").exists():
         raise ValueError("GitHub sync repo must be an absolute git worktree")
     data = read(state_dir, request_id)
-    pending = [item for item in data["operations"] if item["phase"] != "confirmed"]
+    pending = [item for item in data["operations"]
+               if item["phase"] not in {"confirmed", "superseded"}]
     if not pending:
         return {"state": "idle", "operation": None}
     operation = pending[0]
