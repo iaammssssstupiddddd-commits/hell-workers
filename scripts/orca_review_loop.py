@@ -161,6 +161,25 @@ def checked_help_review(data: dict, subject: str) -> dict | None:
     return review
 
 
+def inspection(data: dict) -> dict:
+    """Read-only operator view with exact digests required by guarded resumes."""
+    pending = []
+    owners = [(slot, lane) for slot, lane in data["lanes"].items()]
+    if isinstance(data.get("integration"), dict):
+        owners.append(("integration", data["integration"]))
+    for subject, owner in owners:
+        legacy = "fresh coordinator Help review" in str(owner.get("reason", ""))
+        if owner.get("phase") != "paused" or not (owner.get("help_pause") or legacy):
+            continue
+        try:
+            current = help_review_subject(data, subject)
+        except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
+            pending.append({"subject": subject, "error": f"{type(error).__name__}: {error}"})
+        else:
+            pending.append(current)
+    return {"loop": data, "loop_sha256": bindings.digest(data), "pending_help_reviews": pending}
+
+
 def pause_for_help_review(data: dict, subject: str) -> None:
     reason = "production diff requires a fresh coordinator Help review bound to the exact source"
     if subject == "integration":
@@ -926,7 +945,7 @@ def main() -> int:
                 raise ValueError("correction routing requires a trusted private spec")
             result = route_correction(args.request_id, args.coordinator, STORAGE.read_private_json(args.spec, {}))
         elif args.action == "show":
-            result = load(args.request_id)
+            result = inspection(load(args.request_id))
         elif args.action == "watch":
             result = watch(args.request_id, args.coordinator)
         elif args.action == "decide":

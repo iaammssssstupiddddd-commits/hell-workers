@@ -484,6 +484,17 @@ class ReviewLoopTests(unittest.TestCase):
         self.assertEqual(paused["phase"], "paused")
         self.assertNotIn("help_review", paused["lanes"]["worker-a"])
 
+    def test_inspection_exposes_exact_help_review_resume_inputs(self):
+        self.register()
+        for _ in range(4):
+            self.tick()
+        with patch.object(loop, "is_production_path", return_value=True):
+            data = self.tick()
+        observed = loop.inspection(data)
+        self.assertEqual(observed["loop_sha256"], bindings.digest(data))
+        self.assertEqual(observed["loop"], data)
+        self.assertEqual(observed["pending_help_reviews"], [loop.help_review_subject(data, "worker-a")])
+
     def test_corrupt_ledger_is_preserved(self):
         self.register()
         path = loop.state_path(fixtures.REQUEST)
