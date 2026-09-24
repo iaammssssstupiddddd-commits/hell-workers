@@ -1170,8 +1170,8 @@ handoff成功後は元課題から実装担当を起動せず、新しい統括�
 """
 
 
-def provider_command(executable: str, initial_prompt: str) -> list[str]:
-    return [
+def provider_command(executable: str, initial_prompt: str, resume_session: str | None = None) -> list[str]:
+    command = [
         executable,
         "--dangerously-bypass-approvals-and-sandbox",
         "--model",
@@ -1184,6 +1184,10 @@ def provider_command(executable: str, initial_prompt: str) -> list[str]:
         "--no-alt-screen",
         initial_prompt,
     ]
+    if resume_session:
+        uuid.UUID(resume_session)
+        command = [executable, "resume", *command[1:-1], resume_session, initial_prompt]
+    return command
 
 
 def prepare_runtime(primary: Path) -> Path:
@@ -1282,7 +1286,7 @@ def sandbox_command(command: list[str], primary: Path, runtime: Path) -> list[st
     return result
 
 
-def launch() -> int:
+def launch(resume_session: str | None = None) -> int:
     if __package__:
         from .orca_review_loop import Driver
     else:
@@ -1291,13 +1295,26 @@ def launch() -> int:
     if executable is None:
         raise UiCoordinatorError("Codex CLIが見つかりません")
     with acquire_host("ui-coordinator", inherit=False) as lease:
-        imported, data = prepare()
         primary = primary_repo()
+        runtime = prepare_runtime(primary)
+        if resume_session:
+            if str(uuid.UUID(resume_session)) != resume_session:
+                raise UiCoordinatorError("統括の再開session IDが不正です")
+            sessions = list((runtime / "codex/sessions").glob(f"**/*-{resume_session}.jsonl"))
+            if len(sessions) != 1 or sessions[0].is_symlink():
+                raise UiCoordinatorError("統括の保存会話を一意に確認できません")
+            with sessions[0].open(encoding="utf-8") as handle:
+                meta = json.loads(handle.readline(1024 * 1024))
+            if (meta.get("type") != "session_meta" or meta.get("payload", {}).get("id") != resume_session
+                    or meta["payload"].get("cwd") != str(REPO)):
+                raise UiCoordinatorError("統括の保存会話がこの作業場と一致しません")
+        imported, data = prepare()
         command = provider_command(
             executable,
             prompt(imported["request_id"], data["linear_identifier"], primary),
+            resume_session,
         )
-        argv = sandbox_command(command, primary, prepare_runtime(primary))
+        argv = sandbox_command(command, primary, runtime)
         transferred = False
         with Driver(imported["request_id"], data["terminal"]):
             process = subprocess.Popen(argv, pass_fds=(lease.fd,))
@@ -1371,7 +1388,8 @@ def default_entry() -> int:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="action", required=True)
-    subparsers.add_parser("launch")
+    launch_parser = subparsers.add_parser("launch")
+    launch_parser.add_argument("--resume-session")
     subparsers.add_parser("launch-wait")
     subparsers.add_parser("default-entry")
     for action in ("acknowledge", "show"):
@@ -1387,7 +1405,7 @@ def main() -> int:
         if args.action == "default-entry":
             return default_entry()
         if args.action == "launch":
-            return launch()
+            return launch(args.resume_session)
         if args.action == "launch-wait":
             return launch_wait()
         if args.action == "acknowledge":

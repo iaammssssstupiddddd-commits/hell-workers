@@ -112,6 +112,23 @@ def read_state(slot: str, provider: str, *, allow_pending: bool = False) -> dict
         last_bridge = last.get("bridge_reconciliation") if isinstance(last, dict) else None
         externally_observed_exit = (valid_bridge_reconciliation(last_bridge)
                                     and last_bridge.get("exit_observation") == "external_terminal_exited")
+        if isinstance(last, dict) and last.get("maintenance_exit"):
+            path = Path(last["maintenance_exit"])
+            expected = state_path(slot).parent / "loops/maintenance"
+            if path.parent != expected or path.resolve() != path:
+                raise ValueError("maintenance exit receipt is outside its owner directory")
+            receipt = storage.read_private_json(path, {})
+            restored = receipt.get("after", {}).get(slot, {}).get("role", {})
+            proof = receipt.get("proofs", {}).get(slot, {})
+            close = proof.get("terminal_close", {})
+            if (receipt.get("phase") != "complete" or restored != data
+                    or close.get("ok") is not True
+                    or close.get("result", {}).get("close", {}).get("handle") != last.get("terminal")
+                    or close.get("result", {}).get("close", {}).get("ptyKilled") is not True
+                    or proof.get("journal", {}).get("authority") is not None
+                    or proof.get("journal", {}).get("operations") != {}):
+                raise ValueError("maintenance exit is not positively proved")
+            externally_observed_exit = True
         recorded = (isinstance(last, dict) and last.get("phase") == "recorded"
                     and last.get("process_exited") is True
                     and (type(last.get("exit_code")) is int or externally_observed_exit)

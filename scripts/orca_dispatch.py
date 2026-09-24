@@ -238,6 +238,12 @@ def start(request_id: str, ticket_path: Path, slot: str, coordinator_handle: str
             else:
                 return existing_dispatch(current, ticket, slot, resume_session, follow_up,
                                          run_context, exit_on_settlement)
+        role_state = bindings.read_state(slot, roles.provider_for(ticket, slot))
+        if (role_state.get("last") or {}).get("maintenance_exit"):
+            receipt = frontdesk.read_private_json(Path(role_state["last"]["maintenance_exit"]), {})
+            if receipt.get("request_id") != request_id or receipt.get("after", {}).get(slot, {}).get("ticket") != ticket:
+                raise DispatchError("maintenance receipt does not authorize this assignment")
+            closed_receipt = receipt["proofs"][slot]["terminal_close"]
         if slot != "reviewer" and (resume_session or follow_up or ticket.get("generation", 0)):
             repo = Path(ticket["repo"])
             subject = {"repo": str(repo), "branch": ticket["branch"], "base": ticket["base"],

@@ -596,5 +596,17 @@ class DefaultEntryTests(unittest.TestCase):
                 self.assertEqual(call.call_args.args[0][-1], "統括・起動失敗" if failure else "統括・終了")
 
 
+class CoordinatorResumeTests(unittest.TestCase):
+    def test_resume_uses_exact_saved_session_not_last(self):
+        from scripts import orca_ui_coordinator as ui
+        session = "01a0d0d2-c64a-71a0-a2bd-4f44e1b15665"
+        command = ui.provider_command("codex", "resume intake", session)
+        self.assertEqual(command[:2], ["codex", "resume"])
+        self.assertEqual(command[-2:], [session, "resume intake"])
+        self.assertNotIn("--last", command)
+        with self.assertRaises(ValueError):
+            ui.provider_command("codex", "resume intake", "not-a-session")
+
+
 if __name__ == "__main__":
     unittest.main()
