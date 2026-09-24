@@ -20,6 +20,45 @@ acknowledge後の担当移動と、統括が正常終了した後の画面から
 専用課題はDone、無変更の専用worktreeは撤去済み（実測29,351,936 bytes）。
 実装A/Bと固定reviewerを含む全反復ループの受入完了を意味しない。
 
+### 実エージェント反復試験（TAK-12、2026-09-24）
+
+**結果は不合格。反復ループは運用可能と判定しない。** 配備中の同一runtimeへ固定パネルと同じ
+`supervision.request` APIで明示実装依頼を送信した。今回は画面クリックの再試験ではなく、
+実Codex統括・Codex A・Cursor B・固定Codex reviewerを使うbackend/agent受入である。
+基点はcandidate `7f7526c997eb1f4e8abb349bd54b097a60e14e17`。
+
+- 統括が専用課題・統合先とA/Bの分離作業場を準備し、同一Runに2レーンを登録した。
+  specの内容ではなくpathを渡す必要がある点で統括が一度登録エラーとなり、自身で訂正した。
+  統合先の保持登録漏れは外側担当が指摘し、統括が登録した。無介入での完走とは数えない。
+- Aは専用fixtureへ、空白除去と小文字化を仕様とする`normalize_label`を追加した。
+  初回のみ小文字化を欠落させる意図的な不良注入であり、製品変更ではない。
+  完了通知、provider自動終了、AST検証、checkpoint `afe1c7de1ef7634e9db95d12dcd849c3541b2ca9`、
+  固定reviewer起動まで進んだ。reviewerは実際の仕様不一致を指摘した。
+- reviewerの`ORCA_REVIEW_JSON`内の受入条件に未escapeの引用符が含まれ、JSON解析が失敗した。
+  成功したreview Taskを承認と混同せず、driverは`invalid review verdict`で停止した。
+  Aの修正回数は0。同担当差戻し・同session再実装・再レビューは未達。
+- Bは正式Dispatchが成立する前の初回promptでfixtureの定数を編集した。
+  Cursor用promptにはCodex用と同等のbootstrap待機指示がなく、bridgeも`bootstrap`・authorityなしのまま。
+  `worker-start`は不成立、dispatch台帳は`unknown`、Task/Dispatch IDなしで停止した。
+  配車エラーの低位理由は保存されておらず未確定。配車前編集を成功成果として採用しない。
+- Aとreviewerの2 Dispatchはcompleted、hostのrelease処理は実行済み。
+  reviewer完了のDeliveryは停止時に未ACKのまま残り、排出完了とはしない。
+  BはDispatchがないためworker-release対象にはせず、差分を保持して所有terminalを明示closeし、
+  `ptyKilled=true`とlauncher PID消滅を確認した。role台帳の`starting`は未照合として保持した。
+- 全体は`paused`、integrationは`planned`。統合、最終レビュー、通常UI終了は未実施。
+  A/B作業場には既定の空shellも残り、担当タブだけに整理できたという受入証拠にもならない。
+
+再現作業場は`tak-12`、`tak-12-worker-a`、`tak-12-worker-b`を同じ場所に保持する。
+保持の目的は、配車前編集防止、構造化判定の安全な再提出、停止時の通知処理、空shell整理の修正と再検証。
+試験差分・未確定記録を破棄せず、新規Run、手修正した承認JSON、手動ACKで成功を作らない。
+ゲームのbuild/test、製品branchへの統合、pushは行っていない。
+Help判断はNo impact。変更した2つのPython fixtureは開発用provider試験だけから参照され、
+ゲームの入力・状態・asset・Help catalogへ到達しない。
+
+前回のTAK-8は利用者が意図的に作業場を撤去済みで、最終統合承認・全attemptのrelease/ACK・
+launcher終了記録を照合した。消失したsourceへの再照合だけでpausedになった旧loopを、
+内容を変更せずprivate台帳の`loops/closed/`へ履歴退避した。これは明示保守であり自動終了の成功ではない。
+
 復帰先の現行版は `/home/satotakumi/.local/opt/orca-ide/1.4.205/squashfs-root/orca-ide`。
 終了後・切替前の設定を `/home/satotakumi/.config/orca-pre-ui-bb614da7-20260924`、
 起動アイコンを `/home/satotakumi/.local/share/applications/stably-orca.desktop.pre-ui-bb614da7` に保全した。
