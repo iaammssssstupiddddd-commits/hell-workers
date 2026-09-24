@@ -59,7 +59,7 @@ Help判断はNo impact。変更した2つのPython fixtureは開発用provider�
 launcher終了記録を照合した。消失したsourceへの再照合だけでpausedになった旧loopを、
 内容を変更せずprivate台帳の`loops/closed/`へ履歴退避した。これは明示保守であり自動終了の成功ではない。
 
-### TAK-12からの受付修正（2026-09-24、実provider再受入は未完）
+### TAK-12からの受付修正と再受入（2026-09-24）
 
 candidate `9cb4103e`で以下を実装した。旧試験の成功記録へ書き換えず、停止中の作業場・session・差分は維持する。
 
@@ -84,7 +84,7 @@ candidate `9cb4103e`で以下を実装した。旧試験の成功記録へ書き
 Help実レビューはNo impact。host開発制御→Orca/CLI/private台帳だけの変更で、
 ゲーム入力・UI・保存処理・runtime dataへ到達しない。ゲームテストは実行していない。
 
-**既存TAK-12への配備・状態回復と、実A/B/reviewerによる再完走はまだ確認していない。**
+初回 `9cb4103e` 時点では既存TAK-12への配備・状態回復と再完走は未確認だった。
 candidateから直接旧loopをtickする試行は作業場一致guardで拒否され、通知ACKも行っていない。
 既存統括のdriverは旧worktreeのmoduleを保持しているため、candidateの更新だけでは切り替わらない。
 次は旧subject/session/終了証拠を保全する回復・配備経路を整え、同じ試験環境で再受入する。
@@ -107,6 +107,54 @@ Task/Dispatch/Run/本文の一致で決める。複数の確定owner、本文改
 dispatcherも制御コードと同じ配備のrole launcherを使う。凍結中のreview対象を更新せず制御を修正できる。
 Cursorのhook生成format再提出では、beforeSubmitPromptが省略される自動followupも、
 同じ会話に対する未消費のhost発行retryが1件ある場合だけ次generationへ結び付ける。
+
+TAK-12は同一Runで差戻し1回、同一A sessionで修正、A/B承認、統合検証、固定reviewerの
+最終承認まで到達した。統合HEADは `903c6fa6f8d55a1f8fdd939613ceb3f556c333a4`。
+8 attemptのrelease/ACKと通知排出を確認した。途中の回復とBの送信・結果再提出には
+試験担当の介入があり、無介入完走の証拠ではない。B起動時は復元画面のidleだけでなく、
+新controllerが初期bootstrapを拒否したhook receiptを待ってから配車する改修を追加した。
+
+終了時、長時間使用したtabのring bufferから先頭行が既に退避されていると、全履歴のcursor 0を
+要求して閉じられなかった。保全対象は現在保持されている `oldestCursor..latestCursor` 全行と
+最終preview。事前欠落を `truncated` / `droppedBeforeCursor` に明記し、元の全履歴を保存したとは
+記録しない。読み取り中のrange変化、行の欠落、所有不明・busyなshellは引き続き拒否する。
+provider会話と確定Dispatch/review記録は別の既存台帳に保持し、closeで削除しない。
+
+TAK-12の全所有tab（担当・review 5件と統括1件）のcloseを確認し、アプリ再起動後も
+closed表示・担当handleなし・固定受付readyを確認した。再起動後の新規受付で、controllerの
+cwdがGit外の場合にprimary探索が失敗する問題を検出した。primaryの探索は配備した制御コードの
+Git common directoryから行い、terminalの作業場照合には引き続き実cwdを使用する。
+
+TAK-13ではCursorの起動・編集・通常文からJSONへのhook自動再提出が送信補助なしで成功した。
+個別reviewと統合検証の後、最終reviewがprovider testのREADY初期値固定との矛盾を検出した。
+provider testは書込scopeの制限とRESULT文字列の構造を検査し、編集受入後にも初期値を要求しない。
+指定した最終値の一致は、その案件のlane・統合validationで引き続き厳密に検査する。
+
+worker scope外のhost tooling補正は `scripts/orca_tooling_correction.py` を統括が明示実行する。
+exact loop digest、封印済みの統合差戻し、全attemptのrelease/ACK、clean対象、元worker承認を照合し、
+元baseから派生するtooling commitだけを候補へ加える。ゲームpath・worker fixture変更を拒否する。
+旧Run・拒否review・元receiptを保存し、新headのvalidationと固定reviewを通常driverへ戻す。
+補正自身は承認を生成しない。中断・同じ補正の再実行は照合待ちとなり、未知のGit操作を再送しない。
+
+補正後のTAK-13は同じRunでprovider testとRESULT完全一致の検証に成功し、同じreviewタブ・
+固定sessionで最終承認された。HEADは `4bc2c0c177b8f5fa23c331c5858d4a98a6a4ab89`、
+sourceは `603eb4e6bf50e2244ef19bf97c33208a9fb4026d6a9276762dda88486f20d0fc`。
+全4 attemptのrelease/ACK・inbox排出・同一subjectの承認照合を外側から再確認した。
+Cursor部分は無介入成功だが、最終review後のtooling補正は統括の明示介入であり、全工程無介入とは記録しない。
+案件close APIで全所有role tabと統括tabが閉じ、未使用の試験shellも個別の所有・出力保全を経て撤去した。
+受付はready、TAK-12/13はclosed、試験用の生存terminalは0件。
+
+修正コードはcandidateの `8853d305`、`c6597856`、`66d7e9ba`、`2c4efde5`、
+`410174e8`、`688411c6` にcommit済み。最終変更別検証はbase
+`2c4efde50a2d8f36c4b3b4e299083314e0616b37`、source
+`c9329cccd1870cd14c17a909bb85095958ed1bf7db0c1623f588e7f4113cc5f3`でcontracts/tooling成功。
+Python tooling 651件、Blender tooling 164件、Ruff/actionlint、perf self-testを含む。ゲーム検証は対象外。
+Help実レビューはNo impact（hostの制御・テスト契約のみで、プレイヤーの入力・表示・状態・runtime dataは不変）。
+
+完了したTAK-12の3作業場とTAK-13の2作業場、および今回のcontroller再読込前の重複設定backupを撤去した。
+削除前のdu合計は230,502,400 bytes（約220 MiB）。Btrfsの実空き容量増加とは区別する。
+両試験の統合branchとcommit、provider会話・承認/close receipt、元の切替前設定は保持している。
+Orca本体source、現行controllerを読み込むcandidate、稼働中terminal daemonのpackageは現在の実行依存として保持する。
 
 復帰先の現行版は `/home/satotakumi/.local/opt/orca-ide/1.4.205/squashfs-root/orca-ide`。
 終了後・切替前の設定を `/home/satotakumi/.config/orca-pre-ui-bb614da7-20260924`、
