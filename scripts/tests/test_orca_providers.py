@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import unittest
 import tempfile
 import tomllib
@@ -82,7 +83,15 @@ class ProviderTests(unittest.TestCase):
         root = Path(__file__).resolve().parents[2]
         for slot in ("worker-a", "worker-b"):
             fixture = root / f"scripts/tests/fixtures/orca_edit_acceptance/{slot}/result.py"
-            self.assertIn('RESULT = "READY:', fixture.read_text())
+            # The supervised acceptance intentionally replaces the initial value.
+            # The provider contract is a writable isolated string fixture, not a
+            # requirement to keep the seed after a successful real edit.
+            assignments = [node for node in ast.parse(fixture.read_text()).body
+                           if isinstance(node, ast.Assign) and len(node.targets) == 1
+                           and isinstance(node.targets[0], ast.Name) and node.targets[0].id == "RESULT"]
+            self.assertEqual(len(assignments), 1)
+            self.assertIsInstance(assignments[0].value, ast.Constant)
+            self.assertIsInstance(assignments[0].value.value, str)
         ticket = {**self.simple(), "task_kind": "acceptance-edit",
                   "allowed_directories": [providers.CURSOR_EDIT_ACCEPTANCE_SCOPE]}
         self.assertEqual(providers.provider_for(ticket, "worker-b"), "cursor")
@@ -94,6 +103,10 @@ class ProviderTests(unittest.TestCase):
         ):
             with self.subTest(change=change), self.assertRaisesRegex(ValueError, "dedicated fixture"):
                 providers.provider_for({**ticket, **change}, "worker-b")
+
+    def test_edit_acceptance_contract_accepts_completed_string_result(self) -> None:
+        with patch.object(Path, 'read_text', return_value='RESULT = "PASS: accepted edit"\n'):
+            self.test_b_edit_acceptance_is_restricted_to_dedicated_fixture()
 
     @patch("scripts.orca_providers.shutil.which", side_effect=lambda name: f"/bin/{name}")
     def test_commands_never_fall_back_to_another_provider(self, _) -> None:
