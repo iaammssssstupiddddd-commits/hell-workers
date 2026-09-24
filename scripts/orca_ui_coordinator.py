@@ -1095,12 +1095,15 @@ def handoff(
 
 
 def primary_repo() -> Path:
+    # The app-owned controller can start outside Git. Discover the installation's
+    # primary repository independently of the terminal's task working directory.
+    control_repo = Path(__file__).resolve().parents[1]
     return Path(
         subprocess.check_output(
             [
                 "git",
                 "-C",
-                str(REPO),
+                str(control_repo),
                 "rev-parse",
                 "--path-format=absolute",
                 "--git-common-dir",

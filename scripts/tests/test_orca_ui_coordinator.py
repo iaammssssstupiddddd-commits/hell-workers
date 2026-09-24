@@ -24,6 +24,13 @@ TERMINAL = "term_175c1be5-9f01-4a44-8268-a0542fa4e781"
 
 
 class UiCoordinatorTests(unittest.TestCase):
+    def test_primary_discovery_uses_control_installation_not_controller_cwd(self):
+        with patch.object(ui, "REPO", Path("/outside-git")), patch.object(
+            ui.subprocess, "check_output", return_value="/primary/.git\n"
+        ) as git:
+            self.assertEqual(ui.primary_repo(), Path("/primary"))
+        self.assertEqual(git.call_args.args[0][2], str(Path(ui.__file__).resolve().parents[1]))
+
     def setUp(self) -> None:
         idle = patch.object(ui.role_tabs, "idle_shell")
         idle.start()
