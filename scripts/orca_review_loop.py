@@ -242,15 +242,7 @@ def release(attempt: dict) -> None:
 
 
 def parse_review(body: str, session: str) -> dict:
-    if not isinstance(body, str) or len(body) > 32000:
-        raise ValueError("missing bounded review body")
-    prefix = "ORCA_REVIEW_JSON:"
-    lines = [line[len(prefix):].strip() for line in body.splitlines() if line.startswith(prefix)]
-    if len(lines) != 1:
-        raise ValueError("review needs one structured verdict, never infer approval from prose")
-    record = roles.task_bridge.wire.decode(lines[0].encode())
-    if set(record) != {"ticket", "base", "head", "source_sha256", "validation_evidence", "verdict", "blocking_findings"}:
-        raise ValueError("unexpected review record fields")
+    record = roles.task_bridge.review_record(body)
     return {**record, "reviewer_session": session}
 
 
@@ -411,7 +403,7 @@ def tick(request_id: str, terminal: str) -> dict | None:
                 final.update(phase="paused", reason=f"final approval invalidated: {error}"[:2000])
                 data.update(phase="paused", reason=final["reason"])
                 save(data)
-        if data["phase"] != "active":
+        if data["phase"] not in {"active", "paused"}:
             return data
         dispatch.checked_coordinator(request_id, terminal)
         try:
@@ -419,6 +411,10 @@ def tick(request_id: str, terminal: str) -> dict | None:
         except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
             data.update(phase="paused", reason=f"inbox: {error}"[:2000])
             save(data)
+            return data
+        if data["phase"] == "paused":
+            # Drain only verified, released completions; never dispatch or
+            # silently answer a question while paused.
             return data
         slots = list(data["lanes"])
         for offset in range(len(slots)):

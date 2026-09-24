@@ -166,7 +166,7 @@ def cursor_hook_config(repo: Path) -> dict:
     """Controller-owned lifecycle hooks; they do not grant an agent tool."""
     command = f"{shlex.quote(sys.executable)} {shlex.quote(str(repo / 'scripts/orca_cursor_bridge_hook.py'))}"
     return {"version": 1, "hooks": {
-        "beforeSubmitPrompt": [{"command": command, "timeout": 5, "failClosed": True}],
+        "beforeSubmitPrompt": [{"command": command, "timeout": 15, "failClosed": True}],
         "afterAgentResponse": [{"command": command, "timeout": 5, "failClosed": True}],
         "stop": [{"command": command, "timeout": 50, "failClosed": True}],
     }}

@@ -492,7 +492,9 @@ def launch(ticket: dict, slot: str, *, dry_run: bool, resume_session: str | None
     )
     if bridge_settings:
         if provider == "cursor":
-            prompt += ("\nCursor B lifecycle is handled only by controller-owned hooks. Never invoke Orca, Shell, "
+            prompt = ("BOOTSTRAP ONLY: Wait for the host's live supervised Dispatch. Do not inspect or edit files. "
+                       "The controller will reject this initial prompt until a live Dispatch is admitted. "
+                       "Cursor B lifecycle is handled only by controller-owned hooks. Never invoke Orca, Shell, "
                        "MCP, web, subagents, builds, or tests, and do not ask an interactive question. If the "
                        "task is unclear or blocked, report a failed outcome. Your final response must be exactly "
                        "one JSON object with string keys outcome, subject, body; outcome is succeeded or failed, "
@@ -508,7 +510,9 @@ def launch(ticket: dict, slot: str, *, dry_run: bool, resume_session: str | None
                        "Orca preamble arrives. Do not create runs, tasks, workers or gates. When dispatched, copy "
                        "its executable, terminal, capability and IDs exactly; use --json. Ask/check waits require "
                        "--timeout-ms 10000. Process all delivered messages before explicit check --ack. "
-                       "A bridge refusal means stop and ask the host coordinator to reconcile, never resend. "
+                       "A bridge refusal means stop and ask the host coordinator to reconcile, never resend, "
+                       "except review_format_retry: no completion was sent, so serialize the review record "
+                       "with json.dumps and resubmit it on the same Dispatch as instructed. "
                        "worker_done is not review approval. "
                        + ("No edits or builds are allowed." if read_only else
                           "Edit only the ticket's allowed directories; builds and commits are not allowed."))
@@ -570,7 +574,11 @@ def launch(ticket: dict, slot: str, *, dry_run: bool, resume_session: str | None
                         worker_scope(ticket, initial=False)
                 bridge = channels.enter_context(task_bridge.Session(
                     *bridge_settings, os.environ.get("ORCA_TERMINAL_HANDLE"), repo, verify_subject,
-                    cursor_hooks=provider == "cursor"))
+                    cursor_hooks=provider == "cursor",
+                    review_subject=({"ticket": ticket["id"], "base": ticket.get("review_base", ticket["base"]),
+                                     "head": git(repo, "rev-parse", "HEAD"), "source_sha256": before,
+                                     "validation_evidence": ticket["validation_evidence"]}
+                                    if role == "reviewer" and "validation_evidence" in ticket else None)))
                 if provider == "codex":
                     prompt += (f"\nFor every Orca CLI invocation use exactly {bridge.client}; "
                                "never use bare `orca` or the installed client directly. Do not read or print "

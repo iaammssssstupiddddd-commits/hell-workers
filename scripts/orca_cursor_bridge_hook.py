@@ -85,7 +85,10 @@ def exchange(event: dict) -> dict:
 
 def hook_output(event: dict, response: dict) -> dict:
     if event["hook_event_name"] == "beforeSubmitPrompt":
-        return {"continue": True}
+        result = response.get("result")
+        if not isinstance(result, dict) or type(result.get("continue")) is not bool:
+            raise ValueError("missing explicit Cursor admission decision")
+        return {"continue": result["continue"]}
     if event["hook_event_name"] != "stop":
         return {}
     result = response.get("result")
@@ -108,6 +111,7 @@ def main() -> int:
         return 0
     except (OSError, ValueError, TypeError, json.JSONDecodeError):
         # Never print bridge data, hook input, tokens, or a potentially secret prompt.
+        print('{"continue":false}')
         return 2
 
 

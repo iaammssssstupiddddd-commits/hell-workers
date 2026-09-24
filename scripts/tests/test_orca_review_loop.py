@@ -383,6 +383,18 @@ class ReviewLoopTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "unresolved loop"):
                 loop.register(str(uuid.uuid4()), fixtures.COORDINATOR, self.spec)
 
+    def test_paused_loop_polls_mail_without_dispatching_or_integrating(self):
+        data = self.register()
+        data["phase"] = "paused"
+        loop.save(data)
+        with patch.object(loop.mail, "poll", return_value=False) as poll, \
+                patch.object(loop, "step") as step, patch.object(loop, "integration_step") as integrate:
+            result = self.tick()
+        self.assertEqual(result["phase"], "paused")
+        poll.assert_called_once()
+        step.assert_not_called()
+        integrate.assert_not_called()
+
     def test_auxiliary_specs_do_not_own_loop_bindings(self):
         loop.STORAGE.write_ledger(loop.root() / "recovery-spec.json", {"purpose": "maintenance"})
         self.register()

@@ -51,6 +51,32 @@ class CursorResultRetry(Exception):
     """One controller-owned format retry before any lifecycle mutation."""
 
 
+class ReviewFormatRetry(Exception):
+    """Locally rejected result; no upstream mutation was attempted."""
+
+
+def review_record(body: str) -> dict:
+    prefix = "ORCA_REVIEW_JSON:"
+    if not isinstance(body, str) or len(body.encode()) > 32000:
+        raise ValueError("missing bounded review body")
+    lines = [line[len(prefix):].strip() for line in body.splitlines() if line.startswith(prefix)]
+    if len(lines) != 1:
+        raise ValueError("review needs one structured verdict")
+    record = wire.decode(lines[0].encode())
+    if set(record) != {"ticket", "base", "head", "source_sha256", "validation_evidence", "verdict", "blocking_findings"}:
+        raise ValueError("unexpected review record fields")
+    verdict, findings = record["verdict"], record["blocking_findings"]
+    if (verdict not in {"approved", "changes_requested"} or not isinstance(findings, list)
+            or (verdict == "approved" and findings) or (verdict == "changes_requested" and not findings)):
+        raise ValueError("review verdict and findings disagree")
+    for finding in findings:
+        if (not isinstance(finding, dict) or set(finding) != {"id", "message", "acceptance"}
+                or not all(isinstance(value, str) and value.strip() and len(value) <= 4000
+                           for value in finding.values())):
+            raise ValueError("blocking finding schema differs")
+    return record
+
+
 def key(value: object) -> str:
     if not isinstance(value, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", value):
         raise wire.Refused("invalid lifecycle identity")
@@ -193,7 +219,7 @@ class Upstream(wire.Upstream):
 
 class TaskPolicy:
     def __init__(self, upstream: Upstream, binding: wire.Binding, directory: Path, verify_subject,
-                 *, cursor_hooks: bool = False):
+                 *, cursor_hooks: bool = False, review_subject: dict | None = None):
         self.upstream, self.binding, self.directory = upstream, binding, directory
         self.verify_subject = verify_subject
         self.token = secrets.token_hex(32)
@@ -217,6 +243,8 @@ class TaskPolicy:
         self.cursor_retry_pending = False
         self.cursor_stage = "bootstrap"
         self.cursor_condition = threading.Condition()
+        self.review_subject = review_subject
+        self.review_format_retries = 0
 
     def text(self, value: object, *, optional: bool = False, limit: int = 32000) -> str | None:
         if value is None and optional:
@@ -233,7 +261,24 @@ class TaskPolicy:
             "authority": self.authority, "capability_sha256": self.capability_hash,
             "operations": self.operations, "settled_status": self.settled_status,
             "cursor_hooks": self.cursor_hooks, "cursor_stage": self.cursor_stage,
+            "review_format_retries": self.review_format_retries,
         })
+
+    def validate_review_result(self, method: str, params: dict):
+        if (self.review_subject is None or method != "orchestration.send"
+                or params.get("type") != "worker_done"
+                or wire.decode(params["payload"].encode())["outcome"] != "succeeded"):
+            return
+        try:
+            record = review_record(params.get("body"))
+        except (ValueError, TypeError, wire.Refused) as error:
+            if self.review_format_retries >= 2:
+                raise wire.Refused("review format retry exhausted") from error
+            self.review_format_retries += 1
+            self.save()
+            raise ReviewFormatRetry from error
+        if any(record.get(name) != value for name, value in self.review_subject.items()):
+            raise wire.Refused("review subject differs from launcher-owned ticket")
 
     def terminal_current(self):
         self.check_deadline()
@@ -517,7 +562,18 @@ class TaskPolicy:
                         self.cursor_response = None
                     elif self.cursor_generation != generation:
                         raise wire.Refused("Cursor Dispatch generation changed")
-                result = {"observed": self.cursor_authority is not None}
+                else:
+                    # No model turn, and therefore no editing, before a live
+                    # preamble. Rejection is not a failed lifecycle mutation.
+                    return {"id": request_id, "ok": True, "result": {"observed": False, "continue": False},
+                            "_meta": {"runtimeId": self.upstream.runtime_id}}
+                self.upstream.deadline = absolute_deadline
+                self.await_arm()
+                if any(self.cursor_authority[name] != self.authority[name]
+                       for name in ("task", "dispatch", "coordinator")):
+                    raise wire.Refused("Cursor prompt is outside the armed Dispatch")
+                self.current()
+                result = {"observed": True, "continue": True}
             elif event == "afterAgentResponse":
                 if self.cursor_authority is None or generation != self.cursor_generation:
                     result = {"observed": False}
@@ -720,6 +776,7 @@ class TaskPolicy:
                         raise wire.Refused("no new mutation after settlement")
                     self.parameters(method, request["params"])
                     self.current()
+                    self.validate_review_result(method, request["params"])
                     self.operations[operation] = {"signature": signature, "phase": "pending"}
                     self.save()
                     self.check_deadline()
@@ -733,6 +790,13 @@ class TaskPolicy:
                     self.save()
             self.check_deadline()
             return {"id": request_id, "ok": True, "result": result, "_meta": {"runtimeId": self.upstream.runtime_id}}
+        except ReviewFormatRetry:
+            return {"id": request_id, "ok": False, "error": {
+                "code": "review_format_retry",
+                "message": "No completion was sent. Serialize the ORCA_REVIEW_JSON record with json.dumps, "
+                           "including escaped quotes, and resubmit worker_done on this same Dispatch. "
+                           "Keep the exact ticket, subject hashes and your verdict; do not edit source."},
+                "_meta": {"runtimeId": self.upstream.runtime_id}}
         except (OSError, ValueError, TypeError, KeyError, RuntimeError):
             self.revoked = True
             self.phase = "unknown"
@@ -809,7 +873,7 @@ class Proxy(socketserver.ThreadingMixIn, socketserver.UnixStreamServer):
 class Session:
     """One launcher-owned generation; source/slot leases must enclose its lifetime."""
     def __init__(self, executable: Path, metadata_dir: Path, terminal: str, repo: Path, verify_subject,
-                 *, cursor_hooks: bool = False):
+                 *, cursor_hooks: bool = False, review_subject: dict | None = None):
         if not executable.is_absolute() or not executable.is_file() or executable.is_symlink():
             raise wire.Refused("explicit installed CLI path required")
         self.executable = executable
@@ -822,7 +886,7 @@ class Session:
         self.cursor_hooks = cursor_hooks
         self.client = self.public / "orca"
         self.policy = TaskPolicy(self.upstream, self.binding, self.directory, verify_subject,
-                                 cursor_hooks=cursor_hooks)
+                                 cursor_hooks=cursor_hooks, review_subject=review_subject)
         self.server = None
         self.thread = None
         self.terminal_lease = None

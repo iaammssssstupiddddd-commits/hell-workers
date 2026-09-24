@@ -86,7 +86,18 @@ def checked_coordinator(request_id: str, terminal: str) -> dict:
 
 def decode_cli(completed: subprocess.CompletedProcess[str], operation: str) -> dict:
     if completed.returncode != 0 or completed.stderr.strip():
-        raise DispatchError(f"Orca {operation} did not complete cleanly; preserve state and inspect")
+        # Keep bounded machine identifiers, never stderr, task text or tokens.
+        detail = []
+        try:
+            receipt = json.loads(completed.stdout)
+            error = receipt.get("error", {})
+            for name, item in (("code", error.get("code")), ("request", receipt.get("id"))):
+                if isinstance(item, str) and re.fullmatch(r"[A-Za-z0-9_-]{1,128}", item):
+                    detail.append(f"{name}={item}")
+        except (ValueError, AttributeError, TypeError):
+            pass
+        suffix = " (" + ", ".join(detail) + ")" if detail else ""
+        raise DispatchError(f"Orca {operation} did not complete cleanly{suffix}; preserve state and inspect")
     try:
         value = json.loads(completed.stdout)
     except (json.JSONDecodeError, UnicodeError) as error:
@@ -141,6 +152,12 @@ def task_spec(ticket: dict, slot: str) -> str:
            if reviewer else
            f"Ownership: edit only {scope}; validation, review, commit, and integration remain coordinator-owned.\n")
         + f"Observable acceptance: {acceptance}"
+        + ("\nCursor B: controller-owned hooks handle all lifecycle commands from the preamble. "
+           "Never invoke Shell, Orca, MCP, web, subagents, builds or tests. "
+           "Return exactly one JSON object with string keys outcome, subject, body; "
+           "outcome is succeeded or failed. Use a short subject and a three-sentence body. "
+           "No code fence or other text. Report failed if blocked; do not open an interactive question."
+           if slot == "worker-b" else "")
     )
 
 

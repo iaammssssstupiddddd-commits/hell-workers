@@ -189,6 +189,59 @@ Read the two requested files without editing them.
     def mutations(self):
         return [c for c in self.runtime.calls if c[0] in bridge.METHODS]
 
+    def test_review_format_retry_happens_before_settlement_and_accepts_same_dispatch(self):
+        subject = {"ticket": "review-fixture", "base": "a" * 40, "head": "b" * 40,
+                   "source_sha256": "c" * 64, "validation_evidence": "d" * 64}
+        self.policy.review_subject = subject
+        request = self.done()
+        request["params"]["body"] = 'ORCA_REVIEW_JSON:{"acceptance":"normalize_label(" AbC ")"}'
+        result = self.policy.handle(request)
+        self.assertEqual(result["error"]["code"], "review_format_retry")
+        self.assertEqual(self.policy.phase, "active")
+        self.assertFalse(self.policy.revoked)
+        self.assertEqual(self.mutations(), [])
+        self.assertEqual(self.policy.operations, {})
+        request = self.done()
+        request["params"]["body"] = "ORCA_REVIEW_JSON:" + json.dumps({**subject,
+            "verdict": "changes_requested", "blocking_findings": [{"id": "lowercase",
+            "message": "case is unchanged", "acceptance": 'normalize_label(" AbC ") == "abc"'}]})
+        self.assertTrue(self.policy.handle(request)["ok"])
+        self.assertEqual(self.policy.phase, "settled")
+        self.assertEqual(len(self.mutations()), 1)
+
+    def test_review_retries_are_bounded_and_wrong_subject_is_not_retryable(self):
+        self.policy.review_subject = {"ticket": "correct"}
+        for _ in range(2):
+            self.assertEqual(self.policy.handle(self.done())["error"]["code"], "review_format_retry")
+        self.assertEqual(self.policy.handle(self.done())["error"]["code"], "task_bridge_refused")
+        self.assertEqual(self.mutations(), [])
+        self.policy = self.new_policy()
+        self.policy.review_subject = {"ticket": "correct"}
+        request = self.done()
+        request["params"]["body"] = "ORCA_REVIEW_JSON:" + json.dumps({"ticket": "wrong",
+            "base": "a", "head": "b", "source_sha256": "c", "validation_evidence": "d",
+            "verdict": "approved", "blocking_findings": []})
+        self.assertEqual(self.policy.handle(request)["error"]["code"], "task_bridge_refused")
+        self.assertEqual(self.mutations(), [])
+
+    def test_cursor_denies_arbitrary_prompt_without_revoking_bootstrap(self):
+        policy = self.new_policy(cursor_hooks=True)
+        reply = policy.handle_cursor_hook(self.hook(policy, "beforeSubmitPrompt", prompt="Edit result.py now"))
+        self.assertEqual(cursor_hook.hook_output({"hook_event_name": "beforeSubmitPrompt"}, reply),
+                         {"continue": False})
+        self.assertEqual(policy.phase, "bootstrap")
+        self.assertIsNone(policy.cursor_authority)
+        self.assertEqual(self.mutations(), [])
+
+    def test_cursor_dispatch_prompt_requires_host_arm_before_admission(self):
+        policy = self.new_policy(cursor_hooks=True)
+        (policy.directory / "arm.json").unlink()
+        with patch.object(bridge, "ARM_SECONDS", 0):
+            reply = policy.handle_cursor_hook(self.hook(policy, "beforeSubmitPrompt", prompt=self.cursor_preamble()))
+        self.assertFalse(reply["ok"])
+        self.assertEqual(policy.phase, "unknown")
+        self.assertEqual(self.mutations(), [])
+
     def test_standard_completion_files_and_report_metadata_are_accepted(self):
         request = self.done()
         payload = json.loads(request["params"]["payload"])
@@ -258,11 +311,11 @@ Read the two requested files without editing them.
         bootstrap = policy.handle_cursor_hook(self.hook(
             policy, "beforeSubmitPrompt", generation_id="bootstrap-generation",
             prompt="Wait for the supervised task.", attachments=[]))
-        self.assertEqual(bootstrap["result"], {"observed": False})
+        self.assertEqual(bootstrap["result"], {"observed": False, "continue": False})
         dispatched = policy.handle_cursor_hook(self.hook(
             policy, "beforeSubmitPrompt", generation_id="dispatch-generation",
             prompt=self.cursor_preamble(), attachments=[]))
-        self.assertEqual(dispatched["result"], {"observed": True})
+        self.assertEqual(dispatched["result"], {"observed": True, "continue": True})
         stale_response = policy.handle_cursor_hook(self.hook(
             policy, "afterAgentResponse", generation_id="bootstrap-generation",
             text='{"outcome":"failed","subject":"Stale","body":"Bootstrap turn only."}'))
@@ -299,7 +352,7 @@ Read the two requested files without editing them.
         followup = policy.handle_cursor_hook(self.hook(
             policy, "beforeSubmitPrompt", generation_id="retry-generation",
             prompt=bridge.CURSOR_RESULT_FOLLOWUP, attachments=[]))
-        self.assertEqual(followup["result"], {"observed": True})
+        self.assertEqual(followup["result"], {"observed": True, "continue": True})
         final = json.dumps({"outcome": "succeeded", "subject": "Current Dispatch",
                             "body": "Read only. The requested entry points were inspected. Nothing remains."})
         self.assertTrue(policy.handle_cursor_hook(self.hook(
@@ -315,13 +368,13 @@ Read the two requested files without editing them.
         policy = self.new_policy(cursor_hooks=True)
         bootstrap = policy.handle_cursor_hook(self.hook(
             policy, "beforeSubmitPrompt", prompt="Wait for the supervised task.", attachments=[]))
-        self.assertEqual(bootstrap["result"], {"observed": False})
+        self.assertEqual(bootstrap["result"], {"observed": False, "continue": False})
         ignored = policy.handle_cursor_hook(self.hook(
             policy, "afterAgentResponse", text="Waiting."))
         self.assertEqual(ignored["result"], {"observed": False})
         bad = policy.handle_cursor_hook(self.hook(
             policy, "beforeSubmitPrompt", prompt=self.cursor_preamble(dispatch="dispatch_other"), attachments=[]))
-        self.assertTrue(bad["ok"])
+        self.assertFalse(bad["ok"])
         policy.cursor_response = json.dumps({"outcome": "succeeded", "subject": "Done",
                                              "body": "Read only. Found the entry. Nothing remains."})
         refused = policy.handle_cursor_hook(self.hook(
@@ -918,7 +971,7 @@ print('scoped')
             with patch.object(session.policy, "handle_cursor_hook", side_effect=capture):
                 completed = subprocess.run(command, input=json.dumps(event), text=True,
                                            capture_output=True, timeout=8, check=True)
-            self.assertEqual(json.loads(completed.stdout), {"continue": True})
+            self.assertEqual(json.loads(completed.stdout), {"continue": False})
             self.assertNotIn("future_controller_field", captured[0]["params"])
             policy_text = policy.read_text()
             self.assertIn("Shell(*)", policy_text)
