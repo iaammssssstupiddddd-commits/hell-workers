@@ -435,6 +435,55 @@ class ReviewLoopTests(unittest.TestCase):
         self.assertEqual(data["phase"], "paused")
         self.assertIn("fresh coordinator Help review", data["lanes"]["worker-a"]["reason"])
 
+    def test_exact_post_implementation_help_review_resumes_same_run(self):
+        self.register()
+        self.assertIsInstance(self.tick()["registered_at_ms"], int)
+        for _ in range(3):
+            self.tick()
+        with patch.object(loop, "is_production_path", return_value=True):
+            data = self.tick()
+        subject = loop.help_review_subject(data, "worker-a")
+        spec = {"loop_sha256": bindings.digest(data), "subject": "worker-a", "decision": "none",
+                "reason": "Internal typed asset residency only; no player-visible input, label, or workflow changed.",
+                "source_sha256": subject["source_sha256"], "paths": subject["paths"]}
+        with patch.object(loop, "is_production_path", return_value=True):
+            resumed = loop.submit_help_review(fixtures.REQUEST, fixtures.COORDINATOR, spec)
+        self.assertEqual(resumed["phase"], "active")
+        self.assertEqual(loop.owned_run_id(resumed), "run_fixture")
+        self.assertEqual(resumed["lanes"]["worker-a"]["phase"], "validating")
+        review = resumed["lanes"]["worker-a"]["help_review"]
+        self.assertEqual(review["source_sha256"], subject["source_sha256"])
+        self.assertTrue(Path(review["receipt"]).is_file())
+        evidence = {"id": "e" * 64, "exit_code": 0}
+        with (patch.object(loop, "is_production_path", return_value=True),
+              patch.object(checkpoints, "validate", return_value=evidence) as validate):
+            progressed = self.tick()
+        self.assertEqual(progressed["lanes"]["worker-a"]["phase"], "checkpointing")
+        self.assertEqual(validate.call_args.args[-2:], (spec["reason"], "none"))
+
+    def test_help_review_refuses_old_loop_and_invalidates_changed_source(self):
+        self.register()
+        for _ in range(4):
+            self.tick()
+        with patch.object(loop, "is_production_path", return_value=True):
+            data = self.tick()
+        subject = loop.help_review_subject(data, "worker-a")
+        spec = {"loop_sha256": "0" * 64, "subject": "worker-a", "decision": "none",
+                "reason": "Internal fixture only; no player-visible behavior changed.",
+                "source_sha256": subject["source_sha256"], "paths": subject["paths"]}
+        with self.assertRaisesRegex(ValueError, "exact inspected"):
+            loop.submit_help_review(fixtures.REQUEST, fixtures.COORDINATOR, spec)
+        spec["loop_sha256"] = bindings.digest(data)
+        with patch.object(loop, "is_production_path", return_value=True):
+            loop.submit_help_review(fixtures.REQUEST, fixtures.COORDINATOR, spec)
+        (self.repo / "src/content.txt").write_text("changed after Help review")
+        with (patch.object(loop, "is_production_path", return_value=True),
+              patch.object(checkpoints, "validate") as validate):
+            paused = self.tick()
+        validate.assert_not_called()
+        self.assertEqual(paused["phase"], "paused")
+        self.assertNotIn("help_review", paused["lanes"]["worker-a"])
+
     def test_corrupt_ledger_is_preserved(self):
         self.register()
         path = loop.state_path(fixtures.REQUEST)

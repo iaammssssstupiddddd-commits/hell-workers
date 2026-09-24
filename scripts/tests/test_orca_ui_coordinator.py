@@ -149,7 +149,26 @@ class UiCoordinatorTests(unittest.TestCase):
         self.assertIn("acknowledge", value)
         self.assertIn("利用者へ課題作成や", value)
         self.assertIn("orca_ui_coordinator.py handoff", value)
+        self.assertIn("--spec '<private spec file path>'", value)
+        self.assertIn("submit-help-review", value)
+        self.assertIn("orca_ui_coordinator.py preflight", value)
+        self.assertNotIn("--spec '<private spec>'", value)
         self.assertIn("旧タブは\n自動終了", value)
+
+    def test_workflow_preflight_returns_exact_base_after_storage_check(self) -> None:
+        self.ready_coordinator()
+        base = "b" * 40
+        with (
+            patch.object(ui, "primary_repo", return_value=Path("/primary")),
+            patch.object(ui.subprocess, "check_output", side_effect=[base + "\n", "feature/work\n"]),
+            patch.object(ui.subprocess, "run") as run,
+        ):
+            run.return_value.returncode = 0
+            result = ui.workflow_preflight(REQUEST)
+        self.assertEqual(result["base"], base)
+        self.assertEqual(result["branch"], "feature/work")
+        self.assertEqual(result["storage"], "pass")
+        self.assertEqual(run.call_args.args[0][-2:], ["validation", "check"])
 
     def test_route_created_issue_cannot_handoff_again(self) -> None:
         self.ready_coordinator()

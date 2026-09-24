@@ -60,7 +60,12 @@ def loop_paths() -> list[Path]:
 
 
 def save(data: dict) -> None:
+    data["updated_at_ms"] = event_time_ms()
     STORAGE.write_ledger(state_path(data["request_id"]), {"data": data, "sha256": bindings.digest(data)})
+
+
+def event_time_ms() -> int:
+    return time.time_ns() // 1_000_000
 
 
 def load(request_id: str) -> dict:
@@ -101,6 +106,126 @@ def checked_validation(validation: dict) -> None:
             or not isinstance(validation["help_reason"], str) or not validation["help_reason"].strip()
             or "\n" in validation["help_reason"] or len(validation["help_reason"]) > 2000):
         raise ValueError("validation must be explicit coordinator-selected argv and Help decision")
+
+
+def help_review_subject(data: dict, subject: str) -> dict:
+    """Return the exact production source a fresh coordinator review must cover."""
+    if subject == "integration":
+        final = data.get("integration")
+        if not isinstance(final, dict) or not isinstance(final.get("receipt"), dict):
+            raise ValueError("integration Help review requires the integrated receipt")
+        repo = Path(final["target"]["repo"])
+        base, head = final["target"]["base"], final["receipt"]["head"]
+        paths = roles.git(repo, "diff", "--no-renames", "--name-only", base, head).splitlines()
+        stage = "integration"
+    else:
+        if subject not in data["lanes"]:
+            raise ValueError("Help review subject must be an assigned lane or integration")
+        lane = data["lanes"][subject]
+        repo = Path(lane["ticket"]["repo"])
+        base = lane["ticket"]["base"]
+        head = roles.git(repo, "rev-parse", "HEAD")
+        paths = roles.git(repo, "diff", "HEAD", "--no-renames", "--name-only").splitlines()
+        paths += roles.git(repo, "ls-files", "--others", "--exclude-standard").splitlines()
+        stage = "worker"
+    return {"stage": stage, "subject": subject, "repo": str(repo), "base": base, "head": head,
+            "source_sha256": roles.fingerprint(repo), "paths": sorted(set(paths))}
+
+
+def owned_run_id(data: dict) -> str:
+    context = data.get("run", {}).get("context", {})
+    value = context.get("id") if isinstance(context, dict) else None
+    attempts = {item.get("run_id") for item in data.get("attempts", {}).values()
+                if isinstance(item, dict) and item.get("run_id")}
+    if value:
+        attempts.add(value)
+    if len(attempts) != 1:
+        raise ValueError("Help review requires one exact owned Run")
+    return attempts.pop()
+
+
+def checked_help_review(data: dict, subject: str) -> dict | None:
+    owner = data["integration"] if subject == "integration" else data["lanes"][subject]
+    review = owner.get("help_review")
+    if review is None:
+        return None
+    current = help_review_subject(data, subject)
+    expected = {key: review.get(key) for key in current}
+    if (expected != current or review.get("request_id") != data["request_id"]
+            or review.get("run_id") != owned_run_id(data)
+            or review.get("decision") not in {"none", "updated"}
+            or not isinstance(review.get("reason"), str) or not review["reason"].strip()
+            or review.get("receipt_sha256") != bindings.digest({key: value for key, value in review.items()
+                                                                  if key not in {"receipt_sha256", "receipt"}})):
+        raise ValueError("fresh coordinator Help review no longer matches the exact source")
+    return review
+
+
+def pause_for_help_review(data: dict, subject: str) -> None:
+    reason = "production diff requires a fresh coordinator Help review bound to the exact source"
+    if subject == "integration":
+        final = data["integration"]
+        final.update(phase="paused", reason=reason,
+                     help_pause={"from": "validating", "subject": help_review_subject(data, subject)})
+    else:
+        lane = data["lanes"][subject]
+        lane["help_pause"] = {"from": "validating", "subject": help_review_subject(data, subject)}
+        transition(data, subject, "paused", reason=reason)
+    data.update(phase="paused", reason=reason)
+    save(data)
+
+
+def submit_help_review(request_id: str, terminal: str, spec: dict) -> dict:
+    """Resume the same Run only after a source-bound, post-implementation Help review."""
+    required = {"loop_sha256", "subject", "decision", "reason", "source_sha256", "paths"}
+    if (not isinstance(spec, dict) or set(spec) != required
+            or spec.get("decision") not in {"none", "updated"}
+            or not isinstance(spec.get("reason"), str) or not spec["reason"].strip()
+            or "\n" in spec["reason"] or len(spec["reason"]) > 2000
+            or not isinstance(spec.get("paths"), list)
+            or not all(isinstance(path, str) and path for path in spec["paths"])):
+        raise ValueError("Help review requires exact loop, subject, source, paths, decision and reason")
+    with acquire_host(LOCK, inherit=False):
+        data = load(request_id)
+        if data["terminal"] != terminal or bindings.digest(data) != spec["loop_sha256"]:
+            raise ValueError("Help review requires the exact inspected paused loop")
+        if dispatch.ui_coordinator.state_path(request_id).exists():
+            registered = dispatch.ui_coordinator.read_registered_state(request_id)
+            if registered["terminal"] != terminal or registered["phase"] not in {"ready", "exited"}:
+                raise ValueError("registered coordinator identity differs from the Help reviewer")
+            dispatch.linear_record(request_id)
+        else:
+            dispatch.checked_coordinator(request_id, terminal)
+        subject = spec["subject"]
+        current = help_review_subject(data, subject)
+        if (data["phase"] != "paused" or spec["source_sha256"] != current["source_sha256"]
+                or spec["paths"] != current["paths"] or not any(is_production_path(path) for path in current["paths"])):
+            raise ValueError("Help review subject changed or has no production diff")
+        owner = data["integration"] if subject == "integration" else data["lanes"][subject]
+        pause = owner.get("help_pause", {})
+        legacy_pause = (owner.get("phase") == "paused" and "fresh coordinator Help review" in owner.get("reason", "")
+                        and (subject == "integration" or (owner.get("history")
+                             and owner["history"][-1].get("from") == "validating"
+                             and owner["history"][-1].get("to") == "paused")))
+        if owner.get("phase") != "paused" or (pause.get("from") != "validating" and not legacy_pause):
+            raise ValueError("Help review can resume only the inspected validation pause")
+        record = {**current, "request_id": request_id, "run_id": owned_run_id(data),
+                  "decision": spec["decision"], "reason": spec["reason"],
+                  "loop_sha256": spec["loop_sha256"]}
+        record["receipt_sha256"] = bindings.digest(record)
+        directory = STORAGE.checked_directory(root() / "help-reviews")
+        receipt = directory / f"{record['receipt_sha256']}.json"
+        STORAGE.write_ledger(receipt, record)
+        record["receipt"] = str(receipt)
+        # receipt_sha256 covers the semantic record; the path is a locator only.
+        owner.update(help_review=record, help_pause=None, phase="validating", reason=None)
+        if subject != "integration":
+            owner["history"].append({"from": "paused", "to": "validating",
+                                     "help_review": record["receipt_sha256"],
+                                     "at_ms": event_time_ms()})
+        data.update(phase="active", reason=None)
+        save(data)
+        return data
 
 
 def register(request_id: str, terminal: str, spec: dict) -> dict:
@@ -151,7 +276,7 @@ def register(request_id: str, terminal: str, spec: dict) -> dict:
                 "spec_sha256": bindings.digest(spec), "phase": "active", "lanes": lanes,
                 "run": {"phase": "planned"}, "attempts": {},
                 "inbox": {"delivery": None, "messages": {}, "handled": {}, "operation": None},
-                "cursor": 0, "reason": None}
+                "cursor": 0, "reason": None, "registered_at_ms": event_time_ms()}
         if "integration" in spec:
             config = spec["integration"]
             if not isinstance(config, dict) or set(config) != {"target", "validation"}:
@@ -171,7 +296,8 @@ def register(request_id: str, terminal: str, spec: dict) -> dict:
 def transition(data: dict, slot: str, phase: str, **fields) -> None:
     lane = data["lanes"][slot]
     lane["history"].append({"from": lane["phase"], "to": phase,
-                            "generation": lane["ticket"].get("generation", 0)})
+                            "generation": lane["ticket"].get("generation", 0),
+                            "at_ms": event_time_ms()})
     lane.update(fields, phase=phase)
     save(data)
 
@@ -324,8 +450,19 @@ def step(data: dict, slot: str) -> None:
         paths = roles.git(repo, "diff", "HEAD", "--no-renames", "--name-only").splitlines()
         paths += roles.git(repo, "ls-files", "--others", "--exclude-standard").splitlines()
         if any(is_production_path(path) for path in paths):
-            raise ValueError("production diff requires a fresh coordinator Help review; predeclared Help text is insufficient")
-        config = lane["validation"]
+            try:
+                review = checked_help_review(data, slot)
+            except ValueError:
+                lane.pop("help_review", None)
+                pause_for_help_review(data, slot)
+                return
+            if review is None:
+                pause_for_help_review(data, slot)
+                return
+            config = {**lane["validation"], "help_reason": review["reason"],
+                      "help_decision": review["decision"]}
+        else:
+            config = lane["validation"]
         transition(data, slot, "validation_running")
         try:
             evidence = checkpoints.validate(ticket, slot, config["argv"], config["help_reason"], config["help_decision"])
@@ -478,11 +615,23 @@ def integration_step(data: dict) -> None:
         paths = roles.git(Path(final["target"]["repo"]), "diff", "--no-renames", "--name-only",
                           final["target"]["base"], receipt["head"]).splitlines()
         if any(is_production_path(path) for path in paths):
-            raise ValueError("combined production diff requires a fresh coordinator Help review")
+            try:
+                review = checked_help_review(data, "integration")
+            except ValueError:
+                final.pop("help_review", None)
+                pause_for_help_review(data, "integration")
+                return
+            if review is None:
+                pause_for_help_review(data, "integration")
+                return
+            config = {**final["validation"], "help_reason": review["reason"],
+                      "help_decision": review["decision"]}
+        else:
+            config = final["validation"]
         final["phase"] = "validation_running"
         save(data)
         try:
-            final["evidence"] = integration.validate(receipt, final["validation"])
+            final["evidence"] = integration.validate(receipt, config)
         except HostBusyError:
             final["phase"] = "validating"
             save(data)
@@ -744,7 +893,8 @@ class Driver:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=("register", "show", "tick", "watch", "decide", "route", "resume-review-wait", "resume-inbox"))
+    parser.add_argument("action", choices=("register", "show", "tick", "watch", "decide", "route",
+                                           "submit-help-review", "resume-review-wait", "resume-inbox"))
     parser.add_argument("--request-id", required=True)
     parser.add_argument("--coordinator", required=True)
     parser.add_argument("--spec", type=Path)
@@ -755,7 +905,11 @@ def main() -> int:
     parser.add_argument("--expected-sha256")
     args = parser.parse_args()
     try:
-        if args.action == "resume-inbox":
+        if args.action == "submit-help-review":
+            if args.spec is None:
+                raise ValueError("Help review submission requires a trusted private spec")
+            result = submit_help_review(args.request_id, args.coordinator, STORAGE.read_private_json(args.spec, {}))
+        elif args.action == "resume-inbox":
             if not args.expected_sha256:
                 raise ValueError('inbox recovery requires inspected ledger digest')
             result = resume_inbox(args.request_id, args.coordinator, args.expected_sha256)
