@@ -1,6 +1,6 @@
 # Orcaによる分離開発の運用
 
-更新日: 2026-09-22。対象: Orca 1.4.205 / Linux / Codex CLI 0.155.1。
+更新日: 2026-09-25。対象: Orca 1.4.205 / Linux / Codex CLI 0.155.1。
 Cursor実Task受入は2026.08.04-aaa8809。現在のinstalled版2026.09.18-9a7762bは設定/sessionのoffline互換検査まで。
 
 日常操作は [Orca 運用ガイド](../orca-quickstart.md) を入口にする。本書は権限・ticket・資源管理の詳細仕様。
@@ -770,6 +770,42 @@ TAK-14ではRun `run_3236488f0dff`と同じ統括sessionを維持し、実装A�
 - `finalize-tabs`はloopが最終承認、inbox排出、全attempt release/ACK済みのexact digestに一致する時だけ、
   登録済みA/B/reviewerを一度ずつ終了する。保持中scrollbackを保全し、identity、tui-idle、`ptyKilled=true`、
   terminal不存在を確認する。統括は閉じず、承認後の利用者の戻り先とする。
+
+### 承認済みloopからの後継世代（2026-09-25）
+
+同じLinear課題に複数のマイルストーンがある場合、request IDごとのloop台帳を無条件に上書きせず、
+完全settledな承認済み世代だけを後継世代へ遷移できる。これはTAK-14固有の例外ではなく、
+`orca_review_loop.py successor-preflight / register-successor`が全依頼へ適用する共通契約である。
+
+- `successor-preflight`は可視統括とrequestを照合し、旧loopがschema 2、全体`approved`、integration最終review承認、
+  inbox排出、全attempt release/完了ACK、`finalize-tabs`完了であることを要求する。
+  integration receiptを再検証し、課題branchのcleanな現在HEAD・source fingerprintと一致する承認済み統合HEADだけを返す。
+- initial preflightはprimaryのbranch/HEADを返すが、successor preflightは直前integration targetのrepo/branchと
+  receipt headを返す。後継workerとintegration targetはこのfull SHAを共通baseにし、primaryの新しいHEAD、
+  最初のbase、別課題branchへ戻らない。両modeで対象worktreeのstorage check後にbranch/HEADを再照合する。
+- Orca 1.4.205にRun close APIはなく、完了後も統括は現在Runへ結び付く。同一依頼の後継世代は
+  旧RunのIDとconsumer generationを再検証して継承し、新しいTask/Dispatchだけを作る。
+  別Runを作成・選択して未処理inboxや旧所有権を迂回しない。
+- `register-successor`はpreflightで得た旧loop digest、同じ統括、同じintegration repo/branch、承認済みhead、
+  cleanな新worker worktreeを再検証する。成功時は旧台帳を
+  `role-state/loops/history/<request>/<generation>-<digest>.json`へwrite-once保存してから、
+  `loop_generation`と`predecessor`を持つ新しいactive台帳へ原子的に切り替える。
+- predecessorには旧generation、loop digest、archive path、統合head、target repo/branch、source fingerprint、
+  Run identityを保存する。現行台帳の読取り時にもarchive内容とdigestを再照合する。
+  同じspec/digestの再送は現在世代を返し、異なるspec、古いdigest、paused/active/未統合/未整理loopは拒否する。
+- 旧担当タブは終了済みのまま履歴に残し、新世代では新しい分離worktreeの担当タブを作る。
+  固定reviewerのsession拘束、A=Codex、単純leafだけB=Cursor、最大2 worker、統括所有の検証・commit・統合は変えない。
+
+この世代遷移は、同じworker ticketのreview差戻しgenerationとは別である。worker内の差戻しは同じloop/lane/session、
+後継loopは最終統合承認後の次マイルストーンで新しいticket/worktreeを使う。旧approvalや旧Taskを新しい変更の承認に流用しない。
+
+2026-09-25の実運用受入では、TAK-14の前世代digest
+`b1c2c5b1fc52a20a929b85a7afe939007f761fef5d94d7cd92415d368827142b`をimmutable historyへ保全し、
+承認済み統合HEAD `d8443c89cfe3399f3e0e1ca493f9d7efca254a88`からgeneration 2を開始した。
+Runは`run_3236488f0dff`を継承し、新しいTask `task_6852821ebb87` / Dispatch `ctx_d4b5e3d3206c`と
+実装Aタブを各1件だけ作成した。visual layout上は親worktreeに`統括`、新worker worktreeに
+`実装A（Codex）・実行中`が存在し、workerはlive dispatch受領後に調査を開始した。
+この受入は後継開始機構の確認であり、進行中のゲーム実装自体の受入・完了を意味しない。
 
 最終統合HEADは`d8443c89cfe3399f3e0e1ca493f9d7efca254a88`。Help実レビューはNo impact。
 実案件の変更はopt-inの開発用asset poolと文書で、ゲーム起動時のHelp入力・表示・manifest/providerを変更しない。

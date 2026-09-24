@@ -159,11 +159,36 @@ workerへゲーム実装scope外の編集を許可せず、統括専用の文書
 - workerの質問は15秒の有限待機後も同じmessage IDを継続し、回答待ちのまま`worker_done`を送らない。
 - 最終承認後は実装A/B/reviewerの所有タブだけを、出力保全・identity・idle・PTY終了を確認して閉じる。
   統括タブは利用者の戻り先として残す。補助shellも同じ安全条件で個別に整理し、bulk closeは使わない。
+- 同じ課題に次のマイルストーンが残る場合、統括は終了済み担当タブを再利用せず、開始前検査が返す
+  `successor`基点から新しい担当worktreeとTaskを作る。利用者が課題を作り直したり、基点SHAを指定したりしない。
+
+#### 承認後に同じ課題を続ける場合
+
+後継工程は「旧loopの再開」ではなく、同じLinear課題・統括タブ・Run・統合branchを所有する新しいloop世代です。
+統括の開始前検査は、primaryの現在HEADではなく、直前の最終固定reviewで承認された統合HEADを返します。
+旧世代はdigest名のprivate historyへ保全し、新世代は新しいTask/Dispatchと担当タブだけを作ります。
+
+後継を開始できるのは、直前のloopが次をすべて満たす場合だけです。
+
+- laneと統合後reviewが承認済みで、統合receiptのHEAD/sourceが現在のcleanな課題branchと一致する。
+- 全attemptがrelease済み、完了通知がACK済み、inboxが空である。
+- 実装A/B/reviewerの終了処理が完了し、統括タブだけが残っている。
+- Orcaの現在Runが旧世代のRun ID/consumer generationと一致する。
+
+条件不足、dirty target、HEAD/branch変更、別Run、旧世代digest不一致では、新規Taskを作らず停止します。
+このとき別Linear課題やprimary HEADへ自動退避しません。`preflight`と後継登録の両方で同じ条件を再検査するため、
+検査後に状態が変わっても旧承認を上書きしません。
 
 TAK-14では利用者によるUUID、slot、ticket path、手動配車commandの入力はありませんでした。
 一方、最初の受付から一度も保守介入せず完走したcold-start試験ではありません。今回露出した停止を同一Runで
 修復・回復した受入であり、次の新規案件で「入力形式の訂正0回・手動再開0回」を確認するまで、開始速度の最終評価は保留します。
-制御基盤の全Python試験669件は成功しました。ユーザー指定によりゲーム実装テストは実行していません。
+2026-09-25にTAK-14で後継loop世代を実運用受入した。前世代の承認済み統合HEAD
+`d8443c89cfe3399f3e0e1ca493f9d7efca254a88`をbaseにし、同じRun `run_3236488f0dff`を継承して、
+新しいTask `task_6852821ebb87`とDispatch `ctx_d4b5e3d3206c`を各1件だけ作成した。
+旧世代はdigest付きhistoryへ保全され、現行台帳は`loop_generation: 2`とpredecessor証跡を持つ。
+Orcaのvisual layoutでも、既存の`統括`タブと新worktreeの`実装A（Codex）・実行中`タブが確認でき、
+実装Aはdispatchを受領して調査を開始した。制御基盤の全Python試験673件、Ruff、compileall、文書・差分検査は成功した。
+ユーザー指定によりゲーム実装テストは実行していない。
 
 ### 2026-09-23のタブ管理修正
 
