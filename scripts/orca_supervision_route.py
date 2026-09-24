@@ -10,16 +10,17 @@ import argparse
 import hashlib
 import json
 import re
-import uuid
 from pathlib import Path
 
 if __package__:
     from . import orca_frontdesk as desk, orca_issue_context as intake
+    from . import orca_intake_decision as decisions
     from . import orca_ui_coordinator as ui
     from .host_coordination import acquire_host
 else:
     import orca_frontdesk as desk
     import orca_issue_context as intake
+    import orca_intake_decision as decisions
     import orca_ui_coordinator as ui
     from host_coordination import acquire_host
 
@@ -67,12 +68,20 @@ def route(root: Path, request_id: str, primary: Path, call) -> dict:
         raise ValueError("explicit UI implementation intent is not durable")
     path = route_path(root, request_id)
     digest = hashlib.sha256(item["request"].encode()).hexdigest()
+    decision = decisions.read(root, request_id)
+    if not decision:
+        raise ValueError("coordinator intake decision is missing")
+    disposition = decision["disposition"]
+    if disposition == "none":
+        raise ValueError("coordinator decided that this intake creates no Linear issue")
     with acquire_host("frontdesk-route", inherit=False):
         data = desk.read_private_json(path, {})
         if data:
-            if (data.get("schema") != 1 or data.get("requestId") != request_id
+            if (data.get("schema") != 2 or data.get("requestId") != request_id
                     or data.get("requestSha256") != digest
-                    or data.get("primary") != str(primary)):
+                    or data.get("primary") != str(primary)
+                    or data.get("decisionSha256") != decision["sha256"]
+                    or data.get("disposition") != disposition):
                 raise ValueError("route journal does not match this intake")
         else:
             teams = checked_result(call, ["linear", "team", "list"], "Linear team discovery").get("teams")
@@ -88,24 +97,48 @@ def route(root: Path, request_id: str, primary: Path, call) -> dict:
             if len(matches) != 1:
                 raise ValueError("primary Orca repository is not unique")
             repo_id = intake.canonical_uuid(matches[0].get("id"), "Orca repository id")
-            data = {"schema": 1, "requestId": request_id, "requestSha256": digest,
-                    "primary": str(primary), "phase": "prepared", "team": key,
+            issue_id = None
+            issue_identifier = None
+            linear_write_id = decision["writeId"]
+            phase = "prepared"
+            bound_issue = decision["existingIssue"] or decision["parentIssue"]
+            if bound_issue is not None and bound_issue["workspaceId"] != workspace:
+                raise ValueError("coordinator decision belongs to another Linear workspace")
+            if disposition == "continue_existing":
+                issue_id = decision["existingIssue"]["issueId"]
+                issue_identifier = decision["existingIssue"]["identifier"]
+                phase = "issue_created"
+            data = {"schema": 2, "requestId": request_id, "requestSha256": digest,
+                    "decisionSha256": decision["sha256"], "disposition": disposition,
+                    "primary": str(primary), "phase": phase, "team": key,
                     "workspaceId": workspace, "repoId": repo_id,
-                    "linearWriteId": str(uuid.uuid4()), "issueId": None,
-                    "issueIdentifier": None, "worktreeId": None, "childRequestId": None}
+                    "linearWriteId": linear_write_id, "issueId": issue_id,
+                    "issueIdentifier": issue_identifier, "worktreeId": None,
+                    "childRequestId": None}
             save(path, data)
         phase = data["phase"]
         if phase == "prepared":
             data["phase"] = "issue_creating"
             save(path, data)
             title = item["request"].strip().splitlines()[0][:120]
-            result = checked_result(call, ["linear", "create", "--title", title,
+            create_args = ["linear", "create", "--title", title,
                 "--body-file", "-", "--team", data["team"],
-                "--workspace", data["workspaceId"], "--write-id", data["linearWriteId"]],
-                "Linear issue creation", item["request"])
+                "--workspace", data["workspaceId"], "--write-id", data["linearWriteId"]]
+            parent = decision["parentIssue"]
+            if data["disposition"] == "create_child":
+                create_args.extend(["--parent", parent["identifier"]])
+            result = checked_result(
+                call, create_args, "Linear issue creation", item["request"]
+            )
             issue = result.get("issue")
+            created_parent = issue.get("parent") if isinstance(issue, dict) else None
+            expected_parent = (
+                {"id": parent["issueId"], "identifier": parent["identifier"]}
+                if data["disposition"] == "create_child" else None
+            )
             if (not isinstance(issue, dict) or not ISSUE.fullmatch(issue.get("identifier", ""))
                     or issue.get("title") != title or issue.get("team", {}).get("key") != data["team"]
+                    or created_parent != expected_parent
                     or result.get("meta", {}).get("workspaceId") != data["workspaceId"]
                     or result.get("meta", {}).get("writeId") != data["linearWriteId"]):
                 raise ValueError("Linear create response does not match the route intent")

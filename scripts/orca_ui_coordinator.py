@@ -1224,6 +1224,10 @@ successorなら python3 {review_loop} register-successor --expected-sha256 <pred
 統括自身が実行します。successorは同じRunを継承し、新しいTask/Dispatchだけを一度作成します。
 spec本体をコマンドラインへ直接貼り付けてはいけません。所有者だけが読める0700の一時ディレクトリ内へ
 0600のJSONファイルとして保存し、そのパスだけを--specへ渡してください。
+specにはplanning（schema=1, objective, tasks）も含めます。taskはid、dependsOn、readPaths、writePaths、
+contracts、complexity、complexityReason、taskKind、acceptanceを持ち、lane ticketと完全一致させてください。
+同時waveのwrite/read pathまたは共有contractが競合すれば直列化し、後続waveは承認済みsuccessor generationにします。
+実装Bはplannerが単純leaf・単一write set・共有contractなしと判定した場合だけ使います。
 lanesの各要素はslot, ticket（JSON object）, validation（argv, help_reason, help_decision）を持ちます。
 specにはintegrationも含め、target（課題ID入りbranchのrepo, branch, 全workerと同じ初期base）と
 validation（統合後に実行するargv, help_reason, help_decision）を指定します。

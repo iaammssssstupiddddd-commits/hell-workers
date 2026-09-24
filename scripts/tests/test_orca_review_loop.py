@@ -144,6 +144,23 @@ class ReviewLoopTests(unittest.TestCase):
         self.assertEqual(roles.git(self.repo, "status", "--porcelain"), "")
         self.assertEqual(self.tick(), data)
 
+    def test_registration_binds_reviewed_plan_and_minimal_context_package(self):
+        ticket = {**self.ticket, "complexity": "complex", "complexity_reason": "shared logic",
+                  "task_kind": "feature", "acceptance": "exact fixture output"}
+        self.spec["lanes"][0]["ticket"] = ticket
+        self.spec["planning"] = {"schema": 1, "objective": "bounded fixture", "tasks": [{
+            "id": ticket["id"], "dependsOn": [], "readPaths": [],
+            "writePaths": ticket["allowed_directories"], "contracts": [],
+            "complexity": "complex", "complexityReason": ticket["complexity_reason"],
+            "taskKind": ticket["task_kind"], "acceptance": ticket["acceptance"],
+        }]}
+        data = self.register()
+        package = data["lanes"]["worker-a"]["ticket"]["context_package"]
+        self.assertEqual(data["planning"]["assignments"][ticket["id"]]["slot"], "worker-a")
+        self.assertEqual(package["planSha256"], data["planning"]["sha256"])
+        self.assertEqual(package["allowedPaths"], ticket["allowed_directories"])
+        self.assertEqual(package["questionRoute"], "coordinator")
+
     def test_settled_integrated_loop_starts_one_successor_on_approved_head_and_same_run(self):
         previous, target_repo = self.finish_integrated()
         expected = loop.inspection_digest(previous)

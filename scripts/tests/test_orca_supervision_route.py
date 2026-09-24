@@ -6,6 +6,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from scripts import host_coordination, orca_frontdesk as desk
+from scripts import orca_intake_decision as decisions
 from scripts import orca_supervision_route as routing
 
 
@@ -35,6 +36,7 @@ class RouteTests(unittest.TestCase):
             "schema": 1, "operationId": REQUEST, "intakeId": REQUEST,
             "action": "implement", "phase": "accepted",
             "text": "保存領域の修正を実装してください"})
+        decisions.fixed_reception_decision(self.panel, REQUEST, "implement")
         self.calls = []
         self.fail_on = None
         imported = patch.object(routing.intake, "import_issue", return_value={"request_id": CHILD})
@@ -61,13 +63,17 @@ class RouteTests(unittest.TestCase):
             return 0, {"ok": True, "result": {"repos": [{"id": REPO, "path": str(self.primary)}]}, "_meta": meta}
         if args[:2] == ["linear", "create"]:
             write_id = args[args.index("--write-id") + 1]
+            parent = ({"id": ISSUE, "identifier": "TAK-14"}
+                      if "--parent" in args else None)
             return 0, {"ok": True, "result": {"issue": {
                 "id": ISSUE, "identifier": "TAK-99", "title": args[args.index("--title") + 1],
-                "team": {"key": "TAK"}},
+                "team": {"key": "TAK"}, "parent": parent},
                 "meta": {"workspaceId": WORKSPACE, "writeId": write_id}}, "_meta": meta}
         if args[:2] == ["worktree", "create"]:
+            identifier = args[args.index("--linear-issue") + 1]
             return 0, {"ok": True, "result": {"worktree": {
-                "id": REPO + "::" + str(self.root / "tak-99"), "linkedLinearIssue": "TAK-99"}},
+                "id": REPO + "::" + str(self.root / identifier.lower()),
+                "linkedLinearIssue": identifier}},
                 "_meta": meta}
         raise AssertionError(f"unexpected Orca call: {args}")
 
@@ -138,6 +144,48 @@ class RouteTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "explicit UI implementation intent"):
             routing.route(self.panel, REQUEST, self.primary, self.call)
         self.assertEqual(self.calls, [])
+
+    def replace_decision(self, disposition: str, **references: dict) -> dict:
+        path = decisions.decision_path(self.panel, REQUEST)
+        path.unlink()
+        return decisions.record(
+            self.panel, REQUEST, disposition, "coordinator routing test", "coordinator",
+            **references,
+        )
+
+    def test_existing_issue_is_reused_without_linear_create(self) -> None:
+        existing = {"workspaceId": WORKSPACE, "issueId": ISSUE, "identifier": "TAK-14"}
+        self.replace_decision("continue_existing", existing_issue=existing)
+        result = routing.route(self.panel, REQUEST, self.primary, self.call)
+        self.assertEqual(result["issueIdentifier"], "TAK-14")
+        self.assertEqual(result["disposition"], "continue_existing")
+        self.assertFalse(any(args[:2] == ["linear", "create"] for args, _ in self.calls))
+        self.assertEqual(self.calls[-1][0][:2], ["worktree", "create"])
+
+    def test_child_issue_uses_parent_and_decision_write_id(self) -> None:
+        parent = {"workspaceId": WORKSPACE, "issueId": ISSUE, "identifier": "TAK-14"}
+        decision = self.replace_decision("create_child", parent_issue=parent)
+        result = routing.route(self.panel, REQUEST, self.primary, self.call)
+        create = next(args for args, _ in self.calls if args[:2] == ["linear", "create"])
+        self.assertEqual(create[create.index("--parent") + 1], "TAK-14")
+        self.assertEqual(create[create.index("--write-id") + 1], decision["writeId"])
+        self.assertEqual(result["decisionSha256"], decision["sha256"])
+
+    def test_no_issue_decision_refuses_route_before_discovery(self) -> None:
+        self.replace_decision("none")
+        with self.assertRaisesRegex(ValueError, "creates no Linear issue"):
+            routing.route(self.panel, REQUEST, self.primary, self.call)
+        self.assertEqual(self.calls, [])
+
+    def test_changed_decision_cannot_resume_existing_route(self) -> None:
+        routing.route(self.panel, REQUEST, self.primary, self.call)
+        decision_path = decisions.decision_path(self.panel, REQUEST)
+        value = desk.read_private_json(decision_path, {})
+        value["rationale"] = "tampered"
+        value["sha256"] = decisions.digest(value)
+        desk.write_ledger(decision_path, value)
+        with self.assertRaisesRegex(ValueError, "route journal"):
+            routing.route(self.panel, REQUEST, self.primary, self.call)
 
 
 if __name__ == "__main__":

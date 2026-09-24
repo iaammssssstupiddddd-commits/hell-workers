@@ -20,7 +20,7 @@ from pathlib import Path
 if __package__:
     from . import (orca_dispatch as dispatch, orca_git_checkpoint as checkpoints,
                    orca_role_state as bindings, orca_roles as roles, orca_loop_mail as mail,
-                   orca_git_integrate as integration)
+                   orca_git_integrate as integration, orca_work_planner as work_planner)
     from .host_coordination import HostBusyError, acquire_host
     from .check_help_impact import is_production_path
 else:
@@ -30,6 +30,7 @@ else:
     import orca_roles as roles
     import orca_loop_mail as mail
     import orca_git_integrate as integration
+    import orca_work_planner as work_planner
     from host_coordination import HostBusyError, acquire_host
     from check_help_impact import is_production_path
 
@@ -507,7 +508,9 @@ def build_loop(request_id: str, terminal: str, spec: dict, record: dict, *,
                loop_generation: int = 1, predecessor: dict | None = None,
                run: dict | None = None) -> dict:
     """Validate one generation without reading or replacing the request ledger."""
-    if (not isinstance(spec, dict) or set(spec) not in ({"lanes"}, {"lanes", "integration"})
+    allowed_shapes = ({"lanes"}, {"lanes", "integration"}, {"lanes", "planning"},
+                      {"lanes", "integration", "planning"})
+    if (not isinstance(spec, dict) or set(spec) not in allowed_shapes
             or not isinstance(spec["lanes"], list) or not 1 <= len(spec["lanes"]) <= 2):
         raise ValueError("spec requires one or two lane assignments")
     lanes, repos, scopes, commons, ids = {}, set(), [], set(), set()
@@ -536,6 +539,32 @@ def build_loop(request_id: str, terminal: str, spec: dict, record: dict, *,
         lanes[slot] = {"phase": "planned", "ticket": ticket, "validation": validation,
                        "source": roles.fingerprint(repo), "revisions": 0, "history": [],
                        "session": None, "follow_up": None}
+    reviewed_plan = None
+    if "planning" in spec:
+        reviewed_plan = work_planner.plan(spec["planning"])
+        if len(reviewed_plan["waves"]) != 1:
+            raise ValueError("register one dependency wave at a time; later waves are successor generations")
+        tasks = {item["id"]: item for item in reviewed_plan["tasks"]}
+        if set(tasks) != {lane["ticket"]["id"] for lane in lanes.values()}:
+            raise ValueError("reviewed plan tasks differ from registered tickets")
+        for slot, lane in lanes.items():
+            ticket = lane["ticket"]
+            task = tasks[ticket["id"]]
+            assignment = reviewed_plan["assignments"][ticket["id"]]
+            if (assignment["slot"] != slot
+                    or task["writePaths"] != sorted(set(ticket["allowed_directories"]))
+                    or task["complexity"] != ticket.get("complexity", "complex")
+                    or task["taskKind"] != ticket.get("task_kind", "feature")
+                    or task["acceptance"] != ticket.get("acceptance")):
+                raise ValueError("reviewed plan does not match the exact lane ticket")
+            package = work_planner.context_package(
+                reviewed_plan, ticket["id"], base=ticket["base"], specification=[],
+                decisions=[task["complexityReason"]],
+                forbidden=["subagents", "build", "test", "commit", "push", "PR", "Linear write"],
+                generation=loop_generation,
+            )
+            lane["ticket"] = {**ticket, "context_package": package}
+            roles.validate_ticket(lane["ticket"])
     if len(commons) != 1:
         raise ValueError("lanes must belong to the same repository")
     data = {"schema": 2, "request_id": request_id, "terminal": terminal,
@@ -544,7 +573,8 @@ def build_loop(request_id: str, terminal: str, spec: dict, record: dict, *,
             "attempts": {},
             "inbox": {"delivery": None, "messages": {}, "handled": {}, "operation": None},
             "cursor": 0, "reason": None, "registered_at_ms": event_time_ms(),
-            "loop_generation": loop_generation, "predecessor": predecessor}
+            "loop_generation": loop_generation, "predecessor": predecessor,
+            "planning": reviewed_plan}
     if "integration" in spec:
         config = spec["integration"]
         if not isinstance(config, dict) or set(config) != {"target", "validation"}:

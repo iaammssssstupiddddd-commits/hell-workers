@@ -15,14 +15,19 @@ import uuid
 from pathlib import Path
 
 if __package__:
+    from . import orca_case_contract as case_contract, orca_external_sync as external_sync
     from . import orca_coordinator as coordinator, orca_frontdesk as frontdesk, orca_issue_context as intake
+    from . import orca_intake_decision as intake_decision
     from . import orca_role_tabs as role_tabs, orca_review_loop as review_loop
     from . import host_coordination, orca_supervision_route as routing, orca_ui_coordinator as ui
     from .host_coordination import acquire_host
 else:
+    import orca_case_contract as case_contract
+    import orca_external_sync as external_sync
     import orca_coordinator as coordinator
     import orca_frontdesk as frontdesk
     import orca_issue_context as intake
+    import orca_intake_decision as intake_decision
     import orca_role_tabs as role_tabs
     import orca_review_loop as review_loop
     import host_coordination
@@ -170,12 +175,18 @@ def consultation_view(root: Path, request_id: str) -> tuple[str, str, list[dict]
 
 def route_record(root: Path, request_id: str) -> dict:
     data = frontdesk.read_private_json(routing.route_path(root, request_id), {})
-    if data and (not isinstance(data, dict) or data.get("schema") != 1
+    if data and (not isinstance(data, dict) or data.get("schema") not in {1, 2}
                  or data.get("requestId") != request_id
                  or data.get("phase") not in {"prepared", "issue_creating", "issue_created",
                                                "worktree_creating", "worktree_created",
                                                "terminal_starting", "ready"}):
         raise ValueError("invalid implementation route; preserve for reconciliation")
+    if data.get("schema") == 2 and (
+        data.get("disposition") not in {"continue_existing", "create_child", "create_standalone"}
+        or not isinstance(data.get("decisionSha256"), str)
+        or not re.fullmatch(r"[0-9a-f]{64}", data["decisionSha256"])
+    ):
+        raise ValueError("implementation route lacks its coordinator decision binding")
     return data
 
 
@@ -444,8 +455,9 @@ def route_view(root: Path, request_id: str) -> tuple[str, str, list[dict]]:
             role_views)
 
 
-def workflows(root: Path) -> list[dict]:
-    entries = [reception()]
+def workflows(root: Path, observed_at: int | None = None) -> list[dict]:
+    observed_at = int(time.time() * 1000) if observed_at is None else observed_at
+    entries = [case_contract.enrich(reception(), observed_at=observed_at)]
     routed_children: set[str] = set()
     for path in routing.route_path(root, RECEPTION_ID).parent.iterdir():
         if path.suffix != ".json":
@@ -483,11 +495,16 @@ def workflows(root: Path) -> list[dict]:
             else:
                 original = consultation_view(root, item["id"])
             state, detail, role_views = lifecycle_view(root, item["id"], original)
-        entries.append({"id": item["id"], "revision": task_revision(root, item["id"]),
-                        "title": item["request"].strip().splitlines()[0][:120],
-                        "kind": "task", "state": state,
-                        "detail": detail, "actions": task_actions(root, item["id"], receipt.get("action")),
-                        "roles": role_views})
+        decision = intake_decision.read(root, item["id"])
+        sync = external_sync.projection(root, item["id"])
+        entries.append(case_contract.enrich(
+            {"id": item["id"], "revision": task_revision(root, item["id"]),
+             "title": item["request"].strip().splitlines()[0][:120],
+             "kind": "task", "state": state,
+             "detail": detail, "actions": task_actions(root, item["id"], receipt.get("action")),
+             "roles": role_views},
+            observed_at=observed_at, decision=decision, sync=sync,
+        ))
     if len(entries) > 100:
         raise ValueError("supervision workflow count exceeds the UI bound")
     return entries
@@ -495,8 +512,11 @@ def workflows(root: Path) -> list[dict]:
 
 def publish(root: Path, current_runtime: str) -> dict:
     root, _, _ = directories(root)
-    snapshot = {"schema": 1, "runtimeId": canonical_uuid(current_runtime, "runtime ID"),
-                "publishedAt": int(time.time() * 1000), "workflows": workflows(root)}
+    published_at = int(time.time() * 1000)
+    snapshot = case_contract.snapshot(
+        canonical_uuid(current_runtime, "runtime ID"), published_at,
+        workflows(root, published_at),
+    )
     payload = json.dumps(snapshot, ensure_ascii=False).encode("utf-8")
     if len(payload) > MAX_DOCUMENT_BYTES:
         raise ValueError("supervision snapshot exceeds the UI bound")
@@ -928,11 +948,13 @@ def accept(root: Path, request: dict, current_runtime: str) -> dict:
         frontdesk.sync_directory(receipts)
         if request["action"] == "submit":
             prepare_consult(root, operation_id)
+        intake_decision.fixed_reception_decision(root, operation_id, request["action"])
         return existing
     item = frontdesk.submit(request["text"], operation_id)
     if item["id"] != operation_id or item["request"] != request["text"].strip():
         raise ValueError("frontdesk intake does not match the operation")
     frontdesk.write_ledger(path, expected)
+    intake_decision.fixed_reception_decision(root, operation_id, request["action"])
     if request["action"] == "submit":
         prepare_consult(root, operation_id)
     return expected

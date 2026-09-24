@@ -99,6 +99,23 @@ def validate_ticket(ticket: dict) -> dict:
         if any(candidate.is_relative_to(other) or other.is_relative_to(candidate) for other in paths):
             raise ValueError("overlapping allowed directories")
         paths.append(candidate)
+    package = ticket.get("context_package")
+    if package is not None:
+        required = {"schema", "planSha256", "taskId", "generation", "base", "objective",
+                    "specification", "decisions", "allowedPaths", "forbidden", "acceptance",
+                    "dependsOn", "questionRoute", "sha256"}
+        if (not isinstance(package, dict) or set(package) != required or package.get("schema") != 1
+                or package.get("taskId") != ticket["id"] or package.get("base") != ticket["base"]
+                or package.get("allowedPaths") != sorted(set(allowed))
+                or package.get("acceptance") != ticket.get("acceptance")
+                or package.get("questionRoute") != "coordinator"):
+            raise ValueError("ticket context package differs from its assignment")
+        content = {key: value for key, value in package.items() if key != "sha256"}
+        expected = hashlib.sha256(json.dumps(
+            content, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False
+        ).encode()).hexdigest()
+        if package.get("sha256") != expected:
+            raise ValueError("ticket context package digest changed")
     return ticket
 
 

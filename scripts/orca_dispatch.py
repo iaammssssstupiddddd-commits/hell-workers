@@ -144,6 +144,10 @@ def task_spec(ticket: dict, slot: str) -> str:
     acceptance = ticket.get(
         "acceptance", "Diff stays inside the assigned scope and worker_done reports the result."
     )
+    package = ticket.get("context_package")
+    package_text = ("\nContext package (digest-bound, do not broaden): "
+                    + json.dumps(package, ensure_ascii=False, sort_keys=True)
+                    if isinstance(package, dict) else "")
     return (
         f"Target: {scope}.\n"
         f"Change: {ticket['prompt']}\n"
@@ -152,6 +156,7 @@ def task_spec(ticket: dict, slot: str) -> str:
            if reviewer else
            f"Ownership: edit only {scope}; validation, review, commit, and integration remain coordinator-owned.\n")
         + f"Observable acceptance: {acceptance}"
+        + package_text
         + ("\nCursor B: controller-owned hooks handle all lifecycle commands from the preamble. "
            "Never invoke Shell, Orca, MCP, web, subagents, builds or tests. "
            "Return exactly one JSON object with string keys outcome, subject, body; "
