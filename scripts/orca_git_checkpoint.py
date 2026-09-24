@@ -52,6 +52,24 @@ def task_key(ticket: dict) -> str:
     return bindings.digest({"common": subject(ticket)["common"], "id": ticket["id"]})
 
 
+def recovered_failed_exit(previous: dict, last: dict, slot: str) -> bool:
+    """Accept only a failed exit already sealed by coordinator validation recovery."""
+    if last.get("exit_code") != 1 or last.get("settlement_exit", {}).get("outcome") != "failed":
+        return False
+    directory = bindings.storage.checked_directory(bindings.state_path(slot).parent / "loops" / "validation-resumes")
+    marker = Path(last.get("coordinator_validation_recovery", ""))
+    if marker.parent != directory:
+        return False
+    receipt = bindings.storage.read_private_json(marker, {})
+    return (receipt.get("schema") == 1
+            and receipt.get("subject") == slot
+            and isinstance(receipt.get("request_id"), str)
+            and isinstance(receipt.get("run_id"), str)
+            and re.fullmatch(r"[a-f0-9]{64}", str(receipt.get("evidence", ""))) is not None
+            and receipt.get("source_sha256") == previous.get("source_sha256")
+            and last["settlement_exit"].get("source_sha256") == previous.get("source_sha256"))
+
+
 def worker_exit(ticket: dict, slot: str) -> dict:
     if slot not in {"worker-a", "worker-b"} or ticket.get("read_only"):
         raise ValueError("checkpoint requires an editing worker")
@@ -60,7 +78,8 @@ def worker_exit(ticket: dict, slot: str) -> dict:
     previous = data["tasks"].get(key)
     last = data.get("last") or {}
     if (not previous or last.get("key") != key or last.get("phase") != "recorded"
-            or last.get("process_exited") is not True or last.get("exit_code") != 0
+            or last.get("process_exited") is not True
+            or (last.get("exit_code") != 0 and not recovered_failed_exit(previous, last, slot))
             or previous["ticket_sha256"] != bindings.digest(ticket)
             or previous["subject"] != subject(ticket)):
         raise ValueError("checkpoint requires exact successful worker exit")
@@ -89,6 +108,10 @@ def validate(ticket: dict, slot: str, command: list[str], help_reason: str,
         if previous["source_sha256"] != before:
             raise ValueError("source changed since worker exit")
         environment = heavy.environment(dict(os.environ))
+        if help_decision == "none":
+            environment["HELL_WORKERS_HELP_IMPACT_REASON"] = help_reason
+        else:
+            environment.pop("HELL_WORKERS_HELP_IMPACT_REASON", None)
         result = subprocess.run(command, cwd=repo, env=environment, pass_fds=host_pass_fds(environment),
                                 stdin=subprocess.DEVNULL, capture_output=True, timeout=1800, check=False)
         if before != roles.fingerprint(repo):

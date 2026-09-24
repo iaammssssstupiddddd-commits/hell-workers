@@ -40,10 +40,10 @@ except ModuleNotFoundError:
 
 try:
     from build_coordination import acquire_activity
-    from host_coordination import host_pass_fds
+    from host_coordination import HOST_FD_ENV, host_pass_fds
 except ModuleNotFoundError:
     from scripts.build_coordination import acquire_activity
-    from scripts.host_coordination import host_pass_fds
+    from scripts.host_coordination import HOST_FD_ENV, host_pass_fds
 
 try:
     from validation_storage import require_mutable
@@ -114,6 +114,11 @@ def run_command(
     env["PYTHONDONTWRITEBYTECODE"] = "1"
     if extra_env:
         env.update(extra_env)
+    # The quality runner itself keeps the host-wide lease. Unit tests patch
+    # coordination roots and must acquire fixture-local locks, so inheriting
+    # the real descriptor makes their otherwise isolated leases invalid.
+    if len(command) >= 3 and Path(command[0]).name.startswith("python") and command[1:3] == ["-m", "unittest"]:
+        env.pop(HOST_FD_ENV, None)
     lane = None
     requires_activity = False
     if command and Path(command[0]).name == "cargo":

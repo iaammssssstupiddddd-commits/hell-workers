@@ -39,6 +39,10 @@ class LinearIntakeError(RuntimeError):
     """Fail-closed error which never includes raw Linear or runtime output."""
 
 
+class LinearRuntimeUnavailable(LinearIntakeError):
+    """The local Orca runtime is temporarily unable to serve a read."""
+
+
 def canonical_uuid(value: object, label: str) -> str:
     if not isinstance(value, str):
         raise LinearIntakeError(f"invalid {label}")
@@ -140,6 +144,8 @@ def read_issue_response(arguments: list[str], orca_cli: Path | None = None) -> d
             raise LinearIntakeError("Linear is not connected in Orca settings")
         if code == "linear_no_linked_issue":
             raise LinearIntakeError("current Orca worktree is not linked to a Linear issue")
+        if code == "runtime_unavailable":
+            raise LinearRuntimeUnavailable("Orca Linear read failed (runtime_unavailable)")
         raise LinearIntakeError(f"Orca Linear read failed ({code or 'unknown_error'})")
     canonical_uuid(mapping(response.get("_meta"), "Orca metadata").get("runtimeId"),
                    "Orca runtime id")

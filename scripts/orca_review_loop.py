@@ -68,6 +68,11 @@ def event_time_ms() -> int:
     return time.time_ns() // 1_000_000
 
 
+def inspection_digest(data: dict) -> str:
+    """Bind operator decisions to state while ignoring the UI-only activity clock."""
+    return bindings.digest({key: value for key, value in data.items() if key != "updated_at_ms"})
+
+
 def load(request_id: str) -> dict:
     wrapped = STORAGE.read_private_json(state_path(request_id), {})
     data = wrapped.get("data")
@@ -177,7 +182,7 @@ def inspection(data: dict) -> dict:
             pending.append({"subject": subject, "error": f"{type(error).__name__}: {error}"})
         else:
             pending.append(current)
-    return {"loop": data, "loop_sha256": bindings.digest(data), "pending_help_reviews": pending}
+    return {"loop": data, "loop_sha256": inspection_digest(data), "pending_help_reviews": pending}
 
 
 def pause_for_help_review(data: dict, subject: str) -> None:
@@ -206,7 +211,7 @@ def submit_help_review(request_id: str, terminal: str, spec: dict) -> dict:
         raise ValueError("Help review requires exact loop, subject, source, paths, decision and reason")
     with acquire_host(LOCK, inherit=False):
         data = load(request_id)
-        if data["terminal"] != terminal or bindings.digest(data) != spec["loop_sha256"]:
+        if data["terminal"] != terminal or inspection_digest(data) != spec["loop_sha256"]:
             raise ValueError("Help review requires the exact inspected paused loop")
         if dispatch.ui_coordinator.state_path(request_id).exists():
             registered = dispatch.ui_coordinator.read_registered_state(request_id)
@@ -221,7 +226,7 @@ def submit_help_review(request_id: str, terminal: str, spec: dict) -> dict:
                 or spec["paths"] != current["paths"] or not any(is_production_path(path) for path in current["paths"])):
             raise ValueError("Help review subject changed or has no production diff")
         owner = data["integration"] if subject == "integration" else data["lanes"][subject]
-        pause = owner.get("help_pause", {})
+        pause = owner.get("help_pause") or {}
         legacy_pause = (owner.get("phase") == "paused" and "fresh coordinator Help review" in owner.get("reason", "")
                         and (subject == "integration" or (owner.get("history")
                              and owner["history"][-1].get("from") == "validating"
@@ -242,6 +247,141 @@ def submit_help_review(request_id: str, terminal: str, spec: dict) -> dict:
             owner["history"].append({"from": "paused", "to": "validating",
                                      "help_review": record["receipt_sha256"],
                                      "at_ms": event_time_ms()})
+        data.update(phase="active", reason=None)
+        save(data)
+        return data
+
+
+def resume_coordinator_validation(request_id: str, terminal: str, spec: dict) -> dict:
+    """Resume after a source-unchanged worker reports a coordinator-owned gate failure."""
+    required = {"loop_sha256", "subject", "validation_evidence", "source_sha256", "reason"}
+    if (not isinstance(spec, dict) or frozenset(spec) not in {frozenset(required), frozenset(required | {"replacement_argv"})}
+            or spec.get("subject") not in {"worker-a", "worker-b"}
+            or not isinstance(spec.get("reason"), str) or not spec["reason"].strip()
+            or "\n" in spec["reason"] or len(spec["reason"]) > 2000
+            or not isinstance(spec.get("validation_evidence"), str)
+            or not re.fullmatch(r"[a-f0-9]{64}", spec["validation_evidence"])
+            or not isinstance(spec.get("source_sha256"), str)
+            or not re.fullmatch(r"[a-f0-9]{64}", spec["source_sha256"])):
+        raise ValueError("validation recovery requires exact loop, lane, evidence, source and reason")
+    with acquire_host(LOCK, inherit=False):
+        data = load(request_id)
+        if data["terminal"] != terminal or inspection_digest(data) != spec["loop_sha256"]:
+            raise ValueError("validation recovery requires the exact inspected paused loop")
+        registered = dispatch.ui_coordinator.read_registered_state(request_id)
+        if registered["terminal"] != terminal or registered["phase"] != "ready":
+            raise ValueError("validation recovery requires the original ready coordinator")
+        slot = spec["subject"]
+        lane = data["lanes"][slot]
+        attempt = lane.get("attempt", {})
+        tracked = data.get("attempts", {}).get(attempt.get("dispatch_id"), {})
+        evidence = lane.get("evidence", {})
+        diagnostic = evidence.get("diagnostic", "")
+        repo = Path(lane["ticket"]["repo"])
+        replacement = spec.get("replacement_argv")
+        # A coordinator answer can arrive after the guarded recovery has already
+        # restored the lane.  Reconcile that late pause without replaying the
+        # recovery or validation: the durable receipt, source, evidence and
+        # replacement command must still be the exact inspected subject.
+        late_coordinator_pause = (lane.get("phase") == "validating"
+                                  and str(data.get("reason", "")).startswith("coordinator escalation decision: "))
+        pre_command_guard_pause = (lane.get("phase") == "paused"
+                                   and lane.get("reason") == "ValueError: checkpoint requires exact successful worker exit")
+        if (data["phase"] == "paused" and (late_coordinator_pause or pre_command_guard_pause)
+                and data.get("inbox", {}).get("operation") is None
+                and not data.get("inbox", {}).get("messages")):
+            recovery_dir = STORAGE.checked_directory(root() / "validation-resumes")
+            recovery_path = Path(lane.get("validation_recovery", ""))
+            recovery = (STORAGE.read_private_json(recovery_path, {})
+                        if recovery_path.parent == recovery_dir else {})
+            expected_recovery = {
+                "request_id": request_id,
+                "run_id": owned_run_id(data),
+                "subject": slot,
+                "evidence": spec["validation_evidence"],
+                "source_sha256": spec["source_sha256"],
+                "reason": spec["reason"],
+            }
+            if replacement is not None:
+                expected_recovery["replacement_argv"] = replacement
+            if (all(recovery.get(key) == value for key, value in expected_recovery.items())
+                    and evidence.get("id") == spec["validation_evidence"]
+                    and evidence.get("source_sha256") == spec["source_sha256"]
+                    and roles.fingerprint(repo) == spec["source_sha256"]
+                    and (replacement is None or lane["validation"]["argv"] == replacement)):
+                if pre_command_guard_pause:
+                    transition(data, slot, "validating", reason=None,
+                               validation_recovery=str(recovery_path))
+                data.update(phase="active", reason=None)
+                save(data)
+                return data
+            raise ValueError("late coordinator pause differs from the completed validation recovery")
+        recoverable_reason = lane.get("reason") in {
+            "settled failed Task; coordinator decision required",
+            "ValueError: successful Orca settlement and closed bridge are required",
+        }
+        coordinator_gate = (
+            ("scripts/check_help_impact.py" in diagnostic and "Help impact:" in diagnostic)
+            or ("invalid inherited host lease" in diagnostic and evidence.get("diagnostic_truncated") is True)
+        )
+        if (data["phase"] != "paused" or lane.get("phase") != "paused"
+                or not recoverable_reason
+                or attempt.get("outcome") != "failed" or tracked.get("released") is not True
+                or evidence.get("id") != spec["validation_evidence"] or evidence.get("exit_code") != 1
+                or not coordinator_gate
+                or evidence.get("source_sha256") != spec["source_sha256"]
+                or roles.fingerprint(repo) != spec["source_sha256"]):
+            raise ValueError("only the exact source-unchanged coordinator Help gate failure can resume")
+        stored = STORAGE.read_private_json(checkpoints.root() / f"validation-{evidence['id']}.json", {})
+        if stored != {key: value for key, value in evidence.items() if key != "id"}:
+            raise ValueError("validation evidence differs from its host record")
+        checked_help_review(data, slot)
+        bridge_root = roles.task_bridge.root() / attempt["bridge_id"]
+        completion_path = bridge_root / "completion-recovery.json"
+        recovery = STORAGE.read_private_json(completion_path, {})
+        if recovery:
+            failed_settlement = completion_path
+            recovered_outcome = json.loads(recovery.get("params", {}).get("payload", "{}")).get("outcome")
+            recovered = (recovery.get("phase") == "complete"
+                         and recovery.get("source") == spec["source_sha256"]
+                         and recovered_outcome == "failed")
+        else:
+            failed_settlement = bridge_root / "journal.json"
+            journal = STORAGE.read_private_json(failed_settlement, {})
+            recovered = journal.get("phase") == "settled" and journal.get("settled_status") == "failed"
+        if not recovered:
+            raise ValueError("failed worker completion was not exactly reconciled")
+        if replacement is not None:
+            expected = ["git", "diff", "--check", lane["ticket"]["base"]]
+            if replacement != expected or "invalid inherited host lease" not in diagnostic:
+                raise ValueError("validation replacement is limited to the inspected inherited-lease fixture failure")
+        receipt_path = STORAGE.checked_directory(root() / "validation-resumes") / (
+            bindings.digest({"request": request_id, **spec}) + ".json"
+        )
+        receipt = {"schema": 1, "request_id": request_id, "run_id": owned_run_id(data),
+                   "subject": slot, "evidence": evidence["id"], "source_sha256": spec["source_sha256"],
+                   "failed_settlement": str(failed_settlement), "reason": spec["reason"],
+                   **({"replacement_argv": replacement} if replacement is not None else {})}
+        STORAGE.write_ledger(receipt_path, receipt)
+        with acquire_host(slot, inherit=False), acquire_host(roles.workspace_slot(repo), inherit=False):
+            role = bindings.read_state(slot, roles.provider_for(lane["ticket"], slot), allow_pending=True)
+            last = role.get("last", {})
+            key = checkpoints.task_key(lane["ticket"])
+            bound = role.get("tasks", {}).get(key, {})
+            if (last.get("phase") != "recorded" or last.get("orca_bridge") != attempt["bridge_id"]
+                    or last.get("terminal") != attempt["terminal"]
+                    or bound.get("ticket_sha256") != bindings.digest(lane["ticket"])
+                    or bound.get("source_sha256") != spec["source_sha256"]):
+                raise ValueError("reconciled worker checkpoint differs from validation recovery")
+            last["coordinator_validation_recovery"] = str(receipt_path)
+            bindings.save_state(role)
+        lane.pop("failed", None)
+        lane.pop("failure_reason", None)
+        if replacement is not None:
+            lane["validation"]["argv"] = replacement
+            if isinstance(data.get("integration"), dict):
+                data["integration"]["validation"]["argv"] = replacement
+        transition(data, slot, "validating", reason=None, validation_recovery=str(receipt_path))
         data.update(phase="active", reason=None)
         save(data)
         return data
@@ -583,7 +723,7 @@ def tick(request_id: str, terminal: str) -> dict | None:
             before = bindings.digest(data)
             try:
                 step(data, slot)
-            except HostBusyError:
+            except (HostBusyError, dispatch.intake.LinearRuntimeUnavailable):
                 continue
             except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
                 # No unknown external mutation is replayed. Preserve attempts and diagnostics.
@@ -597,7 +737,7 @@ def tick(request_id: str, terminal: str) -> dict | None:
             if not decision_wait or final["phase"] in {"reviewing", "review_release"}:
                 try:
                     integration_step(data)
-                except HostBusyError:
+                except (HostBusyError, dispatch.intake.LinearRuntimeUnavailable):
                     pass
                 except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
                     final.update(phase="paused", reason=f"{type(error).__name__}: {error}"[:2000])
@@ -815,6 +955,74 @@ def resume_inbox(request_id: str, terminal: str, expected: str) -> dict:
         return data
 
 
+def resume_linear_runtime(request_id: str, terminal: str, expected: str) -> dict:
+    """Resume an exact pre-command pause after the Orca Linear runtime recovers."""
+    with acquire_host(LOCK, inherit=False):
+        data = load(request_id)
+        if (data["terminal"] != terminal or inspection_digest(data) != expected
+                or data["phase"] != "paused" or data["inbox"]["operation"] is not None
+                or data["inbox"]["messages"]):
+            raise ValueError("exact inspected Linear runtime pause required")
+        paused = [(slot, lane) for slot, lane in data["lanes"].items()
+                  if lane.get("phase") == "paused" and lane.get("reason") in {
+                      "LinearRuntimeUnavailable: Orca Linear read failed (runtime_unavailable)",
+                      "LinearIntakeError: Orca Linear read failed (runtime_unavailable)",
+                  }]
+        if len(paused) != 1:
+            raise ValueError("exact inspected Linear runtime pause required")
+        slot, lane = paused[0]
+        history = lane.get("history", [])
+        resumable = {"planned", "dispatching", "validating", "checkpointing",
+                     "review_pending", "review_dispatching", "deciding"}
+        previous = history[-1].get("from") if history and history[-1].get("to") == "paused" else None
+        if previous not in resumable:
+            raise ValueError("Linear runtime pause did not precede an idempotent controller step")
+        dispatch.checked_coordinator(request_id, terminal)
+        if not active_issue(data):
+            raise ValueError("Linear issue is no longer active")
+        transition(data, slot, previous, reason=None)
+        data.update(phase="active", reason=None)
+        save(data)
+        return data
+
+
+def finalize_tabs(request_id: str, terminal: str, expected: str) -> dict:
+    """Archive and close finished role tabs only after the exact final approval."""
+    with acquire_host(LOCK, inherit=False):
+        data = load(request_id)
+        if (data["terminal"] != terminal or inspection_digest(data) != expected
+                or data["phase"] != "approved" or not mail.drained(data)
+                or any(item.get("released") is not True or item.get("completion_acknowledged") is not True
+                       for item in data["attempts"].values())):
+            raise ValueError("tab finalization requires the exact settled approved loop")
+        dispatch.checked_coordinator(request_id, terminal)
+        if data.get("ui_cleanup", {}).get("phase") == "complete":
+            return data
+        cli = dispatch.intake.default_orca_cli()
+        receipts, seen = [], set()
+        for attempt in reversed(list(data["attempts"].values())):
+            handle = attempt.get("terminal")
+            repo = attempt.get("repo")
+            slot = "reviewer" if attempt.get("role") == "reviewer" else attempt.get("slot")
+            if (not isinstance(handle, str) or handle in seen or slot not in dispatch.role_tabs.TITLES
+                    or not isinstance(repo, str)):
+                continue
+            seen.add(handle)
+            registry = dispatch.role_tabs.registry_path(request_id, repo, slot)
+            state = STORAGE.read_private_json(registry, {})
+            identity = state.get("identity", {})
+            if (state.get("phase") != "known" or identity.get("handle") != handle):
+                continue
+            rows, _ = dispatch.role_tabs.inventory(dispatch.run_cli, cli, repo)
+            if not any(row.get("handle") == handle for row in rows):
+                continue
+            receipt = dispatch.role_tabs.retire_settled(dispatch.run_cli, cli, repo, identity)
+            receipts.append(str(receipt))
+        data["ui_cleanup"] = {"phase": "complete", "receipts": receipts, "at_ms": event_time_ms()}
+        save(data)
+        return data
+
+
 def decide(request_id: str, terminal: str, message_id: str, body: str, disposition: str) -> dict:
     with acquire_host(LOCK, inherit=False):
         data = load(request_id)
@@ -913,7 +1121,9 @@ class Driver:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("action", choices=("register", "show", "tick", "watch", "decide", "route",
-                                           "submit-help-review", "resume-review-wait", "resume-inbox"))
+                                           "submit-help-review", "resume-coordinator-validation",
+                                           "resume-review-wait", "resume-inbox", "resume-linear-runtime",
+                                           "finalize-tabs"))
     parser.add_argument("--request-id", required=True)
     parser.add_argument("--coordinator", required=True)
     parser.add_argument("--spec", type=Path)
@@ -928,10 +1138,24 @@ def main() -> int:
             if args.spec is None:
                 raise ValueError("Help review submission requires a trusted private spec")
             result = submit_help_review(args.request_id, args.coordinator, STORAGE.read_private_json(args.spec, {}))
+        elif args.action == "resume-coordinator-validation":
+            if args.spec is None:
+                raise ValueError("validation recovery requires a trusted private spec")
+            result = resume_coordinator_validation(
+                args.request_id, args.coordinator, STORAGE.read_private_json(args.spec, {})
+            )
         elif args.action == "resume-inbox":
             if not args.expected_sha256:
                 raise ValueError('inbox recovery requires inspected ledger digest')
             result = resume_inbox(args.request_id, args.coordinator, args.expected_sha256)
+        elif args.action == "resume-linear-runtime":
+            if not args.expected_sha256:
+                raise ValueError("Linear runtime recovery requires inspected ledger digest")
+            result = resume_linear_runtime(args.request_id, args.coordinator, args.expected_sha256)
+        elif args.action == "finalize-tabs":
+            if not args.expected_sha256:
+                raise ValueError("tab finalization requires inspected ledger digest")
+            result = finalize_tabs(args.request_id, args.coordinator, args.expected_sha256)
         elif args.action == "resume-review-wait":
             if not args.slot or not args.expected_sha256:
                 raise ValueError("review wait recovery requires slot and inspected ledger digest")

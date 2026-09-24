@@ -152,6 +152,8 @@ class UiCoordinatorTests(unittest.TestCase):
         self.assertIn("--spec '<private spec file path>'", value)
         self.assertIn("submit-help-review", value)
         self.assertIn("orca_ui_coordinator.py preflight", value)
+        self.assertIn(str(Path(ui.__file__).resolve()), value)
+        self.assertIn(str(Path(ui.__file__).with_name("orca_review_loop.py").resolve()), value)
         self.assertNotIn("--spec '<private spec>'", value)
         self.assertIn("旧タブは\n自動終了", value)
 
@@ -241,6 +243,10 @@ class UiCoordinatorTests(unittest.TestCase):
         self.assertEqual(terminal_args[terminal_args.index("--title") + 1], "統括")
         self.assertIn(
             "default-entry", terminal_args[terminal_args.index("--command") + 1]
+        )
+        self.assertIn(
+            str(Path(ui.__file__).resolve()),
+            terminal_args[terminal_args.index("--command") + 1],
         )
         self.assertIn("--focus", terminal_args)
         self.assertEqual(run.call_count, 8)
@@ -515,6 +521,9 @@ class UiCoordinatorTests(unittest.TestCase):
         send_args = run.call_args_list[2].args[0]
         self.assertEqual(send_args[:2], ["terminal", "send"])
         self.assertIn("default-entry", send_args[send_args.index("--text") + 1])
+        self.assertIn(
+            str(Path(ui.__file__).resolve()), send_args[send_args.index("--text") + 1]
+        )
 
     def test_launch_wait_retries_only_busy_coordinator(self) -> None:
         with (

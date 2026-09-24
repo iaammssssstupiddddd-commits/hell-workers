@@ -177,6 +177,10 @@ def validate(receipt: dict, config: dict) -> dict:
         check_receipt(receipt)
         source = roles.fingerprint(repo)
         environment = heavy.environment(dict(os.environ))
+        if config["help_decision"] == "none":
+            environment["HELL_WORKERS_HELP_IMPACT_REASON"] = config["help_reason"]
+        else:
+            environment.pop("HELL_WORKERS_HELP_IMPACT_REASON", None)
         result = subprocess.run(config["argv"], cwd=repo, env=environment, pass_fds=host_pass_fds(environment),
                                 stdin=subprocess.DEVNULL, capture_output=True, timeout=1800, check=False)
         if source != roles.fingerprint(repo):

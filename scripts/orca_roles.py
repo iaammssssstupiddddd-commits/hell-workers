@@ -256,8 +256,33 @@ def require_completed_bridge(last: dict, repo: Path) -> None:
     """A provider's exit 0 must not promote a failed or unproven Orca Task."""
     if "orca_bridge" not in last:
         return  # Legacy direct launcher has no Orca lifecycle to claim.
-    if settled_bridge(last, repo)["outcome"] != "completed":
+    if settled_bridge(last, repo)["outcome"] == "completed":
+        return
+    path_value = last.get("coordinator_validation_recovery")
+    if not isinstance(path_value, str):
         raise ValueError("successful Orca settlement and closed bridge are required")
+    path = Path(path_value)
+    expected = bindings.state_path("worker-a").parent / "loops/validation-resumes"
+    if path.parent != expected or path.resolve() != path:
+        raise ValueError("coordinator validation recovery is outside its owner directory")
+    receipt = bindings.storage.read_private_json(path, {})
+    completion = Path(receipt.get("failed_settlement", ""))
+    bridge = task_bridge.root() / bindings.identity(last["orca_bridge"])
+    completed = bindings.storage.read_private_json(completion, {})
+    if completion.name == "completion-recovery.json":
+        try:
+            outcome = json.loads(completed.get("params", {}).get("payload", "{}"))["outcome"]
+        except (json.JSONDecodeError, KeyError, TypeError):
+            outcome = None
+        failed = completed.get("phase") == "complete" and outcome == "failed"
+    else:
+        failed = (completion.name == "journal.json" and completed.get("phase") == "settled"
+                  and completed.get("settled_status") == "failed")
+    if (receipt.get("schema") != 1 or receipt.get("source_sha256") != fingerprint(repo)
+            or completion.parent != bridge or not failed
+            or (completion.name == "completion-recovery.json"
+                and completed.get("source") != receipt.get("source_sha256"))):
+        raise ValueError("coordinator validation recovery differs from the failed Dispatch")
 
 
 def verify_review(ticket: dict, record: dict) -> None:
@@ -509,7 +534,10 @@ def launch(ticket: dict, slot: str, *, dry_run: bool, resume_session: str | None
             prompt += ("\nTask bridge bootstrap only: do not invent lifecycle IDs or send any Orca RPC until a live "
                        "Orca preamble arrives. Do not create runs, tasks, workers or gates. When dispatched, copy "
                        "its executable, terminal, capability and IDs exactly; use --json. Ask/check waits require "
-                       "--timeout-ms 10000. Process all delivered messages before explicit check --ack. "
+                       "--timeout-ms 15000. If ask times out, keep the same question open and call ask again with "
+                       "--resume <messageId> and --timeout-ms 15000 until an answer arrives; never send worker_done "
+                       "while a question is outstanding. On cancelled or connectionLost, stop for host reconciliation "
+                       "without resending completion. Process all delivered messages before explicit check --ack. "
                        "A bridge refusal means stop and ask the host coordinator to reconcile, never resend, "
                        "except review_format_retry: no completion was sent, so serialize the review record "
                        "with json.dumps and resubmit it on the same Dispatch as instructed. "

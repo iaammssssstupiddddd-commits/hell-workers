@@ -7,4 +7,4 @@ scripts:
 # A/B/review tabs only when their bounded tickets are ready.
 defaultTabs:
   - title: 作業シェル
-    command: python3 scripts/orca_ui_coordinator.py default-entry
+    command: python3 "${ORCA_UI_COORDINATOR_SCRIPT:-scripts/orca_ui_coordinator.py}" default-entry

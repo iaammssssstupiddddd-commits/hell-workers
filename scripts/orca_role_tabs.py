@@ -198,6 +198,41 @@ def retire(call, cli, repo: str, expected: dict) -> Path:
         return path
 
 
+def retire_settled(call, cli, repo: str, expected: dict) -> Path:
+    """Close an exact released role tab after the owning loop proves settlement."""
+    handle = expected["handle"]
+    key = bindings.digest({"settled": expected})
+    directory = storage.checked_directory(root() / "retired-settled")
+    path = directory / f"{key}.json"
+    with acquire_host(workspace_lock(repo), inherit=False):
+        if path.exists() or path.is_symlink():
+            raise ValueError("settled retirement already attempted; inspect receipt, do not replay")
+        row = call(cli, ["terminal", "show", "--terminal", handle], "role-tab-show")["terminal"]
+        if identity(row, repo) != expected:
+            raise ValueError("settled role tab identity changed")
+        wait = call(cli, ["terminal", "wait", "--terminal", handle, "--for", "tui-idle",
+                          "--timeout-ms", "15000"], "role-tab-idle").get("wait", {})
+        if (wait.get("handle") != handle or wait.get("condition") != "tui-idle"
+                or wait.get("satisfied") is not True or wait.get("status") != "running"):
+            raise ValueError("settled role tab is not idle; preserve it")
+        output = complete_output(call, cli, handle)
+        storage.write_ledger(path, {"identity": expected, "repo": repo, "output": output,
+                                    "phase": "prepared", "settled": True})
+        row = call(cli, ["terminal", "show", "--terminal", handle], "role-tab-show")["terminal"]
+        if identity(row, repo) != expected:
+            raise ValueError("settled role tab changed before closure")
+        receipt = call(cli, ["terminal", "close", "--terminal", handle], "role-tab-close")
+        storage.write_ledger(path, {"identity": expected, "repo": repo, "output": output,
+                                   "phase": "close-returned", "settled": True, "receipt": receipt})
+        rows, _ = inventory(call, cli, repo)
+        if any(item.get("handle") == handle for item in rows):
+            raise ValueError("settled tab closure unconfirmed")
+        closed = receipt.get("close", {})
+        if closed.get("handle") != handle or closed.get("ptyKilled") is not True:
+            raise ValueError("settled tab PTY closure unconfirmed")
+        return path
+
+
 def complete_output(call, cli, handle: str) -> dict:
     """Preserve a capped preview or all retained completed lines by cursor."""
     preview = call(cli, ["terminal", "read", "--terminal", handle, "--limit", "2000"],

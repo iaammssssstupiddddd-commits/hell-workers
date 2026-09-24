@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import json
 import subprocess
+import sys
 import unittest
 from unittest.mock import patch
 
@@ -280,6 +281,17 @@ class IntegrationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "modified source"):
             integration.validate(result, config)
         self.assertEqual((self.repo / "src/content.txt").read_text(), "unexpected")
+
+    def test_combined_validation_exports_reviewed_no_impact_reason(self):
+        result = integration.integrate(self.target, self.approvals())
+        reason = "Fixture only; no player behavior changes"
+        config = {
+            "argv": [sys.executable, "-c", "import os; assert os.environ['HELL_WORKERS_HELP_IMPACT_REASON'] == " + repr(reason)],
+            "help_reason": reason,
+            "help_decision": "none",
+        }
+        evidence = integration.validate(result, config)
+        self.assertEqual(evidence["exit_code"], 0)
 
     def test_cancellation_before_integration_preserves_target(self):
         self.enable()

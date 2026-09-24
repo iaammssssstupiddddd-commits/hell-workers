@@ -152,6 +152,15 @@ class LinearIntakeTests(unittest.TestCase):
         self.assertFalse((self.root / "linear-intake").exists())
         self.assertEqual(orca_frontdesk.list_requests(), [])
 
+    def test_runtime_unavailable_has_a_distinct_transient_error(self) -> None:
+        value = {"id": "3ce87fa3-30d7-4074-aad2-acf0c7cde95b", "ok": False,
+                 "error": {"code": "runtime_unavailable", "message": "private detail"},
+                 "_meta": {"runtimeId": RUNTIME}}
+        with (patch.object(intake.subprocess, "run", return_value=self.completed(value, returncode=1)),
+              self.assertRaises(intake.LinearRuntimeUnavailable) as caught):
+            intake.read_issue("HW-42", WORKSPACE, self.cli)
+        self.assertNotIn("private detail", str(caught.exception))
+
     def test_mapping_survives_submit_failure_and_retry_reconciles_once(self) -> None:
         real_submit = orca_frontdesk.submit
         with patch.object(intake.subprocess, "run", return_value=self.completed()), patch.object(

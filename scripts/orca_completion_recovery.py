@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import copy
 import json
+import re
 import shlex
 import uuid
 from pathlib import Path
@@ -30,22 +31,32 @@ def recorded_command(path: Path, call_id: str, client: Path, authority: dict, te
     if len(matches) != 1:
         raise ValueError("exact recorded provider tool call required")
     raw = matches[0]["input"].split("tools.exec_command(", 1)[1]
-    options, _ = json.JSONDecoder().raw_decode(raw)
-    argv = shlex.split(options["cmd"])
+    try:
+        options, _ = json.JSONDecoder().raw_decode(raw)
+        command = options["cmd"]
+    except (json.JSONDecodeError, KeyError, TypeError):
+        match = re.search(r'\bcmd\s*:\s*("(?:\\.|[^"\\])*")', raw)
+        if match is None:
+            raise ValueError("recorded completion command is unavailable")
+        command = json.loads(match.group(1))
+    argv = shlex.split(command)
     if argv[:3] != [str(client), "orchestration", "send"] or argv[-1] != "--json":
         raise ValueError("recorded command is not this bridge completion")
     flags = argv[3:-1]
     if len(flags) % 2:
         raise ValueError("invalid recorded completion flags")
     values = dict(zip(flags[::2], flags[1::2], strict=True))
-    required = {"--from", "--dispatch-capability", "--type", "--subject", "--body", "--task-id", "--dispatch-id", "--outcome", "--files-modified"}
-    if (len(values) * 2 != len(flags) or set(values) != required or values["--from"] != terminal
-            or values["--type"] != "worker_done" or values["--outcome"] != "succeeded"
+    required = {"--from", "--dispatch-capability", "--type", "--subject", "--body", "--task-id", "--dispatch-id", "--outcome"}
+    if (len(values) * 2 != len(flags) or not required <= set(values)
+            or set(values) - required - {"--files-modified"} or values["--from"] != terminal
+            or values["--type"] != "worker_done" or values["--outcome"] not in {"succeeded", "failed"}
             or values["--task-id"] != authority["task"] or values["--dispatch-id"] != authority["dispatch"]
             or not values["--dispatch-capability"].startswith("dcap_")):
         raise ValueError("recorded completion identity or scope differs")
-    payload = {"taskId": authority["task"], "dispatchId": authority["dispatch"], "outcome": "succeeded",
-               "filesModified": [name.strip() for name in values["--files-modified"].split(",") if name.strip()]}
+    payload = {"taskId": authority["task"], "dispatchId": authority["dispatch"],
+               "outcome": values["--outcome"]}
+    if "--files-modified" in values:
+        payload["filesModified"] = [name.strip() for name in values["--files-modified"].split(",") if name.strip()]
     return argv[1:-1], {"from": terminal, "devMode": False, "type": "worker_done", "subject": values["--subject"],
                        "body": values["--body"], "payload": json.dumps(payload), "waitForLifecycleSettlement": True}
 
@@ -68,7 +79,7 @@ def recover(request: str, call_id: str, source: str, cli: Path, metadata: Path) 
             receipt_path = directory / "completion-recovery.json"
             receipt = s.read_private_json(receipt_path, {})
             if ((last.get("phase") != "unknown" and record != receipt.get("after_role")) or last.get("process_exited") is not True
-                    or last.get("exit_code") != 0 or last.get("terminal") != attempt["terminal"]
+                    or type(last.get("exit_code")) is not int or last.get("terminal") != attempt["terminal"]
                     or last.get("orca_bridge") != attempt["bridge_id"]):
                 raise ValueError("exact exited worker refusal required")
             bridge_path = directory / "journal.json"
@@ -87,11 +98,18 @@ def recover(request: str, call_id: str, source: str, cli: Path, metadata: Path) 
             policy.authority = authority
             policy.parameters("orchestration.send", params)
             if not receipt:
+                safe_communication = all(
+                    isinstance(item, dict) and item.get("phase") == "confirmed"
+                    and not item.get("result", {}).get("message")
+                    and (item.get("result", {}).get("messages") == []
+                         or (item.get("result", {}).get("answer") is None
+                             and item.get("result", {}).get("timedOut") is True))
+                    for item in journal.get("operations", {}).values()
+                )
                 if (journal.get("phase") != "unknown" or journal.get("revoked") is not True
                         or journal.get("authority") != authority or s.read_private_json(directory / "arm.json", {}) != authority
-                        or any(item.get("phase") != "confirmed" or item.get("result", {}).get("dispatchId") != authority["dispatch"]
-                               or item.get("result", {}).get("messages") != [] for item in journal.get("operations", {}).values())):
-                    raise ValueError("only preflight refusal with confirmed empty checks can be reconciled")
+                        or not safe_communication):
+                    raise ValueError("only a refused completion after confirmed empty communication can be reconciled")
                 policy.current()
                 receipt = {"phase": "prepared", "source": source, "call_id": call_id, "params": params,
                            "operation": str(uuid.uuid4()), "before": {"bridge": copy.deepcopy(journal), "role": copy.deepcopy(record), "loop": copy.deepcopy(data)}}
@@ -106,10 +124,14 @@ def recover(request: str, call_id: str, source: str, cli: Path, metadata: Path) 
             if roles.fingerprint(repo) != source:
                 raise ValueError("source changed during completion reconciliation")
             journal = copy.deepcopy(receipt["before"]["bridge"])
-            journal.update(phase="settled", revoked=True, settled_status="completed", recovery_receipt=str(receipt_path))
+            outcome = json.loads(params["payload"])["outcome"]
+            settled = "completed" if outcome == "succeeded" else "failed"
+            journal.update(phase="settled", revoked=True, settled_status=settled, recovery_receipt=str(receipt_path))
             journal["operations"][receipt["operation"]] = {"signature": b.digest(params), "phase": "confirmed", "result": result}
             s.write_ledger(bridge_path, journal)
-            record["tasks"][key].update(source_sha256=source, **snapshot)
+            record["tasks"][key].update(ticket_sha256=b.digest(ticket),
+                                        subject=loop.checkpoints.subject(ticket),
+                                        source_sha256=source, **snapshot)
             record["last"].update(phase="recorded", completion_recovery=str(receipt_path))
             receipt["after_role"] = copy.deepcopy(record)
             s.write_ledger(receipt_path, receipt)
@@ -118,7 +140,8 @@ def recover(request: str, call_id: str, source: str, cli: Path, metadata: Path) 
             loop.transition(data, "worker-a", "implementing", reason=None)
             receipt["phase"] = "complete"
             s.write_ledger(receipt_path, receipt)
-            return {"recovered": True, "receipt": str(receipt_path), "dispatch": authority["dispatch"]}
+            return {"recovered": True, "receipt": str(receipt_path), "dispatch": authority["dispatch"],
+                    "outcome": settled}
 
 
 if __name__ == "__main__":

@@ -21,14 +21,18 @@ class ToolingCorrectionTests(unittest.TestCase):
         f = self.i.fixture
         f.register()
         original = f.completed
+        documentation = self._testMethodName == 'test_review_cited_documentation_correction_reenters_validation'
 
         def rejected(ticket, slot, attempt):
             result = original(ticket, slot, attempt)
             if ticket['id'].startswith('integration-'):
                 record = L.parse_review(result['body'], result['session'])
                 record.pop('reviewer_session')
-                record.update(verdict='changes_requested', blocking_findings=[
-                    {'id': 'T1', 'message': 'Tooling contract differs', 'acceptance': 'Contract matches'}])
+                finding = ({'id': 'D1', 'message': 'docs/contract.md is stale',
+                            'acceptance': 'Update docs/contract.md to match the implementation'}
+                           if documentation else
+                           {'id': 'T1', 'message': 'Tooling contract differs', 'acceptance': 'Contract matches'})
+                record.update(verdict='changes_requested', blocking_findings=[finding])
                 result['body'] = 'Summary. Review. Complete.\nORCA_REVIEW_JSON: ' + json.dumps(record)
             return result
 
@@ -44,13 +48,22 @@ class ToolingCorrectionTests(unittest.TestCase):
             item['completion_acknowledged'] = True
         L.save(data)
         self.before = copy.deepcopy(data)
-        (f.primary / 'scripts/contract.py').write_text('# corrected contract\n')
-        f.run_git(f.primary, 'add', 'scripts/contract.py')
-        f.run_git(f.primary, 'commit', '-qm', 'fix tooling contract')
-        self.spec = {'loop_sha256': L.bindings.digest(data),
-                     'commit': L.roles.git(f.primary, 'rev-parse', 'HEAD'),
+        correction_repo = f.primary
+        if documentation:
+            correction_repo = f.root / 'documentation-correction'
+            f.run_git(f.primary, 'worktree', 'add', '-qb', 'documentation-correction',
+                      str(correction_repo), data['integration']['receipt']['head'])
+        correction_path = correction_repo / ('docs/contract.md' if documentation else 'scripts/contract.py')
+        correction_path.parent.mkdir(exist_ok=True)
+        correction_path.write_text('corrected contract\n')
+        f.run_git(correction_repo, 'add', str(correction_path.relative_to(correction_repo)))
+        f.run_git(correction_repo, 'commit', '-qm', 'fix coordinator-owned contract')
+        self.spec = {'loop_sha256': L.inspection_digest(data),
+                     'commit': L.roles.git(correction_repo, 'rev-parse', 'HEAD'),
                      'reason': 'Correct the host-only test contract without extending worker scope',
                      'validation': data['integration']['validation']}
+        if documentation:
+            self.spec['category'] = 'documentation'
 
     def test_new_head_requires_fresh_validation_review_preserves_run_and_attempts(self):
         result = correction.correct(REQUEST, COORDINATOR, self.spec)
@@ -76,7 +89,7 @@ class ToolingCorrectionTests(unittest.TestCase):
         next(iter(data['attempts'].values()))['completion_acknowledged'] = False
         L.save(data)
         with self.assertRaisesRegex(ValueError, 'exact settled'):
-            correction.correct(REQUEST, COORDINATOR, {**self.spec, 'loop_sha256': L.bindings.digest(data)})
+            correction.correct(REQUEST, COORDINATOR, {**self.spec, 'loop_sha256': L.inspection_digest(data)})
         L.save(self.before)
         (self.i.repo / 'src/content.txt').write_text('external change')
         with self.assertRaises(ValueError):
@@ -92,6 +105,14 @@ class ToolingCorrectionTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'only host tooling'):
             correction.correct(REQUEST, COORDINATOR, self.spec)
         self.assertEqual(L.roles.git(self.i.repo, 'rev-parse', 'HEAD'), self.before['integration']['receipt']['head'])
+
+    def test_review_cited_documentation_correction_reenters_validation(self):
+        result = correction.correct(REQUEST, COORDINATOR, self.spec)
+        data = L.load(REQUEST)
+        self.assertEqual(data['integration']['phase'], 'validating')
+        self.assertNotEqual(result['head'], self.before['integration']['receipt']['head'])
+        completed = self.i.fixture.finish()
+        self.assertEqual(completed['phase'], 'approved', completed.get('reason'))
 
     def test_interrupted_correction_is_not_replayed_or_approved(self):
         with patch.object(L.integration, 'finish', side_effect=OSError('interrupted checkout')):

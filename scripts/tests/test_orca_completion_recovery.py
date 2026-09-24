@@ -53,6 +53,23 @@ class RecordedCompletionTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "exact recorded"):
             self.read()
 
+    def test_failed_completion_without_files_is_reconstructed(self):
+        self.argv[self.argv.index("--outcome") + 1] = "failed"
+        index = self.argv.index("--files-modified")
+        del self.argv[index:index + 2]
+        self.write()
+        _, params = self.read()
+        self.assertEqual(json.loads(params["payload"])["outcome"], "failed")
+        self.assertNotIn("filesModified", json.loads(params["payload"]))
+
+    def test_current_javascript_tool_wrapper_is_parsed(self):
+        command = shlex.join(self.argv)
+        self.path.write_text(json.dumps({"type": "response_item", "payload": {
+            "type": "custom_tool_call", "call_id": "call_exact",
+            "input": "text(await tools.exec_command({cmd:" + json.dumps(command) + ",max_output_tokens:2600}));"}}) + "\n")
+        argv, _ = self.read()
+        self.assertEqual(argv, self.argv[1:-1])
+
 
 if __name__ == "__main__":
     unittest.main()

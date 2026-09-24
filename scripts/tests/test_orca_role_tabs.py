@@ -46,6 +46,9 @@ class RoleTabTests(unittest.TestCase):
         if operation == "role-tab-read":
             return {"terminal": {"handle": self.row["handle"], "tail": ["old output"],
                                  "limited": False, "truncated": False}}
+        if operation == "role-tab-idle":
+            return {"wait": {"handle": self.row["handle"], "condition": "tui-idle",
+                             "satisfied": True, "status": "running"}}
         if operation == "role-tab-close":
             self.rows = []
             return {"close": {"handle": self.row["handle"], "ptyKilled": True}}
@@ -160,6 +163,18 @@ class RoleTabTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "already attempted"):
             tabs.retire(self.call, Path("orca"), self.repo, owned)
         self.assertEqual(self.commands.count("role-tab-close"), 1)
+
+    def test_retire_settled_requires_idle_and_positive_pty_close(self):
+        self.rows = [self.row]
+        owned = tabs.identity(self.row, self.repo)
+        path = tabs.retire_settled(self.call, Path("orca"), self.repo, owned)
+        receipt = tabs.storage.read_private_json(path, {})
+        self.assertTrue(receipt["settled"])
+        self.assertEqual(receipt["output"]["tail"], ["old output"])
+        self.assertEqual(self.commands.count("role-tab-idle"), 1)
+        self.assertEqual(self.commands.count("role-tab-close"), 1)
+        with self.assertRaisesRegex(ValueError, "already attempted"):
+            tabs.retire_settled(self.call, Path("orca"), self.repo, owned)
 
     def test_shell_stopped_rejects_invalid_journal_identity(self):
         with self.assertRaisesRegex(ValueError, "incomplete"):

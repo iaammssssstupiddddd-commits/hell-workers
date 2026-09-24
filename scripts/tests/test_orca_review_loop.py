@@ -181,6 +181,53 @@ class ReviewLoopTests(unittest.TestCase):
                 cli.assert_not_called()
             self.assertEqual(observed["lanes"]["worker-a"]["phase"], "approved")
 
+    def test_finalization_closes_each_finished_role_tab_once_and_keeps_coordinator(self):
+        self.register()
+        data = self.finish()
+        self.assertEqual(data["phase"], "approved")
+        for attempt in data["attempts"].values():
+            attempt["repo"] = str(self.repo)
+            attempt["released"] = True
+            attempt["completion_acknowledged"] = True
+        loop.save(data)
+        identities = {}
+        for attempt in data["attempts"].values():
+            slot = "reviewer" if attempt["role"] == "reviewer" else attempt["slot"]
+            key = (str(self.repo), slot)
+            identities.setdefault(key, {
+                "handle": attempt["terminal"],
+                "incarnationId": "incarnation-" + slot,
+                "worktreeId": "repo::" + str(self.repo),
+            })
+        for (repo, slot), identity in identities.items():
+            loop.STORAGE.write_ledger(
+                dispatch.role_tabs.registry_path(fixtures.REQUEST, repo, slot),
+                {"phase": "known", "identity": identity},
+            )
+
+        retired = []
+
+        def inventory(_call, _cli, repo):
+            rows = [{"handle": identity["handle"]} for (path, _), identity in identities.items()
+                    if path == repo]
+            return rows, []
+
+        def retire(_call, _cli, repo, identity):
+            retired.append((repo, identity["handle"]))
+            return self.root / (identity["handle"] + ".json")
+
+        expected = loop.inspection_digest(data)
+        with (patch.object(dispatch, "checked_coordinator"),
+              patch.object(dispatch.role_tabs, "inventory", side_effect=inventory),
+              patch.object(dispatch.role_tabs, "retire_settled", side_effect=retire)):
+            finalized = loop.finalize_tabs(fixtures.REQUEST, fixtures.COORDINATOR, expected)
+            repeated = loop.finalize_tabs(fixtures.REQUEST, fixtures.COORDINATOR,
+                                          loop.inspection_digest(finalized))
+        self.assertEqual(finalized["ui_cleanup"]["phase"], "complete")
+        self.assertEqual(len(retired), len(identities))
+        self.assertNotIn(fixtures.COORDINATOR, {handle for _, handle in retired})
+        self.assertEqual(repeated, finalized)
+
     def test_failed_validation_retries_without_commit_and_keeps_same_session(self):
         self.spec["lanes"][0]["validation"]["argv"] = [sys.executable, "-c",
             "from pathlib import Path; raise SystemExit(0 if 'revision 1' in Path('src/content.txt').read_text() else 1)"]
@@ -231,6 +278,30 @@ class ReviewLoopTests(unittest.TestCase):
         self.assertEqual(self.starts, [])
         self.tick()
         self.assertEqual(len(self.starts), 1)
+
+    def test_transient_linear_runtime_failure_waits_without_pausing(self):
+        before = self.register()
+        history = list(before["lanes"]["worker-a"]["history"])
+        with patch.object(loop, "active_issue", side_effect=dispatch.intake.LinearRuntimeUnavailable(
+                "Orca Linear read failed (runtime_unavailable)")):
+            data = self.tick()
+        self.assertEqual(data["phase"], "active")
+        self.assertEqual(data["lanes"]["worker-a"]["phase"], "planned")
+        self.assertEqual(data["lanes"]["worker-a"]["history"], history)
+        self.assertEqual(self.starts, [])
+
+    def test_exact_legacy_linear_runtime_pause_resumes_pre_command_phase(self):
+        data = self.register()
+        loop.transition(data, "worker-a", "paused",
+                        reason="LinearIntakeError: Orca Linear read failed (runtime_unavailable)")
+        data.update(phase="paused", reason=None)
+        loop.save(data)
+        expected = loop.inspection_digest(loop.load(fixtures.REQUEST))
+        with patch.object(loop, "active_issue", return_value=True):
+            resumed = loop.resume_linear_runtime(fixtures.REQUEST, fixtures.COORDINATOR, expected)
+        self.assertEqual(resumed["phase"], "active")
+        self.assertEqual(resumed["lanes"]["worker-a"]["phase"], "planned")
+        self.assertIsNone(resumed["lanes"]["worker-a"]["reason"])
 
     def test_validation_busy_is_not_an_unknown_command(self):
         self.register()
@@ -443,7 +514,7 @@ class ReviewLoopTests(unittest.TestCase):
         with patch.object(loop, "is_production_path", return_value=True):
             data = self.tick()
         subject = loop.help_review_subject(data, "worker-a")
-        spec = {"loop_sha256": bindings.digest(data), "subject": "worker-a", "decision": "none",
+        spec = {"loop_sha256": loop.inspection_digest(data), "subject": "worker-a", "decision": "none",
                 "reason": "Internal typed asset residency only; no player-visible input, label, or workflow changed.",
                 "source_sha256": subject["source_sha256"], "paths": subject["paths"]}
         with patch.object(loop, "is_production_path", return_value=True):
@@ -461,6 +532,49 @@ class ReviewLoopTests(unittest.TestCase):
         self.assertEqual(progressed["lanes"]["worker-a"]["phase"], "checkpointing")
         self.assertEqual(validate.call_args.args[-2:], (spec["reason"], "none"))
 
+    def test_late_coordinator_pause_reuses_completed_validation_recovery(self):
+        data = self.register()
+        source = roles.fingerprint(self.repo)
+        evidence_id = "e" * 64
+        replacement = ["git", "diff", "--check", self.ticket["base"]]
+        reason = "The unchanged source uses the explicitly narrowed validation command."
+        recovery_dir = loop.STORAGE.checked_directory(loop.root() / "validation-resumes")
+        recovery_path = recovery_dir / "late-pause.json"
+        loop.STORAGE.write_ledger(recovery_path, {
+            "schema": 1, "request_id": fixtures.REQUEST, "run_id": "run_fixture",
+            "subject": "worker-a", "evidence": evidence_id, "source_sha256": source,
+            "failed_settlement": "fixture", "reason": reason, "replacement_argv": replacement,
+        })
+        lane = data["lanes"]["worker-a"]
+        lane.update(phase="validating", evidence={"id": evidence_id, "source_sha256": source},
+                    validation_recovery=str(recovery_path))
+        lane["validation"]["argv"] = replacement
+        data["run"] = {"phase": "ready", "context": {"id": "run_fixture", "consumer_generation": 1}}
+        data.update(phase="paused", reason="coordinator escalation decision: late response")
+        loop.save(data)
+        inspected = loop.load(fixtures.REQUEST)
+        spec = {"loop_sha256": loop.inspection_digest(inspected), "subject": "worker-a",
+                "validation_evidence": evidence_id, "source_sha256": source,
+                "reason": reason, "replacement_argv": replacement}
+        with patch.object(dispatch.ui_coordinator, "read_registered_state", return_value={
+                "terminal": fixtures.COORDINATOR, "phase": "ready"}):
+            resumed = loop.resume_coordinator_validation(fixtures.REQUEST, fixtures.COORDINATOR, spec)
+        self.assertEqual(resumed["phase"], "active")
+        self.assertIsNone(resumed["reason"])
+        self.assertEqual(resumed["lanes"]["worker-a"]["phase"], "validating")
+        resumed["lanes"]["worker-a"].update(
+            phase="paused", reason="ValueError: checkpoint requires exact successful worker exit"
+        )
+        resumed.update(phase="paused", reason=None)
+        loop.save(resumed)
+        inspected = loop.load(fixtures.REQUEST)
+        spec["loop_sha256"] = loop.inspection_digest(inspected)
+        with patch.object(dispatch.ui_coordinator, "read_registered_state", return_value={
+                "terminal": fixtures.COORDINATOR, "phase": "ready"}):
+            retried = loop.resume_coordinator_validation(fixtures.REQUEST, fixtures.COORDINATOR, spec)
+        self.assertEqual(retried["phase"], "active")
+        self.assertEqual(retried["lanes"]["worker-a"]["phase"], "validating")
+
     def test_help_review_refuses_old_loop_and_invalidates_changed_source(self):
         self.register()
         for _ in range(4):
@@ -473,7 +587,7 @@ class ReviewLoopTests(unittest.TestCase):
                 "source_sha256": subject["source_sha256"], "paths": subject["paths"]}
         with self.assertRaisesRegex(ValueError, "exact inspected"):
             loop.submit_help_review(fixtures.REQUEST, fixtures.COORDINATOR, spec)
-        spec["loop_sha256"] = bindings.digest(data)
+        spec["loop_sha256"] = loop.inspection_digest(data)
         with patch.object(loop, "is_production_path", return_value=True):
             loop.submit_help_review(fixtures.REQUEST, fixtures.COORDINATOR, spec)
         (self.repo / "src/content.txt").write_text("changed after Help review")
@@ -491,9 +605,21 @@ class ReviewLoopTests(unittest.TestCase):
         with patch.object(loop, "is_production_path", return_value=True):
             data = self.tick()
         observed = loop.inspection(data)
-        self.assertEqual(observed["loop_sha256"], bindings.digest(data))
+        self.assertEqual(observed["loop_sha256"], loop.inspection_digest(data))
         self.assertEqual(observed["loop"], data)
         self.assertEqual(observed["pending_help_reviews"], [loop.help_review_subject(data, "worker-a")])
+
+    def test_help_review_inspection_ignores_activity_clock_only(self):
+        self.register()
+        for _ in range(4):
+            self.tick()
+        with patch.object(loop, "is_production_path", return_value=True):
+            data = self.tick()
+        observed = loop.inspection(data)
+        data["updated_at_ms"] += 1
+        self.assertEqual(loop.inspection(data)["loop_sha256"], observed["loop_sha256"])
+        data["reason"] = "different semantic state"
+        self.assertNotEqual(loop.inspection(data)["loop_sha256"], observed["loop_sha256"])
 
     def test_corrupt_ledger_is_preserved(self):
         self.register()

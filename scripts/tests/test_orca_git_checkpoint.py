@@ -103,6 +103,43 @@ class CheckpointTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "validation modified"):
             self.validate([sys.executable, "-c", "from pathlib import Path; Path('src/content.txt').write_text('bad')"])
 
+    def test_validation_exports_reviewed_no_impact_reason(self):
+        reason = "Fixture only; no player behavior changes"
+        evidence = checkpoints.validate(
+            self.ticket,
+            "worker-a",
+            [sys.executable, "-c", "import os; assert os.environ['HELL_WORKERS_HELP_IMPACT_REASON'] == " + repr(reason)],
+            reason,
+        )
+        self.assertEqual(evidence["exit_code"], 0)
+
+    def test_checkpoint_accepts_only_sealed_same_source_validation_recovery(self):
+        source = roles.fingerprint(self.repo)
+        recovery_dir = state.storage.checked_directory(
+            state.state_path("worker-a").parent / "loops" / "validation-resumes"
+        )
+        recovery_path = recovery_dir / "fixture-recovery.json"
+        state.storage.write_ledger(recovery_path, {
+            "schema": 1, "request_id": str(uuid.uuid4()), "run_id": "run_fixture",
+            "subject": "worker-a", "evidence": "e" * 64, "source_sha256": source,
+            "failed_settlement": "fixture", "reason": "fixture recovery",
+        })
+        self.data["last"].update(
+            exit_code=1,
+            coordinator_validation_recovery=str(recovery_path),
+            settlement_exit={"outcome": "failed", "source_sha256": "0" * 64},
+        )
+        state.save_state(self.data)
+        with (patch.object(roles, "require_completed_bridge"),
+              self.assertRaisesRegex(ValueError, "exact successful worker exit")):
+            self.validate()
+        self.data["last"]["settlement_exit"]["source_sha256"] = source
+        state.save_state(self.data)
+        with patch.object(roles, "require_completed_bridge"):
+            evidence = self.validate()
+            result = checkpoints.checkpoint(self.ticket, "worker-a", evidence["id"])
+        self.assertEqual(result["phase"], "committed")
+
     def test_recovery_preserves_unknown_index_and_external_source(self):
         evidence = self.validate()
         with patch.object(checkpoints, "finish", side_effect=OSError("crash")), self.assertRaises(OSError):
