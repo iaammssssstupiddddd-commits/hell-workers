@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import tempfile
 import unittest
+from contextlib import contextmanager
 from pathlib import Path
 from unittest.mock import patch
 
@@ -11,6 +12,13 @@ from scripts import orca_external_sync as sync
 
 REQUEST = "4252a97e-396b-4779-8ed8-a032f6f0dcda"
 SENT = {"exitCode": 0, "errorCode": None, "definitive": False}
+STATES = [
+    {"name": "Todo", "type": "unstarted", "position": 1},
+    {"name": "In Progress", "type": "started", "position": 2},
+    {"name": "Done", "type": "completed", "position": 3},
+    {"name": "Canceled", "type": "canceled", "position": 4},
+    {"name": "In Review", "type": "started", "position": 1002},
+]
 
 
 class ExternalSyncTests(unittest.TestCase):
@@ -35,6 +43,7 @@ class ExternalSyncTests(unittest.TestCase):
         second = sync.queue_linear_status(self.root, REQUEST, "TAK-14", "review", "レビュー待ち")
         self.assertEqual((first["sequence"], second["sequence"]), (1, 2))
         self.assertEqual(first["payload"]["targetState"], "In Progress")
+        self.assertEqual(first["payload"]["targetType"], "started")
         with self.assertRaisesRegex(ValueError, "stale"):
             sync.queue_linear_status(self.root, REQUEST, "TAK-14", "started", "巻き戻し")
 
@@ -177,7 +186,8 @@ class ExternalSyncTests(unittest.TestCase):
     def test_linear_preflight_blocks_review_to_started_regression(self) -> None:
         operation = sync.queue_linear_status(self.root, REQUEST, "TAK-99", "started", "着手")
         issue = {"issue": {"state": {"name": "In Review", "type": "started"}}}
-        with patch.object(sync, "_linear_issue", return_value=issue):
+        with patch.object(sync, "_linear_issue", return_value=issue), \
+                patch.object(sync, "_linear_states", return_value=STATES):
             allowed, reason = sync._preflight(operation, self.cli, self.repo)
         self.assertFalse(allowed)
         self.assertEqual(reason, "linear_state_would_regress")
@@ -185,7 +195,8 @@ class ExternalSyncTests(unittest.TestCase):
     def test_linear_preflight_blocks_terminal_state_changes(self) -> None:
         operation = sync.queue_linear_status(self.root, REQUEST, "TAK-99", "review", "review")
         issue = {"issue": {"state": {"name": "Done", "type": "completed"}}}
-        with patch.object(sync, "_linear_issue", return_value=issue):
+        with patch.object(sync, "_linear_issue", return_value=issue), \
+                patch.object(sync, "_linear_states", return_value=STATES):
             allowed, reason = sync._preflight(operation, self.cli, self.repo)
         self.assertFalse(allowed)
         self.assertEqual(reason, "linear_state_would_regress")
@@ -193,10 +204,59 @@ class ExternalSyncTests(unittest.TestCase):
     def test_linear_preflight_blocks_unordered_custom_started_state(self) -> None:
         operation = sync.queue_linear_status(self.root, REQUEST, "TAK-99", "review", "review")
         issue = {"issue": {"state": {"name": "Ready to Deploy", "type": "started"}}}
-        with patch.object(sync, "_linear_issue", return_value=issue):
+        with patch.object(sync, "_linear_issue", return_value=issue), \
+                patch.object(sync, "_linear_states", return_value=STATES):
             allowed, reason = sync._preflight(operation, self.cli, self.repo)
         self.assertFalse(allowed)
         self.assertEqual(reason, "linear_state_order_unproven")
+
+    def test_linear_preflight_rejects_valid_target_name_with_wrong_type(self) -> None:
+        operation = sync.queue_linear_status(
+            self.root, REQUEST, "TAK-99", "review", "review", target_state="Todo",
+        )
+        issue = {"issue": {"state": {"name": "In Progress", "type": "started"}}}
+        with patch.object(sync, "_linear_issue", return_value=issue), \
+                patch.object(sync, "_linear_states", return_value=STATES):
+            allowed, reason = sync._preflight(operation, self.cli, self.repo)
+        self.assertFalse(allowed)
+        self.assertEqual(reason, "linear_target_type_mismatch")
+
+    def test_linear_read_back_requires_target_name_and_type(self) -> None:
+        operation = sync.queue_linear_status(
+            self.root, REQUEST, "TAK-99", "review", "review", target_state="Todo",
+        )
+        issue = {"issue": {"identifier": "TAK-99", "url": "https://example/TAK-99",
+                           "state": {"name": "Todo", "type": "unstarted"}}}
+        with patch.object(sync, "_linear_issue", return_value=issue):
+            self.assertIsNone(sync._read_back(operation, self.cli, self.repo))
+
+    def test_linear_status_check_and_append_share_one_lease(self) -> None:
+        held = False
+        original_read, original_save = sync.read, sync.save
+
+        @contextmanager
+        def lease(*_args, **_kwargs):
+            nonlocal held
+            self.assertFalse(held)
+            held = True
+            try:
+                yield
+            finally:
+                held = False
+
+        def guarded_read(*args, **kwargs):
+            self.assertTrue(held)
+            return original_read(*args, **kwargs)
+
+        def guarded_save(*args, **kwargs):
+            self.assertTrue(held)
+            return original_save(*args, **kwargs)
+
+        with patch.object(sync, "acquire_host", side_effect=lease), \
+                patch.object(sync, "read", side_effect=guarded_read), \
+                patch.object(sync, "save", side_effect=guarded_save):
+            sync.queue_linear_status(self.root, REQUEST, "TAK-99", "started", "start")
+        self.assertFalse(held)
 
     def test_github_preflight_requires_exact_remote_base_and_head(self) -> None:
         operation = sync.queue_github_draft(

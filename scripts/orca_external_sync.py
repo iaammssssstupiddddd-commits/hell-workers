@@ -29,6 +29,10 @@ LINEAR_TARGETS = {
     "started": "In Progress", "review": "In Review",
     "completed": "Done", "stopped": "Canceled",
 }
+LINEAR_TARGET_TYPES = {
+    "started": "started", "review": "started",
+    "completed": "completed", "stopped": "canceled",
+}
 SHA = re.compile(r"[0-9a-f]{40}")
 
 
@@ -97,23 +101,32 @@ def save(state_dir: Path, data: dict) -> None:
     storage.write_ledger(path(state_dir, data["requestId"]), data)
 
 
-def enqueue(state_dir: Path, request_id: str, kind: str, payload: dict,
-            *, authorized: bool = True) -> dict:
+def _enqueue_data(data: dict, request_id: str, kind: str, payload: dict,
+                  *, authorized: bool) -> tuple[dict, bool]:
     if kind not in {"linear_status", "linear_comment", "github_draft_pr"}:
         raise ValueError("unsupported external sync kind")
     digest = payload_digest(payload)
     operation_id = str(uuid.uuid5(NAMESPACE, f"{request_id}\n{kind}\n{digest}"))
+    matches = [item for item in data["operations"] if item["id"] == operation_id]
+    if matches:
+        return matches[0], False
+    operation = {"id": operation_id, "sequence": data["sequence"] + 1, "kind": kind,
+                 "payload": payload, "payloadSha256": digest,
+                 "phase": "queued" if authorized else "blocked_authority", "result": None}
+    data["operations"].append(operation)
+    data["sequence"] += 1
+    return operation, True
+
+
+def enqueue(state_dir: Path, request_id: str, kind: str, payload: dict,
+            *, authorized: bool = True) -> dict:
     with acquire_host("external-sync", inherit=False):
         data = read(state_dir, request_id)
-        matches = [item for item in data["operations"] if item["id"] == operation_id]
-        if matches:
-            return matches[0]
-        operation = {"id": operation_id, "sequence": data["sequence"] + 1, "kind": kind,
-                     "payload": payload, "payloadSha256": digest,
-                     "phase": "queued" if authorized else "blocked_authority", "result": None}
-        data["operations"].append(operation)
-        data["sequence"] += 1
-        save(state_dir, data)
+        operation, changed = _enqueue_data(
+            data, request_id, kind, payload, authorized=authorized,
+        )
+        if changed:
+            save(state_dir, data)
         return operation
 
 
@@ -125,23 +138,28 @@ def queue_linear_status(state_dir: Path, request_id: str, issue: str, stage: str
     if not isinstance(target, str) or not target.strip():
         raise ValueError("Linear sync requires an exact target state")
     payload = {"issue": issue, "stage": stage, "summary": summary,
-               "targetState": target.strip()}
-    current = read(state_dir, request_id)
-    operation_id = str(uuid.uuid5(
-        NAMESPACE, f"{request_id}\nlinear_status\n{payload_digest(payload)}",
-    ))
-    exact = [item for item in current["operations"] if item["id"] == operation_id]
-    if exact:
-        return exact[0]
-    unresolved = [item for item in current["operations"]
-                  if item["kind"] == "linear_status" and item["phase"] == "unknown"]
-    if unresolved:
-        raise ValueError("unknown Linear status must be reconciled before a new status")
-    prior = [item for item in current["operations"] if item["kind"] == "linear_status"
-             and item["phase"] != "unknown"]
-    if prior and LINEAR_STAGES[prior[-1]["payload"]["stage"]] > LINEAR_STAGES[stage]:
-        raise ValueError("stale Linear status cannot overwrite a newer case stage")
-    return enqueue(state_dir, request_id, "linear_status", payload)
+               "targetState": target.strip(), "targetType": LINEAR_TARGET_TYPES[stage]}
+    with acquire_host("external-sync", inherit=False):
+        current = read(state_dir, request_id)
+        operation_id = str(uuid.uuid5(
+            NAMESPACE, f"{request_id}\nlinear_status\n{payload_digest(payload)}",
+        ))
+        exact = [item for item in current["operations"] if item["id"] == operation_id]
+        if exact:
+            return exact[0]
+        unresolved = [item for item in current["operations"]
+                      if item["kind"] == "linear_status" and item["phase"] == "unknown"]
+        if unresolved:
+            raise ValueError("unknown Linear status must be reconciled before a new status")
+        prior = [item for item in current["operations"] if item["kind"] == "linear_status"
+                 and item["phase"] != "unknown"]
+        if prior and LINEAR_STAGES[prior[-1]["payload"]["stage"]] > LINEAR_STAGES[stage]:
+            raise ValueError("stale Linear status cannot overwrite a newer case stage")
+        operation, _ = _enqueue_data(
+            current, request_id, "linear_status", payload, authorized=True,
+        )
+        save(state_dir, current)
+        return operation
 
 
 def queue_linear_comment(state_dir: Path, request_id: str, issue: str, body: str) -> dict:
@@ -360,9 +378,14 @@ def _read_back(operation: dict, orca_cli: Path, repo: Path) -> dict | None:
         result = _linear_issue(orca_cli, payload.get("issue", ""))
         issue = result.get("issue") if result else None
         state = issue.get("state") if isinstance(issue, dict) else None
-        if isinstance(state, dict) and state.get("name") == payload.get("targetState"):
+        expected_type = payload.get("targetType") or LINEAR_TARGET_TYPES.get(
+            payload.get("stage"),
+        )
+        if (isinstance(state, dict) and state.get("name") == payload.get("targetState")
+                and state.get("type") == expected_type):
             return {"provider": "linear", "issue": issue.get("identifier"),
-                    "state": state["name"], "url": issue.get("url")}
+                    "state": state["name"], "stateType": state["type"],
+                    "url": issue.get("url")}
         return None
     if operation["kind"] == "linear_comment":
         result = _linear_issue(orca_cli, payload.get("issue", ""))
@@ -393,6 +416,27 @@ def _github_ref(repository: str, branch: str, repo: Path) -> str | None:
     return sha if isinstance(sha, str) and SHA.fullmatch(sha) else None
 
 
+def _linear_states(orca_cli: Path, issue_result: dict) -> list[dict] | None:
+    issue = issue_result.get("issue")
+    meta = issue_result.get("meta")
+    team = issue.get("team") if isinstance(issue, dict) else None
+    resolved = meta.get("resolved") if isinstance(meta, dict) else None
+    team_key = team.get("key") if isinstance(team, dict) else None
+    workspace = resolved.get("workspaceId") if isinstance(resolved, dict) else None
+    if not isinstance(team_key, str) or not isinstance(workspace, str):
+        return None
+    code, response = _run([
+        str(orca_cli), "linear", "team", "states", "--team", team_key,
+        "--workspace", workspace, "--json",
+    ])
+    if code or not isinstance(response, dict) or response.get("ok") is not True:
+        return None
+    result = response.get("result")
+    states = result.get("states") if isinstance(result, dict) else None
+    return states if isinstance(states, list) and all(isinstance(item, dict) for item in states) \
+        else None
+
+
 def _preflight(operation: dict, orca_cli: Path, repo: Path) -> tuple[bool | None, str | None]:
     payload = operation["payload"]
     if operation["kind"] in {"linear_status", "linear_comment"}:
@@ -405,8 +449,28 @@ def _preflight(operation: dict, orca_cli: Path, repo: Path) -> tuple[bool | None
         state = issue.get("state")
         if not isinstance(state, dict):
             return None, "linear_state_unavailable"
-        if state.get("name") == payload.get("targetState"):
+        expected_type = payload.get("targetType") or LINEAR_TARGET_TYPES.get(
+            payload.get("stage"),
+        )
+        if (state.get("name") == payload.get("targetState")
+                and state.get("type") == expected_type):
             return True, None
+        states = _linear_states(orca_cli, result)
+        if states is None:
+            return None, "linear_team_states_unavailable"
+        targets = [item for item in states if item.get("name") == payload.get("targetState")]
+        if len(targets) != 1:
+            return False, "linear_target_state_not_unique"
+        target = targets[0]
+        if target.get("type") != expected_type:
+            return False, "linear_target_type_mismatch"
+        started = [item for item in states if item.get("type") == "started"
+                   and isinstance(item.get("position"), (int, float))]
+        if payload.get("stage") == "started":
+            if not started or target.get("position") != min(item["position"] for item in started):
+                return False, "linear_started_target_order_unproven"
+        if payload.get("stage") == "review" and "review" not in target.get("name", "").lower():
+            return False, "linear_review_target_unproven"
         state_type = state.get("type")
         stage = payload.get("stage")
         early = {"triage", "backlog", "unstarted"}
