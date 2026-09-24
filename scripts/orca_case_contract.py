@@ -12,7 +12,7 @@ STATES = {"queued", "ready", "working", "review", "feedback", "paused", "closing
 STAGES = {"intake", "planning", "implementation", "validation", "review", "integration",
           "external_sync", "feedback", "cleanup", "complete", "attention"}
 SYNC_STATES = {"not_required", "pending", "syncing", "synced", "offline",
-               "blocked_authority", "unknown"}
+               "blocked_authority", "blocked_policy", "unknown"}
 DISPOSITIONS = {"none", "continue_existing", "create_child", "create_standalone"}
 
 

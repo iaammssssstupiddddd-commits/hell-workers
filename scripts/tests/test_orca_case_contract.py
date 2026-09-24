@@ -41,6 +41,13 @@ class CaseContractTests(unittest.TestCase):
         self.assertEqual(result["intakeDecision"]["issueIdentifier"], "TAK-14")
         self.assertEqual(result["externalSync"]["state"], "offline")
 
+    def test_policy_block_is_a_visible_external_sync_state(self) -> None:
+        result = contract.sync_view({
+            "state": "blocked_policy",
+            "detail": "External state is ahead or the reviewed SHA changed",
+        })
+        self.assertEqual(result["state"], "blocked_policy")
+
 
 if __name__ == "__main__":
     unittest.main()

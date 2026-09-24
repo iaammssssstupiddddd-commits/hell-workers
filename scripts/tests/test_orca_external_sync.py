@@ -10,6 +10,7 @@ from scripts import orca_external_sync as sync
 
 
 REQUEST = "4252a97e-396b-4779-8ed8-a032f6f0dcda"
+SENT = {"exitCode": 0, "errorCode": None, "definitive": False}
 
 
 class ExternalSyncTests(unittest.TestCase):
@@ -70,7 +71,7 @@ class ExternalSyncTests(unittest.TestCase):
         verified = {"provider": "linear", "issue": "TAK-99", "commentId": "comment-1"}
         with patch.object(sync, "_read_back", side_effect=[None, verified]) as read_back, \
                 patch.object(sync, "_preflight", return_value=(True, None)), \
-                patch.object(sync, "_send", return_value=0) as send:
+                patch.object(sync, "_send", return_value=SENT) as send:
             result = sync.execute_next(
                 self.root, REQUEST, orca_cli=self.cli, repo=self.repo,
             )
@@ -117,7 +118,7 @@ class ExternalSyncTests(unittest.TestCase):
         verified = {"provider": "linear", "issue": "TAK-99", "commentId": "comment-1"}
         with patch.object(sync, "_read_back", side_effect=[None, verified]), \
                 patch.object(sync, "_preflight", return_value=(True, None)), \
-                patch.object(sync, "_send", return_value=0):
+                patch.object(sync, "_send", return_value=SENT):
             result = sync.execute_next(
                 self.root, REQUEST, orca_cli=self.cli, repo=self.repo,
             )
@@ -137,7 +138,7 @@ class ExternalSyncTests(unittest.TestCase):
     def test_linear_comment_uses_marker_not_a_fresh_provider_retry_id(self) -> None:
         operation = sync.queue_linear_comment(self.root, REQUEST, "TAK-99", "body")
         with patch.object(sync, "_run", return_value=(0, {"ok": True})) as run:
-            self.assertEqual(sync._send(operation, self.cli, self.repo), 0)
+            self.assertEqual(sync._send(operation, self.cli, self.repo), SENT)
         command = run.call_args.args[0]
         self.assertNotIn("--write-id", command)
         self.assertIn(f"<!-- orca-op:{operation['id']} -->", run.call_args.kwargs["stdin"])
@@ -156,7 +157,7 @@ class ExternalSyncTests(unittest.TestCase):
         verified = {"provider": "github", "number": 42, "url": "https://example/pr/42"}
         with patch.object(sync, "_read_back", side_effect=[None, verified]), \
                 patch.object(sync, "_preflight", return_value=(True, None)), \
-                patch.object(sync, "_send", return_value=0):
+                patch.object(sync, "_send", return_value=SENT):
             result = sync.execute_next(
                 self.root, REQUEST, orca_cli=self.cli, repo=self.repo,
             )
@@ -189,6 +190,14 @@ class ExternalSyncTests(unittest.TestCase):
         self.assertFalse(allowed)
         self.assertEqual(reason, "linear_state_would_regress")
 
+    def test_linear_preflight_blocks_unordered_custom_started_state(self) -> None:
+        operation = sync.queue_linear_status(self.root, REQUEST, "TAK-99", "review", "review")
+        issue = {"issue": {"state": {"name": "Ready to Deploy", "type": "started"}}}
+        with patch.object(sync, "_linear_issue", return_value=issue):
+            allowed, reason = sync._preflight(operation, self.cli, self.repo)
+        self.assertFalse(allowed)
+        self.assertEqual(reason, "linear_state_order_unproven")
+
     def test_github_preflight_requires_exact_remote_base_and_head(self) -> None:
         operation = sync.queue_github_draft(
             self.root, REQUEST, branch="candidate", base="a" * 40,
@@ -213,6 +222,38 @@ class ExternalSyncTests(unittest.TestCase):
         self.assertEqual(result["state"], "blocked_policy")
         self.assertEqual(result["operation"]["id"], operation["id"])
         send.assert_not_called()
+
+    def test_definitive_linear_rejection_is_policy_block_not_unknown(self) -> None:
+        sync.queue_linear_status(self.root, REQUEST, "TAK-99", "started", "着手")
+        rejected = {"exitCode": 1, "errorCode": "linear_invalid_state", "definitive": True}
+        with patch.object(sync, "_read_back", side_effect=[None, None]), \
+                patch.object(sync, "_preflight", return_value=(True, None)), \
+                patch.object(sync, "_send", return_value=rejected):
+            result = sync.execute_next(
+                self.root, REQUEST, orca_cli=self.cli, repo=self.repo,
+            )
+        self.assertEqual(result["state"], "blocked_policy")
+        self.assertEqual(result["operation"]["result"]["errorCode"], "linear_invalid_state")
+
+    def test_unknown_github_write_preserves_publication_receipt(self) -> None:
+        operation = sync.queue_github_draft(
+            self.root, REQUEST, branch="candidate", base="a" * 40,
+            head="b" * 40, tested_sha="b" * 40, review_sha="b" * 40,
+            publication_authorized=False, repository="owner/repo", base_branch="base",
+            title="trial", body="body",
+        )
+        sync.authorize_publication(
+            self.root, REQUEST, operation["id"], "user-thread-2026-09-22",
+        )
+        with patch.object(sync, "_read_back", side_effect=[None, None]), \
+                patch.object(sync, "_preflight", return_value=(True, None)), \
+                patch.object(sync, "_send", return_value=SENT):
+            result = sync.execute_next(
+                self.root, REQUEST, orca_cli=self.cli, repo=self.repo,
+            )
+        self.assertEqual(result["state"], "unknown")
+        self.assertEqual(result["operation"]["result"]["authorityReceipt"],
+                         "user-thread-2026-09-22")
 
 
 if __name__ == "__main__":

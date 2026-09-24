@@ -194,7 +194,7 @@ def transition(state_dir: Path, request_id: str, operation_id: str, phase: str,
             raise ValueError("external operation is not unique")
         operation = matches[0]
         allowed = {"queued": {"sending", "blocked_policy"},
-                   "sending": {"confirmed", "unknown"},
+                   "sending": {"confirmed", "unknown", "blocked_policy"},
                    "confirmed": {"confirmed"}, "unknown": {"confirmed", "unknown"},
                    "blocked_authority": set(), "blocked_policy": set()}
         if phase not in allowed[operation["phase"]]:
@@ -353,19 +353,6 @@ def _github_ref(repository: str, branch: str, repo: Path) -> str | None:
     return sha if isinstance(sha, str) and SHA.fullmatch(sha) else None
 
 
-def _linear_rank(state: dict) -> int | None:
-    state_type, name = state.get("type"), state.get("name")
-    if state_type in {"triage", "backlog", "unstarted"}:
-        return 0
-    if state_type == "started":
-        return 2 if isinstance(name, str) and "review" in name.lower() else 1
-    if state_type == "completed":
-        return 3
-    if state_type == "canceled":
-        return 4
-    return None
-
-
 def _preflight(operation: dict, orca_cli: Path, repo: Path) -> tuple[bool | None, str | None]:
     payload = operation["payload"]
     if operation["kind"] in {"linear_status", "linear_comment"}:
@@ -380,12 +367,20 @@ def _preflight(operation: dict, orca_cli: Path, repo: Path) -> tuple[bool | None
             return None, "linear_state_unavailable"
         if state.get("name") == payload.get("targetState"):
             return True, None
-        current_rank = _linear_rank(state)
-        target_rank = LINEAR_STAGES.get(payload.get("stage"))
-        if current_rank is None or target_rank is None:
+        state_type = state.get("type")
+        stage = payload.get("stage")
+        early = {"triage", "backlog", "unstarted"}
+        if state_type not in early | {"started", "completed", "canceled"}:
             return None, "linear_state_unclassified"
-        if state.get("type") in {"completed", "canceled"} or current_rank > target_rank:
+        if state_type in {"completed", "canceled"}:
             return False, "linear_state_would_regress"
+        if stage == "started" and state_type not in early:
+            return False, "linear_state_would_regress"
+        if (stage == "review" and state_type == "started"
+                and state.get("name") != LINEAR_TARGETS["started"]):
+            return False, "linear_state_order_unproven"
+        if stage not in LINEAR_STAGES:
+            return None, "linear_target_unclassified"
         return True, None
     if operation["kind"] == "github_draft_pr":
         required = ("repository", "baseBranch", "branch", "base", "head")
@@ -403,43 +398,58 @@ def _preflight(operation: dict, orca_cli: Path, repo: Path) -> tuple[bool | None
     return False, "unsupported_external_sync_kind"
 
 
-def _send(operation: dict, orca_cli: Path, repo: Path) -> int:
+def _linear_send_result(code: int, response: object | None) -> dict:
+    error = response.get("error") if isinstance(response, dict) else None
+    error_code = error.get("code") if isinstance(error, dict) else None
+    definitive = bool(code and isinstance(error_code, str)
+                      and error_code != "linear_write_unconfirmed")
+    return {"exitCode": code, "errorCode": error_code, "definitive": definitive}
+
+
+def _send(operation: dict, orca_cli: Path, repo: Path) -> dict:
     payload = operation["payload"]
     if operation["kind"] == "linear_status":
         required = (payload.get("issue"), payload.get("targetState"))
         if not all(isinstance(value, str) and value for value in required):
-            return 2
-        code, _ = _run([str(orca_cli), "linear", "status", "set", payload["issue"],
-                        "--to", payload["targetState"], "--json"])
-        return code
+            return {"exitCode": 2, "errorCode": "invalid_operation", "definitive": True}
+        code, response = _run([str(orca_cli), "linear", "status", "set", payload["issue"],
+                               "--to", payload["targetState"], "--json"])
+        return _linear_send_result(code, response)
     if operation["kind"] == "linear_comment":
         issue, body = payload.get("issue"), payload.get("body")
         if not isinstance(issue, str) or not issue or not isinstance(body, str) or not body:
-            return 2
+            return {"exitCode": 2, "errorCode": "invalid_operation", "definitive": True}
         marked = f"{body}\n\n<!-- orca-op:{operation['id']} -->\n"
         # Orca's --write-id is a provider-issued retry token, not a caller
         # idempotency key. The durable operation marker plus the sending phase
         # prevents a second initial submission and makes crash read-back exact.
-        code, _ = _run([str(orca_cli), "linear", "comment", "add", issue,
-                        "--body-file", "-", "--json"], stdin=marked)
-        return code
+        code, response = _run([str(orca_cli), "linear", "comment", "add", issue,
+                               "--body-file", "-", "--json"], stdin=marked)
+        return _linear_send_result(code, response)
     if operation["kind"] == "github_draft_pr":
         required = ("repository", "baseBranch", "branch", "title", "body")
         if not all(isinstance(payload.get(key), str) and payload[key] for key in required):
-            return 2
+            return {"exitCode": 2, "errorCode": "invalid_operation", "definitive": True}
         authority = payload.get("authorityReceipt")
         if not authority and isinstance(operation.get("result"), dict):
             authority = operation["result"].get("authorityReceipt")
         if not isinstance(authority, str) or not authority:
-            return 2
+            return {"exitCode": 2, "errorCode": "authority_missing", "definitive": True}
         marked = f"{payload['body'].rstrip()}\n\n<!-- orca-op:{operation['id']} -->\n"
         code, _ = _run([
             "gh", "pr", "create", "--repo", payload["repository"], "--draft",
             "--base", payload["baseBranch"], "--head", payload["branch"],
             "--title", payload["title"], "--body-file", "-",
         ], stdin=marked, cwd=repo)
-        return code
-    return 2
+        return {"exitCode": code, "errorCode": None, "definitive": False}
+    return {"exitCode": 2, "errorCode": "unsupported_operation", "definitive": True}
+
+
+def _with_authority(operation: dict, result: dict) -> dict:
+    authority = operation["payload"].get("authorityReceipt")
+    if not authority and isinstance(operation.get("result"), dict):
+        authority = operation["result"].get("authorityReceipt")
+    return {**result, **({"authorityReceipt": authority} if authority else {})}
 
 
 def execute_next(state_dir: Path, request_id: str, *, orca_cli: Path,
@@ -461,16 +471,13 @@ def execute_next(state_dir: Path, request_id: str, *, orca_cli: Path,
     if verified:
         if operation["phase"] == "queued":
             operation = transition(state_dir, request_id, operation["id"], "sending")
-        authority = operation.get("result", {}).get("authorityReceipt") \
-            if isinstance(operation.get("result"), dict) else None
-        if authority:
-            verified["authorityReceipt"] = authority
-        operation = transition(state_dir, request_id, operation["id"], "confirmed", verified)
+        operation = transition(state_dir, request_id, operation["id"], "confirmed",
+                               _with_authority(operation, verified))
         return {"state": "confirmed", "operation": operation}
     if operation["phase"] in {"sending", "unknown"}:
         if operation["phase"] == "sending":
             operation = transition(state_dir, request_id, operation["id"], "unknown",
-                                   {"readBack": "not_confirmed"})
+                                   _with_authority(operation, {"readBack": "not_confirmed"}))
         return {"state": "unknown", "operation": operation}
     allowed, reason = _preflight(operation, orca_cli, repo)
     if allowed is None:
@@ -480,17 +487,26 @@ def execute_next(state_dir: Path, request_id: str, *, orca_cli: Path,
                                {"reason": reason})
         return {"state": "blocked_policy", "operation": operation}
     operation = transition(state_dir, request_id, operation["id"], "sending")
-    code = _send(operation, orca_cli, repo)
+    sent = _send(operation, orca_cli, repo)
     verified = _read_back(operation, orca_cli, repo)
     if verified:
-        authority = operation.get("result", {}).get("authorityReceipt") \
-            if isinstance(operation.get("result"), dict) else None
-        if authority:
-            verified["authorityReceipt"] = authority
-        operation = transition(state_dir, request_id, operation["id"], "confirmed", verified)
+        operation = transition(state_dir, request_id, operation["id"], "confirmed",
+                               _with_authority(operation, verified))
         return {"state": "confirmed", "operation": operation}
+    if sent["definitive"]:
+        operation = transition(
+            state_dir, request_id, operation["id"], "blocked_policy",
+            _with_authority(operation, {
+                "reason": "provider_rejected", "exitCode": sent["exitCode"],
+                "errorCode": sent["errorCode"],
+            }),
+        )
+        return {"state": "blocked_policy", "operation": operation}
     operation = transition(state_dir, request_id, operation["id"], "unknown",
-                           {"readBack": "not_confirmed", "exitCode": code})
+                           _with_authority(operation, {
+                               "readBack": "not_confirmed", "exitCode": sent["exitCode"],
+                               "errorCode": sent["errorCode"],
+                           }))
     return {"state": "unknown", "operation": operation}
 
 
