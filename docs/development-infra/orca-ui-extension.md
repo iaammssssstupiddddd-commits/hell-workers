@@ -1,14 +1,50 @@
 # Orca本体の受付・役割UI拡張（開発中）
 
-2026-09-23。これは隔離した開発ビルドの仕様であり、稼働版への配備・運用開始の案内ではない。
+2026-09-24。ユーザー許可のもと拡張ビルドへ一時切替し、実画面からの受入を進めている。
 全体の完了条件は[UIライフサイクル計画](../plans/orca-ui-lifecycle-plan-2026-09-23.md)に従う。
+
+## 一時配備と復帰
+
+本体sourceは `bb614da7`。配備先は `/home/satotakumi/.local/opt/orca-ide/ui-bb614da7`、
+既存のOrca IDEアイコンは同directoryの `launch-supervised` を起動する。
+サイドバーの `Reception & Coordination`（受付・統括）が固定入口。
+controllerは既存candidateの `scripts/orca_supervision.py`、状態保存先は
+`/home/satotakumi/.local/state/hell-workers/supervision-panel`。
+実相談の送信、実providerの回答表示、確認付き終了、終了済み案件の表示切替、
+アプリ再起動後の受付復帰と終了状態保持を確認した。
+実画面の「実装を依頼」から `TAK-11`・専用worktree・統括tabを各1件作成し、
+acknowledge後の担当移動と、統括が正常終了した後の画面からの案件終了を確認した。
+正常終了をunknownにして操作を塞ぐ不具合は、終了code 0と未完了loopの有無を区別して修正した。
+終了の所有照合・idle shell・clean worktree検査は従来どおり実行する。
+この受入では統括の対話終了に試験担当が `/exit` を送った。実行中・入力待ちagentの自動停止は未受入。
+専用課題はDone、無変更の専用worktreeは撤去済み（実測29,351,936 bytes）。
+実装A/Bと固定reviewerを含む全反復ループの受入完了を意味しない。
+
+復帰先の現行版は `/home/satotakumi/.local/opt/orca-ide/1.4.205/squashfs-root/orca-ide`。
+終了後・切替前の設定を `/home/satotakumi/.config/orca-pre-ui-bb614da7-20260924`、
+起動アイコンを `/home/satotakumi/.local/share/applications/stably-orca.desktop.pre-ui-bb614da7` に保全した。
+CLIの元symlinkは `/home/satotakumi/.local/bin/orca-ide.pre-ui-bb614da7` に保全した。
+設定backupの実測は78,557,184 bytes、保持台帳は `orca-ui-switch-rollback`。
+稼働中の既存terminal daemonが最初の試験packageを参照しているため、
+`/home/satotakumi/tools/orca-ui-lifecycle/.git/orca-ui-acceptance/package` も
+`orca-ui-live-daemon-package` として保持する。参照daemonと端末の利用終了後に撤去する。
+終了処理修正のcandidateは `7f7526c9`、変更別contracts/toolingと回帰40件はpass。
+復帰時は通常終了後に元アプリと起動アイコンへ戻す。設定全体の復元は切替後の依頼・状態を消すため、
+必要性を照合し、現在設定も別途保全してから実施する。
+保全のownerはOrca統括、consumerは一時配備の復旧、next_actionは実受入と採否確認、
+release_whenは拡張版採用または復帰を確定し最後の復旧用途が終了した時点。
+
+Linux packageはCLI依存の展開不足とNode組込みmodule判定を修正した。
+このホスト向けpackageでは、同じnode-pty 1.1.0・Electron ABI 148の現行配布済みnative binaryを使用し、
+glibc互換性検査を含む通常の梱包検査を通した。Fedora上でのnative再ビルド単独はglibc 2.42依存のため
+配布基準を満たさず、一般配布用の再現ビルドを受入済みとはしない。
 
 ## 対象と保全境界
 
 - source: `/home/satotakumi/tools/orca-ui-lifecycle`
 - branch: `feat/hell-workers-ui-lifecycle`
 - upstream: `stablyai/orca` tag `v1.4.205`、base `11aba8bdc5e492d3ba01fc7fe333495ace74128f`
-- 稼働中のOrcaアプリ、設定、credential、既存課題・既存作業場は変更しない。実経路受入で作成した専用試験課題`TAK-9`はDone、専用worktreeは成果・所有照合後に撤去済み。試験状態は保護台帳に保持する。
+- 元のOrcaアプリと切替前設定を保全し、拡張版を別directoryから一時起動する。既存課題・作業場は受入の編集対象にしない。実経路受入で作成した専用試験課題`TAK-9`はDone、専用worktreeは成果・所有照合後に撤去済み。試験状態は保護台帳に保持する。
 - 検証はOrcaの隔離Electron fixtureと一時テストrepositoryを使用する。ゲームのbuild/testは対象外。
 - `build:cli`末尾のglobal CLI installerは実行しない。Node 24 / pnpm 12は隔離取得し、system Nodeを置換しない。
 
@@ -33,7 +69,7 @@
 `scripts/orca_supervision.py`を開発中のOrca本体からopt-inで起動する橋渡しを追加した。
 `ORCA_SUPERVISION_CONTROLLER_SCRIPT`、`ORCA_SUPERVISION_STATE_DIR`、
 `ORCA_SUPERVISION_ORCA_CLI`をすべて絶対pathで設定した時だけ動き、runtime IDをOrcaの
-`status --json`と照合する。現在の稼働アプリには設定・配備していない。
+`status --json`と照合する。一時配備のlauncherにこの3設定を明示した。
 
 bridgeは固定受付と受付台帳の案件をsnapshotへ投影し、UIからの新規依頼を操作UUIDで
 `orca_frontdesk.py`の既存台帳へ重複なく取り込む。receiptとconsultation起動intentを永続化し、
@@ -121,7 +157,7 @@ controllerは時刻更新だけではrevisionを変更せず、受付・route・
 
 ## 未実装・未受入
 
-本体UI/APIだけでは日常運用を開始できない。次を接続・受入するまで稼働版へ配備しない。
+本体UI/APIだけでは全自動運用の完了としない。一時配備で次の接続・受入を進める。
 
 1. 実Orcaの課題・worktree・可視統括タブ作成は専用`TAK-9`で確認した。固定受付パネルからその経路を操作し、画面のrole移動まで通す実受入は未実施。
 2. queue→受付台帳の消費と相談起動intentは隔離Orca画面から確認したが、実providerの相談結果照合、パネル再表示／アプリ再起動をまたぐ受入。
