@@ -293,6 +293,43 @@ def lifecycle_view(root: Path, request_id: str, original: tuple[str, str, list[d
     return ("unknown", current.get("message") or "終了の照合が未完了です。再起動・再送せず確認してください。", role_views)
 
 
+def settled_role_receipts(data: dict) -> set[tuple[str, str]]:
+    """Return exact repo/handle pairs whose guarded role tabs were safely retired."""
+    cleanup = data.get("ui_cleanup")
+    if not isinstance(cleanup, dict) or cleanup.get("phase") != "complete":
+        return set()
+    paths = cleanup.get("receipts")
+    if not isinstance(paths, list):
+        raise ValueError("completed role tab cleanup has no receipt list")
+    directory = frontdesk.checked_directory(role_tabs.root() / "retired-settled")
+    settled: set[tuple[str, str]] = set()
+    for raw in paths:
+        if not isinstance(raw, str) or not raw:
+            raise ValueError("completed role tab cleanup receipt path is invalid")
+        path = Path(raw)
+        if (not path.is_absolute() or path.resolve() != path
+                or path.parent != directory or path.suffix != ".json"):
+            raise ValueError("completed role tab cleanup receipt escaped its ledger")
+        receipt = frontdesk.read_private_json(path, {})
+        identity = receipt.get("identity")
+        closed = receipt.get("receipt", {}).get("close", {})
+        repo = receipt.get("repo")
+        if (receipt.get("phase") != "close-returned" or receipt.get("settled") is not True
+                or not isinstance(repo, str) or not Path(repo).is_absolute()
+                or Path(repo).resolve() != Path(repo) or not isinstance(identity, dict)
+                or set(identity) != {"handle", "incarnationId", "worktreeId"}
+                or not all(isinstance(value, str) and value for value in identity.values())
+                or identity["worktreeId"].partition("::")[2] != repo
+                or closed.get("handle") != identity["handle"]
+                or closed.get("ptyKilled") is not True):
+            raise ValueError("completed role tab cleanup receipt is invalid")
+        key = (repo, identity["handle"])
+        if key in settled:
+            raise ValueError("completed role tab cleanup contains a duplicate receipt")
+        settled.add(key)
+    return settled
+
+
 def supervised_view(child_id: str, original: tuple[str, str, list[dict]]) -> tuple[str, str, list[dict]]:
     """Project the guarded loop without inventing tabs for unused roles."""
     if not review_loop.state_path(child_id).exists():
@@ -300,6 +337,7 @@ def supervised_view(child_id: str, original: tuple[str, str, list[dict]]) -> tup
     data = review_loop.load(child_id)
     phase, detail, role_views = original
     attempts = list(data.get("attempts", {}).values())
+    retired = settled_role_receipts(data)
     for index, role in enumerate(("worker-a", "worker-b", "reviewer"), start=1):
         matches = [attempt for attempt in attempts if attempt.get("role") == role]
         if not matches:
@@ -310,6 +348,14 @@ def supervised_view(child_id: str, original: tuple[str, str, list[dict]]) -> tup
         if not isinstance(handle, str) or not isinstance(repo, str):
             role_views[index].update(state="unknown", detail="担当の所在が未確定")
             phase = "unknown"
+            continue
+        if (repo, handle) in retired:
+            if (attempt.get("released") is not True
+                    or attempt.get("completion_acknowledged") is not True):
+                role_views[index].update(state="unknown", detail="終了受領書と監督台帳が一致しません")
+                phase = "unknown"
+                continue
+            role_views[index].update(state="ended", detail="担当タブは安全終了済み", terminal=None)
             continue
         try:
             code, response = ui.run_orca_response(["terminal", "show", "--terminal", handle])

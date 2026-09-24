@@ -569,6 +569,41 @@ class SupervisionTests(unittest.TestCase):
         self.assertEqual(role_views[1]["state"], "unknown")
         self.assertIsNone(role_views[1]["terminal"])
 
+    def test_supervised_projection_uses_exact_settled_retirement_receipt(self) -> None:
+        child = str(uuid.uuid4())
+        path = self.root / "loop.json"
+        path.write_text("fixture")
+        repo = str(self.root.resolve())
+        handle = "term_a"
+        receipt_dir = frontdesk.checked_directory(
+            supervision.role_tabs.root() / "retired-settled")
+        receipt = receipt_dir / "worker-a.json"
+        frontdesk.write_ledger(receipt, {
+            "identity": {"handle": handle, "incarnationId": "inc_a",
+                         "worktreeId": f"repo::{repo}"},
+            "repo": repo, "phase": "close-returned", "settled": True,
+            "receipt": {"close": {"handle": handle, "ptyKilled": True}},
+        })
+        data = {
+            "phase": "approved",
+            "lanes": {"worker-a": {"phase": "approved"}},
+            "attempts": {"dispatch": {
+                "role": "worker-a", "repo": repo, "terminal": handle,
+                "released": True, "completion_acknowledged": True,
+            }},
+            "ui_cleanup": {"phase": "complete", "receipts": [str(receipt)]},
+        }
+        with patch.object(supervision.review_loop, "state_path", return_value=path), \
+                patch.object(supervision.review_loop, "load", return_value=data), \
+                patch.object(supervision.ui, "run_orca_response") as terminal_show:
+            phase, _, role_views = supervision.supervised_view(
+                child, ("working", "", supervision.roles()))
+        terminal_show.assert_not_called()
+        self.assertEqual(phase, "feedback")
+        self.assertEqual(role_views[1]["state"], "ended")
+        self.assertEqual(role_views[1]["detail"], "担当タブは安全終了済み")
+        self.assertIsNone(role_views[1]["terminal"])
+
     def test_implementation_creation_unknown_never_spawns_another_router(self) -> None:
         request = self.request()
         request["action"] = "implement"
