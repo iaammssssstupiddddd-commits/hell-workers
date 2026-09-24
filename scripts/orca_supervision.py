@@ -259,6 +259,10 @@ def task_actions(root: Path, request_id: str, action: str) -> list[str]:
             phase = review_loop.load(child)["phase"]
             if phase != "approved":
                 return []
+        if child and ui.state_path(child).exists():
+            coordinator_state = ui.read_registered_state(child)
+            if coordinator_state["phase"] == "exited":
+                return ["close"] if coordinator_state.get("exit_code") == 0 else []
         return ["pause", "close"]
     return ["close"] if consult_intent(root, request_id).get("phase") == "settled" else []
 
@@ -368,6 +372,11 @@ def route_view(root: Path, request_id: str) -> tuple[str, str, list[dict]]:
         raise ValueError("implementation route points to a different coordinator")
     if state["phase"] == "exited":
         role_views[0].update(state="ended", detail="統括タブのプロセスは終了しました")
+        if state.get("exit_code") == 0:
+            loop_path = review_loop.state_path(child_id)
+            if (loop_path.exists() or loop_path.is_symlink()) and review_loop.load(child_id)["phase"] != "approved":
+                return ("unknown", "統括は終了しましたが、監督ループが未完了です。", role_views)
+            return ("feedback", "統括は正常終了しました。結果の確認後、案件を終了できます。", role_views)
         return ("unknown", "統括タブが終了しました。作業場は保持してあります。", role_views)
     code, response = ui.run_orca_response(["terminal", "show", "--terminal", state["terminal"]])
     terminal = response.get("result", {}).get("terminal", {})

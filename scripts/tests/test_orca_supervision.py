@@ -197,6 +197,24 @@ class SupervisionTests(unittest.TestCase):
         self.assertEqual([role["state"] for role in role_views],
                          ["ended", "ended", "unassigned", "unassigned"])
 
+    def test_successful_exit_exposes_close_but_failure_stays_unknown(self) -> None:
+        request_id = self.accepted_implementation()
+        child = str(uuid.uuid4())
+        state_path = self.root / "coordinator.json"
+        state_path.touch()
+        route = {"phase": "ready", "childRequestId": child,
+                 "worktreeId": "repo::/fixture", "issueIdentifier": "TEST-1"}
+        for exit_code, expected, actions in [(0, "feedback", ["close"]), (1, "unknown", [])]:
+            with self.subTest(exit_code=exit_code), \
+                    patch.object(supervision, "route_record", return_value=route), \
+                    patch.object(supervision.ui, "state_path", return_value=state_path), \
+                    patch.object(supervision.ui, "read_registered_state", return_value={
+                        "phase": "exited", "exit_code": exit_code,
+                        "worktree_id": "repo::/fixture", "linear_identifier": "TEST-1"}), \
+                    patch.object(supervision.review_loop, "state_path", return_value=self.root / "no-loop"):
+                self.assertEqual(supervision.route_view(self.state, request_id)[0], expected)
+                self.assertEqual(supervision.task_actions(self.state, request_id, "implement"), actions)
+
     def test_clean_exited_coordinator_can_preflight_close(self) -> None:
         request_id = self.accepted_implementation()
         child = str(uuid.uuid4())
