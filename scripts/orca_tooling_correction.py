@@ -44,10 +44,18 @@ def correct(request: str, terminal: str, spec: dict) -> dict:
                 or any(lane['phase'] != 'approved' for lane in data['lanes'].values())
                 or len(final.get('tooling_corrections', [])) >= 3):
             raise ValueError('exact settled rejected integration required')
-        loop.dispatch.checked_coordinator(request, terminal)
+        target = final['target']
+        if loop.dispatch.ui_coordinator.state_path(request).exists():
+            registered = loop.dispatch.ui_coordinator.read_registered_state(request)
+            if (registered.get('terminal') != terminal or registered.get('phase') != 'ready'
+                    or registered.get('repo') != target.get('repo')):
+                raise ValueError('registered coordinator differs from the correction target')
+            loop.dispatch.linear_record(request)
+            loop.dispatch.checked_run(loop.mail.cli(), terminal, data['run']['context'])
+        else:
+            loop.dispatch.checked_coordinator(request, terminal)
         if not loop.active_issue(data):
             raise ValueError('issue is no longer active')
-        target = final['target']
         repo = Path(target['repo'])
         for name in ('worker-a', 'worker-b', loop.roles.workspace_slot(repo)):
             leases.enter_context(loop.acquire_host(name, inherit=False))

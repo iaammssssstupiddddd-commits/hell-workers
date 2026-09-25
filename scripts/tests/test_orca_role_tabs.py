@@ -176,6 +176,17 @@ class RoleTabTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "already attempted"):
             tabs.retire_settled(self.call, Path("orca"), self.repo, owned)
 
+    def test_settled_close_confirmation_is_exact_and_reusable(self):
+        self.rows = [self.row]
+        owned = tabs.identity(self.row, self.repo)
+        path = tabs.retire_settled(self.call, Path("orca"), self.repo, owned)
+        confirmation = tabs.settled_close_confirmation(self.repo, owned)
+        self.assertTrue(confirmation["ok"])
+        self.assertEqual(confirmation["result"]["close"]["handle"], owned["handle"])
+        self.assertEqual(confirmation["receipt_path"], str(path))
+        with self.assertRaisesRegex(ValueError, "exact settled"):
+            tabs.settled_close_confirmation(self.repo, {**owned, "incarnationId": "other"})
+
     def test_shell_stopped_rejects_invalid_journal_identity(self):
         with self.assertRaisesRegex(ValueError, "incomplete"):
             tabs.shell_stopped({"pid": 42})

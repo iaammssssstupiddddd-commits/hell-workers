@@ -42,6 +42,48 @@ INTEGRATION_PHASES = {"planned", "integrating", "validating", "validation_runnin
                       "review_dispatching", "reviewing", "review_release", "deciding",
                       "correction_required", "approved", "paused"}
 LOCK = "workspace-" + bindings.digest({"owner": "orca-review-loop-scheduler"})
+DRIVER_HEARTBEAT_SECONDS = 2.0
+SCHEDULER_LOCK_WAIT_SECONDS = 3.0
+_IMMEDIATE_ACQUIRE_HOST = acquire_host
+
+
+def acquire_host(name: str = "heavy", *, inherit: bool = True):
+    """Wait briefly only for the scheduler's periodic lease handoff.
+
+    Other host slots remain fail-fast: retrying a role/workspace acquisition
+    after partial work could replay a side effect. The scheduler lock is always
+    the outermost lease, so contention here happens before a state mutation.
+    """
+    if name != LOCK:
+        return _IMMEDIATE_ACQUIRE_HOST(name, inherit=inherit)
+    deadline = time.monotonic() + SCHEDULER_LOCK_WAIT_SECONDS
+    while True:
+        try:
+            return _IMMEDIATE_ACQUIRE_HOST(name, inherit=inherit)
+        except HostBusyError:
+            if time.monotonic() >= deadline:
+                raise
+            time.sleep(0.05)
+
+
+def checked_visible_coordinator(request_id: str, terminal: str, data: dict | None = None) -> dict:
+    """Validate the saved visible coordinator without binding checks to this CLI's cwd."""
+    try:
+        registered_path = dispatch.ui_coordinator.state_path(request_id)
+    except dispatch.intake.LinearIntakeError:
+        # Legacy saved consultations and isolated fixtures predate canonical
+        # request UUIDs; retain their existing checked fallback only.
+        return dispatch.checked_coordinator(request_id, terminal)
+    if registered_path.exists():
+        registered = dispatch.ui_coordinator.read_registered_state(request_id)
+        if registered.get("terminal") != terminal or registered.get("phase") != "ready":
+            raise ValueError("registered ready coordinator required")
+        dispatch.linear_record(request_id)
+        run = (data or {}).get("run", {})
+        if run.get("phase") == "ready":
+            dispatch.checked_run(mail.cli(), terminal, run["context"])
+        return registered
+    return dispatch.checked_coordinator(request_id, terminal)
 
 
 def root() -> Path:
@@ -261,7 +303,7 @@ def successor_context(data: dict) -> dict:
 
 def successor_preflight(request_id: str, terminal: str) -> dict:
     """Read-only initial/successor decision used by the visible coordinator."""
-    dispatch.checked_coordinator(request_id, terminal)
+    checked_visible_coordinator(request_id, terminal)
     with acquire_host(LOCK, inherit=False):
         if not state_path(request_id).exists():
             return {"schema": 1, "mode": "initial", "request_id": request_id}
@@ -571,7 +613,7 @@ def build_loop(request_id: str, terminal: str, spec: dict, record: dict, *,
 
 def register(request_id: str, terminal: str, spec: dict) -> dict:
     """Internal UI-agent API. No UUID, path or slot selection is delegated to users."""
-    dispatch.checked_coordinator(request_id, terminal)
+    checked_visible_coordinator(request_id, terminal)
     record = dispatch.linear_record(request_id)
     with acquire_host(LOCK, inherit=False):
         if state_path(request_id).exists():
@@ -589,7 +631,7 @@ def register(request_id: str, terminal: str, spec: dict) -> dict:
 
 def register_successor(request_id: str, terminal: str, spec: dict, expected: str) -> dict:
     """Atomically replace a settled generation while preserving its exact ledger and Run."""
-    dispatch.checked_coordinator(request_id, terminal)
+    checked_visible_coordinator(request_id, terminal)
     record = dispatch.linear_record(request_id)
     if not re.fullmatch(r"[a-f0-9]{64}", expected):
         raise ValueError("successor requires the exact predecessor loop digest")
@@ -624,6 +666,8 @@ def transition(data: dict, slot: str, phase: str, **fields) -> None:
     lane["history"].append({"from": lane["phase"], "to": phase,
                             "generation": lane["ticket"].get("generation", 0),
                             "at_ms": event_time_ms()})
+    if phase != "paused" and "reason" not in fields:
+        fields["reason"] = None
     lane.update(fields, phase=phase)
     save(data)
 
@@ -868,7 +912,7 @@ def tick(request_id: str, terminal: str) -> dict | None:
                 save(data)
         if data["phase"] not in {"active", "paused"}:
             return data
-        dispatch.checked_coordinator(request_id, terminal)
+        checked_visible_coordinator(request_id, terminal, data)
         try:
             decision_wait = mail.poll(data, save)
         except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
@@ -1021,7 +1065,7 @@ context; changes requiring a wider scope or a different base remain a decision.
         data = load(request_id)
         if data["terminal"] != terminal or data["phase"] != "active":
             raise ValueError("correction routing requires the active coordinator")
-        dispatch.checked_coordinator(request_id, terminal)
+        checked_visible_coordinator(request_id, terminal, data)
         final = data.get("integration", {})
         history = final.get("history", [])
         if history and history[-1]["routing"] == routing:
@@ -1317,11 +1361,68 @@ def resume_integration_validation(request_id: str, terminal: str, expected: str)
             return data
 
 
+def resume_integration_review_tab(request_id: str, terminal: str, expected: str) -> dict:
+    """Resume final review after an exact previously-settled reviewer tab was cleaned up."""
+    with acquire_host(LOCK, inherit=False):
+        data = load(request_id)
+        registered = dispatch.ui_coordinator.read_registered_state(request_id)
+        final = data.get("integration", {})
+        ticket = final.get("review_ticket", {})
+        receipt = final.get("receipt", {})
+        evidence = final.get("evidence", {})
+        reason = "ValueError: registered role tab missing; explicit reconciliation required"
+        stale_driver_reason = "DispatchError: existing dispatch belongs to a different ticket, owner or follow-up"
+        if (data["terminal"] != terminal or data["phase"] != "paused"
+                or inspection_digest(data) != expected
+                or registered["terminal"] != terminal or registered["phase"] != "ready"
+                or final.get("phase") != "paused" or final.get("reason") not in {reason, stale_driver_reason}
+                or data.get("reason") != final.get("reason")
+                or not all(lane.get("phase") == "approved" for lane in data["lanes"].values())
+                or receipt.get("phase") != "committed" or evidence.get("exit_code") != 0
+                or ticket.get("read_only") is not True
+                or ticket.get("base") != receipt.get("head")
+                or ticket.get("source_sha256") != receipt.get("source_after")
+                or ticket.get("validation_evidence") != evidence.get("id")
+                or final.get("attempt") is not None
+                or not mail.drained(data)):
+            raise ValueError("exact missing final-review tab pause required")
+        repo = Path(ticket["repo"])
+        with acquire_host(roles.workspace_slot(repo), inherit=False):
+            integration.check_receipt(receipt)
+            if roles.fingerprint(repo) != ticket["source_sha256"]:
+                raise ValueError("final review subject changed before tab recovery")
+            directory = STORAGE.checked_directory(root() / "integration-review-tab-resumes")
+            if final.get("reason") == stale_driver_reason:
+                decision = Path(final.get("review_tab_recovery", ""))
+                recovered = STORAGE.read_private_json(decision, {}) if decision.parent == directory else {}
+                attempt = STORAGE.read_private_json(dispatch.dispatch_path(request_id, ticket), {})
+                if (recovered.get("request_id") != request_id
+                        or recovered.get("head") != receipt["head"]
+                        or recovered.get("source_sha256") != receipt["source_after"]
+                        or attempt.get("phase") != "tab_retry_ready"
+                        or recovered.get("dispatch_recovery", {}).get("after") != attempt):
+                    raise ValueError("updated driver retry differs from the settled tab recovery")
+            else:
+                recovery = dispatch.authorize_settled_tab_retry(
+                    request_id, ticket, "reviewer", terminal, data["run"]["context"], True,
+                )
+                decision = directory / f"{expected}.json"
+                STORAGE.write_ledger(decision, {"schema": 1, "request_id": request_id,
+                                                "loop_sha256": expected, "head": receipt["head"],
+                                                "source_sha256": receipt["source_after"],
+                                                "dispatch_recovery": recovery})
+            final.update(phase="review_dispatching", reason=None,
+                         review_tab_recovery=str(decision))
+            data.update(phase="active", reason=None)
+            save(data)
+            return data
+
+
 def resume_inbox(request_id: str, terminal: str, expected: str) -> dict:
     """Resume only a verified receipt-correlation pause, without acknowledging mail."""
     with acquire_host(LOCK, inherit=False):
         data = load(request_id)
-        dispatch.checked_coordinator(request_id, terminal)
+        checked_visible_coordinator(request_id, terminal, data)
         if (data['terminal'] != terminal or bindings.digest(data) != expected
                 or data['phase'] != 'paused'
                 or data['reason'] != 'inbox: message has no unique owned Dispatch; coordinator reconciliation required'
@@ -1359,7 +1460,7 @@ def resume_linear_runtime(request_id: str, terminal: str, expected: str) -> dict
         previous = history[-1].get("from") if history and history[-1].get("to") == "paused" else None
         if previous not in resumable:
             raise ValueError("Linear runtime pause did not precede an idempotent controller step")
-        dispatch.checked_coordinator(request_id, terminal)
+        checked_visible_coordinator(request_id, terminal, data)
         if not active_issue(data):
             raise ValueError("Linear issue is no longer active")
         transition(data, slot, previous, reason=None)
@@ -1377,7 +1478,7 @@ def finalize_tabs(request_id: str, terminal: str, expected: str) -> dict:
                 or any(item.get("released") is not True or item.get("completion_acknowledged") is not True
                        for item in data["attempts"].values())):
             raise ValueError("tab finalization requires the exact settled approved loop")
-        dispatch.checked_coordinator(request_id, terminal)
+        checked_visible_coordinator(request_id, terminal, data)
         if data.get("ui_cleanup", {}).get("phase") == "complete":
             return data
         cli = dispatch.intake.default_orca_cli()
@@ -1410,7 +1511,7 @@ def decide(request_id: str, terminal: str, message_id: str, body: str, dispositi
         data = load(request_id)
         if data["terminal"] != terminal or data["schema"] != 2 or data["phase"] != "active":
             raise ValueError("decision requires this active coordinator and loop")
-        dispatch.checked_coordinator(request_id, terminal)
+        checked_visible_coordinator(request_id, terminal, data)
         mail.decide(data, message_id, body, disposition, save)
         return data
 
@@ -1450,14 +1551,31 @@ class Driver:
     def __init__(self, request_id: str, terminal: str):
         self.request_id, self.terminal = request_id, terminal
         self.stopped = threading.Event()
+        self.status_lock = threading.Lock()
+        self.phase, self.reason = "starting", None
         self.thread = threading.Thread(target=self.run, name="orca-review-loop")
+        self.heartbeat_thread = threading.Thread(target=self.heartbeat, name="orca-review-loop-heartbeat")
         self.lease = None
 
     def status(self, phase: str, reason: str | None = None):
+        with self.status_lock:
+            self.phase, self.reason = phase, reason
+            self.write_status()
+
+    def write_status(self):
         path = STORAGE.checked_directory(root() / "drivers") / f"{self.request_id}.json"
         STORAGE.write_ledger(path, {"schema": 1, "request_id": self.request_id,
                                    "terminal": self.terminal, "pid": os.getpid(),
-                                   "phase": phase, "heartbeat_at": time.time(), "reason": reason})
+                                   "phase": self.phase, "heartbeat_at": time.time(),
+                                   "reason": self.reason})
+
+    def heartbeat(self):
+        """Keep UI liveness current while the owned tick performs long atomic work."""
+        while not self.stopped.wait(DRIVER_HEARTBEAT_SECONDS):
+            with self.status_lock:
+                if self.phase in {"failed", "stopped"}:
+                    return
+                self.write_status()
 
     def run(self):
         while not self.stopped.is_set():
@@ -1487,8 +1605,12 @@ class Driver:
     def __enter__(self):
         self.lease = acquire_host("workspace-" + bindings.digest({"driver": self.request_id}), inherit=False)
         try:
+            self.heartbeat_thread.start()
             self.thread.start()
         except BaseException:
+            self.stopped.set()
+            if self.heartbeat_thread.is_alive():
+                self.heartbeat_thread.join()
             self.lease.__exit__(None, None, None)
             raise
         return self
@@ -1497,6 +1619,7 @@ class Driver:
         self.stopped.set()
         # Finish the current atomic step; never kill a Git commit/validation midway.
         self.thread.join()
+        self.heartbeat_thread.join()
         self.lease.__exit__(None, None, None)
 
 
@@ -1509,6 +1632,7 @@ def main() -> int:
                                            "refresh-validation-authorization",
                                            "resume-validation-authorization",
                                            "resume-integration-validation",
+                                           "resume-integration-review-tab",
                                            "resume-inbox", "resume-linear-runtime",
                                            "finalize-tabs"))
     parser.add_argument("--request-id", required=True)
@@ -1563,6 +1687,12 @@ def main() -> int:
             if not args.expected_sha256:
                 raise ValueError("integration validation recovery requires inspected ledger digest")
             result = resume_integration_validation(
+                args.request_id, args.coordinator, args.expected_sha256
+            )
+        elif args.action == "resume-integration-review-tab":
+            if not args.expected_sha256:
+                raise ValueError("integration reviewer tab recovery requires inspected ledger digest")
+            result = resume_integration_review_tab(
                 args.request_id, args.coordinator, args.expected_sha256
             )
         elif args.action == "resume-validation-authorization":

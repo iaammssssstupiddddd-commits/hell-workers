@@ -575,6 +575,16 @@ account home（OSのuser database）配下 `.local/state/hell-workers/coordinati
 - worker候補だけでなく統合先の検証も現行host runnerを使う。旧統合先runnerを実行済みの場合は、exact
   integration head/source/evidenceと既知のcontroller失敗を照合する`resume-integration-validation`だけが
   同じ統合headを再検証する。新しい統合commitやRunは作らない。
+- 統括driverの生存heartbeatは実処理tickと別threadで更新する。compile/test、provider応答、固定reviewを
+  待つatomic stepが長時間継続しても、UIの生存時刻を停止させない。処理threadは1本のままであり、heartbeatは
+  tickの再実行、phase遷移、Git操作、Orca操作を行わない。pausedから再開したlaneは旧停止理由を消し、現在の
+  phaseと無関係な警告をUIへ残さない。
+- 統括の復旧操作とdriverの周期tickがscheduler leaseの受渡しで衝突した場合だけ、外側lease取得を最大3秒待つ。
+  role、workspace、heavy leaseは従来どおりfail-fastであり、部分実行後の操作を自動再送しない。
+- 終了済み担当タブをUI整理で閉じた後に同じworkstreamの固定reviewerが再び必要になった場合、欠損だけを根拠に
+  新規タブを作らない。`retire_settled`が保存したexact identity・scrollback・`ptyKilled` receipt、入力前で
+  identity-lessな新Dispatch、同じRun・統合head・source・成功済みvalidationを照合する
+  `resume-integration-review-tab`だけが、固定reviewer sessionを新しい可視タブへ再接続する。
 - 長い検証出力は末尾だけに切り詰めず、失敗test名・panic・compiler errorをbounded summaryとして保持して
   実装担当へ返す。大量のasset logで先頭の失敗原因を失わない。
 - 可視統括自体を更新後のdriverへ載せ直す場合は、保存済み会話sessionだけで再起動しない。

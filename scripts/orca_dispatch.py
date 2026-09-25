@@ -58,6 +58,60 @@ def save(path: Path, data: dict) -> None:
     frontdesk.write_ledger(path, data)
 
 
+def authorize_settled_tab_retry(request_id: str, ticket: dict, slot: str,
+                                coordinator_handle: str, run_context: dict,
+                                exit_on_settlement: bool) -> dict:
+    """Authorize only a pre-terminal retry after our own settled tab cleanup."""
+    if slot != "reviewer" or ticket.get("read_only") is not True:
+        raise DispatchError("settled tab recovery is limited to the fixed reviewer")
+    registered = ui_coordinator.read_registered_state(request_id)
+    if (registered.get("phase") != "ready" or registered.get("terminal") != coordinator_handle
+            or registered.get("repo") != ticket.get("repo")):
+        raise DispatchError("settled tab recovery requires the original ready coordinator")
+    linear_record(request_id)
+    executable = intake.checked_orca_cli(intake.default_orca_cli())
+    checked_run(executable, coordinator_handle, run_context)
+    path = dispatch_path(request_id, ticket)
+    with acquire_host("dispatch-" + bindings.digest({"request": request_id, "ticket": ticket["id"]}),
+                      inherit=False):
+        current = frontdesk.read_private_json(path, {})
+        if current.get("phase") == "tab_retry_ready":
+            receipt = frontdesk.read_private_json(Path(current.get("recovery", "")), {})
+            if receipt.get("after") != current:
+                raise DispatchError("settled tab retry receipt changed")
+            return receipt
+        if (current.get("phase") != "unknown" or current.get("request_id") != request_id
+                or current.get("ticket_sha256") != bindings.digest(ticket)
+                or current.get("slot") != slot or current.get("repo") != ticket.get("repo")
+                or current.get("run_id") != run_context.get("id")
+                or current.get("shared_run") != run_context
+                or current.get("exit_on_settlement") is not exit_on_settlement
+                or any(current.get(key) is not None for key in
+                       ("terminal", "bridge_id", "task_id", "dispatch_id"))):
+            raise DispatchError("only an exact pre-terminal reviewer attempt can resume")
+        repo = ticket["repo"]
+        registry = frontdesk.read_private_json(role_tabs.registry_path(request_id, repo, slot), {})
+        if (registry.get("request") != request_id or registry.get("repo") != repo
+                or registry.get("slot") != slot or registry.get("phase") != "known"
+                or not isinstance(registry.get("identity"), dict)):
+            raise DispatchError("reviewer tab registry differs from the failed attempt")
+        confirmation = role_tabs.settled_close_confirmation(repo, registry["identity"])
+        if roles.fingerprint(Path(repo)) != ticket.get("source_sha256"):
+            raise DispatchError("review subject changed before settled tab recovery")
+        recovery_dir = frontdesk.checked_directory(state_root().parent / "dispatch-tab-recoveries")
+        recovery = recovery_dir / (bindings.digest({"request": request_id, "ticket": ticket,
+                                                    "before": current,
+                                                    "terminal_close": confirmation}) + ".json")
+        after = {"phase": "tab_retry_ready", "recovery": str(recovery)}
+        receipt = {"schema": 1, "request_id": request_id, "ticket": ticket,
+                   "slot": slot, "coordinator": coordinator_handle,
+                   "run": run_context, "exit_on_settlement": exit_on_settlement,
+                   "before": current, "terminal_close": confirmation, "after": after}
+        frontdesk.write_ledger(recovery, receipt)
+        save(path, after)
+        return receipt
+
+
 def linear_record(request_id: str) -> dict:
     records = intake.read_ledger(intake.ledger_path())["imports"]
     matches = [item for item in records if item["request_id"] == request_id]
@@ -231,7 +285,17 @@ def start(request_id: str, ticket_path: Path, slot: str, coordinator_handle: str
                       inherit=False):
         if path.exists() or path.is_symlink():
             current = frontdesk.read_private_json(path, {})
-            if current.get("phase") == "retry_ready":
+            if current.get("phase") == "tab_retry_ready":
+                receipt = frontdesk.read_private_json(Path(current.get("recovery", "")), {})
+                if (receipt.get("schema") != 1 or receipt.get("request_id") != request_id
+                        or receipt.get("ticket") != ticket or receipt.get("slot") != slot
+                        or receipt.get("coordinator") != coordinator_handle
+                        or receipt.get("run") != run_context
+                        or receipt.get("exit_on_settlement") is not exit_on_settlement
+                        or receipt.get("after") != current):
+                    raise DispatchError("settled tab recovery receipt does not authorize this retry")
+                closed_receipt = receipt.get("terminal_close")
+            elif current.get("phase") == "retry_ready":
                 receipt = frontdesk.read_private_json(Path(current.get("recovery", "")), {})
                 restored = receipt.get("after", {}).get("loop", {})
                 lane = restored.get("lanes", {}).get(slot, {})

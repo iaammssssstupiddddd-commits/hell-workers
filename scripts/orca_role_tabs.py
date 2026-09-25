@@ -40,6 +40,20 @@ def registry_path(request: str, repo: str, slot: str) -> Path:
     return root() / f"{key}.json"
 
 
+def settled_close_confirmation(repo: str, expected: dict) -> dict:
+    """Return the exact positive close proof written by retire_settled()."""
+    key = bindings.digest({"settled": expected})
+    path = root() / "retired-settled" / f"{key}.json"
+    record = storage.read_private_json(path, {})
+    receipt = record.get("receipt", {})
+    closed = receipt.get("close", {})
+    if (record.get("identity") != expected or record.get("repo") != repo
+            or record.get("phase") != "close-returned" or record.get("settled") is not True
+            or closed.get("handle") != expected.get("handle") or closed.get("ptyKilled") is not True):
+        raise ValueError("missing role tab has no exact settled close receipt")
+    return {"ok": True, "result": receipt, "receipt_path": str(path)}
+
+
 def idle_shell(handle: str, repo: str, proc: Path = Path("/proc")) -> dict:
     """Linux only: exactly one shell, foreground-owned tty, no session children."""
     processes, matches = [], []

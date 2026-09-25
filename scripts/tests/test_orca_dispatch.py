@@ -263,6 +263,71 @@ class OrcaDispatchTests(unittest.TestCase):
         self.assertEqual(argv[argv.index("--retry-of") + 1], "ctx_previous")
         self.assertNotIn("--spec", argv)
 
+    def test_settled_reviewer_tab_retry_reuses_run_and_close_proof(self):
+        run = {"id": "run_fixture", "consumer_generation": 1}
+        ticket = {**self.ticket, "id": "review-fixture", "generation": 1,
+                  "read_only": True, "allowed_directories": [],
+                  "source_sha256": orca_roles.fingerprint(self.repo),
+                  "validation_evidence": "a" * 64}
+        ticket_path = self.root / "review-ticket.json"
+        ticket_path.write_text(json.dumps(ticket))
+        confirmation = {"ok": True, "result": {"close": {
+            "handle": "term_old", "ptyKilled": True}}, "receipt_path": "/proof"}
+        recovery = self.root / "tab-recovery.json"
+        current = {"phase": "tab_retry_ready", "recovery": str(recovery)}
+        orca_frontdesk.write_ledger(recovery, {
+            "schema": 1, "request_id": REQUEST, "ticket": ticket, "slot": "reviewer",
+            "coordinator": COORDINATOR, "run": run, "exit_on_settlement": True,
+            "terminal_close": confirmation, "after": current,
+        })
+        dispatch.save(dispatch.dispatch_path(REQUEST, ticket), current)
+        receipts = [{"run": {**run, "coordinator_handle": COORDINATOR, "legacy": 0}},
+                    {"wait": {"satisfied": True}},
+                    {"runId": "run_fixture", "taskId": "task_review", "dispatchId": "ctx_review",
+                     "state": "ready", "stage": "input_accepted"}]
+        with patch.object(dispatch, "run_cli", side_effect=receipts), \
+                patch.object(dispatch.role_tabs, "launch", return_value={
+                    "handle": TERMINAL, "launch_id": "launch_review"}) as launch, \
+                patch.object(dispatch, "wait_for_bridge", return_value=BRIDGE), \
+                patch.object(dispatch.task_bridge, "arm"):
+            result = dispatch.start(REQUEST, ticket_path, "reviewer", COORDINATOR,
+                                    orca_cli=self.cli, metadata=self.metadata,
+                                    run_context=run, exit_on_settlement=True)
+        self.assertEqual(result["dispatch_id"], "ctx_review")
+        self.assertEqual(launch.call_args.kwargs["closed_receipt"], confirmation)
+
+    def test_authorize_settled_reviewer_tab_retry_requires_preterminal_attempt(self):
+        run = {"id": "run_fixture", "consumer_generation": 1}
+        ticket = {**self.ticket, "id": "review-fixture", "generation": 1,
+                  "read_only": True, "allowed_directories": [],
+                  "source_sha256": orca_roles.fingerprint(self.repo),
+                  "validation_evidence": "a" * 64}
+        attempt = {"schema": 1, "request_id": REQUEST, "ticket_sha256": orca_role_state.digest(ticket),
+                   "slot": "reviewer", "repo": str(self.repo), "phase": "unknown",
+                   "run_id": run["id"], "shared_run": run, "exit_on_settlement": True,
+                   "terminal": None, "bridge_id": None, "task_id": None, "dispatch_id": None}
+        dispatch.save(dispatch.dispatch_path(REQUEST, ticket), attempt)
+        registry = self.root / "role-tab.json"
+        identity = {"handle": "term_old", "incarnationId": "old", "worktreeId": "old-worktree"}
+        orca_frontdesk.write_ledger(registry, {"request": REQUEST, "repo": str(self.repo),
+                                              "slot": "reviewer", "phase": "known",
+                                              "identity": identity})
+        confirmation = {"ok": True, "result": {"close": {
+            "handle": "term_old", "ptyKilled": True}}, "receipt_path": "/proof"}
+        with patch.object(dispatch.ui_coordinator, "read_registered_state", return_value={
+                    "phase": "ready", "terminal": COORDINATOR, "repo": str(self.repo)}), \
+                patch.object(dispatch, "linear_record"), patch.object(dispatch, "checked_run"), \
+                patch.object(dispatch.intake, "default_orca_cli", return_value=self.cli), \
+                patch.object(dispatch.intake, "checked_orca_cli", return_value=self.cli), \
+                patch.object(dispatch.role_tabs, "registry_path", return_value=registry), \
+                patch.object(dispatch.role_tabs, "settled_close_confirmation",
+                             return_value=confirmation):
+            receipt = dispatch.authorize_settled_tab_retry(
+                REQUEST, ticket, "reviewer", COORDINATOR, run, True)
+        self.assertEqual(receipt["terminal_close"], confirmation)
+        saved = orca_frontdesk.read_private_json(dispatch.dispatch_path(REQUEST, ticket), {})
+        self.assertEqual(saved["phase"], "tab_retry_ready")
+
     def test_forged_generation_is_refused_before_external_mutation(self) -> None:
         self.ticket["generation"] = 1
         self.ticket_path.write_text(json.dumps(self.ticket))

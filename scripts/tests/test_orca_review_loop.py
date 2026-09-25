@@ -4,6 +4,7 @@ import copy
 import json
 import sys
 import threading
+import time
 import unittest
 import uuid
 from pathlib import Path
@@ -443,6 +444,38 @@ class ReviewLoopTests(unittest.TestCase):
                 self.assertIn("KeyError", observed["driver"]["reason"])
         tick.assert_called_once()
 
+    def test_active_transition_clears_obsolete_pause_reason(self):
+        data = self.register()
+        loop.transition(data, "worker-a", "paused", reason="old failure")
+        loop.transition(data, "worker-a", "planned")
+        observed = loop.load(fixtures.REQUEST)["lanes"]["worker-a"]
+        self.assertEqual(observed["phase"], "planned")
+        self.assertIsNone(observed["reason"])
+
+    def test_driver_heartbeat_continues_while_tick_is_blocked(self):
+        self.register()
+        entered, release = threading.Event(), threading.Event()
+
+        def blocking_tick(*_):
+            entered.set()
+            release.wait(2)
+
+        with (patch.object(loop, "DRIVER_HEARTBEAT_SECONDS", 0.01),
+              patch.object(loop, "tick", side_effect=blocking_tick)):
+            with loop.Driver(fixtures.REQUEST, fixtures.COORDINATOR):
+                try:
+                    self.assertTrue(entered.wait(1))
+                    first = loop.watch(fixtures.REQUEST, fixtures.COORDINATOR, timeout=0)["driver"]
+                    deadline = time.monotonic() + 1
+                    observed = first
+                    while observed["heartbeat_at"] <= first["heartbeat_at"] and time.monotonic() < deadline:
+                        time.sleep(0.01)
+                        observed = loop.watch(fixtures.REQUEST, fixtures.COORDINATOR, timeout=0)["driver"]
+                    self.assertEqual(observed["phase"], "running")
+                    self.assertGreater(observed["heartbeat_at"], first["heartbeat_at"])
+                finally:
+                    release.set()
+
     def test_resumed_driver_waits_for_ui_acknowledgement(self):
         ui = dispatch.ui_coordinator
         path = self.root / "starting-ui.json"
@@ -463,6 +496,39 @@ class ReviewLoopTests(unittest.TestCase):
                 with self.assertRaises(host_coordination.HostBusyError):
                     with loop.Driver(fixtures.REQUEST, fixtures.COORDINATOR):
                         self.fail("second driver started")
+
+    def test_scheduler_lease_retries_periodic_contention_but_other_slots_fail_fast(self):
+        lease = object()
+        busy = host_coordination.HostBusyError("periodic scheduler handoff")
+        with patch.object(loop, "_IMMEDIATE_ACQUIRE_HOST", side_effect=[busy, lease]) as acquire, \
+                patch.object(loop.time, "sleep") as sleep:
+            self.assertIs(loop.acquire_host(loop.LOCK, inherit=False), lease)
+        self.assertEqual(acquire.call_count, 2)
+        sleep.assert_called_once_with(0.05)
+        with patch.object(loop, "_IMMEDIATE_ACQUIRE_HOST", side_effect=busy) as acquire:
+            with self.assertRaises(host_coordination.HostBusyError):
+                loop.acquire_host("worker-a", inherit=False)
+        acquire.assert_called_once_with("worker-a", inherit=False)
+
+    def test_visible_coordinator_uses_saved_registration_and_run_not_process_cwd(self):
+        state = self.root / "registered-ui.json"
+        loop.STORAGE.write_ledger(state, {"schema": 1})
+        context = {"id": "run_fixture", "consumer_generation": 1}
+        registered = {"terminal": fixtures.COORDINATOR, "phase": "ready", "repo": str(self.repo)}
+        with (patch.object(dispatch.ui_coordinator, "state_path", return_value=state),
+              patch.object(dispatch.ui_coordinator, "read_registered_state", return_value=registered),
+              patch.object(dispatch, "linear_record") as linear,
+              patch.object(loop.mail, "cli", return_value=self.cli),
+              patch.object(dispatch, "checked_run") as checked_run,
+              patch.object(dispatch, "checked_coordinator") as legacy):
+            result = loop.checked_visible_coordinator(
+                fixtures.REQUEST, fixtures.COORDINATOR,
+                {"run": {"phase": "ready", "context": context}},
+            )
+        self.assertEqual(result, registered)
+        linear.assert_called_once_with(fixtures.REQUEST)
+        checked_run.assert_called_once_with(self.cli, fixtures.COORDINATOR, context)
+        legacy.assert_not_called()
 
     def test_ui_does_not_launch_provider_before_acquiring_driver(self):
         ui = dispatch.ui_coordinator
@@ -600,6 +666,47 @@ class ReviewLoopTests(unittest.TestCase):
         self.assertEqual(resumed["lanes"]["worker-a"]["revisions"], 0)
         receipt = loop.root() / "validation-timeout-recoveries" / f"{expected}.json"
         self.assertTrue(receipt.is_file())
+
+    def test_exact_settled_reviewer_tab_cleanup_resumes_final_review(self):
+        self.finish_integrated()
+        data = loop.load(fixtures.REQUEST)
+        final = data["integration"]
+        reason = "ValueError: registered role tab missing; explicit reconciliation required"
+        final.pop("attempt", None)
+        final.pop("review", None)
+        final.update(phase="paused", reason=reason)
+        data.update(phase="paused", reason=reason)
+        loop.save(data)
+        inspected = loop.load(fixtures.REQUEST)
+        expected = loop.inspection_digest(inspected)
+        recovery = {"schema": 1, "after": {"phase": "tab_retry_ready"}}
+        with (patch.object(dispatch.ui_coordinator, "read_registered_state", return_value={
+                    "terminal": fixtures.COORDINATOR, "phase": "ready"}),
+              patch.object(dispatch, "authorize_settled_tab_retry", return_value=recovery) as authorize):
+            resumed = loop.resume_integration_review_tab(
+                fixtures.REQUEST, fixtures.COORDINATOR, expected
+            )
+        self.assertEqual(resumed["phase"], "active")
+        self.assertEqual(resumed["integration"]["phase"], "review_dispatching")
+        self.assertIsNone(resumed["integration"]["reason"])
+        authorize.assert_called_once()
+        self.assertTrue(Path(resumed["integration"]["review_tab_recovery"]).is_file())
+        stale = "DispatchError: existing dispatch belongs to a different ticket, owner or follow-up"
+        resumed["integration"].update(phase="paused", reason=stale)
+        resumed.update(phase="paused", reason=stale)
+        dispatch.save(dispatch.dispatch_path(fixtures.REQUEST, resumed["integration"]["review_ticket"]),
+                      recovery["after"])
+        loop.save(resumed)
+        expected = loop.inspection_digest(loop.load(fixtures.REQUEST))
+        with (patch.object(dispatch.ui_coordinator, "read_registered_state", return_value={
+                    "terminal": fixtures.COORDINATOR, "phase": "ready"}),
+              patch.object(dispatch, "authorize_settled_tab_retry") as authorize):
+            reconciled = loop.resume_integration_review_tab(
+                fixtures.REQUEST, fixtures.COORDINATOR, expected
+            )
+        self.assertEqual(reconciled["phase"], "active")
+        self.assertEqual(reconciled["integration"]["phase"], "review_dispatching")
+        authorize.assert_not_called()
 
     def test_production_help_review_is_not_replaced_by_predeclared_text(self):
         self.register()

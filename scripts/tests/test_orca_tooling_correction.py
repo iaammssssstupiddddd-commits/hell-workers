@@ -114,6 +114,31 @@ class ToolingCorrectionTests(unittest.TestCase):
         completed = self.i.fixture.finish()
         self.assertEqual(completed['phase'], 'approved', completed.get('reason'))
 
+    def test_registered_coordinator_is_checked_by_saved_repo_and_run_not_cwd(self):
+        data = L.load(REQUEST)
+        context = {'id': 'run_fixture', 'consumer_generation': 1}
+        data['run'] = {'phase': 'ready', 'context': context}
+        L.save(data)
+        self.spec['loop_sha256'] = L.inspection_digest(data)
+        state = self.i.fixture.root / 'registered-ui.json'
+        L.STORAGE.write_ledger(state, {'schema': 1})
+        target = data['integration']['target']
+        registered = {'terminal': COORDINATOR, 'phase': 'ready', 'repo': target['repo']}
+        with (patch.object(L.dispatch.ui_coordinator, 'state_path', return_value=state),
+              patch.object(L.dispatch.ui_coordinator, 'read_registered_state', return_value=registered),
+              patch.object(L.dispatch, 'linear_record') as linear,
+              patch.object(L.mail, 'cli', return_value=self.i.fixture.cli),
+              patch.object(L.dispatch, 'checked_run') as checked_run,
+              patch.object(L, 'active_issue', return_value=True),
+              patch.object(L.dispatch, 'checked_coordinator') as legacy):
+            result = correction.correct(REQUEST, COORDINATOR, self.spec)
+        self.assertEqual(result['phase'], 'validating')
+        linear.assert_called_once_with(REQUEST)
+        checked_run.assert_called_once_with(
+            self.i.fixture.cli, COORDINATOR, context,
+        )
+        legacy.assert_not_called()
+
     def test_interrupted_correction_is_not_replayed_or_approved(self):
         with patch.object(L.integration, 'finish', side_effect=OSError('interrupted checkout')):
             with self.assertRaises(OSError):
