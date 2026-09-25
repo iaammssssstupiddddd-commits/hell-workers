@@ -135,6 +135,26 @@ class UiCoordinatorTests(unittest.TestCase):
         with self.assertRaisesRegex(ui.UiCoordinatorError, "配車元"):
             ui.require_ready(REQUEST, "term_other")
 
+    def test_resume_prepare_reuses_immutable_request_without_reimporting_linear(self) -> None:
+        self.ready_coordinator()
+        state = ui.load_state(REQUEST)
+        state.update(phase="exited", exited_at="2026-09-25T00:00:00+00:00", exit_code=0)
+        ui.save_state(state)
+        with patch.object(
+            ui.intake, "import_current_issue", side_effect=AssertionError("must not reimport")
+        ):
+            imported, resumed = ui.prepare(REQUEST)
+        self.assertEqual(imported, {"request_id": REQUEST, "linear_identifier": "HW-42"})
+        self.assertEqual(resumed["phase"], "starting")
+        self.assertEqual(resumed["terminal"], TERMINAL)
+        self.assertIsNone(resumed["acknowledged_at"])
+
+    def test_coordinator_resume_requires_both_session_and_request(self) -> None:
+        with self.assertRaisesRegex(ui.UiCoordinatorError, "両方"):
+            ui.launch(resume_session=str(uuid.uuid4()))
+        with self.assertRaisesRegex(ui.UiCoordinatorError, "両方"):
+            ui.launch(request_id=REQUEST)
+
     def test_request_view_keeps_routing_internal(self) -> None:
         view = ui.request_view(REQUEST)
         self.assertEqual(view["linear_identifier"], "HW-42")

@@ -218,11 +218,17 @@ def linear_record(request_id: str) -> dict:
     return matches[0]
 
 
-def prepare() -> tuple[dict, dict]:
+def prepare(request_id: str | None = None) -> tuple[dict, dict]:
     terminal, worktree = terminal_environment()
-    imported = intake.import_current_issue()
-    request_id = imported["request_id"]
-    record = linear_record(request_id)
+    if request_id is None:
+        imported = intake.import_current_issue()
+        request_id = imported["request_id"]
+        record = linear_record(request_id)
+    else:
+        if str(uuid.UUID(request_id)) != request_id:
+            raise UiCoordinatorError("統括の再開request IDが不正です")
+        record = linear_record(request_id)
+        imported = {"request_id": request_id, "linear_identifier": record["identifier"]}
     path = state_path(request_id)
     with acquire_host("coordinator", inherit=False):
         if path.exists() or path.is_symlink():
@@ -1389,11 +1395,13 @@ def sandbox_command(command: list[str], primary: Path, runtime: Path) -> list[st
     return result
 
 
-def launch(resume_session: str | None = None) -> int:
+def launch(resume_session: str | None = None, request_id: str | None = None) -> int:
     if __package__:
         from .orca_review_loop import Driver
     else:
         from orca_review_loop import Driver
+    if (resume_session is None) != (request_id is None):
+        raise UiCoordinatorError("統括再開には保存済みsession IDとrequest IDの両方が必要です")
     executable = shutil.which("codex")
     if executable is None:
         raise UiCoordinatorError("Codex CLIが見つかりません")
@@ -1411,7 +1419,7 @@ def launch(resume_session: str | None = None) -> int:
             if (meta.get("type") != "session_meta" or meta.get("payload", {}).get("id") != resume_session
                     or meta["payload"].get("cwd") != str(REPO)):
                 raise UiCoordinatorError("統括の保存会話がこの作業場と一致しません")
-        imported, data = prepare()
+        imported, data = prepare(request_id)
         command = provider_command(
             executable,
             prompt(imported["request_id"], data["linear_identifier"], primary),
@@ -1493,6 +1501,7 @@ def main() -> int:
     subparsers = parser.add_subparsers(dest="action", required=True)
     launch_parser = subparsers.add_parser("launch")
     launch_parser.add_argument("--resume-session")
+    launch_parser.add_argument("--request-id")
     subparsers.add_parser("launch-wait")
     subparsers.add_parser("default-entry")
     for action in ("acknowledge", "show", "preflight"):
@@ -1508,7 +1517,7 @@ def main() -> int:
         if args.action == "default-entry":
             return default_entry()
         if args.action == "launch":
-            return launch(args.resume_session)
+            return launch(args.resume_session, args.request_id)
         if args.action == "launch-wait":
             return launch_wait()
         if args.action == "acknowledge":

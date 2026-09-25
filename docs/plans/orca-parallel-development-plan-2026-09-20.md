@@ -31,7 +31,8 @@ L4では利用者がterminal menuを操作する設計を撤回し、Orca Tasks 
 新規worktreeは`統括`を可視tabで起動し、A/B/reviewerも配車時に別の日本語tabとして表示する。
 TAK-14の実案件では、候補作成後にhost lease制御が更新されても候補内の旧`dev.py`が使われ続け、
 tooling fixtureが本来のRust診断より先に失敗してloopが反復停止した。候補sourceを更新・差替えず、
-候補側のcommandとtestsを現行統括runnerで実行する境界をcheckpointへ追加し、同じRun・session・候補から再開する。
+候補側のcommandとtestsを現行統括runnerで実行する境界をcheckpointへ追加する。統括driverの載せ直しも
+保存済みrequest/sessionの組へ拘束し、現在のLinear snapshotから別requestを作らず、同じRun・session・候補から再開する。
 
 ### 正本と責務
 
