@@ -1074,6 +1074,56 @@ def host_runner_control_failure(evidence: dict) -> bool:
     )
 
 
+def refresh_validation_authorization(request_id: str, terminal: str, slot: str, expected: str) -> dict:
+    """Rerun one old truncated diagnostic before consuming a stale retry receipt."""
+    with acquire_host(LOCK, inherit=False):
+        data = load(request_id)
+        registered = dispatch.ui_coordinator.read_registered_state(request_id)
+        lane = data["lanes"][slot]
+        ticket = lane["ticket"]
+        repo = Path(ticket["repo"])
+        evidence = lane.get("evidence", {})
+        next_ticket = {**ticket, "generation": ticket.get("generation", 0) + 1}
+        path = bindings.generation_path(next_ticket, slot)
+        stale = STORAGE.read_private_json(path, {})
+        stored = STORAGE.read_private_json(checkpoints.root() / f"validation-{evidence.get('id')}.json", {})
+        history = lane.get("history", [])
+        if (data["terminal"] != terminal or data["phase"] != "paused"
+                or inspection_digest(data) != expected
+                or registered["terminal"] != terminal or registered["phase"] != "ready"
+                or lane["phase"] != "paused" or lane.get("reason") != (
+                    "ValueError: retry generation already has different authorization"
+                )
+                or not history or history[-1].get("from") != "checkpointing"
+                or history[-1].get("to") != "paused"
+                or evidence.get("exit_code", 0) == 0
+                or evidence.get("diagnostic_truncated") is not True
+                or evidence.get("diagnostic", "").startswith("Failure summary preserved before truncation:")
+                or host_runner_control_failure(evidence)
+                or stored != {key: value for key, value in evidence.items() if key != "id"}
+                or stale.get("phase") != "validation_retry" or stale.get("ticket") != ticket
+                or stale.get("next_ticket") != next_ticket
+                or stale.get("source_after") != lane["source"]
+                or not host_runner_control_failure(stale.get("validation", {}))
+                or roles.fingerprint(repo) != lane["source"]):
+            raise ValueError("exact old truncated diagnostic and stale controller authorization are required")
+        with acquire_host(roles.workspace_slot(repo), inherit=False):
+            roles.validate_ticket(ticket)
+            directory = STORAGE.checked_directory(root() / "validation-authorization-refreshes")
+            STORAGE.write_ledger(directory / f"{expected}.json", {
+                "before": data,
+                "sha256": expected,
+                "subject": slot,
+                "stale_authorization": str(path),
+                "old_evidence": evidence["id"],
+                "source_sha256": lane["source"],
+            })
+            transition(data, slot, "validating", reason=None)
+            data.update(phase="active", reason=None)
+            save(data)
+            return data
+
+
 def resume_validation_authorization(request_id: str, terminal: str, slot: str, expected: str) -> dict:
     """Consume a stale controller-failure retry receipt for the current real diagnostic."""
     with acquire_host(LOCK, inherit=False):
@@ -1405,6 +1455,7 @@ def main() -> int:
                                            "show", "tick", "watch", "decide", "route",
                                            "submit-help-review", "resume-coordinator-validation",
                                            "resume-review-wait", "resume-validation-timeout",
+                                           "refresh-validation-authorization",
                                            "resume-validation-authorization",
                                            "resume-inbox", "resume-linear-runtime",
                                            "finalize-tabs"))
@@ -1448,6 +1499,12 @@ def main() -> int:
             if not args.slot or not args.expected_sha256:
                 raise ValueError("validation timeout recovery requires slot and inspected ledger digest")
             result = resume_validation_timeout(
+                args.request_id, args.coordinator, args.slot, args.expected_sha256
+            )
+        elif args.action == "refresh-validation-authorization":
+            if not args.slot or not args.expected_sha256:
+                raise ValueError("validation authorization refresh requires slot and inspected ledger digest")
+            result = refresh_validation_authorization(
                 args.request_id, args.coordinator, args.slot, args.expected_sha256
             )
         elif args.action == "resume-validation-authorization":
