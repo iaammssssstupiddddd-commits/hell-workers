@@ -139,6 +139,8 @@ orca file open docs/orca-quickstart.md --worktree path:/home/satotakumi/projects
 host/UI契約、Linux package、隔離実画面の受付表示とパネル閉鎖は成功した。2026-09-25にはdesktop iconとCLIを
 `ui-36906ab2`へ切り替え、通常profileを再起動した。監督controllerは新runtimeへ再接続し、既存terminalを保持したまま
 TAK-14の正本状態`feedback`を再公開している。
+desktop iconと旧versionのlauncherはversion非依存の`/home/satotakumi/.local/opt/orca-ide/launch-supervised`へ
+収束しているため、通常起動で旧buildへ戻らない。TAK-14の実renderer上でも上部の正本状態表示を確認済みである。
 
 - Orca 1.4.205とLinear workspace `takumi sato` / team `TAK`の読取り接続を確認済みです。
 - Linear-linked worktreeから`--current`で固定snapshotを取り込み、UUID入力を不要にする実装を追加しました。

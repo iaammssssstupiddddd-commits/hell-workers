@@ -25,6 +25,17 @@ structured native chatの両方へ同じworktree IDが渡ることを固定し�
 Orcaを再起動した。配備sourceは`36906ab2`、配備先は
 `/home/satotakumi/.local/opt/orca-ide/ui-36906ab2`。旧`ui-733013b0`と`ui-dd50afed`は復帰用に保持する。
 
+初回切替後、GNOMEが保持していたversion付きlauncherとOrca内のCLI shimが`ui-733013b0`を再起動し、
+利用者画面が旧版へ戻る不具合を実環境で確認した。配備入口を
+`/home/satotakumi/.local/opt/orca-ide/launch-supervised`と`current` symlinkへ固定し、desktop entry、
+CLI shim、旧`ui-733013b0/launch-supervised`の全てを同じ固定入口へ収束させた。旧launcher経由の再起動でも
+`1.4.205-local.36906ab2`になることを検査した。
+
+TAK-14の実Orca rendererへ接続した受入では、`supervision-terminal-status`がvisibleで、画面上端の
+`x=326.13, y=44, width=718.73, height=60.5`に描画されることを確認した。表示内容は
+`Current task state / Awaiting your feedback / 実装・固定レビューの結果を確認してください。`であり、
+本文に残る旧`paused`報告より上部の正本状態が優先される。
+
 ## A〜D案件panel schema 2と外部同期executor（2026-09-25）
 
 host candidate `2897e3a1`とOrca UI local commit `dd50afed`で、案件snapshotをschema 2へ拡張した。
@@ -52,8 +63,9 @@ HEADだけからDraft PR #27を一度作成し、再実行が`idle`であるこ�
 ## 一時配備と復帰
 
 現在の配備sourceはlocal commit `36906ab2`、配備先は
-`/home/satotakumi/.local/opt/orca-ide/ui-36906ab2`。Orca IDEアイコンは同directoryの
-`launch-supervised`を起動する。旧`ui-733013b0`と`ui-dd50afed`は復帰用に保持する。
+`/home/satotakumi/.local/opt/orca-ide/ui-36906ab2`。Orca IDEアイコンはversion非依存の
+`/home/satotakumi/.local/opt/orca-ide/launch-supervised`を起動し、`current` symlinkから現行buildを解決する。
+旧`ui-733013b0`と`ui-dd50afed`は復帰用に保持するが、旧launcherは誤起動防止のため現行固定入口へ転送する。
 サイドバーの `Reception & Coordination`（受付・統括）が固定入口。
 controllerは既存candidateの `scripts/orca_supervision.py`、状態保存先は
 `/home/satotakumi/.local/state/hell-workers/supervision-panel`。
