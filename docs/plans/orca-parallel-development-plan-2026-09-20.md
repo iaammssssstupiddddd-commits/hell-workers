@@ -5,8 +5,8 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `orca-parallel-development-plan-2026-09-20` |
-| ステータス | In Progress — Orca Tasksを唯一の利用者向け受付とし、Linear-linked worktreeの可視統括と日本語A/B/review tabを実装。3 roleの権限制御と2レーン並列実行は受入済み、UIからの実案件一巡と異常系は未受入 |
-| 作成日 / 最終更新日 | 2026-09-20 / 2026-09-22 |
+| ステータス | In Progress — Orca Tasksを唯一の利用者向け受付とし、Linear-linked worktreeの可視統括と日本語A/B/review tabを実装。3 roleの権限制御と2レーン並列実行は受入済み。実案件TAK-14で長期候補の旧host runner停止を再現し、現行統括runnerで包む恒久修正を実装・再開確認中 |
+| 作成日 / 最終更新日 | 2026-09-20 / 2026-09-25 |
 | 作成者 | Codex |
 | 関連提案 | [並列実装と専任レビューの運用素案](../proposals/orca-parallel-development-proposal-2026-09-20.md) |
 | 関連Issue/PR | N/A（公開なし） |
@@ -29,6 +29,9 @@ L3では固定reviewer、Codex A、Cursor Bのread-only実Taskを起動して受
 L3Eでは別worktreeのA/B限定編集、統括検証、同一固定reviewer、2レーン同時実行まで受け入れた。
 L4では利用者がterminal menuを操作する設計を撤回し、Orca Tasks → Linear → worktree作成を唯一の入口にする。
 新規worktreeは`統括`を可視tabで起動し、A/B/reviewerも配車時に別の日本語tabとして表示する。
+TAK-14の実案件では、候補作成後にhost lease制御が更新されても候補内の旧`dev.py`が使われ続け、
+tooling fixtureが本来のRust診断より先に失敗してloopが反復停止した。候補sourceを更新・差替えず、
+候補側のcommandとtestsを現行統括runnerで実行する境界をcheckpointへ追加し、同じRun・session・候補から再開する。
 
 ### 正本と責務
 
@@ -55,6 +58,7 @@ codeの最新参照元は専用candidate `6453f8cd1ba417202db100e2a635bfd62e70b5
 | 資産（candidateの `scripts/`） | 方針 | 実績と追加作業 |
 | --- | --- | --- |
 | `host_coordination.py` とbuild/validation driver | 再利用 | host重実行1枠・role/workspace排他・子へのlease継承。Linear状態をlockの代わりにしない |
+| `orca_host_validation.py` / `orca_git_checkpoint.py` | 再利用・更新 | 候補内のrepo-local `dev.py`検証を現行host runnerで包み、候補source/testは凍結したままlease制御だけを更新。元commandとrunner hashを証拠化し、任意commandの置換はしない |
 | `orca_roles.py` / `orca_providers.py` | 再利用 | A/Bのprovider固定、Bの単純task制限、mount/policy分離。read-only起動・再開とA/B限定編集、Cursor Bのtool denyを実受入済み |
 | `orca_role_state.py` / fingerprint / `verify-review` | 再利用 | 同一ticket/session、unknown停止、固定reviewer、変更後の承認失効。承認記録の整合性検査であって署名検証ではない |
 | `orca_ui_coordinator.py` | 新規の可視統括入口 | linked issueを`--current`で取り込み、exact Orca terminalを登録してinteractive Codexを同じtabに起動。外側bubblewrapからOrca IPCへ接続し、初回確認や内部ID・ticket path・slot入力を利用者に要求しない |

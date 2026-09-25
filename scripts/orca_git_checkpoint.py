@@ -52,6 +52,26 @@ def task_key(ticket: dict) -> str:
     return bindings.digest({"common": subject(ticket)["common"], "id": ticket["id"]})
 
 
+def validation_execution(repo: Path, command: list[str]) -> tuple[list[str], dict | None]:
+    """Route repository-local dev commands through the current host runner."""
+    if len(command) < 3 or not Path(command[0]).name.startswith("python"):
+        return command, None
+    requested = Path(command[1])
+    if not requested.is_absolute():
+        requested = repo / requested
+    try:
+        requested = requested.resolve(strict=True)
+    except OSError:
+        return command, None
+    candidate_dev = (repo / "scripts/dev.py").resolve()
+    if requested != candidate_dev:
+        return command, None
+    runner = Path(__file__).with_name("orca_host_validation.py").resolve(strict=True)
+    runner_sha256 = hashlib.sha256(runner.read_bytes()).hexdigest()
+    execution = [sys.executable, str(runner), "--repo", str(repo), "--", *command[2:]]
+    return execution, {"schema": 1, "kind": "host-dev-runner", "sha256": runner_sha256}
+
+
 def recovered_failed_exit(previous: dict, last: dict, slot: str) -> bool:
     """Accept only a failed exit already sealed by coordinator validation recovery."""
     if last.get("exit_code") != 1 or last.get("settlement_exit", {}).get("outcome") != "failed":
@@ -112,7 +132,8 @@ def validate(ticket: dict, slot: str, command: list[str], help_reason: str,
             environment["HELL_WORKERS_HELP_IMPACT_REASON"] = help_reason
         else:
             environment.pop("HELL_WORKERS_HELP_IMPACT_REASON", None)
-        result = subprocess.run(command, cwd=repo, env=environment, pass_fds=host_pass_fds(environment),
+        execution, executor = validation_execution(repo, command)
+        result = subprocess.run(execution, cwd=repo, env=environment, pass_fds=host_pass_fds(environment),
                                 stdin=subprocess.DEVNULL, capture_output=True, timeout=1800, check=False)
         if before != roles.fingerprint(repo):
             raise ValueError("validation modified source or index; no evidence accepted")
@@ -121,6 +142,8 @@ def validate(ticket: dict, slot: str, command: list[str], help_reason: str,
                     "stdout_sha256": hashlib.sha256(result.stdout).hexdigest(),
                     "stderr_sha256": hashlib.sha256(result.stderr).hexdigest(),
                     "help_decision": help_decision, "help_reason": help_reason}
+        if executor is not None:
+            evidence["executor"] = executor
         if result.returncode:
             # Private diagnostics are data for a bounded follow-up, never argv.
             output = result.stdout + b"\n" + result.stderr

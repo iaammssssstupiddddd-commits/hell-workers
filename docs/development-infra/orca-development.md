@@ -558,6 +558,11 @@ account home（OSのuser database）配下 `.local/state/hell-workers/coordinati
 - fdは同一inodeだけでなく取得済みopen-descriptionを確認して子へ継承する。
   親のfd closeだけでは生存中の継承子のlockを解放しない。
 - frozen helperのsourceは変更せず、更新済みprimary validation coordinatorが外側から包む。
+- Orcaのcheckpoint検証で候補worktree内の`python3 scripts/dev.py ...`が選ばれた場合、
+  `orca_git_checkpoint.py`は候補側のcommand・source・testを維持したまま、現行統括側の
+  `orca_host_validation.py`で実行制御だけを包む。これにより長時間保持した候補へhost lease修正を
+  source変更としてコピーせず適用する。証拠には元commandとhost runnerのhashを残し、任意command、
+  別worktree、非canonical pathへは置換しない。
 - MCP backendは別namespaceで起動し、idle 15秒で解放する。旧daemonへは接続しないが、
   旧daemonやIDEの独自rust-analyzerを自動終了するわけではない。
 

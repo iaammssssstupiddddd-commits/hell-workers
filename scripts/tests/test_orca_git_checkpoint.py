@@ -4,8 +4,10 @@ import copy
 import sys
 import signal
 import subprocess
+import hashlib
 import uuid
 import unittest
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
@@ -112,6 +114,27 @@ class CheckpointTests(unittest.TestCase):
             reason,
         )
         self.assertEqual(evidence["exit_code"], 0)
+
+    def test_repo_local_dev_validation_uses_current_host_runner(self):
+        candidate = self.repo / "scripts/dev.py"
+        candidate.parent.mkdir()
+        candidate.write_text("raise SystemExit('stale runner must not execute')\n")
+        command = [sys.executable, "scripts/dev.py", "ci", "check", "--base", self.ticket["base"]]
+        execution, executor = checkpoints.validation_execution(self.repo, command)
+        runner = Path(checkpoints.__file__).with_name("orca_host_validation.py").resolve()
+        self.assertEqual(execution, [
+            sys.executable, str(runner), "--repo", str(self.repo), "--",
+            "ci", "check", "--base", self.ticket["base"],
+        ])
+        self.assertEqual(executor, {
+            "schema": 1,
+            "kind": "host-dev-runner",
+            "sha256": hashlib.sha256(runner.read_bytes()).hexdigest(),
+        })
+
+    def test_non_repository_validation_command_is_not_rewritten(self):
+        command = [sys.executable, "-c", "pass"]
+        self.assertEqual(checkpoints.validation_execution(self.repo, command), (command, None))
 
     def test_checkpoint_accepts_only_sealed_same_source_validation_recovery(self):
         source = roles.fingerprint(self.repo)
