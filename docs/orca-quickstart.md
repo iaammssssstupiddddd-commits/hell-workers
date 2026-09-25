@@ -137,7 +137,7 @@ orca file open docs/orca-quickstart.md --worktree path:/home/satotakumi/projects
 2026-09-25のA〜D実装では、案件panelへ工程、待ち理由、次操作、確認時刻、Linear判断、外部同期を
 表示するschema 2と、Linear/GitHubへ順序付きintentを安全に反映するexecutorを実装した。
 host/UI契約、Linux package、隔離実画面の受付表示とパネル閉鎖は成功した。2026-09-25にはdesktop iconとCLIを
-`ui-733013b0`へ切り替え、通常profileを再起動した。監督controllerは新runtimeへ再接続し、既存terminalを保持したまま
+`ui-36906ab2`へ切り替え、通常profileを再起動した。監督controllerは新runtimeへ再接続し、既存terminalを保持したまま
 TAK-14の正本状態`feedback`を再公開している。
 
 - Orca 1.4.205とLinear workspace `takumi sato` / team `TAK`の読取り接続を確認済みです。

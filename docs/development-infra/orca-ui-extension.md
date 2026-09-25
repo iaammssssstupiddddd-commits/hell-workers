@@ -5,7 +5,7 @@
 
 ## 統括タブの正本状態表示（2026-09-25）
 
-Orca UI local commit `733013b0`で、統括・担当ターミナルの上部へ監督台帳の現在状態を常時表示するようにした。
+Orca UI local commit `36906ab2`で、統括・担当ターミナルの上部へ監督台帳の現在状態を常時表示するようにした。
 ターミナル本文は会話履歴なので、過去に出力した`paused`等の報告を後から書き換えない。代わりに
 `supervision.read`の最新snapshotを2秒ごとに照合し、案件状態、詳細、最終照合時刻を固定bannerへ表示する。
 bannerには「ターミナル内の過去の状態報告より、この最新表示を優先する」と明記した。
@@ -14,11 +14,16 @@ snapshotが期限切れ、controllerが不通、または同じworktreeへ複数
 現在値として表示せず`要確認`へ倒す。controller不通時は直前snapshotを表示用に保持するが、ready扱いには戻さない。
 サイドバーpanelとターミナルbannerは同じ単一polling storeを使うため、両者で状態更新の時刻や可用性が分岐しない。
 
+初回commit `733013b0`の隔離Electron受入は通常terminalだけを対象にしており、実際の統括が使う
+Codex native chatの全面portalにbannerが隠れる欠陥を見落としていた。`36906ab2`ではbannerをnative chat
+portal内にも直接mountし、通常terminal側の重複bannerを抑止した。unit testでPTY-backed native chatと
+structured native chatの両方へ同じworktree IDが渡ることを固定している。
+
 隔離Electron受入では同一タブ・同一terminalのまま`feedback → paused → feedback`へsnapshotを更新し、
 最後に旧`paused`詳細がbannerから消えて最終review承認詳細へ切り替わることを確認した。実TAK-14では、
 ターミナル本文に旧`paused`報告が残る一方、保存台帳の`feedback`と最終review承認を正本表示できる状態で
-Orcaを再起動した。配備sourceは`733013b0`、配備先は
-`/home/satotakumi/.local/opt/orca-ide/ui-733013b0`。旧`ui-dd50afed`は復帰用に保持する。
+Orcaを再起動した。配備sourceは`36906ab2`、配備先は
+`/home/satotakumi/.local/opt/orca-ide/ui-36906ab2`。旧`ui-733013b0`と`ui-dd50afed`は復帰用に保持する。
 
 ## A〜D案件panel schema 2と外部同期executor（2026-09-25）
 
@@ -36,7 +41,7 @@ UI contract unit、web typecheck、変更行lint、host側Orca tooling 460件が
 Linux packageはglibc 2.31/native検査を通し、隔離actual-windowで固定受付の`Intake`、最終確認時刻、次操作、
 外部同期と相談・実装button、パネルを閉じても別の稼働中Orcaが停止しないことを確認した。
 当時の配備先は`/home/satotakumi/.local/opt/orca-ide/ui-dd50afed`。その後、上記の正本状態表示を含む
-`ui-733013b0`へ更新し、desktop iconとCLIを同buildへ切り替えた。
+`ui-36906ab2`へ更新し、desktop iconとCLIを同buildへ切り替えた。
 UI sourceは`stablyai/orca`へのwrite権限がないためlocal commitとして保持する。
 
 試験専用`TAK-15`では、着手・review・完了statusとcommentを実Linearへ同期し、read-backを確定した。
@@ -46,9 +51,9 @@ HEADだけからDraft PR #27を一度作成し、再実行が`idle`であるこ�
 
 ## 一時配備と復帰
 
-現在の配備sourceはlocal commit `733013b0`、配備先は
-`/home/satotakumi/.local/opt/orca-ide/ui-733013b0`。Orca IDEアイコンは同directoryの
-`launch-supervised`を起動する。旧`ui-dd50afed`は復帰用に保持する。
+現在の配備sourceはlocal commit `36906ab2`、配備先は
+`/home/satotakumi/.local/opt/orca-ide/ui-36906ab2`。Orca IDEアイコンは同directoryの
+`launch-supervised`を起動する。旧`ui-733013b0`と`ui-dd50afed`は復帰用に保持する。
 サイドバーの `Reception & Coordination`（受付・統括）が固定入口。
 controllerは既存candidateの `scripts/orca_supervision.py`、状態保存先は
 `/home/satotakumi/.local/state/hell-workers/supervision-panel`。
