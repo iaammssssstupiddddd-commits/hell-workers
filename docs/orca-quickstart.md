@@ -55,6 +55,9 @@ A/B/レビューは統括が監督付きの分離worktreeへ配車した時だ�
   実装Aが失敗するたびに「実装A」を追加する動作は不具合です。
 - 役割タブは「起動中」「実行中」「終了・結果確認済み」「停止・要確認」を表示します。
   終了後のshellや履歴表示は、agentが常駐しているという意味ではありません。
+- 統括・担当タブ上部の **「現在の案件状態」** が監督台帳から取得した正本です。
+  ターミナル本文は会話履歴なので、途中で出力された古い`paused`等の報告は残ります。
+  上部表示が更新済みならそちらを優先し、`要確認`なら古い本文から状態を推定せず受付・統括panelで接続状態を確認します。
 - 起動中の統括は「統括・起動中」、登録成功後に「統括」、終了後は「統括・終了」です。
   課題に紐づかない子作業場では統括を起動しません。
 - 再利用は作業場・端末incarnation・所有台帳と実processを照合します。
@@ -133,8 +136,9 @@ orca file open docs/orca-quickstart.md --worktree path:/home/satotakumi/projects
 
 2026-09-25のA〜D実装では、案件panelへ工程、待ち理由、次操作、確認時刻、Linear判断、外部同期を
 表示するschema 2と、Linear/GitHubへ順序付きintentを安全に反映するexecutorを実装した。
-host/UI契約、Linux package、隔離実画面の受付表示とパネル閉鎖は成功し、desktop iconは次回通常起動から
-`ui-dd50afed`を使う。稼働中TAK-14を止めていないため、通常profileのcold-startだけは次回起動時に確認する。
+host/UI契約、Linux package、隔離実画面の受付表示とパネル閉鎖は成功した。2026-09-25にはdesktop iconとCLIを
+`ui-733013b0`へ切り替え、通常profileを再起動した。監督controllerは新runtimeへ再接続し、既存terminalを保持したまま
+TAK-14の正本状態`feedback`を再公開している。
 
 - Orca 1.4.205とLinear workspace `takumi sato` / team `TAK`の読取り接続を確認済みです。
 - Linear-linked worktreeから`--current`で固定snapshotを取り込み、UUID入力を不要にする実装を追加しました。
