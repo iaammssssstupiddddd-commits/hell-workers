@@ -1266,6 +1266,57 @@ def resume_validation_timeout(request_id: str, terminal: str, slot: str, expecte
             return data
 
 
+def resume_integration_validation(request_id: str, terminal: str, expected: str) -> dict:
+    """Retry an exact combined validation that used the frozen target runner."""
+    with acquire_host(LOCK, inherit=False):
+        data = load(request_id)
+        registered = dispatch.ui_coordinator.read_registered_state(request_id)
+        final = data.get("integration", {})
+        receipt = final.get("receipt", {})
+        evidence = final.get("evidence", {})
+        target = final.get("target", {})
+        repo = Path(target.get("repo", "/invalid"))
+        execution, executor = checkpoints.validation_execution(repo, final.get("validation", {}).get("argv", []))
+        diagnostic = evidence.get("diagnostic", "")
+        stored = STORAGE.read_private_json(integration.root() / f"validation-{evidence.get('id')}.json", {})
+        if (data["terminal"] != terminal or data["phase"] != "paused"
+                or inspection_digest(data) != expected
+                or registered["terminal"] != terminal or registered["phase"] != "ready"
+                or final.get("phase") != "paused"
+                or final.get("reason") != "combined validation failed; coordinator correction routing required"
+                or data.get("reason") != final.get("reason")
+                or not all(lane.get("phase") == "approved" for lane in data["lanes"].values())
+                or evidence.get("exit_code", 0) == 0 or evidence.get("executor") is not None
+                or evidence.get("head") != receipt.get("head")
+                or evidence.get("source_sha256") != receipt.get("source_after")
+                or evidence.get("command") != final.get("validation", {}).get("argv")
+                or stored != {key: value for key, value in evidence.items() if key != "id"}
+                or "invalid inherited host lease" not in diagnostic
+                or "test_orca_review_loop" not in diagnostic
+                or executor is None or executor.get("kind") != "host-dev-runner"
+                or len(execution) < 2 or Path(execution[1]).name != "orca_host_validation.py"
+                or roles.fingerprint(repo) != receipt.get("source_after")
+                or data.get("inbox", {}).get("operation") is not None
+                or data.get("inbox", {}).get("messages")):
+            raise ValueError("exact frozen-runner combined validation failure is required")
+        with acquire_host(roles.workspace_slot(repo), inherit=False):
+            integration.check_receipt(receipt)
+            directory = STORAGE.checked_directory(root() / "integration-validation-resumes")
+            recovery = directory / f"{expected}.json"
+            STORAGE.write_ledger(recovery, {
+                "before": data,
+                "sha256": expected,
+                "head": receipt["head"],
+                "source_sha256": receipt["source_after"],
+                "old_evidence": evidence["id"],
+                "executor": executor,
+            })
+            final.update(phase="validating", reason=None, validation_recovery=str(recovery))
+            data.update(phase="active", reason=None)
+            save(data)
+            return data
+
+
 def resume_inbox(request_id: str, terminal: str, expected: str) -> dict:
     """Resume only a verified receipt-correlation pause, without acknowledging mail."""
     with acquire_host(LOCK, inherit=False):
@@ -1457,6 +1508,7 @@ def main() -> int:
                                            "resume-review-wait", "resume-validation-timeout",
                                            "refresh-validation-authorization",
                                            "resume-validation-authorization",
+                                           "resume-integration-validation",
                                            "resume-inbox", "resume-linear-runtime",
                                            "finalize-tabs"))
     parser.add_argument("--request-id", required=True)
@@ -1506,6 +1558,12 @@ def main() -> int:
                 raise ValueError("validation authorization refresh requires slot and inspected ledger digest")
             result = refresh_validation_authorization(
                 args.request_id, args.coordinator, args.slot, args.expected_sha256
+            )
+        elif args.action == "resume-integration-validation":
+            if not args.expected_sha256:
+                raise ValueError("integration validation recovery requires inspected ledger digest")
+            result = resume_integration_validation(
+                args.request_id, args.coordinator, args.expected_sha256
             )
         elif args.action == "resume-validation-authorization":
             if not args.slot or not args.expected_sha256:

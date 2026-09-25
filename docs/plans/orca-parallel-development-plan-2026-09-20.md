@@ -38,6 +38,7 @@ host runnerは検証全体を覆うheavy leaseを継承せず、Cargo/auditの�
 cold cacheのBevy全体検証は2時間まで許容し、旧30分上限で停止したexact sourceは専用のtimeout復旧から再開する。
 誤検証が残した未使用の次世代authorizationは破棄せず、sealed旧診断と現在の実診断を照合して差戻しに消費する。
 修正前runnerで切り詰め済みなら、同じsourceの検証を一度だけ再実行して現在のbounded summaryを作る。
+統合後検証も現行host runnerへ統一し、旧runnerによる既知の誤失敗はexact integration headから再開する。
 長い失敗出力は末尾と失敗signalのbounded summaryを併記し、asset logでtest名やpanicが流れないようにする。
 
 ### 正本と責務

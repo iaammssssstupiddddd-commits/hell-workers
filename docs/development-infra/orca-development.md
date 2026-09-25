@@ -572,6 +572,9 @@ account home（OSのuser database）配下 `.local/state/hell-workers/coordinati
   sealed旧診断を確認する`resume-validation-authorization`がその世代を現在の実診断差戻しに一度だけ消費する。
 - 修正前runnerで切り詰め済みの実診断は、同じsource・validation・未使用authorizationを照合する
   `refresh-validation-authorization`で一度だけ再検証し、失敗signalを保持してから上記の差戻しへ進む。
+- worker候補だけでなく統合先の検証も現行host runnerを使う。旧統合先runnerを実行済みの場合は、exact
+  integration head/source/evidenceと既知のcontroller失敗を照合する`resume-integration-validation`だけが
+  同じ統合headを再検証する。新しい統合commitやRunは作らない。
 - 長い検証出力は末尾だけに切り詰めず、失敗test名・panic・compiler errorをbounded summaryとして保持して
   実装担当へ返す。大量のasset logで先頭の失敗原因を失わない。
 - 可視統括自体を更新後のdriverへ載せ直す場合は、保存済み会話sessionだけで再起動しない。

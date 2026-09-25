@@ -15,12 +15,12 @@ from pathlib import Path
 
 if __package__:
     from . import orca_git_checkpoint as checkpoints, orca_role_state as bindings, orca_roles as roles
-    from .host_coordination import acquire_host, host_pass_fds
+    from .host_coordination import HOST_FD_ENV, acquire_host, host_pass_fds
 else:
     import orca_git_checkpoint as checkpoints
     import orca_role_state as bindings
     import orca_roles as roles
-    from host_coordination import acquire_host, host_pass_fds
+    from host_coordination import HOST_FD_ENV, acquire_host, host_pass_fds
 
 git = checkpoints.git
 
@@ -173,16 +173,26 @@ def validate(receipt: dict, config: dict) -> dict:
     """Fresh combined-head evidence; worker validation is never reused."""
     target, head = receipt["target"], receipt["head"]
     repo = Path(target["repo"])
-    with acquire_host(roles.workspace_slot(repo), inherit=False), acquire_host("heavy") as heavy:
+    execution, executor = checkpoints.validation_execution(repo, config["argv"])
+    with ExitStack() as leases:
+        leases.enter_context(acquire_host(roles.workspace_slot(repo), inherit=False))
         check_receipt(receipt)
         source = roles.fingerprint(repo)
-        environment = heavy.environment(dict(os.environ))
+        environment = dict(os.environ)
+        if executor is None:
+            heavy = leases.enter_context(acquire_host("heavy"))
+            environment = heavy.environment(environment)
+        else:
+            # The current runner owns one heavy lease per Cargo/audit command;
+            # never freeze integration validation to the target's old dev.py.
+            environment.pop(HOST_FD_ENV, None)
         if config["help_decision"] == "none":
             environment["HELL_WORKERS_HELP_IMPACT_REASON"] = config["help_reason"]
         else:
             environment.pop("HELL_WORKERS_HELP_IMPACT_REASON", None)
-        result = subprocess.run(config["argv"], cwd=repo, env=environment, pass_fds=host_pass_fds(environment),
-                                stdin=subprocess.DEVNULL, capture_output=True, timeout=1800, check=False)
+        timeout = 7200 if executor is not None else 1800
+        result = subprocess.run(execution, cwd=repo, env=environment, pass_fds=host_pass_fds(environment),
+                                stdin=subprocess.DEVNULL, capture_output=True, timeout=timeout, check=False)
         if source != roles.fingerprint(repo):
             raise ValueError("combined validation modified source or index")
         evidence = {"schema": 1, "integration": receipt["operation"], "head": head, "source_sha256": source,
@@ -190,8 +200,12 @@ def validate(receipt: dict, config: dict) -> dict:
                     "stdout_sha256": hashlib.sha256(result.stdout).hexdigest(),
                     "stderr_sha256": hashlib.sha256(result.stderr).hexdigest(),
                     "help_reason": config["help_reason"], "help_decision": config["help_decision"]}
+        if executor is not None:
+            evidence["executor"] = executor
         if result.returncode:
-            evidence["diagnostic"] = (result.stdout + b"\n" + result.stderr)[-8000:].decode("utf-8", errors="replace")
+            diagnostic, truncated = checkpoints.bounded_failure_diagnostic(result.stdout + b"\n" + result.stderr)
+            evidence["diagnostic"] = diagnostic
+            evidence["diagnostic_truncated"] = truncated
         identifier = bindings.digest(evidence)
         bindings.storage.write_ledger(root() / f"validation-{identifier}.json", evidence)
         return {"id": identifier, **evidence}

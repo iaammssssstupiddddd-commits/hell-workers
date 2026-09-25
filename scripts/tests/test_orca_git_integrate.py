@@ -293,6 +293,43 @@ class IntegrationTests(unittest.TestCase):
         evidence = integration.validate(result, config)
         self.assertEqual(evidence["exit_code"], 0)
 
+    def test_combined_validation_uses_current_host_runner_without_outer_heavy(self):
+        result = integration.integrate(self.target, self.approvals())
+        command = [sys.executable, "scripts/dev.py", "ci", "check", "--base", self.target["base"]]
+        execution = [sys.executable, "/fixture/orca_host_validation.py", "--repo", str(self.repo),
+                     "--", "ci", "check", "--base", self.target["base"]]
+        executor = {"schema": 1, "kind": "host-dev-runner", "sha256": "a" * 64}
+        completed = subprocess.CompletedProcess(execution, 0, b"", b"")
+        acquired = []
+        original = integration.acquire_host
+        original_run = subprocess.run
+
+        def tracked(name="heavy", **kwargs):
+            acquired.append(name)
+            return original(name, **kwargs)
+
+        def run_command(argv, *args, **kwargs):
+            if argv == execution:
+                return completed
+            return original_run(argv, *args, **kwargs)
+
+        with (
+            patch.object(integration.checkpoints, "validation_execution", return_value=(execution, executor)),
+            patch.object(integration, "acquire_host", side_effect=tracked),
+            patch.object(integration.subprocess, "run", side_effect=run_command) as run,
+        ):
+            evidence = integration.validate(result, {
+                "argv": command,
+                "help_reason": "Fixture only; no player behavior changes",
+                "help_decision": "none",
+            })
+        self.assertEqual(evidence["executor"], executor)
+        self.assertNotIn("heavy", acquired)
+        validation_call = next(item for item in run.call_args_list if item.args[0] == execution)
+        self.assertEqual(validation_call.kwargs["timeout"], 7200)
+        self.assertNotIn(host_coordination.HOST_FD_ENV, validation_call.kwargs["env"])
+        self.assertEqual(validation_call.kwargs["pass_fds"], ())
+
     def test_cancellation_before_integration_preserves_target(self):
         self.enable()
         self.fixture.register()
