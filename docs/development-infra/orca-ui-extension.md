@@ -27,9 +27,9 @@ Orcaを再起動した。配備sourceは`36906ab2`、配備先は
 
 初回切替後、GNOMEが保持していたversion付きlauncherとOrca内のCLI shimが`ui-733013b0`を再起動し、
 利用者画面が旧版へ戻る不具合を実環境で確認した。配備入口を
-`/home/satotakumi/.local/opt/orca-ide/launch-supervised`と`current` symlinkへ固定し、desktop entry、
-CLI shim、旧`ui-733013b0/launch-supervised`の全てを同じ固定入口へ収束させた。旧launcher経由の再起動でも
-`1.4.205-local.36906ab2`になることを検査した。
+`/home/satotakumi/.local/opt/orca-ide/launch-supervised`と`current` symlinkへ固定し、desktop entryと
+旧versionのlauncherを同じ固定入口へ収束させた。Orcaが生成するCLI shimも起動中の現行buildを指すことを照合した。
+旧launcher経由の再起動でも`1.4.205-local.36906ab2`になることを検査した。
 
 TAK-14の実Orca rendererへ接続した受入では、`supervision-terminal-status`がvisibleで、画面上端の
 `x=326.13, y=44, width=718.73, height=60.5`に描画されることを確認した。表示内容は
