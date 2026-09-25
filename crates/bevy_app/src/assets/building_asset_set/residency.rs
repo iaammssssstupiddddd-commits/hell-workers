@@ -7,8 +7,8 @@ use bevy::prelude::*;
 use super::{BuildingAssetSetError, BuildingAssetSetManifest};
 
 pub(super) struct TypedRoles {
-    meshes: Vec<Handle<Mesh>>,
-    images: Vec<(Handle<Image>, Option<[u32; 2]>)>,
+    pub(super) meshes: Vec<Handle<Mesh>>,
+    pub(super) images: Vec<(Handle<Image>, Option<[u32; 2]>)>,
 }
 
 impl TypedRoles {
