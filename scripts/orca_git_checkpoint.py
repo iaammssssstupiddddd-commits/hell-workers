@@ -143,8 +143,9 @@ def validate(ticket: dict, slot: str, command: list[str], help_reason: str,
             environment["HELL_WORKERS_HELP_IMPACT_REASON"] = help_reason
         else:
             environment.pop("HELL_WORKERS_HELP_IMPACT_REASON", None)
+        timeout = 7200 if executor is not None else 1800
         result = subprocess.run(execution, cwd=repo, env=environment, pass_fds=host_pass_fds(environment),
-                                stdin=subprocess.DEVNULL, capture_output=True, timeout=1800, check=False)
+                                stdin=subprocess.DEVNULL, capture_output=True, timeout=timeout, check=False)
         if before != roles.fingerprint(repo):
             raise ValueError("validation modified source or index; no evidence accepted")
         evidence = {"schema": 1, "ticket_sha256": bindings.digest(ticket), "slot": slot,

@@ -574,6 +574,33 @@ class ReviewLoopTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "exact inspected"):
             loop.resume_review_wait(fixtures.REQUEST, fixtures.COORDINATOR, "worker-a", expected)
 
+    def test_exact_cold_cache_validation_timeout_resumes_without_new_revision(self):
+        data = self.register()
+        loop.transition(data, "worker-a", "validation_running")
+        loop.transition(data, "worker-a", "paused", reason=(
+            "TimeoutExpired: Command ['/usr/bin/python3', 'orca_host_validation.py'] "
+            "timed out after 1800 seconds"
+        ))
+        data.update(phase="paused", reason=None)
+        loop.save(data)
+        expected = loop.inspection_digest(data)
+        executor = {"schema": 1, "kind": "host-dev-runner", "sha256": "a" * 64}
+        execution = [sys.executable, "/controller/orca_host_validation.py"]
+        with (
+            patch.object(dispatch.ui_coordinator, "read_registered_state", return_value={
+                "terminal": fixtures.COORDINATOR, "phase": "ready"
+            }),
+            patch.object(checkpoints, "validation_execution", return_value=(execution, executor)),
+        ):
+            resumed = loop.resume_validation_timeout(
+                fixtures.REQUEST, fixtures.COORDINATOR, "worker-a", expected
+            )
+        self.assertEqual(resumed["phase"], "active")
+        self.assertEqual(resumed["lanes"]["worker-a"]["phase"], "validating")
+        self.assertEqual(resumed["lanes"]["worker-a"]["revisions"], 0)
+        receipt = loop.root() / "validation-timeout-recoveries" / f"{expected}.json"
+        self.assertTrue(receipt.is_file())
+
     def test_production_help_review_is_not_replaced_by_predeclared_text(self):
         self.register()
         for _ in range(4):

@@ -171,6 +171,7 @@ class CheckpointTests(unittest.TestCase):
         )
         self.assertNotIn(checkpoints.HOST_FD_ENV, validation_call.kwargs["env"])
         self.assertEqual(validation_call.kwargs["pass_fds"], ())
+        self.assertEqual(validation_call.kwargs["timeout"], 7200)
 
     def test_checkpoint_accepts_only_sealed_same_source_validation_recovery(self):
         source = roles.fingerprint(self.repo)

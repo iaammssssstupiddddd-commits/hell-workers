@@ -1107,6 +1107,44 @@ def resume_review_wait(request_id: str, terminal: str, slot: str, expected: str)
             return data
 
 
+def resume_validation_timeout(request_id: str, terminal: str, slot: str, expected: str) -> dict:
+    """Retry one exact source-unchanged cold-cache timeout with the current runner."""
+    with acquire_host(LOCK, inherit=False):
+        data = load(request_id)
+        registered = dispatch.ui_coordinator.read_registered_state(request_id)
+        lane = data["lanes"][slot]
+        repo = Path(lane["ticket"]["repo"])
+        execution, executor = checkpoints.validation_execution(repo, lane["validation"]["argv"])
+        reason = lane.get("reason", "")
+        history = lane.get("history", [])
+        if (data["terminal"] != terminal or data["phase"] != "paused"
+                or inspection_digest(data) != expected
+                or registered["terminal"] != terminal or registered["phase"] != "ready"
+                or lane["phase"] != "paused" or not history
+                or history[-1].get("from") != "validation_running"
+                or history[-1].get("to") != "paused"
+                or not reason.startswith("TimeoutExpired: Command ")
+                or "timed out after 1800 seconds" not in reason
+                or executor is None or executor.get("kind") != "host-dev-runner"
+                or len(execution) < 2 or Path(execution[1]).name != "orca_host_validation.py"
+                or roles.fingerprint(repo) != lane["source"]):
+            raise ValueError("exact inspected source-unchanged host validation timeout required")
+        with acquire_host(roles.workspace_slot(repo), inherit=False):
+            roles.validate_ticket(lane["ticket"])
+            directory = STORAGE.checked_directory(root() / "validation-timeout-recoveries")
+            STORAGE.write_ledger(directory / f"{expected}.json", {
+                "before": data,
+                "sha256": expected,
+                "subject": slot,
+                "source_sha256": lane["source"],
+                "executor": executor,
+            })
+            transition(data, slot, "validating", reason=None)
+            data.update(phase="active", reason=None)
+            save(data)
+            return data
+
+
 def resume_inbox(request_id: str, terminal: str, expected: str) -> dict:
     """Resume only a verified receipt-correlation pause, without acknowledging mail."""
     with acquire_host(LOCK, inherit=False):
@@ -1295,7 +1333,8 @@ def main() -> int:
     parser.add_argument("action", choices=("register", "register-successor", "successor-preflight",
                                            "show", "tick", "watch", "decide", "route",
                                            "submit-help-review", "resume-coordinator-validation",
-                                           "resume-review-wait", "resume-inbox", "resume-linear-runtime",
+                                           "resume-review-wait", "resume-validation-timeout",
+                                           "resume-inbox", "resume-linear-runtime",
                                            "finalize-tabs"))
     parser.add_argument("--request-id", required=True)
     parser.add_argument("--coordinator", required=True)
@@ -1333,6 +1372,12 @@ def main() -> int:
             if not args.slot or not args.expected_sha256:
                 raise ValueError("review wait recovery requires slot and inspected ledger digest")
             result = resume_review_wait(args.request_id, args.coordinator, args.slot, args.expected_sha256)
+        elif args.action == "resume-validation-timeout":
+            if not args.slot or not args.expected_sha256:
+                raise ValueError("validation timeout recovery requires slot and inspected ledger digest")
+            result = resume_validation_timeout(
+                args.request_id, args.coordinator, args.slot, args.expected_sha256
+            )
         elif args.action == "register":
             if args.spec is None:
                 raise ValueError("registration requires a trusted private spec")

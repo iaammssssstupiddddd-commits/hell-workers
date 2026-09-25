@@ -566,6 +566,8 @@ account home（OSのuser database）配下 `.local/state/hell-workers/coordinati
 - host runner経路ではcheckpoint親がheavy leaseを検証全体へ保持しない。現行runnerがCargo/auditごとに
   heavy leaseを取得し、候補内のcoordination unit testには外側の実leaseを持ち込まない。controller由来で
   source不変の失敗を復旧した場合、その誤再試行は実装修正回数へ算入しない。
+- cold cacheのBevy全体検証を許容するためhost runnerの上限は2時間とする。旧30分上限で停止した場合は、
+  exact loop/source/履歴と終了済みprocessを確認する`resume-validation-timeout`だけが同じ検証を再開する。
 - 可視統括自体を更新後のdriverへ載せ直す場合は、保存済み会話sessionだけで再起動しない。
   `launch --resume-session <UUID> --request-id <UUID>`の組として、既存のimmutable Linear snapshot、
   同じOrca terminal/worktree、終了済み統括状態へ拘束する。再開時に現在のLinear表示を再importして
