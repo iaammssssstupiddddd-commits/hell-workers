@@ -90,6 +90,37 @@ def recovered_failed_exit(previous: dict, last: dict, slot: str) -> bool:
             and last["settlement_exit"].get("source_sha256") == previous.get("source_sha256"))
 
 
+def bounded_failure_diagnostic(output: bytes, tail_bytes: int = 8000,
+                               summary_chars: int = 3500) -> tuple[str, bool]:
+    """Keep failure signals that would otherwise scroll out of the bounded tail."""
+    truncated = len(output) > tail_bytes
+    text = output.decode("utf-8", errors="replace")
+    if not truncated:
+        return text, False
+    lines = text.splitlines()
+    markers = (
+        " FAILED", "panicked at", "failures:", "test result:", "error[E",
+        "error:", "Traceback (most recent call last):", "AssertionError",
+        "Caused by:", "stdout ----",
+    )
+    selected: list[str] = []
+    seen: set[str] = set()
+    for index, line in enumerate(lines):
+        if not any(marker in line for marker in markers):
+            continue
+        for candidate in lines[max(0, index - 1):min(len(lines), index + 3)]:
+            if candidate not in seen:
+                selected.append(candidate)
+                seen.add(candidate)
+        if len("\n".join(selected)) >= summary_chars:
+            break
+    summary = "\n".join(selected)[:summary_chars].strip()
+    tail = output[-tail_bytes:].decode("utf-8", errors="replace")
+    if not summary:
+        return tail, True
+    return f"Failure summary preserved before truncation:\n{summary}\n\nOutput tail:\n{tail}", True
+
+
 def worker_exit(ticket: dict, slot: str) -> dict:
     if slot not in {"worker-a", "worker-b"} or ticket.get("read_only"):
         raise ValueError("checkpoint requires an editing worker")
@@ -158,8 +189,9 @@ def validate(ticket: dict, slot: str, command: list[str], help_reason: str,
         if result.returncode:
             # Private diagnostics are data for a bounded follow-up, never argv.
             output = result.stdout + b"\n" + result.stderr
-            evidence["diagnostic"] = output[-8000:].decode("utf-8", errors="replace")
-            evidence["diagnostic_truncated"] = len(output) > 8000
+            diagnostic, truncated = bounded_failure_diagnostic(output)
+            evidence["diagnostic"] = diagnostic
+            evidence["diagnostic_truncated"] = truncated
         identifier = bindings.digest(evidence)
         bindings.storage.write_ledger(root() / f"validation-{identifier}.json", evidence)
         return {"id": identifier, **evidence}

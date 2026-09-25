@@ -136,6 +136,20 @@ class CheckpointTests(unittest.TestCase):
         command = [sys.executable, "-c", "pass"]
         self.assertEqual(checkpoints.validation_execution(self.repo, command), (command, None))
 
+    def test_truncated_validation_keeps_early_failure_signal_and_tail(self):
+        output = (
+            b"test systems::display::connection ... FAILED\n"
+            b"thread 'systems::display::connection' panicked at fixture.rs:12\n"
+            + b"asset-loader noise\n" * 1000
+            + b"error: test failed, to rerun pass `-p bevy_app --lib`\n"
+        )
+        diagnostic, truncated = checkpoints.bounded_failure_diagnostic(output)
+        self.assertTrue(truncated)
+        self.assertIn("test systems::display::connection ... FAILED", diagnostic)
+        self.assertIn("panicked at fixture.rs:12", diagnostic)
+        self.assertIn("error: test failed", diagnostic)
+        self.assertLessEqual(len(diagnostic), 12000)
+
     def test_current_host_runner_owns_heavy_admission_internally(self):
         command = [sys.executable, "scripts/dev.py", "ci", "check", "--base", self.ticket["base"]]
         completed = subprocess.CompletedProcess([], 0, b"", b"")
