@@ -435,10 +435,19 @@ def resume_coordinator_validation(request_id: str, terminal: str, spec: dict) ->
         recoverable_reason = lane.get("reason") in {
             "settled failed Task; coordinator decision required",
             "ValueError: successful Orca settlement and closed bridge are required",
+            "revision budget or repeated unresolved finding",
         }
+        host_runner_gate = (
+            evidence.get("executor", {}).get("kind") == "host-dev-runner"
+            and evidence.get("diagnostic_truncated") is True
+            and ("invalid inherited host lease" in diagnostic
+                 or "host slot busy (heavy)" in diagnostic)
+        )
         coordinator_gate = (
             ("scripts/check_help_impact.py" in diagnostic and "Help impact:" in diagnostic)
-            or ("invalid inherited host lease" in diagnostic and evidence.get("diagnostic_truncated") is True)
+            or ("invalid inherited host lease" in diagnostic
+                and evidence.get("diagnostic_truncated") is True)
+            or host_runner_gate
         )
         if (data["phase"] != "paused" or lane.get("phase") != "paused"
                 or not recoverable_reason
@@ -477,6 +486,7 @@ def resume_coordinator_validation(request_id: str, terminal: str, spec: dict) ->
         receipt = {"schema": 1, "request_id": request_id, "run_id": owned_run_id(data),
                    "subject": slot, "evidence": evidence["id"], "source_sha256": spec["source_sha256"],
                    "failed_settlement": str(failed_settlement), "reason": spec["reason"],
+                   **({"revisions_before": lane["revisions"]} if host_runner_gate else {}),
                    **({"replacement_argv": replacement} if replacement is not None else {})}
         STORAGE.write_ledger(receipt_path, receipt)
         with acquire_host(slot, inherit=False), acquire_host(roles.workspace_slot(repo), inherit=False):
@@ -493,6 +503,10 @@ def resume_coordinator_validation(request_id: str, terminal: str, spec: dict) ->
             bindings.save_state(role)
         lane.pop("failed", None)
         lane.pop("failure_reason", None)
+        if host_runner_gate:
+            # Controller-only retries never changed the frozen candidate and
+            # must not consume the implementation finding budget.
+            lane["revisions"] = 0
         if replacement is not None:
             lane["validation"]["argv"] = replacement
             if isinstance(data.get("integration"), dict):

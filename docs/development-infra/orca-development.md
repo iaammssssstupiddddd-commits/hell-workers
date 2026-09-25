@@ -563,6 +563,9 @@ account home（OSのuser database）配下 `.local/state/hell-workers/coordinati
   `orca_host_validation.py`で実行制御だけを包む。これにより長時間保持した候補へhost lease修正を
   source変更としてコピーせず適用する。証拠には元commandとhost runnerのhashを残し、任意command、
   別worktree、非canonical pathへは置換しない。
+- host runner経路ではcheckpoint親がheavy leaseを検証全体へ保持しない。現行runnerがCargo/auditごとに
+  heavy leaseを取得し、候補内のcoordination unit testには外側の実leaseを持ち込まない。controller由来で
+  source不変の失敗を復旧した場合、その誤再試行は実装修正回数へ算入しない。
 - 可視統括自体を更新後のdriverへ載せ直す場合は、保存済み会話sessionだけで再起動しない。
   `launch --resume-session <UUID> --request-id <UUID>`の組として、既存のimmutable Linear snapshot、
   同じOrca terminal/worktree、終了済み統括状態へ拘束する。再開時に現在のLinear表示を再importして

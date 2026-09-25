@@ -136,6 +136,42 @@ class CheckpointTests(unittest.TestCase):
         command = [sys.executable, "-c", "pass"]
         self.assertEqual(checkpoints.validation_execution(self.repo, command), (command, None))
 
+    def test_current_host_runner_owns_heavy_admission_internally(self):
+        command = [sys.executable, "scripts/dev.py", "ci", "check", "--base", self.ticket["base"]]
+        completed = subprocess.CompletedProcess([], 0, b"", b"")
+        acquired = []
+        original = checkpoints.acquire_host
+        original_run = subprocess.run
+        runner = Path(checkpoints.__file__).with_name("orca_host_validation.py").resolve()
+        execution = [sys.executable, str(runner), "--repo", str(self.repo), "--", *command[2:]]
+        executor = {"schema": 1, "kind": "host-dev-runner", "sha256": "a" * 64}
+
+        def tracked(name="heavy", **kwargs):
+            acquired.append(name)
+            return original(name, **kwargs)
+
+        def run_command(argv, *args, **kwargs):
+            if len(argv) > 1 and Path(argv[1]).name == "orca_host_validation.py":
+                return completed
+            return original_run(argv, *args, **kwargs)
+
+        with (
+            patch.object(checkpoints, "validation_execution", return_value=(execution, executor)),
+            patch.object(checkpoints, "acquire_host", side_effect=tracked),
+            patch.object(checkpoints.subprocess, "run", side_effect=run_command) as run,
+        ):
+            evidence = checkpoints.validate(
+                self.ticket, "worker-a", command, "Fixture only; no player behavior changes"
+            )
+        self.assertEqual(evidence["exit_code"], 0)
+        self.assertNotIn("heavy", acquired)
+        validation_call = next(
+            item for item in run.call_args_list
+            if len(item.args[0]) > 1 and Path(item.args[0][1]).name == "orca_host_validation.py"
+        )
+        self.assertNotIn(checkpoints.HOST_FD_ENV, validation_call.kwargs["env"])
+        self.assertEqual(validation_call.kwargs["pass_fds"], ())
+
     def test_checkpoint_accepts_only_sealed_same_source_validation_recovery(self):
         source = roles.fingerprint(self.repo)
         recovery_dir = state.storage.checked_directory(

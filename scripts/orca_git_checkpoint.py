@@ -20,11 +20,11 @@ from pathlib import Path
 
 if __package__:
     from . import orca_role_state as bindings, orca_roles as roles
-    from .host_coordination import acquire_host, host_pass_fds
+    from .host_coordination import HOST_FD_ENV, acquire_host, host_pass_fds
 else:
     import orca_role_state as bindings
     import orca_roles as roles
-    from host_coordination import acquire_host, host_pass_fds
+    from host_coordination import HOST_FD_ENV, acquire_host, host_pass_fds
 
 
 def root() -> Path:
@@ -119,20 +119,30 @@ def validate(ticket: dict, slot: str, command: list[str], help_reason: str,
             or help_decision not in {"none", "updated"}):
         raise ValueError("validation requires explicit argv and a bounded Help decision")
     repo = Path(ticket["repo"])
-    with (acquire_host(slot, inherit=False), acquire_host(roles.workspace_slot(repo), inherit=False),
-          acquire_host("heavy") as heavy):
+    execution, executor = validation_execution(repo, command)
+    with ExitStack() as leases:
+        leases.enter_context(acquire_host(slot, inherit=False))
+        leases.enter_context(acquire_host(roles.workspace_slot(repo), inherit=False))
         roles.validate_ticket(ticket)
         previous = worker_exit(ticket, slot)
         roles.worker_scope(ticket, initial=False)
         before = roles.fingerprint(repo)
         if previous["source_sha256"] != before:
             raise ValueError("source changed since worker exit")
-        environment = heavy.environment(dict(os.environ))
+        environment = dict(os.environ)
+        if executor is None:
+            heavy = leases.enter_context(acquire_host("heavy"))
+            environment = heavy.environment(environment)
+        else:
+            # The current host runner acquires the heavy slot only around real
+            # Cargo/audit work. Keeping an outer lease across a frozen
+            # worktree's coordination unit tests makes those tests contend
+            # with their own parent and masks the product diagnostics.
+            environment.pop(HOST_FD_ENV, None)
         if help_decision == "none":
             environment["HELL_WORKERS_HELP_IMPACT_REASON"] = help_reason
         else:
             environment.pop("HELL_WORKERS_HELP_IMPACT_REASON", None)
-        execution, executor = validation_execution(repo, command)
         result = subprocess.run(execution, cwd=repo, env=environment, pass_fds=host_pass_fds(environment),
                                 stdin=subprocess.DEVNULL, capture_output=True, timeout=1800, check=False)
         if before != roles.fingerprint(repo):

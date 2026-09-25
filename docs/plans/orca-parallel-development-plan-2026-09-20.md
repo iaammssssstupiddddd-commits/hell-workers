@@ -33,6 +33,8 @@ TAK-14の実案件では、候補作成後にhost lease制御が更新されて�
 tooling fixtureが本来のRust診断より先に失敗してloopが反復停止した。候補sourceを更新・差替えず、
 候補側のcommandとtestsを現行統括runnerで実行する境界をcheckpointへ追加する。統括driverの載せ直しも
 保存済みrequest/sessionの組へ拘束し、現在のLinear snapshotから別requestを作らず、同じRun・session・候補から再開する。
+host runnerは検証全体を覆うheavy leaseを継承せず、Cargo/auditの実行単位だけを現行制御で直列化する。
+これにより候補内の排他制御unit testが親leaseへ自己衝突せず、controller由来の再試行も実装revision予算から除外する。
 
 ### 正本と責務
 
