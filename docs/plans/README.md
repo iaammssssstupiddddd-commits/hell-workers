@@ -48,9 +48,10 @@
 | [development-workstation-blender-migration-plan-2026-07-29.md](development-workstation-blender-migration-plan-2026-07-29.md) | In Progress | 新PCへの開発環境移行と、現PCでのBlender／asset新規構築計画。 |
 | [hvac-plumbing-plan-2026-07-13.md](hvac-plumbing-plan-2026-07-13.md) | Draft | 地獄のインフラ（換気・導水・部屋認可）実装計画 |
 | [native-acceptance-resource-safety-plan-2026-08-05.md](native-acceptance-resource-safety-plan-2026-08-05.md) | Complete | tmpfs上のCargo出力を永続storageへ固定し、実機検証のRAM圧迫を防ぐ計画。 |
-| [orca-abcd-workflow-expansion-plan-2026-09-25.md](orca-abcd-workflow-expansion-plan-2026-09-25.md) | Active — 第1実装batch完了・実runtime受入待ち | 自然文受付、状態パネル、自動loop、自己修復、A/B並列計画、統括判断によるLinear課題発行、GitHub/CI連携を段階導入する上位計画。 |
+| [orca-abcd-workflow-expansion-plan-2026-09-25.md](orca-abcd-workflow-expansion-plan-2026-09-25.md) | Active — 部品実装済み。依頼全体の制御・同期・終了を横断是正中（受入gateの候補実装） | 自然文受付、状態パネル、自動loop、自己修復、A/B並列計画、統括判断によるLinear課題発行、GitHub/CI連携を段階導入する上位計画。 |
 | [orca-git-review-loop-plan-2026-09-22.md](orca-git-review-loop-plan-2026-09-22.md) | In Progress（実runtimeの実装・差戻し・統合・最終reviewを受入。GitHub公開/PR自動同期と無介入cold-startは未完） | Git基点の実装・差戻し・再review・統合ループ。統括event駆動、GitHub/Linear連携、運用基盤配備の計画。 |
 | [orca-parallel-development-plan-2026-09-20.md](orca-parallel-development-plan-2026-09-20.md) | In Progress — 固定受付、可視統括、日本語A/B/review tab、実案件の反復loop、稼働中runtime中断復旧を受入。無介入cold-startと利用者指定の安全停止を残す | Linear受付・Orca実行基盤の統合。既存guard/session再利用、段階移行と限定検証 |
+| [orca-request-lifecycle-correction-plan-2026-09-26.md](orca-request-lifecycle-correction-plan-2026-09-26.md) | In Progress — host差分統合、全体受入gateの候補実装中。全経路受入・運用切替は未完了 | Orca 依頼全体の進行・完了判定と連携の横断是正計画 |
 | [orca-ui-lifecycle-plan-2026-09-23.md](orca-ui-lifecycle-plan-2026-09-23.md) | In Progress — 固定受付、実案件の実装・固定review・統合、承認後role tab整理、通常desktop起動、稼働中agentの中断・再起動復旧まで受入。新規案件の無介入cold-start計測が残る | Orca UI・受付・終了ライフサイクル統合計画 |
 
 ## アーカイブ計画書一覧 (`archive/` / `**/archived/`)

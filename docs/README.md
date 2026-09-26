@@ -66,6 +66,7 @@
 - [DEVELOPMENT.md](DEVELOPMENT.md): 開発規約・MCP活用、固定品質ツール、依存監査・Dependabot更新、property testの再現手順。
 - [development-infra/rust-analyzer-mcp.md](development-infra/rust-analyzer-mcp.md): 複数エージェントでrust-analyzer MCP backendを共有するadapter、idle解放、IDE側の常駐コスト削減設定。
 - [development-infra/orca-development.md](development-infra/orca-development.md): Orca分離開発の詳細仕様。Linear受付、guard付きhost controller、Codex/Cursor Task bridge、受入済み監督付き並列編集、固定reviewer・host資源制御の再利用。
+- [development-infra/orca-request-lifecycle.md](development-infra/orca-request-lifecycle.md): 工程承認と依頼全体の受入を分ける候補実装。scope改訂、固定review拘束、終了/Doneの拒否gateと未接続範囲。
 - [development-infra/orca-github-linear-acceptance-2026-09-22.md](development-infra/orca-github-linear-acceptance-2026-09-22.md): TAK-7 / PR #26の隔離試験。標準PR link、Draft解除・mergeのLinear反映を実測。全体自動ループの受入とは区別。
 - [development-infra/validation-storage-audit-2026-09-13.md](development-infra/validation-storage-audit-2026-09-13.md): 検証データの容量実測、track close時の撤去規則と実装の差、旧checkout・共有worktreeの残存調査。
 - [development-infra/validation-storage-workflow.md](development-infra/validation-storage-workflow.md): 終了データの整理、現在の用途による保持、フィードバック中の差分ビルド保全。全job保存・固定日数の義務は設けない。
@@ -92,6 +93,7 @@
 - [plans/orca-git-review-loop-plan-2026-09-22.md](plans/orca-git-review-loop-plan-2026-09-22.md): Git基点の実装・差戻し・再review・統合ループ計画。実runtimeの最終reviewまで受入済み。公開/PR自動同期は継続。
 - [plans/orca-ui-lifecycle-plan-2026-09-23.md](plans/orca-ui-lifecycle-plan-2026-09-23.md): Orcaの固定受付・役割表示・終了/再開・作業場整理を一体化する計画。通常起動と承認後role tab整理まで受入済み。
 - [plans/orca-abcd-workflow-expansion-plan-2026-09-25.md](plans/orca-abcd-workflow-expansion-plan-2026-09-25.md): Orcaの自然文受付・状態パネル・自動loop、自己修復、A/B並列計画、統括判断によるLinear課題発行とGitHub/CI連携をA〜Dで段階実装する上位ロードマップ。
+- [plans/orca-request-lifecycle-correction-plan-2026-09-26.md](plans/orca-request-lifecycle-correction-plan-2026-09-26.md): 個別loopと依頼全体の完了を分離し、全体受入条件、次工程継続、Linear同期、終了・履歴・配備を横断是正する計画。
 - [development-infra/orca-ui-extension.md](development-infra/orca-ui-extension.md): 配備中のOrca本体UI/API、状態契約、既存controllerとの責務境界、受入済み範囲と残件。
 - [proposals/progression-and-choice-proposal-2026-08-09.md](proposals/progression-and-choice-proposal-2026-08-09.md): Track D の Dream Edict、Contract、Familiar 昇格を扱う進行・選択提案。
 - [proposals/archive/gameplay-management-improvements-proposal-2026-07-17.md](proposals/archive/gameplay-management-improvements-proposal-2026-07-17.md): Track A〜C のロードマップと完了履歴を保持するアーカイブ提案。

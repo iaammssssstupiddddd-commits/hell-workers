@@ -5,9 +5,9 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `orca-abcd-workflow-expansion-plan-2026-09-25` |
-| ステータス | `Active — 第1実装batch完了・実runtime受入待ち` |
+| ステータス | `Active — 部品実装済み。依頼全体の制御・同期・終了を横断是正中（受入gateの候補実装）` |
 | 作成日 | `2026-09-25` |
-| 最終更新日 | `2026-09-25` |
+| 最終更新日 | `2026-09-26` |
 | 作成者 | `Codex` |
 | 関連提案 | `docs/proposals/orca-parallel-development-proposal-2026-09-20.md` |
 | 関連Issue/PR | `N/A`（Linear新規発行は実装後に統括が案件ごとに判断する） |
@@ -46,6 +46,14 @@ Linux packageのglibc 2.31/native検査、隔離profileのactual-windowでschema
 稼働中TAK-14を中断しないため旧main processは終了していない。実Linear/GitHubへのadapter送信と中断注入を含むD4の完走は未完である。
 
 ## 2. スコープ
+
+### 2026-09-26 横断再監査による優先修正
+
+直近loopの承認を依頼全体の終了と混同したため、[依頼ライフサイクル是正計画](orca-request-lifecycle-correction-plan-2026-09-26.md)を
+本計画A3/B2/C2/C3/D2/D4の具体的な修正・受入手順とする。別系統の製品機能追加ではない。
+部品の単体/隔離試験は有効な過去証拠として残すが、全体契約・残件の強制照合、通常controllerからの
+同期/復旧接続、全体受入gateは未達。既存の「85%」という見積りを運用可能性の根拠にしない。
+以後の表示は消せる状態行と実terminal履歴を中心とし、過去案の大型結果パネルや完了履歴の自動閉鎖を復活させない。
 
 ### 対象（In Scope）
 
@@ -352,11 +360,14 @@ Linux packageのglibc 2.31/native検査、隔離profileのactual-windowでschema
 
 ### 現在地
 
-- 進捗: `85%（外部sync executorと試験専用Linear/GitHub/merge受入まで完了。通常cold-startとD4全経路待ち）`
+- 進捗: 部品実装/個別受入済み。依頼全体の進行・完了保証は未達であり、割合表示を撤回する。
 - 完了済み: schema 2投影、Linear判断、route拘束、reconciler、DAG/context package、外部同期executor、UI表示、固定review、実Linear/GitHub E2E、試験branch merge。
 - 未完: 次回通常起動後のcold-start、固定受付からA/B/reviewまでを含むD4無介入正常系、app/controller/Linear/GitHub各中断の総合受入、最終資源解放。
 
 ### 次のAIが最初にやること
+
+2026-09-26追補: 以下は当時の引継ぎ手順。現在の実装順は上記是正計画M0〜M7を優先し、
+旧buildへ戻さず現在の配備manifestとactive案件を照合する。TAK-14の一loop終了を案件終了と扱わない。
 
 1. activeなTAK-14が終了した次の通常起動で、`ui-dd50afed`とhost candidateのcold-startを確認する。
 2. 固定受付からA/B/review/CI/終了までの新規試験案件を、入力訂正・手動再開なしで一巡させる。
@@ -406,3 +417,4 @@ Linux packageのglibc 2.31/native検査、隔離profileのactual-windowでschema
 | `2026-09-25` | `Codex` | 第1実装batchを反映。schema 2、受付判断、reconciler、DAG/context package、外部同期intent、対応UIを実装し、実runtime/外部provider受入を残件として明記 |
 | `2026-09-25` | `Codex` | schema 2表示E2EとLinux packageを追加し、隔離actual-windowを受入。新buildを復帰可能に配備し、稼働中案件を止めず次回通常起動へ設定 |
 | `2026-09-25` | `Codex` | external sync executorを実装。TAK-15とDraft PR #27でLinear status/comment、誤状態write拒否、SHA/権限gate、重複抑止、試験専用branch mergeを受入。host `2897e3a1`、UI `dd50afed`を固定review済み |
+| `2026-09-26` | `Codex` | 全体契約と通常経路の接続不足を再監査。根拠のない進捗割合を撤回し、横断是正計画を優先手順へ追加 |
