@@ -128,8 +128,15 @@ TAK-14の実受入では、旧Run/Taskと同じ調査を`resolved` checkpointへ
 ソース変更不要の結論を承認した。実統合先は別セッションの`1826355f`（Rust manifest再検証）と
 `48cbcab4`（Help判断）が追加済みで、登録base `3d3cca84`と一致しなかったため統合guardが停止した。
 Git cleanであっても対象HEADの不変は意味しない。asset mirror復元だけが原因という統括の初期説明は誤り。
-別担当のcommitは変更・撤去せず、利用者の許可に基づき新しいsourceへの再検証・reviewを進める。
-この実案件の最終review、終了処理、successor-preflightは未完であり、個別review成功を完走とは扱わない。
+別担当のcommitは変更・撤去せず、利用者の許可に基づき現在sourceでcontracts/tooling/Rustの変更別検証に成功した。
+固定reviewerは元baseから現在HEADまでの差分全体を照合し、blocking findingなしで最終承認した。
+`finalize-tabs`は完了し、実際に承認したterminalをそのまま保持・選択した（保存履歴の再表示ではない）。
+`successor-preflight`も成功し、次工程の基点は`48cbcab4c61314ede4477ed61d0e24cc7b4b20ed`となった。
+今回M1-cの配車・実装は開始せず、Git clean・同じRunを維持した。復旧のための空commitや新規Runは作成していない。
+最終sourceは`e2cbdd028778c93d951090fc035690ee58587c9acc11501f534cb4c5c36aff02`、検証evidenceは
+`8b517821ef4e45cd2a4e265a279c2f5bcd186701ab17b69f8db1476dd7dbaa19`。
+固定reviewer sessionは`01a0bfc7-0a67-7c33-a55f-b215b411c3de`、完了terminalは
+`term_40a915d5-0b1b-4e98-9a8f-8d731c1e986e`である。
 
 全laneの変更なし判断が承認済みで、外部commitにより統合先のHEADが進んでいた場合は、
 統括が`reconcile-no-change-target`へexact loop digest、現在HEAD/source、許可と照合の理由を明示する。
@@ -138,15 +145,21 @@ cleanな同一branch、元baseの子孫、全attemptの終了会計と通知排�
 Help判断、最終固定reviewを要求する。調査時の承認を外部変更の承認にはしない。
 dirty・別branch・非子孫・指紋不一致・未確定終了なら採用を拒否する。
 
-host `e62f2209` / `bbfce50f`は変更別contracts/tooling、Python基盤719件・Blender tooling164件・perf self-testに成功。
+個別reviewのscheduler待ち・最終reviewの終了済みtab復旧でも、封印済み`resolved` receiptを受け付ける。
+単に状態文字列を通すのではなく、元のreceipt/source/検証/所有者の照合と正の旧tab終了証拠を維持する。
+TAK-14では旧終了処理で消失したreviewer tabをこの経路で復旧し、検証をやり直さず同じ最終reviewへ進んだ。
+
+host `e62f2209` / `bbfce50f` / `7d189cc0`は変更別contracts/tooling、Python基盤721件・Blender tooling164件・perf self-testに成功。
 検証baseは`e1a1b83e30911321890a5e2160e35fb1f19a714f`、検証sourceは
-`c76b8b38448f48967c517d3fc430b7f3892411af3bab26269fca0b700a4d291a`。
+`589c9279afd2269e43d7a08a424555074d52cdf360f859a7ae24886b1c143068`。
 fixtureでは変更なしの個別/最終review・次工程引継ぎ、実装との混在、差戻し再実装、終了terminal保持、
 中断receiptと通知排出の照合、dirty/改変証拠の拒否、外部HEADの明示採用と新しい最終reviewを確認した。
-配備側`238e6272` / `e4a11a83`もcontracts/tooling、Python基盤762件・Blender tooling164件・perf self-testに成功。
+配備側`238e6272` / `e4a11a83` / `077774e9`もcontracts/tooling、Python基盤763件・Blender tooling164件・perf self-testに成功。
 検証baseは`f50a0b6343d11187de0da560a77a233c69e592c5`、検証sourceは
-`05a1ee12448ec0770a46638f9f10bf2d53220d98c21062bcc300698e7a2d2bf2`。
+`78deefcebf1d248c5169131caf53efda38931cdb154aa132fc37382b3079fe3c`。
 Orcaを正常終了・再起動し、同じterminal incarnationと統括sessionを維持して両helperの更新を反映した。
+実controllerのsnapshotも`feedback`・現在HEADの検証pass/review approvedとなり、reviewer roleは
+今回の実完了terminalを指している。古い停止結果を成功結果として使っていない。
 
 ### 完了terminalの保持（詳細）
 
