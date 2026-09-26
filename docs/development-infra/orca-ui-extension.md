@@ -205,13 +205,24 @@ HEADだけからDraft PR #27を一度作成し、再実行が`idle`であるこ�
 
 ## 一時配備と復帰
 
-現在の配備sourceはlocal commit `e6fadf0b`、配備先は
-`/home/satotakumi/.local/opt/orca-ide/ui-e6fadf0b`。Orca IDEアイコンはversion非依存の
+現在の配備sourceはlocal commit `60a5d78e`、配備先は
+`/home/satotakumi/.local/opt/orca-ide/ui-60a5d78e`。Orca IDEアイコンはversion非依存の
 `/home/satotakumi/.local/opt/orca-ide/launch-supervised`を起動し、`current` symlinkから現行buildを解決する。
 旧buildは復帰用に保持するが、旧launcherは誤起動防止のため現行固定入口へ転送する。
 サイドバーの `Reception & Coordination`（受付・統括）が固定入口。
 controllerは既存candidateの `scripts/orca_supervision.py`、状態保存先は
 `/home/satotakumi/.local/state/hell-workers/supervision-panel`。
+2026-09-26の切替では、LinearのUUID読取拒否と全workspace一覧の資格情報エラー隠蔽を補正した。
+実runtime `3f0a63cf-05bb-4905-a348-453ab7fbdfdb`でTAK-14のUUIDを明示したfull読取と
+host adapterの正規化が成功し、受付ready・既存tab数・統括terminalの会話を確認した。
+CLI shimは起動中の本体が再生成する。手修正した`current`参照も再生成されるため、
+旧本体のshimを使う`orca open`だけで切り替えたとは扱わない。切替時は固定launcherから起動し、
+statusのPIDと`/proc/<pid>/exe`まで照合する。起動成功だけを修正版反映の証拠にしない。
+切替後に再生成されたshimは実際の`ui-60a5d78e/resources/bin/orca-ide`を参照している。
+直前設定は`/home/satotakumi/.config/orca-before-linear-recovery-20260926`、旧buildは`ui-e6fadf0b`に保持。
+復帰時は現行アプリの終了を確認して`current`を旧buildへ戻す。設定一括復元は新規会話を失うため行わない。
+host `36d9b667`の更新は候補配備であり、全体scope移行・固定review・全経路受入は未完了。
+今回の接続回復を、TAK-14の製品作業完了や全ワークフローの完成と解釈しない。
 実相談の送信、実providerの回答表示、確認付き終了、終了済み案件の表示切替、
 アプリ再起動後の受付復帰と終了状態保持を確認した。
 実画面の「実装を依頼」から `TAK-11`・専用worktree・統括tabを各1件作成し、

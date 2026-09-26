@@ -55,6 +55,11 @@ request/scope/nodeから決めた固定prompt IDと本文をOrcaのdurable promp
 `accepted`、`started`、後継loop登録による`applied`を別状態にする。入力受付やturn開始だけで工程を閉じない。
 worker間通信のRun inboxは引き続き既存driverだけが消費し、別consumerを作らない。
 
+planning通知には全仕様を巨大なCLI引数として埋め込まず、正本pathとscope/nodeを渡す。
+統括は正本全体を読み、実装・reviewのticketには引き続き全体contextを含める。
+送信時の通信例外は同じIDの未確認状態として保全し、driverを終了させない。
+通常のterminal本文はUTF-8で64,000 bytesまで、その他のCLI引数は2,048 bytesまでに制限する。
+
 通常`serve`は単一の同期workerを所有する。外部通信はUI snapshot更新とは別threadで実行し、
 送信前のdurable intentと送信後read-backには既存executorを再利用する。
 CLIとcontrollerが競合しても、一つのrequestのread/send/read-backは専用leaseで直列化する。
@@ -62,6 +67,27 @@ CLIとcontrollerが競合しても、一つのrequestのread/send/read-backは�
 最後の全体受入でのみDone intentを生成し、同一subjectの受入証拠と外部確認operationを結ぶreceiptを保存する。
 close preflight/実行/復旧では、そのreceipt、現在の承認、直近の接続観測を再確認する。
 外部での取消や完了後reopenを観測しても自動的に上書きしない。
+
+完了writeの既存confirmed記録だけで現状態をDoneへ合成しない。送信後にもLinearを再読し、
+接続断・reopen・本文変更があれば全体完了を保留する。同期先はworkspace UUIDとissue UUIDへ拘束する。
+同期workerはroute/lifecycleの読み取り失敗を案件単位で隔離し、他案件の観測を止めない。
+
+### 外部本文と採用scopeの照合（候補batch 3）
+
+`request-status`は最新Linear本文・子課題の観測内容とdigestを`runtime.external`へ示す。
+初回と本文/子課題変更時には新規配車・Done・closeを拒否する。統括は原依頼と採用済み条件への
+影響を確認し、`reconcile-external`へ`scope_sha256/content_sha256/reason`を渡して採用版を固定する。
+直前に外部内容を再読し、expected digestが変わっていたら採用しない。未照合の追加指示も拒否する。
+外部データを実行指示や権限追加とは扱わない。scope改訂が必要なら追加指示の照合を先に行う。
+通常の仕様確認は統括側の内部操作であり、利用者へのID入力要求ではない。
+
+runtime ledger schema 2はschema 1を読めるが、外部仕様の採用を自動推定しない。
+旧loopの封印は書き換えず、再照合まで全体完了を禁止する。旧hostへの無検査downgradeは禁止する。
+
+Linear全workspace一覧は復号失敗を正常な0件と扱わず、partialとworkspaceごとの
+`linear_credential_unavailable`を返す。APIキーの失効とは区別し、設定・保存credentialは削除しない。
+本体`60a5d78e`でUUIDによる課題のfull読取を受理し、返却issue IDの一致も確認する。
+利用者の再登録後、修正版の実runtimeとhost adapterで読取成功を確認した。復号障害は現在の開始阻害ではない。
 
 新規`register`/`register-successor` CLIは、scope/node、工程planning、統合先、Linearの現状態を必須にする。
 旧案件は接続状態の読取までに留め、全体契約未照合のまま自動配車/Doneを行わない。
@@ -78,7 +104,7 @@ providerとOrca接続はfixtureなので、実providerによる全経路受入�
 
 - 旧案件の正式なscope移行と、全入口の互換照合。
 - 上記の自動継続・通常同期は候補コードとfixture試験まで。実providerでの無介入継続は未受入。
-- Linear認証回復、本文/子課題の変更とscopeの採用版を対応させる再照合。
+- 本文/子課題の再照合を含む実サービスでの全経路受入。元の復号障害の原因は未確定だが、読取は回復済み。
 - 人手受入・公開条件、非表示/中断/取消と成功終了の分離、版互換・配備manifest。
 - 同じ通常入口からの実provider複数工程、実Linear/GitHub、UIと再起動を含むT01〜T12の受入。
 

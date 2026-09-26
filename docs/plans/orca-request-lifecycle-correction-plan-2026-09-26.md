@@ -249,7 +249,9 @@ M7以前の部分配備は候補/opt-inに限定し、「運用可能」とは�
 
 ### 次に行うこと
 
-1. Linear設定の再接続後に、実serviceの読取と標準GitHub連携の完了ownerを確認する。
+1. 利用者の再登録後、実Linearの読取回復を確認済み。再入力を追加要求しない。
+   実接続で発見したUUID読取拒否を本体側で修正・配備し、同じworkspace/issueの読取を再確認する。
+   復号障害の元の原因は未確定であり、APIキー失効とは判定しない。
 2. batch 2の候補を固定reviewし、配備manifestと旧案件のscope移行を実施する。既存loopの封印は変更しない。
 3. 本文/子課題とscopeの再照合、権限・終了操作の残件を整え、M7の全経路受入前に運用完了と報告しない。
 
@@ -299,14 +301,59 @@ M7以前の部分配備は候補/opt-inに限定し、「運用可能」とは�
 - 本体UIの新build、通常案件への切替、実provider固定review、既存案件migration、T01〜T12の実運用受入は未実施。
   本文/子課題の変更採用、終了操作/権限モデル、配備manifestにも残件がある。認証だけ直れば全体完了とはしない。
 
-### 計画書検証ログ
+### 2026-09-26 実装batch 3（候補・未配備）
+
+- 本体の全workspace team/project一覧が復号失敗を黙って除外し、正常な0件として返す問題を修正。
+  healthyなworkspaceは維持し、失敗はpartial/個別errorとしてCLIまで伝播する。
+- 後継工程の巨大context引数を正本参照へ変更。長い通常本文は別のUTF-8上限を使う。
+  prompt応答消失時にdriverを終了せず、同じdurable IDだけを再照合する。
+- 外部本文・子課題の観測版と採用scopeを対応付け、変更時の新規配車/Done/closeを拒否。
+  `request-status`/`reconcile-external`を統括promptと通常経路へ接続した。
+- 同期先をworkspace/issue UUIDへ固定。既存confirmed操作から現在のDoneを合成せず、再読を要求。
+  破損routeが同期worker全体を終了させないよう案件単位で隔離した。
+- 認証調査: OS keyringはunlocked。稼働版と同一SHAのElectron 43.7.0を使った隔離probeは
+  `gnome_libsecret`を選び、合成文字列のroundtripは成功、保存済みLinear ciphertextの復号は失敗した。
+  これはAPIキー失効の証拠ではなく、元の暗号鍵/保存情報との不一致原因は未特定。
+  credentialの再発行/再入力/削除/置換は未実施。再入力依頼は根拠不足として撤回した。
+  probeコードと一時profile（apparent 93 bytes）は撤去した。認証情報・既存terminalは保持。
+- host変更別`contracts, tooling`がpass。base/検証HEADは`dc6d6aebbbd47940c13b297cd0c2c68151766597`、
+  sourceは`891c479d4e80ee524c3d49bca1dfb8ac36406d944617b80e65ec2ad70ec23ab6`。
+  scripts/tests 819件、Blender補助164件、Ruff/actionlint/perf self-test、docs/storageがpass。
+  本体関連37 tests、node typecheck、変更fileのoxlintもpass。
+  実provider/実Linearの全経路受入、配備manifest、旧案件正式移行、終了/権限モデルの残件は維持。
+  本batchや認証回復だけで全体完了とは報告しない。
+
+### 2026-09-26 再登録後の実接続とUUID読取補正
+
+- 利用者が再登録済みと明示。稼働runtimeからTAK-14の`--full`読取が成功し、partial=false。
+  設定・credentialをagentが再登録/削除したものではない。
+- UUID指定では`linear_issue_required`を再現。CLIはUUIDを案内するが、本体の
+  `readLinearIssueContext`はidentifier/URLだけを受理していた。既存UUID判定と同じquery経路を再利用し、
+  immutable IDで読み、返却IDが不一致なら拒否するよう修正した。失敗テスト2件を先に確認した。
+  本体commit `60a5d78e77c1c1734b7a799154d2faf7c6687e03`、関連40 tests・node typecheck・oxlintがpass。
+- `ui-60a5d78e`を別build・梱包検査後に切替。glibc/native 17件、daemon entry、plugin資源検査がpass。
+  runtime `3f0a63cf-05bb-4905-a348-453ab7fbdfdb`と実行binaryを照合し、UUID指定の実Linear full読取と
+  host adapterが成功した。全workspace一覧もTAK 1件・partial=false。既存タブ数と統括会話を保持。
+  切替前設定と旧buildは復帰用に保持し、scope不明なTAK-14は全体完了/再配車せず保留を維持した。
+  host `36d9b6678fbda0cbda00bc4db7fe840221ca9801`は候補配備。全体の固定reviewと実provider受入は未完了。
+- 再登録後の同依頼復帰・古い認証エラー除去・planning重複送信なしを回帰testへ追加。
+  変更別`contracts, tooling`が再度pass（scripts/tests 820件、Blender補助164件）。
+  base `dc6d6aebbbd47940c13b297cd0c2c68151766597`、検証HEAD `36d9b6678fbda0cbda00bc4db7fe840221ca9801`、
+  source `73132a8076f35cd4f162ddfaa1896cb5c3168bd0baa39d204cac5a4e96bfe824`。
+  runtime台帳もofflineではなくobservedへ更新済み。ゲームbuild/test・追加の製品実装は行っていない。
+- Linear活動履歴で、TAK-14は2026-09-26T11:57:17ZにGitHub integrationによってDoneへ移動した。
+  PR #28は11:57:15Zに運用基盤branchへmerge済み。これは外部連携の動作確認であり、全体受入の証拠ではない。
+  この調査ではLinear状態変更・再配車・製品branchの変更をしていない。
+
+### 計画作成時の検証ログ（後続実装の結果は上記）
 
 - 今回の検証対象: primaryの計画・上位計画追補・索引のみ。2026-09-26、変更別contracts、docs/index/link、diff、storageはpass。
   比較base/HEADは上記primary SHA。commandは`python3 scripts/dev.py ci check --base 1e86c976c2b7ff989b652209c94e4352743acc88 --mode auto`。
   未commit文書差分を含む検証であり、実装修正の検証成功を意味しない。CI公開は行っていない。
 - 実装test/本体build/Linear実更新/ゲーム検証: 未実施（計画のみのため）。
 - Help判断: 文書だけでruntime producer/consumerを変更しないためNo impact。
-- 未解決: Linear認証復号の原因・最新外部状態、標準GitHub連携の現在設定、全旧案件migrationはM0以降。
+- 計画時点の未解決: Linear認証復号の原因・最新外部状態、標準GitHub連携の現在設定、全旧案件migration。
+  その後の認証回復・GitHub活動履歴の実読取は上記の追補を参照する。
 
 ### Definition of Done（是正実装全体）
 
