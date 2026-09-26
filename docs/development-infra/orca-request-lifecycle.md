@@ -42,6 +42,27 @@ loop specには登録結果の`scope_sha256`と今回の`node_id`を`request_bin
 worktreeのcompleted反映で再実行する。旧版の終了journalを使って検査を迂回できない。
 Linear Done intentの生成と実行にも同じ検査を入れる。旧版が作ったqueueも送信前に再確認する。
 
+依頼PRの生成と送信も全体受入へ拘束し、PR head / tested SHA / review SHAが全体受入のheadと
+一致することを要求する。部分工程はローカルcheckpoint・統合後reviewとして保存し、
+親依頼のPRを部分完了の通知に使わない。GitHub連携はclosing keywordがなくても関連付けで
+状態を更新し得るため、本文からkeywordを消すだけの防御にはしない。
+このgateはproject-owned executorの範囲であり、人手のPR作成・組織の連携設定を制御するものではない。
+
+### 外部完了による配車前停止の復旧
+
+`resume-linear-state --expected-sha256 <showのloop_sha256>`は統括用の内部操作である。
+外部のDone/取消を無視したり、勝手に再開状態へ変更したりはしない。外部状態の変更が必要なら
+利用者の明示指示に従って行い、同じissueを再読したあとで復旧する。
+
+- 対象は可視統括が所有する同一loop、未dispatchのplanned/dispatchingからの既知の停止だけ。2担当の同時停止も一括照合する。
+- exact digest、空の未処理inbox/attempts、ticket/source不変、最新Linear activeを要求する。
+- 認証不明時のcached-active fallbackを復旧には使わない。scope登録済み案件は外部仕様照合も要求する。
+- 変更前後のreceiptを先に記録し、応答消失後の同じ要求は重複遷移しない。進行後に同じ要求を再送すれば拒否する。
+- 新しいRun、Task、worktreeを作らず、既存driverに同じ工程の続きを委ねる。未知Dispatchの再送には使えない。
+- loop内のattemptsが空でも配車未実施とは推定しない。dispatch journal・role launch/bindingが残れば復旧を拒否する。
+- 古いPR queueのheadが全体受入headと異なる場合は`blocked_policy`を保存し、既存supersede経路で解消する。
+  送信済みか不明な操作はread-backを維持し、未送信扱いに変更しない。
+
 連携された案件の空outboxは「同期不要」ではなく「同期確認の記録なし」と表示する。
 この表示だけで接続正常・同期完了を判断しない。
 画面は既存の状態行と実terminal履歴を使い、追加の大きな結果UIは作らない。

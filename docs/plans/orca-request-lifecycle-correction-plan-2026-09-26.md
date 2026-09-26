@@ -42,6 +42,20 @@ Linearへの関連付け、helper単体試験、特定loopの成功を「運用�
 
 ## 3. 現状とギャップ（実コードに基づく監査）
 
+### 2026-09-26 停止復旧の追加範囲
+
+利用者は、GitHub連携でDoneになったTAK-14をIn Progressへ戻し、同じ依頼を再開することを明示許可した。
+上記の当初非対象に対する追加許可として、既存M1-c generation 4の配車前停止を復旧する。
+新規課題・Run・重複worktreeは作らず、旧世代の封印と成果を維持する。
+
+1. exact loop digest、可視統括、配車未実施、同一source、最新Linear activeを確認する`resume-linear-state`を追加。
+   書込み前に前後状態のreceiptを保存し、応答消失後の同一要求は配車を増やさず再照合する。
+2. 依頼PRの生成/送信も全体受入と同一headへ拘束する。部分loop承認で親課題に紐づくPRを出さない。
+   人手で別経路から作成するPRやLinearの組織設定まで制御済みとは扱わない。
+3. 既存の停止loopと新設M1-c worktreeを保持台帳と照合し、変更別検証・固定read-only review後に復旧する。
+4. 稼働中の旧driverと配備hostの差は残存リスクとして分離し、単なるapp再起動で更新済みと判断しない。
+   全体移行/版固定が完了するまで、今回の復旧成功を全体基盤完成とは扱わない。
+
 調査対象は配備host `orca-abcd-expansion`、TAK-14で実行中のhost `orca-parallel-development`、
 Orca本体clone `orca-ui-lifecycle`。下表のpathは各checkout内の相対pathである。
 「確認済み」はコード/呼出経路の事実であり、全故障を実環境で再現したという意味ではない。
@@ -344,6 +358,27 @@ M7以前の部分配備は候補/opt-inに限定し、「運用可能」とは�
 - Linear活動履歴で、TAK-14は2026-09-26T11:57:17ZにGitHub integrationによってDoneへ移動した。
   PR #28は11:57:15Zに運用基盤branchへmerge済み。これは外部連携の動作確認であり、全体受入の証拠ではない。
   この調査ではLinear状態変更・再配車・製品branchの変更をしていない。
+
+### 2026-09-26 外部Doneによる配車前停止の復旧
+
+- `resume-linear-state`を追加し、2担当の一括復旧、exact digest/source/統括所有、dispatch journalとrole証拠、
+  最新Linear active、応答消失時の同一要求再照合を検査した。未知Dispatchや取消は復旧対象にしない。
+- 依頼PRの生成・送信を全体受入headへ拘束。古いqueued PRのhead不一致はdurable blocked_policyへ移し、
+  supersede可能にした。sending/unknownは再送せずread-backを維持する。
+- 固定read-only reviewは追加指摘を解消してAPPROVED。対象base/HEAD `ce0c678ab8b7ffedcf23d78d27fc54f5d88707bb`、
+  4ファイルdiff digest `b9bbc6a25b935e9b6bcd5dd11596f6a082d82deff9f6efc8ff3c03532b4bfbea`。
+  focusedはreview-loop 62件＋external-sync 34件。最終変更別contracts/toolingはscripts 833件＋Blender補助164件、
+  lint/perf self-test/docs/storageがpass。source `e1cfa7cb139e4c4c1afbaed2ca3962e2eae7d4e84d1701cf3ef9590516a7e448`。
+  検証中にレビュー修正が入った中間runはsource変更gateで拒否されており、不採用。
+- 利用者許可に従いTAK-14をIn Progressへ戻して再読済み。同じ統括terminalと会話を正常終了→再開し、
+  旧parallel helperのprocessを残さずabcd helperへ切替。Orcaは同じ`ui-60a5d78e`で再起動し、
+  runtime `b12847fc-3adc-4856-bd23-c35b14a0a061`、監督と統括の実行元を照合した。
+- 実停止loop `5e042611208360350eb0811b876687cb6b5e126831a2ed6a14cdfe9a7d890942`をguard付き復旧。
+  generation 4、Run `run_3236488f0dff`、既存M1-c作業場を維持してactive/plannedからdispatchingへ進んだ。
+  snapshotもpausedからworkingへ変化した。同RunでTask `task_62c20b5cafa5`、Dispatch `ctx_1cd6522b4f25`が
+  一度だけ作成され、実装Aはimplementingへ進んだ。依頼全体の完成やM0〜M7完了の証拠にはしない。
+- M1-c既存作業場の保持未登録を修正（28,831,744 allocated bytes、owner/consumer/終了条件を登録）。
+  登録用の一時JSONだけを撤去し、作業場・成果・履歴は削除していない。ゲームbuild/testは本修正では未実施。
 
 ### 計画作成時の検証ログ（後続実装の結果は上記）
 
