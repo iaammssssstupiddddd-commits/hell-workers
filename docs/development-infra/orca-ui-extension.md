@@ -46,6 +46,28 @@ TAK-14の実Orca rendererへ接続した受入では、`supervision-terminal-sta
 `Current task state / Awaiting your feedback / 実装・固定レビューの結果を確認してください。`であり、
 本文に残る旧`paused`報告より上部の正本状態が優先される。
 
+### 確定結果と同案件への追加依頼
+
+Orca UI local commit `5370641c`とhost candidate `5cd66775`で、状態cardを閲覧専用の表示から
+案件の結果確認と再依頼の入口へ拡張した。schema 4は、封印済みのloop台帳からのみ生成する
+結果summary、基点・統合HEAD、変更path、変更別検証commandと判定、固定review判定とblocking所見、
+Help影響判断を追加する。terminal本文は根拠に使わない。
+
+完了または確認待ちで確定結果がある場合は、結果cardをterminal領域全体の主表示にして古い会話本文を隠す。
+会話本文は削除せず、明示的な「会話履歴を表示」でだけ確認でき、「結果画面へ戻る」で同じ結果表示へ戻る。
+これにより、古い`paused`報告が最新結果より目立つ状態と、短い完了文しか確認できない状態をどちらも解消する。
+
+同じcardの結果直下に追加依頼欄を置き、`follow_up`要求を登録済みの同じ統括terminalへ配送する。
+controllerはworkflow revision、実装案件の所有receipt、現在の統括terminal handle・incarnation・
+worktree・接続状態を再照合する。送信前に永続receiptを作成し、結果不明時は再送しないため、
+別tabや別案件への迂回、同文の二重送信を行わない。`follow_up`自体はLinear課題を作成せず、
+別課題の必要性は受領後の統括判断に残す。
+
+TAK-14の実画面で、旧`paused`本文を初期表示から隠し、確定結果「実装を統合し、変更別検証と固定レビューに合格」、
+基点HEAD、統合HEAD `3d3cca84aefd56815f54e06dea917e52c3b87700`、変更13 path、検証commandと`passed`、
+review`approved`・blocking所見なし、Help影響、会話履歴の表示・復帰、追加依頼欄と送信buttonを確認した。
+依頼本文が指定されていないため、実案件への送信は行っていない。
+
 ## A〜D案件panel schema 2と外部同期executor（2026-09-25）
 
 host candidate `2897e3a1`とOrca UI local commit `dd50afed`で、案件snapshotをschema 2へ拡張した。
@@ -72,8 +94,8 @@ HEADだけからDraft PR #27を一度作成し、再実行が`idle`であるこ�
 
 ## 一時配備と復帰
 
-現在の配備sourceはlocal commit `dcf737db`、配備先は
-`/home/satotakumi/.local/opt/orca-ide/ui-dcf737db`。Orca IDEアイコンはversion非依存の
+現在の配備sourceはlocal commit `5370641c`、配備先は
+`/home/satotakumi/.local/opt/orca-ide/ui-5370641c`。Orca IDEアイコンはversion非依存の
 `/home/satotakumi/.local/opt/orca-ide/launch-supervised`を起動し、`current` symlinkから現行buildを解決する。
 旧buildは復帰用に保持するが、旧launcherは誤起動防止のため現行固定入口へ転送する。
 サイドバーの `Reception & Coordination`（受付・統括）が固定入口。
@@ -318,13 +340,14 @@ hold consumer解除後に非force撤去した。固定パネルの実配備か�
 
 | 項目 | 契約 |
 | --- | --- |
-| snapshot | schema 1、runtime ID、生成時刻、案件一覧。256 KiBまで |
-| workflow | UUID、revision、title、kind、工程、理由、現在受理可能なaction、4役割を各1件 |
+| snapshot | schema 1〜4、runtime ID、生成時刻、案件一覧。256 KiBまで。未知versionは拒否 |
+| workflow | UUID、revision、title、kind、工程、理由、現在受理可能なaction、4役割を各1件。schema 3は最小結果、schema 4は詳細結果を追加 |
 | kind | 受付／案件／保守／検証保持 |
 | 工程 | 受付済み／受付可能／作業中／レビュー中／確認待ち／休止／終了処理中／終了／要確認 |
 | 役割 | 未割当／起動中／実行中／待機中／休止／プロセス終了／要確認 |
 | terminal identity | handle、incarnation、worktree、execution host。表示名から推定しない |
-| request | 期待runtime ID、operation UUID、workflow UUID、revision、action、依頼本文（相談submitと実装implementだけ） |
+| result | 封印済み統合台帳由来のsummary、基点・統合HEAD、変更path、検証commandと判定、固定reviewとblocking所見、Help影響。未確定ならnull |
+| request | 期待runtime ID、operation UUID、workflow UUID、revision、action、依頼本文（相談submit、実装implement、同案件follow_up） |
 
 生成後15秒を超える情報、時計の不正な先行、schema/所有権不明は操作不可。
 UIはRPCが応答しなくなった場合もローカル時刻で有効表示を失効させる。

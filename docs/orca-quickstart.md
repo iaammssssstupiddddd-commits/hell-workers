@@ -58,8 +58,15 @@ A/B/レビューは統括が監督付きの分離worktreeへ配車した時だ�
 - 統括・担当タブの会話本文より上にある **案件状態card** が監督台帳から取得した正本です。
   初期状態では展開され、案件番号・案件名・現在工程・担当状況・現在の状況・待ち理由・次の操作・最終確認を表示します。
   まず強調された **「次の操作」** を確認してください。不要な時だけcardの見出しを押して折り畳みます。
-  ターミナル本文は会話履歴なので、途中で出力された古い`paused`等の報告は残ります。
-  cardが更新済みならそちらを優先し、`要確認`なら古い本文から状態を推定せず受付・統括panelで接続状態を確認します。
+  作業中はターミナル本文を会話履歴として残しますが、完了または確認待ちでは **確定結果を画面全体の初期表示** にし、
+  古い`paused`等の本文を隠します。必要な場合だけ **「会話履歴を表示」** を押し、確認後は
+  **「結果画面へ戻る」** で確定結果へ戻ります。
+- 確定結果には、要約、基点HEAD、統合HEAD、変更ファイル、実行した変更別検証commandと成否、
+  固定レビューの判定・blocking所見、Help影響判断を表示します。terminal本文の要約や最終行ではなく、
+  封印済みの統合・検証・review台帳だけから取得します。
+- 追加修正は、確定結果の直下にある **「この案件への追加依頼」** へ日本語で入力し、
+  **「この案件へ追加依頼を送る」** を押します。登録済みの同じ統括tabへ一度だけ渡され、terminal入力や
+  terminal IDは不要です。この操作だけではLinear課題を新規発行しません。別課題が必要かは受領後に統括が判断します。
 - 起動中の統括は「統括・起動中」、登録成功後に「統括」、終了後は「統括・終了」です。
   課題に紐づかない子作業場では統括を起動しません。
 - 再利用は作業場・端末incarnation・所有台帳と実processを照合します。
@@ -139,8 +146,11 @@ orca file open docs/orca-quickstart.md --worktree path:/home/satotakumi/projects
 2026-09-25のA〜D実装では、案件panelへ工程、待ち理由、次操作、確認時刻、Linear判断、外部同期を
 表示するschema 2と、Linear/GitHubへ順序付きintentを安全に反映するexecutorを実装した。
 host/UI契約、Linux package、隔離実画面の受付表示とパネル閉鎖は成功した。2026-09-26にはdesktop iconとCLIを
-`ui-dcf737db`へ切り替え、通常profileを再起動した。監督controllerは新runtimeへ再接続し、既存terminalを保持したまま
-TAK-14の正本状態`feedback`を再公開している。
+`ui-5370641c`へ切り替え、通常profileを再起動した。監督controllerは新runtimeへ再接続し、既存terminalを保持したまま
+TAK-14の正本状態`feedback`とschema 4の詳細な確定結果を再公開している。統括tabの実画面で基点HEAD、統合HEAD
+`3d3cca84aefd56815f54e06dea917e52c3b87700`、変更13 path、変更別検証commandと`passed`、
+固定reviewの`approved`・blocking所見なし、Help影響、会話履歴の表示切替、同案件への追加依頼欄を確認した。
+完了後の初期表示では古いterminal本文を覆い、結果画面を主表示にする。
 desktop iconと旧versionのlauncherはversion非依存の`/home/satotakumi/.local/opt/orca-ide/launch-supervised`へ
 収束しているため、通常起動で旧buildへ戻らない。統括タブ上部の表示は一行bannerから展開済みcardへ変更し、
 案件・工程・担当・停止理由・次操作を本文を読まずに確認できる。非表示Electronのrenderer受入で描画と更新追従を確認済みである。
