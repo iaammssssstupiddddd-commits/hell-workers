@@ -55,18 +55,15 @@ A/B/レビューは統括が監督付きの分離worktreeへ配車した時だ�
   実装Aが失敗するたびに「実装A」を追加する動作は不具合です。
 - 役割タブは「起動中」「実行中」「終了・結果確認済み」「停止・要確認」を表示します。
   終了後のshellや履歴表示は、agentが常駐しているという意味ではありません。
-- 統括・担当タブの会話本文より上にある **案件状態card** が監督台帳から取得した正本です。
-  初期状態では展開され、案件番号・案件名・現在工程・担当状況・現在の状況・待ち理由・次の操作・最終確認を表示します。
-  まず強調された **「次の操作」** を確認してください。不要な時だけcardの見出しを押して折り畳みます。
-  作業中はターミナル本文を会話履歴として残しますが、完了または確認待ちでは **確定結果を画面全体の初期表示** にし、
-  古い`paused`等の本文を隠します。必要な場合だけ **「会話履歴を表示」** を押し、確認後は
-  **「結果画面へ戻る」** で確定結果へ戻ります。
-- 確定結果には、要約、基点HEAD、統合HEAD、変更ファイル、実行した変更別検証commandと成否、
-  固定レビューの判定・blocking所見、Help影響判断を表示します。terminal本文の要約や最終行ではなく、
-  封印済みの統合・検証・review台帳だけから取得します。
-- 追加修正は、確定結果の直下にある **「この案件への追加依頼」** へ日本語で入力し、
-  **「この案件へ追加依頼を送る」** を押します。登録済みの同じ統括tabへ一度だけ渡され、terminal入力や
-  terminal IDは不要です。この操作だけではLinear課題を新規発行しません。別課題が必要かは受領後に統括が判断します。
+- ターミナル上部の案件状態は、監督台帳から取得した現在状態を一行で示す補助表示です。
+  ターミナル本文を覆う結果画面や、会話履歴との表示切替は設けません。
+- 固定レビューで完了した案件は、その承認に至った実際のreviewer terminalを閉じず、
+  **「レビュー（完了）」** に改名して前面へ切り替えます。古い`paused`報告が残る統括terminalではなく、
+  最終diff確認、検証照合、承認通知までの同じterminal履歴が完了確認の入口です。
+- 実装A/B等の終了済み補助タブは保存台帳へ記録して閉じますが、完了reviewer terminalは残します。
+  再起動後も同じtabを復元し、新しい要約専用tabや結果専用画面を追加しません。
+- 追加修正はサイドバーの **「受付・統括」** から同じ案件へ依頼します。terminal IDや内部commandは不要です。
+  Linear課題を新規発行するかは、依頼内容を受けた統括が判断します。
 - 起動中の統括は「統括・起動中」、登録成功後に「統括」、終了後は「統括・終了」です。
   課題に紐づかない子作業場では統括を起動しません。
 - 再利用は作業場・端末incarnation・所有台帳と実processを照合します。
@@ -145,15 +142,15 @@ orca file open docs/orca-quickstart.md --worktree path:/home/satotakumi/projects
 
 2026-09-25のA〜D実装では、案件panelへ工程、待ち理由、次操作、確認時刻、Linear判断、外部同期を
 表示するschema 2と、Linear/GitHubへ順序付きintentを安全に反映するexecutorを実装した。
-host/UI契約、Linux package、隔離実画面の受付表示とパネル閉鎖は成功した。2026-09-26にはdesktop iconとCLIを
-`ui-5370641c`へ切り替え、通常profileを再起動した。監督controllerは新runtimeへ再接続し、既存terminalを保持したまま
-TAK-14の正本状態`feedback`とschema 4の詳細な確定結果を再公開している。統括tabの実画面で基点HEAD、統合HEAD
-`3d3cca84aefd56815f54e06dea917e52c3b87700`、変更13 path、変更別検証commandと`passed`、
-固定reviewの`approved`・blocking所見なし、Help影響、会話履歴の表示切替、同案件への追加依頼欄を確認した。
-完了後の初期表示では古いterminal本文を覆い、結果画面を主表示にする。
+host/UI契約、Linux package、隔離実画面の受付表示とパネル閉鎖は成功した。2026-09-26には、完了時に
+最終reviewer terminalを誤って閉じ、古い統括terminalだけを残していた終了処理を修正した。
+host controller commit `c9261730`は承認に至ったterminalを`レビュー（完了）`として保持・選択し、
+Orca UI commit `a32cc0f4`は結果専用画面を撤去してterminalを主表示へ戻す。
+既に終了していたTAK-14についても保存台帳から最終reviewer sessionを復元し、同名tabを前面へ切り替えた。
+統合HEADは`3d3cca84aefd56815f54e06dea917e52c3b87700`、固定reviewは`approved`である。
 desktop iconと旧versionのlauncherはversion非依存の`/home/satotakumi/.local/opt/orca-ide/launch-supervised`へ
-収束しているため、通常起動で旧buildへ戻らない。統括タブ上部の表示は一行bannerから展開済みcardへ変更し、
-案件・工程・担当・停止理由・次操作を本文を読まずに確認できる。非表示Electronのrenderer受入で描画と更新追従を確認済みである。
+収束しているため、通常起動で旧buildへ戻らない。現在の配備先は
+`/home/satotakumi/.local/opt/orca-ide/ui-a32cc0f4`で、terminal上部は一行の状態表示だけに留める。
 
 - Orca 1.4.205とLinear workspace `takumi sato` / team `TAK`の読取り接続を確認済みです。
 - Linear-linked worktreeから`--current`で固定snapshotを取り込み、UUID入力を不要にする実装を追加しました。

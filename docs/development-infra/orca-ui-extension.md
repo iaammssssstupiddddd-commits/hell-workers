@@ -5,16 +5,15 @@
 
 ## 統括タブの正本状態表示（2026-09-26更新）
 
-Orca UI local commit `dcf737db`で、統括・担当ターミナルの上部へ監督台帳の現在状態を常時表示するようにした。
-ターミナル本文は会話履歴なので、過去に出力した`paused`等の報告を後から書き換えない。代わりに
-`supervision.read`の最新snapshotを2秒ごとに照合し、案件番号・案件名・現在工程・担当状況・現在の状況・
-待ち理由・次の操作・最終照合時刻を、ターミナル本文より上の展開済みcardへ表示する。cardには
-「ターミナル内の過去の状態報告より、この最新表示を優先する」と明記し、見出しを押せば折り畳める。
+Orca UI local commit `a32cc0f4`では、統括・担当ターミナルの上部表示を現在状態の一行だけへ戻した。
+ターミナル本文は会話履歴なので、過去に出力した`paused`等の報告を後から書き換えない。
+`supervision.read`の最新snapshotを2秒ごとに照合する補助表示は残すが、案件詳細、確定結果、追加依頼formを
+terminal canvasへ重ねない。完了確認は、固定reviewerが承認に至った実terminalを`レビュー（完了）`として
+保持・選択することで行う。
 
-`36906ab2`の一行bannerは保存台帳を正しく表示していたが、案件や工程、各担当、次操作を読み取れず、
-利用者が「どこを見れば何をすればよいか」を判断できない不十分なUIだった。`dcf737db`は情報を増やすだけでなく、
-正本の現在値と履歴本文を視覚的に分離し、次操作を強調表示する。TAK-14のようなworktree名からは案件番号も
-表示するが、番号が推定できなくても案件名・状態・次操作は欠落させない。
+`dcf737db`から`5370641c`までの展開card・全画面結果方式は、保存台帳の情報自体は正しかったが、
+必要なterminal履歴を隠し、終了時に最終reviewer terminalを閉じる欠陥を補えなかったため撤回した。
+案件の詳細確認と追加依頼はサイドバーの`Reception & Coordination`へ集約する。
 
 snapshotが期限切れ、controllerが不通、または同じworktreeへ複数案件が紐づく場合は、過去の状態を
 現在値として表示せず`要確認`へ倒す。controller不通時は直前snapshotを表示用に保持するが、ready扱いには戻さない。
@@ -25,48 +24,40 @@ Codex native chatの全面portalにbannerが隠れる欠陥を見落としてい
 portal内にも直接mountし、通常terminal側の重複bannerを抑止した。unit testでPTY-backed native chatと
 structured native chatの両方へ同じworktree IDが渡ることを固定している。
 
-`dcf737db`ではcard単体のunit testに加え、非表示ElectronをPlaywright/CDPで起動するrenderer受入で、
-同一タブ・同一terminalを維持したまま案件名、工程、担当結果、現在状況、待ち理由、次操作が描画され、
-snapshot更新へ追従することを確認した。Orca本体の検証規約に従い、検証ウィンドウは前面へ出していない。
+`a32cc0f4`ではbanner単体のunit testとtypecheckを通し、配備後の実runtimeで全画面結果UIがなく、
+`レビュー（完了）`tab、terminal canvas、一行状態だけが表示されることをaccessibility treeで確認した。
 
 隔離Electron受入では同一タブ・同一terminalのまま`feedback → paused → feedback`へsnapshotを更新し、
-最後に旧`paused`詳細がbannerから消えて最終review承認詳細へ切り替わることを確認した。実TAK-14では、
-ターミナル本文に旧`paused`報告が残る一方、保存台帳の`feedback`と最終review承認を正本表示できる状態で
-Orcaを再起動した。配備sourceは`36906ab2`、配備先は
-`/home/satotakumi/.local/opt/orca-ide/ui-36906ab2`。旧`ui-733013b0`と`ui-dd50afed`は復帰用に保持する。
+一行状態が最新snapshotへ追従することを確認した。確定結果の詳細はこのbannerへ展開しない。
+実TAK-14は保存台帳の`feedback`を表示しつつ、完了reviewer terminalを別tabで前面に保つ。
 
 初回切替後、GNOMEが保持していたversion付きlauncherとOrca内のCLI shimが`ui-733013b0`を再起動し、
 利用者画面が旧版へ戻る不具合を実環境で確認した。配備入口を
 `/home/satotakumi/.local/opt/orca-ide/launch-supervised`と`current` symlinkへ固定し、desktop entryと
 旧versionのlauncherを同じ固定入口へ収束させた。Orcaが生成するCLI shimも起動中の現行buildを指すことを照合した。
-旧launcher経由の再起動でも`1.4.205-local.36906ab2`になることを検査した。
+現行launcher経由の再起動で`ui-a32cc0f4`が起動することを検査した。
 
 TAK-14の実Orca rendererへ接続した受入では、`supervision-terminal-status`がvisibleで、画面上端の
 `x=326.13, y=44, width=718.73, height=60.5`に描画されることを確認した。表示内容は
 `Current task state / Awaiting your feedback / 実装・固定レビューの結果を確認してください。`であり、
 本文に残る旧`paused`報告より上部の正本状態が優先される。
 
-### 確定結果と同案件への追加依頼
+### 完了terminalの保持
 
-Orca UI local commit `5370641c`とhost candidate `5cd66775`で、状態cardを閲覧専用の表示から
-案件の結果確認と再依頼の入口へ拡張した。schema 4は、封印済みのloop台帳からのみ生成する
-結果summary、基点・統合HEAD、変更path、変更別検証commandと判定、固定review判定とblocking所見、
-Help影響判断を追加する。terminal本文は根拠に使わない。
+結果専用cardをterminal領域へ重ねる方式は採用しない。完了確認の正本は、固定reviewerが最終diff、
+検証結果、Help判断を照合して承認通知を送った実際のterminal履歴とする。host controller commit
+`c9261730`では、`finalize-tabs`がそのterminalを閉じずに`レビュー（完了）`へ改名し、他の終了済み
+補助tabだけを保存・終了する。最後に同terminalへ切り替えるため、利用者は古い統括terminalではなく
+承認までの履歴をそのまま確認できる。
 
-完了または確認待ちで確定結果がある場合は、結果cardをterminal領域全体の主表示にして古い会話本文を隠す。
-会話本文は削除せず、明示的な「会話履歴を表示」でだけ確認でき、「結果画面へ戻る」で同じ結果表示へ戻る。
-これにより、古い`paused`報告が最新結果より目立つ状態と、短い完了文しか確認できない状態をどちらも解消する。
+Orca UI commit `a32cc0f4`では、全画面の確定結果、会話履歴との表示切替、terminal内の追加依頼formを
+撤去した。terminal上部には現在状態の一行表示だけを残し、terminal canvasを主表示にする。
+追加依頼の安全な配送機能とschema 4の封印済み結果データは互換性のため維持するが、操作入口は
+サイドバーの`Reception & Coordination`へ戻す。別Linear課題の必要性は受領後に統括が判断する。
 
-同じcardの結果直下に追加依頼欄を置き、`follow_up`要求を登録済みの同じ統括terminalへ配送する。
-controllerはworkflow revision、実装案件の所有receipt、現在の統括terminal handle・incarnation・
-worktree・接続状態を再照合する。送信前に永続receiptを作成し、結果不明時は再送しないため、
-別tabや別案件への迂回、同文の二重送信を行わない。`follow_up`自体はLinear課題を作成せず、
-別課題の必要性は受領後の統括判断に残す。
-
-TAK-14の実画面で、旧`paused`本文を初期表示から隠し、確定結果「実装を統合し、変更別検証と固定レビューに合格」、
-基点HEAD、統合HEAD `3d3cca84aefd56815f54e06dea917e52c3b87700`、変更13 path、検証commandと`passed`、
-review`approved`・blocking所見なし、Help影響、会話履歴の表示・復帰、追加依頼欄と送信buttonを確認した。
-依頼本文が指定されていないため、実案件への送信は行っていない。
+TAK-14は旧終了処理で最終reviewer terminalが既に閉じられていたため、保存台帳にある同一sessionを
+一度だけ復元した。Orca再起動後も`統括`と`レビュー（完了）`の二tabを保持し、後者がactiveであること、
+全画面結果UIがなくterminal canvasと一行状態表示だけが見えることを実runtimeで確認した。
 
 ## A〜D案件panel schema 2と外部同期executor（2026-09-25）
 
@@ -94,8 +85,8 @@ HEADだけからDraft PR #27を一度作成し、再実行が`idle`であるこ�
 
 ## 一時配備と復帰
 
-現在の配備sourceはlocal commit `5370641c`、配備先は
-`/home/satotakumi/.local/opt/orca-ide/ui-5370641c`。Orca IDEアイコンはversion非依存の
+現在の配備sourceはlocal commit `a32cc0f4`、配備先は
+`/home/satotakumi/.local/opt/orca-ide/ui-a32cc0f4`。Orca IDEアイコンはversion非依存の
 `/home/satotakumi/.local/opt/orca-ide/launch-supervised`を起動し、`current` symlinkから現行buildを解決する。
 旧buildは復帰用に保持するが、旧launcherは誤起動防止のため現行固定入口へ転送する。
 サイドバーの `Reception & Coordination`（受付・統括）が固定入口。
