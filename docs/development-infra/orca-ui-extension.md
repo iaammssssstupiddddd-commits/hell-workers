@@ -29,6 +29,16 @@ host candidate `c34ab323`でlaneとintegrationをrevision材料へ含め、`abdc
 integrationの`planned`は登録直後から存在する将来工程なので、laneがimplementing / validating / reviewingの間は
 laneを現在工程として表示する。全lane承認後だけintegrationの統合・統合後検証・最終reviewへ表示を移す。
 
+同日の再調査で、laneがimplementingでもdriver停止・未送信入力が残る場合を確認した。
+現在はdriverの所有・process・停止状態を優先し、不明なら作業中と表示しない。Orcaへのread-onlyな
+Run照会がruntime_unavailableの場合だけ接続待ちで再照会し、不確定なmutationは再送しない。
+実装・reviewの開始表示には、該当Run/Task/Dispatch/coordinatorのbridgeで確認済みの操作が必要。
+input_acceptedだけなら「指示の受理・作業開始を確認待ち」とし、ターミナルの生存と区別する。
+
+Codexの起動待ちは、今回発行したbridge pathを含むbootstrap user messageと、同じturn IDの
+task_complete（Waiting for supervised dispatch）を照合してからTUI idleを確認する。
+再開前の画面に残る古いidle、前回bridgeの応答、開始済みだが未完了のbootstrapでは配車しない。
+
 初回commit `733013b0`の隔離Electron受入は通常terminalだけを対象にしており、実際の統括が使う
 Codex native chatの全面portalにbannerが隠れる欠陥を見落としていた。`36906ab2`ではbannerをnative chat
 portal内にも直接mountし、通常terminal側の重複bannerを抑止した。unit testでPTY-backed native chatと
@@ -63,6 +73,12 @@ cleanで同一fingerprintのsource、単一provider session、固定assignment�
 再実行可能な順序で確定する。その後だけ同じRun・Taskへ`--retry-of`を使い、保存sessionを明示resumeする。
 電源断等で途中まで書かれたreceiptもbefore/after一致時だけ再開できる。新規Task/Run、旧bridgeへの再送、
 dirty sourceの採用、別sessionの推測採用は禁止する。
+
+外部管理terminalではOrcaのworker-stopだけでproviderを終了できない場合がある。明示保守で
+capabilityを失効しproviderを正常終了させた場合は、失敗確定した同一Dispatch、launcherの終了記録、
+同じterminal incarnationのforeground idle shell（同sessionの子processなし）、失効済み・操作0件の
+bridgeをすべて照合して同じタブへ戻す。PTYのlive状態だけでworker生存/終了を判定しない。
+既存のrole bindingは同じticket・source・sessionの場合だけ継承し、再開前の台帳を復旧receiptへ保持する。
 
 隔離Electron受入では同一タブ・同一terminalのまま`feedback → paused → feedback`へsnapshotを更新し、
 一行状態が最新snapshotへ追従することを確認した。確定結果の詳細はこのbannerへ展開しない。
@@ -416,13 +432,21 @@ controllerは時刻更新だけではrevisionを変更せず、受付・route・
 
 固定受付からの実課題・worktree・統括作成、実相談、role移動、実providerの差戻し反復、最終終了、
 再起動後の状態保持、配備版の切替と復帰手順は後続のTAK-11〜TAK-15で受け入れた。
-2026-09-26には実装中TAK-14のruntime切断を、同じRun・Task・provider sessionへ自動復旧し、
-配布版再起動後も実装中tabとterminal sessionを復元した。
+2026-09-26の初回報告で中断復旧を受入済みとしたのは誤りだった。再配車receiptとterminalの復元までで、
+指示受理と実作業開始を確認していなかった。同日のbootstrap順序・driver表示修正後に再確認する。
 
-残る受入は次の2点に限定する。
+残る受入は次の項目。
 
 1. 完全な新規案件を固定受付から開始し、外部の訂正・resume・内部ID入力なしで初回配車まで到達するcold-start計測。
 2. 利用者が実行中・入力待ちagentの停止を明示した場合の安全停止。runtime事故からの自動復旧とは別に扱う。
+3. 中断後に実workerが指示を受理し、ツールを実行してから完了・reviewまで進むこと。input_acceptedやPTY生存だけでは受入にしない。
+
+今回の修正後、TAK-14は元のRun `run_3236488f0dff` とTask `task_99d8e8b3d003`、
+同じ実装A terminal・provider sessionを維持して再開した。新しいretry Dispatch
+`ctx_1a887cce1137`のbridgeでcheckのconfirmedを確認し、実terminalで
+`git diff`と`rtt_composite.rs`・`startup_systems.rs`等の読み取りを確認した。
+snapshotもその証拠に基づくworkingへ更新された。これは指示受理・作業再開の受入であり、
+黒背景修正自体の完成、最終review、全ライフサイクルの完走を意味しない。
 
 fixtureのsnapshotは画面/API検証用であり、実agent稼働や実案件終了の証拠ではない。
 検証結果は計画書へ集約する。開発clone/cacheは同じ場所を修正・受入まで保持し、失敗jobを無期限には保持しない。
@@ -440,4 +464,4 @@ fixtureのsnapshotは画面/API検証用であり、実agent稼働や実案件�
 
 残る受入は、次の新規案件を固定受付から開始し、spec/ref訂正、外部保守resume、追加ID入力が0回の
 cold-startを測ること、および利用者が明示する実行中agentの安全停止である。runtime事故からの再起動復旧は
-2026-09-26に同じTAK-14のRun・Taskを維持して受け入れたが、無介入開始の成功証拠には読み替えない。
+上記の再調査を踏まえ、実作業の証拠を含めて再受入する。無介入開始の成功証拠には読み替えない。

@@ -303,9 +303,17 @@ Help判断、Linear一時断、質問待ち、統括専用の文書補正をexac
 迂回していない。最終承認後は登録済みrole tab 3件と補助shell 2件を出力保全・identity・idle・
 positive closeで整理し、親作業場には統括1tabだけを残した。通常desktop launcherは標準UIを表示し、
 固定受付をサイドバーから開ける構成へ戻した。2026-09-26には実TAK-14のruntime中断を、source不変、
-失効bridge、終了process、単一session、固定assignmentの照合から同じRun・Taskへ自動復旧し、重複Task/Runを
-作らないことを確認した。配布版切替後も実装中tabとterminal sessionを復元した。残る§7シナリオは、
-完全な新規受付の無介入cold-startである。
+失効bridge、終了process、単一session、固定assignmentの照合から同じRun・Taskへの再配車までは確認した。
+ただし再開後の実作業開始は未確認だった。bootstrap完了前に指示が貼り付けられ、未送信の入力が残り、
+監督driver停止後も実装中と表示していたため、中断復旧の受入は未完として訂正する。
+
+### 追加修正: 起動完了と実行証拠（2026-09-26）
+
+1. Codexの現在のbridgeに対応するbootstrap turnの完了を確認してから配車する。復元された古いidle表示を根拠にしない。
+2. input_acceptedと実作業開始を分離する。bridgeの実際の受付記録がない間は開始確認待ちと表示する。
+3. driver停止・runtime接続待ちを上部表示へ優先反映する。read-only照会のruntime一時断だけを再照会し、不確定なmutationを再送しない。
+4. 回帰テスト後、TAK-14の既存Taskを保全して再開し、指示受理と実ツール実行を確認する。PTY生存や台帳だけでは受入にしない。
+5. ゲームのbuild/testは本修正の対象外。Orca tooling、表示投影、primary storageを検証する。
 
 ## 6. リスクと対策
 
@@ -369,7 +377,7 @@ positive closeで整理し、親作業場には統括1tabだけを残した。�
 
 1. 実装指示の有無を確認し、primary文書・candidate HEAD/dirty・当日のruntime/holdを再照合する。
 2. TAK-14の最終loop、role tab終了receipt、`06cfe378`のlauncherを確認する。次の新規案件は固定受付から開始し、入力訂正・外部保守resume・追加ID入力が0回かを計測する。
-3. 次の新規案件で無介入cold-startを計測する。稼働中agentのruntime中断・アプリ再起動復旧は実TAK-14で受入済みだが、途中のunit passを全ライフサイクル完了と報告しない。
+3. TAK-14の指示受理・実作業開始を確認して中断復旧を再受入し、次の新規案件で無介入cold-startを計測する。途中のunit passを全ライフサイクル完了と報告しない。
 
 ### 参照必須ファイル
 
@@ -411,4 +419,5 @@ positive closeで整理し、親作業場には統括1tabだけを残した。�
 | 2026-09-23 | Codex | 利用者が撤去済みの3作業場を保持台帳で照合・解放。隔離Electron `attempt-16`で相談/明示実装の2経路を受入。実配車・終了・稼働版配備は未完 |
 | 2026-09-23 | Codex | 統括tabの一度だけの背景起動を追加。実Orcaの専用`TAK-9`でLinear→分離worktree→可視統括の1tab経路を確認。固定パネル・終了・配備は継続 |
 | 2026-09-24 | Codex | TAK-14を同一Runで最終固定reviewまで完了。Help/検証/Linear/質問/文書補正の回復を恒久化し、role tab 3件と補助shell 2件を安全に整理。通常desktop起動を復旧。無介入cold-startと稼働中中断復旧は継続 |
-| 2026-09-26 | Codex | 実TAK-14のruntime中断を同じRun・Task・provider sessionへ自動復旧。表示は実作業工程を優先し、×非表示をpolling更新から分離して実画面で受入。残件を新規案件の無介入cold-startへ限定 |
+| 2026-09-26 | Codex | runtime中断後の再配車・タブ復元と、×非表示のpolling分離を確認。実作業開始を確認せず復旧受入済みとした判断は、同日の再調査で訂正 |
+| 2026-09-26 | Codex | Codexの現bootstrap完了gate、driver停止/接続待ち、bridge受理前の開始待ち表示を修正。同じTAK-14 Task/session/tabへ再開し、bridge check受理とソース調査の実行を確認。黒背景修正の最終承認・無介入cold-startは別途確認 |
