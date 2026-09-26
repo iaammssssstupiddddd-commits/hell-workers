@@ -249,9 +249,9 @@ M7以前の部分配備は候補/opt-inに限定し、「運用可能」とは�
 
 ### 次に行うこと
 
-1. M0の到達性/互換/接続診断表を確定し、実装時点の稼働対象を固定する。
-2. M1の契約と完了禁止gateのtestを先行実装し、旧案件previewを固定reviewする。
-3. M2以降で正常継続を接続し、M7の全経路受入前に運用完了と報告しない。
+1. Linear設定の再接続後に、実serviceの読取と標準GitHub連携の完了ownerを確認する。
+2. batch 2の候補を固定reviewし、配備manifestと旧案件のscope移行を実施する。既存loopの封印は変更しない。
+3. 本文/子課題とscopeの再照合、権限・終了操作の残件を整え、M7の全経路受入前に運用完了と報告しない。
 
 ### 2026-09-26 実装batch 1（候補）
 
@@ -273,6 +273,31 @@ M7以前の部分配備は候補/opt-inに限定し、「運用可能」とは�
   `scripts/tests`798件、Blender補助tooling164件、Ruff/actionlint/perf self-testとdocs/storageがpass。
   実provider・固定reviewの実運用受入とT01〜T12全体は未実施。新規request系13件と実Git loop追加試験は上記798件に含まれる。
   ゲームのRust build/test/native起動、push、PR/Linear write、既存案件migrationは行っていない。
+
+### 2026-09-26 実装batch 2（候補・実受入待ち）
+
+- 候補host commit: `dc6d6aebbbd47940c13b297cd0c2c68151766597`。primary製品ソースへの統合・pushはしていない。
+- `orca_request_runtime`を追加し、通常loop driverのtick後から次nodeのplanning配送を接続した。
+  request/scope/node固定IDのwrite-ahead、Orca durable promptの同ID再照合、accepted/started/appliedの分離を実装。
+  原因不明の別Runや再配車で進行を装わない。旧契約未登録のTAK-14には自動配車しない。
+- 通常controllerの`serve`へ単一同期workerを接続。UI heartbeatとネットワーク実行を分離し、
+  CLIとの競合も同requestのexecutor leaseで直列化する。未登録の旧案件は接続観測まででwriteしない。
+- 部分工程の承認ではLinear全体をstartedに維持する。全体受入後のDone再読をcompletion receiptに結び、
+  close preflight/実行/復旧で承認・scope・外部receipt・直近観測・未確定operationの有無を検査する。
+- 新規登録CLIは全体計画/工程planning/統合先/接続確認を必須にした。既存loopの収束APIは維持する。
+  採用仕様をworker context packageへ入れ、稼働中の追加指示入口を開き、stageの日本語部分一致推測を撤去した。
+- 通常desktop wrapperで`ui-e6fadf0b`を起動しても`linear_credential_unavailable`を再現。
+  設定でのLinear再接続を利用者へ依頼済み。credentialの削除・平文読出し・置換はしていない。
+  appは再接続操作ができるよう起動したまま。旧統括process・担当terminal・TAK-14成果は保全。
+- 新規試験は永続ID・応答消失・開始未確認・retry禁止・offline/取消・未処理指示・部分承認・
+  全体receipt/未知write/reopen・通常driver/controller接続を対象とする。providerはfixtureであり実受入ではない。
+- commit直前の同内容で変更別`contracts, tooling`がpass。base/検証HEADは`8796b2f4bac45186d2414fbf32576ae5c0df6fe9`、
+  sourceは`e2be6522cef49d99261792242a30d1fcf02ecd106587473df0f5e5077c014e46`。
+  `scripts/tests`811件、Blender補助164件、Ruff/actionlint/perf self-test、docs/storageがpass。
+  ゲームRust build/test/native起動は行っていない。Helpは開発用host→Orca/外部サービスに限定されNo impact。
+  先行runは検証中のsource変更により最終gateが拒否したため不採用とし、上記同一subjectで全群を再実行した。
+- 本体UIの新build、通常案件への切替、実provider固定review、既存案件migration、T01〜T12の実運用受入は未実施。
+  本文/子課題の変更採用、終了操作/権限モデル、配備manifestにも残件がある。認証だけ直れば全体完了とはしない。
 
 ### 計画書検証ログ
 

@@ -46,6 +46,28 @@ Linear Done intentの生成と実行にも同じ検査を入れる。旧版が�
 この表示だけで接続正常・同期完了を判断しない。
 画面は既存の状態行と実terminal履歴を使い、追加の大きな結果UIは作らない。
 
+## 通常driverとcontrollerへの接続（候補batch 2）
+
+`orca_request_runtime`は既存loop driverのtick後に実行する。scope拘束された承認済み工程から
+依存が満たされた次nodeを選び、同じ統括へのplanning入力を送信前に保存する。
+request/scope/nodeから決めた固定prompt IDと本文をOrcaのdurable prompt APIへ渡す。
+応答消失後も同じID/本文だけを照合し、旧host・process交換等で安全なretryが否定されたら自動再送しない。
+`accepted`、`started`、後継loop登録による`applied`を別状態にする。入力受付やturn開始だけで工程を閉じない。
+worker間通信のRun inboxは引き続き既存driverだけが消費し、別consumerを作らない。
+
+通常`serve`は単一の同期workerを所有する。外部通信はUI snapshot更新とは別threadで実行し、
+送信前のdurable intentと送信後read-backには既存executorを再利用する。
+CLIとcontrollerが競合しても、一つのrequestのread/send/read-backは専用leaseで直列化する。
+個別loopのreviewではLinear案件をreview/Doneへ進めず、依頼全体はstartedを維持する。
+最後の全体受入でのみDone intentを生成し、同一subjectの受入証拠と外部確認operationを結ぶreceiptを保存する。
+close preflight/実行/復旧では、そのreceipt、現在の承認、直近の接続観測を再確認する。
+外部での取消や完了後reopenを観測しても自動的に上書きしない。
+
+新規`register`/`register-successor` CLIは、scope/node、工程planning、統合先、Linearの現状態を必須にする。
+旧案件は接続状態の読取までに留め、全体契約未照合のまま自動配車/Doneを行わない。
+稼働中も追加指示の入口は残すが、実行中ticketを書き換えず、受理した指示の照合を全体受入前に要求する。
+UIのstageはlane/integrationの保存済みenumから決め、日本語の説明文に含まれる語から推測しない。
+
 ## 実装済みと残件
 
 候補側には上記の受入台帳、revision、ticket拘束、終了/Doneの拒否gateとテストを実装した。
@@ -54,9 +76,9 @@ providerとOrca接続はfixtureなので、実providerによる全経路受入�
 
 以下はまだ運用完成を主張できない理由である。
 
-- 通常受付への全体計画の必須接続と、旧案件の正式なscope移行。
-- hostによる次工程planningの永続配送・開始照合と無介入継続。
-- 通常controllerでの外部同期実行、認証回復、scopeと外部状態の再照合。
+- 旧案件の正式なscope移行と、全入口の互換照合。
+- 上記の自動継続・通常同期は候補コードとfixture試験まで。実providerでの無介入継続は未受入。
+- Linear認証回復、本文/子課題の変更とscopeの採用版を対応させる再照合。
 - 人手受入・公開条件、非表示/中断/取消と成功終了の分離、版互換・配備manifest。
 - 同じ通常入口からの実provider複数工程、実Linear/GitHub、UIと再起動を含むT01〜T12の受入。
 
