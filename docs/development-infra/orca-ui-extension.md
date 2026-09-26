@@ -5,7 +5,7 @@
 
 ## 統括タブの正本状態表示（2026-09-26更新）
 
-Orca UI local commit `beac5294`（初回の一行化は`a32cc0f4`）では、統括・担当ターミナルの上部表示を
+Orca UI local commit `e6fadf0b`（初回の一行化は`a32cc0f4`）では、統括・担当ターミナルの上部表示を
 現在状態の一行だけへ戻した。
 ターミナル本文は会話履歴なので、過去に出力した`paused`等の報告を後から書き換えない。
 `supervision.read`の最新snapshotを2秒ごとに照合する補助表示は残すが、案件詳細、確定結果、追加依頼formを
@@ -19,9 +19,11 @@ terminal canvasへ重ねない。完了確認は、固定reviewerが承認に至
 snapshotが期限切れ、controllerが不通、または同じworktreeへ複数案件が紐づく場合は、過去の状態を
 現在値として表示せず`要確認`へ倒す。controller不通時は直前snapshotを表示用に保持するが、ready扱いには戻さない。
 サイドバーpanelとターミナルbannerは同じ単一polling storeを使うため、両者で状態更新の時刻や可用性が分岐しない。
-banner右端の×は現在のworkflow revisionだけを非表示にし、task、agent、terminal、保存台帳を変更しない。
-台帳のphase、attempt、integration等が変わりrevisionが進むと、新しい状態としてbannerを再表示する。
-これによりterminal操作中は表示を退避でき、進行・停止・review等の変化は見落とさない。
+banner右端の×は現在の表示意味だけを非表示にし、task、agent、terminal、保存台帳を変更しない。
+backendのworkflow revisionには観測時刻の更新も含まれるため、非表示keyへ生のrevisionを使わない。
+state、detail、action、4役割のstate/detail、stage、待機理由、次操作、外部同期を表示signatureとして保持し、
+pollingや観測時刻の更新では非表示を維持する。進行・停止・review等の意味の変化だけで再表示する。
+これによりterminal操作中は表示を退避でき、実質的な工程変化は見落とさない。
 
 host candidate `c34ab323`でlaneとintegrationをrevision材料へ含め、`abdc93ee`で表示優先順位を修正した。
 integrationの`planned`は登録直後から存在する将来工程なので、laneがimplementing / validating / reviewingの間は
@@ -34,6 +36,9 @@ structured native chatの両方へ同じworktree IDが渡ることを固定し�
 
 `beac5294`ではbanner単体のunit testとtypecheckを通し、配備後の実runtimeで全画面結果UIがなく、
 `レビュー（完了）`tab、terminal canvas、一行状態だけが表示されることをaccessibility treeで確認した。
+`e6fadf0b`ではpolling revisionと観測時刻だけを進めても×非表示が維持され、detail変更で再表示する
+unit testを追加した。配備後の実TAK-14で×を押し、複数poll後もbannerが戻らず、Terminal inputと
+`実装A（Codex）・実行中`tabが残ることをaccessibility treeで確認した。
 
 ### Linear資格情報と統括再起動の耐障害性
 
@@ -118,8 +123,8 @@ HEADだけからDraft PR #27を一度作成し、再実行が`idle`であるこ�
 
 ## 一時配備と復帰
 
-現在の配備sourceはlocal commit `beac5294`、配備先は
-`/home/satotakumi/.local/opt/orca-ide/ui-beac5294`。Orca IDEアイコンはversion非依存の
+現在の配備sourceはlocal commit `e6fadf0b`、配備先は
+`/home/satotakumi/.local/opt/orca-ide/ui-e6fadf0b`。Orca IDEアイコンはversion非依存の
 `/home/satotakumi/.local/opt/orca-ide/launch-supervised`を起動し、`current` symlinkから現行buildを解決する。
 旧buildは復帰用に保持するが、旧launcherは誤起動防止のため現行固定入口へ転送する。
 サイドバーの `Reception & Coordination`（受付・統括）が固定入口。
@@ -407,15 +412,17 @@ controllerは時刻更新だけではrevisionを変更せず、受付・route・
 - 不明な終了の再送、process停止、通知ACK、所有資源解放、履歴保全、pane close、統括自身の最後の終了は
   controller/finalizerの責務。単なるqueue書込みをこれらの完了証拠にしない。
 
-## 未実装・未受入
+## 残る未受入
 
-本体UI/APIだけでは全自動運用の完了としない。一時配備で次の接続・受入を進める。
+固定受付からの実課題・worktree・統括作成、実相談、role移動、実providerの差戻し反復、最終終了、
+再起動後の状態保持、配備版の切替と復帰手順は後続のTAK-11〜TAK-15で受け入れた。
+2026-09-26には実装中TAK-14のruntime切断を、同じRun・Task・provider sessionへ自動復旧し、
+配布版再起動後も実装中tabとterminal sessionを復元した。
 
-1. 実Orcaの課題・worktree・可視統括タブ作成は専用`TAK-9`で確認した。固定受付パネルからその経路を操作し、画面のrole移動まで通す実受入は未実施。
-2. queue→受付台帳の消費と相談起動intentは隔離Orca画面から確認したが、実providerの相談結果照合、パネル再表示／アプリ再起動をまたぐ受入。
-3. 限定的なidle案件の中断・再開・終了候補と、承認・release済みloopの担当タブを直列に閉じる候補は実装した。worker/reviewerを経た実案件での終了、稼働中agentの安全停止、再起動後の部分失敗復旧、close journal/finalizerの全面受入は未実施。確認待ちの作業場とcacheは保持する。
-4. 実providerによる新規依頼→役割移動→差戻し→確認待ち→再開→最終終了。
-5. 既存作業場の非破壊移行、配備版の選択と復旧手順。
+残る受入は次の2点に限定する。
+
+1. 完全な新規案件を固定受付から開始し、外部の訂正・resume・内部ID入力なしで初回配車まで到達するcold-start計測。
+2. 利用者が実行中・入力待ちagentの停止を明示した場合の安全停止。runtime事故からの自動復旧とは別に扱う。
 
 fixtureのsnapshotは画面/API検証用であり、実agent稼働や実案件終了の証拠ではない。
 検証結果は計画書へ集約する。開発clone/cacheは同じ場所を修正・受入まで保持し、失敗jobを無期限には保持しない。
@@ -432,5 +439,5 @@ fixtureのsnapshotは画面/API検証用であり、実agent稼働や実案件�
 - 全Python基盤試験669件が成功した。ゲーム実装テストはユーザー指定により対象外。
 
 残る受入は、次の新規案件を固定受付から開始し、spec/ref訂正、外部保守resume、追加ID入力が0回の
-cold-startを測ること、および実行中agentをユーザーが中断した場合の安全停止・再起動後復旧である。
-今回のTAK-14は途中停止を同一Runで恒久修正して完了したため、無介入開始の成功証拠には読み替えない。
+cold-startを測ること、および利用者が明示する実行中agentの安全停止である。runtime事故からの再起動復旧は
+2026-09-26に同じTAK-14のRun・Taskを維持して受け入れたが、無介入開始の成功証拠には読み替えない。

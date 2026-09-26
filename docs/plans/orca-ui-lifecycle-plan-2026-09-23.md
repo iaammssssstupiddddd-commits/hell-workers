@@ -5,8 +5,8 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `orca-ui-lifecycle-plan-2026-09-23` |
-| ステータス | In Progress — 固定受付、実案件の実装・固定review・統合、承認後role tab整理、通常desktop起動まで受入。新規案件の無介入cold-start計測と稼働中agentの中断・再起動復旧が残る |
-| 作成日 / 最終更新日 | 2026-09-23 / 2026-09-24 |
+| ステータス | In Progress — 固定受付、実案件の実装・固定review・統合、承認後role tab整理、通常desktop起動、稼働中agentの中断・再起動復旧まで受入。新規案件の無介入cold-start計測が残る |
+| 作成日 / 最終更新日 | 2026-09-23 / 2026-09-26 |
 | 作成者 | Codex |
 | 関連提案 | [Orca運用素案](../proposals/orca-parallel-development-proposal-2026-09-20.md) |
 | 関連Issue/PR | 専用実経路試験`TAK-9`を作成。旧promptの誤handoffで生じた`TAK-10`は試験残骸として照合対象。TAK-5/6/8は既存状態の照合対象であり、本計画の実装依頼に転用しない。PRなし |
@@ -302,8 +302,10 @@ holdを照合して撤去済み。既存sidebarの用途別filter/Sleepや再起
 Help判断、Linear一時断、質問待ち、統括専用の文書補正をexact receiptから再開し、別Runや手書き承認へ
 迂回していない。最終承認後は登録済みrole tab 3件と補助shell 2件を出力保全・identity・idle・
 positive closeで整理し、親作業場には統括1tabだけを残した。通常desktop launcherは標準UIを表示し、
-固定受付をサイドバーから開ける構成へ戻した。残る§7シナリオは、完全な新規受付の無介入cold-startと、
-稼働中agentを中断した場合の安全停止・アプリ再起動後の部分復旧である。
+固定受付をサイドバーから開ける構成へ戻した。2026-09-26には実TAK-14のruntime中断を、source不変、
+失効bridge、終了process、単一session、固定assignmentの照合から同じRun・Taskへ自動復旧し、重複Task/Runを
+作らないことを確認した。配布版切替後も実装中tabとterminal sessionを復元した。残る§7シナリオは、
+完全な新規受付の無介入cold-startである。
 
 ## 6. リスクと対策
 
@@ -367,7 +369,7 @@ positive closeで整理し、親作業場には統括1tabだけを残した。�
 
 1. 実装指示の有無を確認し、primary文書・candidate HEAD/dirty・当日のruntime/holdを再照合する。
 2. TAK-14の最終loop、role tab終了receipt、`06cfe378`のlauncherを確認する。次の新規案件は固定受付から開始し、入力訂正・外部保守resume・追加ID入力が0回かを計測する。
-3. 稼働中agentの中断、アプリ再起動、close中の部分失敗を専用試験で受け入れる。途中のunit passを全ライフサイクル完了と報告しない。
+3. 次の新規案件で無介入cold-startを計測する。稼働中agentのruntime中断・アプリ再起動復旧は実TAK-14で受入済みだが、途中のunit passを全ライフサイクル完了と報告しない。
 
 ### 参照必須ファイル
 
@@ -409,3 +411,4 @@ positive closeで整理し、親作業場には統括1tabだけを残した。�
 | 2026-09-23 | Codex | 利用者が撤去済みの3作業場を保持台帳で照合・解放。隔離Electron `attempt-16`で相談/明示実装の2経路を受入。実配車・終了・稼働版配備は未完 |
 | 2026-09-23 | Codex | 統括tabの一度だけの背景起動を追加。実Orcaの専用`TAK-9`でLinear→分離worktree→可視統括の1tab経路を確認。固定パネル・終了・配備は継続 |
 | 2026-09-24 | Codex | TAK-14を同一Runで最終固定reviewまで完了。Help/検証/Linear/質問/文書補正の回復を恒久化し、role tab 3件と補助shell 2件を安全に整理。通常desktop起動を復旧。無介入cold-startと稼働中中断復旧は継続 |
+| 2026-09-26 | Codex | 実TAK-14のruntime中断を同じRun・Task・provider sessionへ自動復旧。表示は実作業工程を優先し、×非表示をpolling更新から分離して実画面で受入。残件を新規案件の無介入cold-startへ限定 |

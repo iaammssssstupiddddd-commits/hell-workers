@@ -58,7 +58,8 @@ A/B/レビューは統括が監督付きの分離worktreeへ配車した時だ�
 - ターミナル上部の案件状態は、監督台帳から取得した現在状態を一行で示す補助表示です。
   ターミナル本文を覆う結果画面や、会話履歴との表示切替は設けません。
 - 上部状態の右端にある×は、その時点の工程表示だけを隠します。案件、agent、ターミナルは停止せず、
-  ターミナルを全面で操作できます。実装から検証など次の工程へ進むと、新しい状態として自動的に再表示します。
+  ターミナルを全面で操作できます。監視時刻や内部revisionだけが更新されても表示は戻りません。
+  実装から検証など、利用者に見える工程・担当状態・待機理由が変わった時だけ新しい状態として再表示します。
 - 表示は、登録時から存在する将来の統合予定ではなく、現在動いている担当工程を優先します。
   したがって実装中は「実装担当が分離作業場で作業中」、検証中は変更別検証、review中は固定reviewを示します。
 - 固定レビューで完了した案件は、その承認に至った実際のreviewer terminalを閉じず、
@@ -164,8 +165,8 @@ Orca UI commit `a32cc0f4`は結果専用画面を撤去してterminalを主表�
 統合HEADは`3d3cca84aefd56815f54e06dea917e52c3b87700`、固定reviewは`approved`である。
 desktop iconと旧versionのlauncherはversion非依存の`/home/satotakumi/.local/opt/orca-ide/launch-supervised`へ
 収束しているため、通常起動で旧buildへ戻らない。現在の配備先は
-`/home/satotakumi/.local/opt/orca-ide/ui-beac5294`で、terminal上部は一行の状態表示だけに留める。
-同buildでは現在工程への追従、工程単位の×非表示、Linear資格情報エラーの専用分類を追加した。
+`/home/satotakumi/.local/opt/orca-ide/ui-e6fadf0b`で、terminal上部は一行の状態表示だけに留める。
+同buildでは現在工程への追従、工程単位の×非表示、polling中の非表示維持、Linear資格情報エラーの専用分類を追加した。
 統括launcherはPATHだけに依存せず、明示設定、PATH、Codex Desktop同梱実行ファイルを検証して解決するため、
 Orca再起動後も同じ統括sessionを再開できる。
 

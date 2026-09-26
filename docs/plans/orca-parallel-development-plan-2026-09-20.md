@@ -5,8 +5,8 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `orca-parallel-development-plan-2026-09-20` |
-| ステータス | In Progress — 固定受付、Linear-linked worktreeの可視統括、日本語A/B/review tab、実案件の編集→検証→固定review→統合→最終reviewを受入。無介入cold-startと稼働中中断復旧を残す |
-| 作成日 / 最終更新日 | 2026-09-20 / 2026-09-24 |
+| ステータス | In Progress — 固定受付、可視統括、日本語A/B/review tab、実案件の反復loop、稼働中runtime中断復旧を受入。無介入cold-startと利用者指定の安全停止を残す |
+| 作成日 / 最終更新日 | 2026-09-20 / 2026-09-26 |
 | 作成者 | Codex |
 | 関連提案 | [並列実装と専任レビューの運用素案](../proposals/orca-parallel-development-proposal-2026-09-20.md) |
 | 関連Issue/PR | N/A（公開なし） |
@@ -29,7 +29,9 @@ opt-inのsettlement後終了処理を追加した。統括event駆動と統合�
 
 2026-09-23の[UI・受付・終了ライフサイクル統合計画](orca-ui-lifecycle-plan-2026-09-23.md)は、
 下記のTasks経由だけの入口を「固定の受付・統括へ日本語で依頼する入口」へ改訂し、
-各担当の可視化と終了・再開まで一体化する。2026-09-24にTAK-14の実provider・実案件・最終review・承認後role tab整理まで受け入れた。無介入cold-startと稼働中agentの中断復旧は未完で、完了扱いしない。
+各担当の可視化と終了・再開まで一体化する。2026-09-24にTAK-14の実provider・実案件・最終review・承認後role tab整理まで受け入れた。
+2026-09-26に実装中のruntime中断を同じRun・Task・provider sessionへ自動復旧した。無介入cold-startと、
+利用者が明示する実行中agentの安全停止は未完で、計画全体を完了扱いしない。
 
 2026-09-21のユーザー指示により、依頼受付・進捗管理はLinearの標準連携へ寄せる。
 既存の資源制御、role launcher、固定reviewer、会話再開を再利用し、受付UIの自作拡張は止める。
@@ -1109,3 +1111,4 @@ Rust/Bevyのbuild・workspace test・Clippy、Blender test、ゲームwindow/GPU
 | 2026-09-22 | Codex | UUID・ticket path・slot入力を利用者経路から撤去。Orca Tasksを受付とし、linked worktreeの可視統括、exact terminal拘束、日本語A/B/reviewer tabをcandidate `767ca7f6`へ実装・commit。実runtimeでTAK-5取込とacknowledgeを確認 |
 | 2026-09-22 | Codex | 可視統括を外側bubblewrapへ一本化し、初回trust入力を専用設定で撤去。candidate `6453f8cd`を最新基点とし、統括自身からOrca runtime ready/connectedと現在課題`TAK-5`の取得を確認 |
 | 2026-09-22 | Codex | 試験専用`TAK-5`から実装用`TAK-6`・専用worktree・次の可視統括への自動引継ぎを実装。UUIDv4、結果不明復旧、登録済みterminal identity、既定`統括` tab再利用をcandidate `518102b3`まで修正し、TAK-6統括の取得・acknowledge・待機と重複tabなしを実runtimeで確認 |
+| 2026-09-26 | Codex | 実TAK-14でruntime中断を同じRun・Task・provider sessionへ自動復旧し、重複Run/Task/tabなしを確認。配布版切替後も実装中terminalを維持し、残件を無介入cold-startと利用者指定の安全停止へ限定 |
