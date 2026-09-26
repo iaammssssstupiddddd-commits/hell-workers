@@ -4,17 +4,21 @@
 [移行計画](plans/3d-rtt/non-wall-floor-building-art-migration-plan-2026-09-19.md)を正本とする。
 本書はroot `bevy_app::assets::building_asset_set` が所有する入力境界を記す。
 
-## 実装範囲（M1-a1）
+## 実装範囲（M1-b）
 
 `.buildingset` のschema、authority、依存ファイルの実バイト数とSHA-256を検査する。
-`StartupPlugin` はasset型・policy resource・loaderを登録するだけで、通常起動からの読み込み要求はまだない。
+`StartupPlugin` はasset型・policy resource・loaderを登録し、`VisualPlugin`はkind単位のpoolと
+表示更新systemを登録する。ただし通常起動からのlocator選択と読み込み要求はまだない。
 既存Wall／Doorのloaderと表示経路は継続し、Bridgeは別件解決まで対象外とする。
 
-このloaderの`Loaded`は**manifestと依存バイト列の検証済み**を意味する。
-GLB／PNGのデコード、Mesh／Imageの常駐、描画可能性、active/pending切替、退役pool、
-配置・カタログへの公開を意味しない。それらはM1-a2以降で実装する。
+manifest loaderの`Loaded`は**manifestと依存バイト列の検証済み**だけを意味する。
+poolは、明示的に`BuildingAssetPool::request`を呼ぶconsumer向けに、GLBの先頭primitiveを
+`Mesh`、PNGを`Image`として要求し、依存を含むload成功とpreview寸法を確認してから世代を
+activeへ昇格するpoolを追加した。pending世代はactiveと分離し、失敗時は既存activeを保持する。
+M1-bではpoolを`VisualPlugin`へ登録し、`release_approved`のactive descriptorだけを3D設備、2D表示、
+配置・移動preview、Blueprint、pulse、カタログへ同じ更新境界で公開する。
 production向けprojection／promotion生成器も未接続であり、現時点のschemaは未公開の初期版である。
-状態別のwater高さ・rotor軸等の追加契約は、表示接続時に制作側と照合して確定する。
+正式assetと状態別のwater高さ・rotor軸等の制作値は、制作時に制作側と照合して確定する。
 
 ## 種別と必須role
 
@@ -79,12 +83,61 @@ loader自体はfallbackの変更や部分公開を行わない。
 receiptは製品に同梱する承認記録の整合性検査であり、署名や外部承認機関の認証ではない。
 正式な承認・生成器による昇格判断はM1-cの責務で、runtimeが承認を作ることはない。
 
+## typed residencyと世代pool
+
+- `BuildingAssetPool::request`はidentity（kind・generation）とmanifest handleをpending世代として
+  保持し、同じkindで試行済みのgeneration以下を再要求しない。戻り値`BuildingAssetRequest`は
+  `Started`／`PendingOccupied`／`AlreadyAttempted`の受付結果を表す。
+- mesh roleはglTFの`Mesh0/Primitive0`、image roleは通常の`Image`として読み込む。
+  AssetServerのload失敗・再帰依存失敗はいずれも世代失敗として記録する。
+- world／catalog previewはmanifestの`canvas_px`と実画像寸法を照合する。不一致は昇格しない。
+- 全typed assetが揃った時だけpendingをactiveへ原子的に切り替える。旧activeのstrong handleは
+  切替時に即座にdropし、pool内へretired cacheを保持しない。失敗したpendingも破棄し、
+  同じkindの既存activeを維持する。
+- `invalidate_active`はidentityが完全一致するactiveだけをdropする。他kindとpendingには影響しない。
+- 通常起動はlocatorをrequestしないためfallbackのまま。明示投入されたactiveのうち、
+  `release_approved`だけを次節のproduction consumerへ公開する。
+
+## production表示接続
+
+`PostUpdate`でpoolのpoll、3D structure同期、2D／preview同期、`ApplyDeferred`を順にchainし、
+Transform伝播とUI prepareより前に完了する。後着generation、pause中の切替、新規consumerも
+同じ境界でactive descriptorへ揃える。world置換ではpoolを維持し、world entity側を再構築する。
+
+### 3D設備
+
+Tank、MudMixer、RestArea、SoulSpaはlogical ownerごとにmeshを持たない`EquipmentRoot`を1つ持ち、
+descriptorのmesh、local transform、共有generation material、`RenderLayers`、`Visibility`を持つpartを
+childとして生成する。`Building3dVisual`はrootだけに付くため、既存のworld transform同期がpartの
+local transformを上書きしない。generation切替ではpart集合を一括交換し、active失効時は従来の
+mesh・位置・中心高・材質・状態表示へ戻す。owner消失、重複root、world再構築も同期時に整理する。
+
+Tankの水面、MudMixerの回転部、SoulSpaの施工状態と4区画maskは既存gameplay stateを正本としてpartへ
+反映する。descriptorは論理footprint、通行、生産、光源、save schemaを変更しない。
+
+### 2D設備とpreview
+
+Parking、SandPile、BonePile、OutdoorLampのworld spriteに加え、8種の配置ghost、Blueprint、pulse child、
+移動先preview、Tankのpartner ghost、表示中のcatalog cardへdescriptorを適用する。Lampは既存の通電状態で
+off／on画像を選び、旧gray tintを二重適用しない。適用前のimage、size、anchorをentityごとに保持し、
+active失効やmode変更では従来値へ復元する。再利用ghostはDoor、対象設備、bucket／Wall等の非対象へ
+切り替わるたびにbaselineを入れ直し、前のgenerationのanchorやHandleを漏らさない。
+
+production consumerはpoolとは別にauthorityを再確認する。候補authority、欠落／失効したactive、
+locator未接続の通常起動では常に従来fallbackを使用し、Wall／Door／Bridgeの専用経路を変更しない。
+
 ## 検証とHelp
 
 `assets::building_asset_set`のunit testは8種×3 authorityのschema、異常入力、policy、receiptを検査し、
-Bevyのmemory AssetServer経由で欠落・改竄・正常ロードを確認する。
-テストのpayloadはバイト検証用の合成データであり、GLB／PNGの制作・描画受入ではない。
+Bevyのmemory AssetServer経由で欠落・改竄・正常ロードを確認する。M1-a2のtestは実際にdecode可能な
+最小GLB／PNGを使い、typed load、preview寸法拒否、active/pending分離、失敗時のactive保持、
+世代昇格、invalidateと旧handleの解放を確認する。これはruntime契約のtestであり、制作物の見た目や
+描画受入を代替しない。
 
-Help影響はNo impact。登録だけではload要求もplayer-visible consumerも発生せず、
-建築種類、操作、成立条件、文言、成功・失敗結果は不変。
+M1-bのfocused testはkind別atomic publish、後着generation、active失効、ownerごとのroot／part数、
+状態part、world／ghost／Blueprint／pulse／移動先／catalog、owner cleanup、world resetを検査する。
+release-approved fixtureによる接続試験であり、正式assetの美術受入ではない。
+
+Help影響はNo impact。表示consumerは接続済みだが、通常起動にはlocator／load requestと正式release assetがなく、
+player-visibleな表示は従来fallbackのままである。建築種類、操作、成立条件、文言、成功・失敗結果も不変。
 将来のmanifest追加をHelpレビュー対象から漏らさないよう、`.buildingset`をruntime data分類とtestへ追加した。

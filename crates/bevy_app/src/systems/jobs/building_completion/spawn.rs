@@ -7,7 +7,7 @@ use hw_core::constants::{TILE_SIZE, Z_BUILDING_FLOOR, Z_BUILDING_STRUCT};
 use hw_visual::layer::VisualLayerKind;
 use hw_visual::visual3d::{
     Building3dVisual, Door3dPresentationMode, Door3dVisual, DoorPresentationAxis,
-    DoorPresentationState, StructuralPresentationState, Wall3dPresentationState,
+    DoorPresentationState, Wall3dPresentationState,
 };
 use hw_world::WorldMap;
 
@@ -292,21 +292,11 @@ pub(crate) fn spawn_building_3d_visual(
         | BuildingType::MudMixer
         | BuildingType::RestArea
         | BuildingType::SoulSpa => {
-            let transform_3d = Transform::from_xyz(pos2d.x, TILE_SIZE * 0.4, -pos2d.y);
-            commands.spawn((
-                Mesh3d(handles_3d.equipment_2x2_mesh.clone()),
-                MeshMaterial3d(handles_3d.equipment_material.clone()),
-                transform_3d,
-                handles_3d.render_layers.clone(),
-                Building3dVisual { owner },
-                match kind {
-                    BuildingType::Tank => StructuralPresentationState::TankEmpty,
-                    BuildingType::MudMixer => StructuralPresentationState::MixerIdle,
-                    _ => StructuralPresentationState::Neutral,
-                },
-                Name::new(format!("Building3dVisual ({:?})", kind)),
-            ));
+            crate::systems::visual::building_presentation::spawn_equipment_root(
+                commands, owner, kind, pos2d, handles_3d,
+            );
         }
+
         BuildingType::Bridge => {
             commands.spawn((
                 Mesh3d(handles_3d.bridge_mesh.clone()),

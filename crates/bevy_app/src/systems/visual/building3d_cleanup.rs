@@ -79,7 +79,11 @@ type BuildingVisualTransformQuery<'w, 's> = Query<
         &'static mut Transform,
         Option<&'static mut MeshTag>,
     ),
-    (Without<Door3dVisual>, Without<Building>),
+    (
+        Without<Door3dVisual>,
+        Without<Building>,
+        Without<super::building_presentation::EquipmentRoot>,
+    ),
 >;
 
 type ChangedBuildingTransformQuery<'w, 's> = Query<
@@ -95,6 +99,7 @@ type AddedBuildingVisualQuery<'w, 's> = Query<
     (Entity, &'static Building3dVisual),
     (
         Added<Building3dVisual>,
+        Without<super::building_presentation::EquipmentRoot>,
         Without<Door3dVisual>,
         Without<Building>,
     ),
@@ -159,7 +164,7 @@ pub fn sync_building_3d_transform_system(
     }
 }
 
-fn structural_presentation_state(
+pub(super) fn structural_presentation_state(
     kind: BuildingType,
     stockpile: Option<&StockpileVisualState>,
     stored_items: Option<&StoredItems>,

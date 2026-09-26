@@ -12,7 +12,7 @@ use bevy::prelude::*;
 use super::validation::{canonical, digest, manifest_digest, validate_payload, validate_receipt};
 use super::*;
 
-fn artifact(
+pub(super) fn artifact(
     identity: &BuildingAssetSetIdentity,
     role: &str,
     extension: &str,
@@ -31,7 +31,10 @@ fn artifact(
     }
 }
 
-fn fixture(kind: BuildingAssetKind, authority: BuildingAssetAuthority) -> BuildingAssetSetManifest {
+pub(super) fn fixture(
+    kind: BuildingAssetKind,
+    authority: BuildingAssetAuthority,
+) -> BuildingAssetSetManifest {
     let identity = BuildingAssetSetIdentity {
         kind,
         generation: 1,
@@ -97,7 +100,7 @@ fn fixture(kind: BuildingAssetKind, authority: BuildingAssetAuthority) -> Buildi
     manifest
 }
 
-fn receipt_bytes(manifest: &BuildingAssetSetManifest) -> Vec<u8> {
+pub(super) fn receipt_bytes(manifest: &BuildingAssetSetManifest) -> Vec<u8> {
     canonical(&BuildingPromotionReceipt {
         schema_version: 1,
         identity: manifest.identity.clone(),
@@ -107,7 +110,7 @@ fn receipt_bytes(manifest: &BuildingAssetSetManifest) -> Vec<u8> {
     .unwrap()
 }
 
-fn seal(manifest: &mut BuildingAssetSetManifest) {
+pub(super) fn seal(manifest: &mut BuildingAssetSetManifest) {
     manifest.identity.manifest_sha256 = manifest_digest(manifest).unwrap();
     if manifest.identity.authority == BuildingAssetAuthority::ReleaseApproved {
         manifest.receipt = Some(artifact(

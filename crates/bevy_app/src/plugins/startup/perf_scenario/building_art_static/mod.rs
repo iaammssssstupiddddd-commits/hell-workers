@@ -128,7 +128,8 @@ type VisualQuery<'w, 's> = Query<
     's,
     (
         Entity,
-        &'static Building3dVisual,
+        Option<&'static Building3dVisual>,
+        Option<&'static ChildOf>,
         &'static Mesh3d,
         &'static MeshMaterial3d<TopDownStructuralMaterial>,
         &'static ViewVisibility,
@@ -158,6 +159,7 @@ pub(crate) struct InspectParams<'w, 's> {
     world_map: WorldMapRead<'w>,
     buildings: BuildingQuery<'w, 's>,
     visuals: VisualQuery<'w, 's>,
+    visual_roots: Query<'w, 's, &'static Building3dVisual>,
     sprites: SpriteQuery<'w, 's>,
     meshes: Res<'w, Assets<Mesh>>,
     materials: Res<'w, Assets<TopDownStructuralMaterial>>,
@@ -246,7 +248,12 @@ fn inspect(params: &InspectParams) -> Result<Option<Value>, String> {
         return Err("target/support building inventory differs".into());
     }
     let mut visuals = HashMap::<Entity, Vec<_>>::new();
-    for (entity, visual, mesh, material, visibility) in &params.visuals {
+    for (entity, visual, parent, mesh, material, visibility) in &params.visuals {
+        let Some(visual) = visual
+            .or_else(|| parent.and_then(|parent| params.visual_roots.get(parent.parent()).ok()))
+        else {
+            continue;
+        };
         visuals
             .entry(visual.owner)
             .or_default()
@@ -288,7 +295,14 @@ fn inspect(params: &InspectParams) -> Result<Option<Value>, String> {
                 | BuildingType::OutdoorLamp
         );
         let owner_visuals = visuals.get(&owner).map(Vec::as_slice).unwrap_or_default();
-        if owner_visuals.len() != usize::from(structural) {
+        let root_count = params
+            .visual_roots
+            .iter()
+            .filter(|visual| visual.owner == owner)
+            .count();
+        // The static reference expects the legacy one-leaf fallback, but its
+        // owner root is now meshless. Check both independently.
+        if root_count != usize::from(structural) || owner_visuals.len() != usize::from(structural) {
             return Err(format!(
                 "visual count differs: {:?}/{}",
                 spec.kind, spec.ordinal
