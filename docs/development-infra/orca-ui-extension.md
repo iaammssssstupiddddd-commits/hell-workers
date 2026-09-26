@@ -102,7 +102,53 @@ TAK-14の実Orca rendererへ接続した受入では、`supervision-terminal-sta
 `Current task state / Awaiting your feedback / 実装・固定レビューの結果を確認してください。`であり、
 本文に残る旧`paused`報告より上部の正本状態が優先される。
 
-### 完了terminalの保持
+### ソース変更なしの調査終了（2026-09-26）
+
+空checkpointは実装失敗と同一視せず、統括の解決判断待ちとして停止する。
+統括は`resolve-no-change`へexact loop digest、lane、解決理由、実際の観測根拠を提出する。
+worker成功・release・通常通知ACK、同一sourceの検証成功、cleanな作業場、assignment開始時から
+不変のHEADを必須とする。空差分だけの自動承認や、空commitでの迂回は行わない。
+
+解決理由は`no_change` checkpoint receiptとreview ticketへ封印し、固定reviewerへ渡す。
+差戻しは同じworkerへの通常の再実装経路を使う。全laneが変更なしの場合、Gitを更新しない
+`resolved`統合receiptを発行するが、統合先の検証と最終固定reviewは省略しない。
+実装変更との混在では通常の統合を使い、変更なしの判断根拠も最終reviewへ渡す。
+表示は「ソース変更なしで調査を解決」とし、実装変更をmergeしたと誤表示しない。
+
+過去の中断bootstrapは、同じDispatchの失効済みcapability、正のprocess終了または終了済み
+launcherとidle shell、元のarmと一致する未使用bridge、完全な復旧receiptが揃う場合だけ
+終了会計へ含める。存在しないworker_doneやACKは生成しない。最終承認後は実際の
+reviewer terminalを保持し、通常の`finalize-tabs`と`successor-preflight`へ接続する。
+
+Help実レビューはNo impact。変更経路はhostのreceipt・配車・開発用状態表示に限定され、
+ゲームの入力・状態・assets・Help本文へ到達しない。基盤本体の検証ではゲームbuild/testを行わず、
+別sessionの追加変更は利用者の追認に基づき別途現在sourceで再検証する。
+
+TAK-14の実受入では、旧Run/Taskと同じ調査を`resolved` checkpointへ進め、固定reviewerが
+ソース変更不要の結論を承認した。実統合先は別セッションの`1826355f`（Rust manifest再検証）と
+`48cbcab4`（Help判断）が追加済みで、登録base `3d3cca84`と一致しなかったため統合guardが停止した。
+Git cleanであっても対象HEADの不変は意味しない。asset mirror復元だけが原因という統括の初期説明は誤り。
+別担当のcommitは変更・撤去せず、利用者の許可に基づき新しいsourceへの再検証・reviewを進める。
+この実案件の最終review、終了処理、successor-preflightは未完であり、個別review成功を完走とは扱わない。
+
+全laneの変更なし判断が承認済みで、外部commitにより統合先のHEADが進んでいた場合は、
+統括が`reconcile-no-change-target`へexact loop digest、現在HEAD/source、許可と照合の理由を明示する。
+cleanな同一branch、元baseの子孫、全attemptの終了会計と通知排出を確認し、Gitを更新しない
+`reconciled_target` receiptを保存する。元baseは変えず、追加された差分全体に対して新しい検証、
+Help判断、最終固定reviewを要求する。調査時の承認を外部変更の承認にはしない。
+dirty・別branch・非子孫・指紋不一致・未確定終了なら採用を拒否する。
+
+host `e62f2209` / `bbfce50f`は変更別contracts/tooling、Python基盤719件・Blender tooling164件・perf self-testに成功。
+検証baseは`e1a1b83e30911321890a5e2160e35fb1f19a714f`、検証sourceは
+`c76b8b38448f48967c517d3fc430b7f3892411af3bab26269fca0b700a4d291a`。
+fixtureでは変更なしの個別/最終review・次工程引継ぎ、実装との混在、差戻し再実装、終了terminal保持、
+中断receiptと通知排出の照合、dirty/改変証拠の拒否、外部HEADの明示採用と新しい最終reviewを確認した。
+配備側`238e6272` / `e4a11a83`もcontracts/tooling、Python基盤762件・Blender tooling164件・perf self-testに成功。
+検証baseは`f50a0b6343d11187de0da560a77a233c69e592c5`、検証sourceは
+`05a1ee12448ec0770a46638f9f10bf2d53220d98c21062bcc300698e7a2d2bf2`。
+Orcaを正常終了・再起動し、同じterminal incarnationと統括sessionを維持して両helperの更新を反映した。
+
+### 完了terminalの保持（詳細）
 
 結果専用cardをterminal領域へ重ねる方式は採用しない。完了確認の正本は、固定reviewerが最終diff、
 検証結果、Help判断を照合して承認通知を送った実際のterminal履歴とする。host controller commit
