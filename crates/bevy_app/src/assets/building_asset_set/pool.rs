@@ -139,11 +139,8 @@ impl BuildingAssetPool {
         for pool in &mut self.kinds {
             // Explicit asset removal / reload failure invalidates the whole set.
             // Never publish a preview while its geometry is no longer resident.
-            if pool.active.as_ref().is_some_and(|active| {
-                active
-                    .roles
-                    .as_ref()
-                    .is_none_or(|roles| !matches!(roles.ready(server, meshes, images), Ok(true)))
+            if pool.active.as_mut().is_some_and(|active| {
+                !matches!(active.ready(server, manifests, meshes, images), Ok(true))
             }) {
                 pool.active = None;
             }

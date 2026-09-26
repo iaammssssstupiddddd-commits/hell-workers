@@ -244,6 +244,39 @@ fn real_glb_and_png_resolve_to_resident_mesh_and_image() {
 }
 
 #[test]
+fn removed_active_manifest_revokes_the_published_generation() {
+    let dir = Dir::default();
+    let manifest = manifest(BuildingAssetKind::Tank, 1);
+    let path = provision(&dir, &manifest, None);
+    let mut app = app(&dir);
+    let mut pool = BuildingAssetPool::default();
+    request(&app, &mut pool, &manifest, &path);
+    settle(&mut app, &mut pool, manifest.identity.kind);
+
+    let handle = pool.kinds[index(manifest.identity.kind)]
+        .active
+        .as_ref()
+        .unwrap()
+        .manifest
+        .clone();
+    app.world_mut()
+        .resource_mut::<Assets<BuildingAssetSetManifest>>()
+        .remove(handle.id())
+        .unwrap();
+    assert!(matches!(
+        app.world()
+            .resource::<AssetServer>()
+            .load_state(handle.id()),
+        LoadState::Loaded
+    ));
+
+    poll(&app, &mut pool);
+
+    assert!(pool.active(manifest.identity.kind).is_none());
+    assert!(pool.descriptor(manifest.identity.kind).is_none());
+}
+
+#[test]
 fn correct_hashes_do_not_make_wrong_glb_or_png_types_ready() {
     for (role, bytes) in [("mesh:body", PNG.to_vec()), ("image:catalog", glb())] {
         let dir = Dir::default();
