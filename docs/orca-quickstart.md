@@ -57,6 +57,10 @@ A/B/レビューは統括が監督付きの分離worktreeへ配車した時だ�
   終了後のshellや履歴表示は、agentが常駐しているという意味ではありません。
 - ターミナル上部の案件状態は、監督台帳から取得した現在状態を一行で示す補助表示です。
   ターミナル本文を覆う結果画面や、会話履歴との表示切替は設けません。
+- 上部状態の右端にある×は、その時点の工程表示だけを隠します。案件、agent、ターミナルは停止せず、
+  ターミナルを全面で操作できます。実装から検証など次の工程へ進むと、新しい状態として自動的に再表示します。
+- 表示は、登録時から存在する将来の統合予定ではなく、現在動いている担当工程を優先します。
+  したがって実装中は「実装担当が分離作業場で作業中」、検証中は変更別検証、review中は固定reviewを示します。
 - 固定レビューで完了した案件は、その承認に至った実際のreviewer terminalを閉じず、
   **「レビュー（完了）」** に改名して前面へ切り替えます。古い`paused`報告が残る統括terminalではなく、
   最終diff確認、検証照合、承認通知までの同じterminal履歴が完了確認の入口です。
@@ -103,7 +107,10 @@ Linearは依頼の一覧・状態・履歴をOrcaのTasks drawerに表示する�
 子課題または独立課題として統括が発行します。判断理由は案件panelへ表示します。
 課題本文・コメント・添付は未信頼入力として扱い、repository ruleや統括の権限境界を上書きしません。
 
-Linearに接続できない場合は、Orcaの接続設定を直してから再開します。terminalの手入力受付へ切り替えません。
+新規受付でLinearに接続できない場合は、Orcaの接続設定を直してから再開します。terminalの手入力受付へ切り替えません。
+すでに受付とRunの所有が確定した案件では、保存済みLinear資格情報を復号できなくなっても、immutableな受付・Run台帳を
+実行権限として同じRunを継続します。接続復旧後に外部状態を再照合し、completed / canceledなら新しい配車を止めます。
+一時的なnetwork、rate limit、timeout、runtime停止は自動待機・再試行し、別Runや別担当を作りません。
 認証値を課題、会話、repositoryへ貼らないでください。
 
 ## 実装とレビューの見方
@@ -124,7 +131,8 @@ Linearに接続できない場合は、Orcaの接続設定を直してから再�
 | 実装A/Bが現れない | 統括タブで分割判断または未解決仕様を確認する。利用者がslotを選ばない |
 | slot / workspace / host がbusy | 既存タブの処理を待つ。lock削除や裸のagent起動で迂回しない |
 | workerやreviewerがunknown | そのタブと成果を統括が照合する。自動再送・代替agent起動をしない |
-| Linear接続エラー | OrcaのLinear connectionを確認する。同じ依頼を別経路へ重複投入しない |
+| Linear接続エラー（新規受付） | OrcaのLinear connectionを確認する。同じ依頼を別経路へ重複投入しない |
+| Linear資格情報エラー（進行中案件） | 同じRunは保存台帳から継続する。外部Linearへの反映だけ保留されるため、認証値をterminalへ貼らず、Orca設定から後で再接続する |
 
 ## このガイドをOrcaで開く
 
@@ -151,7 +159,10 @@ Orca UI commit `a32cc0f4`は結果専用画面を撤去してterminalを主表�
 統合HEADは`3d3cca84aefd56815f54e06dea917e52c3b87700`、固定reviewは`approved`である。
 desktop iconと旧versionのlauncherはversion非依存の`/home/satotakumi/.local/opt/orca-ide/launch-supervised`へ
 収束しているため、通常起動で旧buildへ戻らない。現在の配備先は
-`/home/satotakumi/.local/opt/orca-ide/ui-a32cc0f4`で、terminal上部は一行の状態表示だけに留める。
+`/home/satotakumi/.local/opt/orca-ide/ui-beac5294`で、terminal上部は一行の状態表示だけに留める。
+同buildでは現在工程への追従、工程単位の×非表示、Linear資格情報エラーの専用分類を追加した。
+統括launcherはPATHだけに依存せず、明示設定、PATH、Codex Desktop同梱実行ファイルを検証して解決するため、
+Orca再起動後も同じ統括sessionを再開できる。
 
 - Orca 1.4.205とLinear workspace `takumi sato` / team `TAK`の読取り接続を確認済みです。
 - Linear-linked worktreeから`--current`で固定snapshotを取り込み、UUID入力を不要にする実装を追加しました。

@@ -5,7 +5,8 @@
 
 ## 統括タブの正本状態表示（2026-09-26更新）
 
-Orca UI local commit `a32cc0f4`では、統括・担当ターミナルの上部表示を現在状態の一行だけへ戻した。
+Orca UI local commit `beac5294`（初回の一行化は`a32cc0f4`）では、統括・担当ターミナルの上部表示を
+現在状態の一行だけへ戻した。
 ターミナル本文は会話履歴なので、過去に出力した`paused`等の報告を後から書き換えない。
 `supervision.read`の最新snapshotを2秒ごとに照合する補助表示は残すが、案件詳細、確定結果、追加依頼formを
 terminal canvasへ重ねない。完了確認は、固定reviewerが承認に至った実terminalを`レビュー（完了）`として
@@ -18,14 +19,36 @@ terminal canvasへ重ねない。完了確認は、固定reviewerが承認に至
 snapshotが期限切れ、controllerが不通、または同じworktreeへ複数案件が紐づく場合は、過去の状態を
 現在値として表示せず`要確認`へ倒す。controller不通時は直前snapshotを表示用に保持するが、ready扱いには戻さない。
 サイドバーpanelとターミナルbannerは同じ単一polling storeを使うため、両者で状態更新の時刻や可用性が分岐しない。
+banner右端の×は現在のworkflow revisionだけを非表示にし、task、agent、terminal、保存台帳を変更しない。
+台帳のphase、attempt、integration等が変わりrevisionが進むと、新しい状態としてbannerを再表示する。
+これによりterminal操作中は表示を退避でき、進行・停止・review等の変化は見落とさない。
+
+host candidate `c34ab323`でlaneとintegrationをrevision材料へ含め、`abdc93ee`で表示優先順位を修正した。
+integrationの`planned`は登録直後から存在する将来工程なので、laneがimplementing / validating / reviewingの間は
+laneを現在工程として表示する。全lane承認後だけintegrationの統合・統合後検証・最終reviewへ表示を移す。
 
 初回commit `733013b0`の隔離Electron受入は通常terminalだけを対象にしており、実際の統括が使う
 Codex native chatの全面portalにbannerが隠れる欠陥を見落としていた。`36906ab2`ではbannerをnative chat
 portal内にも直接mountし、通常terminal側の重複bannerを抑止した。unit testでPTY-backed native chatと
 structured native chatの両方へ同じworktree IDが渡ることを固定している。
 
-`a32cc0f4`ではbanner単体のunit testとtypecheckを通し、配備後の実runtimeで全画面結果UIがなく、
+`beac5294`ではbanner単体のunit testとtypecheckを通し、配備後の実runtimeで全画面結果UIがなく、
 `レビュー（完了）`tab、terminal canvas、一行状態だけが表示されることをaccessibility treeで確認した。
+
+### Linear資格情報と統括再起動の耐障害性
+
+Orca UIは資格情報の復号失敗を`linear_credential_unavailable`として返し、network / rate limit / timeout /
+runtime停止と区別する。host commit `2b15ca48`では、すでに受付・Run・対象課題の所有を確定したloopに限り、
+資格情報が読めない間もimmutableな受付recordとRun authorityから処理を継続する。接続が戻ればLinearを再読し、
+completed / canceled / duplicateなら従来どおり新しい配車・checkpointを止める。新規受付をofflineで推測作成する
+機能ではなく、進行中案件をローカルkeyringの変化で失わないための回復境界である。
+
+一時的な通信・rate limit・timeout・runtime停止はactive loop内で待機して再試行し、legacyな停止台帳はexact digestと
+同じcoordinatorを照合して元のidempotent phaseへ戻す。別Run、別Task、別terminalによる迂回は行わない。
+
+統括launcherはhost commits `1f97ef54` / `2709c7c1`でCodex実行ファイルの解決をPATH単独依存から変更した。
+`ORCA_CODEX_EXECUTABLE`、現在PATH、Codex Desktop同梱先、標準install先を順に検査し、実在する実行可能fileだけを使う。
+これによりOrca再起動後のshell PATHが変わっても、保存sessionを同じ統括terminalで再開できる。
 
 隔離Electron受入では同一タブ・同一terminalのまま`feedback → paused → feedback`へsnapshotを更新し、
 一行状態が最新snapshotへ追従することを確認した。確定結果の詳細はこのbannerへ展開しない。
@@ -86,8 +109,8 @@ HEADだけからDraft PR #27を一度作成し、再実行が`idle`であるこ�
 
 ## 一時配備と復帰
 
-現在の配備sourceはlocal commit `a32cc0f4`、配備先は
-`/home/satotakumi/.local/opt/orca-ide/ui-a32cc0f4`。Orca IDEアイコンはversion非依存の
+現在の配備sourceはlocal commit `beac5294`、配備先は
+`/home/satotakumi/.local/opt/orca-ide/ui-beac5294`。Orca IDEアイコンはversion非依存の
 `/home/satotakumi/.local/opt/orca-ide/launch-supervised`を起動し、`current` symlinkから現行buildを解決する。
 旧buildは復帰用に保持するが、旧launcherは誤起動防止のため現行固定入口へ転送する。
 サイドバーの `Reception & Coordination`（受付・統括）が固定入口。
