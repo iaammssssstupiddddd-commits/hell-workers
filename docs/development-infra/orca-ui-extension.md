@@ -46,7 +46,7 @@ TAK-14の実Orca rendererへ接続した受入では、`supervision-terminal-sta
 
 結果専用cardをterminal領域へ重ねる方式は採用しない。完了確認の正本は、固定reviewerが最終diff、
 検証結果、Help判断を照合して承認通知を送った実際のterminal履歴とする。host controller commit
-`c9261730`では、`finalize-tabs`がそのterminalを閉じずに`レビュー（完了）`へ改名し、他の終了済み
+`c3e2a437`では、`finalize-tabs`がそのterminalを閉じずに`レビュー（完了）`へ改名し、他の終了済み
 補助tabだけを保存・終了する。最後に同terminalへ切り替えるため、利用者は古い統括terminalではなく
 承認までの履歴をそのまま確認できる。
 
@@ -55,8 +55,9 @@ Orca UI commit `a32cc0f4`では、全画面の確定結果、会話履歴との�
 追加依頼の安全な配送機能とschema 4の封印済み結果データは互換性のため維持するが、操作入口は
 サイドバーの`Reception & Coordination`へ戻す。別Linear課題の必要性は受領後に統括が判断する。
 
-TAK-14は旧終了処理で最終reviewer terminalが既に閉じられていたため、保存台帳にある同一sessionを
-一度だけ復元した。Orca再起動後も`統括`と`レビュー（完了）`の二tabを保持し、後者がactiveであること、
+TAK-14は旧終了処理で最終reviewer terminalが既に閉じられていたため、保存台帳にある同一sessionの
+最終turnを読みやすいterminalへ一度だけ復旧した。古いCodex TUIは再実行せず、dispatch capabilityは伏せて表示する。
+Orca再起動後も`統括`と`レビュー（完了）`の二tabを保持し、後者がactiveであること、
 全画面結果UIがなくterminal canvasと一行状態表示だけが見えることを実runtimeで確認した。
 
 ## A〜D案件panel schema 2と外部同期executor（2026-09-25）

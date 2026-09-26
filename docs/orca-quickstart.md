@@ -144,9 +144,10 @@ orca file open docs/orca-quickstart.md --worktree path:/home/satotakumi/projects
 表示するschema 2と、Linear/GitHubへ順序付きintentを安全に反映するexecutorを実装した。
 host/UI契約、Linux package、隔離実画面の受付表示とパネル閉鎖は成功した。2026-09-26には、完了時に
 最終reviewer terminalを誤って閉じ、古い統括terminalだけを残していた終了処理を修正した。
-host controller commit `c9261730`は承認に至ったterminalを`レビュー（完了）`として保持・選択し、
+host controller commit `c3e2a437`は承認に至ったterminalを`レビュー（完了）`として保持・選択し、
 Orca UI commit `a32cc0f4`は結果専用画面を撤去してterminalを主表示へ戻す。
-既に終了していたTAK-14についても保存台帳から最終reviewer sessionを復元し、同名tabを前面へ切り替えた。
+既に終了していたTAK-14については、保存済み最終reviewer turnを読みやすいterminalへ一度だけ復旧し、
+同名tabを前面へ切り替えた。古いCodex TUIを再実行せず、保存履歴を表示するだけなので再レビューは発生しない。
 統合HEADは`3d3cca84aefd56815f54e06dea917e52c3b87700`、固定reviewは`approved`である。
 desktop iconと旧versionのlauncherはversion非依存の`/home/satotakumi/.local/opt/orca-ide/launch-supervised`へ
 収束しているため、通常起動で旧buildへ戻らない。現在の配備先は
