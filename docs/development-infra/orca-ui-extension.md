@@ -3,12 +3,18 @@
 2026-09-24。ユーザー許可のもと拡張ビルドへ一時切替し、実画面からの受入を進めている。
 全体の完了条件は[UIライフサイクル計画](../plans/orca-ui-lifecycle-plan-2026-09-23.md)に従う。
 
-## 統括タブの正本状態表示（2026-09-25）
+## 統括タブの正本状態表示（2026-09-26更新）
 
-Orca UI local commit `36906ab2`で、統括・担当ターミナルの上部へ監督台帳の現在状態を常時表示するようにした。
+Orca UI local commit `dcf737db`で、統括・担当ターミナルの上部へ監督台帳の現在状態を常時表示するようにした。
 ターミナル本文は会話履歴なので、過去に出力した`paused`等の報告を後から書き換えない。代わりに
-`supervision.read`の最新snapshotを2秒ごとに照合し、案件状態、詳細、最終照合時刻を固定bannerへ表示する。
-bannerには「ターミナル内の過去の状態報告より、この最新表示を優先する」と明記した。
+`supervision.read`の最新snapshotを2秒ごとに照合し、案件番号・案件名・現在工程・担当状況・現在の状況・
+待ち理由・次の操作・最終照合時刻を、ターミナル本文より上の展開済みcardへ表示する。cardには
+「ターミナル内の過去の状態報告より、この最新表示を優先する」と明記し、見出しを押せば折り畳める。
+
+`36906ab2`の一行bannerは保存台帳を正しく表示していたが、案件や工程、各担当、次操作を読み取れず、
+利用者が「どこを見れば何をすればよいか」を判断できない不十分なUIだった。`dcf737db`は情報を増やすだけでなく、
+正本の現在値と履歴本文を視覚的に分離し、次操作を強調表示する。TAK-14のようなworktree名からは案件番号も
+表示するが、番号が推定できなくても案件名・状態・次操作は欠落させない。
 
 snapshotが期限切れ、controllerが不通、または同じworktreeへ複数案件が紐づく場合は、過去の状態を
 現在値として表示せず`要確認`へ倒す。controller不通時は直前snapshotを表示用に保持するが、ready扱いには戻さない。
@@ -18,6 +24,10 @@ snapshotが期限切れ、controllerが不通、または同じworktreeへ複数
 Codex native chatの全面portalにbannerが隠れる欠陥を見落としていた。`36906ab2`ではbannerをnative chat
 portal内にも直接mountし、通常terminal側の重複bannerを抑止した。unit testでPTY-backed native chatと
 structured native chatの両方へ同じworktree IDが渡ることを固定している。
+
+`dcf737db`ではcard単体のunit testに加え、非表示ElectronをPlaywright/CDPで起動するrenderer受入で、
+同一タブ・同一terminalを維持したまま案件名、工程、担当結果、現在状況、待ち理由、次操作が描画され、
+snapshot更新へ追従することを確認した。Orca本体の検証規約に従い、検証ウィンドウは前面へ出していない。
 
 隔離Electron受入では同一タブ・同一terminalのまま`feedback → paused → feedback`へsnapshotを更新し、
 最後に旧`paused`詳細がbannerから消えて最終review承認詳細へ切り替わることを確認した。実TAK-14では、
@@ -62,10 +72,10 @@ HEADだけからDraft PR #27を一度作成し、再実行が`idle`であるこ�
 
 ## 一時配備と復帰
 
-現在の配備sourceはlocal commit `36906ab2`、配備先は
-`/home/satotakumi/.local/opt/orca-ide/ui-36906ab2`。Orca IDEアイコンはversion非依存の
+現在の配備sourceはlocal commit `dcf737db`、配備先は
+`/home/satotakumi/.local/opt/orca-ide/ui-dcf737db`。Orca IDEアイコンはversion非依存の
 `/home/satotakumi/.local/opt/orca-ide/launch-supervised`を起動し、`current` symlinkから現行buildを解決する。
-旧`ui-733013b0`と`ui-dd50afed`は復帰用に保持するが、旧launcherは誤起動防止のため現行固定入口へ転送する。
+旧buildは復帰用に保持するが、旧launcherは誤起動防止のため現行固定入口へ転送する。
 サイドバーの `Reception & Coordination`（受付・統括）が固定入口。
 controllerは既存candidateの `scripts/orca_supervision.py`、状態保存先は
 `/home/satotakumi/.local/state/hell-workers/supervision-panel`。
