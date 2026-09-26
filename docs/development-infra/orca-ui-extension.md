@@ -80,6 +80,13 @@ capabilityを失効しproviderを正常終了させた場合は、失敗確定�
 bridgeをすべて照合して同じタブへ戻す。PTYのlive状態だけでworker生存/終了を判定しない。
 既存のrole bindingは同じticket・source・sessionの場合だけ継承し、再開前の台帳を復旧receiptへ保持する。
 
+同じterminalを再利用した後のheartbeat等は、過去の失敗bootstrapも通知ownerの候補になる。
+authority未取得・revoked・operations空・settlementなし・元のarm完全一致を証明した候補だけを
+「通知を送信していない候補」として除外し、現在のbridgeのconfirmed receiptと実通知を照合する。
+missing journal、arm不一致、不確定な操作、複数のconfirmed ownerは引き続き拒否する。
+この照合エラーで保留済みの通知も、全件のreceiptが確認できた場合だけ停止台帳を保存して同じloopを復帰する。
+ACKは通常mailbox経路だけで行い、手動ACK・別Task・再送で取り繕わない。
+
 隔離Electron受入では同一タブ・同一terminalのまま`feedback → paused → feedback`へsnapshotを更新し、
 一行状態が最新snapshotへ追従することを確認した。確定結果の詳細はこのbannerへ展開しない。
 実TAK-14は保存台帳の`feedback`を表示しつつ、完了reviewer terminalを別tabで前面に保つ。
@@ -447,6 +454,9 @@ controllerは時刻更新だけではrevisionを変更せず、受付・route・
 `git diff`と`rtt_composite.rs`・`startup_systems.rs`等の読み取りを確認した。
 snapshotもその証拠に基づくworkingへ更新された。これは指示受理・作業再開の受入であり、
 黒背景修正自体の完成、最終review、全ライフサイクルの完走を意味しない。
+再開後のheartbeatで旧bootstrapとの誤照合が発生したため、上記の候補除外を追加した。
+同じ実装Aを停止・再配車せず、統括だけを同じsessionで再読込し、heartbeatの通常処理と
+実装Aから統括への質問通知がdecisionへ進むことを確認した。
 
 fixtureのsnapshotは画面/API検証用であり、実agent稼働や実案件終了の証拠ではない。
 検証結果は計画書へ集約する。開発clone/cacheは同じ場所を修正・受入まで保持し、失敗jobを無期限には保持しない。
