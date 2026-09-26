@@ -73,6 +73,10 @@ A/B/レビューは統括が監督付きの分離worktreeへ配車した時だ�
 - 再利用は作業場・端末incarnation・所有台帳と実processを照合します。
   busy、所有不明、消えた登録タブ、送信結果不明は停止し、新しいタブで迂回しません。
   タイトルだけで他のタブを採用したり、稼働中のagentを閉じたりしません。
+- Orca本体の再起動で実装中のbridgeだけが切れた場合は、監督台帳が終了済みprocess、失効済み権限、
+  未変更source、単一provider session、最新Dispatchを照合します。すべて一致した場合だけ、同じRun・Task・
+  provider sessionへ1回のretry Dispatchを発行して同じ担当タブを復帰します。新しい依頼やRunは作りません。
+  差分、未確定operation、別session、最新でないDispatchがあれば自動復旧せず保全停止します。
 
 統括は内部保守用の `scripts/orca_role_tabs.py adopt / retire` で既存タブを照合できます。
 `retire` は明示指定の終了済みshellだけを対象に、privateな`role-tabs/retired`台帳へ出力を
@@ -131,6 +135,7 @@ Linearは依頼の一覧・状態・履歴をOrcaのTasks drawerに表示する�
 | 実装A/Bが現れない | 統括タブで分割判断または未解決仕様を確認する。利用者がslotを選ばない |
 | slot / workspace / host がbusy | 既存タブの処理を待つ。lock削除や裸のagent起動で迂回しない |
 | workerやreviewerがunknown | そのタブと成果を統括が照合する。自動再送・代替agent起動をしない |
+| Orca再起動後に実装中表示のまま止まる | 終了済みの旧bridgeを自動照合し、条件が揃えば同じTaskを再開する。別Runや同名タブを手動作成しない |
 | Linear接続エラー（新規受付） | OrcaのLinear connectionを確認する。同じ依頼を別経路へ重複投入しない |
 | Linear資格情報エラー（進行中案件） | 同じRunは保存台帳から継続する。外部Linearへの反映だけ保留されるため、認証値をterminalへ貼らず、Orca設定から後で再接続する |
 

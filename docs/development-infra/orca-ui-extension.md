@@ -50,6 +50,15 @@ completed / canceled / duplicateなら従来どおり新しい配車・checkpoin
 `ORCA_CODEX_EXECUTABLE`、現在PATH、Codex Desktop同梱先、標準install先を順に検査し、実在する実行可能fileだけを使う。
 これによりOrca再起動後のshell PATHが変わっても、保存sessionを同じ統括terminalで再開できる。
 
+実装担当の稼働中にOrca runtimeが切り替わった場合、旧bridgeのlauncherだけが終了し、Orca側Dispatchは
+`failed/process_exited`、role台帳は`starting`のまま残ることがある。host driverはこの組合せを待ち続けず、
+最新の同一Task/Dispatch、失効済みcapability、exact worker exit、切断terminal、mutation-free bridge、
+cleanで同一fingerprintのsource、単一provider session、固定assignmentとtab registryを照合する。
+一致時はprepared/completeの復旧receiptを先に保存し、role checkpoint、tab欠損証拠、dispatch retryを
+再実行可能な順序で確定する。その後だけ同じRun・Taskへ`--retry-of`を使い、保存sessionを明示resumeする。
+電源断等で途中まで書かれたreceiptもbefore/after一致時だけ再開できる。新規Task/Run、旧bridgeへの再送、
+dirty sourceの採用、別sessionの推測採用は禁止する。
+
 隔離Electron受入では同一タブ・同一terminalのまま`feedback → paused → feedback`へsnapshotを更新し、
 一行状態が最新snapshotへ追従することを確認した。確定結果の詳細はこのbannerへ展開しない。
 実TAK-14は保存台帳の`feedback`を表示しつつ、完了reviewer terminalを別tabで前面に保つ。
