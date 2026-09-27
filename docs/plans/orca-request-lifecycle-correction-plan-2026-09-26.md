@@ -44,6 +44,276 @@ Linearへの関連付け、helper単体試験、特定loopの成功を「運用�
 
 ### 2026-09-26 停止復旧の追加範囲
 
+#### 2026-09-27 native終了後の継続欠落（是正中）
+
+- nativeが終了しても統括のturnは自動再開しない。既存Driverの自動継続はloop承認後だけであり、
+  手動promptによる再開は恒久対応ではない。`correction_required`を完了・待機と誤解しない。
+- 起動前に独立したpending native operationを永続登録する。batch digest、依頼scope/node、Run、
+  loop世代、統合source、統括session/process出生、terminal incarnationを固定する。
+- 既存host Driverがpending operationを観測する。実行exit 0と独立verifier passを区別し、
+  verifierは同じ登録commandだけを実行する。invalid/interrupted/unknownを成功へ読み替えない。
+- 配信はprepared/sending/accepted/started、後続工程成立はappliedとして別管理。
+  応答消失時は同一operation IDの照会のみ。pause、所有変更、source変更時は送らない。
+  新Run・新terminal・native recipeの再実行で回避しない。
+- 統括もworker同様にCodexのapp-name titleを起動引数へ含める。実行中providerには反映されないため、
+  稼働工程を保全した同session再開と実配信受入を別の完了条件とする。
+- 検証: 各WAL境界の再起動/重複、失敗/中断、所有/source変更、user pause、
+  acceptedだが未開始、開始したが未適用、正常終了から同terminalの次工程開始までを確認する。
+  固定read-only reviewと変更別tooling/Help/storageの合格前に完了報告しない。
+- 候補実装: event/loop待機CAS、workflow進行gate、same-head `resume-review`、全体受入gate、
+  同session所有handoff、子receipt欠損の照合、既存状態行への投影を追加。
+  native・bridge・文書補正・起動guardの73 tests、差戻し履歴の実Git回帰がpass。
+  途中候補の変更別gateは942件＋164件pass（source `a7ba4e949b195e289d7d271cbc252d82510fdbf62250fbe400413bf2d6c346d9`）。
+  後続reviewで先行event鎖、二度目の所有移転、監視開始順、書込み前gateを補正したため最終gateを再実行する。
+  最終コードreviewはAPPROVED（native `eb24175d`、loop `d021bb36`、UI起動 `0ca96f00`、supervision `4c2a6d90`）。
+  関連154 testsをreviewerも確認。native単体は追加回帰を含め40件pass。
+  これはコード承認であり、配備と自動継続・再起動耐久・失敗時停止の実受入は未完了。
+- 最終変更別`contracts, tooling`は950件＋164件、lint/perf self-test/Help/storage/docsがpass。
+  base/HEAD `ae5b2066c4fd39a8dd6a6c439e272d125f749241`、source
+  `b2ec4c4eba89e7acb57e46b56b84e03c3309af3e66363a12e286e6e79c5e90a8`。
+  Helpはhost側制御・診断だけでplayer-facing経路に変更なし（No impact）。
+- 実反映: idle統括を`/exit`で正常終了し、旧owner/providerの消滅と同terminalのforeground shellを確認。
+  Orcaの通常Close→固定launcher再起動で監視controllerを更新。runtimeは`8038038a-6ac1-4c5e-92ad-b1f17e2dce4d`。
+  terminal `term_b9fb015e-4bb9-4f08-827f-06fe7ecaec67`とincarnationを維持したまま、
+  session `01a0d377-feef-7520-bef5-50565ef282cb`を再開した。これは反映確認でありnative自動継続の実受入とは区別する。
+- 同統括が修正済みrouteを実行し、非routing履歴を維持したまま同Run `run_3236488f0dff`の
+  実装Aが`implementing`へ進んだ。統合工程は`correction_required`から`planned`へ移行。
+  driver生存、同sessionのrollout FD、app-name付きtitle、既存terminalへの実行履歴追記を確認。
+  自動native通知の新規eventはまだ発生しておらず、その実受入を成功扱いにはしない。
+- 実統括の現在の別停止: sourceごとに凍結したharnessを使わない比較helperと、非routing履歴を
+  routing扱いする差戻し経路。後者のKeyErrorと修正回数混同を基盤側で補正した。
+  前者は既存実装Aの許可scope `scripts`内にあり、同じRunの正規差戻しで修正する。主担当は製品sourceを編集しない。
+
+#### 2026-09-27 隔離統括からのnative起動経路
+
+追加実受入で、native終了通知の観測に未解消の欠陥を検出した。
+新batch `tak-14-m1c-foundation-current-cf08061d-primary-20260927`は独立passとなり、
+event `c14602be-98db-5e6f-b712-d061a7e40fa8`の本文は同じ統括rolloutへ一度だけ到達した。
+しかしOrcaのforeground検出は`--new-session`隔離配下のCodex（controlling ttyなし）を除外するため、
+durable send receiptは`unsupported / input_accepted`であり、hostはblockedへ誤分類した。
+title変更だけではこのprocess判定を修正できない。隔離解除・raw Enter追加・通知再送では回避しない。
+通知開始の観測と、同じeventに束縛した正規後続操作の成立を分離し、原receiptを保全した照合経路を整備する。
+本項の是正・固定review・変更別検証・同eventの回収が終わるまで、自動継続の実受入は未完了。
+
+追加修正の契約（実受入待ち）:
+
+- `unsupported / input_accepted`を受理未観測として保持し、同ID read-backを継続する。開始済みとは表示しない。
+- 初回receiptを不変保存、最新read-backは別保存。外部write後のowner/control変化でもreceiptを失わない。
+- 旧誤分類eventはexact successor成立後だけreconcileし、旧block/hash・正規replay receiptを保全する。
+- 比較結果の文書補正でGit公開後・loop保存前の中断も発見。統括から未検証差分を引き継ぎ、
+  基盤checkoutの追加編集を停止して単独所有に戻した。新Run、通知再送、native再実行は行わない。
+- 統括補正はexact prepared journal・全loop投影・committed Git receipt・新sourceを照合する。
+  source変更はこの証明付き遷移に限定し、fresh validationと固定reviewを要求する。
+  Git公開済み／loop保存済みの各中断は既存証拠から投影を回収し、Gitを書き直さない。
+- Help影響reviewはNo impact。開発用host制御からOrcaへの経路のみで、ゲーム入力・描画・Help catalogは不変。
+- 最終コードreviewはAPPROVED。native `8140334e`、tooling correction `4e06fb87`、
+  対応tests `e10bf239` / `0138cfca`。結合62件pass。復旧intentをhandoff前に保存し、
+  応答喪失・最終保存直前の中断後も元hashと同request IDで回収する回帰を含む。
+  直前候補の全体gateは966件＋164件passだが、intent追加後の最終sourceを改めて検証する。
+- 最終source `0cdbd7e916f2745a0c8c5f661466967f0b1a3d68c54cd9c35bf0280d3a0dbece`、
+  base/HEAD `ae5b2066c4fd39a8dd6a6c439e272d125f749241`の変更別contracts/toolingは966件＋164件pass。
+  Ruff/actionlint/perf self-test/Help/storage/docsもpass。primary storageは445732134912 bytes、未分類0。
+- 実回収: idle統括の正常終了を確認し、同terminal・同incarnation・同sessionを再開。
+  新owner 3217703/provider 3217723のopen rollout FDで同sessionを確認した。
+  prepared補正`60febf59…`はGit再公開なしでcompleteへ、event `c14602be…`は元hash
+  `6cee54c7b0cc454a3c437d3a6f999fd8a13615af55ac814eaf0328eaf78fa5a8`から
+  正規reconcileでappliedへ回収。元通知IDのreplayed受理receiptを残し、turn_startedはfalseのまま。
+  新source `adec479fc5db035bc07dbbde36a319bc4cf96730`はfresh Help reviewを要求し、旧承認を流用しない。
+  同統括へ製品のHelp確認・変更別再検証・固定reviewを返す通知を送ったが、後続調査で
+  composer残存・モデル未受理と判明した。実際の作業再開とは扱わない（次節参照）。
+  これは停止記録の実回収であり、TAK-14全体の完了や次回native通知の開始観測成功ではない。
+
+#### 2026-09-27 隔離Codexへの送信確定（追加是正中）
+
+idle統括への引継ぎ入力はdurableに受理されたが、rolloutへ届かずcomposerに残った。
+`unsupported`を未観測として扱うだけでは、raw送信による貼付・Enter競合を解消しない。
+Orca本体のsettled prompt入口に、Linux実行host専用の隔離Codex証明を追加する。
+
+- 既存provider inventoryのexact PTY incarnation/rootProcessIdを再利用し、local/daemonを同経路で扱う。
+  SSH/WSL、古いproviderの証拠欠落をlocal `/proc`で推測しない。
+- fresh process snapshot、root tty、foreground ancestor、唯一のnative Codex子孫、
+  fd 0/1/2の同PTYS device、PID出生と実行commandを束縛する。title/comm/rollout単独は証明にしない。
+- 汎用foreground/stop/idleness判定は変更せず、貼付前・submit直前に同じ証明を再照合する。
+- 既存のatomic bracketed paste・ingest待ち・permission/lifecycle gateを利用し、raw Enterで回避しない。
+- provider/PTY差替、停止process、複数agent、別TTY、headless command、remote/証拠欠落の拒否をテストする。
+  本体typecheck/lint/関連回帰、別build検査後に切替し、同terminalで実際の会話受理・開始を確認する。
+- すでに受理された入力は再送しない。残存composerの処理は元receiptに束縛した正規復旧契約を別途確認する。
+
+追加是正の検証経過:
+
+- 本体 `f46b80ab`で隔離Codexのexact proof・各write fence・local inventory root PIDを実装。
+  固定read-only review APPROVED、関連79 tests、周辺1,309 tests（1 skipped）、node typecheck、
+  changed-code qualityがpass。ゲーム実装・アセット・ゲーム内Help経路に変更はなくNo impact。
+- 別profileの梱包済runtimeでPython→bwrap新session→native probeを実行。
+  bracketed pasteとEnterが1回、`codex / supported / turn_started`、同じrequest replayで再送なしを確認。
+  これはtransport実機試験であり、TAK-14の実provider再開とは分ける。
+- 同試験でdaemonのshell確認がidle shellにもfalseを返したため、既存bare-shell互換の受入は不合格。
+  同inventoryからroot出生・前景自己所有・shell executable・同端末FD・子processなしを二重照合する
+  補助証明を追加。新しいsourceの43 focused testsがpass。再梱包・固定review・実shell受入を継続中。
+- native依存は変更していない。hostでの再compileはglibc 2.42要求により梱包gateで拒否。
+  同一C/C++ source/binding.gypの既設互換binaryを再利用し、正式なprepared-runtime経路で再梱包した。
+  glibc 2.31/native 17件、daemon entry、plugin資源検査がpass。gateは無効化していない。
+- 旧unsupported入力のreceiptはreplay-onlyで、本文の再送や自動Enterを認めない。
+  現在の表示draft全文を確認済みだが、旧receiptからcomposerの完全一致を自動証明するAPIはない。
+  残存入力1件の明示送信について利用者へ確認中。通常の次回送信は新しいguarded経路を使う。
+- 最終候補 `6c38bc463d0b6fd95ed6a5516901713775456fb8`を固定reviewでAPPROVED。
+  shellはroot PID=process group=foregroundと他group member不在も要求し、広いboolean fallbackを撤去。
+  最終focused46 tests、周辺1,351 tests（1 skipped）、node typecheck/changed-code qualityがpass。
+  最終梱包の別runtimeでもshell command成功・隔離probeのFRAME=PASS/SUBMIT=1・turn_startedを確認。
+- `ui-6c38bc46`へ保全切替し、runtime `d60fc502-ba3c-4151-af16-b57b67a08a5f`とPID3388130の
+  exeを照合。元の統括/レビュー等3 terminalのhandle・incarnationは同一。新Run/製品変更はなし。
+  rolloutの最終完了は04:45:33Zのままで、新しい製品作業は開始していない。
+  既存draftの明示送信は確認待ち。開始未観測を再開/完了と表示しない。
+- 試験用profile・native probe・束縛証明の一時出力は全process終了/開放を確認して撤去。
+  `/tmp/orca-isolated-prompt-acceptance.PPk8LN`と`/tmp/orca-prompt-proof.c1CwqK`の
+  実測8,257,536 allocated bytesを削除した。実案件の履歴・保存台帳・旧build/設定snapshotは保持。
+
+- 実レビュー差戻し後のnative batchは登録済みだが未実行。統括sandboxには表示socket/GPUがなく、
+  PID namespaceとprivate tmpもhostのprocess照合・native lockに適合しない。
+- 統括sandboxと担当隔離は変更しない。host launcher所有の限定bridgeへ登録batch IDとexact digestだけを渡す。
+  peerのUID・統括process出生/子孫・現在の受付所有を照合し、他担当・別依頼・任意commandは拒否する。
+- primary台帳の対象source/command/保持/admissionと同じGit common directoryを照合し、
+  既存kitty→primary validation execute→重実行guardの経路を使う。未知結果のlauncherは再送しない。
+- receiptは「起動要求受理」と「batch実行」を分離。応答消失・二重送信・source変更・host環境欠損を試験する。
+  基盤のtooling/固定read-only review/Help/storage確認後、同じ統括へ返し、製品検証は統括自身が実行する。
+- 既存batch `tak-14-m1c-foundation-baseline-20260927`と比較checkoutは保持。
+  主担当がゲームtestを代理実行せず、基盤修正の完了をTAK-14完了と混同しない。
+- 限定recipe bridge、primary controllerのimport前pin、同一heavy leaseのFD継承、
+  子所有のverifier終了receipt、既知失敗/中断確定、資源busyだけのexact試行再開を実装。
+  native関連27 tests（実OS lock継承/競合を含む）と統括関連を合わせた57 testsがpass。
+- 固定read-only review APPROVED。bridge SHA `7d25742481cfa6882e8a14a37fa29b9a0b36b814991a7b8d1dc08e6d8d77d56f`、
+  UI coordinator SHA `8aaf37c4cd918fee9464cedc3af43245a38741aa81da63505ca84d40f47cca82`。
+- 同じ統括processへbridgeを追設し、実統括からinspect成功・登録digest一致を確認。
+  主担当など統括の子孫でないprocessからのinspectは正しく拒否した。
+  この時点ではlaunch/execute/sealは未実施。最終toolingを待って統括へ実行を戻す。
+  storage checkは当該registered batchの未終了を正しく拒否しており、完了扱いに変更しない。
+- 最終host toolingは909件＋Blender補助164件、Ruff/actionlint/perf self-testがpass。
+  base/HEAD `ae5b2066c4fd39a8dd6a6c439e272d125f749241`、前後同一source
+  `8200b7a518d226812446940f8b03df1aafa00dbb679a278a954db4a56aaf53c1`。
+  Helpはhost専用producer/consumerの変更でNo impact。全変更別gateは当該batchの終了待ちでありpassとはしない。
+  同じ統括へ既存batchの正規実行を返した。送信受理は確認したが、それだけを実行開始の証拠にしない。
+
+#### 2026-09-27 native証拠ログの環境継承補正
+
+- 同一統括で登録batchの実起動を確認。初回build後Capture smallの3反復は完走したが、
+  起動元の`RUST_LOG=warn`継承でINFOのAdapterInfoが欠落し、独立判定はinvalidとなった。
+  window証拠だけでpassに書き換えず、既知exit 1→invalid seal→診断用途保持→finalizeしstorageはpass。
+- host bridgeの検証子だけを固定log filterへ正規化し、親環境・凍結subject・verifierを変更しない。
+  unset/warn/off/traceの実子process回帰を追加し、native＋統括58 testsがpass。
+  固定review・全変更別検証後、同じ依頼/Run/統括で新しい検証batchを登録する。
+  旧batchの再送・既存失敗の上書きは行わず、同じCargo cacheを再利用する。
+- Help判断: 検証hostからdiagnosticログへの経路だけを補正し、player-facing操作・結果・表示は不変（No impact）。
+  本補正の実受入・TAK-14全体完了は未確認。
+- 固定read-only review APPROVED。bridge SHA `337232c06ce33ec2cb9a171d43571da3f7eadfa960a8d3b1f7cac517b7f0aeee`、
+  test SHA `b4dffbc3e03b15da8dbc7057b64856b43c8e34deae9ba42fdd09fd2528cbe8c5`。
+- 変更別contracts/toolingは910件＋Blender補助164件、lint/perf self-test/storage/docsがpass。
+  base/HEAD `ae5b2066c4fd39a8dd6a6c439e272d125f749241`、source
+  `54822b5a1e8b1a7ca6fd9ff5e1a79d9441fd7d81ad96ef7f25d926e31110d7d9`。
+  native子の終了と旧batchのfinalizedを確認後、追設brokerのみ更新し、統括のprocess/sessionを維持した。
+- 同じ統括から`tak-14-m1c-foundation-baseline-rustlog-20260927`を正規登録・起動。
+  registration digest `cd17afab4c61e17197d286fae4169c54fc7736222b957d2fe8b9c18c639db2cd`、
+  output `building-art-static-20260927T005736Z-545595a9`のrunningと同一sourceを照合。
+  run-001の実ログでIntel Arc / VulkanのAdapterInfo復帰を確認した。
+  後にbaselineと`tak-14-m1c-foundation-current-20260927`双方の独立pass・finalizeを確認。
+  比較/固定review用の証拠を保持している。これはnative自動継続の実受入や依頼全体の完了ではない。
+
+#### 2026-09-27 未取得回答が残るreview完了拒否
+
+- 質問timeout後にask resumeではなくcheckを続けたreviewerがworker_doneを出し、
+  未取得回答のpreflight拒否だけでbridge全体が失効した。監視待機では復旧しないため主担当が是正する。
+- 上流送信前のpending question/deliveryは、完了を受理せず必要な通信取得へ戻すrecoverable応答にする。
+  所有不一致・不正payload・送信済み不明は失効を維持する。
+- 失効済みreviewerは最終turn・正のprocess終了・同source・Orcaのfailed fencingを照合し、
+  元Task/Run/sessionで固定reviewをやり直す正式復旧を追加する。旧review結果を代理送信・承認しない。
+- 未完の質問を含むconfirmed通信だけを認め、pending mutation・settlementを拒否する。
+  exact receipt保存と再照合、固定review、tooling/Help/storage、実review再開まで確認する。
+- 正式復旧receipt `845be75cfa7d4a9caa78919eac93b84fa4166a0ca0046b7c4c0a73e51265df87`を適用。
+  旧Task/Run/session・統合HEADを維持したが、再起動したreviewerへのworker-startが
+  `agent_unconfigured`で配車前拒否された。tui-idleの正の判定と本体のagent-presence判定の不一致を追加是正する。
+  この段階は再開完了ではない。未arm bootstrapを再生成せず、same request replayと
+  received/arm後のlocal projection回復を備える正式経路を検証する。
+- 追加調査でnamed CodexのOSC titleからアプリ識別子が消える経路を特定。本体guardは緩和せず、
+  supervised通常起動/resumeでCodex自身にapp-name/run-state/activityを通知させる。
+  同じ稼働reviewerへ公式`/title`で適用し、同session/端末のagentStatus=true/idleを実測した。
+  拒否された再送のWALは保全し、確認済みpreflight拒否と未知送信を区別する復旧を固定reviewする。
+- 固定review承認後に同じbootstrapへ正式復旧を適用し、`ctx_e4563220d15c`の実配車・結果受領・
+  provider正常終了を確認した。未検証M1-c受入証拠のchanges_requestedを統括へ戻し、
+  `active / correction_required`まで進んだ。TAK-14完了ではなく、不足証拠の是正が次工程。
+- 追加監査で発見したRPC相関IDと耐久mutation IDの混同を修正した。欠損時の代用は禁止し、
+  異なる2つのIDとnull/欠損ケースの回帰試験・固定reviewを実施した。
+
+#### 2026-09-27 工程承認後のscope未結合停止
+
+- M1-c統合HEAD `e4b79a8a0a69901f0679d9f4f74df444ade5e614`は検証・固定review承認済みだが、
+  進行中loopに後から登録した全体契約のbindingがなく、driverが終了した。
+- 承認済み・通知drain済みの未結合loopだけを対象に、可視統括、exact digest、現在のscope、
+  同一source/evidence、全attempt終了を照合する正式移行を追加する。
+- 旧loopと封印reviewは保存し、同じRun/統合HEADでscope付き固定reviewを新規に行う。
+  bindingの後付けだけで承認を継承せず、未確認の依存・全体受入への直接移行を拒否する。
+- 未結合は既知の照合待ちとして表示し、driverを例外終了させない。復旧後は同じ統括sessionへ戻す。
+- 拒否経路、応答消失、同一要求の再照合、変更別tooling、固定read-only reviewと実復帰を確認する。
+- 上記を実装し固定read-only review APPROVED。関連64 tests、最終contracts/toolingは860＋164 tests、
+  lint/perf self-test/docs/storageまでpass。base/HEAD `ae5b2066c4fd39a8dd6a6c439e272d125f749241`、
+  source `a107e212f7cfb9559e59d82e08110fbdb309ba92a7d4458e5b2f0341a017ecb3`。
+  review指摘修正中の先行gateはsource変更で拒否され、不採用。Helpは開発基盤のみでNo impact。
+- 統括を同session・同terminalで正常再起動し、旧driver終了と新driverのheartbeatを確認。
+  全attempt accounted・通知drain・現Linear接続・封印review・統合source不変を照合してguard付き移行を適用。
+  generation 4、Run `run_3236488f0dff`、統合HEADは不変。旧loopはscope-migration receiptへ保全。
+  Task `task_08c0cfb1699c`／Dispatch `ctx_be0e7904075e`で同じ固定reviewer sessionが実際に仕様確認を開始。
+  snapshotはreview/review、統括も監督を再開した。M1-cのscope付き承認・次工程完走・TAK-14全体完了は未確認。
+- tab整理の別停止は、launcher終了済みshellにTUI idleを要求したため。正のforeground shell確認と
+  close直前の再照合を追加し、shell未確認ならTUI idleへ戻す。今回実tabの削除は行っていない。
+
+#### 2026-09-27 統合前の文書差戻し補正（実復帰確認済み）
+
+- 固定reviewの文書指摘を編集権限のないworkerへ再配車しない。統括所有の補正へ振り分ける。
+- 同一Run・source・封印review・全完了ACK・担当終了を照合し、指摘されたMarkdownだけを補正する。
+  workerのallowed directoriesを広げず、原依頼・実装成果・失敗した試行を保持する。
+- 補正前にjournalを保存し、clean HEADをCAS更新。補正後の検証と固定reviewを必須にし、旧承認は継承しない。
+  中断・source競合・未確認終了を自動再実行しない。
+- successful review後と再試行時に古いfailed/failure_reasonを消し、今回の失敗理由を表示する。
+- 実Git回帰試験、変更別tooling gate、Help No impact、storage確認後に既存TAK-14で再開を確認する。
+- 文書補正／復旧18 tests、review-loop 63 tests、checkpoint 20 testsと固定read-only reviewは成功。
+  復旧済み旧attemptを完了ACKなしでも正にaccountedとする既存receipt経路を補正した。
+  saved/current journal、authority、revocation、settlementなしを照合し、ACKは捏造しない。
+- 監視automationの旧「修正禁止・報告のみ」を、利用者の追加指示に従い「許可済み範囲の恒久修正・検証・
+  同じ依頼の再開確認」へ更新。意図的停止、権限不足、不明な副作用、外部公開は自動で越えない。
+- 最終host変更別contracts/toolingは849＋164 tests、lint/perf self-test/docs/storageまで成功。
+  base/HEAD `ae5b2066c4fd39a8dd6a6c439e272d125f749241`、source
+  `32a9a3d0ad48e1431fd0998ec4db93f5edee3bb9e79e57d03155cfb203692163`。
+  途中source変更のあった先行検証は最終gate証拠として採用していない。
+- 既存統括を正常終了し同session・同terminalで再開、修正版driverの実行を確認した。
+  guard付き補正でcandidate `6aaac0893691cfd868d2f47f62fbc94e80c2060a`を作成。
+  差分は`docs/building-asset-sets.md`だけ、元14ファイルの実装は不変、候補checkoutはclean。
+  旧headからの文書変更別検証に成功し、同じRun `run_3236488f0dff`で固定reviewerが実際に再レビューを開始した。
+  Task `task_7d9ed87cd830`／Dispatch `ctx_780e23147433`、lane=reviewing、failed/failure_reason解除を確認。
+  これは停止からの復帰であり、M1-cの最終承認・TAK-14全体の完成はまだ主張しない。
+
+#### 2026-09-27 完了受理後の終了確認停止
+
+- 実装Aのworker_doneはconfirmed/completedだが、launcherがidle観測を1秒で繰り返し、Orca本体の2秒pollへ到達できなかった。
+- 観測を有界10秒へ修正。所有・正式receipt・idle・終了後source検査は維持し、timeoutを終了と見なさない。
+- 2秒poll/3秒quiet windowより短い待機を拒否する回帰試験、変更別gate、固定read-only reviewを実施する。
+- 既存担当は正常終了させ、同じ14ファイルとTask/Dispatch/terminalを保持して検証へ接続する。
+  再配車や新Run、台帳の直接書換えは行わない。TAK-14全体の完成とは区別する。
+- 実runtimeで1秒観測のtimeout、10秒観測のidle成立を確認。旧launcherの担当を正常終了したところ
+  `recorded/process_exited=true/exit_code=0`から既存driverが自動でvalidatingへ進んだ。
+  次のfresh Help review gateは統括が実diffを確認しており、本基盤修正で製品の承認を代行しない。
+- 終了確認関連20 testsと固定read-only reviewはpass。対象2ファイルdiff SHA-256は
+  `17af7c86d5ebc35430fb0719f07ad1494f1e6d700168e670bcf8d427ca478fb1`。
+  変更別contracts/tooling gateは841 scripts tests＋164 Blender補助tests、lint/docs/storageまでpass。
+  base/HEAD `ae5b2066c4fd39a8dd6a6c439e272d125f749241`、source
+  `a73591fe0e1e16ee22984b71c46270af925a2dd7604bfc10037d7e3aa1a73f9c`。
+  今回の変更は開発用launcherだけでHelp影響はNo impact。製品実装のgate結果とは区別する。
+
+#### 回答済み質問の再照会による停止（追加是正）
+
+- 回答済みaskの同一質問resumeは、同じDispatchの所有・sourceを再確認し、確定済み回答を返す。新たな質問や外部mutationを発行しない。
+- 別の未回答質問が存在する場合、未知質問、能力・所有変更、結果不明の操作は従来どおり拒否する。
+- revoked/unknownなbridgeを、provider終了待ち・host slot取得より先に検知し、loopをpausedにする。UIも「開始待ち」へ逆戻りさせず通信停止を示す。
+- 回帰試験、変更別gate、固定レビュー後に既存TAK-14の同じRun/Task/sessionを照合して復旧する。旧bridgeの権限を直接書き換えて再有効化しない。
+- 完了条件はコード修正だけでなく、実際の担当再開と台帳・画面の一致を確認すること。
+
 利用者は、GitHub連携でDoneになったTAK-14をIn Progressへ戻し、同じ依頼を再開することを明示許可した。
 上記の当初非対象に対する追加許可として、既存M1-c generation 4の配車前停止を復旧する。
 新規課題・Run・重複worktreeは作らず、旧世代の封印と成果を維持する。

@@ -205,10 +205,18 @@ HEADだけからDraft PR #27を一度作成し、再実行が`idle`であるこ�
 
 ## 一時配備と復帰
 
-現在の配備sourceはlocal commit `60a5d78e`、配備先は
-`/home/satotakumi/.local/opt/orca-ide/ui-60a5d78e`。Orca IDEアイコンはversion非依存の
+現在の配備sourceはlocal commit `6c38bc46`、配備先は
+`/home/satotakumi/.local/opt/orca-ide/ui-6c38bc46`。Orca IDEアイコンはversion非依存の
 `/home/satotakumi/.local/opt/orca-ide/launch-supervised`を起動し、`current` symlinkから現行buildを解決する。
 旧buildは復帰用に保持するが、旧launcherは誤起動防止のため現行固定入口へ転送する。
+2026-09-27に隔離Codexの送信経路を修正。same PTY/出生/入出力・前景所有者の証明を
+貼付前とEnter前に再確認し、bare shellもexact proof、未知targetは書込み前に拒否する。
+固定レビュー・関連1,397 tests（別に1 skipped）・typecheck・品質検査・梱包検査に合格し、
+別profileでnative probeの1回送信/開始観測/再送防止とshell操作を確認して切り替えた。
+実runtime `d60fc502-ba3c-4151-af16-b57b67a08a5f`、PID 3388130のexeを照合し、TAK-14の
+3 terminalと各incarnationを維持。旧版から残った未送信指示1件は自動再送せず、明示送信を確認中。
+この切替はTAK-14の再開・製品完成を意味しない。復帰用buildは`ui-60a5d78e`、停止後設定snapshotは
+`/home/satotakumi/.config/orca-before-prompt-routing-20260927`。新規会話を失う一括復元は行わない。
 サイドバーの `Reception & Coordination`（受付・統括）が固定入口。
 controllerは既存candidateの `scripts/orca_supervision.py`、状態保存先は
 `/home/satotakumi/.local/state/hell-workers/supervision-panel`。
@@ -218,7 +226,7 @@ host adapterの正規化が成功し、受付ready・既存tab数・統括termin
 CLI shimは起動中の本体が再生成する。手修正した`current`参照も再生成されるため、
 旧本体のshimを使う`orca open`だけで切り替えたとは扱わない。切替時は固定launcherから起動し、
 statusのPIDと`/proc/<pid>/exe`まで照合する。起動成功だけを修正版反映の証拠にしない。
-切替後に再生成されたshimは実際の`ui-60a5d78e/resources/bin/orca-ide`を参照している。
+2026-09-26の切替後に再生成されたshimは当時の`ui-60a5d78e/resources/bin/orca-ide`を参照した。
 直前設定は`/home/satotakumi/.config/orca-before-linear-recovery-20260926`、旧buildは`ui-e6fadf0b`に保持。
 復帰時は現行アプリの終了を確認して`current`を旧buildへ戻す。設定一括復元は新規会話を失うため行わない。
 host `36d9b667`の更新は候補配備であり、全体scope移行・固定review・全経路受入は未完了。
