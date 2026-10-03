@@ -44,6 +44,10 @@ def repository_markdown_files() -> list[Path]:
         if not path.is_file():
             continue
         relative = path.relative_to(REPO_ROOT)
+        # Installed dependencies are not project-owned documentation. Keep
+        # checking untracked project docs; do not require editing vendor READMEs.
+        if relative.parts[0] == "node_modules":
+            continue
         if relative.parts[0] == "docs" and EXCLUDED_PARTS.intersection(relative.parts):
             continue
         if relative.parts[0] in {".codex", ".cursor", ".gemini", ".claude-plugin"}:

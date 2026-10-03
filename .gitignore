@@ -15,6 +15,9 @@
 # Trunk
 /.trunk
 
+# Installed JavaScript dependencies (keep package manifests visible)
+/node_modules/
+
 # Logs and error files
 *.log
 *.txt
