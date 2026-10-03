@@ -1,4 +1,6 @@
 pub mod anchor;
+#[cfg(test)]
+mod bridge_readiness;
 pub mod coords;
 pub mod door_systems;
 pub mod layout;

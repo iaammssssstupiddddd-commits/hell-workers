@@ -19,6 +19,8 @@ use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 
 use super::{PerfScenarioConfig, PerfWorkload, fixture::PerfScenarioApplied};
+use crate::assets::building_asset_set::acceptance::BuildingArtSession;
+use crate::assets::building_asset_set::{BuildingAssetKind, BuildingAssetPool, M6Comparison};
 use crate::assets::door_asset_set::{
     DoorAssetAuthority, DoorAssetReadiness, DoorAssetReadinessState, ProductionDoorAssetPool,
     ProductionDoorMaterialPool,
@@ -92,6 +94,18 @@ pub(crate) struct BuildingArtStaticState {
     evidence: Option<Value>,
     stable_frames: u64,
     completion_effects_settled: bool,
+    art_candidate: bool,
+    m6: bool,
+    m6_resources: Option<ResourceEvidence>,
+}
+
+#[derive(Clone, PartialEq, Eq, serde::Serialize)]
+struct ResourceEvidence {
+    resident_mesh_count: usize,
+    resident_structural_material_count: usize,
+    resident_image_count: usize,
+    resident_image_cpu_bytes: usize,
+    structural_material_shallow_bytes: usize,
 }
 
 pub(crate) fn should_settle_building_art_static(
@@ -128,7 +142,8 @@ type VisualQuery<'w, 's> = Query<
     's,
     (
         Entity,
-        &'static Building3dVisual,
+        Option<&'static Building3dVisual>,
+        Option<&'static ChildOf>,
         &'static Mesh3d,
         &'static MeshMaterial3d<TopDownStructuralMaterial>,
         &'static ViewVisibility,
@@ -158,6 +173,9 @@ pub(crate) struct InspectParams<'w, 's> {
     world_map: WorldMapRead<'w>,
     buildings: BuildingQuery<'w, 's>,
     visuals: VisualQuery<'w, 's>,
+    part_transforms: Query<'w, 's, &'static Transform>,
+    visual_roots: Query<'w, 's, &'static Building3dVisual>,
+    root_transforms: Query<'w, 's, (&'static Building3dVisual, &'static Transform)>,
     sprites: SpriteQuery<'w, 's>,
     meshes: Res<'w, Assets<Mesh>>,
     materials: Res<'w, Assets<TopDownStructuralMaterial>>,
@@ -166,6 +184,9 @@ pub(crate) struct InspectParams<'w, 's> {
     door_pool: Res<'w, ProductionDoorAssetPool>,
     door_material: Res<'w, ProductionDoorMaterialPool>,
     door_readiness: Res<'w, DoorAssetReadiness>,
+    building_pool: Res<'w, BuildingAssetPool>,
+    art_session: Option<Res<'w, BuildingArtSession>>,
+    m6: Option<Res<'w, M6Comparison>>,
     stockpiles: Query<'w, 's, &'static hw_logistics::Stockpile>,
     companions: Query<'w, 's, &'static hw_logistics::BelongsTo, With<hw_logistics::BucketStorage>>,
     camera: Query<'w, 's, &'static Transform, With<hw_ui::camera::MainCamera>>,
@@ -196,16 +217,73 @@ pub(crate) fn inspect_building_art_static_system(mut params: InspectParams) {
         Ok(Some(evidence)) => {
             if params.state.evidence.is_none() {
                 params.state.evidence = Some(evidence);
+                params.state.art_candidate = params.art_session.is_some();
+                params.state.m6 = params.m6.is_some();
+                let resources = params.m6.as_ref().map(|_| resource_evidence(&params));
+                params.state.m6_resources = resources;
                 params.state.phase = Phase::Ready;
                 params.applied.workload = true;
             }
             params.state.stable_frames += 1;
+            if params.state.stable_frames == 30
+                && let Some(session) = params.art_session.as_ref()
+            {
+                let status = json!({"schema_version": 1, "profile": "building-art",
+                    "mode": session.mode, "identity": session.identity, "nonce": session.nonce,
+                    "status": "ready", "stable_frames": params.state.stable_frames,
+                    "fixture": params.state.evidence, "scope": "paused-static-presentation"});
+                let write = || -> Result<(), Box<dyn std::error::Error>> {
+                    let temporary = session.status_path.with_extension("tmp");
+                    let file = std::fs::OpenOptions::new()
+                        .write(true)
+                        .create_new(true)
+                        .open(&temporary)?;
+                    serde_json::to_writer(&file, &status)?;
+                    file.sync_all()?;
+                    std::fs::rename(temporary, &session.status_path)?;
+                    Ok(())
+                };
+                if let Err(error) = write() {
+                    fail(&mut params.state, &mut params.exit, error.to_string());
+                }
+            }
         }
         Err(reason) => fail(&mut params.state, &mut params.exit, reason),
     }
 }
 
 fn inspect(params: &InspectParams) -> Result<Option<Value>, String> {
+    if let Some(m6) = params.m6.as_ref() {
+        if params.art_session.is_some()
+            || params
+                .building_pool
+                .active(BuildingAssetKind::Bridge)
+                .is_some()
+        {
+            return Err(
+                "M6 cannot mix Bridge or art-preview authority into nine-kind evidence".into(),
+            );
+        }
+        let expected = if m6.candidate { 8 } else { 0 };
+        if params.building_pool.generation_counts() != (expected, 0) {
+            return Ok(None);
+        }
+        if m6.candidate {
+            for identity in &m6.identities {
+                if params.building_pool.active(identity.kind) != Some(identity) {
+                    return Ok(None);
+                }
+            }
+        }
+    }
+    if let Some(session) = params.art_session.as_ref() {
+        let Some(descriptor) = params.building_pool.descriptor(session.identity.kind) else {
+            return Ok(None);
+        };
+        if descriptor.manifest.identity != session.identity {
+            return Err("building-art exact candidate identity differs".into());
+        }
+    }
     if !params.time.is_paused() {
         return Err("static fixture Virtual Time is not paused".into());
     }
@@ -241,12 +319,23 @@ fn inspect(params: &InspectParams) -> Result<Option<Value>, String> {
     if params.door_material.identity.as_ref() != Some(&door_assets.identity) {
         return Ok(None);
     }
+    if params.m6.is_some()
+        && door_assets.identity.manifest_sha256
+            != "4e3f9236db067772b9a60b37ea98437cb29e481f9ec9cbb4d6dcf6517374a449"
+    {
+        return Err("M6 requires the unchanged approved Door g7 identity".into());
+    }
     let copies = layout::copies(params.config.size());
     if params.buildings.iter().count() != copies * 13 || params.state.owners.len() != copies * 9 {
         return Err("target/support building inventory differs".into());
     }
     let mut visuals = HashMap::<Entity, Vec<_>>::new();
-    for (entity, visual, mesh, material, visibility) in &params.visuals {
+    for (entity, visual, parent, mesh, material, visibility) in &params.visuals {
+        let Some(visual) = visual
+            .or_else(|| parent.and_then(|parent| params.visual_roots.get(parent.parent()).ok()))
+        else {
+            continue;
+        };
         visuals
             .entry(visual.owner)
             .or_default()
@@ -288,13 +377,106 @@ fn inspect(params: &InspectParams) -> Result<Option<Value>, String> {
                 | BuildingType::OutdoorLamp
         );
         let owner_visuals = visuals.get(&owner).map(Vec::as_slice).unwrap_or_default();
-        if owner_visuals.len() != usize::from(structural) {
+        let candidate = if params.m6.as_ref().is_some_and(|m6| m6.candidate) {
+            crate::systems::visual::building_presentation::asset_kind(spec.kind)
+                .and_then(|kind| params.building_pool.descriptor(kind))
+        } else {
+            params.art_session.as_ref().and_then(|session| {
+                (crate::systems::visual::building_presentation::asset_kind(spec.kind)
+                    == Some(session.identity.kind))
+                .then(|| params.building_pool.descriptor(session.identity.kind))
+                .flatten()
+            })
+        };
+        let root_count = params
+            .visual_roots
+            .iter()
+            .filter(|visual| visual.owner == owner)
+            .count();
+        // The static reference expects the legacy one-leaf fallback, but its
+        // owner root is now meshless. Check both independently.
+        let expected_parts = candidate.map_or(usize::from(structural), |d| d.manifest.parts.len());
+        if root_count != usize::from(structural) || owner_visuals.len() != expected_parts {
             return Err(format!(
                 "visual count differs: {:?}/{}",
                 spec.kind, spec.ordinal
             ));
         }
-        for (_, mesh, material, visibility) in owner_visuals {
+        if candidate.is_some_and(|set| {
+            matches!(
+                set.manifest.identity.kind,
+                BuildingAssetKind::Tank | BuildingAssetKind::MudMixer
+            )
+        }) {
+            let (_, root) = params
+                .root_transforms
+                .iter()
+                .find(|(visual, _)| visual.owner == owner)
+                .ok_or("missing candidate owner root")?;
+            if !root
+                .translation
+                .abs_diff_eq(Vec3::new(spec.center.x, 0.0, -spec.center.y), 0.001)
+            {
+                return Err("candidate feet differ from logical owner".into());
+            }
+        }
+        for (entity, mesh, material, visibility) in owner_visuals {
+            if let Some(candidate) = candidate {
+                if !candidate
+                    .manifest
+                    .identity
+                    .kind
+                    .mesh_roles()
+                    .iter()
+                    .any(|role| candidate.mesh(role) == Some(&mesh.0))
+                    || params.meshes.get(&mesh.0).is_none()
+                    || params.materials.get(&material.0).is_none_or(|material| {
+                        material.base.base_color_texture.as_ref() != candidate.image("albedo")
+                    })
+                {
+                    return Ok(None);
+                }
+                // The empty Tank deliberately hides its water leaf. Every
+                // other state/part must be visible in this paused fixture.
+                let hidden_water = candidate.manifest.identity.kind == BuildingAssetKind::Tank
+                    && spec.water_count() == 0
+                    && candidate.mesh("water") == Some(&mesh.0);
+                if visibility.get() == hidden_water {
+                    return Ok(None);
+                }
+                let local = params
+                    .part_transforms
+                    .get(*entity)
+                    .map_err(|_| "missing part transform")?;
+                if candidate.manifest.identity.kind == BuildingAssetKind::Tank
+                    && candidate.mesh("water") == Some(&mesh.0)
+                    && params.m6.is_none()
+                {
+                    let expected_y = if spec.water_count() >= 50 { 22.0 } else { 12.0 };
+                    if (local.translation.y - expected_y).abs() > 0.001 {
+                        return Err("Tank water height differs from M2 clay state contract".into());
+                    }
+                }
+                if candidate.manifest.identity.kind == BuildingAssetKind::MudMixer
+                    && candidate.mesh("rotor") == Some(&mesh.0)
+                {
+                    let spec = candidate
+                        .manifest
+                        .parts
+                        .iter()
+                        .find(|part| part.name == "rotor")
+                        .ok_or("missing rotor descriptor")?;
+                    if local.translation != Vec3::from_array(spec.translation_wu)
+                        || !local
+                            .rotation
+                            .abs_diff_eq(Quat::from_array(spec.rotation_xyzw), 0.001)
+                    {
+                        return Err("paused initial Mixer pivot/angle differs".into());
+                    }
+                }
+                active_meshes.insert(mesh.id());
+                continue;
+            }
             let expected_mesh = match spec.kind {
                 BuildingType::Door => &door_assets.meshes[0],
                 _ => &params.handles.equipment_2x2_mesh,
@@ -324,6 +506,20 @@ fn inspect(params: &InspectParams) -> Result<Option<Value>, String> {
             return Err("foreground presentation count differs".into());
         }
         for (sprite, visibility) in owner_sprites {
+            if let Some(candidate) = candidate {
+                let role = if spec.kind == BuildingType::OutdoorLamp {
+                    if spec.quarter() >= 2 {
+                        "world_on"
+                    } else {
+                        "world_off"
+                    }
+                } else {
+                    "world"
+                };
+                if candidate.image(role) != Some(&sprite.image) {
+                    return Ok(None);
+                }
+            }
             if params.images.get(&sprite.image).is_none() || !visibility.get() {
                 return Ok(None);
             }
@@ -429,22 +625,100 @@ fn inspect(params: &InspectParams) -> Result<Option<Value>, String> {
                 BuildingType::Door => json!({"state": "Closed", "axis": "EastWest"}),
                 _ => json!({"state": "Static"}),
             };
-            records.push(json!({"kind": format!("{:?}", spec.kind), "ordinal": spec.ordinal,
-                "anchor": spec.anchor, "tiles": spec.tiles, "center": [spec.center.x, spec.center.y], "state": state}));
+            let mut record = json!({"kind": format!("{:?}", spec.kind), "ordinal": spec.ordinal,
+                "anchor": spec.anchor, "tiles": spec.tiles, "center": [spec.center.x, spec.center.y], "state": state});
+            if let Some(candidate) = candidate {
+                if matches!(
+                    candidate.manifest.identity.kind,
+                    BuildingAssetKind::Tank | BuildingAssetKind::MudMixer
+                ) {
+                    let (_, root) = params
+                        .root_transforms
+                        .iter()
+                        .find(|(visual, _)| visual.owner == owner)
+                        .ok_or("missing candidate owner root")?;
+                    record["root_translation_wu"] = json!(root.translation.to_array());
+                }
+                let mut parts = Vec::new();
+                for (entity, mesh, _, visibility) in owner_visuals {
+                    let local = params
+                        .part_transforms
+                        .get(*entity)
+                        .map_err(|_| "missing part transform")?;
+                    let role = candidate
+                        .manifest
+                        .identity
+                        .kind
+                        .mesh_roles()
+                        .iter()
+                        .find(|role| candidate.mesh(role) == Some(&mesh.0))
+                        .ok_or("unknown candidate mesh role")?;
+                    parts.push(
+                        json!({"mesh_role": role, "translation_wu": local.translation.to_array(),
+                        "rotation_xyzw": local.rotation.to_array(), "scale": local.scale.to_array(),
+                        "visible": visibility.get()}),
+                    );
+                }
+                parts.sort_by_key(|part| part["mesh_role"].as_str().unwrap().to_owned());
+                record["parts"] = json!(parts);
+            }
+            records.push(record);
         }
     }
-    if active_meshes.len() != 2 {
+    if params.art_session.is_none()
+        && !params.m6.as_ref().is_some_and(|m6| m6.candidate)
+        && active_meshes.len() != 2
+    {
         return Err("legacy shared mesh count differs".into());
+    }
+    let resources = params.m6.as_ref().map(|_| resource_evidence(params));
+    if let Some(initial) = params.state.m6_resources.as_ref()
+        && resources.as_ref() != Some(initial)
+    {
+        return Err("M6 resident resource inventory changed after readiness".into());
     }
     let Some(records) = records else {
         return Ok(Some(Value::Null));
     };
-    Ok(Some(
-        json!({"records": records, "target_count": params.state.specs.len(),
+    let mut evidence = json!({"records": records, "target_count": params.state.specs.len(),
         "target_structural_roots": layout::copies(params.config.size()) * 5,
         "target_foreground_owners": layout::copies(params.config.size()) * 4,
-        "target_active_unique_meshes": active_meshes.len(), "souls": params.state.actors.len(), "completion_effects": 0}),
-    ))
+        "target_active_unique_meshes": active_meshes.len(), "souls": params.state.actors.len(), "completion_effects": 0});
+    if let Some(m6) = params.m6.as_ref() {
+        // CPU image payload is decoded storage, never compressed PNG or GPU allocation.
+        // GLB payload bytes are separately inventoried by the offline helper.
+        evidence["m6"] = json!({
+            "mode": if m6.candidate { "candidate" } else { "legacy-control" },
+            "identities": m6.identities,
+            "door_identity": {
+                "asset_set_generation": door_assets.identity.asset_set_generation,
+                "authority": door_assets.identity.authority,
+                "manifest_sha256": door_assets.identity.manifest_sha256,
+            },
+            "target_mesh_entities": copies * if m6.candidate { 11 } else { 5 },
+            "pool_active": params.building_pool.generation_counts().0,
+            "pool_pending": params.building_pool.generation_counts().1,
+            "resources": resources,
+            "gpu_allocation_bytes": null,
+            "active_state_acceptance": false,
+        });
+    }
+    Ok(Some(evidence))
+}
+
+fn resource_evidence(params: &InspectParams) -> ResourceEvidence {
+    ResourceEvidence {
+        resident_mesh_count: params.meshes.len(),
+        resident_structural_material_count: params.materials.len(),
+        resident_image_count: params.images.len(),
+        resident_image_cpu_bytes: params
+            .images
+            .iter()
+            .map(|(_, image)| image.data.as_ref().map_or(0, Vec::len))
+            .sum::<usize>(),
+        structural_material_shallow_bytes: params.materials.len()
+            * std::mem::size_of::<TopDownStructuralMaterial>(),
+    }
 }
 
 impl BuildingArtStaticState {
@@ -462,8 +736,8 @@ impl BuildingArtStaticState {
             .as_ref()
             .ok_or_else(|| std::io::Error::other("missing fixture evidence"))?;
         let bytes = serde_json::to_vec(evidence)?;
-        let summary = json!({"schema_version": 1, "contract_id": "building-art-static-nine-v2",
-            "evidence_kind": "paused-static-only", "active_simulation_evidence": false,
+        let summary = json!({"schema_version": 1, "contract_id": if self.m6 { "building-art-m6-nine-v1" } else { "building-art-static-nine-v2" },
+            "evidence_kind": if self.art_candidate { "candidate-paused-static-only" } else { "paused-static-only" }, "active_simulation_evidence": false,
             "camera_scale": layout::CAMERA_SCALE, "stable_frames": self.stable_frames,
             "layout_sha256": hw_infra::lighting::digest_hex(&Sha256::digest(&bytes).into()), "initial": evidence, "final": evidence});
         let directory = super::output::perf_output_directory(config);
@@ -471,7 +745,11 @@ impl BuildingArtStaticState {
         let file = std::fs::OpenOptions::new()
             .write(true)
             .create_new(true)
-            .open(directory.join("building_art_static.json"))?;
+            .open(directory.join(if self.art_candidate {
+                "building_art_candidate.json"
+            } else {
+                "building_art_static.json"
+            }))?;
         serde_json::to_writer_pretty(file, &summary).map_err(std::io::Error::other)
     }
 }

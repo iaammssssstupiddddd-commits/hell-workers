@@ -12,7 +12,7 @@ use bevy::prelude::*;
 use super::validation::{canonical, digest, manifest_digest, validate_payload, validate_receipt};
 use super::*;
 
-fn artifact(
+pub(super) fn artifact(
     identity: &BuildingAssetSetIdentity,
     role: &str,
     extension: &str,
@@ -31,7 +31,10 @@ fn artifact(
     }
 }
 
-fn fixture(kind: BuildingAssetKind, authority: BuildingAssetAuthority) -> BuildingAssetSetManifest {
+pub(super) fn fixture(
+    kind: BuildingAssetKind,
+    authority: BuildingAssetAuthority,
+) -> BuildingAssetSetManifest {
     let identity = BuildingAssetSetIdentity {
         kind,
         generation: 1,
@@ -92,22 +95,41 @@ fn fixture(kind: BuildingAssetKind, authority: BuildingAssetAuthority) -> Buildi
         world_preview: preview(kind.world_preview_role()),
         catalog_preview: preview("catalog"),
         receipt: None,
+        numeric_approval_sha256: (authority != BuildingAssetAuthority::ArtPreview
+            && matches!(kind, BuildingAssetKind::Tank | BuildingAssetKind::MudMixer))
+        .then(|| "e".repeat(64)),
+        production_state: if authority == BuildingAssetAuthority::ArtPreview {
+            None
+        } else {
+            match kind {
+                BuildingAssetKind::Tank => Some(BuildingProductionState::Tank {
+                    partial_y_wu: 9.0,
+                    full_y_wu: 19.0,
+                }),
+                BuildingAssetKind::MudMixer => Some(BuildingProductionState::MudMixer {
+                    axis: [0.0, 0.0, 1.0],
+                    radians_per_second: 0.7,
+                }),
+                _ => None,
+            }
+        },
     };
     seal(&mut manifest);
     manifest
 }
 
-fn receipt_bytes(manifest: &BuildingAssetSetManifest) -> Vec<u8> {
+pub(super) fn receipt_bytes(manifest: &BuildingAssetSetManifest) -> Vec<u8> {
     canonical(&BuildingPromotionReceipt {
         schema_version: 1,
         identity: manifest.identity.clone(),
         art_approval_sha256: manifest.art_approval_sha256.clone().unwrap_or_default(),
         decision: "release_approved".into(),
+        numeric_approval_sha256: manifest.numeric_approval_sha256.clone(),
     })
     .unwrap()
 }
 
-fn seal(manifest: &mut BuildingAssetSetManifest) {
+pub(super) fn seal(manifest: &mut BuildingAssetSetManifest) {
     manifest.identity.manifest_sha256 = manifest_digest(manifest).unwrap();
     if manifest.identity.authority == BuildingAssetAuthority::ReleaseApproved {
         manifest.receipt = Some(artifact(
@@ -125,7 +147,7 @@ fn rejects(mut manifest: BuildingAssetSetManifest) {
 }
 
 #[test]
-fn all_eight_kind_inventories_match_the_authoring_contract() {
+fn all_nine_kind_inventories_match_the_authoring_contract() {
     let contract: serde_json::Value = serde_json::from_str(include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/../../tools/blender_ai_workflow/fixtures/building-art-v1.contract.json"
@@ -162,7 +184,7 @@ fn all_eight_kind_inventories_match_the_authoring_contract() {
             );
         }
     }
-    for excluded in ["Bridge", "Wall", "Floor", "Door", "Unknown"] {
+    for excluded in ["Wall", "Floor", "Door", "Unknown"] {
         assert!(serde_json::from_value::<BuildingAssetKind>(serde_json::json!(excluded)).is_err());
     }
 }
@@ -434,4 +456,123 @@ fn unauthorized_candidate_stops_before_dependency_io_and_policy_is_snapshotted()
         load(&mut authorized, "candidate.buildingset"),
         LoadState::Loaded
     ));
+}
+
+#[test]
+fn production_state_is_required_typed_bounded_and_bound_to_manifest_identity() {
+    for authority in [
+        BuildingAssetAuthority::IsolatedCandidate,
+        BuildingAssetAuthority::ReleaseApproved,
+    ] {
+        let valid = fixture(BuildingAssetKind::Tank, authority);
+        let mut missing = valid.clone();
+        missing.production_state = None;
+        rejects(missing);
+        let mut wrong_kind = valid.clone();
+        wrong_kind.production_state = Some(BuildingProductionState::MudMixer {
+            axis: [0.0, 1.0, 0.0],
+            radians_per_second: 1.0,
+        });
+        rejects(wrong_kind);
+        for full in [f32::NAN, f32::INFINITY, -1.0, 8.0, 10000.0] {
+            let mut invalid = valid.clone();
+            invalid.production_state = Some(BuildingProductionState::Tank {
+                partial_y_wu: 9.0,
+                full_y_wu: full,
+            });
+            rejects(invalid);
+        }
+        let mut stale = valid;
+        stale.production_state = Some(BuildingProductionState::Tank {
+            partial_y_wu: 10.0,
+            full_y_wu: 20.0,
+        });
+        assert!(decode_buildingset(&canonical(&stale).unwrap()).is_err());
+        for (axis, rate) in [
+            ([0.0; 3], 1.0),
+            ([0.0, 1.0, 0.0], 0.0),
+            ([0.0, 1.0, 0.0], f32::INFINITY),
+            ([0.0, 1.0, 0.0], 10.0),
+        ] {
+            let mut invalid = fixture(BuildingAssetKind::MudMixer, authority);
+            invalid.production_state = Some(BuildingProductionState::MudMixer {
+                axis,
+                radians_per_second: rate,
+            });
+            rejects(invalid);
+        }
+    }
+    let mut draft = fixture(BuildingAssetKind::Tank, BuildingAssetAuthority::ArtPreview);
+    draft.production_state = Some(BuildingProductionState::Tank {
+        partial_y_wu: 9.0,
+        full_y_wu: 19.0,
+    });
+    rejects(draft);
+}
+
+#[test]
+fn numeric_approval_is_required_hash_bound_and_retained_by_release_projection() {
+    for kind in [BuildingAssetKind::Tank, BuildingAssetKind::MudMixer] {
+        let candidate = fixture(kind, BuildingAssetAuthority::IsolatedCandidate);
+        for invalid in [None, Some("invalid".into())] {
+            let mut changed = candidate.clone();
+            changed.numeric_approval_sha256 = invalid;
+            rejects(changed);
+        }
+        let mut changed = candidate.clone();
+        changed.numeric_approval_sha256 = Some("f".repeat(64));
+        assert_ne!(
+            manifest_digest(&candidate).unwrap(),
+            manifest_digest(&changed).unwrap()
+        );
+        assert!(decode_buildingset(&canonical(&changed).unwrap()).is_err());
+        let mut release = candidate.clone();
+        release.identity.authority = BuildingAssetAuthority::ReleaseApproved;
+        let request = serde_json::json!({"operation": "seal",
+            "manifest": String::from_utf8(canonical(&release).unwrap()).unwrap(), "receipt": null});
+        let output = project_building_asset_json(&serde_json::to_vec(&request).unwrap()).unwrap();
+        let output: serde_json::Value = serde_json::from_slice(&output).unwrap();
+        let projected =
+            decode_buildingset(output["manifest"].as_str().unwrap().as_bytes()).unwrap();
+        assert_eq!(projected.production_state, candidate.production_state);
+        assert_eq!(
+            projected.numeric_approval_sha256,
+            candidate.numeric_approval_sha256
+        );
+        let mut receipt: BuildingPromotionReceipt =
+            serde_json::from_str(output["receipt"].as_str().unwrap()).unwrap();
+        validate_receipt(&projected, &canonical(&receipt).unwrap()).unwrap();
+        receipt.numeric_approval_sha256 = None;
+        assert!(validate_receipt(&projected, &canonical(&receipt).unwrap()).is_err());
+        receipt.numeric_approval_sha256 = Some("f".repeat(64));
+        assert!(validate_receipt(&projected, &canonical(&receipt).unwrap()).is_err());
+    }
+}
+
+#[test]
+fn numeric_provenance_is_omitted_for_existing_drafts_and_non_m2() {
+    for (kind, authority) in [
+        (BuildingAssetKind::Tank, BuildingAssetAuthority::ArtPreview),
+        (
+            BuildingAssetKind::MudMixer,
+            BuildingAssetAuthority::ArtPreview,
+        ),
+        (
+            BuildingAssetKind::RestArea,
+            BuildingAssetAuthority::ReleaseApproved,
+        ),
+    ] {
+        let manifest = fixture(kind, authority);
+        let bytes = canonical(&manifest).unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert!(json.get("numeric_approval_sha256").is_none());
+        assert!(json.get("production_state").is_none());
+        assert_eq!(
+            canonical(&decode_buildingset(&bytes).unwrap()).unwrap(),
+            bytes
+        );
+        let mut invalid = manifest;
+        invalid.numeric_approval_sha256 = Some("e".repeat(64));
+        rejects(invalid);
+    }
 }

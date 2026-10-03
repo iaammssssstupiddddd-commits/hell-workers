@@ -14,10 +14,48 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 fn main() -> AppExit {
+    // Offline authoring uses the exact runtime codec without creating an App,
+    // opening a window, loading assets, or granting runtime candidate access.
+    if env::args().nth(1).as_deref() == Some("--building-asset-codec") {
+        use std::io::{Read, Write};
+        let mut input = Vec::new();
+        let result = std::io::stdin()
+            .take(16 * 1024 * 1024)
+            .read_to_end(&mut input)
+            .map_err(|error| error.to_string())
+            .and_then(|_| {
+                bevy_app::project_building_asset_json(&input).map_err(|error| error.to_string())
+            })
+            .and_then(|bytes| {
+                std::io::stdout()
+                    .write_all(&bytes)
+                    .map_err(|error| error.to_string())
+            });
+        return match result {
+            Ok(()) => AppExit::Success,
+            Err(error) => {
+                eprintln!("Building asset codec: {error}");
+                AppExit::error()
+            }
+        };
+    }
     let perf_config = PerfScenarioConfig::try_from_process().unwrap_or_else(|error| {
         eprintln!("Invalid performance scenario configuration: {error}");
         std::process::exit(2);
     });
+    let m2_probe = env::var_os("HW_M2_ACCEPTANCE_PROBE");
+    if !building_art_entry_allowed(
+        cfg!(feature = "profiling"),
+        env::var_os("HW_BUILDING_ART_SESSION").is_some(),
+        m2_probe.as_deref(),
+        perf_config.enabled(),
+        perf_config.workload() == bevy_app::plugins::startup::PerfWorkload::BuildingArtStatic,
+    ) {
+        eprintln!(
+            "Building-art admission requires a profiling static fixture or explicit interactive M2 probe."
+        );
+        return AppExit::error();
+    }
     let native_acceptance_plugin =
         bevy_app::systems::save::NativeSaveLoadAcceptancePlugin::try_from_process().unwrap_or_else(
             |error| {
@@ -62,6 +100,7 @@ fn main() -> AppExit {
         native_deconstruction_plugin.is_some(),
         native_notification_plugin.is_some(),
         native_ui_enabled,
+        m2_probe.is_some(),
     ]
     .into_iter()
     .filter(|enabled| *enabled)
@@ -84,6 +123,15 @@ fn main() -> AppExit {
     let backends = select_backends();
     let present_mode = select_present_mode();
     let mut app = App::new();
+    if let Err(error) = bevy_app::configure_building_asset_releases(&mut app) {
+        eprintln!("Invalid building asset release bindings: {error}");
+        return AppExit::error();
+    }
+    #[cfg(feature = "profiling")]
+    if let Err(error) = bevy_app::configure_building_art(&mut app) {
+        eprintln!("Invalid building-art session: {error}");
+        return AppExit::error();
+    }
     let default_plugins = DefaultPlugins
         .set(WindowPlugin {
             primary_window: (!use_headless_runner).then(|| Window {
@@ -141,6 +189,22 @@ fn main() -> AppExit {
     }
 
     app.run()
+}
+
+// This only selects the execution route. configure_building_art still validates
+// the full session, and m2_probe restricts interactive admission to feedback
+// ArtPreview Tank/MudMixer identities before any load request is registered.
+fn building_art_entry_allowed(
+    profiling: bool,
+    session: bool,
+    probe: Option<&std::ffi::OsStr>,
+    perf_enabled: bool,
+    static_workload: bool,
+) -> bool {
+    if let Some(probe) = probe {
+        return profiling && session && probe == "1" && !perf_enabled;
+    }
+    !session || (profiling && perf_enabled && static_workload)
 }
 
 fn perf_window_update_settings(perf_enabled: bool, headless: bool) -> Option<WinitSettings> {
@@ -281,6 +345,32 @@ fn select_present_mode() -> PresentMode {
 mod tests {
     use super::*;
     use bevy::winit::UpdateMode;
+
+    #[test]
+    fn building_art_entry_separates_interactive_and_static_evidence() {
+        let probe = Some(std::ffi::OsStr::new("1"));
+        assert!(building_art_entry_allowed(true, true, probe, false, false));
+        assert!(building_art_entry_allowed(true, true, None, true, true));
+        assert!(building_art_entry_allowed(false, false, None, false, false));
+        for (profiling, session, value, perf, static_workload) in [
+            (false, true, probe, false, false),
+            (true, false, probe, false, false),
+            (true, true, Some(std::ffi::OsStr::new("0")), false, false),
+            (true, true, probe, true, true),
+            (true, true, probe, true, false),
+            (true, true, None, false, false),
+            (true, true, None, true, false),
+            (false, true, None, true, true),
+        ] {
+            assert!(!building_art_entry_allowed(
+                profiling,
+                session,
+                value,
+                perf,
+                static_workload
+            ));
+        }
+    }
 
     #[test]
     fn perf_window_updates_are_continuous_with_or_without_focus() {

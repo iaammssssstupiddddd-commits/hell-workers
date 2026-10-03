@@ -108,6 +108,21 @@ impl Plugin for VisualPlugin {
             reset_indoor_light_texture_for_world_replace,
         );
 
+        app.init_resource::<crate::assets::building_asset_set::BuildingAssetPool>();
+        app.add_systems(
+            PostUpdate,
+            (
+                crate::systems::visual::building_presentation::poll_building_assets,
+                crate::systems::visual::building_presentation::sync_equipment_structure,
+                crate::systems::visual::building_presentation::sync_building_previews,
+                ApplyDeferred,
+            )
+                .chain()
+                .in_set(crate::systems::visual::building_presentation::BuildingPresentationSet)
+                .after(DoorPresentationSyncSet)
+                .before(TransformSystems::Propagate)
+                .before(bevy::ui::UiSystems::Prepare),
+        );
         app.init_resource::<ActorBillboardOwnerCache>();
         app.init_resource::<WallAssetCandidatePolicy>();
         app.init_resource::<WallAssetReadiness>();

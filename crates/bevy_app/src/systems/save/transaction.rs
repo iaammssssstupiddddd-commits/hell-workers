@@ -1500,6 +1500,165 @@ mod tests {
     }
 
     #[test]
+    fn m6_mixed_nine_shells_recover_after_paused_load_and_rollback() {
+        use crate::app_contexts::{
+            BuildContext, CompanionPlacementState, MoveContext, TaskContext,
+        };
+        use crate::assets::building_asset_set::{
+            BuildingAssetAuthority, BuildingAssetKind, BuildingAssetPool,
+        };
+        use crate::systems::visual::building_presentation::{
+            asset_kind, sync_building_previews, sync_equipment_structure,
+        };
+        use hw_visual::TopDownStructuralMaterial;
+
+        let kinds = [
+            BuildingType::Tank,
+            BuildingType::MudMixer,
+            BuildingType::RestArea,
+            BuildingType::SoulSpa,
+            BuildingType::Door,
+            BuildingType::WheelbarrowParking,
+            BuildingType::SandPile,
+            BuildingType::BonePile,
+            BuildingType::OutdoorLamp,
+        ];
+        let mut incoming_source = app_with_save_schema();
+        insert_persisted_resources(incoming_source.world_mut(), 2.0);
+        for (index, kind) in kinds.into_iter().enumerate() {
+            incoming_source.world_mut().spawn((
+                Building {
+                    kind,
+                    is_provisional: false,
+                },
+                Transform::from_xyz(index as f32 * 96.0, 64.0, 0.0),
+            ));
+        }
+        let incoming = capture_from_app(&mut incoming_source);
+        let mut live = app_with_wall_replacement_runtime();
+        insert_persisted_resources(live.world_mut(), 1.0);
+        live.init_resource::<BuildingAssetPool>()
+            .init_resource::<BuildContext>()
+            .init_resource::<MoveContext>()
+            .init_resource::<TaskContext>()
+            .init_resource::<CompanionPlacementState>()
+            .insert_resource(State::new(hw_core::game_state::PlayMode::BuildingPlace));
+        let mut materials = Assets::<TopDownStructuralMaterial>::default();
+        let material = materials.add(TopDownStructuralMaterial::default());
+        live.world_mut()
+            .resource_mut::<crate::plugins::startup::Building3dHandles>()
+            .equipment_material = material;
+        live.insert_resource(materials).add_systems(
+            PostUpdate,
+            (
+                sync_equipment_structure,
+                sync_building_previews,
+                ApplyDeferred,
+            )
+                .chain()
+                .before(TransformSystems::Propagate),
+        );
+        for kind in kinds.into_iter().filter_map(asset_kind) {
+            live.world_mut()
+                .resource_mut::<BuildingAssetPool>()
+                .install_presentation_fixture(kind, 1, BuildingAssetAuthority::ReleaseApproved);
+        }
+        live.world_mut().resource_mut::<Time<Virtual>>().pause();
+        let plan = ResolvedRehydratePlan::with_step_for_test(
+            "m6.presentation",
+            rehydrate_presentation_shells_for_test,
+        );
+        let type_registry = live.world().resource::<AppTypeRegistry>().clone();
+        let registry = type_registry.read();
+        for _ in 0..10 {
+            replace_persisted_world(live.world_mut(), &incoming, &registry, &plan).unwrap();
+            live.world_mut().flush();
+            live.update();
+            let old_roots: Vec<_> = live
+                .world_mut()
+                .query::<(Entity, &Building3dVisual)>()
+                .iter(live.world())
+                .map(|(entity, _)| entity)
+                .collect();
+            assert_eq!(old_roots.len(), 5);
+            let rollback_plan = plan.clone();
+            let result = replace_persisted_world_with_post_write(
+                live.world_mut(),
+                &incoming,
+                &registry,
+                &plan,
+                |_| Err("M6 injected post-write failure".to_owned()),
+                move |world| {
+                    rollback_plan.run(world);
+                    Ok(())
+                },
+            );
+            assert!(matches!(result, Err(CommitError::Recovered { .. })));
+            live.world_mut().flush();
+            live.update();
+            assert!(
+                old_roots
+                    .iter()
+                    .all(|entity| live.world().get_entity(*entity).is_err())
+            );
+            assert!(live.world().resource::<Time<Virtual>>().is_paused());
+            let owners: Vec<_> = live
+                .world_mut()
+                .query::<(Entity, &Building)>()
+                .iter(live.world())
+                .map(|(entity, building)| (entity, building.kind))
+                .collect();
+            assert_eq!(owners.len(), 9);
+            for (owner, kind) in owners {
+                let roots: Vec<_> = live
+                    .world_mut()
+                    .query::<(Entity, &Building3dVisual)>()
+                    .iter(live.world())
+                    .filter(|(_, visual)| visual.owner == owner)
+                    .map(|(entity, _)| entity)
+                    .collect();
+                if let Some(kind) = asset_kind(kind) {
+                    let set = live
+                        .world()
+                        .resource::<BuildingAssetPool>()
+                        .descriptor(kind)
+                        .unwrap();
+                    assert_eq!(set.manifest.identity.generation, 1);
+                    if kind.mesh_roles().is_empty() {
+                        assert!(roots.is_empty());
+                        let sprite = live
+                            .world()
+                            .get::<Children>(owner)
+                            .unwrap()
+                            .iter()
+                            .find_map(|child| live.world().get::<Sprite>(child))
+                            .unwrap();
+                        assert_eq!(
+                            &sprite.image,
+                            set.image(&set.manifest.world_preview.image_role).unwrap()
+                        );
+                    } else {
+                        assert_eq!(roots.len(), 1);
+                        assert_eq!(
+                            live.world().get::<Children>(roots[0]).unwrap().len(),
+                            set.manifest.parts.len()
+                        );
+                    }
+                } else {
+                    assert_eq!(kind, BuildingType::Door);
+                    assert_eq!(roots.len(), 1);
+                }
+            }
+            assert!(
+                live.world()
+                    .resource::<BuildingAssetPool>()
+                    .active(BuildingAssetKind::Bridge)
+                    .is_none()
+            );
+        }
+    }
+
+    #[test]
     fn mixed_wall_presentation_recovers_after_normal_rollback_and_recovery_replacement() {
         let plan = ResolvedRehydratePlan::with_step_for_test(
             "wall.presentation",

@@ -191,7 +191,7 @@ fn validate_manifest(manifest: &BuildingAssetSetManifest) -> Result<(), Building
     let part_roles: &[(&str, &str)] = match kind {
         BuildingAssetKind::Tank => &[("body", "body"), ("water", "water")],
         BuildingAssetKind::MudMixer => &[("body", "body"), ("rotor", "rotor")],
-        BuildingAssetKind::RestArea => &[("body", "body")],
+        BuildingAssetKind::RestArea | BuildingAssetKind::Bridge => &[("body", "body")],
         BuildingAssetKind::SoulSpa => &[
             ("body", "body"),
             ("slot0", "slot"),
@@ -227,6 +227,7 @@ fn validate_manifest(manifest: &BuildingAssetSetManifest) -> Result<(), Building
             "part quaternion is not normalized",
         )?;
     }
+    validate_production_state(manifest)?;
     validate_preview(&manifest.world_preview, kind, false)?;
     validate_preview(&manifest.catalog_preview, kind, true)?;
     match identity.authority {
@@ -280,7 +281,69 @@ pub(super) fn validate_receipt(
         receipt.schema_version == 1
             && receipt.identity == manifest.identity
             && Some(&receipt.art_approval_sha256) == manifest.art_approval_sha256.as_ref()
+            && receipt.numeric_approval_sha256 == manifest.numeric_approval_sha256
             && receipt.decision == "release_approved",
         "receipt does not approve this exact set",
+    )
+}
+
+fn validate_production_state(
+    manifest: &BuildingAssetSetManifest,
+) -> Result<(), BuildingAssetSetError> {
+    use BuildingProductionState as State;
+    let kind = manifest.identity.kind;
+    if manifest.identity.authority == BuildingAssetAuthority::ArtPreview {
+        return require(
+            manifest.production_state.is_none() && manifest.numeric_approval_sha256.is_none(),
+            "draft cannot claim production state",
+        );
+    }
+    let m2 = matches!(kind, BuildingAssetKind::Tank | BuildingAssetKind::MudMixer);
+    require(
+        if m2 {
+            manifest
+                .numeric_approval_sha256
+                .as_deref()
+                .is_some_and(valid_hash)
+        } else {
+            manifest.numeric_approval_sha256.is_none()
+        },
+        "missing or inapplicable numeric approval digest",
+    )?;
+    let valid = match (kind, manifest.production_state) {
+        (
+            BuildingAssetKind::Tank,
+            Some(State::Tank {
+                partial_y_wu,
+                full_y_wu,
+            }),
+        ) => {
+            partial_y_wu.is_finite()
+                && full_y_wu.is_finite()
+                && partial_y_wu > 0.0
+                && full_y_wu > partial_y_wu
+                && full_y_wu <= 2.0 * hw_core::constants::TILE_SIZE
+        }
+        (
+            BuildingAssetKind::MudMixer,
+            Some(State::MudMixer {
+                axis,
+                radians_per_second,
+            }),
+        ) => {
+            let norm: f32 = axis.iter().map(|v| v * v).sum();
+            norm.is_finite()
+                && (norm - 1.0).abs() <= 0.0001
+                && radians_per_second.is_finite()
+                && radians_per_second > 0.0
+                && radians_per_second <= std::f32::consts::TAU
+        }
+        (BuildingAssetKind::Tank | BuildingAssetKind::MudMixer, _) => false,
+        (_, None) => true,
+        _ => false,
+    };
+    require(
+        valid,
+        "missing, mismatched or out-of-range production state contract",
     )
 }

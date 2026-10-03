@@ -1744,6 +1744,13 @@ mod tests {
         assert!(app.world().resource::<SelectedEntity>().0.is_none());
         assert!(app.world().resource::<MoveContext>().0.is_none());
 
+        let bridge = spawn_building(&mut app, BuildingType::Bridge);
+        write_intent(&mut app, UiIntent::MovePlantBuilding(bridge));
+        app.update();
+        assert!(app.world().resource::<SelectedEntity>().0.is_none());
+        assert!(app.world().resource::<MoveContext>().0.is_none());
+        assert!(app.world().get_entity(bridge).is_ok());
+
         let stale = spawn_building(&mut app, BuildingType::Tank);
         assert!(app.world_mut().despawn(stale));
         write_intent(&mut app, UiIntent::MovePlantBuilding(stale));

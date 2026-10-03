@@ -4,6 +4,29 @@ use hw_jobs::{BuildingAnchorBasis, BuildingType, building_shape};
 use hw_ui::selection::PlacementGeometry;
 use hw_world::WorldMap;
 
+#[cfg(test)]
+#[path = "bridge_readiness_tests.rs"]
+mod bridge_readiness_tests;
+
+/// Preview and commit resolve the same live logical terrain. A rejected crossing
+/// uses only a red cursor footprint; validation still rejects it before commit.
+pub(crate) fn live_building_geometry(
+    world: &WorldMap,
+    kind: BuildingType,
+    clicked_grid: (i32, i32),
+) -> PlacementGeometry {
+    let river_y = if kind == BuildingType::Bridge {
+        hw_ui::selection::resolve_bridge_crossing(
+            &crate::world::map::WorldMapRef(world),
+            clicked_grid,
+        )
+        .map_or(clicked_grid.1, |crossing| crossing.anchor.1)
+    } else {
+        hw_world::RIVER_Y_MIN
+    };
+    building_geometry(kind, clicked_grid, river_y)
+}
+
 pub(crate) fn building_geometry(
     kind: BuildingType,
     clicked_grid: (i32, i32),

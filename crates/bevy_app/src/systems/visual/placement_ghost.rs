@@ -17,7 +17,7 @@ use hw_world::zones::{Site, Yard};
 
 use crate::interface::selection::placement_geometry::{
     bucket_storage_geometry, building_geometry, building_occupied_grids, building_size,
-    building_spawn_pos,
+    building_spawn_pos, live_building_geometry,
 };
 
 #[derive(Component)]
@@ -242,7 +242,7 @@ pub fn placement_ghost_system(
     let geometry = if companion_kind == Some(CompanionPlacementKind::BucketStorage) {
         bucket_storage_geometry(grid_pos)
     } else {
-        building_geometry(building_type, grid_pos, RIVER_Y_MIN)
+        live_building_geometry(world_map.as_ref(), building_type, grid_pos)
     };
 
     let validation = if companion_kind == Some(CompanionPlacementKind::BucketStorage) {

@@ -101,16 +101,79 @@ fn structure_requires_site() {
     );
 }
 
-#[test]
-fn bridge_rejects_non_building_obstacle_on_river() {
+fn bridge_world(left: (i32, i32), right: (i32, i32)) -> TestWorld {
     let mut world = TestWorld::default();
-    world.bounds.insert((0, 0));
-    world.river.insert((0, 0));
-    // Natural, reservation, and construction blockers do not necessarily
-    // have a WorldMap building owner.
-    world.raw_obstacles.insert((0, 0));
+    for x in 10..=11 {
+        for y in 0..hw_core::constants::MAP_HEIGHT {
+            world.bounds.insert((x, y));
+            world.walkable.insert((x, y));
+        }
+    }
+    for (x, (lo, hi)) in [(10, left), (11, right)] {
+        for y in lo..=hi {
+            world.river.insert((x, y));
+            world.walkable.remove(&(x, y));
+        }
+    }
+    world
+}
 
-    let geometry = geometry_with_tiles(vec![(0, 0)]);
+#[test]
+fn bridge_resolves_span_and_rejects_every_deck_and_bank_blocker() {
+    let crossing = resolve_bridge_crossing(&bridge_world((20, 21), (20, 21)), (10, 90)).unwrap();
+    assert_eq!(crossing.anchor, (10, 19));
+    assert_eq!(crossing.occupied_grids.len(), 10);
+    assert_eq!(crossing.occupied_grids[9], (11, 23));
+    assert_eq!(crossing.banks, [(10, 18), (11, 18), (10, 24), (11, 24)]);
+    for &grid in crossing.occupied_grids.iter().chain(&crossing.banks) {
+        for reason in [
+            PlacementRejectReason::OutOfBounds,
+            PlacementRejectReason::OccupiedByBuilding,
+            PlacementRejectReason::OccupiedByStockpile,
+            PlacementRejectReason::NotWalkable,
+        ] {
+            let mut world = bridge_world((20, 21), (20, 21));
+            match reason {
+                PlacementRejectReason::OutOfBounds => {
+                    world.bounds.remove(&grid);
+                }
+                PlacementRejectReason::OccupiedByBuilding => {
+                    world.buildings.insert(grid);
+                }
+                PlacementRejectReason::OccupiedByStockpile => {
+                    world.stockpiles.insert(grid);
+                }
+                _ => {
+                    world.raw_obstacles.insert(grid);
+                }
+            }
+            assert_eq!(
+                resolve_bridge_crossing(&world, (10, 90)).unwrap_err(),
+                PlacementTileRejection { grid, reason }
+            );
+        }
+    }
+}
+
+#[test]
+fn bridge_rejects_span_gap_missing_and_forged_footprints() {
+    assert!(resolve_bridge_crossing(&bridge_world((20, 23), (22, 25)), (10, 0)).is_err());
+    assert_eq!(
+        resolve_bridge_crossing(&bridge_world((20, 23), (21, 24)), (10, 0))
+            .unwrap()
+            .anchor,
+        (10, 20)
+    );
+    let mut gap = bridge_world((20, 23), (21, 24));
+    gap.river.remove(&(10, 21));
+    assert!(resolve_bridge_crossing(&gap, (10, 0)).is_err());
+    assert!(resolve_bridge_crossing(&gap, (9, 0)).is_err());
+    for x in [-1, hw_core::constants::MAP_WIDTH - 1, i32::MAX] {
+        assert!(resolve_bridge_crossing(&gap, (x, 0)).is_err());
+    }
+    assert!(resolve_bridge_crossing(&bridge_world((0, 3), (0, 3)), (10, 0)).is_err());
+    let world = bridge_world((20, 21), (20, 21));
+    let crossing = resolve_bridge_crossing(&world, (10, 0)).unwrap();
     let ctx = BuildingPlacementContext {
         world: &world,
         in_site: true,
@@ -118,12 +181,23 @@ fn bridge_rejects_non_building_obstacle_on_river() {
         is_wall_or_door_at: &|_| false,
         is_replaceable_wall_at: &|_| false,
     };
-
-    let validation = validate_building_placement(&ctx, BuildingType::Bridge, (0, 0), &geometry);
-    assert_eq!(
-        validation.reject_reason,
-        Some(PlacementRejectReason::NotWalkable)
-    );
+    let geometry = geometry_with_tiles(crossing.occupied_grids.clone());
+    assert!(validate_building_placement(&ctx, BuildingType::Bridge, (10, 0), &geometry).can_place);
+    for tiles in [
+        vec![],
+        vec![(10, 20)],
+        crossing.occupied_grids.into_iter().rev().collect(),
+    ] {
+        assert!(
+            !validate_building_placement(
+                &ctx,
+                BuildingType::Bridge,
+                (10, 0),
+                &geometry_with_tiles(tiles)
+            )
+            .can_place
+        );
+    }
 }
 
 #[test]

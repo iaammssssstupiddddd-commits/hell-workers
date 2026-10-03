@@ -564,3 +564,35 @@ fn wall_boundary_without_spawned_wall_waits_for_the_normal_runtime_chain() {
         .expect("normal runtime must spawn the wall");
     assert!(app.world().get::<ProvisionalWall>(wall).is_some());
 }
+
+#[test]
+fn bridge_load_shell_preserves_ordered_footprint_progress_and_materials() {
+    let mut world = World::new();
+    let grids: Vec<_> = (20..25).flat_map(|y| [(10, y), (11, y)]).collect();
+    let mut blueprint = Blueprint::new(BuildingType::Bridge, grids.clone());
+    blueprint.progress = 0.25;
+    blueprint.delivered_materials.insert(ResourceType::Rock, 1);
+    let required = blueprint.required_materials.clone();
+    let owner = world.spawn((blueprint, Transform::default())).id();
+    rehydrate_construction_shells(&mut world, &BlueprintSpriteHandles::default());
+    world.flush();
+    assert_eq!(
+        world.get::<Sprite>(owner).unwrap().custom_size,
+        Some(Vec2::new(2.0, 5.0) * TILE_SIZE)
+    );
+    let restored = world.get::<Blueprint>(owner).unwrap();
+    assert_eq!(restored.occupied_grids, grids);
+    assert_eq!(restored.required_materials, required);
+    assert_eq!(restored.progress, 0.25);
+    assert_eq!(
+        restored.delivered_materials.get(&ResourceType::Rock),
+        Some(&1)
+    );
+    assert_eq!(
+        world.get::<BlueprintVisualState>(owner).unwrap().progress,
+        0.25
+    );
+    rehydrate_construction_shells(&mut world, &BlueprintSpriteHandles::default());
+    world.flush();
+    assert_eq!(world.query::<&Sprite>().iter(&world).count(), 1);
+}

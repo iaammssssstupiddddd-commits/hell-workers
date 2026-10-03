@@ -7,6 +7,7 @@
 
 pub mod actor_billboard;
 pub mod building3d_cleanup;
+pub mod building_presentation;
 pub mod camera_sync;
 pub mod door_preview;
 pub mod placement_ghost;

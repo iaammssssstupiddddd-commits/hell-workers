@@ -143,6 +143,15 @@ exact testで一致を再検証します。生成後は
 
 ## Help impact gate
 
+2026-10-04のTAK-14製品選択統合は `Update required`。Bridgeの配置入力から
+`resolve_bridge_crossing`を通じて実地形の連続した川・2列幅・5タイル以内・南北の乾いた通行可能な岸・
+占有/保管場所/障害物を照合し、同じ結果をpreviewと施工予定のcommitで使用する。
+既存 `architect-building` entryへ成立条件と赤いpreview/予定未作成の拒否結果を追加した。
+既存manifest、Published coverage、shortcutとstable IDは維持し、providerとexact snapshotを同時に取り込む。
+snapshotの生成・一致テストは現subjectで再実行し、旧branchの承認は流用しない。
+production observerと候補/native toolingは独立のアート・数値・release承認を付与せず、
+技術証拠や通常Orcaへの統合を製品全体受入と扱わない。
+
 2026-09-18のR01〜R14レビューは`Update required`とした。実入力から到達するMoveのcommit拒否では
 元の建物・付属保管場所を保持して取消するため`world-object-actions`へ失敗時の結果を追記した。
 Soul一覧・詳細・Tooltipの共通分類でDeconstructの誤表示を修正したため`entity-list-selection`に

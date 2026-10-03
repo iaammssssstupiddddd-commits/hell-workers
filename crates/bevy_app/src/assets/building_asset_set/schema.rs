@@ -1,11 +1,11 @@
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
-/// Bridge is deliberately absent until its separate placement/art work resumes.
 /// Wall and Door retain their existing schemas and loaders.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum BuildingAssetKind {
     Tank,
+    Bridge,
     MudMixer,
     RestArea,
     SoulSpa,
@@ -17,8 +17,9 @@ pub enum BuildingAssetKind {
 
 impl BuildingAssetKind {
     #[cfg(test)]
-    pub const ALL: [Self; 8] = [
+    pub const ALL: [Self; 9] = [
         Self::Tank,
+        Self::Bridge,
         Self::MudMixer,
         Self::RestArea,
         Self::SoulSpa,
@@ -31,6 +32,7 @@ impl BuildingAssetKind {
     pub fn slug(self) -> &'static str {
         match self {
             Self::Tank => "tank",
+            Self::Bridge => "bridge",
             Self::MudMixer => "mud-mixer",
             Self::RestArea => "rest-area",
             Self::SoulSpa => "soul-spa",
@@ -45,7 +47,7 @@ impl BuildingAssetKind {
         match self {
             Self::Tank => &["body", "water"],
             Self::MudMixer => &["body", "rotor"],
-            Self::RestArea => &["body"],
+            Self::RestArea | Self::Bridge => &["body"],
             Self::SoulSpa => &["body", "slot"],
             _ => &[],
         }
@@ -53,7 +55,9 @@ impl BuildingAssetKind {
 
     pub fn image_roles(self) -> &'static [&'static str] {
         match self {
-            Self::Tank | Self::MudMixer | Self::RestArea => &["albedo", "world_preview", "catalog"],
+            Self::Tank | Self::MudMixer | Self::RestArea | Self::Bridge => {
+                &["albedo", "world_preview", "catalog"]
+            }
             Self::SoulSpa => &["albedo", "slot_emissive", "world_preview", "catalog"],
             Self::OutdoorLamp => &["world_off", "world_on", "catalog"],
             _ => &["world", "catalog"],
@@ -63,6 +67,7 @@ impl BuildingAssetKind {
     pub fn representative_state(self) -> &'static str {
         match self {
             Self::Tank | Self::RestArea => "Empty",
+            Self::Bridge => "Complete",
             Self::MudMixer => "IdleAngleZero",
             Self::SoulSpa => "OperationalMaskZero",
             Self::WheelbarrowParking => "WithoutVehicle",
@@ -137,6 +142,21 @@ pub struct BuildingAssetPreview {
     pub representative_state: String,
 }
 
+/// Production motion is part of the canonical manifest digest, and therefore
+/// of the exact candidate admission / release receipt identity. No draft defaults.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", deny_unknown_fields)]
+pub enum BuildingProductionState {
+    Tank {
+        partial_y_wu: f32,
+        full_y_wu: f32,
+    },
+    MudMixer {
+        axis: [f32; 3],
+        radians_per_second: f32,
+    },
+}
+
 #[derive(Asset, TypePath, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct BuildingAssetSetManifest {
@@ -152,6 +172,12 @@ pub struct BuildingAssetSetManifest {
     pub world_preview: BuildingAssetPreview,
     pub catalog_preview: BuildingAssetPreview,
     pub receipt: Option<BuildingArtifact>,
+    // Omission preserves the canonical bytes of existing non-M2 manifests.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub production_state: Option<BuildingProductionState>,
+    /// Digest of the independently supplied, preview/art-bound numeric decision.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub numeric_approval_sha256: Option<String>,
 }
 
 /// Product-owned release evidence, not an approval minted by the runtime.
@@ -162,4 +188,6 @@ pub struct BuildingPromotionReceipt {
     pub identity: BuildingAssetSetIdentity,
     pub art_approval_sha256: String,
     pub decision: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub numeric_approval_sha256: Option<String>,
 }
