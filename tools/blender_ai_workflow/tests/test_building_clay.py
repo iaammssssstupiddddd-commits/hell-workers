@@ -19,6 +19,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
 from building_clay_geometry import build, face_uv, load_pilot, read_json
 import build_building_clay as bundle
+import prepare_building_clay_runtime as runtime
 from check_building_art_contract import REPO, check
 from validate_building_clay_glb import validate
 from validate_wall_glb import ContractError
@@ -180,6 +181,42 @@ class BuildingClayTests(unittest.TestCase):
             self.assertIsNone(load_pilot(kind)["final_art"])
             with self.assertRaises(ValueError):
                 load_pilot("Door")
+
+    def test_runtime_recipe_uses_clay_pivots_and_distinct_preview_anchors(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory)
+            for kind in ("Tank", "MudMixer"):
+                contract = load_pilot(kind)
+                names = ["source.blend", "geometry.json", "albedo.png",
+                         contract["preview"]["representative_state"] + ".png"]
+                names.extend(role + ".glb" for role in contract["roles"])
+                for name in names:
+                    (source / name).write_bytes(b"recipe-only input")
+                recipe = runtime.recipe(kind, 1, source)
+                self.assertEqual(recipe["world_preview"]["anchor_px"], contract["preview"]["anchor_px"])
+                self.assertEqual(recipe["catalog_preview"]["anchor_px"], [128, 128])
+                self.assertEqual([part["translation_wu"] for part in recipe["parts"]],
+                                 [spec["translation_wu"] for spec in contract["roles"].values()])
+                self.assertEqual(len(recipe["artifacts"]), 5)
+                with self.assertRaises(ValueError):
+                    runtime.recipe(kind, 0, source)
+
+    def test_runtime_state_evidence_reads_exported_geometry(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory)
+            for kind in ("Tank", "MudMixer"):
+                for role, geometry in build(kind, load_pilot(kind)).items():
+                    write_glb(source / f"{role}.glb", *encoded_geometry(geometry))
+                result = runtime.state_geometry(kind, source)
+                if kind == "Tank":
+                    self.assertEqual(result["states"]["Partial"]["surface_bounds_y_wu"], [11.75, 12.25])
+                    self.assertEqual(result["states"]["Full"]["surface_bounds_y_wu"], [21.75, 22.25])
+                else:
+                    sweep = result["rotor_sweep"]
+                    self.assertTrue(sweep["continuous_full_turn"])
+                    self.assertAlmostEqual(sweep["radius_wu"], math.hypot(14, 2))
+                    self.assertGreater(sweep["clearance_floor_wu"], 0)
+                    self.assertEqual(sweep["support_contact_y_wu"], 42)
 
     def test_duplicate_and_nonfinite_contract_fields_are_rejected(self):
         with tempfile.TemporaryDirectory() as directory:

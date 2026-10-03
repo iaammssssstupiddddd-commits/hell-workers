@@ -112,6 +112,8 @@ def verify_session(root: Path, instrumentation: str, size: str, souls: int, froz
         samples, errors = read_frames(run / "data/frames.csv", int(validation.summary["samples"]))
         native.require(not errors and bool(samples), "raw frame samples invalid")
         fixture = native.read_json(run / "data/building_art_static.json")
+        native.require(fixture["contract_id"] == "building-art-static-nine-v2",
+                       "M6 paired evidence cannot replace the historical static reference")
         native.require(fixture["stable_frames"] >= len(samples), "fixture was not checked through every measured frame")
         metrics = frame_summary(samples)
         if instrumentation == "memory":

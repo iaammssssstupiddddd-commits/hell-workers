@@ -6,6 +6,9 @@ from .common import ParsedMatrix
 
 
 def validate_density(args: argparse.Namespace, matrix: ParsedMatrix) -> bool:
+    m6 = getattr(args, "building_m6_mode", None)
+    if m6 is not None and args.workload != "building-art-static":
+        raise ValueError("--building-m6-mode requires building-art-static")
     if args.workload == "wall-density":
         if args.wall_actual_window and args.wall_color_actual_window:
             raise ValueError("Wall actual-window profiles are mutually exclusive")
@@ -184,7 +187,7 @@ def validate_density(args: argparse.Namespace, matrix: ParsedMatrix) -> bool:
             or matrix.sizes not in (["small"], ["medium"])
             or matrix.renders != ["gpu"]
             or args.instrumentation not in {"capture", "memory"}
-            or args.seed != 20_260_920 or args.repeat != 3 or args.preflight_runs != 0
+            or args.seed != 20_260_920 or args.repeat != (1 if m6 else 3) or args.preflight_runs != 0
             or args.warmup_secs != 30.0 or args.measure_secs != 60.0
             or args.window_backend != "x11" or args.backend != "vulkan"
             or args.present_mode != "novsync"

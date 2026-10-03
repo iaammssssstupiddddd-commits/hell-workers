@@ -373,6 +373,8 @@ def fixed_environment(args: argparse.Namespace) -> dict[str, str]:
         values["WGPU_BACKEND"] = args.backend
     if args.adapter:
         values["WGPU_ADAPTER_NAME"] = args.adapter
+    if getattr(args, "building_m6_mode", None) is not None:
+        values["HW_BUILDING_M6_MODE"] = args.building_m6_mode
     return values
 
 

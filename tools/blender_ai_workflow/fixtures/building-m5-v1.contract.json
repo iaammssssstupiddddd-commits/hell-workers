@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "contract_id": "building-m5-v1",
+  "status": "unapproved-production-proposal",
+  "presentation": "Foreground2d",
+  "canvas_px": [256, 256],
+  "anchor_px": [128, 128],
+  "catalog_margin_px": 16,
+  "kinds": {
+    "WheelbarrowParking": {
+      "world_roles": ["world"],
+      "canvas_wu": [64, 64],
+      "representative_state": "WithoutVehicle",
+      "art_brief": "Empty parking frame, dark timber and wheel ruts. No vehicle, wheelbarrow, cargo or character baked into the image. Separate real vehicle remains visible."
+    },
+    "SandPile": {
+      "world_roles": ["world"],
+      "canvas_wu": [32, 32],
+      "representative_state": "Static",
+      "art_brief": "Low broad ochre sand mound, a few large planes and restrained rough strokes. Infinite source: no depletion stages. Dedicated building artwork, never an item icon replacement."
+    },
+    "BonePile": {
+      "world_roles": ["world"],
+      "canvas_wu": [32, 32],
+      "representative_state": "Static",
+      "art_brief": "Low mound of a few large weathered bones, readable joints and gaps, muted ivory planes. Distinct from sand and an upright lamp. No item icon replacement."
+    },
+    "OutdoorLamp": {
+      "world_roles": ["world_off", "world_on"],
+      "canvas_wu": [32, 32],
+      "representative_state": "Off",
+      "art_brief": "Bone support and rusty iron cage. Off/on share exactly the same alpha silhouette, canvas and ground anchor; only the cage interior changes illumination. No external glow halo or logical light baked into terrain."
+    }
+  },
+  "art_acceptance": [
+    "Rough Vector Sketch: readable silhouette, broad matte color planes, selective irregular lines; compare with approved M2/M3 and Wall in the actual game",
+    "Draw at the fixed world canvas and center ground anchor; never crop or contain world or preview roles",
+    "Transparent RGBA PNG, visible content strictly inside canvas; no magenta fringe",
+    "Catalog alone is derived by cropping alpha bounds and containing within a centered square margin",
+    "Near, normal, maximum zoom-out; bright/dark terrain; dense placement near Wall and Soul; Foreground2d is not structural depth support"
+  ],
+  "protected_images": [
+    "textures/resources/sandpile/sandpile.png",
+    "textures/resources/bone_pile/bone_pile.png",
+    "textures/ui/bone_small.png",
+    "textures/items/wheel_barrow/wheel_barrow.png",
+    "textures/items/wheel_barrow/wheel_barrow_full.png",
+    "textures/items/wheel_barrow/wheel_barrow_icon.png",
+    "textures/items/wheel_barrow/wheel_barrow_parking.png"
+  ]
+}

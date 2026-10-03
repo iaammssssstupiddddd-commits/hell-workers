@@ -1000,6 +1000,11 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main() -> int:
+    # New equipment owns a distinct schema and transaction protocol. Never
+    # route unknown IDs through Door's otherwise branch or relax its validator.
+    if any(arg == "--kind" or arg.startswith("--kind=") for arg in sys.argv[1:]):
+        import building_asset_pipeline
+        return building_asset_pipeline.main(sys.argv[1:])
     args = build_parser().parse_args()
     if args.command == "plan":
         plan = build_plan(

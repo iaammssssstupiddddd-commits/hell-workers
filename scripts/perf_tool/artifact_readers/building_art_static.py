@@ -63,6 +63,10 @@ def read_building_art_static(data_dir: Path, *, expected_case: Case) -> tuple[di
     try:
         value = json.loads((data_dir / "building_art_static.json").read_text(),
                            object_pairs_hook=unique_object, parse_constant=reject_constant)
+        if isinstance(value, dict) and value.get("contract_id") == "building-art-m6-nine-v1":
+            from .building_m6 import validate_sidecar
+            validate_sidecar(value, expected_case)
+            return value, []
         copies = {"small": 4, "medium": 16}[expected_case.size]
         if expected_case != Case("building-art-static", expected_case.size, "gpu", 20260920, copies // 4 * 15, 0):
             raise ValueError("case differs from frozen static contract")

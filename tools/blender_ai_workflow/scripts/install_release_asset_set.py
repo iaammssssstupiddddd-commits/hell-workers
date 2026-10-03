@@ -91,6 +91,9 @@ def install(
 
 
 def main() -> int:
+    if any(arg == "--kind" or arg.startswith("--kind=") for arg in sys.argv[1:]):
+        import building_asset_pipeline
+        return building_asset_pipeline.main(["install", *sys.argv[1:]])
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--manifest", required=True, type=Path)
     parser.add_argument("--dest", required=True, type=Path)

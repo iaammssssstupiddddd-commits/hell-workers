@@ -1,0 +1,148 @@
+{
+  "schema_version": 1,
+  "task": "tak-14-m3-rest-spa",
+  "base": "19e74a34b2b1f78e588fa7ef9b1af34ee076acac",
+  "scope": "implementation-handoff-not-validation-or-release",
+  "generated_assets": false,
+  "builds_executed": false,
+  "tests_executed": false,
+  "native_executed": false,
+  "art_approved": false,
+  "runtime_published": false,
+  "changed_files": [
+    "crates/bevy_app/src/assets/building_asset_set/release.rs",
+    "crates/bevy_app/src/systems/visual/building_presentation/structure.rs",
+    "crates/bevy_app/src/systems/visual/building_presentation/tests.rs",
+    "tools/blender_ai_workflow/fixtures/building-m3-v1.geometry.json",
+    "tools/blender_ai_workflow/scripts/building_m3_art.py",
+    "tools/blender_ai_workflow/scripts/create_building_m3_scene.py",
+    "tools/blender_ai_workflow/scripts/build_building_m3_candidate.py",
+    "tools/blender_ai_workflow/tests/test_building_m3_art.py",
+    "scripts/building_m3_acceptance.py",
+    "scripts/tests/test_building_m3_acceptance.py",
+    "tools/blender_ai_workflow/fixtures/building-m3-v1.worker-handoff.json"
+  ],
+  "design": [
+    "Reuse existing descriptor generation/pool/preview/root consumers, durable coordinate Spa mask, shared construction material and separate visual root. No gameplay/save/placement/energy/particle/UI code changes.",
+    "RestArea one body: four roof-height-derived dark wood posts, rust bindings and thick cloth canopy with open entrance. Existing RestAreaOccupants/Dream origin, reservation distinction, cooldown, residual particles and pause are untouched.",
+    "SoulSpa low tapered bone frame and shared flat slot mesh at ordered shape centers X/-Y. Top slot emission uses a dedicated RGB atlas multiplied by linear white only for actual nonempty TaskWorkers in Operational; Constructing remains shared-material mask0.",
+    "Production binding retains legacy exact Tank/MudMixer pair and allows only the complete four-kind M2+M3 set, all ReleaseApproved with exact canonical locators. No locator, approval record or release installation is created.",
+    "M2 candidate/motion/release behavior remains unchanged. Clay/planes/strokes are independent fresh staging proposals and cannot grant numeric or art approval.",
+    "Rust regression extends all 16 masks with reverse tile creation, empty worker collections, unrelated active_slots, paused empty-worker reload-equivalent state, reassignment and isolated logical hierarchy; new tests cover M3 consumers, generations, fallback, reservation separation and owner cleanup. These synthetic checks do not replace real save/load/cancel/energy acceptance."
+  ],
+  "expected_outputs": {
+    "RestArea": [
+      "source.blend",
+      "body.glb",
+      "albedo.png",
+      "Empty.png",
+      "catalog.png",
+      "paint report",
+      "role export report",
+      "ArtPreview .buildingset and content-addressed payload"
+    ],
+    "SoulSpa": [
+      "source.blend",
+      "body.glb",
+      "slot.glb",
+      "albedo.png",
+      "slot_emissive.png",
+      "Constructing.png",
+      "Mask00.png through Mask15.png",
+      "catalog.png",
+      "paint report",
+      "role export reports",
+      "ArtPreview .buildingset and content-addressed payload"
+    ]
+  },
+  "coordinator_execution": [
+    "Read primary validation-storage-workflow.md, register candidate/cache hold and bounded batch through primary dev.py validation; freeze source and use guarded heavy slot. Commands below are recipes only, with real coordinator-selected fresh names and paths.",
+    "Run build_building_m3_candidate.py build RestArea --name <fresh-clay-name> --stage clay and corresponding SoulSpa command through guarded authoring execution. Inspect projected clay/native shapes before independent numeric adoption; repeat with fresh planes and strokes names after each decision.",
+    "build uses existing blender-safe and role export-staging-glb with geometry-scale 32, positive sealed OCIO, post-export glTF/UV/bounds/hash checks and fresh staging output guards. It does not build Cargo.",
+    "Run build_building_m3_candidate.py verify <kind> --name <name>, then prepare <kind> --name <strokes-name> --generation <fresh-positive-generation> --destination <fresh-isolated-dir> --codec <already-built-codec>. prepare only exports ArtPreview; no promotion/install.",
+    "Run scripts/building_m3_acceptance.py plan --rest-runtime <rest-runtime> --spa-runtime <spa-runtime> --codec <codec> --subject-sha256 <frozen-source> --output <recipe-path> under primary validation coordinator; verify --plan <recipe-path> proves input integrity only.",
+    "Use native skill's registered no-prompt launcher for exact-identity gallery and actual gameplay lifecycle; sequential Capture and Memory builds, owned-window nonce/PID, exact renderer/GPU/backend and fail-closed artifacts. Static building_art_acceptance recipe alone is not lifecycle or performance acceptance.",
+    "Use existing gameplay save/rehydrate, Spa construction cancellation, operational deconstruction, walking and energy regressions plus M3 presentation tests. Review runtime native roughness/emission/construction parity, not only Blender pictures.",
+    "Set explicit performance limits before N/4N and cumulative M2+M3 runs; record p50/p95/p99, GPU where supported, native allocator/RSS and bounded handles/parts after 10 lifecycle rounds. No numeric performance budget was accepted by the worker.",
+    "Coordinator owns Help classification, fixed review, independent art/candidate acceptance, promotion/install/rollback, formal release and primary documentation. Preserve feedback caches until acceptance/closure; seal/finalize/storage check before reporting."
+  ],
+  "requested_validation": [
+    "primary validation coordinator plans/execution and storage checks",
+    "python3 scripts/dev.py check",
+    "python3 scripts/dev.py cargo -- clippy --workspace --all-targets -- -D warnings",
+    "focused bevy_app building_presentation and building_asset_set::release tests, plus existing pool/schema/load/Spa construction/deconstruction/save/energy tests",
+    "tooling unittest discovery including test_building_m3_art.py and scripts.tests.test_building_m3_acceptance",
+    "same-subject change-aware CI or primary dev.py ci check --base 19e74a34b2b1f78e588fa7ef9b1af34ee076acac --mode auto; full fallback if scope unknown",
+    "actual Blender export, image inspection, GLB/UV verification and all-consumer native recipes"
+  ],
+  "documentation_candidates": [
+    "docs/building-asset-sets.md: optional paired M3 release bindings, slot surface emissive and existing authority boundaries",
+    "docs/building-art-direction.md and docs/assets_workflow.md: M3 source/geometry/atlas/preview and numeric/art decisions after acceptance",
+    "docs/plans/3d-rtt/non-wall-floor-building-art-migration-plan-2026-09-19.md: M3 implementation status, remaining actual-window/lifecycle/performance and release gates",
+    "docs/help-screen.md/provider coverage only if coordinator's real player-path review requires it; worker makes no Help classification",
+    "docs/README.md and generated plan indexes when authoritative docs change"
+  ],
+  "limitations": [
+    "No generator, Blender, codec, build, tests, native window or performance measurement was executed by this worker. Rust files were formatted only.",
+    "No committed source, runtime payload, independent approval, promotion, install, rollback or formal release exists from this dispatch.",
+    "Spa Constructing Blender preview approximates the existing shared material; runtime construction/light-field parity requires native inspection.",
+    "The acceptance planner describes real gameplay observations but does not add a new automated M3 lifecycle input driver or treat a synthetic fixture as gameplay proof."
+  ],
+  "coordinator_argv_templates": [
+    [
+      "python3",
+      "tools/blender_ai_workflow/scripts/build_building_m3_candidate.py",
+      "build",
+      "<RestArea|SoulSpa>",
+      "--name",
+      "<fresh-stage-name>",
+      "--stage",
+      "<clay|planes|strokes>"
+    ],
+    [
+      "python3",
+      "tools/blender_ai_workflow/scripts/build_building_m3_candidate.py",
+      "verify",
+      "<RestArea|SoulSpa>",
+      "--name",
+      "<stage-name>"
+    ],
+    [
+      "python3",
+      "tools/blender_ai_workflow/scripts/build_building_m3_candidate.py",
+      "prepare",
+      "<RestArea|SoulSpa>",
+      "--name",
+      "<strokes-name>",
+      "--generation",
+      "<fresh-positive-generation>",
+      "--destination",
+      "<fresh-isolated-directory>",
+      "--codec",
+      "<already-built-codec>"
+    ],
+    [
+      "python3",
+      "scripts/building_m3_acceptance.py",
+      "plan",
+      "--rest-runtime",
+      "<rest-runtime>",
+      "--spa-runtime",
+      "<spa-runtime>",
+      "--codec",
+      "<codec>",
+      "--subject-sha256",
+      "<frozen-source-sha256>",
+      "--output",
+      "<fresh-recipe-path>"
+    ],
+    [
+      "python3",
+      "scripts/building_m3_acceptance.py",
+      "verify",
+      "--plan",
+      "<recipe-path>"
+    ]
+  ],
+  "argv_note": "Templates are non-executed acceptance data. Coordinator substitutes concrete values and wraps plan/execution in the primary validation coordinator and guarded heavy-work path; no direct worker execution is authorized."
+}

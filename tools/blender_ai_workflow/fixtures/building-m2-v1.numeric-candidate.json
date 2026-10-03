@@ -1,0 +1,71 @@
+{
+  "schema_version": 1,
+  "stage": "numeric_freeze_candidate",
+  "decision": "pending_independent_review",
+  "numeric_freeze": false,
+  "runtime_published": false,
+  "units": "world_unit",
+  "kinds": {
+    "Tank": {
+      "geometry_file": "building-tank-v1.geometry.json",
+      "geometry_sha256": "2dd0ffd89731612ce5d66c20476baa8a9ab32ac818fd4abe8b479af33a9bdc7f",
+      "height_wu": 28,
+      "bounds_min_wu": [-28, 0, -28],
+      "bounds_max_wu": [28, 28, 28],
+      "part_cap": 2,
+      "triangle_caps": {"body": 192, "water": 48},
+      "world_preview": {"canvas_px": [256, 256], "canvas_wu": [96, 96], "anchor_px": [128, 160], "representative_state": "Empty"},
+      "catalog": {"canvas_px": [256, 256], "anchor_px": [128, 128]},
+      "states": {
+        "Empty": {"visible": false, "translation_wu": [0, 12, 0], "bounds_min_wu": [-21.95, 11.75, -21.95], "bounds_max_wu": [21.95, 12.25, 21.95]},
+        "Partial": {"visible": true, "translation_wu": [0, 12, 0], "bounds_min_wu": [-21.95, 11.75, -21.95], "bounds_max_wu": [21.95, 12.25, 21.95]},
+        "Full": {"visible": true, "translation_wu": [0, 22, 0], "bounds_min_wu": [-21.95, 21.75, -21.95], "bounds_max_wu": [21.95, 22.25, 21.95]}
+      }
+    },
+    "MudMixer": {
+      "geometry_file": "building-mud-mixer-v1.geometry.json",
+      "geometry_sha256": "a50b19aab0bebb68a9f0c7b64492dade85cb2d357d03c11553f5895d52bb278b",
+      "height_wu": 46,
+      "bounds_min_wu": [-28, 0, -24],
+      "bounds_max_wu": [28, 46, 24],
+      "part_cap": 2,
+      "triangle_caps": {"body": 120, "rotor": 36},
+      "world_preview": {"canvas_px": [256, 256], "canvas_wu": [96, 96], "anchor_px": [128, 176], "representative_state": "IdleAngleZero"},
+      "catalog": {"canvas_px": [256, 256], "anchor_px": [128, 128]},
+      "motion": {"axis": [0, 1, 0], "pivot_wu": [0, 28, 0], "seconds_per_revolution": 4, "clock": "Virtual", "active_requires": "Refining", "idle": "hold", "paused": "hold", "load_angle_radians": 0},
+      "rotor_sweep": {
+        "radius_wu": 14.142135623730951,
+        "bounds_min_wu": [-14.142135623730951, 14, -14.142135623730951],
+        "bounds_max_wu": [14.142135623730951, 42, 14.142135623730951],
+        "floor_clearance_wu": 2,
+        "inner_x_clearance_wu": 7.857864376269049,
+        "inner_z_clearance_wu": 5.857864376269049,
+        "shaft_support_y_wu": 42
+      }
+    }
+  },
+  "texture_budget_per_kind": {
+    "format": "RGBA8",
+    "albedo_px": [512, 512],
+    "world_preview_px": [256, 256],
+    "catalog_px": [256, 256],
+    "image_cap": 3,
+    "base_level_bytes_cap": 1572864,
+    "full_mip_chain_bytes_cap": 2097152,
+    "atlas_gutter_px": 4
+  },
+  "freeze_requires": [
+    "independent numeric and clay actual-window acceptance for both kinds",
+    "generated GLB bounds, triangles and continuous rotor sweep verification",
+    "preview projection and anchor verification for both kinds",
+    "independent approval of proposed texture and geometry budgets"
+  ],
+  "release_requires": [
+    "final authored state contract; no release use of candidate-only clay constants",
+    "color plane, per-face UV, line and brush stroke acceptance",
+    "both-kind all-state all-consumer active simulation and lifecycle evidence",
+    "same-subject renderer/GPU and measured performance-budget comparison",
+    "independent Help, art, candidate and fixed review acceptance",
+    "approved promotion, install and rollback evidence"
+  ]
+}
