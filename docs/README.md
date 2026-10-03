@@ -39,7 +39,7 @@
 ## 世界観・アセット
 - [art-style-criteria.md](art-style-criteria.md): アートスタイルの受入基準と検証観点。
 - [building-art-direction.md](building-art-direction.md): 建築物の形状・手描きテクスチャ・UV・光の役割分担、素材表現、制作順と採用条件。
-- [building-asset-sets.md](building-asset-sets.md): 新設備8種のmanifest・authority・依存バイト検証。描画への接続は未実装。
+- [building-asset-sets.md](building-asset-sets.md): 設備manifest・authority・依存バイト検証、presentation/residency/pool接続と段階受入。全種の正式releaseは未完。
 - [building-art-static-reference.md](building-art-static-reference.md): Bridgeを除く9種の静止性能参照、実地形の配置・状態検査、Capture/Memoryの逐次計測と未測定範囲。
 - [plans/3d-rtt/non-wall-floor-building-art-migration-plan-2026-09-19.md](plans/3d-rtt/non-wall-floor-building-art-migration-plan-2026-09-19.md): 壁・床を除く10種のアート移行、モデルとpreviewの接続、状態表示、段階導入と受入の計画。
 - [world_lore.md](world_lore.md): 世界観設定書。アセットデザインのための世界観・視覚指針（アートスタイル含む）。
@@ -51,7 +51,16 @@
 - [events.md](events.md): **イベントカタログ**。全イベントの Producer / Consumer / Timing 一覧。イベント追加時は必ず更新。
 
 ## 開発ガイド
-- [orca-quickstart.md](orca-quickstart.md): Orca UIから開く運用ガイド。Linear受付・相談からguard付き配車する入口、受入済みread-only Taskと監督付きA/B並列編集、担当分担と停止/再開。
+- [plans/orca-normalization-and-coordinator-extraction-plan-2026-10-03.md](plans/orca-normalization-and-coordinator-extraction-plan-2026-10-03.md): 通常版復帰の6工程と実施記録。独自統括を撤去し、公式package・標準設定・同保存会話の通常turnを受入確認。外付け実装は別工程。
+- [development-infra/orca-conductor-migration.md](development-infra/orca-conductor-migration.md): 外付け統括構想を完全別プロジェクトOrca Conductorへ移管した案内。設計と今後の実装はhell-workers外で管理。
+
+旧統括の運用・受入ガイドと旧Orca計画は歴史資料です。以下で歴史資料とした文書のcommandや
+未チェック項目は現在の作業指示ではなく、旧復旧/自動継続を再実行しません。
+必須規則は通常運用へ変更済みです。旧制御実装はprimaryへ取り込んでいません。
+TAK-14の製品機能と受入ツールは別対象で、[製品統合・整理記録](plans/tak14-product-integration-plan-2026-10-04.md)の未達条件を維持します。
+
+- [orca-quickstart.md](orca-quickstart.md): 通常Orcaのworktree・terminal・providerを使う現行ガイド。独自統括は必須にしない。
+- [development-infra/orca-supervised-quickstart-history.md](development-infra/orca-supervised-quickstart-history.md): 撤去した独自統括の旧操作・受入記録。実行手順ではない。
 - [architecture.md](architecture.md): 全体構造、システム依存関係、GameTime、空間グリッド一覧。
 - [crate-boundaries.md](crate-boundaries.md): crate 間の依存方向とコアロジック分離の原則。
 - [cargo_workspace.md](cargo_workspace.md): Cargo workspace の crate 責務、依存方向、分割ルール（hw_core / hw_energy / hw_infra / hw_world / hw_logistics / hw_jobs / hw_familiar_ai / hw_soul_ai / hw_spatial / hw_ui / hw_visual）。
@@ -65,8 +74,11 @@
 - [visual_test.md](visual_test.md): productionとは独立したTopDown建物・地形visual testの操作とScene RtT構造。
 - [DEVELOPMENT.md](DEVELOPMENT.md): 開発規約・MCP活用、固定品質ツール、依存監査・Dependabot更新、property testの再現手順。
 - [development-infra/rust-analyzer-mcp.md](development-infra/rust-analyzer-mcp.md): 複数エージェントでrust-analyzer MCP backendを共有するadapter、idle解放、IDE側の常駐コスト削減設定。
-- [development-infra/orca-development.md](development-infra/orca-development.md): Orca分離開発の詳細仕様。Linear受付、guard付きhost controller、Codex/Cursor Task bridge、受入済み監督付き並列編集、固定reviewer・host資源制御の再利用。
-- [development-infra/orca-request-lifecycle.md](development-infra/orca-request-lifecycle.md): 工程承認と依頼全体の受入を分ける候補実装。scope改訂、固定review拘束、終了/Doneの拒否gateと未接続範囲。
+- [development-infra/orca-development.md](development-infra/orca-development.md): 歴史資料。撤去した独自統括・分離開発の仕様。通常運用の実行手順ではない。
+- [development-infra/orca-native-host-execution.md](development-infra/orca-native-host-execution.md): 旧統括の歴史資料。host実行・依存source固定・表示サービスの旧契約。
+- [development-infra/orca-request-lifecycle.md](development-infra/orca-request-lifecycle.md): 旧統括の歴史資料。工程承認と全体受入、scope改訂、固定review/終了gateの旧候補実装。
+- [development-infra/orca-linear-read-recovery.md](development-infra/orca-linear-read-recovery.md): 旧統括の歴史資料。通信待機と同一Run復旧。旧操作を再実行しない。
+- [development-infra/orca-coordinator-continuation.md](development-infra/orca-coordinator-continuation.md): 旧統括の歴史資料。統合指摘と受入工程の継続設計。
 - [development-infra/orca-github-linear-acceptance-2026-09-22.md](development-infra/orca-github-linear-acceptance-2026-09-22.md): TAK-7 / PR #26の隔離試験。標準PR link、Draft解除・mergeのLinear反映を実測。全体自動ループの受入とは区別。
 - [development-infra/validation-storage-audit-2026-09-13.md](development-infra/validation-storage-audit-2026-09-13.md): 検証データの容量実測、track close時の撤去規則と実装の差、旧checkout・共有worktreeの残存調査。
 - [development-infra/validation-storage-workflow.md](development-infra/validation-storage-workflow.md): 終了データの整理、現在の用途による保持、フィードバック中の差分ビルド保全。全job保存・固定日数の義務は設けない。
@@ -88,13 +100,13 @@
 - [proposals/README.md](proposals/README.md): 提案書一覧とテンプレート。
 - [proposals/implementation-refactor-audit-proposal-2026-09-17.md](proposals/implementation-refactor-audit-proposal-2026-09-17.md): 全13 crateの実装横断レビューとR01〜R14の個別実装計画への入口。優先順位・依存・根拠・検証条件。
 - [proposals/library-tooling-evaluation-proposal-2026-09-13.md](proposals/library-tooling-evaluation-proposal-2026-09-13.md): ライブラリ・開発ツールの導入／置換候補、現行構成との重複、優先順位と採用条件。
-- [proposals/orca-parallel-development-proposal-2026-09-20.md](proposals/orca-parallel-development-proposal-2026-09-20.md): Orcaでの実装2名・専任レビュー1名・統括の運用素案。Orca導入済み、host資源制御・変更所有権・統合運用は計画化。
-- [plans/orca-parallel-development-plan-2026-09-20.md](plans/orca-parallel-development-plan-2026-09-20.md): 固定受付とOrca実行基盤の統合計画。可視統括、A/B、固定reviewer、実案件一巡を受入済み。無介入cold-start等は継続。
-- [plans/orca-git-review-loop-plan-2026-09-22.md](plans/orca-git-review-loop-plan-2026-09-22.md): Git基点の実装・差戻し・再review・統合ループ計画。実runtimeの最終reviewまで受入済み。公開/PR自動同期は継続。
-- [plans/orca-ui-lifecycle-plan-2026-09-23.md](plans/orca-ui-lifecycle-plan-2026-09-23.md): Orcaの固定受付・役割表示・終了/再開・作業場整理を一体化する計画。通常起動と承認後role tab整理まで受入済み。
-- [plans/orca-abcd-workflow-expansion-plan-2026-09-25.md](plans/orca-abcd-workflow-expansion-plan-2026-09-25.md): Orcaの自然文受付・状態パネル・自動loop、自己修復、A/B並列計画、統括判断によるLinear課題発行とGitHub/CI連携をA〜Dで段階実装する上位ロードマップ。
-- [plans/orca-request-lifecycle-correction-plan-2026-09-26.md](plans/orca-request-lifecycle-correction-plan-2026-09-26.md): 個別loopと依頼全体の完了を分離し、全体受入条件、次工程継続、Linear同期、終了・履歴・配備を横断是正する計画。
-- [development-infra/orca-ui-extension.md](development-infra/orca-ui-extension.md): 配備中のOrca本体UI/API、状態契約、既存controllerとの責務境界、受入済み範囲と残件。
+- [proposals/orca-parallel-development-proposal-2026-09-20.md](proposals/orca-parallel-development-proposal-2026-09-20.md): 歴史資料。旧A/B・専任review・統括の運用素案。継続指示ではない。
+- [plans/orca-parallel-development-plan-2026-09-20.md](plans/orca-parallel-development-plan-2026-09-20.md): 歴史資料。旧固定受付・A/B・統括の受入記録。通常化方針で置換済み。
+- [plans/orca-git-review-loop-plan-2026-09-22.md](plans/orca-git-review-loop-plan-2026-09-22.md): 歴史資料。旧review/統合ループの受入記録。自動同期を継続しない。
+- [plans/orca-ui-lifecycle-plan-2026-09-23.md](plans/orca-ui-lifecycle-plan-2026-09-23.md): 歴史資料。旧受付・役割・終了/再開・整理の受入記録。
+- [plans/orca-abcd-workflow-expansion-plan-2026-09-25.md](plans/orca-abcd-workflow-expansion-plan-2026-09-25.md): 歴史資料。撤去した統括のA〜D roadmap。旧実装/復旧を再開しない。
+- [plans/orca-request-lifecycle-correction-plan-2026-09-26.md](plans/orca-request-lifecycle-correction-plan-2026-09-26.md): 歴史資料。旧全体受入・継続・同期・終了の是正計画。
+- [development-infra/orca-ui-extension.md](development-infra/orca-ui-extension.md): 歴史資料。旧本体UI/APIとcontroller契約。現在の配備ではない。
 - [proposals/progression-and-choice-proposal-2026-08-09.md](proposals/progression-and-choice-proposal-2026-08-09.md): Track D の Dream Edict、Contract、Familiar 昇格を扱う進行・選択提案。
 - [proposals/archive/gameplay-management-improvements-proposal-2026-07-17.md](proposals/archive/gameplay-management-improvements-proposal-2026-07-17.md): Track A〜C のロードマップと完了履歴を保持するアーカイブ提案。
 - [proposals/hvac-plumbing-proposal.md](proposals/hvac-plumbing-proposal.md): 採用済みの空調・衛生インフラ提案（世界観・採否理由）。

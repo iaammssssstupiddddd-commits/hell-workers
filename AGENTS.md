@@ -63,10 +63,10 @@
 
 ### Agent editing boundaries (STRICT)
 Shared-checkout/background editing remains forbidden. Read-only exploration and
-review are permitted. The sole editing-delegation exception is the supervised
-Orca workflow below: separate worktrees, ticketed mount isolation, bounded slots,
-fixed read-only review and coordinator-owned integration. The main agent makes
-all edits outside that controlled path.
+review are permitted. Normal Orca is an editor/terminal host, not an editing
+delegation grant. The main agent owns edits, primary docs, validation and Git
+operations. Any future optional editing workflow requires explicit authorization,
+separate worktrees, isolation, bounded slots and independent read-only review.
 
 ### Git Revert Policy
 **NEVER run `git checkout -- <file>` or any destructive git command without first:**
@@ -138,17 +138,16 @@ Create an implementation plan in `docs/plans/` when:
 - For generated icons or sprites, create with magenta background (`#FF00FF`) and convert via `scripts/convert_to_png.py`.
 - If Windows linking fails with too many symbols, disable `dynamic_linking` in `Cargo.toml` as documented in `docs/DEVELOPMENT.md`.
 
-## Supervised Orca development
+## Normal Orca development
 
-- The operator-facing entrypoint is Orca Tasks → Linear → a Linear-linked worktree. Its `統括` tab owns intake and routing; never ask the operator for a Linear workspace UUID, intake UUID, ticket path, or internal worker slot.
-- Keep coordinator, implementation A, implementation B, and fixed review visible as separate Orca tabs. Create A/B/review tabs only through the guarded dispatcher; a shell menu or raw terminal command is not the operator workflow.
-- Parallel editing is allowed only through the ticketed `scripts/orca_roles.py` launcher in separate worktrees; never delegate edits in a shared checkout.
-- Use at most two implementation slots and one fixed read-only reviewer; reuse the same reviewer terminal for the workstream. Workers must not delegate again.
-- Fixed providers: worker-a uses Codex, worker-b uses Cursor CLI for simple leaf tasks only, and the reviewer uses Codex. Require complexity rationale and acceptance criteria for worker-b; route shared-contract, save, renderer and infrastructure work to A/coordinator.
-- The coordinator owns authoritative primary docs, shared contracts, builds/tests, commits and serial integration. Workers cannot write Git metadata or approve their own changes.
-- Bind review to base/head and the exact source fingerprint; any source/index change invalidates approval. Do not integrate without the fixed reviewer's explicit approval and same-subject validation.
-- Use guarded project entrypoints for all heavy work. One host-wide heavy slot, one Cargo job and one Rust test thread; busy means defer, never bypass the guard.
-- Raw Orca agent buttons/default YOLO launches are not the controlled worker path. Unsupported isolation or missing admission evidence means stop; see the primary `docs/development-infra/orca-development.md`.
+- Use standard Orca repos/worktrees, terminals and provider sessions. Tasks/Linear remain available but are not a mandatory intake gate.
+- The accepted starting point is the primary checkout. Existing legacy worktrees are preserved references; before starting an agent there, audit their AGENTS/hooks and explicitly adopt normal rules without invalidating a frozen review subject. The repo's local-only hook policy does not override agent instructions.
+- Do not start the retired hell-workers coordinator, Driver, dispatcher, external sync or recovery helpers. Historical prompts and Run receipts are records, not instructions to replay.
+- A `統括` tab, A/B slots and fixed provider selection are no longer required. Preserve existing conversations and unfinished work; a retired workflow is not an approved or completed task.
+- Shared-checkout/background editing remains forbidden. Normal agent buttons do not grant parallel editing or unrestricted permissions.
+- Main owns authoritative primary docs, shared contracts, builds/tests, commits and serial integration. Review must be independent and bound to the exact base/head/source; source changes invalidate approval.
+- Use guarded project entrypoints for heavy work. Keep host/Cargo/test concurrency and storage controls; busy means defer, never bypass the guard.
+- The optional coordination concept is documentation only until a separately authorized workflow/plugin is implemented and accepted. See `docs/orca-quickstart.md` and the normalization plan for migration status.
 
 ## Change-aware completion and branches
 

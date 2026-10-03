@@ -60,9 +60,9 @@
 
 ### Orcaで開発する
 
-[Orca 運用ガイド](docs/orca-quickstart.md) — 依頼の出し方、担当分担、専用launcherでの開始、レビュー・再開の手順。
+[Orca 運用ガイド](docs/orca-quickstart.md) — 通常Orcaのworktree・terminal・providerを使う開発手順。
 文書の正本はprimary作業場に置き、Orca内のエディタから参照します。
-Linear標準受付を使う[現行計画](docs/plans/orca-parallel-development-plan-2026-09-20.md)では、既存の権限・資源制御と固定reviewerを再利用します。A/B限定編集・統括検証・固定review・2レーン並列実行の個別受入は済んでいます。ただし、個別工程の承認は依頼全体の完成ではありません。[横断是正計画](docs/plans/orca-request-lifecycle-correction-plan-2026-09-26.md)で、全体計画・自動継続・通常controllerの外部同期・終了判定を接続しています。通常入口からの全経路受入と配備は未完了であり、残件をcold-startだけとは扱いません。実装契約と未検証範囲は[依頼ライフサイクル](docs/development-infra/orca-request-lifecycle.md)を参照してください。
+独自統括を通常起動と必須運用から撤去しています。[通常化計画](docs/plans/orca-normalization-and-coordinator-extraction-plan-2026-10-03.md)で切替・保全・受入の現在位置を確認してください。旧統括の復旧指示は再開しません。外付け統括の構想は[完全別プロジェクトへ移管](docs/development-infra/orca-conductor-migration.md)し、hell-workersの開発対象や通常Orcaの起動条件には含めません。
 
 ### ビルドと実行
 ```bash

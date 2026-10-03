@@ -1,5 +1,10 @@
 # Orcaによる分離開発の運用
 
+> 歴史資料: 2026-10-03の通常化方針で独自統括の運用を廃止する。本書のlauncher・配車・復旧commandは実行しない。
+> 現在の規則は [通常Orca運用ガイド](../orca-quickstart.md)、作業状態は
+> [通常化計画](../plans/orca-normalization-and-coordinator-extraction-plan-2026-10-03.md)を参照する。
+> 以下の実装/受入記録は保全し、未完を完了へ変更しない。
+
 更新日: 2026-09-25。対象: Orca 1.4.205 / Linux / Codex CLI 0.155.1。
 Cursor実Task受入は2026.08.04-aaa8809。現在のinstalled版2026.09.18-9a7762bは設定/sessionのoffline互換検査まで。
 
@@ -76,7 +81,8 @@ Orcaの既定base refがこのbranchを指すため、新規treeはこの版を�
   global schedulerとrole/workspace lockで同時更新・重複driver・固定reviewerの競合を防ぐ。
 - 検証失敗はcommitせず、失敗evidenceと同じdirty sourceを拘束した次世代receiptで同worker sessionへ戻す。
   review差戻しは必須指摘だけを渡し、同じbranch/sessionで後続commitを作って再reviewする。
-  修正は最大3回。同一未解消指摘、scope変更、結果不明は停止する。
+  修正回数に累積上限は設けない。同じsource・原因で進展がなければ統括が方針を更新する。
+  scope変更・結果不明は別途照合し、権限を拡張したり未知操作を再送したりしない。
 - review本文の一意な`ORCA_REVIEW_JSON:`行を厳密解析する。文章から承認を推測しない。
   不正なverdictでも受理済みsettlementを保存し、resource release後に停止する。
   releaseは公式APIの再読で確認し、reused/external terminalを勝手に閉じない。
@@ -156,7 +162,8 @@ schema 1の台帳は表示用に読めるが、Runを推定して自動移行・
   `{head, slot, reason}`を渡す。同session・同scope・既存checkpointの次世代ticketで修正し、
   worker再review→再統合→combined再検証/reviewを続ける。branch履歴は書き換えない。
   統合SHAはread-onlyの参照contextであり、workerのbaseを勝手に更新しない。
-- routeはhead固定・同じ判断の冪等再読・同一指摘/3回budget停止を持つ。
+- routeはhead固定・同じ判断の冪等再読を持つ。累積回数では止めず、同じhead・指摘・方針の
+  無変更再試行を拒否して統括へ再計画を返す。利用者に内部補正枠の追加承認を求めない。
   複数scope、base更新、競合解消、統合後validation失敗の修正は未接続で、無理にBへ割り当てない。
   `approved`は最終review承認であり、PR作成・公開・merge済みを意味しない。
 - 承認済みlaneの再照合がreviewer leaseと競合しても、hostはinbox処理を続ける。
