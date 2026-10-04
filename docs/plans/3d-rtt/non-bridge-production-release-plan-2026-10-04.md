@@ -328,9 +328,14 @@ Help No impact、独立read-onlyコードレビューはpass。fresh原画
 正式artは `changes_requested` とし、色面だけから泥の存在や実精製中の回転を推定しない。
 最大zoom-out、明暗／背景／低品質、配置preview、実精製と保存復元、数値freeze、
 ordinary lifecycle／性能、promotion/install/rollbackも未受入。
-次の候補では現行body0上面へ2本の不規則な泥汚れを追加し、木目と区別する。
-これは露出した槽底の描線であり、新しい泥の充填面・量・状態を作らない。
-独立泥面が必要なら数値原本と状態契約の別途改訂・受入が必要で、今回の描線passから推定しない。
+`281a6fc50111c79963348558854fd3780240f9ee` の2本の泥汚れ仮説は、
+fresh原画 `tak14-mud-mixer-authoring-281a6fc5-20261005-v1`、runtime候補
+`tak14-mud-mixer-runtime-281a6fc5-20261005-v1`、通常倍率actual-window
+`tak14-mud-mixer-normal-281a6fc5-20261005-v1` で検証した。byte/UV/geometryと
+実機technical verifierはpassしたが、前候補との独立画像比較では泥と木床の判読性が
+実質改善しなかった。この描線仮説は不採用とし、同種の描線・明度調整を重ねない。
+制作器は前の部材別albedoへ戻し、候補のtechnical passを正式art/数値承認へ昇格しない。
+独立泥面が必要なら数値原本と状態契約の別途改訂・受入が必要。
 出力root: primary `target/native-acceptance/nonbridge-restarea-authoring-20261004-v1`。
 owner: main / consumer: M3候補の独立採否・現行subject導入。次工程: 原本・画像を比較しruntime候補を生成。
 release_when: 採用原本のasset正本への集約と候補フィードバック終了後。旧batchのpassを新subjectへ流用しない。

@@ -195,16 +195,6 @@ def paint(kind, path, stage="strokes"):
                 for fraction in (0.28, 0.72):
                     xx = left * (1-fraction) + right * fraction
                     brush.line(((xx, top+2), (xx+1, bottom-2)), fill=(*dark, 255), width=1)
-            elif kind == "MudMixer" and surface == "body0:top":
-                # The recessed floor is stained by mud, not a new fill-state
-                # surface. Broad, irregular flows must not resemble wood grain.
-                points = [meshes[role].vertices[i] for i in indices]
-                for stroke, color in (
-                    ([(-16, -7), (-8, -4), (0, -6), (7, -2), (16, -5)], (119, 87, 62)),
-                    ([(-15, 7), (-6, 4), (2, 7), (10, 3), (16, 6)], (59, 44, 36)),
-                ):
-                    brush.line([project_xz(points, polygon, *point) for point in stroke],
-                               fill=(*color, 255), width=2)
             else:
                 for stroke in range(2):
                     yy = y + 8 + stroke * 6 + (cell % 2)
