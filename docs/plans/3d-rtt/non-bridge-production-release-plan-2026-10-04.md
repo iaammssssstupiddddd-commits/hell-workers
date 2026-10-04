@@ -336,6 +336,14 @@ fresh原画 `tak14-mud-mixer-authoring-281a6fc5-20261005-v1`、runtime候補
 実質改善しなかった。この描線仮説は不採用とし、同種の描線・明度調整を重ねない。
 制作器は前の部材別albedoへ戻し、候補のtechnical passを正式art/数値承認へ昇格しない。
 独立泥面が必要なら数値原本と状態契約の別途改訂・受入が必要。
+次の比較用として旧v1原本を保全し、`building-mud-mixer-v2.geometry.json` と
+`building-m2-v2.numeric-candidate.json` に固定の薄い泥残留面をbody内へ加えた。
+槽底上面Y=12と攪拌部の全角度最下端Y=14の間に泥面Y=12.25〜12.75を置き、
+床と0.25wu、攪拌部と1.25wu、内壁X/Zと各2wuの離隔を検査する。
+body/rotorの2role、外形・接地点・preview anchor、回転・Refining条件、保存／gameplayは不変。
+これは泥量や新しい充填状態ではなく固定の残留面という比較仮説であり、
+Pythonの算術・拒否系検査だけでは数値freezeにならない。現行M2制作器は旧v1に固定したままで、
+v2のBlender出力・通常倍率比較・独立art/数値採否・releaseはこれから行う。
 出力root: primary `target/native-acceptance/nonbridge-restarea-authoring-20261004-v1`。
 owner: main / consumer: M3候補の独立採否・現行subject導入。次工程: 原本・画像を比較しruntime候補を生成。
 release_when: 採用原本のasset正本への集約と候補フィードバック終了後。旧batchのpassを新subjectへ流用しない。

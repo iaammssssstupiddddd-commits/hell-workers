@@ -32,9 +32,11 @@ def read_json(path: Path) -> dict:
                       parse_constant=invalid_number)
 
 
-def load_pilot(kind: str) -> dict:
+def load_pilot(kind: str, revision: str = "v1") -> dict:
     require(kind in PILOTS, "only Tank and MudMixer have clay drafts")
-    contract = read_json(FIXTURES / f"building-{PILOTS[kind]}-v1.geometry.json")
+    require(revision == "v1" or (kind == "MudMixer" and revision == "v2"),
+            "unknown clay geometry revision")
+    contract = read_json(FIXTURES / f"building-{PILOTS[kind]}-{revision}.geometry.json")
     require(contract["schema_version"] == 1 and contract["kind"] == kind, "pilot identity differs")
     require(contract["stage"] == "clay_draft" and contract["final_art"] is None,
             "this generator only produces unapproved clay drafts")
@@ -112,6 +114,8 @@ def build(kind: str, contract: dict) -> dict[str, Geometry]:
         for role, geometry in (("body", body), ("rotor", moving)):
             for index, box in enumerate(config[f"{role}_boxes"]):
                 geometry.box(box["center"], box["size"], f"{role}{index}")
+        if "mud_box" in config:
+            body.box(config["mud_box"]["center"], config["mud_box"]["size"], "mud0")
         result = {"body": body, "rotor": moving}
     else:
         raise ValueError(f"unknown clay kind: {kind}")

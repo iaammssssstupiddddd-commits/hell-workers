@@ -33,9 +33,10 @@ def same(actual, expected, path: str) -> None:
         require(actual == expected, path)
 
 
-def expected_kind(kind: str) -> dict:
-    fixture = FIXTURES / f"building-{PILOTS[kind]}-v1.geometry.json"
-    contract = load_pilot(kind)
+def expected_kind(kind: str, mixer_revision: str = "v1") -> dict:
+    revision = mixer_revision if kind == "MudMixer" else "v1"
+    fixture = FIXTURES / f"building-{PILOTS[kind]}-{revision}.geometry.json"
+    contract = load_pilot(kind, revision)
     meshes = build(kind, contract)
     body_min, body_max = meshes["body"].bounds()
     result = {
@@ -63,6 +64,7 @@ def expected_kind(kind: str) -> dict:
                     and high[1] + height < contract["construction"]["rim_y"],
                     f"{state}: water intersects floor/rim")
     else:
+        config = contract["construction"]
         pivot = contract["roles"]["rotor"]["translation_wu"]
         rotor = meshes["rotor"]
         radius = max(math.hypot(x, z) for x, _, z in rotor.vertices)
@@ -79,6 +81,37 @@ def expected_kind(kind: str) -> dict:
                 "rotor sweep intersects trough")
         require(abs(maximum_y - support_y) <= contract["tolerance_wu"],
                 "shaft must meet support")
+        if revision == "v2":
+            baseline = load_pilot("MudMixer")
+            require(config["body_boxes"] == baseline["construction"]["body_boxes"]
+                    and config["rotor_boxes"] == baseline["construction"]["rotor_boxes"]
+                    and contract["roles"]["rotor"] == baseline["roles"]["rotor"]
+                    and contract["states"] == baseline["states"]
+                    and contract["preview"] == baseline["preview"]
+                    and contract["roles"]["body"] == {
+                        **baseline["roles"]["body"], "triangle_cap": 132},
+                    "mud proposal changed the existing construction or state")
+            mud = config["mud_box"]
+            require(set(mud) == {"center", "size"}
+                    and all(type(value) in (int, float) and math.isfinite(value)
+                            for row in (mud["center"], mud["size"]) for value in row)
+                    and all(value > 0 for value in mud["size"]),
+                    "mud proposal requires one finite positive surface slab")
+            mud_bottom = mud["center"][1] - mud["size"][1] / 2
+            mud_top = mud["center"][1] + mud["size"][1] / 2
+            require(mud_bottom > floor_top and mud_top < minimum_y
+                    and abs(mud["center"][0]) + mud["size"][0] / 2 < inner_x
+                    and abs(mud["center"][2]) + mud["size"][2] / 2 < inner_z,
+                    "mud surface clips floor, walls, or full rotor sweep")
+            result["mud_surface"] = {
+                "bounds_min_wu": [mud["center"][i] - mud["size"][i] / 2 for i in range(3)],
+                "bounds_max_wu": [mud["center"][i] + mud["size"][i] / 2 for i in range(3)],
+                "floor_clearance_wu": mud_bottom - floor_top,
+                "rotor_clearance_wu": minimum_y - mud_top,
+                "inner_x_clearance_wu": inner_x - abs(mud["center"][0]) - mud["size"][0] / 2,
+                "inner_z_clearance_wu": inner_z - abs(mud["center"][2]) - mud["size"][2] / 2,
+                "state": "fixed_residue_not_fill_level",
+            }
         result["motion"] = {
             "axis": [0, 1, 0], "pivot_wu": pivot, "seconds_per_revolution": 4,
             "clock": "Virtual", "active_requires": "Refining", "idle": "hold",
@@ -98,12 +131,18 @@ def expected_kind(kind: str) -> dict:
 
 def validate(candidate: Path) -> dict:
     data = read_json(candidate)
-    same({key: data[key] for key in (
-        "schema_version", "stage", "decision", "numeric_freeze", "runtime_published", "units")},
-        {"schema_version": 1, "stage": "numeric_freeze_candidate",
-         "decision": "pending_independent_review", "numeric_freeze": False,
-         "runtime_published": False, "units": "world_unit"}, "proposal status")
-    same(data["kinds"], {kind: expected_kind(kind) for kind in PILOTS}, "geometry")
+    revision = data.get("mud_mixer_revision", "v1")
+    require(revision in {"v1", "v2"}, "unknown MudMixer numeric revision")
+    expected_status = {
+        "schema_version": 1, "stage": "numeric_freeze_candidate",
+        "decision": "pending_independent_review", "numeric_freeze": False,
+        "runtime_published": False, "units": "world_unit",
+    }
+    if revision == "v2":
+        expected_status["mud_mixer_revision"] = "v2"
+    same({key: data[key] for key in expected_status},
+        expected_status, "proposal status")
+    same(data["kinds"], {kind: expected_kind(kind, revision) for kind in PILOTS}, "geometry")
     budget = data["texture_budget_per_kind"]
     same(budget, {
         "format": "RGBA8", "albedo_px": [512, 512], "world_preview_px": [256, 256],
