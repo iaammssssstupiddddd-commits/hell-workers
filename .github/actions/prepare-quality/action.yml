@@ -26,8 +26,11 @@ runs:
         sudo apt-get update
         sudo apt-get install --yes --no-install-recommends \
           g++ libasound2-dev libudev-dev libwayland-dev libx11-dev \
-          libxkbcommon-dev libxkbcommon-x11-0 mold pkg-config ripgrep
+          libxkbcommon-dev libxkbcommon-x11-0 mold pkg-config ripgrep fonts-noto-cjk
         mold --version
+        test -f /usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc
+        echo 'HW_JAPANESE_TEST_FONT=/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc' >> "$GITHUB_ENV"
+        echo 'HW_JAPANESE_TEST_FONT_FAMILY=Noto Sans CJK JP' >> "$GITHUB_ENV"
     - name: Install Python test dependency
       if: inputs.group == 'tooling'
       shell: bash

@@ -13,6 +13,9 @@ root Cargoの`patch.crates-io`で採用する。wordとNormal/BreakAll/KeepAll�
 ICUのcompiled dictionaryを読み、辞書なしconstructorによる日本語モデル欠落を解消する。
 フォントの差替えや診断の抑制ではない。公開API・shaping・editor実装はupstreamと同一。
 日本語の単語境界と編集・改行はdependency回帰test、実表示はowned-window native feedbackで検証する。
+回帰testのfontは実行時に読む。通常はlocalのNoto Sans JP、clean CIではprepare-qualityが
+`fonts-noto-cjk`を導入し、`HW_JAPANESE_TEST_FONT`と`HW_JAPANESE_TEST_FONT_FAMILY`で
+Noto Sans CJK JPを明示する。fontまたはfamily不在は失敗し、testをskipしない。
 Parley既存のline/word境界を使う編集方針を維持する（漢字の単語選択が辞書語全体になる保証はしない）。
 入力shortcut・ゲーム操作・save契約は変えない。
 出典・license・除去条件は[patch記録](../vendor/parley/PATCH.md)を参照する。
