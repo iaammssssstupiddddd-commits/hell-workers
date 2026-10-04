@@ -9,10 +9,11 @@
 `.buildingset` のschema、authority、依存ファイルの実バイト数とSHA-256を検査する。
 `StartupPlugin` はasset型・policy resource・loaderを登録し、`VisualPlugin`はkind単位のpoolと
 表示更新systemを登録する。通常起動はrelease binding未指定ならlocatorを選択せず、読み込み要求も
-発行しない。`HW_BUILDING_ASSET_RELEASES`を明示した起動だけが、legacy M2のTank／MudMixer 2件、
-またはM3を加えたTank／MudMixer／RestArea／SoulSpa 4件の完全な組を、各kind 1件の
+発行しない。`HW_BUILDING_ASSET_RELEASES`を明示した起動だけが、M2の2件、M3を加えた4件、
+M5を加えた8件、Bridgeを加えた9件の完全な組を、各kind 1件の
 `release_approved` identityとcanonical locatorで要求する。
-既存Wall／Doorのloaderと表示経路は継続し、Bridgeは別件解決まで対象外とする。
+既存Wall／Doorのloaderと表示経路は継続する。Bridgeのschema・pool接続は実装済みだが、
+正式asset導入と固有lifecycle/native受入は別工程であり、実装だけでは承認しない。
 
 manifest loaderの`Loaded`は**manifestと依存バイト列の検証済み**だけを意味する。
 M1-a2のpoolはGLBの先頭primitiveを`Mesh`、PNGを`Image`として要求し、依存loadとpreview寸法を確認して
@@ -26,7 +27,7 @@ M1-c候補はoffline codec／export、明示profiling候補投入、昇格・ins
 
 ### Bridge配置の成立条件（統合候補）
 
-Bridgeは上記8種のasset loaderとは別の既存経路を維持する。配置resolverはlive地形の2列を読み、
+Bridgeの配置・完成・通行契約はasset poolの採否から独立する。配置resolverはlive地形の2列を読み、
 両列の川が連続し、合わせた川幅が5タイル以内であることを確認する。既存2×5 footprintと
 南北4岸セルについて範囲、建物、Stockpile、raw障害物を検査し、岸は川ではなく通行可能でなければならない。
 previewとcommitは同resolver/geometryを使い、不一致・成立不能なら予定を作らない。
@@ -41,6 +42,7 @@ roleは下表の順で、meshを先に、imageを後に並べる。余剰・欠�
 | kind | mesh | image | part | 代表状態 |
 | --- | --- | --- | --- | --- |
 | Tank | body, water | albedo, world_preview, catalog | body, water | Empty |
+| Bridge | body | albedo, world_preview, catalog | body | Complete |
 | MudMixer | body, rotor | albedo, world_preview, catalog | body, rotor | IdleAngleZero |
 | RestArea | body | albedo, world_preview, catalog | body | Empty |
 | SoulSpa | body, slot | albedo, slot_emissive, world_preview, catalog | body, slot0〜slot3 | OperationalMaskZero |
@@ -48,7 +50,7 @@ roleは下表の順で、meshを先に、imageを後に並べる。余剰・欠�
 | SandPile / BonePile | なし | world, catalog | なし | Static |
 | OutdoorLamp | なし | world_off, world_on, catalog | なし | Off |
 
-8種以外はdecode時に拒否する。制作contract fixtureのrole・leaf数・代表状態との一致をtestで照合する。
+9種以外はdecode時に拒否する。Wall／Doorは別schemaを維持する。制作contract fixtureのrole・leaf数・代表状態との一致をtestで照合する。
 SoulSpaの4 slotは同一slot meshを参照し、part側で個別transformを持つ。
 
 ## manifest契約
@@ -67,6 +69,12 @@ SoulSpaの4 slotは同一slot meshを参照し、part側で個別transformを持
   canvasは正、world sizeは有限。anchorは左上起点のpixel座標でcanvas内。
   catalogは正方形・中央anchor、worldは上表のworld用画像（Lampはworld_off）を参照する。
 - `receipt`: release_approvedのみ必須。それ以外はnull。
+- `production_state`: Tankの有限な `0 < partial_y_wu < full_y_wu <= 2 * TILE_SIZE`、MudMixerの有限なunit axis
+  （長さ二乗の誤差0.0001以内）と `0 < radians_per_second <= TAU`。art_previewと他kindでは存在してはならない。
+- `numeric_approval_sha256`: M2のisolated_candidate/release_approvedに独立numeric decisionの小文字64桁hashを要求する。
+  art_previewと他kindには指定できない。M2 release receiptにも同じhashを要求する。
+  production_stateとこのhashはmanifest内容hashに含まれる。安全な数値範囲を満たすだけでは独立採否にならない。
+  optional fieldは未指定時にserializeから省略し、非M2の既存canonical bytesを維持する。
 
 JSONはRustの型宣言順に`serde_json::to_vec`したcompact形式＋末尾LFと完全一致させる。
 未知field、別順序、余分な空白は拒否する。SHA-256は小文字hex64桁。
@@ -130,17 +138,20 @@ content-addressed artifact、locator、provenanceを出力する。`art_preview`
 locator・nonce・status pathを明示照合してload policyとpoolへ候補を許可する。
 `feedback`／`art-preview`は`art_preview`、`candidate`は`isolated_candidate`に限る。
 poolのpresentation許可もそのidentity完全一致に限定する。通常起動のproduction bindingは
-`HW_BUILDING_ASSET_RELEASES`のJSON配列で明示し、次のどちらか一方の完全な組だけを許可する。
+`HW_BUILDING_ASSET_RELEASES`のJSON配列で明示し、次のいずれか一つの完全な組だけを許可する。
 
 - legacy M2形式: TankとMudMixerを各1件、合計2件。
 - M2+M3形式: Tank、MudMixer、RestArea、SoulSpaを各1件、合計4件。RestAreaとSoulSpaは片方だけを
   追加できず、M2の2件を省略できない。
+- M2+M3+M5形式: 上記4件にWheelbarrowParking、SandPile、BonePile、OutdoorLampの全4件を加えた8件。
+- Bridgeを含む形式: 上記8件にBridgeを加えた9件。Bridge単独bindingや8件未満への追加は拒否する。
+  Doorは別loaderであり、この9件に含めない。全対象10種の受入ではDoor固有監査も必要。
 
 各identityは正のgeneration、小文字64桁manifest hash、`release_approved` authorityを持ち、locatorは
-`manifests/building-<kind>-v1.buildingset`と完全一致しなければならない。対応4種以外、件数2／4以外、
+`manifests/building-<kind>-v1.buildingset`と完全一致しなければならない。対応9種以外、件数2／4／8／9以外、
 必須kindの欠落、同kindの重複、未知field、非canonical locator、`HW_BUILDING_ART_SESSION`との併用は、
 App/plugin初期化とpool requestより前に拒否する。未指定時はno-opで従来fallbackを維持する。
-指定が妥当な場合だけStartupで配列内の全2件または全4件をpoolへrequestし、一部だけを暗黙採用しない。
+指定が妥当な場合だけStartupで配列内の全件をpoolへrequestし、一部だけを暗黙採用しない。
 runtimeはこの入力から承認を生成せず、正式assetの導入と通常起動への有効化は別の明示工程である。
 
 ## native evidenceの範囲
@@ -155,6 +166,23 @@ asset view／driver／codec／candidate identityを固定する。feedbackだけ
 binary／source／asset／原本hash一致を検査する。jobは`promotion_authority=false`であり、自動美術承認ではない。
 この証拠は稼働状態、save/load、施工・撤去・移動全経路、各kindの性能予算、全体移行完了を保証しない。
 基盤前後のコスト比較は別々に凍結した静止参照jobを使う。本書更新時点でM1-cの実native受入は未実施。
+
+### 通常開発におけるproduction受入toolingの境界
+
+`python3 scripts/building_production_native_acceptance.py capabilities` はlocal supportを読むだけで、
+旧request/Run/hostへの照会、台帳更新、plan生成、build、launchを行わない。現在は `available=false`。
+ordinary-world process/window・capture/ACK producer、GPU/native/RSS/application-handle instrument producer、
+通常開発のauthenticated admission adapterが未提供である。旧統括を再起動して補完しない。
+
+offline acceptance、collector、lifecycle verifierは、trustedなin-process `registration_adapter`を明示的に
+渡せる。plan/receipt bindingの共通検査は維持し、CLI/spec/environmentから任意adapterを選択できない。
+既定のoffline入口は未対応hostをfail-closedで拒否する。歴史的recipe adapterは保存済み証拠の一致検査であり、
+JSONの一致は認証ではない。通常の正式実行経路として提供・承認したものではない。
+runnerはmodule globalの関数を変更せず、各呼出しにadapterとinstrumentを明示して渡す。
+Capture/Memoryはそれぞれのbinary hashで束縛し、開始時と収集終了時のsource再検査を行う。
+receiptのbatchはintentのid、時刻は正のintかつplan freeze後でなければならない。
+Memory lifecycleもCaptureと同じkind/leg coverageとdomain述語を通す。sessionの整合性だけではleg成功としない。
+技術verifyはart/release/promotion authorityを付与しない。
 
 ## 昇格・install・復旧・切戻し
 
@@ -171,19 +199,26 @@ binary／source／asset／原本hash一致を検査する。jobは`promotion_aut
 - `install`はrelease-approvedの正本transaction／証拠／承認を検査してruntime asset rootへ複写し、
   locatorを最後に切り替える。既定はdry-run、変更には`--apply`が必要。
   `--rollback`によるmirror切戻しも正本のrolled-back journalを要求し、任意の世代低下を許可しない。
-- Wall／Doorの既存promotion/install dispatcherは新8種だけをこの入口へ分岐する。Bridgeは含めない。
+- Wall／Doorの既存promotion/install dispatcherは9種をこの入口へ分岐する。Bridgeのasset処理が可能でも、
+  地形・通過・lifecycle・性能・美術の固有受入を他kindから流用しない。
 
 ## 検証とHelp
 
-`assets::building_asset_set`のunit testは8種×3 authorityのschema、異常入力、policy、receiptを検査し、
+profiling-onlyのproduction raw observerとBridge／M2 probeは共通writerでfresh outputと一時pathを検査し、各snapshotの一時ファイルを
+`create_new`で排他的に作成してからrenameする。既存ファイル・dangling symlink・失敗した一時成果を
+上書きせず拒否する。これは収集の安全性であり、ordinary-worldの欠落producerや正式受入を補わない。
+
+`assets::building_asset_set`のunit testは9種×3 authorityのschema、異常入力、policy、receiptを検査し、
 Bevyのmemory AssetServer経由で欠落・改竄・正常ロードを確認する。
 M1-a2はdecode可能な最小GLB／PNGでtyped load・寸法・世代・失効を、M1-bは表示consumer・root／part・
 状態・cleanup・world resetを検査する。M1-cはcodec互換、exact候補許可、昇格／復旧／切戻しと
 native証拠の拒否条件を検査する。これらの合成fixture試験を正式assetの美術・描画受入とは扱わない。
 
-Help影響はNo impact。release binding未指定の通常起動はlocator／load requestを発行せず従来fallbackを維持する。
-明示的な`HW_BUILDING_ASSET_RELEASES`は独立承認済みのTank／MudMixer、またはM3のRestArea／SoulSpaまで
-含む完全な4件を既存consumerへ接続する運用入口であり、player操作やUI設定ではない。不正なbindingは
+本節のasset入力境界と2026-10-04のadapter refactorはHelp影響No impact。Bridge配置契約を取り込んだ変更は
+別途Update requiredとして既存provider/snapshotへ反映した（[Help契約](help-screen.md)参照）。
+release binding未指定の通常起動はlocator／load requestを発行せず従来fallbackを維持する。
+明示的な`HW_BUILDING_ASSET_RELEASES`は独立承認済みの2種／4種／8種／9種の完全な組を
+既存consumerへ接続する運用入口であり、player操作やUI設定ではない。不正なbindingは
 fallbackへ暗黙縮退せず起動前に拒否する。
 建築種類、通常操作、成立条件、gameplay結果、save schema、配置rule、文言は不変なので、Help catalog／provider／
 coverage snapshotは更新しない。候補投入は引き続き明示profiling sessionだけで、codec／export／promotion／installは

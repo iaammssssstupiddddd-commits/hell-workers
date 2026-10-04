@@ -57,7 +57,8 @@
 旧統括の運用・受入ガイドと旧Orca計画は歴史資料です。以下で歴史資料とした文書のcommandや
 未チェック項目は現在の作業指示ではなく、旧復旧/自動継続を再実行しません。
 必須規則は通常運用へ変更済みです。旧制御実装はprimaryへ取り込んでいません。
-TAK-14の製品機能と受入ツールは別対象で、[製品統合・整理記録](plans/tak14-product-integration-plan-2026-10-04.md)の未達条件を維持します。
+TAK-14の製品機能と受入ツールは別対象で、[統合PRの対象・検証境界](development-infra/tak14-pr-preparation.md)を参照します。
+統合実装のPR準備と全10種の正式release完了を区別し、原移行計画の未達条件を維持します。
 
 - [orca-quickstart.md](orca-quickstart.md): 通常Orcaのworktree・terminal・providerを使う現行ガイド。独自統括は必須にしない。
 - [development-infra/orca-supervised-quickstart-history.md](development-infra/orca-supervised-quickstart-history.md): 撤去した独自統括の旧操作・受入記録。実行手順ではない。

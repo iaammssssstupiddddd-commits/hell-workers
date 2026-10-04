@@ -4,6 +4,10 @@
 
 ## 0. クレートの命名規則
 
+`vendor/parley`は外部Parley0.9の日本語辞書backportであり、ゲームdomain crateやworkspace memberではない。
+root CargoのpatchはBevy0.19の公開APIと内部13crateの依存方向を維持する。
+upstream licenseと差分の記録を保ち、ゲーム型をvendorへ追加しない。
+
 *   ドメインロジックをカプセル化する新しいクレートを作成する場合は、必ず `hw_<domain_name>` のプレフィックスをつけること（例: `hw_core`, `hw_jobs`, `hw_visual`）。
 *   `bevy_app` は App Shell として唯一プレフィックスを持たない Root クレートとする。
 *   単なる `utils` や `components` といった、特定のドメインを持たない雑多な共通クレートの新設は禁止する。

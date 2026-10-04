@@ -31,6 +31,9 @@ crates/hw_infra
 ```
 
 root `Cargo.toml`は`members = ["crates/*"]`、`default-members = ["crates/bevy_app"]`を使います。
+`vendor/parley`はmemberからexcludeし、Parley0.9の日本語辞書対応のみをbackportする外部patchです。
+rootのdependency回帰testは同じParley0.9/stdをdev-dependencyで直接検査します。
+詳細・除去条件は[フォント仕様](fonts.md)と[patch記録](../vendor/parley/PATCH.md)を参照してください。
 全13 memberは内部ゲームcrateとして`publish = false`です。自前licenseはこのmetadataから推測しません。
 rootが版を管理する`proptest`は`hw_world`と`hw_infra`のdev-dependencyだけに追加し、
 `std` featureのみでpure property testを実行します。通常runtimeの依存方向は変えません。
