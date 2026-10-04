@@ -21,6 +21,10 @@ class LocalInputProbeTests(unittest.TestCase):
         self.repo = Path(temporary.name).resolve()
         (self.repo / "target/native-acceptance").mkdir(parents=True)
         (self.repo / "target/profiling").mkdir(parents=True)
+        consent_dir = self.repo / input_probe.CONSENT_RELATIVE.parent
+        consent_dir.mkdir(parents=True, mode=0o700)
+        (self.repo / input_probe.CONSENT_RELATIVE).write_text("")
+        (self.repo / input_probe.CONSENT_RELATIVE).chmod(0o600)
         self.binary = self.repo / "target/profiling/bevy_app"
         self.binary.write_bytes(b"test binary")
         self.binary.chmod(0o755)
@@ -32,6 +36,9 @@ class LocalInputProbeTests(unittest.TestCase):
             "harness": "c" * 64, "driver": input_probe.probe.digest(Path(input_probe.__file__)),
             "input_transport_sha256": input_probe.probe.digest(
                 Path(input_probe.__file__).with_name("native_ui_input.py")),
+            "portal_transport_sha256": input_probe.probe.digest(
+                Path(input_probe.__file__).with_name("native_ui_portal.py")),
+            "consent_file": str(self.repo / input_probe.CONSENT_RELATIVE),
             "binary": str(self.binary), "binary_sha256": input_probe.probe.digest(self.binary),
             "owner": input_probe.OWNER, "key": input_probe.KEY,
             "accepted": False, "performance_evidence": False,
@@ -63,6 +70,8 @@ class LocalInputProbeTests(unittest.TestCase):
             ("art_approved", True), ("promotion_authority", True),
             ("head", "d" * 40), ("source", "d" * 64),
             ("driver", "d" * 64), ("input_transport_sha256", "d" * 64),
+            ("portal_transport_sha256", "d" * 64),
+            ("consent_file", str(self.repo / "other-consent.json")),
             ("binary_sha256", "d" * 64), ("key", "F11"),
             ("owner", "foreign"), ("job_root", str(self.repo)),
         ):
@@ -100,6 +109,17 @@ class LocalInputProbeTests(unittest.TestCase):
                      [raw["events"][0], {**raw["events"][1], "key": "F11"}, raw["events"][2]]):
             with self.subTest(rows=rows), self.assertRaises(RuntimeError):
                 input_probe.witnessed_input({"events": rows}, before_event_count=1)
+
+    def test_portal_grant_is_exact_and_cannot_substitute_for_raw_witness(self):
+        accepted = {"granted_devices": 3, "persistence": "saved",
+                    "session": "/org/freedesktop/portal/desktop/session/test"}
+        input_probe.check_portal_evidence(accepted)
+        for key, replacement in (("granted_devices", 1), ("granted_devices", True),
+                                 ("persistence", "disabled"), ("session", "/foreign")):
+            with self.subTest(key=key, replacement=replacement), self.assertRaises(RuntimeError):
+                input_probe.check_portal_evidence({**accepted, key: replacement})
+        with self.assertRaises(RuntimeError):
+            input_probe.witnessed_input({"events": []}, before_event_count=0)
 
     def test_startup_waits_for_three_samples_without_weakening_raw_validation(self):
         raw_path = self.repo / "raw.json"
@@ -182,7 +202,7 @@ class LocalInputProbeTests(unittest.TestCase):
         class Transport:
             closed = False
 
-            def __init__(self, window, owner, root, nonce, record):
+            def __init__(self, window, owner, root, nonce, record, *, portal):
                 self.record = record
                 transport_instances.append(self)
 
@@ -196,9 +216,24 @@ class LocalInputProbeTests(unittest.TestCase):
             def close(self):
                 self.closed = True
 
+        class Portal:
+            ready = True
+            granted_devices = 3
+            persistence = "saved"
+            session = "/org/freedesktop/portal/desktop/session/test"
+            closed = False
+
+            def __init__(self, heartbeat, *, consent_file):
+                self.assert_consent_file = consent_file
+                portal_instances.append(self)
+
+            def close(self):
+                self.closed = True
+
         game = Game()
         transport = Transport
         transport_instances = []
+        portal_instances = []
 
         def start_game(*args, **kwargs):
             (self.root / "raw.json").write_text(json.dumps({"samples": [{}, {}, {}]}))
@@ -218,7 +253,8 @@ class LocalInputProbeTests(unittest.TestCase):
                                                                              "process_fd_count": 1}), \
              patch.object(input_probe, "raw_snapshot", return_value={"samples": [{}, {}, {}], "events": []}), \
              patch.object(input_probe.native, "capture_client_png", return_value=True), \
-             patch.object(input_probe, "X11Input", transport), \
+             patch.object(input_probe, "PortalSession", Portal), \
+             patch.object(input_probe, "PortalX11Input", transport), \
              patch.object(input_probe, "wait_for_raw_event", side_effect=RuntimeError("raw timeout")), \
              patch.object(input_probe.native, "stop_command_process", side_effect=stop_game):
             with self.assertRaisesRegex(RuntimeError, "raw timeout"):
@@ -226,6 +262,9 @@ class LocalInputProbeTests(unittest.TestCase):
         self.assertTrue(game.stopped)
         self.assertEqual(len(transport_instances), 1)
         self.assertTrue(transport_instances[0].closed)
+        self.assertEqual(len(portal_instances), 1)
+        self.assertTrue(portal_instances[0].closed)
+        self.assertEqual(portal_instances[0].assert_consent_file, self.value["consent_file"])
         failure = json.loads((self.root / "failure.json").read_text())
         self.assertEqual((failure["status"], failure["stage"], failure["reason"]),
                          ("invalid", "F12 tap witness", "raw timeout"))

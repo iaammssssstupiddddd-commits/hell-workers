@@ -209,12 +209,17 @@ Capture→Memory、建設・配電・保存復元・cleanupの成立、art/numer
 正式asset identityを受け付けず、domain outcome、Capture/Memory lifecycle、GPU/native allocator、
 application全体のhandle、性能、art/numeric/releaseを受入済みにしない。入力受付が実機で確認できても
 `capabilities available=false` のまま、必要なordinary-world legとinstrument producerを別途実装する。
-同probeの初期6試行はいずれも正式にはinvalid。最新 `tak14-ordinary-input-probe-b885f623-20261005-v6`
+同probeの初期7試行はいずれも正式にはinvalid。v6 `tak14-ordinary-input-probe-b885f623-20261005-v6`
 では所有X11 windowへのF12押下・解放が輸送側receiptに残り、製品rawには49 sample中に
 `KeyPress`／`KeyRelease`がない。押下時間・focus待ち・tap順を変える仮説はここで打ち切る。
-次のsourceではprofiling限定observerがBevy 0.19の `KeyboardInput` 原メッセージを
-`ButtonInput` 由来の状態イベントと区別して記録する。これでX11配送からwinit/Bevyメッセージまでと、
-メッセージからButtonInputまでの境界を診断する。receiptは製品入力成功の証拠ではない。
+v7 `tak14-ordinary-input-probe-69aa99d1-20261005-v7` はprofiling限定observerが
+Bevy 0.19の `KeyboardInput` 原メッセージを `ButtonInput` 由来の状態イベントと区別して記録したが、
+所有X11 windowへのXTest F12 receiptに対し、48 sampleにはいずれの入力イベントもない。
+原 `KeyboardInput` まで届かない観測であり、Xwayland上流の配送を疑う技術診断である。
+輸送とobserverを独立に実証した原因確定でも、製品入力成功でもない。
+次の技術probeは既存 `native_ui_portal.py` の同意付きRemoteDesktop輸送へ固定し、所有window、
+F12、入力transportのhash、primaryの所有者専用同意ジャーナルをplanに拘束する。旧invalid batchを
+再解釈せずfresh rootで試す。portal grantと輸送receiptだけでも製品raw witnessなしならinvalidである。
 2026-10-04の通常world技術batch `nonbridge-ordinary-probe-20261004-v1` は
 source `ee9410363d4e8f7bd144506a64ac3fb3a71527dd`、Intel Arc/Vulkanの所有X11 clientを撮影し、
 nonce/PID一致のraw 3 sample／0 eventと子process RSS/fdを独立verifyしてfinalizeした。

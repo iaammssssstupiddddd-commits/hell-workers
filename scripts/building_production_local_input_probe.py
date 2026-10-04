@@ -1,4 +1,4 @@
-"""Technical-only ordinary-world X11 input/raw witness probe for TAK-14.
+"""Technical-only ordinary-world portal input/raw witness probe for TAK-14.
 
 The primary validation coordinator owns this direct child. This probe neither
 admits a production recipe nor claims lifecycle, art, performance or release
@@ -19,17 +19,18 @@ import time
 if __package__:
     from . import building_production_local_probe as probe
     from . import building_production_validation_context as ownership
-    from .native_ui_input import X11Input
+    from .native_ui_portal import PortalSession, PortalX11Input
 else:
     import building_production_local_probe as probe
     import building_production_validation_context as ownership
-    from native_ui_input import X11Input
+    from scripts.native_ui_portal import PortalSession, PortalX11Input
 
 native = probe.native
-PROFILE = "building-production-local-input-probe-v1"
+PROFILE = "building-production-local-input-probe-portal-v2"
 OWNER = "TAK-14 normal-development coordinator"
 KEY = "F12"
 WINDOW = (1280, 720)
+CONSENT_RELATIVE = Path(".git/validation-storage/input-consent/remote-desktop.json")
 
 
 def require(value: bool, reason: str) -> None:
@@ -49,16 +50,18 @@ def verifier(root: Path) -> list[str]:
 def check_plan(value: dict, plan_path: Path, *, fresh: bool = True,
                plan_exists: bool = True) -> tuple[Path, Path, Path]:
     require(set(value) == {"schema", "profile", "repo", "job_root", "head", "source",
-                           "harness", "driver", "input_transport_sha256", "binary",
+                           "harness", "driver", "input_transport_sha256",
+                           "portal_transport_sha256", "consent_file", "binary",
                            "binary_sha256", "owner", "key", "accepted",
                            "performance_evidence", "art_approved", "promotion_authority"},
             "input probe plan shape differs")
     repo = native.validate_repo(value["repo"])
     root, binary = Path(value["job_root"]), Path(value["binary"])
-    for path in (plan_path, root, binary):
+    for path in (plan_path, root, binary, Path(value["consent_file"])):
         ownership.exact_path(path)
     require(value["schema"] == 1 and value["profile"] == PROFILE
             and value["owner"] == OWNER and value["key"] == KEY
+            and value["consent_file"] == str(repo / CONSENT_RELATIVE)
             and all(value[key] is False for key in
                     ("accepted", "performance_evidence", "art_approved", "promotion_authority")),
             "input probe cannot grant authority or change its key")
@@ -75,6 +78,8 @@ def check_plan(value: dict, plan_path: Path, *, fresh: bool = True,
             and value["driver"] == probe.digest(Path(__file__))
             and value["input_transport_sha256"] == probe.digest(
                 Path(__file__).with_name("native_ui_input.py"))
+            and value["portal_transport_sha256"] == probe.digest(
+                Path(__file__).with_name("native_ui_portal.py"))
             and value["binary_sha256"] == probe.digest(binary),
             "input probe frozen source, binary or transport differs")
     if fresh:
@@ -95,6 +100,8 @@ def plan(args: argparse.Namespace) -> dict:
              "harness": native.native_harness_fingerprint(repo),
              "driver": probe.digest(Path(__file__)),
              "input_transport_sha256": probe.digest(Path(__file__).with_name("native_ui_input.py")),
+             "portal_transport_sha256": probe.digest(Path(__file__).with_name("native_ui_portal.py")),
+             "consent_file": str(repo / CONSENT_RELATIVE),
              "binary": str(binary), "binary_sha256": probe.digest(binary), "owner": OWNER,
              "key": KEY, "accepted": False, "performance_evidence": False,
              "art_approved": False, "promotion_authority": False}
@@ -104,6 +111,7 @@ def plan(args: argparse.Namespace) -> dict:
     require(not resources["failures"], f"native resources unavailable: {resources['failures']}")
     require(native.save_catalog_window_capture_tool_error() is None,
             "ordinary-world X11 capture tools are unavailable")
+    require((repo / CONSENT_RELATIVE).is_file(), "portal consent journal is unavailable")
     check_plan(value, output, plan_exists=False)
     with output.open("x") as handle:
         handle.write(json.dumps(value, sort_keys=True, separators=(",", ":")) + "\n")
@@ -152,6 +160,17 @@ def witnessed_input(raw: dict, *, before_event_count: int) -> tuple[dict, dict]:
             and matched[0]["sample_index"] <= matched[1]["sample_index"],
             "one ordered raw key press/release witness is missing")
     return matched[0], matched[1]
+
+
+def check_portal_evidence(value: object) -> None:
+    require(isinstance(value, dict)
+            and set(value) == {"granted_devices", "persistence", "session"}
+            and type(value["granted_devices"]) is int
+            and value["granted_devices"] & 3 == 3
+            and value["persistence"] in {"saved", "not-granted"}
+            and isinstance(value["session"], str)
+            and value["session"].startswith("/org/freedesktop/portal/desktop/session/"),
+            "input probe portal evidence differs")
 
 
 def wait_for_raw_event(path: Path, nonce: str, pid: int, operation: str,
@@ -275,6 +294,8 @@ def run(args: argparse.Namespace) -> dict:
         game = subprocess.Popen([str(binary)], cwd=runtime, env=environment, stdout=log,
                                 stderr=subprocess.STDOUT, start_new_session=True)
         transport = None
+        portal = None
+        portal_evidence = None
         stage = "startup raw/window"
         try:
             deadline = time.monotonic() + 45
@@ -296,10 +317,19 @@ def run(args: argparse.Namespace) -> dict:
             require(native.capture_client_png(window, screenshot_before, import_cmd="import"),
                     "owned X11 client before capture failed")
             before_count = len(raw["events"])
-            stage = "owned X11 input activation"
+            stage = "owned portal input activation"
             window_number = numeric_window_id(window)
-            transport = X11Input(window_number, pid, game.pid, nonce, records.append)
+            portal = PortalSession(
+                lambda _method: require(game.poll() is None, "ordinary-world game exited during portal consent"),
+                consent_file=value["consent_file"])
+            transport = PortalX11Input(window_number, pid, game.pid, nonce, records.append,
+                                       portal=portal)
             transport.activate()
+            require(portal.ready and portal.granted_devices & 3 == 3,
+                    "portal keyboard/pointer grant is unavailable")
+            portal_evidence = {"granted_devices": portal.granted_devices,
+                               "persistence": portal.persistence,
+                               "session": portal.session}
             raw = raw_snapshot(raw_path, nonce, pid)
             before_count = len(raw["events"])
             stage = "F12 tap witness"
@@ -325,8 +355,12 @@ def run(args: argparse.Namespace) -> dict:
                 if transport is not None:
                     transport.close()
             finally:
-                if game.poll() is None:
-                    native.stop_command_process(game)
+                try:
+                    if portal is not None:
+                        portal.close()
+                finally:
+                    if game.poll() is None:
+                        native.stop_command_process(game)
     require(owned is not None and len(records) == 2
             and [row["step"] for row in records] == ["key-press", "key-release"]
             and all(row["nonce"] == nonce and row["window"] == window_number
@@ -340,6 +374,7 @@ def run(args: argparse.Namespace) -> dict:
               "before_sha256": probe.digest(screenshot_before),
               "after_sha256": probe.digest(screenshot_after),
               "before_event_count": before_count, "input_receipts": records,
+              "portal_evidence": portal_evidence,
               "measurements": metrics, "gpu_metrics": None,
               "native_allocator_metrics": None, "application_handle_total": None,
               "accepted": False, "performance_evidence": False,
@@ -355,6 +390,7 @@ def verify(root: Path) -> dict:
     require(set(result) == {"schema", "profile", "status", "plan", "context", "nonce",
                             "game_pid", "window_id", "raw_sha256", "before_sha256",
                             "after_sha256", "before_event_count", "input_receipts",
+                            "portal_evidence",
                             "measurements", "gpu_metrics", "native_allocator_metrics",
                             "application_handle_total", "accepted", "performance_evidence",
                             "art_approved", "promotion_authority"}, "input probe result shape differs")
@@ -371,6 +407,7 @@ def verify(root: Path) -> dict:
             and all(result[key] is None for key in
                     ("gpu_metrics", "native_allocator_metrics", "application_handle_total")),
             "input probe authority differs")
+    check_portal_evidence(result["portal_evidence"])
     raw_path = root / "raw.json"
     require(probe.digest(raw_path) == result["raw_sha256"], "input probe raw changed")
     raw = raw_snapshot(raw_path, result["nonce"], result["game_pid"])
@@ -382,7 +419,7 @@ def verify(root: Path) -> dict:
             and all(row.get("nonce") == result["nonce"]
                     and row.get("window") == result["window_id"]
                     and row.get("pid") == result["game_pid"] for row in receipts),
-            "input probe X11 receipts differ")
+            "input probe portal receipts differ")
     for name, field in (("before.png", "before_sha256"), ("after.png", "after_sha256")):
         path = root / name
         require(probe.digest(path) == result[field]
