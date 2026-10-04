@@ -225,6 +225,13 @@ technical pass、用途登録、finalize、storage check済み。独立read-only
 通常地形の最遠判読性は証明できない。これらは静止ArtPreview比較に限り、通常worldの
 給排水遷移、異なる背景・照明・重なり、低品質設定、native性能、数値freeze、正式art採否、
 release/install/rollbackは引き続き未受入。
+通常world固定F12入力probeの初期6 batchは全てinvalidとして独立にseal/finalizeし、診断保持と
+primary storage checkを完了した。最新 `tak14-ordinary-input-probe-b885f623-20261005-v6` は
+所有X11 windowへの押下・解放receiptを残したが、製品raw 49 sampleには対応する入力イベントがない。
+focus待ち・tap順の調整は同じ欠落を再現したため打ち切った。次はprofiling限定observerに
+Bevyの `KeyboardInput` 原メッセージを区別して記録し、配送／入力状態更新のどちらが欠けるか
+同一新sourceの実機で切り分ける。これは9種のlifecycle、正式recipe、art/numeric承認、releaseを
+完了させるものではない。
 出力root: primary `target/native-acceptance/nonbridge-restarea-authoring-20261004-v1`。
 owner: main / consumer: M3候補の独立採否・現行subject導入。次工程: 原本・画像を比較しruntime候補を生成。
 release_when: 採用原本のasset正本への集約と候補フィードバック終了後。旧batchのpassを新subjectへ流用しない。

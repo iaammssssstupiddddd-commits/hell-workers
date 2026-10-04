@@ -1,7 +1,7 @@
 //! Profiling-only, bounded observations of the ordinary world. This does not
 //! create owners, drive input, grant authority, or claim performance evidence.
 use super::snapshot_io::{require_fresh_path, temporary_path, write_observation};
-use bevy::{ecs::message::MessageCursor, prelude::*};
+use bevy::{ecs::message::MessageCursor, input::keyboard::KeyboardInput, prelude::*};
 use hw_core::{
     WorldEpoch,
     events::{DreamTransferredVisualMessage, TaskCompletedVisualMessage},
@@ -38,6 +38,7 @@ struct Observations {
     completed: MessageCursor<BuildingCompletedVisualMessage>,
     tasks: MessageCursor<TaskCompletedVisualMessage>,
     dreams: MessageCursor<DreamTransferredVisualMessage>,
+    keyboard: MessageCursor<KeyboardInput>,
     failure: Option<String>,
     tracked_owners: std::collections::HashSet<Entity>,
     written_events: usize,
@@ -399,6 +400,9 @@ fn observe(world: &mut World) {
                     "source": source, "is_final": event.is_final}));
             }
         }
+        if let Some(messages) = world.get_resource::<Messages<KeyboardInput>>() {
+            record_keyboard_messages(&mut observations, messages, index, now);
+        }
         if let Some(input) = world.get_resource::<ButtonInput<MouseButton>>() {
             for (pressed, operation) in [(input.just_pressed(MouseButton::Left), "PointerPress"),
                 (input.just_released(MouseButton::Left), "PointerRelease")] {
@@ -493,9 +497,57 @@ fn observe(world: &mut World) {
     }
 }
 
+fn record_keyboard_messages(
+    observations: &mut Observations,
+    messages: &Messages<KeyboardInput>,
+    sample_index: usize,
+    now: f64,
+) {
+    let events: Vec<_> = observations
+        .keyboard
+        .read(messages)
+        .take(4097)
+        .cloned()
+        .collect();
+    for event in events {
+        observations
+            .events
+            .push(json!({"sample_index": sample_index, "real_seconds": now,
+            "producer": "KeyboardInput", "operation": "KeyboardInput",
+            "key": format!("{:?}", event.key_code),
+            "state": format!("{:?}", event.state),
+            "repeat": event.repeat, "window": format!("{:?}", event.window)}));
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bevy::input::{ButtonState, keyboard::Key};
+
+    #[test]
+    fn keyboard_messages_remain_distinct_from_button_state_witnesses() {
+        let mut messages = Messages::<KeyboardInput>::default();
+        for state in [ButtonState::Pressed, ButtonState::Released] {
+            messages.write(KeyboardInput {
+                key_code: KeyCode::F12,
+                logical_key: Key::F12,
+                state,
+                text: None,
+                repeat: false,
+                window: Entity::PLACEHOLDER,
+            });
+        }
+        let mut observations = Observations::default();
+        record_keyboard_messages(&mut observations, &messages, 3, 1.5);
+        assert_eq!(observations.events.len(), 2);
+        assert_eq!(observations.events[0]["producer"], "KeyboardInput");
+        assert_eq!(observations.events[0]["state"], "Pressed");
+        assert_eq!(observations.events[1]["state"], "Released");
+        assert_eq!(observations.events[1]["sample_index"], 3);
+        record_keyboard_messages(&mut observations, &messages, 4, 2.0);
+        assert_eq!(observations.events.len(), 2);
+    }
 
     struct OutputDirectory(PathBuf);
 
