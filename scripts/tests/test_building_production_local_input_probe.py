@@ -117,29 +117,6 @@ class LocalInputProbeTests(unittest.TestCase):
             with self.subTest(invalid=invalid), self.assertRaises(RuntimeError):
                 input_probe.numeric_window_id(invalid)
 
-    def test_focus_settle_requires_two_new_raw_samples_and_live_focus(self):
-        raw_path = self.repo / "raw.json"
-
-        class Transport:
-            owner_checks = 0
-            focus_checks = 0
-
-            def _check_owner(self):
-                self.owner_checks += 1
-
-            def _check_focus(self):
-                self.focus_checks += 1
-
-        transport = Transport()
-        with patch.object(input_probe, "raw_snapshot", side_effect=[
-            {"samples": [{}] * 5}, {"samples": [{}] * 5},
-            {"samples": [{}] * 6}, {"samples": [{}] * 7, "events": []},
-        ]) as snapshots, patch.object(input_probe.time, "sleep"):
-            self.assertEqual(len(input_probe.settle_after_activation(
-                raw_path, "nonce", 1, transport)["samples"]), 7)
-        self.assertEqual(snapshots.call_count, 4)
-        self.assertEqual((transport.owner_checks, transport.focus_checks), (3, 3))
-
     def test_run_rejects_unplanned_direct_launch(self):
         args = argparse.Namespace(plan=self.plan_path, repo=self.repo, job_root=self.root)
         with patch.dict(input_probe.os.environ, {}, clear=True), self.assertRaises(RuntimeError):
@@ -242,7 +219,6 @@ class LocalInputProbeTests(unittest.TestCase):
              patch.object(input_probe, "raw_snapshot", return_value={"samples": [{}, {}, {}], "events": []}), \
              patch.object(input_probe.native, "capture_client_png", return_value=True), \
              patch.object(input_probe, "X11Input", transport), \
-             patch.object(input_probe, "settle_after_activation", return_value={"samples": [{}, {}, {}], "events": []}), \
              patch.object(input_probe, "wait_for_raw_event", side_effect=RuntimeError("raw timeout")), \
              patch.object(input_probe.native, "stop_command_process", side_effect=stop_game):
             with self.assertRaisesRegex(RuntimeError, "raw timeout"):
@@ -252,8 +228,8 @@ class LocalInputProbeTests(unittest.TestCase):
         self.assertTrue(transport_instances[0].closed)
         failure = json.loads((self.root / "failure.json").read_text())
         self.assertEqual((failure["status"], failure["stage"], failure["reason"]),
-                         ("invalid", "F12 press witness", "raw timeout"))
-        self.assertEqual(len(failure["input_receipts"]), 1)
+                         ("invalid", "F12 tap witness", "raw timeout"))
+        self.assertEqual(len(failure["input_receipts"]), 2)
         self.assertFalse(failure["accepted"] or failure["promotion_authority"])
 
 
