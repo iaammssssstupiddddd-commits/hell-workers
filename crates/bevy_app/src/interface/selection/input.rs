@@ -1,8 +1,11 @@
 use crate::app_contexts::TaskContext;
+#[cfg(feature = "profiling")]
+use crate::assets::building_asset_set::acceptance::BuildingArtSession;
 use crate::entities::damned_soul::Destination;
 use crate::entities::familiar::Familiar;
 use crate::input_actions::ResolvedInputFrame;
 use crate::interface::ui::UiInputState;
+use crate::plugins::startup::{PerfScenarioConfig, PerfWorkload};
 use crate::systems::command::{TaskArea, TaskMode};
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
@@ -343,8 +346,19 @@ pub(crate) fn update_hover_entity(
     selected_entity: Res<SelectedEntity>,
     mut hovered_entity: ResMut<HoveredEntity>,
     mut pointer_target: ResMut<WorldPointerTarget>,
+    #[cfg(feature = "profiling")] art_session: Option<Res<BuildingArtSession>>,
+    perf_config: Option<Res<PerfScenarioConfig>>,
 ) {
-    if input.ui_input_state.world_input_blocked() {
+    #[cfg(feature = "profiling")]
+    let has_art_session = art_session.is_some();
+    #[cfg(not(feature = "profiling"))]
+    let has_art_session = false;
+    if input.ui_input_state.world_input_blocked()
+        || suppress_hover_for_art_static(
+            has_art_session,
+            perf_config.as_deref().map(PerfScenarioConfig::workload),
+        )
+    {
         hovered_entity.0 = None;
         *pointer_target = WorldPointerTarget::default();
         return;
@@ -378,10 +392,31 @@ pub(crate) fn update_hover_entity(
     pointer_target.world_pos = Some(world_pos);
 }
 
+fn suppress_hover_for_art_static(has_session: bool, workload: Option<PerfWorkload>) -> bool {
+    has_session && workload == Some(PerfWorkload::BuildingArtStatic)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use hw_core::selection::SelectionHitKind;
+
+    #[test]
+    fn hover_suppression_is_limited_to_explicit_static_art_session() {
+        assert!(suppress_hover_for_art_static(
+            true,
+            Some(PerfWorkload::BuildingArtStatic)
+        ));
+        assert!(!suppress_hover_for_art_static(
+            false,
+            Some(PerfWorkload::BuildingArtStatic)
+        ));
+        assert!(!suppress_hover_for_art_static(
+            true,
+            Some(PerfWorkload::Construction)
+        ));
+        assert!(!suppress_hover_for_art_static(true, None));
+    }
 
     fn candidate(entity: Entity) -> SelectionCandidate {
         SelectionCandidate {

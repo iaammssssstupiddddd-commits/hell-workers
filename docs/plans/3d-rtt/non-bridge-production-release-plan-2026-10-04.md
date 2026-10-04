@@ -183,6 +183,19 @@ seal/finalize/storage check済み。近景の空槽遮蔽は解消し4標本を�
 面割れが残る。数値fixture・geometry・水量を変えず、槽底を連続した同色・world基準の木目に、
 外壁だけを控えめな錆鉄帯にするpaint候補と拒否系テストを追加した。原本の新規生成・近景／通常
 比較と独立採否まで正式候補ではない。
+`b8dbce220e18ecf39e80fa5d04d185ae014925cd` でTankのpaint候補を新規生成し、
+原画とruntime packageのbyte/UV/geometry/state検証をtechnical passとして保持した。
+runtime identityは `art_preview`、manifestは
+`22ff091af4af76527361c9b6c6da8c224c792a9fd81e58e7b3a3a9cd4755329f`。
+専用worktreeの初回actual-windowはignored assetの不足でinvalidとし、失敗記録を保全。
+primaryと同一内容のasset viewを復元したfresh batchでは通常倍率と近景がIntel/Vulkanの
+所有X11 window・独立verifierでtechnical pass、用途登録・finalize・storage check済み。
+独立画像比較では槽底の放射状面割れが減り、Partial/Fullの色差も増した。一方、近景の
+PartialはhoverのMove tooltipとselection強調に重なり、鉄帯のface境界に細い切れ目と
+太さのばらつきがある。背景・照明・遠景・実給排水とstate transitionも未受入。
+従ってこれは静止技術証拠であり、独立art/numeric承認、正式候補、promotion/installではない。
+近景のhover重なりは通常worldの美術欠陥と混同しない。明示profilingのbuilding-art静止
+sessionだけhover更新を抑え、通常起動・通常inputは不変のまま同identityをfresh sourceで再撮影する。
 出力root: primary `target/native-acceptance/nonbridge-restarea-authoring-20261004-v1`。
 owner: main / consumer: M3候補の独立採否・現行subject導入。次工程: 原本・画像を比較しruntime候補を生成。
 release_when: 採用原本のasset正本への集約と候補フィードバック終了後。旧batchのpassを新subjectへ流用しない。
