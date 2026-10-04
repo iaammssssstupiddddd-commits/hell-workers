@@ -104,6 +104,76 @@ class BridgePlanningEvidenceTests(unittest.TestCase):
                 acceptance.bridge_planning.check_sequence(entries)
 
 
+class RestAreaPlanningEvidenceTests(unittest.TestCase):
+    def test_helper_is_bound_to_all_native_harness_inventories(self):
+        from scripts.perf_tool import execution, renderdoc_capture
+        relative = ".codex/skills/hell-workers-run-native-acceptance/scripts/ui_rest_area_planning.py"
+        for inventory in (acceptance.native.NATIVE_HARNESS_FILES,
+                          execution.MEASUREMENT_HARNESS_FILES,
+                          renderdoc_capture.MEASUREMENT_HARNESS_FILES):
+            self.assertIn(relative, inventory)
+
+    def entries(self):
+        footprint = [[40, 40], [41, 40], [40, 41], [41, 41]]
+        entries = []
+        for index, case in enumerate(acceptance.rest_area_planning.CHECKPOINTS):
+            entity = 20 if index < 3 else 30
+            occupied = 0 < index < 4
+            cells = [{"grid": grid, "walkable": not occupied,
+                      "owner": entity if occupied else None} for grid in footprint]
+            value = {"frame": 100 + 10 * index, "world_epoch": 1 if index < 3 else 2,
+                     "save_outcomes": ["Save:Succeeded"] if index == 2 else ["Load:Succeeded"] if index == 3 else [],
+                     "task_outcomes": [{"entity": 30, "action": "Cancel", "result": "CancellationRequested",
+                                        "epoch": 2, "frame": 135}] if index == 4 else [],
+                     "rest_area_planning": {"anchor": [40, 40], "footprint": footprint,
+                                            "draw_pos": [20.0, 20.0], "legal": not occupied,
+                                            "cells": cells, "buildings": [],
+                                            "blueprints": [{"entity": entity, "footprint": footprint,
+                                                            "progress": 0, "materials_complete": False}]
+                                            if occupied else []}}
+            entries.append({"case": case, "last_step": index * 5, "value": value})
+        return entries
+
+    def test_exact_ordinary_reservation_save_load_and_cancel(self):
+        acceptance.rest_area_planning.check_sequence(self.entries())
+        self.assertEqual(acceptance.session_matrix("rest-area-planning", True),
+                         [("rest-area-planning", *acceptance.VIEWPORTS[0])])
+
+    def test_missing_or_fabricated_rest_area_evidence_is_rejected(self):
+        def malformed_footprint(entries):
+            for entry in entries:
+                evidence = entry["value"]["rest_area_planning"]
+                evidence["footprint"][3] = [42, 41]
+                evidence["cells"][3]["grid"] = [42, 41]
+                for blueprint in evidence["blueprints"]:
+                    blueprint["footprint"][3] = [42, 41]
+
+        def changed_saved_entity(entries):
+            evidence = entries[2]["value"]["rest_area_planning"]
+            evidence["blueprints"][0]["entity"] = 25
+            for cell in evidence["cells"]:
+                cell["owner"] = 25
+
+        mutations = (
+            lambda entries: entries.pop(),
+            malformed_footprint,
+            lambda entries: entries[1]["value"]["rest_area_planning"]["blueprints"][0].update(progress=1),
+            lambda entries: entries[2]["value"].update(save_outcomes=[]),
+            lambda entries: entries[3]["value"].update(world_epoch=1),
+            lambda entries: entries[3]["value"]["rest_area_planning"]["blueprints"][0].update(entity=20),
+            changed_saved_entity,
+            lambda entries: entries[4]["value"]["rest_area_planning"]["cells"][0].update(owner=30),
+            lambda entries: entries[4]["value"].update(task_outcomes=[]),
+            lambda entries: entries[4]["value"]["task_outcomes"][0].update(epoch=1),
+            lambda entries: entries[4].update(last_step=0),
+        )
+        for mutation in mutations:
+            entries = self.entries()
+            mutation(entries)
+            with self.subTest(mutation=mutation), self.assertRaises(RuntimeError):
+                acceptance.rest_area_planning.check_sequence(entries)
+
+
 class VendoredSourceIdentityTests(unittest.TestCase):
     def test_all_native_fingerprints_include_vendored_dependency_changes(self):
         from scripts.perf_tool import execution, renderdoc_capture

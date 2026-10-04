@@ -286,6 +286,12 @@ runtime package `tak14-restarea-runtime-77e5bd28-20261005-v1` は独立byte/geom
 通常worldの実操作で既存選択・情報UIが建物種別とResting／Dream状態を示す代替経路を確認する。
 黒いviewport余白の原因や通常起動での挙動、明暗・重なり・低品質・配置preview・実利用状態は
 これらの静止画像からは未検証。正式art/numeric採否とreleaseは保留する。
+RestAreaの通常world経路は既存分類で `Temporary`、配置域はSiteではなくYard。
+通常生成worldのSiteから探した初回テストは配置成立せず、分類とproduction validationを照合して
+Yardへ修正した。terrainやzoneを受入用に書き換えず、実際のYard内で既存判定が通る
+2×2候補だけを受動観測するUI caseを追加中。プレイヤーの配置、予約、保存復元、取消を
+実ウィンドウ入力で確認する工程であり、完成建物のResting/Dream、最大ズームアウトの
+情報パネル、正式asset表示、性能やreleaseの代用にはしない。
 出力root: primary `target/native-acceptance/nonbridge-restarea-authoring-20261004-v1`。
 owner: main / consumer: M3候補の独立採否・現行subject導入。次工程: 原本・画像を比較しruntime候補を生成。
 release_when: 採用原本のasset正本への集約と候補フィードバック終了後。旧batchのpassを新subjectへ流用しない。

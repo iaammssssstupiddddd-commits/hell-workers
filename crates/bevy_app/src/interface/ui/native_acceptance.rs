@@ -24,6 +24,7 @@ use crate::systems::settings::SettingsStorageRoot;
 mod bridge_planning;
 mod progress_bars;
 mod refactor_rows;
+mod rest_area_planning;
 mod terrain_materials;
 
 pub struct NativeUiAcceptancePlugin {
@@ -146,6 +147,10 @@ fn prepare_fixture(world: &mut World, scale: f32) {
     world.resource_mut::<GameSettings>().ui_scale = scale;
     if bridge_planning::enabled() {
         bridge_planning::prepare(world);
+        return;
+    }
+    if rest_area_planning::enabled() {
+        rest_area_planning::prepare(world);
         return;
     }
     if terrain_materials::enabled() {
@@ -617,6 +622,7 @@ fn snapshot(world: &mut World, observer: &UiObserver) -> Value {
     });
     value["refactor_rows"] = refactor_rows::snapshot(world, viewport);
     value["bridge_planning"] = bridge_planning::snapshot(world);
+    value["rest_area_planning"] = rest_area_planning::snapshot(world);
     value["progress_bars"] = progress_bars::snapshot(world);
     value["terrain_materials"] = terrain_materials::snapshot(world, observer);
     value

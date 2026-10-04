@@ -17,6 +17,7 @@ import wall_door_joint_acceptance as joint
 import ui_refactor_rows as refactor_rows
 import ui_progress_bars as progress_bars
 import ui_bridge_planning as bridge_planning
+import ui_rest_area_planning as rest_area_planning
 import ui_terrain_materials as terrain_materials
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
@@ -29,7 +30,8 @@ CHECKPOINTS = ("tasks", "last-page", "minimized", "restored", "entities",
                "history", "history-oldest", "history-closed", "guide", "guide-closed")
 VIEWPORTS = ((1920, 1080, 1.0), (1280, 720, 1.25), (1280, 720, 0.85),
              (1280, 720, 1.0), (1920, 1080, 0.85), (1920, 1080, 1.25))
-CASES = ("navigation", "refactor-rows", "progress-bars", "terrain-materials", "refactor-suite", "bridge-planning")
+CASES = ("navigation", "refactor-rows", "progress-bars", "terrain-materials", "refactor-suite",
+         "bridge-planning", "rest-area-planning")
 
 
 def session_matrix(case, smoke):
@@ -59,6 +61,9 @@ def check_observation(case: str, value: dict) -> None:
     native.require(value["task_rows"] <= 20, "task resident row limit exceeded")
     if case in bridge_planning.CHECKPOINTS:
         bridge_planning.check_observation(case, value)
+        return
+    if case in rest_area_planning.CHECKPOINTS:
+        rest_area_planning.check_observation(case, value)
         return
     if case in terrain_materials.CHECKPOINTS:
         terrain_materials.check_observation(case, value)
@@ -438,6 +443,7 @@ def verify_root(root):
         native.require(case == "navigation" or not layout_only, "refactor case requires actual input")
         expected_checkpoints = (refactor_rows.CHECKPOINTS if case == "refactor-rows" else
                                 bridge_planning.CHECKPOINTS if case == "bridge-planning" else
+                                rest_area_planning.CHECKPOINTS if case == "rest-area-planning" else
                                 terrain_materials.CHECKPOINTS if case == "terrain-materials" else
                                 progress_bars.CHECKPOINTS if case == "progress-bars" else CHECKPOINTS)
         native.require([item["case"] for item in entries] == (["entities"] if layout_only else list(expected_checkpoints)), "checkpoints differ")
@@ -476,6 +482,9 @@ def verify_root(root):
         if case == "bridge-planning":
             bridge_planning.check_sequence(entries)
             continue
+        if case == "rest-area-planning":
+            rest_area_planning.check_sequence(entries)
+            continue
         if layout_only:
             continue
         history = next(item["value"] for item in entries if item["case"] == "history")
@@ -490,6 +499,7 @@ def verify_root(root):
                         "task labels, rename, search and fold feedback" if manifest.get("case") == "refactor-rows" else
                         "four progress callers, simulation completion, save/load and cancellation feedback" if manifest.get("case") == "progress-bars" else
                         "ordinary generated-world Bridge placement, reservation save/load and cancellation only" if manifest.get("case") == "bridge-planning" else
+                        "ordinary generated-world RestArea reservation, save/load and cancellation only; no completed art or occupancy" if manifest.get("case") == "rest-area-planning" else
                         "navigation/layout feedback only; C05/C07/C08 and full C01-C06 acceptance remain open"}
 
 
@@ -602,6 +612,8 @@ def run(args):
                         progress_bars.exercise(driver)
                     elif case == "bridge-planning":
                         bridge_planning.exercise(driver)
+                    elif case == "rest-area-planning":
+                        rest_area_planning.exercise(driver)
                     elif case == "terrain-materials":
                         terrain_materials.exercise(driver)
                     else:
