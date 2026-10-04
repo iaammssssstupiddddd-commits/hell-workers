@@ -312,6 +312,22 @@ UI driverは移動だけを最大3回再取得し、実際にhoverを観測す�
 回転部をalbedoの大きな色面で分け、fresh候補を同一条件の実画像で再比較する。
 遠景の小さな内部線は承認根拠にせず、通常worldの実精製時だけ回転する状態、
 明暗・背景・低品質・配置preview、numeric freeze、ordinary lifecycle／性能、正式releaseは未受入。
+`cf265dd2a12315be818bb553da86ccf4de0e0afa` ではMudMixer既存body/rotorの部材別albedoを
+変更し、数値geometryと状態ruleは不変。変更別contracts/tooling CI、Blender回帰204件、
+Help No impact、独立read-onlyコードレビューはpass。fresh原画
+`tak14-mud-mixer-authoring-cf265dd2-20261005-v1` とruntime package
+`tak14-mud-mixer-runtime-cf265dd2-20261005-v1` は独立byte/UV/geometry verify、
+用途保持、finalize済み。manifest `5fdf119b668270d6d898fce5613aa2e9e9e4b58f23b293060df69356253f0d28`
+は依然 `art_preview`。同identityの通常倍率
+`tak14-mud-mixer-normal-cf265dd2-20261005-v1` と近景
+`tak14-mud-mixer-near-cf265dd2-20261005-v1` はIntel/Vulkan所有windowで独立technical verify、
+用途保持、finalize、storage check済み。独立画像比較では旧「緑の平箱」は解消し、木枠・暗い内面・
+十字攪拌部、近景の鉄支持部を区別できる。一方、暗い底面は泥か木床かを判読できない。
+現行数値原本に泥の独立した面・状態がなく、`docs/building-art-direction.md` の容器とは別の
+水・泥表面契約を満たしたとは言えない。泥の状態・面の採否を原本側で決めるまで
+正式artは `changes_requested` とし、色面だけから泥の存在や実精製中の回転を推定しない。
+最大zoom-out、明暗／背景／低品質、配置preview、実精製と保存復元、数値freeze、
+ordinary lifecycle／性能、promotion/install/rollbackも未受入。
 出力root: primary `target/native-acceptance/nonbridge-restarea-authoring-20261004-v1`。
 owner: main / consumer: M3候補の独立採否・現行subject導入。次工程: 原本・画像を比較しruntime候補を生成。
 release_when: 採用原本のasset正本への集約と候補フィードバック終了後。旧batchのpassを新subjectへ流用しない。
