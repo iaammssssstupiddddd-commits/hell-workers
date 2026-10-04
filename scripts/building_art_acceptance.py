@@ -26,10 +26,14 @@ sys.path.insert(0, str(HELPERS))
 import building_asset_pipeline as pipeline  # noqa: E402
 import native_acceptance as native  # noqa: E402
 from wall_density_acceptance import asset_view_fingerprint  # noqa: E402
-import building_art_static_acceptance as static  # noqa: E402
+if __package__:
+    from . import building_art_static_acceptance as static  # noqa: E402
+else:
+    import building_art_static_acceptance as static  # noqa: E402
 
 MODES = {"feedback": "art_preview", "art-preview": "art_preview", "candidate": "isolated_candidate"}
 PROFILE = "building-art"
+VIEWS = {"overview": 5.0, "near": 0.5, "normal": 1.0, "far": 2.0}
 
 
 def subject(repo: Path) -> dict:
@@ -47,6 +51,7 @@ def validate_subject(value: dict, *, feedback: bool) -> None:
 
 
 def check_plan(value: dict, binary: Path) -> dict:
+    pipeline.require(value.get("view", "overview") in VIEWS, "unknown camera view")
     pipeline.require(value["kind"] != "Bridge", "Bridge requires its independent M4 recipe; nine-kind static evidence is inapplicable")
     pipeline.require(value["profile"] == PROFILE and value["mode"] in MODES, "recipe mode differs")
     repo = native.validate_repo(value["repo"])
@@ -73,11 +78,12 @@ def plan(args) -> dict:
     static.check_root(repo, root)
     pipeline.require(not root.exists(), "recipe job root already exists")
     manifest, text, _ = pipeline.load_set(args.source_root, args.kind, args.codec)
-    value = {"schema_version": 1, "profile": PROFILE, "mode": args.mode, "repo": str(repo),
+    value = {"schema_version": 1, "status": "ready", "profile": PROFILE, "mode": args.mode, "repo": str(repo),
              "kind": args.kind, "source_root": str(args.source_root.absolute()), "job_root": str(root),
              "subject": frozen, "identity": manifest["identity"], "manifest_sha256": pipeline.digest(text.encode()),
              "adapter": args.adapter, "codec": str(args.codec.absolute()),
              "codec_sha256": pipeline.digest(args.codec.read_bytes()),
+             "view": getattr(args, "view", "overview"),
              "scope": "paused-static-presentation", "promotion_authority": False,
              "feedback_only": args.mode == "feedback"}
     check_plan(value, args.codec)
@@ -99,6 +105,20 @@ def game_command(binary: Path, root: Path) -> list[str]:
         "--perf-output-dir", str(root / "data"), "--perf-warmup-secs", "30", "--perf-measure-secs", "60",
         "--spawn-souls", "15", "--spawn-familiars", "0", "--perf-window-width", "1280", "--perf-window-height", "720",
         "--perf-window-scale-factor", "1", "--perf-rtt-quality", "high"]
+
+
+def game_environment(environment: dict, view: Path, value: dict, nonce: str, root: Path) -> dict:
+    """Child-only controls: preserve required INFO-level adapter evidence."""
+    environment = environment.copy()
+    for key in list(environment):
+        if key.startswith(("HW_BUILDING_ART", "HW_WALL", "HW_DOOR", "HW_DISABLE_", "HW_PERF_")):
+            del environment[key]
+    environment.update({"BEVY_ASSET_ROOT": str(view), "HW_WINDOW_BACKEND": "x11", "HW_PRESENT_MODE": "novsync",
+        "WGPU_BACKEND": "vulkan", "WGPU_ADAPTER_NAME": value["adapter"], "RUST_LOG": "info,wgpu=error",
+        "HW_BUILDING_ART_SESSION": json.dumps({"mode": value["mode"], "identity": value["identity"],
+            "locator": pipeline.locator(value["kind"]), "nonce": nonce, "view": value.get("view", "overview"),
+            "status_path": str(root / "probe.json")})})
+    return environment
 
 
 def capture(root: Path, pid: int) -> dict | None:
@@ -124,6 +144,14 @@ def validate_probe(probe: dict, value: dict, nonce: str) -> None:
         and type(probe.get("stable_frames")) is int and probe["stable_frames"] >= 30,
         "building-art runtime acknowledgement differs")
     pipeline.require(probe["fixture"]["target_count"] == 36, "building-art fixture inventory differs")
+    view = value.get("view", "overview")
+    pipeline.require(view in VIEWS and probe.get("view", "overview") == view,
+                     "building-art camera view differs")
+    if "view" in value:
+        pipeline.require(probe.get("camera_scale") == VIEWS[view]
+                         and probe["fixture"].get("view") == view
+                         and probe["fixture"].get("camera_scale") == VIEWS[view],
+                         "building-art camera scale differs")
 
 
 def verify(root: Path) -> dict:
@@ -188,13 +216,7 @@ def run(args) -> dict:
         pipeline.put(pipeline.rooted(view / "assets", pipeline.locator(value["kind"])),
                      pipeline.rooted(Path(value["source_root"]), pipeline.locator(value["kind"])).read_bytes(), replace=True)
         nonce = secrets.token_hex(16)
-        for key in list(environment):
-            if key.startswith(("HW_BUILDING_ART", "HW_WALL", "HW_DOOR", "HW_DISABLE_", "HW_PERF_")):
-                del environment[key]
-        environment.update({"BEVY_ASSET_ROOT": str(view), "HW_WINDOW_BACKEND": "x11", "HW_PRESENT_MODE": "novsync",
-            "WGPU_BACKEND": "vulkan", "WGPU_ADAPTER_NAME": value["adapter"],
-            "HW_BUILDING_ART_SESSION": json.dumps({"mode": value["mode"], "identity": value["identity"],
-                "locator": pipeline.locator(value["kind"]), "nonce": nonce, "status_path": str(root / "probe.json")})})
+        environment = game_environment(environment, view, value, nonce, root)
         native.admit_stage_start("actual-window", state=state, job_file=job)
         screenshot = None
         deadline = time.monotonic() + 300
@@ -322,6 +344,7 @@ def main() -> int:
     parser.add_argument("--kind", choices=tuple(pipeline.KINDS))
     parser.add_argument("--mode", choices=tuple(MODES))
     parser.add_argument("--adapter", default="Intel")
+    parser.add_argument("--view", choices=tuple(VIEWS), default="overview")
     args = parser.parse_args()
     if args.command == "plan":
         pipeline.require(all((args.repo, args.source_root, args.codec, args.kind, args.mode)), "incomplete recipe inputs")

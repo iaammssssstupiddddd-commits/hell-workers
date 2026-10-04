@@ -231,7 +231,8 @@ pub(crate) fn inspect_building_art_static_system(mut params: InspectParams) {
                 let status = json!({"schema_version": 1, "profile": "building-art",
                     "mode": session.mode, "identity": session.identity, "nonce": session.nonce,
                     "status": "ready", "stable_frames": params.state.stable_frames,
-                    "fixture": params.state.evidence, "scope": "paused-static-presentation"});
+                    "fixture": params.state.evidence, "view": session.view,
+                    "camera_scale": session.view.scale(), "scope": "paused-static-presentation"});
                 let write = || -> Result<(), Box<dyn std::error::Error>> {
                     let temporary = session.status_path.with_extension("tmp");
                     let file = std::fs::OpenOptions::new()
@@ -294,9 +295,9 @@ fn inspect(params: &InspectParams) -> Result<Option<Value>, String> {
         .camera
         .single()
         .map_err(|_| "main camera count differs")?;
-    if camera.translation.truncate() != hw_world::WorldMap::grid_to_world(46, 37)
-        || camera.scale != Vec3::splat(layout::CAMERA_SCALE)
-    {
+    let (camera_center, camera_scale) =
+        layout::camera_frame(params.art_session.as_deref(), params.config.size());
+    if camera.translation.truncate() != camera_center || camera.scale != Vec3::splat(camera_scale) {
         return Err(format!(
             "static fixture camera changed: translation={:?}, scale={:?}",
             camera.translation, camera.scale
@@ -441,7 +442,15 @@ fn inspect(params: &InspectParams) -> Result<Option<Value>, String> {
                 let hidden_water = candidate.manifest.identity.kind == BuildingAssetKind::Tank
                     && spec.water_count() == 0
                     && candidate.mesh("water") == Some(&mesh.0);
-                if visibility.get() == hidden_water {
+                if (hidden_water && visibility.get())
+                    || (!hidden_water
+                        && !visibility.get()
+                        && layout::requires_visible(
+                            params.art_session.as_deref(),
+                            true,
+                            spec.ordinal,
+                        ))
+                {
                     return Ok(None);
                 }
                 let local = params
@@ -495,7 +504,8 @@ fn inspect(params: &InspectParams) -> Result<Option<Value>, String> {
                 || &material.0 != expected_material
                 || params.meshes.get(&mesh.0).is_none()
                 || params.materials.get(&material.0).is_none()
-                || !visibility.get()
+                || (!visibility.get()
+                    && layout::requires_visible(params.art_session.as_deref(), false, spec.ordinal))
             {
                 return Ok(None);
             }
@@ -520,7 +530,14 @@ fn inspect(params: &InspectParams) -> Result<Option<Value>, String> {
                     return Ok(None);
                 }
             }
-            if params.images.get(&sprite.image).is_none() || !visibility.get() {
+            if params.images.get(&sprite.image).is_none()
+                || (!visibility.get()
+                    && layout::requires_visible(
+                        params.art_session.as_deref(),
+                        candidate.is_some(),
+                        spec.ordinal,
+                    ))
+            {
                 return Ok(None);
             }
         }
@@ -684,6 +701,11 @@ fn inspect(params: &InspectParams) -> Result<Option<Value>, String> {
         "target_structural_roots": layout::copies(params.config.size()) * 5,
         "target_foreground_owners": layout::copies(params.config.size()) * 4,
         "target_active_unique_meshes": active_meshes.len(), "souls": params.state.actors.len(), "completion_effects": 0});
+    if let Some(session) = params.art_session.as_ref() {
+        evidence["view"] = json!(session.view);
+        evidence["camera_scale"] = json!(camera_scale);
+        evidence["camera_center"] = json!([camera_center.x, camera_center.y]);
+    }
     if let Some(m6) = params.m6.as_ref() {
         // CPU image payload is decoded storage, never compressed PNG or GPU allocation.
         // GLB payload bytes are separately inventoried by the offline helper.
@@ -738,7 +760,7 @@ impl BuildingArtStaticState {
         let bytes = serde_json::to_vec(evidence)?;
         let summary = json!({"schema_version": 1, "contract_id": if self.m6 { "building-art-m6-nine-v1" } else { "building-art-static-nine-v2" },
             "evidence_kind": if self.art_candidate { "candidate-paused-static-only" } else { "paused-static-only" }, "active_simulation_evidence": false,
-            "camera_scale": layout::CAMERA_SCALE, "stable_frames": self.stable_frames,
+            "camera_scale": evidence.get("camera_scale").unwrap_or(&json!(layout::CAMERA_SCALE)), "stable_frames": self.stable_frames,
             "layout_sha256": hw_infra::lighting::digest_hex(&Sha256::digest(&bytes).into()), "initial": evidence, "final": evidence});
         let directory = super::output::perf_output_directory(config);
         std::fs::create_dir_all(&directory)?;

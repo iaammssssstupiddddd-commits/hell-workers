@@ -281,6 +281,30 @@ def load_set(root: Path, kind: str, binary: Path) -> tuple[dict, str, str | None
     return manifest, text, receipt
 
 
+def verify_set(root: Path, kind: str, binary: Path) -> dict:
+    """Read-only packaged-byte verification; never create an approval or pointer."""
+    root = no_symlinks(root)
+    manifest, text, _ = load_set(root, kind, binary)
+    ident = manifest["identity"]
+    provenance = root if ident["authority"] != "release_approved" else rooted(
+        root, f"building_sets/{KINDS[kind]['slug']}/{ident['generation']}")
+    for path, field in (("provenance/source", "source_sha256"),
+                        ("provenance/geometry.json", "geometry_contract_sha256")):
+        require(digest(rooted(provenance, path).read_bytes()) == manifest[field],
+                "packaged source provenance differs")
+    if ident["authority"] != "art_preview":
+        approval_path = rooted(provenance, "provenance/art-approval.json")
+        approval = approval_path.read_bytes()
+        require(digest(approval) == manifest["art_approval_sha256"], "packaged art approval digest differs")
+        require(read(approval_path) == {
+            "schema_version": 1, "decision": "building_art_approved",
+            "art_preview_identity": preview_projection(manifest, binary)["identity"]},
+            "packaged art approval identity differs")
+    return {"status": "verified", "scope": "packaged-byte-validity-only",
+            "identity": ident, "manifest_file_sha256": digest(text.encode()),
+            "artifact_count": len(manifest["artifacts"]), "promotion_authority": False}
+
+
 def pointer(root: Path, kind: str) -> dict | None:
     path = rooted(root, f"authority/building-{KINDS[kind]['slug']}.json")
     return read(path) if path.exists() else None
@@ -588,7 +612,7 @@ def install(source: Path, destination: Path, kind: str, binary: Path, *, execute
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("export", "plan", "apply", "recover", "rollback", "install", "bindings"))
+    parser.add_argument("command", choices=("verify", "export", "plan", "apply", "recover", "rollback", "install", "bindings"))
     parser.add_argument("--kind", choices=tuple(KINDS))
     parser.add_argument("--release-group", choices=tuple(RELEASE_GROUPS), default="m2")
     parser.add_argument("--codec", type=Path, required=True)
@@ -598,7 +622,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--apply", action="store_true")
     parser.add_argument("--rollback", action="store_true", help="mirror an explicitly rolled-back canonical transaction")
     args = parser.parse_args(argv)
-    if args.command == "bindings":
+    if args.command == "verify":
+        require(args.kind is not None and args.source_root is not None, "verify needs --kind/source-root")
+        require(not args.apply and not args.rollback and not any((args.recipe, args.asset_root, args.output,
+                args.plan, args.evidence, args.approval, args.numeric_approval)), "verify is read-only")
+        result = verify_set(args.source_root, args.kind, args.codec)
+    elif args.command == "bindings":
         require(args.asset_root and args.codec, "bindings needs --asset-root/--codec")
         result = release_bindings(args.asset_root, args.codec, args.release_group)
     elif args.command == "export":

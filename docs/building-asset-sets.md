@@ -161,11 +161,25 @@ asset view／driver／codec／candidate identityを固定する。feedbackだけ
 転用しない。art-preview／candidateはclean sourceが必要で、candidateは別途美術承認との照合も行う。
 起動は既存native helperの資源guardとno-prompt launcherを使い、基準asset viewを隔離コピーする。
 
+比較時の `--view overview|near|normal|far` は明示profiling sessionのカメラだけを選ぶ。
+既定overviewは従来の全体位置・scale 5を維持する。near／normal／farは候補kindの先頭4棟を中心に、
+scale 0.5／1／2で固定する。対象36棟・状態・論理配置・時間pauseは変更しない。
+overviewでは全対象のvisibilityを確認する。focused viewは候補の先頭4棟のvisibilityを要求し、
+画面外の他種・後続棟についてはload／owner／geometry／状態inventoryを検査するが画面内表示を主張しない。
+runtimeはview、camera center／scaleと30 stable framesを観測し、driverは要求view／scaleと照合する。
+入力によるカメラdriftを毎frame修復せず拒否する。通常起動のカメラ、zoom操作、Helpには影響しない。
+近景の画像取得も技術比較に限り、人による美術採否やordinary lifecycleの代用ではない。
+
 検証対象は**pauseしたsmall静止fixture（36棟）のpresentationのみ**。exact identity／nonce、30 stable frames、
 初期・終了inventory一致、owned X11 clientの1280×720画像、指定adapter／Vulkan、警告・エラーなし、
 binary／source／asset／原本hash一致を検査する。jobは`promotion_authority=false`であり、自動美術承認ではない。
 この証拠は稼働状態、save/load、施工・撤去・移動全経路、各kindの性能予算、全体移行完了を保証しない。
 基盤前後のコスト比較は別々に凍結した静止参照jobを使う。本書更新時点でM1-cの実native受入は未実施。
+
+制作器の `building_asset_pipeline.py verify` はpackaged bytes・provenance・既存承認identityを読むだけで、
+承認を作らない。M5 `prepare --destination` はfreshな隔離jobへ出力できるが、既存出力、原画の親子path、
+primaryの製品assetsへの出力は拒否する。入力原画はstagingに限定しworld画像を再加工しない。
+`verify --isolated` はその出力をread-only検査する。標準の出力先は引き続きstagingである。
 
 ### 通常開発におけるproduction受入toolingの境界
 
@@ -173,6 +187,13 @@ binary／source／asset／原本hash一致を検査する。jobは`promotion_aut
 旧request/Run/hostへの照会、台帳更新、plan生成、build、launchを行わない。現在は `available=false`。
 ordinary-world process/window・capture/ACK producer、GPU/native/RSS/application-handle instrument producer、
 通常開発のauthenticated admission adapterが未提供である。旧統括を再起動して補完しない。
+
+`building_production_validation_context.running_context` は通常primary検証台帳のread-onlyな
+runner所有確認を提供する。実行中batchの直接childと親coordinatorの出生identity、owner、literal
+command/verifier、exact出力root、登録時plan hash、現在head/source、policy/controllerを照合する。
+環境変数や保存JSONだけでは受理しない。grandchild/wrapperも現在は拒否する。この入口はまだ
+production runnerへ接続しておらず、ゲームの起動・window admission・GPU/handle計測・acceptance seal、
+art/promotion authorityを提供しない。上記の不足producerと正式recipeの独立レビューが引き続き必要。
 
 offline acceptance、collector、lifecycle verifierは、trustedなin-process `registration_adapter`を明示的に
 渡せる。plan/receipt bindingの共通検査は維持し、CLI/spec/environmentから任意adapterを選択できない。
@@ -183,6 +204,13 @@ Capture/Memoryはそれぞれのbinary hashで束縛し、開始時と収集終�
 receiptのbatchはintentのid、時刻は正のintかつplan freeze後でなければならない。
 Memory lifecycleもCaptureと同じkind/leg coverageとdomain述語を通す。sessionの整合性だけではleg成功としない。
 技術verifyはart/release/promotion authorityを付与しない。
+
+offline verifierの `non-bridge` scopeは先行9種（M2/M3/M5の8種＋別loaderのDoor）を扱う。
+Bridgeだけを除外し、Door固有を含む全kind/legをCaptureとMemoryの双方に要求する。
+`full` の10種条件は変更しない。9種も累積比較であり、群別の同binary比較へ縮小せず、
+異なるsourceの比較元・24 run matrix・全計測値・有限budget・release inventoryを要求する。
+9種の構造数はcopyごとに5 root／candidate 11 part（legacyは5 part）。
+scope追加は不足producerやadmissionを提供せず、正式実行・美術採用を可能にする変更ではない。
 
 ## 昇格・install・復旧・切戻し
 

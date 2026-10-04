@@ -4,6 +4,8 @@ import struct
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
+import copy
 from pathlib import Path
 
 from PIL import Image
@@ -12,10 +14,28 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
 from building_m2_art import candidate_geometry, face_layout, paint
 from build_building_m2_candidate import check_uv
-from test_building_clay import encoded_geometry, write_glb
+if __package__:
+    from .test_building_clay import encoded_geometry, write_glb
+else:
+    from test_building_clay import encoded_geometry, write_glb
 
 
 class M2ArtTests(unittest.TestCase):
+    def test_albedo_does_not_bake_directional_face_lighting(self):
+        import building_m2_art as art
+        with tempfile.TemporaryDirectory() as directory:
+            for kind in ("Tank", "MudMixer"):
+                original = Path(directory) / (kind + ".png")
+                changed = Path(directory) / (kind + "-normal.png")
+                art.paint(kind, original)
+                layout = copy.deepcopy(art.face_layout(kind))
+                for faces in layout.values():
+                    for face in faces:
+                        face["normal"] = [-n for n in face["normal"]]
+                with patch.object(art, "face_layout", return_value=layout):
+                    art.paint(kind, changed)
+                self.assertEqual(original.read_bytes(), changed.read_bytes())
+
     def test_roles_share_one_atlas_with_unique_face_cells_and_gutters(self):
         for kind in ("Tank", "MudMixer"):
             geometry, layout = candidate_geometry(kind), face_layout(kind)

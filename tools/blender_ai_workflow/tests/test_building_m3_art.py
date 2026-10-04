@@ -12,6 +12,17 @@ from build_building_m3_candidate import recipe
 
 
 class M3ArtTests(unittest.TestCase):
+    def test_restarea_entry_is_recessed_without_changing_ground_envelope(self):
+        _, spec = art.contract("RestArea")
+        self.assertEqual(spec["roof"]["front_z_profile"], [29, 12, 6, 12, 29])
+        body = art.geometry("RestArea")["body"]
+        self.assertEqual(list(body.bounds()), spec["body_bounds_wu"])
+        front = [v for face, surface in zip(body.faces, body.surfaces, strict=True)
+                 if surface == "cloth:canopy" for v in (body.vertices[i] for i in face)]
+        self.assertEqual(max(z for x, _, z in front if x == 0), 6)
+        self.assertEqual(spec["posts"]["x"], [-25, 25])
+        self.assertEqual(spec["posts"]["z"], [-24, 24])
+
     def test_logical_slot_order_and_shared_mesh(self):
         parts = art.parts("SoulSpa")
         self.assertEqual([part["name"] for part in parts], ["body", "slot0", "slot1", "slot2", "slot3"])
@@ -88,6 +99,31 @@ class M3ArtTests(unittest.TestCase):
                 self.assertNotIn("receipt", value)
                 self.assertNotIn("authority", value)
         self.assertFalse(json.loads(art.CONTRACT.read_bytes())["art_approved"])
+
+    def test_cloth_patch_is_distinct_from_wood_grain_without_geometry_changes(self):
+        from PIL import Image
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory)
+            art.paint("RestArea", output, "planes")
+            with Image.open(output / "albedo.png") as image:
+                planes = image.copy()
+            art.paint("RestArea", output, "strokes")
+            with Image.open(output / "albedo.png") as image:
+                strokes = image.copy()
+            _, spec = art.contract("RestArea")
+            light_cloth = 0
+            for face in art.face_layout("RestArea")["body"]:
+                x, y = face["cell"] % 16 * 32, face["cell"] // 16 * 32
+                for px in range(x, x+32):
+                    for py in range(y, y+32):
+                        before, after = planes.getpixel((px, py)), strokes.getpixel((px, py))
+                        self.assertEqual(before[3], after[3])
+                        if face["surface"].startswith("wood"):
+                            self.assertTrue(all(a <= b for a, b in zip(after[:3], before[:3])))
+                        elif face["surface"].startswith("cloth") and after[0] > before[0]:
+                            light_cloth += 1
+            self.assertGreater(light_cloth, 0, "cloth needs a coherent lighter repair, not repeated wood strokes")
+            self.assertEqual(list(art.geometry("RestArea")["body"].bounds()), spec["body_bounds_wu"])
 
 
 if __name__ == "__main__":

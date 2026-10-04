@@ -21,6 +21,30 @@ pub struct BuildingArtSession {
     pub locator: String,
     pub status_path: PathBuf,
     pub nonce: String,
+    #[serde(default)]
+    pub view: BuildingArtView,
+}
+
+/// Explicit profiling camera framing; it never changes ordinary player input.
+#[derive(Clone, Copy, Debug, Default, Deserialize, serde::Serialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum BuildingArtView {
+    #[default]
+    Overview,
+    Near,
+    Normal,
+    Far,
+}
+
+impl BuildingArtView {
+    pub fn scale(self) -> f32 {
+        match self {
+            Self::Overview => 5.0,
+            Self::Near => 0.5,
+            Self::Normal => 1.0,
+            Self::Far => 2.0,
+        }
+    }
 }
 
 pub fn configure_building_art(app: &mut App) -> Result<(), String> {
@@ -34,6 +58,7 @@ pub fn configure_building_art(app: &mut App) -> Result<(), String> {
         _ => return Err("unknown building-art evidence mode".into()),
     };
     if session.identity.authority != authority
+        || session.identity.kind == BuildingAssetKind::Bridge
         || session.identity.generation == 0
         || session.identity.manifest_sha256.len() != 64
         || !session
@@ -83,6 +108,21 @@ fn request(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn camera_views_are_bounded_and_unknown_views_fail_closed() {
+        for (name, scale) in [
+            ("overview", 5.0),
+            ("near", 0.5),
+            ("normal", 1.0),
+            ("far", 2.0),
+        ] {
+            let view: BuildingArtView = serde_json::from_str(&format!("\"{name}\"")).unwrap();
+            assert_eq!(view.scale(), scale);
+        }
+        assert!(serde_json::from_str::<BuildingArtView>("\"arbitrary\"").is_err());
+        assert_eq!(BuildingArtView::default(), BuildingArtView::Overview);
+    }
 
     #[test]
     fn profiling_presentation_requires_the_exact_opted_in_identity() {

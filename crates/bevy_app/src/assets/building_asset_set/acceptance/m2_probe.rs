@@ -318,19 +318,20 @@ fn observe(world: &mut World) {
     let session = world.resource::<BuildingArtSession>();
     let identity = json!(session.identity);
     let kind = format!("{:?}", session.identity.kind);
-    if let Some(mut driver) = world.get_resource_mut::<super::m2_lifecycle::Lifecycle>() {
-        if driver.leg == "placement" && !driver.pulse_observation_complete {
-            let observed = result.as_ref().is_ok_and(|sample| {
-                sample["identity"] == identity
-                    && driver
-                        .placement_blueprint
-                        .is_some_and(|owner| placement_pulse_observed(sample, owner, &kind))
-            });
-            if observed {
-                driver.pulse_observed_since.get_or_insert(now);
-            } else {
-                driver.pulse_observed_since = None;
-            }
+    if let Some(mut driver) = world.get_resource_mut::<super::m2_lifecycle::Lifecycle>()
+        && driver.leg == "placement"
+        && !driver.pulse_observation_complete
+    {
+        let observed = result.as_ref().is_ok_and(|sample| {
+            sample["identity"] == identity
+                && driver
+                    .placement_blueprint
+                    .is_some_and(|owner| placement_pulse_observed(sample, owner, &kind))
+        });
+        if observed {
+            driver.pulse_observed_since.get_or_insert(now);
+        } else {
+            driver.pulse_observed_since = None;
         }
     }
     let path = {
@@ -418,6 +419,7 @@ mod tests {
             locator: "manifests/building-tank-v1.buildingset".into(),
             status_path: PathBuf::from("/unused/m2-probe-test.json"),
             nonce: "a".repeat(32),
+            view: crate::assets::building_asset_set::acceptance::BuildingArtView::Overview,
         });
         world.init_resource::<BuildingAssetPool>();
         world.init_resource::<Time<Real>>();

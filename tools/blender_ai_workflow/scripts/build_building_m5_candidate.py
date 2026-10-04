@@ -19,6 +19,7 @@ from workflow_common import asset_root
 
 CONTRACT = Path(__file__).resolve().parents[1] / "fixtures/building-m5-v1.contract.json"
 KINDS = ("WheelbarrowParking", "SandPile", "BonePile", "OutdoorLamp")
+ISOLATED_JOBS = Path(__file__).resolve().parents[3] / "target/native-acceptance"
 
 
 def contract(kind):
@@ -108,9 +109,20 @@ def recipe(kind, generation, source):
             "parts": [], "world_preview": world, "catalog_preview": card}
 
 
-def prepare(kind, source, name, generation, codec):
-    source, output = staged(source), destination(name)
-    pipeline.require(not output.exists() and not source.is_relative_to(output), "use a fresh separate output")
+def prepare(kind, source, name, generation, codec, isolated_destination=None):
+    source = staged(source)
+    staged_output = destination(name)  # Always validate the candidate name.
+    output = staged_output if isolated_destination is None else pipeline.no_symlinks(isolated_destination)
+    pipeline.require(not output.exists() and not source.is_relative_to(output)
+                     and not output.is_relative_to(source), "use a fresh separate output")
+    # Explicit isolated output is for a coordinator-registered candidate job,
+    # never an installed product inventory. Preserve the staging-only default.
+    product = Path(__file__).resolve().parents[3] / "assets"
+    pipeline.require(not output.is_relative_to(product), "cannot write product assets")
+    if isolated_destination is not None:
+        pipeline.require(output.parent == pipeline.no_symlinks(ISOLATED_JOBS)
+                         and re.fullmatch(r"[a-z0-9][a-z0-9-]{0,79}", output.name) is not None,
+                         "isolated output requires a primary native-acceptance job root")
     _, spec = contract(kind)
     payloads = {role: pipeline.rooted(source, role + ".png").read_bytes() for role in spec["world_roles"]}
     card = originals(kind, payloads)
@@ -129,12 +141,15 @@ def prepare(kind, source, name, generation, codec):
               "identity": exported["identity"], "runtime_root": str(output / "runtime"),
               "art_approved": False, "runtime_published": False}
     pipeline.put(output / "m5-candidate.json", pipeline.canonical(result))
-    verify(kind, output / "runtime", codec)
+    verify(kind, output / "runtime", codec, isolated=isolated_destination is not None)
     return result
 
 
-def verify(kind, root, codec):
-    root = staged(root)
+def verify(kind, root, codec, *, isolated=False):
+    root = pipeline.no_symlinks(root) if isolated else staged(root)
+    if isolated:
+        pipeline.require(root.name == "runtime" and root.parent.parent == pipeline.no_symlinks(ISOLATED_JOBS),
+                         "isolated verify requires a primary native-acceptance runtime")
     manifest, text, _ = pipeline.load_set(root, kind, codec)
     pipeline.require(manifest["identity"]["authority"] == "art_preview"
                      and manifest["receipt"] is None and manifest["art_approval_sha256"] is None,
@@ -173,14 +188,19 @@ def main():
     parser.add_argument("--name")
     parser.add_argument("--generation", type=int)
     parser.add_argument("--runtime", type=Path)
+    parser.add_argument("--destination", type=Path,
+                        help="fresh isolated candidate job output, never product assets")
+    parser.add_argument("--isolated", action="store_true", help="read-only verification of an isolated job")
     args = parser.parse_args()
     if args.action == "prepare":
         pipeline.require(all(value is not None for value in (args.source, args.name, args.generation)),
                          "prepare needs source, name and generation")
-        result = prepare(args.kind, args.source, args.name, args.generation, args.codec)
+        pipeline.require(not args.isolated, "prepare does not accept --isolated")
+        result = prepare(args.kind, args.source, args.name, args.generation, args.codec, args.destination)
     else:
         pipeline.require(args.runtime is not None, "verify needs runtime")
-        result = verify(args.kind, args.runtime, args.codec)
+        pipeline.require(args.destination is None, "verify does not accept --destination")
+        result = verify(args.kind, args.runtime, args.codec, isolated=args.isolated)
     print(json.dumps(result, indent=2, sort_keys=True))
 
 

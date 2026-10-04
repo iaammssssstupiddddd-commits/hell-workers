@@ -16,9 +16,14 @@ HELPERS = Path(__file__).resolve().parents[1] / ".codex/skills/hell-workers-run-
 sys.path.insert(0, str(HELPERS))
 import native_acceptance as native  # noqa: E402
 from wall_density_acceptance import asset_view_fingerprint, session_digest, sha256  # noqa: E402
-from perf_tool.artifacts import frame_summary, read_frames, validate_run  # noqa: E402
-from perf_tool.execution import read_native_memory, read_resource_usage  # noqa: E402
-from perf_tool.model import Case  # noqa: E402
+if __package__:
+    from .perf_tool.artifacts import frame_summary, read_frames, validate_run  # noqa: E402
+    from .perf_tool.execution import read_native_memory, read_resource_usage  # noqa: E402
+    from .perf_tool.model import Case  # noqa: E402
+else:
+    from perf_tool.artifacts import frame_summary, read_frames, validate_run  # noqa: E402
+    from perf_tool.execution import read_native_memory, read_resource_usage  # noqa: E402
+    from perf_tool.model import Case  # noqa: E402
 
 PROFILE = "building-art-static-nine-reference-v2"
 MATRIX = (("capture", "small", 15), ("capture", "medium", 60), ("memory", "medium", 60))

@@ -8,6 +8,43 @@ use super::super::PerfScenarioSize;
 use crate::interface::selection::placement_geometry::building_geometry;
 
 pub(super) const CAMERA_SCALE: f32 = 5.0;
+
+pub(super) fn requires_visible(
+    session: Option<&crate::assets::building_asset_set::acceptance::BuildingArtSession>,
+    candidate: bool,
+    ordinal: usize,
+) -> bool {
+    use crate::assets::building_asset_set::acceptance::BuildingArtView;
+    session.is_none_or(|s| s.view == BuildingArtView::Overview) || (candidate && ordinal < 4)
+}
+
+pub(super) fn camera_frame(
+    session: Option<&crate::assets::building_asset_set::acceptance::BuildingArtSession>,
+    size: PerfScenarioSize,
+) -> (Vec2, f32) {
+    use crate::assets::building_asset_set::{BuildingAssetKind, acceptance::BuildingArtView};
+    let Some(session) = session.filter(|s| s.view != BuildingArtView::Overview) else {
+        return (WorldMap::grid_to_world(46, 37), CAMERA_SCALE);
+    };
+    let kind = match session.identity.kind {
+        BuildingAssetKind::Tank => BuildingType::Tank,
+        BuildingAssetKind::MudMixer => BuildingType::MudMixer,
+        BuildingAssetKind::RestArea => BuildingType::RestArea,
+        BuildingAssetKind::SoulSpa => BuildingType::SoulSpa,
+        BuildingAssetKind::WheelbarrowParking => BuildingType::WheelbarrowParking,
+        BuildingAssetKind::SandPile => BuildingType::SandPile,
+        BuildingAssetKind::BonePile => BuildingType::BonePile,
+        BuildingAssetKind::OutdoorLamp => BuildingType::OutdoorLamp,
+        BuildingAssetKind::Bridge => unreachable!("Bridge is rejected at art-session admission"),
+    };
+    let center = layout(size)
+        .iter()
+        .filter(|s| s.kind == kind && s.ordinal < 4)
+        .map(|s| s.center)
+        .sum::<Vec2>()
+        / 4.0;
+    (center, session.view.scale())
+}
 // Bridge placement/worldgen is a separate issue; it must not gate this reference.
 pub(super) const KINDS: [BuildingType; 9] = [
     BuildingType::Tank,
@@ -121,6 +158,56 @@ pub(super) fn yards(size: PerfScenarioSize) -> Vec<Yard> {
 mod tests {
     use super::*;
     use std::collections::HashSet;
+
+    #[test]
+    fn candidate_camera_frames_only_its_first_four_and_preserves_overview() {
+        use crate::assets::building_asset_set::{
+            BuildingAssetAuthority, BuildingAssetKind, BuildingAssetSetIdentity,
+            acceptance::{BuildingArtSession, BuildingArtView},
+        };
+        let mut session = BuildingArtSession {
+            mode: "feedback".into(),
+            identity: BuildingAssetSetIdentity {
+                kind: BuildingAssetKind::RestArea,
+                generation: 1,
+                authority: BuildingAssetAuthority::ArtPreview,
+                manifest_sha256: "a".repeat(64),
+            },
+            locator: "manifests/building-rest-area-v1.buildingset".into(),
+            status_path: "/unused/probe.json".into(),
+            nonce: "a".repeat(32),
+            view: BuildingArtView::Near,
+        };
+        let expected = layout(PerfScenarioSize::Small)
+            .iter()
+            .filter(|s| s.kind == BuildingType::RestArea)
+            .map(|s| s.center)
+            .sum::<Vec2>()
+            / 4.0;
+        for size in [PerfScenarioSize::Small, PerfScenarioSize::Medium] {
+            assert_eq!(camera_frame(Some(&session), size), (expected, 0.5));
+        }
+        assert!(requires_visible(Some(&session), true, 0));
+        assert!(!requires_visible(Some(&session), true, 4));
+        assert!(!requires_visible(Some(&session), false, 0));
+        assert!(requires_visible(None, false, 0));
+        session.view = BuildingArtView::Normal;
+        assert_eq!(
+            camera_frame(Some(&session), PerfScenarioSize::Small),
+            (expected, 1.0)
+        );
+        session.view = BuildingArtView::Far;
+        assert_eq!(
+            camera_frame(Some(&session), PerfScenarioSize::Small),
+            (expected, 2.0)
+        );
+        session.view = BuildingArtView::Overview;
+        assert!(requires_visible(Some(&session), false, 0));
+        assert_eq!(
+            camera_frame(Some(&session), PerfScenarioSize::Small),
+            camera_frame(None, PerfScenarioSize::Small)
+        );
+    }
 
     #[test]
     fn exact_inventory_and_disjoint_footprints_include_supports_and_companions() {

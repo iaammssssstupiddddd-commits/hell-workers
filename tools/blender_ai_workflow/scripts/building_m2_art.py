@@ -75,13 +75,14 @@ def paint(kind, path, stage="strokes"):
     palettes = {"Tank": {"body": (173, 105, 69), "water": (64, 157, 169)},
                 "MudMixer": {"body": (105, 125, 83), "rotor": (184, 148, 86)}}
     layout = face_layout(kind)
+    meshes = candidate_geometry(kind)
     for role, faces in layout.items():
-        for face in faces:
+        for face, indices in zip(faces, meshes[role].faces, strict=True):
             cell = face["cell"]
             x, y = (cell % 16) * CELL, (cell // 16) * CELL
-            # Plane lighting is authored into color; runtime directional light
-            # remains responsible for actual scene illumination.
-            tone = 0.86 + 0.12 * face["normal"][1] + 0.035 * ((cell % 3) - 1)
+            # Material variation only. Do not bake a face-normal lighting term
+            # into albedo; runtime illumination owns directional shading.
+            tone = 1.0 if role == "water" else 0.96 + 0.035 * ((cell % 3) - 1)
             base = tuple(round(channel * tone) for channel in palettes[kind][role])
             draw.rectangle((x, y, x + CELL - 1, y + CELL - 1), fill=(*base, 255))
             if stage == "planes":
@@ -89,16 +90,35 @@ def paint(kind, path, stage="strokes"):
             dark = tuple(round(c * 0.67) for c in base)
             light = tuple(min(255, round(c * 1.12)) for c in base)
             polygon = face["polygon_px"]
-            draw.line(polygon + polygon[:1], fill=(*dark, 255), width=1)
             # Mask strokes to the authored face; no stroke leaks into neighbours.
             mask = Image.new("L", image.size)
             ImageDraw.Draw(mask).polygon(polygon, fill=255)
             layer = image.copy()
             brush = ImageDraw.Draw(layer)
-            for stroke in range(3):
-                yy = y + 8 + stroke * 6 + (cell % 2)
-                brush.line([(x + 7, yy), (x + 15, yy - 1), (x + 25, yy)],
-                           fill=(*(light if stroke % 2 == 0 else dark), 255), width=1)
+            if role == "water":
+                points = [meshes[role].vertices[i] for i in indices]
+                if all(p[1] > 0 for p in points):
+                    # One quiet world-space ripple design across the entire
+                    # surface, not a repeated star in each triangle's UV cell.
+                    a, b, c = points[:3]
+                    pa, pb, pc = polygon[:3]
+                    dx1, dz1, dx2, dz2 = b[0]-a[0], b[2]-a[2], c[0]-a[0], c[2]-a[2]
+                    determinant = dx1*dz2-dx2*dz1
+                    require(abs(determinant) > 0, "water top requires X/Z projection")
+
+                    def pixel(wx, wz):
+                        dx, dz = wx-a[0], wz-a[2]
+                        u, v = (dx*dz2-dz*dx2)/determinant, (dx1*dz-dz1*dx)/determinant
+                        return tuple(pa[i]+u*(pb[i]-pa[i])+v*(pc[i]-pa[i]) for i in range(2))
+
+                    for stroke in [[(-15, -8), (-6, -7), (4, -9), (12, -8)],
+                                   [(-10, 8), (-2, 9), (8, 7), (15, 8)]]:
+                        brush.line([pixel(*point) for point in stroke], fill=(*light, 255), width=1)
+            else:
+                for stroke in range(2):
+                    yy = y + 8 + stroke * 6 + (cell % 2)
+                    brush.line([(x + 7, yy), (x + 15, yy - 1), (x + 25, yy)],
+                               fill=(*(light if stroke % 2 == 0 else dark), 255), width=1)
             image.paste(layer, (0, 0), mask)
     image.save(path)
     return layout

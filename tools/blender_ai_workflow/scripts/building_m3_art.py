@@ -78,12 +78,19 @@ def geometry(kind):
         # The front remains open between posts; the canopy has actual depth.
         profile = spec["roof"]["x_height_profile"]
         near, far = spec["roof"]["z_edges"]
+        front = spec["roof"]["front_z_profile"]
+        require(len(front) == len(profile) and all(near < z <= far for z in front),
+                "roof front profile must stay inside the unapproved envelope")
         thickness = spec["roof"]["thickness_wu"]
-        for (x0, y0), (x1, y1) in zip(profile, profile[1:]):
+        for ((x0, y0), (x1, y1)), (z0, z1) in zip(
+                zip(profile, profile[1:]), zip(front, front[1:]), strict=True):
             start = len(body.vertices)
-            body.vertices.extend([(x0, y0, near), (x1, y1, near), (x1, y1, far), (x0, y0, far),
+            # Recess the centre of the entry edge, rather than covering the
+            # entire opening with a uniform extrusion in top-down projection.
+            # Ground envelope, support locations and player contracts are fixed.
+            body.vertices.extend([(x0, y0, near), (x1, y1, near), (x1, y1, z1), (x0, y0, z0),
                                   (x0, y0 + thickness, near), (x1, y1 + thickness, near),
-                                  (x1, y1 + thickness, far), (x0, y0 + thickness, far)])
+                                  (x1, y1 + thickness, z1), (x0, y0 + thickness, z0)])
             for face in ((0, 1, 2, 3), (4, 7, 6, 5), (0, 4, 5, 1),
                          (1, 5, 6, 2), (2, 6, 7, 3), (3, 7, 4, 0)):
                 body.face([start + i for i in face], "cloth:canopy")
@@ -137,8 +144,9 @@ def paint(kind, output, stage):
     image = Image.new("RGBA", (size, size), (65, 59, 52, 255))
     emission = Image.new("RGBA", (size, size), (0, 0, 0, 255))
     draw, glow = ImageDraw.Draw(image), ImageDraw.Draw(emission)
+    meshes = geometry(kind)
     for role, faces in face_layout(kind).items():
-        for face in faces:
+        for face, indices in zip(faces, meshes[role].faces, strict=True):
             index = face["cell"]
             x, y = (index % (size//cell))*cell, (index//(size//cell))*cell
             material = face["surface"].split(":")[0]
@@ -150,11 +158,43 @@ def paint(kind, output, stage):
                 ImageDraw.Draw(mask).polygon(face["polygon_px"], fill=255)
                 layer = image.copy()
                 brush = ImageDraw.Draw(layer)
-                dark = tuple(round(c*0.78) for c in base)
-                # Sparse grain/seams, without black borders around every island.
-                for offset in (10, 21):
-                    brush.line([(x+6, y+offset), (x+16, y+offset-1), (x+25, y+offset)],
+                dark = tuple(round(c*0.84) for c in base)
+                if material == "cloth" and face["normal"][1] > 0.5:
+                    # One continuous cloth design in world X/Z, not repeated
+                    # timber-like marks in each UV island. The same seams and
+                    # repair patch continue across the four sloping strips.
+                    points = [meshes[role].vertices[i] for i in indices]
+                    a, b, c = points[0], points[1], points[-1]
+                    uv_a, uv_b, uv_c = face["polygon_px"][0], face["polygon_px"][1], face["polygon_px"][-1]
+                    dx1, dz1 = b[0]-a[0], b[2]-a[2]
+                    dx2, dz2 = c[0]-a[0], c[2]-a[2]
+                    determinant = dx1*dz2-dx2*dz1
+                    require(abs(determinant) > 0, "cloth top must have an X/Z projection")
+
+                    def pixel(world_x, world_z):
+                        dx, dz = world_x-a[0], world_z-a[2]
+                        u = (dx*dz2-dz*dx2)/determinant
+                        v = (dx1*dz-dz1*dx)/determinant
+                        return tuple(uv_a[i]+u*(uv_b[i]-uv_a[i])+v*(uv_c[i]-uv_a[i]) for i in range(2))
+
+                    patch = [(-25, -17), (-12, -18), (-11, -3), (-24, -4)]
+                    brush.polygon([pixel(*p) for p in patch],
+                                  fill=(*tuple(min(255, c+13) for c in base), 255))
+                    # A single broad fold and a stitched fabric join, not an
+                    # outline around every panel or baked directional shadow.
+                    brush.line([pixel(-31, 7), pixel(-8, 6), pixel(14, 8), pixel(31, 7)],
                                fill=(*dark, 255), width=1)
+                    for world_x in range(-28, 30, 6):
+                        brush.line([pixel(world_x, 5), pixel(world_x+1, 9)],
+                                   fill=(*tuple(round(c*0.92) for c in base), 255), width=1)
+                elif material == "wood":
+                    for offset in (10, 21):
+                        brush.line([(x+6, y+offset), (x+16, y+offset-1), (x+25, y+offset)],
+                                   fill=(*dark, 255), width=1)
+                elif material == "bone":
+                    brush.line([(x+9, y+8), (x+12, y+15), (x+10, y+23)],
+                               fill=(*dark, 255), width=1)
+                # Iron, inactive sigils and cloth edge thickness stay quiet.
                 image.paste(layer, (0, 0), mask)
             if role == "slot" and face["normal"][1] > 0.5:
                 # Only top-facing slot faces carry the purple sigil, never body.

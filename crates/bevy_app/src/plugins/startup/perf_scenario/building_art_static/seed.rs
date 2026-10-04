@@ -22,6 +22,7 @@ use hw_world::{WorldMap, layout::RIVER_Y_MIN};
 #[derive(SystemParam)]
 pub(crate) struct SetupParams<'w, 's> {
     config: Res<'w, PerfScenarioConfig>,
+    art_session: Option<Res<'w, BuildingArtSession>>,
     state: ResMut<'w, BuildingArtStaticState>,
     commands: Commands<'w, 's>,
     world_map: WorldMapWrite<'w>,
@@ -64,7 +65,11 @@ pub(crate) fn setup_building_art_static_system(mut p: SetupParams) {
         );
         return;
     };
-    initialize_camera(&mut camera, &mut controller);
+    initialize_camera(
+        &mut camera,
+        &mut controller,
+        layout::camera_frame(p.art_session.as_deref(), p.config.size()),
+    );
     p.commands
         .spawn((layout::site(), Name::new("BuildingArtStatic Site")));
     for yard in layout::yards(p.config.size()) {
@@ -170,14 +175,17 @@ fn operational_spa_state() -> SoulSpaSite {
     }
 }
 
-fn initialize_camera(camera: &mut Transform, controller: &mut PanCamera) {
-    let center = WorldMap::grid_to_world(46, 37);
+fn initialize_camera(
+    camera: &mut Transform,
+    controller: &mut PanCamera,
+    (center, scale): (Vec2, f32),
+) {
     camera.translation.x = center.x;
     camera.translation.y = center.y;
     // Bevy 0.19 writes all scale axes from zoom_factor even without input.
     // Seed both once; never overwrite later input to conceal camera drift.
-    controller.zoom_factor = layout::CAMERA_SCALE;
-    camera.scale = Vec3::splat(layout::CAMERA_SCALE);
+    controller.zoom_factor = scale;
+    camera.scale = Vec3::splat(scale);
 }
 
 fn validate_layout(
@@ -487,7 +495,11 @@ mod tests {
             let world = app.world_mut();
             let mut query = world.query::<(&mut Transform, &mut PanCamera)>();
             let (mut transform, mut controller) = query.single_mut(world).unwrap();
-            initialize_camera(&mut transform, &mut controller);
+            initialize_camera(
+                &mut transform,
+                &mut controller,
+                layout::camera_frame(None, crate::plugins::startup::PerfScenarioSize::Small),
+            );
         }
         for _ in 0..3 {
             app.update();

@@ -5,6 +5,8 @@ The byte payloads below are fixtures, never actual art or release evidence.
 from __future__ import annotations
 
 import json
+import contextlib
+import io
 from pathlib import Path
 import sys
 import tempfile
@@ -264,6 +266,56 @@ class PipelineTests(unittest.TestCase):
             with patch.object(sys, "argv", ["install", "--kind", "Tank"]):
                 self.assertEqual(legacy_install.main(), 0)
             dispatch.assert_called_once_with(["install", "--kind", "Tank"])
+
+    def test_read_only_verification_preserves_files_and_cannot_promote(self):
+        root = self.candidate("RestArea")
+        before = {str(p.relative_to(root)): p.read_bytes() for p in root.rglob("*") if p.is_file()}
+        result = pipeline.verify_set(root, "RestArea", self.binary)
+        self.assertEqual(result["scope"], "packaged-byte-validity-only")
+        self.assertFalse(result["promotion_authority"])
+        self.assertEqual(before, {str(p.relative_to(root)): p.read_bytes() for p in root.rglob("*") if p.is_file()})
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(pipeline.main(["verify", "--kind", "RestArea", "--source-root", str(root),
+                                           "--codec", str(self.binary)]), 0)
+        with self.assertRaisesRegex(ValueError, "read-only"):
+            pipeline.main(["verify", "--kind", "RestArea", "--source-root", str(root),
+                           "--codec", str(self.binary), "--apply"])
+
+    def test_read_only_verification_rejects_malformed_approval_metadata(self):
+        root = self.candidate("RestArea")
+        approval = root / "provenance/art-approval.json"
+        original = approval.read_bytes()
+        record = pipeline.read(approval)
+        boolean_schema = {**record, "schema_version": True}
+        for payload in (pipeline.canonical(boolean_schema), original + b"\n",
+                        original.rstrip()[:-1] + b',"schema_version":1}'):
+            with self.subTest(payload=payload):
+                approval.write_bytes(payload)
+                path = root / pipeline.locator("RestArea")
+                manifest = pipeline.read(path)
+                manifest["art_approval_sha256"] = pipeline.digest(payload)
+                path.write_bytes(pipeline.canonical(manifest))
+                with self.assertRaisesRegex(ValueError, "metadata"):
+                    pipeline.verify_set(root, "RestArea", self.binary)
+
+    def test_read_only_verification_rejects_source_and_art_identity_drift(self):
+        root = self.candidate("RestArea")
+        source = root / "provenance/source"
+        original = source.read_bytes()
+        source.write_bytes(b"changed source")
+        with self.assertRaisesRegex(ValueError, "source provenance"):
+            pipeline.verify_set(root, "RestArea", self.binary)
+        source.write_bytes(original)
+        approval = root / "provenance/art-approval.json"
+        record = pipeline.read(approval)
+        record["art_preview_identity"]["generation"] += 1
+        approval.write_bytes(pipeline.canonical(record))
+        path = root / pipeline.locator("RestArea")
+        manifest = pipeline.read(path)
+        manifest["art_approval_sha256"] = pipeline.digest(approval.read_bytes())
+        path.write_bytes(pipeline.canonical(manifest))
+        with self.assertRaisesRegex(ValueError, "approval identity"):
+            pipeline.verify_set(root, "RestArea", self.binary)
 
 
 if __name__ == "__main__":

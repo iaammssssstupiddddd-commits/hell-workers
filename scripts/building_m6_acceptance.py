@@ -22,14 +22,20 @@ else:
     import building_art_acceptance as art
 
 native, pipeline, static = art.native, art.pipeline, art.static
-from perf_tool.artifact_readers.building_m6 import (  # noqa: E402
-    DOOR_HASH,
-    RESOURCE_KEYS,
-    validate_sidecar,
-)
-from perf_tool.artifacts import frame_summary, read_frames, validate_run  # noqa: E402
-from perf_tool.execution import read_native_memory, read_resource_usage  # noqa: E402
-from perf_tool.model import Case  # noqa: E402
+if __package__:
+    from .perf_tool.artifact_readers.building_m6 import (  # noqa: E402
+        DOOR_HASH, RESOURCE_KEYS, validate_sidecar,
+    )
+    from .perf_tool.artifacts import frame_summary, read_frames, validate_run  # noqa: E402
+    from .perf_tool.execution import read_native_memory, read_resource_usage  # noqa: E402
+    from .perf_tool.model import Case  # noqa: E402
+else:
+    from perf_tool.artifact_readers.building_m6 import (  # noqa: E402
+        DOOR_HASH, RESOURCE_KEYS, validate_sidecar,
+    )
+    from perf_tool.artifacts import frame_summary, read_frames, validate_run  # noqa: E402
+    from perf_tool.execution import read_native_memory, read_resource_usage  # noqa: E402
+    from perf_tool.model import Case  # noqa: E402
 
 PROFILE = "building-m6-paired-static-v1"
 METRICS = {

@@ -2,6 +2,8 @@
 import copy
 import json
 from pathlib import Path
+import subprocess
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -452,6 +454,63 @@ class ProductionAcceptanceTests(unittest.TestCase):
         self.assertEqual(len(lifecycle.BRIDGE_CASES["cleanup"]), 10)
         with self.assertRaises(ValueError):
             lifecycle.verify(None, [], {"scope": "bridge"}, "unused", set())
+
+    def test_non_bridge_scope_preserves_all_nine_and_cumulative_contract(self):
+        nine = production.GROUPS["non-bridge"]
+        self.assertEqual(nine, tuple(kind for kind in production.GROUPS["full"] if kind != "Bridge"))
+        self.assertEqual(len(nine), 9)
+        self.assertIn("Door", nine)
+        self.assertEqual(production.CUMULATIVE_SCOPES, {"full", "non-bridge"})
+        self.assertEqual(production.STRUCTURE_COUNTS["non-bridge"], (5, 11))
+        self.assertEqual(production.STRUCTURE_COUNTS["full"], (6, 12))
+        for kind in nine:
+            self.assertIn(kind, lifecycle.LEGS)
+        with self.assertRaises(ValueError):
+            lifecycle.verify(None, [], {"scope": "non-bridge"}, "unused", set())
+
+    def test_non_bridge_runner_requires_every_nine_kind_leg_in_both_instruments(self):
+        from scripts import building_production_native_acceptance as runner
+        rows = runner.expected_sessions({"scope": "non-bridge"})
+        for instrument in ("Capture", "Memory"):
+            actual = {(row["kind"], row["leg"]) for row in rows
+                      if row["purpose"] == "lifecycle" and row["instrument"] == instrument}
+            expected = {(kind, leg) for kind in production.GROUPS["non-bridge"]
+                        for leg in lifecycle.LEGS[kind]}
+            self.assertEqual(actual, expected)
+        self.assertFalse(any(row.get("kind") == "Bridge" for row in rows))
+        self.assertEqual([(row["instrument"], row["size"], row["repeat"], row["mode"])
+                          for row in rows if row["purpose"] == "performance"], production.matrix())
+
+    def test_isolated_package_release_inventory_reaches_door_verifier(self):
+        # A fresh interpreter must not inherit a preceding test's sys.path or
+        # standalone perf_tool modules. Only the repo package root is added.
+        program = '''
+import sys
+from pathlib import Path
+from unittest.mock import patch
+sys.path.insert(0, sys.argv[1])
+from scripts import building_production_acceptance as p
+door = {"generation": 7}
+text = "fixture manifest"
+releases = {}
+for kind in p.GROUPS["non-bridge"]:
+    if kind == "Door":
+        releases[kind] = {"inventory_sha256": p.pipeline.digest(p.pipeline.canonical(door))}
+    else:
+        releases[kind] = {"root": ".", "identity": {"kind": kind, "authority": "release_approved"},
+                          "manifest_file_sha256": p.pipeline.digest(text.encode())}
+def loaded(root, kind, codec):
+    return {"identity": releases[kind]["identity"]}, text, None
+with patch.object(p.pipeline, "load_set", side_effect=loaded), \\
+     patch("scripts.building_m6_acceptance.inventory", return_value=door) as inventory:
+    p.release_inventory({"scope": "non-bridge", "repo": sys.argv[1],
+                         "codec": {"path": "test-codec"}, "releases": releases})
+    inventory.assert_called_once_with(Path(sys.argv[1]), Path("test-codec"))
+'''
+        result = subprocess.run([sys.executable, "-I", "-c", program,
+                                 str(Path(__file__).resolve().parents[2])],
+                                text=True, capture_output=True, timeout=30)
+        self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_registry_contract_never_claims_launch_or_promotion_authority(self):
         for scope in production.GROUPS:

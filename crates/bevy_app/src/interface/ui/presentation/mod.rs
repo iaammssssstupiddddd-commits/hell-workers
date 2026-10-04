@@ -624,4 +624,66 @@ mod tests {
                 .any(|line| line == "Supply: Shed: waiting for restore margin")
         );
     }
+
+    #[test]
+    fn outdoor_lamp_inspection_keeps_kind_and_live_supply_on_one_entity() {
+        use hw_energy::{PowerConsumer, PowerSupplyState};
+
+        let mut app = minimal_app();
+        app.init_resource::<FamiliarSpatialGrid>()
+            .init_resource::<InspectionReceipt>()
+            .add_systems(Update, inspect);
+        let lamp = app
+            .world_mut()
+            .spawn((
+                crate::systems::jobs::Building {
+                    kind: crate::systems::jobs::BuildingType::OutdoorLamp,
+                    is_provisional: false,
+                },
+                PowerConsumer { demand: 1.0 },
+                PowerSupplyState::Disconnected,
+                Transform::default(),
+            ))
+            .id();
+        app.insert_resource(InspectionTarget(lamp));
+
+        app.update();
+        let model = app
+            .world()
+            .resource::<InspectionReceipt>()
+            .0
+            .as_ref()
+            .unwrap();
+        assert_eq!(model.header, "Building: OutdoorLamp");
+        assert!(
+            model
+                .tooltip_lines
+                .iter()
+                .any(|line| line == "Supply: Disconnected")
+        );
+
+        app.world_mut()
+            .entity_mut(lamp)
+            .insert(PowerSupplyState::Supplied);
+        app.update();
+        let model = app
+            .world()
+            .resource::<InspectionReceipt>()
+            .0
+            .as_ref()
+            .unwrap();
+        assert_eq!(model.header, "Building: OutdoorLamp");
+        assert!(
+            model
+                .tooltip_lines
+                .iter()
+                .any(|line| line == "Supply: Supplied")
+        );
+        assert!(
+            !model
+                .tooltip_lines
+                .iter()
+                .any(|line| line == "Supply: Disconnected")
+        );
+    }
 }

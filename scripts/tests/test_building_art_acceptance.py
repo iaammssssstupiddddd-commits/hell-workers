@@ -8,6 +8,7 @@ import sys
 import subprocess
 import tempfile
 import unittest
+from types import SimpleNamespace
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -15,6 +16,56 @@ import building_art_acceptance as art
 
 
 class RecipeTests(unittest.TestCase):
+    def test_camera_view_requires_matching_runtime_scale_and_inventory(self):
+        value = {"mode": "feedback", "identity": {}, "scope": "paused-static-presentation", "view": "near"}
+        probe = {"profile": art.PROFILE, "status": "ready", "mode": "feedback", "identity": {},
+                 "nonce": "a" * 32, "scope": value["scope"], "stable_frames": 30,
+                 "view": "near", "camera_scale": 0.5,
+                 "fixture": {"target_count": 36, "view": "near", "camera_scale": 0.5}}
+        art.validate_probe(probe, value, probe["nonce"])
+        for key, changed in [("view", "far"), ("camera_scale", 5.0)]:
+            with self.assertRaisesRegex(ValueError, "camera"):
+                art.validate_probe({**probe, key: changed}, value, probe["nonce"])
+        with self.assertRaisesRegex(ValueError, "inventory"):
+            art.validate_probe({**probe, "fixture": {"target_count": 4}}, value, probe["nonce"])
+
+    def test_child_logging_cannot_inherit_suppressed_adapter_evidence(self):
+        original = {"RUST_LOG": "warn", "HW_WALL_MODE": "foreign", "KEEP": "unchanged"}
+        value = {"kind": "RestArea", "mode": "feedback", "adapter": "Intel",
+                 "identity": {"authority": "art_preview"}}
+        result = art.game_environment(original, Path("view"), value, "nonce", Path("job"))
+        self.assertEqual(result["RUST_LOG"], "info,wgpu=error")
+        self.assertEqual(result["WGPU_BACKEND"], "vulkan")
+        self.assertEqual(result["WGPU_ADAPTER_NAME"], "Intel")
+        self.assertNotIn("HW_WALL_MODE", result)
+        self.assertEqual(original["RUST_LOG"], "warn")
+        self.assertEqual(result["KEEP"], original["KEEP"])
+
+    def test_plan_reports_ready_only_after_resource_admission(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            binary = root / "codec"
+            binary.write_bytes(b"codec fixture")
+            args = SimpleNamespace(repo=root, mode="feedback", job_root=root / "job",
+                                   source_root=root / "candidate", kind="RestArea", codec=binary,
+                                   adapter="fixture", output=root / "plan.json")
+            with patch.object(art.native, "validate_repo", return_value=root), \
+                    patch.object(art, "subject", return_value=self.source()), \
+                    patch.object(art.static, "check_root"), \
+                    patch.object(art.pipeline, "load_set", return_value=(
+                        {"identity": {"authority": "art_preview"}}, "{}", None)), \
+                    patch.object(art, "check_plan"), \
+                    patch.object(art.native, "resource_snapshot", return_value={"failures": []}) as resources:
+                value = art.plan(args)
+                self.assertEqual(value["status"], "ready")
+                self.assertFalse(value["promotion_authority"])
+                self.assertTrue(value["feedback_only"])
+                args.output.unlink()
+                resources.return_value = {"failures": ["insufficient memory"]}
+                with self.assertRaisesRegex(ValueError, "insufficient memory"):
+                    art.plan(args)
+                self.assertFalse(args.output.exists())
+
     def source(self, digit="a"):
         return {"commit": digit * 40, "source": digit * 64, "harness": "b" * 64,
                 "assets": "c" * 64, "driver": "d" * 64, "dirty": []}
