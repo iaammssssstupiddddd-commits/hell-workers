@@ -162,6 +162,8 @@ asset view／driver／codec／candidate identityを固定する。feedbackだけ
 起動は既存native helperの資源guardとno-prompt launcherを使い、基準asset viewを隔離コピーする。
 
 比較時の `--view overview|near|normal|far` は明示profiling sessionのカメラだけを選ぶ。
+明示building-art sessionがある間は左の開発パネルも非表示にし、近景で先頭の
+状態標本が隠れないようにする。通常起動とsessionなしのM6比較のパネル状態は変更しない。
 既定overviewは従来の全体位置・scale 5を維持する。near／normal／farは候補kindの先頭4棟を中心に、
 scale 0.5／1／2で固定する。対象36棟・状態・論理配置・時間pauseは変更しない。
 overviewでは全対象のvisibilityを確認する。focused viewは候補の先頭4棟のvisibilityを要求し、
