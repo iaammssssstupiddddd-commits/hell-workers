@@ -101,6 +101,16 @@ class LocalInputProbeTests(unittest.TestCase):
             with self.subTest(rows=rows), self.assertRaises(RuntimeError):
                 input_probe.witnessed_input({"events": rows}, before_event_count=1)
 
+    def test_startup_waits_for_three_samples_without_weakening_raw_validation(self):
+        raw_path = self.repo / "raw.json"
+        for count, ready in ((1, False), (2, False), (3, True)):
+            raw_path.write_text(json.dumps({"samples": [{}] * count}))
+            self.assertIs(input_probe.raw_ready(raw_path), ready)
+        for invalid in ({}, {"samples": None}, {"samples": [{}] * 1201}):
+            raw_path.write_text(json.dumps(invalid))
+            with self.assertRaises(RuntimeError):
+                input_probe.raw_ready(raw_path)
+
     def test_run_rejects_unplanned_direct_launch(self):
         args = argparse.Namespace(plan=self.plan_path, repo=self.repo, job_root=self.root)
         with patch.dict(input_probe.os.environ, {}, clear=True), self.assertRaises(RuntimeError):
@@ -185,7 +195,7 @@ class LocalInputProbeTests(unittest.TestCase):
         transport_instances = []
 
         def start_game(*args, **kwargs):
-            (self.root / "raw.json").write_text("{}")
+            (self.root / "raw.json").write_text(json.dumps({"samples": [{}, {}, {}]}))
             return game
 
         def stop_game(process):

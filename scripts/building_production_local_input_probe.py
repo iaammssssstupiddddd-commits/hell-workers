@@ -123,6 +123,15 @@ def raw_snapshot(path: Path, nonce: str, pid: int) -> dict:
     return raw
 
 
+def raw_ready(path: Path) -> bool:
+    """Wait for the required sample count before applying final raw validation."""
+    raw = json.loads(path.read_bytes())
+    require(isinstance(raw, dict) and isinstance(raw.get("samples"), list)
+            and len(raw["samples"]) <= 1200,
+            "input probe startup raw shape differs")
+    return len(raw["samples"]) >= 3
+
+
 def witnessed_input(raw: dict, *, before_event_count: int) -> tuple[dict, dict]:
     require(type(before_event_count) is int and 0 <= before_event_count <= len(raw["events"]),
             "input probe event boundary is invalid")
@@ -267,10 +276,9 @@ def run(args: argparse.Namespace) -> dict:
                 if windows:
                     owned = windows[0]
                     metrics.append(probe.process_metrics(owned[1]))
-                if owned and raw_path.is_file():
+                if owned and raw_path.is_file() and raw_ready(raw_path):
                     raw = raw_snapshot(raw_path, nonce, owned[1])
-                    if len(raw["samples"]) >= 3:
-                        break
+                    break
                 time.sleep(0.25)
             else:
                 raise native.AcceptanceError("ordinary-world process/window/raw timeout")
