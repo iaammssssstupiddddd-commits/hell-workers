@@ -265,6 +265,19 @@ storage checkを完了。独立read-only画像比較では入口開口と支柱�
 布atlasの色面と少数の世界座標基準の継ぎ目・皺だけを新候補へ補正する。
 この撮影は静止比較のみで、利用者/Dreamの実遷移、異なる照明・背景、最遠・重なり、
 低品質、preview、numeric freeze、ordinary lifecycleやreleaseを証明しない。
+原画補正 `77e5bd2870261c6489bb92cc983024b84913fb34` は布色を木材から分離し、
+世界座標基準の継ぎ布・2本の横断継ぎ目・少数の皺／縫い目を追加。geometry、入口、利用状態、
+SoulSpaには触れていない。変更別contracts/tooling CI、回帰7件、Help No impact、
+独立read-only実装レビューはpass。新原画 `tak14-restarea-authoring-77e5bd28-20261005-v1` と
+runtime package `tak14-restarea-runtime-77e5bd28-20261005-v1` は独立byte/geometry verify、
+用途保持、finalize済み。新manifest `db0f535611de1140cc83dd82f08128052da82e5d8dd2642d77f3075d5fae2522`
+は依然 `art_preview` で正式authorityなし。同identityの実画面通常倍率
+`tak14-restarea-normal-77e5bd28-20261005-v1`、近景
+`tak14-restarea-near-77e5bd28-20261005-v1` はIntel/Vulkan所有windowで独立technical verify pass、
+用途保持・finalize・storage check済み。独立read-only画像比較では旧候補の茶色板／皮革感は解消し、
+淡い補修布、暗い木支柱、継ぎ目と入口が両倍率で読めるため、この2 viewの追加paint補正は必須でない。
+正式art採用は未実施。遠景・最遠・情報UI、明暗／重なり／低品質、配置preview、
+実際の利用者・Dream状態遷移、数値freeze、ordinary lifecycle／性能、promotion/install/rollbackは未受入。
 出力root: primary `target/native-acceptance/nonbridge-restarea-authoring-20261004-v1`。
 owner: main / consumer: M3候補の独立採否・現行subject導入。次工程: 原本・画像を比較しruntime候補を生成。
 release_when: 採用原本のasset正本への集約と候補フィードバック終了後。旧batchのpassを新subjectへ流用しない。
