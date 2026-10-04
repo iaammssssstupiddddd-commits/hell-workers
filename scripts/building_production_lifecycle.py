@@ -42,6 +42,13 @@ def check_raw_transitions(raw):
             require(event.get("operation") in operations
                     and all(isinstance(event.get(key), str) and event[key] for key in fields),
                     "domain message producer/payload mismatch")
+        elif producer == "KeyboardInput":
+            require(event.get("operation") == "KeyboardInput"
+                    and isinstance(event.get("key"), str) and event["key"]
+                    and event.get("state") in {"Pressed", "Released"}
+                    and type(event.get("repeat")) is bool
+                    and isinstance(event.get("window"), str) and event["window"],
+                    "raw keyboard message producer/payload mismatch")
         elif producer != "production_snapshot_delta":
             require(producer is None and event.get("operation") in {"PointerPress", "PointerRelease", "KeyPress", "KeyRelease"},
                     "unrecognized raw domain producer")

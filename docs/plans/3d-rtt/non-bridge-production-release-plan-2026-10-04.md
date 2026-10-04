@@ -46,7 +46,7 @@ Bevy 0.19の既存loader/pool経路を使う。公開・push・mergeは本依頼
 
 ### M2: 受入・正式導入
 
-- [ ] primary validation所有の通常world固定F12入力probeを拒否系試験・実機・独立reviewで確認。
+- [x] primary validation所有の通常world固定F12入力probeを拒否系試験・実機・独立reviewで確認。
   これはinput/raw輸送の技術境界だけで、正式recipe、domain lifecycleやreleaseの代用ではない。
 - [ ] 通常開発の不足producerを実装し、拒否系試験と独立レビュー。
 - [ ] 同subjectのCapture→Memory、state/lifecycle、有限pool/cleanup、群別性能を検証。
@@ -240,6 +240,10 @@ art/numeric承認、releaseを完了させるものではない。
 用途登録、finalize、primary storage checkを完了した。これは入力配送境界の技術証拠で、
 通常worldの施工・保存・cleanupや9種の正式受入を代替しない。次はこの成立経路を用いた
 通常world Capture/Memory producerとhost instrumentを別工程で実装・受入する。
+現行の正式raw verifierは新しい原 `KeyboardInput` イベントを拒否していたため、厳密な
+key/state/repeat/window payloadを持つ入力観測としてだけ追加し、domain witnessには流用しない。
+拒否系fixtureと独立reviewを経ても、通常worldのhost admission／capture ACK／instrument
+producer欠落は残る。既存collectorはX11 XTest固定であり、portal輸送の実証だけでは正式driverにならない。
 出力root: primary `target/native-acceptance/nonbridge-restarea-authoring-20261004-v1`。
 owner: main / consumer: M3候補の独立採否・現行subject導入。次工程: 原本・画像を比較しruntime候補を生成。
 release_when: 採用原本のasset正本への集約と候補フィードバック終了後。旧batchのpassを新subjectへ流用しない。

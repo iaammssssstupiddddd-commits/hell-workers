@@ -235,6 +235,9 @@ nonce/PID一致のraw 3 sample／0 eventと子process RSS/fdを独立verifyし�
 
 offline acceptance、collector、lifecycle verifierは、trustedなin-process `registration_adapter`を明示的に
 渡せる。plan/receipt bindingの共通検査は維持し、CLI/spec/environmentから任意adapterを選択できない。
+raw lifecycle verifierはprofiling observerが出す `KeyboardInput` 原メッセージを、key／
+Pressed/Released／repeat／windowを持つ入力観測としてだけ許可する。これをdomain outcome、
+ownerに紐づいたlifecycle witness、または正式入力recipeの成立証拠へ昇格しない。
 既定のoffline入口は未対応hostをfail-closedで拒否する。歴史的recipe adapterは保存済み証拠の一致検査であり、
 JSONの一致は認証ではない。通常の正式実行経路として提供・承認したものではない。
 runnerはmodule globalの関数を変更せず、各呼出しにadapterとinstrumentを明示して渡す。

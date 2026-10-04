@@ -192,6 +192,25 @@ class CollectionTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             evidence.bind_lifecycle_observations(trace, raw)
 
+    def test_raw_keyboard_message_is_input_only_and_payload_is_strict(self):
+        binding, _, raw, _ = self.fixture()
+        raw["events"].append({"event_index": 2, "sample_index": 2,
+                              "producer": "KeyboardInput", "operation": "KeyboardInput",
+                              "key": "F12", "state": "Pressed", "repeat": False,
+                              "window": "68v0", "real_seconds": 2.0})
+        collection.raw_record(evidence.pipeline.canonical(raw), binding)
+        trace = collection.normalize(raw, binding, "a" * 64)
+        with self.assertRaisesRegex(ValueError, "domain/state witness"):
+            lifecycle.check_domain_witness({"owner": "owner", "before": 1, "after": 2,
+                                            "domain_event_indices": [2]}, trace)
+        for key, replacement in (("producer", None), ("operation", "BuildingCompleted"),
+                                 ("key", ""), ("state", "Unknown"), ("repeat", 1),
+                                 ("window", "")):
+            with self.subTest(key=key, replacement=replacement), self.assertRaises(ValueError):
+                changed = copy.deepcopy(raw)
+                changed["events"][2][key] = replacement
+                collection.raw_record(evidence.pipeline.canonical(changed), binding)
+
     def test_generated_plan_session_and_result_admission_contract(self):
         from scripts.tests.test_building_production_acceptance import ProductionAcceptanceTests
 
