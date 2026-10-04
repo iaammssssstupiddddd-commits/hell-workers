@@ -276,8 +276,16 @@ runtime package `tak14-restarea-runtime-77e5bd28-20261005-v1` は独立byte/geom
 `tak14-restarea-near-77e5bd28-20261005-v1` はIntel/Vulkan所有windowで独立technical verify pass、
 用途保持・finalize・storage check済み。独立read-only画像比較では旧候補の茶色板／皮革感は解消し、
 淡い補修布、暗い木支柱、継ぎ目と入口が両倍率で読めるため、この2 viewの追加paint補正は必須でない。
-正式art採用は未実施。遠景・最遠・情報UI、明暗／重なり／低品質、配置preview、
+正式art採用は未実施。情報UI、明暗／重なり／低品質、配置preview、
 実際の利用者・Dream状態遷移、数値freeze、ordinary lifecycle／性能、promotion/install/rollbackは未受入。
+同manifestの遠景 `tak14-restarea-far-35a35f5a-20261005-v1` と最大ズームアウト
+`tak14-restarea-overview-35a35f5a-20261005-v1` も現行clean headのIntel/Vulkan実windowで
+独立technical verify pass、用途保持、finalize、storage check済み。独立画像評価では遠景で淡いテント屋根・
+入口・支柱が隣の四角い設備と区別でき、追加paint補正は不要。一方、最大ズームアウトでは
+種類と入口、支柱、利用状態を初見で確実に読むには小さすぎる。屋根を誇張する前に、
+通常worldの実操作で既存選択・情報UIが建物種別とResting／Dream状態を示す代替経路を確認する。
+黒いviewport余白の原因や通常起動での挙動、明暗・重なり・低品質・配置preview・実利用状態は
+これらの静止画像からは未検証。正式art/numeric採否とreleaseは保留する。
 出力root: primary `target/native-acceptance/nonbridge-restarea-authoring-20261004-v1`。
 owner: main / consumer: M3候補の独立採否・現行subject導入。次工程: 原本・画像を比較しruntime候補を生成。
 release_when: 採用原本のasset正本への集約と候補フィードバック終了後。旧batchのpassを新subjectへ流用しない。
