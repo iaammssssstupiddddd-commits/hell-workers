@@ -210,13 +210,15 @@ Move tooltip・selection強調がないTank近景をfresh subjectのIntel/Vulkan
 seal/finalizeした。runtime manifest identityは `art_preview`、manifest SHA-256は
 `edc65d14fe5f97b8953ccdd1487b62b1fcb51d9112915968d5994c2edf29f9cb`。
 数値freeze、独立art approval、production candidate、promotion authorityはいずれもない。
-専用worktreeと同一codec/identityのIntel/Vulkan所有X11 windowで近景、通常倍率、最大ズームアウトを
+専用worktreeと同一codec/identityのIntel/Vulkan所有X11 windowで近景、通常倍率、遠景、最大ズームアウトを
 それぞれfresh batch `tak14-tank-band-near-534fd9b3-20261005-v1`、
 `tak14-tank-band-normal-534fd9b3-20261005-v1`、
-`tak14-tank-band-overview-534fd9b3-20261005-v1` として撮影した。3件とも登録済み独立verifierで
+`tak14-tank-band-far-534fd9b3-20261005-v1`、
+`tak14-tank-band-overview-534fd9b3-20261005-v1` として撮影した。4件とも登録済み独立verifierで
 technical pass、用途登録、finalize、storage check済み。独立read-only画像評価では、近景・通常倍率に
 帯の重大な断絶は見えず、Empty/Partial/Fullも色差を伴って判別でき、正式art採否へ提出する
-候補には進められる。一方、通常倍率の鉄は細い灰色線で錆の質感が弱く、最大ズームアウトでは
+候補には進められる。遠景の草地上でも三状態の色面と桶の外形は判別できるが、木目・水位高低差・
+鉄帯の連続性や素材感は判定不能。一方、通常倍率の鉄は細い灰色線で錆の質感が弱く、最大ズームアウトでは
 建物が十数pixel程度のためPartialとFullを確実に区別できず、鉄帯も判定不能。黒背景の静止画から
 通常地形の最遠判読性は証明できない。これらは静止ArtPreview比較に限り、通常worldの
 給排水遷移、異なる背景・照明・重なり、低品質設定、native性能、数値freeze、正式art採否、
