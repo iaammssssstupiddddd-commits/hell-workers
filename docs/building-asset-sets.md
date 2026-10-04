@@ -198,6 +198,10 @@ cleanな同一source／profiling binary／登録済みplan／fresh rootを要求
 入力は駆動せず正式identityも渡さない。GPU／native allocator／application全体のhandle、
 Capture→Memory、建設・配電・保存復元・cleanupの成立、art/numeric採否、release/promotion authorityは
 この観測器から得られない。別の実装・独立受入を終えるまで `capabilities available=false` は維持する。
+2026-10-04の通常world技術batch `nonbridge-ordinary-probe-20261004-v1` は
+source `ee9410363d4e8f7bd144506a64ac3fb3a71527dd`、Intel Arc/Vulkanの所有X11 clientを撮影し、
+nonce/PID一致のraw 3 sample／0 eventと子process RSS/fdを独立verifyしてfinalizeした。
+画面は建設物のない通常開始時点であり、9種の表示・入力・lifecycle・性能受入ではない。
 
 offline acceptance、collector、lifecycle verifierは、trustedなin-process `registration_adapter`を明示的に
 渡せる。plan/receipt bindingの共通検査は維持し、CLI/spec/environmentから任意adapterを選択できない。

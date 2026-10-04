@@ -143,6 +143,15 @@ primary検証batchの直接child／登録planとclean sourceを照合し、隔�
 所有window、raw sample/event、子process RSS/fdを採る設計。入力なし・正式identityなしの技術probeで、
 全lifecycle、Capture→Memory、GPU/native/アプリ全体handle、正式美術・数値・releaseを受け入れたものではない。
 拒否系unit testと現subjectの実機観測・独立reviewを経るまでM2のproducer条件は未完とする。
+同観測器は拒否系5テストと独立read-only reviewで阻害なし。正規batch
+`nonbridge-ordinary-probe-20261004-v1` はsource `ee9410363d4e8f7bd144506a64ac3fb3a71527dd`で
+Intel Arc/Vulkanの所有X11画面、raw 3 sample／0 event、子process RSS/fdを技術verify passとして
+seal/finalizeし、比較用途をstorage holdへ登録した。画像は通常開始時点で建設物がなく、
+操作・建設・配電・save/load・release identityは観測されていない。0 eventをlifecycle passへ読み替えない。
+Door g7はprimaryの既存locator `21075f6b5c6e4412ccc17632ecc3b44bcb619bb901a06062fa0905c0be303002`、
+receipt `95ba6a19494d84825db54075cf8735d2024d18e6983dc54343cdc71c19a046ad`と
+6 core fileの保存済みhashが現時点で一致。現行HEADのghost/catalog focused test 4件もpass。
+この静的監査は通常配置・load後・pool cleanup・性能の実機受入を代替せず、M2のDoor監査を閉じない。
 出力root: primary `target/native-acceptance/nonbridge-restarea-authoring-20261004-v1`。
 owner: main / consumer: M3候補の独立採否・現行subject導入。次工程: 原本・画像を比較しruntime候補を生成。
 release_when: 採用原本のasset正本への集約と候補フィードバック終了後。旧batchのpassを新subjectへ流用しない。
