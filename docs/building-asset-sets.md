@@ -203,6 +203,12 @@ cleanな同一source／profiling binary／登録済みplan／fresh rootを要求
 入力は駆動せず正式identityも渡さない。GPU／native allocator／application全体のhandle、
 Capture→Memory、建設・配電・保存復元・cleanupの成立、art/numeric採否、release/promotion authorityは
 この観測器から得られない。別の実装・独立受入を終えるまで `capabilities available=false` は維持する。
+`building_production_local_input_probe.py` は別の技術専用入口で、同じprimary validation所有の
+直接childから通常worldの所有X11 windowへ固定F12を一度押下・解放し、製品rawの対応する
+`KeyPress`／`KeyRelease`、前後の実window画像、子processのRSS/fdを照合する。任意入力recipeや
+正式asset identityを受け付けず、domain outcome、Capture/Memory lifecycle、GPU/native allocator、
+application全体のhandle、性能、art/numeric/releaseを受入済みにしない。入力受付が実機で確認できても
+`capabilities available=false` のまま、必要なordinary-world legとinstrument producerを別途実装する。
 2026-10-04の通常world技術batch `nonbridge-ordinary-probe-20261004-v1` は
 source `ee9410363d4e8f7bd144506a64ac3fb3a71527dd`、Intel Arc/Vulkanの所有X11 clientを撮影し、
 nonce/PID一致のraw 3 sample／0 eventと子process RSS/fdを独立verifyしてfinalizeした。

@@ -46,6 +46,8 @@ Bevy 0.19の既存loader/pool経路を使う。公開・push・mergeは本依頼
 
 ### M2: 受入・正式導入
 
+- [ ] primary validation所有の通常world固定F12入力probeを拒否系試験・実機・独立reviewで確認。
+  これはinput/raw輸送の技術境界だけで、正式recipe、domain lifecycleやreleaseの代用ではない。
 - [ ] 通常開発の不足producerを実装し、拒否系試験と独立レビュー。
 - [ ] 同subjectのCapture→Memory、state/lifecycle、有限pool/cleanup、群別性能を検証。
 - [ ] Door既存assetと全consumerの適合監査。
