@@ -203,7 +203,24 @@ Move tooltip・selection強調がないTank近景をfresh subjectのIntel/Vulkan
 外壁の錆鉄帯にUV面境界の切れ目と幅の不揃いが残り、正式art採否は不可。
 静止草地画面であり、異なる背景・照明・遠景、実水量遷移、numeric freeze、releaseは未検証。
 この指摘に限って外壁の2帯を同じ高さ比率の面へ塗り、UV境界外に描線を延長する候補を
-補正中。12面の両側で帯がgutterへ届き、内面・水面へ鉄色が付かない回帰テストで確認する。
+`534fd9b30c6bd5050bde567faae40affb92ec110` で補正した。12面の両側で帯がgutterへ届く
+拒否系回帰テスト、変更別CI、Help No impactを確認した。新規のTank原本
+`nonbridge-tank-authoring-20261005-v4` とruntime package
+`nonbridge-tank-runtime-20261005-v4` を同sourceから生成・独立検証し、technical passとして
+seal/finalizeした。runtime manifest identityは `art_preview`、manifest SHA-256は
+`edc65d14fe5f97b8953ccdd1487b62b1fcb51d9112915968d5994c2edf29f9cb`。
+数値freeze、独立art approval、production candidate、promotion authorityはいずれもない。
+専用worktreeと同一codec/identityのIntel/Vulkan所有X11 windowで近景、通常倍率、最大ズームアウトを
+それぞれfresh batch `tak14-tank-band-near-534fd9b3-20261005-v1`、
+`tak14-tank-band-normal-534fd9b3-20261005-v1`、
+`tak14-tank-band-overview-534fd9b3-20261005-v1` として撮影した。3件とも登録済み独立verifierで
+technical pass、用途登録、finalize、storage check済み。独立read-only画像評価では、近景・通常倍率に
+帯の重大な断絶は見えず、Empty/Partial/Fullも色差を伴って判別でき、正式art採否へ提出する
+候補には進められる。一方、通常倍率の鉄は細い灰色線で錆の質感が弱く、最大ズームアウトでは
+建物が十数pixel程度のためPartialとFullを確実に区別できず、鉄帯も判定不能。黒背景の静止画から
+通常地形の最遠判読性は証明できない。これらは静止ArtPreview比較に限り、通常worldの
+給排水遷移、異なる背景・照明・重なり、低品質設定、native性能、数値freeze、正式art採否、
+release/install/rollbackは引き続き未受入。
 出力root: primary `target/native-acceptance/nonbridge-restarea-authoring-20261004-v1`。
 owner: main / consumer: M3候補の独立採否・現行subject導入。次工程: 原本・画像を比較しruntime候補を生成。
 release_when: 採用原本のasset正本への集約と候補フィードバック終了後。旧batchのpassを新subjectへ流用しない。
