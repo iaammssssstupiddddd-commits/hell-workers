@@ -138,6 +138,11 @@ PowerSupplyState変更を表示する回帰テストを追加したが、最遠�
 同sourceの独立read-only実装レビューはblocking findingなし。ただし実機操作、art/numeric採否、
 ordinary lifecycle／性能、正式releaseは未受入であり、実装レビューから承認を推定しない。
 既存static画像はその撮影時subjectの比較用であり、後続のtooling差分を検証したnative受入には流用しない。
+通常worldの最初のhost観測器 `building_production_local_probe.py` を追加。
+primary検証batchの直接child／登録planとclean sourceを照合し、隔離cwdの通常起動から
+所有window、raw sample/event、子process RSS/fdを採る設計。入力なし・正式identityなしの技術probeで、
+全lifecycle、Capture→Memory、GPU/native/アプリ全体handle、正式美術・数値・releaseを受け入れたものではない。
+拒否系unit testと現subjectの実機観測・独立reviewを経るまでM2のproducer条件は未完とする。
 出力root: primary `target/native-acceptance/nonbridge-restarea-authoring-20261004-v1`。
 owner: main / consumer: M3候補の独立採否・現行subject導入。次工程: 原本・画像を比較しruntime候補を生成。
 release_when: 採用原本のasset正本への集約と候補フィードバック終了後。旧batchのpassを新subjectへ流用しない。

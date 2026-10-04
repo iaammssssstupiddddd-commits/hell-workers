@@ -191,9 +191,13 @@ ordinary-world process/window・capture/ACK producer、GPU/native/RSS/applicatio
 `building_production_validation_context.running_context` は通常primary検証台帳のread-onlyな
 runner所有確認を提供する。実行中batchの直接childと親coordinatorの出生identity、owner、literal
 command/verifier、exact出力root、登録時plan hash、現在head/source、policy/controllerを照合する。
-環境変数や保存JSONだけでは受理しない。grandchild/wrapperも現在は拒否する。この入口はまだ
-production runnerへ接続しておらず、ゲームの起動・window admission・GPU/handle計測・acceptance seal、
-art/promotion authorityを提供しない。上記の不足producerと正式recipeの独立レビューが引き続き必要。
+環境変数や保存JSONだけでは受理しない。grandchild/wrapperも現在は拒否する。
+`building_production_local_probe.py` はこの入口を通常開発の直接child検証へ接続する技術観測器である。
+cleanな同一source／profiling binary／登録済みplan／fresh rootを要求し、隔離した作業dirで通常worldを起動する。
+所有PIDのX11 client画像、製品rawのsample/event順序、子processのRSSとfd数だけを採る。
+入力は駆動せず正式identityも渡さない。GPU／native allocator／application全体のhandle、
+Capture→Memory、建設・配電・保存復元・cleanupの成立、art/numeric採否、release/promotion authorityは
+この観測器から得られない。別の実装・独立受入を終えるまで `capabilities available=false` は維持する。
 
 offline acceptance、collector、lifecycle verifierは、trustedなin-process `registration_adapter`を明示的に
 渡せる。plan/receipt bindingの共通検査は維持し、CLI/spec/environmentから任意adapterを選択できない。
