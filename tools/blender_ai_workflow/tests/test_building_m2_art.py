@@ -43,6 +43,32 @@ class M2ArtTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "unknown MudMixer"):
             mud_mixer_plane("body", "body10:top")
 
+    def test_mixer_mud_stains_only_recessed_floor(self):
+        with tempfile.TemporaryDirectory() as directory:
+            planes = Path(directory) / "planes.png"
+            strokes = Path(directory) / "strokes.png"
+            paint("MudMixer", planes, stage="planes")
+            paint("MudMixer", strokes, stage="strokes")
+            faces = face_layout("MudMixer")["body"]
+            floor = [face for face in faces if face["surface"] == "body0:top"]
+            self.assertEqual(len(floor), 1)
+            cell = floor[0]["cell"]
+            x, y = (cell % 16) * 32, (cell // 16) * 32
+            with Image.open(planes) as before, Image.open(strokes) as after:
+                colors = set(after.crop((x, y, x + 32, y + 32)).get_flattened_data())
+                self.assertIn((119, 87, 62, 255), colors)
+                self.assertIn((59, 44, 36, 255), colors)
+                self.assertNotEqual(before.crop((x, y, x + 32, y + 32)).tobytes(),
+                                    after.crop((x, y, x + 32, y + 32)).tobytes())
+                for face in faces:
+                    if face is floor[0]:
+                        continue
+                    other = face["cell"]
+                    ox, oy = (other % 16) * 32, (other // 16) * 32
+                    material = set(after.crop((ox, oy, ox + 32, oy + 32)).get_flattened_data())
+                    self.assertNotIn((119, 87, 62, 255), material)
+                    self.assertNotIn((59, 44, 36, 255), material)
+
     def test_tank_floor_is_one_color_and_iron_stays_on_outer_wall(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "tank.png"
