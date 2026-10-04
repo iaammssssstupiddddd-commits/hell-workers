@@ -13,7 +13,8 @@ from PIL import Image, ImageDraw
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
-from building_m2_art import candidate_geometry, face_layout, mud_mixer_plane, paint, project_xz
+from building_m2_art import (candidate_geometry, face_layout, mud_mixer_plane,
+                             numeric_contract, paint, project_xz)
 from build_building_m2_candidate import check_uv
 if __package__:
     from .test_building_clay import encoded_geometry, write_glb
@@ -22,6 +23,32 @@ else:
 
 
 class M2ArtTests(unittest.TestCase):
+    def test_v2_mud_surface_has_own_uv_and_not_wood_floor_paint(self):
+        numeric, sha256 = numeric_contract("MudMixer", "v2")
+        self.assertEqual(numeric.name, "building-m2-v2.numeric-candidate.json")
+        self.assertEqual(len(sha256), 64)
+        layout = face_layout("MudMixer", "v2")
+        self.assertEqual(len(layout["body"]), 66)
+        mud = [face for face in layout["body"] if face["surface"] == "mud0:top"]
+        self.assertEqual(len(mud), 1)
+        self.assertNotEqual(mud_mixer_plane("body", "mud0:top"),
+                            mud_mixer_plane("body", "body0:top"))
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "v2.png"
+            strokes = Path(directory) / "v2-strokes.png"
+            paint("MudMixer", path, stage="planes", revision="v2")
+            paint("MudMixer", strokes, stage="strokes", revision="v2")
+            with Image.open(path) as image:
+                cell = mud[0]["cell"]
+                x, y = (cell % 16) * 32, (cell // 16) * 32
+                self.assertEqual(image.getpixel((x + 1, y + 1)),
+                                 (*mud_mixer_plane("body", "mud0:top"), 255))
+            with Image.open(path) as planes, Image.open(strokes) as detailed:
+                box = (x, y, x + 32, y + 32)
+                self.assertEqual(planes.crop(box).tobytes(), detailed.crop(box).tobytes())
+        with self.assertRaisesRegex(ValueError, "unknown M2 art revision"):
+            numeric_contract("Tank", "v2")
+
     def test_mixer_material_planes_separate_cavity_wood_iron_and_rotor(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "mixer.png"
@@ -172,6 +199,22 @@ class M2ArtTests(unittest.TestCase):
                     write_glb(path, document, binary)
                     with self.assertRaises(ValueError):
                         check_uv(path, geometry, layout[role])
+
+    def test_indexed_quads_allow_both_diagonals_and_cyclic_order(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "body.glb"
+            geometry = candidate_geometry("MudMixer", "v2")["body"]
+            layout = face_layout("MudMixer", "v2")["body"]
+            document, binary = encoded_geometry(geometry)
+            uv_offset = document["bufferViews"][2]["byteOffset"]
+            for index, (u, v) in enumerate(point for face in layout for point in face["uv"]):
+                struct.pack_into("<ff", binary, uv_offset + index * 8, u, 1 - v)
+            index_offset = document["bufferViews"][3]["byteOffset"]
+            # First quad: switch to the other valid diagonal and cyclically
+            # rotate one triangle while retaining the authored winding.
+            struct.pack_into("<IIIIII", binary, index_offset, 1, 3, 0, 1, 2, 3)
+            write_glb(path, document, binary)
+            check_uv(path, geometry, layout)
 
 
 if __name__ == "__main__":

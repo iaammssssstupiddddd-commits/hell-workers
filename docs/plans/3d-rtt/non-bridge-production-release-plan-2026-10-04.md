@@ -342,8 +342,12 @@ fresh原画 `tak14-mud-mixer-authoring-281a6fc5-20261005-v1`、runtime候補
 床と0.25wu、攪拌部と1.25wu、内壁X/Zと各2wuの離隔を検査する。
 body/rotorの2role、外形・接地点・preview anchor、回転・Refining条件、保存／gameplayは不変。
 これは泥量や新しい充填状態ではなく固定の残留面という比較仮説であり、
-Pythonの算術・拒否系検査だけでは数値freezeにならない。現行M2制作器は旧v1に固定したままで、
-v2のBlender出力・通常倍率比較・独立art/数値採否・releaseはこれから行う。
+Pythonの算術・拒否系検査だけでは数値freezeにならない。M2制作器に明示`--revision v2`を
+加え、旧v1は既定のまま固定し、新候補の原本・GLB・UV・runtime previewを別identityで
+生成できるようにした。独立実装レビューでaccessorだけでは泥面未描画を拒否できないと分かったため、
+実際のindexごとにface所属・有向周縁・逆向き一対の内部対角線を照合し、
+泥面のindex削除／誤接続／逆巻きを拒否してから
+離隔値を出す。v2のBlender出力・通常倍率比較・独立art/数値採否・releaseはこれから行う。
 出力root: primary `target/native-acceptance/nonbridge-restarea-authoring-20261004-v1`。
 owner: main / consumer: M3候補の独立採否・現行subject導入。次工程: 原本・画像を比較しruntime候補を生成。
 release_when: 採用原本のasset正本への集約と候補フィードバック終了後。旧batchのpassを新subjectへ流用しない。

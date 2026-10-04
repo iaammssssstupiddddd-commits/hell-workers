@@ -15,7 +15,7 @@ import bpy
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from building_clay_geometry import PILOTS, load_pilot, require
-from building_m2_art import NUMERIC_SHA256, candidate_geometry, face_layout
+from building_m2_art import candidate_geometry, face_layout, numeric_contract
 from create_building_clay_scene import check_projection, configure_camera, digest
 from render_color_calibration import resolve_ocio_evidence
 from workflow_common import asset_root, script_arguments, staging_path, write_json_atomic
@@ -26,6 +26,7 @@ def main():
     parser.add_argument("kind", choices=tuple(PILOTS))
     parser.add_argument("--name", required=True)
     parser.add_argument("--stage", choices=("planes", "strokes"), required=True)
+    parser.add_argument("--revision", choices=("v1", "v2"), default="v1")
     args = parser.parse_args(script_arguments())
     import re
     require(re.fullmatch(r"[a-z0-9][a-z0-9-]{0,79}", args.name) is not None, "unsafe name")
@@ -36,8 +37,10 @@ def main():
     require(not blend.exists() and not report.exists(), "candidate output already exists")
     require(output.is_dir() and {p.name for p in output.iterdir()} == {"albedo.png"},
             "prepare only the atlas before candidate scene creation")
-    geometries, layout = candidate_geometry(args.kind), face_layout(args.kind)
-    contract = load_pilot(args.kind)
+    geometries, layout = (candidate_geometry(args.kind, args.revision),
+                          face_layout(args.kind, args.revision))
+    contract = load_pilot(args.kind, args.revision)
+    _, numeric_sha256 = numeric_contract(args.kind, args.revision)
     ocio = resolve_ocio_evidence()
     require(not ocio["fallback"], "candidate requires explicit OCIO evidence")
     bpy.ops.object.select_all(action="SELECT")
@@ -102,12 +105,14 @@ def main():
     write_json_atomic(report, {
         "schema_version": 1, "kind": args.kind, "stage": args.stage,
         "evidence_kind": "unapproved_m2_paint_candidate",
-        "numeric_candidate_sha256": NUMERIC_SHA256,
+        "numeric_candidate_sha256": numeric_sha256,
+        "revision": args.revision,
         "numeric_freeze": False, "art_approved": False, "runtime_published": False,
         "ocio": ocio, "blend_sha256": digest(blend),
         "sources": {name: digest(scripts / name) for name in (
             "create_building_m2_scene.py", "building_m2_art.py", "building_clay_geometry.py",
-            "create_building_clay_scene.py", "validate_building_numeric_candidate.py")},
+            "create_building_clay_scene.py", "validate_building_numeric_candidate.py",
+            "validate_building_m2_indexed_faces.py")},
         "albedo_sha256": digest(output / "albedo.png"),
         "renders": renders, "preview": contract["preview"], "face_layout": layout,
         "excludes": ["active simulation", "native", "art acceptance", "formal release"],

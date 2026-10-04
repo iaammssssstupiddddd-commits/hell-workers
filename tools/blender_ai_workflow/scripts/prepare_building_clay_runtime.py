@@ -19,10 +19,11 @@ from validate_building_clay_glb import validate
 from validate_wall_glb import accessor_values, read_glb
 
 
-def state_geometry(kind: str, output: Path) -> dict:
+def state_geometry(kind: str, output: Path, revision: str = "v1") -> dict:
     """Recompute state extents and continuous sweep from the actual exported GLB."""
-    contract = load_pilot(kind)
-    roles = {role: validate(output / f"{role}.glb", kind, role) for role in contract["roles"]}
+    contract = load_pilot(kind, revision)
+    roles = {role: validate(output / f"{role}.glb", kind, role, revision)
+             for role in contract["roles"]}
     moving = "water" if kind == "Tank" else "rotor"
     document, binary = read_glb(output / f"{moving}.glb")
     accessor = document["meshes"][0]["primitives"][0]["attributes"]["POSITION"]
@@ -52,15 +53,26 @@ def state_geometry(kind: str, output: Path) -> dict:
     pipeline.require(pivot[0] == pivot[2] == 0 and radius < min(inner_x, inner_z)
                      and minimum > floor and abs(maximum - support_bottom) <= contract["tolerance_wu"],
                      "rotor sweep intersects trough or misses shaft support")
-    return {"roles": roles, "rotor_sweep": {
+    sweep = {
         "axis": "local_y", "pivot_wu": pivot, "radius_wu": radius,
         "bounds_y_wu": [minimum, maximum], "clearance_x_wu": inner_x - radius,
         "clearance_z_wu": inner_z - radius, "clearance_floor_wu": minimum - floor,
-        "support_contact_y_wu": support_bottom, "continuous_full_turn": True}}
+        "support_contact_y_wu": support_bottom, "continuous_full_turn": True}
+    if revision == "v2":
+        from building_m2_art import candidate_geometry, face_layout
+        from validate_building_m2_indexed_faces import check_indexed_faces
+
+        check_indexed_faces(output / "body.glb", candidate_geometry(kind, revision)["body"],
+                            face_layout(kind, revision)["body"])
+        mud = contract["construction"]["mud_box"]
+        mud_top = mud["center"][1] + mud["size"][1] / 2
+        pipeline.require(mud_top < minimum, "mud surface intersects actual rotor sweep")
+        sweep["clearance_mud_surface_wu"] = minimum - mud_top
+    return {"roles": roles, "rotor_sweep": sweep}
 
 
-def recipe(kind: str, generation: int, source: Path) -> dict:
-    contract = load_pilot(kind)
+def recipe(kind: str, generation: int, source: Path, revision: str = "v1") -> dict:
+    contract = load_pilot(kind, revision)
     pipeline.identity(kind, generation, "art_preview")
     representative = contract["preview"]["representative_state"]
 

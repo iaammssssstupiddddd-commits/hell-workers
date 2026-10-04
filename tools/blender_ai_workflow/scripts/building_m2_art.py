@@ -14,23 +14,34 @@ from validate_building_numeric_candidate import validate
 
 NUMERIC = FIXTURES / "building-m2-v1.numeric-candidate.json"
 NUMERIC_SHA256 = "1b913ea0784bf6815a6c46ed0396dafc6ebcdcfc107370bc569aa875775d949d"
+NUMERIC_V2 = FIXTURES / "building-m2-v2.numeric-candidate.json"
+NUMERIC_V2_SHA256 = "aba63ac343e11ed4fa758deffaf36b9139145333ca5d61fd26c3e3dd513153c8"
 ATLAS_SIZE = 512
 CELL = 32
 GUTTER = 4
 
 
-def candidate_geometry(kind):
-    require(hashlib.sha256(NUMERIC.read_bytes()).hexdigest() == NUMERIC_SHA256,
+def numeric_contract(kind, revision="v1"):
+    require(revision == "v1" or (kind == "MudMixer" and revision == "v2"),
+            "unknown M2 art revision")
+    path, expected = ((NUMERIC_V2, NUMERIC_V2_SHA256) if revision == "v2"
+                      else (NUMERIC, NUMERIC_SHA256))
+    require(hashlib.sha256(path.read_bytes()).hexdigest() == expected,
             "numeric proposal changed: independent revision required")
-    validate(NUMERIC)
-    return build(kind, load_pilot(kind))
+    validate(path)
+    return path, expected
 
 
-def face_layout(kind):
+def candidate_geometry(kind, revision="v1"):
+    numeric_contract(kind, revision)
+    return build(kind, load_pilot(kind, revision))
+
+
+def face_layout(kind, revision="v1"):
     """A cell per polygon; UV points retain planar proportions inside its gutter."""
     layout = {}
     index = 0
-    for role, geometry in candidate_geometry(kind).items():
+    for role, geometry in candidate_geometry(kind, revision).items():
         layout[role] = []
         for face, surface in zip(geometry.faces, geometry.surfaces, strict=True):
             points = [geometry.vertices[i] for i in face]
@@ -84,8 +95,10 @@ def mud_mixer_plane(role, surface):
     if role == "rotor":
         require(label in {"rotor0", "rotor1", "rotor2"}, "unknown MudMixer rotor")
         return (112, 111, 99) if label == "rotor0" else (194, 144, 83)
-    require(role == "body" and label in {f"body{index}" for index in range(10)},
+    require(role == "body" and label in {f"body{index}" for index in range(10)} | {"mud0"},
             "unknown MudMixer body")
+    if label == "mud0":
+        return (118, 94, 65) if side == "top" else (98, 75, 53)
     if label == "body0":
         return (83, 58, 43) if side == "top" else (119, 79, 50)
     inside = {"body1": "right", "body2": "left", "body3": "back", "body4": "front"}
@@ -98,7 +111,7 @@ def mud_mixer_plane(role, surface):
     return (163, 112, 68)  # overhead wooden crossbeam
 
 
-def paint(kind, path, stage="strokes"):
+def paint(kind, path, stage="strokes", revision="v1"):
     # Pillow is already part of the workflow; Blender invokes this via the host
     # preparation entrypoint, so its bundled Python does not need Pillow.
     from PIL import Image, ImageDraw, ImageFilter
@@ -107,8 +120,8 @@ def paint(kind, path, stage="strokes"):
     image = Image.new("RGBA", (ATLAS_SIZE, ATLAS_SIZE), (40, 35, 30, 255))
     draw = ImageDraw.Draw(image)
     palettes = {"Tank": {"body": (173, 105, 69), "water": (64, 157, 169)}}
-    layout = face_layout(kind)
-    meshes = candidate_geometry(kind)
+    layout = face_layout(kind, revision)
+    meshes = candidate_geometry(kind, revision)
     for role, faces in layout.items():
         for face, indices in zip(faces, meshes[role].faces, strict=True):
             surface = face["surface"]
@@ -195,6 +208,10 @@ def paint(kind, path, stage="strokes"):
                 for fraction in (0.28, 0.72):
                     xx = left * (1-fraction) + right * fraction
                     brush.line(((xx, top+2), (xx+1, bottom-2)), fill=(*dark, 255), width=1)
+            elif kind == "MudMixer" and surface.startswith("mud0:"):
+                # The independent opaque mud slab is a large material plane;
+                # generic wood-grain strokes would misidentify its surface.
+                pass
             else:
                 for stroke in range(2):
                     yy = y + 8 + stroke * 6 + (cell % 2)

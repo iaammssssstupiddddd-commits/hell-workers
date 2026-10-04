@@ -12,8 +12,8 @@ from validate_wall_glb import accessor_values, exact_identity_node, index_values
 from workflow_common import staging_path, write_json_atomic
 
 
-def validate(path: Path, kind: str, role: str) -> dict:
-    contract = load_pilot(kind)
+def validate(path: Path, kind: str, role: str, revision: str = "v1") -> dict:
+    contract = load_pilot(kind, revision)
     require(role in contract["roles"], "unknown pilot mesh role")
     spec = contract["roles"][role]
     document, binary = read_glb(path)
@@ -84,9 +84,10 @@ def main() -> None:
     parser.add_argument("input", type=Path)
     parser.add_argument("kind", choices=("Tank", "MudMixer"))
     parser.add_argument("role")
+    parser.add_argument("--revision", choices=("v1", "v2"), default="v1")
     parser.add_argument("--report", type=Path)
     args = parser.parse_args()
-    result = validate(args.input, args.kind, args.role)
+    result = validate(args.input, args.kind, args.role, args.revision)
     if args.report:
         report = staging_path(args.report, "reports")
         require(not report.exists(), "report already exists")
