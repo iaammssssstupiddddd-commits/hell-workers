@@ -14,6 +14,67 @@ sys.path.insert(0, str(HELPER_DIR))
 acceptance = importlib.import_module("ui_usability_acceptance")
 
 
+class DynamicTargetClickTests(unittest.TestCase):
+    KEY = "menu:Workspace(OpenEntities)"
+
+    def driver(self, rect):
+        driver = acceptance.Driver.__new__(acceptance.Driver)
+        driver.last = {"cursor": None, "controls": {
+            self.KEY: {"rect": rect, "fully_visible": True, "interaction": "None"}}}
+        driver.send = Mock()
+        return driver
+
+    def test_moved_target_is_reacquired_before_press(self):
+        driver = self.driver([1448, 16, 1564, 48])
+        points = []
+
+        def send(**event):
+            if "point" in event:
+                point = event["point"]
+                points.append(point)
+                driver.last["cursor"] = point
+                driver.last["controls"][self.KEY]["rect"] = [1515, 16, 1631, 48]
+                driver.last["controls"][self.KEY]["interaction"] = (
+                    "Hovered" if point == (1573, 32) else "None")
+            elif event.get("pressed"):
+                driver.last["controls"][self.KEY]["interaction"] = "Pressed"
+
+        driver.send.side_effect = send
+        acceptance.Driver.click(driver, self.KEY)
+        self.assertEqual(points, [(1506, 32), (1573, 32)])
+        self.assertEqual(driver.send.call_count, 4)
+        self.assertEqual(driver.send.call_args_list[2].kwargs,
+                         {"button": 1, "pressed": True})
+
+    def test_occluded_target_is_not_pressed(self):
+        driver = self.driver([1515, 16, 1631, 48])
+
+        def send(**event):
+            driver.last["cursor"] = event["point"]
+
+        driver.send.side_effect = send
+        with self.assertRaisesRegex(acceptance.native.AcceptanceError, "occluded"):
+            acceptance.Driver.click(driver, self.KEY)
+        driver.send.assert_called_once_with(point=(1573, 32))
+
+    def test_unstable_target_is_bounded_without_press(self):
+        driver = self.driver([0, 16, 100, 48])
+        points = []
+
+        def send(**event):
+            point = event["point"]
+            points.append(point)
+            driver.last["cursor"] = point
+            driver.last["controls"][self.KEY]["rect"] = [point[0] + 1, 16,
+                                                          point[0] + 101, 48]
+
+        driver.send.side_effect = send
+        with self.assertRaisesRegex(acceptance.native.AcceptanceError, "stable hover"):
+            acceptance.Driver.click(driver, self.KEY)
+        self.assertEqual(len(points), 3)
+        self.assertEqual(driver.send.call_count, 3)
+
+
 class BridgePlanningEvidenceTests(unittest.TestCase):
     def test_pause_toggle_waits_for_domain_state_without_resending(self):
         driver = Mock()

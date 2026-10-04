@@ -292,6 +292,11 @@ Yardへ修正した。terrainやzoneを受入用に書き換えず、実際のYa
 2×2候補だけを受動観測するUI caseを追加中。プレイヤーの配置、予約、保存復元、取消を
 実ウィンドウ入力で確認する工程であり、完成建物のResting/Dream、最大ズームアウトの
 情報パネル、正式asset表示、性能やreleaseの代用にはしない。
+初回バッチ `tak14-restarea-planning-2aa4edef-20261005-v1` は通常worldの配置予約、
+保存・再読込を実操作で観測したが、再読込直後に可変top barの OpenEntities 位置が
+pointer移動中に変わり、hover guardで終了した。exit 1／invalidとして封印・診断保持済み。
+取消の実入力と独立verifyは未完了であり、部分観測を正式lifecycle受入へ昇格しない。
+UI driverは移動だけを最大3回再取得し、実際にhoverを観測するまでpressしない補正を実施中。
 出力root: primary `target/native-acceptance/nonbridge-restarea-authoring-20261004-v1`。
 owner: main / consumer: M3候補の独立採否・現行subject導入。次工程: 原本・画像を比較しruntime候補を生成。
 release_when: 採用原本のasset正本への集約と候補フィードバック終了後。旧batchのpassを新subjectへ流用しない。

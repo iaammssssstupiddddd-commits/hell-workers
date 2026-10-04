@@ -304,10 +304,23 @@ class Driver:
         return (round((rect[0] + rect[2]) / 2), round((rect[1] + rect[3]) / 2))
 
     def click(self, key):
-        point = self.point(key)
-        self.send(point=point)
-        native.require(self.last["controls"].get(key, {}).get("interaction") == "Hovered",
-                       f"target is occluded or not hovered: {key}")
+        # Dynamic menu text can move an adjacent target between the observed
+        # rect and the acknowledged pointer move. Reacquire before pressing;
+        # an unmoved but unhovered target is still a hard occlusion failure.
+        for _ in range(3):
+            point = self.point(key)
+            self.send(point=point)
+            target = self.last["controls"].get(key)
+            if target is not None and target["interaction"] == "Hovered":
+                break
+            native.require(target is not None and target["fully_visible"],
+                           f"target disappeared or is clipped: {key}")
+            rect = target["rect"]
+            native.require(not (rect[0] <= point[0] <= rect[2]
+                                and rect[1] <= point[1] <= rect[3]),
+                           f"target is occluded or not hovered: {key}")
+        else:
+            raise native.AcceptanceError(f"target moved without stable hover: {key}")
         self.send(button=1, pressed=True)
         native.require(self.last["controls"].get(key, {}).get("interaction") == "Pressed",
                        f"target did not receive press: {key}")
