@@ -19,7 +19,7 @@ sys.path.insert(0, str(ROOT / "tools/blender_ai_workflow/scripts"))
 # Workflow helpers require the repository-relative search path above.
 import building_asset_pipeline as pipeline  # noqa: E402
 from building_clay_geometry import read_json  # noqa: E402
-from building_m2_art import NUMERIC_SHA256, candidate_geometry  # noqa: E402
+from building_m2_art import NUMERIC_SHA256, candidate_geometry, numeric_contract  # noqa: E402
 
 COMMON_LEGS = {
     "world-near-far": "Observe the normal world at normal and distant zoom; retain kind/state recognition captures.",
@@ -54,6 +54,15 @@ def frozen_subject(repo):
     return value
 
 
+def numeric_binding(kind, spec):
+    """Legacy absent fields mean v1, never infer a revision from a digest."""
+    revision = spec.get("revision", "v1")
+    _, expected = numeric_contract(kind, revision)
+    declared = spec.get("numeric_candidate_sha256", NUMERIC_SHA256)
+    pipeline.require(declared == expected, "per-kind numeric proposal binding differs")
+    return {"revision": revision, "numeric_candidate_sha256": expected}
+
+
 def verify(plan_path):
     """Re-read both prepared runtime sets, provenance, codec and frozen source."""
     value = pipeline.read(plan_path)
@@ -69,15 +78,16 @@ def verify(plan_path):
     codec = pipeline.no_symlinks(Path(value["codec"]))
     pipeline.require(pipeline.digest(codec.read_bytes()) == value["codec_sha256"], "codec changed")
     pipeline.require(set(value["kinds"]) == set(KIND_LEGS), "both runtime kinds are required")
-    identities = {}
+    identities, numeric_candidates = {}, {}
     for kind, spec in value["kinds"].items():
-        candidate_geometry(kind)
+        binding = numeric_binding(kind, spec)
+        candidate_geometry(kind, binding["revision"])
         root = pipeline.no_symlinks(Path(spec["source_root"]))
         manifest, text, _ = pipeline.load_set(root, kind, codec)
         pipeline.require(manifest["identity"] == spec["identity"]
                          and manifest["identity"]["authority"] == "art_preview"
                          and pipeline.digest(text.encode()) == spec["manifest_sha256"]
-                         and manifest["geometry_contract_sha256"] == NUMERIC_SHA256,
+                         and manifest["geometry_contract_sha256"] == binding["numeric_candidate_sha256"],
                          "runtime identity or numeric binding changed")
         pipeline.require(manifest["receipt"] is None and manifest["art_approval_sha256"] is None,
                          "ArtPreview runtime cannot carry release/art approval")
@@ -88,6 +98,7 @@ def verify(plan_path):
         pipeline.require(manifest["export_sha256"] == pipeline.digest(pipeline.canonical(manifest["artifacts"])),
                          "runtime artifact inventory changed")
         identities[kind] = manifest["identity"]
+        numeric_candidates[kind] = binding
     # Detect changes while the external codec and artifact readers were running.
     pipeline.require(value["subject"] == frozen_subject(Path(value["repo"]))
                      and pipeline.digest(codec.read_bytes()) == value["codec_sha256"]
@@ -95,6 +106,7 @@ def verify(plan_path):
     return {"schema_version": 1, "status": "pass", "scope": "m2-prepared-runtime-integrity-only",
             "plan_sha256": pipeline.digest(plan_path.read_bytes()), "subject": value["subject"],
             "identities": identities, "numeric_candidate_sha256": NUMERIC_SHA256,
+            "numeric_candidates": numeric_candidates,
             "accepted": False, "numeric_freeze": False, "runtime_published": False}
 
 
@@ -106,20 +118,25 @@ def plan(args):
     pipeline.require(subject["source"] == args.subject_sha256, "supplied source fingerprint differs")
     kinds = {}
     for kind, root in (("Tank", args.tank_runtime), ("MudMixer", args.mixer_runtime)):
-        candidate_geometry(kind)
+        revision = getattr(args, "mixer_revision", "v1") if kind == "MudMixer" else "v1"
+        _, numeric_sha = numeric_contract(kind, revision)
+        candidate_geometry(kind, revision)
         manifest, text, _ = pipeline.load_set(root, kind, args.codec)
         pipeline.require(manifest["identity"]["authority"] == "art_preview",
                          "M2 feedback must remain ArtPreview")
         # The M1-c loader seals this geometry record into the descriptor identity.
-        pipeline.require(manifest["geometry_contract_sha256"] == NUMERIC_SHA256,
+        pipeline.require(manifest["geometry_contract_sha256"] == numeric_sha,
                          "runtime descriptor does not bind the exact numeric proposal")
         kinds[kind] = {"source_root": str(root.absolute()), "identity": manifest["identity"],
                        "manifest_sha256": pipeline.digest(text.encode()),
+                       "revision": revision, "numeric_candidate_sha256": numeric_sha,
                        "legs": [{"id": name, "action": action, "accepted": False,
                                  "evidence": []} for name, action in
                                 {**COMMON_LEGS, **KIND_LEGS[kind]}.items()]}
     result = {
         "schema_version": 1, "scope": "m2-feedback-plan-not-acceptance",
+        # The top-level legacy field is the common v1 baseline, not proof that
+        # both runtime kinds use v1. Each kind binds its exact proposal above.
         "source_sha256": args.subject_sha256, "numeric_candidate_sha256": NUMERIC_SHA256,
         "repo": str(repo), "subject": subject, "codec": str(args.codec.absolute()),
         "codec_sha256": pipeline.digest(args.codec.read_bytes()), "kinds": kinds,
@@ -160,6 +177,7 @@ def inspect(plan_path, kind, trace_path):
                      and trace["schema_version"] == 1, "unsupported observation schema")
     pipeline.require(value["scope"] == "m2-feedback-plan-not-acceptance"
                      and value["numeric_candidate_sha256"] == NUMERIC_SHA256, "wrong plan")
+    binding = numeric_binding(kind, value["kinds"][kind])
     pipeline.require(trace["scope"] == "m2-feedback-observations-only"
                      and trace["identity"] == value["kinds"][kind]["identity"]
                      and trace["failure"] is None and trace["accepted"] is False
@@ -188,6 +206,7 @@ def inspect(plan_path, kind, trace_path):
     # does not prove a task succeeded, a rejected move, overlap, or visual quality.
     return {"scope": "m2-observation-inventory", "source_sha256": value["source_sha256"],
             "identity": trace["identity"], "trace_sha256": pipeline.digest(trace_path.read_bytes()),
+            "numeric_candidate": binding,
             "samples": len(samples), "owners_seen": len(owners), "states_seen": sorted(states),
             "matching_consumers_seen": sorted(consumers), "unpaused_samples": active_samples,
             "paused_samples": paused_samples, "accepted": False,
@@ -200,6 +219,8 @@ def main():
     create = sub.add_parser("plan")
     create.add_argument("--tank-runtime", type=Path, required=True)
     create.add_argument("--mixer-runtime", type=Path, required=True)
+    create.add_argument("--mixer-revision", choices=("v1", "v2"), default="v1",
+                        help="Explicit unapproved MudMixer numeric revision; Tank remains v1")
     create.add_argument("--codec", type=Path, required=True)
     create.add_argument("--subject-sha256", required=True)
     create.add_argument("--output", type=Path, required=True)

@@ -380,6 +380,22 @@ Vulkan/X11/adapterを既存window verifierで検査する。旧planはhighとし
 静止性能参照はhigh限定を維持し、lower qualityは明示building-art sessionだけで許可する。
 品質指定は検証子processだけの制御で、通常起動やプレイヤーの設定・Help契約を変更しない。
 追加経路の実装レビューと現subjectの低品質画像取得までは、低品質受入を完了扱いにしない。
+`e234fbe0aa2b80a98d1baacd59d0838b30a4459c` の低品質normalとhigh最大scale5を
+同manifestで撮影。`tak14-mud-mixer-v2-flow-{low,overview}-20261005-v1` は独立technical
+verifier pass、具体用途保持・finalize済み。low画像SHA
+`81748907ad80948d7fe162c93fd832dc5bfea51bb29722a66a9559d242b5201b`、overview画像SHA
+`25fffea7babf76914a3f4d425179e5bac81c297a7f4a5f72e78498ca01709e94`。
+独立画像レビューではlow normalの木枠／泥／rotor／紫の静止差と隣接種の識別は維持され、
+追加paint調整は不要。ただしoverview scale5は素材・種・状態を確実に読めず、画像可読性は未達。
+細かなpaint追加で解決したとせず、既存選択・情報UIによる種類・状態の確認を実操作で検証する。
+いずれも通常worldの精製・停止・再開、明暗・重なり、正式art/numeric採否やreleaseの証拠ではない。
+次の状態観測に向け、`building_m2_acceptance.py plan --mixer-revision v2` を追加する。
+Tankはv1、MudMixerは明示revisionと数値原本hashをkind単位で固定し、manifestと実provenanceの
+一致をverifyする。旧field欠落planはv1のみと解釈し、hashからv2を推測しない。
+top-levelの旧`numeric_candidate_sha256`は共通v1基点で、v2の根拠ではない。検証結果の
+`numeric_candidates`を各kindの根拠とし、inspectも同じrevision拒否規則を使う。
+unknown revision、Tank v2、v2 hash欠落・v1への取り違え、manifest／provenance不一致を拒否する。
+これは未承認feedback候補の状態観測準備だけで、数値freezeや正式art/releaseを付与しない。
 出力root: primary `target/native-acceptance/nonbridge-restarea-authoring-20261004-v1`。
 owner: main / consumer: M3候補の独立採否・現行subject導入。次工程: 原本・画像を比較しruntime候補を生成。
 release_when: 採用原本のasset正本への集約と候補フィードバック終了後。旧batchのpassを新subjectへ流用しない。
