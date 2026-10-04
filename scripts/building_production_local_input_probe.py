@@ -267,6 +267,7 @@ def run(args: argparse.Namespace) -> dict:
         game = subprocess.Popen([str(binary)], cwd=runtime, env=environment, stdout=log,
                                 stderr=subprocess.STDOUT, start_new_session=True)
         transport = None
+        stage = "startup raw/window"
         try:
             deadline = time.monotonic() + 45
             while time.monotonic() < deadline:
@@ -283,19 +284,32 @@ def run(args: argparse.Namespace) -> dict:
             else:
                 raise native.AcceptanceError("ordinary-world process/window/raw timeout")
             window, pid = owned
+            stage = "owned before capture"
             require(native.capture_client_png(window, screenshot_before, import_cmd="import"),
                     "owned X11 client before capture failed")
             before_count = len(raw["events"])
+            stage = "owned X11 input activation"
             transport = X11Input(window, pid, game.pid, nonce, records.append)
             transport.activate()
+            stage = "F12 press witness"
             transport.send("key-press", nonce, key=KEY, pressed=True)
             raw = wait_for_raw_event(raw_path, nonce, pid, "KeyPress", after=before_count)
+            stage = "F12 release witness"
             transport.send("key-release", nonce, key=KEY, pressed=False)
             raw = wait_for_raw_event(raw_path, nonce, pid, "KeyRelease", after=before_count)
             witnessed_input(raw, before_event_count=before_count)
+            stage = "owned after capture"
             require(native.capture_client_png(window, screenshot_after, import_cmd="import"),
                     "owned X11 client after capture failed")
             metrics.append(probe.process_metrics(pid))
+        except Exception as exc:
+            (root / "failure.json").write_text(json.dumps({
+                "schema": 1, "status": "invalid", "stage": stage,
+                "error_type": type(exc).__name__, "reason": str(exc),
+                "accepted": False, "performance_evidence": False,
+                "art_approved": False, "promotion_authority": False,
+            }, sort_keys=True, separators=(",", ":")) + "\n")
+            raise
         finally:
             try:
                 if transport is not None:

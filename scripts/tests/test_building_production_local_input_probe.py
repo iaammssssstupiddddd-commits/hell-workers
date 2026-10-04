@@ -220,6 +220,10 @@ class LocalInputProbeTests(unittest.TestCase):
         self.assertTrue(game.stopped)
         self.assertEqual(len(transport_instances), 1)
         self.assertTrue(transport_instances[0].closed)
+        failure = json.loads((self.root / "failure.json").read_text())
+        self.assertEqual((failure["status"], failure["stage"], failure["reason"]),
+                         ("invalid", "F12 press witness", "raw timeout"))
+        self.assertFalse(failure["accepted"] or failure["promotion_authority"])
 
 
 if __name__ == "__main__":
