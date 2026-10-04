@@ -21,6 +21,7 @@ use crate::interface::ui::panels::task_list::TaskActionOutcome;
 use crate::systems::save::{SaveLoadOutcome, SaveStorageRoot};
 use crate::systems::settings::SettingsStorageRoot;
 
+mod bridge_planning;
 mod progress_bars;
 mod refactor_rows;
 mod terrain_materials;
@@ -143,6 +144,10 @@ fn prepare_fixture(world: &mut World, scale: f32) {
     use hw_core::familiar::FamiliarPolicy;
     use hw_jobs::{Designation, PlayerIssuedDesignation, Priority, TaskSlots, Tree};
     world.resource_mut::<GameSettings>().ui_scale = scale;
+    if bridge_planning::enabled() {
+        bridge_planning::prepare(world);
+        return;
+    }
     if terrain_materials::enabled() {
         terrain_materials::prepare(world);
         return;
@@ -611,6 +616,7 @@ fn snapshot(world: &mut World, observer: &UiObserver) -> Value {
         "controls": controls,
     });
     value["refactor_rows"] = refactor_rows::snapshot(world, viewport);
+    value["bridge_planning"] = bridge_planning::snapshot(world);
     value["progress_bars"] = progress_bars::snapshot(world);
     value["terrain_materials"] = terrain_materials::snapshot(world, observer);
     value

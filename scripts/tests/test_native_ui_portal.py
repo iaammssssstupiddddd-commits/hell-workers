@@ -1,10 +1,132 @@
 from __future__ import annotations
 
 import unittest
+import os
+import json
+import tempfile
+from pathlib import Path
 from unittest import mock
 
 from scripts.native_ui_input import InputRejected
-from scripts.native_ui_portal import PortalSession, PortalX11Input, physical_monitor_scale
+from scripts.native_ui_portal import ConsentStore, PortalSession, PortalX11Input, physical_monitor_scale
+
+
+class PersistentConsentTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.path = Path(self.temp.name) / "consent.json"
+
+    def store(self):
+        store = ConsentStore(self.path)
+        self.addCleanup(store.close)
+        return store
+
+    def test_consume_rotates_and_unknown_result_cannot_reuse(self):
+        store = self.store()
+        self.assertIsNone(store.consume("desktop"))
+        store.save("desktop", "first")
+        self.assertEqual(store.consume("desktop"), "first")
+        self.assertIsNone(store.consume("desktop"))
+        store.save("desktop", "rotated")
+        store.close()
+        self.assertEqual(self.store().consume("desktop"), "rotated")
+        self.assertEqual(self.path.stat().st_mode & 0o777, 0o600)
+
+    def test_busy_foreign_desktop_and_corruption_rejected(self):
+        store = self.store()
+        store.save("desktop", "first")
+        with self.assertRaisesRegex(InputRejected, "busy"):
+            ConsentStore(self.path)
+        with self.assertRaisesRegex(InputRejected, "context"):
+            store.consume("foreign")
+        self.assertEqual(json.loads(self.path.read_text())["token"], "first")
+        store.close()
+        self.path.write_text("broken")
+        with self.assertRaisesRegex(InputRejected, "journal"):
+            self.store().consume("desktop")
+
+    def test_symlink_hardlink_open_permissions_and_large_file_rejected(self):
+        target = self.path.parent / "target"
+        target.write_text("keep")
+        self.path.symlink_to(target)
+        with self.assertRaises(OSError):
+            self.store()
+        self.assertEqual(target.read_text(), "keep")
+        self.path.unlink()
+        os.link(target, self.path)
+        with self.assertRaises(InputRejected):
+            self.store()
+        self.path.unlink()
+        self.path.write_text("{}")
+        self.path.chmod(0o644)
+        with self.assertRaises(InputRejected):
+            self.store()
+        self.path.chmod(0o600)
+        self.path.write_text("x" * 16385)
+        with self.assertRaisesRegex(InputRejected, "bound"):
+            self.store().consume("desktop")
+
+    def session(self, *, persistent=True, response=None, version=2):
+        session = PortalSession.__new__(PortalSession)
+        session.ready, session.session = False, None
+        session.consent_file = self.path if persistent else None
+        session.consent_store, session.persistence = None, "disabled"
+        session.GLib = mock.Mock()
+        session.GLib.Variant.side_effect = lambda kind, value: value
+        session.Gio, session.bus = mock.Mock(), mock.Mock()
+        session.bus.call_sync.return_value.unpack.return_value = ("desktop",)
+        session.call = mock.Mock()
+        session.call.return_value.unpack.return_value = (version,)
+        session.request = mock.Mock(side_effect=[{"session_handle": "/session"}, {},
+            response if response is not None else {"devices": 3, "restore_token": "rotated"}])
+        self.addCleanup(lambda: session.consent_store and session.consent_store.close())
+        return session
+
+    def test_fresh_permission_then_second_session_restores_rotated_token(self):
+        first = self.session()
+        first.start(100)
+        options = first.request.call_args_list[1].args[2][1]
+        self.assertEqual(options["persist_mode"], 2)
+        self.assertNotIn("restore_token", options)
+        self.assertTrue(first.ready)
+        self.assertEqual(first.persistence, "saved")
+        first.start(101)
+        self.assertEqual(first.request.call_count, 3)  # reuse live session
+        first.consent_store.close()
+        second = self.session()
+        second.start(102)
+        self.assertEqual(second.request.call_args_list[1].args[2][1]["restore_token"], "rotated")
+
+    def test_default_is_nonpersistent_and_old_interface_is_rejected_before_request(self):
+        plain = self.session(persistent=False)
+        plain.start(100)
+        self.assertEqual(plain.request.call_args_list[1].args[2][1]["persist_mode"], 0)
+        old = self.session(version=1)
+        with self.assertRaises(InputRejected):
+            old.start(100)
+        old.request.assert_not_called()
+        self.assertFalse(self.path.exists())
+
+    def test_denial_timeout_and_partial_grant_never_save_old_token_or_enable_input(self):
+        for response in (InputRejected("denied"), InputRejected("timeout"), {"devices": 1}):
+            with self.subTest(response=type(response).__name__):
+                store = self.store()
+                store.save("desktop", "single-use")
+                store.close()
+                session = self.session(response=response)
+                with self.assertRaises(InputRejected):
+                    session.start(100)
+                self.assertFalse(session.ready)
+                self.assertIsNone(json.loads(self.path.read_text())["token"])
+                session.consent_store.close()
+
+    def test_os_declines_persistence_live_input_grant_is_not_claimed_persistent(self):
+        session = self.session(response={"devices": 3})
+        session.start(100)
+        self.assertTrue(session.ready)
+        self.assertEqual(session.persistence, "not-granted")
+        self.assertIsNone(json.loads(self.path.read_text())["token"])
 
 
 class PortalInputTests(unittest.TestCase):

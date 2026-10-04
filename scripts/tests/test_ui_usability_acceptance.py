@@ -4,6 +4,7 @@ import importlib
 import copy
 from pathlib import Path
 import sys
+import tempfile
 import unittest
 from unittest.mock import Mock, patch
 
@@ -11,6 +12,135 @@ from unittest.mock import Mock, patch
 HELPER_DIR = Path(__file__).resolve().parents[2] / ".codex/skills/hell-workers-run-native-acceptance/scripts"
 sys.path.insert(0, str(HELPER_DIR))
 acceptance = importlib.import_module("ui_usability_acceptance")
+
+
+class BridgePlanningEvidenceTests(unittest.TestCase):
+    def test_pause_toggle_waits_for_domain_state_without_resending(self):
+        driver = Mock()
+        driver.last = {"frame": 10, "paused": True}
+        def wait(predicate, *, after):
+            self.assertEqual(after, 10)
+            self.assertFalse(predicate({"frame": 14, "paused": True}))
+            result = {"frame": 20, "paused": False}
+            self.assertTrue(predicate(result))
+            return result
+        driver.wait.side_effect = wait
+        acceptance.bridge_planning.set_paused(driver, False)
+        driver.key.assert_called_once_with("space")
+        self.assertFalse(driver.last["paused"])
+
+    def test_pause_timeout_does_not_retry_input(self):
+        driver = Mock()
+        driver.last = {"frame": 10, "paused": True}
+        driver.wait.side_effect = RuntimeError("UI checkpoint timed out; input will not be resent")
+        with self.assertRaises(RuntimeError):
+            acceptance.bridge_planning.set_paused(driver, False)
+        driver.key.assert_called_once_with("space")
+
+    def test_matching_pause_state_needs_no_toggle(self):
+        driver = Mock()
+        driver.last = {"frame": 10, "paused": True}
+        acceptance.bridge_planning.set_paused(driver, True)
+        driver.key.assert_not_called()
+        driver.wait.assert_not_called()
+
+    def test_helper_is_bound_to_native_harness_and_measurement_boundaries(self):
+        from scripts.perf_tool import execution, renderdoc_capture
+        relative = ".codex/skills/hell-workers-run-native-acceptance/scripts/ui_bridge_planning.py"
+        for inventory in (acceptance.native.NATIVE_HARNESS_FILES,
+                          execution.MEASUREMENT_HARNESS_FILES,
+                          renderdoc_capture.MEASUREMENT_HARNESS_FILES):
+            self.assertIn(relative, inventory)
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            helper = root / "bridge.py"
+            helper.write_text("before", encoding="utf-8")
+            # Keep the native entrypoint's separate live self-hash unchanged.
+            with patch.object(acceptance.native, "NATIVE_HARNESS_FILES", ("bridge.py",)):
+                before = acceptance.native.native_harness_fingerprint(root)
+                helper.write_text("after", encoding="utf-8")
+                self.assertNotEqual(before, acceptance.native.native_harness_fingerprint(root))
+
+    def entries(self):
+        footprint = [[x, y] for x in (50, 51) for y in range(45, 50)]
+        entries = []
+        for index, case in enumerate(acceptance.bridge_planning.CHECKPOINTS):
+            entity = 20 if index < 3 else 30
+            occupied = 0 < index < 4
+            cells = [{"grid": grid, "river": True, "walkable": False,
+                      "bridged": False, "owner": entity if occupied else None} for grid in footprint]
+            value = {"frame": 100 + 10 * index, "world_epoch": 1 if index < 3 else 2,
+                     "save_outcomes": ["Save:Succeeded"] if index == 2 else ["Load:Succeeded"] if index == 3 else [],
+                     "task_outcomes": [{"entity": 30, "action": "Cancel", "result": "CancellationRequested",
+                                        "epoch": 2, "frame": 135}] if index == 4 else [],
+                     "bridge_planning": {"footprint": footprint, "banks": [[50, 44], [51, 44], [50, 50], [51, 50]],
+                                         "legal": not occupied, "cells": cells, "buildings": [],
+                                         "blueprints": [{"entity": entity, "footprint": footprint, "progress": 0,
+                                                         "materials_complete": False}] if occupied else []}}
+            entries.append({"case": case, "last_step": index * 5, "value": value})
+        return entries
+
+    def test_exact_ordinary_planning_sequence(self):
+        acceptance.bridge_planning.check_sequence(self.entries())
+        self.assertEqual(acceptance.session_matrix("bridge-planning", True),
+                         [("bridge-planning", *acceptance.VIEWPORTS[0])])
+
+    def test_missing_fabricated_or_foreign_domain_evidence_is_rejected(self):
+        mutations = (
+            lambda entries: entries.pop(),
+            lambda entries: entries[1]["value"]["bridge_planning"]["blueprints"][0].update(progress=1),
+            lambda entries: entries[2]["value"].update(save_outcomes=[]),
+            lambda entries: entries[3]["value"].update(world_epoch=1),
+            lambda entries: entries[3]["value"]["bridge_planning"]["blueprints"][0].update(entity=20),
+            lambda entries: entries[4]["value"]["bridge_planning"]["cells"][0].update(walkable=True),
+            lambda entries: entries[4]["value"].update(task_outcomes=[]),
+            lambda entries: entries[4]["value"]["task_outcomes"][0].update(epoch=1),
+            lambda entries: entries[4].update(last_step=0),
+        )
+        for mutation in mutations:
+            entries = self.entries()
+            mutation(entries)
+            with self.subTest(mutation=mutation), self.assertRaises(RuntimeError):
+                acceptance.bridge_planning.check_sequence(entries)
+
+
+class VendoredSourceIdentityTests(unittest.TestCase):
+    def test_all_native_fingerprints_include_vendored_dependency_changes(self):
+        from scripts.perf_tool import execution, renderdoc_capture
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            relative = "vendor/parley/src/analysis/mod.rs"
+            source = root / relative
+            source.parent.mkdir(parents=True)
+            source.write_text("dictionary-v1", encoding="utf-8")
+            with patch.object(acceptance.native, "tracked_paths", return_value=[relative]), \
+                    patch.object(execution, "REPO_ROOT", root), \
+                    patch.object(execution, "tracked_source_paths", return_value=[relative]), \
+                    patch.object(renderdoc_capture, "_tracked_paths", return_value=[relative]):
+                def fingerprints():
+                    return (acceptance.native.source_fingerprint(root),
+                            execution.source_fingerprint(),
+                            renderdoc_capture.source_fingerprint(root))
+
+                before = fingerprints()
+                self.assertEqual(len(set(before)), 1)
+                source.write_text("dictionary-v2", encoding="utf-8")
+                after = fingerprints()
+                self.assertEqual(len(set(after)), 1)
+                self.assertTrue(all(old != new for old, new in zip(before, after)))
+
+
+class RuntimeLogEvidenceTests(unittest.TestCase):
+    def test_parent_log_filter_cannot_hide_renderer_evidence(self):
+        for inherited in ("warn", "off", "bevy_app=info"):
+            with self.subTest(inherited=inherited), patch.object(
+                acceptance.native, "cargo_environment",
+                return_value={"RUST_LOG": inherited, "CARGO_TARGET_DIR": "/owned/target"},
+            ):
+                environment = acceptance.game_environment(Path("/owned"))
+                self.assertEqual(environment["RUST_LOG"], "info,wgpu=error")
+                self.assertEqual(environment["CARGO_TARGET_DIR"], "/owned/target")
 
 
 class KeyboardTapTests(unittest.TestCase):

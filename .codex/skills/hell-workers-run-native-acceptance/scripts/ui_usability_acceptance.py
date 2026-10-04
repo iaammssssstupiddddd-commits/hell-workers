@@ -5,7 +5,6 @@ from __future__ import annotations
 import argparse
 from datetime import UTC, datetime
 import hashlib
-import json
 import os
 from pathlib import Path
 import secrets
@@ -17,6 +16,7 @@ import native_acceptance as native
 import wall_door_joint_acceptance as joint
 import ui_refactor_rows as refactor_rows
 import ui_progress_bars as progress_bars
+import ui_bridge_planning as bridge_planning
 import ui_terrain_materials as terrain_materials
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
@@ -29,7 +29,7 @@ CHECKPOINTS = ("tasks", "last-page", "minimized", "restored", "entities",
                "history", "history-oldest", "history-closed", "guide", "guide-closed")
 VIEWPORTS = ((1920, 1080, 1.0), (1280, 720, 1.25), (1280, 720, 0.85),
              (1280, 720, 1.0), (1920, 1080, 0.85), (1920, 1080, 1.25))
-CASES = ("navigation", "refactor-rows", "progress-bars", "terrain-materials", "refactor-suite")
+CASES = ("navigation", "refactor-rows", "progress-bars", "terrain-materials", "refactor-suite", "bridge-planning")
 
 
 def session_matrix(case, smoke):
@@ -57,6 +57,9 @@ def sha256(path: Path) -> str:
 def check_observation(case: str, value: dict) -> None:
     native.require(value["ready"] and value["frame"] > 90, "fixture is not ready")
     native.require(value["task_rows"] <= 20, "task resident row limit exceeded")
+    if case in bridge_planning.CHECKPOINTS:
+        bridge_planning.check_observation(case, value)
+        return
     if case in terrain_materials.CHECKPOINTS:
         terrain_materials.check_observation(case, value)
         return
@@ -434,6 +437,7 @@ def verify_root(root):
         check_input_client(manifest, session, client)
         native.require(case == "navigation" or not layout_only, "refactor case requires actual input")
         expected_checkpoints = (refactor_rows.CHECKPOINTS if case == "refactor-rows" else
+                                bridge_planning.CHECKPOINTS if case == "bridge-planning" else
                                 terrain_materials.CHECKPOINTS if case == "terrain-materials" else
                                 progress_bars.CHECKPOINTS if case == "progress-bars" else CHECKPOINTS)
         native.require([item["case"] for item in entries] == (["entities"] if layout_only else list(expected_checkpoints)), "checkpoints differ")
@@ -469,6 +473,9 @@ def verify_root(root):
         if case == "progress-bars":
             progress_bars.check_sequence(entries)
             continue
+        if case == "bridge-planning":
+            bridge_planning.check_sequence(entries)
+            continue
         if layout_only:
             continue
         history = next(item["value"] for item in entries if item["case"] == "history")
@@ -482,12 +489,23 @@ def verify_root(root):
                         "three visible terrain LODs, diagnostic normal prepass, Scene resize and restore" if manifest.get("case") == "terrain-materials" else
                         "task labels, rename, search and fold feedback" if manifest.get("case") == "refactor-rows" else
                         "four progress callers, simulation completion, save/load and cancellation feedback" if manifest.get("case") == "progress-bars" else
+                        "ordinary generated-world Bridge placement, reservation save/load and cancellation only" if manifest.get("case") == "bridge-planning" else
                         "navigation/layout feedback only; C05/C07/C08 and full C01-C06 acceptance remain open"}
+
+
+def game_environment(repo):
+    environment = native.cargo_environment(repo)
+    # AdapterInfo is INFO-level renderer evidence. An inherited RUST_LOG=warn
+    # must not silently remove it; warnings/errors remain visible and rejected.
+    environment["RUST_LOG"] = "info,wgpu=error"
+    return environment
 
 
 def plan(args):
     repo = native.validate_repo(args.repo)
     native.require(args.case == "navigation" or args.input_backend != "none", "refactor case requires actual input")
+    native.require(not args.portal_consent_file or args.input_backend == "portal",
+                   "consent file requires portal input backend")
     resources = native.resource_snapshot(repo, require_launcher=True)
     root = Path(args.job_root).resolve() if args.job_root else native.unique_job_root(repo, PROFILE)
     native.require(root.is_relative_to(repo / "target/native-acceptance") and not root.exists(), "requires fresh native job root")
@@ -499,6 +517,7 @@ def plan(args):
                "--harness-fingerprint", harness, "--input-backend", args.input_backend,
                "--case", args.case,
                "--layout-scene", args.layout_scene,
+               *(["--portal-consent-file", args.portal_consent_file] if args.portal_consent_file else []),
                *(["--layout-menu"] if args.layout_menu else []),
                *(["--smoke"] if args.smoke else [])]
     native.print_json({"status": "blocked" if resources["failures"] else "ready", "profile": PROFILE,
@@ -512,6 +531,8 @@ def plan(args):
 @native.activity_locked
 def run(args):
     repo, root = native.validate_repo(args.repo), Path(args.job_root).resolve()
+    native.require(not args.portal_consent_file or args.input_backend == "portal",
+                   "consent file requires portal input backend")
     native.require(os.environ.get("HW_NATIVE_ACCEPTANCE_LAUNCHED") == "1", "use planned kitty launcher")
     native.require(args.case == "navigation" or args.input_backend != "none", "refactor case requires actual input")
     native.require(not args.layout_menu or args.input_backend == "none", "layout menu requires no-input rendering")
@@ -537,12 +558,12 @@ def run(args):
             def portal_heartbeat(method):
                 state.update(current_stage=f"portal-{method}", heartbeat_at=native.utc_now())
                 native.atomic_write_json(job_file, state)
-            portal = PortalSession(portal_heartbeat)
+            portal = PortalSession(portal_heartbeat, consent_file=args.portal_consent_file)
         for index, (case, width, height, scale) in enumerate(session_matrix(args.case, args.smoke)):
             directory = root / f"viewport-{index}"
             directory.mkdir()
             nonce = secrets.token_hex(16)
-            environment = native.cargo_environment(repo)
+            environment = game_environment(repo)
             for key in tuple(environment):
                 if key.startswith(("HW_NATIVE_", "HW_PERF_", "HW_WALL_", "HW_DOOR_")) or key in joint.ENV_KEYS:
                     environment.pop(key, None)
@@ -579,6 +600,8 @@ def run(args):
                         refactor_rows.exercise(driver)
                     elif case == "progress-bars":
                         progress_bars.exercise(driver)
+                    elif case == "bridge-planning":
+                        bridge_planning.exercise(driver)
                     elif case == "terrain-materials":
                         terrain_materials.exercise(driver)
                     else:
@@ -605,6 +628,7 @@ def run(args):
             "profile": PROFILE, "evidence_kind": "feedback", "repo": str(repo), "smoke": args.smoke,
             "input_backend": args.input_backend,
             "portal_session": portal.session if portal else None,
+            "portal_persistence": portal.persistence if portal else "disabled",
             "case": args.case,
             "layout_menu": args.layout_menu,
             "layout_scene": args.layout_scene,
@@ -635,6 +659,7 @@ def main():
             child.add_argument("--layout-menu", action="store_true")
             child.add_argument("--layout-scene", choices=("management", "normal", "selection", "pinned", "build", "display", "area", "area-details"), default="management")
             child.add_argument("--input-backend", choices=("xtest", "portal", "none"), default="xtest")
+            child.add_argument("--portal-consent-file", help="explicit owner-only restore-token journal; never a consent bypass")
         if command == "run":
             for option in ("subject-commit", "source-fingerprint", "harness-fingerprint"):
                 child.add_argument(f"--{option}", required=True)
