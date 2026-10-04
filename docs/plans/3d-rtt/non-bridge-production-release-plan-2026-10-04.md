@@ -296,7 +296,12 @@ Yardへ修正した。terrainやzoneを受入用に書き換えず、実際のYa
 保存・再読込を実操作で観測したが、再読込直後に可変top barの OpenEntities 位置が
 pointer移動中に変わり、hover guardで終了した。exit 1／invalidとして封印・診断保持済み。
 取消の実入力と独立verifyは未完了であり、部分観測を正式lifecycle受入へ昇格しない。
-UI driverは移動だけを最大3回再取得し、実際にhoverを観測するまでpressしない補正を実施中。
+UI driverは移動だけを最大3回再取得し、実際にhoverを観測するまでpressしない補正を実施。
+修正後のsource `3038dee7a347bf37d49f2d6a9ac26273c195890a` でfresh batch
+`tak14-restarea-planning-3038dee7-20261005-v2` を起動し、実ウィンドウの5 checkpoint
+（空き→配置→保存→読込→取消）を取得。Yardの2×2 Blueprint予約、保存後の同一対象復元、
+取消後のowner解放を固定独立verifierがpassし、用途保持・finalize・storage check済み。
+対象は完成前のBlueprintであり、Resting／Dream・数値／art採否・正式導入・性能を証明しない。
 出力root: primary `target/native-acceptance/nonbridge-restarea-authoring-20261004-v1`。
 owner: main / consumer: M3候補の独立採否・現行subject導入。次工程: 原本・画像を比較しruntime候補を生成。
 release_when: 採用原本のasset正本への集約と候補フィードバック終了後。旧batchのpassを新subjectへ流用しない。
