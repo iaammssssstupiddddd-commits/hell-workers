@@ -168,6 +168,27 @@ def wait_for_raw_event(path: Path, nonce: str, pid: int, operation: str,
     raise native.AcceptanceError(f"ordinary input {operation} raw witness timeout")
 
 
+def wait_for_focused_samples(path: Path, nonce: str, pid: int, transport: X11Input,
+                             *, after: int, timeout: float = 3.0) -> dict:
+    """Let the game observe WM focus before the first synthetic input."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        transport._check_owner()
+        transport._check_focus()
+        raw = raw_snapshot(path, nonce, pid)
+        if len(raw["samples"]) >= after + 2:
+            return raw
+        time.sleep(0.05)
+    raise native.AcceptanceError("ordinary input focus-settle raw sample timeout")
+
+
+def settle_after_activation(path: Path, nonce: str, pid: int,
+                            transport: X11Input) -> dict:
+    focused_raw = raw_snapshot(path, nonce, pid)
+    return wait_for_focused_samples(path, nonce, pid, transport,
+                                    after=len(focused_raw["samples"]))
+
+
 def check_registered_context(repo: Path, root: Path, plan_path: Path, context: dict) -> None:
     """Recheck live primary validation ownership, including independent sealing."""
     require(ownership.storage.primary_for(repo) == repo,
@@ -300,6 +321,9 @@ def run(args: argparse.Namespace) -> dict:
             window_number = numeric_window_id(window)
             transport = X11Input(window_number, pid, game.pid, nonce, records.append)
             transport.activate()
+            stage = "owned X11 focus settling"
+            raw = settle_after_activation(raw_path, nonce, pid, transport)
+            before_count = len(raw["events"])
             stage = "F12 press witness"
             transport.send("key-press", nonce, key=KEY, pressed=True)
             raw = wait_for_raw_event(raw_path, nonce, pid, "KeyPress", after=before_count)
@@ -315,6 +339,7 @@ def run(args: argparse.Namespace) -> dict:
             (root / "failure.json").write_text(json.dumps({
                 "schema": 1, "status": "invalid", "stage": stage,
                 "error_type": type(exc).__name__, "reason": str(exc),
+                "input_receipts": records,
                 "accepted": False, "performance_evidence": False,
                 "art_approved": False, "promotion_authority": False,
             }, sort_keys=True, separators=(",", ":")) + "\n")
