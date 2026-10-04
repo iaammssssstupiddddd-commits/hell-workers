@@ -201,6 +201,51 @@ fn bridge_rejects_span_gap_missing_and_forged_footprints() {
 }
 
 #[test]
+fn bridge_commit_rechecks_live_terrain_and_rejects_stale_preview_geometry() {
+    let before = bridge_world((20, 21), (20, 21));
+    let preview = resolve_bridge_crossing(&before, (10, 90)).unwrap();
+    let after = bridge_world((30, 31), (30, 31));
+    let committed = resolve_bridge_crossing(&after, (10, 90)).unwrap();
+    assert_ne!(preview.anchor, committed.anchor);
+    let ctx = BuildingPlacementContext {
+        world: &after,
+        in_site: true,
+        in_yard: true,
+        is_wall_or_door_at: &|_| false,
+        is_replaceable_wall_at: &|_| false,
+    };
+    assert!(
+        !validate_building_placement(
+            &ctx,
+            BuildingType::Bridge,
+            (10, 90),
+            &geometry_with_tiles(preview.occupied_grids),
+        )
+        .can_place
+    );
+    assert!(
+        validate_building_placement(
+            &ctx,
+            BuildingType::Bridge,
+            (10, 90),
+            &geometry_with_tiles(committed.occupied_grids.clone()),
+        )
+        .can_place
+    );
+    for bank in committed.banks {
+        let mut blocked = bridge_world((30, 31), (30, 31));
+        blocked.walkable.remove(&bank);
+        assert_eq!(
+            resolve_bridge_crossing(&blocked, (10, 90)).unwrap_err(),
+            PlacementTileRejection {
+                grid: bank,
+                reason: PlacementRejectReason::NotWalkable,
+            }
+        );
+    }
+}
+
+#[test]
 fn moved_bucket_storage_allows_existing_owned_stockpile() {
     let mut world = TestWorld::default();
     for grid in [(2, 0), (3, 0), (0, 0), (1, 0), (0, 1), (1, 1)] {

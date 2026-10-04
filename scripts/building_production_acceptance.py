@@ -192,8 +192,11 @@ def require_production_registration(value, receipt=None):
     raise ValueError("production lifecycle recipe/instruments unavailable: host registration adapter is not admitted")
 
 
-def registration_binding(value, receipt=None):
-    binding = require_production_registration(value, receipt)
+def registration_binding(value, receipt=None, *, registration_adapter=None):
+    # Adapters are trusted in-process dependencies, never loaded from a plan,
+    # environment variable or arbitrary command. Offline defaults fail closed.
+    provider = require_production_registration if registration_adapter is None else registration_adapter
+    binding = provider(value, receipt)
     keys = {"registry_sha256"}
     if receipt is not None:
         keys |= {"plan_sha256", "receipt_sha256", "admitted_at_ns"}
@@ -213,8 +216,10 @@ def registration_binding(value, receipt=None):
     return binding
 
 
-def check_registration_receipt(value, receipt) -> int:
+def check_registration_receipt(value, receipt, *, registration_adapter=None) -> int:
     """Check public consistency, then return only the host-attested time."""
+    if registration_adapter is not None:
+        return registration_binding(value, receipt, registration_adapter=registration_adapter)["admitted_at_ns"]
     context = check_registration_context(value)
     require(isinstance(receipt, dict) and set(receipt) == {"batch", "phase", "sha256", "registration"}
             and hashed(receipt["sha256"]), "invalid host registration receipt")
@@ -255,8 +260,8 @@ def release_inventory(value):
                 "unreleased or mismatched asset identity")
 
 
-def check_plan(value):
-    registration_binding(value)
+def check_plan(value, *, registration_adapter=None):
+    registration_binding(value, registration_adapter=registration_adapter)
     require(set(value) == SPEC_KEYS | GENERATED_KEYS, "unknown/missing plan fields")
     require(type(value["created_at_ns"]) is int and value["created_at_ns"] > 0, "invalid plan freeze timestamp")
     require(value["schema_version"] == 1 and value["profile"] == PROFILE
@@ -320,8 +325,8 @@ def check_plan(value):
         Path(__file__).with_name("building_production_lifecycle.py").read_bytes()), "lifecycle verifier changed")
 
 
-def plan(spec):
-    binding = registration_binding(spec)
+def plan(spec, *, registration_adapter=None):
+    binding = registration_binding(spec, registration_adapter=registration_adapter)
     require(set(spec) == SPEC_KEYS, "unknown/missing specification fields; baseline is null for groups")
     value = {**spec, "schema_version": 1, "profile": PROFILE,
              "accepted": False, "promotion_authority": False, "launchable": False,
@@ -331,7 +336,7 @@ def plan(spec):
              "lifecycle_verifier_sha256": pipeline.digest(Path(__file__).with_name("building_production_lifecycle.py").read_bytes()),
              "registry_contract": registry_contract(spec["scope"]),
              "registry_sha256": binding["registry_sha256"]}
-    check_plan(value)
+    check_plan(value, registration_adapter=registration_adapter)
     return value
 
 
@@ -368,7 +373,7 @@ def bind_lifecycle_observations(trace, raw):
                 f"lifecycle field has no matching raw witness: {key}")
 
 
-def session(root, row, plan_value, plan_hash, seen, *, performance):
+def session(root, row, plan_value, plan_hash, seen, *, performance, registration_adapter=None):
     """Bind raw trace, owned client capture, ACK, renderer and instrument to one run."""
     baseline = performance and plan_value["scope"] == "full" and row.get("mode") == "legacy-control"
     expected_subject = plan_value["baseline"]["subject"] if baseline else plan_value["subject"]
@@ -418,7 +423,7 @@ def session(root, row, plan_value, plan_hash, seen, *, performance):
             from . import building_production_collection as collection
         else:
             import building_production_collection as collection
-        collection.verify_log(root, row, plan_value, raw, trace)
+        collection.verify_log(root, row, plan_value, raw, trace, registration_adapter=registration_adapter)
     shots = row["captures"]
     require(isinstance(shots, list) and 2 <= len(shots) <= 128, "actual-window captures missing")
     for shot in shots:
@@ -460,8 +465,9 @@ def bind_external_resources(row, samples, gpu, handles):
             "external GPU/application-handle samples differ")
 
 
-def inspect_performance(root, row, value, plan_hash, seen):
-    trace = session(root, row, value, plan_hash, seen, performance=True)
+def inspect_performance(root, row, value, plan_hash, seen, *, registration_adapter=None):
+    trace = session(root, row, value, plan_hash, seen, performance=True,
+                    registration_adapter=registration_adapter)
     require(row["case"] == value["cases"][row["size"]], "layout/state/camera/population/activity differs")
     require(number(row["warmup_seconds"]) and number(row["measure_seconds"])
             and row["warmup_seconds"] >= 30 and row["measure_seconds"] >= 60
@@ -532,23 +538,24 @@ def inspect_performance(root, row, value, plan_hash, seen):
     return metrics
 
 
-def verify_results(plan_path, result_path):
+def verify_results(plan_path, result_path, *, registration_adapter=None):
     value = pipeline.read(plan_path)
-    check_plan(value)
+    check_plan(value, registration_adapter=registration_adapter)
     plan_hash = pipeline.digest(plan_path.read_bytes())
     result = pipeline.read(result_path)
     root = result_path.parent
     require(result["profile"] == PROFILE and result["promotion_authority"] is False
             and result["plan_sha256"] == plan_hash, "wrong result scope")
     receipt = json_bytes(artifact(root, result["registration_receipt"]))
-    admitted_at_ns = check_registration_receipt(value, receipt)
+    admitted_at_ns = check_registration_receipt(value, receipt, registration_adapter=registration_adapter)
     rows = result["performance"]
     require([(r["instrument"], r["size"], r["repeat"], r["mode"]) for r in rows] == matrix(),
             "missing/reordered adjacent reversed three-repeat Capture/Memory matrix")
     seen, metrics, end = set(), {}, admitted_at_ns
     for row in rows:
         require(row["started_at_ns"] > end, "overlapping/out-of-order instrumentation")
-        observed = inspect_performance(root, row, value, plan_hash, seen)
+        observed = inspect_performance(root, row, value, plan_hash, seen,
+                                       registration_adapter=registration_adapter)
         end = row["finished_at_ns"]
         metrics[(row["instrument"], row["size"], row["repeat"], row["mode"])] = observed
     summaries = {}
@@ -578,8 +585,9 @@ def verify_results(plan_path, result_path):
         from . import building_production_lifecycle as lifecycle
     else:
         import building_production_lifecycle as lifecycle
-    lifecycle.verify(root, result["lifecycle"], value, plan_hash, seen)
-    check_plan(value)
+    lifecycle.verify(root, result["lifecycle"], value, plan_hash, seen,
+                     registration_adapter=registration_adapter)
+    check_plan(value, registration_adapter=registration_adapter)
     require(result == pipeline.read(result_path) and pipeline.digest(plan_path.read_bytes()) == plan_hash,
             "inputs changed during verification")
     return {"profile": PROFILE, "scope": value["scope"], "evidence_verified": True,

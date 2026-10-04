@@ -2,6 +2,7 @@
 //! Does not simulate input, change gameplay, approve art, or measure performance.
 
 use super::BuildingArtSession;
+use crate::assets::building_asset_set::snapshot_io::{require_fresh_output, write_observation};
 use crate::assets::building_asset_set::{
     BuildingAssetAuthority, BuildingAssetKind, BuildingAssetPool,
 };
@@ -44,9 +45,7 @@ pub(super) fn configure(app: &mut App, session: &BuildingArtSession) -> Result<(
         );
     }
     let path = session.status_path.with_extension("m2-trace.json");
-    if path.exists() {
-        return Err("M2 trace path already exists; use a fresh acceptance session".into());
-    }
+    require_fresh_output(&path).map_err(|e| format!("use a fresh M2 trace path: {e}"))?;
     super::m2_fixture::configure(app, session.identity.kind)?;
     app.insert_resource(Trace {
         path,
@@ -355,12 +354,7 @@ fn observe(world: &mut World) {
         "samples": world.resource::<Trace>().samples});
     let write = serde_json::to_vec(&record)
         .map_err(|e| e.to_string())
-        .and_then(|data| {
-            let temporary = path.with_extension("tmp");
-            std::fs::write(&temporary, data)
-                .and_then(|()| std::fs::rename(temporary, &path))
-                .map_err(|e| e.to_string())
-        });
+        .and_then(|data| write_observation(&path, &data).map_err(|e| e.to_string()));
     if failure.is_some() || write.is_err() {
         error!("M2 observation failed: {:?} {:?}", failure, write.err());
         world.write_message(AppExit::error());

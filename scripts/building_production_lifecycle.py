@@ -440,12 +440,15 @@ def check_group(trace, row, value):
             cleaned(samples[-1], trace["owner"])
 
 
-def verify(root, rows, value, plan_hash, seen):
+def verify(root, rows, value, plan_hash, seen, *, registration_adapter=None, instrument="Capture"):
+    require(instrument in {"Capture", "Memory"}, "unsupported lifecycle instrument")
     expected = {(kind, leg) for kind in evidence.GROUPS[value["scope"]] for leg in LEGS[kind]}
     require(len(rows) == len(expected) and {(r["kind"], r["leg"]) for r in rows} == expected,
             "missing/duplicate lifecycle legs")
     for row in rows:
-        trace = evidence.session(root, row, value, plan_hash, seen, performance=False)
+        require(row["instrument"] == instrument, "wrong lifecycle instrument")
+        trace = evidence.session(root, row, value, plan_hash, seen, performance=False,
+                                 registration_adapter=registration_adapter)
         require(all("identity" in sample for sample in trace["samples"])
                 if row["kind"] != "Door" else all("door_identity" in sample for sample in trace["samples"]),
                 "raw collector lacks per-kind lifecycle identity; no synthesized projection is permitted")
@@ -453,7 +456,7 @@ def verify(root, rows, value, plan_hash, seen):
             require(isinstance(trace.get("witnesses"), list), "raw Bridge witnesses unavailable")
         elif row["leg"] in {"generation", "cleanup", "dedicated-generation"}:
             require(isinstance(trace.get("cycles"), list), "raw generation/cleanup cycles unavailable")
-        require(row["instrument"] == "Capture" and trace["leg"] == row["leg"]
+        require(trace["leg"] == row["leg"]
                 and trace["scope"] == ("bridge-normal-world-observations-only" if row["kind"] == "Bridge"
                                        else "production-normal-world-observations-v1"), "legacy or wrong lifecycle trace")
         previous = -1

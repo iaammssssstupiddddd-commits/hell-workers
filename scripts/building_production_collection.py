@@ -49,14 +49,16 @@ def write_once(path, payload):
         os.fsync(destination.fileno())
 
 
-def session_binding(plan, plan_hash, binding, admission, steps):
-    registry = evidence.registration_binding(plan)
+def session_binding(plan, plan_hash, binding, admission, steps, *, instrument="Capture", registration_adapter=None):
+    require(isinstance(binding, dict) and set(binding) == set(SESSION_KEYS), "invalid session binding fields")
+    require(instrument in {"Capture", "Memory"}, "unsupported collection instrument")
+    registry = evidence.registration_binding(plan, registration_adapter=registration_adapter)
     require(evidence.hashed(plan.get("registry_sha256"))
             and registry["registry_sha256"] == plan["registry_sha256"], "plan registry identity missing or differs")
     require(binding["subject"] == plan["subject"]
             and binding["plan_sha256"] == plan_hash
             and binding["campaign_nonce"] == plan["campaign_nonce"]
-            and binding["binary_sha256"] == plan["binaries"]["Capture"]["sha256"]
+            and binding["binary_sha256"] == plan["binaries"][instrument]["sha256"]
             and binding["codec_sha256"] == plan["codec"]["sha256"]
             and binding["driver_sha256"] == plan["driver"]["sha256"]
             and binding["input_transport_sha256"] == plan["input_transport_sha256"],
@@ -171,7 +173,7 @@ def check_process(binding):
             "live executable differs")
 
 
-def collect(plan_path, binding, admission, steps, raw_path, output):
+def collect(plan_path, binding, admission, steps, raw_path, output, *, instrument="Capture", registration_adapter=None):
     """Collect only; output existence forbids retries, including failed attempts.
 
     The host owns launch, capture/ACK, shutdown and sealing. No leg is marked
@@ -179,9 +181,10 @@ def collect(plan_path, binding, admission, steps, raw_path, output):
     """
     plan_bytes = bounded_read(plan_path)
     plan = evidence.json_bytes(plan_bytes)
-    evidence.check_plan(plan)
+    evidence.check_plan(plan, registration_adapter=registration_adapter)
     validate_steps(steps)
-    session_binding(plan, evidence.pipeline.digest(plan_bytes), binding, admission, steps)
+    session_binding(plan, evidence.pipeline.digest(plan_bytes), binding, admission, steps,
+                    instrument=instrument, registration_adapter=registration_adapter)
     require(plan["driver"]["sha256"] == evidence.pipeline.digest(Path(__file__).read_bytes()), "wrong collector driver")
     require(plan["input_transport_sha256"] == evidence.pipeline.digest(Path(__file__).with_name("native_ui_input.py").read_bytes()),
             "input transport changed")
@@ -241,7 +244,7 @@ def collect(plan_path, binding, admission, steps, raw_path, output):
             verify_action_records({"session": binding, "steps": steps, "records": records,
                                    "failure": None, "promotion_authority": False}, raw)
             check_process(binding)
-            evidence.check_plan(plan)
+            evidence.check_plan(plan, registration_adapter=registration_adapter)
         except BaseException as error:
             failure = str(error)
             raise
@@ -306,12 +309,13 @@ def verify_action_records(log, raw):
     return ranges
 
 
-def verify_log(root, row, plan, raw, trace):
+def verify_log(root, row, plan, raw, trace, *, registration_adapter=None):
     log = evidence.json_bytes(evidence.artifact(root, row["action_log"]))
     binding = log["session"]
     raw_record(evidence.pipeline.canonical(raw), binding)
     admission = evidence.json_bytes(evidence.artifact(root, row["collection_admission"]))
-    session_binding(plan, row["plan_sha256"], binding, admission, log["steps"])
+    session_binding(plan, row["plan_sha256"], binding, admission, log["steps"],
+                    instrument=row["instrument"], registration_adapter=registration_adapter)
     require(all(equal(binding[k], row[k]) for k in ("subject", "binary_sha256", "codec_sha256", "driver_sha256",
                                                    "plan_sha256", "campaign_nonce", "nonce", "pid", "kind", "leg")),
             "action log belongs to another session")

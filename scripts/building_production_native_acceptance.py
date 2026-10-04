@@ -1,14 +1,15 @@
-"""Registered host adapter and producer for TAK-14 production evidence.
+"""Experimental host-session orchestrator for TAK-14 production evidence.
 
 This helper never approves art, assets, release, installation or promotion.  A
 literal infrastructure recipe must seal its plan before ``run`` is reachable.
 The host owns process/window admission, captures and external instruments; this
 driver only sequences those admitted sessions and the ordinary-input collector.
+It is not an ordinary-world process/capture/instrument producer. The retired
+host context is retained for compatibility, not a normal-development entrypoint.
 """
 from __future__ import annotations
 
 import argparse
-import contextlib
 import copy
 import json
 import os
@@ -80,6 +81,25 @@ def record(path: Path) -> dict:
     return {"path": str(path), "bytes": len(payload), "sha256": digest(payload)}
 
 
+def capabilities() -> dict:
+    """Read local support only; no host/Run lookup, launch or output writes.
+
+    No CLI flag or saved document enables the missing producers or grants
+    authority. This description is not a live host admission catalog.
+    """
+    return {"schema_version": 1, "profile": PROFILE,
+            "available": False, "launchable": False,
+            "accepted": False, "promotion_authority": False,
+            "art_approved": False, "release_approved": False,
+            "scope": "local-support-only", "recipe_id": RECIPE_ID,
+            "supported": ["offline evidence predicates", "ordinary-input collection",
+                          "Capture/Memory session sequencing"],
+            "missing": ["normal-development authenticated admission adapter",
+                        "ordinary-world process/window and capture/ACK producer",
+                        "GPU/native/RSS/application-handle instrument producer"],
+            "next_action": "implement and independently review producers through dev.py validation; never restart the retired host"}
+
+
 def recipe_binding(value: dict, receipt: dict | None = None) -> dict:
     """Validate the exact live catalog/intent; never authenticate saved JSON.
 
@@ -127,6 +147,7 @@ def recipe_binding(value: dict, receipt: dict | None = None) -> dict:
             and receipt["schema"] == 1
             and receipt["authority"] == "host-admitted-native-registration"
             and receipt["phase"] == "registered"
+            and receipt["batch"] == intent["spec"]["id"]
             and receipt["request"] == value["registration_request"]
             and receipt["controller_sha256"] == context["controller_sha256"]
             and receipt["recipe_revision"] == context["recipe_revision"]
@@ -142,44 +163,12 @@ def recipe_binding(value: dict, receipt: dict | None = None) -> dict:
             and receipt["command"] == expected_command
             and receipt["verify_command"] == expected_verify
             and receipt["promotion_authority"] is False
-            and type(receipt["registered_at_ns"]) is int,
+            and type(receipt["registered_at_ns"]) is int and receipt["registered_at_ns"] > 0,
             "host registration adapter receipt differs")
     result.update(plan_sha256=receipt["plan_sha256"],
                   receipt_sha256=digest(canonical(receipt)),
                   admitted_at_ns=receipt["registered_at_ns"])
     return result
-
-
-@contextlib.contextmanager
-def adapter_scope():
-    original_binding = evidence.registration_binding
-    original_required = evidence.require_production_registration
-    original_receipt = evidence.check_registration_receipt
-
-    def binding(value, receipt=None):
-        result = recipe_binding(value, receipt)
-        require(evidence.hashed(value.get("registry_sha256"))
-                and value["registry_sha256"] == result["registry_sha256"],
-                "authenticated registry identity differs")
-        return result
-
-    def admitted(value, receipt):
-        result = binding(value, receipt)
-        require(result["plan_sha256"] == digest(canonical(value))
-                and result["receipt_sha256"] == digest(canonical(receipt))
-                and result["admitted_at_ns"] > value["created_at_ns"],
-                "host receipt does not bind this exact runtime plan")
-        return result["admitted_at_ns"]
-
-    evidence.require_production_registration = recipe_binding
-    evidence.registration_binding = binding
-    evidence.check_registration_receipt = admitted
-    try:
-        yield
-    finally:
-        evidence.registration_binding = original_binding
-        evidence.require_production_registration = original_required
-        evidence.check_registration_receipt = original_receipt
 
 
 def expected_sessions(runtime: dict) -> list[dict]:
@@ -246,51 +235,9 @@ def check_native_plan(value: dict) -> tuple[dict, Path]:
     require(receipt_path.is_absolute() and receipt_path.resolve() == receipt_path
             and receipt_path.is_relative_to(root / "host-registration"),
             "registration receipt path escapes output root")
-    with adapter_scope():
-        evidence.check_plan(runtime)
+    evidence.check_plan(runtime, registration_adapter=recipe_binding)
     check_session_plan(value["sessions"], runtime, root)
     return runtime, root
-
-
-def instrument_session_binding(plan, plan_hash, binding, admission, steps, instrument):
-    registry = evidence.registration_binding(plan)
-    require(instrument in {"Capture", "Memory"}
-            and binding["binary_sha256"] == plan["binaries"][instrument]["sha256"],
-            "session instrument/binary differs")
-    require(isinstance(binding, dict) and set(binding) == set(collection.SESSION_KEYS)
-            and binding["subject"] == plan["subject"]
-            and binding["plan_sha256"] == plan_hash
-            and binding["campaign_nonce"] == plan["campaign_nonce"]
-            and binding["codec_sha256"] == plan["codec"]["sha256"]
-            and binding["driver_sha256"] == plan["driver"]["sha256"]
-            and binding["input_transport_sha256"] == plan["input_transport_sha256"]
-            and isinstance(binding["nonce"], str) and evidence.NONCE.fullmatch(binding["nonce"])
-            and all(type(binding[key]) is int and binding[key] > 0
-                    for key in ("pid", "root_pid", "window_id"))
-            and binding["kind"] in evidence.GROUPS[plan["scope"]]
-            and binding["leg"] in lifecycle.LEGS[binding["kind"]],
-            "session subject/driver/kind/leg differs")
-    expected_admission = {
-        "authority": "host-admitted-production-session",
-        "registry_sha256": registry["registry_sha256"],
-        "session": {key: binding[key] for key in collection.SESSION_KEYS},
-        "steps_sha256": digest(canonical(steps)),
-        "world": "normal-generated", "headless": False,
-        "fixture_seeded_completion": False,
-    }
-    require(canonical(admission) == canonical(expected_admission),
-            "host session admission differs")
-
-
-@contextlib.contextmanager
-def collection_scope(instrument):
-    original = collection.session_binding
-    collection.session_binding = lambda plan, plan_hash, binding, admission, steps: (
-        instrument_session_binding(plan, plan_hash, binding, admission, steps, instrument))
-    try:
-        yield
-    finally:
-        collection.session_binding = original
 
 
 def read_when_available(path: Path, deadline: float) -> dict:
@@ -338,43 +285,42 @@ def run(plan_path: Path) -> dict:
     receipt_path = Path(value["registration_receipt_path"])
     deadline = time.monotonic() + 300
     receipt = read_when_available(receipt_path, deadline)
-    with adapter_scope():
-        admitted = evidence.check_registration_receipt(runtime, receipt)
-        require(admitted < time.time_ns(), "registration admission time is in the future")
-        performance, lifecycle_capture, lifecycle_memory = [], [], []
-        for planned in value["sessions"]:
-            descriptor = read_when_available(Path(planned["descriptor"]), deadline)
-            require(isinstance(descriptor, dict)
-                    and set(descriptor) == {"binding", "admission", "raw_path"},
-                    "invalid host session descriptor")
-            binding = descriptor["binding"]
-            require(binding.get("nonce") == planned["nonce"], "host session nonce differs")
-            output = root / f"collection-{planned['ordinal']:04d}"
-            with collection_scope(planned["instrument"]):
-                collection.collect(root / "runtime-plan.json", binding, descriptor["admission"],
-                                   planned["steps"], Path(descriptor["raw_path"]), output)
-            row = read_when_available(Path(planned["sealed_row"]), deadline)
-            check_sealed_row(row, planned, binding, runtime, plan_hash)
-            if planned["purpose"] == "performance":
-                performance.append(row)
-            elif planned["instrument"] == "Capture":
-                lifecycle_capture.append(row)
-            else:
-                lifecycle_memory.append(row)
-        receipt_copy = root / "registration-receipt.json"
-        collection.write_once(receipt_copy, canonical(receipt))
-        result = {
-            "profile": evidence.PROFILE,
-            "promotion_authority": False,
-            "accepted": False,
-            "plan_sha256": plan_hash,
-            "registration_receipt": evidence.pipeline.record(
-                receipt_copy.name, receipt_copy.read_bytes()),
-            "performance": performance,
-            "lifecycle": lifecycle_capture,
-            "memory_lifecycle": lifecycle_memory,
-        }
-        collection.write_once(root / "result.json", canonical(result))
+    admitted = evidence.check_registration_receipt(runtime, receipt, registration_adapter=recipe_binding)
+    require(admitted < time.time_ns(), "registration admission time is in the future")
+    performance, lifecycle_capture, lifecycle_memory = [], [], []
+    for planned in value["sessions"]:
+        descriptor = read_when_available(Path(planned["descriptor"]), deadline)
+        require(isinstance(descriptor, dict)
+                and set(descriptor) == {"binding", "admission", "raw_path"},
+                "invalid host session descriptor")
+        binding = descriptor["binding"]
+        require(binding.get("nonce") == planned["nonce"], "host session nonce differs")
+        output = root / f"collection-{planned['ordinal']:04d}"
+        collection.collect(root / "runtime-plan.json", binding, descriptor["admission"],
+                           planned["steps"], Path(descriptor["raw_path"]), output,
+                           instrument=planned["instrument"], registration_adapter=recipe_binding)
+        row = read_when_available(Path(planned["sealed_row"]), deadline)
+        check_sealed_row(row, planned, binding, runtime, plan_hash)
+        if planned["purpose"] == "performance":
+            performance.append(row)
+        elif planned["instrument"] == "Capture":
+            lifecycle_capture.append(row)
+        else:
+            lifecycle_memory.append(row)
+    receipt_copy = root / "registration-receipt.json"
+    collection.write_once(receipt_copy, canonical(receipt))
+    result = {
+        "profile": evidence.PROFILE,
+        "promotion_authority": False,
+        "accepted": False,
+        "plan_sha256": plan_hash,
+        "registration_receipt": evidence.pipeline.record(
+            receipt_copy.name, receipt_copy.read_bytes()),
+        "performance": performance,
+        "lifecycle": lifecycle_capture,
+        "memory_lifecycle": lifecycle_memory,
+    }
+    collection.write_once(root / "result.json", canonical(result))
     verify(root)
     return result
 
@@ -395,14 +341,13 @@ def verify(root: Path) -> dict:
             and {(row.get("kind"), row.get("leg")) for row in memory} == expected_memory
             and all(row.get("instrument") == "Memory" for row in memory),
             "missing/duplicate Memory lifecycle sessions")
-    with adapter_scope():
-        evidence.check_registration_receipt(runtime, receipt)
-        seen = set()
-        plan_hash = digest((root / "runtime-plan.json").read_bytes())
-        for row in memory:
-            with collection_scope("Memory"):
-                evidence.session(root, row, runtime, plan_hash, seen, performance=False)
-        verified = evidence.verify_results(root / "runtime-plan.json", root / "result.json")
+    evidence.check_registration_receipt(runtime, receipt, registration_adapter=recipe_binding)
+    seen = set()
+    plan_hash = digest((root / "runtime-plan.json").read_bytes())
+    lifecycle.verify(root, memory, runtime, plan_hash, seen,
+                     registration_adapter=recipe_binding, instrument="Memory")
+    verified = evidence.verify_results(root / "runtime-plan.json", root / "result.json",
+                                       registration_adapter=recipe_binding)
     require(verified["promotion_authority"] is False
             and verified["art_approved"] is False
             and verified["release_approved"] is False,
@@ -422,8 +367,7 @@ def create_plan(spec_path: Path, output: Path) -> dict:
     require(runtime_spec["registration_intent"]["command"][-1] == str(output.resolve())
             and runtime_spec["registration_intent"]["spec"]["roots"] == [job_root],
             "planning envelope differs from registered plan/root")
-    with adapter_scope():
-        runtime = evidence.plan(runtime_spec)
+    runtime = evidence.plan(runtime_spec, registration_adapter=recipe_binding)
     runtime_path = output.with_name(output.stem + "-runtime.json").resolve()
     evidence.pipeline.put(runtime_path, canonical(runtime))
     value = {
@@ -444,6 +388,7 @@ def create_plan(spec_path: Path, output: Path) -> dict:
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
+    commands.add_parser("capabilities", help="read local support; never contact the retired host")
     planning = commands.add_parser("plan")
     planning.add_argument("--spec", type=Path, required=True)
     planning.add_argument("--output", type=Path, required=True)
@@ -452,7 +397,9 @@ def main():
     checking = commands.add_parser("verify")
     checking.add_argument("--job-root", type=Path, required=True)
     args = parser.parse_args()
-    if args.command == "plan":
+    if args.command == "capabilities":
+        result = capabilities()
+    elif args.command == "plan":
         result = create_plan(args.spec, args.output)
     elif args.command == "run":
         result = run(args.plan)

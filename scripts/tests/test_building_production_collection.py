@@ -12,6 +12,87 @@ from scripts import building_production_lifecycle as lifecycle
 
 
 class CollectionTests(unittest.TestCase):
+    def test_collection_rechecks_explicit_adapter_at_success_and_rejection_terminal(self):
+        # Scripted observations and transport are test-only, never native evidence.
+        for reject_terminal in (False, True):
+            binding, steps, raw, _ = self.fixture()
+            versions = []
+            for count in (1, 2, 3):
+                version = copy.deepcopy(raw)
+                version["samples"] = version["samples"][:count]
+                version["events"] = version["events"][:count - 1]
+                versions.append(evidence.pipeline.canonical(version))
+            plan = {"driver": {"sha256": evidence.pipeline.digest(Path(collection.__file__).read_bytes())},
+                    "input_transport_sha256": evidence.pipeline.digest(
+                        Path(collection.__file__).with_name("native_ui_input.py").read_bytes())}
+            adapter = Mock()
+            transport = Mock(held_buttons=set(), held_keys=set())
+
+            def input_transport(window, pid, parent, nonce, callback):
+                transport.send.side_effect = lambda step, sent_nonce, **action: callback(
+                    {"step": step, "nonce": sent_nonce, "pid": pid, "window": window, **action})
+                return transport
+
+            with self.subTest(reject_terminal=reject_terminal), tempfile.TemporaryDirectory() as temp:
+                root = Path(temp)
+                raw_path, plan_path, output = root / "raw.json", root / "plan.json", root / "result"
+                binding["raw_observations_path"] = str(raw_path)
+                plan_path.write_bytes(evidence.pipeline.canonical(plan))
+                def check_plan(value, *, registration_adapter=None):
+                    self.assertIs(registration_adapter, adapter)
+                    if checker.call_count == 2 and reject_terminal:
+                        raise ValueError("terminal subject changed")
+                with patch.object(evidence, "check_plan", side_effect=check_plan) as checker, \
+                        patch.object(collection, "session_binding") as binder, \
+                        patch.object(collection, "check_process"), \
+                        patch.object(collection, "X11Input", side_effect=input_transport), \
+                        patch.object(collection, "bounded_read", side_effect=[
+                            evidence.pipeline.canonical(plan), versions[0], versions[0], versions[1], versions[1], versions[2]]):
+                    if reject_terminal:
+                        with self.assertRaisesRegex(ValueError, "terminal subject"):
+                            collection.collect(plan_path, binding, {}, steps, raw_path, output,
+                                               instrument="Memory", registration_adapter=adapter)
+                    else:
+                        self.assertEqual(collection.collect(plan_path, binding, {}, steps, raw_path, output,
+                                                            instrument="Memory", registration_adapter=adapter), output)
+                    self.assertEqual(checker.call_count, 2)
+                    self.assertIs(binder.call_args.kwargs["registration_adapter"], adapter)
+                    self.assertEqual(binder.call_args.kwargs["instrument"], "Memory")
+                transport.close.assert_called_once()
+                self.assertEqual((output / "trace.json").exists(), not reject_terminal)
+                log = evidence.json_bytes((output / "action-log.json").read_bytes())
+                self.assertEqual(log["failure"], "terminal subject changed" if reject_terminal else None)
+
+    def test_explicit_instrument_binding_rejects_wrong_mode_and_foreign_session(self):
+        binding, steps, _, _ = self.fixture()
+        plan = {"registry_sha256": "a" * 64, "subject": binding["subject"],
+                "campaign_nonce": binding["campaign_nonce"], "scope": "m2",
+                "binaries": {"Capture": {"sha256": "c" * 64}, "Memory": {"sha256": "d" * 64}},
+                "codec": {"sha256": binding["codec_sha256"]},
+                "driver": {"sha256": binding["driver_sha256"]},
+                "input_transport_sha256": binding["input_transport_sha256"]}
+        original = evidence.require_production_registration
+        adapter = Mock(return_value={"registry_sha256": "a" * 64})
+        for instrument in ("Capture", "Memory"):
+            bound = {**binding, "binary_sha256": plan["binaries"][instrument]["sha256"]}
+            admission = {"authority": "host-admitted-production-session", "registry_sha256": "a" * 64,
+                         "session": bound, "steps_sha256": evidence.pipeline.digest(evidence.pipeline.canonical(steps)),
+                         "world": "normal-generated", "headless": False, "fixture_seeded_completion": False}
+            collection.session_binding(plan, bound["plan_sha256"], bound, admission, steps,
+                                       instrument=instrument, registration_adapter=adapter)
+            other = "Memory" if instrument == "Capture" else "Capture"
+            with self.assertRaisesRegex(ValueError, "binary"):
+                collection.session_binding(plan, bound["plan_sha256"], bound, admission, steps,
+                                           instrument=other, registration_adapter=adapter)
+            for invalid in ({**bound, "foreign": True}, {**bound, "subject": {"source": "foreign"}}):
+                with self.assertRaises(ValueError):
+                    collection.session_binding(plan, bound["plan_sha256"], invalid, admission, steps,
+                                               instrument=instrument, registration_adapter=adapter)
+        self.assertIs(evidence.require_production_registration, original)
+        with self.assertRaisesRegex(ValueError, "instrument"):
+            collection.session_binding(plan, binding["plan_sha256"], binding, {}, steps,
+                                       instrument="unknown", registration_adapter=adapter)
+
     def test_session_claim_and_artifacts_cannot_be_rewritten(self):
         with tempfile.TemporaryDirectory() as temp:
             path = Path(temp) / "raw.collection-claim"
@@ -294,7 +375,7 @@ class CollectionTests(unittest.TestCase):
         # is exercised by test_generated_plan_session_and_result_admission_contract.
         plan = {}
         admission = {"steps_sha256": evidence.pipeline.digest(evidence.pipeline.canonical(steps))}
-        row = {**binding, "started_at_ns": 0, "finished_at_ns": 10,
+        row = {**binding, "instrument": "Capture", "started_at_ns": 0, "finished_at_ns": 10,
                "captures": [{"window_id": "64", "sample_index": i} for i in (0, 2)]}
         for name in ("action_log", "collection_admission", "collection_seal", "raw_observations", "trace"):
             row[name] = {"path": name, "sha256": "e" * 64}

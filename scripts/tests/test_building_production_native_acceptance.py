@@ -1,7 +1,6 @@
 """Fail-closed tests for the registered production runner; no native launch."""
 from __future__ import annotations
 
-import contextlib
 import copy
 import importlib.util
 import json
@@ -75,10 +74,10 @@ class ProductionNativeAcceptanceTests(unittest.TestCase):
         evidence.registration_binding = lambda value, receipt=None: {"registry_sha256": value["registry_sha256"]}
         evidence.require_production_registration = lambda value, receipt=None: evidence.registration_binding(value, receipt)
         evidence.check_registration_receipt = lambda value, receipt: receipt["registered_at_ns"]
-        evidence.check_plan = lambda value: None
-        evidence.plan = lambda value: value
+        evidence.check_plan = lambda value, **kwargs: None
+        evidence.plan = lambda value, **kwargs: value
         evidence.session = lambda *args, **kwargs: {}
-        evidence.verify_results = lambda *args: {"promotion_authority": False,
+        evidence.verify_results = lambda *args, **kwargs: {"promotion_authority": False,
             "art_approved": False, "release_approved": False}
         collection = types.ModuleType("building_production_collection")
         collection.SESSION_KEYS = ("subject", "binary_sha256", "codec_sha256", "driver_sha256",
@@ -90,6 +89,7 @@ class ProductionNativeAcceptanceTests(unittest.TestCase):
         collection.write_once = lambda path, value: Path(path).write_bytes(value)
         lifecycle = types.ModuleType("building_production_lifecycle")
         lifecycle.LEGS = {"Tank": ("placement",)}
+        lifecycle.verify = lambda *args, **kwargs: None
         self.evidence, self.collection, self.lifecycle = evidence, collection, lifecycle
         self.runner = load_runner(evidence, collection, lifecycle)
         self.subject = {"binding": {"scope_sha256": "a" * 64, "node_id": "full-acceptance"},
@@ -133,7 +133,7 @@ class ProductionNativeAcceptanceTests(unittest.TestCase):
         receipt = self.receipt(value)
         admitted = self.runner.recipe_binding(value, receipt)
         self.assertEqual(admitted["plan_sha256"], receipt["plan_sha256"])
-        for case in ("recipe", "command", "subject", "authority", "runner", "root"):
+        for case in ("recipe", "command", "subject", "authority", "runner", "root", "batch", "timestamp"):
             changed_value, changed_receipt = copy.deepcopy(value), copy.deepcopy(receipt)
             if case == "recipe":
                 changed_value["host_capabilities"]["contracts"]["recipes"][0]["id"] = "foreign"
@@ -145,10 +145,26 @@ class ProductionNativeAcceptanceTests(unittest.TestCase):
                 changed_receipt["promotion_authority"] = True
             elif case == "runner":
                 changed_receipt["runner_sha256"] = "0" * 64
+            elif case == "batch":
+                changed_receipt["batch"] = "foreign"
+            elif case == "timestamp":
+                changed_receipt["registered_at_ns"] = 0
             else:
                 changed_receipt["job_root"] += "-foreign"
             with self.subTest(case=case), self.assertRaises(ValueError):
                 self.runner.recipe_binding(changed_value, changed_receipt)
+
+    def test_local_capabilities_never_read_host_or_create_artifacts(self):
+        before = list(self.root.iterdir())
+        with patch.object(self.evidence, "check_registration_context", side_effect=AssertionError("old host read")), \
+                patch.object(self.evidence, "host_document", side_effect=AssertionError("old host document")):
+            result = self.runner.capabilities()
+        self.assertFalse(result["available"])
+        self.assertFalse(result["launchable"])
+        for key in ("accepted", "promotion_authority", "art_approved", "release_approved"):
+            self.assertIs(result[key], False)
+        self.assertEqual(len(result["missing"]), 3)
+        self.assertEqual(list(self.root.iterdir()), before)
 
     def sessions(self, runtime):
         root = Path(runtime["native_job_root"])
@@ -196,9 +212,14 @@ class ProductionNativeAcceptanceTests(unittest.TestCase):
             "registry_sha256": value["registry_sha256"], "session": copy.deepcopy(binding),
             "steps_sha256": Pipeline.digest(Pipeline.canonical([])), "world": "normal-generated",
             "headless": False, "fixture_seeded_completion": False}
-        self.runner.instrument_session_binding(value, "7" * 64, binding, admission, [], "Memory")
-        with self.assertRaisesRegex(ValueError, "instrument/binary"):
-            self.runner.instrument_session_binding(value, "7" * 64, binding, admission, [], "Capture")
+        # Exercise the real shared collector binding, not a parallel runner copy.
+        from scripts import building_production_collection as real_collection
+        with patch.object(real_collection, "evidence", self.evidence), \
+                patch.object(self.evidence, "registration_binding", return_value={
+                    "registry_sha256": value["registry_sha256"]}):
+            real_collection.session_binding(value, "7" * 64, binding, admission, [], instrument="Memory")
+            with self.assertRaisesRegex(ValueError, "binary"):
+                real_collection.session_binding(value, "7" * 64, binding, admission, [], instrument="Capture")
 
     def test_run_requires_registered_launcher_and_verify_preserves_no_authority(self):
         with patch.dict("os.environ", {}, clear=True), self.assertRaisesRegex(ValueError, "registered"):
@@ -210,14 +231,17 @@ class ProductionNativeAcceptanceTests(unittest.TestCase):
                     "memory_lifecycle": [{"kind": "Tank", "leg": "placement", "instrument": "Memory"}]}]), \
                 patch.object(Path, "read_bytes", return_value=b"{}"), \
                 patch.object(self.evidence, "check_registration_receipt"), \
-                patch.object(self.evidence, "session"), \
+                patch.object(self.lifecycle, "verify"), \
                 patch.object(self.evidence, "verify_results", return_value={
-                    "promotion_authority": False, "art_approved": False, "release_approved": False}), \
-                patch.object(self.runner, "adapter_scope", return_value=contextlib.nullcontext()), \
-                patch.object(self.runner, "collection_scope", return_value=contextlib.nullcontext()):
+                    "promotion_authority": False, "art_approved": False, "release_approved": False}):
             runtime = {"scope": "m2"}
             self.runner.check_native_plan.return_value = (runtime, self.root)
             result = self.runner.verify(self.root)
+            self.assertIs(self.evidence.verify_results.call_args.kwargs["registration_adapter"],
+                          self.runner.recipe_binding)
+            self.assertIs(self.lifecycle.verify.call_args.kwargs["registration_adapter"],
+                          self.runner.recipe_binding)
+            self.assertEqual(self.lifecycle.verify.call_args.kwargs["instrument"], "Memory")
         self.assertFalse(result["accepted"])
         self.assertFalse(result["promotion_authority"])
         self.assertFalse(result["art_approved"])

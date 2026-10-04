@@ -1,5 +1,6 @@
 //! Profiling-only, bounded observations of the ordinary world. This does not
 //! create owners, drive input, grant authority, or claim performance evidence.
+use super::snapshot_io::{require_fresh_path, temporary_path, write_observation};
 use bevy::{ecs::message::MessageCursor, prelude::*};
 use hw_core::{
     WorldEpoch,
@@ -57,7 +58,8 @@ pub(super) fn configure(app: &mut App) -> Result<(), String> {
             .output
             .components()
             .any(|c| matches!(c, Component::ParentDir))
-        || session.output.exists()
+        || require_fresh_path(&session.output).is_err()
+        || require_fresh_path(&temporary_path(&session.output)).is_err()
         || session.admitted_identities.len() > 18
         || session
             .admitted_identities
@@ -479,10 +481,7 @@ fn observe(world: &mut World) {
             if bytes.len() > 64 * 1024 * 1024 {
                 return Err("production observation byte cap exceeded".into());
             }
-            let temporary = session.output.with_extension("tmp");
-            std::fs::write(&temporary, bytes)
-                .and_then(|()| std::fs::rename(temporary, &session.output))
-                .map_err(|e| e.to_string())
+            write_observation(&session.output, &bytes).map_err(|e| e.to_string())
         });
     if failure.is_some() || result.is_err() {
         error!(
@@ -497,6 +496,61 @@ fn observe(world: &mut World) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    struct OutputDirectory(PathBuf);
+
+    impl OutputDirectory {
+        fn new() -> Self {
+            static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+            let path = std::env::temp_dir().join(format!(
+                "hw-production-observation-{}-{}-{}",
+                std::process::id(),
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_nanos(),
+                NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+            ));
+            std::fs::create_dir(&path).unwrap();
+            Self(path)
+        }
+    }
+
+    impl Drop for OutputDirectory {
+        fn drop(&mut self) {
+            std::fs::remove_dir_all(&self.0).unwrap();
+        }
+    }
+
+    #[test]
+    fn observation_snapshots_replace_only_after_exclusive_temporary_creation() {
+        let directory = OutputDirectory::new();
+        let output = directory.0.join("raw.json");
+        assert!(require_fresh_path(&output).is_ok());
+        write_observation(&output, b"first").unwrap();
+        write_observation(&output, b"second").unwrap();
+        assert_eq!(std::fs::read(&output).unwrap(), b"second");
+        let temporary = temporary_path(&output);
+        std::fs::write(&temporary, b"retained failure").unwrap();
+        assert!(require_fresh_path(&temporary).is_err());
+        assert!(write_observation(&output, b"must not replace").is_err());
+        assert_eq!(std::fs::read(&output).unwrap(), b"second");
+        assert_eq!(std::fs::read(&temporary).unwrap(), b"retained failure");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn observation_paths_reject_existing_and_dangling_symlinks() {
+        let directory = OutputDirectory::new();
+        let output = directory.0.join("raw.json");
+        let victim = directory.0.join("retained.json");
+        std::fs::write(&victim, b"retained evidence").unwrap();
+        std::os::unix::fs::symlink(&victim, temporary_path(&output)).unwrap();
+        assert!(write_observation(&output, b"must not follow").is_err());
+        assert_eq!(std::fs::read(&victim).unwrap(), b"retained evidence");
+        std::os::unix::fs::symlink(directory.0.join("missing"), &output).unwrap();
+        assert!(require_fresh_path(&output).is_err());
+    }
 
     fn sample() -> Value {
         json!({"real_seconds": 1.0, "owners": [], "blueprints": [], "roots": [],

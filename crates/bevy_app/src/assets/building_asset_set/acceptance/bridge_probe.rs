@@ -1,6 +1,7 @@
 //! Bounded observations of ordinary Bridge input/lifecycle; never seeds buildings,
 //! rewrites terrain, supplies materials, or claims UI/native/performance acceptance.
 use super::BuildingArtSession;
+use crate::assets::building_asset_set::snapshot_io::{require_fresh_output, write_observation};
 use crate::assets::building_asset_set::{BuildingAssetKind, BuildingAssetPool};
 use crate::world::map::WorldMapRef;
 use bevy::prelude::*;
@@ -46,9 +47,7 @@ pub(super) fn configure(app: &mut App, session: &BuildingArtSession) -> Result<(
         return Err("Bridge observations cannot share the M2 seeded fixture".into());
     }
     let path = session.status_path.with_extension("bridge-trace.json");
-    if path.exists() {
-        return Err("use a fresh Bridge trace path".into());
-    }
+    require_fresh_output(&path).map_err(|e| format!("use a fresh Bridge trace path: {e}"))?;
     app.insert_resource(Trace {
         path,
         leg,
@@ -262,12 +261,7 @@ fn observe(world: &mut World) {
         "fixture_seeded_completion": false, "failure": failure, "samples": trace.samples});
     let result = serde_json::to_vec(&record)
         .map_err(|e| e.to_string())
-        .and_then(|data| {
-            let temporary = path.with_extension("tmp");
-            std::fs::write(&temporary, data)
-                .and_then(|()| std::fs::rename(temporary, path))
-                .map_err(|e| e.to_string())
-        });
+        .and_then(|data| write_observation(&path, &data).map_err(|e| e.to_string()));
     if failure.is_some() || result.is_err() {
         error!(
             "Bridge observation failed: {:?} {:?}",

@@ -11,6 +11,48 @@ from scripts import building_production_lifecycle as lifecycle
 
 
 class ProductionAcceptanceTests(unittest.TestCase):
+    def test_memory_lifecycle_uses_the_same_domain_predicates_as_capture(self):
+        trace = {"scope": "production-normal-world-observations-v1", "leg": "placement",
+                 "samples": [{"identity": {}, "real_seconds": float(i)} for i in (0, 1)]}
+        value = {"scope": "fixture"}
+        adapter = object()
+        with patch.dict(production.GROUPS, {"fixture": ("Tank",)}), \
+                patch.dict(lifecycle.LEGS, {"Tank": ("placement",)}), \
+                patch.object(production, "session", return_value=trace) as session, \
+                patch.object(lifecycle, "check_group", side_effect=ValueError("missing domain outcome")) as predicates:
+            for instrument in ("Capture", "Memory"):
+                row = {"kind": "Tank", "leg": "placement", "instrument": instrument}
+                with self.subTest(instrument=instrument), self.assertRaisesRegex(ValueError, "missing domain"):
+                    lifecycle.verify(None, [row], value, "a" * 64, set(),
+                                     registration_adapter=adapter, instrument=instrument)
+                self.assertIs(session.call_args.kwargs["registration_adapter"], adapter)
+            self.assertEqual(predicates.call_count, 2)
+            session.reset_mock()
+            with self.assertRaisesRegex(ValueError, "instrument"):
+                lifecycle.verify(None, [row], value, "a" * 64, set(), instrument="Capture")
+            session.assert_not_called()
+
+    def test_explicit_adapters_do_not_replace_offline_default_or_each_other(self):
+        value = {"registry_sha256": "a" * 64, "created_at_ns": 1}
+        receipt = {"fixture": "not a host receipt"}
+
+        def admitted(plan, record):
+            return {"registry_sha256": "a" * 64,
+                    "plan_sha256": production.pipeline.digest(production.pipeline.canonical(plan)),
+                    "receipt_sha256": production.pipeline.digest(production.pipeline.canonical(record)),
+                    "admitted_at_ns": 2}
+
+        original = production.require_production_registration
+        self.assertEqual(production.check_registration_receipt(value, receipt, registration_adapter=admitted), 2)
+        for field in ("registry_sha256", "plan_sha256", "receipt_sha256", "admitted_at_ns"):
+            def wrong(plan, record):
+                return {**admitted(plan, record), field: 0}
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                production.check_registration_receipt(value, receipt, registration_adapter=wrong)
+        self.assertIs(production.require_production_registration, original)
+        with self.assertRaises(ValueError):
+            production.registration_binding(value)
+
     @staticmethod
     def unavailable_host_fixture(root):
         # Public-schema rejection fixtures, never authenticated admissions or

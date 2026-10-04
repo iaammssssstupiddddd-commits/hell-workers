@@ -11,6 +11,8 @@ mod projection;
 mod release;
 mod residency;
 mod schema;
+#[cfg(feature = "profiling")]
+mod snapshot_io;
 mod validation;
 
 pub use loader::{BuildingAssetLoadPolicy, BuildingAssetSetLoader};

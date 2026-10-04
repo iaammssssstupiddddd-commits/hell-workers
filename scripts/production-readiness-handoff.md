@@ -1,5 +1,29 @@
 # TAK-14 production-readiness worker handoff
 
+## Current normal-development status (2026-10-04)
+
+The report below is historical worker evidence, not current execution instructions.
+Do not restart the retired coordinator, broker, Run or recovery helpers.
+Primary validation has since tested the integrated code; the worker's statements
+that it did not build/test describe that worker attempt, not the primary results.
+The authoritative current boundary is `docs/building-asset-sets.md`.
+
+`python3 scripts/building_production_native_acceptance.py capabilities` is a
+read-only local description without host context, registration, plan or launch.
+It reports the missing normal-development admission, process/capture and host
+instrument producers. The orchestration runner is present but not a producer.
+The legacy recipe adapter remains experimental consistency checking only.
+No saved JSON or CLI option grants authentication, art or release approval.
+
+Explicit in-process registration adapters now propagate through plan, collection
+start/end checks, session verification and both Capture/Memory lifecycle checks;
+module-global functions are never replaced by the runner. Collector instrument
+selection binds the correct binary. Memory verification applies the same domain
+predicates as Capture, rather than accepting session integrity alone. Missing
+domain observations still reject. All standalone offline defaults fail closed.
+
+## Historical worker report
+
 This is a worker integration report, not an authoritative specification, acceptance
 record, art decision or release. No builds, tests, analysis server, native launch,
 performance run, asset generation, registry registration, commit or external write

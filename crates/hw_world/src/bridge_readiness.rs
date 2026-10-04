@@ -1,7 +1,8 @@
 //! TAK-14 readiness specification, deliberately test-only.
 //!
-//! These candidates are NOT accepted by the current all-River UI validator.
-//! A later atomic preview/commit change must adopt the same terrain contract.
+//! The production UI now resolves preview and commit through the shared
+//! `hw_ui::selection::resolve_bridge_crossing` live-terrain contract. These
+//! independent map-layer tests cover readiness, not UI integration acceptance.
 //! Neither a candidate nor map-layer tests prove construction, load, actor
 //! presentation, native acceptance, or authorization to install Bridge art.
 
