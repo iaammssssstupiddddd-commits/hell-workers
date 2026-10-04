@@ -243,7 +243,11 @@ art/numeric承認、releaseを完了させるものではない。
 現行の正式raw verifierは新しい原 `KeyboardInput` イベントを拒否していたため、厳密な
 key/state/repeat/window payloadを持つ入力観測としてだけ追加し、domain witnessには流用しない。
 拒否系fixtureと独立reviewを経ても、通常worldのhost admission／capture ACK／instrument
-producer欠落は残る。既存collectorはX11 XTest固定であり、portal輸送の実証だけでは正式driverにならない。
+producer欠落は残る。補正前のcollectorはX11 XTest固定であり、portal輸送の実証だけでは正式driverにならない。
+本補正ではoffline production planをportal専用v2へ更新し、collectorを固定同意journal・
+所有window・focus・raw ACKのportal輸送へ接続する。grantをaction logへ残して独立検査するが、
+host admission、actual-window capture/ACK、外部GPU/native/RSS/application handle計測器は
+別途必要であり、このコード補正だけでは正式campaignを開始できない。
 出力root: primary `target/native-acceptance/nonbridge-restarea-authoring-20261004-v1`。
 owner: main / consumer: M3候補の独立採否・現行subject導入。次工程: 原本・画像を比較しruntime候補を生成。
 release_when: 採用原本のasset正本への集約と候補フィードバック終了後。旧batchのpassを新subjectへ流用しない。

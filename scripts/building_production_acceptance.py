@@ -26,7 +26,7 @@ else:
     from perf_tool.execution import read_native_memory, read_resource_usage
 
 pipeline = art.pipeline
-PROFILE = "building-production-results-v1"
+PROFILE = "building-production-results-portal-v2"
 GROUPS = {
     "m2": ("Tank", "MudMixer"),
     "m3": ("RestArea", "SoulSpa"),
@@ -51,7 +51,8 @@ SPEC_KEYS = {"scope", "repo", "subject", "codec", "driver", "binaries", "environ
              "budget", "releases", "generation_trials", "baseline"}
 GENERATED_KEYS = {"schema_version", "profile", "accepted", "promotion_authority", "launchable",
                   "created_at_ns", "campaign_nonce", "verifier_sha256", "lifecycle_verifier_sha256",
-                  "input_transport_sha256", "registry_contract", "registry_sha256"}
+                  "input_transport_sha256", "portal_transport_sha256",
+                  "registry_contract", "registry_sha256"}
 
 
 def require(value, reason):
@@ -277,6 +278,8 @@ def check_plan(value, *, registration_adapter=None):
     require(value["verifier_sha256"] == pipeline.digest(Path(__file__).read_bytes()), "verifier changed")
     require(value["input_transport_sha256"] == pipeline.digest(
         Path(__file__).with_name("native_ui_input.py").read_bytes()), "input transport changed")
+    require(value["portal_transport_sha256"] == pipeline.digest(
+        Path(__file__).with_name("native_ui_portal.py").read_bytes()), "portal transport changed")
     require(NONCE.fullmatch(value["campaign_nonce"]) is not None, "invalid campaign nonce")
     budget(value["budget"])
     require(value["budget"]["frozen_at_ns"] <= value["created_at_ns"], "budget was not frozen")
@@ -337,6 +340,7 @@ def plan(spec, *, registration_adapter=None):
              "created_at_ns": time.time_ns(), "campaign_nonce": secrets.token_hex(16),
              "verifier_sha256": pipeline.digest(Path(__file__).read_bytes()),
              "input_transport_sha256": pipeline.digest(Path(__file__).with_name("native_ui_input.py").read_bytes()),
+             "portal_transport_sha256": pipeline.digest(Path(__file__).with_name("native_ui_portal.py").read_bytes()),
              "lifecycle_verifier_sha256": pipeline.digest(Path(__file__).with_name("building_production_lifecycle.py").read_bytes()),
              "registry_contract": registry_contract(spec["scope"]),
              "registry_sha256": binding["registry_sha256"]}

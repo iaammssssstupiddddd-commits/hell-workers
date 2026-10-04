@@ -1,4 +1,4 @@
-"""Bounded collector for an already host-admitted ordinary X11 world.
+"""Bounded portal collector for an already host-admitted ordinary X11 world.
 
 No build, launch, registry mutation, asset production or acceptance authority.
 The host seals the resulting log/raw hashes separately; local hashes alone are
@@ -13,10 +13,10 @@ import time
 
 if __package__:
     from . import building_production_acceptance as evidence
-    from .native_ui_input import X11Input
+    from .native_ui_portal import PortalSession, PortalX11Input
 else:
     import building_production_acceptance as evidence
-    from native_ui_input import X11Input
+    from scripts.native_ui_portal import PortalSession, PortalX11Input
 
 require = evidence.require
 MAX_BYTES = 64 * 1024 * 1024
@@ -33,6 +33,18 @@ SESSION_KEYS = ("subject", "binary_sha256", "codec_sha256", "driver_sha256",
 
 def equal(a, b):
     return evidence.pipeline.canonical(a) == evidence.pipeline.canonical(b)
+
+
+def check_portal_grant(value):
+    require(isinstance(value, dict)
+            and set(value) == {"granted_devices", "persistence", "session"}
+            and type(value["granted_devices"]) is int
+            and value["granted_devices"] >= 0
+            and value["granted_devices"] & 3 == 3
+            and value["persistence"] in {"saved", "not-granted"}
+            and isinstance(value["session"], str)
+            and value["session"].startswith("/org/freedesktop/portal/desktop/session/"),
+            "portal grant receipt differs")
 
 
 def bounded_read(path):
@@ -188,6 +200,8 @@ def collect(plan_path, binding, admission, steps, raw_path, output, *, instrumen
     require(plan["driver"]["sha256"] == evidence.pipeline.digest(Path(__file__).read_bytes()), "wrong collector driver")
     require(plan["input_transport_sha256"] == evidence.pipeline.digest(Path(__file__).with_name("native_ui_input.py").read_bytes()),
             "input transport changed")
+    require(plan["portal_transport_sha256"] == evidence.pipeline.digest(Path(__file__).with_name("native_ui_portal.py").read_bytes()),
+            "portal transport changed")
     require(str(raw_path.resolve()) == binding["raw_observations_path"] and raw_path.is_absolute(),
             "raw path differs from host admission")
     output.mkdir(parents=False, exist_ok=False)
@@ -198,6 +212,8 @@ def collect(plan_path, binding, admission, steps, raw_path, output, *, instrumen
     raw = None
     raw_payload = None
     transport = None
+    portal = None
+    portal_grant = None
     failure = None
     started = time.monotonic()
     # Append-only intent/receipt journal survives a failed input or host interruption.
@@ -212,9 +228,18 @@ def collect(plan_path, binding, admission, steps, raw_path, output, *, instrumen
             check_process(binding)
             raw_payload = bounded_read(raw_path)
             raw = raw_record(raw_payload, binding)
-            transport = X11Input(binding["window_id"], binding["pid"], binding["root_pid"], binding["nonce"],
-                                 lambda event: record({"type": "sent", **event}))
+            portal = PortalSession(lambda _method: check_process(binding),
+                                   consent_file=str(Path(plan["repo"]) /
+                                                    ".git/validation-storage/input-consent/remote-desktop.json"))
+            transport = PortalX11Input(binding["window_id"], binding["pid"], binding["root_pid"], binding["nonce"],
+                                       lambda event: record({"type": "sent", **event}), portal=portal)
             transport.activate()
+            require(portal.ready and portal.granted_devices >= 0
+                    and portal.granted_devices & 3 == 3,
+                    "portal keyboard/pointer grant missing")
+            portal_grant = {"granted_devices": portal.granted_devices,
+                            "persistence": portal.persistence, "session": portal.session}
+            check_portal_grant(portal_grant)
             for step in steps:
                 require(time.monotonic() - started < 600, "collection deadline exceeded")
                 transport._check_owner()
@@ -242,7 +267,8 @@ def collect(plan_path, binding, admission, steps, raw_path, output, *, instrumen
                     time.sleep(.05)
             require(not transport.held_buttons and not transport.held_keys, "input still held")
             verify_action_records({"session": binding, "steps": steps, "records": records,
-                                   "failure": None, "promotion_authority": False}, raw)
+                                   "failure": None, "portal_grant": portal_grant,
+                                   "promotion_authority": False}, raw)
             check_process(binding)
             evidence.check_plan(plan, registration_adapter=registration_adapter)
         except BaseException as error:
@@ -256,21 +282,30 @@ def collect(plan_path, binding, admission, steps, raw_path, output, *, instrumen
                 failure = failure or f"input cleanup failed: {error}"
                 raise
             finally:
-                result = {"session": {k: binding[k] for k in SESSION_KEYS}, "steps": steps,
-                          "records": records, "failure": failure, "promotion_authority": False}
-                write_once(output / "action-log.json", evidence.pipeline.canonical(result))
-                if raw is not None:
-                    payload = raw_payload
-                    write_once(output / "raw.json", payload)
-                    if failure is None:
-                        trace = normalize(raw, binding, evidence.pipeline.digest(payload))
-                        write_once(output / "trace.json", evidence.pipeline.canonical(trace))
+                try:
+                    if portal is not None:
+                        portal.close()
+                except Exception as error:
+                    failure = failure or f"portal cleanup failed: {error}"
+                    raise
+                finally:
+                    result = {"session": {k: binding[k] for k in SESSION_KEYS}, "steps": steps,
+                              "records": records, "failure": failure, "portal_grant": portal_grant,
+                              "promotion_authority": False}
+                    write_once(output / "action-log.json", evidence.pipeline.canonical(result))
+                    if raw is not None:
+                        payload = raw_payload
+                        write_once(output / "raw.json", payload)
+                        if failure is None:
+                            trace = normalize(raw, binding, evidence.pipeline.digest(payload))
+                            write_once(output / "trace.json", evidence.pipeline.canonical(trace))
     return output
 
 
 def verify_action_records(log, raw):
     """Validate every input receipt against immutable instructions and raw events."""
     require(log["failure"] is None and log["promotion_authority"] is False, "failed collection")
+    check_portal_grant(log.get("portal_grant"))
     steps, records, binding = log["steps"], log["records"], log["session"]
     validate_steps(steps)
     require(len(records) == 3 * len(steps), "incomplete/extra collection records")

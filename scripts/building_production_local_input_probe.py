@@ -166,6 +166,7 @@ def check_portal_evidence(value: object) -> None:
     require(isinstance(value, dict)
             and set(value) == {"granted_devices", "persistence", "session"}
             and type(value["granted_devices"]) is int
+            and value["granted_devices"] >= 0
             and value["granted_devices"] & 3 == 3
             and value["persistence"] in {"saved", "not-granted"}
             and isinstance(value["session"], str)
@@ -325,7 +326,8 @@ def run(args: argparse.Namespace) -> dict:
             transport = PortalX11Input(window_number, pid, game.pid, nonce, records.append,
                                        portal=portal)
             transport.activate()
-            require(portal.ready and portal.granted_devices & 3 == 3,
+            require(portal.ready and portal.granted_devices >= 0
+                    and portal.granted_devices & 3 == 3,
                     "portal keyboard/pointer grant is unavailable")
             portal_evidence = {"granted_devices": portal.granted_devices,
                                "persistence": portal.persistence,

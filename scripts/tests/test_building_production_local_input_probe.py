@@ -114,7 +114,8 @@ class LocalInputProbeTests(unittest.TestCase):
         accepted = {"granted_devices": 3, "persistence": "saved",
                     "session": "/org/freedesktop/portal/desktop/session/test"}
         input_probe.check_portal_evidence(accepted)
-        for key, replacement in (("granted_devices", 1), ("granted_devices", True),
+        for key, replacement in (("granted_devices", 1), ("granted_devices", -1),
+                                 ("granted_devices", True),
                                  ("persistence", "disabled"), ("session", "/foreign")):
             with self.subTest(key=key, replacement=replacement), self.assertRaises(RuntimeError):
                 input_probe.check_portal_evidence({**accepted, key: replacement})
