@@ -64,6 +64,18 @@ def face_layout(kind):
     return layout
 
 
+def project_xz(points, polygon, wx, wz):
+    """Project a world-space mark into one face's private UV cell."""
+    a, b, c = points[:3]
+    pa, pb, pc = polygon[:3]
+    dx1, dz1, dx2, dz2 = b[0]-a[0], b[2]-a[2], c[0]-a[0], c[2]-a[2]
+    determinant = dx1*dz2-dx2*dz1
+    require(abs(determinant) > 0, "horizontal mark requires X/Z projection")
+    dx, dz = wx-a[0], wz-a[2]
+    u, v = (dx*dz2-dz*dx2)/determinant, (dx1*dz-dz1*dx)/determinant
+    return tuple(pa[i]+u*(pb[i]-pa[i])+v*(pc[i]-pa[i]) for i in range(2))
+
+
 def paint(kind, path, stage="strokes"):
     # Pillow is already part of the workflow; Blender invokes this via the host
     # preparation entrypoint, so its bundled Python does not need Pillow.
@@ -78,11 +90,18 @@ def paint(kind, path, stage="strokes"):
     meshes = candidate_geometry(kind)
     for role, faces in layout.items():
         for face, indices in zip(faces, meshes[role].faces, strict=True):
+            surface = face["surface"]
+            if kind == "Tank" and role == "body":
+                require(surface in {f"vessel:band{index}" for index in range(5)},
+                        "unknown Tank vessel surface")
             cell = face["cell"]
             x, y = (cell % 16) * CELL, (cell // 16) * CELL
             # Material variation only. Do not bake a face-normal lighting term
             # into albedo; runtime illumination owns directional shading.
-            tone = 1.0 if role == "water" else 0.96 + 0.035 * ((cell % 3) - 1)
+            # The twelve triangles of the Tank floor are one continuous wood
+            # surface: cell-dependent colors would form a spurious star.
+            tone = 1.0 if role == "water" else (0.96 if kind == "Tank" and surface == "vessel:band4"
+                                                 else 0.96 + 0.035 * ((cell % 3) - 1))
             base = tuple(round(channel * tone) for channel in palettes[kind][role])
             draw.rectangle((x, y, x + CELL - 1, y + CELL - 1), fill=(*base, 255))
             if stage == "planes":
@@ -100,20 +119,38 @@ def paint(kind, path, stage="strokes"):
                 if all(p[1] > 0 for p in points):
                     # One quiet world-space ripple design across the entire
                     # surface, not a repeated star in each triangle's UV cell.
-                    a, b, c = points[:3]
-                    pa, pb, pc = polygon[:3]
-                    dx1, dz1, dx2, dz2 = b[0]-a[0], b[2]-a[2], c[0]-a[0], c[2]-a[2]
-                    determinant = dx1*dz2-dx2*dz1
-                    require(abs(determinant) > 0, "water top requires X/Z projection")
-
-                    def pixel(wx, wz):
-                        dx, dz = wx-a[0], wz-a[2]
-                        u, v = (dx*dz2-dz*dx2)/determinant, (dx1*dz-dz1*dx)/determinant
-                        return tuple(pa[i]+u*(pb[i]-pa[i])+v*(pc[i]-pa[i]) for i in range(2))
-
                     for stroke in [[(-15, -8), (-6, -7), (4, -9), (12, -8)],
                                    [(-10, 8), (-2, 9), (8, 7), (15, 8)]]:
-                        brush.line([pixel(*point) for point in stroke], fill=(*light, 255), width=1)
+                        brush.line([project_xz(points, polygon, *point) for point in stroke],
+                                   fill=(*light, 255), width=1)
+            elif kind == "Tank" and surface == "vessel:band4":
+                # World-aligned grain crosses the floor's triangular UV cells
+                # without a per-face fan or radial brush marks.
+                points = [meshes[role].vertices[i] for i in indices]
+                for stroke in [[(-17, -8), (-5, -9), (7, -8), (17, -9)],
+                               [(-18, 7), (-6, 8), (5, 7), (17, 8)]]:
+                    brush.line([project_xz(points, polygon, *point) for point in stroke],
+                               fill=(*dark, 255), width=1)
+            elif kind == "Tank" and surface == "vessel:band1":
+                # Painted iron straps are fixed to the outside, not to the
+                # rim, water, or inside of the vessel. Broad, muted bands
+                # survive the game's normal top-down scale.
+                for fraction in (0.28, 0.72):
+                    left = tuple(polygon[0][i] * (1-fraction) + polygon[3][i] * fraction for i in range(2))
+                    right = tuple(polygon[1][i] * (1-fraction) + polygon[2][i] * fraction for i in range(2))
+                    brush.line((left, right), fill=(78, 76, 70, 255), width=3)
+                    for spot in (0.24, 0.76):
+                        center = tuple(left[i] * (1-spot) + right[i] * spot for i in range(2))
+                        brush.ellipse((center[0]-1, center[1]-1, center[0]+1, center[1]+1),
+                                      fill=(132, 78, 53, 255))
+            elif kind == "Tank" and surface == "vessel:band3":
+                # The inside wall has upright grain, unlike the horizontal
+                # marks on the outside and rim.
+                left, right = min(p[0] for p in polygon), max(p[0] for p in polygon)
+                top, bottom = min(p[1] for p in polygon), max(p[1] for p in polygon)
+                for fraction in (0.28, 0.72):
+                    xx = left * (1-fraction) + right * fraction
+                    brush.line(((xx, top+2), (xx+1, bottom-2)), fill=(*dark, 255), width=1)
             else:
                 for stroke in range(2):
                     yy = y + 8 + stroke * 6 + (cell % 2)

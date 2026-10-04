@@ -6,13 +6,14 @@ import tempfile
 import unittest
 from unittest.mock import patch
 import copy
+from collections import Counter
 from pathlib import Path
 
-from PIL import Image
+from PIL import Image, ImageDraw
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
-from building_m2_art import candidate_geometry, face_layout, paint
+from building_m2_art import candidate_geometry, face_layout, paint, project_xz
 from build_building_m2_candidate import check_uv
 if __package__:
     from .test_building_clay import encoded_geometry, write_glb
@@ -21,6 +22,50 @@ else:
 
 
 class M2ArtTests(unittest.TestCase):
+    def test_tank_floor_is_one_color_and_iron_stays_on_outer_wall(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "tank.png"
+            layout = face_layout("Tank")
+            paint("Tank", path)
+            with Image.open(path) as image:
+                floor_colors = set()
+                for role, faces in layout.items():
+                    for face in faces:
+                        cell = face["cell"]
+                        x, y = (cell % 16) * 32, (cell // 16) * 32
+                        pixels = image.crop((x, y, x + 32, y + 32)).get_flattened_data()
+                        iron = (78, 76, 70, 255)
+                        rust = (132, 78, 53, 255)
+                        if role == "body" and face["surface"] == "vessel:band1":
+                            self.assertIn(iron, pixels)
+                            rows = sorted({index // 32 for index, color in enumerate(pixels) if color == iron})
+                            clusters = 1 + sum(right - left > 2 for left, right in zip(rows, rows[1:]))
+                            self.assertEqual(clusters, 2)
+                        else:
+                            self.assertNotIn(iron, pixels)
+                            self.assertNotIn(rust, pixels)
+                        if face["surface"] == "vessel:band4":
+                            mask = Image.new("L", (32, 32))
+                            ImageDraw.Draw(mask).polygon(
+                                [(px - x, py - y) for px, py in face["polygon_px"]], fill=255)
+                            colors = Counter(image.getpixel((x + ix, y + iy))
+                                             for iy in range(32) for ix in range(32)
+                                             if mask.getpixel((ix, iy)))
+                            self.assertTrue(colors)
+                            floor_colors.add(colors.most_common(1)[0][0])
+                self.assertEqual(len(floor_colors), 1)
+
+    def test_tank_rejects_unknown_surface_and_degenerate_horizontal_projection(self):
+        with tempfile.TemporaryDirectory() as directory:
+            layout = copy.deepcopy(face_layout("Tank"))
+            layout["body"][0]["surface"] = "vessel:unknown"
+            with patch("building_m2_art.face_layout", return_value=layout):
+                with self.assertRaisesRegex(ValueError, "unknown Tank vessel surface"):
+                    paint("Tank", Path(directory) / "invalid.png")
+        with self.assertRaisesRegex(ValueError, "X/Z projection"):
+            project_xz([(0, 0, 0), (1, 0, 0), (2, 0, 0)],
+                       [(0, 0), (1, 0), (2, 0)], 1, 0)
+
     def test_albedo_does_not_bake_directional_face_lighting(self):
         import building_m2_art as art
         with tempfile.TemporaryDirectory() as directory:

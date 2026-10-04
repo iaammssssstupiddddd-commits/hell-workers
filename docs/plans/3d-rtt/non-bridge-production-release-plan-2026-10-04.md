@@ -169,6 +169,18 @@ seal/finalize/storage check済み。近景の空槽遮蔽は解消し4標本を�
 通常倍率の判読不足を受け、Tankの既存`TankPartial`状態にのみ低水位の陰を示すmaterial tintを
 追加した。水量・高さ・asset identityは変えず、世代交換／owner cleanupの既存回帰を維持する。
 これは候補補正であり、変更後のactual-window再撮影と独立採否までは未受入。
+`29fcf958b0f661e8edc56979cff10c472ce6ffd9`の通常倍率feedback
+`tak14-tank-tint-feedback-29fcf958-20261004-v1`は、Intel/Vulkan実windowの静止画像を
+独立verifyしtechnical passとしてseal/finalizeした。Partial水面がFullより暗く、以前の
+同倍率画像より区別しやすい。ただしfeedback-onlyであり正式art、数値、releaseの権限はない。
+同sourceのart-preview試行`tak14-tank-normal-29fcf958-20261004-v1`は、recipeが旧証拠の
+`target/profiling/bevy_app`を上書きするビルドを始めたため、そのcodec SHAが変わる前に
+該当ビルド工程を停止しinvalidとしてseal/finalizeした。画像やpassは存在せず、診断ログだけ保持。
+旧2件のcodec SHAは不変。正式previewは別worktreeの専用targetで作る。
+独立画像レビューでは状態差の改善を確認したが、暗色が水質差に見える可能性、鉄帯と空槽底の
+面割れが残る。数値fixture・geometry・水量を変えず、槽底を連続した同色・world基準の木目に、
+外壁だけを控えめな錆鉄帯にするpaint候補と拒否系テストを追加した。原本の新規生成・近景／通常
+比較と独立採否まで正式候補ではない。
 出力root: primary `target/native-acceptance/nonbridge-restarea-authoring-20261004-v1`。
 owner: main / consumer: M3候補の独立採否・現行subject導入。次工程: 原本・画像を比較しruntime候補を生成。
 release_when: 採用原本のasset正本への集約と候補フィードバック終了後。旧batchのpassを新subjectへ流用しない。
