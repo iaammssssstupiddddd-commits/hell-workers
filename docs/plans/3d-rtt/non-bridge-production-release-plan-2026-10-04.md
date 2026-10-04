@@ -234,6 +234,12 @@ XTest F12 receiptに対して48 sampleで原メッセージ・ButtonInput状態�
 Xwayland上流の入力配送を疑い、次の技術probeは既存の同意付きWayland portal輸送へ固定する。
 所有windowと同意、製品rawの順序を新sourceで確認する。これは9種のlifecycle、正式recipe、
 art/numeric承認、releaseを完了させるものではない。
+新source `dcac0f7541b26ec788b3bee93973e0448c5eac96` の
+`tak14-ordinary-portal-probe-dcac0f75-20261005-v8` はportal同意と固定F12輸送receipt、
+製品rawの原メッセージ・ButtonInput状態遷移を5 sample／4 eventで確認し、独立verify pass、
+用途登録、finalize、primary storage checkを完了した。これは入力配送境界の技術証拠で、
+通常worldの施工・保存・cleanupや9種の正式受入を代替しない。次はこの成立経路を用いた
+通常world Capture/Memory producerとhost instrumentを別工程で実装・受入する。
 出力root: primary `target/native-acceptance/nonbridge-restarea-authoring-20261004-v1`。
 owner: main / consumer: M3候補の独立採否・現行subject導入。次工程: 原本・画像を比較しruntime候補を生成。
 release_when: 採用原本のasset正本への集約と候補フィードバック終了後。旧batchのpassを新subjectへ流用しない。

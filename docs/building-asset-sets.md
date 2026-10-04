@@ -217,9 +217,17 @@ Bevy 0.19の `KeyboardInput` 原メッセージを `ButtonInput` 由来の状態
 所有X11 windowへのXTest F12 receiptに対し、48 sampleにはいずれの入力イベントもない。
 原 `KeyboardInput` まで届かない観測であり、Xwayland上流の配送を疑う技術診断である。
 輸送とobserverを独立に実証した原因確定でも、製品入力成功でもない。
-次の技術probeは既存 `native_ui_portal.py` の同意付きRemoteDesktop輸送へ固定し、所有window、
-F12、入力transportのhash、primaryの所有者専用同意ジャーナルをplanに拘束する。旧invalid batchを
-再解釈せずfresh rootで試す。portal grantと輸送receiptだけでも製品raw witnessなしならinvalidである。
+新profile `building-production-local-input-probe-portal-v2` は既存 `native_ui_portal.py` の
+同意付きRemoteDesktop輸送へ固定し、所有window、F12、両入力transportのhash、primaryの
+所有者専用同意ジャーナルをplanに拘束する。旧invalid batchを再解釈せずfresh rootで試す。
+`tak14-ordinary-portal-probe-dcac0f75-20261005-v8` はsource
+`dcac0f7541b26ec788b3bee93973e0448c5eac96` の通常world所有windowで同意付き
+portal grant、F12押下・解放receipt、製品rawの原 `KeyboardInput` 押下・解放と
+`ButtonInput` の `KeyPress`／`KeyRelease` を5 sample／4 event内に記録し、独立verifierで
+technical passとして封印・finalizeした。同じprofiling binaryでXTest失敗に対するportal配送成立を確認したが、
+技術probeの `accepted`、`performance_evidence`、`art_approved`、`promotion_authority` は全てfalse。
+通常worldのCapture/Memory lifecycle、host GPU/native/RSS/application全体handle、9種の性能・
+art/numeric採否、release/install/rollbackを証明するものではない。
 2026-10-04の通常world技術batch `nonbridge-ordinary-probe-20261004-v1` は
 source `ee9410363d4e8f7bd144506a64ac3fb3a71527dd`、Intel Arc/Vulkanの所有X11 clientを撮影し、
 nonce/PID一致のraw 3 sample／0 eventと子process RSS/fdを独立verifyしてfinalizeした。
