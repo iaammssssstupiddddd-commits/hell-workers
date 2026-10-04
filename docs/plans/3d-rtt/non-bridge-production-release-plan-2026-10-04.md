@@ -81,6 +81,8 @@ M2 albedoのface normal由来の焼付け明暗を除去。materialの色差だ�
 変化しない回帰テストを追加した。旧候補を新しい美術・数値承認として流用しない。
 Help実経路レビュー: 未承認staging制作・byte検査・明示profiling比較cameraのみの変更で、通常起動、
 player操作、文言、gameplay、save schema、Help到達性は不変（No impact）。正式導入時は改めてレビューする。
+現行のTank水面tintとatlas塗装も未導入のArtPreview候補に限る。開発用panelはprofiling条件下だけで、
+通常起動のasset解決、操作、表示文言、状態遷移、保存形式、Help到達性には変更がない（No impact）。
 Tank/MudMixerのv2原本とruntime packageを検証。Tankの水面は面全体に連続する2本の波線に修正し、
 三角形ごとの放射状筆跡を除去した。原本・数値・ゲームの水位判定は別契約のまま維持する。
 RestArea/Tank/SoulSpa/Parkingの近景、Sand/Bone/Lamp/MudMixerの通常zoom実機比較はtechnical passで
