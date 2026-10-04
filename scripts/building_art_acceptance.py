@@ -28,12 +28,21 @@ import native_acceptance as native  # noqa: E402
 from wall_density_acceptance import asset_view_fingerprint  # noqa: E402
 if __package__:
     from . import building_art_static_acceptance as static  # noqa: E402
+    from .perf_tool.artifacts import read_window  # noqa: E402
 else:
     import building_art_static_acceptance as static  # noqa: E402
+    from perf_tool.artifacts import read_window  # noqa: E402
 
 MODES = {"feedback": "art_preview", "art-preview": "art_preview", "candidate": "isolated_candidate"}
 PROFILE = "building-art"
 VIEWS = {"overview": 5.0, "near": 0.5, "normal": 1.0, "far": 2.0}
+QUALITIES = ("high", "medium", "low")
+
+
+def quality(value: dict) -> str:
+    selected = value.get("quality", "high")
+    pipeline.require(selected in QUALITIES, "unknown building-art quality")
+    return selected
 
 
 def subject(repo: Path) -> dict:
@@ -51,6 +60,7 @@ def validate_subject(value: dict, *, feedback: bool) -> None:
 
 
 def check_plan(value: dict, binary: Path) -> dict:
+    quality(value)
     pipeline.require(value.get("view", "overview") in VIEWS, "unknown camera view")
     pipeline.require(value["kind"] != "Bridge", "Bridge requires its independent M4 recipe; nine-kind static evidence is inapplicable")
     pipeline.require(value["profile"] == PROFILE and value["mode"] in MODES, "recipe mode differs")
@@ -84,6 +94,7 @@ def plan(args) -> dict:
              "adapter": args.adapter, "codec": str(args.codec.absolute()),
              "codec_sha256": pipeline.digest(args.codec.read_bytes()),
              "view": getattr(args, "view", "overview"),
+             "quality": getattr(args, "quality", "high"),
              "scope": "paused-static-presentation", "promotion_authority": False,
              "feedback_only": args.mode == "feedback"}
     check_plan(value, args.codec)
@@ -98,13 +109,28 @@ def plan(args) -> dict:
     return value
 
 
-def game_command(binary: Path, root: Path) -> list[str]:
+def game_command(binary: Path, root: Path, value: dict) -> list[str]:
     return [str(binary), "--perf-scenario", "--perf-seed", str(static.SEED), "--perf-size", "small",
         "--perf-workload", "building-art-static", "--perf-render", "gpu", "--perf-clock", "realtime",
         "--perf-familiar-policy", "baseline", "--perf-operation-dialog", "hidden", "--perf-dashboard", "hidden",
         "--perf-output-dir", str(root / "data"), "--perf-warmup-secs", "30", "--perf-measure-secs", "60",
         "--spawn-souls", "15", "--spawn-familiars", "0", "--perf-window-width", "1280", "--perf-window-height", "720",
-        "--perf-window-scale-factor", "1", "--perf-rtt-quality", "high"]
+        "--perf-window-scale-factor", "1", "--perf-rtt-quality", quality(value)]
+
+
+def validate_window(root: Path, value: dict) -> None:
+    """Check actual quality/target dimensions, not just the requested argv.
+
+    This reuses the window-only validator: paused art fixtures cannot satisfy
+    ordinary gameplay performance predicates and grant no performance authority.
+    """
+    window, errors = read_window(root / "data/window.csv", expect_headless=False,
+        expected_width=1280, expected_height=720, expected_scale_factor=1.0,
+        expected_rtt_quality=quality(value), expected_window_backend="x11",
+        expected_backend="vulkan", expected_present_mode="novsync")
+    pipeline.require(window is not None and not errors, "building-art window differs: " + "; ".join(errors))
+    pipeline.require(value["adapter"].casefold() in window["adapter_name"].casefold(),
+                     "building-art window adapter differs")
 
 
 def game_environment(environment: dict, view: Path, value: dict, nonce: str, root: Path) -> dict:
@@ -174,6 +200,8 @@ def verify(root: Path) -> dict:
     pipeline.require(sidecar["evidence_kind"] == "candidate-paused-static-only"
                      and sidecar["initial"] == sidecar["final"] == probe["fixture"]
                      and sidecar["stable_frames"] >= 30, "candidate fixture did not remain stable")
+    # Older plans remain high-only; their recorded raw window is checked too.
+    validate_window(root, value)
     log = (root / "actual-window.log").read_text()
     pipeline.require(not re.search(r"\b(?:WARN|ERROR)\b|bevy_ecs::error::handler", log), "native log contains warning/error")
     adapters = re.findall(r'AdapterInfo \{ name: "([^"]+)".*?backend: ([A-Za-z0-9_]+)', log)
@@ -221,7 +249,7 @@ def run(args) -> dict:
         screenshot = None
         deadline = time.monotonic() + 300
         with (root / "actual-window.log").open("w") as log:
-            process = subprocess.Popen(game_command(binary, root), cwd=repo, env=environment,
+            process = subprocess.Popen(game_command(binary, root, value), cwd=repo, env=environment,
                 stdout=log, stderr=subprocess.STDOUT, start_new_session=True,
                 pass_fds=native.activity_pass_fds(environment))
             native.update_state(job, state, child_pid=process.pid, current_stage="actual-window")
@@ -345,6 +373,7 @@ def main() -> int:
     parser.add_argument("--mode", choices=tuple(MODES))
     parser.add_argument("--adapter", default="Intel")
     parser.add_argument("--view", choices=tuple(VIEWS), default="overview")
+    parser.add_argument("--quality", choices=QUALITIES, default="high")
     args = parser.parse_args()
     if args.command == "plan":
         pipeline.require(all((args.repo, args.source_root, args.codec, args.kind, args.mode)), "incomplete recipe inputs")

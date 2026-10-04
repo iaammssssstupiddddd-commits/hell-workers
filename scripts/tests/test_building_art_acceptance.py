@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import copy
+import csv
 import json
 from pathlib import Path
 import sys
@@ -13,9 +14,59 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import building_art_acceptance as art
+from perf_tool.fixtures import write_fixture_run
 
 
 class RecipeTests(unittest.TestCase):
+    def test_quality_is_bounded_and_legacy_plans_remain_high(self):
+        self.assertEqual(art.quality({}), "high")
+        for quality in art.QUALITIES:
+            command = art.game_command(Path("binary"), Path("job"), {"quality": quality})
+            self.assertEqual(command[command.index("--perf-rtt-quality") + 1], quality)
+        for invalid in (None, "ultra", "Low", 1):
+            with self.subTest(invalid=invalid), self.assertRaisesRegex(ValueError, "quality"):
+                art.game_command(Path("binary"), Path("job"), {"quality": invalid})
+
+    def test_actual_window_quality_resolution_and_end_state_are_required(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            write_fixture_run(root)
+            path = root / "data/window.csv"
+            with path.open(newline="") as handle:
+                original = next(csv.DictReader(handle))
+
+            def write(row):
+                with path.open("w", newline="") as handle:
+                    writer = csv.DictWriter(handle, fieldnames=list(original))
+                    writer.writeheader()
+                    writer.writerow(row)
+
+            for quality, factor in (("high", 1), ("medium", .75), ("low", .5)):
+                row = dict(original)
+                for prefix in ("", "end_"):
+                    row.update({prefix + "rtt_quality": quality,
+                                prefix + "scene_target_width": str(int(1280 * factor)),
+                                prefix + "scene_target_height": str(int(720 * factor)),
+                                prefix + "mask_target_width": str(int(1280 * factor)),
+                                prefix + "mask_target_height": str(int(720 * factor)),
+                                prefix + "target_scale_factor": str(factor)})
+                write(row)
+                value = {"quality": quality, "adapter": "Test GPU"}
+                art.validate_window(root, value)
+                for field, changed in (("rtt_quality", "invalid"),
+                                       ("scene_target_width", "999"),
+                                       ("end_rtt_quality", "invalid"),
+                                       ("resolved_window_backend", "wayland")):
+                    write({**row, field: changed})
+                    with self.subTest(quality=quality, field=field), self.assertRaisesRegex(ValueError, "window"):
+                        art.validate_window(root, value)
+                write(row)
+                with self.assertRaisesRegex(ValueError, "adapter"):
+                    art.validate_window(root, {**value, "adapter": "foreign"})
+            path.unlink()
+            with self.assertRaisesRegex(ValueError, "missing"):
+                art.validate_window(root, value)
+
     def test_camera_view_requires_matching_runtime_scale_and_inventory(self):
         value = {"mode": "feedback", "identity": {}, "scope": "paused-static-presentation", "view": "near"}
         probe = {"profile": art.PROFILE, "status": "ready", "mode": "feedback", "identity": {},

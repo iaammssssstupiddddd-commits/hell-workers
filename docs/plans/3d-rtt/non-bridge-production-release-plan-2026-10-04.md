@@ -362,6 +362,24 @@ manifest `43b1fe0f75b7176870f9d72663a5c75119d0e81989ba49be0ab96a73697177f1` は
 低彩度の濁色と広い不均一な流れを、独立mud面だけに与えること。微細描線を増やすのでなく
 通常倍率・近景の同条件画像で素材の分離を一度検証する。実精製中の動作、通常world状態、
 full lifecycle／性能、正式releaseは未受入。
+`bda34aadc43815f531e5b4a55e5da48bb98c1b31` では独立mud面だけを低彩度の濁色と
+広い不均一なflowへ補正。数値geometry、rotor、旧v1、通常gameplayは不変。
+fresh原画 `tak14-mud-mixer-v2-flow-bda34aad-20261005-v1` とruntime package
+`tak14-mud-mixer-v2-flow-runtime-bda34aad-20261005-v1` を独立byte/UV/index verify後に保持・finalizeした。
+manifest `faa969b7af23d93644d7e58cf86c000e35c3113d2c89ecd7f7105d0958fcb876` は
+`art_preview` のままで、art/numeric/production authorityはない。
+同identityの通常・近景・遠景 `tak14-mud-mixer-v2-flow-{normal,near,far}-bda34aad-20261005-v1` は
+Intel/Vulkan所有1280×720 windowで独立technical verifier pass、用途保持・finalize済み。
+独立画像レビューでは通常・近景の木製槽底との混同は解消し、遠景scale2でも木枠・泥面・
+十字攪拌部と隣接種を区別できた。追加paint調整はここで止める。紫色表示は静止状態差だけで
+実精製の証拠ではない。最大scale5、低品質、明暗・重なり、配置preview、実状態遷移、
+正式art/numeric採否、ordinary lifecycle／性能、release/install/rollbackは未受入。
+次の画像検証のため `building_art_acceptance.py plan --quality high|medium|low` を追加する。
+指定argvだけでなく実window CSVの開始／終了品質、Scene解像度・scale、所有window寸法、
+Vulkan/X11/adapterを既存window verifierで検査する。旧planはhighとして扱う。
+静止性能参照はhigh限定を維持し、lower qualityは明示building-art sessionだけで許可する。
+品質指定は検証子processだけの制御で、通常起動やプレイヤーの設定・Help契約を変更しない。
+追加経路の実装レビューと現subjectの低品質画像取得までは、低品質受入を完了扱いにしない。
 出力root: primary `target/native-acceptance/nonbridge-restarea-authoring-20261004-v1`。
 owner: main / consumer: M3候補の独立採否・現行subject導入。次工程: 原本・画像を比較しruntime候補を生成。
 release_when: 採用原本のasset正本への集約と候補フィードバック終了後。旧batchのpassを新subjectへ流用しない。

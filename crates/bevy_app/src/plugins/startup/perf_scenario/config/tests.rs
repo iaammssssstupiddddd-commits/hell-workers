@@ -51,6 +51,18 @@ fn building_art_static_rejects_wrong_population_clock_and_measurement_contract()
         assert!(config.keeps_virtual_time_paused_during_capture());
         assert!(config.uses_isolated_density_world());
         assert_eq!(config.soul_count().to_string(), souls);
+        // Parser admission does not approve an asset: configure_building_art
+        // subsequently validates the full explicit session and exact identity.
+        for quality in ["medium", "low"] {
+            let mut art_args = args.clone();
+            let index = art_args
+                .iter()
+                .position(|&arg| arg == "--perf-rtt-quality")
+                .unwrap();
+            art_args[index + 1] = quality;
+            assert!(parse_input(&art_args, &[]).is_err());
+            assert!(parse_input(&art_args, &[("HW_BUILDING_ART_SESSION", "{}")]).is_ok());
+        }
         for (flag, bad) in [
             ("--spawn-souls", "0"),
             ("--spawn-familiars", "1"),

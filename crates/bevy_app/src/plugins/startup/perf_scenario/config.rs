@@ -1256,9 +1256,12 @@ impl PerfScenarioConfig {
                 || window_width != Some(1280)
                 || window_height != Some(720)
                 || window_scale_factor != Some(1.0)
-                || rtt_quality != Some(RttQualityPreset::High))
+                || !building_art_quality_matches(
+                    input.env_text("HW_BUILDING_ART_SESSION").is_some(),
+                    rtt_quality,
+                ))
         {
-            return Err(PerfScenarioConfigError("building-art-static requires small/15 Souls or medium/60 Souls, zero Familiars, gpu/realtime, seed 20260920, 30s/60s, output directory, baseline policies and 1280x720/high/DPI-1".into()));
+            return Err(PerfScenarioConfigError("building-art-static requires small/15 Souls or medium/60 Souls, zero Familiars, gpu/realtime, seed 20260920, 30s/60s, output directory, baseline policies and 1280x720/DPI-1; non-high quality requires an explicit building-art session".into()));
         }
         #[cfg(feature = "profiling-renderdoc")]
         if renderdoc_capture
@@ -1668,6 +1671,17 @@ const fn wall_actual_window_phase_matches(
         && (matches!(phase, Some(PerfWallPhase::Completed))
             || (art_preview && matches!(phase, Some(PerfWallPhase::Provisional)))
             || (formwork_acceptance && matches!(phase, Some(PerfWallPhase::Mixed))))
+}
+
+// Static performance references stay high-only. Explicit art sessions are
+// independently admitted by configure_building_art and grant no release authority.
+fn building_art_quality_matches(art_session: bool, quality: Option<RttQualityPreset>) -> bool {
+    quality == Some(RttQualityPreset::High)
+        || (art_session
+            && matches!(
+                quality,
+                Some(RttQualityPreset::Medium | RttQualityPreset::Low)
+            ))
 }
 
 fn wall_density_window_contract_matches(
