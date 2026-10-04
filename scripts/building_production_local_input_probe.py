@@ -132,6 +132,14 @@ def raw_ready(path: Path) -> bool:
     return len(raw["samples"]) >= 3
 
 
+def numeric_window_id(window: str) -> int:
+    require(type(window) is str and re.fullmatch(r"0x[0-9a-fA-F]+", window) is not None,
+            "owned X11 window ID is not hexadecimal")
+    value = int(window, 16)
+    require(value > 0, "owned X11 window ID is zero")
+    return value
+
+
 def witnessed_input(raw: dict, *, before_event_count: int) -> tuple[dict, dict]:
     require(type(before_event_count) is int and 0 <= before_event_count <= len(raw["events"]),
             "input probe event boundary is invalid")
@@ -289,7 +297,8 @@ def run(args: argparse.Namespace) -> dict:
                     "owned X11 client before capture failed")
             before_count = len(raw["events"])
             stage = "owned X11 input activation"
-            transport = X11Input(window, pid, game.pid, nonce, records.append)
+            window_number = numeric_window_id(window)
+            transport = X11Input(window_number, pid, game.pid, nonce, records.append)
             transport.activate()
             stage = "F12 press witness"
             transport.send("key-press", nonce, key=KEY, pressed=True)
@@ -319,13 +328,13 @@ def run(args: argparse.Namespace) -> dict:
                     native.stop_command_process(game)
     require(owned is not None and len(records) == 2
             and [row["step"] for row in records] == ["key-press", "key-release"]
-            and all(row["nonce"] == nonce and row["window"] == owned[0]
+            and all(row["nonce"] == nonce and row["window"] == window_number
                     and row["pid"] == owned[1] for row in records)
             and metrics and all(row["rss_kib"] > 0 and row["process_fd_count"] > 0
                                 for row in metrics), "owned input receipts or host metrics missing")
     result = {"schema": 1, "profile": PROFILE, "status": "technical-pass",
               "plan": value, "context": context, "nonce": nonce,
-              "game_pid": owned[1], "window_id": owned[0],
+              "game_pid": owned[1], "window_id": window_number,
               "raw_sha256": probe.digest(raw_path),
               "before_sha256": probe.digest(screenshot_before),
               "after_sha256": probe.digest(screenshot_after),
@@ -355,6 +364,7 @@ def verify(root: Path) -> dict:
     check_registered_context(repo, root, plan_path, context)
     require(root == expected and result["schema"] == 1 and result["profile"] == PROFILE
             and result["status"] == "technical-pass"
+            and type(result["window_id"]) is int and result["window_id"] > 0
             and all(result[key] is False for key in
                     ("accepted", "performance_evidence", "art_approved", "promotion_authority"))
             and all(result[key] is None for key in

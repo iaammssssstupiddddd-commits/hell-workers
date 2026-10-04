@@ -111,6 +111,12 @@ class LocalInputProbeTests(unittest.TestCase):
             with self.assertRaises(RuntimeError):
                 input_probe.raw_ready(raw_path)
 
+    def test_owned_hex_window_id_is_numeric_only_at_input_boundary(self):
+        self.assertEqual(input_probe.numeric_window_id("0x7b"), 123)
+        for invalid in (123, "123", "0x0", "0x7g", "0x7b junk"):
+            with self.subTest(invalid=invalid), self.assertRaises(RuntimeError):
+                input_probe.numeric_window_id(invalid)
+
     def test_run_rejects_unplanned_direct_launch(self):
         args = argparse.Namespace(plan=self.plan_path, repo=self.repo, job_root=self.root)
         with patch.dict(input_probe.os.environ, {}, clear=True), self.assertRaises(RuntimeError):
@@ -207,7 +213,7 @@ class LocalInputProbeTests(unittest.TestCase):
              patch.object(input_probe.ownership, "running_context", return_value={}), \
              patch.object(input_probe.native, "cargo_environment", return_value={}), \
              patch.object(input_probe.subprocess, "Popen", side_effect=start_game), \
-             patch.object(input_probe.native, "x11_client_windows_for_process_tree", return_value=[(123, 2345)]), \
+             patch.object(input_probe.native, "x11_client_windows_for_process_tree", return_value=[("0x7b", 2345)]), \
              patch.object(input_probe.probe, "process_metrics", return_value={"rss_kib": 1,
                                                                              "process_fd_count": 1}), \
              patch.object(input_probe, "raw_snapshot", return_value={"samples": [{}, {}, {}], "events": []}), \
