@@ -16,7 +16,7 @@
     "roles": {"body": {"collection": "RestArea_Body", "triangle_cap": 256}},
     "posts": {"x": [-25, 25], "z": [-24, 24], "width_depth_wu": [4, 4]},
     "roof": {"x_height_profile": [[-31, 33], [-15, 37], [0, 43], [15, 36], [31, 33]], "z_edges": [-29, 29], "front_z_profile": [29, 12, 6, 12, 29], "thickness_wu": 1.5},
-    "palette": {"wood": [83, 66, 54], "cloth": [139, 107, 91], "iron": [85, 79, 70]},
+    "palette": {"wood": [83, 66, 54], "cloth": [177, 153, 123], "iron": [85, 79, 70]},
     "body_bounds_wu": [[-31, 0, -29], [31, 44.5, 29]],
     "reject_if": ["roof/posts/entrance unreadable at normal and far zoom", "Dream origin or lingering particles appear buried", "reservation is represented as occupancy"]
   },

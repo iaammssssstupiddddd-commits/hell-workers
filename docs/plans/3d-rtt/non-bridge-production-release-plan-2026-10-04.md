@@ -255,6 +255,16 @@ host admission、actual-window capture/ACK、外部GPU/native/RSS/application ha
 証明しない。正式art採用は `changes_requested` とし、実操作による既存情報UIの確認経路、異なる明暗・
 壁／Soul／隣接設備との重なり、低品質表示、完成と配置previewの接地・縮尺、実状態遷移を同identityの
 追加証拠で評価する。技術画像の再評価を数値freeze、lifecycle、release承認へ転用しない。
+現行source `0b4738dd8f831bbdfdc981fb140903ddfd89f870` のRestArea通常倍率
+`tak14-restarea-normal-0b4738dd-20261005-v2` は、同じ未承認ArtPreview identity
+`364c1ad44187d074fe4bc7251f3a919a40659cf49da59187662ce733e7179860` を
+Intel/Vulkan実ウィンドウで撮影し、独立verifierのtechnical pass、用途登録、finalize、
+storage checkを完了。独立read-only画像比較では入口開口と支柱の形は読めるが、
+屋根が板または皮革に見え、縫い目・継ぎ布・皺と木支柱との素材差が通常倍率で不足。
+正式art採用は `changes_requested`。配置geometry・利用状態・保存契約を変えず、
+布atlasの色面と少数の世界座標基準の継ぎ目・皺だけを新候補へ補正する。
+この撮影は静止比較のみで、利用者/Dreamの実遷移、異なる照明・背景、最遠・重なり、
+低品質、preview、numeric freeze、ordinary lifecycleやreleaseを証明しない。
 出力root: primary `target/native-acceptance/nonbridge-restarea-authoring-20261004-v1`。
 owner: main / consumer: M3候補の独立採否・現行subject導入。次工程: 原本・画像を比較しruntime候補を生成。
 release_when: 採用原本のasset正本への集約と候補フィードバック終了後。旧batchのpassを新subjectへ流用しない。

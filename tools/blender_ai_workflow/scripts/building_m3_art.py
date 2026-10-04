@@ -179,14 +179,21 @@ def paint(kind, output, stage):
 
                     patch = [(-25, -17), (-12, -18), (-11, -3), (-24, -4)]
                     brush.polygon([pixel(*p) for p in patch],
-                                  fill=(*tuple(min(255, c+13) for c in base), 255))
-                    # A single broad fold and a stitched fabric join, not an
-                    # outline around every panel or baked directional shadow.
-                    brush.line([pixel(-31, 7), pixel(-8, 6), pixel(14, 8), pixel(31, 7)],
-                               fill=(*dark, 255), width=1)
+                                  fill=(*tuple(min(255, c+24) for c in base), 255))
+                    seam = (*tuple(round(c*0.66) for c in base), 255)
+                    # Two continuous joins and one broad fold are drawn in
+                    # world coordinates, so their marks cross UV islands
+                    # without turning each cloth face into a timber panel.
+                    for points in (
+                        [(-31, -13), (-7, -12), (15, -14), (31, -13)],
+                        [(-31, 10), (-8, 9), (14, 11), (31, 10)],
+                    ):
+                        brush.line([pixel(*p) for p in points], fill=seam, width=2)
+                    brush.line([pixel(-27, 19), pixel(-8, 16), pixel(12, 18), pixel(27, 16)],
+                               fill=(*dark, 255), width=2)
                     for world_x in range(-28, 30, 6):
-                        brush.line([pixel(world_x, 5), pixel(world_x+1, 9)],
-                                   fill=(*tuple(round(c*0.92) for c in base), 255), width=1)
+                        brush.line([pixel(world_x, 8), pixel(world_x+2, 12)],
+                                   fill=seam, width=2)
                 elif material == "wood":
                     for offset in (10, 21):
                         brush.line([(x+6, y+offset), (x+16, y+offset-1), (x+25, y+offset)],

@@ -125,6 +125,29 @@ class M3ArtTests(unittest.TestCase):
             self.assertGreater(light_cloth, 0, "cloth needs a coherent lighter repair, not repeated wood strokes")
             self.assertEqual(list(art.geometry("RestArea")["body"].bounds()), spec["body_bounds_wu"])
 
+    def test_restarea_linen_and_repairs_are_distinct_at_atlas_scale(self):
+        from PIL import Image
+        _, spec = art.contract("RestArea")
+        cloth = spec["palette"]["cloth"]
+        wood = spec["palette"]["wood"]
+        self.assertGreater(sum(cloth) - sum(wood), 200)
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory)
+            art.paint("RestArea", output, "strokes")
+            with Image.open(output / "albedo.png") as image:
+                pixels = image.convert("RGB")
+                top = [face for face in art.face_layout("RestArea")["body"]
+                       if face["surface"] == "cloth:canopy" and face["normal"][1] > 0.5]
+                self.assertEqual(len(top), 4)
+                colors = set()
+                for face in top:
+                    x, y = face["cell"] % 16 * 32, face["cell"] // 16 * 32
+                    colors.update(pixels.getpixel((px, py))
+                                  for px in range(x, x+32) for py in range(y, y+32))
+                self.assertIn(tuple(cloth), colors)
+                self.assertIn(tuple(min(255, c+24) for c in cloth), colors)
+                self.assertIn(tuple(round(c*0.66) for c in cloth), colors)
+
 
 if __name__ == "__main__":
     unittest.main()
