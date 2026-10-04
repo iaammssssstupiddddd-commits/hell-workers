@@ -45,7 +45,11 @@ class M2ArtTests(unittest.TestCase):
                                  (*mud_mixer_plane("body", "mud0:top"), 255))
             with Image.open(path) as planes, Image.open(strokes) as detailed:
                 box = (x, y, x + 32, y + 32)
-                self.assertEqual(planes.crop(box).tobytes(), detailed.crop(box).tobytes())
+                self.assertNotEqual(planes.crop(box).tobytes(), detailed.crop(box).tobytes())
+                muddy = set(detailed.crop(box).get_flattened_data())
+                self.assertIn((48, 55, 37, 255), muddy)
+                self.assertIn((110, 108, 65, 255), muddy)
+                self.assertNotIn((*mud_mixer_plane("body", "body1:top"), 255), muddy)
         with self.assertRaisesRegex(ValueError, "unknown M2 art revision"):
             numeric_contract("Tank", "v2")
 

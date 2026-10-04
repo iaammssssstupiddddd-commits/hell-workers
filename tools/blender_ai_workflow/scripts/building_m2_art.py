@@ -98,7 +98,7 @@ def mud_mixer_plane(role, surface):
     require(role == "body" and label in {f"body{index}" for index in range(10)} | {"mud0"},
             "unknown MudMixer body")
     if label == "mud0":
-        return (118, 94, 65) if side == "top" else (98, 75, 53)
+        return (79, 83, 51) if side == "top" else (60, 61, 41)
     if label == "body0":
         return (83, 58, 43) if side == "top" else (119, 79, 50)
     inside = {"body1": "right", "body2": "left", "body3": "back", "body4": "front"}
@@ -209,9 +209,20 @@ def paint(kind, path, stage="strokes", revision="v1"):
                     xx = left * (1-fraction) + right * fraction
                     brush.line(((xx, top+2), (xx+1, bottom-2)), fill=(*dark, 255), width=1)
             elif kind == "MudMixer" and surface.startswith("mud0:"):
-                # The independent opaque mud slab is a large material plane;
-                # generic wood-grain strokes would misidentify its surface.
-                pass
+                # Broad, world-aligned cloudy flows mark static residue rather
+                # than wood grain. Only the top surface receives these marks;
+                # every other state and the rotor retain their existing art.
+                if surface == "mud0:top":
+                    points = [meshes[role].vertices[i] for i in indices]
+                    for flow, color in (
+                        ([(-18, -9), (-7, -12), (5, -8), (17, -11),
+                          (19, -2), (8, 1), (-6, -2), (-18, 2)], (48, 55, 37)),
+                        ([(-19, 9), (-9, 5), (2, 8), (12, 5),
+                          (19, 8), (18, 14), (7, 11), (-2, 14), (-15, 12)],
+                         (110, 108, 65)),
+                    ):
+                        brush.polygon([project_xz(points, polygon, *point)
+                                       for point in flow], fill=(*color, 255))
             else:
                 for stroke in range(2):
                     yy = y + 8 + stroke * 6 + (cell % 2)
