@@ -347,7 +347,21 @@ Pythonの算術・拒否系検査だけでは数値freezeにならない。M2制
 生成できるようにした。独立実装レビューでaccessorだけでは泥面未描画を拒否できないと分かったため、
 実際のindexごとにface所属・有向周縁・逆向き一対の内部対角線を照合し、
 泥面のindex削除／誤接続／逆巻きを拒否してから
-離隔値を出す。v2のBlender出力・通常倍率比較・独立art/数値採否・releaseはこれから行う。
+離隔値を出す。`fee69559e958fe36dd22c0cb7a88e307f1ed8cf0` のclean sourceから
+原画 `tak14-mud-mixer-v2-authoring-fee69559-20261005-v1`、preview package
+`tak14-mud-mixer-v2-runtime-fee69559-20261005-v1` を別identityとして制作し、
+index付きGLB・UV・離隔・byteと独立verifierがpassした。bodyは132三角形、rotorは36三角形、
+manifest `43b1fe0f75b7176870f9d72663a5c75119d0e81989ba49be0ab96a73697177f1` は
+`art_preview`、`numeric_freeze=false`、`art_approved=false`、`production_candidate=false`。
+同identityの通常倍率 `tak14-mud-mixer-v2-normal-fee69559-20261005-v1` と近景
+`tak14-mud-mixer-v2-near-fee69559-20261005-v1` はIntel/Vulkan所有windowで
+独立technical verifier pass、用途保持・finalize・storage check済み。v1との独立画像比較では
+槽底と別の連続面は両倍率で前より読めるが、木枠と近い黄土色の平面で「泥」の素材判読は
+まだ不確実。近景では紫の状態表示が右2標本に重なるため、泥色の観察は左2標本を重視する。
+この静止技術比較を独立art/numeric承認に読み替えない。次の色面仮説は、木材とは異なる
+低彩度の濁色と広い不均一な流れを、独立mud面だけに与えること。微細描線を増やすのでなく
+通常倍率・近景の同条件画像で素材の分離を一度検証する。実精製中の動作、通常world状態、
+full lifecycle／性能、正式releaseは未受入。
 出力root: primary `target/native-acceptance/nonbridge-restarea-authoring-20261004-v1`。
 owner: main / consumer: M3候補の独立採否・現行subject導入。次工程: 原本・画像を比較しruntime候補を生成。
 release_when: 採用原本のasset正本への集約と候補フィードバック終了後。旧batchのpassを新subjectへ流用しない。
