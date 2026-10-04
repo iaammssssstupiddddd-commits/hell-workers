@@ -248,6 +248,13 @@ producer欠落は残る。補正前のcollectorはX11 XTest固定であり、por
 所有window・focus・raw ACKのportal輸送へ接続する。grantをaction logへ残して独立検査するが、
 host admission、actual-window capture/ACK、外部GPU/native/RSS/application handle計測器は
 別途必要であり、このコード補正だけでは正式campaignを開始できない。
+同一Tank preview identity `edc65d14fe5f97b8953ccdd1487b62b1fcb51d9112915968d5994c2edf29f9cb` の
+近景・通常・遠景・最大ズームアウト4枚を独立read-only美術再評価した。近景の槽底・鉄帯の大きな断絶は
+解消し、通常倍率でEmpty／Partial／Fullを区別できるため、追加の形状変更は現時点では必須でない。
+ただし最大ズームアウトではPartial／Fullの判別が不確実で、黒背景の静止画像は通常地形との分離を
+証明しない。正式art採用は `changes_requested` とし、実操作による既存情報UIの確認経路、異なる明暗・
+壁／Soul／隣接設備との重なり、低品質表示、完成と配置previewの接地・縮尺、実状態遷移を同identityの
+追加証拠で評価する。技術画像の再評価を数値freeze、lifecycle、release承認へ転用しない。
 出力root: primary `target/native-acceptance/nonbridge-restarea-authoring-20261004-v1`。
 owner: main / consumer: M3候補の独立採否・現行subject導入。次工程: 原本・画像を比較しruntime候補を生成。
 release_when: 採用原本のasset正本への集約と候補フィードバック終了後。旧batchのpassを新subjectへ流用しない。
