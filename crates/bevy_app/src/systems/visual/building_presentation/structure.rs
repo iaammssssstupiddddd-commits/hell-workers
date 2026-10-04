@@ -51,6 +51,7 @@ struct EquipmentPart {
 struct GenerationMaterials {
     identity: BuildingAssetSetIdentity,
     opaque: Handle<TopDownStructuralMaterial>,
+    tank_partial_water: Option<Handle<TopDownStructuralMaterial>>,
     slot_on: Handle<TopDownStructuralMaterial>,
 }
 
@@ -252,6 +253,18 @@ fn sync_structure(world: &mut World, handles: &Building3dHandles, pool: &Buildin
                     material.base.emissive = LinearRgba::BLACK;
                     material.base.emissive_texture = None;
                     let opaque = assets.add(material.clone());
+                    // The lower water surface sits in the vessel's shade. A
+                    // bounded tint makes Partial distinguishable from Full in
+                    // the actual top-down view without changing water counts,
+                    // numeric heights, or the shared authored atlas.
+                    let tank_partial_water = if kind == BuildingType::Tank {
+                        material.base.base_color = Color::srgb(0.58, 0.70, 0.73);
+                        let partial = assets.add(material.clone());
+                        material.base.base_color = Color::WHITE;
+                        Some(partial)
+                    } else {
+                        None
+                    };
                     // Only active Spa slots use this material. The authored
                     // RGB mask controls surface emission, never a logical light.
                     material.base.emissive = LinearRgba::WHITE;
@@ -264,6 +277,7 @@ fn sync_structure(world: &mut World, handles: &Building3dHandles, pool: &Buildin
                     cache.0.push(GenerationMaterials {
                         identity: set.manifest.identity.clone(),
                         opaque,
+                        tank_partial_water,
                         slot_on,
                     });
                 }
@@ -400,7 +414,16 @@ fn sync_structure(world: &mut World, handles: &Building3dHandles, pool: &Buildin
                     .strip_prefix("slot")
                     .and_then(|index| index.parse::<u8>().ok())
                     .is_some_and(|index| index < 4 && mask & (1 << index) != 0);
-                if active {
+                if kind == BuildingType::Tank
+                    && part.name == "water"
+                    && state == StructuralPresentationState::TankPartial
+                {
+                    material
+                        .tank_partial_water
+                        .as_ref()
+                        .expect("Tank material includes its partial water tint")
+                        .clone()
+                } else if active {
                     material.slot_on.clone()
                 } else {
                     material.opaque.clone()

@@ -156,6 +156,19 @@ receipt `95ba6a19494d84825db54075cf8735d2024d18e6983dc54343cdc71c19a046ad`と
 Tank近景の空状態は開発パネルに遮蔽され、水位差も弱い。SoulSpaの骨素材／全mask、
 Lamp最遠の種類・状態と情報パネル経路も重点未達。明示building-art session中だけの
 開発パネル非表示を補正し、同一新subjectでTank近景を再観測する。通常プレイヤーUIは変更しない。
+`c606733989c0f21b6fba4dea7138190f5f873409`の明示art-previewでは、保存済みdebug表示が
+再適用されてもDevPanelだけをLayout前に隠す実装・回帰テスト・固定read-only reviewを通過。
+Tank近景 `tak14-tank-near-c6067339-20261004-v1` と通常倍率
+`tak14-tank-normal-c6067339-20261004-v1` はIntel/Vulkan実window・同manifest
+`87997feeafa4c99dddeab227d0e8e60bfc371d8572e208f0266a652abccc9596`で独立verify pass、
+seal/finalize/storage check済み。近景の空槽遮蔽は解消し4標本を確認できた。
+ただし通常倍率ではPartial(25)／Full(50)の水位差を判読しづらく、近景の木部材・鉄帯と
+空槽内面の三角形状も正式画風採否には不足。静止画像は背景・preview・実給排水・性能を含まない。
+この候補の正式art/numeric採用とreleaseは保留し、まず通常倍率で状態差が読める
+表現／確認経路と内面描線を修正し、fresh identity・同subject画像で再評価する。
+通常倍率の判読不足を受け、Tankの既存`TankPartial`状態にのみ低水位の陰を示すmaterial tintを
+追加した。水量・高さ・asset identityは変えず、世代交換／owner cleanupの既存回帰を維持する。
+これは候補補正であり、変更後のactual-window再撮影と独立採否までは未受入。
 出力root: primary `target/native-acceptance/nonbridge-restarea-authoring-20261004-v1`。
 owner: main / consumer: M3候補の独立採否・現行subject導入。次工程: 原本・画像を比較しruntime候補を生成。
 release_when: 採用原本のasset正本への集約と候補フィードバック終了後。旧batchのpassを新subjectへ流用しない。

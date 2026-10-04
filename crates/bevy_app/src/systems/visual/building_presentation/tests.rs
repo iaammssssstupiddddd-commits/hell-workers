@@ -947,6 +947,8 @@ fn tank_state_changes_reuse_water_leaf_and_keep_fallback_materials() {
         "/../../tools/blender_ai_workflow/fixtures/building-tank-v1.geometry.json"
     )))
     .unwrap();
+    let mut partial_material = None;
+    let mut full_material = None;
     for expected in [
         StructuralPresentationState::TankPartial,
         StructuralPresentationState::TankFull,
@@ -958,6 +960,36 @@ fn tank_state_changes_reuse_water_leaf_and_keep_fallback_materials() {
             Some(&expected)
         );
         assert_eq!(children(app.world(), visual), parts);
+        let water_material = app
+            .world()
+            .get::<MeshMaterial3d<TopDownStructuralMaterial>>(parts[1])
+            .unwrap()
+            .0
+            .clone();
+        if expected == StructuralPresentationState::TankPartial {
+            assert_eq!(
+                app.world()
+                    .resource::<Assets<TopDownStructuralMaterial>>()
+                    .get(&water_material)
+                    .unwrap()
+                    .base
+                    .base_color,
+                Color::srgb(0.58, 0.70, 0.73)
+            );
+            partial_material = Some(water_material);
+        } else {
+            assert_eq!(
+                app.world()
+                    .resource::<Assets<TopDownStructuralMaterial>>()
+                    .get(&water_material)
+                    .unwrap()
+                    .base
+                    .base_color,
+                Color::WHITE
+            );
+            assert_ne!(Some(water_material.clone()), partial_material);
+            full_material = Some(water_material);
+        }
         assert_eq!(
             app.world().get::<Visibility>(parts[1]),
             Some(&Visibility::Inherited)
@@ -980,6 +1012,10 @@ fn tank_state_changes_reuse_water_leaf_and_keep_fallback_materials() {
         .get_mut::<StockpileVisualState>(owner)
         .unwrap()
         .capacity = 0;
+    let material_count = app
+        .world()
+        .resource::<Assets<TopDownStructuralMaterial>>()
+        .len();
     app.update();
     assert_eq!(children(app.world(), visual), parts);
     assert_eq!(
@@ -994,11 +1030,29 @@ fn tank_state_changes_reuse_water_leaf_and_keep_fallback_materials() {
             .y,
         12.0
     );
+    assert_eq!(
+        app.world()
+            .get::<MeshMaterial3d<TopDownStructuralMaterial>>(parts[1])
+            .map(|material| material.0.clone()),
+        partial_material
+    );
     app.world_mut()
         .get_mut::<StockpileVisualState>(owner)
         .unwrap()
         .capacity = 2;
     app.update();
+    assert_eq!(
+        app.world()
+            .get::<MeshMaterial3d<TopDownStructuralMaterial>>(parts[1])
+            .map(|material| material.0.clone()),
+        full_material
+    );
+    assert_eq!(
+        app.world()
+            .resource::<Assets<TopDownStructuralMaterial>>()
+            .len(),
+        material_count
+    );
     app.world_mut()
         .resource_mut::<BuildingAssetPool>()
         .invalidate_active(&set.manifest.identity);

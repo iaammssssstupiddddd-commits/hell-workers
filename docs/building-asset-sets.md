@@ -118,6 +118,9 @@ receiptは製品に同梱する承認記録の整合性検査であり、署名�
   `Building3dVisual`はrootだけに付け、partのlocal transformをworld同期で上書きしない。
   generation交換はpart集合単位、失効時は従来mesh／位置／材質／状態表示へ戻る。
   owner消失・重複root・world再構築を整理し、水面・回転・施工状態・稼働maskは既存gameplay stateに従う。
+  TankのPartial水面だけは低い位置の陰として専用の暗いmaterial tintを使い、俯瞰の通常倍率での
+  Fullとの識別を補助する。判読性は変更後の実機画像で要確認。水量判定・数値高さ・共通albedoは
+  変えず、世代ごとにmaterialを有限保持する。
 - 小物4種のworld、8種のghost／Blueprint／pulse／移動先／catalog、Tank partner ghostを同期する。
   Lampは既存通電状態でoff/on画像を選び、旧gray tintを二重適用しない。image／size／anchorのbaselineを
   entityごとに保存し、失効／mode変更で復元する。再利用ghostは対象切替時にbaselineを更新する。
