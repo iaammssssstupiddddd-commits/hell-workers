@@ -27,14 +27,27 @@ pub(crate) fn upsert_mixer_requests(
     desired_requests: &std::collections::HashMap<(Entity, ResourceType), (Entity, u32, Vec2)>,
     active_mixers: &std::collections::HashSet<Entity>,
 ) {
-    let mut seen_existing_keys = std::collections::HashSet::<(Entity, ResourceType)>::new();
+    let seen_existing_keys = upsert::select_canonical_requests(
+        q_mixer_requests
+            .iter()
+            .filter(|(_, _, request, _, _)| {
+                mixer_request_resource_matches(request.resource_type, request.kind)
+            })
+            .map(|(entity, _, request, workers, _)| {
+                (
+                    (request.anchor, request.resource_type),
+                    entity,
+                    workers.map_or(0, |workers| workers.len()),
+                )
+            }),
+    );
 
     upsert_mixer_requests_by_kind(
         commands,
         q_mixer_requests,
         desired_requests,
         active_mixers,
-        &mut seen_existing_keys,
+        &seen_existing_keys,
         TransportRequestKind::DeliverWaterToMixer,
     );
     upsert_mixer_requests_by_kind(
@@ -42,12 +55,12 @@ pub(crate) fn upsert_mixer_requests(
         q_mixer_requests,
         desired_requests,
         active_mixers,
-        &mut seen_existing_keys,
+        &seen_existing_keys,
         TransportRequestKind::DeliverToMixerSolid,
     );
 
     for (key, (issued_by, slots, mixer_pos)) in desired_requests.iter() {
-        if seen_existing_keys.contains(key) {
+        if seen_existing_keys.contains_key(key) {
             continue;
         }
 
@@ -59,7 +72,7 @@ pub(crate) fn upsert_mixer_requests(
                 key: *key,
                 site_pos: *mixer_pos,
                 issued_by: *issued_by,
-                desired_slots: *slots,
+                slots: upsert::RequestSlots::TotalSlots(*slots),
                 priority: 5,
                 target: TargetMixer(key.0),
                 kind,
@@ -74,7 +87,7 @@ fn upsert_mixer_requests_by_kind(
     q_mixer_requests: &MixerRequestsQuery,
     desired_requests: &std::collections::HashMap<(Entity, ResourceType), (Entity, u32, Vec2)>,
     active_mixers: &std::collections::HashSet<Entity>,
-    seen_existing_keys: &mut std::collections::HashSet<(Entity, ResourceType)>,
+    seen_existing_keys: &std::collections::HashMap<(Entity, ResourceType), (Entity, usize)>,
     expected_kind: TransportRequestKind,
 ) {
     for (request_entity, target_mixer, request, workers_opt, current) in q_mixer_requests.iter() {
@@ -87,12 +100,14 @@ fn upsert_mixer_requests_by_kind(
         }
 
         let workers = workers_opt.map(|w| w.len()).unwrap_or(0);
-        if !upsert::process_duplicate_key(
+        if !upsert::reconcile_duplicate_request(
             commands,
             request_entity,
             workers,
-            seen_existing_keys,
-            key,
+            seen_existing_keys
+                .get(&key)
+                .is_some_and(|(kept, _)| *kept == request_entity),
+            upsert::RequestSlotSnapshot::from_runtime(current),
         ) {
             continue;
         }
@@ -113,7 +128,7 @@ fn upsert_mixer_requests_by_kind(
                     key,
                     site_pos: *mixer_pos,
                     issued_by: *issued_by,
-                    desired_slots: *slots,
+                    slots: upsert::RequestSlots::TotalSlots(*slots),
                     inflight: super::super::to_u32_saturating(workers),
                     priority: 5,
                     transport_priority: TransportPriority::Normal,

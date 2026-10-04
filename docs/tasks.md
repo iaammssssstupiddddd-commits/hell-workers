@@ -157,6 +157,8 @@ delegation が診断する。これにより新規 task を古い revision で `
 
 ### 4.3 実行 (Execution)
 
+payloadのEntity参照列挙は`AssignedTask::references_entity`へ集約する。外部terminalはidentityのassignment/current targetと`WorkingOn`も含めてowner参照を判定し、解体のexactなAwaitingCommit条件は維持する。Floor／Wall取消はownerが収集したsite・tile・request集合へのpayloadまたはWorkingOn参照を使う。参照列挙API自体は取消policyを決めない。
+
 - `task_execution_system`は`AssignedTask::None`をread-onlyで早期除外し、idle Soulのtask context用mutable accessを作らない。`WorkingOn`はfilter条件にしないため、target消滅後の`AssignedTask::Some + Without<WorkingOn>`も既存handler/cleanupへ到達する。
 - Actor移動の再探索、task handler、bucket routing が `RuntimePathSearchBudget` 不足で `Deferred` になった場合は、到達不能・タスク中断ではない。`AssignedTask`、phase、予約、`WorkingOn`、`Destination`、`Path`を維持して次フレームに再試行する。task/bucket の direct 探索が失敗後に adjacent 探索で defer した場合は、direct を繰り返さず adjacent 段階から再開する。
 - すべての経路探索を実行して `Unreachable` になった運搬は retryable abort へ流す。特に Blueprint 運搬の pickup 前に資材へ到達できない場合は、source予約、`DeliveringTo` / `IncomingDeliveries`、`WorkingOn`を同時に解放し、requestを再割り当て可能に戻す。
@@ -264,7 +266,7 @@ Bevy 0.19 は削除イベントを持たないため、各システムが `Remov
 
 ### 7.2 採集後チェーン (gather chain)
 
-採集完了 (`GatherPhase::Done`) 直後、同フレーム内で `chain::find_haul_chain_after_gather` が起動し、採集地点から **4タイル以内の空きアイテム** と **pending な TransportRequest** を照合して同一 Soul が即座に運搬タスクへ移行する。
+`GatherPhase::Done`を処理するとき、`chain/gather_haul.rs`の`prepare_gather_haul_segment`が現在のSoul位置から**4タイル以内の未使用資材**と搬入先を読み取り専用で評価する。予約・作業・搬送・手動指定中の資材、解体予定の資材／搬入先、満杯・需要消失・phase不一致の搬入先を除外し、通常Stockpileはownerと`NewInbound` policyも照合する。受理後の`commit_gather_haul_segment`がsourceとdestinationのshadowを先に確保し、予約Message、`DeliveringTo`、`WorkingOn`、identity、payload、移動先を更新する。準備失敗時は予約を作らず通常の採集完了へ進む。
 
 採掘完了時に生成する `ResourceItem(Rock)` は、自然障害物の岩山画像ではなく `SoulTaskHandles.icon_rock_small` を使う。地面アイテムのロード復元も同じハンドルと `TILE_SIZE * 0.5` の表示サイズを使い、保存前後で見た目を一致させる。
 同一セルに複数ドロップした Rock は10個の論理 entity を維持し、地面資材数ラベルで総数を示しながら代表スプライト1件だけを描画する。
@@ -274,13 +276,13 @@ Bevy 0.19 は削除イベントを持たないため、各システムが `Remov
 | 優先度 | TransportRequest kind | Soul に割り当てるタスク | 対象リソース |
 |:---|:---|:---|:---|
 | 1 | `DeliverToWallConstruction` | `AssignedTask::Haul { stockpile: wall_site }` | Wood |
-| 1 | `DeliverToFloorConstruction` | `AssignedTask::Haul { stockpile: floor_site }` | 各種 |
+| 1 | `DeliverToFloorConstruction` | `AssignedTask::Haul { stockpile: floor_site }` | Bone / StasisMud（helper対応。現行Chop/Mine起点では到達しない） |
 | 2 | `DeliverToBlueprint` | `AssignedTask::HaulToBlueprint` | Wood / Rock 等 |
 | 3 | `DeliverToMixerSolid` | `AssignedTask::HaulToMixer` | Rock |
 | 4 | ―（フォールバック） | `AssignedTask::Haul { stockpile }` | 最近傍ストックパイル |
 
 **フィルタ条件**: `state == Pending` / `WheelbarrowLease.is_none()` / `demand.remaining() > 0` / `resource_type` 一致。  
-**実装**: `crates/hw_soul_ai/src/soul_ai/execute/task_execution/chain.rs` — `GatherHaulChain` enum + `find_haul_chain_after_gather`
+**実装**: `crates/hw_soul_ai/src/soul_ai/execute/task_execution/chain/gather_haul.rs`。`ChainAdmissionShadow`は1回のtask execution内だけに存在し、同じ走査中に受理した増分を保持する。live cacheを複製せず、同じExecute内の予約Message適用後、次frameのactive task snapshotへ引き継ぐ。
 
 ### 7.3 搬入後チェーン (haul chain)
 

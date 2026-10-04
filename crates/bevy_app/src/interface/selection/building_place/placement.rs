@@ -1,7 +1,7 @@
 use super::PlacementQueries;
 use crate::assets::GameAssets;
 use crate::systems::jobs::{Blueprint, Building, BuildingType};
-use crate::world::map::{RIVER_Y_MIN, WorldMap, WorldMapRef};
+use crate::world::map::{WorldMap, WorldMapRef};
 use bevy::prelude::*;
 use hw_core::constants::*;
 use hw_core::visual_mirror::construction::BlueprintVisualState;
@@ -11,7 +11,7 @@ use hw_ui::selection::{
     validate_building_placement,
 };
 
-use super::super::placement_geometry::{bucket_storage_geometry, building_geometry};
+use super::super::placement_geometry::{bucket_storage_geometry, live_building_geometry};
 
 type PlaceBlueprintResult = Result<(Entity, Vec<(i32, i32)>, Vec2), PlacementTileRejection>;
 
@@ -85,7 +85,7 @@ pub(super) fn validate_building_blueprint_placement(
     grid: (i32, i32),
     pq: &PlacementQueries<'_, '_, '_>,
 ) -> PlacementValidation {
-    let geometry = building_geometry(building_type, grid, RIVER_Y_MIN);
+    let geometry = live_building_geometry(world_map, building_type, grid);
     validate_blueprint_geometry(world_map, building_type, grid, &geometry, pq)
 }
 
@@ -99,7 +99,7 @@ pub(super) fn place_building_blueprint(
     grid: (i32, i32),
     pq: &PlacementQueries<'_, '_, '_>,
 ) -> PlaceBlueprintResult {
-    let geometry = building_geometry(building_type, grid, RIVER_Y_MIN);
+    let geometry = live_building_geometry(world_map, building_type, grid);
     let replace_wall_entity = {
         let validation = validate_blueprint_geometry(world_map, building_type, grid, &geometry, pq);
         if !validation.can_place {
@@ -213,4 +213,127 @@ pub(crate) fn try_place_bucket_storage_companion(
         storage_entities.push(storage_entity);
     }
     Ok(storage_entities)
+}
+
+#[cfg(test)]
+mod bridge_tests {
+    use super::super::BuildingStateQueries;
+    use super::*;
+
+    #[derive(Resource)]
+    struct Attempt {
+        grid: (i32, i32),
+        result: Option<PlaceBlueprintResult>,
+    }
+
+    fn commit(
+        mut commands: Commands,
+        mut map: ResMut<WorldMap>,
+        assets: Res<GameAssets>,
+        queries: BuildingStateQueries,
+        mut attempt: ResMut<Attempt>,
+    ) {
+        let pq = PlacementQueries {
+            q_buildings: &queries.q_buildings,
+            q_blueprints_by_entity: &queries.q_blueprints_by_entity,
+            q_sites: &queries.q_sites,
+            q_yards: &queries.q_yards,
+        };
+        attempt.result = Some(place_building_blueprint(
+            &mut commands,
+            &mut map,
+            &assets,
+            BuildingType::Bridge,
+            attempt.grid,
+            &pq,
+        ));
+    }
+
+    #[test]
+    fn bridge_production_commit_reserves_generated_crossing_and_rejects_overlap() {
+        use hw_ui::selection::resolve_bridge_crossing;
+        let layout = hw_world::generate_world_layout(20260920);
+        let mut map = WorldMap::default();
+        map.tiles.clone_from(&layout.terrain_tiles);
+        for &(x, y) in layout
+            .initial_tree_positions
+            .iter()
+            .chain(&layout.initial_rock_positions)
+        {
+            map.add_obstacle(x, y);
+        }
+        let crossing = (0..MAP_WIDTH - 1)
+            .find_map(|x| resolve_bridge_crossing(&WorldMapRef(&map), (x, 0)).ok())
+            .unwrap();
+        let initial: Vec<_> = crossing
+            .occupied_grids
+            .iter()
+            .map(|&(x, y)| map.is_walkable(x, y))
+            .collect();
+        let mut app = App::new();
+        app.add_plugins((MinimalPlugins, AssetPlugin::default()))
+            .init_asset::<Image>()
+            .init_asset::<Font>()
+            .init_asset::<Gltf>()
+            .init_asset::<WorldAsset>();
+        let server = app.world().resource::<AssetServer>().clone();
+        let assets =
+            crate::plugins::startup::create_game_assets(&server, &mut Assets::<Image>::default());
+        app.insert_resource(assets)
+            .insert_resource(map)
+            .insert_resource(Attempt {
+                grid: (crossing.anchor.0, 0),
+                result: None,
+            })
+            .add_systems(Update, commit);
+        // Zone inputs only; logical terrain and blockers remain generated.
+        app.world_mut().spawn(hw_world::zones::Site {
+            min: WorldMap::grid_to_world(0, 0),
+            max: WorldMap::grid_to_world(MAP_WIDTH - 1, MAP_HEIGHT - 1),
+        });
+        app.world_mut().spawn(hw_world::zones::Yard {
+            min: WorldMap::grid_to_world(0, 0),
+            max: WorldMap::grid_to_world(MAP_WIDTH - 1, MAP_HEIGHT - 1),
+        });
+        app.update();
+        let (owner, grids, position) = app
+            .world_mut()
+            .resource_mut::<Attempt>()
+            .result
+            .take()
+            .unwrap()
+            .unwrap();
+        assert_eq!(grids, crossing.occupied_grids);
+        assert_eq!(app.world().get::<Blueprint>(owner).unwrap().progress, 0.0);
+        assert_eq!(
+            app.world()
+                .get::<Transform>(owner)
+                .unwrap()
+                .translation
+                .truncate(),
+            position
+        );
+        let map = app.world().resource::<WorldMap>();
+        for (&grid, &walkable) in grids.iter().zip(&initial) {
+            assert_eq!(map.building_entity(grid), Some(owner));
+            assert!(!map.bridged_tiles.contains(&grid));
+            assert_eq!(map.is_walkable(grid.0, grid.1), walkable);
+        }
+        app.world_mut().resource_mut::<Attempt>().grid.1 = MAP_HEIGHT - 1;
+        app.update();
+        assert!(
+            app.world()
+                .resource::<Attempt>()
+                .result
+                .as_ref()
+                .unwrap()
+                .is_err()
+        );
+        let mut blueprints = app.world_mut().query::<&Blueprint>();
+        assert_eq!(blueprints.iter(app.world()).count(), 1);
+        assert_eq!(
+            app.world().resource::<WorldMap>().tiles,
+            layout.terrain_tiles
+        );
+    }
 }

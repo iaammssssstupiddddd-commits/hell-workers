@@ -115,15 +115,22 @@ pub(super) fn rehydrate_construction_shells(
             &FloorConstructionSite,
             Option<&FloorSiteVisualState>,
             Option<&Name>,
+            Option<&Visibility>,
         )>();
         query
             .iter(world)
-            .filter_map(|(entity, site, visual_state, name)| {
+            .filter_map(|(entity, site, visual_state, name, visibility)| {
                 let visual_state = visual_state
                     .is_none()
                     .then(|| floor_site_visual_state(site));
                 let name = name.is_none().then(|| Name::new("FloorConstructionSite"));
-                (visual_state.is_some() || name.is_some()).then_some((entity, visual_state, name))
+                let visibility = visibility.is_none().then(Visibility::default);
+                (visual_state.is_some() || name.is_some() || visibility.is_some()).then_some((
+                    entity,
+                    visual_state,
+                    name,
+                    visibility,
+                ))
             })
             .collect()
     };
@@ -169,13 +176,20 @@ pub(super) fn rehydrate_construction_shells(
             &WallConstructionSite,
             Option<&WallSiteVisualState>,
             Option<&Name>,
+            Option<&Visibility>,
         )>();
         query
             .iter(world)
-            .filter_map(|(entity, site, visual_state, name)| {
+            .filter_map(|(entity, site, visual_state, name, visibility)| {
                 let visual_state = visual_state.is_none().then(|| wall_site_visual_state(site));
                 let name = name.is_none().then(|| Name::new("WallConstructionSite"));
-                (visual_state.is_some() || name.is_some()).then_some((entity, visual_state, name))
+                let visibility = visibility.is_none().then(Visibility::default);
+                (visual_state.is_some() || name.is_some() || visibility.is_some()).then_some((
+                    entity,
+                    visual_state,
+                    name,
+                    visibility,
+                ))
             })
             .collect()
     };
@@ -227,12 +241,15 @@ pub(super) fn rehydrate_construction_shells(
             commands.entity(entity).insert(name);
         }
     }
-    for (entity, visual_state, name) in floor_sites {
+    for (entity, visual_state, name, visibility) in floor_sites {
         if let Some(visual_state) = visual_state {
             commands.entity(entity).insert(visual_state);
         }
         if let Some(name) = name {
             commands.entity(entity).insert(name);
+        }
+        if let Some(visibility) = visibility {
+            commands.entity(entity).insert(visibility);
         }
     }
     for (entity, visual_state, sprite, name) in floor_tiles {
@@ -246,12 +263,15 @@ pub(super) fn rehydrate_construction_shells(
             commands.entity(entity).insert(name);
         }
     }
-    for (entity, visual_state, name) in wall_sites {
+    for (entity, visual_state, name, visibility) in wall_sites {
         if let Some(visual_state) = visual_state {
             commands.entity(entity).insert(visual_state);
         }
         if let Some(name) = name {
             commands.entity(entity).insert(name);
+        }
+        if let Some(visibility) = visibility {
+            commands.entity(entity).insert(visibility);
         }
     }
     for (entity, visual_state, sprite, name) in wall_tiles {

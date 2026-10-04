@@ -24,6 +24,82 @@ pub enum StockpileTransferPhase {
     NewOutbound,
 }
 
+/// Live contents of one ordinary stockpile; this contains no reservations.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct StockpileContentsSnapshot {
+    pub policy: StockpilePolicy,
+    pub capacity: usize,
+    pub stored_amount: usize,
+    pub stored_resource: Option<ResourceType>,
+}
+
+/// Durable incoming reservations and caller-owned same-cycle increments.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct InboundReservationSnapshot {
+    pub incoming_reserved: usize,
+    pub incoming_reserved_other_resource: usize,
+    pub owned_reservation: usize,
+    pub cycle_reserved: usize,
+    pub cycle_reserved_other_resource: usize,
+}
+
+impl InboundReservationSnapshot {
+    pub fn from_counts(total: usize, matching: usize, owned: usize) -> Self {
+        Self {
+            incoming_reserved: total,
+            incoming_reserved_other_resource: total.saturating_sub(matching),
+            owned_reservation: owned,
+            ..Self::default()
+        }
+    }
+
+    /// Each entry occupies physical capacity, including an unknown resource.
+    /// The caller establishes ownership at the destination being evaluated.
+    pub fn from_entries(
+        resource: ResourceType,
+        entries: impl IntoIterator<Item = (Option<ResourceType>, bool)>,
+    ) -> Self {
+        let mut snapshot = Self::default();
+        for (incoming_resource, owned) in entries {
+            snapshot.incoming_reserved += 1;
+            snapshot.incoming_reserved_other_resource +=
+                usize::from(incoming_resource != Some(resource));
+            snapshot.owned_reservation += usize::from(owned);
+        }
+        snapshot
+    }
+
+    pub fn with_cycle_counts(mut self, total: usize, matching: usize) -> Self {
+        self.cycle_reserved = total;
+        self.cycle_reserved_other_resource = total.saturating_sub(matching);
+        self
+    }
+}
+
+impl StockpileContentsSnapshot {
+    pub fn policy_input(
+        self,
+        phase: StockpileTransferPhase,
+        resource: ResourceType,
+        requested: usize,
+        reservations: InboundReservationSnapshot,
+    ) -> StockpilePolicyInput {
+        StockpilePolicyInput {
+            phase,
+            policy: self.policy,
+            capacity: self.capacity,
+            stored_amount: self.stored_amount,
+            stored_resource: self.stored_resource,
+            transfer_resource: resource,
+            requested_amount: requested,
+            incoming_reserved: reservations.incoming_reserved,
+            incoming_reserved_other_resource: reservations.incoming_reserved_other_resource,
+            cycle_reserved: reservations.cycle_reserved,
+            cycle_reserved_other_resource: reservations.cycle_reserved_other_resource,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StockpilePolicyState {
     Accepting,
@@ -367,6 +443,66 @@ mod tests {
             incoming_reserved_other_resource: 0,
             cycle_reserved: 0,
             cycle_reserved_other_resource: 0,
+        }
+    }
+
+    #[test]
+    fn reservation_snapshot_counts_unknown_and_only_explicit_ownership_test() {
+        let entries = [
+            (Some(ResourceType::Wood), true),
+            (None, false),
+            (Some(ResourceType::Rock), false),
+        ];
+        let snapshot = InboundReservationSnapshot::from_entries(ResourceType::Wood, entries);
+        assert_eq!(snapshot, InboundReservationSnapshot::from_counts(3, 1, 1));
+        let other_destination = InboundReservationSnapshot::from_entries(
+            ResourceType::Wood,
+            entries.map(|(resource, _)| (resource, false)),
+        );
+        assert_eq!(other_destination.owned_reservation, 0);
+        let with_cycle = snapshot.with_cycle_counts(2, 1);
+        assert_eq!(with_cycle.incoming_reserved, 3);
+        assert_eq!(with_cycle.owned_reservation, 1);
+        assert_eq!(with_cycle.cycle_reserved, 2);
+        assert_eq!(with_cycle.cycle_reserved_other_resource, 1);
+    }
+
+    #[test]
+    fn snapshot_constructor_preserves_full_policy_evaluation_test() {
+        for requested in [0, 1, 5] {
+            for phase in [
+                StockpileTransferPhase::NewInbound,
+                StockpileTransferPhase::CommittedInbound {
+                    owned_reservation: 1,
+                },
+                StockpileTransferPhase::NewOutbound,
+            ] {
+                let original = StockpilePolicyInput {
+                    requested_amount: requested,
+                    stored_amount: 2,
+                    stored_resource: Some(ResourceType::Wood),
+                    incoming_reserved: 2,
+                    cycle_reserved: 1,
+                    ..input(phase)
+                };
+                let rebuilt = StockpileContentsSnapshot {
+                    policy: original.policy,
+                    capacity: original.capacity,
+                    stored_amount: original.stored_amount,
+                    stored_resource: original.stored_resource,
+                }
+                .policy_input(
+                    phase,
+                    ResourceType::Wood,
+                    requested,
+                    InboundReservationSnapshot::from_counts(2, 2, 1).with_cycle_counts(1, 1),
+                );
+                assert_eq!(rebuilt, original);
+                assert_eq!(
+                    evaluate_stockpile_policy(rebuilt),
+                    evaluate_stockpile_policy(original)
+                );
+            }
         }
     }
 

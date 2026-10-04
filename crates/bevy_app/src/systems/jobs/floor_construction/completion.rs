@@ -42,7 +42,6 @@ pub(crate) struct FloorCompletionQueries<'w, 's> {
     q_tiles: FloorCompletionTileQuery<'w, 's>,
     q_souls: FloorCompletionSoulQuery<'w, 's>,
     nearby_souls: Local<'s, Vec<Entity>>,
-    handles_3d: Res<'w, Building3dHandles>,
     #[cfg(feature = "profiling")]
     metrics: Option<ResMut<'w, ConstructionPerfMetrics>>,
 }
@@ -154,6 +153,7 @@ fn indexed_floor_tiles(
             q_tiles
                 .get(tile_entity)
                 .ok()
+                .filter(|tile| tile.parent_site == site_entity)
                 .map(|tile| (tile_entity, tile.grid_pos, tile.state))
         })
         .collect()
@@ -234,7 +234,6 @@ pub(crate) fn floor_construction_completion_system(
         q_tiles,
         mut q_souls,
         mut nearby_souls,
-        handles_3d,
         #[cfg(feature = "profiling")]
         mut metrics,
     } = queries;
@@ -260,7 +259,17 @@ pub(crate) fn floor_construction_completion_system(
                     .floor_tiles_inspected
                     .saturating_add(site_tiles.len() as u64);
             }
-            if site_tiles.len() != site.tiles_total as usize
+            if site_tiles.is_empty()
+                || site_tiles
+                    .iter()
+                    .map(|(_, grid, _)| *grid)
+                    .collect::<HashSet<_>>()
+                    .len()
+                    != site_tiles.len()
+                || site_tiles.iter().any(|(_, grid, _)| {
+                    world_map.has_building(*grid) || world_map.floor_entity(*grid).is_some()
+                })
+                || site_tiles.len() != site.tiles_total as usize
                 || !site_tiles
                     .iter()
                     .all(|(_, _, state)| *state == FloorTileState::Complete)
@@ -342,31 +351,11 @@ pub(crate) fn floor_construction_completion_system(
             continue;
         }
 
-        // For each tile: spawn Building entity with Floor type
-        let mut tile_count = 0;
-        let mut completed_buildings = Vec::with_capacity(footprint.tiles.len());
-        for (tile_entity, (gx, gy)) in &footprint.tiles {
-            let building_entity =
-                spawn_completed_floor_tile(&mut commands, &handles_3d, (*gx, *gy));
-            completed_buildings.push((building_entity, (*gx, *gy)));
-
-            // Despawn tile blueprint
-            commands.entity(*tile_entity).despawn();
-            tile_count += 1;
-        }
-
-        // Curing is complete: tile becomes walkable and the completed floor
-        // becomes the durable logical owner used by save validation and
-        // deconstruction cleanup.
-        register_completed_floors(&mut world_map, &completed_buildings);
-
-        // Despawn site
-        commands.entity(site_entity).despawn();
-
-        info!(
-            "Floor site {:?} completed after curing ({} tiles, total {}/{})",
-            site_entity, tile_count, site.tiles_poured, site.tiles_total
-        );
+        // Re-read durable tiles, reservations and map owners at the actual
+        // command boundary. A stale cache cannot partially finish a site.
+        commands.queue(move |world: &mut World| {
+            commit_cured_floor(world, site_entity);
+        });
     }
     #[cfg(feature = "profiling")]
     if let Some(metrics) = metrics.as_mut() {
@@ -376,11 +365,106 @@ pub(crate) fn floor_construction_completion_system(
     }
 }
 
+fn commit_cured_floor(world: &mut World, site_entity: Entity) -> bool {
+    let Some(site) = world.get::<FloorConstructionSite>(site_entity) else {
+        return false;
+    };
+    if site.phase != FloorConstructionPhase::Curing
+        || site.curing_remaining_secs > 0.0
+        || site.tiles_total == 0
+        || world
+            .get::<FloorConstructionCancelRequested>(site_entity)
+            .is_some()
+    {
+        return false;
+    }
+    let Some(footprint) = world.get::<CuringFootprint>(site_entity) else {
+        return false;
+    };
+    let tiles = footprint.tiles.clone();
+    let tile_entities: HashSet<_> = tiles.iter().map(|(entity, _)| *entity).collect();
+    let grids: HashSet<_> = tiles.iter().map(|(_, grid)| *grid).collect();
+    if tiles.len() != site.tiles_total as usize
+        || tile_entities.len() != tiles.len()
+        || grids.len() != tiles.len()
+        || footprint.blocked_tiles != grids
+    {
+        return false;
+    }
+    for &(entity, grid) in &tiles {
+        if !world.get::<FloorTileBlueprint>(entity).is_some_and(|tile| {
+            tile.parent_site == site_entity
+                && tile.grid_pos == grid
+                && tile.state == FloorTileState::Complete
+        }) || world
+            .get::<ObstaclePosition>(entity)
+            .is_none_or(|position| (position.0, position.1) != grid)
+            || world.get::<ObstacleSourceKind>(entity)
+                != Some(&ObstacleSourceKind::ConstructionProtection)
+        {
+            return false;
+        }
+    }
+    // The index is only a candidate cache; durable membership must agree too.
+    if world
+        .query::<(Entity, &FloorTileBlueprint)>()
+        .iter(world)
+        .any(|(entity, tile)| tile.parent_site == site_entity && !tile_entities.contains(&entity))
+    {
+        return false;
+    }
+    let map = world.resource::<WorldMap>();
+    if grids.iter().any(|grid| {
+        map.has_building(*grid)
+            || map.floor_entity(*grid).is_some()
+            || !map.has_raw_obstacle(grid.0, grid.1)
+    }) {
+        return false;
+    }
+    let remaining_blockers: HashSet<_> = world
+        .query::<(Entity, &ObstaclePosition)>()
+        .iter(world)
+        .filter(|(entity, _)| !tile_entities.contains(entity))
+        .map(|(_, position)| (position.0, position.1))
+        .filter(|grid| grids.contains(grid))
+        .collect();
+
+    let mut queue = bevy::ecs::world::CommandQueue::default();
+    let mut completed = Vec::with_capacity(tiles.len());
+    {
+        let handles = world.resource::<Building3dHandles>();
+        let mut commands = Commands::new(&mut queue, world);
+        for &(tile_entity, grid) in &tiles {
+            completed.push((
+                spawn_completed_floor_tile(&mut commands, handles, grid),
+                grid,
+            ));
+            commands.entity(tile_entity).despawn();
+        }
+        commands.entity(site_entity).despawn();
+    }
+    {
+        let mut map = world.resource_mut::<WorldMap>();
+        for &grid in &grids {
+            if !remaining_blockers.contains(&grid) {
+                map.remove_grid_obstacle(grid);
+            }
+        }
+        register_completed_floors(&mut map, &completed);
+    }
+    queue.apply(world);
+    info!(
+        "Floor site {:?} completed after curing ({} tiles)",
+        site_entity,
+        tiles.len()
+    );
+    true
+}
+
 pub(crate) fn register_completed_floors(
     world_map: &mut WorldMap,
     completed_buildings: &[(Entity, (i32, i32))],
 ) {
-    world_map.clear_building_footprint(completed_buildings.iter().map(|(_, grid)| *grid));
     for &(building, grid) in completed_buildings {
         world_map.set_floor(grid, building);
     }
@@ -395,6 +479,126 @@ mod tests {
     use hw_jobs::BuildingType;
     use hw_spatial::{SpatialGrid, SpatialGridOps};
     use hw_ui::selection::{BuildingPlacementContext, validate_building_placement};
+
+    fn ready_floor() -> (World, Entity, Vec<Entity>) {
+        use super::super::components::*;
+        let mut world = World::new();
+        world.init_resource::<WorldMap>();
+        world.insert_resource(crate::test_support::empty_building_3d_handles());
+        let mut site_data = FloorConstructionSite::new(
+            hw_core::area::TaskArea::from_points(Vec2::ZERO, Vec2::ONE),
+            Vec2::ZERO,
+            2,
+        );
+        site_data.phase = FloorConstructionPhase::Curing;
+        site_data.tiles_poured = 2;
+        let site = world.spawn(site_data).id();
+        let tiles: Vec<_> = [(10, 10), (11, 10)]
+            .into_iter()
+            .map(|grid| {
+                let mut tile = FloorTileBlueprint::new(site, grid);
+                tile.state = FloorTileState::Complete;
+                world
+                    .spawn((
+                        tile,
+                        hw_jobs::ObstaclePosition(grid.0, grid.1),
+                        hw_jobs::ObstacleSourceKind::ConstructionProtection,
+                    ))
+                    .id()
+            })
+            .collect();
+        world
+            .entity_mut(site)
+            .insert(CuringFootprint::from_tile_positions([
+                (tiles[0], (10, 10)),
+                (tiles[1], (11, 10)),
+            ]));
+        world
+            .resource_mut::<WorldMap>()
+            .reserve_building_footprint_tiles([(10, 10), (11, 10)]);
+        (world, site, tiles)
+    }
+
+    #[test]
+    fn floor_completion_preserves_other_obstacle_sources_test() {
+        let (mut world, site, tiles) = ready_floor();
+        let other = world
+            .spawn((
+                hw_jobs::ObstaclePosition(11, 10),
+                hw_jobs::ObstacleSourceKind::PlacementReservation,
+            ))
+            .id();
+        let before = world.resource::<WorldMap>().obstacle_version;
+        assert!(super::commit_cured_floor(&mut world, site));
+        let map = world.resource::<WorldMap>();
+        assert!(map.floor_entity((10, 10)).is_some());
+        assert!(map.floor_entity((11, 10)).is_some());
+        assert!(map.is_walkable(10, 10));
+        assert!(!map.is_walkable(11, 10));
+        assert_eq!(map.obstacle_version, before + 1);
+        assert!(world.get_entity(other).is_ok());
+        assert!(world.get_entity(site).is_err());
+        assert!(
+            tiles
+                .into_iter()
+                .all(|tile| world.get_entity(tile).is_err())
+        );
+        assert!(!super::commit_cured_floor(&mut world, site));
+    }
+
+    #[test]
+    fn floor_completion_rejects_stale_ownership_or_reservation_without_partial_completion_test() {
+        use super::super::components::*;
+        for conflict in 0..4 {
+            let (mut world, site, tiles) = ready_floor();
+            let other = world.spawn_empty().id();
+            match conflict {
+                0 => world
+                    .resource_mut::<WorldMap>()
+                    .set_building((11, 10), other),
+                1 => {
+                    world
+                        .entity_mut(tiles[1])
+                        .remove::<hw_jobs::ObstaclePosition>();
+                }
+                2 => {
+                    world
+                        .get_mut::<FloorTileBlueprint>(tiles[1])
+                        .unwrap()
+                        .parent_site = other
+                }
+                _ => {
+                    world
+                        .entity_mut(site)
+                        .insert(FloorConstructionCancelRequested);
+                }
+            }
+            let map = world.resource::<WorldMap>();
+            let before = (
+                map.buildings.clone(),
+                map.floors.clone(),
+                map.obstacles.clone(),
+                map.obstacle_version,
+            );
+            assert!(!super::commit_cured_floor(&mut world, site));
+            let map = world.resource::<WorldMap>();
+            assert_eq!(
+                before,
+                (
+                    map.buildings.clone(),
+                    map.floors.clone(),
+                    map.obstacles.clone(),
+                    map.obstacle_version
+                )
+            );
+            assert_eq!(
+                world.get::<FloorConstructionSite>(site).unwrap().phase,
+                FloorConstructionPhase::Curing
+            );
+            assert!(tiles.into_iter().all(|tile| world.get_entity(tile).is_ok()));
+            assert_eq!(world.query::<&hw_jobs::Building>().iter(&world).count(), 0);
+        }
+    }
 
     #[test]
     fn curing_candidates_are_local_and_stably_deduplicated() {
@@ -421,6 +625,8 @@ mod tests {
         let second = Entity::from_bits(11);
         map.reserve_building_footprint_tiles([(3, 4), (4, 4)]);
 
+        map.remove_grid_obstacle((3, 4));
+        map.remove_grid_obstacle((4, 4));
         register_completed_floors(&mut map, &[(first, (3, 4)), (second, (4, 4))]);
 
         assert_eq!(map.floor_entity((3, 4)), Some(first));

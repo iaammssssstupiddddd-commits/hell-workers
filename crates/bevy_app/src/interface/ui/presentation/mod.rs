@@ -1,6 +1,9 @@
 mod builders;
 mod room;
+mod task;
 pub use room::RoomInspectionChanges;
+pub(super) use task::format_task_str;
+pub(crate) use task::task_kind_presentation;
 
 use crate::entities::damned_soul::{DamnedSoul, IdleBehavior, IdleState};
 use crate::entities::familiar::Familiar;
@@ -271,31 +274,6 @@ impl EntityInspectionQuery<'_, '_> {
         } else {
             TooltipTemplate::Generic
         }
-    }
-}
-
-pub(super) fn format_task_str(task: &AssignedTask) -> String {
-    if let Some(data) = task.bucket_transport_data() {
-        return format!("BucketTransport ({:?})", data.phase);
-    }
-
-    match task {
-        AssignedTask::None => "Idle".to_string(),
-        AssignedTask::Gather(data) => format!("Gather ({:?})", data.phase),
-        AssignedTask::Haul(data) => format!("Haul ({:?})", data.phase),
-        AssignedTask::HaulToBlueprint(data) => format!("HaulToBp ({:?})", data.phase),
-        AssignedTask::Build(data) => format!("Build ({:?})", data.phase),
-        AssignedTask::MovePlant(data) => format!("MovePlant ({:?})", data.phase),
-        AssignedTask::CollectBone(data) => format!("CollectBone ({:?})", data.phase),
-        AssignedTask::Refine(data) => format!("Refine ({:?})", data.phase),
-        AssignedTask::HaulToMixer(data) => format!("HaulToMixer ({:?})", data.phase),
-        AssignedTask::HaulWithWheelbarrow(data) => format!("HaulWheelbarrow ({:?})", data.phase),
-        AssignedTask::ReinforceFloorTile(data) => format!("ReinforceFloor ({:?})", data.phase),
-        AssignedTask::PourFloorTile(data) => format!("PourFloor ({:?})", data.phase),
-        AssignedTask::FrameWallTile(data) => format!("FrameWall ({:?})", data.phase),
-        AssignedTask::CoatWall(data) => format!("CoatWall ({:?})", data.phase),
-        AssignedTask::GeneratePower(data) => format!("GeneratePower ({:?})", data.phase),
-        _ => "BucketTransport".to_string(),
     }
 }
 

@@ -8,6 +8,21 @@
 2.  **Execution**: 責務に合う crate で実装し、root 側は app shell と薄い互換層に保つ。初回は `python3 scripts/dev.py doctor` で環境を診断し、作業中は `python3 scripts/dev.py check` を使う。
 3.  **Verification**: 修正中の見た目・操作確認には `python3 scripts/dev.py feedback` を使い、同じ作業場で差分ビルドを続ける。完了前は `python3 scripts/dev.py verify` と変更に必要な正式受入を通し、仕様変更を対応する `docs/*.md` に反映する。
 
+## 通常Orcaによる開発
+
+[通常Orca運用ガイド](orca-quickstart.md)を入口とする。独自統括・専用launcher・A/B常設・
+Linear経由のみの受付は廃止対象であり、旧復旧指示を再実行しない。
+[通常化計画](plans/orca-normalization-and-coordinator-extraction-plan-2026-10-03.md)でlive切替・会話保全の現在位置を管理する。
+旧実装・受入記録は [歴史資料](development-infra/orca-development.md)へ保全した。
+
+今回受入済みの起点はprimary `/home/satotakumi/projects/hell-workers`。mainが編集・primary文書・検証・Git操作を担当する。
+旧worktree18件は2026-10-04に成果を選別保全して撤去済みであり、現在はprimaryのみを使用する。
+将来旧commitから作業場を作る場合も、agent開始前にAGENTS/hookを確認して通常規則へ明示切替する。
+標準local-only設定だけでは旧agent指示は無効化されない。凍結/承認済みsubjectを一括変更しない。
+標準のTasks/Linear・browser・native orchestrationは残るが、共有checkout/background編集の許可を意味しない。
+任意の編集委譲は、別worktree・隔離・限定slot・独立read-only reviewを持つ別途許可されたworkflowに限る。
+ゲームの資源guard・Help・native受入・Clippy・storage・同subject検証は以下の規則を維持する。
+
 ## 開発ルール
 
 ### 1. Rust-analyzer 診断の厳守
@@ -79,6 +94,15 @@ python3 scripts/dev.py cargo -- clippy --workspace --all-targets -- -D warnings
 この結果はfeedback専用で、性能比較・品質/DPI matrix・正式受入の代替にはならない。
 未承認ArtPreviewのgallery等、まだ軽量経路のない専用recipeは既存helperを使う。
 正式確認へ進むときだけprofiling buildと必要な監査を実施する。詳細はnative Skillを参照する。
+
+Wayland上のUI入力検証で継続許可を希望する場合は、native UI helperのplanへ
+`--input-backend portal --portal-consent-file <absolute-path>`を明示する。
+RemoteDesktop v2のOS許可を取得し、次の登録jobでsingle-use restore tokenを更新・再利用する。
+credentialはGit外の専用0700ディレクトリ内の0600ファイル（primary Git common directoryの
+`validation-storage/input-consent/`等）へ保持し、spec・log・Gitへtokenを転記しない。
+OSが永続許可を認めなかった場合や撤回した場合は再許可が必要であり、manifestの`saved`は
+token取得の記録だけで復元成功の実測ではない。sessionと所有window/focus/nonce/boundsの検査は維持する。
+詳細と忘却・失効時の扱いはNative SkillのUI input feedbackを参照する。
 
 2026-09-13の既存cacheを使った実測では、feedback初回4.49秒、未変更再実行0.40秒、
 main.rsのwindow title 1行変更3.29秒、復元後2.64秒（いずれもdriver込みの実時間）。

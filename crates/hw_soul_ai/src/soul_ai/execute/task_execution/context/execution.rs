@@ -83,6 +83,8 @@ pub struct TaskExecutionContext<'a, 'w, 's> {
     pub pf_context: &'a mut PathfindingContext,
     pub path_budget: &'a mut RuntimePathSearchBudget,
     pub(crate) path_search_progress: &'a mut TaskPathSearchProgress,
+    pub(crate) chain_shadow:
+        &'a mut crate::soul_ai::execute::task_execution::chain::ChainAdmissionShadow,
     pub queries: &'a mut TaskQueries<'w, 's>,
     pub world_epoch: u64,
     pub(crate) deconstruction_commit_request: Option<DeconstructionCommitRequest>,

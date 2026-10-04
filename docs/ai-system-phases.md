@@ -98,6 +98,8 @@ Familiar AI と Soul AI は**別々のシステムセット**として定義さ�
 
 ### Execute（実行）
 
+Soul Executeでは割当反映→identity/relationshipの`ApplyDeferred`→task execution→予約Message適用を明示する。`register_task_execution_system`は本番・統合テスト共通の登録入口で、`LogisticsPlugin`所有の予約適用systemへbefore edgeを持つ。移設commitはtask execution後の別`ApplyDeferred`に続くexclusive systemで行う。
+
 **責任**: 決定された行動の実行
 
 **原則**:

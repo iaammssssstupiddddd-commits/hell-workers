@@ -92,6 +92,7 @@ class X11Input:
             "XGetInputFocus": ([pointer, ctypes.POINTER(ulong), ctypes.POINTER(integer)], integer),
             "XSetInputFocus": ([pointer, ulong, integer, ulong], integer),
             "XRaiseWindow": ([pointer, ulong], integer),
+            "XResizeWindow": ([pointer, ulong, ctypes.c_uint, ctypes.c_uint], integer),
             "XSync": ([pointer, integer], integer),
             "XInternAtom": ([pointer, ctypes.c_char_p, integer], ulong),
             "XSendEvent": ([pointer, ulong, integer, ctypes.c_long, ctypes.POINTER(XEvent)], integer),
@@ -128,12 +129,12 @@ class X11Input:
         if result.returncode or not match or int(match[1]) != self.owner_pid:
             raise InputRejected("X11 client PID changed")
 
-    def activate(self) -> None:
-        """Acquire focus once at recipe start; never reacquire it after input begins."""
+    def _request_activation(self) -> None:
+        """Present the owned client before input; the WM decides whether to focus it."""
         if self.sent:
             raise InputRejected("cannot reacquire focus after input started")
         self._check_owner()
-        # Request activation through the WM, then verify it. See EWMH section
+        # Request activation through the WM. See EWMH section
         # _NET_ACTIVE_WINDOW: https://specifications.freedesktop.org/wm/latest-single/
         event = XEvent()
         event.client.type = 33  # ClientMessage
@@ -149,6 +150,10 @@ class X11Input:
             raise InputRejected("window manager activation request failed")
         self.x11.XRaiseWindow(self.display, self.window)
         self.x11.XSync(self.display, 0)
+
+    def activate(self) -> None:
+        """Acquire focus once at recipe start; never reacquire it after input begins."""
+        self._request_activation()
         deadline = time.monotonic() + 2
         while True:
             try:
@@ -227,6 +232,22 @@ class X11Input:
         self.record({"step": step, "nonce": nonce, "window": self.window, "pid": self.owner_pid,
                      "point": point, "button": button, "pressed": pressed, "key": key,
                      "x11_pointer": self.client_pointer()})
+
+    def resize(self, step: str, nonce: str, width: int, height: int) -> None:
+        if nonce != self.nonce or not step or step in self.sent:
+            raise InputRejected("stale nonce or repeated resize step")
+        if self.held_buttons or self.held_keys:
+            raise InputRejected("resize cannot interrupt a held input")
+        if (type(width) is not int or type(height) is not int
+                or not (1280 <= width <= 1920 and 720 <= height <= 1080)):
+            raise InputRejected("unsupported resize dimensions")
+        self._check_owner()
+        self._check_focus()
+        self.sent.add(step)
+        self.x11.XResizeWindow(self.display, self.window, width, height)
+        self.x11.XSync(self.display, 0)
+        self.record({"step": step, "nonce": nonce, "window": self.window, "pid": self.owner_pid,
+                     "resize": [width, height]})
 
     def _motion(self, x: int, y: int) -> None:
         if not self.xtest.XTestFakeMotionEvent(self.display, -1, x, y, 0):

@@ -11,9 +11,10 @@ use crate::systems::visual::placement_ghost::PlacementGhost;
 use bevy::prelude::*;
 use bevy::sprite::Anchor;
 use hw_core::constants::TILE_SIZE;
+use hw_ui::components::BuildingCatalogPreview;
 use hw_visual::blueprint::{BlueprintPulseOverlayChild, BlueprintVisual};
 use hw_visual::visual3d::{DoorPresentationAxis, resolve_door_presentation_axis};
-use hw_visual::wall_connection::WallTopologyIndex;
+use hw_visual::wall_connection::{WallConnectionMask, WallTopologyIndex};
 use hw_world::WorldMap;
 
 const PRODUCTION_PREVIEW_SIZE: Vec2 = Vec2::splat(64.0);
@@ -30,11 +31,43 @@ fn eligible_previews<'a>(
     (&resolved.identity == identity).then_some([&resolved.preview_ew, &resolved.preview_ns])
 }
 
+/// Catalog cards use the Closed EW preview, including cards created after
+/// readiness settles. Do not copy the world sprite's size or ground anchor.
+pub fn sync_door_catalog_preview_system(
+    game_assets: Res<GameAssets>,
+    production: Res<ProductionDoorAssetPool>,
+    readiness: Res<DoorAssetReadiness>,
+    mut cards: Query<(&BuildingCatalogPreview, &mut ImageNode)>,
+) {
+    let image = eligible_previews(&readiness, &production)
+        .map_or(&game_assets.door_closed, |previews| previews[0]);
+    for (preview, mut node) in &mut cards {
+        if preview.0 == BuildingType::Door && node.image != *image {
+            node.image = image.clone();
+        }
+    }
+}
+
 fn preview_axis(topology: &WallTopologyIndex, transform: &Transform) -> DoorPresentationAxis {
     topology
         .connection_mask(WorldMap::world_to_grid(transform.translation.truncate()))
         .map(resolve_door_presentation_axis)
         .unwrap_or_default()
+}
+
+fn placement_preview_axis(
+    topology: &WallTopologyIndex,
+    transform: &Transform,
+) -> DoorPresentationAxis {
+    let (x, y) = WorldMap::world_to_grid(transform.translation.truncate());
+    // A placement ghost is not a topology contributor. Read its supports
+    // without requiring (or registering) a connector at the empty target cell.
+    resolve_door_presentation_axis(WallConnectionMask::from_neighbors(
+        topology.connection_mask((x, y + 1)).is_some(),
+        topology.connection_mask((x, y - 1)).is_some(),
+        topology.connection_mask((x - 1, y)).is_some(),
+        topology.connection_mask((x + 1, y)).is_some(),
+    ))
 }
 
 fn apply_preview(
@@ -142,7 +175,7 @@ pub fn sync_door_preview_system(mut params: DoorPreviewParams) {
         return;
     }
     for (transform, mut sprite, mut anchor) in &mut params.ghosts {
-        let axis = preview_axis(&params.topology, transform);
+        let axis = placement_preview_axis(&params.topology, transform);
         let production = previews.map(|images| match axis {
             DoorPresentationAxis::EastWest => images[0],
             DoorPresentationAxis::NorthSouth => images[1],
@@ -159,10 +192,280 @@ pub fn sync_door_preview_system(mut params: DoorPreviewParams) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::assets::door_asset_set::{
+        DoorAssetAuthority, DoorAssetFallbackReason, DoorAssetSetIdentity,
+        ResolvedProductionDoorAssets,
+    };
     use bevy::asset::uuid::Uuid;
+    use hw_core::visual_mirror::building::{BuildingTypeVisual, BuildingVisualState};
+    use hw_core::visual_mirror::construction::BlueprintVisualState;
+    use hw_visual::blueprint::BlueprintPulseOverlay;
+    use hw_visual::wall_connection::{WallConnectionDirty, wall_connections_system};
 
     fn image_handle(value: u128) -> Handle<Image> {
         Uuid::from_u128(value).into()
+    }
+
+    fn support(app: &mut App, grid: (i32, i32)) -> Entity {
+        app.world_mut()
+            .spawn((
+                Transform::from_translation(WorldMap::grid_to_world(grid.0, grid.1).extend(0.0)),
+                BuildingVisualState {
+                    kind: BuildingTypeVisual::Wall,
+                    is_provisional: false,
+                },
+            ))
+            .id()
+    }
+
+    #[test]
+    fn empty_cell_ghost_uses_support_axis_without_becoming_a_connector() {
+        let mut app = App::new();
+        app.init_resource::<WallTopologyIndex>()
+            .init_resource::<WallConnectionDirty>()
+            .insert_resource(crate::test_support::empty_wall_visual_handles())
+            .add_systems(Update, wall_connections_system);
+        let grid = (10, 10);
+        let transform = Transform::from_translation(WorldMap::grid_to_world(10, 10).extend(0.0));
+        let north = support(&mut app, (10, 11));
+        let south = support(&mut app, (10, 9));
+        app.update();
+        let topology = app.world().resource::<WallTopologyIndex>();
+        assert_eq!(topology.connection_mask(grid), None);
+        assert_eq!(
+            placement_preview_axis(topology, &transform),
+            DoorPresentationAxis::NorthSouth
+        );
+        // Observing the empty target must not change adjacent Wall topology.
+        assert_eq!(topology.connection_mask((10, 11)).unwrap().bits(), 0);
+        assert_eq!(topology.connection_mask(grid), None);
+
+        let west = support(&mut app, (9, 10));
+        let east = support(&mut app, (11, 10));
+        app.update();
+        assert_eq!(
+            placement_preview_axis(app.world().resource::<WallTopologyIndex>(), &transform),
+            DoorPresentationAxis::EastWest,
+            "both support pairs keep the existing EW tie-break"
+        );
+        for entity in [north, south] {
+            app.world_mut().despawn(entity);
+        }
+        app.update();
+        assert_eq!(
+            placement_preview_axis(app.world().resource::<WallTopologyIndex>(), &transform),
+            DoorPresentationAxis::EastWest
+        );
+        for entity in [west, east] {
+            app.world_mut().despawn(entity);
+        }
+        app.update();
+        assert_eq!(
+            placement_preview_axis(app.world().resource::<WallTopologyIndex>(), &transform),
+            DoorPresentationAxis::EastWest,
+            "unsupported cells keep the existing fallback axis"
+        );
+    }
+
+    #[test]
+    fn catalog_tracks_late_readiness_generation_fallback_and_new_cards_while_paused() {
+        let mut app = App::new();
+        app.add_plugins((MinimalPlugins, AssetPlugin::default()))
+            .init_asset::<Image>()
+            .init_asset::<Font>()
+            .init_asset::<Gltf>()
+            .init_asset::<WorldAsset>();
+        let server = app.world().resource::<AssetServer>().clone();
+        let assets = crate::plugins::startup::create_game_assets(
+            &server,
+            &mut app.world_mut().resource_mut::<Assets<Image>>(),
+        );
+        let fallback = assets.door_closed.clone();
+        app.insert_resource(assets)
+            .init_resource::<DoorAssetReadiness>()
+            .init_resource::<WallTopologyIndex>()
+            .init_resource::<WallConnectionDirty>()
+            .insert_resource(BuildContext(Some(BuildingType::Door)))
+            .insert_resource(crate::test_support::empty_wall_visual_handles())
+            .insert_resource(ProductionDoorAssetPool {
+                manifest: default(),
+                resolved: None,
+            })
+            .add_systems(
+                PostUpdate,
+                (
+                    wall_connections_system,
+                    sync_door_preview_system,
+                    sync_door_catalog_preview_system,
+                )
+                    .chain(),
+            );
+        app.world_mut().resource_mut::<Time<Virtual>>().pause();
+        let tint = Color::srgb(0.5, 0.6, 0.7);
+        for grid in [(10, 9), (10, 11), (20, 9), (20, 11)] {
+            support(&mut app, grid);
+        }
+        let overlay = app
+            .world_mut()
+            .spawn((
+                BlueprintPulseOverlayChild,
+                Sprite {
+                    color: tint,
+                    ..default()
+                },
+                Anchor::CENTER,
+            ))
+            .id();
+        let blueprint = app
+            .world_mut()
+            .spawn((
+                Blueprint::new(BuildingType::Door, vec![(10, 10)]),
+                BlueprintVisualState {
+                    is_wall_or_door: true,
+                    occupied_grids: vec![(10, 10)],
+                    ..default()
+                },
+                Transform::from_translation(WorldMap::grid_to_world(10, 10).extend(0.0)),
+                Sprite {
+                    color: tint,
+                    ..default()
+                },
+                Anchor::CENTER,
+                BlueprintVisual {
+                    pulse_overlay: Some(BlueprintPulseOverlay {
+                        entity: overlay,
+                        base_color: tint,
+                    }),
+                    ..default()
+                },
+            ))
+            .id();
+        app.world_mut()
+            .entity_mut(overlay)
+            .insert(ChildOf(blueprint));
+        let ghost = app
+            .world_mut()
+            .spawn((
+                PlacementGhost,
+                Transform::from_translation(WorldMap::grid_to_world(20, 10).extend(0.0)),
+                Sprite {
+                    color: tint,
+                    ..default()
+                },
+                Anchor::CENTER,
+            ))
+            .id();
+        let door = app
+            .world_mut()
+            .spawn((
+                BuildingCatalogPreview(BuildingType::Door),
+                ImageNode {
+                    color: tint,
+                    ..ImageNode::new(fallback.clone())
+                },
+                Node {
+                    width: Val::Px(32.0),
+                    height: Val::Px(32.0),
+                    ..default()
+                },
+            ))
+            .id();
+        let tank = app
+            .world_mut()
+            .spawn((
+                BuildingCatalogPreview(BuildingType::Tank),
+                ImageNode::new(image_handle(90)),
+            ))
+            .id();
+        app.update();
+        assert_eq!(app.world().get::<ImageNode>(door).unwrap().image, fallback);
+
+        let mut resolved = ResolvedProductionDoorAssets {
+            identity: DoorAssetSetIdentity {
+                asset_set_generation: 7,
+                authority: DoorAssetAuthority::ReleaseApproved,
+                manifest_sha256: "generation-seven".into(),
+            },
+            meshes: default(),
+            albedo: default(),
+            preview_ew: image_handle(7),
+            preview_ns: image_handle(17),
+        };
+        for generation in [7, 8] {
+            resolved.identity.asset_set_generation = generation;
+            resolved.preview_ew = image_handle(u128::from(generation));
+            resolved.preview_ns = image_handle(u128::from(generation) + 10);
+            app.world_mut()
+                .resource_mut::<ProductionDoorAssetPool>()
+                .resolved = Some(resolved.clone());
+            app.world_mut().resource_mut::<DoorAssetReadiness>().state =
+                DoorAssetReadinessState::Eligible(resolved.identity.clone());
+            app.update();
+            assert_eq!(
+                app.world().get::<ImageNode>(door).unwrap().image,
+                resolved.preview_ew
+            );
+            for entity in [blueprint, overlay, ghost] {
+                let sprite = app.world().get::<Sprite>(entity).unwrap();
+                assert_eq!(sprite.image, resolved.preview_ns);
+                assert_eq!(sprite.custom_size, Some(PRODUCTION_PREVIEW_SIZE));
+                assert_eq!(sprite.color, tint);
+                assert_eq!(
+                    app.world().get::<Anchor>(entity),
+                    Some(&PRODUCTION_PREVIEW_ANCHOR)
+                );
+            }
+        }
+        let new_card = app
+            .world_mut()
+            .spawn((
+                BuildingCatalogPreview(BuildingType::Door),
+                ImageNode::new(fallback.clone()),
+            ))
+            .id();
+        app.update();
+        assert_eq!(
+            app.world().get::<ImageNode>(new_card).unwrap().image,
+            resolved.preview_ew
+        );
+        assert_eq!(app.world().get::<ImageNode>(door).unwrap().color, tint);
+        assert_eq!(app.world().get::<Node>(door).unwrap().width, Val::Px(32.0));
+        assert_eq!(
+            app.world().get::<ImageNode>(tank).unwrap().image,
+            image_handle(90)
+        );
+
+        let mut mismatched = resolved.identity.clone();
+        mismatched.manifest_sha256 = "different-manifest".into();
+        for state in [
+            DoorAssetReadinessState::Eligible(mismatched),
+            DoorAssetReadinessState::Loading,
+            DoorAssetReadinessState::Fallback(DoorAssetFallbackReason::LoadFailed),
+            DoorAssetReadinessState::Fallback(DoorAssetFallbackReason::CandidateDisabled),
+        ] {
+            app.world_mut().resource_mut::<DoorAssetReadiness>().state = state;
+            app.update();
+            for entity in [door, new_card] {
+                assert_eq!(
+                    app.world().get::<ImageNode>(entity).unwrap().image,
+                    fallback
+                );
+            }
+            for entity in [blueprint, overlay, ghost] {
+                let sprite = app.world().get::<Sprite>(entity).unwrap();
+                assert_eq!(sprite.image, fallback);
+                assert_eq!(sprite.custom_size, Some(Vec2::splat(TILE_SIZE)));
+                assert_eq!(sprite.color, tint);
+                assert_eq!(app.world().get::<Anchor>(entity), Some(&Anchor::CENTER));
+            }
+        }
+        app.world_mut().resource_mut::<DoorAssetReadiness>().state =
+            DoorAssetReadinessState::Eligible(resolved.identity);
+        app.world_mut()
+            .resource_mut::<ProductionDoorAssetPool>()
+            .resolved = None;
+        app.update();
+        assert_eq!(app.world().get::<ImageNode>(door).unwrap().image, fallback);
     }
 
     #[test]

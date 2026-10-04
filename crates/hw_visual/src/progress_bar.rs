@@ -5,6 +5,9 @@
 use bevy::prelude::*;
 use hw_core::constants::*;
 
+#[cfg(test)]
+mod tests;
+
 /// プログレスバーの設定
 #[derive(Debug, Clone)]
 pub struct ProgressBarConfig {
@@ -50,13 +53,18 @@ pub struct ProgressBarBackground;
 #[derive(Component)]
 pub struct ProgressBarFill;
 
+#[derive(Clone, Copy, Debug)]
+pub struct ProgressBarPair {
+    pub background: Entity,
+    pub fill: Entity,
+}
+
 /// プログレスバーを生成する
 pub fn spawn_progress_bar(
     commands: &mut Commands,
-    _parent: Entity,
-    _parent_transform: &Transform,
+    owner: Entity,
     config: ProgressBarConfig,
-) -> (Entity, Entity) {
+) -> ProgressBarPair {
     let bar_pos = Vec3::new(0.0, config.y_offset, config.z_index);
 
     // 背景バー
@@ -66,6 +74,7 @@ pub fn spawn_progress_bar(
                 config: config.clone(),
             },
             ProgressBarBackground,
+            ChildOf(owner),
             Sprite {
                 color: config.bg_color,
                 custom_size: Some(Vec2::new(config.width, config.height)),
@@ -80,6 +89,7 @@ pub fn spawn_progress_bar(
     let fill_entity = commands
         .spawn((
             ProgressBarFill,
+            ChildOf(owner),
             Sprite {
                 color: config.fill_color,
                 custom_size: Some(Vec2::new(0.0, 0.0)),
@@ -91,7 +101,34 @@ pub fn spawn_progress_bar(
         ))
         .id();
 
-    (bg_entity, fill_entity)
+    ProgressBarPair {
+        background: bg_entity,
+        fill: fill_entity,
+    }
+}
+
+/// Reconciles pairs for the caller's active sites. Phase and appearance stay caller-owned.
+pub(crate) fn reconcile_site_progress_bars<M: Component + Default>(
+    commands: &mut Commands,
+    active: impl IntoIterator<Item = (Entity, ProgressBarConfig)>,
+    existing: impl IntoIterator<Item = (Entity, Entity)>,
+) {
+    let existing: Vec<_> = existing.into_iter().collect();
+    let owners: std::collections::HashSet<_> = existing.iter().map(|(_, owner)| *owner).collect();
+    let mut active_owners = std::collections::HashSet::new();
+    for (owner, config) in active {
+        if !active_owners.insert(owner) || owners.contains(&owner) {
+            continue;
+        }
+        let pair = spawn_progress_bar(commands, owner, config);
+        commands.entity(pair.background).insert(M::default());
+        commands.entity(pair.fill).insert(M::default());
+    }
+    for (bar, owner) in existing {
+        if !active_owners.contains(&owner) {
+            commands.entity(bar).try_despawn();
+        }
+    }
 }
 
 /// プログレスバーの進捗を更新する

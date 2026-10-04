@@ -5,7 +5,6 @@ from __future__ import annotations
 import argparse
 from datetime import UTC, datetime
 import hashlib
-import json
 import os
 from pathlib import Path
 import secrets
@@ -15,6 +14,10 @@ import time
 
 import native_acceptance as native
 import wall_door_joint_acceptance as joint
+import ui_refactor_rows as refactor_rows
+import ui_progress_bars as progress_bars
+import ui_bridge_planning as bridge_planning
+import ui_terrain_materials as terrain_materials
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
 from scripts.native_ui_input import X11Input
@@ -26,6 +29,25 @@ CHECKPOINTS = ("tasks", "last-page", "minimized", "restored", "entities",
                "history", "history-oldest", "history-closed", "guide", "guide-closed")
 VIEWPORTS = ((1920, 1080, 1.0), (1280, 720, 1.25), (1280, 720, 0.85),
              (1280, 720, 1.0), (1920, 1080, 0.85), (1920, 1080, 1.25))
+CASES = ("navigation", "refactor-rows", "progress-bars", "terrain-materials", "refactor-suite", "bridge-planning")
+
+
+def session_matrix(case, smoke):
+    native.require(case in CASES, "unsupported UI case")
+    cases = ("refactor-rows", "progress-bars") if case == "refactor-suite" else (case,)
+    return [(item, *viewport) for item in cases for viewport in (VIEWPORTS[:1] if smoke else VIEWPORTS)]
+
+
+def check_session_inventory(manifest):
+    case = manifest.get("case", "navigation")
+    expected = session_matrix(case, manifest["smoke"])
+    sessions = manifest["sessions"]
+    native.require(len(sessions) == len(expected), "case/viewport coverage missing")
+    native.require([item.get("case", case) for item in sessions] == [item[0] for item in expected],
+                   "session case order differs")
+    for field in ("directory", "nonce"):
+        native.require(len({item[field] for item in sessions}) == len(sessions), "duplicate session identity")
+    return expected
 
 
 def sha256(path: Path) -> str:
@@ -35,6 +57,18 @@ def sha256(path: Path) -> str:
 def check_observation(case: str, value: dict) -> None:
     native.require(value["ready"] and value["frame"] > 90, "fixture is not ready")
     native.require(value["task_rows"] <= 20, "task resident row limit exceeded")
+    if case in bridge_planning.CHECKPOINTS:
+        bridge_planning.check_observation(case, value)
+        return
+    if case in terrain_materials.CHECKPOINTS:
+        terrain_materials.check_observation(case, value)
+        return
+    if case in refactor_rows.CHECKPOINTS:
+        refactor_rows.check_observation(case, value)
+        return
+    if case in progress_bars.CHECKPOINTS:
+        progress_bars.check_observation(case, value)
+        return
     controls = value["controls"]
     if case in ("tasks", "last-page", "restored"):
         native.require(value["left_panel"] == "TaskList" and not value["minimized"], "Tasks body not open")
@@ -199,7 +233,11 @@ class Driver:
             native.atomic_write_json(self.root / "input-client.json", {"window": self.input.window,
                 "pid": pid, "geometry": geometry, "observer_viewport": self.last["viewport"], "nonce": nonce,
                 "input_backend": "portal" if portal else "xtest",
+                "xmodifiers": next((entry.split(b"=", 1)[1].decode() for entry in
+                                    Path(f"/proc/{pid}/environ").read_bytes().split(b"\0")
+                                    if entry.startswith(b"XMODIFIERS=")), None),
                 "portal_devices": portal.granted_devices if portal else None,
+                "portal_session": portal.session if portal else None,
                 "monitor_mapping": self.input.mapping if portal else None})
             native.require(list(geometry) == self.last["viewport"], "X11 client and renderer coordinate spaces differ")
             stable = [None, time.monotonic()]
@@ -244,11 +282,15 @@ class Driver:
                 return value["mouse_left_pressed"] == event["pressed"] or (event["pressed"] and value["world_input_captured"])
             return True
         self.last = self.wait(acknowledged, after=self.last["frame"] + 3)
-        self.events[-1]["post_frame"] = self.last["frame"]
-        self.events[-1]["observed_cursor"] = self.last["cursor"]
-        self.events[-1]["observed_left_pressed"] = self.last["mouse_left_pressed"]
-        self.events[-1]["observed_hover"] = {key: value["interaction"] for key, value in self.last["controls"].items()
-                                           if value["interaction"] in ("Hovered", "Pressed")}
+        self.acknowledge_events(self.events[-1:])
+
+    def acknowledge_events(self, events):
+        for event in events:
+            event["post_frame"] = self.last["frame"]
+            event["observed_cursor"] = self.last["cursor"]
+            event["observed_left_pressed"] = self.last["mouse_left_pressed"]
+            event["observed_hover"] = {key: value["interaction"] for key, value in self.last["controls"].items()
+                                       if value["interaction"] in ("Hovered", "Pressed")}
         native.atomic_write_json(self.root / "events.json", {"events": self.events})
 
     def point(self, key):
@@ -269,8 +311,22 @@ class Driver:
                        f"pointer moved outside click target during gesture: {key}")
 
     def key(self, key):
-        self.send(key=key, pressed=True)
-        self.send(key=key, pressed=False)
+        first = len(self.events)
+        # Release before waiting for frames: a slow renderer must not turn a tap
+        # into compositor autorepeat. Both events retain the input ownership checks.
+        self.input.send(str(len(self.events) + 1), self.nonce, key=key, pressed=True)
+        self.input.send(str(len(self.events) + 1), self.nonce, key=key, pressed=False)
+        self.last = self.wait(lambda value: True, after=self.last["frame"] + 3)
+        self.acknowledge_events(self.events[first:])
+
+    def focus_text(self, key):
+        native.require(key.startswith("text-field:"), "expected a text field")
+        point = self.point(key)
+        self.send(point=point)
+        self.send(button=1, pressed=True)
+        self.send(button=1, pressed=False)
+        self.last = self.wait(lambda value: value["controls"].get(key, {}).get("focused"), after=self.last["frame"])
+        native.require(self.last["cursor"] is not None and all(abs(a-b) <= 2 for a,b in zip(self.last["cursor"], point)), "pointer moved during text focus gesture")
 
     def scroll(self, key, amount):
         self.send(point=self.point(key))
@@ -298,6 +354,8 @@ class Driver:
                        "screenshot": path.name, "sha256": sha256(path),
                        "capture_scope": "x11-client-window", "window": self.window,
                        "pid": self.owner_pid}
+        if case in terrain_materials.CHECKPOINTS:
+            terrain_materials.add_capture(self.root, observation)
         self.checkpoints.append(observation)
         native.atomic_write_json(self.root / "checkpoints.json", {"checkpoints": self.checkpoints})
 
@@ -346,6 +404,19 @@ class Driver:
         self.capture("guide-closed")
 
 
+def check_input_client(manifest, session, client):
+    native.require(client["input_backend"] == manifest["input_backend"] and client["nonce"] == session["nonce"],
+                   "input client/backend differs")
+    if manifest["input_backend"] == "portal":
+        native.require(client["portal_devices"] & 3 == 3 and client["monitor_mapping"][1] > 0,
+                       "portal consent or monitor mapping missing")
+        if manifest.get("case") == "refactor-suite":
+            native.require(manifest.get("portal_session") and client.get("portal_session") == manifest["portal_session"],
+                           "suite did not share one portal session")
+    if session.get("case", manifest.get("case")) == "refactor-rows":
+        native.require(client.get("xmodifiers") == "@im=local", "row text input requires child-local XIM")
+
+
 def verify_root(root):
     manifest = native.read_json(root / "manifest.json")
     native.require(manifest["profile"] == PROFILE and manifest["evidence_kind"] == "feedback", "unsupported evidence kind")
@@ -356,20 +427,20 @@ def verify_root(root):
     native.require(native.native_harness_fingerprint(repo) == manifest["harness_fingerprint"], "harness changed")
     native.require(native.git_subject(repo) == manifest["subject_commit"], "subject changed")
     native.require(sha256(repo / "target/debug/bevy_app") == manifest["binary_sha256"], "binary changed")
-    expected = VIEWPORTS[:1] if manifest["smoke"] else VIEWPORTS
-    native.require(len(manifest["sessions"]) == len(expected), "viewport coverage missing")
-    for session, (width, height, scale) in zip(manifest["sessions"], expected):
+    expected = check_session_inventory(manifest)
+    for session, (case, width, height, scale) in zip(manifest["sessions"], expected):
         directory = root / session["directory"]
         native.require(directory.parent == root, "session path escapes job")
         entries = native.read_json(directory / "checkpoints.json")["checkpoints"]
         events = native.read_json(directory / "events.json")["events"]
         client = native.read_json(directory / "input-client.json")
-        native.require(client["input_backend"] == manifest["input_backend"] and client["nonce"] == session["nonce"],
-                       "input client/backend differs")
-        if manifest["input_backend"] == "portal":
-            native.require(client["portal_devices"] & 3 == 3 and client["monitor_mapping"][1] > 0,
-                           "portal consent or monitor mapping missing")
-        native.require([item["case"] for item in entries] == (["entities"] if layout_only else list(CHECKPOINTS)), "checkpoints differ")
+        check_input_client(manifest, session, client)
+        native.require(case == "navigation" or not layout_only, "refactor case requires actual input")
+        expected_checkpoints = (refactor_rows.CHECKPOINTS if case == "refactor-rows" else
+                                bridge_planning.CHECKPOINTS if case == "bridge-planning" else
+                                terrain_materials.CHECKPOINTS if case == "terrain-materials" else
+                                progress_bars.CHECKPOINTS if case == "progress-bars" else CHECKPOINTS)
+        native.require([item["case"] for item in entries] == (["entities"] if layout_only else list(expected_checkpoints)), "checkpoints differ")
         if layout_only:
             native.require(not events, "layout capture must not send input")
         else:
@@ -384,14 +455,27 @@ def verify_root(root):
                 check_layout_scene(value, scene)
                 native.require(value.get("menu_state") == ("Zones" if manifest.get("layout_menu") else "Architect" if scene == "build" else "Hidden"),
                                "layout menu fixture differs")
-            native.require(value["nonce"] == session["nonce"] and value["viewport"] == [width, height]
+            expected_size = terrain_materials.SIZES[item["case"]] if case == "terrain-materials" else [width, height]
+            native.require(value["nonce"] == session["nonce"] and value["viewport"] == expected_size
                            and abs(value["ui_scale"] - scale) < 0.001, "viewport/nonce differs")
             native.require(item["pid"] == value["pid"] and item["capture_scope"] == "x11-client-window", "capture scope differs")
             image = directory / item["screenshot"]
             native.require(image.parent == directory and sha256(image) == item["sha256"], "screenshot changed")
-            native.require(native.validate_png_structure(image.read_bytes()) == (width, height), "image dimensions differ")
+            native.require(list(native.validate_png_structure(image.read_bytes())) == expected_size, "image dimensions differ")
         native.require(sha256(directory / "game.log") == session["log_sha256"], "game log changed")
         joint.verify_game_log(directory / "game.log", "Intel")
+        if case == "terrain-materials":
+            terrain_materials.verify_sequence(directory, entries, events)
+            continue
+        if case == "refactor-rows":
+            refactor_rows.check_sequence(entries)
+            continue
+        if case == "progress-bars":
+            progress_bars.check_sequence(entries)
+            continue
+        if case == "bridge-planning":
+            bridge_planning.check_sequence(entries)
+            continue
         if layout_only:
             continue
         history = next(item["value"] for item in entries if item["case"] == "history")
@@ -401,11 +485,27 @@ def verify_root(root):
         joint.verify_game_log(directory / "game.log", "Intel")
     return {"status": "valid", "profile": PROFILE, "sessions": len(expected),
             "coverage": f"{manifest.get('layout_scene', 'management')} rendering only; no input evidence" if layout_only else
+                        "task labels, rename, search/fold and four progress callers with save/load/cancellation" if manifest.get("case") == "refactor-suite" else
+                        "three visible terrain LODs, diagnostic normal prepass, Scene resize and restore" if manifest.get("case") == "terrain-materials" else
+                        "task labels, rename, search and fold feedback" if manifest.get("case") == "refactor-rows" else
+                        "four progress callers, simulation completion, save/load and cancellation feedback" if manifest.get("case") == "progress-bars" else
+                        "ordinary generated-world Bridge placement, reservation save/load and cancellation only" if manifest.get("case") == "bridge-planning" else
                         "navigation/layout feedback only; C05/C07/C08 and full C01-C06 acceptance remain open"}
+
+
+def game_environment(repo):
+    environment = native.cargo_environment(repo)
+    # AdapterInfo is INFO-level renderer evidence. An inherited RUST_LOG=warn
+    # must not silently remove it; warnings/errors remain visible and rejected.
+    environment["RUST_LOG"] = "info,wgpu=error"
+    return environment
 
 
 def plan(args):
     repo = native.validate_repo(args.repo)
+    native.require(args.case == "navigation" or args.input_backend != "none", "refactor case requires actual input")
+    native.require(not args.portal_consent_file or args.input_backend == "portal",
+                   "consent file requires portal input backend")
     resources = native.resource_snapshot(repo, require_launcher=True)
     root = Path(args.job_root).resolve() if args.job_root else native.unique_job_root(repo, PROFILE)
     native.require(root.is_relative_to(repo / "target/native-acceptance") and not root.exists(), "requires fresh native job root")
@@ -415,7 +515,9 @@ def plan(args):
                "PYTHONDONTWRITEBYTECODE=1", "python3", str(Path(__file__).resolve()), "run", "--repo", str(repo),
                "--job-root", str(root), "--subject-commit", subject, "--source-fingerprint", source,
                "--harness-fingerprint", harness, "--input-backend", args.input_backend,
+               "--case", args.case,
                "--layout-scene", args.layout_scene,
+               *(["--portal-consent-file", args.portal_consent_file] if args.portal_consent_file else []),
                *(["--layout-menu"] if args.layout_menu else []),
                *(["--smoke"] if args.smoke else [])]
     native.print_json({"status": "blocked" if resources["failures"] else "ready", "profile": PROFILE,
@@ -429,7 +531,10 @@ def plan(args):
 @native.activity_locked
 def run(args):
     repo, root = native.validate_repo(args.repo), Path(args.job_root).resolve()
+    native.require(not args.portal_consent_file or args.input_backend == "portal",
+                   "consent file requires portal input backend")
     native.require(os.environ.get("HW_NATIVE_ACCEPTANCE_LAUNCHED") == "1", "use planned kitty launcher")
+    native.require(args.case == "navigation" or args.input_backend != "none", "refactor case requires actual input")
     native.require(not args.layout_menu or args.input_backend == "none", "layout menu requires no-input rendering")
     native.require(not args.layout_menu or args.layout_scene == "management", "layout menu requires management scene")
     native.require(native.git_subject(repo) == args.subject_commit and native.source_fingerprint(repo) == args.source_fingerprint
@@ -453,12 +558,12 @@ def run(args):
             def portal_heartbeat(method):
                 state.update(current_stage=f"portal-{method}", heartbeat_at=native.utc_now())
                 native.atomic_write_json(job_file, state)
-            portal = PortalSession(portal_heartbeat)
-        for index, (width, height, scale) in enumerate(VIEWPORTS[:1] if args.smoke else VIEWPORTS):
+            portal = PortalSession(portal_heartbeat, consent_file=args.portal_consent_file)
+        for index, (case, width, height, scale) in enumerate(session_matrix(args.case, args.smoke)):
             directory = root / f"viewport-{index}"
             directory.mkdir()
             nonce = secrets.token_hex(16)
-            environment = native.cargo_environment(repo)
+            environment = game_environment(repo)
             for key in tuple(environment):
                 if key.startswith(("HW_NATIVE_", "HW_PERF_", "HW_WALL_", "HW_DOOR_")) or key in joint.ENV_KEYS:
                     environment.pop(key, None)
@@ -466,6 +571,11 @@ def run(args):
                                 "WGPU_BACKEND": "vulkan", "WGPU_ADAPTER_NAME": "Intel", "HELL_WORKERS_WORLDGEN_SEED": "20260914",
                                 "HW_NATIVE_UI_ROOT": str(directory), "HW_NATIVE_UI_NONCE": nonce,
                                 "HW_NATIVE_UI_WIDTH": str(width), "HW_NATIVE_UI_HEIGHT": str(height), "HW_NATIVE_UI_SCALE": str(scale)})
+            environment["HW_NATIVE_UI_CASE"] = case
+            if case == "refactor-rows":
+                # Use winit's local XIM backend for this ASCII rename/search case.
+                # Keep the desktop's IME and every other process unchanged.
+                environment["XMODIFIERS"] = "@im=local"
             if args.input_backend == "none":
                 environment["HW_NATIVE_UI_LAYOUT_ONLY"] = "1"
                 environment["HW_NATIVE_UI_LAYOUT_SCENE"] = args.layout_scene
@@ -486,6 +596,14 @@ def run(args):
                     state["current_stage"] = "ui-input"
                     if args.input_backend == "none":
                         driver.capture("entities")
+                    elif case == "refactor-rows":
+                        refactor_rows.exercise(driver)
+                    elif case == "progress-bars":
+                        progress_bars.exercise(driver)
+                    elif case == "bridge-planning":
+                        bridge_planning.exercise(driver)
+                    elif case == "terrain-materials":
+                        terrain_materials.exercise(driver)
                     else:
                         driver.exercise()
                 except Exception:
@@ -505,10 +623,13 @@ def run(args):
                             native.stop_command_process(process)
                         state["child_pid"] = None
             joint.verify_game_log(directory / "game.log", "Intel")
-            sessions.append({"directory": directory.name, "nonce": nonce, "log_sha256": sha256(directory / "game.log")})
+            sessions.append({"case": case, "directory": directory.name, "nonce": nonce, "log_sha256": sha256(directory / "game.log")})
         native.atomic_write_json(root / "manifest.json", {
             "profile": PROFILE, "evidence_kind": "feedback", "repo": str(repo), "smoke": args.smoke,
             "input_backend": args.input_backend,
+            "portal_session": portal.session if portal else None,
+            "portal_persistence": portal.persistence if portal else "disabled",
+            "case": args.case,
             "layout_menu": args.layout_menu,
             "layout_scene": args.layout_scene,
             "subject_commit": args.subject_commit, "source_fingerprint": args.source_fingerprint,
@@ -534,13 +655,17 @@ def main():
         if command in ("plan", "run"):
             child.add_argument("--repo", required=True)
             child.add_argument("--smoke", action="store_true")
+            child.add_argument("--case", choices=CASES, default="navigation")
             child.add_argument("--layout-menu", action="store_true")
             child.add_argument("--layout-scene", choices=("management", "normal", "selection", "pinned", "build", "display", "area", "area-details"), default="management")
             child.add_argument("--input-backend", choices=("xtest", "portal", "none"), default="xtest")
+            child.add_argument("--portal-consent-file", help="explicit owner-only restore-token journal; never a consent bypass")
         if command == "run":
             for option in ("subject-commit", "source-fingerprint", "harness-fingerprint"):
                 child.add_argument(f"--{option}", required=True)
     args = parser.parse_args()
+    if args.command in ("plan", "run") and args.case == "terrain-materials":
+        native.require(args.smoke and args.input_backend != "none", "terrain-materials requires --smoke and owned-window resize input")
     if args.command == "plan":
         return plan(args)
     if args.command == "run":

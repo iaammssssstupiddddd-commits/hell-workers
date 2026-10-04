@@ -89,28 +89,83 @@ where
     None
 }
 
-fn reject_for_bridge_tile<World>(world: &World, grid: (i32, i32)) -> Option<PlacementRejectReason>
-where
-    World: WorldReadApi,
-{
-    if world.pos_to_idx(grid.0, grid.1).is_none() {
-        return Some(PlacementRejectReason::OutOfBounds);
+/// One live-terrain crossing, using the existing 2x5 RiverYMin shape.
+/// No terrain, walkability, or owner state is changed by this resolver.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BridgeCrossing {
+    pub anchor: (i32, i32),
+    pub occupied_grids: Vec<(i32, i32)>,
+    pub banks: [(i32, i32); 4],
+}
+
+pub fn resolve_bridge_crossing<W: WorldReadApi>(
+    world: &W,
+    clicked_grid: (i32, i32),
+) -> Result<BridgeCrossing, super::PlacementTileRejection> {
+    use super::{PlacementRejectReason as Reason, PlacementTileRejection};
+    use hw_core::constants::{MAP_HEIGHT, MAP_WIDTH};
+    let reject = |reason, grid| PlacementTileRejection { grid, reason };
+    let x = clicked_grid.0;
+    if !(0..MAP_WIDTH - 1).contains(&x) {
+        return Err(reject(Reason::OutOfBounds, clicked_grid));
     }
-    if world.has_building(grid) {
-        return Some(PlacementRejectReason::OccupiedByBuilding);
+    let mut intervals = [(0, 0); 2];
+    for (column, interval) in intervals.iter_mut().enumerate() {
+        let gx = x + column as i32;
+        let mut rows = (0..MAP_HEIGHT).filter(|&y| world.is_river_tile(gx, y));
+        let Some(lo) = rows.next() else {
+            return Err(reject(Reason::NotRiverTile, (gx, clicked_grid.1)));
+        };
+        let hi = rows.next_back().unwrap_or(lo);
+        for y in lo..=hi {
+            if !world.is_river_tile(gx, y) {
+                return Err(reject(Reason::NotRiverTile, (gx, y)));
+            }
+        }
+        *interval = (lo, hi);
     }
-    if world.has_stockpile(grid) {
-        return Some(PlacementRejectReason::OccupiedByStockpile);
+    let lo = intervals[0].0.min(intervals[1].0);
+    let hi = intervals[0].1.max(intervals[1].1);
+    let span = hi - lo + 1;
+    if span > 5 {
+        return Err(reject(Reason::NotWalkable, (x, lo)));
     }
-    // A bridge is allowed on a non-walkable river tile, but it must not
-    // overwrite a natural, reservation, or construction blocker.
-    if world.has_raw_obstacle(grid) {
-        return Some(PlacementRejectReason::NotWalkable);
+    let anchor = (x, lo - (5 - span) / 2);
+    let occupied_grids: Vec<_> = hw_jobs::building_shape(BuildingType::Bridge)
+        .ordered_relative_tiles
+        .iter()
+        .map(|&(dx, dy)| (x + dx, anchor.1 + dy))
+        .collect();
+    let banks = [
+        (x, anchor.1 - 1),
+        (x + 1, anchor.1 - 1),
+        (x, anchor.1 + 5),
+        (x + 1, anchor.1 + 5),
+    ];
+    for &grid in occupied_grids.iter().chain(&banks) {
+        let reason = if world.pos_to_idx(grid.0, grid.1).is_none() {
+            Some(Reason::OutOfBounds)
+        } else if world.has_building(grid) {
+            Some(Reason::OccupiedByBuilding)
+        } else if world.has_stockpile(grid) {
+            Some(Reason::OccupiedByStockpile)
+        } else if world.has_raw_obstacle(grid)
+            || (banks.contains(&grid) && world.is_river_tile(grid.0, grid.1))
+            || (!world.is_river_tile(grid.0, grid.1) && !world.is_walkable(grid.0, grid.1))
+        {
+            Some(Reason::NotWalkable)
+        } else {
+            None
+        };
+        if let Some(reason) = reason {
+            return Err(reject(reason, grid));
+        }
     }
-    if !world.is_river_tile(grid.0, grid.1) {
-        return Some(PlacementRejectReason::NotRiverTile);
-    }
-    None
+    Ok(BridgeCrossing {
+        anchor,
+        occupied_grids,
+        banks,
+    })
 }
 
 pub fn validate_building_placement<World>(
@@ -124,13 +179,15 @@ where
 {
     let world = ctx.world;
     match building_type {
-        BuildingType::Bridge => {
-            for &candidate in &geometry.occupied_grids {
-                if let Some(reason) = reject_for_bridge_tile(world, candidate) {
-                    return PlacementValidation::rejected_at(reason, candidate);
-                }
+        BuildingType::Bridge => match resolve_bridge_crossing(world, grid) {
+            Ok(crossing) if crossing.occupied_grids == geometry.occupied_grids => {}
+            Ok(_) => {
+                return PlacementValidation::rejected_at(PlacementRejectReason::NotWalkable, grid);
             }
-        }
+            Err(rejection) => {
+                return PlacementValidation::rejected_at(rejection.reason, rejection.grid);
+            }
+        },
         BuildingType::Door => {
             let replaceable_wall = (ctx.is_replaceable_wall_at)(grid);
             if replaceable_wall {

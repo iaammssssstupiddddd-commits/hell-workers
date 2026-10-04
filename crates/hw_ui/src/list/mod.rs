@@ -7,8 +7,10 @@ pub mod search;
 pub mod section_toggle;
 pub mod selection_focus;
 pub mod spawn;
+mod style;
 pub mod sync;
 pub mod tree_ops;
+pub mod values;
 pub mod visual;
 
 pub use dirty::EntityListDirty;
@@ -16,7 +18,7 @@ pub use drag_state::DragState;
 pub use minimize::{EntityListMinimizeState, entity_list_minimize_toggle_system};
 pub use models::{
     EntityListNodeIndex, EntityListSnapshot, EntityListViewModel, FamiliarRowViewModel,
-    FamiliarSectionNodes, SoulGender, SoulRowViewModel, StressBucket, TaskVisual,
+    FamiliarSectionNodes, SoulGender, SoulRowNodes, SoulRowViewModel, StressBucket, TaskVisual,
 };
 pub use resize::{
     EntityListResizeState, entity_list_resize_cursor_system, entity_list_resize_system,

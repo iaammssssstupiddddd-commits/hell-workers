@@ -8,7 +8,9 @@ Frozen subjects run their own helpers under the primary coordinator.
 from __future__ import annotations
 
 import argparse
+from collections.abc import Callable
 from contextlib import contextmanager
+from copy import deepcopy
 from datetime import UTC, datetime
 try:
     import fcntl
@@ -275,7 +277,7 @@ def policy_hash(primary: Path) -> str:
 def subject_fingerprint(repo: Path) -> str:
     tracked = git(repo, "ls-files", "--cached", "--others", "--exclude-standard", "-z").split("\0")
     paths = {repo / name for name in tracked if name and (
-        name.startswith(("crates/", "scripts/", ".cargo/", ".codex/skills/hell-workers-run-native-acceptance/scripts/"))
+        name.startswith(("crates/", "vendor/", "scripts/", ".cargo/", ".codex/skills/hell-workers-run-native-acceptance/scripts/"))
         or name in {"Cargo.toml", "Cargo.lock", "rust-toolchain", "rust-toolchain.toml"}
     )}
     assets = repo / "assets"
@@ -453,8 +455,20 @@ def admit(primary: Path, ledger: dict, batch: dict) -> None:
         require(Path(item["path"]).is_file() and digest(Path(item["path"])) == item["sha256"], "planned helper changed")
 
 
-def register(primary: Path, spec: dict, *, command: list[str] | None = None) -> dict:
-    batch = dict(spec)
+def register(primary: Path, spec: dict, *, command: list[str] | None = None,
+             preflight: Callable[[dict], None] | None = None) -> dict:
+    """Publish once, only after optional host-owned admission accepts the snapshot.
+
+    The in-process preflight may inspect but must not mutate its isolated copy,
+    execute work, or reenter the storage lock. It is never loaded from a spec or
+    CLI option. Rejection leaves no batch/history entry. Callers remain responsible
+    for authenticating requests and reconciling an uncertain publication by ID.
+    """
+    batch = deepcopy(spec)
+    command = deepcopy(command)
+    require("host_admission" not in batch, "host admission receipt is controller-owned")
+    require("native_registration" not in batch or preflight is not None,
+            "native registration requires host-owned preflight")
     for key in ("id", "repo", "owner"):
         require(nonempty(batch.get(key)), f"batch requires {key}")
     require(re.fullmatch(r"[A-Za-z0-9_.-]+", batch["id"]) is not None, "batch id has invalid characters")
@@ -480,6 +494,22 @@ def register(primary: Path, spec: dict, *, command: list[str] | None = None) -> 
             require(not any(overlap(Path(a), Path(b)) for a in batch["roots"] for b in other["roots"]), "output root overlaps another batch")
         admit(primary, ledger, batch)
         batch["before_bytes"] = usage(ledger, discover(primary))
+        if preflight is not None:
+            inspected = deepcopy(batch)
+            result = preflight(inspected)
+            require(result is None, "registration preflight must raise on rejection and return None on success")
+            require(inspected == batch, "registration preflight changed the sealed candidate")
+            # Admission can inspect external state. Never publish the old source,
+            # helper hashes or output assumptions if they changed while it ran.
+            require(not any(Path(root).exists() for root in batch["roots"]),
+                    "planned output appeared during registration preflight")
+            admit(primary, ledger, batch)
+            if "native_registration" in batch:
+                batch["host_admission"] = {
+                    "schema": 1, "controller_sha256": batch["coordinator_sha256"],
+                    "registration_sha256": hashlib.sha256(json.dumps(
+                        batch["native_registration"], sort_keys=True, separators=(",", ":")).encode()).hexdigest(),
+                }
         ledger["batches"][batch["id"]] = batch
         save(primary, ledger, f"register {batch['id']}")
         return batch

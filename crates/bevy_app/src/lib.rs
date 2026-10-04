@@ -13,6 +13,10 @@ use std::env;
 
 use bevy::prelude::*;
 
+#[cfg(feature = "profiling")]
+pub use assets::building_asset_set::acceptance::configure_building_art;
+pub use assets::building_asset_set::configure_building_asset_releases;
+pub use assets::building_asset_set::project_building_asset_json;
 pub use entities::damned_soul::DamnedSoulPlugin;
 pub use hw_core::events::{
     DesignationRequest, EncouragementRequest, EscapeRequest, FamiliarAiStateChangedEvent,

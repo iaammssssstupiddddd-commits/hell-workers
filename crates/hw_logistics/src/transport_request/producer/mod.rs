@@ -14,6 +14,9 @@ pub mod upsert;
 pub mod wall_construction;
 pub mod wheelbarrow;
 
+#[cfg(test)]
+mod reconcile_tests;
+
 use bevy::math::Vec2;
 use bevy::prelude::{
     Added, Commands, Entity, Or, Query, ResMut, Resource, Transform, Visibility, With,
@@ -298,7 +301,18 @@ pub fn sync_construction_requests<TTarget: bevy::prelude::Component>(
     build_target: impl Fn(Entity) -> TTarget,
     priority_for: impl Fn(ResourceType) -> u32,
 ) -> std::collections::HashSet<(Entity, ResourceType)> {
-    let mut seen_existing_keys = std::collections::HashSet::<(Entity, ResourceType)>::new();
+    let seen_existing_keys = upsert::select_canonical_requests(
+        q_requests
+            .iter()
+            .filter(|(_, _, request, _, _)| request.kind == spec.expected_kind)
+            .map(|(entity, _, request, workers, _)| {
+                (
+                    (request.anchor, request.resource_type),
+                    entity,
+                    workers.map_or(0, |workers| workers.len()),
+                )
+            }),
+    );
 
     for (request_entity, target, request, workers_opt, current) in q_requests.iter() {
         if request.kind != spec.expected_kind {
@@ -307,12 +321,14 @@ pub fn sync_construction_requests<TTarget: bevy::prelude::Component>(
 
         let key = (request.anchor, request.resource_type);
         let workers = workers_opt.map(|w| w.len()).unwrap_or(0);
-        if !upsert::process_duplicate_key(
+        if !upsert::reconcile_duplicate_request(
             commands,
             request_entity,
             workers,
-            &mut seen_existing_keys,
-            key,
+            seen_existing_keys
+                .get(&key)
+                .is_some_and(|(kept, _)| *kept == request_entity),
+            upsert::RequestSlotSnapshot::from_runtime(current),
         ) {
             continue;
         }
@@ -333,7 +349,7 @@ pub fn sync_construction_requests<TTarget: bevy::prelude::Component>(
                     key,
                     site_pos: *site_pos,
                     issued_by: *issued_by,
-                    desired_slots: *slots,
+                    slots: upsert::RequestSlots::TotalSlots(*slots),
                     inflight,
                     priority: priority_for(key.1),
                     transport_priority: TransportPriority::Normal,
@@ -349,7 +365,7 @@ pub fn sync_construction_requests<TTarget: bevy::prelude::Component>(
     }
 
     for (key, (issued_by, slots, site_pos)) in desired_requests.iter() {
-        if seen_existing_keys.contains(key) {
+        if seen_existing_keys.contains_key(key) {
             continue;
         }
 
@@ -360,7 +376,7 @@ pub fn sync_construction_requests<TTarget: bevy::prelude::Component>(
                 key: *key,
                 site_pos: *site_pos,
                 issued_by: *issued_by,
-                desired_slots: *slots,
+                slots: upsert::RequestSlots::TotalSlots(*slots),
                 priority: priority_for(key.1),
                 target: build_target(key.0),
                 kind: spec.request_kind,
@@ -369,7 +385,7 @@ pub fn sync_construction_requests<TTarget: bevy::prelude::Component>(
         );
     }
 
-    seen_existing_keys
+    seen_existing_keys.into_keys().collect()
 }
 
 #[cfg(test)]

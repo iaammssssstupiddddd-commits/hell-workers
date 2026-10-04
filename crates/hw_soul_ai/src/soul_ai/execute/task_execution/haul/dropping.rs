@@ -170,8 +170,6 @@ pub(super) fn handle_dropping_phase(
                         transfer_resource: res_type,
                         requested_amount: 1,
                         reservations,
-                        cycle_reserved: 0,
-                        cycle_reserved_other_resource: 0,
                     })
                     .allowed_amount
                         == 1

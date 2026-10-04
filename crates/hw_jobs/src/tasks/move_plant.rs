@@ -26,9 +26,16 @@ pub struct MovePlantTask {
 /// on the Soul executor crate.
 #[derive(Component, Debug, Clone)]
 pub struct PendingBuildingMove {
+    pub worker: Entity,
+    pub task_entity: Entity,
+    pub expected_identity: super::ActiveTaskIdentity,
+    pub expected_transform: Transform,
+    pub proposed_transform: Transform,
+    pub expected_kind: crate::BuildingType,
     pub old_occupied: Vec<(i32, i32)>,
     pub new_occupied: Vec<(i32, i32)>,
     pub companion_anchor: Option<(i32, i32)>,
+    pub rejected: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Reflect, Default)]

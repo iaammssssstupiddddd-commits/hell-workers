@@ -45,6 +45,7 @@ use hw_visual::Building3dVisual;
 use hw_visual::wall_connection::{
     WallConnectionMask, WallTopologyIndex, WallTopologyState, wall_connections_system,
 };
+use hw_world::SpatialGridOps;
 use hw_world::{
     Room, RoomBoundaryLookup, RoomDetectionState, RoomTileLookup, RuntimePathSearchBudget,
     TerrainType, WalkabilityConnectivityCache, WorldMap, detect_rooms_system,
@@ -786,7 +787,6 @@ fn order_to_familiar_assignment_to_finalizer_runs_in_fixed_headless_ticks() {
         .set_building_occupancy((12, 13), target);
     app.world_mut()
         .resource_mut::<DesignationSpatialGrid>()
-        .data_mut()
         .insert(order, position);
 
     let assigned_move_task = app.world_mut().spawn_empty().id();
@@ -2506,6 +2506,59 @@ fn cancel_only_aborts_order_workers_and_preserves_target_work() {
             .get::<WorkingOn>(collector)
             .map(|working| working.0),
         Some(fixture.target)
+    );
+    let item_count = app
+        .world_mut()
+        .query::<&ResourceItem>()
+        .iter(app.world())
+        .count();
+    app.world_mut()
+        .resource_mut::<Messages<ResourceReservationRequest>>()
+        .clear();
+    app.world_mut()
+        .resource_mut::<Messages<OnTaskAbandoned>>()
+        .clear();
+    let completion_count = app.world().resource::<FinalizerReceipts>().completed.len();
+    app.world_mut().write_message(DeconstructionCancelRequest {
+        world_epoch: 0,
+        order: fixture.order,
+    });
+    app.update();
+    let receipts = app.world().resource::<FinalizerReceipts>();
+    assert_eq!(receipts.cancels.len(), 2);
+    assert_eq!(
+        receipts.cancels[0].result,
+        DeconstructionCancelResult::Canceled
+    );
+    assert_eq!(
+        receipts.cancels[1].result,
+        DeconstructionCancelResult::StaleOrder
+    );
+    assert_eq!(receipts.completed.len(), completion_count);
+    assert!(
+        app.world()
+            .resource::<Messages<ResourceReservationRequest>>()
+            .is_empty()
+    );
+    assert!(
+        app.world()
+            .resource::<Messages<OnTaskAbandoned>>()
+            .is_empty()
+    );
+    assert_eq!(
+        app.world_mut()
+            .query::<&ResourceItem>()
+            .iter(app.world())
+            .count(),
+        item_count
+    );
+    assert_eq!(
+        app.world().get::<ActiveTaskIdentity>(collector),
+        Some(&collector_identity)
+    );
+    assert_eq!(
+        app.world().get::<WorkingOn>(collector).unwrap().0,
+        fixture.target
     );
 }
 

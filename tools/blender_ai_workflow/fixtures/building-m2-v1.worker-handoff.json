@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "scope": "M2 unapproved numeric and paint candidate implementation handoff",
+  "accepted": false,
+  "numeric_freeze": false,
+  "runtime_published": false,
+  "numeric_candidate_sha256": "1b913ea0784bf6815a6c46ed0396dafc6ebcdcfc107370bc569aa875775d949d",
+  "changed_files": [
+    "crates/bevy_app/src/assets/building_asset_set/acceptance.rs",
+    "crates/bevy_app/src/assets/building_asset_set/acceptance/m2_probe.rs",
+    "crates/bevy_app/src/systems/visual/building_presentation/tests.rs",
+    "scripts/building_m2_acceptance.py",
+    "scripts/tests/test_building_m2_acceptance.py",
+    "tools/blender_ai_workflow/fixtures/building-m2-v1.numeric-candidate.json",
+    "tools/blender_ai_workflow/fixtures/building-m2-v1.worker-handoff.json",
+    "tools/blender_ai_workflow/scripts/build_building_m2_candidate.py",
+    "tools/blender_ai_workflow/scripts/building_m2_art.py",
+    "tools/blender_ai_workflow/scripts/create_building_m2_scene.py",
+    "tools/blender_ai_workflow/scripts/validate_building_numeric_candidate.py",
+    "tools/blender_ai_workflow/tests/test_building_m2_art.py",
+    "tools/blender_ai_workflow/tests/test_building_numeric_candidate.py"
+  ],
+  "worker_execution": ["read-only source inspection and hashing", "source edits", "rustfmt on changed Rust files only"],
+  "design": [
+    "Historical clay fixtures, authoring generators and sealed native evidence are unchanged.",
+    "The separate pending numeric proposal binds both historical geometry hashes, full state bounds, continuous rotor sweep, preview anchors and proposed triangle/part/texture budgets.",
+    "Paint authoring and the optional runtime observation probe require the exact numeric proposal digest; changing it requires an explicit candidate revision.",
+    "One opaque 512x512 atlas per kind uses non-overlapping per-face cells with four-pixel gutters; planes and strokes are separate authoring stages with unchanged mesh topology.",
+    "Tank uses terracotta and teal; MudMixer uses olive and brass; independent near/far and all-state visual judgment remains pending.",
+    "The candidate packaging entrypoint uses the existing M1-c export/codec with ArtPreview authority only; ordinary startup and ReleaseApproved behavior are unchanged.",
+    "Existing exact-profile candidate motion and consumer synchronization are reused; new regressions cover both kinds across preview consumers and generation/fallback boundaries.",
+    "The optional feedback-only probe observes the actual interactive game without mutating gameplay, save, placement, refinement or resources; observations are not acceptance.",
+    "The probe is capped at 1800 samples and 128 entities per category; run separate legs below 170 seconds and disable the probe for performance comparison."
+  ],
+  "coordinator_entrypoints": [
+    "Start or resume the primary validation coordinator and storage workflow before executing any validation or heavy work.",
+    "tools/blender_ai_workflow/scripts/validate_building_numeric_candidate.py checks proposal arithmetic only.",
+    "tools/blender_ai_workflow/scripts/build_building_m2_candidate.py build Tank --name <fresh-name> --stage planes; repeat with strokes and MudMixer under distinct fresh names via coordinator-owned guarded execution.",
+    "build_building_m2_candidate.py verify <kind> --name <name> rechecks source hashes, exported geometry, continuous sweep, atlas pixels, per-face UV and projection reports.",
+    "build_building_m2_candidate.py prepare <kind> --name <strokes-name> --generation <generation> --destination <fresh-staging-output> --codec <already-built-codec> produces a private ArtPreview runtime view.",
+    "scripts/building_m2_acceptance.py plan --tank-runtime <view> --mixer-runtime <view> --codec <codec> --subject-sha256 <frozen-source-fingerprint> --output <plan> records both-kind consumer/lifecycle and independent gates.",
+    "For interactive lifecycle legs, use the native skill guarded launcher with the exact existing HW_BUILDING_ART_SESSION feedback identity and HW_M2_ACCEPTANCE_PROBE=1; do not use the paused building-art-static workload for active acceptance.",
+    "The probe writes beside the fresh session status path with .m2-trace.json suffix; scripts/building_m2_acceptance.py inspect inventories observations and always leaves accepted=false.",
+    "Capture owned actual windows, renderer/GPU/backend, action outcomes, feet, overlap and near/far judgment with the same frozen subject; the inventory alone proves none of these judgments."
+  ],
+  "validation_not_run": [
+    "Python numeric, art/UV and recipe regressions",
+    "Rust compilation, profiling/non-profiling regressions, Clippy and change-aware quality groups",
+    "Blender planes/strokes generation, GLB export, Khronos, projection and packaging verification",
+    "Tank and MudMixer actual-window all states and all consumers",
+    "Real refining start/stop/pause/resume and item/rotor overlap",
+    "Real build, move success/rejection/cancel/destination, companion, save/load and deconstruction",
+    "N/4N baseline/candidate performance and independently approved performance limits",
+    "Independent numeric, Help, art, candidate and fixed review gates",
+    "Promotion, install, rollback and formal release"
+  ],
+  "help_review": {
+    "worker_decision": "No impact",
+    "reason": "New authoring and observation entrypoints are explicitly unapproved profiling/development paths; normal startup loads no new locator, and player controls, labels, resource rules, save schema, placement conditions and success/failure semantics remain unchanged.",
+    "coordinator_approval": null
+  },
+  "authoritative_document_candidates_for_coordinator": [
+    "docs/building-asset-sets.md: pending numeric/paint candidate workflow, exact digest binding and feedback-only observation limits; no release entry until accepted",
+    "docs/building-art-direction.md: independent adoption or rejection of numeric values, color/UV/line candidate and near/far readability",
+    "docs/plans/3d-rtt/non-wall-floor-building-art-migration-plan-2026-09-19.md: M2 implementation progress and explicit remaining C2/C7/C8 evidence; no later-node completion",
+    "docs/DEVELOPMENT.md and docs/README.md: new coordinator-owned candidate/probe entrypoints if adopted"
+  ],
+  "limitations": [
+    "No generated blend/GLB/PNG bundle was produced by this worker because builds and validation belong to the coordinator.",
+    "The observation inspector is an inventory, not an automated lifecycle or release gate; actual input outcomes and screenshots need independent review.",
+    "Numeric and texture budgets are proposals, not independently frozen or performance-approved values.",
+    "Formal production state parameters and ReleaseApproved publication remain gated; no draft constants were enabled for release descriptors."
+  ]
+}

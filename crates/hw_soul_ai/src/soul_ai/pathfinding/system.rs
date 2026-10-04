@@ -201,8 +201,7 @@ pub struct PathfindingResources<'w, 's> {
     defer_metrics: Option<ResMut<'w, RuntimePathDeferMetrics>>,
     work_queue: Local<'s, EpochLocal<RuntimePathWorkQueue>>,
     rest_areas: Query<'w, 's, &'static Transform, With<hw_jobs::RestArea>>,
-    assignment_queries:
-        crate::soul_ai::execute::task_execution::context::TaskAssignmentQueries<'w, 's>,
+    unassign_queries: crate::soul_ai::execute::task_execution::context::TaskUnassignQueries<'w, 's>,
 }
 
 fn idle_behavior_can_move(
@@ -399,7 +398,7 @@ pub fn pathfinding_system(
         mut defer_metrics,
         mut work_queue,
         rest_areas: q_rest_areas,
-        assignment_queries: mut queries,
+        unassign_queries: mut queries,
     } = resources;
     let obstacle_version = world_map.obstacle_version;
     let world_epoch = world_epoch.map_or_else(WorldEpoch::default, |epoch| *epoch);

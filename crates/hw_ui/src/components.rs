@@ -5,7 +5,7 @@
 use bevy::prelude::*;
 use hw_core::game_state::TimeSpeed;
 use hw_core::jobs::WorkType;
-use hw_jobs::BuildingCategory;
+use hw_jobs::{BuildingCategory, BuildingType};
 use hw_logistics::ResourceType;
 use std::borrow::Cow;
 
@@ -193,6 +193,10 @@ pub struct ArchitectCategoryListPanel;
 
 #[derive(Component)]
 pub struct ArchitectBuildingPanel(pub BuildingCategory);
+
+/// Identifies catalog images for root-owned asset readiness adapters.
+#[derive(Component)]
+pub struct BuildingCatalogPreview(pub BuildingType);
 
 #[derive(Component)]
 pub struct ZonesSubMenu;

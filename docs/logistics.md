@@ -546,6 +546,8 @@ snapshot と `WheelbarrowArbitrationRuntime` は保存せず、world replacement
 
 ### 6.1 搬入先予約（Relationship ベース）
 
+通常Stockpileの評価入力は`StockpileContentsSnapshot`と`InboundReservationSnapshot`で構成する。前者はpolicy・容量・現在内容、後者はlive搬入予約とcaller所有の同cycle増分を表す。資源型不明の予約も物理容量と異種予約へ数える。`CommittedInbound`のowned予約は実行adapterがlive item relationshipから確定し、snapshot側で推定しない。phase・要求量・owner確認・mixed batchのcommitted優先評価はcallerが所有する。
+
 Stockpile / Blueprint / Tank などへの搬入予約は、Bevy の Relationship で管理します。
 
 - タスク割り当て時に、搬入対象アイテムに `DeliveringTo(destination)` を自動挿入（`apply_task_assignment_requests_system`）。
@@ -580,6 +582,8 @@ Stockpile / Blueprint / Tank などへの搬入予約は、Bevy の Relationship
 - profiling CSVの`reservation_sync_pending_tasks_scanned`列は互換性のため維持し、pending走査廃止後は0となる。
 
 #### 差分適用
+
+`SoulAiCorePlugin`は`register_task_execution_system`経由で、割当適用・driftingの後、`apply_reservation_requests_system`の前にtask executionを登録する。割当のidentity／relationshipは実行前の`ApplyDeferred`で確定する。handlerの予約差分は同じExecute内で適用し、次frameのactive task snapshotと二重計上させない。`ChainAdmissionShadow`はtask executionの1回の呼出しで受理した増分だけを保持し、live予約の複製やframe間保持はしない。
 - `TaskAssignmentRequest` に含まれる `reservation_ops` は、その適用時に `apply_reservation_op` を通じて cache へ直接反映する。
 - task の中断と実行 handler は `ResourceReservationRequest` を送信し、`hw_logistics::apply_reservation_requests_system` が Execute で `ResourceReservationOp` を適用する。
 - `apply_reservation_requests_system` と `apply_reservation_op` の実装は `hw_logistics` にあり、system 登録は `hw_logistics::LogisticsPlugin`（`SoulAiSystemSet::Execute`）が担う。`ResourceReservationRequest` の `add_message` と `SharedResourceCache` の `init_resource` は app shell が担当する。
@@ -623,9 +627,11 @@ Stockpile / Blueprint / Tank などへの搬入予約は、Bevy の Relationship
 - request の `kind` / `work_type` / `anchor` / `resource_type` の組み合わせは必ず一貫させる。
 
 ### 8.2 Producer の upsert/cleanup 規約
+
+producer共通の`select_canonical_requests`／`reconcile_duplicate_request`はworker付きrequestを優先し、workerなしduplicateだけをdespawnする。worker付きduplicateはTaskSlotsとDemandを現在worker数へ絞り、Claimedを維持して新規割当を止める。`RequestSlots::TotalSlots`は総枠、`AdditionalSlots`は既存workerへ追加できる枠を表す。意味差分の書込みとduplicate処理を共通化し、需要算定、target marker、key、不要時のdisable／despawn方針は各producerが所有する。
 - 既存 request があれば再利用（upsert）し、不要時は以下で閉じる。
   - `TaskWorkers == 0` のときは `Designation` / `TaskSlots` / `Priority` を外す、または despawn。
-- 同一 key の重複 request は許可しない。policy-driven `DepositToStockpile` の key は
+- 同一 key を新規に重複発行しない。既存のworker付きduplicateは実行中作業を保持し、新規割当を止める。policy-driven `DepositToStockpile` の key は
   `(issued_by Yard, resource_type, receiver priority tier)` であり、anchor の変更で別 request にしない。
 - `DepositToStockpile`と`ConsolidateStockpile`は`producer/upsert.rs`の共通stockpile reconcilerを通す。
   canonical選択はworker付きrequestを優先し、idle duplicateだけを除去する。需要消失時はworkerlessをdisable、

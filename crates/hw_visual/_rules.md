@@ -36,11 +36,9 @@ hw_world     ✓
 bevy         ✓
 rand         ✓
 
-# 残存依存（Out of Scope ファイルのみ・別提案で解消予定）
-hw_jobs      △  (mud_mixer.rs / tank.rs / wall_connection.rs の Building 系のみ)
-hw_logistics △  (tank.rs の Stockpile のみ)
-
 # 禁止
+hw_jobs        ✗
+hw_logistics   ✗
 bevy_app       ✗
 hw_ui          ✗  (共有selection契約はhw_core::selectionを参照する)
 hw_soul_ai     ✗  (AI ロジック型は hw_core events 経由で受け取る)
@@ -59,11 +57,11 @@ hw_familiar_ai ✗
 ## plugin / system 登録責務
 
 - **`SpeechPlugin`** がスピーチ系システムの唯一の登録者
-- **`HwVisualPlugin`** が以下を `FamiliarAiSystemSet::Execute` に登録する：
+- **`SpeechPlugin`** が以下を `SpeechVisualIngressSet`（`GameSystemSet::Visual`）に登録する：
   - `speech::max_soul_visual_system`
   - `speech::idle_visual::familiar_idle_visual_apply_system`
   - `speech::squad_visual::squad_visual_system`
-  - ※ これらは Logic フェーズ（`FamiliarAiSystemSet::Execute`）に属する。他の Visual フェーズシステムとは混在するが機能的に正しい。
+  - Actor完了後の表示専用ingressとして実行する。
 
 ## docs 更新対象（変更時に必ず更新するドキュメント）
 

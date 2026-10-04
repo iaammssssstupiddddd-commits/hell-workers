@@ -60,7 +60,7 @@ pub fn progress_bar_system(
         With<DamnedSoul>,
     >,
 ) {
-    for (soul_entity, task_vs, transform, mut ui_links) in q_souls.iter_mut() {
+    for (soul_entity, task_vs, _, mut ui_links) in q_souls.iter_mut() {
         let needs_bar = task_vs.progress.is_some();
 
         if needs_bar {
@@ -74,13 +74,10 @@ pub fn progress_bar_system(
                     z_index: Z_BAR_BG,
                 };
 
-                let (bg_entity, fill_entity) =
-                    spawn_progress_bar(&mut commands, soul_entity, transform, config);
-
-                commands.entity(bg_entity).try_insert(ChildOf(soul_entity));
-                commands
-                    .entity(fill_entity)
-                    .try_insert(ChildOf(soul_entity));
+                let ProgressBarPair {
+                    background: bg_entity,
+                    fill: fill_entity,
+                } = spawn_progress_bar(&mut commands, soul_entity, config);
 
                 commands.entity(bg_entity).insert(SoulProgressBar);
                 commands.entity(fill_entity).insert(SoulProgressBar);

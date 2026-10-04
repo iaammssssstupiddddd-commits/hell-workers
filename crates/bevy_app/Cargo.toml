@@ -28,6 +28,9 @@ wgpu-core = { workspace = true, optional = true }
 libloading = { workspace = true, optional = true }
 renderdoc-sys = { workspace = true, optional = true }
 
+[dev-dependencies]
+parley = { version = "=0.9.0", default-features = false, features = ["std"] }
+
 
 [features]
 default = ["dynamic_linking"]

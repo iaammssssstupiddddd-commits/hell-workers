@@ -27,6 +27,10 @@ Hell Workers の AI 支援 Blender 編集を、staging 限定・検証付きで�
 | `scripts/project_wallset.py` | 検証済みmanifestからcanonical runtime `.wallset` JSONを生成 |
 | `scripts/promote_asset_set.py` | Wall final generationのplan / apply / recover / rollback transaction |
 | `bin/workflow-smoke` | deterministic `.blend` / PNG / GLB / reports を生成 |
+| `bin/create-building-clay-scene` | Tank/Mixerの部品別identity原本と状態別無地previewをstagingに生成 |
+| `scripts/build_building_clay.py` | 無地原本→既存scene/export/Khronos gate→role検査を一括実行、またはbundleを再検証 |
+| `scripts/check_building_art_contract.py` | 全10種のRust shapeとconsumerを照合。`--check-images`で非対象icon/車両hashも検査 |
+| `scripts/validate_building_clay_glb.py` | Tank/Mixerの実GLBをbounds・原点・UV・法線・role別予算で検査。runtime承認は行わない |
 | `scripts/render_color_calibration.py` | 壁M0の固定5 patchをBlenderで描画し、OCIO陽性証明付きmetadataを出力 |
 | `scripts/verify_color_calibration.py` | Blender / Bevy PNGをCIEDE2000とemissive sanityでoffline照合 |
 | `scripts/verify_wall_reference_locators.py` | 登録済みhistorical P02とcurrent fallback壁の用途・identity・artifact hashを分離検証 |

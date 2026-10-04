@@ -76,6 +76,11 @@
 Blender AI編集、品質gate、MCPの安全境界は
 [`blender-setup.md`](blender-setup.md) を参照する。
 
+壁・床以外の移行M0では、`build_building_clay.py`がTank/Mixerのrole別原本・GLB・neutral albedo・
+状態PNGをstagingへ作る。`verify`は実bytesを再検証するが、出力は`technical_clay_only`であり、
+`.buildingset`、ArtPreview/candidate authority、art approval、promotion receiptを発行しない。
+通常runtimeへのcopy・locator切替は実装も実行もしていない。既存Wall/Doorの承認経路は不変。
+
 production Wall M1候補は1つの`.blend`にあるexact named collectionを個別に検査・exportする。各GLBは
 Khronos validatorの後に`tools/blender_ai_workflow/bin/validate-wall-glb`で実bytesを再検査し、scene reportだけを
 合格根拠にしない。M1中の`.blend`、GLB、texture、reportはすべて`staging/`に留め、asset-set manifestと
@@ -373,6 +378,32 @@ v2は完成6 GLBに型枠6 GLBと型枠albedoを加え、仮設はOpaqueな専�
 pending review、optional normal、manifest identity opt-in不一致はfail closedとする。
 
 ## 6. 競合回避ルール
+
+### TAK-14制作資料の引継ぎ（2026-10-04）
+
+旧 `tak-14` 作業場の制作資料は、リポジトリ外の
+`/home/satotakumi/Sync/hell-workers-assets/staging/imports/tak14-20261004/` へ引継いだ。
+これは未承認候補の保全であり、canonical昇格・runtime install・releaseではない。
+
+- `m2-candidates/`、`m2-runtime/`、`m2-neutral-clay-prep/`: Tank/MudMixerの制作原本、候補、export、manifestと制作report。
+- `m2-current-04f3fbac/`、`m2-current-8e462c75/`: 比較資料の元plan。旧絶対pathとsubjectを変更せず、再起動指示として使わない。
+- `native-comparison/`: Tank `8e462c75` と MudMixer `04f3fbac` の最新ArtPreview比較入力。元画像・計測・asset viewを維持し、異なるsubjectの結果を合同性能や現primaryの受入へ読み替えない。
+
+847ファイル、論理容量288,965,638 bytesを元ファイルとSHA-256で全件照合した。
+22個の `.blend` を含む（candidate/runtimeの同一原本の複製を含む）。
+inventory fingerprintは `841156812875da106b657c694f4280fe5a7b5d2d4ad3c2e37d052bf07d7096ad`。
+計算規約は、各fileの相対POSIX path＋NUL＋内容SHA-256を辞書順に並べ、LFで連結したUTF-8 bytesのSHA-256。
+
+ownerはTAK-14制作引継ぎ、用途は候補選定・独立アート/数値判断と次回受入の入力確認。
+選定後は採用原本を正式workflowへ渡し、不要候補・旧比較入力のconsumerを閉じて整理する。
+既存runtime `assets/` は旧作業場と235ファイルが同一であり、今回上書きしていない。
+旧Cargo cache、古いnative job群、私的統括spec、個人設定は取り込まない。
+同日の利用者承認後、元作業場はprocess終了・保持consumer終了を確認してOrca正規経路で削除した。
+削除後にも上記847ファイルのinventory fingerprint一致を確認した。制作再利用はこのstagingを入口とし、
+資料に残る旧絶対pathや旧native recipeを再実行しない。
+
+今回の資料引継ぎだけのHelp影響は **No impact**。stagingを通常起動のlocatorへ接続せず、
+入力・UI文言・gameplay・保存形式・Help到達性を変更しない。先行コード統合のBridge Help更新判断は維持する。
 
 - 同じ原本ファイルを複数 PC で同時編集しない。
 - 原本のファイル名と書き出し先を安定させる。

@@ -59,7 +59,7 @@ try:
     from validation_storage import require_admission
 except ModuleNotFoundError:
     from scripts.validation_storage import require_admission
-SOURCE_FINGERPRINT_PREFIXES = ("crates/", "scripts/perf_tool/")
+SOURCE_FINGERPRINT_PREFIXES = ("crates/", "vendor/", "scripts/perf_tool/")
 SOURCE_FINGERPRINT_ASSET_PREFIX = "assets/"
 MEASUREMENT_HARNESS_FILES = (
     ".codex/skills/hell-workers-run-native-acceptance/scripts/native_acceptance.py",
@@ -68,6 +68,11 @@ MEASUREMENT_HARNESS_FILES = (
     ".codex/skills/hell-workers-run-native-acceptance/scripts/door_density_acceptance.py",
     ".codex/skills/hell-workers-run-native-acceptance/scripts/wall_door_joint_acceptance.py",
     ".codex/skills/hell-workers-run-native-acceptance/scripts/ui_usability_acceptance.py",
+    ".codex/skills/hell-workers-run-native-acceptance/scripts/ui_refactor_rows.py",
+    ".codex/skills/hell-workers-run-native-acceptance/scripts/ui_progress_bars.py",
+    ".codex/skills/hell-workers-run-native-acceptance/scripts/ui_bridge_planning.py",
+    ".codex/skills/hell-workers-run-native-acceptance/scripts/ui_terrain_materials.py",
+    ".codex/skills/hell-workers-run-native-acceptance/scripts/rtt_light_closure_verify.py",
     "scripts/native_ui_input.py",
     "scripts/native_ui_portal.py",
     ".codex/skills/hell-workers-run-native-acceptance/scripts/p02_presentation_acceptance.py",
@@ -369,6 +374,8 @@ def fixed_environment(args: argparse.Namespace) -> dict[str, str]:
         values["WGPU_BACKEND"] = args.backend
     if args.adapter:
         values["WGPU_ADAPTER_NAME"] = args.adapter
+    if getattr(args, "building_m6_mode", None) is not None:
+        values["HW_BUILDING_M6_MODE"] = args.building_m6_mode
     return values
 
 

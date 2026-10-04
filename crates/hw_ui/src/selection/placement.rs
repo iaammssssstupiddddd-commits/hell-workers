@@ -5,8 +5,8 @@ mod validation;
 
 pub use self::geometry::{bucket_storage_geometry, grid_is_nearby};
 pub use self::validation::{
-    validate_area_size, validate_bucket_storage_placement, validate_building_placement,
-    validate_floor_tile, validate_moved_bucket_storage_placement,
+    BridgeCrossing, resolve_bridge_crossing, validate_area_size, validate_bucket_storage_placement,
+    validate_building_placement, validate_floor_tile, validate_moved_bucket_storage_placement,
     validate_moved_building_placement, validate_wall_area, validate_wall_tile,
 };
 

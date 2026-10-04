@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "reason": "Shared resource icons and vehicle artwork are outside the building migration scope",
+  "files": {
+    "assets/textures/resources/sandpile/sandpile.png": "fba50c0059b3d9c105e0b0c7528313fecf31c925ef981041f44444359f97c7df",
+    "assets/textures/ui/bone_small.png": "1907ef98f8b10e61cd23a3e69cef46e4c27f9d4d5bebeb6b2ed6b5f51d09a9c8",
+    "assets/textures/items/wheel_barrow/wheel_barrow.png": "16fa2dd41498a35d1599b7a40b8a304e3d36837c85a89b85a4496ba6219b0010",
+    "assets/textures/items/wheel_barrow/wheel_barrow_full.png": "e830a6f84aad52e6f4d5fa04b68a1eb06fcf7d4d0633736f63062c951f4957f7"
+  }
+}

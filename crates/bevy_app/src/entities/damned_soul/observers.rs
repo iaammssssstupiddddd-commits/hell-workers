@@ -72,7 +72,7 @@ pub fn on_stress_breakdown(
     mut commands: Commands,
     mut q_souls: StressBreakdownSoulQuery,
     world_map: WorldMapRead,
-    mut queries: crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
+    mut queries: crate::systems::soul_ai::execute::task_execution::context::TaskUnassignQueries,
 ) {
     let soul_entity = on.entity;
     if let Ok((
@@ -121,7 +121,7 @@ pub fn on_exhausted(
     q_spots: Query<&hw_soul_ai::soul_ai::helpers::gathering::GatheringSpot>,
     mut q_souls: ExhaustedSoulQuery,
     world_map: WorldMapRead,
-    mut queries: crate::systems::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
+    mut queries: crate::systems::soul_ai::execute::task_execution::context::TaskUnassignQueries,
 ) {
     let soul_entity = on.entity;
     if let Ok((
@@ -199,6 +199,105 @@ pub fn on_exhausted(
                 dest.0 = center;
                 path.waypoints.clear();
                 path.current_index = 0;
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use hw_core::events::{
+        OnReleasedFromService, OnTaskAbandoned, ResourceReservationOp, ResourceReservationRequest,
+    };
+    use hw_core::relationships::{DeliveringTo, WorkingOn};
+    use hw_jobs::{ActiveTaskIdentity, HaulData, HaulPhase, WorkType};
+    use hw_logistics::{Inventory, ResourceItem, ResourceType, SharedResourceCache};
+    use hw_world::WorldMap;
+
+    #[test]
+    fn observers_unassign_without_assignment_messages_test() {
+        for exhausted in [false, true] {
+            let mut app = App::new();
+            app.init_resource::<WorldMap>()
+                .init_resource::<SharedResourceCache>()
+                .add_message::<ResourceReservationRequest>()
+                .add_message::<OnReleasedFromService>()
+                .add_message::<OnTaskAbandoned>()
+                .add_observer(on_stress_breakdown)
+                .add_observer(on_exhausted);
+            let commander = app.world_mut().spawn_empty().id();
+            let destination = app.world_mut().spawn_empty().id();
+            let item = app
+                .world_mut()
+                .spawn((
+                    Transform::default(),
+                    Visibility::Visible,
+                    ResourceItem(ResourceType::Wood),
+                    DeliveringTo(destination),
+                ))
+                .id();
+            let soul = app
+                .world_mut()
+                .spawn((
+                    Transform::default(),
+                    DamnedSoul::default(),
+                    IdleState::default(),
+                    Destination(Vec2::ZERO),
+                    CommandedBy(commander),
+                    AssignedTask::Haul(HaulData {
+                        item,
+                        stockpile: destination,
+                        phase: HaulPhase::GoingToItem,
+                    }),
+                    Path::default(),
+                    Inventory::default(),
+                    WorkingOn(item),
+                    ActiveTaskIdentity::new(item, item, WorkType::Haul),
+                ))
+                .id();
+            if exhausted {
+                app.world_mut().trigger(OnExhausted { entity: soul });
+            } else {
+                app.world_mut().trigger(OnStressBreakdown { entity: soul });
+            }
+            app.world_mut().flush();
+            assert!(matches!(
+                app.world().get::<AssignedTask>(soul),
+                Some(AssignedTask::None)
+            ));
+            assert!(app.world().get::<WorkingOn>(soul).is_none());
+            assert!(app.world().get::<ActiveTaskIdentity>(soul).is_none());
+            assert!(app.world().get::<CommandedBy>(soul).is_none());
+            assert!(app.world().get::<DeliveringTo>(item).is_none());
+            let reservations = app
+                .world()
+                .resource::<Messages<ResourceReservationRequest>>();
+            let mut cursor = reservations.get_cursor();
+            let ops: Vec<_> = cursor
+                .read(reservations)
+                .map(|request| &request.op)
+                .collect();
+            assert!(
+                matches!(ops.as_slice(), [ResourceReservationOp::ReleaseSource { source, .. }]
+                if *source == hw_core::logistics::ResourceSourceKey::Entity(item))
+            );
+            assert_eq!(
+                app.world()
+                    .resource::<Messages<OnReleasedFromService>>()
+                    .len(),
+                0
+            );
+            assert_eq!(app.world().resource::<Messages<OnTaskAbandoned>>().len(), 0);
+            if exhausted {
+                assert_eq!(
+                    app.world().get::<IdleState>(soul).unwrap().behavior,
+                    IdleBehavior::ExhaustedGathering
+                );
+            } else {
+                let stress = app.world().get::<StressBreakdown>(soul).unwrap();
+                assert!(stress.is_frozen);
+                assert_eq!(stress.remaining_freeze_secs, STRESS_BREAKDOWN_FREEZE_SECS);
             }
         }
     }

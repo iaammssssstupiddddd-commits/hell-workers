@@ -9,6 +9,7 @@ mod stockpiles;
 mod tiles;
 
 pub use access::{WorldMapRead, WorldMapWrite};
+pub use buildings::OccupancyConflict;
 pub use ownership::WorldMapOwnerSnapshot;
 
 use crate::TerrainType;

@@ -170,6 +170,7 @@ append_designation_model   // Designation: タスク情報
 - `crates/bevy_app/src/interface/ui/presentation/` - `EntityInspectionModel` / `ViewModel` 構築（ゲームエンティティクエリ）
   - `mod.rs` — `EntityInspectionQuery` SystemParam（クエリ定義）
   - `builders.rs` — 各 `build_*` / `append_*` メソッド実装
+  - `task.rs` — AssignedTaskの一覧分類・詳細名・phaseを網羅的に定義し、一覧ViewModelと詳細／Tooltipで共有。解体は`Deconstruct`、発電は`GeneratePower`、バケツ運搬は`BucketTransport`として区別する
 - `crates/bevy_app/src/interface/ui/panels/context_menu.rs` - `Inspect (Pin)` メニュー
 - `crates/bevy_app/src/interface/ui/interaction/menu_actions.rs` - `InspectEntity` / `ClearInspectPin`
 - `crates/bevy_app/src/systems/command/stockpile_policy.rs` - 矩形gesture、安定した対象解決、保留patch resource

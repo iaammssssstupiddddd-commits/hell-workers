@@ -61,6 +61,81 @@ class ValidationStorageTests(unittest.TestCase):
         storage.register(self.repo, self.spec(identity, output, repo), command=[sys.executable, "-c", program])
         self.assertEqual(storage.execute(self.repo, identity), 0)
 
+    def test_vendored_dependency_change_invalidates_success_sealing(self):
+        source = self.repo / "vendor/parley/src/analysis/mod.rs"
+        source.parent.mkdir(parents=True)
+        source.write_text("dictionary-v1", encoding="utf-8")
+        self.commit()
+        self.run_batch()
+        source.write_text("dictionary-v2", encoding="utf-8")
+        with self.assertRaisesRegex(RuntimeError, "source/assets changed before sealing"):
+            storage.seal(self.repo, "first", {
+                "result": "pass", "reason": "fixture verifier",
+                "verify_command": self.spec()["verify_command"],
+            })
+
+    def test_registration_preflight_observes_isolated_snapshot_without_launch(self):
+        spec = self.spec()
+        observed = []
+        batch = storage.register(self.repo, spec, preflight=lambda value: observed.append(value))
+        self.assertEqual(len(observed), 1)
+        self.assertEqual(observed[0]["subject"], batch["subject"])
+        self.assertNotIn("phase", spec)
+        self.assertFalse(self.output.exists())
+
+    def test_registration_rejection_does_not_publish_batch(self):
+        def reject(value):
+            raise RuntimeError("fixture admission rejected")
+
+        with self.assertRaisesRegex(RuntimeError, "fixture admission rejected"):
+            storage.register(self.repo, self.spec(), preflight=reject)
+        with storage.locked(self.repo) as ledger:
+            self.assertNotIn("first", ledger["batches"])
+        self.assertFalse(self.output.exists())
+
+    def test_registration_rejects_candidate_mutation_and_returned_approval(self):
+        def mutate(value):
+            value["consumers"].append("foreign consumer")
+
+        for callback, reason in ((mutate, "changed the sealed candidate"),
+                                 (lambda value: True, "return None")):
+            with self.subTest(reason=reason), self.assertRaisesRegex(RuntimeError, reason):
+                storage.register(self.repo, self.spec(), preflight=callback)
+            with storage.locked(self.repo) as ledger:
+                self.assertNotIn("first", ledger["batches"])
+
+    def test_registration_rejects_output_created_during_preflight(self):
+        def create_output(value):
+            self.output.mkdir(parents=True)
+
+        with self.assertRaisesRegex(RuntimeError, "output appeared"):
+            storage.register(self.repo, self.spec(), preflight=create_output)
+        with storage.locked(self.repo) as ledger:
+            self.assertNotIn("first", ledger["batches"])
+
+    def test_registration_readmits_source_after_preflight(self):
+        def change_source(value):
+            self.verifier.write_text("changed source\n")
+
+        with self.assertRaisesRegex(RuntimeError, "source|helper"):
+            storage.register(self.repo, self.spec(), preflight=change_source)
+        with storage.locked(self.repo) as ledger:
+            self.assertNotIn("first", ledger["batches"])
+
+    def test_registration_rejects_self_declared_host_authority(self):
+        for field, reason in (("host_admission", "controller-owned"),
+                              ("native_registration", "host-owned preflight")):
+            with self.subTest(field=field), self.assertRaisesRegex(RuntimeError, reason):
+                storage.register(self.repo, {**self.spec(), field: {"approved": True}})
+
+    def test_registration_host_receipt_binds_accepted_registration(self):
+        registration = {"schema": 1, "subject": "fixture"}
+        batch = storage.register(self.repo, {**self.spec(), "native_registration": registration},
+                                 preflight=lambda value: None)
+        self.assertEqual(batch["host_admission"]["controller_sha256"], batch["coordinator_sha256"])
+        self.assertEqual(len(batch["host_admission"]["registration_sha256"]), 64)
+        self.assertFalse(self.output.exists())
+
     def seal_batch(self, identity="first", output=None, result="pass"):
         output = output or self.output
         verifier = [sys.executable, str(self.verifier), "verify", str(output)]

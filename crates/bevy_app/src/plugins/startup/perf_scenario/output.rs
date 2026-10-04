@@ -117,7 +117,7 @@ pub(super) fn write_dream_ui_metrics(
     config: &PerfScenarioConfig,
     metrics: Option<&hw_visual::dream::DreamUiPerfMetrics>,
 ) -> std::io::Result<()> {
-    if config.workload != PerfWorkload::DreamUiBurst {
+    if config.workload() != PerfWorkload::DreamUiBurst {
         return Ok(());
     }
     let metrics = metrics.ok_or_else(|| {
@@ -200,7 +200,7 @@ pub(super) fn write_indoor_light_fixture_sidecars(
     canonical_room_tiles: Option<&[(i32, i32)]>,
     gpu_texture: Option<&crate::systems::visual::indoor_light_texture::IndoorLightTexture>,
 ) -> std::io::Result<()> {
-    if config.workload != PerfWorkload::IndoorLight {
+    if config.workload() != PerfWorkload::IndoorLight {
         return Ok(());
     }
     let directory = perf_output_directory(config);
@@ -241,7 +241,7 @@ pub(super) fn write_indoor_light_fixture_sidecars(
     }
     if selection.uses_gpu_light_field()
         && selection.lane() == "static"
-        && config.render_mode == PerfRenderMode::Gpu
+        && config.render_mode() == PerfRenderMode::Gpu
     {
         let texture = gpu_texture.ok_or_else(|| {
             std::io::Error::other("GPU Light Field run has no IndoorLightTexture resource")
@@ -413,7 +413,7 @@ pub(super) fn write_deconstruction_fixture_sidecar(
     config: &PerfScenarioConfig,
     state: &DeconstructionPerfFixtureState,
 ) -> std::io::Result<()> {
-    if config.workload != PerfWorkload::Deconstruction {
+    if config.workload() != PerfWorkload::Deconstruction {
         return Ok(());
     }
     let directory = perf_output_directory(config);
@@ -437,7 +437,7 @@ pub(super) fn write_wall_density_fixture_sidecars(
     config: &PerfScenarioConfig,
     state: &WallDensityFixtureState,
 ) -> std::io::Result<()> {
-    if config.workload != PerfWorkload::WallDensity {
+    if config.workload() != PerfWorkload::WallDensity {
         return Ok(());
     }
     let directory = perf_output_directory(config);
@@ -464,7 +464,7 @@ pub(super) fn write_door_density_fixture_sidecars(
     config: &PerfScenarioConfig,
     state: &super::door_density_fixture::DoorDensityFixtureState,
 ) -> std::io::Result<()> {
-    if config.workload != PerfWorkload::DoorDensity {
+    if config.workload() != PerfWorkload::DoorDensity {
         return Ok(());
     }
     let directory = perf_output_directory(config);
@@ -529,7 +529,7 @@ pub(super) fn write_render_inventory(
     config: &PerfScenarioConfig,
     inventory: &PerfRenderInventory,
 ) -> std::io::Result<()> {
-    if config.workload != PerfWorkload::IndoorLight || config.uses_fixed_timesteps() {
+    if config.workload() != PerfWorkload::IndoorLight || config.uses_fixed_timesteps() {
         return Ok(());
     }
     let directory = perf_output_directory(config);
@@ -665,13 +665,13 @@ pub(super) fn write_perf_capture(input: PerfCaptureWriteInput<'_>) -> std::io::R
         || scene_roots_path.exists()
         || directory.join("determinism.csv").exists()
         || directory.join("determinism_records.csv").exists()
-        || (config.workload == PerfWorkload::TaskDashboard && dashboard_cpu_path.exists())
+        || (config.workload() == PerfWorkload::TaskDashboard && dashboard_cpu_path.exists())
         || (matches!(
-            config.workload,
+            config.workload(),
             PerfWorkload::Construction | PerfWorkload::TaskDashboard
         ) && transport_request_changes_path.exists())
         || (matches!(
-            config.workload,
+            config.workload(),
             PerfWorkload::PathDoor | PerfWorkload::Gather
         ) && spatial_query_metrics_path.exists())
         || (cfg!(feature = "profiling-memory") && directory.join("memory.csv").exists())
@@ -701,7 +701,7 @@ pub(super) fn write_perf_capture(input: PerfCaptureWriteInput<'_>) -> std::io::R
     );
     std::fs::write(&scene_roots_path, scene_roots_csv)?;
 
-    if config.workload == PerfWorkload::TaskDashboard {
+    if config.workload() == PerfWorkload::TaskDashboard {
         let dashboard_cpu_csv = format!(
             "schema_version,system_invocations,total_elapsed_ns\n1,{},{}\n",
             dashboard_timing_metrics.system_invocations, dashboard_timing_metrics.total_elapsed_ns,
@@ -710,7 +710,7 @@ pub(super) fn write_perf_capture(input: PerfCaptureWriteInput<'_>) -> std::io::R
     }
 
     if matches!(
-        config.workload,
+        config.workload(),
         PerfWorkload::Construction | PerfWorkload::TaskDashboard
     ) {
         std::fs::write(
@@ -720,12 +720,16 @@ pub(super) fn write_perf_capture(input: PerfCaptureWriteInput<'_>) -> std::io::R
     }
 
     if matches!(
-        config.workload,
+        config.workload(),
         PerfWorkload::PathDoor | PerfWorkload::Gather
     ) {
         std::fs::write(
             &spatial_query_metrics_path,
-            spatial_query_metrics_csv(config.workload, door_metrics, gathering_recruitment_metrics),
+            spatial_query_metrics_csv(
+                config.workload(),
+                door_metrics,
+                gathering_recruitment_metrics,
+            ),
         )?;
     }
 
@@ -796,13 +800,13 @@ pub(super) fn write_perf_capture(input: PerfCaptureWriteInput<'_>) -> std::io::R
     );
     let summary_fields = vec![
         PERF_SUMMARY_SCHEMA_VERSION.to_string(),
-        config.master_seed.to_string(),
-        config.workload.as_str().to_string(),
-        config.size.as_str().to_string(),
-        config.render_mode.as_str().to_string(),
-        config.dashboard_mode.as_str().to_string(),
-        config.soul_count.to_string(),
-        config.familiar_count.to_string(),
+        config.master_seed().to_string(),
+        config.workload().as_str().to_string(),
+        config.size().as_str().to_string(),
+        config.render_mode().as_str().to_string(),
+        config.dashboard_mode().as_str().to_string(),
+        config.soul_count().to_string(),
+        config.familiar_count().to_string(),
         initial_checksum.souls.to_string(),
         initial_checksum.familiars.to_string(),
         initial_checksum.designations.to_string(),
@@ -1157,12 +1161,12 @@ fn write_save_transaction_csv_inner(
     );
     let fields = vec![
         SCHEMA_VERSION.to_string(),
-        config.workload.as_str().to_string(),
-        config.size.as_str().to_string(),
-        config.render_mode.as_str().to_string(),
-        config.master_seed.to_string(),
-        config.soul_count.to_string(),
-        config.familiar_count.to_string(),
+        config.workload().as_str().to_string(),
+        config.size().as_str().to_string(),
+        config.render_mode().as_str().to_string(),
+        config.master_seed().to_string(),
+        config.soul_count().to_string(),
+        config.familiar_count().to_string(),
         format!("{fixture_checksum:016x}"),
         sample_kind.to_string(),
         seconds_to_nanos(measure_virtual_secs).to_string(),
@@ -1224,16 +1228,19 @@ pub(super) fn write_save_transaction_memory_csv(
 
 #[cfg(feature = "profiling")]
 pub(super) fn perf_output_directory(config: &PerfScenarioConfig) -> PathBuf {
-    config.output_dir.clone().unwrap_or_else(|| {
-        PathBuf::from(format!(
-            "target/perf/{}-{}-{}-seed-{}-dashboard-{}",
-            config.workload.as_str(),
-            config.size.as_str(),
-            config.render_mode.as_str(),
-            config.master_seed,
-            config.dashboard_mode.as_str()
-        ))
-    })
+    config
+        .output_dir()
+        .map(std::path::Path::to_path_buf)
+        .unwrap_or_else(|| {
+            PathBuf::from(format!(
+                "target/perf/{}-{}-{}-seed-{}-dashboard-{}",
+                config.workload().as_str(),
+                config.size().as_str(),
+                config.render_mode().as_str(),
+                config.master_seed(),
+                config.dashboard_mode().as_str()
+            ))
+        })
 }
 
 #[cfg(feature = "profiling")]
@@ -1363,7 +1370,7 @@ pub(super) fn write_determinism_audit(
         let work = checkpoint.work;
         let fields = vec![
             PERF_DETERMINISM_SCHEMA_VERSION.to_string(),
-            config.dashboard_mode.as_str().to_string(),
+            config.dashboard_mode().as_str().to_string(),
             checkpoint.checkpoint.to_string(),
             checkpoint.update_tick.to_string(),
             checkpoint.fixed_timestep_ns.to_string(),

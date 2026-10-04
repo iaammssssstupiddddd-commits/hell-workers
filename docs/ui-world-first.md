@@ -1,6 +1,6 @@
 # 地図中心のUI
 
-最終更新: 2026-09-17
+最終更新: 2026-09-20
 
 通常時は地図を広く表示し、管理・詳細・補助表示は必要なときに開く。カメラ移動、世界の選択、詳細の固定は独立した操作である。
 
@@ -45,6 +45,9 @@ Task snapshotまたはowner関係が変わった場合に再計算し、loadで�
 ## 建築と理解
 
 全12種類を画像・日本語名・用途付きのカードで選ぶ。カテゴリ選択は任意。
+各画像の`BuildingCatalogPreview(BuildingType)`をrootのasset adapterが識別する。
+Doorは`DoorAssetReadiness`とresolved poolのidentityが一致する場合だけClosed EW previewを使用し、それ以外は従来の`door_closed`へ戻す。
+`PostUpdate`のreadiness確定後・UI Prepare前に同期するため、pause中、読込後着、世代切替、カード再生成にも追従する。32pxのUI枠と色を保持し、world用anchorや寸法は適用しない。他の11種の画像・操作・文言は変えない。
 Soul Spaは発電設備、休息所は休息場所として区別する。配置中はカタログを閉じ、対象・次の入力・終了方法を示す。
 床・壁の費用は既存の採用タイルのみのpreviewを使用する。通常時のMode説明は出さない。
 submenuは案内の実測上端を避ける。Area操作欄は右上、cursor previewはUiScaleで座標変換し、HUDと下部案内の領域を避ける。

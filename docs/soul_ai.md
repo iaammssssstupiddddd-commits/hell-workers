@@ -149,7 +149,7 @@ Soul 本体画像は、Idle 状態だけでなくイベントでも一時差し�
 ### 3.1. 採取 (Gather)
 - **対象**: 木、岩、建築物など。
 - **プロセス**: 対象へ移動 → 作業（プログレスバー表示） → 完了時にアイテムドロップ。
-- **完了後チェーン（gather chain）**: `GatherPhase::Done` に達した同フレーム内で `find_haul_chain_after_gather` が呼ばれ、採集地点から4タイル以内の空きアイテムと pending TransportRequest の宛先を照合し、同一 Soul が即座に運搬タスクへ移行する（tasks.md §7.2 参照）。
+- **完了後チェーン（gather chain）**: `GatherPhase::Done`を処理するとき、`prepare_gather_haul_segment`が現在のSoul位置から4タイル以内の未使用資材と搬入先を評価する。受理後だけ`commit_gather_haul_segment`がcycle内shadowと予約Message、relationship、identity、payloadを更新する（tasks.md §7.2参照）。
 
 ### 3.2. 運搬 (Haul)
 - **対象**: 資源アイテム、建築材料。
@@ -240,6 +240,8 @@ order/targetをdespawnする前に`TaskWorkers`と予約cleanupを可視化す�
 空の`Inventory`はimmutableに先行確認し、実在itemをdropする場合だけmutable borrowする。空値の再代入で
 availability revisionを進め、`NoSafeRecovery` blockerをroot transaction自身が起こすことはない。
 `execute/task_execution/common.rs` は `NavOutcome` / `navigate_to_adjacent` / `navigate_to_pos` の facade を維持しつつ、パスキャッシュ検証と destination 更新の実体は `execute/task_execution/path_cache.rs` に分離された。`gather`・`collect_*`・`haul`・`haul_with_wheelbarrow` は従来どおり同系統の移動 helper を共有し、各 task ハンドラは到達判定の差分と副作用に集中する。予約解放や cancel 契約は task 側で保持する。
+
+床補強・床注入・壁骨組みの材料地点／施工タイルへの移動は`navigate_to_construction_target`を共有する。Found時だけ従来のtarget-or-destination到達判定を行い、Deferredではphase・資材・予約を変えず待機する。Unreachableはretryable abort、site消失はclosed abortとして扱う。
 
 ### 境界用語の整理
 

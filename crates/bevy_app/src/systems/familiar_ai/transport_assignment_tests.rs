@@ -36,6 +36,133 @@ use hw_spatial::{
 };
 use hw_world::{WalkabilityConnectivityCache, WorldMap};
 
+#[test]
+fn gather_chain_production_schedule_applies_then_rebuilds_one_reservation_test() {
+    use bevy::ecs::schedule::{LogLevel, ScheduleBuildSettings};
+    use hw_core::events::TaskCompletedVisualMessage;
+    use hw_core::relationships::{DeliveringTo, WorkingOn};
+    use hw_core::system_sets::{FamiliarAiSystemSet, SoulAiSystemSet};
+    use hw_core::visual::SoulTaskHandles;
+    use hw_jobs::{ActiveTaskIdentity, GatherData, GatherPhase};
+    let mut app = App::new();
+    app.add_plugins((MinimalPlugins, hw_logistics::LogisticsPlugin))
+        .init_resource::<WorldMap>()
+        .init_resource::<SharedResourceCache>()
+        .init_resource::<ReservationSyncTimer>()
+        .init_resource::<ReservationSignatureCache>()
+        .insert_resource(hw_world::RuntimePathSearchBudget::new(0))
+        .insert_resource(SoulTaskHandles {
+            wood: default(),
+            tree_animes: vec![],
+            icon_rock_small: default(),
+            icon_bone_small: default(),
+            icon_sand_small: default(),
+            icon_stasis_mud_small: default(),
+            bucket_water: default(),
+            bucket_empty: default(),
+        })
+        .add_message::<ResourceReservationRequest>()
+        .add_message::<hw_jobs::DeconstructionCommitRequest>()
+        .add_message::<TaskCompletedVisualMessage>()
+        .add_message::<OnTaskAbandoned>()
+        .configure_sets(
+            Update,
+            (FamiliarAiSystemSet::Perceive, SoulAiSystemSet::Execute).chain(),
+        )
+        .add_systems(
+            Update,
+            sync_reservations_system.in_set(FamiliarAiSystemSet::Perceive),
+        );
+    hw_soul_ai::soul_ai::register_task_execution_system(&mut app);
+    app.edit_schedule(Update, |schedule| {
+        schedule.set_build_settings(ScheduleBuildSettings {
+            ambiguity_detection: LogLevel::Error,
+            ..default()
+        });
+    });
+    #[cfg(feature = "profiling")]
+    app.init_resource::<hw_soul_ai::soul_ai::execute::task_execution::TaskExecutionPerfMetrics>();
+    let assignment = app.world_mut().spawn_empty().id();
+    let position = WorldMap::grid_to_world(30, 30);
+    let mut identity = ActiveTaskIdentity::new(assignment, assignment, WorkType::Mine);
+    identity.detach_from_working_on();
+    let worker = app
+        .world_mut()
+        .spawn((
+            DamnedSoul::default(),
+            Transform::from_translation(position.extend(0.0)),
+            Destination(position),
+            Path::default(),
+            Inventory::default(),
+            identity,
+            AssignedTask::Gather(GatherData {
+                target: assignment,
+                work_type: WorkType::Mine,
+                phase: GatherPhase::Done,
+            }),
+        ))
+        .id();
+    let source = app
+        .world_mut()
+        .spawn((
+            ResourceItem(ResourceType::Rock),
+            Transform::from_translation(WorldMap::grid_to_world(33, 30).extend(0.0)),
+            Visibility::Visible,
+        ))
+        .id();
+    let mixer = app
+        .world_mut()
+        .spawn((
+            MudMixerStorage::default(),
+            Transform::from_translation(WorldMap::grid_to_world(36, 30).extend(0.0)),
+        ))
+        .id();
+    app.world_mut().spawn((
+        TransportRequest {
+            kind: TransportRequestKind::DeliverToMixerSolid,
+            anchor: mixer,
+            resource_type: ResourceType::Rock,
+            issued_by: mixer,
+            priority: TransportPriority::Normal,
+            stockpile_group: vec![],
+        },
+        TransportDemand {
+            desired_slots: 1,
+            inflight: 0,
+        },
+        TransportRequestState::Pending,
+    ));
+    for cycle in 0..2 {
+        app.update();
+        let cache = app.world().resource::<SharedResourceCache>();
+        assert_eq!(cache.get_source_reservation(source), 1, "cycle {cycle}");
+        assert_eq!(
+            cache.get_mixer_destination_reservation(mixer, ResourceType::Rock),
+            1,
+            "cycle {cycle}"
+        );
+        assert!(
+            matches!(app.world().get::<AssignedTask>(worker), Some(AssignedTask::HaulToMixer(data)) if data.item == source && data.mixer == mixer)
+        );
+        assert_eq!(
+            app.world()
+                .get::<ActiveTaskIdentity>(worker)
+                .unwrap()
+                .assignment_entity,
+            assignment
+        );
+        assert_eq!(app.world().get::<WorkingOn>(worker).unwrap().0, source);
+        assert_eq!(app.world().get::<DeliveringTo>(source).unwrap().0, mixer);
+        if cycle == 0 {
+            // The next Perceive must derive exact counts from the new payload,
+            // not retain an earlier cycle's additive cache entries.
+            let mut cache = app.world_mut().resource_mut::<SharedResourceCache>();
+            cache.reserve_source(source, 1);
+            cache.reserve_mixer_destination(mixer, ResourceType::Rock);
+        }
+    }
+}
+
 fn transport_fixture() -> (App, Entity, Entity, [Entity; 2]) {
     // This fixture isolates the production assignment/reservation/interrupt
     // boundary. It does not simulate recruitment, movement, or construction.

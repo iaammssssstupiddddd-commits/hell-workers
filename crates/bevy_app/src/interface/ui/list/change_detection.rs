@@ -22,6 +22,8 @@ pub struct StructureDetectors<'w, 's> {
     removed_souls: RemovedComponents<'w, 's, DamnedSoul>,
     removed_familiars: RemovedComponents<'w, 's, Familiar>,
     removed_commanded_by: RemovedComponents<'w, 's, CommandedBy>,
+    removed_folded: RemovedComponents<'w, 's, SectionFolded>,
+    removed_unassigned_folded: RemovedComponents<'w, 's, UnassignedFolded>,
 }
 
 #[derive(SystemParam)]
@@ -51,6 +53,8 @@ pub fn detect_entity_list_changes(
         mut removed_souls,
         mut removed_familiars,
         mut removed_commanded_by,
+        mut removed_folded,
+        mut removed_unassigned_folded,
     } = structure;
     let ValueDetectors {
         q_souls,
@@ -64,6 +68,8 @@ pub fn detect_entity_list_changes(
     let removed_souls = drain_removed(&mut removed_souls);
     let removed_familiars = drain_removed(&mut removed_familiars);
     let removed_commanded_by = drain_removed(&mut removed_commanded_by);
+    let removed_folded = drain_removed(&mut removed_folded);
+    let removed_unassigned_folded = drain_removed(&mut removed_unassigned_folded);
     let structure_changed = !q_added_souls.is_empty()
         || !q_added_familiars.is_empty()
         || !q_commanding.is_empty()
@@ -72,7 +78,9 @@ pub fn detect_entity_list_changes(
         || !q_unassigned_folded.is_empty()
         || removed_souls
         || removed_familiars
-        || removed_commanded_by;
+        || removed_commanded_by
+        || removed_folded
+        || removed_unassigned_folded;
 
     if structure_changed {
         dirty.mark_structure();
@@ -149,6 +157,52 @@ mod tests {
                 .resource::<EntityListDirty>()
                 .needs_structure_sync()
         );
+    }
+
+    #[test]
+    fn unfolding_either_section_requests_structure_sync_once() {
+        for familiar_section in [true, false] {
+            let mut app = minimal_app();
+            app.init_resource::<EntityListDirty>()
+                .init_resource::<EntityListSearchState>()
+                .add_systems(Update, detect_entity_list_changes);
+            let section = app.world_mut().spawn_empty().id();
+            if familiar_section {
+                app.world_mut().entity_mut(section).insert(SectionFolded);
+            } else {
+                app.world_mut().entity_mut(section).insert(UnassignedFolded);
+            }
+            app.update();
+            app.world_mut()
+                .resource_mut::<EntityListDirty>()
+                .clear_all();
+
+            if familiar_section {
+                app.world_mut()
+                    .entity_mut(section)
+                    .remove::<SectionFolded>();
+            } else {
+                app.world_mut()
+                    .entity_mut(section)
+                    .remove::<UnassignedFolded>();
+            }
+            app.update();
+            assert!(
+                app.world()
+                    .resource::<EntityListDirty>()
+                    .needs_structure_sync()
+            );
+
+            app.world_mut()
+                .resource_mut::<EntityListDirty>()
+                .clear_all();
+            app.update();
+            assert!(
+                !app.world()
+                    .resource::<EntityListDirty>()
+                    .needs_structure_sync()
+            );
+        }
     }
 
     #[test]

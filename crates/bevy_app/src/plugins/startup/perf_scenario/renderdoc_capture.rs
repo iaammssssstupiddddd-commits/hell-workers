@@ -40,7 +40,7 @@ const SIMULATION_TICK_SOURCE: &str = "perf_capture.fixed_update_tick";
 const RTT_SCENE_LABEL: &str = "hell-workers-rtt-scene";
 const TOPDOWN_STRUCTURAL_SHADER: &str =
     include_str!("../../../../../../assets/shaders/topdown_structural_material.wgsl");
-const RENDERDOC_RECEIVER_SHADER_PATHS: [&str; 8] = [
+const RENDERDOC_RECEIVER_SHADER_PATHS: [&str; 10] = [
     "shaders/topdown_structural_material.wgsl",
     "shaders/topdown_structural_material_prepass.wgsl",
     "shaders/terrain_surface_material.wgsl",
@@ -49,6 +49,8 @@ const RENDERDOC_RECEIVER_SHADER_PATHS: [&str; 8] = [
     "shaders/terrain_surface_material_prepass.wgsl",
     "shaders/shadow_style.wgsl",
     "shaders/indoor_light_field.wgsl",
+    "shaders/terrain_surface_types.wgsl",
+    "shaders/terrain_surface_bindings.wgsl",
 ];
 const RENDERDOC_RECEIVER_FRAGMENT_SHADER_PATHS: [&str; 4] = [
     RENDERDOC_RECEIVER_SHADER_PATHS[0],
@@ -83,7 +85,7 @@ struct StableRenderDocCheckpoint {
     cross_consumer: Option<RuntimeCrossConsumerEvidence>,
     wall_density: Option<RuntimeWallDensityEvidence>,
     receiver_fragment_shaders: Option<[AssetId<Shader>; 4]>,
-    receiver_import_shaders: Option<[(AssetId<Shader>, Shader); 2]>,
+    receiver_import_shaders: Option<Vec<(AssetId<Shader>, Shader)>>,
     fixture: RuntimeFixtureEvidence,
 }
 
@@ -305,7 +307,7 @@ impl RenderDocReceiverShaders {
     fn import_shader_snapshots(
         &self,
         shaders: &Assets<Shader>,
-    ) -> Result<[(AssetId<Shader>, Shader); 2], String> {
+    ) -> Result<Vec<(AssetId<Shader>, Shader)>, String> {
         let snapshot = |index: usize| {
             let handle = &self.handles[index];
             shaders
@@ -319,7 +321,9 @@ impl RenderDocReceiverShaders {
                     )
                 })
         };
-        Ok([snapshot(6)?, snapshot(7)?])
+        (6..RENDERDOC_RECEIVER_SHADER_PATHS.len())
+            .map(snapshot)
+            .collect()
     }
 }
 
@@ -549,7 +553,7 @@ pub(crate) fn arm_renderdoc_checkpoint_system(
         }
     }
 
-    if params.config.workload == PerfWorkload::WallDensity {
+    if params.config.workload() == PerfWorkload::WallDensity {
         match build_wall_renderdoc_checkpoint(&params, &mut state) {
             Ok(Some(checkpoint)) => {
                 mailbox.0 = Some(checkpoint);
@@ -622,8 +626,8 @@ pub(crate) fn arm_renderdoc_checkpoint_system(
         None
     };
     let checksum = calculate_checksum(&params.checksum_queries);
-    if checksum.souls != params.config.soul_count as usize
-        || checksum.familiars != params.config.familiar_count as usize
+    if checksum.souls != params.config.soul_count() as usize
+        || checksum.familiars != params.config.familiar_count() as usize
     {
         return;
     }
@@ -911,7 +915,7 @@ fn build_wall_renderdoc_checkpoint(
     }
     state.next_generation = state.next_generation.saturating_add(1);
     let phase = evidence.phase.as_str();
-    let size = params.config.size.as_str();
+    let size = params.config.size().as_str();
     Ok(Some(StableRenderDocCheckpoint {
         schema_version: WALL_RENDERDOC_RUNTIME_CHECKPOINT_SCHEMA_VERSION,
         contract_id: CONTRACT_ID,
@@ -930,7 +934,7 @@ fn build_wall_renderdoc_checkpoint(
             schema_version: 2,
             contract_sha256: CONTRACT_SHA256,
             layout_checksum: evidence.layout_checksum.clone(),
-            target_size: if params.config.size == PerfScenarioSize::Small {
+            target_size: if params.config.size() == PerfScenarioSize::Small {
                 "N"
             } else {
                 "4N"
@@ -975,7 +979,7 @@ pub(crate) fn poll_renderdoc_capture_system(
     }
     match bridge.snapshot() {
         RenderDocBridgeState::Captured(result) => {
-            let Some(output_dir) = config.output_dir.as_ref() else {
+            let Some(output_dir) = config.output_dir() else {
                 bridge.replace(RenderDocBridgeState::Failed(
                     "RenderDoc capture has no output directory".to_string(),
                 ));
@@ -1883,7 +1887,7 @@ fn cross_consumer_evidence(
     let observation = *params.cross_consumer_observation;
     let expected_epoch = params.world_epoch.get();
     let expected_revision = params.indoor_light_runtime.output_revision();
-    let expected_souls = params.config.soul_count;
+    let expected_souls = params.config.soul_count();
     let expected_samples =
         u64::from(expected_souls).saturating_mul(u64::from(observation.recovery_steps()));
     let topology_revision = params.room_lookup.topology_signature().revision();
@@ -2062,6 +2066,39 @@ fn write_runtime_checkpoint(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn receiver_snapshot_includes_both_terrain_modules_and_rejects_a_missing_import() {
+        for missing_index in [None, Some(8), Some(9)] {
+            let mut shaders = Assets::<Shader>::default();
+            let handles = std::array::from_fn(|index| {
+                shaders.add(Shader::from_wgsl(
+                    "",
+                    RENDERDOC_RECEIVER_SHADER_PATHS[index],
+                ))
+            });
+            let receiver = RenderDocReceiverShaders { handles };
+            if let Some(index) = missing_index {
+                shaders.remove(receiver.handles[index].id());
+                let error = receiver.import_shader_snapshots(&shaders).unwrap_err();
+                assert!(error.contains(RENDERDOC_RECEIVER_SHADER_PATHS[index]));
+            } else {
+                let imports = receiver.import_shader_snapshots(&shaders).unwrap();
+                assert_eq!(imports.len(), 4);
+                assert_eq!(
+                    imports.iter().map(|(id, _)| *id).collect::<Vec<_>>(),
+                    receiver.handles[6..]
+                        .iter()
+                        .map(Handle::id)
+                        .collect::<Vec<_>>()
+                );
+                assert_eq!(
+                    receiver.fragment_shader_ids(),
+                    [0, 2, 3, 4].map(|index| receiver.handles[index].id())
+                );
+            }
+        }
+    }
 
     #[test]
     fn renderdoc_api_requires_compatible_major_one_prefix() {

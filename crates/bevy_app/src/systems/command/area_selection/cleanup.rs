@@ -79,6 +79,16 @@ mod tests {
             .resource_mut::<WorldMap>()
             .reserve_building_footprint(BuildingType::OutdoorLamp, blueprint, [grid]);
 
+        app.world_mut()
+            .resource_mut::<WorldMap>()
+            .complete_owned_building_footprint(
+                blueprint,
+                building,
+                BuildingType::OutdoorLamp,
+                &[grid],
+                &Default::default(),
+            )
+            .unwrap();
         app.world_mut().trigger(BuildingCompletedEvent {
             blueprint_entity: blueprint,
             building_entity: building,

@@ -440,6 +440,62 @@ def _rgba8_from_unorm(pixel: Any) -> list[int]:
     return [max(0, min(255, round(value * 255.0))) for value in values]
 
 
+def _bound_light_field_descriptors(
+    rd: Any,
+    controller: Any,
+    stores: dict[str, Any],
+    resource_id: str,
+) -> list[tuple[int, int, str]]:
+    """Inspect actual material descriptors, including shader-unused images.
+
+    Startup deliberately disables Light Field sampling. Naga can omit its
+    SPIR-V variable entirely, so even onlyUsed=False reflection is insufficient.
+    Keep this evidence separate from the shader-accessed composite bindings.
+    Vulkan binding numbers come from RenderDoc: wgpu remaps WGSL bindings.
+    """
+    sets = controller.GetVulkanPipelineState().graphics.descriptorSets
+    if len(sets) <= 3:
+        return []
+    material = sets[3]
+    store_id = _resource_id(rd, material.descriptorSetResourceId)
+    if store_id is None:
+        return []
+    if material.descriptorBufferIndex != -1 or store_id not in stores:
+        raise RuntimeError("Light Field material has no supported descriptor store")
+    store = stores[store_id]
+    if (
+        store.firstDescriptorOffset < 0
+        or store.descriptorByteSize <= 0
+        or store.descriptorCount <= 0
+    ):
+        raise RuntimeError("Light Field descriptor store range is invalid")
+    region = rd.DescriptorRange()
+    region.offset = store.firstDescriptorOffset
+    region.descriptorSize = store.descriptorByteSize
+    region.count = store.descriptorCount
+    descriptors = controller.GetDescriptors(store.resourceId, [region])
+    locations = controller.GetDescriptorLocations(store.resourceId, [region])
+    if len(descriptors) != region.count or len(locations) != region.count:
+        raise RuntimeError("Light Field descriptor store read is incomplete")
+    result = []
+    for descriptor, location in zip(descriptors, locations, strict=True):
+        if _resource_id(rd, descriptor.resource) != resource_id:
+            continue
+        if (
+            location.category != rd.DescriptorCategory.ReadOnlyResource
+            or not (location.stageMask & rd.ShaderStageMask.Fragment)
+            or _resource_id(rd, descriptor.view) is None
+            or not isinstance(location.fixedBindNumber, int)
+            or isinstance(location.fixedBindNumber, bool)
+            or location.fixedBindNumber < 0
+        ):
+            raise RuntimeError("Light Field material descriptor is invalid")
+        result.append((3, location.fixedBindNumber, resource_id))
+    if len(result) > 1:
+        raise RuntimeError("Light Field material has duplicate texture descriptors")
+    return result
+
+
 def _p06_gpu_light_field_pixel_probe(
     rd: Any,
     controller: Any,
@@ -493,6 +549,13 @@ def _p06_gpu_light_field_pixel_probe(
         for row in bindings
         if row["category"].endswith(":read-only")
     }
+    named_ids = {
+        _resource_id(rd, resource.resourceId)
+        for resource in controller.GetResources()
+        if resource.name == label
+    }
+    if len(named_ids) != 1 or None in named_ids:
+        raise RuntimeError("P06 Light Field label does not identify exactly one resource")
     candidates: list[tuple[Any, str, list[int], int]] = []
     dimension_matches: list[tuple[str | None, str, bool]] = []
     for texture in controller.GetTextures():
@@ -506,7 +569,7 @@ def _p06_gpu_light_field_pixel_probe(
                 resource_id in bound_resource_ids,
             )
         )
-        if resource_id is None or resource_id not in bound_resource_ids:
+        if resource_id not in named_ids or resource_id not in bound_resource_ids:
             continue
         actual = _rgba8_from_unorm(
             controller.PickPixel(
@@ -530,7 +593,7 @@ def _p06_gpu_light_field_pixel_probe(
     texture, resource_id, actual, binding_count = matches[0]
     return {
         "label": label,
-        "captured_name": str(getattr(texture, "name", "")).strip(),
+        "captured_name": label,
         "resource_id": resource_id,
         "width": width,
         "height": height,
@@ -726,6 +789,17 @@ def _extract(rd: Any, controller: Any, checkpoint: dict[str, Any]) -> dict[str, 
     structured_file = controller.GetStructuredFile()
     render_resources = _render_resources(checkpoint)
     tracked_resources = _tracked_resources(rd, controller, render_resources)
+    stage_id = checkpoint.get("stage_id")
+    light_resource_id = None
+    descriptor_stores = {}
+    if stage_id in {"p06", "p08"}:
+        light_resource_id = _tracked_resources(rd, controller, {
+            "light_field_target_label": checkpoint["gpu_light_field"]["field_texture_label"],
+        })["light_field_target"]["resource_id"]
+        descriptor_stores = {
+            _resource_id(rd, store.resourceId): store
+            for store in controller.GetDescriptorStores()
+        }
     passes: list[dict[str, Any]] = []
     attachments: list[dict[str, Any]] = []
     bindings: list[dict[str, Any]] = []
@@ -809,6 +883,20 @@ def _extract(rd: Any, controller: Any, checkpoint: dict[str, Any]) -> dict[str, 
                             }
                         )
 
+            if light_resource_id is not None:
+                for bind_set, bind_number, resource_id in _bound_light_field_descriptors(
+                    rd, controller, descriptor_stores, light_resource_id
+                ):
+                    bindings.append({
+                        "binding_id": f"binding-{len(bindings) + 1:07d}",
+                        "pass_id": pass_id,
+                        "event_id": event_id,
+                        "category": "bound:read-only",
+                        "fixed_bind_set_or_space": bind_set,
+                        "fixed_bind_number": bind_number,
+                        "resource_id": resource_id,
+                    })
+
     event_ids = {
         int(action.eventId) for action in flattened if int(action.eventId) > 0
     }
@@ -819,7 +907,6 @@ def _extract(rd: Any, controller: Any, checkpoint: dict[str, Any]) -> dict[str, 
         raise RuntimeError("capture contains no draw attachments")
     if not bindings:
         raise RuntimeError("capture contains no used draw bindings")
-    stage_id = checkpoint.get("stage_id")
     p06_pixel_probe = (
         _p06_gpu_light_field_pixel_probe(
             rd,
@@ -1017,6 +1104,7 @@ def self_test() -> int:
     expected_rgba = [17, 34, 51, 255]
     picked_events: list[int] = []
     probe_controller = SimpleNamespace(
+        GetResources=lambda: [SimpleNamespace(resourceId=ResourceId(31), name="hell-workers-indoor-light-field")],
         GetTextures=lambda: [light_texture],
         SetFrameEvent=lambda event_id, _force: picked_events.append(event_id),
         PickPixel=lambda *_args: SimpleNamespace(
@@ -1047,6 +1135,7 @@ def self_test() -> int:
         "P06 replay pixel proof regressed",
     )
     mismatched_controller = SimpleNamespace(
+        GetResources=probe_controller.GetResources,
         GetTextures=lambda: [light_texture],
         SetFrameEvent=lambda _event_id, _force: None,
         PickPixel=lambda *_args: SimpleNamespace(floatValue=[0.0, 0.0, 0.0, 1.0]),

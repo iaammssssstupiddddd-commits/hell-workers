@@ -86,3 +86,167 @@ pub fn soul_spa_auto_haul_system(
         |_| FLOOR_CONSTRUCTION_PRIORITY,
     );
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bevy::ecs::system::RunSystemOnce;
+    use hw_core::events::SoulTaskUnassignRequest;
+    use hw_core::relationships::{TaskWorkers, WorkingOn};
+    use hw_jobs::{Designation, Priority, TaskSlots};
+    use hw_logistics::transport_request::{
+        TransportDemand, TransportRequest, TransportRequestState,
+        transport_request_anchor_cleanup_system,
+    };
+
+    fn fixture() -> (App, Entity, Entity, Entity) {
+        let mut app = App::new();
+        app.add_message::<SoulTaskUnassignRequest>()
+            .add_systems(Update, soul_spa_auto_haul_system);
+        let yard = app
+            .world_mut()
+            .spawn(Yard {
+                min: Vec2::splat(-100.0),
+                max: Vec2::splat(100.0),
+            })
+            .id();
+        let site = app
+            .world_mut()
+            .spawn((
+                Transform::default(),
+                SoulSpaSite {
+                    bones_required: 8,
+                    bones_delivered: 0,
+                    ..default()
+                },
+            ))
+            .id();
+        app.update();
+        let request = app
+            .world_mut()
+            .query_filtered::<Entity, With<TargetSoulSpaSite>>()
+            .single(app.world())
+            .unwrap();
+        (app, yard, site, request)
+    }
+
+    #[test]
+    fn soul_spa_duplicate_workers_are_preserved_and_inflight_is_subtracted_once_test() {
+        let (mut app, _, site, request) = fixture();
+        assert_eq!(app.world().get::<TaskSlots>(request).unwrap().max, 4);
+        let duplicate_request = app
+            .world()
+            .get::<TransportRequest>(request)
+            .unwrap()
+            .clone();
+        let duplicate = app
+            .world_mut()
+            .spawn((
+                duplicate_request.clone(),
+                TargetSoulSpaSite(site),
+                TaskSlots::new(8),
+            ))
+            .id();
+        let empty_duplicate = app
+            .world_mut()
+            .spawn((duplicate_request, TargetSoulSpaSite(site)))
+            .id();
+        let workers = [
+            app.world_mut().spawn(WorkingOn(request)).id(),
+            app.world_mut().spawn(WorkingOn(request)).id(),
+            app.world_mut().spawn(WorkingOn(duplicate)).id(),
+        ];
+        app.world_mut()
+            .get_mut::<SoulSpaSite>(site)
+            .unwrap()
+            .bones_delivered = 2;
+        app.update();
+        // 8 required - 2 delivered - 3 workers = 3 total slots, not 3 + 2.
+        assert_eq!(app.world().get::<TaskSlots>(request).unwrap().max, 3);
+        let demand = app.world().get::<TransportDemand>(request).unwrap();
+        assert_eq!((demand.desired_slots, demand.inflight), (3, 2));
+        assert_eq!(app.world().get::<TaskSlots>(duplicate).unwrap().max, 1);
+        assert_eq!(
+            app.world().get::<TransportRequestState>(duplicate),
+            Some(&TransportRequestState::Claimed)
+        );
+        assert!(app.world().get_entity(empty_duplicate).is_err());
+        for (worker, target) in workers.into_iter().zip([request, request, duplicate]) {
+            assert_eq!(app.world().get::<WorkingOn>(worker).unwrap().0, target);
+        }
+        assert_eq!(
+            app.world().get::<TargetSoulSpaSite>(request).unwrap().0,
+            site
+        );
+        assert_eq!(
+            app.world().get::<Priority>(request).unwrap().0,
+            FLOOR_CONSTRUCTION_PRIORITY
+        );
+        app.world_mut().clear_trackers();
+        app.update();
+        let entity = app.world().entity(request);
+        assert!(!entity.get_ref::<TransportDemand>().unwrap().is_changed());
+        assert!(!entity.get_ref::<TaskSlots>().unwrap().is_changed());
+    }
+
+    #[test]
+    fn soul_spa_zero_demand_maintain_and_reactivation_test() {
+        for has_worker in [false, true] {
+            let (mut app, _, site, request) = fixture();
+            let worker = has_worker.then(|| app.world_mut().spawn(WorkingOn(request)).id());
+            app.world_mut()
+                .get_mut::<SoulSpaSite>(site)
+                .unwrap()
+                .bones_delivered = 8;
+            app.update();
+            assert!(app.world().get::<Designation>(request).is_none());
+            assert!(app.world().get::<TaskSlots>(request).is_none());
+            let demand = app.world().get::<TransportDemand>(request).unwrap();
+            assert_eq!(
+                (demand.desired_slots, demand.inflight),
+                (0, u32::from(has_worker))
+            );
+            app.world_mut()
+                .run_system_once(transport_request_anchor_cleanup_system)
+                .unwrap();
+            assert_eq!(app.world().get_entity(request).is_ok(), has_worker);
+            if let Some(worker) = worker {
+                assert_eq!(app.world().get::<WorkingOn>(worker).unwrap().0, request);
+                assert_eq!(app.world().get::<TaskWorkers>(request).unwrap().len(), 1);
+            }
+            app.world_mut()
+                .get_mut::<SoulSpaSite>(site)
+                .unwrap()
+                .bones_delivered = 0;
+            app.update();
+            let renewed = app
+                .world_mut()
+                .query_filtered::<Entity, With<TargetSoulSpaSite>>()
+                .single(app.world())
+                .unwrap();
+            assert_eq!(renewed == request, has_worker);
+            assert_eq!(app.world().get::<TaskSlots>(renewed).unwrap().max, 4);
+            assert!(app.world().get::<Designation>(renewed).is_some());
+        }
+    }
+
+    #[test]
+    fn soul_spa_no_owner_early_return_is_distinct_from_zero_demand_test() {
+        let (mut app, yard, site, request) = fixture();
+        app.world_mut().entity_mut(yard).remove::<Yard>();
+        app.world_mut()
+            .get_mut::<SoulSpaSite>(site)
+            .unwrap()
+            .bones_delivered = 8;
+        app.world_mut().clear_trackers();
+        app.update();
+        let entity = app.world().entity(request);
+        assert_eq!(entity.get::<TaskSlots>().unwrap().max, 4);
+        assert!(!entity.get_ref::<TransportDemand>().unwrap().is_changed());
+        // The lifecycle owner subsequently closes the invalid issuer.
+        app.world_mut()
+            .run_system_once(transport_request_anchor_cleanup_system)
+            .unwrap();
+        assert!(app.world().get_entity(request).is_err());
+    }
+}

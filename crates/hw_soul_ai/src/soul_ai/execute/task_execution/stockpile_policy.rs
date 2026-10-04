@@ -5,16 +5,11 @@ use std::collections::HashSet;
 use bevy::prelude::*;
 use hw_core::relationships::IncomingDeliveries;
 use hw_logistics::{
-    ResourceItem, ResourceType, StockpilePolicy, StockpilePolicyEvaluation, StockpilePolicyInput,
-    StockpileTransferPhase, evaluate_stockpile_policy,
+    ResourceItem, ResourceType, StockpileContentsSnapshot, StockpilePolicy,
+    StockpilePolicyEvaluation, StockpileTransferPhase, evaluate_stockpile_policy,
 };
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub struct InboundReservationSnapshot {
-    pub incoming_reserved: usize,
-    pub incoming_reserved_other_resource: usize,
-    pub owned_reservation: usize,
-}
+pub use hw_logistics::InboundReservationSnapshot;
 
 /// Builds a resource-aware reservation snapshot from the live relationship set.
 ///
@@ -32,25 +27,15 @@ pub fn inbound_reservation_snapshot(
         return InboundReservationSnapshot::default();
     };
 
-    let incoming_reserved = incoming.len();
-    let incoming_matching = incoming
-        .iter()
-        .filter(|item| {
-            resources
-                .get(**item)
-                .is_ok_and(|resource| resource.0 == transfer_resource)
-        })
-        .count();
-    let owned_reservation = incoming
-        .iter()
-        .filter(|item| owned_items.contains(item))
-        .count();
-
-    InboundReservationSnapshot {
-        incoming_reserved,
-        incoming_reserved_other_resource: incoming_reserved.saturating_sub(incoming_matching),
-        owned_reservation,
-    }
+    InboundReservationSnapshot::from_entries(
+        transfer_resource,
+        incoming.iter().map(|item| {
+            (
+                resources.get(*item).ok().map(|resource| resource.0),
+                owned_items.contains(item),
+            )
+        }),
+    )
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -62,8 +47,6 @@ pub struct RuntimeStockpileInboundInput {
     pub transfer_resource: ResourceType,
     pub requested_amount: usize,
     pub reservations: InboundReservationSnapshot,
-    pub cycle_reserved: usize,
-    pub cycle_reserved_other_resource: usize,
 }
 
 /// Evaluates a live inbound transfer. The acceptance/target policy is grandfathered only when
@@ -81,19 +64,20 @@ pub fn evaluate_runtime_stockpile_inbound(
         StockpileTransferPhase::NewInbound
     };
 
-    evaluate_stockpile_policy(StockpilePolicyInput {
-        phase,
-        policy: input.policy,
-        capacity: input.capacity,
-        stored_amount: input.stored_amount,
-        stored_resource: input.stored_resource,
-        transfer_resource: input.transfer_resource,
-        requested_amount: input.requested_amount,
-        incoming_reserved: input.reservations.incoming_reserved,
-        incoming_reserved_other_resource: input.reservations.incoming_reserved_other_resource,
-        cycle_reserved: input.cycle_reserved,
-        cycle_reserved_other_resource: input.cycle_reserved_other_resource,
-    })
+    evaluate_stockpile_policy(
+        StockpileContentsSnapshot {
+            policy: input.policy,
+            capacity: input.capacity,
+            stored_amount: input.stored_amount,
+            stored_resource: input.stored_resource,
+        }
+        .policy_input(
+            phase,
+            input.transfer_resource,
+            input.requested_amount,
+            input.reservations,
+        ),
+    )
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -155,6 +139,7 @@ pub fn evaluate_runtime_stockpile_inbound_batch(
                     .reservations
                     .incoming_reserved_other_resource,
                 owned_reservation: 0,
+                ..input.reservations
             },
             ..input
         })
@@ -194,9 +179,8 @@ mod tests {
                 incoming_reserved: owned_reservation,
                 incoming_reserved_other_resource: 0,
                 owned_reservation,
+                ..Default::default()
             },
-            cycle_reserved: 0,
-            cycle_reserved_other_resource: 0,
         }
     }
 
@@ -237,5 +221,80 @@ mod tests {
         assert_eq!(allowance.committed_allowed, 2);
         assert_eq!(allowance.new_allowed, 0);
         assert_eq!(allowance.total(), 2);
+    }
+
+    #[test]
+    fn mixed_batch_respects_last_physical_slot_test() {
+        let mut mixed = input(2);
+        mixed.stored_amount = 9;
+        mixed.requested_amount = 3;
+        let allowance = evaluate_runtime_stockpile_inbound_batch(mixed);
+        assert_eq!(allowance.committed_allowed, 1);
+        assert_eq!(allowance.new_allowed, 0);
+    }
+
+    #[test]
+    fn live_reservation_snapshot_is_scoped_to_its_destination_test() {
+        use bevy::ecs::system::SystemState;
+        use hw_core::relationships::DeliveringTo;
+        let mut world = World::new();
+        let first = world.spawn_empty().id();
+        let second = world.spawn_empty().id();
+        let owned = world
+            .spawn((ResourceItem(ResourceType::Wood), DeliveringTo(first)))
+            .id();
+        world.spawn((ResourceItem(ResourceType::Rock), DeliveringTo(second)));
+        world.spawn(DeliveringTo(second)); // unreadable resources still reserve physical space
+        let owned_items = HashSet::from([owned]);
+        let mut state =
+            SystemState::<(Query<(Entity, &IncomingDeliveries)>, Query<&ResourceItem>)>::new(
+                &mut world,
+            );
+        let (incoming, resources) = state.get(&world).unwrap();
+        let first_snapshot = inbound_reservation_snapshot(
+            first,
+            ResourceType::Wood,
+            &owned_items,
+            &incoming,
+            &resources,
+        );
+        let second_snapshot = inbound_reservation_snapshot(
+            second,
+            ResourceType::Wood,
+            &owned_items,
+            &incoming,
+            &resources,
+        );
+        assert_eq!(
+            (
+                first_snapshot.incoming_reserved,
+                first_snapshot.owned_reservation
+            ),
+            (1, 1)
+        );
+        assert_eq!(
+            (
+                second_snapshot.incoming_reserved,
+                second_snapshot.incoming_reserved_other_resource,
+                second_snapshot.owned_reservation
+            ),
+            (2, 2, 0)
+        );
+        assert_eq!(
+            evaluate_runtime_stockpile_inbound(RuntimeStockpileInboundInput {
+                reservations: first_snapshot,
+                ..input(0)
+            })
+            .allowed_amount,
+            1
+        );
+        assert_eq!(
+            evaluate_runtime_stockpile_inbound(RuntimeStockpileInboundInput {
+                reservations: second_snapshot,
+                ..input(0)
+            })
+            .allowed_amount,
+            0
+        );
     }
 }

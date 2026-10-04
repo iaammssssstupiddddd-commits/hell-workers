@@ -193,6 +193,25 @@ pub fn navigate_to_pos(
     }
 }
 
+/// Construction preserves its target-or-destination arrival policy, but only
+/// after the path search has established a reachable destination.
+pub fn navigate_to_construction_target(
+    ctx: &mut TaskExecutionContext,
+    target_pos: Vec2,
+) -> NavOutcome {
+    match update_task_destination_to_adjacent(ctx, target_pos) {
+        PathSearchResult::Deferred => NavOutcome::Deferred,
+        PathSearchResult::Unreachable => NavOutcome::Unreachable,
+        PathSearchResult::Found(()) => {
+            if is_near_target_or_dest(ctx.soul_pos(), target_pos, ctx.dest.0) {
+                NavOutcome::Arrived
+            } else {
+                NavOutcome::Moving
+            }
+        }
+    }
+}
+
 /// 収集対象の Designation を片付けたうえで Soul 割り当てを閉じる。
 fn cleanup_collect_target_components(
     target: Entity,

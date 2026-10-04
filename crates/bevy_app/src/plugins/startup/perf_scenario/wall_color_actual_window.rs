@@ -143,10 +143,10 @@ impl WallColorActualWindowAcceptance {
             && !self.completed
             && !self.failed
             && config.enabled()
-            && config.workload == PerfWorkload::WallDensity
-            && config.size == PerfScenarioSize::Small
+            && config.workload() == PerfWorkload::WallDensity
+            && config.size() == PerfScenarioSize::Small
             && config.wall_phase() == Some(PerfWallPhase::Completed)
-            && config.render_mode == PerfRenderMode::Gpu
+            && config.render_mode() == PerfRenderMode::Gpu
     }
 
     fn acknowledgement_matches(&self) -> bool {

@@ -395,7 +395,7 @@ pub(super) fn begin_wall_density_fixture(
         fail_fixture(state, exit, "wall-density phase is absent".to_string());
         return;
     };
-    let mut layout = WallDensityLayout::build(config.size, phase);
+    let mut layout = WallDensityLayout::build(config.size(), phase);
     if let Err(reason) = validate_layout_cells(&layout, world_map.as_ref()) {
         fail_fixture(state, exit, reason);
         return;
@@ -552,7 +552,7 @@ pub(crate) struct WallDensityValidationParams<'w, 's> {
 
 pub(crate) fn validate_wall_density_fixture_system(mut params: WallDensityValidationParams) {
     if !params.config.enabled()
-        || params.config.workload != PerfWorkload::WallDensity
+        || params.config.workload() != PerfWorkload::WallDensity
         || params.state.phase != WallDensityFixturePhase::Spawned
     {
         return;

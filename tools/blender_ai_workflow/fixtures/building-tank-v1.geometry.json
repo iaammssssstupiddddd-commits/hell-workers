@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "kind": "Tank",
+  "stage": "clay_draft",
+  "final_art": null,
+  "units": "world_unit",
+  "geometry_scale": 32,
+  "tolerance_wu": 0.001,
+  "preview": {"canvas_px": [256, 256], "canvas_wu": [96, 96], "anchor_px": [128, 160], "representative_state": "Empty"},
+  "roles": {
+    "body": {"collection": "Tank_Body", "bounds_min_wu": [-28, 0, -28], "bounds_max_wu": [28, 28, 28], "translation_wu": [0, 0, 0], "triangle_cap": 192},
+    "water": {"collection": "Tank_Water", "bounds_min_wu": [-21.95, -0.25, -21.95], "bounds_max_wu": [21.95, 0.25, 21.95], "translation_wu": [0, 12, 0], "triangle_cap": 48}
+  },
+  "construction": {"segments": 12, "outer_radius_bottom": 24, "outer_radius_top": 28, "inner_radius_bottom": 22, "inner_radius_top": 22, "floor_y": 4, "rim_y": 28, "water_radius": 21.95, "water_half_thickness": 0.25},
+  "states": {"Empty": {"water_visible": false, "water_y_wu": 12}, "Partial": {"water_visible": true, "water_y_wu": 12}, "Full": {"water_visible": true, "water_y_wu": 22}},
+  "reject_if": ["Opening or inner wall unreadable", "Partial and Full hidden by rim", "Companion work position obstructed"],
+  "final_freeze_requires": ["actual-window clay approval", "triangle and texture budgets", "preview projection report", "all state bounds"]
+}

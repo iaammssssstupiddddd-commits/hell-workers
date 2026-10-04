@@ -96,7 +96,7 @@ pub(crate) fn inspect_wall_density_presentation(
     let Some(expected) = config.wall_presentation() else {
         return Ok(WallDensityPresentationReadiness::Pending);
     };
-    if config.workload != PerfWorkload::WallDensity {
+    if config.workload() != PerfWorkload::WallDensity {
         return Err("Wall presentation evidence requires wall-density".to_string());
     }
     let evidence = fixture.renderdoc_evidence()?;

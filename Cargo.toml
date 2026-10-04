@@ -4,6 +4,12 @@ members = [
     "crates/*",
 ]
 default-members = ["crates/bevy_app"]
+exclude = ["vendor/parley"]
+
+# Bevy 0.19's Parley 0.9 API is preserved; load ICU dictionaries for Japanese
+# rather than suppressing the missing-segmentation-model diagnostic.
+[patch.crates-io]
+parley = { path = "vendor/parley" }
 
 [workspace.dependencies]
 bevy = { version = "0.19", default-features = false, features = [

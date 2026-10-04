@@ -38,6 +38,14 @@ SavePlugin           Save/Load の Last apply phase
 
 この plugin が `GameSystemSet` の実行順と game resource の初期化を一意に所有する。各 parent plugin が自身の child plugin を登録するため、shell や `HellWorkersGamePlugin` から child plugin を重ねて登録しない。
 
+## 外部テキスト依存の回帰契約
+
+Bevy 0.19が使用するParley 0.9はrootの`vendor/parley` patchで日本語辞書を読み込む。
+`bevy_app`のParley dev-dependency（default features無効、`std`のみ）は
+`tests/japanese_segmentation.rs`で同じ依存の日本語境界・有限幅layout・UTF-8編集を検査する。
+ゲームdomainの型や入力規則をvendorへ移さない。出典・license・除去条件は
+[フォント仕様](../../../docs/fonts.md)を参照する。
+
 ## フレーム実行順序
 
 ```

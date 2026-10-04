@@ -369,7 +369,7 @@ runnerだけが所有する。
 | Familiar | `FamiliarAiState`/`ActiveCommand`/foreground Sprite + 指揮範囲インジケーター×3 | `attach_familiar_shell`（同上）。3D proxyは生成しない。durable operation / policy は挿入せず、runtime-only の `ActiveCommand` は保存済み `TaskArea` があれば `Patrol`、なければ `Idle` へ再構築する |
 | Building（SoulSpa 含む） | `Name`/バウンス演出 + class別のactive Spriteまたは独立3D visual。旧state consumerが残るDoor / Tank / MudMixerだけStructural2d mirrorをhiddenで保持 | `attach_building_shell`（同上） |
 | Blueprint | `Name`、`Sprite`、`BlueprintVisualState`、`BlueprintVisual` | durable `Blueprint` から mirror と搬入履歴を完成形で生成してから付与。資材アイコン・進捗バーはこの mirror を入力に Visual phase で再生成し、保存済み搬入を新規演出として再生しない |
-| Floor / wall construction | site / tile の `Name`、site の visual state、tile の visual mirror と Sprite | durable な site / tile state から直接生成。Logic 停止中でも床・壁タイルと進捗表示を復元 |
+| Floor / wall construction | site / tile の `Name`、site の visual state と `Visibility`、tile の visual mirror と Sprite | durable な site / tile state から直接生成。Spriteを持たないsiteにも欠損したVisibilityと必須のInheritedVisibility / ViewVisibilityを補完し、既存のHidden等は維持する。Logic停止中でも床・壁タイルと進捗表示を復元 |
 | Tree / Rock / ResourceItem / Stockpile | Sprite（spawn 箇所と同じ画像・サイズ） | rehydrate 内で直接挿入 |
 | 旧形式の Familiar 設定 | 欠落した `FamiliarOperation` / `FamiliarPolicy` | shell より前に `rehydrate_familiar_settings` を実行。operation 欠落時は default threshold と `max(default max, Commanding roster数)`、policy 欠落時は全許可 / Normal を補完する。保存済み operation は維持し、保存済み policy は effective semantics を変えず正規化する |
 | 旧形式のSoul Energy設定 | 範囲外`SoulSpaSite.active_slots`、欠落`PowerConsumerPolicy` | active slotsを0〜4へclampし、旧consumerだけNormal policyを補完する。保存済みLow/Normal/Highは維持する |

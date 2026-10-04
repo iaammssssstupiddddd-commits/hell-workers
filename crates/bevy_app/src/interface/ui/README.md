@@ -42,7 +42,7 @@
 | `systems.rs` | インタラクションシステム（Modal/Pause 中は `ForegroundUiGate` で前景 ancestry を確認） |
 | `status_display.rs` | ステータス表示エントリポイント |
 | `status_display/` | ステータスバー描画（runtime, dream bar, mode panel） |
-| `tooltip/` | ツールチップ（target, layout, fade） |
+| `tooltip/` | inspection/assets adapterとepoch別runtime。target/layout/fade/systemの実装は`hw_ui::interaction::tooltip` |
 
 配置tooltipは`PlacementFeedbackState`のliveを優先し、確定失敗のrecent latchへfallbackする。
 RejectedとPartialは見出しとsemantic colorを分ける。

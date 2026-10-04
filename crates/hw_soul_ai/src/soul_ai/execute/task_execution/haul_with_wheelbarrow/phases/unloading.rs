@@ -215,8 +215,6 @@ pub fn handle(
                                 transfer_resource,
                                 requested_amount: eligible_items.len(),
                                 reservations: *reservations,
-                                cycle_reserved: 0,
-                                cycle_reserved_other_resource: 0,
                             },
                         );
                         let committed_items: HashSet<Entity> = eligible_items

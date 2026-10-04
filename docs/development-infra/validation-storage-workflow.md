@@ -71,6 +71,16 @@ primaryの `python3 scripts/dev.py validation` が台帳・起動許可・結果
 台帳には対象・結果・整理経過のmetadataだけが残り、過去成果物を保存させる依存を作らない。
 coordinatorはファイルを自動削除しない。担当者が下記の確認をして削除する。
 
+subjectの凍結には`vendor/`のローカル依存patchも含む。native/perfのfingerprintに加え、
+coordinatorはscriptsの検証契約変更も検査する。計画登録からsealまで関連sourceを変更せず、
+別のtest/guard変更でもsubjectが変わったbatchをpassへ封印しない。
+
+`validation_storage.register`の任意のin-process `preflight`は、登録前の有界な読取り判定だけを行う。
+spec/CLIからcallbackを指定できず、候補の変更・結果の返却・出力rootの出現・source/helperの変化を
+拒否してから登録する。拒否ではbatchを保存しない。host receiptの自己申告も拒否する。
+このAPIは旧Orca統括を起動する入口ではなく、通常のCLI登録はcallbackなしで従来どおり使用する。
+hostの認証や独立検証・アート承認・release権限をAPI自身が付与することはない。
+
 ## コマンド例
 
 初期化は一度だけ。旧領域があれば未分類として棚卸しし、存在するだけで保持を認めない。

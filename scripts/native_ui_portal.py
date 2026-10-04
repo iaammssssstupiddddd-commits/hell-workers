@@ -1,6 +1,6 @@
 """Consent-gated RemoteDesktop transport for the owned X11 acceptance client.
 
-Uses the documented Notify methods, never ConnectToEIS or persistent permissions.
+Uses Notify methods and optional consent-backed, single-use restore tokens.
 https://flatpak.github.io/xdg-desktop-portal/docs/doc-org.freedesktop.portal.RemoteDesktop.html
 """
 from __future__ import annotations
@@ -8,12 +8,81 @@ from __future__ import annotations
 import secrets
 import math
 import time
+import os
+import stat
+import json
+import fcntl
+from pathlib import Path
 
 from scripts.native_ui_input import InputRejected, X11Input
 
 DEST = "org.freedesktop.portal.Desktop"
 ROOT = "/org/freedesktop/portal/desktop"
 REMOTE = "org.freedesktop.portal.RemoteDesktop"
+
+
+class ConsentStore:
+    """Owner-only credential journal; consume before submission, rotate on success.
+
+    Hold the inode lock for the entire session. A crash/unknown response never
+    reuses the old single-use token. This file is not evidence of OS consent.
+    """
+    def __init__(self, path):
+        path = Path(path)
+        parent = path.parent.stat()
+        if not path.is_absolute() or path.parent.resolve() != path.parent or (
+            parent.st_uid != os.geteuid() or stat.S_IMODE(parent.st_mode) != 0o700
+        ):
+            raise InputRejected("consent store requires an absolute path in an owner-only directory")
+        self.fd = os.open(path, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_NONBLOCK, 0o600)
+        try:
+            info = os.fstat(self.fd)
+            if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.geteuid()
+                    or stat.S_IMODE(info.st_mode) != 0o600 or info.st_nlink != 1):
+                raise InputRejected("unsafe consent credential file")
+            try:
+                fcntl.flock(self.fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                raise InputRejected("consent credential is busy") from None
+        except BaseException:
+            self.close()
+            raise
+
+    def consume(self, bus_id):
+        os.lseek(self.fd, 0, os.SEEK_SET)
+        raw = os.read(self.fd, 16385)
+        if len(raw) > 16384:
+            raise InputRejected("consent credential exceeds bound")
+        token = None
+        if raw:
+            try:
+                data = json.loads(raw)
+            except (ValueError, UnicodeError):
+                raise InputRejected("invalid consent credential journal") from None
+            if (not isinstance(data, dict) or set(data) != {"schema", "bus_id", "devices", "token"}
+                    or data["schema"] != 1 or data["bus_id"] != bus_id or data["devices"] != 3
+                    or (data["token"] is not None and
+                        (not isinstance(data["token"], str) or not 0 < len(data["token"]) <= 4096))):
+                raise InputRejected("consent credential context differs or is invalid")
+            token = data["token"]
+        self.save(bus_id, None)
+        return token
+
+    def save(self, bus_id, token):
+        if token is not None and (not isinstance(token, str) or not 0 < len(token) <= 4096):
+            raise InputRejected("portal returned an invalid restore token")
+        raw = json.dumps({"schema": 1, "bus_id": bus_id, "devices": 3, "token": token}).encode()
+        os.lseek(self.fd, 0, os.SEEK_SET)
+        os.ftruncate(self.fd, 0)
+        with os.fdopen(os.dup(self.fd), "wb", closefd=True) as stream:
+            stream.write(raw)
+            stream.flush()
+            os.fsync(stream.fileno())
+
+    def close(self):
+        if self.fd is not None:
+            os.close(self.fd)
+            self.fd = None
 
 
 def physical_monitor_scale(state, root_size):
@@ -32,7 +101,7 @@ def physical_monitor_scale(state, root_size):
 
 
 class PortalSession:
-    def __init__(self, heartbeat) -> None:
+    def __init__(self, heartbeat, *, consent_file=None) -> None:
         from gi.repository import Gio, GLib
 
         self.Gio, self.GLib = Gio, GLib
@@ -43,6 +112,9 @@ class PortalSession:
         self.ready = False
         self.granted_devices = 0
         self.pending = None
+        self.consent_file = consent_file
+        self.consent_store = None
+        self.persistence = "disabled"
         self.subscriptions = [self.bus.signal_subscribe(
             DEST, "org.freedesktop.portal.Request", "Response", None, None,
             Gio.DBusSignalFlags.NONE, self._response), self.bus.signal_subscribe(
@@ -90,17 +162,37 @@ class PortalSession:
             raise InputRejected("portal session ended; do not silently request consent again")
         token = "hwui" + secrets.token_hex(8)
         variant = self.GLib.Variant
+        options = {"types": variant("u", 3), "persist_mode": variant("u", 0),
+                   "handle_token": variant("s", token + "devices")}
+        bus_id = None
+        if self.consent_file:
+            version = self.call(ROOT, "org.freedesktop.DBus.Properties", "Get",
+                                "(ss)", (REMOTE, "version")).unpack()[0]
+            if hasattr(version, "unpack"):
+                version = version.unpack()
+            if version < 2:
+                raise InputRejected("persistent input consent requires RemoteDesktop version 2")
+            bus_id = self.bus.call_sync("org.freedesktop.DBus", "/org/freedesktop/DBus",
+                "org.freedesktop.DBus", "GetId", None, None,
+                self.Gio.DBusCallFlags.NONE, 5000, None).unpack()[0]
+            self.consent_store = ConsentStore(self.consent_file)
+            restore = self.consent_store.consume(bus_id)
+            options["persist_mode"] = variant("u", 2)
+            if restore:
+                options["restore_token"] = variant("s", restore)
         data = self.request("CreateSession", "(a{sv})", ({
             "handle_token": variant("s", token), "session_handle_token": variant("s", token)},))
         self.session = data["session_handle"]
-        self.request("SelectDevices", "(oa{sv})", (self.session, {
-            "types": variant("u", 3), "persist_mode": variant("u", 0),
-            "handle_token": variant("s", token + "devices")}))
+        self.request("SelectDevices", "(oa{sv})", (self.session, options))
         data = self.request("Start", "(osa{sv})", (self.session, f"x11:{window:x}", {
             "handle_token": variant("s", token + "start")}), timeout=300)
         if data.get("devices", 0) & 3 != 3:
             raise InputRejected("portal did not grant both pointer and keyboard")
         self.granted_devices = data["devices"]
+        if self.consent_store:
+            restore = data.get("restore_token")
+            self.consent_store.save(bus_id, restore)
+            self.persistence = "saved" if restore else "not-granted"
         self.ready = True
 
     def notify(self, method, suffix, *values):
@@ -130,6 +222,9 @@ class PortalSession:
         for subscription in self.subscriptions:
             self.bus.signal_unsubscribe(subscription)
         self.subscriptions.clear()
+        if self.consent_store:
+            self.consent_store.close()
+            self.consent_store = None
 
 
 class PortalX11Input(X11Input):
@@ -140,6 +235,9 @@ class PortalX11Input(X11Input):
     def activate(self):
         self._check_owner()
         self.mapping = self.portal.motion_mapping(self.root_size())
+        # Present the owned parent, but consent does not require X11 input focus.
+        # The compositor may keep focus on a Wayland surface until consent closes.
+        self._request_activation()
         self.portal.start(self.window)
         # The consent dialog owned focus; acquire the game once after it closes.
         super().activate()

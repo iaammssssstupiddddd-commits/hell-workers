@@ -231,6 +231,28 @@ production 96 / fallback 0、distinct mesh 6 / material 1、connector visual 192
 
 P06はPoint／Spot Lightや追加shadow map／local-light passを生成せず、P01の単一Scene RtTとP02のTopDown presentationを維持する。CPU fieldは1つのlinear RGBA8 `Image`へrevision単位でuploadされ、Terrain 3 pipelineとstructural 1 pipelineはそれぞれtexture／samplerを1組だけbindする。Wall／Doorのper-instance sampling anchorは`MeshTag`にあり、material handle数はLamp数・Building数に比例しない。
 
+sampling停止中もmaterialのtexture descriptorを保持する。未参照globalはSPIR-Vから除去され得るため、
+RenderDocの`GetReadOnlyResources`は`onlyUsed=False`でもこのbindingを証明できない。
+P06/P08のreplayは描画時にbindされたVulkan material setのdescriptor storeを読み、
+`GetResources`の一意な`hell-workers-indoor-light-field`、実texture view、fragment visibility、寸法と画素完全一致を照合する。
+物理binding番号はwgpuによりWGSL番号から変換されるため、`GetDescriptorLocations`から取得する。
+この証拠は`bound:read-only`として記録し、合成描画のshader使用texture／samplerの厳密集合には混ぜない。
+2026-09-19の切り分けでは、旧extractorが除外した実画像は100×100・期待白pixelで、7個のbound material setに保持されていた。
+同じRDCのSceneは1920×1080だった。検証器の対象選択を修正し、sampling再有効化や画素期待値の変更は行っていない。
+この検証器変更は受入ツール内に閉じ、通常ゲームの入力・表示・成立条件を変更しないため、追加のHelp更新は不要である。
+
+2026-09-19のR13/R14最終受入は`refactor-p08-closure-20260919-c`で成功し、登録した独立verifierも通過した。
+clean subjectは`a0487a35c09ed444dc588902ed198c9532f4c685`、source fingerprintは
+`2f3cc42ecb89c75ef0785a96a3e4bfb478733dfed6d72dc30956cad4ca4e8ee3`。
+Intel Arc Graphics (MTL)／Vulkan／X11／Mesa 26.1.8、1920×1080、scale 1.0で、
+preflight 1回・Capture 1回・RenderDoc 1回の3 game processを逐次実行した。
+Capture binaryは`a48a440daf1a25d9b95310f0c776d525187c6553adf4f78e5a10cade0295b50e`、
+RenderDoc binaryは`b0df8a2152e5004870f79e082df926b8d242c3e0533c46068bfde7a3229477e5`。
+二重replay、100×100 Light Fieldの(19,25)白pixel、22件の実material binding、
+CPU/GPU/Soul/Roomのepoch 0・revision 1一致、200 Soulのsample・72件の回復適用、stale適用0、4 Roomの一致を確認した。
+同じRDCを登録済みの寸法replayでも開き、`hell-workers-rtt-scene`が1920×1080×1であることを確認した。
+これは現行状態のbounded closureであり、過去baselineとの性能改善率や全DPI／正式性能matrixを保証しない。
+
 | 項目 | P06 source |
 |---|---:|
 | Light Field image / live handle | 1 / 1 |
@@ -364,6 +386,28 @@ RAM peakを抑えるため LTO を無効化して codegen unit を 16 に固定�
 | `TerrainSurfaceMaterial` (LOD1) | 1 | 49 chunk が同一ハンドルを共有 |
 | `TerrainSurfaceMaterialLod1Lite` (LOD1-lite) | 1 | 同上 |
 | `TerrainSurfaceMaterialLod2` (LOD2) | 1 | 同上（LOD 切替で一方だけが有効） |
+
+地形materialのuniform宣言は`assets/shaders/terrain_surface_types.wgsl`、material bindingは
+`terrain_surface_bindings.wgsl`を正本とする。LOD1／LOD1-lite／LOD2は共通bindingをimportし、
+prepassはuniform型だけをimportしてbinding 100のみを宣言する。Rustの`TerrainSurfaceUniform`と
+3つのmaterial拡張は同じABIを維持する。uniformは14 field、alignment 16 bytes、size 160 bytes、
+bindingは100〜134である。`terrain_surface_material_abi_tests.rs`がfield順・型・offset、
+binding番号／種別、prepassの限定依存を固定する。LOD別の計算・sample処理は各shaderが保持する。
+RenderDocのreceiver snapshotは本pass／prepassを含む10 shaderのロードを待ち、4 fragmentと4 import依存をrender側へ転送する。
+static ABI testとGPUでのcompile／binding／描画検証は別に実施する。
+
+`ui_usability_acceptance.py --case terrain-materials --smoke`の診断fixtureでは、
+production materialの3 LODを独立patchとして配置し、通常は無効な`NormalPrepass`を
+RtT cameraへ付けてprepass fragmentもGPUでcompileする。native DPIのままX11 clientを
+1920×1080→1280×720→1920×1080へ変更し、4 pipelineのresident状態、3 patchの実描画、
+Scene readback、cameraと実composite materialの再接続を確認する。これは診断条件の
+prepass検証であり、通常描画でprepassが有効であることを意味しない。
+
+2026-09-19のR13診断受入ではIntel Arc Graphics (MTL) / Vulkan / X11、native DPI 2.0で
+上記3 checkpointが最終sourceで成功した（batch `refactor-terrain-materials-20260919-d`、
+source fingerprint `28fe99f986431c66a080f9aeec09e91f299911ebfa6ff79713d33da24627978d`）。4 fragment pipeline常駐、
+3 LODの可視出力、Scene readbackと実clientの色一致、縮小・復元で異なるScene imageへの再接続を
+独立verifierと6画像の目視で確認した。640×360 logical pixels時のUI layoutはこの地形診断の対象外。
 
 LOD 切替閾値（hysteresis）:
 

@@ -5,13 +5,13 @@ mod placement;
 
 pub use intent::{OpenWorldContextMenu, SelectionIntent};
 pub use placement::{
-    AreaPlacementPlan, BuildingPlacementContext, PlacementFeedback, PlacementFeedbackSet,
-    PlacementFeedbackState, PlacementFeedbackStatus, PlacementGeometry, PlacementRejectReason,
-    PlacementTileRejection, PlacementValidation, RECENT_PLACEMENT_FAILURE_LIFETIME,
-    TANK_NEARBY_BUCKET_STORAGE_TILES, WorldReadApi, bucket_storage_geometry,
-    build_area_placement_plan, clear_live_placement_feedback_system, grid_is_nearby,
-    validate_area_size, validate_bucket_storage_placement, validate_building_placement,
-    validate_floor_tile, validate_moved_bucket_storage_placement,
+    AreaPlacementPlan, BridgeCrossing, BuildingPlacementContext, PlacementFeedback,
+    PlacementFeedbackSet, PlacementFeedbackState, PlacementFeedbackStatus, PlacementGeometry,
+    PlacementRejectReason, PlacementTileRejection, PlacementValidation,
+    RECENT_PLACEMENT_FAILURE_LIFETIME, TANK_NEARBY_BUCKET_STORAGE_TILES, WorldReadApi,
+    bucket_storage_geometry, build_area_placement_plan, clear_live_placement_feedback_system,
+    grid_is_nearby, resolve_bridge_crossing, validate_area_size, validate_bucket_storage_placement,
+    validate_building_placement, validate_floor_tile, validate_moved_bucket_storage_placement,
     validate_moved_building_placement, validate_wall_area, validate_wall_tile,
 };
 

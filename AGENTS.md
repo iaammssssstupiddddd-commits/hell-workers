@@ -61,18 +61,12 @@
 - フレームワークやライブラリ依存の挙動は推測で説明しない。必要なら `docs.rs` や `~/.cargo/registry/src/` などの一次情報を確認してから説明する。
 - probe / debug material / 一時設定変更は最小限に留め、原因切り分け後は必ず撤去する。恒久実装と診断実装を混在させない。
 
-### Background Agent Policy (STRICT — DO NOT VIOLATE)
-**Do NOT use background or subprocess agents for code editing tasks** — including Cursor’s `Task` tool with `run_in_background`, or a `general-purpose` / file-editing subagent.
-
-Reasons:
-- Agents share the same repository and routinely make out-of-scope changes to unrelated files
-- Progress cannot be monitored in real time; damage is discovered only after the fact
-- Multiple agents running in parallel conflict with each other and with other ongoing sessions
-
-**Permitted agent uses:**
-- `explore` agent — read-only codebase investigation only
-- `code-review` agent — read-only review only
-- All code edits must be made directly by the main agent (IDE patch/apply tools — e.g. `StrReplace` / `apply_patch` — not delegated editors)
+### Agent editing boundaries (STRICT)
+Shared-checkout/background editing remains forbidden. Read-only exploration and
+review are permitted. Normal Orca is an editor/terminal host, not an editing
+delegation grant. The main agent owns edits, primary docs, validation and Git
+operations. Any future optional editing workflow requires explicit authorization,
+separate worktrees, isolation, bounded slots and independent read-only review.
 
 ### Git Revert Policy
 **NEVER run `git checkout -- <file>` or any destructive git command without first:**
@@ -143,6 +137,17 @@ Create an implementation plan in `docs/plans/` when:
 ## Assets & Configuration Tips
 - For generated icons or sprites, create with magenta background (`#FF00FF`) and convert via `scripts/convert_to_png.py`.
 - If Windows linking fails with too many symbols, disable `dynamic_linking` in `Cargo.toml` as documented in `docs/DEVELOPMENT.md`.
+
+## Normal Orca development
+
+- Use standard Orca repos/worktrees, terminals and provider sessions. Tasks/Linear remain available but are not a mandatory intake gate.
+- The accepted starting point is the primary checkout. Existing legacy worktrees are preserved references; before starting an agent there, audit their AGENTS/hooks and explicitly adopt normal rules without invalidating a frozen review subject. The repo's local-only hook policy does not override agent instructions.
+- Do not start the retired hell-workers coordinator, Driver, dispatcher, external sync or recovery helpers. Historical prompts and Run receipts are records, not instructions to replay.
+- A `統括` tab, A/B slots and fixed provider selection are no longer required. Preserve existing conversations and unfinished work; a retired workflow is not an approved or completed task.
+- Shared-checkout/background editing remains forbidden. Normal agent buttons do not grant parallel editing or unrestricted permissions.
+- Main owns authoritative primary docs, shared contracts, builds/tests, commits and serial integration. Review must be independent and bound to the exact base/head/source; source changes invalidate approval.
+- Use guarded project entrypoints for heavy work. Keep host/Cargo/test concurrency and storage controls; busy means defer, never bypass the guard.
+- The optional coordination concept is documentation only until a separately authorized workflow/plugin is implemented and accepted. See `docs/orca-quickstart.md` and the normalization plan for migration status.
 
 ## Change-aware completion and branches
 

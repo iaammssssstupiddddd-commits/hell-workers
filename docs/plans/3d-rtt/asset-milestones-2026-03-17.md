@@ -8,6 +8,12 @@
 
 ## 概要
 
+> **2026-09-20 新規設備の制作範囲:** 壁・床以外は
+> [建築物アート移行計画](non-wall-floor-building-art-migration-plan-2026-09-19.md)を正本とする。
+> 新規3DはTank / MudMixer / RestArea / SoulSpa / Bridgeの5種・8 mesh role、
+> Parking / SandPile / BonePile / OutdoorLampは専用2D、Doorは現行release g7を継承する。
+> 下記の旧1×1寸法・全種GLB案・未導入表記を新規制作へ転用しない。現在は先行2種のstaging無地制作までで、通常表示の切替は未実装。
+
 単一Scene RtT移行計画と連動するアセット制作のマイルストーン。旧Phase 3の完了履歴は`docs/plans/3d-rtt/milestone-roadmap.md`と`archived/phase3-implementation-plan-2026-03-16.md`に保存する。
 
 > **2026-08-03 方針変更:** Soul visible GLB固定、billboard廃止、全BuildingTypeのGLB化、section view用LOD0を新規作業の前提にしない。Soul GLB / animation / face atlasは完了履歴とfallback assetとして保持し、runtime表示は[`single-scene-rtt-indoor-light-field-migration-plan-2026-08-03.md`](single-scene-rtt-indoor-light-field-migration-plan-2026-08-03.md) M2の共有unlit billboardで再評価する。建築trackは同計画のpresentation mappingで`Structural3d`に分類された種類だけを対象に継続する。

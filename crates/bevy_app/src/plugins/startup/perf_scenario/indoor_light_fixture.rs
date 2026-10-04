@@ -950,7 +950,7 @@ pub(crate) fn should_settle_indoor_light_fixture(
     state: Res<IndoorLightFixtureState>,
 ) -> bool {
     config.enabled()
-        && config.workload == PerfWorkload::IndoorLight
+        && config.workload() == PerfWorkload::IndoorLight
         && state.phase == IndoorLightFixturePhase::Settling
 }
 
@@ -1077,7 +1077,7 @@ pub(super) fn begin_indoor_light_fixture(
     }
     #[cfg(feature = "profiling")]
     commands.insert_resource(IndoorLightCrossConsumerObservation::default());
-    let layout = IndoorLightLayout::build(config.size);
+    let layout = IndoorLightLayout::build(config.size());
     for spa in &layout.spas {
         let geometry = crate::interface::selection::placement_geometry::building_geometry(
             BuildingType::SoulSpa,
@@ -1666,7 +1666,7 @@ pub(crate) fn validate_indoor_light_fixture_system(mut p: IndoorLightValidationP
         let observation = *p.cross_consumer_observation;
         let current_epoch = p.world_epoch.get();
         let current_revision = p.indoor_light_runtime.output_revision();
-        let expected_souls = p.config.soul_count;
+        let expected_souls = p.config.soul_count();
         let expected_rooms = u32::try_from(
             fixture
                 .layout
@@ -1764,7 +1764,7 @@ pub(crate) fn validate_indoor_light_fixture_system(mut p: IndoorLightValidationP
             p.applied.workload = true;
             info!(
                 "PERF_CAPTURE: indoor-light {}/current/static fixture settled ({})",
-                p.config.size.as_str(),
+                p.config.size().as_str(),
                 layout_checksum,
             );
         }
@@ -2288,8 +2288,8 @@ fn validate_observed_fixture(
         case_id: format!(
             "indoor-light-{}-{}-seed-{}",
             layout.size.as_str(),
-            p.config.render_mode.as_str(),
-            p.config.master_seed
+            p.config.render_mode().as_str(),
+            p.config.master_seed()
         ),
         layout_checksum: layout.layout_checksum,
         floors: floors.len(),

@@ -33,7 +33,7 @@ pub struct GeneratedWorldLayoutResource {
 
 pub fn resolve_worldgen_seed(perf_config: &PerfScenarioConfig) -> u64 {
     if perf_config.enabled() {
-        return perf_config.master_seed;
+        return perf_config.master_seed();
     }
 
     match std::env::var(WORLDGEN_SEED_ENV) {

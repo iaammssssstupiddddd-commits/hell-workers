@@ -128,7 +128,20 @@ pub fn blueprint_auto_haul_system(
         }
     }
 
-    let mut seen_existing_keys = std::collections::HashSet::<(Entity, ResourceType)>::new();
+    let seen_existing_keys = super::upsert::select_canonical_requests(
+        q_bp_requests
+            .iter()
+            .filter(|(_, _, request, _, _)| {
+                request.kind == TransportRequestKind::DeliverToBlueprint
+            })
+            .map(|(entity, _, request, workers, _)| {
+                (
+                    (request.anchor, request.resource_type),
+                    entity,
+                    workers.map_or(0, |workers| workers.len()),
+                )
+            }),
+    );
 
     for (request_entity, target_bp, request, workers_opt, current) in q_bp_requests.iter() {
         if !matches!(request.kind, TransportRequestKind::DeliverToBlueprint) {
@@ -137,12 +150,14 @@ pub fn blueprint_auto_haul_system(
         let key = (request.anchor, request.resource_type);
         let workers = workers_opt.map(|w| w.len()).unwrap_or(0);
 
-        if !super::upsert::process_duplicate_key(
+        if !super::upsert::reconcile_duplicate_request(
             &mut commands,
             request_entity,
             workers,
-            &mut seen_existing_keys,
-            key,
+            seen_existing_keys
+                .get(&key)
+                .is_some_and(|(kept, _)| *kept == request_entity),
+            super::upsert::RequestSlotSnapshot::from_runtime(current),
         ) {
             continue;
         }
@@ -163,7 +178,7 @@ pub fn blueprint_auto_haul_system(
                     key,
                     site_pos: *bp_pos,
                     issued_by: *issued_by,
-                    desired_slots: *slots,
+                    slots: super::upsert::RequestSlots::TotalSlots(*slots),
                     inflight,
                     priority: 0,
                     transport_priority: TransportPriority::Normal,
@@ -181,7 +196,7 @@ pub fn blueprint_auto_haul_system(
     }
 
     for (key, (issued_by, slots, bp_pos)) in desired_requests {
-        if seen_existing_keys.contains(&key) {
+        if seen_existing_keys.contains_key(&key) {
             continue;
         }
 

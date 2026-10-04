@@ -22,6 +22,12 @@ impl WorldMap {
     }
 
     pub fn is_walkable(&self, x: i32, y: i32) -> bool {
+        self.is_walkable_with_raw_obstacle(x, y, self.has_raw_obstacle(x, y))
+    }
+
+    /// Evaluate terrain/door/bridge rules with a caller-verified raw blocker.
+    /// This does not authorize removal of an obstacle or change any map layer.
+    pub fn is_walkable_with_raw_obstacle(&self, x: i32, y: i32, blocked: bool) -> bool {
         use hw_core::world::DoorState;
         let idx = match self.pos_to_idx(x, y) {
             Some(i) => i,
@@ -30,7 +36,7 @@ impl WorldMap {
         if let Some(state) = self.door_states.get(&(x, y)) {
             return *state != DoorState::Locked;
         }
-        if self.obstacles[idx] {
+        if blocked {
             return false;
         }
         if self.bridged_tiles.contains(&(x, y)) {

@@ -36,6 +36,7 @@ class ClassificationTests(unittest.TestCase):
             "docs/plans/plan-template.md", "docs/DEVELOPMENT.md", "assets/README.md",
             "settings/default.ron", "crates/hw_world/assets/fixture.json", "assets/test.wgsl",
             "docs/diagram.png", "new-root/new.extension",
+            "vendor/parley/src/analysis/mod.rs", "vendor/parley/Cargo.toml",
         ):
             with self.subTest(path=path):
                 self.assertTrue(all(ci_scope.classify([path])[0].values()))

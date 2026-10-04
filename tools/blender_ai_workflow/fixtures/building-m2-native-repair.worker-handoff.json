@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "scope": "prepared-runtime integrity and interactive native recipe implementation",
+  "accepted": false,
+  "numeric_freeze": false,
+  "runtime_published": false,
+  "changed_files": [
+    "scripts/building_m2_acceptance.py",
+    "scripts/building_m2_native_acceptance.py",
+    "scripts/tests/test_building_m2_acceptance.py",
+    "scripts/tests/test_building_m2_native_acceptance.py",
+    "crates/bevy_app/src/assets/building_asset_set/acceptance/m2_probe.rs",
+    "tools/blender_ai_workflow/fixtures/building-m2-native-repair.worker-handoff.json"
+  ],
+  "runtime_verify": {
+    "entrypoint": "python3 scripts/building_m2_acceptance.py verify --job-root <directory-containing-plan.json>",
+    "alternative": "python3 scripts/building_m2_acceptance.py verify --plan <plan.json>",
+    "plan_inputs": "plan now requires a clean --repo and a --subject-sha256 equal to that repository native source_fingerprint; codec absolute path and the full subject are recorded",
+    "checks": ["both kinds", "codec digest", "frozen source and harness/assets", "sealed manifest identity", "all artifact bytes", "source and geometry provenance", "numeric proposal hash", "export inventory hash", "no art/release approval claims"],
+    "pass_scope": "m2-prepared-runtime-integrity-only"
+  },
+  "native_recipe": {
+    "profile": "building-m2-interactive-v1",
+    "plan_entrypoint": "python3 scripts/building_m2_native_acceptance.py plan --runtime-plan <verified-pair-plan.json> --kind Tank --leg water --adapter <exact-AdapterInfo-name> --output <launcher-plan-outside-job-root.json>",
+    "run_entrypoint": "registered direct kitty launcher_command from the plan; coordinator adoption and admission required",
+    "verify_entrypoint": "python3 scripts/building_m2_native_acceptance.py verify --job-root <native-job-root>",
+    "status_entrypoint": "python3 scripts/building_m2_native_acceptance.py status --job-root <native-job-root>",
+    "behavior": "Uses existing native activity admission and guarded feedback build, then starts the normal game without perf workload arguments; the operator supplies actual gameplay input for the declared leg",
+    "isolation": "private copied asset overlay and working directory, including private relative saves; original runtime source and production assets remain unchanged",
+    "bounds": "10 to 170 seconds, default 160; explicit bounded SIGTERM shutdown, rejection of SIGKILL or early unexpected exit; probe entity/sample caps remain active",
+    "binding": "both runtime sets, frozen subject, codec, generated binary, nonce, actual probe process ID, monotonically advancing real and virtual clocks, at least one exact candidate consumer, owned X11 1280x720 capture, exact Vulkan adapter, raw logs, captured trace prefix, final trace and private asset inventory",
+    "pass_scope": "interactive-feedback-observation-only",
+    "not_covered": ["input outcome verdict", "all lifecycle legs", "numeric freeze", "art approval", "performance budgets", "candidate approval", "formal release"]
+  },
+  "coordinator_actions": [
+    "Run change-aware Python/Rust checks and fixed review; worker did not execute tests, builds, validators or native processes.",
+    "Freeze the repaired source and regenerate pair/native plans: old plans without repo/subject/codec bindings intentionally fail closed.",
+    "Keep the supplied codec byte-stable across the feedback build; use a separately retained codec if rebuilding target/debug would replace it.",
+    "Adopt the new product recipe in the host registry and wrap planning/launcher/verify with the primary validation-storage workflow; worker did not edit the host registry.",
+    "Run each required Tank and MudMixer leg with actual input and independently judge its trace and captures; technical pass does not claim the input succeeded.",
+    "Keep independent numeric/art/candidate/Help/fixed-review, all-state/all-consumer lifecycle decisions, N/4N performance budget decisions, promotion/install/rollback and formal releases pending until executed.",
+    "Preserve earlier four-stage candidate and native evidence as historical evidence for its original frozen source; no existing candidate geometry, atlas or numeric fixture was edited."
+  ],
+  "help_review": {
+    "worker_decision": "No impact",
+    "reason": "Changes add developer-only offline verification/registered native recipe entrypoints and process ID metadata inside the already opt-in profiling probe; ordinary player controls, labels, gameplay/save/placement contracts and release authority remain unchanged.",
+    "independent_approval": null
+  },
+  "documentation_candidates_for_coordinator": [
+    "Document pair-plan regeneration, verify CLI and its narrow integrity-only pass scope in building-asset-sets and development instructions.",
+    "Document the interactive recipe registration, private save location, exact adapter requirement, bounded stop, declared leg and technical-only pass scope.",
+    "Update the authoritative M2 plan only with independently verified execution evidence; this handoff does not close C2/C7/C8."
+  ]
+}
