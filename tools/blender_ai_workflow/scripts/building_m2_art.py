@@ -79,7 +79,7 @@ def project_xz(points, polygon, wx, wz):
 def paint(kind, path, stage="strokes"):
     # Pillow is already part of the workflow; Blender invokes this via the host
     # preparation entrypoint, so its bundled Python does not need Pillow.
-    from PIL import Image, ImageDraw
+    from PIL import Image, ImageDraw, ImageFilter
 
     require(stage in ("planes", "strokes"), "unknown art stage")
     image = Image.new("RGBA", (ATLAS_SIZE, ATLAS_SIZE), (40, 35, 30, 255))
@@ -133,16 +133,36 @@ def paint(kind, path, stage="strokes"):
                                fill=(*dark, 255), width=1)
             elif kind == "Tank" and surface == "vessel:band1":
                 # Painted iron straps are fixed to the outside, not to the
-                # rim, water, or inside of the vessel. Broad, muted bands
-                # survive the game's normal top-down scale.
+                # rim, water, or inside of the vessel. Construct each stripe
+                # from the same world-height fractions on every side face.
+                # The extra atlas pixels cover filtering at each UV seam.
+                def along(a, b, fraction):
+                    return tuple(a[i] * (1-fraction) + b[i] * fraction for i in range(2))
+
+                def extend(a, b, pixels):
+                    dx, dy = b[0]-a[0], b[1]-a[1]
+                    length = math.hypot(dx, dy)
+                    require(length > 0, "Tank iron band has a degenerate face edge")
+                    return (dx / length * pixels, dy / length * pixels)
+
                 for fraction in (0.28, 0.72):
-                    left = tuple(polygon[0][i] * (1-fraction) + polygon[3][i] * fraction for i in range(2))
-                    right = tuple(polygon[1][i] * (1-fraction) + polygon[2][i] * fraction for i in range(2))
-                    brush.line((left, right), fill=(78, 76, 70, 255), width=3)
+                    top_left = along(polygon[0], polygon[3], fraction - 0.045)
+                    top_right = along(polygon[1], polygon[2], fraction - 0.045)
+                    bottom_left = along(polygon[0], polygon[3], fraction + 0.045)
+                    bottom_right = along(polygon[1], polygon[2], fraction + 0.045)
+                    dx, dy = extend(top_left, top_right, 2)
+                    brush.polygon(((top_left[0]-dx, top_left[1]-dy),
+                                   (top_right[0]+dx, top_right[1]+dy),
+                                   (bottom_right[0]+dx, bottom_right[1]+dy),
+                                   (bottom_left[0]-dx, bottom_left[1]-dy)),
+                                  fill=(78, 76, 70, 255))
+                    left = along(polygon[0], polygon[3], fraction)
+                    right = along(polygon[1], polygon[2], fraction)
                     for spot in (0.24, 0.76):
                         center = tuple(left[i] * (1-spot) + right[i] * spot for i in range(2))
                         brush.ellipse((center[0]-1, center[1]-1, center[0]+1, center[1]+1),
                                       fill=(132, 78, 53, 255))
+                mask = mask.filter(ImageFilter.MaxFilter(5))
             elif kind == "Tank" and surface == "vessel:band3":
                 # The inside wall has upright grain, unlike the horizontal
                 # marks on the outside and rim.

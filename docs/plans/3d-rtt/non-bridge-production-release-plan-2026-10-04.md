@@ -6,7 +6,7 @@
 | --- | --- |
 | 計画ID | `non-bridge-production-release-plan-2026-10-04` |
 | ステータス | `In Progress` |
-| 作成日 / 最終更新日 | `2026-10-04` |
+| 作成日 / 最終更新日 | `2026-10-04` / `2026-10-05` |
 | 作成者 | Codex |
 | 関連提案 | N/A |
 | 関連Issue/PR | TAK-14 / 基盤統合PR #29 |
@@ -196,6 +196,14 @@ PartialはhoverのMove tooltipとselection強調に重なり、鉄帯のface境�
 従ってこれは静止技術証拠であり、独立art/numeric承認、正式候補、promotion/installではない。
 近景のhover重なりは通常worldの美術欠陥と混同しない。明示profilingのbuilding-art静止
 sessionだけhover更新を抑え、通常起動・通常inputは不変のまま同identityをfresh sourceで再撮影する。
+`64f69762c3edbbd3147bac725e8f8792af97c078` の明示ArtPreviewでhover由来の
+Move tooltip・selection強調がないTank近景をfresh subjectのIntel/Vulkan実windowで取得し、
+独立verifierのtechnical pass、用途登録、finalize、storage checkを完了した。
+独立read-only画像評価ではEmpty/Partial/Fullの区別と槽底の改善を確認したが、
+外壁の錆鉄帯にUV面境界の切れ目と幅の不揃いが残り、正式art採否は不可。
+静止草地画面であり、異なる背景・照明・遠景、実水量遷移、numeric freeze、releaseは未検証。
+この指摘に限って外壁の2帯を同じ高さ比率の面へ塗り、UV境界外に描線を延長する候補を
+補正中。12面の両側で帯がgutterへ届き、内面・水面へ鉄色が付かない回帰テストで確認する。
 出力root: primary `target/native-acceptance/nonbridge-restarea-authoring-20261004-v1`。
 owner: main / consumer: M3候補の独立採否・現行subject導入。次工程: 原本・画像を比較しruntime候補を生成。
 release_when: 採用原本のasset正本への集約と候補フィードバック終了後。旧batchのpassを新subjectへ流用しない。

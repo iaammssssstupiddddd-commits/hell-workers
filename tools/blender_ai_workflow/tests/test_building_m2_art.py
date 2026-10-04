@@ -66,6 +66,27 @@ class M2ArtTests(unittest.TestCase):
             project_xz([(0, 0, 0), (1, 0, 0), (2, 0, 0)],
                        [(0, 0), (1, 0), (2, 0)], 1, 0)
 
+    def test_tank_iron_straps_reach_both_uv_face_seams(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "tank.png"
+            paint("Tank", path)
+            faces = [face for face in face_layout("Tank")["body"]
+                     if face["surface"] == "vessel:band1"]
+            self.assertEqual(len(faces), 12)
+            with Image.open(path) as image:
+                for face in faces:
+                    polygon = face["polygon_px"]
+                    cell = face["cell"]
+                    for fraction in (0.28, 0.72):
+                        for top, bottom, direction in ((0, 3, -1), (1, 2, 1)):
+                            edge = tuple(polygon[top][i] * (1 - fraction)
+                                         + polygon[bottom][i] * fraction for i in range(2))
+                            # Sample just beyond the projected face boundary: a
+                            # strap ending inside the UV face leaves a visible gap.
+                            xx, yy = round(edge[0] + direction), round(edge[1])
+                            self.assertEqual(image.getpixel((xx, yy)), (78, 76, 70, 255),
+                                             (cell, fraction, direction))
+
     def test_albedo_does_not_bake_directional_face_lighting(self):
         import building_m2_art as art
         with tempfile.TemporaryDirectory() as directory:
