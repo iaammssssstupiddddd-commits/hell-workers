@@ -302,6 +302,16 @@ UI driverは移動だけを最大3回再取得し、実際にhoverを観測す�
 （空き→配置→保存→読込→取消）を取得。Yardの2×2 Blueprint予約、保存後の同一対象復元、
 取消後のowner解放を固定独立verifierがpassし、用途保持・finalize・storage check済み。
 対象は完成前のBlueprintであり、Resting／Dream・数値／art採否・正式導入・性能を証明しない。
+同一MudMixer `art_preview` manifest `4007d3fb4ebb93b9c6a4ce73aec3a9ac1e53736f8e19fc71211dd74ca45b094a` の
+近景 `tak14-mud-mixer-near-86a0953a-20261005-v1` と遠景
+`tak14-mud-mixer-far-86a0953a-20261005-v1` は、現行clean subjectのIntel/Vulkan所有windowで
+独立technical verify pass、用途保持、finalize、storage check済み。独立read-only画像評価は
+回転部の十字輪郭とIdle／Refiningの静止色差を認める一方、固定槽が緑の平箱に見え、
+木・鉄・泥、槽の内側と架台の区別が近景でも不足すると指摘した。正式art判断は
+`changes_requested`。数値geometryやゲーム状態を変更せず、槽内面・木の縁と外板・鉄架台・
+回転部をalbedoの大きな色面で分け、fresh候補を同一条件の実画像で再比較する。
+遠景の小さな内部線は承認根拠にせず、通常worldの実精製時だけ回転する状態、
+明暗・背景・低品質・配置preview、numeric freeze、ordinary lifecycle／性能、正式releaseは未受入。
 出力root: primary `target/native-acceptance/nonbridge-restarea-authoring-20261004-v1`。
 owner: main / consumer: M3候補の独立採否・現行subject導入。次工程: 原本・画像を比較しruntime候補を生成。
 release_when: 採用原本のasset正本への集約と候補フィードバック終了後。旧batchのpassを新subjectへ流用しない。

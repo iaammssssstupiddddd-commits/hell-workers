@@ -13,7 +13,7 @@ from PIL import Image, ImageDraw
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
-from building_m2_art import candidate_geometry, face_layout, paint, project_xz
+from building_m2_art import candidate_geometry, face_layout, mud_mixer_plane, paint, project_xz
 from build_building_m2_candidate import check_uv
 if __package__:
     from .test_building_clay import encoded_geometry, write_glb
@@ -22,6 +22,27 @@ else:
 
 
 class M2ArtTests(unittest.TestCase):
+    def test_mixer_material_planes_separate_cavity_wood_iron_and_rotor(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "mixer.png"
+            layout = face_layout("MudMixer")
+            paint("MudMixer", path, stage="planes")
+            with Image.open(path) as image:
+                for role, faces in layout.items():
+                    for face in faces:
+                        cell = face["cell"]
+                        x, y = (cell % 16) * 32, (cell // 16) * 32
+                        self.assertEqual(image.getpixel((x + 1, y + 1)),
+                                         (*mud_mixer_plane(role, face["surface"]), 255))
+            self.assertNotEqual(mud_mixer_plane("body", "body0:top"),
+                                mud_mixer_plane("body", "body1:top"))
+            self.assertNotEqual(mud_mixer_plane("body", "body1:right"),
+                                mud_mixer_plane("body", "body1:left"))
+            self.assertNotEqual(mud_mixer_plane("body", "body5:front"),
+                                mud_mixer_plane("rotor", "rotor1:front"))
+        with self.assertRaisesRegex(ValueError, "unknown MudMixer"):
+            mud_mixer_plane("body", "body10:top")
+
     def test_tank_floor_is_one_color_and_iron_stays_on_outer_wall(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "tank.png"

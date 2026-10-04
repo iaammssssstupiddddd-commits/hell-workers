@@ -76,6 +76,28 @@ def project_xz(points, polygon, wx, wz):
     return tuple(pa[i]+u*(pb[i]-pa[i])+v*(pc[i]-pa[i]) for i in range(2))
 
 
+def mud_mixer_plane(role, surface):
+    """Assign material colors to authored parts, never to a face's light normal."""
+    label, separator, side = surface.partition(":")
+    require(separator == ":" and side in {"bottom", "top", "front", "right", "back", "left"},
+            "unknown MudMixer face")
+    if role == "rotor":
+        require(label in {"rotor0", "rotor1", "rotor2"}, "unknown MudMixer rotor")
+        return (112, 111, 99) if label == "rotor0" else (194, 144, 83)
+    require(role == "body" and label in {f"body{index}" for index in range(10)},
+            "unknown MudMixer body")
+    if label == "body0":
+        return (83, 58, 43) if side == "top" else (119, 79, 50)
+    inside = {"body1": "right", "body2": "left", "body3": "back", "body4": "front"}
+    if label in inside:
+        if side == "top":
+            return (190, 143, 86)  # wood lip around the real cavity
+        return (101, 67, 48) if side == inside[label] else (151, 103, 64)
+    if label in {"body5", "body6", "body7", "body8"}:
+        return (83, 85, 78)  # runners and upright iron supports
+    return (163, 112, 68)  # overhead wooden crossbeam
+
+
 def paint(kind, path, stage="strokes"):
     # Pillow is already part of the workflow; Blender invokes this via the host
     # preparation entrypoint, so its bundled Python does not need Pillow.
@@ -84,8 +106,7 @@ def paint(kind, path, stage="strokes"):
     require(stage in ("planes", "strokes"), "unknown art stage")
     image = Image.new("RGBA", (ATLAS_SIZE, ATLAS_SIZE), (40, 35, 30, 255))
     draw = ImageDraw.Draw(image)
-    palettes = {"Tank": {"body": (173, 105, 69), "water": (64, 157, 169)},
-                "MudMixer": {"body": (105, 125, 83), "rotor": (184, 148, 86)}}
+    palettes = {"Tank": {"body": (173, 105, 69), "water": (64, 157, 169)}}
     layout = face_layout(kind)
     meshes = candidate_geometry(kind)
     for role, faces in layout.items():
@@ -100,9 +121,12 @@ def paint(kind, path, stage="strokes"):
             # into albedo; runtime illumination owns directional shading.
             # The twelve triangles of the Tank floor are one continuous wood
             # surface: cell-dependent colors would form a spurious star.
-            tone = 1.0 if role == "water" else (0.96 if kind == "Tank" and surface == "vessel:band4"
-                                                 else 0.96 + 0.035 * ((cell % 3) - 1))
-            base = tuple(round(channel * tone) for channel in palettes[kind][role])
+            if kind == "MudMixer":
+                base = mud_mixer_plane(role, surface)
+            else:
+                tone = (1.0 if role == "water" else
+                        0.96 if surface == "vessel:band4" else 0.96 + 0.035 * ((cell % 3) - 1))
+                base = tuple(round(channel * tone) for channel in palettes[kind][role])
             draw.rectangle((x, y, x + CELL - 1, y + CELL - 1), fill=(*base, 255))
             if stage == "planes":
                 continue
