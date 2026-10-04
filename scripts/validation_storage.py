@@ -277,7 +277,7 @@ def policy_hash(primary: Path) -> str:
 def subject_fingerprint(repo: Path) -> str:
     tracked = git(repo, "ls-files", "--cached", "--others", "--exclude-standard", "-z").split("\0")
     paths = {repo / name for name in tracked if name and (
-        name.startswith(("crates/", "scripts/", ".cargo/", ".codex/skills/hell-workers-run-native-acceptance/scripts/"))
+        name.startswith(("crates/", "vendor/", "scripts/", ".cargo/", ".codex/skills/hell-workers-run-native-acceptance/scripts/"))
         or name in {"Cargo.toml", "Cargo.lock", "rust-toolchain", "rust-toolchain.toml"}
     )}
     assets = repo / "assets"

@@ -61,6 +61,19 @@ class ValidationStorageTests(unittest.TestCase):
         storage.register(self.repo, self.spec(identity, output, repo), command=[sys.executable, "-c", program])
         self.assertEqual(storage.execute(self.repo, identity), 0)
 
+    def test_vendored_dependency_change_invalidates_success_sealing(self):
+        source = self.repo / "vendor/parley/src/analysis/mod.rs"
+        source.parent.mkdir(parents=True)
+        source.write_text("dictionary-v1", encoding="utf-8")
+        self.commit()
+        self.run_batch()
+        source.write_text("dictionary-v2", encoding="utf-8")
+        with self.assertRaisesRegex(RuntimeError, "source/assets changed before sealing"):
+            storage.seal(self.repo, "first", {
+                "result": "pass", "reason": "fixture verifier",
+                "verify_command": self.spec()["verify_command"],
+            })
+
     def test_registration_preflight_observes_isolated_snapshot_without_launch(self):
         spec = self.spec()
         observed = []

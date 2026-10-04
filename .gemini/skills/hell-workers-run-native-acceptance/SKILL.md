@@ -70,6 +70,11 @@ existing Souls per Familiar where available, and pauses simulation. The observer
 then stays read-only; the verifier checks nonce/PID-owned client images, visible
 Familiar text, fixture state, frozen inputs and image hashes. Inspect every image.
 This mode provides no click, scroll, navigation or high-DPI acceptance evidence.
+The UI feedback game child fixes `RUST_LOG=info,wgpu=error` so a parent `warn`
+filter cannot suppress the required renderer AdapterInfo record. This does not
+grant adapter authority or relax the verifier. Non-tracing stderr diagnostics
+(for example ICU4X segmentation data errors) must be reported separately; a
+rendering-only verifier pass does not establish an error-free product session.
 The map-first UI also supports `--layout-scene normal|selection|pinned|build|display|area|area-details`.
 Area fixtures verify the compact editor and the ten disclosed actions; selection
 fixtures require the visible Familiar area entry. The details fixture completes
@@ -106,7 +111,8 @@ Select `--case refactor-suite --smoke --input-backend portal` to run rows then
 progress bars with one build and one live portal session. Each game process has
 its own fixture, nonce, input log and checkpoint set. Verification requires both
 cases in order, distinct evidence directories/nonces and the same portal session.
-The session closes when the suite ends or fails; permissions are not persisted.
+The session closes when the suite ends or fails. Persistence is explicit opt-in
+as described below; the default does not store permission.
 
 The ASCII rename/search sequence in `refactor-rows` sets `XMODIFIERS=@im=local`
 only for its game child, using winit's local XIM backend. Record the child's actual
@@ -137,9 +143,27 @@ concrete limitation once instead of repeatedly launching permission waits. Do no
 infer dialog visibility or denial from a timeout.
 
 Start waits up to 300 seconds with heartbeats and rejects denial or missing
-capabilities. The current helper requests nonpersistent access (persist_mode=0)
-and closes the request/session at recipe end. This is an implementation choice,
-not a user requirement for repeated manual approval. One session is reused across
+capabilities. By default the helper requests nonpersistent access (persist_mode=0).
+When the user requests one permission for continuing tests, add
+`--portal-consent-file <absolute-owner-only-state-path>` to `plan` with the portal
+backend. Use a dedicated 0700 directory outside tracked source (for example,
+the primary Git common directory's `validation-storage/input-consent/`) and the
+same journal path for subsequent registered jobs. RemoteDesktop version 2 is
+required. The helper requests persist_mode=2 and stores only the OS-returned
+single-use restore token in a 0600 owner-only journal, bound to the current
+desktop bus and pointer/keyboard device set. It consumes the token before
+submission and rotates it after a successful grant. Busy, malformed, foreign,
+symlink/hardlink, or open-permission journals fail closed; unknown outcomes never
+reuse an old token. Do not print tokens or put them in specs, logs or Git.
+The manifest records `portal_persistence=saved|not-granted|disabled`, not the token.
+`saved` means a token was returned, not that a later restoration has been tested.
+The OS may reject restoration and show consent again after revocation or a change
+in context. A missing returned token means persistence was not granted; report
+that limitation rather than promise one-time consent. To forget local reuse,
+remove only that credential journal after its session has ended; revoke the OS
+permission in desktop settings when required. A new desktop bus needs a new
+journal/explicit consent, not editing the saved binding.
+The request/session still closes at recipe end. One live session is reused across
 viewports; a revoked session is never silently reopened. Each event still checks
 the owned X11 client's focus,
 PID and bounds. Relative motion is sent once and must match the game observer's
@@ -169,6 +193,16 @@ This recipe currently covers navigation/layout feedback for Tasks, minimization,
 paused Tooltip, Settings and notification history. It is not full C01–C08/P1
 acceptance, high-DPI acceptance or a CPU/allocator result. Save transactions,
 general context-menu cancellation and Zone commit scenarios still need dedicated cases.
+
+Select `--case bridge-planning --smoke --input-backend portal` to exercise a
+legal crossing in the ordinary generated world through the Architect catalog,
+placement, a real save/load transaction and Task Dashboard cancellation.
+Preparation only centers the camera and pauses time: no terrain, actors, materials,
+task assignments, buildings or completion outcomes are seeded. The independent
+verifier checks exact ten-cell ownership, load epoch/entity replacement and
+cancellation receipt plus restoration of the original terrain/walkability.
+This is planning feedback only, not completed construction, passage, deconstruction,
+Memory/performance, art/numeric approval or release acceptance.
 
 ## Wall/Door feedback storyboard
 

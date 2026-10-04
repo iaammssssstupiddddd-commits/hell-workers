@@ -56,7 +56,7 @@ SOURCE_FILES = {
     "tools/blender_ai_workflow/scripts/render_color_calibration.py",
     "tools/blender_ai_workflow/scripts/verify_color_calibration.py",
 }
-SOURCE_PREFIXES = ("crates/", "scripts/perf_tool/")
+SOURCE_PREFIXES = ("crates/", "vendor/", "scripts/perf_tool/")
 ASSET_PREFIX = "assets/"
 MEASUREMENT_HARNESS_FILES = (
     ".codex/skills/hell-workers-run-native-acceptance/scripts/native_acceptance.py",
@@ -66,6 +66,7 @@ MEASUREMENT_HARNESS_FILES = (
     ".codex/skills/hell-workers-run-native-acceptance/scripts/wall_door_joint_acceptance.py",
     ".codex/skills/hell-workers-run-native-acceptance/scripts/ui_refactor_rows.py",
     ".codex/skills/hell-workers-run-native-acceptance/scripts/ui_progress_bars.py",
+    ".codex/skills/hell-workers-run-native-acceptance/scripts/ui_bridge_planning.py",
     ".codex/skills/hell-workers-run-native-acceptance/scripts/ui_terrain_materials.py",
     ".codex/skills/hell-workers-run-native-acceptance/scripts/rtt_light_closure_verify.py",
     ".codex/skills/hell-workers-run-native-acceptance/scripts/p02_presentation_acceptance.py",

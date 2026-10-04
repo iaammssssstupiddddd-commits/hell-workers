@@ -76,6 +76,12 @@ def is_production_path(path: str) -> bool:
 
     if path in {"Cargo.toml", "Cargo.lock"}:
         return True
+    # Local dependency patches can change player behavior without touching a
+    # first-party crate. Keep their source/build changes inside the review gate.
+    if parts[0] == "vendor" and (
+        normalized.suffix == ".rs" or parts[-1] in {"Cargo.toml", "Cargo.lock"}
+    ):
+        return True
     if (
         len(parts) == 3
         and parts[0] == "crates"

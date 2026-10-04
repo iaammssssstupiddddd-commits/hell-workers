@@ -43,8 +43,16 @@ class HelpImpactPathTests(unittest.TestCase):
             "crates/bevy_app/assets/manifests/lamp.buildingset",
             "crates/hw_ui/assets/labels.ftl",
             "settings/defaults.toml",
+            "vendor/parley/src/analysis/mod.rs",
+            "vendor/parley/Cargo.toml",
         ):
             self.assertTrue(check_help_impact.is_production_path(path), path)
+
+    def test_vendored_source_requires_a_fresh_help_decision(self) -> None:
+        decision = check_help_impact.evaluate_batch(
+            [], ["vendor/parley/src/analysis/mod.rs"]
+        )
+        self.assertFalse(decision.passed)
 
     def test_root_catalog_and_typed_renderer_count_as_help_sources(self) -> None:
         self.assertTrue(

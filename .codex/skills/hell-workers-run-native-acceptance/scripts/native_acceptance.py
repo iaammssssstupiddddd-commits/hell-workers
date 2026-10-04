@@ -89,6 +89,7 @@ SOURCE_FILES = {
 }
 SOURCE_PREFIXES = (
     "crates/",
+    "vendor/",
     "scripts/perf_tool/",
 )
 ASSET_PREFIX = "assets/"
@@ -101,6 +102,7 @@ NATIVE_HARNESS_FILES = (
     ".codex/skills/hell-workers-run-native-acceptance/scripts/ui_usability_acceptance.py",
     ".codex/skills/hell-workers-run-native-acceptance/scripts/ui_refactor_rows.py",
     ".codex/skills/hell-workers-run-native-acceptance/scripts/ui_progress_bars.py",
+    ".codex/skills/hell-workers-run-native-acceptance/scripts/ui_bridge_planning.py",
     ".codex/skills/hell-workers-run-native-acceptance/scripts/ui_terrain_materials.py",
     ".codex/skills/hell-workers-run-native-acceptance/scripts/rtt_light_closure_verify.py",
     "scripts/native_ui_input.py",
