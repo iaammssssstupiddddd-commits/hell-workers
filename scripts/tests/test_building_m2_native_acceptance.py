@@ -293,7 +293,8 @@ class NativeRecipeTests(unittest.TestCase):
         for selector in ("Intel", "iNtEl", name):
             with self.subTest(selector=selector):
                 self.assertEqual(recipe.adapter_environment(selector),
-                                 {"WGPU_BACKEND": "vulkan", "WGPU_ADAPTER_NAME": selector})
+                                 {"WGPU_BACKEND": "vulkan", "WGPU_ADAPTER_NAME": selector,
+                                  "RUST_LOG": "info,wgpu=error"})
                 record = recipe.check_renderer(log, selector)
                 self.assertEqual(record, {"selector": selector, "name": name, "backend": "Vulkan"})
                 recipe.check_renderer_record(log, selector, record)

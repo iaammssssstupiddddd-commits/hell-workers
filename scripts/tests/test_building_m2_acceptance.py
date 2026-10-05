@@ -80,6 +80,30 @@ class M2AcceptanceTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "revision"):
             self.inspect()
 
+    def test_inventory_cannot_attribute_a_v1_trace_to_v2(self):
+        self.identity["kind"] = "MudMixer"
+        digest = m2.numeric_contract("MudMixer", "v2")[1]
+        self.plan["kinds"] = {"MudMixer": {"identity": self.identity,
+                              "revision": "v2", "numeric_candidate_sha256": digest}}
+        self.trace["identity"] = self.identity
+        for sample in self.trace["samples"]:
+            sample["identity"] = self.identity
+        with tempfile.TemporaryDirectory() as directory:
+            plan, trace = Path(directory) / "plan.json", Path(directory) / "trace.json"
+            plan.write_bytes(m2.pipeline.canonical(self.plan))
+            for declared in (None, m2.NUMERIC_SHA256, "a" * 64, digest):
+                changed = copy.deepcopy(self.trace)
+                if declared is not None:
+                    changed["numeric_candidate_sha256"] = declared
+                trace.write_text(json.dumps(changed))
+                if declared == digest:
+                    result = m2.inspect(plan, "MudMixer", trace)
+                    self.assertEqual(result["numeric_candidate"]["numeric_candidate_sha256"], digest)
+                    self.assertFalse(result["accepted"])
+                else:
+                    with self.assertRaisesRegex(ValueError, "numeric revision"):
+                        m2.inspect(plan, "MudMixer", trace)
+
 
 class RuntimeIntegrityTests(unittest.TestCase):
     def setUp(self):

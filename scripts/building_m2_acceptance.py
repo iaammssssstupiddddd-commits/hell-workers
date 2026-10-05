@@ -178,6 +178,8 @@ def inspect(plan_path, kind, trace_path):
     pipeline.require(value["scope"] == "m2-feedback-plan-not-acceptance"
                      and value["numeric_candidate_sha256"] == NUMERIC_SHA256, "wrong plan")
     binding = numeric_binding(kind, value["kinds"][kind])
+    pipeline.require(trace.get("numeric_candidate_sha256", NUMERIC_SHA256)
+                     == binding["numeric_candidate_sha256"], "trace numeric revision differs")
     pipeline.require(trace["scope"] == "m2-feedback-observations-only"
                      and trace["identity"] == value["kinds"][kind]["identity"]
                      and trace["failure"] is None and trace["accepted"] is False

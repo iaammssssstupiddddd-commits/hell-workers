@@ -340,7 +340,8 @@ def check_owned_states(owned, value):
 def adapter_environment(selector):
     """The plan stores the WGPU name selector, not an observed GPU identity."""
     pipeline.require(isinstance(selector, str) and selector.strip(), "empty adapter selector")
-    return {"WGPU_BACKEND": "vulkan", "WGPU_ADAPTER_NAME": selector}
+    return {"WGPU_BACKEND": "vulkan", "WGPU_ADAPTER_NAME": selector,
+            "RUST_LOG": "info,wgpu=error"}
 
 
 def check_renderer(log, adapter):

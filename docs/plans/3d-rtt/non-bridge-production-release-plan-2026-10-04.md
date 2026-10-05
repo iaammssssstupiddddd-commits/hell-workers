@@ -403,6 +403,13 @@ unknown revision、Tank v2、v2 hash欠落・v1への取り違え、manifest／p
 Tank v1/MudMixer v1/v2だけを許可、選択hashとdescriptorを照合する補正を行う。
 raw traceにも同数値hashを残し、v2 verifierはhash欠落・v1取り違えを拒否する。
 通常起動や精製システムは不変。修正後のfresh subjectと独立実機verifyまで精製観測は未達。
+producer補正`2fd6bb381cafb525898def9393ad2e43d600b851`のfresh batch
+`tak14-mud-mixer-v2-refining-2fd6bb38-20261005-v1` は160秒観測後、renderer/GPU identity
+欠損でinvalid。rawはv2 hash・Idle/Active/pausedを記録したが、actual-window logにAdapterInfoがなく
+正式観測passにはしない。旧失敗と別の診断保持・finalizeを行った。
+M2 runnerの子processへ既存nativeと同じ`RUST_LOG=info,wgpu=error`を明示し、rendererの証拠を
+採取する補正を行う。renderer欠損／不一致の拒否は維持する。inventory単独もrawの数値hashを
+照合し、v2 traceのhash欠落やv1取り違えを拒否する。修正後のfresh実機verifyは未達。
 出力root: primary `target/native-acceptance/nonbridge-restarea-authoring-20261004-v1`。
 owner: main / consumer: M3候補の独立採否・現行subject導入。次工程: 原本・画像を比較しruntime候補を生成。
 release_when: 採用原本のasset正本への集約と候補フィードバック終了後。旧batchのpassを新subjectへ流用しない。
