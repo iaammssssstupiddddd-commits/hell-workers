@@ -396,6 +396,13 @@ top-levelの旧`numeric_candidate_sha256`は共通v1基点で、v2の根拠で�
 `numeric_candidates`を各kindの根拠とし、inspectも同じrevision拒否規則を使う。
 unknown revision、Tank v2、v2 hash欠落・v1への取り違え、manifest／provenance不一致を拒否する。
 これは未承認feedback候補の状態観測準備だけで、数値freezeや正式art/releaseを付与しない。
+補正`6836e916f49dcfefc84d403208cc317395c61acd`のfresh refining batch
+`tak14-mud-mixer-v2-refining-6836e916-20261005-v1` はRust producerのv1固定hashで拒否されinvalid。
+ログの `M2 probe descriptor does not bind the exact numeric candidate` を診断保持しfinalizeした。
+同batchの再起動・結果の読み替えはしない。producerへ明示`HW_M2_ACCEPTANCE_REVISION`を渡し、
+Tank v1/MudMixer v1/v2だけを許可、選択hashとdescriptorを照合する補正を行う。
+raw traceにも同数値hashを残し、v2 verifierはhash欠落・v1取り違えを拒否する。
+通常起動や精製システムは不変。修正後のfresh subjectと独立実機verifyまで精製観測は未達。
 出力root: primary `target/native-acceptance/nonbridge-restarea-authoring-20261004-v1`。
 owner: main / consumer: M3候補の独立採否・現行subject導入。次工程: 原本・画像を比較しruntime候補を生成。
 release_when: 採用原本のasset正本への集約と候補フィードバック終了後。旧batchのpassを新subjectへ流用しない。

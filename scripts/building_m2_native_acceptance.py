@@ -48,6 +48,9 @@ def check_plan(value):
     pipeline.require(pipeline.digest(plan_path.read_bytes()) == value["runtime_plan_sha256"], "runtime plan changed")
     result = m2.verify(plan_path)
     runtime = pipeline.read(plan_path)
+    expected_numeric = m2.numeric_binding(value["kind"], runtime["kinds"][value["kind"]])
+    pipeline.require(m2.numeric_binding(value["kind"], value) == expected_numeric,
+                     "native numeric revision differs")
     pipeline.require(result["subject"] == value["subject"]
                      and runtime["repo"] == value["repo"]
                      and runtime["kinds"][value["kind"]]["identity"] == value["identity"], "native subject differs")
@@ -69,6 +72,7 @@ def plan(args):
              "runtime_plan": str(args.runtime_plan.absolute()),
              "runtime_plan_sha256": pipeline.digest(args.runtime_plan.read_bytes()),
              "identity": runtime["kinds"][args.kind]["identity"], "kind": args.kind,
+             **m2.numeric_binding(args.kind, runtime["kinds"][args.kind]),
              "leg": args.leg, "duration_seconds": args.duration_seconds, "adapter": args.adapter,
              "driver_sha256": pipeline.digest(Path(__file__).read_bytes()),
              "accepted": False, "promotion_authority": False}
@@ -85,6 +89,9 @@ def plan(args):
 
 
 def check_trace(trace, value, nonce, pid):
+    binding = m2.numeric_binding(value["identity"]["kind"], value)
+    pipeline.require(trace.get("numeric_candidate_sha256", m2.NUMERIC_SHA256)
+                     == binding["numeric_candidate_sha256"], "trace numeric revision differs")
     pipeline.require(value.get("leg") in LIFECYCLE_LEGS | {DRIVEN_LEGS.get(value["identity"]["kind"])},
                      "unsupported fixture leg")
     pipeline.require(type(pid) is int and pid > 0 and isinstance(nonce, str)
@@ -459,6 +466,7 @@ def run(args):
         env.update({"BEVY_ASSET_ROOT": str(view), "HW_WINDOW_BACKEND": "x11", "HW_PRESENT_MODE": "novsync",
             **adapter_environment(value["adapter"]), "WINIT_X11_SCALE_FACTOR": "1",
             "HW_M2_ACCEPTANCE_PROBE": "1", "HW_M2_ACCEPTANCE_LEG": value["leg"],
+            "HW_M2_ACCEPTANCE_REVISION": m2.numeric_binding(value["kind"], value)["revision"],
             "HW_BUILDING_ART_SESSION": json.dumps({
                 "mode": "feedback", "identity": value["identity"], "locator": locator,
                 "nonce": nonce, "status_path": str(root / "probe.json")})})

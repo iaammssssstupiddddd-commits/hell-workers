@@ -53,6 +53,27 @@ class NativeRecipeTests(unittest.TestCase):
         self.assertEqual(self.trace, before)
         self.assertFalse(self.trace["accepted"])
 
+    def test_v2_trace_requires_the_explicit_numeric_proposal(self):
+        identity = {**self.identity, "kind": "MudMixer"}
+        binding = recipe.m2.numeric_binding("MudMixer", {
+            "revision": "v2", "numeric_candidate_sha256": recipe.m2.numeric_contract("MudMixer", "v2")[1]})
+        value = {"identity": identity, "leg": "refining", **binding}
+        trace = copy.deepcopy(self.trace)
+        trace.update(identity=identity, leg="refining")
+        for sample in trace["samples"]:
+            sample["identity"] = identity
+        for digest in (None, recipe.m2.NUMERIC_SHA256, "a" * 64):
+            changed = copy.deepcopy(trace)
+            if digest is not None:
+                changed["numeric_candidate_sha256"] = digest
+            with self.subTest(digest=digest), self.assertRaisesRegex(ValueError, "numeric revision"):
+                recipe.check_trace(changed, value, self.nonce, 42)
+        trace["numeric_candidate_sha256"] = binding["numeric_candidate_sha256"]
+        with patch.object(recipe, "check_owned_states"):
+            recipe.check_trace(trace, value, self.nonce, 42)
+        self.assertFalse(trace["accepted"])
+        self.assertFalse(trace["performance_evidence"])
+
     def test_mixer_requires_owned_pause_resume_motion_and_overlap(self):
         value = {"identity": {**self.identity, "kind": "MudMixer"}, "leg": "refining"}
         states = [("MixerIdle", False, 0), ("MixerActive", False, 1),

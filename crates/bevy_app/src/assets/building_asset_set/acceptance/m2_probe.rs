@@ -19,9 +19,19 @@ use std::path::PathBuf;
 const SAMPLE_CAP: usize = 1800;
 const ENTITY_CAP: usize = 128;
 const NUMERIC_SHA256: &str = "1b913ea0784bf6815a6c46ed0396dafc6ebcdcfc107370bc569aa875775d949d";
+const NUMERIC_V2_SHA256: &str = "aba63ac343e11ed4fa758deffaf36b9139145333ca5d61fd26c3e3dd513153c8";
+
+fn numeric_candidate(kind: BuildingAssetKind, revision: &str) -> Result<&'static str, String> {
+    match (kind, revision) {
+        (BuildingAssetKind::Tank | BuildingAssetKind::MudMixer, "v1") => Ok(NUMERIC_SHA256),
+        (BuildingAssetKind::MudMixer, "v2") => Ok(NUMERIC_V2_SHA256),
+        _ => Err("unsupported M2 kind/numeric revision".into()),
+    }
+}
 
 #[derive(Resource)]
 struct Trace {
+    numeric_sha256: &'static str,
     path: PathBuf,
     next_sample: f64,
     next_write: f64,
@@ -45,9 +55,16 @@ pub(super) fn configure(app: &mut App, session: &BuildingArtSession) -> Result<(
         );
     }
     let path = session.status_path.with_extension("m2-trace.json");
+    let revision = match std::env::var("HW_M2_ACCEPTANCE_REVISION") {
+        Ok(value) => value,
+        Err(std::env::VarError::NotPresent) => "v1".into(),
+        Err(error) => return Err(format!("invalid M2 numeric revision: {error}")),
+    };
+    let numeric_sha256 = numeric_candidate(session.identity.kind, &revision)?;
     require_fresh_output(&path).map_err(|e| format!("use a fresh M2 trace path: {e}"))?;
     super::m2_fixture::configure(app, session.identity.kind)?;
     app.insert_resource(Trace {
+        numeric_sha256,
         path,
         next_sample: 0.0,
         next_write: 0.0,
@@ -106,7 +123,8 @@ fn snapshot(world: &mut World) -> Result<Value, String> {
     let pool = world.resource::<BuildingAssetPool>();
     let identity = pool.active(session.identity.kind).cloned();
     let descriptor = pool.descriptor(session.identity.kind);
-    if descriptor.is_some_and(|set| set.manifest.geometry_contract_sha256 != NUMERIC_SHA256) {
+    let numeric_sha256 = world.resource::<Trace>().numeric_sha256;
+    if descriptor.is_some_and(|set| set.manifest.geometry_contract_sha256 != numeric_sha256) {
         return Err("M2 probe descriptor does not bind the exact numeric candidate".into());
     }
     let expected_images = descriptor.map(|set| {
@@ -351,6 +369,7 @@ fn observe(world: &mut World) {
         "leg": world.resource::<super::m2_lifecycle::Lifecycle>().leg,
         "process_id": std::process::id(),
         "identity": session.identity, "nonce": session.nonce, "failure": failure,
+        "numeric_candidate_sha256": world.resource::<Trace>().numeric_sha256,
         "accepted": false, "performance_evidence": false,
         "samples": world.resource::<Trace>().samples});
     let write = serde_json::to_vec(&record)
@@ -375,6 +394,30 @@ fn observe(world: &mut World) {
 mod tests {
     use super::*;
     use crate::assets::building_asset_set::BuildingAssetSetIdentity;
+
+    #[test]
+    fn numeric_revision_is_explicit_and_kind_bounded() {
+        assert_eq!(
+            numeric_candidate(BuildingAssetKind::Tank, "v1").unwrap(),
+            NUMERIC_SHA256
+        );
+        assert_eq!(
+            numeric_candidate(BuildingAssetKind::MudMixer, "v1").unwrap(),
+            NUMERIC_SHA256
+        );
+        assert_eq!(
+            numeric_candidate(BuildingAssetKind::MudMixer, "v2").unwrap(),
+            NUMERIC_V2_SHA256
+        );
+        for (kind, revision) in [
+            (BuildingAssetKind::Tank, "v2"),
+            (BuildingAssetKind::MudMixer, "v3"),
+            (BuildingAssetKind::MudMixer, ""),
+            (BuildingAssetKind::RestArea, "v1"),
+        ] {
+            assert!(numeric_candidate(kind, revision).is_err());
+        }
+    }
 
     #[test]
     fn pulse_ack_requires_both_visible_candidate_consumers_on_the_placement_owner() {
@@ -408,6 +451,13 @@ mod tests {
 
     fn world() -> World {
         let mut world = World::new();
+        world.insert_resource(Trace {
+            numeric_sha256: NUMERIC_SHA256,
+            path: PathBuf::from("/unused/m2-trace.json"),
+            next_sample: 0.0,
+            next_write: 0.0,
+            samples: Vec::new(),
+        });
         world.insert_resource(BuildingArtSession {
             mode: "feedback".into(),
             identity: BuildingAssetSetIdentity {
