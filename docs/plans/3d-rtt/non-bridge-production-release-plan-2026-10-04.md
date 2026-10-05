@@ -410,6 +410,25 @@ producer補正`2fd6bb381cafb525898def9393ad2e43d600b851`のfresh batch
 M2 runnerの子processへ既存nativeと同じ`RUST_LOG=info,wgpu=error`を明示し、rendererの証拠を
 採取する補正を行う。renderer欠損／不一致の拒否は維持する。inventory単独もrawの数値hashを
 照合し、v2 traceのhash欠落やv1取り違えを拒否する。修正後のfresh実機verifyは未達。
+補正`5468dbbc928f48993986b362e7929021d6e553c0`のfresh
+`tak14-mud-mixer-v2-refining-5468dbbc-20261005-v1` と
+`tak14-tank-water-5468dbbc-20261005-v1` はIntel Arc/Vulkan所有1280×720 windowで
+各160秒観測、登録済み独立verifier pass、比較用途保持・finalize・primary storage check pass。
+MudMixer rawは1288 samples、同一v2数値hash・ArtPreview identityでIdle/Active、17 paused samples、
+rotor姿勢変化と再開を記録。独立画像レビューでは木枠・泥・rotorと紫のActive表示差が読め、
+追加paint欠陥は見当たらない。一方、owner itemはrawの33 samplesにあり、画像では独立した形が
+明瞭でなく、item/rotor重なりの可読性は未達。Idle画像にはConstruction Complete表示の重なりがある。
+checkpoint 1の撮影前raw index39はpaused=falseだが画像は既に一時停止表示で、checkpoint 2も
+停止画像である。現在の撮影前sample bindingは画像の撮影時点を固定しないため、画像だけで
+停止前後の運動を証明しない。撮影前後のraw区間と描画時点の整合を確認する補正が必要。
+Tank rawは955 samples、同一v1数値hash・ArtPreview identity、同一ownerでEmpty/Partial/Fullを記録。
+通常倍率のcheckpoint画像では空の槽底、暗めの低水面、明るい満水面が見えるが、独立画像採否と
+撮影時点は別取得である。独立画像レビューでも3状態と木枠／水面の分離を確認し、追加paint修正は
+不要と判断した。raw index3/39/75は同じownerのEmpty/Partial/Fullで、水面Hidden→高さ12→高さ22と
+画像変化が整合するが、完全な同時刻証拠ではない。EmptyのConstruction Complete表示は上縁・内面を
+遮り、その部分の美術評価は未達。水のfixture投入やMudMixerのfixture task/state操作は通常入力の証拠ではない。
+両passはfeedback技術観測だけで、正式art/numeric freeze、ordinary-input給排水・精製lifecycle、
+全leg/性能、promotion/install/rollbackや通常起動の本設導入は引き続き未受入。
 出力root: primary `target/native-acceptance/nonbridge-restarea-authoring-20261004-v1`。
 owner: main / consumer: M3候補の独立採否・現行subject導入。次工程: 原本・画像を比較しruntime候補を生成。
 release_when: 採用原本のasset正本への集約と候補フィードバック終了後。旧batchのpassを新subjectへ流用しない。
