@@ -380,6 +380,10 @@ fresh job内 `runtime/saves/manual-1.scn.ron` の実バイトhashとManualCatalo
 検査する。実saveはゲームだけが書き、hostは有界read-only hashのみ。symlink／hardlinkや
 既存slot上書きを拒否する。これは計画保存復元の技術feedbackであり、完成lifecycle・全世界の
 canonical serialization・性能・アート／数値・release承認へ昇格しない。
+`89f40fe2`のfresh通常Tank計画Save/Loadは独立画像reviewと登録verifierで限定technical pass。
+原親と2childはLoadで新IDへ置換し、同footprint・進捗0・空材料・保管占有を保持、旧mapは空。
+ロード確認dialogなし／Loaded Manual slot1をowned clientで確認した。これは材料配送・完成・
+取消のterminal refund・正式asset authorityを受け入れたものではない。
 
 - `plan`はisolated candidate、別美術承認、source／geometry／export inventory、codec hash、現在のauthority／
   locatorを照合する。sourceと導入先は分離し、generationは失敗を含む全割当済み世代より大きくする。

@@ -13,9 +13,10 @@
 
 ## 1. 目的
 
-2026-10-12の最新限定進捗: `e5f81694`で通常Tank親Blueprintと2childの計画commitを
-actual-window/rawの独立review・登録verifierで確認した。次は通常F5/F9のManual1保存復元を
-fresh job内の実ファイル・receipt・epoch・親子置換で照合する。完成・正式asset・9種全体受入は未完。
+2026-10-12の最新限定進捗: `89f40fe2`で通常Tank親Blueprintと2childの計画commit、
+F5/F9のManual1保存復元、dialogなしのロード後画面をactual-window/rawの独立review・
+登録verifierで確認した。次は通常計画取消のowner/付属保管所/map cleanupと実terminal receipt。
+完成・正式asset・9種全体受入は未完。
 `e9bc838f`の初回はF5直後のcatalog layout未確定（sample65、可視controls空）をクリック前に拒否し、
 save/loadなしのinvalidとして精算・診断保持した。入力を再送せず、2つの実computed-layout sampleが
 同じwindow／epoch／session／controlを持つまで最大3秒のpassive waitを追加してfresh subjectで再確認する。
@@ -35,6 +36,13 @@ epoch0→1、親1898v2→1984v1と2childの新ID、footprint・空材料・map�
 cycleはinvalidとして精算し、原raw／save／画像を撮影同期修正の診断に保持した。
 Load実receipt直後のcaptureをやめ、2つの後続Closed sampleと500ms settleをpassiveに要求し、
 fresh画像を独立確認する。raw成功を画像成功・正式construction・releaseへ読み替えない。
+fresh `tak14-save-tank-present-feedback-20261012-v1`は独立9PNG reviewと登録verifierで限定pass、
+seal/finalize/storage check済み。Save sample67/session1、Load sample81/session2、capture sample84は
+receipt後566ms・後続3sampleのClosed、新epoch1。原親2367v1→798v1、付属2childのID置換、
+4tile footprint・空材料・進捗0・stockpile占有を保持し、旧実entity/map残留はない。
+実Manual1は494407 bytes、SHA-256 `541c691df5a3ce70428244177c39238702a4e1bbc7dd26c45bebc91879998835`。
+通常Intel Arc/Vulkan、WARN/ERRORなし。全world canonical serialization・完成・art/numeric/perf/
+正式releaseではなく、次の取消／cleanup比較用途の限定raw/save/latest画像だけを保持する。
 
 通常起動で橋以外の9種が正式ビジュアルになり、完成・状態・配置・移動・施工・カタログ・保存復元が一致する。
 原移行計画の受入条件を維持し、橋だけを今回の完了対象から外す。技術previewと正式採用を区別する。
