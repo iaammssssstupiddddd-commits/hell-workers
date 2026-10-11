@@ -34,7 +34,6 @@ struct Trace {
     numeric_sha256: &'static str,
     path: PathBuf,
     next_sample: f64,
-    next_write: f64,
     samples: Vec<Value>,
 }
 
@@ -67,7 +66,6 @@ pub(super) fn configure(app: &mut App, session: &BuildingArtSession) -> Result<(
         numeric_sha256,
         path,
         next_sample: 0.0,
-        next_write: 0.0,
         samples: Vec::new(),
     })
     .add_systems(Last, observe);
@@ -358,10 +356,9 @@ fn observe(world: &mut World) {
         if let Ok(sample) = result {
             trace.samples.push(sample);
         }
-        if now < trace.next_write && failure.is_none() {
-            return;
-        }
-        trace.next_write = now + 1.0;
+        // Publish each bounded diagnostic sample. A one-second publication
+        // delay can hide the fixture's shorter active/pause capture intervals.
+        // This observer remains disabled for performance measurements.
         trace.path.clone()
     };
     let session = world.resource::<BuildingArtSession>();
@@ -455,7 +452,6 @@ mod tests {
             numeric_sha256: NUMERIC_SHA256,
             path: PathBuf::from("/unused/m2-trace.json"),
             next_sample: 0.0,
-            next_write: 0.0,
             samples: Vec::new(),
         });
         world.insert_resource(BuildingArtSession {
@@ -526,5 +522,37 @@ mod tests {
             ));
         }
         assert!(snapshot(&mut world).unwrap_err().contains("cap exceeded"));
+    }
+
+    #[test]
+    fn every_due_sample_is_published_without_one_second_lag() {
+        let mut world = world();
+        world.insert_resource(super::super::m2_lifecycle::Lifecycle::new("water".into()));
+        let output = std::env::temp_dir().join(format!(
+            "hw-m2-publish-{}-{}.json",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        world.resource_mut::<Trace>().path = output.clone();
+        observe(&mut world);
+        let first = std::fs::read(&output).unwrap();
+        world
+            .resource_mut::<Time<Real>>()
+            .advance_by(std::time::Duration::from_millis(50));
+        observe(&mut world);
+        assert_eq!(std::fs::read(&output).unwrap(), first);
+        world
+            .resource_mut::<Time<Real>>()
+            .advance_by(std::time::Duration::from_millis(60));
+        observe(&mut world);
+        let published: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&output).unwrap()).unwrap();
+        assert_eq!(published["samples"].as_array().unwrap().len(), 2);
+        assert_eq!(published["accepted"], false);
+        assert_eq!(published["performance_evidence"], false);
+        std::fs::remove_file(output).unwrap();
     }
 }
