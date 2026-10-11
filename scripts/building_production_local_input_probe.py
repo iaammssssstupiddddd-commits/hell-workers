@@ -19,17 +19,20 @@ import time
 if __package__:
     from . import building_production_local_probe as probe
     from . import building_production_validation_context as ownership
+    from . import building_production_selection_probe as selection_probe
     from .building_m2_native_acceptance import check_capture_pixels
     from .native_ui_portal import PortalSession, PortalX11Input
 else:
     import building_production_local_probe as probe
     import building_production_validation_context as ownership
+    import building_production_selection_probe as selection_probe
     from building_m2_native_acceptance import check_capture_pixels
     from scripts.native_ui_portal import PortalSession, PortalX11Input
 
 native = probe.native
 PROFILE = "building-production-local-input-probe-portal-v2"
 CATALOG_PROFILE = "building-production-local-architect-portal-v1"
+SELECTION_PROFILE = "building-production-local-equipment-feedback-v1"
 OWNER = "TAK-14 normal-development coordinator"
 KEY = "F12"
 WINDOW = (1280, 720)
@@ -57,15 +60,20 @@ def check_plan(value: dict, plan_path: Path, *, fresh: bool = True,
                            "portal_transport_sha256", "consent_file", "binary",
                            "binary_sha256", "owner", "key", "accepted",
                            "performance_evidence", "art_approved", "promotion_authority"}
-    catalog = value.get("profile") == CATALOG_PROFILE
-    require(set(value) == (fields | {"scenario"} if catalog else fields),
+    selection = value.get("profile") == SELECTION_PROFILE
+    catalog = value.get("profile") in {CATALOG_PROFILE, SELECTION_PROFILE}
+    expected = fields | {"scenario"} if catalog else fields
+    if selection:
+        expected |= {"selection_kind", "selection_driver_sha256"}
+    require(set(value) == expected,
             "input probe plan shape differs")
     repo = native.validate_repo(value["repo"])
     root, binary = Path(value["job_root"]), Path(value["binary"])
     for path in (plan_path, root, binary, Path(value["consent_file"])):
         ownership.exact_path(path)
-    require(value["schema"] == 1 and value["profile"] in {PROFILE, CATALOG_PROFILE}
-            and (not catalog or value.get("scenario") == "architect-cancel")
+    require(value["schema"] == 1 and value["profile"] in {PROFILE, CATALOG_PROFILE, SELECTION_PROFILE}
+            and (not catalog or value.get("scenario") == ("architect-select-cancel" if selection else "architect-cancel"))
+            and (not selection or value.get("selection_kind") in selection_probe.KINDS)
             and value["owner"] == OWNER and value["key"] == ("b" if catalog else KEY)
             and value["consent_file"] == str(repo / CONSENT_RELATIVE)
             and all(value[key] is False for key in
@@ -74,7 +82,7 @@ def check_plan(value: dict, plan_path: Path, *, fresh: bool = True,
     require((not plan_exists or plan_path.is_file())
             and plan_path.parent == repo / "target/native-acceptance"
             and root.parent == repo / "target/native-acceptance"
-            and root != plan_path and binary == repo / "target/profiling/bevy_app"
+            and root != plan_path and binary == repo / ("target/debug/bevy_app" if selection else "target/profiling/bevy_app")
             and binary.is_file() and os.access(binary, os.X_OK),
             "input probe paths differ")
     require(not native.git_dirty_paths(repo)
@@ -88,6 +96,8 @@ def check_plan(value: dict, plan_path: Path, *, fresh: bool = True,
                 Path(__file__).with_name("native_ui_portal.py"))
             and value["binary_sha256"] == probe.digest(binary),
             "input probe frozen source, binary or transport differs")
+    require(not selection or value["selection_driver_sha256"] == probe.digest(Path(selection_probe.__file__)),
+            "equipment selection driver differs")
     if fresh:
         require(not root.exists(), "input probe output root already exists")
     return repo, root, binary
@@ -99,8 +109,11 @@ def plan(args: argparse.Namespace) -> dict:
     ownership.exact_path(root)
     ownership.exact_path(output)
     require(not root.exists() and not output.exists(), "input probe requires fresh paths")
-    binary = repo / "target/profiling/bevy_app"
-    require(binary.is_file(), "build the profiling-feature binary through dev.py cargo first")
+    selection = getattr(args, "scenario", None) == "architect-select-cancel"
+    require((getattr(args, "kind", None) in selection_probe.KINDS) if selection
+            else getattr(args, "kind", None) is None, "equipment kind must belong to the fixed selection scenario")
+    binary = repo / ("target/debug/bevy_app" if selection else "target/profiling/bevy_app")
+    require(binary.is_file(), "build the profiling-feature binary through dev.py feedback or cargo first")
     value = {"schema": 1, "profile": PROFILE, "repo": str(repo), "job_root": str(root),
              "head": native.git_subject(repo), "source": native.source_fingerprint(repo),
              "harness": native.native_harness_fingerprint(repo),
@@ -113,6 +126,9 @@ def plan(args: argparse.Namespace) -> dict:
              "art_approved": False, "promotion_authority": False}
     if getattr(args, "scenario", "debug-toggle") == "architect-cancel":
         value.update(profile=CATALOG_PROFILE, scenario="architect-cancel", key="b")
+    if selection:
+        value.update(profile=SELECTION_PROFILE, scenario="architect-select-cancel", key="b",
+                     selection_kind=args.kind, selection_driver_sha256=probe.digest(Path(selection_probe.__file__)))
     require(root.parent == repo / "target/native-acceptance" and not native.git_dirty_paths(repo),
             "input probe requires a clean primary subject and direct output root")
     resources = native.resource_snapshot(repo, require_launcher=True)
@@ -388,8 +404,10 @@ def run(args: argparse.Namespace) -> dict:
     owned = None
     records: list[dict] = []
     screenshot_before, screenshot_after = root / "before.png", root / "after.png"
-    catalog = value["profile"] == CATALOG_PROFILE
+    selection = value["profile"] == SELECTION_PROFILE
+    catalog = value["profile"] in {CATALOG_PROFILE, SELECTION_PROFILE}
     catalog_evidence = None
+    selection_evidence = None
     metrics: list[dict] = []
     with (root / "game.log").open("w") as log:
         game = subprocess.Popen([str(binary)], cwd=runtime, env=environment, stdout=log,
@@ -458,6 +476,18 @@ def run(args: argparse.Namespace) -> dict:
                     time.sleep(0.05)
                     raw = raw_snapshot(raw_path, nonce, pid)
                 opened_end = len(raw["samples"]) - 1
+                if selection:
+                    stage = "ordinary equipment selection feedback"
+
+                    def capture_selection(path):
+                        require(native.capture_client_png(window, path, import_cmd="import"),
+                                "owned equipment selection capture failed")
+                        check_capture_pixels(path)
+
+                    selection_evidence = selection_probe.run(
+                        transport, lambda: raw_snapshot(raw_path, nonce, pid), value["selection_kind"],
+                        root, capture_selection)
+                    raw = raw_snapshot(raw_path, nonce, pid)
                 close_boundary = len(raw["events"])
                 transport.send("close-press", nonce, key="Escape", pressed=True)
                 transport.send("close-release", nonce, key="Escape", pressed=False)
@@ -503,8 +533,10 @@ def run(args: argparse.Namespace) -> dict:
                 finally:
                     if game.poll() is None:
                         native.stop_command_process(game)
-    require(owned is not None and len(records) == (4 if catalog else 2)
-            and [row["step"] for row in records] == (["key-press", "key-release", "close-press", "close-release"]
+    require(owned is not None and len(records) == (7 if selection else 4 if catalog else 2)
+            and [row["step"] for row in records] == (["key-press", "key-release", "select-motion",
+                                                     "select-press", "select-release", "close-press", "close-release"]
+                                                     if selection else ["key-press", "key-release", "close-press", "close-release"]
                                                      if catalog else ["key-press", "key-release"])
             and all(row["nonce"] == nonce and row["window"] == window_number
                     and row["pid"] == owned[1] for row in records)
@@ -525,6 +557,9 @@ def run(args: argparse.Namespace) -> dict:
     result["startup_capture"] = startup_capture
     if catalog:
         result["catalog_evidence"] = catalog_evidence
+    if selection:
+        result["selection_evidence"] = selection_evidence
+        result["selected_sha256"] = probe.digest(root / "selected.png")
     (root / "result.json").write_text(json.dumps(result, sort_keys=True, separators=(",", ":")) + "\n")
     verify(root)
     return result
@@ -533,7 +568,8 @@ def run(args: argparse.Namespace) -> dict:
 def verify(root: Path) -> dict:
     ownership.exact_path(root)
     result = json.loads((root / "result.json").read_bytes())
-    catalog = result.get("profile") == CATALOG_PROFILE
+    selection = result.get("profile") == SELECTION_PROFILE
+    catalog = result.get("profile") in {CATALOG_PROFILE, SELECTION_PROFILE}
     fields = {"schema", "profile", "status", "plan", "context", "nonce",
                             "game_pid", "window_id", "raw_sha256", "before_sha256",
                             "after_sha256", "before_event_count", "input_receipts",
@@ -541,7 +577,10 @@ def verify(root: Path) -> dict:
                             "measurements", "gpu_metrics", "native_allocator_metrics",
                             "application_handle_total", "accepted", "performance_evidence",
                             "art_approved", "promotion_authority"}
-    require(set(result) == (fields | {"catalog_evidence"} if catalog else fields), "input probe result shape differs")
+    expected = fields | {"catalog_evidence"} if catalog else fields
+    if selection:
+        expected |= {"selection_evidence", "selected_sha256"}
+    require(set(result) == expected, "input probe result shape differs")
     context = result["context"]
     plan_path = Path(context["command"][7])
     require(result["plan"] == json.loads(plan_path.read_bytes()), "input probe plan changed")
@@ -576,10 +615,24 @@ def verify(root: Path) -> dict:
                 and native.validate_png_structure(image.read_bytes()) == WINDOW,
                 "owned Architect capture changed")
         check_capture_pixels(image)
+    if selection:
+        selection_probe.verify(raw, result["selection_evidence"], result["plan"]["selection_kind"])
+        require(result["catalog_evidence"]["opened_end"] <= result["selection_evidence"]["before"]
+                and result["selection_evidence"]["end"] < result["catalog_evidence"]["closed"],
+                "equipment selection is outside the ordinary catalog cycle")
+        require(all("selected_building" in s and s["selected_building"] is None
+                    for s in raw["samples"][evidence["closed"] - 1:evidence["closed_end"] + 1]),
+                "equipment cancellation retained a build selection")
+        image = root / "selected.png"
+        require(probe.digest(image) == result["selected_sha256"], "equipment selection capture changed")
+        check_capture_pixels(image)
     receipts = result["input_receipts"]
     expected_receipts = ([("key-press", "b", True), ("key-release", "b", False),
                           ("close-press", "Escape", True), ("close-release", "Escape", False)]
                          if catalog else [("key-press", KEY, True), ("key-release", KEY, False)])
+    if selection:
+        expected_receipts[2:2] = [("select-motion", None, None), ("select-press", None, True),
+                                  ("select-release", None, False)]
     require(isinstance(receipts, list) and len(receipts) == len(expected_receipts)
             and [(row.get("step"), row.get("key"), row.get("pressed")) for row in receipts]
             == expected_receipts
@@ -587,6 +640,12 @@ def verify(root: Path) -> dict:
                     and row.get("window") == result["window_id"]
                     and row.get("pid") == result["game_pid"] for row in receipts),
             "input probe portal receipts differ")
+    if selection:
+        motion, press, release = receipts[2:5]
+        require(motion.get("point") == result["selection_evidence"]["point"]
+                and motion.get("button") is None
+                and all(row.get("point") is None and row.get("button") == 1 for row in (press, release)),
+                "equipment pointer receipts differ")
     for name, field in (("before.png", "before_sha256"), ("after.png", "after_sha256")):
         path = root / name
         require(probe.digest(path) == result[field]
@@ -601,7 +660,8 @@ def verify(root: Path) -> dict:
     adapters = re.findall(r'AdapterInfo \{ name: "([^"]+)".*?backend: ([A-Za-z0-9_]+)', log)
     require(len(adapters) == 1 and "intel" in adapters[0][0].casefold()
             and adapters[0][1] == "Vulkan", "ordinary-world adapter differs")
-    return {"status": "technical-pass", "scope": "ordinary Architect open/close" if catalog
+    return {"status": "technical-pass", "scope": "feedback-only ordinary equipment selection (no placement)" if selection
+            else "ordinary Architect open/close" if catalog
             else "one owned ordinary-world key receipt only",
             "accepted": False, "promotion_authority": False}
 
@@ -613,7 +673,8 @@ def main() -> int:
     planned.add_argument("--repo", type=Path, required=True)
     planned.add_argument("--job-root", type=Path, required=True)
     planned.add_argument("--output", type=Path, required=True)
-    planned.add_argument("--scenario", choices=("debug-toggle", "architect-cancel"), default="debug-toggle")
+    planned.add_argument("--scenario", choices=("debug-toggle", "architect-cancel", "architect-select-cancel"), default="debug-toggle")
+    planned.add_argument("--kind", choices=selection_probe.KINDS)
     running = actions.add_parser("run")
     running.add_argument("--plan", type=Path, required=True)
     running.add_argument("--repo", type=Path, required=True)

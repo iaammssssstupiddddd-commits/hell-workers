@@ -529,3 +529,8 @@ read-only追加する。既存UiIntentと実layoutから対象を解決し、hid
 最小補正と拒否testを追加。原MouseButtonInputのbutton/state/windowも状態由来入力と分離する。
 原因解消済みの旧3診断jobは正式consumer解除後に生成物だけを整理し、du 11,964,416 bytes減。
 invalid metadata・コード・原本・現行比較証拠は保全し、primary storage checkはpass。
+観測追加`b94e88a3`は独立read-only review、profiling観測15 test、変更別CIのcontract/tooling/Rust、
+通常・profiling Clippy警告0、Help No impactとdev.py checkを通過した。
+次の選択feedbackは既存debug cacheを利用する別profileとし、正規validationの所有／source／
+plan／driver／binary hashを維持する。9種の実cardだけを固定集合として扱い、pointerの製品ACK、
+原MouseButtonInputのprimary window、選択後modeを検査する。通常worldをseedせず、正式採否を付与しない。

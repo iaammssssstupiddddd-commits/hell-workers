@@ -284,12 +284,19 @@ fn snapshot(world: &mut World) -> Result<Value, String> {
     if items.len() > 4096 || move_tasks.len() > 512 {
         return Err("production item/task observation cap exceeded".into());
     }
-    let mut query = world.query_filtered::<&Window, With<bevy::window::PrimaryWindow>>();
-    let dpi = query.iter(world).next().map(|window| window.scale_factor());
+    let mut query = world.query_filtered::<(Entity, &Window), With<bevy::window::PrimaryWindow>>();
+    let primary_window = query
+        .iter(world)
+        .next()
+        .map(|(entity, _)| format!("{entity:?}"));
+    let dpi = query
+        .iter(world)
+        .next()
+        .map(|(_, window)| window.scale_factor());
     let cursor_position = query
         .iter(world)
         .next()
-        .and_then(|window| window.cursor_position())
+        .and_then(|(_, window)| window.cursor_position())
         .map(|point| point.to_array());
     let mut query = world.query_filtered::<&Transform, With<hw_ui::camera::MainCamera>>();
     let camera_scale = query.iter(world).next().map(|pose| pose.scale.x);
@@ -349,7 +356,8 @@ fn snapshot(world: &mut World) -> Result<Value, String> {
         "owner_layers": owner_layers, "actors": actors,
         "items": items, "move_tasks": move_tasks, "generations": generations,
         "quality": world.get_resource::<hw_core::quality::QualitySettings>().map(|settings| format!("{:?}", settings.rtt)),
-        "dpi": dpi, "camera_scale": camera_scale, "cursor_position": cursor_position,
+        "dpi": dpi, "primary_window": primary_window,
+        "camera_scale": camera_scale, "cursor_position": cursor_position,
         "identities": pool.active_identities(),
         "pool_active": active, "pool_pending": pending,
         "pool_owned_handle_count": pool.owned_handle_count(),

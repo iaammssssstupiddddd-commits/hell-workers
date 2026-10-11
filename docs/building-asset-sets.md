@@ -232,6 +232,15 @@ rendererのclipと可視ancestorを適用したrectを記録する。Bridge、�
 過大集合・可視重複は受理しない。`MouseButtonInput`はbutton/state/windowを実原メッセージとして
 記録し、ButtonInput由来のPointerPress/Releaseとは区別する。rectや入力だけでclick成功、
 placement commitや正式asset受入を推定しない。通常入力・UiIntent・gameplay・Helpは変更しない。
+`architect-select-cancel --kind <9種の固定集合>`は別profile
+`building-production-local-equipment-feedback-v1`で、`dev.py feedback --build-only`の
+`target/debug/bevy_app`を利用する。formal Capture/Memoryや性能のbinaryとは混同しない。
+固定Bで開き、2連続rawで安定した実cardの中心へ一度motionを送り、製品cursorのfresh ACK後に
+Left押下・解放を一度だけ送る。primary window／epoch／DPI 1／cardの不一致ではクリックしない。
+実MouseButtonInputとBuildContext／PlayModeを同区間で検査し、SoulSpaだけは既存の
+TaskContext SoulSpaPlaceを使う。選択画像の前後区間を拘束した後、Escapeで通常modeへ戻す。
+任意座標・任意command・Bridge・fixtureは受け付けない。失敗を再送せずfresh診断に保持する。
+これは選択のfeedbackのみで、配置commit、施工、asset readiness、正式art/numeric採否ではない。
 同probeの初期7試行はいずれも正式にはinvalid。v6 `tak14-ordinary-input-probe-b885f623-20261005-v6`
 では所有X11 windowへのF12押下・解放が輸送側receiptに残り、製品rawには49 sample中に
 `KeyPress`／`KeyRelease`がない。押下時間・focus待ち・tap順を変える仮説はここで打ち切る。

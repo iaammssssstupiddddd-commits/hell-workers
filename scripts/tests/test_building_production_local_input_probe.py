@@ -72,6 +72,23 @@ class LocalInputProbeTests(unittest.TestCase):
             with self.subTest(change=change), self.assertRaises(RuntimeError):
                 input_probe.check_plan(value | change, self.plan_path)
 
+    def test_equipment_feedback_plan_is_kind_bounded_and_debug_binary_bound(self):
+        self.plan_path.write_text("{}")
+        binary = self.repo / "target/debug/bevy_app"
+        binary.parent.mkdir()
+        binary.write_bytes(b"feedback binary")
+        binary.chmod(0o755)
+        value = self.value | {"profile": input_probe.SELECTION_PROFILE, "scenario": "architect-select-cancel",
+                              "key": "b", "selection_kind": "Tank", "binary": str(binary),
+                              "binary_sha256": input_probe.probe.digest(binary),
+                              "selection_driver_sha256": input_probe.probe.digest(
+                                  Path(input_probe.selection_probe.__file__))}
+        self.assertEqual(input_probe.check_plan(value, self.plan_path), (self.repo, self.root, binary))
+        for change in ({"selection_kind": "Bridge"}, {"selection_driver_sha256": "0" * 64},
+                       {"binary": str(self.binary)}, {"scenario": "architect-cancel"}, {"art_approved": True}):
+            with self.subTest(change=change), self.assertRaises(RuntimeError):
+                input_probe.check_plan(value | change, self.plan_path)
+
     def test_catalog_states_require_stable_raw_capture_and_world(self):
         raw = {"samples": [{"menu_state": menu, "play_mode": "Normal", "task_mode": "None", "world_epoch": 2,
                             "architect_panel_ready": menu == "Architect"}
