@@ -515,3 +515,17 @@ Rustの観測先補正は成立しており、この追加補正はPython撮影d
 独立画像reviewで3画像全体はchanges_requested、invalidとしてseal/finalizeして診断保持。
 既存M2のnonblank検査を開始・開・閉の全画像へ適用し、開始はfresh Hidden区間を拘束する。
 blankだけを8秒・16回以内で再撮影し、拒否画像・理由を保持する。別batchの再launchではない。
+
+`tak14-architect-input-32b0bd72-20261012-v1`はfresh sourceで3画像がnonblank、通常worldの
+開始／Architect表示／閉鎖が実画像と同epochのrawに整合し、独立画像review・登録verifierで
+限定technical pass、seal/finalize済み。固定B/Escapeは実入力であり、建物選択・配置は未実行。
+このjobの画像/rawだけを次の収集producerの対照として保持し、primary sourceやbinaryは凍結しない。
+次はprofiling observerに実際の建設cardの可視・clip済みphysical rectとBuildContextを
+read-only追加する。既存UiIntentと実layoutから対象を解決し、hidden ancestor／未layout／
+重複・過大集合を拒否する。座標の推測、worldや施工結果のseed、Bridge対象化はしない。
+その後、所有windowの実pointer操作と選択後のauthoritative stateを同区間で拘束する。
+選択観測の準備だけではordinary placement/lifecycleや正式導入を完了扱いにしない。
+独立reviewで変形UIのrect不整合を指摘され、finite translation＋identity matrixだけを受理する
+最小補正と拒否testを追加。原MouseButtonInputのbutton/state/windowも状態由来入力と分離する。
+原因解消済みの旧3診断jobは正式consumer解除後に生成物だけを整理し、du 11,964,416 bytes減。
+invalid metadata・コード・原本・現行比較証拠は保全し、primary storage checkはpass。

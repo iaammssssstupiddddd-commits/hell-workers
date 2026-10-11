@@ -6,6 +6,8 @@ pub mod acceptance;
 mod loader;
 #[cfg(feature = "profiling")]
 mod observations;
+#[cfg(feature = "profiling")]
+mod observations_ui;
 mod pool;
 mod projection;
 mod release;

@@ -226,6 +226,12 @@ runとverifyはbefore／catalog／afterの全画像へ同じnonblank検査を適
 画素の非一様性はasset readinessやアート採用を証明しない。
 これはordinary入力でのcatalog開閉に限り、9種の候補表示・配置・施工・性能・正式採否ではない。
 この実装の実機成功はfresh batchの独立verifyと画像確認後にのみ記録する。
+profiling rawには`BuildContext.0`の実選択と、通常Architectの9種の実cardを読み取る。
+`UiIntent`／`ArchitectBuildingPanel`から対象を解決し、primary windowのphysical pixelで
+rendererのclipと可視ancestorを適用したrectを記録する。Bridge、非表示、未layout、変形matrix、
+過大集合・可視重複は受理しない。`MouseButtonInput`はbutton/state/windowを実原メッセージとして
+記録し、ButtonInput由来のPointerPress/Releaseとは区別する。rectや入力だけでclick成功、
+placement commitや正式asset受入を推定しない。通常入力・UiIntent・gameplay・Helpは変更しない。
 同probeの初期7試行はいずれも正式にはinvalid。v6 `tak14-ordinary-input-probe-b885f623-20261005-v6`
 では所有X11 windowへのF12押下・解放が輸送側receiptに残り、製品rawには49 sample中に
 `KeyPress`／`KeyRelease`がない。押下時間・focus待ち・tap順を変える仮説はここで打ち切る。

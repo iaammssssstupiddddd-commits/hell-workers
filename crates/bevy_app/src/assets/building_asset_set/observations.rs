@@ -1,7 +1,11 @@
 //! Profiling-only, bounded observations of the ordinary world. This does not
 //! create owners, drive input, grant authority, or claim performance evidence.
 use super::snapshot_io::{require_fresh_path, temporary_path, write_observation};
-use bevy::{ecs::message::MessageCursor, input::keyboard::KeyboardInput, prelude::*};
+use bevy::{
+    ecs::message::MessageCursor,
+    input::{keyboard::KeyboardInput, mouse::MouseButtonInput},
+    prelude::*,
+};
 use hw_core::{
     WorldEpoch,
     events::{DreamTransferredVisualMessage, TaskCompletedVisualMessage},
@@ -39,6 +43,7 @@ struct Observations {
     tasks: MessageCursor<TaskCompletedVisualMessage>,
     dreams: MessageCursor<DreamTransferredVisualMessage>,
     keyboard: MessageCursor<KeyboardInput>,
+    mouse: MessageCursor<MouseButtonInput>,
     failure: Option<String>,
     tracked_owners: std::collections::HashSet<Entity>,
     written_events: usize,
@@ -173,6 +178,7 @@ fn target(kind: BuildingType) -> bool {
 
 fn snapshot(world: &mut World) -> Result<Value, String> {
     let architect_panel_ready = architect_panel_ready(world);
+    let architect_cards = super::observations_ui::architect_cards(world)?;
     let mut query = world.query::<(Entity, &Building, &Transform)>();
     let mut current: Vec<Entity> = query
         .iter(world)
@@ -334,7 +340,10 @@ fn snapshot(world: &mut World) -> Result<Value, String> {
         "menu_state": modes["menu_state"],
         "play_mode": modes["play_mode"],
         "task_mode": modes["task_mode"],
+        "selected_building": world.get_resource::<crate::app_contexts::BuildContext>()
+            .and_then(|context| context.0).map(|kind| format!("{kind:?}")),
         "architect_panel_ready": architect_panel_ready,
+        "architect_cards": architect_cards,
         "world_epoch": world.get_resource::<WorldEpoch>().map(|epoch| epoch.get()),
         "owners": owners, "blueprints": blueprints, "roots": roots, "bridge": bridge,
         "owner_layers": owner_layers, "actors": actors,
@@ -429,6 +438,9 @@ fn observe(world: &mut World) {
         if let Some(messages) = world.get_resource::<Messages<KeyboardInput>>() {
             record_keyboard_messages(&mut observations, messages, index, now);
         }
+        if let Some(messages) = world.get_resource::<Messages<MouseButtonInput>>() {
+            record_mouse_messages(&mut observations, messages, index, now);
+        }
         if let Some(input) = world.get_resource::<ButtonInput<MouseButton>>() {
             for (pressed, operation) in [(input.just_pressed(MouseButton::Left), "PointerPress"),
                 (input.just_released(MouseButton::Left), "PointerRelease")] {
@@ -520,6 +532,22 @@ fn observe(world: &mut World) {
             result.err()
         );
         world.write_message(AppExit::error());
+    }
+}
+
+fn record_mouse_messages(
+    observations: &mut Observations,
+    messages: &Messages<MouseButtonInput>,
+    sample_index: usize,
+    now: f64,
+) {
+    for event in observations.mouse.read(messages).take(4097) {
+        observations
+            .events
+            .push(json!({"sample_index": sample_index, "real_seconds": now,
+            "producer": "MouseButtonInput", "operation": "MouseButtonInput",
+            "button": format!("{:?}", event.button), "state": format!("{:?}", event.state),
+            "window": format!("{:?}", event.window)}));
     }
 }
 
@@ -625,6 +653,37 @@ mod tests {
         assert_eq!(observations.events[1]["state"], "Released");
         assert_eq!(observations.events[1]["sample_index"], 3);
         record_keyboard_messages(&mut observations, &messages, 4, 2.0);
+        assert_eq!(observations.events.len(), 2);
+    }
+
+    #[test]
+    fn mouse_messages_preserve_window_and_do_not_infer_click_outcomes() {
+        let mut messages = Messages::<MouseButtonInput>::default();
+        for state in [ButtonState::Pressed, ButtonState::Released] {
+            messages.write(MouseButtonInput {
+                button: MouseButton::Left,
+                state,
+                window: Entity::PLACEHOLDER,
+            });
+        }
+        let mut observations = Observations::default();
+        record_mouse_messages(&mut observations, &messages, 4, 2.0);
+        assert_eq!(observations.events.len(), 2);
+        assert_eq!(observations.events[0]["producer"], "MouseButtonInput");
+        assert_eq!(observations.events[0]["state"], "Pressed");
+        assert_eq!(observations.events[1]["state"], "Released");
+        assert_eq!(observations.events[1]["sample_index"], 4);
+        assert_eq!(
+            observations.events[0]["window"],
+            format!("{:?}", Entity::PLACEHOLDER)
+        );
+        assert!(
+            observations
+                .events
+                .iter()
+                .all(|event| event.get("accepted").is_none())
+        );
+        record_mouse_messages(&mut observations, &messages, 5, 2.5);
         assert_eq!(observations.events.len(), 2);
     }
 
