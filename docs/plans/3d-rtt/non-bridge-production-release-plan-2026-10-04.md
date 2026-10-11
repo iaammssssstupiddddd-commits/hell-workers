@@ -559,3 +559,9 @@ root=(2880,1800)を記録してinvalid精算。一次libei APIのlogical pixel�
 declared scaleとexact logical extentが一致する時だけphysical targetをscaleで割る。
 任意倍率の逆算や到達ACKの緩和はしない。半logical pixelも丸めず、ゲーム側のexact
 physical cursor ACKを維持する。独立review／fresh実機前で9種の正式導入は未完。
+
+`8b5db4f6`のfresh EIS feedbackはphysical cursor [663,563]、原Left入力、
+Tank選択、Escape解除をrawで確認した。closed capture直前の2 sampleのうち
+先行sampleがHidden/BuildingPlaceだったためstrict verifierが拒否し、invalid精算済み。
+待機側だけを2連続Normal／task None／選択解除済みへ補正する。撮影interval verifierは
+変更せず、別subjectのfresh撮影と独立reviewで確認する。正式アート／releaseは未承認。

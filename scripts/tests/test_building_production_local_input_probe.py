@@ -119,7 +119,8 @@ class LocalInputProbeTests(unittest.TestCase):
                     input_probe.check_catalog_states(changed, evidence)
 
     def test_menu_wait_requires_two_fresh_matching_layout_samples(self):
-        hidden = {"menu_state": "Hidden", "play_mode": "Normal", "architect_panel_ready": False}
+        hidden = {"menu_state": "Hidden", "play_mode": "Normal", "task_mode": "None",
+                  "selected_building": None, "architect_panel_ready": False}
         opened = hidden | {"menu_state": "Architect", "architect_panel_ready": True}
         for expected, before, after in (("Architect", hidden, opened), ("Hidden", opened, hidden)):
             snapshots = [{"samples": [before, before, after]}, {"samples": [before, before, after, after]}]
@@ -128,6 +129,29 @@ class LocalInputProbeTests(unittest.TestCase):
                 result = input_probe.wait_for_menu(Path("/unused"), "n", 1, expected, after=1)
                 self.assertEqual(len(result["samples"]), 4)
                 self.assertEqual(read.call_count, 2)
+
+    def test_menu_wait_rejects_incomplete_preceding_mode_sample(self):
+        ready = {"menu_state": "Hidden", "play_mode": "Normal", "task_mode": "None",
+                 "selected_building": None, "architect_panel_ready": False}
+        for change in ({"play_mode": "BuildingPlace"}, {"play_mode": "TaskDesignation"},
+                       {"task_mode": "SoulSpaPlace"}, {"selected_building": "Tank"},
+                       {"play_mode": None}, {"task_mode": None}):
+            stale = ready | change
+            snapshots = [{"samples": [stale, ready]}, {"samples": [stale, ready, ready]}]
+            with self.subTest(change=change), patch.object(input_probe, "raw_snapshot", side_effect=snapshots) as read, \
+                    patch.object(input_probe.time, "sleep"):
+                result = input_probe.wait_for_menu(Path("/unused"), "n", 1, "Hidden", after=0)
+                self.assertEqual(len(result["samples"]), 3)
+                self.assertEqual(read.call_count, 2)
+
+    def test_menu_wait_requires_explicit_cleared_selection(self):
+        ready = {"menu_state": "Hidden", "play_mode": "Normal", "task_mode": "None",
+                 "selected_building": None, "architect_panel_ready": False}
+        missing = {key: value for key, value in ready.items() if key != "selected_building"}
+        snapshots = [{"samples": [missing, ready]}, {"samples": [missing, ready, ready]}]
+        with patch.object(input_probe, "raw_snapshot", side_effect=snapshots) as read, patch.object(input_probe.time, "sleep"):
+            input_probe.wait_for_menu(Path("/unused"), "n", 1, "Hidden", after=0)
+            self.assertEqual(read.call_count, 2)
 
     def test_key_witness_cannot_relabel_f12_as_architect(self):
         raw = {"events": [{"event_index": i, "sample_index": i + 1, "operation": operation, "key": "KeyB"}

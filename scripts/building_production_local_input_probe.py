@@ -264,10 +264,11 @@ def wait_for_menu(path: Path, nonce: str, pid: int, expected: str, *, after: int
     while time.monotonic() < deadline:
         raw = raw_snapshot(path, nonce, pid)
         if (len(raw["samples"]) - 1 > after
-                and raw["samples"][-1].get("menu_state") == expected
-                and raw["samples"][-1].get("play_mode") == "Normal"
                 and len(raw["samples"]) >= 2 and all(
                     row.get("menu_state") == expected
+                    and row.get("play_mode") == "Normal"
+                    and row.get("task_mode") == "None"
+                    and "selected_building" in row and row["selected_building"] is None
                     and row.get("architect_panel_ready") is (expected == "Architect")
                     for row in raw["samples"][-2:])):
             return raw
