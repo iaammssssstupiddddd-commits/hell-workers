@@ -16,6 +16,9 @@
 2026-10-12の最新限定進捗: `e5f81694`で通常Tank親Blueprintと2childの計画commitを
 actual-window/rawの独立review・登録verifierで確認した。次は通常F5/F9のManual1保存復元を
 fresh job内の実ファイル・receipt・epoch・親子置換で照合する。完成・正式asset・9種全体受入は未完。
+`e9bc838f`の初回はF5直後のcatalog layout未確定（sample65、可視controls空）をクリック前に拒否し、
+save/loadなしのinvalidとして精算・診断保持した。入力を再送せず、2つの実computed-layout sampleが
+同じwindow／epoch／session／controlを持つまで最大3秒のpassive waitを追加してfresh subjectで再確認する。
 
 通常起動で橋以外の9種が正式ビジュアルになり、完成・状態・配置・移動・施工・カタログ・保存復元が一致する。
 原移行計画の受入条件を維持し、橋だけを今回の完了対象から外す。技術previewと正式採用を区別する。

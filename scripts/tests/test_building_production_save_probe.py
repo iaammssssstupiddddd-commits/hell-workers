@@ -9,6 +9,18 @@ from scripts import building_production_save_probe as probe
 
 
 class SaveProbeTests(unittest.TestCase):
+    def test_passive_layout_wait_requires_two_actual_stable_samples_and_no_input(self):
+        empty = self.sample()
+        empty["save_catalog_context"]["controls"] = []
+        raw = {"nonce": "nonce", "samples": [empty, self.sample()]}
+        ready = {"nonce": "nonce", "samples": [self.sample(), self.sample()]}
+        self.assertEqual(probe.wait_control(Mock(side_effect=[raw, ready]), "Save", "nonce", "1v0", 0), ready)
+        for key, value in (("primary_window", "foreign"), ("world_epoch", 1)):
+            changed = copy.deepcopy(ready)
+            changed["samples"][-1][key] = value
+            with self.subTest(key=key), self.assertRaises(RuntimeError):
+                probe.wait_control(lambda: changed, "Save", "nonce", "1v0", 0)
+
     def sample(self, mode="SaveCatalog", session=7):
         action = {"SaveCatalog": "Save", "LoadCatalog": "Load", "LoadConfirmManual1": "ConfirmLoad"}.get(mode)
         return {"dpi": 1, "play_mode": "Normal", "task_mode": "None", "selected_building": None,
@@ -42,8 +54,24 @@ class SaveProbeTests(unittest.TestCase):
             pointer["samples"][-1][key] = value
             transport = Mock()
             with self.subTest(key=key), self.assertRaises(RuntimeError):
-                probe.click(transport, Mock(side_effect=[initial, pointer]), "Save", "nonce")
+                probe.click(transport, Mock(side_effect=[initial, pointer]), "Save", "nonce", initial["samples"][-1])
             self.assertEqual([c.args[0] for c in transport.send.call_args_list], ["save-motion"])
+
+    def test_no_input_when_context_changes_after_ready_wait(self):
+        expected = self.sample()
+        for key, value in (("world_epoch", 1), ("primary_window", "foreign"), ("session", 8), ("nonce", "foreign")):
+            raw = {"nonce": "nonce", "samples": [self.sample()], "events": []}
+            if key == "nonce":
+                raw[key] = value
+            elif key == "session":
+                raw["samples"][-1]["save_catalog_context"][key] = value
+                raw["samples"][-1]["save_catalog_context"]["controls"][0][key] = value
+            else:
+                raw["samples"][-1][key] = value
+            transport = Mock()
+            with self.subTest(key=key), self.assertRaises(RuntimeError):
+                probe.click(transport, lambda: raw, "Save", "nonce", expected)
+            transport.send.assert_not_called()
 
     def test_file_hash_is_actual_unique_job_local_bytes(self):
         with tempfile.TemporaryDirectory() as temporary:

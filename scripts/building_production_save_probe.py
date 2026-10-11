@@ -99,11 +99,33 @@ def planning(sample):
     return owner, {c["entity"] for c in children}, semantic
 
 
-def click(transport, read, action, nonce):
+def wait_control(read, action, nonce, window, epoch):
+    """Wait for two computed-layout samples; no input or coordinate retry."""
+    mode = {"Save": "SaveCatalog", "Load": "LoadCatalog", "ConfirmLoad": "LoadConfirmManual1"}[action]
+    def ready(raw):
+        require(raw["nonce"] == nonce, "save layout nonce changed")
+        samples = raw["samples"][-2:]
+        require(all(s["primary_window"] == window and s["world_epoch"] == epoch for s in samples),
+                "save layout window/epoch changed")
+        if len(samples) != 2 or any(s.get("save_catalog_context", {}).get("mode") != mode for s in samples):
+            return False
+        if any(context(s)["controls"] == [] for s in samples):
+            return False
+        left, right = (control(s, action) for s in samples)
+        require(context(samples[0])["session"] == context(samples[1])["session"], "save layout session changed")
+        return left == right
+    return selection.wait(read, ready, timeout=3)
+
+
+def click(transport, read, action, nonce, expected):
     raw = read()
     before = len(raw["samples"]) - 1
     initial = raw["samples"][-1]
     row, point = control(initial, action)
+    require(raw["nonce"] == nonce and initial["primary_window"] == expected["primary_window"]
+            and initial["world_epoch"] == expected["world_epoch"]
+            and control(initial, action) == control(expected, action)
+            and context(initial) == context(expected), "save context changed after layout wait")
     prefix = action.lower()
     transport.send(prefix + "-motion", nonce, point=point)
     raw = selection.wait(read, lambda v: len(v["samples"]) - 1 > before and v["samples"][-1].get("cursor_position") == point, timeout=2)
@@ -133,17 +155,19 @@ def run(transport, read, root, capture):
         selection.wait(read, lambda v: v["samples"][-1].get("save_catalog_context", {}).get("mode") == mode
                        and any(e.get("producer") == "KeyboardInput" and e.get("key") == key and e.get("state") == "Released"
                                for e in v["events"][boundary:]))
-    open_catalog("save", "F5", "SaveCatalog")
-    saved = click(transport, read, "Save", nonce)
+        return wait_control(read, "Save" if prefix == "save" else "Load", nonce, initial["primary_window"], initial["world_epoch"])
+    ready = open_catalog("save", "F5", "SaveCatalog")
+    saved = click(transport, read, "Save", nonce, ready["samples"][-1])
     raw = selection.wait(read, lambda v: any(e.get("producer") == "SaveLoadOutcome" for e in v["events"][saved["boundary"]:])
                          and v["samples"][-1]["save_catalog_context"]["mode"] == "Closed")
     saved["after"] = len(raw["samples"]) - 1
     identity = file_identity(root)
     capture(root / "saved.png")
-    open_catalog("load", "F9", "LoadCatalog")
-    loaded = click(transport, read, "Load", nonce)
+    ready = open_catalog("load", "F9", "LoadCatalog")
+    loaded = click(transport, read, "Load", nonce, ready["samples"][-1])
     selection.wait(read, lambda v: v["samples"][-1]["save_catalog_context"]["mode"] == "LoadConfirmManual1")
-    confirmed = click(transport, read, "ConfirmLoad", nonce)
+    ready = wait_control(read, "ConfirmLoad", nonce, initial["primary_window"], initial["world_epoch"])
+    confirmed = click(transport, read, "ConfirmLoad", nonce, ready["samples"][-1])
     raw = selection.wait(read, lambda v: any(e.get("producer") == "SaveLoadOutcome" and e.get("operation") == "Load"
                          for e in v["events"][confirmed["boundary"]:]) and v["samples"][-1]["world_epoch"] != initial["world_epoch"])
     confirmed["after"] = len(raw["samples"]) - 1
