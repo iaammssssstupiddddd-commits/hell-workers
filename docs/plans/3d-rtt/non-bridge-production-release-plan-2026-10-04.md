@@ -24,6 +24,11 @@ save/loadなしのinvalidとして精算・診断保持した。入力を再送�
 原saveにはYard発行のDeliverToBlueprint requestとFamiliarのManagedByが混在していた。
 Soul割当applyの`IssuedBy(=ManagedBy)`片側上書きが原因で、requestのproducer ownerを
 deferred適用時に保持する修正を進める。原失敗・saveは診断保持し、load validatorは変更しない。
+修正`ba1d8e3a`は変更別CI、Clippy警告0、workspace checkと独立reviewを通過。
+fresh実機はSave以前にcameraのKeyW区間で停止した。sample22→23が0.505秒空き、
+Yard投影が96→348pxへ移動してfeedback停止帯を通過した。通常worldやinputを変更せず、
+明示profiling observerだけheld WASDを50ms間隔で読む。sample/event capは維持し、
+hostは停止帯通過を即時拒否して元keyを一度releaseする。旧launchの再送・補正入力はしない。
 
 通常起動で橋以外の9種が正式ビジュアルになり、完成・状態・配置・移動・施工・カタログ・保存復元が一致する。
 原移行計画の受入条件を維持し、橋だけを今回の完了対象から外す。技術previewと正式採用を区別する。

@@ -121,6 +121,9 @@ def run(transport, read):
                 pixel = normal(raw["samples"][-1], window, epoch, yard, camera)
                 if low <= pixel[axis] <= high:
                     break
+                increasing = key in {"a", "w"}
+                selection.require(not (pixel[axis] > high if increasing else pixel[axis] < low),
+                                  "ordinary Yard camera crossed endpoint without an observation")
                 time.sleep(.05)
             else:
                 raise RuntimeError("ordinary Yard camera pan timeout")

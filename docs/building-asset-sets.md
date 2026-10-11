@@ -261,6 +261,10 @@ actor／光／UIだけの描画をworld表示済みと誤認しないための�
 
 通常worldの`placement_context`は既存Yardのentity／min／maxを最大32件と、
 単一active MainCameraによるlogical viewport四隅の投影を読み取るprofiling限定観測である。
+明示production観測sessionのrawは通常500ms間隔、実際のheld WASD中は50ms間隔で採る。
+これはcameraの通常速度・入力・worldを変更せず、read-only観測の間隔だけを切り替える。
+1200 sample／4096 eventのcapは維持する。hostが停止帯通過を観測したら即時拒否して
+元のkeyをreleaseし、逆向き補正や再送で成功へ変えない。
 Yardの作成・拡張、カメラ移動、配置入力、候補点の自動承認は行わない。
 欠落／多重／inactive cameraや投影不可はnullとして明示し、viewport点を推測しない。
 非finite・反転したYard bounds／camera位置、件数超過は観測失敗とする。

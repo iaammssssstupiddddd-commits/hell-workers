@@ -71,6 +71,19 @@ class YardProbeTests(unittest.TestCase):
         self.assertEqual([call.args[0] for call in transport.send.call_args_list],
                          ["pan-1-press", "pan-1-release"])
 
+    def test_pan_overshoot_rejects_and_releases_without_correction(self):
+        overshoot = copy.deepcopy(self.sample)
+        overshoot["placement_context"]["camera_position"][1] = 260
+        for corner in overshoot["placement_context"]["yards"][0]["logical_viewport_corners"]:
+            corner[1] += 260
+        before = {"nonce": "n", "samples": [self.sample], "events": []}
+        after = {"nonce": "n", "samples": [self.sample, overshoot], "events": []}
+        transport = Mock()
+        with self.assertRaisesRegex(RuntimeError, "crossed endpoint"):
+            probe.run(transport, Mock(side_effect=[before, before, before, after]))
+        self.assertEqual([call.args[0] for call in transport.send.call_args_list],
+                         ["pan-1-press", "pan-1-release"])
+
     def test_original_key_pan_and_stable_normal_endpoint(self):
         moved = copy.deepcopy(self.sample)
         moved["placement_context"]["camera_position"][1] = 64

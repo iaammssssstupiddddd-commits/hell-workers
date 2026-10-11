@@ -635,6 +635,7 @@ fn observe(world: &mut World) {
     } else {
         snapshot(world)
     };
+    let interval = sample_interval(world);
     let mut failure = sample.as_ref().err().cloned();
     if let Ok(mut sample) = sample {
         let mut state = world.resource_mut::<Observations>();
@@ -650,7 +651,7 @@ fn observe(world: &mut World) {
             }
         }
         state.samples.push(sample);
-        state.next = now + 0.5;
+        state.next = now + interval;
         state.written_events = state.events.len();
     }
     {
@@ -692,6 +693,21 @@ fn observe(world: &mut World) {
             result.err()
         );
         world.write_message(AppExit::error());
+    }
+}
+
+// Only the explicit profiling observer uses this cadence. Ordinary camera
+// input remains owned by the existing input systems; no key or outcome is set.
+fn sample_interval(world: &World) -> f64 {
+    if world
+        .get_resource::<ButtonInput<KeyCode>>()
+        .is_some_and(|keys| {
+            keys.any_pressed([KeyCode::KeyW, KeyCode::KeyA, KeyCode::KeyS, KeyCode::KeyD])
+        })
+    {
+        0.05
+    } else {
+        0.5
     }
 }
 
@@ -1066,6 +1082,34 @@ mod tests {
     fn sample() -> Value {
         json!({"real_seconds": 1.0, "owners": [], "blueprints": [], "roots": [],
             "items": [], "move_tasks": [], "generations": [], "owner_layers": []})
+    }
+
+    #[test]
+    fn held_camera_input_uses_bounded_read_only_sampling_cadence() {
+        let mut world = World::new();
+        assert_eq!(sample_interval(&world), 0.5);
+        let mut keys = ButtonInput::<KeyCode>::default();
+        keys.press(KeyCode::F5);
+        world.insert_resource(keys);
+        assert_eq!(sample_interval(&world), 0.5);
+        world
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .press(KeyCode::KeyW);
+        assert_eq!(sample_interval(&world), 0.05);
+        assert!(
+            world
+                .resource::<ButtonInput<KeyCode>>()
+                .pressed(KeyCode::KeyW)
+        );
+        world
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .release(KeyCode::KeyW);
+        assert_eq!(sample_interval(&world), 0.5);
+        assert!(
+            world
+                .resource::<ButtonInput<KeyCode>>()
+                .pressed(KeyCode::F5)
+        );
     }
 
     #[test]
