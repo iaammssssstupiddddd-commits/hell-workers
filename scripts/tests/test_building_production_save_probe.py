@@ -9,6 +9,28 @@ from scripts import building_production_save_probe as probe
 
 
 class SaveProbeTests(unittest.TestCase):
+    def test_load_capture_requires_two_later_closed_samples_and_settle_time(self):
+        samples = []
+        for i, seconds in enumerate((1.0, 1.2, 1.6)):
+            sample = self.sample("Closed")
+            sample.update(sample_index=i, real_seconds=seconds, world_epoch=1, menu_state="Hidden")
+            samples.append(sample)
+        self.assertFalse(probe.loaded_capture_ready(samples[:1], 0, "1v0", 1))
+        self.assertFalse(probe.loaded_capture_ready(samples[:2], 0, "1v0", 1))
+        self.assertTrue(probe.loaded_capture_ready(samples, 0, "1v0", 1))
+        early = copy.deepcopy(samples)
+        early[-1]["real_seconds"] = 1.4
+        self.assertFalse(probe.loaded_capture_ready(early, 0, "1v0", 1))
+        for key, value in (("world_epoch", 2), ("primary_window", "foreign"), ("menu_state", "Architect")):
+            changed = copy.deepcopy(samples)
+            changed[-1][key] = value
+            with self.subTest(key=key), self.assertRaises(RuntimeError):
+                probe.loaded_capture_ready(changed, 0, "1v0", 1)
+        changed = copy.deepcopy(samples)
+        changed[-1]["save_catalog_context"]["mode"] = "LoadConfirmManual1"
+        with self.assertRaises(RuntimeError):
+            probe.loaded_capture_ready(changed, 0, "1v0", 1)
+
     def test_failed_terminal_save_load_is_reported_without_timeout_or_retry(self):
         for operation in ("Save", "Load"):
             read = Mock(return_value={"events": [{"producer": "SaveLoadOutcome", "operation": operation,
@@ -131,10 +153,10 @@ class SaveProbeTests(unittest.TestCase):
             (root / "runtime/saves/manual-1.scn.ron").write_bytes(b"file")
             samples = []
             footprint = [[1, 1], [2, 1], [1, 2], [2, 2]]
-            for i in range(14):
+            for i in range(15):
                 mode = "SaveCatalog" if i in (1, 2) else "LoadCatalog" if i in (6, 7) else "LoadConfirmManual1" if i in (9, 10) else "Closed"
                 sample = self.sample(mode, 7 if i < 6 else 8)
-                sample.update(sample_index=i, real_seconds=i, cursor_position=[70, 60], world_epoch=1 if i >= 12 else 0)
+                sample.update(sample_index=i, real_seconds=i, cursor_position=[70, 60], world_epoch=1 if i >= 12 else 0, menu_state="Hidden")
                 sample.update({category: [] for category in probe.lifecycle.TRANSITION_CATEGORIES})
                 owner = "new" if i >= 12 else "old"
                 sample["blueprints"] = [{"entity": owner, "kind": "Tank", "footprint": footprint, "progress": 0,
@@ -178,7 +200,7 @@ class SaveProbeTests(unittest.TestCase):
             raw = dict(schema_version=2, transition_contract="indexed-state-delta-v1", samples=samples, events=events)
             evidence = {"before": 0, "save": dict(before=1, pointer=2, after=4, boundary=save_boundary, point=[70, 60]),
                         "load": dict(before=6, pointer=7, boundary=load_boundary, point=[70, 60]),
-                        "confirm": dict(before=9, pointer=10, after=13, boundary=confirm_boundary, point=[70, 60]),
+                        "confirm": dict(before=9, pointer=10, after=14, boundary=confirm_boundary, point=[70, 60]),
                         "file": probe.file_identity(root)}
             probe.verify(raw, evidence, root)
             changed = copy.deepcopy(raw)
@@ -193,11 +215,15 @@ class SaveProbeTests(unittest.TestCase):
                 changed = copy.deepcopy(raw)
                 row = tombstone | {key: value}
                 changed["samples"][-1]["owner_layers"].append(row)
-                changed["events"].append(dict(event_index=len(changed["events"]), sample_index=13, before_sample_index=12,
-                    real_seconds=13, producer="production_snapshot_delta", operation="StateTransition",
+                changed["events"].append(dict(event_index=len(changed["events"]), sample_index=14, before_sample_index=13,
+                    real_seconds=14, producer="production_snapshot_delta", operation="StateTransition",
                     category="owner_layers", entity="old", before=None, after=row))
                 with self.subTest(key=key), self.assertRaises(RuntimeError):
                     probe.verify(changed, evidence, root)
+            early = copy.deepcopy(evidence)
+            early["confirm"]["after"] = 13
+            with self.assertRaisesRegex(RuntimeError, "later settled"):
+                probe.verify(raw, early, root)
             for key, value in (("result", "Failed(LoadNotFound)"), ("source", "Load(NormalCatalog { dialog_session: 7 })"),
                                ("target", "Manual slot 2")):
                 changed = copy.deepcopy(raw)

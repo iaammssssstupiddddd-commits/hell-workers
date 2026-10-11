@@ -29,6 +29,12 @@ fresh実機はSave以前にcameraのKeyW区間で停止した。sample22→23が
 Yard投影が96→348pxへ移動してfeedback停止帯を通過した。通常worldやinputを変更せず、
 明示profiling observerだけheld WASDを50ms間隔で読む。sample/event capは維持し、
 hostは停止帯通過を即時拒否して元keyを一度releaseする。旧launchの再送・補正入力はしない。
+`562a151b`のfresh実機では通常Save sample67/session1・Load sample82/session2がSucceeded、
+epoch0→1、親1898v2→1984v1と2childの新ID、footprint・空材料・map占有の復元をrawで確認。
+実Manual1は501865 bytes。ただしloaded.pngはLoad確認dialogが残り、独立画像reviewが拒否した。
+cycleはinvalidとして精算し、原raw／save／画像を撮影同期修正の診断に保持した。
+Load実receipt直後のcaptureをやめ、2つの後続Closed sampleと500ms settleをpassiveに要求し、
+fresh画像を独立確認する。raw成功を画像成功・正式construction・releaseへ読み替えない。
 
 通常起動で橋以外の9種が正式ビジュアルになり、完成・状態・配置・移動・施工・カタログ・保存復元が一致する。
 原移行計画の受入条件を維持し、橋だけを今回の完了対象から外す。技術previewと正式採用を区別する。

@@ -265,6 +265,10 @@ actor／光／UIだけの描画をworld表示済みと誤認しないための�
 これはcameraの通常速度・入力・worldを変更せず、read-only観測の間隔だけを切り替える。
 1200 sample／4096 eventのcapは維持する。hostが停止帯通過を観測したら即時拒否して
 元のkeyをreleaseし、逆向き補正や再送で成功へ変えない。
+通常Manual1ロードのfeedback captureは、実Succeeded receipt後の同window／新epoch／
+Hidden・Normal・Closedを2つの後続raw sampleで確認し、最低500msのsettle後に取得する。
+verifierも後続sampleを要求するが、rawとGPU呈示の原子的同期を保証するものではない。
+全owned PNGを別途独立に実見し、確認dialogが残る旧buffer画像をロード完了証拠へ採用しない。
 Yardの作成・拡張、カメラ移動、配置入力、候補点の自動承認は行わない。
 欠落／多重／inactive cameraや投影不可はnullとして明示し、viewport点を推測しない。
 非finite・反転したYard bounds／camera位置、件数超過は観測失敗とする。

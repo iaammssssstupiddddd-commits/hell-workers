@@ -154,6 +154,18 @@ def wait_success(read, operation, boundary, settled):
     return selection.wait(read, ready)
 
 
+def loaded_capture_ready(samples, receipt_index, window, epoch):
+    """Passive capture prerequisite, not an atomic renderer acknowledgement."""
+    receipt = samples[receipt_index]
+    later = samples[receipt_index + 1:]
+    for sample in later:
+        require(sample["primary_window"] == window and sample["world_epoch"] == epoch
+                and sample.get("menu_state") == "Hidden"
+                and context(sample)["mode"] == "Closed" and context(sample)["controls"] == [],
+                "loaded capture context changed")
+    return len(later) >= 2 and later[-1]["real_seconds"] >= receipt["real_seconds"] + .5
+
+
 def run(transport, read, root, capture):
     raw = read()
     nonce, before = raw["nonce"], len(raw["samples"]) - 1
@@ -181,6 +193,12 @@ def run(transport, read, root, capture):
     ready = wait_control(read, "ConfirmLoad", nonce, initial["primary_window"], initial["world_epoch"])
     confirmed = click(transport, read, "ConfirmLoad", nonce, ready["samples"][-1])
     raw = wait_success(read, "Load", confirmed["boundary"], lambda s: s["world_epoch"] != initial["world_epoch"])
+    receipt_index = next(e["sample_index"] for e in raw["events"][confirmed["boundary"]:]
+                         if e.get("producer") == "SaveLoadOutcome")
+    def capture_ready(value):
+        require(value["nonce"] == nonce, "loaded capture nonce changed")
+        return loaded_capture_ready(value["samples"], receipt_index, initial["primary_window"], initial["world_epoch"] + 1)
+    raw = selection.wait(read, capture_ready, timeout=3)
     confirmed["after"] = len(raw["samples"]) - 1
     capture(root / "loaded.png")
     evidence = {"before": before, "save": saved, "load": loaded, "confirm": confirmed, "file": identity}
@@ -249,3 +267,6 @@ def verify(raw, evidence, root):
             and save["pointer"] < outcomes[0]["sample_index"] <= save["after"]
             and confirm["pointer"] < outcomes[1]["sample_index"] <= confirm["after"]
             and load_session > save_session and evidence["file"] == file_identity(root), "exact save/load outcome or bytes differ")
+    require(loaded_capture_ready(raw["samples"][:confirm["after"] + 1], outcomes[1]["sample_index"],
+                                 start["primary_window"], start["world_epoch"] + 1),
+            "load capture lacks later settled normal-world observations")
