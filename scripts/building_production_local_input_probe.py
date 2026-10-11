@@ -32,7 +32,7 @@ else:
 native = probe.native
 PROFILE = "building-production-local-input-probe-portal-v2"
 CATALOG_PROFILE = "building-production-local-architect-portal-v1"
-SELECTION_PROFILE = "building-production-local-equipment-feedback-v1"
+SELECTION_PROFILE = "building-production-local-equipment-feedback-eis-v2"
 OWNER = "TAK-14 normal-development coordinator"
 KEY = "F12"
 WINDOW = (1280, 720)
@@ -64,7 +64,7 @@ def check_plan(value: dict, plan_path: Path, *, fresh: bool = True,
     catalog = value.get("profile") in {CATALOG_PROFILE, SELECTION_PROFILE}
     expected = fields | {"scenario"} if catalog else fields
     if selection:
-        expected |= {"selection_kind", "selection_driver_sha256"}
+        expected |= {"selection_kind", "selection_driver_sha256", "eis_transport_sha256"}
     require(set(value) == expected,
             "input probe plan shape differs")
     repo = native.validate_repo(value["repo"])
@@ -98,6 +98,8 @@ def check_plan(value: dict, plan_path: Path, *, fresh: bool = True,
             "input probe frozen source, binary or transport differs")
     require(not selection or value["selection_driver_sha256"] == probe.digest(Path(selection_probe.__file__)),
             "equipment selection driver differs")
+    require(not selection or value["eis_transport_sha256"] == probe.digest(
+        Path(__file__).with_name("native_ui_eis.py")), "equipment EIS transport differs")
     if fresh:
         require(not root.exists(), "input probe output root already exists")
     return repo, root, binary
@@ -128,7 +130,8 @@ def plan(args: argparse.Namespace) -> dict:
         value.update(profile=CATALOG_PROFILE, scenario="architect-cancel", key="b")
     if selection:
         value.update(profile=SELECTION_PROFILE, scenario="architect-select-cancel", key="b",
-                     selection_kind=args.kind, selection_driver_sha256=probe.digest(Path(selection_probe.__file__)))
+                     selection_kind=args.kind, selection_driver_sha256=probe.digest(Path(selection_probe.__file__)),
+                     eis_transport_sha256=probe.digest(Path(__file__).with_name("native_ui_eis.py")))
     require(root.parent == repo / "target/native-acceptance" and not native.git_dirty_paths(repo),
             "input probe requires a clean primary subject and direct output root")
     resources = native.resource_snapshot(repo, require_launcher=True)
@@ -441,8 +444,11 @@ def run(args: argparse.Namespace) -> dict:
             portal = PortalSession(
                 lambda _method: require(game.poll() is None, "ordinary-world game exited during portal consent"),
                 consent_file=value["consent_file"])
-            transport = PortalX11Input(window_number, pid, game.pid, nonce, records.append,
-                                       portal=portal)
+            if selection:
+                from scripts.native_ui_eis import PortalEisInput
+                transport = PortalEisInput(window_number, pid, game.pid, nonce, records.append, portal=portal)
+            else:
+                transport = PortalX11Input(window_number, pid, game.pid, nonce, records.append, portal=portal)
             transport.activate()
             require(portal.ready and portal.granted_devices >= 0
                     and portal.granted_devices & 3 == 3,

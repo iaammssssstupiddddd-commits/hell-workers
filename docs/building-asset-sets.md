@@ -233,8 +233,14 @@ rendererのclipと可視ancestorを適用したrectを記録する。Bridge、�
 記録し、ButtonInput由来のPointerPress/Releaseとは区別する。rectや入力だけでclick成功、
 placement commitや正式asset受入を推定しない。通常入力・UiIntent・gameplay・Helpは変更しない。
 `architect-select-cancel --kind <9種の固定集合>`は別profile
-`building-production-local-equipment-feedback-v1`で、`dev.py feedback --build-only`の
-`target/debug/bevy_app`を利用する。formal Capture/Memoryや性能のbinaryとは混同しない。
+`building-production-local-equipment-feedback-eis-v2`で、`dev.py feedback --build-only`の
+profiling feature付き`target/debug/bevy_app`を利用する限定feedbackである。
+formal Capture/Memoryや性能のbinaryとは混同しない。入力は既存pointer／keyboard consentから
+一度だけConnectToEISし、`native_ui_eis.py`の単一physical monitorと一意なabsolute regionで
+配送する。planはEIS transport hashも固定する。外側のX11 owner/focus/nonce/単発stepと
+製品のexact cursor ACKは維持し、Notify混用・再送・region推定・authority付与はしない。
+終了時は通常配送guardを再使用せず、原deviceに記録した保持key/buttonのreleaseだけを送り、
+stop・device close・connection teardownする。pause/removal済みdeviceへは注入しない。
 固定Bで開き、2連続rawで安定した実cardの中心へ一度motionを送り、製品cursorのfresh ACK後に
 Left押下・解放を一度だけ送る。primary window／epoch／DPI 1／cardの不一致ではクリックしない。
 実MouseButtonInputとBuildContext／PlayModeを同区間で検査し、SoulSpaだけは既存の

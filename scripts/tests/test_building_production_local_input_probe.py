@@ -81,10 +81,13 @@ class LocalInputProbeTests(unittest.TestCase):
         value = self.value | {"profile": input_probe.SELECTION_PROFILE, "scenario": "architect-select-cancel",
                               "key": "b", "selection_kind": "Tank", "binary": str(binary),
                               "binary_sha256": input_probe.probe.digest(binary),
+                              "eis_transport_sha256": input_probe.probe.digest(
+                                  Path(input_probe.__file__).with_name("native_ui_eis.py")),
                               "selection_driver_sha256": input_probe.probe.digest(
                                   Path(input_probe.selection_probe.__file__))}
         self.assertEqual(input_probe.check_plan(value, self.plan_path), (self.repo, self.root, binary))
         for change in ({"selection_kind": "Bridge"}, {"selection_driver_sha256": "0" * 64},
+                       {"eis_transport_sha256": "0" * 64},
                        {"binary": str(self.binary)}, {"scenario": "architect-cancel"}, {"art_approved": True}):
             with self.subTest(change=change), self.assertRaises(RuntimeError):
                 input_probe.check_plan(value | change, self.plan_path)

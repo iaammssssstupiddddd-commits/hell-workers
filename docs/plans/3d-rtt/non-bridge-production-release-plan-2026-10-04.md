@@ -539,3 +539,15 @@ invalid seal/finalize済み。実Architect PNGには12 cardが表示された。
 `ComputedNode::resolve_clip_rect`と実`Overflow::scroll_y()`から、Visible横軸の正規±∞を
 観測器が拒否する前提誤りを確認。外向き無限clipを有限node／viewportへ交差させ、
 NaN・内向き無限・反転・空・変形を引き続き拒否する。値調整やUI変更では解決しない。
+
+`c21b916a`のfresh feedbackでは9 cardの観測が成立した。一方、移動前はゲーム外の
+X11 cursor／製品cursor nullで、相対motion要求[663,563]に対し製品cursor[596,575]。
+クリック前にtimeoutでinvalid、正式seal/finalizeして座標経路の診断用途で保持する。
+経験的なoffset補正や到達条件の緩和は行わない。既存pointer／keyboard consentで
+RemoteDesktopのConnectToEISを一度だけ使う限定equipment profileを追加する。
+libei senderは単一seat・一意なactive device・単一virtual region・同monitorのphysical
+extent/scaleだけを受理し、pause/removal/monitor変更は拒否する。EIS接続後のNotify混用、
+入力再送、未知regionの推定は禁止。原inputと製品の厳密なcursor ACK・選択state、
+独立画像review・登録verifierは維持する。実機受入前であり9種のreleaseは未完。
+初回独立コードreviewはmonitor変更時の保持入力cleanupを指摘。releaseだけを通常guardから
+分離し、原deviceの押下記録を解放してcloseする補正とpause／revocation拒否系testを追加する。
