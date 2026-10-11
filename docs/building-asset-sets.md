@@ -279,6 +279,17 @@ Yard内の固定相対trial grid（min X+3、max Y-3）を実quadから投影し
 一致grid／CompanionPendingだけを認める。Rejectedや親子commitを成功へ読み替えない。
 Blueprint一覧不変とEscape解除を要求し、正式配置・完成・lifecycle・art・releaseのauthorityはない。
 
+`architect-select-place-companion-cancel --kind Tank`はその後の単発Left入力を追加する別feedback。
+profilingの`companion_context`は実際の`CompanionPlacementState`と最大512の`BucketStorage` root、
+`PendingBelongsToBlueprint`／`BelongsTo`、実stockpile占有を読むだけで、missing resourceはavailable=false。
+全BucketStorage markerを数え、Transform欠損はinventoryから隠さず観測failureとする。
+pending anchor／center／radiusと実Yard投影を照合し、現Tank 2×2の右隣へ2tile保管所を試行する。
+press直前までwindow／epoch／選択／投影／pending contextを再検査し、入力を再送しない。
+原Leftと同frame/timeのCompanionCommitted、実Tank Blueprint 4tile、2つの実child rootと
+pending parent参照／stockpile占有、親map予約を独立照合する。Escapeは選択だけを閉じ、
+確定した計画の親子inventoryと親map予約を残すことを検査する。拒否・rollback・不明結果は成功にしない。
+これは通常配置の計画確定だけで、材料配送・建設完了・save/load・cleanup・正式art／releaseは証明しない。
+
 `architect-select-cancel --kind <9種の固定集合>`は別profile
 `building-production-local-equipment-feedback-eis-v2`で、`dev.py feedback --build-only`の
 profiling feature付き`target/debug/bevy_app`を利用する限定feedbackである。

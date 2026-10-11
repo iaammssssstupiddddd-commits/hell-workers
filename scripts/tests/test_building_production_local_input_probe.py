@@ -166,6 +166,13 @@ class LocalInputProbeTests(unittest.TestCase):
         yard = placement | {"profile": input_probe.YARD_PROFILE, "scenario": "architect-select-place-yard-cancel",
                             "yard_driver_sha256": input_probe.probe.digest(Path(input_probe.yard_probe.__file__))}
         self.assertEqual(input_probe.check_plan(yard, self.plan_path), (self.repo, self.root, binary))
+        companion = yard | {"profile": input_probe.COMPANION_PROFILE, "scenario": "architect-select-place-companion-cancel",
+                            "companion_driver_sha256": input_probe.probe.digest(Path(input_probe.companion_probe.__file__))}
+        self.assertEqual(input_probe.check_plan(companion, self.plan_path), (self.repo, self.root, binary))
+        for change in ({"companion_driver_sha256": "0" * 64}, {"scenario": "architect-select-place-yard-cancel"},
+                       {"accepted": True}, {"selection_kind": "MudMixer"}):
+            with self.subTest(change=change), self.assertRaises(RuntimeError):
+                input_probe.check_plan(companion | change, self.plan_path)
         for change in ({"selection_kind": "MudMixer"}, {"yard_driver_sha256": "0" * 64},
                        {"scenario": "architect-select-place-cancel"}, {"promotion_authority": True}):
             with self.subTest(change=change), self.assertRaises(RuntimeError):

@@ -610,3 +610,11 @@ storage subject fingerprintとnative plan.sourceは別digest体系であり同�
 各軸1回・4秒以内、解除まで観測する。Yard trial点はmap生成を変えず実投影と同一contextに拘束。
 Yard内の最初のTank clickはCompanionPendingだけを検査し、Blueprint commitはしない。
 正常配置の次の親子commit・占有・材料配送・完成・move/save/cleanupと性能・正式releaseは残す。
+
+`7fc5697b`のfresh実機では通常D→W入力で既存Yardへ到達し、grid `[73,60]`で原Leftと
+同sample37／time `7.633592636`／window `69v0`／epoch0のCompanionPendingを取得。
+全6owned画像と拒否startup原画像・rawを独立reviewし、登録verifierで限定pass封印／finalize、
+primary storage pass。Blueprintは空のままであり、正式導入の承認ではない。
+次の`architect-select-place-companion-cancel`は実pending stateとBucketStorage root／map占有を
+読み取り、通常2回目のクリックによる親Blueprint・2childの計画確定だけを検査する。
+既存world／材料／actor／建設結果のseedはせず、完成・性能・art／numeric・releaseは未達のまま保持する。

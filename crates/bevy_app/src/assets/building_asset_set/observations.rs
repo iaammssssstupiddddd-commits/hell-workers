@@ -263,7 +263,59 @@ fn placement_context(world: &mut World) -> Result<Value, String> {
     )
 }
 
+fn companion_context(world: &mut World) -> Result<Value, String> {
+    use crate::app_contexts::CompanionPlacementState;
+    use hw_logistics::{BelongsTo, BucketStorage, PendingBelongsToBlueprint};
+    let state = world.get_resource::<CompanionPlacementState>();
+    let available = state.is_some();
+    let pending = state.and_then(|state| state.0.as_ref()).map(|state| {
+        json!({"parent_kind": format!("{:?}", state.parent_kind),
+            "parent_anchor": state.parent_anchor, "kind": format!("{:?}", state.kind),
+            "center": state.center.to_array(), "radius": state.radius, "required": state.required})
+    });
+    if pending.as_ref().is_some_and(|state| {
+        state["center"].as_array().is_none_or(|values| {
+            values
+                .iter()
+                .any(|value| value.as_f64().is_none_or(|v| !v.is_finite()))
+        }) || state["radius"]
+            .as_f64()
+            .is_none_or(|v| !v.is_finite() || v <= 0.0)
+    }) {
+        return Err("production companion context is nonfinite".into());
+    }
+    let mut query = world.query_filtered::<(
+        Entity,
+        Option<&Transform>,
+        Option<&PendingBelongsToBlueprint>,
+        Option<&BelongsTo>,
+    ), With<BucketStorage>>();
+    let roots: Vec<_> = query.iter(world).take(513).collect();
+    if roots.len() > 512 {
+        return Err("production companion observation cap exceeded".into());
+    }
+    let mut storages = Vec::new();
+    for (entity, pose, pending_owner, owner) in roots {
+        let pose = pose.ok_or("production companion Transform missing")?;
+        if !pose.translation.is_finite() {
+            return Err("production companion position is nonfinite".into());
+        }
+        let layers = world
+            .resource::<hw_world::WorldMap>()
+            .snapshot_owner(entity);
+        storages.push(json!({"entity": format!("{entity:?}"),
+            "position": pose.translation.to_array(),
+            "grid": hw_world::WorldMap::world_to_grid(pose.translation.truncate()),
+            "pending_owner": pending_owner.map(|owner| format!("{:?}", owner.0)),
+            "owner": owner.map(|owner| format!("{:?}", owner.0)),
+            "stockpile_grids": layers.stockpile_grids}));
+    }
+    storages.sort_by(|a, b| a["entity"].as_str().cmp(&b["entity"].as_str()));
+    Ok(json!({"available": available, "pending": pending, "storages": storages}))
+}
+
 fn snapshot(world: &mut World) -> Result<Value, String> {
+    let companion_context = companion_context(world)?;
     let architect_panel_ready = architect_panel_ready(world);
     let architect_cards = super::observations_ui::architect_cards(world)?;
     let mut query = world.query::<(Entity, &Building, &Transform)>();
@@ -428,8 +480,7 @@ fn snapshot(world: &mut World) -> Result<Value, String> {
                 "production_state": pool.descriptor(kind).and_then(|set| set.manifest.production_state.as_ref())})
         }).collect();
     let modes = ui_modes(world);
-    Ok(
-        json!({"real_seconds": world.resource::<Time<Real>>().elapsed_secs_f64(),
+    let mut sample = json!({"real_seconds": world.resource::<Time<Real>>().elapsed_secs_f64(),
         "virtual_seconds": world.resource::<Time<Virtual>>().elapsed_secs_f64(),
         "paused": world.resource::<Time<Virtual>>().is_paused(),
         "menu_state": modes["menu_state"],
@@ -456,8 +507,9 @@ fn snapshot(world: &mut World) -> Result<Value, String> {
         "material_shallow_bytes": materials.len() * std::mem::size_of::<TopDownStructuralMaterial>(),
         "mesh_cpu_bytes": null, "gpu_measured_bytes": null, "gpu_estimated_bytes": null,
         "native_peak_live_bytes": null, "rss_bytes": null,
-        "application_handle_count": null}),
-    )
+        "application_handle_count": null});
+    sample["companion_context"] = companion_context;
+    Ok(sample)
 }
 
 fn ui_modes(world: &World) -> Value {
@@ -684,6 +736,85 @@ fn record_keyboard_messages(
 mod tests {
     use super::*;
     use bevy::input::{ButtonState, keyboard::Key};
+
+    #[test]
+    fn companion_context_reads_real_pending_state_and_stockpile_ownership() {
+        use crate::app_contexts::{
+            CompanionParentKind, CompanionPlacement, CompanionPlacementKind,
+            CompanionPlacementState,
+        };
+        let mut world = World::new();
+        world.init_resource::<hw_world::WorldMap>();
+        assert_eq!(
+            companion_context(&mut world).unwrap(),
+            json!({"available": false, "pending": null, "storages": []})
+        );
+        let parent = world.spawn_empty().id();
+        let grid = (75, 60);
+        let pose = hw_world::WorldMap::grid_to_world(grid.0, grid.1);
+        let child = world
+            .spawn((
+                hw_logistics::BucketStorage,
+                hw_logistics::PendingBelongsToBlueprint(parent),
+                Transform::from_translation(pose.extend(0.0)),
+            ))
+            .id();
+        world
+            .resource_mut::<hw_world::WorldMap>()
+            .register_stockpile_tile(grid, child);
+        world.insert_resource(CompanionPlacementState(Some(CompanionPlacement {
+            parent_kind: CompanionParentKind::Tank,
+            parent_anchor: (73, 60),
+            kind: CompanionPlacementKind::BucketStorage,
+            center: Vec2::new(768.0, 352.0),
+            radius: 160.0,
+            required: true,
+        })));
+        let before = world.entities().len();
+        let value = companion_context(&mut world).unwrap();
+        assert_eq!(value["pending"]["parent_anchor"], json!([73, 60]));
+        assert_eq!(value["storages"][0]["entity"], format!("{child:?}"));
+        assert_eq!(value["storages"][0]["pending_owner"], format!("{parent:?}"));
+        assert!(value["storages"][0]["owner"].is_null());
+        assert_eq!(value["storages"][0]["stockpile_grids"], json!([[75, 60]]));
+        assert_eq!(world.entities().len(), before);
+    }
+
+    #[test]
+    fn companion_context_rejects_nonfinite_or_overflow() {
+        let mut world = World::new();
+        world.init_resource::<hw_world::WorldMap>();
+        let child = world
+            .spawn((
+                hw_logistics::BucketStorage,
+                Transform::from_xyz(f32::NAN, 0.0, 0.0),
+            ))
+            .id();
+        assert!(companion_context(&mut world).is_err());
+        world.despawn(child);
+        for _ in 0..513 {
+            world.spawn((hw_logistics::BucketStorage, Transform::default()));
+        }
+        assert!(companion_context(&mut world).is_err());
+    }
+
+    #[test]
+    fn companion_context_never_hides_missing_transform_roots() {
+        let mut world = World::new();
+        world.init_resource::<hw_world::WorldMap>();
+        world.spawn(hw_logistics::BucketStorage);
+        assert_eq!(
+            companion_context(&mut world).unwrap_err(),
+            "production companion Transform missing"
+        );
+        for _ in 0..512 {
+            world.spawn(hw_logistics::BucketStorage);
+        }
+        assert_eq!(
+            companion_context(&mut world).unwrap_err(),
+            "production companion observation cap exceeded"
+        );
+    }
 
     #[test]
     fn placement_context_keeps_real_yards_and_missing_projection_explicit() {
