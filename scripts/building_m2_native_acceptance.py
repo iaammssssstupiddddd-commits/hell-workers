@@ -284,6 +284,51 @@ def checkpoint_key(sample):
             sample["paused"]]
 
 
+def check_capture_interval(samples, shot):
+    """Bind an image to a stable observed interval, not an atomic rendered frame."""
+    start, end = shot.get("sample_index"), shot.get("sample_end_index")
+    pipeline.require(type(start) is int and type(end) is int
+                     and 0 <= start < end < len(samples), "capture interval missing/stale")
+    first = samples[start]
+    pipeline.require(first.get("fixture_owner") is not None and first.get("identity") is not None
+                     and shot.get("key") == checkpoint_key(first), "capture interval owner/key missing")
+    pipeline.require(all(checkpoint_key(row) == shot["key"]
+                         and row.get("fixture_owner") == first["fixture_owner"]
+                         and row.get("identity") == first["identity"]
+                         and row.get("world_epoch") == first.get("world_epoch")
+                         and [root.get("owner") for root in row["roots"]]
+                         == [root.get("owner") for root in first["roots"]]
+                         for row in samples[start:end + 1]), "state/owner changed during capture")
+
+
+def bind_capture(before, after, shot):
+    pipeline.require(all(before.get(key) == after.get(key)
+                         for key in ("nonce", "process_id", "identity", "leg"))
+                     and after["samples"][:len(before["samples"])] == before["samples"],
+                     "capture trace prefix/session changed")
+    bound = {**shot, "sample_index": len(before["samples"]) - 1,
+             "sample_end_index": len(after["samples"]) - 1,
+             "key": checkpoint_key(before["samples"][-1])}
+    check_capture_interval(after["samples"], bound)
+    return bound
+
+
+def capture_observed_interval(capture_root, pid, trace_path, before):
+    shot = art.capture(capture_root, pid)
+    if shot is None:
+        return None, None
+    after = m2.read_json(trace_path)
+    try:
+        return bind_capture(before, after, shot), after
+    except ValueError as error:
+        if str(error) not in ("capture interval missing/stale", "state/owner changed during capture"):
+            raise
+        pipeline.put(capture_root / "rejected.json", pipeline.canonical({
+            "reason": str(error), "sample_index": len(before["samples"]) - 1,
+            "sample_end_index": len(after["samples"]) - 1, "capture": shot}))
+        return None, after
+
+
 def required_owned_states(value):
     kind, leg = value["identity"]["kind"], value["leg"]
     pipeline.require(kind in DRIVEN_LEGS and leg in LIFECYCLE_LEGS | {DRIVEN_LEGS[kind]}
@@ -395,6 +440,7 @@ def verify(root):
     check_trace(captured, value, result["nonce"], result["pid"])
     pipeline.require(trace["samples"][:len(captured["samples"])] == captured["samples"], "capture trace is not a run prefix")
     screenshot = result["screenshot"]
+    check_capture_interval(trace["samples"], screenshot)
     image = pipeline.rooted(root, screenshot["path"])
     pipeline.require(screenshot["capture_scope"] == "owned-x11-client"
                      and screenshot["window_pid"] == result["pid"]
@@ -407,6 +453,7 @@ def verify(root):
     for shot in checkpoints:
         image = pipeline.rooted(root, shot["path"])
         index = shot["sample_index"]
+        check_capture_interval(trace["samples"], shot)
         pipeline.require(type(index) is int and previous_index < index < len(trace["samples"])
                          and shot["key"] == checkpoint_key(trace["samples"][index])
                          and shot["window_pid"] == result["pid"] and shot["capture_scope"] == "owned-x11-client"
@@ -475,6 +522,8 @@ def run(args):
         screenshot = None
         checkpoints = []
         captured_keys = set()
+        capture_attempts = 0
+        final_capture_attempts = 0
         started = time.monotonic()
         # Private cwd keeps interactive saves out of the repository/user save directory.
         with (root / "actual-window.log").open("w") as log:
@@ -492,20 +541,27 @@ def run(args):
                             key_text = json.dumps(key)
                             if key_text not in captured_keys:
                                 pipeline.require(len(checkpoints) < 24, "checkpoint capture cap exceeded")
-                                capture_root = root / "checkpoints" / str(len(checkpoints))
+                                pipeline.require(capture_attempts < 48, "checkpoint attempt cap exceeded")
+                                capture_root = root / "checkpoints" / str(capture_attempts)
+                                capture_attempts += 1
                                 capture_root.mkdir(parents=True, exist_ok=True)
-                                shot = art.capture(capture_root, process.pid)
+                                shot, _ = capture_observed_interval(capture_root, process.pid, trace_path, current)
                                 if shot is not None:
-                                    shot.update(path=str((capture_root / shot["path"]).relative_to(root)),
-                                                key=key, sample_index=len(current["samples"]) - 1)
+                                    shot.update(path=str((capture_root / shot["path"]).relative_to(root)))
                                     checkpoints.append(shot)
                                     captured_keys.add(key_text)
                     if screenshot is None and time.monotonic() - started >= value["duration_seconds"] - 2:
                         trace = m2.read_json(root / "probe.m2-trace.json")
                         check_trace(trace, value, nonce, process.pid)
-                        screenshot = art.capture(root, process.pid)
+                        pipeline.require(final_capture_attempts < 8, "final capture attempt cap exceeded")
+                        final_root = root / "final-captures" / str(final_capture_attempts)
+                        final_capture_attempts += 1
+                        final_root.mkdir(parents=True, exist_ok=False)
+                        screenshot, after = capture_observed_interval(
+                            final_root, process.pid, root / "probe.m2-trace.json", trace)
                         if screenshot is not None:
-                            pipeline.put(root / "captured-trace.json", pipeline.canonical(trace))
+                            screenshot["path"] = str((final_root / screenshot["path"]).relative_to(root))
+                            pipeline.put(root / "captured-trace.json", pipeline.canonical(after))
                     native.update_state(job, state, heartbeat_at=native.utc_now())
                     time.sleep(0.5)
             finally:

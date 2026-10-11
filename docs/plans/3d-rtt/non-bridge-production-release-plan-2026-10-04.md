@@ -6,7 +6,7 @@
 | --- | --- |
 | 計画ID | `non-bridge-production-release-plan-2026-10-04` |
 | ステータス | `In Progress` |
-| 作成日 / 最終更新日 | `2026-10-04` / `2026-10-05` |
+| 作成日 / 最終更新日 | `2026-10-04` / `2026-10-12` |
 | 作成者 | Codex |
 | 関連提案 | N/A |
 | 関連Issue/PR | TAK-14 / 基盤統合PR #29 |
@@ -429,6 +429,15 @@ Tank rawは955 samples、同一v1数値hash・ArtPreview identity、同一owner�
 遮り、その部分の美術評価は未達。水のfixture投入やMudMixerのfixture task/state操作は通常入力の証拠ではない。
 両passはfeedback技術観測だけで、正式art/numeric freeze、ordinary-input給排水・精製lifecycle、
 全leg/性能、promotion/install/rollbackや通常起動の本設導入は引き続き未受入。
+2026-10-12再開: 撮影前sampleだけへの結合を修正する。M2 runnerは撮影後のraw prefixを再取得し、
+前後でsampleが進み、全区間でstate/pause/camera/consumer表示・identity・fixture owner・root owner・
+world epochが不変な画像だけをcheckpointと最終画像へ採用する。途中で変わって戻る区間も拒否する。
+不安定なcheckpoint画像は理由付きで診断保持し、同名で上書きせず最大48試行／24採用画像へ制限する。
+最終画像も最大8試行の別pathへ撮り、拒否画像と理由を上書きせず保持する。
+session/prefix改変は再撮影で隠さず失敗させる。新verifierは撮影後indexがない旧画像を受入証拠として拒否する。
+これはrawの安定区間への結合であり、renderer frameと完全に原子的な撮影や通常入力の証拠ではない。
+旧passはその時点の限定結果として維持する。fresh実機観測と独立画像評価を終えるまで本補正の実機結果は未達。
+Help実経路: 子processの撮影・raw検証のみの変更で、通常起動、player input/UI、gameplay、保存、Helpは不変（No impact）。
 出力root: primary `target/native-acceptance/nonbridge-restarea-authoring-20261004-v1`。
 owner: main / consumer: M3候補の独立採否・現行subject導入。次工程: 原本・画像を比較しruntime候補を生成。
 release_when: 採用原本のasset正本への集約と候補フィードバック終了後。旧batchのpassを新subjectへ流用しない。

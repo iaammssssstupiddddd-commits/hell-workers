@@ -1,6 +1,7 @@
 """Independent native-recipe rejection coverage without starting a process."""
 
 import copy
+import json
 from argparse import Namespace
 from pathlib import Path
 import tempfile
@@ -52,6 +53,68 @@ class NativeRecipeTests(unittest.TestCase):
         recipe.check_trace(self.trace, self.value, self.nonce, 42)
         self.assertEqual(self.trace, before)
         self.assertFalse(self.trace["accepted"])
+
+    def test_capture_interval_binds_fresh_prefix_without_mutation(self):
+        after = copy.deepcopy(self.trace)
+        for sample in after["samples"]:
+            sample["roots"][0]["state"] = "Some(TankEmpty)"
+        before = {**after, "samples": after["samples"][:1]}
+        original = copy.deepcopy((before, after))
+        shot = recipe.bind_capture(before, after, {"path": "image.png"})
+        self.assertEqual((shot["sample_index"], shot["sample_end_index"]), (0, 2))
+        recipe.check_capture_interval(after["samples"], shot)
+        self.assertEqual((before, after), original)
+        for mutation in (
+            lambda trace: trace.update(nonce="c" * 32),
+            lambda trace: trace.update(process_id=99),
+            lambda trace: trace.update(samples=trace["samples"][:1]),
+            lambda trace: trace["samples"][0].update(real_seconds=0.9),
+            lambda trace: trace["samples"][1].update(paused=True),
+            lambda trace: trace["samples"][1].update(fixture_owner="other"),
+            lambda trace: trace["samples"][1].update(identity=None),
+            lambda trace: trace["samples"][1].update(world_epoch=2),
+            lambda trace: trace["samples"][1]["roots"][0].update(owner="other"),
+            lambda trace: trace["samples"][1]["roots"][0].update(state="Some(TankFull)"),
+        ):
+            changed = copy.deepcopy(after)
+            mutation(changed)
+            with self.subTest(mutation=mutation), self.assertRaises(ValueError):
+                recipe.bind_capture(before, changed, {"path": "image.png"})
+
+    def test_capture_interval_rejects_legacy_missing_or_invalid_indices(self):
+        for start, end in ((0, None), (0, 0), (-1, 2), (0, 3), (True, 2), (0, False)):
+            with self.subTest(start=start, end=end), self.assertRaises(ValueError):
+                recipe.check_capture_interval(self.trace["samples"], {
+                    "sample_index": start, "sample_end_index": end,
+                    "key": recipe.checkpoint_key(self.trace["samples"][0])})
+
+    def test_rejected_then_successful_capture_preserves_original_pixels_and_reason(self):
+        stable = copy.deepcopy(self.trace)
+        for row in stable["samples"]:
+            row["roots"][0]["state"] = "Some(TankEmpty)"
+        before = {**stable, "samples": stable["samples"][:1]}
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            trace_path = root / "trace.json"
+            def capture(path, pid):
+                recipe.pipeline.put(path / "actual-window.png", path.name.encode())
+                return {"path": "actual-window.png", "window_pid": pid}
+            trace_path.write_text(json.dumps(self.trace))
+            rejected = root / "0"
+            with patch.object(recipe.art, "capture", side_effect=capture):
+                shot, _ = recipe.capture_observed_interval(rejected, 42, trace_path, before)
+                self.assertIsNone(shot)
+                trace_path.write_text(json.dumps(stable))
+                accepted = root / "1"
+                shot, after = recipe.capture_observed_interval(accepted, 42, trace_path, before)
+                self.assertEqual(shot["sample_end_index"], 2)
+                self.assertEqual(after, stable)
+            self.assertEqual((rejected / "actual-window.png").read_bytes(), b"0")
+            self.assertEqual((accepted / "actual-window.png").read_bytes(), b"1")
+            record = json.loads((rejected / "rejected.json").read_text())
+            self.assertEqual(record["reason"], "state/owner changed during capture")
+            self.assertEqual((record["sample_index"], record["sample_end_index"]), (0, 2))
+            self.assertFalse((accepted / "rejected.json").exists())
 
     def test_v2_trace_requires_the_explicit_numeric_proposal(self):
         identity = {**self.identity, "kind": "MudMixer"}
