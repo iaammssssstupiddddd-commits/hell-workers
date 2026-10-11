@@ -153,9 +153,12 @@ class EisSender:
             raise InputRejected("EIS requires one virtual absolute/button region")
         rect = tuple(getattr(lib, "ei_region_get_" + name)(region)
                      for name in ("x", "y", "width", "height"))
+        scale = lib.ei_region_get_physical_scale(region)
         if (rect != (0, 0, *self.root_size)
-                or lib.ei_region_get_physical_scale(region) != self.mapping[1]):
-            raise InputRejected("EIS region does not match inspected physical monitor")
+                or scale != self.mapping[1]):
+            raise InputRejected(f"EIS region does not match inspected physical monitor: "
+                                f"observed rect={rect}, scale={scale}; "
+                                f"expected rect={(0, 0, *self.root_size)}, scale={self.mapping[1]}")
         return device
 
     def send(self, operation, *values):

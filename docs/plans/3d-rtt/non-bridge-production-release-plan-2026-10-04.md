@@ -551,3 +551,6 @@ extent/scaleだけを受理し、pause/removal/monitor変更は拒否する。EI
 独立画像review・登録verifierは維持する。実機受入前であり9種のreleaseは未完。
 初回独立コードreviewはmonitor変更時の保持入力cleanupを指摘。releaseだけを通常guardから
 分離し、原deviceの押下記録を解放してcloseする補正とpause／revocation拒否系testを追加する。
+`f16d3e87`のfresh EIS実機は接続・device取得後、physical region一致guardで入力前拒否。
+input_receiptsは空、invalid seal/finalize・診断保持済み。拒否にactual rect/scaleとexpected値を
+含めるだけの観測補正を追加し、同じ拒否条件を維持して次のfresh実測で単位を確定する。

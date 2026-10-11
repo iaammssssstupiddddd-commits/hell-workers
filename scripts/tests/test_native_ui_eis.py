@@ -72,6 +72,14 @@ class EisTests(unittest.TestCase):
             with self.subTest(change=change), self.assertRaises(InputRejected):
                 value.region()
 
+    def test_rejected_region_records_actual_and_expected_contract_without_input(self):
+        value = sender()
+        value.lib.ei_region_get_width.return_value = 1440
+        with self.assertRaisesRegex(InputRejected, r"observed rect=\(0, 0, 1440, 1800\), scale=2.0; "
+                                    r"expected rect=\(0, 0, 2880, 1800\), scale=2.0"):
+            value.send("pointer_motion_absolute", 1200, 900)
+        value.lib.ei_device_pointer_motion_absolute.assert_not_called()
+
     def test_disconnect_removed_and_pause_fail_before_input(self):
         for event_type in (2, 4, 6, 7, 999):
             value = sender()
