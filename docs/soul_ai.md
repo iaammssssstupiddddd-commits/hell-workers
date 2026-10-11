@@ -280,6 +280,10 @@ availability revisionを進め、`NoSafeRecovery` blockerをroot transaction自�
 
 #### タスク終了 API（M2）
 
+割当applyはSoulの`CommandedBy`を委譲Familiarへ接続する一方、搬送依頼の`ManagedBy`は
+実`TransportRequest.issued_by`へ維持する。Yard発行のrequestをFamiliarへ片側移譲しない。
+非搬送taskの既存引き継ぎ、`WorkingOn`／`ActiveTaskIdentity`の同frame適用は不変である。
+
 ハンドラは `TaskExecutionContext`（`context/execution.rs`）の終了 API で Soul 割り当てを解除する。`clear_task_and_path` と `remove::<WorkingOn>` の手書き組み合わせは禁止（`chain.rs` の `WorkingOn` 付け替えのみ例外）。
 
 | メソッド | 用途 |

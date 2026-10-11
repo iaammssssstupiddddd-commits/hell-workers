@@ -96,6 +96,8 @@ Source 側のみ手動操作し、Target 側は Bevy が自動更新する（tas
 
 ### 1.6 TransportRequest
 - `TransportRequest { kind, anchor, resource_type, issued_by, priority, stockpile_group }`
+  `issued_by`とdurable `ManagedBy`はproducerが所有する同一pair。作業員割当のFamiliarを
+  request管理者へ片側だけ上書きしない（Yard依頼の委譲でも発行ownerは保持）。
 - `TransportDemand { desired_slots, inflight }`
 - `desired_slots` は request が同時に持てる worker の総 ceiling、`inflight` は既存 request に付いた
   `TaskWorkers` / lease 状態を producer が再反映した値として扱う。policy-driven Stockpile request では

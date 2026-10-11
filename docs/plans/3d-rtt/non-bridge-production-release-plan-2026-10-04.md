@@ -19,6 +19,11 @@ fresh job内の実ファイル・receipt・epoch・親子置換で照合する�
 `e9bc838f`の初回はF5直後のcatalog layout未確定（sample65、可視controls空）をクリック前に拒否し、
 save/loadなしのinvalidとして精算・診断保持した。入力を再送せず、2つの実computed-layout sampleが
 同じwindow／epoch／session／controlを持つまで最大3秒のpassive waitを追加してfresh subjectで再確認する。
+`d58de249`のfresh実機は描画待ちを通過し、Manual1のSave成功（sample57、session1、497110 bytes）を
+実見した。Loadはsample71/session2でInvalidData、epoch0のまま拒否。
+原saveにはYard発行のDeliverToBlueprint requestとFamiliarのManagedByが混在していた。
+Soul割当applyの`IssuedBy(=ManagedBy)`片側上書きが原因で、requestのproducer ownerを
+deferred適用時に保持する修正を進める。原失敗・saveは診断保持し、load validatorは変更しない。
 
 通常起動で橋以外の9種が正式ビジュアルになり、完成・状態・配置・移動・施工・カタログ・保存復元が一致する。
 原移行計画の受入条件を維持し、橋だけを今回の完了対象から外す。技術previewと正式採用を区別する。

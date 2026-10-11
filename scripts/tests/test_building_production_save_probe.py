@@ -9,6 +9,14 @@ from scripts import building_production_save_probe as probe
 
 
 class SaveProbeTests(unittest.TestCase):
+    def test_failed_terminal_save_load_is_reported_without_timeout_or_retry(self):
+        for operation in ("Save", "Load"):
+            read = Mock(return_value={"events": [{"producer": "SaveLoadOutcome", "operation": operation,
+                                                   "result": "Failed(InvalidData)"}], "samples": [{}]})
+            with self.subTest(operation=operation), self.assertRaisesRegex(RuntimeError, "terminal rejection"):
+                probe.wait_success(read, operation, 0, lambda _s: False)
+            self.assertEqual(read.call_count, 1)
+
     def test_passive_layout_wait_requires_two_actual_stable_samples_and_no_input(self):
         empty = self.sample()
         empty["save_catalog_context"]["controls"] = []

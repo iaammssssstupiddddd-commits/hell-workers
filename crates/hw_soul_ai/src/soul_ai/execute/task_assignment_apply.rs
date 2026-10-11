@@ -44,9 +44,18 @@ fn prepare_worker_for_task_apply(
             WorkingOn(task_entity),
             ActiveTaskIdentity::new(task_entity, task_entity, work_type),
         ));
-    commands
-        .entity(task_entity)
-        .try_insert(IssuedBy(familiar_entity));
+    // A transport producer owns its durable issuer/ManagedBy pair. A worker
+    // may be delegated by a Familiar to a Yard request without transferring
+    // that request's owner. Read the actual request when deferred writes apply
+    // so assignment cannot serialize a half-changed ownership pair.
+    commands.queue(move |world: &mut World| {
+        let owner = world
+            .get::<hw_logistics::transport_request::TransportRequest>(task_entity)
+            .map_or(familiar_entity, |request| request.issued_by);
+        if let Ok(mut task) = world.get_entity_mut(task_entity) {
+            task.insert(IssuedBy(owner));
+        }
+    });
 }
 
 fn worker_can_receive_assignment(assigned_task: &AssignedTask, idle: &IdleState) -> bool {
@@ -506,6 +515,78 @@ mod tests {
         GeneratePowerData, GeneratePowerPhase, MovePlantTask, SandPile, TargetDeconstructionRoot,
         TaskDiagnosticDomainMask,
     };
+
+    #[test]
+    fn delegated_transport_assignment_preserves_the_producer_owner() {
+        use hw_logistics::transport_request::{
+            TransportPriority, TransportRequest, TransportRequestKind,
+        };
+        let mut world = World::new();
+        let yard = world.spawn_empty().id();
+        let familiar = world.spawn_empty().id();
+        let worker = world.spawn_empty().id();
+        let task = world
+            .spawn((
+                IssuedBy(yard),
+                TransportRequest {
+                    kind: TransportRequestKind::DeliverToBlueprint,
+                    anchor: yard,
+                    resource_type: ResourceType::Wood,
+                    issued_by: yard,
+                    priority: TransportPriority::Normal,
+                    stockpile_group: Vec::new(),
+                },
+            ))
+            .id();
+        prepare_worker_for_task_apply(
+            &mut world.commands(),
+            worker,
+            familiar,
+            task,
+            WorkType::Haul,
+            true,
+        );
+        world.flush();
+        assert_eq!(world.get::<IssuedBy>(task).unwrap().0, yard);
+        assert_eq!(world.get::<TransportRequest>(task).unwrap().issued_by, yard);
+        assert_eq!(world.get::<CommandedBy>(worker).unwrap().0, familiar);
+        assert_eq!(world.get::<WorkingOn>(worker).unwrap().0, task);
+        assert!(
+            world
+                .get::<hw_core::relationships::ManagedTasks>(yard)
+                .unwrap()
+                .contains(task)
+        );
+        assert!(
+            world
+                .get::<hw_core::relationships::ManagedTasks>(familiar)
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn non_transport_assignment_keeps_existing_familiar_takeover_behavior() {
+        let mut world = World::new();
+        let old = world.spawn_empty().id();
+        let familiar = world.spawn_empty().id();
+        let worker = world.spawn_empty().id();
+        let task = world.spawn(IssuedBy(old)).id();
+        prepare_worker_for_task_apply(
+            &mut world.commands(),
+            worker,
+            familiar,
+            task,
+            WorkType::Build,
+            true,
+        );
+        world.flush();
+        assert_eq!(world.get::<IssuedBy>(task).unwrap().0, familiar);
+        assert!(
+            world
+                .get::<hw_core::relationships::ManagedTasks>(old)
+                .is_none_or(|tasks| !tasks.contains(task))
+        );
+    }
 
     #[derive(Resource, Clone, Copy)]
     struct AssignmentFixture {

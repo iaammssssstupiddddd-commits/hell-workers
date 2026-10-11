@@ -27,6 +27,11 @@ Bevy 0.19 の Relationship は **Source 側を操作すれば Target 側が自�
 
 `TaskWorkers` は `WorkingOn` source だけを正本とし、target を直接 remove してはならない。最後の source が外れると Bevy は空の `TaskWorkers` 自体を削除するため、`TransportRequestPlugin` は Soul AI `Execute` の後に source command と Relationship 内部 command を順に適用してから removal を読む。現存する worker なし `TransportRequest` は同じ `Update` で `Pending` に戻り、次の Logic frame で再割り当て候補になる。
 
+搬送依頼のdurable `ManagedBy` は `TransportRequest.issued_by` と一致させる。
+Yard発行依頼をFamiliarが委譲しても、Soulの`CommandedBy`と依頼のownerは別である。
+割当applyは実deferred適用時のrequest issuerを保持し、非搬送taskだけ従来どおりFamiliarへ引き継ぐ。
+save candidateの発行者／owner一致・Relationship対称性の拒否検査は緩和しない。
+
 ### 2.2 手動管理コンポーネント
 
 | コンポーネント | 書き込み元 | 読み取り元 | 非自明な挙動 |

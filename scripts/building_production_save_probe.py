@@ -141,6 +141,19 @@ def click(transport, read, action, nonce, expected):
     return {"before": before, "pointer": pointer, "boundary": boundary, "point": point}
 
 
+def wait_success(read, operation, boundary, settled):
+    def ready(raw):
+        outcomes = [e for e in raw["events"][boundary:] if e.get("producer") == "SaveLoadOutcome"]
+        require(len(outcomes) <= 1, "multiple save/load terminal receipts")
+        if not outcomes:
+            return False
+        outcome = outcomes[0]
+        require(outcome["operation"] == operation and outcome["result"] == "Succeeded",
+                f"actual {operation} terminal rejection: {outcome.get('result')}")
+        return settled(raw["samples"][-1])
+    return selection.wait(read, ready)
+
+
 def run(transport, read, root, capture):
     raw = read()
     nonce, before = raw["nonce"], len(raw["samples"]) - 1
@@ -158,8 +171,7 @@ def run(transport, read, root, capture):
         return wait_control(read, "Save" if prefix == "save" else "Load", nonce, initial["primary_window"], initial["world_epoch"])
     ready = open_catalog("save", "F5", "SaveCatalog")
     saved = click(transport, read, "Save", nonce, ready["samples"][-1])
-    raw = selection.wait(read, lambda v: any(e.get("producer") == "SaveLoadOutcome" for e in v["events"][saved["boundary"]:])
-                         and v["samples"][-1]["save_catalog_context"]["mode"] == "Closed")
+    raw = wait_success(read, "Save", saved["boundary"], lambda s: s["save_catalog_context"]["mode"] == "Closed")
     saved["after"] = len(raw["samples"]) - 1
     identity = file_identity(root)
     capture(root / "saved.png")
@@ -168,8 +180,7 @@ def run(transport, read, root, capture):
     selection.wait(read, lambda v: v["samples"][-1]["save_catalog_context"]["mode"] == "LoadConfirmManual1")
     ready = wait_control(read, "ConfirmLoad", nonce, initial["primary_window"], initial["world_epoch"])
     confirmed = click(transport, read, "ConfirmLoad", nonce, ready["samples"][-1])
-    raw = selection.wait(read, lambda v: any(e.get("producer") == "SaveLoadOutcome" and e.get("operation") == "Load"
-                         for e in v["events"][confirmed["boundary"]:]) and v["samples"][-1]["world_epoch"] != initial["world_epoch"])
+    raw = wait_success(read, "Load", confirmed["boundary"], lambda s: s["world_epoch"] != initial["world_epoch"])
     confirmed["after"] = len(raw["samples"]) - 1
     capture(root / "loaded.png")
     evidence = {"before": before, "save": saved, "load": loaded, "confirm": confirmed, "file": identity}
