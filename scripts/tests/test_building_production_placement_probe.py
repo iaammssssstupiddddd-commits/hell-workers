@@ -5,6 +5,7 @@ from unittest.mock import Mock
 
 from scripts import building_production_placement_probe as probe
 from scripts import building_production_lifecycle as lifecycle
+from scripts.tests import test_building_production_yard_probe as yard_tests
 
 
 class PlacementProbeTests(unittest.TestCase):
@@ -89,6 +90,39 @@ class PlacementProbeTests(unittest.TestCase):
             with self.subTest(change=change), self.assertRaises(RuntimeError):
                 probe.run(transport, Mock(side_effect=[before, pointer]))
             self.assertEqual([call.args[0] for call in transport.send.call_args_list], ["world-motion"])
+
+    def yard_fixture(self):
+        fixture = yard_tests.YardProbeTests()
+        fixture.setUp()
+        context = fixture.sample["placement_context"]
+        for corner in context["yards"][0]["logical_viewport_corners"]:
+            corner[1] += 64
+        for index, sample in enumerate(self.raw["samples"]):
+            sample["placement_context"] = copy.deepcopy(context)
+            if index:
+                sample["cursor_position"] = [696, 152]
+        self.raw["events"][2]["outcome"]["grid"] = [73, 56]
+        self.evidence["point"] = [696, 152]
+
+    def test_observed_yard_point_requires_matching_pending_branch(self):
+        self.yard_fixture()
+        probe.verify(self.raw, self.evidence, yard=True)
+        for change in ({"grid": [74, 56]}, {"status": "Rejected", "reason": "NotInYard"}):
+            raw = copy.deepcopy(self.raw)
+            raw["events"][2]["outcome"].update(change)
+            with self.subTest(change=change), self.assertRaises((RuntimeError, ValueError)):
+                probe.verify(raw, self.evidence, yard=True)
+
+    def test_yard_camera_change_after_motion_stops_before_press(self):
+        self.yard_fixture()
+        before, pointer = copy.deepcopy(self.raw), copy.deepcopy(self.raw)
+        before.update(samples=before["samples"][:1], events=[])
+        pointer.update(samples=pointer["samples"][:2], events=[])
+        pointer["samples"][1]["placement_context"]["camera_position"][0] = 10
+        transport = Mock()
+        with self.assertRaisesRegex(RuntimeError, "projection changed"):
+            probe.run(transport, Mock(side_effect=[before, pointer]), yard=True)
+        self.assertEqual([call.args[0] for call in transport.send.call_args_list], ["world-motion"])
 
 
 if __name__ == "__main__":

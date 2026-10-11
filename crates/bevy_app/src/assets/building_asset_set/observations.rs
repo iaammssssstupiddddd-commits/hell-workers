@@ -196,17 +196,25 @@ fn placement_context(world: &mut World) -> Result<Value, String> {
     }) {
         return Err("production Yard bounds are nonfinite or inverted".into());
     }
-    let mut cameras = world
-        .query_filtered::<(Entity, &Camera, &GlobalTransform), With<hw_ui::camera::MainCamera>>();
+    let primary_window = world
+        .query_filtered::<Entity, (With<bevy::window::PrimaryWindow>, With<Window>)>()
+        .single(world)
+        .ok();
+    let mut cameras = world.query_filtered::<(
+        Entity,
+        &Camera,
+        &GlobalTransform,
+        &bevy::camera::RenderTarget,
+    ), With<hw_ui::camera::MainCamera>>();
     let camera = match cameras.single(world) {
-        Ok((entity, camera, transform)) if camera.is_active => {
-            Some((entity, camera.clone(), *transform))
+        Ok((entity, camera, transform, target)) if camera.is_active => {
+            Some((entity, camera.clone(), *transform, target.clone()))
         }
         _ => None,
     };
     if camera
         .as_ref()
-        .is_some_and(|(_, _, transform)| !transform.translation().is_finite())
+        .is_some_and(|(_, _, transform, _)| !transform.translation().is_finite())
     {
         return Err("production placement camera position is nonfinite".into());
     }
@@ -219,7 +227,7 @@ fn placement_context(world: &mut World) -> Result<Value, String> {
                 yard.max,
                 Vec2::new(yard.min.x, yard.max.y),
             ];
-            let projected = camera.as_ref().and_then(|(_, camera, transform)| {
+            let projected = camera.as_ref().and_then(|(_, camera, transform, _)| {
                 corners
                     .iter()
                     .map(|point| {
@@ -231,13 +239,26 @@ fn placement_context(world: &mut World) -> Result<Value, String> {
                     })
                     .collect::<Option<Vec<_>>>()
             });
+            let grid_min = hw_world::WorldMap::world_to_grid(yard.min);
+            let grid_max = hw_world::WorldMap::world_to_grid(yard.max);
             json!({"entity": format!("{entity:?}"), "min": yard.min.to_array(),
-                "max": yard.max.to_array(), "logical_viewport_corners": projected})
+                "max": yard.max.to_array(), "grid_min": grid_min, "grid_max": grid_max,
+                "grid_world_min": hw_world::WorldMap::grid_to_world(grid_min.0, grid_min.1).to_array(),
+                "grid_world_max": hw_world::WorldMap::grid_to_world(grid_max.0, grid_max.1).to_array(),
+                "logical_viewport_corners": projected})
         })
         .collect();
     Ok(
-        json!({"camera": camera.as_ref().map(|(entity, _, _)| format!("{entity:?}")),
-        "camera_position": camera.as_ref().map(|(_, _, transform)| transform.translation().to_array()),
+        json!({"camera": camera.as_ref().map(|(entity, _, _, _)| format!("{entity:?}")),
+        "camera_position": camera.as_ref().map(|(_, _, transform, _)| transform.translation().to_array()),
+        "target_window": camera.as_ref().and_then(|(_, _, _, target)| match target {
+            bevy::camera::RenderTarget::Window(reference) => match reference {
+                bevy::window::WindowRef::Primary => primary_window,
+                bevy::window::WindowRef::Entity(entity) => Some(*entity),
+            }.map(|entity| format!("{entity:?}")),
+            _ => None,
+        }),
+        "logical_viewport_size": camera.as_ref().and_then(|(_, camera, _, _)| camera.logical_viewport_size().map(|size| size.to_array())),
         "yards": rows}),
     )
 }
@@ -717,6 +738,33 @@ mod tests {
         let value = placement_context(&mut world).unwrap();
         assert!(value["camera"].is_null());
         assert!(value["camera_position"].is_null());
+    }
+
+    #[test]
+    fn placement_context_records_actual_target_without_rebinding_foreign_window() {
+        let mut world = World::new();
+        let primary = world
+            .spawn((bevy::window::PrimaryWindow, Window::default()))
+            .id();
+        let foreign = world.spawn(Window::default()).id();
+        let camera = world
+            .spawn((
+                hw_ui::camera::MainCamera,
+                Camera::default(),
+                GlobalTransform::IDENTITY,
+            ))
+            .id();
+        let value = placement_context(&mut world).unwrap();
+        assert_eq!(value["target_window"], format!("{primary:?}"));
+        assert!(value["logical_viewport_size"].is_null());
+        world
+            .entity_mut(camera)
+            .insert(bevy::camera::RenderTarget::Window(
+                bevy::window::WindowRef::Entity(foreign),
+            ));
+        let value = placement_context(&mut world).unwrap();
+        assert_eq!(value["target_window"], format!("{foreign:?}"));
+        assert_ne!(value["target_window"], format!("{primary:?}"));
     }
 
     #[test]

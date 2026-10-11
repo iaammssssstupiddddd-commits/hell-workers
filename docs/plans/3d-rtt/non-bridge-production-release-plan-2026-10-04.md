@@ -604,3 +604,9 @@ storage subject fingerprintとnative plan.sourceは別digest体系であり同�
 成功経路は既存Yardの位置と現カメラprojectionを実観測して通常操作で到達する。
 `placement_context`は最大32の実Yard boundsと単一active MainCamera projectionを読み取るだけで、
 新Yard・ownerのseed、カメラ強制移動、入力・受入authorityを追加しない。missing projectionはnull。
+
+既存Yardへの次の限定recipeは`architect-select-place-yard-cancel --kind Tank`。
+実target window／logical viewport／WorldMap grid対応を追加し、必要なcamera移動を原WASDで
+各軸1回・4秒以内、解除まで観測する。Yard trial点はmap生成を変えず実投影と同一contextに拘束。
+Yard内の最初のTank clickはCompanionPendingだけを検査し、Blueprint commitはしない。
+正常配置の次の親子commit・占有・材料配送・完成・move/save/cleanupと性能・正式releaseは残す。

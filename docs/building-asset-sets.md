@@ -266,6 +266,18 @@ Yardの作成・拡張、カメラ移動、配置入力、候補点の自動承�
 非finite・反転したYard bounds／camera位置、件数超過は観測失敗とする。
 同sampleのprimary window／dpi／epochと組み合わせて通常配置の前提を切り分けるための情報であり、
 Yard内という理由だけで占有・配置可否・実commit・release受入を認めない。
+同contextの`target_window`はRenderTargetの実window参照でありforeign targetをprimaryへ置換しない。
+`logical_viewport_size`、WorldMapによる`grid_min/max`と対応する`grid_world_min/max`も実観測する。
+画面外の有限projectionを画面内へclipしたり、欠けたprojectionを再構成したりしない。
+
+`architect-select-place-yard-cancel --kind Tank`は別の限定feedback profileである。
+単一の既存・grid整列Yardとowned primaryの1280×720 logical viewport／DPI1を要求する。
+Yard内の固定相対trial grid（min X+3、max Y-3）を実quadから投影し、必要な軸だけ
+通常W/A/S/Dを各軸1回・最大4秒で送ってworld viewportへ到達する。停止・context異常時も
+元の保持keyを解放し、入力を再送しない。原KeyboardInputとcamera変位方向を独立検査する。
+選択後はprojection全体が不変であることをpress前に再検査し、原単発Left入力と同frame/timeの
+一致grid／CompanionPendingだけを認める。Rejectedや親子commitを成功へ読み替えない。
+Blueprint一覧不変とEscape解除を要求し、正式配置・完成・lifecycle・art・releaseのauthorityはない。
 
 `architect-select-cancel --kind <9種の固定集合>`は別profile
 `building-production-local-equipment-feedback-eis-v2`で、`dev.py feedback --build-only`の
