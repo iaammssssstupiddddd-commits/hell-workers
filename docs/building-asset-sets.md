@@ -227,11 +227,23 @@ runとverifyはbefore／catalog／afterの全画像へ同じnonblank検査を適
 これはordinary入力でのcatalog開閉に限り、9種の候補表示・配置・施工・性能・正式採否ではない。
 この実装の実機成功はfresh batchの独立verifyと画像確認後にのみ記録する。
 profiling rawには`BuildContext.0`の実選択と、通常Architectの9種の実cardを読み取る。
+
 `UiIntent`／`ArchitectBuildingPanel`から対象を解決し、primary windowのphysical pixelで
 rendererのclipと可視ancestorを適用したrectを記録する。Bridge、非表示、未layout、変形matrix、
 過大集合・可視重複は受理しない。`MouseButtonInput`はbutton/state/windowを実原メッセージとして
 記録し、ButtonInput由来のPointerPress/Releaseとは区別する。rectや入力だけでclick成功、
 placement commitや正式asset受入を推定しない。通常入力・UiIntent・gameplay・Helpは変更しない。
+
+profiling観測sessionの`PlacementReceipts`は、通常UI配置分岐が実際に返した結果だけを最大4096件で保持する。
+観測sessionなしではresourceを作らず、入力・配置条件・保存・正式authorityを変更しない。
+Tankの最初の有効clickは`CompanionPending`でありBlueprint成功ではない。companion配置成功時だけ
+実親Blueprint／子storage IDs／footprintを記録し、失敗時は拒否または親rollback済みを記録する。
+他7種の実Blueprint結果と、SoulSpaの実site／4tile spawn結果は別statusとする。
+rawの`PlacementOutcome`にはdeferred command適用時のworld epoch／primary window／実時間と、
+raw観測時のsample indexを付ける。click時点との原子性やraw event順による因果関係を保証しない。
+overflow、欠落・多重window、計測context欠落はfail closed。原MouseButtonInputとの因果照合、
+deferred entityのbefore/afterとoccupancy検証、通常lifecycle全体の受入は別の未完工程である。
+
 `architect-select-cancel --kind <9種の固定集合>`は別profile
 `building-production-local-equipment-feedback-eis-v2`で、`dev.py feedback --build-only`の
 profiling feature付き`target/debug/bevy_app`を利用する限定feedbackである。

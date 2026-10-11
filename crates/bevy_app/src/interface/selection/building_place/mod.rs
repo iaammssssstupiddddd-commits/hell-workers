@@ -5,6 +5,8 @@
 //! 現段階では意図的に root に残す。純バリデーション API は hw_ui::selection::placement を参照。
 mod companion;
 mod flow;
+#[cfg(feature = "profiling")]
+pub(crate) mod observed_outcomes;
 mod placement;
 
 use crate::app_contexts::{
@@ -128,6 +130,12 @@ pub fn blueprint_placement(
             let rejection = validation
                 .rejection(grid)
                 .expect("rejected Tank placement must carry a reason");
+            #[cfg(feature = "profiling")]
+            observed_outcomes::record(
+                &mut commands,
+                serde_json::json!({"kind": "Tank",
+                "grid": grid, "status": "Rejected", "reason": format!("{:?}", rejection.reason)}),
+            );
             record_placement_outcome(&mut state.placement_feedback, Err(rejection), grid, now);
             return;
         }
@@ -137,6 +145,12 @@ pub fn blueprint_placement(
             CompanionPlacementKind::BucketStorage,
             spawn_pos,
         ));
+        #[cfg(feature = "profiling")]
+        observed_outcomes::record(
+            &mut commands,
+            serde_json::json!({"kind": "Tank",
+            "grid": grid, "status": "CompanionPending"}),
+        );
         record_placement_outcome(&mut state.placement_feedback, Ok(()), grid, now);
     } else {
         let result = place_building_blueprint(
@@ -146,9 +160,30 @@ pub fn blueprint_placement(
             building_type,
             grid,
             &pq,
-        )
-        .map(|_| ());
-        record_placement_outcome(&mut state.placement_feedback, result, grid, now);
+        );
+        #[cfg(feature = "profiling")]
+        if matches!(
+            building_type,
+            BuildingType::MudMixer
+                | BuildingType::RestArea
+                | BuildingType::Door
+                | BuildingType::WheelbarrowParking
+                | BuildingType::SandPile
+                | BuildingType::BonePile
+                | BuildingType::OutdoorLamp
+        ) {
+            let row = match &result {
+                Ok((owner, footprint, _)) => {
+                    serde_json::json!({"kind": format!("{building_type:?}"),
+                    "grid": grid, "status": "BlueprintCommitted", "owner": format!("{owner:?}"),
+                    "footprint": footprint})
+                }
+                Err(rejection) => serde_json::json!({"kind": format!("{building_type:?}"),
+                    "grid": grid, "status": "Rejected", "reason": format!("{:?}", rejection.reason)}),
+            };
+            observed_outcomes::record(&mut commands, row);
+        }
+        record_placement_outcome(&mut state.placement_feedback, result.map(|_| ()), grid, now);
     }
 }
 

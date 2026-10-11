@@ -101,6 +101,19 @@ dual 通知の Producer は `publish_*` helper を使う。
 
 ## 3. イベント使用上のルール
 
+### profiling-onlyの配置観測（Messageではない）
+
+`building_place::observed_outcomes::PlacementReceipts`は明示production観測sessionだけが登録する
+最大4096件の診断queueである。通常UIのBlueprint分岐、Tank companion分岐、SoulSpa spawn分岐が
+実際に返した結果を`Commands::queue`経由で記録し、production raw observerが`Last`でdrainして
+`PlacementOutcome`へsample indexを付ける。player通知／domain requestを追加するものではない。
+Tank pendingは成功とせず、実親子IDsのcommit、拒否、rollbackを区別する。
+time／primary window／world epochはdeferred command適用時、sample indexはraw観測時であり、
+click時点との原子性やraw event順による因果関係を保証しない。entity実在／occupancyと
+原MouseButtonInputの照合は別途必要で、入力やstate差分から成功を作らない。
+sessionなしではresourceを作らず、overflowまたはcontext欠損をraw failureへ伝播する。
+完成、材料配送、refund、移動、保存bytes、正式asset/release受入を証明するqueueではない。
+
 ### R-E1: Request の可視化時点は ApplyDeferred と system set で決まる
 `Commands::write_message()` と component 操作は次の `ApplyDeferred` まで他 system から見えない。
 reader がその barrier より後に schedule されていれば同じ Update で適用でき、後なら次 frame になる。

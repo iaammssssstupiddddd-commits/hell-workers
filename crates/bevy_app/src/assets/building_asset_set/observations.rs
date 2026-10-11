@@ -22,6 +22,7 @@ use std::path::{Component, PathBuf};
 use super::{
     BuildingAssetAuthority, BuildingAssetKind, BuildingAssetPool, BuildingAssetSetIdentity,
 };
+use crate::interface::selection::building_place::observed_outcomes::PlacementReceipts;
 use crate::systems::save::SaveLoadOutcome;
 
 #[derive(Resource, Deserialize)]
@@ -83,6 +84,7 @@ pub(super) fn configure(app: &mut App) -> Result<(), String> {
     }
     app.insert_resource(session)
         .init_resource::<Observations>()
+        .init_resource::<PlacementReceipts>()
         .add_observer(building_completed)
         .add_systems(Last, observe);
     Ok(())
@@ -395,6 +397,15 @@ fn observe(world: &mut World) {
     let now = world.resource::<Time<Real>>().elapsed_secs_f64();
     world.resource_scope(|world, mut observations: Mut<Observations>| {
         let index = observations.samples.len();
+        if let Some(mut receipts) = world.get_resource_mut::<PlacementReceipts>() {
+            if receipts.failed {
+                observations.failure = Some("ordinary placement receipt cap/context failed".into());
+            }
+            for mut receipt in receipts.rows.drain(..) {
+                receipt["sample_index"] = json!(index);
+                observations.events.push(receipt);
+            }
+        }
         if let Some(messages) = world.get_resource::<Messages<SaveLoadOutcome>>() {
             let events: Vec<_> = observations.saves.read(messages).take(4097).cloned().collect();
             for event in events {
@@ -515,7 +526,7 @@ fn observe(world: &mut World) {
         "nonce": session.nonce, "process_id": std::process::id(), "accepted": false,
         "performance_evidence": false, "promotion_authority": false,
         "unsupported_observations": [
-            "Placement/CompanionPlacement: interface/selection/building_place has no terminal operation receipt",
+            "Placement receipts are command-branch results, not full input/domain lifecycle acceptance",
             "Move: hw_jobs::MovePlantTask is state, not a move commit/reject/cancel receipt",
             "Navigation: actor Transform/grid samples do not prove a navigation request arrived",
             "CancelConstruction/refund: BlueprintCancelRequested is a request, not a terminal refund receipt",

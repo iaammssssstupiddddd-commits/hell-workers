@@ -572,3 +572,17 @@ layout readyとOS撮影の表示時点は同一とは限らない。限定equipm
 theme正本のdefault card色とraw rectによるpanel存在確認を追加し、最大8回の撮影だけを
 試す。hover／tooltipを除く7 card以上を要求し、失敗画像を保全する。入力再送なし。
 これはpanel存在の補助gateであり、文字／アート採否や独立画像reviewの代用ではない。
+
+`b9ac0823`のfresh Tank実機はカタログ実表示／Tank配置説明／Escape閉鎖を独立画像reviewで
+確認し、原MouseButtonInput・同window/epoch・選択stateと登録verifierもpass。限定UI選択技術証拠。
+選択時の紫cardは移動後cursor下のBonePile hoverであり、Tank採否やselection色の証拠にしない。
+原因解消済み6診断jobはconsumer解除・使用process不在・原本不在を確認し生成物だけ削除。
+du合計24,985,600 bytes減、台帳metadataと採用コード・原画・最新証拠は保全、storage pass。
+
+次のordinary placement producerはUI処理が実際に得た成功／拒否／Tank companion待機を区別する。
+profiling観測sessionがある時だけbounded receipt queueを有効化し、実owner/footprint、
+grid/kind、原primary windowとreal timeを記録する。Tank親の仮生成を成功と扱わず、
+companion成功時だけ親子の同時commit、失敗時はrollback済み拒否を記録する。
+SoulSpaの4tile ownerも実spawn結果に拘束する。ordinary input rawとは別のdomain結果として
+結合し、state deltaから成功を推測しない。ゲーム配置条件／spawn順／saveを変えず、
+材料配送・cancel/refund・move・save bytesやhost metricsまで受入済みとしない。

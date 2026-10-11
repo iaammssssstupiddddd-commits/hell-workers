@@ -23,6 +23,12 @@ pub(super) fn handle_companion_flow(
     let active = companion_state.0.clone()?;
 
     if world_pos.distance(active.center) > active.radius {
+        #[cfg(feature = "profiling")]
+        super::observed_outcomes::record(
+            commands,
+            serde_json::json!({"kind": "Tank", "grid": grid,
+            "status": "CompanionRejected", "reason": "TooFarFromParent"}),
+        );
         return Some(Err(PlacementTileRejection {
             grid,
             reason: PlacementRejectReason::TooFarFromParent,
@@ -35,7 +41,7 @@ pub(super) fn handle_companion_flow(
             let parent_occupied_grids =
                 building_occupied_grids(parent_type, active.parent_anchor, RIVER_Y_MIN);
 
-            let (parent_blueprint, _, _) = match place_building_blueprint(
+            let (parent_blueprint, footprint, _) = match place_building_blueprint(
                 commands,
                 world_map,
                 game_assets,
@@ -45,6 +51,12 @@ pub(super) fn handle_companion_flow(
             ) {
                 Ok(placed) => placed,
                 Err(rejection) => {
+                    #[cfg(feature = "profiling")]
+                    super::observed_outcomes::record(
+                        commands,
+                        serde_json::json!({"kind": "Tank", "grid": grid,
+                        "status": "CompanionRejected", "reason": format!("{:?}", rejection.reason)}),
+                    );
                     warn!("COMPANION: parent blueprint validation failed");
                     return Some(Err(rejection));
                 }
@@ -56,7 +68,16 @@ pub(super) fn handle_companion_flow(
                 &parent_occupied_grids,
                 grid,
             ) {
-                Ok(_) => {
+                Ok(storage_entities) => {
+                    #[cfg(feature = "profiling")]
+                    super::observed_outcomes::record(
+                        commands,
+                        serde_json::json!({"kind": "Tank", "grid": grid,
+                        "status": "CompanionCommitted", "owner": format!("{parent_blueprint:?}"),
+                        "footprint": footprint, "companion_owners": storage_entities.iter().map(|owner| format!("{owner:?}")).collect::<Vec<_>>()}),
+                    );
+                    #[cfg(not(feature = "profiling"))]
+                    let _ = (footprint, storage_entities);
                     companion_state.0 = None;
                     Some(Ok(()))
                 }
@@ -66,6 +87,13 @@ pub(super) fn handle_companion_flow(
                         world_map.clear_building_occupancy((gx, gy));
                     }
                     commands.entity(parent_blueprint).despawn();
+                    #[cfg(feature = "profiling")]
+                    super::observed_outcomes::record(
+                        commands,
+                        serde_json::json!({"kind": "Tank", "grid": grid,
+                        "status": "CompanionRolledBack", "rolled_back_owner": format!("{parent_blueprint:?}"),
+                        "reason": format!("{:?}", rejection.reason)}),
+                    );
                     Some(Err(rejection))
                 }
             }
