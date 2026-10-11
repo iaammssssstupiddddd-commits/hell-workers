@@ -243,6 +243,9 @@ rawの`PlacementOutcome`にはdeferred command適用時のworld epoch／primary 
 raw観測時のsample indexを付ける。click時点との原子性やraw event順による因果関係を保証しない。
 overflow、欠落・多重window、計測context欠落はfail closed。原MouseButtonInputとの因果照合、
 deferred entityのbefore/afterとoccupancy検証、通常lifecycle全体の受入は別の未完工程である。
+offline raw parserは同window／epoch／finite時刻とstatus別payloadを検査するが、
+`PlacementOutcome`をlifecycle domain witnessの許可一覧へ追加しない。pending・分岐結果の
+形式検査を通常placement legの成功へ読み替えない。原MouseButtonInputも入力証拠のまま扱う。
 
 `architect-select-cancel --kind <9種の固定集合>`は別profile
 `building-production-local-equipment-feedback-eis-v2`で、`dev.py feedback --build-only`の

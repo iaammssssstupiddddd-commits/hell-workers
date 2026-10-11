@@ -13,6 +13,75 @@ from scripts import building_production_lifecycle as lifecycle
 
 
 class ProductionAcceptanceTests(unittest.TestCase):
+    def placement_raw(self, outcome):
+        samples = [{"sample_index": index, "real_seconds": index + 1.0,
+                    "primary_window": "68v0", "world_epoch": 0,
+                    **{category: [] for category in lifecycle.TRANSITION_CATEGORIES}} for index in range(2)]
+        event = {"producer": "ordinary-building-placement-branch-v1", "operation": "PlacementOutcome",
+                 "sample_index": 1, "event_index": 0, "real_seconds": 1.5,
+                 "window": "68v0", "world_epoch": 0, "outcome": outcome}
+        return {"schema_version": 2, "transition_contract": "indexed-state-delta-v1", "samples": samples, "events": [event]}
+
+    def test_placement_branch_diagnostics_do_not_become_lifecycle_witnesses(self):
+        footprint = [[3, 4], [4, 4], [3, 5], [4, 5]]
+        cases = [
+            {"kind": "Tank", "status": "CompanionPending"},
+            {"kind": "Tank", "status": "Rejected", "reason": "OutsideSite"},
+            {"kind": "Tank", "status": "CompanionRejected", "reason": "TooFarFromParent"},
+            {"kind": "Tank", "status": "CompanionRolledBack", "reason": "OccupiedByBuilding", "rolled_back_owner": "1v0"},
+            {"kind": "Tank", "status": "CompanionCommitted", "owner": "1v0", "footprint": footprint, "companion_owners": ["2v0"]},
+            {"kind": "MudMixer", "status": "BlueprintCommitted", "owner": "1v0", "footprint": footprint},
+            {"kind": "SoulSpa", "status": "BuildingCommitted", "owner": "1v0", "footprint": footprint,
+             "tile_owners": ["2v0", "3v0", "4v0", "5v0"]},
+        ]
+        for case in cases:
+            raw = self.placement_raw(case | {"grid": [3, 4]})
+            with self.subTest(case=case):
+                lifecycle.check_raw_transitions(raw)
+                with self.assertRaises(ValueError):
+                    lifecycle.check_domain_witness({"before": 0, "after": 1, "owner": "1v0",
+                        "events": [0], "domain_event_indices": [0]}, raw)
+
+    def test_placement_branch_context_and_payload_relabeling_fail_closed(self):
+        original = self.placement_raw({"kind": "Tank", "status": "CompanionPending", "grid": [3, 4]})
+        for change in ({"world_epoch": 1}, {"world_epoch": True}, {"window": "foreign"},
+                       {"real_seconds": float("inf")}, {"real_seconds": float("nan")},
+                       {"real_seconds": True}, {"sample_index": True}, {"sample_index": 2},
+                       {"operation": "Placement"}, {"accepted": True}):
+            raw = copy.deepcopy(original)
+            raw["events"][0].update(change)
+            with self.subTest(change=change), self.assertRaises(ValueError):
+                lifecycle.check_raw_transitions(raw)
+        for change in ({"kind": "Bridge"}, {"kind": []}, {"status": "Committed"}, {"status": []},
+                       {"grid": [True, 4]}, {"owner": "invented"}, {"promotion_authority": True}):
+            raw = copy.deepcopy(original)
+            raw["events"][0]["outcome"].update(change)
+            with self.subTest(change=change), self.assertRaises(ValueError):
+                lifecycle.check_raw_transitions(raw)
+
+    def test_placement_commits_require_exact_kind_and_child_inventory(self):
+        original = self.placement_raw({"kind": "SoulSpa", "status": "BuildingCommitted", "grid": [3, 4],
+            "owner": "1v0", "footprint": [[3, 4], [4, 4], [3, 5], [4, 5]], "tile_owners": ["2v0", "3v0", "4v0", "5v0"]})
+        for change in ({"kind": "Tank"}, {"tile_owners": ["2v0"]},
+                       {"tile_owners": ["2v0", "3v0", "4v0", "4v0"]},
+                       {"tile_owners": ["1v0", "3v0", "4v0", "5v0"]}, {"owner": ""},
+                       {"footprint": [[3, 4]]}, {"footprint": [[3, 4]] * 4}):
+            raw = copy.deepcopy(original)
+            raw["events"][0]["outcome"].update(change)
+            with self.subTest(change=change), self.assertRaises(ValueError):
+                lifecycle.check_raw_transitions(raw)
+
+    def test_raw_mouse_messages_remain_input_not_placement_results(self):
+        raw = self.placement_raw({})
+        event = {"producer": "MouseButtonInput", "operation": "MouseButtonInput", "state": "Pressed", "button": "Left",
+                 "sample_index": 1, "event_index": 0, "real_seconds": 1.5, "window": "68v0"}
+        raw["events"] = [event]
+        lifecycle.check_raw_transitions(raw)
+        for change in ({"result": "Committed"}, {"window": "foreign"}, {"button": "Invented"},
+                       {"button": "Other(65536)"}, {"sample_index": True}, {"real_seconds": float("inf")}):
+            with self.subTest(change=change), self.assertRaises(ValueError):
+                lifecycle.check_raw_transitions(raw | {"events": [event | change]})
+
     def test_memory_lifecycle_uses_the_same_domain_predicates_as_capture(self):
         trace = {"scope": "production-normal-world-observations-v1", "leg": "placement",
                  "samples": [{"identity": {}, "real_seconds": float(i)} for i in (0, 1)]}

@@ -6,6 +6,9 @@ from ordinary world operations. Missing driver coverage remains a hard failure.
 """
 from __future__ import annotations
 
+import math
+import re
+
 if __package__:
     from . import building_production_acceptance as evidence
     from . import building_bridge_acceptance as bridge
@@ -16,6 +19,67 @@ else:
 require = evidence.require
 TRANSITION_CATEGORIES = {"owners": "entity", "blueprints": "entity", "roots": "entity",
                          "items": "entity", "move_tasks": "entity", "generations": "kind", "owner_layers": "entity"}
+
+
+def check_placement_receipt(event, samples):
+    """Validate branch diagnostics, without admitting a lifecycle witness."""
+    require(set(event) == {"producer", "operation", "sample_index", "event_index", "real_seconds",
+                           "window", "world_epoch", "outcome"}
+            and event["operation"] == "PlacementOutcome"
+            and type(event["sample_index"]) is int and 0 <= event["sample_index"] < len(samples),
+            "placement receipt envelope differs")
+    sample = samples[event["sample_index"]]
+    require(type(event["world_epoch"]) is int and event["world_epoch"] >= 0
+            and type(sample.get("world_epoch")) is int
+            and event["world_epoch"] == sample.get("world_epoch")
+            and isinstance(event["window"], str) and event["window"]
+            and event["window"] == sample.get("primary_window")
+            and type(event["real_seconds"]) in (int, float)
+            and math.isfinite(event["real_seconds"])
+            and type(sample.get("real_seconds")) in (int, float) and math.isfinite(sample["real_seconds"])
+            and 0 <= event["real_seconds"] <= sample.get("real_seconds", -1),
+            "placement receipt context differs")
+    outcome = event["outcome"]
+    require(isinstance(outcome, dict) and isinstance(outcome.get("kind"), str) and outcome["kind"] in {
+        "Tank", "MudMixer", "RestArea", "SoulSpa", "Door", "WheelbarrowParking", "SandPile", "BonePile", "OutdoorLamp"},
+        "placement receipt kind differs")
+    status = outcome.get("status")
+    fields = {
+        "Rejected": {"reason"}, "CompanionPending": set(), "CompanionRejected": {"reason"},
+        "CompanionRolledBack": {"reason", "rolled_back_owner"},
+        "BlueprintCommitted": {"owner", "footprint"},
+        "CompanionCommitted": {"owner", "footprint", "companion_owners"},
+        "BuildingCommitted": {"owner", "footprint", "tile_owners"},
+    }
+    require(isinstance(status, str) and status in fields and set(outcome) == {"kind", "grid", "status"} | fields[status],
+            "placement receipt status/payload differs")
+    def grid(value):
+        return isinstance(value, list) and len(value) == 2 and all(type(coordinate) is int for coordinate in value)
+    require(grid(outcome["grid"]), "placement receipt grid differs")
+    if status.startswith("Companion"):
+        require(outcome["kind"] == "Tank", "companion receipt is not Tank")
+    if status == "BlueprintCommitted":
+        require(outcome["kind"] not in {"Tank", "SoulSpa"}, "placement receipt branch differs")
+    if status == "BuildingCommitted":
+        require(outcome["kind"] == "SoulSpa", "site receipt is not SoulSpa")
+    for key in ("reason", "owner", "rolled_back_owner"):
+        if key in outcome:
+            require(isinstance(outcome[key], str) and 0 < len(outcome[key]) <= 128,
+                    "placement receipt identity/reason differs")
+    if "footprint" in outcome:
+        footprint = outcome["footprint"]
+        require(isinstance(footprint, list) and 1 <= len(footprint) <= 64 and all(grid(row) for row in footprint)
+                and len({tuple(row) for row in footprint}) == len(footprint), "placement footprint differs")
+    for key in ("companion_owners", "tile_owners"):
+        if key in outcome:
+            owners = outcome[key]
+            require(isinstance(owners, list) and 1 <= len(owners) <= 16
+                    and all(isinstance(owner, str) and 0 < len(owner) <= 128 for owner in owners)
+                    and len(set(owners)) == len(owners) and outcome["owner"] not in owners,
+                    "placement child identities differ")
+    if status == "BuildingCommitted":
+        require(len(outcome["tile_owners"]) == 4 and len(outcome["footprint"]) == 4,
+                "SoulSpa four-tile receipt differs")
 
 
 def check_raw_transitions(raw):
@@ -49,6 +113,25 @@ def check_raw_transitions(raw):
                     and type(event.get("repeat")) is bool
                     and isinstance(event.get("window"), str) and event["window"],
                     "raw keyboard message producer/payload mismatch")
+        elif producer == "MouseButtonInput":
+            require(set(event) == {"producer", "operation", "state", "button", "window",
+                                  "sample_index", "event_index", "real_seconds"}
+                    and event.get("operation") == "MouseButtonInput"
+                    and event.get("state") in {"Pressed", "Released"}
+                    and isinstance(event.get("button"), str)
+                    and (event["button"] in {"Left", "Right", "Middle", "Back", "Forward"}
+                         or re.fullmatch(r"Other\(([0-9]{1,5})\)", event["button"]) is not None
+                         and int(event["button"][6:-1]) <= 65535)
+                    and isinstance(event.get("window"), str) and event["window"]
+                    and type(event.get("sample_index")) is int and 0 <= event["sample_index"] < len(samples),
+                    "raw mouse message producer/payload mismatch")
+            sample = samples[event["sample_index"]]
+            require(event["window"] == sample.get("primary_window")
+                    and type(event.get("real_seconds")) in (int, float) and math.isfinite(event["real_seconds"])
+                    and type(sample.get("real_seconds")) in (int, float) and math.isfinite(sample["real_seconds"])
+                    and 0 <= event["real_seconds"] <= sample["real_seconds"], "raw mouse context differs")
+        elif producer == "ordinary-building-placement-branch-v1":
+            check_placement_receipt(event, samples)
         elif producer != "production_snapshot_delta":
             require(producer is None and event.get("operation") in {"PointerPress", "PointerRelease", "KeyPress", "KeyRelease"},
                     "unrecognized raw domain producer")
