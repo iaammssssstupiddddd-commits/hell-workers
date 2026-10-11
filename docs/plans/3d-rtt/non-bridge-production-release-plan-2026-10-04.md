@@ -565,3 +565,10 @@ Tank選択、Escape解除をrawで確認した。closed capture直前の2 sample
 先行sampleがHidden/BuildingPlaceだったためstrict verifierが拒否し、invalid精算済み。
 待機側だけを2連続Normal／task None／選択解除済みへ補正する。撮影interval verifierは
 変更せず、別subjectのfresh撮影と独立reviewで確認する。正式アート／releaseは未承認。
+
+`ffded26d`では選択・解除rawとclosed intervalは成功したが、独立画像reviewは
+catalog.pngのpanel未表示を拒否。exit0を採用せずinvalid精算して診断保持した。
+layout readyとOS撮影の表示時点は同一とは限らない。限定equipment profileの撮影に
+theme正本のdefault card色とraw rectによるpanel存在確認を追加し、最大8回の撮影だけを
+試す。hover／tooltipを除く7 card以上を要求し、失敗画像を保全する。入力再送なし。
+これはpanel存在の補助gateであり、文字／アート採否や独立画像reviewの代用ではない。

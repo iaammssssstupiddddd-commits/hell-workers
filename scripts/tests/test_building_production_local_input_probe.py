@@ -11,10 +11,82 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
+from PIL import Image, ImageDraw
+
 from scripts import building_production_local_input_probe as input_probe
 
 
 class LocalInputProbeTests(unittest.TestCase):
+    def catalog_fixture(self, rendered):
+        sample = {"dpi": 1, "menu_state": "Architect", "architect_panel_ready": True,
+                  "play_mode": "Normal", "task_mode": "None", "selected_building": None,
+                  "architect_cards": []}
+        image = Image.new("RGB", input_probe.WINDOW, (120, 195, 75))
+        draw = ImageDraw.Draw(image)
+        for index, kind in enumerate(input_probe.selection_probe.KINDS):
+            left, top = 10 + index % 6 * 144, 500 + index // 6 * 60
+            rect = [left, top, left + 140, top + 56]
+            sample["architect_cards"].append({"entity": str(index), "kind": kind,
+                "physical_rect": rect, "physical_viewport": [1280, 720]})
+            if index < rendered:
+                draw.rectangle(rect, fill=(64, 64, 77))
+        return sample, image
+
+    def test_catalog_capture_requires_rendered_card_backgrounds(self):
+        path = self.repo / "catalog.png"
+        for count in (0, 3, 6, 7, 9):
+            sample, image = self.catalog_fixture(count)
+            image.save(path)
+            if count < 7:
+                with self.subTest(count=count), self.assertRaises(RuntimeError):
+                    input_probe.check_rendered_catalog(path, sample)
+            else:
+                input_probe.check_rendered_catalog(path, sample)
+        sample["architect_cards"].pop()
+        with self.assertRaises(RuntimeError):
+            input_probe.check_rendered_catalog(path, sample)
+
+    def test_catalog_background_patches_reject_clipped_small_card(self):
+        sample, image = self.catalog_fixture(9)
+        path = self.repo / "catalog.png"
+        image.save(path)
+        sample["architect_cards"][0]["physical_rect"] = [10, 500, 24, 514]
+        with self.assertRaises(RuntimeError):
+            input_probe.check_rendered_catalog(path, sample)
+
+    def test_catalog_capture_preserves_rejected_frames_without_input(self):
+        self.root.mkdir()
+        sample, rejected = self.catalog_fixture(0)
+        _, accepted = self.catalog_fixture(9)
+        frames = iter((rejected, accepted))
+
+        def capture(_window, path, **_kwargs):
+            next(frames).save(path)
+            return True
+
+        with patch.object(input_probe.native, "capture_client_png", side_effect=capture) as captured, \
+                patch.object(input_probe, "check_capture_pixels"), patch.object(input_probe.time, "sleep"):
+            input_probe.capture_catalog("0x7b", self.root, lambda: {"samples": [sample]})
+            self.assertEqual(captured.call_count, 2)
+        self.assertTrue((self.root / "catalog-capture-0.png").is_file())
+        self.assertTrue((self.root / "catalog.png").is_file())
+
+    def test_catalog_capture_failure_is_bounded_and_preserves_all_frames(self):
+        self.root.mkdir()
+        sample, rejected = self.catalog_fixture(0)
+
+        def capture(_window, path, **_kwargs):
+            rejected.save(path)
+            return True
+
+        with patch.object(input_probe.native, "capture_client_png", side_effect=capture) as captured, \
+                patch.object(input_probe, "check_capture_pixels"), patch.object(input_probe.time, "sleep"), \
+                self.assertRaises(RuntimeError):
+            input_probe.capture_catalog("0x7b", self.root, lambda: {"samples": [sample]})
+        self.assertEqual(captured.call_count, 8)
+        self.assertEqual(len(list(self.root.glob("catalog-capture-*.png"))), 8)
+        self.assertFalse((self.root / "catalog.png").exists())
+
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)

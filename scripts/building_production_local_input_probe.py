@@ -16,6 +16,8 @@ import secrets
 import subprocess
 import time
 
+from PIL import Image
+
 if __package__:
     from . import building_production_local_probe as probe
     from . import building_production_validation_context as ownership
@@ -276,6 +278,49 @@ def wait_for_menu(path: Path, nonce: str, pid: int, expected: str, *, after: int
     raise native.AcceptanceError(f"ordinary Architect {expected} raw witness timeout")
 
 
+def check_rendered_catalog(path: Path, sample: dict) -> None:
+    """Limited panel-presence check, not label, asset or art acceptance.
+
+    Source theme.rs fixes default card sRGB to (0.25, 0.25, 0.3).
+    Insets avoid the radius/icon/text. One hover and its tooltip may cover two
+    cards; the remaining seven must actually be rendered at their raw bounds.
+    """
+    with Image.open(path) as image:
+        require(image.size == WINDOW, "catalog image extent differs")
+        rgb = image.convert("RGB")
+        visible = 0
+        for kind in selection_probe.KINDS:
+            row, _ = selection_probe.card(sample, kind)
+            left, top, right, bottom = row["physical_rect"]
+            require(right - left >= 16 and bottom - top >= 16,
+                    "catalog card too small for interior background patches")
+            points = [(int(x), int(y)) for x in (left + 6, right - 7)
+                      for y in (top + 6, bottom - 7)]
+            matches = sum(all(abs(actual - expected) <= 2
+                              for actual, expected in zip(rgb.getpixel(point), (64, 64, 77), strict=True))
+                          for point in points)
+            visible += matches >= 3
+        require(visible >= 7, "Architect card backgrounds not rendered in owned capture")
+
+
+def capture_catalog(window: str, root: Path, read) -> None:
+    # Retry only observation/capture, never input; preserve every rejected frame.
+    for attempt in range(8):
+        raw = read()
+        path = root / f"catalog-capture-{attempt}.png"
+        require(native.capture_client_png(window, path, import_cmd="import"), "owned Architect capture failed")
+        check_capture_pixels(path)
+        try:
+            check_rendered_catalog(path, raw["samples"][-1])
+        except native.AcceptanceError:
+            if attempt == 7:
+                raise
+            time.sleep(0.1)
+        else:
+            path.replace(root / "catalog.png")
+            return
+
+
 def check_catalog_states(raw: dict, evidence: dict) -> None:
     require(set(evidence) == {"before", "opened", "opened_end", "closed", "closed_end", "close_event_count", "catalog_sha256"},
             "Architect evidence shape differs")
@@ -474,9 +519,12 @@ def run(args: argparse.Namespace) -> dict:
                 stage = "Architect opened by ordinary input"
                 raw = wait_for_menu(raw_path, nonce, pid, "Architect", after=before_sample)
                 opened = len(raw["samples"]) - 1
-                require(native.capture_client_png(window, root / "catalog.png", import_cmd="import"),
-                        "owned Architect capture failed")
-                check_capture_pixels(root / "catalog.png")
+                if selection:
+                    capture_catalog(window, root, lambda: raw_snapshot(raw_path, nonce, pid))
+                else:
+                    require(native.capture_client_png(window, root / "catalog.png", import_cmd="import"),
+                            "owned Architect capture failed")
+                    check_capture_pixels(root / "catalog.png")
                 raw = raw_snapshot(raw_path, nonce, pid)
                 deadline = time.monotonic() + 2
                 while len(raw["samples"]) - 1 <= opened and time.monotonic() < deadline:
@@ -623,6 +671,7 @@ def verify(root: Path) -> dict:
                 "owned Architect capture changed")
         check_capture_pixels(image)
     if selection:
+        check_rendered_catalog(root / "catalog.png", raw["samples"][result["catalog_evidence"]["opened"]])
         selection_probe.verify(raw, result["selection_evidence"], result["plan"]["selection_kind"])
         require(result["catalog_evidence"]["opened_end"] <= result["selection_evidence"]["before"]
                 and result["selection_evidence"]["end"] < result["catalog_evidence"]["closed"],
