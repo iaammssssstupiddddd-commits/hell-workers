@@ -217,6 +217,7 @@ profiling raw observerは実際のMenuState／PlayMode／TaskModeを読み、存
 catalog画像の前後にはfresh sampleを要求し、その全区間でArchitectが不変でなければ拒否する。
 操作モードは通常入力が参照する`TaskContext.0`から読む（`TaskMode`単体resourceを仮定しない）。
 撮影前には単一Architect panelの表示と正の有限layoutが2連続sampleで成立することを要求する。
+閉じた画像も2連続のHidden／panel非表示を待ち、撮影後のfresh sampleまで同状態を検査する。
 このreadinessは実画面の独立確認を代替せず、menu stateだけの変更や描画前の画像は採用しない。
 これはordinary入力でのcatalog開閉に限り、9種の候補表示・配置・施工・性能・正式採否ではない。
 この実装の実機成功はfresh batchの独立verifyと画像確認後にのみ記録する。

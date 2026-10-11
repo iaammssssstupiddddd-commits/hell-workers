@@ -505,3 +505,8 @@ B/Escapeと同epochのHidden→Architect→Hiddenは実rawで確認したが、T
 読取りはnull、catalog画像にはpanelが未表示だった。失敗画像/rawを具体的診断用途で保持する。
 通常操作が参照するTaskContextへ観測先を補正し、panel表示・layoutの2連続sample成立を撮影前に
 要求する。失敗をpassへ読み替えず、修正後のfresh sourceで再検証する。9種正式導入は未完。
+
+`tak14-architect-input-50ae73ff-20261012-v1`はexit0でも独立画像reviewでchanges_requested。
+開いたpanelは表示されたが、raw Hidden直後のafter画像にpanelが残ったためinvalidを正式記録。
+閉鎖側にも2連続Hidden／layout非表示と撮影後fresh sampleまでの安定区間を要求する。
+Rustの観測先補正は成立しており、この追加補正はPython撮影driverと拒否系testだけで行う。

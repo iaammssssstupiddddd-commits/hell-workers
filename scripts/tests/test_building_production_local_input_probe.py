@@ -75,11 +75,11 @@ class LocalInputProbeTests(unittest.TestCase):
     def test_catalog_states_require_stable_raw_capture_and_world(self):
         raw = {"samples": [{"menu_state": menu, "play_mode": "Normal", "task_mode": "None", "world_epoch": 2,
                             "architect_panel_ready": menu == "Architect"}
-                           for menu in ("Hidden", "Architect", "Architect", "Hidden")]}
-        evidence = {"before": 0, "opened": 1, "opened_end": 2, "closed": 3,
+                           for menu in ("Hidden", "Architect", "Architect", "Hidden", "Hidden", "Hidden")]}
+        evidence = {"before": 0, "opened": 1, "opened_end": 2, "closed": 4, "closed_end": 5,
                     "close_event_count": 2, "catalog_sha256": "a" * 64}
         input_probe.check_catalog_states(raw, evidence)
-        for change in ({"before": True}, {"opened_end": 1}, {"closed": 1}, {"unknown": 0}):
+        for change in ({"before": True}, {"opened_end": 1}, {"closed": 1}, {"closed_end": 4}, {"closed_end": True}, {"unknown": 0}):
             with self.subTest(change=change), self.assertRaises(RuntimeError):
                 input_probe.check_catalog_states(raw, evidence | change)
         for key, value in (("menu_state", "Hidden"), ("world_epoch", 3), ("world_epoch", None),
@@ -89,6 +89,25 @@ class LocalInputProbeTests(unittest.TestCase):
             changed["samples"][2][key] = value
             with self.subTest(key=key), self.assertRaises(RuntimeError):
                 input_probe.check_catalog_states(changed, evidence)
+
+        for index in (3, 4, 5):
+            for key, value in (("menu_state", "Architect"), ("architect_panel_ready", True),
+                               ("architect_panel_ready", None), ("world_epoch", 3)):
+                changed = copy.deepcopy(raw)
+                changed["samples"][index][key] = value
+                with self.subTest(index=index, key=key), self.assertRaises(RuntimeError):
+                    input_probe.check_catalog_states(changed, evidence)
+
+    def test_menu_wait_requires_two_fresh_matching_layout_samples(self):
+        hidden = {"menu_state": "Hidden", "play_mode": "Normal", "architect_panel_ready": False}
+        opened = hidden | {"menu_state": "Architect", "architect_panel_ready": True}
+        for expected, before, after in (("Architect", hidden, opened), ("Hidden", opened, hidden)):
+            snapshots = [{"samples": [before, before, after]}, {"samples": [before, before, after, after]}]
+            with self.subTest(expected=expected), patch.object(input_probe, "raw_snapshot", side_effect=snapshots) as read, \
+                    patch.object(input_probe.time, "sleep"):
+                result = input_probe.wait_for_menu(Path("/unused"), "n", 1, expected, after=1)
+                self.assertEqual(len(result["samples"]), 4)
+                self.assertEqual(read.call_count, 2)
 
     def test_key_witness_cannot_relabel_f12_as_architect(self):
         raw = {"events": [{"event_index": i, "sample_index": i + 1, "operation": operation, "key": "KeyB"}

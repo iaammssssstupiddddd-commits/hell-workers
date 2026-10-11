@@ -201,17 +201,17 @@ def wait_for_menu(path: Path, nonce: str, pid: int, expected: str, *, after: int
         if (len(raw["samples"]) - 1 > after
                 and raw["samples"][-1].get("menu_state") == expected
                 and raw["samples"][-1].get("play_mode") == "Normal"
-                and (expected != "Architect" or
-                     (len(raw["samples"]) >= 2 and all(
-                         row.get("menu_state") == "Architect" and row.get("architect_panel_ready") is True
-                         for row in raw["samples"][-2:])))):
+                and len(raw["samples"]) >= 2 and all(
+                    row.get("menu_state") == expected
+                    and row.get("architect_panel_ready") is (expected == "Architect")
+                    for row in raw["samples"][-2:])):
             return raw
         time.sleep(0.05)
     raise native.AcceptanceError(f"ordinary Architect {expected} raw witness timeout")
 
 
 def check_catalog_states(raw: dict, evidence: dict) -> None:
-    require(set(evidence) == {"before", "opened", "opened_end", "closed", "close_event_count", "catalog_sha256"},
+    require(set(evidence) == {"before", "opened", "opened_end", "closed", "closed_end", "close_event_count", "catalog_sha256"},
             "Architect evidence shape differs")
     indices = [evidence[key] for key in ("before", "opened", "closed")]
     require(all(type(index) is int for index in indices)
@@ -231,6 +231,13 @@ def check_catalog_states(raw: dict, evidence: dict) -> None:
             and len({row.get("world_epoch") for row in states}) == 1
             and states[0].get("world_epoch") is not None,
             "Architect mode/world witness differs")
+    closed_end = evidence["closed_end"]
+    require(type(closed_end) is int and indices[2] < closed_end < len(raw["samples"])
+            and all(row.get("menu_state") == "Hidden" and row.get("play_mode") == "Normal"
+                    and row.get("task_mode") == "None" and row.get("architect_panel_ready") is False
+                    and row.get("world_epoch") == states[0].get("world_epoch")
+                    for row in raw["samples"][indices[2] - 1:closed_end + 1]),
+            "Architect closed capture interval changed or stale")
 
 
 def check_registered_context(repo: Path, root: Path, plan_path: Path, context: dict) -> None:
@@ -413,12 +420,20 @@ def run(args: argparse.Namespace) -> dict:
                 raw = wait_for_menu(raw_path, nonce, pid, "Hidden", after=opened_end)
                 catalog_evidence = {"before": before_sample, "opened": opened,
                                     "opened_end": opened_end,
-                                    "closed": len(raw["samples"]) - 1, "close_event_count": close_boundary,
+                                    "closed": len(raw["samples"]) - 1, "closed_end": None, "close_event_count": close_boundary,
                                     "catalog_sha256": probe.digest(root / "catalog.png")}
-                check_catalog_states(raw, catalog_evidence)
             stage = "owned after capture"
             require(native.capture_client_png(window, screenshot_after, import_cmd="import"),
                     "owned X11 client after capture failed")
+            if catalog:
+                stage = "Architect closed capture stability"
+                raw = raw_snapshot(raw_path, nonce, pid)
+                deadline = time.monotonic() + 2
+                while len(raw["samples"]) - 1 <= catalog_evidence["closed"] and time.monotonic() < deadline:
+                    time.sleep(0.05)
+                    raw = raw_snapshot(raw_path, nonce, pid)
+                catalog_evidence["closed_end"] = len(raw["samples"]) - 1
+                check_catalog_states(raw, catalog_evidence)
             metrics.append(probe.process_metrics(pid))
         except Exception as exc:
             (root / "failure.json").write_text(json.dumps({
