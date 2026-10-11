@@ -114,10 +114,284 @@ pub(super) fn architect_cards(world: &mut World) -> Result<Vec<Value>, String> {
     Ok(rows)
 }
 
+pub(super) fn save_catalog_context(world: &mut World) -> Result<Value, String> {
+    use crate::systems::save::catalog::SaveStorageRoot;
+    use crate::systems::save::{SaveCatalog, SaveCatalogMode, SaveCatalogUi};
+    use hw_core::SaveSlotId;
+    let Some(ui) = world.get_resource::<SaveCatalogUi>() else {
+        return Ok(json!({"available": false}));
+    };
+    let mode = match ui.mode {
+        SaveCatalogMode::Closed => "Closed",
+        SaveCatalogMode::SaveCatalog => "SaveCatalog",
+        SaveCatalogMode::LoadCatalog => "LoadCatalog",
+        SaveCatalogMode::LoadConfirm {
+            slot: SaveSlotId::Manual1,
+            recovery: false,
+        } => "LoadConfirmManual1",
+        _ => "Unsupported",
+    };
+    let session = ui.session;
+    let storage_root = world
+        .get_resource::<SaveStorageRoot>()
+        .and_then(|root| root.0.to_str())
+        .map(str::to_owned);
+    let manual1 = world.get_resource::<SaveCatalog>().and_then(|catalog| catalog.entry(SaveSlotId::Manual1)).map(|entry| {
+        json!({"exists": entry.revision.exists, "length": entry.revision.length,
+            "can_save": entry.capabilities.can_manual_save, "can_load": entry.capabilities.can_load})
+    });
+    let mut rows = Vec::new();
+    if mode != "Closed" {
+        let mut windows =
+            world.query_filtered::<(Entity, &Window), With<bevy::window::PrimaryWindow>>();
+        let Ok((primary, window)) = windows.single(world) else {
+            return Err("production save catalog primary window missing or ambiguous".into());
+        };
+        let viewport = window.physical_size().as_vec2();
+        let mut query = world.query::<(Entity, &MenuButton)>();
+        let buttons: Vec<_> = query.iter(world).take(513).map(|(e, b)| (e, b.0)).collect();
+        if buttons.len() > 512 {
+            return Err("production save catalog button cap exceeded".into());
+        }
+        for (entity, action) in buttons {
+            let (action, button_session) = match action {
+                UiIntent::SelectSaveCatalogSlot {
+                    slot: SaveSlotId::Manual1,
+                    session,
+                } => ("Save", session),
+                UiIntent::SelectLoadCatalogSlot {
+                    slot: SaveSlotId::Manual1,
+                    session,
+                } => ("Load", session),
+                UiIntent::ConfirmLoadCatalogSlot {
+                    slot: SaveSlotId::Manual1,
+                    session,
+                } => ("ConfirmLoad", session),
+                _ => continue,
+            };
+            let expected_action = match mode {
+                "SaveCatalog" => "Save",
+                "LoadCatalog" => "Load",
+                "LoadConfirmManual1" => "ConfirmLoad",
+                _ => continue,
+            };
+            if action != expected_action
+                || button_session != session
+                || !enabled_hierarchy(world, entity)
+            {
+                continue;
+            }
+            let Some(rect) = visible_rect(world, entity, viewport) else {
+                continue;
+            };
+            let Some(camera_entity) = world
+                .get::<ComputedUiTargetCamera>(entity)
+                .and_then(ComputedUiTargetCamera::get)
+            else {
+                continue;
+            };
+            let Some(camera) = world.get::<Camera>(camera_entity) else {
+                continue;
+            };
+            let target = world.get::<bevy::camera::RenderTarget>(camera_entity);
+            let primary_target = match target {
+                Some(bevy::camera::RenderTarget::Window(bevy::window::WindowRef::Primary)) => true,
+                Some(bevy::camera::RenderTarget::Window(bevy::window::WindowRef::Entity(
+                    target,
+                ))) => *target == primary,
+                _ => false,
+            };
+            if !camera.is_active
+                || camera.viewport.is_some()
+                || !primary_target
+                || camera.physical_viewport_size() != Some(viewport.as_uvec2())
+            {
+                continue;
+            }
+            rows.push(json!({"action": action, "session": button_session, "slot": "Manual1",
+                "entity": format!("{entity:?}"), "camera": format!("{camera_entity:?}"),
+                "window": format!("{primary:?}"), "physical_rect": rect, "physical_viewport": viewport.to_array()}));
+        }
+    }
+    if rows.len() > 3
+        || rows.iter().enumerate().any(|(i, row)| {
+            rows[..i]
+                .iter()
+                .any(|other| other["action"] == row["action"])
+        })
+    {
+        return Err("duplicate production save catalog control".into());
+    }
+    Ok(json!({"available": true, "mode": mode, "session": session,
+        "storage_root": storage_root, "manual1": manual1, "controls": rows}))
+}
+
+fn enabled_hierarchy(world: &World, entity: Entity) -> bool {
+    let mut ancestor = Some(entity);
+    for _ in 0..64 {
+        let Some(current) = ancestor else {
+            return true;
+        };
+        if world
+            .get::<bevy::ui::InteractionDisabled>(current)
+            .is_some()
+        {
+            return false;
+        }
+        ancestor = world.get::<ChildOf>(current).map(ChildOf::parent);
+    }
+    false
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use hw_jobs::BuildingCategory;
+
+    fn save_app() -> (App, Entity, Entity) {
+        use bevy::app::{HierarchyPropagatePlugin, PropagateSet};
+        use bevy::camera::{ComputedCameraValues, RenderTargetInfo};
+        let mut app = App::new();
+        app.init_resource::<UiScale>();
+        app.add_plugins(HierarchyPropagatePlugin::<ComputedUiTargetCamera>::new(
+            PostUpdate,
+        ));
+        app.configure_sets(
+            PostUpdate,
+            PropagateSet::<ComputedUiTargetCamera>::default(),
+        );
+        app.add_plugins(HierarchyPropagatePlugin::<
+            bevy::ui::ComputedUiRenderTargetInfo,
+        >::new(PostUpdate));
+        app.configure_sets(
+            PostUpdate,
+            PropagateSet::<bevy::ui::ComputedUiRenderTargetInfo>::default(),
+        );
+        app.add_systems(Update, bevy::ui::update::propagate_ui_target_cameras);
+        let world = app.world_mut();
+        world.insert_resource(crate::systems::save::SaveCatalogUi {
+            mode: crate::systems::save::SaveCatalogMode::SaveCatalog,
+            session: 7,
+            selected: None,
+        });
+        world.init_resource::<crate::systems::save::SaveStorageRoot>();
+        world.spawn((
+            Window {
+                resolution: (1280, 720).into(),
+                ..default()
+            },
+            bevy::window::PrimaryWindow,
+        ));
+        let camera = world
+            .spawn((
+                Camera2d,
+                Camera {
+                    computed: ComputedCameraValues {
+                        target_info: Some(RenderTargetInfo {
+                            physical_size: UVec2::new(1280, 720),
+                            scale_factor: 1.0,
+                        }),
+                        ..default()
+                    },
+                    ..default()
+                },
+            ))
+            .id();
+        let button = card(world, BuildingType::Tank);
+        world.entity_mut(button).insert((
+            UiTargetCamera(camera),
+            MenuButton(UiIntent::SelectSaveCatalogSlot {
+                slot: hw_core::SaveSlotId::Manual1,
+                session: 7,
+            }),
+        ));
+        app.update();
+        (app, camera, button)
+    }
+
+    #[test]
+    fn save_controls_bind_actual_camera_session_and_do_not_mutate_ui() {
+        let (mut app, camera, button) = save_app();
+        let before = app
+            .world()
+            .resource::<crate::systems::save::SaveCatalogUi>()
+            .clone();
+        let row = save_catalog_context(app.world_mut()).unwrap();
+        assert_eq!(row["storage_root"], "saves");
+        assert_eq!(row["controls"][0]["action"], "Save");
+        assert_eq!(row["controls"][0]["camera"], format!("{camera:?}"));
+        assert_eq!(row["controls"][0]["entity"], format!("{button:?}"));
+        assert_eq!(
+            *app.world()
+                .resource::<crate::systems::save::SaveCatalogUi>(),
+            before
+        );
+        app.world_mut()
+            .resource_mut::<crate::systems::save::SaveCatalogUi>()
+            .session = 8;
+        assert_eq!(
+            save_catalog_context(app.world_mut()).unwrap()["controls"],
+            json!([])
+        );
+    }
+
+    #[test]
+    fn save_controls_reject_disabled_ancestors_foreign_or_inactive_cameras() {
+        let (mut app, camera, button) = save_app();
+        let parent = app
+            .world_mut()
+            .spawn((Node::default(), bevy::ui::InteractionDisabled))
+            .id();
+        app.world_mut().entity_mut(button).insert(ChildOf(parent));
+        assert_eq!(
+            save_catalog_context(app.world_mut()).unwrap()["controls"],
+            json!([])
+        );
+        app.world_mut()
+            .entity_mut(parent)
+            .remove::<bevy::ui::InteractionDisabled>();
+        app.world_mut().get_mut::<Camera>(camera).unwrap().is_active = false;
+        assert_eq!(
+            save_catalog_context(app.world_mut()).unwrap()["controls"],
+            json!([])
+        );
+        app.world_mut().get_mut::<Camera>(camera).unwrap().is_active = true;
+        let other_window = app.world_mut().spawn(Window::default()).id();
+        app.world_mut()
+            .entity_mut(camera)
+            .insert(bevy::camera::RenderTarget::Window(
+                bevy::window::WindowRef::Entity(other_window),
+            ));
+        assert_eq!(
+            save_catalog_context(app.world_mut()).unwrap()["controls"],
+            json!([])
+        );
+    }
+
+    #[test]
+    fn save_controls_fail_closed_for_missing_resources_camera_and_excess_buttons() {
+        assert_eq!(
+            save_catalog_context(&mut World::new()).unwrap(),
+            json!({"available": false})
+        );
+        let (mut app, _, button) = save_app();
+        app.world_mut()
+            .entity_mut(button)
+            .remove::<ComputedUiTargetCamera>();
+        assert_eq!(
+            save_catalog_context(app.world_mut()).unwrap()["controls"],
+            json!([])
+        );
+        for _ in 0..512 {
+            app.world_mut()
+                .spawn(MenuButton(UiIntent::SelectBuild(BuildingType::Bridge)));
+        }
+        assert!(
+            save_catalog_context(app.world_mut())
+                .unwrap_err()
+                .contains("cap")
+        );
+    }
 
     fn card(world: &mut World, kind: BuildingType) -> Entity {
         world

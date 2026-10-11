@@ -363,6 +363,16 @@ scope追加は不足producerやadmissionを提供せず、正式実行・美術�
 
 ## 昇格・install・復旧・切戻し
 
+保存復元の限定feedback `architect-select-place-companion-save-load --kind Tank` は、既存F5/F9と
+実Manual1ボタンを通常入力で使用する。profiling rawはSaveCatalogUiのmode/session、実slot
+capabilitiesとcomputed UI camera／primary window／有効・可視rectを読むだけ。古いsession、
+別window、非表示・無効祖先、custom camera viewportをclick対象へ変換しない。
+fresh job内 `runtime/saves/manual-1.scn.ron` の実バイトhashとManualCatalog／NormalCatalog
+成功receiptを束ね、epoch更新・親子Entity置換・同じBlueprint進捗／材料／footprint／保管占有を
+検査する。実saveはゲームだけが書き、hostは有界read-only hashのみ。symlink／hardlinkや
+既存slot上書きを拒否する。これは計画保存復元の技術feedbackであり、完成lifecycle・全世界の
+canonical serialization・性能・アート／数値・release承認へ昇格しない。
+
 - `plan`はisolated candidate、別美術承認、source／geometry／export inventory、codec hash、現在のauthority／
   locatorを照合する。sourceと導入先は分離し、generationは失敗を含む全割当済み世代より大きくする。
 - `apply --apply`は同identityのcandidate-mode native証拠を原本から検証し、その証拠hashに結び付いた

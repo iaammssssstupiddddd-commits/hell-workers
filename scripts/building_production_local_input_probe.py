@@ -25,6 +25,7 @@ if __package__:
     from . import building_production_placement_probe as placement_probe
     from . import building_production_yard_probe as yard_probe
     from . import building_production_companion_probe as companion_probe
+    from . import building_production_save_probe as save_probe
     from .building_m2_native_acceptance import check_capture_pixels
     from .native_ui_portal import PortalSession, PortalX11Input
 else:
@@ -34,6 +35,7 @@ else:
     from scripts import building_production_placement_probe as placement_probe
     from scripts import building_production_yard_probe as yard_probe
     from scripts import building_production_companion_probe as companion_probe
+    from scripts import building_production_save_probe as save_probe
     from building_m2_native_acceptance import check_capture_pixels
     from scripts.native_ui_portal import PortalSession, PortalX11Input
 
@@ -44,7 +46,9 @@ SELECTION_PROFILE = "building-production-local-equipment-feedback-eis-v2"
 PLACEMENT_PROFILE = "building-production-local-tank-branch-feedback-eis-v1"
 YARD_PROFILE = "building-production-local-tank-yard-feedback-eis-v1"
 COMPANION_PROFILE = "building-production-local-tank-companion-feedback-eis-v1"
-YARD_PROFILES = {YARD_PROFILE, COMPANION_PROFILE}
+SAVE_PROFILE = "building-production-local-tank-save-feedback-eis-v1"
+COMPANION_PROFILES = {COMPANION_PROFILE, SAVE_PROFILE}
+YARD_PROFILES = {YARD_PROFILE, *COMPANION_PROFILES}
 PLACEMENT_PROFILES = {PLACEMENT_PROFILE, *YARD_PROFILES}
 SELECTION_PROFILES = {SELECTION_PROFILE, *PLACEMENT_PROFILES}
 CATALOG_PROFILES = {CATALOG_PROFILE, *SELECTION_PROFILES}
@@ -75,7 +79,8 @@ def check_plan(value: dict, plan_path: Path, *, fresh: bool = True,
                            "portal_transport_sha256", "consent_file", "binary",
                            "binary_sha256", "owner", "key", "accepted",
                            "performance_evidence", "art_approved", "promotion_authority"}
-    companion = value.get("profile") == COMPANION_PROFILE
+    save = value.get("profile") == SAVE_PROFILE
+    companion = value.get("profile") in COMPANION_PROFILES
     yard = value.get("profile") in YARD_PROFILES
     placement = value.get("profile") in PLACEMENT_PROFILES
     selection = value.get("profile") in SELECTION_PROFILES
@@ -89,6 +94,8 @@ def check_plan(value: dict, plan_path: Path, *, fresh: bool = True,
         expected.add("yard_driver_sha256")
     if companion:
         expected.add("companion_driver_sha256")
+    if save:
+        expected.add("save_driver_sha256")
     require(set(value) == expected,
             "input probe plan shape differs")
     repo = native.validate_repo(value["repo"])
@@ -96,7 +103,7 @@ def check_plan(value: dict, plan_path: Path, *, fresh: bool = True,
     for path in (plan_path, root, binary, Path(value["consent_file"])):
         ownership.exact_path(path)
     require(value["schema"] == 1 and value["profile"] in {PROFILE, *CATALOG_PROFILES}
-            and (not catalog or value.get("scenario") == ("architect-select-place-companion-cancel" if companion else "architect-select-place-yard-cancel" if yard else "architect-select-place-cancel" if placement
+            and (not catalog or value.get("scenario") == ("architect-select-place-companion-save-load" if save else "architect-select-place-companion-cancel" if companion else "architect-select-place-yard-cancel" if yard else "architect-select-place-cancel" if placement
                  else "architect-select-cancel" if selection else "architect-cancel"))
             and (not selection or value.get("selection_kind") in selection_probe.KINDS)
             and (not placement or value.get("selection_kind") == "Tank")
@@ -131,6 +138,7 @@ def check_plan(value: dict, plan_path: Path, *, fresh: bool = True,
     require(not yard or value["yard_driver_sha256"] == probe.digest(Path(yard_probe.__file__)), "Yard input driver differs")
     require(not companion or value["companion_driver_sha256"] == probe.digest(Path(companion_probe.__file__)),
             "companion input driver differs")
+    require(not save or value["save_driver_sha256"] == probe.digest(Path(save_probe.__file__)), "save input driver differs")
     if fresh:
         require(not root.exists(), "input probe output root already exists")
     return repo, root, binary
@@ -142,8 +150,9 @@ def plan(args: argparse.Namespace) -> dict:
     ownership.exact_path(root)
     ownership.exact_path(output)
     require(not root.exists() and not output.exists(), "input probe requires fresh paths")
-    companion = getattr(args, "scenario", None) == "architect-select-place-companion-cancel"
-    yard = getattr(args, "scenario", None) in {"architect-select-place-yard-cancel", "architect-select-place-companion-cancel"}
+    save = getattr(args, "scenario", None) == "architect-select-place-companion-save-load"
+    companion = save or getattr(args, "scenario", None) == "architect-select-place-companion-cancel"
+    yard = companion or getattr(args, "scenario", None) == "architect-select-place-yard-cancel"
     placement = yard or getattr(args, "scenario", None) == "architect-select-place-cancel"
     selection = placement or getattr(args, "scenario", None) == "architect-select-cancel"
     require((getattr(args, "kind", None) in selection_probe.KINDS) if selection
@@ -176,6 +185,9 @@ def plan(args: argparse.Namespace) -> dict:
     if companion:
         value.update(profile=COMPANION_PROFILE, scenario="architect-select-place-companion-cancel",
                      companion_driver_sha256=probe.digest(Path(companion_probe.__file__)))
+    if save:
+        value.update(profile=SAVE_PROFILE, scenario="architect-select-place-companion-save-load",
+                     save_driver_sha256=probe.digest(Path(save_probe.__file__)))
     require(root.parent == repo / "target/native-acceptance" and not native.git_dirty_paths(repo),
             "input probe requires a clean primary subject and direct output root")
     resources = native.resource_snapshot(repo, require_launcher=True)
@@ -509,7 +521,8 @@ def run(args: argparse.Namespace) -> dict:
     owned = None
     records: list[dict] = []
     screenshot_before, screenshot_after = root / "before.png", root / "after.png"
-    companion = value["profile"] == COMPANION_PROFILE
+    save = value["profile"] == SAVE_PROFILE
+    companion = value["profile"] in COMPANION_PROFILES
     yard = value["profile"] in YARD_PROFILES
     placement = value["profile"] in PLACEMENT_PROFILES
     selection = value["profile"] in SELECTION_PROFILES
@@ -519,6 +532,7 @@ def run(args: argparse.Namespace) -> dict:
     placement_evidence = None
     yard_evidence = None
     companion_evidence = None
+    save_evidence = None
     metrics: list[dict] = []
     with (root / "game.log").open("w") as log:
         game = subprocess.Popen([str(binary)], cwd=runtime, env=environment, stdout=log,
@@ -642,6 +656,9 @@ def run(args: argparse.Namespace) -> dict:
                     raw = raw_snapshot(raw_path, nonce, pid)
                 catalog_evidence["closed_end"] = len(raw["samples"]) - 1
                 check_catalog_states(raw, catalog_evidence)
+            if save:
+                stage = "ordinary Tank planning save/load"
+                save_evidence = save_probe.run(transport, lambda: raw_snapshot(raw_path, nonce, pid), root, capture_selection)
             metrics.append(probe.process_metrics(pid))
         except Exception as exc:
             (root / "failure.json").write_text(json.dumps({
@@ -677,6 +694,8 @@ def run(args: argparse.Namespace) -> dict:
         expected_steps.extend(["companion-motion", "companion-press", "companion-release"])
     if catalog:
         expected_steps.extend(["close-press", "close-release"])
+    if save:
+        expected_steps.extend(row[0] for row in save_probe.STEPS)
     require(owned is not None and len(records) == len(expected_steps)
             and [row["step"] for row in records] == expected_steps
             and all(row["nonce"] == nonce and row["window"] == window_number
@@ -707,6 +726,8 @@ def run(args: argparse.Namespace) -> dict:
         result.update(yard_evidence=yard_evidence, yard_sha256=probe.digest(root / "yard.png"))
     if companion:
         result.update(companion_evidence=companion_evidence, companion_sha256=probe.digest(root / "companion.png"))
+    if save:
+        result.update(save_evidence=save_evidence, saved_sha256=probe.digest(root / "saved.png"), loaded_sha256=probe.digest(root / "loaded.png"))
     (root / "result.json").write_text(json.dumps(result, sort_keys=True, separators=(",", ":")) + "\n")
     verify(root)
     return result
@@ -715,7 +736,8 @@ def run(args: argparse.Namespace) -> dict:
 def verify(root: Path) -> dict:
     ownership.exact_path(root)
     result = json.loads((root / "result.json").read_bytes())
-    companion = result.get("profile") == COMPANION_PROFILE
+    save = result.get("profile") == SAVE_PROFILE
+    companion = result.get("profile") in COMPANION_PROFILES
     yard = result.get("profile") in YARD_PROFILES
     placement = result.get("profile") in PLACEMENT_PROFILES
     selection = result.get("profile") in SELECTION_PROFILES
@@ -736,6 +758,8 @@ def verify(root: Path) -> dict:
         expected |= {"yard_evidence", "yard_sha256"}
     if companion:
         expected |= {"companion_evidence", "companion_sha256"}
+    if save:
+        expected |= {"save_evidence", "saved_sha256", "loaded_sha256"}
     require(set(result) == expected, "input probe result shape differs")
     context = result["context"]
     plan_path = Path(context["command"][7])
@@ -828,6 +852,8 @@ def verify(root: Path) -> dict:
             axis = 0 if leg["key"] in {"a", "d"} else 1
             pan_receipts.extend([(f"pan-{axis}-press", leg["key"], True), (f"pan-{axis}-release", leg["key"], False)])
     expected_receipts[0:0] = pan_receipts
+    if save:
+        expected_receipts.extend(save_probe.STEPS)
     require(isinstance(receipts, list) and len(receipts) == len(expected_receipts)
             and [(row.get("step"), row.get("key"), row.get("pressed")) for row in receipts]
             == expected_receipts
@@ -851,6 +877,17 @@ def verify(root: Path) -> dict:
         require(motion.get("point") == result["companion_evidence"]["point"] and motion.get("button") is None
                 and all(row.get("point") is None and row.get("button") == 1 for row in (press, release)),
                 "companion pointer receipts differ")
+    if save:
+        save_probe.verify(raw, result["save_evidence"], root)
+        require(result["save_evidence"]["before"] >= result["catalog_evidence"]["closed_end"], "save precedes ordinary placement closure")
+        for action, leg in (("save", "save"), ("load", "load"), ("confirmload", "confirm")):
+            rows = [row for row in receipts if row["step"].startswith(action + "-") and "open" not in row["step"]]
+            require(len(rows) == 3 and rows[0].get("point") == result["save_evidence"][leg]["point"]
+                    and rows[0].get("button") is None and all(row.get("point") is None and row.get("button") == 1 for row in rows[1:]),
+                    "save pointer receipts differ")
+        for name in ("saved", "loaded"):
+            require(probe.digest(root / (name + ".png")) == result[name + "_sha256"], "save/load capture changed")
+            check_capture_pixels(root / (name + ".png"))
     for name, field in (("before.png", "before_sha256"), ("after.png", "after_sha256")):
         path = root / name
         require(probe.digest(path) == result[field]
@@ -865,7 +902,7 @@ def verify(root: Path) -> dict:
     adapters = re.findall(r'AdapterInfo \{ name: "([^"]+)".*?backend: ([A-Za-z0-9_]+)', log)
     require(len(adapters) == 1 and "intel" in adapters[0][0].casefold()
             and adapters[0][1] == "Vulkan", "ordinary-world adapter differs")
-    return {"status": "technical-pass", "scope": "ordinary Tank Blueprint and companion planning commit only (no completed construction)" if companion else "first Tank Yard click pending only (no committed owner)" if yard else "first Tank click branch only (pending/rejected, no committed owner)" if placement
+    return {"status": "technical-pass", "scope": "ordinary Tank and companion planning save/load only (no completed construction)" if save else "ordinary Tank Blueprint and companion planning commit only (no completed construction)" if companion else "first Tank Yard click pending only (no committed owner)" if yard else "first Tank click branch only (pending/rejected, no committed owner)" if placement
             else "feedback-only ordinary equipment selection (no placement)" if selection
             else "ordinary Architect open/close" if catalog
             else "one owned ordinary-world key receipt only",
@@ -880,7 +917,7 @@ def main() -> int:
     planned.add_argument("--job-root", type=Path, required=True)
     planned.add_argument("--output", type=Path, required=True)
     planned.add_argument("--scenario", choices=("debug-toggle", "architect-cancel", "architect-select-cancel",
-                        "architect-select-place-cancel", "architect-select-place-yard-cancel", "architect-select-place-companion-cancel"), default="debug-toggle")
+                        "architect-select-place-cancel", "architect-select-place-yard-cancel", "architect-select-place-companion-cancel", "architect-select-place-companion-save-load"), default="debug-toggle")
     planned.add_argument("--kind", choices=selection_probe.KINDS)
     running = actions.add_parser("run")
     running.add_argument("--plan", type=Path, required=True)

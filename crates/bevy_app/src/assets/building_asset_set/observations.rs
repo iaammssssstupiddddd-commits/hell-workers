@@ -316,6 +316,7 @@ fn companion_context(world: &mut World) -> Result<Value, String> {
 
 fn snapshot(world: &mut World) -> Result<Value, String> {
     let companion_context = companion_context(world)?;
+    let save_catalog_context = super::observations_ui::save_catalog_context(world)?;
     let architect_panel_ready = architect_panel_ready(world);
     let architect_cards = super::observations_ui::architect_cards(world)?;
     let mut query = world.query::<(Entity, &Building, &Transform)>();
@@ -509,6 +510,7 @@ fn snapshot(world: &mut World) -> Result<Value, String> {
         "native_peak_live_bytes": null, "rss_bytes": null,
         "application_handle_count": null});
     sample["companion_context"] = companion_context;
+    sample["save_catalog_context"] = save_catalog_context;
     Ok(sample)
 }
 
