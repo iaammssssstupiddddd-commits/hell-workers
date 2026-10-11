@@ -101,7 +101,8 @@ class NativeRecipeTests(unittest.TestCase):
                 return {"path": "actual-window.png", "window_pid": pid}
             trace_path.write_text(json.dumps(self.trace))
             rejected = root / "0"
-            with patch.object(recipe.art, "capture", side_effect=capture):
+            with patch.object(recipe.art, "capture", side_effect=capture), \
+                 patch.object(recipe, "check_capture_pixels"):
                 shot, _ = recipe.capture_observed_interval(rejected, 42, trace_path, before)
                 self.assertIsNone(shot)
                 trace_path.write_text(json.dumps(stable))
@@ -124,6 +125,7 @@ class NativeRecipeTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             with patch.object(recipe.art, "capture", return_value={"path": "image.png"}), \
+                 patch.object(recipe, "check_capture_pixels"), \
                  patch.object(recipe.m2, "read_json", side_effect=[before, stable]), \
                  patch.object(recipe.time, "sleep") as sleep:
                 shot, after = recipe.capture_observed_interval(root / "fresh", 42, root / "trace", before)
@@ -138,6 +140,41 @@ class NativeRecipeTests(unittest.TestCase):
                 self.assertEqual(after, before)
                 record = json.loads((root / "stale/rejected.json").read_text())
                 self.assertEqual(record["reason"], "capture interval missing/stale")
+
+    def test_blank_viewport_is_rejected_even_with_visible_edge_ui(self):
+        from PIL import Image, ImageDraw
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "image.png"
+            image = Image.new("RGB", (1280, 720), (26, 26, 26))
+            draw = ImageDraw.Draw(image)
+            draw.rectangle((10, 10, 320, 50), fill="white")
+            draw.rectangle((10, 665, 650, 708), fill="white")
+            draw.line((464, 0, 464, 471), fill="cyan")
+            image.save(path)
+            with self.assertRaisesRegex(ValueError, "blank central viewport"):
+                recipe.check_capture_pixels(path)
+            draw.rectangle((620, 330, 660, 370), fill="brown")
+            image.save(path)
+            recipe.check_capture_pixels(path)
+            image.crop((0, 0, 640, 360)).save(path)
+            with self.assertRaisesRegex(ValueError, "dimensions differ"):
+                recipe.check_capture_pixels(path)
+
+    def test_blank_capture_preserves_pixels_and_is_not_accepted(self):
+        stable = copy.deepcopy(self.trace)
+        for row in stable["samples"]:
+            row["roots"][0]["state"] = "Some(TankEmpty)"
+        before = {**stable, "samples": stable["samples"][:1]}
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            with patch.object(recipe.art, "capture", return_value={"path": "image.png"}), \
+                 patch.object(recipe.m2, "read_json", return_value=stable), \
+                 patch.object(recipe, "check_capture_pixels", side_effect=ValueError("blank central viewport")):
+                shot, after = recipe.capture_observed_interval(root, 42, root / "trace", before)
+            self.assertIsNone(shot)
+            self.assertEqual(after, stable)
+            self.assertEqual(json.loads((root / "rejected.json").read_text())["reason"], "blank central viewport")
 
     def test_capture_wait_never_hides_foreign_or_rewritten_intermediate_snapshot(self):
         before = {**self.trace, "samples": self.trace["samples"][:1]}

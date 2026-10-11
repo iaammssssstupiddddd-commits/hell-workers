@@ -449,6 +449,12 @@ timeoutでは不採用を維持し、prefix/session改変、区間内の状態�
 observerは0.1秒ごとに採るsampleを1秒おきにしか公開していなかったため、検証専用M2 observerで
 各due sampleをそのまま公開する。サンプル／entity cap、失敗時のfail-closed、通常起動の無効化、
 performance_evidence=falseを維持し、精製ルールやfixtureの材料・task・pause時刻は変えない。
+公開間隔補正`85c7574f14d8da720758fe31fc6b95c0ade3c43e`のMudMixer/Tank fresh batchは
+技術verifier pass・seal/finalize済み。ただし独立画像レビューでMudMixer Idle raw4..5の画像は
+UIだけで中央viewportがclear色のままと判明し、Idleの視覚証拠として不採用とした。
+paused Active46..49とunpaused Active62..65は木枠・紫表示・rotorが見え、rawの停止／進行と限定整合する。
+中央160x160が単色の画像を採用・verify双方で拒否し、元画像・理由を保持して既存上限内で再撮影する。
+この最小blank検査は対象の描画完了や美術採否を保証しないため、fresh画像の独立比較は必須のまま。
 出力root: primary `target/native-acceptance/nonbridge-restarea-authoring-20261004-v1`。
 owner: main / consumer: M3候補の独立採否・現行subject導入。次工程: 原本・画像を比較しruntime候補を生成。
 release_when: 採用原本のasset正本への集約と候補フィードバック終了後。旧batchのpassを新subjectへ流用しない。

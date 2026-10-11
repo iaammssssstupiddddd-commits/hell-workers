@@ -317,6 +317,18 @@ def bind_capture(before, after, shot):
     return bound
 
 
+def check_capture_pixels(path):
+    """Reject a blank central viewport; this does not prove asset/art readiness."""
+    from PIL import Image
+
+    with Image.open(path) as image:
+        pipeline.require(image.size == (1280, 720), "actual client dimensions differ")
+        # Exclude the fixed edge UI and selection outline. M2 focuses its fixture
+        # at the viewport centre; a clear-colour-only centre is not visual evidence.
+        extrema = image.convert("RGB").crop((560, 280, 720, 440)).getextrema()
+    pipeline.require(any(low < high for low, high in extrema), "blank central viewport")
+
+
 def capture_observed_interval(capture_root, pid, trace_path, before):
     shot = art.capture(capture_root, pid)
     if shot is None:
@@ -329,9 +341,12 @@ def capture_observed_interval(capture_root, pid, trace_path, before):
         after = m2.read_json(trace_path)
         check_capture_prefix(before, after)
     try:
-        return bind_capture(before, after, shot), after
+        bound = bind_capture(before, after, shot)
+        check_capture_pixels(capture_root / shot["path"])
+        return bound, after
     except ValueError as error:
-        if str(error) not in ("capture interval missing/stale", "state/owner changed during capture"):
+        if str(error) not in ("capture interval missing/stale", "state/owner changed during capture",
+                              "blank central viewport"):
             raise
         pipeline.put(capture_root / "rejected.json", pipeline.canonical({
             "reason": str(error), "sample_index": len(before["samples"]) - 1,
@@ -452,6 +467,7 @@ def verify(root):
     screenshot = result["screenshot"]
     check_capture_interval(trace["samples"], screenshot)
     image = pipeline.rooted(root, screenshot["path"])
+    check_capture_pixels(image)
     pipeline.require(screenshot["capture_scope"] == "owned-x11-client"
                      and screenshot["window_pid"] == result["pid"]
                      and pipeline.digest(image.read_bytes()) == screenshot["sha256"]
@@ -462,6 +478,7 @@ def verify(root):
     previous_index = -1
     for shot in checkpoints:
         image = pipeline.rooted(root, shot["path"])
+        check_capture_pixels(image)
         index = shot["sample_index"]
         check_capture_interval(trace["samples"], shot)
         pipeline.require(type(index) is int and previous_index < index < len(trace["samples"])
