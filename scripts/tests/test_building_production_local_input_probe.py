@@ -265,7 +265,7 @@ class LocalInputProbeTests(unittest.TestCase):
         snapshots = [{"samples": [row.copy() for _ in range(n)]} for n in (1, 2, 2, 3)]
 
         def capture(_window, path, **_kwargs):
-            path.write_bytes(b"test PNG")
+            Image.new("RGB", input_probe.WINDOW, (120, 195, 75)).save(path)
             return True
 
         with patch.object(input_probe, "raw_snapshot", side_effect=snapshots), \
@@ -278,6 +278,38 @@ class LocalInputProbeTests(unittest.TestCase):
         rejected = json.loads((self.root / "startup-rejected-0.json").read_text())
         self.assertEqual(rejected["reason"], "blank central viewport")
         self.assertEqual(rejected["interval"], {"before": 0, "after": 1, "epoch": 0})
+
+    def test_actor_light_only_startup_is_not_a_rendered_world(self):
+        path = self.repo / "startup.png"
+        image = Image.new("RGB", input_probe.WINDOW, (25, 25, 25))
+        ImageDraw.Draw(image).ellipse((500, 180, 700, 380), fill=(180, 90, 40))
+        image.save(path)
+        with self.assertRaisesRegex(ValueError, "majority clear"):
+            input_probe.check_startup_background(path)
+        Image.new("RGB", input_probe.WINDOW, (120, 195, 75)).save(path)
+        input_probe.check_startup_background(path)
+
+    def test_clear_background_retry_preserves_original_without_input(self):
+        self.root.mkdir()
+        row = {"menu_state": "Hidden", "play_mode": "Normal", "task_mode": "None",
+               "architect_panel_ready": False, "world_epoch": 0}
+        snapshots = [{"samples": [row.copy() for _ in range(n)]} for n in (1, 2, 2, 3)]
+        colors = iter(((25, 25, 25), (120, 195, 75)))
+
+        def capture(_window, path, **_kwargs):
+            image = Image.new("RGB", input_probe.WINDOW, next(colors))
+            ImageDraw.Draw(image).ellipse((500, 180, 700, 380), fill=(180, 90, 40))
+            image.save(path)
+            return True
+
+        with patch.object(input_probe, "raw_snapshot", side_effect=snapshots), \
+                patch.object(input_probe.native, "capture_client_png", side_effect=capture), \
+                patch.object(input_probe, "check_capture_pixels"):
+            evidence = input_probe.capture_startup("0x7b", self.root, Path("/unused"), "n", 1)
+        self.assertEqual(evidence, {"before": 1, "after": 2, "epoch": 0})
+        self.assertTrue((self.root / "startup-capture-0.png").is_file())
+        self.assertEqual(json.loads((self.root / "startup-rejected-0.json").read_text())["reason"],
+                         "startup viewport still majority clear background")
 
     def test_startup_capture_does_not_retry_nonblank_contract_failure(self):
         self.root.mkdir()

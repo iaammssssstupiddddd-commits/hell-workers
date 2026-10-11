@@ -591,3 +591,9 @@ SoulSpaの4tile ownerも実spawn結果に拘束する。ordinary input rawとは
 Rejected／CompanionPending、Blueprint不変、Escape解除だけを確認する。committed ownerや
 正式lifecycle成功を許可しない。producer／入力probe hashとfresh subjectを固定し、
 実機raw／画像の独立reviewと登録verifierを通す。正式9種導入の未完条件は維持する。
+
+`5c48a6de`の実機は原Left入力と同frame/timeのTank／NotInYard拒否、Blueprint不変、
+Escape解除を実見。ただしbefore画像の地形未描画を独立reviewが拒否し、batchはinvalid精算。
+非blankだけではactor／光で偽陽性になるため、normal startupの固定map内viewportに
+正本ClearColorが過半残る画像の補助拒否を追加する。撮影だけ有界で再確認し原失敗を保持する。
+storage subject fingerprintとnative plan.sourceは別digest体系であり同一hashと記録しない。

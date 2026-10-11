@@ -196,6 +196,19 @@ def check_startup_capture(raw: dict, evidence: dict) -> None:
             "startup capture interval missing, stale or changed")
 
 
+def check_startup_background(path: Path) -> None:
+    """Reject actor/UI-only startup frames; not a terrain/art acceptance test."""
+    with Image.open(path) as image:
+        require(image.size == WINDOW, "startup client dimensions differ")
+        # GamePlugin's ClearColor is srgb(0.1, 0.1, 0.1). This fixed normal
+        # startup viewport is inside the map; majority clear background is not
+        # a rendered world, even when actor lights make the nonblank gate pass.
+        pixels = list(image.convert("RGB").crop((160, 120, 1120, 400)).get_flattened_data())
+    clear = sum(all(abs(channel - 26) <= 2 for channel in pixel) for pixel in pixels)
+    if clear * 2 >= len(pixels):
+        raise ValueError("startup viewport still majority clear background")
+
+
 def capture_startup(window: str, root: Path, raw_path: Path, nonce: str, pid: int) -> dict:
     """Keep rejected blank attempts; never treat raw readiness as rendered readiness."""
     deadline = time.monotonic() + 8
@@ -216,8 +229,9 @@ def capture_startup(window: str, root: Path, raw_path: Path, nonce: str, pid: in
         check_startup_capture(after, evidence)
         try:
             check_capture_pixels(path)
+            check_startup_background(path)
         except ValueError as exc:
-            if str(exc) != "blank central viewport":
+            if str(exc) not in {"blank central viewport", "startup viewport still majority clear background"}:
                 raise
             (root / f"startup-rejected-{attempt}.json").write_text(json.dumps({
                 "reason": str(exc), "capture": path.name, "sha256": probe.digest(path),
@@ -684,6 +698,7 @@ def verify(root: Path) -> dict:
     require(probe.digest(raw_path) == result["raw_sha256"], "input probe raw changed")
     raw = raw_snapshot(raw_path, result["nonce"], result["game_pid"])
     check_startup_capture(raw, result["startup_capture"])
+    check_startup_background(root / "before.png")
     input_events = witnessed_input(raw, before_event_count=result["before_event_count"], key="KeyB" if catalog else KEY)
     require(all(row["sample_index"] >= result["startup_capture"]["after"] for row in input_events),
             "input precedes startup capture")

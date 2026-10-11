@@ -253,6 +253,11 @@ offline raw parserは同window／epoch／finite時刻とstatus別payloadを検�
 明示されたBlueprint一覧が不変であることとEscape解除を要求し、committed ownerを認めない。
 raw全体のindexed-state-delta形式も検査し、欠落／重複／合成入力・branchは拒否する。
 これは最初の配置分岐の技術診断であり、親子commit、完成、lifecycle、正式アート・releaseではない。
+開始画像は非blankだけで判定せず、固定normal startupのmap内viewportで
+GamePlugin正本のClearColor（srgb 0.1）の近傍が半数以上残る画像を拒否する。
+actor／光／UIだけの描画をworld表示済みと誤認しないための補助拒否gateであり、
+地形の完全性・品質や独立画像reviewの代用ではない。既存16回／8秒の撮影上限を維持し、
+拒否原画像と理由を保存する。入力の再送はしない。
 
 `architect-select-cancel --kind <9種の固定集合>`は別profile
 `building-production-local-equipment-feedback-eis-v2`で、`dev.py feedback --build-only`の
