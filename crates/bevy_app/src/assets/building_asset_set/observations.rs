@@ -178,6 +178,70 @@ fn target(kind: BuildingType) -> bool {
     )
 }
 
+fn placement_context(world: &mut World) -> Result<Value, String> {
+    let yards: Vec<_> = world
+        .query::<(Entity, &hw_world::Yard)>()
+        .iter(world)
+        .take(33)
+        .map(|(entity, yard)| (entity, yard.clone()))
+        .collect();
+    if yards.len() > 32 {
+        return Err("production Yard observation cap exceeded".into());
+    }
+    if yards.iter().any(|(_, yard)| {
+        !yard.min.is_finite()
+            || !yard.max.is_finite()
+            || yard.min.x > yard.max.x
+            || yard.min.y > yard.max.y
+    }) {
+        return Err("production Yard bounds are nonfinite or inverted".into());
+    }
+    let mut cameras = world
+        .query_filtered::<(Entity, &Camera, &GlobalTransform), With<hw_ui::camera::MainCamera>>();
+    let camera = match cameras.single(world) {
+        Ok((entity, camera, transform)) if camera.is_active => {
+            Some((entity, camera.clone(), *transform))
+        }
+        _ => None,
+    };
+    if camera
+        .as_ref()
+        .is_some_and(|(_, _, transform)| !transform.translation().is_finite())
+    {
+        return Err("production placement camera position is nonfinite".into());
+    }
+    let rows: Vec<_> = yards
+        .iter()
+        .map(|(entity, yard)| {
+            let corners = [
+                yard.min,
+                Vec2::new(yard.max.x, yard.min.y),
+                yard.max,
+                Vec2::new(yard.min.x, yard.max.y),
+            ];
+            let projected = camera.as_ref().and_then(|(_, camera, transform)| {
+                corners
+                    .iter()
+                    .map(|point| {
+                        camera
+                            .world_to_viewport(transform, point.extend(0.0))
+                            .ok()
+                            .filter(|point| point.is_finite())
+                            .map(|point| point.to_array())
+                    })
+                    .collect::<Option<Vec<_>>>()
+            });
+            json!({"entity": format!("{entity:?}"), "min": yard.min.to_array(),
+                "max": yard.max.to_array(), "logical_viewport_corners": projected})
+        })
+        .collect();
+    Ok(
+        json!({"camera": camera.as_ref().map(|(entity, _, _)| format!("{entity:?}")),
+        "camera_position": camera.as_ref().map(|(_, _, transform)| transform.translation().to_array()),
+        "yards": rows}),
+    )
+}
+
 fn snapshot(world: &mut World) -> Result<Value, String> {
     let architect_panel_ready = architect_panel_ready(world);
     let architect_cards = super::observations_ui::architect_cards(world)?;
@@ -302,6 +366,7 @@ fn snapshot(world: &mut World) -> Result<Value, String> {
         .map(|point| point.to_array());
     let mut query = world.query_filtered::<&Transform, With<hw_ui::camera::MainCamera>>();
     let camera_scale = query.iter(world).next().map(|pose| pose.scale.x);
+    let placement_context = placement_context(world)?;
     let bridge = super::acceptance::bridge_probe::snapshot(world)?;
     let mut actors =
         world.query_filtered::<(Entity, &Transform), With<hw_core::soul::DamnedSoul>>();
@@ -360,6 +425,7 @@ fn snapshot(world: &mut World) -> Result<Value, String> {
         "quality": world.get_resource::<hw_core::quality::QualitySettings>().map(|settings| format!("{:?}", settings.rtt)),
         "dpi": dpi, "primary_window": primary_window,
         "camera_scale": camera_scale, "cursor_position": cursor_position,
+        "placement_context": placement_context,
         "identities": pool.active_identities(),
         "pool_active": active, "pool_pending": pending,
         "pool_owned_handle_count": pool.owned_handle_count(),
@@ -597,6 +663,61 @@ fn record_keyboard_messages(
 mod tests {
     use super::*;
     use bevy::input::{ButtonState, keyboard::Key};
+
+    #[test]
+    fn placement_context_keeps_real_yards_and_missing_projection_explicit() {
+        let mut world = World::new();
+        let yard = world
+            .spawn(hw_world::Yard {
+                min: Vec2::new(10.0, 20.0),
+                max: Vec2::new(30.0, 40.0),
+            })
+            .id();
+        let value = placement_context(&mut world).unwrap();
+        assert!(value["camera"].is_null());
+        assert_eq!(value["yards"][0]["entity"], format!("{yard:?}"));
+        assert_eq!(value["yards"][0]["min"], json!([10.0, 20.0]));
+        assert_eq!(value["yards"][0]["max"], json!([30.0, 40.0]));
+        assert!(value["yards"][0]["logical_viewport_corners"].is_null());
+        assert_eq!(world.query::<&hw_world::Yard>().iter(&world).count(), 1);
+        assert!(value.get("accepted").is_none());
+    }
+
+    #[test]
+    fn placement_context_rejects_bad_bounds_and_overflow() {
+        for (min, max) in [
+            (Vec2::splat(f32::NAN), Vec2::ONE),
+            (Vec2::ZERO, Vec2::splat(f32::INFINITY)),
+            (Vec2::ONE, Vec2::ZERO),
+        ] {
+            let mut world = World::new();
+            world.spawn(hw_world::Yard { min, max });
+            assert!(placement_context(&mut world).is_err());
+        }
+        let mut world = World::new();
+        for _ in 0..33 {
+            world.spawn(hw_world::Yard {
+                min: Vec2::ZERO,
+                max: Vec2::ONE,
+            });
+        }
+        assert!(placement_context(&mut world).is_err());
+    }
+
+    #[test]
+    fn placement_context_never_selects_first_of_ambiguous_cameras() {
+        let mut world = World::new();
+        for _ in 0..2 {
+            world.spawn((
+                hw_ui::camera::MainCamera,
+                Camera::default(),
+                GlobalTransform::IDENTITY,
+            ));
+        }
+        let value = placement_context(&mut world).unwrap();
+        assert!(value["camera"].is_null());
+        assert!(value["camera_position"].is_null());
+    }
 
     #[test]
     fn ui_mode_observations_are_read_only_and_do_not_infer_missing_resources() {

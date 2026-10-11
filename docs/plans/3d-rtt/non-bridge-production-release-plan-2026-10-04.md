@@ -597,3 +597,10 @@ Escape解除を実見。ただしbefore画像の地形未描画を独立review�
 非blankだけではactor／光で偽陽性になるため、normal startupの固定map内viewportに
 正本ClearColorが過半残る画像の補助拒否を追加する。撮影だけ有界で再確認し原失敗を保持する。
 storage subject fingerprintとnative plan.sourceは別digest体系であり同一hashと記録しない。
+
+`1b529faa`のfresh実機は未描画startup原画像を拒否・保全し、地形描画後の開始から
+カタログ／Tank選択／NotInYard拒否／Escapeまで全5画像とrawを独立review、登録verifierで
+限定pass精算しstorage pass。正式配置・親子commit・9種releaseは未受入。
+成功経路は既存Yardの位置と現カメラprojectionを実観測して通常操作で到達する。
+`placement_context`は最大32の実Yard boundsと単一active MainCamera projectionを読み取るだけで、
+新Yard・ownerのseed、カメラ強制移動、入力・受入authorityを追加しない。missing projectionはnull。

@@ -259,6 +259,14 @@ actor／光／UIだけの描画をworld表示済みと誤認しないための�
 地形の完全性・品質や独立画像reviewの代用ではない。既存16回／8秒の撮影上限を維持し、
 拒否原画像と理由を保存する。入力の再送はしない。
 
+通常worldの`placement_context`は既存Yardのentity／min／maxを最大32件と、
+単一active MainCameraによるlogical viewport四隅の投影を読み取るprofiling限定観測である。
+Yardの作成・拡張、カメラ移動、配置入力、候補点の自動承認は行わない。
+欠落／多重／inactive cameraや投影不可はnullとして明示し、viewport点を推測しない。
+非finite・反転したYard bounds／camera位置、件数超過は観測失敗とする。
+同sampleのprimary window／dpi／epochと組み合わせて通常配置の前提を切り分けるための情報であり、
+Yard内という理由だけで占有・配置可否・実commit・release受入を認めない。
+
 `architect-select-cancel --kind <9種の固定集合>`は別profile
 `building-production-local-equipment-feedback-eis-v2`で、`dev.py feedback --build-only`の
 profiling feature付き`target/debug/bevy_app`を利用する限定feedbackである。
