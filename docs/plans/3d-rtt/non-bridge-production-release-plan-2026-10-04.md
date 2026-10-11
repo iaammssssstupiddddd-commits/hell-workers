@@ -534,3 +534,8 @@ invalid metadata・コード・原本・現行比較証拠は保全し、primary
 次の選択feedbackは既存debug cacheを利用する別profileとし、正規validationの所有／source／
 plan／driver／binary hashを維持する。9種の実cardだけを固定集合として扱い、pointerの製品ACK、
 原MouseButtonInputのprimary window、選択後modeを検査する。通常worldをseedせず、正式採否を付与しない。
+`tak14-equipment-tank-feedback-2be539bb-20261012-v1`はクリック前にcard inventory空でexit1、
+invalid seal/finalize済み。実Architect PNGには12 cardが表示された。Bevy 0.19の
+`ComputedNode::resolve_clip_rect`と実`Overflow::scroll_y()`から、Visible横軸の正規±∞を
+観測器が拒否する前提誤りを確認。外向き無限clipを有限node／viewportへ交差させ、
+NaN・内向き無限・反転・空・変形を引き続き拒否する。値調整やUI変更では解決しない。

@@ -48,7 +48,18 @@ fn visible_rect(world: &World, entity: Entity, viewport: Vec2) -> Option<[f32; 4
     let mut min = (transform.translation - half).max(Vec2::ZERO);
     let mut max = (transform.translation + half).min(viewport);
     if let Some(clip) = world.get::<bevy::ui::CalculatedClip>(entity) {
-        if !clip.clip.min.is_finite() || !clip.clip.max.is_finite() {
+        // Bevy 0.19 ComputedNode::resolve_clip_rect uses -/+ infinity for
+        // OverflowAxis::Visible (including the x axis of scroll_y()).
+        // Accept only those outward unbounded endpoints, then intersect the
+        // finite node/viewport. NaN, inward infinity and inverted clips fail.
+        let lower = clip.clip.min.to_array();
+        let upper = clip.clip.max.to_array();
+        if lower
+            .iter()
+            .any(|v| !v.is_finite() && *v != f32::NEG_INFINITY)
+            || upper.iter().any(|v| !v.is_finite() && *v != f32::INFINITY)
+            || !clip.clip.min.cmple(clip.clip.max).all()
+        {
             return None;
         }
         min = min.max(clip.clip.min);
@@ -213,6 +224,52 @@ mod tests {
             UiGlobalTransform::from_translation(Vec2::new(f32::INFINITY, 100.0)),
         ] {
             world.entity_mut(entity).insert(transform);
+            assert!(architect_cards(&mut world).unwrap().is_empty());
+        }
+    }
+
+    #[test]
+    fn bevy_scroll_y_unbounded_x_clip_becomes_a_finite_physical_rect() {
+        let mut world = world();
+        let entity = card(&mut world, BuildingType::Tank);
+        let computed = ComputedNode {
+            size: Vec2::new(100.0, 50.0),
+            inverse_scale_factor: 1.0,
+            ..default()
+        };
+        let mut clip = computed.resolve_clip_rect(Overflow::scroll_y(), default());
+        clip.min += Vec2::splat(100.0);
+        clip.max += Vec2::splat(100.0);
+        assert_eq!(clip.min.x, f32::NEG_INFINITY);
+        assert_eq!(clip.max.x, f32::INFINITY);
+        world
+            .entity_mut(entity)
+            .insert(bevy::ui::CalculatedClip { clip });
+        assert_eq!(
+            architect_cards(&mut world).unwrap()[0]["physical_rect"],
+            json!([30.0, 75.0, 170.0, 125.0])
+        );
+    }
+
+    #[test]
+    fn nan_inward_infinity_and_inverted_clips_remain_rejected() {
+        let mut world = world();
+        let entity = card(&mut world, BuildingType::Tank);
+        for (min, max) in [
+            (Vec2::new(f32::NAN, 75.0), Vec2::new(170.0, 125.0)),
+            (
+                Vec2::new(f32::INFINITY, 75.0),
+                Vec2::new(f32::INFINITY, 125.0),
+            ),
+            (
+                Vec2::new(f32::NEG_INFINITY, 75.0),
+                Vec2::new(f32::NEG_INFINITY, 125.0),
+            ),
+            (Vec2::new(30.0, 140.0), Vec2::new(170.0, 120.0)),
+        ] {
+            world.entity_mut(entity).insert(bevy::ui::CalculatedClip {
+                clip: Rect { min, max },
+            });
             assert!(architect_cards(&mut world).unwrap().is_empty());
         }
     }

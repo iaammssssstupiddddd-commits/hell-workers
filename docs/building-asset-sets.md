@@ -239,6 +239,9 @@ placement commitや正式asset受入を推定しない。通常入力・UiIntent
 Left押下・解放を一度だけ送る。primary window／epoch／DPI 1／cardの不一致ではクリックしない。
 実MouseButtonInputとBuildContext／PlayModeを同区間で検査し、SoulSpaだけは既存の
 TaskContext SoulSpaPlaceを使う。選択画像の前後区間を拘束した後、Escapeで通常modeへ戻す。
+Bevy 0.19の`ComputedNode::resolve_clip_rect`はVisible軸を下限−∞／上限＋∞とする。
+Architectの`Overflow::scroll_y()`の横軸も同じであり、正規の外向き無限clipだけを有限node／
+viewportへ交差させる。NaN、内向き無限値、反転範囲、空矩形、変形matrixは拒否する。
 任意座標・任意command・Bridge・fixtureは受け付けない。失敗を再送せずfresh診断に保持する。
 これは選択のfeedbackのみで、配置commit、施工、asset readiness、正式art/numeric採否ではない。
 同probeの初期7試行はいずれも正式にはinvalid。v6 `tak14-ordinary-input-probe-b885f623-20261005-v6`
