@@ -119,6 +119,11 @@ filter/sort変更は先頭ページ、ページ変更は本文の先頭へ戻り
 - `TaskListDirty` は `state_dirty` / `list_dirty` / `summary_dirty` の 3 つの責務に分かれます。
 - `state_dirty` は snapshot と summary の再計算要求、`list_dirty` は管理ページ本文の再描画要求、`summary_dirty` は画面上部 summary の更新要求です。
 - `TaskListState.snapshot` は最新観測済みデータを保持し、未描画の `pending` snapshot は持ちません。
+- 左pointer押下中は通常snapshotのdirty由来の本文despawn/rebuildだけを保留し、元Button entityをreleaseまで維持する。
+  snapshotは更新し続け、`list_dirty`を残してrelease後に最新状態で再描画する。change tickだけを
+  保留条件に使わない。共通collectorの同対象・payload・epoch・capture照合とactionのlive capability
+  再検証は維持し、対象が消えた古い操作を成功に変えない。hidden/minimizedの既存gateも維持する。
+  filter/page/sortやshell遷移などnavigation自身の変更は即時処理し、scroll reset／confirmation取消を遅らせない。
 - diagnostics の cycle ID 自体は `TaskEntry` に含めず、表示内容が同じなら周期評価だけで UI を再構築しません。
 - `Changed<FamiliarPolicy>` / `RemovedComponents<FamiliarPolicy>` は task diagnostic の roster revision を進めます。
   task list の dirty 検知は policy 本体を再評価せず、更新された diagnostics / revision を通常の dirty source として読みます。

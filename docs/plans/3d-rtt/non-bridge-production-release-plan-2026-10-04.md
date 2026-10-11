@@ -43,6 +43,10 @@ receipt後566ms・後続3sampleのClosed、新epoch1。原親2367v1→798v1、�
 実Manual1は494407 bytes、SHA-256 `541c691df5a3ce70428244177c39238702a4e1bbc7dd26c45bebc91879998835`。
 通常Intel Arc/Vulkan、WARN/ERRORなし。全world canonical serialization・完成・art/numeric/perf/
 正式releaseではなく、次の取消／cleanup比較用途の限定raw/save/latest画像だけを保持する。
+既存通常RestArea recipeのfresh試行は配置・Save/Loadの4checkpoint後、Task Dashboard取消の
+Left押下でtargetが再生成され、pressed観測を失ってinvalid。取消receiptはない。
+本文のdirty再描画をheld Left中だけ保留し、dirty要求をreleaseまで保持する修正を進める。
+simulation snapshot・既存同対象release guard・live capability拒否を変更せず、fresh実機で再確認する。
 
 通常起動で橋以外の9種が正式ビジュアルになり、完成・状態・配置・移動・施工・カタログ・保存復元が一致する。
 原移行計画の受入条件を維持し、橋だけを今回の完了対象から外す。技術previewと正式採用を区別する。

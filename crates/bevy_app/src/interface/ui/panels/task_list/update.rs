@@ -19,6 +19,22 @@ fn clear_task_list_body(commands: &mut Commands, body_entity: Entity) {
     commands.entity(body_entity).despawn_children();
 }
 
+fn defer_pointer_rebuild(
+    mouse: Option<&ButtonInput<MouseButton>>,
+    dirty: &mut TaskListDirty,
+) -> bool {
+    if mouse.is_some_and(|mouse| mouse.pressed(MouseButton::Left)) {
+        // Preserve the existing button entity until its original release is
+        // collected. Keep a durable redraw request even if change ticks expire.
+        // Live action capability and the shared button collector still reject
+        // stale targets, changed epochs, capture, and pointer drift.
+        dirty.mark_list();
+        true
+    } else {
+        false
+    }
+}
+
 #[cfg(feature = "profiling")]
 struct TaskDashboardTimingGuard<'a> {
     metrics: Option<&'a mut TaskDashboardTimingMetrics>,
@@ -60,6 +76,7 @@ pub struct TaskListRenderState<'w, 's> {
     action_state: ResMut<'w, TaskDashboardActionState>,
     minimized: Res<'w, EntityListMinimizeState>,
     shell: Option<Res<'w, hw_ui::shell::UiShellState>>,
+    mouse: Option<Res<'w, ButtonInput<MouseButton>>>,
     scroll: Query<'w, 's, &'static ScrollPosition, With<TaskListScroll>>,
 }
 
@@ -91,6 +108,18 @@ pub fn task_list_update_system(
             .shell
             .as_ref()
             .is_some_and(|shell| shell.is_changed())
+    {
+        return;
+    }
+
+    // Navigation changes retain their immediate scroll/confirmation semantics;
+    // only ordinary snapshot-driven refreshes wait for a held pointer release.
+    if !render_state.view_state.is_changed()
+        && !render_state
+            .shell
+            .as_ref()
+            .is_some_and(|shell| shell.is_changed())
+        && defer_pointer_rebuild(render_state.mouse.as_deref(), &mut dirty)
     {
         return;
     }
@@ -206,6 +235,64 @@ mod tests {
     fn queue_body_cleanup(mut commands: Commands, body_query: Query<Entity, With<TestBody>>) {
         let body = body_query.single().expect("test body should exist");
         clear_task_list_body(&mut commands, body);
+    }
+
+    fn gesture_safe_test_rebuild(
+        mut commands: Commands,
+        body_query: Query<Entity, With<TestBody>>,
+        mouse: Res<ButtonInput<MouseButton>>,
+        mut dirty: ResMut<TaskListDirty>,
+    ) {
+        if defer_pointer_rebuild(Some(&mouse), &mut dirty) {
+            return;
+        }
+        if dirty.list_dirty() {
+            clear_task_list_body(&mut commands, body_query.single().unwrap());
+            dirty.clear_list();
+        }
+    }
+
+    #[test]
+    fn held_task_button_identity_survives_dirty_frames_and_release_rebuilds_once() {
+        let mut app = App::new();
+        app.init_resource::<ButtonInput<MouseButton>>()
+            .init_resource::<TaskListDirty>()
+            .add_systems(Update, gesture_safe_test_rebuild);
+        let body = app.world_mut().spawn(TestBody).id();
+        let button = app
+            .world_mut()
+            .spawn((Button, TestChild, ChildOf(body)))
+            .id();
+        app.world_mut().resource_mut::<TaskListDirty>().mark_list();
+        app.world_mut()
+            .resource_mut::<ButtonInput<MouseButton>>()
+            .press(MouseButton::Left);
+        for _ in 0..3 {
+            app.update();
+            assert!(app.world().get_entity(button).is_ok());
+            assert!(app.world().resource::<TaskListDirty>().list_dirty());
+            app.world_mut()
+                .resource_mut::<ButtonInput<MouseButton>>()
+                .clear();
+        }
+        app.world_mut()
+            .resource_mut::<ButtonInput<MouseButton>>()
+            .release(MouseButton::Left);
+        app.update();
+        assert!(app.world().get_entity(button).is_err());
+        assert!(!app.world().resource::<TaskListDirty>().list_dirty());
+        app.update();
+        assert!(!app.world().resource::<TaskListDirty>().list_dirty());
+    }
+
+    #[test]
+    fn missing_or_non_left_input_does_not_defer_task_rebuild() {
+        let mut dirty = TaskListDirty::default();
+        let mut mouse = ButtonInput::default();
+        mouse.press(MouseButton::Right);
+        assert!(!defer_pointer_rebuild(None, &mut dirty));
+        assert!(!defer_pointer_rebuild(Some(&mouse), &mut dirty));
+        assert!(!dirty.list_dirty());
     }
 
     #[test]
