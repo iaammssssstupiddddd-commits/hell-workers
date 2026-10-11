@@ -499,3 +499,9 @@ kind単位の正式rollback記録で復旧し、loader失敗時の従来fallback
 defaultのF12 probeは維持し、別profileだけB→EscapeでHidden→Architect→Hiddenを検査する。
 独立コードレビュー、fresh実機／画像review、Help No impact・変更別CI・storageを通すまで新経路は未受入。
 これはcatalog開閉の収集基盤であり、正式identity、配置・完成・全lifecycle／性能、releaseの代用ではない。
+
+2026-10-12実機: `tak14-architect-input-da3da1c4-20261012-v1`はinvalidとして正式seal/finalize。
+B/Escapeと同epochのHidden→Architect→Hiddenは実rawで確認したが、TaskMode単体resourceの
+読取りはnull、catalog画像にはpanelが未表示だった。失敗画像/rawを具体的診断用途で保持する。
+通常操作が参照するTaskContextへ観測先を補正し、panel表示・layoutの2連続sample成立を撮影前に
+要求する。失敗をpassへ読み替えず、修正後のfresh sourceで再検証する。9種正式導入は未完。

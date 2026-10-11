@@ -172,6 +172,7 @@ fn target(kind: BuildingType) -> bool {
 }
 
 fn snapshot(world: &mut World) -> Result<Value, String> {
+    let architect_panel_ready = architect_panel_ready(world);
     let mut query = world.query::<(Entity, &Building, &Transform)>();
     let mut current: Vec<Entity> = query
         .iter(world)
@@ -333,6 +334,7 @@ fn snapshot(world: &mut World) -> Result<Value, String> {
         "menu_state": modes["menu_state"],
         "play_mode": modes["play_mode"],
         "task_mode": modes["task_mode"],
+        "architect_panel_ready": architect_panel_ready,
         "world_epoch": world.get_resource::<WorldEpoch>().map(|epoch| epoch.get()),
         "owners": owners, "blueprints": blueprints, "roots": roots, "bridge": bridge,
         "owner_layers": owner_layers, "actors": actors,
@@ -356,8 +358,20 @@ fn ui_modes(world: &World) -> Value {
     json!({
         "menu_state": world.get_resource::<hw_ui::components::MenuState>().map(|state| format!("{state:?}")),
         "play_mode": world.get_resource::<State<hw_core::game_state::PlayMode>>().map(|state| format!("{:?}", state.get())),
-        "task_mode": world.get_resource::<hw_core::game_state::TaskMode>().map(|state| format!("{state:?}")),
+        "task_mode": world.get_resource::<crate::app_contexts::TaskContext>().map(|state| format!("{:?}", state.0)),
     })
+}
+
+fn architect_panel_ready(world: &mut World) -> bool {
+    let mut query =
+        world.query_filtered::<(&Node, &ComputedNode), With<hw_ui::components::ArchitectSubMenu>>();
+    let Ok((node, computed)) = query.single(world) else {
+        return false;
+    };
+    node.display != Display::None
+        && computed.size().is_finite()
+        && computed.size().x > 0.0
+        && computed.size().y > 0.0
 }
 
 fn observe(world: &mut World) {
@@ -549,14 +563,45 @@ mod tests {
         );
         world.insert_resource(MenuState::Architect);
         world.insert_resource(State::new(PlayMode::Normal));
-        world.insert_resource(TaskMode::None);
+        world.insert_resource(crate::app_contexts::TaskContext(TaskMode::None));
         assert_eq!(
             ui_modes(&world),
             json!({"menu_state": "Architect", "play_mode": "Normal", "task_mode": "None"})
         );
         assert_eq!(*world.resource::<MenuState>(), MenuState::Architect);
         assert_eq!(world.resource::<State<PlayMode>>().get(), &PlayMode::Normal);
-        assert_eq!(*world.resource::<TaskMode>(), TaskMode::None);
+        assert_eq!(
+            world.resource::<crate::app_contexts::TaskContext>().0,
+            TaskMode::None
+        );
+    }
+
+    #[test]
+    fn architect_readiness_requires_one_displayed_laid_out_panel() {
+        use hw_ui::components::ArchitectSubMenu;
+        let mut world = World::new();
+        assert!(!architect_panel_ready(&mut world));
+        let entity = world
+            .spawn((ArchitectSubMenu, Node::default(), ComputedNode::default()))
+            .id();
+        assert!(!architect_panel_ready(&mut world));
+        world.entity_mut(entity).insert(ComputedNode {
+            size: Vec2::new(100.0, 50.0),
+            ..default()
+        });
+        assert!(architect_panel_ready(&mut world));
+        world.entity_mut(entity).get_mut::<Node>().unwrap().display = Display::None;
+        assert!(!architect_panel_ready(&mut world));
+        world.entity_mut(entity).get_mut::<Node>().unwrap().display = Display::Flex;
+        world.spawn((
+            ArchitectSubMenu,
+            Node::default(),
+            ComputedNode {
+                size: Vec2::ONE,
+                ..default()
+            },
+        ));
+        assert!(!architect_panel_ready(&mut world));
     }
 
     #[test]

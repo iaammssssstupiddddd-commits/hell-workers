@@ -200,7 +200,11 @@ def wait_for_menu(path: Path, nonce: str, pid: int, expected: str, *, after: int
         raw = raw_snapshot(path, nonce, pid)
         if (len(raw["samples"]) - 1 > after
                 and raw["samples"][-1].get("menu_state") == expected
-                and raw["samples"][-1].get("play_mode") == "Normal"):
+                and raw["samples"][-1].get("play_mode") == "Normal"
+                and (expected != "Architect" or
+                     (len(raw["samples"]) >= 2 and all(
+                         row.get("menu_state") == "Architect" and row.get("architect_panel_ready") is True
+                         for row in raw["samples"][-2:])))):
             return raw
         time.sleep(0.05)
     raise native.AcceptanceError(f"ordinary Architect {expected} raw witness timeout")
@@ -217,6 +221,7 @@ def check_catalog_states(raw: dict, evidence: dict) -> None:
     end = evidence["opened_end"]
     require(type(end) is int and indices[1] < end < indices[2]
             and all(row.get("menu_state") == "Architect" and row.get("play_mode") == "Normal"
+                    and row.get("architect_panel_ready") is True
                     and row.get("task_mode") == "None" and row.get("world_epoch") == states[0].get("world_epoch")
                     for row in raw["samples"][indices[1]:end + 1]),
             "Architect capture interval changed or stale")

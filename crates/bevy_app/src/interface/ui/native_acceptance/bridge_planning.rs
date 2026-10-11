@@ -46,6 +46,53 @@ fn crossing_in_site(crossing: &BridgeCrossing, sites: &[Site]) -> bool {
     sites.iter().any(|site| site.contains(draw_pos))
 }
 
+pub(super) fn snapshot(world: &mut World) -> Value {
+    let Some(target) = world.get_resource::<Target>() else {
+        return Value::Null;
+    };
+    let crossing = target.0.clone();
+    let point = WorldMap::grid_to_world(crossing.anchor.0, crossing.anchor.1);
+    let projected = world
+        .query_filtered::<(&Camera, &GlobalTransform), With<hw_ui::camera::MainCamera>>()
+        .iter(world)
+        .find_map(|(camera, transform)| {
+            camera.world_to_viewport(transform, point.extend(0.0)).ok()
+        });
+    let blueprints: Vec<_> = world
+        .query::<(Entity, &Blueprint)>()
+        .iter(world)
+        .filter(|(_, bp)| bp.kind == BuildingType::Bridge)
+        .map(|(entity, bp)| {
+            json!({
+                "entity": entity.to_bits(), "footprint": bp.occupied_grids,
+                "progress": bp.progress, "materials_complete": bp.materials_complete(),
+            })
+        })
+        .collect();
+    let buildings: Vec<_> = world
+        .query::<(Entity, &Building)>()
+        .iter(world)
+        .filter(|(_, building)| building.kind == BuildingType::Bridge)
+        .map(|(entity, _)| entity.to_bits())
+        .collect();
+    let map = world.resource::<WorldMap>();
+    let cells: Vec<_> = crossing
+        .occupied_grids
+        .iter()
+        .map(|&(x, y)| {
+            json!({
+                "grid": [x, y], "river": map.is_river_tile(x, y),
+                "walkable": map.is_walkable(x, y), "bridged": map.bridged_tiles.contains(&(x, y)),
+                "owner": map.building_entity((x, y)).map(Entity::to_bits),
+            })
+        })
+        .collect();
+    json!({"anchor": crossing.anchor, "footprint": crossing.occupied_grids,
+        "banks": crossing.banks, "point": projected.map(|point| point.to_array()),
+        "legal": resolve_bridge_crossing(&WorldMapRef(map), crossing.anchor).is_ok(),
+        "cells": cells, "blueprints": blueprints, "buildings": buildings})
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -105,51 +152,4 @@ mod tests {
             }]
         ));
     }
-}
-
-pub(super) fn snapshot(world: &mut World) -> Value {
-    let Some(target) = world.get_resource::<Target>() else {
-        return Value::Null;
-    };
-    let crossing = target.0.clone();
-    let point = WorldMap::grid_to_world(crossing.anchor.0, crossing.anchor.1);
-    let projected = world
-        .query_filtered::<(&Camera, &GlobalTransform), With<hw_ui::camera::MainCamera>>()
-        .iter(world)
-        .find_map(|(camera, transform)| {
-            camera.world_to_viewport(transform, point.extend(0.0)).ok()
-        });
-    let blueprints: Vec<_> = world
-        .query::<(Entity, &Blueprint)>()
-        .iter(world)
-        .filter(|(_, bp)| bp.kind == BuildingType::Bridge)
-        .map(|(entity, bp)| {
-            json!({
-                "entity": entity.to_bits(), "footprint": bp.occupied_grids,
-                "progress": bp.progress, "materials_complete": bp.materials_complete(),
-            })
-        })
-        .collect();
-    let buildings: Vec<_> = world
-        .query::<(Entity, &Building)>()
-        .iter(world)
-        .filter(|(_, building)| building.kind == BuildingType::Bridge)
-        .map(|(entity, _)| entity.to_bits())
-        .collect();
-    let map = world.resource::<WorldMap>();
-    let cells: Vec<_> = crossing
-        .occupied_grids
-        .iter()
-        .map(|&(x, y)| {
-            json!({
-                "grid": [x, y], "river": map.is_river_tile(x, y),
-                "walkable": map.is_walkable(x, y), "bridged": map.bridged_tiles.contains(&(x, y)),
-                "owner": map.building_entity((x, y)).map(Entity::to_bits),
-            })
-        })
-        .collect();
-    json!({"anchor": crossing.anchor, "footprint": crossing.occupied_grids,
-        "banks": crossing.banks, "point": projected.map(|point| point.to_array()),
-        "legal": resolve_bridge_crossing(&WorldMapRef(map), crossing.anchor).is_ok(),
-        "cells": cells, "blueprints": blueprints, "buildings": buildings})
 }

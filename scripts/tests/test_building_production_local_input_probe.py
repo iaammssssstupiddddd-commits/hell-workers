@@ -73,7 +73,8 @@ class LocalInputProbeTests(unittest.TestCase):
                 input_probe.check_plan(value | change, self.plan_path)
 
     def test_catalog_states_require_stable_raw_capture_and_world(self):
-        raw = {"samples": [{"menu_state": menu, "play_mode": "Normal", "task_mode": "None", "world_epoch": 2}
+        raw = {"samples": [{"menu_state": menu, "play_mode": "Normal", "task_mode": "None", "world_epoch": 2,
+                            "architect_panel_ready": menu == "Architect"}
                            for menu in ("Hidden", "Architect", "Architect", "Hidden")]}
         evidence = {"before": 0, "opened": 1, "opened_end": 2, "closed": 3,
                     "close_event_count": 2, "catalog_sha256": "a" * 64}
@@ -82,7 +83,8 @@ class LocalInputProbeTests(unittest.TestCase):
             with self.subTest(change=change), self.assertRaises(RuntimeError):
                 input_probe.check_catalog_states(raw, evidence | change)
         for key, value in (("menu_state", "Hidden"), ("world_epoch", 3), ("world_epoch", None),
-                           ("play_mode", "BuildingPlace"), ("task_mode", "SelectBuildTarget")):
+                           ("play_mode", "BuildingPlace"), ("task_mode", "SelectBuildTarget"),
+                           ("architect_panel_ready", False), ("architect_panel_ready", None)):
             changed = copy.deepcopy(raw)
             changed["samples"][2][key] = value
             with self.subTest(key=key), self.assertRaises(RuntimeError):
