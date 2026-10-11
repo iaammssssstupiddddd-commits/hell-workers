@@ -510,3 +510,8 @@ B/Escapeと同epochのHidden→Architect→Hiddenは実rawで確認したが、T
 開いたpanelは表示されたが、raw Hidden直後のafter画像にpanelが残ったためinvalidを正式記録。
 閉鎖側にも2連続Hidden／layout非表示と撮影後fresh sampleまでの安定区間を要求する。
 Rustの観測先補正は成立しており、この追加補正はPython撮影driverと拒否系testだけで行う。
+
+`tak14-architect-input-a47fa8ab-20261012-v1`は開閉の画像が成立したがbeforeが全面黒だった。
+独立画像reviewで3画像全体はchanges_requested、invalidとしてseal/finalizeして診断保持。
+既存M2のnonblank検査を開始・開・閉の全画像へ適用し、開始はfresh Hidden区間を拘束する。
+blankだけを8秒・16回以内で再撮影し、拒否画像・理由を保持する。別batchの再launchではない。

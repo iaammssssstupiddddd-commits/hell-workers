@@ -219,6 +219,11 @@ catalog画像の前後にはfresh sampleを要求し、その全区間でArchite
 撮影前には単一Architect panelの表示と正の有限layoutが2連続sampleで成立することを要求する。
 閉じた画像も2連続のHidden／panel非表示を待ち、撮影後のfresh sampleまで同状態を検査する。
 このreadinessは実画面の独立確認を代替せず、menu stateだけの変更や描画前の画像は採用しない。
+開始画像はHidden／Normal／None／同epochのfresh撮影区間を拘束し、中央160pxのblankを
+既存M2 pixel検査で拒否する。8秒・最大16回以内のblank再撮影は同じowned processに限り、
+拒否した画像と理由を保持する。寸法違いやraw区間の不成立は再撮影せず失敗する。
+runとverifyはbefore／catalog／afterの全画像へ同じnonblank検査を適用する。
+画素の非一様性はasset readinessやアート採用を証明しない。
 これはordinary入力でのcatalog開閉に限り、9種の候補表示・配置・施工・性能・正式採否ではない。
 この実装の実機成功はfresh batchの独立verifyと画像確認後にのみ記録する。
 同probeの初期7試行はいずれも正式にはinvalid。v6 `tak14-ordinary-input-probe-b885f623-20261005-v6`

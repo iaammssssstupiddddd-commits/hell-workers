@@ -116,6 +116,82 @@ class LocalInputProbeTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             input_probe.witnessed_input(raw, before_event_count=0)
 
+    def test_startup_capture_requires_fresh_normal_world_interval(self):
+        row = {"menu_state": "Hidden", "play_mode": "Normal", "task_mode": "None",
+               "architect_panel_ready": False, "world_epoch": 0}
+        raw = {"samples": [row.copy(), row.copy()]}
+        evidence = {"before": 0, "after": 1, "epoch": 0}
+        input_probe.check_startup_capture(raw, evidence)
+        for change in ({"before": True}, {"after": 0}, {"after": 2}, {"epoch": None}, {"epoch": True}, {"epoch": 1}):
+            with self.subTest(change=change), self.assertRaises(RuntimeError):
+                input_probe.check_startup_capture(raw, evidence | change)
+        for key, value in (("menu_state", "Architect"), ("task_mode", None),
+                           ("architect_panel_ready", True), ("world_epoch", 1)):
+            changed = copy.deepcopy(raw)
+            changed["samples"][1][key] = value
+            with self.subTest(key=key), self.assertRaises(RuntimeError):
+                input_probe.check_startup_capture(changed, evidence)
+
+    def test_startup_blank_retry_preserves_rejected_capture(self):
+        self.root.mkdir()
+        row = {"menu_state": "Hidden", "play_mode": "Normal", "task_mode": "None",
+               "architect_panel_ready": False, "world_epoch": 0}
+        snapshots = [{"samples": [row.copy() for _ in range(n)]} for n in (1, 2, 2, 3)]
+
+        def capture(_window, path, **_kwargs):
+            path.write_bytes(b"test PNG")
+            return True
+
+        with patch.object(input_probe, "raw_snapshot", side_effect=snapshots), \
+                patch.object(input_probe.native, "capture_client_png", side_effect=capture), \
+                patch.object(input_probe, "check_capture_pixels", side_effect=[ValueError("blank central viewport"), None]):
+            evidence = input_probe.capture_startup("0x7b", self.root, Path("/unused"), "n", 1)
+        self.assertEqual(evidence, {"before": 1, "after": 2, "epoch": 0})
+        self.assertTrue((self.root / "startup-capture-0.png").is_file())
+        self.assertTrue((self.root / "before.png").is_file())
+        rejected = json.loads((self.root / "startup-rejected-0.json").read_text())
+        self.assertEqual(rejected["reason"], "blank central viewport")
+        self.assertEqual(rejected["interval"], {"before": 0, "after": 1, "epoch": 0})
+
+    def test_startup_capture_does_not_retry_nonblank_contract_failure(self):
+        self.root.mkdir()
+        row = {"menu_state": "Hidden", "play_mode": "Normal", "task_mode": "None",
+               "architect_panel_ready": False, "world_epoch": 0}
+        with patch.object(input_probe, "raw_snapshot", side_effect=[{"samples": [row]}, {"samples": [row, row]}]), \
+                patch.object(input_probe.native, "capture_client_png", return_value=True) as capture, \
+                patch.object(input_probe, "check_capture_pixels", side_effect=ValueError("actual client dimensions differ")):
+            with self.assertRaisesRegex(ValueError, "dimensions differ"):
+                input_probe.capture_startup("0x7b", self.root, Path("/unused"), "n", 1)
+        self.assertEqual(capture.call_count, 1)
+
+    def test_startup_blank_attempts_are_bounded_and_preserved(self):
+        self.root.mkdir()
+        row = {"menu_state": "Hidden", "play_mode": "Normal", "task_mode": "None",
+               "architect_panel_ready": False, "world_epoch": 0}
+        snapshots = [{"samples": [row.copy() for _ in range(n)]}
+                     for attempt in range(16) for n in (attempt + 1, attempt + 2)]
+
+        def capture(_window, path, **_kwargs):
+            path.write_bytes(b"test PNG")
+            return True
+
+        with patch.object(input_probe, "raw_snapshot", side_effect=snapshots), \
+                patch.object(input_probe.native, "capture_client_png", side_effect=capture) as captured, \
+                patch.object(input_probe.time, "monotonic", return_value=0), \
+                patch.object(input_probe, "check_capture_pixels", side_effect=ValueError("blank central viewport")):
+            with self.assertRaisesRegex(RuntimeError, "attempt cap"):
+                input_probe.capture_startup("0x7b", self.root, Path("/unused"), "n", 1)
+        self.assertEqual(captured.call_count, 16)
+        self.assertEqual(len(list(self.root.glob("startup-rejected-*.json"))), 16)
+        self.assertFalse((self.root / "before.png").exists())
+
+    def test_startup_timeout_does_not_capture_or_send_input(self):
+        with patch.object(input_probe.time, "monotonic", side_effect=[0, 9]), \
+                patch.object(input_probe.native, "capture_client_png") as capture:
+            with self.assertRaisesRegex(RuntimeError, "timeout"):
+                input_probe.capture_startup("0x7b", self.root, Path("/unused"), "n", 1)
+        capture.assert_not_called()
+
     def test_rejects_authority_source_binary_transport_and_foreign_root(self):
         self.plan_path.write_text("{}")
         for key, replacement in (
@@ -306,6 +382,7 @@ class LocalInputProbeTests(unittest.TestCase):
              patch.object(input_probe.probe, "process_metrics", return_value={"rss_kib": 1,
                                                                              "process_fd_count": 1}), \
              patch.object(input_probe, "raw_snapshot", return_value={"samples": [{}, {}, {}], "events": []}), \
+             patch.object(input_probe, "capture_startup", return_value={"before": 0, "after": 1, "epoch": 0}), \
              patch.object(input_probe.native, "capture_client_png", return_value=True), \
              patch.object(input_probe, "PortalSession", Portal), \
              patch.object(input_probe, "PortalX11Input", transport), \

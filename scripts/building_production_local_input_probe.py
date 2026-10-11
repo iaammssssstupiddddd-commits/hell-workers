@@ -19,10 +19,12 @@ import time
 if __package__:
     from . import building_production_local_probe as probe
     from . import building_production_validation_context as ownership
+    from .building_m2_native_acceptance import check_capture_pixels
     from .native_ui_portal import PortalSession, PortalX11Input
 else:
     import building_production_local_probe as probe
     import building_production_validation_context as ownership
+    from building_m2_native_acceptance import check_capture_pixels
     from scripts.native_ui_portal import PortalSession, PortalX11Input
 
 native = probe.native
@@ -144,6 +146,50 @@ def raw_ready(path: Path) -> bool:
             and len(raw["samples"]) <= 1200,
             "input probe startup raw shape differs")
     return len(raw["samples"]) >= 3
+
+
+def check_startup_capture(raw: dict, evidence: dict) -> None:
+    require(set(evidence) == {"before", "after", "epoch"}, "startup capture shape differs")
+    before, after = evidence["before"], evidence["after"]
+    require(type(before) is int and type(after) is int and 0 <= before < after < len(raw["samples"])
+            and type(evidence["epoch"]) is int and evidence["epoch"] >= 0
+            and all(row.get("menu_state") == "Hidden" and row.get("play_mode") == "Normal"
+                    and row.get("task_mode") == "None" and row.get("architect_panel_ready") is False
+                    and type(row.get("world_epoch")) is int and row.get("world_epoch") == evidence["epoch"]
+                    for row in raw["samples"][before:after + 1]),
+            "startup capture interval missing, stale or changed")
+
+
+def capture_startup(window: str, root: Path, raw_path: Path, nonce: str, pid: int) -> dict:
+    """Keep rejected blank attempts; never treat raw readiness as rendered readiness."""
+    deadline = time.monotonic() + 8
+    for attempt in range(16):
+        require(time.monotonic() < deadline, "startup rendered capture timeout")
+        before = raw_snapshot(raw_path, nonce, pid)
+        index = len(before["samples"]) - 1
+        evidence = {"before": index, "after": index, "epoch": before["samples"][-1].get("world_epoch")}
+        path = root / f"startup-capture-{attempt}.png"
+        require(not path.exists() and not (root / "before.png").exists(), "startup capture path already exists")
+        require(native.capture_client_png(window, path, import_cmd="import"), "owned startup capture failed")
+        after = raw_snapshot(raw_path, nonce, pid)
+        fresh_deadline = min(deadline, time.monotonic() + 2)
+        while len(after["samples"]) - 1 <= index and time.monotonic() < fresh_deadline:
+            time.sleep(0.05)
+            after = raw_snapshot(raw_path, nonce, pid)
+        evidence["after"] = len(after["samples"]) - 1
+        check_startup_capture(after, evidence)
+        try:
+            check_capture_pixels(path)
+        except ValueError as exc:
+            if str(exc) != "blank central viewport":
+                raise
+            (root / f"startup-rejected-{attempt}.json").write_text(json.dumps({
+                "reason": str(exc), "capture": path.name, "sha256": probe.digest(path),
+                "interval": evidence}, sort_keys=True) + "\n")
+            continue
+        path.rename(root / "before.png")
+        return evidence
+    raise native.AcceptanceError("startup blank capture attempt cap exceeded")
 
 
 def numeric_window_id(window: str) -> int:
@@ -369,8 +415,8 @@ def run(args: argparse.Namespace) -> dict:
                 raise native.AcceptanceError("ordinary-world process/window/raw timeout")
             window, pid = owned
             stage = "owned before capture"
-            require(native.capture_client_png(window, screenshot_before, import_cmd="import"),
-                    "owned X11 client before capture failed")
+            startup_capture = capture_startup(window, root, raw_path, nonce, pid)
+            raw = raw_snapshot(raw_path, nonce, pid)
             before_count = len(raw["events"])
             stage = "owned portal input activation"
             window_number = numeric_window_id(window)
@@ -405,6 +451,7 @@ def run(args: argparse.Namespace) -> dict:
                 opened = len(raw["samples"]) - 1
                 require(native.capture_client_png(window, root / "catalog.png", import_cmd="import"),
                         "owned Architect capture failed")
+                check_capture_pixels(root / "catalog.png")
                 raw = raw_snapshot(raw_path, nonce, pid)
                 deadline = time.monotonic() + 2
                 while len(raw["samples"]) - 1 <= opened and time.monotonic() < deadline:
@@ -425,6 +472,7 @@ def run(args: argparse.Namespace) -> dict:
             stage = "owned after capture"
             require(native.capture_client_png(window, screenshot_after, import_cmd="import"),
                     "owned X11 client after capture failed")
+            check_capture_pixels(screenshot_after)
             if catalog:
                 stage = "Architect closed capture stability"
                 raw = raw_snapshot(raw_path, nonce, pid)
@@ -474,6 +522,7 @@ def run(args: argparse.Namespace) -> dict:
               "native_allocator_metrics": None, "application_handle_total": None,
               "accepted": False, "performance_evidence": False,
               "art_approved": False, "promotion_authority": False}
+    result["startup_capture"] = startup_capture
     if catalog:
         result["catalog_evidence"] = catalog_evidence
     (root / "result.json").write_text(json.dumps(result, sort_keys=True, separators=(",", ":")) + "\n")
@@ -488,7 +537,7 @@ def verify(root: Path) -> dict:
     fields = {"schema", "profile", "status", "plan", "context", "nonce",
                             "game_pid", "window_id", "raw_sha256", "before_sha256",
                             "after_sha256", "before_event_count", "input_receipts",
-                            "portal_evidence",
+                            "portal_evidence", "startup_capture",
                             "measurements", "gpu_metrics", "native_allocator_metrics",
                             "application_handle_total", "accepted", "performance_evidence",
                             "art_approved", "promotion_authority"}
@@ -510,7 +559,10 @@ def verify(root: Path) -> dict:
     raw_path = root / "raw.json"
     require(probe.digest(raw_path) == result["raw_sha256"], "input probe raw changed")
     raw = raw_snapshot(raw_path, result["nonce"], result["game_pid"])
-    witnessed_input(raw, before_event_count=result["before_event_count"], key="KeyB" if catalog else KEY)
+    check_startup_capture(raw, result["startup_capture"])
+    input_events = witnessed_input(raw, before_event_count=result["before_event_count"], key="KeyB" if catalog else KEY)
+    require(all(row["sample_index"] >= result["startup_capture"]["after"] for row in input_events),
+            "input precedes startup capture")
     if catalog:
         evidence = result["catalog_evidence"]
         check_catalog_states(raw, evidence)
@@ -523,6 +575,7 @@ def verify(root: Path) -> dict:
         require(probe.digest(image) == evidence["catalog_sha256"]
                 and native.validate_png_structure(image.read_bytes()) == WINDOW,
                 "owned Architect capture changed")
+        check_capture_pixels(image)
     receipts = result["input_receipts"]
     expected_receipts = ([("key-press", "b", True), ("key-release", "b", False),
                           ("close-press", "Escape", True), ("close-release", "Escape", False)]
@@ -539,6 +592,7 @@ def verify(root: Path) -> dict:
         require(probe.digest(path) == result[field]
                 and native.validate_png_structure(path.read_bytes()) == WINDOW,
                 "input probe owned screenshot changed")
+        check_capture_pixels(path)
     require(result["measurements"] and all(row["rss_kib"] > 0
             and row["process_fd_count"] > 0 for row in result["measurements"]),
             "input probe host metrics missing")
