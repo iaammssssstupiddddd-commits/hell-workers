@@ -438,6 +438,11 @@ session/prefix改変は再撮影で隠さず失敗させる。新verifierは撮�
 これはrawの安定区間への結合であり、renderer frameと完全に原子的な撮影や通常入力の証拠ではない。
 旧passはその時点の限定結果として維持する。fresh実機観測と独立画像評価を終えるまで本補正の実機結果は未達。
 Help実経路: 子processの撮影・raw検証のみの変更で、通常起動、player input/UI、gameplay、保存、Helpは不変（No impact）。
+撮影補正`9b1d518d5d9c07447fe73e777ddf2863478b3bec`のfresh 30秒batch
+`tak14-mixer-capture-interval-9b1d518d-20261012-v1`は`native bounded stop/capture failed`でinvalid。
+拒否画像と前後indexを保全し、同sampleの最終撮影213/223/232を拒否したことを確認、診断保持・finalizeした。
+rawの公開間隔より撮影が短いため、撮影後のstrictly newer sampleを最大2秒だけ待つ補正を追加する。
+timeoutでは不採用を維持し、prefix/session改変、区間内の状態変化やowner交替は引き続き拒否する。
 出力root: primary `target/native-acceptance/nonbridge-restarea-authoring-20261004-v1`。
 owner: main / consumer: M3候補の独立採否・現行subject導入。次工程: 原本・画像を比較しruntime候補を生成。
 release_when: 採用原本のasset正本への集約と候補フィードバック終了後。旧batchのpassを新subjectへ流用しない。

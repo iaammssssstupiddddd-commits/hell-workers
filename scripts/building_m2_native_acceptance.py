@@ -301,11 +301,15 @@ def check_capture_interval(samples, shot):
                          for row in samples[start:end + 1]), "state/owner changed during capture")
 
 
-def bind_capture(before, after, shot):
+def check_capture_prefix(before, after):
     pipeline.require(all(before.get(key) == after.get(key)
                          for key in ("nonce", "process_id", "identity", "leg"))
                      and after["samples"][:len(before["samples"])] == before["samples"],
                      "capture trace prefix/session changed")
+
+
+def bind_capture(before, after, shot):
+    check_capture_prefix(before, after)
     bound = {**shot, "sample_index": len(before["samples"]) - 1,
              "sample_end_index": len(after["samples"]) - 1,
              "key": checkpoint_key(before["samples"][-1])}
@@ -317,7 +321,13 @@ def capture_observed_interval(capture_root, pid, trace_path, before):
     shot = art.capture(capture_root, pid)
     if shot is None:
         return None, None
+    deadline = time.monotonic() + 2.0
     after = m2.read_json(trace_path)
+    check_capture_prefix(before, after)
+    while len(after["samples"]) <= len(before["samples"]) and time.monotonic() < deadline:
+        time.sleep(0.05)
+        after = m2.read_json(trace_path)
+        check_capture_prefix(before, after)
     try:
         return bind_capture(before, after, shot), after
     except ValueError as error:

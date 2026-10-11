@@ -116,6 +116,44 @@ class NativeRecipeTests(unittest.TestCase):
             self.assertEqual((record["sample_index"], record["sample_end_index"]), (0, 2))
             self.assertFalse((accepted / "rejected.json").exists())
 
+    def test_capture_waits_for_fresh_raw_but_times_out_without_fabricating_it(self):
+        stable = copy.deepcopy(self.trace)
+        for row in stable["samples"]:
+            row["roots"][0]["state"] = "Some(TankEmpty)"
+        before = {**stable, "samples": stable["samples"][:1]}
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            with patch.object(recipe.art, "capture", return_value={"path": "image.png"}), \
+                 patch.object(recipe.m2, "read_json", side_effect=[before, stable]), \
+                 patch.object(recipe.time, "sleep") as sleep:
+                shot, after = recipe.capture_observed_interval(root / "fresh", 42, root / "trace", before)
+                self.assertEqual(shot["sample_end_index"], 2)
+                self.assertEqual(after, stable)
+                sleep.assert_called_once_with(0.05)
+            with patch.object(recipe.art, "capture", return_value={"path": "image.png"}), \
+                 patch.object(recipe.m2, "read_json", return_value=before), \
+                 patch.object(recipe.time, "monotonic", side_effect=[0.0, 2.0]):
+                shot, after = recipe.capture_observed_interval(root / "stale", 42, root / "trace", before)
+                self.assertIsNone(shot)
+                self.assertEqual(after, before)
+                record = json.loads((root / "stale/rejected.json").read_text())
+                self.assertEqual(record["reason"], "capture interval missing/stale")
+
+    def test_capture_wait_never_hides_foreign_or_rewritten_intermediate_snapshot(self):
+        before = {**self.trace, "samples": self.trace["samples"][:1]}
+        for mutation in (lambda trace: trace.update(nonce="c" * 32),
+                         lambda trace: trace.update(process_id=99),
+                         lambda trace: trace["samples"][0].update(real_seconds=0.9)):
+            damaged = copy.deepcopy(before)
+            mutation(damaged)
+            for reads in ([damaged, self.trace], [before, damaged, self.trace]):
+                with self.subTest(reads=reads), \
+                     patch.object(recipe.art, "capture", return_value={"path": "image.png"}), \
+                     patch.object(recipe.m2, "read_json", side_effect=reads) as read, \
+                     patch.object(recipe.time, "sleep"), self.assertRaisesRegex(ValueError, "prefix/session changed"):
+                    recipe.capture_observed_interval(Path("unused"), 42, Path("trace"), before)
+                self.assertEqual(read.call_count, len(reads) - 1)
+
     def test_v2_trace_requires_the_explicit_numeric_proposal(self):
         identity = {**self.identity, "kind": "MudMixer"}
         binding = recipe.m2.numeric_binding("MudMixer", {
