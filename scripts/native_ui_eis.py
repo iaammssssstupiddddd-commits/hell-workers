@@ -7,6 +7,7 @@ API: https://libinput.pages.freedesktop.org/libei/api/libei_8h_source.html
 from __future__ import annotations
 
 import ctypes as c
+import math
 import time
 
 from scripts.native_ui_input import InputRejected, X11Input
@@ -154,16 +155,28 @@ class EisSender:
         rect = tuple(getattr(lib, "ei_region_get_" + name)(region)
                      for name in ("x", "y", "width", "height"))
         scale = lib.ei_region_get_physical_scale(region)
-        if (rect != (0, 0, *self.root_size)
-                or scale != self.mapping[1]):
+        monitor_scale = self.mapping[1]
+        if not math.isfinite(monitor_scale) or monitor_scale <= 0:
+            raise InputRejected("invalid inspected monitor scale")
+        # EIS absolute coordinates are logical pixels. Xwayland root/client
+        # coordinates on this inspected path are physical pixels. Require
+        # the declared logical extent to equal physical extent / scale;
+        # never infer a ratio from an arbitrary/mismatched region.
+        expected = (0, 0, *(extent / monitor_scale for extent in self.root_size))
+        if rect != expected or scale != monitor_scale:
             raise InputRejected(f"EIS region does not match inspected physical monitor: "
                                 f"observed rect={rect}, scale={scale}; "
-                                f"expected rect={(0, 0, *self.root_size)}, scale={self.mapping[1]}")
+                                f"expected logical rect={expected}, scale={monitor_scale}")
         return device
 
     def send(self, operation, *values):
         self.pump()
         device = self.selected(KEYBOARD) if operation == "keyboard_key" else self.region()
+        if operation == "pointer_motion_absolute":
+            if (len(values) != 2 or any(type(v) is not int for v in values)
+                    or not all(0 <= v < extent for v, extent in zip(values, self.root_size, strict=True))):
+                raise InputRejected("EIS absolute physical target is outside owned root")
+            values = tuple(v / self.mapping[1] for v in values)
         if operation in ("keyboard_key", "button_button"):
             held = self.held_keys if operation == "keyboard_key" else self.held_buttons
             # Record the intended press before submission; cleanup never

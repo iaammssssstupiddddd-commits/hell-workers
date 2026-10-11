@@ -237,8 +237,11 @@ placement commitや正式asset受入を推定しない。通常入力・UiIntent
 profiling feature付き`target/debug/bevy_app`を利用する限定feedbackである。
 formal Capture/Memoryや性能のbinaryとは混同しない。入力は既存pointer／keyboard consentから
 一度だけConnectToEISし、`native_ui_eis.py`の単一physical monitorと一意なabsolute regionで
-配送する。planはEIS transport hashも固定する。外側のX11 owner/focus/nonce/単発stepと
-製品のexact cursor ACKは維持し、Notify混用・再送・region推定・authority付与はしない。
+配送する。planはEIS transport hashも固定する。
+X11のphysical rootに対しEISのlogical region寸法が宣言scaleで一致する場合だけ、
+absolute targetを同scaleでlogical pixelへ変換する。regionから任意倍率を逆算しない。
+外側のX11 owner/focus/nonce/単発stepと製品のexact cursor ACKは維持し、
+Notify混用・再送・region推定・authority付与はしない。
 終了時は通常配送guardを再使用せず、原deviceに記録した保持key/buttonのreleaseだけを送り、
 stop・device close・connection teardownする。pause/removal済みdeviceへは注入しない。
 固定Bで開き、2連続rawで安定した実cardの中心へ一度motionを送り、製品cursorのfresh ACK後に

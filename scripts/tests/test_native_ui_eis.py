@@ -16,7 +16,7 @@ def sender():
     value.lib.ei_get_event.return_value = None
     value.lib.ei_device_get_type.return_value = 1
     value.lib.ei_device_get_region.side_effect = lambda _device, index: 40 if index == 0 else None
-    for name, result in zip(("x", "y", "width", "height", "physical_scale"), (0, 0, 2880, 1800, 2.)):
+    for name, result in zip(("x", "y", "width", "height", "physical_scale"), (0, 0, 1440, 900, 2.)):
         getattr(value.lib, "ei_region_get_" + name).return_value = result
     value.lib.ei_now.return_value = 1000
     return value
@@ -35,7 +35,7 @@ class EisTests(unittest.TestCase):
     def test_unique_absolute_region_and_direct_frame(self):
         value = sender()
         value.send("pointer_motion_absolute", 1200, 900)
-        value.lib.ei_device_pointer_motion_absolute.assert_called_once_with(10, 1200, 900)
+        value.lib.ei_device_pointer_motion_absolute.assert_called_once_with(10, 600., 450.)
         value.lib.ei_device_frame.assert_called_once_with(10, 1000)
         value.lib.ei_device_keyboard_key.assert_not_called()
 
@@ -47,7 +47,7 @@ class EisTests(unittest.TestCase):
         self.assertEqual(value.held_keys, {(20, 48)})
 
     def test_mismatched_or_multiple_regions_are_rejected_before_send(self):
-        for name, result in (("x", 1), ("y", 1), ("width", 1440), ("height", 900),
+        for name, result in (("x", 1), ("y", 1), ("width", 2880), ("height", 1800),
                              ("physical_scale", 1.), ("physical_scale", float("nan"))):
             value = sender()
             getattr(value.lib, "ei_region_get_" + name).return_value = result
@@ -74,11 +74,30 @@ class EisTests(unittest.TestCase):
 
     def test_rejected_region_records_actual_and_expected_contract_without_input(self):
         value = sender()
-        value.lib.ei_region_get_width.return_value = 1440
-        with self.assertRaisesRegex(InputRejected, r"observed rect=\(0, 0, 1440, 1800\), scale=2.0; "
-                                    r"expected rect=\(0, 0, 2880, 1800\), scale=2.0"):
+        value.lib.ei_region_get_width.return_value = 720
+        with self.assertRaisesRegex(InputRejected, r"observed rect=\(0, 0, 720, 900\), scale=2.0; "
+                                    r"expected logical rect=\(0, 0, 1440.0, 900.0\), scale=2.0"):
             value.send("pointer_motion_absolute", 1200, 900)
         value.lib.ei_device_pointer_motion_absolute.assert_not_called()
+
+    def test_odd_physical_target_preserves_exact_half_logical_pixel(self):
+        value = sender()
+        value.send("pointer_motion_absolute", 1463, 1173)
+        value.lib.ei_device_pointer_motion_absolute.assert_called_once_with(10, 731.5, 586.5)
+
+    def test_unscaled_declared_coordinates_and_invalid_physical_target(self):
+        value = sender()
+        value.mapping = (1, 1.)
+        value.lib.ei_region_get_physical_scale.return_value = 1.
+        value.lib.ei_region_get_width.return_value = 2880
+        value.lib.ei_region_get_height.return_value = 1800
+        value.send("pointer_motion_absolute", 1200, 900)
+        value.lib.ei_device_pointer_motion_absolute.assert_called_once_with(10, 1200., 900.)
+        for point in ((-1, 0), (2880, 0), (0, 1800), (True, 0), (1200.5, 900)):
+            value = sender()
+            with self.subTest(point=point), self.assertRaises(InputRejected):
+                value.send("pointer_motion_absolute", *point)
+            value.lib.ei_device_pointer_motion_absolute.assert_not_called()
 
     def test_disconnect_removed_and_pause_fail_before_input(self):
         for event_type in (2, 4, 6, 7, 999):

@@ -554,3 +554,8 @@ extent/scaleだけを受理し、pause/removal/monitor変更は拒否する。EI
 `f16d3e87`のfresh EIS実機は接続・device取得後、physical region一致guardで入力前拒否。
 input_receiptsは空、invalid seal/finalize・診断保持済み。拒否にactual rect/scaleとexpected値を
 含めるだけの観測補正を追加し、同じ拒否条件を維持して次のfresh実測で単位を確定する。
+`8709e085`のfresh入力前実測はEIS logical rect=(0,0,1440,900)、scale=2、X11 physical
+root=(2880,1800)を記録してinvalid精算。一次libei APIのlogical pixel契約に従い、
+declared scaleとexact logical extentが一致する時だけphysical targetをscaleで割る。
+任意倍率の逆算や到達ACKの緩和はしない。半logical pixelも丸めず、ゲーム側のexact
+physical cursor ACKを維持する。独立review／fresh実機前で9種の正式導入は未完。
