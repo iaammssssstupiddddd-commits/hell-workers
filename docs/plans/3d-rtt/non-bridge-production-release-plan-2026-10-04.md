@@ -455,6 +455,20 @@ UIだけで中央viewportがclear色のままと判明し、Idleの視覚証拠�
 paused Active46..49とunpaused Active62..65は木枠・紫表示・rotorが見え、rawの停止／進行と限定整合する。
 中央160x160が単色の画像を採用・verify双方で拒否し、元画像・理由を保持して既存上限内で再撮影する。
 この最小blank検査は対象の描画完了や美術採否を保証しないため、fresh画像の独立比較は必須のまま。
+最終補正`0619cd65a741e64e082a049fbd10d31ef62d90fd`のfresh 30秒batch
+`tak14-mixer-capture-ready-0619cd65-20261012-v1`と
+`tak14-tank-capture-ready-0619cd65-20261012-v1`は登録済み独立verifier pass、seal/finalize済み。
+同source `0d20a4d2d8fb744832076ff8a292568eb4638a962b6d1cb5f010432a4591fed8`、
+同codec `9d846a9b7df7c804dfaf29eb9b01d0960e4d87ca836af0be9bd66872b0b60e84`で逐次実行した。
+独立画像レビューでもMudMixer Idle5..6、unpaused Active37..38、paused Active43..45の3画像に
+terrainと対象を確認し、同owner2187v0／epoch0と停止・進行の限定整合を確認した。
+Tank Empty6..8／Partial39..41／Full78..80も対象が見え、同owner2186v0／epoch0で
+水面Hidden→高さ12→高さ22と画像変化が整合する。startup blankはなく、撮影補正の限定受入を閉じた。
+ただしConstruction Complete表示の上縁遮蔽、MudMixer紫表示下の泥とitem重なりの判読、
+通常入力lifecycle、正式art/numeric freeze・性能・promotion/install/rollback・通常起動導入は未受入。
+修正の独立コードレビュー、Python tooling 437件／asset tooling208件、変更別CI contracts/tooling、
+observer変更時のworkspace test・Clippy・dev.py checkは成功。HelpはNo impact。
+診断が終了した本修正の旧4jobは結果・制限を本節へ集約して整理し、最新2jobだけをM2候補画像比較用途で保持する。
 出力root: primary `target/native-acceptance/nonbridge-restarea-authoring-20261004-v1`。
 owner: main / consumer: M3候補の独立採否・現行subject導入。次工程: 原本・画像を比較しruntime候補を生成。
 release_when: 採用原本のasset正本への集約と候補フィードバック終了後。旧batchのpassを新subjectへ流用しない。

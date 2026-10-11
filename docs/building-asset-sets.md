@@ -283,6 +283,16 @@ profiling-onlyのproduction raw observerとBridge／M2 probeは共通writerでfr
 `create_new`で排他的に作成してからrenameする。既存ファイル・dangling symlink・失敗した一時成果を
 上書きせず拒否する。これは収集の安全性であり、ordinary-worldの欠落producerや正式受入を補わない。
 
+M2 probeは有効化された検証sessionだけで0.1秒ごとのdue sampleを即時公開する（最大1800 samples、
+categoryごと最大128 entities）。観測・同期書込みの負荷を含むため性能証拠には使わない。
+M2 native runnerは画像の撮影前後でraw prefix/sessionを照合し、最大2秒の待機で新sampleを要求する。
+全観測区間のstate/pause/camera/identity/owner/epochが不変な画像だけを採用する。
+固定1280x720 clientの中央160x160が単色の画像もrun/verify両方で拒否する。
+拒否画像・理由は別pathに残し、checkpointは最大48試行／24採用、最終画像は最大8試行に制限する。
+このblank拒否や安定raw区間はrenderer frameの原子性・対象の描画完了・美術採否を保証しない。
+独立画像比較を別に要求し、fixture投入による水量・精製状態をordinary-input lifecycleへ読み替えない。
+この検証専用補正は通常起動・player input/UI・gameplay・save・Helpに影響しない。
+
 `assets::building_asset_set`のunit testは9種×3 authorityのschema、異常入力、policy、receiptを検査し、
 Bevyのmemory AssetServer経由で欠落・改竄・正常ロードを確認する。
 M1-a2はdecode可能な最小GLB／PNGでtyped load・寸法・世代・失効を、M1-bは表示consumer・root／part・
