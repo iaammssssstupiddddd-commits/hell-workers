@@ -27,6 +27,7 @@ else:
 
 native = probe.native
 PROFILE = "building-production-local-input-probe-portal-v2"
+CATALOG_PROFILE = "building-production-local-architect-portal-v1"
 OWNER = "TAK-14 normal-development coordinator"
 KEY = "F12"
 WINDOW = (1280, 720)
@@ -49,18 +50,21 @@ def verifier(root: Path) -> list[str]:
 
 def check_plan(value: dict, plan_path: Path, *, fresh: bool = True,
                plan_exists: bool = True) -> tuple[Path, Path, Path]:
-    require(set(value) == {"schema", "profile", "repo", "job_root", "head", "source",
+    fields = {"schema", "profile", "repo", "job_root", "head", "source",
                            "harness", "driver", "input_transport_sha256",
                            "portal_transport_sha256", "consent_file", "binary",
                            "binary_sha256", "owner", "key", "accepted",
-                           "performance_evidence", "art_approved", "promotion_authority"},
+                           "performance_evidence", "art_approved", "promotion_authority"}
+    catalog = value.get("profile") == CATALOG_PROFILE
+    require(set(value) == (fields | {"scenario"} if catalog else fields),
             "input probe plan shape differs")
     repo = native.validate_repo(value["repo"])
     root, binary = Path(value["job_root"]), Path(value["binary"])
     for path in (plan_path, root, binary, Path(value["consent_file"])):
         ownership.exact_path(path)
-    require(value["schema"] == 1 and value["profile"] == PROFILE
-            and value["owner"] == OWNER and value["key"] == KEY
+    require(value["schema"] == 1 and value["profile"] in {PROFILE, CATALOG_PROFILE}
+            and (not catalog or value.get("scenario") == "architect-cancel")
+            and value["owner"] == OWNER and value["key"] == ("b" if catalog else KEY)
             and value["consent_file"] == str(repo / CONSENT_RELATIVE)
             and all(value[key] is False for key in
                     ("accepted", "performance_evidence", "art_approved", "promotion_authority")),
@@ -105,6 +109,8 @@ def plan(args: argparse.Namespace) -> dict:
              "binary": str(binary), "binary_sha256": probe.digest(binary), "owner": OWNER,
              "key": KEY, "accepted": False, "performance_evidence": False,
              "art_approved": False, "promotion_authority": False}
+    if getattr(args, "scenario", "debug-toggle") == "architect-cancel":
+        value.update(profile=CATALOG_PROFILE, scenario="architect-cancel", key="b")
     require(root.parent == repo / "target/native-acceptance" and not native.git_dirty_paths(repo),
             "input probe requires a clean primary subject and direct output root")
     resources = native.resource_snapshot(repo, require_launcher=True)
@@ -115,7 +121,7 @@ def plan(args: argparse.Namespace) -> dict:
     check_plan(value, output, plan_exists=False)
     with output.open("x") as handle:
         handle.write(json.dumps(value, sort_keys=True, separators=(",", ":")) + "\n")
-    return {"status": "ready", "profile": PROFILE, "job_root": str(root),
+    return {"status": "ready", "profile": value["profile"], "job_root": str(root),
             "launcher_command": ["kitty", "--directory", str(repo), "--detach",
                                  *command(output, repo, root)],
             "verify_command": verifier(root), "accepted": False,
@@ -148,12 +154,12 @@ def numeric_window_id(window: str) -> int:
     return value
 
 
-def witnessed_input(raw: dict, *, before_event_count: int) -> tuple[dict, dict]:
+def witnessed_input(raw: dict, *, before_event_count: int, key: str = KEY) -> tuple[dict, dict]:
     require(type(before_event_count) is int and 0 <= before_event_count <= len(raw["events"]),
             "input probe event boundary is invalid")
     rows = raw["events"][before_event_count:]
     matched = [row for row in rows if row.get("operation") in {"KeyPress", "KeyRelease"}
-               and row.get("key") == KEY]
+               and row.get("key") == key]
     require(len(matched) == 2 and [row["operation"] for row in matched]
             == ["KeyPress", "KeyRelease"]
             and matched[0]["event_index"] < matched[1]["event_index"]
@@ -175,17 +181,51 @@ def check_portal_evidence(value: object) -> None:
 
 
 def wait_for_raw_event(path: Path, nonce: str, pid: int, operation: str,
-                       *, after: int, timeout: float = 8.0) -> dict:
+                       *, after: int, timeout: float = 8.0, key: str = KEY) -> dict:
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         raw = raw_snapshot(path, nonce, pid)
         matched = [event for event in raw["events"][after:]
-                   if event.get("operation") == operation and event.get("key") == KEY]
+                   if event.get("operation") == operation and event.get("key") == key]
         require(len(matched) <= 1, "duplicate ordinary input event")
         if matched:
             return raw
         time.sleep(0.05)
     raise native.AcceptanceError(f"ordinary input {operation} raw witness timeout")
+
+
+def wait_for_menu(path: Path, nonce: str, pid: int, expected: str, *, after: int) -> dict:
+    deadline = time.monotonic() + 8
+    while time.monotonic() < deadline:
+        raw = raw_snapshot(path, nonce, pid)
+        if (len(raw["samples"]) - 1 > after
+                and raw["samples"][-1].get("menu_state") == expected
+                and raw["samples"][-1].get("play_mode") == "Normal"):
+            return raw
+        time.sleep(0.05)
+    raise native.AcceptanceError(f"ordinary Architect {expected} raw witness timeout")
+
+
+def check_catalog_states(raw: dict, evidence: dict) -> None:
+    require(set(evidence) == {"before", "opened", "opened_end", "closed", "close_event_count", "catalog_sha256"},
+            "Architect evidence shape differs")
+    indices = [evidence[key] for key in ("before", "opened", "closed")]
+    require(all(type(index) is int for index in indices)
+            and 0 <= indices[0] < indices[1] < indices[2] < len(raw["samples"]),
+            "Architect sample order differs")
+    states = [raw["samples"][index] for index in indices]
+    end = evidence["opened_end"]
+    require(type(end) is int and indices[1] < end < indices[2]
+            and all(row.get("menu_state") == "Architect" and row.get("play_mode") == "Normal"
+                    and row.get("task_mode") == "None" and row.get("world_epoch") == states[0].get("world_epoch")
+                    for row in raw["samples"][indices[1]:end + 1]),
+            "Architect capture interval changed or stale")
+    require([row.get("menu_state") for row in states] == ["Hidden", "Architect", "Hidden"]
+            and all(row.get("play_mode") == "Normal" for row in states)
+            and all(row.get("task_mode") == "None" for row in states)
+            and len({row.get("world_epoch") for row in states}) == 1
+            and states[0].get("world_epoch") is not None,
+            "Architect mode/world witness differs")
 
 
 def check_registered_context(repo: Path, root: Path, plan_path: Path, context: dict) -> None:
@@ -290,6 +330,8 @@ def run(args: argparse.Namespace) -> dict:
     owned = None
     records: list[dict] = []
     screenshot_before, screenshot_after = root / "before.png", root / "after.png"
+    catalog = value["profile"] == CATALOG_PROFILE
+    catalog_evidence = None
     metrics: list[dict] = []
     with (root / "game.log").open("w") as log:
         game = subprocess.Popen([str(binary)], cwd=runtime, env=environment, stdout=log,
@@ -334,11 +376,41 @@ def run(args: argparse.Namespace) -> dict:
                                "session": portal.session}
             raw = raw_snapshot(raw_path, nonce, pid)
             before_count = len(raw["events"])
-            stage = "F12 tap witness"
-            transport.send("key-press", nonce, key=KEY, pressed=True)
-            transport.send("key-release", nonce, key=KEY, pressed=False)
-            raw = wait_for_raw_event(raw_path, nonce, pid, "KeyRelease", after=before_count)
-            witnessed_input(raw, before_event_count=before_count)
+            stage = "Architect key tap witness" if catalog else "F12 tap witness"
+            before_sample = len(raw["samples"]) - 1
+            if catalog:
+                require(raw["samples"][-1].get("menu_state") == "Hidden"
+                        and raw["samples"][-1].get("play_mode") == "Normal",
+                        "Architect scenario must start in ordinary normal world")
+            key, observed_key = ("b", "KeyB") if catalog else (KEY, KEY)
+            transport.send("key-press", nonce, key=key, pressed=True)
+            transport.send("key-release", nonce, key=key, pressed=False)
+            raw = wait_for_raw_event(raw_path, nonce, pid, "KeyRelease", after=before_count, key=observed_key)
+            witnessed_input(raw, before_event_count=before_count, key=observed_key)
+            if catalog:
+                stage = "Architect opened by ordinary input"
+                raw = wait_for_menu(raw_path, nonce, pid, "Architect", after=before_sample)
+                opened = len(raw["samples"]) - 1
+                require(native.capture_client_png(window, root / "catalog.png", import_cmd="import"),
+                        "owned Architect capture failed")
+                raw = raw_snapshot(raw_path, nonce, pid)
+                deadline = time.monotonic() + 2
+                while len(raw["samples"]) - 1 <= opened and time.monotonic() < deadline:
+                    time.sleep(0.05)
+                    raw = raw_snapshot(raw_path, nonce, pid)
+                opened_end = len(raw["samples"]) - 1
+                close_boundary = len(raw["events"])
+                transport.send("close-press", nonce, key="Escape", pressed=True)
+                transport.send("close-release", nonce, key="Escape", pressed=False)
+                raw = wait_for_raw_event(raw_path, nonce, pid, "KeyRelease", after=close_boundary, key="Escape")
+                witnessed_input(raw, before_event_count=close_boundary, key="Escape")
+                stage = "Architect closed by ordinary input"
+                raw = wait_for_menu(raw_path, nonce, pid, "Hidden", after=opened_end)
+                catalog_evidence = {"before": before_sample, "opened": opened,
+                                    "opened_end": opened_end,
+                                    "closed": len(raw["samples"]) - 1, "close_event_count": close_boundary,
+                                    "catalog_sha256": probe.digest(root / "catalog.png")}
+                check_catalog_states(raw, catalog_evidence)
             stage = "owned after capture"
             require(native.capture_client_png(window, screenshot_after, import_cmd="import"),
                     "owned X11 client after capture failed")
@@ -363,13 +435,14 @@ def run(args: argparse.Namespace) -> dict:
                 finally:
                     if game.poll() is None:
                         native.stop_command_process(game)
-    require(owned is not None and len(records) == 2
-            and [row["step"] for row in records] == ["key-press", "key-release"]
+    require(owned is not None and len(records) == (4 if catalog else 2)
+            and [row["step"] for row in records] == (["key-press", "key-release", "close-press", "close-release"]
+                                                     if catalog else ["key-press", "key-release"])
             and all(row["nonce"] == nonce and row["window"] == window_number
                     and row["pid"] == owned[1] for row in records)
             and metrics and all(row["rss_kib"] > 0 and row["process_fd_count"] > 0
                                 for row in metrics), "owned input receipts or host metrics missing")
-    result = {"schema": 1, "profile": PROFILE, "status": "technical-pass",
+    result = {"schema": 1, "profile": value["profile"], "status": "technical-pass",
               "plan": value, "context": context, "nonce": nonce,
               "game_pid": owned[1], "window_id": window_number,
               "raw_sha256": probe.digest(raw_path),
@@ -381,6 +454,8 @@ def run(args: argparse.Namespace) -> dict:
               "native_allocator_metrics": None, "application_handle_total": None,
               "accepted": False, "performance_evidence": False,
               "art_approved": False, "promotion_authority": False}
+    if catalog:
+        result["catalog_evidence"] = catalog_evidence
     (root / "result.json").write_text(json.dumps(result, sort_keys=True, separators=(",", ":")) + "\n")
     verify(root)
     return result
@@ -389,19 +464,21 @@ def run(args: argparse.Namespace) -> dict:
 def verify(root: Path) -> dict:
     ownership.exact_path(root)
     result = json.loads((root / "result.json").read_bytes())
-    require(set(result) == {"schema", "profile", "status", "plan", "context", "nonce",
+    catalog = result.get("profile") == CATALOG_PROFILE
+    fields = {"schema", "profile", "status", "plan", "context", "nonce",
                             "game_pid", "window_id", "raw_sha256", "before_sha256",
                             "after_sha256", "before_event_count", "input_receipts",
                             "portal_evidence",
                             "measurements", "gpu_metrics", "native_allocator_metrics",
                             "application_handle_total", "accepted", "performance_evidence",
-                            "art_approved", "promotion_authority"}, "input probe result shape differs")
+                            "art_approved", "promotion_authority"}
+    require(set(result) == (fields | {"catalog_evidence"} if catalog else fields), "input probe result shape differs")
     context = result["context"]
     plan_path = Path(context["command"][7])
     require(result["plan"] == json.loads(plan_path.read_bytes()), "input probe plan changed")
     repo, expected, _ = check_plan(result["plan"], plan_path, fresh=False)
     check_registered_context(repo, root, plan_path, context)
-    require(root == expected and result["schema"] == 1 and result["profile"] == PROFILE
+    require(root == expected and result["schema"] == 1 and result["profile"] == result["plan"]["profile"]
             and result["status"] == "technical-pass"
             and type(result["window_id"]) is int and result["window_id"] > 0
             and all(result[key] is False for key in
@@ -413,11 +490,26 @@ def verify(root: Path) -> dict:
     raw_path = root / "raw.json"
     require(probe.digest(raw_path) == result["raw_sha256"], "input probe raw changed")
     raw = raw_snapshot(raw_path, result["nonce"], result["game_pid"])
-    witnessed_input(raw, before_event_count=result["before_event_count"])
+    witnessed_input(raw, before_event_count=result["before_event_count"], key="KeyB" if catalog else KEY)
+    if catalog:
+        evidence = result["catalog_evidence"]
+        check_catalog_states(raw, evidence)
+        opened_events = witnessed_input(raw, before_event_count=result["before_event_count"], key="KeyB")
+        closed_events = witnessed_input(raw, before_event_count=evidence["close_event_count"], key="Escape")
+        require(all(evidence["before"] <= row["sample_index"] <= evidence["opened"] for row in opened_events)
+                and all(evidence["opened_end"] <= row["sample_index"] <= evidence["closed"] for row in closed_events),
+                "Architect key witness lies outside its observed interval")
+        image = root / "catalog.png"
+        require(probe.digest(image) == evidence["catalog_sha256"]
+                and native.validate_png_structure(image.read_bytes()) == WINDOW,
+                "owned Architect capture changed")
     receipts = result["input_receipts"]
-    require(isinstance(receipts, list) and len(receipts) == 2
+    expected_receipts = ([("key-press", "b", True), ("key-release", "b", False),
+                          ("close-press", "Escape", True), ("close-release", "Escape", False)]
+                         if catalog else [("key-press", KEY, True), ("key-release", KEY, False)])
+    require(isinstance(receipts, list) and len(receipts) == len(expected_receipts)
             and [(row.get("step"), row.get("key"), row.get("pressed")) for row in receipts]
-            == [("key-press", KEY, True), ("key-release", KEY, False)]
+            == expected_receipts
             and all(row.get("nonce") == result["nonce"]
                     and row.get("window") == result["window_id"]
                     and row.get("pid") == result["game_pid"] for row in receipts),
@@ -435,7 +527,8 @@ def verify(root: Path) -> dict:
     adapters = re.findall(r'AdapterInfo \{ name: "([^"]+)".*?backend: ([A-Za-z0-9_]+)', log)
     require(len(adapters) == 1 and "intel" in adapters[0][0].casefold()
             and adapters[0][1] == "Vulkan", "ordinary-world adapter differs")
-    return {"status": "technical-pass", "scope": "one owned ordinary-world key receipt only",
+    return {"status": "technical-pass", "scope": "ordinary Architect open/close" if catalog
+            else "one owned ordinary-world key receipt only",
             "accepted": False, "promotion_authority": False}
 
 
@@ -446,6 +539,7 @@ def main() -> int:
     planned.add_argument("--repo", type=Path, required=True)
     planned.add_argument("--job-root", type=Path, required=True)
     planned.add_argument("--output", type=Path, required=True)
+    planned.add_argument("--scenario", choices=("debug-toggle", "architect-cancel"), default="debug-toggle")
     running = actions.add_parser("run")
     running.add_argument("--plan", type=Path, required=True)
     running.add_argument("--repo", type=Path, required=True)

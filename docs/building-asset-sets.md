@@ -209,6 +209,14 @@ Capture→Memory、建設・配電・保存復元・cleanupの成立、art/numer
 正式asset identityを受け付けず、domain outcome、Capture/Memory lifecycle、GPU/native allocator、
 application全体のhandle、性能、art/numeric/releaseを受入済みにしない。入力受付が実機で確認できても
 `capabilities available=false` のまま、必要なordinary-world legとinstrument producerを別途実装する。
+同helperの明示`--scenario architect-cancel`は固定された別profile
+`building-production-local-architect-portal-v1`を計画する。通常生成worldへBの押下・解放で
+Architectを開き、Escapeの押下・解放で閉じる。任意key/command、fixture、asset authorityは渡せない。
+profiling raw observerは実際のMenuState／PlayMode／TaskModeを読み、存在しないresourceはnullとする。
+同epochのHidden→Architect→Hidden、Normal／None、各キーの実raw witnessと所有clientの3画像を検査する。
+catalog画像の前後にはfresh sampleを要求し、その全区間でArchitectが不変でなければ拒否する。
+これはordinary入力でのcatalog開閉に限り、9種の候補表示・配置・施工・性能・正式採否ではない。
+この実装の実機成功はfresh batchの独立verifyと画像確認後にのみ記録する。
 同probeの初期7試行はいずれも正式にはinvalid。v6 `tak14-ordinary-input-probe-b885f623-20261005-v6`
 では所有X11 windowへのF12押下・解放が輸送側receiptに残り、製品rawには49 sample中に
 `KeyPress`／`KeyRelease`がない。押下時間・focus待ち・tap順を変える仮説はここで打ち切る。

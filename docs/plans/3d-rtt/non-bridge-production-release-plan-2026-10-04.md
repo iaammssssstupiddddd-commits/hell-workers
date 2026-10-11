@@ -492,3 +492,10 @@ kind単位の正式rollback記録で復旧し、loader失敗時の従来fallback
 ## 10. 更新履歴
 
 2026-10-04: 利用者の「橋以外で最後まで」指示により先行9種の実作業を再開。storage pass、専用branch作成。
+
+2026-10-12継続: 9種の正式導入を完了対象として残す。独立候補監査は完成形の部分評価のみ可で、
+全候補の正式art承認は未達。通常worldのArchitect開閉を実入力・実UI状態・所有画像で収集する
+固定scenarioを追加する。ゲームを変更せず、MenuState／PlayMode／TaskModeをprofiling observerへ読取り追加する。
+defaultのF12 probeは維持し、別profileだけB→EscapeでHidden→Architect→Hiddenを検査する。
+独立コードレビュー、fresh実機／画像review、Help No impact・変更別CI・storageを通すまで新経路は未受入。
+これはcatalog開閉の収集基盤であり、正式identity、配置・完成・全lifecycle／性能、releaseの代用ではない。

@@ -63,6 +63,38 @@ class LocalInputProbeTests(unittest.TestCase):
                          str(self.plan_path))
         self.assertEqual(input_probe.verifier(self.root)[-1], str(self.root))
 
+    def test_catalog_plan_is_fixed_not_an_arbitrary_key_or_command(self):
+        self.plan_path.write_text("{}")
+        value = self.value | {"profile": input_probe.CATALOG_PROFILE, "scenario": "architect-cancel", "key": "b"}
+        self.assertEqual(input_probe.check_plan(value, self.plan_path), (self.repo, self.root, self.binary))
+        for change in ({"scenario": "anything"}, {"key": "F12"}, {"profile": input_probe.PROFILE},
+                       {"accepted": True}, {"command": ["arbitrary"]}):
+            with self.subTest(change=change), self.assertRaises(RuntimeError):
+                input_probe.check_plan(value | change, self.plan_path)
+
+    def test_catalog_states_require_stable_raw_capture_and_world(self):
+        raw = {"samples": [{"menu_state": menu, "play_mode": "Normal", "task_mode": "None", "world_epoch": 2}
+                           for menu in ("Hidden", "Architect", "Architect", "Hidden")]}
+        evidence = {"before": 0, "opened": 1, "opened_end": 2, "closed": 3,
+                    "close_event_count": 2, "catalog_sha256": "a" * 64}
+        input_probe.check_catalog_states(raw, evidence)
+        for change in ({"before": True}, {"opened_end": 1}, {"closed": 1}, {"unknown": 0}):
+            with self.subTest(change=change), self.assertRaises(RuntimeError):
+                input_probe.check_catalog_states(raw, evidence | change)
+        for key, value in (("menu_state", "Hidden"), ("world_epoch", 3), ("world_epoch", None),
+                           ("play_mode", "BuildingPlace"), ("task_mode", "SelectBuildTarget")):
+            changed = copy.deepcopy(raw)
+            changed["samples"][2][key] = value
+            with self.subTest(key=key), self.assertRaises(RuntimeError):
+                input_probe.check_catalog_states(changed, evidence)
+
+    def test_key_witness_cannot_relabel_f12_as_architect(self):
+        raw = {"events": [{"event_index": i, "sample_index": i + 1, "operation": operation, "key": "KeyB"}
+                          for i, operation in enumerate(("KeyPress", "KeyRelease"))]}
+        input_probe.witnessed_input(raw, before_event_count=0, key="KeyB")
+        with self.assertRaises(RuntimeError):
+            input_probe.witnessed_input(raw, before_event_count=0)
+
     def test_rejects_authority_source_binary_transport_and_foreign_root(self):
         self.plan_path.write_text("{}")
         for key, replacement in (

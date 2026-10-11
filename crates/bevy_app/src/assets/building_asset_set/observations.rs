@@ -325,10 +325,14 @@ fn snapshot(world: &mut World) -> Result<Value, String> {
                 "failure": pool.failure(kind).map(|failure| json!({"identity": failure.identity, "reason": failure.reason})),
                 "production_state": pool.descriptor(kind).and_then(|set| set.manifest.production_state.as_ref())})
         }).collect();
+    let modes = ui_modes(world);
     Ok(
         json!({"real_seconds": world.resource::<Time<Real>>().elapsed_secs_f64(),
         "virtual_seconds": world.resource::<Time<Virtual>>().elapsed_secs_f64(),
         "paused": world.resource::<Time<Virtual>>().is_paused(),
+        "menu_state": modes["menu_state"],
+        "play_mode": modes["play_mode"],
+        "task_mode": modes["task_mode"],
         "world_epoch": world.get_resource::<WorldEpoch>().map(|epoch| epoch.get()),
         "owners": owners, "blueprints": blueprints, "roots": roots, "bridge": bridge,
         "owner_layers": owner_layers, "actors": actors,
@@ -346,6 +350,14 @@ fn snapshot(world: &mut World) -> Result<Value, String> {
         "native_peak_live_bytes": null, "rss_bytes": null,
         "application_handle_count": null}),
     )
+}
+
+fn ui_modes(world: &World) -> Value {
+    json!({
+        "menu_state": world.get_resource::<hw_ui::components::MenuState>().map(|state| format!("{state:?}")),
+        "play_mode": world.get_resource::<State<hw_core::game_state::PlayMode>>().map(|state| format!("{:?}", state.get())),
+        "task_mode": world.get_resource::<hw_core::game_state::TaskMode>().map(|state| format!("{state:?}")),
+    })
 }
 
 fn observe(world: &mut World) {
@@ -524,6 +536,28 @@ fn record_keyboard_messages(
 mod tests {
     use super::*;
     use bevy::input::{ButtonState, keyboard::Key};
+
+    #[test]
+    fn ui_mode_observations_are_read_only_and_do_not_infer_missing_resources() {
+        use hw_core::game_state::{PlayMode, TaskMode};
+        use hw_ui::components::MenuState;
+
+        let mut world = World::new();
+        assert_eq!(
+            ui_modes(&world),
+            json!({"menu_state": null, "play_mode": null, "task_mode": null})
+        );
+        world.insert_resource(MenuState::Architect);
+        world.insert_resource(State::new(PlayMode::Normal));
+        world.insert_resource(TaskMode::None);
+        assert_eq!(
+            ui_modes(&world),
+            json!({"menu_state": "Architect", "play_mode": "Normal", "task_mode": "None"})
+        );
+        assert_eq!(*world.resource::<MenuState>(), MenuState::Architect);
+        assert_eq!(world.resource::<State<PlayMode>>().get(), &PlayMode::Normal);
+        assert_eq!(*world.resource::<TaskMode>(), TaskMode::None);
+    }
 
     #[test]
     fn keyboard_messages_remain_distinct_from_button_state_witnesses() {
