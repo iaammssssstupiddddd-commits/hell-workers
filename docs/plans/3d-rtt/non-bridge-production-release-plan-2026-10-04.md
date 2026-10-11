@@ -586,3 +586,8 @@ companion成功時だけ親子の同時commit、失敗時はrollback済み拒否
 SoulSpaの4tile ownerも実spawn結果に拘束する。ordinary input rawとは別のdomain結果として
 結合し、state deltaから成功を推測しない。ゲーム配置条件／spawn順／saveを変えず、
 材料配送・cancel/refund・move・save bytesやhost metricsまで受入済みとしない。
+
+次の限定feedbackは`architect-select-place-cancel --kind Tank`。原UI選択後の単発world入力と
+Rejected／CompanionPending、Blueprint不変、Escape解除だけを確認する。committed ownerや
+正式lifecycle成功を許可しない。producer／入力probe hashとfresh subjectを固定し、
+実機raw／画像の独立reviewと登録verifierを通す。正式9種導入の未完条件は維持する。

@@ -158,6 +158,16 @@ class LocalInputProbeTests(unittest.TestCase):
                               "selection_driver_sha256": input_probe.probe.digest(
                                   Path(input_probe.selection_probe.__file__))}
         self.assertEqual(input_probe.check_plan(value, self.plan_path), (self.repo, self.root, binary))
+        placement = value | {"profile": input_probe.PLACEMENT_PROFILE,
+                             "scenario": "architect-select-place-cancel",
+                             "placement_driver_sha256": input_probe.probe.digest(
+                                 Path(input_probe.placement_probe.__file__))}
+        self.assertEqual(input_probe.check_plan(placement, self.plan_path), (self.repo, self.root, binary))
+        for change in ({"selection_kind": "MudMixer"}, {"selection_kind": "Bridge"},
+                       {"placement_driver_sha256": "0" * 64}, {"scenario": "architect-select-cancel"},
+                       {"accepted": True}, {"promotion_authority": True}):
+            with self.subTest(change=change), self.assertRaises(RuntimeError):
+                input_probe.check_plan(placement | change, self.plan_path)
         for change in ({"selection_kind": "Bridge"}, {"selection_driver_sha256": "0" * 64},
                        {"eis_transport_sha256": "0" * 64},
                        {"binary": str(self.binary)}, {"scenario": "architect-cancel"}, {"art_approved": True}):

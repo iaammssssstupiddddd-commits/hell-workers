@@ -247,6 +247,13 @@ offline raw parserは同window／epoch／finite時刻とstatus別payloadを検�
 `PlacementOutcome`をlifecycle domain witnessの許可一覧へ追加しない。pending・分岐結果の
 形式検査を通常placement legの成功へ読み替えない。原MouseButtonInputも入力証拠のまま扱う。
 
+`architect-select-place-cancel --kind Tank`は限定first-click feedbackである。
+選択後のowned 1280×720 clientの固定world点[640,300]へ一度だけmotion／Left press／releaseし、
+同window／epoch・原入力と同sample／実時間の単一RejectedまたはCompanionPendingだけを検査する。
+明示されたBlueprint一覧が不変であることとEscape解除を要求し、committed ownerを認めない。
+raw全体のindexed-state-delta形式も検査し、欠落／重複／合成入力・branchは拒否する。
+これは最初の配置分岐の技術診断であり、親子commit、完成、lifecycle、正式アート・releaseではない。
+
 `architect-select-cancel --kind <9種の固定集合>`は別profile
 `building-production-local-equipment-feedback-eis-v2`で、`dev.py feedback --build-only`の
 profiling feature付き`target/debug/bevy_app`を利用する限定feedbackである。
