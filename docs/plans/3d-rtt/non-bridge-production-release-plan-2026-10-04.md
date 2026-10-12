@@ -47,6 +47,15 @@ receipt後566ms・後続3sampleのClosed、新epoch1。原親2367v1→798v1、�
 Left押下でtargetが再生成され、pressed観測を失ってinvalid。取消receiptはない。
 本文のdirty再描画をheld Left中だけ保留し、dirty要求をreleaseまで保持する修正を進める。
 simulation snapshot・既存同対象release guard・live capability拒否を変更せず、fresh実機で再確認する。
+修正`76209f80`は同sourceの全変更別CI（contracts/tooling/Rust）、profiling全target Clippy警告0、
+workspace checkと独立read-only reviewを通過した。fresh `rest-area-gesture-feedback` v1/v2は
+どちらもrecipe入力前の初期WM activationで拒否（owned `0x1600004`、focus `0x400003`）。
+配置・保存・取消のcheckpointはなく、invalidとしてseal/finalize済み。第三の盲目的な再起動、
+強制focus、旧launch再送はせず、通常取消の実機確認は未達として保持する。
+通常Tankの保存復元修正で用途を終えた旧生成job6件（placement-yard、companion、saveの
+initial/layout/owner/cadence）を、終了済み・利用processなし・追跡原本なし・symlinkなしと確認して
+正式consumer release後に削除した。実測合計77,844,480 bytes。履歴結果と採用仕様は維持し、
+最新Tank raw/save・RestArea取消診断・制作原本・通常Cargo cacheは保持、storage checkはpass。
 
 通常起動で橋以外の9種が正式ビジュアルになり、完成・状態・配置・移動・施工・カタログ・保存復元が一致する。
 原移行計画の受入条件を維持し、橋だけを今回の完了対象から外す。技術previewと正式採用を区別する。
