@@ -384,6 +384,11 @@ canonical serialization・性能・アート／数値・release承認へ昇格�
 原親と2childはLoadで新IDへ置換し、同footprint・進捗0・空材料・保管占有を保持、旧mapは空。
 ロード確認dialogなし／Loaded Manual slot1をowned clientで確認した。これは材料配送・完成・
 取消のterminal refund・正式asset authorityを受け入れたものではない。
+通常RestAreaの予約配置・Manual1保存復元・二段階取消は、`1756c610`のfresh feedbackで
+独立owned画像/raw reviewと登録verifierを通過した。ロードで親Entity/epochを置換し、
+同じ4tile・進捗0・材料未完を保持、取消後は4tileの占有解除とwalkability復元を確認。
+これは既存取消requestと予約cleanupの限定証拠であり、完成資材返却のterminal receipt、
+全actor/pool cleanup、正式art/numeric/performance/release承認ではない。
 
 - `plan`はisolated candidate、別美術承認、source／geometry／export inventory、codec hash、現在のauthority／
   locatorを照合する。sourceと導入先は分離し、generationは失敗を含む全割当済み世代より大きくする。

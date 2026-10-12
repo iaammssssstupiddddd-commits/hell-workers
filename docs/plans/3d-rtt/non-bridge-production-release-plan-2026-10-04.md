@@ -56,6 +56,15 @@ workspace checkと独立read-only reviewを通過した。fresh `rest-area-gestu
 initial/layout/owner/cadence）を、終了済み・利用processなし・追跡原本なし・symlinkなしと確認して
 正式consumer release後に削除した。実測合計77,844,480 bytes。履歴結果と採用仕様は維持し、
 最新Tank raw/save・RestArea取消診断・制作原本・通常Cargo cacheは保持、storage checkはpass。
+初期activation拒否は、公開Shell状態のread-only観測でOverviewActive=true、画面ロックfalseと
+切り分けた。通常の公開Properties.SetでOverviewだけを閉じてfalseをreadbackし、新規jobで
+既存owned focus guardを通過。強制focusやtimeout調整はしない。
+`1756c610`のfresh `tak14-rest-area-gesture-overview-feedback-20261012-v1`は通常配置・Manual1の
+Save/Load・二段階取消・4tile復元を独立5PNG/raw reviewと登録verifierで限定pass、seal/finalize済み。
+親8589932601→8589932382、epoch0→1、進捗0・材料未完の予約を保持。
+frame562で新親/epoch1のCancellationRequested、frame576で予約なし・4tile owner=null/walkable=true。
+取消ボタンは各press/releaseで同task payloadを維持し、ロード後画像に確認dialog残留なし。
+完成材料のterminal refund、全actor/pool cleanup、art/numeric/performance/releaseは未達。
 
 通常起動で橋以外の9種が正式ビジュアルになり、完成・状態・配置・移動・施工・カタログ・保存復元が一致する。
 原移行計画の受入条件を維持し、橋だけを今回の完了対象から外す。技術previewと正式採用を区別する。
