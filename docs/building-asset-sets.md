@@ -71,10 +71,11 @@ SoulSpaの4 slotは同一slot meshを参照し、part側で個別transformを持
 - `receipt`: release_approvedのみ必須。それ以外はnull。
 - `production_state`: Tankの有限な `0 < partial_y_wu < full_y_wu <= 2 * TILE_SIZE`、MudMixerの有限なunit axis
   （長さ二乗の誤差0.0001以内）と `0 < radians_per_second <= TAU`。art_previewと他kindでは存在してはならない。
-- `numeric_approval_sha256`: M2のisolated_candidate/release_approvedに独立numeric decisionの小文字64桁hashを要求する。
-  art_previewと他kindには指定できない。M2 release receiptにも同じhashを要求する。
+- `numeric_approval_sha256`: M2/M3のisolated_candidate/release_approvedに独立numeric decisionの小文字64桁hashを要求する。
+  art_previewと他kindには指定できない。M2/M3 release receiptにも同じhashを要求する。
   production_stateとこのhashはmanifest内容hashに含まれる。安全な数値範囲を満たすだけでは独立採否にならない。
-  optional fieldは未指定時にserializeから省略し、非M2の既存canonical bytesを維持する。
+  optional fieldは未指定時にserializeから省略し、全art_previewと非M2/M3の既存canonical bytesを維持する。
+  M3はproduction_stateを持たず、保存・利用・Dreamのgameplay数値は変更しない。
 
 JSONはRustの型宣言順に`serde_json::to_vec`したcompact形式＋末尾LFと完全一致させる。
 未知field、別順序、余分な空白は拒否する。SHA-256は小文字hex64桁。
@@ -136,6 +137,17 @@ codecのreceipt生成は形式の整合性だけであり、美術・release承�
 包装する。geometryや画像を新規生成しない。source／geometry／artifactの実bytes・hashとrole順を確認し、
 content-addressed artifact、locator、provenanceを出力する。`art_preview`は承認なし、`isolated_candidate`は
 独立した`building_art_approved`記録とpreview identity完全一致を要求する。exportではreleaseを発行できない。
+
+M3のcandidateには別入力のcanonical `building_m3_numeric_approved` decision（schema_version=1）も必須。
+fieldはschema_version、decision、art_preview_identity、art_approval_sha256、geometry_contract_sha256、
+numeric_contractの6個だけ。geometryの実原本bytes/hashと、exact preview/art decisionへ拘束する。
+`building_m3_numeric.numeric_contract`はversion 1 proposalの厳密なfield/list形状からunits、scale、
+tolerance、tile順/中心、emissive multiplier、atlasと対象kindのgeometry/preview/role budgetを取り出す。
+paletteとreject文は独立art側に残す。数値は有限なint/floatだけでbool代用・未知field・値の不一致を拒否する。
+proposalのnumeric_freeze/art_approved/runtime_published=falseは書き換えず、decisionを自動生成しない。
+独立採否の存在・真正性はreview運用の責務で、validatorやsynthetic testの成功は採否にならない。
+export/load/plan/recovery/installはnumeric原本とdigestを保持・再照合する。runtime codecはmanifestと
+release receiptのdigest一致を検査し、geometry原本の採否を新しく行わない。既存M2数値型/範囲は維持する。
 
 `profiling` buildの`HW_BUILDING_ART_SESSION`だけが、mode・kind・generation・authority・manifest hash・
 locator・nonce・status pathを明示照合してload policyとpoolへ候補を許可する。

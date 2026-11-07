@@ -3,11 +3,13 @@ import copy
 import importlib.util
 import json
 from pathlib import Path
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
 
 MODULE = Path(__file__).resolve().parents[2] / "tools/blender_ai_workflow/scripts/building_asset_pipeline.py"
+sys.path.insert(0, str(MODULE.parent))
 SPEC = importlib.util.spec_from_file_location("m2_pipeline_fixture", MODULE)
 pipeline = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(pipeline)
@@ -155,16 +157,16 @@ class M2ReleasePipelineTests(unittest.TestCase):
         self.assertEqual(pipeline.preview_projection(manifest, self.binary)["identity"],
                          pipeline.read(art)["art_preview_identity"])
 
-    def test_non_m2_omits_numeric_fields_and_rejects_numeric_input(self):
-        source, recipe, art, numeric = self.inputs("RestArea")
-        output = self.root / "rest-candidate"
+    def test_non_m2_m3_omits_numeric_fields_and_rejects_numeric_input(self):
+        source, recipe, art, numeric = self.inputs("SandPile")
+        output = self.root / "sand-candidate"
         self.export(source, recipe, art, None, output)
-        manifest, _, _ = pipeline.load_set(output, "RestArea", self.binary)
+        manifest, _, _ = pipeline.load_set(output, "SandPile", self.binary)
         self.assertNotIn("production_state", manifest)
         self.assertNotIn("numeric_approval_sha256", manifest)
         with self.assertRaises(ValueError):
-            self.export(source, recipe, art, numeric, self.root / "bad-rest")
-        self.assertFalse((self.root / "bad-rest").exists())
+            self.export(source, recipe, art, numeric, self.root / "bad-sand")
+        self.assertFalse((self.root / "bad-sand").exists())
 
     def test_runtime_codec_rejection_precedes_all_destination_writes(self):
         source, recipe, art, numeric = self.inputs("Tank")

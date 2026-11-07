@@ -298,9 +298,15 @@ fn validate_production_state(
             "draft cannot claim production state",
         );
     }
-    let m2 = matches!(kind, BuildingAssetKind::Tank | BuildingAssetKind::MudMixer);
+    let numeric_required = matches!(
+        kind,
+        BuildingAssetKind::Tank
+            | BuildingAssetKind::MudMixer
+            | BuildingAssetKind::RestArea
+            | BuildingAssetKind::SoulSpa
+    );
     require(
-        if m2 {
+        if numeric_required {
             manifest
                 .numeric_approval_sha256
                 .as_deref()

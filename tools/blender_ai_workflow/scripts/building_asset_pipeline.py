@@ -17,6 +17,8 @@ import subprocess
 import sys
 from typing import Callable
 
+import building_m3_numeric
+
 try:
     import fcntl
 except ImportError:
@@ -205,8 +207,15 @@ def export(recipe_path: Path, source_root: Path, destination: Path, binary: Path
             numeric_bytes = canonical(numeric)
             manifest["numeric_approval_sha256"] = digest(numeric_bytes)
             files["provenance/numeric-approval.json"] = numeric_bytes
+        elif ident["kind"] in building_m3_numeric.KINDS:
+            require(numeric_approval_path is not None, "M3 candidate requires separate numeric approval")
+            numeric = read(numeric_approval_path)
+            building_m3_numeric.validate(numeric, json.loads(preview)["identity"], digest(approval_bytes), geometry)
+            numeric_bytes = canonical(numeric)
+            manifest["numeric_approval_sha256"] = digest(numeric_bytes)
+            files["provenance/numeric-approval.json"] = numeric_bytes
         else:
-            require(numeric_approval_path is None, "numeric approval is M2-only")
+            require(numeric_approval_path is None, "numeric approval is M2/M3-only")
     else:
         require(approval_path is None and numeric_approval_path is None, "art preview cannot claim approval")
     projection = codec(binary, "seal", json.dumps(manifest))["manifest"]
@@ -252,7 +261,7 @@ def preview_projection(manifest: dict, binary: Path) -> dict:
 
 
 def check_numeric_provenance(root: Path, manifest: dict, binary: Path) -> None:
-    if manifest["identity"]["kind"] not in {"Tank", "MudMixer"} or manifest["identity"]["authority"] == "art_preview":
+    if manifest["identity"]["kind"] not in {"Tank", "MudMixer", *building_m3_numeric.KINDS} or manifest["identity"]["authority"] == "art_preview":
         return
     numeric = read(rooted(root, "provenance/numeric-approval.json"))
     require(digest(canonical(numeric)) == manifest.get("numeric_approval_sha256"), "numeric approval digest differs")
@@ -260,9 +269,14 @@ def check_numeric_provenance(root: Path, manifest: dict, binary: Path) -> None:
     require(digest(canonical(art)) == manifest["art_approval_sha256"], "numeric provenance art digest differs")
     preview = preview_projection(manifest, binary)
     require(art == {"schema_version": 1, "decision": "building_art_approved",
-                    "art_preview_identity": preview["identity"]}, "numeric provenance art identity differs")
-    require(approved_numeric_state(numeric, preview["identity"], manifest["art_approval_sha256"])
-            == manifest["production_state"], "approved numeric values differ")
+                    "art_preview_identity": preview["identity"]}, "numeric provenance art approval identity differs")
+    if manifest["identity"]["kind"] in building_m3_numeric.KINDS:
+        require(manifest.get("production_state") is None, "M3 cannot claim M2 production state")
+        building_m3_numeric.validate(numeric, preview["identity"], manifest["art_approval_sha256"],
+                                    rooted(root, "provenance/geometry.json").read_bytes())
+    else:
+        require(approved_numeric_state(numeric, preview["identity"], manifest["art_approval_sha256"])
+                == manifest["production_state"], "approved numeric values differ")
     for relative, field in (("provenance/source", "source_sha256"), ("provenance/geometry.json", "geometry_contract_sha256")):
         require(digest(rooted(root, relative).read_bytes()) == manifest[field], "numeric source provenance differs")
 
@@ -462,7 +476,7 @@ def apply(path: Path, binary: Path, evidence_path: Path, approval_path: Path,
     generation_prefix = f"building_sets/{KINDS[kind]['slug']}/{projected['identity']['generation']}"
     for relative in ("provenance/source", "provenance/geometry.json", "provenance/art-approval.json"):
         files[f"{generation_prefix}/{relative}"] = rooted(source, relative).read_bytes()
-    if kind in {"Tank", "MudMixer"}:
+    if kind in {"Tank", "MudMixer", *building_m3_numeric.KINDS}:
         files[f"{generation_prefix}/provenance/numeric-approval.json"] = rooted(source, "provenance/numeric-approval.json").read_bytes()
     for relative, payload in files.items():
         target = rooted(root, relative)
@@ -588,7 +602,7 @@ def install(source: Path, destination: Path, kind: str, binary: Path, *, execute
         "candidate_identity": journal["plan"]["candidate_identity"], "evidence_sha256": active["evidence_sha256"]},
         "install release approval differs")
     files = {r["path"]: file_bytes(source, r) for r in [*manifest["artifacts"], manifest["receipt"]]}
-    if kind in {"Tank", "MudMixer"}:
+    if kind in {"Tank", "MudMixer", *building_m3_numeric.KINDS}:
         prefix = f"building_sets/{KINDS[kind]['slug']}/{manifest['identity']['generation']}/provenance"
         for name in ("source", "geometry.json", "art-approval.json", "numeric-approval.json"):
             files[f"{prefix}/{name}"] = rooted(source, f"{prefix}/{name}").read_bytes()

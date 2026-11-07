@@ -62,10 +62,12 @@ class PipelineTests(unittest.TestCase):
             (source / name).write_bytes(payload)
             entries.append({"role": role, **pipeline.record(name, payload)})
         (source / "source").write_bytes(b"source fixture")
-        (source / "geometry").write_bytes(b"geometry fixture")
+        geometry = (pipeline.building_m3_numeric.CONTRACT.read_bytes()
+                    if kind in pipeline.building_m3_numeric.KINDS else b"geometry fixture")
+        (source / "geometry").write_bytes(geometry)
         recipe = {"schema_version": 1, "kind": kind, "generation": generation,
             "source": pipeline.record("source", b"source fixture"),
-            "geometry_contract": pipeline.record("geometry", b"geometry fixture"),
+            "geometry_contract": pipeline.record("geometry", geometry),
             "artifacts": entries, "parts": [], "world_preview": {}, "catalog_preview": {}}
         recipe_path = source / "recipe.json"
         recipe_path.write_bytes(pipeline.canonical(recipe))
@@ -86,12 +88,22 @@ class PipelineTests(unittest.TestCase):
             numeric_path.write_bytes(pipeline.canonical({"schema_version": 1,
                 "decision": "building_numeric_approved", "art_preview_identity": preview["identity"],
                 "art_approval_sha256": pipeline.digest(approval_path.read_bytes()), "production_state": state}))
+        elif kind in pipeline.building_m3_numeric.KINDS:
+            numeric_path = source / "numeric-approval.json"
+            numeric_path.write_bytes(pipeline.canonical({"schema_version": 1,
+                "decision": "building_m3_numeric_approved", "art_preview_identity": preview["identity"],
+                "art_approval_sha256": pipeline.digest(approval_path.read_bytes()),
+                "geometry_contract_sha256": pipeline.digest(geometry),
+                "numeric_contract": pipeline.building_m3_numeric.numeric_contract(geometry, kind)}))
         output = self.root / f"candidate-{kind}-{generation}"
         pipeline.export(recipe_path, source, output, self.binary, authority="isolated_candidate",
                         approval_path=approval_path, numeric_approval_path=numeric_path)
         manifest = pipeline.read(output / pipeline.locator(kind))
         if numeric_path is not None:
-            self.assertEqual(manifest["production_state"], state)
+            if kind in {"Tank", "MudMixer"}:
+                self.assertEqual(manifest["production_state"], state)
+            else:
+                self.assertNotIn("production_state", manifest)
             self.assertEqual(manifest["numeric_approval_sha256"], pipeline.digest(numeric_path.read_bytes()))
         else:
             self.assertNotIn("production_state", manifest)
@@ -101,8 +113,8 @@ class PipelineTests(unittest.TestCase):
     def assert_numeric_release(self, root, kind, expected):
         manifest, _, receipt_text = pipeline.load_set(root, kind, self.binary)
         receipt = json.loads(receipt_text)
-        if kind in {"Tank", "MudMixer"}:
-            self.assertEqual(manifest["production_state"], expected["production_state"])
+        if kind in {"Tank", "MudMixer", "RestArea", "SoulSpa"}:
+            self.assertEqual(manifest.get("production_state"), expected.get("production_state"))
             self.assertEqual(manifest["numeric_approval_sha256"], expected["numeric_approval_sha256"])
             self.assertEqual(receipt["numeric_approval_sha256"], expected["numeric_approval_sha256"])
             numeric_path = root / f"building_sets/{pipeline.KINDS[kind]['slug']}/{manifest['identity']['generation']}/provenance/numeric-approval.json"
@@ -112,6 +124,40 @@ class PipelineTests(unittest.TestCase):
             self.assertNotIn("numeric_approval_sha256", manifest)
             self.assertNotIn("numeric_approval_sha256", receipt)
 
+    def test_m3_export_requires_separate_exact_numeric_decision_before_writes(self):
+        for kind in ("RestArea", "SoulSpa"):
+            self.candidate(kind)
+            source = self.root / f"author-{kind}-1"
+            output = self.root / f"rejected-{kind}"
+            for field, value in ((None, None), ("art_approval_sha256", "f" * 64),
+                                 ("geometry_contract_sha256", "e" * 64)):
+                original = pipeline.read(source / "numeric-approval.json")
+                numeric_path = None
+                if field is not None:
+                    numeric_path = source / "changed-decision.json"
+                    numeric_path.write_bytes(pipeline.canonical({**original, field: value}))
+                with self.subTest(kind=kind, field=field), self.assertRaises(ValueError):
+                    pipeline.export(source / "recipe.json", source, output, self.binary,
+                                    authority="isolated_candidate", approval_path=source / "art-approval.json",
+                                    numeric_approval_path=numeric_path)
+                self.assertFalse(output.exists())
+
+    def test_m3_provenance_tamper_blocks_planning(self):
+        for kind in ("RestArea", "SoulSpa"):
+            candidate = self.candidate(kind)
+            path = candidate / "provenance/numeric-approval.json"
+            original = path.read_bytes()
+            changed = pipeline.read(path)
+            changed["numeric_contract"]["geometry_scale"] = 33
+            path.write_bytes(pipeline.canonical(changed))
+            with self.assertRaises(ValueError):
+                pipeline.plan(candidate, self.root / "assets", kind, self.binary)
+            path.write_bytes(original)
+            # Missing decision is not repaired or synthesized from manifest digest.
+            path.unlink()
+            with self.assertRaises(FileNotFoundError):
+                pipeline.plan(candidate, self.root / "assets", kind, self.binary)
+
     def promotion(self, kind="Tank", generation=1):
         candidate = self.candidate(kind, generation)
         assets = self.root / "assets"
@@ -119,8 +165,8 @@ class PipelineTests(unittest.TestCase):
         candidate_manifest = pipeline.read(candidate / pipeline.locator(kind))
         projected = json.loads(value["projection"]["manifest"])
         receipt = json.loads(value["projection"]["receipt"])
-        if kind in {"Tank", "MudMixer"}:
-            self.assertEqual(projected["production_state"], candidate_manifest["production_state"])
+        if kind in {"Tank", "MudMixer", "RestArea", "SoulSpa"}:
+            self.assertEqual(projected.get("production_state"), candidate_manifest.get("production_state"))
             self.assertEqual(projected["numeric_approval_sha256"], candidate_manifest["numeric_approval_sha256"])
             self.assertEqual(receipt["numeric_approval_sha256"], candidate_manifest["numeric_approval_sha256"])
         else:

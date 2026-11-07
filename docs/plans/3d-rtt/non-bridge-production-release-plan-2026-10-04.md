@@ -13,6 +13,15 @@
 
 ## 1. 目的
 
+次の実装はM3の独立数値採否を、exact art-preview identity・art decision・geometry原本の
+hashと明示数値projectionへ結ぶ経路。RestArea/SoulSpaのcandidate/releaseにもnumeric digestを
+要求し、M2専用production_stateは流用しない。未知field・非有限値・bool代用・identity/原本/
+数値の不一致は拒否する。proposalのnumeric_freeze=falseは変更せず、実承認は別入力のままとし、
+schema実装や合成fixtureを正式採否・releaseへ読み替えない。
+この経路は独立read-only code/docs reviewで限定承認。Python 573+214試験、通常/profiling workspace
+試験、Memory/Tracy/RenderDoc構成、Clippy警告0、dev.py check、Help No impactを確認した。
+数値採否・candidate化・通常起動の視覚世代切替はまだ行っていない。
+
 読込後の残工程は`rest-area-lifecycle`として同じ通常操作へ接続する。利用中save/load 7枚から、
 実mapで復元した同じSoulの自然Dream枯渇/退出とcooldown満了まで計9checkpointを取得する。
 早期のcomponent消失・入所/予約・timer再設定・世代/epoch置換・時刻逆行は拒否し、

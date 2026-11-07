@@ -96,7 +96,13 @@ pub(super) fn fixture(
         catalog_preview: preview("catalog"),
         receipt: None,
         numeric_approval_sha256: (authority != BuildingAssetAuthority::ArtPreview
-            && matches!(kind, BuildingAssetKind::Tank | BuildingAssetKind::MudMixer))
+            && matches!(
+                kind,
+                BuildingAssetKind::Tank
+                    | BuildingAssetKind::MudMixer
+                    | BuildingAssetKind::RestArea
+                    | BuildingAssetKind::SoulSpa
+            ))
         .then(|| "e".repeat(64)),
         production_state: if authority == BuildingAssetAuthority::ArtPreview {
             None
@@ -512,7 +518,12 @@ fn production_state_is_required_typed_bounded_and_bound_to_manifest_identity() {
 
 #[test]
 fn numeric_approval_is_required_hash_bound_and_retained_by_release_projection() {
-    for kind in [BuildingAssetKind::Tank, BuildingAssetKind::MudMixer] {
+    for kind in [
+        BuildingAssetKind::Tank,
+        BuildingAssetKind::MudMixer,
+        BuildingAssetKind::RestArea,
+        BuildingAssetKind::SoulSpa,
+    ] {
         let candidate = fixture(kind, BuildingAssetAuthority::IsolatedCandidate);
         for invalid in [None, Some("invalid".into())] {
             let mut changed = candidate.clone();
@@ -550,7 +561,7 @@ fn numeric_approval_is_required_hash_bound_and_retained_by_release_projection() 
 }
 
 #[test]
-fn numeric_provenance_is_omitted_for_existing_drafts_and_non_m2() {
+fn numeric_provenance_is_omitted_for_existing_drafts_and_non_m2_m3() {
     for (kind, authority) in [
         (BuildingAssetKind::Tank, BuildingAssetAuthority::ArtPreview),
         (
@@ -559,6 +570,14 @@ fn numeric_provenance_is_omitted_for_existing_drafts_and_non_m2() {
         ),
         (
             BuildingAssetKind::RestArea,
+            BuildingAssetAuthority::ArtPreview,
+        ),
+        (
+            BuildingAssetKind::SoulSpa,
+            BuildingAssetAuthority::ArtPreview,
+        ),
+        (
+            BuildingAssetKind::SandPile,
             BuildingAssetAuthority::ReleaseApproved,
         ),
     ] {
