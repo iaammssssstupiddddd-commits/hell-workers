@@ -7,6 +7,8 @@ mod loader;
 #[cfg(feature = "profiling")]
 mod observations;
 #[cfg(feature = "profiling")]
+mod observations_rest;
+#[cfg(feature = "profiling")]
 mod observations_ui;
 mod pool;
 mod projection;
@@ -18,6 +20,8 @@ mod snapshot_io;
 mod validation;
 
 pub use loader::{BuildingAssetLoadPolicy, BuildingAssetSetLoader};
+#[cfg(feature = "profiling")]
+pub(crate) use observations_rest::snapshot as snapshot_rest_observations;
 pub use pool::{BuildingAssetDescriptor, BuildingAssetPool};
 pub use projection::project_building_asset_json;
 #[cfg(feature = "profiling")]

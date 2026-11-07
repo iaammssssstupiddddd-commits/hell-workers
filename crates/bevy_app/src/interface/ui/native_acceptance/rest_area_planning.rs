@@ -16,7 +16,7 @@ struct Target((i32, i32));
 pub(super) fn enabled() -> bool {
     matches!(
         std::env::var("HW_NATIVE_UI_CASE").as_deref(),
-        Ok("rest-area-planning" | "rest-area-refund" | "rest-area-completion")
+        Ok("rest-area-planning" | "rest-area-refund" | "rest-area-completion" | "rest-area-usage")
     )
 }
 
@@ -62,6 +62,13 @@ pub(super) fn snapshot(world: &mut World) -> Value {
         return Value::Null;
     };
     let anchor = target.0;
+    let rest_area_usage = if std::env::var("HW_NATIVE_UI_CASE").as_deref() == Ok("rest-area-usage")
+    {
+        crate::assets::building_asset_set::snapshot_rest_observations(world)
+            .unwrap_or_else(|failure| json!({"failure": failure}))
+    } else {
+        Value::Null
+    };
     let yards: Vec<_> = world.query::<&Yard>().iter(world).cloned().collect();
     let point = WorldMap::grid_to_world(anchor.0, anchor.1);
     let projected = world
@@ -108,6 +115,7 @@ pub(super) fn snapshot(world: &mut World) -> Value {
         "point": projected.map(|point| point.to_array()),
         "legal": legal_anchor_at(map, &yards, anchor),
         "cells": cells, "blueprints": blueprints, "buildings": buildings,
+        "rest_area_usage": rest_area_usage,
     })
 }
 

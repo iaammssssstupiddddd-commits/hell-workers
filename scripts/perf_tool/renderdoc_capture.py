@@ -68,6 +68,7 @@ MEASUREMENT_HARNESS_FILES = (
     ".codex/skills/hell-workers-run-native-acceptance/scripts/ui_progress_bars.py",
     ".codex/skills/hell-workers-run-native-acceptance/scripts/ui_bridge_planning.py",
     ".codex/skills/hell-workers-run-native-acceptance/scripts/ui_rest_area_planning.py",
+    ".codex/skills/hell-workers-run-native-acceptance/scripts/ui_rest_area_usage.py",
     ".codex/skills/hell-workers-run-native-acceptance/scripts/ui_terrain_materials.py",
     ".codex/skills/hell-workers-run-native-acceptance/scripts/rtt_light_closure_verify.py",
     ".codex/skills/hell-workers-run-native-acceptance/scripts/p02_presentation_acceptance.py",

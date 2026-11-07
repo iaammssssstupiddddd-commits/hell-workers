@@ -444,6 +444,25 @@ canonical serialization・性能・アート／数値・release承認へ昇格�
 
 ## 検証とHelp
 
+profiling-onlyの`observations_rest`は通常RestAreaのcapacity、両方向のoccupants/reservations、
+Soulの実Dream/fatigue/stress/IdleState/Visibility/座標/入口walkability/cooldown、DreamPoolと
+実/仮想時刻をread-onlyで採取する。owner最大512、Soulと各relationship最大128とし、
+上限超過・非finite状態は収集失敗、欠損component/resourceはnullのままにする。
+空のoccupants targetがBevyにより除去された後も、空配列や成功へ置換しない。
+
+UI feedbackの`rest-area-usage`は通常施工の3checkpointに入所・放出の2checkpointを追加する。
+camera/pause準備以外は既存入力と通常AIを使い、occupant・Dream・材料・完了状態を注入しない。
+UIとproduction rawは同じread-only collectorを使い、paused・同nonce/PID/epoch・同仮想時刻・
+有界な実時刻差で結ぶ。正しいcapacity/inverse relation、非表示かつ歩行可能な入口にいる同一Soulの
+連続Restingと、既存`DreamTransferredVisualMessage`のexact owner/source/amountを照合する。
+0.5以上のSoul Dream減少とmessage総量、DreamPoolの増加を確認し、移動・世代置換・
+Sleeping由来や異ownerのmessage・不整合な時刻/数量を拒否する。
+UIのPostUpdate撮影後、Lastのraw writerが同じcheckpointの状態・時刻を記録するまで
+最大15秒だけ待ってから子を終了する。入力は再送せず、1秒以内の実時刻差と全状態一致を
+緩和しない。foreign nonce/PID・収集失敗・timeoutは検証失敗とする。
+これは通常利用と正のDream放出に限定した技術feedbackであり、退出/cooldown、利用中save/load、
+全状態・美術/数値・性能・正式releaseの全受入を代替しない。実行・独立verify・画像reviewは別途必要。
+
 profiling-onlyのproduction raw observerとBridge／M2 probeは共通writerでfresh outputと一時pathを検査し、各snapshotの一時ファイルを
 `create_new`で排他的に作成してからrenameする。既存ファイル・dangling symlink・失敗した一時成果を
 上書きせず拒否する。これは収集の安全性であり、ordinary-worldの欠落producerや正式受入を補わない。

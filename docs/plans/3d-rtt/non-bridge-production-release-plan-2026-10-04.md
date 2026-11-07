@@ -124,6 +124,34 @@ manifest `8f974eeeb5b3…`、PNG `3c0e16303f48…`。入力なしの描画と起
 全asset形式・art/numeric・性能・9種releaseを承認しない。最終review中の3,985,408 bytesだけを保持。
 Helpは公式API/featureを維持する不正画像拒否・futures保守更新で、入力/UI文言/Help到達性/
 gameplay/save schema不変のためNo impact。全体の変更別検証は引き続き実施する。
+依存補正は`c0267a15`で保存済み。base `37c76a3dd04cc1c7baf91faa5779598f05fae3c6`からの
+変更別CIはcontracts/tooling/deps/rust全groupを通過した。通常/profiling全試験、Memory/Tracy/
+RenderDoc構成、Clippy警告0、tooling 538+208試験、`dev.py check`、primary storage pass。
+最終比較が終了したためdecoder native holdを正式releaseし、生成物3,985,408 bytesを撤去した。
+コード・出典・限定pass metadataは保持し、この旧jobを再検証する義務にはしない。
+
+次工程は通常RestArea施工完了の後の利用・Dream放出である。準備によるcamera/pause以外は
+既存入力と通常AIだけを使い、SoulのDream/疲労/idle/Visibility、RestingIn/予約/owner側occupantsと
+DreamPoolをread-onlyで採取する。既存DreamTransferredVisualMessageのexact Soul/RestArea/amountと
+同process/nonce/epochのbefore/afterを結ぶ拒否系試験を追加し、通常入所と実放出を実機確認する。
+occupant/Dream/materialの注入、強制完了、gameplay変更、art/numeric/performance/releaseの代用はしない。
+変更別検証・Help・独立read-only review・native seal/finalize・storageを次の同sourceで再実施する。
+通常/profiling workspace試験・両Clippy警告0と全groupの変更別CIを通過した。
+初回`tak14-rest-area-usage-feedback-20261107-v1`は通常Wood5搬入・施工・Soul1867v0の入所と
+Dream9.4800758→6.8300657、Pool79.4395065→87.3095398を記録したが、最終UI checkpointより
+raw writerが1.091728332秒手前で終了し、1秒以内の厳密照合でinvalidとなった。
+invalidをseal/finalizeし、38,535,168 bytesを同checkpointのwriter競合調査に限定して保持した。
+UI PostUpdate撮影後、Lastのraw記録が既存の同状態/時刻条件を満たすまで最大15秒待つ補正を行う。
+許容幅を緩めず、未到達だけを待ち、foreign identity・時刻/関係破損・timeoutは即拒否する。
+旧invalidを再解釈せず、拒否系回帰と独立review後にfresh batchで確認する。
+補正後`tak14-rest-area-usage-feedback-20261107-v2`はsource `b77a1c8b1538…`、harness
+`d2e2f1487740…`で登録verifierと別プロセスのverifyが限定pass、seal/finalize済み。
+通常Wood5配送・施工後のRestArea2275v32へSoul1863v0が入所し、同世代・同入口座標の
+Hidden/Restingを維持してDream4.1100345→1.4600365、Pool72.4896851→75.1398468を確認した。
+実RestArea sourceのmessage総量と減少量、同epoch・停止中UI/rawの状態/時刻が一致する。
+全5PNGをmainが実見し、strict log検査はWARN/ERRORなし。画像は現行の灰色fallbackであり、
+美術・数値採用・性能・正式releaseの証拠ではない。36,794,368 bytesは退出/cooldownと
+利用中save/loadの次工程比較だけを保持し、旧binary再実行依存は精算した。
 施工完了v1の誤ったwalkable期待値はv2で修正・独立review・実機passとなったため、
 旧v1 diagnostic consumerを正式releaseした。稼働process・symlink・原本がないことを確認し、
 `target/native-acceptance/tak14-rest-area-construction-feedback-20261107-v1`の生成物
