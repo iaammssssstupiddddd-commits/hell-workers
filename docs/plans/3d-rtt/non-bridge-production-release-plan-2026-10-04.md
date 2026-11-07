@@ -101,6 +101,38 @@ M2入口の3/4角限定を維持した別M3入口で3/4/8角だけを扱い、in
 枚数・全perimeterの向き・内部edge対消去を従来同様に検査する。checker自身のhashもM3制作reportへ加える。
 正常M3 capとM2拒否、逆向き・重複・退化・face跨ぎ・範囲外index・UV変更の回帰を通してからfresh v2へ進む。
 
+`a7356b49`で関連23試験・contracts/tooling・独立readonlyを通過した。authoring v2の制作と内部verifyは成功し、
+body/slot GLBは旧候補と同じ`3046407c…f0e6d` / `0f523ea0…39415`、emissiveも旧同一だった。
+ただし主担当の登録verifierがoutput rootをenv token内だけへ含め、sealが`verifier does not address this batch's output`
+で送信前拒否されたため当batchはinvalidとして保持・finalizeした。台帳やverifierを修正してpassへ変えていない。
+独立の正規prepare工程が原本を再verifyしてgeneration2 ArtPreviewを生成し、runtimeの登録verifier seal/finalizeはpass。
+新identityは`fe49fae422a101bb796e2e6397b370599cbce33425637d9cae6127a75d407aff`、geometry原本は
+`729c7f275619c63db63b1255ab505a09a40b0b5480f4585a9081a035a50f98fe`。
+同source/binaryのfresh nearは技術pass、manifest `4e1f86d292d493391a3e8222db9ed93413d8d1eab0b18607240923e3ef524d06`、
+PNG `c12a97b94367cc3bd0699796fa246e6358447edc5582ae46d370a81bbead05bd`。別verify・seal/finalize済み。
+main/独立画像reviewでは骨としての判読改善は乏しく、描線追加で解決する仮説は一回で打ち切った。
+同形状のclay比較も生成・厳密verifyしたが、人間の採否と別の診断でありnative受入とは扱わない。
+Blenderのuse_nodes非推奨警告、clay子processのsocket Broken pipe警告を観測した。GLB errors/warningsは0、終了code0。
+利用者は新near画像に対して「この見た目を採用する」と明示した。2026-11-08、同世代2の見た目だけを採用し、
+追加の骨形状修正は行わない。`tak14-soulspa-uv-runtime-20261108-v1/art-approval.json`へexact identityを拘束し、
+保存file SHAは`97ad92b97572fd29abf1c2bd3821e3f07722f1491ff64ad098a0bc2b4ea0f128`、
+export/numericへ拘束するcanonical JSON SHAは`cb6fea40f51f488d6759e2a61739e2ef8533f00e6a01650f7357b1a47e14b97f`。
+独立readonly数値reviewは、32wu/tileとslot順・中心offset、半径11wu/隣接間隔10wu、高さ0.6/半厚0.3、
+body±31.5wu/高さ6.5wu、body420/slot48tri、原本式に対するGLB最大誤差約8.4e-7wuとUV約2.6e-8、
+512px atlas/32px cell/4px gutter、preview/Anchor、実tile→slot producerと発光倍率[1,1,1]を独立に照合し採用可能と判断した。
+numeric projection canonical SHA=`51ed725c6cdcab66ba548fcf2e23af76f637e522d2859161fd16997fda569a38`、
+同art/geometryへ拘束したnumeric decision canonical SHA=`8c3d74bd2ec11e00e7617becb3dc4a0fd4bc63bef2ec6a5b29f6437718bf9cce`。
+最初の隔離export v1は主担当が非canonical key順のreceiptを渡し、出力前に拒否されたためinvalid/finalize済み。
+原回答fileを保持したまま内容不変のcanonical別fileを作り、正規readと束縛を確認したfresh v2だけを実行した。
+`tak14-soulspa-isolated-candidate-20261108-v2`の独立verify・seal/finalizeはpass、隔離候補identityは
+`a1b92f31c34a62c034d041738f495669aa3b2d9ff2e41007966afc30da3a9bf8`（generation2）。
+両decisionをprovenanceへ内包し、通常assets/locatorは未変更。all-mask/通常lifecycle/性能/release/既定起動は未承認。
+次はこの隔離候補の全16maskを、既定galleryの4標本と混同しない明示入口で現sourceへ拘束して照合する。
+用途終了したauthoring v1（1294336B）とclay比較（1130496B）は固有の採用原本を含まず、
+既存strokes原本・runtime世代2・採用画像へ必要情報を保持したうえで生成物のみ撤去した（計2424832B）。
+両process終了・所有・非symlinkを照合し、v1診断consumerを正式release、clayはseal後撤去・finalizeした。
+削除物自体のbackupはなく、採用原本と失敗metadataは保持する。
+
 `c07987e4`のfresh `tak14-restarea-ordinary-art-eis-feedback-20261108-v3`は9checkpoint、
 登録verifierと別実行verifyが成功した。source=`43386c30797aac97f88d338f16c76304cb14ff143d9f9111e4dc0eba01361947`、
 manifest=`ea7a00561cb8da52693a7a5afeec6b8c5723917534f51668d75b6b047a55d9da`、
