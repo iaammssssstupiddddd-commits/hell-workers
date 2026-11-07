@@ -135,6 +135,48 @@ pageごとに4標本をmask[4p,4p+1,4p+2,4p+3]へ一度seedし、actor数は他�
 body/inactive非発光を観測し、全4pageの別process画像と不変snapshotを照合する。これはseeded静止状態の検査であり、
 通常利用の状態遷移や性能受入は代替しない。未知page/混在/不足actor/誤slotや発光を拒否する。
 Help・変更別CI・Rust check/Clippy・独立readonly後、現候補のfresh4pageを逐次実行する。
+
+`c2459398666b1247b0623e1043cbb3fef8550252`でこの明示検査を実装した。独立reviewの指摘を受け、
+pageだけは初回-only記録にせず毎frame再観測し、初期snapshotと異なれば上書きや修復をせず失敗する。
+owner/root/part Entity・実ChildOf・消費世代・root/part pose・同handle内の材質値変化も対象に含める。
+既定gallery/M6の初回-only挙動は維持。Python関連21件、Rust spa関連42件・静止fixture17件、
+`dev.py check`、通常/profiling Clippy警告0、変更別contracts/tooling/rust（Python605件・制作224件・
+workspace通常/profiling tests・Memory/Tracy/RenderDoc compile）が成功した。
+変更別検証baseは`248dfc1c980fe212b9de73e6c38eb1a3127904c2`、dirty source fingerprintは
+`2040b8dc108e4462dfac3767a5f542bc89a9eebe630739dd22a6f95a22cbd254`。
+Helpはexplicit profiling-only sessionから通常入力・UI・保存・利用条件へ到達しないためNo impact。
+RAはerror/warning0だがprofiling fileにunlinked hintがあり、対象featureの実compile/testも併用した。
+最終tracked diff `4d68c1cd63608eecfd36b4c86804e27f1f9c123ee87398ae0b8aefca0439050d`と
+新Spa observer `639a062414c8fdd322c8e6fddf1c59f86f58595272b94309f71bef1ed6bd0508`は独立readonly承認済み。
+
+fresh `tak14-soulspa-mask-page{0,1,2,3}-20261108-v1`は同commit・source
+`1dc5cbfdbd26a4758976d37ba7cbe59382d1e9a0d0e8174717df9bd50e2101e0`、driver
+`322eac169ba09aba10469ce8ddc4ae50329993efa8f2a18a0119078a78d550e9`、binary
+`201d0a6a8b0d82a6aa3a87c414fddd9c313d465c346904e1e951630fbb89334d`、隔離候補a1b92f31世代2へ拘束した。
+Intel Arc/Vulkan/X11/High/DPI1・1280x720、30秒warmup/60秒のpaused静止観測を逐次実施し、
+30 stable frames後の4画像を主担当が実際に確認した。各pageのactor数は12/16/16/20、実tile maskは0〜15を重複なく網羅。
+body/slot0〜3のexact mesh/pose・親子所有・材質/発光・初終不変とnative WARN/ERRORなしを検査し、
+recipe内verify、別CLI verify、登録済み独立verify・seal/finalizeはいずれもpass。
+
+| page / mask | manifest SHA256 | owned-client PNG SHA256 |
+| --- | --- | --- |
+| 0 / 0〜3 | `04761d81596105961abea33e43596a51e8fd786e856d61436eb4addfe60c619d` | `ebb5c94b6b61c82387ed36991370025e34266ccfcabdec391659000cdc54858b` |
+| 1 / 4〜7 | `b8b53f9a16c6a13fe689977529316d313cdb34d4888486e44cbad829161400b0` | `e1774e5eeb97709c5fc81cfea70dd549889b05d61b607204bc01532d3c76461c` |
+| 2 / 8〜11 | `c30b64bd5c7bf5d0ad7e272340eb8030086a890e264239cde5ce66f8219bba85` | `c4d5290ba58004535e9e59cd5f7ebec98eb1d11ccedf04bb6cdce3bc4a1446f5` |
+| 3 / 12〜15 | `c36e0fd01b331a5043fd70abe232266b640449402d42de3af0a7714b3a24bb97` | `30f9d9052644cb8967f95f66c10a3c3e81e651f63260af70de2a5e18f51e4fa8` |
+
+これは全maskのseeded静止presentationに限る。通常の自然入退所・実施工・Save/Load・cleanupや
+Memory/GPU/累積性能budget・release/rollback・既定起動を完了扱いにしない。
+独立readonly担当も全4PNGを実見し、mask/actor・5part・同candidate・probe/manifest・初終snapshot・
+所有window/adapter・hash一致を照合して、この静止技術確認だけをapprovedとした。
+Soulが発光面を部分遮蔽する点も確認済みで、通常稼働遷移や性能/releaseの承認には読み替えない。
+4pageの画像/snapshot比較は終了した。全process終了・非symlink・候補assetの別原本とのbyte一致を照合し、
+4holdの比較consumerを正式releaseした。削除前du合計は568254464B。初回削除では複製Wall/Door世代の
+readonly directoryにより一部が残ったため、所有・非symlinkを再確認し、生成物側directoryだけへ
+owner writeを戻して撤去を完了した。当該4rootは全て不存在（残存0B）、採用元の権限は変更していない。
+削除した生成物自体のbackupはなく、結果と台帳metadataを保持する。採用原本・隔離候補a1b92f31・
+利用者が採用したnear画像・通常Cargo cacheは別の現在用途で保全し、変更していない。
+
 用途終了したauthoring v1（1294336B）とclay比較（1130496B）は固有の採用原本を含まず、
 既存strokes原本・runtime世代2・採用画像へ必要情報を保持したうえで生成物のみ撤去した（計2424832B）。
 両process終了・所有・非symlinkを照合し、v1診断consumerを正式release、clayはseal後撤去・finalizeした。
