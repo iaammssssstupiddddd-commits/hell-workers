@@ -33,7 +33,7 @@ CHECKPOINTS = ("tasks", "last-page", "minimized", "restored", "entities",
 VIEWPORTS = ((1920, 1080, 1.0), (1280, 720, 1.25), (1280, 720, 0.85),
              (1280, 720, 1.0), (1920, 1080, 0.85), (1920, 1080, 1.25))
 CASES = ("navigation", "refactor-rows", "progress-bars", "terrain-materials", "refactor-suite",
-         "bridge-planning", "rest-area-planning", "rest-area-refund", "rest-area-completion", "rest-area-usage", "rest-area-exit", "rest-area-save")
+         "bridge-planning", "rest-area-planning", "rest-area-refund", "rest-area-completion", "rest-area-usage", "rest-area-exit", "rest-area-save", "rest-area-lifecycle")
 
 
 def session_matrix(case, smoke):
@@ -71,7 +71,8 @@ def check_observation(case: str, value: dict) -> None:
     if case in terrain_materials.CHECKPOINTS:
         terrain_materials.check_observation(case, value)
         return
-    if case in (*rest_area_usage.EXIT_CHECKPOINTS[3:], *rest_area_usage.SAVE_CHECKPOINTS[5:]):
+    if case in (*rest_area_usage.EXIT_CHECKPOINTS[3:], *rest_area_usage.SAVE_CHECKPOINTS[5:],
+                rest_area_usage.LIFECYCLE_CHECKPOINTS[-1]):
         rest_area_usage.check_observation(case, value)
         return
     if case in refactor_rows.CHECKPOINTS:
@@ -459,10 +460,13 @@ def verify_root(root):
         events = native.read_json(directory / "events.json")["events"]
         client = native.read_json(directory / "input-client.json")
         check_input_client(manifest, session, client)
-        if case in ("rest-area-planning", "rest-area-refund", "rest-area-completion", "rest-area-usage", "rest-area-exit", "rest-area-save"):
+        if case in ("rest-area-planning", "rest-area-refund", "rest-area-completion", "rest-area-usage", "rest-area-exit", "rest-area-save", "rest-area-lifecycle"):
             raw_path = directory / "production-cancellation.json"
             native.require(sha256(raw_path) == session.get("cancellation_sha256"), "cancellation raw changed")
-            if case == "rest-area-save":
+            if case == "rest-area-lifecycle":
+                rest_area_usage.check_lifecycle(native.read_json(raw_path), entries, client,
+                                                directory / "saves" / "manual-1.scn.ron")
+            elif case == "rest-area-save":
                 rest_area_usage.check_save(native.read_json(raw_path), entries, client,
                                            directory / "saves" / "manual-1.scn.ron")
             elif case == "rest-area-exit":
@@ -483,6 +487,7 @@ def verify_root(root):
                                 rest_area_usage.CHECKPOINTS if case == "rest-area-usage" else
                                 rest_area_usage.EXIT_CHECKPOINTS if case == "rest-area-exit" else
                                 rest_area_usage.SAVE_CHECKPOINTS if case == "rest-area-save" else
+                                rest_area_usage.LIFECYCLE_CHECKPOINTS if case == "rest-area-lifecycle" else
                                 terrain_materials.CHECKPOINTS if case == "terrain-materials" else
                                 progress_bars.CHECKPOINTS if case == "progress-bars" else CHECKPOINTS)
         native.require([item["case"] for item in entries] == (["entities"] if layout_only else list(expected_checkpoints)), "checkpoints differ")
@@ -524,7 +529,7 @@ def verify_root(root):
         if case in ("rest-area-planning", "rest-area-refund"):
             rest_area_planning.check_sequence(entries, refund=case == "rest-area-refund")
             continue
-        if case in ("rest-area-completion", "rest-area-usage", "rest-area-exit", "rest-area-save"):
+        if case in ("rest-area-completion", "rest-area-usage", "rest-area-exit", "rest-area-save", "rest-area-lifecycle"):
             continue  # Exact sequence/domain/raw checks ran together above.
         if layout_only:
             continue
@@ -543,6 +548,7 @@ def verify_root(root):
                         "ordinary RestArea completion, admission and positive Dream transfer; not art/numeric/performance/release acceptance" if manifest.get("case") == "rest-area-usage" else
                         "ordinary RestArea natural exit and active cooldown; not cooldown expiry/art/numeric/performance/release acceptance" if manifest.get("case") == "rest-area-exit" else
                         "ordinary occupied RestArea save/load with actual bytes and Entity remap; not whole-world inventory/art/numeric/performance/release acceptance" if manifest.get("case") == "rest-area-save" else
+                        "ordinary RestArea occupied save/load, post-load natural exit and observed cooldown expiry; not whole-world inventory/art/numeric/performance/release acceptance" if manifest.get("case") == "rest-area-lifecycle" else
                         "ordinary RestArea real delivery and construction completion feedback; not full inventory/art/release acceptance" if manifest.get("case") == "rest-area-completion" else
                         "ordinary RestArea delivered-material save/load and refund cancellation feedback; not full inventory/art/release acceptance" if manifest.get("case") == "rest-area-refund" else
                         "ordinary generated-world RestArea reservation, save/load and cancellation only; no completed art or occupancy" if manifest.get("case") == "rest-area-planning" else
@@ -633,7 +639,7 @@ def run(args):
                                 "HW_NATIVE_UI_ROOT": str(directory), "HW_NATIVE_UI_NONCE": nonce,
                                 "HW_NATIVE_UI_WIDTH": str(width), "HW_NATIVE_UI_HEIGHT": str(height), "HW_NATIVE_UI_SCALE": str(scale)})
             environment["HW_NATIVE_UI_CASE"] = case
-            if case in ("rest-area-planning", "rest-area-refund", "rest-area-completion", "rest-area-usage", "rest-area-exit", "rest-area-save"):
+            if case in ("rest-area-planning", "rest-area-refund", "rest-area-completion", "rest-area-usage", "rest-area-exit", "rest-area-save", "rest-area-lifecycle"):
                 environment["HW_BUILDING_PRODUCTION_OBSERVATIONS"] = cancellation_observation_setting(directory, nonce)
             if case == "refactor-rows":
                 # Use winit's local XIM backend for this ASCII rename/search case.
@@ -665,6 +671,8 @@ def run(args):
                         progress_bars.exercise(driver)
                     elif case == "bridge-planning":
                         bridge_planning.exercise(driver)
+                    elif case == "rest-area-lifecycle":
+                        rest_area_usage.exercise_lifecycle(driver)
                     elif case == "rest-area-save":
                         rest_area_usage.exercise_save(driver)
                     elif case == "rest-area-exit":
@@ -696,7 +704,7 @@ def run(args):
                         state["child_pid"] = None
             joint.verify_game_log(directory / "game.log", "Intel")
             session = {"case": case, "directory": directory.name, "nonce": nonce, "log_sha256": sha256(directory / "game.log")}
-            if case in ("rest-area-planning", "rest-area-refund", "rest-area-completion", "rest-area-usage", "rest-area-exit", "rest-area-save"):
+            if case in ("rest-area-planning", "rest-area-refund", "rest-area-completion", "rest-area-usage", "rest-area-exit", "rest-area-save", "rest-area-lifecycle"):
                 session["cancellation_sha256"] = sha256(directory / "production-cancellation.json")
             sessions.append(session)
         native.atomic_write_json(root / "manifest.json", {

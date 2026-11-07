@@ -500,6 +500,27 @@ Soul `1842v0→807v1`はowner `2320v34→1955v1`への入所関係、Hidden、Dr
 Intel Arc/Vulkan、WARN/ERRORなし。表示は未承認assetではなく灰色fallbackで、美術採否ではない。
 読込後の自然退出/cooldown満了・全inventory・正式9種導入の不足は残る。
 
+次の限定`rest-area-lifecycle` recipeは上記7checkpointの後、実mapで復元された同じSoulの
+自然なDream枯渇/退出/正のcooldownと、cooldown componentの実消失までを2checkpointで延ばす。
+退出は実final Dream messageと総放出量/Pool増加で照合し、満了までは再入所/予約・timer再増加や
+停止を拒否する。remainingと仮想経過は既存slow-step最大0.5秒以内の差だけを許す。
+初回消失がその期間より早ければ拒否し、その後の通常再入所は早期入所と混同しない。
+全区間のsame Soul generation/epoch、単調な実/仮想時刻と最終paused全contextを照合する。
+recipe実装や単体試験だけで満了を受入済みとせず、fresh実機/独立確認を必要とする。
+
+`tak14-rest-area-postload-lifecycle-feedback-20261107-v1`は通常配置/搬入/完成/入所/Dream放出、
+利用中save/load、実mapの同Soul退出/cooldown満了まで全9画像と登録/別実行verifier、
+独立read-only確認をpassしseal/finalizeした。実Manual1は496,786 bytes、SHA-256
+`da7457dafd6c5f303106d46f094484f5e0c5c98d221c8e26bb9b7ed0be69c017`、両receiptと一致。
+Save416/epoch0→Load473/epoch1の全21map/収集状態を確認。選定Soul `1856v0→855v1`は
+owner `1908v19→1833v1`へのHidden入所とDream `2.0300469398498535`を保持した。
+読込後17放出の合計`2.03004778549`とPool増分が整合し、唯一finalはsample520。
+同sample/virtual `91.815720774`でcooldown15.0、sample607/virtual `106.815720774`で初回消失。
+満了前の再入所/予約なし・同世代/epoch・単調減少を確認。Intel Arc/Vulkan、WARN/ERRORなし。
+灰色fallbackの限定技術証拠であり、正式art/numeric/performance/releaseや全inventoryは未受入。
+旧退出/保存比較jobは用途終了後に撤去し、結果は履歴として残す。最新jobだけを正式視覚世代の
+ordinary lifecycle退行比較に保持し、旧binary/verifierを再実行する依存は作らない。
+
 profiling-onlyのproduction raw observerとBridge／M2 probeは共通writerでfresh outputと一時pathを検査し、各snapshotの一時ファイルを
 `create_new`で排他的に作成してからrenameする。既存ファイル・dangling symlink・失敗した一時成果を
 上書きせず拒否する。これは収集の安全性であり、ordinary-worldの欠落producerや正式受入を補わない。

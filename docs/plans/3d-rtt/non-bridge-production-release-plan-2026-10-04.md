@@ -13,6 +13,19 @@
 
 ## 1. 目的
 
+読込後の残工程は`rest-area-lifecycle`として同じ通常操作へ接続する。利用中save/load 7枚から、
+実mapで復元した同じSoulの自然Dream枯渇/退出とcooldown満了まで計9checkpointを取得する。
+早期のcomponent消失・入所/予約・timer再設定・世代/epoch置換・時刻逆行は拒否し、
+満了後の通常再入所は区別する。状態を注入せず、fresh実機と独立レビュー前は未受入とする。
+fresh `tak14-rest-area-postload-lifecycle-feedback-20261107-v1`は全9画像/登録・別実行verifier/
+独立read-only確認をpass、seal/finalize済み。実Manual1 496,786 bytes、SHA
+`da7457dafd6c5f303106d46f094484f5e0c5c98d221c8e26bb9b7ed0be69c017`とSave416→Load473が一致。
+21mapでSoul1856v0→855v1/owner1908v19→1833v1を固定し、Hidden/Dream保持後の自然17放出/
+final/退出を確認。virtual91.815720774のcooldown15→106.815720774の初回消失まで正確に15秒。
+満了前の再入所/予約なし、Intel Arc/Vulkan、WARN/ERRORなし。灰色fallbackであり正式art/releaseではない。
+旧退出/occupied-save比較root計89,088,000 bytesはconsumer解除・process/原本不在確認後に撤去し、
+最新64,573,440 bytesだけを正式視覚世代のlifecycle比較へ保持する。コード/原本/台帳履歴は保全。
+
 利用中保存/読込の独立した`rest-area-save` feedback recipeを実装した。
 最初の`tak14-rest-area-occupied-save-feedback-20261107-v1`は実保存/読込と7checkpointに到達したが、
 receipt→撮影の追加15秒条件（実15.034/17.522秒）でinvalid精算した。各区間18raw sampleの

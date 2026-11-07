@@ -10,6 +10,7 @@ CHECKPOINTS = (*planning.COMPLETION_CHECKPOINTS,
                "rest-area-usage-occupied", "rest-area-usage-drained")
 EXIT_CHECKPOINTS = (*CHECKPOINTS, "rest-area-usage-exited")
 SAVE_CHECKPOINTS = (*CHECKPOINTS, "rest-area-usage-saved", "rest-area-usage-loaded")
+LIFECYCLE_CHECKPOINTS = (*SAVE_CHECKPOINTS, "rest-area-usage-exited", "rest-area-usage-expired")
 
 
 class RawCheckpointPending(native.AcceptanceError):
@@ -79,11 +80,14 @@ def candidates(value, bits):
 
 
 def check_observation(case, value):
-    native.require(case in (*EXIT_CHECKPOINTS[3:], *SAVE_CHECKPOINTS[5:]), "unsupported rest usage checkpoint")
+    native.require(case in (*EXIT_CHECKPOINTS[3:], *SAVE_CHECKPOINTS[5:], LIFECYCLE_CHECKPOINTS[-1]),
+                   "unsupported rest usage checkpoint")
     planning.check_observation("rest-area-completion-completed", value)
     bits = value["rest_area_planning"]["buildings"][0]
     state = context(value)
-    if case == EXIT_CHECKPOINTS[-1]:
+    if case == LIFECYCLE_CHECKPOINTS[-1]:
+        candidates(state, bits)
+    elif case == EXIT_CHECKPOINTS[-1]:
         native.require(any(released_soul(row) for row in state["souls"]), "no visible released Soul with active cooldown")
         candidates(state, bits)
     else:
@@ -161,6 +165,7 @@ def exercise_save(driver):
                               after=driver.last["frame"], timeout=60)
     planning.set_refund_paused(driver, True)
     driver.capture(SAVE_CHECKPOINTS[-1])
+    selected = [None]
 
     def recorded(_):
         path = driver.root / "production-cancellation.json"
@@ -173,13 +178,47 @@ def exercise_save(driver):
         if not any(row.get("operation") == "DurableLoad" for row in raw.get("events", [])):
             return False
         try:
-            check_save(raw, driver.checkpoints, {"nonce": driver.last["nonce"], "pid": driver.last["pid"]},
-                       driver.root / "saves" / "manual-1.scn.ron")
+            selected[0] = check_save(raw, driver.checkpoints, {"nonce": driver.last["nonce"], "pid": driver.last["pid"]},
+                                      driver.root / "saves" / "manual-1.scn.ron")
         except RawCheckpointPending:
             return False
         return True
 
     driver.wait(recorded, after=driver.last["frame"], timeout=15)
+    native.require(isinstance(selected[0], str) and selected[0], "saved occupant remap missing")
+    return selected[0]
+
+
+def exercise_lifecycle(driver):
+    entity = exercise_save(driver)
+    loaded = driver.checkpoints[-1]["value"]
+    bits = loaded["rest_area_planning"]["buildings"][0]
+    planning.set_refund_paused(driver, False)
+    driver.last = driver.wait(lambda value: any(row.get("entity") == entity and released_soul(row)
+                                              for row in context(value)["souls"]),
+                              after=driver.last["frame"], timeout=120)
+    planning.set_refund_paused(driver, True)
+    driver.capture(LIFECYCLE_CHECKPOINTS[-2])
+    wait_for_raw_checkpoint(driver, bits, entity, released=True)
+    planning.set_refund_paused(driver, False)
+    driver.last = driver.wait(lambda value: any(row.get("entity") == entity and row.get("cooldown") is None
+                                              for row in context(value)["souls"]),
+                              after=driver.last["frame"], timeout=60)
+    planning.set_refund_paused(driver, True)
+    driver.capture(LIFECYCLE_CHECKPOINTS[-1])
+    captured = driver.checkpoints[-1]["value"]
+
+    def recorded(_):
+        raw = native.read_json(driver.root / "production-cancellation.json")
+        native.require(raw.get("nonce") == captured["nonce"] and raw.get("process_id") == captured["pid"]
+                       and raw.get("failure") is None, "post-load lifecycle raw changed identity/failed")
+        try:
+            raw_context_checkpoint(raw["samples"], captured)
+        except RawCheckpointPending:
+            return False
+        return True
+
+    driver.wait(recorded, after=captured["frame"], timeout=15)
 
 
 def stable_context(state):
@@ -343,6 +382,7 @@ def check_save(raw, entries, client, save_path):
                        for new_owner, new_soul in restored), "occupied RestArea/Soul pair not restored")
     check_receipt_interval(raw, save, saved, bits, soul["entity"])
     check_receipt_interval(raw, load, loaded, restored_bits, lookup[soul["entity"]])
+    return lookup[soul["entity"]]
 
 
 def wait_for_raw_checkpoint(driver, bits, entity, *, released=False):
@@ -401,22 +441,44 @@ def raw_checkpoint(samples, value, bits, entity, *, released=False):
     return min(matching, key=lambda sample: abs(sample["real_seconds"] - ui["real_seconds"]))
 
 
+def raw_context_checkpoint(samples, value):
+    ui = context(value)
+    matches = [sample for sample in samples if sample.get("world_epoch") == value["world_epoch"]
+               and sample.get("paused") is True and finite(sample.get("real_seconds"))
+               and abs(sample["real_seconds"] - ui["real_seconds"]) <= 1
+               and sample.get("virtual_seconds") == ui["virtual_seconds"]
+               and isinstance(sample.get("rest_area_context"), dict)
+               and sample["rest_area_context"].get("real_seconds") == sample["real_seconds"]
+               and sample["rest_area_context"].get("virtual_seconds") == sample["virtual_seconds"]
+               and stable_context(sample["rest_area_context"]) == stable_context(ui)]
+    if not matches:
+        raise RawCheckpointPending("full rest context has no same-subject paused raw sample")
+    return min(matches, key=lambda sample: abs(sample["real_seconds"] - ui["real_seconds"]))
+
+
 def check_exit(raw, entries, client):
     native.require([entry["case"] for entry in entries] == list(EXIT_CHECKPOINTS), "rest exit checkpoints differ")
     check_usage(raw, entries[:5], client)
     occupied, drained, exited = [entry["value"] for entry in entries[3:]]
-    check_observation(EXIT_CHECKPOINTS[-1], exited)
-    native.require(exited.get("nonce") == client["nonce"] and exited.get("pid") == client["pid"]
-                   and exited.get("world_epoch") == drained["world_epoch"] and exited.get("paused") is True
-                   and exited["frame"] > drained["frame"] and entries[-1]["last_step"] > entries[-2]["last_step"]
-                   and all(exited["rest_area_planning"][key] == drained["rest_area_planning"][key]
-                           for key in ("anchor", "footprint", "draw_pos", "buildings")),
-                   "rest exit checkpoint subject/target differs")
     bits = drained["rest_area_planning"]["buildings"][0]
     remaining = {row["entity"]: row for _, row in candidates(context(drained), bits)}
     owner, initial = next((owner, remaining[row["entity"]]) for owner, row in candidates(context(occupied), bits)
                           if row["entity"] in remaining and remaining[row["entity"]]["dream"] <= row["dream"] - 0.5)
     entity = initial["entity"]
+    check_exit_leg(raw, entries[-2], entries[-1], client, entity)
+
+
+def check_exit_leg(raw, before_entry, exited_entry, client, entity):
+    drained, exited = before_entry["value"], exited_entry["value"]
+    check_observation(EXIT_CHECKPOINTS[-1], exited)
+    native.require(exited.get("nonce") == client["nonce"] and exited.get("pid") == client["pid"]
+                   and exited.get("world_epoch") == drained["world_epoch"] and exited.get("paused") is True
+                   and exited["frame"] > drained["frame"] and exited_entry["last_step"] > before_entry["last_step"]
+                   and all(exited["rest_area_planning"][key] == drained["rest_area_planning"][key]
+                           for key in ("anchor", "footprint", "draw_pos", "buildings")),
+                   "rest exit checkpoint subject/target differs")
+    bits = drained["rest_area_planning"]["buildings"][0]
+    owner, initial = next((owner, row) for owner, row in candidates(context(drained), bits) if row["entity"] == entity)
     first = raw_checkpoint(raw["samples"], drained, bits, entity)
     last = raw_checkpoint(raw["samples"], exited, bits, entity, released=True)
     start, end = first["sample_index"], last["sample_index"]
@@ -479,6 +541,68 @@ def check_exit(raw, entries, client):
                    and last["rest_area_context"]["dream_pool"] - first["rest_area_context"]["dream_pool"]
                    >= sum(row["amount"] for row in transfers) - 0.01,
                    "rest final messages do not account for natural Dream exhaustion")
+
+
+def check_lifecycle(raw, entries, client, save_path):
+    native.require([entry["case"] for entry in entries] == list(LIFECYCLE_CHECKPOINTS),
+                   "post-load lifecycle checkpoints differ")
+    entity = check_save(raw, entries[:7], client, save_path)
+    loaded, exited, expired = [entry["value"] for entry in entries[6:]]
+    bits = loaded["rest_area_planning"]["buildings"][0]
+    selected = [row for _, row in candidates(context(loaded), bits) if row["entity"] == entity]
+    native.require(len(selected) == 1, "post-load selected saved occupant disappeared")
+    initial = selected[0]
+    check_exit_leg(raw, entries[6], entries[7], client, entity)
+    check_observation(LIFECYCLE_CHECKPOINTS[-1], expired)
+    native.require(expired.get("nonce") == client["nonce"] and expired.get("pid") == client["pid"]
+                   and expired.get("world_epoch") == loaded["world_epoch"] and expired.get("paused") is True
+                   and expired["frame"] > exited["frame"] and entries[8]["last_step"] > entries[7]["last_step"]
+                   and all(expired["rest_area_planning"][key] == loaded["rest_area_planning"][key]
+                           for key in ("anchor", "footprint", "draw_pos", "buildings")),
+                   "cooldown expiry checkpoint subject/order differs")
+    first = raw_checkpoint(raw["samples"], exited, bits, entity, released=True)
+    last = raw_context_checkpoint(raw["samples"], expired)
+    start, end = first["sample_index"], last["sample_index"]
+    native.require(0 < end - start < 240 and last["virtual_seconds"] > first["virtual_seconds"],
+                   "cooldown expiry interval missing/capped")
+    soul = next(row for row in first["rest_area_context"]["souls"] if row["entity"] == entity)
+    duration, previous, previous_time, expired_at = soul["cooldown"], soul["cooldown"], first["virtual_seconds"], None
+    previous_real = first["real_seconds"]
+    for index in range(start, end + 1):
+        sample = raw["samples"][index]
+        state = sample["rest_area_context"]
+        native.require(sample.get("sample_index") == index and sample.get("world_epoch") == loaded["world_epoch"]
+                       and finite(sample.get("real_seconds")) and finite(sample.get("virtual_seconds"))
+                       and state.get("real_seconds") == sample["real_seconds"]
+                       and state.get("virtual_seconds") == sample["virtual_seconds"]
+                       and sample["real_seconds"] >= previous_real
+                       and previous_time <= sample["virtual_seconds"] <= last["virtual_seconds"],
+                       "cooldown expiry crosses foreign/non-monotonic time")
+        previous_time = sample["virtual_seconds"]
+        previous_real = sample["real_seconds"]
+        candidates(state, bits)
+        rows = [row for row in state["souls"] if row["entity"] == entity]
+        native.require(len(rows) == 1 and rows[0]["entity_bits"] == initial["entity_bits"],
+                       "cooldown expiry changed Soul generation")
+        row = rows[0]
+        native.require(all(finite(row.get(key)) for key in ("dream", "fatigue", "stress"))
+                       and 0 <= row["dream"] <= 100 and 0 <= row["fatigue"] <= 1 and 0 <= row["stress"] <= 1
+                       and (row.get("cooldown") is None or finite(row["cooldown"]) and row["cooldown"] >= 0)
+                       and row.get("visibility") in ("Hidden", "Visible", "Inherited")
+                       and isinstance(row.get("position"), list) and len(row["position"]) == 3
+                       and all(finite(axis) for axis in row["position"]), "cooldown Soul state malformed")
+        if expired_at is not None:
+            continue  # Later ordinary re-entry is not an early-entry violation.
+        elapsed = sample["virtual_seconds"] - first["virtual_seconds"]
+        if row.get("cooldown") is None:
+            native.require(elapsed + 0.5 >= duration, "cooldown removed before its actual duration")
+            expired_at = index
+        else:
+            native.require(released_soul(row) and row["cooldown"] <= previous
+                           and abs(row["cooldown"] - max(0, duration - elapsed)) <= 0.5,
+                           "cooldown reset, stopped counting, or allowed early entry")
+            previous = row["cooldown"]
+    native.require(expired_at is not None, "no actual post-load cooldown removal observed")
 
 
 def check_usage(raw, entries, client):

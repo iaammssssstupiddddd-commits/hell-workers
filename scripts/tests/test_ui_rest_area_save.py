@@ -222,6 +222,133 @@ class OrdinaryRestSaveTests(unittest.TestCase):
             with self.assertRaises(RuntimeError):
                 usage.check_save(raw, entries, client, path)
 
+    def lifecycle_fixture(self):
+        raw, entries, client, payload = self.fixture()
+        for index, virtual, dream, cooldown in ((12, 10.0, 4.75, None), (13, 11.0, 0.0, 14.75),
+                                                (14, 12.0, 0.0, 14.5), (15, 19.0, 0.0, 7.5),
+                                                (16, 27.0, 0.0, None)):
+            sample = copy.deepcopy(raw["samples"][11])
+            sample.update(sample_index=index, real_seconds=float(index + 10), virtual_seconds=virtual,
+                          paused=index in (14, 16))
+            sample["owners"][0]["entity"] = "new-building"
+            state = sample["rest_area_context"]
+            state.update(real_seconds=sample["real_seconds"], virtual_seconds=virtual,
+                         dream_pool=5.5 + (9.5 - dream))
+            row = state["souls"][0]
+            row["dream"] = dream
+            if index >= 13:
+                row.update(resting_in=None, visibility="Visible", cooldown=cooldown)
+                row["idle"]["behavior"] = "Wandering"
+                state["owners"][0]["occupants"] = None
+            raw["samples"].append(sample)
+            if index in (12, 13):
+                raw["events"].append({"event_index": len(raw["events"]), "sample_index": index,
+                                      "real_seconds": sample["real_seconds"],
+                                      "producer": "DreamTransferredVisualMessage", "operation": "DreamTransferred",
+                                      "worker": "new-worker", "amount": 4.75, "is_final": index == 13,
+                                      "source": {"kind": "RestArea", "owner": "new-building", "origin": [20.0, 20.0]}})
+            if index in (14, 16):
+                entry = copy.deepcopy(entries[-1])
+                entry.update(case=usage.LIFECYCLE_CHECKPOINTS[-2 if index == 14 else -1], last_step=index * 5)
+                entry["value"]["frame"] = index * 10 + 100
+                entry["value"]["rest_area_planning"]["rest_area_usage"] = copy.deepcopy(state)
+                entries.append(entry)
+        return raw, entries, client, payload
+
+    def verify_lifecycle(self, raw, entries, client, payload):
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "saves" / "manual-1.scn.ron"
+            path.parent.mkdir()
+            path.write_bytes(payload)
+            usage.check_lifecycle(raw, entries, client, path)
+
+    def test_post_load_natural_exit_and_actual_cooldown_removal(self):
+        original = self.lifecycle_fixture()
+        snapshot = copy.deepcopy(original)
+        self.verify_lifecycle(*original)
+        self.assertEqual(original, snapshot)
+        from scripts.tests import test_ui_rest_area_completion as base
+        self.assertEqual(base.acceptance.session_matrix("rest-area-lifecycle", True),
+                         [("rest-area-lifecycle", *base.acceptance.VIEWPORTS[0])])
+        for entry in original[1][-2:]:
+            value = copy.deepcopy(entry["value"])
+            value.update(ready=True, task_rows=0)
+            base.acceptance.check_observation(entry["case"], value)
+
+    def test_cooldown_early_removal_entry_reset_and_foreign_time_are_rejected(self):
+        for mode in ("early", "entry", "reset", "clock", "epoch", "generation", "index"):
+            raw, entries, client, payload = self.lifecycle_fixture()
+            sample = raw["samples"][15]
+            row = sample["rest_area_context"]["souls"][0]
+            if mode == "early":
+                row["cooldown"] = None
+            elif mode == "entry":
+                row["resting_in"] = "new-building"
+            elif mode == "reset":
+                row["cooldown"] = 15.0
+            elif mode == "generation":
+                row["entity_bits"] += 1
+            else:
+                key, bad = {"clock": ("virtual_seconds", 5), "epoch": ("world_epoch", 2),
+                            "index": ("sample_index", 1000)}[mode]
+                sample[key] = bad
+            with self.subTest(mode=mode), self.assertRaises(RuntimeError):
+                self.verify_lifecycle(raw, entries, client, payload)
+
+    def test_expiry_requires_a_full_paused_raw_context_not_just_a_missing_component(self):
+        raw, entries, client, payload = self.lifecycle_fixture()
+        raw["samples"][-1]["rest_area_context"]["dream_pool"] += 1
+        with self.assertRaises(RuntimeError):
+            self.verify_lifecycle(raw, entries, client, payload)
+
+    def multiple_occupants_fixture(self):
+        raw, entries, client, payload = self.lifecycle_fixture()
+        original = copy.deepcopy(usage.context(entries[5]["value"])["souls"][0])
+        for loaded, states in (
+            (False, [sample["rest_area_context"] for sample in raw["samples"][7:11]]
+             + [usage.context(entry["value"]) for entry in entries[3:6]]
+             + [row["rest_area_context"] for row in raw["events"] if row.get("operation") == "DurableSave"]),
+            (True, [sample["rest_area_context"] for sample in raw["samples"][11:]]
+             + [usage.context(entry["value"]) for entry in entries[6:]]
+             + [row["rest_area_context"] for row in raw["events"] if row.get("operation") == "DurableLoad"]),
+        ):
+            for state in states:
+                other = copy.deepcopy(original)
+                other.update(entity="other-new" if loaded else "other-old", entity_bits=200 if loaded else 100,
+                             resting_in="new-building" if loaded else "building")
+                state["souls"].append(other)
+                occupants = state["owners"][0]["occupants"] or []
+                state["owners"][0]["occupants"] = ([other["entity"]] + occupants if loaded
+                                                    else occupants + [other["entity"]])
+        next(row for row in raw["events"] if row.get("operation") == "DurableLoad")["entity_remap"].append(
+            {"kind": "Soul", "saved_entity": "other-old", "saved_bits": 100,
+             "loaded_entity": "other-new", "loaded_bits": 200})
+        return raw, entries, client, payload
+
+    def test_saved_occupant_remap_survives_loaded_occupant_order_changes(self):
+        raw, entries, client, payload = self.multiple_occupants_fixture()
+        self.assertEqual(usage.candidates(usage.context(entries[6]["value"]), 88)[0][1]["entity"], "other-new")
+        self.verify_lifecycle(raw, entries, client, payload)
+
+    def test_another_loaded_occupants_exit_cannot_replace_the_saved_selection(self):
+        raw, entries, client, payload = self.multiple_occupants_fixture()
+        swapped = {"new-worker": "other-new", "other-new": "new-worker"}
+        bits = {"new-worker": 199, "other-new": 200}
+        states = [sample["rest_area_context"] for sample in raw["samples"][12:]]
+        states += [usage.context(entry["value"]) for entry in entries[7:]]
+        for state in states:
+            for row in state["souls"]:
+                row["entity"] = swapped[row["entity"]]
+                row["entity_bits"] = bits[row["entity"]]
+            for owner in state["owners"]:
+                if owner["occupants"] is not None:
+                    owner["occupants"] = [swapped[entity] for entity in owner["occupants"]]
+        for event in raw["events"]:
+            if event.get("worker") == "new-worker":
+                event["worker"] = "other-new"
+        with self.assertRaises(RuntimeError):
+            self.verify_lifecycle(raw, entries, client, payload)
+
 
 if __name__ == "__main__":
     unittest.main()
