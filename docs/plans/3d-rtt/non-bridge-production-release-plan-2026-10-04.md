@@ -103,6 +103,32 @@ Blueprint2233v0へ5個の実Woodを配送し、actor1863v0／起点assignment223
 通常/profilingのworkspace試験・両Clippy警告0、Memory/Tracy/RenderDoc構成、関連59 tests・tooling・
 Help No impactを確認。rust-analyzerはcfg-disabled hintのみ、エラー0。全体CIは既存依存2件で未通過。
 
+次のCI復旧は依存の最小補正として分離する。`futures-util`は同0.3系列の保守版へ更新して
+`pin-utils`経路を解消できるか確認する。`ruzstd`は0.9.1以上の修正版が必要だが、Bevy 0.19の
+`bevy_image`は^0.8指定のため、エンジン全体の版変更・feature削除・advisory無視は行わない。
+必要なら既存vendor方式でBevy 0.19のimage crateだけを正規原本から固定し、APIを変えず
+decoder依存だけを更新する。license・原本hash・実差分・削除条件と拒否系decode試験を残し、
+Help判断・通常/profiling検証・native画像読込・独立review・storage・変更別CIで検査する。
+依存補正は美術承認や9種の正式releaseを代替しない。
+修正前の実Bevy KTX2回帰試験では、正常1024 bytesとtruncated拒否はpass、
+1KiB windowに対する1025 bytesの不正RLE blockを旧ruzstd 0.8.2が受理してredとなった。
+巨大なbombを生成せず拒否境界を再現した。公式bevy_image 0.19.0の全Rust sourceを保持し、
+optional ruzstd指定だけを0.9.1へ変更するvendor patchで補正する。出典・除去条件は
+`vendor/bevy_image/PATCH.md`を正本とし、修正後の結果は別途確認する。
+修正版ruzstd 0.9.1では同3試験がすべてpass。`dev.py deps`はadvisories/bans/licenses/sources
+すべてokとなり、RUSTSEC-2026-0441/0344の2件を解消した。既存duplicateとyanked版
+（clipboard-win 5.4.1、spin 0.10.0）のwarningは別扱いで残している。
+`image-decoder-feedback-20261107-v1`はsource `97b343980d38…`、通常画面1PNGを
+mainと独立reviewerが実見し、登録verifier・seal/finalize pass。Intel Arc/Vulkan、WARN/ERRORなし。
+manifest `8f974eeeb5b3…`、PNG `3c0e16303f48…`。入力なしの描画と起動時KTX2 LUT読込に限定し、
+全asset形式・art/numeric・性能・9種releaseを承認しない。最終review中の3,985,408 bytesだけを保持。
+Helpは公式API/featureを維持する不正画像拒否・futures保守更新で、入力/UI文言/Help到達性/
+gameplay/save schema不変のためNo impact。全体の変更別検証は引き続き実施する。
+施工完了v1の誤ったwalkable期待値はv2で修正・独立review・実機passとなったため、
+旧v1 diagnostic consumerを正式releaseした。稼働process・symlink・原本がないことを確認し、
+`target/native-acceptance/tak14-rest-area-construction-feedback-20261107-v1`の生成物
+20,246,528 bytesを撤去した。invalid履歴と採用コード、最新v2の比較用途は保持している。
+
 2026-11-07再開工程: 通常Blueprint取消が実際に発行したrefund Entity IDsと、
 deferred適用後のowner/request/storage/map・関連actor状態を結ぶprofiling-only観測を追加する。
 通常RestAreaの既存input recipeへ同nonce/PIDのrawを接続し、ゼロ材料予約の取消を実機確認する。

@@ -34,6 +34,10 @@ root `Cargo.toml`は`members = ["crates/*"]`、`default-members = ["crates/bevy_
 `vendor/parley`はmemberからexcludeし、Parley0.9の日本語辞書対応のみをbackportする外部patchです。
 rootのdependency回帰testは同じParley0.9/stdをdev-dependencyで直接検査します。
 詳細・除去条件は[フォント仕様](fonts.md)と[patch記録](../vendor/parley/PATCH.md)を参照してください。
+`vendor/bevy_image`もmemberからexcludeする外部patchです。公式Bevy 0.19.0のRust source/APIと
+featureを保持し、`zstd_rust`のoptional decoder依存だけを`ruzstd` 0.9.1以上へ更新します。
+rootのKTX2回帰testは実decoderの正常境界・window超過拒否・truncated拒否を検査します。
+出典hash・license・実差分と除去条件は[patch記録](../vendor/bevy_image/PATCH.md)を参照してください。
 全13 memberは内部ゲームcrateとして`publish = false`です。自前licenseはこのmetadataから推測しません。
 rootが版を管理する`proptest`は`hw_world`と`hw_infra`のdev-dependencyだけに追加し、
 `std` featureのみでpure property testを実行します。通常runtimeの依存方向は変えません。
