@@ -79,11 +79,22 @@ pub(super) fn snapshot(world: &mut World) -> Value {
     };
     let yards: Vec<_> = world.query::<&Yard>().iter(world).cloned().collect();
     let point = WorldMap::grid_to_world(anchor.0, anchor.1);
+    let owner_center =
+        live_building_geometry(world.resource::<WorldMap>(), BuildingType::RestArea, anchor)
+            .draw_pos;
     let projected = world
         .query_filtered::<(&Camera, &GlobalTransform), With<hw_ui::camera::MainCamera>>()
         .iter(world)
         .find_map(|(camera, transform)| {
             camera.world_to_viewport(transform, point.extend(0.0)).ok()
+        });
+    let owner_projected = world
+        .query_filtered::<(&Camera, &GlobalTransform), With<hw_ui::camera::MainCamera>>()
+        .iter(world)
+        .find_map(|(camera, transform)| {
+            camera
+                .world_to_viewport(transform, owner_center.extend(0.0))
+                .ok()
         });
     let blueprints: Vec<_> = world
         .query::<(Entity, &Blueprint)>()
@@ -121,6 +132,7 @@ pub(super) fn snapshot(world: &mut World) -> Value {
         "anchor": anchor, "footprint": geometry.occupied_grids,
         "draw_pos": geometry.draw_pos.to_array(),
         "point": projected.map(|point| point.to_array()),
+        "owner_point": owner_projected.map(|point| point.to_array()),
         "legal": legal_anchor_at(map, &yards, anchor),
         "cells": cells, "blueprints": blueprints, "buildings": buildings,
         "rest_area_usage": rest_area_usage,

@@ -229,7 +229,21 @@ feedbackだけで要求identity、実active/pending/descriptor、実owner-linked
 読込前owner参照、別mesh/texture/material値を拒否する。従来の正式raw verifierは新scopeを受理しない。
 これは限定された候補表示/lifecycle feedbackであり、全consumer、最大遠景selection、照明/壁depth、
 independent art/numeric採否、Capture/Memory性能、promotion/install/release/rollbackは別途必要である。
-新入口は実装・回帰検証中で、fresh実機成功はまだ記録していない。
+`c07987e4`のfresh ordinary EIS feedbackは9checkpointを通過し、登録verifierと別実行verifyが成功した。
+source=`43386c30797aac97f88d338f16c76304cb14ff143d9f9111e4dc0eba01361947`、
+harness=`3edf28c113da7c416c45af5f9053de50b83c53d7320ec8bd10562883863d5cae`、
+exact候補は`db0f…2522`。通常施工・利用・Dream・実Entity remapを伴う保存復元、
+自然退出と15秒cooldown（仮想85.614576461→100.614576461）を観測した。
+同ownerのroot/part/画像/材質接続と9枚のowned画像をmainと独立read-onlyで確認し、
+Intel Arc/VulkanでWARN/ERRORなし。限定feedback結果は保持・seal/finalize/storage pass済み。
+通常起動への正式採用や前段のart/numeric承認、全consumer/性能の完了とは扱わない。
+
+最大遠景UI補完の受動観測は、cameraの数値transform/projection、primary window、実hover／pointer target、
+tooltip reducerが実際に保持するWorldEntityとworld epoch、owner中心の投影点を記録する。
+tooltip mirrorはprofiling UI observerが存在するときだけ更新し、UI／placement／対象なしではworld targetを消す。
+実MouseWheelは独立MessageCursorで読み、window・unit・delta・phase・frame・epochを最大128件記録する。
+上限超過はsticky overflowで公開し、黙って欠落を成功にしない。他consumerの入力を消費せず、
+カメラ／hover／tooltip／actorの状態を書き換えない。これだけではzoom操作や遠景の識別成功を証明しない。
 
 同UI recipeの明示`--input-backend portal-eis`は当該ArtPreview lifecycleだけで既存EIS absolute
 経路を選ぶ。通常portal Notify経路からの自動fallbackではなく、混用・他caseへの拡張は拒否する。

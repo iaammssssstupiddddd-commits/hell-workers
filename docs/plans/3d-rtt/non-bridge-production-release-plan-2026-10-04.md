@@ -6,12 +6,33 @@
 | --- | --- |
 | 計画ID | `non-bridge-production-release-plan-2026-10-04` |
 | ステータス | `In Progress` |
-| 作成日 / 最終更新日 | `2026-10-04` / `2026-11-07` |
+| 作成日 / 最終更新日 | `2026-10-04` / `2026-11-08` |
 | 作成者 | Codex |
 | 関連提案 | N/A |
 | 関連Issue/PR | TAK-14 / 基盤統合PR #29 |
 
 ## 1. 目的
+
+`c07987e4`のfresh `tak14-restarea-ordinary-art-eis-feedback-20261108-v3`は9checkpoint、
+登録verifierと別実行verifyが成功した。source=`43386c30797aac97f88d338f16c76304cb14ff143d9f9111e4dc0eba01361947`、
+manifest=`ea7a00561cb8da52693a7a5afeec6b8c5723917534f51668d75b6b047a55d9da`、
+raw=`87a03b86750e0d89402495023d6e837e65d3747fc1580333bb83ebad27fea964`。
+exact db0f ArtPreviewで通常施工・実入所/Dream・保存復元(1845v0→831v1)・自然退出・
+cooldown15秒(仮想85.614576461→100.614576461)を観測。実active/root/part/材質の同一性と
+全9画像をmain/独立read-onlyで確認し、Intel Arc/Vulkan WARN/ERRORなし。
+保持・seal/finalize/storage pass、allocated=296582414336B。正式art/numeric/release採否は未完。
+用途終了した失敗job `tak14-restarea-ordinary-art-feedback-20261107-v1`、
+`tak14-restarea-ordinary-art-eis-feedback-20261107-v1`、`tak14-restarea-ordinary-art-eis-feedback-20261108-v2`
+は各診断consumerを正式release後、`target/native-acceptance/`直下の当該生成物だけを撤去した。
+削除前duは順に149721088/192282624/189358080B（合計531361792B）。invalid metadataと原因・補正結果は
+維持し、候補制作原本・最新成功job・共有Cargo cacheは変更しない。
+
+次は最大zoom-out=5でのUI補完を明示legとして実装する。数値camera scale、実wheel、hover/pointer/tooltip
+対象とvisible本文を同一sampleへ受動記録し、既存consentの宣言SCROLL capabilityを持つEISだけを使う。
+通常入力でzoom→exact owner hover→利用人数/Dream表示→同owner選択をempty/occupiedで確認する。
+tooltipを情報panel本文と混同せず、予約数や未表示値は証明しない。scale/stateを直接書き換えず、
+wheel/ACK回数上限、window/epoch/owner、UI遮蔽、候補世代、誤tooltip/選択をfail-closedで検査する。
+既存recipeはSCROLLを要求しないまま維持する。関連テスト、Help、same-source検証、独立review後にfresh実機へ進む。
 
 `b6e2cfc5`のfresh `tak14-restarea-ordinary-art-eis-feedback-20261108-v2`は通常建設まで通過し、
 入所待機120秒でinvalid。予約5人はGoingToRestのまま通常移動していた。rawの最初の予約から
