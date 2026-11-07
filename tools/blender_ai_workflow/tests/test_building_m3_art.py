@@ -12,6 +12,33 @@ from build_building_m3_candidate import recipe
 
 
 class M3ArtTests(unittest.TestCase):
+    def test_every_upper_bone_shaft_has_grain_inside_its_actual_uv_polygon(self):
+        from PIL import Image, ImageDraw
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory)
+            art.paint("SoulSpa", output, "planes")
+            with Image.open(output / "albedo.png") as image:
+                planes = image.copy()
+            emission = (output / "slot_emissive.png").read_bytes()
+            art.paint("SoulSpa", output, "strokes")
+            with Image.open(output / "albedo.png") as image:
+                strokes = image.copy()
+            self.assertEqual(emission, (output / "slot_emissive.png").read_bytes())
+            upper = [face for face in art.face_layout("SoulSpa")["body"]
+                     if face["surface"] == "bone:shaft" and face["normal"][1] > 0.5]
+            self.assertEqual(len(upper), 42)
+            missing = []
+            for face in upper:
+                mask = Image.new("1", planes.size)
+                ImageDraw.Draw(mask).polygon(face["polygon_px"], fill=1)
+                left, top, right, bottom = mask.getbbox()
+                pixels = [(x, y) for y in range(top, bottom) for x in range(left, right)
+                          if mask.getpixel((x, y))]
+                if not any(planes.getpixel(p) != strokes.getpixel(p) for p in pixels):
+                    missing.append(face["cell"])
+                self.assertTrue(all(planes.getpixel(p)[3] == strokes.getpixel(p)[3] for p in pixels))
+            self.assertEqual(missing, [], "bone grain must reach every upper thin UV face")
+
     def test_restarea_entry_is_recessed_without_changing_ground_envelope(self):
         _, spec = art.contract("RestArea")
         self.assertEqual(spec["roof"]["front_z_profile"], [29, 12, 6, 12, 29])

@@ -199,8 +199,20 @@ def paint(kind, output, stage):
                         brush.line([(x+6, y+offset), (x+16, y+offset-1), (x+25, y+offset)],
                                    fill=(*dark, 255), width=1)
                 elif material == "bone":
-                    brush.line([(x+9, y+8), (x+12, y+15), (x+10, y+23)],
-                               fill=(*dark, 255), width=1)
+                    if face["surface"] == "bone:shaft":
+                        # Shaft UVs are thin quads: fixed atlas-cell marks miss
+                        # their polygons. Follow the actual longitudinal edges
+                        # without changing geometry, UVs, palette or lighting.
+                        q0, q1, q2, q3 = face["polygon_px"]
+                        def grain_point(t, across):
+                            left = [a + (b-a)*t for a, b in zip(q0, q3, strict=True)]
+                            right = [a + (b-a)*t for a, b in zip(q1, q2, strict=True)]
+                            return tuple(a + (b-a)*across for a, b in zip(left, right, strict=True))
+                        brush.line([grain_point(0.12, 0.4), grain_point(0.48, 0.55),
+                                    grain_point(0.88, 0.4)], fill=(*dark, 255), width=1)
+                    else:
+                        brush.line([(x+9, y+8), (x+12, y+15), (x+10, y+23)],
+                                   fill=(*dark, 255), width=1)
                 # Iron, inactive sigils and cloth edge thickness stay quiet.
                 image.paste(layer, (0, 0), mask)
             if role == "slot" and face["normal"][1] > 0.5:

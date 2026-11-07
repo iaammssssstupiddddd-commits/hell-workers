@@ -80,6 +80,20 @@ PNG `cb8dbcfff5bb16f05c9af3a939e9817ff2793e9d5f23ddfc16050e7122f0fa13`。
 world/catalogは96wu/256px、world Anchor[128,144]・代表OperationalMaskZero、geometry hash
 `738afb151a0d55044774a8f22af9b2649784678b61c4ab25e0577869acb1d2f2`、art/numeric/production_stateは未承認のまま。
 
+`df2f2c20`の同source `4a45c367…479b6`、同binary `02ea33c1…de72e9`でSoulSpaのfresh near/normal/farを実行した。
+3件ともrun・別実行・登録seal verifierを通過し、用途保持・finalize済み。mainと独立readonlyが全3画像を実見した。
+PNGはnear `1dff025ff111abb2c087d8e6cc51e8e18a02776ad4381885b566a9604bbb9f1b`、
+normal `fd7aa39caf2b2dca99fd9d2e4788c6a72d625adff7d5ae8cb68d1e4b4d538b4b`、
+far `8db517ce77342c0060416323687084727f5467a073be0213403e445acb5cdca2`。
+同ArtPreview・36体の静止fixtureでmask0/1/3/15と0/1/2/4人、4区画は読めるが、骨素材の筋・節は弱く
+黄土色の直線格子へ寄っている。active slotはSoulに覆われ、発光単独の判読も未達。技術passで美術採否を閉じない。
+atlas/UVの実経路を照合すると、上向きbone:shaft 42面中34面で既存の固定cell描線が面内へ届いていない。
+長辺共通正規化で細いUV帯になるのに、strokeを固定cell座標へ描きpolygon maskで切り捨てるためである。
+次は `building_m3_art.py` と対応testだけでshaft描線を実UV quadの長軸へ沿わせる。
+色・geometry・logical footprint・slot順・emissive・runtimeは変更せず、旧描線で失敗する面内画素回帰を先に追加する。
+Help実レビュー・変更別CI・独立readonly後、fresh候補を既存制作経路で作り新identityとして再比較する。
+旧原本・3距離画像は修正前後比較の用途で保持し、正式art/numeric/release/performanceは未承認のまま。
+
 `c07987e4`のfresh `tak14-restarea-ordinary-art-eis-feedback-20261108-v3`は9checkpoint、
 登録verifierと別実行verifyが成功した。source=`43386c30797aac97f88d338f16c76304cb14ff143d9f9111e4dc0eba01361947`、
 manifest=`ea7a00561cb8da52693a7a5afeec6b8c5723917534f51668d75b6b047a55d9da`、
