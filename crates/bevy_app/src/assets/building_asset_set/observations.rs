@@ -337,6 +337,7 @@ fn snapshot(world: &mut World) -> Result<Value, String> {
             json!({"entity": format!("{entity:?}"),
             "kind": format!("{:?}", building.kind), "position": pose.translation.to_array(),
             "rotation": pose.rotation.to_array(), "scale": pose.scale.to_array(),
+            "entity_bits": entity.to_bits(),
             "movable": building.kind.is_player_movable(), "provisional": building.is_provisional,
             "refining": world.get::<hw_core::visual_mirror::MudMixerVisualState>(entity).map(|state| state.is_active)})
         })
@@ -356,6 +357,7 @@ fn snapshot(world: &mut World) -> Result<Value, String> {
         .map(|(entity, bp)| {
         json!({"entity": format!("{entity:?}"), "entity_bits": entity.to_bits(), "kind": format!("{:?}", bp.kind),
             "footprint": bp.occupied_grids, "progress": bp.progress,
+            "materials_complete": bp.materials_complete(),
             "delivered_materials": bp.delivered_materials.iter().map(|(kind, count)| (format!("{kind:?}"), *count)).collect::<std::collections::BTreeMap<_, _>>(),
             "flexible_material_requirement": bp.flexible_material_requirement.as_ref().map(|r| json!({"required_total": r.required_total, "delivered_total": r.delivered_total}))})
         })
@@ -446,15 +448,22 @@ fn snapshot(world: &mut World) -> Result<Value, String> {
     let camera_scale = query.iter(world).next().map(|pose| pose.scale.x);
     let placement_context = placement_context(world)?;
     let bridge = super::acceptance::bridge_probe::snapshot(world)?;
-    let mut actors =
-        world.query_filtered::<(Entity, &Transform), With<hw_core::soul::DamnedSoul>>();
+    let mut actors = world.query_filtered::<(
+        Entity,
+        &Transform,
+        Option<&hw_jobs::ActiveTaskIdentity>,
+    ), With<hw_core::soul::DamnedSoul>>();
     let actors: Vec<_> = actors
         .iter(world)
         .take(129)
-        .map(|(entity, pose)| {
+        .map(|(entity, pose, identity)| {
             json!({
         "entity": format!("{entity:?}"), "position": pose.translation.to_array(),
-        "grid": hw_world::WorldMap::world_to_grid(pose.translation.truncate())})
+        "grid": hw_world::WorldMap::world_to_grid(pose.translation.truncate()),
+        "task_identity": identity.map(|identity| json!({
+            "assignment": format!("{:?}", identity.assignment_entity),
+            "target": format!("{:?}", identity.current_target_entity),
+            "work_type": format!("{:?}", identity.current_work_type)}))})
         })
         .collect();
     if actors.len() > 128 {

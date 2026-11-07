@@ -67,11 +67,41 @@ fresh `tak14-rest-area-cooldown-refund-feedback-20261107-v6`はsource
 返却2102v10／2360v3各Wood1、request2098v9閉鎖・4tile通行復元を確認した。
 Intel Arc/Vulkanの全6画像・原入力・rawを独立reviewし、登録verifierとstrict log検査pass、
 seal/finalize済み。今回WARN/ERRORはなく、旧Soulへの遅延command警告は再現しなかった。
-v5はinvalidのまま保持する。v6の29,396,992 bytesは通常施工・全予約/inventory観測の
+v5はinvalid履歴のまま保持する。v6の29,396,992 bytesは通常施工・全予約/inventory観測の
 次工程比較だけをconsumerとして保持し、旧source/binaryの再検証依存は精算した。
 通常/profiling workspace、Memory/Tracy/RenderDoc構成、両Clippy警告0、Help No impact、
 rust-analyzer 0件、contracts/toolingを確認。全体CIは既存依存advisory 2件で未通過。
 この限定feedbackを全予約/inventory・art/numeric/performance/release承認へ読み替えない。
+原因修正とfresh v6の確認後、v5診断consumerを正式解除し、process不在・原本なし・
+symlinkなしを確認して生成raw/画像/検証用saveだけを削除した（43,352,064 bytes）。
+失敗metadata・採用コード・制作原本・最新v6証拠・通常Cargo cacheは保全した。
+
+次の通常施工feedbackは既存`commit_completed_building`→`publish_building_completed`の
+domain event記録を利用する。経路確認で元Blueprint・新building・kind・footprintのproducerが
+既に存在すると分かったため、重複producerやゲーム処理は追加しない。
+新しい`rest-area-completion` caseは通常配置後に実配送・施工を待つだけとし、完了event、
+実Build task終了message、同epochの旧Blueprint消失・新ownerと全map占有をrawと画像で照合する。
+状態差やUI通知だけを施工commitへ昇格せず、施工条件・速度・spawn・予約は変更しない。
+全予約/inventory清算・正式asset/releaseとは分け、拒否系試験・Help判断・独立review・fresh実機を経る。
+独立reviewで配送前Build完了を許す抜けを発見したため、最終配送以降のsample/time、
+実ActiveTaskIdentityとの完了前一致を必須化した。元配送assignmentを保持するchainは維持し、
+同sampleでのdomain callback→Lastのmessage読取順も別に検証する。関連59 tests pass。
+初回`tak14-rest-area-construction-feedback-20261107-v1`は通常Wood5搬入・施工完了に到達したが、
+verifierがRestAreaを誤って通行可能と期待して拒否したためinvalid封印/finalizeした。
+既存`BuildingType::blocks_movement`とWorldMap完成処理は4tile通行不可が正しいため、
+ゲームを変えず新caseの述語・fixtureだけを訂正し、通行可能を拒否するtestを追加する。
+20,246,528 bytesの初回診断をfresh確認まで保持し、旧invalidをpassへ変更しない。
+fresh `tak14-rest-area-construction-feedback-20261107-v2`はsource
+`860333f9ad5043357e48a901ebdac833d59b66a99a07f1f6e3cbab20e158688d`、harness
+`16199865666c335e2e14d8ba01470d7f84044a521bbfbf8015a82527dcd0384c`で限定pass。
+Blueprint2233v0へ5個の実Woodを配送し、actor1863v0／起点assignment2234v0のBuild完了と
+新building2283v42への4tile占有移管をsample206で確認した。domain event359→Lastのtask361、
+実時刻は双方59.600192742。旧owner消失・全4tile通行不可、全3PNG/原入力/rawを独立review、
+登録verifier・strict log検査pass、seal/finalize済み。Intel Arc/Vulkan、WARN/ERRORなし。
+20,033,536 bytesは通常利用/Dreamと残lifecycleへの比較用途だけを保持し、旧source/binary依存は精算。
+完成画像は現行fallbackの簡素な表示であり、正式art/numeric・全予約/inventory・性能・releaseは未承認。
+通常/profilingのworkspace試験・両Clippy警告0、Memory/Tracy/RenderDoc構成、関連59 tests・tooling・
+Help No impactを確認。rust-analyzerはcfg-disabled hintのみ、エラー0。全体CIは既存依存2件で未通過。
 
 2026-11-07再開工程: 通常Blueprint取消が実際に発行したrefund Entity IDsと、
 deferred適用後のowner/request/storage/map・関連actor状態を結ぶprofiling-only観測を追加する。

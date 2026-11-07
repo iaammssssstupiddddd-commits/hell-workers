@@ -285,6 +285,18 @@ post-release cursor消失でinvalidのまま記録した。v2の部分的な実�
 入力因果や正式lifecycle全legを証明しない。量のstate deltaだけをcommitへ変換しない。
 cursor消失の切り分けには、明示UI observerの`window_focused`を実Windowから受動記録する。
 focusを設定・強制したり、cursor/focus guardを免除するものではない。
+別case `rest-area-completion`は通常配置後、最大120秒の受動待機で実材料配送・通常施工の
+完了を待つ。準備で材料・worker・進捗を付与しない。原domainの`BuildingCompleted`と
+同Blueprintを対象にした実Build task終了、5つの実Wood消費receipt、旧owner消失と新buildingの
+4tile占有・通行不可（既存`BuildingType::blocks_movement`契約）を同epoch/raw・3枚のowned画像へ拘束する。rawのBuilding `entity_bits`と
+Blueprint `materials_complete`は実値の読み取りであり、生成・進捗変更・承認を行わない。
+actorsの実`ActiveTaskIdentity`（assignment／current target／work type）も受動記録し、
+Build完了を直前の実assignmentへ結ぶ。chain後もassignmentの起点は元配送requestのことがあり、
+Blueprint同値へ書き換えない。最終配送以降のtask sampleとdomain完了sampleの順を要求する。
+同sampleはExecute後のdomain callbackが先、Lastでのtask message読取りが後になるため、
+rawの記録時刻順を実処理の発行順と取り違えない。異sampleの時刻逆転は拒否する。
+同kindのstate差やUI完了表示だけでは合格させず、全予約/inventory・完成後の利用/Dream・
+art/numeric/performance/releaseは別受入とする。このcaseの追加だけでは実機成功ではない。
 明示production観測sessionのrawは通常500ms間隔、実際のheld WASD中は50ms間隔で採る。
 これはcameraの通常速度・入力・worldを変更せず、read-only観測の間隔だけを切り替える。
 1200 sample／4096 eventのcapは維持する。hostが停止帯通過を観測したら即時拒否して

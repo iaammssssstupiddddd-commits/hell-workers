@@ -13,6 +13,8 @@ CHECKPOINTS = ("rest-area-empty", "rest-area-placed", "rest-area-saved",
                "rest-area-loaded", "rest-area-cancelled")
 REFUND_CHECKPOINTS = tuple("rest-area-refund-" + phase for phase in (
     "empty", "placed", "delivered", "saved", "loaded", "cancelled"))
+COMPLETION_CHECKPOINTS = tuple("rest-area-completion-" + phase for phase in (
+    "empty", "placed", "completed"))
 
 
 def checkpoint(entries, phase):
@@ -45,6 +47,13 @@ def check_observation(case, value):
                    and len(evidence["cells"]) == 4
                    and [cell["grid"] for cell in evidence["cells"]] == footprint,
                    "RestArea footprint/cell order differs")
+    if case == "rest-area-completion-completed":
+        native.require(not evidence["blueprints"] and len(evidence["buildings"]) == 1
+                       and not evidence["legal"]
+                       and all(cell["owner"] == evidence["buildings"][0]
+                               and cell["walkable"] is False for cell in evidence["cells"]),
+                       "completed RestArea must own its blocked footprint")
+        return
     native.require(not evidence["buildings"], "planning evidence contains a completed RestArea")
     if phase in ("empty", "cancelled"):
         native.require(evidence["legal"] and not evidence["blueprints"]
@@ -116,10 +125,12 @@ def check_sequence(entries, *, refund=False):
                    "RestArea cancellation receipt is missing")
 
 
-def exercise(driver, *, refund=False):
-    pause = set_refund_paused if refund else set_paused
+def exercise(driver, *, refund=False, completion=False):
+    native.require(not (refund and completion), "completion and cancellation cases are distinct")
+    pause = set_refund_paused if refund or completion else set_paused
     def capture(phase):
-        driver.capture(("rest-area-refund-" if refund else "rest-area-") + phase)
+        prefix = "rest-area-completion-" if completion else "rest-area-refund-" if refund else "rest-area-"
+        driver.capture(prefix + phase)
     if "text-field:DevPoc" in driver.last["controls"]:
         driver.click("dev-minimize")
     capture("empty")
@@ -139,6 +150,14 @@ def exercise(driver, *, refund=False):
     driver.key("Escape")
     pause(driver, True)
     capture("placed")
+    if completion:
+        pause(driver, False)
+        driver.last = driver.wait(lambda value: len(value["rest_area_planning"]["buildings"]) == 1
+                                  and not value["rest_area_planning"]["blueprints"],
+                                  after=driver.last["frame"], timeout=120)
+        pause(driver, True)
+        capture("completed")
+        return
     if refund:
         pause(driver, False)
         def has_delivery(value):
@@ -177,6 +196,120 @@ def set_refund_paused(driver, paused):
     before = driver.last["frame"]
     driver.click("menu:SetTimeSpeed(Paused)" if paused else "menu:SetTimeSpeed(Normal)")
     driver.last = driver.wait(lambda value: value["paused"] == paused, after=before)
+
+
+def check_completion(raw, entries, client):
+    """Actual domain completion plus delivery/task/owner witnesses, not release."""
+    from scripts import building_production_lifecycle as lifecycle
+    native.require([entry["case"] for entry in entries] == list(COMPLETION_CHECKPOINTS),
+                   "completion checkpoints differ")
+    for entry in entries:
+        check_observation(entry["case"], entry["value"])
+    empty, placed, completed = [entry["value"] for entry in entries]
+    native.require(all(value.get("nonce") == client["nonce"] and value.get("pid") == client["pid"]
+                       and value.get("paused") is True for value in (empty, placed, completed)),
+                   "completion checkpoint process/pause differs")
+    footprint = placed["rest_area_planning"]["footprint"]
+    native.require(all(value["world_epoch"] == placed["world_epoch"]
+                       and value["rest_area_planning"]["anchor"] == empty["rest_area_planning"]["anchor"]
+                       and value["rest_area_planning"]["footprint"] == footprint
+                       and value["rest_area_planning"]["draw_pos"] == empty["rest_area_planning"]["draw_pos"]
+                       for value in (empty, completed))
+                   and all(after["value"]["frame"] > before["value"]["frame"]
+                           and after["last_step"] > before["last_step"]
+                           for before, after in zip(entries, entries[1:])), "completion target/epoch/order differs")
+    native.require(raw.get("scope") == "production-raw-observations-v1"
+                   and raw.get("schema_version") == 2 and raw.get("failure") is None
+                   and raw.get("nonce") == client["nonce"] and raw.get("process_id") == client["pid"]
+                   and all(raw.get(key) is False for key in ("accepted", "performance_evidence", "promotion_authority")),
+                   "completion raw context/authority differs")
+    samples, events = raw["samples"], raw["events"]
+    native.require(0 < len(samples) <= 1200 and len(events) < 4096
+                   and all(type(sample.get("sample_index")) is int and sample["sample_index"] == index
+                           and type(sample.get("real_seconds")) in (int, float)
+                           and math.isfinite(sample["real_seconds"]) and sample["real_seconds"] >= 0
+                           for index, sample in enumerate(samples))
+                   and all(before["real_seconds"] < after["real_seconds"] for before, after in zip(samples, samples[1:]))
+                   and all(type(event.get("event_index")) is int and event["event_index"] == index
+                           for index, event in enumerate(events)),
+                   "completion raw ordinals differ")
+    rows = [event for event in events if event.get("operation") == "BuildingCompleted"]
+    native.require(len(rows) == 1, "actual completion domain event missing or duplicated")
+    row = rows[0]
+    index = row.get("sample_index")
+    native.require(row.get("producer") == "hw_jobs::publish_building_completed"
+                   and row.get("kind") == "RestArea" and row.get("footprint") == footprint
+                   and isinstance(row.get("owner"), str) and isinstance(row.get("blueprint_owner"), str)
+                   and row["owner"] != row["blueprint_owner"]
+                   and type(index) is int and 0 < index < len(samples), "completion event binding differs")
+    sample = samples[index]
+    epoch = placed["world_epoch"]
+    native.require(type(epoch) is int and epoch >= 0 and type(sample.get("world_epoch")) is int
+                   and sample["world_epoch"] == epoch
+                   and type(row.get("real_seconds")) in (int, float) and math.isfinite(row["real_seconds"])
+                   and 0 <= row["real_seconds"] <= sample["real_seconds"], "completion time/epoch differs")
+    prior = [bp for value in samples[:index] if value.get("world_epoch") == epoch
+             for bp in value.get("blueprints", []) if bp.get("entity") == row["blueprint_owner"]]
+    old_bits = placed["rest_area_planning"]["blueprints"][0]["entity"]
+    native.require(prior and all(bp.get("entity_bits") == old_bits and bp.get("kind") == "RestArea"
+                                and bp.get("footprint") == footprint for bp in prior)
+                   and any(bp.get("materials_complete") is True
+                           and bp.get("delivered_materials") == {"Wood": 5} for bp in prior)
+                   and not any(bp.get("entity") == row["blueprint_owner"] for bp in sample.get("blueprints", [])),
+                   "completion lacks real complete-material Blueprint history")
+    owners = [owner for owner in sample.get("owners", []) if owner.get("entity") == row["owner"]]
+    native.require(len(owners) == 1 and owners[0].get("kind") == "RestArea"
+                   and owners[0].get("provisional") is False
+                   and owners[0].get("entity_bits") == completed["rest_area_planning"]["buildings"][0],
+                   "completion new owner differs")
+    for entity, exists in ((row["blueprint_owner"], False), (row["owner"], True)):
+        layers = [layer for layer in sample.get("owner_layers", []) if layer.get("entity") == entity]
+        native.require(len(layers) == 1 and layers[0].get("exists") is exists
+                       and sorted(layers[0].get("building_grids", [])) == (sorted(footprint) if exists else [])
+                       and all(layers[0].get(key) == [] for key in (
+                           "floor_grids", "door_grids", "bridge_grids", "stockpile_grids")),
+                       "completion ownership transfer differs")
+    tasks = [event for event in events if event.get("producer") == "TaskCompletedVisualMessage"
+             and event.get("operation") == "TaskCompleted" and event.get("work_type") == "Build"
+             and event.get("target") == row["blueprint_owner"]]
+    native.require(len(tasks) == 1 and type(tasks[0].get("sample_index")) is int
+                   and 0 <= tasks[0]["sample_index"] <= index
+                   and isinstance(tasks[0].get("assignment"), str) and tasks[0]["assignment"]
+                   and type(tasks[0].get("real_seconds")) in (int, float)
+                   and math.isfinite(tasks[0]["real_seconds"])
+                   and 0 <= tasks[0]["real_seconds"]
+                   and tasks[0]["real_seconds"] <= samples[tasks[0]["sample_index"]]["real_seconds"]
+                   and samples[tasks[0]["sample_index"]].get("world_epoch") == epoch
+                   and any(actor.get("entity") == tasks[0].get("worker")
+                           for actor in samples[tasks[0]["sample_index"]].get("actors", [])),
+                   "real Build task completion/actor missing")
+    deliveries = [event for event in events if event.get("producer") == "ordinary-blueprint-delivery-branch-v1"
+                  and event.get("owner") == row["blueprint_owner"]]
+    native.require(len(deliveries) == 5 and len({event.get("item") for event in deliveries}) == 5,
+                   "completion needs five distinct real Wood deliveries")
+    for count, event in enumerate(deliveries):
+        lifecycle.check_delivery_receipt(event, samples)
+        native.require(event["world_epoch"] == epoch and event["kind"] == "RestArea"
+                       and event["resource"] == "Wood" and event["before_count"] == count
+                       and event["after_count"] == count + 1 and event["sample_index"] <= index,
+                       "completion material sequence differs")
+    task, last = tasks[0], deliveries[-1]
+    native.require(last["sample_index"] <= task["sample_index"]
+                   and last["real_seconds"] <= task["real_seconds"]
+                   and last["event_index"] < task["event_index"], "Build completion precedes material delivery")
+    if task["sample_index"] == index:
+        # The domain callback runs after Execute; its raw row is appended now.
+        # Task visual messages are drained later in Last, not at publication.
+        native.require(row["event_index"] < task["event_index"]
+                       and row["real_seconds"] <= task["real_seconds"], "same-sample completion producer order differs")
+    else:
+        native.require(task["event_index"] < row["event_index"]
+                       and task["real_seconds"] <= row["real_seconds"], "Build/domain completion time reversed")
+    native.require(any(actor.get("entity") == task["worker"]
+                       and actor.get("task_identity") == {"assignment": task["assignment"],
+                           "target": row["blueprint_owner"], "work_type": "Build"}
+                       for value in samples[:task["sample_index"]] if value.get("world_epoch") == epoch
+                       for actor in value.get("actors", [])), "Build completion has no exact prior active assignment")
 
 
 def cancel_loaded(driver, *, refund=False):

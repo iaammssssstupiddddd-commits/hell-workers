@@ -16,7 +16,7 @@ struct Target((i32, i32));
 pub(super) fn enabled() -> bool {
     matches!(
         std::env::var("HW_NATIVE_UI_CASE").as_deref(),
-        Ok("rest-area-planning" | "rest-area-refund")
+        Ok("rest-area-planning" | "rest-area-refund" | "rest-area-completion")
     )
 }
 
