@@ -645,6 +645,21 @@ numeric Entity bitsがないためdurable remap照合でinvalidとなった。si
 受動producerへ追加し、grid接続・逆参照を持つfixtureと欠損/異ID/異参照の拒否試験を補完する。
 Debug文字列からbitsを推測せず、mapping条件も緩めない。旧結果はinvalidのままseal/finalizeする。
 
+補完後の`tak14-soulspa-ordinary-planning-20261108-v5`は`6e612c1bd94f832aa9ee345563d295986c307a7f`で
+5checkpointと別実行の独立CLI verifyが成功し、primary seal pass/finalizeした。
+Intel Arc MTL / Vulkanの所有X11窓で通常fallbackの配置表示を取得し、全画像を目視した。
+site `2226v0`→`909v1`、epoch0→1、4tileとPowerGrid `1884v0`→`1858v1`の実remap、
+500731 bytes/SHA256 `8d29562112841ff9440426e09960f1b849bd952c5a9f5561b884e611f73611e3`の
+同一保存原本、未搬入Bone0・必要12・active_slots4・ゼロ出力・歩行可能な4区画を照合した。
+確認付き取消は復元ownerへの実outcome `Canceled { refunded_bones: 0 }`、site/tile/map owner消失と整合する。
+manifest SHA256は`a4a0734ebde473487b61a008bfa039c519ab647c83cc043f487949bcfb7b4ac9`、
+raw SHA256は`05cf5522bb35ebbd6929fff863ad964787efb8e8b2a3f3a3027ce1a84618a334`。
+これは未搬入の施工予定だけの限定技術受入であり、候補アートの通常適用、自然搬入/完成/利用、
+搬入後返却、全owner cleanup、Capture/Memory性能、正式releaseは未完のまま。
+v5を次の自然施工・通常利用との比較基準に保持し、診断を終えた旧v1〜v4のjobは保持解除して撤去する。
+旧4jobの実測83,501,056 bytesを撤去し、storage checkを通過した。失敗metadataと簡潔な診断は保持し、
+採用candidate・authoring原本・最新v5・primary Cargo cacheは変更しない。
+
 ## 5. マイルストーン
 
 ### M1: 原本・候補
