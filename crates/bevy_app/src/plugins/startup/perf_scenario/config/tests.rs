@@ -67,6 +67,28 @@ fn building_art_static_rejects_wrong_population_clock_and_measurement_contract()
             size == "small"
         );
         assert!(parse_input(&args, &context).is_err());
+        for (page, count) in [12, 16, 16, 20].into_iter().enumerate() {
+            let session = format!("{{\"spa_mask_page\":{page}}}");
+            let count = count.to_string();
+            let mut page_args = args.clone();
+            page_args[population + 1] = &count;
+            assert_eq!(
+                parse_input(&page_args, &[("HW_BUILDING_ART_SESSION", &session)]).is_ok(),
+                size == "small"
+            );
+            assert!(parse_input(&args, &[("HW_BUILDING_ART_SESSION", &session)]).is_err());
+        }
+        for invalid in ["true", "1.0", "-1", "4"] {
+            let session = format!("{{\"spa_mask_page\":{invalid}}}");
+            assert!(parse_input(&args, &[("HW_BUILDING_ART_SESSION", &session)]).is_err());
+        }
+        assert!(
+            parse_input(
+                &args,
+                &[("HW_BUILDING_ART_SESSION", "{\"spa_mask_page\":null}")]
+            )
+            .is_ok()
+        );
         // Parser admission does not approve an asset: configure_building_art
         // subsequently validates the full explicit session and exact identity.
         for quality in ["medium", "low"] {

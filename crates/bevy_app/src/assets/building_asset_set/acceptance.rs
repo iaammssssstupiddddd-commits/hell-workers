@@ -27,6 +27,8 @@ pub struct BuildingArtSession {
     pub variant: BuildingArtVariant,
     #[serde(default)]
     pub lighting: BuildingArtLighting,
+    #[serde(default)]
+    pub spa_mask_page: Option<u8>,
 }
 
 /// Separate seeded comparison; never an ordinary-world or release recipe.
@@ -52,6 +54,32 @@ impl BuildingArtSession {
     }
 
     fn validate_context(&self, present: impl Fn(&str) -> bool) -> Result<(), String> {
+        if let Some(page) = self.spa_mask_page {
+            if page > 3
+                || self.identity.kind != BuildingAssetKind::SoulSpa
+                || self.identity.authority != BuildingAssetAuthority::IsolatedCandidate
+                || self.mode != "candidate"
+                || self.variant != BuildingArtVariant::Gallery
+                || self.lighting != BuildingArtLighting::Standard
+                || self.view == BuildingArtView::Overview
+                || [
+                    "HW_BUILDING_M6_MODE",
+                    "HW_BUILDING_ORDINARY_ART_SESSION",
+                    "HW_BUILDING_PRODUCTION_OBSERVATIONS",
+                    "HW_BUILDING_ASSET_RELEASES",
+                    "HW_M2_ACCEPTANCE_PROBE",
+                    "HW_BRIDGE_ACCEPTANCE_PROBE",
+                    "HW_NATIVE_UI_ROOT",
+                ]
+                .into_iter()
+                .any(present)
+            {
+                return Err(
+                    "Spa mask page requires an isolated candidate-only static gallery".into(),
+                );
+            }
+            return Ok(());
+        }
         if !self.is_rest_context() {
             return if self.lighting == BuildingArtLighting::Standard {
                 Ok(())
@@ -167,6 +195,69 @@ fn request(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn spa_pages_are_candidate_only_bounded_and_cannot_mix_sessions() {
+        let raw = serde_json::json!({"mode":"candidate", "identity":{"kind":"SoulSpa", "generation":2,
+            "authority":"isolated_candidate", "manifest_sha256":"a".repeat(64)},
+            "locator":"manifests/building-soul-spa-v1.buildingset", "status_path":"/unused/spa-page.json",
+            "nonce":"a".repeat(32), "view":"near", "spa_mask_page":0});
+        for page in 0..4 {
+            let mut value = raw.clone();
+            value["spa_mask_page"] = serde_json::json!(page);
+            let session: BuildingArtSession = serde_json::from_value(value).unwrap();
+            assert!(session.validate_context(|_| false).is_ok());
+            for key in [
+                "HW_BUILDING_M6_MODE",
+                "HW_BUILDING_ORDINARY_ART_SESSION",
+                "HW_NATIVE_UI_ROOT",
+                "HW_BUILDING_PRODUCTION_OBSERVATIONS",
+                "HW_BUILDING_ASSET_RELEASES",
+                "HW_M2_ACCEPTANCE_PROBE",
+                "HW_BRIDGE_ACCEPTANCE_PROBE",
+            ] {
+                assert!(session.validate_context(|name| name == key).is_err());
+            }
+        }
+        for page in [
+            serde_json::json!(true),
+            serde_json::json!(1.0),
+            serde_json::json!(-1),
+            serde_json::json!(4),
+        ] {
+            let mut value = raw.clone();
+            value["spa_mask_page"] = page;
+            assert!(match serde_json::from_value::<BuildingArtSession>(value) {
+                Ok(session) => session.validate_context(|_| false).is_err(),
+                Err(_) => true,
+            });
+        }
+        for (key, value) in [
+            ("mode", "feedback"),
+            ("variant", "rest-area-art-context"),
+            ("lighting", "dim"),
+            ("view", "overview"),
+        ] {
+            let mut changed = raw.clone();
+            changed[key] = serde_json::json!(value);
+            assert!(
+                serde_json::from_value::<BuildingArtSession>(changed)
+                    .unwrap()
+                    .validate_context(|_| false)
+                    .is_err()
+            );
+        }
+        for (key, value) in [("kind", "Tank"), ("authority", "art_preview")] {
+            let mut changed = raw.clone();
+            changed["identity"][key] = serde_json::json!(value);
+            assert!(
+                serde_json::from_value::<BuildingArtSession>(changed)
+                    .unwrap()
+                    .validate_context(|_| false)
+                    .is_err()
+            );
+        }
+    }
 
     #[test]
     fn rest_context_is_explicit_preview_only_and_rejects_mixed_sessions() {

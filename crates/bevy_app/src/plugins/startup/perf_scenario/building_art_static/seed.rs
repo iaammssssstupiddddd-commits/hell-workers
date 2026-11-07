@@ -53,6 +53,15 @@ pub(crate) fn setup_building_art_static_system(mut p: SetupParams) {
     }
     actors.sort_by_key(|entity| entity.to_bits());
     let mut specs = layout::layout(p.config.size());
+    if let Some(page) = p
+        .art_session
+        .as_ref()
+        .and_then(|session| session.spa_mask_page)
+        && let Err(reason) = layout::apply_spa_mask_page(&mut specs, page)
+    {
+        fail(&mut p.state, &mut p.exit, reason);
+        return;
+    }
     if p.art_session
         .as_ref()
         .is_some_and(|session| session.is_rest_context())

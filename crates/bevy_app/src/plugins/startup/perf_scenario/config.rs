@@ -1235,15 +1235,27 @@ impl PerfScenarioConfig {
                     .to_string(),
             ));
         }
-        let rest_art_context = input
+        let art_session = input
             .env_text("HW_BUILDING_ART_SESSION")
-            .and_then(|raw| serde_json::from_str::<serde_json::Value>(&raw).ok())
+            .and_then(|raw| serde_json::from_str::<serde_json::Value>(&raw).ok());
+        let rest_art_context = art_session
+            .as_ref()
             .is_some_and(|session| session["variant"] == "rest-area-art-context");
-        if rest_art_context
+        let spa_mask_page = art_session
+            .as_ref()
+            .and_then(|session| session.get("spa_mask_page"))
+            .filter(|page| !page.is_null())
+            .map(|page| {
+                page.as_u64()
+                    .filter(|page| *page < 4)
+                    .ok_or_else(|| PerfScenarioConfigError("unknown Spa mask page".into()))
+            })
+            .transpose()?;
+        if (rest_art_context || spa_mask_page.is_some())
             && (workload != PerfWorkload::BuildingArtStatic || size != PerfScenarioSize::Small)
         {
             return Err(PerfScenarioConfigError(
-                "rest-area-art-context requires the small static fixture".into(),
+                "art context/page requires the small static fixture".into(),
             ));
         }
         if workload == PerfWorkload::BuildingArtStatic
@@ -1252,6 +1264,10 @@ impl PerfScenarioConfig {
                 || soul_count
                     != if rest_art_context {
                         6
+                    } else if let Some(page) = spa_mask_page {
+                        8 + (0..4u64)
+                            .map(|ordinal| (page * 4 + ordinal).count_ones())
+                            .sum::<u32>()
                     } else if size == PerfScenarioSize::Small {
                         15
                     } else {

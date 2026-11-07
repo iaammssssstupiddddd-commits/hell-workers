@@ -780,6 +780,7 @@ mod tests {
             nonce: "a".repeat(32), view: BuildingArtView::Normal,
             variant: crate::assets::building_asset_set::acceptance::BuildingArtVariant::RestAreaArtContext,
             lighting: BuildingArtLighting::Standard,
+            spa_mask_page: None,
         });
         world.insert_resource(pool);
         world.init_resource::<ContextState>();

@@ -39,6 +39,29 @@ PROFILE = "building-art"
 VIEWS = {"overview": 5.0, "near": 0.5, "normal": 1.0, "far": 2.0}
 QUALITIES = ("high", "medium", "low")
 CONTEXT_SCOPE = "seeded-paused-art-comparison"
+SPA_PAGE_SCOPE = "paused-static-spa-mask-page"
+
+
+def spa_page(value: dict) -> int | None:
+    page = value.get("spa_mask_page")
+    if page is None:
+        return None
+    pipeline.require(type(page) is int and 0 <= page < 4
+        and value.get("kind") == "SoulSpa" and value.get("mode") == "candidate"
+        and value.get("identity", {}).get("authority") == "isolated_candidate"
+        and value.get("variant", "gallery") == "gallery"
+        and value.get("lighting", "standard") == "standard"
+        and value.get("view") in ("near", "normal", "far")
+        and value.get("scope") == SPA_PAGE_SCOPE and value.get("promotion_authority") is False,
+        "Spa page requires exact isolated-candidate gallery scope")
+    return page
+
+
+def actor_count(value: dict) -> int:
+    page = spa_page(value)
+    if page is not None:
+        return 8 + sum(mask.bit_count() for mask in range(page * 4, page * 4 + 4))
+    return 6 if context_settings(value) else 15
 
 
 def context_preview(manifest: dict) -> dict:
@@ -87,6 +110,7 @@ def validate_subject(value: dict, *, feedback: bool) -> None:
 
 def check_plan(value: dict, binary: Path) -> dict:
     context_settings(value)
+    page = spa_page(value)
     quality(value)
     pipeline.require(value.get("view", "overview") in VIEWS, "unknown camera view")
     pipeline.require(value["kind"] != "Bridge", "Bridge requires its independent M4 recipe; nine-kind static evidence is inapplicable")
@@ -103,6 +127,9 @@ def check_plan(value: dict, binary: Path) -> dict:
     if context_settings(value):
         pipeline.require(value.get("context_preview") == context_preview(manifest),
             "context preview differs from exact source manifest")
+    if page is not None:
+        pipeline.require(pipeline.canonical(value.get("spa_parts")) == pipeline.canonical(manifest["parts"]),
+                         "Spa page parts differ from exact source manifest")
     if value["mode"] == "candidate":
         # Reuse promotion's art approval/provenance checks without approving or
         # installing the set. This target is only a read-only planning namespace.
@@ -127,10 +154,13 @@ def plan(args) -> dict:
              "quality": getattr(args, "quality", "high"),
              "variant": getattr(args, "variant", "gallery"),
              "lighting": getattr(args, "lighting", "standard"),
-             "scope": CONTEXT_SCOPE if getattr(args, "variant", "gallery") == "rest-area-art-context" else "paused-static-presentation", "promotion_authority": False,
+             "spa_mask_page": getattr(args, "spa_mask_page", None),
+             "scope": CONTEXT_SCOPE if getattr(args, "variant", "gallery") == "rest-area-art-context" else SPA_PAGE_SCOPE if getattr(args, "spa_mask_page", None) is not None else "paused-static-presentation", "promotion_authority": False,
              "feedback_only": args.mode == "feedback"}
     if value["variant"] == "rest-area-art-context":
         value["context_preview"] = context_preview(manifest)
+    if spa_page(value) is not None:
+        value["spa_parts"] = manifest["parts"]
     check_plan(value, args.codec)
     resources = native.resource_snapshot(repo, require_launcher=True)
     pipeline.require(not resources["failures"], str(resources["failures"]))
@@ -144,12 +174,12 @@ def plan(args) -> dict:
 
 
 def game_command(binary: Path, root: Path, value: dict) -> list[str]:
-    context = context_settings(value)
+    context_settings(value)
     return [str(binary), "--perf-scenario", "--perf-seed", str(static.SEED), "--perf-size", "small",
         "--perf-workload", "building-art-static", "--perf-render", "gpu", "--perf-clock", "realtime",
         "--perf-familiar-policy", "baseline", "--perf-operation-dialog", "hidden", "--perf-dashboard", "hidden",
         "--perf-output-dir", str(root / "data"), "--perf-warmup-secs", "30", "--perf-measure-secs", "60",
-        "--spawn-souls", "6" if context else "15", "--spawn-familiars", "0", "--perf-window-width", "1280", "--perf-window-height", "720",
+        "--spawn-souls", str(actor_count(value)), "--spawn-familiars", "0", "--perf-window-width", "1280", "--perf-window-height", "720",
         "--perf-window-scale-factor", "1", "--perf-rtt-quality", quality(value)]
 
 
@@ -179,6 +209,7 @@ def game_environment(environment: dict, view: Path, value: dict, nonce: str, roo
         "HW_BUILDING_ART_SESSION": json.dumps({"mode": value["mode"], "identity": value["identity"],
             "locator": pipeline.locator(value["kind"]), "nonce": nonce, "view": value.get("view", "overview"),
             "variant": value.get("variant", "gallery"), "lighting": value.get("lighting", "standard"),
+            "spa_mask_page": value.get("spa_mask_page"),
             "status_path": str(root / "probe.json")})})
     return environment
 
@@ -209,6 +240,8 @@ def validate_probe(probe: dict, value: dict, nonce: str) -> None:
         validate_context_fixture(probe, value)
     else:
         pipeline.require(probe["fixture"]["target_count"] == 36, "building-art fixture inventory differs")
+        if spa_page(value) is not None:
+            validate_spa_page(probe, value)
     view = value.get("view", "overview")
     pipeline.require(view in VIEWS and probe.get("view", "overview") == view,
                      "building-art camera view differs")
@@ -217,6 +250,64 @@ def validate_probe(probe: dict, value: dict, nonce: str) -> None:
                          and probe["fixture"].get("view") == view
                          and probe["fixture"].get("camera_scale") == VIEWS[view],
                          "building-art camera scale differs")
+
+
+def validate_spa_page(probe: dict, value: dict) -> None:
+    page = spa_page(value)
+    fixture = probe["fixture"]
+    pipeline.require(type(probe.get("spa_mask_page")) is int and probe["spa_mask_page"] == page
+        and type(fixture.get("spa_mask_page")) is int and fixture["spa_mask_page"] == page
+        and fixture.get("scope") == SPA_PAGE_SCOPE and fixture.get("souls") == actor_count(value),
+        "Spa page/actor evidence differs")
+    records = [record for record in fixture["records"] if record["kind"] == "SoulSpa"]
+    kinds = {"Tank", "MudMixer", "RestArea", "SoulSpa", "WheelbarrowParking", "SandPile", "BonePile", "Door", "OutdoorLamp"}
+    pipeline.require(len(fixture["records"]) == 36 and {record["kind"] for record in fixture["records"]} == kinds
+        and all(sorted(record["ordinal"] for record in fixture["records"] if record["kind"] == kind) == list(range(4)) for kind in kinds),
+        "Spa page full gallery inventory differs")
+    pipeline.require(len(records) == 4 and sorted(record["ordinal"] for record in records) == list(range(4)),
+                     "Spa page owner ordinals differ")
+    expected = {part["name"]: part for part in value["spa_parts"]}
+    pipeline.require(set(expected) == {"body", "slot0", "slot1", "slot2", "slot3"}, "Spa descriptor names differ")
+    entities = []
+    for record in records:
+        entities.extend([record.get("owner"), record.get("root")])
+        pipeline.require(pipeline.canonical(record.get("root_identity")) == pipeline.canonical(value["identity"]),
+                         "Spa consumed root generation differs")
+        center = record.get("center")
+        pipeline.require(isinstance(center, list) and len(center) == 2
+            and all(type(v) in (int, float) and math.isfinite(v) for v in center), "Spa center differs")
+        for field, wanted in (("root_translation_wu", [center[0], 0, -center[1]]),
+                              ("root_rotation_xyzw", [0, 0, 0, 1]), ("root_scale", [1, 1, 1])):
+            actual = record.get(field)
+            pipeline.require(isinstance(actual, list) and len(actual) == len(wanted)
+                and all(type(a) in (int, float) and math.isfinite(a) and abs(a-b) <= .001
+                        for a, b in zip(actual, wanted, strict=True)), "Spa actual root pose differs")
+        mask = page * 4 + record["ordinal"]
+        pipeline.require(type(record["state"].get("mask")) is int and record["state"]["mask"] == mask
+            and record["state"].get("operational") is True, "Spa actual tile mask differs")
+        parts = record["parts"]
+        pipeline.require(len(parts) == 5 and {part.get("name") for part in parts} == set(expected), "Spa actual part names differ")
+        for part in parts:
+            entities.append(part.get("entity"))
+            original = expected[part["name"]]
+            active = part["name"] != "body" and bool(mask & (1 << int(part["name"][-1])))
+            pipeline.require(part.get("mesh_role") == original["mesh_role"]
+                and type(part.get("parent")) is int and part["parent"] == record["root"]
+                and part.get("material_role") == original["material_role"]
+                and part.get("visible") is True and part.get("slot_active") is active
+                and part.get("emissive_white") is active and part.get("emissive_black") is (not active)
+                and part.get("emissive_texture_matches") is True and part.get("white_opaque_lit") is True,
+                "Spa actual material/mask differs")
+            for field in ("translation_wu", "rotation_xyzw", "scale"):
+                actual = part.get(field)
+                pipeline.require(isinstance(actual, list) and len(actual) == len(original[field])
+                    and all(type(a) in (int, float) and math.isfinite(a) and abs(a-b) <= .001
+                            for a, b in zip(actual, original[field], strict=True)), "Spa actual part pose differs")
+            pipeline.require(all(type(part.get(field)) in (int, float) and part[field] == expected_value
+                for field, expected_value in (("roughness", 1), ("metallic", 0), ("reflectance", 0)))
+                and isinstance(part.get("material_values"), str) and part["material_values"], "Spa actual material values differ")
+    pipeline.require(all(type(entity) is int and entity >= 0 for entity in entities)
+        and len(set(entities)) == len(entities), "Spa owner/root/part identities overlap or are missing")
 
 
 def validate_context_fixture(probe: dict, value: dict) -> None:
@@ -485,6 +576,7 @@ def main() -> int:
     parser.add_argument("--quality", choices=QUALITIES, default="high")
     parser.add_argument("--variant", choices=("gallery", "rest-area-art-context"), default="gallery")
     parser.add_argument("--lighting", choices=("standard", "dim"), default="standard")
+    parser.add_argument("--spa-mask-page", type=int, choices=range(4))
     args = parser.parse_args()
     if args.command == "plan":
         pipeline.require(all((args.repo, args.source_root, args.codec, args.kind, args.mode)), "incomplete recipe inputs")

@@ -468,6 +468,7 @@ mod tests {
             view: crate::assets::building_asset_set::acceptance::BuildingArtView::Overview,
             variant: Default::default(),
             lighting: Default::default(),
+            spa_mask_page: None,
         });
         world.init_resource::<BuildingAssetPool>();
         world.init_resource::<Time<Real>>();

@@ -128,6 +128,13 @@ numeric projection canonical SHA=`51ed725c6cdcab66ba548fcf2e23af76f637e522d28591
 `a1b92f31c34a62c034d041738f495669aa3b2d9ff2e41007966afc30da3a9bf8`（generation2）。
 両decisionをprovenanceへ内包し、通常assets/locatorは未変更。all-mask/通常lifecycle/性能/release/既定起動は未承認。
 次はこの隔離候補の全16maskを、既定galleryの4標本と混同しない明示入口で現sourceへ拘束して照合する。
+実装はgallery sessionの任意`spa_mask_page=0..3`をSoulSpa isolated_candidate/通常照明/smallだけへ限定する。
+pageごとに4標本をmask[4p,4p+1,4p+2,4p+3]へ一度seedし、actor数は他種8人+実mask popcountから導出する。
+未指定は既存[0,1,3,15]/15人・36体gallery、M6・RestArea context・他kind・通常起動を維持する。
+別scopeでpage/identity/source/nonce、実tileからのmaskとslot名/mesh/transform/材質・発光画像・倍率、
+body/inactive非発光を観測し、全4pageの別process画像と不変snapshotを照合する。これはseeded静止状態の検査であり、
+通常利用の状態遷移や性能受入は代替しない。未知page/混在/不足actor/誤slotや発光を拒否する。
+Help・変更別CI・Rust check/Clippy・独立readonly後、現候補のfresh4pageを逐次実行する。
 用途終了したauthoring v1（1294336B）とclay比較（1130496B）は固有の採用原本を含まず、
 既存strokes原本・runtime世代2・採用画像へ必要情報を保持したうえで生成物のみ撤去した（計2424832B）。
 両process終了・所有・非symlinkを照合し、v1診断consumerを正式release、clayはseal後撤去・finalizeした。

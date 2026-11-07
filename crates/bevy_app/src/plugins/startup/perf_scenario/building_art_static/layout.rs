@@ -72,6 +72,7 @@ pub(super) struct Specimen {
     pub anchor: (i32, i32),
     pub tiles: Vec<(i32, i32)>,
     pub center: Vec2,
+    pub spa_mask_override: Option<u8>,
 }
 
 impl Specimen {
@@ -88,7 +89,8 @@ impl Specimen {
     }
 
     pub fn spa_mask(&self) -> u8 {
-        [0, 1, 3, 15][self.quarter()]
+        self.spa_mask_override
+            .unwrap_or([0, 1, 3, 15][self.quarter()])
     }
 
     pub fn supports(&self) -> [(i32, i32); 2] {
@@ -111,6 +113,29 @@ pub(super) fn copies(size: PerfScenarioSize) -> usize {
     }
 }
 
+pub(super) fn apply_spa_mask_page(specs: &mut [Specimen], page: u8) -> Result<(), String> {
+    let spa = specs
+        .iter()
+        .filter(|spec| spec.kind == BuildingType::SoulSpa)
+        .collect::<Vec<_>>();
+    if page > 3
+        || spa.len() != 4
+        || spa
+            .iter()
+            .enumerate()
+            .any(|(index, spec)| spec.ordinal != index)
+    {
+        return Err("Spa page requires exactly four ordered specimens and page 0..3".into());
+    }
+    for spec in specs
+        .iter_mut()
+        .filter(|spec| spec.kind == BuildingType::SoulSpa)
+    {
+        spec.spa_mask_override = Some(page * 4 + spec.ordinal as u8);
+    }
+    Ok(())
+}
+
 pub(super) fn layout(size: PerfScenarioSize) -> Vec<Specimen> {
     KINDS
         .into_iter()
@@ -126,6 +151,7 @@ pub(super) fn layout(size: PerfScenarioSize) -> Vec<Specimen> {
                     anchor,
                     tiles: geometry.occupied_grids,
                     center: geometry.draw_pos,
+                    spa_mask_override: None,
                 }
             })
         })
@@ -167,6 +193,36 @@ mod tests {
     use std::collections::HashSet;
 
     #[test]
+    fn explicit_spa_pages_cover_all_masks_without_changing_other_specimens() {
+        let mut masks = Vec::new();
+        for (page, actors) in [12, 16, 16, 20].into_iter().enumerate() {
+            let mut specs = layout(PerfScenarioSize::Small);
+            apply_spa_mask_page(&mut specs, page as u8).unwrap();
+            let spa = specs
+                .iter()
+                .filter(|s| s.kind == BuildingType::SoulSpa)
+                .collect::<Vec<_>>();
+            let page_masks = spa.iter().map(|s| s.spa_mask()).collect::<Vec<_>>();
+            assert_eq!(
+                8 + page_masks.iter().map(|m| m.count_ones()).sum::<u32>(),
+                actors
+            );
+            masks.extend(page_masks);
+            assert!(
+                specs
+                    .iter()
+                    .filter(|s| s.kind != BuildingType::SoulSpa)
+                    .all(|s| s.spa_mask_override.is_none())
+            );
+        }
+        assert_eq!(masks, (0..16).collect::<Vec<_>>());
+        let mut small = layout(PerfScenarioSize::Small);
+        assert!(apply_spa_mask_page(&mut small, 4).is_err());
+        assert!(small.iter().all(|s| s.spa_mask_override.is_none()));
+        assert!(apply_spa_mask_page(&mut layout(PerfScenarioSize::Medium), 0).is_err());
+    }
+
+    #[test]
     fn candidate_camera_frames_only_its_first_four_and_preserves_overview() {
         use crate::assets::building_asset_set::{
             BuildingAssetAuthority, BuildingAssetKind, BuildingAssetSetIdentity,
@@ -186,6 +242,7 @@ mod tests {
             view: BuildingArtView::Near,
             variant: Default::default(),
             lighting: Default::default(),
+            spa_mask_page: None,
         };
         let expected = layout(PerfScenarioSize::Small)
             .iter()

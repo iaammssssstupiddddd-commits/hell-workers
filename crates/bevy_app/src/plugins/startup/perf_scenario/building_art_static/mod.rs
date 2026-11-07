@@ -5,6 +5,7 @@
 pub(crate) mod context;
 mod layout;
 mod seed;
+mod spa_masks;
 
 use std::collections::{HashMap, HashSet};
 
@@ -151,6 +152,15 @@ type VisualQuery<'w, 's> = Query<
         &'static ViewVisibility,
     ),
 >;
+type EquipmentRootQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static Building3dVisual,
+        &'static crate::systems::visual::building_presentation::EquipmentRoot,
+    ),
+>;
 type SpriteQuery<'w, 's> = Query<
     'w,
     's,
@@ -176,6 +186,8 @@ pub(crate) struct InspectParams<'w, 's> {
     buildings: BuildingQuery<'w, 's>,
     visuals: VisualQuery<'w, 's>,
     part_transforms: Query<'w, 's, &'static Transform>,
+    part_names: Query<'w, 's, &'static Name>,
+    equipment_roots: EquipmentRootQuery<'w, 's>,
     visual_roots: Query<'w, 's, &'static Building3dVisual>,
     root_transforms: Query<'w, 's, (&'static Building3dVisual, &'static Transform)>,
     sprites: SpriteQuery<'w, 's>,
@@ -224,6 +236,15 @@ pub(crate) fn inspect_building_art_static_system(mut params: InspectParams) {
             }
         }
         Ok(Some(evidence)) => {
+            if params
+                .art_session
+                .as_ref()
+                .is_some_and(|session| session.spa_mask_page.is_some())
+                && let Err(reason) = spa_masks::unchanged(params.state.evidence.as_ref(), &evidence)
+            {
+                fail(&mut params.state, &mut params.exit, reason);
+                return;
+            }
             if params.state.evidence.is_none() {
                 params.state.evidence = Some(evidence);
                 params.state.art_candidate = params.art_session.is_some();
@@ -241,7 +262,8 @@ pub(crate) fn inspect_building_art_static_system(mut params: InspectParams) {
                     "mode": session.mode, "identity": session.identity, "nonce": session.nonce,
                     "status": "ready", "stable_frames": params.state.stable_frames,
                     "fixture": params.state.evidence, "view": session.view,
-                    "camera_scale": session.view.scale(), "scope": "paused-static-presentation"});
+                    "camera_scale": session.view.scale(), "spa_mask_page": session.spa_mask_page,
+                    "scope": if session.spa_mask_page.is_some() { "paused-static-spa-mask-page" } else { "paused-static-presentation" }});
                 let write = || -> Result<(), Box<dyn std::error::Error>> {
                     let temporary = session.status_path.with_extension("tmp");
                     let file = std::fs::OpenOptions::new()
@@ -360,7 +382,12 @@ fn inspect(params: &InspectParams) -> Result<Option<Value>, String> {
     }
     let mut active_meshes = HashSet::new();
     // Full JSON is allocated only for the initial checkpoint, never per frame.
-    let mut records = params.state.evidence.is_none().then(Vec::new);
+    let mut records = (params.state.evidence.is_none()
+        || params
+            .art_session
+            .as_ref()
+            .is_some_and(|session| session.spa_mask_page.is_some()))
+    .then(Vec::new);
     for (spec, &owner) in params.state.specs.iter().zip(&params.state.owners) {
         let (building, transform, door, water, resting, mixer, lamp) = params
             .buildings
@@ -654,6 +681,39 @@ fn inspect(params: &InspectParams) -> Result<Option<Value>, String> {
             let mut record = json!({"kind": format!("{:?}", spec.kind), "ordinal": spec.ordinal,
                 "anchor": spec.anchor, "tiles": spec.tiles, "center": [spec.center.x, spec.center.y], "state": state});
             if let Some(candidate) = candidate {
+                if params
+                    .art_session
+                    .as_ref()
+                    .is_some_and(|session| session.spa_mask_page.is_some())
+                    && spec.kind == BuildingType::SoulSpa
+                {
+                    let roots = params
+                        .equipment_roots
+                        .iter()
+                        .filter(|(_, visual, _)| visual.owner == owner)
+                        .collect::<Vec<_>>();
+                    let (_, pose) = params
+                        .root_transforms
+                        .iter()
+                        .find(|(visual, _)| visual.owner == owner)
+                        .ok_or("Spa actual root missing")?;
+                    if roots.len() != 1
+                        || roots[0].2.observed_identity() != Some(&candidate.manifest.identity)
+                        || !pose
+                            .translation
+                            .abs_diff_eq(Vec3::new(spec.center.x, 0.0, -spec.center.y), 0.001)
+                        || !pose.rotation.abs_diff_eq(Quat::IDENTITY, 0.001)
+                        || !pose.scale.abs_diff_eq(Vec3::ONE, 0.001)
+                    {
+                        return Ok(None);
+                    }
+                    record["owner"] = json!(owner.to_bits());
+                    record["root"] = json!(roots[0].0.to_bits());
+                    record["root_identity"] = json!(roots[0].2.observed_identity());
+                    record["root_translation_wu"] = json!(pose.translation.to_array());
+                    record["root_rotation_xyzw"] = json!(pose.rotation.to_array());
+                    record["root_scale"] = json!(pose.scale.to_array());
+                }
                 if matches!(
                     candidate.manifest.identity.kind,
                     BuildingAssetKind::Tank | BuildingAssetKind::MudMixer
@@ -667,6 +727,19 @@ fn inspect(params: &InspectParams) -> Result<Option<Value>, String> {
                 }
                 let mut parts = Vec::new();
                 for (entity, mesh, _, visibility) in owner_visuals {
+                    if params
+                        .art_session
+                        .as_ref()
+                        .is_some_and(|session| session.spa_mask_page.is_some())
+                        && spec.kind == BuildingType::SoulSpa
+                    {
+                        match spa_masks::observe_part(params, spec, candidate, owner, *entity) {
+                            Ok(part) => parts.push(part),
+                            Err(_) if params.state.phase == Phase::Seeded => return Ok(None),
+                            Err(reason) => return Err(reason),
+                        }
+                        continue;
+                    }
                     let local = params
                         .part_transforms
                         .get(*entity)
@@ -686,6 +759,20 @@ fn inspect(params: &InspectParams) -> Result<Option<Value>, String> {
                     );
                 }
                 parts.sort_by_key(|part| part["mesh_role"].as_str().unwrap().to_owned());
+                if params
+                    .art_session
+                    .as_ref()
+                    .is_some_and(|session| session.spa_mask_page.is_some())
+                    && spec.kind == BuildingType::SoulSpa
+                {
+                    let names = parts
+                        .iter()
+                        .filter_map(|part| part["name"].as_str())
+                        .collect::<HashSet<_>>();
+                    if names != HashSet::from(["body", "slot0", "slot1", "slot2", "slot3"]) {
+                        return Err("Spa mask page part inventory differs".into());
+                    }
+                }
                 record["parts"] = json!(parts);
             }
             records.push(record);
@@ -714,6 +801,10 @@ fn inspect(params: &InspectParams) -> Result<Option<Value>, String> {
         evidence["view"] = json!(session.view);
         evidence["camera_scale"] = json!(camera_scale);
         evidence["camera_center"] = json!([camera_center.x, camera_center.y]);
+        if let Some(page) = session.spa_mask_page {
+            evidence["spa_mask_page"] = json!(page);
+            evidence["scope"] = json!("paused-static-spa-mask-page");
+        }
     }
     if let Some(m6) = params.m6.as_ref() {
         // CPU image payload is decoded storage, never compressed PNG or GPU allocation.

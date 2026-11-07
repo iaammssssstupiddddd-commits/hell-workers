@@ -196,3 +196,15 @@ camera/layers・壁depth・画像role/hash・Anchor/custom_sizeとresident inven
 readiness後の変化は補正せず拒否する。通常起動、通常入力ghost、既存LightField実装は変更しない。
 証拠scopeは `seeded-paused-art-comparison`、accepted/performance/promotion=false。
 この場面の技術passだけでは通常照明環境全体、通常利用/lifecycle、独立art/numeric、releaseを承認しない。
+
+### SoulSpaの全16区画mask検査
+
+同helperの `--mode candidate --kind SoulSpa --spa-mask-page 0|1|2|3` は、独立art/numeric決定を
+持つisolated_candidateだけの明示small galleryである。standard照明とnear/normal/farを使い、
+4標本へmask `[4p,4p+1,4p+2,4p+3]` を一度だけseedする。他種の8人にmaskのpopcountを加えた
+12/16/16/20人を要求し、未指定のgallery（mask 0/1/3/15・15人）やM6・通常起動を変更しない。
+実tileのworkersから計算したmask、消費されたexact世代、body/slot0〜3の名前・mesh・local pose・
+root pose、lit/opaque白色材質とalbedo、roughness=1/metallic=0/reflectance=0を照合する。
+active slotだけ白倍率とslot_emissive画像を持ち、body/inactiveは黒倍率・発光画像なしであることを要求する。
+readiness後のsnapshot変化は修復せず拒否する。scope `paused-static-spa-mask-page` はseeded静止状態の
+技術検査であり、自然な入退所・Save/Load・性能・正式releaseを承認するものではない。

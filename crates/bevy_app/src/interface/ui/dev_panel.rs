@@ -96,6 +96,7 @@ mod tests {
             view: BuildingArtView::Near,
             variant: Default::default(),
             lighting: Default::default(),
+            spa_mask_page: None,
         });
         app.update();
         assert_eq!(
