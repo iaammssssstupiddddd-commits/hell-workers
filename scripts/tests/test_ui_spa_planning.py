@@ -15,6 +15,10 @@ ui = importlib.import_module("ui_usability_acceptance")
 
 
 class SpaPlanningTests(unittest.TestCase):
+    def test_cancel_key_matches_actual_ui_intent_field_order(self):
+        self.assertEqual(spa.cancel_key("865v1"),
+                         "menu:CancelSoulSpaConstruction { source_task: None, target: 865v1 }")
+
     def test_world_press_keeps_actual_architect_menu_and_rejects_foreign_mode_before_press(self):
         for menu, mode, valid in (("Architect", "SoulSpaPlace(None)", True),
                                   ("Hidden", "SoulSpaPlace(None)", False), ("Architect", "None", False)):
@@ -121,7 +125,7 @@ class SpaPlanningTests(unittest.TestCase):
                  (19, "menu:SelectSaveCatalogSlot { slot: Manual1, session: 1 }"), (21, "F9"),
                  (25, "menu:SelectLoadCatalogSlot { slot: Manual1, session: 2 }"),
                  (39, "menu:ConfirmLoadCatalogSlot { slot: Manual1, session: 2 }"), (41, "select-loaded"),
-                 (42, "menu:CancelSoulSpaConstruction { target: 2v0, source_task: None }"),
+                 (42, "menu:CancelSoulSpaConstruction { source_task: None, target: 2v0 }"),
                  (49, "menu:ConfirmSoulSpaConstructionCancel { target: 2v0, epoch: 1, ticket: 1 }")]
         for now, key in specs:
             before_state = self.state(None if now <= 5 else 1 if now <= 39 else 2)

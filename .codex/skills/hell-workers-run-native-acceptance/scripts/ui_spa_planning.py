@@ -10,6 +10,11 @@ from ui_progress_bars import catalog_control
 CHECKPOINTS = tuple("soul-spa-" + phase for phase in ("empty", "placed", "saved", "loaded", "cancelled"))
 
 
+def cancel_key(owner):
+    # Match UiIntent's declared Debug field order, also observed in the real UI.
+    return f"menu:CancelSoulSpaConstruction {{ source_task: None, target: {owner} }}"
+
+
 def finite(value):
     return type(value) in (int, float) and math.isfinite(value)
 
@@ -411,7 +416,7 @@ def check_inputs(raw, entries, client, inputs):
                 r"menu:SelectSaveCatalogSlot \{ slot: Manual1, session: [1-9][0-9]* \}", "F9",
                 r"menu:SelectLoadCatalogSlot \{ slot: Manual1, session: [1-9][0-9]* \}",
                 r"menu:ConfirmLoadCatalogSlot \{ slot: Manual1, session: [1-9][0-9]* \}", "select-loaded",
-                re.escape(f"menu:CancelSoulSpaConstruction {{ target: {owner}, source_task: None }}"),
+                re.escape(cancel_key(owner)),
                 re.escape(f"menu:ConfirmSoulSpaConstructionCancel {{ target: {owner}, epoch: {entries[3]['value']['world_epoch']}, ticket: ") + r"[1-9][0-9]* \}"]
     native.require(len(filtered) == len(patterns) and all(re.fullmatch(pattern, key) for pattern, key in zip(patterns, filtered, strict=True)),
                    "Spa exact control/confirmation sequence differs")
@@ -457,7 +462,7 @@ def exercise(driver):
     # Select the loaded site through its normal world target, while paused.
     world_click(driver, "select-loaded", "owner_point")
     owner = context(driver.last)["sites"][0]["entity"]
-    action = f"menu:CancelSoulSpaConstruction {{ target: {owner}, source_task: None }}"
+    action = cancel_key(owner)
     driver.last = driver.wait(lambda v: action in v["controls"], after=driver.last["frame"])
     pause(driver, False)
     click(driver, action)

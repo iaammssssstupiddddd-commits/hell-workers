@@ -620,6 +620,14 @@ world capture/pointer-over-UIともfalseであった。試験のHidden menu要�
 配置pressやSave/Load/取消は未実施。旧結果はinvalidのままseal/finalizeし、原入力と観測を修正比較に保持する。
 製品状態を変更せず、試験は実Architect menuを正としてmode/footprint/window/epoch/入力guardを維持する。
 
+次の`tak14-soulspa-ordinary-planning-20261108-v2`は`c34f4da4`で通常配置・保存・復元・復元owner選択まで
+観測したが、取消controlの探索でtimeoutしinvalid終了した。実UIは
+`CancelSoulSpaConstruction { source_task: None, target: 865v1 }`を公開しており、試験が逆のfield順を期待した。
+取消/確認入力は未送信。保存/読込の実receiptは同じ500945 bytes/SHA256
+`e57639856f4fbe7f3c58377775b8f2f98551a26839bba1ee824dd691f943855d`を示し、
+旧site `2237v0`→`865v1`、4tileとgridの実remapを記録したが、全recipeの成功とは扱わない。
+この失敗もinvalid seal/finalizeして比較用に保持し、識別keyを実UiIntentの宣言順に集約して修正する。
+
 ## 5. マイルストーン
 
 ### M1: 原本・候補
