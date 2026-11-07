@@ -243,6 +243,10 @@ Xwayland/compositorの原点不一致は未確定仮説。開始座標依存を�
 既定の正式raw scopeでfeedbackを照合しinvalidとなった。旧結果は変更せず、live exerciseにも
 明示keywordでfeedback scopeを渡す。raw自身のscopeから推測せず、正式呼出しの既定と拒否は不変。
 読込後の退出/cooldownは当該試行では未検証であり、修正後のfresh比較で確認する。
+次のfresh試行では入所前に120秒の待機が終了した。予約5人はGoingToRestを維持して実際に移動し、
+123実秒で54仮想秒だけ進み、最寄りも中心まで約500wuを残した。固定待機の不足として入所待機を
+240秒へ有界化する。速度・Soul位置・予約・Dream・成功predicateは変えず、全体480秒上限を維持する。
+旧timeoutはinvalidのままで、240秒は入所成功や性能budgetの証明ではない。
 
 `python3 scripts/building_production_native_acceptance.py capabilities` はlocal supportを読むだけで、
 旧request/Run/hostへの照会、台帳更新、plan生成、build、launchを行わない。現在は `available=false`。

@@ -13,6 +13,13 @@
 
 ## 1. 目的
 
+`b6e2cfc5`のfresh `tak14-restarea-ordinary-art-eis-feedback-20261108-v2`は通常建設まで通過し、
+入所待機120秒でinvalid。予約5人はGoingToRestのまま通常移動していた。rawの最初の予約から
+実43.920→166.658秒、仮想34.630→88.401秒、最寄りの予約Soulは(1232,-1552)→(720,-466)、
+建物中心(672,32)まで約500wuを残した。停止・入力失敗ではなく有界待機不足と判断する。
+入所待機だけ240秒とし、既存全体480秒、実occupant/Dream>=2、raw同一性等の条件を維持する。
+待機中の速度変更・actor/進捗/状態の注入はしない。旧結果は診断保持・seal/finalizeし成功へ変更しない。
+
 `ec2c1c2b`のfresh `tak14-restarea-ordinary-art-eis-feedback-20261107-v1`では、宣言済み
 logical region=(0,0,1440,900)/scale=2、physical root=(2880,1800)で初回入力を通過した。
 通常施工・利用・Dream・Save:Succeeded・Load:Succeededと7checkpointを記録した後、

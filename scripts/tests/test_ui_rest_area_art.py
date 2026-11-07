@@ -13,6 +13,36 @@ art = completed.acceptance.rest_area_art
 
 
 class OrdinaryArtTests(unittest.TestCase):
+    def test_arrival_wait_is_bounded_and_requires_a_real_occupant(self):
+        driver = MagicMock()
+        state = {"frame": 10, "rest_area_planning": {"buildings": [99]}}
+        driver.last = state
+        driver.checkpoints = [{"value": state}]
+        row = {"entity": "soul", "dream": 2.5}
+        waits = []
+
+        def wait(predicate, **kwargs):
+            waits.append(kwargs)
+            if len(waits) == 1:
+                with patch.object(art.usage, "candidates", return_value=[]):
+                    self.assertFalse(predicate(state))
+                with patch.object(art.usage, "candidates", return_value=[({}, {**row, "dream": 1.9})]):
+                    self.assertFalse(predicate(state))
+                self.assertTrue(predicate(state))
+                return state
+            raise RuntimeError("stop after arrival")
+
+        driver.wait.side_effect = wait
+        with (patch.object(art.usage.planning, "exercise"),
+              patch.object(art.usage.planning, "set_refund_paused"),
+              patch.object(art.usage, "context", return_value={}),
+              patch.object(art.usage, "candidates", return_value=[({}, row)]),
+              patch.object(art.usage, "wait_for_raw_checkpoint")):
+            with self.assertRaisesRegex(RuntimeError, "stop after arrival"):
+                art.usage.exercise(driver)
+        self.assertEqual(waits[0], {"after": 10, "timeout": 240})
+        self.assertEqual(waits[1]["timeout"], 15)
+
     def test_live_art_lifecycle_forwards_scope_to_save_without_changing_formal_default(self):
         driver = object()
         with patch.object(art.usage, "exercise_save", side_effect=RuntimeError("stop before further input")) as save:

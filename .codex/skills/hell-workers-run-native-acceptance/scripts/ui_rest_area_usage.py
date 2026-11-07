@@ -112,7 +112,13 @@ def exercise(driver):
     bits = driver.last["rest_area_planning"]["buildings"][0]
     planning.set_refund_paused(driver, False)
     driver.last = driver.wait(lambda value: any(row["dream"] >= 2 for _, row in candidates(context(value), bits)),
-                              after=driver.last["frame"], timeout=120)
+                              # Ordinary reservations may select distant Souls. In the
+                              # recorded low-FPS art run they kept moving throughout
+                              # 123 wall seconds but advanced only 54 virtual seconds.
+                              # Allow arrival without changing speed/state or the
+                              # actual occupant predicate; Driver still caps the
+                              # complete session at 480 wall seconds.
+                              after=driver.last["frame"], timeout=240)
     planning.set_refund_paused(driver, True)
     driver.capture(CHECKPOINTS[-2])
     _, soul = next((owner, row) for owner, row in candidates(context(driver.last), bits) if row["dream"] >= 2)
