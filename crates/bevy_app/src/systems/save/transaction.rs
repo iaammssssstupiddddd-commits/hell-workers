@@ -154,6 +154,8 @@ fn replace_persisted_world_with_post_write(
     }
 
     world.flush();
+    #[cfg(feature = "profiling")]
+    super::observations::mapped(world, &incoming_entity_map);
     Ok(())
 }
 
@@ -1497,6 +1499,94 @@ mod tests {
             live.world().resource::<MutationTrace>().0,
             vec!["rehydrate"]
         );
+    }
+
+    #[cfg(feature = "profiling")]
+    #[test]
+    fn durable_load_observer_uses_the_real_transaction_entity_remap() {
+        use super::super::format::{SaveHeader, encode_save_file};
+        use super::super::observations::{self, DurableReceipts};
+        use super::super::{DispatchedSaveLoadRequest, LoadRequestOrigin, SaveLoadRequest};
+        use hw_core::SaveSlotId;
+        use hw_core::relationships::RestingIn;
+        use hw_core::soul::{IdleBehavior, IdleState};
+
+        let mut source = app_with_save_schema();
+        insert_persisted_resources(source.world_mut(), 2.0);
+        let rest = source
+            .world_mut()
+            .spawn((
+                Building {
+                    kind: BuildingType::RestArea,
+                    is_provisional: false,
+                },
+                hw_jobs::RestArea { capacity: 4 },
+                Transform::from_xyz(64.0, 64.0, 0.0),
+            ))
+            .id();
+        let soul = source
+            .world_mut()
+            .spawn((
+                DamnedSoul {
+                    dream: 5.0,
+                    ..default()
+                },
+                IdleState {
+                    behavior: IdleBehavior::Resting,
+                    ..default()
+                },
+                RestingIn(rest),
+                Transform::from_xyz(32.0, 64.0, 1.0),
+                Visibility::Hidden,
+            ))
+            .id();
+        source.world_mut().flush();
+        let incoming = capture_from_app(&mut source);
+        let source_registry = source.world().resource::<AppTypeRegistry>().clone();
+        let body = incoming.serialize(&source_registry.read()).unwrap();
+        let bytes = encode_save_file(SaveHeader::current(20260914), &body);
+
+        let mut live = app_with_save_schema();
+        insert_persisted_resources(live.world_mut(), 1.0);
+        live.init_resource::<DurableReceipts>()
+            .init_resource::<Time<Real>>()
+            .init_resource::<hw_core::WorldEpoch>()
+            .insert_resource(DispatchedSaveLoadRequest(Some(SaveLoadRequest::Load {
+                origin: LoadRequestOrigin::NormalCatalog { dialog_session: 8 },
+                slot: SaveSlotId::Manual1,
+            })));
+        observations::begin_load(live.world_mut(), &bytes);
+        let type_registry = live.world().resource::<AppTypeRegistry>().clone();
+        let registry = type_registry.read();
+        let plan = ResolvedRehydratePlan::with_step_for_test("test.noop", |_| {});
+        replace_persisted_world(live.world_mut(), &incoming, &registry, &plan).unwrap();
+        observations::finish_load(live.world_mut(), true);
+        let receipts = live.world().resource::<DurableReceipts>();
+        assert!(receipts.failure.is_none(), "{:?}", receipts.failure);
+        assert_eq!(receipts.rows.len(), 1);
+        let mappings = receipts.rows[0]["entity_remap"].as_array().unwrap();
+        let restored = |saved: Entity| {
+            let bits = mappings
+                .iter()
+                .find(|row| row["saved_bits"] == saved.to_bits())
+                .unwrap()["loaded_bits"]
+                .as_u64()
+                .unwrap();
+            Entity::from_bits(bits)
+        };
+        assert_eq!(
+            live.world().get::<RestingIn>(restored(soul)).unwrap().0,
+            restored(rest)
+        );
+        assert_eq!(
+            live.world()
+                .get::<DamnedSoul>(restored(soul))
+                .unwrap()
+                .dream,
+            5.0
+        );
+        assert_eq!(receipts.rows[0]["previous_epoch"], 0);
+        assert_eq!(receipts.rows[0]["world_epoch"], 1);
     }
 
     #[test]

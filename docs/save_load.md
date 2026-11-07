@@ -341,6 +341,34 @@ rebuild systemが観測できる。
 `PlayerIssuedDesignation` と `Priority` は durable なので load 後も許可された manual task の capability を復元するが、
 marker のない legacy / auto task を「auto marker が消えた manual task」と推測してはならず read-only とする。
 
+## 明示profiling sessionの保存/読込診断
+
+通常の保存形式・成否・復旧・terminal `SaveLoadOutcome` は変更しない。
+`HW_BUILDING_PRODUCTION_OBSERVATIONS`で明示したprofiling sessionだけが、非保存の
+`observations::DurableReceipts`を登録する。atomic saveがdirectory syncまで成功した分岐で、
+実際にstreamしたheader/body全bytesのSHA-256と長さ、requestのslot/source、epoch/実時刻と
+read-only RestArea/Soul snapshotを`DurableSave`へ記録する。durability uncertainは成功receiptにしない。
+
+normal loadは実際にreadしたcontainer bytesを同じrequestへ束縛し、成功transactionの最終flush後に
+`write_to_world_with`が返した実EntityHashMapから全Soul/RestAreaのsaved→loaded IDを採取する。
+呼出元が成功を確認し、同requestとepochの1世代遷移を照合してからだけ`DurableLoad`を発行する。
+rollback・recovery-only・失敗からこの成功receiptを生成せず、未完mapを次のloadへ持ち越さない。
+名前一致や近い座標をremapの代わりにはしない。
+
+pending loadは1件、未drain receiptは8件、選択mapは640件、元mapは65,536件、containerは64MiBを
+上限とし、欠損・重複・request/epoch不一致・上限超過は観測失敗へ伝播する。
+raw observerは`Last`の`SaveLoadApplySet`後にdrainし、同じframeの新world sampleへ結ぶ。
+これらは診断記録であり、player通知・Reflect/save schema・world mutationや判定には使用しない。
+byte hashと選択mapだけで全world canonical state、全inventory、正式asset/release受入を証明しない。
+
+2026-11-07の`tak14-durable-receipts-feedback-20261107-v1`では、通常UIのManual slot 1で
+save sample70/epoch0からload sample76/epoch1へ進み、両receiptと実containerの
+SHA-256 `664f920bbd449367244366423899e57ff8c55ade077e4d153ef969d07ae37cda`、
+499,109 bytesが一致した。独立read-only確認で20 Soulの実map、ID以外の収集状態とPool一致を確認。
+6 owned画像と登録済みrefund verifierもpass。ただし新receipt項目は独立手動読取の限定結果で、
+既存verifierの自動受入範囲ではない。保存時はBlueprintのためRestArea ownerは0件であり、
+完成したRestAreaの利用中save/loadと全world canonical一致は未受入。
+
 ## Rehydrate（ロード後の shell 再付与）
 
 セーブが復元するのはschema allow-listの simulation 状態のみで、spawn 関数がその場で挿入する

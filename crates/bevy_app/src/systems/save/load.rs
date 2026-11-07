@@ -202,6 +202,10 @@ fn execute_load(
     plan.validate_live(world)
         .map_err(LoadExecutionError::RehydratePrerequisite)?;
 
+    #[cfg(feature = "profiling")]
+    if matches!(mode, LoadCommitMode::Normal) {
+        super::observations::begin_load(world, &contents);
+    }
     let registry = type_registry.read();
     let commit_result = match mode {
         LoadCommitMode::Normal => {
@@ -212,6 +216,10 @@ fn execute_load(
         }
     };
     drop(registry);
+    #[cfg(feature = "profiling")]
+    if matches!(mode, LoadCommitMode::Normal) {
+        super::observations::finish_load(world, commit_result.is_ok());
+    }
     commit_result.map_err(LoadExecutionError::Commit)?;
 
     Ok(prepared.format)

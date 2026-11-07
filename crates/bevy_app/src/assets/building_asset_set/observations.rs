@@ -89,8 +89,14 @@ pub(super) fn configure(app: &mut App) -> Result<(), String> {
         .init_resource::<PlacementReceipts>()
         .init_resource::<CancellationReceipts>()
         .init_resource::<BlueprintDeliveryReceipts>()
+        .init_resource::<crate::systems::save::observations::DurableReceipts>()
         .add_observer(building_completed)
-        .add_systems(Last, (finalize_cancellation_receipts, observe).chain());
+        .add_systems(
+            Last,
+            (finalize_cancellation_receipts, observe)
+                .chain()
+                .after(crate::systems::save::SaveLoadApplySet),
+        );
     Ok(())
 }
 
@@ -553,6 +559,15 @@ fn observe(world: &mut World) {
     let now = world.resource::<Time<Real>>().elapsed_secs_f64();
     world.resource_scope(|world, mut observations: Mut<Observations>| {
         let index = observations.samples.len();
+        if let Some(mut receipts) = world.get_resource_mut::<crate::systems::save::observations::DurableReceipts>() {
+            if let Some(failure) = &receipts.failure {
+                observations.failure = Some(failure.clone());
+            }
+            for mut receipt in receipts.rows.drain(..) {
+                receipt["sample_index"] = json!(index);
+                observations.events.push(receipt);
+            }
+        }
         if let Some(mut receipts) = world.get_resource_mut::<BlueprintDeliveryReceipts>() {
             if let Some(failure) = receipts.failure {
                 observations.failure = Some(failure.into());
@@ -715,7 +730,7 @@ fn observe(world: &mut World) {
             "CancelConstruction: BlueprintCancellationApplied binds owner cleanup/refund IDs, not full reservation/inventory lifecycle; SoulSpa needs its separate producer",
             "MaterialDelivery: typed receipts cover ordinary blueprint hand/wheelbarrow branches only, not every construction-site delivery",
             "Salvage: DeconstructionCommitOutcome does not contain emitted salvage item IDs/counts",
-            "Durable state: SaveLoadOutcome does not contain canonical before/after save-state bytes",
+            "Durable state: commit byte hashes and selected Entity remaps do not prove canonical world-state equality or complete inventory lifecycle",
             "Complete lifecycle witnesses/cycles are not inferred from input or state deltas",
             "GPU/native/RSS/total application handles require independent host instrumentation"],
         "failure": failure, "samples": state.samples, "events": state.events});

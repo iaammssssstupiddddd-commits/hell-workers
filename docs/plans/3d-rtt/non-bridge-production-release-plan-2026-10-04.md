@@ -13,6 +13,13 @@
 
 ## 1. 目的
 
+保存/読込の次の境界は、実commit bytesと実Entity remapへ結ぶprofiling限定producer。
+`tak14-durable-receipts-feedback-20261107-v1`は通常Manual slot 1の499,109 bytesと
+Save/LoadのSHA一致、epoch0→1、全20 Soul map/収集状態/Pool一致を独立読取で確認した。
+6画像・登録済みrefund verifierはpass封印/finalize済み。新receipt項目は自動verifierの受入範囲ではなく、
+保存時BlueprintでRestArea ownerは0件。次は完成RestAreaの通常利用中save/loadを同じ実mapで
+自動照合する。全world canonical、cooldown満了、正式art/numeric/release/default起動は未完。
+
 2026-11-07材料返却工程: 既存のゼロ材料caseを変えず、通常RestAreaの実搬入Woodを受動観測してから
 同じF5/F9・二段階取消を行う別feedback caseを追加する。資材付与・進捗設定・AI割当は行わない。
 実前状態の材料数と、新規の返却Entity IDs/種類/数量を厳密照合する。材料なし・施工完了・
@@ -171,6 +178,13 @@ UI/raw境界の時刻は完全一致し、Intel Arc/Vulkan、WARN/ERRORなし。
 cooldown満了・利用中save/load・art/numeric/performance/releaseは未承認。
 43,528,192 bytesは残lifecycle比較用に保持した。旧施工v2と利用v2の比較consumerを最新batchへ
 移管・正式解除し、生成物20,033,536＋36,794,368 bytesを撤去。結果metadataとコード/原本は保全した。
+利用中save/loadの次工程では、明示production observerがあるprofiling buildだけに、
+実atomic-saveのheader/body bytesのdigestと、成功normal-loadが使用した実Entity remapを記録する。
+通常requestのoperation/slot/source、epoch、時刻、RestArea/Soulの実snapshotへ束縛し、
+rollback/recovery・未成功・異request・欠損map・上限超過から成功receiptを作らない。
+保存schema・ロード判断・rehydrate順・terminal outcome・gameplayは変えず、観測失敗だけを
+fail-closedで記録する。producerの拒否系と実transaction回帰を先に検証し、独立review後に
+通常UIの保存/読込とexact file bytesへ接続する。名前一致や状態差はEntity同一性の代用にしない。
 施工完了v1の誤ったwalkable期待値はv2で修正・独立review・実機passとなったため、
 旧v1 diagnostic consumerを正式releaseした。稼働process・symlink・原本がないことを確認し、
 `target/native-acceptance/tak14-rest-area-construction-feedback-20261107-v1`の生成物

@@ -141,6 +141,18 @@ root raw adapterが`Last`でdrainし`ordinary-blueprint-delivery-branch-v1 / Mat
 Floor/Wall/SoulSpa専用site搬入、BuildWork、予約全清算、正式art/performance/releaseは別条件。
 通常起動や明示resourceなしではreceiptを作らず、player-facing通知や要求のinventoryは増えない。
 
+### profiling-onlyの保存/読込commit観測（Messageではない）
+
+`bevy_app::systems::save::observations::DurableReceipts`は明示production観測sessionだけに存在する。
+directory sync済みatomic-save成功と、実read bytesに束縛されたnormal-load成功transactionからのみ、
+`ordinary-save-commit-v1 / DurableSave`、`ordinary-load-commit-v1 / DurableLoad`を記録する。
+slot/source・epoch・時刻・実RestArea/Soul snapshotと、streamed/read containerのSHA-256/長さを持ち、
+loadは実EntityHashMapの全Soul/RestArea remapを保持する。失敗・rollback・recovery-onlyは成功にしない。
+pending1件、未drain8件、選択map640件、元map65,536件、container64MiBのcapと、欠損/重複/
+request/epoch不一致をfail-closedにし、raw observerが`Last::SaveLoadApplySet`後にdrainしてsample indexを付ける。
+runtime-onlyの診断であり、新規Message/player通知/保存型ではない。canonical全world一致・
+全inventory・入力因果・host承認・正式releaseは別途照合する。詳細は[save_load.md](save_load.md)。
+
 ### R-E1: Request の可視化時点は ApplyDeferred と system set で決まる
 `Commands::write_message()` と component 操作は次の `ApplyDeferred` まで他 system から見えない。
 reader がその barrier より後に schedule されていれば同じ Update で適用でき、後なら次 frame になる。

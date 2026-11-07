@@ -472,6 +472,13 @@ Dream枯渇・退出後の1checkpointを追加する。同ownerの正のfinal tr
 raw区間内の世代/epoch置換・退出後の再入所・cooldown再増加を拒否する。
 退出を注入せず、cooldownの満了や利用中save/loadの受入までは主張しない。
 
+明示production観測sessionではsave ownerの非保存`DurableReceipts`も登録する。
+実atomic commit後の`DurableSave`はstreamed container全bytes、実normal-load成功の`DurableLoad`は
+read container全bytesと実Entity remapをrequest/epoch/RestArea snapshotへ結ぶ。
+raw observerは`SaveLoadApplySet`後にだけdrainする。失敗/rollback/recoveryを成功にしない。
+上限・除外範囲は[save_load.md](save_load.md#明示profiling-sessionの保存読込診断)を正本とし、
+このproducerの存在だけで利用中save/load、全world canonical一致や正式releaseの受入を宣言しない。
+
 profiling-onlyのproduction raw observerとBridge／M2 probeは共通writerでfresh outputと一時pathを検査し、各snapshotの一時ファイルを
 `create_new`で排他的に作成してからrenameする。既存ファイル・dangling symlink・失敗した一時成果を
 上書きせず拒否する。これは収集の安全性であり、ordinary-worldの欠落producerや正式受入を補わない。
