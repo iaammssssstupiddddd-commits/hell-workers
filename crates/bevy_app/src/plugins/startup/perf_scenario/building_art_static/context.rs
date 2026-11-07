@@ -653,7 +653,11 @@ fn checkpoint(state: &mut BuildingArtStaticState, evidence: Option<Value>) -> Re
     };
     if let Some(initial) = &state.evidence {
         if initial != &evidence {
-            return Err("context changed after readiness; no repair permitted".into());
+            return Err(format!(
+                "context changed after readiness; no repair permitted: {}",
+                first_difference(initial, &evidence, "$")
+                    .unwrap_or_else(|| "unknown JSON difference".into())
+            ));
         }
     } else {
         state.evidence = Some(evidence);
@@ -664,9 +668,78 @@ fn checkpoint(state: &mut BuildingArtStaticState, evidence: Option<Value>) -> Re
     Ok(state.stable_frames == 30)
 }
 
+/// Bounded, read-only diagnosis. It does not reseed or accept a changed snapshot.
+fn first_difference(before: &Value, after: &Value, path: &str) -> Option<String> {
+    if before == after {
+        return None;
+    }
+    match (before, after) {
+        (Value::Object(left), Value::Object(right)) if left.keys().eq(right.keys()) => {
+            left.iter().find_map(|(key, value)| {
+                first_difference(value, &right[key], &format!("{path}.{key}"))
+            })
+        }
+        (Value::Array(left), Value::Array(right)) if left.len() == right.len() => left
+            .iter()
+            .zip(right)
+            .enumerate()
+            .find_map(|(index, (left, right))| {
+                first_difference(left, right, &format!("{path}[{index}]"))
+            }),
+        _ => {
+            let left = before.to_string();
+            let right = after.to_string();
+            let offset = left
+                .chars()
+                .zip(right.chars())
+                .take_while(|(left, right)| left == right)
+                .count()
+                .saturating_sub(40);
+            let short = |text: &str| text.chars().skip(offset).take(200).collect::<String>();
+            Some(format!(
+                "{path} (chars {offset}..): before={} after={}",
+                short(&left),
+                short(&right)
+            ))
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn diagnostic_identifies_exact_nested_field_without_weakening_stability() {
+        let initial =
+            json!({"records": [{"material_values": {"lit": true}}], "resources": {"images": 100}});
+        let mut changed = initial.clone();
+        changed["resources"]["images"] = json!(101);
+        assert!(
+            first_difference(&initial, &changed, "$")
+                .unwrap()
+                .contains("$.resources.images")
+        );
+        changed = initial.clone();
+        changed["records"][0]["material_values"]["lit"] = json!(false);
+        assert!(
+            first_difference(&initial, &changed, "$")
+                .unwrap()
+                .contains("$.records[0].material_values.lit")
+        );
+        let mut state = BuildingArtStaticState {
+            phase: Phase::Seeded,
+            ..default()
+        };
+        checkpoint(&mut state, Some(initial.clone())).unwrap();
+        let failure = checkpoint(&mut state, Some(changed)).unwrap_err();
+        assert!(failure.contains("no repair permitted: $.records[0].material_values.lit"));
+        assert_eq!(state.evidence, Some(initial));
+        assert_eq!(state.stable_frames, 1);
+        let long = Value::String("a".repeat(5000));
+        let changed = Value::String(format!("{}b", "a".repeat(4999)));
+        assert!(first_difference(&long, &changed, "$").unwrap().len() < 600);
+    }
 
     #[test]
     fn preview_artifact_uses_validated_image_namespace_and_rejects_missing_or_duplicate() {

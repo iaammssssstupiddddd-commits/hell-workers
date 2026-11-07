@@ -51,6 +51,10 @@ config/admission・seed・plugin配線とsidecar契約を明示分岐した。�
 `a76c44f3`の最初のplanは、実manifestのartifact roleが`image:world_preview`であるのに
 新helperが非prefix名を検索していたため登録前に拒否された。job root・launchは未作成のまま保全した。
 実role namespaceへ修正し、欠損/非prefix/重複artifactの拒否テストを追加する。旧計画拒否はnative passではない。
+`8386042b`のfresh standard v1は実X11/Intel Arc/Vulkanへ起動したが、readiness後のsnapshot変化を
+observerが検出して非ゼロ終了し、probe/PNGは未生成。invalid封印・診断用途保持・finalize済み。
+現段階では変更fieldが未記録のため原因を断定せず、最初のJSON差分path/前後値を有界に報告する
+readonly診断を追加する。不変性・identity・材質・投影・inventoryの受入条件は緩和しない。
 
 `c07987e4`のfresh `tak14-restarea-ordinary-art-eis-feedback-20261108-v3`は9checkpoint、
 登録verifierと別実行verifyが成功した。source=`43386c30797aac97f88d338f16c76304cb14ff143d9f9111e4dc0eba01361947`、
