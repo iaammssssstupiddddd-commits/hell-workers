@@ -23,6 +23,14 @@ pub struct EquipmentRoot {
     rotor_angle: f32,
 }
 
+#[cfg(feature = "profiling")]
+impl EquipmentRoot {
+    /// Actual consumer generation, not the requested or merely ready identity.
+    pub(crate) fn observed_identity(&self) -> Option<&BuildingAssetSetIdentity> {
+        self.identity.as_ref()
+    }
+}
+
 // M2 clay values, checked against the authoring fixtures by the regression test.
 // These are not frozen production art parameters or a gameplay refinement rate.
 const TANK_PARTIAL_Y: f32 = 12.0;

@@ -20,6 +20,7 @@ import ui_progress_bars as progress_bars
 import ui_bridge_planning as bridge_planning
 import ui_rest_area_planning as rest_area_planning
 import ui_rest_area_usage as rest_area_usage
+import ui_rest_area_art as rest_area_art
 import ui_terrain_materials as terrain_materials
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
@@ -452,6 +453,12 @@ def verify_root(root):
     native.require(native.native_harness_fingerprint(repo) == manifest["harness_fingerprint"], "harness changed")
     native.require(native.git_subject(repo) == manifest["subject_commit"], "subject changed")
     native.require(sha256(repo / "target/debug/bevy_app") == manifest["binary_sha256"], "binary changed")
+    art_contract = manifest.get("ordinary_art")
+    if art_contract is not None:
+        native.require(manifest["case"] == "rest-area-lifecycle" and manifest["smoke"]
+                       and manifest["input_backend"] == "portal", "ordinary art profile differs")
+        expected_art = rest_area_art.source_contract(repo, Path(art_contract["source_root"]), Path(art_contract["codec"]))
+        native.require(rest_area_art.pipeline.exact_json(expected_art, art_contract), "ordinary art inputs changed")
     expected = check_session_inventory(manifest)
     for session, (case, width, height, scale) in zip(manifest["sessions"], expected):
         directory = root / session["directory"]
@@ -464,8 +471,13 @@ def verify_root(root):
             raw_path = directory / "production-cancellation.json"
             native.require(sha256(raw_path) == session.get("cancellation_sha256"), "cancellation raw changed")
             if case == "rest-area-lifecycle":
-                rest_area_usage.check_lifecycle(native.read_json(raw_path), entries, client,
-                                                directory / "saves" / "manual-1.scn.ron")
+                if art_contract is not None:
+                    rest_area_art.check_view(repo, directory / "asset-view", art_contract)
+                    rest_area_art.check_lifecycle(native.read_json(raw_path), entries, client,
+                                                directory / "saves" / "manual-1.scn.ron", art_contract)
+                else:
+                    rest_area_usage.check_lifecycle(native.read_json(raw_path), entries, client,
+                                                   directory / "saves" / "manual-1.scn.ron")
             elif case == "rest-area-save":
                 rest_area_usage.check_save(native.read_json(raw_path), entries, client,
                                            directory / "saves" / "manual-1.scn.ron")
@@ -570,6 +582,7 @@ def cancellation_observation_setting(directory, nonce):
 
 def plan(args):
     repo = native.validate_repo(args.repo)
+    art_contract = rest_area_art.planned_contract(args, repo)
     native.require(args.case == "navigation" or args.input_backend != "none", "refactor case requires actual input")
     native.require(not args.portal_consent_file or args.input_backend == "portal",
                    "consent file requires portal input backend")
@@ -585,6 +598,8 @@ def plan(args):
                "--case", args.case,
                "--layout-scene", args.layout_scene,
                *(["--portal-consent-file", args.portal_consent_file] if args.portal_consent_file else []),
+               *(["--rest-area-art-source", art_contract["source_root"], "--art-codec", art_contract["codec"],
+                  "--art-contract-sha256", rest_area_art.contract_digest(art_contract)] if art_contract else []),
                *(["--layout-menu"] if args.layout_menu else []),
                *(["--smoke"] if args.smoke else [])]
     native.print_json({"status": "blocked" if resources["failures"] else "ready", "profile": PROFILE,
@@ -598,6 +613,9 @@ def plan(args):
 @native.activity_locked
 def run(args):
     repo, root = native.validate_repo(args.repo), Path(args.job_root).resolve()
+    art_contract = rest_area_art.planned_contract(args, repo)
+    native.require(art_contract is None or getattr(args, "art_contract_sha256", None),
+                   "ordinary art run requires the frozen plan digest")
     native.require(not args.portal_consent_file or args.input_backend == "portal",
                    "consent file requires portal input backend")
     native.require(os.environ.get("HW_NATIVE_ACCEPTANCE_LAUNCHED") == "1", "use planned kitty launcher")
@@ -634,13 +652,20 @@ def run(args):
             for key in tuple(environment):
                 if key.startswith(("HW_NATIVE_", "HW_PERF_", "HW_WALL_", "HW_DOOR_")) or key in joint.ENV_KEYS:
                     environment.pop(key, None)
+                if key.startswith(("HW_BUILDING_", "HW_M2_", "HW_BRIDGE_ACCEPTANCE_")):
+                    environment.pop(key, None)
             environment.update({"BEVY_ASSET_ROOT": str(repo), "HW_WINDOW_BACKEND": "x11", "HW_PRESENT_MODE": "novsync",
                                 "WGPU_BACKEND": "vulkan", "WGPU_ADAPTER_NAME": "Intel", "HELL_WORKERS_WORLDGEN_SEED": "20260914",
                                 "HW_NATIVE_UI_ROOT": str(directory), "HW_NATIVE_UI_NONCE": nonce,
                                 "HW_NATIVE_UI_WIDTH": str(width), "HW_NATIVE_UI_HEIGHT": str(height), "HW_NATIVE_UI_SCALE": str(scale)})
             environment["HW_NATIVE_UI_CASE"] = case
             if case in ("rest-area-planning", "rest-area-refund", "rest-area-completion", "rest-area-usage", "rest-area-exit", "rest-area-save", "rest-area-lifecycle"):
-                environment["HW_BUILDING_PRODUCTION_OBSERVATIONS"] = cancellation_observation_setting(directory, nonce)
+                if art_contract is not None:
+                    view = rest_area_art.prepare_view(repo, directory, art_contract)
+                    environment["BEVY_ASSET_ROOT"] = str(view)
+                    environment["HW_BUILDING_ORDINARY_ART_SESSION"] = rest_area_art.session_setting(directory, nonce, art_contract)
+                else:
+                    environment["HW_BUILDING_PRODUCTION_OBSERVATIONS"] = cancellation_observation_setting(directory, nonce)
             if case == "refactor-rows":
                 # Use winit's local XIM backend for this ASCII rename/search case.
                 # Keep the desktop's IME and every other process unchanged.
@@ -662,6 +687,8 @@ def run(args):
                 try:
                     driver = Driver(process, directory, nonce, state, job_file, portal,
                                     layout_only=args.input_backend == "none")
+                    if art_contract is not None:
+                        rest_area_art.wait_ready(driver, art_contract)
                     state["current_stage"] = "ui-input"
                     if args.input_backend == "none":
                         driver.capture("entities")
@@ -713,6 +740,7 @@ def run(args):
             "portal_session": portal.session if portal else None,
             "portal_persistence": portal.persistence if portal else "disabled",
             "case": args.case,
+            "ordinary_art": art_contract,
             "layout_menu": args.layout_menu,
             "layout_scene": args.layout_scene,
             "subject_commit": args.subject_commit, "source_fingerprint": args.source_fingerprint,
@@ -743,6 +771,10 @@ def main():
             child.add_argument("--layout-scene", choices=("management", "normal", "selection", "pinned", "build", "display", "area", "area-details"), default="management")
             child.add_argument("--input-backend", choices=("xtest", "portal", "none"), default="xtest")
             child.add_argument("--portal-consent-file", help="explicit owner-only restore-token journal; never a consent bypass")
+            child.add_argument("--rest-area-art-source", help="explicit isolated RestArea ArtPreview bytes; no approval")
+            child.add_argument("--art-codec", help="frozen already-built codec for the ArtPreview input")
+        if command == "run":
+            child.add_argument("--art-contract-sha256")
         if command == "run":
             for option in ("subject-commit", "source-fingerprint", "harness-fingerprint"):
                 child.add_argument(f"--{option}", required=True)

@@ -44,6 +44,14 @@ fn main() -> AppExit {
         std::process::exit(2);
     });
     let m2_probe = env::var_os("HW_M2_ACCEPTANCE_PROBE");
+    if !ordinary_art_entry_allowed(
+        cfg!(feature = "profiling"),
+        env::var_os("HW_BUILDING_ORDINARY_ART_SESSION").is_some(),
+        perf_config.enabled(),
+    ) {
+        eprintln!("Ordinary art feedback requires profiling without a performance fixture.");
+        return AppExit::error();
+    }
     if !building_art_entry_allowed(
         cfg!(feature = "profiling"),
         env::var_os("HW_BUILDING_ART_SESSION").is_some(),
@@ -194,6 +202,10 @@ fn main() -> AppExit {
 // This only selects the execution route. configure_building_art still validates
 // the full session, and m2_probe restricts interactive admission to feedback
 // ArtPreview Tank/MudMixer identities before any load request is registered.
+fn ordinary_art_entry_allowed(profiling: bool, session: bool, perf_enabled: bool) -> bool {
+    !session || (profiling && !perf_enabled)
+}
+
 fn building_art_entry_allowed(
     profiling: bool,
     session: bool,
@@ -345,6 +357,19 @@ fn select_present_mode() -> PresentMode {
 mod tests {
     use super::*;
     use bevy::winit::UpdateMode;
+
+    #[test]
+    fn ordinary_art_never_enters_a_nonprofiling_or_performance_process() {
+        for profiling in [false, true] {
+            for perf in [false, true] {
+                assert!(ordinary_art_entry_allowed(profiling, false, perf));
+                assert_eq!(
+                    ordinary_art_entry_allowed(profiling, true, perf),
+                    profiling && !perf
+                );
+            }
+        }
+    }
 
     #[test]
     fn building_art_entry_separates_interactive_and_static_evidence() {

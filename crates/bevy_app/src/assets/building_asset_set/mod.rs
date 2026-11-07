@@ -10,6 +10,8 @@ mod observations;
 mod observations_rest;
 #[cfg(feature = "profiling")]
 mod observations_ui;
+#[cfg(feature = "profiling")]
+mod ordinary_art;
 mod pool;
 mod projection;
 mod release;

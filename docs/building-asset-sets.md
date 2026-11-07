@@ -205,6 +205,32 @@ primaryの製品assetsへの出力は拒否する。入力原画はstagingに限
 
 ### 通常開発におけるproduction受入toolingの境界
 
+#### 採否前のRestArea ordinary art feedback
+
+通常UI helperの`plan --case rest-area-lifecycle --smoke --input-backend portal`へ
+`--rest-area-art-source <隔離ArtPreview root> --art-codec <準備済みcodec>`を明示した場合だけ、
+exact RestArea ArtPreviewを通常生成worldで表示する。通常起動の有効化でも正式候補の承認でもない。
+planは実codec検証、原本/geometry/manifest/依存bytes、基準asset viewとcodec hashを固定し、runは
+そのdigestを再照合する。fresh job内へ基準assetsと宣言依存だけをcopyし、製品assetsを変更しない。
+verifyは基準全ファイル＋宣言overlayのexact inventoryを再計算し、追加/欠落/改竄/symlinkを拒否する。
+
+profiling限定`HW_BUILDING_ORDINARY_ART_SESSION`はUIのnonce/root/固定caseと一組で、
+`feedback`/RestArea/ArtPreview/正規locatorのみを許可する。static ArtSession、M2/Bridge probe、
+M6、release、正式production observer、perfとの混在、非profiling、未知fieldや既存出力/tmpを拒否する。
+loader登録前にexact policyとpool requestを準備し、材料/完成/actor/利用/Dreamは一切seedしない。
+既存の通常配置・施工・入所・Dream・利用中保存復元・自然退出/cooldown入力を用いる。
+
+共用の受動collectorは専用Resourceから別scope `ordinary-rest-art-feedback-v1`を選ぶ。
+public production JSONは従来どおりReleaseApprovedだけを許可し、scopeを自己申告できない。
+両scopeともaccepted/performance/promotion=false固定。通常scopeには新しいart項目を加えない。
+feedbackだけで要求identity、実active/pending/descriptor、実owner-linked rootの世代、part mesh、
+親子/transform/可視性、material/albedoと不透明・非発光・白tint等の実値を別記録する。
+採用checkpointは実completed ownerからexact root1件を引き、pending/未ready/旧世代/fallback、
+読込前owner参照、別mesh/texture/material値を拒否する。従来の正式raw verifierは新scopeを受理しない。
+これは限定された候補表示/lifecycle feedbackであり、全consumer、最大遠景selection、照明/壁depth、
+independent art/numeric採否、Capture/Memory性能、promotion/install/release/rollbackは別途必要である。
+新入口は実装・回帰検証中で、fresh実機成功はまだ記録していない。
+
 `python3 scripts/building_production_native_acceptance.py capabilities` はlocal supportを読むだけで、
 旧request/Run/hostへの照会、台帳更新、plan生成、build、launchを行わない。現在は `available=false`。
 ordinary-world process/window・capture/ACK producer、GPU/native/RSS/application-handle instrument producer、

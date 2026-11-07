@@ -314,9 +314,9 @@ def check_receipt_interval(raw, receipt, value, bits, entity):
         previous = sample["real_seconds"]
 
 
-def check_save(raw, entries, client, save_path):
+def check_save(raw, entries, client, save_path, *, raw_scope="production-raw-observations-v1"):
     native.require([entry["case"] for entry in entries] == list(SAVE_CHECKPOINTS), "rest save checkpoints differ")
-    check_usage(raw, entries[:5], client)
+    check_usage(raw, entries[:5], client, raw_scope=raw_scope)
     drained, saved, loaded = [entry["value"] for entry in entries[4:]]
     for entry in entries[5:]:
         value = entry["value"]
@@ -543,10 +543,10 @@ def check_exit_leg(raw, before_entry, exited_entry, client, entity):
                    "rest final messages do not account for natural Dream exhaustion")
 
 
-def check_lifecycle(raw, entries, client, save_path):
+def check_lifecycle(raw, entries, client, save_path, *, raw_scope="production-raw-observations-v1"):
     native.require([entry["case"] for entry in entries] == list(LIFECYCLE_CHECKPOINTS),
                    "post-load lifecycle checkpoints differ")
-    entity = check_save(raw, entries[:7], client, save_path)
+    entity = check_save(raw, entries[:7], client, save_path, raw_scope=raw_scope)
     loaded, exited, expired = [entry["value"] for entry in entries[6:]]
     bits = loaded["rest_area_planning"]["buildings"][0]
     selected = [row for _, row in candidates(context(loaded), bits) if row["entity"] == entity]
@@ -605,9 +605,9 @@ def check_lifecycle(raw, entries, client, save_path):
     native.require(expired_at is not None, "no actual post-load cooldown removal observed")
 
 
-def check_usage(raw, entries, client):
+def check_usage(raw, entries, client, *, raw_scope="production-raw-observations-v1"):
     native.require([entry["case"] for entry in entries] == list(CHECKPOINTS), "rest usage checkpoints differ")
-    planning.check_completion(raw, entries[:3], client)
+    planning.check_completion(raw, entries[:3], client, raw_scope=raw_scope)
     completed, occupied, drained = [entry["value"] for entry in entries[2:]]
     for entry in entries[-2:]:
         value = entry["value"]

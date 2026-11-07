@@ -13,6 +13,29 @@
 
 ## 1. 目的
 
+2026-11-07、HEAD `254fba4e` / source `2faf959677b5f9a78e5c25f34e0f68f523d6d4d10f5fd951206754562e068762`
+のexact RestArea ArtPreview `db0f5356…2522`をnormal/far/near/overview highとnormal lowの
+fresh 5試行で確認した。全て登録・別実行verifierをpassし、owned画像をmainが確認、保持・seal/finalize済み。
+独立画像確認ではnormal/far/nearの布屋根・支柱・入口に追加形状修正要求なし。
+最大zoom-outでは存在だけが読め、種別/利用状態は断定できないため、実selection/info UIによる補完を未達条件に残す。
+静止fixtureの技術passであり、art/numeric/release・通常利用や性能の採否ではない。
+
+次の実装は、採否前ordinary表示の循環を解く明示profiling-only RestArea ArtPreview feedback入口。
+`BuildingArtSession`やM2 seeded fixtureを流用せず、exact identityのload policy/pool requestと受動観測だけを
+通常生成worldへ接続する。専用session/UI case/observerを一組にし、正式production env、release、M6、
+static/perf/M2との混在、非profiling、未知field、別kind/authority/nonce/pathを起動前拒否する。
+正式production observerのReleaseApproved allowlistとscopeは維持し、feedbackは別scopeで
+accepted/performance/promotion=false固定。要求identityと実active/descriptor/root/part/材質画像を別々に記録する。
+UI runnerは原本/manifest/依存bytes、codec/source/harness/nonceを固定した隔離asset viewを使い、既存の
+通常施工・利用・Dream・保存復元・退出/cooldown入力を再利用する。材料/進捗/actor/完成を注入しない。
+fallback・旧世代・読込前ownerだけでは候補表示成功にせず、変更別検証・Help・storage・独立read-only review後に
+fresh実機へ進む。通常起動/ゲーム規則/正式承認条件は不変。全9種の正式採否と導入は未完。
+入口/runner/専用scope/実consumer照合を実装し、最初の変更別CIはcontracts/tooling/deps/rust、
+通常/profiling workspace試験、Memory/Tracy/RenderDoc構成、通常/profiling Clippy警告0とdev.py checkを通過。
+独立reviewでasset-view根の同bytes symlink漏れを指摘され、canonicalなjob配下/祖先/root実体を
+copy前/verify時に検査する補正とview/assets/viewport祖先の3拒否回帰を追加した。
+関連101試験はpass。最終同subject検証・独立再review・fresh実機前であり、正式採否は保留する。
+
 M3導入経路の追加照合で、既存Pythonのart/release decision比較がnested generationの
 true/1.0を正規int1と同一視する欠陥を独立read-only reviewで確認した。M3 numeric側のidentityを
 正規intのまま不正artのhashへ結び直しても通るため、採否・候補化・起動前に補正する。

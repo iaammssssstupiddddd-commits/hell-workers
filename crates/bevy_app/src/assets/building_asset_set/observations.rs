@@ -33,6 +33,8 @@ struct Session {
     nonce: String,
     output: PathBuf,
     admitted_identities: Vec<BuildingAssetSetIdentity>,
+    #[serde(skip)]
+    art_feedback: bool,
 }
 
 #[derive(Resource, Default)]
@@ -52,11 +54,34 @@ struct Observations {
     written_events: usize,
 }
 
+fn production_session(raw: &str) -> Result<Session, String> {
+    let session: Session = serde_json::from_str(raw).map_err(|error| error.to_string())?;
+    if session
+        .admitted_identities
+        .iter()
+        .any(|identity| identity.authority != BuildingAssetAuthority::ReleaseApproved)
+    {
+        return Err("production observations require release-approved identities".into());
+    }
+    Ok(session)
+}
+
 pub(super) fn configure(app: &mut App) -> Result<(), String> {
-    let Ok(raw) = std::env::var("HW_BUILDING_PRODUCTION_OBSERVATIONS") else {
-        return Ok(());
+    let session = if let Some(art) = app.world().get_resource::<super::ordinary_art::Session>() {
+        // Only the validated dedicated session selects this scope. The public
+        // production JSON cannot set art_feedback or admit draft identities.
+        Session {
+            nonce: art.nonce.clone(),
+            output: art.output.clone(),
+            admitted_identities: vec![art.identity.clone()],
+            art_feedback: true,
+        }
+    } else {
+        let Ok(raw) = std::env::var("HW_BUILDING_PRODUCTION_OBSERVATIONS") else {
+            return Ok(());
+        };
+        production_session(&raw)?
     };
-    let session: Session = serde_json::from_str(&raw).map_err(|e| e.to_string())?;
     if session.nonce.len() != 32
         || !session
             .nonce
@@ -70,10 +95,6 @@ pub(super) fn configure(app: &mut App) -> Result<(), String> {
         || require_fresh_path(&session.output).is_err()
         || require_fresh_path(&temporary_path(&session.output)).is_err()
         || session.admitted_identities.len() > 18
-        || session
-            .admitted_identities
-            .iter()
-            .any(|identity| identity.authority != BuildingAssetAuthority::ReleaseApproved)
     {
         return Err("production observations require a fresh absolute path and nonce".into());
     }
@@ -325,6 +346,7 @@ fn companion_context(world: &mut World) -> Result<Value, String> {
 }
 
 fn snapshot(world: &mut World) -> Result<Value, String> {
+    let art_feedback = super::ordinary_art::snapshot(world)?;
     let rest_area_context = super::observations_rest::snapshot(world)?;
     let companion_context = companion_context(world)?;
     let save_catalog_context = super::observations_ui::save_catalog_context(world)?;
@@ -530,6 +552,9 @@ fn snapshot(world: &mut World) -> Result<Value, String> {
         "native_peak_live_bytes": null, "rss_bytes": null,
         "application_handle_count": null});
     sample["rest_area_context"] = rest_area_context;
+    if !art_feedback.is_null() {
+        sample["art_feedback"] = art_feedback;
+    }
     sample["companion_context"] = companion_context;
     sample["save_catalog_context"] = save_catalog_context;
     Ok(sample)
@@ -719,7 +744,12 @@ fn observe(world: &mut World) {
     }
     let state = world.resource::<Observations>();
     let session = world.resource::<Session>();
-    let record = json!({"schema_version": 2, "scope": "production-raw-observations-v1",
+    let scope = if session.art_feedback {
+        super::ordinary_art::SCOPE
+    } else {
+        "production-raw-observations-v1"
+    };
+    let record = json!({"schema_version": 2, "scope": scope,
         "transition_contract": "indexed-state-delta-v1",
         "nonce": session.nonce, "process_id": std::process::id(), "accepted": false,
         "performance_evidence": false, "promotion_authority": false,
@@ -810,6 +840,20 @@ fn record_keyboard_messages(
 mod tests {
     use super::*;
     use bevy::input::{ButtonState, keyboard::Key};
+
+    #[test]
+    fn public_production_json_cannot_admit_preview_or_select_feedback_scope() {
+        let mut value = json!({"nonce": "a".repeat(32), "output": "/private/observation.json", "admitted_identities": []});
+        assert!(!production_session(&value.to_string()).unwrap().art_feedback);
+        value["art_feedback"] = json!(true);
+        assert!(production_session(&value.to_string()).is_err());
+        value.as_object_mut().unwrap().remove("art_feedback");
+        for authority in ["art_preview", "isolated_candidate"] {
+            value["admitted_identities"] = json!([{"kind": "RestArea", "generation": 1,
+                "authority": authority, "manifest_sha256": "a".repeat(64)}]);
+            assert!(production_session(&value.to_string()).is_err());
+        }
+    }
 
     #[test]
     fn companion_context_reads_real_pending_state_and_stockpile_ownership() {

@@ -136,6 +136,13 @@ fn validate_bindings(bindings: &[ReleaseBinding]) -> Result<(), String> {
 /// production requests are mutually exclusive so one startup cannot race two
 /// authority paths for the same kind.
 pub fn configure_building_asset_releases(app: &mut App) -> Result<(), String> {
+    if std::env::var_os("HW_BUILDING_ORDINARY_ART_SESSION").is_some()
+        && !cfg!(feature = "profiling")
+    {
+        return Err("ordinary art feedback requires the profiling feature".into());
+    }
+    #[cfg(feature = "profiling")]
+    super::ordinary_art::configure(app)?;
     #[cfg(feature = "profiling")]
     super::observations::configure(app)?;
     let m6 = std::env::var("HW_BUILDING_M6_MODE").ok();
