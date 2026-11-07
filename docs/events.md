@@ -114,6 +114,19 @@ click時点との原子性やraw event順による因果関係を保証しない
 sessionなしではresourceを作らず、overflowまたはcontext欠損をraw failureへ伝播する。
 完成、材料配送、refund、移動、保存bytes、正式asset/release受入を証明するqueueではない。
 
+### profiling-onlyのBlueprint取消観測（Messageではない）
+
+`blueprint_cancellation::observations::CancellationReceipts`も明示production観測sessionだけで登録する。
+domain ownerが既存refund primitiveのcallbackから実spawn予定IDを記録し、owner despawn後の
+deferred commandで有界pending queueへ渡す。`Last`のread-only finalizerが実refund Entity/型/個数、
+owner/request/storage/mapの除去、stored itemの解放、関連actorの参照解除を確認したものだけを
+`BlueprintCancellationApplied / OwnerCleanupApplied`としてraw observerへ渡す。
+transaction indexはsession内で単調増加し、world epoch相違・欠損・上限超過はraw failure。
+pending最大64件・各identity一覧最大4096件・総transaction最大4096件、300回のLast待機でも
+状態が揃わなければ失敗とし、観測器がcleanupを代行しない。
+これは`CancelConstruction / Committed`ではない。予約cache/inventory全体の清算、SoulSpa専用取消、
+player入力との因果、正式asset/lifecycle受入は別条件として残す。Bridge/Wall/Floorは対象外。
+
 ### R-E1: Request の可視化時点は ApplyDeferred と system set で決まる
 `Commands::write_message()` と component 操作は次の `ApplyDeferred` まで他 system から見えない。
 reader がその barrier より後に schedule されていれば同じ Update で適用でき、後なら次 frame になる。

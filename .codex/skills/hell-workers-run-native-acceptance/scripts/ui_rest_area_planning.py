@@ -127,3 +127,52 @@ def exercise(driver):
     driver.last = driver.wait(lambda value: not value["rest_area_planning"]["blueprints"],
                               after=driver.last["frame"])
     driver.capture("rest-area-cancelled")
+
+
+def check_cancellation(raw, entries, client):
+    """Bind the opt-in owner/refund observation, not a full lifecycle verdict."""
+    native.require(raw.get("scope") == "production-raw-observations-v1"
+                   and raw.get("schema_version") == 2 and raw.get("failure") is None
+                   and raw.get("nonce") == client["nonce"]
+                   and raw.get("process_id") == client["pid"]
+                   and raw.get("accepted") is False and raw.get("performance_evidence") is False
+                   and raw.get("promotion_authority") is False, "cancellation raw context/authority differs")
+    loaded = entries[3]["value"]
+    owner = loaded["rest_area_planning"]["blueprints"][0]["entity"]
+    rows = [event for event in raw.get("events", []) if event.get("operation") == "BlueprintCancellationApplied"]
+    native.require(len(rows) == 1, "cancellation applied observation missing or duplicated")
+    row = rows[0]
+    native.require(row.get("producer") == "blueprint_cancellation_system"
+                   and row.get("result") == "OwnerCleanupApplied"
+                   and row.get("kind") == "RestArea" and type(row.get("owner_bits")) is int
+                   and row.get("owner_bits") == owner and type(row.get("world_epoch")) is int
+                   and row.get("world_epoch") == loaded["world_epoch"]
+                   and row.get("footprint") == loaded["rest_area_planning"]["footprint"]
+                   and row.get("footprint_walkability") == [True] * 4
+                   and all(type(value) is bool for value in row["footprint_walkability"]),
+                   "cancellation owner/footprint differs")
+    native.require(row.get("refund_items") == [] and row.get("delivered_materials") == [],
+                   "zero-material planning case cannot prove a partial-material refund")
+    samples = raw.get("samples", [])
+    index = row.get("sample_index")
+    native.require(type(index) is int and 0 <= index < len(samples), "cancellation sample index missing")
+    sample = samples[index]
+    native.require(sample.get("world_epoch") == row["world_epoch"]
+                   and isinstance(sample.get("blueprints"), list)
+                   and not any(blueprint.get("entity") == row.get("owner") for blueprint in sample["blueprints"]),
+                   "cancellation sample still contains the owner or has a stale epoch")
+    before = [blueprint for value in samples[:index] if value.get("world_epoch") == row["world_epoch"]
+              for blueprint in value.get("blueprints", []) if blueprint.get("entity") == row.get("owner")
+              and blueprint.get("entity_bits") == owner and blueprint.get("kind") == "RestArea"
+              and blueprint.get("footprint") == row["footprint"] and blueprint.get("progress") == 0
+              and blueprint.get("delivered_materials") == {}]
+    native.require(before, "cancellation lacks the same real pre-cancel blueprint")
+    layers = [layer for layer in sample.get("owner_layers", []) if layer.get("entity") == row.get("owner")]
+    native.require(len(layers) == 1 and layers[0].get("exists") is False
+                   and all(layers[0].get(key) == [] for key in (
+                       "building_grids", "floor_grids", "door_grids", "bridge_grids", "stockpile_grids")),
+                   "cancellation owner/map tombstone differs")
+    for field in ("released_actors", "closed_requests", "removed_storages", "released_items"):
+        values = row.get(field)
+        native.require(isinstance(values, list) and all(isinstance(value, str) and value for value in values)
+                       and len(values) == len(set(values)), "cancellation identities malformed")

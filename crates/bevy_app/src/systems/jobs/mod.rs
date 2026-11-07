@@ -10,6 +10,10 @@ use bevy::prelude::SystemSet;
 
 pub use blueprint_cancellation::blueprint_cancellation_system;
 #[cfg(feature = "profiling")]
+pub(crate) use blueprint_cancellation::observations::{
+    CancellationReceipts, finalize_cancellation_receipts,
+};
+#[cfg(feature = "profiling")]
 pub(crate) use building_completion::spawn_building_3d_visual;
 pub use building_completion::{BuildingCompletionSet, building_completion_system};
 #[cfg(feature = "profiling")]

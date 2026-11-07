@@ -6,12 +6,32 @@
 | --- | --- |
 | 計画ID | `non-bridge-production-release-plan-2026-10-04` |
 | ステータス | `In Progress` |
-| 作成日 / 最終更新日 | `2026-10-04` / `2026-10-12` |
+| 作成日 / 最終更新日 | `2026-10-04` / `2026-11-07` |
 | 作成者 | Codex |
 | 関連提案 | N/A |
 | 関連Issue/PR | TAK-14 / 基盤統合PR #29 |
 
 ## 1. 目的
+
+2026-11-07再開工程: 通常Blueprint取消が実際に発行したrefund Entity IDsと、
+deferred適用後のowner/request/storage/map・関連actor状態を結ぶprofiling-only観測を追加する。
+通常RestAreaの既存input recipeへ同nonce/PIDのrawを接続し、ゼロ材料予約の取消を実機確認する。
+単体試験の非ゼロrefundと通常worldのゼロ材料取消を区別し、完全な予約/inventory清算、
+SoulSpa専用取消、全9種のart/numeric/performance/release未達は維持する。
+取消10件と通常/profilingのworkspace試験、Memory/Tracy/RenderDoc構成、両構成Clippy警告0を確認。
+全体gateは既存依存のRUSTSEC-2026-0441（pin-utils）とRUSTSEC-2026-0344（ruzstd）で未通過。
+例外追加や依存の無検証更新はせず、正式完了条件として残す。
+初回`cancellation-witness-feedback-20261107-v1`はbuild成功後、ゲーム起動前のjson未importで
+invalidとしてseal/finalize。設定生成関数を直接呼ぶ回帰テストを追加し、修正後はfresh試行で確認する。
+fresh `cancellation-witness-feedback-20261107-v2`は5PNG/rawの独立reviewと登録verifierで限定pass、
+seal/finalize/storage pass。Intel Arc/Vulkan、same nonce/PID118045、新epoch1のowner1834v1
+（UI Entity ID8589932757）についてsample86で実applied witnessを確認した。
+配送request1839v1とactor4件の参照解除、owner/map tombstoneと4tile walkability=trueを照合。
+進捗0・材料0・refund0の実操作であり、非ゼロ返却や全予約/inventory清算の受入ではない。
+次は同じ通常取消経路で非ゼロ実搬入材料の返却と全清算を検証する。9種の正式導入は未完。
+この新証拠を次の比較用に保持し、用途を終えた旧RestArea zero-material証拠と初回build-only
+診断をconsumer release後に削除した（計20,017,152 bytes）。制作原本・最新Tank/RestArea証拠・
+通常Cargo cacheは保持。削除後storage checkは404,728,475,648 bytes、339 batch、未分類0でpass。
 
 2026-10-12の最新限定進捗: `89f40fe2`で通常Tank親Blueprintと2childの計画commit、
 F5/F9のManual1保存復元、dialogなしのロード後画面をactual-window/rawの独立review・
@@ -102,6 +122,7 @@ Bevy 0.19の既存loader/pool経路を使う。公開・push・mergeは本依頼
 - [x] primary validation所有の通常world固定F12入力probeを拒否系試験・実機・独立reviewで確認。
   これはinput/raw輸送の技術境界だけで、正式recipe、domain lifecycleやreleaseの代用ではない。
 - [ ] 通常開発の不足producerを実装し、拒否系試験と独立レビュー。
+  - 11月7日: Blueprint取消の実返却ID・owner cleanup観測を実装/検証中。全lifecycle成功ではない。
 - [ ] 同subjectのCapture→Memory、state/lifecycle、有限pool/cleanup、群別性能を検証。
 - [ ] Door既存assetと全consumerの適合監査。
 - [ ] 正式promotion/install/release/rollbackを検査。

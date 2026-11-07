@@ -204,6 +204,17 @@ cancellation receipt plus restoration of the original terrain/walkability.
 This is planning feedback only, not completed construction, passage, deconstruction,
 Memory/performance, art/numeric approval or release acceptance.
 
+Select `--case rest-area-planning --smoke --input-backend portal` for ordinary
+RestArea reservation, Manual1 Save/Load and two-stage Task Dashboard cancellation.
+Preparation only centers the camera and pauses time. The case also enables the
+read-only production observer with its process nonce and binds the raw hash to
+the session manifest. Verification requires the loaded blueprint's exact numeric
+and debug Entity IDs, world epoch, pre-cancel snapshot, applied owner-cleanup
+observation and empty owner/map tombstone. This zero-delivered-material case
+does not prove partial-material refunds, full reservation/inventory cleanup,
+completed art, performance or release authority. Missing producer output fails
+closed; do not synthesize it from `CancellationRequested` or disappearance.
+
 ## Wall/Door feedback storyboard
 
 For already approved candidate or release assets, the joint helper supports a

@@ -23,6 +23,7 @@ use super::{
     BuildingAssetAuthority, BuildingAssetKind, BuildingAssetPool, BuildingAssetSetIdentity,
 };
 use crate::interface::selection::building_place::observed_outcomes::PlacementReceipts;
+use crate::systems::jobs::{CancellationReceipts, finalize_cancellation_receipts};
 use crate::systems::save::SaveLoadOutcome;
 
 #[derive(Resource, Deserialize)]
@@ -85,8 +86,9 @@ pub(super) fn configure(app: &mut App) -> Result<(), String> {
     app.insert_resource(session)
         .init_resource::<Observations>()
         .init_resource::<PlacementReceipts>()
+        .init_resource::<CancellationReceipts>()
         .add_observer(building_completed)
-        .add_systems(Last, observe);
+        .add_systems(Last, (finalize_cancellation_receipts, observe).chain());
     Ok(())
 }
 
@@ -350,7 +352,7 @@ fn snapshot(world: &mut World) -> Result<Value, String> {
         .iter(world)
         .filter(|(_, bp)| target(bp.kind))
         .map(|(entity, bp)| {
-            json!({"entity": format!("{entity:?}"), "kind": format!("{:?}", bp.kind),
+        json!({"entity": format!("{entity:?}"), "entity_bits": entity.to_bits(), "kind": format!("{:?}", bp.kind),
             "footprint": bp.occupied_grids, "progress": bp.progress,
             "delivered_materials": bp.delivered_materials.iter().map(|(kind, count)| (format!("{kind:?}"), *count)).collect::<std::collections::BTreeMap<_, _>>(),
             "flexible_material_requirement": bp.flexible_material_requirement.as_ref().map(|r| json!({"required_total": r.required_total, "delivered_total": r.delivered_total}))})
@@ -538,6 +540,16 @@ fn observe(world: &mut World) {
     let now = world.resource::<Time<Real>>().elapsed_secs_f64();
     world.resource_scope(|world, mut observations: Mut<Observations>| {
         let index = observations.samples.len();
+        if let Some(mut receipts) = world.get_resource_mut::<CancellationReceipts>() {
+            if let Some(failure) = &receipts.failure {
+                observations.failure = Some(failure.clone());
+            }
+            for mut receipt in receipts.rows.drain(..) {
+                receipt["sample_index"] = json!(index);
+                receipt["real_seconds"] = json!(now);
+                observations.events.push(receipt);
+            }
+        }
         if let Some(mut receipts) = world.get_resource_mut::<PlacementReceipts>() {
             if receipts.failed {
                 observations.failure = Some("ordinary placement receipt cap/context failed".into());
@@ -671,7 +683,7 @@ fn observe(world: &mut World) {
             "Placement receipts are command-branch results, not full input/domain lifecycle acceptance",
             "Move: hw_jobs::MovePlantTask is state, not a move commit/reject/cancel receipt",
             "Navigation: actor Transform/grid samples do not prove a navigation request arrived",
-            "CancelConstruction/refund: BlueprintCancelRequested is a request, not a terminal refund receipt",
+            "CancelConstruction: BlueprintCancellationApplied binds owner cleanup/refund IDs, not full reservation/inventory lifecycle; SoulSpa needs its separate producer",
             "MaterialDelivery: delivered_materials deltas do not identify the delivering transaction",
             "Salvage: DeconstructionCommitOutcome does not contain emitted salvage item IDs/counts",
             "Durable state: SaveLoadOutcome does not contain canonical before/after save-state bytes",

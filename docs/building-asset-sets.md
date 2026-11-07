@@ -261,6 +261,15 @@ actor／光／UIだけの描画をworld表示済みと誤認しないための�
 
 通常worldの`placement_context`は既存Yardのentity／min／maxを最大32件と、
 単一active MainCameraによるlogical viewport四隅の投影を読み取るprofiling限定観測である。
+同じ明示sessionのBlueprint取消観測は、実refund IDsとdeferred後のowner cleanupを
+`BlueprintCancellationApplied / OwnerCleanupApplied`として保持する。Blueprint rawには
+UI側の実Entity IDと照合する`entity_bits`も付ける。全予約/inventory清算やSoulSpa取消、
+正式lifecycleの`CancelConstruction / Committed`は未対応のまま、partial記録から合成しない。
+RestArea planning feedbackは同nonce/PIDのraw hash、実前状態とowner/map tombstoneを検証するが、
+ゼロ材料取消の実機証拠と非ゼロ返却の単体試験を混同せず、art/release authorityを付与しない。
+2026-11-07の通常RestArea feedbackではSave/Load後のepoch1 ownerに対し、実二段階取消から
+配送request1件・actor参照4件の解消、Blueprint/map消失・4tile walkableを同process rawと5画像で
+独立確認した。これは進捗0・実搬入材料0の限定passであり、完成assetや全清算の承認ではない。
 明示production観測sessionのrawは通常500ms間隔、実際のheld WASD中は50ms間隔で採る。
 これはcameraの通常速度・入力・worldを変更せず、read-only観測の間隔だけを切り替える。
 1200 sample／4096 eventのcapは維持する。hostが停止帯通過を観測したら即時拒否して

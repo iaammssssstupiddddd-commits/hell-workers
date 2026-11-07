@@ -14,7 +14,10 @@ use hw_logistics::{
 
 use crate::world::map::WorldMapWrite;
 
-fn task_targets_blueprint(task: &AssignedTask, blueprint: Entity) -> bool {
+#[cfg(feature = "profiling")]
+pub(crate) mod observations;
+
+pub(super) fn task_targets_blueprint(task: &AssignedTask, blueprint: Entity) -> bool {
     match task {
         AssignedTask::Build(data) => data.blueprint == blueprint,
         AssignedTask::HaulToBlueprint(data) => data.blueprint == blueprint,
@@ -49,6 +52,10 @@ pub struct BlueprintCancellationQueries<'w, 's> {
     >,
     pending: Query<'w, 's, (Entity, &'static PendingBelongsToBlueprint)>,
     stored_items: Query<'w, 's, (Entity, &'static StoredIn)>,
+    #[cfg(feature = "profiling")]
+    tracing: Option<Res<'w, observations::CancellationReceipts>>,
+    #[cfg(feature = "profiling")]
+    epoch: Option<Res<'w, hw_core::WorldEpoch>>,
 }
 
 pub fn blueprint_cancellation_system(
@@ -58,8 +65,20 @@ pub fn blueprint_cancellation_system(
     resource_item_handles: Res<ResourceItemVisualHandles>,
 ) {
     for (blueprint_entity, transform, blueprint) in &queries.blueprints {
+        #[cfg(feature = "profiling")]
+        let mut trace = queries.tracing.as_ref().and_then(|_| {
+            observations::CancellationDraft::new(
+                blueprint_entity,
+                blueprint,
+                queries.epoch.as_deref(),
+            )
+        });
         for (soul_entity, task) in &queries.souls {
             if task_targets_blueprint(task, blueprint_entity) {
+                #[cfg(feature = "profiling")]
+                if let Some(trace) = &mut trace {
+                    trace.actor(soul_entity);
+                }
                 commands.write_message(SoulTaskUnassignRequest {
                     soul_entity,
                     emit_abandoned: true,
@@ -71,20 +90,36 @@ pub fn blueprint_cancellation_system(
             if request.anchor == blueprint_entity
                 || target.is_some_and(|target| target.0 == blueprint_entity)
             {
+                #[cfg(feature = "profiling")]
+                if let Some(trace) = &mut trace {
+                    trace.request(request_entity);
+                }
                 commands.entity(request_entity).try_despawn();
             }
         }
         for (pending_entity, pending) in &queries.pending {
             if pending.0 == blueprint_entity {
+                #[cfg(feature = "profiling")]
+                if let Some(trace) = &mut trace {
+                    trace.storage(pending_entity);
+                }
                 let grids: Vec<_> = world_map
                     .stockpile_entries()
                     .filter_map(|(&grid, &owner)| (owner == pending_entity).then_some(grid))
                     .collect();
                 for grid in grids {
+                    #[cfg(feature = "profiling")]
+                    if let Some(trace) = &mut trace {
+                        trace.stockpile_grid(grid);
+                    }
                     world_map.clear_stockpile_tile_if_owned(grid, pending_entity);
                 }
                 for (item_entity, stored_in) in &queries.stored_items {
                     if stored_in.0 == pending_entity {
+                        #[cfg(feature = "profiling")]
+                        if let Some(trace) = &mut trace {
+                            trace.released_item(item_entity);
+                        }
                         commands
                             .entity(item_entity)
                             .remove::<StoredIn>()
@@ -103,6 +138,18 @@ pub fn blueprint_cancellation_system(
             .collect();
         delivered.sort_unstable_by_key(|(resource_type, _)| resource_order(*resource_type));
         for (resource_type, amount) in delivered {
+            #[cfg(feature = "profiling")]
+            if let Some(trace) = &mut trace {
+                hw_logistics::construction_helpers::spawn_refund_items_observed(
+                    &mut commands,
+                    &resource_item_handles,
+                    center,
+                    resource_type,
+                    amount,
+                    |entity| trace.refund(entity, resource_type),
+                );
+                continue;
+            }
             spawn_refund_items(
                 &mut commands,
                 &resource_item_handles,
@@ -116,6 +163,10 @@ pub fn blueprint_cancellation_system(
             world_map.clear_building_occupancy_if_owned(grid, blueprint_entity);
         }
         commands.entity(blueprint_entity).try_despawn();
+        #[cfg(feature = "profiling")]
+        if let Some(trace) = trace {
+            trace.queue(&mut commands);
+        }
     }
 }
 

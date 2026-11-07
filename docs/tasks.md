@@ -332,6 +332,12 @@ Blueprint / FloorSite / WallSite への搬入完了直後、`chain::find_chain_o
 Floor / Wall site の cleanup を汎用 despawn へ統合しない。Pause / Modal capture 中の intent は読み捨てず typed 拒否として
 drain し、capture 解除後に遅延適用しない。
 
+明示production観測sessionではBlueprint取消の実返却IDとowner cleanupを別queueで追跡する。
+`TaskActionOutcome::CancellationRequested`やdespawnだけでは完了とせず、actorのpayload/
+WorkingOn/ActiveTaskIdentity等が元owner/requestを参照する間は観測を保留する。
+記録名は`BlueprintCancellationApplied / OwnerCleanupApplied`で、全予約/inventory清算や
+正式lifecycleの`CancelConstruction / Committed`へ読み替えない。観測器は解除を実行しない。
+
 Constructing Soul Spaの`DeliverToSoulSpa`行は`TransportRequest.kind`、Bone、anchor、
 `TargetSoulSpaSite`が同じlive siteを指す場合だけcancel可能にする。Task Dashboardはrequestを直接despawnせず
 `SoulSpaConstructionCancelRequest`をsite ownerへ送り、情報パネルと同じexact cleanup・実搬入Bone返却へ合流する。

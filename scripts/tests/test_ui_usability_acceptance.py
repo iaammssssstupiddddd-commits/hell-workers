@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib
 import copy
+import json
 from pathlib import Path
 import sys
 import tempfile
@@ -166,6 +167,60 @@ class BridgePlanningEvidenceTests(unittest.TestCase):
 
 
 class RestAreaPlanningEvidenceTests(unittest.TestCase):
+    def cancellation(self):
+        return {"scope": "production-raw-observations-v1", "schema_version": 2,
+                "failure": None, "nonce": "ordinary-cancel", "process_id": 123,
+                "accepted": False, "performance_evidence": False, "promotion_authority": False,
+                "samples": [{"world_epoch": 2, "blueprints": [{"entity": "7v1", "entity_bits": 30,
+                             "kind": "RestArea", "footprint": [[40, 40], [41, 40], [40, 41], [41, 41]],
+                             "progress": 0, "delivered_materials": {}}]},
+                            {"world_epoch": 2, "blueprints": [], "owner_layers": [{"entity": "7v1",
+                             "exists": False, "building_grids": [], "floor_grids": [], "door_grids": [],
+                             "bridge_grids": [], "stockpile_grids": []}]}],
+                "events": [{"operation": "BlueprintCancellationApplied", "producer": "blueprint_cancellation_system",
+                            "result": "OwnerCleanupApplied", "kind": "RestArea", "owner": "7v1", "owner_bits": 30,
+                            "world_epoch": 2, "sample_index": 1,
+                            "footprint": [[40, 40], [41, 40], [40, 41], [41, 41]],
+                            "footprint_walkability": [True] * 4,
+                            "refund_items": [], "delivered_materials": [],
+                            "released_actors": [], "closed_requests": [], "removed_storages": [], "released_items": []}]}
+
+    def test_applied_cancellation_is_bound_without_granting_lifecycle_authority(self):
+        acceptance.rest_area_planning.check_cancellation(self.cancellation(), self.entries(),
+                                                       {"nonce": "ordinary-cancel", "pid": 123})
+
+    def test_foreign_or_missing_cancellation_observation_is_rejected(self):
+        mutations = (
+            lambda raw: raw.update(nonce="foreign"),
+            lambda raw: raw.update(process_id=124),
+            lambda raw: raw.update(accepted=True),
+            lambda raw: raw.update(performance_evidence=True),
+            lambda raw: raw.update(promotion_authority=True),
+            lambda raw: raw.update(failure="overflow"),
+            lambda raw: raw.update(events=[]),
+            lambda raw: raw["events"].append(copy.deepcopy(raw["events"][0])),
+            lambda raw: raw["events"][0].update(producer="TaskActionOutcome"),
+            lambda raw: raw["events"][0].update(result="CancellationRequested"),
+            lambda raw: raw["events"][0].update(owner_bits=20),
+            lambda raw: raw["events"][0].update(owner_bits=30.0),
+            lambda raw: raw["events"][0].update(world_epoch=1),
+            lambda raw: raw["events"][0].update(sample_index=-1),
+            lambda raw: raw["events"][0].update(sample_index=True),
+            lambda raw: raw["events"][0].update(refund_items=[{"kind": "Wood", "count": 1}]),
+            lambda raw: raw["events"][0].update(released_actors=["7v1", "7v1"]),
+            lambda raw: raw["samples"][0].update(world_epoch=1),
+            lambda raw: raw["samples"][1].update(blueprints=[{"entity": "7v1"}]),
+            lambda raw: raw["samples"][1].pop("blueprints"),
+            lambda raw: raw["samples"][1].pop("owner_layers"),
+            lambda raw: raw["samples"][1]["owner_layers"][0].update(stockpile_grids=[[40, 40]]),
+        )
+        for mutate in mutations:
+            raw = self.cancellation()
+            mutate(raw)
+            with self.subTest(mutation=mutate), self.assertRaises(RuntimeError):
+                acceptance.rest_area_planning.check_cancellation(raw, self.entries(),
+                                                               {"nonce": "ordinary-cancel", "pid": 123})
+
     def test_helper_is_bound_to_all_native_harness_inventories(self):
         from scripts.perf_tool import execution, renderdoc_capture
         relative = ".codex/skills/hell-workers-run-native-acceptance/scripts/ui_rest_area_planning.py"
@@ -263,6 +318,11 @@ class VendoredSourceIdentityTests(unittest.TestCase):
 
 
 class RuntimeLogEvidenceTests(unittest.TestCase):
+    def test_cancellation_environment_builds_exact_process_bound_raw_setting(self):
+        setting = acceptance.cancellation_observation_setting(Path("/owned/viewport-0"), "fresh-nonce")
+        self.assertEqual(json.loads(setting), {"nonce": "fresh-nonce",
+            "output": "/owned/viewport-0/production-cancellation.json", "admitted_identities": []})
+
     def test_parent_log_filter_cannot_hide_renderer_evidence(self):
         for inherited in ("warn", "off", "bevy_app=info"):
             with self.subTest(inherited=inherited), patch.object(

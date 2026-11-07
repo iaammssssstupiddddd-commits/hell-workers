@@ -124,6 +124,12 @@ Source 側のみ手動操作し、Target 側は Bevy が自動更新する（tas
 
 ## 2. TransportRequest 基盤
 
+建設取消の`spawn_refund_items`は従来と同じitem/位置/画像/個数を生成する。
+`construction_helpers::spawn_refund_items_observed`は同じprimitiveのcallbackで実予約Entity IDを
+通知するだけで、deferred適用や取消全体の成功を保証しない。明示profiling観測のBlueprint ownerが
+そのIDを後段で検証する。未対応資源を返却済みと合成せず、通常APIはno-op callbackを使う。
+通常playerの入力、数量契約、Soul所有の予約解放、save schemaを変更しない。
+
 `TransportRequestPlugin` は以下の順で実行されます。
 
 1. `Perceive`（メトリクス集計 + フレームキャッシュ更新）

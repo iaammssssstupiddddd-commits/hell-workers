@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 from datetime import UTC, datetime
 import hashlib
+import json
 import os
 from pathlib import Path
 import secrets
@@ -453,6 +454,10 @@ def verify_root(root):
         events = native.read_json(directory / "events.json")["events"]
         client = native.read_json(directory / "input-client.json")
         check_input_client(manifest, session, client)
+        if case == "rest-area-planning":
+            raw_path = directory / "production-cancellation.json"
+            native.require(sha256(raw_path) == session.get("cancellation_sha256"), "cancellation raw changed")
+            rest_area_planning.check_cancellation(native.read_json(raw_path), entries, client)
         native.require(case == "navigation" or not layout_only, "refactor case requires actual input")
         expected_checkpoints = (refactor_rows.CHECKPOINTS if case == "refactor-rows" else
                                 bridge_planning.CHECKPOINTS if case == "bridge-planning" else
@@ -522,6 +527,11 @@ def game_environment(repo):
     # must not silently remove it; warnings/errors remain visible and rejected.
     environment["RUST_LOG"] = "info,wgpu=error"
     return environment
+
+
+def cancellation_observation_setting(directory, nonce):
+    return json.dumps({"nonce": nonce, "output": str(directory / "production-cancellation.json"),
+                       "admitted_identities": []})
 
 
 def plan(args):
@@ -595,6 +605,8 @@ def run(args):
                                 "HW_NATIVE_UI_ROOT": str(directory), "HW_NATIVE_UI_NONCE": nonce,
                                 "HW_NATIVE_UI_WIDTH": str(width), "HW_NATIVE_UI_HEIGHT": str(height), "HW_NATIVE_UI_SCALE": str(scale)})
             environment["HW_NATIVE_UI_CASE"] = case
+            if case == "rest-area-planning":
+                environment["HW_BUILDING_PRODUCTION_OBSERVATIONS"] = cancellation_observation_setting(directory, nonce)
             if case == "refactor-rows":
                 # Use winit's local XIM backend for this ASCII rename/search case.
                 # Keep the desktop's IME and every other process unchanged.
@@ -648,7 +660,10 @@ def run(args):
                             native.stop_command_process(process)
                         state["child_pid"] = None
             joint.verify_game_log(directory / "game.log", "Intel")
-            sessions.append({"case": case, "directory": directory.name, "nonce": nonce, "log_sha256": sha256(directory / "game.log")})
+            session = {"case": case, "directory": directory.name, "nonce": nonce, "log_sha256": sha256(directory / "game.log")}
+            if case == "rest-area-planning":
+                session["cancellation_sha256"] = sha256(directory / "production-cancellation.json")
+            sessions.append(session)
         native.atomic_write_json(root / "manifest.json", {
             "profile": PROFILE, "evidence_kind": "feedback", "repo": str(repo), "smoke": args.smoke,
             "input_backend": args.input_backend,
