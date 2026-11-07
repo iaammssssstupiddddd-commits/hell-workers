@@ -553,6 +553,24 @@ Soulの実Dream/fatigue/stress/IdleState/Visibility/座標/入口walkability/coo
 上限超過・非finite状態は収集失敗、欠損component/resourceはnullのままにする。
 空のoccupants targetがBevyにより除去された後も、空配列や成功へ置換しない。
 
+同じ明示profiling sessionの`spa_context`はSoulSpa専用の受動観測である。
+site最大512、tile最大2048、Soul/WorkingOn source最大128、grid最大512、tile worker最大128を要求する。
+phase、必要/搬入Bone、active_slots、PowerGeneratorの出力/係数、実poseとmap owner footprint、
+durable `SoulSpaTile.parent_site`、TaskWorkersと全WorkingOn source、GeneratePowerのtile/phase/座標、
+SoulのDream/疲労/ストレス、designation/task slots、grid generation/consumption/接続の実値を記録する。
+Children/ChildOfからtile集合を推測せず、load後に表示階層がなくても同じ論理ownerを観測できる。
+欠損component/resourceと空配列を区別し、orphan parent、非Soul worker、active_slots範囲外なども
+正常化や成功判定をせず原状態で公開する。非finite値と件数超過は収集失敗とする。
+`outcome_channels`は実cancel/slots message resourceの存在だけを示し、未登録channelを空の成功へ置換しない。
+独立MessageCursorが`SoulSpaConstructionCancelOutcome`/`SoulSpaSlotsChangeOutcome`を一度ずつ読み、
+既存domain resultと実refund数/適用値を記録する。他consumerのmessageをdrainせず、要求・消失・
+state差から成功を合成しない。`Canceled`の返却個数だけでは返却Entity IDs/全cleanupの証明にならない。
+sample_index/real_secondsはobserverがmessageを読んだ時点であり、domain適用時刻や入力との因果を表さない。
+raw verifierはこの2種の厳密な型・status/payload一致・有界な観測時刻だけを検査し、
+domain witnessの許可一覧には追加しない。範囲外の有限値も合法値へ補正せず、別の受入predicateで判断する。
+このproducer追加は通常アセット採用、保存schema、配置/利用/発電ruleやHelpを変更せず、
+通常入力lifecycle・Save/Load・性能・releaseを受入済みにするものではない。
+
 UI feedbackの`rest-area-usage`は通常施工の3checkpointに入所・放出の2checkpointを追加する。
 camera/pause準備以外は既存入力と通常AIを使い、occupant・Dream・材料・完了状態を注入しない。
 UIとproduction rawは同じread-only collectorを使い、paused・同nonce/PID/epoch・同仮想時刻・

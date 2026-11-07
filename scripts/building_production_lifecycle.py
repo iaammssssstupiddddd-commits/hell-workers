@@ -120,6 +120,48 @@ def check_placement_receipt(event, samples):
                 "SoulSpa four-tile receipt differs")
 
 
+def check_spa_outcome(event, samples):
+    """Validate observed messages, not input causality, refunds or cleanup proof."""
+    cancel = event.get("producer") == "SoulSpaConstructionCancelOutcome"
+    payload = "refunded_bones" if cancel else "applied"
+    require(event.get("producer") in {"SoulSpaConstructionCancelOutcome", "SoulSpaSlotsChangeOutcome"}
+            and set(event) == {"producer", "operation", "owner", "result", "sample_index",
+                               "event_index", "real_seconds", payload}
+            and event["operation"] == ("SoulSpaConstructionCancel" if cancel else "SoulSpaSlotsChange")
+            and isinstance(event["owner"], str) and event["owner"]
+            and isinstance(event["result"], str)
+            and type(event["event_index"]) is int and event["event_index"] >= 0
+            and type(event["sample_index"]) is int and 0 <= event["sample_index"] < len(samples),
+            "Spa observed outcome envelope differs")
+    sample = samples[event["sample_index"]]
+    require(type(event["real_seconds"]) in (int, float) and math.isfinite(event["real_seconds"])
+            and type(sample.get("real_seconds")) in (int, float) and math.isfinite(sample["real_seconds"])
+            and 0 <= event["real_seconds"] <= sample["real_seconds"], "Spa observed outcome time differs")
+    if cancel:
+        match = re.fullmatch(r"Canceled \{ refunded_bones: ([0-9]{1,10}) \}", event["result"])
+        if match:
+            require(type(event[payload]) is int and 0 <= event[payload] < 2**32
+                    and event[payload] == int(match[1]), "Spa observed refund count differs")
+        else:
+            require(event["result"] in {"Paused", "StaleTarget", "PhaseUnavailable", "OwnerMismatch",
+                                         "ActiveTaskMismatch"} and event[payload] is None,
+                    "Spa observed cancel status differs")
+    else:
+        match = re.fullmatch(r"Applied \{ requested: ([0-9]{1,10}), applied: ([0-9]{1,10}), "
+                             r"clamped: (true|false) \}", event["result"])
+        if match:
+            value = event[payload]
+            require(isinstance(value, dict) and set(value) == {"requested", "applied", "clamped"}
+                    and all(type(value[key]) is int and 0 <= value[key] < 2**32
+                            and value[key] == int(match[index])
+                            for key, index in (("requested", 1), ("applied", 2)))
+                    and type(value["clamped"]) is bool and value["clamped"] == (match[3] == "true"),
+                    "Spa observed slots payload differs")
+        else:
+            require(event["result"] in {"StaleTarget", "UnsupportedTarget", "PhaseUnavailable"}
+                    and event[payload] is None, "Spa observed slots status differs")
+
+
 def check_raw_transitions(raw):
     """Check indexed raw state deltas; they never imply an operation succeeded."""
     require(raw.get("schema_version") == 2 and raw.get("transition_contract") == "indexed-state-delta-v1",
@@ -172,6 +214,8 @@ def check_raw_transitions(raw):
                     and 0 <= event["real_seconds"] <= sample["real_seconds"], "raw mouse context differs")
         elif producer == "ordinary-building-placement-branch-v1":
             check_placement_receipt(event, samples)
+        elif producer in {"SoulSpaConstructionCancelOutcome", "SoulSpaSlotsChangeOutcome"}:
+            check_spa_outcome(event, samples)
         elif producer == "ordinary-blueprint-delivery-branch-v1":
             check_delivery_receipt(event, samples)
             item = (event["world_epoch"], event["item"])

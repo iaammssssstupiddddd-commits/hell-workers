@@ -594,6 +594,19 @@ mainがprimaryを直列編集し、branch `codex/tak14-non-bridge-release` を�
 最終導入では承認済みの同一世代inventoryを既定起動へ接続し、明示overrideと失敗fallbackを検証する。
 Bevy 0.19の既存loader/pool経路を使う。公開・push・mergeは本依頼の完了条件にしない。
 
+### SoulSpa通常worldの観測補完（2026-11-08）
+
+全16maskの静止確認後、通常利用/lifecycleを実値で検査するため、profiling-onlyの
+`observations_spa.rs`を通常raw observerへ接続する。siteのphase/Bone搬入/active_slotsと発電値、
+durable parent_siteによるtile/worker/WorkingOn逆参照、実GeneratePower taskとSoulのDream/疲労、
+WorldMap占有・walkability・grid接続を有界に読み取る。表示hierarchyに依存しない。
+不足component/resourceはnullとして残し、欠損からmask・成立・cleanup完了を推測しない。
+所有・座標・有限値・上限の不整合は検査できる生の状態として保持し、非有限値/件数超過はfail closed。
+既存のdomain cancel/slots outcomeを独立MessageCursorで記録し、受理要求や消失を成功receiptへ変換しない。
+通常起動の候補採用・通常動作・保存schema・公開入力は変更しない。関連unit/拒否試験・Help実レビュー・
+Rust check/Clippy・変更別検証・独立readonlyを通してから、別の通常入力シナリオを補完する。
+このproducer補完だけでは実施工・自然利用・Save/Load・Capture/Memory・releaseを完了にしない。
+
 ## 5. マイルストーン
 
 ### M1: 原本・候補

@@ -9,6 +9,8 @@ mod observations;
 #[cfg(feature = "profiling")]
 mod observations_rest;
 #[cfg(feature = "profiling")]
+mod observations_spa;
+#[cfg(feature = "profiling")]
 mod observations_ui;
 #[cfg(feature = "profiling")]
 mod ordinary_art;

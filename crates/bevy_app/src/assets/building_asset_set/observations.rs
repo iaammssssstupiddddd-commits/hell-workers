@@ -47,6 +47,7 @@ struct Observations {
     completed: MessageCursor<BuildingCompletedVisualMessage>,
     tasks: MessageCursor<TaskCompletedVisualMessage>,
     dreams: MessageCursor<DreamTransferredVisualMessage>,
+    spa: super::observations_spa::Events,
     keyboard: MessageCursor<KeyboardInput>,
     mouse: MessageCursor<MouseButtonInput>,
     failure: Option<String>,
@@ -348,6 +349,7 @@ fn companion_context(world: &mut World) -> Result<Value, String> {
 fn snapshot(world: &mut World) -> Result<Value, String> {
     let art_feedback = super::ordinary_art::snapshot(world)?;
     let rest_area_context = super::observations_rest::snapshot(world)?;
+    let spa_context = super::observations_spa::snapshot(world)?;
     let companion_context = companion_context(world)?;
     let save_catalog_context = super::observations_ui::save_catalog_context(world)?;
     let architect_panel_ready = architect_panel_ready(world);
@@ -552,6 +554,7 @@ fn snapshot(world: &mut World) -> Result<Value, String> {
         "native_peak_live_bytes": null, "rss_bytes": null,
         "application_handle_count": null});
     sample["rest_area_context"] = rest_area_context;
+    sample["spa_context"] = spa_context;
     if !art_feedback.is_null() {
         sample["art_feedback"] = art_feedback;
     }
@@ -584,6 +587,10 @@ fn observe(world: &mut World) {
     let now = world.resource::<Time<Real>>().elapsed_secs_f64();
     world.resource_scope(|world, mut observations: Mut<Observations>| {
         let index = observations.samples.len();
+        match observations.spa.read(world, index, now) {
+            Ok(rows) => observations.events.extend(rows),
+            Err(failure) => observations.failure = Some(failure),
+        }
         if let Some(mut receipts) = world.get_resource_mut::<crate::systems::save::observations::DurableReceipts>() {
             if let Some(failure) = &receipts.failure {
                 observations.failure = Some(failure.clone());
