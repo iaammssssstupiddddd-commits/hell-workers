@@ -124,6 +124,146 @@ class PipelineTests(unittest.TestCase):
             self.assertNotIn("numeric_approval_sha256", manifest)
             self.assertNotIn("numeric_approval_sha256", receipt)
 
+    def test_art_approval_generation_is_exact_json_not_python_numeric_equality(self):
+        for kind in ("Tank", "RestArea", "SoulSpa"):
+            self.candidate(kind)
+            source = self.root / f"author-{kind}-1"
+            original_art = pipeline.read(source / "art-approval.json")
+            original_numeric = pipeline.read(source / "numeric-approval.json")
+            for index, value in enumerate((True, 1.0)):
+                art = json.loads(json.dumps(original_art))
+                art["art_preview_identity"]["generation"] = value
+                (source / "art-approval.json").write_bytes(pipeline.canonical(art))
+                # The numeric identity remains the correct integer; rebinding
+                # its art hash must not sanitize the malformed art decision.
+                numeric = {**original_numeric, "art_approval_sha256": pipeline.digest(pipeline.canonical(art))}
+                (source / "numeric-approval.json").write_bytes(pipeline.canonical(numeric))
+                output = self.root / f"bad-art-{kind}-{index}"
+                with self.subTest(kind=kind, value=value), self.assertRaises(ValueError):
+                    pipeline.export(source / "recipe.json", source, output, self.binary,
+                                    authority="isolated_candidate", approval_path=source / "art-approval.json",
+                                    numeric_approval_path=source / "numeric-approval.json")
+                self.assertFalse(output.exists())
+
+    def test_m2_numeric_identity_and_values_reject_boolean_aliases(self):
+        root = self.candidate("Tank")
+        decision = pipeline.read(root / "provenance/numeric-approval.json")
+        identity = dict(decision["art_preview_identity"])
+        for value in (True, 1.0):
+            changed = {**decision, "art_preview_identity": {**identity, "generation": value}}
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                pipeline.approved_numeric_state(changed, identity, decision["art_approval_sha256"])
+        changed = {**decision, "production_state": {"kind": "Tank", "partial_y_wu": 0.5, "full_y_wu": True}}
+        with self.assertRaises(ValueError):
+            pipeline.approved_numeric_state(changed, identity, decision["art_approval_sha256"])
+
+    def test_release_approval_generation_rejects_numeric_alias_before_promotion(self):
+        for generation, value in ((1, True), (2, 2.0)):
+            path, assets, evidence, approval = self.promotion("Tank", generation)
+            changed = pipeline.read(approval)
+            changed["candidate_identity"]["generation"] = value
+            approval.write_bytes(pipeline.canonical(changed))
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                pipeline.apply(path, self.binary, evidence, approval)
+            self.assertIsNone(pipeline.pointer(assets, "Tank"))
+
+    def test_rehashed_art_provenance_still_rejects_numeric_identity_aliases(self):
+        for kind in ("Tank", "RestArea", "SoulSpa", "SandPile"):
+            for generation, value in ((1, True), (2, 2.0)):
+                root = self.candidate(kind, generation)
+                art_path = root / "provenance/art-approval.json"
+                art = pipeline.read(art_path)
+                art["art_preview_identity"]["generation"] = value
+                art_path.write_bytes(pipeline.canonical(art))
+                manifest_path = root / pipeline.locator(kind)
+                manifest = pipeline.read(manifest_path)
+                manifest["art_approval_sha256"] = pipeline.digest(art_path.read_bytes())
+                numeric_path = root / "provenance/numeric-approval.json"
+                if numeric_path.exists():
+                    numeric = pipeline.read(numeric_path)
+                    numeric["art_approval_sha256"] = manifest["art_approval_sha256"]
+                    numeric_path.write_bytes(pipeline.canonical(numeric))
+                    manifest["numeric_approval_sha256"] = pipeline.digest(numeric_path.read_bytes())
+                manifest_path.write_text(fixture_codec(self.binary, "seal", json.dumps(manifest))["manifest"])
+                with self.subTest(kind=kind, value=value, route="plan"), self.assertRaises(ValueError):
+                    pipeline.plan(root, self.root / "assets", kind, self.binary)
+                with self.subTest(kind=kind, value=value, route="verify"), self.assertRaises(ValueError):
+                    pipeline.verify_set(root, kind, self.binary)
+
+    def test_candidate_evidence_identity_rejects_numeric_alias_with_rebound_approval(self):
+        for generation, value in ((1, True), (2, 2.0)):
+            path, assets, evidence, approval = self.promotion("Tank", generation)
+            changed = pipeline.read(evidence)
+            changed["identity"]["generation"] = value
+            evidence.write_bytes(pipeline.canonical(changed))
+            release = pipeline.read(approval)
+            release["evidence_sha256"] = pipeline.digest(evidence.read_bytes())
+            approval.write_bytes(pipeline.canonical(release))
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                pipeline.apply(path, self.binary, evidence, approval)
+            self.assertIsNone(pipeline.pointer(assets, "Tank"))
+
+    def test_install_rejects_rehashed_release_approval_identity_alias(self):
+        for kind, value in (("Tank", True), ("RestArea", 1.0)):
+            path, assets, evidence, approval = self.promotion(kind)
+            pipeline.apply(path, self.binary, evidence, approval)
+            active = pipeline.pointer(assets, kind)
+            slug = pipeline.KINDS[kind]["slug"]
+            journal_path = assets / f"transactions/building-{slug}-1.json"
+            journal = pipeline.read(journal_path)
+            journal["approval"]["candidate_identity"]["generation"] = value
+            active["approval_sha256"] = pipeline.digest(pipeline.canonical(journal["approval"]))
+            journal["new"] = active
+            journal_path.write_bytes(pipeline.canonical(journal))
+            (assets / f"authority/building-{slug}.json").write_bytes(pipeline.canonical(active))
+            destination = self.root / f"bad-mirror-{kind}"
+            with self.subTest(kind=kind, value=value), self.assertRaises(ValueError):
+                pipeline.install(assets, destination, kind, self.binary, execute=True)
+            self.assertFalse((destination / pipeline.locator(kind)).exists())
+
+    def test_apply_rejects_coordinated_plan_evidence_and_approval_aliases(self):
+        for kind, value in (("Tank", True), ("RestArea", 1.0)):
+            path, assets, evidence, approval = self.promotion(kind)
+            plan = pipeline.read(path)
+            plan["candidate_identity"]["generation"] = value
+            path.write_bytes(pipeline.canonical(plan))
+            sample = pipeline.read(evidence)
+            sample["identity"]["generation"] = value
+            evidence.write_bytes(pipeline.canonical(sample))
+            decision = pipeline.read(approval)
+            decision["candidate_identity"]["generation"] = value
+            decision["evidence_sha256"] = pipeline.digest(evidence.read_bytes())
+            approval.write_bytes(pipeline.canonical(decision))
+            with self.subTest(kind=kind, value=value), self.assertRaises(ValueError):
+                pipeline.checked_plan(path, self.binary)
+            with self.assertRaises(ValueError):
+                pipeline.apply(path, self.binary, evidence, approval)
+            self.assertIsNone(pipeline.pointer(assets, kind))
+
+    def test_install_rejects_coordinated_rehashed_journal_identity_aliases(self):
+        for kind, value in (("Tank", True), ("RestArea", 1.0)):
+            path, assets, evidence, approval = self.promotion(kind)
+            pipeline.apply(path, self.binary, evidence, approval)
+            active = pipeline.pointer(assets, kind)
+            slug = pipeline.KINDS[kind]["slug"]
+            journal_path = assets / f"transactions/building-{slug}-1.json"
+            journal = pipeline.read(journal_path)
+            for container, key in ((journal["plan"], "candidate_identity"),
+                                   (journal["evidence"], "identity"), (journal["approval"], "candidate_identity")):
+                container[key]["generation"] = value
+            active["plan_sha256"] = pipeline.digest(pipeline.canonical(journal["plan"]))
+            active["evidence_sha256"] = pipeline.digest(pipeline.canonical(journal["evidence"]))
+            journal["approval"]["evidence_sha256"] = active["evidence_sha256"]
+            active["approval_sha256"] = pipeline.digest(pipeline.canonical(journal["approval"]))
+            journal["plan_sha256"] = active["plan_sha256"]
+            journal["new"] = active
+            journal_path.write_bytes(pipeline.canonical(journal))
+            (assets / f"authority/building-{slug}.json").write_bytes(pipeline.canonical(active))
+            destination = self.root / f"coordinated-bad-mirror-{kind}"
+            with self.subTest(kind=kind, value=value), self.assertRaises(ValueError):
+                pipeline.install(assets, destination, kind, self.binary, execute=True)
+            self.assertFalse((destination / pipeline.locator(kind)).exists())
+
     def test_m3_export_requires_separate_exact_numeric_decision_before_writes(self):
         for kind in ("RestArea", "SoulSpa"):
             self.candidate(kind)

@@ -13,6 +13,17 @@
 
 ## 1. 目的
 
+M3導入経路の追加照合で、既存Pythonのart/release decision比較がnested generationの
+true/1.0を正規int1と同一視する欠陥を独立read-only reviewで確認した。M3 numeric側のidentityを
+正規intのまま不正artのhashへ結び直しても通るため、採否・候補化・起動前に補正する。
+既存art decisionのexport/load/verify/planとrelease decisionをcanonical JSON比較へ統一し、
+M2 numericのidentityとbool数値代用も拒否する。新しい承認・asset・ゲーム規則は生成しない。
+Rustのprofiling実行ファイル準備と並行する編集はPython/文書だけで、Rust入力は変更しない。
+旧コードは追加拒否回帰で7failureを再現。補正後はfocused21件、Python全573+222件と
+contracts/toolingの変更別検証を通過した。plan/evidence/approvalと全hashを同時差替えする拒否も含む。
+実codec由来candidateへ再拘束した実装は独立read-only reviewで限定承認、HelpはNo impact。
+実機plan登録前に最終文書差分とstorageを確認する。profiling executableの準備buildも成功した。
+
 次の実装はM3の独立数値採否を、exact art-preview identity・art decision・geometry原本の
 hashと明示数値projectionへ結ぶ経路。RestArea/SoulSpaのcandidate/releaseにもnumeric digestを
 要求し、M2専用production_stateは流用しない。未知field・非有限値・bool代用・identity/原本/

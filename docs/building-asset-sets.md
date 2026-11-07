@@ -133,6 +133,11 @@ receiptは製品に同梱する承認記録の整合性検査であり、署名�
 `project_building_asset_json`の`seal`／`validate`がruntimeのRust型・f32形式・canonical serializerを再利用する。
 codecのreceipt生成は形式の整合性だけであり、美術・release承認を行わない。
 
+Python側のart/numeric/release decisionのidentityはcanonical JSONで比較し、generationの
+int `1`とbool `true`／float `1.0`を同一視しない。art原本・numeric原本・manifestのhashを
+結び直しても不正型を正規identityへ読み替えない。M2 production_stateの数値にもboolを許さず、
+既存int/float入力とRustのf32範囲検査を維持する。candidate evidenceとinstall時のrelease decisionも再照合する。
+
 `tools/blender_ai_workflow/scripts/building_asset_pipeline.py export`は既存のrole別GLB／PNGとrecipeを
 包装する。geometryや画像を新規生成しない。source／geometry／artifactの実bytes・hashとrole順を確認し、
 content-addressed artifact、locator、provenanceを出力する。`art_preview`は承認なし、`isolated_candidate`は
