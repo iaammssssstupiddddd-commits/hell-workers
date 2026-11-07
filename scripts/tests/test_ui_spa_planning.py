@@ -539,6 +539,49 @@ class SpaPlanningTests(unittest.TestCase):
             finish.assert_called_once_with(driver)
             driver.send.assert_not_called()
 
+    def test_measurement_window_requires_real_worker_and_vital_headroom(self):
+        with tempfile.TemporaryDirectory() as directory:
+            save = Path(directory) / "saves/manual-1.scn.ron"
+            save.parent.mkdir()
+            _, entries, _, _ = self.usage_fixture(save)
+            state = spa.context(entries[3]["value"])
+            before = copy.deepcopy(state)
+            self.assertEqual(set(spa.measurement_workers(state)), {"400v0"})
+            self.assertEqual(state, before)
+            for key, value in (("fatigue", .74), ("stress", .9), ("dream", 12), ("fatigue", None), ("fatigue", True)):
+                changed = copy.deepcopy(state)
+                changed["souls"][0][key] = value
+                self.assertFalse(spa.measurement_workers(changed))
+            changed = copy.deepcopy(state)
+            changed["souls"][0]["generate_power"]["phase"] = "GoingToTile"
+            self.assertFalse(spa.measurement_workers(changed))
+
+    def test_collector_does_not_switch_to_first_unhealthy_worker_after_capture(self):
+        with tempfile.TemporaryDirectory() as directory:
+            save = Path(directory) / "saves/manual-1.scn.ron"
+            save.parent.mkdir()
+            _, entries, _, _ = self.usage_fixture(save)
+            using, used = (copy.deepcopy(e["value"]) for e in entries[3:])
+            for value in (using, used):
+                state = spa.context(value)
+                healthy = copy.deepcopy(state["souls"][0])
+                healthy.update(entity="999v0", entity_bits=999, fatigue=.2)
+                healthy["generate_power"]["tile"] = state["tiles"][1]["entity"]
+                healthy["working_on"] = state["tiles"][1]["entity"]
+                state["tiles"][1]["workers"] = ["999v0"]
+                state["souls"][0]["fatigue"] = .75
+                state["souls"].append(healthy)
+            # The fatigued ID-first worker leaves, while the selected healthy
+            # worker remains. The measured predicate must follow the latter.
+            spa.context(used)["souls"][0]["generate_power"] = None
+            driver = Mock()
+            driver.last = entries[2]["value"]
+            driver.wait.side_effect = [using, using, used]
+            with patch.object(spa, "exercise_completion"), patch.object(spa, "pause"), \
+                    patch.object(spa, "click"), patch.object(spa, "wait_final_raw"):
+                spa.exercise_usage(driver)
+            self.assertTrue(driver.wait.call_args_list[-1].args[0](used))
+
     def test_grid_numeric_identity_and_relationships_must_match_actual_remap(self):
         before, after = self.state(1), self.state(2)
         mapping = [{"saved_entity": a["entity"], "saved_bits": a["entity_bits"],

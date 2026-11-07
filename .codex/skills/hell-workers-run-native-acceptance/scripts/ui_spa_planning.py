@@ -706,6 +706,14 @@ def generating(state):
             and s["entity"] in (tiles[s["generate_power"]["tile"]].get("workers") or [])}
 
 
+def measurement_workers(state):
+    # Select a real observation window, never change the worker's vitals or
+    # assignment. Allow room for owned-input ACK/capture and the measured leg.
+    return {key: soul for key, soul in generating(state).items()
+            if all(finite(soul.get(k)) for k in ("dream", "fatigue", "stress"))
+            and soul["dream"] >= 20 and 0 <= soul["fatigue"] <= .6 and 0 <= soul["stress"] <= .65}
+
+
 def check_usage_observation(case, value):
     if case in COMPLETION_CHECKPOINTS:
         check_completion_observation(case, value)
@@ -816,11 +824,11 @@ def exercise_usage(driver):
     click(driver, "menu:SetTimeSpeed(Fast)")
     driver.last = driver.wait(lambda v: not v["paused"] and context(v).get("relative_speed") == 2,
                               after=driver.last["frame"])
-    driver.last = driver.wait(lambda v: any(s["dream"] > 12 for s in generating(context(v)).values()),
+    driver.last = driver.wait(lambda v: bool(measurement_workers(context(v))),
                               after=driver.last["frame"], timeout=300)
     pause(driver, True)
     driver.capture(USAGE_CHECKPOINTS[3])
-    workers = {key: soul for key, soul in generating(context(driver.last)).items() if soul["dream"] > 12}
+    workers = measurement_workers(context(driver.last))
     native.require(workers, "Spa generating worker vanished before capture")
     worker = sorted(workers)[0]
     start = driver.last["spa_planning"]["virtual_seconds"]

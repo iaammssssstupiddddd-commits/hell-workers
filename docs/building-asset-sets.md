@@ -604,6 +604,9 @@ Dream変化、停止中の消費への付替え、途中のworker/親/map/window
 受動`relative_speed`を実Timeから記録し、欠損時はnullのまま。rawとUI/actionで実1→2→1と
 単発HUD入力区間を照合し、測定区間のunpaused rawが1倍速でない場合やbool代用/不明速度を拒否する。
 全session480秒とraw1200 sampleの上限、未成立時のinvalidは維持する。速度を準備コードから設定しない。
+撮影入力中の自然な疲労離脱を成功と誤認しないよう、収集開始は実GeneratingのDream20以上・
+疲労0.6以下・stress0.65以下を観測できた場合だけにする。測定窓の選択であり、数値設定・
+割当・回復・離脱ruleを変更しない。十分な利用者が現れない場合も同じ上限で失敗する。
 これは通常利用の限定feedbackであり、枠変更、Operational保存復元、撤去、候補画像の採用、
 Capture/Memory性能、正式releaseの証明ではない。実機成功はfresh jobの独立検証後にのみ記録する。
 
