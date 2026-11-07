@@ -558,6 +558,7 @@ site最大512、tile最大2048、Soul/WorkingOn source最大128、grid最大512�
 phase、必要/搬入Bone、active_slots、PowerGeneratorの出力/係数、実poseとmap owner footprint、
 durable `SoulSpaTile.parent_site`、TaskWorkersと全WorkingOn source、GeneratePowerのtile/phase/座標、
 SoulのDream/疲労/ストレス、designation/task slots、grid generation/consumption/接続の実値を記録する。
+site/tile/Soul/PowerGridのEntityはDebug表現と実`to_bits()`を併記し、保存復元の実mapと数値identityを照合する。
 Children/ChildOfからtile集合を推測せず、load後に表示階層がなくても同じ論理ownerを観測できる。
 欠損component/resourceと空配列を区別し、orphan parent、非Soul worker、active_slots範囲外なども
 正常化や成功判定をせず原状態で公開する。非finite値と件数超過は収集失敗とする。

@@ -76,6 +76,7 @@ fn spa_snapshot_reads_all_worker_masks_without_hierarchy_or_gameplay_mutation() 
         let first = snapshot(&mut world).unwrap();
         assert_eq!(first["sites"][0]["active_slots"], 0);
         assert_eq!(first["sites"][0]["grid"], format!("{grid:?}"));
+        assert_eq!(first["grids"][0]["entity_bits"], grid.to_bits());
         assert_eq!(
             first["grids"][0]["generators"],
             json!([format!("{owner:?}")])

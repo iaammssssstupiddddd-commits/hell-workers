@@ -145,7 +145,7 @@ pub(crate) fn snapshot(world: &mut World) -> Result<Value, String> {
             return Err("Spa observation grid generator cap exceeded".into());
         }
         grids.push(
-            json!({"entity": format!("{entity:?}"), "generation": grid.generation,
+            json!({"entity": format!("{entity:?}"), "entity_bits": entity.to_bits(), "generation": grid.generation,
             "consumption": grid.consumption, "powered": grid.powered, "generators": generators}),
         );
     }

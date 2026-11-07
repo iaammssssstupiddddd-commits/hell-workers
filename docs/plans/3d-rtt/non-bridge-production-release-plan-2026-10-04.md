@@ -640,6 +640,11 @@ actionを閉じる。独立reviewの当初の「loaded時に施工予定表示�
 5画像の再照合で撤回した。ROI `(912,492)-(992,573)` の淡青表示はplaced/saved/loadedで一致し、
 empty/cancelledでは地形へ戻る。誤認を根拠に製品visualを変更しない。
 
+`tak14-soulspa-ordinary-planning-20261108-v4`（`ef3dff4f`）は入力照合を通過したが、PowerGrid観測に
+numeric Entity bitsがないためdurable remap照合でinvalidとなった。site/tileと同様に実`Entity::to_bits()`を
+受動producerへ追加し、grid接続・逆参照を持つfixtureと欠損/異ID/異参照の拒否試験を補完する。
+Debug文字列からbitsを推測せず、mapping条件も緩めない。旧結果はinvalidのままseal/finalizeする。
+
 ## 5. マイルストーン
 
 ### M1: 原本・候補

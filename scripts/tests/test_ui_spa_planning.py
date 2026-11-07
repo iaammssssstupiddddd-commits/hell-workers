@@ -113,7 +113,10 @@ class SpaPlanningTests(unittest.TestCase):
                            "bones_required": 12, "bones_delivered": 0, "active_slots": 4,
                            "building_kind": "SoulSpa", "provisional": False, "pose": {"translation": [1, 2, 3]},
                            "generator": {"current_output": 0.0, "output_per_soul": 1.0},
-                           "grid": None, "map_building_grids": footprint}]
+                           "grid": f"{owner * 100}v0", "map_building_grids": footprint}]
+        state["grids"] = [{"entity": f"{owner * 100}v0", "entity_bits": owner * 100,
+                           "generation": 0.0, "consumption": 0.0, "powered": True,
+                           "generators": [f"{owner}v0"]}]
         state["tiles"] = [{"entity": f"{owner * 10 + i}v0", "entity_bits": owner * 10 + i,
                            "parent_site": f"{owner}v0", "parent_exists": True,
                            "grid": grid, "pose": {"translation": [i, i, 0]}, "workers": None,
@@ -138,7 +141,7 @@ class SpaPlanningTests(unittest.TestCase):
                             "paused": True, "world_epoch": int(i >= 3), "spa_context": copy.deepcopy(state)})
         mapping = [{"saved_entity": a["entity"], "saved_bits": a["entity_bits"],
                     "loaded_entity": b["entity"], "loaded_bits": b["entity_bits"], "kind": kind}
-                   for key, kind in (("sites", "SoulSpa"), ("tiles", "SoulSpaTile"))
+                   for key, kind in (("sites", "SoulSpa"), ("tiles", "SoulSpaTile"), ("grids", "PowerGrid"))
                    for a, b in zip(states[2][key], states[3][key], strict=True)]
         payload = b"fixture save, not a real game execution"
         save_path.write_bytes(payload)
@@ -225,6 +228,28 @@ class SpaPlanningTests(unittest.TestCase):
             for entry in entries:
                 ui.check_observation(entry["case"], entry["value"])
             self.assertIn("soul-spa-planning", ui.CASES)
+
+    def test_grid_numeric_identity_and_relationships_must_match_actual_remap(self):
+        before, after = self.state(1), self.state(2)
+        mapping = [{"saved_entity": a["entity"], "saved_bits": a["entity_bits"],
+                    "loaded_entity": b["entity"], "loaded_bits": b["entity_bits"], "kind": kind}
+                   for key, kind in (("sites", "SoulSpa"), ("tiles", "SoulSpaTile"), ("grids", "PowerGrid"))
+                   for a, b in zip(before[key], after[key], strict=True)]
+        spa.check_mapping(before, after, mapping)
+        for change in ("missing_bits", "wrong_bits", "missing_mapping", "foreign_generator", "foreign_grid"):
+            modified, remap = copy.deepcopy(after), copy.deepcopy(mapping)
+            if change == "missing_bits":
+                modified["grids"][0].pop("entity_bits")
+            elif change == "wrong_bits":
+                modified["grids"][0]["entity_bits"] = 999
+            elif change == "missing_mapping":
+                remap.pop()
+            elif change == "foreign_generator":
+                modified["grids"][0]["generators"] = ["foreign"]
+            else:
+                modified["sites"][0]["grid"] = "foreign"
+            with self.subTest(change=change), self.assertRaises(spa.native.AcceptanceError):
+                spa.check_mapping(before, modified, remap)
 
     def test_missing_foreign_or_changed_evidence_is_not_success(self):
         with tempfile.TemporaryDirectory() as directory:
