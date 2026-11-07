@@ -127,6 +127,20 @@ pending最大64件・各identity一覧最大4096件・総transaction最大4096�
 これは`CancelConstruction / Committed`ではない。予約cache/inventory全体の清算、SoulSpa専用取消、
 player入力との因果、正式asset/lifecycle受入は別条件として残す。Bridge/Wall/Floorは対象外。
 
+### profiling-onlyのBlueprint実搬入観測（Messageではない）
+
+`hw_jobs::delivery_observations::BlueprintDeliveryReceipts`は明示production観測sessionだけが登録する。
+`hw_soul_ai`の手運び搬入成功branch（chain有／無）とwheelbarrowのBlueprint搬入成功branchが、
+既存の材料加算の前後量とworker/assignment/item/owner/epoch/footprintを記録する。
+既存item消費commandより後のqueueで実item消失、worker生存、同epoch、owner kind/footprint、
+実量が増分1以上を保持することを確認してからreceiptへ渡す。材料加算・疲労・chain・予約解除は変更しない。
+総4096件のcapはdrainしても戻さず、context欠損／未消費／上限超過はraw failureとする。
+root raw adapterが`Last`でdrainし`ordinary-blueprint-delivery-branch-v1 / MaterialDelivery / Committed`
+へsample indexを付ける。verifierは実owner/actor/sampleの整合、直前raw量からの連続性、
+各増分1とepoch内の同item二重消費を検証する。host認証や入力因果はJSONが自己付与しない。
+Floor/Wall/SoulSpa専用site搬入、BuildWork、予約全清算、正式art/performance/releaseは別条件。
+通常起動や明示resourceなしではreceiptを作らず、player-facing通知や要求のinventoryは増えない。
+
 ### R-E1: Request の可視化時点は ApplyDeferred と system set で決まる
 `Commands::write_message()` と component 操作は次の `ApplyDeferred` まで他 system から見えない。
 reader がその barrier より後に schedule されていれば同じ Update で適用でき、後なら次 frame になる。

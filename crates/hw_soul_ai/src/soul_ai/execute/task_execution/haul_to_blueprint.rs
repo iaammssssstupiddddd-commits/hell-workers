@@ -162,6 +162,10 @@ pub fn handle_haul_to_blueprint_task(
             };
 
             // Step 2: 搬入処理（blueprints の可変借用をスコープ内に閉じ込める）
+            #[cfg(feature = "profiling")]
+            let assignment = ctx.task_identity().assignment_entity;
+            #[cfg(feature = "profiling")]
+            let mut delivery_receipt = None;
             enum DeliverResult {
                 Done { materials_complete: bool },
                 Cancel,
@@ -176,7 +180,30 @@ pub fn handle_haul_to_blueprint_task(
                         );
                         DeliverResult::Cancel
                     } else {
+                        #[cfg(feature = "profiling")]
+                        let before_count = bp
+                            .delivered_materials
+                            .get(&resource_type)
+                            .copied()
+                            .unwrap_or(0);
                         bp.deliver_material(resource_type, 1);
+                        #[cfg(feature = "profiling")]
+                        if ctx.env.delivery_observations {
+                            delivery_receipt =
+                                Some(hw_jobs::delivery_observations::BlueprintDeliveryReceipt {
+                                    worker: ctx.soul_entity,
+                                    assignment,
+                                    owner: blueprint_entity,
+                                    item: item_entity,
+                                    world_epoch: ctx.world_epoch,
+                                    kind: bp.kind,
+                                    resource: resource_type,
+                                    before_count,
+                                    after_count: bp.delivered_materials[&resource_type],
+                                    footprint: bp.occupied_grids.clone(),
+                                    wheelbarrow: false,
+                                });
+                        }
                         debug!(
                             "HAUL_TO_BP: Soul {:?} delivered {:?} to blueprint {:?}. Progress: {:?}/{:?}",
                             ctx.soul_entity,
@@ -238,6 +265,10 @@ pub fn handle_haul_to_blueprint_task(
                 ctx.inventory.0 = None;
                 chain::execute_chain(opp, ctx, commands);
                 commands.entity(item_entity).despawn();
+                #[cfg(feature = "profiling")]
+                if let Some(receipt) = delivery_receipt {
+                    receipt.queue(commands);
+                }
                 reservation::release_destination(ctx, blueprint_entity);
                 return TaskHandlerControl::Continue;
             }
@@ -245,6 +276,10 @@ pub fn handle_haul_to_blueprint_task(
             // Step 5: チェーンなし — 通常のクリーンアップ
             ctx.inventory.0 = None;
             commands.entity(item_entity).despawn();
+            #[cfg(feature = "profiling")]
+            if let Some(receipt) = delivery_receipt {
+                receipt.queue(commands);
+            }
             ctx.soul.fatigue = (ctx.soul.fatigue + 0.05).min(1.0);
             reservation::release_destination(ctx, blueprint_entity);
             return ctx.complete_task(commands, "haul to blueprint done");

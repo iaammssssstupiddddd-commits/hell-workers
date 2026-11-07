@@ -180,6 +180,11 @@ payloadのEntity参照列挙は`AssignedTask::references_entity`へ集約する�
 
 ### 4.4 完了・放棄 (Completion / Abandonment)
 
+明示production観測sessionの`profiling`構成では、手運び・猫車のBlueprint搬入成功branchが
+`hw_jobs::delivery_observations`へ実消費receiptを送る。deferred適用後のitem消滅、owner・epoch・
+材料増分を照合してから記録し、失敗・4096件上限超過は観測失敗とする。
+これは既存搬入・chain・予約・正常完了通知を変更せず、建設完了や全予約清算を証明しない。
+
 タスク実行の終了は `TaskExecutionContext` の終了 API 経由で行う（`context/execution.rs`）:
 
 | API | 用途 | `OnTaskCompleted` | タスク本体（Designation 等） |

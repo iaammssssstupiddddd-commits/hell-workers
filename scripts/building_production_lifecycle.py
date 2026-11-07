@@ -21,6 +21,44 @@ TRANSITION_CATEGORIES = {"owners": "entity", "blueprints": "entity", "roots": "e
                          "items": "entity", "move_tasks": "entity", "generations": "kind", "owner_layers": "entity"}
 
 
+def check_delivery_receipt(event, samples):
+    """Bind a typed applied branch receipt; JSON alone grants no host authority."""
+    require(set(event) == {"producer", "operation", "result", "sample_index", "event_index", "real_seconds",
+                           "worker", "assignment", "owner", "item", "world_epoch", "kind", "resource",
+                           "before_count", "after_count", "footprint", "wheelbarrow"}
+            and event["operation"] == "MaterialDelivery" and event["result"] == "Committed"
+            and type(event["sample_index"]) is int and 0 <= event["sample_index"] < len(samples),
+            "delivery receipt envelope differs")
+    sample = samples[event["sample_index"]]
+    require(all(isinstance(event[field], str) and event[field] for field in ("worker", "assignment", "owner", "item"))
+            and len({event["worker"], event["owner"], event["item"]}) == 3
+            and event["kind"] in evidence.GROUPS["full"]
+            and event["resource"] in {"Wood", "Rock", "Water", "BucketEmpty", "BucketWater",
+                                      "Sand", "Bone", "StasisMud", "Wheelbarrow"}
+            and type(event["world_epoch"]) is int and event["world_epoch"] >= 0
+            and type(sample.get("world_epoch")) is int and event["world_epoch"] == sample["world_epoch"]
+            and type(event["real_seconds"]) in (int, float) and math.isfinite(event["real_seconds"])
+            and type(sample.get("real_seconds")) in (int, float) and math.isfinite(sample["real_seconds"])
+            and 0 <= event["real_seconds"] <= sample["real_seconds"]
+            and type(event["wheelbarrow"]) is bool
+            and type(event["before_count"]) is int and 0 <= event["before_count"] < 2**32 - 1
+            and type(event["after_count"]) is int and event["after_count"] == event["before_count"] + 1,
+            "delivery receipt identity/epoch/time/count differs")
+    footprint = event["footprint"]
+    require(isinstance(footprint, list) and 0 < len(footprint) <= 64
+            and all(isinstance(grid, list) and len(grid) == 2
+                    and all(type(axis) is int for axis in grid) for grid in footprint)
+            and len({tuple(grid) for grid in footprint}) == len(footprint), "delivery footprint differs")
+    blueprints = [row for row in sample.get("blueprints", []) if row.get("entity") == event["owner"]]
+    require(len(blueprints) == 1 and blueprints[0].get("kind") == event["kind"]
+            and blueprints[0].get("footprint") == footprint
+            and type(blueprints[0].get("delivered_materials", {}).get(event["resource"])) is int
+            and blueprints[0]["delivered_materials"][event["resource"]] >= event["after_count"]
+            and any(row.get("entity") == event["worker"] for row in sample.get("actors", []))
+            and not any(row.get("entity") == event["item"] for row in sample.get("items", [])),
+            "delivery receipt lacks its actual owner/material/actor sample")
+
+
 def check_placement_receipt(event, samples):
     """Validate branch diagnostics, without admitting a lifecycle witness."""
     require(set(event) == {"producer", "operation", "sample_index", "event_index", "real_seconds",
@@ -99,6 +137,8 @@ def check_raw_transitions(raw):
         "SaveLoadOutcome": (("Save", "Load"), ("target", "source", "result")),
         "DeconstructionCommitOutcome": (("Deconstruct",), ("worker", "order", "owner", "result")),
     }
+    delivered_items = set()
+    delivery_counts = {}
     for event in events_seen:
         producer = event.get("producer")
         if producer in producers:
@@ -132,6 +172,21 @@ def check_raw_transitions(raw):
                     and 0 <= event["real_seconds"] <= sample["real_seconds"], "raw mouse context differs")
         elif producer == "ordinary-building-placement-branch-v1":
             check_placement_receipt(event, samples)
+        elif producer == "ordinary-blueprint-delivery-branch-v1":
+            check_delivery_receipt(event, samples)
+            item = (event["world_epoch"], event["item"])
+            key = (event["world_epoch"], event["owner"], event["resource"])
+            if key not in delivery_counts:
+                prior = [row for sample in samples[:event["sample_index"]]
+                         if sample.get("world_epoch") == event["world_epoch"]
+                         for row in sample.get("blueprints", []) if row.get("entity") == event["owner"]]
+                before = prior[-1].get("delivered_materials", {}).get(event["resource"], 0) if prior else 0
+                require(type(before) is int and before == event["before_count"],
+                        "delivery receipt does not continue the real prior material count")
+            require(item not in delivered_items and (key not in delivery_counts
+                    or delivery_counts[key] == event["before_count"]), "duplicate item or discontinuous delivery receipt")
+            delivered_items.add(item)
+            delivery_counts[key] = event["after_count"]
         elif producer != "production_snapshot_delta":
             require(producer is None and event.get("operation") in {"PointerPress", "PointerRelease", "KeyPress", "KeyRelease"},
                     "unrecognized raw domain producer")
@@ -206,7 +261,8 @@ def check_domain_witness(witness, trace):
         require(witness["before"] < event["sample_index"] <= witness["after"], "domain event outside witness")
         require(event.get("producer") in {"production_snapshot_delta", "hw_jobs::publish_building_completed",
                                           "SaveLoadOutcome", "DeconstructionCommitOutcome",
-                                          "TaskCompletedVisualMessage", "DreamTransferredVisualMessage"},
+                                          "TaskCompletedVisualMessage", "DreamTransferredVisualMessage",
+                                          "ordinary-blueprint-delivery-branch-v1"},
                 "input alone is not an authoritative domain/state witness")
         if event.get("producer") == "production_snapshot_delta":
             require(event["operation"] == "StateTransition" and event["before_sample_index"] >= witness["before"],

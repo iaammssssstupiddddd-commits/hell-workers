@@ -279,6 +279,12 @@ raw履歴はloaded量から単調増加し、取消直前の量と実返却ID数
 停止中に移動し、失効・pointer移動・時間遷移timeoutでは入力を再送しない。
 2026-11-07の4試行は施工完了競合、追加搬入と旧量条件の不一致、時間再開未成立、
 post-release cursor消失でinvalidのまま記録した。v2の部分的な実返却観測をnative passへ転用しない。
+実搬入はprofiling-onlyの`hw_jobs::delivery_observations::BlueprintDeliveryReceipts`へ
+手運び・wheelbarrowの既存成功branchからのみ記録し、item消費適用後の同epoch/owner/material整合を
+確認する。rawの`MaterialDelivery / Committed`はこの限定branchの実結果であり、全site、BuildWork、
+入力因果や正式lifecycle全legを証明しない。量のstate deltaだけをcommitへ変換しない。
+cursor消失の切り分けには、明示UI observerの`window_focused`を実Windowから受動記録する。
+focusを設定・強制したり、cursor/focus guardを免除するものではない。
 明示production観測sessionのrawは通常500ms間隔、実際のheld WASD中は50ms間隔で採る。
 これはcameraの通常速度・入力・worldを変更せず、read-only観測の間隔だけを切り替える。
 1200 sample／4096 eventのcapは維持する。hostが停止帯通過を観測したら即時拒否して

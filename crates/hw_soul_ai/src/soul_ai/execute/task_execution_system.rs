@@ -28,6 +28,9 @@ pub struct TaskExecResources<'w, 's> {
     pf_context: Local<'s, PathfindingContext>,
     path_budget: ResMut<'w, RuntimePathSearchBudget>,
     world_epoch: Option<Res<'w, WorldEpoch>>,
+    #[cfg(feature = "profiling")]
+    delivery_observations:
+        Option<Res<'w, hw_jobs::delivery_observations::BlueprintDeliveryReceipts>>,
     deconstruction_commit_writer: MessageWriter<'w, DeconstructionCommitRequest>,
     path_search_progress: Local<'s, EpochLocal<TaskPathSearchProgress>>,
     task_round_robin: Local<'s, EpochLocal<TaskExecutionRoundRobin>>,
@@ -244,6 +247,8 @@ pub fn task_execution_system(params: TaskExecutionParams) {
                     time: res.time.as_ref(),
                     world_map: res.world_map.as_ref(),
                     breakdown: breakdown_opt,
+                    #[cfg(feature = "profiling")]
+                    delivery_observations: res.delivery_observations.is_some(),
                 },
                 end_state: default(),
             };

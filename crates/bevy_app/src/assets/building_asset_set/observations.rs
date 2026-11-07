@@ -25,6 +25,7 @@ use super::{
 use crate::interface::selection::building_place::observed_outcomes::PlacementReceipts;
 use crate::systems::jobs::{CancellationReceipts, finalize_cancellation_receipts};
 use crate::systems::save::SaveLoadOutcome;
+use hw_jobs::delivery_observations::BlueprintDeliveryReceipts;
 
 #[derive(Resource, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -87,6 +88,7 @@ pub(super) fn configure(app: &mut App) -> Result<(), String> {
         .init_resource::<Observations>()
         .init_resource::<PlacementReceipts>()
         .init_resource::<CancellationReceipts>()
+        .init_resource::<BlueprintDeliveryReceipts>()
         .add_observer(building_completed)
         .add_systems(Last, (finalize_cancellation_receipts, observe).chain());
     Ok(())
@@ -540,6 +542,22 @@ fn observe(world: &mut World) {
     let now = world.resource::<Time<Real>>().elapsed_secs_f64();
     world.resource_scope(|world, mut observations: Mut<Observations>| {
         let index = observations.samples.len();
+        if let Some(mut receipts) = world.get_resource_mut::<BlueprintDeliveryReceipts>() {
+            if let Some(failure) = receipts.failure {
+                observations.failure = Some(failure.into());
+            }
+            for receipt in receipts.rows.drain(..) {
+                if !target(receipt.kind) { continue; }
+                observations.events.push(json!({"sample_index": index, "real_seconds": now,
+                    "producer": "ordinary-blueprint-delivery-branch-v1", "operation": "MaterialDelivery",
+                    "result": "Committed", "worker": format!("{:?}", receipt.worker),
+                    "assignment": format!("{:?}", receipt.assignment), "owner": format!("{:?}", receipt.owner),
+                    "item": format!("{:?}", receipt.item), "world_epoch": receipt.world_epoch,
+                    "kind": format!("{:?}", receipt.kind), "resource": format!("{:?}", receipt.resource),
+                    "before_count": receipt.before_count, "after_count": receipt.after_count,
+                    "footprint": receipt.footprint, "wheelbarrow": receipt.wheelbarrow}));
+            }
+        }
         if let Some(mut receipts) = world.get_resource_mut::<CancellationReceipts>() {
             if let Some(failure) = &receipts.failure {
                 observations.failure = Some(failure.clone());
@@ -684,7 +702,7 @@ fn observe(world: &mut World) {
             "Move: hw_jobs::MovePlantTask is state, not a move commit/reject/cancel receipt",
             "Navigation: actor Transform/grid samples do not prove a navigation request arrived",
             "CancelConstruction: BlueprintCancellationApplied binds owner cleanup/refund IDs, not full reservation/inventory lifecycle; SoulSpa needs its separate producer",
-            "MaterialDelivery: delivered_materials deltas do not identify the delivering transaction",
+            "MaterialDelivery: typed receipts cover ordinary blueprint hand/wheelbarrow branches only, not every construction-site delivery",
             "Salvage: DeconstructionCommitOutcome does not contain emitted salvage item IDs/counts",
             "Durable state: SaveLoadOutcome does not contain canonical before/after save-state bytes",
             "Complete lifecycle witnesses/cycles are not inferred from input or state deltas",

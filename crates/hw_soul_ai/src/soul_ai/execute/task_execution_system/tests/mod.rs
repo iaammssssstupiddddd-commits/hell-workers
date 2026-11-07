@@ -140,6 +140,8 @@ mod aborts;
 mod completion;
 mod construction_navigation;
 mod deconstruct;
+#[cfg(feature = "profiling")]
+mod delivery_observations;
 mod gather_chain;
 mod guards;
 mod stockpile_policy;

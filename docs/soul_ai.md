@@ -156,6 +156,10 @@ Soul 本体画像は、Idle 状態だけでなくイベントでも一時差し�
 - **プロセス**: アイテムへ移動 → `Inventory(Option<Entity>)`へ拾い上げる → 備蓄場所へ移動 → 配置してslotを空にする。
 - **搬入後チェーン（haul chain）**: Blueprint / FloorSite / WallSite への搬入完了直後に `find_chain_opportunity` が呼ばれ、スロットに空きがあれば同一 Soul が Build / ReinforceFloor / PourFloor / FrameWall / CoatWall へ即移行する（tasks.md §7.3 参照）。
 
+搬入成功の診断は`profiling`かつ明示観測resourceがある場合だけ有効。
+手運び・猫車の実Blueprint材料増分と消費itemを共有のbounded receiptへ送り、
+root observerが受動収集する。通常のAI割当・疲労・chain・予約解除・建設速度は変えない。
+
 ### 3.3. 解体 (Deconstruct)
 
 - `DeconstructData`はdurable order、canonical target、`GoingToTarget → Dismantling → AwaitingCommit` phaseを持つ。

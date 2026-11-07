@@ -386,6 +386,8 @@ pub fn handle(
             }
         }
         WheelbarrowDestination::Blueprint(blueprint_entity) => {
+            #[cfg(feature = "profiling")]
+            let assignment = ctx.task_identity().assignment_entity;
             if let Ok((_, mut blueprint, _)) =
                 ctx.queries.storage.blueprints.get_mut(blueprint_entity)
             {
@@ -397,8 +399,31 @@ pub fn handle(
                         continue;
                     }
 
+                    #[cfg(feature = "profiling")]
+                    let before_count = blueprint
+                        .delivered_materials
+                        .get(res_type)
+                        .copied()
+                        .unwrap_or(0);
                     blueprint.deliver_material(*res_type, 1);
                     if try_despawn_item(commands, *item_entity) {
+                        #[cfg(feature = "profiling")]
+                        if ctx.env.delivery_observations {
+                            hw_jobs::delivery_observations::BlueprintDeliveryReceipt {
+                                worker: ctx.soul_entity,
+                                assignment,
+                                owner: blueprint_entity,
+                                item: *item_entity,
+                                world_epoch: ctx.world_epoch,
+                                kind: blueprint.kind,
+                                resource: *res_type,
+                                before_count,
+                                after_count: blueprint.delivered_materials[res_type],
+                                footprint: blueprint.occupied_grids.clone(),
+                                wheelbarrow: true,
+                            }
+                            .queue(commands);
+                        }
                         delivered_items.insert(*item_entity);
                         destination_store_count += 1;
                         unloaded_count += 1;

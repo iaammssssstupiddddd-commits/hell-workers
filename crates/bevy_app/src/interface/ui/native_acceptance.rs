@@ -440,6 +440,7 @@ fn snapshot(world: &mut World, observer: &UiObserver) -> Value {
     let cursor = window
         .physical_cursor_position()
         .map(|position| [position.x, position.y]);
+    let window_focused = window.focused;
     let mut controls = serde_json::Map::new();
     let mut query = world.query_filtered::<Entity, With<Node>>();
     for entity in query.iter(world) {
@@ -598,6 +599,7 @@ fn snapshot(world: &mut World, observer: &UiObserver) -> Value {
         "base_scale_factor": base_scale_factor,
         "dpi_mode": if terrain_materials::enabled() { "native" } else { "viewport-override" },
         "cursor": cursor,
+        "window_focused": window_focused,
         "mouse_left_pressed": world.resource::<ButtonInput<MouseButton>>().pressed(MouseButton::Left),
         "world_input_captured": world.resource::<UiInputState>().world_input_captured,
         "pointer_over_ui": world.resource::<UiInputState>().pointer_over_ui,

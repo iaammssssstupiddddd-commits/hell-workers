@@ -16,6 +16,7 @@ Soul が実行するタスクの種類・進捗状態、および建物の建設
 | `mud_mixer.rs` | 泥ミキサーのワークフロー状態 |
 | `refine_activity.rs` | mixer別のassigned/refining countとvisual dirty edgeをChanged/Removed・WorldEpochから差分同期するruntime index |
 | `events.rs` | タスク完了イベント等 |
+| `delivery_observations.rs` | `profiling` 限定の Blueprint 資材配送観測。実際の消費適用後に owner・item・世代・資材数を照合し、最大4096件の受動的 receipt を保持する。ゲーム操作・受入承認は行わない |
 | `diagnostics.rs` | producer共通の5分類、fixed-width coverage/counter、input stamp/revision契約（表示非依存・runtime only） |
 | `lifecycle.rs` | タスク予約ライフサイクル helper (`collect_active_reservation_ops`, `active_reservation_signature`, `collect_release_reservation_ops`) |
 | `deconstruction.rs` | durable order、target policy、candidate/applyが共有するquery非依存`DeconstructionAssignmentFacts` validator |

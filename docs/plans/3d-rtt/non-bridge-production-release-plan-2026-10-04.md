@@ -32,6 +32,27 @@ release時にBevy cursorがnullとなりgesture guardが拒否。取消は送っ
 材料snapshotはworkspace通常/profiling試験・両Clippy警告0で確認済み。非ゼロ返却native受入は未達。
 次は入力ガードを緩めずfocus/cursorを切り分け、独立して実搬入branchのtransaction producerを追加する。
 
+実搬入producerの実装方針: 手運びとwheelbarrowの既存Blueprint搬入成功branchでのみ、
+actor/assignment/item/owner/epoch、実増分の前後量とfootprintをprofiling限定で記録する。
+明示観測resourceがない通常起動は収集しない。item消費のdeferred適用とowner/material整合を
+確認してからbounded receiptへ加え、未消費・foreign epoch・cap超過は観測失敗として閉じる。
+状態差から搬入commitを推測せず、全予約清算・BuildWork・art/releaseを付与しない。
+既存搬入・疲労・chain・予約解除・施工速度を変えず、拒否系単体試験、変更別検証、
+Help No impact判断、storageとexact-source独立reviewを通してから新しい実機証拠へ結ぶ。
+
+配送producerの手運び（通常終了・Build chain）／猫車実handler試験、bounded receipt拒否系、
+Pythonのidentity/count/epoch/item照合を追加し、Soul AI 115件、通常/profiling workspace試験、
+Memory/Tracy/RenderDoc構成、両構成Clippy警告0、tooling、Help No impactを確認した。
+独立read-only reviewはコードと関連仕様を限定承認。rust-analyzerの既存Query呼出しの一時エラーは、
+コード変更なしのfresh診断で0件へ戻った。変更別CIは既存依存advisory 2件で引き続き未通過。
+fresh `tak14-rest-area-delivery-refund-feedback-20261107-v5`は実Wood配送4件を記録し、
+保存・ロードWood1一致後、新epoch1のowner810v1へWood4まで通常配送、返却4IDとowner/request
+cleanup・4tile walkability復元まで到達した。しかし旧Soul1845v0を触るdeferred commandのWARNで
+厳格なgame-log検査が拒否し、invalidとしてseal/finalizeした（診断保持43,352,064 bytes）。
+入力ガードは変更せず、この試行ではfocus/cursorを維持。警告を無視した受入や旧invalidのpass化はしない。
+次はロード前Entityを保持する遅延会話cooldown等のproducerを実再現で特定し、修正・fresh実機を行う。
+全予約/inventory・通常起動の正式asset・art/numeric/performance/release受入は未完。
+
 2026-11-07再開工程: 通常Blueprint取消が実際に発行したrefund Entity IDsと、
 deferred適用後のowner/request/storage/map・関連actor状態を結ぶprofiling-only観測を追加する。
 通常RestAreaの既存input recipeへ同nonce/PIDのrawを接続し、ゼロ材料予約の取消を実機確認する。

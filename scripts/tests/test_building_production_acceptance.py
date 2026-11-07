@@ -13,6 +13,63 @@ from scripts import building_production_lifecycle as lifecycle
 
 
 class ProductionAcceptanceTests(unittest.TestCase):
+    def delivery_raw(self):
+        event = {"producer": "ordinary-blueprint-delivery-branch-v1", "operation": "MaterialDelivery",
+                 "result": "Committed", "sample_index": 1, "event_index": 0, "real_seconds": 1.5,
+                 "worker": "worker", "assignment": "request", "owner": "blueprint", "item": "wood-item",
+                 "world_epoch": 0, "kind": "RestArea", "resource": "Wood", "before_count": 0,
+                 "after_count": 1, "footprint": [[3, 4]], "wheelbarrow": False}
+        samples = [{"sample_index": index, "real_seconds": index + 1.0, "world_epoch": 0,
+                    **{category: [] for category in lifecycle.TRANSITION_CATEGORIES},
+                    "actors": [{"entity": "worker"}]} for index in range(2)]
+        for index, sample in enumerate(samples):
+            sample["blueprints"] = [{"entity": "blueprint", "kind": "RestArea", "footprint": [[3, 4]],
+                                     "delivered_materials": {"Wood": index}}]
+        delta = {"producer": "production_snapshot_delta", "operation": "StateTransition",
+                 "sample_index": 1, "before_sample_index": 0, "event_index": 1,
+                 "real_seconds": 2.0, "category": "blueprints", "entity": "blueprint",
+                 "before": copy.deepcopy(samples[0]["blueprints"][0]),
+                 "after": copy.deepcopy(samples[1]["blueprints"][0])}
+        return {"schema_version": 2, "transition_contract": "indexed-state-delta-v1",
+                "samples": samples, "events": [event, delta]}
+
+    def test_typed_delivery_branch_binds_owner_actor_and_single_consumed_item(self):
+        raw = self.delivery_raw()
+        lifecycle.check_raw_transitions(raw)
+        lifecycle.check_domain_witness({"before": 0, "after": 1, "owner": "blueprint",
+            "events": [0], "domain_event_indices": [0]}, raw)
+        for change in ({"before_count": True}, {"after_count": True}, {"after_count": 2},
+                       {"before_count": -1}, {"world_epoch": True}, {"world_epoch": 1},
+                       {"real_seconds": float("nan")}, {"real_seconds": 3},
+                       {"worker": "foreign"}, {"owner": "foreign"}, {"item": "worker"},
+                       {"kind": "Tank"}, {"kind": "Unknown"}, {"resource": "Bone"},
+                       {"resource": "Unknown"}, {"footprint": []},
+                       {"footprint": [[3, 4], [3, 4]]}, {"wheelbarrow": 1},
+                       {"result": "Inferred"}, {"operation": "BuildWork"}, {"accepted": True}):
+            bad = copy.deepcopy(raw)
+            bad["events"][0].update(change)
+            with self.subTest(change=change), self.assertRaises(ValueError):
+                lifecycle.check_raw_transitions(bad)
+        raw["samples"][1]["items"] = [{"entity": "wood-item"}]
+        with self.assertRaises(ValueError):
+            lifecycle.check_raw_transitions(raw)
+
+    def test_repeated_items_and_discontinuous_delivery_cannot_be_committed(self):
+        for change in ({}, {"item": "second-item", "before_count": 0, "after_count": 1}):
+            raw = self.delivery_raw()
+            raw["events"].append({**raw["events"][0], "event_index": 2, **change})
+            with self.subTest(change=change), self.assertRaises(ValueError):
+                lifecycle.check_raw_transitions(raw)
+
+    def test_same_frame_wheelbarrow_deliveries_keep_distinct_items_and_exact_counts(self):
+        raw = self.delivery_raw()
+        raw["samples"][1]["blueprints"][0]["delivered_materials"]["Wood"] = 2
+        raw["events"][1]["after"]["delivered_materials"]["Wood"] = 2
+        raw["events"][0]["wheelbarrow"] = True
+        raw["events"].append({**raw["events"][0], "event_index": 2, "item": "second-item",
+                               "before_count": 1, "after_count": 2})
+        lifecycle.check_raw_transitions(raw)
+
     def placement_raw(self, outcome):
         samples = [{"sample_index": index, "real_seconds": index + 1.0,
                     "primary_window": "68v0", "world_epoch": 0,
