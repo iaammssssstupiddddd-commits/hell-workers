@@ -667,6 +667,19 @@ map占有/歩行・実worker逆参照/発電値の整合を同nonceのrawと照�
 完了seed、候補自動admissionをしない。期限内に成立しなければ未完の実観測として停止する。
 この工程だけでDream消費・長時間利用・稼働枠変更・Operational保存復元・deconstruct・性能・releaseを閉じない。
 
+`tak14-soulspa-ordinary-completion-20261108-v1`を`c9ab174c62a1fff7a4839c20142086dc2d84888e`で実行し、
+3画像と別実行の独立CLI verifyが成功、primary seal pass/finalizeした。
+通常fallbackのsite `2162v1`（bits8589932429）、tile `2156v1/2157v1/2158v1/2159v1`、grid `1884v0`を
+保持し、自然搬入Bone0→12/12でOperationalとなった。完成snapshotは実時刻88.441秒/仮想53.365秒、
+各tileにGeneratePower/slot1、歩行可能な同一占有を観測し、worker0/出力0でgridと整合した。
+Intel Arc MTL / Vulkanの所有X11窓で3画像を目視し、淡青の予定表示から4区画の完成fallbackへ変わることを確認した。
+manifest SHA256 `107e97868fcb801643348fd7aa809dbe87f6663033c7a0202c0968f3811ce973`、
+raw SHA256 `9fd7a6161e4e6452c95a02dedfa1e0b9e7004be6281c471d10e356da3495af3a`。
+完成時HUDのFPS表示4は性能budgetの証拠ではなく、性能受入は未実施のまま。自然利用・発電時Dream消費・
+枠変更・Operational保存復元・deconstruct・候補アート通常適用・性能・releaseを未完として維持する。
+最新完成jobを通常利用/Operational保存復元との比較に保持し、比較を終えた未搬入planning v5のjobは撤去する。
+planning v5の生成物25,108,480 bytesを保持解除後に撤去し、primary storage checkを通過した。
+
 ## 5. マイルストーン
 
 ### M1: 原本・候補
