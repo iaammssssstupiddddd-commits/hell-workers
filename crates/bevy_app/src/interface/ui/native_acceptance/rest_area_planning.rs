@@ -20,6 +20,7 @@ pub(super) fn enabled() -> bool {
             | "rest-area-refund"
             | "rest-area-completion"
             | "rest-area-usage"
+            | "rest-area-save"
             | "rest-area-exit")
     )
 }
@@ -68,7 +69,7 @@ pub(super) fn snapshot(world: &mut World) -> Value {
     let anchor = target.0;
     let rest_area_usage = if matches!(
         std::env::var("HW_NATIVE_UI_CASE").as_deref(),
-        Ok("rest-area-usage" | "rest-area-exit")
+        Ok("rest-area-usage" | "rest-area-exit" | "rest-area-save")
     ) {
         crate::assets::building_asset_set::snapshot_rest_observations(world)
             .unwrap_or_else(|failure| json!({"failure": failure}))

@@ -1,5 +1,7 @@
 """Ordinary RestArea admission and positive Dream transfer, never art authority."""
 import math
+import hashlib
+import re
 
 import native_acceptance as native
 import ui_rest_area_planning as planning
@@ -7,6 +9,7 @@ import ui_rest_area_planning as planning
 CHECKPOINTS = (*planning.COMPLETION_CHECKPOINTS,
                "rest-area-usage-occupied", "rest-area-usage-drained")
 EXIT_CHECKPOINTS = (*CHECKPOINTS, "rest-area-usage-exited")
+SAVE_CHECKPOINTS = (*CHECKPOINTS, "rest-area-usage-saved", "rest-area-usage-loaded")
 
 
 class RawCheckpointPending(native.AcceptanceError):
@@ -76,7 +79,7 @@ def candidates(value, bits):
 
 
 def check_observation(case, value):
-    native.require(case in EXIT_CHECKPOINTS[3:], "unsupported rest usage checkpoint")
+    native.require(case in (*EXIT_CHECKPOINTS[3:], *SAVE_CHECKPOINTS[5:]), "unsupported rest usage checkpoint")
     planning.check_observation("rest-area-completion-completed", value)
     bits = value["rest_area_planning"]["buildings"][0]
     state = context(value)
@@ -136,6 +139,210 @@ def exercise_exit(driver):
     planning.set_refund_paused(driver, True)
     driver.capture(EXIT_CHECKPOINTS[-1])
     wait_for_raw_checkpoint(driver, bits, entity, released=True)
+
+
+def exercise_save(driver):
+    """Save/load an ordinarily admitted occupant through the existing catalogs."""
+    exercise(driver)
+    driver.key("F5")
+    driver.last = driver.wait(lambda value: any(key.startswith("menu:SelectSaveCatalogSlot")
+                                              for key in value["controls"]), after=driver.last["frame"])
+    driver.click(planning.catalog_control(driver, "SelectSaveCatalogSlot"))
+    driver.last = driver.wait(lambda value: value["catalog"] == "Closed"
+                              and "Save:Succeeded" in value["save_outcomes"], after=driver.last["frame"])
+    driver.capture(SAVE_CHECKPOINTS[-2])
+    driver.key("F9")
+    driver.last = driver.wait(lambda value: any(key.startswith("menu:SelectLoadCatalogSlot")
+                                              for key in value["controls"]), after=driver.last["frame"])
+    driver.click(planning.catalog_control(driver, "SelectLoadCatalogSlot"))
+    epoch = driver.last["world_epoch"]
+    driver.click(planning.catalog_control(driver, "ConfirmLoadCatalogSlot"))
+    driver.last = driver.wait(lambda value: value["world_epoch"] > epoch and value["catalog"] == "Closed",
+                              after=driver.last["frame"], timeout=60)
+    planning.set_refund_paused(driver, True)
+    driver.capture(SAVE_CHECKPOINTS[-1])
+
+    def recorded(_):
+        path = driver.root / "production-cancellation.json"
+        if not path.is_file():
+            return False
+        raw = native.read_json(path)
+        native.require(raw.get("nonce") == driver.last["nonce"]
+                       and raw.get("process_id") == driver.last["pid"] and raw.get("failure") is None,
+                       "durable raw collector failed/changed process")
+        if not any(row.get("operation") == "DurableLoad" for row in raw.get("events", [])):
+            return False
+        try:
+            check_save(raw, driver.checkpoints, {"nonce": driver.last["nonce"], "pid": driver.last["pid"]},
+                       driver.root / "saves" / "manual-1.scn.ron")
+        except RawCheckpointPending:
+            return False
+        return True
+
+    driver.wait(recorded, after=driver.last["frame"], timeout=15)
+
+
+def stable_context(state):
+    """Only collection order and observation clocks are non-persistent here."""
+    result = {key: value for key, value in state.items() if key not in ("real_seconds", "virtual_seconds")}
+    for key in ("owners", "souls"):
+        result[key] = sorted(state[key], key=lambda row: row["entity_bits"])
+    return result
+
+
+def check_durable_mapping(before, after, mapping):
+    native.require(isinstance(mapping, list) and 0 < len(mapping) <= 640, "durable map missing/capped")
+    expected, actual = {}, {}
+    for key, kind, limit in (("owners", "RestArea", 512), ("souls", "Soul", 128)):
+        for state, target in ((before, expected), (after, actual)):
+            rows = state.get(key)
+            native.require(isinstance(rows, list) and len(rows) <= limit, "durable context inventory missing/capped")
+            for row in rows:
+                entity = row.get("entity")
+                native.require(isinstance(entity, str) and entity and entity not in target
+                               and type(row.get("entity_bits")) is int and row["entity_bits"] >= 0,
+                               "durable context identity missing/duplicated")
+                target[entity] = (kind, row)
+    native.require(len(mapping) == len(expected) == len(actual), "durable map inventory incomplete")
+    lookup, targets = {}, set()
+    for row in mapping:
+        old, new = row.get("saved_entity"), row.get("loaded_entity")
+        native.require(old in expected and new in actual and old not in lookup and new not in targets
+                       and old != new and row.get("kind") == expected[old][0] == actual[new][0]
+                       and type(row.get("saved_bits")) is int and type(row.get("loaded_bits")) is int
+                       and row["saved_bits"] == expected[old][1]["entity_bits"]
+                       and row["loaded_bits"] == actual[new][1]["entity_bits"],
+                       "durable map is foreign/duplicated or changes kind/bits")
+        lookup[old] = new
+        targets.add(new)
+    for old, (kind, row) in expected.items():
+        restored = actual[lookup[old]][1]
+        translated = {key: value for key, value in row.items() if key not in ("entity", "entity_bits")}
+        if kind == "RestArea":
+            for key in ("occupants", "reservations"):
+                values = row.get(key)
+                native.require(values is None or isinstance(values, list)
+                               and len(values) == len(set(values)) and all(value in lookup for value in values),
+                               "durable owner relationship target missing/duplicated")
+                translated[key] = sorted(lookup[value] for value in values) if values is not None else None
+        else:
+            for key in ("resting_in", "reserved_for"):
+                native.require(row.get(key) is None or row[key] in lookup, "durable Soul relationship target missing")
+                translated[key] = lookup[row[key]] if row.get(key) is not None else None
+            # Visibility is not persisted. attach_soul_shell installs Inherited;
+            # rehydrate_soul_shells overrides it to Hidden only for RestingIn.
+            # Pin that existing projection, not a general equivalence of modes.
+            if row.get("resting_in") is None:
+                native.require(row.get("visibility") in ("Visible", "Inherited"),
+                               "durable non-resting Soul has an unsupported visibility")
+                translated["visibility"] = "Inherited"
+            else:
+                native.require(row.get("visibility") == "Hidden", "durable resting Soul was not hidden")
+        observed = {key: value for key, value in restored.items() if key not in ("entity", "entity_bits")}
+        if kind == "RestArea":
+            for key in ("occupants", "reservations"):
+                if observed.get(key) is not None:
+                    observed[key] = sorted(observed[key])
+        native.require(translated == observed, "durable restored state/relationship differs")
+    native.require(before.get("dream_pool") == after.get("dream_pool"), "durable DreamPool differs")
+    return lookup
+
+
+def check_receipt_interval(raw, receipt, value, bits, entity):
+    """Bind the exact commit to the capture through unchanged paused samples.
+
+    UI clicks/capture each wait for several rendered frames. Their real duration
+    is not simulation freshness. Bound by the existing 480-second UI session and
+    240 samples, and reject any intervening time/state/epoch change instead.
+    """
+    last = raw_checkpoint(raw["samples"], value, bits, entity)
+    start, end = receipt["sample_index"], last["sample_index"]
+    native.require(0 <= end - start < 240
+                   and 0 <= context(value)["real_seconds"] - receipt["real_seconds"] <= 480,
+                   "durable receipt interval is absent/capped")
+    expected = stable_context(context(value))
+    previous = receipt["real_seconds"]
+    for index in range(start, end + 1):
+        sample = raw["samples"][index]
+        state = sample.get("rest_area_context")
+        native.require(sample.get("sample_index") == index and sample.get("world_epoch") == value["world_epoch"]
+                       and sample.get("paused") is True and finite(sample.get("real_seconds"))
+                       and sample["real_seconds"] >= previous and isinstance(state, dict)
+                       and state.get("real_seconds") == sample["real_seconds"]
+                       and state.get("virtual_seconds") == sample.get("virtual_seconds")
+                       == context(value)["virtual_seconds"] and stable_context(state) == expected,
+                       "durable receipt interval crosses changed/unpaused/foreign state")
+        previous = sample["real_seconds"]
+
+
+def check_save(raw, entries, client, save_path):
+    native.require([entry["case"] for entry in entries] == list(SAVE_CHECKPOINTS), "rest save checkpoints differ")
+    check_usage(raw, entries[:5], client)
+    drained, saved, loaded = [entry["value"] for entry in entries[4:]]
+    for entry in entries[5:]:
+        value = entry["value"]
+        check_observation(entry["case"], value)
+        native.require(value.get("nonce") == client["nonce"] and value.get("pid") == client["pid"]
+                       and value.get("paused") is True and value.get("catalog") == "Closed"
+                       and all(value["rest_area_planning"][key] == drained["rest_area_planning"][key]
+                               for key in ("anchor", "footprint", "draw_pos")), "rest save subject/target differs")
+    native.require(saved["world_epoch"] == drained["world_epoch"]
+                   and loaded["world_epoch"] == saved["world_epoch"] + 1
+                   and "Save:Succeeded" in saved["save_outcomes"] and "Load:Succeeded" in loaded["save_outcomes"]
+                   and all(after["value"]["frame"] > before["value"]["frame"]
+                           and after["last_step"] > before["last_step"]
+                           for before, after in zip(entries[4:], entries[5:])), "rest save result/epoch/order differs")
+    native.require(stable_context(context(drained)) == stable_context(context(saved)),
+                   "paused save changed the ordinary rest state")
+    native.require(save_path.name == "manual-1.scn.ron" and save_path.parent.name == "saves"
+                   and not save_path.is_symlink() and not save_path.parent.is_symlink()
+                   and save_path.is_file() and 0 < save_path.stat().st_size <= 64 * 1024 * 1024,
+                   "durable save file missing/unsafe/capped")
+    with save_path.open("rb") as stream:
+        payload = stream.read(64 * 1024 * 1024 + 1)
+    native.require(0 < len(payload) <= 64 * 1024 * 1024, "durable save bytes capped")
+    digest = hashlib.sha256(payload).hexdigest()
+    receipts = [row for row in raw["events"] if row.get("operation") in ("DurableSave", "DurableLoad")]
+    native.require([row.get("operation") for row in receipts] == ["DurableSave", "DurableLoad"],
+                   "durable receipt inventory differs")
+    for row, value, operation, source in zip(receipts, (saved, loaded), ("save", "load"),
+                                            (r"Manual\(ManualCatalog \{ dialog_session: [1-9][0-9]* \}\)",
+                                             r"Load\(NormalCatalog \{ dialog_session: [1-9][0-9]* \}\)")):
+        native.require(row.get("producer") == f"ordinary-{operation}-commit-v1"
+                       and row.get("result") == "Committed" and row.get("target") == "Manual slot 1"
+                       and isinstance(row.get("request_source"), str) and re.fullmatch(source, row["request_source"])
+                       and row.get("file_sha256") == digest and type(row.get("file_bytes")) is int
+                       and row["file_bytes"] == len(payload)
+                       and row.get("world_epoch") == value["world_epoch"]
+                       and type(row.get("sample_index")) is int and 0 <= row["sample_index"] < len(raw["samples"])
+                       and finite(row.get("real_seconds"))
+                       and 0 <= context(value)["real_seconds"] - row["real_seconds"] <= 480
+                       and row["rest_area_context"].get("real_seconds") == row["real_seconds"]
+                       and row["rest_area_context"].get("virtual_seconds") == context(value)["virtual_seconds"]
+                       and stable_context(row["rest_area_context"]) == stable_context(context(value)),
+                       "durable receipt bytes/request/context differs")
+        sample = raw["samples"][row["sample_index"]]
+        native.require(sample["world_epoch"] == row["world_epoch"] and sample["paused"] is True
+                       and row["real_seconds"] <= sample["real_seconds"]
+                       and (row["sample_index"] == 0
+                            or raw["samples"][row["sample_index"] - 1]["real_seconds"] < row["real_seconds"])
+                       and stable_context(sample["rest_area_context"]) == stable_context(row["rest_area_context"]),
+                       "durable receipt sample/time differs")
+    save, load = receipts
+    native.require(save["sample_index"] < load["sample_index"]
+                   and save["real_seconds"] < load["real_seconds"]
+                   and save["real_seconds"] > context(drained)["real_seconds"]
+                   and load["real_seconds"] > context(saved)["real_seconds"]
+                   and load.get("previous_epoch") == save["world_epoch"], "durable load origin differs")
+    lookup = check_durable_mapping(context(saved), context(loaded), load.get("entity_remap"))
+    bits = saved["rest_area_planning"]["buildings"][0]
+    owner, soul = candidates(context(saved), bits)[0]
+    restored_bits = loaded["rest_area_planning"]["buildings"][0]
+    restored = candidates(context(loaded), restored_bits)
+    native.require(any(new_owner["entity"] == lookup[owner["entity"]] and new_soul["entity"] == lookup[soul["entity"]]
+                       for new_owner, new_soul in restored), "occupied RestArea/Soul pair not restored")
+    check_receipt_interval(raw, save, saved, bits, soul["entity"])
+    check_receipt_interval(raw, load, loaded, restored_bits, lookup[soul["entity"]])
 
 
 def wait_for_raw_checkpoint(driver, bits, entity, *, released=False):

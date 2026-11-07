@@ -134,6 +134,29 @@ fn resting_soul_shell_remains_hidden_after_rehydrate() {
 }
 
 #[test]
+fn non_resting_soul_shell_rebuilds_non_persisted_visibility_as_inherited() {
+    use hw_core::relationships::RestingIn;
+
+    for visibility in [Visibility::Visible, Visibility::Inherited] {
+        let mut world = World::new();
+        let soul = world
+            .spawn((
+                DamnedSoul::default(),
+                Transform::from_xyz(2.0, 3.0, 0.0),
+                visibility,
+            ))
+            .id();
+        assert_eq!(
+            rehydrate_soul_shells(&mut world, &empty_building_3d_handles()),
+            1
+        );
+        world.flush();
+        assert_eq!(world.get::<Visibility>(soul), Some(&Visibility::Inherited));
+        assert!(world.get::<RestingIn>(soul).is_none());
+    }
+}
+
+#[test]
 fn rehydrated_wall_starts_in_visible_fallback_at_its_world_position() {
     use bevy::asset::{AssetApp, AssetPlugin};
     use hw_visual::{Building3dVisual, Wall3dPresentationMode, Wall3dPresentationState};

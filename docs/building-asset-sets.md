@@ -479,6 +479,27 @@ raw observerは`SaveLoadApplySet`後にだけdrainする。失敗/rollback/recov
 上限・除外範囲は[save_load.md](save_load.md#明示profiling-sessionの保存読込診断)を正本とし、
 このproducerの存在だけで利用中save/load、全world canonical一致や正式releaseの受入を宣言しない。
 
+`ui_usability_acceptance.py --case rest-area-save --smoke`は通常の完成/入所/Dream放出5checkpoint後、
+pause中のF5/F9と既存Manual slot 1選択/確認だけを行う。7 owned画像、保存実bytes/hash、
+Save/Load commit receiptと全Soul/RestArea実mapを照合し、vitals/位置/Idle/可視性/Poolと
+両方向の入所/予約関係がremap後も一致することを要求する。名前や近い座標から同一性を推測しない。
+利用中の同一Soul/RestArea pair、paused raw/checkpoint、request/epoch/時刻の不一致を拒否する。
+Visibilityは非保存shellなので既存rehydrateのprojectionを固定する。入所Soulは保存前後ともHidden、
+非入所SoulのVisible/Inheritedは読込後Inheritedだけを許し、Hiddenや欠損を同値扱いしない。
+receiptから撮影までの全raw sampleでpause/epoch/仮想時刻/収集状態が不変なことを要求する。
+観測区間は既存UI sessionの480秒と240 sample以内に制限し、単純な撮影待ち秒数を鮮度に代用しない。
+これは限定feedback recipeであり、実機で未実行の段階を受入済みとはせず、全world canonical、
+全inventory、cooldown満了、art/numeric/performance/releaseへ昇格しない。
+
+2026-11-07の`tak14-rest-area-occupied-save-feedback-20261107-v2`は登録/別実行verifierと
+全7画像の独立read-only確認をpassし、seal/finalize済み。実Manual1は496,766 bytes、SHA-256
+`6912a29eac134f34f68f0f0ef3ec7dfe7b018bf4d9a6438074de9fc0d4821f09`で両receiptと一致。
+Save sample310/epoch0→Load sample367/epoch1、全20Soul+1RestAreaの実mapと4予約を確認し、
+Soul `1842v0→807v1`はowner `2320v34→1955v1`への入所関係、Hidden、Dream
+`1.1400237083435059`を保持した。Save310→撮影327とLoad367→撮影384の全rawは停止/状態不変。
+Intel Arc/Vulkan、WARN/ERRORなし。表示は未承認assetではなく灰色fallbackで、美術採否ではない。
+読込後の自然退出/cooldown満了・全inventory・正式9種導入の不足は残る。
+
 profiling-onlyのproduction raw observerとBridge／M2 probeは共通writerでfresh outputと一時pathを検査し、各snapshotの一時ファイルを
 `create_new`で排他的に作成してからrenameする。既存ファイル・dangling symlink・失敗した一時成果を
 上書きせず拒否する。これは収集の安全性であり、ordinary-worldの欠落producerや正式受入を補わない。

@@ -13,6 +13,23 @@
 
 ## 1. 目的
 
+利用中保存/読込の独立した`rest-area-save` feedback recipeを実装した。
+最初の`tak14-rest-area-occupied-save-feedback-20261107-v1`は実保存/読込と7checkpointに到達したが、
+receipt→撮影の追加15秒条件（実15.034/17.522秒）でinvalid精算した。各区間18raw sampleの
+pause/epoch/仮想時刻/状態は独立確認で不変。時間上限だけを広げる代わりに全raw区間の不変性を
+検証し、既存session480秒/240 sample以内へ拘束する。また非保存Soul Visibilityは既存shell再構築で
+非入所のVisibleがInheritedへ戻るため、その正確なprojectionをRust試験で固定する。
+入所SoulのHidden・vitals/位置/双方向関係は緩和せず、旧invalidをpassへ読み替えない。
+通常完成/入所/正のDream放出後にpauseを維持し、F5/F9の既存Manual1操作で保存/読込する。
+実bytes/hashと実Entity remapの全Soul/RestArea集合・vitals/位置/関係を照合し、7画像を独立確認する。
+fresh v2は登録/別実行verifierと全7画像の独立read-only確認をpassし、seal/finalize済み。
+実Manual1 496,766 bytes、SHA `6912a29eac134f34f68f0f0ef3ec7dfe7b018bf4d9a6438074de9fc0d4821f09`、
+Save310/epoch0→Load367/epoch1の全21map（20Soul+1RestArea）・4予約・利用中Hidden/Dream保持を確認。
+撮影までの全raw区間はpaused/同virtual time/状態不変。Intel Arc/Vulkan・WARN/ERRORなし。
+灰色fallbackの限定技術証拠であり、正式art/numeric/performance/releaseは未承認。
+既存の自然退出/active cooldownの限定結果を保持し、次は読込後の退出/cooldown満了へ進める。
+全inventory・正式9種release/default起動の不足は消さない。
+
 保存/読込の次の境界は、実commit bytesと実Entity remapへ結ぶprofiling限定producer。
 `tak14-durable-receipts-feedback-20261107-v1`は通常Manual slot 1の499,109 bytesと
 Save/LoadのSHA一致、epoch0→1、全20 Soul map/収集状態/Pool一致を独立読取で確認した。
