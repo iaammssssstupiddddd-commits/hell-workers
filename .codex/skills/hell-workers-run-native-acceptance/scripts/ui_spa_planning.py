@@ -294,7 +294,23 @@ def click(driver, key):
 def tap(driver, key):
     before, first = input_context(driver.last), len(driver.events)
     driver.key(key)
+    # Last-stage raw observation may trail the UI ACK. Wait for the real
+    # press/release pair before ending this action; never resend the key.
+    def recorded(value):
+        path = driver.root / "production-cancellation.json"
+        return path.is_file() and keyboard_recorded(native.read_json(path), before, value, key)
+    driver.last = driver.wait(recorded, after=driver.last["frame"], timeout=10)
     record_action(driver, key, first, before)
+
+
+def keyboard_recorded(raw, before, value, key):
+    native.require(raw.get("failure") is None and raw.get("nonce") == before["nonce"]
+                   and raw.get("process_id") == before["pid"], "Spa keyboard raw owner/failure differs")
+    rows = [e for e in raw.get("events", []) if e.get("producer") == "KeyboardInput"
+            and finite(e.get("real_seconds"))
+            and before["spa_planning"]["real_seconds"] < e["real_seconds"] <= value["spa_planning"]["real_seconds"]]
+    return (len(rows) == 2 and [r.get("state") for r in rows] == ["Pressed", "Released"]
+            and all(r.get("key") == key and r.get("repeat") is False for r in rows))
 
 
 def pause(driver, paused):

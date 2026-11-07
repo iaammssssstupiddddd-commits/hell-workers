@@ -634,6 +634,11 @@ world capture/pointer-over-UIともfalseであった。試験のHidden menu要�
 試験側の「action開始以後にもmodeが残る」前提を撤去し、UI guard時点以前の最新rawを1秒以内、
 同window/epoch、Architect/SoulSpaPlaceに拘束する。古い一致行への遡及やpost-commit行の代用は拒否する。
 元batchはinvalid seal/finalizeのまま保持し、修正版は新subjectの別batchで実測する。
+同じ原記録の診断で、F5/F9のraw読取時刻が短いUI ACKの後に来る場合も確認した。
+keyの再送や検査window拡張ではなく、同nonce/PIDの実Pressed/Releasedを最大10秒待ってから
+actionを閉じる。独立reviewの当初の「loaded時に施工予定表示がない」という所見は、
+5画像の再照合で撤回した。ROI `(912,492)-(992,573)` の淡青表示はplaced/saved/loadedで一致し、
+empty/cancelledでは地形へ戻る。誤認を根拠に製品visualを変更しない。
 
 ## 5. マイルストーン
 

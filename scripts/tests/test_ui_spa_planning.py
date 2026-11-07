@@ -15,6 +15,32 @@ ui = importlib.import_module("ui_usability_acceptance")
 
 
 class SpaPlanningTests(unittest.TestCase):
+    def test_keyboard_waits_for_actual_delayed_pair_without_resending(self):
+        before = {"nonce": "owned", "pid": 10, "spa_planning": {"real_seconds": 1.0}}
+        value = {"spa_planning": {"real_seconds": 1.3}}
+        raw = {"nonce": "owned", "process_id": 10, "failure": None, "events": [
+            {"producer": "KeyboardInput", "state": state, "key": "F5", "repeat": False, "real_seconds": 1.25}
+            for state in ("Pressed", "Released")]}
+        self.assertTrue(spa.keyboard_recorded(raw, before, value, "F5"))
+        self.assertFalse(spa.keyboard_recorded(raw, before, {"spa_planning": {"real_seconds": 1.2}}, "F5"))
+        for change in ({"key": "F9"}, {"repeat": True}, {"state": "Pressed"}):
+            changed = copy.deepcopy(raw)
+            changed["events"][1].update(change)
+            self.assertFalse(spa.keyboard_recorded(changed, before, value, "F5"))
+        for change in ({"nonce": "foreign"}, {"process_id": 11}, {"failure": "overflow"}):
+            with self.subTest(change=change), self.assertRaises(spa.native.AcceptanceError):
+                spa.keyboard_recorded(dict(raw, **change), before, value, "F5")
+        with tempfile.TemporaryDirectory() as directory:
+            driver = Mock(root=Path(directory), last={"frame": 2}, events=[{}, {}])
+            with unittest.mock.patch.object(spa, "input_context", return_value=before), \
+                    unittest.mock.patch.object(spa, "record_action") as record:
+                driver.wait.return_value = {"frame": 3}
+                spa.tap(driver, "F5")
+                driver.key.assert_called_once_with("F5")
+                driver.wait.assert_called_once()
+                self.assertEqual(driver.wait.call_args.kwargs["timeout"], 10)
+                record.assert_called_once()
+
     def test_prepress_binds_latest_bounded_raw_not_post_commit_mode(self):
         before = {"spa_planning": {"real_seconds": 6.45}, "world_epoch": 0, "primary_window": 72}
         good = {"real_seconds": 6.21, "world_epoch": 0, "primary_window": "72v0", "primary_window_bits": 72,
