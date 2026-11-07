@@ -628,6 +628,13 @@ world capture/pointer-over-UIともfalseであった。試験のHidden menu要�
 旧site `2237v0`→`865v1`、4tileとgridの実remapを記録したが、全recipeの成功とは扱わない。
 この失敗もinvalid seal/finalizeして比較用に保持し、識別keyを実UiIntentの宣言順に集約して修正する。
 
+`tak14-soulspa-ordinary-planning-20261108-v3`は`59ad5f2c`で5段階の操作・画像を取得したが、
+独立verifierの配置mode確認でinvalid終了した。UI press前6.447秒にはSoulSpaPlace(None)で、
+直前raw 6.216秒にも同modeがあるが、配置commit/press観測6.498秒では製品がmodeをNoneへ戻していた。
+試験側の「action開始以後にもmodeが残る」前提を撤去し、UI guard時点以前の最新rawを1秒以内、
+同window/epoch、Architect/SoulSpaPlaceに拘束する。古い一致行への遡及やpost-commit行の代用は拒否する。
+元batchはinvalid seal/finalizeのまま保持し、修正版は新subjectの別batchで実測する。
+
 ## 5. マイルストーン
 
 ### M1: 原本・候補

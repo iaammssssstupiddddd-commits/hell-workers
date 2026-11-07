@@ -98,6 +98,23 @@ def after_press(receipt, pressed):
                    "Spa receipt precedes its actual raw press")
 
 
+def placement_prepress(raw, before, window):
+    # The product clears TaskMode on commit. The raw observer samples less often
+    # than the UI observer, so bind the latest raw state at/before the UI guard,
+    # never a convenient older mode or a post-commit sample.
+    now = before["spa_planning"]["real_seconds"]
+    samples = [s for s in raw["samples"] if finite(s.get("real_seconds")) and s["real_seconds"] <= now]
+    native.require(samples, "Spa pre-press raw context missing")
+    sample = max(samples, key=lambda s: s["real_seconds"])
+    native.require(0 <= now - sample["real_seconds"] <= 1
+                   and sample.get("world_epoch") == before["world_epoch"]
+                   and sample.get("primary_window") == window
+                   and sample.get("primary_window_bits") == before["primary_window"]
+                   and sample.get("menu_state") == "Architect"
+                   and sample.get("task_mode", "").startswith("SoulSpaPlace("),
+                   "Spa pre-press raw mode/window/epoch differs")
+
+
 def pressed_for(raw, action):
     start, end = (action[side]["spa_planning"]["real_seconds"] for side in ("before", "after"))
     rows = [e for e in raw["events"] if e.get("producer") == "MouseButtonInput" and e.get("state") == "Pressed"
@@ -390,6 +407,7 @@ def check_inputs(raw, entries, client, inputs):
                            and a.get("menu_state") == "Architect"
                            and a["spa_planning"].get("task_mode", "").startswith("SoulSpaPlace("),
                            "Spa placement foreground differs")
+            placement_prepress(raw, a, expected_window)
             receipts = [r for r in raw["events"] if r.get("producer") == "ordinary-building-placement-branch-v1"
                         and start < r.get("real_seconds", -1) <= end]
             native.require(len(receipts) == 1, "Spa actual placement receipt missing/duplicate")
@@ -401,9 +419,7 @@ def check_inputs(raw, entries, client, inputs):
                            and result.get("grid") == a["spa_planning"]["anchor"]
                            and result.get("footprint") == a["spa_planning"]["footprint"]
                            and set(result["tile_owners"]) == {t["entity"] for t in context(entries[1]["value"])["tiles"]}
-                           and result.get("owner") == context(entries[1]["value"])["sites"][0]["entity"]
-                           and any(s.get("task_mode", "").startswith("SoulSpaPlace(")
-                                   and start <= s.get("real_seconds", -1) <= end for s in raw["samples"]),
+                           and result.get("owner") == context(entries[1]["value"])["sites"][0]["entity"],
                            "Spa placement target/mode differs")
     native.require(all(i + 1 in claimed for i, row in enumerate(inputs) if row.get("button") is not None or row.get("key") is not None)
                    and raw_claimed == {r["event_index"] for r in raw["events"] if r.get("producer") in ("KeyboardInput", "MouseButtonInput")},

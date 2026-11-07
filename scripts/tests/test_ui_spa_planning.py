@@ -15,6 +15,20 @@ ui = importlib.import_module("ui_usability_acceptance")
 
 
 class SpaPlanningTests(unittest.TestCase):
+    def test_prepress_binds_latest_bounded_raw_not_post_commit_mode(self):
+        before = {"spa_planning": {"real_seconds": 6.45}, "world_epoch": 0, "primary_window": 72}
+        good = {"real_seconds": 6.21, "world_epoch": 0, "primary_window": "72v0", "primary_window_bits": 72,
+                "menu_state": "Architect", "task_mode": "SoulSpaPlace(None)"}
+        committed = dict(good, real_seconds=6.50, task_mode="None")
+        spa.placement_prepress({"samples": [good, committed]}, before, "72v0")
+        for change in ({"real_seconds": 5.44}, {"world_epoch": 1}, {"primary_window": "foreign"},
+                       {"primary_window_bits": 99}, {"menu_state": "Hidden"}, {"task_mode": "None"}):
+            with self.subTest(change=change), self.assertRaises(spa.native.AcceptanceError):
+                spa.placement_prepress({"samples": [dict(good, **change), committed]}, before, "72v0")
+        for samples in ([], [committed], [good, dict(good, real_seconds=6.40, task_mode="None")]):
+            with self.subTest(samples=samples), self.assertRaises(spa.native.AcceptanceError):
+                spa.placement_prepress({"samples": samples}, before, "72v0")
+
     def test_cancel_key_matches_actual_ui_intent_field_order(self):
         self.assertEqual(spa.cancel_key("865v1"),
                          "menu:CancelSoulSpaConstruction { source_task: None, target: 865v1 }")
@@ -119,7 +133,7 @@ class SpaPlanningTests(unittest.TestCase):
         def sample(now, state, epoch, task="None"):
             return {"real_seconds": now, "virtual_seconds": 0, "paused": True, "world_epoch": epoch,
                     "spa_context": copy.deepcopy(state), "primary_window": "3v0", "cursor_position": [100, 100],
-                    "dpi": 1, "task_mode": task}
+                    "dpi": 1, "task_mode": task, "menu_state": "Architect"}
         specs = [(2, "menu:ToggleArchitect"), (3, "menu:SelectArchitectCategory(Some(Plant))"),
                  (4, "menu:SelectTaskMode(SoulSpaPlace(None))"), (5, "placement"), (11, "F5"),
                  (19, "menu:SelectSaveCatalogSlot { slot: Manual1, session: 1 }"), (21, "F9"),
@@ -158,6 +172,7 @@ class SpaPlanningTests(unittest.TestCase):
                 event.update({"key": key, "repeat": False} if keyboard else {"button": "Left"})
                 events.append(event)
             inputs[first - 1]["spa_action"] = {"key": key, "first_step": first, "last_step": len(inputs), "before": before, "after": after}
+            samples.append(sample(now - .01, before_state, before_epoch, plan["task_mode"]))
             samples.append(sample(now + .01, before_state, before_epoch, plan["task_mode"]))
         events.append({"producer": "ordinary-building-placement-branch-v1", "operation": "PlacementOutcome",
                        "window": "3v0", "world_epoch": 0, "real_seconds": 5.15,
