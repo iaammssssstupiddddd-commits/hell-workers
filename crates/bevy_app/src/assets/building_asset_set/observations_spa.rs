@@ -29,7 +29,7 @@ fn pose(world: &World, entity: Entity) -> Result<Value, String> {
     )
 }
 
-pub(super) fn snapshot(world: &mut World) -> Result<Value, String> {
+pub(crate) fn snapshot(world: &mut World) -> Result<Value, String> {
     let mut sites = Vec::new();
     for (entity, site) in world
         .query::<(Entity, &SoulSpaSite)>()

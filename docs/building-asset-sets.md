@@ -571,6 +571,19 @@ domain witnessの許可一覧には追加しない。範囲外の有限値も合
 このproducer追加は通常アセット採用、保存schema、配置/利用/発電ruleやHelpを変更せず、
 通常入力lifecycle・Save/Load・性能・releaseを受入済みにするものではない。
 
+`soul-spa-planning`は既存Yardから製品validatorで南向き2×2の合法配置先を選び、
+準備はcamera/pauseだけを変更する。通常OS入力で未搬入の配置、Save/Load、確認付き取消を実施し、
+全4tileのdurable parent/pose/占有、walkability、実cancel結果を検査する限定feedbackである。
+実save/normal-load commitの受動receiptは保存バイト列hash/sizeと`spa_context`を持ち、
+`spa_entity_remap`は実適用mapからSoulSpaSite/Tile/PowerGridだけを抽出する。既存Soul/RestAreaの
+`entity_remap`は変更しない。不完全・重複・曖昧なmap、epoch/原保存バイト/paused stateの不一致を拒否する。
+入力journalのnonce/PID/window/step/frame、実controlのhover/pressと対象・session・確認ticket/epochを
+原KeyboardInput/MouseButtonInputへ一対一に結ぶ。配置直前は最新の投影点・window/epoch・合法footprint・
+SoulSpa modeを再確認し、実placement receiptのowner/4tileも照合する。timeoutや不一致で入力を再送しない。
+新helperはnative/Capture/RenderDocの全harness fingerprintへ含め、内容変更で旧証拠を再利用できない。
+取消前後の実source relationも検査するが、Bone搬入後の返却、自然利用、発電/通行、全cleanup、
+候補アート採用・性能・正式releaseの証拠をこのrecipeから推測しない。
+
 UI feedbackの`rest-area-usage`は通常施工の3checkpointに入所・放出の2checkpointを追加する。
 camera/pause準備以外は既存入力と通常AIを使い、occupant・Dream・材料・完了状態を注入しない。
 UIとproduction rawは同じread-only collectorを使い、paused・同nonce/PID/epoch・同仮想時刻・

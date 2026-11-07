@@ -607,6 +607,12 @@ WorldMap占有・walkability・grid接続を有界に読み取る。表示hierar
 Rust check/Clippy・変更別検証・独立readonlyを通してから、別の通常入力シナリオを補完する。
 このproducer補完だけでは実施工・自然利用・Save/Load・Capture/Memory・releaseを完了にしない。
 
+次に専用`SoulSpa`通常配置feedbackを追加する。生成済みYard内の南向き2×2成立条件を
+製品と同じvalidatorで探し、初期準備はcamera/pauseだけに限定する。既存OS入力で配置、
+未搬入状態のSave/Load、確認付き取消を行い、4つのdurable tile、owner remap、実map占有と
+walkability、実cancel outcomeを照合する。資材・task・worker・Dreamは注入しない。
+この限定recipeは候補アートをadmitせず、発電/利用/搬入後返却/正式releaseを証明しない。
+
 ## 5. マイルストーン
 
 ### M1: 原本・候補

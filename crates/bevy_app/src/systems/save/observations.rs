@@ -2,6 +2,7 @@
 //! Never reflected, persisted, used for gameplay, or a source of acceptance authority.
 use bevy::{ecs::entity::EntityHashMap, prelude::*};
 use hw_core::{WorldEpoch, soul::DamnedSoul};
+use hw_energy::{PowerGrid, SoulSpaSite, SoulSpaTile};
 use hw_infra::lighting::digest_hex;
 use hw_jobs::RestArea;
 use serde_json::{Value, json};
@@ -30,6 +31,7 @@ struct PendingLoad {
     file_hash: String,
     file_bytes: usize,
     mapping: Option<Vec<Value>>,
+    spa_mapping: Option<Vec<Value>>,
 }
 
 fn request(world: &World, operation: SaveLoadOperation) -> Result<SaveLoadRequest, String> {
@@ -76,6 +78,7 @@ fn push(world: &mut World, mut row: Value, request: &SaveLoadRequest) -> Result<
     ));
     row["rest_area_context"] =
         crate::assets::building_asset_set::snapshot_rest_observations(world)?;
+    row["spa_context"] = crate::assets::building_asset_set::snapshot_spa_observations(world)?;
     let mut receipts = world.resource_mut::<DurableReceipts>();
     if receipts.rows.len() >= RECEIPT_LIMIT {
         return Err("durable observation receipt cap exceeded".into());
@@ -131,6 +134,7 @@ pub(super) fn begin_load(world: &mut World, contents: &str) {
             file_hash: digest_hex(&Sha256::digest(contents.as_bytes()).into()),
             file_bytes: contents.len(),
             mapping: None,
+            spa_mapping: None,
         };
         world.resource_mut::<DurableReceipts>().pending = Some(pending);
         Ok(())
@@ -174,6 +178,36 @@ pub(super) fn mapped(world: &mut World, mapping: &EntityHashMap<Entity>) {
             return Err("durable observation incomplete Soul/RestArea map".into());
         }
         rows.sort_by_key(|row| row["saved_bits"].as_u64());
+        // Keep the existing Soul/RestArea map unchanged for its consumers.
+        // Spa uses durable parent_site, not the non-persisted display hierarchy.
+        let mut spa_rows = Vec::new();
+        let mut spa_targets = std::collections::HashSet::new();
+        for (&saved, &loaded) in mapping {
+            let kind = match (
+                world.get::<SoulSpaSite>(loaded),
+                world.get::<SoulSpaTile>(loaded),
+                world.get::<PowerGrid>(loaded),
+            ) {
+                (Some(_), None, None) => "SoulSpa",
+                (None, Some(_), None) => "SoulSpaTile",
+                (None, None, Some(_)) => "PowerGrid",
+                (None, None, None) => continue,
+                _ => return Err("durable Spa mapping has ambiguous components".into()),
+            };
+            if !spa_targets.insert(loaded) || spa_rows.len() >= 3072 {
+                return Err("durable Spa mapping duplicate target/cap exceeded".into());
+            }
+            spa_rows.push(json!({"saved_entity": format!("{saved:?}"), "saved_bits": saved.to_bits(),
+                "loaded_entity": format!("{loaded:?}"), "loaded_bits": loaded.to_bits(), "kind": kind}));
+        }
+        let spa_expected = world
+            .query_filtered::<Entity, Or<(With<SoulSpaSite>, With<SoulSpaTile>, With<PowerGrid>)>>()
+            .iter(world)
+            .count();
+        if spa_rows.len() != spa_expected {
+            return Err("durable Spa mapping is incomplete".into());
+        }
+        spa_rows.sort_by_key(|row| row["saved_bits"].as_u64());
         let mut receipts = world.resource_mut::<DurableReceipts>();
         let pending = receipts
             .pending
@@ -183,6 +217,7 @@ pub(super) fn mapped(world: &mut World, mapping: &EntityHashMap<Entity>) {
             return Err("durable observation duplicate map".into());
         }
         pending.mapping = Some(rows);
+        pending.spa_mapping = Some(spa_rows);
         Ok(())
     })();
     if let Err(error) = result {
@@ -211,11 +246,14 @@ pub(super) fn finish_load(world: &mut World, success: bool) {
         let mapping = pending
             .mapping
             .ok_or("durable observation successful load has no applied map")?;
+        let spa_mapping = pending
+            .spa_mapping
+            .ok_or("durable observation successful load has no Spa map")?;
         push(
             world,
             json!({"producer": "ordinary-load-commit-v1", "operation": "DurableLoad",
             "result": "Committed", "file_sha256": pending.file_hash, "file_bytes": pending.file_bytes,
-            "previous_epoch": pending.epoch, "entity_remap": mapping}),
+            "previous_epoch": pending.epoch, "entity_remap": mapping, "spa_entity_remap": spa_mapping}),
             &current,
         )
     })();
@@ -315,6 +353,74 @@ mod tests {
                 && item["kind"] == "RestArea"
         }));
         assert_eq!(world.get::<RestArea>(owner).unwrap().capacity, 4);
+    }
+
+    #[test]
+    fn spa_receipt_keeps_actual_site_tile_grid_remap_separate_from_rest_map() {
+        let mut world = world();
+        begin_load(&mut world, &bytes());
+        let grid = world.spawn(PowerGrid::default()).id();
+        let site = world
+            .spawn((SoulSpaSite::default(), hw_energy::GeneratesFor(grid)))
+            .id();
+        let tiles: Vec<_> = (0..4)
+            .map(|i| {
+                world
+                    .spawn(SoulSpaTile {
+                        parent_site: site,
+                        grid_pos: (i, 2),
+                    })
+                    .id()
+            })
+            .collect();
+        let entities = [vec![site, grid], tiles].concat();
+        let mapping = EntityHashMap::from_iter(entities.into_iter().map(|entity| (entity, entity)));
+        world.resource_mut::<WorldEpoch>().advance();
+        mapped(&mut world, &mapping);
+        finish_load(&mut world, true);
+        let receipts = world.resource::<DurableReceipts>();
+        assert!(receipts.failure.is_none(), "{:?}", receipts.failure);
+        let row = &receipts.rows[0];
+        assert_eq!(row["entity_remap"], json!([]));
+        assert_eq!(row["spa_entity_remap"].as_array().unwrap().len(), 6);
+        assert_eq!(row["spa_context"]["sites"][0]["grid"], format!("{grid:?}"));
+        assert_eq!(row["spa_context"]["tiles"].as_array().unwrap().len(), 4);
+    }
+
+    #[test]
+    fn incomplete_duplicate_or_ambiguous_spa_mapping_cannot_publish_a_receipt() {
+        for case in 0..3 {
+            let mut world = world();
+            begin_load(&mut world, &bytes());
+            let site = world.spawn(SoulSpaSite::default()).id();
+            let tile = world
+                .spawn(SoulSpaTile {
+                    parent_site: site,
+                    grid_pos: (1, 2),
+                })
+                .id();
+            let mut mapping = EntityHashMap::from_iter([(site, site), (tile, tile)]);
+            match case {
+                0 => {
+                    mapping.remove(&tile);
+                }
+                1 => {
+                    let other = world.spawn_empty().id();
+                    mapping.insert(other, tile);
+                }
+                _ => {
+                    world.entity_mut(site).insert(PowerGrid::default());
+                }
+            }
+            world.resource_mut::<WorldEpoch>().advance();
+            mapped(&mut world, &mapping);
+            finish_load(&mut world, true);
+            assert!(
+                world.resource::<DurableReceipts>().failure.is_some(),
+                "case {case}"
+            );
+            assert!(world.resource::<DurableReceipts>().rows.is_empty());
+        }
     }
 
     #[test]

@@ -466,6 +466,7 @@ fn snapshot(world: &mut World) -> Result<Value, String> {
         .iter(world)
         .next()
         .map(|(entity, _)| format!("{entity:?}"));
+    let primary_window_bits = query.iter(world).next().map(|(entity, _)| entity.to_bits());
     let dpi = query
         .iter(world)
         .next()
@@ -553,6 +554,7 @@ fn snapshot(world: &mut World) -> Result<Value, String> {
         "mesh_cpu_bytes": null, "gpu_measured_bytes": null, "gpu_estimated_bytes": null,
         "native_peak_live_bytes": null, "rss_bytes": null,
         "application_handle_count": null});
+    sample["primary_window_bits"] = json!(primary_window_bits);
     sample["rest_area_context"] = rest_area_context;
     sample["spa_context"] = spa_context;
     if !art_feedback.is_null() {
