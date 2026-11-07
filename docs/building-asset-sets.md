@@ -239,6 +239,10 @@ physical root寸法、実owner/focus/nonce、単発stepとgame cursor ACKを維�
 EIS helperも三つのharness inventoryでhash固定する。未知regionや座標不一致で入力を再送しない。
 最初のNotify試行は候補load後、初回motionのACKなしでinvalid精算。配置は未送信であり、
 Xwayland/compositorの原点不一致は未確定仮説。開始座標依存を除く比較であり、承認の代用ではない。
+`ec2c1c2b`のfresh EIS試行は実施工・利用・Dream・保存と読込まで進んだが、live save checkerが
+既定の正式raw scopeでfeedbackを照合しinvalidとなった。旧結果は変更せず、live exerciseにも
+明示keywordでfeedback scopeを渡す。raw自身のscopeから推測せず、正式呼出しの既定と拒否は不変。
+読込後の退出/cooldownは当該試行では未検証であり、修正後のfresh比較で確認する。
 
 `python3 scripts/building_production_native_acceptance.py capabilities` はlocal supportを読むだけで、
 旧request/Run/hostへの照会、台帳更新、plan生成、build、launchを行わない。現在は `available=false`。

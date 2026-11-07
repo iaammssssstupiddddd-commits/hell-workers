@@ -4,7 +4,7 @@ from pathlib import Path
 import tempfile
 from types import SimpleNamespace
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from scripts.tests import test_ui_rest_area_save as saved
 from scripts.tests import test_ui_rest_area_completion as completed
@@ -13,6 +13,46 @@ art = completed.acceptance.rest_area_art
 
 
 class OrdinaryArtTests(unittest.TestCase):
+    def test_live_art_lifecycle_forwards_scope_to_save_without_changing_formal_default(self):
+        driver = object()
+        with patch.object(art.usage, "exercise_save", side_effect=RuntimeError("stop before further input")) as save:
+            with self.assertRaisesRegex(RuntimeError, "stop before further input"):
+                art.exercise_lifecycle(driver)
+            save.assert_called_once_with(driver, raw_scope=art.SCOPE)
+            save.reset_mock()
+            with self.assertRaisesRegex(RuntimeError, "stop before further input"):
+                art.usage.exercise_lifecycle(driver)
+            save.assert_called_once_with(driver, raw_scope="production-raw-observations-v1")
+
+    def test_live_save_checker_receives_only_explicit_scope_not_raw_self_declaration(self):
+        for explicit in (False, True):
+            driver = MagicMock()
+            driver.root = Path("/unused-owned-job")
+            state = {"frame": 10, "world_epoch": 0, "nonce": "owned", "pid": 123}
+            driver.last = state
+            calls = []
+
+            def wait(predicate, **kwargs):
+                calls.append(kwargs)
+                if len(calls) == 5:
+                    self.assertTrue(predicate(state))
+                return state
+
+            driver.wait.side_effect = wait
+            raw = {"nonce": "owned", "process_id": 123, "failure": None,
+                   "scope": art.SCOPE, "events": [{"operation": "DurableLoad"}]}
+            with (patch.object(art.usage, "exercise"),
+                  patch.object(art.usage.planning, "catalog_control", return_value="owned-control"),
+                  patch.object(art.usage.planning, "set_refund_paused"),
+                  patch.object(Path, "is_file", return_value=True),
+                  patch.object(art.usage.native, "read_json", return_value=raw),
+                  patch.object(art.usage, "check_save", return_value="loaded-soul") as checker):
+                result = art.usage.exercise_save(driver, **({"raw_scope": art.SCOPE} if explicit else {}))
+            self.assertEqual(result, "loaded-soul")
+            self.assertEqual(checker.call_count, 1)
+            self.assertEqual(checker.call_args.kwargs,
+                             {"raw_scope": art.SCOPE if explicit else "production-raw-observations-v1"})
+
     def fixture(self):
         raw, entries, client, payload = saved.OrdinaryRestSaveTests().lifecycle_fixture()
         identity = {"kind": "RestArea", "authority": "art_preview", "generation": 1, "manifest_sha256": "a" * 64}

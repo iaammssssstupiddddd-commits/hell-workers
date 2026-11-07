@@ -710,7 +710,10 @@ def run(args):
                     elif case == "bridge-planning":
                         bridge_planning.exercise(driver)
                     elif case == "rest-area-lifecycle":
-                        rest_area_usage.exercise_lifecycle(driver)
+                        if art_contract is not None:
+                            rest_area_art.exercise_lifecycle(driver)
+                        else:
+                            rest_area_usage.exercise_lifecycle(driver)
                     elif case == "rest-area-save":
                         rest_area_usage.exercise_save(driver)
                     elif case == "rest-area-exit":

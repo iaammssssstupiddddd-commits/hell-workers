@@ -188,6 +188,11 @@ def check_consumers(raw, entries, contract):
                            "ordinary art material values differ")
 
 
+def exercise_lifecycle(driver):
+    """Pass the explicitly admitted feedback scope through the live save check."""
+    usage.exercise_lifecycle(driver, raw_scope=SCOPE)
+
+
 def check_lifecycle(raw, entries, client, save_path, contract):
     # Scope is selected by this explicit validator, never copied from raw input.
     usage.check_lifecycle(raw, entries, client, save_path, raw_scope=SCOPE)

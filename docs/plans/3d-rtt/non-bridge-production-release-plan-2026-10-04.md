@@ -13,6 +13,14 @@
 
 ## 1. 目的
 
+`ec2c1c2b`のfresh `tak14-restarea-ordinary-art-eis-feedback-20261107-v1`では、宣言済み
+logical region=(0,0,1440,900)/scale=2、physical root=(2880,1800)で初回入力を通過した。
+通常施工・利用・Dream・Save:Succeeded・Load:Succeededと7checkpointを記録した後、
+live exercise_saveが既定の正式raw scopeをcheck_saveへ渡してfeedbackを拒否しinvalid。
+ゲーム失敗や候補採否とは読み替えず診断保持・seal/finalize済み。退出/cooldownは未達のまま。
+明示ArtPreview入口からlive lifecycle→save checkerへだけscopeを受け渡し、通常入口の既定を維持する。
+rawの自己申告からscopeを選ばない。回帰試験はliveのkeyword伝播と旧正式既定の両方を検査する。
+
 新入口のfresh `tak14-restarea-ordinary-art-feedback-20261107-v1`は、exact db0f ArtPreviewを
 active descriptorへ読み込んだが、最初の速度ボタンへのpointer motion1件がgame cursorのACKを
 得られず15秒でinvalid。クリック/キー/建物配置は未送信。子とportal終了後、診断用途で保持・seal/finalizeした。

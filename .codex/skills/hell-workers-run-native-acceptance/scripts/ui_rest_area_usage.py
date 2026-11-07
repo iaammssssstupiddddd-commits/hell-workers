@@ -145,7 +145,7 @@ def exercise_exit(driver):
     wait_for_raw_checkpoint(driver, bits, entity, released=True)
 
 
-def exercise_save(driver):
+def exercise_save(driver, *, raw_scope="production-raw-observations-v1"):
     """Save/load an ordinarily admitted occupant through the existing catalogs."""
     exercise(driver)
     driver.key("F5")
@@ -179,7 +179,7 @@ def exercise_save(driver):
             return False
         try:
             selected[0] = check_save(raw, driver.checkpoints, {"nonce": driver.last["nonce"], "pid": driver.last["pid"]},
-                                      driver.root / "saves" / "manual-1.scn.ron")
+                                      driver.root / "saves" / "manual-1.scn.ron", raw_scope=raw_scope)
         except RawCheckpointPending:
             return False
         return True
@@ -189,8 +189,8 @@ def exercise_save(driver):
     return selected[0]
 
 
-def exercise_lifecycle(driver):
-    entity = exercise_save(driver)
+def exercise_lifecycle(driver, *, raw_scope="production-raw-observations-v1"):
+    entity = exercise_save(driver, raw_scope=raw_scope)
     loaded = driver.checkpoints[-1]["value"]
     bits = loaded["rest_area_planning"]["buildings"][0]
     planning.set_refund_paused(driver, False)
