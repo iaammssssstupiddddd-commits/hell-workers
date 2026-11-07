@@ -596,6 +596,16 @@ Bevy 0.19の既存loader/pool経路を使う。公開・push・mergeは本依頼
 
 ### SoulSpa通常worldの観測補完（2026-11-08）
 
+`66330d0d`のfresh `tak14-soulspa-ordinary-usage-20261108-v1`は施工・Generating・1W出力の
+全5checkpointを得たが、ゲームログのdangling relationship警告1件でinvalidとなった。
+Soul `1856v0`→消滅対象`1950v11`の警告時刻は23:06:55 UTCで、同Soulはraw上で集会行動中、
+Spa task/WorkingOnは全400 sampleでNoneだった。site `2053v2`は別ownerで、
+実利用Soul `1878v0`はtile `2040v2`でGeneratingを維持したが限定passへも昇格しない。
+旧batchはinvalid seal/finalize、41,324,544Bを修正比較用に保持した。
+管理Recruitには適用時の存続guardがある一方、idle Join/Arriveにはなく、同じ消滅参照を作れる。
+この経路を適用時のSoul/spot確認へ揃え、拒否時の休憩関係・Visibility・通知不変を回帰試験する。
+警告の型名がdebug featureなしで匿名のため、当該経路との完全な因果確定はfresh比較まで留保する。
+
 全16maskの静止確認後、通常利用/lifecycleを実値で検査するため、profiling-onlyの
 `observations_spa.rs`を通常raw observerへ接続する。siteのphase/Bone搬入/active_slotsと発電値、
 durable parent_siteによるtile/worker/WorkingOn逆参照、実GeneratePower taskとSoulのDream/疲労、

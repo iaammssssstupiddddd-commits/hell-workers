@@ -178,7 +178,7 @@ root observerが受動収集する。通常のAI割当・疲労・chain・予約
 
 タスク系 Relationship（`CommandedBy` / `WorkingOn`）と携行品`Inventory`の書き込み元・削除元は **tasks.md §2** を参照。
 
-- `ParticipatingIn(spot)` ← Soul / `GatheringParticipants` ← GatheringSpot: 集会参加状態。`idle_behavior_decision` が insert、集会終了・タスク割り当て時に remove。
+- `ParticipatingIn(spot)` ← Soul / `GatheringParticipants` ← GatheringSpot: 集会参加状態。Decideの参加/到着requestをExecuteが適用し、deferred適用時にもSoulとspotの存続を確認してinsertする。消滅済みrequestは休憩関係/Visibility/参加・到着通知も変更しない。集会終了・タスク割り当て時にremoveする。
 - 休憩所関連 (`RestingIn`, `RestAreaOccupants` 等): 詳細は [rest_area_system.md](rest_area_system.md) を参照。
 
 ## 5. 移動と制御 (Movement & Control)

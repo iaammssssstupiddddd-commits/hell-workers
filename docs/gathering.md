@@ -64,6 +64,7 @@ Soulの待機行動に基づいて自然発生的に集会所が生成され、�
 - 実際のエンティティ生成は root `crates/bevy_app/src/systems/soul_ai/execute/gathering_spawn.rs` が担当し、`GameAssets` を使ってオーラと中心オブジェクトをスポーンする。
 - adapter 側は request 消費時に initiator がまだ未参加・未指揮・無タスク・対象 idle 状態であることを再検証する。これにより、同一 Execute フェーズ内で他システムが Soul 状態を変えた後の stale request から孤立スポットが生成されるのを防ぐ。
 - 集会管理要求は一括で正規化する。同じbatchでdissolve/mergeにより退役するspotを先に求め、そのspotへ向かうRecruitと、退役予定のabsorberへ向かうMergeは破棄する。残る参加はdeferred command適用時にもSoulとspotの存続を再確認してから`ParticipatingIn`をinsertする。これにより、消滅済みtargetへのRelationship insertを防ぐ。
+- 待機行動の`JoinGathering` / `ArriveAtGathering`もdeferred適用時にSoulとspotの存続を再確認する。消滅済みなら参加・到着通知を出さず、既存の休憩関係やVisibilityも変更しない。生存時だけ従来の参加、休憩解除、可視復帰と通知を同じcommand内で適用する。
 - スポットをdissolveまたはmergeで吸収するときは、`GatheringParticipants`の各sourceから`ParticipatingIn`を先に外し、その後でspotをdespawnする。これは退役spotを参照するsourceを残さないための整合性処理であり、staleなvisual/spot commandはno-opとして扱う。
 
 ## デバッグ機能
