@@ -26,6 +26,7 @@ import ui_terrain_materials as terrain_materials
 sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
 from scripts.native_ui_input import X11Input
 from scripts.native_ui_portal import PortalSession, PortalX11Input
+from scripts.native_ui_eis import PortalEisInput
 
 PROFILE = "ui-usability-feedback"
 CHECKPOINTS = ("tasks", "last-page", "minimized", "restored", "entities",
@@ -221,7 +222,7 @@ def check_layout_scene(value, scene):
 
 
 class Driver:
-    def __init__(self, process, root, nonce, state, job_file, portal=None, *, layout_only=False):
+    def __init__(self, process, root, nonce, state, job_file, portal=None, *, layout_only=False, eis=False):
         self.process, self.root, self.nonce = process, root, nonce
         self.state, self.job_file = state, job_file
         self.events, self.checkpoints = [], []
@@ -239,13 +240,17 @@ class Driver:
                 "window": self.window, "pid": pid, "nonce": nonce, "input_backend": "none"})
             return
         arguments = (int(window, 0), pid, process.pid, nonce, self.record)
-        self.input = PortalX11Input(*arguments, portal=portal) if portal else X11Input(*arguments)
+        native.require(not eis or portal is not None, "EIS requires the existing consented portal")
+        self.input = (PortalEisInput(*arguments, portal=portal) if eis else
+                      PortalX11Input(*arguments, portal=portal) if portal else X11Input(*arguments))
         try:
             self.input.activate()
             geometry = self.input.client_size()
             native.atomic_write_json(self.root / "input-client.json", {"window": self.input.window,
                 "pid": pid, "geometry": geometry, "observer_viewport": self.last["viewport"], "nonce": nonce,
-                "input_backend": "portal" if portal else "xtest",
+                "input_backend": "portal-eis" if eis else "portal" if portal else "xtest",
+                "input_transport": "portal-eis-absolute-v1" if eis else "portal-notify-relative-v1" if portal else "xtest",
+                "eis_region": self.input.sender.region_contract if eis else None,
                 "xmodifiers": next((entry.split(b"=", 1)[1].decode() for entry in
                                     Path(f"/proc/{pid}/environ").read_bytes().split(b"\0")
                                     if entry.startswith(b"XMODIFIERS=")), None),
@@ -433,12 +438,14 @@ class Driver:
 def check_input_client(manifest, session, client):
     native.require(client["input_backend"] == manifest["input_backend"] and client["nonce"] == session["nonce"],
                    "input client/backend differs")
-    if manifest["input_backend"] == "portal":
+    if manifest["input_backend"] in ("portal", "portal-eis"):
         native.require(client["portal_devices"] & 3 == 3 and client["monitor_mapping"][1] > 0,
                        "portal consent or monitor mapping missing")
         if manifest.get("case") == "refactor-suite":
             native.require(manifest.get("portal_session") and client.get("portal_session") == manifest["portal_session"],
                            "suite did not share one portal session")
+    if manifest["input_backend"] == "portal-eis":
+        rest_area_art.check_eis_client(client)
     if session.get("case", manifest.get("case")) == "refactor-rows":
         native.require(client.get("xmodifiers") == "@im=local", "row text input requires child-local XIM")
 
@@ -446,7 +453,9 @@ def check_input_client(manifest, session, client):
 def verify_root(root):
     manifest = native.read_json(root / "manifest.json")
     native.require(manifest["profile"] == PROFILE and manifest["evidence_kind"] == "feedback", "unsupported evidence kind")
-    native.require(manifest.get("input_backend") in ("portal", "xtest", "none"), "input backend missing")
+    native.require(manifest.get("input_backend") in ("portal", "portal-eis", "xtest", "none"), "input backend missing")
+    native.require(manifest.get("input_backend") != "portal-eis" or manifest.get("ordinary_art") is not None,
+                   "EIS UI feedback requires explicit ordinary ArtPreview context")
     layout_only = manifest["input_backend"] == "none"
     repo = native.validate_repo(manifest["repo"])
     native.require(native.source_fingerprint(repo) == manifest["source_fingerprint"], "source changed")
@@ -456,7 +465,7 @@ def verify_root(root):
     art_contract = manifest.get("ordinary_art")
     if art_contract is not None:
         native.require(manifest["case"] == "rest-area-lifecycle" and manifest["smoke"]
-                       and manifest["input_backend"] == "portal", "ordinary art profile differs")
+                       and manifest["input_backend"] in ("portal", "portal-eis"), "ordinary art profile differs")
         expected_art = rest_area_art.source_contract(repo, Path(art_contract["source_root"]), Path(art_contract["codec"]))
         native.require(rest_area_art.pipeline.exact_json(expected_art, art_contract), "ordinary art inputs changed")
     expected = check_session_inventory(manifest)
@@ -583,8 +592,9 @@ def cancellation_observation_setting(directory, nonce):
 def plan(args):
     repo = native.validate_repo(args.repo)
     art_contract = rest_area_art.planned_contract(args, repo)
+    native.require(args.input_backend != "portal-eis" or art_contract is not None, "EIS is limited to ordinary art feedback")
     native.require(args.case == "navigation" or args.input_backend != "none", "refactor case requires actual input")
-    native.require(not args.portal_consent_file or args.input_backend == "portal",
+    native.require(not args.portal_consent_file or args.input_backend in ("portal", "portal-eis"),
                    "consent file requires portal input backend")
     resources = native.resource_snapshot(repo, require_launcher=True)
     root = Path(args.job_root).resolve() if args.job_root else native.unique_job_root(repo, PROFILE)
@@ -614,9 +624,10 @@ def plan(args):
 def run(args):
     repo, root = native.validate_repo(args.repo), Path(args.job_root).resolve()
     art_contract = rest_area_art.planned_contract(args, repo)
+    native.require(args.input_backend != "portal-eis" or art_contract is not None, "EIS is limited to ordinary art feedback")
     native.require(art_contract is None or getattr(args, "art_contract_sha256", None),
                    "ordinary art run requires the frozen plan digest")
-    native.require(not args.portal_consent_file or args.input_backend == "portal",
+    native.require(not args.portal_consent_file or args.input_backend in ("portal", "portal-eis"),
                    "consent file requires portal input backend")
     native.require(os.environ.get("HW_NATIVE_ACCEPTANCE_LAUNCHED") == "1", "use planned kitty launcher")
     native.require(args.case == "navigation" or args.input_backend != "none", "refactor case requires actual input")
@@ -639,7 +650,7 @@ def run(args):
                            env=native.cargo_environment(repo), log_path=root / "build.log", job_file=job_file,
                            state=state, timeout_seconds=3600)
         sessions = []
-        if args.input_backend == "portal":
+        if args.input_backend in ("portal", "portal-eis"):
             def portal_heartbeat(method):
                 state.update(current_stage=f"portal-{method}", heartbeat_at=native.utc_now())
                 native.atomic_write_json(job_file, state)
@@ -686,7 +697,7 @@ def run(args):
                 driver = None
                 try:
                     driver = Driver(process, directory, nonce, state, job_file, portal,
-                                    layout_only=args.input_backend == "none")
+                                    layout_only=args.input_backend == "none", eis=args.input_backend == "portal-eis")
                     if art_contract is not None:
                         rest_area_art.wait_ready(driver, art_contract)
                     state["current_stage"] = "ui-input"
@@ -769,7 +780,7 @@ def main():
             child.add_argument("--case", choices=CASES, default="navigation")
             child.add_argument("--layout-menu", action="store_true")
             child.add_argument("--layout-scene", choices=("management", "normal", "selection", "pinned", "build", "display", "area", "area-details"), default="management")
-            child.add_argument("--input-backend", choices=("xtest", "portal", "none"), default="xtest")
+            child.add_argument("--input-backend", choices=("xtest", "portal", "portal-eis", "none"), default="xtest")
             child.add_argument("--portal-consent-file", help="explicit owner-only restore-token journal; never a consent bypass")
             child.add_argument("--rest-area-art-source", help="explicit isolated RestArea ArtPreview bytes; no approval")
             child.add_argument("--art-codec", help="frozen already-built codec for the ArtPreview input")

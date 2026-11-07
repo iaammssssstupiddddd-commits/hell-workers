@@ -167,6 +167,7 @@ class EisSender:
             raise InputRejected(f"EIS region does not match inspected physical monitor: "
                                 f"observed rect={rect}, scale={scale}; "
                                 f"expected logical rect={expected}, scale={monitor_scale}")
+        self.region_contract = {"rect": list(rect), "scale": scale, "root_size": list(self.root_size)}
         return device
 
     def send(self, operation, *values):

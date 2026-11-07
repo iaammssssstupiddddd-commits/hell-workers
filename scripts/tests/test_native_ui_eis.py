@@ -38,6 +38,7 @@ class EisTests(unittest.TestCase):
         value.lib.ei_device_pointer_motion_absolute.assert_called_once_with(10, 600., 450.)
         value.lib.ei_device_frame.assert_called_once_with(10, 1000)
         value.lib.ei_device_keyboard_key.assert_not_called()
+        self.assertEqual(value.region_contract, {"rect": [0, 0, 1440, 900], "scale": 2.0, "root_size": [2880, 1800]})
 
     def test_keyboard_is_not_sent_on_pointer_device(self):
         value = sender()

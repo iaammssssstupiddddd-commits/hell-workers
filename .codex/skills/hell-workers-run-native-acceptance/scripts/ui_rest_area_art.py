@@ -88,12 +88,29 @@ def planned_contract(args, repo):
     if not source:
         native.require(not getattr(args, "art_contract_sha256", None), "unexpected art contract digest")
         return None
-    native.require(args.case == "rest-area-lifecycle" and args.smoke and args.input_backend == "portal"
+    native.require(args.case == "rest-area-lifecycle" and args.smoke and args.input_backend in ("portal", "portal-eis")
                    and not args.layout_menu, "ordinary art requires the bounded portal lifecycle recipe")
     contract = source_contract(repo, Path(source), Path(codec))
     if getattr(args, "art_contract_sha256", None):
         native.require(contract_digest(contract) == args.art_contract_sha256, "ordinary art plan changed")
     return contract
+
+
+def check_eis_client(client):
+    native.require(client.get("input_transport") == "portal-eis-absolute-v1", "EIS transport differs")
+    region, mapping = client.get("eis_region"), client.get("monitor_mapping")
+    native.require(isinstance(region, dict) and isinstance(mapping, (tuple, list)) and len(mapping) == 2,
+                   "EIS region/mapping missing")
+    scale, size, rect = region.get("scale"), region.get("root_size"), region.get("rect")
+    native.require(type(scale) in (int, float) and math.isfinite(scale) and scale > 0
+                   and type(mapping[0]) is int and mapping[0] > 0
+                   and type(mapping[1]) in (int, float) and mapping[1] == scale
+                   and isinstance(size, (tuple, list)) and len(size) == 2
+                   and all(type(axis) is int and axis > 0 for axis in size)
+                   and isinstance(rect, (tuple, list)) and len(rect) == 4
+                   and all(type(axis) in (int, float) and math.isfinite(axis) for axis in rect)
+                   and list(rect) == [0, 0, size[0] / scale, size[1] / scale],
+                   "EIS declared absolute region differs")
 
 
 def wait_ready(driver, contract):

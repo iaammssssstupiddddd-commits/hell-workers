@@ -13,6 +13,18 @@
 
 ## 1. 目的
 
+新入口のfresh `tak14-restarea-ordinary-art-feedback-20261107-v1`は、exact db0f ArtPreviewを
+active descriptorへ読み込んだが、最初の速度ボタンへのpointer motion1件がgame cursorのACKを
+得られず15秒でinvalid。クリック/キー/建物配置は未送信。子とportal終了後、診断用途で保持・seal/finalizeした。
+全39raw sampleでcursor=null、送信時X11 root=(2878,67)/client=(2398,-363)はgame窓外。
+同mapping=(1,2.0)の前成功は初期client=(1102,720)から目標へACKした。scaleを変える根拠はない。
+Xwayland座標とcompositorの現在座標の食違いは仮説であり、原因確定や失敗のpass化はしない。
+次は開始座標依存を切り離すため、既存のconsented EIS absolute経路を当該ArtPreview lifecycleだけで
+明示選択する。既存Notify経路を変更/自動fallbackせず、同じportal permission、declared region/scale、
+exact owner/focus/nonce/単発step/game ACKを維持する。transport/hashと実regionを結果へ拘束し、
+未知region/混用/他case/false authorityは起動前に拒否する。関連拒否試験・Help・storage・独立review後に
+fresh batchで一度比較し、変化がなければこの仮説は打ち切る。
+
 2026-11-07、HEAD `254fba4e` / source `2faf959677b5f9a78e5c25f34e0f68f523d6d4d10f5fd951206754562e068762`
 のexact RestArea ArtPreview `db0f5356…2522`をnormal/far/near/overview highとnormal lowの
 fresh 5試行で確認した。全て登録・別実行verifierをpassし、owned画像をmainが確認、保持・seal/finalize済み。

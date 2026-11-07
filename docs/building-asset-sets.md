@@ -231,6 +231,15 @@ feedbackだけで要求identity、実active/pending/descriptor、実owner-linked
 independent art/numeric採否、Capture/Memory性能、promotion/install/release/rollbackは別途必要である。
 新入口は実装・回帰検証中で、fresh実機成功はまだ記録していない。
 
+同UI recipeの明示`--input-backend portal-eis`は当該ArtPreview lifecycleだけで既存EIS absolute
+経路を選ぶ。通常portal Notify経路からの自動fallbackではなく、混用・他caseへの拡張は拒否する。
+既存のpointer/keyboard同意を使い、ConnectToEISは一度だけ。宣言logical region×scaleと
+physical root寸法、実owner/focus/nonce、単発stepとgame cursor ACKを維持する。
+結果へabsolute transport種別と実region/scale/root寸法を記録し、独立verifyで照合する。
+EIS helperも三つのharness inventoryでhash固定する。未知regionや座標不一致で入力を再送しない。
+最初のNotify試行は候補load後、初回motionのACKなしでinvalid精算。配置は未送信であり、
+Xwayland/compositorの原点不一致は未確定仮説。開始座標依存を除く比較であり、承認の代用ではない。
+
 `python3 scripts/building_production_native_acceptance.py capabilities` はlocal supportを読むだけで、
 旧request/Run/hostへの照会、台帳更新、plan生成、build、launchを行わない。現在は `available=false`。
 ordinary-world process/window・capture/ACK producer、GPU/native/RSS/application-handle instrument producer、

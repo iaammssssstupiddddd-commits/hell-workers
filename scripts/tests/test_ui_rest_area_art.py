@@ -179,6 +179,29 @@ class OrdinaryArtTests(unittest.TestCase):
                           renderdoc_capture.MEASUREMENT_HARNESS_FILES):
             self.assertEqual(inventory.count(relative), 1)
 
+    def test_explicit_eis_region_is_validated_without_relative_fallback(self):
+        client = {"input_backend": "portal-eis", "nonce": "owned", "portal_devices": 3,
+                  "monitor_mapping": [1, 2.0], "input_transport": "portal-eis-absolute-v1",
+                  "eis_region": {"rect": [0, 0, 1440, 900], "scale": 2.0, "root_size": [2880, 1800]}}
+        manifest = {"input_backend": "portal-eis", "case": "rest-area-lifecycle"}
+        completed.acceptance.check_input_client(manifest, {"nonce": "owned"}, client)
+        for field, value in (("eis_region", None), ("input_transport", "portal-notify-relative-v1"),
+                             ("monitor_mapping", [1, 1.0]), ("input_backend", "portal"), ("portal_devices", 1)):
+            invalid = copy.deepcopy(client)
+            invalid[field] = value
+            with self.subTest(field=field), self.assertRaises(RuntimeError):
+                completed.acceptance.check_input_client(manifest, {"nonce": "owned"}, invalid)
+        for field, value in (("rect", [0, 0, 2880, 1800]), ("rect", [True, 0, 1440, 900]),
+                             ("scale", float("nan")), ("root_size", [True, 1800])):
+            invalid = copy.deepcopy(client)
+            invalid["eis_region"][field] = value
+            with self.subTest(field=field, value=value), self.assertRaises(RuntimeError):
+                art.check_eis_client(invalid)
+        from scripts.perf_tool import execution, renderdoc_capture
+        for inventory in (art.native.NATIVE_HARNESS_FILES, execution.MEASUREMENT_HARNESS_FILES,
+                          renderdoc_capture.MEASUREMENT_HARNESS_FILES):
+            self.assertEqual(inventory.count("scripts/native_ui_eis.py"), 1)
+
 
 if __name__ == "__main__":
     unittest.main()
