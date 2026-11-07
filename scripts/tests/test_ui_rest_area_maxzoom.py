@@ -235,6 +235,22 @@ class MaxzoomTests(unittest.TestCase):
         with self.assertRaises(zoom.usage.RawCheckpointPending):
             zoom.checkpoint_sample([future], value)
 
+    def test_existing_construction_key_tap_joint_ack_is_outside_maxzoom_interval_rule(self):
+        raw, entries, client, contract, events = self.verification_fixture()
+        prior = [{"step": str(index + 1), "nonce": client["nonce"], "pid": client["pid"], "window": client["window"],
+                  "world_epoch": entries[2]["value"]["world_epoch"], "key": "Escape", "pressed": pressed,
+                  "pre_frame": 190, "post_frame": 195} for index, pressed in enumerate((True, False))]
+        for event in events:
+            event["step"] = str(int(event["step"]) + 2)
+        for entry in entries:
+            entry["last_step"] += 2
+        events = prior + events
+        self.verify_wheel_fixture((raw, entries, client, contract, events))
+        # The same overlap remains forbidden in the new post-completion leg.
+        events[3]["pre_frame"] = events[2]["post_frame"] - 1
+        with self.assertRaises(RuntimeError):
+            self.verify_wheel_fixture((raw, entries, client, contract, events))
+
     def test_explicit_picker_is_bound_to_exact_owner_revision_input_and_raw_point(self):
         fixture = self.verification_fixture(picker=True)
         self.verify_wheel_fixture(fixture)

@@ -39,6 +39,11 @@ scale=4.999997615814209へ到達し、empty hover/selectedとoccupied hoverの6c
 step18のmotionを(161,32)でACKした直後、次のpress前にX11 pointerが所有client外となり未送信拒否。
 最終observerもcursor=null、focus=true。物理入力、compositor移動、adapter問題のどれかは断定しない。
 invalid封印・診断保持・finalizeし、press拒否へ実X11座標/寸法/ownerを追加する。入力guardやcleanupは不変。
+診断付き`215f2590`のfresh maxzoom v3ではポインタ消失は再発せず、実施工・40wheel・empty/occupied
+hover/selected全7枚と候補一覧からのexact owner選択(step83)を取得した。ただし最終検証の新しいglobal
+interval ruleが前段constructionのEscape steps13/14（共にframe261..267のjoint ACK）を誤拒否しinvalid。
+これが唯一の重複であり、完了step23後のmaxzoom操作には重複なし。旧結果はinvalid封印・診断保持・finalizeし、
+新規interval ruleを完了後の操作だけへ限定する。既存construction検査、全Left/wheel/owner条件は維持する。
 
 最大zoom-out=5でのUI補完を明示legとして実装した。数値camera scale、実wheel、hover/pointer/tooltip
 対象とvisible本文を同一sampleへ受動記録し、既存consentの宣言SCROLL capabilityを持つEISだけを使う。

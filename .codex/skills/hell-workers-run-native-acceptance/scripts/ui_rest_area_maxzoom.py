@@ -360,7 +360,8 @@ def check_sequence(raw, entries, client, events, scrolls):
                        and event["world_epoch"] == first["value"]["world_epoch"]
                        and all(type(event[key]) is int for key in ("pre_frame", "post_frame"))
                        and event["pre_frame"] < event["post_frame"], "maxzoom input identity/ACK differs")
-    native.require(all(a["post_frame"] <= b["pre_frame"] for a, b in zip(events, events[1:])),
+    maxzoom_events = events[previous_step:]
+    native.require(all(a["post_frame"] <= b["pre_frame"] for a, b in zip(maxzoom_events, maxzoom_events[1:])),
                    "maxzoom input intervals overlap or reverse")
     for index, entry in enumerate(entries[3:]):
         value, step = entry["value"], entry["last_step"]

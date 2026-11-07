@@ -255,6 +255,8 @@ libei 1.6の宣言SCROLL(16)とscroll_discreteのint32/120単位だけを使い�
 利用人数と既存Dream rate、選択ownerと可視inspection headerを照合する。倍率やactor状態を直接設定せず、
 このcaseのfresh実機成功、アート・数値・性能・正式releaseは実装/回帰テストだけから主張しない。
 checkpointはframe、入力step、raw sample、実時間の順序とpause中のvirtual時間不変を要求する。
+新しい入力区間の非重複検査は建設完了後のmaxzoom操作だけに適用する。前段の既存construction検査は維持し、
+Driver.keyが意図的に押下/解放をまとめてACKするEscapeを、新規wheel/click区間の規則で誤拒否しない。
 hover→selectedには同区間の実MouseButtonInputのLeft press/release、同window/epoch/ownerと実cursor座標を
 要求し、既存選択の表示だけをクリック成功に読み替えない。empty→occupiedは通常simulationの進行を要求する。
 同地点の再クリックは既存の重なり候補巡回なので、異なる対象が選ばれた場合はworldクリックを再送しない。
