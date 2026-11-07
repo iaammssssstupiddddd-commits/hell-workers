@@ -13,6 +13,35 @@
 
 ## 1. 目的
 
+`77f90d22`のfresh `tak14-restarea-maxzoom-art-eis-feedback-20261108-v5`は7checkpointと登録/別実行verifierが成功。
+source=`dba53819e43c01de77e3afbf632fe930242767ea9d35be23d5cfff778663b840`、
+harness=`e2560847da2f51e10809c29d59ed276bbb4511d6dd4532bb747a5cc30103d94f`、
+manifest=`037365f52dc1902922ee9d401d49cb952d0e10ad7feaa437caf82274ac1a5764`、
+raw=`9367b78abd6ca0894f2b0ccc76a612ce808ed0af80c4544b43e4c1a8793f612b`。
+実施工後40wheelでscale4.999997615814209、同owner133143983773/epoch0のempty/occupiedを撮影。
+既存tooltipのResting 0/5→1/5、Dream 0.00→0.50/sとBuilding: RestAreaの選択headerをmain/独立reviewで実見した。
+再クリックによる別候補選択後、`world-candidate:133143983773:1:0`を一度選んで同ownerへ復帰し、
+全3Left pairのraw座標/時刻/ownerとframe順序を照合した。Intel Arc/Vulkan WARN/ERRORなし、505raw samples。
+利用者が共有入力を使わないと明示した比較条件ではポインタ消失なし。旧2失敗の原因は物理操作と断定しない。
+限定UI補完として用途保持・seal/finalize/storage pass（allocated304263049216B）。正式art/numeric/performance/releaseは未受入。
+用途終了したmaxzoom v1〜v4のdiagnostic consumerを正式releaseし、当該4生成jobだけを撤去した。
+削除前duは173944832/153239552/181583872/165187584B、計673955840B。invalid履歴と原因・補正結果は本書/台帳へ保持。
+最新v5、候補制作原本、不変codec、共有Cargo cacheは維持する。次は同identityで未確認の明暗・壁とのdepth・
+配置previewと完成形の投影/anchor比較を補完し、独立art判断後にM3 numeric決定をexact geometry/art hashへ拘束する。
+
+次の限定比較はRestArea専用の明示static variant `rest-area-art-context` とする。既存galleryの既定36体・
+M6・ordinary sessionへ混在させず、同descriptorの完成形とworld preview、前後の既存壁factoryを一度だけ配置する。
+変更対象は `assets/building_asset_set/acceptance.rs`、`scripts/building_art_acceptance.py` と新profiling fixture module、
+`building_presentation/preview.rs` の共通適用処理、専用observer/verifier・拒否テストに限定する。
+previewは単なるPNG貼付ではなく共通descriptor→handle/canvas/Anchor処理を通し、実owner/root/parts、壁transform/depth、
+preview role/hash/anchor/custom_size、投影、実light entity/値/影/camera/layerと安定後不変inventoryを照合する。
+未知variant・別kind/identity・ordinary/M6混在・fallback・preview role/anchor/size不一致・前後反転・light不一致・
+readiness後の再seed/位置補正/inventory変化は拒否する。primary既存build cacheを維持し、Help実レビュー・
+変更別CI・Clippy・独立read-only review・fresh owned画像・storageを通す。候補assetやgameplayは変更しない。
+重要な境界: 現structural shaderはLightFieldをsampleしていないため、field値だけで室内照明応答を主張しない。
+当fixtureのAmbient/Directional比較は `seeded-paused-art-comparison`、accepted/performance/promotion=falseであり、
+通常入力ghost・通常照明環境全体・lifecycle・正式art/numeric/release採否の完了とはしない。
+
 `c07987e4`のfresh `tak14-restarea-ordinary-art-eis-feedback-20261108-v3`は9checkpoint、
 登録verifierと別実行verifyが成功した。source=`43386c30797aac97f88d338f16c76304cb14ff143d9f9111e4dc0eba01361947`、
 manifest=`ea7a00561cb8da52693a7a5afeec6b8c5723917534f51668d75b6b047a55d9da`、

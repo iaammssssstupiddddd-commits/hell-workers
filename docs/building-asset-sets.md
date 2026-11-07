@@ -266,6 +266,14 @@ hover→selectedには同区間の実MouseButtonInputのLeft press/release、同
 press前の所有client外ポインタ拒否には実window/PID、client寸法、X11 client/root座標とmaskを記録する。
 拒否時は入力を送信・成功記録せず、cleanup releaseは維持する。これは原因観測の補強であり、guardの緩和ではない。
 
+2026-11-08のfresh `tak14-restarea-maxzoom-art-eis-feedback-20261108-v5`では、通常施工と40wheel、
+最大scale4.999997615814209で同owner133143983773のempty/occupied hover/selected全7checkpointが
+登録/別実行verifier pass。既存tooltipのResting 0/5→1/5・Dream 0.00→0.50/s、可視header、
+候補一覧のexact owner/revision/epoch行からの明示選択をmain/独立read-onlyが実画像とrawで照合した。
+Intel Arc/Vulkan WARN/ERRORなし。quiet shared-input条件で旧ポインタ消失は再発しなかったが原因は断定しない。
+結果は用途保持・seal/finalize済み。建物形状だけの最遠識別、明暗・壁depth・配置previewの比較、
+独立art/numeric採否、性能、正式releaseと通常起動への採用を証明するものではない。
+
 同UI recipeの明示`--input-backend portal-eis`は当該ArtPreview lifecycle/maxzoomだけで既存EIS absolute
 経路を選ぶ。通常portal Notify経路からの自動fallbackではなく、混用・他caseへの拡張は拒否する。
 既存のpointer/keyboard同意を使い、ConnectToEISは一度だけ。宣言logical region×scaleと
