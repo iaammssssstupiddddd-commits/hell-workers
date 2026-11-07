@@ -2,6 +2,20 @@ use super::*;
 use hw_energy::{SoulSpaConstructionCancelResult, SoulSpaPhase, SoulSpaSlotsChangeStatus};
 use hw_jobs::{BuildingType, GeneratePowerData, GeneratePowerPhase, WorkType};
 
+#[test]
+fn spa_clock_speed_is_passive_and_missing_time_is_not_inferred() {
+    let mut world = World::new();
+    assert!(snapshot(&mut world).unwrap()["relative_speed"].is_null());
+    let mut time = Time::<Virtual>::default();
+    time.set_relative_speed(2.0);
+    time.pause();
+    world.insert_resource(time);
+    assert_eq!(snapshot(&mut world).unwrap()["relative_speed"], 2.0);
+    assert!(world.resource::<Time<Virtual>>().is_paused());
+    assert_eq!(world.resource::<Time<Virtual>>().relative_speed(), 2.0);
+    assert_eq!(world.resource::<Time<Virtual>>().elapsed_secs_f64(), 0.0);
+}
+
 fn spa(world: &mut World) -> (Entity, Vec<Entity>) {
     let owner = world
         .spawn((

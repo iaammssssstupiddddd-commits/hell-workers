@@ -162,6 +162,7 @@ pub(crate) fn snapshot(world: &mut World) -> Result<Value, String> {
     }
     Ok(
         json!({"sites": sites, "tiles": tiles, "souls": souls, "working_relations": working, "grids": grids,
+        "relative_speed": world.get_resource::<Time<Virtual>>().map(Time::relative_speed),
         "outcome_channels": {
             "construction_cancel": world.contains_resource::<Messages<SoulSpaConstructionCancelOutcome>>(),
             "slots_change": world.contains_resource::<Messages<SoulSpaSlotsChangeOutcome>>()}}),

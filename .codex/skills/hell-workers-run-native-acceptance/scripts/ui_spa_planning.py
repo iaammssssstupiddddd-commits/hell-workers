@@ -353,7 +353,7 @@ def world_click(driver, name, projection):
     record_action(driver, name, first, before)
 
 
-def check_inputs(raw, entries, client, inputs, *, completion=False):
+def check_inputs(raw, entries, client, inputs, *, completion=False, usage=False):
     native.require(isinstance(inputs, list) and 0 < len(inputs) <= 256
                    and [row.get("step") for row in inputs] == [str(i + 1) for i in range(len(inputs))], "Spa input inventory differs")
     actions = [row["spa_action"] for row in inputs if "spa_action" in row]
@@ -447,7 +447,10 @@ def check_inputs(raw, entries, client, inputs, *, completion=False):
     native.require(all(i + 1 in claimed for i, row in enumerate(inputs) if row.get("button") is not None or row.get("key") is not None)
                    and raw_claimed == {r["event_index"] for r in raw["events"] if r.get("producer") in ("KeyboardInput", "MouseButtonInput")},
                    "Spa unclaimed or extraneous input")
-    required = [a for a in actions if a["key"] not in {"Escape", "dev-minimize", "menu:SetTimeSpeed(Paused)", "menu:SetTimeSpeed(Normal)"}]
+    ignored = {"Escape", "dev-minimize", "menu:SetTimeSpeed(Paused)", "menu:SetTimeSpeed(Normal)"}
+    if usage:
+        ignored.add("menu:SetTimeSpeed(Fast)")
+    required = [a for a in actions if a["key"] not in ignored]
     filtered = [a["key"] for a in required]
     if completion:
         patterns = [r"menu:ToggleArchitect", r"menu:SelectArchitectCategory\(Some\(Plant\)\)",
@@ -721,7 +724,7 @@ def verify_usage(raw, entries, client, inputs):
     prefix = dict(raw, samples=raw["samples"][:prefix_end + 1],
                   events=[e for e in raw["events"] if e["sample_index"] <= prefix_end])
     verify_completion(prefix, entries[:3], client, inputs[:entries[2]["last_step"]])
-    check_inputs(raw, entries, client, inputs, completion=True)
+    check_inputs(raw, entries, client, inputs, completion=True, usage=True)
     values = [e["value"] for e in entries]
     snapshots = [raw_checkpoint(raw, v) for v in values]
     for entry, snap in zip(entries, snapshots, strict=True):
@@ -736,8 +739,13 @@ def verify_usage(raw, entries, client, inputs):
                    and all(a["last_step"] < b["last_step"] and a["value"]["frame"] < b["value"]["frame"]
                            for a, b in zip(entries, entries[1:])), "Spa usage order differs")
     actions = [r["spa_action"] for r in inputs if "spa_action" in r and int(r["step"]) > entries[2]["last_step"]]
-    native.require([a["key"] for a in actions] == ["menu:SetTimeSpeed(Normal)", "menu:SetTimeSpeed(Paused)"] * 2,
+    native.require([a["key"] for a in actions] == ["menu:SetTimeSpeed(Fast)", "menu:SetTimeSpeed(Paused)",
+                                                     "menu:SetTimeSpeed(Normal)", "menu:SetTimeSpeed(Paused)"],
                    "Spa usage normal/pause sequence differs")
+    for action, speeds in zip(actions, ((1, 2), (2, 2), (2, 1), (1, 1)), strict=True):
+        actual = tuple(context(action[side]).get("relative_speed") for side in ("before", "after"))
+        native.require(all(finite(speed) for speed in actual) and actual == speeds,
+                       "Spa actual HUD speed transition differs")
     windows = []
     for pair, lower, upper in ((actions[:2], entries[2], entries[3]), (actions[2:], entries[3], entries[4])):
         for action in pair:
@@ -758,6 +766,15 @@ def verify_usage(raw, entries, client, inputs):
     for sample in interval:
         state = context({"spa_planning": {"context": sample["spa_context"]}})
         check_operational(state, values[2]["spa_planning"])
+        now = sample["real_seconds"]
+        native.require(finite(now), "Spa raw speed time is missing/nonfinite")
+        fast, normal = actions[0], actions[2]
+        fast_start, fast_end = (fast[s]["spa_planning"]["real_seconds"] for s in ("before", "after"))
+        normal_start, normal_end = (normal[s]["spa_planning"]["real_seconds"] for s in ("before", "after"))
+        expected_speeds = {1, 2} if fast_start <= now <= fast_end or normal_start <= now <= normal_end else (
+            {2} if fast_end < now < normal_start else {1})
+        native.require(type(state.get("relative_speed")) in (int, float) and state["relative_speed"] in expected_speeds,
+                       "Spa raw HUD speed interval differs")
         native.require(type(sample.get("world_epoch")) is int and sample["world_epoch"] == values[0]["world_epoch"]
                        and sample.get("primary_window") == snapshots[0]["primary_window"]
                        and type(sample.get("primary_window_bits")) is int and sample["primary_window_bits"] == snapshots[0]["primary_window_bits"]
@@ -783,6 +800,7 @@ def verify_usage(raw, entries, client, inputs):
             continue
         dream = [s["dream"] for s in souls]
         passed |= (all(a >= b for a, b in zip(dream, dream[1:]))
+                   and all(s["paused"] or s["spa_context"]["relative_speed"] == 1 for s in measured)
                    and all((a["dream"] == b["dream"] if right["virtual_seconds"] == left["virtual_seconds"]
                             else abs((a["dream"] - b["dream"]) - .5 * (right["virtual_seconds"] - left["virtual_seconds"])) <= .15)
                            for a, b, left, right in zip(souls, souls[1:], measured, measured[1:]))
@@ -795,7 +813,9 @@ def verify_usage(raw, entries, client, inputs):
 
 def exercise_usage(driver):
     exercise_completion(driver)
-    pause(driver, False)
+    click(driver, "menu:SetTimeSpeed(Fast)")
+    driver.last = driver.wait(lambda v: not v["paused"] and context(v).get("relative_speed") == 2,
+                              after=driver.last["frame"])
     driver.last = driver.wait(lambda v: any(s["dream"] > 12 for s in generating(context(v)).values()),
                               after=driver.last["frame"], timeout=300)
     pause(driver, True)

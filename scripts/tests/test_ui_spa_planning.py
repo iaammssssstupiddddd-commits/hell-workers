@@ -105,7 +105,7 @@ class SpaPlanningTests(unittest.TestCase):
 
     def state(self, owner=None):
         footprint = [[10, 10], [11, 10], [10, 9], [11, 9]]
-        state = {"sites": [], "tiles": [], "souls": [], "working_relations": [], "grids": [],
+        state = {"sites": [], "tiles": [], "souls": [], "working_relations": [], "grids": [], "relative_speed": 1.,
                  "outcome_channels": {"construction_cancel": True, "slots_change": True}}
         if owner is None:
             return state
@@ -431,13 +431,15 @@ class SpaPlanningTests(unittest.TestCase):
             state["grids"][0]["generation"] = 1.
             return state
         for now, paused in ((31, False), (49, True), (51, False), (54, True)):
-            key = "menu:SetTimeSpeed(Paused)" if paused else "menu:SetTimeSpeed(Normal)"
+            key = "menu:SetTimeSpeed(Fast)" if now == 31 else "menu:SetTimeSpeed(Paused)" if paused else "menu:SetTimeSpeed(Normal)"
             before = copy.deepcopy(inputs[8]["spa_action"]["before"])
             before.update(frame=now * 100, paused=not paused)
             before["spa_planning"]["real_seconds"] = float(now)
+            before["spa_planning"]["context"]["relative_speed"] = 1. if now in (31, 54) else 2.
             after = copy.deepcopy(before)
             after.update(frame=now * 100 + 30, paused=paused)
             after["spa_planning"]["real_seconds"] = now + .3
+            after["spa_planning"]["context"]["relative_speed"] = 2. if now in (31, 49) else 1.
             first = len(inputs)
             for i, pressed in enumerate((True, False)):
                 row = copy.deepcopy(inputs[i])
@@ -454,6 +456,8 @@ class SpaPlanningTests(unittest.TestCase):
                     (53., None, 6., False, occupied(39., .11)), (54.1, True, 8., False, occupied(38., .12)),
                     (54.2, False, 8., True, occupied(38., .12)), (55., None, 8., True, occupied(38., .12))]
         for now, pressed, virtual, paused, state in timeline:
+            state = copy.deepcopy(state)
+            state["relative_speed"] = 2. if 31.2 <= now < 51.2 else 1.
             sample = copy.deepcopy(raw["samples"][-1])
             sample.update(real_seconds=now, virtual_seconds=virtual, paused=paused, spa_context=state)
             raw["samples"].append(sample)
@@ -479,7 +483,7 @@ class SpaPlanningTests(unittest.TestCase):
             save.parent.mkdir()
             raw, entries, client, inputs = self.usage_fixture(save)
             spa.verify_usage(raw, entries, client, inputs)
-            for case in ("window", "epoch", "tile", "clock", "worker", "dream", "paused_consumption",
+            for case in ("window", "epoch", "tile", "clock", "worker", "dream", "speed", "speed_action", "speed_bool", "paused_consumption",
                          "shifted_consumption", "output", "input", "authority"):
                 raw, entries, client, inputs = self.usage_fixture(save)
                 middle = next(s for s in raw["samples"] if s["real_seconds"] == 53.)
@@ -495,6 +499,10 @@ class SpaPlanningTests(unittest.TestCase):
                     middle["spa_context"]["souls"][0]["generate_power"]["phase"] = "GoingToTile"
                 elif case == "dream":
                     middle["spa_context"]["souls"][0]["dream"] = 45.
+                elif case == "speed":
+                    middle["spa_context"]["relative_speed"] = 2.
+                elif case in ("speed_action", "speed_bool"):
+                    inputs[12]["spa_action"]["after"]["spa_planning"]["context"]["relative_speed"] = True if case == "speed_bool" else 1.
                 elif case in ("paused_consumption", "shifted_consumption"):
                     # Preserve both checkpoint endpoints and the total .5/s decrease,
                     # but move consumption into a paused or a wrong running interval.
@@ -518,13 +526,15 @@ class SpaPlanningTests(unittest.TestCase):
             _, entries, _, _ = self.usage_fixture(save)
             driver = Mock()
             driver.last = entries[2]["value"]
-            driver.wait.side_effect = [entries[3]["value"], entries[4]["value"]]
+            driver.wait.side_effect = [entries[3]["value"], entries[3]["value"], entries[4]["value"]]
             with patch.object(spa, "exercise_completion") as completion, patch.object(spa, "pause") as pause, \
+                    patch.object(spa, "click") as click, \
                     patch.object(spa, "wait_final_raw") as finish:
                 spa.exercise_usage(driver)
             completion.assert_called_once_with(driver)
-            self.assertEqual([c.kwargs["timeout"] for c in driver.wait.call_args_list], [300, 15])
-            self.assertEqual([c.args[1] for c in pause.call_args_list], [False, True, False, True])
+            self.assertEqual([c.kwargs.get("timeout") for c in driver.wait.call_args_list], [None, 300, 15])
+            click.assert_called_once_with(driver, "menu:SetTimeSpeed(Fast)")
+            self.assertEqual([c.args[1] for c in pause.call_args_list], [True, False, True])
             self.assertEqual([c.args[0] for c in driver.capture.call_args_list], list(spa.USAGE_CHECKPOINTS[3:]))
             finish.assert_called_once_with(driver)
             driver.send.assert_not_called()

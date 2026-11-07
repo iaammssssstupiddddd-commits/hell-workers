@@ -690,7 +690,7 @@ raw SHA256 `9fd7a6161e4e6452c95a02dedfa1e0b9e7004be6281c471d10e356da3495af3a`。
 最新完成jobを通常利用/Operational保存復元との比較に保持し、比較を終えた未搬入planning v5のjobは撤去する。
 planning v5の生成物25,108,480 bytesを保持解除後に撤去し、primary storage checkを通過した。
 
-次の限定工程`soul-spa-usage`は自然施工の3checkpointを継承し、通常速度で最大300秒待って実Generating
+次の限定工程`soul-spa-usage`は自然施工の3checkpointを継承し、HUD Fastで最大300秒待って実Generating
 workerを観測する。using/usedを追加し、同じSoul/tileで3秒以上の実仮想時間、正出力とgrid、
 Dream消費0.5/秒を照合する。全中間rawの同epoch/window/site/4tile、時計、実HUD通常/停止入力を拘束し、
 Dream/workerの注入や割当強制をしない。収集上限1200sample、全session480秒を維持し、上限到達はinvalidとする。
@@ -701,6 +701,14 @@ Dream/workerの注入や割当強制をしない。収集上限1200sample、全s
 既存割当条件30未達のままtimeoutした。invalid seal/finalizeし36,749,312Bを待機比較に保持した。
 旧結果を成功へ変えず、通常速度・判定・数値を維持して待機だけ300秒へ有界化する。
 全session480秒・1200sample上限は不変であり、この変更自体を自然利用の成功とは扱わない。
+
+usage v3（`28b64854`）も警告/エラーなしだが、300秒の待機末尾で仮想129.775353527、
+最大Dream30.01014518737793に達した直後にtimeoutし、Generatingは未成立だった。invalid精算し
+44,642,304Bを経路比較に保持した。待機延長の反復はここで打ち切り、既存HUDのFast=2倍速を
+条件待ちだけに使い、Dream消費は通常速度へ戻して測る別の明示経路にする。
+受動Time.relative_speedをraw/UI共通contextへ記録し、実Fast/Paused/Normal/Paused入力と
+raw速度1→2→1、Normal限定の消費区間を結ぶ。未観測速度や未知入力で成功を作らない。
+ゲームの時間ルール・Dream値・割当条件・速度の直接設定は変更せず、全480秒上限を維持する。
 
 ## 5. マイルストーン
 

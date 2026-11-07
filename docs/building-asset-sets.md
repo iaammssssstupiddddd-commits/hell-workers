@@ -593,14 +593,17 @@ Operational、各tileのGeneratePower/slot1・占有/歩行、workerと実task/�
 資材・worker・完了をseedせず、不成立時にtimeout後の入力再送をしない。これは通常施工の限定feedbackで、
 継続利用・Dream消費・枠変更・Operational保存復元・deconstruct・候補アート・性能・releaseは別の受入とする。
 
-`soul-spa-usage`は施工3checkpointを再検証し、通常速度で最大300秒待って実際のGeneratingを確認する。
+`soul-spa-usage`は通常速度の施工3checkpointを再検証し、既存HUDのFast（2倍速）入力で
+最大300秒待って実際のGeneratingを確認する。using撮影後は通常速度へ戻して消費を測る。
 同じSoul/稼働tileを維持するusing/usedの2画像と全中間rawを追加し、正の出力・grid接続・逆参照、
 3〜15仮想秒のDream消費0.5/秒を照合する。隣接rawの減少率と総量を検査し、同仮想時刻での
 Dream変化、停止中の消費への付替え、途中のworker/親/map/window/epoch置換を拒否する。
 再開/停止は既存HUDの単発入力だけで行い、Dream・worker・発電状態を注入しない。
 通常AIの割当条件Dream30以上と自然な移動を待つため、timeoutは成功や再送許可にならない。
-通常速度で120実秒を待っても約40仮想秒・Dream最大27.02に留まった実測に基づく有界待機であり、
-全session480秒とraw1200 sampleの上限、未成立時のinvalidは維持する。
+通常速度の120秒/300秒比較が既存Dream条件・移動の完了前にtimeoutしたため、延長反復はしない。
+受動`relative_speed`を実Timeから記録し、欠損時はnullのまま。rawとUI/actionで実1→2→1と
+単発HUD入力区間を照合し、測定区間のunpaused rawが1倍速でない場合やbool代用/不明速度を拒否する。
+全session480秒とraw1200 sampleの上限、未成立時のinvalidは維持する。速度を準備コードから設定しない。
 これは通常利用の限定feedbackであり、枠変更、Operational保存復元、撤去、候補画像の採用、
 Capture/Memory性能、正式releaseの証明ではない。実機成功はfresh jobの独立検証後にのみ記録する。
 
