@@ -9,6 +9,7 @@ from ui_progress_bars import catalog_control
 
 CHECKPOINTS = tuple("soul-spa-" + phase for phase in ("empty", "placed", "saved", "loaded", "cancelled"))
 COMPLETION_CHECKPOINTS = tuple("soul-spa-completion-" + phase for phase in ("empty", "placed", "completed"))
+USAGE_CHECKPOINTS = COMPLETION_CHECKPOINTS + ("soul-spa-using", "soul-spa-used")
 
 
 def cancel_key(owner):
@@ -558,8 +559,12 @@ def check_completion_observation(case, value):
     if case != COMPLETION_CHECKPOINTS[-1]:
         check_observation("soul-spa-" + case.rsplit("-", 1)[-1], value)
         return
-    state, plan = context(value), value["spa_planning"]
-    native.require(value.get("paused") is True and plan.get("legal") is False
+    native.require(value.get("paused") is True, "Spa completion capture is not paused")
+    check_operational(context(value), value["spa_planning"])
+
+
+def check_operational(state, plan):
+    native.require(plan.get("legal") is False
                    and len(state["sites"]) == 1 and len(state["tiles"]) == 4, "Spa completion site inventory differs")
     site = state["sites"][0]
     x, y = plan["anchor"]
@@ -687,4 +692,122 @@ def exercise_completion(driver):
                               and context(v)["sites"][0].get("phase") == "Operational", after=driver.last["frame"], timeout=180)
     pause(driver, True)
     driver.capture(COMPLETION_CHECKPOINTS[2])
+    wait_final_raw(driver)
+
+
+def generating(state):
+    tiles = {t["entity"]: t for t in state["tiles"]}
+    return {s["entity"]: s for s in state["souls"] if isinstance(s.get("generate_power"), dict)
+            and s["generate_power"].get("phase") == "Generating"
+            and s["generate_power"].get("tile") in tiles
+            and s["entity"] in (tiles[s["generate_power"]["tile"]].get("workers") or [])}
+
+
+def check_usage_observation(case, value):
+    if case in COMPLETION_CHECKPOINTS:
+        check_completion_observation(case, value)
+        return
+    native.require(case in USAGE_CHECKPOINTS and value.get("paused") is True, "Spa usage checkpoint differs")
+    state = context(value)
+    check_operational(state, value["spa_planning"])
+    native.require(generating(state) and state["sites"][0]["generator"]["current_output"] > 0,
+                   "Spa has no actual generating worker/positive output")
+
+
+def verify_usage(raw, entries, client, inputs):
+    native.require([e["case"] for e in entries] == list(USAGE_CHECKPOINTS), "Spa usage inventory differs")
+    check_raw_session(raw, client)
+    prefix_end = raw_checkpoint(raw, entries[2]["value"])["sample_index"]
+    prefix = dict(raw, samples=raw["samples"][:prefix_end + 1],
+                  events=[e for e in raw["events"] if e["sample_index"] <= prefix_end])
+    verify_completion(prefix, entries[:3], client, inputs[:entries[2]["last_step"]])
+    check_inputs(raw, entries, client, inputs, completion=True)
+    values = [e["value"] for e in entries]
+    snapshots = [raw_checkpoint(raw, v) for v in values]
+    for entry, snap in zip(entries, snapshots, strict=True):
+        value = entry["value"]
+        check_usage_observation(entry["case"], value)
+        native.require(value.get("nonce") == client["nonce"] and value.get("pid") == client["pid"]
+                       and type(value.get("world_epoch")) is int and value["world_epoch"] == values[0]["world_epoch"]
+                       and type(entry.get("last_step")) is int
+                       and all(value["spa_planning"][k] == values[0]["spa_planning"][k]
+                               for k in ("anchor", "footprint", "draw_pos")), "Spa usage subject/geometry differs")
+    native.require(all(a["sample_index"] < b["sample_index"] for a, b in zip(snapshots, snapshots[1:]))
+                   and all(a["last_step"] < b["last_step"] and a["value"]["frame"] < b["value"]["frame"]
+                           for a, b in zip(entries, entries[1:])), "Spa usage order differs")
+    actions = [r["spa_action"] for r in inputs if "spa_action" in r and int(r["step"]) > entries[2]["last_step"]]
+    native.require([a["key"] for a in actions] == ["menu:SetTimeSpeed(Normal)", "menu:SetTimeSpeed(Paused)"] * 2,
+                   "Spa usage normal/pause sequence differs")
+    windows = []
+    for pair, lower, upper in ((actions[:2], entries[2], entries[3]), (actions[2:], entries[3], entries[4])):
+        for action in pair:
+            a, b = action["before"], action["after"]
+            native.require(lower["last_step"] < action["first_step"] <= action["last_step"] <= upper["last_step"]
+                           and lower["value"]["frame"] <= a["frame"] < b["frame"] < upper["value"]["frame"]
+                           and a["world_epoch"] == b["world_epoch"] == values[0]["world_epoch"], "Spa usage input phase differs")
+        native.require(pair[0]["before"]["paused"] is True and pair[0]["after"]["paused"] is False
+                       and pair[1]["before"]["paused"] is False and pair[1]["after"]["paused"] is True,
+                       "Spa usage actual pause transition missing")
+        windows.append((pressed_for(raw, pair[0])["real_seconds"], pair[1]["after"]["spa_planning"]["real_seconds"]))
+    owner = context(values[2])["sites"][0]
+    tile_keys = ("entity", "entity_bits", "parent_site", "parent_exists", "grid", "pose", "map")
+    def shape(state):
+        return sorted([{k: t.get(k) for k in tile_keys} for t in state["tiles"]], key=lambda t: t["entity"])
+    expected_tiles = shape(context(values[2]))
+    interval = raw["samples"][snapshots[2]["sample_index"]:snapshots[4]["sample_index"] + 1]
+    for sample in interval:
+        state = context({"spa_planning": {"context": sample["spa_context"]}})
+        check_operational(state, values[2]["spa_planning"])
+        native.require(type(sample.get("world_epoch")) is int and sample["world_epoch"] == values[0]["world_epoch"]
+                       and sample.get("primary_window") == snapshots[0]["primary_window"]
+                       and type(sample.get("primary_window_bits")) is int and sample["primary_window_bits"] == snapshots[0]["primary_window_bits"]
+                       and finite(sample.get("real_seconds")) and finite(sample.get("virtual_seconds"))
+                       and sample["real_seconds"] >= 0 and sample["virtual_seconds"] >= 0 and type(sample.get("paused")) is bool
+                       and (sample["paused"] or any(a <= sample["real_seconds"] <= b for a, b in windows))
+                       and all(state["sites"][0][k] == owner[k] for k in ("entity", "entity_bits", "pose", "grid"))
+                       and shape(state) == expected_tiles, "Spa usage continuity differs")
+    native.require(all(a["real_seconds"] < b["real_seconds"] and a["virtual_seconds"] <= b["virtual_seconds"]
+                       and (not (a["paused"] and b["paused"]) or a["virtual_seconds"] == b["virtual_seconds"])
+                       for a, b in zip(interval, interval[1:])), "Spa usage clocks differ")
+    first, last = [generating(context(v)) for v in values[3:]]
+    shared = sorted(set(first) & set(last))
+    native.require(shared, "Spa usage has no stable generating Soul")
+    duration = snapshots[4]["virtual_seconds"] - snapshots[3]["virtual_seconds"]
+    native.require(3 <= duration <= 15, "Spa usage duration differs")
+    # One same Soul must remain Generating throughout the measured interval.
+    measured = raw["samples"][snapshots[3]["sample_index"]:snapshots[4]["sample_index"] + 1]
+    passed = False
+    for worker in shared:
+        souls = [generating(s["spa_context"]).get(worker) for s in measured]
+        if not all(s is not None and s["generate_power"]["tile"] == first[worker]["generate_power"]["tile"] for s in souls):
+            continue
+        dream = [s["dream"] for s in souls]
+        passed |= (all(a >= b for a, b in zip(dream, dream[1:]))
+                   and all((a["dream"] == b["dream"] if right["virtual_seconds"] == left["virtual_seconds"]
+                            else abs((a["dream"] - b["dream"]) - .5 * (right["virtual_seconds"] - left["virtual_seconds"])) <= .15)
+                           for a, b, left, right in zip(souls, souls[1:], measured, measured[1:]))
+                   and abs((dream[0] - dream[-1]) - .5 * duration) <= .15 and dream[0] > dream[-1]
+                   and last[worker]["fatigue"] >= first[worker]["fatigue"]
+                   and any(s["paused"] is False for s in measured))
+    native.require(passed and not any(e.get("operation") in ("DurableSave", "DurableLoad", "SoulSpaConstructionCancel", "SoulSpaSlotsChange")
+                                     for e in raw["events"]), "Spa usage Dream consumption/operation differs")
+
+
+def exercise_usage(driver):
+    exercise_completion(driver)
+    pause(driver, False)
+    driver.last = driver.wait(lambda v: any(s["dream"] > 12 for s in generating(context(v)).values()),
+                              after=driver.last["frame"], timeout=120)
+    pause(driver, True)
+    driver.capture(USAGE_CHECKPOINTS[3])
+    workers = {key: soul for key, soul in generating(context(driver.last)).items() if soul["dream"] > 12}
+    native.require(workers, "Spa generating worker vanished before capture")
+    worker = sorted(workers)[0]
+    start = driver.last["spa_planning"]["virtual_seconds"]
+    pause(driver, False)
+    driver.last = driver.wait(lambda v: worker in generating(context(v))
+                              and v["spa_planning"]["virtual_seconds"] >= start + 3,
+                              after=driver.last["frame"], timeout=15)
+    pause(driver, True)
+    driver.capture(USAGE_CHECKPOINTS[4])
     wait_final_raw(driver)

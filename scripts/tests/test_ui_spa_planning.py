@@ -416,6 +416,101 @@ class SpaPlanningTests(unittest.TestCase):
                 with self.subTest(case=case), self.assertRaises(spa.native.AcceptanceError):
                     spa.check_completion_observation(spa.COMPLETION_CHECKPOINTS[-1], changed)
 
+    def usage_fixture(self, save_path):
+        raw, entries, client, inputs = self.completion_fixture(save_path)
+        empty = copy.deepcopy(entries[-1]["value"]["spa_planning"]["context"])
+        def occupied(dream, fatigue):
+            state = copy.deepcopy(empty)
+            tile = state["tiles"][0]
+            tile["workers"] = ["400v0"]
+            state["souls"] = [{"entity": "400v0", "entity_bits": 400, "working_on": tile["entity"],
+                               "dream": dream, "fatigue": fatigue, "stress": .1,
+                               "generate_power": {"tile": tile["entity"], "phase": "Generating"}}]
+            state["working_relations"] = [{"entity": "400v0", "target": tile["entity"], "is_soul": True}]
+            state["sites"][0]["generator"]["current_output"] = 1.
+            state["grids"][0]["generation"] = 1.
+            return state
+        for now, paused in ((31, False), (49, True), (51, False), (54, True)):
+            key = "menu:SetTimeSpeed(Paused)" if paused else "menu:SetTimeSpeed(Normal)"
+            before = copy.deepcopy(inputs[8]["spa_action"]["before"])
+            before.update(frame=now * 100, paused=not paused)
+            before["spa_planning"]["real_seconds"] = float(now)
+            after = copy.deepcopy(before)
+            after.update(frame=now * 100 + 30, paused=paused)
+            after["spa_planning"]["real_seconds"] = now + .3
+            first = len(inputs)
+            for i, pressed in enumerate((True, False)):
+                row = copy.deepcopy(inputs[i])
+                row.pop("spa_action", None)
+                row.update(step=str(len(inputs) + 1), pre_frame=now * 100 + i * 10, post_frame=now * 100 + i * 10 + 5,
+                           pressed=pressed, observed_hover={key: "Pressed"} if pressed else {})
+                inputs.append(row)
+            inputs[first]["spa_action"] = {"key": key, "first_step": first + 1, "last_step": first + 2,
+                                          "before": before, "after": after}
+        timeline = [(31.1, True, 1., True, empty), (31.2, False, 1.1, False, empty),
+                    (40., None, 2.5, False, empty), (49.1, True, 4., False, occupied(40., .1)),
+                    (49.2, False, 4., True, occupied(40., .1)), (50., None, 4., True, occupied(40., .1)),
+                    (51.1, True, 4., True, occupied(40., .1)), (51.2, False, 4.1, False, occupied(39.95, .1005)),
+                    (53., None, 6., False, occupied(39., .11)), (54.1, True, 8., False, occupied(38., .12)),
+                    (54.2, False, 8., True, occupied(38., .12)), (55., None, 8., True, occupied(38., .12))]
+        for now, pressed, virtual, paused, state in timeline:
+            sample = copy.deepcopy(raw["samples"][-1])
+            sample.update(real_seconds=now, virtual_seconds=virtual, paused=paused, spa_context=state)
+            raw["samples"].append(sample)
+            if pressed is not None:
+                raw["events"].append({"producer": "MouseButtonInput", "operation": "MouseButtonInput", "window": "3v0",
+                                      "real_seconds": now, "state": "Pressed" if pressed else "Released", "button": "Left"})
+            if now in (50., 55.):
+                entry = copy.deepcopy(entries[2])
+                entry.update(case=spa.USAGE_CHECKPOINTS[len(entries)], last_step=16 if now == 50 else 20)
+                entry["value"].update(frame=int(now * 100))
+                entry["value"]["spa_planning"].update(real_seconds=now, virtual_seconds=virtual, context=copy.deepcopy(state))
+                entries.append(entry)
+        for i, sample in enumerate(raw["samples"]):
+            sample["sample_index"] = i
+        for i, event in enumerate(raw["events"]):
+            event.update(event_index=i, sample_index=next(j for j, s in enumerate(raw["samples"])
+                                                       if s["real_seconds"] >= event["real_seconds"]))
+        return raw, entries, client, inputs
+
+    def test_usage_requires_actual_worker_consumption_and_continuity(self):
+        with tempfile.TemporaryDirectory() as directory:
+            save = Path(directory) / "saves/manual-1.scn.ron"
+            save.parent.mkdir()
+            raw, entries, client, inputs = self.usage_fixture(save)
+            spa.verify_usage(raw, entries, client, inputs)
+            for case in ("window", "epoch", "tile", "clock", "worker", "dream", "paused_consumption",
+                         "shifted_consumption", "output", "input", "authority"):
+                raw, entries, client, inputs = self.usage_fixture(save)
+                middle = next(s for s in raw["samples"] if s["real_seconds"] == 53.)
+                if case == "window":
+                    middle["primary_window"] = "foreign"
+                elif case == "epoch":
+                    middle["world_epoch"] = 1
+                elif case == "tile":
+                    middle["spa_context"]["tiles"][0]["parent_site"] = "foreign"
+                elif case == "clock":
+                    middle["virtual_seconds"] = 0.
+                elif case == "worker":
+                    middle["spa_context"]["souls"][0]["generate_power"]["phase"] = "GoingToTile"
+                elif case == "dream":
+                    middle["spa_context"]["souls"][0]["dream"] = 45.
+                elif case in ("paused_consumption", "shifted_consumption"):
+                    # Preserve both checkpoint endpoints and the total .5/s decrease,
+                    # but move consumption into a paused or a wrong running interval.
+                    for sample in raw["samples"]:
+                        if 51.1 <= sample["real_seconds"] < 55.:
+                            sample["spa_context"]["souls"][0]["dream"] = (
+                                38. if case == "paused_consumption" else 40. if sample["real_seconds"] < 54.1 else 38.)
+                elif case == "output":
+                    middle["spa_context"]["sites"][0]["generator"]["current_output"] = 0.
+                elif case == "input":
+                    inputs.pop()
+                else:
+                    raw["accepted"] = True
+                with self.subTest(case=case), self.assertRaises(spa.native.AcceptanceError):
+                    spa.verify_usage(raw, entries, client, inputs)
+
     def test_grid_numeric_identity_and_relationships_must_match_actual_remap(self):
         before, after = self.state(1), self.state(2)
         mapping = [{"saved_entity": a["entity"], "saved_bits": a["entity_bits"],

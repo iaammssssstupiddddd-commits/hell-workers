@@ -593,6 +593,15 @@ Operational、各tileのGeneratePower/slot1・占有/歩行、workerと実task/�
 資材・worker・完了をseedせず、不成立時にtimeout後の入力再送をしない。これは通常施工の限定feedbackで、
 継続利用・Dream消費・枠変更・Operational保存復元・deconstruct・候補アート・性能・releaseは別の受入とする。
 
+`soul-spa-usage`は施工3checkpointを再検証し、通常速度で最大120秒待って実際のGeneratingを確認する。
+同じSoul/稼働tileを維持するusing/usedの2画像と全中間rawを追加し、正の出力・grid接続・逆参照、
+3〜15仮想秒のDream消費0.5/秒を照合する。隣接rawの減少率と総量を検査し、同仮想時刻での
+Dream変化、停止中の消費への付替え、途中のworker/親/map/window/epoch置換を拒否する。
+再開/停止は既存HUDの単発入力だけで行い、Dream・worker・発電状態を注入しない。
+通常AIの割当条件Dream30以上と自然な移動を待つため、timeoutは成功や再送許可にならない。
+これは通常利用の限定feedbackであり、枠変更、Operational保存復元、撤去、候補画像の採用、
+Capture/Memory性能、正式releaseの証明ではない。実機成功はfresh jobの独立検証後にのみ記録する。
+
 UI feedbackの`rest-area-usage`は通常施工の3checkpointに入所・放出の2checkpointを追加する。
 camera/pause準備以外は既存入力と通常AIを使い、occupant・Dream・材料・完了状態を注入しない。
 UIとproduction rawは同じread-only collectorを使い、paused・同nonce/PID/epoch・同仮想時刻・
