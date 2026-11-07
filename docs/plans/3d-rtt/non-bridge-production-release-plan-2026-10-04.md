@@ -35,6 +35,10 @@ scale=4.999997615814209へ到達し、empty hover/selectedとoccupied hoverの6c
 候補一覧の既存target/revision/epoch付き行をprofiling observerで受動公開し、別対象が選ばれた場合だけ
 一覧からexact ownerを一度選ぶ。各UI hover/press、raw Left pairと座標、最後のworld hover復帰を検証する。
 未知targetや旧revision、余分なクリックは拒否し、player選択ルールと候補順位は変更しない。
+補正`a3ef5226`のfresh `tak14-restarea-maxzoom-art-eis-feedback-20261108-v2`は通常配置後、
+step18のmotionを(161,32)でACKした直後、次のpress前にX11 pointerが所有client外となり未送信拒否。
+最終observerもcursor=null、focus=true。物理入力、compositor移動、adapter問題のどれかは断定しない。
+invalid封印・診断保持・finalizeし、press拒否へ実X11座標/寸法/ownerを追加する。入力guardやcleanupは不変。
 
 最大zoom-out=5でのUI補完を明示legとして実装した。数値camera scale、実wheel、hover/pointer/tooltip
 対象とvisible本文を同一sampleへ受動記録し、既存consentの宣言SCROLL capabilityを持つEISだけを使う。

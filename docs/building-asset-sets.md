@@ -261,6 +261,8 @@ hover→selectedには同区間の実MouseButtonInputのLeft press/release、同
 既存候補一覧のtoggleと対象行をtarget/revision/epoch付きで受動観測し、可視hover/pressと実入力を一度ずつ照合して
 当該ownerを明示選択する。最後にworld ownerへpointerを戻し、同じtooltipと選択headerを撮影する。
 一覧を使う場合も全Left pairのraw window/epoch/owner/座標/時系列を検査し、別target・旧revision・追加クリックは拒否する。
+press前の所有client外ポインタ拒否には実window/PID、client寸法、X11 client/root座標とmaskを記録する。
+拒否時は入力を送信・成功記録せず、cleanup releaseは維持する。これは原因観測の補強であり、guardの緩和ではない。
 
 同UI recipeの明示`--input-backend portal-eis`は当該ArtPreview lifecycle/maxzoomだけで既存EIS absolute
 経路を選ぶ。通常portal Notify経路からの自動fallbackではなく、混用・他caseへの拡張は拒否する。
