@@ -51,6 +51,22 @@ fn building_art_static_rejects_wrong_population_clock_and_measurement_contract()
         assert!(config.keeps_virtual_time_paused_during_capture());
         assert!(config.uses_isolated_density_world());
         assert_eq!(config.soul_count().to_string(), souls);
+        let mut context_args = args.clone();
+        let population = context_args
+            .iter()
+            .position(|&arg| arg == "--spawn-souls")
+            .unwrap();
+        context_args[population + 1] = "6";
+        assert!(parse_input(&context_args, &[]).is_err());
+        let context = [(
+            "HW_BUILDING_ART_SESSION",
+            "{\"variant\":\"rest-area-art-context\"}",
+        )];
+        assert_eq!(
+            parse_input(&context_args, &context).is_ok(),
+            size == "small"
+        );
+        assert!(parse_input(&args, &context).is_err());
         // Parser admission does not approve an asset: configure_building_art
         // subsequently validates the full explicit session and exact identity.
         for quality in ["medium", "low"] {

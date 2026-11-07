@@ -1235,11 +1235,24 @@ impl PerfScenarioConfig {
                     .to_string(),
             ));
         }
+        let rest_art_context = input
+            .env_text("HW_BUILDING_ART_SESSION")
+            .and_then(|raw| serde_json::from_str::<serde_json::Value>(&raw).ok())
+            .is_some_and(|session| session["variant"] == "rest-area-art-context");
+        if rest_art_context
+            && (workload != PerfWorkload::BuildingArtStatic || size != PerfScenarioSize::Small)
+        {
+            return Err(PerfScenarioConfigError(
+                "rest-area-art-context requires the small static fixture".into(),
+            ));
+        }
         if workload == PerfWorkload::BuildingArtStatic
             && (!matches!(size, PerfScenarioSize::Small | PerfScenarioSize::Medium)
                 || render_mode != PerfRenderMode::Gpu
                 || soul_count
-                    != if size == PerfScenarioSize::Small {
+                    != if rest_art_context {
+                        6
+                    } else if size == PerfScenarioSize::Small {
                         15
                     } else {
                         60

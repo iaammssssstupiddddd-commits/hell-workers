@@ -167,6 +167,7 @@ impl Plugin for StartupPlugin {
             }
             app.init_resource::<PerfScenarioApplied>()
                 .init_resource::<perf_scenario::building_art_static::BuildingArtStaticState>()
+                .init_resource::<perf_scenario::building_art_static::context::ContextState>()
                 .init_resource::<perf_scenario::PerfScenarioDriverState>()
                 .init_resource::<perf_scenario::DeconstructionPerfFixtureState>()
                 .init_resource::<perf_scenario::IndoorLightFixtureState>()
@@ -193,6 +194,8 @@ impl Plugin for StartupPlugin {
                 ).chain().in_set(PerfScenarioSet::IndoorSettle)
                     .run_if(perf_scenario::building_art_static::should_settle_building_art_static))
                 .add_systems(PostUpdate, perf_scenario::building_art_static::inspect_building_art_static_system
+                    .after(bevy::camera::visibility::VisibilitySystems::CheckVisibility))
+                .add_systems(PostUpdate, perf_scenario::building_art_static::context::observe
                     .after(bevy::camera::visibility::VisibilitySystems::CheckVisibility))
                 .add_systems(
                     PostStartup,

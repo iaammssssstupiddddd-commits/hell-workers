@@ -43,7 +43,14 @@ pub(super) fn camera_frame(
         .map(|s| s.center)
         .sum::<Vec2>()
         / 4.0;
-    (center, session.view.scale())
+    (
+        if session.is_rest_context() {
+            center - Vec2::Y * 80.0
+        } else {
+            center
+        },
+        session.view.scale(),
+    )
 }
 // Bridge placement/worldgen is a separate issue; it must not gate this reference.
 pub(super) const KINDS: [BuildingType; 9] = [
@@ -177,6 +184,8 @@ mod tests {
             status_path: "/unused/probe.json".into(),
             nonce: "a".repeat(32),
             view: BuildingArtView::Near,
+            variant: Default::default(),
+            lighting: Default::default(),
         };
         let expected = layout(PerfScenarioSize::Small)
             .iter()

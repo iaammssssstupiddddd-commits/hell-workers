@@ -94,6 +94,8 @@ mod tests {
             status_path: "/tmp/dev-panel-test-status".into(),
             nonce: "a".repeat(32),
             view: BuildingArtView::Near,
+            variant: Default::default(),
+            lighting: Default::default(),
         });
         app.update();
         assert_eq!(

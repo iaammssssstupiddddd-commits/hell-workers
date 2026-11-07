@@ -20,7 +20,7 @@ struct SpriteFallback {
     anchor: Anchor,
 }
 
-fn apply(
+pub(crate) fn apply(
     world: &mut World,
     entity: Entity,
     set: Option<&BuildingAssetDescriptor>,

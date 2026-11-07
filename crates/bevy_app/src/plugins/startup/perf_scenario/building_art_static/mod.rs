@@ -2,6 +2,7 @@
 //! Production factories and domain projections run during setup only; inspection
 //! never repairs a specimen once measurement readiness has been published.
 
+pub(crate) mod context;
 mod layout;
 mod seed;
 
@@ -42,6 +43,7 @@ pub(crate) fn settle_refine_visuals(world: &mut World) {
         .run_system_cached(hw_jobs::visual_sync::sync_mud_mixer_active_system)
         .expect("profiling setup has the production visual resources");
     settle_completion_effects(world);
+    context::prepare(world);
 }
 
 /// A paused reference must not retain the factories' one-shot completion text
@@ -198,6 +200,13 @@ pub(crate) struct InspectParams<'w, 's> {
 }
 
 pub(crate) fn inspect_building_art_static_system(mut params: InspectParams) {
+    if params
+        .art_session
+        .as_ref()
+        .is_some_and(|session| session.is_rest_context())
+    {
+        return;
+    }
     if !params.config.enabled()
         || params.config.workload() != PerfWorkload::BuildingArtStatic
         || !matches!(params.state.phase, Phase::Seeded | Phase::Ready)
@@ -758,7 +767,7 @@ impl BuildingArtStaticState {
             .as_ref()
             .ok_or_else(|| std::io::Error::other("missing fixture evidence"))?;
         let bytes = serde_json::to_vec(evidence)?;
-        let summary = json!({"schema_version": 1, "contract_id": if self.m6 { "building-art-m6-nine-v1" } else { "building-art-static-nine-v2" },
+        let summary = json!({"schema_version": 1, "contract_id": if evidence.get("variant").is_some() { "rest-area-art-context-v1" } else if self.m6 { "building-art-m6-nine-v1" } else { "building-art-static-nine-v2" },
             "evidence_kind": if self.art_candidate { "candidate-paused-static-only" } else { "paused-static-only" }, "active_simulation_evidence": false,
             "camera_scale": evidence.get("camera_scale").unwrap_or(&json!(layout::CAMERA_SCALE)), "stable_frames": self.stable_frames,
             "layout_sha256": hw_infra::lighting::digest_hex(&Sha256::digest(&bytes).into()), "initial": evidence, "final": evidence});

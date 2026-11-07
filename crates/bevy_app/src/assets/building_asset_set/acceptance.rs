@@ -23,6 +23,64 @@ pub struct BuildingArtSession {
     pub nonce: String,
     #[serde(default)]
     pub view: BuildingArtView,
+    #[serde(default)]
+    pub variant: BuildingArtVariant,
+    #[serde(default)]
+    pub lighting: BuildingArtLighting,
+}
+
+/// Separate seeded comparison; never an ordinary-world or release recipe.
+#[derive(Clone, Copy, Debug, Default, Deserialize, serde::Serialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum BuildingArtVariant {
+    #[default]
+    Gallery,
+    RestAreaArtContext,
+}
+
+#[derive(Clone, Copy, Debug, Default, Deserialize, serde::Serialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum BuildingArtLighting {
+    #[default]
+    Standard,
+    Dim,
+}
+
+impl BuildingArtSession {
+    pub fn is_rest_context(&self) -> bool {
+        self.variant == BuildingArtVariant::RestAreaArtContext
+    }
+
+    fn validate_context(&self, present: impl Fn(&str) -> bool) -> Result<(), String> {
+        if !self.is_rest_context() {
+            return if self.lighting == BuildingArtLighting::Standard {
+                Ok(())
+            } else {
+                Err("non-default lighting requires rest-area-art-context".into())
+            };
+        }
+        if self.identity.kind != BuildingAssetKind::RestArea
+            || self.view == BuildingArtView::Overview
+            || self.identity.authority != BuildingAssetAuthority::ArtPreview
+            || !matches!(self.mode.as_str(), "feedback" | "art-preview")
+            || [
+                "HW_BUILDING_M6_MODE",
+                "HW_BUILDING_ORDINARY_ART_SESSION",
+                "HW_BUILDING_PRODUCTION_OBSERVATIONS",
+                "HW_BUILDING_ASSET_RELEASES",
+                "HW_M2_ACCEPTANCE_PROBE",
+                "HW_BRIDGE_ACCEPTANCE_PROBE",
+                "HW_NATIVE_UI_ROOT",
+            ]
+            .into_iter()
+            .any(present)
+        {
+            return Err(
+                "rest-area-art-context kind/authority or conflicting session differs".into(),
+            );
+        }
+        Ok(())
+    }
 }
 
 /// Explicit profiling camera framing; it never changes ordinary player input.
@@ -52,6 +110,7 @@ pub fn configure_building_art(app: &mut App) -> Result<(), String> {
         return Ok(());
     };
     let session: BuildingArtSession = serde_json::from_str(&value).map_err(|e| e.to_string())?;
+    session.validate_context(|key| std::env::var_os(key).is_some())?;
     let authority = match session.mode.as_str() {
         "feedback" | "art-preview" => BuildingAssetAuthority::ArtPreview,
         "candidate" => BuildingAssetAuthority::IsolatedCandidate,
@@ -108,6 +167,67 @@ fn request(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn rest_context_is_explicit_preview_only_and_rejects_mixed_sessions() {
+        let raw = serde_json::json!({"mode": "feedback", "identity": {
+            "kind": "RestArea", "generation": 1, "authority": "art_preview", "manifest_sha256": "a".repeat(64)},
+            "locator": "manifests/building-rest-area-v1.buildingset", "status_path": "/unused/probe.json",
+            "nonce": "a".repeat(32), "view": "normal", "variant": "rest-area-art-context", "lighting": "dim"});
+        let session: BuildingArtSession = serde_json::from_value(raw.clone()).unwrap();
+        assert!(session.validate_context(|_| false).is_ok());
+        for key in [
+            "HW_BUILDING_M6_MODE",
+            "HW_BUILDING_ORDINARY_ART_SESSION",
+            "HW_NATIVE_UI_ROOT",
+            "HW_BUILDING_PRODUCTION_OBSERVATIONS",
+            "HW_BUILDING_ASSET_RELEASES",
+            "HW_M2_ACCEPTANCE_PROBE",
+            "HW_BRIDGE_ACCEPTANCE_PROBE",
+        ] {
+            assert!(
+                session
+                    .validate_context(|candidate| candidate == key)
+                    .is_err()
+            );
+        }
+        for (key, value) in [("variant", "unknown"), ("lighting", "unknown")] {
+            let mut bad = raw.clone();
+            bad[key] = serde_json::json!(value);
+            assert!(serde_json::from_value::<BuildingArtSession>(bad).is_err());
+        }
+        for (key, value) in [
+            ("mode", "candidate"),
+            ("view", "overview"),
+            ("variant", "gallery"),
+        ] {
+            let mut bad = raw.clone();
+            bad[key] = serde_json::json!(value);
+            assert!(
+                serde_json::from_value::<BuildingArtSession>(bad)
+                    .unwrap()
+                    .validate_context(|_| false)
+                    .is_err()
+            );
+        }
+        for (key, value) in [("kind", "Tank"), ("authority", "isolated_candidate")] {
+            let mut bad = raw.clone();
+            bad["identity"][key] = serde_json::json!(value);
+            assert!(
+                serde_json::from_value::<BuildingArtSession>(bad)
+                    .unwrap()
+                    .validate_context(|_| false)
+                    .is_err()
+            );
+        }
+        let mut legacy = raw;
+        legacy.as_object_mut().unwrap().remove("variant");
+        legacy.as_object_mut().unwrap().remove("lighting");
+        let session: BuildingArtSession = serde_json::from_value(legacy).unwrap();
+        assert_eq!(session.variant, BuildingArtVariant::Gallery);
+        assert_eq!(session.lighting, BuildingArtLighting::Standard);
+        assert!(session.validate_context(|_| false).is_ok());
+    }
 
     #[test]
     fn camera_views_are_bounded_and_unknown_views_fail_closed() {

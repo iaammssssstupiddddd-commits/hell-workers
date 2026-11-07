@@ -175,3 +175,19 @@ roughness=1、metallic=0、reflectance=0を起点とし、Blenderの確認用材
 無地で主要構造が読めない場合は形状を、模様追加後に読めなくなる場合はUV・線の密度を、
 照明を入れて潰れる場合は焼き込んだ陰と材質・光の整合を見直す。
 Blender上の見栄えだけを最終合格とせず、個別導入時のゲーム内受入は既定のnative acceptance手順に従う。
+
+### RestAreaの限定art-context比較
+
+`scripts/building_art_acceptance.py --variant rest-area-art-context --view near|normal|far`
+はArtPreviewのRestAreaだけを扱う明示profiling場面であり、既定の36体galleryやM6とは別契約である。
+既存factoryで完成させた4体（利用者0/1/5/0）、占有footprint外の上下各1壁、同descriptorを
+通常previewと同じhandle/canvas/Anchor適用関数へ渡した4画像を一度だけ配置する。
+previewの基準点は完成ownerからworld Y=-160に並置し、実Camera2d・RtT target・縦補正済み
+compositeの完成接地点と既知offsetを照合する。輪郭や縮尺の美術採否は撮影後の独立判断を要する。
+
+`--lighting standard|dim` は既存PBR Ambientのbrightness 500/100と主Directionalの
+illuminance 12000/2400を比較し、追加Directionalは0/影なしのままとする。実光源・影・材質・
+camera/layers・壁depth・画像role/hash・Anchor/custom_sizeとresident inventoryを観測し、
+readiness後の変化は補正せず拒否する。通常起動、通常入力ghost、既存LightField実装は変更しない。
+証拠scopeは `seeded-paused-art-comparison`、accepted/performance/promotion=false。
+この場面の技術passだけでは通常照明環境全体、通常利用/lifecycle、独立art/numeric、releaseを承認しない。

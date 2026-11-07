@@ -42,6 +42,13 @@ readiness後の再seed/位置補正/inventory変化は拒否する。primary既�
 当fixtureのAmbient/Directional比較は `seeded-paused-art-comparison`、accepted/performance/promotion=falseであり、
 通常入力ghost・通常照明環境全体・lifecycle・正式art/numeric/release採否の完了とはしない。
 
+専用variantの初期実装は4完成owner/8壁/4preview/6実Soulを別inventoryとして構成し、
+config/admission・seed・plugin配線とsidecar契約を明示分岐した。既定36体/M6のlayout・検査は維持する。
+独立中間reviewで判明した壁footprint衝突は実tilesのmin/max外側から導出して修正し、
+同handle内のPBR材質変更、壁可視性/3D transform/layer、実RtT target/composite、
+完成接地点とpreview anchorの既知offsetを観測・拒否へ追加した。
+現時点は準備中であり、この新場面のfresh native画像・最終固定read-only review・正式採否は未実施。
+
 `c07987e4`のfresh `tak14-restarea-ordinary-art-eis-feedback-20261108-v3`は9checkpoint、
 登録verifierと別実行verifyが成功した。source=`43386c30797aac97f88d338f16c76304cb14ff143d9f9111e4dc0eba01361947`、
 manifest=`ea7a00561cb8da52693a7a5afeec6b8c5723917534f51668d75b6b047a55d9da`、

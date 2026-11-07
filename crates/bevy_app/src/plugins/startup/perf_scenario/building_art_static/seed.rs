@@ -52,8 +52,22 @@ pub(crate) fn setup_building_art_static_system(mut p: SetupParams) {
         return;
     }
     actors.sort_by_key(|entity| entity.to_bits());
-    let specs = layout::layout(p.config.size());
+    let mut specs = layout::layout(p.config.size());
+    if p.art_session
+        .as_ref()
+        .is_some_and(|session| session.is_rest_context())
+    {
+        specs.retain(|spec| spec.kind == BuildingType::RestArea);
+    }
     if let Err(reason) = validate_layout(&specs, p.world_map.as_ref(), p.config.size()) {
+        fail(&mut p.state, &mut p.exit, reason);
+        return;
+    }
+    if p.art_session
+        .as_ref()
+        .is_some_and(|session| session.is_rest_context())
+        && let Err(reason) = super::context::validate_layout(&specs, p.world_map.as_ref())
+    {
         fail(&mut p.state, &mut p.exit, reason);
         return;
     }
@@ -75,6 +89,34 @@ pub(crate) fn setup_building_art_static_system(mut p: SetupParams) {
     for yard in layout::yards(p.config.size()) {
         p.commands
             .spawn((yard, Name::new("BuildingArtStatic Yard")));
+    }
+    if p.art_session
+        .as_ref()
+        .is_some_and(|session| session.is_rest_context())
+    {
+        for spec in &specs {
+            for grid in super::context::wall_grids(spec) {
+                if !p.world_map.as_ref().is_walkable(grid.0, grid.1)
+                    || p.world_map.as_ref().has_building(grid)
+                    || p.world_map.as_ref().has_stockpile(grid)
+                {
+                    fail(
+                        &mut p.state,
+                        &mut p.exit,
+                        "occupied context wall grid".into(),
+                    );
+                    return;
+                }
+                let wall = crate::systems::jobs::wall_construction::spawn_wall_shell(
+                    &mut p.commands,
+                    &p.handles,
+                    grid,
+                    false,
+                );
+                p.world_map
+                    .register_completed_building_footprint(BuildingType::Wall, wall, [grid]);
+            }
+        }
     }
     // Both support walls and their floors use existing completion factories.
     for spec in specs.iter().filter(|s| s.kind == BuildingType::Door) {

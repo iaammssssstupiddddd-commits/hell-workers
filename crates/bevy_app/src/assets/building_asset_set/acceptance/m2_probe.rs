@@ -466,6 +466,8 @@ mod tests {
             status_path: PathBuf::from("/unused/m2-probe-test.json"),
             nonce: "a".repeat(32),
             view: crate::assets::building_asset_set::acceptance::BuildingArtView::Overview,
+            variant: Default::default(),
+            lighting: Default::default(),
         });
         world.init_resource::<BuildingAssetPool>();
         world.init_resource::<Time<Real>>();

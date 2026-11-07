@@ -18,6 +18,98 @@ from perf_tool.fixtures import write_fixture_run
 
 
 class RecipeTests(unittest.TestCase):
+    def context(self):
+        descriptor = {"image_role": "world_preview", "canvas_px": [256, 256],
+                      "canvas_wu": [128., 128.], "anchor_px": [128., 144.], "representative_state": "Empty"}
+        artifact = {"role": "world_preview", "path": "preview.png", "bytes": 100, "sha256": "b" * 64}
+        value = {"mode": "feedback", "kind": "RestArea", "identity": {"authority": "art_preview"},
+                 "variant": "rest-area-art-context", "lighting": "standard", "view": "normal",
+                 "scope": art.CONTEXT_SCOPE, "promotion_authority": False,
+                 "context_preview": {"descriptor": descriptor, "artifact": artifact}}
+        records = [{"ordinal": index, "occupants": (0, 1, 5, 0)[index], "owner": 100 + index,
+                    "root": 200 + index, "tiles": [[index * 5 + x, y] for y in (18, 19) for x in (0, 1)],
+                    "owner_screen": [200., 200.], "composite_screen": [200., 200.], "preview_offset_wu": [0., -160.],
+                    "preview": {"entity": 300 + index, "descriptor": descriptor, "artifact": artifact,
+                                "canvas_wu": [128., 128.], "anchor": [0., -.0625], "visible": True, "screen_anchor": [200., 360.]},
+                    "parts": [{"visible": True, "material_values": dict.fromkeys(
+                        ("white", "opaque", "lit", "emissive_black", "emissive_texture_absent"), True)}], "walls": [
+                        {"owner": 400 + index * 2 + side, "grid": [index * 5, y], "visuals": [{"visible": True, "layers": [1, 5]}]}
+                        for side, y in enumerate((17, 20))]} for index in range(4)]
+        fixture = {"variant": value["variant"], "lighting": "standard", "scope": art.CONTEXT_SCOPE,
+                   "identity": value["identity"], "target_count": 4, "wall_count": 8, "preview_count": 4,
+                   "souls": 6, "view": "normal", "camera_scale": 1., "records": records,
+                   "accepted": False, "performance_evidence": False, "promotion_authority": False,
+                   "ambient": [{"brightness": 500.}], "directional": [
+                       {"primary": True, "extra": False, "illuminance": 12000., "shadows": True},
+                       {"primary": False, "extra": True, "illuminance": 0., "shadows": False}]}
+        probe = {"profile": art.PROFILE, "status": "ready", "mode": "feedback", "identity": value["identity"],
+                 "nonce": "a" * 32, "scope": art.CONTEXT_SCOPE, "stable_frames": 30, "view": "normal",
+                 "camera_scale": 1., "variant": value["variant"], "lighting": "standard", "fixture": fixture}
+        return value, probe
+
+    def test_context_is_separate_and_exactly_admitted(self):
+        value, probe = self.context()
+        art.validate_probe(probe, value, probe["nonce"])
+        command = art.game_command(Path("binary"), Path("job"), value)
+        self.assertEqual(command[command.index("--spawn-souls") + 1], "6")
+        old = art.game_command(Path("binary"), Path("job"), {})
+        self.assertEqual(old[old.index("--spawn-souls") + 1], "15")
+        environment = art.game_environment({}, Path("view"), {**value, "adapter": "Intel"}, "nonce", Path("job"))
+        session = json.loads(environment["HW_BUILDING_ART_SESSION"])
+        self.assertEqual(session["variant"], value["variant"])
+        self.assertEqual(session["lighting"], value["lighting"])
+        for key, changed in (("variant", "unknown"), ("lighting", "unknown"), ("kind", "Tank"),
+                             ("mode", "candidate"), ("view", "overview"), ("scope", "ordinary-world"),
+                             ("promotion_authority", True), ("identity", {"authority": "isolated_candidate"})):
+            with self.subTest(key=key), self.assertRaises(ValueError):
+                art.context_settings({**value, key: changed})
+        with self.assertRaises(ValueError):
+            art.context_settings({"lighting": "dim"})
+        # A context's four owners can never pass the old 36-owner gallery check.
+        with self.assertRaises(ValueError):
+            art.validate_probe(probe, {**value, "variant": "gallery", "lighting": "standard"}, probe["nonce"])
+
+    def test_context_rejects_wrong_inventory_identity_preview_walls_and_lights(self):
+        value, original = self.context()
+        changes = [
+            ((), "lighting", "dim"), (("fixture",), "identity", {}),
+            (("fixture",), "target_count", 36), (("fixture",), "wall_count", 7),
+            (("fixture",), "preview_count", True), (("fixture",), "accepted", True),
+            (("fixture",), "performance_evidence", True), (("fixture",), "promotion_authority", True),
+            (("fixture", "records", 0), "owner", 101),
+            (("fixture", "records", 0), "occupants", 5),
+            (("fixture", "records", 0, "preview"), "anchor", [0, 0]),
+            (("fixture", "records", 0, "preview"), "canvas_wu", [64, 64]),
+            (("fixture", "records", 0, "preview"), "visible", False),
+            (("fixture", "records", 0, "preview", "artifact"), "sha256", "f" * 64),
+            (("fixture", "records", 0, "walls", 0), "grid", [0, 21]),
+            (("fixture", "records", 0, "parts", 0), "visible", False),
+            (("fixture", "records", 0, "parts", 0, "material_values"), "lit", False),
+            (("fixture", "records", 0, "walls", 0, "visuals", 0), "visible", False),
+            (("fixture", "records", 0, "walls", 0, "visuals", 0), "layers", [0]),
+            (("fixture", "records", 0), "owner_screen", [float("nan"), 200.]),
+            (("fixture", "records", 0), "composite_screen", [205., 200.]),
+            (("fixture", "records", 0, "preview"), "screen_anchor", [200., 365.]),
+            (("fixture", "records", 0, "preview"), "screen_anchor", [200., 800.]),
+            (("fixture", "ambient", 0), "brightness", 100.),
+            (("fixture", "directional", 0), "illuminance", 0.),
+            (("fixture", "directional", 0), "shadows", False),
+            (("fixture",), "directional", []),
+        ]
+        for path, key, changed in changes:
+            bad = copy.deepcopy(original)
+            target = bad
+            for component in path:
+                target = target[component]
+            target[key] = changed
+            with self.subTest(path=path, key=key), self.assertRaises(ValueError):
+                art.validate_probe(bad, value, bad["nonce"])
+        dim = copy.deepcopy(original)
+        dim["lighting"] = dim["fixture"]["lighting"] = "dim"
+        dim["fixture"]["ambient"][0]["brightness"] = 100.
+        dim["fixture"]["directional"][0]["illuminance"] = 2400.
+        art.validate_probe(dim, {**value, "lighting": "dim"}, dim["nonce"])
+
     def test_quality_is_bounded_and_legacy_plans_remain_high(self):
         self.assertEqual(art.quality({}), "high")
         for quality in art.QUALITIES:

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -37,6 +38,24 @@ MODES = {"feedback": "art_preview", "art-preview": "art_preview", "candidate": "
 PROFILE = "building-art"
 VIEWS = {"overview": 5.0, "near": 0.5, "normal": 1.0, "far": 2.0}
 QUALITIES = ("high", "medium", "low")
+CONTEXT_SCOPE = "seeded-paused-art-comparison"
+
+
+def context_settings(value: dict) -> bool:
+    variant = value.get("variant", "gallery")
+    lighting = value.get("lighting", "standard")
+    pipeline.require(variant in ("gallery", "rest-area-art-context")
+                     and lighting in ("standard", "dim"), "unknown art variant/lighting")
+    if variant == "gallery":
+        pipeline.require(lighting == "standard", "gallery lighting cannot change")
+        return False
+    pipeline.require(value.get("kind") == "RestArea"
+        and value.get("mode") in ("feedback", "art-preview")
+        and value.get("view") in ("near", "normal", "far")
+        and value.get("identity", {}).get("authority") == "art_preview"
+        and value.get("scope") == CONTEXT_SCOPE
+        and value.get("promotion_authority") is False, "context authority/view/scope differs")
+    return True
 
 
 def quality(value: dict) -> str:
@@ -60,6 +79,7 @@ def validate_subject(value: dict, *, feedback: bool) -> None:
 
 
 def check_plan(value: dict, binary: Path) -> dict:
+    context_settings(value)
     quality(value)
     pipeline.require(value.get("view", "overview") in VIEWS, "unknown camera view")
     pipeline.require(value["kind"] != "Bridge", "Bridge requires its independent M4 recipe; nine-kind static evidence is inapplicable")
@@ -73,6 +93,12 @@ def check_plan(value: dict, binary: Path) -> dict:
     pipeline.require(manifest["identity"] == value["identity"]
                      and pipeline.digest(text.encode()) == value["manifest_sha256"]
                      and manifest["identity"]["authority"] == MODES[value["mode"]], "candidate identity/authority changed")
+    if context_settings(value):
+        pipeline.require(value.get("context_preview") == {
+            "descriptor": manifest["world_preview"],
+            "artifact": next(entry for entry in manifest["artifacts"]
+                             if entry["role"] == manifest["world_preview"]["image_role"])},
+            "context preview differs from exact source manifest")
     if value["mode"] == "candidate":
         # Reuse promotion's art approval/provenance checks without approving or
         # installing the set. This target is only a read-only planning namespace.
@@ -95,8 +121,14 @@ def plan(args) -> dict:
              "codec_sha256": pipeline.digest(args.codec.read_bytes()),
              "view": getattr(args, "view", "overview"),
              "quality": getattr(args, "quality", "high"),
-             "scope": "paused-static-presentation", "promotion_authority": False,
+             "variant": getattr(args, "variant", "gallery"),
+             "lighting": getattr(args, "lighting", "standard"),
+             "scope": CONTEXT_SCOPE if getattr(args, "variant", "gallery") == "rest-area-art-context" else "paused-static-presentation", "promotion_authority": False,
              "feedback_only": args.mode == "feedback"}
+    if value["variant"] == "rest-area-art-context":
+        value["context_preview"] = {"descriptor": manifest["world_preview"],
+            "artifact": next(entry for entry in manifest["artifacts"]
+                             if entry["role"] == manifest["world_preview"]["image_role"])}
     check_plan(value, args.codec)
     resources = native.resource_snapshot(repo, require_launcher=True)
     pipeline.require(not resources["failures"], str(resources["failures"]))
@@ -110,11 +142,12 @@ def plan(args) -> dict:
 
 
 def game_command(binary: Path, root: Path, value: dict) -> list[str]:
+    context = context_settings(value)
     return [str(binary), "--perf-scenario", "--perf-seed", str(static.SEED), "--perf-size", "small",
         "--perf-workload", "building-art-static", "--perf-render", "gpu", "--perf-clock", "realtime",
         "--perf-familiar-policy", "baseline", "--perf-operation-dialog", "hidden", "--perf-dashboard", "hidden",
         "--perf-output-dir", str(root / "data"), "--perf-warmup-secs", "30", "--perf-measure-secs", "60",
-        "--spawn-souls", "15", "--spawn-familiars", "0", "--perf-window-width", "1280", "--perf-window-height", "720",
+        "--spawn-souls", "6" if context else "15", "--spawn-familiars", "0", "--perf-window-width", "1280", "--perf-window-height", "720",
         "--perf-window-scale-factor", "1", "--perf-rtt-quality", quality(value)]
 
 
@@ -143,6 +176,7 @@ def game_environment(environment: dict, view: Path, value: dict, nonce: str, roo
         "WGPU_BACKEND": "vulkan", "WGPU_ADAPTER_NAME": value["adapter"], "RUST_LOG": "info,wgpu=error",
         "HW_BUILDING_ART_SESSION": json.dumps({"mode": value["mode"], "identity": value["identity"],
             "locator": pipeline.locator(value["kind"]), "nonce": nonce, "view": value.get("view", "overview"),
+            "variant": value.get("variant", "gallery"), "lighting": value.get("lighting", "standard"),
             "status_path": str(root / "probe.json")})})
     return environment
 
@@ -169,7 +203,10 @@ def validate_probe(probe: dict, value: dict, nonce: str) -> None:
         and probe.get("nonce") == nonce and probe.get("scope") == value["scope"]
         and type(probe.get("stable_frames")) is int and probe["stable_frames"] >= 30,
         "building-art runtime acknowledgement differs")
-    pipeline.require(probe["fixture"]["target_count"] == 36, "building-art fixture inventory differs")
+    if context_settings(value):
+        validate_context_fixture(probe, value)
+    else:
+        pipeline.require(probe["fixture"]["target_count"] == 36, "building-art fixture inventory differs")
     view = value.get("view", "overview")
     pipeline.require(view in VIEWS and probe.get("view", "overview") == view,
                      "building-art camera view differs")
@@ -178,6 +215,74 @@ def validate_probe(probe: dict, value: dict, nonce: str) -> None:
                          and probe["fixture"].get("view") == view
                          and probe["fixture"].get("camera_scale") == VIEWS[view],
                          "building-art camera scale differs")
+
+
+def validate_context_fixture(probe: dict, value: dict) -> None:
+    """Seeded image comparison only; never issues an art/numeric decision."""
+    fixture = probe["fixture"]
+    pipeline.require(probe.get("variant") == fixture.get("variant") == "rest-area-art-context"
+        and probe.get("lighting") == fixture.get("lighting") == value["lighting"]
+        and fixture.get("scope") == CONTEXT_SCOPE and fixture.get("identity") == value["identity"]
+        and all(fixture.get(key) is False for key in ("accepted", "performance_evidence", "promotion_authority")),
+        "context identity/authority differs")
+    pipeline.require(all(type(fixture.get(key)) is int and fixture[key] == count for key, count in
+        (("target_count", 4), ("wall_count", 8), ("preview_count", 4), ("souls", 6)))
+        and len(fixture.get("records", [])) == 4, "context inventory differs")
+    identities = []
+    occupied = set()
+    def point(raw):
+        pipeline.require(isinstance(raw, list) and len(raw) == 2
+            and all(type(number) in (int, float) and math.isfinite(number) for number in raw)
+            and 0 <= raw[0] <= 1280 and 0 <= raw[1] <= 720, "context projection is non-finite/offscreen")
+        return raw
+    for ordinal, record in enumerate(fixture["records"]):
+        pipeline.require(record.get("ordinal") == ordinal and record.get("occupants") == (0, 1, 5, 0)[ordinal]
+            and len(record.get("tiles", [])) == 4 and len(record.get("walls", [])) == 2
+            and len(record.get("parts", [])) > 0, "context specimen differs")
+        for tile in record["tiles"]:
+            pipeline.require(len(tile) == 2 and all(type(number) is int for number in tile)
+                and tuple(tile) not in occupied, "context footprint overlaps")
+            occupied.add(tuple(tile))
+        preview = record["preview"]
+        descriptor = preview["descriptor"]
+        artifact = preview["artifact"]
+        pipeline.require({"descriptor": descriptor, "artifact": artifact} == value["context_preview"]
+            and descriptor["image_role"] == artifact["role"] == "world_preview"
+            and re.fullmatch(r"[0-9a-f]{64}", artifact["sha256"]) is not None
+            and preview["canvas_wu"] == descriptor["canvas_wu"]
+            and preview["anchor"] == [descriptor["anchor_px"][0] / descriptor["canvas_px"][0] - .5,
+                                      .5 - descriptor["anchor_px"][1] / descriptor["canvas_px"][1]]
+            and preview["visible"] is True, "context descriptor preview differs")
+        identities.extend([record["owner"], record["root"], preview["entity"]])
+        identities.extend(wall["owner"] for wall in record["walls"])
+        pipeline.require(all(part["visible"] is True and all(part["material_values"].get(key) is True
+            for key in ("white", "opaque", "lit", "emissive_black", "emissive_texture_absent"))
+            for part in record["parts"]), "context part hidden or material differs")
+        lower, upper = record["walls"]
+        ys = [tile[1] for tile in record["tiles"]]
+        pipeline.require(lower["grid"][1] < min(ys) and upper["grid"][1] > max(ys)
+            and all(len(wall["visuals"]) == 1 and wall["visuals"][0]["visible"] is True
+                    and 1 in wall["visuals"][0]["layers"] for wall in (lower, upper)), "context wall ordering differs")
+        for wall in record["walls"]:
+            pipeline.require(tuple(wall["grid"]) not in occupied, "context wall overlaps")
+            occupied.add(tuple(wall["grid"]))
+        owner = point(record["owner_screen"])
+        completed = point(record["composite_screen"])
+        preview_screen = point(preview["screen_anchor"])
+        scale = VIEWS[value["view"]]
+        pipeline.require(record["preview_offset_wu"] == [0., -160.]
+            and all(abs(a - b) <= 1 for a, b in zip(owner, completed, strict=True))
+            and abs(preview_screen[0] - owner[0]) <= .01
+            and abs(preview_screen[1] - owner[1] - 160 / scale) <= .01, "context anchor correspondence differs")
+    pipeline.require(all(type(entity) is int and entity > 0 for entity in identities)
+                     and len(set(identities)) == len(identities), "context duplicate entities")
+    ambient, sun = (500., 12000.) if value["lighting"] == "standard" else (100., 2400.)
+    pipeline.require(len(fixture["ambient"]) == 1 and fixture["ambient"][0]["brightness"] == ambient
+        and len(fixture["directional"]) == 2
+        and sum(light["primary"] is True and light["illuminance"] == sun and light["shadows"] is True
+                for light in fixture["directional"]) == 1
+        and sum(light["extra"] is True and light["illuminance"] == 0 and light["shadows"] is False
+                for light in fixture["directional"]) == 1, "context actual lights differ")
 
 
 def verify(root: Path) -> dict:
@@ -200,6 +305,8 @@ def verify(root: Path) -> dict:
     pipeline.require(sidecar["evidence_kind"] == "candidate-paused-static-only"
                      and sidecar["initial"] == sidecar["final"] == probe["fixture"]
                      and sidecar["stable_frames"] >= 30, "candidate fixture did not remain stable")
+    if context_settings(value):
+        pipeline.require(sidecar.get("contract_id") == "rest-area-art-context-v1", "context sidecar contract differs")
     # Older plans remain high-only; their recorded raw window is checked too.
     validate_window(root, value)
     log = (root / "actual-window.log").read_text()
@@ -374,6 +481,8 @@ def main() -> int:
     parser.add_argument("--adapter", default="Intel")
     parser.add_argument("--view", choices=tuple(VIEWS), default="overview")
     parser.add_argument("--quality", choices=QUALITIES, default="high")
+    parser.add_argument("--variant", choices=("gallery", "rest-area-art-context"), default="gallery")
+    parser.add_argument("--lighting", choices=("standard", "dim"), default="standard")
     args = parser.parse_args()
     if args.command == "plan":
         pipeline.require(all((args.repo, args.source_root, args.codec, args.kind, args.mode)), "incomplete recipe inputs")
