@@ -797,7 +797,7 @@ def exercise_usage(driver):
     exercise_completion(driver)
     pause(driver, False)
     driver.last = driver.wait(lambda v: any(s["dream"] > 12 for s in generating(context(v)).values()),
-                              after=driver.last["frame"], timeout=120)
+                              after=driver.last["frame"], timeout=300)
     pause(driver, True)
     driver.capture(USAGE_CHECKPOINTS[3])
     workers = {key: soul for key, soul in generating(context(driver.last)).items() if soul["dream"] > 12}

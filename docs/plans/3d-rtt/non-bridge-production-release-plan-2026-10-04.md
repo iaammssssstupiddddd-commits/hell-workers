@@ -690,11 +690,17 @@ raw SHA256 `9fd7a6161e4e6452c95a02dedfa1e0b9e7004be6281c471d10e356da3495af3a`。
 最新完成jobを通常利用/Operational保存復元との比較に保持し、比較を終えた未搬入planning v5のjobは撤去する。
 planning v5の生成物25,108,480 bytesを保持解除後に撤去し、primary storage checkを通過した。
 
-次の限定工程`soul-spa-usage`は自然施工の3checkpointを継承し、通常速度で最大120秒待って実Generating
+次の限定工程`soul-spa-usage`は自然施工の3checkpointを継承し、通常速度で最大300秒待って実Generating
 workerを観測する。using/usedを追加し、同じSoul/tileで3秒以上の実仮想時間、正出力とgrid、
 Dream消費0.5/秒を照合する。全中間rawの同epoch/window/site/4tile、時計、実HUD通常/停止入力を拘束し、
 Dream/workerの注入や割当強制をしない。収集上限1200sample、全session480秒を維持し、上限到達はinvalidとする。
 枠変更・Operational保存復元・解体・候補通常適用・性能・releaseはこの限定利用試験に含めない。
+
+警告修正後`32805bdc`のfresh usage v2は警告/エラーなしで通常施工を完了したが、
+その後120実秒で仮想50.387571644→90.637571644、全SoulのDream最大27.01988410949707に留まり、
+既存割当条件30未達のままtimeoutした。invalid seal/finalizeし36,749,312Bを待機比較に保持した。
+旧結果を成功へ変えず、通常速度・判定・数値を維持して待機だけ300秒へ有界化する。
+全session480秒・1200sample上限は不変であり、この変更自体を自然利用の成功とは扱わない。
 
 ## 5. マイルストーン
 

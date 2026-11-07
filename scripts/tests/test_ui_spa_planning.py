@@ -6,7 +6,7 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 SKILL = Path(__file__).resolve().parents[2] / ".codex/skills/hell-workers-run-native-acceptance/scripts"
 sys.path.insert(0, str(SKILL))
@@ -510,6 +510,24 @@ class SpaPlanningTests(unittest.TestCase):
                     raw["accepted"] = True
                 with self.subTest(case=case), self.assertRaises(spa.native.AcceptanceError):
                     spa.verify_usage(raw, entries, client, inputs)
+
+    def test_usage_wait_is_bounded_without_seed_or_retry(self):
+        with tempfile.TemporaryDirectory() as directory:
+            save = Path(directory) / "saves/manual-1.scn.ron"
+            save.parent.mkdir()
+            _, entries, _, _ = self.usage_fixture(save)
+            driver = Mock()
+            driver.last = entries[2]["value"]
+            driver.wait.side_effect = [entries[3]["value"], entries[4]["value"]]
+            with patch.object(spa, "exercise_completion") as completion, patch.object(spa, "pause") as pause, \
+                    patch.object(spa, "wait_final_raw") as finish:
+                spa.exercise_usage(driver)
+            completion.assert_called_once_with(driver)
+            self.assertEqual([c.kwargs["timeout"] for c in driver.wait.call_args_list], [300, 15])
+            self.assertEqual([c.args[1] for c in pause.call_args_list], [False, True, False, True])
+            self.assertEqual([c.args[0] for c in driver.capture.call_args_list], list(spa.USAGE_CHECKPOINTS[3:]))
+            finish.assert_called_once_with(driver)
+            driver.send.assert_not_called()
 
     def test_grid_numeric_identity_and_relationships_must_match_actual_remap(self):
         before, after = self.state(1), self.state(2)
