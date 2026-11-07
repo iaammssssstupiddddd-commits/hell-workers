@@ -660,6 +660,13 @@ v5を次の自然施工・通常利用との比較基準に保持し、診断を
 旧4jobの実測83,501,056 bytesを撤去し、storage checkを通過した。失敗metadataと簡潔な診断は保持し、
 採用candidate・authoring原本・最新v5・primary Cargo cacheは変更しない。
 
+次の限定工程は`soul-spa-completion`の通常施工確認とする。既存の配置入力guardを共有し、
+empty/placed/completedの3画像を取得する。初期準備はcamera/pauseだけで、通常AIによるBone搬入を
+最大180秒待つ。完了は同じsite/4tile・Bone12/12・Operational・GeneratePower designation/slot・
+map占有/歩行・実worker逆参照/発電値の整合を同nonceのrawと照合する。入力の再送、資材注入、
+完了seed、候補自動admissionをしない。期限内に成立しなければ未完の実観測として停止する。
+この工程だけでDream消費・長時間利用・稼働枠変更・Operational保存復元・deconstruct・性能・releaseを閉じない。
+
 ## 5. マイルストーン
 
 ### M1: 原本・候補

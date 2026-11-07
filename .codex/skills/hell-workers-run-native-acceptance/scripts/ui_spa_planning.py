@@ -8,6 +8,7 @@ import native_acceptance as native
 from ui_progress_bars import catalog_control
 
 CHECKPOINTS = tuple("soul-spa-" + phase for phase in ("empty", "placed", "saved", "loaded", "cancelled"))
+COMPLETION_CHECKPOINTS = tuple("soul-spa-completion-" + phase for phase in ("empty", "placed", "completed"))
 
 
 def cancel_key(owner):
@@ -165,8 +166,7 @@ def check_mapping(before, after, mapping):
     return lookup
 
 
-def verify(raw, entries, client, save_path, inputs):
-    native.require([row["case"] for row in entries] == list(CHECKPOINTS), "Spa checkpoint inventory differs")
+def check_raw_session(raw, client):
     native.require(raw.get("scope") == "production-raw-observations-v1" and raw.get("schema_version") == 2
                    and raw.get("failure") is None and raw.get("nonce") == client["nonce"]
                    and raw.get("process_id") == client["pid"]
@@ -178,6 +178,12 @@ def verify(raw, entries, client, save_path, inputs):
                            and finite(row.get("real_seconds")) for i, row in enumerate(samples))
                    and all(row.get("event_index") == i and type(row.get("event_index")) is int for i, row in enumerate(events)),
                    "Spa raw ordinal/cap differs")
+
+
+def verify(raw, entries, client, save_path, inputs):
+    native.require([row["case"] for row in entries] == list(CHECKPOINTS), "Spa checkpoint inventory differs")
+    check_raw_session(raw, client)
+    samples, events = raw["samples"], raw["events"]
     values = [row["value"] for row in entries]
     empty, placed, saved, loaded, cancelled = values
     for case, value in zip(CHECKPOINTS, values, strict=True):
@@ -346,7 +352,7 @@ def world_click(driver, name, projection):
     record_action(driver, name, first, before)
 
 
-def check_inputs(raw, entries, client, inputs):
+def check_inputs(raw, entries, client, inputs, *, completion=False):
     native.require(isinstance(inputs, list) and 0 < len(inputs) <= 256
                    and [row.get("step") for row in inputs] == [str(i + 1) for i in range(len(inputs))], "Spa input inventory differs")
     actions = [row["spa_action"] for row in inputs if "spa_action" in row]
@@ -442,6 +448,25 @@ def check_inputs(raw, entries, client, inputs):
                    "Spa unclaimed or extraneous input")
     required = [a for a in actions if a["key"] not in {"Escape", "dev-minimize", "menu:SetTimeSpeed(Paused)", "menu:SetTimeSpeed(Normal)"}]
     filtered = [a["key"] for a in required]
+    if completion:
+        patterns = [r"menu:ToggleArchitect", r"menu:SelectArchitectCategory\(Some\(Plant\)\)",
+                    r"menu:SelectTaskMode\(SoulSpaPlace\(None\)\)", "placement"]
+        native.require(len(filtered) == len(patterns)
+                       and all(re.fullmatch(p, k) for p, k in zip(patterns, filtered, strict=True)),
+                       "Spa completion input sequence differs")
+        lower, upper = entries[:2]
+        for action in required:
+            a, b = action["before"], action["after"]
+            native.require(lower["last_step"] < action["first_step"] <= action["last_step"] <= upper["last_step"]
+                           and lower["value"]["frame"] <= a["frame"] < b["frame"] < upper["value"]["frame"]
+                           and lower["value"]["spa_planning"]["real_seconds"] <= a["spa_planning"]["real_seconds"]
+                           < b["spa_planning"]["real_seconds"] <= upper["value"]["spa_planning"]["real_seconds"]
+                           and a["world_epoch"] == b["world_epoch"] == lower["value"]["world_epoch"],
+                           "Spa completion placement crosses checkpoint phase")
+        native.require(all(entries[0]["value"]["frame"] <= a["before"]["frame"]
+                           < a["after"]["frame"] < entries[-1]["value"]["frame"] for a in actions),
+                       "Spa completion input outside checkpoints")
+        return
     owner = context(entries[3]["value"])["sites"][0]["entity"]
     patterns = [r"menu:ToggleArchitect", r"menu:SelectArchitectCategory\(Some\(Plant\)\)",
                 r"menu:SelectTaskMode\(SoulSpaPlace\(None\)\)", "placement", "F5",
@@ -465,10 +490,10 @@ def check_inputs(raw, entries, client, inputs):
                        "Spa required action crosses its checkpoint phase")
 
 
-def exercise(driver):
+def exercise_placement(driver, checkpoints):
     if "text-field:DevPoc" in driver.last["controls"]:
         click(driver, "dev-minimize")
-    driver.capture(CHECKPOINTS[0])
+    driver.capture(checkpoints[0])
     pause(driver, False)
     click(driver, "menu:ToggleArchitect")
     click(driver, "menu:SelectArchitectCategory(Some(Plant))")
@@ -477,7 +502,11 @@ def exercise(driver):
     driver.last = driver.wait(lambda value: len(context(value)["sites"]) == 1, after=driver.last["frame"])
     tap(driver, "Escape")
     pause(driver, True)
-    driver.capture(CHECKPOINTS[1])
+    driver.capture(checkpoints[1])
+
+
+def exercise(driver):
+    exercise_placement(driver, CHECKPOINTS)
     tap(driver, "F5")
     driver.last = driver.wait(lambda v: any(k.startswith("menu:SelectSaveCatalogSlot") for k in v["controls"]), after=driver.last["frame"])
     click(driver, catalog_control(driver, "SelectSaveCatalogSlot"))
@@ -506,6 +535,10 @@ def exercise(driver):
     driver.last = driver.wait(lambda v: not context(v)["sites"] and not context(v)["tiles"], after=driver.last["frame"])
     pause(driver, True)
     driver.capture(CHECKPOINTS[4])
+    wait_final_raw(driver)
+
+
+def wait_final_raw(driver):
     # UI snapshots precede Last; wait for the exact final raw state, never resend input.
     value = driver.checkpoints[-1]["value"]
     def recorded(_):
@@ -518,3 +551,140 @@ def exercise(driver):
             return False
         return True
     driver.wait(recorded, after=driver.last["frame"], timeout=10)
+
+
+def check_completion_observation(case, value):
+    native.require(case in COMPLETION_CHECKPOINTS, "Spa completion checkpoint differs")
+    if case != COMPLETION_CHECKPOINTS[-1]:
+        check_observation("soul-spa-" + case.rsplit("-", 1)[-1], value)
+        return
+    state, plan = context(value), value["spa_planning"]
+    native.require(value.get("paused") is True and plan.get("legal") is False
+                   and len(state["sites"]) == 1 and len(state["tiles"]) == 4, "Spa completion site inventory differs")
+    site = state["sites"][0]
+    x, y = plan["anchor"]
+    footprint = [[x, y], [x + 1, y], [x, y - 1], [x + 1, y - 1]]
+    native.require(plan["footprint"] == footprint and sorted(site.get("map_building_grids", [])) == sorted(footprint)
+                   and site.get("phase") == "Operational" and site.get("building_kind") == "SoulSpa"
+                   and site.get("provisional") is False and type(site.get("entity_bits")) is int
+                   and all(type(site.get(k)) is int for k in ("bones_required", "bones_delivered", "active_slots"))
+                   and site["bones_required"] == site["bones_delivered"] == 12 and site["active_slots"] == 4
+                   and [c.get("grid") for c in plan["cells"]] == footprint
+                   and all(c.get("owner") == site["entity_bits"] and c.get("walkable") is True for c in plan["cells"]),
+                   "Spa completion values/footprint differ")
+    native.require(sorted(t.get("grid") for t in state["tiles"]) == sorted(footprint), "Spa completion tile grid differs")
+    workers, active = set(), 0
+    souls = {s["entity"]: s for s in state["souls"]}
+    targets = {t["entity"] for t in state["tiles"]}
+    inverse = {(r["entity"], r["target"]) for r in state["working_relations"] if r.get("target") in targets}
+    expected = set()
+    for tile in state["tiles"]:
+        current = tile.get("workers")
+        native.require(type(tile.get("entity_bits")) is int and tile.get("parent_exists") is True
+                       and tile.get("parent_site") == site["entity"] and tile.get("designation") == "GeneratePower"
+                       and type(tile.get("task_slots")) is int and tile["task_slots"] == 1
+                       and tile.get("map") == {"owner": site["entity"], "walkable": True}
+                       and (current is None or isinstance(current, list) and len(current) <= 1),
+                       "Spa completion tile contract differs")
+        for worker in current or []:
+            soul = souls.get(worker, {})
+            task = soul.get("generate_power")
+            native.require(worker not in workers and soul.get("working_on") == tile["entity"]
+                           and isinstance(task, dict) and task.get("tile") == tile["entity"]
+                           and task.get("phase") in ("GoingToTile", "Generating")
+                           and all(finite(soul.get(k)) for k in ("dream", "fatigue", "stress")),
+                           "Spa completion worker/task differs")
+            workers.add(worker)
+            expected.add((worker, tile["entity"]))
+        active += bool(current)
+    native.require(inverse == expected and all(r.get("is_soul") is True for r in state["working_relations"]
+                                             if r.get("target") in targets), "Spa completion worker inverse differs")
+    generator = site.get("generator")
+    grids = [g for g in state["grids"] if g["entity"] == site.get("grid")]
+    native.require(isinstance(generator, dict) and all(finite(generator.get(k)) for k in ("current_output", "output_per_soul"))
+                   and generator["output_per_soul"] == 1 and generator["current_output"] == active
+                   and len(grids) == 1 and type(grids[0].get("entity_bits")) is int
+                   and grids[0].get("generators") == [site["entity"]]
+                   and finite(grids[0].get("generation")) and grids[0]["generation"] == active,
+                   "Spa completion grid/output differs")
+
+
+def verify_completion(raw, entries, client, inputs):
+    native.require([e["case"] for e in entries] == list(COMPLETION_CHECKPOINTS), "Spa completion inventory differs")
+    check_raw_session(raw, client)
+    snapshots = []
+    for entry in entries:
+        value = entry["value"]
+        check_completion_observation(entry["case"], value)
+        native.require(value.get("nonce") == client["nonce"] and value.get("pid") == client["pid"]
+                       and type(value.get("frame")) is int and value["frame"] > 90
+                       and type(value.get("world_epoch")) is int and value["world_epoch"] == entries[0]["value"]["world_epoch"]
+                       and type(entry.get("last_step")) is int and entry["last_step"] >= 0
+                       and all(value["spa_planning"][k] == entries[0]["value"]["spa_planning"][k]
+                               for k in ("anchor", "footprint", "draw_pos")), "Spa completion subject/position differs")
+        snapshots.append(raw_checkpoint(raw, value))
+    check_inputs(raw, entries, client, inputs, completion=True)
+    native.require(all(a["sample_index"] < b["sample_index"] for a, b in zip(snapshots, snapshots[1:]))
+                   and all(a["value"]["frame"] < b["value"]["frame"] and a["last_step"] < b["last_step"]
+                           for a, b in zip(entries, entries[1:])), "Spa completion ordering differs")
+    placed, completed = [context(e["value"]) for e in entries[1:]]
+    owner = placed["sites"][0]
+    native.require(all(completed["sites"][0][k] == owner[k] for k in ("entity", "entity_bits", "pose"))
+                   and {(t["entity"], t["entity_bits"]) for t in placed["tiles"]}
+                   == {(t["entity"], t["entity_bits"]) for t in completed["tiles"]}, "Spa completion owner replaced")
+    actions = [r["spa_action"] for r in inputs if "spa_action" in r
+               and r["spa_action"]["before"]["frame"] >= entries[1]["value"]["frame"]]
+    native.require([a["key"] for a in actions] == ["menu:SetTimeSpeed(Normal)", "menu:SetTimeSpeed(Paused)"]
+                   and actions[0]["before"]["paused"] is True and actions[0]["after"]["paused"] is False
+                   and actions[1]["before"]["paused"] is False and actions[1]["after"]["paused"] is True,
+                   "Spa natural progress has no exact normal/pause input interval")
+    start = pressed_for(raw, actions[0])["real_seconds"]
+    end = actions[1]["after"]["spa_planning"]["real_seconds"]
+    amounts = []
+    interval = raw["samples"][snapshots[1]["sample_index"]:snapshots[2]["sample_index"] + 1]
+    def shape(tiles):
+        keys = ("entity", "entity_bits", "parent_site", "parent_exists", "grid", "pose", "map")
+        return sorted([{k: t.get(k) for k in keys} for t in tiles], key=lambda t: t["entity"])
+    expected_shape = shape(placed["tiles"])
+    for sample in interval:
+        sites = sample.get("spa_context", {}).get("sites", [])
+        tiles = sample.get("spa_context", {}).get("tiles", [])
+        native.require(type(sample.get("world_epoch")) is int
+                       and sample["world_epoch"] == entries[0]["value"]["world_epoch"]
+                       and sample.get("primary_window") == snapshots[0]["primary_window"]
+                       and type(sample.get("primary_window_bits")) is int
+                       and sample.get("primary_window_bits") == snapshots[0]["primary_window_bits"]
+                       and finite(sample.get("real_seconds")) and finite(sample.get("virtual_seconds"))
+                       and sample["real_seconds"] >= 0 and sample["virtual_seconds"] >= 0
+                       and type(sample.get("paused")) is bool
+                       and (sample["paused"] or start <= sample["real_seconds"] <= end)
+                       and len(sites) == 1 and all(sites[0].get(k) == owner[k] for k in (
+                           "entity", "entity_bits", "pose", "map_building_grids", "grid", "bones_required", "active_slots"))
+                       and len(tiles) == 4 and shape(tiles) == expected_shape
+                       and type(sites[0].get("bones_delivered")) is int
+                       and 0 <= sites[0]["bones_delivered"] <= 12
+                       and sites[0].get("phase") == ("Operational" if sites[0]["bones_delivered"] == 12 else "Constructing"),
+                       "Spa natural construction continuity differs")
+        amounts.append(sites[0]["bones_delivered"])
+    native.require(amounts[0] == 0 and amounts[-1] == 12 and amounts == sorted(amounts)
+                   and all(a["real_seconds"] < b["real_seconds"] and a["virtual_seconds"] <= b["virtual_seconds"]
+                           and (not (a["paused"] and b["paused"])
+                                or a["virtual_seconds"] == b["virtual_seconds"]
+                                and a["spa_context"]["sites"][0]["bones_delivered"] == b["spa_context"]["sites"][0]["bones_delivered"])
+                           for a, b in zip(interval, interval[1:]))
+                   and any(s["paused"] is False and start <= s["real_seconds"] <= end
+                           and s["virtual_seconds"] > snapshots[1]["virtual_seconds"] for s in interval)
+                   and snapshots[2]["virtual_seconds"] > snapshots[1]["virtual_seconds"]
+                   and 0 < snapshots[2]["real_seconds"] - snapshots[1]["real_seconds"] <= 190
+                   and not any(e.get("operation") in ("DurableSave", "DurableLoad", "SoulSpaConstructionCancel", "SoulSpaSlotsChange")
+                               for e in raw["events"]), "Spa completion elapsed/progress/operation differs")
+
+
+def exercise_completion(driver):
+    exercise_placement(driver, COMPLETION_CHECKPOINTS)
+    pause(driver, False)
+    driver.last = driver.wait(lambda v: len(context(v)["sites"]) == 1
+                              and context(v)["sites"][0].get("phase") == "Operational", after=driver.last["frame"], timeout=180)
+    pause(driver, True)
+    driver.capture(COMPLETION_CHECKPOINTS[2])
+    wait_final_raw(driver)

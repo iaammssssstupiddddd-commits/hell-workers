@@ -585,6 +585,14 @@ SoulSpa modeを再確認し、実placement receiptのowner/4tileも照合する�
 取消前後の実source relationも検査するが、Bone搬入後の返却、自然利用、発電/通行、全cleanup、
 候補アート採用・性能・正式releaseの証拠をこのrecipeから推測しない。
 
+別case `soul-spa-completion`は同じcamera/pause準備と通常配置入力から、実Bone自然搬入を最大180秒待つ。
+empty/placed/completedの所有窓画像と同nonceのrawを結び、同site/4tileの維持、Bone0→12の単調増加、
+Operational、各tileのGeneratePower/slot1・占有/歩行、workerと実task/逆参照、派生出力とgrid接続を照合する。
+途中rawも同epoch/window、site/4tile・pose/親/mapを維持し、単調な実/仮想時刻とHUD通常/停止入力に
+拘束された実unpaused区間を要求する。全区間pausedの仮想進行や途中だけ異なるsubjectを拒否する。
+資材・worker・完了をseedせず、不成立時にtimeout後の入力再送をしない。これは通常施工の限定feedbackで、
+継続利用・Dream消費・枠変更・Operational保存復元・deconstruct・候補アート・性能・releaseは別の受入とする。
+
 UI feedbackの`rest-area-usage`は通常施工の3checkpointに入所・放出の2checkpointを追加する。
 camera/pause準備以外は既存入力と通常AIを使い、occupant・Dream・材料・完了状態を注入しない。
 UIとproduction rawは同じread-only collectorを使い、paused・同nonce/PID/epoch・同仮想時刻・

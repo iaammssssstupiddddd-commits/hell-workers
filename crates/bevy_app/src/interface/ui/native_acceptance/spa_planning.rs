@@ -8,7 +8,10 @@ use hw_world::{WorldMap, zones::Yard};
 struct Target((i32, i32));
 
 pub(super) fn enabled() -> bool {
-    std::env::var("HW_NATIVE_UI_CASE").as_deref() == Ok("soul-spa-planning")
+    matches!(
+        std::env::var("HW_NATIVE_UI_CASE").as_deref(),
+        Ok("soul-spa-planning" | "soul-spa-completion")
+    )
 }
 
 fn legal(map: &WorldMap, yards: &[Yard], anchor: (i32, i32)) -> bool {

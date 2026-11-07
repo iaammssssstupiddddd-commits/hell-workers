@@ -229,6 +229,193 @@ class SpaPlanningTests(unittest.TestCase):
                 ui.check_observation(entry["case"], entry["value"])
             self.assertIn("soul-spa-planning", ui.CASES)
 
+    def completion_fixture(self, save_path):
+        raw, old_entries, client, old_inputs = self.fixtures(save_path)
+        entries = copy.deepcopy(old_entries[:2])
+        for entry, name in zip(entries, spa.COMPLETION_CHECKPOINTS, strict=False):
+            entry["case"] = name
+        state = copy.deepcopy(entries[1]["value"]["spa_planning"]["context"])
+        state["sites"][0].update(phase="Operational", bones_delivered=12)
+        for tile in state["tiles"]:
+            tile.update(designation="GeneratePower", task_slots=1)
+        completed = copy.deepcopy(entries[1])
+        completed.update(case=spa.COMPLETION_CHECKPOINTS[2], last_step=12)
+        completed["value"].update(frame=3000)
+        completed["value"]["spa_planning"].update(real_seconds=30., virtual_seconds=1., context=state)
+        entries.append(completed)
+        inputs = copy.deepcopy(old_inputs[:8])
+        for now, paused in ((11, False), (29, True)):
+            key = "menu:SetTimeSpeed(Paused)" if paused else "menu:SetTimeSpeed(Normal)"
+            before = copy.deepcopy(inputs[0]["spa_action"]["before"])
+            before.update(frame=now * 100, paused=not paused)
+            before["spa_planning"].update(real_seconds=float(now), virtual_seconds=float(paused),
+                                         context=state if paused else entries[1]["value"]["spa_planning"]["context"])
+            after = copy.deepcopy(before)
+            after.update(frame=now * 100 + 30, paused=paused)
+            after["spa_planning"]["real_seconds"] = now + .3
+            first = len(inputs)
+            for i, pressed in enumerate((True, False)):
+                row = copy.deepcopy(old_inputs[i])
+                row.pop("spa_action", None)
+                row.update(step=str(len(inputs) + 1), pre_frame=now * 100 + i * 10, post_frame=now * 100 + i * 10 + 5,
+                           pressed=pressed, observed_hover={key: "Pressed"} if pressed else {})
+                inputs.append(row)
+            inputs[first]["spa_action"] = {"key": key, "first_step": first + 1, "last_step": first + 2,
+                                          "before": before, "after": after}
+        raw["samples"] = [s for s in raw["samples"] if s["real_seconds"] <= 10]
+        raw["events"] = [e for e in raw["events"] if e["real_seconds"] <= 10]
+        intermediate = copy.deepcopy(entries[1]["value"]["spa_planning"]["context"])
+        intermediate["sites"][0]["bones_delivered"] = 6
+        for now, pressed, virtual, paused, ctx in (
+            (11.1, True, 0., True, entries[1]["value"]["spa_planning"]["context"]),
+            (11.2, False, .1, False, entries[1]["value"]["spa_planning"]["context"]),
+            (20., None, .5, False, intermediate),
+            (29.1, True, 1., False, state), (29.2, False, 1., True, state), (30., None, 1., True, state)):
+            sample = copy.deepcopy(raw["samples"][-1])
+            sample.update(real_seconds=now, virtual_seconds=virtual, paused=paused, spa_context=copy.deepcopy(ctx),
+                          cursor_position=[100, 100], dpi=1)
+            raw["samples"].append(sample)
+            if pressed is not None:
+                raw["events"].append({"producer": "MouseButtonInput", "operation": "MouseButtonInput", "window": "3v0",
+                                      "real_seconds": now, "state": "Pressed" if pressed else "Released", "button": "Left"})
+        for i, sample in enumerate(raw["samples"]):
+            sample["sample_index"] = i
+        for i, event in enumerate(raw["events"]):
+            event.update(event_index=i, sample_index=next(j for j, s in enumerate(raw["samples"])
+                                                       if s["real_seconds"] >= event["real_seconds"]))
+        return raw, entries, client, inputs
+
+    def test_natural_completion_fixture_and_missing_evidence_refusals(self):
+        with tempfile.TemporaryDirectory() as directory:
+            save = Path(directory) / "saves/manual-1.scn.ron"
+            save.parent.mkdir()
+            raw, entries, client, inputs = self.completion_fixture(save)
+            spa.verify_completion(raw, entries, client, inputs)
+            for entry in entries:
+                ui.check_observation(entry["case"], entry["value"])
+            self.assertIn("soul-spa-completion", ui.CASES)
+            for change in ("authority", "missing_input", "phase", "bones", "output", "designation", "slot",
+                           "walkability", "foreign_parent", "foreign_grid", "ghost_worker", "epoch", "late"):
+                raw, entries, client, inputs = self.completion_fixture(save)
+                state = entries[-1]["value"]["spa_planning"]["context"]
+                if change == "authority":
+                    raw["promotion_authority"] = True
+                elif change == "missing_input":
+                    inputs.pop()
+                elif change == "phase":
+                    state["sites"][0]["phase"] = "Constructing"
+                elif change == "bones":
+                    state["sites"][0]["bones_delivered"] = 11
+                elif change == "output":
+                    state["sites"][0]["generator"]["current_output"] = 1
+                elif change == "designation":
+                    state["tiles"][0]["designation"] = None
+                elif change == "slot":
+                    state["tiles"][0]["task_slots"] = 2
+                elif change == "walkability":
+                    entries[-1]["value"]["spa_planning"]["cells"][0]["walkable"] = False
+                elif change == "foreign_parent":
+                    state["tiles"][0]["parent_site"] = "foreign"
+                elif change == "foreign_grid":
+                    state["grids"][0]["generators"] = ["foreign"]
+                elif change == "ghost_worker":
+                    state["tiles"][0]["workers"] = ["foreign"]
+                elif change == "epoch":
+                    entries[-1]["value"]["world_epoch"] = 1
+                else:
+                    entries[-1]["value"]["spa_planning"]["real_seconds"] = 300
+                with self.subTest(change=change), self.assertRaises(spa.native.AcceptanceError):
+                    spa.verify_completion(raw, entries, client, inputs)
+
+    def test_completion_wait_is_bounded_and_never_assigns_or_completes_work(self):
+        driver = Mock(last={"frame": 100})
+        driver.wait.return_value = {"frame": 200}
+        with unittest.mock.patch.object(spa, "exercise_placement") as place, \
+                unittest.mock.patch.object(spa, "pause") as pause, unittest.mock.patch.object(spa, "wait_final_raw"):
+            spa.exercise_completion(driver)
+            place.assert_called_once_with(driver, spa.COMPLETION_CHECKPOINTS)
+            self.assertEqual(pause.call_args_list, [unittest.mock.call(driver, False), unittest.mock.call(driver, True)])
+            driver.wait.assert_called_once()
+            self.assertEqual(driver.wait.call_args.kwargs["timeout"], 180)
+            driver.capture.assert_called_once_with(spa.COMPLETION_CHECKPOINTS[-1])
+
+    def test_completion_rejects_intermediate_subject_shape_and_clock_changes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            save = Path(directory) / "saves/manual-1.scn.ron"
+            save.parent.mkdir()
+            for case in ("epoch", "window", "window_bits", "tile", "parent", "pose", "map", "grid",
+                         "clock", "virtual_clock", "all_paused", "paused_progress", "counter", "missing_normal"):
+                raw, entries, client, inputs = self.completion_fixture(save)
+                middle = next(s for s in raw["samples"] if s["real_seconds"] == 20.)
+                state = middle["spa_context"]
+                if case == "epoch":
+                    middle["world_epoch"] = 1
+                elif case == "window":
+                    middle["primary_window"] = "foreign"
+                elif case == "window_bits":
+                    middle["primary_window_bits"] = 99
+                elif case == "tile":
+                    state["tiles"][0]["entity_bits"] = 999
+                elif case == "parent":
+                    state["tiles"][0]["parent_site"] = "foreign"
+                elif case == "pose":
+                    state["tiles"][0]["pose"]["translation"][0] = 999
+                elif case == "map":
+                    state["tiles"][0]["map"]["walkable"] = False
+                elif case == "grid":
+                    state["sites"][0]["grid"] = "foreign"
+                elif case == "clock":
+                    middle["real_seconds"] = 1.
+                elif case == "virtual_clock":
+                    middle["virtual_seconds"] = -1.
+                elif case == "all_paused":
+                    for sample in raw["samples"]:
+                        sample["paused"] = True
+                elif case == "paused_progress":
+                    for sample in raw["samples"]:
+                        if 11.2 <= sample["real_seconds"] <= 29.1:
+                            sample["paused"] = True
+                            sample["virtual_seconds"] = 0.
+                elif case == "counter":
+                    state["sites"][0]["bones_delivered"] = 13
+                else:
+                    inputs[8]["spa_action"]["key"] = "menu:SetTimeSpeed(Paused)"
+                with self.subTest(case=case), self.assertRaises(spa.native.AcceptanceError):
+                    spa.verify_completion(raw, entries, client, inputs)
+
+    def test_operational_worker_inverse_and_derived_output_are_exact(self):
+        with tempfile.TemporaryDirectory() as directory:
+            save = Path(directory) / "saves/manual-1.scn.ron"
+            save.parent.mkdir()
+            _, entries, _, _ = self.completion_fixture(save)
+            value = entries[-1]["value"]
+            state = value["spa_planning"]["context"]
+            tile = state["tiles"][0]
+            tile["workers"] = ["400v0"]
+            state["souls"] = [{"entity": "400v0", "working_on": tile["entity"], "dream": 5., "fatigue": .1,
+                               "stress": .2, "generate_power": {"tile": tile["entity"], "phase": "GoingToTile"}}]
+            state["working_relations"] = [{"entity": "400v0", "target": tile["entity"], "is_soul": True}]
+            state["sites"][0]["generator"]["current_output"] = 1.
+            state["grids"][0]["generation"] = 1.
+            spa.check_completion_observation(spa.COMPLETION_CHECKPOINTS[-1], value)
+            state["souls"][0]["generate_power"]["phase"] = "Generating"
+            spa.check_completion_observation(spa.COMPLETION_CHECKPOINTS[-1], value)
+            for case in ("inverse", "foreign_task", "duplicate_worker", "non_soul", "output"):
+                changed = copy.deepcopy(value)
+                data = changed["spa_planning"]["context"]
+                if case == "inverse":
+                    data["working_relations"] = []
+                elif case == "foreign_task":
+                    data["souls"][0]["generate_power"]["tile"] = "foreign"
+                elif case == "duplicate_worker":
+                    data["tiles"][1]["workers"] = ["400v0"]
+                elif case == "non_soul":
+                    data["working_relations"][0]["is_soul"] = False
+                else:
+                    data["grids"][0]["generation"] = 0.
+                with self.subTest(case=case), self.assertRaises(spa.native.AcceptanceError):
+                    spa.check_completion_observation(spa.COMPLETION_CHECKPOINTS[-1], changed)
+
     def test_grid_numeric_identity_and_relationships_must_match_actual_remap(self):
         before, after = self.state(1), self.state(2)
         mapping = [{"saved_entity": a["entity"], "saved_bits": a["entity_bits"],
