@@ -144,6 +144,21 @@ fn material_snapshot(material: &TopDownStructuralMaterial) -> Value {
         "base": format!("{:?}", material.base), "extension": format!("{:?}", material.extension)})
 }
 
+fn preview_artifact(
+    set: &crate::assets::building_asset_set::BuildingAssetDescriptor,
+) -> Result<&crate::assets::building_asset_set::BuildingArtifact, String> {
+    let role = format!("image:{}", set.manifest.world_preview.image_role);
+    let mut matching = set
+        .manifest
+        .artifacts
+        .iter()
+        .filter(|artifact| artifact.role == role);
+    match (matching.next(), matching.next()) {
+        (Some(artifact), None) => Ok(artifact),
+        _ => Err("context requires exactly one image: preview artifact".into()),
+    }
+}
+
 fn snapshot(world: &mut World) -> Result<Option<Value>, String> {
     let session = world.resource::<BuildingArtSession>();
     let identity = session.identity.clone();
@@ -526,7 +541,7 @@ fn snapshot(world: &mut World) -> Result<Option<Value>, String> {
             "composite_screen": composite_screen.to_array(), "preview_offset_wu": [0.0, -160.0],
             "root_rtt_screen": rtt_camera.world_to_viewport(rtt_global, root_transform.translation).map_err(|_| "context RtT projection unavailable")?.to_array(),
             "preview": {"entity": preview_id.to_bits(), "descriptor": preview,
-                "artifact": descriptor.manifest.artifacts.iter().find(|artifact| artifact.role == preview.image_role).ok_or("missing preview artifact")?,
+                "artifact": preview_artifact(&descriptor)?,
                 "anchor": anchor.0.to_array(), "canvas_wu": sprite.custom_size.unwrap().to_array(),
                 "transform": transform(&preview_transform), "image": format!("{:?}", sprite.image.id()),
                 "screen_anchor": point(preview_transform.translation)?, "color": format!("{:?}", sprite.color), "visible": true}}));
@@ -652,6 +667,27 @@ fn checkpoint(state: &mut BuildingArtStaticState, evidence: Option<Value>) -> Re
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn preview_artifact_uses_validated_image_namespace_and_rejects_missing_or_duplicate() {
+        let mut pool = BuildingAssetPool::default();
+        let mut set = pool.install_presentation_fixture(
+            BuildingAssetKind::RestArea,
+            1,
+            crate::assets::building_asset_set::BuildingAssetAuthority::ArtPreview,
+        );
+        let artifact = preview_artifact(&set).unwrap().clone();
+        assert_eq!(artifact.role, "image:world_preview");
+        set.manifest.artifacts.push(artifact.clone());
+        assert!(preview_artifact(&set).is_err());
+        set.manifest.artifacts = vec![crate::assets::building_asset_set::BuildingArtifact {
+            role: "world_preview".into(),
+            ..artifact
+        }];
+        assert!(preview_artifact(&set).is_err());
+        set.manifest.artifacts.clear();
+        assert!(preview_artifact(&set).is_err());
+    }
 
     #[test]
     fn seeded_previews_use_shared_descriptor_once_and_are_never_repaired() {

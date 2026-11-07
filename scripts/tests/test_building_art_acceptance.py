@@ -21,7 +21,7 @@ class RecipeTests(unittest.TestCase):
     def context(self):
         descriptor = {"image_role": "world_preview", "canvas_px": [256, 256],
                       "canvas_wu": [128., 128.], "anchor_px": [128., 144.], "representative_state": "Empty"}
-        artifact = {"role": "world_preview", "path": "preview.png", "bytes": 100, "sha256": "b" * 64}
+        artifact = {"role": "image:world_preview", "path": "preview.png", "bytes": 100, "sha256": "b" * 64}
         value = {"mode": "feedback", "kind": "RestArea", "identity": {"authority": "art_preview"},
                  "variant": "rest-area-art-context", "lighting": "standard", "view": "normal",
                  "scope": art.CONTEXT_SCOPE, "promotion_authority": False,
@@ -69,6 +69,16 @@ class RecipeTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             art.validate_probe(probe, {**value, "variant": "gallery", "lighting": "standard"}, probe["nonce"])
 
+    def test_manifest_image_artifact_namespace_is_exact_and_unique(self):
+        value, _ = self.context()
+        expected = value["context_preview"]
+        manifest = {"world_preview": expected["descriptor"], "artifacts": [expected["artifact"]]}
+        self.assertEqual(art.context_preview(manifest), expected)
+        for artifacts in ([], [{**expected["artifact"], "role": "world_preview"}],
+                          [expected["artifact"], expected["artifact"]]):
+            with self.subTest(artifacts=artifacts), self.assertRaisesRegex(ValueError, "image:"):
+                art.context_preview({**manifest, "artifacts": artifacts})
+
     def test_context_rejects_wrong_inventory_identity_preview_walls_and_lights(self):
         value, original = self.context()
         changes = [
@@ -82,6 +92,7 @@ class RecipeTests(unittest.TestCase):
             (("fixture", "records", 0, "preview"), "canvas_wu", [64, 64]),
             (("fixture", "records", 0, "preview"), "visible", False),
             (("fixture", "records", 0, "preview", "artifact"), "sha256", "f" * 64),
+            (("fixture", "records", 0, "preview", "artifact"), "role", "world_preview"),
             (("fixture", "records", 0, "walls", 0), "grid", [0, 21]),
             (("fixture", "records", 0, "parts", 0), "visible", False),
             (("fixture", "records", 0, "parts", 0, "material_values"), "lit", False),

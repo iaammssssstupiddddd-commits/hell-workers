@@ -41,6 +41,13 @@ QUALITIES = ("high", "medium", "low")
 CONTEXT_SCOPE = "seeded-paused-art-comparison"
 
 
+def context_preview(manifest: dict) -> dict:
+    preview = manifest["world_preview"]
+    artifacts = [entry for entry in manifest["artifacts"] if entry["role"] == "image:" + preview["image_role"]]
+    pipeline.require(len(artifacts) == 1, "context requires one exact image: preview artifact")
+    return {"descriptor": preview, "artifact": artifacts[0]}
+
+
 def context_settings(value: dict) -> bool:
     variant = value.get("variant", "gallery")
     lighting = value.get("lighting", "standard")
@@ -94,10 +101,7 @@ def check_plan(value: dict, binary: Path) -> dict:
                      and pipeline.digest(text.encode()) == value["manifest_sha256"]
                      and manifest["identity"]["authority"] == MODES[value["mode"]], "candidate identity/authority changed")
     if context_settings(value):
-        pipeline.require(value.get("context_preview") == {
-            "descriptor": manifest["world_preview"],
-            "artifact": next(entry for entry in manifest["artifacts"]
-                             if entry["role"] == manifest["world_preview"]["image_role"])},
+        pipeline.require(value.get("context_preview") == context_preview(manifest),
             "context preview differs from exact source manifest")
     if value["mode"] == "candidate":
         # Reuse promotion's art approval/provenance checks without approving or
@@ -126,9 +130,7 @@ def plan(args) -> dict:
              "scope": CONTEXT_SCOPE if getattr(args, "variant", "gallery") == "rest-area-art-context" else "paused-static-presentation", "promotion_authority": False,
              "feedback_only": args.mode == "feedback"}
     if value["variant"] == "rest-area-art-context":
-        value["context_preview"] = {"descriptor": manifest["world_preview"],
-            "artifact": next(entry for entry in manifest["artifacts"]
-                             if entry["role"] == manifest["world_preview"]["image_role"])}
+        value["context_preview"] = context_preview(manifest)
     check_plan(value, args.codec)
     resources = native.resource_snapshot(repo, require_launcher=True)
     pipeline.require(not resources["failures"], str(resources["failures"]))
@@ -247,7 +249,7 @@ def validate_context_fixture(probe: dict, value: dict) -> None:
         descriptor = preview["descriptor"]
         artifact = preview["artifact"]
         pipeline.require({"descriptor": descriptor, "artifact": artifact} == value["context_preview"]
-            and descriptor["image_role"] == artifact["role"] == "world_preview"
+            and descriptor["image_role"] == "world_preview" and artifact["role"] == "image:world_preview"
             and re.fullmatch(r"[0-9a-f]{64}", artifact["sha256"]) is not None
             and preview["canvas_wu"] == descriptor["canvas_wu"]
             and preview["anchor"] == [descriptor["anchor_px"][0] / descriptor["canvas_px"][0] - .5,

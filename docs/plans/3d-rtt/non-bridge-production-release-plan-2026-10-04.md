@@ -48,6 +48,9 @@ config/admission・seed・plugin配線とsidecar契約を明示分岐した。�
 同handle内のPBR材質変更、壁可視性/3D transform/layer、実RtT target/composite、
 完成接地点とpreview anchorの既知offsetを観測・拒否へ追加した。
 現時点は準備中であり、この新場面のfresh native画像・最終固定read-only review・正式採否は未実施。
+`a76c44f3`の最初のplanは、実manifestのartifact roleが`image:world_preview`であるのに
+新helperが非prefix名を検索していたため登録前に拒否された。job root・launchは未作成のまま保全した。
+実role namespaceへ修正し、欠損/非prefix/重複artifactの拒否テストを追加する。旧計画拒否はnative passではない。
 
 `c07987e4`のfresh `tak14-restarea-ordinary-art-eis-feedback-20261108-v3`は9checkpoint、
 登録verifierと別実行verifyが成功した。source=`43386c30797aac97f88d338f16c76304cb14ff143d9f9111e4dc0eba01361947`、
