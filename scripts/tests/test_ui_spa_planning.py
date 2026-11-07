@@ -6,6 +6,7 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
+from unittest.mock import Mock
 
 SKILL = Path(__file__).resolve().parents[2] / ".codex/skills/hell-workers-run-native-acceptance/scripts"
 sys.path.insert(0, str(SKILL))
@@ -14,6 +15,33 @@ ui = importlib.import_module("ui_usability_acceptance")
 
 
 class SpaPlanningTests(unittest.TestCase):
+    def test_world_press_keeps_actual_architect_menu_and_rejects_foreign_mode_before_press(self):
+        for menu, mode, valid in (("Architect", "SoulSpaPlace(None)", True),
+                                  ("Hidden", "SoulSpaPlace(None)", False), ("Architect", "None", False)):
+            with tempfile.TemporaryDirectory() as directory:
+                driver = Mock()
+                driver.root, driver.events = Path(directory), []
+                driver.last = {"frame": 100, "nonce": "nonce", "pid": 10, "world_epoch": 0,
+                               "primary_window": 3, "paused": False, "cursor": [100, 100], "scale_factor": 1,
+                               "mouse_left_pressed": False, "pointer_over_ui": False, "world_input_captured": False,
+                               "viewport": [1920, 1080], "controls": {}, "menu_state": menu,
+                               "spa_planning": {"point": [100, 100], "legal": True, "footprint": [[10, 10]],
+                                                "real_seconds": 1., "task_mode": mode}}
+                def send(**event):
+                    driver.events.append(event)
+                    driver.last["frame"] += 10
+                    driver.last["spa_planning"]["real_seconds"] += .1
+                driver.send.side_effect = send
+                if valid:
+                    spa.world_click(driver, "placement", "point")
+                    self.assertEqual(driver.send.call_count, 3)
+                    self.assertEqual(driver.send.call_args_list[1].kwargs, {"button": 1, "pressed": True})
+                    self.assertEqual(driver.events[1]["spa_action"]["before"]["menu_state"], "Architect")
+                else:
+                    with self.assertRaises(spa.native.AcceptanceError):
+                        spa.world_click(driver, "placement", "point")
+                    driver.send.assert_called_once_with(point=(100, 100))
+
     def test_spa_helper_is_in_every_frozen_harness_inventory(self):
         from scripts.perf_tool import execution, renderdoc_capture
         relative = ".codex/skills/hell-workers-run-native-acceptance/scripts/ui_spa_planning.py"
@@ -104,6 +132,7 @@ class SpaPlanningTests(unittest.TestCase):
             before = {"nonce": "nonce", "pid": 10, "world_epoch": before_epoch, "primary_window": 3,
                       "frame": now * 100, "cursor": [100, 100], "spa_planning": plan,
                       "viewport": [1920, 1080], "scale_factor": 1,
+                      "menu_state": "Architect",
                       "pointer_over_ui": False, "world_input_captured": False,
                       "control": {"fully_visible": True, "interaction": "Hovered", "rect": [90, 90, 110, 110]}}
             after = copy.deepcopy(before)

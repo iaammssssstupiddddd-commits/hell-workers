@@ -247,7 +247,7 @@ def verify(raw, entries, client, save_path, inputs):
 def input_context(value, key=None):
     result = {k: copy.deepcopy(value[k]) for k in (
         "frame", "nonce", "pid", "world_epoch", "primary_window", "paused", "cursor", "scale_factor",
-        "mouse_left_pressed", "world_input_captured", "pointer_over_ui", "spa_planning", "viewport")}
+        "mouse_left_pressed", "world_input_captured", "pointer_over_ui", "spa_planning", "viewport", "menu_state")}
     result["control"] = copy.deepcopy(value["controls"].get(key)) if key else None
     return result
 
@@ -301,7 +301,7 @@ def world_click(driver, name, projection):
         native.require(current["spa_planning"]["legal"] is True
                        and current["spa_planning"]["footprint"] == before["spa_planning"]["footprint"]
                        and current["spa_planning"]["task_mode"].startswith("SoulSpaPlace(")
-                       and current["menu_state"] == "Hidden", "Spa placement context changed")
+                       and current["menu_state"] == "Architect", "Spa placement context changed")
     before, first = input_context(current), len(driver.events)
     driver.send(button=1, pressed=True)
     driver.send(button=1, pressed=False)
@@ -382,6 +382,7 @@ def check_inputs(raw, entries, client, inputs):
                            "Spa actual control target missing")
         if key == "placement":
             native.require(a["spa_planning"]["legal"] is True and not a["pointer_over_ui"] and not a["world_input_captured"]
+                           and a.get("menu_state") == "Architect"
                            and a["spa_planning"].get("task_mode", "").startswith("SoulSpaPlace("),
                            "Spa placement foreground differs")
             receipts = [r for r in raw["events"] if r.get("producer") == "ordinary-building-placement-branch-v1"

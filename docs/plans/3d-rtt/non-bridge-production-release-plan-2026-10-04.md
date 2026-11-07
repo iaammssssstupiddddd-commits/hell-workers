@@ -613,6 +613,13 @@ Rust check/Clippy・変更別検証・独立readonlyを通してから、別の�
 walkability、実cancel outcomeを照合する。資材・task・worker・Dreamは注入しない。
 この限定recipeは候補アートをadmitせず、発電/利用/搬入後返却/正式releaseを証明しない。
 
+初回`tak14-soulspa-ordinary-planning-20261108-v1`は`f647da95`で実行し、配置press前に
+`Spa placement context changed`でinvalid終了した。原観測frame279/epoch0ではArchitect menu、
+SoulSpaPlace(None)、合法footprint `[(70,50),(71,50),(70,49),(71,49)]`、cursor `(944,524)`、
+world capture/pointer-over-UIともfalseであった。試験のHidden menu要求が製品契約と違ったためで、
+配置pressやSave/Load/取消は未実施。旧結果はinvalidのままseal/finalizeし、原入力と観測を修正比較に保持する。
+製品状態を変更せず、試験は実Architect menuを正としてmode/footprint/window/epoch/入力guardを維持する。
+
 ## 5. マイルストーン
 
 ### M1: 原本・候補
