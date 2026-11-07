@@ -17,13 +17,14 @@ from pathlib import Path
 import building_asset_pipeline as pipeline
 from building_clay_geometry import FIXTURES, read_json, require
 from building_m3_art import CONTRACT, KINDS, contract, face_layout, geometry, paint, parts, states
-from build_building_m2_candidate import check_uv
+from validate_building_m2_indexed_faces import check_m3_indexed_faces as check_uv
 from validate_wall_glb import accessor_values, exact_identity_node, index_values, read_glb
 from workflow_common import asset_root, require_within, write_json_atomic
 
 WORKFLOW = FIXTURES.parent
 SOURCES = ("building_m3_art.py", "create_building_m3_scene.py", "building_clay_geometry.py",
-           "create_building_clay_scene.py", "build_building_m3_candidate.py", "build_building_m2_candidate.py")
+           "create_building_clay_scene.py", "build_building_m3_candidate.py", "build_building_m2_candidate.py",
+           "validate_building_m2_indexed_faces.py")
 
 
 def digest(path):

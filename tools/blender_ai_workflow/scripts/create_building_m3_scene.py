@@ -137,7 +137,8 @@ def main():
         "geometry_contract_sha256": digest(CONTRACT), "blend_sha256": digest(blend), "ocio": ocio,
         "sources": {name: digest(scripts / name) for name in (
             "building_m3_art.py", "create_building_m3_scene.py", "building_clay_geometry.py",
-            "create_building_clay_scene.py", "build_building_m3_candidate.py", "build_building_m2_candidate.py")},
+            "create_building_clay_scene.py", "build_building_m3_candidate.py", "build_building_m2_candidate.py",
+            "validate_building_m2_indexed_faces.py")},
         "face_layout": layout, "parts": parts(args.kind), "preview": spec["preview"],
         "renders": renders, "catalog_sha256": digest(output / "catalog.png"), "catalog_projection": catalog_projection,
         "albedo_sha256": digest(output / "albedo.png"),

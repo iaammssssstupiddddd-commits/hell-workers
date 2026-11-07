@@ -93,6 +93,13 @@ atlas/UVの実経路を照合すると、上向きbone:shaft 42面中34面で既
 色・geometry・logical footprint・slot順・emissive・runtimeは変更せず、旧描線で失敗する面内画素回帰を先に追加する。
 Help実レビュー・変更別CI・独立readonly後、fresh候補を既存制作経路で作り新identityとして再比較する。
 旧原本・3距離画像は修正前後比較の用途で保持し、正式art/numeric/release/performanceは未承認のまま。
+描線補正`9bbe8abf`はM3関連12試験・変更別contracts/toolingと独立readonlyを通過した。
+fresh authoring v1はGLB exporter/validatorが両roleともerrors=0/warnings=0だったが、M3がM2専用の
+3/4角面検査を呼び骨の8角capを拒否してexit1。invalid封印・診断保持・finalizeし、旧試行を再送しない。
+初期診断の「slotの12角cap」も拒否対象という推測は不正確で、実slotは24三角/12四角であり追加許可は不要だった。
+M2入口の3/4角限定を維持した別M3入口で3/4/8角だけを扱い、indexed vertex/UV集合・face内triangle・
+枚数・全perimeterの向き・内部edge対消去を従来同様に検査する。checker自身のhashもM3制作reportへ加える。
+正常M3 capとM2拒否、逆向き・重複・退化・face跨ぎ・範囲外index・UV変更の回帰を通してからfresh v2へ進む。
 
 `c07987e4`のfresh `tak14-restarea-ordinary-art-eis-feedback-20261108-v3`は9checkpoint、
 登録verifierと別実行verifyが成功した。source=`43386c30797aac97f88d338f16c76304cb14ff143d9f9111e4dc0eba01361947`、

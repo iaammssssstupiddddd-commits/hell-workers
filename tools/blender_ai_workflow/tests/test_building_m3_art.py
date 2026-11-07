@@ -1,5 +1,6 @@
 """Pure M3 authoring regressions; no Blender, approval, or native substitute."""
 import json
+import struct
 import sys
 import tempfile
 import unittest
@@ -9,9 +10,52 @@ SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 import building_m3_art as art
 from build_building_m3_candidate import recipe
+from build_building_m3_candidate import check_uv as check_m3_uv
+from build_building_m2_candidate import check_uv as check_m2_uv
+if __package__:
+    from .test_building_clay import encoded_geometry, write_glb
+else:
+    from test_building_clay import encoded_geometry, write_glb
 
 
 class M3ArtTests(unittest.TestCase):
+    def test_m3_cap_faces_are_indexed_exactly_without_relaxing_m2(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "role.glb"
+            for role, mesh in art.geometry("SoulSpa").items():
+                layout = art.face_layout("SoulSpa")[role]
+                document, binary = encoded_geometry(mesh)
+                uv_offset = document["bufferViews"][2]["byteOffset"]
+                index_offset = document["bufferViews"][3]["byteOffset"]
+                for index, (u, v) in enumerate(point for face in layout for point in face["uv"]):
+                    struct.pack_into("<ff", binary, uv_offset + index*8, u, 1-v)
+                write_glb(path, document, binary)
+                check_m3_uv(path, mesh, layout)
+                if role == "body":
+                    with self.assertRaisesRegex(ValueError, "unsupported sides"):
+                        check_m2_uv(path, mesh, layout)
+                else:
+                    check_m2_uv(path, mesh, layout)
+                first = struct.unpack_from("<III", binary, index_offset)
+                second = struct.unpack_from("<III", binary, index_offset + 12)
+                changes = {
+                    "degenerate": (0, 0, 1), "reversed": first[::-1],
+                    "duplicate": second, "cross-face": (0, 1, len(mesh.faces[0])),
+                    "out-of-range": (0, 1, document["accessors"][0]["count"]),
+                }
+                for label, triangle in changes.items():
+                    with self.subTest(role=role, mutation=label):
+                        changed = bytearray(binary)
+                        struct.pack_into("<III", changed, index_offset, *triangle)
+                        write_glb(path, document, changed)
+                        with self.assertRaises(ValueError):
+                            check_m3_uv(path, mesh, layout)
+                changed = bytearray(binary)
+                struct.pack_into("<ff", changed, uv_offset, 0, 0)
+                write_glb(path, document, changed)
+                with self.assertRaises(ValueError):
+                    check_m3_uv(path, mesh, layout)
+
     def test_every_upper_bone_shaft_has_grain_inside_its_actual_uv_polygon(self):
         from PIL import Image, ImageDraw
         with tempfile.TemporaryDirectory() as directory:
