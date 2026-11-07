@@ -13,6 +13,25 @@
 
 ## 1. 目的
 
+2026-11-07材料返却工程: 既存のゼロ材料caseを変えず、通常RestAreaの実搬入Woodを受動観測してから
+同じF5/F9・二段階取消を行う別feedback caseを追加する。資材付与・進捗設定・AI割当は行わない。
+実前状態の材料数と、新規の返却Entity IDs/種類/数量を厳密照合する。材料なし・施工完了・
+同subject不一致・返却不足は拒否し、全予約/inventory清算や正式release承認へは昇格しない。
+`material-refund-feedback-20261107-v1`は実Wood1の保存読込後、時間再開中のUI遷移で
+通常施工が完了して対象を失いinvalid。停止中に対象詳細へ移動する手順へ修正した。
+v2は実取消、owner2219v1／epoch1のcleanup、Wood2と返却Entity2411v18・880v6を観測したが、
+読込Wood1の後に通常搬入が1個増え、旧verifierのloaded量との一致要求でinvalid。
+save/load間の量・progress一致は維持し、取消時はsame-owner/epochの実raw履歴が
+loaded量から単調増加し、最後の実材料数と返却ID数・種類が厳密一致する契約へ訂正した。
+v3は配置後のSpace入力が時間再開を成立させずtimeoutでinvalid。新caseのみ既存HUDの
+Normal（1x）／Pausedを一度操作して実状態を待ち、未知入力は再送しない。
+v4は実搬入・保存読込・停止中の対象選択に成功したが、Normalを押して時間再開後、
+release時にBevy cursorがnullとなりgesture guardが拒否。取消は送っていない。
+4試行ともinvalidのままseal/finalizeし、それぞれの修正・原因調査用途だけを診断保持した。
+限定コードは独立read-only review、55 focused tests、tooling gateを通過。profiling-only Rustの
+材料snapshotはworkspace通常/profiling試験・両Clippy警告0で確認済み。非ゼロ返却native受入は未達。
+次は入力ガードを緩めずfocus/cursorを切り分け、独立して実搬入branchのtransaction producerを追加する。
+
 2026-11-07再開工程: 通常Blueprint取消が実際に発行したrefund Entity IDsと、
 deferred適用後のowner/request/storage/map・関連actor状態を結ぶprofiling-only観測を追加する。
 通常RestAreaの既存input recipeへ同nonce/PIDのrawを接続し、ゼロ材料予約の取消を実機確認する。

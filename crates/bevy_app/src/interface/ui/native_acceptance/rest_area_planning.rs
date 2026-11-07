@@ -14,7 +14,10 @@ use hw_world::zones::Yard;
 struct Target((i32, i32));
 
 pub(super) fn enabled() -> bool {
-    std::env::var("HW_NATIVE_UI_CASE").as_deref() == Ok("rest-area-planning")
+    matches!(
+        std::env::var("HW_NATIVE_UI_CASE").as_deref(),
+        Ok("rest-area-planning" | "rest-area-refund")
+    )
 }
 
 fn legal_anchor(map: &WorldMap, yards: &[Yard]) -> Option<(i32, i32)> {
@@ -75,6 +78,9 @@ pub(super) fn snapshot(world: &mut World) -> Value {
             json!({
                 "entity": entity.to_bits(), "footprint": blueprint.occupied_grids,
                 "progress": blueprint.progress, "materials_complete": blueprint.materials_complete(),
+                "delivered_materials": blueprint.delivered_materials.iter()
+                    .map(|(kind, count)| (format!("{kind:?}"), *count))
+                    .collect::<std::collections::BTreeMap<_, _>>(),
             })
         })
         .collect();
@@ -121,6 +127,35 @@ fn legal_anchor_at(map: &WorldMap, yards: &[Yard], anchor: (i32, i32)) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn snapshot_reads_actual_delivered_materials_without_mutation() {
+        let mut world = World::new();
+        world.init_resource::<WorldMap>();
+        world.insert_resource(Target((2, 3)));
+        let mut blueprint =
+            Blueprint::new(BuildingType::RestArea, vec![(2, 3), (3, 3), (2, 4), (3, 4)]);
+        blueprint
+            .delivered_materials
+            .insert(hw_logistics::ResourceType::Wood, 2);
+        let owner = world.spawn(blueprint).id();
+        let before = world
+            .get::<Blueprint>(owner)
+            .unwrap()
+            .delivered_materials
+            .clone();
+        let value = snapshot(&mut world);
+        assert_eq!(value["blueprints"][0]["entity"], owner.to_bits());
+        assert_eq!(
+            value["blueprints"][0]["delivered_materials"],
+            json!({"Wood": 2})
+        );
+        assert_eq!(
+            world.get::<Blueprint>(owner).unwrap().delivered_materials,
+            before
+        );
+        assert_eq!(world.get::<Blueprint>(owner).unwrap().progress, 0.0);
+    }
 
     #[test]
     fn generated_world_has_yard_eligible_rest_area_without_mutation() {

@@ -215,6 +215,14 @@ does not prove partial-material refunds, full reservation/inventory cleanup,
 completed art, performance or release authority. Missing producer output fails
 closed; do not synthesize it from `CancellationRequested` or disappearance.
 
+Use the separate `--case rest-area-refund --smoke --input-backend portal` case
+to wait up to 90 seconds for real Wood delivery before Save/Load and cancellation.
+It adds a delivered checkpoint, requires unchanged material counts/progress after
+load, and binds exact distinct refund Entity IDs, kinds and counts to those
+materials. It never grants materials or completes/assigns work. Missing delivery,
+completed construction or a missing/mismatched refund fails closed. This remains
+limited feedback, not full reservation/inventory cleanup or art/release approval.
+
 ## Wall/Door feedback storyboard
 
 For already approved candidate or release assets, the joint helper supports a

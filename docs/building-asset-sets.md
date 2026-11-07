@@ -270,6 +270,15 @@ RestArea planning feedbackは同nonce/PIDのraw hash、実前状態とowner/map 
 2026-11-07の通常RestArea feedbackではSave/Load後のepoch1 ownerに対し、実二段階取消から
 配送request1件・actor参照4件の解消、Blueprint/map消失・4tile walkableを同process rawと5画像で
 独立確認した。これは進捗0・実搬入材料0の限定passであり、完成assetや全清算の承認ではない。
+別case `rest-area-refund`は通常のWood搬入を最大90秒待ち、実搬入数と施工進捗を保存・読込で
+保持してから取消し、同ownerの実返却Entity IDs・種類・数量を照合する。資材付与や作業完了を
+準備しない。実搬入欠落・完成済み・返却不足は拒否し、このcase追加自体を実機成功へ数えない。
+save/load間の材料・progress一致と、再開後の追加通常搬入を区別する。取消時のsame-owner/epoch
+raw履歴はloaded量から単調増加し、取消直前の量と実返却ID数・種類が一致しなければ拒否する。
+新caseの時間操作は既存HUDのNormal（1x）／Pausedを一度使い、実状態を待つ。取消詳細までは
+停止中に移動し、失効・pointer移動・時間遷移timeoutでは入力を再送しない。
+2026-11-07の4試行は施工完了競合、追加搬入と旧量条件の不一致、時間再開未成立、
+post-release cursor消失でinvalidのまま記録した。v2の部分的な実返却観測をnative passへ転用しない。
 明示production観測sessionのrawは通常500ms間隔、実際のheld WASD中は50ms間隔で採る。
 これはcameraの通常速度・入力・worldを変更せず、read-only観測の間隔だけを切り替える。
 1200 sample／4096 eventのcapは維持する。hostが停止帯通過を観測したら即時拒否して

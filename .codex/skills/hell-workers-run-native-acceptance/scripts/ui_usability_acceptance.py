@@ -32,7 +32,7 @@ CHECKPOINTS = ("tasks", "last-page", "minimized", "restored", "entities",
 VIEWPORTS = ((1920, 1080, 1.0), (1280, 720, 1.25), (1280, 720, 0.85),
              (1280, 720, 1.0), (1920, 1080, 0.85), (1920, 1080, 1.25))
 CASES = ("navigation", "refactor-rows", "progress-bars", "terrain-materials", "refactor-suite",
-         "bridge-planning", "rest-area-planning")
+         "bridge-planning", "rest-area-planning", "rest-area-refund")
 
 
 def session_matrix(case, smoke):
@@ -63,7 +63,7 @@ def check_observation(case: str, value: dict) -> None:
     if case in bridge_planning.CHECKPOINTS:
         bridge_planning.check_observation(case, value)
         return
-    if case in rest_area_planning.CHECKPOINTS:
+    if case in (*rest_area_planning.CHECKPOINTS, *rest_area_planning.REFUND_CHECKPOINTS):
         rest_area_planning.check_observation(case, value)
         return
     if case in terrain_materials.CHECKPOINTS:
@@ -454,14 +454,16 @@ def verify_root(root):
         events = native.read_json(directory / "events.json")["events"]
         client = native.read_json(directory / "input-client.json")
         check_input_client(manifest, session, client)
-        if case == "rest-area-planning":
+        if case in ("rest-area-planning", "rest-area-refund"):
             raw_path = directory / "production-cancellation.json"
             native.require(sha256(raw_path) == session.get("cancellation_sha256"), "cancellation raw changed")
-            rest_area_planning.check_cancellation(native.read_json(raw_path), entries, client)
+            rest_area_planning.check_cancellation(native.read_json(raw_path), entries, client,
+                                                  refund=case == "rest-area-refund")
         native.require(case == "navigation" or not layout_only, "refactor case requires actual input")
         expected_checkpoints = (refactor_rows.CHECKPOINTS if case == "refactor-rows" else
                                 bridge_planning.CHECKPOINTS if case == "bridge-planning" else
                                 rest_area_planning.CHECKPOINTS if case == "rest-area-planning" else
+                                rest_area_planning.REFUND_CHECKPOINTS if case == "rest-area-refund" else
                                 terrain_materials.CHECKPOINTS if case == "terrain-materials" else
                                 progress_bars.CHECKPOINTS if case == "progress-bars" else CHECKPOINTS)
         native.require([item["case"] for item in entries] == (["entities"] if layout_only else list(expected_checkpoints)), "checkpoints differ")
@@ -500,8 +502,8 @@ def verify_root(root):
         if case == "bridge-planning":
             bridge_planning.check_sequence(entries)
             continue
-        if case == "rest-area-planning":
-            rest_area_planning.check_sequence(entries)
+        if case in ("rest-area-planning", "rest-area-refund"):
+            rest_area_planning.check_sequence(entries, refund=case == "rest-area-refund")
             continue
         if layout_only:
             continue
@@ -517,6 +519,7 @@ def verify_root(root):
                         "task labels, rename, search and fold feedback" if manifest.get("case") == "refactor-rows" else
                         "four progress callers, simulation completion, save/load and cancellation feedback" if manifest.get("case") == "progress-bars" else
                         "ordinary generated-world Bridge placement, reservation save/load and cancellation only" if manifest.get("case") == "bridge-planning" else
+                        "ordinary RestArea delivered-material save/load and refund cancellation feedback; not full inventory/art/release acceptance" if manifest.get("case") == "rest-area-refund" else
                         "ordinary generated-world RestArea reservation, save/load and cancellation only; no completed art or occupancy" if manifest.get("case") == "rest-area-planning" else
                         "navigation/layout feedback only; C05/C07/C08 and full C01-C06 acceptance remain open"}
 
@@ -605,7 +608,7 @@ def run(args):
                                 "HW_NATIVE_UI_ROOT": str(directory), "HW_NATIVE_UI_NONCE": nonce,
                                 "HW_NATIVE_UI_WIDTH": str(width), "HW_NATIVE_UI_HEIGHT": str(height), "HW_NATIVE_UI_SCALE": str(scale)})
             environment["HW_NATIVE_UI_CASE"] = case
-            if case == "rest-area-planning":
+            if case in ("rest-area-planning", "rest-area-refund"):
                 environment["HW_BUILDING_PRODUCTION_OBSERVATIONS"] = cancellation_observation_setting(directory, nonce)
             if case == "refactor-rows":
                 # Use winit's local XIM backend for this ASCII rename/search case.
@@ -637,8 +640,8 @@ def run(args):
                         progress_bars.exercise(driver)
                     elif case == "bridge-planning":
                         bridge_planning.exercise(driver)
-                    elif case == "rest-area-planning":
-                        rest_area_planning.exercise(driver)
+                    elif case in ("rest-area-planning", "rest-area-refund"):
+                        rest_area_planning.exercise(driver, refund=case == "rest-area-refund")
                     elif case == "terrain-materials":
                         terrain_materials.exercise(driver)
                     else:
@@ -661,7 +664,7 @@ def run(args):
                         state["child_pid"] = None
             joint.verify_game_log(directory / "game.log", "Intel")
             session = {"case": case, "directory": directory.name, "nonce": nonce, "log_sha256": sha256(directory / "game.log")}
-            if case == "rest-area-planning":
+            if case in ("rest-area-planning", "rest-area-refund"):
                 session["cancellation_sha256"] = sha256(directory / "production-cancellation.json")
             sessions.append(session)
         native.atomic_write_json(root / "manifest.json", {
