@@ -6,6 +6,7 @@ import ui_rest_area_planning as planning
 
 CHECKPOINTS = (*planning.COMPLETION_CHECKPOINTS,
                "rest-area-usage-occupied", "rest-area-usage-drained")
+EXIT_CHECKPOINTS = (*CHECKPOINTS, "rest-area-usage-exited")
 
 
 class RawCheckpointPending(native.AcceptanceError):
@@ -75,10 +76,28 @@ def candidates(value, bits):
 
 
 def check_observation(case, value):
-    native.require(case in CHECKPOINTS[-2:], "unsupported rest usage checkpoint")
+    native.require(case in EXIT_CHECKPOINTS[3:], "unsupported rest usage checkpoint")
     planning.check_observation("rest-area-completion-completed", value)
     bits = value["rest_area_planning"]["buildings"][0]
-    native.require(candidates(context(value), bits), "no actual hidden occupant on a walkable entry")
+    state = context(value)
+    if case == EXIT_CHECKPOINTS[-1]:
+        native.require(any(released_soul(row) for row in state["souls"]), "no visible released Soul with active cooldown")
+        candidates(state, bits)
+    else:
+        native.require(candidates(state, bits), "no actual hidden occupant on a walkable entry")
+
+
+def released_soul(row):
+    return (row.get("resting_in") is None and row.get("reserved_for") is None
+            and row.get("visibility") == "Visible" and row.get("walkable") is True
+            and isinstance(row.get("idle"), dict)
+            and row["idle"].get("behavior") not in (None, "Resting", "GoingToRest")
+            and finite(row.get("cooldown")) and 0 < row["cooldown"] <= 15
+            and finite(row.get("dream")) and 0 <= row["dream"] <= 100
+            and all(finite(row.get(key)) and 0 <= row[key] <= 1 for key in ("fatigue", "stress"))
+            and type(row.get("entity_bits")) is int and row["entity_bits"] >= 0
+            and isinstance(row.get("position"), list) and len(row["position"]) == 3
+            and all(finite(axis) for axis in row["position"]))
 
 
 def exercise(driver):
@@ -101,7 +120,25 @@ def exercise(driver):
     wait_for_raw_checkpoint(driver, bits, entity)
 
 
-def wait_for_raw_checkpoint(driver, bits, entity):
+def exercise_exit(driver):
+    exercise(driver)
+    value = driver.checkpoints[-1]["value"]
+    bits = value["rest_area_planning"]["buildings"][0]
+    occupied = candidates(context(driver.checkpoints[-2]["value"]), bits)
+    final = {row["entity"]: row for _, row in candidates(context(value), bits)}
+    _, soul = next((owner, row) for owner, row in occupied
+                   if row["entity"] in final and final[row["entity"]]["dream"] <= row["dream"] - 0.5)
+    entity = soul["entity"]
+    planning.set_refund_paused(driver, False)
+    driver.last = driver.wait(lambda observed: any(row.get("entity") == entity and released_soul(row)
+                                                  for row in context(observed)["souls"]),
+                              after=driver.last["frame"], timeout=120)
+    planning.set_refund_paused(driver, True)
+    driver.capture(EXIT_CHECKPOINTS[-1])
+    wait_for_raw_checkpoint(driver, bits, entity, released=True)
+
+
+def wait_for_raw_checkpoint(driver, bits, entity, *, released=False):
     # UI observation runs in PostUpdate; raw observation runs in Last. Do not
     # terminate the child while its final captured frame is still being written.
     # Keep the verifier's exact state/time predicates, and never resend input.
@@ -116,7 +153,7 @@ def wait_for_raw_checkpoint(driver, bits, entity):
                        and raw.get("process_id") == value["pid"]
                        and raw.get("failure") is None, "raw rest collector failed or changed identity")
         try:
-            raw_checkpoint(raw["samples"], value, bits, entity)
+            raw_checkpoint(raw["samples"], value, bits, entity, released=released)
         except RawCheckpointPending:
             return False
         return True
@@ -124,10 +161,18 @@ def wait_for_raw_checkpoint(driver, bits, entity):
     driver.wait(recorded, after=value["frame"], timeout=15)
 
 
-def raw_checkpoint(samples, value, bits, entity):
+def checkpoint_rows(state, bits, entity, *, released):
+    occupants = candidates(state, bits)
+    if not released:
+        return [(owner, soul) for owner, soul in occupants if soul["entity"] == entity]
+    owner = next(row for row in state["owners"] if row["entity_bits"] == bits)
+    return [(owner, row) for row in state["souls"] if row["entity"] == entity and released_soul(row)]
+
+
+def raw_checkpoint(samples, value, bits, entity, *, released=False):
     ui = context(value)
-    selected = [(owner, soul) for owner, soul in candidates(ui, bits) if soul["entity"] == entity]
-    native.require(len(selected) == 1, "checkpoint lost the selected resting Soul")
+    selected = checkpoint_rows(ui, bits, entity, released=released)
+    native.require(len(selected) == 1, "checkpoint lost the selected Soul/state")
     matching = []
     for sample in samples:
         state = sample.get("rest_area_context")
@@ -141,12 +186,92 @@ def raw_checkpoint(samples, value, bits, entity):
                        and finite(sample.get("virtual_seconds"))
                        and abs(state["virtual_seconds"] - sample["virtual_seconds"]) < 1e-9,
                        "raw rest timestamp differs from its containing sample")
-        rows = [(owner, soul) for owner, soul in candidates(state, bits) if soul["entity"] == entity]
+        rows = checkpoint_rows(state, bits, entity, released=released)
         if rows == selected and state.get("dream_pool") == ui["dream_pool"]:
             matching.append(sample)
     if not matching:
         raise RawCheckpointPending("UI rest checkpoint is not bound to a paused same-subject raw sample")
     return min(matching, key=lambda sample: abs(sample["real_seconds"] - ui["real_seconds"]))
+
+
+def check_exit(raw, entries, client):
+    native.require([entry["case"] for entry in entries] == list(EXIT_CHECKPOINTS), "rest exit checkpoints differ")
+    check_usage(raw, entries[:5], client)
+    occupied, drained, exited = [entry["value"] for entry in entries[3:]]
+    check_observation(EXIT_CHECKPOINTS[-1], exited)
+    native.require(exited.get("nonce") == client["nonce"] and exited.get("pid") == client["pid"]
+                   and exited.get("world_epoch") == drained["world_epoch"] and exited.get("paused") is True
+                   and exited["frame"] > drained["frame"] and entries[-1]["last_step"] > entries[-2]["last_step"]
+                   and all(exited["rest_area_planning"][key] == drained["rest_area_planning"][key]
+                           for key in ("anchor", "footprint", "draw_pos", "buildings")),
+                   "rest exit checkpoint subject/target differs")
+    bits = drained["rest_area_planning"]["buildings"][0]
+    remaining = {row["entity"]: row for _, row in candidates(context(drained), bits)}
+    owner, initial = next((owner, remaining[row["entity"]]) for owner, row in candidates(context(occupied), bits)
+                          if row["entity"] in remaining and remaining[row["entity"]]["dream"] <= row["dream"] - 0.5)
+    entity = initial["entity"]
+    first = raw_checkpoint(raw["samples"], drained, bits, entity)
+    last = raw_checkpoint(raw["samples"], exited, bits, entity, released=True)
+    start, end = first["sample_index"], last["sample_index"]
+    native.require(start < end and first["virtual_seconds"] < last["virtual_seconds"], "rest exit time did not advance")
+    released, release_index, cooldown, previous_time = False, None, 15, first["virtual_seconds"]
+    for sample in raw["samples"][start:end + 1]:
+        state = sample["rest_area_context"]
+        native.require(sample["world_epoch"] == drained["world_epoch"]
+                       and finite(sample.get("real_seconds")) and finite(sample.get("virtual_seconds"))
+                       and state.get("real_seconds") == sample["real_seconds"]
+                       and state.get("virtual_seconds") == sample["virtual_seconds"]
+                       and previous_time <= sample["virtual_seconds"] <= last["virtual_seconds"],
+                       "rest exit crosses bad time/epoch")
+        previous_time = sample["virtual_seconds"]
+        candidates(state, bits)
+        rows = [row for row in state["souls"] if row["entity"] == entity]
+        native.require(len(rows) == 1 and rows[0]["entity_bits"] == initial["entity_bits"], "rest exit Soul generation differs")
+        row = rows[0]
+        if released_soul(row):
+            native.require(row["cooldown"] <= cooldown, "rest exit cooldown increased/reset")
+            # Existing rules: at most 0.5 Dream/s awake, 15s cooldown,
+            # and at most five 0.1s slow steps in the application frame.
+            # The Rust contract test pins these bounds; this is not exact zero.
+            native.require(row["dream"] <= 0.5 * (15 - row["cooldown"] + 0.5) + 1e-3,
+                           "rest exit retains more Dream than bounded awake regeneration")
+            cooldown = row["cooldown"]
+            if not released:
+                release_index = sample["sample_index"]
+            released = True
+        else:
+            native.require(not released and row.get("resting_in") == owner["entity"]
+                           and row.get("position") == initial["position"], "rest exit is not a one-way lifecycle")
+    native.require(released, "rest exit did not release the selected Soul")
+    final = [row for row in raw["events"] if row.get("producer") == "DreamTransferredVisualMessage"
+             and row.get("worker") == entity and row.get("is_final") is True
+             and type(row.get("sample_index")) is int and start < row["sample_index"] <= end]
+    native.require(len(final) == 1 and final[0].get("operation") == "DreamTransferred"
+                   and final[0].get("source", {}).get("kind") == "RestArea"
+                   and final[0]["source"].get("owner") == owner["entity"]
+                   and final[0]["sample_index"] <= release_index
+                   and finite(final[0].get("amount")) and final[0]["amount"] > 0,
+                   "no exact same-owner natural final Dream transfer")
+    transfers = [row for row in raw["events"] if row.get("producer") == "DreamTransferredVisualMessage"
+                 and row.get("worker") == entity and type(row.get("sample_index")) is int
+                 and start < row["sample_index"] <= end]
+    native.require(transfers and all(row.get("operation") == "DreamTransferred"
+                                    and row.get("source", {}).get("kind") == "RestArea"
+                                    and row["source"].get("owner") == owner["entity"]
+                                    and finite(row.get("real_seconds"))
+                                    and first["real_seconds"] < row["real_seconds"]
+                                    <= raw["samples"][row["sample_index"]]["real_seconds"]
+                                    and row["real_seconds"] > raw["samples"][row["sample_index"] - 1]["real_seconds"]
+                                    and row["sample_index"] <= release_index
+                                    and any(item.get("entity") == owner["entity"]
+                                            and item.get("position", [])[:2] == row["source"].get("origin")
+                                            for item in raw["samples"][row["sample_index"]].get("owners", []))
+                                    and finite(row.get("amount")) and row["amount"] > 0 for row in transfers)
+                   and math.isclose(sum(row["amount"] for row in transfers), initial["dream"],
+                                    rel_tol=1e-4, abs_tol=1e-3)
+                   and last["rest_area_context"]["dream_pool"] - first["rest_area_context"]["dream_pool"]
+                   >= sum(row["amount"] for row in transfers) - 0.01,
+                   "rest final messages do not account for natural Dream exhaustion")
 
 
 def check_usage(raw, entries, client):

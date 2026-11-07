@@ -152,6 +152,25 @@ Hidden/Restingを維持してDream4.1100345→1.4600365、Pool72.4896851→75.13
 全5PNGをmainが実見し、strict log検査はWARN/ERRORなし。画像は現行の灰色fallbackであり、
 美術・数値採用・性能・正式releaseの証拠ではない。36,794,368 bytesは退出/cooldownと
 利用中save/loadの次工程比較だけを保持し、旧binary再実行依存は精算した。
+通常利用は`5486abf6`で保存し、変更別CI全groupと独立code/画像reviewが通過した。
+v1のwriter競合調査は完了したため診断consumerを正式解除し、生成物38,535,168 bytesを
+撤去した。invalid metadata・採用コード・最新v2証拠・通常Cargo cacheは保全した。
+次は独立した`rest-area-exit` caseで実Dream放出を最後まで待ち、同Soul/ownerのfinal message、
+関係解除・可視復帰・正のcooldownと歩行可能な入口をraw/画像で結ぶ。材料/Dream注入・
+強制退出・duration変更は行わず、既存利用caseと正式art/release未達を維持する。
+退出verifierは独立reviewで見つかった残量/Poolの拘束不足を補正し、rawとUIを同時改変しても
+不正残量・Pool加算なしを拒否する回帰を追加した。通常再生成は実cooldown経過と最大rate/
+slow-stepからだけ許容する。関連68 tests、実Rust定数契約1件、変更別CI全group、
+`dev.py check`、profiling Clippy警告0、Help No impact、rust-analyzerエラー0を確認した。
+`tak14-rest-area-exit-feedback-20261107-v1`はsource `dd827e2d22be…`、harness `b76c0ece1f34…`で
+実行と登録verifier・別verify・独立全6PNG/raw reviewが限定pass、seal/finalize済み。
+Soul1867v0／epoch0の残Dream2.7300391に対し実RestArea放出22件は計2.73004065、
+sample414のfinal時にDream0・関係解除・Visible/walkable・cooldown15を確認した。
+撮影時は通常再生成Dream0.35／cooldown11.50、Pool84.98965→102.41963で全量以上の増加。
+UI/raw境界の時刻は完全一致し、Intel Arc/Vulkan、WARN/ERRORなし。灰色fallback表示であり、
+cooldown満了・利用中save/load・art/numeric/performance/releaseは未承認。
+43,528,192 bytesは残lifecycle比較用に保持した。旧施工v2と利用v2の比較consumerを最新batchへ
+移管・正式解除し、生成物20,033,536＋36,794,368 bytesを撤去。結果metadataとコード/原本は保全した。
 施工完了v1の誤ったwalkable期待値はv2で修正・独立review・実機passとなったため、
 旧v1 diagnostic consumerを正式releaseした。稼働process・symlink・原本がないことを確認し、
 `target/native-acceptance/tak14-rest-area-construction-feedback-20261107-v1`の生成物

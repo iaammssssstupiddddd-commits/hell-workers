@@ -196,6 +196,84 @@ class OrdinaryRestUsageTests(unittest.TestCase):
             with self.subTest(relationship=relationship), self.assertRaises(RuntimeError):
                 usage.check_usage(raw, entries, client)
 
+    def exit_fixture(self):
+        raw, entries, client = self.fixture()
+        for index in range(10, 13):
+            sample = copy.deepcopy(raw["samples"][9])
+            sample.update(sample_index=index, real_seconds=float(index), virtual_seconds=float(index), paused=index == 12)
+            state = sample["rest_area_context"]
+            state.update(real_seconds=float(index), virtual_seconds=float(index), dream_pool=5.5 + min(index - 9, 2) * 4.75)
+            row = state["souls"][0]
+            row["dream"] = 4.75 if index == 10 else 0.0
+            if index >= 11:
+                row.update(resting_in=None, visibility="Visible", cooldown=15.0 - (index - 10) * 0.25)
+                row["idle"]["behavior"] = "Wandering"
+                state["owners"][0]["occupants"] = None
+            raw["samples"].append(sample)
+            if index < 12:
+                event = copy.deepcopy(raw["events"][-1])
+                event.update(event_index=len(raw["events"]), sample_index=index, real_seconds=float(index),
+                             amount=4.75, is_final=index == 11)
+                raw["events"].append(event)
+        entry = copy.deepcopy(entries[-1])
+        entry.update(case=usage.EXIT_CHECKPOINTS[-1], last_step=25)
+        entry["value"]["frame"] = 150
+        entry["value"]["rest_area_planning"]["rest_area_usage"] = copy.deepcopy(raw["samples"][-1]["rest_area_context"])
+        entries.append(entry)
+        return raw, entries, client
+
+    def test_natural_exhaustion_exit_and_active_cooldown_are_read_only(self):
+        raw, entries, client = self.exit_fixture()
+        original = copy.deepcopy((raw, entries, client))
+        usage.check_exit(raw, entries, client)
+        self.assertEqual((raw, entries, client), original)
+        self.assertEqual(base.acceptance.session_matrix("rest-area-exit", True),
+                         [("rest-area-exit", *base.acceptance.VIEWPORTS[0])])
+
+    def test_missing_foreign_final_or_broken_exit_is_rejected(self):
+        mutations = (
+            lambda r, e: e.pop(),
+            lambda r, e: e[-1]["value"].update(pid=-1),
+            lambda r, e: e[-1]["value"].update(world_epoch=1),
+            lambda r, e: e[-1]["value"].update(paused=False),
+            lambda r, e: e[-1].update(last_step=20),
+            lambda r, e: r["samples"][10]["rest_area_context"]["souls"][0].update(position=[7, 7, 0]),
+            lambda r, e: r["samples"][11]["rest_area_context"]["souls"][0].update(entity_bits=100),
+            lambda r, e: r["samples"][11]["rest_area_context"]["souls"][0].update(cooldown=None),
+            lambda r, e: r["samples"][11]["rest_area_context"]["souls"][0].update(visibility="Hidden"),
+            lambda r, e: r["samples"][11]["rest_area_context"]["souls"][0].update(walkable=False),
+            lambda r, e: r["samples"][11]["rest_area_context"]["owners"][0].update(occupants=["worker"]),
+            lambda r, e: r["samples"][11].update(world_epoch=1),
+            lambda r, e: r["samples"][11].update(virtual_seconds=float("nan")),
+            lambda r, e: r["samples"][11]["rest_area_context"]["souls"][0].update(cooldown=10),
+            lambda r, e: r["events"][-1].update(is_final=False),
+            lambda r, e: r["events"][-1].update(amount=1),
+            lambda r, e: r["events"][-1].update(worker="foreign"),
+            lambda r, e: r["events"][-1].update(real_seconds=13),
+            lambda r, e: r["events"][-1].update(sample_index=12, real_seconds=12),
+            lambda r, e: r["events"][-1]["source"].update(kind="Sleeping"),
+            lambda r, e: r["events"][-1]["source"].update(owner="foreign"),
+            lambda r, e: r["events"][-1]["source"].update(origin=[21, 20]),
+        )
+        for mutate in mutations:
+            raw, entries, client = self.exit_fixture()
+            mutate(raw, entries)
+            with self.subTest(mutation=mutate), self.assertRaises((RuntimeError, ValueError)):
+                usage.check_exit(raw, entries, client)
+
+    def test_rebound_exit_cannot_hide_retained_dream_or_missing_pool_growth(self):
+        for corrupt in ("dream", "dream_pool"):
+            raw, entries, client = self.exit_fixture()
+            for sample in raw["samples"][10:]:
+                if corrupt == "dream_pool":
+                    sample["rest_area_context"]["dream_pool"] = 5.5
+                elif sample["sample_index"] >= 11:
+                    sample["rest_area_context"]["souls"][0]["dream"] = 5.0
+            entries[-1]["value"]["rest_area_planning"]["rest_area_usage"] = copy.deepcopy(
+                raw["samples"][-1]["rest_area_context"])
+            with self.subTest(corrupt=corrupt), self.assertRaises(RuntimeError):
+                usage.check_exit(raw, entries, client)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -463,6 +463,15 @@ UIのPostUpdate撮影後、Lastのraw writerが同じcheckpointの状態・時�
 これは通常利用と正のDream放出に限定した技術feedbackであり、退出/cooldown、利用中save/load、
 全状態・美術/数値・性能・正式releaseの全受入を代替しない。実行・独立verify・画像reviewは別途必要。
 
+別caseの`rest-area-exit`は通常利用の5checkpointをすべて再検証してから、同Soulの自然な
+Dream枯渇・退出後の1checkpointを追加する。同ownerの正のfinal transferと総放出量、
+関係の双方向解除、可視復帰、walkableな座標、0より大きく15秒以下のcooldownを照合する。
+全放出量以上のPool増加を要求し、退出後Dreamは既存awake最大0.5/秒・15秒cooldownの
+実経過と適用frame最大0.5秒から得る再生成上限以下とする。厳密な残量0とは主張しない。
+これら定数とslow step上限が変わる場合はRust契約試験が失敗し、verifierの再検討を要求する。
+raw区間内の世代/epoch置換・退出後の再入所・cooldown再増加を拒否する。
+退出を注入せず、cooldownの満了や利用中save/loadの受入までは主張しない。
+
 profiling-onlyのproduction raw observerとBridge／M2 probeは共通writerでfresh outputと一時pathを検査し、各snapshotの一時ファイルを
 `create_new`で排他的に作成してからrenameする。既存ファイル・dangling symlink・失敗した一時成果を
 上書きせず拒否する。これは収集の安全性であり、ordinary-worldの欠落producerや正式受入を補わない。

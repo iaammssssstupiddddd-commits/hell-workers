@@ -16,7 +16,11 @@ struct Target((i32, i32));
 pub(super) fn enabled() -> bool {
     matches!(
         std::env::var("HW_NATIVE_UI_CASE").as_deref(),
-        Ok("rest-area-planning" | "rest-area-refund" | "rest-area-completion" | "rest-area-usage")
+        Ok("rest-area-planning"
+            | "rest-area-refund"
+            | "rest-area-completion"
+            | "rest-area-usage"
+            | "rest-area-exit")
     )
 }
 
@@ -62,8 +66,10 @@ pub(super) fn snapshot(world: &mut World) -> Value {
         return Value::Null;
     };
     let anchor = target.0;
-    let rest_area_usage = if std::env::var("HW_NATIVE_UI_CASE").as_deref() == Ok("rest-area-usage")
-    {
+    let rest_area_usage = if matches!(
+        std::env::var("HW_NATIVE_UI_CASE").as_deref(),
+        Ok("rest-area-usage" | "rest-area-exit")
+    ) {
         crate::assets::building_asset_set::snapshot_rest_observations(world)
             .unwrap_or_else(|failure| json!({"failure": failure}))
     } else {
@@ -135,6 +141,35 @@ fn legal_anchor_at(map: &WorldMap, yards: &[Yard], anchor: (i32, i32)) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn rest_exit_verifier_bounds_match_actual_slow_simulation_rules() {
+        use hw_core::constants::{
+            DREAM_ACCUMULATE_RATE_ESCAPING, DREAM_ACCUMULATE_RATE_GATHERING,
+            DREAM_ACCUMULATE_RATE_IDLE, DREAM_ACCUMULATE_RATE_WORKING,
+            REST_AREA_RECRUIT_COOLDOWN_SECS,
+        };
+        use hw_soul_ai::soul_ai::update::slow_simulation::{
+            MAX_SLOW_SIMULATION_STEPS_PER_FRAME, SLOW_SIMULATION_STEP,
+        };
+
+        assert_eq!(REST_AREA_RECRUIT_COOLDOWN_SECS, 15.0);
+        assert_eq!(
+            [
+                DREAM_ACCUMULATE_RATE_WORKING,
+                DREAM_ACCUMULATE_RATE_IDLE,
+                DREAM_ACCUMULATE_RATE_GATHERING,
+                DREAM_ACCUMULATE_RATE_ESCAPING,
+            ]
+            .into_iter()
+            .fold(0.0_f32, f32::max),
+            0.5
+        );
+        assert_eq!(
+            SLOW_SIMULATION_STEP.as_secs_f64() * f64::from(MAX_SLOW_SIMULATION_STEPS_PER_FRAME),
+            0.5
+        );
+    }
 
     #[test]
     fn snapshot_reads_actual_delivered_materials_without_mutation() {
