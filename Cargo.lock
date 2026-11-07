@@ -3140,6 +3140,7 @@ dependencies = [
  "hw_core",
  "hw_spatial",
  "hw_world",
+ "log",
  "rand 0.8.6",
 ]
 

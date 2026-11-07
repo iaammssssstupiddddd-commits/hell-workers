@@ -121,6 +121,7 @@ Familiar は命令や状態を「ラテン語」で表現します。表示は *
 - 発火は `TimePlugin` が `PreUpdate` に登録する `check_delayed_command_queues` が担う（アプリ側の登録は不要）
 - デフォルトクロック基準のため、ゲームのポーズ/倍速（`Time` の pause / relative_speed）に追従する
 - **発火のキャンセル手段はない**。キャンセル・リセット・上書きが必要な時限処理には使わないこと（判定基準は `docs/DEVELOPMENT.md` の該当規約を参照）
+- 遅延queueはworld replacement後も残り得る。会話cooldownの期限処理は実行時に元の完全なEntity ID（generationを含む）を再取得し、生存している場合だけmarkerを除去する。ロードやdespawnで失われたSoul、同indexの別generationには作用せず、警告も発行しない。既存のVirtual pause・速度・期限は維持する。
 - ⚠️ 同一 Soul に 0.3 秒以内へ複数のリアクション（勧誘 + 激励など）が重なった場合、両方のバブルが表示される（旧実装は後勝ち上書きだった）。発火源はいずれも離散アクションのエッジトリガーであり、意図的に許容している
 
 ---

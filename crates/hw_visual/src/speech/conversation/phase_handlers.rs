@@ -8,6 +8,9 @@ use hw_core::soul::DamnedSoul;
 use rand::Rng;
 use std::collections::HashMap;
 
+#[cfg(test)]
+mod tests;
+
 type AvailableSoulQuery<'w, 's> = Query<
     'w,
     's,
@@ -26,8 +29,13 @@ pub fn end_conversation(commands: &mut Commands, entity: Entity, cooldown: Optio
         commands
             .delayed()
             .secs(dur)
-            .entity(entity)
-            .remove::<ConversationCooldown>();
+            .queue(move |world: &mut World| {
+                // The queue can outlive this Soul across load or despawn.
+                // Fetch the full Entity generation only when the delay expires.
+                if let Ok(mut soul) = world.get_entity_mut(entity) {
+                    soul.remove::<ConversationCooldown>();
+                }
+            });
     }
 }
 

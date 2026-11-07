@@ -53,6 +53,26 @@ cleanup・4tile walkability復元まで到達した。しかし旧Soul1845v0を�
 次はロード前Entityを保持する遅延会話cooldown等のproducerを実再現で特定し、修正・fresh実機を行う。
 全予約/inventory・通常起動の正式asset・art/numeric/performance/release受入は未完。
 
+次の限定修正は`hw_visual::speech::conversation::end_conversation`のcooldown遅延処理。
+Bevy 0.19の独立DelayedCommandQueueはworld replacement後も期限まで残るため、
+期限到達時にexact Entity generationの生存を読み直してからmarkerを除去するclosureへ変更する。
+ログfilterや全遅延queue破棄は行わない。まず旧実装で置換後の実warning捕捉試験を失敗させ、
+通常の期限、Virtual pause/resume、index再利用、実visual reset、中断時cooldownなしを回帰検証する。
+会話時間・報酬・操作・保存schemaは維持し、Help判断・workspace検証・独立reviewとfresh nativeを再実施する。
+旧実装はworld置換・pause/resumeの2試験で実WARNを再現、修正後は全4試験pass。
+独立read-only reviewはこの限定修正を承認。fresh nativeと全体受入は別に確認する。
+fresh `tak14-rest-area-cooldown-refund-feedback-20261107-v6`はsource
+`31111610b5121cb963beb4aefd41727cde05415fdae63fcaee6cee73709390a4`で、
+通常配送Wood0→1、保存読込Wood1、epoch1でWood1→2、owner2330v8の取消と
+返却2102v10／2360v3各Wood1、request2098v9閉鎖・4tile通行復元を確認した。
+Intel Arc/Vulkanの全6画像・原入力・rawを独立reviewし、登録verifierとstrict log検査pass、
+seal/finalize済み。今回WARN/ERRORはなく、旧Soulへの遅延command警告は再現しなかった。
+v5はinvalidのまま保持する。v6の29,396,992 bytesは通常施工・全予約/inventory観測の
+次工程比較だけをconsumerとして保持し、旧source/binaryの再検証依存は精算した。
+通常/profiling workspace、Memory/Tracy/RenderDoc構成、両Clippy警告0、Help No impact、
+rust-analyzer 0件、contracts/toolingを確認。全体CIは既存依存advisory 2件で未通過。
+この限定feedbackを全予約/inventory・art/numeric/performance/release承認へ読み替えない。
+
 2026-11-07再開工程: 通常Blueprint取消が実際に発行したrefund Entity IDsと、
 deferred適用後のowner/request/storage/map・関連actor状態を結ぶprofiling-only観測を追加する。
 通常RestAreaの既存input recipeへ同nonce/PIDのrawを接続し、ゼロ材料予約の取消を実機確認する。

@@ -51,6 +51,10 @@
 
 ## Plugin 登録ルール
 
+会話cooldownの遅延処理は発火時の完全なEntity IDで生存を照合する。
+world replacementやdespawn後の古いqueueから、新しいSoulや同indexの別generationを変更しない。
+通常の期限・Virtual pause/resume・会話内容は維持する。
+
 - この crate に実装本体がある visual system は `HwVisualPlugin` を唯一の登録元にする。
 - root 側の `pub use` / thin shell は互換パス維持や run condition 付与のために残してよいが、同じ system function を再登録しない。
 - `DebugVisible` や `GameAssets` のような root-only resource を使う条件付け・startup 注入だけを root 側が担当する。
