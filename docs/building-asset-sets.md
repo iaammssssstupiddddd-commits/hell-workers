@@ -245,7 +245,20 @@ tooltip mirrorはprofiling UI observerが存在するときだけ更新し、UI�
 上限超過はsticky overflowで公開し、黙って欠落を成功にしない。他consumerの入力を消費せず、
 カメラ／hover／tooltip／actorの状態を書き換えない。これだけではzoom操作や遠景の識別成功を証明しない。
 
-同UI recipeの明示`--input-backend portal-eis`は当該ArtPreview lifecycleだけで既存EIS absolute
+明示`--case rest-area-maxzoom --smoke --input-backend portal-eis`は同じArtPreview/codec指定を必須とし、
+保存復元lifecycleとは別の有界feedback caseである。通常建設3checkpointの後、最大48回の1刻みwheelで
+数値scale=5へ到達し、empty/occupied各状態のhoverと同owner選択の4枚を確認する。
+SCROLL capabilityはこのcaseだけが明示要求し、既存caseは要求せずwheel/button4/5を拒否する。
+libei 1.6の宣言SCROLL(16)とscroll_discreteのint32/120単位だけを使い、Notifyやsmooth scrollへfallbackしない。
+各wheelはpresend/ACKのwindow/epoch/foreground、実MouseWheel、raw camera sampleを照合して一度だけ送り、
+同stepや不明送信を再送しない。camera一意性・active/primary target、実hover/pointer/tooltip対象・可視本文、
+利用人数と既存Dream rate、選択ownerと可視inspection headerを照合する。倍率やactor状態を直接設定せず、
+このcaseのfresh実機成功、アート・数値・性能・正式releaseは実装/回帰テストだけから主張しない。
+checkpointはframe、入力step、raw sample、実時間の順序とpause中のvirtual時間不変を要求する。
+hover→selectedには同区間の実MouseButtonInputのLeft press/release、同window/epoch/ownerと実cursor座標を
+要求し、既存選択の表示だけをクリック成功に読み替えない。empty→occupiedは通常simulationの進行を要求する。
+
+同UI recipeの明示`--input-backend portal-eis`は当該ArtPreview lifecycle/maxzoomだけで既存EIS absolute
 経路を選ぶ。通常portal Notify経路からの自動fallbackではなく、混用・他caseへの拡張は拒否する。
 既存のpointer/keyboard同意を使い、ConnectToEISは一度だけ。宣言logical region×scaleと
 physical root寸法、実owner/focus/nonce、単発stepとgame cursor ACKを維持する。

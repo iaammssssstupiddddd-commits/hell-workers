@@ -87,17 +87,20 @@ def planned_contract(args, repo):
     native.require(bool(source) == bool(codec), "ordinary art needs both source and codec")
     if not source:
         native.require(not getattr(args, "art_contract_sha256", None), "unexpected art contract digest")
+        native.require(args.case != "rest-area-maxzoom", "maxzoom requires the explicit ordinary ArtPreview")
         return None
-    native.require(args.case == "rest-area-lifecycle" and args.smoke and args.input_backend in ("portal", "portal-eis")
+    native.require(args.case in ("rest-area-lifecycle", "rest-area-maxzoom") and args.smoke and args.input_backend in ("portal", "portal-eis")
                    and not args.layout_menu, "ordinary art requires the bounded portal lifecycle recipe")
+    native.require(args.case != "rest-area-maxzoom" or args.input_backend == "portal-eis", "maxzoom requires explicit EIS scroll")
     contract = source_contract(repo, Path(source), Path(codec))
     if getattr(args, "art_contract_sha256", None):
         native.require(contract_digest(contract) == args.art_contract_sha256, "ordinary art plan changed")
     return contract
 
 
-def check_eis_client(client):
-    native.require(client.get("input_transport") == "portal-eis-absolute-v1", "EIS transport differs")
+def check_eis_client(client, *, scroll=False):
+    native.require(client.get("input_transport") == ("portal-eis-absolute-scroll-v1" if scroll else "portal-eis-absolute-v1")
+                   and (client.get("eis_scroll") is True if scroll else client.get("eis_scroll") is False or client.get("eis_scroll") is None), "EIS transport differs")
     region, mapping = client.get("eis_region"), client.get("monitor_mapping")
     native.require(isinstance(region, dict) and isinstance(mapping, (tuple, list)) and len(mapping) == 2,
                    "EIS region/mapping missing")

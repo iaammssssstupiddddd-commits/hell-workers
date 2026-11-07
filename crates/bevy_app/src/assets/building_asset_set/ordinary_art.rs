@@ -50,7 +50,7 @@ fn validate(session: &Session, root: &Path, nonce: &str, case: &str) -> Result<(
         || session.locator != "manifests/building-rest-area-v1.buildingset"
         || !hex(&session.nonce, 32)
         || session.nonce != nonce
-        || case != "rest-area-lifecycle"
+        || !matches!(case, "rest-area-lifecycle" | "rest-area-maxzoom")
         || !root.is_absolute()
         || root
             .components()
@@ -309,6 +309,7 @@ mod tests {
         let root = Path::new("/private/session");
         let good: Session = serde_json::from_value(value()).unwrap();
         validate(&good, root, &"b".repeat(32), "rest-area-lifecycle").unwrap();
+        validate(&good, root, &"b".repeat(32), "rest-area-maxzoom").unwrap();
         for (path, replacement) in [
             ("/mode", json!("candidate")),
             ("/identity/kind", json!("SoulSpa")),

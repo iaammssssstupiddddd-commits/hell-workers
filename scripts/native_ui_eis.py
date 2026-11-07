@@ -13,7 +13,7 @@ import time
 from scripts.native_ui_input import InputRejected, X11Input
 from scripts.native_ui_portal import DEST, ROOT, REMOTE
 
-ABSOLUTE, KEYBOARD, BUTTON = 2, 4, 32
+ABSOLUTE, KEYBOARD, SCROLL, BUTTON = 2, 4, 16, 32
 
 
 def bind_library():
@@ -50,6 +50,7 @@ def bind_library():
         "ei_device_pointer_motion_absolute": ([pointer, c.c_double, c.c_double], None),
         "ei_device_button_button": ([pointer, c.c_uint32, c.c_bool], None),
         "ei_device_keyboard_key": ([pointer, c.c_uint32, c.c_bool], None),
+        "ei_device_scroll_discrete": ([pointer, c.c_int32, c.c_int32], None),
     }
     for name, (args, result) in bindings.items():
         getattr(lib, name).argtypes, getattr(lib, name).restype = args, result
@@ -57,7 +58,10 @@ def bind_library():
 
 
 class EisSender:
-    def __init__(self, portal, root_size, mapping):
+    def __init__(self, portal, root_size, mapping, *, allow_scroll=False):
+        if type(allow_scroll) is not bool:
+            raise InputRejected("EIS scroll profile must be explicit")
+        self.allow_scroll = allow_scroll
         if not portal.ready or type(portal.granted_devices) is not int or portal.granted_devices & 3 != 3:
             raise InputRejected("EIS requires the existing pointer/keyboard consent")
         self.lib = bind_library()
@@ -86,8 +90,11 @@ class EisSender:
                 if not portal.ready:
                     raise InputRejected("portal ended during EIS readiness")
                 self.pump()
-                if self.selected(ABSOLUTE, required=False) and self.selected(KEYBOARD, required=False):
+                if (self.selected(ABSOLUTE, required=False) and self.selected(KEYBOARD, required=False)
+                        and (not self.allow_scroll or self.selected(SCROLL, required=False))):
                     self.region()  # Reject unsupported mapping before any key.
+                    if self.allow_scroll and self.selected(SCROLL) != self.selected(ABSOLUTE):
+                        raise InputRejected("EIS scroll must share the declared absolute region device")
                     self.ready = True
                     return
                 time.sleep(.02)
@@ -115,16 +122,16 @@ class EisSender:
                     if not seat or self.seats:
                         raise InputRejected("EIS requires exactly one seat")
                     self.seats.add(seat)
-                    if not all(self.lib.ei_seat_has_capability(seat, cap)
-                               for cap in (ABSOLUTE, KEYBOARD, BUTTON)):
+                    required = (ABSOLUTE, KEYBOARD, BUTTON) + ((SCROLL,) if self.allow_scroll else ())
+                    if not all(self.lib.ei_seat_has_capability(seat, cap) for cap in required):
                         raise InputRejected("EIS required capabilities are unavailable")
-                    self.lib.ei_seat_bind_capabilities(seat, c.c_int(ABSOLUTE),
-                        c.c_int(KEYBOARD), c.c_int(BUTTON), c.c_void_p())
+                    self.lib.ei_seat_bind_capabilities(seat, *(c.c_int(cap) for cap in required), c.c_void_p())
                 elif kind == 5:
                     device = self.lib.ei_event_get_device(event)
                     if not device or device in self.devices or len(self.devices) >= 4:
                         raise InputRejected("EIS device identity or cap differs")
-                    caps = {cap for cap in (ABSOLUTE, KEYBOARD, BUTTON)
+                    wanted = (ABSOLUTE, KEYBOARD, BUTTON) + ((SCROLL,) if self.allow_scroll else ())
+                    caps = {cap for cap in wanted
                             if self.lib.ei_device_has_capability(device, cap)}
                     self.devices[self.lib.ei_device_ref(device)] = caps
                 elif kind == 8:
@@ -171,8 +178,15 @@ class EisSender:
         return device
 
     def send(self, operation, *values):
+        if operation not in ("keyboard_key", "button_button", "pointer_motion_absolute", "scroll_discrete"):
+            raise InputRejected("unsupported EIS input operation")
+        if operation == "scroll_discrete" and (not self.allow_scroll or len(values) != 2
+                or any(type(value) is not int for value in values) or values[0] != 0 or values[1] not in (-120, 120)):
+            raise InputRejected("EIS permits only one explicit vertical wheel click")
         self.pump()
         device = self.selected(KEYBOARD) if operation == "keyboard_key" else self.region()
+        if operation == "scroll_discrete" and self.selected(SCROLL) != device:
+            raise InputRejected("EIS scroll device differs from the owned absolute region")
         if operation == "pointer_motion_absolute":
             if (len(values) != 2 or any(type(v) is not int for v in values)
                     or not all(0 <= v < extent for v, extent in zip(values, self.root_size, strict=True))):
@@ -217,7 +231,10 @@ class EisSender:
 
 
 class PortalEisInput(X11Input):
-    def __init__(self, *args, portal):
+    def __init__(self, *args, portal, allow_scroll=False):
+        if type(allow_scroll) is not bool:
+            raise InputRejected("EIS scroll profile must be explicit")
+        self.allow_scroll = allow_scroll
         self.portal, self.sender = portal, None
         super().__init__(*args)
 
@@ -227,7 +244,28 @@ class PortalEisInput(X11Input):
         self._request_activation()
         self.portal.start(self.window)
         super().activate()
-        self.sender = EisSender(self.portal, self.root_size(), self.mapping)
+        self.sender = EisSender(self.portal, self.root_size(), self.mapping, allow_scroll=self.allow_scroll)
+
+    def scroll(self, step, nonce, direction):
+        """One separately acknowledged wheel click, never button4/5 or Notify*."""
+        if (not self.allow_scroll or nonce != self.nonce or not step or step in self.sent
+                or type(direction) is not int or direction not in (-1, 1)):
+            raise InputRejected("stale, repeated or unsupported EIS wheel step")
+        if self.held_keys or self.held_buttons:
+            raise InputRejected("EIS wheel cannot interrupt a held input")
+        self._check_owner()
+        self._check_focus()
+        self._guard()
+        pointer = self.client_pointer()
+        width, height = self.client_size()
+        if not pointer["same_screen"] or not (0 <= pointer["client"][0] < width and 0 <= pointer["client"][1] < height):
+            raise InputRejected("EIS wheel pointer is outside the owned client")
+        self.sent.add(step)  # A send or unknown outcome must never be retried.
+        self.sender.send("scroll_discrete", 0, direction * 120)
+        self.x11.XSync(self.display, 0)
+        self.record({"step": step, "nonce": nonce, "window": self.window, "pid": self.owner_pid,
+                     "point": None, "button": None, "pressed": None, "key": None,
+                     "scroll_discrete": [0, direction * 120], "x11_pointer": self.client_pointer()})
 
     def _guard(self):
         self.portal.pump()

@@ -21,6 +21,7 @@ import ui_bridge_planning as bridge_planning
 import ui_rest_area_planning as rest_area_planning
 import ui_rest_area_usage as rest_area_usage
 import ui_rest_area_art as rest_area_art
+import ui_rest_area_maxzoom as rest_area_maxzoom
 import ui_terrain_materials as terrain_materials
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
@@ -35,7 +36,7 @@ CHECKPOINTS = ("tasks", "last-page", "minimized", "restored", "entities",
 VIEWPORTS = ((1920, 1080, 1.0), (1280, 720, 1.25), (1280, 720, 0.85),
              (1280, 720, 1.0), (1920, 1080, 0.85), (1920, 1080, 1.25))
 CASES = ("navigation", "refactor-rows", "progress-bars", "terrain-materials", "refactor-suite",
-         "bridge-planning", "rest-area-planning", "rest-area-refund", "rest-area-completion", "rest-area-usage", "rest-area-exit", "rest-area-save", "rest-area-lifecycle")
+         "bridge-planning", "rest-area-planning", "rest-area-refund", "rest-area-completion", "rest-area-usage", "rest-area-exit", "rest-area-save", "rest-area-lifecycle", "rest-area-maxzoom")
 
 
 def session_matrix(case, smoke):
@@ -63,6 +64,9 @@ def sha256(path: Path) -> str:
 def check_observation(case: str, value: dict) -> None:
     native.require(value["ready"] and value["frame"] > 90, "fixture is not ready")
     native.require(value["task_rows"] <= 20, "task resident row limit exceeded")
+    if case in rest_area_maxzoom.CASES:
+        rest_area_maxzoom.check_observation(case, value)
+        return
     if case in bridge_planning.CHECKPOINTS:
         bridge_planning.check_observation(case, value)
         return
@@ -222,7 +226,7 @@ def check_layout_scene(value, scene):
 
 
 class Driver:
-    def __init__(self, process, root, nonce, state, job_file, portal=None, *, layout_only=False, eis=False):
+    def __init__(self, process, root, nonce, state, job_file, portal=None, *, layout_only=False, eis=False, scroll=False):
         self.process, self.root, self.nonce = process, root, nonce
         self.state, self.job_file = state, job_file
         self.events, self.checkpoints = [], []
@@ -241,7 +245,8 @@ class Driver:
             return
         arguments = (int(window, 0), pid, process.pid, nonce, self.record)
         native.require(not eis or portal is not None, "EIS requires the existing consented portal")
-        self.input = (PortalEisInput(*arguments, portal=portal) if eis else
+        native.require(not scroll or eis, "maxzoom requires the explicit EIS input backend")
+        self.input = (PortalEisInput(*arguments, portal=portal, allow_scroll=scroll) if eis else
                       PortalX11Input(*arguments, portal=portal) if portal else X11Input(*arguments))
         try:
             self.input.activate()
@@ -249,7 +254,8 @@ class Driver:
             native.atomic_write_json(self.root / "input-client.json", {"window": self.input.window,
                 "pid": pid, "geometry": geometry, "observer_viewport": self.last["viewport"], "nonce": nonce,
                 "input_backend": "portal-eis" if eis else "portal" if portal else "xtest",
-                "input_transport": "portal-eis-absolute-v1" if eis else "portal-notify-relative-v1" if portal else "xtest",
+                "input_transport": "portal-eis-absolute-scroll-v1" if eis and scroll else "portal-eis-absolute-v1" if eis else "portal-notify-relative-v1" if portal else "xtest",
+                "eis_scroll": scroll,
                 "eis_region": self.input.sender.region_contract if eis else None,
                 "xmodifiers": next((entry.split(b"=", 1)[1].decode() for entry in
                                     Path(f"/proc/{pid}/environ").read_bytes().split(b"\0")
@@ -445,7 +451,7 @@ def check_input_client(manifest, session, client):
             native.require(manifest.get("portal_session") and client.get("portal_session") == manifest["portal_session"],
                            "suite did not share one portal session")
     if manifest["input_backend"] == "portal-eis":
-        rest_area_art.check_eis_client(client)
+        rest_area_art.check_eis_client(client, scroll=manifest.get("case") == "rest-area-maxzoom")
     if session.get("case", manifest.get("case")) == "refactor-rows":
         native.require(client.get("xmodifiers") == "@im=local", "row text input requires child-local XIM")
 
@@ -463,9 +469,12 @@ def verify_root(root):
     native.require(native.git_subject(repo) == manifest["subject_commit"], "subject changed")
     native.require(sha256(repo / "target/debug/bevy_app") == manifest["binary_sha256"], "binary changed")
     art_contract = manifest.get("ordinary_art")
+    native.require(manifest["case"] != "rest-area-maxzoom" or art_contract is not None and manifest["input_backend"] == "portal-eis",
+                   "maxzoom requires the explicit ArtPreview EIS profile")
     if art_contract is not None:
-        native.require(manifest["case"] == "rest-area-lifecycle" and manifest["smoke"]
+        native.require(manifest["case"] in ("rest-area-lifecycle", "rest-area-maxzoom") and manifest["smoke"]
                        and manifest["input_backend"] in ("portal", "portal-eis"), "ordinary art profile differs")
+        native.require(manifest["case"] != "rest-area-maxzoom" or manifest["input_backend"] == "portal-eis", "maxzoom backend differs")
         expected_art = rest_area_art.source_contract(repo, Path(art_contract["source_root"]), Path(art_contract["codec"]))
         native.require(rest_area_art.pipeline.exact_json(expected_art, art_contract), "ordinary art inputs changed")
     expected = check_session_inventory(manifest)
@@ -476,10 +485,13 @@ def verify_root(root):
         events = native.read_json(directory / "events.json")["events"]
         client = native.read_json(directory / "input-client.json")
         check_input_client(manifest, session, client)
-        if case in ("rest-area-planning", "rest-area-refund", "rest-area-completion", "rest-area-usage", "rest-area-exit", "rest-area-save", "rest-area-lifecycle"):
+        if case in ("rest-area-planning", "rest-area-refund", "rest-area-completion", "rest-area-usage", "rest-area-exit", "rest-area-save", "rest-area-lifecycle", "rest-area-maxzoom"):
             raw_path = directory / "production-cancellation.json"
             native.require(sha256(raw_path) == session.get("cancellation_sha256"), "cancellation raw changed")
-            if case == "rest-area-lifecycle":
+            if case == "rest-area-maxzoom":
+                rest_area_art.check_view(repo, directory / "asset-view", art_contract)
+                rest_area_maxzoom.verify(native.read_json(raw_path), entries, client, art_contract, events)
+            elif case == "rest-area-lifecycle":
                 if art_contract is not None:
                     rest_area_art.check_view(repo, directory / "asset-view", art_contract)
                     rest_area_art.check_lifecycle(native.read_json(raw_path), entries, client,
@@ -509,6 +521,7 @@ def verify_root(root):
                                 rest_area_usage.EXIT_CHECKPOINTS if case == "rest-area-exit" else
                                 rest_area_usage.SAVE_CHECKPOINTS if case == "rest-area-save" else
                                 rest_area_usage.LIFECYCLE_CHECKPOINTS if case == "rest-area-lifecycle" else
+                                rest_area_maxzoom.CHECKPOINTS if case == "rest-area-maxzoom" else
                                 terrain_materials.CHECKPOINTS if case == "terrain-materials" else
                                 progress_bars.CHECKPOINTS if case == "progress-bars" else CHECKPOINTS)
         native.require([item["case"] for item in entries] == (["entities"] if layout_only else list(expected_checkpoints)), "checkpoints differ")
@@ -550,7 +563,7 @@ def verify_root(root):
         if case in ("rest-area-planning", "rest-area-refund"):
             rest_area_planning.check_sequence(entries, refund=case == "rest-area-refund")
             continue
-        if case in ("rest-area-completion", "rest-area-usage", "rest-area-exit", "rest-area-save", "rest-area-lifecycle"):
+        if case in ("rest-area-completion", "rest-area-usage", "rest-area-exit", "rest-area-save", "rest-area-lifecycle", "rest-area-maxzoom"):
             continue  # Exact sequence/domain/raw checks ran together above.
         if layout_only:
             continue
@@ -561,6 +574,7 @@ def verify_root(root):
         joint.verify_game_log(directory / "game.log", "Intel")
     return {"status": "valid", "profile": PROFILE, "sessions": len(expected),
             "coverage": f"{manifest.get('layout_scene', 'management')} rendering only; no input evidence" if layout_only else
+                        "ordinary RestArea farthest-zoom type/utilization hover and selection feedback; not art/numeric/performance/release acceptance" if manifest.get("case") == "rest-area-maxzoom" else
                         "task labels, rename, search/fold and four progress callers with save/load/cancellation" if manifest.get("case") == "refactor-suite" else
                         "three visible terrain LODs, diagnostic normal prepass, Scene resize and restore" if manifest.get("case") == "terrain-materials" else
                         "task labels, rename, search and fold feedback" if manifest.get("case") == "refactor-rows" else
@@ -670,7 +684,7 @@ def run(args):
                                 "HW_NATIVE_UI_ROOT": str(directory), "HW_NATIVE_UI_NONCE": nonce,
                                 "HW_NATIVE_UI_WIDTH": str(width), "HW_NATIVE_UI_HEIGHT": str(height), "HW_NATIVE_UI_SCALE": str(scale)})
             environment["HW_NATIVE_UI_CASE"] = case
-            if case in ("rest-area-planning", "rest-area-refund", "rest-area-completion", "rest-area-usage", "rest-area-exit", "rest-area-save", "rest-area-lifecycle"):
+            if case in ("rest-area-planning", "rest-area-refund", "rest-area-completion", "rest-area-usage", "rest-area-exit", "rest-area-save", "rest-area-lifecycle", "rest-area-maxzoom"):
                 if art_contract is not None:
                     view = rest_area_art.prepare_view(repo, directory, art_contract)
                     environment["BEVY_ASSET_ROOT"] = str(view)
@@ -697,7 +711,8 @@ def run(args):
                 driver = None
                 try:
                     driver = Driver(process, directory, nonce, state, job_file, portal,
-                                    layout_only=args.input_backend == "none", eis=args.input_backend == "portal-eis")
+                                    layout_only=args.input_backend == "none", eis=args.input_backend == "portal-eis",
+                                    scroll=case == "rest-area-maxzoom")
                     if art_contract is not None:
                         rest_area_art.wait_ready(driver, art_contract)
                     state["current_stage"] = "ui-input"
@@ -709,6 +724,8 @@ def run(args):
                         progress_bars.exercise(driver)
                     elif case == "bridge-planning":
                         bridge_planning.exercise(driver)
+                    elif case == "rest-area-maxzoom":
+                        rest_area_maxzoom.exercise(driver)
                     elif case == "rest-area-lifecycle":
                         if art_contract is not None:
                             rest_area_art.exercise_lifecycle(driver)
@@ -745,7 +762,7 @@ def run(args):
                         state["child_pid"] = None
             joint.verify_game_log(directory / "game.log", "Intel")
             session = {"case": case, "directory": directory.name, "nonce": nonce, "log_sha256": sha256(directory / "game.log")}
-            if case in ("rest-area-planning", "rest-area-refund", "rest-area-completion", "rest-area-usage", "rest-area-exit", "rest-area-save", "rest-area-lifecycle"):
+            if case in ("rest-area-planning", "rest-area-refund", "rest-area-completion", "rest-area-usage", "rest-area-exit", "rest-area-save", "rest-area-lifecycle", "rest-area-maxzoom"):
                 session["cancellation_sha256"] = sha256(directory / "production-cancellation.json")
             sessions.append(session)
         native.atomic_write_json(root / "manifest.json", {

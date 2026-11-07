@@ -1,7 +1,7 @@
 import unittest
 from unittest import mock
 
-from scripts.native_ui_eis import ABSOLUTE, BUTTON, KEYBOARD, EisSender, PortalEisInput
+from scripts.native_ui_eis import ABSOLUTE, BUTTON, KEYBOARD, SCROLL, EisSender, PortalEisInput
 from scripts.native_ui_input import InputRejected
 
 
@@ -10,6 +10,7 @@ def sender():
     value.lib = mock.Mock()
     value.context = 1
     value.ready = True
+    value.allow_scroll = False
     value.devices, value.active, value.seats = {10: {ABSOLUTE, BUTTON}, 20: {KEYBOARD}}, {10, 20}, {30}
     value.held_keys, value.held_buttons = set(), set()
     value.root_size, value.mapping = (2880, 1800), (1, 2.)
@@ -23,6 +24,65 @@ def sender():
 
 
 class EisTests(unittest.TestCase):
+    def test_scroll_flag_is_boolean_and_capability_binding_is_opt_in(self):
+        portal = mock.Mock(ready=True, granted_devices=3)
+        for flag in (1, "true", None):
+            with mock.patch("scripts.native_ui_eis.bind_library") as bind:
+                with self.assertRaises(InputRejected):
+                    EisSender(portal, (2880, 1800), (1, 2.), allow_scroll=flag)
+                bind.assert_not_called()
+        for enabled, offered in ((False, False), (True, True), (True, False)):
+            value = sender()
+            value.allow_scroll = enabled
+            value.seats.clear()
+            value.lib.ei_get_event.side_effect = [99, None]
+            value.lib.ei_event_get_type.return_value = 3
+            value.lib.ei_event_get_seat.return_value = 30
+            value.lib.ei_seat_has_capability.side_effect = lambda _, cap: cap != SCROLL or offered
+            if enabled and not offered:
+                with self.assertRaises(InputRejected):
+                    value.pump()
+                value.lib.ei_seat_bind_capabilities.assert_not_called()
+            else:
+                value.pump()
+                bound = value.lib.ei_seat_bind_capabilities.call_args.args
+                self.assertEqual([cap.value for cap in bound[1:-1]],
+                                 [ABSOLUTE, KEYBOARD, BUTTON] + ([SCROLL] if enabled else []))
+
+    def test_scroll_is_explicit_single_discrete_click_on_the_owned_region(self):
+        value = sender()
+        with self.assertRaises(InputRejected):
+            value.send("scroll_discrete", 0, 120)
+        value.lib.ei_device_scroll_discrete.assert_not_called()
+        value.allow_scroll = True
+        value.devices[10].add(SCROLL)
+        value.send("scroll_discrete", 0, 120)
+        value.lib.ei_device_scroll_discrete.assert_called_once_with(10, 0, 120)
+        value.lib.ei_device_frame.assert_called_once_with(10, 1000)
+        value.lib.ei_device_button_button.assert_not_called()
+        self.assertFalse(value.held_buttons or value.held_keys)
+
+    def test_scroll_rejects_missing_multiple_foreign_or_invalid_requests(self):
+        for mode in ("missing", "duplicate", "foreign", "horizontal", "fraction", "bool", "multiple", "zero", "unknown"):
+            value = sender()
+            value.allow_scroll = True
+            value.devices[10].add(SCROLL)
+            operation, args = "scroll_discrete", (0, 120)
+            if mode == "missing":
+                value.devices[10].remove(SCROLL)
+            elif mode in ("duplicate", "foreign"):
+                value.devices[30] = {SCROLL}
+                value.active.add(30)
+                if mode == "foreign":
+                    value.devices[10].remove(SCROLL)
+            else:
+                operation, args = {"horizontal": (operation, (120, 120)), "fraction": (operation, (0, 120.)),
+                    "bool": (operation, (False, 120)), "multiple": (operation, (0, 240)),
+                    "zero": (operation, (0, 0)), "unknown": ("scroll_delta", (0, 120))}[mode]
+            with self.subTest(mode=mode), self.assertRaises(InputRejected):
+                value.send(operation, *args)
+            value.lib.ei_device_scroll_discrete.assert_not_called()
+
     def test_existing_consent_is_required_before_connect_or_library(self):
         for ready, devices in ((False, 3), (True, 1), (True, True)):
             portal = mock.Mock(ready=ready, granted_devices=devices)
@@ -142,6 +202,55 @@ class EisTests(unittest.TestCase):
         value.root_size = mock.Mock(return_value=(2880, 1800))
         value.sender = mock.Mock(ready=True)
         return value
+
+    def wheel_bridge(self):
+        value = self.bridge()
+        value.allow_scroll, value.nonce, value.sent = True, "owned", set()
+        value.held_keys, value.held_buttons = set(), set()
+        value._check_owner, value._check_focus = mock.Mock(), mock.Mock()
+        value.client_size = mock.Mock(return_value=(1920, 1080))
+        value.client_pointer = mock.Mock(return_value={"same_screen": True, "client": [960, 540]})
+        value.x11, value.display = mock.Mock(), 1
+        value.window, value.owner_pid, value.record = 10, 20, mock.Mock()
+        return value
+
+    def test_wheel_owned_step_is_recorded_once_without_button_or_notify(self):
+        value = self.wheel_bridge()
+        value.scroll("one", "owned", 1)
+        value.sender.send.assert_called_once_with("scroll_discrete", 0, 120)
+        value.portal.notify.assert_not_called()
+        value.record.assert_called_once()
+        self.assertEqual(value.record.call_args.args[0]["scroll_discrete"], [0, 120])
+        with self.assertRaises(InputRejected):
+            value.scroll("one", "owned", 1)
+        value.sender.send.assert_called_once()
+
+    def test_wheel_guard_failures_do_not_send_and_unknown_send_is_not_retried(self):
+        for mode in ("disabled", "nonce", "held", "focus", "owner", "pointer", "monitor", "consent", "direction"):
+            value = self.wheel_bridge()
+            if mode == "disabled":
+                value.allow_scroll = False
+            elif mode == "held":
+                value.held_buttons.add(1)
+            elif mode in ("focus", "owner"):
+                getattr(value, "_check_" + mode).side_effect = InputRejected("ownership changed")
+            elif mode == "pointer":
+                value.client_pointer.return_value["client"] = [-1, 10]
+            elif mode == "monitor":
+                value.portal.motion_mapping.return_value = (2, 2.)
+            elif mode == "consent":
+                value.portal.ready = False
+            with self.subTest(mode=mode), self.assertRaises(InputRejected):
+                value.scroll("one", "foreign" if mode == "nonce" else "owned", True if mode == "direction" else 1)
+            value.sender.send.assert_not_called()
+            value.portal.notify.assert_not_called()
+        value = self.wheel_bridge()
+        value.sender.send.side_effect = InputRejected("unknown send outcome")
+        for _ in range(2):
+            with self.assertRaises(InputRejected):
+                value.scroll("one", "owned", 1)
+        value.sender.send.assert_called_once()
+        value.record.assert_not_called()
 
     def test_absolute_transport_does_not_read_or_infer_initial_cursor(self):
         value = self.bridge()

@@ -22,6 +22,7 @@ pub(super) fn enabled() -> bool {
             | "rest-area-usage"
             | "rest-area-save"
             | "rest-area-lifecycle"
+            | "rest-area-maxzoom"
             | "rest-area-exit")
     )
 }
@@ -70,7 +71,11 @@ pub(super) fn snapshot(world: &mut World) -> Value {
     let anchor = target.0;
     let rest_area_usage = if matches!(
         std::env::var("HW_NATIVE_UI_CASE").as_deref(),
-        Ok("rest-area-usage" | "rest-area-exit" | "rest-area-save" | "rest-area-lifecycle")
+        Ok("rest-area-usage"
+            | "rest-area-exit"
+            | "rest-area-save"
+            | "rest-area-lifecycle"
+            | "rest-area-maxzoom")
     ) {
         crate::assets::building_asset_set::snapshot_rest_observations(world)
             .unwrap_or_else(|failure| json!({"failure": failure}))
@@ -168,6 +173,14 @@ mod tests {
         };
 
         assert_eq!(REST_AREA_RECRUIT_COOLDOWN_SECS, 15.0);
+        assert_eq!(hw_core::constants::DREAM_DRAIN_RATE_REST, 0.5);
+        let camera = bevy::camera_controller::pan_camera::PanCamera::default();
+        assert_eq!(camera.max_zoom, 5.0);
+        assert_eq!(camera.zoom_speed, 0.1);
+        assert_eq!(
+            bevy::input::mouse::MouseScrollUnit::SCROLL_UNIT_CONVERSION_FACTOR,
+            100.0
+        );
         assert_eq!(
             [
                 DREAM_ACCUMULATE_RATE_WORKING,
