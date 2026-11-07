@@ -47,7 +47,7 @@ config/admission・seed・plugin配線とsidecar契約を明示分岐した。�
 独立中間reviewで判明した壁footprint衝突は実tilesのmin/max外側から導出して修正し、
 同handle内のPBR材質変更、壁可視性/3D transform/layer、実RtT target/composite、
 完成接地点とpreview anchorの既知offsetを観測・拒否へ追加した。
-現時点は準備中であり、この新場面のfresh native画像・最終固定read-only review・正式採否は未実施。
+初期実装時点では準備中であり、fresh native画像・最終固定read-only review・正式採否は未実施だった。
 `a76c44f3`の最初のplanは、実manifestのartifact roleが`image:world_preview`であるのに
 新helperが非prefix名を検索していたため登録前に拒否された。job root・launchは未作成のまま保全した。
 実role namespaceへ修正し、欠損/非prefix/重複artifactの拒否テストを追加する。旧計画拒否はnative passではない。
@@ -55,6 +55,30 @@ config/admission・seed・plugin配線とsidecar契約を明示分岐した。�
 observerが検出して非ゼロ終了し、probe/PNGは未生成。invalid封印・診断用途保持・finalize済み。
 現段階では変更fieldが未記録のため原因を断定せず、最初のJSON差分path/前後値を有界に報告する
 readonly診断を追加する。不変性・identity・材質・投影・inventoryの受入条件は緩和しない。
+
+`3356cdee`（source `4a45c3676428ceed73925d9648cb76318fe0064800b2cc7b7a38835179c479b6`）の
+fresh standard v2とdim v1は、同じdb0f ArtPreview・同一binary
+`02ea33c1c87407d9cc0512dd4bf7027b28f3d7d58cf4cd76af64b8b739de72e9`で技術比較pass。
+実光源500/12000対100/2400、4完成owner・8壁・4preview、0/1/5/0 seeded occupantsと
+exact材質・壁depth・画像role/hash/Anchor・実RtT target/compositeを照合した。
+ownerの投影[400/560/720/880,280]と縦補正済み完成接地点が一致し、previewは同x・y440へ並置。
+standard manifest `693aec1b6e4d4eecc2b67ba7dcbb630d1aa956a713d047562eb76e47fb5f54f7`、
+PNG `faec96caeb16998d292306a0c6e9aeee6a5b0f1a8649006551a9829854de1d68`。
+dim manifest `c9b85ae99d37a45b6b23373b129b126d09cdef67ec770e52cd4d10f1511db436`、
+PNG `cb8dbcfff5bb16f05c9af3a939e9817ff2793e9d5f23ddfc16050e7122f0fa13`。
+両方とも別プロセスverify、登録verifier seal/finalize済み。main/独立read-only reviewで両PNGを実見し、
+暗所でも布屋根・支柱・入口が残ること、固定preview自体は明るさ不変であることを確認した。
+複雑な壁交差・全方向depth、人数の形だけの識別、通常入力ghost・LightField・通常照明全体は未証明。
+正式art/numeric/release/performance判断は付与せず、利用者へ当該見た目の採否だけを別途照会中。
+先行standard v1の変化は診断追加後の同条件v2/照明だけを変えたdim v1では再現せず、原因未断定。
+受入を緩和せず、初回invalidのまま一回の有界診断を終了し、今後の変化はfirst-difference診断で拒否する。
+最新2画像は具体的採否用途で保持し、旧source/binaryの再実行依存はseal/finalizeで終了した。
+初回standard v1の診断consumerは終了し、finalized/invalid・終了process・所有・非symlinkを確認して
+当該生成jobだけ140005376Bを撤去した。原本・最新2画像・共有Cargo cacheとinvalid metadataは維持する。
+利用者のRestArea見た目採否待ちと並行して、既存SoulSpa ArtPreview generation1
+`63e860d2777b1ed7d562835f64452c5fd3d9a00ef5ac1435015e0beafd346e48`の現行source galleryを準備する。
+world/catalogは96wu/256px、world Anchor[128,144]・代表OperationalMaskZero、geometry hash
+`738afb151a0d55044774a8f22af9b2649784678b61c4ab25e0577869acb1d2f2`、art/numeric/production_stateは未承認のまま。
 
 `c07987e4`のfresh `tak14-restarea-ordinary-art-eis-feedback-20261108-v3`は9checkpoint、
 登録verifierと別実行verifyが成功した。source=`43386c30797aac97f88d338f16c76304cb14ff143d9f9111e4dc0eba01361947`、
