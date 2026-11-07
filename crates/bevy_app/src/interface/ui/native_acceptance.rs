@@ -412,6 +412,9 @@ fn node_key(world: &World, entity: Entity) -> Option<String> {
     {
         return Some("dev-minimize".into());
     }
+    if let Some(key) = crate::interface::selection::candidates::native_button_key(world, entity) {
+        return Some(key);
+    }
     if let Some(button) = world.get::<MenuButton>(entity) {
         let mut ancestor = Some(entity);
         while let Some(current) = ancestor {

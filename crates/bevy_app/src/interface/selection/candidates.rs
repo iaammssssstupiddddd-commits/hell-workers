@@ -98,6 +98,21 @@ struct CandidateButton {
     epoch: WorldEpoch,
 }
 
+/// Passive profiling inventory of the existing revision/epoch-bound UI action.
+#[cfg(feature = "profiling")]
+pub(crate) fn native_button_key(world: &World, entity: Entity) -> Option<String> {
+    let button = world.get::<CandidateButton>(entity)?;
+    let target = button.target.map_or_else(
+        || "toggle".to_string(),
+        |target| target.to_bits().to_string(),
+    );
+    Some(format!(
+        "world-candidate:{target}:{}:{}",
+        button.revision,
+        button.epoch.get()
+    ))
+}
+
 #[derive(SystemParam)]
 pub(crate) struct PickerQueries<'w, 's> {
     roots: Query<'w, 's, Entity, With<UiRoot>>,
@@ -352,6 +367,46 @@ fn spawn_button(
 mod tests {
     use super::*;
     use hw_core::selection::SelectionHitKind;
+
+    #[cfg(feature = "profiling")]
+    #[test]
+    fn native_picker_keys_only_read_exact_target_revision_and_epoch() {
+        let mut world = World::new();
+        let target = world.spawn_empty().id();
+        let mut epoch = WorldEpoch::default();
+        epoch.advance();
+        let toggle = world
+            .spawn(CandidateButton {
+                target: None,
+                revision: 12,
+                epoch,
+            })
+            .id();
+        let row = world
+            .spawn(CandidateButton {
+                target: Some(target),
+                revision: 12,
+                epoch,
+            })
+            .id();
+        assert_eq!(
+            native_button_key(&world, toggle),
+            Some(format!("world-candidate:toggle:12:{}", epoch.get()))
+        );
+        assert_eq!(
+            native_button_key(&world, row),
+            Some(format!(
+                "world-candidate:{}:12:{}",
+                target.to_bits(),
+                epoch.get()
+            ))
+        );
+        assert_eq!(native_button_key(&world, target), None);
+        assert_eq!(
+            world.get::<CandidateButton>(row).unwrap().target,
+            Some(target)
+        );
+    }
 
     fn target(entity: Entity, class: SelectionTargetClass) -> SelectionCandidate {
         SelectionCandidate {

@@ -257,6 +257,10 @@ libei 1.6の宣言SCROLL(16)とscroll_discreteのint32/120単位だけを使い�
 checkpointはframe、入力step、raw sample、実時間の順序とpause中のvirtual時間不変を要求する。
 hover→selectedには同区間の実MouseButtonInputのLeft press/release、同window/epoch/ownerと実cursor座標を
 要求し、既存選択の表示だけをクリック成功に読み替えない。empty→occupiedは通常simulationの進行を要求する。
+同地点の再クリックは既存の重なり候補巡回なので、異なる対象が選ばれた場合はworldクリックを再送しない。
+既存候補一覧のtoggleと対象行をtarget/revision/epoch付きで受動観測し、可視hover/pressと実入力を一度ずつ照合して
+当該ownerを明示選択する。最後にworld ownerへpointerを戻し、同じtooltipと選択headerを撮影する。
+一覧を使う場合も全Left pairのraw window/epoch/owner/座標/時系列を検査し、別target・旧revision・追加クリックは拒否する。
 
 同UI recipeの明示`--input-backend portal-eis`は当該ArtPreview lifecycle/maxzoomだけで既存EIS absolute
 経路を選ぶ。通常portal Notify経路からの自動fallbackではなく、混用・他caseへの拡張は拒否する。

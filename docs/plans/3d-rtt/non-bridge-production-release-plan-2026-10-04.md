@@ -27,7 +27,16 @@ cooldown15秒(仮想85.614576461→100.614576461)を観測。実active/root/part
 削除前duは順に149721088/192282624/189358080B（合計531361792B）。invalid metadataと原因・補正結果は
 維持し、候補制作原本・最新成功job・共有Cargo cacheは変更しない。
 
-次は最大zoom-out=5でのUI補完を明示legとして実装する。数値camera scale、実wheel、hover/pointer/tooltip
+`5e61256f`のfresh `tak14-restarea-maxzoom-art-eis-feedback-20261108-v1`は実施工後40wheelで
+scale=4.999997615814209へ到達し、empty hover/selectedとoccupied hoverの6checkpointを取得した。
+同owner38654703279の利用中tooltipはResting 2/5・Dream 1.00/sを表示したが、同地点の再クリックは
+既存の重なり候補巡回によりSoul Stephanie (4294965449)を選び、occupied-selectedは15秒timeoutでinvalid。
+旧送信は再送せず、invalid封印・診断用途保持・finalize済み。正式art/numeric/release採否には使わない。
+候補一覧の既存target/revision/epoch付き行をprofiling observerで受動公開し、別対象が選ばれた場合だけ
+一覧からexact ownerを一度選ぶ。各UI hover/press、raw Left pairと座標、最後のworld hover復帰を検証する。
+未知targetや旧revision、余分なクリックは拒否し、player選択ルールと候補順位は変更しない。
+
+最大zoom-out=5でのUI補完を明示legとして実装した。数値camera scale、実wheel、hover/pointer/tooltip
 対象とvisible本文を同一sampleへ受動記録し、既存consentの宣言SCROLL capabilityを持つEISだけを使う。
 通常入力でzoom→exact owner hover→利用人数/Dream表示→同owner選択をempty/occupiedで確認する。
 tooltipを情報panel本文と混同せず、予約数や未表示値は証明しない。scale/stateを直接書き換えず、

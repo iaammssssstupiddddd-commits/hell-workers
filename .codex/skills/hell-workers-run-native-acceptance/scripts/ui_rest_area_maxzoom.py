@@ -158,13 +158,46 @@ def wheel(driver):
     driver.acknowledge_events(driver.events[-1:])
 
 
+def picker_click(driver, key):
+    """One explicit candidate UI action, not a repeated world click."""
+    first_step = len(driver.events) + 1
+    driver.send(point=driver.point(key))
+    native.require(driver.last["controls"].get(key, {}).get("interaction") == "Hovered", "candidate button is not hovered")
+    observed = driver.last
+    driver.send(button=1, pressed=True)
+    native.require(driver.last["controls"].get(key, {}).get("interaction") == "Pressed", "candidate button did not receive press")
+    driver.send(button=1, pressed=False)
+    return {"key": key, "hover": observed, "first_step": first_step, "last_step": len(driver.events)}
+
+
+def select_owner(driver):
+    bits, _ = owner(driver.last)
+    driver.send(button=1, pressed=True)
+    driver.send(button=1, pressed=False)
+    if driver.last["selected"] == bits:
+        return None
+    # Repeated same-point world clicks intentionally cycle overlapping actors.
+    # Use the existing revision/epoch-bound named picker, never a blind retry.
+    suffix = f":{driver.last['world_epoch']}"
+    toggles = [key for key in driver.last["controls"] if key.startswith("world-candidate:toggle:") and key.endswith(suffix)]
+    native.require(len(toggles) == 1, "selection differs and no unique existing candidate picker is visible")
+    toggle = picker_click(driver, toggles[0])
+    prefix = f"world-candidate:{bits}:"
+    driver.last = driver.wait(lambda value: any(key.startswith(prefix) and key.endswith(suffix) for key in value["controls"]),
+                              after=driver.last["frame"], timeout=15)
+    targets = [key for key in driver.last["controls"] if key.startswith(prefix) and key.endswith(suffix)]
+    native.require(len(targets) == 1, "candidate picker does not contain the exact owner")
+    target = picker_click(driver, targets[0])
+    driver.last = driver.wait(lambda value: value["selected"] == bits, after=driver.last["frame"], timeout=15)
+    driver.send(point=point(driver.last))
+    return {"toggle": toggle, "target": target}
+
+
 def capture_phase(driver, state):
     driver.send(point=point(driver.last))
     for kind in ("hover", "selected"):
         case = f"rest-area-maxzoom-{state}-{kind}"
-        if kind == "selected":
-            driver.send(button=1, pressed=True)
-            driver.send(button=1, pressed=False)
+        picker = select_owner(driver) if kind == "selected" else None
         def ready(value):
             try:
                 check_observation(case, value)
@@ -173,6 +206,9 @@ def capture_phase(driver, state):
             return True
         driver.last = driver.wait(ready, after=driver.last["frame"], timeout=15)
         driver.capture(case)
+        if picker is not None:
+            driver.checkpoints[-1]["selection_picker"] = picker
+            native.atomic_write_json(driver.root / "checkpoints.json", {"checkpoints": driver.checkpoints})
         captured = driver.last
         def recorded(_):
             raw = native.read_json(driver.root / "production-cancellation.json")
@@ -261,6 +297,58 @@ def verify(raw, entries, client, contract, events):
     check_sequence(raw, entries, client, events, scrolls)
 
 
+def selection_points(entry, events, previous_step):
+    value = entry["value"]
+    picker = entry.get("selection_picker")
+    native.require(len(events) == (9 if picker is not None else 2), "maxzoom selection input count differs")
+    pairs = [events[:2]]
+    points = [point(value)]
+    times = []
+    if picker is not None:
+        native.require(isinstance(picker, dict) and set(picker) == {"toggle", "target"}, "maxzoom picker proof differs")
+        bits, _ = owner(value)
+        keys = [picker[name]["key"] for name in ("toggle", "target")]
+        tokens = [key.split(":") for key in keys]
+        native.require(all(len(row) == 4 and row[0] == "world-candidate" and row[2].isdigit()
+                           and row[3] == str(value["world_epoch"]) for row in tokens)
+                       and tokens[0][1] == "toggle" and tokens[1][1] == str(bits) and tokens[0][2:] == tokens[1][2:],
+                       "maxzoom candidate target/revision/epoch differs")
+        for offset, name in ((2, "toggle"), (5, "target")):
+            proof = picker[name]
+            key, observed = proof["key"], proof["hover"]
+            motion, press, release = events[offset:offset + 3]
+            control = observed["controls"].get(key, {})
+            rect = control.get("rect")
+            native.require(visible_rect(rect, value["viewport"]) and control.get("fully_visible") is True
+                           and control.get("interaction") == "Hovered", "maxzoom candidate control is not visibly hovered")
+            center = [round((rect[0] + rect[2]) / 2), round((rect[1] + rect[3]) / 2)]
+            native.require(type(proof["first_step"]) is int and type(proof["last_step"]) is int
+                           and proof["first_step"] == previous_step + offset + 1 and proof["last_step"] == previous_step + offset + 3
+                           and observed["nonce"] == value["nonce"] and type(observed["pid"]) is int and observed["pid"] == value["pid"]
+                           and observed["world_epoch"] == value["world_epoch"] and observed["primary_window"] == value["primary_window"]
+                           and observed["frame"] == motion["post_frame"] <= press["pre_frame"] < release["post_frame"]
+                           and observed["paused"] is True and abs(camera_scale(observed) - 5) <= 1e-5
+                           and owner(observed)[0] == bits and observed["selected"] != bits
+                           and motion.get("point") == center and motion.get("button") is None and motion.get("key") is None
+                           and motion.get("scroll_discrete") is None and motion.get("observed_hover", {}).get(key) == "Hovered"
+                           and press.get("observed_hover", {}).get(key) == "Pressed",
+                           "maxzoom candidate action identity/input binding differs")
+            points.append(center)
+            pairs.append([press, release])
+            times.append(usage.context(observed)["real_seconds"])
+        motion = events[-1]
+        native.require(motion.get("point") == list(point(value)) and motion.get("button") is None
+                       and motion.get("key") is None and motion.get("scroll_discrete") is None,
+                       "maxzoom candidate selection did not return to owner hover")
+    for pair in pairs:
+        native.require([event.get("button") for event in pair] == [1, 1]
+                       and [event.get("pressed") for event in pair] == [True, False]
+                       and [event.get("observed_left_pressed") for event in pair] == [True, False]
+                       and all(event.get("point") is None and event.get("key") is None and event.get("scroll_discrete") is None
+                               for event in pair), "maxzoom selection has no single acknowledged Left pair per action")
+    return points, times
+
+
 def check_sequence(raw, entries, client, events, scrolls):
     native.require([event.get("step") for event in events] == [str(index + 1) for index in range(len(events))],
                    "maxzoom input sequence differs")
@@ -272,6 +360,8 @@ def check_sequence(raw, entries, client, events, scrolls):
                        and event["world_epoch"] == first["value"]["world_epoch"]
                        and all(type(event[key]) is int for key in ("pre_frame", "post_frame"))
                        and event["pre_frame"] < event["post_frame"], "maxzoom input identity/ACK differs")
+    native.require(all(a["post_frame"] <= b["pre_frame"] for a, b in zip(events, events[1:])),
+                   "maxzoom input intervals overlap or reverse")
     for index, entry in enumerate(entries[3:]):
         value, step = entry["value"], entry["last_step"]
         native.require(value.get("nonce") == first["value"]["nonce"] == client["nonce"] == raw["nonce"]
@@ -295,17 +385,16 @@ def check_sequence(raw, entries, client, events, scrolls):
                            and motion.get("button") is None and motion.get("key") is None
                            and motion.get("scroll_discrete") is None, "maxzoom hover has no fresh owner motion")
         else:
-            native.require(len(phase_events) == 2 and [event.get("button") for event in phase_events] == [1, 1]
-                           and [event.get("pressed") for event in phase_events] == [True, False]
-                           and [event.get("observed_left_pressed") for event in phase_events] == [True, False]
-                           and all(event.get("point") is None and event.get("key") is None and event.get("scroll_discrete") is None
-                                   for event in phase_events), "maxzoom selection has no single acknowledged Left pair")
+            points, action_times = selection_points(entry, phase_events, previous_step)
+            times = [previous_sample["real_seconds"], *action_times, sample["real_seconds"]]
+            native.require(all(finite(at) for at in times) and all(a < b for a, b in zip(times, times[1:])),
+                           "maxzoom selection action times differ")
             buttons = [event for event in raw["events"] if event.get("producer") == "MouseButtonInput"
                        and previous_sample["sample_index"] < event.get("sample_index", -1) <= sample["sample_index"]]
-            native.require(len(buttons) == 2 and [event.get("state") for event in buttons] == ["Pressed", "Released"]
-                           and buttons[0]["event_index"] < buttons[1]["event_index"],
+            native.require(len(buttons) == 2 * len(points) and [event.get("state") for event in buttons] == ["Pressed", "Released"] * len(points)
+                           and all(a["event_index"] < b["event_index"] for a, b in zip(buttons, buttons[1:])),
                            "maxzoom selection lacks a unique ordered raw Left pair")
-            for event in buttons:
+            for button_index, event in enumerate(buttons):
                 row = raw["samples"][event["sample_index"]]
                 cursor, dpi = row.get("cursor_position"), row.get("dpi")
                 bits, _ = owner(value)
@@ -315,10 +404,10 @@ def check_sequence(raw, entries, client, events, scrolls):
                                and row.get("world_epoch") == value["world_epoch"] and row.get("paused") is True
                                and row.get("virtual_seconds") == previous_sample["virtual_seconds"] == sample["virtual_seconds"]
                                and finite(event.get("real_seconds"))
-                               and previous_sample["real_seconds"] < event["real_seconds"] <= row["real_seconds"] <= sample["real_seconds"]
+                               and times[button_index // 2] < event["real_seconds"] <= row["real_seconds"] <= times[button_index // 2 + 1]
                                and finite(dpi) and dpi > 0 and isinstance(cursor, list) and len(cursor) == 2
                                and all(finite(axis) for axis in cursor)
-                               and all(abs(axis * dpi - expected) <= 2 for axis, expected in zip(cursor, point(value), strict=True))
+                               and all(abs(axis * dpi - expected) <= 2 for axis, expected in zip(cursor, points[button_index // 2], strict=True))
                                and any(item.get("entity_bits") == bits
                                        for item in row.get("rest_area_context", {}).get("owners", [])),
                                "maxzoom raw Left window/epoch/owner/point/time differs")

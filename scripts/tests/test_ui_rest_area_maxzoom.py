@@ -12,7 +12,7 @@ zoom = acceptance.rest_area_maxzoom
 
 
 class MaxzoomTests(unittest.TestCase):
-    def verification_fixture(self):
+    def verification_fixture(self, picker=False):
         first = self.observation()
         first["camera_numeric"][0]["scale"] = [1., 1., 1.]
         raw = {"nonce": first["nonce"], "process_id": first["pid"], "scope": zoom.art.SCOPE,
@@ -53,7 +53,7 @@ class MaxzoomTests(unittest.TestCase):
         entries = [{"case": case, "value": copy.deepcopy(first), "last_step": 0} for case in zoom.planning.COMPLETION_CHECKPOINTS]
         for index, case in enumerate(zoom.CASES):
             value = self.observation("-occupied-" in case)
-            value["frame"] = 500 + index * 10
+            value["frame"] = 560 if picker and index == 3 else 500 + index * 10
             value["rest_area_planning"]["rest_area_usage"]["real_seconds"] = 100. + index
             value["rest_area_planning"]["rest_area_usage"]["virtual_seconds"] = 10. if index < 2 else 20.
             value["wheel_events"] = wheels
@@ -64,6 +64,33 @@ class MaxzoomTests(unittest.TestCase):
                 raw["samples"][-1]["paused"] = False
             if index % 2 == 0:
                 append_event(value, point=[500, 300], pre_frame=value["frame"] - 5, post_frame=value["frame"] - 1)
+            elif picker and index == 3:
+                def button_pair(at, frame, cursor, key=None):
+                    for offset, pressed in enumerate((True, False)):
+                        append_event(value, button=1, pressed=pressed, observed_left_pressed=pressed,
+                                     observed_hover={key: "Pressed" if pressed else "Hovered"} if key else {},
+                                     pre_frame=frame + offset * 3, post_frame=frame + offset * 3 + 2)
+                        click = copy.deepcopy(value)
+                        click["rest_area_planning"]["rest_area_usage"]["real_seconds"] = at + offset * .02
+                        sample(click, 5.)
+                        raw["samples"][-1]["cursor_position"] = cursor
+                        raw["events"].append({"producer": "MouseButtonInput", "operation": "MouseButtonInput", "button": "Left",
+                                              "state": "Pressed" if pressed else "Released", "window": "75v0",
+                                              "event_index": len(raw["events"]), "sample_index": len(raw["samples"]) - 1,
+                                              "real_seconds": raw["samples"][-1]["real_seconds"]})
+                button_pair(102.4, 521, [500., 300.])
+                route = {}
+                for name, target, y, frame, at in (("toggle", "toggle", 100, 526, 102.7), ("target", "8", 150, 534, 102.8)):
+                    key = f"world-candidate:{target}:7:{value['world_epoch']}"
+                    first_step = len(events) + 1
+                    append_event(value, point=[100, y], observed_hover={key: "Hovered"}, pre_frame=frame, post_frame=frame + 2)
+                    observed = copy.deepcopy(value)
+                    observed["frame"], observed["selected"] = frame + 2, 999
+                    observed["rest_area_planning"]["rest_area_usage"]["real_seconds"] = at
+                    observed["controls"][key] = {"rect": [90, y - 10, 110, y + 10], "fully_visible": True, "interaction": "Hovered"}
+                    button_pair(at + .02, frame + 2, [100., float(y)], key)
+                    route[name] = {"key": key, "hover": observed, "first_step": first_step, "last_step": len(events)}
+                append_event(value, point=[500, 300], pre_frame=541, post_frame=543)
             else:
                 for offset, pressed in enumerate((True, False)):
                     append_event(value, button=1, pressed=pressed, observed_left_pressed=pressed,
@@ -77,6 +104,8 @@ class MaxzoomTests(unittest.TestCase):
                                           "real_seconds": raw["samples"][-1]["real_seconds"]})
             sample(value, 5.)
             entries.append({"case": case, "value": value, "last_step": len(events)})
+            if picker and index == 3:
+                entries[-1]["selection_picker"] = route
         return raw, entries, {"eis_scroll": True, "nonce": first["nonce"], "pid": first["pid"], "window": 123}, {}, events
 
     def verify_wheel_fixture(self, fixture):
@@ -205,6 +234,46 @@ class MaxzoomTests(unittest.TestCase):
         self.assertEqual(zoom.checkpoint_sample([before, future], value)["sample_index"], before["sample_index"])
         with self.assertRaises(zoom.usage.RawCheckpointPending):
             zoom.checkpoint_sample([future], value)
+
+    def test_explicit_picker_is_bound_to_exact_owner_revision_input_and_raw_point(self):
+        fixture = self.verification_fixture(picker=True)
+        self.verify_wheel_fixture(fixture)
+        for mode in ("target", "revision", "epoch", "pid", "nonce", "control", "hover", "pressed", "step", "frame",
+                     "same_owner", "motion", "return", "raw_point", "raw_time", "raw_missing"):
+            raw, entries, client, contract, events = copy.deepcopy(fixture)
+            route = entries[-1]["selection_picker"]
+            proof = route["target"]
+            event = events[proof["first_step"] - 1]
+            if mode in ("target", "revision", "epoch"):
+                parts = proof["key"].split(":")
+                parts[{"target": 1, "revision": 2, "epoch": 3}[mode]] = "999"
+                proof["key"] = ":".join(parts)
+            elif mode in ("pid", "nonce"):
+                proof["hover"][mode] = 999 if mode == "pid" else "foreign"
+            elif mode == "control":
+                proof["hover"]["controls"][proof["key"]]["fully_visible"] = False
+            elif mode == "hover":
+                event["observed_hover"] = {}
+            elif mode == "pressed":
+                events[proof["first_step"]]["observed_hover"] = {}
+            elif mode == "step":
+                proof["first_step"] -= 1
+            elif mode == "frame":
+                proof["hover"]["frame"] -= 1
+            elif mode == "same_owner":
+                proof["hover"]["selected"] = 8
+            elif mode == "motion":
+                event["point"] = [101, 151]
+            elif mode == "return":
+                events[-1]["point"] = [100, 150]
+            elif mode == "raw_point":
+                raw["samples"][raw["events"][-1]["sample_index"]]["cursor_position"] = [500, 300]
+            elif mode == "raw_time":
+                raw["events"][-1]["real_seconds"] = 102.79
+            elif mode == "raw_missing":
+                raw["events"].pop()
+            with self.subTest(mode=mode), self.assertRaises((RuntimeError, ValueError)):
+                self.verify_wheel_fixture((raw, entries, client, contract, events))
 
     def observation(self, occupied=False):
         _, entries, _, _, _ = ordinary_art.OrdinaryArtTests().fixture()
