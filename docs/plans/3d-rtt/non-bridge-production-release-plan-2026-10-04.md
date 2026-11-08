@@ -43,6 +43,22 @@ Soulの既存task/relationを上書きせず、setup後はpassiveで30frames安�
 modeはfeedback/ArtPreview、small、normal/far、standard/dimだけを明示許可し、既存gallery/他contextに流用しない。
 Tankの水量は既存hover tooltip、Mixerは実workerのRefining UIによる間接補完が後続に必要で、
 Mixer自身に存在しないIdle/Activeラベルをfixtureで捏造しない。この比較にも入力/lifecycle/性能/承認の権限はない。
+当経路は `044ac448` で固定。独立レビューで指摘された水item実体/所属、worker正逆集合/作業ID、
+独立行列再照合、旧variant欠落plan互換を補強し、Python24件・M2関連Rust15件、
+変更別全群CI（source `05292907379eeb3c95751cf7f1631c1a61ff400b8503b69d048150dafb9f94c4`）、
+profiling Clippy・新moduleのrust-analyzer全0・storageを通過した。独立exact code reviewもapproved。
+Help影響はNo impact：明示profiling sessionだけの準備/受動観測で、通常起動・操作・UI文言・水/精製rule・save・承認権限は不変。
+次のfresh actual-window rootsは `target/native-acceptance/tak14-{tank,mixer}-context-{standard,dim}-20261109-v1` の4個。
+owner/consumer/整理条件は上記M2比較と同じ。通常倍率/lowでstandardとdimを同source/binaryで逐次比較する。
+Mixer入力は `tak14-mud-mixer-v2-flow-runtime-bda34aad-20261005-v1/runtime` のArtPreview
+`faa969b7af23d93644d7e58cf86c000e35c3113d2c89ecd7f7105d0958fcb876`。
+旧画像/manifestは原本identityの美術比較にだけ使用し、旧binaryを必要とする独立verifyは既にseal前に実施済み。
+同じprimary feedback cacheを更新するが、旧sourceのtechnical passを新sourceの受入へ流用しない。
+最初のTank standard v1は、context前壁が実BucketStorageの(8,10)を占有してsetupで正式拒否された。
+captureなし/invalidとしてseal、診断用途保持、finalize済み。製品の配置guardを緩めたり同batchを再起動しない。
+回帰testも同座標でREDを確認した。Tankだけ前壁を付属2cellより前に置き、開始前検査にもその2cellを含める。
+RestArea/Mixer/M5の前後壁位置、原本、カメラ、通常配置ruleは変えない。実生成terrain上のM2両kindも検査する。
+補正後はfresh `tak14-tank-context-standard-20261109-v2` を使い、他の未登録3jobも新subjectへ拘束する。
 
 2026-11-09の独立read-onlyアート監査では、Sand/Boneの現ArtPreview世代1を見た目だけ採用した。
 Sand `dbdf3e6ba5557f1b91b59a4e7d19c0bc1afe68e96c745d0dcbefd3f7b637d4e5` は低い黄土色の塊と大色面、

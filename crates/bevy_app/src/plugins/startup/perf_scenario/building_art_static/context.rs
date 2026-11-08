@@ -32,7 +32,14 @@ pub(super) fn wall_grids(spec: &Specimen) -> [(i32, i32); 2] {
         .map(|tile| tile.1)
         .max()
         .expect("nonempty footprint");
-    [(spec.anchor.0, min_y - 1), (spec.anchor.0, max_y + 1)]
+    // Tank's real two-cell BucketStorage is outside its own footprint.
+    // Keep it between the owner and front wall, never occupy its placement.
+    let front_y = if spec.kind == BuildingType::Tank {
+        max_y.max(spec.companion().1) + 1
+    } else {
+        max_y + 1
+    };
+    [(spec.anchor.0, min_y - 1), (spec.anchor.0, front_y)]
 }
 
 pub(super) fn validate_layout(specs: &[Specimen], map: &hw_world::WorldMap) -> Result<(), String> {
@@ -40,6 +47,18 @@ pub(super) fn validate_layout(specs: &[Specimen], map: &hw_world::WorldMap) -> R
         .iter()
         .flat_map(|spec| spec.tiles.iter().copied())
         .collect::<HashSet<_>>();
+    for spec in specs.iter().filter(|spec| spec.kind == BuildingType::Tank) {
+        let (x, y) = spec.companion();
+        for cell in [(x, y), (x + 1, y)] {
+            if !occupied.insert(cell)
+                || !map.is_walkable(cell.0, cell.1)
+                || map.has_building(cell)
+                || map.has_stockpile(cell)
+            {
+                return Err("occupied/overlapping Tank context companion grid".into());
+            }
+        }
+    }
     for grid in specs.iter().flat_map(wall_grids) {
         if !occupied.insert(grid)
             || !map.is_walkable(grid.0, grid.1)
@@ -913,6 +932,49 @@ mod tests {
             }
             assert!(checkpoint(&mut state, Some(material_snapshot(&changed))).is_err());
             assert_eq!(state.evidence, Some(initial));
+        }
+    }
+
+    #[test]
+    fn context_tank_walls_clear_real_companion_inventory() {
+        let specs = layout::layout(super::super::super::PerfScenarioSize::Small);
+        let mut occupied = HashSet::new();
+        for spec in specs.iter().filter(|spec| spec.kind == BuildingType::Tank) {
+            for tile in &spec.tiles {
+                assert!(occupied.insert(*tile));
+            }
+            let (x, y) = spec.companion();
+            for cell in [(x, y), (x + 1, y)] {
+                assert!(occupied.insert(cell));
+            }
+            for wall in wall_grids(spec) {
+                assert!(
+                    occupied.insert(wall),
+                    "wall intersects Tank or companion at {wall:?}"
+                );
+            }
+        }
+        assert_eq!(occupied.len(), 32);
+    }
+
+    #[test]
+    fn m2_context_supports_are_legal_on_actual_terrain_without_mutation() {
+        let generated = hw_world::generate_world_layout(20260920);
+        let mut map = hw_world::WorldMap::default();
+        for (index, &terrain) in generated.terrain_tiles.iter().enumerate() {
+            map.set_terrain_at_idx(index, terrain);
+        }
+        let all = layout::layout(super::super::super::PerfScenarioSize::Small);
+        for kind in [BuildingType::Tank, BuildingType::MudMixer] {
+            let specs = all
+                .iter()
+                .filter(|spec| spec.kind == kind)
+                .cloned()
+                .collect::<Vec<_>>();
+            assert_eq!(validate_layout(&specs, &map), Ok(()));
+        }
+        for (index, &terrain) in generated.terrain_tiles.iter().enumerate() {
+            assert_eq!(map.terrain_at_idx(index), Some(terrain));
         }
     }
 
