@@ -13,6 +13,15 @@
 
 ## 1. 目的
 
+### 現在の判断（2026-11-08）
+
+以下の試行履歴にある「照会中」「採否待ち」は各時点の記録であり、現在の利用者確認待ちではない。
+利用者の継続指示に従い、既存範囲内の判断・検証は主担当が進める。SoulSpaの見た目は利用者採用済み。
+RestAreaは主担当が独立画像/数値レビューに基づいて採用し、隔離候補8e4e8003を生成済み。
+最大zoomでは形だけの識別を要求せず、既存header/Resting/Dream表示による補完を維持する。
+採用は美術/数値判断であり、通常起動へのinstall・正式release・性能受入ではない。
+通常起動のfallbackはまだ切替前。橋を除く9種全体の受入は未完である。
+
 `77f90d22`のfresh `tak14-restarea-maxzoom-art-eis-feedback-20261108-v5`は7checkpointと登録/別実行verifierが成功。
 source=`dba53819e43c01de77e3afbf632fe930242767ea9d35be23d5cfff778663b840`、
 harness=`e2560847da2f51e10809c29d59ed276bbb4511d6dd4532bb747a5cc30103d94f`、
@@ -903,6 +912,40 @@ dirty rebuildを区別する。出力だけで稼働復元を判定せず、任�
 receipt→captureの全rawでdurable値と明示runtime-reset状態を照合し、一時変化/旧ID/別Soul/入力不一致を拒否する。
 再開後の再計算・再割当・自然退出は別legで残す。実装・拒否系試験・Help実判断・独立review・
 変更別CI後のfresh実機まで、この新caseを受入済みとはしない。
+
+実装`bbea8678`はbase939353baからの変更別contracts/tooling/deps/rust、通常/明示profiling Clippy警告0、
+dev check、関連Python99件、Skill全self-test/quick_validateを通過した。独立read-only reviewは
+時系列2指摘の補正後、tracked diff `e2edd0a51eef1f4d27e7f18ce77be305839cd5d57e4830d5a4728b6d14fa7da3`と
+新helper `4f6c1280163335f4461806c89bff770132b34a34ce970a9e958278e0e9bfde48`、
+新test `30d684cbcf7ed35d2fab66954883a4bee72ffc0de75844e9f7895447e9ee2bf7`をapproved。
+Help実判断は明示profiling検証経路だけの追加で通常操作/文言/ゲーム規則/save schema不変のNo impact。
+rust-analyzer errors/warningsは0（profiling非接続hintは保持し、実featureのcompile/testで補完）。
+
+fresh `tak14-soulspa-occupied-save-20261108-v1`はrun/別CLI/登録verifierをpassし、seal/finalizeした。
+source `feeff08bb6faf38879b53c487af6322a12b1872b19b3c9f500e83fe9fbf853ea`、
+harness `0ae9785cfe53c28bffc7fde76c8453c00c436aedf50f8b18546fe608fd6e3329`。
+Bone12の自然施工後、Soul1872v0がtile2240v0でGeneratingとなり、通常利用のDream消費を確認。
+停止中Manual1の502774bytes（SHA `5469987895ea06c02af971dd1a02029ece9e6894093a729ba740d177c3d5e095`）を保存/読込し、
+site2237v0→1897v1、Soul1872v0→1840v1、4tile/gridの実remap、epoch0→1を照合した。
+Dream23.20504379272461/疲労0.20575010776519775/ストレス0.4507571756839752とposeはexact保持。
+仮想時刻122.152098093を保ち、全rawの永続projectionとruntime task/WorkingOn/worker resetを検査した。
+保存された派生出力1Wは停止中に維持されるが、Generating復元と解釈しない。
+mainは7枚の所有窓PNGを実見し、Intel Arc/VulkanとWARN/ERRORなしを確認した。
+manifest `ae29b3ff0d9bd32828d771511038417c585df1432882222c42c51006f6325c88`、
+raw `657b0322ad8caf984629185b4274f48b8e91135b3e1ca1ebfbfbf36f676c14bb`。
+57,200,640Bを通常再開/再割当と採用候補lifecycle比較の用途に保持する。
+採用asset表示、通常再開後の再計算・自然退出、性能・releaseはこの限定passで閉じない。
+独立reviewも7PNG/hash、20Soul一対一map、used→loadedの120rawを照合してこの限定結果をapproved。
+saved/loadedの選択オーラ条件差を含む色差は、画像完全同等の証明にも材質退行の断定にも使わない。
+
+次の補完はRestAreaの採用済み隔離候補を通常lifecycleで検査する明示経路とする。
+既存ArtPreview feedbackの受付は不変に保ち、別mode/scopeと専用caseだけでisolated_candidateを許可する。
+Python計画段階で既存pipelineのart/numeric/provenance検査を通し、exact manifest/依存bytesとcodecへ拘束する。
+製品側は同じ明示identityの検証用admissionだけを使い、release/default起動や別kindへ拡張しない。
+通常入力・自然建設/利用・実保存/読込・自然退出の既存lifecycleを再利用し、生成/消費identity、
+全asset-view bytes、load後owner/root/part、実材質とworld preview/catalogを独立照合する。
+旧feedbackのcandidate拒否と未知mode・authority・case混在・承認欠損・source改変の拒否を回帰で維持する。
+変更別CI・Help・storage・独立read-only review後にfresh実機を行い、技術passをpromotion/release承認にしない。
 
 ## 5. マイルストーン
 
