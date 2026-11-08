@@ -304,6 +304,10 @@ fn validate_production_state(
             | BuildingAssetKind::MudMixer
             | BuildingAssetKind::RestArea
             | BuildingAssetKind::SoulSpa
+            | BuildingAssetKind::WheelbarrowParking
+            | BuildingAssetKind::SandPile
+            | BuildingAssetKind::BonePile
+            | BuildingAssetKind::OutdoorLamp
     );
     require(
         if numeric_required {

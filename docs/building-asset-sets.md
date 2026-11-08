@@ -71,11 +71,11 @@ SoulSpaの4 slotは同一slot meshを参照し、part側で個別transformを持
 - `receipt`: release_approvedのみ必須。それ以外はnull。
 - `production_state`: Tankの有限な `0 < partial_y_wu < full_y_wu <= 2 * TILE_SIZE`、MudMixerの有限なunit axis
   （長さ二乗の誤差0.0001以内）と `0 < radians_per_second <= TAU`。art_previewと他kindでは存在してはならない。
-- `numeric_approval_sha256`: M2/M3のisolated_candidate/release_approvedに独立numeric decisionの小文字64桁hashを要求する。
-  art_previewと他kindには指定できない。M2/M3 release receiptにも同じhashを要求する。
+- `numeric_approval_sha256`: M2/M3/M5のisolated_candidate/release_approvedに独立numeric decisionの小文字64桁hashを要求する。
+  art_previewとBridgeには指定できない。M2/M3/M5 release receiptにも同じhashを要求する。
   production_stateとこのhashはmanifest内容hashに含まれる。安全な数値範囲を満たすだけでは独立採否にならない。
-  optional fieldは未指定時にserializeから省略し、全art_previewと非M2/M3の既存canonical bytesを維持する。
-  M3はproduction_stateを持たず、保存・利用・Dreamのgameplay数値は変更しない。
+  optional fieldは未指定時にserializeから省略し、全art_previewとBridgeの既存canonical bytesを維持する。
+  M3/M5はproduction_stateを持たず、保存・利用・Dreamのgameplay数値は変更しない。
 
 JSONはRustの型宣言順に`serde_json::to_vec`したcompact形式＋末尾LFと完全一致させる。
 未知field、別順序、余分な空白は拒否する。SHA-256は小文字hex64桁。
@@ -153,6 +153,17 @@ proposalのnumeric_freeze/art_approved/runtime_published=falseは書き換えず
 独立採否の存在・真正性はreview運用の責務で、validatorやsynthetic testの成功は採否にならない。
 export/load/plan/recovery/installはnumeric原本とdigestを保持・再照合する。runtime codecはmanifestと
 release receiptのdigest一致を検査し、geometry原本の採否を新しく行わない。既存M2数値型/範囲は維持する。
+
+M5も独立入力の`building_m5_numeric_approved`を要求する（同じ6field/schema_version=1）。
+`building_m5_numeric`はversion 1 proposalの原本とexact preview/art decisionを照合し、
+canvas_px/wu、anchor_px、catalog margin、world role順、代表状態を別numeric_contractへ拘束する。
+実manifestのworld/catalog descriptor、空partsと画像role順も照合し、別値・別kind・未知field・
+bool/floatの整数aliasやM2 production_stateを拒否する。export前に検査し、load/plan/recovery/installで
+numeric原本・digestを保持/再検査する。未承認ArtPreviewは引き続き承認なしで扱えるが、M5 candidateと
+releaseにnumeric digestがない旧形式は拒否する。この実装は4種の独立採否や正式releaseを発行しない。
+新M5 candidateのnative planは`numeric_verifiers`へpipeline/M3・M5 validatorと参照contract原本の
+相対path→SHA256 inventoryを固定する。共通game/harness hash外の依存であり、同じdirty pathの内容変更も
+run/verify共通のplan再検査で拒否する。旧ArtPreview/feedbackにこの検査の成功を遡及付与しない。
 
 `profiling` buildの`HW_BUILDING_ART_SESSION`だけが、mode・kind・generation・authority・manifest hash・
 locator・nonce・status pathを明示照合してload policyとpoolへ候補を許可する。

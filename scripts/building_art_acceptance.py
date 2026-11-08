@@ -110,7 +110,16 @@ def validate_subject(value: dict, *, feedback: bool) -> None:
     pipeline.require(feedback or value["dirty"] == [], "non-feedback requires a clean source")
 
 
+def check_numeric_verifiers(value: dict) -> None:
+    if value.get("kind") in pipeline.building_m5_numeric.KINDS and value.get("mode") == "candidate":
+        pipeline.require(pipeline.exact_json(value.get("numeric_verifiers"), pipeline.numeric_verifier_inventory()),
+                         "M5 numeric verifier inventory changed or missing")
+    else:
+        pipeline.require("numeric_verifiers" not in value, "numeric verifier inventory requires M5 candidate")
+
+
 def check_plan(value: dict, binary: Path) -> dict:
+    check_numeric_verifiers(value)
     foreground_settings = foreground.settings(value)
     context_settings(value)
     page = spa_page(value)
@@ -167,6 +176,8 @@ def plan(args) -> dict:
         value["context_preview"] = context_preview(manifest)
     if value["kind"] in foreground.KINDS and value["variant"] == "gallery":
         value["foreground_observation"] = foreground.descriptor(manifest)
+    if value["kind"] in pipeline.building_m5_numeric.KINDS and value["mode"] == "candidate":
+        value["numeric_verifiers"] = pipeline.numeric_verifier_inventory()
     if spa_page(value) is not None:
         value["spa_parts"] = manifest["parts"]
     check_plan(value, args.codec)

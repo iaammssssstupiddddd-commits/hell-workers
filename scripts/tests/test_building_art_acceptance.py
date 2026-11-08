@@ -18,6 +18,33 @@ from perf_tool.fixtures import write_fixture_run
 
 
 class RecipeTests(unittest.TestCase):
+    def test_m5_candidate_freezes_each_numeric_dependency_even_when_paths_are_unchanged(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for relative in art.pipeline.NUMERIC_VERIFIER_FILES:
+                path = root / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(b"synthetic frozen dependency\n")
+            with patch.object(art.pipeline, "__file__", str(root / "scripts/building_asset_pipeline.py")):
+                inventory = art.pipeline.numeric_verifier_inventory()
+                value = {"kind": "SandPile", "mode": "candidate", "numeric_verifiers": inventory}
+                art.check_numeric_verifiers(value)
+                for relative in inventory:
+                    path = root / relative
+                    original = path.read_bytes()
+                    path.write_bytes(original + b"changed bytes, same path\n")
+                    with self.subTest(relative=relative), self.assertRaisesRegex(ValueError, "inventory"):
+                        # run and verify both enter this shared check before reading a candidate.
+                        art.check_plan(value, Path("unused-codec"))
+                    path.write_bytes(original)
+                for kind in art.pipeline.building_m5_numeric.KINDS:
+                    with self.assertRaisesRegex(ValueError, "inventory"):
+                        art.check_numeric_verifiers({"kind": kind, "mode": "candidate"})
+                for mode in ("feedback", "art-preview"):
+                    art.check_numeric_verifiers({"kind": "SandPile", "mode": mode})
+                    with self.assertRaises(ValueError):
+                        art.check_numeric_verifiers({**value, "mode": mode})
+
     def context(self):
         descriptor = {"image_role": "world_preview", "canvas_px": [256, 256],
                       "canvas_wu": [128., 128.], "anchor_px": [128., 144.], "representative_state": "Empty"}

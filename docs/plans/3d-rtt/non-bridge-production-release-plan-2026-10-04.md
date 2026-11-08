@@ -1045,6 +1045,25 @@ lifecycle側asset-viewと全byte一致、終了/childなし・参照なし・tra
 生成物141,672,448B→0を削除した（rawの復元archiveなし）。候補/制作原本・最新lifecycle・共有Cargo cacheは保全。
 結果は上記の履歴/台帳に残し、旧verifier再実行のための保持義務にはしない。削除後storage checkはpass。
 
+次のM5数値境界補完は、独立承認入力を作るのではなく、既存proposal原本のcanvas/anchor/role/
+代表状態とexact ArtPreview/art decisionへ拘束された別numeric decisionを受け取るvalidatorを追加する。
+export/load/plan/recovery/installで原本とdigestを保持し、runtime manifest/release receiptにも同digestを必須にする。
+art_previewとBridgeの既存bytes/受付を維持し、M5にM2 production_stateを許可しない。
+不足/改竄/別kind/別世代/bool alias/descriptor不一致を出力前に拒否するsynthetic試験と独立reviewを行う。
+未採用4種へ承認を発行せず、画像・gameplay・通常起動のrelease bindingは変更しない。
+独立reviewは共通fingerprint外の制作validator改変を指摘したため、新M5 candidate planへ
+pipeline/M3/M5 numeric validatorと参照contractの6file digest inventoryを追加した。
+run/verify共通のcheck_plan先頭で実bytesを照合し、各依存を同pathのまま内容変更した拒否系試験を加える。
+旧SandPile「numeric不要」対照はBridgeへ修正し、M5は承認欠損/改竄拒否と全9種の
+promotion/install/rollback合成試験で保持する。これらは実際の採否/transaction実施ではない。
+
+Parkingの追加read-only pixel照合では、owner0/camera/scaleからの対応位置で、不透明な上横木の
+原画(80,60)/(128,62)/(176,62)のRGB(88,71,52)に対し画面(136,326)/(160,327)/(184,327)は
+RGB(85,70,51)だった。下横木内部も原画(128,80)=(101,78,56)、画面(160,336)=(97,76,55)。
+緑の画面点を含む上木の境界y64や透明な隙間y66以降を、不透明内部の色不一致と誤認しない。
+これは原画/投影/画像上の限定照合で、GPU全pixel一致や最終アート採否の証拠ではない。
+白色化や原画の塗り直しは行わず、未達の明暗地形/密集/descriptor previewの読みやすさを次に比較する。
+
 ## 5. マイルストーン
 
 ### M1: 原本・候補

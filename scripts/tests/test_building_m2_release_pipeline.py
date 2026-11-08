@@ -157,16 +157,16 @@ class M2ReleasePipelineTests(unittest.TestCase):
         self.assertEqual(pipeline.preview_projection(manifest, self.binary)["identity"],
                          pipeline.read(art)["art_preview_identity"])
 
-    def test_non_m2_m3_omits_numeric_fields_and_rejects_numeric_input(self):
-        source, recipe, art, numeric = self.inputs("SandPile")
-        output = self.root / "sand-candidate"
+    def test_bridge_omits_numeric_fields_and_rejects_numeric_input(self):
+        source, recipe, art, numeric = self.inputs("Bridge")
+        output = self.root / "bridge-candidate"
         self.export(source, recipe, art, None, output)
-        manifest, _, _ = pipeline.load_set(output, "SandPile", self.binary)
+        manifest, _, _ = pipeline.load_set(output, "Bridge", self.binary)
         self.assertNotIn("production_state", manifest)
         self.assertNotIn("numeric_approval_sha256", manifest)
         with self.assertRaises(ValueError):
-            self.export(source, recipe, art, numeric, self.root / "bad-sand")
-        self.assertFalse((self.root / "bad-sand").exists())
+            self.export(source, recipe, art, numeric, self.root / "bad-bridge")
+        self.assertFalse((self.root / "bad-bridge").exists())
 
     def test_runtime_codec_rejection_precedes_all_destination_writes(self):
         source, recipe, art, numeric = self.inputs("Tank")

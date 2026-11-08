@@ -18,6 +18,7 @@ import sys
 from typing import Callable
 
 import building_m3_numeric
+import building_m5_numeric
 
 try:
     import fcntl
@@ -26,6 +27,12 @@ except ImportError:
 
 CONTRACT = Path(__file__).resolve().parents[1] / "fixtures/building-art-v1.contract.json"
 KINDS = json.loads(CONTRACT.read_bytes())["kinds"]
+NUMERIC_KINDS = {"Tank", "MudMixer", *building_m3_numeric.KINDS, *building_m5_numeric.KINDS}
+NUMERIC_VERIFIER_FILES = (
+    "scripts/building_asset_pipeline.py", "scripts/building_m3_numeric.py", "scripts/building_m5_numeric.py",
+    "fixtures/building-art-v1.contract.json", "fixtures/building-m3-v1.geometry.json",
+    "fixtures/building-m5-v1.contract.json",
+)
 
 
 def require(condition: bool, reason: str) -> None:
@@ -39,6 +46,12 @@ def canonical(value: object) -> bytes:
 
 def digest(payload: bytes) -> str:
     return hashlib.sha256(payload).hexdigest()
+
+
+def numeric_verifier_inventory() -> dict:
+    """Bind external tooling not covered by the game/native harness fingerprint."""
+    root = Path(__file__).resolve().parents[1]
+    return {relative: digest(rooted(root, relative).read_bytes()) for relative in NUMERIC_VERIFIER_FILES}
 
 
 def exact_json(value: object, expected: object) -> bool:
@@ -229,14 +242,25 @@ def export(recipe_path: Path, source_root: Path, destination: Path, binary: Path
             numeric_bytes = canonical(numeric)
             manifest["numeric_approval_sha256"] = digest(numeric_bytes)
             files["provenance/numeric-approval.json"] = numeric_bytes
+        elif ident["kind"] in building_m5_numeric.KINDS:
+            require(numeric_approval_path is not None, "M5 candidate requires separate numeric approval")
+            numeric = read(numeric_approval_path)
+            building_m5_numeric.validate(numeric, json.loads(preview)["identity"], digest(approval_bytes), geometry,
+                                         json.loads(preview))
+            numeric_bytes = canonical(numeric)
+            manifest["numeric_approval_sha256"] = digest(numeric_bytes)
+            files["provenance/numeric-approval.json"] = numeric_bytes
         else:
-            require(numeric_approval_path is None, "numeric approval is M2/M3-only")
+            require(numeric_approval_path is None, "numeric approval is M2/M3/M5-only")
     else:
         require(approval_path is None and numeric_approval_path is None, "art preview cannot claim approval")
     projection = codec(binary, "seal", json.dumps(manifest))["manifest"]
     if "production_state" in manifest:
         require(json.loads(projection)["production_state"] == manifest["production_state"],
                 "numeric approval values are not preserved by the runtime codec")
+    if "numeric_approval_sha256" in manifest:
+        require(json.loads(projection).get("numeric_approval_sha256") == manifest["numeric_approval_sha256"],
+                "numeric approval digest is not preserved by the runtime codec")
     files[locator(ident["kind"])] = projection.encode()
     files["provenance/source"] = source
     files["provenance/geometry.json"] = geometry
@@ -293,7 +317,7 @@ def candidate_projection(manifest: dict, binary: Path) -> tuple[dict, str]:
 
 
 def check_numeric_provenance(root: Path, manifest: dict, binary: Path) -> None:
-    if manifest["identity"]["kind"] not in {"Tank", "MudMixer", *building_m3_numeric.KINDS} or manifest["identity"]["authority"] == "art_preview":
+    if manifest["identity"]["kind"] not in NUMERIC_KINDS or manifest["identity"]["authority"] == "art_preview":
         return
     numeric = read(rooted(root, "provenance/numeric-approval.json"))
     require(digest(canonical(numeric)) == manifest.get("numeric_approval_sha256"), "numeric approval digest differs")
@@ -305,6 +329,9 @@ def check_numeric_provenance(root: Path, manifest: dict, binary: Path) -> None:
         require(manifest.get("production_state") is None, "M3 cannot claim M2 production state")
         building_m3_numeric.validate(numeric, preview["identity"], manifest["art_approval_sha256"],
                                     rooted(root, "provenance/geometry.json").read_bytes())
+    elif manifest["identity"]["kind"] in building_m5_numeric.KINDS:
+        building_m5_numeric.validate(numeric, preview["identity"], manifest["art_approval_sha256"],
+                                    rooted(root, "provenance/geometry.json").read_bytes(), manifest)
     else:
         require(approved_numeric_state(numeric, preview["identity"], manifest["art_approval_sha256"])
                 == manifest["production_state"], "approved numeric values differ")
@@ -497,7 +524,7 @@ def apply(path: Path, binary: Path, evidence_path: Path, approval_path: Path,
     generation_prefix = f"building_sets/{KINDS[kind]['slug']}/{projected['identity']['generation']}"
     for relative in ("provenance/source", "provenance/geometry.json", "provenance/art-approval.json"):
         files[f"{generation_prefix}/{relative}"] = rooted(source, relative).read_bytes()
-    if kind in {"Tank", "MudMixer", *building_m3_numeric.KINDS}:
+    if kind in NUMERIC_KINDS:
         files[f"{generation_prefix}/provenance/numeric-approval.json"] = rooted(source, "provenance/numeric-approval.json").read_bytes()
     for relative, payload in files.items():
         target = rooted(root, relative)
@@ -626,7 +653,7 @@ def install(source: Path, destination: Path, kind: str, binary: Path, *, execute
             and digest(canonical(journal["evidence"])) == active["evidence_sha256"], "install receipt/transaction binding differs")
     check_release_approval(journal["approval"], candidate["identity"], active["evidence_sha256"])
     files = {r["path"]: file_bytes(source, r) for r in [*manifest["artifacts"], manifest["receipt"]]}
-    if kind in {"Tank", "MudMixer", *building_m3_numeric.KINDS}:
+    if kind in NUMERIC_KINDS:
         prefix = f"building_sets/{KINDS[kind]['slug']}/{manifest['identity']['generation']}/provenance"
         for name in ("source", "geometry.json", "art-approval.json", "numeric-approval.json"):
             files[f"{prefix}/{name}"] = rooted(source, f"{prefix}/{name}").read_bytes()
