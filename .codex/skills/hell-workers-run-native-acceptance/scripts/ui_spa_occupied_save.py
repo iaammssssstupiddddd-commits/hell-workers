@@ -117,13 +117,13 @@ def worker_values(state, identities):
             for key in identities}
 
 
-def verify(raw, entries, client, save_path, inputs):
+def verify(raw, entries, client, save_path, inputs, *, raw_scope="production-raw-observations-v1"):
     native.require([row["case"] for row in entries] == list(CHECKPOINTS), "Occupied Spa sequence differs")
-    spa.check_raw_session(raw, client)
+    spa.check_raw_session(raw, client, raw_scope=raw_scope)
     end = spa.raw_checkpoint(raw, entries[4]["value"])["sample_index"]
     prefix = dict(raw, samples=raw["samples"][:end + 1],
                   events=[row for row in raw["events"] if row["sample_index"] <= end])
-    spa.verify_usage(prefix, entries[:5], client, inputs[:entries[4]["last_step"]])
+    spa.verify_usage(prefix, entries[:5], client, inputs[:entries[4]["last_step"]], raw_scope=raw_scope)
     spa.check_inputs(raw, entries, client, inputs, completion=True, usage=True, occupied=True)
     for entry in entries[5:]:
         check_observation(entry["case"], entry["value"])

@@ -15,6 +15,7 @@ use std::path::{Component, Path, PathBuf};
 const ENV: &str = "HW_BUILDING_ORDINARY_ART_SESSION";
 pub(super) const SCOPE: &str = "ordinary-rest-art-feedback-v1";
 const CANDIDATE_SCOPE: &str = "ordinary-rest-candidate-lifecycle-v1";
+pub(super) const SPA_CANDIDATE_SCOPE: &str = "ordinary-spa-candidate-occupied-v1";
 const CONFLICTS: &[&str] = &[
     "HW_BUILDING_ART_SESSION",
     "HW_BUILDING_PRODUCTION_OBSERVATIONS",
@@ -45,20 +46,31 @@ fn validate(session: &Session, root: &Path, nonce: &str, case: &str) -> Result<(
     };
     let profile = match session.mode.as_str() {
         "feedback" => {
-            session.identity.authority == BuildingAssetAuthority::ArtPreview
+            session.identity.kind == BuildingAssetKind::RestArea
+                && session.identity.authority == BuildingAssetAuthority::ArtPreview
                 && matches!(case, "rest-area-lifecycle" | "rest-area-maxzoom")
         }
         "candidate" => {
             session.identity.authority == BuildingAssetAuthority::IsolatedCandidate
-                && case == "rest-area-candidate-lifecycle"
+                && matches!(
+                    (session.identity.kind, case),
+                    (BuildingAssetKind::RestArea, "rest-area-candidate-lifecycle")
+                        | (
+                            BuildingAssetKind::SoulSpa,
+                            "soul-spa-candidate-occupied-save"
+                        )
+                )
         }
         _ => false,
     };
     if !profile
-        || session.identity.kind != BuildingAssetKind::RestArea
         || session.identity.generation == 0
         || !hex(&session.identity.manifest_sha256, 64)
-        || session.locator != "manifests/building-rest-area-v1.buildingset"
+        || session.locator
+            != format!(
+                "manifests/building-{}-v1.buildingset",
+                session.identity.kind.slug()
+            )
         || !hex(&session.nonce, 32)
         || session.nonce != nonce
         || !root.is_absolute()
@@ -68,13 +80,19 @@ fn validate(session: &Session, root: &Path, nonce: &str, case: &str) -> Result<(
         || session.output != root.join("production-cancellation.json")
     {
         return Err(
-            "ordinary art requires exact RestArea authority, mode and UI lifecycle context".into(),
+            "ordinary art requires exact kind, authority, mode and dedicated UI lifecycle context"
+                .into(),
         );
     }
     Ok(())
 }
 
 pub(super) fn scope(world: &World) -> &'static str {
+    if world.get_resource::<Session>().is_some_and(|session| {
+        session.mode == "candidate" && session.identity.kind == BuildingAssetKind::SoulSpa
+    }) {
+        return SPA_CANDIDATE_SCOPE;
+    }
     if world
         .get_resource::<Session>()
         .is_some_and(|session| session.mode == "candidate")
@@ -164,7 +182,7 @@ pub(super) fn snapshot(world: &mut World) -> Result<Value, String> {
     {
         return Err("ordinary art active/pending generation differs".into());
     }
-    let expected = descriptor.as_ref().map(|set| json!({
+    let mut expected = descriptor.as_ref().map(|set| json!({
         "identity": set.manifest.identity,
         "body_mesh": set.mesh("body").map(|handle| format!("{:?}", handle.id())),
         "albedo": set.image("albedo").map(|handle| format!("{:?}", handle.id())),
@@ -173,12 +191,32 @@ pub(super) fn snapshot(world: &mut World) -> Result<Value, String> {
         "part_names": set.manifest.parts.iter().map(|part| part.name.as_str()).collect::<Vec<_>>()
         ,"parts": set.manifest.parts
     }));
+    if session.identity.kind == BuildingAssetKind::SoulSpa
+        && let (Some(set), Some(Value::Object(expected))) = (descriptor.as_ref(), expected.as_mut())
+    {
+        expected.insert(
+            "slot_mesh".into(),
+            json!(set.mesh("slot").map(|handle| format!("{:?}", handle.id()))),
+        );
+        expected.insert(
+            "slot_emissive".into(),
+            json!(
+                set.image("slot_emissive")
+                    .map(|handle| format!("{:?}", handle.id()))
+            ),
+        );
+    }
+    let kind = match session.identity.kind {
+        BuildingAssetKind::RestArea => BuildingType::RestArea,
+        BuildingAssetKind::SoulSpa => BuildingType::SoulSpa,
+        _ => return Err("ordinary art session kind differs".into()),
+    };
     let mut query = world.query::<(Entity, &Building3dVisual, &EquipmentRoot, Option<&Children>)>();
     let mut roots = Vec::new();
     for (entity, visual, root, children) in query.iter(world) {
         if !world
             .get::<Building>(visual.owner)
-            .is_some_and(|building| building.kind == BuildingType::RestArea)
+            .is_some_and(|building| building.kind == kind)
         {
             continue;
         }
@@ -199,6 +237,8 @@ pub(super) fn snapshot(world: &mut World) -> Result<Value, String> {
                     "opaque": material.base.alpha_mode == AlphaMode::Opaque, "lit": !material.base.unlit,
                     "roughness": material.base.perceptual_roughness, "reflectance": material.base.reflectance,
                     "emissive_black": material.base.emissive == LinearRgba::BLACK,
+                    "emissive_white": material.base.emissive == LinearRgba::WHITE,
+                    "emissive_texture": material.base.emissive_texture.as_ref().map(|texture| format!("{:?}", texture.id())),
                     "emissive_texture_absent": material.base.emissive_texture.is_none()})),
                 "visible": world.get::<ViewVisibility>(part).map(|visibility| visibility.get())})
         }).collect();
@@ -208,8 +248,7 @@ pub(super) fn snapshot(world: &mut World) -> Result<Value, String> {
         let expected_pose = world.get::<Transform>(visual.owner).map(|owner| {
             let mut pose =
                 crate::systems::visual::building3d_cleanup::building_presentation_transform(
-                    BuildingType::RestArea,
-                    owner,
+                    kind, owner,
                 );
             pose.translation.y = 0.0;
             pose
@@ -373,6 +412,58 @@ mod tests {
         assert_eq!(scope(app.world()), SCOPE);
         app.insert_resource(good);
         assert_eq!(scope(app.world()), CANDIDATE_SCOPE);
+    }
+
+    #[test]
+    fn spa_candidate_is_admitted_only_for_its_own_occupied_case_and_scope() {
+        let mut input = value();
+        input["mode"] = json!("candidate");
+        input["identity"]["kind"] = json!("SoulSpa");
+        input["identity"]["authority"] = json!("isolated_candidate");
+        input["locator"] = json!("manifests/building-soul-spa-v1.buildingset");
+        let session: Session = serde_json::from_value(input.clone()).unwrap();
+        let root = Path::new("/private/session");
+        validate(
+            &session,
+            root,
+            &"b".repeat(32),
+            "soul-spa-candidate-occupied-save",
+        )
+        .unwrap();
+        for case in [
+            "soul-spa-occupied-save",
+            "soul-spa-usage",
+            "rest-area-candidate-lifecycle",
+            "navigation",
+        ] {
+            assert!(validate(&session, root, &"b".repeat(32), case).is_err());
+        }
+        for (path, replacement) in [
+            ("/mode", json!("feedback")),
+            ("/identity/authority", json!("art_preview")),
+            ("/identity/authority", json!("release_approved")),
+            ("/identity/kind", json!("RestArea")),
+            (
+                "/locator",
+                json!("manifests/building-rest-area-v1.buildingset"),
+            ),
+        ] {
+            let mut changed = input.clone();
+            *changed.pointer_mut(path).unwrap() = replacement;
+            let changed: Session = serde_json::from_value(changed).unwrap();
+            assert!(
+                validate(
+                    &changed,
+                    root,
+                    &"b".repeat(32),
+                    "soul-spa-candidate-occupied-save"
+                )
+                .is_err()
+            );
+        }
+        let mut app = App::new();
+        app.insert_resource(session);
+        assert_eq!(scope(app.world()), SPA_CANDIDATE_SCOPE);
     }
 
     #[test]

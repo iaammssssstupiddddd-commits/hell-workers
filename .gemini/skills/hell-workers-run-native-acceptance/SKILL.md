@@ -244,6 +244,21 @@ transient mutation, extra input or clock advance fails closed. This case proves
 only occupied durable restoration, not resumed assignment, exit, art, performance
 or release. The existing empty Operational case still rejects occupants.
 
+Use `--case soul-spa-candidate-occupied-save --smoke --input-backend portal-eis`
+with `--soul-spa-art-source <approved-isolated-candidate>` and `--art-codec`
+for the same seven ordinary checkpoints with adopted SoulSpa bytes. The explicit
+candidate scope binds packaged art/numeric provenance, codec, validator bytes,
+base assets, body/four-slot mesh and pose, and actual worker-driven emission.
+Loaded runtime-worker reset must extinguish the corresponding slots; retained
+derived output is still not continued generation. Old fallback/ArtPreview cases
+cannot borrow this admission. Inspect every owned image and independently verify
+the raw before seal. This neither grants new approval nor proves resumed
+assignment, natural exit, performance, promotion/install or release.
+The existing absolute EIS transport retains exact region/scale, owner and cursor
+ACK checks; it does not enable scroll or resend input. The explicit `portal`
+Notify transport remains selectable, but a failed motion is not retried or
+corrected with an empirical offset. Use a fresh registered subject for changes.
+
 Select `--case rest-area-planning --smoke --input-backend portal` for ordinary
 RestArea reservation, Manual1 Save/Load and two-stage Task Dashboard cancellation.
 Preparation only centers the camera and pauses time. The case also enables the

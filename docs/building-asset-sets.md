@@ -762,6 +762,14 @@ scope `ordinary-rest-candidate-lifecycle-v1`でのみ通常worldの検証用admi
 candidate scopeは専用validatorが明示し、rawの自己申告から選ばない。未知scopeやpreview/release authorityの混入を拒否する。
 実機pass前はこの入口の実装だけで受入済みとせず、pass後も性能・promotion/install/release権限を付与しない。
 
+SoulSpaの採用済み隔離候補は別case `soul-spa-candidate-occupied-save`、mode `candidate`、
+scope `ordinary-spa-candidate-occupied-v1`に限定する。通常施工/利用/占有Manual1保存復元の既存7checkpointを
+維持し、source/codec/制作validator原本・基準assetsと隔離overlayを固定する。既存RestAreaとSpa fallbackの
+scopeは変更せず、独立validatorからだけ専用scopeを渡す。body+4slotの実mesh、parent/pose、白/opaque/lit、
+albedoとemissive画像を、同checkpointの実4tile TaskWorkers maskへ照合する。保存復元後はruntime worker resetに
+従う非発光を要求し、保存派生出力から稼働継続を推測しない。candidate原本や通常worldへ資材/worker/完了をseedしない。
+この追加は実機成功・再割当/自然退出・性能・正式release受入ではなく、fresh実行と独立画像/raw reviewを必要とする。
+
 M2 probeは有効化された検証sessionだけで0.1秒ごとのdue sampleを即時公開する（最大1800 samples、
 categoryごと最大128 entities）。観測・同期書込みの負荷を含むため性能証拠には使わない。
 M2 native runnerは画像の撮影前後でraw prefix/sessionを照合し、最大2秒の待機で新sampleを要求する。

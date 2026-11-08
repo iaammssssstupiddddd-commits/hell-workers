@@ -1064,6 +1064,48 @@ RGB(85,70,51)だった。下横木内部も原画(128,80)=(101,78,56)、画面(1
 これは原画/投影/画像上の限定照合で、GPU全pixel一致や最終アート採否の証拠ではない。
 白色化や原画の塗り直しは行わず、未達の明暗地形/密集/descriptor previewの読みやすさを次に比較する。
 
+次は採用済みSoulSpa候補のordinary occupied-save比較を専用case/scopeで追加する。
+既存の通常施工/利用/占有保存復元7checkpointを変えず、exact candidateとbody+4slotの実mesh/
+親子pose/albedo/emissive、実4tile worker maskを同じrawへ拘束する。material/worker/建設/資材はseedしない。
+RestAreaと既存Spa fallback recipeのscope受付は維持し、raw自己申告からcandidate経路を選ばない。
+新source/codec/制作validatorと基準assetsをplanへ固定し、通常起動の有効化やrelease承認には使わない。
+予定batch `tak14-soulspa-candidate-occupied-save-20261108-v1`はprimary native-acceptanceの同名fresh rootを使う。
+ownerはTAK-14 non-Bridge visual adoption、consumerはSoulSpa adopted candidate occupied lifecycle comparison。
+既存primary/Cargo cache、不変codec、採用候補a1b92f31の保持を維持し、jobはslot発光/保存復元比較まで保持する。
+比較・修正終了後は必要な結果を本書へ集約してconsumerを解除し、不要生成物を撤去する。
+初回v1はempty画像だけ取得し、最初のNotify相対motion `[161,32]`が製品cursorへ届かずtimeout。
+window_focused=trueのままcursor=null、原button/key送信なし。exit1/invalid封印・診断保持/finalize/storage pass。
+候補表示/lifecycle成功と扱わず、相対motionや座標offset調整を反復しない。
+次のfresh v2は既存のabsolute EIS輸送を専用caseでも選択できるよう接続する。
+monitor/region/declared scale、owner/focus/cursor exact ACK、scroll無効・入力非再送を維持し、
+基盤やゲームのruleを変更せず同じ7checkpointと採用candidateを検証する。
+v2はEISで全7checkpointを撮影したが、descriptor partsの原本JSON `0.6`とRust f32
+`0.6000000238418579`のexact比較でinvalidとなった。旧結果はinvalid封印・診断保持/finalizeし、
+成功へ読み替えない。修正は原本vectorを明示的にf32へ変換してexact比較する境界だけとし、
+identity/role/順序/keyの一致、bool/非有限/overflow拒否を維持する。隣接f32や未変換値も拒否する。
+次のfresh v3で同じ候補・入力campaignを新しい検証器に拘束して再確認する。
+
+`tak14-soulspa-candidate-occupied-save-20261108-v3`はsource `8acaecafda7a…dfb2`、harness
+`e10f0fecc4c2…c9b5`、HEAD `805d184f`と採用候補a1b92f31世代2に拘束してpassした。
+Intel Arc MTL/Vulkan/X11、EIS absolute/non-scroll/scale2のowned 1920×1080 clientで全7画像を
+主担当・独立reviewerが実見し、別CLI/登録verifier・seal/finalize/storageを通した。Bone12の自然搬入/施工、
+同2Soulの6.75仮想秒Generatingと各Dream3.375減、本体+4slotの実mesh/親子pose/材質、
+worker由来slot0+1発光→loaded全非発光を確認した。保存前はFamiliar選択オーラとSoul重なりがあり、
+画像間の色完全一致や骨描線の再採否までは主張しない。
+Manual1は500,431B、SHA `9be58282418663ad7443b547b159c5694554e8ad34c8de3eb0b43dc0ae4ca1e9`。
+save sample457/epoch0→load517/epoch1、owner2163v1→911v1、grid1885v0→873v1と4tile/20Soul remap。
+以前の2workerのvitals/poseを保持し、全AssignedTask/WorkingOn/TaskWorkersをresetした。
+virtual133.556767547は停止中不変。grid generation2.0は保存派生値の保持であり、再開発電とは扱わない。
+manifest SHA `79b9bb6139faf27bb18def967f6acf3be0754e5abfb8621c9f7f5f438f6ccf70`、raw
+`95a80bbed35636cdb6f2066ba8833378f862be9528df819dc404fcc54c835355`。WARN/ERRORなし。
+200,912,896Bは採用候補のロード後再割当/自然退出比較に保持し、その比較終了後に結果を集約して撤去する。
+これは限定ordinary candidate feedbackで、再割当/自然退出・性能・promotion/install/releaseは未受入。
+v1 Notify原因の深部調査は成功した明示EIS経路を使うことで打切り（原因確定とはしない）、v2 f32診断は
+拒否系試験とfresh成功で閉じた。各consumerを正式releaseし、終了/invalid/exit1・childなし、未追跡生成物のみ、
+最新v3 asset-viewとの全byte一致・他active依存なしを確認して旧2rootを個別撤去した。
+v1 150,077,440B＋v2 199,090,176B＝349,167,616B→0。rawの復元archiveは作らず、失敗履歴/理由は本書/台帳に保持。
+制作原本・採用候補・最新v3・共有Cargo cacheは保全した。
+
 ## 5. マイルストーン
 
 ### M1: 原本・候補

@@ -169,8 +169,10 @@ def check_mapping(before, after, mapping):
     return lookup
 
 
-def check_raw_session(raw, client):
-    native.require(raw.get("scope") == "production-raw-observations-v1" and raw.get("schema_version") == 2
+def check_raw_session(raw, client, *, raw_scope="production-raw-observations-v1"):
+    native.require(raw_scope in ("production-raw-observations-v1", "ordinary-spa-candidate-occupied-v1"),
+                   "unsupported Spa raw scope")
+    native.require(raw.get("scope") == raw_scope and raw.get("schema_version") == 2
                    and raw.get("failure") is None and raw.get("nonce") == client["nonce"]
                    and raw.get("process_id") == client["pid"]
                    and all(raw.get(k) is False for k in ("accepted", "performance_evidence", "promotion_authority")),
@@ -696,9 +698,9 @@ def check_operational(state, plan, *, active_slots=4):
                    "Spa completion grid/output differs")
 
 
-def verify_completion(raw, entries, client, inputs, *, persistence=False):
+def verify_completion(raw, entries, client, inputs, *, persistence=False, raw_scope="production-raw-observations-v1"):
     native.require([e["case"] for e in entries] == list(COMPLETION_CHECKPOINTS), "Spa completion inventory differs")
-    check_raw_session(raw, client)
+    check_raw_session(raw, client, raw_scope=raw_scope)
     snapshots = []
     for entry in entries:
         value = entry["value"]
@@ -811,13 +813,13 @@ def check_usage_observation(case, value):
                    "Spa has no actual generating worker/positive output")
 
 
-def verify_usage(raw, entries, client, inputs):
+def verify_usage(raw, entries, client, inputs, *, raw_scope="production-raw-observations-v1"):
     native.require([e["case"] for e in entries] == list(USAGE_CHECKPOINTS), "Spa usage inventory differs")
-    check_raw_session(raw, client)
+    check_raw_session(raw, client, raw_scope=raw_scope)
     prefix_end = raw_checkpoint(raw, entries[2]["value"])["sample_index"]
     prefix = dict(raw, samples=raw["samples"][:prefix_end + 1],
                   events=[e for e in raw["events"] if e["sample_index"] <= prefix_end])
-    verify_completion(prefix, entries[:3], client, inputs[:entries[2]["last_step"]])
+    verify_completion(prefix, entries[:3], client, inputs[:entries[2]["last_step"]], raw_scope=raw_scope)
     check_inputs(raw, entries, client, inputs, completion=True, usage=True)
     values = [e["value"] for e in entries]
     snapshots = [raw_checkpoint(raw, v) for v in values]
