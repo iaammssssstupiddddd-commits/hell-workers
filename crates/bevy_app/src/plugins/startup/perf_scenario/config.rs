@@ -1241,9 +1241,11 @@ impl PerfScenarioConfig {
         let rest_art_context = art_session
             .as_ref()
             .is_some_and(|session| session["variant"] == "rest-area-art-context");
-        let m5_art_context = art_session
-            .as_ref()
-            .is_some_and(|session| session["variant"] == "m5-art-context");
+        let m5_art_context = art_session.as_ref().is_some_and(|session| {
+            session["variant"] == "m5-art-context"
+                || (session["variant"] == "lamp-supply-art-context"
+                    && session["identity"]["kind"] == "OutdoorLamp")
+        });
         let spa_mask_page = art_session
             .as_ref()
             .and_then(|session| session.get("spa_mask_page"))

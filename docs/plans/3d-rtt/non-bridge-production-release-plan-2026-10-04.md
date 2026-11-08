@@ -128,6 +128,13 @@ consumerはM5 independently adopted Parking candidate lifecycle comparison。独
 主担当が製品側の限定fixture/observer/verifier/testを編集し、独立担当はread-only。
 primaryの既存debug cache/immutable候補と原本を保全する。fresh jobだけを登録し、比較終了条件で保持/整理する。
 美術補完が成立しなければ同alpha/輪郭の籠内部だけを修正する。現在はLamp未採用、9種全体は未完。
+限定fixture実装 `e12cf43d` は独立exact code review、全4変更別CI群、通常check、profiling Clippy警告0、
+32 Python/14照明Rust test、Skill9自己試験と同期/形式検査を通過した。初回
+`tak14-lamp-supply-off-normal-20261109-v1` はシナリオ入口parserが新variantを扱わず、14Soulを拒否して
+App/window生成前にexit1。画像/UI成功へ読み替えずinvalid seal/診断保持/finalizeした（139943936B）。
+実測を再現するconfig回帰は補正前にfalse/true不一致で失敗した。入口だけへOutdoorLampの新variantを追加し、
+small/14Soul、zero Familiar、30/60秒等の固定条件と完全sessionの別admissionは維持する。
+medium、8Soul、未指定、foreign kindを拒否する回帰を保持し、同subject検証/独立review後のfresh v2だけを実行する。
 
 `77f90d22`のfresh `tak14-restarea-maxzoom-art-eis-feedback-20261108-v5`は7checkpointと登録/別実行verifierが成功。
 source=`dba53819e43c01de77e3afbf632fe930242767ea9d35be23d5cfff778663b840`、
