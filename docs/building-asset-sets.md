@@ -277,6 +277,15 @@ WorkingOnは当branchで解除される。branch内counterと、同frameの別�
 出力には既存の寿命があるため、後の個数だけを精製完了の証拠にしない。receipt resourceが無ければ記録せず、
 このproducerやunit testだけでは実機の自然精製/lifecycle・性能・アート・releaseを受入しない。
 
+水供給の受動inventoryは別の `water_inventory_schema=1` として同 `m2_context` へ追加する。
+TankとBucketStorageを各最大512件、BucketTransport actorを最大128件読み、実Stockpileの種別/capacity、
+StoredItems（不在はnull）、専用BelongsTo、未完成PendingBelongsToBlueprintとitemのDeliveringToを区別する。
+BucketTransportはRiverまたはTank/needs_fill、TankまたはMixerのdestination、bucket/amount、全6phaseと
+Filling/Pouringの実progress、Inventory/WorkingOn/ActiveTaskIdentityを記録する。欠損/消失した参照と非Soulも
+観測したまま残し、所属・資材・taskを修復しない。非finite/上限超過は収集失敗。
+これはstate inventoryだけであり `water_transfer_receipts=false` を明示する。
+River取水・Tank取出し・注水の成功branch receipt、自然供給/精製、Tank親子の実入力/施工受入は別途必要である。
+
 自然施工は別の `m2-mixer-candidate-completion` / `m2-candidate-completion` /
 `ordinary-m2-candidate-completion-v1` で採用済みMixer候補だけを受付する。準備はcamera/pauseだけとし、
 実配置receipt・Wood4個の実搬入・同BlueprintへのBuild assignment/完了・新ownerへのmap移管を記録する。

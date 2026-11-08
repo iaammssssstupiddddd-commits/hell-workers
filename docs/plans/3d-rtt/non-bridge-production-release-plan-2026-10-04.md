@@ -214,6 +214,23 @@ camera/pauseだけの準備後、実catalog/配置/停止操作、4個のWood実
 初期完成ownerや資材/worker/task/progressの注入は拒否する。完成後の自然精製、save/load、move/cleanupや
 性能/releaseは、この限定construction caseの結果から推論しない。
 
+同caseの `tak14-mixer-candidate-completion-20261109-v1` はHEAD
+`9d32e694af0c9fcf92a4a8a27075cd4c95a2d43e`、source
+`3b5392d8eab91c2b6b07deb815d5a8c050bac0f37bf47118a0c333ec4b64ce93` で実行し、
+3owned PNGとraw/inputの独立read-only確認、登録verify/seal/用途保持/finalize/storageをpassした。
+manifest `917132597853a6906166f3b73618c46b5d563a3add47754b0925313da863d3e1`、
+raw `5da75e16525ad63b8e20abe65dc86ba07e1fd95eb1530abcb8e6687b4e384184`、163717120 B。
+Blueprint `2221v0` へのWood4個搬入、worker `1861v0` / assignment `2222v0` のBuildと
+新owner `2419v46` の4tile移管を確認した。完成PNGの木枠/槽/rotorは採用候補原画像と一致し、
+旧placeholderとする根拠はない。Intel Arc MTL/Vulkan、WARN/ERRORなし。
+FPS4は観測値だけで性能承認ではない。通常起動の切替、自然供給/精製、保存/移動/cleanupと正式releaseは未完。
+
+次のTank/Mixer水供給試験に先立ち、明示profiling collectorへTank・BucketStorage・BucketTransportの
+実typed inventoryを追加する。全phase/amount/source/destination/実専用所属と格納関係、task/Inventoryを読み、
+null/消失/非Soulを正常化せず、有界/finite検査を維持する。観測だけで水移送のcommitを推論しない。
+資材・task・world・通常UI/入力・保存形式は変更しない。Tankの二段階入力と自然施工、River→Tank→Mixerの
+実成功branch receiptは別の必要工程として残し、state追加や合成unit testを実機passへ昇格しない。
+
 2026-11-09の独立read-onlyアート監査では、Sand/Boneの現ArtPreview世代1を見た目だけ採用した。
 Sand `dbdf3e6ba5557f1b91b59a4e7d19c0bc1afe68e96c745d0dcbefd3f7b637d4e5` は低い黄土色の塊と大色面、
 Bone `fe6c024cd79783abff36fc22fb8b676a5bdc0325edef34b35089e563127e3f4f` は骨軸/節/隙間/象牙色が
