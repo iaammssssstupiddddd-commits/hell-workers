@@ -75,7 +75,9 @@ pub(super) fn prepare(world: &mut World) {
     let Some(session) = world.get_resource::<BuildingArtSession>() else {
         return;
     };
-    if !session.is_rest_context() || world.resource::<ContextState>().prepared {
+    if !(session.is_rest_context() || session.is_m2_context())
+        || world.resource::<ContextState>().prepared
+    {
         return;
     }
     let lighting = session.lighting;
@@ -87,7 +89,7 @@ pub(super) fn prepare(world: &mut World) {
     let specs = state.specs.clone();
     let Some(descriptor) = world
         .resource::<BuildingAssetPool>()
-        .descriptor(BuildingAssetKind::RestArea)
+        .descriptor(identity.kind)
         .cloned()
     else {
         return;
@@ -116,7 +118,7 @@ pub(super) fn prepare(world: &mut World) {
                 Sprite::default(),
                 Transform::from_translation(preview_position(spec)),
                 RenderLayers::layer(0),
-                Name::new("Seeded RestArea descriptor preview"),
+                Name::new("Seeded mesh art descriptor preview"),
             ))
             .id();
         apply_building_preview(world, entity, Some(&descriptor), None);
@@ -146,7 +148,9 @@ fn material_snapshot(material: &TopDownStructuralMaterial) -> Value {
     json!({"white": material.base.base_color == Color::WHITE,
         "opaque": material.base.alpha_mode == AlphaMode::Opaque, "lit": !material.base.unlit,
         "roughness": material.base.perceptual_roughness, "reflectance": material.base.reflectance,
+        "metallic": material.base.metallic,
         "emissive_black": material.base.emissive == LinearRgba::BLACK,
+        "color_srgba": material.base.base_color.to_srgba().to_f32_array(),
         "emissive_texture_absent": material.base.emissive_texture.is_none(),
         "base": format!("{:?}", material.base), "extension": format!("{:?}", material.extension)})
 }
@@ -171,6 +175,8 @@ fn snapshot(world: &mut World) -> Result<Option<Value>, String> {
     let identity = session.identity.clone();
     let view = session.view;
     let lighting = session.lighting;
+    let variant = session.variant;
+    let m2 = session.is_m2_context();
     let config = world.resource::<PerfScenarioConfig>();
     let size = config.size();
     if !config.enabled()
@@ -198,7 +204,7 @@ fn snapshot(world: &mut World) -> Result<Option<Value>, String> {
         return Err("context owner/wall/preview inventory differs".into());
     }
     let pool = world.resource::<BuildingAssetPool>();
-    let Some(descriptor) = pool.descriptor(BuildingAssetKind::RestArea).cloned() else {
+    let Some(descriptor) = pool.descriptor(identity.kind).cloned() else {
         return Ok(None);
     };
     if descriptor.manifest.identity != identity
@@ -208,6 +214,14 @@ fn snapshot(world: &mut World) -> Result<Option<Value>, String> {
     {
         return Err("context exact resident identity differs".into());
     }
+    let m2_state = if m2 {
+        let Some(state) = super::m2_context::snapshot(world, &specs, &owners)? else {
+            return Ok(None);
+        };
+        Some(state)
+    } else {
+        None
+    };
     let (camera_center, camera_scale) =
         layout::camera_frame(Some(world.resource::<BuildingArtSession>()), size);
     let cameras = world.query_filtered::<(Entity, &Camera, &GlobalTransform, &Transform), With<hw_ui::camera::MainCamera>>()
@@ -285,15 +299,17 @@ fn snapshot(world: &mut World) -> Result<Option<Value>, String> {
         let owner_transform = *world
             .get::<Transform>(*owner)
             .ok_or("missing context owner transform")?;
-        if building.kind != BuildingType::RestArea
+        if crate::systems::visual::building_presentation::asset_kind(building.kind)
+            != Some(identity.kind)
             || building.is_provisional
             || owner_transform.translation.truncate() != spec.center
             || owner_transform.rotation != Quat::IDENTITY
             || owner_transform.scale != Vec3::ONE
-            || world
-                .get::<RestAreaOccupants>(*owner)
-                .map_or(0, RestAreaOccupants::len)
-                != spec.rest_count()
+            || !m2
+                && world
+                    .get::<RestAreaOccupants>(*owner)
+                    .map_or(0, RestAreaOccupants::len)
+                    != spec.rest_count()
         {
             return Err("context owner geometry/state differs".into());
         }
@@ -325,6 +341,13 @@ fn snapshot(world: &mut World) -> Result<Option<Value>, String> {
             .abs_diff_eq(Vec3::new(spec.center.x, 0.0, -spec.center.y), 0.001)
         {
             return Err("context root feet differ".into());
+        }
+        if m2
+            && (root_transform.rotation != Quat::IDENTITY
+                || root_transform.scale != Vec3::ONE
+                || world.get::<ChildOf>(*root_id).is_some())
+        {
+            return Err("M2 context root hierarchy/pose differs".into());
         }
         let parts = world
             .query::<(
@@ -360,7 +383,19 @@ fn snapshot(world: &mut World) -> Result<Option<Value>, String> {
                 return Err("context part roles differ".into());
             };
             let (entity, mesh, material, local, visible) = *actual;
-            if !visible || world.resource::<Assets<Mesh>>().get(&mesh.0).is_none() {
+            let original = Transform {
+                translation: Vec3::from_array(part.translation_wu),
+                rotation: Quat::from_array(part.rotation_xyzw),
+                scale: Vec3::from_array(part.scale),
+            };
+            let (expected_pose, expected_visible, expected_color) = if m2 {
+                super::m2_context::part_state(spec, &part.name, &original)
+            } else {
+                (original, true, Color::WHITE)
+            };
+            if *visible != expected_visible
+                || world.resource::<Assets<Mesh>>().get(&mesh.0).is_none()
+            {
                 return Ok(None);
             }
             if !layers(world, *entity).contains(&hw_core::constants::LAYER_3D) {
@@ -376,29 +411,40 @@ fn snapshot(world: &mut World) -> Result<Option<Value>, String> {
                 return Err("context part albedo differs".into());
             }
             let material_values = material_snapshot(material_asset);
-            if [
-                "white",
-                "opaque",
-                "lit",
-                "emissive_black",
-                "emissive_texture_absent",
-            ]
-            .iter()
-            .any(|key| material_values[key] != true)
+            if ["opaque", "lit", "emissive_black", "emissive_texture_absent"]
+                .iter()
+                .any(|key| material_values[key] != true)
+                || material_asset.base.base_color != expected_color
+                || m2
+                    && (material_asset.base.perceptual_roughness != 1.0
+                        || material_asset.base.reflectance != 0.0
+                        || material_asset.base.metallic != 0.0)
             {
                 return Err(
                     "context RestArea material is tinted, unlit, translucent or emissive".into(),
                 );
             }
-            if local.translation != Vec3::from_array(part.translation_wu)
-                || local.scale != Vec3::from_array(part.scale)
-                || !local
-                    .rotation
-                    .abs_diff_eq(Quat::from_array(part.rotation_xyzw), 0.001)
+            if local.translation != expected_pose.translation
+                || local.scale != expected_pose.scale
+                || !local.rotation.abs_diff_eq(expected_pose.rotation, 0.001)
             {
                 return Err("context part transform differs".into());
             }
+            let global = world.get::<GlobalTransform>(*entity);
+            if m2
+                && global.is_none_or(|global| {
+                    !global.to_matrix().abs_diff_eq(
+                        GlobalTransform::from(*root_transform)
+                            .mul_transform(*local)
+                            .to_matrix(),
+                        0.001,
+                    )
+                })
+            {
+                return Err("M2 context part global transform differs".into());
+            }
             part_records.push(json!({"entity": entity.to_bits(), "role": part.mesh_role, "transform": transform(local),
+                "global_matrix": global.map(|value| value.to_matrix().to_cols_array()),
                 "layers": layers(world, *entity), "mesh": format!("{:?}", mesh.0.id()), "material": format!("{:?}", material.0.id()),
                 "material_values": material_values, "visible": visible}));
         }
@@ -542,7 +588,7 @@ fn snapshot(world: &mut World) -> Result<Option<Value>, String> {
             );
         }
         records.push(json!({"ordinal": spec.ordinal, "owner": owner.to_bits(), "tiles": spec.tiles,
-            "occupants": spec.rest_count(), "root": root_id.to_bits(), "root_transform": transform(root_transform),
+            "occupants": if m2 { None } else { Some(spec.rest_count()) }, "root": root_id.to_bits(), "root_transform": transform(root_transform),
             "root_layers": layers(world, *root_id), "parts": part_records, "walls": walls,
             "owner_screen": point(owner_transform.translation)?,
             "composite_screen": composite_screen.to_array(), "preview_offset_wu": [0.0, -160.0],
@@ -587,8 +633,11 @@ fn snapshot(world: &mut World) -> Result<Option<Value>, String> {
         return Err("context directional light inventory/settings differ".into());
     }
     Ok(Some(
-        json!({"variant": "rest-area-art-context", "lighting": lighting, "scope": SCOPE,
-        "identity": identity, "target_count": 4, "wall_count": 8, "preview_count": 4, "souls": 6,
+        json!({"variant": variant, "lighting": lighting, "scope": SCOPE,
+        "identity": identity, "target_count": 4, "wall_count": 8, "preview_count": 4,
+        "souls": if m2 { 8 + usize::from(identity.kind == BuildingAssetKind::MudMixer) * 2 } else { 6 },
+        "m2_state": m2_state,
+        "geometry_contract_sha256": descriptor.manifest.geometry_contract_sha256,
         "view": view, "camera_scale": camera_scale, "camera_center": camera_center.to_array(),
         "camera": {"entity": camera_id.to_bits(), "transform": transform(local), "layers": layers(world, *camera_id)},
         "rtt_camera": {"entity": rtt_id.to_bits(), "transform": transform(rtt_local), "projection": projection,

@@ -106,6 +106,18 @@ fn building_art_static_rejects_wrong_population_clock_and_measurement_contract()
             "{\"variant\":\"lamp-supply-art-context\",\"identity\":{\"kind\":\"SandPile\"}}",
         )];
         assert!(parse_input(&context_args, &foreign_lamp_ui).is_err());
+        for (kind, expected) in [("Tank", "8"), ("MudMixer", "10")] {
+            let session =
+                format!("{{\"variant\":\"m2-art-context\",\"identity\":{{\"kind\":\"{kind}\"}}}}");
+            context_args[population + 1] = expected;
+            assert_eq!(
+                parse_input(&context_args, &[("HW_BUILDING_ART_SESSION", &session)]).is_ok(),
+                size == "small"
+            );
+            assert!(parse_input(&context_args, &[]).is_err());
+            context_args[population + 1] = "15";
+            assert!(parse_input(&context_args, &[("HW_BUILDING_ART_SESSION", &session)]).is_err());
+        }
         for (page, count) in [12, 16, 16, 20].into_iter().enumerate() {
             let session = format!("{{\"spa_mask_page\":{page}}}");
             let count = count.to_string();

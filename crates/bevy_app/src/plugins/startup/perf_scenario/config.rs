@@ -1241,6 +1241,13 @@ impl PerfScenarioConfig {
         let rest_art_context = art_session
             .as_ref()
             .is_some_and(|session| session["variant"] == "rest-area-art-context");
+        let m2_art_context = art_session.as_ref().filter(|session| {
+            session["variant"] == "m2-art-context"
+                && matches!(
+                    session["identity"]["kind"].as_str(),
+                    Some("Tank" | "MudMixer")
+                )
+        });
         let m5_art_context = art_session.as_ref().is_some_and(|session| {
             session["variant"] == "m5-art-context"
                 || (session["variant"] == "lamp-supply-art-context"
@@ -1256,7 +1263,10 @@ impl PerfScenarioConfig {
                     .ok_or_else(|| PerfScenarioConfigError("unknown Spa mask page".into()))
             })
             .transpose()?;
-        if (rest_art_context || m5_art_context || spa_mask_page.is_some())
+        if (rest_art_context
+            || m2_art_context.is_some()
+            || m5_art_context
+            || spa_mask_page.is_some())
             && (workload != PerfWorkload::BuildingArtStatic || size != PerfScenarioSize::Small)
         {
             return Err(PerfScenarioConfigError(
@@ -1269,6 +1279,12 @@ impl PerfScenarioConfig {
                 || soul_count
                     != if rest_art_context {
                         6
+                    } else if let Some(session) = m2_art_context {
+                        if session["identity"]["kind"] == "MudMixer" {
+                            10
+                        } else {
+                            8
+                        }
                     } else if m5_art_context {
                         if art_session
                             .as_ref()

@@ -45,6 +45,11 @@ QUALITIES = ("high", "medium", "low")
 CONTEXT_SCOPE = "seeded-paused-art-comparison"
 SPA_PAGE_SCOPE = "paused-static-spa-mask-page"
 M5_CONTEXT_VARIANTS = ("m5-art-context", "lamp-supply-art-context")
+M2_NUMERIC = {
+    "Tank": ("1b913ea0784bf6815a6c46ed0396dafc6ebcdcfc107370bc569aa875775d949d",),
+    "MudMixer": ("1b913ea0784bf6815a6c46ed0396dafc6ebcdcfc107370bc569aa875775d949d",
+                 "aba63ac343e11ed4fa758deffaf36b9139145333ca5d61fd26c3e3dd513153c8"),
+}
 
 
 def spa_page(value: dict) -> int | None:
@@ -63,6 +68,9 @@ def spa_page(value: dict) -> int | None:
 
 
 def actor_count(value: dict) -> int:
+    if value.get("variant") == "m2-art-context":
+        context_settings(value)
+        return 10 if value["kind"] == "MudMixer" else 8
     if value.get("variant") in M5_CONTEXT_VARIANTS:
         context_settings(value)
         return 14 if value["kind"] == "OutdoorLamp" else 8
@@ -82,12 +90,20 @@ def context_preview(manifest: dict) -> dict:
 def context_settings(value: dict) -> bool:
     variant = value.get("variant", "gallery")
     lighting = value.get("lighting", "standard")
-    pipeline.require(variant in ("gallery", "rest-area-art-context", *M5_CONTEXT_VARIANTS)
+    pipeline.require(variant in ("gallery", "rest-area-art-context", "m2-art-context", *M5_CONTEXT_VARIANTS)
                      and lighting in ("standard", "dim"), "unknown art variant/lighting")
     pipeline.require(variant == "lamp-supply-art-context" or value.get("lamp_supply_target") is None,
                      "Lamp UI target requires its separate context")
     if variant in M5_CONTEXT_VARIANTS:
         m5_context.settings(value)
+        return True
+    if variant == "m2-art-context":
+        pipeline.require(value.get("kind") in ("Tank", "MudMixer")
+            and value.get("mode") == "feedback" and value.get("view") in ("normal", "far")
+            and value.get("identity", {}).get("authority") == "art_preview"
+            and value.get("context_mesh_verifier_sha256") == m5_context.verifier_sha256()
+            and value.get("spa_mask_page") is None and value.get("scope") == CONTEXT_SCOPE
+            and value.get("promotion_authority") is False, "M2 context authority/view/scope differs")
         return True
     if variant == "gallery":
         pipeline.require(lighting == "standard", "gallery lighting cannot change")
@@ -153,6 +169,12 @@ def check_plan(value: dict, binary: Path) -> dict:
     if context_settings(value):
         pipeline.require(value.get("context_preview") == context_preview(manifest),
             "context preview differs from exact source manifest")
+    if value.get("variant") == "m2-art-context":
+        pipeline.require(pipeline.exact_json(value.get("context_parts"), manifest["parts"]),
+                         "M2 context parts differ from exact source manifest")
+        pipeline.require(value.get("context_geometry_sha256") == manifest["geometry_contract_sha256"]
+            and manifest["geometry_contract_sha256"] in M2_NUMERIC[value["kind"]],
+            "M2 context numeric contract is unsupported or changed")
     if page is not None:
         pipeline.require(pipeline.canonical(value.get("spa_parts")) == pipeline.canonical(manifest["parts"]),
                          "Spa page parts differ from exact source manifest")
@@ -182,10 +204,14 @@ def plan(args) -> dict:
              "lighting": getattr(args, "lighting", "standard"),
              "spa_mask_page": getattr(args, "spa_mask_page", None),
              "lamp_supply_target": getattr(args, "lamp_supply_target", None),
-             "scope": m5_context.LAMP_UI_SCOPE if getattr(args, "variant", "gallery") == "lamp-supply-art-context" else CONTEXT_SCOPE if getattr(args, "variant", "gallery") in ("rest-area-art-context", "m5-art-context") else SPA_PAGE_SCOPE if getattr(args, "spa_mask_page", None) is not None else "paused-static-presentation", "promotion_authority": False,
+             "scope": m5_context.LAMP_UI_SCOPE if getattr(args, "variant", "gallery") == "lamp-supply-art-context" else CONTEXT_SCOPE if getattr(args, "variant", "gallery") in ("rest-area-art-context", "m2-art-context", "m5-art-context") else SPA_PAGE_SCOPE if getattr(args, "spa_mask_page", None) is not None else "paused-static-presentation", "promotion_authority": False,
              "feedback_only": args.mode == "feedback"}
-    if value["variant"] in ("rest-area-art-context", *M5_CONTEXT_VARIANTS):
+    if value["variant"] in ("rest-area-art-context", "m2-art-context", *M5_CONTEXT_VARIANTS):
         value["context_preview"] = context_preview(manifest)
+    if value["variant"] == "m2-art-context":
+        value["context_parts"] = manifest["parts"]
+        value["context_geometry_sha256"] = manifest["geometry_contract_sha256"]
+        value["context_mesh_verifier_sha256"] = m5_context.verifier_sha256()
     if value["variant"] in M5_CONTEXT_VARIANTS:
         value["m5_context_verifier_sha256"] = m5_context.verifier_sha256()
     if value["kind"] in foreground.KINDS and value["variant"] in ("gallery", *M5_CONTEXT_VARIANTS):
@@ -345,19 +371,111 @@ def validate_spa_page(probe: dict, value: dict) -> None:
         and len(set(entities)) == len(entities), "Spa owner/root/part identities overlap or are missing")
 
 
+def m2_vector(actual, expected) -> bool:
+    return (isinstance(actual, list) and len(actual) == len(expected)
+        and all(type(a) in (float, int) and math.isfinite(a) and abs(a - b) <= .00001
+                for a, b in zip(actual, expected, strict=True)))
+
+
+def validate_m2_context_parts(record: dict, value: dict, ordinal: int) -> None:
+    originals = value["context_parts"]
+    parts = record["parts"]
+    pipeline.require(len(parts) == len(originals) == 2, "M2 context part inventory differs")
+    expected_roles = {"body", "water"} if value["kind"] == "Tank" else {"body", "rotor"}
+    root = foreground.matrix(record["root_transform"])
+    pipeline.require(m2_vector(record["root_transform"]["rotation"], [0., 0., 0., 1.])
+        and m2_vector(record["root_transform"]["scale"], [1., 1., 1.]), "M2 root pose differs")
+    pipeline.require({part.get("name") for part in originals} == expected_roles
+        and len({part["mesh_role"] for part in originals}) == 2, "M2 context original roles differ")
+    for original in originals:
+        matching = [part for part in parts if part.get("role") == original["mesh_role"]]
+        pipeline.require(len(matching) == 1, "M2 context duplicate/missing part")
+        part = matching[0]
+        water = value["kind"] == "Tank" and original["name"] == "water"
+        position = original["translation_wu"].copy()
+        if water:
+            position[1] = 22. if ordinal >= 2 else 12.
+        color = [.58, .70, .73, 1.] if water and ordinal == 1 else [1., 1., 1., 1.]
+        pipeline.require(part.get("visible") is (not water or ordinal > 0)
+            and m2_vector(part.get("transform", {}).get("translation"), position)
+            and m2_vector(part.get("transform", {}).get("rotation"), original["rotation_xyzw"])
+            and m2_vector(part.get("transform", {}).get("scale"), original["scale"])
+            and m2_vector(part.get("material_values", {}).get("color_srgba"), color)
+            and all(type(part["material_values"].get(key)) in (int, float) and part["material_values"][key] == expected
+                    for key, expected in (("roughness", 1), ("reflectance", 0), ("metallic", 0))),
+            "M2 context state-specific pose/visibility/material differs")
+        pipeline.require(m2_vector(part.get("global_matrix"), foreground.product(root, foreground.matrix(part["transform"]))),
+                         "M2 part global transform differs")
+
+
+def validate_m2_context_state(fixture: dict, value: dict, identities: list) -> None:
+    state = fixture.get("m2_state", {})
+    workers = 2 if value["kind"] == "MudMixer" else 0
+    pipeline.require(state.get("idle_souls") == 8 and state.get("source_workers") == workers
+        and type(state.get("idle_souls")) is int and type(state.get("source_workers")) is int
+        and fixture.get("geometry_contract_sha256") == value.get("context_geometry_sha256")
+        and value.get("context_geometry_sha256") in M2_NUMERIC[value["kind"]]
+        and state.get("ordinary_input_evidence") is False and state.get("lifecycle_evidence") is False
+        and len(state.get("records", [])) == 4, "M2 context state scope/inventory differs")
+    for ordinal, (actual, record) in enumerate(zip(state["records"], fixture["records"], strict=True)):
+        identities.extend(part.get("entity") for part in record["parts"])
+        pipeline.require(type(actual.get("ordinal")) is int and actual.get("ordinal") == ordinal and actual.get("owner") == record["owner"]
+            and len(actual.get("souls", [])) == 2, "M2 context state owner differs")
+        domain = actual.get("state", {})
+        if value["kind"] == "Tank":
+            pipeline.require(pipeline.exact_json({key: domain.get(key) for key in ("stored_water", "capacity")},
+                    {"stored_water": (0, 25, 50, 50)[ordinal], "capacity": 50})
+                and isinstance(domain.get("water_items"), list) and len(domain["water_items"]) == domain["stored_water"],
+                "M2 context actual water differs")
+            identities.extend(domain["water_items"])
+        else:
+            pipeline.require(domain.get("refining") is (ordinal >= 2)
+                and len(domain.get("workers", [])) == int(ordinal >= 2), "M2 context Refining differs")
+            for worker in domain["workers"]:
+                pipeline.require(type(worker.get("entity")) is int
+                    and all(type(worker.get(key)) is int and worker[key] == record["owner"]
+                            for key in ("mixer", "working_on", "assignment", "target"))
+                    and worker.get("work_type") == "Refine" and worker.get("phase") == "Refining"
+                    and type(worker.get("progress")) in (float, int) and worker["progress"] == 0,
+                    "M2 context worker task binding differs")
+                identities.append(worker["entity"])
+        for soul, side in zip(actual["souls"], (-1., 1.), strict=True):
+            meshes = soul.get("meshes", [])
+            pipeline.require(type(soul.get("side")) in (int, float) and soul.get("side") == side and len(meshes) == 1
+                and meshes[0].get("visible") is True and meshes[0].get("owner") == soul.get("entity")
+                and 1 in meshes[0].get("layers", []) and len(meshes[0].get("global_matrix", [])) == 16,
+                "M2 context overlap Soul renderer differs")
+            ground = soul.get("ground", [])
+            pipeline.require(isinstance(ground, list) and len(ground) == 2
+                and all(type(n) in (int, float) and math.isfinite(n) for n in ground),
+                "M2 context Soul position differs")
+            root = record["root_transform"]["translation"]
+            pipeline.require(m2_vector(ground, [root[0], -root[2] + side * 12.])
+                and m2_vector(meshes[0].get("root_pose", {}).get("translation"), [ground[0], 17.6, -ground[1]]),
+                "M2 context Soul owner/render position differs")
+            scale = foreground.vector(meshes[0]["root_pose"]["scale"], 3)
+            pipeline.require(scale[0] in (-1., 1.) and scale[1:] == [1., 1.], "M2 Soul scale differs")
+            expected_pose = {"translation": [ground[0], 17.6, -ground[1]],
+                "rotation": fixture["rtt_camera"]["transform"]["rotation"], "scale": scale}
+            identities.extend(m5_context.meshes(meshes, soul["entity"], expected_pose, actor=True))
+            identities.append(soul["entity"])
+
+
 def validate_context_fixture(probe: dict, value: dict) -> None:
     """Seeded image comparison only; never issues an art/numeric decision."""
     if value.get("variant") in M5_CONTEXT_VARIANTS:
         m5_context.validate(probe, value)
         return
     fixture = probe["fixture"]
-    pipeline.require(probe.get("variant") == fixture.get("variant") == "rest-area-art-context"
+    m2 = value.get("variant") == "m2-art-context"
+    pipeline.require(probe.get("variant") == fixture.get("variant") == value.get("variant")
+        and value.get("variant") in ("rest-area-art-context", "m2-art-context")
         and probe.get("lighting") == fixture.get("lighting") == value["lighting"]
         and fixture.get("scope") == CONTEXT_SCOPE and fixture.get("identity") == value["identity"]
         and all(fixture.get(key) is False for key in ("accepted", "performance_evidence", "promotion_authority")),
         "context identity/authority differs")
     pipeline.require(all(type(fixture.get(key)) is int and fixture[key] == count for key, count in
-        (("target_count", 4), ("wall_count", 8), ("preview_count", 4), ("souls", 6)))
+        (("target_count", 4), ("wall_count", 8), ("preview_count", 4), ("souls", actor_count(value))))
         and len(fixture.get("records", [])) == 4, "context inventory differs")
     identities = []
     occupied = set()
@@ -367,7 +485,7 @@ def validate_context_fixture(probe: dict, value: dict) -> None:
             and 0 <= raw[0] <= 1280 and 0 <= raw[1] <= 720, "context projection is non-finite/offscreen")
         return raw
     for ordinal, record in enumerate(fixture["records"]):
-        pipeline.require(record.get("ordinal") == ordinal and record.get("occupants") == (0, 1, 5, 0)[ordinal]
+        pipeline.require(record.get("ordinal") == ordinal and (m2 or record.get("occupants") == (0, 1, 5, 0)[ordinal])
             and len(record.get("tiles", [])) == 4 and len(record.get("walls", [])) == 2
             and len(record.get("parts", [])) > 0, "context specimen differs")
         for tile in record["tiles"]:
@@ -386,8 +504,10 @@ def validate_context_fixture(probe: dict, value: dict) -> None:
             and preview["visible"] is True, "context descriptor preview differs")
         identities.extend([record["owner"], record["root"], preview["entity"]])
         identities.extend(wall["owner"] for wall in record["walls"])
-        pipeline.require(all(part["visible"] is True and all(part["material_values"].get(key) is True
-            for key in ("white", "opaque", "lit", "emissive_black", "emissive_texture_absent"))
+        if m2:
+            validate_m2_context_parts(record, value, ordinal)
+        pipeline.require(all((m2 or part["visible"] is True) and all(part["material_values"].get(key) is True
+            for key in (("opaque", "lit", "emissive_black", "emissive_texture_absent") if m2 else ("white", "opaque", "lit", "emissive_black", "emissive_texture_absent")))
             for part in record["parts"]), "context part hidden or material differs")
         lower, upper = record["walls"]
         ys = [tile[1] for tile in record["tiles"]]
@@ -405,6 +525,8 @@ def validate_context_fixture(probe: dict, value: dict) -> None:
             and all(abs(a - b) <= 1 for a, b in zip(owner, completed, strict=True))
             and abs(preview_screen[0] - owner[0]) <= .01
             and abs(preview_screen[1] - owner[1] - 160 / scale) <= .01, "context anchor correspondence differs")
+    if m2:
+        validate_m2_context_state(fixture, value, identities)
     pipeline.require(all(type(entity) is int and entity > 0 for entity in identities)
                      and len(set(identities)) == len(identities), "context duplicate entities")
     ambient, sun = (500., 12000.) if value["lighting"] == "standard" else (100., 2400.)
@@ -437,7 +559,7 @@ def verify(root: Path) -> dict:
                      and sidecar["initial"] == sidecar["final"] == probe["fixture"]
                      and sidecar["stable_frames"] >= 30, "candidate fixture did not remain stable")
     if context_settings(value):
-        pipeline.require(sidecar.get("contract_id") == ("lamp-supply-art-context-v1" if value.get("variant") == "lamp-supply-art-context" else "m5-art-context-v1" if value.get("variant") == "m5-art-context" else "rest-area-art-context-v1"), "context sidecar contract differs")
+        pipeline.require(sidecar.get("contract_id") == ("lamp-supply-art-context-v1" if value.get("variant") == "lamp-supply-art-context" else "m5-art-context-v1" if value.get("variant") == "m5-art-context" else "m2-art-context-v1" if value.get("variant") == "m2-art-context" else "rest-area-art-context-v1"), "context sidecar contract differs")
     # Older plans remain high-only; their recorded raw window is checked too.
     validate_window(root, value)
     log = (root / "actual-window.log").read_text()
@@ -612,7 +734,7 @@ def main() -> int:
     parser.add_argument("--adapter", default="Intel")
     parser.add_argument("--view", choices=tuple(VIEWS), default="overview")
     parser.add_argument("--quality", choices=QUALITIES, default="high")
-    parser.add_argument("--variant", choices=("gallery", "rest-area-art-context", *M5_CONTEXT_VARIANTS), default="gallery")
+    parser.add_argument("--variant", choices=("gallery", "rest-area-art-context", "m2-art-context", *M5_CONTEXT_VARIANTS), default="gallery")
     parser.add_argument("--lighting", choices=("standard", "dim"), default="standard")
     parser.add_argument("--spa-mask-page", type=int, choices=range(4))
     parser.add_argument("--lamp-supply-target", type=int, choices=(0, 2))

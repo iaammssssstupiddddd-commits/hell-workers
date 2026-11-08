@@ -454,7 +454,7 @@ pub(crate) fn seed_building_art_static_system(mut p: SeedParams) {
             };
             if p.art_session
                 .as_ref()
-                .is_some_and(|session| session.is_m5_context())
+                .is_some_and(|session| session.is_m5_context() || session.is_m2_context())
                 && (!matches!(*assigned, AssignedTask::None)
                     || p.actor_relations.get(actor).is_ok())
             {
@@ -494,9 +494,19 @@ pub(crate) fn seed_building_art_static_system(mut p: SeedParams) {
     }
     if p.art_session
         .as_ref()
-        .is_some_and(|session| session.is_m5_context())
+        .is_some_and(|session| session.is_m5_context() || session.is_m2_context())
     {
-        let source_workers = if p
+        let m2 = p
+            .art_session
+            .as_ref()
+            .is_some_and(|session| session.is_m2_context());
+        let source_workers = if m2 {
+            usize::from(
+                p.art_session
+                    .as_ref()
+                    .is_some_and(|session| session.identity.kind == BuildingAssetKind::MudMixer),
+            ) * 2
+        } else if p
             .art_session
             .as_ref()
             .is_some_and(|session| session.identity.kind == BuildingAssetKind::OutdoorLamp)
@@ -507,7 +517,7 @@ pub(crate) fn seed_building_art_static_system(mut p: SeedParams) {
         };
         if actor_index != source_workers
             || p.state.actors.len() != 8 + source_workers
-            || specs.len() != 4 + usize::from(source_workers > 0) * 2
+            || specs.len() != 4 + usize::from(!m2 && source_workers > 0) * 2
         {
             fail(
                 &mut p.state,

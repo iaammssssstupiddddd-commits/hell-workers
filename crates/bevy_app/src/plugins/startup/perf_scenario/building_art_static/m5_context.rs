@@ -102,7 +102,7 @@ fn composite_scene_matches(material: Option<&RttCompositeMaterial>, scene: &Hand
     material.is_some_and(|material| material.scene_texture == *scene)
 }
 
-fn mesh_rows(world: &mut World, owner: Entity, actor: bool) -> Vec<Value> {
+pub(super) fn mesh_rows(world: &mut World, owner: Entity, actor: bool) -> Vec<Value> {
     let roots = if actor {
         world
             .query::<(Entity, &ActorBillboard3d)>()

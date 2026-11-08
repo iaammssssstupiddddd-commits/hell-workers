@@ -22,6 +22,28 @@ RestAreaは主担当が独立画像/数値レビューに基づいて採用し�
 採用は美術/数値判断であり、通常起動へのinstall・正式release・性能受入ではない。
 通常起動のfallbackはまだ切替前。橋を除く9種全体の受入は未完である。
 
+利用者の追加確認を待たず残工程を進める。M2の独立画像監査では再塗装を必須とする欠陥はなく、
+Tankのnormal/low、両種の既存UI状態補完、同原本descriptor previewとWall/Soul、standard/dim比較が不足する。
+まず既存gallery recipeでTankのnormal/lowだけを新subjectとして補い、他の不足をpassへ読み替えない。
+fresh rootは `target/native-acceptance/tak14-tank-normal-low-20261109-v1`、
+入力は `nonbridge-tank-runtime-20261005-v4/runtime` のArtPreview identity
+`edc65d14fe5f97b8953ccdd1487b62b1fcb51d9112915968d5994c2edf29f9cb`。
+ownerはTAK-14 non-Bridge visual adoption、consumerはM2 Tank and MudMixer exact identity art comparison。
+独立採否に使う最新画像/比較入力として保持し、採用候補への集約と比較終了後に不要な生成物を整理する。
+30/60秒paused technical feedbackであり、ordinary入力・性能・数値/美術採用・releaseの承認は与えない。
+当normal/lowはowned PNG実見、登録済み独立verify/seal、用途保持、finalizeをpassした（140861440B）。
+manifest実SHAは `616ba5cdc5ba2f22accc8fb92186d41c53b7ffd8539495b72c1eb32c530ee066`。
+Empty/Partial/Fullの差は残り、これだけでM2採用とはしない。
+
+次の実装は明示的な `m2-art-context` のみ。既存RestAreaのcamera/RtT/preview/壁観測を共用するが、
+RestAreaのoccupant/白材質/全part可視契約は緩めない。M2専用の状態検査ではTankの実StoredItemsとcapacity50、
+空水面hidden・Partial Y12/Full Y22・既存Partial tint、Mixerの実Refining関係とpaused原本rotorを拘束する。
+各4対象へ8idle Soulsを前後に一度だけ配置し、Mixerだけ元の2Refining workersを別枠で維持する。
+Soulの既存task/relationを上書きせず、setup後はpassiveで30frames安定と以後の不変を確認する。
+modeはfeedback/ArtPreview、small、normal/far、standard/dimだけを明示許可し、既存gallery/他contextに流用しない。
+Tankの水量は既存hover tooltip、Mixerは実workerのRefining UIによる間接補完が後続に必要で、
+Mixer自身に存在しないIdle/Activeラベルをfixtureで捏造しない。この比較にも入力/lifecycle/性能/承認の権限はない。
+
 2026-11-09の独立read-onlyアート監査では、Sand/Boneの現ArtPreview世代1を見た目だけ採用した。
 Sand `dbdf3e6ba5557f1b91b59a4e7d19c0bc1afe68e96c745d0dcbefd3f7b637d4e5` は低い黄土色の塊と大色面、
 Bone `fe6c024cd79783abff36fc22fb8b676a5bdc0325edef34b35089e563127e3f4f` は骨軸/節/隙間/象牙色が

@@ -6,6 +6,7 @@ pub(crate) mod context;
 mod foreground;
 mod lamp_supply_ui;
 mod layout;
+mod m2_context;
 mod m5_context;
 mod m5_power;
 mod seed;
@@ -887,7 +888,7 @@ impl BuildingArtStaticState {
             .as_ref()
             .ok_or_else(|| std::io::Error::other("missing fixture evidence"))?;
         let bytes = serde_json::to_vec(evidence)?;
-        let summary = json!({"schema_version": 1, "contract_id": if evidence.get("variant") == Some(&json!("lamp-supply-art-context")) { "lamp-supply-art-context-v1" } else if evidence.get("variant") == Some(&json!("m5-art-context")) { "m5-art-context-v1" } else if evidence.get("variant").is_some() { "rest-area-art-context-v1" } else if self.m6 { "building-art-m6-nine-v1" } else { "building-art-static-nine-v2" },
+        let summary = json!({"schema_version": 1, "contract_id": if evidence.get("variant") == Some(&json!("lamp-supply-art-context")) { "lamp-supply-art-context-v1" } else if evidence.get("variant") == Some(&json!("m5-art-context")) { "m5-art-context-v1" } else if evidence.get("variant") == Some(&json!("m2-art-context")) { "m2-art-context-v1" } else if evidence.get("variant").is_some() { "rest-area-art-context-v1" } else if self.m6 { "building-art-m6-nine-v1" } else { "building-art-static-nine-v2" },
             "evidence_kind": if self.art_candidate { "candidate-paused-static-only" } else { "paused-static-only" }, "active_simulation_evidence": false,
             "camera_scale": evidence.get("camera_scale").unwrap_or(&json!(layout::CAMERA_SCALE)), "stable_frames": self.stable_frames,
             "layout_sha256": hw_infra::lighting::digest_hex(&Sha256::digest(&bytes).into()), "initial": evidence, "final": evidence});

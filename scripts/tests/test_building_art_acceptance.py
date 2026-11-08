@@ -18,6 +18,129 @@ from perf_tool.fixtures import write_fixture_run
 
 
 class RecipeTests(unittest.TestCase):
+    def m2_context(self, kind="Tank"):
+        value, probe = self.context()
+        value.update(kind=kind, variant="m2-art-context")
+        value["context_geometry_sha256"] = art.M2_NUMERIC[kind][-1]
+        value["context_mesh_verifier_sha256"] = art.m5_context.verifier_sha256()
+        value["identity"] = {"authority": "art_preview", "kind": kind}
+        names = ("body", "water" if kind == "Tank" else "rotor")
+        value["context_parts"] = [{"name": name, "mesh_role": name, "translation_wu": [0., 0., 0.],
+            "rotation_xyzw": [0., 0., 0., 1.], "scale": [1., 1., 1.]} for name in names]
+        probe.update(variant=value["variant"], identity=value["identity"])
+        fixture = probe["fixture"]
+        fixture.update(variant=value["variant"], identity=value["identity"], souls=8 if kind == "Tank" else 10)
+        fixture["geometry_contract_sha256"] = value["context_geometry_sha256"]
+        fixture["rtt_camera"] = {"transform": {"rotation": [0., 0., 0., 1.]}}
+        states = []
+        for ordinal, record in enumerate(fixture["records"]):
+            record["root_transform"] = {"translation": [ordinal * 160., 0., 0.], "rotation": [0., 0., 0., 1.], "scale": [1., 1., 1.]}
+            record["parts"] = []
+            for index, original in enumerate(value["context_parts"]):
+                water = original["name"] == "water"
+                local = {"translation": [0., 22. if ordinal >= 2 else 12., 0.] if water else [0., 0., 0.],
+                    "rotation": original["rotation_xyzw"], "scale": original["scale"]}
+                material = dict.fromkeys(("opaque", "lit", "emissive_black", "emissive_texture_absent"), True)
+                material.update(color_srgba=[.58, .70, .73, 1.] if water and ordinal == 1 else [1., 1., 1., 1.],
+                    roughness=1., reflectance=0., metallic=0.)
+                record["parts"].append({"entity": 500 + ordinal * 2 + index, "role": original["mesh_role"],
+                    "visible": not water or ordinal > 0, "transform": local, "material_values": material,
+                    "global_matrix": art.foreground.product(art.foreground.matrix(record["root_transform"]), art.foreground.matrix(local))})
+            souls = []
+            for index, side in enumerate((-1., 1.)):
+                entity = 600 + ordinal * 2 + index
+                ground = [ordinal * 160., side * 12.]
+                pose = {"translation": [ground[0], 17.6, -ground[1]], "rotation": [0., 0., 0., 1.], "scale": [1., 1., 1.]}
+                souls.append({"entity": entity, "side": side, "ground": ground, "meshes": [{
+                    "entity": 800 + ordinal * 2 + index, "root": 800 + ordinal * 2 + index,
+                    "visible": True, "owner": entity, "layers": [1], "global_matrix": art.foreground.matrix(pose),
+                    "mesh": "Mesh(1)", "pose": pose, "root_pose": pose,
+                    "material": {"kind": "standard", "handle": "Material(1)", "values": "actual material", "base_color": [1., 1., 1., 1.]}}]})
+            states.append({"ordinal": ordinal, "owner": record["owner"], "souls": souls,
+                "state": {"stored_water": (0, 25, 50, 50)[ordinal], "capacity": 50,
+                    "water_items": list(range(1000 + ordinal * 100, 1000 + ordinal * 100 + (0, 25, 50, 50)[ordinal]))} if kind == "Tank"
+                else {"refining": ordinal >= 2, "workers": [{"entity": 700 + ordinal, "mixer": record["owner"],
+                    "working_on": record["owner"], "assignment": record["owner"], "target": record["owner"],
+                    "work_type": "Refine", "phase": "Refining", "progress": 0.}] if ordinal >= 2 else []}})
+        fixture["m2_state"] = {"idle_souls": 8, "source_workers": 0 if kind == "Tank" else 2,
+            "ordinary_input_evidence": False, "lifecycle_evidence": False, "records": states}
+        return value, probe
+
+    def test_m2_context_has_separate_kind_mode_population_and_view_admission(self):
+        for kind, population in (("Tank", 8), ("MudMixer", 10)):
+            value, probe = self.m2_context(kind)
+            art.validate_probe(probe, value, probe["nonce"])
+            self.assertEqual(art.actor_count(value), population)
+            for key, changed in (("kind", "RestArea"), ("mode", "candidate"), ("view", "overview"),
+                ("view", "near"), ("spa_mask_page", 0), ("lamp_supply_target", 0)):
+                with self.subTest(kind=kind, key=key), self.assertRaises(ValueError):
+                    art.context_settings({**value, key: changed})
+
+    def test_m2_context_rejects_wrong_water_state_pose_visibility_and_material(self):
+        value, original = self.m2_context()
+        for ordinal in range(4):
+            for key, changed in (("visible", ordinal == 0), ("transform", {"translation": [0., 99., 0.]}),
+                ("role", "body"), ("material_values", {"color_srgba": [1., 0., 0., 1.]})):
+                probe = copy.deepcopy(original)
+                probe["fixture"]["records"][ordinal]["parts"][1][key] = changed
+                with self.subTest(ordinal=ordinal, key=key), self.assertRaises(ValueError):
+                    art.validate_probe(probe, value, probe["nonce"])
+
+    def test_m2_context_rejects_foreign_worker_soul_and_authority_claims(self):
+        for kind in ("Tank", "MudMixer"):
+            value, original = self.m2_context(kind)
+            for key, changed in (("idle_souls", 6), ("source_workers", 8), ("ordinary_input_evidence", True),
+                ("lifecycle_evidence", True)):
+                probe = copy.deepcopy(original)
+                probe["fixture"]["m2_state"][key] = changed
+                with self.subTest(kind=kind, key=key), self.assertRaises(ValueError):
+                    art.validate_probe(probe, value, probe["nonce"])
+            for changed in (None, False, float("nan"), 100):
+                probe = copy.deepcopy(original)
+                probe["fixture"]["m2_state"]["records"][0]["souls"][0]["ground"][0] = changed
+                with self.subTest(kind=kind, changed=changed), self.assertRaises(ValueError):
+                    art.validate_probe(probe, value, probe["nonce"])
+
+    def test_m2_context_rejects_corrupt_render_matrices_layers_and_receipt_bindings(self):
+        for kind in ("Tank", "MudMixer"):
+            value, original = self.m2_context(kind)
+            for key, changed in (("global_matrix", [0.] * 16), ("global_matrix", [float("nan")] * 16),
+                                 ("layers", [True]), ("material", {})):
+                probe = copy.deepcopy(original)
+                probe["fixture"]["m2_state"]["records"][0]["souls"][0]["meshes"][0][key] = changed
+                with self.subTest(kind=kind, key=key), self.assertRaises(ValueError):
+                    art.validate_probe(probe, value, probe["nonce"])
+            probe = copy.deepcopy(original)
+            probe["fixture"]["records"][0]["parts"][0]["global_matrix"] = [0.] * 16
+            with self.assertRaises(ValueError):
+                art.validate_probe(probe, value, probe["nonce"])
+            probe = copy.deepcopy(original)
+            probe["fixture"]["geometry_contract_sha256"] = "f" * 64
+            with self.assertRaises(ValueError):
+                art.validate_probe(probe, value, probe["nonce"])
+        value, probe = self.m2_context("MudMixer")
+        probe["fixture"]["m2_state"]["records"][2]["state"]["workers"][0]["target"] = 999
+        with self.assertRaises(ValueError):
+            art.validate_probe(probe, value, probe["nonce"])
+        value, probe = self.m2_context("Tank")
+        probe["fixture"]["m2_state"]["records"][2]["state"]["water_items"][0] = 100
+        with self.assertRaises(ValueError):
+            art.validate_probe(probe, value, probe["nonce"])
+
+    def test_historical_gallery_without_variant_still_enters_exact_plan_check(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            frozen = self.source()
+            manifest = {"identity": {"kind": "Tank", "authority": "art_preview"}}
+            value = {"kind": "Tank", "mode": "feedback", "profile": art.PROFILE, "repo": str(root),
+                "source_root": str(root / "candidate"), "job_root": str(root / "job"), "subject": frozen,
+                "identity": manifest["identity"], "manifest_sha256": art.pipeline.digest(b"fixture")}
+            with patch.object(art.native, "validate_repo", return_value=root), \
+                    patch.object(art, "subject", return_value=frozen), \
+                    patch.object(art.static, "check_root"), \
+                    patch.object(art.pipeline, "load_set", return_value=(manifest, "fixture", None)):
+                self.assertEqual(art.check_plan(value, root / "codec"), manifest)
+
     def test_m5_candidate_freezes_each_numeric_dependency_even_when_paths_are_unchanged(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

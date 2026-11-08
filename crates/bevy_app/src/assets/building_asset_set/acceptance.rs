@@ -40,6 +40,7 @@ pub enum BuildingArtVariant {
     #[default]
     Gallery,
     RestAreaArtContext,
+    M2ArtContext,
     M5ArtContext,
     LampSupplyArtContext,
 }
@@ -57,6 +58,10 @@ impl BuildingArtSession {
         self.variant == BuildingArtVariant::RestAreaArtContext
     }
 
+    pub fn is_m2_context(&self) -> bool {
+        self.variant == BuildingArtVariant::M2ArtContext
+    }
+
     pub fn is_m5_context(&self) -> bool {
         matches!(
             self.variant,
@@ -69,12 +74,38 @@ impl BuildingArtSession {
     }
 
     pub fn is_context(&self) -> bool {
-        self.is_rest_context() || self.is_m5_context()
+        self.is_rest_context() || self.is_m2_context() || self.is_m5_context()
     }
 
     fn validate_context(&self, present: impl Fn(&str) -> bool) -> Result<(), String> {
         if self.lamp_supply_target.is_some() && !self.is_lamp_supply_context() {
             return Err("Lamp UI target requires its separate rendering-only context".into());
+        }
+        if self.is_m2_context() {
+            if !matches!(
+                self.identity.kind,
+                BuildingAssetKind::Tank | BuildingAssetKind::MudMixer
+            ) || self.mode != "feedback"
+                || self.identity.authority != BuildingAssetAuthority::ArtPreview
+                || !matches!(self.view, BuildingArtView::Normal | BuildingArtView::Far)
+                || self.spa_mask_page.is_some()
+                || [
+                    "HW_BUILDING_M6_MODE",
+                    "HW_BUILDING_ORDINARY_ART_SESSION",
+                    "HW_BUILDING_PRODUCTION_OBSERVATIONS",
+                    "HW_BUILDING_ASSET_RELEASES",
+                    "HW_M2_ACCEPTANCE_PROBE",
+                    "HW_BRIDGE_ACCEPTANCE_PROBE",
+                    "HW_NATIVE_UI_ROOT",
+                ]
+                .into_iter()
+                .any(present)
+            {
+                return Err(
+                    "M2 art context requires separate Tank/Mixer paused feedback ArtPreview".into(),
+                );
+            }
+            return Ok(());
         }
         if self.is_m5_context() {
             let lamp_ui = self.is_lamp_supply_context();
@@ -312,6 +343,59 @@ mod tests {
             );
         }
         for (key, value) in [("kind", "Tank"), ("authority", "art_preview")] {
+            let mut changed = raw.clone();
+            changed["identity"][key] = serde_json::json!(value);
+            assert!(
+                serde_json::from_value::<BuildingArtSession>(changed)
+                    .unwrap()
+                    .validate_context(|_| false)
+                    .is_err()
+            );
+        }
+    }
+
+    #[test]
+    fn m2_context_admits_only_separate_paused_preview_comparisons() {
+        let raw = serde_json::json!({"mode": "feedback", "identity": {
+            "kind": "Tank", "generation": 1, "authority": "art_preview", "manifest_sha256": "a".repeat(64)},
+            "locator": "manifests/building-tank-v1.buildingset", "status_path": "/unused/probe.json",
+            "nonce": "a".repeat(32), "variant": "m2-art-context", "view": "normal", "lighting": "dim"});
+        for kind in ["Tank", "MudMixer"] {
+            let mut value = raw.clone();
+            value["identity"]["kind"] = serde_json::json!(kind);
+            let session: BuildingArtSession = serde_json::from_value(value).unwrap();
+            assert!(session.is_m2_context() && session.is_context() && !session.is_rest_context());
+            assert!(session.validate_context(|_| false).is_ok());
+            for conflict in [
+                "HW_M2_ACCEPTANCE_PROBE",
+                "HW_BUILDING_ASSET_RELEASES",
+                "HW_BUILDING_M6_MODE",
+                "HW_NATIVE_UI_ROOT",
+            ] {
+                assert!(session.validate_context(|key| key == conflict).is_err());
+            }
+        }
+        for (key, value) in [
+            ("mode", serde_json::json!("candidate")),
+            ("view", serde_json::json!("overview")),
+            ("view", serde_json::json!("near")),
+            ("spa_mask_page", serde_json::json!(0)),
+            ("lamp_supply_target", serde_json::json!(0)),
+        ] {
+            let mut changed = raw.clone();
+            changed[key] = value;
+            assert!(
+                serde_json::from_value::<BuildingArtSession>(changed)
+                    .unwrap()
+                    .validate_context(|_| false)
+                    .is_err()
+            );
+        }
+        for (key, value) in [
+            ("kind", "RestArea"),
+            ("kind", "Bridge"),
+            ("authority", "isolated_candidate"),
+        ] {
             let mut changed = raw.clone();
             changed["identity"][key] = serde_json::json!(value);
             assert!(

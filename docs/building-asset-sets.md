@@ -216,6 +216,15 @@ offline verifierは型を保持したsource manifestとのcanonical JSON一致�
 白へ補正したり美術的に正しい色と承認したりしない。旧planはこの追加証拠なしの履歴であり、
 新schemaの観測済みと読み替えない。これは2D表示経路の切り分けで、明暗/密集/preview/UIや素材採否を閉じない。
 
+明示 `--variant m2-art-context --view normal|far --lighting standard|dim` はTank/MudMixer専用の
+feedback/ArtPreview/small比較で、他のsessionとの混在とcandidate/releaseを拒否する。
+4対象と前後8Wall、8idle Soulを一度だけ準備し、Mixerの既存2Refining workerは別に数える。
+原本parts/geometry digest、Tankの実水量0/25/50/50・capacity50・空水面hidden・Y12/22・既存Partial tint、
+Mixer実Refining関係と停止時の原本rotor poseだけを明示検査する。未知の材質/pose差は許可しない。
+共通のcamera/RtT/descriptor previewと30frames安定観測を使うが、RestAreaの白材質/occupant契約は不変。
+previewはEmpty/Idle代表画像であり、全状態のpreviewが存在する証拠ではない。
+これは画像採否の比較材料のみで、UI/通常入力・自然利用・lifecycle・性能・独立採否・releaseを閉じない。
+
 M5専用の明示 `--variant m5-art-context --view normal` は別のseeded比較である。
 ArtPreviewの4種だけをfeedback/art-preview・standard照明で許可し、candidate/releaseや通常入力証拠へ転用しない。
 対象4棟、前後8Wall、8idle Soul、descriptor経由の4previewを一度だけ準備し、以後は受動観測する。
