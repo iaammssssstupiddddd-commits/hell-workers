@@ -861,6 +861,26 @@ fresh ACK待機削減だけで完走する仮説は打ち切り、同じ入力�
 中間複製だけを除き、収集/serialize/write時間の有界診断で次の一度の比較を評価する。
 JSON同値・順序・byte cap・既存tmp/失敗保全を試験し、Help No impact・独立review・変更別検証後にfresh実機へ進む。
 
+`e6266503`のfresh slots v5はsource
+`caffed86ac0138b7dc0bb157715d592546c72df258dbe15235fd185392db6bd4`、
+harness `27bdbf080b06daba3308c0df70ac00821854d82b868b3daea9b9d7de5c8b9a3e`で全7画像を完走した。
+owner2237v0/bits4294965058、同epoch0の実picker行から選択し、3/2/1/0の全4receiptを照合。
+closed→heldは5.25仮想秒、69raw samplesで
+Soul1850v0→tile2240v0・Soul1868v0→tile2242v0の割当集合/Generatingと出力2が不変。
+実UIの`Draining (2 active / 0 configured)`・`Active slots: 0/4`・`Output: 2.0W`を確認した。
+全7PNGの主/独立read-only実見、別CLIと登録verify、pass seal/finalize/storageを完了。
+manifest `a188068fc2c481b7787630107eab05d578b2e0b2424baad0a518a6c53c4d688c`、
+raw `82cc1ab0583652a7d5dbbb80b83274cc2b36cea50d39a7aaa94e805039d72867`、
+input `3713ed96b86884d52172fe18bebf6fb5a2c9e7acd9b9649848265868866ca5f1`。
+Intel Arc/Vulkan、WARN/ERRORなし。58,613,760Bをoccupied保存/採用candidate lifecycleの比較に保持する。
+今回wheelは0回で、scroll分岐を実機成功とはしない。fallbackの有界な枠変更/非追出しだけの証拠で、
+occupied保存・自然退出・再開放・採用asset表示・性能・正式releaseは未完のまま。
+publish診断は128→512samplesでencode173→780ms、write17→30msと全量encodeの増大が残る。
+中間複製除去後の完走は確認したが、単独の因果/ゲーム性能改善率は主張しない。
+用途を終えたslots v1〜v4は原本/独自コード/使用中参照/他consumerなしを個別確認し、
+正式consumer release後にexact4rootの診断生成物のみ撤去した。実測215,990,272B、
+失敗結果と診断は本文/台帳へ保持、rawは復元用archiveを作らず削除。最新v5と制作原本/cacheは保全。
+
 ## 5. マイルストーン
 
 ### M1: 原本・候補

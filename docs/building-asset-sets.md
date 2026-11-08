@@ -720,6 +720,11 @@ JSON値・順序・ordinal・公開頻度と64MiB/1200samples/4096events上限�
 失敗tmp保持は不変。128samplesごとに収集/encode/writeの処理時間とbytesを有界に記録するが、
 これはobserver自体の負荷診断で、ゲーム/renderer性能や正式受入の証拠ではない。
 
+`tak14-soulspa-ordinary-slots-20261108-v5`は全7actual-window画像/独立確認と登録verifyを通り、
+同ownerの4→0実入力・5.25仮想秒の既存2worker維持/割当集合不変を確認した。
+これはfallbackの限定非追出し証拠だけで、wheel分岐・occupied保存・採用asset表示・正式性能/releaseを補わない。
+旧4診断jobは用途終了後に個別撤去し、結果は現行計画/台帳へ残す。
+
 M2 probeは有効化された検証sessionだけで0.1秒ごとのdue sampleを即時公開する（最大1800 samples、
 categoryごと最大128 entities）。観測・同期書込みの負荷を含むため性能証拠には使わない。
 M2 native runnerは画像の撮影前後でraw prefix/sessionを照合し、最大2秒の待機で新sampleを要求する。
