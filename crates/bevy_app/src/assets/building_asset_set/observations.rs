@@ -15,7 +15,7 @@ use hw_jobs::{
     DeconstructionCommitOutcome, MovePlantTask,
 };
 use hw_visual::{Building3dVisual, StructuralPresentationState, TopDownStructuralMaterial};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::path::{Component, PathBuf};
 
@@ -53,6 +53,24 @@ struct Observations {
     failure: Option<String>,
     tracked_owners: std::collections::HashSet<Entity>,
     written_events: usize,
+}
+
+// Borrow the growing history instead of cloning every Value into a second
+// envelope on each publication. The wire schema, ordering and caps are unchanged.
+#[derive(Serialize)]
+struct ObservationRecord<'a> {
+    #[serde(flatten)]
+    header: Value,
+    samples: &'a [Value],
+    events: &'a [Value],
+}
+
+fn encode_record(record: &ObservationRecord<'_>, byte_cap: usize) -> Result<Vec<u8>, String> {
+    let bytes = serde_json::to_vec(record).map_err(|error| error.to_string())?;
+    if bytes.len() > byte_cap {
+        return Err("production observation byte cap exceeded".into());
+    }
+    Ok(bytes)
 }
 
 fn production_session(raw: &str) -> Result<Session, String> {
@@ -586,6 +604,7 @@ fn architect_panel_ready(world: &mut World) -> bool {
 }
 
 fn observe(world: &mut World) {
+    let observation_start = std::time::Instant::now();
     let now = world.resource::<Time<Real>>().elapsed_secs_f64();
     world.resource_scope(|world, mut observations: Mut<Observations>| {
         let index = observations.samples.len();
@@ -758,7 +777,7 @@ fn observe(world: &mut World) {
     } else {
         "production-raw-observations-v1"
     };
-    let record = json!({"schema_version": 2, "scope": scope,
+    let header = json!({"schema_version": 2, "scope": scope,
         "transition_contract": "indexed-state-delta-v1",
         "nonce": session.nonce, "process_id": std::process::id(), "accepted": false,
         "performance_evidence": false, "promotion_authority": false,
@@ -772,15 +791,37 @@ fn observe(world: &mut World) {
             "Durable state: commit byte hashes and selected Entity remaps do not prove canonical world-state equality or complete inventory lifecycle",
             "Complete lifecycle witnesses/cycles are not inferred from input or state deltas",
             "GPU/native/RSS/total application handles require independent host instrumentation"],
-        "failure": failure, "samples": state.samples, "events": state.events});
-    let result = serde_json::to_vec(&record)
-        .map_err(|e| e.to_string())
-        .and_then(|bytes| {
-            if bytes.len() > 64 * 1024 * 1024 {
-                return Err("production observation byte cap exceeded".into());
-            }
-            write_observation(&session.output, &bytes).map_err(|e| e.to_string())
-        });
+        "failure": failure});
+    let record = ObservationRecord {
+        header,
+        samples: &state.samples,
+        events: &state.events,
+    };
+    let collected = observation_start.elapsed();
+    let encoding_start = std::time::Instant::now();
+    let mut encoded_bytes = 0;
+    let mut encoding_time = std::time::Duration::ZERO;
+    let mut writing_time = std::time::Duration::ZERO;
+    let result = encode_record(&record, 64 * 1024 * 1024).and_then(|bytes| {
+        encoding_time = encoding_start.elapsed();
+        encoded_bytes = bytes.len();
+        let writing_start = std::time::Instant::now();
+        let result = write_observation(&session.output, &bytes).map_err(|e| e.to_string());
+        writing_time = writing_start.elapsed();
+        result
+    });
+    // Bounded cadence under the 1200-sample cap. These timings describe the
+    // observer itself, never renderer/game performance acceptance.
+    if state.samples.len().is_multiple_of(128) {
+        info!(
+            samples = state.samples.len(),
+            encoded_bytes,
+            collection_us = collected.as_micros(),
+            encoding_us = encoding_time.as_micros(),
+            writing_us = writing_time.as_micros(),
+            "Production observation publication cost"
+        );
+    }
     if failure.is_some() || result.is_err() {
         error!(
             "Production observations failed: {:?} {:?}",
@@ -1191,6 +1232,38 @@ mod tests {
     fn sample() -> Value {
         json!({"real_seconds": 1.0, "owners": [], "blueprints": [], "roots": [],
             "items": [], "move_tasks": [], "generations": [], "owner_layers": []})
+    }
+
+    #[test]
+    fn borrowed_record_preserves_complete_json_history_and_authority() {
+        let header = json!({"schema_version": 2, "scope": "production-raw-observations-v1",
+            "transition_contract": "indexed-state-delta-v1", "nonce": "exact-session",
+            "process_id": 42, "accepted": false, "performance_evidence": false,
+            "promotion_authority": false, "unsupported_observations": ["missing host measurements"],
+            "failure": null});
+        let samples = vec![sample(), json!({"sample_index": 1, "owners": ["owner-a"]})];
+        let events = vec![
+            json!({"event_index": 0, "sample_index": 0, "operation": "Pressed"}),
+            json!({"event_index": 1, "sample_index": 1, "operation": "Released"}),
+        ];
+        let mut expected = header.clone();
+        expected["samples"] = json!(samples);
+        expected["events"] = json!(events);
+        let record = ObservationRecord {
+            header,
+            samples: &samples,
+            events: &events,
+        };
+        let bytes = encode_record(&record, 64 * 1024 * 1024).unwrap();
+        assert_eq!(serde_json::from_slice::<Value>(&bytes).unwrap(), expected);
+        assert_eq!(record.samples, samples);
+        assert_eq!(record.events, events);
+        assert!(encode_record(&record, bytes.len()).is_ok());
+        assert_eq!(
+            encode_record(&record, bytes.len() - 1).unwrap_err(),
+            "production observation byte cap exceeded"
+        );
+        assert!(encode_record(&record, 0).is_err());
     }
 
     #[test]

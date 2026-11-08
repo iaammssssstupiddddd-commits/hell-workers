@@ -832,6 +832,35 @@ UI observerは3frameごとだが各入力がさらにframe+3超を待ち、1枠�
 他caseと原入力照合・所有/nonce・fail-closed・全体480秒は不変。新方針をclientへ拘束し、
 旧attemptは再送せず、変更別検証・Help No impact・独立review後にfresh subjectで一度比較する。
 
+11月8日の継続判断でRestAreaの独立read-only美術・数値レビューをexact ArtPreview
+`db0f535611de1140cc83dd82f08128052da82e5d8dd2642d77f3075d5fae2522`へ固定した。
+standard/dim・near/normal/far/low/overview・通常利用/退出・最大zoomの実画像を確認し、
+布屋根・入口・細い支柱を採用する。最大zoomで形だけの識別は約束せず、既存の施設headerと
+`Resting 1/5 / Dream 0.50/s`の補完を採用条件に含める。利用者の未回答を承認へ読み替えてはいない。
+独立数値レビューは32wu/tile・2×2順序・中心[0.5,-0.5]・body62×58×44.5wu・4支柱・
+144tri/上限256・法線/有限値/退化面と256px preview/anchor[128,144]を照合した。
+geometry `729c7f275619c63db63b1255ab505a09a40b0b5480f4585a9081a035a50f98fe`、
+numeric projection `6ed8c3080ef8dd9cbe56ccc7ef5de9e32ebeb8f6f5576e7b2d4ce540cf436592`。
+canonical art `5f4dd43f081e34cb89c312e4820ec9c61d074264699381b7250c601506157a6a`、
+numeric `7cb2fb485d54fabd2e6110583c665675b6439aa45c7d787e2275caf168162685`を
+原本rootの追加decisionと新candidateのprovenanceへ保存し、独立reviewerがexact bytesを再照合した。
+`tak14-restarea-isolated-candidate-20261108-v1`を正規register/execute/verify/seal/finalizeし、
+候補identity `8e4e8003083407514abe01c2261afaada1f21562f444b20bef3b14833f3814c2`を得た。
+221,184Bを通常consumer/lifecycle・性能・release受入のため保持する。package技術検証は
+`promotion_authority=false`で、正式release/installや既定起動の切替は未実施。
+
+`1819bc24`のslots v4はsourceをv3と同一に保ち、harness
+`27bdbf080b06daba3308c0df70ac00821854d82b868b3daea9b9d7de5c8b9a3e`へ拘束した。
+通常施工・利用・実picker選択後、owner2220v0の枠3@450.903385713秒・2@472.784720148秒を実受理したが、
+480秒上限でinvalid終了。最終real475.603436331/virtual169.432307273、枠2/出力2で、
+zero-slot/非追出し全体を承認しない。子終了・invalid seal/finalize済み、56,356,864Bを負荷診断に保持する。
+fresh ACK待機削減だけで完走する仮説は打ち切り、同じ入力調整や上限延長を繰り返さない。
+独立read-only調査で、World排他observerがpublishごとに累積samples/eventsを別Valueへ複製し、
+全量serialize/write/sync/renameする経路を確認。最終raw31,450,308B/612samples/1029events。
+低速化の唯一原因とは未確定のため、まず履歴・頻度・cap・authorityを変えず借用envelopeで
+中間複製だけを除き、収集/serialize/write時間の有界診断で次の一度の比較を評価する。
+JSON同値・順序・byte cap・既存tmp/失敗保全を試験し、Help No impact・独立review・変更別検証後にfresh実機へ進む。
+
 ## 5. マイルストーン
 
 ### M1: 原本・候補

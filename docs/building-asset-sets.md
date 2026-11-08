@@ -715,6 +715,10 @@ ordinary lifecycle退行比較に保持し、旧binary/verifierを再実行す�
 profiling-onlyのproduction raw observerとBridge／M2 probeは共通writerでfresh outputと一時pathを検査し、各snapshotの一時ファイルを
 `create_new`で排他的に作成してからrenameする。既存ファイル・dangling symlink・失敗した一時成果を
 上書きせず拒否する。これは収集の安全性であり、ordinary-worldの欠落producerや正式受入を補わない。
+production rawは累積samples/eventsを借用Serialize envelopeへ渡し、中間Valueへの全履歴複製を行わない。
+JSON値・順序・ordinal・公開頻度と64MiB/1200samples/4096events上限、同期write/sync/rename、
+失敗tmp保持は不変。128samplesごとに収集/encode/writeの処理時間とbytesを有界に記録するが、
+これはobserver自体の負荷診断で、ゲーム/renderer性能や正式受入の証拠ではない。
 
 M2 probeは有効化された検証sessionだけで0.1秒ごとのdue sampleを即時公開する（最大1800 samples、
 categoryごと最大128 entities）。観測・同期書込みの負荷を含むため性能証拠には使わない。
