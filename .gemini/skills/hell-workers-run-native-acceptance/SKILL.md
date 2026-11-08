@@ -259,6 +259,31 @@ ACK checks; it does not enable scroll or resend input. The explicit `portal`
 Notify transport remains selectable, but a failed motion is not retried or
 corrected with an empirical offset. Use a fresh registered subject for changes.
 
+Use the separate `--case soul-spa-candidate-resumed-use` with the same explicit
+candidate/codec/EIS options for the seven occupied-save checkpoints plus three
+post-load captures. Its own candidate-resumed mode/scope retains the old prefix
+verifier, then uses only the ordinary 4x speed button to observe a remapped former
+occupant's reassignment, additional Dream consumption and Dream-floor-adjacent
+worker cleanup. No Soul/task/Dream is seeded. The complete input/raw/owner/epoch
+chain and actual worker-driven candidate emission are checked. The 480-second
+session and raw caps are unchanged; a timeout is invalid, not automatic retry.
+The observed state departure is not an uncollected domain-end receipt or proof
+that all workers departed. Performance and release remain separate.
+
+When that full campaign exceeds its fixed deadline, use the explicitly separate
+`--case soul-spa-candidate-loaded-use --spa-resume-source <verified-occupied-job>`
+with the same candidate/codec/EIS options. Hash and independently revalidate the
+historical seven-checkpoint input, copy its exact Manual1 bytes into a fresh
+session, and use only F9 / slot selection / confirmation. The old construction
+is historical input evidence, not proof for today's source. Five current owned
+captures cover empty startup, loaded/reset, reassigned, Normal-speed consumption
+and departure. Saved worker IDs bind through this Load's maps, never old loaded
+IDs. Super/Paused, Normal/Paused, Super/Paused are the only six further actions.
+The target/world footprint, imported bytes, source and actual candidate parts
+remain exact. No Save, task/vital seed, numerical/art decision or release is
+added. Keep 480 seconds, 1200 samples and 3–15 virtual seconds for measurement;
+a failed full campaign remains invalid and is not resumed by this new job.
+
 Select `--case rest-area-planning --smoke --input-backend portal` for ordinary
 RestArea reservation, Manual1 Save/Load and two-stage Task Dashboard cancellation.
 Preparation only centers the camera and pauses time. The case also enables the
@@ -1077,7 +1102,7 @@ pass because individual runs happened to finish.
 After changing the Skill or helper, run:
 
 ```bash
-python3 -m unittest scripts.tests.test_ui_usability_acceptance scripts.tests.test_ui_spa_occupied_save scripts.tests.test_rtt_light_closure_verify
+python3 -m unittest scripts.tests.test_ui_usability_acceptance scripts.tests.test_ui_spa_occupied_save scripts.tests.test_ui_spa_candidate_art scripts.tests.test_ui_spa_resumed_use scripts.tests.test_ui_spa_loaded_use scripts.tests.test_rtt_light_closure_verify
 PYTHONDONTWRITEBYTECODE=1 python3 \
   .codex/skills/hell-workers-run-native-acceptance/scripts/native_acceptance.py \
   self-test

@@ -770,6 +770,28 @@ albedoとemissive画像を、同checkpointの実4tile TaskWorkers maskへ照合�
 従う非発光を要求し、保存派生出力から稼働継続を推測しない。candidate原本や通常worldへ資材/worker/完了をseedしない。
 この追加は実機成功・再割当/自然退出・性能・正式release受入ではなく、fresh実行と独立画像/raw reviewを必要とする。
 
+後続の`soul-spa-candidate-resumed-use`は`candidate-resumed` modeと
+`ordinary-spa-candidate-resumed-v1` scopeで同じoccupied prefixを再検証し、通常4倍速入力による
+以前のworkerの実remap後の再割当・追加Dream消費・Dream閾値付近の関係解除を3場面へ追加する。
+入力対、epoch/window、構造、派生出力の通常Logic再構築と実slot発光を照合し、保存派生出力だけから
+再開発電を推測しない。観測された状態差は未収集のdomain終了receiptとは区別する。
+旧caseの受入・通常起動・gameplay・保存形式・480秒/1200sample上限を変えない。
+2026-11-08の全工程case v1は退出前に上限へ達してinvalidであり、受入成功へ読み替えない。
+
+全工程の固定上限に収まらない場合も上限を緩めず、`soul-spa-candidate-loaded-use`を別subjectの
+fresh jobとして使う。`candidate-loaded` mode / `ordinary-spa-candidate-load-v1` scopeは検証済み
+occupied jobの原本・7画像・raw/input/checkpoint・候補依存hashを固定し、実Manual1だけを新sessionへ
+コピーする。過去施工を現sourceの証明に数えず、今回の通常F9/選択/確定の唯一Loadと保存時Soulから
+今回のremapを検査する。初期worldと保存worldのanchor/footprint/draw_pos不一致は拒否する。
+停止中reset→自然再割当（Super）→追加消費（Normal、3–15 virtual秒）→自然解除（Super）の5画像で、
+実window/epoch/入力対・構造・発光・Dream消費と関係解除を検証する。Save/資材・worker・Dream seedなし。
+480秒/1200sample・入力上限を維持し、historical入力と今回の限定結果を分離する。正式release/性能は別条件。
+
+2026-11-08のloaded-use v1（source `a0f2c5ce1a4f76245c0734a6c370bb2f5238791232bf89908c55620d5554ca40`）は
+5画像/rawの独立reviewと登録verifierを通過した。保存時1849v0→今回854v1、同tile2349v1で
+6.088962112 virtual秒にDream26.38408470→23.33959770、直前Dream9.78866768から作業解除を観測。
+別workerは残存しており全員退出ではない。過去施工、未収集domain終了receipt、性能・releaseはこの結果に含めない。
+
 M2 probeは有効化された検証sessionだけで0.1秒ごとのdue sampleを即時公開する（最大1800 samples、
 categoryごと最大128 entities）。観測・同期書込みの負荷を含むため性能証拠には使わない。
 M2 native runnerは画像の撮影前後でraw prefix/sessionを照合し、最大2秒の待機で新sampleを要求する。

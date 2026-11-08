@@ -170,7 +170,7 @@ def check_mapping(before, after, mapping):
 
 
 def check_raw_session(raw, client, *, raw_scope="production-raw-observations-v1"):
-    native.require(raw_scope in ("production-raw-observations-v1", "ordinary-spa-candidate-occupied-v1"),
+    native.require(raw_scope in ("production-raw-observations-v1", "ordinary-spa-candidate-occupied-v1", "ordinary-spa-candidate-resumed-v1", "ordinary-spa-candidate-load-v1"),
                    "unsupported Spa raw scope")
     native.require(raw.get("scope") == raw_scope and raw.get("schema_version") == 2
                    and raw.get("failure") is None and raw.get("nonce") == client["nonce"]
@@ -403,7 +403,7 @@ def world_click(driver, name, projection):
     record_action(driver, name, first, before)
 
 
-def check_inputs(raw, entries, client, inputs, *, completion=False, usage=False, persistence=False, slots=False, occupied=False):
+def check_action_inventory(raw, entries, client, inputs, *, slots=False):
     native.require(isinstance(inputs, list) and 0 < len(inputs) <= 256
                    and [row.get("step") for row in inputs] == [str(i + 1) for i in range(len(inputs))], "Spa input inventory differs")
     actions = [row["spa_action"] for row in inputs if "spa_action" in row]
@@ -498,11 +498,32 @@ def check_inputs(raw, entries, client, inputs, *, completion=False, usage=False,
     native.require(all(i + 1 in claimed for i, row in enumerate(inputs) if row.get("button") is not None or row.get("key") is not None)
                    and raw_claimed == {r["event_index"] for r in raw["events"] if r.get("producer") in ("KeyboardInput", "MouseButtonInput")},
                    "Spa unclaimed or extraneous input")
+    return actions
+
+
+def check_inputs(raw, entries, client, inputs, *, completion=False, usage=False, persistence=False, slots=False, occupied=False, resumed=False):
+    actions = check_action_inventory(raw, entries, client, inputs, slots=slots)
     ignored = {"Escape", "dev-minimize", "menu:SetTimeSpeed(Paused)", "menu:SetTimeSpeed(Normal)"}
     if usage:
         ignored.add("menu:SetTimeSpeed(Fast)")
+    native.require(not resumed or occupied and len(entries) == 10, "Spa resumed input requires its occupied prefix")
     if occupied:
         tail = [a for a in actions if a["first_step"] > entries[4]["last_step"]]
+        resumed_tail = [a for a in tail if a["first_step"] > entries[6]["last_step"]] if resumed else []
+        if resumed:
+            tail = [a for a in tail if a["first_step"] <= entries[6]["last_step"]]
+            native.require([a["key"] for a in resumed_tail] == ["menu:SetTimeSpeed(Super)", "menu:SetTimeSpeed(Paused)"] * 3,
+                           "Spa resumed input sequence differs")
+            for index, action in enumerate(resumed_tail):
+                lower, upper = entries[6 + index // 2:8 + index // 2]
+                a, b = action["before"], action["after"]
+                native.require(lower["last_step"] < action["first_step"] <= action["last_step"] <= upper["last_step"]
+                               and lower["value"]["frame"] <= a["frame"] < b["frame"] < upper["value"]["frame"]
+                               and a["world_epoch"] == b["world_epoch"] == entries[6]["value"]["world_epoch"]
+                               and a["paused"] is (index % 2 == 0) and b["paused"] is (index % 2 == 1)
+                               and (index % 2 == 1 or context(b).get("relative_speed") == 4),
+                               "Spa resumed input phase/clock differs")
+            ignored.update(a["key"] for a in resumed_tail)
         patterns = ["F5", r"menu:SelectSaveCatalogSlot \{ slot: Manual1, session: [1-9][0-9]* \}",
                     "F9", r"menu:SelectLoadCatalogSlot \{ slot: Manual1, session: [1-9][0-9]* \}",
                     r"menu:ConfirmLoadCatalogSlot \{ slot: Manual1, session: [1-9][0-9]* \}"]

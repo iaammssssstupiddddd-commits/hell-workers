@@ -16,6 +16,8 @@ pub(super) fn enabled() -> bool {
             | "soul-spa-persistence"
             | "soul-spa-occupied-save"
             | "soul-spa-candidate-occupied-save"
+            | "soul-spa-candidate-resumed-use"
+            | "soul-spa-candidate-loaded-use"
             | "soul-spa-slots")
     )
 }

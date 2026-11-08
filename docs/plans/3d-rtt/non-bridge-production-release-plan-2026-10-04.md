@@ -1106,6 +1106,53 @@ v1 Notify原因の深部調査は成功した明示EIS経路を使うことで�
 v1 150,077,440B＋v2 199,090,176B＝349,167,616B→0。rawの復元archiveは作らず、失敗履歴/理由は本書/台帳に保持。
 制作原本・採用候補・最新v3・共有Cargo cacheは保全した。
 
+次の専用caseは同じ自然施工/occupied save/loadの7checkpointをprefixとして保持し、通常4倍速ボタンだけで
+再開→実remap済みの以前のworkerの自然再割当→同Soulの追加Dream消費→自然な作業解除を観測する。
+3場面を追加し、旧case/専用scopeを借用せず新case/mode/scopeへ限定する。480秒/1200sample上限、
+非再送/owned-window/全raw-input照合を維持する。材料・Dream・task・slot数の注入や保存値改変はしない。
+prefixの全保存検証を切り出したraw範囲で再実行し、後続の全input/epoch/window/構造連続性と
+worker/逆関係/出力の通常Logic再構築、candidate slot発光を検査する。Dream閾値付近の
+Generating→関係解除を状態差として検証し、観測していないdomain終了receiptや全員退出は主張しない。
+実装/拒否系試験/独立review/Help判断後にfresh batchで実測する。未実行は未達のままとする。
+予定batchは`tak14-soulspa-candidate-resumed-use-20261108-v1`、primaryの`target/native-acceptance/`直下の
+同名fresh root。ownerはTAK-14 non-Bridge visual adoption、consumerはSoulSpa adopted candidate occupied lifecycle comparison。
+primary/Cargo cache・不変codec・採用候補と直前v3のraw比較を保持し、実機/独立verify/画像review後に
+再割当/解除の比較用途を終了して不要job生成物を撤去する。アート/数値/性能/releaseの承認へ読み替えない。
+
+上記resumed-use v1は9画像後の退出待ちで480秒上限に達しexit1、invalid seal/finalize済み。
+再割当はvirtual217.173563294、追加消費撮影は238.173563294で、21秒/10.5 Dream消費を観測したが
+測定上限15秒も超えており受入に数えない。上限を緩めず、原本・失敗履歴を診断用途
+`SoulSpa bounded post-load campaign partition diagnosis`に保持する。自然退出は未実証。
+次の独立batch `tak14-soulspa-candidate-loaded-use-20261108-v1` は同名fresh rootへ、検証済みoccupied v3の
+Manual1原bytesをコピーして通常ロードだけから始める。元7checkpointは歴史入力検査であり現sourceの施工証拠ではない。
+唯一のLoad receiptと今回のentity remap、reset・自然再割当・Normal測定・Super解除を5画像へ拘束する。
+原本/全15入力file（終了済みvalid jobと警告/エラーなしの元logを含む）・候補/codec・validator inventoryをhash固定し、
+保存時Soulから追跡、anchor不一致は停止する。旧invalidは修正後predicateが通っても入力として採用しない。
+owner/consumerは上記と同じ、480秒/1200sample/256input/4096eventと3–15 virtual秒は不変。
+実行前に独立コードreview・Help/関連拒否系試験・storageを通す。成功時も通常起動/正式release/性能とは分離し、
+比較後に不要jobを整理する。旧v1の再送・再開ではない。
+
+loaded-use v1は別実行CLIと登録verifier、全5画像/rawの独立reviewを通過してpass seal/finalize済み。
+HEAD `e3c42ba5f9ab61eead9a50b27a6fc4aaf6b62416`＋承認済みdirty実装、source
+`a0f2c5ce1a4f76245c0734a6c370bb2f5238791232bf89908c55620d5554ca40`、harness
+`fa81bce4822ccd55339f3d2f60048857176b2c9bbef6054e856f6ea93d516c98`、binary
+`62c000c365e751f5628c3a2aa71b999b610137a3e9fa1e2541d2dad52af18317`。
+manifest `c2cb1065a272ae447878990a0746b9f0dd44f0e98dc8738f019eff0d980a714b`、raw
+`53b870de0867a5beafdefa33e603effc72ca081e1b5fa8ebf8790b84399b4179`。176samples/295events、
+唯一Manual1 Loadと通常速度9操作、保存bytes500,431B/SHA `9be58282418663ad7443b547b159c5694554e8ad34c8de3eb0b43dc0ae4ca1e9`。
+保存時1849v0→今回854v1が同tile2349v1で再割当され、Normal測定51.216319152→57.305281264 virtual秒、
+Dream26.384084701538086→23.339597702026367。sample158→159で直前Dream9.788667678833008から
+GeneratePower解除、最終task/WorkingOn/対応workers逆関係なし。他870v1は残存し、全員退出ではない。
+候補slot発光は実worker maskと整合、全画像に欠損/blank/黒化/残留dialogなし。Intel Arc/Vulkan、WARN/ERRORなし。
+loaded reset時の派生output保存値を継続発電と誤認せず、自然Logic再割当と追加消費から再開を確認した限定結果。
+171,188,224BをM3 RestArea/SoulSpa ordinary consumer consistency比較用に保持し、その比較/修正終了後に整理する。
+v3はこのjobの入力依存でもあるため継続保持する。9種release・通常起動切替・group/performanceは未完。
+分割による480秒上限診断は成功したfresh legで閉じた。旧resumed-use v1のconsumerを正式releaseし、
+invalid/finalized/exit1・process identity/childなし・未追跡生成物のみ・symlinkなしと、最新asset-view全byte一致、
+新jobの入力依存が旧v1ではなく保全中v3であることを確認して旧診断rootだけを撤去した。
+224,768,000B→0、archiveは作らず失敗の結果/理由を本書と台帳に維持。旧試行のgenerated saveは
+不採用診断であり、制作原本・採用候補・v3原save・最新5画像/raw・共有cacheは保持、storage pass。
+
 ## 5. マイルストーン
 
 ### M1: 原本・候補

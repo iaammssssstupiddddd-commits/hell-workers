@@ -16,6 +16,8 @@ const ENV: &str = "HW_BUILDING_ORDINARY_ART_SESSION";
 pub(super) const SCOPE: &str = "ordinary-rest-art-feedback-v1";
 const CANDIDATE_SCOPE: &str = "ordinary-rest-candidate-lifecycle-v1";
 pub(super) const SPA_CANDIDATE_SCOPE: &str = "ordinary-spa-candidate-occupied-v1";
+const SPA_RESUMED_SCOPE: &str = "ordinary-spa-candidate-resumed-v1";
+const SPA_LOADED_SCOPE: &str = "ordinary-spa-candidate-load-v1";
 const CONFLICTS: &[&str] = &[
     "HW_BUILDING_ART_SESSION",
     "HW_BUILDING_PRODUCTION_OBSERVATIONS",
@@ -61,6 +63,16 @@ fn validate(session: &Session, root: &Path, nonce: &str, case: &str) -> Result<(
                         )
                 )
         }
+        "candidate-resumed" => {
+            session.identity.authority == BuildingAssetAuthority::IsolatedCandidate
+                && session.identity.kind == BuildingAssetKind::SoulSpa
+                && case == "soul-spa-candidate-resumed-use"
+        }
+        "candidate-loaded" => {
+            session.identity.authority == BuildingAssetAuthority::IsolatedCandidate
+                && session.identity.kind == BuildingAssetKind::SoulSpa
+                && case == "soul-spa-candidate-loaded-use"
+        }
         _ => false,
     };
     if !profile
@@ -88,6 +100,16 @@ fn validate(session: &Session, root: &Path, nonce: &str, case: &str) -> Result<(
 }
 
 pub(super) fn scope(world: &World) -> &'static str {
+    if world.get_resource::<Session>().is_some_and(|session| {
+        session.mode == "candidate-loaded" && session.identity.kind == BuildingAssetKind::SoulSpa
+    }) {
+        return SPA_LOADED_SCOPE;
+    }
+    if world.get_resource::<Session>().is_some_and(|session| {
+        session.mode == "candidate-resumed" && session.identity.kind == BuildingAssetKind::SoulSpa
+    }) {
+        return SPA_RESUMED_SCOPE;
+    }
     if world.get_resource::<Session>().is_some_and(|session| {
         session.mode == "candidate" && session.identity.kind == BuildingAssetKind::SoulSpa
     }) {
@@ -412,6 +434,99 @@ mod tests {
         assert_eq!(scope(app.world()), SCOPE);
         app.insert_resource(good);
         assert_eq!(scope(app.world()), CANDIDATE_SCOPE);
+    }
+
+    #[test]
+    fn loaded_spa_mode_is_separate_from_the_occupied_and_resumed_cases() {
+        let mut input = value();
+        input["mode"] = json!("candidate-loaded");
+        input["identity"]["kind"] = json!("SoulSpa");
+        input["identity"]["authority"] = json!("isolated_candidate");
+        input["locator"] = json!("manifests/building-soul-spa-v1.buildingset");
+        let session: Session = serde_json::from_value(input.clone()).unwrap();
+        let root = Path::new("/private/session");
+        validate(
+            &session,
+            root,
+            &"b".repeat(32),
+            "soul-spa-candidate-loaded-use",
+        )
+        .unwrap();
+        for case in [
+            "soul-spa-candidate-occupied-save",
+            "soul-spa-candidate-resumed-use",
+            "soul-spa-occupied-save",
+        ] {
+            assert!(validate(&session, root, &"b".repeat(32), case).is_err());
+        }
+        for (path, replacement) in [
+            ("/mode", json!("candidate")),
+            ("/identity/authority", json!("art_preview")),
+            ("/identity/kind", json!("RestArea")),
+        ] {
+            let mut changed = input.clone();
+            *changed.pointer_mut(path).unwrap() = replacement;
+            let changed: Session = serde_json::from_value(changed).unwrap();
+            assert!(
+                validate(
+                    &changed,
+                    root,
+                    &"b".repeat(32),
+                    "soul-spa-candidate-loaded-use"
+                )
+                .is_err()
+            );
+        }
+        let mut app = App::new();
+        app.insert_resource(session);
+        assert_eq!(scope(app.world()), SPA_LOADED_SCOPE);
+    }
+
+    #[test]
+    fn resumed_spa_mode_cannot_borrow_the_occupied_case_or_authority() {
+        let mut input = value();
+        input["mode"] = json!("candidate-resumed");
+        input["identity"]["kind"] = json!("SoulSpa");
+        input["identity"]["authority"] = json!("isolated_candidate");
+        input["locator"] = json!("manifests/building-soul-spa-v1.buildingset");
+        let root = Path::new("/private/session");
+        let session: Session = serde_json::from_value(input.clone()).unwrap();
+        validate(
+            &session,
+            root,
+            &"b".repeat(32),
+            "soul-spa-candidate-resumed-use",
+        )
+        .unwrap();
+        for case in [
+            "soul-spa-candidate-occupied-save",
+            "soul-spa-occupied-save",
+            "rest-area-candidate-lifecycle",
+        ] {
+            assert!(validate(&session, root, &"b".repeat(32), case).is_err());
+        }
+        for (path, replacement) in [
+            ("/mode", json!("candidate")),
+            ("/identity/authority", json!("art_preview")),
+            ("/identity/authority", json!("release_approved")),
+            ("/identity/kind", json!("RestArea")),
+        ] {
+            let mut changed = input.clone();
+            *changed.pointer_mut(path).unwrap() = replacement;
+            let changed: Session = serde_json::from_value(changed).unwrap();
+            assert!(
+                validate(
+                    &changed,
+                    root,
+                    &"b".repeat(32),
+                    "soul-spa-candidate-resumed-use"
+                )
+                .is_err()
+            );
+        }
+        let mut app = App::new();
+        app.insert_resource(session);
+        assert_eq!(scope(app.world()), SPA_RESUMED_SCOPE);
     }
 
     #[test]
