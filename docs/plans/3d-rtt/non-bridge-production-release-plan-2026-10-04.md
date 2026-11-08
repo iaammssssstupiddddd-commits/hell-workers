@@ -780,6 +780,13 @@ paused tail103行の仮想52.076294648不変を照合した。Intel Arc/Vulkan�
 旧v1/v2は正式consumer解除・process/open file不在・非symlink・生成物のみと確認し、exact 2jobを撤去した。
 du計55,562,240B減。原本・最新証拠・共有cacheとinvalid metadataは維持する。
 
+枠変更の次の回帰試験は既存UiIntent→domain commit経路を使い、4区画のGoingToTile/Generatingを
+保持したままactive_slotsを4→3→2→1→0→4へ変更する。worker双方向参照、task/phase、
+区画designation/slot、Bone/OperationalとSoul状態が変わらず、満員/ゼロ枠の新規受付判定と
+各変更outcomeが一致することを単体試験する。停止中の枠変更は消費・拒否され、再開後に遅延適用しない。
+これはUI domain境界の回帰範囲であり、通常スケジューラの継続・実クリック・実機枠変更の受入ではない。
+通常起動、入力仕様、Help本文と正式art/performance/release条件は変更しない。
+
 ## 5. マイルストーン
 
 ### M1: 原本・候補
