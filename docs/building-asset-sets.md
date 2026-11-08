@@ -196,6 +196,14 @@ runtimeはview、camera center／scaleと30 stable framesを観測し、driver�
 初期・終了inventory一致、owned X11 clientの1280×720画像、指定adapter／Vulkan、警告・エラーなし、
 binary／source／asset／原本hash一致を検査する。jobは`promotion_authority=false`であり、自動美術承認ではない。
 この証拠は稼働状態、save/load、施工・撤去・移動全経路、各kindの性能予算、全体移行完了を保証しない。
+M5四種の新gallery planは `foreground_observation.schema=1` を明示する。
+別Python観測moduleの実file SHA256もplanへ拘束し、共通harnessリスト外のmodule改変を拒否する。
+実owner/子Sprite・parent・画像role/handle/原本artifact・descriptor canvas/anchor、実sRGBA、
+local/global poseと親子合成matrix、visibility/layersを受動採取し、ready後の変化を拒否する。
+offline verifierは型を保持したsource manifestとのcanonical JSON一致と独立TRS合成を照合する。
+整数inventoryのbool/float aliasを拒否する。有限の非白色は診断値として保持し、
+白へ補正したり美術的に正しい色と承認したりしない。旧planはこの追加証拠なしの履歴であり、
+新schemaの観測済みと読み替えない。これは2D表示経路の切り分けで、明暗/密集/preview/UIや素材採否を閉じない。
 基盤前後のコスト比較は別々に凍結した静止参照jobを使う。本書更新時点でM1-cの実native受入は未実施。
 
 制作器の `building_asset_pipeline.py verify` はpackaged bytes・provenance・既存承認identityを読むだけで、

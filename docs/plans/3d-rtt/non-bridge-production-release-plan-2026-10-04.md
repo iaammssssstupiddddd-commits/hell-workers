@@ -976,6 +976,46 @@ Bone原本は関節二瘤/隙間を持つ改善版で、batch名v1だけから�
 低品質、明暗地形・Wall/Soul重なり、実descriptor previewの不足比較を段階的に補う。
 距離比較の既存static galleryはseeded技術証拠のみで、後段のcontext/通常入力/採否/正式releaseを代替しない。
 
+2026-11-08のfresh M5距離/品質比較はHEAD `6f4f0ce6efa7f7d3fccd19064376ce3747081e6a`、
+source `d409e6dca2f08d758b7ab7b19f98e2648a3d930047460e20e98b2192e622720b`、
+harness `e86061c29d0bfecbe076cf5743b301152b35d0f7a7e2e970076865d25d962cd2`、
+profiling binary `b16a5183b6f49b8456c285446a5f827a3e9e05bc08587e35f4113094b2e4b800`で逐次実行した。
+Sand/Bone/Parkingのexact ArtPreview世代1に対しnear/high（scale0.5）、normal/high（1）、
+overview/low（実最大5）、normal/low（1）の4条件を実測し、main/独立read-only reviewerが全12画像を実見した。
+各jobは別CLI/登録verifier、seal、具体的比較用途のretain、finalize、primary storage checkをpass。
+Intel Arc/Vulkan/X11・1280×720・DPI1、30秒warmup/60秒paused-static測定、30stable framesを照合した。
+これは性能budgetや通常world lifecycleの合格ではない。
+
+| exact identity | near/high manifest SHA256 | normal/high manifest SHA256 | normal/low manifest SHA256 | overview/low manifest SHA256 |
+| --- | --- | --- | --- | --- |
+| Sand `dbdf3e6ba5557f1b91b59a4e7d19c0bc1afe68e96c745d0dcbefd3f7b637d4e5` | `f7c12383008d67ecf04bde353af39e8d318f3bf750013f80da7f8b983e51cf09` | `e000ddeee29ed4046fb62c08ff2ac31d9ed93996213d1389c378617bc5e6a531` | `a3a8f1fb1a673e92491de09aa02511450f969709a1efea92f4eb119c93b1312b` | `a7abd9c27ba31595cf9be7ec99bb25d2f5b4870672b7f25ddf4c5ebf732a8b16` |
+| Bone `fe6c024cd79783abff36fc22fb8b676a5bdc0325edef34b35089e563127e3f4f` | `cc5c061994bb7b216584f30895623cfeb91c84f532b6ff46815a7783c9a866a6` | `b38be0f11113d68b49d3c8696ffc190a3d5aa9f8fde0baba3645d076c10b2b47` | `c62ae5ea3705c2603f7c38f75d41ec6cdbc6a337daee42062b66287bd55087e9` | `3e7d484fcfa83d152a1645298e48944f2cf6c328f53a429aab1b2ea64672a261` |
+| Parking `5c700f194d9c3dc61202640d21882632891fe9f934ebba77e2c37c013daa5df2` | `1584c5273e4272ce9933168721e38a17e40402b0116c26513d879d039d56840a` | `9407ac8c469fdb354b916ac43e1fbc2e817e70a044858d55166a8e597ed71022` | `606ffeb252302d01f3acfdd4a5c03d0d6f0044a77c0591ef2afa19f0b66d1063` | `69c7bf27c69da2a7516e5709329cf9785b4d8b2b71948c6e3dd495f47d024473` |
+
+Sandは黄土色の低い多角形mound、大きな色面がnormalでも残るが、細描線/砂粒の判読は限定的。
+Boneはnearで骨軸/端の膨らみ/隙間、normalで象牙色の交差輪郭が残り、Sandと区別できる。
+両者のnormal high/lowで明白な追加消失/黒化はなく、この比較だけでpaint変更を要求しない。
+Parkingはnearで枠と別entityの猫車が分かれるが、轍は地面/車体下で読みにくい。
+world画像4430bbec…df2b24とcatalog画像804ab534…b804は共に暗褐色で車体を含まないが、
+実表示はhigh/lowとも緑/olive寄りとなる。背景原因やSprite tintと断定せず、アート採否は保留する。
+3種ともscale5では数pxの目印程度で、種別/素材/状態の確実な識別は画像単独では保証できない。
+既存選択/info補完、明暗背景・Wall/Soul密集、実descriptor preview、正式numeric/art、lifecycle/performance/releaseは未達。
+12jobはこれらの具体的比較用途に保持し、終了後は本書の結果を残して生成物を整理する。
+
+次の小工程はM5 galleryの読み取り専用foreground観測の補完とする。
+実owner/子Spriteのparent、画像role/handle/descriptor、canvas/anchor、実色、local/global pose、
+visibility/layersをready後の不変snapshotへ含める。新planはschemaを明示し、旧証拠を新観測ありと扱わない。
+verifierは欠損/重複/別owner/別画像/anchorやpose不一致/非有限色を拒否するが、未知の色を白へnormalizeしない。
+この観測だけで色差原因の解消・preview/context・art採用を主張しない。
+変更範囲はprofiling fixture、native plan/verifier、拒否系testsと本書/対応仕様に限定し、
+gameplay/原画/通常起動/承認authorityは維持する。変更別CI・Help実判断・独立review後のfresh実機で色差を切り分ける。
+
+採用RestAreaの通常lifecycle比較が終了したため、旧static job
+`target/native-acceptance/tak14-restarea-candidate-normal-20261108-v1`だけを正式consumer release後に撤去した。
+lifecycle側asset-viewと全byte一致、終了/childなし・参照なし・tracked/unique原本なしを確認し、
+生成物141,672,448B→0を削除した（rawの復元archiveなし）。候補/制作原本・最新lifecycle・共有Cargo cacheは保全。
+結果は上記の履歴/台帳に残し、旧verifier再実行のための保持義務にはしない。削除後storage checkはpass。
+
 ## 5. マイルストーン
 
 ### M1: 原本・候補

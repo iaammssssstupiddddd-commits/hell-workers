@@ -28,9 +28,11 @@ import building_asset_pipeline as pipeline  # noqa: E402
 import native_acceptance as native  # noqa: E402
 from wall_density_acceptance import asset_view_fingerprint  # noqa: E402
 if __package__:
+    from . import building_foreground_observation as foreground  # noqa: E402
     from . import building_art_static_acceptance as static  # noqa: E402
     from .perf_tool.artifacts import read_window  # noqa: E402
 else:
+    import building_foreground_observation as foreground  # noqa: E402
     import building_art_static_acceptance as static  # noqa: E402
     from perf_tool.artifacts import read_window  # noqa: E402
 
@@ -109,6 +111,7 @@ def validate_subject(value: dict, *, feedback: bool) -> None:
 
 
 def check_plan(value: dict, binary: Path) -> dict:
+    foreground_settings = foreground.settings(value)
     context_settings(value)
     page = spa_page(value)
     quality(value)
@@ -124,6 +127,9 @@ def check_plan(value: dict, binary: Path) -> dict:
     pipeline.require(manifest["identity"] == value["identity"]
                      and pipeline.digest(text.encode()) == value["manifest_sha256"]
                      and manifest["identity"]["authority"] == MODES[value["mode"]], "candidate identity/authority changed")
+    if foreground_settings is not None:
+        pipeline.require(foreground.canonical(foreground_settings) == foreground.canonical(foreground.descriptor(manifest)),
+                         "foreground source descriptor changed")
     if context_settings(value):
         pipeline.require(value.get("context_preview") == context_preview(manifest),
             "context preview differs from exact source manifest")
@@ -159,6 +165,8 @@ def plan(args) -> dict:
              "feedback_only": args.mode == "feedback"}
     if value["variant"] == "rest-area-art-context":
         value["context_preview"] = context_preview(manifest)
+    if value["kind"] in foreground.KINDS and value["variant"] == "gallery":
+        value["foreground_observation"] = foreground.descriptor(manifest)
     if spa_page(value) is not None:
         value["spa_parts"] = manifest["parts"]
     check_plan(value, args.codec)
@@ -243,6 +251,7 @@ def validate_probe(probe: dict, value: dict, nonce: str) -> None:
         if spa_page(value) is not None:
             validate_spa_page(probe, value)
     view = value.get("view", "overview")
+    foreground.validate(probe, value)
     pipeline.require(view in VIEWS and probe.get("view", "overview") == view,
                      "building-art camera view differs")
     if "view" in value:

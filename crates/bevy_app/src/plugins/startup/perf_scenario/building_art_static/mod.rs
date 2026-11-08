@@ -3,6 +3,7 @@
 //! never repairs a specimen once measurement readiness has been published.
 
 pub(crate) mod context;
+mod foreground;
 mod layout;
 mod seed;
 mod spa_masks;
@@ -191,6 +192,7 @@ pub(crate) struct InspectParams<'w, 's> {
     visual_roots: Query<'w, 's, &'static Building3dVisual>,
     root_transforms: Query<'w, 's, (&'static Building3dVisual, &'static Transform)>,
     sprites: SpriteQuery<'w, 's>,
+    foreground: foreground::ForegroundQuery<'w, 's>,
     meshes: Res<'w, Assets<Mesh>>,
     materials: Res<'w, Assets<TopDownStructuralMaterial>>,
     images: Res<'w, Assets<Image>>,
@@ -236,6 +238,16 @@ pub(crate) fn inspect_building_art_static_system(mut params: InspectParams) {
             }
         }
         Ok(Some(evidence)) => {
+            if params
+                .art_session
+                .as_ref()
+                .is_some_and(|session| session.identity.kind.mesh_roles().is_empty())
+                && let Err(reason) =
+                    foreground::unchanged(params.state.evidence.as_ref(), &evidence)
+            {
+                fail(&mut params.state, &mut params.exit, reason);
+                return;
+            }
             if params
                 .art_session
                 .as_ref()
@@ -681,6 +693,10 @@ fn inspect(params: &InspectParams) -> Result<Option<Value>, String> {
             let mut record = json!({"kind": format!("{:?}", spec.kind), "ordinal": spec.ordinal,
                 "anchor": spec.anchor, "tiles": spec.tiles, "center": [spec.center.x, spec.center.y], "state": state});
             if let Some(candidate) = candidate {
+                if candidate.manifest.identity.kind.mesh_roles().is_empty() {
+                    record["owner"] = json!(owner.to_bits());
+                    record["foreground"] = foreground::snapshot(params, spec, owner, candidate)?;
+                }
                 if params
                     .art_session
                     .as_ref()
@@ -798,6 +814,9 @@ fn inspect(params: &InspectParams) -> Result<Option<Value>, String> {
         "target_foreground_owners": layout::copies(params.config.size()) * 4,
         "target_active_unique_meshes": active_meshes.len(), "souls": params.state.actors.len(), "completion_effects": 0});
     if let Some(session) = params.art_session.as_ref() {
+        if session.identity.kind.mesh_roles().is_empty() {
+            evidence["foreground_schema"] = json!(1);
+        }
         evidence["view"] = json!(session.view);
         evidence["camera_scale"] = json!(camera_scale);
         evidence["camera_center"] = json!([camera_center.x, camera_center.y]);
