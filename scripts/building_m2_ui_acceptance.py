@@ -82,11 +82,17 @@ def check_observation(case, value, identity):
     pipeline.require(isinstance(point, list) and len(point) == 2 and all(ui.m5.finite(axis) for axis in point)
                      and value.get("scale_factor") == 1. and value.get("cursor") is not None
                      and all(abs(a-b) <= 2 for a, b in zip(value["cursor"], point, strict=True)), "M2 UI cursor/projection differs")
-    visible = [row["text"] for row in value.get("tooltip_text", [])
+    # Production tooltip fading follows Real Time even while the world is paused.
+    # Wait for its real endpoint; never normalize alpha or relax exact interval checks.
+    texts = value.get("tooltip_text", [])
+    pipeline.require(texts and ui.m5.finite(value.get("tooltip_alpha")) and value["tooltip_alpha"] == 1.
+                     and all(ui.m5.finite(row.get("alpha")) and row["alpha"] == 1. for row in texts),
+                     "M2 UI tooltip fade has not settled")
+    visible = [row["text"] for row in texts
                if ui.rest_area_maxzoom.visible_rect(row.get("rect"), value["viewport"])
                and row.get("root") == value["tooltip_presentation"]["entity"]
                and row.get("fully_visible") is True and row.get("primary_camera") is True
-               and ui.m5.finite(row.get("alpha")) and row["alpha"] >= .95]
+               and row["alpha"] == 1.]
     expected = f"Building: Tank: Water ({CASES[case][1]}/50)" if CASES[case][0] == "Tank" else "Task: Refine (Refining { progress: 0.0 })"
     pipeline.require(ui.m5.finite(value.get("tooltip_alpha")) and value["tooltip_alpha"] >= .95
                      and value.get("tooltip_presentation") is not None

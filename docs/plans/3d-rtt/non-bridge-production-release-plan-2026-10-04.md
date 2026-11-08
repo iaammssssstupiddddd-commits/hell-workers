@@ -117,6 +117,11 @@ v1はinvalid/seal/finalize済み、game/画像/出力rootなし。旧起動を�
 ui-art leg・probe=1・他scopeなしをread-only検査して入口で許可する。後段のidentity/path/load検証は維持する。
 全32 profile組合せ×admission真偽を検査し、第三profileや性能scenario併用は引き続き拒否する。
 次のPartialはfresh `tak14-tank-partial-ui-maxzoom-20261109-v3`。実機passや美術/正式releaseはまだ未達。
+v3はowned EIS hoverとWater (25/50)のPNGまで到達したが、capture中のText alpha
+0.9999507069587708→0.9999998211860657をexact比較が拒否しinvalid。seal/診断用途保持/finalize済み。
+実tooltipはpause中もReal Timeでfadeする。既存rawでは後続frameでroot/Text alpha=1に到達した。
+alphaを丸めたり比較を緩めず、全実Text/rootのalpha=1を待つready条件に強化し、同じexact区間検査を維持する。
+実測値によるRED回帰、同subject検証と独立レビュー後にfresh Partial v4へ進む。旧画像をpassへ変更しない。
 
 2026-11-09の独立read-onlyアート監査では、Sand/Boneの現ArtPreview世代1を見た目だけ採用した。
 Sand `dbdf3e6ba5557f1b91b59a4e7d19c0bc1afe68e96c745d0dcbefd3f7b637d4e5` は低い黄土色の塊と大色面、

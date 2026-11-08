@@ -37,6 +37,26 @@ def observed(case="m2-ui-tank-partial"):
 
 
 class M2UiTests(unittest.TestCase):
+    def test_capture_readiness_waits_for_all_real_tooltip_fades_to_finish(self):
+        value = observed()
+        identity = value["m2_ui"]["identity"]
+        recipe.check_observation("m2-ui-tank-partial", value, identity)
+        for alpha in (.95, .9999507069587708, .9999998211860657, float("nan"), 1.001, True):
+            for root in (False, True):
+                changed = copy.deepcopy(value)
+                if root:
+                    changed["tooltip_alpha"] = alpha
+                else:
+                    changed["tooltip_text"][0]["alpha"] = alpha
+                with self.subTest(alpha=alpha, root=root), self.assertRaises(ValueError):
+                    recipe.check_observation("m2-ui-tank-partial", changed, identity)
+        changed = copy.deepcopy(value)
+        extra = copy.deepcopy(changed["tooltip_text"][0])
+        extra.update(entity=82, text="Building: Tank", alpha=.9999507069587708)
+        changed["tooltip_text"].append(extra)
+        with self.assertRaises(ValueError):
+            recipe.check_observation("m2-ui-tank-partial", changed, identity)
+
     def test_cli_passes_the_frozen_namespace_through_actual_activity_guard(self):
         @recipe.native.activity_locked
         def guarded(args):
