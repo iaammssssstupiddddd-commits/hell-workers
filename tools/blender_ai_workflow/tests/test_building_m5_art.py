@@ -1,5 +1,6 @@
 """Fixed-canvas original proposals are not release/art approval evidence."""
 import io
+import hashlib
 import sys
 import unittest
 import tempfile
@@ -11,6 +12,25 @@ import building_m5_art as art
 
 
 class M5ArtTests(unittest.TestCase):
+    def test_parking_worn_strokes_contrast_without_changing_alpha_or_other_kinds(self):
+        from PIL import Image
+        with Image.open(io.BytesIO(art.render("WheelbarrowParking"))) as image:
+            self.assertEqual(hashlib.sha256(image.getchannel("A").tobytes()).hexdigest(),
+                             "4c618a8a814d182bafdffe3ee55dff21ee95472dbc250cc88fea6a0dce226a91")
+            self.assertEqual(image.getchannel("A").getbbox(), (68, 60, 189, 181))
+            # Only existing wear/rut strokes change, not the dark timber face.
+            self.assertEqual(image.getpixel((74, 102)), (76, 62, 49, 255))
+            for point in ((76, 100), (100, 110), (128, 62)):
+                r, g, b, alpha = image.getpixel(point)
+                self.assertEqual(alpha, 255)
+                self.assertGreater(0.2126*r + 0.7152*g + 0.0722*b, 120)
+        for kind, expected in {
+            "SandPile": "44dbd1b7ca87502887771cb0db829f7183925b0be4c9f048638e65747608fca8",
+            "BonePile": "2483a20c8e9bde63a85e63b511434d4f339d9075688263b48fd0e974f9581226",
+            "OutdoorLamp": "a8958577a785ccde040cfbe1a311bf7dac56c24740acdbe66923fb064aa86592",
+        }.items():
+            self.assertEqual(hashlib.sha256(art.render(kind)).hexdigest(), expected)
+
     def test_staging_only_fresh_outputs_and_origin_drift_rejected(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

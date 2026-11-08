@@ -55,6 +55,52 @@ Lampはまず完成後の既存UIが実off/on状態を補完する最小一対�
 補完できなければ籠内部の状態差だけを強め、同alpha/輪郭を維持したfresh identityで再比較する。
 2D Spriteへ無意味なPBR dim再撮影を要求せず、強遮蔽contextを正しいdepthの保証とも扱わない。
 
+Parking補正は既存のdeterministic vector-raster原本生成器 `building_m5_art.py` と対応testだけで行う。
+外枠の細い木目/上桁/2本の轍の既存画素だけを明るいマットな木/擦れ色へ調整し、面全体を白くしない。
+256px/64wu/中心anchor、alpha SHA `4c618a8a814d182bafdffe3ee55dff21ee95472dbc250cc88fea6a0dce226a91`、
+空枠のgeometry、描線の幅/位置、他3種の原画bytes、資源/車両/製品画像を維持する。
+旧原本で失敗する局所明度の回帰を先に追加し、alpha/他種不変も検査する。
+これは素材色だけの仮説であり、fresh Dirt/Grass同倍率で改善しなければ同種の色調整を繰り返さず再判断する。
+primary既存cache/codec/旧候補を保持し、Help実判断・変更別CI・独立コードreview後にfresh staging原本と
+新世代ArtPreviewを生成する。通常表示writer/tint・gameplay・承認を変えず、独立画像再判定まで未採用とする。
+旧色の回帰は局所明度82.5954で失敗し、補正後はM5関連8件、contracts/tooling CI
+（Python678件/asset229件）と独立read-only code reviewを通過した。明度120は内部回帰値であり美術合格ではない。
+新規原本は `target/native-acceptance/tak14-parking-contrast-originals-20261109-v1` 下の隔離staging、
+新ArtPreviewは `target/native-acceptance/tak14-parking-contrast-preview-20261109-v1/runtime` のgeneration2とする。
+owner TAK-14 non-Bridge visual adoption、consumer Parking worn timber and wheel-rut contrast revision。
+同source/binaryの旧世代controlと新世代をM5 context通常倍率で逐次撮影し、同配置のDirt/Grassを比較する。
+修正/独立採否が終わるまで原本と対照を保持し、製品正本へ集約後または明示終了後に不要jobを整理する。
+新原本とgeneration2 ArtPreviewの独立verify/seal/finalizeはpass。新world PNG SHAは
+`117c4ed8e3d50ff9f0a3d1602d85923833f3b22783e79d1ba3e2ec8d8c8af8fa`、preview identityは
+`3e42d97ecf3a87e3ae44489aa861fc7f97da27f4fddc4247a8546ce45f8c2cf3`で、art/promotion authorityはない。
+fresh実機rootは `tak14-parking-contrast-control-20261109-v1` と `tak14-parking-contrast-context-20261109-v1`。
+primary native-acceptance直下に別登録し、同source/codec/binary・通常倍率/高品質・同配置/terrainで旧/newを比較する。
+30秒warmup/60秒pausedのM5限定contextであり、性能budgetやordinary lifecycleを受入済みにしない。
+fresh旧/newの両contextは別実行/登録独立verifier、owned PNG実見、用途保持、seal/finalizeをpassした。
+同source `329a64500b6168f66b43c41394b5595ad4fb91ef374197619ade436008307c86`、
+同binary/codec `beaa3f8d72ee902c93901909263cf94940c5d4b2af8d476db12f79c799487305`、同1280×720/DPI1/normal/high。
+旧manifest `48825f73e5a1e76697a3e0df135cc039bdc6274b3c5c4bc2ba81cd7796c3c6f9`、
+PNG `2f1f9f88d39f336b6391d665c07dcd2bc04c8c3c8609d697e035dca7a6e895e6`、142069760B。
+新manifest `f9fd75487c6cdf360fc06be6e7767a7e5c96cbe3dbaaf10aa502a303c2e5df61`、
+PNG `b576de30cb650889ba3e5574958a4285812433c0f4f55774964f32f7a2f293d2`、142077952B。
+mainはDirt上の轍に旧より明るい線が残ることを確認したが、上段のWall/Soul/車両強遮蔽は維持され、
+全depthや車両lifecycle・正式art/性能/releaseの証明とはしない。独立画像採否まで未承認を維持する。
+独立画像監査でもDirt/Grassの上桁・2本の轍に改善を確認し、面全体の白化や新たな欠損はないと判断した。
+gen2の最終採用はnormal/lowとoverview/lowの縮小比較まで保留し、色の再調整やnearの再実行はしない。
+追加rootは `tak14-parking-contrast-normal-low-20261109-v1` / `tak14-parking-contrast-overview-low-20261109-v1`。
+同source/codec/binary・gen2の明示galleryを逐次実行し、細線の消失/ちらつき/明るい塊化を独立評価する。
+両low galleryは登録独立verify/owned画像実見/用途保持/seal/finalizeをpassした。
+normal manifest `19d7a5dd4cf301e7899a4db8becb12e70910d4c76eaae8aca0a2eb6c4fa6a9cb`、
+PNG `833c4e940d9cb246c6d968f3eb50e6d0fa09e476affba733b1b0f4e79fc05815`、141090816B。
+overview manifest `daa32addb7c3ba360916920af3a88c9f28041e08b4aa6010ea4c92f81936593c`、
+PNG `57dec0df43873c3ec0b3ac8ec1e05546b3660ae36a89f7183a286f7b62b082d1`、140615680B。
+独立read-only画像監査はgen2を見た目だけ採用可と判断した。通常lowで木枠/透明な開口/別車両を区別でき、
+scale5で細線/轍/台数は保証しないが、新たな黒塊/白塊化や明白な追加欠損はない。
+主担当はこの独立判断に基づいてParking gen2のアートを採用し、追加の色調整はしない。
+静止画像から時間方向のちらつき不在は断定しない。利用者の追加回答やtechnical passからの自動承認ではない。
+次はexact art digestと64wu/256px/128px anchor/16px margin/WithoutVehicle/world/空partsの数値を独立照合し、
+隔離candidateを生成する。車両入出庫・通常lifecycle・性能・promotion/install/releaseは未受入のまま保持する。
+
 `77f90d22`のfresh `tak14-restarea-maxzoom-art-eis-feedback-20261108-v5`は7checkpointと登録/別実行verifierが成功。
 source=`dba53819e43c01de77e3afbf632fe930242767ea9d35be23d5cfff778663b840`、
 harness=`e2560847da2f51e10809c29d59ed276bbb4511d6dd4532bb747a5cc30103d94f`、

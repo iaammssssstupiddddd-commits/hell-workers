@@ -37,12 +37,14 @@ def render(kind: str, *, on: bool = False) -> bytes:
         # Empty dark timber rack with two ground wheel ruts; no vehicle painted.
         for x in (-13, 13):
             plane([(x-1.4, -13, 0), (x+1.4, -13, 0), (x+1.4, 13, 0), (x-1.4, 13, 0)], (76, 62, 49))
-            line([(x, -10, 0), (x-0.3, 9, 0)], (99, 80, 60), 2)
+            # Sparse worn timber edges remain distinct from dark Dirt; keep
+            # the original dark faces, stroke geometry and alpha unchanged.
+            line([(x, -10, 0), (x-0.3, 9, 0)], (169, 139, 99), 2)
         plane([(-15, -13, 0), (15, -13, 0), (15, -10, 0), (-15, -10, 0)], (101, 78, 56))
         for x in (-7, 7):
-            line([(x, -6, 0), (x-0.5, 2, 0), (x, 12, 0)], (112, 91, 66), 4)
+            line([(x, -6, 0), (x-0.5, 2, 0), (x, 12, 0)], (174, 146, 106), 4)
             plane([(x-1, -13, 0), (x+1, -13, 0), (x+1, -13, 6), (x-1, -13, 6)], (82, 68, 53))
-        line([(-14, -13, 6), (14, -13, 6)], (88, 71, 52), 5)
+        line([(-14, -13, 6), (14, -13, 6)], (145, 123, 88), 5)
     elif kind == "SandPile":
         rim = [(-12, -4, 0), (-9, -9, 0), (0, -11, 0), (10, -6, 0),
                (12, 3, 0), (7, 9, 0), (-2, 10, 0), (-12, 4, 0)]
