@@ -22,6 +22,39 @@ RestAreaは主担当が独立画像/数値レビューに基づいて採用し�
 採用は美術/数値判断であり、通常起動へのinstall・正式release・性能受入ではない。
 通常起動のfallbackはまだ切替前。橋を除く9種全体の受入は未完である。
 
+2026-11-09の独立read-onlyアート監査では、Sand/Boneの現ArtPreview世代1を見た目だけ採用した。
+Sand `dbdf3e6ba5557f1b91b59a4e7d19c0bc1afe68e96c745d0dcbefd3f7b637d4e5` は低い黄土色の塊と大色面、
+Bone `fe6c024cd79783abff36fc22fb8b676a5bdc0325edef34b35089e563127e3f4f` は骨軸/節/隙間/象牙色が
+原画・距離/高低品質・Grass/Dirt・context・同原本previewで判別可能。最遠の細部は既存種別UIで補完する。
+利用者本人の追加回答ではなく独立監査に基づく主担当の採用であり、technical passからの自動承認ではない。
+各canonical art decision SHAはSand `58cbfa56185f3bbfaeadc4241f091cb70c0c2a2877a556ec7cec7af88a33370b`、
+Bone `64b27924f33df9eeef37b57849ec03dcdf1ef6fc597c782ab609d2562252fe1f`。
+次はこれらのart digestと既存geometry/numeric proposalを独立に再照合し、採用2種だけを正式隔離候補へexportする。
+candidate生成はpromotion/installや通常起動への切替ではなく、完成lifecycle/性能/releaseは別途残す。
+独立数値監査でも両種の256px canvas/128px anchor/16px catalog margin/32wu/Static/world role/空partsを
+同geometry `2aa7f7d85d93cf2059316efd40d4796e734d4a3f5becb8ce8c6e87bcd184efd7`と各art digestへ拘束して採用した。
+主担当が当判定を記録したcanonical numeric decision SHAはSand
+`d73002b5d8959eeae7284a18bb0b43371b1f41396698651c589f593f255bcf1e`、Bone
+`20441bd55d7e311476ef1734b5ecdcdfa0ce1c27cf412159e5111191b48d96b1`。
+新しい隔離出力は `target/native-acceptance/tak14-{sand,bone}-isolated-candidate-20261109-v1` とし、
+主担当が登録/既存export/独立verify/seal/finalizeを逐次実行する。ownerはTAK-14 non-Bridge visual adoption、
+consumerはM5 independently adopted Sand and Bone candidate lifecycle comparison。採用候補の修正・実機lifecycle・
+正式導入まで当candidateを保持し、利用が終了した時だけ原本/製品正本を保全して専用生成物を整理する。
+Sand初回v1は保存済みM3 codec `13b7d699…229727`がM5のnumeric approvalを受け付けず、
+output root生成前に拒否された。invalid/seal/finalize済みで、既存codecや台帳を変更してpassにはしない。
+現行sourceの正規feedback buildでM5を扱うcodec `beaa3f8d72ee902c93901909263cf94940c5d4b2af8d476db12f79c799487305`
+を確認し、fresh Sand v2とBone v1を登録/既存export/独立verify/seal/用途保持/finalizeした。
+隔離候補identityはSand `4eebe4212a95d4ddfc7fcee1eb03c0ee47fe27a3db071ac85b9b5e6a47c9307f`（v2 root、57344B）、
+Bone `4aab20ce8e02e3f0274841d875f8a25f6075bb6da8861efce20adfb225db25c3`（v1 root、69632B）。
+いずれもgeneration1/isolated_candidateで、上記exact art/numeric/geometryをprovenanceへ内包した。
+製品assets/locator・資源画像は未変更。次は採用候補identityとしての実機consumer/lifecycle/性能を確認する。
+
+Parking/Lampはchanges_requestedを維持する。Parkingの緑部分は背景が見える隙間で、Sprite tintの欠陥ではない。
+Dirtに沈む空枠/轍だけのcontrastを最小修正し、旧原本/車両/64wu/anchor/alphaを維持してDirt/Grass同倍率を再比較する。
+Lampはまず完成後の既存UIが実off/on状態を補完する最小一対を通常/最遠で確認する。
+補完できなければ籠内部の状態差だけを強め、同alpha/輪郭を維持したfresh identityで再比較する。
+2D Spriteへ無意味なPBR dim再撮影を要求せず、強遮蔽contextを正しいdepthの保証とも扱わない。
+
 `77f90d22`のfresh `tak14-restarea-maxzoom-art-eis-feedback-20261108-v5`は7checkpointと登録/別実行verifierが成功。
 source=`dba53819e43c01de77e3afbf632fe930242767ea9d35be23d5cfff778663b840`、
 harness=`e2560847da2f51e10809c29d59ed276bbb4511d6dd4532bb747a5cc30103d94f`、
