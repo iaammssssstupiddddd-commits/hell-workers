@@ -31,6 +31,7 @@ fn numeric_candidate(kind: BuildingAssetKind, revision: &str) -> Result<&'static
 
 #[derive(Resource)]
 struct Trace {
+    leg: String,
     numeric_sha256: &'static str,
     path: PathBuf,
     next_sample: f64,
@@ -61,8 +62,13 @@ pub(super) fn configure(app: &mut App, session: &BuildingArtSession) -> Result<(
     };
     let numeric_sha256 = numeric_candidate(session.identity.kind, &revision)?;
     require_fresh_output(&path).map_err(|e| format!("use a fresh M2 trace path: {e}"))?;
-    super::m2_fixture::configure(app, session.identity.kind)?;
+    if let Ok(case) = std::env::var("HW_NATIVE_UI_CASE") {
+        super::m2_ui::configure(app, session, &case)?;
+    } else {
+        super::m2_fixture::configure(app, session.identity.kind)?;
+    }
     app.insert_resource(Trace {
+        leg: std::env::var("HW_M2_ACCEPTANCE_LEG").map_err(|_| "M2 leg missing")?,
         numeric_sha256,
         path,
         next_sample: 0.0,
@@ -129,6 +135,10 @@ fn snapshot(world: &mut World) -> Result<Value, String> {
         json!({"world": format!("{:?}", set.image(&set.manifest.world_preview.image_role)),
                "catalog": format!("{:?}", set.image(&set.manifest.catalog_preview.image_role))})
     });
+    let descriptor_handles = descriptor.map(|set| json!({
+        "meshes": set.manifest.identity.kind.mesh_roles().iter().map(|role| (role.to_string(), json!(set.mesh(role).map(|mesh| format!("{:?}", mesh.id()))))).collect::<serde_json::Map<_, _>>(),
+        "albedo": set.image("albedo").map(|image| format!("{:?}", image.id()))
+    }));
     let mut owners = Vec::new();
     let mut query = world.query::<(Entity, &Building, &Transform)>();
     for (entity, building, transform) in query.iter(world) {
@@ -153,12 +163,24 @@ fn snapshot(world: &mut World) -> Result<Value, String> {
                 .flat_map(|c| c.iter())
                 .take(17)
                 .map(|part| {
+                    let material = world.get::<MeshMaterial3d<hw_visual::TopDownStructuralMaterial>>(part)
+                        .and_then(|handle| world.resource::<Assets<hw_visual::TopDownStructuralMaterial>>().get(&handle.0));
                     json!({
                         "entity": format!("{part:?}"),
+                        "parent": world.get::<ChildOf>(part).map(|parent| format!("{:?}", parent.parent())),
+                        "global_matrix": world.get::<GlobalTransform>(part).map(|global| global.to_matrix().to_cols_array()),
                         "name": world.get::<Name>(part).map(Name::as_str),
                         "pose": world.get::<Transform>(part).map(pose),
                         "visibility": format!("{:?}", world.get::<Visibility>(part)),
                         "mesh": format!("{:?}", world.get::<Mesh3d>(part)),
+                        "mesh_handle": world.get::<Mesh3d>(part).map(|mesh| format!("{:?}", mesh.0.id())),
+                        "mesh_resident": world.get::<Mesh3d>(part).is_some_and(|mesh| world.resource::<Assets<Mesh>>().get(&mesh.0).is_some()),
+                        "visible": world.get::<ViewVisibility>(part).is_some_and(|visible| visible.get()),
+                        "layer_3d": world.get::<bevy::camera::visibility::RenderLayers>(part).is_some_and(|layers| layers.iter().any(|layer| layer == hw_core::constants::LAYER_3D)),
+                        "material": material.map(|material| json!({"albedo": material.base.base_color_texture.as_ref().map(|image| format!("{:?}", image.id())),
+                            "albedo_resident": material.base.base_color_texture.as_ref().is_some_and(|image| world.resource::<Assets<Image>>().get(image).is_some()),
+                            "opaque": material.base.alpha_mode == AlphaMode::Opaque, "lit": !material.base.unlit,
+                            "color": material.base.base_color.to_srgba().to_f32_array()})),
                     })
                 })
                 .collect();
@@ -168,6 +190,9 @@ fn snapshot(world: &mut World) -> Result<Value, String> {
             push_capped(
                 &mut roots,
                 json!({"entity": format!("{entity:?}"),
+                "identity": world.get::<EquipmentRoot>(entity).and_then(EquipmentRoot::observed_identity),
+                "parent": world.get::<ChildOf>(entity).map(|parent| format!("{:?}", parent.parent())),
+                "global_matrix": world.get::<GlobalTransform>(entity).map(|global| global.to_matrix().to_cols_array()),
                 "owner": format!("{:?}", visual.owner), "owner_exists": world.get_entity(visual.owner).is_ok(),
                 "pose": pose(transform), "state": format!("{state:?}"), "parts": parts}),
             )?;
@@ -267,7 +292,10 @@ fn snapshot(world: &mut World) -> Result<Value, String> {
         "virtual_seconds": world.resource::<Time<Virtual>>().elapsed_secs_f64(),
         "paused": world.resource::<Time<Virtual>>().is_paused(),
         "identity": identity, "expected_images": expected_images,
+        "descriptor_handles": descriptor_handles,
+        "ui_art_observed": crate::interface::ui::native_acceptance::m2_last_published(world),
         "fixture_owner": fixture_owner.map(|owner| format!("{owner:?}")),
+        "fixture_owner_bits": fixture_owner.map(Entity::to_bits),
         "fixture_owner_exists": fixture_owner.is_some_and(|owner| world.get_entity(owner).is_ok()),
         "world_epoch": world.get_resource::<hw_core::WorldEpoch>().map(|epoch| epoch.get()),
         "camera_scale": camera_scale,
@@ -363,7 +391,7 @@ fn observe(world: &mut World) {
     };
     let session = world.resource::<BuildingArtSession>();
     let record = json!({"schema_version": 1, "scope": "m2-feedback-observations-only",
-        "leg": world.resource::<super::m2_lifecycle::Lifecycle>().leg,
+        "leg": world.resource::<Trace>().leg,
         "process_id": std::process::id(),
         "identity": session.identity, "nonce": session.nonce, "failure": failure,
         "numeric_candidate_sha256": world.resource::<Trace>().numeric_sha256,
@@ -449,6 +477,7 @@ mod tests {
     fn world() -> World {
         let mut world = World::new();
         world.insert_resource(Trace {
+            leg: "water".into(),
             numeric_sha256: NUMERIC_SHA256,
             path: PathBuf::from("/unused/m2-trace.json"),
             next_sample: 0.0,

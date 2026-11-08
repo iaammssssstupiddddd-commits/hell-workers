@@ -422,7 +422,7 @@ class Driver:
             self.send(button=5, pressed=True)
             self.send(button=5, pressed=False)
 
-    def capture(self, case):
+    def capture(self, case, *, validate=None):
         self.last = self.wait(lambda value: True, after=self.last["frame"] + 6)
         path = self.root / f"{case}.png"
         owned = native.x11_client_windows_for_process_tree(self.process.pid)
@@ -432,7 +432,7 @@ class Driver:
         dimensions = native.validate_png_structure(path.read_bytes())
         native.require(list(dimensions) == self.last["viewport"], "capture dimensions differ")
         try:
-            check_observation(case, self.last)
+            (validate or check_observation)(case, self.last)
             if self.input is None:
                 check_layout_scene(self.last, self.last["layout_scene"])
         except native.AcceptanceError:

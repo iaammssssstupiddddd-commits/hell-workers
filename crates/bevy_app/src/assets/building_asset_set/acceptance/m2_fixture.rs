@@ -62,6 +62,17 @@ pub(super) fn configure(app: &mut App, kind: BuildingAssetKind) -> Result<(), St
     Ok(())
 }
 
+/// UI art feedback reuses only legal construction setup. Never register the old
+/// real-time injection/unpause or lifecycle drivers in this separate recipe.
+pub(super) fn configure_ui(app: &mut App) {
+    app.init_resource::<Fixture>().add_systems(
+        PreUpdate,
+        (setup, super::m2_ui::prepare)
+            .chain()
+            .after(bevy::input::InputSystems),
+    );
+}
+
 #[derive(SystemParam)]
 struct Setup<'w, 's> {
     fixture: ResMut<'w, Fixture>,

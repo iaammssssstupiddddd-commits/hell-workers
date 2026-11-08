@@ -228,6 +228,18 @@ RestArea既存contextの全体counter不変検査は変更しない。
 previewはEmpty/Idle代表画像であり、全状態のpreviewが存在する証拠ではない。
 これは画像採否の比較材料のみで、UI/通常入力・自然利用・lifecycle・性能・独立採否・releaseを閉じない。
 
+別入口 `scripts/building_m2_ui_acceptance.py` の `m2-ui-tank-empty|partial|full` と
+`m2-ui-mixer-refining` は、seeded最大zoomの既存tooltipをOS EIS hoverで確認するfeedbackだけを扱う。
+専用 `ui-art` legは合法な施工setupを共用するが、旧M2の時間駆動注水・再開・lifecycle driverを登録しない。
+一度だけ実Water/StoredInまたは実Refining/WorkingOnを準備してpauseし、カメラscale5を設定する。
+通常のhover resolver、tooltip生成、player文言は変更せず、static artのhover抑止も解除しない。
+Tankは0/25/50の実Water正逆集合とcapacity50、Mixerはactual SoulのRefiningとexact mixer/task identityを照合する。
+同source/identity、owned X11/window/nonce、EIS ACK、実Tooltip rootとText祖先/clip/alpha/UI camera、
+Lastで公開した同観測、production root/mesh/材質/poseをcapture前後へ拘束する。
+各caseはfresh登録jobとし、旧caseや他authorityとの混在を許さない。
+これはzoom操作による最大値到達、自然施工/搬送/割当、selection、lifecycle、性能、独立art/numeric採用、
+promotion/install/releaseの証拠ではない。通常起動へ新しいasset locatorやUI表示は追加しない。
+
 M5専用の明示 `--variant m5-art-context --view normal` は別のseeded比較である。
 ArtPreviewの4種だけをfeedback/art-preview・standard照明で許可し、candidate/releaseや通常入力証拠へ転用しない。
 対象4棟、前後8Wall、8idle Soul、descriptor経由の4previewを一度だけ準備し、以後は受動観測する。

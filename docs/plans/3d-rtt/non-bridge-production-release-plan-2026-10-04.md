@@ -67,6 +67,46 @@ M2限定の美術比較ではsetに宣言された全mesh/imageの実常駐とro
 全体assetの追加/削除で同じ対象snapshotが不変、owned image/mesh消失で未ready/非修復、offline欠損拒否を回帰する。
 RestAreaの旧全体counter条件は不変。補正・独立レビュー・同subject検証後のfresh Tank standardはv3へ進む。
 
+当補正後のHEAD `b8efff7ae808867f4359d943bd1839454501f4c6`、native source
+`411697a113fdb39e587ce866f6b27ef4acd5d51fb9aa60c70e5a867632739df3`、codec
+`cf89da530e4aa8ad8f5fd9b0486b8955bf11ca80664e3520d35fc4383077852a` で4件を逐次実施した。
+全件Intel/Vulkan/X11・1280×720/DPI1・normal/lowで、mainがowned PNGを実見し、登録済み独立verify、
+pass seal、上記比較用途保持、finalizeを完了した。manifest SHAは以下のとおり。
+
+| fresh job（`target/native-acceptance/`直下） | manifest SHA256 |
+| --- | --- |
+| `tak14-tank-context-standard-20261109-v3` | `6d3b9b60efc781b19f8ee9cd119be5daf56da623bd0531217403e1763af4501e` |
+| `tak14-tank-context-dim-20261109-v1` | `ea7af43adeec4dfc5450ac02ef043ca8a3f5458819df17e420aa562cf365d417` |
+| `tak14-mixer-context-standard-20261109-v1` | `94e1279cdd43928e7b4dc5a1685e702b9353ee0ca2fd8c8d04c6f63c73a948db` |
+| `tak14-mixer-context-dim-20261109-v1` | `2520058b772cfe9d330a003bf26ed64f0a947d65c7e0d64f197ca12c57576605` |
+
+Tankの独立画像監査では新しい形状/材質/anchor blockerはなく、dimの完成形と固定previewの差を含めて
+限定的な比較を通した。ただしSoulが水面中央を隠すため、全水量の読み取りや人物depthの正しさ全体は立証しない。
+両種とも最大zoomの既存UI補完は未確認で、最終art/numeric採用・自然lifecycle・性能・releaseには読み替えない。
+次は別の明示M2 UI feedback入口で、Tankの実Water/StoredIn/StoredItems正逆集合と水量tooltip、
+Mixerの実Refining/WorkingOn/TaskWorkers/ActiveTaskIdentityとworker UIを拘束する。
+一度だけ準備するdomain fixtureとOS hover/selectionを分離し、通常UI文言/入力ruleや旧static比較guardを変更しない。
+各stateはfresh job、既存owned window/nonce/ACK/入力ログ・same-source verify/Help/storage/独立reviewを維持する。
+seedは自然搬送/自然割当/通常lifecycleの証拠とせず、見た目の判断と正式性能・導入を分離する。
+
+解決済みTank standard v1/v2の診断consumerは正式releaseした。各rootのtracked fileなし・symlinkなし・
+open processなしと生成物だけのinventoryを照合し、ディレクトリのみ書込可能にしてexact rootを撤去した。
+各139988992B、計279977984B→0。失敗理由は上記と台帳metadataに保持し、原本/候補/最新比較画像は未撤去。
+storage checkはpass（allocated318725447680B、未分類legacyなし）。
+
+MudMixerの独立画像監査も限定approved。木枠/泥/rotorと紫のActive差に新しい造形blockerはなく、
+中央のSoul遮蔽と固定preview/照明の差、最大zoom UI未確認を明示して保持した。
+次の専用UI recipeは `scripts/building_m2_ui_acceptance.py`、caseは
+`m2-ui-tank-empty`、`m2-ui-tank-partial`、`m2-ui-tank-full`、`m2-ui-mixer-refining`。
+新規rootは各caseに対応する `target/native-acceptance/tak14-{tank-{empty,partial,full},mixer-refining}-ui-maxzoom-20261109-v1`。
+owner/consumerは上記M2比較と同じとし、画像判断とUI比較が終了するまで保持する。
+一度だけ合法な施工fixture/水量または実Refiningを準備し、scale5/pauseを固定する。
+旧timed drive/lifecycleとstatic art hover抑止は使わず、OS EIS hoverで既存tooltipだけを確認する。
+selection/zoom操作到達の証拠ではない。独立コードレビューで判明したview既定値、Lifecycle依存、
+renderer owner/root/partsと入力ACK、foreign tooltip tree、camera/paused時計の拒否を回帰で補強する。
+Help影響はNo impact：明示profilingのfixture/観測だけで、通常起動・操作・tooltip文言・水/精製rule・save・authorityは不変。
+この時点では実機未実行であり、起動受理やsynthetic testをUI/アートの合格に読み替えない。
+
 2026-11-09の独立read-onlyアート監査では、Sand/Boneの現ArtPreview世代1を見た目だけ採用した。
 Sand `dbdf3e6ba5557f1b91b59a4e7d19c0bc1afe68e96c745d0dcbefd3f7b637d4e5` は低い黄土色の塊と大色面、
 Bone `fe6c024cd79783abff36fc22fb8b676a5bdc0325edef34b35089e563127e3f4f` は骨軸/節/隙間/象牙色が

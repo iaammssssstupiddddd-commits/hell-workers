@@ -120,6 +120,7 @@ impl Plugin for NativeUiAcceptancePlugin {
                 wheels: WheelObservations::default(),
             })
             .init_resource::<NativeTooltipObservation>()
+            .init_resource::<M2UiPublished>()
             .add_systems(
                 PostUpdate,
                 observe_ui
@@ -145,6 +146,16 @@ struct UiObserver {
     task_cursor: MessageCursor<TaskActionOutcome>,
     task_outcomes: Vec<Value>,
     wheels: WheelObservations,
+}
+
+#[derive(Resource, Default)]
+struct M2UiPublished(Option<Value>);
+
+pub(crate) fn m2_last_published(world: &World) -> Value {
+    world
+        .get_resource::<M2UiPublished>()
+        .and_then(|value| value.0.clone())
+        .unwrap_or(Value::Null)
 }
 
 /// A mirror of the actual tooltip reducer target, never a target selector.
@@ -195,6 +206,13 @@ fn prepare_fixture(world: &mut World, scale: f32) {
     use hw_core::familiar::FamiliarPolicy;
     use hw_jobs::{Designation, PlayerIssuedDesignation, Priority, TaskSlots, Tree};
     world.resource_mut::<GameSettings>().ui_scale = scale;
+    if std::env::var("HW_NATIVE_UI_CASE")
+        .is_ok_and(|case| crate::assets::building_asset_set::acceptance::m2_ui_case(&case))
+    {
+        // M2's separately admitted one-time domain fixture owns preparation.
+        // Do not fall through to the generic navigation fixture below.
+        return;
+    }
     if m5_planning::enabled() {
         m5_planning::prepare(world);
         return;
@@ -546,6 +564,7 @@ fn snapshot(world: &mut World, observer: &UiObserver) -> Value {
         .map_or(0.0, |tooltip| tooltip.fade_alpha);
     let presentation = |entity: Entity| {
         json!({
+            "entity": entity.to_bits(),
             "rect": visible_rect(world, entity, viewport),
             "stack_index": world.get::<bevy::ui::ComputedStackIndex>(entity).map(|index| index.0),
         })
@@ -559,8 +578,12 @@ fn snapshot(world: &mut World, observer: &UiObserver) -> Value {
         .query_filtered::<(Entity, &Text, &TextColor), Or<(With<TooltipHeader>, With<TooltipBody>)>>()
         .iter(world)
         .map(|(entity, text, color)| json!({
+            "entity": entity.to_bits(),
+            "root": tooltip_root(world, entity).map(Entity::to_bits),
             "text": text.0, "alpha": color.0.alpha(),
             "rect": visible_rect(world, entity, viewport),
+            "fully_visible": full_text_rect(world, entity, viewport),
+            "primary_camera": primary_ui_camera(world, entity, primary_window, viewport),
         }))
         .collect::<Vec<_>>();
     let task_rows = world.query::<&TaskListItem>().iter(world).count();
@@ -700,6 +723,7 @@ fn snapshot(world: &mut World, observer: &UiObserver) -> Value {
         "task_total": world.resource::<crate::interface::ui::panels::task_list::TaskListState>().snapshot.len(),
         "history_open": center.history_open(), "history_count": center.history_count(),
         "visible_history": visible_history, "tooltip_alpha": tooltip_alpha,
+        "tooltip_roots": world.query_filtered::<Entity, With<HoverTooltip>>().iter(world).map(Entity::to_bits).collect::<Vec<_>>(),
         "tooltip_presentation": tooltip_presentation, "tooltip_text": tooltip_text,
         "mode_presentation": mode_presentation,
         "catalog": format!("{:?}", world.resource::<crate::systems::save::SaveCatalogUi>().mode),
@@ -731,6 +755,7 @@ fn snapshot(world: &mut World, observer: &UiObserver) -> Value {
     value["bridge_planning"] = bridge_planning::snapshot(world);
     value["rest_area_planning"] = rest_area_planning::snapshot(world);
     value["m5_planning"] = m5_planning::snapshot(world);
+    value["m2_ui"] = crate::assets::building_asset_set::acceptance::m2_ui_snapshot(world);
     value["spa_planning"] = spa_planning::snapshot(world);
     value["progress_bars"] = progress_bars::snapshot(world);
     value["terrain_materials"] = terrain_materials::snapshot(world, observer);
@@ -739,6 +764,61 @@ fn snapshot(world: &mut World, observer: &UiObserver) -> Value {
         .expect("snapshot object")
         .extend(layout.as_object().expect("layout object").clone());
     value
+}
+
+fn full_text_rect(world: &World, entity: Entity, viewport: Vec2) -> bool {
+    let Some(node) = world.get::<ComputedNode>(entity) else {
+        return false;
+    };
+    let Some(transform) = world.get::<UiGlobalTransform>(entity) else {
+        return false;
+    };
+    let Some(rect) = visible_rect(world, entity, viewport) else {
+        return false;
+    };
+    let min = transform.translation - node.size() * 0.5;
+    let max = transform.translation + node.size() * 0.5;
+    [min.x, min.y, max.x, max.y]
+        .iter()
+        .zip(rect)
+        .all(|(expected, actual)| {
+            expected.is_finite() && actual.is_finite() && (*expected - actual).abs() <= 0.01
+        })
+}
+
+fn tooltip_root(world: &World, entity: Entity) -> Option<Entity> {
+    let mut current = Some(entity);
+    for _ in 0..128 {
+        let entity = current?;
+        if world.get::<HoverTooltip>(entity).is_some() {
+            return Some(entity);
+        }
+        current = world.get::<ChildOf>(entity).map(ChildOf::parent);
+    }
+    None
+}
+
+fn primary_ui_camera(world: &World, entity: Entity, primary: Option<u64>, viewport: Vec2) -> bool {
+    use bevy::{camera::RenderTarget, window::WindowRef};
+    let Some(camera_entity) = world
+        .get::<ComputedUiTargetCamera>(entity)
+        .and_then(ComputedUiTargetCamera::get)
+    else {
+        return false;
+    };
+    let Some(camera) = world.get::<Camera>(camera_entity) else {
+        return false;
+    };
+    camera.is_active
+        && camera.viewport.is_none()
+        && camera.physical_viewport_size() == Some(viewport.as_uvec2())
+        && match world.get::<RenderTarget>(camera_entity) {
+            Some(RenderTarget::Window(WindowRef::Primary)) => primary.is_some(),
+            Some(RenderTarget::Window(WindowRef::Entity(target))) => {
+                Some(target.to_bits()) == primary
+            }
+            _ => false,
+        }
 }
 
 fn observe_ui(world: &mut World) {
@@ -792,6 +872,9 @@ fn observe_ui(world: &mut World) {
             return;
         }
         let value = snapshot(world, &observer);
+        if std::env::var("HW_NATIVE_UI_CASE").is_ok_and(|case| crate::assets::building_asset_set::acceptance::m2_ui_case(&case)) {
+            world.resource_mut::<M2UiPublished>().0 = Some(value.clone());
+        }
         let temporary = observer.root.join("observed.tmp");
         let result = fs::write(&temporary, value.to_string())
             .and_then(|()| fs::rename(&temporary, observer.root.join("observed.json")));

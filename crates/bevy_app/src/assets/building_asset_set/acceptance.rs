@@ -12,6 +12,15 @@ pub(super) mod bridge_probe;
 mod m2_fixture;
 mod m2_lifecycle;
 mod m2_probe;
+mod m2_ui;
+
+pub(crate) fn m2_ui_case(case: &str) -> bool {
+    m2_ui::case_kind(case).is_some()
+}
+
+pub(crate) fn m2_ui_snapshot(world: &mut World) -> serde_json::Value {
+    m2_ui::snapshot(world)
+}
 
 #[derive(Resource, Deserialize)]
 #[serde(deny_unknown_fields)]
