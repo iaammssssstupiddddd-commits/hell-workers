@@ -23,7 +23,9 @@ pub(super) fn camera_frame(
     size: PerfScenarioSize,
 ) -> (Vec2, f32) {
     use crate::assets::building_asset_set::{BuildingAssetKind, acceptance::BuildingArtView};
-    let Some(session) = session.filter(|s| s.view != BuildingArtView::Overview) else {
+    let Some(session) =
+        session.filter(|s| s.view != BuildingArtView::Overview || s.is_lamp_supply_context())
+    else {
         return (WorldMap::grid_to_world(46, 37), CAMERA_SCALE);
     };
     let kind = match session.identity.kind {
@@ -243,6 +245,7 @@ mod tests {
             variant: Default::default(),
             lighting: Default::default(),
             spa_mask_page: None,
+            lamp_supply_target: None,
         };
         let expected = layout(PerfScenarioSize::Small)
             .iter()

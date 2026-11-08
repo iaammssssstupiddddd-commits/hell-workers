@@ -38,13 +38,16 @@ def settings(value: dict, *, context=False) -> dict | None:
     observation = value.get("foreground_observation")
     if observation is None:
         return None  # Historical gallery: never claim the new observations.
+    lamp_ui = context and value.get("variant") == "lamp-supply-art-context"
+    require(not lamp_ui or (value.get("kind") == "OutdoorLamp" and value.get("mode") == "feedback"),
+            "Lamp UI requires its dedicated feedback kind")
     require(isinstance(observation, dict)
             and set(observation) == {"schema", "descriptor", "artifacts", "verifier_sha256"}
             and type(observation["schema"]) is int and observation["schema"] == 1
             and observation["verifier_sha256"] == verifier_sha256()
             and value.get("kind") in KINDS
-            and value.get("variant", "gallery") == ("m5-art-context" if context else "gallery")
-            and value.get("scope") == ("seeded-paused-art-comparison" if context else "paused-static-presentation")
+            and value.get("variant", "gallery") == ("lamp-supply-art-context" if lamp_ui else "m5-art-context" if context else "gallery")
+            and value.get("scope") == ("seeded-paused-lamp-supply-ui" if lamp_ui else "seeded-paused-art-comparison" if context else "paused-static-presentation")
             and value.get("promotion_authority") is False, "plan schema/kind/scope differs")
     return observation
 

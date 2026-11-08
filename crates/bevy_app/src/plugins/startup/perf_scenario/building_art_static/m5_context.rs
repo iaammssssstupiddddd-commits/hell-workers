@@ -22,6 +22,7 @@ pub(super) fn prepare(world: &mut World) {
         return;
     }
     let identity = session.identity.clone();
+    let selected_ordinal = session.lamp_supply_target;
     let Some(descriptor) = world
         .resource::<BuildingAssetPool>()
         .descriptor(identity.kind)
@@ -51,6 +52,24 @@ pub(super) fn prepare(world: &mut World) {
             .id();
         apply_building_preview(world, entity, Some(&descriptor), None);
         previews.push(entity);
+    }
+    if let Some(ordinal) = selected_ordinal {
+        let state = world.resource::<BuildingArtStaticState>();
+        if let Some(owner) = state
+            .specs
+            .iter()
+            .zip(&state.owners)
+            .find(|(spec, _)| {
+                spec.kind == BuildingType::OutdoorLamp && spec.ordinal == usize::from(ordinal)
+            })
+            .map(|(_, owner)| *owner)
+        {
+            // One-time seeded selection only. Production presentation owns all
+            // UI text, state and layout; no per-frame repair or input claim.
+            world
+                .resource_mut::<crate::interface::selection::SelectedEntity>()
+                .0 = Some(owner);
+        }
     }
     *world.resource_mut::<context::ContextState>() = context::ContextState {
         previews,
@@ -171,6 +190,10 @@ pub(super) fn snapshot(world: &mut World) -> Result<Option<Value>, String> {
         return Err("M5 context session differs".into());
     }
     let identity = session.identity.clone();
+    let lamp_ui = session.is_lamp_supply_context();
+    let variant = session.variant;
+    let view = session.view;
+    let selected_ordinal = session.lamp_supply_target;
     let config = world.resource::<PerfScenarioConfig>();
     let size = config.size();
     if !config.enabled()
@@ -514,18 +537,31 @@ pub(super) fn snapshot(world: &mut World) -> Result<Option<Value>, String> {
                 "anchor": world.get::<Anchor>(*preview).map_or(Vec2::ZERO, |anchor| anchor.0).to_array(),
                 "pose": pose(actual), "ground_projection": project(actual.translation.truncate())?, "visible": true}}));
     }
-    Ok(Some(
-        json!({"variant": "m5-art-context", "lighting": "standard", "scope": "seeded-paused-art-comparison",
+    let ui = if lamp_ui {
+        let ordinal = selected_ordinal.ok_or("Lamp UI ordinal missing")?;
+        let Some(ui) =
+            super::lamp_supply_ui::snapshot(world, owners[usize::from(ordinal)], ordinal)?
+        else {
+            return Ok(None);
+        };
+        Some(ui)
+    } else {
+        None
+    };
+    let mut fixture = json!({"variant": variant, "lighting": "standard", "scope": if lamp_ui { "seeded-paused-lamp-supply-ui" } else { "seeded-paused-art-comparison" },
         "identity": identity, "target_count": 4, "wall_count": 8, "preview_count": 4, "souls": 8 + source_workers, "idle_souls": 8,
         "source_workers": source_workers, "source_count": sources, "power": power,
-        "foreground_schema": 1, "view": "normal", "camera_scale": camera_scale, "camera_center": camera_center.to_array(),
+        "foreground_schema": 1, "view": view, "camera_scale": camera_scale, "camera_center": camera_center.to_array(),
         "main_camera": {"entity": camera_entity.to_bits(), "target": "primary-window", "viewport": [1280, 720], "pose": pose(local)},
         "rtt_camera": {"entity": rtt_entity.to_bits(), "active": true, "layers": layers(world, *rtt_entity), "pose": pose(rtt_pose),
             "projection": rtt_projection, "viewport": rtt_camera.logical_viewport_size().map(|value| value.to_array()), "scene_image": format!("{:?}", scene.id())},
         "composite": {"entity": composite_entity.to_bits(), "pose": pose(composite_pose), "visible": true, "layers": layers(world, *composite_entity),
             "scene_image": format!("{:?}", scene.id()), "material": format!("{:?}", composite_material.id()), "vertical_compensation": compensation},
-        "records": records, "accepted": false, "performance_evidence": false, "promotion_authority": false}),
-    ))
+        "records": records, "accepted": false, "performance_evidence": false, "promotion_authority": false});
+    if let Some(ui) = ui {
+        fixture["lamp_supply_ui"] = ui;
+    }
+    Ok(Some(fixture))
 }
 
 #[cfg(test)]
@@ -590,6 +626,7 @@ mod tests {
             variant: BuildingArtVariant::M5ArtContext,
             lighting: BuildingArtLighting::Standard,
             spa_mask_page: None,
+            lamp_supply_target: None,
         });
         world.insert_resource(pool);
         world.init_resource::<context::ContextState>();

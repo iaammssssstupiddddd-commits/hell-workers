@@ -13,6 +13,8 @@ mod observations_spa;
 #[cfg(feature = "profiling")]
 mod observations_ui;
 #[cfg(feature = "profiling")]
+pub(crate) use observations_ui::visible_rect as observed_ui_visible_rect;
+#[cfg(feature = "profiling")]
 mod ordinary_art;
 #[cfg(feature = "profiling")]
 mod ordinary_m5;

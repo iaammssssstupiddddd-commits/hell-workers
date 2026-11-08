@@ -229,6 +229,15 @@ RTT camera、preview画像/canvas/anchorを同subjectで記録し、30 stable fr
 正しい奥行き順、全地形での可読性、通常のPlacementGhost/選択入力、配電、lifecycle、性能、独立採否を保証しない。
 基盤前後のコスト比較は別々に凍結した静止参照jobを使う。本書更新時点でM1-cの実native受入は未実施。
 
+明示 `--variant lamp-supply-art-context --lamp-supply-target 0|2` はLampの美術判断用に限る別feedback。
+ArtPreview/OutdoorLamp/standard/small、normalまたはoverviewだけを許可し、既存M5 contextのnormal-only条件は維持する。
+同じseeded配電graphでsetup時だけcompleted ownerを選択し、通常presentation/inspectionが作るheaderと供給Textを読む。
+Text/ViewModel/PowerSupplyStateは注入しない。実selected/unpinned/inspected/model/grid owner、供給state/需要と
+未clip・可視・無変形の実Text矩形、primary window/DPI1をexact foreground/identityへ拘束する。
+30 stable framesと初期/終了一致を維持し、ready後の変化を補正せず拒否する。
+normal/overview×off/onのowned画像によるreadabilityだけを扱い、OS選択・自然配電・ordinary lifecycle・性能や採否を
+成功としない。通常起動、player操作/文言、配電rule、Helpに変更はない。
+
 制作器の `building_asset_pipeline.py verify` はpackaged bytes・provenance・既存承認identityを読むだけで、
 承認を作らない。M5 `prepare --destination` はfreshな隔離jobへ出力できるが、既存出力、原画の親子path、
 primaryの製品assetsへの出力は拒否する。入力原画はstagingに限定しworld画像を再加工しない。

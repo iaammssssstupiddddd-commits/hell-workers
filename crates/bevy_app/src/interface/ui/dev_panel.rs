@@ -97,6 +97,7 @@ mod tests {
             variant: Default::default(),
             lighting: Default::default(),
             spa_mask_page: None,
+            lamp_supply_target: None,
         });
         app.update();
         assert_eq!(

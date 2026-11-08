@@ -44,6 +44,7 @@ VIEWS = {"overview": 5.0, "near": 0.5, "normal": 1.0, "far": 2.0}
 QUALITIES = ("high", "medium", "low")
 CONTEXT_SCOPE = "seeded-paused-art-comparison"
 SPA_PAGE_SCOPE = "paused-static-spa-mask-page"
+M5_CONTEXT_VARIANTS = ("m5-art-context", "lamp-supply-art-context")
 
 
 def spa_page(value: dict) -> int | None:
@@ -62,7 +63,7 @@ def spa_page(value: dict) -> int | None:
 
 
 def actor_count(value: dict) -> int:
-    if value.get("variant") == "m5-art-context":
+    if value.get("variant") in M5_CONTEXT_VARIANTS:
         context_settings(value)
         return 14 if value["kind"] == "OutdoorLamp" else 8
     page = spa_page(value)
@@ -81,9 +82,11 @@ def context_preview(manifest: dict) -> dict:
 def context_settings(value: dict) -> bool:
     variant = value.get("variant", "gallery")
     lighting = value.get("lighting", "standard")
-    pipeline.require(variant in ("gallery", "rest-area-art-context", "m5-art-context")
+    pipeline.require(variant in ("gallery", "rest-area-art-context", *M5_CONTEXT_VARIANTS)
                      and lighting in ("standard", "dim"), "unknown art variant/lighting")
-    if variant == "m5-art-context":
+    pipeline.require(variant == "lamp-supply-art-context" or value.get("lamp_supply_target") is None,
+                     "Lamp UI target requires its separate context")
+    if variant in M5_CONTEXT_VARIANTS:
         m5_context.settings(value)
         return True
     if variant == "gallery":
@@ -128,7 +131,7 @@ def check_numeric_verifiers(value: dict) -> None:
 
 def check_plan(value: dict, binary: Path) -> dict:
     check_numeric_verifiers(value)
-    foreground_settings = foreground.settings(value, context=value.get("variant") == "m5-art-context")
+    foreground_settings = foreground.settings(value, context=value.get("variant") in M5_CONTEXT_VARIANTS)
     context_settings(value)
     page = spa_page(value)
     quality(value)
@@ -178,13 +181,14 @@ def plan(args) -> dict:
              "variant": getattr(args, "variant", "gallery"),
              "lighting": getattr(args, "lighting", "standard"),
              "spa_mask_page": getattr(args, "spa_mask_page", None),
-             "scope": CONTEXT_SCOPE if getattr(args, "variant", "gallery") in ("rest-area-art-context", "m5-art-context") else SPA_PAGE_SCOPE if getattr(args, "spa_mask_page", None) is not None else "paused-static-presentation", "promotion_authority": False,
+             "lamp_supply_target": getattr(args, "lamp_supply_target", None),
+             "scope": m5_context.LAMP_UI_SCOPE if getattr(args, "variant", "gallery") == "lamp-supply-art-context" else CONTEXT_SCOPE if getattr(args, "variant", "gallery") in ("rest-area-art-context", "m5-art-context") else SPA_PAGE_SCOPE if getattr(args, "spa_mask_page", None) is not None else "paused-static-presentation", "promotion_authority": False,
              "feedback_only": args.mode == "feedback"}
-    if value["variant"] in ("rest-area-art-context", "m5-art-context"):
+    if value["variant"] in ("rest-area-art-context", *M5_CONTEXT_VARIANTS):
         value["context_preview"] = context_preview(manifest)
-    if value["variant"] == "m5-art-context":
+    if value["variant"] in M5_CONTEXT_VARIANTS:
         value["m5_context_verifier_sha256"] = m5_context.verifier_sha256()
-    if value["kind"] in foreground.KINDS and value["variant"] in ("gallery", "m5-art-context"):
+    if value["kind"] in foreground.KINDS and value["variant"] in ("gallery", *M5_CONTEXT_VARIANTS):
         value["foreground_observation"] = foreground.descriptor(manifest)
     if value["kind"] in pipeline.building_m5_numeric.KINDS and value["mode"] == "candidate":
         value["numeric_verifiers"] = pipeline.numeric_verifier_inventory()
@@ -239,6 +243,7 @@ def game_environment(environment: dict, view: Path, value: dict, nonce: str, roo
             "locator": pipeline.locator(value["kind"]), "nonce": nonce, "view": value.get("view", "overview"),
             "variant": value.get("variant", "gallery"), "lighting": value.get("lighting", "standard"),
             "spa_mask_page": value.get("spa_mask_page"),
+            "lamp_supply_target": value.get("lamp_supply_target"),
             "status_path": str(root / "probe.json")})})
     return environment
 
@@ -272,7 +277,7 @@ def validate_probe(probe: dict, value: dict, nonce: str) -> None:
         if spa_page(value) is not None:
             validate_spa_page(probe, value)
     view = value.get("view", "overview")
-    foreground.validate(probe, value, context=value.get("variant") == "m5-art-context")
+    foreground.validate(probe, value, context=value.get("variant") in M5_CONTEXT_VARIANTS)
     pipeline.require(view in VIEWS and probe.get("view", "overview") == view,
                      "building-art camera view differs")
     if "view" in value:
@@ -342,7 +347,7 @@ def validate_spa_page(probe: dict, value: dict) -> None:
 
 def validate_context_fixture(probe: dict, value: dict) -> None:
     """Seeded image comparison only; never issues an art/numeric decision."""
-    if value.get("variant") == "m5-art-context":
+    if value.get("variant") in M5_CONTEXT_VARIANTS:
         m5_context.validate(probe, value)
         return
     fixture = probe["fixture"]
@@ -432,7 +437,7 @@ def verify(root: Path) -> dict:
                      and sidecar["initial"] == sidecar["final"] == probe["fixture"]
                      and sidecar["stable_frames"] >= 30, "candidate fixture did not remain stable")
     if context_settings(value):
-        pipeline.require(sidecar.get("contract_id") == ("m5-art-context-v1" if value.get("variant") == "m5-art-context" else "rest-area-art-context-v1"), "context sidecar contract differs")
+        pipeline.require(sidecar.get("contract_id") == ("lamp-supply-art-context-v1" if value.get("variant") == "lamp-supply-art-context" else "m5-art-context-v1" if value.get("variant") == "m5-art-context" else "rest-area-art-context-v1"), "context sidecar contract differs")
     # Older plans remain high-only; their recorded raw window is checked too.
     validate_window(root, value)
     log = (root / "actual-window.log").read_text()
@@ -607,9 +612,10 @@ def main() -> int:
     parser.add_argument("--adapter", default="Intel")
     parser.add_argument("--view", choices=tuple(VIEWS), default="overview")
     parser.add_argument("--quality", choices=QUALITIES, default="high")
-    parser.add_argument("--variant", choices=("gallery", "rest-area-art-context", "m5-art-context"), default="gallery")
+    parser.add_argument("--variant", choices=("gallery", "rest-area-art-context", *M5_CONTEXT_VARIANTS), default="gallery")
     parser.add_argument("--lighting", choices=("standard", "dim"), default="standard")
     parser.add_argument("--spa-mask-page", type=int, choices=range(4))
+    parser.add_argument("--lamp-supply-target", type=int, choices=(0, 2))
     args = parser.parse_args()
     if args.command == "plan":
         pipeline.require(all((args.repo, args.source_root, args.codec, args.kind, args.mode)), "incomplete recipe inputs")

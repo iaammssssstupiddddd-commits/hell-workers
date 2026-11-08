@@ -378,6 +378,16 @@ owned PNG for actual overlap: recorded geometry alone does not prove correct dep
 order or readability. This is not ordinary placement/selection input, power or
 lifecycle, art/numeric adoption, performance or promotion/release evidence.
 
+For the separate Lamp UI art complement, use
+`--variant lamp-supply-art-context --lamp-supply-target 0|2 --view normal|overview`
+in feedback mode. It reuses that seeded graph and sets selection once; production
+inspection renders the real kind and supply text. The passive observer binds the
+selected/unpinned/model/grid owner, actual supply, fully visible Text rectangles,
+DPI/window and stable foreground to the exact subject. It never injects Text,
+supply state or subsequent repair. Capture off/on at both views through separate
+registered jobs. This proves only seeded, no-input rendering readability; it does
+not prove OS selection, natural supply, lifecycle, performance or approval.
+
 From the repository root, generate a fresh, non-mutating plan:
 
 ```bash

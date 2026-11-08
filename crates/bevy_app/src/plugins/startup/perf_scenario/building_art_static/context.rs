@@ -631,10 +631,15 @@ pub(crate) fn observe(world: &mut World) {
         world.resource_mut::<PerfScenarioApplied>().workload = true;
         if publish {
             let session = world.resource::<BuildingArtSession>();
+            let scope = if session.is_lamp_supply_context() {
+                "seeded-paused-lamp-supply-ui"
+            } else {
+                SCOPE
+            };
             let status = json!({"schema_version": 1, "profile": "building-art", "mode": session.mode,
                 "identity": session.identity, "nonce": session.nonce, "status": "ready", "stable_frames": 30,
                 "fixture": fixture, "variant": session.variant, "lighting": session.lighting,
-                "view": session.view, "camera_scale": session.view.scale(), "scope": SCOPE});
+                "view": session.view, "camera_scale": session.view.scale(), "scope": scope});
             let temporary = session.status_path.with_extension("tmp");
             let file = std::fs::OpenOptions::new()
                 .write(true)
@@ -792,6 +797,7 @@ mod tests {
             variant: crate::assets::building_asset_set::acceptance::BuildingArtVariant::RestAreaArtContext,
             lighting: BuildingArtLighting::Standard,
             spa_mask_page: None,
+            lamp_supply_target: None,
         });
         world.insert_resource(pool);
         world.init_resource::<ContextState>();

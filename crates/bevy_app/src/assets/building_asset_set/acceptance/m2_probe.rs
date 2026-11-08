@@ -469,6 +469,7 @@ mod tests {
             variant: Default::default(),
             lighting: Default::default(),
             spa_mask_page: None,
+            lamp_supply_target: None,
         });
         world.init_resource::<BuildingAssetPool>();
         world.init_resource::<Time<Real>>();

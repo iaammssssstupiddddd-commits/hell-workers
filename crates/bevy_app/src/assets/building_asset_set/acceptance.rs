@@ -29,6 +29,8 @@ pub struct BuildingArtSession {
     pub lighting: BuildingArtLighting,
     #[serde(default)]
     pub spa_mask_page: Option<u8>,
+    #[serde(default)]
+    pub lamp_supply_target: Option<u8>,
 }
 
 /// Separate seeded comparison; never an ordinary-world or release recipe.
@@ -39,6 +41,7 @@ pub enum BuildingArtVariant {
     Gallery,
     RestAreaArtContext,
     M5ArtContext,
+    LampSupplyArtContext,
 }
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, serde::Serialize, PartialEq, Eq)]
@@ -55,7 +58,14 @@ impl BuildingArtSession {
     }
 
     pub fn is_m5_context(&self) -> bool {
-        self.variant == BuildingArtVariant::M5ArtContext
+        matches!(
+            self.variant,
+            BuildingArtVariant::M5ArtContext | BuildingArtVariant::LampSupplyArtContext
+        )
+    }
+
+    pub fn is_lamp_supply_context(&self) -> bool {
+        self.variant == BuildingArtVariant::LampSupplyArtContext
     }
 
     pub fn is_context(&self) -> bool {
@@ -63,7 +73,11 @@ impl BuildingArtSession {
     }
 
     fn validate_context(&self, present: impl Fn(&str) -> bool) -> Result<(), String> {
+        if self.lamp_supply_target.is_some() && !self.is_lamp_supply_context() {
+            return Err("Lamp UI target requires its separate rendering-only context".into());
+        }
         if self.is_m5_context() {
+            let lamp_ui = self.is_lamp_supply_context();
             if !matches!(
                 self.identity.kind,
                 BuildingAssetKind::WheelbarrowParking
@@ -71,8 +85,18 @@ impl BuildingArtSession {
                     | BuildingAssetKind::BonePile
                     | BuildingAssetKind::OutdoorLamp
             ) || self.identity.authority != BuildingAssetAuthority::ArtPreview
-                || !matches!(self.mode.as_str(), "feedback" | "art-preview")
-                || self.view != BuildingArtView::Normal
+                || if lamp_ui {
+                    self.identity.kind != BuildingAssetKind::OutdoorLamp
+                        || self.mode != "feedback"
+                        || !matches!(self.lamp_supply_target, Some(0 | 2))
+                        || !matches!(
+                            self.view,
+                            BuildingArtView::Normal | BuildingArtView::Overview
+                        )
+                } else {
+                    !matches!(self.mode.as_str(), "feedback" | "art-preview")
+                        || self.view != BuildingArtView::Normal
+                }
                 || self.lighting != BuildingArtLighting::Standard
                 || self.spa_mask_page.is_some()
                 || [
@@ -292,6 +316,60 @@ mod tests {
             changed["identity"][key] = serde_json::json!(value);
             assert!(
                 serde_json::from_value::<BuildingArtSession>(changed)
+                    .unwrap()
+                    .validate_context(|_| false)
+                    .is_err()
+            );
+        }
+    }
+
+    #[test]
+    fn lamp_supply_context_is_rendering_only_and_rejects_foreign_targets() {
+        let raw = serde_json::json!({"mode": "feedback", "identity": {
+            "kind": "OutdoorLamp", "generation": 1, "authority": "art_preview", "manifest_sha256": "a".repeat(64)},
+            "locator": "manifests/building-outdoor-lamp-v1.buildingset", "status_path": "/unused/probe.json",
+            "nonce": "a".repeat(32), "view": "normal", "variant": "lamp-supply-art-context",
+            "lighting": "standard", "spa_mask_page": null, "lamp_supply_target": 0});
+        for view in ["normal", "overview"] {
+            for ordinal in [0, 2] {
+                let mut good = raw.clone();
+                good["view"] = serde_json::json!(view);
+                good["lamp_supply_target"] = serde_json::json!(ordinal);
+                let session: BuildingArtSession = serde_json::from_value(good).unwrap();
+                assert!(session.validate_context(|_| false).is_ok());
+                for mixed in [
+                    "HW_NATIVE_UI_ROOT",
+                    "HW_BUILDING_ORDINARY_ART_SESSION",
+                    "HW_BUILDING_PRODUCTION_OBSERVATIONS",
+                    "HW_BUILDING_M6_MODE",
+                    "HW_BUILDING_ASSET_RELEASES",
+                    "HW_M2_ACCEPTANCE_PROBE",
+                    "HW_BRIDGE_ACCEPTANCE_PROBE",
+                ] {
+                    assert!(session.validate_context(|key| key == mixed).is_err());
+                }
+            }
+        }
+        for (pointer, value) in [
+            ("/mode", serde_json::json!("art-preview")),
+            ("/identity/kind", serde_json::json!("SandPile")),
+            (
+                "/identity/authority",
+                serde_json::json!("isolated_candidate"),
+            ),
+            ("/view", serde_json::json!("near")),
+            ("/view", serde_json::json!("far")),
+            ("/variant", serde_json::json!("m5-art-context")),
+            ("/lighting", serde_json::json!("dim")),
+            ("/spa_mask_page", serde_json::json!(0)),
+            ("/lamp_supply_target", serde_json::json!(null)),
+            ("/lamp_supply_target", serde_json::json!(1)),
+            ("/lamp_supply_target", serde_json::json!(3)),
+        ] {
+            let mut bad = raw.clone();
+            *bad.pointer_mut(pointer).unwrap() = value;
+            assert!(
+                serde_json::from_value::<BuildingArtSession>(bad)
                     .unwrap()
                     .validate_context(|_| false)
                     .is_err()

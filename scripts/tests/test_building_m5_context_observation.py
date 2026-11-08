@@ -92,6 +92,77 @@ def fixture(kind="SandPile"):
 
 
 class M5ContextTests(unittest.TestCase):
+    def test_lamp_ui_exact_owner_supply_text_and_rendering_only_scope(self):
+        for view in ("normal", "overview"):
+            for ordinal in (0, 2):
+                value, probe = fixture("OutdoorLamp")
+                scale = 5 if view == "overview" else 1
+                value.update(variant="lamp-supply-art-context", scope=context.LAMP_UI_SCOPE, view=view,
+                             lamp_supply_target=ordinal)
+                probe.update(variant=value["variant"], scope=value["scope"], view=view, camera_scale=scale)
+                f = probe["fixture"]
+                f.update(variant=value["variant"], scope=value["scope"], view=view, camera_scale=scale)
+                f["main_camera"]["pose"]["scale"] = [scale]*3
+                owner = f["records"][ordinal]["owner"]
+                on = ordinal == 2
+                f["lamp_supply_ui"] = {
+                    "schema": 1, "scope": "seeded-no-input-rendering-only", "ordinal": ordinal,
+                    "owner": owner, "selected": owner, "pinned": None, "inspected": owner, "model_owner": owner,
+                    "kind": "OutdoorLamp", "powered": on, "demand": .2, "grid": f["power"]["records"][ordinal]["grid"],
+                    "supply_state": "Supplied" if on else "Shed { reason: InsufficientGeneration }",
+                    "viewport_physical": [1280, 720], "scale_factor": 1, "window": 60000,
+                    "ordinary_input_evidence": False, "natural_supply_evidence": False,
+                    "header": {"entity": 50000, "text": "Building: OutdoorLamp", "rect_physical": [900., 100., 1100., 120.],
+                               "rect_logical": [900., 100., 1100., 120.], "visible": True, "fully_visible": True},
+                    "power_text": {"entity": 50001,
+                                   "text": ("Supply: Supplied" if on else "Supply: Shed — insufficient generation") + " / Demand: 0.2W",
+                                   "rect_physical": [900., 140., 1200., 180.], "rect_logical": [900., 140., 1200., 180.],
+                                   "visible": True, "fully_visible": True}}
+                for key in ("header", "power_text"):
+                    f["lamp_supply_ui"][key].update(color_srgba=[.8, .8, .8, 1.], camera={
+                        "entity": 60001, "window": 60000, "target": "owned-primary-window",
+                        "active": True, "full_viewport": True, "viewport_physical": [1280, 720]})
+                context.validate(probe, value)
+                self.assertEqual(art.actor_count(value), 14)
+                for key, wrong in (("kind", "SandPile"), ("mode", "art-preview"), ("view", "near"),
+                                   ("lamp_supply_target", True), ("lamp_supply_target", 1),
+                                   ("lamp_supply_target", None), ("scope", context.SCOPE)):
+                    with self.subTest(key=key, wrong=wrong), self.assertRaises(ValueError):
+                        context.settings({**value, key: wrong})
+                for change in ("owner", "selected", "model_owner", "pinned", "grid", "state", "text", "visible", "clip", "nan", "alias", "authority", "camera-missing", "camera-inactive", "camera-image", "camera-foreign", "camera-crop", "transparent"):
+                    bad = copy.deepcopy(probe)
+                    ui = bad["fixture"]["lamp_supply_ui"]
+                    if change in ("owner", "selected", "model_owner", "pinned", "grid"):
+                        ui[change] = owner + 1
+                    elif change == "state":
+                        ui["supply_state"] = "Disconnected"
+                    elif change == "text":
+                        ui["power_text"]["text"] = "Supply: Rebuilding"
+                    elif change == "visible":
+                        ui["power_text"]["visible"] = False
+                    elif change == "clip":
+                        ui["power_text"]["rect_physical"][2] = 1290.
+                    elif change == "nan":
+                        ui["header"]["rect_physical"][0] = float("nan")
+                    elif change == "alias":
+                        ui["power_text"]["entity"] = ui["header"]["entity"]
+                    elif change == "camera-missing":
+                        del ui["power_text"]["camera"]
+                    elif change == "camera-inactive":
+                        ui["header"]["camera"]["active"] = False
+                    elif change == "camera-image":
+                        ui["power_text"]["camera"]["target"] = "image"
+                    elif change == "camera-foreign":
+                        ui["power_text"]["camera"]["window"] += 1
+                    elif change == "camera-crop":
+                        ui["header"]["camera"]["full_viewport"] = False
+                    elif change == "transparent":
+                        ui["power_text"]["color_srgba"][3] = 0.
+                    else:
+                        ui["ordinary_input_evidence"] = True
+                    with self.subTest(change=change), self.assertRaises(ValueError):
+                        context.validate(bad, value)
+
     def test_lamp_source_graph_refuses_missing_foreign_and_changed_supply(self):
         value, probe = fixture("OutdoorLamp")
         for change in ("missing", "foreign-grid", "foreign-parent", "foreign-worker", "task", "output", "off-supply", "count", "tile", "yard"):

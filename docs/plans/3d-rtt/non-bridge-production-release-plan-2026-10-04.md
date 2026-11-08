@@ -100,6 +100,34 @@ scale5で細線/轍/台数は保証しないが、新たな黒塊/白塊化や�
 静止画像から時間方向のちらつき不在は断定しない。利用者の追加回答やtechnical passからの自動承認ではない。
 次はexact art digestと64wu/256px/128px anchor/16px margin/WithoutVehicle/world/空partsの数値を独立照合し、
 隔離candidateを生成する。車両入出庫・通常lifecycle・性能・promotion/install/releaseは未受入のまま保持する。
+数値も独立監査で上記固定値を採用した。canonical art decision SHAは
+`760c15c92e7aaf7e7bb69c96db9f7996ab3369357fe3230cadc8813c6a3f0ba8`、numeric decision SHAは
+`204f6ddd3b061b171845a4bcb4c229c31a1ca7381b3c63e72f73479f0459123d`。
+登録済みexport/独立verify/用途保持/seal/finalizeでfresh隔離候補
+`96ed30f975a6281e71a292810e98ec83626cefaaf9ebf40dbd65d49f947e40e8`（generation2/isolated_candidate、49152B）を生成した。
+rootは `target/native-acceptance/tak14-parking-isolated-candidate-20261109-v1`、
+consumerはM5 independently adopted Parking candidate lifecycle comparison。独立監査に基づく主担当の採用で、
+製品assets/locatorは未変更。候補のordinary入出庫/保存/性能/正式releaseは次の独立工程とする。
+
+### 次の限定工程：Lampの既存状態UIによるアート補完
+
+目的は32wuの籠内部が縮小される通常/最遠表示で、既存種別headerと実供給stateが見えるかを判断すること。
+独立設計reviewでrendering-only fixtureが当美術比較には十分と判断した。OS選択や自然配電の受入とは分離する。
+
+- [ ] 新明示variant `lamp-supply-art-context` をOutdoorLamp/ArtPreview/feedback/standard/small/normalまたはoverviewだけに限定。
+  既存M5 contextのnormal-only契約は緩めない。target ordinalは0(off)か2(on)だけを受理する。
+- [ ] 既存2Spa/6発電worker/4Lampのseeded配電graphを再利用し、setup時だけ実completed LampをSelectedEntityへ指定する。
+  Text/ViewModel/PowerSupplyStateを直接書かず、通常presentation→既存InfoPanelNodesへ流す。
+- [ ] actual selected/pinned/inspected owner、実PowerSupplyState、実header/power Text、visible/clip/viewport rectを読み、
+  同owner/同identity/graph/foregroundと拘束。ready後のdriftは修復せず拒否し、30stableとinitial/final同一を維持する。
+- [ ] unknown/mixed session、他kind/authority、別owner/ordinal、state/text不一致、hidden/clipped/変形/非finiteUI、
+  graph/identity/source/binary変更を拒否するfocused testsとHelp No impact実判断、変更別CI/Clippy/独立exact reviewを通す。
+- [ ] 同subjectでnormal/overview×off/onの4owned actual-window画像を正規launcherから逐次取得し、独立画像監査で見た目を判断する。
+  input witness・自然供給・ordinary lifecycle・性能budget・promotion/install権限を付与しない。
+
+主担当が製品側の限定fixture/observer/verifier/testを編集し、独立担当はread-only。
+primaryの既存debug cache/immutable候補と原本を保全する。fresh jobだけを登録し、比較終了条件で保持/整理する。
+美術補完が成立しなければ同alpha/輪郭の籠内部だけを修正する。現在はLamp未採用、9種全体は未完。
 
 `77f90d22`のfresh `tak14-restarea-maxzoom-art-eis-feedback-20261108-v5`は7checkpointと登録/別実行verifierが成功。
 source=`dba53819e43c01de77e3afbf632fe930242767ea9d35be23d5cfff778663b840`、
