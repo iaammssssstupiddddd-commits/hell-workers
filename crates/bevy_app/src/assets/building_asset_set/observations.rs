@@ -773,7 +773,7 @@ fn observe(world: &mut World) {
     let state = world.resource::<Observations>();
     let session = world.resource::<Session>();
     let scope = if session.art_feedback {
-        super::ordinary_art::SCOPE
+        super::ordinary_art::scope(world)
     } else {
         "production-raw-observations-v1"
     };

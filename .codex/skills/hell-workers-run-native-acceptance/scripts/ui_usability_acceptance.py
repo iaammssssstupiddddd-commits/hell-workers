@@ -38,8 +38,9 @@ CHECKPOINTS = ("tasks", "last-page", "minimized", "restored", "entities",
 VIEWPORTS = ((1920, 1080, 1.0), (1280, 720, 1.25), (1280, 720, 0.85),
              (1280, 720, 1.0), (1920, 1080, 0.85), (1920, 1080, 1.25))
 CASES = ("navigation", "refactor-rows", "progress-bars", "terrain-materials", "refactor-suite",
-         "bridge-planning", "soul-spa-planning", "soul-spa-completion", "soul-spa-usage", "soul-spa-persistence", "soul-spa-slots", "soul-spa-occupied-save", "rest-area-planning", "rest-area-refund", "rest-area-completion", "rest-area-usage", "rest-area-exit", "rest-area-save", "rest-area-lifecycle", "rest-area-maxzoom")
+         "bridge-planning", "soul-spa-planning", "soul-spa-completion", "soul-spa-usage", "soul-spa-persistence", "soul-spa-slots", "soul-spa-occupied-save", "rest-area-planning", "rest-area-refund", "rest-area-completion", "rest-area-usage", "rest-area-exit", "rest-area-save", "rest-area-lifecycle", "rest-area-maxzoom", "rest-area-candidate-lifecycle")
 SPA_CASES = ("soul-spa-planning", "soul-spa-completion", "soul-spa-usage", "soul-spa-persistence", "soul-spa-slots", "soul-spa-occupied-save")
+REST_CASES = ("rest-area-planning", "rest-area-refund", "rest-area-completion", "rest-area-usage", "rest-area-exit", "rest-area-save", "rest-area-lifecycle", "rest-area-maxzoom", "rest-area-candidate-lifecycle")
 
 
 def session_matrix(case, smoke):
@@ -492,13 +493,18 @@ def verify_root(root):
     native.require(native.git_subject(repo) == manifest["subject_commit"], "subject changed")
     native.require(sha256(repo / "target/debug/bevy_app") == manifest["binary_sha256"], "binary changed")
     art_contract = manifest.get("ordinary_art")
+    native.require(manifest["case"] != "rest-area-candidate-lifecycle" or art_contract is not None,
+                   "candidate lifecycle requires explicit candidate source")
     native.require(manifest["case"] != "rest-area-maxzoom" or art_contract is not None and manifest["input_backend"] == "portal-eis",
                    "maxzoom requires the explicit ArtPreview EIS profile")
     if art_contract is not None:
-        native.require(manifest["case"] in ("rest-area-lifecycle", "rest-area-maxzoom") and manifest["smoke"]
+        native.require(manifest["case"] in ("rest-area-lifecycle", "rest-area-maxzoom", "rest-area-candidate-lifecycle") and manifest["smoke"]
                        and manifest["input_backend"] in ("portal", "portal-eis"), "ordinary art profile differs")
         native.require(manifest["case"] != "rest-area-maxzoom" or manifest["input_backend"] == "portal-eis", "maxzoom backend differs")
-        expected_art = rest_area_art.source_contract(repo, Path(art_contract["source_root"]), Path(art_contract["codec"]))
+        native.require(rest_area_art.candidate_contract(art_contract) == (manifest["case"] == "rest-area-candidate-lifecycle"),
+                       "ordinary art authority/case differs")
+        expected_art = rest_area_art.source_contract(repo, Path(art_contract["source_root"]), Path(art_contract["codec"]),
+                                                     candidate=manifest["case"] == "rest-area-candidate-lifecycle")
         native.require(rest_area_art.pipeline.exact_json(expected_art, art_contract), "ordinary art inputs changed")
     expected = check_session_inventory(manifest)
     for session, (case, width, height, scale) in zip(manifest["sessions"], expected):
@@ -527,13 +533,13 @@ def verify_root(root):
             else:
                 spa_planning.verify(native.read_json(raw_path), entries, client,
                                     directory / "saves" / "manual-1.scn.ron", events)
-        if case in ("rest-area-planning", "rest-area-refund", "rest-area-completion", "rest-area-usage", "rest-area-exit", "rest-area-save", "rest-area-lifecycle", "rest-area-maxzoom"):
+        if case in REST_CASES:
             raw_path = directory / "production-cancellation.json"
             native.require(sha256(raw_path) == session.get("cancellation_sha256"), "cancellation raw changed")
             if case == "rest-area-maxzoom":
                 rest_area_art.check_view(repo, directory / "asset-view", art_contract)
                 rest_area_maxzoom.verify(native.read_json(raw_path), entries, client, art_contract, events)
-            elif case == "rest-area-lifecycle":
+            elif case in ("rest-area-lifecycle", "rest-area-candidate-lifecycle"):
                 if art_contract is not None:
                     rest_area_art.check_view(repo, directory / "asset-view", art_contract)
                     rest_area_art.check_lifecycle(native.read_json(raw_path), entries, client,
@@ -568,7 +574,7 @@ def verify_root(root):
                                 rest_area_usage.CHECKPOINTS if case == "rest-area-usage" else
                                 rest_area_usage.EXIT_CHECKPOINTS if case == "rest-area-exit" else
                                 rest_area_usage.SAVE_CHECKPOINTS if case == "rest-area-save" else
-                                rest_area_usage.LIFECYCLE_CHECKPOINTS if case == "rest-area-lifecycle" else
+                                rest_area_usage.LIFECYCLE_CHECKPOINTS if case in ("rest-area-lifecycle", "rest-area-candidate-lifecycle") else
                                 rest_area_maxzoom.CHECKPOINTS if case == "rest-area-maxzoom" else
                                 terrain_materials.CHECKPOINTS if case == "terrain-materials" else
                                 progress_bars.CHECKPOINTS if case == "progress-bars" else CHECKPOINTS)
@@ -613,7 +619,7 @@ def verify_root(root):
         if case in ("rest-area-planning", "rest-area-refund"):
             rest_area_planning.check_sequence(entries, refund=case == "rest-area-refund")
             continue
-        if case in ("rest-area-completion", "rest-area-usage", "rest-area-exit", "rest-area-save", "rest-area-lifecycle", "rest-area-maxzoom"):
+        if case in REST_CASES and case not in ("rest-area-planning", "rest-area-refund"):
             continue  # Exact sequence/domain/raw checks ran together above.
         if layout_only:
             continue
@@ -639,7 +645,7 @@ def verify_root(root):
                         "ordinary RestArea completion, admission and positive Dream transfer; not art/numeric/performance/release acceptance" if manifest.get("case") == "rest-area-usage" else
                         "ordinary RestArea natural exit and active cooldown; not cooldown expiry/art/numeric/performance/release acceptance" if manifest.get("case") == "rest-area-exit" else
                         "ordinary occupied RestArea save/load with actual bytes and Entity remap; not whole-world inventory/art/numeric/performance/release acceptance" if manifest.get("case") == "rest-area-save" else
-                        "ordinary RestArea occupied save/load, post-load natural exit and observed cooldown expiry; not whole-world inventory/art/numeric/performance/release acceptance" if manifest.get("case") == "rest-area-lifecycle" else
+                        "ordinary RestArea occupied save/load, post-load natural exit and observed cooldown expiry; not whole-world inventory/art/numeric/performance/release acceptance" if manifest.get("case") in ("rest-area-lifecycle", "rest-area-candidate-lifecycle") else
                         "ordinary RestArea real delivery and construction completion feedback; not full inventory/art/release acceptance" if manifest.get("case") == "rest-area-completion" else
                         "ordinary RestArea delivered-material save/load and refund cancellation feedback; not full inventory/art/release acceptance" if manifest.get("case") == "rest-area-refund" else
                         "ordinary generated-world RestArea reservation, save/load and cancellation only; no completed art or occupancy" if manifest.get("case") == "rest-area-planning" else
@@ -742,7 +748,7 @@ def run(args):
             environment["HW_NATIVE_UI_CASE"] = case
             if case in SPA_CASES:
                 environment["HW_BUILDING_PRODUCTION_OBSERVATIONS"] = cancellation_observation_setting(directory, nonce)
-            if case in ("rest-area-planning", "rest-area-refund", "rest-area-completion", "rest-area-usage", "rest-area-exit", "rest-area-save", "rest-area-lifecycle", "rest-area-maxzoom"):
+            if case in REST_CASES:
                 if art_contract is not None:
                     view = rest_area_art.prepare_view(repo, directory, art_contract)
                     environment["BEVY_ASSET_ROOT"] = str(view)
@@ -796,9 +802,9 @@ def run(args):
                         spa_planning.exercise_slots(driver)
                     elif case == "rest-area-maxzoom":
                         rest_area_maxzoom.exercise(driver)
-                    elif case == "rest-area-lifecycle":
+                    elif case in ("rest-area-lifecycle", "rest-area-candidate-lifecycle"):
                         if art_contract is not None:
-                            rest_area_art.exercise_lifecycle(driver)
+                            rest_area_art.exercise_lifecycle(driver, candidate=case == "rest-area-candidate-lifecycle")
                         else:
                             rest_area_usage.exercise_lifecycle(driver)
                     elif case == "rest-area-save":
@@ -834,7 +840,7 @@ def run(args):
             session = {"case": case, "directory": directory.name, "nonce": nonce, "log_sha256": sha256(directory / "game.log")}
             if case in SPA_CASES:
                 session["cancellation_sha256"] = sha256(directory / "production-cancellation.json")
-            if case in ("rest-area-planning", "rest-area-refund", "rest-area-completion", "rest-area-usage", "rest-area-exit", "rest-area-save", "rest-area-lifecycle", "rest-area-maxzoom"):
+            if case in REST_CASES:
                 session["cancellation_sha256"] = sha256(directory / "production-cancellation.json")
             sessions.append(session)
         native.atomic_write_json(root / "manifest.json", {
@@ -874,7 +880,7 @@ def main():
             child.add_argument("--layout-scene", choices=("management", "normal", "selection", "pinned", "build", "display", "area", "area-details"), default="management")
             child.add_argument("--input-backend", choices=("xtest", "portal", "portal-eis", "none"), default="xtest")
             child.add_argument("--portal-consent-file", help="explicit owner-only restore-token journal; never a consent bypass")
-            child.add_argument("--rest-area-art-source", help="explicit isolated RestArea ArtPreview bytes; no approval")
+            child.add_argument("--rest-area-art-source", help="explicit RestArea ArtPreview, or approved isolated candidate only in candidate-lifecycle; no new approval")
             child.add_argument("--art-codec", help="frozen already-built codec for the ArtPreview input")
         if command == "run":
             child.add_argument("--art-contract-sha256")

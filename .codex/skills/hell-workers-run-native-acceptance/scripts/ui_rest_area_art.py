@@ -13,15 +13,16 @@ import ui_rest_area_usage as usage
 
 native, pipeline = art.native, art.pipeline
 SCOPE = "ordinary-rest-art-feedback-v1"
+CANDIDATE_SCOPE = "ordinary-rest-candidate-lifecycle-v1"
 
 
-def source_contract(repo, source_root, codec):
+def source_contract(repo, source_root, codec, *, candidate=False):
     source_root, codec = pipeline.no_symlinks(source_root), pipeline.no_symlinks(codec)
     pipeline.verify_set(source_root, "RestArea", codec)
     manifest, text, receipt = pipeline.load_set(source_root, "RestArea", codec)
-    native.require(manifest["identity"]["authority"] == "art_preview" and receipt is None,
-                   "ordinary art feedback requires an unapproved RestArea ArtPreview")
-    return {"scope": SCOPE, "source_root": str(source_root), "codec": str(codec),
+    native.require(manifest["identity"]["authority"] == ("isolated_candidate" if candidate else "art_preview")
+                   and receipt is None, "ordinary art authority differs from explicit profile")
+    return {"scope": CANDIDATE_SCOPE if candidate else SCOPE, "source_root": str(source_root), "codec": str(codec),
             "codec_sha256": pipeline.digest(codec.read_bytes()), "identity": manifest["identity"],
             "manifest_sha256": pipeline.digest(text.encode()), "artifacts": manifest["artifacts"],
             "parts": manifest["parts"],
@@ -32,6 +33,11 @@ def source_contract(repo, source_root, codec):
 
 def contract_digest(contract):
     return pipeline.digest(pipeline.canonical(contract))
+
+
+def candidate_contract(contract):
+    native.require(contract.get("scope") in (SCOPE, CANDIDATE_SCOPE), "ordinary art contract scope differs")
+    return contract["scope"] == CANDIDATE_SCOPE
 
 
 def checked_view(repo, view, *, prepared):
@@ -50,7 +56,8 @@ def checked_view(repo, view, *, prepared):
 
 
 def prepare_view(repo, directory, contract):
-    native.require(pipeline.exact_json(source_contract(repo, Path(contract["source_root"]), Path(contract["codec"])), contract),
+    native.require(pipeline.exact_json(source_contract(repo, Path(contract["source_root"]), Path(contract["codec"]),
+                                                      candidate=candidate_contract(contract)), contract),
                    "ordinary art source changed")
     view = checked_view(repo, directory / "asset-view", prepared=False)
     native.require(not view.exists(), "ordinary art view must be fresh")
@@ -87,12 +94,12 @@ def planned_contract(args, repo):
     native.require(bool(source) == bool(codec), "ordinary art needs both source and codec")
     if not source:
         native.require(not getattr(args, "art_contract_sha256", None), "unexpected art contract digest")
-        native.require(args.case != "rest-area-maxzoom", "maxzoom requires the explicit ordinary ArtPreview")
+        native.require(args.case not in ("rest-area-maxzoom", "rest-area-candidate-lifecycle"), "case requires explicit ordinary art source")
         return None
-    native.require(args.case in ("rest-area-lifecycle", "rest-area-maxzoom") and args.smoke and args.input_backend in ("portal", "portal-eis")
+    native.require(args.case in ("rest-area-lifecycle", "rest-area-maxzoom", "rest-area-candidate-lifecycle") and args.smoke and args.input_backend in ("portal", "portal-eis")
                    and not args.layout_menu, "ordinary art requires the bounded portal lifecycle recipe")
     native.require(args.case != "rest-area-maxzoom" or args.input_backend == "portal-eis", "maxzoom requires explicit EIS scroll")
-    contract = source_contract(repo, Path(source), Path(codec))
+    contract = source_contract(repo, Path(source), Path(codec), candidate=args.case == "rest-area-candidate-lifecycle")
     if getattr(args, "art_contract_sha256", None):
         native.require(contract_digest(contract) == args.art_contract_sha256, "ordinary art plan changed")
     return contract
@@ -122,7 +129,7 @@ def wait_ready(driver, contract):
         if not path.exists():
             return False
         raw = native.read_json(path)
-        native.require(raw.get("scope") == SCOPE and raw.get("failure") is None
+        native.require(raw.get("scope") == contract["scope"] and raw.get("failure") is None
                        and raw.get("nonce") == driver.last["nonce"] and raw.get("process_id") == driver.last["pid"],
                        "ordinary art raw session failed/changed")
         sample = raw.get("samples", [])[-1:] or [{}]
@@ -132,15 +139,16 @@ def wait_ready(driver, contract):
 
 
 def session_setting(directory, nonce, contract):
-    return json.dumps({"mode": "feedback", "identity": contract["identity"],
+    return json.dumps({"mode": "candidate" if candidate_contract(contract) else "feedback", "identity": contract["identity"],
                        "locator": pipeline.locator("RestArea"), "nonce": nonce,
                        "output": str(directory / "production-cancellation.json")})
 
 
 def check_consumers(raw, entries, contract):
-    native.require(raw.get("scope") == SCOPE, "ordinary art feedback scope differs")
+    candidate = candidate_contract(contract)
+    native.require(raw.get("scope") == contract["scope"], "ordinary art feedback scope differs")
     identity = contract["identity"]
-    native.require(identity.get("kind") == "RestArea" and identity.get("authority") == "art_preview"
+    native.require(identity.get("kind") == "RestArea" and identity.get("authority") == ("isolated_candidate" if candidate else "art_preview")
                    and type(identity.get("generation")) is int and identity["generation"] > 0,
                    "ordinary art identity authority differs")
     for entry in entries[2:]:
@@ -191,12 +199,13 @@ def check_consumers(raw, entries, contract):
                            "ordinary art material values differ")
 
 
-def exercise_lifecycle(driver):
+def exercise_lifecycle(driver, *, candidate=False):
     """Pass the explicitly admitted feedback scope through the live save check."""
-    usage.exercise_lifecycle(driver, raw_scope=SCOPE)
+    usage.exercise_lifecycle(driver, raw_scope=CANDIDATE_SCOPE if candidate else SCOPE)
 
 
 def check_lifecycle(raw, entries, client, save_path, contract):
     # Scope is selected by this explicit validator, never copied from raw input.
-    usage.check_lifecycle(raw, entries, client, save_path, raw_scope=SCOPE)
+    candidate_contract(contract)
+    usage.check_lifecycle(raw, entries, client, save_path, raw_scope=contract["scope"])
     check_consumers(raw, entries, contract)

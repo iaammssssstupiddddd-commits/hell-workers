@@ -22,6 +22,7 @@ pub(super) fn enabled() -> bool {
             | "rest-area-usage"
             | "rest-area-save"
             | "rest-area-lifecycle"
+            | "rest-area-candidate-lifecycle"
             | "rest-area-maxzoom"
             | "rest-area-exit")
     )
@@ -75,6 +76,7 @@ pub(super) fn snapshot(world: &mut World) -> Value {
             | "rest-area-exit"
             | "rest-area-save"
             | "rest-area-lifecycle"
+            | "rest-area-candidate-lifecycle"
             | "rest-area-maxzoom")
     ) {
         crate::assets::building_asset_set::snapshot_rest_observations(world)

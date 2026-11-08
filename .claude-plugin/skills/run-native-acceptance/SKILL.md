@@ -255,6 +255,16 @@ does not prove partial-material refunds, full reservation/inventory cleanup,
 completed art, performance or release authority. Missing producer output fails
 closed; do not synthesize it from `CancellationRequested` or disappearance.
 
+Use `--case rest-area-candidate-lifecycle --smoke --input-backend portal`
+with `--rest-area-art-source <approved-isolated-candidate>` and `--art-codec`
+for adopted RestArea bytes in ordinary natural construction, usage, occupied
+Manual1 save/load and natural exit/cooldown feedback. This explicit case requires
+packaged art/numeric provenance and exact dependency bytes. It has a separate
+candidate mode/scope; old preview feedback still rejects candidate authority.
+No default asset locator, release/promotion or gameplay rule is changed. Keep
+source, codec and overlay frozen through verification and inspect every image.
+Technical lifecycle feedback is not performance or release approval.
+
 Use the separate `--case rest-area-refund --smoke --input-backend portal` case
 to wait up to 90 seconds for real Wood delivery before Save/Load and cancellation.
 It adds a delivered checkpoint, requires unchanged material counts/progress after

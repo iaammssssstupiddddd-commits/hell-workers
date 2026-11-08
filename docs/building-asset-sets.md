@@ -734,6 +734,15 @@ receipt/capture間の全rawの永続projection・runtime reset・pause/仮想時
 これは新しい検証経路の契約であり、fresh実機pass以前は利用中保存を受入済みとしない。
 通常再開後のdirty rebuild/再割当・自然退出・採用asset表示・性能/releaseは別の未検証範囲である。
 
+RestAreaの採用済み隔離候補は、別case `rest-area-candidate-lifecycle` / mode `candidate` /
+scope `ordinary-rest-candidate-lifecycle-v1`でのみ通常worldの検証用admissionへ渡す。
+既存ArtPreview feedbackのauthority/mode/case受付と、通常起動のlocatorは変更しない。
+主担当の計画・実行・再verifyでpackaged art/numeric approvalとsource/geometry/依存bytesを既存pipelineにより検査し、
+同じmanifest/codec/base assetsのoverlayだけを作る。自然建設/利用・Manual1占有保存/読込・自然退出の
+既存lifecycleへexact consumer identity/root/part/材質検査を加える。
+candidate scopeは専用validatorが明示し、rawの自己申告から選ばない。未知scopeやpreview/release authorityの混入を拒否する。
+実機pass前はこの入口の実装だけで受入済みとせず、pass後も性能・promotion/install/release権限を付与しない。
+
 M2 probeは有効化された検証sessionだけで0.1秒ごとのdue sampleを即時公開する（最大1800 samples、
 categoryごと最大128 entities）。観測・同期書込みの負荷を含むため性能証拠には使わない。
 M2 native runnerは画像の撮影前後でraw prefix/sessionを照合し、最大2秒の待機で新sampleを要求する。

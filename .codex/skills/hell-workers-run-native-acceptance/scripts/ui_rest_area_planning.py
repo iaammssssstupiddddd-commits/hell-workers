@@ -218,7 +218,7 @@ def check_completion(raw, entries, client, *, raw_scope="production-raw-observat
                    and all(after["value"]["frame"] > before["value"]["frame"]
                            and after["last_step"] > before["last_step"]
                            for before, after in zip(entries, entries[1:])), "completion target/epoch/order differs")
-    native.require(raw_scope in ("production-raw-observations-v1", "ordinary-rest-art-feedback-v1")
+    native.require(raw_scope in ("production-raw-observations-v1", "ordinary-rest-art-feedback-v1", "ordinary-rest-candidate-lifecycle-v1")
                    and raw.get("scope") == raw_scope
                    and raw.get("schema_version") == 2 and raw.get("failure") is None
                    and raw.get("nonce") == client["nonce"] and raw.get("process_id") == client["pid"]

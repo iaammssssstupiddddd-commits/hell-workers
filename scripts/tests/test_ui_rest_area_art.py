@@ -13,6 +13,56 @@ art = completed.acceptance.rest_area_art
 
 
 class OrdinaryArtTests(unittest.TestCase):
+    def test_candidate_lifecycle_has_separate_explicit_scope_and_authority(self):
+        raw, entries, client, payload, contract = self.fixture()
+        contract["scope"] = raw["scope"] = art.CANDIDATE_SCOPE
+        contract["identity"]["authority"] = "isolated_candidate"
+        self.verify(raw, entries, client, payload, contract)
+        before = copy.deepcopy((raw, contract))
+        for field, value in (("scope", art.SCOPE), ("scope", "production-raw-observations-v1"),
+                             ("authority", "art_preview"), ("authority", "release_approved"),
+                             ("kind", "SoulSpa")):
+            changed_raw, changed_contract = copy.deepcopy(before)
+            if field == "scope":
+                changed_raw["scope"] = value
+            else:
+                changed_contract["identity"][field] = value
+            with self.subTest(field=field, value=value), self.assertRaises(RuntimeError):
+                self.verify(changed_raw, entries, client, payload, changed_contract)
+        driver = object()
+        with patch.object(art.usage, "exercise_lifecycle") as exercise:
+            art.exercise_lifecycle(driver, candidate=True)
+            exercise.assert_called_once_with(driver, raw_scope=art.CANDIDATE_SCOPE)
+        setting = art.session_setting(Path("/owned"), "b" * 32, contract)
+        self.assertEqual(art.json.loads(setting)["mode"], "candidate")
+
+    def test_candidate_source_requires_packaged_approval_and_exact_profile(self):
+        manifest = {"identity": {"authority": "isolated_candidate"}, "artifacts": [], "parts": [],
+                    "source_sha256": "s", "geometry_contract_sha256": "g"}
+        with (patch.object(art.pipeline, "no_symlinks", side_effect=lambda path: path),
+              patch.object(art.pipeline, "verify_set") as verify,
+              patch.object(art.pipeline, "load_set", return_value=(manifest, "manifest", None)),
+              patch.object(Path, "read_bytes", return_value=b"codec"),
+              patch.object(art.art, "asset_view_fingerprint", return_value="base")):
+            contract = art.source_contract(Path("/repo"), Path("/candidate"), Path("/codec"), candidate=True)
+            self.assertEqual(contract["scope"], art.CANDIDATE_SCOPE)
+            verify.assert_called_once_with(Path("/candidate"), "RestArea", Path("/codec"))
+            with self.assertRaises(RuntimeError):
+                art.source_contract(Path("/repo"), Path("/candidate"), Path("/codec"))
+            verify.side_effect = RuntimeError("numeric approval missing or altered")
+            with self.assertRaisesRegex(RuntimeError, "numeric approval"):
+                art.source_contract(Path("/repo"), Path("/candidate"), Path("/codec"), candidate=True)
+
+    def test_candidate_profile_cannot_silently_use_fallback_or_preview_mode(self):
+        args = SimpleNamespace(rest_area_art_source="/candidate", art_codec="/codec", art_contract_sha256=None,
+                               case="rest-area-candidate-lifecycle", smoke=True, input_backend="portal", layout_menu=False)
+        with patch.object(art, "source_contract", return_value={"scope": art.CANDIDATE_SCOPE}) as source:
+            self.assertEqual(art.planned_contract(args, Path("/repo")), {"scope": art.CANDIDATE_SCOPE})
+            source.assert_called_once_with(Path("/repo"), Path("/candidate"), Path("/codec"), candidate=True)
+        args.rest_area_art_source = args.art_codec = None
+        with self.assertRaises(RuntimeError):
+            art.planned_contract(args, Path("/repo"))
+
     def test_arrival_wait_is_bounded_and_requires_a_real_occupant(self):
         driver = MagicMock()
         state = {"frame": 10, "rest_area_planning": {"buildings": [99]}}
@@ -88,7 +138,7 @@ class OrdinaryArtTests(unittest.TestCase):
         identity = {"kind": "RestArea", "authority": "art_preview", "generation": 1, "manifest_sha256": "a" * 64}
         part = {"name": "body", "mesh_role": "body", "material_role": "opaque_albedo",
                 "translation_wu": [0, 0, 0], "rotation_xyzw": [0, 0, 0, 1], "scale": [1, 1, 1]}
-        contract = {"identity": identity, "parts": [part]}
+        contract = {"scope": art.SCOPE, "identity": identity, "parts": [part]}
         raw["scope"] = art.SCOPE
         completed_context = copy.deepcopy(raw["samples"][7]["rest_area_context"])
         completed_context.update(real_seconds=6.0, virtual_seconds=6.0)

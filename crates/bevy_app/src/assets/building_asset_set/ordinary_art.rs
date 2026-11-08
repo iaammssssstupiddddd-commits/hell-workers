@@ -14,6 +14,7 @@ use std::path::{Component, Path, PathBuf};
 
 const ENV: &str = "HW_BUILDING_ORDINARY_ART_SESSION";
 pub(super) const SCOPE: &str = "ordinary-rest-art-feedback-v1";
+const CANDIDATE_SCOPE: &str = "ordinary-rest-candidate-lifecycle-v1";
 const CONFLICTS: &[&str] = &[
     "HW_BUILDING_ART_SESSION",
     "HW_BUILDING_PRODUCTION_OBSERVATIONS",
@@ -42,15 +43,24 @@ fn validate(session: &Session, root: &Path, nonce: &str, case: &str) -> Result<(
                 .bytes()
                 .all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase())
     };
-    if session.mode != "feedback"
+    let profile = match session.mode.as_str() {
+        "feedback" => {
+            session.identity.authority == BuildingAssetAuthority::ArtPreview
+                && matches!(case, "rest-area-lifecycle" | "rest-area-maxzoom")
+        }
+        "candidate" => {
+            session.identity.authority == BuildingAssetAuthority::IsolatedCandidate
+                && case == "rest-area-candidate-lifecycle"
+        }
+        _ => false,
+    };
+    if !profile
         || session.identity.kind != BuildingAssetKind::RestArea
-        || session.identity.authority != BuildingAssetAuthority::ArtPreview
         || session.identity.generation == 0
         || !hex(&session.identity.manifest_sha256, 64)
         || session.locator != "manifests/building-rest-area-v1.buildingset"
         || !hex(&session.nonce, 32)
         || session.nonce != nonce
-        || !matches!(case, "rest-area-lifecycle" | "rest-area-maxzoom")
         || !root.is_absolute()
         || root
             .components()
@@ -58,10 +68,21 @@ fn validate(session: &Session, root: &Path, nonce: &str, case: &str) -> Result<(
         || session.output != root.join("production-cancellation.json")
     {
         return Err(
-            "ordinary art feedback requires exact RestArea preview and UI lifecycle context".into(),
+            "ordinary art requires exact RestArea authority, mode and UI lifecycle context".into(),
         );
     }
     Ok(())
+}
+
+pub(super) fn scope(world: &World) -> &'static str {
+    if world
+        .get_resource::<Session>()
+        .is_some_and(|session| session.mode == "candidate")
+    {
+        CANDIDATE_SCOPE
+    } else {
+        SCOPE
+    }
 }
 
 pub(super) fn configure(app: &mut App) -> Result<(), String> {
@@ -302,6 +323,56 @@ mod tests {
         "kind": "RestArea", "authority": "art_preview", "generation": 1, "manifest_sha256": "a".repeat(64)},
         "locator": "manifests/building-rest-area-v1.buildingset", "nonce": "b".repeat(32),
         "output": "/private/session/production-cancellation.json"})
+    }
+
+    #[test]
+    fn candidate_requires_its_explicit_mode_case_and_exact_authority() {
+        let root = Path::new("/private/session");
+        let mut candidate = value();
+        candidate["mode"] = json!("candidate");
+        candidate["identity"]["authority"] = json!("isolated_candidate");
+        let good: Session = serde_json::from_value(candidate.clone()).unwrap();
+        validate(
+            &good,
+            root,
+            &"b".repeat(32),
+            "rest-area-candidate-lifecycle",
+        )
+        .unwrap();
+        for case in [
+            "rest-area-lifecycle",
+            "rest-area-maxzoom",
+            "soul-spa-usage",
+            "navigation",
+        ] {
+            assert!(validate(&good, root, &"b".repeat(32), case).is_err());
+        }
+        for (path, replacement) in [
+            ("/mode", json!("feedback")),
+            ("/mode", json!("release")),
+            ("/identity/kind", json!("SoulSpa")),
+            ("/identity/authority", json!("art_preview")),
+            ("/identity/authority", json!("release_approved")),
+            ("/identity/generation", json!(0)),
+            ("/nonce", json!("c".repeat(32))),
+        ] {
+            let mut changed = candidate.clone();
+            *changed.pointer_mut(path).unwrap() = replacement;
+            let session: Session = serde_json::from_value(changed).unwrap();
+            assert!(
+                validate(
+                    &session,
+                    root,
+                    &"b".repeat(32),
+                    "rest-area-candidate-lifecycle"
+                )
+                .is_err()
+            );
+        }
+        let mut app = App::new();
+        assert_eq!(scope(app.world()), SCOPE);
+        app.insert_resource(good);
+        assert_eq!(scope(app.world()), CANDIDATE_SCOPE);
     }
 
     #[test]
