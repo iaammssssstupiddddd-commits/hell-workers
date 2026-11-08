@@ -947,6 +947,35 @@ Python計画段階で既存pipelineのart/numeric/provenance検査を通し、ex
 旧feedbackのcandidate拒否と未知mode・authority・case混在・承認欠損・source改変の拒否を回帰で維持する。
 変更別CI・Help・storage・独立read-only review後にfresh実機を行い、技術passをpromotion/release承認にしない。
 
+`4d73f230`でこの専用入口を実装した。独立read-only reviewはbase1d506487からの12file diff
+`5cea909a0f5598b301ff016ec5ef911870c55e7f4016b7ee981bcbb9d1bbb6d5`をapproved。
+関連Python123件、Skill全self-test/quick_validate、変更別contracts/tooling/deps/rust、
+通常/profiling Clippy警告0、dev check、Help実No impact、RA errors/warnings0、storageを通過。
+dirty CI sourceは `b9fa6cbd75d3f65d61e8d6d592cc580c4b065d1fc34ffc17de99d64e519aca33`。
+fresh `tak14-restarea-candidate-lifecycle-20261108-v1`は同commitのsource
+`d409e6dca2f08d758b7ab7b19f98e2648a3d930047460e20e98b2192e622720b`、harness
+`e86061c29d0bfecbe076cf5743b301152b35d0f7a7e2e970076865d25d962cd2`へ拘束してpass。
+候補8e4e8003世代1の自然Wood5配送/完成、利用、Manual1占有save/load、同Soul自然退出と15秒cooldown満了を照合した。
+old owner2353v26→2102v1、Soul1875v0→866v1を21件の実remapから追跡し、
+停止virtual69.203485144、Hidden/Dream0.8700123429298401を保持。復元後のDream全放出とVisible/walkable復帰、
+初消失sample456/virtual86.203485144のcooldown満了を観測した。
+実保存496819bytes、SHA `ddaa733c101105e7eed412f432b470dc70038e932852a40ecbc75d3a5c597671`。
+manifest `7181e31f374514b2f921a67e57a98e92c72bc3559820f32f5cb94d5a3e9fa258`、
+raw `b39319b45359c48c6694d9c657479a9e14f282edf2dfcf4ac34a4808e76e91ac`。
+main/独立reviewは全9PNG/hashとexact owner/root/body/mesh/albedo/親子/材質/poseを照合して限定feedbackをapproved。
+初期未readyとload commit直後の一過性pose/visible未readyがあり、安定captureでの復帰を確認した結果である。
+frame原子性・全rawにわたる表示無変化は主張しない。人物/効果が入口を遮るため個体の入退出はrawで判断する。
+Intel Arc/Vulkan WARN/ERRORなし。HUD FPS4を性能合格とせず、性能/promotion/release/9種全体は未達。
+別CLI/登録verifier・seal/finalize/storage pass、201,674,752Bを採用SoulSpaとの具体的M3 consumer比較に保持する。
+
+M5のParking/Sand/Boneの独立棚卸しでは、現存exact ArtPreviewのcanvas/anchorに不整合はないが採否証拠が不足。
+Sand/Boneの旧near命名は実plan/probeではnormal/scale1であり、近景実測と扱わない。
+Parkingは車体重なりと緑寄りの実表示があり、暗木材の判断を分離できない（色差の原因は未確定）。
+Bone原本は関節二瘤/隙間を持つ改善版で、batch名v1だけから初期板状不採用と混同しない。
+3種の正式art/numeric判断は保留し、paint変更に入らず、現subjectで明示near/normal/最大zoomと
+低品質、明暗地形・Wall/Soul重なり、実descriptor previewの不足比較を段階的に補う。
+距離比較の既存static galleryはseeded技術証拠のみで、後段のcontext/通常入力/採否/正式releaseを代替しない。
+
 ## 5. マイルストーン
 
 ### M1: 原本・候補
