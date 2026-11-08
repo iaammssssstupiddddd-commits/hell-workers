@@ -88,16 +88,28 @@ def check_observation(case, value, identity):
     pipeline.require(texts and ui.m5.finite(value.get("tooltip_alpha")) and value["tooltip_alpha"] == 1.
                      and all(ui.m5.finite(row.get("alpha")) and row["alpha"] == 1. for row in texts),
                      "M2 UI tooltip fade has not settled")
-    visible = [row["text"] for row in texts
+    visible = [row for row in texts
                if ui.rest_area_maxzoom.visible_rect(row.get("rect"), value["viewport"])
                and row.get("root") == value["tooltip_presentation"]["entity"]
                and row.get("fully_visible") is True and row.get("primary_camera") is True
                and row["alpha"] == 1.]
     expected = f"Building: Tank: Water ({CASES[case][1]}/50)" if CASES[case][0] == "Tank" else "Task: Refine (Refining { progress: 0.0 })"
+    matches = any(expected in row["text"].splitlines() for row in visible)
+    if case == "m2-ui-mixer-refining":
+        # The ordinary tooltip formatter may split the task into two Text rows.
+        # Only exact, ordered, adjacent, aligned rows in this owned root can join.
+        ordered = sorted(visible, key=lambda row: (row["rect"][1], row["rect"][0]))
+        matches |= any(type(a.get("entity")) is int and type(b.get("entity")) is int
+                       and a["entity"] != b["entity"]
+                       and a["text"] + " " + b["text"] == expected
+                       and abs(a["rect"][0] - b["rect"][0]) <= 1.
+                       and abs(a["rect"][2] - b["rect"][2]) <= 1.
+                       and abs(b["rect"][1] - a["rect"][3]) <= 1.
+                       for a, b in zip(ordered, ordered[1:]))
     pipeline.require(ui.m5.finite(value.get("tooltip_alpha")) and value["tooltip_alpha"] >= .95
                      and value.get("tooltip_presentation") is not None
                      and ui.rest_area_maxzoom.visible_rect(value["tooltip_presentation"].get("rect"), value["viewport"])
-                     and any(expected in text.splitlines() for text in visible), "M2 UI actual visible state text differs")
+                     and matches, "M2 UI actual visible state text differs")
     return ctx
 
 

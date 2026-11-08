@@ -37,6 +37,31 @@ def observed(case="m2-ui-tank-partial"):
 
 
 class M2UiTests(unittest.TestCase):
+    def test_mixer_task_can_wrap_only_across_two_adjacent_owned_visible_rows(self):
+        value = observed("m2-ui-mixer-refining")
+        first = value["tooltip_text"][0]
+        first.update(text="Task: Refine (Refining { progress:", rect=[1005., 686., 1216., 703.])
+        second = copy.deepcopy(first)
+        second.update(entity=82, text="0.0 })", rect=[1005., 703., 1216., 720.])
+        value["tooltip_text"].append(second)
+        recipe.check_observation("m2-ui-mixer-refining", value, value["m2_ui"]["identity"])
+        for mutate in (
+            lambda v: v["tooltip_text"][1].update(root=99),
+            lambda v: v["tooltip_text"][1].update(entity=81),
+            lambda v: v["tooltip_text"][1].update(text="1.0 })"),
+            lambda v: v["tooltip_text"][1].update(fully_visible=False),
+            lambda v: v["tooltip_text"][1].update(primary_camera=False),
+            lambda v: v["tooltip_text"][1].update(alpha=.9999),
+            lambda v: v["tooltip_text"][1].update(rect=[1005., 900., 1216., 917.]),
+            lambda v: v["tooltip_text"][1].update(rect=[969., 703., 1216., 720.]),
+            lambda v: v["tooltip_text"][1].update(rect=[1005., 600., 1216., 617.]),
+            lambda v: v["tooltip_text"][1].update(rect=[1005., 1078., 1216., 1095.]),
+        ):
+            changed = copy.deepcopy(value)
+            mutate(changed)
+            with self.subTest(mutate=mutate), self.assertRaises(ValueError):
+                recipe.check_observation("m2-ui-mixer-refining", changed, changed["m2_ui"]["identity"])
+
     def test_capture_readiness_waits_for_all_real_tooltip_fades_to_finish(self):
         value = observed()
         identity = value["m2_ui"]["identity"]

@@ -127,6 +127,12 @@ v4はfade終端を通過したが、verifierがproduction rootへfallback用Y12.
 失敗をseal/診断用途保持/finalize後、verifierだけを同製品契約へ補正する。owner XY→root X/-Z、独立global合成、
 identity/mesh/material/状態のexact検査は維持し、12.8やowner描画Zの流用を拒否するRED回帰を追加する。
 次のfresh Partialはv5。旧invalidをpassへ読み替えず、実機・美術・releaseは引き続き別判定とする。
+同HEAD `31b64455` でTank Partial v5/Empty v1/Full v1はowned実画像・独立verify/seal・比較用途保持・finalizeがpass。
+Mixer Refining v1はexact worker hover・Refining関係・完全表示まで成立したが、通常tooltipがtaskを2つのText行へ
+折り返したため、1行完全一致のready条件でtimeoutとなりinvalid。入力再送なし、診断保持/seal/finalize済み。
+verifierだけを同一root・全表示/alpha1・同X幅・上下隣接・別Entityの順序付き2行完全一致へ対応させる。
+他root/非隣接/欠落/別progressを連結せず、元のowner/task/clip/camera/時間/描画検査は維持する。
+次のfresh Mixerはv2。旧Tank結果は同identityの画像比較材料として保持し、新subjectへの合格流用はしない。
 
 2026-11-09の独立read-onlyアート監査では、Sand/Boneの現ArtPreview世代1を見た目だけ採用した。
 Sand `dbdf3e6ba5557f1b91b59a4e7d19c0bc1afe68e96c745d0dcbefd3f7b637d4e5` は低い黄土色の塊と大色面、
