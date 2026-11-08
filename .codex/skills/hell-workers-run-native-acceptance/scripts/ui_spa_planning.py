@@ -216,7 +216,7 @@ def verify(raw, entries, client, save_path, inputs, *, persistence=False):
     if persistence:
         end = raw_checkpoint(raw, values[2])["sample_index"]
         prefix = dict(raw, samples=samples[:end + 1], events=[e for e in events if e["sample_index"] <= end])
-        verify_completion(prefix, entries[:3], client, inputs[:entries[2]["last_step"]])
+        verify_completion(prefix, entries[:3], client, inputs[:entries[2]["last_step"]], persistence=True)
         interval = samples[end:snapshots[3]["sample_index"] + 1]
         native.require(all(s.get("paused") is True and s.get("world_epoch") == baseline["world_epoch"]
                            and s.get("primary_window") == snapshots[2]["primary_window"]
@@ -664,7 +664,7 @@ def check_operational(state, plan):
                    "Spa completion grid/output differs")
 
 
-def verify_completion(raw, entries, client, inputs):
+def verify_completion(raw, entries, client, inputs, *, persistence=False):
     native.require([e["case"] for e in entries] == list(COMPLETION_CHECKPOINTS), "Spa completion inventory differs")
     check_raw_session(raw, client)
     snapshots = []
@@ -730,16 +730,16 @@ def verify_completion(raw, entries, client, inputs):
                    and any(s["paused"] is False and start <= s["real_seconds"] <= end
                            and s["virtual_seconds"] > snapshots[1]["virtual_seconds"] for s in interval)
                    and snapshots[2]["virtual_seconds"] > snapshots[1]["virtual_seconds"]
-                   and 0 < snapshots[2]["real_seconds"] - snapshots[1]["real_seconds"] <= 190
+                   and 0 < snapshots[2]["real_seconds"] - snapshots[1]["real_seconds"] <= (310 if persistence else 190)
                    and not any(e.get("operation") in ("DurableSave", "DurableLoad", "SoulSpaConstructionCancel", "SoulSpaSlotsChange")
                                for e in raw["events"]), "Spa completion elapsed/progress/operation differs")
 
 
-def exercise_completion(driver):
+def exercise_completion(driver, *, persistence=False):
     exercise_placement(driver, COMPLETION_CHECKPOINTS)
     pause(driver, False)
     driver.last = driver.wait(lambda v: len(context(v)["sites"]) == 1
-                              and context(v)["sites"][0].get("phase") == "Operational", after=driver.last["frame"], timeout=180)
+                              and context(v)["sites"][0].get("phase") == "Operational", after=driver.last["frame"], timeout=300 if persistence else 180)
     pause(driver, True)
     driver.capture(COMPLETION_CHECKPOINTS[2])
     wait_final_raw(driver)
@@ -910,7 +910,7 @@ def check_persistence_observation(case, value):
 
 
 def exercise_persistence(driver):
-    exercise_completion(driver)
+    exercise_completion(driver, persistence=True)
     check_persistence_observation(COMPLETION_CHECKPOINTS[-1], driver.last)
     tap(driver, "F5")
     driver.last = driver.wait(lambda v: any(k.startswith("menu:SelectSaveCatalogSlot") for k in v["controls"]), after=driver.last["frame"])

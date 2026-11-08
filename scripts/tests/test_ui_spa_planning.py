@@ -473,6 +473,38 @@ class SpaPlanningTests(unittest.TestCase):
                 with self.subTest(case=case), self.assertRaises(spa.native.AcceptanceError):
                     spa.verify_completion(raw, entries, client, inputs)
 
+    def test_persistence_construction_has_one_separate_bounded_wait(self):
+        driver = Mock(last={"frame": 100})
+        driver.wait.return_value = {"frame": 200}
+        with patch.object(spa, "exercise_placement"), patch.object(spa, "pause"), patch.object(spa, "wait_final_raw"):
+            spa.exercise_completion(driver, persistence=True)
+        driver.wait.assert_called_once()
+        self.assertEqual(driver.wait.call_args.kwargs["timeout"], 300)
+        driver.send.assert_not_called()
+        with tempfile.TemporaryDirectory() as directory:
+            save = Path(directory) / "saves/manual-1.scn.ron"
+            save.parent.mkdir()
+            for factor in (12, 16):
+                raw, entries, client, inputs = self.completion_fixture(save)
+                def retime(row):
+                    if row["real_seconds"] > 10:
+                        row["real_seconds"] = 10 + factor * (row["real_seconds"] - 10)
+                for row in raw["samples"] + raw["events"]:
+                    retime(row)
+                for entry in entries:
+                    retime(entry["value"]["spa_planning"])
+                for row in inputs:
+                    if "spa_action" in row:
+                        for side in ("before", "after"):
+                            retime(row["spa_action"][side]["spa_planning"])
+                with self.assertRaises(spa.native.AcceptanceError):
+                    spa.verify_completion(raw, entries, client, inputs)
+                if factor == 12:
+                    spa.verify_completion(raw, entries, client, inputs, persistence=True)
+                else:
+                    with self.assertRaises(spa.native.AcceptanceError):
+                        spa.verify_completion(raw, entries, client, inputs, persistence=True)
+
     def test_operational_worker_inverse_and_derived_output_are_exact(self):
         with tempfile.TemporaryDirectory() as directory:
             save = Path(directory) / "saves/manual-1.scn.ron"

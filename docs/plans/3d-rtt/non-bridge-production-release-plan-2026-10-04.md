@@ -742,6 +742,16 @@ Help実レビュー・拒否系試験・変更別CI/Clippy・独立read-only rev
 診断終了したusage v1〜v4は正式consumer解除・終了process/open fileなし・非symlink・生成物だけと確認し撤去した。
 du合計160,788,480B減（原本・候補・最新v5・共有Cargo cacheは維持）。invalid metadata/結果履歴は保全する。
 
+`2ba8332a`のpersistence v1は施工待機180実秒でtimeoutし、保存/読込へ未到達のinvalidとして
+seal/finalizeした。最終real204.229823432/virtual68.017569753、site2276v1/Bone0。WARN/ERRORなし。
+rawの実AssignedTaskを照合するとSoul1848v0/1854v0は別cart909v0/910v0でBone10ずつを自然採集し、
+同siteへのGoingToDestinationを継続していた。1848v0は仮想6.673/位置[-432,-432]から
+仮想67.767/位置[560,144]まで移動しており、搬入producer不在や同cart競合と断定しない。
+今回は実時間上限に対する仮想進行の遅さと実移動経路が観測できたため、persistence専用の施工待機だけ
+300実秒へ一度有界化する。施工raw/receipt/空施設/保存検査は不変で、既存completion/usageの180秒は維持する。
+全480秒/1200raw上限を維持し、fresh v2でも不成立なら同系統の待機延長を打ち切る。
+旧v1の26,980,352Bは移動経路と次の一回比較の診断用途で保持し、失敗を成功へ読み替えない。
+
 ## 5. マイルストーン
 
 ### M1: 原本・候補
