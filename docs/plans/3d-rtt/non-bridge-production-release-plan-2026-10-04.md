@@ -806,6 +806,19 @@ ObjectはSoul/Resourceより後順位であることを確認した。全members
 点だけで通常クリックを一度行う。解決点なしはpress前に拒否し、任意座標や候補・選択の注入はしない。
 単体回帰、Help No impact判断、独立コードreviewとfresh実機を経るまで、枠変更は未受入のまま。
 
+`801ef1ae`のfresh slots v2はsource `6c4a146668f9ac330383168f4c49bce20dd44e83e4c538a23cea06311f265356`、
+harness `4f3ff9e8e2ce77fce8f730b357ddc6837d6fd2660f857dbad75165c12343037b`へ拘束した。
+通常Bone12施工後、Soul1872v0/1878v0のGenerating・出力2と通常6.75仮想秒の利用prefixを観測したが、
+5点のfirst-Direct-Object probeはnullで選択motion/press前にinvalid停止。real298.970581711、
+virtual145.838831046、active_slots4のまま。子終了確認・invalid seal/finalize、49,233,920Bを補正比較に保持した。
+probe nullは先頭候補なしと内部照会不成立を区別しないため、施設欠落やResource遮蔽とは断定しない。
+先頭Direct点を探す仮説はここで打ち切り、既存pickerへの通常スクロールを明示試験経路にする。
+同じ5点で施設がDirect Object候補内にいることを受動確認し、先頭なら優先、重なれば一回clickして
+実picker inventoryの同owner/revision/epochを照合する。専用ScrollArea keyと実MouseWheelを受動公開し、
+最大8wheel pairで進行・所有window・不変camera/選択/worldを確認してからfully-visibleのowner行を一回選ぶ。
+無進行・再構築・不明owner・送信前wheel・別window・overflowは拒否。順位変更やscroll/選択の直接設定はしない。
+fresh実機の全7checkpointと登録verifyを終えるまで、利用枠・正式art/performance/releaseは未受入。
+
 ## 5. マイルストーン
 
 ### M1: 原本・候補

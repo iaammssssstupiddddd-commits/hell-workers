@@ -90,6 +90,37 @@ struct CandidatePanel;
 #[derive(Component)]
 struct CandidatePopup;
 
+#[cfg(feature = "profiling")]
+#[derive(Component)]
+struct CandidateList;
+
+/// Read-only inventory; a hidden row is not an input target until normally scrolled into view.
+#[cfg(feature = "profiling")]
+pub(crate) fn native_inventory(world: &World) -> serde_json::Value {
+    let Some(state) = world.get_resource::<OverlapCandidates>() else {
+        return serde_json::Value::Null;
+    };
+    if state.entries.len() > 256 {
+        return serde_json::json!({"failure": "candidate observation cap exceeded"});
+    }
+    serde_json::json!({"revision": state.revision, "epoch": state.epoch.get(),
+        "anchor": state.anchor.map(|point| point.to_array()),
+        "entries": state.entries.iter().map(|(entity, class)|
+            serde_json::json!({"entity": entity.to_bits(), "class": format!("{class:?}")}))
+            .collect::<Vec<_>>()})
+}
+
+#[cfg(feature = "profiling")]
+pub(crate) fn native_scroll_key(world: &World, entity: Entity) -> Option<String> {
+    world.get::<CandidateList>(entity)?;
+    let state = world.get_resource::<OverlapCandidates>()?;
+    Some(format!(
+        "scroll:world-candidates:{}:{}",
+        state.revision,
+        state.epoch.get()
+    ))
+}
+
 /// Never changed in place: a revision rebuilds the button entities, cancelling armed input.
 #[derive(Component, Clone, Copy)]
 struct CandidateButton {
@@ -274,6 +305,8 @@ pub(crate) fn candidate_picker(
                 RelativeCursorPosition::default(),
             ))
             .id();
+        #[cfg(feature = "profiling")]
+        commands.entity(list).insert(CandidateList);
         for (index, (target, class)) in snapshot.entries.iter().enumerate() {
             let fallback = match class {
                 SelectionTargetClass::Familiar => "使い魔",
@@ -406,6 +439,33 @@ mod tests {
             world.get::<CandidateButton>(row).unwrap().target,
             Some(target)
         );
+    }
+
+    #[cfg(feature = "profiling")]
+    #[test]
+    fn native_picker_inventory_and_scroll_key_are_passive_and_bounded() {
+        let mut world = World::new();
+        let list = world.spawn(CandidateList).id();
+        assert!(native_inventory(&world).is_null());
+        assert!(native_scroll_key(&world, list).is_none());
+        let owner = world.spawn_empty().id();
+        let mut state = OverlapCandidates::default();
+        state.latch(Vec2::ONE, &[target(owner, SelectionTargetClass::Object)]);
+        world.insert_resource(state);
+        let count = world.entities().len();
+        let observed = native_inventory(&world);
+        assert_eq!(observed["anchor"], serde_json::json!([1., 1.]));
+        assert_eq!(observed["entries"][0]["entity"], owner.to_bits());
+        assert_eq!(observed["entries"][0]["class"], "Object");
+        assert_eq!(
+            native_scroll_key(&world, list).as_deref(),
+            Some("scroll:world-candidates:1:0")
+        );
+        assert!(native_scroll_key(&world, owner).is_none());
+        assert_eq!(world.entities().len(), count);
+        world.resource_mut::<OverlapCandidates>().entries =
+            vec![(owner, SelectionTargetClass::Object); 257];
+        assert!(native_inventory(&world).get("failure").is_some());
     }
 
     fn target(entity: Entity, class: SelectionTargetClass) -> SelectionCandidate {

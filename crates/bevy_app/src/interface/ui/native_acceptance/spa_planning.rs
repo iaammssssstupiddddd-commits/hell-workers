@@ -103,9 +103,9 @@ pub(super) fn snapshot(world: &mut World) -> Value {
                     .collect();
                 points.push(geometry.draw_pos);
                 crate::interface::selection::native_direct_owner_point(world, owner, &points).map(
-                    |(point, screen)| {
+                    |(point, screen, rank)| {
                         json!({"owner": owner.to_bits(), "world": point.to_array(),
-                        "point": screen.to_array(), "hit": "Direct", "class": "Object"})
+                        "point": screen.to_array(), "hit": "Direct", "class": "Object", "rank": rank})
                     },
                 )
             })
@@ -118,6 +118,7 @@ pub(super) fn snapshot(world: &mut World) -> Value {
         "task_mode": format!("{:?}", world.resource::<crate::app_contexts::TaskContext>().0),
         "point": projected.map(|p| p.to_array()), "owner_point": owner_projected.map(|p| p.to_array()),
         "selection_target": selection_target,
+        "picker": crate::interface::selection::candidates::native_inventory(world),
         "selection_point": selection_target.as_ref().and_then(|value| value.get("point")),
         "legal": legal(world.resource::<WorldMap>(), &yards, anchor), "cells": cells, "context": context})
 }

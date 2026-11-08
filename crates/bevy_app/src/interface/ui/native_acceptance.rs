@@ -370,6 +370,9 @@ fn visible_rect(world: &World, entity: Entity, viewport: Vec2) -> Option<[f32; 4
 }
 
 fn node_key(world: &World, entity: Entity) -> Option<String> {
+    if let Some(key) = crate::interface::selection::candidates::native_scroll_key(world, entity) {
+        return Some(key);
+    }
     if let Some(item) = world.get::<SoulListItem>(entity) {
         return Some(format!("soul:{}", item.0.to_bits()));
     }

@@ -33,7 +33,7 @@ pub(crate) fn native_direct_owner_point(
     world: &mut World,
     owner: Entity,
     points: &[Vec2],
-) -> Option<(Vec2, Vec2)> {
+) -> Option<(Vec2, Vec2, usize)> {
     use bevy::ecs::system::SystemState;
     if points.is_empty() || points.len() > 5 || points.iter().any(|point| !point.is_finite()) {
         return None;
@@ -51,18 +51,25 @@ pub(crate) fn native_direct_owner_point(
         .and_then(|selected| selected.0);
     let mut state = SystemState::<SelectionResolver>::new(world);
     let resolver = state.get(world).ok()?;
-    points.iter().find_map(|&point| {
+    let mut overlapping = None;
+    for &point in points {
         let screen = camera
             .world_to_viewport(&transform, point.extend(0.0))
             .ok()?;
         let candidates = resolver.resolve(screen, point, &camera, &transform, selected);
-        candidates.first().filter(|candidate| {
+        let rank = candidates.iter().position(|candidate| {
             candidate.entity == owner
                 && candidate.class == SelectionTargetClass::Object
                 && candidate.hit == SelectionHitKind::Direct
-        })?;
-        Some((point, screen))
-    })
+        });
+        if let Some(rank) = rank {
+            if rank == 0 {
+                return Some((point, screen, rank));
+            }
+            overlapping.get_or_insert((point, screen, rank));
+        }
+    }
+    overlapping
 }
 
 type ActorQuery<'w, 's, Marker> = Query<
@@ -614,9 +621,12 @@ mod tests {
         world.insert_resource(hw_core::selection::SelectedEntity(Some(soul)));
         let before = world.resource::<WorldMap>().snapshot_owner(owner);
         let count = world.entities().len();
-        assert!(native_direct_owner_point(&mut world, owner, &[occupied]).is_none());
-        let (point, screen) =
+        let (point, _, rank) = native_direct_owner_point(&mut world, owner, &[occupied]).unwrap();
+        assert_eq!(point, occupied);
+        assert_eq!(rank, 1);
+        let (point, screen, rank) =
             native_direct_owner_point(&mut world, owner, &[occupied, free]).unwrap();
+        assert_eq!(rank, 0);
         assert_eq!(point, free);
         assert!(screen.distance(Vec2::new(976., 524.)) < 0.001);
         assert_eq!(

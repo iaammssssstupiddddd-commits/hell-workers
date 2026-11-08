@@ -218,8 +218,13 @@ closed. The whole-session and raw caps remain unchanged. This is limited slot
 feedback, not occupied persistence, natural exit, art, performance or release.
 Before the world click, the profiling observer evaluates at most the four owned
 tile centers and site center through the unchanged ordinary SelectionResolver.
-It exposes a point only when that exact owner is the first Direct Object target.
-No selection or candidate ranking is changed; no eligible point means no press.
+It prefers a point where that exact owner is the first Direct Object target.
+If the owner is a lower-ranked Direct Object, one world click must latch its real
+revision/epoch-bound picker inventory. At most eight actual downward wheel pairs
+may expose its fully visible row. Each pair requires one new MouseWheel witness,
+same owned client/list/inventory, increasing ScrollPosition and unchanged camera,
+selection and paused world. No progress, drift, overflow or missing owner stops
+without retry. No eligible Direct Object point means no press; ranking is unchanged.
 
 Select `--case rest-area-planning --smoke --input-backend portal` for ordinary
 RestArea reservation, Manual1 Save/Load and two-stage Task Dashboard cancellation.

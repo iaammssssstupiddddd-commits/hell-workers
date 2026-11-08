@@ -617,7 +617,7 @@ class SpaPlanningTests(unittest.TestCase):
             before["spa_planning"].update(real_seconds=float(now), virtual_seconds=virtual,
                                          context=copy.deepcopy(state), selection_point=[100, 100],
                                          selection_target={"owner": 1, "world": [0, 0], "point": [100, 100],
-                                                           "hit": "Direct", "class": "Object"}, task_mode="None")
+                                                           "hit": "Direct", "class": "Object", "rank": 0}, task_mode="None")
             first = len(inputs)
             for i, pressed in enumerate((True, False)):
                 if not pressed:
@@ -797,7 +797,7 @@ class SpaPlanningTests(unittest.TestCase):
             driver = Mock(last=copy.deepcopy(entries[-1]["value"]))
             driver.last.update(selected=999, controls={})
             driver.last["spa_planning"].update(selection_point=[100, 100], selection_target={
-                "owner": 1, "world": [0, 0], "point": [100, 100], "hit": "Direct", "class": "Object"})
+                "owner": 1, "world": [0, 0], "point": [100, 100], "hit": "Direct", "class": "Object", "rank": 0})
             with patch.object(spa, "exercise_usage") as prefix, patch.object(spa, "world_click") as world:
                 with self.assertRaises(spa.native.AcceptanceError):
                     spa.exercise_slots(driver)
@@ -829,7 +829,7 @@ class SpaPlanningTests(unittest.TestCase):
             self.assertEqual(spa.check_selection_target(baseline), [100, 100])
             for patch_value in (None, {"owner": 2}, {"owner": True}, {"world": [500, 500]},
                                 {"world": [float("nan"), 0]}, {"point": [float("inf"), 100]},
-                                {"hit": "Snapped"}, {"class": "Soul"}):
+                                {"hit": "Snapped"}, {"class": "Soul"}, {"rank": True}, {"rank": -1}, {"rank": 256}):
                 value = copy.deepcopy(baseline)
                 if patch_value is None:
                     value["spa_planning"]["selection_target"] = None
@@ -847,6 +847,140 @@ class SpaPlanningTests(unittest.TestCase):
                 with self.assertRaises(spa.native.AcceptanceError):
                     spa.exercise_slots(driver)
                 world.assert_not_called()
+                driver.send.assert_not_called()
+
+    def picker_scroll_fixture(self):
+        key = "scroll:world-candidates:7:0"
+        state = self.state(1)
+        before = {"nonce": "n", "pid": 10, "world_epoch": 0, "primary_window": 3, "camera": ["fixed"],
+                  "selected": 400, "paused": True, "pointer_over_ui": True, "world_input_captured": False,
+                  "wheel_overflow": False, "wheel_events": [], "cursor": [150, 120], "frame": 10,
+                  "spa_planning": {"context": state, "virtual_seconds": 8., "picker": {
+                      "revision": 7, "epoch": 0, "anchor": [0, 0], "entries": [
+                          {"entity": 400, "class": "Soul"}, {"entity": 1, "class": "Object"}]}},
+                  "controls": {key: {"entity": 55, "fully_visible": True, "rect": [100, 100, 200, 200], "scroll": [0, 0]}}}
+        after = copy.deepcopy(before)
+        after["frame"] = 20
+        after["controls"][key]["scroll"][1] = 24.
+        after["wheel_events"] = [{"index": 0, "frame": 18, "epoch": 0, "window": 3,
+                                  "phase": "Moved", "unit": "Line", "delta": [0, -1]}]
+        motion = {"point": [150, 120], "button": None, "key": None, "nonce": "n", "pid": 10,
+                  "window": 100, "world_epoch": 0, "pre_frame": 5, "post_frame": 10}
+        sent = [{"step": str(i + 2), "button": 5, "pressed": pressed, "point": None, "key": None,
+                 "nonce": "n", "pid": 10, "window": 100, "world_epoch": 0, "pre_frame": 10 + i * 3, "post_frame": 13 + i * 3}
+                for i, pressed in enumerate((True, False))]
+        action = {"key": key, "window": 100, "first_step": 2, "last_step": 3, "before": before, "after": after}
+        return key, action, [motion, *sent]
+
+    def test_picker_wheel_requires_real_receipt_progress_and_unchanged_context(self):
+        _, action, inputs = self.picker_scroll_fixture()
+        spa.check_picker_scroll(action, inputs, action["after"]["wheel_events"])
+        self.assertEqual(spa.picker_target(action["before"], 1), "world-candidate:1:7:0")
+        for mutation in ("no-wheel", "extra-wheel", "wrong-window", "wrong-epoch", "wrong-direction", "overflow",
+                         "no-progress", "list-rebuilt", "revision", "owner", "pointer", "camera", "world-time", "transport",
+                         "foreign-motion", "foreign-pair", "early-wheel"):
+            key, action, inputs = self.picker_scroll_fixture()
+            b = action["after"]
+            if mutation == "no-wheel":
+                b["wheel_events"] = []
+            elif mutation == "extra-wheel":
+                b["wheel_events"] *= 2
+            elif mutation == "wrong-window":
+                b["wheel_events"][0]["window"] = 999
+            elif mutation == "wrong-epoch":
+                b["wheel_events"][0]["epoch"] = 1
+            elif mutation == "wrong-direction":
+                b["wheel_events"][0]["delta"][1] = 1
+            elif mutation == "overflow":
+                b["wheel_overflow"] = True
+            elif mutation == "no-progress":
+                b["controls"][key]["scroll"][1] = 0
+            elif mutation == "list-rebuilt":
+                b["controls"][key]["entity"] = 56
+            elif mutation == "revision":
+                b["spa_planning"]["picker"]["revision"] = 8
+            elif mutation == "owner":
+                b["spa_planning"]["picker"]["entries"][-1]["entity"] = 2
+            elif mutation == "pointer":
+                b["cursor"] = [201, 120]
+            elif mutation == "camera":
+                b["camera"] = ["changed"]
+            elif mutation == "world-time":
+                b["spa_planning"]["virtual_seconds"] += 1
+            elif mutation == "foreign-motion":
+                inputs[0]["window"] = 999
+            elif mutation == "foreign-pair":
+                inputs[1]["window"] = inputs[2]["window"] = 999
+            elif mutation == "early-wheel":
+                b["wheel_events"][0]["frame"] = 12
+            else:
+                inputs[2]["button"] = 1
+            with self.subTest(mutation=mutation), self.assertRaises(spa.native.AcceptanceError):
+                spa.check_picker_scroll(action, inputs, b["wheel_events"])
+
+    def test_picker_inventory_rejects_absent_duplicate_foreign_and_boolean_owner(self):
+        _, action, _ = self.picker_scroll_fixture()
+        baseline = action["before"]
+        for patch_value in ({"entries": []}, {"epoch": 1}, {"revision": True},
+                            {"entries": [{"entity": 1, "class": "Object"}] * 2},
+                            {"entries": [{"entity": True, "class": "Object"}, {"entity": 400, "class": "Soul"}]},
+                            {"entries": [{"entity": 1, "class": "Resource"}, {"entity": 400, "class": "Soul"}]}):
+            value = copy.deepcopy(baseline)
+            value["spa_planning"]["picker"].update(patch_value)
+            with self.subTest(patch_value=patch_value), self.assertRaises(spa.native.AcceptanceError):
+                spa.picker_target(value, 1)
+
+    def test_picker_wheel_phase_and_entire_history_are_bound_to_exact_client(self):
+        _, action, inputs = self.picker_scroll_fixture()
+        inputs[1]["spa_scroll"] = action
+        lower = copy.deepcopy(action["before"])
+        lower["frame"] = 1
+        upper = copy.deepcopy(action["after"])
+        upper["frame"] = 30
+        entries = [{"value": lower, "last_step": 0}] * 5 + [
+            {"value": upper, "last_step": 3}, {"value": upper, "last_step": 3}]
+        client = {"nonce": "n", "pid": 10, "window": 100}
+        self.assertEqual(spa.check_picker_scrolls(entries, client, inputs), {2, 3})
+        for mutation in ("foreign-client", "foreign-window", "early-phase", "extra-wheel", "missing-annotation"):
+            changed_entries, changed_inputs, changed_client = copy.deepcopy((entries, inputs, client))
+            if mutation == "foreign-client":
+                changed_client["nonce"] = "foreign"
+            elif mutation == "foreign-window":
+                changed_client["window"] = 999
+            elif mutation == "early-phase":
+                changed_entries[4]["value"]["frame"] = 11
+            elif mutation == "extra-wheel":
+                changed_entries[-1]["value"]["wheel_events"] *= 2
+            else:
+                changed_inputs[1].pop("spa_scroll")
+            with self.subTest(mutation=mutation), self.assertRaises(spa.native.AcceptanceError):
+                spa.check_picker_scrolls(changed_entries, changed_client, changed_inputs)
+
+    def test_operational_selection_uses_one_world_click_and_scrolls_only_exact_picker(self):
+        with tempfile.TemporaryDirectory() as directory:
+            save = Path(directory) / "saves/manual-1.scn.ron"
+            save.parent.mkdir()
+            _, _, _, inputs = self.slots_fixture(save)
+            baseline = copy.deepcopy(inputs[20]["spa_action"]["before"])
+            key, action, _ = self.picker_scroll_fixture()
+            baseline["spa_planning"]["picker"] = action["before"]["spa_planning"]["picker"]
+            baseline["spa_planning"]["selection_target"]["rank"] = 1
+            baseline["controls"] = {key: action["before"]["controls"][key]}
+            driver = Mock(last=baseline)
+            driver.wait.side_effect = lambda predicate, **kwargs: driver.last if predicate(driver.last) else self.fail("missing picker")
+            def clicked(_, target):
+                if target == "world-candidate:1:7:0":
+                    driver.last["selected"] = 1
+            def scrolled(_, target):
+                self.assertEqual(target, key)
+                driver.last["controls"]["world-candidate:1:7:0"] = {"fully_visible": True}
+            with patch.object(spa, "world_click") as world, patch.object(spa, "click", side_effect=clicked) as click, \
+                    patch.object(spa, "picker_scroll", side_effect=scrolled) as wheel:
+                spa.select_operational(driver, {"entity_bits": 1})
+                world.assert_called_once_with(driver, "select-operational", "selection_point")
+                wheel.assert_called_once_with(driver, key)
+                self.assertEqual([call.args[1] for call in click.call_args_list],
+                                 ["world-candidate:toggle:7:0", "world-candidate:1:7:0"])
                 driver.send.assert_not_called()
 
     def test_usage_requires_actual_worker_consumption_and_continuity(self):

@@ -408,7 +408,8 @@ def check_inputs(raw, entries, client, inputs, *, completion=False, usage=False,
     native.require(all(row["spa_action"].get("first_step") == i + 1 for i, row in enumerate(inputs) if "spa_action" in row)
                    and all(a["after"]["spa_planning"]["real_seconds"] <= b["before"]["spa_planning"]["real_seconds"]
                            for a, b in zip(actions, actions[1:])), "Spa action annotation/order differs")
-    claimed, raw_claimed = set(), set()
+    claimed = check_picker_scrolls(entries, client, inputs) if slots else set()
+    raw_claimed = set()
     first_sample = raw_checkpoint(raw, entries[0]["value"])
     expected_window, window_bits = first_sample["primary_window"], first_sample.get("primary_window_bits")
     native.require(isinstance(expected_window, str) and expected_window
@@ -921,12 +922,133 @@ def check_selection_target(value):
     native.require(isinstance(target, dict) and type(target.get("owner")) is int
                    and target["owner"] == state["sites"][0]["entity_bits"]
                    and target.get("hit") == "Direct" and target.get("class") == "Object"
+                   and type(target.get("rank")) is int and 0 <= target["rank"] < 256
                    and target.get("world") in points and isinstance(target.get("world"), list)
                    and len(target["world"]) == 2 and all(finite(x) for x in target["world"])
                    and isinstance(target.get("point"), list) and len(target["point"]) == 2
                    and all(finite(x) for x in target["point"]) and plan.get("selection_point") == target["point"],
                    "Spa has no ordinary resolver-confirmed direct owner point")
     return target["point"]
+
+
+def picker_target(value, owner):
+    picker = value["spa_planning"].get("picker")
+    native.require(isinstance(picker, dict) and "failure" not in picker
+                   and type(picker.get("revision")) is int and picker["revision"] >= 0
+                   and type(picker.get("epoch")) is int and picker["epoch"] == value["world_epoch"]
+                   and isinstance(picker.get("entries"), list) and 1 < len(picker["entries"]) <= 256
+                   and all(isinstance(row, dict) and type(row.get("entity")) is int for row in picker["entries"])
+                   and len({row["entity"] for row in picker["entries"]}) == len(picker["entries"])
+                   and sum(row == {"entity": owner, "class": "Object"} for row in picker["entries"]) == 1,
+                   "Spa exact owner is not in the current picker")
+    return f"world-candidate:{owner}:{picker['revision']}:{picker['epoch']}"
+
+
+def picker_scroll(driver, key):
+    picker = copy.deepcopy(driver.last["spa_planning"]["picker"])
+    driver.send(point=driver.point(key))
+    before, first = copy.deepcopy(driver.last), len(driver.events)
+    native.require(key in before["controls"] and before["pointer_over_ui"] and before["paused"]
+                   and not before["world_input_captured"] and not before["wheel_overflow"]
+                   and before["spa_planning"]["picker"] == picker,
+                   "Spa picker scroll foreground differs")
+    control = before["controls"][key]
+    rect, point = control.get("rect"), before.get("cursor")
+    native.require(control.get("fully_visible") is True and isinstance(rect, list) and len(rect) == 4
+                   and all(finite(x) for x in rect) and isinstance(point, list) and len(point) == 2
+                   and all(finite(x) for x in point) and rect[0] < point[0] < rect[2] and rect[1] < point[1] < rect[3],
+                   "Spa wheel target is not inside the visible picker list")
+    picker_target(before, context(before)["sites"][0]["entity_bits"])
+    driver.send(button=5, pressed=True)
+    driver.send(button=5, pressed=False)
+    count = len(before["wheel_events"])
+    driver.last = driver.wait(lambda value: len(value["wheel_events"]) > count, after=before["frame"])
+    action = {"key": key, "window": driver.window, "first_step": first + 1, "last_step": first + 2,
+              "before": before, "after": copy.deepcopy(driver.last)}
+    # Validate this physical step immediately; no-progress is not a retry request.
+    check_picker_scroll(action, driver.events, driver.last["wheel_events"][count:])
+    driver.events[first]["spa_scroll"] = action
+    native.atomic_write_json(driver.root / "events.json", {"events": driver.events})
+
+
+def check_picker_scroll(action, inputs, wheels):
+    a, b, key = action["before"], action["after"], action["key"]
+    first, last = action["first_step"], action["last_step"]
+    native.require(type(first) is int and type(last) is int and 2 <= first < last <= len(inputs)
+                   and last == first + 1, "Spa scroll physical pair differs")
+    picker = a["spa_planning"]["picker"]
+    native.require(key == f"scroll:world-candidates:{picker['revision']}:{picker['epoch']}"
+                   and b["spa_planning"]["picker"] == picker, "Spa scroll picker revision/inventory changed")
+    left, right = a["controls"].get(key), b["controls"].get(key)
+    native.require(isinstance(left, dict) and isinstance(right, dict) and left.get("fully_visible") is True
+                   and right.get("entity") == left.get("entity") and right.get("rect") == left.get("rect")
+                   and isinstance(left.get("scroll"), list) and len(left["scroll"]) == 2
+                   and isinstance(right.get("scroll"), list) and len(right["scroll"]) == 2
+                   and all(finite(x) for x in left["scroll"] + right["scroll"])
+                   and right["scroll"][0] == left["scroll"][0] and right["scroll"][1] > left["scroll"][1],
+                   "Spa picker scroll made no progress or changed list")
+    rect, point = left["rect"], a.get("cursor")
+    native.require(isinstance(rect, list) and len(rect) == 4 and all(finite(x) for x in rect)
+                   and isinstance(point, list) and len(point) == 2 and all(finite(x) for x in point)
+                   and rect[0] < point[0] < rect[2] and rect[1] < point[1] < rect[3]
+                   and b.get("cursor") == point and a.get("pointer_over_ui") is True and b.get("pointer_over_ui") is True,
+                   "Spa wheel pointer is outside the actual list")
+    native.require(all(a.get(k) == b.get(k) for k in ("nonce", "pid", "world_epoch", "primary_window", "camera", "selected"))
+                   and a["paused"] is True and b["paused"] is True
+                   and not a["world_input_captured"] and not b["world_input_captured"]
+                   and not a["wheel_overflow"] and not b["wheel_overflow"]
+                   and a["spa_planning"]["virtual_seconds"] == b["spa_planning"]["virtual_seconds"]
+                   and selected_state(context(a)) == selected_state(context(b)), "Spa wheel changed world/camera/owner")
+    sent = inputs[first - 1:last]
+    motion = inputs[first - 2]
+    native.require(type(action.get("window")) is int and action["window"] > 0
+                   and motion.get("point") is not None and len(motion["point"]) == 2
+                   and motion.get("button") is None and motion.get("key") is None
+                   and motion.get("nonce") == a["nonce"] and motion.get("pid") == a["pid"]
+                   and motion.get("window") == action["window"] and motion.get("world_epoch") == a["world_epoch"]
+                   and motion.get("pre_frame", -1) < motion.get("post_frame", -1) == a["frame"]
+                   and all(abs(x-y) <= 2 for x, y in zip(motion["point"], point, strict=True))
+                   and [row.get("pressed") for row in sent] == [True, False]
+                   and all(type(row.get("button")) is int and row["button"] == 5
+                           and type(row.get("pressed")) is bool and row.get("key") is None and row.get("point") is None
+                           and row.get("nonce") == a["nonce"] and row.get("pid") == a["pid"]
+                           and row.get("window") == action["window"]
+                           and row.get("world_epoch") == a["world_epoch"]
+                           and a["frame"] <= row["pre_frame"] < row["post_frame"] <= b["frame"] for row in sent),
+                   "Spa scroll transport pair/owner differs")
+    native.require(len(wheels) == 1 and not a["wheel_overflow"] and not b["wheel_overflow"]
+                   and b["wheel_events"] == a["wheel_events"] + wheels, "Spa wheel receipt missing/duplicated")
+    wheel = wheels[0]
+    native.require(wheel.get("index") == len(a["wheel_events"]) and wheel.get("window") == a["primary_window"]
+                   and wheel.get("epoch") == a["world_epoch"]
+                   and sent[1]["pre_frame"] < wheel.get("frame", -1) <= b["frame"]
+                   and wheel.get("phase") == "Moved" and wheel.get("unit") in ("Line", "Pixel")
+                   and isinstance(wheel.get("delta"), list) and len(wheel["delta"]) == 2
+                   and all(finite(x) for x in wheel["delta"]) and wheel["delta"][0] == 0 and wheel["delta"][1] < 0,
+                   "Spa actual wheel witness differs")
+
+
+def check_picker_scrolls(entries, client, inputs):
+    rows = [(i, row["spa_scroll"]) for i, row in enumerate(inputs) if "spa_scroll" in row]
+    native.require(len(rows) <= 8, "Spa picker wheel bound exceeded")
+    wheels, claimed = [], set()
+    for i, action in rows:
+        a, b = action["before"], action["after"]
+        picker_target(a, context(entries[4]["value"])["sites"][0]["entity_bits"])
+        native.require(action.get("window") == client["window"] and action["first_step"] == i + 1
+                       and all(v["nonce"] == client["nonce"] and v["pid"] == client["pid"]
+                       and v["primary_window"] == entries[4]["value"]["primary_window"]
+                       and v["world_epoch"] == entries[4]["value"]["world_epoch"] for v in (a, b))
+                       and entries[4]["last_step"] < action["first_step"] < action["last_step"] <= entries[5]["last_step"]
+                       and entries[4]["value"]["frame"] <= a["frame"] < b["frame"] < entries[5]["value"]["frame"],
+                       "Spa wheel crosses its actual phase/subject")
+        delta = b["wheel_events"][len(a["wheel_events"]):]
+        check_picker_scroll(action, inputs, delta)
+        native.require(a["wheel_events"] == wheels, "Spa wheel history gap/order differs")
+        wheels += delta
+        claimed.update((action["first_step"], action["last_step"]))
+    native.require(entries[-1]["value"].get("wheel_events", []) == wheels, "Spa has unclaimed actual wheels")
+    return claimed
 
 
 def check_slots_observation(case, value):
@@ -988,6 +1110,19 @@ def verify_slots(raw, entries, client, inputs):
                            rf"world-candidate:{owner['entity_bits']}:[0-9]+:{epoch}", keys[2]),
                        "Spa slots candidate picker target/revision differs")
         selection_end = 3
+        picker_key = picker_target(actions[1]["after"], owner["entity_bits"])
+        native.require(keys[2] == picker_key and keys[1] == picker_key.replace(str(owner["entity_bits"]), "toggle", 1),
+                       "Spa picker buttons do not match its actual inventory")
+        for row in inputs:
+            if "spa_scroll" in row:
+                scroll = row["spa_scroll"]
+                native.require(actions[1]["last_step"] < scroll["first_step"] < scroll["last_step"] < actions[2]["first_step"]
+                               and actions[1]["after"]["frame"] <= scroll["before"]["frame"]
+                               < scroll["after"]["frame"] <= actions[2]["before"]["frame"]
+                               and picker_target(scroll["before"], owner["entity_bits"]) == picker_key,
+                               "Spa wheel is outside the exact candidate selection")
+    else:
+        native.require(not any("spa_scroll" in row for row in inputs), "Spa direct selection contains wheel input")
     native.require(type(actions[selection_end - 1]["after"].get("selected")) is int
                    and actions[selection_end - 1]["after"]["selected"] == owner["entity_bits"]
                    and keys[selection_end:] == ["menu:SetTimeSpeed(Normal)",
@@ -1075,23 +1210,30 @@ def verify_slots(raw, entries, client, inputs):
                                for e in raw["events"]), "Spa slots measured duration/foreign operation differs")
 
 
-def exercise_slots(driver):
-    exercise_usage(driver)
-    owner = context(driver.last)["sites"][0]
+def select_operational(driver, owner):
     check_selection_target(driver.last)
     world_click(driver, "select-operational", "selection_point")
     if driver.last.get("selected") != owner["entity_bits"]:
-        suffix = f":{driver.last['world_epoch']}"
-        toggles = [k for k in driver.last["controls"] if k.startswith("world-candidate:toggle:") and k.endswith(suffix)]
-        native.require(len(toggles) == 1, "Spa selection needs one existing candidate picker")
-        click(driver, toggles[0])
-        prefix = f"world-candidate:{owner['entity_bits']}:"
-        driver.last = driver.wait(lambda v: any(k.startswith(prefix) and k.endswith(suffix) for k in v["controls"]),
-                                  after=driver.last["frame"], timeout=15)
-        targets = [k for k in driver.last["controls"] if k.startswith(prefix) and k.endswith(suffix)]
-        native.require(len(targets) == 1, "Spa candidate picker has no unique site")
-        click(driver, targets[0])
+        target = picker_target(driver.last, owner["entity_bits"])
+        toggle = target.replace(str(owner["entity_bits"]), "toggle", 1)
+        click(driver, toggle)
+        scroll_key = target.replace(f"world-candidate:{owner['entity_bits']}", "scroll:world-candidates", 1)
+        driver.last = driver.wait(lambda value: scroll_key in value["controls"], after=driver.last["frame"])
+        for _ in range(8):
+            native.require(picker_target(driver.last, owner["entity_bits"]) == target, "Spa picker changed before scroll")
+            if driver.last["controls"].get(target, {}).get("fully_visible") is True:
+                break
+            picker_scroll(driver, scroll_key)
+        native.require(driver.last["controls"].get(target, {}).get("fully_visible") is True,
+                       "Spa exact candidate is not visible within wheel bound")
+        click(driver, target)
     native.require(driver.last.get("selected") == owner["entity_bits"], "Spa actual owner selection failed")
+
+
+def exercise_slots(driver):
+    exercise_usage(driver)
+    owner = context(driver.last)["sites"][0]
+    select_operational(driver, owner)
     pause(driver, False)
     for count in (3, 2, 1, 0):
         key = slots_key(owner["entity"], count)
