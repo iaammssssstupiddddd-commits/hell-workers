@@ -672,6 +672,7 @@ class SpaPlanningTests(unittest.TestCase):
             save = Path(directory) / "saves/manual-1.scn.ron"
             save.parent.mkdir()
             raw, entries, client, inputs = self.slots_fixture(save)
+            client["input_ack_policy"] = "next-exact-observation-v1"
             spa.verify_slots(raw, entries, client, inputs)
             self.assertIn("soul-spa-slots", ui.CASES)
             for entry in entries:
@@ -682,6 +683,7 @@ class SpaPlanningTests(unittest.TestCase):
                              "orphan-assignment", "duplicate-receipt", "duplicate-sample", "sample-cap", "event-cap",
                              "early-selection", "early-slot"):
                 raw, entries, client, inputs = self.slots_fixture(save)
+                client["input_ack_policy"] = "next-exact-observation-v1"
                 receipts = [e for e in raw["events"] if e.get("operation") == "SoulSpaSlotsChange"]
                 if mutation == "missing-receipt":
                     raw["events"].remove(receipts[0])
@@ -762,6 +764,7 @@ class SpaPlanningTests(unittest.TestCase):
             save = Path(directory) / "saves/manual-1.scn.ron"
             save.parent.mkdir()
             raw, entries, client, inputs = self.slots_fixture(save)
+            client["input_ack_policy"] = "next-exact-observation-v1"
             actions = [row["spa_action"] for row in inputs if "spa_action" in row
                        and row["spa_action"]["first_step"] > entries[4]["last_step"]]
             for i, action in enumerate(actions):
@@ -871,6 +874,21 @@ class SpaPlanningTests(unittest.TestCase):
                 for i, pressed in enumerate((True, False))]
         action = {"key": key, "window": 100, "first_step": 2, "last_step": 3, "before": before, "after": after}
         return key, action, [motion, *sent]
+
+    def test_slot_measurement_requires_every_initial_worker_to_be_safe(self):
+        with tempfile.TemporaryDirectory() as directory:
+            save = Path(directory) / "saves/manual-1.scn.ron"
+            save.parent.mkdir()
+            _, entries, _, _ = self.usage_fixture(save)
+            state = spa.context(entries[-1]["value"])
+            self.assertEqual(spa.safe_slot_workers(state).keys(), spa.generating(state).keys())
+            unsafe = copy.deepcopy(state["souls"][0])
+            unsafe.update(entity="unsafe")
+            unsafe["fatigue"] = .733
+            state["souls"].append(unsafe)
+            state["tiles"][0]["workers"].append("unsafe")
+            with self.assertRaisesRegex(spa.native.AcceptanceError, "unsafe"):
+                spa.safe_slot_workers(state)
 
     def test_picker_wheel_requires_real_receipt_progress_and_unchanged_context(self):
         _, action, inputs = self.picker_scroll_fixture()

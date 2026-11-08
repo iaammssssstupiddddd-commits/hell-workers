@@ -242,10 +242,11 @@ def check_layout_scene(value, scene):
 
 
 class Driver:
-    def __init__(self, process, root, nonce, state, job_file, portal=None, *, layout_only=False, eis=False, scroll=False):
+    def __init__(self, process, root, nonce, state, job_file, portal=None, *, layout_only=False, eis=False, scroll=False, fresh_ack=False):
         self.process, self.root, self.nonce = process, root, nonce
         self.state, self.job_file = state, job_file
         self.events, self.checkpoints = [], []
+        self.fresh_ack = fresh_ack
         self.started = time.monotonic()
         self.input = None
         self.last = self.wait(lambda value: value["ready"], timeout=120)
@@ -271,6 +272,7 @@ class Driver:
                 "pid": pid, "geometry": geometry, "observer_viewport": self.last["viewport"], "nonce": nonce,
                 "input_backend": "portal-eis" if eis else "portal" if portal else "xtest",
                 "input_transport": "portal-eis-absolute-scroll-v1" if eis and scroll else "portal-eis-absolute-v1" if eis else "portal-notify-relative-v1" if portal else "xtest",
+                "input_ack_policy": "next-exact-observation-v1" if fresh_ack else "settled-exact-observation-v1",
                 "eis_scroll": scroll,
                 "eis_region": self.input.sender.region_contract if eis else None,
                 "xmodifiers": next((entry.split(b"=", 1)[1].decode() for entry in
@@ -321,7 +323,7 @@ class Driver:
             if event.get("button") == 1:
                 return value["mouse_left_pressed"] == event["pressed"] or (event["pressed"] and value["world_input_captured"])
             return True
-        self.last = self.wait(acknowledged, after=self.last["frame"] + 3)
+        self.last = self.wait(acknowledged, after=self.last["frame"] + (0 if getattr(self, "fresh_ack", False) else 3))
         self.acknowledge_events(self.events[-1:])
 
     def acknowledge_events(self, events):
@@ -758,7 +760,7 @@ def run(args):
                 try:
                     driver = Driver(process, directory, nonce, state, job_file, portal,
                                     layout_only=args.input_backend == "none", eis=args.input_backend == "portal-eis",
-                                    scroll=case == "rest-area-maxzoom")
+                                    scroll=case == "rest-area-maxzoom", fresh_ack=case == "soul-spa-slots")
                     if art_contract is not None:
                         rest_area_art.wait_ready(driver, art_contract)
                     state["current_stage"] = "ui-input"

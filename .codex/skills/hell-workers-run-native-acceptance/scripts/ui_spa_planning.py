@@ -770,6 +770,13 @@ def measurement_workers(state):
             and soul["dream"] >= 20 and 0 <= soul["fatigue"] <= .6 and 0 <= soul["stress"] <= .65}
 
 
+def safe_slot_workers(state):
+    workers = generating(state)
+    native.require(workers and workers.keys() == measurement_workers(state).keys(),
+                   "Spa slot baseline has an unsafe generating worker; no slot input permitted")
+    return workers
+
+
 def check_usage_observation(case, value):
     if case in COMPLETION_CHECKPOINTS:
         check_completion_observation(case, value)
@@ -1091,6 +1098,7 @@ def check_slot_receipts(raw, actions, owner, epoch):
 
 
 def verify_slots(raw, entries, client, inputs):
+    native.require(client.get("input_ack_policy") == "next-exact-observation-v1", "Spa slot input ACK policy differs")
     native.require([e["case"] for e in entries] == list(SLOTS_CHECKPOINTS), "Spa slots inventory differs")
     check_raw_session(raw, client)
     prefix_end = raw_checkpoint(raw, entries[4]["value"])["sample_index"]
@@ -1156,7 +1164,7 @@ def verify_slots(raw, entries, client, inputs):
     tile_keys = ("entity", "entity_bits", "parent_site", "parent_exists", "grid", "pose", "map")
     def shape(state):
         return sorted([{k: t.get(k) for k in tile_keys} for t in state["tiles"]], key=lambda t: t["entity"])
-    required_workers = generating(baseline)
+    required_workers = safe_slot_workers(baseline)
     native.require(required_workers, "Spa slots have no initial generating worker")
     for entry in entries[5:]:
         check_slots_observation(entry["case"], entry["value"])
@@ -1232,6 +1240,7 @@ def select_operational(driver, owner):
 
 def exercise_slots(driver):
     exercise_usage(driver)
+    safe_slot_workers(context(driver.last))
     owner = context(driver.last)["sites"][0]
     select_operational(driver, owner)
     pause(driver, False)

@@ -819,6 +819,19 @@ probe nullは先頭候補なしと内部照会不成立を区別しないため�
 無進行・再構築・不明owner・送信前wheel・別window・overflowは拒否。順位変更やscroll/選択の直接設定はしない。
 fresh実機の全7checkpointと登録verifyを終えるまで、利用枠・正式art/performance/releaseは未受入。
 
+`62067e1f`のfresh slots v3はsource `1b6c4125ce2e3881f23cdb38c0197a442a146a1ce68487f72dac93650fb95411`、
+harness `d6006a63a94293a80908c7c9e740aea5c1089beeaa8c912110c114f04f7f37e2`へ拘束した。
+通常施工・利用後、実候補pickerの3行目からowner2245v1/bits8589932346を選び、
+370.236581144/402.14459734/435.347474251秒の3/2/1と、その後0の全4受理outcomeを記録した。
+最後の実観測はreal476.42679768/virtual139.717833185/slots0/出力1で、closed/held撮影前に全体480秒上限でinvalid。
+子終了確認・seal/finalize済み、56,360,960Bを入力待機と自然離脱の診断に保持。全受入は未達のまま。
+used時の2人中、Soul1860v0はDream26.9749/疲労0.4052、Soul1876v0はDream31.0248/疲労0.7327だった。
+後者の離脱を枠による追出しとも自然離脱とも断定しない。次は全初期Generatingに既存測定の安全条件を要求する。
+UI observerは3frameごとだが各入力がさらにframe+3超を待ち、1枠操作に約32実秒かかっていた。
+利用枠caseだけ次のfresh実観測でcursor/pressの同一ACKを検査し、固定の追加frame待機を除く。
+他caseと原入力照合・所有/nonce・fail-closed・全体480秒は不変。新方針をclientへ拘束し、
+旧attemptは再送せず、変更別検証・Help No impact・独立review後にfresh subjectで一度比較する。
+
 ## 5. マイルストーン
 
 ### M1: 原本・候補

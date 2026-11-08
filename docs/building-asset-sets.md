@@ -636,6 +636,10 @@ epoch/revision/anchor/inventoryを照合する。clip外なら既存ScrollArea�
 実MouseWheel witnessと輸送press/releaseを1対1で拘束する。release前のwheel、別window、再構築、
 無進行、overflow、camera/world変化を拒否し、fully-visibleのexact owner行だけを一度選ぶ。
 ScrollPositionや選択状態を直接変更せず、通常UI/入力/候補順位は維持する。
+利用枠caseだけ入力ACKを「次のfreshな同対象観測」へ拘束し、従来の各motion/button後の固定3frame索引待機を
+除く。cursor/pressの実一致、所有/nonce/原input対と全上限は維持し、clientへACK方針を記録する。
+他caseの待機は不変。利用枠操作前に、初期Generating全員が既存の安全な利用測定条件を満たすことを要求する。
+一人だけの健全な測定窓から他の疲労した利用者の継続を推定せず、自然離脱と枠変更を混同しない。
 
 UI feedbackの`rest-area-usage`は通常施工の3checkpointに入所・放出の2checkpointを追加する。
 camera/pause準備以外は既存入力と通常AIを使い、occupant・Dream・材料・完了状態を注入しない。

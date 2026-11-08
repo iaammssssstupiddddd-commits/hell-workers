@@ -501,6 +501,24 @@ class RuntimeLogEvidenceTests(unittest.TestCase):
 
 
 class KeyboardTapTests(unittest.TestCase):
+    def test_fresh_ack_keeps_exact_target_and_waits_for_a_new_observation(self):
+        for fresh, lower in ((False, 13), (True, 10)):
+            driver = acceptance.Driver.__new__(acceptance.Driver)
+            driver.nonce, driver.events = "owned", []
+            driver.last = {"frame": 10}
+            driver.fresh_ack = fresh
+            driver.input = Mock()
+            driver.acknowledge_events = Mock()
+            def wait(predicate, *, after):
+                self.assertEqual(after, lower)
+                self.assertFalse(predicate({"cursor": [101, 110]}))
+                self.assertTrue(predicate({"cursor": [100, 100]}))
+                return {"frame": lower + 3, "cursor": [100, 100]}
+            driver.wait = Mock(side_effect=wait)
+            driver.send(point=(100, 100))
+            driver.input.send.assert_called_once_with("1", "owned", point=(100, 100))
+            self.assertGreater(driver.last["frame"], lower)
+
     def test_release_precedes_slow_observer_acknowledgement(self):
         driver = acceptance.Driver.__new__(acceptance.Driver)
         driver.nonce, driver.events, driver.root = "owned", [], Path("unused")

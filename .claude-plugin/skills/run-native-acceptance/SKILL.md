@@ -225,6 +225,11 @@ may expose its fully visible row. Each pair requires one new MouseWheel witness,
 same owned client/list/inventory, increasing ScrollPosition and unchanged camera,
 selection and paused world. No progress, drift, overflow or missing owner stops
 without retry. No eligible Direct Object point means no press; ranking is unchanged.
+Only this case uses the next fresh exact input observation instead of waiting
+three additional frame indices after every motion/button. Cursor and press ACK,
+ownership, nonce, raw pairs, timeout and the 480-second session cap are unchanged;
+the input client binds this policy. Every initially generating Soul must satisfy
+the existing safe usage-window preconditions before any slot input is sent.
 
 Select `--case rest-area-planning --smoke --input-backend portal` for ordinary
 RestArea reservation, Manual1 Save/Load and two-stage Task Dashboard cancellation.
