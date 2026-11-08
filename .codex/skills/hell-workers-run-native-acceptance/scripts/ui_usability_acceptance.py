@@ -23,6 +23,7 @@ import ui_rest_area_usage as rest_area_usage
 import ui_rest_area_art as rest_area_art
 import ui_rest_area_maxzoom as rest_area_maxzoom
 import ui_spa_planning as spa_planning
+import ui_spa_occupied_save as spa_occupied
 import ui_terrain_materials as terrain_materials
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
@@ -37,7 +38,8 @@ CHECKPOINTS = ("tasks", "last-page", "minimized", "restored", "entities",
 VIEWPORTS = ((1920, 1080, 1.0), (1280, 720, 1.25), (1280, 720, 0.85),
              (1280, 720, 1.0), (1920, 1080, 0.85), (1920, 1080, 1.25))
 CASES = ("navigation", "refactor-rows", "progress-bars", "terrain-materials", "refactor-suite",
-         "bridge-planning", "soul-spa-planning", "soul-spa-completion", "soul-spa-usage", "soul-spa-persistence", "soul-spa-slots", "rest-area-planning", "rest-area-refund", "rest-area-completion", "rest-area-usage", "rest-area-exit", "rest-area-save", "rest-area-lifecycle", "rest-area-maxzoom")
+         "bridge-planning", "soul-spa-planning", "soul-spa-completion", "soul-spa-usage", "soul-spa-persistence", "soul-spa-slots", "soul-spa-occupied-save", "rest-area-planning", "rest-area-refund", "rest-area-completion", "rest-area-usage", "rest-area-exit", "rest-area-save", "rest-area-lifecycle", "rest-area-maxzoom")
+SPA_CASES = ("soul-spa-planning", "soul-spa-completion", "soul-spa-usage", "soul-spa-persistence", "soul-spa-slots", "soul-spa-occupied-save")
 
 
 def session_matrix(case, smoke):
@@ -65,6 +67,9 @@ def sha256(path: Path) -> str:
 def check_observation(case: str, value: dict) -> None:
     native.require(value["ready"] and value["frame"] > 90, "fixture is not ready")
     native.require(value["task_rows"] <= 20, "task resident row limit exceeded")
+    if case in spa_occupied.CHECKPOINTS[-2:]:
+        spa_occupied.check_observation(case, value)
+        return
     if case in spa_planning.SLOTS_CHECKPOINTS[-2:]:
         spa_planning.check_slots_observation(case, value)
         return
@@ -503,11 +508,14 @@ def verify_root(root):
         events = native.read_json(directory / "events.json")["events"]
         client = native.read_json(directory / "input-client.json")
         check_input_client(manifest, session, client)
-        if case in ("soul-spa-planning", "soul-spa-completion", "soul-spa-usage", "soul-spa-persistence", "soul-spa-slots"):
+        if case in SPA_CASES:
             raw_path = directory / "production-cancellation.json"
             native.require(art_contract is None and sha256(raw_path) == session.get("cancellation_sha256"),
                            "Spa planning raw changed or unexpected art admission")
-            if case == "soul-spa-slots":
+            if case == "soul-spa-occupied-save":
+                spa_occupied.verify(native.read_json(raw_path), entries, client,
+                                    directory / "saves" / "manual-1.scn.ron", events)
+            elif case == "soul-spa-slots":
                 spa_planning.verify_slots(native.read_json(raw_path), entries, client, events)
             elif case == "soul-spa-persistence":
                 spa_planning.verify(native.read_json(raw_path), entries, client,
@@ -547,6 +555,7 @@ def verify_root(root):
                                                       refund=case == "rest-area-refund")
         native.require(case == "navigation" or not layout_only, "refactor case requires actual input")
         expected_checkpoints = (refactor_rows.CHECKPOINTS if case == "refactor-rows" else
+                                spa_occupied.CHECKPOINTS if case == "soul-spa-occupied-save" else
                                 spa_planning.SLOTS_CHECKPOINTS if case == "soul-spa-slots" else
                                 spa_planning.PERSISTENCE_CHECKPOINTS if case == "soul-spa-persistence" else
                                 spa_planning.USAGE_CHECKPOINTS if case == "soul-spa-usage" else
@@ -599,7 +608,7 @@ def verify_root(root):
         if case == "bridge-planning":
             bridge_planning.check_sequence(entries)
             continue
-        if case in ("soul-spa-planning", "soul-spa-completion", "soul-spa-usage", "soul-spa-persistence", "soul-spa-slots"):
+        if case in SPA_CASES:
             continue  # Dedicated raw/durable commit checks ran above.
         if case in ("rest-area-planning", "rest-area-refund"):
             rest_area_planning.check_sequence(entries, refund=case == "rest-area-refund")
@@ -615,6 +624,7 @@ def verify_root(root):
         joint.verify_game_log(directory / "game.log", "Intel")
     return {"status": "valid", "profile": PROFILE, "sessions": len(expected),
             "coverage": f"{manifest.get('layout_scene', 'management')} rendering only; no input evidence" if layout_only else
+                        "ordinary occupied SoulSpa paused save/load durable identity and runtime reset only; no resumed assignment/art/performance/release acceptance" if manifest.get("case") == "soul-spa-occupied-save" else
                         "ordinary SoulSpa occupied 4-to-zero slot changes and bounded non-eviction only; no occupied persistence/art/performance/release acceptance" if manifest.get("case") == "soul-spa-slots" else
                         "ordinary empty Operational SoulSpa exact-byte save/load and durable remapping only; no occupied persistence/art/performance/release acceptance" if manifest.get("case") == "soul-spa-persistence" else
                         "ordinary SoulSpa natural construction, generating worker and Dream consumption only; no art/performance/release acceptance" if manifest.get("case") == "soul-spa-usage" else
@@ -730,7 +740,7 @@ def run(args):
                                 "HW_NATIVE_UI_ROOT": str(directory), "HW_NATIVE_UI_NONCE": nonce,
                                 "HW_NATIVE_UI_WIDTH": str(width), "HW_NATIVE_UI_HEIGHT": str(height), "HW_NATIVE_UI_SCALE": str(scale)})
             environment["HW_NATIVE_UI_CASE"] = case
-            if case in ("soul-spa-planning", "soul-spa-completion", "soul-spa-usage", "soul-spa-persistence", "soul-spa-slots"):
+            if case in SPA_CASES:
                 environment["HW_BUILDING_PRODUCTION_OBSERVATIONS"] = cancellation_observation_setting(directory, nonce)
             if case in ("rest-area-planning", "rest-area-refund", "rest-area-completion", "rest-area-usage", "rest-area-exit", "rest-area-save", "rest-area-lifecycle", "rest-area-maxzoom"):
                 if art_contract is not None:
@@ -780,6 +790,8 @@ def run(args):
                         spa_planning.exercise_usage(driver)
                     elif case == "soul-spa-persistence":
                         spa_planning.exercise_persistence(driver)
+                    elif case == "soul-spa-occupied-save":
+                        spa_occupied.exercise(driver)
                     elif case == "soul-spa-slots":
                         spa_planning.exercise_slots(driver)
                     elif case == "rest-area-maxzoom":
@@ -820,7 +832,7 @@ def run(args):
                         state["child_pid"] = None
             joint.verify_game_log(directory / "game.log", "Intel")
             session = {"case": case, "directory": directory.name, "nonce": nonce, "log_sha256": sha256(directory / "game.log")}
-            if case in ("soul-spa-planning", "soul-spa-completion", "soul-spa-usage", "soul-spa-persistence", "soul-spa-slots"):
+            if case in SPA_CASES:
                 session["cancellation_sha256"] = sha256(directory / "production-cancellation.json")
             if case in ("rest-area-planning", "rest-area-refund", "rest-area-completion", "rest-area-usage", "rest-area-exit", "rest-area-save", "rest-area-lifecycle", "rest-area-maxzoom"):
                 session["cancellation_sha256"] = sha256(directory / "production-cancellation.json")

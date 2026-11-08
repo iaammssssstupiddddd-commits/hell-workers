@@ -231,6 +231,19 @@ ownership, nonce, raw pairs, timeout and the 480-second session cap are unchange
 the input client binds this policy. Every initially generating Soul must satisfy
 the existing safe usage-window preconditions before any slot input is sent.
 
+Select `--case soul-spa-occupied-save --smoke --input-backend portal` for the
+ordinary natural construction/usage prefix and a paused Manual1 save/load.
+The explicit verifier binds bytes, request/session, raw input, epoch and actual
+Soul/Spa remaps. Previously generating Souls retain durable vitals/pose; runtime
+tasks and WorkingOn/TaskWorkers must be reset, not relabeled as continued work.
+The paused energy pipeline may retain saved derived output pending a normal
+Logic rebuild. Preserve the exact recorded value: never normalize it to zero
+or infer continued generation from it. Every raw sample through capture must
+preserve the declared durable/reset projections. Missing maps, foreign Soul,
+transient mutation, extra input or clock advance fails closed. This case proves
+only occupied durable restoration, not resumed assignment, exit, art, performance
+or release. The existing empty Operational case still rejects occupants.
+
 Select `--case rest-area-planning --smoke --input-backend portal` for ordinary
 RestArea reservation, Manual1 Save/Load and two-stage Task Dashboard cancellation.
 Preparation only centers the camera and pauses time. The case also enables the
@@ -1039,7 +1052,7 @@ pass because individual runs happened to finish.
 After changing the Skill or helper, run:
 
 ```bash
-python3 -m unittest scripts.tests.test_ui_usability_acceptance scripts.tests.test_rtt_light_closure_verify
+python3 -m unittest scripts.tests.test_ui_usability_acceptance scripts.tests.test_ui_spa_occupied_save scripts.tests.test_rtt_light_closure_verify
 PYTHONDONTWRITEBYTECODE=1 python3 \
   .codex/skills/hell-workers-run-native-acceptance/scripts/native_acceptance.py \
   self-test

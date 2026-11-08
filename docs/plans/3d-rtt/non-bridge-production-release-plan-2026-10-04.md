@@ -881,6 +881,29 @@ publish診断は128→512samplesでencode173→780ms、write17→30msと全量en
 正式consumer release後にexact4rootの診断生成物のみ撤去した。実測215,990,272B、
 失敗結果と診断は本文/台帳へ保持、rawは復元用archiveを作らず削除。最新v5と制作原本/cacheは保全。
 
+`939353ba`のfresh `tak14-restarea-candidate-normal-20261108-v1`は、同source
+`caffed86ac0138b7dc0bb157715d592546c72df258dbe15235fd185392db6bd4`の
+正式profiling buildから承認済み隔離候補8e4e8003世代1を描画し、run/別CLI/登録verifierをpass、
+seal/finalize/storageを完了した。mainは所有窓画像の4つの布屋根・入口・支柱を実見し、
+exact candidate identity・normal/high・30stable frames・36体の静止inventoryを照合した。
+manifest `ab55d904a9175f63eb013e07cc6e7813eac2407fcc56e1393eef96d9024bf3a8`、
+PNG `bebfa7182811a3a3050dbc4d34653f689208e5aa58faf3c80b6979d67c4b4c08`、
+binary `d909965f00d412d376cf0a6ead4eb91eadc34438031b94c1f4b311d8d0fcf16f`。
+141,672,448Bを採用candidateの通常consumer画像比較に保持する。これはseeded静止presentationだけで、
+通常入力・全quality/DPI・性能budget・promotion/install/releaseは承認しない。
+
+次の通常world補完は専用 `soul-spa-occupied-save` caseとする。usage5checkpointを再検証し、
+停止中のManual1 save/loadの2画像を加える。保存bytes/正規request/session/epoch+1と、
+実Soul/Spa remapによる以前のGenerating SoulのDream/疲労/ストレス/pose、
+site/4tile/親/位置/map/grid/active_slotsを別のdurable projectionで検査する。
+既存empty verifierはoccupiedを拒否し続ける。非永続AssignedTaskとruntime WorkingOn/TaskWorkersは
+正規rehydrate resetを要求し、ロード直後のGenerating継続を要求・推測しない。
+paused中はLogic energy pipelineが停止するため、保存された派生出力を残した状態と通常再開後の
+dirty rebuildを区別する。出力だけで稼働復元を判定せず、任意値の許容や0へのnormalizeは行わない。
+receipt→captureの全rawでdurable値と明示runtime-reset状態を照合し、一時変化/旧ID/別Soul/入力不一致を拒否する。
+再開後の再計算・再割当・自然退出は別legで残す。実装・拒否系試験・Help実判断・独立review・
+変更別CI後のfresh実機まで、この新caseを受入済みとはしない。
+
 ## 5. マイルストーン
 
 ### M1: 原本・候補

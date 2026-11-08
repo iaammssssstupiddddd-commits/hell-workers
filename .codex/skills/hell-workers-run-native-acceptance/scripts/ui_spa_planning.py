@@ -401,7 +401,7 @@ def world_click(driver, name, projection):
     record_action(driver, name, first, before)
 
 
-def check_inputs(raw, entries, client, inputs, *, completion=False, usage=False, persistence=False, slots=False):
+def check_inputs(raw, entries, client, inputs, *, completion=False, usage=False, persistence=False, slots=False, occupied=False):
     native.require(isinstance(inputs, list) and 0 < len(inputs) <= 256
                    and [row.get("step") for row in inputs] == [str(i + 1) for i in range(len(inputs))], "Spa input inventory differs")
     actions = [row["spa_action"] for row in inputs if "spa_action" in row]
@@ -499,6 +499,29 @@ def check_inputs(raw, entries, client, inputs, *, completion=False, usage=False,
     ignored = {"Escape", "dev-minimize", "menu:SetTimeSpeed(Paused)", "menu:SetTimeSpeed(Normal)"}
     if usage:
         ignored.add("menu:SetTimeSpeed(Fast)")
+    if occupied:
+        tail = [a for a in actions if a["first_step"] > entries[4]["last_step"]]
+        patterns = ["F5", r"menu:SelectSaveCatalogSlot \{ slot: Manual1, session: [1-9][0-9]* \}",
+                    "F9", r"menu:SelectLoadCatalogSlot \{ slot: Manual1, session: [1-9][0-9]* \}",
+                    r"menu:ConfirmLoadCatalogSlot \{ slot: Manual1, session: [1-9][0-9]* \}"]
+        native.require(len(tail) == len(patterns)
+                       and all(re.fullmatch(pattern, action["key"]) for pattern, action in zip(patterns, tail, strict=True))
+                       and all(a[side]["paused"] is True for a in tail for side in ("before", "after")),
+                       "Occupied Spa save/load input sequence differs")
+        for group, lower, upper in ((tail[:2], entries[4], entries[5]),
+                                    (tail[2:], entries[5], entries[6])):
+            for action in group:
+                a, b = action["before"], action["after"]
+                native.require(lower["last_step"] < action["first_step"] <= action["last_step"] <= upper["last_step"]
+                               and lower["value"]["frame"] <= a["frame"] < b["frame"] < upper["value"]["frame"]
+                               and lower["value"]["spa_planning"]["real_seconds"] <= a["spa_planning"]["real_seconds"]
+                               < b["spa_planning"]["real_seconds"] <= upper["value"]["spa_planning"]["real_seconds"]
+                               and a["world_epoch"] == lower["value"]["world_epoch"]
+                               and b["world_epoch"] == (upper["value"]["world_epoch"]
+                                   if action["key"].startswith("menu:ConfirmLoadCatalogSlot ")
+                                   else lower["value"]["world_epoch"]),
+                               "Occupied Spa request crossed checkpoint phase")
+        ignored.update(a["key"] for a in tail)
     if slots:
         ignored.update(a["key"] for a in actions if a["first_step"] > entries[4]["last_step"])
     required = [a for a in actions if a["key"] not in ignored]

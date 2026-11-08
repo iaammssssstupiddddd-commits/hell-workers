@@ -14,6 +14,7 @@ pub(super) fn enabled() -> bool {
             | "soul-spa-completion"
             | "soul-spa-usage"
             | "soul-spa-persistence"
+            | "soul-spa-occupied-save"
             | "soul-spa-slots")
     )
 }

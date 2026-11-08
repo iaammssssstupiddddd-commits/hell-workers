@@ -725,6 +725,15 @@ JSON値・順序・ordinal・公開頻度と64MiB/1200samples/4096events上限�
 これはfallbackの限定非追出し証拠だけで、wheel分岐・occupied保存・採用asset表示・正式性能/releaseを補わない。
 旧4診断jobは用途終了後に個別撤去し、結果は現行計画/台帳へ残す。
 
+別case `soul-spa-occupied-save`は通常usage prefix後の停止中Manual1保存/読込を検査する。
+実Soul/Spa remapで以前のGenerating Soulの永続vitals/poseとsite/4tile/map/gridを拘束し、
+AssignedTask/WorkingOn/TaskWorkersの正規resetは永続値と分ける。
+停止中のLogic停止により残る派生出力は保存値とのexact比較を保ち、0へnormalizeせず稼働継続とも扱わない。
+receipt/capture間の全rawの永続projection・runtime reset・pause/仮想時刻/epoch/window不変、
+実bytes・正規request/session・原入力を要求する。既存empty caseのoccupied拒否は維持する。
+これは新しい検証経路の契約であり、fresh実機pass以前は利用中保存を受入済みとしない。
+通常再開後のdirty rebuild/再割当・自然退出・採用asset表示・性能/releaseは別の未検証範囲である。
+
 M2 probeは有効化された検証sessionだけで0.1秒ごとのdue sampleを即時公開する（最大1800 samples、
 categoryごと最大128 entities）。観測・同期書込みの負荷を含むため性能証拠には使わない。
 M2 native runnerは画像の撮影前後でraw prefix/sessionを照合し、最大2秒の待機で新sampleを要求する。
