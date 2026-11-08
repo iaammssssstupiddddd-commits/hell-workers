@@ -162,6 +162,54 @@ def check_spa_outcome(event, samples):
                     and event[payload] is None, "Spa observed slots status differs")
 
 
+def check_refine_receipt(event, samples):
+    """Check a real branch receipt, not an ordinary-input lifecycle campaign."""
+    require(set(event) == {"producer", "operation", "sample_index", "event_index", "real_seconds", "worker",
+                           "assignment", "owner", "world_epoch", "water", "water_count", "outputs", "counter_order", "before", "after"}
+            and event["producer"] == "ordinary-mixer-refine-branch-v1" and event["operation"] == "RefineCommit"
+            and type(event["event_index"]) is int and event["event_index"] >= 0
+            and type(event["sample_index"]) is int and 0 <= event["sample_index"] < len(samples), "Refine receipt envelope differs")
+    sample = samples[event["sample_index"]]
+    require(type(event["world_epoch"]) is int and event["world_epoch"] >= 0
+            and type(sample.get("world_epoch")) is int and event["world_epoch"] == sample["world_epoch"]
+            and type(event["real_seconds"]) in (int, float) and math.isfinite(event["real_seconds"])
+            and type(sample.get("real_seconds")) in (int, float) and math.isfinite(sample["real_seconds"])
+            and 0 <= event["real_seconds"] <= sample["real_seconds"], "Refine receipt epoch/clock differs")
+    outputs = event["outputs"]
+    require(all(isinstance(event[key], str) and event[key] for key in ("worker", "assignment", "owner", "water"))
+            and event["worker"] != event["owner"] and event["water"] not in (event["worker"], event["owner"])
+            and isinstance(outputs, list) and len(outputs) == 5 and all(isinstance(item, str) and item for item in outputs)
+            and len(set(outputs)) == 5 and not set(outputs).intersection({event["worker"], event["owner"], event["water"]})
+            and type(event["water_count"]) is int and 0 < event["water_count"] < 2**32, "Refine receipt item identities differ")
+    require(event["counter_order"] == ["Sand", "Rock", "StasisMud"]
+            and all(isinstance(event[key], list) and len(event[key]) == 3
+                    and all(type(value) is int and 0 <= value < 2**32 for value in event[key]) for key in ("before", "after"))
+            and event["before"][0] - 1 == event["after"][0]
+            and event["before"][1] - 1 == event["after"][1]
+            and event["before"][2] + 5 == event["after"][2], "Refine branch counter delta differs")
+    ctx = sample.get("m2_context", {})
+    require(type(ctx.get("schema")) is int and ctx["schema"] == 1 and ctx.get("refine_commit_channel") is True
+            and all(ctx.get(key) is False for key in ("accepted", "performance_evidence", "promotion_authority"))
+            and all(isinstance(ctx.get(key), list) for key in ("mixers", "items", "actors", "working_relations")),
+            "Refine typed context missing")
+    owners = [row for row in ctx["mixers"] if row.get("entity") == event["owner"]]
+    actors = [row for row in ctx["actors"] if row.get("entity") == event["worker"]]
+    require(len(owners) == 1 and evidence.pipeline.exact_json(owners[0].get("building"), {"kind": "MudMixer", "provisional": False})
+            and len(actors) == 1 and actors[0].get("is_soul") is True and actors[0].get("phase") == "Done"
+            and actors[0].get("mixer") == event["owner"] and actors[0].get("owner_exists") is True
+            and "working_on" in actors[0] and actors[0]["working_on"] is None
+            and evidence.pipeline.exact_json(actors[0].get("identity"), {"assignment": event["assignment"], "target": event["owner"],
+                                              "work_type": "Refine", "matches_working_on": True})
+            and not any(row.get("entity") == event["worker"] for row in ctx["working_relations"]),
+            "Refine committed owner/actor differs")
+    require(not any(row.get("entity") == event["water"] for row in ctx["items"]), "Refine consumed water survives")
+    for item in outputs:
+        rows = [row for row in ctx["items"] if row.get("entity") == item]
+        require(len(rows) == 1 and {"stored_in", "loaded_in"} <= rows[0].keys() and rows[0].get("resource") == "StasisMud"
+                and rows[0].get("stored_by_mixer") == event["owner"] and rows[0].get("stored_in") is None
+                and rows[0].get("loaded_in") is None, "Refine actual output identity/type/relation differs")
+
+
 def check_raw_transitions(raw):
     """Check indexed raw state deltas; they never imply an operation succeeded."""
     require(raw.get("schema_version") == 2 and raw.get("transition_contract") == "indexed-state-delta-v1",
@@ -180,6 +228,7 @@ def check_raw_transitions(raw):
         "DeconstructionCommitOutcome": (("Deconstruct",), ("worker", "order", "owner", "result")),
     }
     delivered_items = set()
+    refined_items = set()
     delivery_counts = {}
     for event in events_seen:
         producer = event.get("producer")
@@ -212,6 +261,11 @@ def check_raw_transitions(raw):
                     and type(event.get("real_seconds")) in (int, float) and math.isfinite(event["real_seconds"])
                     and type(sample.get("real_seconds")) in (int, float) and math.isfinite(sample["real_seconds"])
                     and 0 <= event["real_seconds"] <= sample["real_seconds"], "raw mouse context differs")
+        elif producer == "ordinary-mixer-refine-branch-v1":
+            check_refine_receipt(event, samples)
+            identities = {(event["world_epoch"], item) for item in [event["water"], *event["outputs"]]}
+            require(not refined_items.intersection(identities), "Refine item receipt reused")
+            refined_items.update(identities)
         elif producer == "ordinary-building-placement-branch-v1":
             check_placement_receipt(event, samples)
         elif producer in {"SoulSpaConstructionCancelOutcome", "SoulSpaSlotsChangeOutcome"}:

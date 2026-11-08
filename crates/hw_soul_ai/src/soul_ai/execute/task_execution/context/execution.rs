@@ -65,6 +65,8 @@ pub struct TaskExecEnv<'a> {
     pub breakdown: Option<&'a StressBreakdown>,
     #[cfg(feature = "profiling")]
     pub delivery_observations: bool,
+    #[cfg(feature = "profiling")]
+    pub refine_observations: bool,
 }
 
 /// タスク実行の基本コンテキスト

@@ -31,6 +31,8 @@ pub struct TaskExecResources<'w, 's> {
     #[cfg(feature = "profiling")]
     delivery_observations:
         Option<Res<'w, hw_jobs::delivery_observations::BlueprintDeliveryReceipts>>,
+    #[cfg(feature = "profiling")]
+    refine_observations: Option<Res<'w, crate::refine_observations::RefineCommitReceipts>>,
     deconstruction_commit_writer: MessageWriter<'w, DeconstructionCommitRequest>,
     path_search_progress: Local<'s, EpochLocal<TaskPathSearchProgress>>,
     task_round_robin: Local<'s, EpochLocal<TaskExecutionRoundRobin>>,
@@ -249,6 +251,8 @@ pub fn task_execution_system(params: TaskExecutionParams) {
                     breakdown: breakdown_opt,
                     #[cfg(feature = "profiling")]
                     delivery_observations: res.delivery_observations.is_some(),
+                    #[cfg(feature = "profiling")]
+                    refine_observations: res.refine_observations.is_some(),
                 },
                 end_state: default(),
             };

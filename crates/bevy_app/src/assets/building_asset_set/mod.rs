@@ -7,6 +7,8 @@ mod loader;
 #[cfg(feature = "profiling")]
 mod observations;
 #[cfg(feature = "profiling")]
+mod observations_m2;
+#[cfg(feature = "profiling")]
 mod observations_rest;
 #[cfg(feature = "profiling")]
 mod observations_spa;

@@ -268,6 +268,15 @@ scope `ordinary-m2-candidate-planning-v1` に限定し、採用済みMudMixer Is
 TankのCompanionPending/Committed、自然施工/搬送/精製、save/load、move/cleanup、性能/releaseは別工程である。
 旧M5のArtPreview契約・旧seeded M2のfixtureをこのcandidate証拠へ流用しない。
 
+通常観測のprofiling専用 `m2_context` はMixerのSand/Rock/Mud、Stockpile/StoredItems、
+全ResourceItemの実種別とStoredIn/StoredByMixer/LoadedIn、Refine actorのtyped phase/progress・identity・
+WorkingOn/TaskWorkersの両方向を有界収集する。欠損はnull/明示不在、非finite/overflowはfailureとし、関係を修復しない。
+`ordinary-mixer-refine-branch-v1` は実Refining完了branchのWater消費ID・Mud生成5ID・branch内の
+Sand/Rock各−1とMud＋5を、deferred適用後の消失/ResourceItem/StoredByMixer/Doneと照合して記録する。
+WorkingOnは当branchで解除される。branch内counterと、同frameの別配送を含み得る最終snapshot counterを混同しない。
+出力には既存の寿命があるため、後の個数だけを精製完了の証拠にしない。receipt resourceが無ければ記録せず、
+このproducerやunit testだけでは実機の自然精製/lifecycle・性能・アート・releaseを受入しない。
+
 M5専用の明示 `--variant m5-art-context --view normal` は別のseeded比較である。
 ArtPreviewの4種だけをfeedback/art-preview・standard照明で許可し、candidate/releaseや通常入力証拠へ転用しない。
 対象4棟、前後8Wall、8idle Soul、descriptor経由の4previewを一度だけ準備し、以後は受動観測する。

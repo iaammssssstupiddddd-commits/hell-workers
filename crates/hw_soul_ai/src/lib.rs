@@ -1,4 +1,6 @@
 pub mod movement;
+#[cfg(feature = "profiling")]
+pub mod refine_observations;
 pub mod rest_area_lifecycle;
 pub mod soul_ai;
 pub use movement::soul_movement;

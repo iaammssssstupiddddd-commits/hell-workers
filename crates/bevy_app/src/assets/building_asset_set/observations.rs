@@ -129,6 +129,7 @@ pub(super) fn configure(app: &mut App) -> Result<(), String> {
         .init_resource::<PlacementReceipts>()
         .init_resource::<CancellationReceipts>()
         .init_resource::<BlueprintDeliveryReceipts>()
+        .init_resource::<hw_soul_ai::refine_observations::RefineCommitReceipts>()
         .init_resource::<crate::systems::save::observations::DurableReceipts>()
         .add_observer(building_completed)
         .add_systems(
@@ -368,6 +369,7 @@ fn snapshot(world: &mut World) -> Result<Value, String> {
     let art_feedback = super::ordinary_art::snapshot(world)?;
     let rest_area_context = super::observations_rest::snapshot(world)?;
     let spa_context = super::observations_spa::snapshot(world)?;
+    let m2_context = super::observations_m2::snapshot(world)?;
     let companion_context = companion_context(world)?;
     let save_catalog_context = super::observations_ui::save_catalog_context(world)?;
     let architect_panel_ready = architect_panel_ready(world);
@@ -573,6 +575,7 @@ fn snapshot(world: &mut World) -> Result<Value, String> {
         "native_peak_live_bytes": null, "rss_bytes": null,
         "application_handle_count": null});
     sample["primary_window_bits"] = json!(primary_window_bits);
+    sample["m2_context"] = m2_context;
     sample["rest_area_context"] = rest_area_context;
     sample["spa_context"] = spa_context;
     if !art_feedback.is_null() {
@@ -635,6 +638,20 @@ fn observe(world: &mut World) {
                     "kind": format!("{:?}", receipt.kind), "resource": format!("{:?}", receipt.resource),
                     "before_count": receipt.before_count, "after_count": receipt.after_count,
                     "footprint": receipt.footprint, "wheelbarrow": receipt.wheelbarrow}));
+            }
+        }
+        if let Some(mut receipts) = world.get_resource_mut::<hw_soul_ai::refine_observations::RefineCommitReceipts>() {
+            if let Some(failure) = receipts.failure {
+                observations.failure = Some(failure.into());
+            }
+            for receipt in receipts.rows.drain(..) {
+                observations.events.push(json!({"sample_index": index, "real_seconds": now,
+                    "producer": "ordinary-mixer-refine-branch-v1", "operation": "RefineCommit",
+                    "worker": format!("{:?}", receipt.worker), "assignment": format!("{:?}", receipt.assignment),
+                    "owner": format!("{:?}", receipt.owner), "world_epoch": receipt.world_epoch,
+                    "water": receipt.water.map(|water| format!("{water:?}")), "water_count": receipt.water_count,
+                    "outputs": receipt.outputs.iter().map(|entity| format!("{entity:?}")).collect::<Vec<_>>(),
+                    "counter_order": ["Sand", "Rock", "StasisMud"], "before": receipt.before, "after": receipt.after}));
             }
         }
         if let Some(mut receipts) = world.get_resource_mut::<CancellationReceipts>() {

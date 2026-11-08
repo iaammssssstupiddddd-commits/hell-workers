@@ -191,6 +191,22 @@ Tankは別段階：初回clickのCompanionPendingはBlueprint成立ではなく�
 揃う必要があるため、この1clickのspineへ押し込まない。後続のdurable remap・typed item/Refine実入出力・move commit・
 salvage全数のproducer不足は維持し、それぞれ実成功branchから別途観測する。
 
+2026-11-09 `f701263869c682bc04db9f45fd52987402696344` の
+`tak14-mixer-candidate-planning-20261109-v1` は採用済みMixer candidate
+`b6b01fd6a79d780a1764239b3ea733f5e02b1dfd4335137004842028b5a564a0` を使い、通常生成世界の
+上記6checkpointを実EISで完了した。source `10d8a6397ed31a6cd681c2912b4a79bec69b4dd5ac0f40d5b1d838d874a89f75`、
+harness `e64ab4ea0633b88a4453ae1ea484a8fd4c8a3f303c3ac446bf25cb324461e61e`、
+manifest `a823957b80300e65247b566eb646005dc6b796bcb45d34e615977dc3b7837db8`。
+登録独立verify/seal・現比較用途retain/finalize・storage checkはpass、raw/jobは165429248 B。
+主担当は同Blueprintの選択/inspection画像を確認した。これは計画配置の限定証拠であり、通常起動release、
+完成3D、自然施工/精製、save/load、move/cleanup、性能の成功ではない。
+
+次の実装は自然精製の受動producerを先に補う。profiling専用の有界receiptを実Refining完了branchから発行し、
+epoch・worker/assignment・Mixer owner・消費したWater Entity・生成した全Mud Entity・前後Sand/Rock/Mud数を記録する。
+deferred command適用後に実消費/出力ResourceItem/StoredByMixer/Refine Doneと照合し、不足はfailureとして保持する。
+receipt不在の通常起動では収集せず、資材・worker・progressを注入しない。typedな通常resource/owner/task snapshotと
+組み合わせるが、producer単体やunit testを自然施工・精製の受入証拠へ昇格しない。
+
 2026-11-09の独立read-onlyアート監査では、Sand/Boneの現ArtPreview世代1を見た目だけ採用した。
 Sand `dbdf3e6ba5557f1b91b59a4e7d19c0bc1afe68e96c745d0dcbefd3f7b637d4e5` は低い黄土色の塊と大色面、
 Bone `fe6c024cd79783abff36fc22fb8b676a5bdc0325edef34b35089e563127e3f4f` は骨軸/節/隙間/象牙色が

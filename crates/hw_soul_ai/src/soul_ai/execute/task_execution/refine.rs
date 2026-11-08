@@ -54,6 +54,8 @@ pub fn handle_refine_task(
         }
 
         RefinePhase::Refining { mut progress } => {
+            #[cfg(feature = "profiling")]
+            let assignment = ctx.task_identity().assignment_entity;
             if let Ok(mixer_data) = ctx.queries.storage.mixers.get_mut(mixer_entity) {
                 let (mixer_transform, mut storage, _) = mixer_data;
                 let water_count = match ctx.queries.storage.stockpiles.get(mixer_entity) {
@@ -82,6 +84,10 @@ pub fn handle_refine_task(
                 progress += ctx.env.time.delta_secs() * GATHER_SPEED_BASE;
 
                 if progress >= 1.0 {
+                    #[cfg(feature = "profiling")]
+                    let before = [storage.sand, storage.rock, storage.mud];
+                    #[cfg(feature = "profiling")]
+                    let mut consumed_water = None;
                     storage.consume_materials_for_refining(water_count);
                     if let Some(water_entity) = ctx.queries.resource_items.iter().find_map(
                         |(res_entity, _, _, res_item, stored_in, _)| {
@@ -94,6 +100,10 @@ pub fn handle_refine_task(
                             }
                         },
                     ) {
+                        #[cfg(feature = "profiling")]
+                        {
+                            consumed_water = Some(water_entity);
+                        }
                         ctx.identity.detach_from_working_on();
                         commands
                             .entity(ctx.soul_entity)
@@ -107,24 +117,32 @@ pub fn handle_refine_task(
                     }
 
                     let pos = mixer_transform.translation;
+                    #[cfg(feature = "profiling")]
+                    let mut output_items = Vec::new();
                     for i in 0..STASIS_MUD_OUTPUT {
                         let offset =
                             Vec3::new(((i % 3) as f32 - 1.0) * 8.0, ((i / 3) as f32) * 8.0, 0.0);
-                        commands.spawn((
-                            ResourceItem(ResourceType::StasisMud),
-                            StoredByMixer(mixer_entity),
-                            Sprite {
-                                image: ctx.env.soul_handles.icon_stasis_mud_small.clone(),
-                                custom_size: Some(Vec2::splat(TILE_SIZE * 0.5)),
-                                ..default()
-                            },
-                            Visibility::Visible,
-                            Transform::from_translation(
-                                pos.truncate().extend(Z_ITEM_PICKUP) + offset,
-                            ),
-                            Name::new("Item (StasisMud)"),
-                            hw_logistics::item_lifetime::ItemDespawnTimer::new(5.0),
-                        ));
+                        let _output = commands
+                            .spawn((
+                                ResourceItem(ResourceType::StasisMud),
+                                StoredByMixer(mixer_entity),
+                                Sprite {
+                                    image: ctx.env.soul_handles.icon_stasis_mud_small.clone(),
+                                    custom_size: Some(Vec2::splat(TILE_SIZE * 0.5)),
+                                    ..default()
+                                },
+                                Visibility::Visible,
+                                Transform::from_translation(
+                                    pos.truncate().extend(Z_ITEM_PICKUP) + offset,
+                                ),
+                                Name::new("Item (StasisMud)"),
+                                hw_logistics::item_lifetime::ItemDespawnTimer::new(5.0),
+                            ))
+                            .id();
+                        #[cfg(feature = "profiling")]
+                        if ctx.env.refine_observations {
+                            output_items.push(_output);
+                        }
                     }
                     storage.mud += STASIS_MUD_OUTPUT;
 
@@ -134,6 +152,21 @@ pub fn handle_refine_task(
                         mixer: mixer_entity,
                         phase: RefinePhase::Done,
                     });
+                    #[cfg(feature = "profiling")]
+                    if ctx.env.refine_observations {
+                        crate::refine_observations::RefineCommitReceipt {
+                            worker: ctx.soul_entity,
+                            assignment,
+                            owner: mixer_entity,
+                            world_epoch: ctx.world_epoch,
+                            water: consumed_water,
+                            water_count,
+                            outputs: output_items,
+                            before,
+                            after: [storage.sand, storage.rock, storage.mud],
+                        }
+                        .queue(commands);
+                    }
                     ctx.soul.fatigue = (ctx.soul.fatigue + FATIGUE_GAIN_ON_COMPLETION).min(1.0);
                 } else {
                     *ctx.task = AssignedTask::Refine(RefineData {
