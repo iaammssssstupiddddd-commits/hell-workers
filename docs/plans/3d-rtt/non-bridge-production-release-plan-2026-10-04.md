@@ -134,6 +134,42 @@ verifierだけを同一root・全表示/alpha1・同X幅・上下隣接・別Ent
 他root/非隣接/欠落/別progressを連結せず、元のowner/task/clip/camera/時間/描画検査は維持する。
 次のfresh Mixerはv2。旧Tank結果は同identityの画像比較材料として保持し、新subjectへの合格流用はしない。
 
+当Mixer v2（HEAD `a45970ef`）もowned PNG/独立verify/seal/比較用途保持/finalizeをpassした。
+4件のmanifest SHAはEmpty `5aee9986a21e5e7daedf11287ed5543e22ece3df23abd94d00f3982b655eb05c`、
+Partial `566f03ba485e41ef6cf54a428351846ff681979febabcb3b70ad023a64f6e5f0`、
+Full `395562e72b15c1ad9dff5c8802fd54bbb7b047790feeefddec8b7328413f3767`、
+Mixer `0f873f02dde3138f800754f0dfa10c12b4d8833ea356fe3683c1312445ffa7ba`。
+全PNGの独立実見でTankの0/25/50 UI、Mixerの実worker上の折返しRefining UIは判読可能と判断した。
+従来の原画/近距離/normal/low/context/preview/standard-dim監査と合わせ、主担当は各exact ArtPreviewの美術採用を決定した。
+Tank canonical art decision SHA `a386563c801c098d2f7da8d12eac4dcb70df4e48fe085dadc223afe38e661b0e`、
+Mixer `19555fe7fc41f77791300cf4d62dfb8488db11e9d64ae2d7814b73b7312aeaf9`。
+数値も独立監査でTank Y12/22、Mixer axis[0,1,0]/f32 FRAC_PI_2=1.5707963705062866 rad/sを採用した。
+numeric decision SHAはTank `3449b1d5ed3b1e7553bfc89333336522d4c5b10258de021de250dca08ec8b815`、
+Mixer `a3046b7cefea305f09733484aabaad158a00a302d7726b244f4ec8191eda2c1b`。
+美術/数値の判断はtechnical passからの自動承認ではなく、自然施工/搬送/割当・性能・releaseとは別である。
+最遠形状単独の識別や存在しないMixer Idle/Active labelは要求せず、実worker UIの間接補完とする。
+成功を新sourceの全体受入へ合算せず、正式campaignは別途必要とする。
+原因解消済みPartial UI v2/v3/v4とMixer UI v1の診断consumerを正式解除し、tracked file/差分/原本/稼働参照なし・
+非symlinkを確認して4rootを撤去した。実測565039104B→0、primary storage pass。失敗理由は本履歴と台帳へ保持する。
+次は `target/native-acceptance/tak14-{tank,mixer}-isolated-candidate-20261109-v1` を登録/export/独立verifyする。
+ownerはTAK-14 non-Bridge visual adoption、consumerはM2 independently adopted Tank and MudMixer candidate lifecycle comparison。
+採用candidateの通常consumer/lifecycle・正式導入で使い、修正/feedback完了まで保持する。利用終了後に原本/製品正本を
+保全して専用生成物を整理する。promotion/install/default起動切替の権限はこのexportに与えない。
+Tank v1はexport/独立verify/seal/保持/finalize済み、candidate identity
+`6cf7e62bc7b8a9f75c31ab8eb8a036956e16e249f03b70a6e15e9757d4a5b12e`（204800B）。
+Mixer v1はoutput作成前に、codecのf32正規JSON `1.5707964` と承認記録の全精度decimal差をstrict equalityが拒否した。
+invalid/seal/finalize、rootなし。両表記のf32 bitsは独立確認でも `0x3fc90fdb` であり実数値の変更ではない。
+旧承認を上書きせず、codecの正規表記を採用した新numeric decision
+`a0e8e2d9431f9f3bc6f058c1feabf6085254127718470e96ce79a3ed2d8e4073` を作成した。
+art/geometry/軸/回転速度は不変、検証条件を緩めずfresh Mixer candidate v2を使う。
+Mixer v2の既存export/独立verify/seal/用途保持/finalizeはpass。candidate identity
+`b6b01fd6a79d780a1764239b3ea733f5e02b1dfd4335137004842028b5a564a0`（196608B）。
+M2両候補は承認JSON/原本/geometry/依存を内包し、release receiptは持たない。既定fallbackは未変更。
+次の通常世界candidate試験では既存ordinary-artとEIS owned入力を再使用し、まずcatalog/ghost/Blueprintの
+生成と拒否/取消を独立した段階として限定する。準備はcamera/pauseだけとし、資材/worker/task/完成/水を注入しない。
+自然施工・実水量変化・精製・save/load・move・owner cleanupとCapture/Memory性能は後続の別観測として残す。
+旧seeded M2 lifecycleやpreviewのpassをordinary candidateの証拠へ読み替えない。
+
 2026-11-09の独立read-onlyアート監査では、Sand/Boneの現ArtPreview世代1を見た目だけ採用した。
 Sand `dbdf3e6ba5557f1b91b59a4e7d19c0bc1afe68e96c745d0dcbefd3f7b637d4e5` は低い黄土色の塊と大色面、
 Bone `fe6c024cd79783abff36fc22fb8b676a5bdc0325edef34b35089e563127e3f4f` は骨軸/節/隙間/象牙色が

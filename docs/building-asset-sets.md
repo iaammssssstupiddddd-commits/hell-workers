@@ -243,6 +243,21 @@ Lastで公開した同観測、production root/mesh/材質/poseをcapture前後�
 これはzoom操作による最大値到達、自然施工/搬送/割当、selection、lifecycle、性能、独立art/numeric採用、
 promotion/install/releaseの証拠ではない。通常起動へ新しいasset locatorやUI表示は追加しない。
 
+2026-11-09の独立画像/数値監査と主担当判断で、M2の現原本を美術/数値だけ採用した。
+Tankの空/半量/満水は既存Water tooltip、Mixerは実workerのRefining tooltipで最遠時の状態を補完する。
+Mixer自身にIdle/Active文言は追加しない。canonical承認と原本/geometry/依存を内包した隔離候補は以下であり、
+通常startupへのinstall・promotion/release・自然lifecycle・性能受入は未完のままである。
+
+| 種別 | 隔離候補manifest SHA256 | 採用production state |
+| --- | --- | --- |
+| Tank | `6cf7e62bc7b8a9f75c31ab8eb8a036956e16e249f03b70a6e15e9757d4a5b12e` | partial Y12 / full Y22 |
+| MudMixer | `b6b01fd6a79d780a1764239b3ea733f5e02b1dfd4335137004842028b5a564a0` | Y軸 / 1.5707964 rad/s（f32 bits `0x3fc90fdb`） |
+
+回転速度の実f32値は1.5707963705062866で、manifest/承認JSONはruntime codecの正規表記1.5707964を使う。
+全精度decimalの旧承認からは出力前のstrict比較で拒否されており、新承認digestでfresh候補を生成した。
+数値を丸めて検証条件を緩めたのではない。独立監査・承認digest・失敗/成功と整理の履歴は
+[現行導入計画](plans/3d-rtt/non-bridge-production-release-plan-2026-10-04.md)に記録する。
+
 M5専用の明示 `--variant m5-art-context --view normal` は別のseeded比較である。
 ArtPreviewの4種だけをfeedback/art-preview・standard照明で許可し、candidate/releaseや通常入力証拠へ転用しない。
 対象4棟、前後8Wall、8idle Soul、descriptor経由の4previewを一度だけ準備し、以後は受動観測する。
