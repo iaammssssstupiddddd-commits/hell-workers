@@ -610,6 +610,12 @@ Dream変化、停止中の消費への付替え、途中のworker/親/map/window
 これは通常利用の限定feedbackであり、枠変更、Operational保存復元、撤去、候補画像の採用、
 Capture/Memory性能、正式releaseの証明ではない。実機成功はfresh jobの独立検証後にのみ記録する。
 
+`soul-spa-persistence`は通常施工3checkpoint後の**空のOperational施設**をF5/F9の実catalog入力で保存・復元する。
+完成以降は停止を維持し、原保存ファイルのhash/bytesと正規commit、epochの更新、site/四区画/PowerGridの
+完全なID置換、pose/slot/指定/占有/歩行/grid出力を照合する。worker/taskがある場合、入力追加・枠変更・取消、
+停止中の仮想時間変化や保存間の状態変更を拒否する。未搬入取消caseの既定条件は変更しない。
+これは空施設の永続化だけを扱い、occupied task/Soul remap・自然離脱・撤去・候補表示・性能・releaseは別受入とする。
+
 UI feedbackの`rest-area-usage`は通常施工の3checkpointに入所・放出の2checkpointを追加する。
 camera/pause準備以外は既存入力と通常AIを使い、occupant・Dream・材料・完了状態を注入しない。
 UIとproduction rawは同じread-only collectorを使い、paused・同nonce/PID/epoch・同仮想時刻・

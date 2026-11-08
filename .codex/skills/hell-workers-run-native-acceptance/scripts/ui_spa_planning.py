@@ -10,6 +10,7 @@ from ui_progress_bars import catalog_control
 CHECKPOINTS = tuple("soul-spa-" + phase for phase in ("empty", "placed", "saved", "loaded", "cancelled"))
 COMPLETION_CHECKPOINTS = tuple("soul-spa-completion-" + phase for phase in ("empty", "placed", "completed"))
 USAGE_CHECKPOINTS = COMPLETION_CHECKPOINTS + ("soul-spa-using", "soul-spa-used")
+PERSISTENCE_CHECKPOINTS = COMPLETION_CHECKPOINTS + ("soul-spa-operational-saved", "soul-spa-operational-loaded")
 
 
 def cancel_key(owner):
@@ -181,14 +182,19 @@ def check_raw_session(raw, client):
                    "Spa raw ordinal/cap differs")
 
 
-def verify(raw, entries, client, save_path, inputs):
-    native.require([row["case"] for row in entries] == list(CHECKPOINTS), "Spa checkpoint inventory differs")
+def verify(raw, entries, client, save_path, inputs, *, persistence=False):
+    expected = PERSISTENCE_CHECKPOINTS if persistence else CHECKPOINTS
+    native.require([row["case"] for row in entries] == list(expected), "Spa checkpoint inventory differs")
     check_raw_session(raw, client)
     samples, events = raw["samples"], raw["events"]
     values = [row["value"] for row in entries]
-    empty, placed, saved, loaded, cancelled = values
-    for case, value in zip(CHECKPOINTS, values, strict=True):
-        check_observation(case, value)
+    empty, placed = values[:2]
+    saved, loaded = values[3:5] if persistence else values[2:4]
+    for case, value in zip(expected, values, strict=True):
+        if persistence:
+            check_persistence_observation(case, value)
+        else:
+            check_observation(case, value)
         native.require(value.get("pid") == client["pid"] and value.get("nonce") == client["nonce"]
                        and all(value["spa_planning"][k] == empty["spa_planning"][k] for k in ("anchor", "footprint", "draw_pos")),
                        "Spa checkpoint process/position differs")
@@ -197,14 +203,33 @@ def verify(raw, entries, client, save_path, inputs):
                        and type(e["value"].get("world_epoch")) is int and e["value"]["world_epoch"] >= 0
                        for e in entries), "Spa checkpoint ordinals are mistyped")
     snapshots = [raw_checkpoint(raw, value) for value in values]
-    check_inputs(raw, entries, client, inputs)
+    check_inputs(raw, entries, client, inputs, persistence=persistence)
     native.require(all(a["sample_index"] < b["sample_index"] for a, b in zip(snapshots, snapshots[1:]))
                    and all(b["value"]["frame"] > a["value"]["frame"] and b["last_step"] > a["last_step"]
                            for a, b in zip(entries, entries[1:]))
                    and placed["world_epoch"] == empty["world_epoch"] == saved["world_epoch"]
-                   and loaded["world_epoch"] == saved["world_epoch"] + 1 == cancelled["world_epoch"],
+                   and loaded["world_epoch"] == saved["world_epoch"] + 1
+                   and (persistence or loaded["world_epoch"] == values[4]["world_epoch"]),
                    "Spa checkpoint time/input/epoch order differs")
-    native.require(selected_state(context(placed)) == selected_state(context(saved)), "Spa paused save changed construction")
+    baseline = values[2] if persistence else placed
+    native.require(selected_state(context(baseline)) == selected_state(context(saved)), "Spa paused save changed construction")
+    if persistence:
+        end = raw_checkpoint(raw, values[2])["sample_index"]
+        prefix = dict(raw, samples=samples[:end + 1], events=[e for e in events if e["sample_index"] <= end])
+        verify_completion(prefix, entries[:3], client, inputs[:entries[2]["last_step"]])
+        interval = samples[end:snapshots[3]["sample_index"] + 1]
+        native.require(all(s.get("paused") is True and s.get("world_epoch") == baseline["world_epoch"]
+                           and s.get("primary_window") == snapshots[2]["primary_window"]
+                           and s.get("primary_window_bits") == snapshots[2]["primary_window_bits"]
+                           and s.get("virtual_seconds") == baseline["spa_planning"]["virtual_seconds"]
+                           and selected_state(s["spa_context"]) == selected_state(context(baseline)) for s in interval),
+                       "Spa Operational pre-save interval changed")
+        native.require(all(s.get("paused") is True and s.get("world_epoch") in (saved["world_epoch"], loaded["world_epoch"])
+                           and s.get("primary_window") == snapshots[2]["primary_window"]
+                           and s.get("primary_window_bits") == snapshots[2]["primary_window_bits"]
+                           and s.get("virtual_seconds") == baseline["spa_planning"]["virtual_seconds"]
+                           for s in samples[end:snapshots[4]["sample_index"] + 1]),
+                       "Spa Operational persistence advanced time/window/epoch")
     native.require(save_path.name == "manual-1.scn.ron" and save_path.parent.name == "saves"
                    and save_path.is_file() and not save_path.is_symlink() and not save_path.parent.is_symlink()
                    and 0 < save_path.stat().st_size <= 64 * 1024 * 1024, "Spa save bytes missing/unsafe/capped")
@@ -252,6 +277,23 @@ def verify(raw, entries, client, save_path, inputs):
     old, owner = context(saved)["sites"][0], context(loaded)["sites"][0]
     native.require(old["entity"] != owner["entity"] and lookup[old["entity"]] == owner["entity"]
                    and receipts[1].get("previous_epoch") == saved["world_epoch"], "Spa actual owner remap missing")
+    if persistence:
+        native.require(not any(e.get("operation") in ("SoulSpaConstructionCancel", "SoulSpaSlotsChange") for e in events),
+                       "Spa Operational persistence contains foreign operations")
+        start, stop = snapshots[2]["sample_index"], snapshots[4]["sample_index"]
+        boundary = receipts[1]["sample_index"]
+        tail = samples[start:stop + 1]
+        native.require(all(a["real_seconds"] < b["real_seconds"] for a, b in zip(tail, tail[1:])),
+                       "Spa Operational persistence clock order differs")
+        for sample in tail:
+            expected_value = loaded if sample["sample_index"] >= boundary else baseline
+            native.require(type(sample.get("world_epoch")) is int and sample["world_epoch"] == expected_value["world_epoch"]
+                           and selected_state(sample["spa_context"]) == selected_state(context(expected_value)),
+                           "Spa Operational persistence transient state/epoch differs")
+            observed = {"paused": sample["paused"], "spa_planning": dict(expected_value["spa_planning"], context=sample["spa_context"])}
+            check_persistence_observation(PERSISTENCE_CHECKPOINTS[-1], observed)
+        return
+    cancelled = values[4]
     outcomes = [e for e in events if e.get("producer") == "SoulSpaConstructionCancelOutcome"]
     native.require(len(outcomes) == 1, "Spa cancellation outcome missing/duplicate")
     from scripts import building_production_lifecycle as lifecycle
@@ -353,7 +395,7 @@ def world_click(driver, name, projection):
     record_action(driver, name, first, before)
 
 
-def check_inputs(raw, entries, client, inputs, *, completion=False, usage=False):
+def check_inputs(raw, entries, client, inputs, *, completion=False, usage=False, persistence=False):
     native.require(isinstance(inputs, list) and 0 < len(inputs) <= 256
                    and [row.get("step") for row in inputs] == [str(i + 1) for i in range(len(inputs))], "Spa input inventory differs")
     actions = [row["spa_action"] for row in inputs if "spa_action" in row]
@@ -471,18 +513,23 @@ def check_inputs(raw, entries, client, inputs, *, completion=False, usage=False)
                            < a["after"]["frame"] < entries[-1]["value"]["frame"] for a in actions),
                        "Spa completion input outside checkpoints")
         return
-    owner = context(entries[3]["value"])["sites"][0]["entity"]
+    owner = context(entries[-1 if persistence else 3]["value"])["sites"][0]["entity"]
     patterns = [r"menu:ToggleArchitect", r"menu:SelectArchitectCategory\(Some\(Plant\)\)",
                 r"menu:SelectTaskMode\(SoulSpaPlace\(None\)\)", "placement", "F5",
                 r"menu:SelectSaveCatalogSlot \{ slot: Manual1, session: [1-9][0-9]* \}", "F9",
                 r"menu:SelectLoadCatalogSlot \{ slot: Manual1, session: [1-9][0-9]* \}",
-                r"menu:ConfirmLoadCatalogSlot \{ slot: Manual1, session: [1-9][0-9]* \}", "select-loaded",
+                r"menu:ConfirmLoadCatalogSlot \{ slot: Manual1, session: [1-9][0-9]* \}"]
+    if not persistence:
+        patterns += ["select-loaded",
                 re.escape(cancel_key(owner)),
                 re.escape(f"menu:ConfirmSoulSpaConstructionCancel {{ target: {owner}, epoch: {entries[3]['value']['world_epoch']}, ticket: ") + r"[1-9][0-9]* \}"]
+    else:
+        native.require([a for a in actions if a["first_step"] > entries[2]["last_step"]] == required[4:],
+                       "Spa Operational persistence has extra post-completion input")
     native.require(len(filtered) == len(patterns) and all(re.fullmatch(pattern, key) for pattern, key in zip(patterns, filtered, strict=True)),
                    "Spa exact control/confirmation sequence differs")
     for index, action in enumerate(required):
-        phase = 0 if index < 4 else 1 if index < 6 else 2 if index < 9 else 3
+        phase = 0 if index < 4 else (2 if persistence else 1) if index < 6 else (3 if persistence else 2) if index < 9 else 3
         lower, upper = entries[phase:phase + 2]
         a, b = action["before"], action["after"]
         native.require(lower["last_step"] < action["first_step"] <= action["last_step"] <= upper["last_step"]
@@ -838,4 +885,44 @@ def exercise_usage(driver):
                               after=driver.last["frame"], timeout=15)
     pause(driver, True)
     driver.capture(USAGE_CHECKPOINTS[4])
+    wait_final_raw(driver)
+
+
+def check_persistence_observation(case, value):
+    if case in COMPLETION_CHECKPOINTS:
+        check_completion_observation(case, value)
+        if case != COMPLETION_CHECKPOINTS[-1]:
+            return
+    else:
+        native.require(case in PERSISTENCE_CHECKPOINTS and value.get("paused") is True,
+                       "Spa persistence capture differs")
+        check_operational(context(value), value["spa_planning"])
+    state = context(value)
+    # This first persistence leg deliberately covers an empty Operational site.
+    # Occupied tasks/Soul remapping need their own explicit save contract.
+    targets = {tile["entity"] for tile in state["tiles"]}
+    native.require(all(not tile.get("workers") for tile in state["tiles"])
+                   and not any(s.get("working_on") in targets
+                               or isinstance(s.get("generate_power"), dict) and s["generate_power"].get("tile") in targets
+                               for s in state["souls"])
+                   and not any(r.get("target") in targets for r in state["working_relations"]),
+                   "Spa empty Operational persistence has occupants")
+
+
+def exercise_persistence(driver):
+    exercise_completion(driver)
+    check_persistence_observation(COMPLETION_CHECKPOINTS[-1], driver.last)
+    tap(driver, "F5")
+    driver.last = driver.wait(lambda v: any(k.startswith("menu:SelectSaveCatalogSlot") for k in v["controls"]), after=driver.last["frame"])
+    click(driver, catalog_control(driver, "SelectSaveCatalogSlot"))
+    driver.last = driver.wait(lambda v: v["catalog"] == "Closed" and "Save:Succeeded" in v["save_outcomes"], after=driver.last["frame"])
+    driver.capture(PERSISTENCE_CHECKPOINTS[3])
+    tap(driver, "F9")
+    driver.last = driver.wait(lambda v: any(k.startswith("menu:SelectLoadCatalogSlot") for k in v["controls"]), after=driver.last["frame"])
+    click(driver, catalog_control(driver, "SelectLoadCatalogSlot"))
+    epoch = driver.last["world_epoch"]
+    click(driver, catalog_control(driver, "ConfirmLoadCatalogSlot"))
+    driver.last = driver.wait(lambda v: v["world_epoch"] == epoch + 1 and v["catalog"] == "Closed", after=driver.last["frame"], timeout=60)
+    pause(driver, True)
+    driver.capture(PERSISTENCE_CHECKPOINTS[4])
     wait_final_raw(driver)

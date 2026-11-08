@@ -285,6 +285,96 @@ class SpaPlanningTests(unittest.TestCase):
                                                        if s["real_seconds"] >= event["real_seconds"]))
         return raw, entries, client, inputs
 
+    def persistence_fixture(self, save):
+        raw, entries, client, inputs = self.completion_fixture(save)
+        old_raw, old_entries, _, old_inputs = self.fixtures(save)
+        def operational(state):
+            for site in state["sites"]:
+                site.update(phase="Operational", bones_delivered=12)
+            for tile in state["tiles"]:
+                tile.update(designation="GeneratePower", task_slots=1)
+        for entry, name in zip(copy.deepcopy(old_entries[2:4]), spa.PERSISTENCE_CHECKPOINTS[3:], strict=True):
+            entry.update(case=name, last_step=entry["last_step"] + 4)
+            entry["value"]["frame"] += 3000
+            entry["value"]["spa_planning"]["real_seconds"] += 30
+            entry["value"]["spa_planning"]["virtual_seconds"] = 1.
+            operational(entry["value"]["spa_planning"]["context"])
+            entries.append(entry)
+        for row in copy.deepcopy(old_inputs[8:18]):
+            row.update(step=str(int(row["step"]) + 4), pre_frame=row["pre_frame"] + 3000, post_frame=row["post_frame"] + 3000)
+            if "spa_action" in row:
+                action = row["spa_action"]
+                action.update(first_step=action["first_step"] + 4, last_step=action["last_step"] + 4)
+                for side in ("before", "after"):
+                    value = action[side]
+                    value.update(frame=value["frame"] + 3000, paused=True)
+                    value["spa_planning"]["real_seconds"] += 30
+                    value["spa_planning"]["virtual_seconds"] = 1.
+                    operational(value["spa_planning"]["context"])
+            inputs.append(row)
+        for sample in copy.deepcopy(old_raw["samples"]):
+            if 10 < sample["real_seconds"] <= 40:
+                sample.update(real_seconds=sample["real_seconds"] + 30, virtual_seconds=1.)
+                operational(sample["spa_context"])
+                raw["samples"].append(sample)
+        for event in copy.deepcopy(old_raw["events"]):
+            if 10 < event["real_seconds"] <= 40:
+                event["real_seconds"] += 30
+                if "spa_context" in event:
+                    operational(event["spa_context"])
+                raw["events"].append(event)
+        for i, sample in enumerate(raw["samples"]):
+            sample["sample_index"] = i
+        for i, event in enumerate(raw["events"]):
+            event.update(event_index=i, sample_index=next(j for j, s in enumerate(raw["samples"])
+                                                       if s["real_seconds"] >= event["real_seconds"]))
+        return raw, entries, client, inputs
+
+    def test_empty_operational_persistence_and_refusals(self):
+        with tempfile.TemporaryDirectory() as directory:
+            save = Path(directory) / "saves/manual-1.scn.ron"
+            save.parent.mkdir()
+            raw, entries, client, inputs = self.persistence_fixture(save)
+            spa.verify(raw, entries, client, save, inputs, persistence=True)
+            for entry in entries:
+                ui.check_observation(entry["case"], entry["value"])
+            self.assertIn("soul-spa-persistence", ui.CASES)
+            for change in ("remap", "hash", "epoch", "phase", "occupant", "paused", "input", "foreign_operation",
+                           "pre_save_drift", "post_save_drift", "post_save_task", "early_epoch", "bool_epoch"):
+                raw, entries, client, inputs = self.persistence_fixture(save)
+                if change == "remap":
+                    next(e for e in raw["events"] if e.get("operation") == "DurableLoad")["spa_entity_remap"].pop()
+                elif change == "hash":
+                    next(e for e in raw["events"] if e.get("operation") == "DurableSave")["file_sha256"] = "0" * 64
+                elif change == "epoch":
+                    entries[-1]["value"]["world_epoch"] = 0
+                elif change == "phase":
+                    spa.context(entries[-1]["value"])["sites"][0]["phase"] = "Constructing"
+                elif change == "occupant":
+                    spa.context(entries[-1]["value"])["tiles"][0]["workers"] = ["foreign"]
+                elif change == "paused":
+                    entries[-1]["value"]["paused"] = False
+                elif change == "input":
+                    inputs.pop()
+                elif change == "foreign_operation":
+                    raw["events"].append(dict(raw["events"][-1], event_index=len(raw["events"]), operation="SoulSpaSlotsChange"))
+                elif change == "pre_save_drift":
+                    sample = next(s for s in raw["samples"] if 30 < s["real_seconds"] < 49)
+                    sample["spa_context"]["sites"][0]["bones_delivered"] = 11
+                else:
+                    sample = next(s for s in raw["samples"] if 50 < s["real_seconds"] < 69)
+                    if change == "post_save_drift":
+                        sample["spa_context"]["sites"][0].update(phase="Constructing", bones_delivered=11)
+                    elif change == "post_save_task":
+                        sample["spa_context"]["souls"] = [{"entity": "ghost", "working_on": None,
+                                                         "generate_power": {"tile": "10v0", "phase": "GoingToTile"}}]
+                    elif change == "bool_epoch":
+                        sample["world_epoch"] = False
+                    else:
+                        sample["world_epoch"] = 1
+                with self.subTest(change=change), self.assertRaises(spa.native.AcceptanceError):
+                    spa.verify(raw, entries, client, save, inputs, persistence=True)
+
     def test_natural_completion_fixture_and_missing_evidence_refusals(self):
         with tempfile.TemporaryDirectory() as directory:
             save = Path(directory) / "saves/manual-1.scn.ron"

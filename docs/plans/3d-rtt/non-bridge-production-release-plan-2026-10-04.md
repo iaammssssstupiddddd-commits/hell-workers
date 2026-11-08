@@ -716,6 +716,32 @@ Dream消費を示したが、疲労0.742994→0.802993の直後にtaskNone/回�
 実Generating・Dream20以上/疲労0.6以下/stress0.65以下という観測窓に限る。測定継続は全rawで検査し、
 回復・worker・数値・離脱条件を注入/変更しない。既存300秒/全480秒上限と無再送を維持する。
 
+`bea0b570`のfresh `tak14-soulspa-ordinary-usage-20261108-v5`は5checkpoint・別実行/登録verifierと
+main/独立read-onlyの全画像確認を通過し、限定technical passとしてseal/finalizeした。
+source `81e913b300df79a4f170f17bdd5b412b8262d7f97720ac2843a75c5c50054fd5`、harness
+`bbdc6194935a38bdfc0d1640217caa0a2b6e0ca96eb9a18816b1d52f2bd46a42`、manifest
+`8dde11884e22bee96a8e1d4faa864246363924dad00318ad3dcf2f1ee5d26ea5`、raw
+`23edf02b177f40758f1822bf94540b7e7353480c5699aeb83b22f1f9a410bfb6`。
+site2258v0/四区画を維持し、通常Bone0→12・Operational後、Soul1846v0/tile2261v0が
+Normal速度1で仮想133.152545029→139.902545029の6.75秒を継続した。Dream26.81013298→23.43513298、
+減少3.375は0.5/秒と一致する。後から別Soulも入り出力は1→2。Intel Arc/Vulkan・WARN/ERRORなし。
+人物・範囲オーラ・粒子が重なるため画像だけで個体や数値は読めず、対応はrawによる限定観測とする。
+通常起動はfallbackのまま。候補art・枠変更・Operational保存復元・性能・releaseは未受入。
+最新job44,785,664Bを枠変更/Operational保存の比較基準に保持する。旧usage v1〜v4の診断は
+この比較で終了し、結果履歴を維持したまま生成jobを整理する。
+
+次は独立case `soul-spa-persistence`で自然施工3checkpointにempty Operationalのsaved/loadedを追加する。
+既存F5/F9/catalog実入力だけで原保存バイト・正規commit・同window/nonce・epoch0→1と
+site/四区画/PowerGridの完全remap、slot/指定/pose/map/出力を検証する。完成以降は全区間pausedで、
+workerがいる場合は拒否し、利用中task/Soul remapの証明に読み替えない。枠変更・取消・未知入力も拒否する。
+Help実レビュー・拒否系試験・変更別CI/Clippy・独立read-only review後、fresh nativeで確認する。
+この準備は保存受入成功や候補通常導入ではない。
+独立コードreviewでsaved→load commit間の一時的な状態差替えを拒否できない点を検出し、
+正規load receiptのsampleを境に全rawの旧/新epochと施設/四区画/gridを固定する補正を追加した。
+同区間の孤立Soul task/WorkingOnも空施設条件として検査する。中間Constructing、ghost task、早いepoch置換の拒否を追加。
+診断終了したusage v1〜v4は正式consumer解除・終了process/open fileなし・非symlink・生成物だけと確認し撤去した。
+du合計160,788,480B減（原本・候補・最新v5・共有Cargo cacheは維持）。invalid metadata/結果履歴は保全する。
+
 ## 5. マイルストーン
 
 ### M1: 原本・候補
