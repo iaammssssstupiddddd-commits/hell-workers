@@ -795,6 +795,17 @@ WorkingOn追加前から割当を数える。数値・actor・taskを注入せ�
 誤対象、欠損/重複receipt、bool代用、epoch変更、追出し、新規worker、短い測定、余分な入力は拒否する。
 これは実機試験の準備であり、独立review・fresh実行・画像/raw確認・登録verify前は未受入のまま。
 
+`72b18d36`のfresh slots v1は通常Bone12/Operational、Soul1862v0/Generatingまで進んだが、
+owner2220v0/bits4294965075の中心投影[960,540]への単発選択がSoulへ当たり、既存pickerを開いた後も
+表示controlsに施設が現れず、待機上限でinvalid精算/finalizeした。終了real444.400936429、
+active_slots4、slot操作なし。54,042,624Bを選択経路の診断だけに保持し、受入成功とはしない。
+独立read-only照合でも候補行は32px、scroll viewport478px/offset0で先頭15行だけが露出し、
+ObjectはSoul/Resourceより後順位であることを確認した。全membership/施設の行番号は観測しておらず、
+候補自体の欠落やゲーム選択不具合と断定しない。ゲームの順位/選択ruleは変更しない。
+次はprofiling限定で既存resolverへ四区画中心/施設中心の最大5点を受動照会し、施設が先頭Direct Objectとなる
+点だけで通常クリックを一度行う。解決点なしはpress前に拒否し、任意座標や候補・選択の注入はしない。
+単体回帰、Help No impact判断、独立コードreviewとfresh実機を経るまで、枠変更は未受入のまま。
+
 ## 5. マイルストーン
 
 ### M1: 原本・候補

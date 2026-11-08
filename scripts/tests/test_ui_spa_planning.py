@@ -615,7 +615,9 @@ class SpaPlanningTests(unittest.TestCase):
             before = copy.deepcopy(inputs[0]["spa_action"]["before"])
             before.update(frame=now * 100, paused=paused, selected=selected, menu_state="Hidden")
             before["spa_planning"].update(real_seconds=float(now), virtual_seconds=virtual,
-                                         context=copy.deepcopy(state), owner_point=[100, 100], task_mode="None")
+                                         context=copy.deepcopy(state), selection_point=[100, 100],
+                                         selection_target={"owner": 1, "world": [0, 0], "point": [100, 100],
+                                                           "hit": "Direct", "class": "Object"}, task_mode="None")
             first = len(inputs)
             for i, pressed in enumerate((True, False)):
                 if not pressed:
@@ -721,7 +723,7 @@ class SpaPlanningTests(unittest.TestCase):
                 elif mutation == "boolean-selection":
                     inputs[20]["spa_action"]["after"]["selected"] = True
                 elif mutation == "wrong-projection":
-                    inputs[20]["spa_action"]["before"]["spa_planning"]["owner_point"] = []
+                    inputs[20]["spa_action"]["before"]["spa_planning"]["selection_point"] = []
                 elif mutation == "orphan-assignment":
                     state = raw["samples"][receipts[-1]["sample_index"] + 1]["spa_context"]
                     state["souls"].append({"entity": "401v0", "generate_power": {
@@ -794,11 +796,57 @@ class SpaPlanningTests(unittest.TestCase):
             _, entries, _, _ = self.usage_fixture(save)
             driver = Mock(last=copy.deepcopy(entries[-1]["value"]))
             driver.last.update(selected=999, controls={})
+            driver.last["spa_planning"].update(selection_point=[100, 100], selection_target={
+                "owner": 1, "world": [0, 0], "point": [100, 100], "hit": "Direct", "class": "Object"})
             with patch.object(spa, "exercise_usage") as prefix, patch.object(spa, "world_click") as world:
                 with self.assertRaises(spa.native.AcceptanceError):
                     spa.exercise_slots(driver)
                 prefix.assert_called_once_with(driver)
-                world.assert_called_once_with(driver, "select-operational", "owner_point")
+                world.assert_called_once_with(driver, "select-operational", "selection_point")
+                driver.send.assert_not_called()
+
+    def test_selection_probe_is_rechecked_after_motion_before_press(self):
+        with tempfile.TemporaryDirectory() as directory:
+            save = Path(directory) / "saves/manual-1.scn.ron"
+            save.parent.mkdir()
+            _, _, _, inputs = self.slots_fixture(save)
+            driver = Mock(last=copy.deepcopy(inputs[20]["spa_action"]["before"]), events=[])
+            driver.last.update(mouse_left_pressed=False, controls={})
+            def motion(**event):
+                driver.last["frame"] += 1
+                driver.last["spa_planning"]["selection_target"]["owner"] = 2
+            driver.send.side_effect = motion
+            with self.assertRaises(spa.native.AcceptanceError):
+                spa.world_click(driver, "select-operational", "selection_point")
+            driver.send.assert_called_once_with(point=(100, 100))
+
+    def test_selection_probe_is_exact_owned_finite_and_on_existing_footprint(self):
+        with tempfile.TemporaryDirectory() as directory:
+            save = Path(directory) / "saves/manual-1.scn.ron"
+            save.parent.mkdir()
+            _, _, _, inputs = self.slots_fixture(save)
+            baseline = inputs[20]["spa_action"]["before"]
+            self.assertEqual(spa.check_selection_target(baseline), [100, 100])
+            for patch_value in (None, {"owner": 2}, {"owner": True}, {"world": [500, 500]},
+                                {"world": [float("nan"), 0]}, {"point": [float("inf"), 100]},
+                                {"hit": "Snapped"}, {"class": "Soul"}):
+                value = copy.deepcopy(baseline)
+                if patch_value is None:
+                    value["spa_planning"]["selection_target"] = None
+                else:
+                    value["spa_planning"]["selection_target"].update(patch_value)
+                with self.subTest(patch_value=patch_value), self.assertRaises(spa.native.AcceptanceError):
+                    spa.check_selection_target(value)
+            missing_pose = copy.deepcopy(baseline)
+            spa.context(missing_pose)["tiles"][0]["pose"] = None
+            with self.assertRaisesRegex(spa.native.AcceptanceError, "pose"):
+                spa.check_selection_target(missing_pose)
+            driver = Mock(last=copy.deepcopy(baseline))
+            driver.last["spa_planning"]["selection_target"] = None
+            with patch.object(spa, "exercise_usage"), patch.object(spa, "world_click") as world:
+                with self.assertRaises(spa.native.AcceptanceError):
+                    spa.exercise_slots(driver)
+                world.assert_not_called()
                 driver.send.assert_not_called()
 
     def test_usage_requires_actual_worker_consumption_and_continuity(self):

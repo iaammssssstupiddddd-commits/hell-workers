@@ -626,6 +626,11 @@ epoch/revision付き候補pickerでexact ownerを選び、盲目的なworld clic
 GoingToTileはWorkingOn追加前から数え、閉鎖前に割当済みのSoulの到着を新規割当と誤認しない。
 全session480秒/raw1200上限は維持する。これは有界な既存利用継続だけで、自然離脱・再開放時の
 割当・occupied保存復元・候補表示・性能・正式releaseを証明しない。実機成功は別途記録する。
+profiling observerは実4tile中心とsite中心の最大5点を既存SelectionResolverへ読み取り照会し、
+同ownerが先頭のDirect Objectになる点だけを`selection_target/selection_point`へ出す。
+実owner/所有tileの座標と投影点へ拘束し、不明・非有限・別対象・Snapped・解決点なしはpress前に拒否する。
+選択・候補順・world/map・actorを変更しない。visible controlsはclip外の候補行を含まないため、
+controls不在だけで施設が選択候補から欠落したとは断定しない。
 
 UI feedbackの`rest-area-usage`は通常施工の3checkpointに入所・放出の2checkpointを追加する。
 camera/pause準備以外は既存入力と通常AIを使い、occupant・Dream・材料・完了状態を注入しない。

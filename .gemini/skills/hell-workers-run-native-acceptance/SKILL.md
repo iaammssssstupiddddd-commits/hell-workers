@@ -216,6 +216,10 @@ An overlapping selection uses only the existing revision/epoch-bound candidate
 picker, never repeated blind world clicks. Missing selection or any timeout fails
 closed. The whole-session and raw caps remain unchanged. This is limited slot
 feedback, not occupied persistence, natural exit, art, performance or release.
+Before the world click, the profiling observer evaluates at most the four owned
+tile centers and site center through the unchanged ordinary SelectionResolver.
+It exposes a point only when that exact owner is the first Direct Object target.
+No selection or candidate ranking is changed; no eligible point means no press.
 
 Select `--case rest-area-planning --smoke --input-backend portal` for ordinary
 RestArea reservation, Manual1 Save/Load and two-stage Task Dashboard cancellation.

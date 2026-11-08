@@ -391,6 +391,10 @@ def world_click(driver, name, projection):
                        and current["spa_planning"]["footprint"] == before["spa_planning"]["footprint"]
                        and current["spa_planning"]["task_mode"].startswith("SoulSpaPlace(")
                        and current["menu_state"] == "Architect", "Spa placement context changed")
+    if name == "select-operational":
+        native.require(check_selection_target(current) == point
+                       and current["spa_planning"]["selection_target"] == before["spa_planning"]["selection_target"],
+                       "Spa resolver target changed before press")
     before, first = input_context(current), len(driver.events)
     driver.send(button=1, pressed=True)
     driver.send(button=1, pressed=False)
@@ -904,6 +908,27 @@ def spa_assignment_keys(state):
             if isinstance(task := s.get("generate_power"), dict) and task.get("tile") in targets}
 
 
+def check_selection_target(value):
+    plan, state = value["spa_planning"], context(value)
+    native.require(len(state["sites"]) == 1 and len(state["tiles"]) == 4,
+                   "Spa selection has no exact site/four tiles")
+    target = plan.get("selection_target")
+    poses = [row.get("pose") for row in state["tiles"] + state["sites"]]
+    native.require(all(isinstance(pose, dict) and isinstance(pose.get("translation"), list)
+                       and len(pose["translation"]) == 3 and all(finite(x) for x in pose["translation"])
+                       for pose in poses), "Spa selection pose missing/nonfinite")
+    points = [pose["translation"][:2] for pose in poses]
+    native.require(isinstance(target, dict) and type(target.get("owner")) is int
+                   and target["owner"] == state["sites"][0]["entity_bits"]
+                   and target.get("hit") == "Direct" and target.get("class") == "Object"
+                   and target.get("world") in points and isinstance(target.get("world"), list)
+                   and len(target["world"]) == 2 and all(finite(x) for x in target["world"])
+                   and isinstance(target.get("point"), list) and len(target["point"]) == 2
+                   and all(finite(x) for x in target["point"]) and plan.get("selection_point") == target["point"],
+                   "Spa has no ordinary resolver-confirmed direct owner point")
+    return target["point"]
+
+
 def check_slots_observation(case, value):
     if case in USAGE_CHECKPOINTS:
         check_usage_observation(case, value)
@@ -978,8 +1003,9 @@ def verify_slots(raw, entries, client, inputs):
                            and a["before"]["world_epoch"] == a["after"]["world_epoch"] == epoch for a in group),
                        "Spa slot action crosses its checkpoint phase")
     selection = actions[0]["before"]
-    point = selection["spa_planning"]["owner_point"]
-    native.require(selection.get("menu_state") == "Hidden" and not selection["world_input_captured"]
+    point = check_selection_target(selection)
+    native.require(selected_state(context(selection)) == selected_state(context(entries[4]["value"]))
+                   and selection.get("menu_state") == "Hidden" and not selection["world_input_captured"]
                    and not selection["pointer_over_ui"] and selection["paused"] is True
                    and isinstance(point, list) and len(point) == 2 and all(finite(x) for x in point)
                    and all(abs(a - b * selection["scale_factor"]) <= 2
@@ -1052,7 +1078,8 @@ def verify_slots(raw, entries, client, inputs):
 def exercise_slots(driver):
     exercise_usage(driver)
     owner = context(driver.last)["sites"][0]
-    world_click(driver, "select-operational", "owner_point")
+    check_selection_target(driver.last)
+    world_click(driver, "select-operational", "selection_point")
     if driver.last.get("selected") != owner["entity_bits"]:
         suffix = f":{driver.last['world_epoch']}"
         toggles = [k for k in driver.last["controls"] if k.startswith("world-candidate:toggle:") and k.endswith(suffix)]

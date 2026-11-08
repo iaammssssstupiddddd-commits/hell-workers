@@ -19,6 +19,8 @@ pub use building_place::blueprint_placement;
 pub use floor_place::{
     FloorPlacementPreview, floor_placement_preview_system, floor_placement_system,
 };
+#[cfg(feature = "profiling")]
+pub(crate) use hit_test::native_direct_owner_point;
 pub(crate) use input::pointer_hits_task_area_border;
 pub(crate) use input::{WorldSelectionGesture, handle_mouse_input, update_hover_entity};
 pub use mode::clear_companion_state_outside_build_mode;
