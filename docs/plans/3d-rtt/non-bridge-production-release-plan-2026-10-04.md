@@ -752,6 +752,18 @@ rawの実AssignedTaskを照合するとSoul1848v0/1854v0は別cart909v0/910v0で
 全480秒/1200raw上限を維持し、fresh v2でも不成立なら同系統の待機延長を打ち切る。
 旧v1の26,980,352Bは移動経路と次の一回比較の診断用途で保持し、失敗を成功へ読み替えない。
 
+`74f396dc`のfresh persistence v2は通常搬入でsite2332v1/Bone12/Operationalまで進んだ
+（real206.460834539/virtual74.232638957）。ただし停止ボタンへの単発motion step24で
+要求physical[118,32]に対し製品cursor[234,360]となり、クリック前の到達ACKがtimeoutした。
+最終frame564/focused=true/paused=false、WARN/ERRORなし。F5/F9と完成checkpoint撮影へ未到達であり、
+試験全体をinvalid seal/finalizeし28,581,888Bを当該ポインタ比較用途で保持した。
+物理的な利用者操作と原因を断定せず、座標offsetやACK条件・時間上限を緩和しない。
+施工待機の延長はこれ以上行わない。次のfresh試験前に共有入力が静止する時間を確認する。
+独立して進める次の設計は、実site選択→Normal→既存SetSoulSpaActiveSlotsの4→0入力と正規outcomeを
+結び、既存workerを追い出さず新規assignmentだけを閉じる通常契約を検査するものとする。
+prefixの通常利用証拠・全tailのslot/worker/逆参照/owner/grid/epochを維持し、state注入を行わない。
+この設計記録は実装・実機成功を意味せず、occupied保存・撤去・候補通常表示・性能・releaseは未受入のまま。
+
 ## 5. マイルストーン
 
 ### M1: 原本・候補
