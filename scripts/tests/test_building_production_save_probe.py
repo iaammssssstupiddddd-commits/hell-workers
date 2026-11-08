@@ -2,13 +2,36 @@
 import copy
 from pathlib import Path
 import tempfile
+from types import SimpleNamespace
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 from scripts import building_production_save_probe as probe
 
 
 class SaveProbeTests(unittest.TestCase):
+    def test_hash_ignores_read_atime_but_rejects_content_and_identity_mutations(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            directory = root / "runtime/saves"
+            directory.mkdir(parents=True)
+            path = directory / "manual-1.scn.ron"
+            path.write_bytes(b"bounded fixture")
+            actual = path.stat()
+            fields = ("st_dev", "st_ino", "st_mode", "st_nlink", "st_uid", "st_gid", "st_size",
+                      "st_mtime_ns", "st_ctime_ns", "st_atime_ns")
+            before = SimpleNamespace(**{key: getattr(actual, key) for key in fields})
+            after = copy.copy(before)
+            after.st_atime_ns += 1
+            with patch.object(probe.os, "fstat", side_effect=[before, after]):
+                self.assertEqual(probe.file_identity(root)["bytes"], 15)
+            for field in fields[:-1]:
+                changed = copy.copy(after)
+                setattr(changed, field, getattr(changed, field) + 1)
+                with self.subTest(field=field), patch.object(probe.os, "fstat", side_effect=[before, changed]), \
+                     self.assertRaisesRegex(RuntimeError, "changed during hashing"):
+                    probe.file_identity(root)
+
     def test_load_capture_requires_two_later_closed_samples_and_settle_time(self):
         samples = []
         for i, seconds in enumerate((1.0, 1.2, 1.6)):

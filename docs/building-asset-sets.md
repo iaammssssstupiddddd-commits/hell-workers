@@ -258,6 +258,16 @@ Mixer自身にIdle/Active文言は追加しない。canonical承認と原本/geo
 数値を丸めて検証条件を緩めたのではない。独立監査・承認digest・失敗/成功と整理の履歴は
 [現行導入計画](plans/3d-rtt/non-bridge-production-release-plan-2026-10-04.md)に記録する。
 
+別の通常世界入口 `m2-mixer-candidate-planning` はmode `m2-candidate-planning` /
+scope `ordinary-m2-candidate-planning-v1` に限定し、採用済みMudMixer IsolatedCandidateだけを許可する。
+準備は合法anchorへのcamera/pauseのみ。実EISのcatalog→合法ghost→Blueprint→占有ghost→配置mode取消→
+同Blueprint inspectionを、packaged art/numeric/production-state・入力/PlacementOutcome・実preview consumerへ拘束する。
+実PlacementOutcomeのraw sampleを境界として、全途中sampleで配置前の対象不在、配置後の同owner/4tileの
+未完成Blueprint1件と予約map、厳密型epoch/window・有限単調clockを検査する。通常の資材搬入は拒否しない。
+初期完成Mixerや途中完成を拒否し、通常の資材/worker/task/水/完成を注入しない。
+TankのCompanionPending/Committed、自然施工/搬送/精製、save/load、move/cleanup、性能/releaseは別工程である。
+旧M5のArtPreview契約・旧seeded M2のfixtureをこのcandidate証拠へ流用しない。
+
 M5専用の明示 `--variant m5-art-context --view normal` は別のseeded比較である。
 ArtPreviewの4種だけをfeedback/art-preview・standard照明で許可し、candidate/releaseや通常入力証拠へ転用しない。
 対象4棟、前後8Wall、8idle Soul、descriptor経由の4previewを一度だけ準備し、以後は受動観測する。

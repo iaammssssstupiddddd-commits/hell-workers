@@ -1,4 +1,4 @@
-//! Ordinary M5 planning feedback: prepare only the camera and virtual pause.
+//! Ordinary M5 / separately admitted Mixer planning: camera and pause only.
 //! All catalog, ghost, reservation and selection transitions require real input.
 use super::*;
 use crate::interface::selection::placement_geometry::live_building_geometry;
@@ -43,6 +43,9 @@ fn building_inventory(world: &mut World, kind: BuildingType) -> Vec<Value> {
 }
 
 fn case_kind(case: &str) -> Option<BuildingType> {
+    if case == "m2-mixer-candidate-planning" {
+        return Some(BuildingType::MudMixer);
+    }
     use crate::assets::building_asset_set::{BuildingAssetKind, m5_kind_for_case};
     match m5_kind_for_case(case)? {
         BuildingAssetKind::SandPile => Some(BuildingType::SandPile),
@@ -74,7 +77,7 @@ fn validate(
         world: &read,
         in_site: sites.iter().any(|site| site.contains(geometry.draw_pos)),
         in_yard: yards.iter().any(|yard| yard.contains(geometry.draw_pos)),
-        // This module admits only M5 kinds, never Wall/Door placement.
+        // This module admits M5/Mixer kinds, never Wall/Door placement.
         is_wall_or_door_at: &|_| false,
         is_replaceable_wall_at: &|_| false,
     };
@@ -117,6 +120,10 @@ pub(super) fn prepare(world: &mut World) {
         transform.translation.y = center.y;
     }
     let initial_building_inventory = building_inventory(world, kind);
+    assert!(
+        kind != BuildingType::MudMixer || initial_building_inventory.is_empty(),
+        "M2 planning requires no initial Mixer; never clear existing owners"
+    );
     assert!(
         initial_building_inventory.len() <= 16,
         "M5 initial owner cap exceeded"
@@ -229,6 +236,12 @@ mod tests {
 
     #[test]
     fn m5_cases_do_not_admit_bridge_or_existing_seeded_cases() {
+        assert_eq!(
+            case_kind("m2-mixer-candidate-planning"),
+            Some(BuildingType::MudMixer)
+        );
+        assert_eq!(case_kind("m2-tank-candidate-planning"), None);
+        assert_eq!(case_kind("m2-ui-mixer-refining"), None);
         for (case, kind) in [
             ("m5-sand-planning", BuildingType::SandPile),
             ("m5-bone-planning", BuildingType::BonePile),

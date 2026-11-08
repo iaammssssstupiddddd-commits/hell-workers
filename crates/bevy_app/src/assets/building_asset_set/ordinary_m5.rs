@@ -1,4 +1,5 @@
-//! Passive M5 2D consumer inventory in an explicitly admitted ordinary UI case.
+//! Passive 2D planning consumer inventory in explicitly admitted ordinary cases.
+//! Mixer planning rejects completed owners before using this preview-only DTO.
 use super::{BuildingAssetPool, BuildingAssetSetIdentity};
 use bevy::{camera::visibility::RenderLayers, prelude::*, sprite::Anchor};
 use hw_jobs::{Blueprint, Building, BuildingType};
@@ -44,6 +45,7 @@ pub(super) fn snapshot(
         super::BuildingAssetKind::BonePile => BuildingType::BonePile,
         super::BuildingAssetKind::WheelbarrowParking => BuildingType::WheelbarrowParking,
         super::BuildingAssetKind::OutdoorLamp => BuildingType::OutdoorLamp,
+        super::BuildingAssetKind::MudMixer => BuildingType::MudMixer,
         _ => return Err("ordinary M5 cannot observe another kind".into()),
     };
     let pool = world.resource::<BuildingAssetPool>();
@@ -67,6 +69,9 @@ pub(super) fn snapshot(
         })
         .take(129)
         .collect::<Vec<_>>();
+    if kind == BuildingType::MudMixer && !buildings.is_empty() {
+        return Err("M2 planning cannot claim completed 3D consumer evidence".into());
+    }
     let blueprints = world
         .query::<(Entity, &Blueprint, Option<&BlueprintVisual>)>()
         .iter(world)
@@ -167,4 +172,36 @@ pub(super) fn snapshot(
         json!({"schema": 1, "requested": identity, "active": active, "pending": pending, "descriptor": descriptor,
         "sprites": sprites, "catalog": catalog, "accepted": false, "performance_evidence": false, "promotion_authority": false}),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn mixer_planning_never_labels_an_existing_completed_root_as_preview_evidence() {
+        let mut world = World::new();
+        world.init_resource::<BuildingAssetPool>();
+        let owner = world
+            .spawn(Building {
+                kind: BuildingType::MudMixer,
+                is_provisional: false,
+            })
+            .id();
+        let identity = BuildingAssetSetIdentity {
+            kind: super::super::BuildingAssetKind::MudMixer,
+            generation: 1,
+            authority: super::super::BuildingAssetAuthority::IsolatedCandidate,
+            manifest_sha256: "a".repeat(64),
+        };
+        assert!(
+            snapshot(&mut world, &identity)
+                .unwrap_err()
+                .contains("completed 3D")
+        );
+        assert_eq!(
+            world.get::<Building>(owner).unwrap().kind,
+            BuildingType::MudMixer
+        );
+    }
 }

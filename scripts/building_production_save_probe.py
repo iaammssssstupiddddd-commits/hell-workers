@@ -73,7 +73,12 @@ def file_identity(root: Path):
         with os.fdopen(os.dup(fd), "rb") as stream:
             data = stream.read(64 * 1024 * 1024 + 1)
         after = os.fstat(fd)
-        require(before == after and len(data) == before.st_size and path.stat() == after,
+        # A read may update atime (relatime/strictatime). Keep nanosecond
+        # modification/change clocks and inode/ownership checks, not read time.
+        def stable(info):
+            return tuple(getattr(info, key) for key in ("st_dev", "st_ino", "st_mode", "st_nlink", "st_uid", "st_gid",
+                                                       "st_size", "st_mtime_ns", "st_ctime_ns"))
+        require(stable(before) == stable(after) and len(data) == before.st_size and stable(path.lstat()) == stable(after),
                 "save file changed during hashing")
         return {"path": "runtime/saves/manual-1.scn.ron", "bytes": len(data), "sha256": hashlib.sha256(data).hexdigest()}
     finally:

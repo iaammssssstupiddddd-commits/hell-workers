@@ -170,6 +170,27 @@ M2両候補は承認JSON/原本/geometry/依存を内包し、release receiptは
 自然施工・実水量変化・精製・save/load・move・owner cleanupとCapture/Memory性能は後続の別観測として残す。
 旧seeded M2 lifecycleやpreviewのpassをordinary candidateの証拠へ読み替えない。
 
+#### 次の限定実装：Mixer candidate planning
+
+初段caseは `m2-mixer-candidate-planning` / mode `m2-candidate-planning` /
+scope `ordinary-m2-candidate-planning-v1` のみとし、IsolatedCandidateのMudMixerだけを許可する。
+既存M5と同じ合法anchor探索/camera/pause・Sprite/catalog受動DTOを使うが、初期Mixer完成ownerが存在すれば
+当caseは拒否し、消去やfixtureで整えない。準備後はcatalog→合法ghost→1 Blueprint→占有ghost→Escapeで
+配置mode取消→同Blueprint inspectionの6 checkpointを実EIS入力で確認する。Blueprint自体の取消や完成は含まない。
+完全なpackaged art/numeric/production-state、元recipeと依存byte、actual input/PlacementOutcome、epoch/window/cursor、
+原本previewのhandle/canvas/anchor/local/global/clipを同subjectへ拘束する。新helper/検証依存もharnessへ追加する。
+旧M5のauthority/ケース/初期world消失検査は変更せず、新MixerはM5承認やseeded M2の入口へ流入させない。
+拒否回帰はforeign/missing approval、preview/release/Tank混入、seeded/perf混在、初期owner有り、
+motion後のtarget変更・未送信、実入力/receiptの時刻・owner/epoch/window差、途中raw改変を含める。
+独立reviewで指摘された途中Blueprint/mapの欠落は、実PlacementOutcome sampleを境界に全raw区間の
+同owner/4tile/未完成1件と予約map、有限単調clock・厳密整数epoch/windowを検査して拒否する。
+全体tooling検証で既存save hashが読取り時のatime更新を変更と誤判定したため、atimeのみを比較から除き、
+dev/inode/mode/nlink/uid/gid/size/mtime_ns/ctime_nsと最終lstatを保持する。atime単独の正例と各metadata変更の
+拒否回帰で、内容変更・差替えのfail-closed契約を維持する。
+Tankは別段階：初回clickのCompanionPendingはBlueprint成立ではなく、次clickのCompanionCommittedで親と2保管場所が
+揃う必要があるため、この1clickのspineへ押し込まない。後続のdurable remap・typed item/Refine実入出力・move commit・
+salvage全数のproducer不足は維持し、それぞれ実成功branchから別途観測する。
+
 2026-11-09の独立read-onlyアート監査では、Sand/Boneの現ArtPreview世代1を見た目だけ採用した。
 Sand `dbdf3e6ba5557f1b91b59a4e7d19c0bc1afe68e96c745d0dcbefd3f7b637d4e5` は低い黄土色の塊と大色面、
 Bone `fe6c024cd79783abff36fc22fb8b676a5bdc0325edef34b35089e563127e3f4f` は骨軸/節/隙間/象牙色が

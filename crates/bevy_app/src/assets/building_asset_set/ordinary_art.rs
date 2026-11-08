@@ -19,6 +19,7 @@ pub(super) const SPA_CANDIDATE_SCOPE: &str = "ordinary-spa-candidate-occupied-v1
 const SPA_RESUMED_SCOPE: &str = "ordinary-spa-candidate-resumed-v1";
 const SPA_LOADED_SCOPE: &str = "ordinary-spa-candidate-load-v1";
 const M5_SCOPE: &str = "ordinary-m5-art-planning-v1";
+const M2_PLANNING_SCOPE: &str = "ordinary-m2-candidate-planning-v1";
 
 pub(crate) fn m5_kind_for_case(case: &str) -> Option<BuildingAssetKind> {
     match case {
@@ -58,6 +59,11 @@ fn validate(session: &Session, root: &Path, nonce: &str, case: &str) -> Result<(
                 .all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase())
     };
     let profile = match session.mode.as_str() {
+        "m2-candidate-planning" => {
+            session.identity.authority == BuildingAssetAuthority::IsolatedCandidate
+                && session.identity.kind == BuildingAssetKind::MudMixer
+                && case == "m2-mixer-candidate-planning"
+        }
         "m5-feedback" => {
             session.identity.authority == BuildingAssetAuthority::ArtPreview
                 && m5_kind_for_case(case) == Some(session.identity.kind)
@@ -115,6 +121,12 @@ fn validate(session: &Session, root: &Path, nonce: &str, case: &str) -> Result<(
 }
 
 pub(super) fn scope(world: &World) -> &'static str {
+    if world
+        .get_resource::<Session>()
+        .is_some_and(|session| session.mode == "m2-candidate-planning")
+    {
+        return M2_PLANNING_SCOPE;
+    }
     if world
         .get_resource::<Session>()
         .is_some_and(|session| session.mode == "m5-feedback")
@@ -225,7 +237,10 @@ pub(super) fn snapshot(world: &mut World) -> Result<Value, String> {
     {
         return Err("ordinary art active/pending generation differs".into());
     }
-    if session.mode == "m5-feedback" {
+    if matches!(
+        session.mode.as_str(),
+        "m5-feedback" | "m2-candidate-planning"
+    ) {
         return super::ordinary_m5::snapshot(world, &session.identity);
     }
     let mut expected = descriptor.as_ref().map(|set| json!({
@@ -314,6 +329,53 @@ pub(super) fn snapshot(world: &mut World) -> Result<Value, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn mixer_planning_admits_only_its_exact_candidate_case_without_seeded_authority() {
+        let root = Path::new("/unused/mixer-ui");
+        let session = Session {
+            mode: "m2-candidate-planning".into(),
+            identity: BuildingAssetSetIdentity {
+                kind: BuildingAssetKind::MudMixer,
+                generation: 1,
+                authority: BuildingAssetAuthority::IsolatedCandidate,
+                manifest_sha256: "a".repeat(64),
+            },
+            locator: "manifests/building-mud-mixer-v1.buildingset".into(),
+            nonce: "b".repeat(32),
+            output: root.join("production-cancellation.json"),
+        };
+        validate(
+            &session,
+            root,
+            &session.nonce,
+            "m2-mixer-candidate-planning",
+        )
+        .unwrap();
+        for case in [
+            "m2-ui-mixer-refining",
+            "m5-lamp-planning",
+            "m2-tank-candidate-planning",
+            "navigation",
+        ] {
+            assert!(validate(&session, root, &session.nonce, case).is_err());
+        }
+        for authority in [
+            BuildingAssetAuthority::ArtPreview,
+            BuildingAssetAuthority::ReleaseApproved,
+        ] {
+            let mut wrong = session.clone();
+            wrong.identity.authority = authority;
+            assert!(validate(&wrong, root, &wrong.nonce, "m2-mixer-candidate-planning").is_err());
+        }
+        let mut wrong = session.clone();
+        wrong.identity.kind = BuildingAssetKind::Tank;
+        assert!(validate(&wrong, root, &wrong.nonce, "m2-mixer-candidate-planning").is_err());
+        assert!(validate(&session, root, "foreign", "m2-mixer-candidate-planning").is_err());
+        let mut world = World::new();
+        world.insert_resource(session);
+        assert_eq!(scope(&world), M2_PLANNING_SCOPE);
+    }
 
     #[test]
     fn every_seeded_static_release_or_formal_session_is_excluded() {
