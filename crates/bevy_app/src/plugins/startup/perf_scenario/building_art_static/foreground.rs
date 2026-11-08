@@ -40,9 +40,51 @@ pub(super) fn unchanged(initial: Option<&Value>, current: &Value) -> Result<(), 
         || before.as_ref().is_none_or(|records| records.len() != 4)
         || after != before
     {
-        return Err("foreground measured sprite changed after readiness".into());
+        let before = json!({"foreground_schema": initial["foreground_schema"], "records": before});
+        let after = json!({"foreground_schema": current["foreground_schema"], "records": after});
+        let difference = first_difference(&before, &after, "fixture".into())
+            .unwrap_or_else(|| "foreground schema/inventory invalid".into());
+        return Err(format!(
+            "foreground measured sprite changed after readiness: {difference}"
+        ));
     }
     Ok(())
+}
+
+fn first_difference(before: &Value, after: &Value, path: String) -> Option<String> {
+    if before == after {
+        return None;
+    }
+    match (before, after) {
+        (Value::Object(left), Value::Object(right)) => {
+            let keys = left
+                .keys()
+                .chain(right.keys())
+                .collect::<std::collections::BTreeSet<_>>();
+            for key in keys {
+                if let Some(difference) =
+                    first_difference(&before[key], &after[key], format!("{path}.{key}"))
+                {
+                    return Some(difference);
+                }
+            }
+        }
+        (Value::Array(left), Value::Array(right)) if left.len() == right.len() => {
+            for (index, (left, right)) in left.iter().zip(right).enumerate() {
+                if let Some(difference) = first_difference(left, right, format!("{path}[{index}]"))
+                {
+                    return Some(difference);
+                }
+            }
+        }
+        _ => {}
+    }
+    let bounded = |value: &Value| value.to_string().chars().take(512).collect::<String>();
+    Some(format!(
+        "{path}: before={} after={}",
+        bounded(before),
+        bounded(after)
+    ))
 }
 
 fn pose(value: &Transform) -> Value {
@@ -141,10 +183,30 @@ mod tests {
         assert!(unchanged(Some(&initial), &initial).is_ok());
         let mut changed = initial.clone();
         changed["records"][0]["foreground"]["color_srgba"] = json!([1.0, 1.0, 1.0, 1.0]);
-        assert!(unchanged(Some(&initial), &changed).is_err());
+        let error = unchanged(Some(&initial), &changed).unwrap_err();
+        assert!(error.contains("fixture.records[0].foreground.color_srgba[0]"));
+        assert!(error.contains("before=0.2 after=1.0"));
         assert_ne!(initial, changed);
         changed["records"] = json!([]);
         assert!(unchanged(Some(&initial), &changed).is_err());
+    }
+
+    #[test]
+    fn passive_sprite_diagnostic_ignores_unrelated_fixture_records() {
+        let initial = json!({"foreground_schema": 1, "records": [
+            {"kind": "Tank", "unrelated": 1},
+            {"owner": 1, "foreground": {"color": 0.2}},
+            {"owner": 2, "foreground": {"color": 0.2}},
+            {"owner": 3, "foreground": {"color": 0.2}},
+            {"owner": 4, "foreground": {"color": 0.2}}]});
+        let mut current = initial.clone();
+        current["records"][0]["unrelated"] = json!(999);
+        assert!(unchanged(Some(&initial), &current).is_ok());
+        current["records"][1]["foreground"]["color"] = json!(0.8);
+        let reason = unchanged(Some(&initial), &current).unwrap_err();
+        assert!(reason.contains("fixture.records[0].foreground.color"));
+        assert!(reason.contains("before=0.2 after=0.8"));
+        assert!(!reason.contains("unrelated"));
     }
 
     #[test]

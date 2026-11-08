@@ -1010,6 +1010,13 @@ verifierは欠損/重複/別owner/別画像/anchorやpose不一致/非有限色�
 変更範囲はprofiling fixture、native plan/verifier、拒否系testsと本書/対応仕様に限定し、
 gameplay/原画/通常起動/承認authorityは維持する。変更別CI・Help実判断・独立review後のfresh実機で色差を切り分ける。
 
+`ebb7e8e4`で受動観測を実装し、Python25件/Rust2件・変更別contracts/tooling/rust、
+通常/profiling Clippy警告0・dev check・Help No impact・RA errors/warnings0・storage・独立reviewを通過した。
+fresh `tak14-parking-foreground-feedback-20261108-v1`は初期ready直後のsnapshot変化を検出し、
+所有窓PNG取得前に終了したためinvalidとしてseal/finalize。139,927,552Bをexact変化fieldの診断用途に保持する。
+色差原因の特定や新観測成功と扱わず、次の補正は拒否理由へ有界な最初のfield差分を残すだけとする。
+変化を無視する待機延長・白色化・測定中の再seed/位置補正・失敗再利用は行わない。
+
 採用RestAreaの通常lifecycle比較が終了したため、旧static job
 `target/native-acceptance/tak14-restarea-candidate-normal-20261108-v1`だけを正式consumer release後に撤去した。
 lifecycle側asset-viewと全byte一致、終了/childなし・参照なし・tracked/unique原本なしを確認し、
