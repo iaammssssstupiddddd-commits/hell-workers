@@ -59,6 +59,13 @@ captureなし/invalidとしてseal、診断用途保持、finalize済み。製�
 回帰testも同座標でREDを確認した。Tankだけ前壁を付属2cellより前に置き、開始前検査にもその2cellを含める。
 RestArea/Mixer/M5の前後壁位置、原本、カメラ、通常配置ruleは変えない。実生成terrain上のM2両kindも検査する。
 補正後はfresh `tak14-tank-context-standard-20261109-v2` を使い、他の未登録3jobも新subjectへ拘束する。
+v2はcompanion配置を通過したが、ready後の `resources.images` 全体数160→159で停止した。
+captureなし/invalid・診断用途保持・seal/finalize済み。全体数だけから対象dependencyの消失とは判定できない。
+M2限定の美術比較ではsetに宣言された全mesh/imageの実常駐とrole/handleを固定し、owned欠損は従来同様に拒否する。
+全体数の減少を性能/finite-poolの合格とも扱わず、`global_pool_evidence=false`を明示して後続の正式計測を残す。
+同handleの対象part/preview、全姿勢/材質/Wall/Soul/時刻/30frames以後の不変検査は維持する。
+全体assetの追加/削除で同じ対象snapshotが不変、owned image/mesh消失で未ready/非修復、offline欠損拒否を回帰する。
+RestAreaの旧全体counter条件は不変。補正・独立レビュー・同subject検証後のfresh Tank standardはv3へ進む。
 
 2026-11-09の独立read-onlyアート監査では、Sand/Boneの現ArtPreview世代1を見た目だけ採用した。
 Sand `dbdf3e6ba5557f1b91b59a4e7d19c0bc1afe68e96c745d0dcbefd3f7b637d4e5` は低い黄土色の塊と大色面、

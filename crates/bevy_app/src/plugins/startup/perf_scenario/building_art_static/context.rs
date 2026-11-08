@@ -651,6 +651,15 @@ fn snapshot(world: &mut World) -> Result<Option<Value>, String> {
     {
         return Err("context directional light inventory/settings differ".into());
     }
+    let resources = if m2 {
+        let Some(resources) = super::m2_context::resident_assets(world, &descriptor) else {
+            return Ok(None);
+        };
+        resources
+    } else {
+        json!({"meshes": world.resource::<Assets<Mesh>>().len(), "images": world.resource::<Assets<Image>>().len(),
+            "materials": world.resource::<Assets<TopDownStructuralMaterial>>().len()})
+    };
     Ok(Some(
         json!({"variant": variant, "lighting": lighting, "scope": SCOPE,
         "identity": identity, "target_count": 4, "wall_count": 8, "preview_count": 4,
@@ -665,8 +674,7 @@ fn snapshot(world: &mut World) -> Result<Option<Value>, String> {
         "composite": {"entity": composite_id.to_bits(), "transform": transform(composite_transform),
             "scene": format!("{:?}", scene.id()), "vertical_compensation": compensation},
         "records": records, "ambient": ambient, "directional": directional,
-        "resources": {"meshes": world.resource::<Assets<Mesh>>().len(), "images": world.resource::<Assets<Image>>().len(),
-            "materials": world.resource::<Assets<TopDownStructuralMaterial>>().len()},
+        "resources": resources,
         "accepted": false, "performance_evidence": false, "promotion_authority": false}),
     ))
 }

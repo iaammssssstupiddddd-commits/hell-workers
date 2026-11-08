@@ -5,6 +5,30 @@ use bevy::ecs::relationship::RelationshipTarget;
 use hw_core::{relationships::WorkingOn, soul::DamnedSoul};
 use hw_jobs::{ActiveTaskIdentity, AssignedTask, RefinePhase};
 
+/// Only exact admitted dependencies, not the asynchronous global asset pool.
+/// A missing owned dependency still prevents readiness and fails after ready.
+pub(super) fn resident_assets(
+    world: &World,
+    set: &crate::assets::building_asset_set::BuildingAssetDescriptor,
+) -> Option<Value> {
+    let mut meshes = Vec::new();
+    for role in set.manifest.identity.kind.mesh_roles() {
+        let handle = set.mesh(role)?;
+        world.resource::<Assets<Mesh>>().get(handle)?;
+        meshes.push(json!({"role": role, "handle": format!("{:?}", handle.id())}));
+    }
+    let mut images = Vec::new();
+    for role in set.manifest.identity.kind.image_roles() {
+        let handle = set.image(role)?;
+        world.resource::<Assets<Image>>().get(handle)?;
+        images.push(json!({"role": role, "handle": format!("{:?}", handle.id())}));
+    }
+    Some(
+        json!({"scope": "exact-m2-resident-dependencies", "meshes": meshes, "images": images,
+        "global_pool_evidence": false}),
+    )
+}
+
 fn tank_state(world: &mut World, owner: Entity, expected: usize) -> Result<Value, String> {
     let stockpile = world
         .get::<hw_logistics::Stockpile>(owner)
@@ -197,6 +221,56 @@ pub(super) fn snapshot(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn m2_residency_ignores_unrelated_assets_but_rejects_missing_owned_dependencies() {
+        let mut pool = BuildingAssetPool::default();
+        let set = pool.install_presentation_fixture(
+            BuildingAssetKind::Tank,
+            1,
+            crate::assets::building_asset_set::BuildingAssetAuthority::ArtPreview,
+        );
+        let mut world = World::new();
+        world.init_resource::<Assets<Mesh>>();
+        world.init_resource::<Assets<Image>>();
+        for role in set.manifest.identity.kind.mesh_roles() {
+            world
+                .resource_mut::<Assets<Mesh>>()
+                .insert(
+                    set.mesh(role).unwrap().id(),
+                    Cuboid::new(1.0, 1.0, 1.0).into(),
+                )
+                .unwrap();
+        }
+        for role in set.manifest.identity.kind.image_roles() {
+            world
+                .resource_mut::<Assets<Image>>()
+                .insert(set.image(role).unwrap().id(), Image::default())
+                .unwrap();
+        }
+        let initial = resident_assets(&world, &set).unwrap();
+        let unrelated = world.resource_mut::<Assets<Image>>().add(Image::default());
+        assert_eq!(resident_assets(&world, &set), Some(initial.clone()));
+        world.resource_mut::<Assets<Image>>().remove(unrelated.id());
+        assert_eq!(resident_assets(&world, &set), Some(initial.clone()));
+        for role in set.manifest.identity.kind.image_roles() {
+            let handle = set.image(role).unwrap();
+            let asset = world
+                .resource_mut::<Assets<Image>>()
+                .remove(handle.id())
+                .unwrap();
+            assert!(resident_assets(&world, &set).is_none());
+            assert!(world.resource::<Assets<Image>>().get(handle).is_none());
+            world
+                .resource_mut::<Assets<Image>>()
+                .insert(handle.id(), asset)
+                .unwrap();
+            assert_eq!(resident_assets(&world, &set), Some(initial.clone()));
+        }
+        let handle = set.mesh("body").unwrap();
+        world.resource_mut::<Assets<Mesh>>().remove(handle.id());
+        assert!(resident_assets(&world, &set).is_none());
+    }
 
     #[test]
     fn m2_tank_rejects_same_count_foreign_resource_without_repair() {

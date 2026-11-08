@@ -410,6 +410,21 @@ def validate_m2_context_parts(record: dict, value: dict, ordinal: int) -> None:
 
 def validate_m2_context_state(fixture: dict, value: dict, identities: list) -> None:
     state = fixture.get("m2_state", {})
+    resources = fixture.get("resources", {})
+    pipeline.require(resources.get("scope") == "exact-m2-resident-dependencies"
+        and resources.get("global_pool_evidence") is False, "M2 resident dependency scope differs")
+    for key, roles in (("meshes", [part["mesh_role"] for part in value["context_parts"]]),
+                       ("images", ["albedo", "world_preview", "catalog"])):
+        entries = resources.get(key, [])
+        pipeline.require(isinstance(entries, list) and len(entries) == len(roles)
+            and {row.get("role") for row in entries} == set(roles)
+            and all(isinstance(row.get("handle"), str) and row["handle"] for row in entries),
+            "M2 resident dependency inventory differs")
+    meshes = {row["role"]: row["handle"] for row in resources["meshes"]}
+    for record in fixture["records"]:
+        pipeline.require(all(part.get("mesh") == meshes.get(part.get("role")) for part in record["parts"])
+            and record["preview"].get("image") == next(row["handle"] for row in resources["images"] if row["role"] == "world_preview"),
+            "M2 resident dependency consumer differs")
     workers = 2 if value["kind"] == "MudMixer" else 0
     pipeline.require(state.get("idle_souls") == 8 and state.get("source_workers") == workers
         and type(state.get("idle_souls")) is int and type(state.get("source_workers")) is int

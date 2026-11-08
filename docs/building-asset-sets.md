@@ -221,6 +221,9 @@ feedback/ArtPreview/small比較で、他のsessionとの混在とcandidate/relea
 4対象と前後8Wall、8idle Soulを一度だけ準備し、Mixerの既存2Refining workerは別に数える。
 原本parts/geometry digest、Tankの実水量0/25/50/50・capacity50・空水面hidden・Y12/22・既存Partial tint、
 Mixer実Refining関係と停止時の原本rotor poseだけを明示検査する。未知の材質/pose差は許可しない。
+M2のresourcesは全体asset数でなく当該setの全mesh/image roleと常駐handleを固定し、欠損を拒否する。
+対象part/previewのhandleと独立に照合し、`global_pool_evidence=false`とする。全体資源pool/性能の受入ではない。
+RestArea既存contextの全体counter不変検査は変更しない。
 共通のcamera/RtT/descriptor previewと30frames安定観測を使うが、RestAreaの白材質/occupant契約は不変。
 previewはEmpty/Idle代表画像であり、全状態のpreviewが存在する証拠ではない。
 これは画像採否の比較材料のみで、UI/通常入力・自然利用・lifecycle・性能・独立採否・releaseを閉じない。

@@ -32,10 +32,14 @@ class RecipeTests(unittest.TestCase):
         fixture.update(variant=value["variant"], identity=value["identity"], souls=8 if kind == "Tank" else 10)
         fixture["geometry_contract_sha256"] = value["context_geometry_sha256"]
         fixture["rtt_camera"] = {"transform": {"rotation": [0., 0., 0., 1.]}}
+        fixture["resources"] = {"scope": "exact-m2-resident-dependencies", "global_pool_evidence": False,
+            "meshes": [{"role": name, "handle": "mesh:" + name} for name in names],
+            "images": [{"role": role, "handle": "image:" + role} for role in ("albedo", "world_preview", "catalog")]}
         states = []
         for ordinal, record in enumerate(fixture["records"]):
             record["root_transform"] = {"translation": [ordinal * 160., 0., 0.], "rotation": [0., 0., 0., 1.], "scale": [1., 1., 1.]}
             record["parts"] = []
+            record["preview"]["image"] = "image:world_preview"
             for index, original in enumerate(value["context_parts"]):
                 water = original["name"] == "water"
                 local = {"translation": [0., 22. if ordinal >= 2 else 12., 0.] if water else [0., 0., 0.],
@@ -44,6 +48,7 @@ class RecipeTests(unittest.TestCase):
                 material.update(color_srgba=[.58, .70, .73, 1.] if water and ordinal == 1 else [1., 1., 1., 1.],
                     roughness=1., reflectance=0., metallic=0.)
                 record["parts"].append({"entity": 500 + ordinal * 2 + index, "role": original["mesh_role"],
+                    "mesh": "mesh:" + original["mesh_role"],
                     "visible": not water or ordinal > 0, "transform": local, "material_values": material,
                     "global_matrix": art.foreground.product(art.foreground.matrix(record["root_transform"]), art.foreground.matrix(local))})
             souls = []
@@ -122,6 +127,24 @@ class RecipeTests(unittest.TestCase):
         probe["fixture"]["m2_state"]["records"][2]["state"]["workers"][0]["target"] = 999
         with self.assertRaises(ValueError):
             art.validate_probe(probe, value, probe["nonce"])
+
+    def test_m2_context_requires_complete_exact_resident_dependencies_not_global_counts(self):
+        value, original = self.m2_context()
+        for change in ("missing-image", "missing-mesh", "foreign-handle", "global-claim", "global-counts"):
+            probe = copy.deepcopy(original)
+            resources = probe["fixture"]["resources"]
+            if change == "missing-image":
+                resources["images"].pop()
+            elif change == "missing-mesh":
+                resources["meshes"].pop()
+            elif change == "foreign-handle":
+                resources["meshes"][0]["handle"] = "foreign"
+            elif change == "global-claim":
+                resources["global_pool_evidence"] = True
+            else:
+                probe["fixture"]["resources"] = {"images": 159, "meshes": 20, "materials": 10}
+            with self.subTest(change=change), self.assertRaises(ValueError):
+                art.validate_probe(probe, value, probe["nonce"])
         value, probe = self.m2_context("Tank")
         probe["fixture"]["m2_state"]["records"][2]["state"]["water_items"][0] = 100
         with self.assertRaises(ValueError):
