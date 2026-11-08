@@ -103,17 +103,18 @@ fn main() -> AppExit {
         eprintln!("Native acceptance cannot be combined with a performance scenario.");
         std::process::exit(2);
     }
-    let native_acceptance_count = [
+    #[cfg(feature = "profiling")]
+    let m2_ui_pair = bevy_app::m2_ui_pair_admitted_from_process();
+    #[cfg(not(feature = "profiling"))]
+    let m2_ui_pair = false;
+    let native_profiles = [
         native_acceptance_plugin.is_some(),
         native_deconstruction_plugin.is_some(),
         native_notification_plugin.is_some(),
         native_ui_enabled,
         m2_probe.is_some(),
-    ]
-    .into_iter()
-    .filter(|enabled| *enabled)
-    .count();
-    if native_acceptance_count > 1 {
+    ];
+    if !native_profiles_allowed(native_profiles, m2_ui_pair) {
         eprintln!("Native acceptance profiles cannot run together.");
         std::process::exit(2);
     }
@@ -204,6 +205,13 @@ fn main() -> AppExit {
 // ArtPreview Tank/MudMixer identities before any load request is registered.
 fn ordinary_art_entry_allowed(profiling: bool, session: bool, perf_enabled: bool) -> bool {
     !session || (profiling && !perf_enabled)
+}
+
+// The only paired profile is the explicitly admitted M2 UI observer/probe.
+// Third profiles and arbitrary UI/probe combinations remain forbidden.
+fn native_profiles_allowed(profiles: [bool; 5], m2_ui_pair: bool) -> bool {
+    profiles.into_iter().filter(|enabled| *enabled).count() <= 1
+        || (m2_ui_pair && profiles == [false, false, false, true, true])
 }
 
 fn building_art_entry_allowed(
@@ -357,6 +365,20 @@ fn select_present_mode() -> PresentMode {
 mod tests {
     use super::*;
     use bevy::winit::UpdateMode;
+
+    #[test]
+    fn native_profile_matrix_only_allows_the_validated_m2_ui_pair() {
+        for mask in 0_u32..32 {
+            let profiles = std::array::from_fn(|bit| mask & (1 << bit) != 0);
+            for admitted in [false, true] {
+                assert_eq!(
+                    native_profiles_allowed(profiles, admitted),
+                    mask.count_ones() <= 1 || (mask == 24 && admitted),
+                    "mask={mask} admitted={admitted}"
+                );
+            }
+        }
+    }
 
     #[test]
     fn ordinary_art_never_enters_a_nonprofiling_or_performance_process() {

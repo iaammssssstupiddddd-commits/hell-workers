@@ -14,6 +14,14 @@ mod m2_lifecycle;
 mod m2_probe;
 mod m2_ui;
 
+/// Read-only execution-route check. Full identity/path validation still runs
+/// before any building load request in `configure_building_art`.
+pub fn m2_ui_pair_admitted_from_process() -> bool {
+    m2_ui::pair_admitted(|key| {
+        std::env::var_os(key).map(|value| value.to_string_lossy().into_owned())
+    })
+}
+
 pub(crate) fn m2_ui_case(case: &str) -> bool {
     m2_ui::case_kind(case).is_some()
 }

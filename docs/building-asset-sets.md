@@ -231,6 +231,9 @@ previewはEmpty/Idle代表画像であり、全状態のpreviewが存在する�
 別入口 `scripts/building_m2_ui_acceptance.py` の `m2-ui-tank-empty|partial|full` と
 `m2-ui-mixer-refining` は、seeded最大zoomの既存tooltipをOS EIS hoverで確認するfeedbackだけを扱う。
 専用 `ui-art` legは合法な施工setupを共用するが、旧M2の時間駆動注水・再開・lifecycle driverを登録しない。
+起動時の複数native profile禁止には、この専用M2 probe/UI observerだけの厳密な例外を置く。
+同case/kind/nonce・probe=1・ui-art・feedback/ArtPreview/gallery/normal/standardをread-only照合し、
+他scope・第三profile・性能scenarioは拒否する。後段の完全なidentity/path検証とload前guardは省略しない。
 一度だけ実Water/StoredInまたは実Refining/WorkingOnを準備してpauseし、カメラscale5を設定する。
 通常のhover resolver、tooltip生成、player文言は変更せず、static artのhover抑止も解除しない。
 Tankは0/25/50の実Water正逆集合とcapacity50、Mixerはactual SoulのRefiningとexact mixer/task identityを照合する。

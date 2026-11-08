@@ -15,6 +15,8 @@ use bevy::prelude::*;
 
 #[cfg(feature = "profiling")]
 pub use assets::building_asset_set::acceptance::configure_building_art;
+#[cfg(feature = "profiling")]
+pub use assets::building_asset_set::acceptance::m2_ui_pair_admitted_from_process;
 pub use assets::building_asset_set::configure_building_asset_releases;
 pub use assets::building_asset_set::project_building_asset_json;
 pub use entities::damned_soul::DamnedSoulPlugin;

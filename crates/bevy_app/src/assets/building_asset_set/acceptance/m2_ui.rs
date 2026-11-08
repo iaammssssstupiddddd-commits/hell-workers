@@ -20,6 +20,28 @@ pub(super) fn case_kind(case: &str) -> Option<BuildingAssetKind> {
     }
 }
 
+pub(super) fn pair_admitted(read: impl Fn(&str) -> Option<String>) -> bool {
+    let Some(raw) = read("HW_BUILDING_ART_SESSION") else {
+        return false;
+    };
+    let Ok(session) = serde_json::from_str::<BuildingArtSession>(&raw) else {
+        return false;
+    };
+    if read("HW_M2_ACCEPTANCE_PROBE").as_deref() != Some("1") {
+        return false;
+    }
+    let present = |key: &str| read(key).is_some();
+    session.validate_context(present).is_ok()
+        && validate_admission(
+            &session,
+            &read("HW_NATIVE_UI_CASE").unwrap_or_default(),
+            &read("HW_M2_ACCEPTANCE_LEG").unwrap_or_default(),
+            &read("HW_NATIVE_UI_NONCE").unwrap_or_default(),
+            present,
+        )
+        .is_ok()
+}
+
 #[derive(Resource)]
 struct UiFixture {
     case: String,
@@ -278,6 +300,70 @@ pub(super) fn snapshot(world: &mut World) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn startup_pair_admission_is_read_only_and_rejects_foreign_or_missing_context() {
+        let session = json!({"mode":"feedback", "identity":{"kind":"Tank", "generation":1,
+            "authority":"art_preview", "manifest_sha256":"a".repeat(64)},
+            "locator":"manifests/building-tank-v1.buildingset", "nonce":"b".repeat(32),
+            "status_path":"/unused/probe.json", "view":"normal"});
+        let mut values = std::collections::BTreeMap::from([
+            ("HW_BUILDING_ART_SESSION", session.to_string()),
+            ("HW_M2_ACCEPTANCE_PROBE", "1".into()),
+            ("HW_M2_ACCEPTANCE_LEG", "ui-art".into()),
+            ("HW_NATIVE_UI_CASE", "m2-ui-tank-partial".into()),
+            ("HW_NATIVE_UI_ROOT", "/unused/ui".into()),
+            ("HW_NATIVE_UI_NONCE", "b".repeat(32)),
+        ]);
+        assert!(pair_admitted(|key| values.get(key).cloned()));
+        for key in values.keys() {
+            assert!(
+                !pair_admitted(|asked| {
+                    (asked != *key)
+                        .then(|| values.get(asked).cloned())
+                        .flatten()
+                }),
+                "missing {key}"
+            );
+        }
+        for (key, wrong) in [
+            ("HW_BUILDING_ART_SESSION", "{}"),
+            ("HW_BUILDING_ART_SESSION", "invalid-json"),
+            ("HW_M2_ACCEPTANCE_PROBE", "0"),
+            ("HW_M2_ACCEPTANCE_LEG", "water"),
+            ("HW_NATIVE_UI_CASE", "navigation"),
+            ("HW_NATIVE_UI_CASE", "m2-ui-mixer-refining"),
+            ("HW_NATIVE_UI_NONCE", "foreign"),
+        ] {
+            assert!(
+                !pair_admitted(|asked| {
+                    if asked == key {
+                        Some(wrong.into())
+                    } else {
+                        values.get(asked).cloned()
+                    }
+                }),
+                "changed {key}={wrong}"
+            );
+        }
+        for conflict in [
+            "HW_PERF_SCENARIO",
+            "HW_BUILDING_ORDINARY_ART_SESSION",
+            "HW_BUILDING_ASSET_RELEASES",
+            "HW_BUILDING_M6_MODE",
+            "HW_BRIDGE_ACCEPTANCE_PROBE",
+            "HW_NATIVE_UI_LAYOUT_ONLY",
+        ] {
+            values.insert(conflict, "1".into());
+            assert!(!pair_admitted(|key| values.get(key).cloned()), "{conflict}");
+            values.remove(conflict);
+        }
+        let mut mixer = session;
+        mixer["identity"]["kind"] = json!("MudMixer");
+        values.insert("HW_BUILDING_ART_SESSION", mixer.to_string());
+        values.insert("HW_NATIVE_UI_CASE", "m2-ui-mixer-refining".into());
+        assert!(pair_admitted(|key| values.get(key).cloned()));
+    }
 
     #[test]
     fn ui_admission_rejects_foreign_context_without_registering_old_drivers() {

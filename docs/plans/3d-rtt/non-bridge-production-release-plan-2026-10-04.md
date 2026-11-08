@@ -110,7 +110,13 @@ Help影響はNo impact：明示profilingのfixture/観測だけで、通常起�
 最初のTank Partial UI v1は出力root作成前にexit1。新runnerが共通activity guardへNamespaceでなく
 Pathを渡していたため、guardの`args.repo`でAttributeErrorとなった。read-only plan再照合はpass。
 同じ実CLI→decorated入口を通す回帰でこの失敗をRED再現し、既存recipeと同じNamespace adapterへ補正する。
-失敗batchはinvalid/seal/finalize済み、game/画像/出力rootなし。旧起動を再送せず、補正後はfresh Partial v2へ進む。
+v1はinvalid/seal/finalize済み、game/画像/出力rootなし。旧起動を再送せず、補正後fresh Partial v2へ進めた。
+補正後Partial UI v2はゲーム起動直後、既存のnative profile数guardでexit2となり、入力/captureなしでinvalid。
+正式seal、具体的診断用途保持（139988992B）、finalize済み。同batchの起動を再送しない。
+専用M2 probeとUI observerの組合せだけ、exact case/kind/nonce・feedback/ArtPreview/gallery/normal/standard・
+ui-art leg・probe=1・他scopeなしをread-only検査して入口で許可する。後段のidentity/path/load検証は維持する。
+全32 profile組合せ×admission真偽を検査し、第三profileや性能scenario併用は引き続き拒否する。
+次のPartialはfresh `tak14-tank-partial-ui-maxzoom-20261109-v3`。実機passや美術/正式releaseはまだ未達。
 
 2026-11-09の独立read-onlyアート監査では、Sand/Boneの現ArtPreview世代1を見た目だけ採用した。
 Sand `dbdf3e6ba5557f1b91b59a4e7d19c0bc1afe68e96c745d0dcbefd3f7b637d4e5` は低い黄土色の塊と大色面、
