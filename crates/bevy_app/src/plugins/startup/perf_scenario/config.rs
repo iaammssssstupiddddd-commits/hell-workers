@@ -1241,6 +1241,9 @@ impl PerfScenarioConfig {
         let rest_art_context = art_session
             .as_ref()
             .is_some_and(|session| session["variant"] == "rest-area-art-context");
+        let m5_art_context = art_session
+            .as_ref()
+            .is_some_and(|session| session["variant"] == "m5-art-context");
         let spa_mask_page = art_session
             .as_ref()
             .and_then(|session| session.get("spa_mask_page"))
@@ -1251,7 +1254,7 @@ impl PerfScenarioConfig {
                     .ok_or_else(|| PerfScenarioConfigError("unknown Spa mask page".into()))
             })
             .transpose()?;
-        if (rest_art_context || spa_mask_page.is_some())
+        if (rest_art_context || m5_art_context || spa_mask_page.is_some())
             && (workload != PerfWorkload::BuildingArtStatic || size != PerfScenarioSize::Small)
         {
             return Err(PerfScenarioConfigError(
@@ -1264,6 +1267,15 @@ impl PerfScenarioConfig {
                 || soul_count
                     != if rest_art_context {
                         6
+                    } else if m5_art_context {
+                        if art_session
+                            .as_ref()
+                            .is_some_and(|session| session["identity"]["kind"] == "OutdoorLamp")
+                        {
+                            14
+                        } else {
+                            8
+                        }
                     } else if let Some(page) = spa_mask_page {
                         8 + (0..4u64)
                             .map(|ordinal| (page * 4 + ordinal).count_ones())

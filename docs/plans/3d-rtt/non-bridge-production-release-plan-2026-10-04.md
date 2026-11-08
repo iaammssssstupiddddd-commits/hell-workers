@@ -1002,6 +1002,115 @@ world画像4430bbec…df2b24とcatalog画像804ab534…b804は共に暗褐色で
 既存選択/info補完、明暗背景・Wall/Soul密集、実descriptor preview、正式numeric/art、lifecycle/performance/releaseは未達。
 12jobはこれらの具体的比較用途に保持し、終了後は本書の結果を残して生成物を整理する。
 
+SoulSpaの限定継続検証後、まずLampの不足しているnormal/lowを既存galleryで補う。
+batch `tak14-lamp-normal-low-20261108-v1`、primary `target/native-acceptance/`直下の同名fresh root、
+owner TAK-14 non-Bridge visual adoption、consumer `M5 exact identity distance quality and contextual art comparison`。
+sourceは既存 `nonbridge-lamp-runtime-20261004-v4/runtime` のArtPreview manifest `8cc4fec0…3323e` のまま、
+view normal/scale1・quality low・feedback-only・30秒warmup/60秒paused-staticとし、1280×720/DPI1、
+Intel/Vulkan/X11・実foreground off/on descriptor・owned画像を照合する。M3と同じ共有targetを再利用し、
+入力codec原本とM5候補を保持する。独立画像/raw review・登録verify後もアート/数値採用や実配電/性能とは分離する。
+この比較と明暗地形/遮蔽/実preview/選択UIの残比較が閉じたら結果を本書へ集約し、不要jobを整理する。
+normal/low v1は別CLI・登録verifier、main/独立画像raw reviewをpassし、用途保持・seal/finalize/storage pass。
+HEAD `df052a909158e525951494c6842cc941bbf067d9`（計画文書のみdirty）、source
+`a0f2c5ce1a4f76245c0734a6c370bb2f5238791232bf89908c55620d5554ca40`、binary `62c000c3…18317`。
+manifest `4c363a832e00866a724efdd2a68372a1f951dd5bdc4868d2651aeca43cf8d8f8`、owned PNG
+`7af938aef6b01e8b86eee89b46e7fadd10264430aa3316328d236d486d27999c`。4foreground off/off/on/on、
+実handle/白alpha1/visible/30stable frames、Intel Arc/Vulkan/X11・低品質target寸法・WARN/ERRORなし。
+同倍率の旧同identity high画像との独立比較で欠損/黒化/明白な追加消失なし。細い支柱と籠輪郭は残るが、
+通常倍率では描線が数pixelでoff/on紫色差は弱い。画像単独の確実な状態識別とはしない。
+旧highは別source/HUDであり差の原因を品質設定だけに帰さない。141,107,200Bを残context比較用に保持、
+アート/数値採否・通常配電・性能・releaseは未受入のまま維持する。
+
+#### 次工程: M5の明示seeded foreground context
+
+既存normal4標本は実生成地形の草/土を含むが、Wall/Soulの前後重なりと実descriptor previewは未検証。
+原画/tintを先に調整せず、`m5-art-context`という別variantでM5一種の4標本だけを準備し、
+通常倍率・不変ArtPreview identity・実terrainを保持した静止比較を追加する。
+
+1. admissionはM5四種、feedback/art-preview、通常倍率、standard lighting、ArtPreviewに限定。
+   candidate/release、M6、通常UI/production observer、Bridge、Spa pageとの混在は拒否する。
+2. 一度だけ既存completion factoryで4建物と前後8Wall、8既存Soulを準備する。terrainを塗替えず、
+   footprintとWall gridの合法性/重複を確認する。idle8人のtask/Dream/slot/供給結果は注入しない。
+   Lamp補助source6人だけは後述の明示seedと実power pipelineを使い、自然な発電の証拠とは扱わない。
+   空のdescriptor previewは既存apply関数を使って4個生成する。これはPlacementGhostではなく、
+   合法/非法tint・通常入力によるpreviewや選択UIの証拠へ読み替えない。
+3. 読取observerはnonce/identity/pool、owner/footprint/実terrain、前後Wall/Soulの実pose/可視性、
+   4foregroundの実image/white-alpha/canvas/anchor/parent-global、4previewの同descriptorを記録する。
+   readiness前にのみ準備し、30stable frames後の原観測が変われば補修せずinvalidで終了する。
+4. 既存no-prompt launcher・30/60秒paused比較、actual X11/Vulkan・owned画像と非authorityを維持する。
+   独立画像/rawレビュー後に4種のcontrast/遮蔽/previewを判断する。通常input/選択UI/配電/供給/保存、
+   実lifecycle・有限pool/performance・正式art/numeric採否・releaseは別gateとして残す。
+
+主な変更先はacceptance.rs、building_art_staticのcontext/seed/layout/新m5_context module、startupの既存wiring、
+building_art_acceptance.py・foreground観測/新context verifierと関連tests、恒久仕様/Skill。
+mainが実装・関連拒否系試験・Help実判断・Clippy/変更別ゲート/storageを所有し、独立read-only reviewを経る。
+既存RestArea context・gallery・M6の契約は維持し、M5追加を通常ゲームの実装変更や受入完了としない。
+
+最初のfresh比較は `tak14-sand-context-feedback-20261108-v1` とし、primaryの
+`target/native-acceptance/`直下に同名rootを新設する。ownerはTAK-14 non-Bridge visual adoption、
+consumerは `M5 exact identity distance quality and contextual art comparison`。
+不変Sand ArtPreview `dbdf3e6b…37d4e5`、既存13b7d699…229727のcodecとprimary dev cacheを使う。
+4種類の比較/独立採否が終了するまで必要な画像/rawを保持し、その後は本書へ結果を集約してjobを整理する。
+実機前の実装検証ではPython106件、Rust3件が成功。独立reviewで見つかったRTT出力→合成材質の
+参照不足とlayersのbool/float aliasを拒否する補正を加えた。通常入力・原画・数値・採否の権限は変えない。
+
+初回Sand context v1は描画前のconfigで8Soulを拒否したためexit1、owned PNG/probeなしでinvalid封印・
+診断保持139,939,840B・finalizeした。既存configのgallery15/60とRest6以外の分岐が未接続だった。
+M5明示variantだけsmall/8Soulを認める入口と、sessionなし/Rest/medium/旧人数の拒否回帰を追加した。
+既存gallery/M6を緩和せず、補正後はfresh `tak14-sand-context-feedback-20261108-v2`で検証する。
+同owner/consumer・primary直下の同名rootと既存codec/cacheを継承し、v1を再実行・pass化しない。
+
+独立readonly numeric監査はM5の4proposalを採用可能と判断した。4geometry原本は
+`2aa7f7d85d93cf2059316efd40d4796e734d4a3f5becb8ce8c6e87bcd184efd7`へbytes完全一致、
+256canvas/128anchor、Parking64wu/他32wuは既存footprintへ整合、catalog margin16を再構成したbytesも一致。
+Lamp off/on alpha同一・色差1182pixel、空parts/role順/代表状態と全artifactを照合した。
+主担当はこの固定proposalの数値妥当性を採用するが、art採否は別であり、numeric receipt生成/candidate/releaseは未実施。
+
+Sand context v2はsource `94a6cc85d3a8c7a1972eb1b07c8eb60d8bacd930bc3f9253782d6ee6c0b34e7e`、
+binary `a3b2aa019c81f9764a1585f8954ecb6cb8b28a1579965e1234979b1a7bb8dfc0`で限定技術pass。
+manifest `cfbf66b2200213f4cae6f41a7d7b832ef67ecba7002d5adf8bd92ff5e1260cf6`、
+PNG `2cf9c882d8eaa63b7bbf47ae14853dd8d104842276c82101a8de76d855178a83`。
+Intel Arc/Vulkan/X11 owned PID1418057、WARN/ERRORなし、4/8/8/4・30stableと実出力chainを別verify・登録sealで照合した。
+main/独立画像reviewは下段previewの山形/面分割を確認したが、上段はWall/Soulの重なりが強く全輪郭/前後判定が困難。
+全対象footprintはDirtでありGrass/明暗全条件を閉じない。142,086,144Bを残M5比較用途で保持しfinalizeした。
+次は同じ受動observerと不変各ArtPreviewでBone/Parking/Lampを逐次比較する。
+batch/root名は `tak14-bone-context-feedback-20261108-v1`、`tak14-parking-context-feedback-20261108-v1`、
+`tak14-lamp-context-feedback-20261108-v1`。全てprimary `target/native-acceptance/`直下、前記owner/consumer、
+codec/cache・非authority境界を維持し、M5比較/採否終了時に本書へ集約して不要jobを整理する。
+
+Bone/Parking context v1は同source/binaryで別verify・登録seal/finalizeを通過した。
+Bone PNG `820c134a265d2ac5d34c1f27a230e6749e879038fd2f93bb072063c95e08f850`、142,110,720B、
+Parking PNG `5bffb00e8f18a02274ebf065deb20f5f5312c2e064b131f24d685c512c093ae7`、142,069,760Bを具体比較用途保持。
+独立画像reviewではBoneの下段交差輪郭は残るが上段は強遮蔽、ParkingはGrass上の枠と上段vehicle/個数2を
+確認しDirt上の暗線が弱い。両者とも対象footprintはDirt3/Grass1で、preview別位置の背景と混同しない。
+欠損/黒化ではないが、正しいdepth・通常入力・独立art採否は未受入とする。
+
+Lamp context v1は元galleryの発電Spaを単種filterが除去したため、実grid_recalcで全Lamp offとなり、
+要求off/off/on/onの照合でPNG前にinvalid終了・診断保持・finalizeした。
+次の補正ではLamp明示contextだけ、既存layoutのSpa ordinal2/3（mask3/15）の実供給元を画像外に残す。
+既存completion・実worker task/WorkingOn・power_output/grid_recalcの準備経路を使い、PoweredVisualStateを
+上書きしない。8idle Soulに6generator Soul、4Lamp/8Wallに2Spaを加えた別inventoryを明示し、
+source tile/worker/発電・配分をreadonlyで固定する。Wall/previewはLamp4だけ、他M5・既存galleryは不変。
+これは明示seeded供給であり通常入力の発電/停電lifecycle受入ではない。関連拒否テスト・Help・同subject検証・
+独立review後、fresh `tak14-lamp-context-feedback-20261108-v2`（同owner/consumer/root規則）へ進む。
+
+Lamp context v2はsource `cc06ccc5bb0ebaf1490cb40781159c62828b350c120cf114441b76973700bee3`で
+30/60秒の限定比較、別verify・登録独立seal/finalizeを通過した。
+manifest `b88743830e6d8bf5088f91994af4c2c2ca81b89cccb9d822cfd01b2f0b544b46`、
+PNG `6e3b3c5eea1f23a0b6b99a0d5050c9a9ce5e5f5321bde04b3be24348b258e96a`、owned PID1436212、
+Intel Arc/Vulkan/X11・WARN/ERRORなし。実source2Spa/6Generating+idle8、off網供給なし、
+on網mask3/15から出力2/4・Lamp需要約0.2・off/off/on/onと全双方向関係を照合した。
+main/独立画像reviewは下段の小さな支柱/籠の形を確認したが、Dirtの暗線・上段重なりの状態判読は弱い。
+対象terrainはDirt/Grass/Dirt/Dirt。142,106,624Bを通常UI補完との比較用途に保持し、正式art採否は未実施。
+これは別subjectのseeded補助producer付き技術証拠であり、Sand/Bone/Parking旧画像の現source再検証や
+自然発電・通常操作・全depth/明暗・性能・releaseを完了したことにはしない。
+
+人数guard/Spa供給除外の診断は補正・拒否回帰とfresh比較成功で終了した。
+finalized/invalid/exit1/process終了・childなし、非symlink/非tracked・manifest原本一致を照合して正式consumerを解除し、
+Sand context v1（139,939,840B）とLamp context v1（139,943,936B）の生成jobだけを撤去した。
+合計279,883,776B→0。rawログの復元コピーはなく、無効metadata/原因/補正結果は本書と台帳へ保持する。
+制作原本・最新比較4件・immutable codec・primary cacheは維持、storage check PASS（316,512,763,904B）。
+
 次の小工程はM5 galleryの読み取り専用foreground観測の補完とする。
 実owner/子Spriteのparent、画像role/handle/descriptor、canvas/anchor、実色、local/global pose、
 visibility/layersをready後の不変snapshotへ含める。新planはschemaを明示し、旧証拠を新観測ありと扱わない。

@@ -29,10 +29,12 @@ import native_acceptance as native  # noqa: E402
 from wall_density_acceptance import asset_view_fingerprint  # noqa: E402
 if __package__:
     from . import building_foreground_observation as foreground  # noqa: E402
+    from . import building_m5_context_observation as m5_context  # noqa: E402
     from . import building_art_static_acceptance as static  # noqa: E402
     from .perf_tool.artifacts import read_window  # noqa: E402
 else:
     import building_foreground_observation as foreground  # noqa: E402
+    import building_m5_context_observation as m5_context  # noqa: E402
     import building_art_static_acceptance as static  # noqa: E402
     from perf_tool.artifacts import read_window  # noqa: E402
 
@@ -60,6 +62,9 @@ def spa_page(value: dict) -> int | None:
 
 
 def actor_count(value: dict) -> int:
+    if value.get("variant") == "m5-art-context":
+        context_settings(value)
+        return 14 if value["kind"] == "OutdoorLamp" else 8
     page = spa_page(value)
     if page is not None:
         return 8 + sum(mask.bit_count() for mask in range(page * 4, page * 4 + 4))
@@ -76,8 +81,11 @@ def context_preview(manifest: dict) -> dict:
 def context_settings(value: dict) -> bool:
     variant = value.get("variant", "gallery")
     lighting = value.get("lighting", "standard")
-    pipeline.require(variant in ("gallery", "rest-area-art-context")
+    pipeline.require(variant in ("gallery", "rest-area-art-context", "m5-art-context")
                      and lighting in ("standard", "dim"), "unknown art variant/lighting")
+    if variant == "m5-art-context":
+        m5_context.settings(value)
+        return True
     if variant == "gallery":
         pipeline.require(lighting == "standard", "gallery lighting cannot change")
         return False
@@ -120,7 +128,7 @@ def check_numeric_verifiers(value: dict) -> None:
 
 def check_plan(value: dict, binary: Path) -> dict:
     check_numeric_verifiers(value)
-    foreground_settings = foreground.settings(value)
+    foreground_settings = foreground.settings(value, context=value.get("variant") == "m5-art-context")
     context_settings(value)
     page = spa_page(value)
     quality(value)
@@ -170,11 +178,13 @@ def plan(args) -> dict:
              "variant": getattr(args, "variant", "gallery"),
              "lighting": getattr(args, "lighting", "standard"),
              "spa_mask_page": getattr(args, "spa_mask_page", None),
-             "scope": CONTEXT_SCOPE if getattr(args, "variant", "gallery") == "rest-area-art-context" else SPA_PAGE_SCOPE if getattr(args, "spa_mask_page", None) is not None else "paused-static-presentation", "promotion_authority": False,
+             "scope": CONTEXT_SCOPE if getattr(args, "variant", "gallery") in ("rest-area-art-context", "m5-art-context") else SPA_PAGE_SCOPE if getattr(args, "spa_mask_page", None) is not None else "paused-static-presentation", "promotion_authority": False,
              "feedback_only": args.mode == "feedback"}
-    if value["variant"] == "rest-area-art-context":
+    if value["variant"] in ("rest-area-art-context", "m5-art-context"):
         value["context_preview"] = context_preview(manifest)
-    if value["kind"] in foreground.KINDS and value["variant"] == "gallery":
+    if value["variant"] == "m5-art-context":
+        value["m5_context_verifier_sha256"] = m5_context.verifier_sha256()
+    if value["kind"] in foreground.KINDS and value["variant"] in ("gallery", "m5-art-context"):
         value["foreground_observation"] = foreground.descriptor(manifest)
     if value["kind"] in pipeline.building_m5_numeric.KINDS and value["mode"] == "candidate":
         value["numeric_verifiers"] = pipeline.numeric_verifier_inventory()
@@ -262,7 +272,7 @@ def validate_probe(probe: dict, value: dict, nonce: str) -> None:
         if spa_page(value) is not None:
             validate_spa_page(probe, value)
     view = value.get("view", "overview")
-    foreground.validate(probe, value)
+    foreground.validate(probe, value, context=value.get("variant") == "m5-art-context")
     pipeline.require(view in VIEWS and probe.get("view", "overview") == view,
                      "building-art camera view differs")
     if "view" in value:
@@ -332,6 +342,9 @@ def validate_spa_page(probe: dict, value: dict) -> None:
 
 def validate_context_fixture(probe: dict, value: dict) -> None:
     """Seeded image comparison only; never issues an art/numeric decision."""
+    if value.get("variant") == "m5-art-context":
+        m5_context.validate(probe, value)
+        return
     fixture = probe["fixture"]
     pipeline.require(probe.get("variant") == fixture.get("variant") == "rest-area-art-context"
         and probe.get("lighting") == fixture.get("lighting") == value["lighting"]
@@ -419,7 +432,7 @@ def verify(root: Path) -> dict:
                      and sidecar["initial"] == sidecar["final"] == probe["fixture"]
                      and sidecar["stable_frames"] >= 30, "candidate fixture did not remain stable")
     if context_settings(value):
-        pipeline.require(sidecar.get("contract_id") == "rest-area-art-context-v1", "context sidecar contract differs")
+        pipeline.require(sidecar.get("contract_id") == ("m5-art-context-v1" if value.get("variant") == "m5-art-context" else "rest-area-art-context-v1"), "context sidecar contract differs")
     # Older plans remain high-only; their recorded raw window is checked too.
     validate_window(root, value)
     log = (root / "actual-window.log").read_text()
@@ -594,7 +607,7 @@ def main() -> int:
     parser.add_argument("--adapter", default="Intel")
     parser.add_argument("--view", choices=tuple(VIEWS), default="overview")
     parser.add_argument("--quality", choices=QUALITIES, default="high")
-    parser.add_argument("--variant", choices=("gallery", "rest-area-art-context"), default="gallery")
+    parser.add_argument("--variant", choices=("gallery", "rest-area-art-context", "m5-art-context"), default="gallery")
     parser.add_argument("--lighting", choices=("standard", "dim"), default="standard")
     parser.add_argument("--spa-mask-page", type=int, choices=range(4))
     args = parser.parse_args()

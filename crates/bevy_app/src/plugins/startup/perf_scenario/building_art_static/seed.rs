@@ -62,11 +62,19 @@ pub(crate) fn setup_building_art_static_system(mut p: SetupParams) {
         fail(&mut p.state, &mut p.exit, reason);
         return;
     }
-    if p.art_session
+    if let Some(session) = p
+        .art_session
         .as_ref()
-        .is_some_and(|session| session.is_rest_context())
+        .filter(|session| session.is_context())
     {
-        specs.retain(|spec| spec.kind == BuildingType::RestArea);
+        specs.retain(|spec| {
+            crate::systems::visual::building_presentation::asset_kind(spec.kind)
+                == Some(session.identity.kind)
+                || (session.is_m5_context()
+                    && session.identity.kind == BuildingAssetKind::OutdoorLamp
+                    && spec.kind == BuildingType::SoulSpa
+                    && spec.ordinal >= 2)
+        });
     }
     if let Err(reason) = validate_layout(&specs, p.world_map.as_ref(), p.config.size()) {
         fail(&mut p.state, &mut p.exit, reason);
@@ -74,7 +82,7 @@ pub(crate) fn setup_building_art_static_system(mut p: SetupParams) {
     }
     if p.art_session
         .as_ref()
-        .is_some_and(|session| session.is_rest_context())
+        .is_some_and(|session| session.is_context())
         && let Err(reason) = super::context::validate_layout(&specs, p.world_map.as_ref())
     {
         fail(&mut p.state, &mut p.exit, reason);
@@ -101,9 +109,16 @@ pub(crate) fn setup_building_art_static_system(mut p: SetupParams) {
     }
     if p.art_session
         .as_ref()
-        .is_some_and(|session| session.is_rest_context())
+        .is_some_and(|session| session.is_context())
     {
         for spec in &specs {
+            if p.art_session.as_ref().is_some_and(|session| {
+                session.is_m5_context()
+                    && crate::systems::visual::building_presentation::asset_kind(spec.kind)
+                        != Some(session.identity.kind)
+            }) {
+                continue;
+            }
             for grid in super::context::wall_grids(spec) {
                 if !p.world_map.as_ref().is_walkable(grid.0, grid.1)
                     || p.world_map.as_ref().has_building(grid)
@@ -309,14 +324,19 @@ type SeedActors<'w, 's> = Query<
     ),
 >;
 
+type ActorRelations<'w, 's> =
+    Query<'w, 's, (), Or<(With<WorkingOn>, With<RestingIn>, With<ActiveTaskIdentity>)>>;
+
 #[derive(SystemParam)]
 pub(crate) struct SeedParams<'w, 's> {
+    art_session: Option<Res<'w, BuildingArtSession>>,
     state: ResMut<'w, BuildingArtStaticState>,
     world_map: WorldMapRead<'w>,
     commands: Commands<'w, 's>,
     buildings: Query<'w, 's, &'static Building>,
     tiles: Query<'w, 's, (Entity, &'static SoulSpaTile)>,
     actors: SeedActors<'w, 's>,
+    actor_relations: ActorRelations<'w, 's>,
     exit: MessageWriter<'w, AppExit>,
 }
 
@@ -432,6 +452,19 @@ pub(crate) fn seed_building_art_static_system(mut p: SeedParams) {
                 );
                 return;
             };
+            if p.art_session
+                .as_ref()
+                .is_some_and(|session| session.is_m5_context())
+                && (!matches!(*assigned, AssignedTask::None)
+                    || p.actor_relations.get(actor).is_ok())
+            {
+                fail(
+                    &mut p.state,
+                    &mut p.exit,
+                    "M5 source cannot replace an existing Soul task or relation".into(),
+                );
+                return;
+            }
             soul.dream = 100.0;
             soul.fatigue = 0.0;
             soul.stress = 0.0;
@@ -456,6 +489,67 @@ pub(crate) fn seed_building_art_static_system(mut p: SeedParams) {
                     WorkingOn(target),
                     ActiveTaskIdentity::new(target, target, work),
                 ));
+            }
+        }
+    }
+    if p.art_session
+        .as_ref()
+        .is_some_and(|session| session.is_m5_context())
+    {
+        let source_workers = if p
+            .art_session
+            .as_ref()
+            .is_some_and(|session| session.identity.kind == BuildingAssetKind::OutdoorLamp)
+        {
+            6
+        } else {
+            0
+        };
+        if actor_index != source_workers
+            || p.state.actors.len() != 8 + source_workers
+            || specs.len() != 4 + usize::from(source_workers > 0) * 2
+        {
+            fail(
+                &mut p.state,
+                &mut p.exit,
+                "M5 context requires eight idle Souls plus its declared source workers".into(),
+            );
+            return;
+        }
+        for spec in &specs {
+            if crate::systems::visual::building_presentation::asset_kind(spec.kind)
+                != p.art_session.as_ref().map(|session| session.identity.kind)
+            {
+                continue;
+            }
+            for side in [-1.0, 1.0] {
+                let actor = p.state.actors[actor_index];
+                actor_index += 1;
+                let Ok((_, mut transform, mut destination, mut path, assigned, mut idle)) =
+                    p.actors.get_mut(actor)
+                else {
+                    fail(
+                        &mut p.state,
+                        &mut p.exit,
+                        "M5 context Soul shell missing".into(),
+                    );
+                    return;
+                };
+                if !matches!(*assigned, AssignedTask::None) || p.actor_relations.get(actor).is_ok()
+                {
+                    fail(
+                        &mut p.state,
+                        &mut p.exit,
+                        "M5 context cannot replace an existing Soul task or relation".into(),
+                    );
+                    return;
+                }
+                let point = spec.center + Vec2::Y * (side * 12.0);
+                transform.translation.x = point.x;
+                transform.translation.y = point.y;
+                destination.0 = point;
+                *path = Path::default();
+                *idle = IdleState::default();
             }
         }
     }

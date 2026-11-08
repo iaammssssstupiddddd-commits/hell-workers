@@ -38,6 +38,7 @@ pub enum BuildingArtVariant {
     #[default]
     Gallery,
     RestAreaArtContext,
+    M5ArtContext,
 }
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, serde::Serialize, PartialEq, Eq)]
@@ -53,7 +54,46 @@ impl BuildingArtSession {
         self.variant == BuildingArtVariant::RestAreaArtContext
     }
 
+    pub fn is_m5_context(&self) -> bool {
+        self.variant == BuildingArtVariant::M5ArtContext
+    }
+
+    pub fn is_context(&self) -> bool {
+        self.is_rest_context() || self.is_m5_context()
+    }
+
     fn validate_context(&self, present: impl Fn(&str) -> bool) -> Result<(), String> {
+        if self.is_m5_context() {
+            if !matches!(
+                self.identity.kind,
+                BuildingAssetKind::WheelbarrowParking
+                    | BuildingAssetKind::SandPile
+                    | BuildingAssetKind::BonePile
+                    | BuildingAssetKind::OutdoorLamp
+            ) || self.identity.authority != BuildingAssetAuthority::ArtPreview
+                || !matches!(self.mode.as_str(), "feedback" | "art-preview")
+                || self.view != BuildingArtView::Normal
+                || self.lighting != BuildingArtLighting::Standard
+                || self.spa_mask_page.is_some()
+                || [
+                    "HW_BUILDING_M6_MODE",
+                    "HW_BUILDING_ORDINARY_ART_SESSION",
+                    "HW_BUILDING_PRODUCTION_OBSERVATIONS",
+                    "HW_BUILDING_ASSET_RELEASES",
+                    "HW_M2_ACCEPTANCE_PROBE",
+                    "HW_BRIDGE_ACCEPTANCE_PROBE",
+                    "HW_NATIVE_UI_ROOT",
+                ]
+                .into_iter()
+                .any(present)
+            {
+                return Err(
+                    "M5 context requires a separate normal-view ArtPreview static comparison"
+                        .into(),
+                );
+            }
+            return Ok(());
+        }
         if let Some(page) = self.spa_mask_page {
             if page > 3
                 || self.identity.kind != BuildingAssetKind::SoulSpa
@@ -252,6 +292,60 @@ mod tests {
             changed["identity"][key] = serde_json::json!(value);
             assert!(
                 serde_json::from_value::<BuildingArtSession>(changed)
+                    .unwrap()
+                    .validate_context(|_| false)
+                    .is_err()
+            );
+        }
+    }
+
+    #[test]
+    fn m5_context_is_separate_preview_only_normal_view_and_rejects_mixing() {
+        let raw = serde_json::json!({"mode": "feedback", "identity": {
+            "kind": "OutdoorLamp", "generation": 1, "authority": "art_preview", "manifest_sha256": "a".repeat(64)},
+            "locator": "manifests/building-outdoor-lamp-v1.buildingset", "status_path": "/unused/probe.json",
+            "nonce": "a".repeat(32), "view": "normal", "variant": "m5-art-context", "lighting": "standard", "spa_mask_page": null});
+        for kind in ["WheelbarrowParking", "SandPile", "BonePile", "OutdoorLamp"] {
+            let mut good = raw.clone();
+            good["identity"]["kind"] = serde_json::json!(kind);
+            let session: BuildingArtSession = serde_json::from_value(good).unwrap();
+            assert!(session.is_context() && session.is_m5_context() && !session.is_rest_context());
+            assert!(session.validate_context(|_| false).is_ok());
+        }
+        let session: BuildingArtSession = serde_json::from_value(raw.clone()).unwrap();
+        for key in [
+            "HW_BUILDING_M6_MODE",
+            "HW_BUILDING_ORDINARY_ART_SESSION",
+            "HW_BUILDING_PRODUCTION_OBSERVATIONS",
+            "HW_BUILDING_ASSET_RELEASES",
+            "HW_M2_ACCEPTANCE_PROBE",
+            "HW_BRIDGE_ACCEPTANCE_PROBE",
+            "HW_NATIVE_UI_ROOT",
+        ] {
+            assert!(
+                session
+                    .validate_context(|candidate| candidate == key)
+                    .is_err()
+            );
+        }
+        for (path, value) in [
+            ("/mode", serde_json::json!("candidate")),
+            ("/identity/kind", serde_json::json!("Bridge")),
+            ("/identity/kind", serde_json::json!("RestArea")),
+            (
+                "/identity/authority",
+                serde_json::json!("isolated_candidate"),
+            ),
+            ("/view", serde_json::json!("near")),
+            ("/view", serde_json::json!("overview")),
+            ("/lighting", serde_json::json!("dim")),
+            ("/spa_mask_page", serde_json::json!(0)),
+        ] {
+            let mut bad = raw.clone();
+            *bad.pointer_mut(path)
+                .unwrap_or_else(|| panic!("missing test key: {path}")) = value;
+            assert!(
+                serde_json::from_value::<BuildingArtSession>(bad)
                     .unwrap()
                     .validate_context(|_| false)
                     .is_err()

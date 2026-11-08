@@ -345,6 +345,24 @@ For formal J1, remove `--feedback` and use the existing clean-subject recipe.
 
 ## Run the Task Dashboard recipe
 
+For the non-Bridge M5 ArtPreview comparison, wrap
+`python3 scripts/building_art_acceptance.py plan --variant m5-art-context --view normal`
+with the primary validation coordinator and the exact source/codec options.
+This explicit feedback/art-preview-only scope seeds four target buildings, eight
+front/back Walls, eight idle Souls and four descriptor previews once. It preserves
+generated terrain and rejects pre-existing Soul work/relations rather than clearing
+them. Lamp alone retains two source Spas and six extra generating Souls from the
+gallery's explicit setup (including Dream100), not ordinary construction or natural
+assignment evidence. Its separate fourteen-Soul/fourteen-building inventory binds
+tile/worker inverse relations, actual output, Yard/grid generators/consumers and
+unpowered control isolation. It never overrides the powered visual mirror.
+After setup the observer is passive. The independent verifier binds actual
+foreground and preview images, terrain/footprints, renderer root/local/global poses,
+materials/layers, RTT camera and 30 stable frames to the same subject. Inspect the
+owned PNG for actual overlap: recorded geometry alone does not prove correct depth
+order or readability. This is not ordinary placement/selection input, power or
+lifecycle, art/numeric adoption, performance or promotion/release evidence.
+
 From the repository root, generate a fresh, non-mutating plan:
 
 ```bash

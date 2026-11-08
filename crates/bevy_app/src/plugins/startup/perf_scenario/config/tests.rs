@@ -67,6 +67,30 @@ fn building_art_static_rejects_wrong_population_clock_and_measurement_contract()
             size == "small"
         );
         assert!(parse_input(&args, &context).is_err());
+        context_args[population + 1] = "8";
+        let m5_context = [(
+            "HW_BUILDING_ART_SESSION",
+            "{\"variant\":\"m5-art-context\"}",
+        )];
+        assert_eq!(
+            parse_input(&context_args, &m5_context).is_ok(),
+            size == "small"
+        );
+        assert!(parse_input(&context_args, &[]).is_err());
+        assert!(parse_input(&context_args, &context).is_err());
+        assert!(parse_input(&args, &m5_context).is_err());
+        context_args[population + 1] = "14";
+        let lamp_context = [(
+            "HW_BUILDING_ART_SESSION",
+            "{\"variant\":\"m5-art-context\",\"identity\":{\"kind\":\"OutdoorLamp\"}}",
+        )];
+        assert_eq!(
+            parse_input(&context_args, &lamp_context).is_ok(),
+            size == "small"
+        );
+        assert!(parse_input(&context_args, &m5_context).is_err());
+        context_args[population + 1] = "8";
+        assert!(parse_input(&context_args, &lamp_context).is_err());
         for (page, count) in [12, 16, 16, 20].into_iter().enumerate() {
             let session = format!("{{\"spa_mask_page\":{page}}}");
             let count = count.to_string();

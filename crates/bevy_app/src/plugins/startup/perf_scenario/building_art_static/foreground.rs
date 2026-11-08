@@ -119,7 +119,7 @@ fn pose(value: &Transform) -> Value {
         "scale": value.scale.to_array()})
 }
 
-fn measured_values(
+pub(super) fn measured_values(
     sprite: &Sprite,
     owner_pose: &Transform,
     local: &Transform,

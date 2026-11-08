@@ -215,6 +215,18 @@ offline verifierは型を保持したsource manifestとのcanonical JSON一致�
 整数inventoryのbool/float aliasを拒否する。有限の非白色は診断値として保持し、
 白へ補正したり美術的に正しい色と承認したりしない。旧planはこの追加証拠なしの履歴であり、
 新schemaの観測済みと読み替えない。これは2D表示経路の切り分けで、明暗/密集/preview/UIや素材採否を閉じない。
+
+M5専用の明示 `--variant m5-art-context --view normal` は別のseeded比較である。
+ArtPreviewの4種だけをfeedback/art-preview・standard照明で許可し、candidate/releaseや通常入力証拠へ転用しない。
+対象4棟、前後8Wall、8idle Soul、descriptor経由の4previewを一度だけ準備し、以後は受動観測する。
+Lampだけは元galleryの列別Spa2棟（mask3/15）と追加6発電Soulを保持し、既存のOperational/Generating準備、
+Dream100の明示seedから実power_output/grid_recalcを通す。全14Soul/14建物の別inventory、tile/worker双方向関係、
+発電元/消費先/Yard/電力網とoff列への供給不在を固定する。通電ミラーを上書きせず、ready後の変化は拒否する。
+元の地形を変更せず、全Soulの既存task/関係があれば拒否する。8idle SoulのDream値は調整しない。
+actual foreground、地形/footprint、Wall/Soulの論理位置とrenderer root/local/global行列・材質・layers・visibility、
+RTT camera、preview画像/canvas/anchorを同subjectで記録し、30 stable frames後の変化を拒否する。
+別verifierの実file hashもplanへ拘束する。これは2D/RTT合成の重なりを画像で判断するための比較材料であり、
+正しい奥行き順、全地形での可読性、通常のPlacementGhost/選択入力、配電、lifecycle、性能、独立採否を保証しない。
 基盤前後のコスト比較は別々に凍結した静止参照jobを使う。本書更新時点でM1-cの実native受入は未実施。
 
 制作器の `building_asset_pipeline.py verify` はpackaged bytes・provenance・既存承認identityを読むだけで、

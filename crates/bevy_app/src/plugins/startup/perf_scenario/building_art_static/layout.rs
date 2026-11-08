@@ -44,7 +44,7 @@ pub(super) fn camera_frame(
         .sum::<Vec2>()
         / 4.0;
     (
-        if session.is_rest_context() {
+        if session.is_context() {
             center - Vec2::Y * 80.0
         } else {
             center

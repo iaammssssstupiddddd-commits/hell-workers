@@ -14,8 +14,8 @@ const SCOPE: &str = "seeded-paused-art-comparison";
 
 #[derive(Resource, Default)]
 pub(crate) struct ContextState {
-    previews: Vec<Entity>,
-    prepared: bool,
+    pub(super) previews: Vec<Entity>,
+    pub(super) prepared: bool,
 }
 
 pub(super) fn wall_grids(spec: &Specimen) -> [(i32, i32); 2] {
@@ -65,6 +65,13 @@ fn light_values(lighting: BuildingArtLighting) -> (f32, f32) {
 
 /// Called only by the pre-readiness settle chain, never after readiness.
 pub(super) fn prepare(world: &mut World) {
+    if world
+        .get_resource::<BuildingArtSession>()
+        .is_some_and(BuildingArtSession::is_m5_context)
+    {
+        super::m5_context::prepare(world);
+        return;
+    }
     let Some(session) = world.get_resource::<BuildingArtSession>() else {
         return;
     };
@@ -599,7 +606,7 @@ fn snapshot(world: &mut World) -> Result<Option<Value>, String> {
 pub(crate) fn observe(world: &mut World) {
     if !world
         .get_resource::<BuildingArtSession>()
-        .is_some_and(BuildingArtSession::is_rest_context)
+        .is_some_and(BuildingArtSession::is_context)
         || !matches!(
             world.resource::<BuildingArtStaticState>().phase,
             Phase::Seeded | Phase::Ready
@@ -607,7 +614,11 @@ pub(crate) fn observe(world: &mut World) {
     {
         return;
     }
-    let result = snapshot(world);
+    let result = if world.resource::<BuildingArtSession>().is_m5_context() {
+        super::m5_context::snapshot(world)
+    } else {
+        snapshot(world)
+    };
     let update = || -> Result<(), String> {
         let (publish, fixture) = {
             let mut state = world.resource_mut::<BuildingArtStaticState>();

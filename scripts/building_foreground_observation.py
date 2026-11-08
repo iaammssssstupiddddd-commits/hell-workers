@@ -34,7 +34,7 @@ def descriptor(manifest: dict) -> dict:
             "verifier_sha256": verifier_sha256()}
 
 
-def settings(value: dict) -> dict | None:
+def settings(value: dict, *, context=False) -> dict | None:
     observation = value.get("foreground_observation")
     if observation is None:
         return None  # Historical gallery: never claim the new observations.
@@ -42,8 +42,9 @@ def settings(value: dict) -> dict | None:
             and set(observation) == {"schema", "descriptor", "artifacts", "verifier_sha256"}
             and type(observation["schema"]) is int and observation["schema"] == 1
             and observation["verifier_sha256"] == verifier_sha256()
-            and value.get("kind") in KINDS and value.get("variant", "gallery") == "gallery"
-            and value.get("scope") == "paused-static-presentation"
+            and value.get("kind") in KINDS
+            and value.get("variant", "gallery") == ("m5-art-context" if context else "gallery")
+            and value.get("scope") == ("seeded-paused-art-comparison" if context else "paused-static-presentation")
             and value.get("promotion_authority") is False, "plan schema/kind/scope differs")
     return observation
 
@@ -78,8 +79,8 @@ def close(actual: list, expected: list) -> bool:
     return all(abs(a-b) <= .001 for a, b in zip(actual, expected, strict=True))
 
 
-def validate(probe: dict, value: dict) -> None:
-    observation = settings(value)
+def validate(probe: dict, value: dict, *, context=False) -> None:
+    observation = settings(value, context=context)
     if observation is None:
         return
     fixture = probe["fixture"]
