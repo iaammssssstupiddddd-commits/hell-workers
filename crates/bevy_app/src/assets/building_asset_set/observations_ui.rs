@@ -31,7 +31,7 @@ fn equipment(action: UiIntent) -> Option<BuildingType> {
     }
 }
 
-fn visible_rect(world: &World, entity: Entity, viewport: Vec2) -> Option<[f32; 4]> {
+pub(super) fn visible_rect(world: &World, entity: Entity, viewport: Vec2) -> Option<[f32; 4]> {
     let computed = world.get::<ComputedNode>(entity)?;
     let transform = world.get::<UiGlobalTransform>(entity)?;
     if !viewport.is_finite()

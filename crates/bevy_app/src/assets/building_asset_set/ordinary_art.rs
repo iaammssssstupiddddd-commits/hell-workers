@@ -18,6 +18,17 @@ const CANDIDATE_SCOPE: &str = "ordinary-rest-candidate-lifecycle-v1";
 pub(super) const SPA_CANDIDATE_SCOPE: &str = "ordinary-spa-candidate-occupied-v1";
 const SPA_RESUMED_SCOPE: &str = "ordinary-spa-candidate-resumed-v1";
 const SPA_LOADED_SCOPE: &str = "ordinary-spa-candidate-load-v1";
+const M5_SCOPE: &str = "ordinary-m5-art-planning-v1";
+
+pub(crate) fn m5_kind_for_case(case: &str) -> Option<BuildingAssetKind> {
+    match case {
+        "m5-sand-planning" => Some(BuildingAssetKind::SandPile),
+        "m5-bone-planning" => Some(BuildingAssetKind::BonePile),
+        "m5-parking-planning" => Some(BuildingAssetKind::WheelbarrowParking),
+        "m5-lamp-planning" => Some(BuildingAssetKind::OutdoorLamp),
+        _ => None,
+    }
+}
 const CONFLICTS: &[&str] = &[
     "HW_BUILDING_ART_SESSION",
     "HW_BUILDING_PRODUCTION_OBSERVATIONS",
@@ -47,6 +58,10 @@ fn validate(session: &Session, root: &Path, nonce: &str, case: &str) -> Result<(
                 .all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase())
     };
     let profile = match session.mode.as_str() {
+        "m5-feedback" => {
+            session.identity.authority == BuildingAssetAuthority::ArtPreview
+                && m5_kind_for_case(case) == Some(session.identity.kind)
+        }
         "feedback" => {
             session.identity.kind == BuildingAssetKind::RestArea
                 && session.identity.authority == BuildingAssetAuthority::ArtPreview
@@ -100,6 +115,12 @@ fn validate(session: &Session, root: &Path, nonce: &str, case: &str) -> Result<(
 }
 
 pub(super) fn scope(world: &World) -> &'static str {
+    if world
+        .get_resource::<Session>()
+        .is_some_and(|session| session.mode == "m5-feedback")
+    {
+        return M5_SCOPE;
+    }
     if world.get_resource::<Session>().is_some_and(|session| {
         session.mode == "candidate-loaded" && session.identity.kind == BuildingAssetKind::SoulSpa
     }) {
@@ -203,6 +224,9 @@ pub(super) fn snapshot(world: &mut World) -> Result<Value, String> {
             .is_some_and(|identity| identity != &session.identity)
     {
         return Err("ordinary art active/pending generation differs".into());
+    }
+    if session.mode == "m5-feedback" {
+        return super::ordinary_m5::snapshot(world, &session.identity);
     }
     let mut expected = descriptor.as_ref().map(|set| json!({
         "identity": set.manifest.identity,
@@ -434,6 +458,60 @@ mod tests {
         assert_eq!(scope(app.world()), SCOPE);
         app.insert_resource(good);
         assert_eq!(scope(app.world()), CANDIDATE_SCOPE);
+    }
+
+    #[test]
+    fn m5_feedback_requires_exact_case_kind_and_preview_authority() {
+        let root = Path::new("/private/session");
+        for case in [
+            "m5-sand-planning",
+            "m5-bone-planning",
+            "m5-parking-planning",
+            "m5-lamp-planning",
+        ] {
+            let kind = m5_kind_for_case(case).unwrap();
+            let mut input = value();
+            input["mode"] = json!("m5-feedback");
+            input["identity"]["kind"] = json!(kind);
+            input["locator"] = json!(format!("manifests/building-{}-v1.buildingset", kind.slug()));
+            let session: Session = serde_json::from_value(input.clone()).unwrap();
+            validate(&session, root, &"b".repeat(32), case).unwrap();
+            let mut app = App::new();
+            app.insert_resource(session.clone());
+            assert_eq!(scope(app.world()), M5_SCOPE);
+            for other in [
+                "rest-area-lifecycle",
+                "navigation",
+                "m5-art-context",
+                "bridge-planning",
+            ] {
+                assert!(validate(&session, root, &"b".repeat(32), other).is_err());
+            }
+            for (path, replacement) in [
+                ("/mode", json!("feedback")),
+                ("/identity/authority", json!("isolated_candidate")),
+                ("/identity/authority", json!("release_approved")),
+                ("/identity/kind", json!("Bridge")),
+                ("/identity/generation", json!(0)),
+                ("/nonce", json!("c".repeat(32))),
+            ] {
+                let mut changed = input.clone();
+                *changed.pointer_mut(path).unwrap() = replacement;
+                let changed: Session = serde_json::from_value(changed).unwrap();
+                assert!(validate(&changed, root, &"b".repeat(32), case).is_err());
+            }
+            for other in [
+                "m5-sand-planning",
+                "m5-bone-planning",
+                "m5-parking-planning",
+                "m5-lamp-planning",
+            ] {
+                assert_eq!(
+                    validate(&session, root, &"b".repeat(32), other).is_ok(),
+                    case == other
+                );
+            }
+        }
     }
 
     #[test]

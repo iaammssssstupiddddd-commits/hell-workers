@@ -6,14 +6,14 @@
 | --- | --- |
 | 計画ID | `non-bridge-production-release-plan-2026-10-04` |
 | ステータス | `In Progress` |
-| 作成日 / 最終更新日 | `2026-10-04` / `2026-11-08` |
+| 作成日 / 最終更新日 | `2026-10-04` / `2026-11-09` |
 | 作成者 | Codex |
 | 関連提案 | N/A |
 | 関連Issue/PR | TAK-14 / 基盤統合PR #29 |
 
 ## 1. 目的
 
-### 現在の判断（2026-11-08）
+### 現在の判断（2026-11-09）
 
 以下の試行履歴にある「照会中」「採否待ち」は各時点の記録であり、現在の利用者確認待ちではない。
 利用者の継続指示に従い、既存範囲内の判断・検証は主担当が進める。SoulSpaの見た目は利用者採用済み。
@@ -1110,6 +1110,92 @@ finalized/invalid/exit1/process終了・childなし、非symlink/非tracked・ma
 Sand context v1（139,939,840B）とLamp context v1（139,943,936B）の生成jobだけを撤去した。
 合計279,883,776B→0。rawログの復元コピーはなく、無効metadata/原因/補正結果は本書と台帳へ保持する。
 制作原本・最新比較4件・immutable codec・primary cacheは維持、storage check PASS（316,512,763,904B）。
+
+#### 次工程: M5の通常入力preview・選択補完
+
+静止比較では上段の遮蔽とDirt背景の暗線が弱く、既存UIによる補完を未確認のまま採用しない。
+M5各kindの別case（m5-sand-planning / m5-bone-planning / m5-parking-planning / m5-lamp-planning）を
+`ordinary-m5-art-planning-v1`という限定feedbackへ追加する。
+
+1. `ordinary_art.rs`はArtPreview一件のexact identity・専用mode/case/nonce/outputを照合し、他kind/case、
+   candidate/release、static/M6/production混在を拒否する。既定起動のadmissionは変更しない。
+2. 新native UI moduleは実worldの製品placement validatorで合法anchorを見つけ、camera/pauseだけを一度準備する。
+   建物/資材/Soul/task/terrain・完成結果を注入しない。Parking2×2と他1tileを共通shape正本から読む。
+3. catalog実card/ImageNodeとclip/可視階層、PlacementGhost、実入力で生成されたBlueprint/pulseの
+   image/descriptor/size/anchor/color/親とglobal poseを読取り、同identityへ照合する。
+   pulse/合法色/施工alphaは既存writerの実値を保持し、白へnormalizeしない。
+   pulseは実Building時だけ必要とし、未施工時にpulseを生成したり存在を主張したりしない。
+4. EIS実入力でcatalog→合法ghost→一度配置→同tile再hoverの占有拒否ghost→配置終了→同Blueprint選択infoを
+   別owned画像とfresh raw区間へ拘束する。placement mode継続を仮定せず、再選択は別actionとして記録する。
+   pointer/window/epoch/nonce・click ACK・有限raw/action/session capと既存fail-closed条件を維持する。
+5. 占有以外の違法理由、別grid/別kind/別owner、追加Blueprint、fallback/別identity、clip/未表示header、
+   raw/action欠損・再順序・未知入力を拒否する。自然施工が進んだ場合は実progress/搬入を保存し未搬入と決めつけない。
+6. scopeはfeedback-only・accepted/performance/promotion=false。通常完成/入出庫/採取/配電/保存、
+   世代切替/owner cleanup、独立art/receipt/candidate/releaseは別gateで残す。
+
+対象はordinary_artと新M5 consumer観測、observations_ui、native_acceptanceのcase/新M5 module、
+UI driverと新Python helper/拒否tests・harness inventories、primary仕様/Skill。
+製品の表示writerを変更せず、通常UIの実到達を確認するためのprofiling専用変更とする。
+mainが実装・検証・Gitとprimary docsを所有し、独立readonly review・Help実判断・同subject CI/native/storageを通す。
+
+最初の`tak14-sand-ordinary-planning-20261108-v1`は6画面の実入力を完了したが、独立verifierが
+ImageNodeの白RGB `0.9999999403953552`をliteral1.0と比較して拒否したためinvalidとした。
+current sourceは`1ee85288`+dirty、native source `9125d8f278c872db28980730819a99667a99cc1bc401ca746301e10d94505d11`。
+実catalogはexact descriptor画像・fully_visible=true・whole_image=trueで、alpha=1だった。
+旧試行はinvalid/seal/finalizeし、数値変換診断とfresh比較用途で一時保持する。
+白RGBだけに1e-6以内のf32変換誤差を認め、gray tint/alpha変更/bool/非有限を拒否する回帰を追加する。
+旧batchは承認へ変えず、新sourceのfresh jobで全入力とraw検証をやり直す。
+さらに旧rawでは、配置直後に停止したためmodeがNormalへ戻り、停止中の再選択後もghostが存在しなかった。
+「illegal」ラベル付き画像を拒否ghostの証拠とは扱わない。製品の停止時制約を変えず、通常速度で
+配置→占有ghostを確認してからEscape→Paused→同Blueprint選択へ進む手順へ補正する。
+checkpointごとのpause/mode/cursor/実ghostも撮影時に検査し、phase/action区間は新しい順序へ厳密に更新する。
+
+`tak14-sand-ordinary-planning-20261108-v2`と`tak14-bone-ordinary-planning-20261108-v1`は修正後の
+6画像・実入力・raw/descriptor検証がpassし、mainが全画像を実見して独立verify/seal/保持/finalizeした。
+Sandの独立read-only画像reviewではcatalog名/画像と同Blueprint infoは判読可、緑ghostはGrass上で弱く、
+占有ghostはBlueprint/tooltipと重なるため赤色単独の強い視認成功とは扱わなかった。NeedsMaterialsでpulseなし。
+両方ともsource `9125d8f278c872db28980730819a99667a99cc1bc401ca746301e10d94505d11`、
+harness `5fe9bb979976e3a95283c2dad00c80169b5a6f5bdea255c8f0b85488b41741ca`の限定比較で、
+以下のbaseline補正後のsourceに対する受入には流用しない。
+
+`tak14-parking-ordinary-planning-20261108-v1`は初期観測で既存Parking ownerが1棟あることを確認して停止した。
+建物ゼロという試験側の誤前提であり、配置入力は未送信。invalid/seal/診断保持/finalize済み。
+元worldを消さず、準備時の同kind既存owner ID/local/global poseを有界固定し、全phaseで同一性を検査する。
+初期ready時のworld consumer画像/親/poseを同descriptorへ拘束して保持し、新anchorのBlueprint/ghostと分ける。
+新しい完成owner・既存物の移動/欠損/置換・foreign consumerは拒否する。基盤補正後は4種ともfresh jobで再確認する。
+
+2026-11-09のfresh `tak14-{parking,sand,bone,lamp}-ordinary-planning-20261109-v1`は全4件で
+6owned画像・実EIS絶対入力・登録独立verifierを通過し、比較用途を保持してseal/finalizeした。
+HEAD `1ee85288dddeeaf00f6603b530bc0b268bf0399a` + reviewed dirty code、同source
+`cdd25273f04f8b82b7d8b67945be8c211365bf9e5a066ff1ed44c18499b0bbe8`、同harness
+`0f25e52bfb67bd820dab8d9d3f60a9194c2ecd228e79c7b74b1778f15ab48b05`、同binary
+`beaa3f8d72ee902c93901909263cf94940c5d4b2af8d476db12f79c799487305`に拘束した。
+
+| 対象 | manifest SHA256 | 比較用途保持bytes |
+| --- | --- | ---: |
+| Parking | `0fc24d7fe8e070cfa64d867b16a229bfda746a6d034517b22edf1e742aed9d2d` | 165437440 |
+| Sand | `653dd108307f3f8cef80cef2bfe0023dc919caaf5e9d2fd40e32b62259973531` | 165384192 |
+| Bone | `a73db9099d6d21f166126d17ed2b9d5b115fb2c9999bdc57c18391e3e72a4368` | 165810176 |
+| Lamp | `70960bf80eb5e8328cf7a23ed3ca8b4b567c52d2b77248563f6e57704f29d07b` | 165605376 |
+
+Parking既存owner `4294966391`/world pose `[1056,96,.5]`は全raw区間で不変、新Blueprint
+`2309v0`の2×2 footprintと分離されていた。他3種は初期同kind完成ownerなしを保持した。
+checkpoint間で一度消えて戻るケースも拒否し、原press/releaseとplacement receipt、同Blueprintの
+selection headerを照合する。mainと独立readonly reviewerは全24PNG/原rawを実見し、4種とも限定technical pass。
+catalogの形と名前、最終infoのkind/0%は読めるが、Grass上の緑ghostは薄く、占有赤ghostは
+淡青Blueprintとtooltipに重なる。色単独の強い判読成功や完成形の採否とはしない。
+全4件は未搬入/NeedsMaterials、pulseなし。完成、車両入出庫、採取、実配電、save/load、
+性能、独立art/numeric receipt、promotion/install/releaseは未達のまま残す。
+ownerはTAK-14 non-Bridge visual adoption、consumerはM5 ordinary catalog ghost Blueprint and selection comparison。
+4種の現source比較と独立画像判断を本書へ集約しraw利用が終わるまで保持し、旧sourceのpassは流用しない。
+Help実経路は明示profiling-only入場・受動観測と外部試験driverに限定され、通常起動、操作、UI文言、
+配置条件、gameplay、save schema、承認authorityは不変（No impact）。正式導入完了ではない。
+実装の関連Python85件・初期ownerを含むRust10件とprofiling Clippy警告0、変更全体の
+contracts/tooling/deps/rust CIが成功（Python tooling678件、asset tooling228件、workspace tests/全target Clippyを含む）。
+原因解消済みの旧Sand ordinary v1/v2、Bone ordinary v1、Parking ordinary v1は正式consumer解除後に
+当該4生成rootだけを撤去した。削除前du合計644632576B→0、invalid/pass metadataと本書の原因・制限は維持する。
+削除済みrawは復元用archiveを作らず、制作原本・現行4比較・codec・共有Cargo cacheを保持した。
+primary storage checkはPASS（allocated317081468928B）。旧rootの原環境再検証は用途終了した歴史資料である。
 
 次の小工程はM5 galleryの読み取り専用foreground観測の補完とする。
 実owner/子Spriteのparent、画像role/handle/descriptor、canvas/anchor、実色、local/global pose、

@@ -236,6 +236,29 @@ primaryの製品assetsへの出力は拒否する。入力原画はstagingに限
 
 ### 通常開発におけるproduction受入toolingの境界
 
+#### M5 ordinary planning ArtPreview feedback
+
+UI helperの`--case m5-sand-planning|m5-bone-planning|m5-parking-planning|m5-lamp-planning`
+は`--smoke --input-backend portal-eis --m5-art-source <exact ArtPreview> --art-codec <codec>`を要求する。
+`ordinary-m5-art-planning-v1` / `m5-feedback`は一kindのidentity、source/codec/verifierの実bytes、
+base assetsと新規asset-viewだけを認め、candidate/release、他kind、seeded gallery・M6・productionとの混在を拒否する。
+既定起動のlocator/admissionや製品writerは変更しない。
+準備は生成済みworldの製品placement validatorで合法anchorを選び、cameraとpauseを一度設定するだけ。
+Site/Yard、地形、資材、Soul、task、建物、完成や施工進捗は注入しない。
+生成済み同kind建物は最大16ownerのID/local/global poseを準備時に固定し、消したり新設対象に数えたりしない。
+全phaseでそのowner集合と姿勢・world consumerを保持し、新しい完成owner、差替え、欠損は拒否する。
+既存world画像は初期ready時のexact descriptor/親/poseへ拘束し、今回の合法anchor・新Blueprintと分離する。
+実Primary windowへ向く単一active/full-viewport/layer0 cameraと実cursor gridを確認し、通常入力による
+catalog→合法ghost→一度だけBlueprint配置→同tileの占有拒否ghost→同Blueprintの情報表示を6画像で記録する。
+実ImageNodeの未clip・whole-image・白tint、Spriteのdescriptor/image/size/anchor、施工/合法色、
+owner/parent/local/global pose・layersと表示実体を独立検査する。
+pulseは既存writerがBuilding状態で作った場合だけ存在し、それ以前は存在してはならない。
+施工が進んだ実progress/搬入は保存するが、pulse未出現の試行をpulse受入と読み替えない。
+実入力は同nonce/PID/window/epochとphase別step/frame/real区間、原press/release、
+原Pressed以後の配置receiptに拘束する。Last flush待ちは入力を再送しない。
+このfeedbackはaccepted/performance/promotion=falseであり、完成/採取/車両入出庫/通電/保存、
+世代切替/cleanup、独立art/numeric decision、正式candidate/releaseや通常起動への公開を証明しない。
+
 #### 採否前のRestArea ordinary art feedback
 
 通常UI helperの`plan --case rest-area-lifecycle --smoke --input-backend portal`へ

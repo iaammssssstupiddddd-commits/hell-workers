@@ -110,6 +110,7 @@ NATIVE_HARNESS_FILES = (
     ".codex/skills/hell-workers-run-native-acceptance/scripts/ui_spa_planning.py",
     ".codex/skills/hell-workers-run-native-acceptance/scripts/ui_spa_occupied_save.py",
     "scripts/native_ui_eis.py",
+    "scripts/ui_m5_planning.py",
     ".codex/skills/hell-workers-run-native-acceptance/scripts/ui_terrain_materials.py",
     ".codex/skills/hell-workers-run-native-acceptance/scripts/rtt_light_closure_verify.py",
     "scripts/native_ui_input.py",

@@ -14,6 +14,8 @@ mod observations_spa;
 mod observations_ui;
 #[cfg(feature = "profiling")]
 mod ordinary_art;
+#[cfg(feature = "profiling")]
+mod ordinary_m5;
 mod pool;
 mod projection;
 mod release;
@@ -28,6 +30,14 @@ pub use loader::{BuildingAssetLoadPolicy, BuildingAssetSetLoader};
 pub(crate) use observations_rest::snapshot as snapshot_rest_observations;
 #[cfg(feature = "profiling")]
 pub(crate) use observations_spa::snapshot as snapshot_spa_observations;
+#[cfg(feature = "profiling")]
+pub(crate) use ordinary_art::m5_kind_for_case;
+#[cfg(feature = "profiling")]
+pub(crate) fn snapshot_ordinary_art(
+    world: &mut bevy::prelude::World,
+) -> Result<serde_json::Value, String> {
+    ordinary_art::snapshot(world)
+}
 pub use pool::{BuildingAssetDescriptor, BuildingAssetPool};
 pub use projection::project_building_asset_json;
 #[cfg(feature = "profiling")]

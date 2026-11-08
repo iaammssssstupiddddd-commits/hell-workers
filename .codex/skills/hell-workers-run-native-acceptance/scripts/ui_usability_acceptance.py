@@ -33,6 +33,7 @@ from scripts.native_ui_eis import PortalEisInput
 from scripts import ui_spa_candidate_art as spa_art
 from scripts import ui_spa_resumed_use as spa_resumed
 from scripts import ui_spa_loaded_use as spa_loaded
+from scripts import ui_m5_planning as m5
 
 PROFILE = "ui-usability-feedback"
 CHECKPOINTS = ("tasks", "last-page", "minimized", "restored", "entities",
@@ -45,10 +46,14 @@ CASES = ("navigation", "refactor-rows", "progress-bars", "terrain-materials", "r
 SPA_CASES = ("soul-spa-planning", "soul-spa-completion", "soul-spa-usage", "soul-spa-persistence", "soul-spa-slots", "soul-spa-occupied-save", spa_art.CASE, spa_resumed.CASE, spa_loaded.CASE)
 SPA_ART_CASES = (spa_art.CASE, spa_resumed.CASE, spa_loaded.CASE)
 CASES += SPA_ART_CASES
+CASES += tuple(m5.KINDS)
 REST_CASES = ("rest-area-planning", "rest-area-refund", "rest-area-completion", "rest-area-usage", "rest-area-exit", "rest-area-save", "rest-area-lifecycle", "rest-area-maxzoom", "rest-area-candidate-lifecycle")
 
 
 def planned_art(args, repo):
+    native.require(not getattr(args, "m5_art_source", None) or args.case in m5.KINDS, "M5 source requires dedicated case")
+    if args.case in m5.KINDS:
+        return m5.planned_contract(args, repo)
     native.require(not getattr(args, "spa_resume_source", None) or args.case == spa_loaded.CASE,
                    "Spa save input requires the dedicated loaded case")
     native.require(not getattr(args, "soul_spa_art_source", None) or args.case in SPA_ART_CASES,
@@ -81,6 +86,9 @@ def sha256(path: Path) -> str:
 def check_observation(case: str, value: dict) -> None:
     native.require(value["ready"] and value["frame"] > 90, "fixture is not ready")
     native.require(value["task_rows"] <= 20, "task resident row limit exceeded")
+    if case in m5.CHECKPOINTS:
+        m5.check_observation(case, value)
+        return
     if case == spa_loaded.CHECKPOINTS[1]:
         spa_loaded.check_observation(case, value)
         return
@@ -512,13 +520,18 @@ def verify_root(root):
     native.require(native.git_subject(repo) == manifest["subject_commit"], "subject changed")
     native.require(sha256(repo / "target/debug/bevy_app") == manifest["binary_sha256"], "binary changed")
     art_contract = manifest.get("ordinary_art")
+    native.require(manifest["case"] not in m5.KINDS or art_contract is not None, "M5 needs exact ArtPreview")
     native.require(manifest["case"] not in SPA_ART_CASES or art_contract is not None,
                    "Spa candidate case requires its exact source")
     native.require(manifest["case"] != "rest-area-candidate-lifecycle" or art_contract is not None,
                    "candidate lifecycle requires explicit candidate source")
     native.require(manifest["case"] != "rest-area-maxzoom" or art_contract is not None and manifest["input_backend"] == "portal-eis",
                    "maxzoom requires the explicit ArtPreview EIS profile")
-    if art_contract is not None and manifest["case"] in SPA_ART_CASES:
+    if art_contract is not None and manifest["case"] in m5.KINDS:
+        native.require(manifest["smoke"] is True and manifest["input_backend"] == "portal-eis", "M5 profile differs")
+        native.require(rest_area_art.pipeline.exact_json(m5.source_contract(repo, Path(art_contract["source_root"]),
+            Path(art_contract["codec"]), manifest["case"]), art_contract), "M5 art inputs changed")
+    elif art_contract is not None and manifest["case"] in SPA_ART_CASES:
         native.require(manifest["smoke"] and manifest["input_backend"] in ("portal", "portal-eis"), "Spa art profile differs")
         native.require(rest_area_art.pipeline.exact_json(spa_art.source_contract(repo,
             Path(art_contract["source_root"]), Path(art_contract["codec"]), case=manifest["case"],
@@ -540,6 +553,11 @@ def verify_root(root):
         events = native.read_json(directory / "events.json")["events"]
         client = native.read_json(directory / "input-client.json")
         check_input_client(manifest, session, client)
+        if case in m5.KINDS:
+            raw_path = directory / "production-cancellation.json"
+            native.require(sha256(raw_path) == session.get("cancellation_sha256"), "M5 raw changed")
+            m5.check_view(repo, directory / "asset-view", art_contract)
+            m5.verify(native.read_json(raw_path), entries, client, events, art_contract)
         if case in SPA_CASES:
             raw_path = directory / "production-cancellation.json"
             native.require((art_contract is None or case in SPA_ART_CASES) and sha256(raw_path) == session.get("cancellation_sha256"),
@@ -590,7 +608,8 @@ def verify_root(root):
                 rest_area_planning.check_cancellation(native.read_json(raw_path), entries, client,
                                                       refund=case == "rest-area-refund")
         native.require(case == "navigation" or not layout_only, "refactor case requires actual input")
-        expected_checkpoints = (refactor_rows.CHECKPOINTS if case == "refactor-rows" else
+        expected_checkpoints = (m5.CHECKPOINTS if case in m5.KINDS else
+                                refactor_rows.CHECKPOINTS if case == "refactor-rows" else
                                 spa_loaded.CHECKPOINTS if case == spa_loaded.CASE else
                                 spa_resumed.CHECKPOINTS if case == spa_resumed.CASE else
                                 spa_occupied.CHECKPOINTS if case in ("soul-spa-occupied-save", spa_art.CASE) else
@@ -648,6 +667,8 @@ def verify_root(root):
             continue
         if case in SPA_CASES:
             continue  # Dedicated raw/durable commit checks ran above.
+        if case in m5.KINDS:
+            continue  # Exact ordinary 2D consumers and input checks ran above.
         if case in ("rest-area-planning", "rest-area-refund"):
             rest_area_planning.check_sequence(entries, refund=case == "rest-area-refund")
             continue
@@ -662,6 +683,7 @@ def verify_root(root):
         joint.verify_game_log(directory / "game.log", "Intel")
     return {"status": "valid", "profile": PROFILE, "sessions": len(expected),
             "coverage": f"{manifest.get('layout_scene', 'management')} rendering only; no input evidence" if layout_only else
+                        "ordinary M5 ArtPreview catalog, legal/occupied ghost, Blueprint/pulse and same-owner inspection only; no completion, art approval, power, performance or release" if manifest.get("case") in m5.KINDS else
                         "ordinary isolated-candidate SoulSpa load of historical occupied-save input, current remap/reset/reassignment, Normal consumption and observed departure only; no current construction/domain end receipt/performance/release authority" if manifest.get("case") == spa_loaded.CASE else
                         "ordinary isolated-candidate SoulSpa occupied restoration, remapped former-worker reassignment, measured consumption and observed Dream-floor departure; no domain end receipt/performance/release authority" if manifest.get("case") == spa_resumed.CASE else
                         "ordinary isolated-candidate SoulSpa body/four-slot consumers and occupied durable restoration/runtime reset; not resumed assignment/performance/release acceptance" if manifest.get("case") == spa_art.CASE else
@@ -720,7 +742,7 @@ def plan(args):
                "--layout-scene", args.layout_scene,
                *(["--portal-consent-file", args.portal_consent_file] if args.portal_consent_file else []),
                *(["--spa-resume-source", art_contract["resume_input"]["root"]] if args.case == spa_loaded.CASE else []),
-               *(["--soul-spa-art-source" if args.case in SPA_ART_CASES else "--rest-area-art-source", art_contract["source_root"], "--art-codec", art_contract["codec"],
+               *(["--m5-art-source" if args.case in m5.KINDS else "--soul-spa-art-source" if args.case in SPA_ART_CASES else "--rest-area-art-source", art_contract["source_root"], "--art-codec", art_contract["codec"],
                   "--art-contract-sha256", rest_area_art.contract_digest(art_contract)] if art_contract else []),
                *(["--layout-menu"] if args.layout_menu else []),
                *(["--smoke"] if args.smoke else [])]
@@ -782,6 +804,10 @@ def run(args):
                                 "HW_NATIVE_UI_ROOT": str(directory), "HW_NATIVE_UI_NONCE": nonce,
                                 "HW_NATIVE_UI_WIDTH": str(width), "HW_NATIVE_UI_HEIGHT": str(height), "HW_NATIVE_UI_SCALE": str(scale)})
             environment["HW_NATIVE_UI_CASE"] = case
+            if case in m5.KINDS:
+                view = m5.prepare_view(repo, directory, art_contract)
+                environment["BEVY_ASSET_ROOT"] = str(view)
+                environment["HW_BUILDING_ORDINARY_ART_SESSION"] = m5.session_setting(directory, nonce, art_contract)
             if case in SPA_CASES:
                 if case in SPA_ART_CASES:
                     view = spa_art.prepare_view(repo, directory, art_contract)
@@ -825,6 +851,8 @@ def run(args):
                     state["current_stage"] = "ui-input"
                     if args.input_backend == "none":
                         driver.capture("entities")
+                    elif case in m5.KINDS:
+                        m5.exercise(driver, art_contract)
                     elif case == "refactor-rows":
                         refactor_rows.exercise(driver)
                     elif case == "progress-bars":
@@ -885,6 +913,8 @@ def run(args):
                         state["child_pid"] = None
             joint.verify_game_log(directory / "game.log", "Intel")
             session = {"case": case, "directory": directory.name, "nonce": nonce, "log_sha256": sha256(directory / "game.log")}
+            if case in m5.KINDS:
+                session["cancellation_sha256"] = sha256(directory / "production-cancellation.json")
             if case in SPA_CASES:
                 session["cancellation_sha256"] = sha256(directory / "production-cancellation.json")
             if case in REST_CASES:
@@ -930,6 +960,7 @@ def main():
             child.add_argument("--rest-area-art-source", help="explicit RestArea ArtPreview, or approved isolated candidate only in candidate-lifecycle; no new approval")
             child.add_argument("--soul-spa-art-source", help="approved isolated SoulSpa candidate only in its occupied-save case; no new approval")
             child.add_argument("--spa-resume-source", help="verified occupied-save job as immutable historical input in loaded-use only")
+            child.add_argument("--m5-art-source", help="one exact M5 ArtPreview in dedicated ordinary planning case; no approval")
             child.add_argument("--art-codec", help="frozen already-built codec for the ArtPreview input")
         if command == "run":
             child.add_argument("--art-contract-sha256")

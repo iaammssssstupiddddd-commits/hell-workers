@@ -23,6 +23,7 @@ use crate::systems::save::{SaveLoadOutcome, SaveStorageRoot};
 use crate::systems::settings::SettingsStorageRoot;
 
 mod bridge_planning;
+mod m5_planning;
 mod progress_bars;
 mod refactor_rows;
 mod rest_area_planning;
@@ -194,6 +195,10 @@ fn prepare_fixture(world: &mut World, scale: f32) {
     use hw_core::familiar::FamiliarPolicy;
     use hw_jobs::{Designation, PlayerIssuedDesignation, Priority, TaskSlots, Tree};
     world.resource_mut::<GameSettings>().ui_scale = scale;
+    if m5_planning::enabled() {
+        m5_planning::prepare(world);
+        return;
+    }
     if bridge_planning::enabled() {
         bridge_planning::prepare(world);
         return;
@@ -725,6 +730,7 @@ fn snapshot(world: &mut World, observer: &UiObserver) -> Value {
     value["refactor_rows"] = refactor_rows::snapshot(world, viewport);
     value["bridge_planning"] = bridge_planning::snapshot(world);
     value["rest_area_planning"] = rest_area_planning::snapshot(world);
+    value["m5_planning"] = m5_planning::snapshot(world);
     value["spa_planning"] = spa_planning::snapshot(world);
     value["progress_bars"] = progress_bars::snapshot(world);
     value["terrain_materials"] = terrain_materials::snapshot(world, observer);

@@ -295,6 +295,21 @@ does not prove partial-material refunds, full reservation/inventory cleanup,
 completed art, performance or release authority. Missing producer output fails
 closed; do not synthesize it from `CancellationRequested` or disappearance.
 
+For an M5 ArtPreview, select `--case m5-sand-planning|m5-bone-planning|m5-parking-planning|m5-lamp-planning`
+with `--smoke --input-backend portal-eis --m5-art-source <exact-preview> --art-codec <codec>`.
+The separate ordinary-m5-art-planning-v1 scope prepares only camera and pause in
+the generated world. Six owned captures bind empty/catalog/legal ghost/single
+Blueprint/occupied ghost/same-Blueprint inspection to real input, exact image
+consumers and source. Existing construction tint/scale remain intact; a pulse
+exists only if natural construction actually reached Building.
+Initial same-kind generated buildings are preserved in a bounded owner/pose
+inventory; keep their exact world consumers distinct from the new Blueprint.
+Reject missing/replaced/moved initial owners or any extra completed owner.
+Preserve input ACK, phase/clock/owner, original press/receipt and Last flush guards; do not resend
+an event or seed materials/tasks to obtain evidence. Inspect every image. This is
+not completed lifecycle, pulse evidence when absent, power, vehicle/gathering,
+art/numeric approval, performance, promotion or release acceptance.
+
 Use `--case rest-area-candidate-lifecycle --smoke --input-backend portal`
 with `--rest-area-art-source <approved-isolated-candidate>` and `--art-codec`
 for adopted RestArea bytes in ordinary natural construction, usage, occupied
@@ -1120,7 +1135,7 @@ pass because individual runs happened to finish.
 After changing the Skill or helper, run:
 
 ```bash
-python3 -m unittest scripts.tests.test_ui_usability_acceptance scripts.tests.test_ui_spa_occupied_save scripts.tests.test_ui_spa_candidate_art scripts.tests.test_ui_spa_resumed_use scripts.tests.test_ui_spa_loaded_use scripts.tests.test_rtt_light_closure_verify
+python3 -m unittest scripts.tests.test_ui_usability_acceptance scripts.tests.test_ui_m5_planning scripts.tests.test_ui_spa_occupied_save scripts.tests.test_ui_spa_candidate_art scripts.tests.test_ui_spa_resumed_use scripts.tests.test_ui_spa_loaded_use scripts.tests.test_rtt_light_closure_verify
 PYTHONDONTWRITEBYTECODE=1 python3 \
   .codex/skills/hell-workers-run-native-acceptance/scripts/native_acceptance.py \
   self-test
