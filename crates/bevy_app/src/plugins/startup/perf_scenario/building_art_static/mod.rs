@@ -393,13 +393,13 @@ fn inspect(params: &InspectParams) -> Result<Option<Value>, String> {
             .push((sprite, visibility));
     }
     let mut active_meshes = HashSet::new();
-    // Full JSON is allocated only for the initial checkpoint, never per frame.
-    let mut records = (params.state.evidence.is_none()
-        || params
-            .art_session
-            .as_ref()
-            .is_some_and(|session| session.spa_mask_page.is_some()))
-    .then(Vec::new);
+    // Baselines keep one full checkpoint. Explicit Spa pages reobserve all
+    // records; explicit M5 sessions reobserve only their four target sprites.
+    let record_mode = foreground::RecordMode::for_frame(
+        params.state.evidence.is_none(),
+        params.art_session.as_deref(),
+    );
+    let mut records = (record_mode != foreground::RecordMode::None).then(Vec::new);
     for (spec, &owner) in params.state.specs.iter().zip(&params.state.owners) {
         let (building, transform, door, water, resting, mixer, lamp) = params
             .buildings
@@ -681,6 +681,13 @@ fn inspect(params: &InspectParams) -> Result<Option<Value>, String> {
             _ => {}
         };
         if let Some(records) = records.as_mut() {
+            if !record_mode.includes(
+                candidate.is_some_and(|candidate| {
+                    candidate.manifest.identity.kind.mesh_roles().is_empty()
+                }),
+            ) {
+                continue;
+            }
             let state = match spec.kind {
                 BuildingType::Tank => json!({"stored_water": spec.water_count(), "capacity": 50}),
                 BuildingType::MudMixer => json!({"refining": spec.quarter() >= 2}),

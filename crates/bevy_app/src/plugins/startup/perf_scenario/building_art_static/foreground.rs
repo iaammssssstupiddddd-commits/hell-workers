@@ -20,6 +20,33 @@ pub(super) type ForegroundQuery<'w, 's> = Query<
     With<hw_visual::layer::VisualLayerKind>,
 >;
 
+#[derive(Debug, PartialEq, Eq)]
+pub(super) enum RecordMode {
+    None,
+    All,
+    Foreground,
+}
+
+impl RecordMode {
+    pub(super) fn for_frame(initial: bool, session: Option<&BuildingArtSession>) -> Self {
+        if initial || session.is_some_and(|session| session.spa_mask_page.is_some()) {
+            Self::All
+        } else if session.is_some_and(|session| session.identity.kind.mesh_roles().is_empty()) {
+            Self::Foreground
+        } else {
+            Self::None
+        }
+    }
+
+    pub(super) fn includes(&self, foreground_candidate: bool) -> bool {
+        match self {
+            Self::None => false,
+            Self::All => true,
+            Self::Foreground => foreground_candidate,
+        }
+    }
+}
+
 pub(super) fn unchanged(initial: Option<&Value>, current: &Value) -> Result<(), String> {
     let Some(initial) = initial else {
         return Ok(());
@@ -174,6 +201,46 @@ pub(super) fn snapshot(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn foreground_records_continue_after_initial_without_expanding_other_sessions() {
+        use crate::assets::building_asset_set::{BuildingAssetAuthority, BuildingAssetSetIdentity};
+        let mut session = BuildingArtSession {
+            mode: "feedback".into(),
+            identity: BuildingAssetSetIdentity {
+                kind: BuildingAssetKind::WheelbarrowParking,
+                authority: BuildingAssetAuthority::ArtPreview,
+                generation: 1,
+                manifest_sha256: "a".repeat(64),
+            },
+            locator: "unused-test-locator".into(),
+            status_path: "/tmp/unused-test-status".into(),
+            nonce: "a".repeat(32),
+            view: default(),
+            variant: default(),
+            lighting: default(),
+            spa_mask_page: None,
+        };
+        let initial = RecordMode::for_frame(true, Some(&session));
+        assert_eq!(initial, RecordMode::All);
+        assert!(initial.includes(false));
+        let next = RecordMode::for_frame(false, Some(&session));
+        assert_eq!(next, RecordMode::Foreground);
+        assert!(next.includes(true));
+        assert!(!next.includes(false));
+        assert_eq!(RecordMode::for_frame(false, None), RecordMode::None);
+        session.identity.kind = BuildingAssetKind::RestArea;
+        assert_eq!(
+            RecordMode::for_frame(false, Some(&session)),
+            RecordMode::None
+        );
+        session.identity.kind = BuildingAssetKind::SoulSpa;
+        session.spa_mask_page = Some(0);
+        assert_eq!(
+            RecordMode::for_frame(false, Some(&session)),
+            RecordMode::All
+        );
+    }
 
     #[test]
     fn passive_sprite_drift_is_rejected_not_repaired() {

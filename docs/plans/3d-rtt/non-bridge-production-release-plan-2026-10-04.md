@@ -1016,6 +1016,28 @@ fresh `tak14-parking-foreground-feedback-20261108-v1`は初期ready直後のsnap
 所有窓PNG取得前に終了したためinvalidとしてseal/finalize。139,927,552Bをexact変化fieldの診断用途に保持する。
 色差原因の特定や新観測成功と扱わず、次の補正は拒否理由へ有界な最初のfield差分を残すだけとする。
 変化を無視する待機延長・白色化・測定中の再seed/位置補正・失敗再利用は行わない。
+診断補正`deabca60`のfresh v2もPNG前invalidで、exact拒否は`foreground_schema: before=1 after=null`だった。
+これは実Sprite変化の証拠ではなく、galleryが初期checkpoint後のJSON再採取を省略する既存最適化へ、
+新しい継続比較を接続し切れていなかった観測側の欠陥である。v2もinvalid封印/finalizeし、修正比較に保持する。
+修正は初期の全36recordと既存Spa pageの全継続採取を維持し、明示M5 sessionだけ対象4棟を毎frame再観測する。
+他群のJSONを毎frame増やさず、入力/時間/ゲーム状態/色/座標の修復やdrift条件の緩和は行わない。
+
+継続採取を接続したfresh `tak14-parking-foreground-feedback-20261108-v3`は実機実行、
+別実行verifier、独立画像/raw reviewを通過し、pass封印/finalizeとstorage checkを完了した。
+head `deabca6075c2f0816835cdf2f88d2d3a0e7640fd`上の未commit補正、source
+`f914f2fd6bc333cc9678ea275528c343180089957920e86ad1c25a7d5910c80e`、
+Parking ArtPreview identity `5c700f194d9c3dc61202640d21882632891fe9f934ebba77e2c37c013daa5df2`に拘束する。
+初期36record、以後対象4recordの連続比較が成立し、全4棟の実Spriteは白
+（sRGBA各RGB約0.99999994/alpha1）、同world画像handle、canvas64wu/anchor0、
+owner/local/global行列一致、visible/layer0で不変だった。Intel Arc/Vulkan/X11、1280×720/DPI1、
+near/highのpaused feedbackであり、アート/数値/性能/正式release承認ではない。
+PNG SHA256 `6b760b194e6e8cfa9b547abbfeebe46167ef8eed423159c3790d89645f6ce705`。
+Sprite tintを緑色の原因とする仮説は打ち切り、透明部分を含む原画と実pixelの対応を次に調べる。
+最新job 141,774,848Bはこの表示比較の用途に保持し、原因調査終了後に整理する。
+観測器の欠陥が解消したため、旧v1/v2は各consumerを正式releaseし、asset-viewの最新jobとの
+byte一致、終了済みinvalid/exit1、固有原本/追跡file/使用参照なしを確認して生成物のみ撤去した。
+各139,927,552B、合計279,855,104Bを削除（raw復元archiveなし）。失敗結果は本書と台帳に残し、
+制作原本・最新v3・共有Cargo cacheは保全。撤去後storage check pass。
 
 採用RestAreaの通常lifecycle比較が終了したため、旧static job
 `target/native-acceptance/tak14-restarea-candidate-normal-20261108-v1`だけを正式consumer release後に撤去した。
