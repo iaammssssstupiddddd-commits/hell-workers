@@ -122,6 +122,11 @@ v3はowned EIS hoverとWater (25/50)のPNGまで到達したが、capture中のT
 実tooltipはpause中もReal Timeでfadeする。既存rawでは後続frameでroot/Text alpha=1に到達した。
 alphaを丸めたり比較を緩めず、全実Text/rootのalpha=1を待つready条件に強化し、同じexact区間検査を維持する。
 実測値によるRED回帰、同subject検証と独立レビュー後にfresh Partial v4へ進む。旧画像をpassへ変更しない。
+v4はfade終端を通過したが、verifierがproduction rootへfallback用Y12.8を期待してinvalid。
+`structure.rs`のdescriptor適用と既存generation-switch testはproduction Y=0を明示しており、実rawも一致した。
+失敗をseal/診断用途保持/finalize後、verifierだけを同製品契約へ補正する。owner XY→root X/-Z、独立global合成、
+identity/mesh/material/状態のexact検査は維持し、12.8やowner描画Zの流用を拒否するRED回帰を追加する。
+次のfresh Partialはv5。旧invalidをpassへ読み替えず、実機・美術・releaseは引き続き別判定とする。
 
 2026-11-09の独立read-onlyアート監査では、Sand/Boneの現ArtPreview世代1を見た目だけ採用した。
 Sand `dbdf3e6ba5557f1b91b59a4e7d19c0bc1afe68e96c745d0dcbefd3f7b637d4e5` は低い黄土色の塊と大色面、

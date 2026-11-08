@@ -89,7 +89,7 @@ class M2UiTests(unittest.TestCase):
                  for name in ("body", "water")]
         plan = {"case": "m2-ui-tank-partial", "input": {"identity": value["m2_ui"]["identity"], "parts": parts, "geometry_sha256": "c" * 64}}
         rows = []
-        root_pose = {"translation": [0., 12.8, 0.], "rotation": [0., 0., 0., 1.], "scale": [1.] * 3}
+        root_pose = {"translation": [0., 0., 0.], "rotation": [0., 0., 0., 1.], "scale": [1.] * 3}
         root_matrix = recipe.art.foreground.matrix(root_pose)
         for time, frame in enumerate((90, 100, 110), start=1):
             ui_value = copy.deepcopy(value)
@@ -121,6 +121,27 @@ class M2UiTests(unittest.TestCase):
         old = copy.deepcopy(raw)
         recipe.check_trace(raw, plan, before, after)
         self.assertEqual(raw, old)
+
+    def test_production_root_tracks_owner_ground_plane_and_rejects_fallback_elevation(self):
+        raw, plan, before, after = self.trace_fixture()
+        for row in raw["samples"]:
+            row["owners"][0]["pose"]["translation"] = [-1312., -1312., .12]
+            root = row["roots"][0]
+            root["pose"]["translation"] = [-1312., 0., 1312.]
+            root["global_matrix"] = recipe.art.foreground.matrix(root["pose"])
+            for part in root["parts"]:
+                part["global_matrix"] = recipe.art.foreground.product(root["global_matrix"], recipe.art.foreground.matrix(part["pose"]))
+        recipe.check_trace(raw, plan, before, after)
+        for y in (12.8, .12, 1.):
+            wrong = copy.deepcopy(raw)
+            for row in wrong["samples"]:
+                root = row["roots"][0]
+                root["pose"]["translation"][1] = y
+                root["global_matrix"] = recipe.art.foreground.matrix(root["pose"])
+                for part in root["parts"]:
+                    part["global_matrix"] = recipe.art.foreground.product(root["global_matrix"], recipe.art.foreground.matrix(part["pose"]))
+            with self.subTest(y=y), self.assertRaises(ValueError):
+                recipe.check_trace(wrong, plan, before, after)
 
     def test_last_trace_rejects_fallback_foreign_missing_parts_and_drift(self):
         for mutate in (

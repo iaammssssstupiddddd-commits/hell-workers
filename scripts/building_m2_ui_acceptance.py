@@ -263,7 +263,9 @@ def check_trace(raw, plan_value, before, after):
         owner_pose = owners[0]["pose"]
         pipeline.require(owner_pose["rotation"] == [0., 0., 0., 1.] and owner_pose["scale"] == [1.] * 3,
                          "M2 UI unexpected owner rotation/scale")
-        expected_root = {"translation": [owner_pose["translation"][0], 12.8, -owner_pose["translation"][1]],
+        # Admitted descriptor roots are grounded by structure::sync at Y=0;
+        # TILE_SIZE*.4 belongs only to the fallback, not production meshes.
+        expected_root = {"translation": [owner_pose["translation"][0], 0., -owner_pose["translation"][1]],
                          "rotation": [0., 0., 0., 1.], "scale": [1.] * 3}
         pipeline.require(ui.m5.valid_pose(root.get("pose")) and root.get("parent") is None
                          and pipeline.exact_json(root.get("identity"), identity)
