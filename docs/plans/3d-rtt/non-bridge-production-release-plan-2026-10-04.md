@@ -106,6 +106,11 @@ selection/zoom操作到達の証拠ではない。独立コードレビューで
 renderer owner/root/partsと入力ACK、foreign tooltip tree、camera/paused時計の拒否を回帰で補強する。
 Help影響はNo impact：明示profilingのfixture/観測だけで、通常起動・操作・tooltip文言・水/精製rule・save・authorityは不変。
 この時点では実機未実行であり、起動受理やsynthetic testをUI/アートの合格に読み替えない。
+当実装は `66195750` で固定し、全群のlocal CIと独立read-only code reviewを通した。
+最初のTank Partial UI v1は出力root作成前にexit1。新runnerが共通activity guardへNamespaceでなく
+Pathを渡していたため、guardの`args.repo`でAttributeErrorとなった。read-only plan再照合はpass。
+同じ実CLI→decorated入口を通す回帰でこの失敗をRED再現し、既存recipeと同じNamespace adapterへ補正する。
+失敗batchはinvalid/seal/finalize済み、game/画像/出力rootなし。旧起動を再送せず、補正後はfresh Partial v2へ進む。
 
 2026-11-09の独立read-onlyアート監査では、Sand/Boneの現ArtPreview世代1を見た目だけ採用した。
 Sand `dbdf3e6ba5557f1b91b59a4e7d19c0bc1afe68e96c745d0dcbefd3f7b637d4e5` は低い黄土色の塊と大色面、

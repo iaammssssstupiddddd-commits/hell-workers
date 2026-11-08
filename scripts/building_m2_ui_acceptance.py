@@ -299,8 +299,8 @@ def check_trace(raw, plan_value, before, after):
 
 
 @native.activity_locked
-def run(path):
-    value = native.read_json(path)
+def run(args):
+    value = native.read_json(args.plan)
     repo = check_plan(value)
     root = Path(value["job_root"])
     pipeline.require(os.environ.get("HW_NATIVE_ACCEPTANCE_LAUNCHED") == "1" and not root.exists(), "use the fresh registered launcher")
@@ -410,7 +410,16 @@ def main():
     parser.add_argument("--output", type=Path)
     parser.add_argument("--plan", type=Path)
     args = parser.parse_args()
-    result = plan(args) if args.command == "plan" else run(args.plan) if args.command == "run" else verify(args.job_root) if args.command == "verify" else native.read_json(args.job_root / "job.json")
+    if args.command == "plan":
+        result = plan(args)
+    elif args.command == "run":
+        value = native.read_json(args.plan)
+        args.repo, args.job_root = value["repo"], value["job_root"]
+        result = run(args)
+    elif args.command == "verify":
+        result = verify(args.job_root)
+    else:
+        result = native.read_json(args.job_root / "job.json")
     native.print_json(result)
     return 2 if result.get("status") == "running" else int(result.get("status") not in ("ready", "valid"))
 

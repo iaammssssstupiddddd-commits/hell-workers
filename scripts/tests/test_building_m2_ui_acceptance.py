@@ -3,6 +3,8 @@ import copy
 import json
 from pathlib import Path
 import unittest
+from contextlib import nullcontext
+from unittest.mock import patch
 
 from scripts import building_m2_ui_acceptance as recipe
 
@@ -35,6 +37,23 @@ def observed(case="m2-ui-tank-partial"):
 
 
 class M2UiTests(unittest.TestCase):
+    def test_cli_passes_the_frozen_namespace_through_actual_activity_guard(self):
+        @recipe.native.activity_locked
+        def guarded(args):
+            self.assertEqual(args.repo, "/unused/repo")
+            self.assertEqual(args.job_root, "/unused/job")
+            self.assertEqual(args.plan, Path("/unused/plan.json"))
+            return {"status": "valid"}
+        lease_environment = {recipe.native.ACTIVITY_LOCK_FD_ENV: "4", recipe.native.ACTIVITY_LOCK_MODE_ENV: "exclusive"}
+        with patch("sys.argv", ["recipe", "run", "--plan", "/unused/plan.json"]), \
+             patch.object(recipe.native, "read_json", return_value={"repo": "/unused/repo", "job_root": "/unused/job"}), \
+             patch.object(recipe.native, "require_admission") as admission, \
+             patch.object(recipe.native, "acquire_activity", return_value=nullcontext(None)), \
+             patch.object(recipe.native, "activity_lease_environment", return_value=lease_environment), \
+             patch.object(recipe.native, "print_json"), patch.object(recipe, "run", guarded):
+            self.assertEqual(recipe.main(), 0)
+            admission.assert_called_once_with(Path("/unused/repo"), [Path("/unused/job")])
+
     def test_actual_session_setting_pins_normal_gallery_admission(self):
         for case in recipe.CASES:
             value = observed(case)
