@@ -43,7 +43,10 @@ fn building_inventory(world: &mut World, kind: BuildingType) -> Vec<Value> {
 }
 
 fn case_kind(case: &str) -> Option<BuildingType> {
-    if case == "m2-mixer-candidate-planning" {
+    if matches!(
+        case,
+        "m2-mixer-candidate-planning" | "m2-mixer-candidate-completion"
+    ) {
         return Some(BuildingType::MudMixer);
     }
     use crate::assets::building_asset_set::{BuildingAssetKind, m5_kind_for_case};

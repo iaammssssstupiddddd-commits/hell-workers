@@ -576,6 +576,7 @@ fn snapshot(world: &mut World) -> Result<Value, String> {
         "application_handle_count": null});
     sample["primary_window_bits"] = json!(primary_window_bits);
     sample["m2_context"] = m2_context;
+    sample["relative_speed"] = json!(world.resource::<Time<Virtual>>().relative_speed());
     sample["rest_area_context"] = rest_area_context;
     sample["spa_context"] = spa_context;
     if !art_feedback.is_null() {

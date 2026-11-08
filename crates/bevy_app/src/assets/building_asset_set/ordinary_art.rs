@@ -20,6 +20,7 @@ const SPA_RESUMED_SCOPE: &str = "ordinary-spa-candidate-resumed-v1";
 const SPA_LOADED_SCOPE: &str = "ordinary-spa-candidate-load-v1";
 const M5_SCOPE: &str = "ordinary-m5-art-planning-v1";
 const M2_PLANNING_SCOPE: &str = "ordinary-m2-candidate-planning-v1";
+const M2_COMPLETION_SCOPE: &str = "ordinary-m2-candidate-completion-v1";
 
 pub(crate) fn m5_kind_for_case(case: &str) -> Option<BuildingAssetKind> {
     match case {
@@ -59,6 +60,11 @@ fn validate(session: &Session, root: &Path, nonce: &str, case: &str) -> Result<(
                 .all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase())
     };
     let profile = match session.mode.as_str() {
+        "m2-candidate-completion" => {
+            session.identity.authority == BuildingAssetAuthority::IsolatedCandidate
+                && session.identity.kind == BuildingAssetKind::MudMixer
+                && case == "m2-mixer-candidate-completion"
+        }
         "m2-candidate-planning" => {
             session.identity.authority == BuildingAssetAuthority::IsolatedCandidate
                 && session.identity.kind == BuildingAssetKind::MudMixer
@@ -121,6 +127,12 @@ fn validate(session: &Session, root: &Path, nonce: &str, case: &str) -> Result<(
 }
 
 pub(super) fn scope(world: &World) -> &'static str {
+    if world
+        .get_resource::<Session>()
+        .is_some_and(|session| session.mode == "m2-candidate-completion")
+    {
+        return M2_COMPLETION_SCOPE;
+    }
     if world
         .get_resource::<Session>()
         .is_some_and(|session| session.mode == "m2-candidate-planning")
@@ -252,6 +264,22 @@ pub(super) fn snapshot(world: &mut World) -> Result<Value, String> {
         "part_names": set.manifest.parts.iter().map(|part| part.name.as_str()).collect::<Vec<_>>()
         ,"parts": set.manifest.parts
     }));
+    if session.identity.kind == BuildingAssetKind::MudMixer
+        && let (Some(set), Some(Value::Object(expected))) = (descriptor.as_ref(), expected.as_mut())
+    {
+        expected.insert(
+            "meshes".into(),
+            json!(
+                set.manifest
+                    .identity
+                    .kind
+                    .mesh_roles()
+                    .iter()
+                    .map(|role| (*role, set.mesh(role).map(|mesh| format!("{:?}", mesh.id()))))
+                    .collect::<std::collections::BTreeMap<_, _>>()
+            ),
+        );
+    }
     if session.identity.kind == BuildingAssetKind::SoulSpa
         && let (Some(set), Some(Value::Object(expected))) = (descriptor.as_ref(), expected.as_mut())
     {
@@ -270,6 +298,9 @@ pub(super) fn snapshot(world: &mut World) -> Result<Value, String> {
     let kind = match session.identity.kind {
         BuildingAssetKind::RestArea => BuildingType::RestArea,
         BuildingAssetKind::SoulSpa => BuildingType::SoulSpa,
+        BuildingAssetKind::MudMixer if session.mode == "m2-candidate-completion" => {
+            BuildingType::MudMixer
+        }
         _ => return Err("ordinary art session kind differs".into()),
     };
     let mut query = world.query::<(Entity, &Building3dVisual, &EquipmentRoot, Option<&Children>)>();
@@ -329,6 +360,51 @@ pub(super) fn snapshot(world: &mut World) -> Result<Value, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn mixer_completion_is_separate_candidate_only_scope_without_seeded_admission() {
+        let root = Path::new("/unused/mixer-completion");
+        let session = Session {
+            mode: "m2-candidate-completion".into(),
+            identity: BuildingAssetSetIdentity {
+                kind: BuildingAssetKind::MudMixer,
+                generation: 1,
+                authority: BuildingAssetAuthority::IsolatedCandidate,
+                manifest_sha256: "a".repeat(64),
+            },
+            locator: "manifests/building-mud-mixer-v1.buildingset".into(),
+            nonce: "b".repeat(32),
+            output: root.join("production-cancellation.json"),
+        };
+        validate(
+            &session,
+            root,
+            &session.nonce,
+            "m2-mixer-candidate-completion",
+        )
+        .unwrap();
+        for case in [
+            "m2-mixer-candidate-planning",
+            "m2-ui-mixer-refining",
+            "navigation",
+        ] {
+            assert!(validate(&session, root, &session.nonce, case).is_err());
+        }
+        for authority in [
+            BuildingAssetAuthority::ArtPreview,
+            BuildingAssetAuthority::ReleaseApproved,
+        ] {
+            let mut wrong = session.clone();
+            wrong.identity.authority = authority;
+            assert!(validate(&wrong, root, &wrong.nonce, "m2-mixer-candidate-completion").is_err());
+        }
+        let mut wrong = session.clone();
+        wrong.identity.kind = BuildingAssetKind::Tank;
+        assert!(validate(&wrong, root, &wrong.nonce, "m2-mixer-candidate-completion").is_err());
+        let mut world = World::new();
+        world.insert_resource(session);
+        assert_eq!(scope(&world), M2_COMPLETION_SCOPE);
+    }
 
     #[test]
     fn mixer_planning_admits_only_its_exact_candidate_case_without_seeded_authority() {

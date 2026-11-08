@@ -80,6 +80,7 @@ MEASUREMENT_HARNESS_FILES = (
     "scripts/native_ui_eis.py",
     "scripts/ui_m5_planning.py",
     "scripts/ui_m2_planning.py",
+    "scripts/ui_m2_completion.py",
     "scripts/building_m2_ui_acceptance.py",
     ".codex/skills/hell-workers-run-native-acceptance/scripts/ui_terrain_materials.py",
     ".codex/skills/hell-workers-run-native-acceptance/scripts/rtt_light_closure_verify.py",

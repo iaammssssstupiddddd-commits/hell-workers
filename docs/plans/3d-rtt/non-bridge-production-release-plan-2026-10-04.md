@@ -207,6 +207,13 @@ deferred command適用後に実消費/出力ResourceItem/StoredByMixer/Refine Do
 receipt不在の通常起動では収集せず、資材・worker・progressを注入しない。typedな通常resource/owner/task snapshotと
 組み合わせるが、producer単体やunit testを自然施工・精製の受入証拠へ昇格しない。
 
+続く `m2-mixer-candidate-completion` は専用mode `m2-candidate-completion` / scope
+`ordinary-m2-candidate-completion-v1` とし、既存planning caseの完成owner拒否を維持する。
+camera/pauseだけの準備後、実catalog/配置/停止操作、4個のWood実搬入、同BlueprintへのBuild assignmentと
+完了domain message、新ownerへの予約移管、同candidateのbody/rotor描画を独立に検査する。
+初期完成ownerや資材/worker/task/progressの注入は拒否する。完成後の自然精製、save/load、move/cleanupや
+性能/releaseは、この限定construction caseの結果から推論しない。
+
 2026-11-09の独立read-onlyアート監査では、Sand/Boneの現ArtPreview世代1を見た目だけ採用した。
 Sand `dbdf3e6ba5557f1b91b59a4e7d19c0bc1afe68e96c745d0dcbefd3f7b637d4e5` は低い黄土色の塊と大色面、
 Bone `fe6c024cd79783abff36fc22fb8b676a5bdc0325edef34b35089e563127e3f4f` は骨軸/節/隙間/象牙色が

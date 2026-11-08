@@ -754,7 +754,10 @@ fn snapshot(world: &mut World, observer: &UiObserver) -> Value {
     value["refactor_rows"] = refactor_rows::snapshot(world, viewport);
     value["bridge_planning"] = bridge_planning::snapshot(world);
     value["rest_area_planning"] = rest_area_planning::snapshot(world);
-    if std::env::var("HW_NATIVE_UI_CASE").as_deref() == Ok("m2-mixer-candidate-planning") {
+    if matches!(
+        std::env::var("HW_NATIVE_UI_CASE").as_deref(),
+        Ok("m2-mixer-candidate-planning" | "m2-mixer-candidate-completion")
+    ) {
         value["m2_planning"] = m5_planning::snapshot(world);
     } else {
         value["m5_planning"] = m5_planning::snapshot(world);

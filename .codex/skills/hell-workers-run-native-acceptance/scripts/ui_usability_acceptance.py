@@ -35,6 +35,7 @@ from scripts import ui_spa_resumed_use as spa_resumed
 from scripts import ui_spa_loaded_use as spa_loaded
 from scripts import ui_m5_planning as m5
 from scripts import ui_m2_planning as m2
+from scripts import ui_m2_completion as m2_completion
 
 PROFILE = "ui-usability-feedback"
 CHECKPOINTS = ("tasks", "last-page", "minimized", "restored", "entities",
@@ -49,6 +50,7 @@ SPA_ART_CASES = (spa_art.CASE, spa_resumed.CASE, spa_loaded.CASE)
 CASES += SPA_ART_CASES
 CASES += tuple(m5.KINDS)
 CASES += tuple(m2.KINDS)
+CASES += (m2_completion.CASE,)
 PLANNING_CASES = (*m5.KINDS, *m2.KINDS)
 REST_CASES = ("rest-area-planning", "rest-area-refund", "rest-area-completion", "rest-area-usage", "rest-area-exit", "rest-area-save", "rest-area-lifecycle", "rest-area-maxzoom", "rest-area-candidate-lifecycle")
 
@@ -60,7 +62,9 @@ def planning_recipe(case):
 
 def planned_art(args, repo):
     native.require(not getattr(args, "m5_art_source", None) or args.case in m5.KINDS, "M5 source requires dedicated case")
-    native.require(not getattr(args, "m2_art_source", None) or args.case in m2.KINDS, "M2 source requires dedicated case")
+    native.require(not getattr(args, "m2_art_source", None) or args.case in (*m2.KINDS, m2_completion.CASE), "M2 source requires dedicated case")
+    if args.case == m2_completion.CASE:
+        return m2_completion.planned_contract(args, repo)
     if args.case in PLANNING_CASES:
         return planning_recipe(args.case).planned_contract(args, repo)
     native.require(not getattr(args, "spa_resume_source", None) or args.case == spa_loaded.CASE,
@@ -95,6 +99,9 @@ def sha256(path: Path) -> str:
 def check_observation(case: str, value: dict) -> None:
     native.require(value["ready"] and value["frame"] > 90, "fixture is not ready")
     native.require(value["task_rows"] <= 20, "task resident row limit exceeded")
+    if case in m2_completion.CHECKPOINTS:
+        m2_completion.check_observation(case, value)
+        return
     if case in m5.CHECKPOINTS:
         m5.check_observation(case, value)
         return
@@ -532,6 +539,7 @@ def verify_root(root):
     native.require(native.git_subject(repo) == manifest["subject_commit"], "subject changed")
     native.require(sha256(repo / "target/debug/bevy_app") == manifest["binary_sha256"], "binary changed")
     art_contract = manifest.get("ordinary_art")
+    native.require(manifest["case"] != m2_completion.CASE or art_contract is not None, "Mixer completion needs exact candidate")
     native.require(manifest["case"] not in PLANNING_CASES or art_contract is not None, "planning needs exact source")
     native.require(manifest["case"] not in SPA_ART_CASES or art_contract is not None,
                    "Spa candidate case requires its exact source")
@@ -539,7 +547,11 @@ def verify_root(root):
                    "candidate lifecycle requires explicit candidate source")
     native.require(manifest["case"] != "rest-area-maxzoom" or art_contract is not None and manifest["input_backend"] == "portal-eis",
                    "maxzoom requires the explicit ArtPreview EIS profile")
-    if art_contract is not None and manifest["case"] in PLANNING_CASES:
+    if art_contract is not None and manifest["case"] == m2_completion.CASE:
+        native.require(manifest["smoke"] is True and manifest["input_backend"] == "portal-eis", "Mixer completion profile differs")
+        native.require(rest_area_art.pipeline.exact_json(m2_completion.source_contract(repo, Path(art_contract["source_root"]),
+            Path(art_contract["codec"])), art_contract), "Mixer completion source changed")
+    elif art_contract is not None and manifest["case"] in PLANNING_CASES:
         native.require(manifest["smoke"] is True and manifest["input_backend"] == "portal-eis", "M5 profile differs")
         native.require(rest_area_art.pipeline.exact_json(planning_recipe(manifest["case"]).source_contract(repo, Path(art_contract["source_root"]),
             Path(art_contract["codec"]), manifest["case"]), art_contract), "M5 art inputs changed")
@@ -565,6 +577,11 @@ def verify_root(root):
         events = native.read_json(directory / "events.json")["events"]
         client = native.read_json(directory / "input-client.json")
         check_input_client(manifest, session, client)
+        if case == m2_completion.CASE:
+            raw_path = directory / "production-cancellation.json"
+            native.require(sha256(raw_path) == session.get("cancellation_sha256"), "Mixer completion raw changed")
+            m2_completion.check_view(repo, directory / "asset-view", art_contract)
+            m2_completion.verify(native.read_json(raw_path), entries, client, events, art_contract)
         if case in PLANNING_CASES:
             raw_path = directory / "production-cancellation.json"
             native.require(sha256(raw_path) == session.get("cancellation_sha256"), "M5 raw changed")
@@ -620,7 +637,8 @@ def verify_root(root):
                 rest_area_planning.check_cancellation(native.read_json(raw_path), entries, client,
                                                       refund=case == "rest-area-refund")
         native.require(case == "navigation" or not layout_only, "refactor case requires actual input")
-        expected_checkpoints = (planning_recipe(case).CHECKPOINTS if case in PLANNING_CASES else
+        expected_checkpoints = (m2_completion.CHECKPOINTS if case == m2_completion.CASE else
+                                planning_recipe(case).CHECKPOINTS if case in PLANNING_CASES else
                                 refactor_rows.CHECKPOINTS if case == "refactor-rows" else
                                 spa_loaded.CHECKPOINTS if case == spa_loaded.CASE else
                                 spa_resumed.CHECKPOINTS if case == spa_resumed.CASE else
@@ -679,6 +697,8 @@ def verify_root(root):
             continue
         if case in SPA_CASES:
             continue  # Dedicated raw/durable commit checks ran above.
+        if case == m2_completion.CASE:
+            continue
         if case in PLANNING_CASES:
             continue  # Exact ordinary 2D consumers and input checks ran above.
         if case in ("rest-area-planning", "rest-area-refund"):
@@ -695,6 +715,7 @@ def verify_root(root):
         joint.verify_game_log(directory / "game.log", "Intel")
     return {"status": "valid", "profile": PROFILE, "sessions": len(expected),
             "coverage": f"{manifest.get('layout_scene', 'management')} rendering only; no input evidence" if layout_only else
+                        "ordinary adopted Mixer candidate Wood delivery and natural construction with body/rotor consumption only; no refinement, full lifecycle, performance or release" if manifest.get("case") == m2_completion.CASE else
                         "ordinary adopted Mixer candidate planning consumers and one Blueprint input only; no completed lifecycle, art decision, performance or release" if manifest.get("case") in m2.KINDS else
                         "ordinary M5 ArtPreview catalog, legal/occupied ghost, Blueprint/pulse and same-owner inspection only; no completion, art approval, power, performance or release" if manifest.get("case") in m5.KINDS else
                         "ordinary isolated-candidate SoulSpa load of historical occupied-save input, current remap/reset/reassignment, Normal consumption and observed departure only; no current construction/domain end receipt/performance/release authority" if manifest.get("case") == spa_loaded.CASE else
@@ -755,7 +776,7 @@ def plan(args):
                "--layout-scene", args.layout_scene,
                *(["--portal-consent-file", args.portal_consent_file] if args.portal_consent_file else []),
                *(["--spa-resume-source", art_contract["resume_input"]["root"]] if args.case == spa_loaded.CASE else []),
-               *(["--m2-art-source" if args.case in m2.KINDS else "--m5-art-source" if args.case in m5.KINDS else "--soul-spa-art-source" if args.case in SPA_ART_CASES else "--rest-area-art-source", art_contract["source_root"], "--art-codec", art_contract["codec"],
+               *(["--m2-art-source" if args.case in (*m2.KINDS, m2_completion.CASE) else "--m5-art-source" if args.case in m5.KINDS else "--soul-spa-art-source" if args.case in SPA_ART_CASES else "--rest-area-art-source", art_contract["source_root"], "--art-codec", art_contract["codec"],
                   "--art-contract-sha256", rest_area_art.contract_digest(art_contract)] if art_contract else []),
                *(["--layout-menu"] if args.layout_menu else []),
                *(["--smoke"] if args.smoke else [])]
@@ -817,6 +838,10 @@ def run(args):
                                 "HW_NATIVE_UI_ROOT": str(directory), "HW_NATIVE_UI_NONCE": nonce,
                                 "HW_NATIVE_UI_WIDTH": str(width), "HW_NATIVE_UI_HEIGHT": str(height), "HW_NATIVE_UI_SCALE": str(scale)})
             environment["HW_NATIVE_UI_CASE"] = case
+            if case == m2_completion.CASE:
+                view = m2_completion.prepare_view(repo, directory, art_contract)
+                environment["BEVY_ASSET_ROOT"] = str(view)
+                environment["HW_BUILDING_ORDINARY_ART_SESSION"] = m2_completion.session_setting(directory, nonce, art_contract)
             if case in PLANNING_CASES:
                 view = planning_recipe(case).prepare_view(repo, directory, art_contract)
                 environment["BEVY_ASSET_ROOT"] = str(view)
@@ -864,6 +889,8 @@ def run(args):
                     state["current_stage"] = "ui-input"
                     if args.input_backend == "none":
                         driver.capture("entities")
+                    elif case == m2_completion.CASE:
+                        m2_completion.exercise(driver, art_contract)
                     elif case in PLANNING_CASES:
                         planning_recipe(case).exercise(driver, art_contract)
                     elif case == "refactor-rows":
@@ -926,7 +953,7 @@ def run(args):
                         state["child_pid"] = None
             joint.verify_game_log(directory / "game.log", "Intel")
             session = {"case": case, "directory": directory.name, "nonce": nonce, "log_sha256": sha256(directory / "game.log")}
-            if case in PLANNING_CASES:
+            if case in PLANNING_CASES or case == m2_completion.CASE:
                 session["cancellation_sha256"] = sha256(directory / "production-cancellation.json")
             if case in SPA_CASES:
                 session["cancellation_sha256"] = sha256(directory / "production-cancellation.json")

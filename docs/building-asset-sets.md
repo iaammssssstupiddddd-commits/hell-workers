@@ -277,6 +277,15 @@ WorkingOnは当branchで解除される。branch内counterと、同frameの別�
 出力には既存の寿命があるため、後の個数だけを精製完了の証拠にしない。receipt resourceが無ければ記録せず、
 このproducerやunit testだけでは実機の自然精製/lifecycle・性能・アート・releaseを受入しない。
 
+自然施工は別の `m2-mixer-candidate-completion` / `m2-candidate-completion` /
+`ordinary-m2-candidate-completion-v1` で採用済みMixer候補だけを受付する。準備はcamera/pauseだけとし、
+実配置receipt・Wood4個の実搬入・同BlueprintへのBuild assignment/完了・新ownerへのmap移管を記録する。
+完成時は同候補のbody/rotor mesh・albedo・材質・初期poseを確認する。既存planning caseの完成拒否は維持し、
+このcaseを精製・save/load・move/cleanup・性能・releaseの証拠へ流用しない。
+このconsumer観測はlocal pose・owner一致とpart ViewVisibilityに限定し、global行列・root親・render layersを
+通じた描画chain全体の証明ではない。Normal/Pausedの実raw状態・speed1と施工区間のvirtual前進、
+全checkpointの同PID/epoch/window・paused同clock、入力のreal phase境界を検査する。
+
 M5専用の明示 `--variant m5-art-context --view normal` は別のseeded比較である。
 ArtPreviewの4種だけをfeedback/art-preview・standard照明で許可し、candidate/releaseや通常入力証拠へ転用しない。
 対象4棟、前後8Wall、8idle Soul、descriptor経由の4previewを一度だけ準備し、以後は受動観測する。
