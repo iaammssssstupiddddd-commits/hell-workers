@@ -49,7 +49,8 @@ Bone `4aab20ce8e02e3f0274841d875f8a25f6075bb6da8861efce20adfb225db25c3`（v1 roo
 いずれもgeneration1/isolated_candidateで、上記exact art/numeric/geometryをprovenanceへ内包した。
 製品assets/locator・資源画像は未変更。次は採用候補identityとしての実機consumer/lifecycle/性能を確認する。
 
-Parking/Lampはchanges_requestedを維持する。Parkingの緑部分は背景が見える隙間で、Sprite tintの欠陥ではない。
+この時点のParking/Lampはchanges_requestedだった。後述のParking gen2採用後も、Lampは独立採否まで未採用とする。
+Parkingの緑部分は背景が見える隙間で、Sprite tintの欠陥ではない。
 Dirtに沈む空枠/轍だけのcontrastを最小修正し、旧原本/車両/64wu/anchor/alphaを維持してDirt/Grass同倍率を再比較する。
 Lampはまず完成後の既存UIが実off/on状態を補完する最小一対を通常/最遠で確認する。
 補完できなければ籠内部の状態差だけを強め、同alpha/輪郭を維持したfresh identityで再比較する。
@@ -114,20 +115,20 @@ consumerはM5 independently adopted Parking candidate lifecycle comparison。独
 目的は32wuの籠内部が縮小される通常/最遠表示で、既存種別headerと実供給stateが見えるかを判断すること。
 独立設計reviewでrendering-only fixtureが当美術比較には十分と判断した。OS選択や自然配電の受入とは分離する。
 
-- [ ] 新明示variant `lamp-supply-art-context` をOutdoorLamp/ArtPreview/feedback/standard/small/normalまたはoverviewだけに限定。
+- [x] 新明示variant `lamp-supply-art-context` をOutdoorLamp/ArtPreview/feedback/standard/small/normalまたはoverviewだけに限定。
   既存M5 contextのnormal-only契約は緩めない。target ordinalは0(off)か2(on)だけを受理する。
-- [ ] 既存2Spa/6発電worker/4Lampのseeded配電graphを再利用し、setup時だけ実completed LampをSelectedEntityへ指定する。
+- [x] 既存2Spa/6発電worker/4Lampのseeded配電graphを再利用し、setup時だけ実completed LampをSelectedEntityへ指定する。
   Text/ViewModel/PowerSupplyStateを直接書かず、通常presentation→既存InfoPanelNodesへ流す。
-- [ ] actual selected/pinned/inspected owner、実PowerSupplyState、実header/power Text、visible/clip/viewport rectを読み、
+- [x] actual selected/pinned/inspected owner、実PowerSupplyState、実header/power Text、visible/clip/viewport rectを読み、
   同owner/同identity/graph/foregroundと拘束。ready後のdriftは修復せず拒否し、30stableとinitial/final同一を維持する。
-- [ ] unknown/mixed session、他kind/authority、別owner/ordinal、state/text不一致、hidden/clipped/変形/非finiteUI、
+- [x] unknown/mixed session、他kind/authority、別owner/ordinal、state/text不一致、hidden/clipped/変形/非finiteUI、
   graph/identity/source/binary変更を拒否するfocused testsとHelp No impact実判断、変更別CI/Clippy/独立exact reviewを通す。
-- [ ] 同subjectでnormal/overview×off/onの4owned actual-window画像を正規launcherから逐次取得し、独立画像監査で見た目を判断する。
+- [x] 同subjectでnormal/overview×off/onの4owned actual-window画像を正規launcherから逐次取得し、独立画像監査で見た目を判断する。
   input witness・自然供給・ordinary lifecycle・性能budget・promotion/install権限を付与しない。
 
 主担当が製品側の限定fixture/observer/verifier/testを編集し、独立担当はread-only。
 primaryの既存debug cache/immutable候補と原本を保全する。fresh jobだけを登録し、比較終了条件で保持/整理する。
-美術補完が成立しなければ同alpha/輪郭の籠内部だけを修正する。現在はLamp未採用、9種全体は未完。
+美術補完が成立しなければ同alpha/輪郭の籠内部だけを修正する。独立採否まで未採用を維持し、9種全体の受入とは区別する。
 限定fixture実装 `e12cf43d` は独立exact code review、全4変更別CI群、通常check、profiling Clippy警告0、
 32 Python/14照明Rust test、Skill9自己試験と同期/形式検査を通過した。初回
 `tak14-lamp-supply-off-normal-20261109-v1` はシナリオ入口parserが新variantを扱わず、14Soulを拒否して
@@ -135,6 +136,41 @@ App/window生成前にexit1。画像/UI成功へ読み替えずinvalid seal/診�
 実測を再現するconfig回帰は補正前にfalse/true不一致で失敗した。入口だけへOutdoorLampの新variantを追加し、
 small/14Soul、zero Familiar、30/60秒等の固定条件と完全sessionの別admissionは維持する。
 medium、8Soul、未指定、foreign kindを拒否する回帰を保持し、同subject検証/独立review後のfresh v2だけを実行する。
+入口補正 `c48a6944` は再現test/変更別CI/通常check/profiling Clippy警告0/RA診断0と独立exact reviewを通過。
+fresh `tak14-lamp-supply-{off,on}-{normal,overview}-20261109-v2` 全4件を逐次実行し、登録独立verify/owned画像実見/
+用途保持/seal/finalizeがpassした。同HEAD `c48a6944082db44f5b59f30ac28f74bc2235b222`、clean source
+`de14cb1298e976c6f9962dd46d24f419721d2cc448641e721a145060d39fd71f`、codec/binary
+`9c5b5c7c5d9cad1fb4f1cbd2f0f2f21223fc3e36be01c04d65f785bb0878b775`、low/1280×720/DPI1/Intel Arc/Vulkan/X11。
+manifest SHAはoff-normal `bfee36653f34a8fa306c5fb991487be3de2009134182e7cb122c07e88c16cdd6`、
+on-normal `7447e8851d5881fb0c550a9453551a628fc40de2c77fd5085bab25c3bd061da8`、
+off-overview `172fd05ebe37d29be61a9772964c9fa8e930e2dc3afa453ed27ead58760177e8`、
+on-overview `0019a758ea21cecfb9ba38efe01d33171b65ccac0df629f46d4161b12a2a2a0d`。
+各owned PNG SHAは同順で `4fdf818c1f3cfd6244cb03c495f337e701b4081270e5088b619b4b27a31dc936`、
+`76f16a4f0628d4620f2944fc90d083e586587716712995ca517fd63e35a9b343`、
+`bb15b67487785058b5c79fd261c7b58d07c7c7d692d4a990ab88a22505f15a79`、
+`af0ce022378aa0e3177164ffd0b5c5d10026815a8255124c2e06a95bfb77794a`。
+実ownerはoff4294965508/on4294965502、30stable/initial-final一致。既存header OutdoorLampと
+Supply Shed—insufficient generation / Supplied、Demand0.2Wはmainの全4実画像で判読できた。
+同model/grid/selected/unpinned owner、同primary camera/実TextColor/未clip rectを実probeへ拘束した。
+独立画像監査でも全4画像のUI補完を確認し、exact ArtPreview generation1
+`8cc4fec0d4bed81f3f0b47c44082c6b307a0411f76377805aef5c9a5c323323e`を見た目だけ採用可と判断した。
+曲がった骨支柱/開いた籠/マットな骨鉄の大色面、同alpha/輪郭のoff/onと籠内部だけの差、
+near/normal/low/GrassDirt/descriptor previewに採用を阻む欠損や黒白塊化がないことを確認した。
+主担当はこの独立判断に基づいてLampアートを採用し、追加の原画修正はしない。数値判断は別途exact artへ拘束する。
+保持bytesは同順141291520/141295616/140857344/140857344。consumerは前記M5 art比較。
+seeded選択後の描画だけで、通常OS選択到達性・自然配電・ordinary lifecycle/性能/releaseの既存未達条件は閉じない。
+独立数値監査も256px/128px anchor/16px margin/32wu/Off/world_off,world_on/空partsをexact preview/artへ拘束して採用した。
+canonical art decision SHAは `25cda9214a197ebd9d3e4b9d678f2e9e1e2ec4f6a2812cfe7308aaec9b5ac19c`、
+numeric decision SHAは `4eb1c44b6e2fcf1f8869faf0a6349f1690fe3acc03ba7f7b0e7f748311bff13d`。
+Gameplayの光源半径/照度/需要/配電値は対象外。次は当採用を包装するfresh隔離candidateを登録/生成/独立verifyする。
+原因解消済みの初回off-normal v1は診断consumerを正式解除し、原本なし/非symlink/未追跡/終了を照合して
+当該生成jobだけ撤去した。du 139943936B→0、復元archiveは作らずinvalid metadataと原因/補正結果を本書/台帳へ保持。
+採用原本・最新4画像・既存codec/cache・他jobは維持した。
+fresh `tak14-lamp-isolated-candidate-20261109-v1` の登録/export/独立verify/用途保持/seal/finalizeはpass。
+隔離候補identityは `0eeacbb5ff35507520d335be4e635e33a50682bb5780c1d142016770c60f8194`、generation1/isolated_candidate、
+root `target/native-acceptance/tak14-lamp-isolated-candidate-20261109-v1`、61440B。
+consumerはM5 independently adopted Lamp candidate lifecycle comparison。前記exact art/numeric/geometryをprovenanceに内包し、
+製品assets/locatorは未変更。M5の4種は独立art/numeric採用候補がそろったが、通常consumer/lifecycle/性能/releaseは未完。
 
 `77f90d22`のfresh `tak14-restarea-maxzoom-art-eis-feedback-20261108-v5`は7checkpointと登録/別実行verifierが成功。
 source=`dba53819e43c01de77e3afbf632fe930242767ea9d35be23d5cfff778663b840`、
