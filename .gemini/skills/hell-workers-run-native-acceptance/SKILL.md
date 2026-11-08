@@ -204,6 +204,19 @@ cancellation receipt plus restoration of the original terrain/walkability.
 This is planning feedback only, not completed construction, passage, deconstruction,
 Memory/performance, art/numeric approval or release acceptance.
 
+Select `--case soul-spa-slots --smoke --input-backend portal` for the ordinary
+SoulSpa natural construction/usage prefix followed by actual site selection and
+four existing information-panel slot buttons (4 to zero). Only camera and pause
+are prepared; materials, actors, assignments and completion are never injected.
+The verifier binds each applied outcome to the exact owner, input and raw sample,
+then requires the same generating Soul and unchanged task admission identities
+through a bounded 3–15 virtual-second zero-slot leg. Already dispatched
+GoingToTile tasks may arrive; they are counted before acquiring WorkingOn.
+An overlapping selection uses only the existing revision/epoch-bound candidate
+picker, never repeated blind world clicks. Missing selection or any timeout fails
+closed. The whole-session and raw caps remain unchanged. This is limited slot
+feedback, not occupied persistence, natural exit, art, performance or release.
+
 Select `--case rest-area-planning --smoke --input-backend portal` for ordinary
 RestArea reservation, Manual1 Save/Load and two-stage Task Dashboard cancellation.
 Preparation only centers the camera and pauses time. The case also enables the

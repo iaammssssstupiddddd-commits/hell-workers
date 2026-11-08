@@ -787,6 +787,14 @@ du計55,562,240B減。原本・最新証拠・共有cacheとinvalid metadataは�
 これはUI domain境界の回帰範囲であり、通常スケジューラの継続・実クリック・実機枠変更の受入ではない。
 通常起動、入力仕様、Help本文と正式art/performance/release条件は変更しない。
 
+独立case `soul-spa-slots`の7checkpoint経路を追加する。既存の自然施工/利用をprefixとして
+再検証し、同施設の通常選択（必要ならexact ownerの既存候補picker）→Normal→4回の枠減少→停止→
+Normalの短時間継続→停止を原入力と受理outcomeへ拘束する。全tailの構造/関係/時刻と
+同Generating Soulの維持、ゼロ枠以降のtask割当集合不変を検査する。既存GoingToTileの到着は許し、
+WorkingOn追加前から割当を数える。数値・actor・taskを注入せず、
+誤対象、欠損/重複receipt、bool代用、epoch変更、追出し、新規worker、短い測定、余分な入力は拒否する。
+これは実機試験の準備であり、独立review・fresh実行・画像/raw確認・登録verify前は未受入のまま。
+
 ## 5. マイルストーン
 
 ### M1: 原本・候補

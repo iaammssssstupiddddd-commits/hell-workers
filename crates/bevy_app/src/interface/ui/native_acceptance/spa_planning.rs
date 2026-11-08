@@ -10,7 +10,11 @@ struct Target((i32, i32));
 pub(super) fn enabled() -> bool {
     matches!(
         std::env::var("HW_NATIVE_UI_CASE").as_deref(),
-        Ok("soul-spa-planning" | "soul-spa-completion" | "soul-spa-usage" | "soul-spa-persistence")
+        Ok("soul-spa-planning"
+            | "soul-spa-completion"
+            | "soul-spa-usage"
+            | "soul-spa-persistence"
+            | "soul-spa-slots")
     )
 }
 

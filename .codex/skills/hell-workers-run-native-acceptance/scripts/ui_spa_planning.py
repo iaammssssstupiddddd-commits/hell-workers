@@ -11,6 +11,7 @@ CHECKPOINTS = tuple("soul-spa-" + phase for phase in ("empty", "placed", "saved"
 COMPLETION_CHECKPOINTS = tuple("soul-spa-completion-" + phase for phase in ("empty", "placed", "completed"))
 USAGE_CHECKPOINTS = COMPLETION_CHECKPOINTS + ("soul-spa-using", "soul-spa-used")
 PERSISTENCE_CHECKPOINTS = COMPLETION_CHECKPOINTS + ("soul-spa-operational-saved", "soul-spa-operational-loaded")
+SLOTS_CHECKPOINTS = USAGE_CHECKPOINTS + ("soul-spa-slots-closed", "soul-spa-slots-held")
 
 
 def cancel_key(owner):
@@ -320,6 +321,7 @@ def input_context(value, key=None):
         "frame", "nonce", "pid", "world_epoch", "primary_window", "paused", "cursor", "scale_factor",
         "mouse_left_pressed", "world_input_captured", "pointer_over_ui", "spa_planning", "viewport", "menu_state")}
     result["control"] = copy.deepcopy(value["controls"].get(key)) if key else None
+    result["selected"] = value.get("selected")
     return result
 
 
@@ -395,7 +397,7 @@ def world_click(driver, name, projection):
     record_action(driver, name, first, before)
 
 
-def check_inputs(raw, entries, client, inputs, *, completion=False, usage=False, persistence=False):
+def check_inputs(raw, entries, client, inputs, *, completion=False, usage=False, persistence=False, slots=False):
     native.require(isinstance(inputs, list) and 0 < len(inputs) <= 256
                    and [row.get("step") for row in inputs] == [str(i + 1) for i in range(len(inputs))], "Spa input inventory differs")
     actions = [row["spa_action"] for row in inputs if "spa_action" in row]
@@ -458,7 +460,7 @@ def check_inputs(raw, entries, client, inputs, *, completion=False, usage=False,
                                and finite(dpi) and dpi > 0 and dpi == a.get("scale_factor") and isinstance(a.get("cursor"), (tuple, list))
                                and all(abs(x * dpi - y) <= 2 for x, y in zip(cursor, a["cursor"], strict=True)),
                                "Spa raw pointer differs")
-        if not keyboard and (key.startswith("menu:") or key == "dev-minimize"):
+        if not keyboard and (key.startswith(("menu:", "world-candidate:")) or key == "dev-minimize"):
             control = a.get("control")
             rect = control.get("rect") if isinstance(control, dict) else None
             native.require(isinstance(control, dict) and control.get("fully_visible") is True
@@ -492,6 +494,8 @@ def check_inputs(raw, entries, client, inputs, *, completion=False, usage=False,
     ignored = {"Escape", "dev-minimize", "menu:SetTimeSpeed(Paused)", "menu:SetTimeSpeed(Normal)"}
     if usage:
         ignored.add("menu:SetTimeSpeed(Fast)")
+    if slots:
+        ignored.update(a["key"] for a in actions if a["first_step"] > entries[4]["last_step"])
     required = [a for a in actions if a["key"] not in ignored]
     filtered = [a["key"] for a in required]
     if completion:
@@ -613,7 +617,7 @@ def check_completion_observation(case, value):
     check_operational(context(value), value["spa_planning"])
 
 
-def check_operational(state, plan):
+def check_operational(state, plan, *, active_slots=4):
     native.require(plan.get("legal") is False
                    and len(state["sites"]) == 1 and len(state["tiles"]) == 4, "Spa completion site inventory differs")
     site = state["sites"][0]
@@ -623,7 +627,7 @@ def check_operational(state, plan):
                    and site.get("phase") == "Operational" and site.get("building_kind") == "SoulSpa"
                    and site.get("provisional") is False and type(site.get("entity_bits")) is int
                    and all(type(site.get(k)) is int for k in ("bones_required", "bones_delivered", "active_slots"))
-                   and site["bones_required"] == site["bones_delivered"] == 12 and site["active_slots"] == 4
+                   and site["bones_required"] == site["bones_delivered"] == 12 and site["active_slots"] == active_slots
                    and [c.get("grid") for c in plan["cells"]] == footprint
                    and all(c.get("owner") == site["entity_bits"] and c.get("walkable") is True for c in plan["cells"]),
                    "Spa completion values/footprint differ")
@@ -885,6 +889,197 @@ def exercise_usage(driver):
                               after=driver.last["frame"], timeout=15)
     pause(driver, True)
     driver.capture(USAGE_CHECKPOINTS[4])
+    wait_final_raw(driver)
+
+
+def slots_key(owner, count):
+    return f"menu:SetSoulSpaActiveSlots {{ target: {owner}, active_slots: {count} }}"
+
+
+def spa_assignment_keys(state):
+    targets = {t["entity"] for t in state["tiles"]}
+    # Already dispatched GoingToTile tasks may arrive after closing admission.
+    # Count those identities before WorkingOn is installed, not just occupants.
+    return {(s["entity"], task["tile"]) for s in state["souls"]
+            if isinstance(task := s.get("generate_power"), dict) and task.get("tile") in targets}
+
+
+def check_slots_observation(case, value):
+    if case in USAGE_CHECKPOINTS:
+        check_usage_observation(case, value)
+        return
+    native.require(case in SLOTS_CHECKPOINTS[-2:] and value.get("paused") is True,
+                   "Spa slots capture differs")
+    check_operational(context(value), value["spa_planning"], active_slots=0)
+    native.require(generating(context(value)), "Spa closed slots have no generating occupant")
+
+
+def check_slot_receipts(raw, actions, owner, epoch):
+    receipts = [e for e in raw["events"] if e.get("operation") == "SoulSpaSlotsChange"]
+    native.require(len(actions) == len(receipts) == 4, "Spa slot outcomes missing/duplicate")
+    for count, action, receipt in zip((3, 2, 1, 0), actions, receipts, strict=True):
+        native.require(action["key"] == slots_key(owner, count)
+                       and action["before"]["paused"] is False and action["after"]["paused"] is False
+                       and action["before"]["world_epoch"] == action["after"]["world_epoch"] == epoch
+                       and receipt.get("producer") == "SoulSpaSlotsChangeOutcome" and receipt.get("owner") == owner
+                       and receipt.get("result") == f"Applied {{ requested: {count}, applied: {count}, clamped: false }}"
+                       and receipt.get("applied") == {"requested": count, "applied": count, "clamped": False}
+                       and all(type(receipt["applied"].get(k)) is int for k in ("requested", "applied"))
+                       and receipt["applied"].get("clamped") is False,
+                       "Spa exact slot request/outcome differs")
+        pressed = pressed_for(raw, action)
+        after_press(receipt, pressed)
+        index = receipt["sample_index"]
+        native.require(0 <= index < len(raw["samples"])
+                       and raw["samples"][index].get("world_epoch") == epoch
+                       and raw["samples"][index].get("paused") is False
+                       and raw["samples"][index]["real_seconds"] >= receipt["real_seconds"]
+                       and action["before"]["spa_planning"]["real_seconds"] < receipt["real_seconds"]
+                       <= action["after"]["spa_planning"]["real_seconds"]
+                       and raw["samples"][index]["spa_context"]["sites"][0]["active_slots"] == count,
+                       "Spa slot receipt is outside actual input/sample")
+    native.require(all(a["sample_index"] < b["sample_index"] and a["real_seconds"] < b["real_seconds"]
+                       for a, b in zip(receipts, receipts[1:])), "Spa slot receipt order differs")
+    return receipts
+
+
+def verify_slots(raw, entries, client, inputs):
+    native.require([e["case"] for e in entries] == list(SLOTS_CHECKPOINTS), "Spa slots inventory differs")
+    check_raw_session(raw, client)
+    prefix_end = raw_checkpoint(raw, entries[4]["value"])["sample_index"]
+    prefix = dict(raw, samples=raw["samples"][:prefix_end + 1],
+                  events=[e for e in raw["events"] if e["sample_index"] <= prefix_end])
+    verify_usage(prefix, entries[:5], client, inputs[:entries[4]["last_step"]])
+    check_inputs(raw, entries, client, inputs, completion=True, usage=True, slots=True)
+    owner = context(entries[4]["value"])["sites"][0]
+    epoch = entries[4]["value"]["world_epoch"]
+    actions = [r["spa_action"] for r in inputs if "spa_action" in r and int(r["step"]) > entries[4]["last_step"]]
+    keys = [a["key"] for a in actions]
+    native.require(keys and keys[0] == "select-operational", "Spa slots need one world selection")
+    selection_end = 1
+    if len(keys) > 1 and keys[1].startswith("world-candidate:toggle:"):
+        native.require(re.fullmatch(r"world-candidate:toggle:[0-9]+:" + str(epoch), keys[1])
+                       and len(keys) > 2 and re.fullmatch(
+                           rf"world-candidate:{owner['entity_bits']}:[0-9]+:{epoch}", keys[2]),
+                       "Spa slots candidate picker target/revision differs")
+        selection_end = 3
+    native.require(type(actions[selection_end - 1]["after"].get("selected")) is int
+                   and actions[selection_end - 1]["after"]["selected"] == owner["entity_bits"]
+                   and keys[selection_end:] == ["menu:SetTimeSpeed(Normal)",
+                       *(slots_key(owner["entity"], n) for n in (3, 2, 1, 0)),
+                       "menu:SetTimeSpeed(Paused)", "menu:SetTimeSpeed(Normal)", "menu:SetTimeSpeed(Paused)"],
+                   "Spa slot selection/action sequence differs")
+    for phase, group in ((4, actions[:selection_end + 6]), (5, actions[selection_end + 6:])):
+        lower, upper = entries[phase:phase + 2]
+        native.require(all(lower["last_step"] < a["first_step"] <= a["last_step"] <= upper["last_step"]
+                           and lower["value"]["frame"] <= a["before"]["frame"] < a["after"]["frame"] < upper["value"]["frame"]
+                           and lower["value"]["spa_planning"]["real_seconds"] <= a["before"]["spa_planning"]["real_seconds"]
+                           < a["after"]["spa_planning"]["real_seconds"] <= upper["value"]["spa_planning"]["real_seconds"]
+                           and a["before"]["world_epoch"] == a["after"]["world_epoch"] == epoch for a in group),
+                       "Spa slot action crosses its checkpoint phase")
+    selection = actions[0]["before"]
+    point = selection["spa_planning"]["owner_point"]
+    native.require(selection.get("menu_state") == "Hidden" and not selection["world_input_captured"]
+                   and not selection["pointer_over_ui"] and selection["paused"] is True
+                   and isinstance(point, list) and len(point) == 2 and all(finite(x) for x in point)
+                   and all(abs(a - b * selection["scale_factor"]) <= 2
+                           for a, b in zip(selection["cursor"], point, strict=True)),
+                   "Spa slots selection is not the actual projected site")
+    changes = actions[selection_end + 1:selection_end + 5]
+    receipts = check_slot_receipts(raw, changes, owner["entity"], epoch)
+    snapshots = [raw_checkpoint(raw, e["value"]) for e in entries]
+    native.require(all(a["sample_index"] < b["sample_index"] for a, b in zip(snapshots, snapshots[1:]))
+                   and all(a["last_step"] < b["last_step"] and a["value"]["frame"] < b["value"]["frame"]
+                           for a, b in zip(entries, entries[1:])), "Spa slots checkpoint order differs")
+    baseline = context(entries[4]["value"])
+    tile_keys = ("entity", "entity_bits", "parent_site", "parent_exists", "grid", "pose", "map")
+    def shape(state):
+        return sorted([{k: t.get(k) for k in tile_keys} for t in state["tiles"]], key=lambda t: t["entity"])
+    required_workers = generating(baseline)
+    native.require(required_workers, "Spa slots have no initial generating worker")
+    for entry in entries[5:]:
+        check_slots_observation(entry["case"], entry["value"])
+        native.require(entry["value"].get("nonce") == client["nonce"] and entry["value"].get("pid") == client["pid"]
+                       and type(entry["value"].get("world_epoch")) is int and entry["value"]["world_epoch"] == epoch
+                       and type(entry["value"].get("primary_window")) is int
+                       and entry["value"]["primary_window"] == snapshots[4]["primary_window_bits"]
+                       and all(entry["value"]["spa_planning"][k] == entries[4]["value"]["spa_planning"][k]
+                               for k in ("anchor", "footprint", "draw_pos")), "Spa slot subject/geometry differs")
+    interval = raw["samples"][prefix_end:snapshots[-1]["sample_index"] + 1]
+    pause_actions = [a for a in actions[selection_end:] if a["key"].startswith("menu:SetTimeSpeed(")]
+    for pair, lower, upper in ((pause_actions[:2], entries[4], entries[5]),
+                               (pause_actions[2:], entries[5], entries[6])):
+        native.require(pair[0]["before"]["paused"] is True and pair[0]["after"]["paused"] is False
+                       and pair[1]["before"]["paused"] is False and pair[1]["after"]["paused"] is True
+                       and all(lower["last_step"] < a["first_step"] <= a["last_step"] <= upper["last_step"]
+                               and lower["value"]["frame"] <= a["before"]["frame"] < a["after"]["frame"] < upper["value"]["frame"]
+                               and a["before"]["world_epoch"] == a["after"]["world_epoch"] == epoch
+                               and context(a["before"]).get("relative_speed") == context(a["after"]).get("relative_speed") == 1
+                               for a in pair), "Spa slots actual normal/pause interval differs")
+    windows = [(pressed_for(raw, a)["real_seconds"], b["after"]["spa_planning"]["real_seconds"])
+               for a, b in (pause_actions[:2], pause_actions[2:])]
+    closed_assignments = None
+    for sample in interval:
+        state = context({"spa_planning": {"context": sample["spa_context"]}})
+        count = 4 - sum(r["sample_index"] <= sample["sample_index"] for r in receipts)
+        check_operational(state, entries[4]["value"]["spa_planning"], active_slots=count)
+        current = generating(state)
+        native.require(type(sample.get("world_epoch")) is int and sample["world_epoch"] == epoch
+                       and sample.get("primary_window") == snapshots[4]["primary_window"]
+                       and type(sample.get("primary_window_bits")) is int
+                       and sample["primary_window_bits"] == snapshots[4]["primary_window_bits"]
+                       and all(state["sites"][0][k] == owner[k] for k in ("entity", "entity_bits", "pose", "grid"))
+                       and shape(state) == shape(baseline) and finite(state.get("relative_speed")) and state["relative_speed"] == 1
+                       and type(sample.get("paused")) is bool and finite(sample.get("real_seconds"))
+                       and finite(sample.get("virtual_seconds"))
+                       and (sample["paused"] or any(a <= sample["real_seconds"] <= b for a, b in windows))
+                       and all(worker in current and current[worker]["generate_power"]["tile"] == soul["generate_power"]["tile"]
+                               for worker, soul in required_workers.items()), "Spa slots evict worker/change owner/clock")
+        if count == 0:
+            assignments = spa_assignment_keys(state)
+            if closed_assignments is None:
+                closed_assignments = assignments
+            native.require(assignments == closed_assignments, "Spa zero slots admitted/replaced a worker")
+    native.require(all(a["real_seconds"] < b["real_seconds"] and a["virtual_seconds"] <= b["virtual_seconds"]
+                       and (not (a["paused"] and b["paused"]) or a["virtual_seconds"] == b["virtual_seconds"])
+                       for a, b in zip(interval, interval[1:]))
+                   and 3 <= snapshots[-1]["virtual_seconds"] - snapshots[-2]["virtual_seconds"] <= 15
+                   and receipts[-1]["sample_index"] < snapshots[-2]["sample_index"]
+                   and not any(e.get("operation") in ("DurableSave", "DurableLoad", "SoulSpaConstructionCancel")
+                               for e in raw["events"]), "Spa slots measured duration/foreign operation differs")
+
+
+def exercise_slots(driver):
+    exercise_usage(driver)
+    owner = context(driver.last)["sites"][0]
+    world_click(driver, "select-operational", "owner_point")
+    if driver.last.get("selected") != owner["entity_bits"]:
+        suffix = f":{driver.last['world_epoch']}"
+        toggles = [k for k in driver.last["controls"] if k.startswith("world-candidate:toggle:") and k.endswith(suffix)]
+        native.require(len(toggles) == 1, "Spa selection needs one existing candidate picker")
+        click(driver, toggles[0])
+        prefix = f"world-candidate:{owner['entity_bits']}:"
+        driver.last = driver.wait(lambda v: any(k.startswith(prefix) and k.endswith(suffix) for k in v["controls"]),
+                                  after=driver.last["frame"], timeout=15)
+        targets = [k for k in driver.last["controls"] if k.startswith(prefix) and k.endswith(suffix)]
+        native.require(len(targets) == 1, "Spa candidate picker has no unique site")
+        click(driver, targets[0])
+    native.require(driver.last.get("selected") == owner["entity_bits"], "Spa actual owner selection failed")
+    pause(driver, False)
+    for count in (3, 2, 1, 0):
+        key = slots_key(owner["entity"], count)
+        driver.last = driver.wait(lambda v: key in v["controls"], after=driver.last["frame"], timeout=10)
+        click(driver, key)
+        driver.last = driver.wait(lambda v: context(v)["sites"][0]["active_slots"] == count,
+                                  after=driver.last["frame"], timeout=10)
+    pause(driver, True)
+    driver.capture(SLOTS_CHECKPOINTS[-2])
+    start = driver.last["spa_planning"]["virtual_seconds"]
+    pause(driver, False)
+    driver.last = driver.wait(lambda v: v["spa_planning"]["virtual_seconds"] >= start + 3,
+                              after=driver.last["frame"], timeout=15)
+    pause(driver, True)
+    driver.capture(SLOTS_CHECKPOINTS[-1])
     wait_final_raw(driver)
 
 

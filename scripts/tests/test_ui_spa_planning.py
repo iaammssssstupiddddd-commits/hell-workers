@@ -599,6 +599,208 @@ class SpaPlanningTests(unittest.TestCase):
                                                        if s["real_seconds"] >= event["real_seconds"]))
         return raw, entries, client, inputs
 
+    def slots_fixture(self, save):
+        raw, entries, client, inputs = self.usage_fixture(save)
+        state = copy.deepcopy(entries[-1]["value"]["spa_planning"]["context"])
+        paused, virtual, selected = True, 8., None
+        def sample(now):
+            value = copy.deepcopy(raw["samples"][-1])
+            value.update(sample_index=len(raw["samples"]), real_seconds=now, virtual_seconds=virtual,
+                         paused=paused, spa_context=copy.deepcopy(state))
+            raw["samples"].append(value)
+        for now, key in ((56, "select-operational"), (57, "menu:SetTimeSpeed(Normal)"),
+                         *((58 + i, spa.slots_key("1v0", n)) for i, n in enumerate((3, 2, 1, 0))),
+                         (62, "menu:SetTimeSpeed(Paused)"), (64, "menu:SetTimeSpeed(Normal)"),
+                         (68, "menu:SetTimeSpeed(Paused)")):
+            before = copy.deepcopy(inputs[0]["spa_action"]["before"])
+            before.update(frame=now * 100, paused=paused, selected=selected, menu_state="Hidden")
+            before["spa_planning"].update(real_seconds=float(now), virtual_seconds=virtual,
+                                         context=copy.deepcopy(state), owner_point=[100, 100], task_mode="None")
+            first = len(inputs)
+            for i, pressed in enumerate((True, False)):
+                if not pressed:
+                    if key == "select-operational":
+                        selected = 1
+                    elif key.startswith("menu:SetSoulSpaActiveSlots"):
+                        state["sites"][0]["active_slots"] -= 1
+                    else:
+                        paused = key == "menu:SetTimeSpeed(Paused)"
+                if now == 62:
+                    virtual = 9.225
+                elif now == 68:
+                    virtual = 13.125
+                elif not paused and now >= 58:
+                    virtual = 8. + (now + .1 + i * .1 - 57.2) * .25
+                sample(now + .1 + i * .1)
+                row = copy.deepcopy(inputs[i])
+                row.pop("spa_action", None)
+                row.update(step=str(len(inputs) + 1), pre_frame=now * 100 + i * 10,
+                           post_frame=now * 100 + i * 10 + 5, pressed=pressed,
+                           observed_hover={key: "Pressed"} if pressed else {})
+                inputs.append(row)
+                raw["events"].append({"producer": "MouseButtonInput", "operation": "MouseButtonInput", "window": "3v0",
+                                      "real_seconds": now + .1 + i * .1, "state": "Pressed" if pressed else "Released",
+                                      "button": "Left", "sample_index": len(raw["samples"]) - 1})
+            after = copy.deepcopy(before)
+            after.update(frame=now * 100 + 30, paused=paused, selected=selected)
+            after["spa_planning"].update(real_seconds=now + .3, virtual_seconds=virtual, context=copy.deepcopy(state))
+            inputs[first]["spa_action"] = {"key": key, "first_step": first + 1, "last_step": first + 2,
+                                          "before": before, "after": after}
+            if key.startswith("menu:SetSoulSpaActiveSlots"):
+                count = state["sites"][0]["active_slots"]
+                raw["events"].append({"producer": "SoulSpaSlotsChangeOutcome", "operation": "SoulSpaSlotsChange",
+                                      "owner": "1v0", "result": f"Applied {{ requested: {count}, applied: {count}, clamped: false }}",
+                                      "applied": {"requested": count, "applied": count, "clamped": False},
+                                      "sample_index": len(raw["samples"]) - 1, "real_seconds": now + .15})
+            if now in (62, 68):
+                sample(float(now + 1))
+                entry = copy.deepcopy(entries[-1])
+                entry.update(case=spa.SLOTS_CHECKPOINTS[len(entries)], last_step=len(inputs))
+                entry["value"].update(frame=(now + 1) * 100, selected=selected)
+                entry["value"]["spa_planning"].update(real_seconds=float(now + 1), virtual_seconds=virtual,
+                                                       context=copy.deepcopy(state))
+                entries.append(entry)
+        raw["events"].sort(key=lambda e: e["real_seconds"])
+        for i, event in enumerate(raw["events"]):
+            event["event_index"] = i
+        return raw, entries, client, inputs
+
+    def test_slots_require_exact_inputs_outcomes_and_non_eviction(self):
+        with tempfile.TemporaryDirectory() as directory:
+            save = Path(directory) / "saves/manual-1.scn.ron"
+            save.parent.mkdir()
+            raw, entries, client, inputs = self.slots_fixture(save)
+            spa.verify_slots(raw, entries, client, inputs)
+            self.assertIn("soul-spa-slots", ui.CASES)
+            for entry in entries:
+                ui.check_observation(entry["case"], entry["value"])
+            for mutation in ("missing-receipt", "foreign-owner", "boolean-count", "reordered-receipt", "early-epoch",
+                             "eviction", "new-worker", "unpaused-capture", "wrong-selection", "extra-action", "short-dwell",
+                             "paused-outcome", "boolean-speed", "boolean-epoch", "boolean-selection", "wrong-projection",
+                             "orphan-assignment", "duplicate-receipt", "duplicate-sample", "sample-cap", "event-cap",
+                             "early-selection", "early-slot"):
+                raw, entries, client, inputs = self.slots_fixture(save)
+                receipts = [e for e in raw["events"] if e.get("operation") == "SoulSpaSlotsChange"]
+                if mutation == "missing-receipt":
+                    raw["events"].remove(receipts[0])
+                elif mutation == "foreign-owner":
+                    receipts[0]["owner"] = "foreign"
+                elif mutation == "boolean-count":
+                    receipts[-1]["applied"]["requested"] = False
+                elif mutation == "reordered-receipt":
+                    receipts[-1]["sample_index"] = receipts[0]["sample_index"]
+                elif mutation == "early-epoch":
+                    raw["samples"][receipts[-1]["sample_index"]]["world_epoch"] = 1
+                elif mutation in ("eviction", "new-worker"):
+                    sample = raw["samples"][receipts[-1]["sample_index"] + 1]
+                    state = sample["spa_context"]
+                    if mutation == "eviction":
+                        state["souls"][0]["generate_power"]["phase"] = "GoingToTile"
+                    else:
+                        tile = state["tiles"][1]
+                        tile["workers"] = ["401v0"]
+                        soul = copy.deepcopy(state["souls"][0])
+                        soul.update(entity="401v0", entity_bits=401, working_on=tile["entity"])
+                        soul["generate_power"]["tile"] = tile["entity"]
+                        state["souls"].append(soul)
+                        state["working_relations"].append({"entity": "401v0", "target": tile["entity"], "is_soul": True})
+                        state["sites"][0]["generator"]["current_output"] = 2.
+                        state["grids"][0]["generation"] = 2.
+                elif mutation == "unpaused-capture":
+                    entries[-1]["value"]["paused"] = False
+                elif mutation == "wrong-selection":
+                    inputs[20]["spa_action"]["after"]["selected"] = 2
+                elif mutation == "extra-action":
+                    inputs[22]["spa_action"]["key"] = "menu:SetTimeSpeed(Fast)"
+                elif mutation == "paused-outcome":
+                    raw["samples"][receipts[-1]["sample_index"]]["paused"] = True
+                elif mutation == "boolean-speed":
+                    raw["samples"][receipts[-1]["sample_index"]]["spa_context"]["relative_speed"] = True
+                elif mutation == "boolean-epoch":
+                    entries[-1]["value"]["world_epoch"] = False
+                elif mutation == "boolean-selection":
+                    inputs[20]["spa_action"]["after"]["selected"] = True
+                elif mutation == "wrong-projection":
+                    inputs[20]["spa_action"]["before"]["spa_planning"]["owner_point"] = []
+                elif mutation == "orphan-assignment":
+                    state = raw["samples"][receipts[-1]["sample_index"] + 1]["spa_context"]
+                    state["souls"].append({"entity": "401v0", "generate_power": {
+                        "tile": state["tiles"][1]["entity"], "phase": "GoingToTile"}})
+                elif mutation == "duplicate-receipt":
+                    raw["events"].append(copy.deepcopy(receipts[-1]))
+                elif mutation == "duplicate-sample":
+                    raw["samples"][-1]["sample_index"] = raw["samples"][-2]["sample_index"]
+                elif mutation == "sample-cap":
+                    raw["samples"] += [copy.deepcopy(raw["samples"][-1])] * 1201
+                elif mutation == "event-cap":
+                    raw["events"] += [copy.deepcopy(raw["events"][-1])] * 4097
+                elif mutation in ("early-selection", "early-slot"):
+                    action = inputs[20 if mutation == "early-selection" else 24]["spa_action"]
+                    for side in ("before", "after"):
+                        action[side]["frame"] -= 500
+                        action[side]["spa_planning"]["real_seconds"] -= 5
+                else:
+                    entries[-1]["value"]["spa_planning"]["virtual_seconds"] = 10.
+                with self.subTest(mutation=mutation), self.assertRaises(spa.native.AcceptanceError):
+                    spa.verify_slots(raw, entries, client, inputs)
+
+    def test_slot_admission_inventory_includes_inflight_tasks_before_arrival(self):
+        state = self.state(1)
+        tile = state["tiles"][0]
+        state["souls"] = [{"entity": "400v0", "generate_power": {"tile": tile["entity"], "phase": "GoingToTile"}}]
+        before = spa.spa_assignment_keys(state)
+        self.assertEqual(before, {("400v0", tile["entity"])})
+        tile["workers"] = ["400v0"]
+        state["souls"][0]["working_on"] = tile["entity"]
+        state["souls"][0]["generate_power"]["phase"] = "Generating"
+        self.assertEqual(spa.spa_assignment_keys(state), before)
+
+    def test_slots_reject_self_consistent_input_and_receipt_times_before_used_checkpoint(self):
+        with tempfile.TemporaryDirectory() as directory:
+            save = Path(directory) / "saves/manual-1.scn.ron"
+            save.parent.mkdir()
+            raw, entries, client, inputs = self.slots_fixture(save)
+            actions = [row["spa_action"] for row in inputs if "spa_action" in row
+                       and row["spa_action"]["first_step"] > entries[4]["last_step"]]
+            for i, action in enumerate(actions):
+                start, end = (action[side]["spa_planning"]["real_seconds"] for side in ("before", "after"))
+                now = 54.4 + i * .04
+                frame = 5440 + i * 4
+                for side, offset in (("before", 0), ("after", 3)):
+                    action[side]["frame"] = frame + offset
+                    action[side]["spa_planning"]["real_seconds"] = now + offset * .01
+                for j, row in enumerate(inputs[action["first_step"] - 1:action["last_step"]]):
+                    row.update(pre_frame=frame + j, post_frame=frame + j + 1)
+                for event in raw["events"]:
+                    if start < event["real_seconds"] <= end:
+                        if event.get("producer") == "MouseButtonInput":
+                            event["real_seconds"] = now + (.01 if event["state"] == "Pressed" else .02)
+                        elif event.get("operation") == "SoulSpaSlotsChange":
+                            event["real_seconds"] = now + .015
+            raw["events"].sort(key=lambda e: e["real_seconds"])
+            for i, event in enumerate(raw["events"]):
+                event["event_index"] = i
+            # Ownership, exact physical pairs and annotations agree; only the
+            # claimed phase is wrong. Do not accept late sample indices as proof.
+            spa.check_raw_session(raw, client)
+            spa.check_inputs(raw, entries, client, inputs, completion=True, usage=True, slots=True)
+            with self.assertRaisesRegex(spa.native.AcceptanceError, "checkpoint phase"):
+                spa.verify_slots(raw, entries, client, inputs)
+
+    def test_slot_driver_does_not_retry_unknown_world_selection(self):
+        with tempfile.TemporaryDirectory() as directory:
+            save = Path(directory) / "saves/manual-1.scn.ron"
+            save.parent.mkdir()
+            _, entries, _, _ = self.usage_fixture(save)
+            driver = Mock(last=copy.deepcopy(entries[-1]["value"]))
+            driver.last.update(selected=999, controls={})
+            with patch.object(spa, "exercise_usage") as prefix, patch.object(spa, "world_click") as world:
+                with self.assertRaises(spa.native.AcceptanceError):
+                    spa.exercise_slots(driver)
+                prefix.assert_called_once_with(driver)
+                world.assert_called_once_with(driver, "select-operational", "owner_point")
+                driver.send.assert_not_called()
+
     def test_usage_requires_actual_worker_consumption_and_continuity(self):
         with tempfile.TemporaryDirectory() as directory:
             save = Path(directory) / "saves/manual-1.scn.ron"

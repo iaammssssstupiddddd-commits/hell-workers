@@ -617,6 +617,16 @@ F5/F9の実catalog入力で保存・復元する。従来completion/usageの施�
 停止中の仮想時間変化や保存間の状態変更を拒否する。未搬入取消caseの既定条件は変更しない。
 これは空施設の永続化だけを扱い、occupied task/Soul remap・自然離脱・撤去・候補表示・性能・releaseは別受入とする。
 
+`soul-spa-slots`は自然施工/利用5checkpointを再検証後、通常worldの同siteを実選択し、
+既存情報パネルの枠ボタンを通常速度で4→3→2→1→0と単発操作する。重なり時は既存の
+epoch/revision付き候補pickerでexact ownerを選び、盲目的なworld click再送はしない。
+全4件のSoulSpaSlotsChangeOutcomeを原MouseButtonInput、対象、値、sample/timeへ結び、
+ゼロ枠で停止撮影→通常3〜15仮想秒→停止撮影を追加する。全tailのowner/4tile/grid/window/epochと
+同Generating Soul/tileの維持、ゼロ枠以降のtask割当集合不変を要求し、新規割当や追出しを拒否する。
+GoingToTileはWorkingOn追加前から数え、閉鎖前に割当済みのSoulの到着を新規割当と誤認しない。
+全session480秒/raw1200上限は維持する。これは有界な既存利用継続だけで、自然離脱・再開放時の
+割当・occupied保存復元・候補表示・性能・正式releaseを証明しない。実機成功は別途記録する。
+
 UI feedbackの`rest-area-usage`は通常施工の3checkpointに入所・放出の2checkpointを追加する。
 camera/pause準備以外は既存入力と通常AIを使い、occupant・Dream・材料・完了状態を注入しない。
 UIとproduction rawは同じread-only collectorを使い、paused・同nonce/PID/epoch・同仮想時刻・
