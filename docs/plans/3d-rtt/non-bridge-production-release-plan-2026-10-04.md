@@ -764,6 +764,22 @@ rawの実AssignedTaskを照合するとSoul1848v0/1854v0は別cart909v0/910v0で
 prefixの通常利用証拠・全tailのslot/worker/逆参照/owner/grid/epochを維持し、state注入を行わない。
 この設計記録は実装・実機成功を意味せず、occupied保存・撤去・候補通常表示・性能・releaseは未受入のまま。
 
+利用者が入力を控えられると明示した新比較 `tak14-soulspa-ordinary-persistence-20261108-v3`
+（`4ae97505`、source `527f0d2d4b1752cdfba16b97f5fab781daf7151b35067784e7053feefaf8b60a`、harness
+`b2d31eb0e48d96c731fee53cdfa66267fde678c84cbcf20959899c0bd7f83fe0`）は全5画像・別実行/登録verifier、
+main/独立read-onlyの画像/raw確認を通し、**空Operationalの論理永続化だけ**をpass seal/finalizeした。
+manifest `dbb07cfd9b3facebc1e55723c7bf1e012fa605b413700aa083f7f43671aad876`、raw
+`23b630251d84353cc4c86e5dcc28e0c2bb99bbbfcd2708b78b9b358af9a52f77`、Manual1保存501040B/hash
+`a2a2cfef1a4a206e8cbea71e81bac0cdbf5ff14f69764d4cbe328e7c9984b1b1`。
+site2318v0→1902v1、grid1884v0→819v1と全4tileの実remap、GeneratePower/slot1/worker0、Bone12、
+paused tail103行の仮想52.076294648不変を照合した。Intel Arc/Vulkan、WARN/ERRORなし。
+画像の黄土色→淡青の差は実在するが、保存前selected Familiar1834v0→load後nullの条件差もあり、
+選択オーラが消えている。共通fallbackは両方Neutral/mesh10、sourceの材質選択も同じequipment_materialである。
+画像だけから材質/ロード退行と断定せず、同一selectionでの表示同等性は未検証とする。正式artや候補導入ではない。
+最新38,580,224Bは表示条件/occupied保存の比較基準に保持し、旧v1/v2の有界診断は終了した。
+旧v1/v2は正式consumer解除・process/open file不在・非symlink・生成物のみと確認し、exact 2jobを撤去した。
+du計55,562,240B減。原本・最新証拠・共有cacheとinvalid metadataは維持する。
+
 ## 5. マイルストーン
 
 ### M1: 原本・候補
