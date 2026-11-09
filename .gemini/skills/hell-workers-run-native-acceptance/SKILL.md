@@ -343,6 +343,11 @@ receipts and a fourth water-state capture. Bind every produced Water Entity to
 the exact worker/assignment/bucket, current Tank inventory and water part state.
 Never inject water or normalize concurrent pours. These cases do not prove the
 River fill branch, all supply/refinement, full renderer chain, performance or release.
+Use the separate `--case m2-tank-candidate-full` with the same candidate/codec/EIS
+options for natural filling to exactly fifty Water items and the Full water part.
+It keeps the same ordinary-construction prefix, requires ten distinct five-Water
+pour output sets, and uses its own scope/checkpoint. The 180-second wait and raw
+sample/event/session caps are unchanged; timeout or partial filling is invalid.
 
 For already approved candidate or release assets, the joint helper supports a
 feedback-only dev build. Keep the same mutable workspace and cache; an uncommitted

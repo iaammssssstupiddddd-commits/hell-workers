@@ -47,7 +47,7 @@ fn building_inventory(world: &mut World, kind: BuildingType) -> Vec<Value> {
 fn case_kind(case: &str) -> Option<BuildingType> {
     if matches!(
         case,
-        "m2-tank-candidate-completion" | "m2-tank-candidate-inflow"
+        "m2-tank-candidate-completion" | "m2-tank-candidate-inflow" | "m2-tank-candidate-full"
     ) {
         return Some(BuildingType::Tank);
     }

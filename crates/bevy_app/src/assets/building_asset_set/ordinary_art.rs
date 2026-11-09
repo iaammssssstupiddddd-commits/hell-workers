@@ -60,7 +60,7 @@ fn validate(session: &Session, root: &Path, nonce: &str, case: &str) -> Result<(
                 .all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase())
     };
     let profile = match session.mode.as_str() {
-        "m2-tank-candidate-completion" | "m2-tank-candidate-inflow" => {
+        "m2-tank-candidate-completion" | "m2-tank-candidate-inflow" | "m2-tank-candidate-full" => {
             session.identity.authority == BuildingAssetAuthority::IsolatedCandidate
                 && session.identity.kind == BuildingAssetKind::Tank
                 && case == session.mode
@@ -132,6 +132,12 @@ fn validate(session: &Session, root: &Path, nonce: &str, case: &str) -> Result<(
 }
 
 pub(super) fn scope(world: &World) -> &'static str {
+    if world
+        .get_resource::<Session>()
+        .is_some_and(|session| session.mode == "m2-tank-candidate-full")
+    {
+        return "ordinary-m2-tank-candidate-full-v1";
+    }
     if world
         .get_resource::<Session>()
         .is_some_and(|session| session.mode == "m2-tank-candidate-inflow")
@@ -324,7 +330,9 @@ pub(super) fn snapshot(world: &mut World) -> Result<Value, String> {
         BuildingAssetKind::Tank
             if matches!(
                 session.mode.as_str(),
-                "m2-tank-candidate-completion" | "m2-tank-candidate-inflow"
+                "m2-tank-candidate-completion"
+                    | "m2-tank-candidate-inflow"
+                    | "m2-tank-candidate-full"
             ) =>
         {
             BuildingType::Tank
@@ -431,6 +439,13 @@ mod tests {
         }
         let mut world = World::new();
         let mut inflow = session.clone();
+        let mut full = session.clone();
+        full.mode = "m2-tank-candidate-full".into();
+        validate(&full, root, &full.nonce, "m2-tank-candidate-full").unwrap();
+        assert!(validate(&session, root, &session.nonce, "m2-tank-candidate-full").is_err());
+        assert!(validate(&full, root, &full.nonce, "m2-tank-candidate-inflow").is_err());
+        world.insert_resource(full);
+        assert_eq!(scope(&world), "ordinary-m2-tank-candidate-full-v1");
         inflow.mode = "m2-tank-candidate-inflow".into();
         validate(&inflow, root, &inflow.nonce, "m2-tank-candidate-inflow").unwrap();
         assert!(validate(&session, root, &session.nonce, "m2-tank-candidate-inflow").is_err());

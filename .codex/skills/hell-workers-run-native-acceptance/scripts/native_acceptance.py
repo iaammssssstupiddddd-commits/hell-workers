@@ -115,6 +115,7 @@ NATIVE_HARNESS_FILES = (
     "scripts/ui_m2_completion.py",
     "scripts/ui_m2_tank_completion.py",
     "scripts/ui_m2_tank_inflow.py",
+    "scripts/ui_m2_tank_full.py",
     "scripts/building_m2_ui_acceptance.py",
     ".codex/skills/hell-workers-run-native-acceptance/scripts/ui_terrain_materials.py",
     ".codex/skills/hell-workers-run-native-acceptance/scripts/rtt_light_closure_verify.py",

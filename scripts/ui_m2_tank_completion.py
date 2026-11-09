@@ -13,7 +13,9 @@ CASE = "m2-tank-candidate-completion"
 SCOPE = "ordinary-m2-tank-candidate-completion-v1"
 INFLOW_CASE = "m2-tank-candidate-inflow"
 INFLOW_SCOPE = "ordinary-m2-tank-candidate-inflow-v1"
-PROFILES = ((CASE, SCOPE), (INFLOW_CASE, INFLOW_SCOPE))
+FULL_CASE = "m2-tank-candidate-full"
+FULL_SCOPE = "ordinary-m2-tank-candidate-full-v1"
+PROFILES = ((CASE, SCOPE), (INFLOW_CASE, INFLOW_SCOPE), (FULL_CASE, FULL_SCOPE))
 CHECKPOINTS = tuple("m2-tank-completion-" + phase for phase in ("empty", "placed", "completed"))
 
 
@@ -296,7 +298,7 @@ def check_completion(raw, entries, client, *, raw_scope=SCOPE):
                    and all(after["value"]["frame"] > before["value"]["frame"]
                            and after["last_step"] > before["last_step"]
                            for before, after in zip(entries, entries[1:])), "completion target/epoch/order differs")
-    native.require(raw_scope in (SCOPE, INFLOW_SCOPE) and raw.get("scope") == raw_scope
+    native.require(raw_scope in (SCOPE, INFLOW_SCOPE, FULL_SCOPE) and raw.get("scope") == raw_scope
                    and raw.get("schema_version") == 2 and raw.get("failure") is None
                    and raw.get("nonce") == client["nonce"] and raw.get("process_id") == client["pid"]
                    and all(raw.get(key) is False for key in ("accepted", "performance_evidence", "promotion_authority")),

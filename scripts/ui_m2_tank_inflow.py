@@ -6,6 +6,9 @@ from scripts import building_production_lifecycle as lifecycle
 native, pipeline, planning = construction.native, construction.pipeline, construction.planning
 CASE, SCOPE = construction.INFLOW_CASE, construction.INFLOW_SCOPE
 CHECKPOINTS = (*construction.CHECKPOINTS, "m2-tank-inflow")
+FULL_CASE, FULL_SCOPE = construction.FULL_CASE, construction.FULL_SCOPE
+FULL_CHECKPOINTS = (*construction.CHECKPOINTS, "m2-tank-full")
+PROFILES = ((CASE, SCOPE), (FULL_CASE, FULL_SCOPE))
 prepare_view = construction.prepare_view
 check_view = construction.check_view
 session_setting = construction.session_setting
@@ -15,13 +18,13 @@ def source_contract(repo, source, codec):
     return construction.source_contract(repo, source, codec, profile=(CASE, SCOPE))
 
 
-def planned_contract(args, repo):
-    native.require(args.case == CASE and args.smoke and args.input_backend == "portal-eis"
+def planned_contract(args, repo, *, profile=(CASE, SCOPE)):
+    native.require(profile in PROFILES and args.case == profile[0] and args.smoke and args.input_backend == "portal-eis"
                    and args.m2_art_source and args.art_codec and not args.layout_menu
                    and not any(getattr(args, key, None) for key in
                                ("m5_art_source", "rest_area_art_source", "soul_spa_art_source", "spa_resume_source")),
                    "Tank inflow requires its dedicated candidate EIS case")
-    contract = source_contract(repo, Path(args.m2_art_source), Path(args.art_codec))
+    contract = construction.source_contract(repo, Path(args.m2_art_source), Path(args.art_codec), profile=profile)
     if getattr(args, "art_contract_sha256", None):
         native.require(planning.art_contract_digest(contract) == args.art_contract_sha256, "Tank inflow source changed")
     return contract
@@ -31,22 +34,27 @@ def check_observation(case, value):
     if case in construction.CHECKPOINTS:
         construction.check_observation(case, value)
         return
-    native.require(case == CHECKPOINTS[-1], "Tank inflow checkpoint differs")
+    native.require(case in (CHECKPOINTS[-1], FULL_CHECKPOINTS[-1]), "Tank inflow checkpoint differs")
     construction.check_observation(construction.CHECKPOINTS[-1], value)
     roots = construction.context(value).get("consumers", {}).get("roots", [])
     native.require(len(roots) == 1 and type(roots[0].get("tank_water_count")) is int
                    and 0 < roots[0]["tank_water_count"] <= 50, "Tank inflow capture has no real water")
+    if case == FULL_CHECKPOINTS[-1]:
+        native.require(roots[0]["tank_water_count"] == 50, "Tank Full capture requires fifty actual Water items")
 
 
 def exercise(driver, contract):
+    native.require((contract.get("case"),contract.get("scope")) in PROFILES, "Tank supply exercise profile differs")
+    full = contract["case"] == FULL_CASE
     construction.exercise(driver, contract)
     construction.capture_action(driver, "menu:SetTimeSpeed(Normal)")
     def supplied(value):
         roots = construction.context(value).get("consumers", {}).get("roots", [])
-        return len(roots) == 1 and type(roots[0].get("tank_water_count")) is int and roots[0]["tank_water_count"] > 0
+        return len(roots) == 1 and type(roots[0].get("tank_water_count")) is int and (
+            roots[0]["tank_water_count"] == 50 if full else roots[0]["tank_water_count"] > 0)
     driver.last = driver.wait(supplied, after=driver.last["frame"], timeout=180)
     construction.capture_action(driver, "menu:SetTimeSpeed(Paused)")
-    driver.capture(CHECKPOINTS[-1])
+    driver.capture((FULL_CHECKPOINTS if full else CHECKPOINTS)[-1])
 
 
 def check_tail_inputs(raw, entries, client, inputs):
@@ -121,9 +129,10 @@ def check_tail_inputs(raw, entries, client, inputs):
     return effects, actions
 
 
-def verify(raw, entries, client, inputs, contract):
-    native.require(contract.get("case") == CASE and contract.get("scope") == SCOPE and raw.get("scope") == SCOPE
-                   and [e["case"] for e in entries] == list(CHECKPOINTS), "Tank inflow profile differs")
+def verify(raw, entries, client, inputs, contract, *, profile=(CASE, SCOPE)):
+    checkpoints = FULL_CHECKPOINTS if profile == (FULL_CASE,FULL_SCOPE) else CHECKPOINTS
+    native.require(profile in PROFILES and contract.get("case") == profile[0] and contract.get("scope") == profile[1]
+                   and raw.get("scope") == profile[1] and [e["case"] for e in entries] == list(checkpoints), "Tank inflow profile differs")
     samples, events = raw["samples"], raw["events"]
     epoch, window = entries[0]["value"]["world_epoch"], entries[0]["value"]["primary_window"]
     native.require(0 < len(samples) <= 1200 and len(events) < 4096
@@ -149,7 +158,7 @@ def verify(raw, entries, client, inputs, contract):
     before = construction.context(actions[0]["before"])["real_seconds"]
     cutoff = max(s["sample_index"] for s in raw["samples"] if s["real_seconds"] <= before)
     prefix = dict(raw, samples=raw["samples"][:cutoff+1], events=[e for e in raw["events"] if e["sample_index"] <= cutoff])
-    construction.verify(prefix, entries[:3], client, inputs[:entries[2]["last_step"]], contract, profile=(CASE, SCOPE))
+    construction.verify(prefix, entries[:3], client, inputs[:entries[2]["last_step"]], contract, profile=profile)
     lifecycle.check_raw_transitions(raw)
     final = entries[-1]["value"]
     ctx = construction.context(final)

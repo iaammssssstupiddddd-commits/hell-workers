@@ -759,7 +759,8 @@ fn snapshot(world: &mut World, observer: &UiObserver) -> Value {
         Ok("m2-mixer-candidate-planning"
             | "m2-mixer-candidate-completion"
             | "m2-tank-candidate-completion"
-            | "m2-tank-candidate-inflow")
+            | "m2-tank-candidate-inflow"
+            | "m2-tank-candidate-full")
     ) {
         value["m2_planning"] = m5_planning::snapshot(world);
     } else {
