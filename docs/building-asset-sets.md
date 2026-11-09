@@ -345,6 +345,14 @@ manifest `8a203b9ef1f9a9978f9be7763ea34ac437b861046fd019af8c70bad6b10a95f7`、
 raw `1138a050671a2668e9ef5056b24cecfa24b2ebb97347413f323f15e3655cbf98`。
 登録verifierで封印しfinalize/storage pass済み。186470400 bytesはFull→Mixer供給の比較とvisual feedback用に保持し、
 その用途終了後に整理する。川取水branch、Mixer供給/精製、性能、正式releaseは依然として別の未達条件である。
+後続の受動観測として `ordinary-river-fill-branch-v1` / `RiverFill` を追加する。
+RiverのFilling branchで通常の帰路探索がFoundとなり、実空bucketをBucketWaterへ変更した場合だけ記録する。
+deferred適用後に同worker/request/Inventory、専用bucketのBelongsTo/DeliveringTo、同Tank/epoch、
+GoingToDestinationを照合し、欠損・不一致はsticky failureにする。通常gameplayと非観測sessionは不変。
+receiptはbucketの型変換を証明するだけで、`data.amount=1`を水量と読まず、川地点・到達経路や
+注水/精製の成功を推定しない。Full検証器は新sourceから各注水の直前の同bucket/worker/requestの実RiverFillを要求し、
+再利用・欠損・別作業のreceiptを拒否する。旧成功jobをこの新条件の証拠へ読み替えない。
+現在は実handler/拒否系fixtureだけで、新sourceの実機確認は未実施。
 最初の実機 `tak14-tank-candidate-inflow-20261109-v1`（`41253e73`）の結果はinvalidのまま維持。
 実注水と4画像は得られたが、周期観測に一瞬のPouring phaseを要求した検証器が拒否した。
 修正では実TankPour branch証拠を維持し、直前sampleの同依頼/作業員/水入りbucket/行先を拘束する。

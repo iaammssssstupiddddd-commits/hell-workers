@@ -58,6 +58,14 @@ pub fn handle(
                     BucketTransportPhase::GoingToDestination,
                 ) {
                     PathSearchResult::Found(()) => {
+                        #[cfg(feature = "profiling")]
+                        let bucket_before = ctx
+                            .queries
+                            .reservation
+                            .resources
+                            .get(data.bucket)
+                            .ok()
+                            .map(|r| r.0);
                         commands.entity(data.bucket).try_insert((
                             ResourceItem(ResourceType::BucketWater),
                             Sprite {
@@ -69,6 +77,19 @@ pub fn handle(
                         commands
                             .entity(data.bucket)
                             .try_insert(hw_core::relationships::DeliveringTo(tank_entity));
+                        #[cfg(feature = "profiling")]
+                        if ctx.env.water_observations {
+                            crate::water_observations::RiverFillReceipt {
+                                worker: ctx.soul_entity,
+                                assignment: ctx.task_identity().assignment_entity,
+                                target: ctx.task_identity().current_target_entity,
+                                tank: tank_entity,
+                                bucket: data.bucket,
+                                world_epoch: ctx.world_epoch,
+                                bucket_before,
+                            }
+                            .queue(commands);
+                        }
                     }
                     PathSearchResult::Deferred => return TaskHandlerControl::Continue,
                     PathSearchResult::Unreachable => {

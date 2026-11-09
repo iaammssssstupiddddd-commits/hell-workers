@@ -265,6 +265,52 @@ def check_tank_pour_receipt(event, samples, events):
                     and owners[0]["stored_items"].count(entity) == 1, "Tank pour water relation differs")
 
 
+def check_river_fill_receipt(event, samples):
+    """Actual bucket conversion only; no inferred river route/geography or volume."""
+    require(set(event) == {"producer", "operation", "sample_index", "event_index", "real_seconds",
+                           "worker", "assignment", "target", "owner", "bucket", "world_epoch", "bucket_before"}
+            and event["producer"] == "ordinary-river-fill-branch-v1" and event["operation"] == "RiverFill"
+            and type(event["event_index"]) is int and event["event_index"] >= 0
+            and type(event["sample_index"]) is int and 0 <= event["sample_index"] < len(samples),
+            "River fill receipt envelope differs")
+    sample = samples[event["sample_index"]]
+    require(all(isinstance(event[k], str) and event[k] for k in ("worker", "assignment", "target", "owner", "bucket"))
+            and event["assignment"] == event["target"]
+            and len({event[k] for k in ("worker", "target", "owner", "bucket")}) == 4
+            and type(event["world_epoch"]) is int and event["world_epoch"] >= 0
+            and type(sample.get("world_epoch")) is int and sample["world_epoch"] == event["world_epoch"]
+            and event["bucket_before"] == "BucketEmpty"
+            and type(event["real_seconds"]) in (int, float) and math.isfinite(event["real_seconds"])
+            and type(sample.get("real_seconds")) in (int, float) and math.isfinite(sample["real_seconds"])
+            and 0 <= event["real_seconds"] <= sample["real_seconds"], "River fill receipt context differs")
+    ctx = sample.get("m2_context", {})
+    require(type(ctx.get("water_inventory_schema")) is int and ctx["water_inventory_schema"] == 1
+            and ctx.get("river_fill_channel") is True
+            and all(ctx.get(k) is False for k in ("accepted", "performance_evidence", "promotion_authority")),
+            "River fill observer contract differs")
+    buckets = [i for i in ctx.get("items", []) if i.get("entity") == event["bucket"]]
+    actors = [a for a in ctx.get("bucket_actors", []) if a.get("entity") == event["worker"]]
+    tanks = [t for t in ctx.get("tanks", []) if t.get("entity") == event["owner"]]
+    require(len(buckets) == len(actors) == len(tanks) == 1
+            and tanks[0].get("provisional") is False
+            and type(tanks[0].get("stockpile", {}).get("capacity")) is int
+            and tanks[0].get("stockpile") == {"resource": "Water", "capacity": 50}
+            and buckets[0].get("resource") == "BucketWater"
+            and buckets[0].get("belongs_to") == buckets[0].get("delivering_to") == event["owner"]
+            and all(k in buckets[0] and buckets[0][k] is None for k in ("stored_in", "loaded_in"))
+            and actors[0].get("is_soul") is True and actors[0].get("inventory_present") is True
+            and actors[0].get("bucket") == actors[0].get("carried_item") == event["bucket"]
+            and actors[0].get("working_on") == event["target"]
+            and actors[0].get("phase") == "GoingToDestination"
+            and actors[0].get("destination", {}).get("exists") is True
+            and actors[0].get("identity", {}).get("matches_working_on") is True
+            and actors[0].get("source") == {"kind": "River"}
+            and actors[0].get("destination") == {"kind": "Tank", "entity": event["owner"], "exists": True}
+            and actors[0].get("identity") == {"assignment": event["assignment"], "target": event["target"],
+                                              "work_type": "GatherWater", "matches_working_on": True},
+            "River fill lacks actual post-conversion bucket/assignment")
+
+
 def check_raw_transitions(raw):
     """Check indexed raw state deltas; they never imply an operation succeeded."""
     require(raw.get("schema_version") == 2 and raw.get("transition_contract") == "indexed-state-delta-v1",
@@ -322,6 +368,8 @@ def check_raw_transitions(raw):
             identities = {(event["world_epoch"], item) for item in [event["water"], *event["outputs"]]}
             require(not refined_items.intersection(identities), "Refine item receipt reused")
             refined_items.update(identities)
+        elif producer == "ordinary-river-fill-branch-v1":
+            check_river_fill_receipt(event, samples)
         elif producer == "ordinary-tank-pour-branch-v1":
             check_tank_pour_receipt(event, samples, events_seen)
             identities = {(event["world_epoch"], item) for item in event["outputs"]}

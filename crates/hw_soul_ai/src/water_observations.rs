@@ -8,9 +8,13 @@ use hw_core::{
 use hw_jobs::{Blueprint, Building, BuildingType};
 use hw_logistics::{Inventory, ResourceItem, ResourceType, Stockpile};
 
+mod river_fill;
+pub use river_fill::RiverFillReceipt;
+
 #[derive(Resource, Default)]
 pub struct TankPourReceipts {
     pub rows: Vec<TankPourReceipt>,
+    pub river_fills: Vec<RiverFillReceipt>,
     pub failure: Option<&'static str>,
     total: usize,
 }

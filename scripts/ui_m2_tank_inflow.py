@@ -243,3 +243,30 @@ def verify(raw, entries, client, inputs, contract, *, profile=(CASE, SCOPE)):
     count = ctx["consumers"]["roots"][0]["tank_water_count"]
     native.require(count == len(produced) and count <= 50, "Tank inflow capture water count differs")
     construction.check_completed_consumers(raw, final, contract, water_count=count)
+    if profile == (FULL_CASE, FULL_SCOPE):
+        check_river_fill_chain(raw)
+
+
+def check_river_fill_chain(raw):
+    """After raw validation, bind each pour to this bucket's observed fill cycle.
+
+    Last appends receipt classes in batches, so event ordering alone is not
+    chronology. Require distinct ordered observations, not inferred apply times.
+    """
+    samples, events = raw["samples"], raw["events"]
+    used, previous_pour = set(), {}
+    fills = [e for e in events if e.get("operation") == "RiverFill"]
+    for pour in (e for e in events if e.get("operation") == "TankPour"):
+        prior = [e for e in fills if e["bucket"] == pour["bucket"]
+                 and e["event_index"] < pour["event_index"]]
+        native.require(prior, "Full Tank pour has no actual preceding River fill")
+        fill = prior[-1]
+        native.require(fill["event_index"] not in used
+                       and all(fill[k] == pour[k] for k in ("world_epoch", "worker", "assignment", "target", "owner", "bucket"))
+                       and previous_pour.get(pour["bucket"], -1) < fill["sample_index"] < pour["sample_index"]
+                       and samples[fill["sample_index"]]["real_seconds"] < samples[pour["sample_index"]]["real_seconds"]
+                       and fill["real_seconds"] < pour["real_seconds"],
+                       "Full Tank pour has stale or foreign River fill")
+        lifecycle.check_river_fill_receipt(fill, samples)
+        used.add(fill["event_index"])
+        previous_pour[pour["bucket"]] = pour["sample_index"]

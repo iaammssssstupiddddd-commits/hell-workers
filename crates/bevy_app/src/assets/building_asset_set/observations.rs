@@ -658,6 +658,14 @@ fn observe(world: &mut World) {
         }
         if let Some(mut receipts) = world.get_resource_mut::<hw_soul_ai::water_observations::TankPourReceipts>() {
             if let Some(failure) = receipts.failure { observations.failure = Some(failure.into()); }
+            for receipt in receipts.river_fills.drain(..) {
+                observations.events.push(json!({"sample_index": index, "real_seconds": now,
+                    "producer": "ordinary-river-fill-branch-v1", "operation": "RiverFill",
+                    "worker": format!("{:?}", receipt.worker), "assignment": format!("{:?}", receipt.assignment),
+                    "target": format!("{:?}", receipt.target), "owner": format!("{:?}", receipt.tank),
+                    "bucket": format!("{:?}", receipt.bucket), "world_epoch": receipt.world_epoch,
+                    "bucket_before": receipt.bucket_before.map(|item| format!("{item:?}"))}));
+            }
             for receipt in receipts.rows.drain(..) {
                 observations.events.push(json!({"sample_index": index, "real_seconds": now,
                     "producer": "ordinary-tank-pour-branch-v1", "operation": "TankPour",

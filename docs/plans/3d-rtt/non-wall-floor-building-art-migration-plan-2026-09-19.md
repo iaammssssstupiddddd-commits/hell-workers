@@ -51,6 +51,12 @@ River取水branch、Tank→Mixer供給/自然精製、残る通常lifecycle/性�
 job186470400 bytesを同比較用途で保持。待機180秒やraw/input上限は増やさず、461 samples/899 eventsで成功した。
 川取水receiptと全物流は別途必要。初期Woodは5個なので、将来Tank2＋Mixer4を同worldで施工する際は
 通常の伐採指定で追加木材を得る。Rockも通常採掘で実itemを得る必要があり、資材注入で代替しない。
+次工程のRiverFillは実Filling branchの型変更後だけ受動記録する。Found以外は成功記録を出さず、
+実handlerで観測有無の同値を検査する。川地点への到達・Tank→Mixer取出し/投入・固体搬入は別の観測が必要で、
+新sourceの通常world実機と物流全体の受入は未実施のまま保持する。
+この追加の実機確認はfresh root `target/native-acceptance/tak14-tank-candidate-full-20261109-v2`で行い、
+ownerはTAK-14、consumerはRiverFill→TankPourの相関とFull→Mixer供給比較。sourceを封印まで固定し、
+成功時は最新比較用途、失敗時は具体的原因の診断用途だけ保持する。旧v1のpassを新条件に流用しない。
 
 - 解決したい課題: 壁・床以外の建築物で、用途・状態が読める形状と手描き表現を統一し、完成表示から各previewまで整合させる。
 - 到達したい状態: モデルが外形・開口・可動部を、テクスチャが手描きの線・材質・色面を担当し、全対象が同じ世界の設備として読める。

@@ -58,6 +58,19 @@ def fixture():
         event["sample_index"]=next(s["sample_index"] for s in samples if s["real_seconds"]==event["real_seconds"])
     raw["samples"]=samples
     raw["events"]=sorted([*raw["events"],*extra_events],key=lambda e:e["sample_index"])
+    fills=[]
+    for pour in raw["events"]:
+        if pour.get("operation") != "TankPour":
+            continue
+        index=pour["sample_index"]-1
+        prior=samples[index]
+        prior["m2_context"]["bucket_actors"][0].update(phase="GoingToDestination",inventory_present=True)
+        fills.append(dict(producer="ordinary-river-fill-branch-v1",operation="RiverFill",sample_index=index,
+                          real_seconds=prior["real_seconds"],bucket_before="BucketEmpty",
+                          **{k:pour[k] for k in ("worker","assignment","target","owner","bucket","world_epoch")}))
+    raw["events"]=sorted([*raw["events"],*fills],key=lambda e:e["sample_index"])
+    for sample in samples:
+        sample.get("m2_context",{})["river_fill_channel"]=True
     for index,event in enumerate(raw["events"]):
         event["event_index"]=index
     entries[-1]["value"]["m2_planning"]["consumers"]=copy.deepcopy(base["art_feedback"])
@@ -84,3 +97,37 @@ class TankFullTests(unittest.TestCase):
     def test_partial_default_does_not_borrow_full_scope(self):
         with self.assertRaises((ValueError,RuntimeError)):
             full.inflow.verify(*fixture())
+
+    def test_full_requires_fresh_same_bucket_worker_request_river_fill(self):
+        for mutate in (
+            lambda r:r.update(events=[e for e in r["events"] if e.get("operation")!="RiverFill"]),
+            lambda r:next(e for e in r["events"] if e.get("operation")=="RiverFill").update(worker="foreign"),
+            lambda r:next(e for e in r["events"] if e.get("operation")=="RiverFill").update(bucket="foreign"),
+        ):
+            args=fixture()
+            mutate(args[0])
+            for index,event in enumerate(args[0]["events"]):
+                event["event_index"]=index
+            with self.assertRaises((ValueError,RuntimeError)):
+                full.verify(*args)
+
+    def test_fill_observation_cannot_be_future_or_reused_from_a_previous_cycle(self):
+        raw=fixture()[0]
+        full.inflow.check_river_fill_chain(raw)
+        fills=[e for e in raw["events"] if e.get("operation")=="RiverFill"]
+        pours=[e for e in raw["events"] if e.get("operation")=="TankPour"]
+        # Keep event ordinals and old event clocks: neither proves chronology.
+        future=copy.deepcopy(raw)
+        future_fill=next(e for e in future["events"] if e.get("operation")=="RiverFill")
+        future_fill["sample_index"]=len(future["samples"])-1
+        with self.assertRaisesRegex((ValueError,RuntimeError),"stale or foreign"):
+            full.inflow.check_river_fill_chain(future)
+        same_sample=copy.deepcopy(raw)
+        next(e for e in same_sample["events"] if e.get("operation")=="RiverFill")["sample_index"]=pours[0]["sample_index"]
+        with self.assertRaisesRegex((ValueError,RuntimeError),"stale or foreign"):
+            full.inflow.check_river_fill_chain(same_sample)
+        old_cycle=copy.deepcopy(raw)
+        second=[e for e in old_cycle["events"] if e.get("operation")=="RiverFill"][1]
+        second.update(sample_index=fills[0]["sample_index"],real_seconds=fills[0]["real_seconds"])
+        with self.assertRaisesRegex((ValueError,RuntimeError),"stale or foreign"):
+            full.inflow.check_river_fill_chain(old_cycle)

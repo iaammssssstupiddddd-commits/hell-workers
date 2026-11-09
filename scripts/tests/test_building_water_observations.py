@@ -71,3 +71,47 @@ class TankPourTests(unittest.TestCase):
         samples[0]["actors"] *= 2
         with self.assertRaises(ValueError):
             lifecycle.check_tank_pour_receipt(event, samples, events)
+
+
+class RiverFillTests(unittest.TestCase):
+    @staticmethod
+    def fixture():
+        event = dict(producer="ordinary-river-fill-branch-v1", operation="RiverFill", sample_index=0,
+                     event_index=0, real_seconds=1., worker="worker", assignment="request", target="request",
+                     owner="tank", bucket="bucket", world_epoch=0, bucket_before="BucketEmpty")
+        context = dict(water_inventory_schema=1, river_fill_channel=True, accepted=False,
+                       performance_evidence=False, promotion_authority=False,
+                       tanks=[dict(entity="tank", provisional=False, stockpile=dict(resource="Water", capacity=50))],
+                       items=[dict(entity="bucket", resource="BucketWater", belongs_to="tank", delivering_to="tank",
+                                   stored_in=None, loaded_in=None)],
+                       bucket_actors=[dict(entity="worker", is_soul=True, inventory_present=True, bucket="bucket",
+                           carried_item="bucket", working_on="request", phase="GoingToDestination",
+                           source=dict(kind="River"), destination=dict(kind="Tank", entity="tank", exists=True),
+                           identity=dict(assignment="request", target="request", work_type="GatherWater", matches_working_on=True))])
+        return event, [dict(real_seconds=1., world_epoch=0, m2_context=context)]
+
+    def test_actual_conversion_is_not_a_water_volume_or_route_claim(self):
+        event, samples = self.fixture()
+        lifecycle.check_river_fill_receipt(event, samples)
+        samples[0].update(sample_index=0, **{key: [] for key in lifecycle.TRANSITION_CATEGORIES})
+        lifecycle.check_raw_transitions(dict(schema_version=2, transition_contract="indexed-state-delta-v1",
+                                            samples=samples, events=[event]))
+
+    def test_foreign_missing_unapplied_or_authoritative_claims_rejected(self):
+        for mutate in (
+            lambda e,c: e.update(world_epoch=True), lambda e,c: e.update(sample_index=True),
+            lambda e,c: e.update(event_index=True), lambda e,c: e.update(real_seconds=float("nan")),
+            lambda e,c: e.update(bucket_before="BucketWater"), lambda e,c: e.update(target="bucket"),
+            lambda e,c: e.update(amount=5), lambda e,c: c.update(river_fill_channel=False),
+            lambda e,c: c.update(promotion_authority=True), lambda e,c: c.update(bucket_actors=[]),
+            lambda e,c: c["items"][0].update(stored_in="tank"),
+            lambda e,c: c["items"][0].update(belongs_to="foreign"),
+            lambda e,c: c["items"][0].update(resource="BucketEmpty"),
+            lambda e,c: c["bucket_actors"][0].update(carried_item=None),
+            lambda e,c: c["bucket_actors"][0]["destination"].update(exists=1),
+            lambda e,c: c["bucket_actors"][0]["identity"].update(matches_working_on=1),
+        ):
+            event, samples = self.fixture()
+            mutate(event, samples[0]["m2_context"])
+            with self.subTest(mutate=mutate), self.assertRaises(ValueError):
+                lifecycle.check_river_fill_receipt(event, samples)
