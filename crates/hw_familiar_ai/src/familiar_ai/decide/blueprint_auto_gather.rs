@@ -213,6 +213,75 @@ pub fn blueprint_auto_gather_system(
 
     let plan = build_auto_gather_targets(&raw_demand_by_owner, &supply_state.supply_by_owner);
 
+    // Temporary read-only diagnosis of the ordinary missing-Wood campaign.
+    // Remove after distinguishing demand, supply, reachability and assignment.
+    #[cfg(feature = "profiling")]
+    if std::env::var("HW_NATIVE_UI_CASE").as_deref() == Ok("m2-tank-candidate-supply") {
+        let requests: Vec<_> = p
+            .q_bp_requests
+            .iter()
+            .take(64)
+            .map(|(request, target, workers)| {
+                (
+                    request.anchor,
+                    request.issued_by,
+                    request.resource_type,
+                    target.0,
+                    workers.map(|workers| workers.iter().collect::<Vec<_>>()),
+                    p.q_blueprints
+                        .get(target.0)
+                        .ok()
+                        .map(|bp| (&bp.required_materials, &bp.delivered_materials)),
+                )
+            })
+            .collect();
+        let supply: Vec<_> = supply_state
+            .supply_by_owner
+            .iter()
+            .take(64)
+            .map(|(key, value)| {
+                (
+                    key,
+                    value.ground_items,
+                    value.pending_non_auto_yield,
+                    value.auto_active_count,
+                    value.auto_idle.len(),
+                )
+            })
+            .collect();
+        let candidates: Vec<_> = supply_state
+            .candidate_sources
+            .iter()
+            .take(64)
+            .map(|(key, value)| (key, value.len()))
+            .collect();
+        let sources: Vec<_> = p
+            .q_sources
+            .iter()
+            .take(128)
+            .map(
+                |(entity, transform, tree, rock, designation, workers, manager, auto)| {
+                    (
+                        entity,
+                        transform.translation.truncate(),
+                        tree.is_some(),
+                        rock.is_some(),
+                        designation.map(|value| value.work_type),
+                        workers.map(|value| value.len()),
+                        manager.map(|value| value.0),
+                        auto.map(|value| value.owner),
+                    )
+                },
+            )
+            .collect();
+        info!(
+            "M2_GATHER_DIAGNOSTIC counts=({}, {}) requests={requests:?} interest={owner_resource_interest:?} raw={raw_demand_by_owner:?} supply={supply:?} candidates={candidates:?} needed={:?} sources={sources:?}",
+            p.q_bp_requests.iter().count(),
+            p.q_sources.iter().count(),
+            plan.needed_new_auto_count
+        );
+    }
+
     assign_needed_auto_designations(
         &mut commands,
         &plan.needed_new_auto_count,

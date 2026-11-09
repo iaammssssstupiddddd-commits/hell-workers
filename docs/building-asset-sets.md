@@ -332,6 +332,12 @@ Sand/Rockは実item消費receiptのzeroからのcounter経路を精製直前値�
 全後半sampleで同Tankのmap・専用bucket5個・保管所・在庫正逆・active candidate rootを保持する。
 このrecipeの実装/testは実機成功ではなく、fresh実行・登録verifier・独立画像/raw reviewを必要とする。
 帰還完了、全採取/配送lifecycle、Mixer候補の通常表示、性能、9種の正式release/installは別条件である。
+`e9863406`のfresh `tak14-tank-mixer-supply-20261110-v1`はMixer施工待機180秒でinvalid終了。
+通常Tankの完成とMixer配置、Wood3/4の実消費は記録されたが、残るWoodが供給されず完成しなかった。
+494 samples/1104 events、最終real242.282747855 / virtual321.127758323、実RiverFill11/TankPour10。
+MixerMaterial/MixerPour/RefineCommitはなく、給水から精製までの受入成功には数えない。
+入力再送・資材追加・上限延長はせず、通常需要/自動採取/割当の診断として192774144 bytesを保持した。
+invalid封印/finalize済み。原因はまだ確定しておらず、旧passへの読み替えや独立採否の変更は行わない。
 
 自然施工は別の `m2-mixer-candidate-completion` / `m2-candidate-completion` /
 `ordinary-m2-candidate-completion-v1` で採用済みMixer候補だけを受付する。準備はcamera/pauseだけとし、
