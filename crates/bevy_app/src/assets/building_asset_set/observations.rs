@@ -1,5 +1,6 @@
 //! Profiling-only, bounded observations of the ordinary world. This does not
 //! create owners, drive input, grant authority, or claim performance evidence.
+use super::observations_history::{BYTE_CAP, History, encode_record};
 use super::snapshot_io::{require_fresh_path, temporary_path, write_observation};
 use bevy::{
     ecs::message::MessageCursor,
@@ -15,7 +16,7 @@ use hw_jobs::{
     DeconstructionCommitOutcome, MovePlantTask,
 };
 use hw_visual::{Building3dVisual, StructuralPresentationState, TopDownStructuralMaterial};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use serde_json::{Value, json};
 use std::path::{Component, PathBuf};
 
@@ -40,8 +41,8 @@ struct Session {
 #[derive(Resource, Default)]
 struct Observations {
     next: f64,
-    samples: Vec<Value>,
-    events: Vec<Value>,
+    samples: History<false>,
+    events: History<true>,
     saves: MessageCursor<SaveLoadOutcome>,
     deconstruction: MessageCursor<DeconstructionCommitOutcome>,
     completed: MessageCursor<BuildingCompletedVisualMessage>,
@@ -53,11 +54,13 @@ struct Observations {
     failure: Option<String>,
     tracked_owners: std::collections::HashSet<Entity>,
     written_events: usize,
+    published_encoding_time: std::time::Duration,
 }
 
 // Borrow the growing history instead of cloning every Value into a second
 // envelope on each publication. The wire schema, ordering and caps are unchanged.
-#[derive(Serialize)]
+#[cfg(test)]
+#[derive(serde::Serialize)]
 struct ObservationRecord<'a> {
     #[serde(flatten)]
     header: Value,
@@ -65,7 +68,11 @@ struct ObservationRecord<'a> {
     events: &'a [Value],
 }
 
-fn encode_record(record: &ObservationRecord<'_>, byte_cap: usize) -> Result<Vec<u8>, String> {
+#[cfg(test)]
+fn encode_reference_record(
+    record: &ObservationRecord<'_>,
+    byte_cap: usize,
+) -> Result<Vec<u8>, String> {
     let bytes = serde_json::to_vec(record).map_err(|error| error.to_string())?;
     if bytes.len() > byte_cap {
         return Err("production observation byte cap exceeded".into());
@@ -610,6 +617,8 @@ fn architect_panel_ready(world: &mut World) -> bool {
 
 fn observe(world: &mut World) {
     let observation_start = std::time::Instant::now();
+    let state = world.resource::<Observations>();
+    let encoding_before = state.samples.encoding_time() + state.events.encoding_time();
     let now = world.resource::<Time<Real>>().elapsed_secs_f64();
     world.resource_scope(|world, mut observations: Mut<Observations>| {
         let index = observations.samples.len();
@@ -852,9 +861,7 @@ fn observe(world: &mut World) {
     {
         let mut state = world.resource_mut::<Observations>();
         state.failure = failure.clone();
-        for (index, event) in state.events.iter_mut().enumerate() {
-            event["event_index"] = json!(index);
-        }
+        // Ordinals are finalized by the immutable event history at append time.
     }
     let state = world.resource::<Observations>();
     let session = world.resource::<Session>();
@@ -878,24 +885,24 @@ fn observe(world: &mut World) {
             "Complete lifecycle witnesses/cycles are not inferred from input or state deltas",
             "GPU/native/RSS/total application handles require independent host instrumentation"],
         "failure": failure});
-    let record = ObservationRecord {
-        header,
-        samples: &state.samples,
-        events: &state.events,
-    };
-    let collected = observation_start.elapsed();
+    let total_row_encoding = state.samples.encoding_time() + state.events.encoding_time();
+    let row_encoding_time = total_row_encoding.saturating_sub(state.published_encoding_time);
+    let collected = observation_start
+        .elapsed()
+        .saturating_sub(total_row_encoding.saturating_sub(encoding_before));
     let encoding_start = std::time::Instant::now();
     let mut encoded_bytes = 0;
     let mut encoding_time = std::time::Duration::ZERO;
     let mut writing_time = std::time::Duration::ZERO;
-    let result = encode_record(&record, 64 * 1024 * 1024).and_then(|bytes| {
-        encoding_time = encoding_start.elapsed();
-        encoded_bytes = bytes.len();
-        let writing_start = std::time::Instant::now();
-        let result = write_observation(&session.output, &bytes).map_err(|e| e.to_string());
-        writing_time = writing_start.elapsed();
-        result
-    });
+    let result =
+        encode_record(&header, &state.samples, &state.events, BYTE_CAP).and_then(|bytes| {
+            encoding_time = encoding_start.elapsed() + row_encoding_time;
+            encoded_bytes = bytes.len();
+            let writing_start = std::time::Instant::now();
+            let result = write_observation(&session.output, &bytes).map_err(|e| e.to_string());
+            writing_time = writing_start.elapsed();
+            result
+        });
     // Bounded cadence under the 1200-sample cap. These timings describe the
     // observer itself, never renderer/game performance acceptance.
     if state.samples.len().is_multiple_of(128) {
@@ -904,10 +911,12 @@ fn observe(world: &mut World) {
             encoded_bytes,
             collection_us = collected.as_micros(),
             encoding_us = encoding_time.as_micros(),
+            row_encoding_us = row_encoding_time.as_micros(),
             writing_us = writing_time.as_micros(),
             "Production observation publication cost"
         );
     }
+    world.resource_mut::<Observations>().published_encoding_time = total_row_encoding;
     if failure.is_some() || result.is_err() {
         error!(
             "Production observations failed: {:?} {:?}",
@@ -1340,16 +1349,24 @@ mod tests {
             samples: &samples,
             events: &events,
         };
-        let bytes = encode_record(&record, 64 * 1024 * 1024).unwrap();
+        let bytes = encode_reference_record(&record, 64 * 1024 * 1024).unwrap();
+        let mut cached_samples = History::default();
+        cached_samples.extend(samples.clone());
+        let mut cached_events = History::default();
+        cached_events.extend(events.clone());
+        assert_eq!(
+            encode_record(&record.header, &cached_samples, &cached_events, BYTE_CAP).unwrap(),
+            bytes
+        );
         assert_eq!(serde_json::from_slice::<Value>(&bytes).unwrap(), expected);
         assert_eq!(record.samples, samples);
         assert_eq!(record.events, events);
-        assert!(encode_record(&record, bytes.len()).is_ok());
+        assert!(encode_reference_record(&record, bytes.len()).is_ok());
         assert_eq!(
-            encode_record(&record, bytes.len() - 1).unwrap_err(),
+            encode_reference_record(&record, bytes.len() - 1).unwrap_err(),
             "production observation byte cap exceeded"
         );
-        assert!(encode_record(&record, 0).is_err());
+        assert!(encode_reference_record(&record, 0).is_err());
     }
 
     #[test]

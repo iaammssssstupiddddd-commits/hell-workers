@@ -356,6 +356,18 @@ Tank内Waterの取出しではない。TankTake/MixerMaterial/RefineCommitは0�
 invalid封印・診断用途204750848 bytes保持・finalize済み。Sand採取指定不足や停止と推測せず、
 次はSupply専用の限定受動観測でsolid requestの実owner/demand/workers、Rock実指定/到達、
 採取/手運搬/猫車の実task/移動先を調べる。入力・数量・上限・採否条件は変更しない。
+供給v4（`f6270ae7`）ではYard発行Rock需要5→到達可能なMine指定→実採掘/手運搬→Rock搬入まで確認した。
+Sand5も猫車の帰路を進行し、real417.811793415で上限終了した。invalid封印・比較用途保持・finalize済み。
+採取/搬送実装の欠落やSand指定不足は立証されず、一時solid診断は撤去する。
+512 samples時点の公開コストは収集9476us、全履歴encode903873us、write33624usだった。
+profiling observerの履歴をowned append-only型へ移し、event_indexをappend時に確定して一度だけencodeする。
+過去rowへのmutable参照を公開せず、入力/receipt全経路を共通appendへ通す。全JSON内容/順序/authority、
+1200samples/4096events/完成JSON64MiB上限、排他的temporary・同期write・renameは不変。
+byte/encode失敗はstickyで、欠損を捨てて後続成功にしない。headerのfailureは公開時に生成する。
+各公開の`encoding_us`は新規row encodeとenvelope組立の合計、`row_encoding_us`は前回公開後の追記分。
+`collection_us`は当observe内で実行したrow encode分を差し引き、callback由来のencodeはencoding側だけへ含める。
+全面bytesコピー/writeは残り、総累積処理の線形化やゲーム/renderer性能合格を意味しない。
+新sourceの実機結果は未確認であり、旧成功/invalidを新受入へ流用しない。
 
 自然施工は別の `m2-mixer-candidate-completion` / `m2-candidate-completion` /
 `ordinary-m2-candidate-completion-v1` で採用済みMixer候補だけを受付する。準備はcamera/pauseだけとし、
