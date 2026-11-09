@@ -160,6 +160,10 @@ Soul 本体画像は、Idle 状態だけでなくイベントでも一時差し�
 手運び・猫車の実Blueprint材料増分と消費itemを共有のbounded receiptへ送り、
 root observerが受動収集する。通常のAI割当・疲労・chain・予約解除・建設速度は変えない。
 
+Mixer宛猫車の`GoingToDestination`は手運びと同じtarget-or-destination判定を、隣接経路`Found`後に使う。
+Mixerの2×2中心から遠い合法な斜め終点でも`Unloading`へ進める。遠方では移動を継続し、
+`Deferred`で近いstale destinationを到着と扱わない。`Unreachable`/target消滅のcleanupと実搬入時の容量は不変。
+
 ### 3.3. 解体 (Deconstruct)
 
 - `DeconstructData`はdurable order、canonical target、`GoingToTarget → Dismantling → AwaitingCommit` phaseを持つ。

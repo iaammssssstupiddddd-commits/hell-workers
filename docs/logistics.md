@@ -303,6 +303,9 @@ assignment arbitrationが新しいrequest/workerを追加しない。既存in-fl
   - `Loading` フェーズで生成するため搬入先への `DeliveringTo` は挿入されない（Mixer 宛の予約は `ReserveMixerDestination` op で別途管理）。
   - 採取前は`collect_amount`分、採取後は`items`分のMixer容量をactive reservation signatureに保持する。同期・中断時もbuilderと同じ数量を再構築・解放する。
   - 需要計算: `needed = MUD_MIXER_CAPACITY - current - inflight`。`inflight` には `DeliverToMixerSolid+Sand` に割り当て済みの worker 数を使用し、過剰タスク発行を防止する。
+  - 猫車の到着は`Found`になった隣接pathの実終点またはMixer中心への近接で判定する。
+    2×2の中心から斜め終点までの距離だけを見て、到着後も搬入待ちを繰り返さない。
+    遠方/Deferredは荷下ろしせず、到達不能/消滅は既存cancelへ進む。材料増分はUnloadingだけで確定する。
 
 ### 4.4 MudMixer 水搬入 (`DeliverWaterToMixer`)
 - 水不足時に request を発行。

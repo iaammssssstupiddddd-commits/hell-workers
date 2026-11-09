@@ -170,6 +170,10 @@ payloadのEntity参照列挙は`AssignedTask::references_entity`へ集約する�
 - **採取**: 木=Wood×5、岩=Rock×10ドロップ。Sand/BonePile/砂タイル/河川は無限ソース（即時完了）
 - **運搬 (Haul)**: GoingToSource → Picking → GoingToDestination → Dropping
 - **猫車運搬 (HaulWithWheelbarrow)**: GoingToParking → PickingUpWheelbarrow → GoingToSource → Loading → GoingToDestination → Unloading → ReturningWheelbarrow
+- Mixer宛の猫車は、隣接経路が`Found`のときだけ建物中心または選定した実終点への近接で`Unloading`へ進む。
+  2×2footprintの斜め終点を中心距離だけで拒否しない。`Deferred`は荷下ろし/解除せず、
+  `Unreachable`と対象消滅は従来の積載物drop・予約解放を伴うretryable cleanupを通す。
+  移動phaseでは材料を消費せず、実Unloadingの既存容量/数量判定を維持する。
 - **Sand / StasisMud**: 原則猫車必須。例外: ソース隣接 3x3 の立ち位置からドロップ閾値内なら徒歩可
 - **水搬送 (BucketTransport)**: `AssignedTask::BucketTransport(BucketTransportData)` の単一バリアントで表現。`source`（`River` / `Tank`）と `destination`（`Tank` / `Mixer`）に応じて `bucket_transport/phases/` の共通フェーズハンドラで実行される。`WorkType` は River→Tank が `GatherWater`、Tank→Mixer が `HaulWaterToMixer` として返される。
 - **運搬先ガード**: Blueprint / construction / provisional wall / stockpile は Dropping / Unloading 直前に受入可能量を再確認し、到着時点で需要が消えた cargo を搬入先へ反映しない。

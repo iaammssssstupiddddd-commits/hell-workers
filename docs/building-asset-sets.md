@@ -383,6 +383,14 @@ v1のcoalescingは撤去し、対象eventの即時公開を元に戻す。input�
 独立verifierはv2scope/source/headerの完全一致を要求し、旧scope、契約欠損/変更、Dream producer/operation混入を拒否する。
 この証拠からDream移送・休憩lifecycle・全世界の完全履歴を証明できない。旧v1 invalidは履歴のまま維持する。
 1200samples/4096events/完成JSON64MiBと待機上限は変更しない。
+v7（`37515837`）はこの通知契約で490samples/254events、観測は上限内・raw failureなしだったが、
+精製待機180秒でinvalidとなった。最終real231.907792928/virtual821.816274802。
+両建物完成・Rock5実搬入・MixerPour1は記録された一方、Sand5は猫車905v0に残り、TankTake/Refineは0。
+実停止点[72,49]=(720,-16)とMixer中心(672,-64)は67.88wu離れ、中心距離閾値57.6wuを越えた。
+猫車は有効な隣接pathを得ていたが中心距離だけで到着判定しており、Unloadingへ進めなかった。
+独立read-only調査でも同じ不整合を確認した。identity失効の直接原因は観測がなく断定しない。
+通常のMixer猫車branchだけ、Found後に手運びと同じ実終点も到着判定する修正を行う。
+旧invalidは封印/finalizeし、200327168bytesを修正比較用途に保持。新source実機成功や全受入には数えない。
 
 自然施工は別の `m2-mixer-candidate-completion` / `m2-candidate-completion` /
 `ordinary-m2-candidate-completion-v1` で採用済みMixer候補だけを受付する。準備はcamera/pauseだけとし、

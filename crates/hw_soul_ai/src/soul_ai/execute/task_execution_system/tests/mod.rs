@@ -153,3 +153,4 @@ mod refine_observations;
 mod stockpile_policy;
 #[cfg(feature = "profiling")]
 mod water_observations;
+mod wheelbarrow_navigation;
