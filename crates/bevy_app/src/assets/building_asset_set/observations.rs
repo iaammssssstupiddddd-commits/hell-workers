@@ -646,6 +646,20 @@ fn observe(world: &mut World) {
             if let Some(failure) = receipts.failure {
                 observations.failure = Some(failure.into());
             }
+            for receipt in receipts.materials.drain(..) {
+                observations.events.push(json!({"sample_index":index, "real_seconds":now,
+                    "producer":"ordinary-mixer-material-branch-v1", "operation":"MixerMaterial",
+                    "worker":format!("{:?}",receipt.worker), "assignment":format!("{:?}",receipt.assignment),
+                    "target":format!("{:?}",receipt.target), "work_type":format!("{:?}",receipt.work_type),
+                    "owner":format!("{:?}",receipt.owner), "item":format!("{:?}",receipt.item),
+                    "resource":format!("{:?}",receipt.resource), "world_epoch":receipt.world_epoch,
+                    "actual_resource":receipt.actual_resource.map(|r|format!("{r:?}")),
+                    "stored_before":receipt.stored_before.map(|e|format!("{e:?}")),
+                    "loaded_before":receipt.loaded_before.map(|e|format!("{e:?}")),
+                    "carried_before":receipt.carried_before.map(|e|format!("{e:?}")),
+                    "wheelbarrow":receipt.wheelbarrow.map(|e|format!("{e:?}")),
+                    "counter_order":["Sand","Rock","StasisMud"], "before":receipt.before, "after":receipt.after}));
+            }
             for receipt in receipts.rows.drain(..) {
                 observations.events.push(json!({"sample_index": index, "real_seconds": now,
                     "producer": "ordinary-mixer-refine-branch-v1", "operation": "RefineCommit",

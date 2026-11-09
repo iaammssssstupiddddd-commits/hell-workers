@@ -159,11 +159,29 @@ pub fn handle_haul_to_mixer_task(
         }
 
         HaulToMixerPhase::Delivering => {
+            #[cfg(feature = "profiling")]
+            let mut receipt = ctx.env.refine_observations.then(|| {
+                crate::refine_observations::MixerMaterialReceipt::capture(
+                    ctx,
+                    mixer_entity,
+                    item_entity,
+                    resource_type,
+                    None,
+                )
+            });
             let mut delivered = false;
             if let Ok(mixer_data) = ctx.queries.storage.mixers.get_mut(mixer_entity) {
                 let (_, mut storage, _) = mixer_data;
+                #[cfg(feature = "profiling")]
+                if let Some(receipt) = &mut receipt {
+                    receipt.before = [storage.sand, storage.rock, storage.mud];
+                }
                 if storage.add_material(resource_type) {
                     delivered = true;
+                }
+                #[cfg(feature = "profiling")]
+                if let Some(receipt) = &mut receipt {
+                    receipt.after = [storage.sand, storage.rock, storage.mud];
                 }
 
                 if delivered {
@@ -174,7 +192,12 @@ pub fn handle_haul_to_mixer_task(
                         ctx.soul_entity, resource_type
                     );
                     reservation::release_mixer_destination(ctx, mixer_entity, resource_type);
-                    return ctx.complete_task(commands, "haul to mixer delivered");
+                    let result = ctx.complete_task(commands, "haul to mixer delivered");
+                    #[cfg(feature = "profiling")]
+                    if let Some(receipt) = receipt {
+                        receipt.queue(commands);
+                    }
+                    return result;
                 }
 
                 if let Some(item) = ctx.inventory.0 {

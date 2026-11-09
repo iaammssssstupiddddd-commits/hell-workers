@@ -10,9 +10,13 @@ use hw_logistics::{ResourceItem, ResourceType};
 
 const CAP: usize = 4096;
 
+mod materials;
+pub use materials::MixerMaterialReceipt;
+
 #[derive(Resource, Default)]
 pub struct RefineCommitReceipts {
     pub rows: Vec<RefineCommitReceipt>,
+    pub materials: Vec<MixerMaterialReceipt>,
     pub failure: Option<&'static str>,
     total: usize,
 }

@@ -277,6 +277,17 @@ WorkingOnは当branchで解除される。branch内counterと、同frameの別�
 出力には既存の寿命があるため、後の個数だけを精製完了の証拠にしない。receipt resourceが無ければ記録せず、
 このproducerやunit testだけでは実機の自然精製/lifecycle・性能・アート・releaseを受入しない。
 
+Sand/Rock搬入は `ordinary-mixer-material-branch-v1` / `MixerMaterial` として、実手運び・猫車の
+`add_material`成功branchでのみ捕捉する。実item型、格納/積載/所持の直前値、worker/assignment/target、
+MixerとSand/Rock/Mudのbranch内before/afterを、deferred消費後のitem消失と同epoch/完成Mixerへ照合する。
+手運びは所持item、猫車は同じ所持車両へのLoadedInを要求し、payloadだけの型推定や失敗の成功化を拒否する。
+各itemの受入増分は1、対象外counterは不変、現在の材料capacity5を超えないことを検査する。
+同frameの別配送/精製があるため、最終snapshot counterをbranch内afterへ一致させない。
+満杯でのdropは成功receiptを作らず、猫車の部分投入は実消費できたitemだけを記録する。
+Refineと共通の4096件上限とsticky failureを使い、同epoch/itemの再利用を独立parserが拒否する。
+これは材料→counter変換の証拠であり、通常伐採/採掘/砂採取、配送要求の全lifecycle、帰還、自然精製、
+全9種の実機・性能・正式releaseを証明しない。observerの非承認flagsとゲーム規則は変更しない。
+
 水供給の受動inventoryは別の `water_inventory_schema=1` として同 `m2_context` へ追加する。
 TankとBucketStorageを各最大512件、BucketTransport actorを最大128件読み、実Stockpileの種別/capacity、
 StoredItems（不在はnull）、専用BelongsTo、未完成PendingBelongsToBlueprintとitemのDeliveringToを区別する。

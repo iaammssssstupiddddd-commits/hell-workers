@@ -145,6 +145,8 @@ mod delivery_observations;
 mod gather_chain;
 mod guards;
 #[cfg(feature = "profiling")]
+mod mixer_materials;
+#[cfg(feature = "profiling")]
 mod mixer_water;
 #[cfg(feature = "profiling")]
 mod refine_observations;

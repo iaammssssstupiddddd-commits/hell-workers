@@ -210,6 +210,51 @@ def check_refine_receipt(event, samples):
                 and rows[0].get("loaded_in") is None, "Refine actual output identity/type/relation differs")
 
 
+def check_mixer_material_receipt(event, samples):
+    """Actual item-to-counter branch, not a complete supply/refinement leg."""
+    require(set(event) == {"producer", "operation", "sample_index", "event_index", "real_seconds",
+                           "worker", "assignment", "target", "work_type", "owner", "item", "resource",
+                           "world_epoch", "actual_resource", "stored_before", "loaded_before", "carried_before",
+                           "wheelbarrow", "counter_order", "before", "after"}
+            and event["producer"] == "ordinary-mixer-material-branch-v1" and event["operation"] == "MixerMaterial"
+            and type(event["event_index"]) is int and event["event_index"] >= 0
+            and type(event["sample_index"]) is int and 0 <= event["sample_index"] < len(samples),
+            "Mixer material envelope differs")
+    sample = samples[event["sample_index"]]
+    require(type(event["world_epoch"]) is int and event["world_epoch"] >= 0
+            and type(sample.get("world_epoch")) is int and sample["world_epoch"] == event["world_epoch"]
+            and all(type(value) in (int,float) and math.isfinite(value) for value in
+                    (event["real_seconds"], sample.get("real_seconds")))
+            and 0 <= event["real_seconds"] <= sample["real_seconds"], "Mixer material epoch/clock differs")
+    require(all(isinstance(event[k],str) and event[k] for k in ("worker","assignment","target","owner","item"))
+            and len({event["worker"],event["owner"],event["item"]}) == 3
+            and event["resource"] in ("Sand","Rock") and event["actual_resource"] == event["resource"]
+            and event["stored_before"] is None, "Mixer material actual item differs")
+    wheel = event["wheelbarrow"]
+    require((wheel is None and event["work_type"] == "HaulToMixer" and event["loaded_before"] is None
+             and event["carried_before"] == event["item"])
+            or (isinstance(wheel,str) and wheel and wheel not in {event["worker"],event["owner"],event["item"]}
+                and event["work_type"] == "WheelbarrowHaul" and event["loaded_before"] == event["carried_before"] == wheel),
+            "Mixer material actual carrier differs")
+    require(event["counter_order"] == ["Sand","Rock","StasisMud"]
+            and all(isinstance(event[key],list) and len(event[key]) == 3
+                    and all(type(value) is int and 0 <= value < 2**32 for value in event[key]) for key in ("before","after")),
+            "Mixer material branch counters malformed")
+    axis = ("Sand","Rock").index(event["resource"])
+    require(all(event["after"][i] == event["before"][i] + int(i == axis) for i in range(3))
+            and event["after"][axis] <= 5, "Mixer material branch counter delta differs")
+    ctx = sample.get("m2_context",{})
+    require(type(ctx.get("schema")) is int and ctx["schema"] == 1 and ctx.get("mixer_material_channel") is True
+            and all(ctx.get(k) is False for k in ("accepted","performance_evidence","promotion_authority")),
+            "Mixer material observer differs")
+    owners = [row for row in ctx.get("mixers",[]) if row.get("entity") == event["owner"]]
+    require(len(owners) == 1 and evidence.pipeline.exact_json(owners[0].get("building"),dict(kind="MudMixer",provisional=False))
+            and all(type(owners[0].get(k)) is int and 0 <= owners[0][k] < 2**32 for k in ("sand","rock","mud"))
+            and len([row for row in sample.get("actors",[]) if row.get("entity") == event["worker"]]) == 1
+            and not any(row.get("entity") == event["item"] for row in ctx.get("items",[])),
+            "Mixer material committed owner/consumption differs")
+
+
 def check_tank_pour_receipt(event, samples, events):
     """Actual pour branch only; no River origin or whole supply authority."""
     require(set(event) == {"producer", "operation", "sample_index", "event_index", "real_seconds", "worker",
@@ -332,6 +377,7 @@ def check_raw_transitions(raw):
     refined_items = set()
     poured_items = set()
     consumed_transfer_items, produced_transfer_items = set(), set()
+    mixer_material_items = set()
     delivery_counts = {}
     for event in events_seen:
         producer = event.get("producer")
@@ -364,6 +410,11 @@ def check_raw_transitions(raw):
                     and type(event.get("real_seconds")) in (int, float) and math.isfinite(event["real_seconds"])
                     and type(sample.get("real_seconds")) in (int, float) and math.isfinite(sample["real_seconds"])
                     and 0 <= event["real_seconds"] <= sample["real_seconds"], "raw mouse context differs")
+        elif producer == "ordinary-mixer-material-branch-v1":
+            check_mixer_material_receipt(event, samples)
+            identity = (event["world_epoch"],event["item"])
+            require(identity not in mixer_material_items, "Mixer material receipt reused")
+            mixer_material_items.add(identity)
         elif producer == "ordinary-mixer-refine-branch-v1":
             check_refine_receipt(event, samples)
             identities = {(event["world_epoch"], item) for item in [event["water"], *event["outputs"]]}

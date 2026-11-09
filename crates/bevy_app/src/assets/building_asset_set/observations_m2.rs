@@ -205,6 +205,7 @@ pub(super) fn snapshot(world: &mut World) -> Result<Value, String> {
         "mixer_water_channel": world.contains_resource::<hw_soul_ai::water_observations::TankPourReceipts>(),
         "tank_pour_channel": world.contains_resource::<hw_soul_ai::water_observations::TankPourReceipts>(),
         "refine_commit_channel": world.contains_resource::<hw_soul_ai::refine_observations::RefineCommitReceipts>(),
+        "mixer_material_channel": world.contains_resource::<hw_soul_ai::refine_observations::RefineCommitReceipts>(),
         "accepted": false, "performance_evidence": false, "promotion_authority": false}),
     )
 }

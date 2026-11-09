@@ -445,14 +445,42 @@ pub fn handle(
             entity: mixer_entity,
             resource_type,
         } => {
+            #[cfg(feature = "profiling")]
+            let receipts: HashMap<_, _> = if ctx.env.refine_observations {
+                item_types
+                    .iter()
+                    .map(|&(item, actual)| {
+                        (
+                            item,
+                            crate::refine_observations::MixerMaterialReceipt::capture(
+                                ctx,
+                                mixer_entity,
+                                item,
+                                actual.unwrap_or(resource_type),
+                                Some(data.wheelbarrow),
+                            ),
+                        )
+                    })
+                    .collect()
+            } else {
+                HashMap::new()
+            };
             if let Ok((_, mut storage, _)) = ctx.queries.storage.mixers.get_mut(mixer_entity) {
                 for (item_entity, res_type_opt) in &item_types {
                     let res_type = (*res_type_opt).unwrap_or(resource_type);
+                    #[cfg(feature = "profiling")]
+                    let before = [storage.sand, storage.rock, storage.mud];
 
                     if storage.add_material(res_type) {
                         if try_despawn_item(commands, *item_entity) {
                             delivered_items.insert(*item_entity);
                             unloaded_count += 1;
+                        }
+                        #[cfg(feature = "profiling")]
+                        if let Some(mut receipt) = receipts.get(item_entity).cloned() {
+                            receipt.before = before;
+                            receipt.after = [storage.sand, storage.rock, storage.mud];
+                            receipt.queue(commands);
                         }
                     } else if let Ok(mut item_commands) = commands.get_entity(*item_entity) {
                         item_commands.try_remove::<LoadedIn>();
