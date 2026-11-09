@@ -337,7 +337,18 @@ Sand/Rockは実item消費receiptのzeroからのcounter経路を精製直前値�
 494 samples/1104 events、最終real242.282747855 / virtual321.127758323、実RiverFill11/TankPour10。
 MixerMaterial/MixerPour/RefineCommitはなく、給水から精製までの受入成功には数えない。
 入力再送・資材追加・上限延長はせず、通常需要/自動採取/割当の診断として192774144 bytesを保持した。
-invalid封印/finalize済み。原因はまだ確定しておらず、旧passへの読み替えや独立採否の変更は行わない。
+invalid封印/finalize済み。旧passへの読み替えや独立採否の変更は行わない。
+追加診断v2（`5ee802b5`）も同じ180秒でinvalid、194744320 bytesを診断保持しfinalizeした。
+通常Wood需要1、地上/予約/搬送供給0、Tree候補41は存在したが、新規伐採割当はなかった。
+自然生成seed20260914の再現では、Yardから到達できるTreeは0/41、Rockは13/52で、
+初期・Tank/専用置場完成後・Mixer予定footprint後の全段階で同じだった。fresh/warm cacheとA*も一致した。
+地形生成の現契約はTree到達を保証しておらず、この試験worldでは橋なしの追加Wood供給を成立させられない。
+一時INFO診断は撤去し、gameplayの地形・資材量・自動採取・歩行規則は変更しない。
+供給caseだけ自然生成seed42/attempt0/fallback=falseへ固定し、layout SHA256
+`d8eff05ae2b6c56d8bbfa39570c6ce6e7174aae0c69f2c5ab53527add5dcff72`をcontractと実観測で照合する。
+準備時のread-only経路投影では全3段階でTree15/Rock12へ到達可能で、実WorldMapは更新しない。
+他caseや通常起動のseedは変えない。これは特定worldの試験成立条件であり、任意seedでの供給保証、
+全物流や地形生成修正の受入ではない。新sourceの実機成功はまだ得られていない。
 
 自然施工は別の `m2-mixer-candidate-completion` / `m2-candidate-completion` /
 `ordinary-m2-candidate-completion-v1` で採用済みMixer候補だけを受付する。準備はcamera/pauseだけとし、

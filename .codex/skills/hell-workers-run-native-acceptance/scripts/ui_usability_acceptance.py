@@ -861,6 +861,8 @@ def run(args):
                                 "HW_NATIVE_UI_ROOT": str(directory), "HW_NATIVE_UI_NONCE": nonce,
                                 "HW_NATIVE_UI_WIDTH": str(width), "HW_NATIVE_UI_HEIGHT": str(height), "HW_NATIVE_UI_SCALE": str(scale)})
             environment["HW_NATIVE_UI_CASE"] = case
+            if case == tank_supply.CASE:
+                environment["HELL_WORKERS_WORLDGEN_SEED"] = str(art_contract["worldgen"]["seed"])
             if case in COMPLETION_CASES:
                 view = completion_recipe(case).prepare_view(repo, directory, art_contract)
                 environment["BEVY_ASSET_ROOT"] = str(view)

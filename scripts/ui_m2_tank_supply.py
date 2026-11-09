@@ -16,12 +16,14 @@ native, pipeline, planning = tank.native, tank.pipeline, tank.planning
 CASE, SCOPE = tank.SUPPLY_CASE, tank.SUPPLY_SCOPE
 CHECKPOINTS = (*tank.CHECKPOINTS, "m2-supply-mixer-placed", "m2-supply-mixer-completed", "m2-supply-refined")
 session_setting, check_view = tank.session_setting, tank.check_view
+WORLDGEN = dict(seed=42, attempt=0, fallback=False,
+                layout_sha256="d8eff05ae2b6c56d8bbfa39570c6ce6e7174aae0c69f2c5ab53527add5dcff72")
 
 
 def source_contract(repo, source, codec):
     return dict(tank.source_contract(repo, source, codec, profile=(CASE, SCOPE)),
                 mixer_presentation="base-assets", material_supply="ordinary-auto-gather",
-                supply_verifier_sha256=pipeline.digest(Path(__file__).read_bytes()))
+                supply_verifier_sha256=pipeline.digest(Path(__file__).read_bytes()), worldgen=copy.deepcopy(WORLDGEN))
 
 
 def planned_contract(args, repo):
@@ -45,9 +47,25 @@ def prepare_view(repo, directory, contract):
 
 def context(value):
     """Geometry/owner observation only; never re-label an art or raw identity."""
+    check_worldgen(value)
     ctx = tank.context(value).get("supply_mixer")
     native.require(isinstance(ctx, dict), "Supply Mixer observation missing")
     return mixer.context(dict(value, m2_planning=ctx))
+
+
+def check_worldgen(value):
+    observed = tank.context(value).get("supply_worldgen")
+    native.require(isinstance(observed, dict) and set(observed) == {*WORLDGEN, "projected_routes"}
+                   and pipeline.exact_json({key: observed[key] for key in WORLDGEN}, WORLDGEN),
+                   "Supply natural world identity differs")
+    routes = observed["projected_routes"]
+    native.require(isinstance(routes, list) and len(routes) == 3 and all(
+        isinstance(row, dict) and set(row) == {"phase", "start", "trees", "rocks"}
+        and type(row["phase"]) is int and row["phase"] == phase
+        and isinstance(row["start"], list) and len(row["start"]) == 2
+        and all(type(axis) is int for axis in row["start"])
+        and all(type(row[key]) is int and 0 < row[key] <= 128 for key in ("trees", "rocks"))
+        for phase, row in enumerate(routes)), "Supply projected natural resource route unavailable")
 
 
 def check_observation(case, value):
@@ -104,7 +122,8 @@ def place_mixer(driver, baseline):
 def exercise(driver, contract):
     native.require(contract.get("case") == CASE and contract.get("scope") == SCOPE
                    and contract.get("supply_speed") == "Super" and contract.get("mixer_presentation") == "base-assets"
-                   and contract.get("material_supply") == "ordinary-auto-gather", "Supply exercise differs")
+                   and contract.get("material_supply") == "ordinary-auto-gather"
+                   and pipeline.exact_json(contract.get("worldgen"), WORLDGEN), "Supply exercise differs")
     baseline = copy.deepcopy(context(driver.last))
     tank.exercise(driver, contract)
     for key in ("menu:SetTimeSpeed(Normal)", "menu:ToggleArchitect", "menu:SelectBuild(MudMixer)"):
@@ -207,6 +226,8 @@ def check_tail_inputs(raw, entries, client, inputs):
     claimed, raw_claimed, effects = set(), set(), []
     for action in actions:
         before, after, key = action["before"], action["after"], action["key"]
+        for value in (before, after):
+            check_worldgen(value)
         first, last = action["first_step"], action["last_step"]
         native.require(type(first) is int and type(last) is int and last == first + 1
                        and lower["last_step"] < first < last <= upper["last_step"] == len(inputs)
@@ -281,6 +302,7 @@ def verify(raw, entries, client, inputs, contract):
                    and contract.get("mixer_presentation") == "base-assets" and contract.get("material_supply") == "ordinary-auto-gather"
                    and contract.get("supply_speed") == "Super" and [e["case"] for e in entries] == list(CHECKPOINTS),
                    "Supply campaign scope differs")
+    native.require(pipeline.exact_json(contract.get("worldgen"), WORLDGEN), "Supply world contract differs")
     samples, events = raw["samples"], raw["events"]
     epoch, window = entries[0]["value"]["world_epoch"], entries[0]["value"]["primary_window"]
     native.require(0 < len(samples) <= 1200 and len(events) < 4096

@@ -183,6 +183,7 @@ pub(super) fn prepare(world: &mut World) {
         );
         let mixer = supply_mixer_anchor(world.resource::<WorldMap>(), &sites, &yards, anchor)
             .expect("generated world requires a separate legal Mixer anchor with a free corridor");
+        super::supply_worldgen::prepare(world, anchor, mixer, &yards);
         world.insert_resource(SupplyMixerTarget { anchor: mixer });
     }
     assert!(
@@ -214,6 +215,7 @@ pub(super) fn snapshot(world: &mut World) -> Value {
     let mut value = snapshot_at(world, kind, anchor, initial_building_inventory);
     if let Some(mixer) = mixer {
         value["supply_mixer"] = snapshot_at(world, BuildingType::MudMixer, mixer, Vec::new());
+        value["supply_worldgen"] = super::supply_worldgen::snapshot(world);
     }
     value
 }

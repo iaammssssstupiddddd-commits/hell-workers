@@ -53,6 +53,7 @@ def input_fixture():
     def wrap(value):
         nested = value["m2_planning"]
         value["m2_planning"] = dict(copy.deepcopy(tank_context), supply_mixer=nested,
+                                  supply_worldgen=worldgen_fixture(),
                                   real_seconds=nested["real_seconds"],virtual_seconds=nested["virtual_seconds"])
         return value
 
@@ -106,7 +107,39 @@ def input_fixture():
     return raw,entries,client,inputs
 
 
+def worldgen_fixture():
+    return dict(copy.deepcopy(supply.WORLDGEN), projected_routes=[
+        dict(phase=phase, start=[80, 52], trees=15, rocks=12) for phase in range(3)])
+
+
 class SupplyTests(unittest.TestCase):
+    def test_exact_natural_world_and_missing_or_foreign_prerequisites(self):
+        for field, replacement in (("seed", 20260914), ("seed", True), ("attempt", True),
+                                   ("attempt", 1), ("fallback", 0), ("fallback", True),
+                                   ("layout_sha256", "0" * 64)):
+            value = construction.fixture()[1][-1]["value"]
+            value["m2_planning"]["supply_worldgen"] = worldgen_fixture()
+            supply.check_worldgen(value)
+            value["m2_planning"]["supply_worldgen"][field] = replacement
+            with self.subTest(field=field, replacement=replacement), self.assertRaises(RuntimeError):
+                supply.check_worldgen(value)
+        for mutate in (
+            lambda w: w.pop("seed"),
+            lambda w: w.update(extra="unbound"),
+            lambda w: w["projected_routes"].pop(),
+            lambda w: w["projected_routes"][1].update(phase=0),
+            lambda w: w["projected_routes"][1].update(phase=True),
+            lambda w: w["projected_routes"][2].update(trees=0),
+            lambda w: w["projected_routes"][0].update(rocks=True),
+            lambda w: w["projected_routes"][0].update(start=[True, 52]),
+        ):
+            value = construction.fixture()[1][-1]["value"]
+            observed = worldgen_fixture()
+            value["m2_planning"]["supply_worldgen"] = observed
+            mutate(observed)
+            with self.subTest(mutate=mutate), self.assertRaises(RuntimeError):
+                supply.check_worldgen(value)
+
     def test_exact_control_tail_and_missing_reused_or_foreign_inputs(self):
         supply.check_tail_inputs(*input_fixture())
         for mutate in (
