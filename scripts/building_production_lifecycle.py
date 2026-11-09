@@ -331,6 +331,7 @@ def check_raw_transitions(raw):
     delivered_items = set()
     refined_items = set()
     poured_items = set()
+    consumed_transfer_items, produced_transfer_items = set(), set()
     delivery_counts = {}
     for event in events_seen:
         producer = event.get("producer")
@@ -370,6 +371,14 @@ def check_raw_transitions(raw):
             refined_items.update(identities)
         elif producer == "ordinary-river-fill-branch-v1":
             check_river_fill_receipt(event, samples)
+        elif producer in {"ordinary-tank-take-branch-v1", "ordinary-mixer-pour-branch-v1"}:
+            from scripts import building_water_transfers
+            building_water_transfers.check_receipt(event,samples,events_seen)
+            field = "inputs" if event["operation"] == "TankTake" else "outputs"
+            identities = {(event["world_epoch"],item) for item in event[field]}
+            claimed = consumed_transfer_items if field == "inputs" else produced_transfer_items
+            require(not identities.intersection(claimed),"Water transfer item receipt reused")
+            claimed.update(identities)
         elif producer == "ordinary-tank-pour-branch-v1":
             check_tank_pour_receipt(event, samples, events_seen)
             identities = {(event["world_epoch"], item) for item in event["outputs"]}

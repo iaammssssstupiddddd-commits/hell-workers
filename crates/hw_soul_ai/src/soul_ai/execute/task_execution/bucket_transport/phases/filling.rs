@@ -146,6 +146,46 @@ pub fn handle(
                 }
 
                 let take_amount = found_waters.len() as u32;
+                #[cfg(feature = "profiling")]
+                let receipt = ctx.env.water_observations.then(|| {
+                    crate::water_observations::TankTakeReceipt {
+                        context: crate::water_observations::TransferContext {
+                            worker: ctx.soul_entity,
+                            assignment: ctx.task_identity().assignment_entity,
+                            target: ctx.task_identity().current_target_entity,
+                            tank,
+                            mixer: mixer_entity,
+                            bucket: data.bucket,
+                            carried_before: ctx.inventory.0,
+                            world_epoch: ctx.world_epoch,
+                            work_type: ctx.task_identity().current_work_type,
+                        },
+                        bucket_before: ctx
+                            .queries
+                            .reservation
+                            .resources
+                            .get(data.bucket)
+                            .ok()
+                            .map(|r| r.0),
+                        inputs: found_waters.clone(),
+                        inputs_before: found_waters
+                            .iter()
+                            .filter_map(|&entity| {
+                                ctx.queries.resource_items.get(entity).ok().map(
+                                    |(_, _, _, item, stored, loaded)| {
+                                        crate::water_observations::WaterInputObservation {
+                                            entity,
+                                            resource: item.0,
+                                            stored_in: stored.map(|r| r.0),
+                                            loaded_in: loaded.map(|r| r.0),
+                                        }
+                                    },
+                                )
+                            })
+                            .collect(),
+                        route_found: matches!(route, PathSearchResult::Found(())),
+                    }
+                });
                 for water_entity in found_waters {
                     commands.entity(water_entity).despawn();
                 }
@@ -174,6 +214,10 @@ pub fn handle(
                 commands
                     .entity(data.bucket)
                     .try_insert(hw_core::relationships::DeliveringTo(mixer_entity));
+                #[cfg(feature = "profiling")]
+                if let Some(receipt) = receipt {
+                    receipt.queue(commands);
+                }
             } else {
                 // 水が尽きた
                 let mixer = match data.destination {

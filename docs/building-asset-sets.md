@@ -292,7 +292,20 @@ raw parserは同sampleの実水ID・Tank所属と重複使用を検査し、こ�
 作業IDは実GatherWaterToTank request（assignment/targetとanchor Tank）へ拘束し、bucketは別のpayloadとして扱う。
 同sampleの実Soulとexact GatherWater TaskCompletedのworker/assignment/request-target/時刻を照合する。
 初期観測器のbucket-target固定は通常assignment経路と不一致だったため修正した。ゲームのtask割当は変更しない。
-River取水・Tank取出し・Mixer注水の成功receipt、自然供給/精製、Tank親子の実入力/施工受入は別途必要である。
+River取水、自然供給/精製、Tank親子の実入力/施工受入は下記の専用caseで個別に確認する。
+Tankからの取出しとMixerへの投入は、profiling限定の実分岐receipt
+`ordinary-tank-take-branch-v1` / `ordinary-mixer-pour-branch-v1`で受動記録する。
+同epochの実DeliverWaterToMixer request、Soul/Inventory/ActiveTaskIdentity、専用bucket/Tank/Mixerを拘束し、
+消費Water ID、実搬送量、投入前個数/capacity、生成Water ID、帰還可否を保持する。
+Deferredでは取出し記録を作らず、現行handlerがUnreachableでも消費する結果はroute_found=falseで残す。
+部分投入や帰還失敗も実結果として記録し、ゲームの数量・pathfinding・失敗cleanupを修正しない。
+独立parserは実branchで捕捉した搬送bucket/消費Waterの型と格納先、適用後sampleの所有・型・在庫正逆・実時刻と一意IDを照合する。
+周期rawの直前sampleを実処理の直前と同一視せず、その間の正常な取得・移動・搬入を拒否しない。
+別のlossless-chain検査はraw検査を先に実行し、同worker/request/bucket/epochの先行取出し、
+Found/帰還継続、消費数=搬送量=生成数を要求する。投入だけをTaskCompletedへ読み替えない。
+全receiptを同じ4096件上限へ数え、欠損/不整合はsticky failureとする。
+これらのunit testは合成世界の分岐同値性であり、通常worldの供給/自然精製、帰還完了、
+renderer性能や正式releaseの証拠ではない。`water_transfer_receipts=false`と非承認flagsは維持する。
 
 自然施工は別の `m2-mixer-candidate-completion` / `m2-candidate-completion` /
 `ordinary-m2-candidate-completion-v1` で採用済みMixer候補だけを受付する。準備はcamera/pauseだけとし、

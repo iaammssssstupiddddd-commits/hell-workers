@@ -10,11 +10,17 @@ use hw_logistics::{Inventory, ResourceItem, ResourceType, Stockpile};
 
 mod river_fill;
 pub use river_fill::RiverFillReceipt;
+mod mixer_transfer;
+pub use mixer_transfer::{
+    MixerPourReceipt, TankTakeReceipt, TransferContext, WaterInputObservation,
+};
 
 #[derive(Resource, Default)]
 pub struct TankPourReceipts {
     pub rows: Vec<TankPourReceipt>,
     pub river_fills: Vec<RiverFillReceipt>,
+    pub tank_takes: Vec<TankTakeReceipt>,
+    pub mixer_pours: Vec<MixerPourReceipt>,
     pub failure: Option<&'static str>,
     total: usize,
 }

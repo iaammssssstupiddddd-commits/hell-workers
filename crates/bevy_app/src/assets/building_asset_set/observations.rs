@@ -666,6 +666,37 @@ fn observe(world: &mut World) {
                     "bucket": format!("{:?}", receipt.bucket), "world_epoch": receipt.world_epoch,
                     "bucket_before": receipt.bucket_before.map(|item| format!("{item:?}"))}));
             }
+            for receipt in receipts.tank_takes.drain(..) {
+                let c = receipt.context;
+                observations.events.push(json!({"sample_index": index, "real_seconds": now,
+                    "producer":"ordinary-tank-take-branch-v1", "operation":"TankTake",
+                    "worker":format!("{:?}",c.worker), "assignment":format!("{:?}",c.assignment),
+                    "target":format!("{:?}",c.target), "owner":format!("{:?}",c.tank),
+                    "mixer":format!("{:?}",c.mixer), "bucket":format!("{:?}",c.bucket),
+                    "carried_before":c.carried_before.map(|e|format!("{e:?}")),
+                    "world_epoch":c.world_epoch, "work_type":format!("{:?}",c.work_type),
+                    "bucket_before":receipt.bucket_before.map(|r|format!("{r:?}")),
+                    "route_found":receipt.route_found,
+                    "inputs_before":receipt.inputs_before.iter().map(|item|json!({
+                        "entity":format!("{:?}",item.entity), "resource":format!("{:?}",item.resource),
+                        "stored_in":item.stored_in.map(|e|format!("{e:?}")),
+                        "loaded_in":item.loaded_in.map(|e|format!("{e:?}"))})).collect::<Vec<_>>(),
+                    "inputs":receipt.inputs.iter().map(|e|format!("{e:?}")).collect::<Vec<_>>()}));
+            }
+            for receipt in receipts.mixer_pours.drain(..) {
+                let c = receipt.context;
+                observations.events.push(json!({"sample_index": index, "real_seconds": now,
+                    "producer":"ordinary-mixer-pour-branch-v1", "operation":"MixerPour",
+                    "worker":format!("{:?}",c.worker), "assignment":format!("{:?}",c.assignment),
+                    "target":format!("{:?}",c.target), "owner":format!("{:?}",c.tank),
+                    "mixer":format!("{:?}",c.mixer), "bucket":format!("{:?}",c.bucket),
+                    "carried_before":c.carried_before.map(|e|format!("{e:?}")),
+                    "bucket_before":receipt.bucket_before.map(|r|format!("{r:?}")),
+                    "world_epoch":c.world_epoch, "work_type":format!("{:?}",c.work_type),
+                    "amount":receipt.amount, "before_count":receipt.before_count, "capacity":receipt.capacity,
+                    "returning":receipt.returning,
+                    "outputs":receipt.outputs.iter().map(|e|format!("{e:?}")).collect::<Vec<_>>()}));
+            }
             for receipt in receipts.rows.drain(..) {
                 observations.events.push(json!({"sample_index": index, "real_seconds": now,
                     "producer": "ordinary-tank-pour-branch-v1", "operation": "TankPour",

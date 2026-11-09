@@ -202,6 +202,7 @@ pub(super) fn snapshot(world: &mut World) -> Result<Value, String> {
         "water_inventory_schema": 1, "tanks": tanks, "bucket_storages": bucket_storages, "bucket_actors": bucket_actors,
         "water_transfer_receipts": false,
         "river_fill_channel": world.contains_resource::<hw_soul_ai::water_observations::TankPourReceipts>(),
+        "mixer_water_channel": world.contains_resource::<hw_soul_ai::water_observations::TankPourReceipts>(),
         "tank_pour_channel": world.contains_resource::<hw_soul_ai::water_observations::TankPourReceipts>(),
         "refine_commit_channel": world.contains_resource::<hw_soul_ai::refine_observations::RefineCommitReceipts>(),
         "accepted": false, "performance_evidence": false, "promotion_authority": false}),
