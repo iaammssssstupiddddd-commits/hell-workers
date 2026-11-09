@@ -216,6 +216,7 @@ pub(super) fn snapshot(world: &mut World) -> Value {
     if let Some(mixer) = mixer {
         value["supply_mixer"] = snapshot_at(world, BuildingType::MudMixer, mixer, Vec::new());
         value["supply_worldgen"] = super::supply_worldgen::snapshot(world);
+        value["supply_diagnostic"] = super::supply_diagnostic::snapshot(world);
     }
     value
 }

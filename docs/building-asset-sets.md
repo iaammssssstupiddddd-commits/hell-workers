@@ -348,7 +348,14 @@ invalid封印/finalize済み。旧passへの読み替えや独立採否の変更
 `d8eff05ae2b6c56d8bbfa39570c6ce6e7174aae0c69f2c5ab53527add5dcff72`をcontractと実観測で照合する。
 準備時のread-only経路投影では全3段階でTree15/Rock12へ到達可能で、実WorldMapは更新しない。
 他caseや通常起動のseedは変えない。これは特定worldの試験成立条件であり、任意seedでの供給保証、
-全物流や地形生成修正の受入ではない。新sourceの実機成功はまだ得られていない。
+全物流や地形生成修正の受入ではない。
+`ec590035`のfresh供給v3では両建物が通常施工で完成したが、精製待機180秒でinvalidとなった。
+最終real394.520277787/virtual445.421038043、1172 events。Sand5は末尾で猫車へ積載され、帰路を進行中だった。
+MixerPour1は川で満水になったbucketを保管後に別workerが拾い、Fillingを省略した通常分岐であり、
+Tank内Waterの取出しではない。TankTake/MixerMaterial/RefineCommitは0で、成功へ読み替えない。
+invalid封印・診断用途204750848 bytes保持・finalize済み。Sand採取指定不足や停止と推測せず、
+次はSupply専用の限定受動観測でsolid requestの実owner/demand/workers、Rock実指定/到達、
+採取/手運搬/猫車の実task/移動先を調べる。入力・数量・上限・採否条件は変更しない。
 
 自然施工は別の `m2-mixer-candidate-completion` / `m2-candidate-completion` /
 `ordinary-m2-candidate-completion-v1` で採用済みMixer候補だけを受付する。準備はcamera/pauseだけとし、
