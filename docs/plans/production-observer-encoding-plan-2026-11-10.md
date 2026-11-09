@@ -25,9 +25,12 @@
 
 ## 3. 現状とギャップ
 
-各sample/eventは追記後不変だが、公開ごとに全Valueをserializeしている。
-唯一の過去event書換えはevent_index全件付与で、共通appendへ移せる。
+変更前は各sample/eventが追記後不変でも、公開ごとに全Valueをserializeしていた。
+唯一の過去event書換えだったevent_index全件付与は共通appendへ移した。
 全面bytesコピーと同期writeは残るため、総公開処理が線形化したとは主張しない。
+v5はencodeを384samplesで698895us→4109usへ改善したが、Dream通知でsnapshotが毎frame増殖し64MiB上限でinvalid。
+Supply scopeだけ背景Dreamの全通知を保持して既存Real0.5秒までsampleをまとめ、他の全通知・エラー・終了は即時公開する。
+上限/validator/他scopeは変更しない。M2にこの限定補正の拒否回帰とfresh実機を追加する。
 
 ## 4. 実装方針
 
@@ -71,7 +74,7 @@
 
 `dev.py cargo`、`dev.py check`、`dev.py ci check --base f6270ae72cede7e16e2d64333ce1781bf37f5933 --mode auto`。
 native Skillとprimary validation coordinatorを使用し、planからsealまでsourceを凍結する。
-同じprimary/target/candidate/codecを再利用。新実機rootは準備完了後fresh v5として登録する。
+同じprimary/target/candidate/codecを再利用。v5は結果確定済みで、新実機rootは準備完了後fresh v6として登録する。
 旧v4は204MB規模の診断比較用途、exact bytesはstorage台帳を正本とする。
 比較終了後はconsumer解除・生成物整理・finalize/check。結果正本は `docs/building-asset-sets.md`。
 親track未完を理由に全jobを保持しない。
@@ -82,9 +85,10 @@ native Skillとprimary validation coordinatorを使用し、planからsealまで
 
 ## 9. AI引継ぎ
 
-実装済み、focused66tests成功。累積append上限回帰と計測重複排除も検証済み。
+実装済み、背景通知batch回帰を含むfocused69tests成功。累積append上限回帰と計測重複排除も検証済み。
 旧Orca統括は再開しない。v4はRock採掘/搬送・Sand帰路まで進行してinvalid。
-次はappend-only履歴の実装→exact回帰→独立review→品質→fresh実機。新たな利用者許可待ちはない。
+append-only履歴は4b93f47aで品質/独立review済み。次はSupply限定cadence補正の独立review/品質→fresh実機。
+新たな利用者許可待ちはない。
 未検証の成功・アート/数値/正式releaseを捏造しない。
 
 ### Definition of Done

@@ -825,11 +825,13 @@ fn observe(world: &mut World) {
         }
     });
     let state = world.resource::<Observations>();
-    if now < state.next
-        && state.events.len() == state.written_events
-        && state.events.len() < 4096
-        && state.failure.is_none()
-    {
+    let supply = world.resource::<Session>().art_feedback
+        && super::ordinary_art::scope(world) == "ordinary-m2-tank-candidate-supply-v1";
+    let exiting = supply
+        && world
+            .get_resource::<Messages<AppExit>>()
+            .is_some_and(|events| !events.is_empty());
+    if defer_publication(state, now, supply, exiting) {
         return;
     }
     let sample = if let Some(failure) = &state.failure {
@@ -927,6 +929,30 @@ fn observe(world: &mut World) {
     }
 }
 
+// Keep every background event and its original timestamp/ordinal. In this
+// supply-only scope, bind Dream-only batches to the next regular sample rather
+// than letting unrelated sleeping Souls defeat the existing 0.5s cadence.
+// Input, domain receipts, unknown producers, errors and shutdown still flush now.
+fn defer_publication(state: &Observations, now: f64, supply: bool, exiting: bool) -> bool {
+    now < state.next
+        && !exiting
+        && state.events.len() < 4096
+        && state.failure.is_none()
+        && if supply {
+            state
+                .events
+                .get(state.written_events..)
+                .is_some_and(|events| {
+                    events.iter().all(|event| {
+                        event["producer"] == "DreamTransferredVisualMessage"
+                            && event["operation"] == "DreamTransferred"
+                    })
+                })
+        } else {
+            state.events.len() == state.written_events
+        }
+}
+
 // Only the explicit profiling observer uses this cadence. Ordinary camera
 // input remains owned by the existing input systems; no key or outcome is set.
 fn sample_interval(world: &World) -> f64 {
@@ -985,6 +1011,92 @@ fn record_keyboard_messages(
 mod tests {
     use super::*;
     use bevy::input::{ButtonState, keyboard::Key};
+
+    #[test]
+    fn supply_only_background_batch_keeps_all_events_and_the_regular_deadline() {
+        let mut state = Observations {
+            next: 1.0,
+            ..Default::default()
+        };
+        state.events.extend((0..8).map(|index|json!({"producer":"DreamTransferredVisualMessage",
+            "operation":"DreamTransferred","sample_index":0,"real_seconds":0.1+f64::from(index)*0.05})));
+        let before = state.events.to_vec();
+        assert!(defer_publication(&state, 0.9, true, false));
+        assert!(!defer_publication(&state, 1.0, true, false));
+        assert!(!defer_publication(&state, 0.9, false, false));
+        assert!(!defer_publication(&state, 0.9, true, true));
+        assert_eq!(&*state.events, &before);
+        assert_eq!(state.written_events, 0);
+        state.failure = Some("failure".into());
+        assert!(!defer_publication(&state, 0.9, true, false));
+        state.failure = None;
+        state.written_events = state.events.len() + 1;
+        assert!(!defer_publication(&state, 0.9, true, false));
+        state.written_events = 0;
+        state.events.extend((8..4096).map(
+            |_| json!({"producer":"DreamTransferredVisualMessage","operation":"DreamTransferred"}),
+        ));
+        assert!(!defer_publication(&state, 0.9, true, false));
+    }
+
+    #[test]
+    fn supply_never_defers_input_domain_or_unknown_events() {
+        for event in [
+            json!({"producer":"KeyboardInput","operation":"KeyboardInput"}),
+            json!({"producer":"MouseButtonInput","operation":"MouseButtonInput"}),
+            json!({"producer":"ordinary-tank-take-branch-v1","operation":"TankTake"}),
+            json!({"producer":"ordinary-mixer-material-branch-v1","operation":"MixerMaterial"}),
+            json!({"producer":"hw_jobs::publish_building_completed","operation":"BuildingCompleted"}),
+            json!({"producer":"DreamTransferredVisualMessage","operation":"other"}),
+            json!({"producer":"unknown","operation":"DreamTransferred"}),
+            json!({}),
+        ] {
+            let mut state = Observations {
+                next: 1.0,
+                ..Default::default()
+            };
+            state.events.push(
+                json!({"producer":"DreamTransferredVisualMessage","operation":"DreamTransferred"}),
+            );
+            state.events.push(event);
+            assert!(!defer_publication(&state, 0.9, true, false));
+            assert_eq!(state.events.len(), 2);
+        }
+    }
+
+    #[test]
+    fn background_event_times_and_next_sample_binding_survive_a_forced_flush() {
+        let mut state = Observations {
+            next: 1.0,
+            ..Default::default()
+        };
+        state
+            .samples
+            .push(json!({"sample_index":0,"real_seconds":0.5}));
+        for time in [0.6, 0.7, 0.8] {
+            state
+                .events
+                .push(json!({"producer":"DreamTransferredVisualMessage",
+                "operation":"DreamTransferred","sample_index":state.samples.len(),
+                "real_seconds":time}));
+            assert!(defer_publication(&state, time, true, false));
+        }
+        assert!(!defer_publication(&state, 0.9, true, true));
+        state
+            .samples
+            .push(json!({"sample_index":1,"real_seconds":0.9}));
+        state.written_events = state.events.len();
+        let bytes = encode_record(&json!({}), &state.samples, &state.events, BYTE_CAP).unwrap();
+        let record: Value = serde_json::from_slice(&bytes).unwrap();
+        for (ordinal, event) in record["events"].as_array().unwrap().iter().enumerate() {
+            assert_eq!(event["event_index"], ordinal);
+            assert_eq!(event["sample_index"], 1);
+            let time = event["real_seconds"].as_f64().unwrap();
+            assert!(time > 0.5 && time <= 0.9);
+        }
+        assert_eq!(record["events"].as_array().unwrap().len(), 3);
+        assert_eq!(state.written_events, 3);
+    }
 
     #[test]
     fn public_production_json_cannot_admit_preview_or_select_feedback_scope() {

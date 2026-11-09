@@ -368,6 +368,14 @@ byte/encode失敗はstickyで、欠損を捨てて後続成功にしない。hea
 `collection_us`は当observe内で実行したrow encode分を差し引き、callback由来のencodeはencoding側だけへ含める。
 全面bytesコピー/writeは残り、総累積処理の線形化やゲーム/renderer性能合格を意味しない。
 新sourceの実機結果は未確認であり、旧成功/invalidを新受入へ流用しない。
+encode最適化v5（`4b93f47a`）は384samplesでencode4109us（旧698895us）に改善したが、
+背景Dream通知による予定間隔前のsnapshot増殖で64MiB上限へ達しinvalidとなった。
+896samples/64287642bytes時点のencode31745us（うちrow2690us）で、TankTake1/MixerPour1とRock実搬入はあった。
+正式invalid封印・診断比較用途保持・finalize済み。精製成功/全物流/正式性能には読み替えない。
+Supply専用scopeではDreamTransferredVisualMessage/DreamTransferredだけの未公開batchを、
+既存0.5秒の次sampleまで保持する。通知そのもの・元時刻・ordinalは削除/変更せず、次sample indexへ結ぶ。
+入力・domain receipt・未知producer/operation・failure・event上限・AppExitは即時公開し、他scopeは不変。
+1200samples/4096events/完成JSON64MiBと待機上限は変更しない。
 
 自然施工は別の `m2-mixer-candidate-completion` / `m2-candidate-completion` /
 `ordinary-m2-candidate-completion-v1` で採用済みMixer候補だけを受付する。準備はcamera/pauseだけとし、
