@@ -19,7 +19,8 @@ session_setting, check_view = tank.session_setting, tank.check_view
 WORLDGEN = dict(seed=42, attempt=0, fallback=False,
                 layout_sha256="d8eff05ae2b6c56d8bbfa39570c6ce6e7174aae0c69f2c5ab53527add5dcff72")
 EVENT_CONTRACT = dict(id="m2-supply-events-v1", excluded_producers=["DreamTransferredVisualMessage"])
-SETUP = "ordinary-tank-full-empty-returned-buckets-v1"
+SETUP = "ordinary-tank-full-returned-buckets-v2"
+REFINEMENT_POLICY = "first-tank-origin-after-complete-prefix-v1"
 # Nineteen declared pointer moves plus the optional developer-panel minimize.
 MOTION_CAP = 20
 
@@ -28,7 +29,8 @@ def source_contract(repo, source, codec):
     return dict(tank.source_contract(repo, source, codec, profile=(CASE, SCOPE)),
                 mixer_presentation="base-assets", material_supply="ordinary-auto-gather",
                 supply_verifier_sha256=pipeline.digest(Path(__file__).read_bytes()), worldgen=copy.deepcopy(WORLDGEN),
-                event_contract=copy.deepcopy(EVENT_CONTRACT), setup=SETUP, motion_cap=MOTION_CAP)
+                event_contract=copy.deepcopy(EVENT_CONTRACT), setup=SETUP, motion_cap=MOTION_CAP,
+                refinement_policy=REFINEMENT_POLICY)
 
 
 def planned_contract(args, repo):
@@ -88,7 +90,7 @@ def check_observation(case, value):
 
 
 def full_setup_ready(sample, owner, children):
-    """Same-snapshot Full inventory and five returned, unheld Empty buckets."""
+    """Same-snapshot Full inventory and five returned, unheld real buckets."""
     ctx = sample.get("m2_context", {})
     tanks = [t for t in ctx.get("tanks", []) if t.get("entity") == owner]
     if len(tanks) != 1 or not isinstance(tanks[0].get("stored_items"), list) or len(tanks[0]["stored_items"]) != 50:
@@ -119,7 +121,7 @@ def full_setup_ready(sample, owner, children):
                    and isinstance(h.get("entity"), str) and isinstance(h.get("carried_item"), str) for h in holders),
                    "Supply Full inventory holders missing")
     for bucket in buckets:
-        if bucket.get("resource") != "BucketEmpty" or any(bucket.get(k) is not None
+        if bucket.get("resource") not in ("BucketEmpty", "BucketWater") or any(bucket.get(k) is not None
                 for k in ("loaded_in", "delivering_to", "stored_by_mixer")):
             return False
         if not all(k in bucket for k in ("loaded_in", "delivering_to", "stored_by_mixer", "stored_in")):
@@ -192,7 +194,8 @@ def exercise(driver, contract):
                    and contract.get("material_supply") == "ordinary-auto-gather"
                    and pipeline.exact_json(contract.get("worldgen"), WORLDGEN)
                    and contract.get("setup") == SETUP and type(contract.get("motion_cap")) is int
-                   and contract["motion_cap"] == MOTION_CAP, "Supply exercise differs")
+                   and contract["motion_cap"] == MOTION_CAP
+                   and contract.get("refinement_policy") == REFINEMENT_POLICY, "Supply exercise differs")
     baseline = copy.deepcopy(context(driver.last))
     tank.exercise(driver, contract)
     owner = tank.context(driver.last)["consumers"]["roots"][0]["owner"]
@@ -231,7 +234,18 @@ def exercise(driver, contract):
         native.require(raw.get("failure") is None and raw.get("nonce") == value["nonce"]
                        and raw.get("process_id") == value["pid"], "Supply raw failed")
         owners = context(value)["buildings"]
-        return len(owners) == 1 and any(e.get("operation") == "RefineCommit" for e in raw.get("events", []))
+        if len(owners) != 1:
+            return False
+        # A readiness predicate only. The final verifier validates every branch,
+        # cycle and preceding refinement before admitting the first Tank-origin one.
+        events = raw.get("events", [])
+        if not any(e.get("operation") == "TankTake" for e in events):
+            return False
+        completed = [e for e in events if e.get("operation") == "BuildingCompleted" and e.get("kind") == "MudMixer"]
+        native.require(len(completed) == 1, "Supply refinement Mixer completion missing")
+        origins, _ = check_complete_prefix(events, owner, completed[0]["owner"])
+        return any(e.get("operation") == "RefineCommit" and origins[e["water"]]["kind"] == "TankTake"
+                   for e in events)
 
     driver.last = driver.wait(refined, after=driver.last["frame"], timeout=180)
     tank.capture_action(driver, "menu:SetTimeSpeed(Paused)")
@@ -239,7 +253,7 @@ def exercise(driver, contract):
 
 
 def check_supply_chain(raw, tank_owner, mixer_owner, *, capture_time):
-    """One complete selected leg. Other in-flight legs remain unaccepted.
+    """First actual Tank-origin refinement after an entirely verified prefix.
 
     All raw branches still pass their strict post-commit validators. Selection
     cannot hide invalid/duplicate receipts and never calls a partial leg complete.
@@ -247,12 +261,14 @@ def check_supply_chain(raw, tank_owner, mixer_owner, *, capture_time):
     lifecycle.check_raw_transitions(raw)
     inflow.check_river_fill_chain(raw)
     events = raw["events"]
-    refines = [e for e in events if e.get("operation") == "RefineCommit" and e.get("owner") == mixer_owner]
-    native.require(refines, "Supply has no actual refinement")
-    refine = min(refines, key=lambda e: (e["real_seconds"], e["event_index"]))
-    native.require(planning.finite(capture_time) and refine["real_seconds"] <= capture_time
-                   and raw["samples"][refine["sample_index"]]["real_seconds"] <= capture_time,
+    native.require(planning.finite(capture_time) and all(e["real_seconds"] <= capture_time
+                   and raw["samples"][e["sample_index"]]["real_seconds"] <= capture_time
+                   for e in events if e.get("operation") in ("MixerPour", "RefineCommit")),
                    "Refinement occurred after its capture")
+    _, classified = check_complete_prefix(events, tank_owner, mixer_owner)
+    selected = [row for row in classified if row["operation"] == "RefineCommit" and row["origin"] == "TankTake"]
+    native.require(selected, "Supply has no Tank-origin refinement")
+    refine = next(e for e in events if e["event_index"] == selected[0]["event"])
 
     def prior(operation, predicate, later):
         rows = [e for e in events if e.get("operation") == operation and predicate(e)
@@ -272,31 +288,90 @@ def check_supply_chain(raw, tank_owner, mixer_owner, *, capture_time):
         origin = prior("TankPour", lambda e: e["owner"] == tank_owner and item in e["outputs"], take)
         prior("RiverFill", lambda e: all(e[k] == origin[k] for k in
               ("worker", "assignment", "target", "owner", "bucket")), origin)
-    # A fresh ordinary Mixer has zero solid counters. Walk exact branch deltas
-    # through the FIRST refinement only; later mud hauling legitimately changes
-    # counters and is not inferred from a periodic sample.
-    solids = [e for e in events if e.get("operation") == "MixerMaterial" and e.get("owner") == mixer_owner
-              and e["real_seconds"] <= refine["real_seconds"]]
-    native.require({e["resource"] for e in solids} >= {"Sand", "Rock"}, "Supply lacks actual Sand/Rock consumption")
-    remaining, selected, state = list(solids), [], [0, 0, 0]
-    previous_time, previous_sample = -1., -1
-    while state != refine["before"]:
-        next_rows = [e for e in remaining if e["before"] == state]
-        native.require(len(next_rows) == 1, "Supply solid counter history is missing or ambiguous")
-        event = next_rows[0]
-        native.require(previous_time <= event["real_seconds"] and previous_sample <= event["sample_index"]
-                       and (not selected or previous_sample != event["sample_index"]
-                            or selected[-1]["event_index"] < event["event_index"]),
-                       "Supply solid counter chronology is reversed")
-        previous_time, previous_sample = event["real_seconds"], event["sample_index"]
-        state = event["after"]
-        selected.append(event)
-        remaining.remove(event)
-    native.require({e["resource"] for e in selected} >= {"Sand", "Rock"}
-                   and not any(e["real_seconds"] < refine["real_seconds"] for e in remaining),
-                   "Refinement lacks exact delivered solid counters")
     return dict(refine=refine["event_index"], tank_take=take["event_index"], mixer_pour=pour["event_index"],
-                materials=[e["event_index"] for e in selected])
+                materials=selected[0]["materials"],
+                prefix=classified)
+
+
+def check_complete_prefix(events, tank_owner, mixer_owner):
+    """Classify EVERY filled-bucket cycle and refinement; never skip failures.
+
+    Sand/Rock quantities are fully accounted. Mud haul-out is not normalized or
+    claimed here: each Refine's actual before/after/output receipt is checked by
+    the raw parser, independently of this two-resource supply ledger.
+    """
+    relevant = sorted((e for e in events if e.get("operation") in
+                       ("RiverFill", "TankPour", "TankTake", "MixerPour", "MixerMaterial", "RefineCommit")),
+                      key=lambda e: (e["real_seconds"], e["event_index"]))
+    cycles, origins, consumed, classified = {}, {}, set(), []
+    tank_water, produced_water = set(), set()
+    previous_sample = -1
+    for event in relevant:
+        op = event["operation"]
+        native.require(event["sample_index"] >= previous_sample, "Supply solid counter chronology is reversed")
+        previous_sample = event["sample_index"]
+        native.require(event["owner"] == (mixer_owner if op in ("RefineCommit", "MixerMaterial") else tank_owner),
+                       "Supply prefix contains foreign owner")
+        if op in ("RiverFill", "TankTake"):
+            native.require(event["bucket"] not in cycles, "Supply bucket filled twice without consumption")
+            if op == "TankTake":
+                native.require(event["mixer"] == mixer_owner and len(event["inputs"]) == len(set(event["inputs"]))
+                               and set(event["inputs"]) <= tank_water,
+                               "Supply Tank withdrawal water unproven or reused")
+                tank_water.difference_update(event["inputs"])
+            cycles[event["bucket"]] = event
+        elif op in ("TankPour", "MixerPour"):
+            source = cycles.pop(event["bucket"], None)
+            native.require(source is not None, "Supply bucket conversion predecessor missing or reused")
+            if op == "TankPour":
+                native.require(source["operation"] == "RiverFill" and all(source[k] == event[k]
+                               for k in ("owner", "bucket", "worker", "assignment", "target", "world_epoch")),
+                               "Supply Tank pour cycle differs")
+                native.require(not produced_water.intersection(event["outputs"]), "Supply Tank water identity reused")
+                produced_water.update(event["outputs"])
+                tank_water.update(event["outputs"])
+                continue
+            native.require(event["mixer"] == mixer_owner and event["returning"] is True,
+                           "Supply Mixer pour owner/return differs")
+            if source["operation"] == "TankTake":
+                native.require(source["route_found"] is True and all(source[k] == event[k] for k in
+                               ("owner", "bucket", "worker", "assignment", "target", "mixer", "world_epoch"))
+                               and len(source["inputs"]) == event["amount"] == len(event["outputs"]),
+                               "Supply Tank cycle is foreign, failed or lossy")
+            else:
+                native.require(event["amount"] == len(event["outputs"]) == 5,
+                               "Supply River bucket reuse is partial")
+            for item in event["outputs"]:
+                native.require(item not in origins, "Supply Mixer water identity reused")
+                origins[item] = dict(kind=source["operation"], source=source["event_index"], pour=event["event_index"],
+                                     sample=event["sample_index"], time=event["real_seconds"])
+            classified.append(dict(operation=op, event=event["event_index"], origin=source["operation"]))
+    # Class drain order is NOT cross-class execution order. Within each sample,
+    # keep each producer vector's order, and require a unique interleaving whose
+    # exact S/R before-state matches the preceding committed after-state.
+    mutations = [e for e in relevant if e["operation"] in ("MixerMaterial", "RefineCommit")]
+    solids, materials = [0, 0], []
+    for index in sorted({e["sample_index"] for e in mutations}):
+        groups = {op: sorted((e for e in mutations if e["sample_index"] == index and e["operation"] == op),
+                             key=lambda e: e["event_index"]) for op in ("MixerMaterial", "RefineCommit")}
+        while any(groups.values()):
+            ready = [rows[0] for rows in groups.values() if rows and rows[0]["before"][:2] == solids]
+            native.require(len(ready) == 1, "Supply solid counter chronology/history is missing or ambiguous")
+            event = ready[0]
+            groups[event["operation"]].pop(0)
+            solids = event["after"][:2]
+            if event["operation"] == "MixerMaterial":
+                materials.append(event["event_index"])
+                continue
+            item = event["water"]
+            native.require(item in origins and item not in consumed
+                           and origins[item]["sample"] <= event["sample_index"]
+                           and origins[item]["time"] <= event["real_seconds"],
+                           "Supply refinement water unproven, future or reused")
+            consumed.add(item)
+            classified.append(dict(operation="RefineCommit", event=event["event_index"],
+                                   origin=origins[item]["kind"], materials=list(materials)))
+    return origins, classified
 
 
 def check_tail_inputs(raw, entries, client, inputs):
@@ -392,7 +467,8 @@ def verify(raw, entries, client, inputs, contract):
                    "Supply campaign scope differs")
     native.require(pipeline.exact_json(contract.get("worldgen"), WORLDGEN), "Supply world contract differs")
     native.require(contract.get("setup") == SETUP and type(contract.get("motion_cap")) is int
-                   and contract["motion_cap"] == MOTION_CAP, "Supply setup/input budget differs")
+                   and contract["motion_cap"] == MOTION_CAP
+                   and contract.get("refinement_policy") == REFINEMENT_POLICY, "Supply setup/input budget differs")
     samples, events = raw["samples"], raw["events"]
     epoch, window = entries[0]["value"]["world_epoch"], entries[0]["value"]["primary_window"]
     native.require(0 < len(samples) <= 1200 and len(events) < 4096

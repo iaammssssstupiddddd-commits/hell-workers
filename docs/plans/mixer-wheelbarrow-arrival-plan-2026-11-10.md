@@ -59,6 +59,12 @@ v8では実Sand5搬入と初回RefineCommit（泥5生成）まで到達したが
 専用contractにsetupとmotion_cap=20（宣言19移動＋任意Dev最小化1）を固定し、汎用16は維持。
 6画像、1200samples/4096events/64MiB、工程180秒/全体480秒、初回精製→TankTake証明を緩めない。
 
+v9は正常な余剰満水バケツ1個が残り全Empty前提でinvalid。ゲーム変更や上限延長はしない。
+v4 scopeへ明示改訂し、全5bucketを実型のまま返却確認、全cycleの充填/消費と全精製Water ID、
+Sand/Rockの全搬入・全先行精製の数量ledgerを照合する。Tank取水由来Waterを消費する最初の精製を
+固定選択し、先行するRiver満水再利用を隠さず分類する。Mud搬出を未観測のままnormalizeしない。
+この変更方針は独立read-only設計確認済み、実装exact review/検証/新実機は別途要求する。
+
 ### M3: 終了
 
 - [ ] 恒久仕様へ限定結果/残条件を同期し、計画撤去またはarchiveと索引更新。

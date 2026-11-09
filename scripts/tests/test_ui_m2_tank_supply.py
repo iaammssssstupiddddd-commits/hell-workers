@@ -167,12 +167,15 @@ class SupplyTests(unittest.TestCase):
                                loaded_in=None, delivering_to=None, stored_by_mixer=None) for i in range(5)]
         return dict(m2_context=ctx)
 
-    def test_full_requires_five_returned_unheld_empty_buckets(self):
+    def test_full_requires_five_returned_unheld_actual_buckets(self):
         children = ["storage", "second"]
         self.assertTrue(supply.full_setup_ready(self.full_fixture(), "tank", children))
+        sample = self.full_fixture()
+        sample["m2_context"]["items"][-1]["resource"] = "BucketWater"
+        self.assertTrue(supply.full_setup_ready(sample,"tank",children))
         for mutate in (
             lambda c: c["tanks"][0]["stored_items"].pop(),
-            lambda c: c["items"][-1].update(resource="BucketWater"),
+            lambda c: c["items"][-1].update(resource="Water"),
             lambda c: c["items"][-1].update(loaded_in="cart"),
             lambda c: c["items"][-1].update(delivering_to="tank"),
             lambda c: c["items"][-1].pop("loaded_in"),
@@ -207,7 +210,7 @@ class SupplyTests(unittest.TestCase):
         for sample in raw["samples"]:
             sample.update(self.full_fixture())
         supply.check_full_setup(raw,actions,"tank",["storage","second"])
-        raw["samples"][2]["m2_context"]["items"][-1]["resource"] = "BucketWater"
+        raw["samples"][2]["m2_context"]["items"][-1]["resource"] = "Water"
         with self.assertRaisesRegex(RuntimeError,"not held"):
             supply.check_full_setup(raw,actions,"tank",["storage","second"])
 
@@ -236,6 +239,7 @@ class SupplyTests(unittest.TestCase):
             lambda r, c: r.update(scope="ordinary-m2-tank-candidate-supply-v1"),
             lambda r, c: c.update(scope="ordinary-m2-tank-candidate-supply-v1"),
             lambda r, c: r.update(scope="ordinary-m2-tank-candidate-supply-v2"),
+            lambda r, c: r.update(scope="ordinary-m2-tank-candidate-supply-v3"),
             lambda r, c: r["event_contract"].update(id="foreign"),
             lambda r, c: c["event_contract"]["excluded_producers"].append("ordinary-tank-take-branch-v1"),
             lambda r, c: r["events"].append(dict(producer="DreamTransferredVisualMessage", operation="other")),
@@ -293,8 +297,66 @@ class SupplyTests(unittest.TestCase):
     def test_one_selected_exact_leg_and_material_counter_chain(self):
         raw = fixture()
         proof = supply.check_supply_chain(raw, "tank", "mixer", capture_time=20.)
-        self.assertEqual(set(proof), {"refine","tank_take","mixer_pour","materials"})
+        self.assertEqual(set(proof), {"refine","tank_take","mixer_pour","materials","prefix"})
         self.assertEqual(len(proof["materials"]),2)
+
+    @staticmethod
+    def prefix_fixture():
+        events = []
+        def add(op, **fields):
+            index = len(events)
+            events.append(dict(operation=op, event_index=index, sample_index=index+1,
+                               real_seconds=float(index+1), owner="mixer" if op in
+                               ("MixerMaterial","RefineCommit") else "tank", **fields))
+        shared = dict(worker="worker",assignment="request",target="request",world_epoch=0)
+        add("RiverFill",bucket="fill",**shared)
+        add("TankPour",bucket="fill",outputs=[f"stored-{i}" for i in range(5)],**shared)
+        add("RiverFill",bucket="direct",**shared)
+        add("MixerPour",bucket="direct",mixer="mixer",returning=True,amount=5,
+            outputs=[f"direct-{i}" for i in range(5)],**shared)
+        add("MixerMaterial",resource="Sand",before=[0,0,0],after=[1,0,0])
+        add("MixerMaterial",resource="Rock",before=[1,0,0],after=[1,1,0])
+        add("RefineCommit",water="direct-0",before=[1,1,0],after=[0,0,5])
+        add("TankTake",bucket="empty",mixer="mixer",route_found=True,inputs=[f"stored-{i}" for i in range(5)],**shared)
+        add("MixerPour",bucket="empty",mixer="mixer",returning=True,amount=5,
+            outputs=[f"taken-{i}" for i in range(5)],**shared)
+        # Actual mud haul-out is intentionally not inferred by this S/R ledger.
+        add("MixerMaterial",resource="Sand",before=[0,0,0],after=[1,0,0])
+        add("MixerMaterial",resource="Rock",before=[1,0,0],after=[1,1,0])
+        add("RefineCommit",water="taken-0",before=[1,1,0],after=[0,0,5])
+        return events
+
+    def test_complete_prefix_keeps_direct_reuse_and_later_tank_origin(self):
+        events = self.prefix_fixture()
+        origins, classified = supply.check_complete_prefix(events,"tank","mixer")
+        self.assertEqual(origins["direct-0"]["kind"],"RiverFill")
+        self.assertEqual(origins["taken-0"]["kind"],"TankTake")
+        self.assertEqual([e["origin"] for e in classified if e["operation"]=="RefineCommit"],
+                         ["RiverFill","TankTake"])
+        for mutate in (
+            lambda e: e.pop(0),
+            lambda e: e[3].update(amount=4),
+            lambda e: e[6].update(water="unknown"),
+            lambda e: e[11].update(water="direct-0"),
+            lambda e: e[7].update(bucket="direct"),
+            lambda e: e[7].update(inputs=["unproven"]),
+            lambda e: e[8].update(worker="foreign"),
+            lambda e: e[9].update(before=[1,0,0]),
+            lambda e: e[11].update(before=[2,1,0]),
+            lambda e: e[6].update(owner="foreign"),
+        ):
+            rows = self.prefix_fixture()
+            mutate(rows)
+            with self.subTest(mutate=mutate), self.assertRaises(RuntimeError):
+                supply.check_complete_prefix(rows,"tank","mixer")
+
+    def test_old_filled_bucket_cycle_cannot_be_reused_after_tank_pour(self):
+        events = self.prefix_fixture()
+        events.insert(3,dict(operation="TankPour",event_index=99,sample_index=3,real_seconds=3.5,
+                            owner="tank",bucket="direct",worker="worker",assignment="request",target="request",world_epoch=0,
+                            outputs=["extra-water"]))
+        with self.assertRaisesRegex(RuntimeError,"predecessor missing or reused"):
+            supply.check_complete_prefix(events,"tank","mixer")
 
     def test_missing_foreign_lossy_and_unproven_solids_fail(self):
         for defect in ("no-river","no-take","foreign-tank","foreign-mixer","lossy","route","return",
@@ -352,6 +414,15 @@ class SupplyTests(unittest.TestCase):
         sample = raw["samples"][-1]
         sample["actors"] = [dict(entity="soul")]
         sample["m2_context"]["mixer_material_channel"] = True
+        proof = supply.check_supply_chain(raw,"tank","mixer",capture_time=20.)
+        self.assertNotIn(event["event_index"],proof["materials"])
+        # The actual observer drains all material receipts BEFORE Refine rows,
+        # even when this branch executed after Refine in the same frame.
+        raw["events"].remove(event)
+        position = next(i for i,e in enumerate(raw["events"]) if e.get("operation")=="RefineCommit")
+        raw["events"].insert(position,event)
+        for i,row in enumerate(raw["events"]):
+            row["event_index"] = i
         proof = supply.check_supply_chain(raw,"tank","mixer",capture_time=20.)
         self.assertNotIn(event["event_index"],proof["materials"])
 

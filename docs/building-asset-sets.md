@@ -318,23 +318,27 @@ Found/帰還継続、消費数=搬送量=生成数を要求する。投入だけ
 これらのunit testは合成世界の分岐同値性であり、通常worldの供給/自然精製、帰還完了、
 renderer性能や正式releaseの証拠ではない。`water_transfer_receipts=false`と非承認flagsは維持する。
 
-限定case `m2-tank-candidate-supply` / `ordinary-m2-tank-candidate-supply-v3` は、
-採用済みTank候補の通常施工3checkpointに、別の合法なMixer配置・自然施工・最初の精製の3画像を加える。
+限定case `m2-tank-candidate-supply` / `ordinary-m2-tank-candidate-supply-v4` は、
+採用済みTank候補の通常施工3checkpointに、別の合法なMixer配置・自然施工・Tank取水由来の最初の精製の3画像を加える。
 Mixerは基準assetsの表示を維持し、Mixer候補のadmissionや美術採否をこのcaseへ混入しない。
 準備はcamera/pauseとread-onlyな2つのanchor選定だけ。Tank/保管所とMixerの間に1セル以上の間隔を保ち、
 初期Mixer不在を要求する。資材・actor・task・完成・水を付与せず、既存Yardの通常自動採取需要を使う。
 Tank施工prefixは同process/scope/indexのまま再検証し、後半は既存HUDと一度だけの実Mixer配置入力を使う。
-Mixerの前に通常SuperでTank Water50と専用BucketEmpty5個の返却を最大180秒待つ。
-`setup=ordinary-tank-full-empty-returned-buckets-v1`を固定し、Pausedの実release sampleから
+Mixerの前に通常SuperでTank Water50と専用bucket5個の返却を最大180秒待つ。
+`setup=ordinary-tank-full-returned-buckets-v2`を固定し、Pausedの実release sampleから
 Normal直前まで同owner・在庫正逆・own storage・非積載/非配送/非所持を同一rawで要求する。
 全Inventoryの`inventory_holders`を受動観測し、BucketTransport以外の帰還運搬による所持も除外する。
 追加2操作を含む専用motion上限20（宣言19＋任意Dev最小化1）をsource契約へ固定する。汎用上限16は不変。
-Full専用画像は追加せず、この前提確認はraw証拠だけである。初回精製→実TankTakeの条件は緩和しない。
+Full専用画像は追加せず、この前提確認はraw証拠だけである。Empty/Waterの実型を変換・破棄しない。
 Mixer施工/供給は明示Super条件でそれぞれ最大180秒待ち、全体480秒・1200sample・4096event上限は維持する。
-全raw分岐の厳密検証を通したうえで、撮影以前の同Mixerの最初のRefineCommitから実Water IDを遡り、
+`refinement_policy=first-tank-origin-after-complete-prefix-v1`を固定する。全raw分岐と全先行精製を検証したうえで、
+撮影以前の同MixerでTank取水由来のWaterを消費する最初のRefineCommitから実Water IDを遡り、
 同worker/request/bucketの損失なしTankTake→MixerPourと、再利用しない各RiverFill→TankPourへ結ぶ。
-Sand/Rockは実item消費receiptのzeroからのcounter経路を精製直前値へ結び、同frameの精製後搬入を
-精製前の材料へ数えない。別bucketの未完の配送を消したり完了へ数えたりしない。
+各bucketのRiverFill/TankTake→TankPour/MixerPourをcycle順で全件追い、消費済みの満水履歴を再利用しない。
+全MixerPour出力と全Refineの実Water IDを一意に結び、先行する満水bucketの正常な再利用も分類して残す。
+Sand/Rockは全実搬入と全先行Refineのzero起点数量ledgerを照合し、同frameの精製後搬入を
+精製前の材料へ数えない。Mud搬出は別経路なので未観測差をnormalizeした3counter一致を主張しない。
+各Refineの実before/after/出力はraw parserで別途検証する。別bucketの未完配送を完了へ数えない。
 全後半sampleで同Tankのmap・専用bucket5個・保管所・在庫正逆・active candidate rootを保持する。
 このrecipeの実装/testは実機成功ではなく、fresh実行・登録verifier・独立画像/raw reviewを必要とする。
 帰還完了、全採取/配送lifecycle、Mixer候補の通常表示、性能、9種の正式release/installは別条件である。
@@ -402,6 +406,11 @@ v8（`c673ff6a`）は猫車の実Sand5搬入とRock1、初回RefineCommitで泥5
 初回精製real68.398932860、最終real69.450875111/virtual180.860686409。
 使用水は満水バケツの正常な直接再利用でTankTakeは0。搬入修正の限定結果を供給全体の成功に読み替えない。
 invalid封印・177369088bytesを明示入力予算と取水前提の比較用途に保持しfinalize済み。
+v9（`e89707bc`）ではWater50到達後、専用置場にBucketEmpty4とBucketWater1、bucket task0の
+正常終状態が続き、全Empty前提の180秒待機でinvalidとなった。433samples/177events、raw failureなし、
+最終real211.397865047/virtual749.625251064。満水Tankへ注げない余剰バケツを満水のまま返す既存仕様である。
+185516032bytesをcycle provenance比較用途で保持しinvalid封印/finalize済み。v4はこの正常分岐を捨てず全件検査し、
+最初のTank由来精製を固定選択する新しい契約であり、旧v3結果や別精製を成功へ読み替えない。
 
 自然施工は別の `m2-mixer-candidate-completion` / `m2-candidate-completion` /
 `ordinary-m2-candidate-completion-v1` で採用済みMixer候補だけを受付する。準備はcamera/pauseだけとし、
