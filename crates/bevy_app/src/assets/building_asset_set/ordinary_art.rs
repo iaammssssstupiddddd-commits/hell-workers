@@ -60,6 +60,11 @@ fn validate(session: &Session, root: &Path, nonce: &str, case: &str) -> Result<(
                 .all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase())
     };
     let profile = match session.mode.as_str() {
+        "m2-tank-candidate-completion" => {
+            session.identity.authority == BuildingAssetAuthority::IsolatedCandidate
+                && session.identity.kind == BuildingAssetKind::Tank
+                && case == "m2-tank-candidate-completion"
+        }
         "m2-candidate-completion" => {
             session.identity.authority == BuildingAssetAuthority::IsolatedCandidate
                 && session.identity.kind == BuildingAssetKind::MudMixer
@@ -127,6 +132,12 @@ fn validate(session: &Session, root: &Path, nonce: &str, case: &str) -> Result<(
 }
 
 pub(super) fn scope(world: &World) -> &'static str {
+    if world
+        .get_resource::<Session>()
+        .is_some_and(|session| session.mode == "m2-tank-candidate-completion")
+    {
+        return "ordinary-m2-tank-candidate-completion-v1";
+    }
     if world
         .get_resource::<Session>()
         .is_some_and(|session| session.mode == "m2-candidate-completion")
@@ -264,8 +275,11 @@ pub(super) fn snapshot(world: &mut World) -> Result<Value, String> {
         "part_names": set.manifest.parts.iter().map(|part| part.name.as_str()).collect::<Vec<_>>()
         ,"parts": set.manifest.parts
     }));
-    if session.identity.kind == BuildingAssetKind::MudMixer
-        && let (Some(set), Some(Value::Object(expected))) = (descriptor.as_ref(), expected.as_mut())
+    if matches!(
+        session.identity.kind,
+        BuildingAssetKind::MudMixer | BuildingAssetKind::Tank
+    ) && let (Some(set), Some(Value::Object(expected))) =
+        (descriptor.as_ref(), expected.as_mut())
     {
         expected.insert(
             "meshes".into(),
@@ -300,6 +314,9 @@ pub(super) fn snapshot(world: &mut World) -> Result<Value, String> {
         BuildingAssetKind::SoulSpa => BuildingType::SoulSpa,
         BuildingAssetKind::MudMixer if session.mode == "m2-candidate-completion" => {
             BuildingType::MudMixer
+        }
+        BuildingAssetKind::Tank if session.mode == "m2-tank-candidate-completion" => {
+            BuildingType::Tank
         }
         _ => return Err("ordinary art session kind differs".into()),
     };
@@ -360,6 +377,49 @@ pub(super) fn snapshot(world: &mut World) -> Result<Value, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn tank_completion_is_exact_candidate_only_and_never_mixer_or_seeded() {
+        let root = Path::new("/unused/tank-completion");
+        let session = Session {
+            mode: "m2-tank-candidate-completion".into(),
+            identity: BuildingAssetSetIdentity {
+                kind: BuildingAssetKind::Tank,
+                generation: 1,
+                authority: BuildingAssetAuthority::IsolatedCandidate,
+                manifest_sha256: "a".repeat(64),
+            },
+            locator: "manifests/building-tank-v1.buildingset".into(),
+            nonce: "b".repeat(32),
+            output: root.join("production-cancellation.json"),
+        };
+        validate(
+            &session,
+            root,
+            &session.nonce,
+            "m2-tank-candidate-completion",
+        )
+        .unwrap();
+        for case in [
+            "m2-mixer-candidate-completion",
+            "m2-tank-candidate-planning",
+            "m2-ui-tank-empty",
+            "navigation",
+        ] {
+            assert!(validate(&session, root, &session.nonce, case).is_err());
+        }
+        for authority in [
+            BuildingAssetAuthority::ArtPreview,
+            BuildingAssetAuthority::ReleaseApproved,
+        ] {
+            let mut wrong = session.clone();
+            wrong.identity.authority = authority;
+            assert!(validate(&wrong, root, &wrong.nonce, "m2-tank-candidate-completion").is_err());
+        }
+        let mut world = World::new();
+        world.insert_resource(session);
+        assert_eq!(scope(&world), "ordinary-m2-tank-candidate-completion-v1");
+    }
 
     #[test]
     fn mixer_completion_is_separate_candidate_only_scope_without_seeded_admission() {

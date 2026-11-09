@@ -301,6 +301,16 @@ River取水・Tank取出し・Mixer注水の成功receipt、自然供給/精製�
 通じた描画chain全体の証明ではない。Normal/Pausedの実raw状態・speed1と施工区間のvirtual前進、
 全checkpointの同PID/epoch/window・paused同clock、入力のreal phase境界を検査する。
 
+Tankの自然施工は独立した `m2-tank-candidate-completion` mode/case、
+`ordinary-m2-tank-candidate-completion-v1` scopeで採用済みisolated candidateだけを受付する。
+本体クリックのCompanionPendingでは予定/保管場所を作らず、右隣2セルへの実第二クリックの
+CompanionCommittedから本体4セルと保管場所2個を追跡する。Wood2個の搬入とBuild完了、新Tankへのmap移管、
+同じ保管場所のPendingBelongsToBlueprint→BelongsTo、実座標・capacity10・StoredItems正逆を検査する。
+完成sampleで専用空バケツ5個と格納/非運搬関係を照合し、その後の自然運搬を停止・修復しない。
+空/予定/完成の3画像と同候補body/waterを検査し、Emptyではwater partの存在・非表示を要求する。
+準備はcamera/pauseのみ。供給が先に始まりEmpty条件を失えば失敗とし、水を削除しない。
+このcaseは現在実装/検証中であり、Tank水運搬、全描画chain、性能、正式releaseの受入を意味しない。
+
 M5専用の明示 `--variant m5-art-context --view normal` は別のseeded比較である。
 ArtPreviewの4種だけをfeedback/art-preview・standard照明で許可し、candidate/releaseや通常入力証拠へ転用しない。
 対象4棟、前後8Wall、8idle Soul、descriptor経由の4previewを一度だけ準備し、以後は受動観測する。

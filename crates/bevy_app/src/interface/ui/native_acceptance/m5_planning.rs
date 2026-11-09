@@ -1,7 +1,9 @@
 //! Ordinary M5 / separately admitted Mixer planning: camera and pause only.
 //! All catalog, ghost, reservation and selection transitions require real input.
 use super::*;
-use crate::interface::selection::placement_geometry::live_building_geometry;
+use crate::interface::selection::placement_geometry::{
+    bucket_storage_geometry, live_building_geometry,
+};
 use crate::world::map::WorldMapRef;
 use hw_core::constants::{MAP_HEIGHT, MAP_WIDTH};
 use hw_jobs::{Blueprint, Building, BuildingType};
@@ -43,6 +45,9 @@ fn building_inventory(world: &mut World, kind: BuildingType) -> Vec<Value> {
 }
 
 fn case_kind(case: &str) -> Option<BuildingType> {
+    if case == "m2-tank-candidate-completion" {
+        return Some(BuildingType::Tank);
+    }
     if matches!(
         case,
         "m2-mixer-candidate-planning" | "m2-mixer-candidate-completion"
@@ -96,7 +101,19 @@ fn legal_anchor(
     (1..MAP_WIDTH - 2)
         .flat_map(|x| (1..MAP_HEIGHT - 2).map(move |y| (x, y)))
         .filter(|&anchor| validate(map, sites, yards, kind, anchor).can_place)
+        .filter(|&(x, y)| kind != BuildingType::Tank || companion_legal(map, (x, y)))
         .min_by_key(|&(x, y)| (x - MAP_WIDTH / 2).abs() + (y - MAP_HEIGHT / 2).abs())
+}
+
+fn companion_legal(map: &WorldMap, anchor: (i32, i32)) -> bool {
+    hw_ui::selection::validate_bucket_storage_placement(
+        &WorldMapRef(map),
+        &bucket_storage_geometry((anchor.0 + 2, anchor.1)),
+        &live_building_geometry(map, BuildingType::Tank, anchor).occupied_grids,
+        true,
+        hw_ui::selection::TANK_NEARBY_BUCKET_STORAGE_TILES,
+    )
+    .can_place
 }
 
 pub(super) fn prepare(world: &mut World) {
@@ -124,7 +141,8 @@ pub(super) fn prepare(world: &mut World) {
     }
     let initial_building_inventory = building_inventory(world, kind);
     assert!(
-        kind != BuildingType::MudMixer || initial_building_inventory.is_empty(),
+        !matches!(kind, BuildingType::MudMixer | BuildingType::Tank)
+            || initial_building_inventory.is_empty(),
         "M2 planning requires no initial Mixer; never clear existing owners"
     );
     assert!(
@@ -213,12 +231,26 @@ pub(super) fn snapshot(world: &mut World) -> Value {
     let building_inventory = building_inventory(world, kind);
     let consumers = crate::assets::building_asset_set::snapshot_ordinary_art(world)
         .unwrap_or_else(|failure| json!({"failure": failure}));
+    let companion_grid = (anchor.0 + 2, anchor.1);
+    let companion_point = camera
+        .world_to_viewport(
+            camera_global,
+            WorldMap::grid_to_world(companion_grid.0, companion_grid.1).extend(0.0),
+        )
+        .ok();
+    let companion_pending = world.get_resource::<crate::app_contexts::CompanionPlacementState>()
+        .and_then(|state| state.0.as_ref()).map(|pending| json!({
+            "parent_anchor": pending.parent_anchor, "parent_kind": format!("{:?}", pending.parent_kind),
+            "kind": format!("{:?}", pending.kind), "center": pending.center.to_array(),
+            "radius": pending.radius, "required": pending.required}));
     let map = world.resource::<WorldMap>();
     let validation = validate(map, &sites, &yards, kind, anchor);
     let cells = geometry.occupied_grids.iter().map(|&(x, y)| json!({"grid": [x, y],
         "walkable": map.is_walkable(x, y), "owner": map.building_entity((x, y)).map(Entity::to_bits)})).collect::<Vec<_>>();
     json!({"kind": format!("{kind:?}"), "anchor": anchor, "footprint": geometry.occupied_grids,
         "draw_pos": geometry.draw_pos.to_array(), "point": projected.map(|point| point.to_array()),
+        "companion_grid": companion_grid, "companion_point": companion_point.map(|point| point.to_array()),
+        "companion_pending": companion_pending, "companion_legal": companion_legal(map, anchor),
         "cursor_grid": cursor_grid, "primary_window": window_entity.to_bits(),
         "world_epoch": world.resource::<hw_core::WorldEpoch>().get(),
         "play_mode": format!("{:?}", world.resource::<State<hw_core::game_state::PlayMode>>().get()),
@@ -239,6 +271,10 @@ mod tests {
 
     #[test]
     fn m5_cases_do_not_admit_bridge_or_existing_seeded_cases() {
+        assert_eq!(
+            case_kind("m2-tank-candidate-completion"),
+            Some(BuildingType::Tank)
+        );
         assert_eq!(
             case_kind("m2-mixer-candidate-planning"),
             Some(BuildingType::MudMixer)
@@ -317,6 +353,18 @@ mod tests {
             building_inventory(&mut world, BuildingType::WheelbarrowParking).len(),
             2
         );
+    }
+
+    #[test]
+    fn tank_completion_requires_free_companion_cells_without_mutation() {
+        let mut map = WorldMap::default();
+        assert!(companion_legal(&map, (10, 10)));
+        let mut world = World::new();
+        let other = world.spawn_empty().id();
+        map.register_stockpile_tile((13, 10), other);
+        let version = map.obstacle_version;
+        assert!(!companion_legal(&map, (10, 10)));
+        assert_eq!(map.obstacle_version, version);
     }
 
     #[test]
