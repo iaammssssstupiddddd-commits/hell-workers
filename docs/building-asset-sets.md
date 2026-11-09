@@ -318,12 +318,18 @@ Found/帰還継続、消費数=搬送量=生成数を要求する。投入だけ
 これらのunit testは合成世界の分岐同値性であり、通常worldの供給/自然精製、帰還完了、
 renderer性能や正式releaseの証拠ではない。`water_transfer_receipts=false`と非承認flagsは維持する。
 
-限定case `m2-tank-candidate-supply` / `ordinary-m2-tank-candidate-supply-v2` は、
+限定case `m2-tank-candidate-supply` / `ordinary-m2-tank-candidate-supply-v3` は、
 採用済みTank候補の通常施工3checkpointに、別の合法なMixer配置・自然施工・最初の精製の3画像を加える。
 Mixerは基準assetsの表示を維持し、Mixer候補のadmissionや美術採否をこのcaseへ混入しない。
 準備はcamera/pauseとread-onlyな2つのanchor選定だけ。Tank/保管所とMixerの間に1セル以上の間隔を保ち、
 初期Mixer不在を要求する。資材・actor・task・完成・水を付与せず、既存Yardの通常自動採取需要を使う。
 Tank施工prefixは同process/scope/indexのまま再検証し、後半は既存HUDと一度だけの実Mixer配置入力を使う。
+Mixerの前に通常SuperでTank Water50と専用BucketEmpty5個の返却を最大180秒待つ。
+`setup=ordinary-tank-full-empty-returned-buckets-v1`を固定し、Pausedの実release sampleから
+Normal直前まで同owner・在庫正逆・own storage・非積載/非配送/非所持を同一rawで要求する。
+全Inventoryの`inventory_holders`を受動観測し、BucketTransport以外の帰還運搬による所持も除外する。
+追加2操作を含む専用motion上限20（宣言19＋任意Dev最小化1）をsource契約へ固定する。汎用上限16は不変。
+Full専用画像は追加せず、この前提確認はraw証拠だけである。初回精製→実TankTakeの条件は緩和しない。
 Mixer施工/供給は明示Super条件でそれぞれ最大180秒待ち、全体480秒・1200sample・4096event上限は維持する。
 全raw分岐の厳密検証を通したうえで、撮影以前の同Mixerの最初のRefineCommitから実Water IDを遡り、
 同worker/request/bucketの損失なしTankTake→MixerPourと、再利用しない各RiverFill→TankPourへ結ぶ。
@@ -380,7 +386,7 @@ Tank/Mixer完成・TankTake1/MixerPour1・Rock5搬入はあったが精製未達
 検証済みSupply preview sessionから固定導出し、任意producerの除外を外部JSONで選択できない。
 このscopeだけobserverのDream readerを最初から購読せず、製品側の生成・他reader・他scopeは変更しない。
 v1のcoalescingは撤去し、対象eventの即時公開を元に戻す。input・施工・水・solid・精製・未知eventは除外しない。
-独立verifierはv2scope/source/headerの完全一致を要求し、旧scope、契約欠損/変更、Dream producer/operation混入を拒否する。
+独立verifierは現行scope/source/headerの完全一致を要求し、旧scope、契約欠損/変更、Dream producer/operation混入を拒否する。
 この証拠からDream移送・休憩lifecycle・全世界の完全履歴を証明できない。旧v1 invalidは履歴のまま維持する。
 1200samples/4096events/完成JSON64MiBと待機上限は変更しない。
 v7（`37515837`）はこの通知契約で490samples/254events、観測は上限内・raw failureなしだったが、
@@ -391,6 +397,11 @@ v7（`37515837`）はこの通知契約で490samples/254events、観測は上限
 独立read-only調査でも同じ不整合を確認した。identity失効の直接原因は観測がなく断定しない。
 通常のMixer猫車branchだけ、Found後に手運びと同じ実終点も到着判定する修正を行う。
 旧invalidは封印/finalizeし、200327168bytesを修正比較用途に保持。新source実機成功や全受入には数えない。
+v8（`c673ff6a`）は猫車の実Sand5搬入とRock1、初回RefineCommitで泥5生成まで進んだが、
+55入力中17motionsが旧汎用16上限を越え、独立検査でinvalid。179samples/263events、raw failureなし、
+初回精製real68.398932860、最終real69.450875111/virtual180.860686409。
+使用水は満水バケツの正常な直接再利用でTankTakeは0。搬入修正の限定結果を供給全体の成功に読み替えない。
+invalid封印・177369088bytesを明示入力予算と取水前提の比較用途に保持しfinalize済み。
 
 自然施工は別の `m2-mixer-candidate-completion` / `m2-candidate-completion` /
 `ordinary-m2-candidate-completion-v1` で採用済みMixer候補だけを受付する。準備はcamera/pauseだけとし、

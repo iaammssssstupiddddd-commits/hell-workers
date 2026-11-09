@@ -294,7 +294,8 @@ def capture_action(driver, key, *, world=False, contract=None, baseline=None):
     native.atomic_write_json(driver.root / "events.json", {"events": driver.events})
 
 
-def check_transport(inputs, client, epoch):
+def check_transport(inputs, client, epoch, *, motion_cap=16):
+    native.require(type(motion_cap) is int and 0 < motion_cap <= 160, "M2 motion budget differs")
     native.require(isinstance(inputs, list) and 0 < len(inputs) <= 160
                    and [r.get("step") for r in inputs] == [str(i + 1) for i in range(len(inputs))], "M2 input bounds/steps differ")
     for row in inputs:
@@ -311,7 +312,7 @@ def check_transport(inputs, client, epoch):
                            and row.get("pressed") is None and "m2_action" not in row
                            and isinstance(cursor, list) and len(cursor) == 2 and all(finite(x) for x in cursor)
                            and all(abs(x - y) <= 2 for x, y in zip(point, cursor, strict=True)), "M2 motion ACK/coordinate differs")
-    native.require(sum(r.get("point") is not None for r in inputs) <= 16
+    native.require(sum(r.get("point") is not None for r in inputs) <= motion_cap
                    and all(a["pre_frame"] <= b["pre_frame"] and a["post_frame"] <= b["post_frame"]
                            for a, b in zip(inputs, inputs[1:])), "M2 motion cap/transport order differs")
 

@@ -104,6 +104,46 @@ def input_fixture():
     final["value"]["frame"] = 4000
     final["value"]["m2_planning"]["real_seconds"] = 40.
     entries.append(final)
+    # Extra ordinary Full-setup controls precede the old Mixer-only tail.
+    for row in inputs:
+        row["step"] = str(int(row["step"]) + 4)
+        if "tank_completion_action" in row:
+            for key in ("first_step", "last_step"):
+                row["tank_completion_action"][key] += 4
+    for entry in entries[3:]:
+        entry["last_step"] += 4
+    for sample in raw["samples"][1:]:
+        sample["sample_index"] += 2
+    for event in raw["events"]:
+        event["sample_index"] += 2 if event["sample_index"] else 0
+    prefix_inputs, prefix_events, prefix_samples = [], [], []
+    for index, (time, key, paused) in enumerate(((1.2, "menu:SetTimeSpeed(Super)", False),
+                                               (1.6, "menu:SetTimeSpeed(Paused)", True))):
+        before = copy.deepcopy(entries[2]["value"])
+        before.update(frame=round(time*100), paused=not paused, cursor=[400.,400.])
+        before["m2_planning"]["real_seconds"] = time
+        before["controls"][key] = dict(fully_visible=True, interaction="Hovered")
+        after = copy.deepcopy(before)
+        after.update(frame=before["frame"]+20, paused=paused)
+        after["m2_planning"]["real_seconds"] += .2
+        sample = copy.deepcopy(raw["samples"][0])
+        sample.update(sample_index=index+1, real_seconds=time+.2, paused=paused, relative_speed=4.)
+        prefix_samples.append(sample)
+        first = len(prefix_inputs)+1
+        for offset, pressed in enumerate((True,False)):
+            prefix_inputs.append(dict(step=str(len(prefix_inputs)+1), nonce=client["nonce"], pid=client["pid"],
+                window=50, world_epoch=0, pre_frame=before["frame"], post_frame=after["frame"],
+                button=1, pressed=pressed, observed_hover={key:"Pressed" if pressed else "Hovered"}))
+            prefix_events.append(dict(producer="MouseButtonInput", operation="MouseButtonInput", button="Left",
+                window="99v1", state="Pressed" if pressed else "Released", sample_index=index+1,
+                real_seconds=time+.05*(offset+1)))
+        prefix_inputs[first-1]["tank_completion_action"] = dict(key=key, first_step=first,
+            last_step=len(prefix_inputs), before=before, after=after)
+    inputs[:0] = prefix_inputs
+    raw["events"][:0] = prefix_events
+    raw["samples"][1:1] = prefix_samples
+    for index,event in enumerate(raw["events"]):
+        event["event_index"] = index
     return raw,entries,client,inputs
 
 
@@ -113,6 +153,79 @@ def worldgen_fixture():
 
 
 class SupplyTests(unittest.TestCase):
+    @staticmethod
+    def full_fixture():
+        ctx = dict(tanks=[dict(entity="tank", provisional=False, stockpile=dict(resource="Water",capacity=50),
+                              stored_items=[f"water-{i}" for i in range(50)])],
+                   items=[dict(entity=f"water-{i}", resource="Water", stored_in="tank", loaded_in=None) for i in range(50)],
+                   bucket_storages=[dict(entity="storage", belongs_to="tank", pending_blueprint=None,
+                                         stockpile=dict(resource=None,capacity=10),
+                                         stored_items=[f"bucket-{i}" for i in range(5)]),
+                                    dict(entity="second", belongs_to="tank", pending_blueprint=None,
+                                         stockpile=dict(resource=None,capacity=10),stored_items=None)], inventory_holders=[])
+        ctx["items"] += [dict(entity=f"bucket-{i}", resource="BucketEmpty", belongs_to="tank", stored_in="storage",
+                               loaded_in=None, delivering_to=None, stored_by_mixer=None) for i in range(5)]
+        return dict(m2_context=ctx)
+
+    def test_full_requires_five_returned_unheld_empty_buckets(self):
+        children = ["storage", "second"]
+        self.assertTrue(supply.full_setup_ready(self.full_fixture(), "tank", children))
+        for mutate in (
+            lambda c: c["tanks"][0]["stored_items"].pop(),
+            lambda c: c["items"][-1].update(resource="BucketWater"),
+            lambda c: c["items"][-1].update(loaded_in="cart"),
+            lambda c: c["items"][-1].update(delivering_to="tank"),
+            lambda c: c["items"][-1].pop("loaded_in"),
+            lambda c: c["inventory_holders"].append(dict(entity="ordinary-hauler",carried_item="bucket-4")),
+        ):
+            sample = self.full_fixture()
+            mutate(sample["m2_context"])
+            with self.subTest(mutate=mutate):
+                self.assertFalse(supply.full_setup_ready(sample,"tank", children))
+        sample = self.full_fixture()
+        sample["m2_context"].pop("inventory_holders")
+        with self.assertRaisesRegex(RuntimeError,"holders"):
+            supply.full_setup_ready(sample,"tank", children)
+        for mutate in (
+            lambda c: c["items"][-1].update(stored_in="foreign"),
+            lambda c: c["bucket_storages"][0]["stored_items"].pop(),
+            lambda c: c["bucket_storages"][0].update(belongs_to="foreign"),
+            lambda c: c["bucket_storages"].pop(),
+            lambda c: c["bucket_storages"][1].update(entity="other-same-owner-storage"),
+            lambda c: c["bucket_storages"][1].pop("pending_blueprint"),
+            lambda c: c["bucket_storages"][1]["stockpile"].update(capacity=True),
+            lambda c: c["bucket_storages"][1].update(stored_items=["foreign-item"]),
+        ):
+            sample = self.full_fixture()
+            mutate(sample["m2_context"])
+            with self.subTest(mutate=mutate), self.assertRaises(RuntimeError):
+                supply.full_setup_ready(sample,"tank",children)
+
+    def test_full_setup_is_current_continuous_paused_not_historical(self):
+        raw,entries,client,inputs = input_fixture()
+        actions = supply.check_tail_inputs(raw,entries,client,inputs)
+        for sample in raw["samples"]:
+            sample.update(self.full_fixture())
+        supply.check_full_setup(raw,actions,"tank",["storage","second"])
+        raw["samples"][2]["m2_context"]["items"][-1]["resource"] = "BucketWater"
+        with self.assertRaisesRegex(RuntimeError,"not held"):
+            supply.check_full_setup(raw,actions,"tank",["storage","second"])
+
+    def test_motion_budget_is_supply_only_and_bounded(self):
+        client = dict(nonce="b"*32,pid=40,window=50)
+        def moves(count):
+            return [dict(step=str(i+1),nonce=client["nonce"],pid=40,window=50,world_epoch=0,
+                         pre_frame=2*i+1,post_frame=2*i+2,point=[1,1],observed_cursor=[1.,1.]) for i in range(count)]
+        supply.planning.check_transport(moves(16),client,0)
+        with self.assertRaises(RuntimeError):
+            supply.planning.check_transport(moves(17),client,0)
+        supply.planning.check_transport(moves(20),client,0,motion_cap=supply.MOTION_CAP)
+        with self.assertRaises(RuntimeError):
+            supply.planning.check_transport(moves(21),client,0,motion_cap=supply.MOTION_CAP)
+        for cap in (True,0,161):
+            with self.assertRaises(RuntimeError):
+                supply.planning.check_transport(moves(1),client,0,motion_cap=cap)
+
     def test_exact_supply_event_subscription_and_rejected_mixing(self):
         raw = dict(scope=supply.SCOPE, event_contract=copy.deepcopy(supply.EVENT_CONTRACT), events=[])
         contract = dict(scope=supply.SCOPE, event_contract=copy.deepcopy(supply.EVENT_CONTRACT))
@@ -122,6 +235,7 @@ class SupplyTests(unittest.TestCase):
             lambda r, c: c.pop("event_contract"),
             lambda r, c: r.update(scope="ordinary-m2-tank-candidate-supply-v1"),
             lambda r, c: c.update(scope="ordinary-m2-tank-candidate-supply-v1"),
+            lambda r, c: r.update(scope="ordinary-m2-tank-candidate-supply-v2"),
             lambda r, c: r["event_contract"].update(id="foreign"),
             lambda r, c: c["event_contract"]["excluded_producers"].append("ordinary-tank-take-branch-v1"),
             lambda r, c: r["events"].append(dict(producer="DreamTransferredVisualMessage", operation="other")),

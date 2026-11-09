@@ -19,13 +19,16 @@ session_setting, check_view = tank.session_setting, tank.check_view
 WORLDGEN = dict(seed=42, attempt=0, fallback=False,
                 layout_sha256="d8eff05ae2b6c56d8bbfa39570c6ce6e7174aae0c69f2c5ab53527add5dcff72")
 EVENT_CONTRACT = dict(id="m2-supply-events-v1", excluded_producers=["DreamTransferredVisualMessage"])
+SETUP = "ordinary-tank-full-empty-returned-buckets-v1"
+# Nineteen declared pointer moves plus the optional developer-panel minimize.
+MOTION_CAP = 20
 
 
 def source_contract(repo, source, codec):
     return dict(tank.source_contract(repo, source, codec, profile=(CASE, SCOPE)),
                 mixer_presentation="base-assets", material_supply="ordinary-auto-gather",
                 supply_verifier_sha256=pipeline.digest(Path(__file__).read_bytes()), worldgen=copy.deepcopy(WORLDGEN),
-                event_contract=copy.deepcopy(EVENT_CONTRACT))
+                event_contract=copy.deepcopy(EVENT_CONTRACT), setup=SETUP, motion_cap=MOTION_CAP)
 
 
 def planned_contract(args, repo):
@@ -84,6 +87,68 @@ def check_observation(case, value):
     mixer.check_observation(phase, dict(value, m2_planning=context(value)))
 
 
+def full_setup_ready(sample, owner, children):
+    """Same-snapshot Full inventory and five returned, unheld Empty buckets."""
+    ctx = sample.get("m2_context", {})
+    tanks = [t for t in ctx.get("tanks", []) if t.get("entity") == owner]
+    if len(tanks) != 1 or not isinstance(tanks[0].get("stored_items"), list) or len(tanks[0]["stored_items"]) != 50:
+        return False
+    native.require(tanks[0].get("provisional") is False
+                   and pipeline.exact_json(tanks[0].get("stockpile"), dict(resource="Water", capacity=50)),
+                   "Supply Full owner differs")
+    water.check_inventory(ctx, tanks[0])
+    buckets = [item for item in ctx.get("items", []) if item.get("belongs_to") == owner]
+    native.require(len(buckets) == 5 and len({b.get("entity") for b in buckets}) == 5,
+                   "Supply Full dedicated bucket identities differ")
+    storages = [s for s in ctx.get("bucket_storages", []) if s.get("belongs_to") == owner]
+    native.require(isinstance(children, list) and len(children) == len(set(children)) == 2
+                   and all(isinstance(c, str) and c for c in children)
+                   and len(storages) == 2 and {s.get("entity") for s in storages} == set(children)
+                   and all("pending_blueprint" in s and s["pending_blueprint"] is None
+                           and pipeline.exact_json(s.get("stockpile"), dict(resource=None, capacity=10))
+                           for s in storages), "Supply Full committed companions differ")
+    for storage in storages:
+        forward = [i.get("entity") for i in ctx.get("items", []) if i.get("stored_in") == storage["entity"]]
+        inverse = storage.get("stored_items")
+        native.require("stored_items" in storage and (inverse is None or isinstance(inverse, list)
+                       and all(isinstance(i, str) for i in inverse) and len(inverse) == len(set(inverse)))
+                       and len(forward) == len(set(forward)) and set(forward) == set(inverse or []),
+                       "Supply Full companion inventory differs")
+    holders = ctx.get("inventory_holders")
+    native.require(isinstance(holders, list) and all(isinstance(h, dict)
+                   and isinstance(h.get("entity"), str) and isinstance(h.get("carried_item"), str) for h in holders),
+                   "Supply Full inventory holders missing")
+    for bucket in buckets:
+        if bucket.get("resource") != "BucketEmpty" or any(bucket.get(k) is not None
+                for k in ("loaded_in", "delivering_to", "stored_by_mixer")):
+            return False
+        if not all(k in bucket for k in ("loaded_in", "delivering_to", "stored_by_mixer", "stored_in")):
+            return False
+        own = [s for s in storages if s.get("entity") == bucket["stored_in"]]
+        if len(own) != 1 or own[0].get("pending_blueprint") is not None:
+            return False
+        inverse = own[0].get("stored_items")
+        if not isinstance(inverse, list) or inverse.count(bucket["entity"]) != 1:
+            return False
+        if any(h["carried_item"] == bucket["entity"] for h in holders):
+            return False
+    return True
+
+
+def check_full_setup(raw, actions, owner, children):
+    paused, normal = actions[1:3]
+    start, end = (tank.context(paused[k])["real_seconds"] for k in ("before", "after"))
+    released = [e for e in raw["events"] if e.get("producer") == "MouseButtonInput"
+                and e.get("state") == "Released" and start < e["real_seconds"] <= end]
+    native.require(len(released) == 1, "Supply Full pause receipt missing")
+    first = released[0]["sample_index"]
+    until = tank.context(normal["before"])["real_seconds"]
+    samples = [s for s in raw["samples"][first:] if s["real_seconds"] <= until]
+    native.require(samples and until - samples[-1]["real_seconds"] <= 1
+                   and all(s.get("paused") is True and full_setup_ready(s, owner, children) for s in samples),
+                   "Supply Full setup not held before Mixer placement")
+
+
 def check_world_action(value, baseline):
     ctx = context(value)
     native.require(all(pipeline.exact_json(ctx[k], baseline[k]) for k in
@@ -125,9 +190,28 @@ def exercise(driver, contract):
     native.require(contract.get("case") == CASE and contract.get("scope") == SCOPE
                    and contract.get("supply_speed") == "Super" and contract.get("mixer_presentation") == "base-assets"
                    and contract.get("material_supply") == "ordinary-auto-gather"
-                   and pipeline.exact_json(contract.get("worldgen"), WORLDGEN), "Supply exercise differs")
+                   and pipeline.exact_json(contract.get("worldgen"), WORLDGEN)
+                   and contract.get("setup") == SETUP and type(contract.get("motion_cap")) is int
+                   and contract["motion_cap"] == MOTION_CAP, "Supply exercise differs")
     baseline = copy.deepcopy(context(driver.last))
     tank.exercise(driver, contract)
+    owner = tank.context(driver.last)["consumers"]["roots"][0]["owner"]
+    prior_raw = native.read_json(driver.root / "production-cancellation.json")
+    placements = [e for e in prior_raw.get("events", []) if e.get("producer") == "ordinary-building-placement-branch-v1"
+                  and e.get("outcome", {}).get("kind") == "Tank"
+                  and e["outcome"].get("status") == "CompanionCommitted"]
+    native.require(len(placements) == 1, "Supply Full companion placement missing")
+    children = placements[0]["outcome"]["companion_owners"]
+    tank.capture_action(driver, "menu:SetTimeSpeed(Super)")
+
+    def full(value):
+        raw = native.read_json(driver.root / "production-cancellation.json")
+        native.require(raw.get("failure") is None and raw.get("nonce") == value["nonce"]
+                       and raw.get("process_id") == value["pid"], "Supply Full setup raw failed")
+        return bool(raw.get("samples")) and full_setup_ready(raw["samples"][-1], owner, children)
+
+    driver.last = driver.wait(full, after=driver.last["frame"], timeout=180)
+    tank.capture_action(driver, "menu:SetTimeSpeed(Paused)")
     for key in ("menu:SetTimeSpeed(Normal)", "menu:ToggleArchitect", "menu:SelectBuild(MudMixer)"):
         tank.capture_action(driver, key)
     place_mixer(driver, baseline)
@@ -220,11 +304,12 @@ def check_tail_inputs(raw, entries, client, inputs):
     lower, upper = entries[2], entries[-1]
     tail = inputs[lower["last_step"]:]
     actions = [row["tank_completion_action"] for row in tail if "tank_completion_action" in row]
-    expected = ["menu:SetTimeSpeed(Normal)", "menu:ToggleArchitect", "menu:SelectBuild(MudMixer)",
+    expected = ["menu:SetTimeSpeed(Super)", "menu:SetTimeSpeed(Paused)",
+                "menu:SetTimeSpeed(Normal)", "menu:ToggleArchitect", "menu:SelectBuild(MudMixer)",
                 "mixer-placement", "Escape", "menu:SetTimeSpeed(Paused)", "menu:SetTimeSpeed(Super)",
                 "menu:SetTimeSpeed(Paused)", "menu:SetTimeSpeed(Super)", "menu:SetTimeSpeed(Paused)"]
     native.require([a.get("key") for a in actions] == expected, "Supply input sequence differs")
-    planning.check_transport(inputs, client, upper["value"]["world_epoch"])
+    planning.check_transport(inputs, client, upper["value"]["world_epoch"], motion_cap=MOTION_CAP)
     claimed, raw_claimed, effects = set(), set(), []
     for action in actions:
         before, after, key = action["before"], action["after"], action["key"]
@@ -282,8 +367,8 @@ def check_tail_inputs(raw, entries, client, inputs):
                    and raw_claimed == {e["event_index"] for e in raw["events"]
                        if e.get("producer") in ("KeyboardInput", "MouseButtonInput")
                        and e["real_seconds"] > tank.context(lower["value"])["real_seconds"]}, "Supply unclaimed input")
-    for lo, hi, group in ((entries[2], entries[3], expected[:6]), (entries[3], entries[4], expected[6:8]),
-                          (entries[4], entries[5], expected[8:])):
+    for lo, hi, group in ((entries[2], entries[3], expected[:8]), (entries[3], entries[4], expected[8:10]),
+                          (entries[4], entries[5], expected[10:])):
         selected = [a for a in actions if lo["last_step"] < a["first_step"] <= hi["last_step"]]
         native.require([a["key"] for a in selected] == group and all(a["last_step"] <= hi["last_step"]
                        and lo["value"]["frame"] <= a["before"]["frame"] < a["after"]["frame"] < hi["value"]["frame"]
@@ -306,6 +391,8 @@ def verify(raw, entries, client, inputs, contract):
                    and contract.get("supply_speed") == "Super" and [e["case"] for e in entries] == list(CHECKPOINTS),
                    "Supply campaign scope differs")
     native.require(pipeline.exact_json(contract.get("worldgen"), WORLDGEN), "Supply world contract differs")
+    native.require(contract.get("setup") == SETUP and type(contract.get("motion_cap")) is int
+                   and contract["motion_cap"] == MOTION_CAP, "Supply setup/input budget differs")
     samples, events = raw["samples"], raw["events"]
     epoch, window = entries[0]["value"]["world_epoch"], entries[0]["value"]["primary_window"]
     native.require(0 < len(samples) <= 1200 and len(events) < 4096
@@ -361,6 +448,7 @@ def verify(raw, entries, client, inputs, contract):
                        and e.get("outcome",{}).get("kind") == "Tank"]
     native.require(len(tank_placements) == 2 and len(bucket_ids) == 5, "Supply Tank companions/buckets missing")
     children = tank_placements[1]["outcome"]["companion_owners"]
+    check_full_setup(raw, actions, tank_complete["owner"], children)
     initial_children = {e["entity"]:e for e in samples[tank_complete["sample_index"]]["companion_context"]["storages"]
                         if e["entity"] in children}
     for sample in samples:

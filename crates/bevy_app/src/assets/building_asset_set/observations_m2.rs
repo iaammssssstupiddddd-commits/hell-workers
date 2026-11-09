@@ -186,6 +186,18 @@ pub(super) fn snapshot(world: &mut World) -> Result<Value, String> {
     if mixers.len() > 512 || items.len() > 4096 {
         return Err("M2 typed inventory cap exceeded".into());
     }
+    // All inventories, not just BucketTransport: returning haul tasks may also
+    // hold a dedicated bucket. Observation must not infer absence from task kind.
+    let mut inventory_holders = Vec::new();
+    for (entity, inventory) in world.query::<(Entity, &Inventory)>().iter(world) {
+        if let Some(item) = inventory.0 {
+            inventory_holders.push(json!({"entity": format!("{entity:?}"),
+                "carried_item": format!("{item:?}")}));
+            if inventory_holders.len() > 4096 {
+                return Err("M2 inventory holder cap exceeded".into());
+            }
+        }
+    }
     for rows in [
         &mut mixers,
         &mut items,
@@ -194,12 +206,14 @@ pub(super) fn snapshot(world: &mut World) -> Result<Value, String> {
         &mut tanks,
         &mut bucket_storages,
         &mut bucket_actors,
+        &mut inventory_holders,
     ] {
         rows.sort_by(|a, b| a["entity"].as_str().cmp(&b["entity"].as_str()));
     }
     Ok(
         json!({"schema": 1, "mixers": mixers, "items": items, "actors": actors, "working_relations": working,
         "water_inventory_schema": 1, "tanks": tanks, "bucket_storages": bucket_storages, "bucket_actors": bucket_actors,
+        "inventory_holders": inventory_holders,
         "water_transfer_receipts": false,
         "river_fill_channel": world.contains_resource::<hw_soul_ai::water_observations::TankPourReceipts>(),
         "mixer_water_channel": world.contains_resource::<hw_soul_ai::water_observations::TankPourReceipts>(),
@@ -345,10 +359,34 @@ mod tests {
         assert_eq!(task["is_soul"], false);
         assert_eq!(task["progress"], 0.25);
         assert_eq!(task["carried_item"], format!("{bucket:?}"));
+        assert_eq!(
+            value["inventory_holders"],
+            json!([{
+                "entity": format!("{actor:?}"), "carried_item": format!("{bucket:?}")
+            }])
+        );
         // Observing contradictory/foreign data must not fix it or grant authority.
         assert_eq!(world.get::<StoredIn>(bucket).unwrap().0, companion);
         assert_eq!(world.get::<Inventory>(actor).unwrap().0, Some(bucket));
         assert_eq!(value["accepted"], false);
+    }
+
+    #[test]
+    fn inventory_holders_include_non_bucket_tasks_without_repairing_relations() {
+        let mut world = World::new();
+        let item = world.spawn_empty().id();
+        let actor = world
+            .spawn((AssignedTask::None, Inventory(Some(item))))
+            .id();
+        world.spawn(Inventory(None));
+        let value = snapshot(&mut world).unwrap();
+        assert_eq!(
+            value["inventory_holders"],
+            json!([{
+                "entity": format!("{actor:?}"), "carried_item": format!("{item:?}")
+            }])
+        );
+        assert_eq!(world.get::<Inventory>(actor).unwrap().0, Some(item));
     }
 
     #[test]

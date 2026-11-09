@@ -139,7 +139,7 @@ pub(super) fn scope(world: &World) -> &'static str {
         .get_resource::<Session>()
         .is_some_and(|session| session.mode == "m2-tank-candidate-supply")
     {
-        return "ordinary-m2-tank-candidate-supply-v2";
+        return "ordinary-m2-tank-candidate-supply-v3";
     }
     if world
         .get_resource::<Session>()
@@ -467,7 +467,7 @@ mod tests {
         wrong.identity.kind = BuildingAssetKind::MudMixer;
         assert!(validate(&wrong, root, &wrong.nonce, "m2-tank-candidate-supply").is_err());
         world.insert_resource(supply);
-        assert_eq!(scope(&world), "ordinary-m2-tank-candidate-supply-v2");
+        assert_eq!(scope(&world), "ordinary-m2-tank-candidate-supply-v3");
         full.mode = "m2-tank-candidate-full".into();
         validate(&full, root, &full.nonce, "m2-tank-candidate-full").unwrap();
         assert!(validate(&session, root, &session.nonce, "m2-tank-candidate-full").is_err());

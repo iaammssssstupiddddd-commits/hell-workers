@@ -52,6 +52,13 @@ Bevy 0.19の既存helper/fixtureを利用し、新APIやcrate依存は追加し�
 - [ ] Help実経路判断、primary storage確認。
 - [ ] 同candidate/自然worldのfresh通常供給。失敗はinvalidのまま診断する。
 
+v8では実Sand5搬入と初回RefineCommit（泥5生成）まで到達したが、追加操作を含む17回のpointer motionが
+旧汎用16回上限に抵触しinvalid。取水も満水BucketWaterの正常な直接再利用でTankTake未実行だった。
+次のv3シナリオでは、通常Super操作でTank Water50・専用5BucketEmptyのown storage返却を待ち、Paused後も
+同一rawで維持したことを確認してからMixerを建設する。Inventory全体の受動観測で非所持も確認する。
+専用contractにsetupとmotion_cap=20（宣言19移動＋任意Dev最小化1）を固定し、汎用16は維持。
+6画像、1200samples/4096events/64MiB、工程180秒/全体480秒、初回精製→TankTake証明を緩めない。
+
 ### M3: 終了
 
 - [ ] 恒久仕様へ限定結果/残条件を同期し、計画撤去またはarchiveと索引更新。

@@ -927,7 +927,7 @@ fn observe(world: &mut World) {
 // A new, explicit supply-only contract. Other campaigns keep Dream evidence;
 // this scope cannot be used to prove Dream transfer or complete world lifecycle.
 fn supply_event_contract(art_feedback: bool, scope: &str) -> Option<Value> {
-    (art_feedback && scope == "ordinary-m2-tank-candidate-supply-v2").then(|| {
+    (art_feedback && scope == "ordinary-m2-tank-candidate-supply-v3").then(|| {
         json!({"id":"m2-supply-events-v1","excluded_producers":["DreamTransferredVisualMessage"]})
     })
 }
@@ -1027,7 +1027,7 @@ mod tests {
 
     #[test]
     fn supply_event_exclusion_is_derived_only_from_the_exact_preview_scope() {
-        let scope = "ordinary-m2-tank-candidate-supply-v2";
+        let scope = "ordinary-m2-tank-candidate-supply-v3";
         assert_eq!(
             supply_event_contract(true, scope),
             Some(json!({
@@ -1036,6 +1036,7 @@ mod tests {
         assert!(supply_event_contract(false, scope).is_none());
         for other in [
             "ordinary-m2-tank-candidate-supply-v1",
+            "ordinary-m2-tank-candidate-supply-v2",
             "production-raw-observations-v1",
             "ordinary-rest-area-candidate-lifecycle-v1",
             "",
