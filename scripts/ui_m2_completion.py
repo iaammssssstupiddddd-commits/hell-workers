@@ -146,7 +146,6 @@ def exercise(driver, contract):
 
 def check_completion(raw, entries, client):
     """Actual domain completion plus delivery/task/owner witnesses, not release."""
-    from scripts import building_production_lifecycle as lifecycle
     native.require([entry["case"] for entry in entries] == list(CHECKPOINTS),
                    "completion checkpoints differ")
     for entry in entries:
@@ -179,7 +178,22 @@ def check_completion(raw, entries, client):
                    and all(type(event.get("event_index")) is int and event["event_index"] == index
                            for index, event in enumerate(events)),
                    "completion raw ordinals differ")
-    rows = [event for event in events if event.get("operation") == "BuildingCompleted"]
+    native.require(sum(event.get("operation") == "BuildingCompleted" for event in events) == 1,
+                   "actual completion domain event missing or duplicated")
+    check_mixer_domain_completion(raw, placed, completed, context(placed), context(completed))
+
+
+def check_mixer_domain_completion(raw, placed, completed, placed_context, completed_context):
+    """Exact Mixer domain history, also usable inside a declared multi-owner campaign.
+
+    This does not validate a campaign envelope, inputs, art or admission. The
+    caller must validate those separately; unrelated completion events are kept.
+    """
+    from scripts import building_production_lifecycle as lifecycle
+    samples, events = raw["samples"], raw["events"]
+    footprint = placed_context["footprint"]
+    rows = [event for event in events if event.get("operation") == "BuildingCompleted"
+            and event.get("kind") == "MudMixer"]
     native.require(len(rows) == 1, "actual completion domain event missing or duplicated")
     row = rows[0]
     index = row.get("sample_index")
@@ -196,7 +210,7 @@ def check_completion(raw, entries, client):
                    and 0 <= row["real_seconds"] <= sample["real_seconds"], "completion time/epoch differs")
     prior = [bp for value in samples[:index] if value.get("world_epoch") == epoch
              for bp in value.get("blueprints", []) if bp.get("entity") == row["blueprint_owner"]]
-    old_bits = placed["m2_planning"]["blueprints"][0]["entity"]
+    old_bits = placed_context["blueprints"][0]["entity"]
     native.require(prior and all(bp.get("entity_bits") == old_bits and bp.get("kind") == "MudMixer"
                                 and bp.get("footprint") == footprint for bp in prior)
                    and any(bp.get("materials_complete") is True
@@ -206,7 +220,7 @@ def check_completion(raw, entries, client):
     owners = [owner for owner in sample.get("owners", []) if owner.get("entity") == row["owner"]]
     native.require(len(owners) == 1 and owners[0].get("kind") == "MudMixer"
                    and owners[0].get("provisional") is False
-                   and owners[0].get("entity_bits") == completed["m2_planning"]["buildings"][0],
+                   and owners[0].get("entity_bits") == completed_context["buildings"][0],
                    "completion new owner differs")
     for entity, exists in ((row["blueprint_owner"], False), (row["owner"], True)):
         layers = [layer for layer in sample.get("owner_layers", []) if layer.get("entity") == entity]

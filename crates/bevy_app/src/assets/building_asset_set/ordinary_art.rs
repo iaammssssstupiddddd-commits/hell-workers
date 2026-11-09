@@ -60,7 +60,10 @@ fn validate(session: &Session, root: &Path, nonce: &str, case: &str) -> Result<(
                 .all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase())
     };
     let profile = match session.mode.as_str() {
-        "m2-tank-candidate-completion" | "m2-tank-candidate-inflow" | "m2-tank-candidate-full" => {
+        "m2-tank-candidate-completion"
+        | "m2-tank-candidate-inflow"
+        | "m2-tank-candidate-full"
+        | "m2-tank-candidate-supply" => {
             session.identity.authority == BuildingAssetAuthority::IsolatedCandidate
                 && session.identity.kind == BuildingAssetKind::Tank
                 && case == session.mode
@@ -132,6 +135,12 @@ fn validate(session: &Session, root: &Path, nonce: &str, case: &str) -> Result<(
 }
 
 pub(super) fn scope(world: &World) -> &'static str {
+    if world
+        .get_resource::<Session>()
+        .is_some_and(|session| session.mode == "m2-tank-candidate-supply")
+    {
+        return "ordinary-m2-tank-candidate-supply-v1";
+    }
     if world
         .get_resource::<Session>()
         .is_some_and(|session| session.mode == "m2-tank-candidate-full")
@@ -333,6 +342,7 @@ pub(super) fn snapshot(world: &mut World) -> Result<Value, String> {
                 "m2-tank-candidate-completion"
                     | "m2-tank-candidate-inflow"
                     | "m2-tank-candidate-full"
+                    | "m2-tank-candidate-supply"
             ) =>
         {
             BuildingType::Tank
@@ -440,6 +450,24 @@ mod tests {
         let mut world = World::new();
         let mut inflow = session.clone();
         let mut full = session.clone();
+        let mut supply = session.clone();
+        supply.mode = "m2-tank-candidate-supply".into();
+        validate(&supply, root, &supply.nonce, "m2-tank-candidate-supply").unwrap();
+        assert!(validate(&session, root, &session.nonce, "m2-tank-candidate-supply").is_err());
+        assert!(validate(&supply, root, &supply.nonce, "m2-tank-candidate-full").is_err());
+        for authority in [
+            BuildingAssetAuthority::ArtPreview,
+            BuildingAssetAuthority::ReleaseApproved,
+        ] {
+            let mut wrong = supply.clone();
+            wrong.identity.authority = authority;
+            assert!(validate(&wrong, root, &wrong.nonce, "m2-tank-candidate-supply").is_err());
+        }
+        let mut wrong = supply.clone();
+        wrong.identity.kind = BuildingAssetKind::MudMixer;
+        assert!(validate(&wrong, root, &wrong.nonce, "m2-tank-candidate-supply").is_err());
+        world.insert_resource(supply);
+        assert_eq!(scope(&world), "ordinary-m2-tank-candidate-supply-v1");
         full.mode = "m2-tank-candidate-full".into();
         validate(&full, root, &full.nonce, "m2-tank-candidate-full").unwrap();
         assert!(validate(&session, root, &session.nonce, "m2-tank-candidate-full").is_err());

@@ -79,6 +79,7 @@ MEASUREMENT_HARNESS_FILES = (
     "scripts/ui_m2_completion.py",
     "scripts/ui_m2_tank_completion.py",
     "scripts/ui_m2_tank_inflow.py",
+    "scripts/ui_m2_tank_supply.py",
     "scripts/ui_m2_tank_full.py",
     "scripts/building_water_transfers.py",
     "scripts/building_m2_ui_acceptance.py",

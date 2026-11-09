@@ -39,6 +39,7 @@ from scripts import ui_m2_completion as m2_completion
 from scripts import ui_m2_tank_completion as tank_completion
 from scripts import ui_m2_tank_inflow as tank_inflow
 from scripts import ui_m2_tank_full as tank_full
+from scripts import ui_m2_tank_supply as tank_supply
 
 PROFILE = "ui-usability-feedback"
 CHECKPOINTS = ("tasks", "last-page", "minimized", "restored", "entities",
@@ -53,7 +54,7 @@ SPA_ART_CASES = (spa_art.CASE, spa_resumed.CASE, spa_loaded.CASE)
 CASES += SPA_ART_CASES
 CASES += tuple(m5.KINDS)
 CASES += tuple(m2.KINDS)
-COMPLETION_CASES = (m2_completion.CASE, tank_completion.CASE, tank_inflow.CASE, tank_full.CASE)
+COMPLETION_CASES = (m2_completion.CASE, tank_completion.CASE, tank_inflow.CASE, tank_full.CASE, tank_supply.CASE)
 CASES += COMPLETION_CASES
 PLANNING_CASES = (*m5.KINDS, *m2.KINDS)
 REST_CASES = ("rest-area-planning", "rest-area-refund", "rest-area-completion", "rest-area-usage", "rest-area-exit", "rest-area-save", "rest-area-lifecycle", "rest-area-maxzoom", "rest-area-candidate-lifecycle")
@@ -61,7 +62,7 @@ REST_CASES = ("rest-area-planning", "rest-area-refund", "rest-area-completion", 
 
 def completion_recipe(case):
     native.require(case in COMPLETION_CASES, "dedicated completion case required")
-    return tank_full if case == tank_full.CASE else tank_inflow if case == tank_inflow.CASE else tank_completion if case == tank_completion.CASE else m2_completion
+    return tank_supply if case == tank_supply.CASE else tank_full if case == tank_full.CASE else tank_inflow if case == tank_inflow.CASE else tank_completion if case == tank_completion.CASE else m2_completion
 
 
 def planning_recipe(case):
@@ -108,6 +109,9 @@ def sha256(path: Path) -> str:
 def check_observation(case: str, value: dict) -> None:
     native.require(value["ready"] and value["frame"] > 90, "fixture is not ready")
     native.require(value["task_rows"] <= 20, "task resident row limit exceeded")
+    if case in tank_supply.CHECKPOINTS[3:]:
+        tank_supply.check_observation(case, value)
+        return
     if case in (tank_inflow.CHECKPOINTS[-1], tank_full.CHECKPOINTS[-1]):
         tank_inflow.check_observation(case, value)
         return
@@ -730,6 +734,7 @@ def verify_root(root):
         joint.verify_game_log(directory / "game.log", "Intel")
     return {"status": "valid", "profile": PROFILE, "sessions": len(expected),
             "coverage": f"{manifest.get('layout_scene', 'management')} rendering only; no input evidence" if layout_only else
+                        "ordinary Tank candidate and base-presentation Mixer construction, one exact River-to-Tank-to-Mixer refinement leg only; no whole lifecycle, performance, Mixer art or release authority" if manifest.get("case") == tank_supply.CASE else
                         "ordinary adopted Tank construction and actual pours to capacity fifty with Full water presentation only; no River-fill, Mixer supply, performance or release" if manifest.get("case") == tank_full.CASE else
                         "ordinary adopted Tank construction and actual Tank pour with water presentation only; no River-fill, full supply lifecycle, performance or release" if manifest.get("case") == tank_inflow.CASE else
                         "ordinary adopted Tank companion placement, Wood delivery and natural construction only; no water supply, full lifecycle, performance or release" if manifest.get("case") == tank_completion.CASE else

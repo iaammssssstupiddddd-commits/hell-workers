@@ -318,6 +318,21 @@ Found/帰還継続、消費数=搬送量=生成数を要求する。投入だけ
 これらのunit testは合成世界の分岐同値性であり、通常worldの供給/自然精製、帰還完了、
 renderer性能や正式releaseの証拠ではない。`water_transfer_receipts=false`と非承認flagsは維持する。
 
+次の限定case `m2-tank-candidate-supply` / `ordinary-m2-tank-candidate-supply-v1` は、
+採用済みTank候補の通常施工3checkpointに、別の合法なMixer配置・自然施工・最初の精製の3画像を加える。
+Mixerは基準assetsの表示を維持し、Mixer候補のadmissionや美術採否をこのcaseへ混入しない。
+準備はcamera/pauseとread-onlyな2つのanchor選定だけ。Tank/保管所とMixerの間に1セル以上の間隔を保ち、
+初期Mixer不在を要求する。資材・actor・task・完成・水を付与せず、既存Yardの通常自動採取需要を使う。
+Tank施工prefixは同process/scope/indexのまま再検証し、後半は既存HUDと一度だけの実Mixer配置入力を使う。
+Mixer施工/供給は明示Super条件でそれぞれ最大180秒待ち、全体480秒・1200sample・4096event上限は維持する。
+全raw分岐の厳密検証を通したうえで、撮影以前の同Mixerの最初のRefineCommitから実Water IDを遡り、
+同worker/request/bucketの損失なしTankTake→MixerPourと、再利用しない各RiverFill→TankPourへ結ぶ。
+Sand/Rockは実item消費receiptのzeroからのcounter経路を精製直前値へ結び、同frameの精製後搬入を
+精製前の材料へ数えない。別bucketの未完の配送を消したり完了へ数えたりしない。
+全後半sampleで同Tankのmap・専用bucket5個・保管所・在庫正逆・active candidate rootを保持する。
+このrecipeの実装/testは実機成功ではなく、fresh実行・登録verifier・独立画像/raw reviewを必要とする。
+帰還完了、全採取/配送lifecycle、Mixer候補の通常表示、性能、9種の正式release/installは別条件である。
+
 自然施工は別の `m2-mixer-candidate-completion` / `m2-candidate-completion` /
 `ordinary-m2-candidate-completion-v1` で採用済みMixer候補だけを受付する。準備はcamera/pauseだけとし、
 実配置receipt・Wood4個の実搬入・同BlueprintへのBuild assignment/完了・新ownerへのmap移管を記録する。

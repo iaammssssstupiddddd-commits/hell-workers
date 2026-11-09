@@ -22,6 +22,11 @@ struct Target {
     initial_building_inventory: Vec<Value>,
 }
 
+#[derive(Resource)]
+struct SupplyMixerTarget {
+    anchor: (i32, i32),
+}
+
 fn building_inventory(world: &mut World, kind: BuildingType) -> Vec<Value> {
     let mut rows = world
         .query::<(
@@ -47,7 +52,10 @@ fn building_inventory(world: &mut World, kind: BuildingType) -> Vec<Value> {
 fn case_kind(case: &str) -> Option<BuildingType> {
     if matches!(
         case,
-        "m2-tank-candidate-completion" | "m2-tank-candidate-inflow" | "m2-tank-candidate-full"
+        "m2-tank-candidate-completion"
+            | "m2-tank-candidate-inflow"
+            | "m2-tank-candidate-full"
+            | "m2-tank-candidate-supply"
     ) {
         return Some(BuildingType::Tank);
     }
@@ -119,6 +127,31 @@ fn companion_legal(map: &WorldMap, anchor: (i32, i32)) -> bool {
     .can_place
 }
 
+fn supply_mixer_anchor(
+    map: &WorldMap,
+    sites: &[Site],
+    yards: &[Yard],
+    tank: (i32, i32),
+) -> Option<(i32, i32)> {
+    let mut reserved = live_building_geometry(map, BuildingType::Tank, tank).occupied_grids;
+    reserved.extend(bucket_storage_geometry((tank.0 + 2, tank.1)).occupied_grids);
+    (1..MAP_WIDTH - 2)
+        .flat_map(|x| (1..MAP_HEIGHT - 2).map(move |y| (x, y)))
+        .filter(|&p| (p.0 - tank.0).abs() + (p.1 - tank.1).abs() <= 12)
+        .filter(|&p| validate(map, sites, yards, BuildingType::MudMixer, p).can_place)
+        .filter(|&p| {
+            live_building_geometry(map, BuildingType::MudMixer, p)
+                .occupied_grids
+                .iter()
+                .all(|cell| {
+                    reserved
+                        .iter()
+                        .all(|r| (cell.0 - r.0).abs().max((cell.1 - r.1).abs()) >= 2)
+                })
+        })
+        .min_by_key(|&(x, y)| ((x - tank.0).abs() + (y - tank.1).abs(), x, y))
+}
+
 pub(super) fn prepare(world: &mut World) {
     let kind = case_kind(&std::env::var("HW_NATIVE_UI_CASE").expect("M5 case required"))
         .expect("dedicated M5 case required");
@@ -143,6 +176,15 @@ pub(super) fn prepare(world: &mut World) {
         transform.translation.y = center.y;
     }
     let initial_building_inventory = building_inventory(world, kind);
+    if std::env::var("HW_NATIVE_UI_CASE").as_deref() == Ok("m2-tank-candidate-supply") {
+        assert!(
+            building_inventory(world, BuildingType::MudMixer).is_empty(),
+            "supply requires no initial Mixer; never remove it"
+        );
+        let mixer = supply_mixer_anchor(world.resource::<WorldMap>(), &sites, &yards, anchor)
+            .expect("generated world requires a separate legal Mixer anchor with a free corridor");
+        world.insert_resource(SupplyMixerTarget { anchor: mixer });
+    }
     assert!(
         !matches!(kind, BuildingType::MudMixer | BuildingType::Tank)
             || initial_building_inventory.is_empty(),
@@ -166,6 +208,22 @@ pub(super) fn snapshot(world: &mut World) -> Value {
     };
     let (kind, anchor) = (target.kind, target.anchor);
     let initial_building_inventory = target.initial_building_inventory.clone();
+    let mixer = world
+        .get_resource::<SupplyMixerTarget>()
+        .map(|target| target.anchor);
+    let mut value = snapshot_at(world, kind, anchor, initial_building_inventory);
+    if let Some(mixer) = mixer {
+        value["supply_mixer"] = snapshot_at(world, BuildingType::MudMixer, mixer, Vec::new());
+    }
+    value
+}
+
+fn snapshot_at(
+    world: &mut World,
+    kind: BuildingType,
+    anchor: (i32, i32),
+    initial_building_inventory: Vec<Value>,
+) -> Value {
     let sites = world
         .query::<&Site>()
         .iter(world)
@@ -368,6 +426,36 @@ mod tests {
         let version = map.obstacle_version;
         assert!(!companion_legal(&map, (10, 10)));
         assert_eq!(map.obstacle_version, version);
+    }
+
+    #[test]
+    fn supply_secondary_anchor_is_read_only_legal_and_keeps_a_corridor() {
+        let map = WorldMap::default();
+        let yards = [Yard {
+            min: Vec2::splat(-10000.0),
+            max: Vec2::splat(10000.0),
+        }];
+        let tank = (50, 50);
+        let version = map.obstacle_version;
+        let anchor = supply_mixer_anchor(&map, &[], &yards, tank).unwrap();
+        assert_eq!(Some(anchor), supply_mixer_anchor(&map, &[], &yards, tank));
+        assert!(validate(&map, &[], &yards, BuildingType::MudMixer, anchor).can_place);
+        let mut reserved = live_building_geometry(&map, BuildingType::Tank, tank).occupied_grids;
+        reserved.extend(bucket_storage_geometry((52, 50)).occupied_grids);
+        assert!(
+            live_building_geometry(&map, BuildingType::MudMixer, anchor)
+                .occupied_grids
+                .iter()
+                .all(|p| reserved
+                    .iter()
+                    .all(|r| (p.0 - r.0).abs().max((p.1 - r.1).abs()) >= 2))
+        );
+        assert_eq!(version, map.obstacle_version);
+        assert!(supply_mixer_anchor(&map, &[], &[], tank).is_none());
+        assert_eq!(
+            case_kind("m2-tank-candidate-supply"),
+            Some(BuildingType::Tank)
+        );
     }
 
     #[test]
