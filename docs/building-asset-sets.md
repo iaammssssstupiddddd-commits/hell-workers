@@ -323,11 +323,21 @@ Tank水運搬、全描画chain、性能、正式releaseの受入を意味しな�
 既存TankPour branch・正確な作業ID/TaskCompleted・専用bucketと新Water5個を照合し、全実注水の生成集合と
 同Tankの現在StoredIn/StoredItemsを一致させる。実水量により水part可視・Partial高さ/色またはFull高さ/色を確認する。
 通常取水/供給を注入・修復せず、180秒待ちの不成立は失敗。川取水成功そのもの、TankからMixerへの搬出、
-全物流、全描画chain、性能、正式releaseは証明しない。この拡張は実装中で実機結果未確定。
-最初の実機 `tak14-tank-candidate-inflow-20261109-v1`（`41253e73`）はinvalidのまま保全。
+全物流、全描画chain、性能、正式releaseは証明しない。
+`aba57f91`のfresh実機 `tak14-tank-candidate-inflow-20261109-v2`で限定成功、4画像/rawを独立確認した。
+sample228の同worker1864v0/request1957v36/bucket2413v24に続き、229でTank1896v44への
+実TankPour・同request完了・Water5個生成を記録。以降の同Tank格納集合が一致し、同rootのwaterはHiddenから
+Visibleへ、Y12/Partial色[.58,.70,.73,1]へ追従した。Intel Arc/Vulkan/X11、WARN/ERRORなし。
+source `729343f055081e28e723bc42e394d748cebc3d88b34d52c41f2a4c8989461142`、
+manifest `c10eabcb51a2a98d2fa5d5c65d91b9104cc832b3bc52e1dbdf4063401576e44d`、
+raw `534baa14a067952ac5cca9a482f5b48a29f356956b0a3b5dd5b971dfac578e3f`。
+170229760 bytesを残るFull/Mixer供給との比較用途で保持し、封印/finalize/storage pass済み。
+Full50は未実測。全9種の標準起動locator/install/releaseは未変更であり、通常起動の全移行完了ではない。
+最初の実機 `tak14-tank-candidate-inflow-20261109-v1`（`41253e73`）の結果はinvalidのまま維持。
 実注水と4画像は得られたが、周期観測に一瞬のPouring phaseを要求した検証器が拒否した。
 修正では実TankPour branch証拠を維持し、直前sampleの同依頼/作業員/水入りbucket/行先を拘束する。
-phaseは到着中またはPouringとし、任意の過去sampleから作業IDを拾わない。旧jobを成功へ変更せず新jobで再確認する。
+phaseは到着中またはPouringとし、任意の過去sampleから作業IDを拾わない。旧jobを成功へ変更せず新jobで再確認した。
+診断終了後、旧job167124992 bytesは正式releaseしてゴミ箱へ移動。採用原本/候補/最新証拠を削除せず、失敗履歴は本書と台帳へ集約した。
 
 M5専用の明示 `--variant m5-art-context --view normal` は別のseeded比較である。
 ArtPreviewの4種だけをfeedback/art-preview・standard照明で許可し、candidate/releaseや通常入力証拠へ転用しない。
