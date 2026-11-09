@@ -357,7 +357,22 @@ receiptはbucketの型変換を証明するだけで、`data.amount=1`を水量�
 この失敗を上限延長や旧passで解消しない。後続Full contractは必須 `supply_speed="Super"` を封入し、
 施工prefixは既存条件のまま、貯水だけ実Super→Pausedの二操作へ分離する。切替前raw速度1、
 Released sample以後は停止後も4を要求する。全上限・実汲水相関・一意Water50条件は不変。
-これは4x条件の技術表示確認であり、Normalの180秒内充填や性能の確認ではない。新条件の実機は未実施。
+これは4x条件の技術表示確認であり、Normalの180秒内充填や性能の確認ではない。
+`b152108d`のfresh `tak14-tank-candidate-full-20261109-v3`で新条件が限定成功。
+実RiverFill10件とTankPour10件が同worker/request/bucketで対応し、Tank2218v18に一意Water50個を格納。
+同root2216v17のFull Y22/white、4枚の所有窓画像を独立確認した。465 samples/877 events、
+sample154のReleasedで速度1→4、最終Pause後は末尾464まで停止/速度4/仮想時刻固定。
+Intel Arc/Vulkan/X11、WARN/ERRORなし。HUD FPS1は性能承認ではない。
+source `7d934e9e1dbb9964b6485909ee3f9ebd230c283e8fd238ecc9aa315609009fbb`、
+harness `6113fb1b62a492d8a3b4084b1c387f0b09d6896d5a44d01027fef0c709bde8d2`、
+manifest `26f1add51e320a61996ae0c9ac25bda1c66791362f5fdf612cc2adcd7e5e87db`、
+raw `1bdd5d3af35b9f68e6ceebe83eb0ef045f65b21bd90f563cfb79dc005f84a693`。
+登録verifier、独立read-only review、封印、finalize/storage pass済み。最新job186478592 bytesは
+Tank→Mixer供給/visual feedback比較用に保持し、その用途終了後に整理する。
+施工単独v1・Full v1・Normal未達Full v2は用途を正式解除し、計534450176 bytesをゴミ箱へ移動した（回収可能）。
+結果の成功/invalid履歴は維持し、採用原本/候補/codec/Partial比較入力と最新v3は保全した。
+次は実Tank取出しとMixer注水、Sand/Rock搬入のbranch結果を採取し、通常伐採/採掘と
+自然RefineCommitへ接続する。川地点への地理到達、全物流、全描画chain、性能、正式releaseは未達。
 最初の実機 `tak14-tank-candidate-inflow-20261109-v1`（`41253e73`）の結果はinvalidのまま維持。
 実注水と4画像は得られたが、周期観測に一瞬のPouring phaseを要求した検証器が拒否した。
 修正では実TankPour branch証拠を維持し、直前sampleの同依頼/作業員/水入りbucket/行先を拘束する。

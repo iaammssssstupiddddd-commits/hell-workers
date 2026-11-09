@@ -7,7 +7,7 @@
 | 計画ID | `non-wall-floor-building-art-migration-plan-2026-09-19` |
 | ステータス | `In Progress` |
 | 作成日 | `2026-09-19` |
-| 最終更新日 | `2026-09-21` |
+| 最終更新日 | `2026-11-09` |
 | 作成者 | `Codex` |
 | 関連提案 | `N/A`（ユーザー依頼による計画） |
 | 関連Issue/PR | `N/A` |
@@ -61,6 +61,14 @@ v2はNormalで40/50のまま180秒に達しinvalid封印・診断保全・finali
 最後の運搬も継続中だった。後続は必須supply_speed=Superの明示contractで施工後だけ既存4xボタンを使う。
 Normal条件の失敗を成功へ変えず、180/480秒やraw上限も維持する。fresh rootは
 `target/native-acceptance/tak14-tank-candidate-full-20261109-v3`、owner/consumer/保持終了条件は同じ限定比較。
+`b152108d`のv3はSuper条件で限定成功。実汲水10→実注水10→一意Water50、Full Y22/white、
+全4所有窓画像とrawを独立確認。最終Pause後の末尾も停止/速度4/仮想時刻固定を照合し、
+登録verifier・封印・finalize/storage pass済み。186478592 bytesの最新jobを次のMixer供給比較用に保持する。
+旧施工単独v1/Full v1/Normal未達v2は用途終了で正式解除し、計534450176 bytesをゴミ箱へ移動（回収可能）。
+失敗はinvalidのまま、採用原本/候補/codec/Partial比較入力は保全。repo内実測allocatedは
+322425606144→321891155968 bytesとなった。Trashはfilesystem上の回収可能保全であり、物理空き増加の主張ではない。
+次は実Tank取出し/Mixer注水とSand/Rock搬入の受動receiptを補い、通常伐採/採掘による材料確保と
+自然精製を別の同subjectキャンペーンへ接続する。全9種の通常起動切替・性能・release完了にはしない。
 
 - 解決したい課題: 壁・床以外の建築物で、用途・状態が読める形状と手描き表現を統一し、完成表示から各previewまで整合させる。
 - 到達したい状態: モデルが外形・開口・可動部を、テクスチャが手描きの線・材質・色面を担当し、全対象が同じ世界の設備として読める。
