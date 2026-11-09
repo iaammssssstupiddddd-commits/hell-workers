@@ -3,6 +3,8 @@ pub mod movement;
 pub mod refine_observations;
 pub mod rest_area_lifecycle;
 pub mod soul_ai;
+#[cfg(feature = "profiling")]
+pub mod water_observations;
 pub use movement::soul_movement;
 pub use rest_area_lifecycle::{
     RestAreaReleaseResult, release_rest_area_for_removed_owner, rest_area_relationship_sources,

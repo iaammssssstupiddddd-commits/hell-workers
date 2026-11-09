@@ -147,3 +147,5 @@ mod guards;
 #[cfg(feature = "profiling")]
 mod refine_observations;
 mod stockpile_policy;
+#[cfg(feature = "profiling")]
+mod water_observations;

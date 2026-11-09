@@ -67,6 +67,8 @@ pub struct TaskExecEnv<'a> {
     pub delivery_observations: bool,
     #[cfg(feature = "profiling")]
     pub refine_observations: bool,
+    #[cfg(feature = "profiling")]
+    pub water_observations: bool,
 }
 
 /// タスク実行の基本コンテキスト

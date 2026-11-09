@@ -231,6 +231,13 @@ null/消失/非Soulを正常化せず、有界/finite検査を維持する。観
 資材・task・world・通常UI/入力・保存形式は変更しない。Tankの二段階入力と自然施工、River→Tank→Mixerの
 実成功branch receiptは別の必要工程として残し、state追加や合成unit testを実機passへ昇格しない。
 
+Tank側の実注水分岐を先に `ordinary-tank-pour-branch-v1` として受動記録する。
+実worker/assignment/bucket・事前bucket種別・River source payload・生成Water5ID・epochを保持し、
+既存cleanup後のTank/capacity50と水の両方向格納・空bucketを検査する。有界bufferはdrain後も総上限を保持する。
+実handlerを観測有無の両方で通し、通常の注水量・bucket/Inventory cleanupが同じであることを回帰する。
+offline parserの欠損/foreign/型alias/重複出力拒否を補うが、実機pass、River取水・Mixerまでの供給、
+正式asset releaseやTankの二段階配置・自然施工の受入をこの実装だけから主張しない。
+
 2026-11-09の独立read-onlyアート監査では、Sand/Boneの現ArtPreview世代1を見た目だけ採用した。
 Sand `dbdf3e6ba5557f1b91b59a4e7d19c0bc1afe68e96c745d0dcbefd3f7b637d4e5` は低い黄土色の塊と大色面、
 Bone `fe6c024cd79783abff36fc22fb8b676a5bdc0325edef34b35089e563127e3f4f` は骨軸/節/隙間/象牙色が

@@ -130,6 +130,7 @@ pub(super) fn configure(app: &mut App) -> Result<(), String> {
         .init_resource::<CancellationReceipts>()
         .init_resource::<BlueprintDeliveryReceipts>()
         .init_resource::<hw_soul_ai::refine_observations::RefineCommitReceipts>()
+        .init_resource::<hw_soul_ai::water_observations::TankPourReceipts>()
         .init_resource::<crate::systems::save::observations::DurableReceipts>()
         .add_observer(building_completed)
         .add_systems(
@@ -653,6 +654,20 @@ fn observe(world: &mut World) {
                     "water": receipt.water.map(|water| format!("{water:?}")), "water_count": receipt.water_count,
                     "outputs": receipt.outputs.iter().map(|entity| format!("{entity:?}")).collect::<Vec<_>>(),
                     "counter_order": ["Sand", "Rock", "StasisMud"], "before": receipt.before, "after": receipt.after}));
+            }
+        }
+        if let Some(mut receipts) = world.get_resource_mut::<hw_soul_ai::water_observations::TankPourReceipts>() {
+            if let Some(failure) = receipts.failure { observations.failure = Some(failure.into()); }
+            for receipt in receipts.rows.drain(..) {
+                observations.events.push(json!({"sample_index": index, "real_seconds": now,
+                    "producer": "ordinary-tank-pour-branch-v1", "operation": "TankPour",
+                    "worker": format!("{:?}", receipt.worker), "assignment": format!("{:?}", receipt.assignment),
+                    "owner": format!("{:?}", receipt.tank), "bucket": format!("{:?}", receipt.bucket),
+                    "world_epoch": receipt.world_epoch,
+                    "bucket_before": receipt.bucket_before.map(|item| format!("{item:?}")),
+                    "river_source": receipt.river_source,
+                    "target": format!("{:?}", receipt.target), "gather_water": receipt.gather_water,
+                    "outputs": receipt.outputs.iter().map(|entity| format!("{entity:?}")).collect::<Vec<_>>()}));
             }
         }
         if let Some(mut receipts) = world.get_resource_mut::<CancellationReceipts>() {

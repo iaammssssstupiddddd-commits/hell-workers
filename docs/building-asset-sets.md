@@ -284,7 +284,13 @@ BucketTransportはRiverまたはTank/needs_fill、TankまたはMixerのdestinati
 Filling/Pouringの実progress、Inventory/WorkingOn/ActiveTaskIdentityを記録する。欠損/消失した参照と非Soulも
 観測したまま残し、所属・資材・taskを修復しない。非finite/上限超過は収集失敗。
 これはstate inventoryだけであり `water_transfer_receipts=false` を明示する。
-River取水・Tank取出し・注水の成功branch receipt、自然供給/精製、Tank親子の実入力/施工受入は別途必要である。
+`ordinary-tank-pour-branch-v1` は実Tank注水branchのworker/assignment・bucket・新Water5Entityを記録する。
+既存の注水/cleanup command適用後、同epochの実Tank/capacity50、水のResourceItem/StoredIn/StoredItems正逆、
+空bucketと運搬関係解除を照合する。非profilingでは収集せず、観測Resource不在では記録しない。
+bucket_beforeとRiver由来taskの実payloadを記すが、Riverでの取水自体を観測した証拠ではない。
+raw parserは同sampleの実水ID・Tank所属と重複使用を検査し、このreceiptを全lifecycle witnessには昇格しない。
+作業IDは同sampleの実Soulとexact GatherWater TaskCompletedのworker/assignment/bucket/時刻へ拘束する。
+River取水・Tank取出し・Mixer注水の成功receipt、自然供給/精製、Tank親子の実入力/施工受入は別途必要である。
 
 自然施工は別の `m2-mixer-candidate-completion` / `m2-candidate-completion` /
 `ordinary-m2-candidate-completion-v1` で採用済みMixer候補だけを受付する。準備はcamera/pauseだけとし、

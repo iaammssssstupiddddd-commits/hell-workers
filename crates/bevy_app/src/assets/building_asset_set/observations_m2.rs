@@ -201,6 +201,7 @@ pub(super) fn snapshot(world: &mut World) -> Result<Value, String> {
         json!({"schema": 1, "mixers": mixers, "items": items, "actors": actors, "working_relations": working,
         "water_inventory_schema": 1, "tanks": tanks, "bucket_storages": bucket_storages, "bucket_actors": bucket_actors,
         "water_transfer_receipts": false,
+        "tank_pour_channel": world.contains_resource::<hw_soul_ai::water_observations::TankPourReceipts>(),
         "refine_commit_channel": world.contains_resource::<hw_soul_ai::refine_observations::RefineCommitReceipts>(),
         "accepted": false, "performance_evidence": false, "promotion_authority": false}),
     )

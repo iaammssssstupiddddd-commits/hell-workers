@@ -43,6 +43,18 @@ pub fn handle(
                     );
                 }
 
+                #[cfg(feature = "profiling")]
+                let bucket_before = ctx
+                    .queries
+                    .reservation
+                    .resources
+                    .get(data.bucket)
+                    .ok()
+                    .map(|item| item.0);
+                #[cfg(feature = "profiling")]
+                let assignment = ctx.task_identity().assignment_entity;
+                #[cfg(feature = "profiling")]
+                let mut outputs = Vec::new();
                 commands
                     .entity(data.bucket)
                     .try_insert(ResourceItem(ResourceType::BucketEmpty));
@@ -53,24 +65,48 @@ pub fn handle(
                 });
 
                 for _ in 0..BUCKET_CAPACITY {
-                    commands.spawn((
-                        ResourceItem(ResourceType::Water),
-                        hw_core::relationships::StoredIn(tank_entity),
-                        Visibility::Hidden,
-                        Transform::default(),
-                    ));
+                    let _water = commands
+                        .spawn((
+                            ResourceItem(ResourceType::Water),
+                            hw_core::relationships::StoredIn(tank_entity),
+                            Visibility::Hidden,
+                            Transform::default(),
+                        ))
+                        .id();
+                    #[cfg(feature = "profiling")]
+                    if ctx.env.water_observations {
+                        outputs.push(_water);
+                    }
                 }
 
                 commands
                     .entity(data.bucket)
                     .remove::<hw_core::relationships::DeliveringTo>();
 
-                return helpers::drop_bucket_for_auto_haul(
+                let result = helpers::drop_bucket_for_auto_haul(
                     commands,
                     ctx,
                     data.bucket,
                     ctx.env.world_map,
                 );
+                #[cfg(feature = "profiling")]
+                if ctx.env.water_observations {
+                    crate::water_observations::TankPourReceipt {
+                        worker: ctx.soul_entity,
+                        assignment,
+                        target: ctx.task_identity().current_target_entity,
+                        gather_water: ctx.task_identity().current_work_type
+                            == hw_jobs::WorkType::GatherWater,
+                        tank: tank_entity,
+                        bucket: data.bucket,
+                        world_epoch: ctx.world_epoch,
+                        bucket_before,
+                        river_source: matches!(data.source, BucketTransportSource::River),
+                        outputs,
+                    }
+                    .queue(commands);
+                }
+                return result;
             } else {
                 *ctx.task = AssignedTask::BucketTransport(BucketTransportData {
                     phase: BucketTransportPhase::Pouring {

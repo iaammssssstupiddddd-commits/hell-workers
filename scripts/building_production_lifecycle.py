@@ -210,6 +210,61 @@ def check_refine_receipt(event, samples):
                 and rows[0].get("loaded_in") is None, "Refine actual output identity/type/relation differs")
 
 
+def check_tank_pour_receipt(event, samples, events):
+    """Actual pour branch only; no River origin or whole supply authority."""
+    require(set(event) == {"producer", "operation", "sample_index", "event_index", "real_seconds", "worker",
+                           "assignment", "owner", "bucket", "world_epoch", "bucket_before", "river_source", "outputs", "target", "gather_water"}
+            and event["producer"] == "ordinary-tank-pour-branch-v1" and event["operation"] == "TankPour"
+            and type(event["sample_index"]) is int and 0 <= event["sample_index"] < len(samples)
+            and type(event["event_index"]) is int and event["event_index"] >= 0, "Tank pour envelope differs")
+    sample = samples[event["sample_index"]]
+    require(type(event["world_epoch"]) is int and event["world_epoch"] >= 0
+            and type(sample.get("world_epoch")) is int and event["world_epoch"] == sample["world_epoch"]
+            and type(event["real_seconds"]) in (int, float) and math.isfinite(event["real_seconds"])
+            and type(sample.get("real_seconds")) in (int, float) and math.isfinite(sample["real_seconds"])
+            and 0 <= event["real_seconds"] <= sample["real_seconds"], "Tank pour epoch/clock differs")
+    outputs = event["outputs"]
+    require(event["bucket_before"] == "BucketWater" and event["river_source"] is True
+            and event["gather_water"] is True and event["target"] == event["bucket"]
+            and all(isinstance(event[key], str) and event[key] for key in ("worker", "assignment", "owner", "bucket"))
+            and len({event["worker"], event["owner"], event["bucket"]}) == 3
+            and isinstance(outputs, list) and len(outputs) == 5 and all(isinstance(item, str) and item for item in outputs)
+            and len(set(outputs)) == 5 and not set(outputs).intersection({event["worker"], event["owner"], event["bucket"]}),
+            "Tank pour item identities differ")
+    ctx = sample.get("m2_context", {})
+    completions = [row for row in events if row.get("producer") == "TaskCompletedVisualMessage"
+                   and row.get("operation") == "TaskCompleted" and row.get("worker") == event["worker"]
+                   and row.get("assignment") == event["assignment"] and row.get("target") == event["bucket"]
+                   and row.get("work_type") == "GatherWater" and type(row.get("sample_index")) is int
+                   and row["sample_index"] == event["sample_index"]]
+    require(len(completions) == 1
+            and type(completions[0].get("real_seconds")) in (int, float)
+            and math.isfinite(completions[0]["real_seconds"])
+            and 0 <= completions[0]["real_seconds"] <= sample["real_seconds"]
+            and len([row for row in sample.get("actors", []) if row.get("entity") == event["worker"]]) == 1,
+            "Tank pour lacks exact actor/GatherWater completion")
+    require(type(ctx.get("water_inventory_schema")) is int and ctx["water_inventory_schema"] == 1
+            and ctx.get("tank_pour_channel") is True
+            and all(ctx.get(key) is False for key in ("accepted", "performance_evidence", "promotion_authority"))
+            and isinstance(ctx.get("tanks"), list) and isinstance(ctx.get("items"), list), "Tank pour context missing")
+    owners = [row for row in ctx["tanks"] if row.get("entity") == event["owner"]]
+    require(len(owners) == 1 and owners[0].get("provisional") is False
+            and evidence.pipeline.exact_json(owners[0].get("stockpile"), {"resource": "Water", "capacity": 50})
+            and isinstance(owners[0].get("stored_items"), list), "Tank pour actual owner differs")
+    for entity in [event["bucket"], *outputs]:
+        rows = [row for row in ctx["items"] if row.get("entity") == entity]
+        require(len(rows) == 1, "Tank pour actual item missing or duplicated")
+        row = rows[0]
+        if entity == event["bucket"]:
+            require(row.get("resource") == "BucketEmpty"
+                    and {"stored_in", "loaded_in", "delivering_to"} <= row.keys()
+                    and all(row[key] is None for key in ("stored_in", "loaded_in", "delivering_to")), "Tank pour bucket not empty/dropped")
+        else:
+            require(row.get("resource") == "Water" and row.get("stored_in") == event["owner"]
+                    and "loaded_in" in row and row["loaded_in"] is None
+                    and owners[0]["stored_items"].count(entity) == 1, "Tank pour water relation differs")
+
+
 def check_raw_transitions(raw):
     """Check indexed raw state deltas; they never imply an operation succeeded."""
     require(raw.get("schema_version") == 2 and raw.get("transition_contract") == "indexed-state-delta-v1",
@@ -229,6 +284,7 @@ def check_raw_transitions(raw):
     }
     delivered_items = set()
     refined_items = set()
+    poured_items = set()
     delivery_counts = {}
     for event in events_seen:
         producer = event.get("producer")
@@ -266,6 +322,11 @@ def check_raw_transitions(raw):
             identities = {(event["world_epoch"], item) for item in [event["water"], *event["outputs"]]}
             require(not refined_items.intersection(identities), "Refine item receipt reused")
             refined_items.update(identities)
+        elif producer == "ordinary-tank-pour-branch-v1":
+            check_tank_pour_receipt(event, samples, events_seen)
+            identities = {(event["world_epoch"], item) for item in event["outputs"]}
+            require(not poured_items.intersection(identities), "Tank pour output receipt reused")
+            poured_items.update(identities)
         elif producer == "ordinary-building-placement-branch-v1":
             check_placement_receipt(event, samples)
         elif producer in {"SoulSpaConstructionCancelOutcome", "SoulSpaSlotsChangeOutcome"}:
