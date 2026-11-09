@@ -411,6 +411,22 @@ v9（`e89707bc`）ではWater50到達後、専用置場にBucketEmpty4とBucketW
 最終real211.397865047/virtual749.625251064。満水Tankへ注げない余剰バケツを満水のまま返す既存仕様である。
 185516032bytesをcycle provenance比較用途で保持しinvalid封印/finalize済み。v4はこの正常分岐を捨てず全件検査し、
 最初のTank由来精製を固定選択する新しい契約であり、旧v3結果や別精製を成功へ読み替えない。
+v10（`e9ac61c7`、source `9d843ab755c0a617d48fb901dc437e1ca3bc967ba348bc1d98ad324f6df937a3`）は
+通常Full/返却前提を満たし、両建物完成・先行するRiver満水bucketの投入と2回の精製へ進んだが、
+real93.546954555のTankTakeで5Waterを消費した後、同worker/request/bucketのMixerPourが
+Mixer内3/5に対して2Waterだけを生成し、strict lossless検査でinvalidとなった。
+実route_found/returningはtrue。最終230samples/294events、real94.384383478/virtual250.933614114、raw failureなし。
+`pouring.rs`の`min(amount, available)`と全bucketのEmpty化が残3の消失原因で、実handler回帰も現行部分投入を保持している。
+数量/待機/予約/取消の変更は観測同値修正ではなく別のgameplay bugfix判断を必要とする。
+良いcycleだけを選んでこの損失を隠さず、lossless供給、全物流、正式性能・release/installは未達のままとする。
+181051392bytesのv10原本を数量契約の診断用に保持し、invalid封印/finalize済み。
+
+観測encode改善とMixer猫車隣接到着修正は、変更別contracts/tooling/Rust gate、profiling Clippy警告0、
+Help実経路No impact、独立read-only reviewを通過した。v8/v10では実Sand搬入/精製まで到達し、
+観測負荷と到着不整合の限定修正は確認できたため、2つの一時計画は本節へ結果を集約して撤去する。
+供給全体の合格を意味しない。解決済みv1〜v6の診断consumerは正式releaseし、元pathの
+1201537024bytesを復元可能なTrashへ移した（物理空き容量の増加とは主張しない）。
+v7〜v10、採用candidate/codec、通常Cargo cacheは別の具体的用途を維持する。primary storage checkはpass。
 
 自然施工は別の `m2-mixer-candidate-completion` / `m2-candidate-completion` /
 `ordinary-m2-candidate-completion-v1` で採用済みMixer候補だけを受付する。準備はcamera/pauseだけとし、

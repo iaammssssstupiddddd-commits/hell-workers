@@ -48,7 +48,6 @@
 | [3d-rtt/terrain-lod-switch-flicker-plan-2026-04-17.md](3d-rtt/terrain-lod-switch-flicker-plan-2026-04-17.md) | Draft | 地形 LOD の単発切替ポップを観測し、短い dither 遷移で抑える計画 |
 | [development-workstation-blender-migration-plan-2026-07-29.md](development-workstation-blender-migration-plan-2026-07-29.md) | In Progress | 新PCへの開発環境移行と、現PCでのBlender／asset新規構築計画。 |
 | [hvac-plumbing-plan-2026-07-13.md](hvac-plumbing-plan-2026-07-13.md) | Draft | 地獄のインフラ（換気・導水・部屋認可）実装計画 |
-| [mixer-wheelbarrow-arrival-plan-2026-11-10.md](mixer-wheelbarrow-arrival-plan-2026-11-10.md) | In Progress | Mixer猫車搬入の隣接到着修正 |
 | [native-acceptance-resource-safety-plan-2026-08-05.md](native-acceptance-resource-safety-plan-2026-08-05.md) | Complete | tmpfs上のCargo出力を永続storageへ固定し、実機検証のRAM圧迫を防ぐ計画。 |
 | [orca-abcd-workflow-expansion-plan-2026-09-25.md](orca-abcd-workflow-expansion-plan-2026-09-25.md) | Active — 部品実装済み。依頼全体の制御・同期・終了を横断是正中（受入gateの候補実装） | 自然文受付、状態パネル、自動loop、自己修復、A/B並列計画、統括判断によるLinear課題発行、GitHub/CI連携を段階導入する上位計画。 |
 | [orca-dispatch-submit-plan-2026-09-28.md](orca-dispatch-submit-plan-2026-09-28.md) | In Progress | Orca配車の着手確認とモデル通知競合の是正 |
@@ -60,7 +59,6 @@
 | [orca-system-hardening-plan-2026-09-29.md](orca-system-hardening-plan-2026-09-29.md) | Superseded — 独自統括を撤去し通常Orcaへ戻す方針へ変更。過去実績・未完・不成立の履歴を保持 | Orca運用基盤の恒久修正・収束計画 |
 | [orca-tak14-bounded-recovery-plan-2026-10-03.md](orca-tak14-bounded-recovery-plan-2026-10-03.md) | Superseded — M1不合格・未適用の履歴を保持。通常Orca復帰・独自統括撤去へ方針変更 | TAK-14統括の期限付き復旧計画 |
 | [orca-ui-lifecycle-plan-2026-09-23.md](orca-ui-lifecycle-plan-2026-09-23.md) | In Progress — 固定受付、実案件の実装・固定review・統合、承認後role tab整理、通常desktop起動、稼働中agentの中断・再起動復旧まで受入。新規案件の無介入cold-start計測が残る | Orca UI・受付・終了ライフサイクル統合計画 |
-| [production-observer-encoding-plan-2026-11-10.md](production-observer-encoding-plan-2026-11-10.md) | In Progress | 通常world観測履歴の再encode除去 |
 
 ## アーカイブ計画書一覧 (`archive/` / `**/archived/`)
 
