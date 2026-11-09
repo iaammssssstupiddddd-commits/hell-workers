@@ -9,6 +9,7 @@ def fixture():
     raw,entries,client,inputs,contract=partial_fixture()
     raw["scope"]=contract["scope"]=full.SCOPE
     contract["case"]=full.CASE
+    contract["supply_speed"]="Super"
     entries[-1]["case"]=full.CHECKPOINTS[-1]
     original=raw["samples"]
     base=copy.deepcopy(next(s for s in original if s["real_seconds"]==40))
@@ -73,6 +74,18 @@ def fixture():
         sample.get("m2_context",{})["river_fill_channel"]=True
     for index,event in enumerate(raw["events"]):
         event["event_index"]=index
+    tail_actions=[row["tank_completion_action"] for row in inputs if "tank_completion_action" in row][-2:]
+    supply=tail_actions[0]
+    old_key,new_key="menu:SetTimeSpeed(Normal)","menu:SetTimeSpeed(Super)"
+    supply["key"]=new_key
+    supply["before"]["controls"][new_key]=supply["before"]["controls"].pop(old_key)
+    for row in inputs[supply["first_step"]-1:supply["last_step"]]:
+        if old_key in row.get("observed_hover",{}):
+            row["observed_hover"][new_key]=row["observed_hover"].pop(old_key)
+    boundary=next(e["sample_index"] for e in raw["events"] if e.get("producer")=="MouseButtonInput"
+                  and e.get("state")=="Released" and e["real_seconds"]>supply["before"]["m2_planning"]["real_seconds"])
+    for sample in samples[boundary:]:
+        sample["relative_speed"]=4
     entries[-1]["value"]["m2_planning"]["consumers"]=copy.deepcopy(base["art_feedback"])
     return raw,entries,client,inputs,contract
 
@@ -131,3 +144,42 @@ class TankFullTests(unittest.TestCase):
         second.update(sample_index=fills[0]["sample_index"],real_seconds=fills[0]["real_seconds"])
         with self.assertRaisesRegex((ValueError,RuntimeError),"stale or foreign"):
             full.inflow.check_river_fill_chain(old_cycle)
+
+    def test_super_is_explicit_and_paused_tail_keeps_four(self):
+        for mutate in (
+            lambda r,e,c,i,a:a.pop("supply_speed"),
+            lambda r,e,c,i,a:a.update(supply_speed="Normal"),
+            lambda r,e,c,i,a:a.update(supply_speed=True),
+            lambda r,e,c,i,a:r["samples"][-1].update(relative_speed=1),
+            lambda r,e,c,i,a:r["samples"][-2].update(relative_speed=True),
+            lambda r,e,c,i,a:next(row["tank_completion_action"] for row in reversed(i)
+                if row.get("tank_completion_action",{}).get("key")=="menu:SetTimeSpeed(Super)").update(key="menu:SetTimeSpeed(Normal)"),
+        ):
+            args=fixture()
+            mutate(*args)
+            with self.assertRaises((ValueError,RuntimeError)):
+                full.verify(*args)
+        args=fixture()
+        self.assertTrue(args[0]["samples"][-1]["paused"])
+        self.assertEqual(args[0]["samples"][-1]["relative_speed"],4)
+        full.verify(*args)
+
+    def test_old_inflow_cannot_admit_super_supply(self):
+        args=partial_fixture()
+        args[-1]["supply_speed"]="Super"
+        with self.assertRaises((ValueError,RuntimeError)):
+            full.inflow.verify(*args)
+
+    def test_capture_does_not_hide_post_capture_speed_pause_or_clock_changes(self):
+        def with_tail():
+            args=fixture()
+            tail=copy.deepcopy(args[0]["samples"][-1])
+            tail.update(sample_index=len(args[0]["samples"]),real_seconds=tail["real_seconds"]+1.)
+            args[0]["samples"].append(tail)
+            return args
+        full.verify(*with_tail())
+        for change in (dict(relative_speed=2),dict(relative_speed=True),dict(paused=False),dict(virtual_seconds=999.)):
+            args=with_tail()
+            args[0]["samples"][-1].update(change)
+            with self.subTest(change=change),self.assertRaises((ValueError,RuntimeError)):
+                full.verify(*args)

@@ -46,8 +46,10 @@ def check_observation(case, value):
 def exercise(driver, contract):
     native.require((contract.get("case"),contract.get("scope")) in PROFILES, "Tank supply exercise profile differs")
     full = contract["case"] == FULL_CASE
+    native.require(contract.get("supply_speed") == "Super" if full else "supply_speed" not in contract,
+                   "Tank supply speed contract differs")
     construction.exercise(driver, contract)
-    construction.capture_action(driver, "menu:SetTimeSpeed(Normal)")
+    construction.capture_action(driver, "menu:SetTimeSpeed(Super)" if full else "menu:SetTimeSpeed(Normal)")
     def supplied(value):
         roots = construction.context(value).get("consumers", {}).get("roots", [])
         return len(roots) == 1 and type(roots[0].get("tank_water_count")) is int and (
@@ -57,13 +59,14 @@ def exercise(driver, contract):
     driver.capture((FULL_CHECKPOINTS if full else CHECKPOINTS)[-1])
 
 
-def check_tail_inputs(raw, entries, client, inputs):
+def check_tail_inputs(raw, entries, client, inputs, *, supply_speed="Normal"):
     """Two time controls only, exact sent/raw pairs and same client throughout."""
     lower, upper = entries[-2:]
     tail = inputs[lower["last_step"]:]
+    native.require(supply_speed in ("Normal", "Super"), "Unknown Tank supply speed")
     actions = [row["tank_completion_action"] for row in tail if "tank_completion_action" in row]
-    native.require([a["key"] for a in actions] == ["menu:SetTimeSpeed(Normal)", "menu:SetTimeSpeed(Paused)"],
-                   "Tank inflow permits only Normal then Paused")
+    native.require([a["key"] for a in actions] == [f"menu:SetTimeSpeed({supply_speed})", "menu:SetTimeSpeed(Paused)"],
+                   "Tank inflow speed input differs")
     claimed, raw_claimed, effects = set(), set(), []
     epoch = upper["value"]["world_epoch"]
     planning.check_transport(inputs, client, epoch)
@@ -117,12 +120,17 @@ def check_tail_inputs(raw, entries, client, inputs):
     native.require(raw_claimed == {row["event_index"] for row in raw["events"]
                                   if row.get("producer") in ("KeyboardInput", "MouseButtonInput") and row["real_seconds"] > start},
                    "Tank inflow unclaimed raw input")
-    samples = [s for s in raw["samples"] if start <= s["real_seconds"] <= end]
+    # Last may retain observations after the final UI capture. They must remain
+    # paused at the selected speed too; capture time is not a validation cutoff.
+    samples = [s for s in raw["samples"] if start <= s["real_seconds"]]
     native.require(samples and construction.context(upper["value"])["virtual_seconds"] > construction.context(lower["value"])["virtual_seconds"],
                    "Tank inflow has no simulation advance")
     for sample in samples:
         paused = next((state for index,state in reversed(effects) if index <= sample["sample_index"]), True)
-        native.require(sample.get("paused") is paused and planning.finite(sample.get("relative_speed")) and sample["relative_speed"] == 1, "Tank inflow time phase differs")
+        speed = 4 if supply_speed == "Super" and effects[0][0] <= sample["sample_index"] else 1
+        native.require(sample.get("paused") is paused and type(sample.get("relative_speed")) in (int,float)
+                       and planning.finite(sample["relative_speed"]) and sample["relative_speed"] == speed,
+                       "Tank inflow time phase differs")
     native.require(all(a["virtual_seconds"] <= b["virtual_seconds"]
                        and (not (a["paused"] and b["paused"]) or a["virtual_seconds"] == b["virtual_seconds"])
                        for a,b in zip(samples, samples[1:])), "Tank inflow virtual clock differs")
@@ -133,6 +141,9 @@ def verify(raw, entries, client, inputs, contract, *, profile=(CASE, SCOPE)):
     checkpoints = FULL_CHECKPOINTS if profile == (FULL_CASE,FULL_SCOPE) else CHECKPOINTS
     native.require(profile in PROFILES and contract.get("case") == profile[0] and contract.get("scope") == profile[1]
                    and raw.get("scope") == profile[1] and [e["case"] for e in entries] == list(checkpoints), "Tank inflow profile differs")
+    full = profile == (FULL_CASE,FULL_SCOPE)
+    native.require(contract.get("supply_speed") == "Super" if full else "supply_speed" not in contract,
+                   "Tank supply speed contract differs")
     samples, events = raw["samples"], raw["events"]
     epoch, window = entries[0]["value"]["world_epoch"], entries[0]["value"]["primary_window"]
     native.require(0 < len(samples) <= 1200 and len(events) < 4096
@@ -152,7 +163,7 @@ def verify(raw, entries, client, inputs, contract, *, profile=(CASE, SCOPE)):
         native.require(type(entry.get("last_step")) is int and all(type(entry["value"].get(k)) is int
                        for k in ("pid","world_epoch","primary_window","frame")), "Tank inflow checkpoint integer schema differs")
         check_observation(entry["case"], entry["value"])
-    effects, actions = check_tail_inputs(raw, entries, client, inputs)
+    effects, actions = check_tail_inputs(raw, entries, client, inputs, supply_speed="Super" if full else "Normal")
     # Keep the original scope and ordinal values: this is a contiguous same-process
     # prefix, not a historical pass or a relabeled completion batch.
     before = construction.context(actions[0]["before"])["real_seconds"]

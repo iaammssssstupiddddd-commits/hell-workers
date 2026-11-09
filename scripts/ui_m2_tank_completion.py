@@ -35,7 +35,8 @@ def source_contract(repo, source, codec, *, profile=(CASE, SCOPE)):
                 numeric_approval_sha256=manifest["numeric_approval_sha256"],
                 numeric_verifiers=pipeline.numeric_verifier_inventory(),
                 base_assets_sha256=planning.art.asset_view_fingerprint(repo),
-                verifier_sha256=pipeline.digest(Path(__file__).read_bytes()))
+                verifier_sha256=pipeline.digest(Path(__file__).read_bytes()),
+                **(dict(supply_speed="Super") if profile == (FULL_CASE, FULL_SCOPE) else {}))
 
 
 def planned_contract(args, repo):

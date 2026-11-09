@@ -352,7 +352,12 @@ GoingToDestinationを照合し、欠損・不一致はsticky failureにする。
 receiptはbucketの型変換を証明するだけで、`data.amount=1`を水量と読まず、川地点・到達経路や
 注水/精製の成功を推定しない。Full検証器は新sourceから各注水の直前の同bucket/worker/requestの実RiverFillを要求し、
 再利用・欠損・別作業のreceiptを拒否する。旧成功jobをこの新条件の証拠へ読み替えない。
-現在は実handler/拒否系fixtureだけで、新sourceの実機確認は未実施。
+`7c661318`のfresh v2はNormalで40/50のまま180秒に達しinvalidとして封印・診断保全・finalize済み。
+472 samples/898 events、RiverFill11件・TankPour8件、終了直前も水入りbucketが同Tankへ運搬中だった。
+この失敗を上限延長や旧passで解消しない。後続Full contractは必須 `supply_speed="Super"` を封入し、
+施工prefixは既存条件のまま、貯水だけ実Super→Pausedの二操作へ分離する。切替前raw速度1、
+Released sample以後は停止後も4を要求する。全上限・実汲水相関・一意Water50条件は不変。
+これは4x条件の技術表示確認であり、Normalの180秒内充填や性能の確認ではない。新条件の実機は未実施。
 最初の実機 `tak14-tank-candidate-inflow-20261109-v1`（`41253e73`）の結果はinvalidのまま維持。
 実注水と4画像は得られたが、周期観測に一瞬のPouring phaseを要求した検証器が拒否した。
 修正では実TankPour branch証拠を維持し、直前sampleの同依頼/作業員/水入りbucket/行先を拘束する。

@@ -57,6 +57,10 @@ job186470400 bytesを同比較用途で保持。待機180秒やraw/input上限�
 この追加の実機確認はfresh root `target/native-acceptance/tak14-tank-candidate-full-20261109-v2`で行い、
 ownerはTAK-14、consumerはRiverFill→TankPourの相関とFull→Mixer供給比較。sourceを封印まで固定し、
 成功時は最新比較用途、失敗時は具体的原因の診断用途だけ保持する。旧v1のpassを新条件に流用しない。
+v2はNormalで40/50のまま180秒に達しinvalid封印・診断保全・finalize済み。11実汲水/8注水を観測し、
+最後の運搬も継続中だった。後続は必須supply_speed=Superの明示contractで施工後だけ既存4xボタンを使う。
+Normal条件の失敗を成功へ変えず、180/480秒やraw上限も維持する。fresh rootは
+`target/native-acceptance/tak14-tank-candidate-full-20261109-v3`、owner/consumer/保持終了条件は同じ限定比較。
 
 - 解決したい課題: 壁・床以外の建築物で、用途・状態が読める形状と手描き表現を統一し、完成表示から各previewまで整合させる。
 - 到達したい状態: モデルが外形・開口・可動部を、テクスチャが手描きの線・材質・色面を担当し、全対象が同じ世界の設備として読める。
