@@ -332,11 +332,19 @@ source `729343f055081e28e723bc42e394d748cebc3d88b34d52c41f2a4c8989461142`、
 manifest `c10eabcb51a2a98d2fa5d5c65d91b9104cc832b3bc52e1dbdf4063401576e44d`、
 raw `534baa14a067952ac5cca9a482f5b48a29f356956b0a3b5dd5b971dfac578e3f`。
 170229760 bytesを残るFull/Mixer供給との比較用途で保持し、封印/finalize/storage pass済み。
-Full50は未実測。全9種の標準起動locator/install/releaseは未変更であり、通常起動の全移行完了ではない。
-Full50のための専用 `m2-tank-candidate-full` / `ordinary-m2-tank-candidate-full-v1` を追加する。
-同じ通常施工prefixから自然充填を最大180秒待ち、10回以上ではなく実5Water注水10件と現在50個のexact集合、
+全9種の標準起動locator/install/releaseは未変更であり、通常起動の全移行完了ではない。
+Full50専用の `m2-tank-candidate-full` / `ordinary-m2-tank-candidate-full-v1` は、
+同じ通常施工prefixから自然充填を最大180秒待ち、実5Water注水10件と現在50個のexact集合、
 同候補水partのY22/whiteを検査する。旧inflowの最初の注水条件は変えず、case/scope/checkpointは別とする。
-既存のclock/owner/map/関係・sample/event上限を維持し、未達なら失敗とする。Fullの実機成立はまだ確認していない。
+既存のclock/owner/map/関係・sample/event上限を維持し、未達なら失敗とする。
+`0cf63187`の `tak14-tank-candidate-full-20261109-v1` で限定成功。実Tank2439v21への10件の注水、
+一意Water50個と同在庫、同水partのFull Y22/whiteを確認した。4枚の所有窓画像を確認し、
+Intel Arc/Vulkan/X11でWARN/ERRORなし。461 samples/899 eventsで既存上限内だった。
+source `c4f1d2ebe3828cf39a0d4dfdb92f36789d553dee7ce8946f46a335862a0700d8`、
+manifest `8a203b9ef1f9a9978f9be7763ea34ac437b861046fd019af8c70bad6b10a95f7`、
+raw `1138a050671a2668e9ef5056b24cecfa24b2ebb97347413f323f15e3655cbf98`。
+登録verifierで封印しfinalize/storage pass済み。186470400 bytesはFull→Mixer供給の比較とvisual feedback用に保持し、
+その用途終了後に整理する。川取水branch、Mixer供給/精製、性能、正式releaseは依然として別の未達条件である。
 最初の実機 `tak14-tank-candidate-inflow-20261109-v1`（`41253e73`）の結果はinvalidのまま維持。
 実注水と4画像は得られたが、周期観測に一瞬のPouring phaseを要求した検証器が拒否した。
 修正では実TankPour branch証拠を維持し、直前sampleの同依頼/作業員/水入りbucket/行先を拘束する。

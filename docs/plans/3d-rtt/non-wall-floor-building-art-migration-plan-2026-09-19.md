@@ -43,11 +43,12 @@ fresh root `target/native-acceptance/tak14-tank-candidate-inflow-20261109-v2`で
 `aba57f91`で通常施工から実注水5個と同Tank在庫/Partial水面表示が限定成功。4画像/rawの独立review、
 登録verifier、封印、用途登録、finalize/storage passまで完了。最新job170229760 bytesはFull/Mixer供給比較用に保持。
 旧v1の診断は閉じて正式release後167124992 bytesをゴミ箱へ移した。invalid履歴は保持し、旧passへの読み替えはない。
-Full50、River取水branch、Tank→Mixer供給/自然精製、残る通常lifecycle/性能/正式releaseは未達のまま。
-次は `m2-tank-candidate-full` による自然Full50の確認を行う。予定rootは
+River取水branch、Tank→Mixer供給/自然精製、残る通常lifecycle/性能/正式releaseは未達のまま。
+`0cf63187`の `m2-tank-candidate-full` は通常施工後の10回の実注水でWater50個とFull Y22/whiteを限定確認した。
+4画像/rawの確認、登録verifier、封印、用途登録、finalize/storage pass済み。rootは
 `target/native-acceptance/tak14-tank-candidate-full-20261109-v1`、ownerはTAK-14、consumerはFull水量/表示と
 後続Mixer供給の比較。元候補/codec/最新evidenceを保全し、同比較・feedback終了後に用途のないjobを整理する。
-待機180秒やraw/input上限は増やさず、自然充填が成立しなければ失敗を保持して診断する。
+job186470400 bytesを同比較用途で保持。待機180秒やraw/input上限は増やさず、461 samples/899 eventsで成功した。
 川取水receiptと全物流は別途必要。初期Woodは5個なので、将来Tank2＋Mixer4を同worldで施工する際は
 通常の伐採指定で追加木材を得る。Rockも通常採掘で実itemを得る必要があり、資材注入で代替しない。
 
