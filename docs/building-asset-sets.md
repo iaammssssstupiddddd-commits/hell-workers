@@ -324,6 +324,10 @@ Tank水運搬、全描画chain、性能、正式releaseの受入を意味しな�
 同Tankの現在StoredIn/StoredItemsを一致させる。実水量により水part可視・Partial高さ/色またはFull高さ/色を確認する。
 通常取水/供給を注入・修復せず、180秒待ちの不成立は失敗。川取水成功そのもの、TankからMixerへの搬出、
 全物流、全描画chain、性能、正式releaseは証明しない。この拡張は実装中で実機結果未確定。
+最初の実機 `tak14-tank-candidate-inflow-20261109-v1`（`41253e73`）はinvalidのまま保全。
+実注水と4画像は得られたが、周期観測に一瞬のPouring phaseを要求した検証器が拒否した。
+修正では実TankPour branch証拠を維持し、直前sampleの同依頼/作業員/水入りbucket/行先を拘束する。
+phaseは到着中またはPouringとし、任意の過去sampleから作業IDを拾わない。旧jobを成功へ変更せず新jobで再確認する。
 
 M5専用の明示 `--variant m5-art-context --view normal` は別のseeded比較である。
 ArtPreviewの4種だけをfeedback/art-preview・standard照明で許可し、candidate/releaseや通常入力証拠へ転用しない。

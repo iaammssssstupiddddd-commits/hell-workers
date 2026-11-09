@@ -37,6 +37,9 @@ ownerはTAK-14、consumerは採用Tankの親子施工と後続水運搬との比
 この工程だけで通常供給、Mixer精製、残る9種の全体releaseを完了としない。
 次は専用 `m2-tank-candidate-inflow` で通常の実TankPourと水量表示を確認する。
 新root `target/native-acceptance/tak14-tank-candidate-inflow-20261109-v1`、owner/consumer/終了条件は同じTank比較用途。
+v1は周期観測に一瞬のPouringを要求した検証器が拒否しinvalid封印・診断保全・finalize済み。
+実注水receiptのない成功は許可せず、直前の同依頼/運搬bucketを照合する補正後に
+fresh root `target/native-acceptance/tak14-tank-candidate-inflow-20261109-v2`で再確認する。
 川取水receiptと全物流は別途必要。初期Woodは5個なので、将来Tank2＋Mixer4を同worldで施工する際は
 通常の伐採指定で追加木材を得る。Rockも通常採掘で実itemを得る必要があり、資材注入で代替しない。
 

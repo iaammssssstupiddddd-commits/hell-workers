@@ -82,6 +82,22 @@ class TankInflowTests(unittest.TestCase):
     def test_exact_synthetic_construction_then_pour(self):
         inflow.verify(*fixture())
 
+    def test_periodic_observation_may_skip_transient_pouring_but_not_live_assignment(self):
+        changed=fixture()
+        prior=next(s for s in changed[0]["samples"] if s["real_seconds"]==36)
+        prior["m2_context"]["bucket_actors"][0]["phase"]="GoingToDestination"
+        inflow.verify(*changed)
+        for mutate in (
+            lambda p: p["m2_context"]["bucket_actors"][0].update(phase="Filling"),
+            lambda p: p["m2_context"]["bucket_actors"].clear(),
+            lambda p: p["m2_context"]["items"][0].update(resource="BucketEmpty"),
+            lambda p: p["m2_context"]["items"][0].update(delivering_to="foreign"),
+        ):
+            changed=fixture()
+            mutate(next(s for s in changed[0]["samples"] if s["real_seconds"]==36))
+            with self.assertRaises((ValueError,RuntimeError)):
+                inflow.verify(*changed)
+
     def test_missing_receipt_assignment_inventory_presentation_and_scope_rejected(self):
         for mutate in (
             lambda r,e,c,i,a: r.update(scope=inflow.construction.SCOPE),

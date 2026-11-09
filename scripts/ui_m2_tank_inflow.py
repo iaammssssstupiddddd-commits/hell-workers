@@ -172,14 +172,27 @@ def verify(raw, entries, client, inputs, contract):
         lifecycle.check_tank_pour_receipt(event, raw["samples"], raw["events"])
         native.require(event["bucket"] in buckets and not produced.intersection(event["outputs"]), "Tank inflow foreign bucket or repeated water")
         produced.update(event["outputs"])
-        native.require(any(actor.get("entity") == event["worker"] and actor.get("bucket") == event["bucket"]
-                           and actor.get("is_soul") is True and actor.get("phase") == "Pouring"
+        native.require(event["sample_index"] > 0, "Tank pour has no preceding transport observation")
+        prior = raw["samples"][event["sample_index"]-1].get("m2_context", {})
+        actors = [actor for actor in prior.get("bucket_actors", []) if actor.get("entity") == event["worker"]]
+        prior_buckets = [item for item in prior.get("items", []) if item.get("entity") == event["bucket"]]
+        native.require(len(actors) == len(prior_buckets) == 1
+                       and prior_buckets[0].get("resource") == "BucketWater"
+                       and prior_buckets[0].get("belongs_to") == owner
+                       and prior_buckets[0].get("delivering_to") == owner
+                       and "loaded_in" in prior_buckets[0] and prior_buckets[0]["loaded_in"] is None,
+                       "Tank pour preceding carried bucket differs")
+        # The branch receipt proves Pouring. Periodic observations may skip that
+        # one-frame phase; require the immediately preceding same live transport,
+        # never a stale actor found anywhere in the campaign.
+        native.require(all(actor.get("entity") == event["worker"] and actor.get("bucket") == event["bucket"]
+                           and actor.get("is_soul") is True and actor.get("phase") in ("GoingToDestination", "Pouring")
                            and actor.get("carried_item") == event["bucket"] and actor.get("working_on") == event["target"]
                            and pipeline.exact_json(actor.get("source"), {"kind":"River"})
                            and pipeline.exact_json(actor.get("destination"), {"kind":"Tank", "entity":owner, "exists":True})
                            and pipeline.exact_json(actor.get("identity"), {"assignment":event["assignment"], "target":event["target"],
                                                                       "work_type":"GatherWater", "matches_working_on":True})
-                           for s in raw["samples"][:event["sample_index"]] for actor in s.get("m2_context", {}).get("bucket_actors", [])),
+                           for actor in actors),
                        "Tank pour lacks exact prior live assignment")
     for sample in raw["samples"][cutoff+1:]:
         native.require(sample.get("world_epoch") == final["world_epoch"] and sample.get("primary_window_bits") == final["primary_window"]
