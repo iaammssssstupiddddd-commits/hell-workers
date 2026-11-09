@@ -46,10 +46,21 @@ fn real_tank_pour_branch_keeps_gameplay_identical_with_and_without_observer() {
                 phase: BucketTransportPhase::Pouring { progress: 0. },
             }),
         );
+        let request = app
+            .world_mut()
+            .spawn(hw_logistics::transport_request::TransportRequest {
+                kind: hw_logistics::transport_request::TransportRequestKind::GatherWaterToTank,
+                anchor: tank,
+                resource_type: ResourceType::Water,
+                issued_by: worker,
+                priority: hw_logistics::transport_request::TransportPriority::Normal,
+                stockpile_group: Vec::new(),
+            })
+            .id();
         app.world_mut().entity_mut(worker).insert((
             Inventory(Some(bucket)),
-            WorkingOn(bucket),
-            ActiveTaskIdentity::new(tank, bucket, WorkType::GatherWater),
+            WorkingOn(request),
+            ActiveTaskIdentity::new(request, request, WorkType::GatherWater),
         ));
         app.update();
         assert_eq!(
@@ -73,6 +84,9 @@ fn real_tank_pour_branch_keeps_gameplay_identical_with_and_without_observer() {
             let receipts = app.world().resource::<TankPourReceipts>();
             assert!(receipts.failure.is_none(), "{:?}", receipts.failure);
             assert_eq!(receipts.rows.len(), 1);
+            assert_eq!(receipts.rows[0].target, request);
+            assert_eq!(receipts.rows[0].assignment, request);
+            assert_ne!(receipts.rows[0].target, bucket);
             assert_eq!(
                 (
                     receipts.rows[0].worker,

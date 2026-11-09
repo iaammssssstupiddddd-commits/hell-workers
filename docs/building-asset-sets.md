@@ -289,7 +289,9 @@ Filling/Pouringの実progress、Inventory/WorkingOn/ActiveTaskIdentityを記録�
 空bucketと運搬関係解除を照合する。非profilingでは収集せず、観測Resource不在では記録しない。
 bucket_beforeとRiver由来taskの実payloadを記すが、Riverでの取水自体を観測した証拠ではない。
 raw parserは同sampleの実水ID・Tank所属と重複使用を検査し、このreceiptを全lifecycle witnessには昇格しない。
-作業IDは同sampleの実Soulとexact GatherWater TaskCompletedのworker/assignment/bucket/時刻へ拘束する。
+作業IDは実GatherWaterToTank request（assignment/targetとanchor Tank）へ拘束し、bucketは別のpayloadとして扱う。
+同sampleの実Soulとexact GatherWater TaskCompletedのworker/assignment/request-target/時刻を照合する。
+初期観測器のbucket-target固定は通常assignment経路と不一致だったため修正した。ゲームのtask割当は変更しない。
 River取水・Tank取出し・Mixer注水の成功receipt、自然供給/精製、Tank親子の実入力/施工受入は別途必要である。
 
 自然施工は別の `m2-mixer-candidate-completion` / `m2-candidate-completion` /
@@ -309,7 +311,19 @@ CompanionCommittedから本体4セルと保管場所2個を追跡する。Wood2�
 完成sampleで専用空バケツ5個と格納/非運搬関係を照合し、その後の自然運搬を停止・修復しない。
 空/予定/完成の3画像と同候補body/waterを検査し、Emptyではwater partの存在・非表示を要求する。
 準備はcamera/pauseのみ。供給が先に始まりEmpty条件を失えば失敗とし、水を削除しない。
-このcaseは現在実装/検証中であり、Tank水運搬、全描画chain、性能、正式releaseの受入を意味しない。
+`0a51f1b3`のactual-windowでこの限定施工受入は成功。二段入力からWood2配送、同じ保管場所の昇格、
+専用空bucket5個、候補body表示/water非表示の3画像とrawを独立確認した。
+job `tak14-tank-candidate-completion-20261109-v1`、source `bbc4ccd6051760b38dc866ef57a06804e6e217a5b9d08b48d1daccb506208890`、
+manifest `e16b6ae3e201f4c58e41fe2d2d29af295c0ca50b2bbf5551b7a51c1e2618e81d`。
+Intel Arc/Vulkan/X11、WARN/ERRORなし。封印・用途登録・finalize/storage check済みで、後続変更の成功へ流用しない。
+Tank水運搬、全描画chain、性能、正式releaseの受入を意味しない。
+
+次の `m2-tank-candidate-inflow` / `ordinary-m2-tank-candidate-inflow-v1` は別の明示case/scope。
+同processの施工prefixをscope/index不変のまま検証し、追加入力はNormal→自然TankPour待機→Pausedだけ。
+既存TankPour branch・正確な作業ID/TaskCompleted・専用bucketと新Water5個を照合し、全実注水の生成集合と
+同Tankの現在StoredIn/StoredItemsを一致させる。実水量により水part可視・Partial高さ/色またはFull高さ/色を確認する。
+通常取水/供給を注入・修復せず、180秒待ちの不成立は失敗。川取水成功そのもの、TankからMixerへの搬出、
+全物流、全描画chain、性能、正式releaseは証明しない。この拡張は実装中で実機結果未確定。
 
 M5専用の明示 `--variant m5-art-context --view normal` は別のseeded比較である。
 ArtPreviewの4種だけをfeedback/art-preview・standard照明で許可し、candidate/releaseや通常入力証拠へ転用しない。

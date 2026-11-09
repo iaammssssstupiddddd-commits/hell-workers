@@ -7,7 +7,7 @@ from scripts import building_production_lifecycle as lifecycle
 def fixture():
     event = dict(producer="ordinary-tank-pour-branch-v1", operation="TankPour", sample_index=0, event_index=0,
                  real_seconds=1., worker="worker", assignment="assignment", owner="tank", bucket="bucket", world_epoch=0,
-                 bucket_before="BucketWater", river_source=True, target="bucket", gather_water=True, outputs=[f"water-{i}" for i in range(5)])
+                 bucket_before="BucketWater", river_source=True, target="assignment", gather_water=True, outputs=[f"water-{i}" for i in range(5)])
     context = dict(water_inventory_schema=1, tank_pour_channel=True,
                    accepted=False, performance_evidence=False, promotion_authority=False,
                    tanks=[dict(entity="tank", provisional=False, stockpile=dict(resource="Water", capacity=50),
@@ -15,7 +15,7 @@ def fixture():
                    items=[dict(entity=item, resource="Water", stored_in="tank", loaded_in=None) for item in event["outputs"]]
                    + [dict(entity="bucket", resource="BucketEmpty", stored_in=None, loaded_in=None, delivering_to=None)])
     completed = dict(producer="TaskCompletedVisualMessage", operation="TaskCompleted", worker="worker", assignment="assignment",
-                     target="bucket", work_type="GatherWater", sample_index=0, event_index=1, real_seconds=1.)
+                     target="assignment", work_type="GatherWater", sample_index=0, event_index=1, real_seconds=1.)
     return event, [dict(real_seconds=1., world_epoch=0, m2_context=context, actors=[dict(entity="worker")])], [event, completed]
 
 
@@ -34,6 +34,7 @@ class TankPourTests(unittest.TestCase):
             lambda e, s: e.update(owner="worker"),
             lambda e, s: e.update(worker="foreign"),
             lambda e, s: e.update(assignment="foreign"),
+            lambda e, s: e.update(target="bucket"),
             lambda e, s: e.update(gather_water=1),
             lambda e, s: s[0].update(actors=[]),
             lambda e, s: s[0]["m2_context"].update(water_inventory_schema=True),

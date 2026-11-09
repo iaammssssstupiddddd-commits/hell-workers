@@ -11,17 +11,21 @@ from scripts import ui_spa_candidate_art as spa
 native, pipeline = planning.native, planning.pipeline
 CASE = "m2-tank-candidate-completion"
 SCOPE = "ordinary-m2-tank-candidate-completion-v1"
+INFLOW_CASE = "m2-tank-candidate-inflow"
+INFLOW_SCOPE = "ordinary-m2-tank-candidate-inflow-v1"
+PROFILES = ((CASE, SCOPE), (INFLOW_CASE, INFLOW_SCOPE))
 CHECKPOINTS = tuple("m2-tank-completion-" + phase for phase in ("empty", "placed", "completed"))
 
 
-def source_contract(repo, source, codec):
+def source_contract(repo, source, codec, *, profile=(CASE, SCOPE)):
+    native.require(profile in PROFILES, "Unknown Tank observation profile")
     source, codec = pipeline.no_symlinks(source), pipeline.no_symlinks(codec)
     pipeline.verify_set(source, "Tank", codec)
     manifest, text, receipt = pipeline.load_set(source, "Tank", codec)
     native.require(manifest["identity"]["authority"] == "isolated_candidate" and receipt is None,
                    "Tank completion requires an adopted isolated candidate")
     pipeline.check_numeric_provenance(source, manifest, codec)
-    return dict(case=CASE, scope=SCOPE, source_root=str(source), codec=str(codec),
+    return dict(case=profile[0], scope=profile[1], source_root=str(source), codec=str(codec),
                 codec_sha256=pipeline.digest(codec.read_bytes()), identity=manifest["identity"],
                 manifest_sha256=pipeline.digest(text.encode()), artifacts=manifest["artifacts"],
                 parts=manifest["parts"], world=manifest["world_preview"], catalog=manifest["catalog_preview"],
@@ -47,7 +51,8 @@ def planned_contract(args, repo):
 def prepare_view(repo, directory, contract):
     import shutil
     import ui_rest_area_art as shared
-    native.require(pipeline.exact_json(source_contract(repo, Path(contract["source_root"]), Path(contract["codec"])), contract),
+    native.require(pipeline.exact_json(source_contract(repo, Path(contract["source_root"]), Path(contract["codec"]),
+                                                     profile=(contract["case"], contract["scope"])), contract),
                    "Tank completion source changed")
     view = shared.checked_view(repo, directory / "asset-view", prepared=False)
     native.require(not view.exists(), "Tank asset view must be fresh")
@@ -65,7 +70,8 @@ check_view = planning.check_view
 
 
 def session_setting(directory, nonce, contract):
-    return json.dumps({"mode": "m2-tank-candidate-completion", "identity": contract["identity"],
+    native.require((contract["case"], contract["scope"]) in PROFILES, "Tank session profile differs")
+    return json.dumps({"mode": contract["case"], "identity": contract["identity"],
                        "locator": pipeline.locator("Tank"), "nonce": nonce,
                        "output": str(directory / "production-cancellation.json")})
 
@@ -270,7 +276,7 @@ def exercise(driver, contract):
     driver.capture(CHECKPOINTS[2])
 
 
-def check_completion(raw, entries, client):
+def check_completion(raw, entries, client, *, raw_scope=SCOPE):
     """Actual domain completion plus delivery/task/owner witnesses, not release."""
     from scripts import building_production_lifecycle as lifecycle
     native.require([entry["case"] for entry in entries] == list(CHECKPOINTS),
@@ -290,7 +296,7 @@ def check_completion(raw, entries, client):
                    and all(after["value"]["frame"] > before["value"]["frame"]
                            and after["last_step"] > before["last_step"]
                            for before, after in zip(entries, entries[1:])), "completion target/epoch/order differs")
-    native.require(raw.get("scope") == SCOPE
+    native.require(raw_scope in (SCOPE, INFLOW_SCOPE) and raw.get("scope") == raw_scope
                    and raw.get("schema_version") == 2 and raw.get("failure") is None
                    and raw.get("nonce") == client["nonce"] and raw.get("process_id") == client["pid"]
                    and all(raw.get(key) is False for key in ("accepted", "performance_evidence", "promotion_authority")),
@@ -383,12 +389,12 @@ def check_completion(raw, entries, client):
                        for value in samples[:task["sample_index"]] if value.get("world_epoch") == epoch
                        for actor in value.get("actors", [])), "Build completion has no exact prior active assignment")
 
-def verify(raw, entries, client, inputs, contract):
+def verify(raw, entries, client, inputs, contract, *, profile=(CASE, SCOPE)):
     from scripts import building_production_lifecycle as lifecycle
-    native.require(contract.get("case") == CASE and contract.get("scope") == SCOPE
+    native.require(profile in PROFILES and contract.get("case") == profile[0] and contract.get("scope") == profile[1]
                    and contract["identity"].get("kind") == "Tank" and contract["identity"].get("authority") == "isolated_candidate",
                    "Tank completion candidate contract differs")
-    check_completion(raw, entries, client)
+    check_completion(raw, entries, client, raw_scope=profile[1])
     lifecycle.check_raw_transitions(raw)
     epoch, window = entries[0]["value"]["world_epoch"], entries[0]["value"]["primary_window"]
     samples = raw["samples"]
@@ -524,7 +530,7 @@ def verify(raw, entries, client, inputs, contract):
     check_completed_consumers(raw, entries[-1]["value"], contract)
 
 
-def check_completed_consumers(raw, value, contract):
+def check_completed_consumers(raw, value, contract, *, water_count=0):
     ctx = context(value)
     near = [sample for sample in raw["samples"] if sample["world_epoch"] == value["world_epoch"]
             and sample["primary_window_bits"] == value["primary_window"] and sample.get("paused") is True
@@ -545,14 +551,19 @@ def check_completed_consumers(raw, value, contract):
                        and any(owner["entity"] == roots[0].get("owner") and owner.get("entity_bits") == ctx["buildings"][0]
                                for owner in sample["owners"]), "Tank completed root owner differs")
         tank = [row for row in sample.get("m2_context", {}).get("tanks", []) if row.get("entity") == roots[0]["owner"]]
-        native.require(len(tank) == 1 and "stored_items" in tank[0] and tank[0]["stored_items"] in (None, [])
-                       and not any(row.get("stored_in") == roots[0]["owner"] for row in sample.get("m2_context", {}).get("items", [])),
-                       "Tank Empty capture contains stored water; never clear supply")
+        water = [row for row in sample.get("m2_context", {}).get("items", []) if row.get("stored_in") == roots[0]["owner"]]
+        native.require(type(water_count) is int and 0 <= water_count <= 50 and len(tank) == 1 and "stored_items" in tank[0]
+                       and (tank[0]["stored_items"] is None and water_count == 0 or isinstance(tank[0]["stored_items"], list))
+                       and len(water) == water_count
+                       and len({row["entity"] for row in water}) == water_count
+                       and all(row.get("resource") == "Water" and "loaded_in" in row and row["loaded_in"] is None for row in water)
+                       and sorted(tank[0]["stored_items"] or []) == sorted(row["entity"] for row in water),
+                       "Tank capture inventory differs; never clear supply")
         parts = roots[0].get("parts", [])
         native.require(len(parts) == len(declared) == 2 and [part.get("name") for part in parts] == [part["name"] for part in declared],
                        "Tank completed body/water inventory differs")
         for part, authored in zip(parts, declared, strict=True):
-            native.require(part.get("parent") == roots[0]["entity"] and part.get("visible") is (part.get("name") != "water")
+            native.require(part.get("parent") == roots[0]["entity"] and part.get("visible") is (part.get("name") != "water" or water_count > 0)
                            and isinstance(part.get("material"), str) and part["material"]
                            and isinstance(descriptor.get("albedo"), str) and descriptor["albedo"]
                            and part.get("albedo") == descriptor["albedo"]
@@ -560,11 +571,21 @@ def check_completed_consumers(raw, value, contract):
                            and part.get("mesh") == descriptor["meshes"][authored["mesh_role"]], "Tank completed mesh/material differs")
             for key, authored_key in (("translation", "translation_wu"), ("rotation", "rotation_xyzw"), ("scale", "scale")):
                 actual, expected = part.get("pose", {}).get(key), authored[authored_key]
+                if part["name"] == "water" and key == "translation" and water_count > 0:
+                    expected = [*expected]
+                    expected[1] = contract["production_state"]["full_y_wu" if water_count == 50 else "partial_y_wu"]
                 native.require(isinstance(actual, list) and len(actual) == len(expected)
                                and all(planning.finite(a) and abs(a - b) <= 1e-5 for a, b in zip(actual, expected, strict=True)),
                                "Tank initial completed part pose differs")
             material = part.get("material_values", {})
-            native.require(all(material.get(key) is True for key in ("white", "opaque", "lit", "emissive_black", "emissive_texture_absent"))
+            partial = part["name"] == "water" and 0 < water_count < 50
+            native.require(material.get("white") is (not partial)
+                           and all(material.get(key) is True for key in ("opaque", "lit", "emissive_black", "emissive_texture_absent"))
                            and planning.finite(material.get("roughness")) and material["roughness"] == 1
                            and planning.finite(material.get("reflectance")) and material["reflectance"] == 0,
                            "Tank completed material values differ")
+            if water_count > 0:
+                color = material.get("base_color_srgba")
+                expected_color = [.58, .70, .73, 1.] if partial else [1., 1., 1., 1.]
+                native.require(isinstance(color, list) and len(color) == 4 and all(planning.finite(a) and abs(a-b) < 1e-5
+                               for a, b in zip(color, expected_color, strict=True)), "Tank actual water tint differs")

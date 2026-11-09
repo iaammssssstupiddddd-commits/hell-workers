@@ -60,10 +60,10 @@ fn validate(session: &Session, root: &Path, nonce: &str, case: &str) -> Result<(
                 .all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase())
     };
     let profile = match session.mode.as_str() {
-        "m2-tank-candidate-completion" => {
+        "m2-tank-candidate-completion" | "m2-tank-candidate-inflow" => {
             session.identity.authority == BuildingAssetAuthority::IsolatedCandidate
                 && session.identity.kind == BuildingAssetKind::Tank
-                && case == "m2-tank-candidate-completion"
+                && case == session.mode
         }
         "m2-candidate-completion" => {
             session.identity.authority == BuildingAssetAuthority::IsolatedCandidate
@@ -132,6 +132,12 @@ fn validate(session: &Session, root: &Path, nonce: &str, case: &str) -> Result<(
 }
 
 pub(super) fn scope(world: &World) -> &'static str {
+    if world
+        .get_resource::<Session>()
+        .is_some_and(|session| session.mode == "m2-tank-candidate-inflow")
+    {
+        return "ordinary-m2-tank-candidate-inflow-v1";
+    }
     if world
         .get_resource::<Session>()
         .is_some_and(|session| session.mode == "m2-tank-candidate-completion")
@@ -315,7 +321,12 @@ pub(super) fn snapshot(world: &mut World) -> Result<Value, String> {
         BuildingAssetKind::MudMixer if session.mode == "m2-candidate-completion" => {
             BuildingType::MudMixer
         }
-        BuildingAssetKind::Tank if session.mode == "m2-tank-candidate-completion" => {
+        BuildingAssetKind::Tank
+            if matches!(
+                session.mode.as_str(),
+                "m2-tank-candidate-completion" | "m2-tank-candidate-inflow"
+            ) =>
+        {
             BuildingType::Tank
         }
         _ => return Err("ordinary art session kind differs".into()),
@@ -342,6 +353,7 @@ pub(super) fn snapshot(world: &mut World) -> Result<Value, String> {
                 "material": material.map(|material| format!("{:?}", material.0.id())),
                 "albedo": texture.map(|texture| format!("{:?}", texture.id())),
                 "material_values": material_value.map(|material| json!({
+                    "base_color_srgba": material.base.base_color.to_srgba().to_f32_array(),
                     "white": material.base.base_color == Color::WHITE,
                     "opaque": material.base.alpha_mode == AlphaMode::Opaque, "lit": !material.base.unlit,
                     "roughness": material.base.perceptual_roughness, "reflectance": material.base.reflectance,
@@ -364,6 +376,7 @@ pub(super) fn snapshot(world: &mut World) -> Result<Value, String> {
         });
         roots.push(
             json!({"entity": format!("{entity:?}"), "owner": format!("{:?}", visual.owner),
+            "tank_water_count": (kind == BuildingType::Tank).then(|| world.get::<hw_core::relationships::StoredItems>(visual.owner).map_or(0, |items| items.len())),
             "owner_pose_matches": expected_pose.as_ref().is_some_and(|pose| world.get::<Transform>(entity) == Some(pose)),
             "identity": root.observed_identity(), "parts": parts}),
         );
@@ -417,6 +430,21 @@ mod tests {
             assert!(validate(&wrong, root, &wrong.nonce, "m2-tank-candidate-completion").is_err());
         }
         let mut world = World::new();
+        let mut inflow = session.clone();
+        inflow.mode = "m2-tank-candidate-inflow".into();
+        validate(&inflow, root, &inflow.nonce, "m2-tank-candidate-inflow").unwrap();
+        assert!(validate(&session, root, &session.nonce, "m2-tank-candidate-inflow").is_err());
+        assert!(validate(&inflow, root, &inflow.nonce, "m2-tank-candidate-completion").is_err());
+        for authority in [
+            BuildingAssetAuthority::ArtPreview,
+            BuildingAssetAuthority::ReleaseApproved,
+        ] {
+            let mut wrong = inflow.clone();
+            wrong.identity.authority = authority;
+            assert!(validate(&wrong, root, &wrong.nonce, "m2-tank-candidate-inflow").is_err());
+        }
+        world.insert_resource(inflow);
+        assert_eq!(scope(&world), "ordinary-m2-tank-candidate-inflow-v1");
         world.insert_resource(session);
         assert_eq!(scope(&world), "ordinary-m2-tank-candidate-completion-v1");
     }

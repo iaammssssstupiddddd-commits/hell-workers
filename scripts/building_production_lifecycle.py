@@ -225,16 +225,16 @@ def check_tank_pour_receipt(event, samples, events):
             and 0 <= event["real_seconds"] <= sample["real_seconds"], "Tank pour epoch/clock differs")
     outputs = event["outputs"]
     require(event["bucket_before"] == "BucketWater" and event["river_source"] is True
-            and event["gather_water"] is True and event["target"] == event["bucket"]
+            and event["gather_water"] is True and event["target"] == event["assignment"] and event["target"] != event["bucket"]
             and all(isinstance(event[key], str) and event[key] for key in ("worker", "assignment", "owner", "bucket"))
-            and len({event["worker"], event["owner"], event["bucket"]}) == 3
+            and len({event["worker"], event["owner"], event["bucket"], event["target"]}) == 4
             and isinstance(outputs, list) and len(outputs) == 5 and all(isinstance(item, str) and item for item in outputs)
-            and len(set(outputs)) == 5 and not set(outputs).intersection({event["worker"], event["owner"], event["bucket"]}),
+            and len(set(outputs)) == 5 and not set(outputs).intersection({event["worker"], event["owner"], event["bucket"], event["target"]}),
             "Tank pour item identities differ")
     ctx = sample.get("m2_context", {})
     completions = [row for row in events if row.get("producer") == "TaskCompletedVisualMessage"
                    and row.get("operation") == "TaskCompleted" and row.get("worker") == event["worker"]
-                   and row.get("assignment") == event["assignment"] and row.get("target") == event["bucket"]
+                   and row.get("assignment") == event["assignment"] and row.get("target") == event["target"]
                    and row.get("work_type") == "GatherWater" and type(row.get("sample_index")) is int
                    and row["sample_index"] == event["sample_index"]]
     require(len(completions) == 1

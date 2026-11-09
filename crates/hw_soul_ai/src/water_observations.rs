@@ -43,7 +43,13 @@ impl TankPourReceipt {
                 && self.bucket_before == Some(ResourceType::BucketWater)
                 && self.river_source
                 && self.gather_water
-                && self.target == self.bucket
+                && self.target == self.assignment
+                && self.target != self.bucket
+                && self.target != self.worker && self.target != self.tank
+                && world.get::<hw_logistics::transport_request::TransportRequest>(self.target).is_some_and(|request| {
+                    request.kind == hw_logistics::transport_request::TransportRequestKind::GatherWaterToTank
+                        && request.anchor == self.tank && request.resource_type == ResourceType::Water
+                })
                 && self.worker != self.tank
                 && self.bucket != self.worker
                 && self.bucket != self.tank
@@ -134,13 +140,22 @@ mod tests {
                     .id()
             })
             .collect();
-        let assignment = world.spawn_empty().id();
+        let assignment = world
+            .spawn(hw_logistics::transport_request::TransportRequest {
+                kind: hw_logistics::transport_request::TransportRequestKind::GatherWaterToTank,
+                anchor: tank,
+                resource_type: ResourceType::Water,
+                issued_by: worker,
+                priority: hw_logistics::transport_request::TransportPriority::Normal,
+                stockpile_group: Vec::new(),
+            })
+            .id();
         (
             world,
             TankPourReceipt {
                 worker,
                 assignment,
-                target: bucket,
+                target: assignment,
                 gather_water: true,
                 tank,
                 bucket,
@@ -178,7 +193,7 @@ mod tests {
 
     #[test]
     fn tank_pour_rejects_missing_foreign_or_invented_commit_without_repair() {
-        for case in 0..12 {
+        for case in 0..17 {
             let (mut world, mut receipt) = fixture();
             match case {
                 0 => receipt.world_epoch += 1,
@@ -210,8 +225,38 @@ mod tests {
                 }
                 9 => receipt.target = receipt.tank,
                 10 => receipt.gather_water = false,
-                _ => {
+                11 => {
                     receipt.outputs.pop();
+                }
+                12 => {
+                    world
+                        .entity_mut(receipt.target)
+                        .remove::<hw_logistics::transport_request::TransportRequest>();
+                }
+                13 => {
+                    world
+                        .get_mut::<hw_logistics::transport_request::TransportRequest>(
+                            receipt.target,
+                        )
+                        .unwrap()
+                        .anchor = receipt.worker;
+                }
+                14 => {
+                    world
+                        .get_mut::<hw_logistics::transport_request::TransportRequest>(
+                            receipt.target,
+                        )
+                        .unwrap()
+                        .resource_type = ResourceType::Wood;
+                }
+                15 => receipt.assignment = receipt.bucket,
+                _ => {
+                    world
+                        .get_mut::<hw_logistics::transport_request::TransportRequest>(
+                            receipt.target,
+                        )
+                        .unwrap()
+                        .resource_type = ResourceType::BucketWater
                 }
             }
             let tank = receipt.tank;

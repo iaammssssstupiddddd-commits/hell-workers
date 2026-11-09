@@ -30,10 +30,15 @@ role別GLB、active/pendingの切替、再利用ghostのanchor復元、移動依
 
 `m2-tank-candidate-completion`を実装し、本体/付属保管場所の実二段入力、Wood2個の通常搬入、
 Build完了、親子/map移管、完成時の専用空バケツ5個を別scopeで照合する。通常起動は変更しない。
-実機はまだ未実施。予定rootは `target/native-acceptance/tak14-tank-candidate-completion-20261109-v1`、
+`0a51f1b3`の実機は限定成功、3画像/rawと採用候補bytesを独立確認・封印・finalize/storage pass済み。
+rootは `target/native-acceptance/tak14-tank-candidate-completion-20261109-v1`（161787904 bytes）、
 ownerはTAK-14、consumerは採用Tankの親子施工と後続水運搬との比較。入力raw/3画像/元候補とcodecを
 比較・修正・正式採否まで保持し、その用途終了後に整理する。原本・既存candidateは保全する。
 この工程だけで通常供給、Mixer精製、残る9種の全体releaseを完了としない。
+次は専用 `m2-tank-candidate-inflow` で通常の実TankPourと水量表示を確認する。
+新root `target/native-acceptance/tak14-tank-candidate-inflow-20261109-v1`、owner/consumer/終了条件は同じTank比較用途。
+川取水receiptと全物流は別途必要。初期Woodは5個なので、将来Tank2＋Mixer4を同worldで施工する際は
+通常の伐採指定で追加木材を得る。Rockも通常採掘で実itemを得る必要があり、資材注入で代替しない。
 
 - 解決したい課題: 壁・床以外の建築物で、用途・状態が読める形状と手描き表現を統一し、完成表示から各previewまで整合させる。
 - 到達したい状態: モデルが外形・開口・可動部を、テクスチャが手描きの線・材質・色面を担当し、全対象が同じ世界の設備として読める。

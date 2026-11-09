@@ -330,6 +330,20 @@ limited feedback, not full reservation/inventory cleanup or art/release approval
 
 ## Wall/Door feedback storyboard
 
+For adopted Tank natural construction, use the dedicated
+`--case m2-tank-candidate-completion --smoke --input-backend portal-eis`
+with `--m2-art-source <approved-isolated-candidate>` and an immutable `--art-codec`.
+Only camera/pause are prepared. Two real world clicks must first enter companion
+pending, then commit the parent and two BucketStorage cells. Verify actual Wood2,
+Build completion, same-child ownership promotion, initial five dedicated buckets
+and the Empty candidate body/water state. Inspect all three owned PNGs.
+The separately scoped `--case m2-tank-candidate-inflow` retains that same-process
+construction prefix, then uses Normal/Paused only to observe actual TankPour
+receipts and a fourth water-state capture. Bind every produced Water Entity to
+the exact worker/assignment/bucket, current Tank inventory and water part state.
+Never inject water or normalize concurrent pours. These cases do not prove the
+River fill branch, all supply/refinement, full renderer chain, performance or release.
+
 For already approved candidate or release assets, the joint helper supports a
 feedback-only dev build. Keep the same mutable workspace and cache; an uncommitted
 source revision is allowed. Plan/run/verify still bind the current HEAD, source,
