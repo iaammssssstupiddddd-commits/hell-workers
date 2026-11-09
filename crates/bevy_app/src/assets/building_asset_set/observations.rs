@@ -620,6 +620,10 @@ fn observe(world: &mut World) {
     let state = world.resource::<Observations>();
     let encoding_before = state.samples.encoding_time() + state.events.encoding_time();
     let now = world.resource::<Time<Real>>().elapsed_secs_f64();
+    let event_contract = supply_event_contract(
+        world.resource::<Session>().art_feedback,
+        super::ordinary_art::scope(world),
+    );
     world.resource_scope(|world, mut observations: Mut<Observations>| {
         let index = observations.samples.len();
         match observations.spa.read(world, index, now) {
@@ -787,17 +791,7 @@ fn observe(world: &mut World) {
             }
         }
         if let Some(messages) = world.get_resource::<Messages<DreamTransferredVisualMessage>>() {
-            let events: Vec<_> = observations.dreams.read(messages).take(4097).cloned().collect();
-            for event in events {
-                let source = match event.source {
-                    hw_core::events::DreamTransferVisualSource::Sleeping { origin } => json!({"kind": "Sleeping", "origin": origin.to_array()}),
-                    hw_core::events::DreamTransferVisualSource::RestArea { rest_area, origin } => json!({"kind": "RestArea", "owner": format!("{rest_area:?}"), "origin": origin.to_array()}),
-                };
-                observations.events.push(json!({"sample_index": index, "real_seconds": now,
-                    "producer": "DreamTransferredVisualMessage", "operation": "DreamTransferred",
-                    "worker": format!("{:?}", event.soul), "amount": event.amount,
-                    "source": source, "is_final": event.is_final}));
-            }
+            record_dream_messages(&mut observations, messages, index, now, event_contract.is_some());
         }
         if let Some(messages) = world.get_resource::<Messages<KeyboardInput>>() {
             record_keyboard_messages(&mut observations, messages, index, now);
@@ -825,13 +819,11 @@ fn observe(world: &mut World) {
         }
     });
     let state = world.resource::<Observations>();
-    let supply = world.resource::<Session>().art_feedback
-        && super::ordinary_art::scope(world) == "ordinary-m2-tank-candidate-supply-v1";
-    let exiting = supply
-        && world
-            .get_resource::<Messages<AppExit>>()
-            .is_some_and(|events| !events.is_empty());
-    if defer_publication(state, now, supply, exiting) {
+    if now < state.next
+        && state.events.len() == state.written_events
+        && state.events.len() < 4096
+        && state.failure.is_none()
+    {
         return;
     }
     let sample = if let Some(failure) = &state.failure {
@@ -872,7 +864,7 @@ fn observe(world: &mut World) {
     } else {
         "production-raw-observations-v1"
     };
-    let header = json!({"schema_version": 2, "scope": scope,
+    let mut header = json!({"schema_version": 2, "scope": scope,
         "transition_contract": "indexed-state-delta-v1",
         "nonce": session.nonce, "process_id": std::process::id(), "accepted": false,
         "performance_evidence": false, "promotion_authority": false,
@@ -887,6 +879,9 @@ fn observe(world: &mut World) {
             "Complete lifecycle witnesses/cycles are not inferred from input or state deltas",
             "GPU/native/RSS/total application handles require independent host instrumentation"],
         "failure": failure});
+    if let Some(contract) = event_contract {
+        header["event_contract"] = contract;
+    }
     let total_row_encoding = state.samples.encoding_time() + state.events.encoding_time();
     let row_encoding_time = total_row_encoding.saturating_sub(state.published_encoding_time);
     let collected = observation_start
@@ -929,28 +924,46 @@ fn observe(world: &mut World) {
     }
 }
 
-// Keep every background event and its original timestamp/ordinal. In this
-// supply-only scope, bind Dream-only batches to the next regular sample rather
-// than letting unrelated sleeping Souls defeat the existing 0.5s cadence.
-// Input, domain receipts, unknown producers, errors and shutdown still flush now.
-fn defer_publication(state: &Observations, now: f64, supply: bool, exiting: bool) -> bool {
-    now < state.next
-        && !exiting
-        && state.events.len() < 4096
-        && state.failure.is_none()
-        && if supply {
-            state
-                .events
-                .get(state.written_events..)
-                .is_some_and(|events| {
-                    events.iter().all(|event| {
-                        event["producer"] == "DreamTransferredVisualMessage"
-                            && event["operation"] == "DreamTransferred"
-                    })
-                })
-        } else {
-            state.events.len() == state.written_events
-        }
+// A new, explicit supply-only contract. Other campaigns keep Dream evidence;
+// this scope cannot be used to prove Dream transfer or complete world lifecycle.
+fn supply_event_contract(art_feedback: bool, scope: &str) -> Option<Value> {
+    (art_feedback && scope == "ordinary-m2-tank-candidate-supply-v2").then(|| {
+        json!({"id":"m2-supply-events-v1","excluded_producers":["DreamTransferredVisualMessage"]})
+    })
+}
+
+fn record_dream_messages(
+    observations: &mut Observations,
+    messages: &Messages<DreamTransferredVisualMessage>,
+    index: usize,
+    now: f64,
+    supply: bool,
+) {
+    if supply {
+        return;
+    }
+    let events: Vec<_> = observations
+        .dreams
+        .read(messages)
+        .take(4097)
+        .cloned()
+        .collect();
+    for event in events {
+        let source = match event.source {
+            hw_core::events::DreamTransferVisualSource::Sleeping { origin } => {
+                json!({"kind": "Sleeping", "origin": origin.to_array()})
+            }
+            hw_core::events::DreamTransferVisualSource::RestArea { rest_area, origin } => {
+                json!({"kind": "RestArea", "owner": format!("{rest_area:?}"), "origin": origin.to_array()})
+            }
+        };
+        observations
+            .events
+            .push(json!({"sample_index": index, "real_seconds": now,
+            "producer": "DreamTransferredVisualMessage", "operation": "DreamTransferred",
+            "worker": format!("{:?}", event.soul), "amount": event.amount,
+            "source": source, "is_final": event.is_final}));
+    }
 }
 
 // Only the explicit profiling observer uses this cadence. Ordinary camera
@@ -1013,89 +1026,66 @@ mod tests {
     use bevy::input::{ButtonState, keyboard::Key};
 
     #[test]
-    fn supply_only_background_batch_keeps_all_events_and_the_regular_deadline() {
-        let mut state = Observations {
-            next: 1.0,
-            ..Default::default()
-        };
-        state.events.extend((0..8).map(|index|json!({"producer":"DreamTransferredVisualMessage",
-            "operation":"DreamTransferred","sample_index":0,"real_seconds":0.1+f64::from(index)*0.05})));
-        let before = state.events.to_vec();
-        assert!(defer_publication(&state, 0.9, true, false));
-        assert!(!defer_publication(&state, 1.0, true, false));
-        assert!(!defer_publication(&state, 0.9, false, false));
-        assert!(!defer_publication(&state, 0.9, true, true));
-        assert_eq!(&*state.events, &before);
-        assert_eq!(state.written_events, 0);
-        state.failure = Some("failure".into());
-        assert!(!defer_publication(&state, 0.9, true, false));
-        state.failure = None;
-        state.written_events = state.events.len() + 1;
-        assert!(!defer_publication(&state, 0.9, true, false));
-        state.written_events = 0;
-        state.events.extend((8..4096).map(
-            |_| json!({"producer":"DreamTransferredVisualMessage","operation":"DreamTransferred"}),
-        ));
-        assert!(!defer_publication(&state, 0.9, true, false));
-    }
-
-    #[test]
-    fn supply_never_defers_input_domain_or_unknown_events() {
-        for event in [
-            json!({"producer":"KeyboardInput","operation":"KeyboardInput"}),
-            json!({"producer":"MouseButtonInput","operation":"MouseButtonInput"}),
-            json!({"producer":"ordinary-tank-take-branch-v1","operation":"TankTake"}),
-            json!({"producer":"ordinary-mixer-material-branch-v1","operation":"MixerMaterial"}),
-            json!({"producer":"hw_jobs::publish_building_completed","operation":"BuildingCompleted"}),
-            json!({"producer":"DreamTransferredVisualMessage","operation":"other"}),
-            json!({"producer":"unknown","operation":"DreamTransferred"}),
-            json!({}),
+    fn supply_event_exclusion_is_derived_only_from_the_exact_preview_scope() {
+        let scope = "ordinary-m2-tank-candidate-supply-v2";
+        assert_eq!(
+            supply_event_contract(true, scope),
+            Some(json!({
+            "id":"m2-supply-events-v1","excluded_producers":["DreamTransferredVisualMessage"]}))
+        );
+        assert!(supply_event_contract(false, scope).is_none());
+        for other in [
+            "ordinary-m2-tank-candidate-supply-v1",
+            "production-raw-observations-v1",
+            "ordinary-rest-area-candidate-lifecycle-v1",
+            "",
+            "m2-supply-events-v1",
         ] {
-            let mut state = Observations {
-                next: 1.0,
-                ..Default::default()
-            };
-            state.events.push(
-                json!({"producer":"DreamTransferredVisualMessage","operation":"DreamTransferred"}),
-            );
-            state.events.push(event);
-            assert!(!defer_publication(&state, 0.9, true, false));
-            assert_eq!(state.events.len(), 2);
+            assert!(supply_event_contract(true, other).is_none());
         }
     }
 
     #[test]
-    fn background_event_times_and_next_sample_binding_survive_a_forced_flush() {
-        let mut state = Observations {
-            next: 1.0,
-            ..Default::default()
-        };
-        state
-            .samples
-            .push(json!({"sample_index":0,"real_seconds":0.5}));
-        for time in [0.6, 0.7, 0.8] {
-            state
-                .events
-                .push(json!({"producer":"DreamTransferredVisualMessage",
-                "operation":"DreamTransferred","sample_index":state.samples.len(),
-                "real_seconds":time}));
-            assert!(defer_publication(&state, time, true, false));
+    fn supply_does_not_subscribe_to_dreams_or_mutate_other_events_and_readers() {
+        let mut world = World::new();
+        let soul = world.spawn_empty().id();
+        let mut messages = Messages::default();
+        messages.write(DreamTransferredVisualMessage {
+            soul,
+            amount: 0.2,
+            quality: hw_core::soul::DreamQuality::default(),
+            source: hw_core::events::DreamTransferVisualSource::Sleeping { origin: Vec2::ONE },
+            is_final: false,
+        });
+        let mut state = Observations::default();
+        for producer in [
+            "KeyboardInput",
+            "ordinary-tank-take-branch-v1",
+            "ordinary-mixer-pour-branch-v1",
+            "ordinary-mixer-material-branch-v1",
+            "ordinary-mixer-refine-branch-v1",
+            "unknown",
+        ] {
+            state.events.push(json!({"producer":producer}));
         }
-        assert!(!defer_publication(&state, 0.9, true, true));
-        state
-            .samples
-            .push(json!({"sample_index":1,"real_seconds":0.9}));
-        state.written_events = state.events.len();
-        let bytes = encode_record(&json!({}), &state.samples, &state.events, BYTE_CAP).unwrap();
-        let record: Value = serde_json::from_slice(&bytes).unwrap();
-        for (ordinal, event) in record["events"].as_array().unwrap().iter().enumerate() {
-            assert_eq!(event["event_index"], ordinal);
-            assert_eq!(event["sample_index"], 1);
-            let time = event["real_seconds"].as_f64().unwrap();
-            assert!(time > 0.5 && time <= 0.9);
-        }
-        assert_eq!(record["events"].as_array().unwrap().len(), 3);
-        assert_eq!(state.written_events, 3);
+        let before = state.events.to_vec();
+        record_dream_messages(&mut state, &messages, 4, 1.5, true);
+        assert_eq!(&*state.events, &before);
+        assert_eq!(MessageCursor::default().read(&messages).count(), 1);
+        // Every other scope retains its existing reader and payload behavior.
+        record_dream_messages(&mut state, &messages, 4, 1.5, false);
+        assert_eq!(state.events.len(), before.len() + 1);
+        let event = state.events.last().unwrap();
+        assert_eq!(event["producer"], "DreamTransferredVisualMessage");
+        assert_eq!(event["sample_index"], 4);
+        assert_eq!(event["real_seconds"], 1.5);
+        assert_eq!(event["event_index"], before.len());
+        assert_eq!(
+            event["source"],
+            json!({"kind":"Sleeping","origin":[1.0,1.0]})
+        );
+        record_dream_messages(&mut state, &messages, 5, 2.0, false);
+        assert_eq!(state.events.len(), before.len() + 1);
     }
 
     #[test]

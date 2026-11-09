@@ -29,8 +29,10 @@
 唯一の過去event書換えだったevent_index全件付与は共通appendへ移した。
 全面bytesコピーと同期writeは残るため、総公開処理が線形化したとは主張しない。
 v5はencodeを384samplesで698895us→4109usへ改善したが、Dream通知でsnapshotが毎frame増殖し64MiB上限でinvalid。
-Supply scopeだけ背景Dreamの全通知を保持して既存Real0.5秒までsampleをまとめ、他の全通知・エラー・終了は即時公開する。
-上限/validator/他scopeは変更しない。M2にこの限定補正の拒否回帰とfresh実機を追加する。
+v6は背景Dreamを全件保持しsnapshotを186件へ抑えたが、3833件のSleeping Dream通知により4096event上限でinvalid。
+Supply v2にexact event contractを追加し、この水砂岩1供給legではDream readerだけを最初から対象外とする。
+製品の生成・他reader・他scopeや対象receipt・上限は変更しない。旧coalescingを撤去し、旧invalidを維持する。
+M2にscope/source/header契約一致・改変/混入拒否とfresh実機を追加する。Dreamや全世界lifecycleの受入には使わない。
 
 ## 4. 実装方針
 
@@ -74,7 +76,7 @@ Supply scopeだけ背景Dreamの全通知を保持して既存Real0.5秒までsa
 
 `dev.py cargo`、`dev.py check`、`dev.py ci check --base f6270ae72cede7e16e2d64333ce1781bf37f5933 --mode auto`。
 native Skillとprimary validation coordinatorを使用し、planからsealまでsourceを凍結する。
-同じprimary/target/candidate/codecを再利用。v5は結果確定済みで、新実機rootは準備完了後fresh v6として登録する。
+同じprimary/target/candidate/codecを再利用。v5/v6は結果確定済みで、新実機rootは準備完了後fresh v7として登録する。
 旧v4は204MB規模の診断比較用途、exact bytesはstorage台帳を正本とする。
 比較終了後はconsumer解除・生成物整理・finalize/check。結果正本は `docs/building-asset-sets.md`。
 親track未完を理由に全jobを保持しない。
@@ -85,9 +87,9 @@ native Skillとprimary validation coordinatorを使用し、planからsealまで
 
 ## 9. AI引継ぎ
 
-実装済み、背景通知batch回帰を含むfocused69tests成功。累積append上限回帰と計測重複排除も検証済み。
+append-only履歴と旧batch補正は検証済み。v2の明示event購読境界と拒否回帰を現在検証中。
 旧Orca統括は再開しない。v4はRock採掘/搬送・Sand帰路まで進行してinvalid。
-append-only履歴は4b93f47aで品質/独立review済み。次はSupply限定cadence補正の独立review/品質→fresh実機。
+append-only履歴は4b93f47aで品質/独立review済み。次はSupply v2の独立review/品質→fresh実機。
 新たな利用者許可待ちはない。
 未検証の成功・アート/数値/正式releaseを捏造しない。
 

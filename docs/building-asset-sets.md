@@ -318,7 +318,7 @@ Found/帰還継続、消費数=搬送量=生成数を要求する。投入だけ
 これらのunit testは合成世界の分岐同値性であり、通常worldの供給/自然精製、帰還完了、
 renderer性能や正式releaseの証拠ではない。`water_transfer_receipts=false`と非承認flagsは維持する。
 
-次の限定case `m2-tank-candidate-supply` / `ordinary-m2-tank-candidate-supply-v1` は、
+限定case `m2-tank-candidate-supply` / `ordinary-m2-tank-candidate-supply-v2` は、
 採用済みTank候補の通常施工3checkpointに、別の合法なMixer配置・自然施工・最初の精製の3画像を加える。
 Mixerは基準assetsの表示を維持し、Mixer候補のadmissionや美術採否をこのcaseへ混入しない。
 準備はcamera/pauseとread-onlyな2つのanchor選定だけ。Tank/保管所とMixerの間に1セル以上の間隔を保ち、
@@ -372,9 +372,16 @@ encode最適化v5（`4b93f47a`）は384samplesでencode4109us（旧698895us）�
 背景Dream通知による予定間隔前のsnapshot増殖で64MiB上限へ達しinvalidとなった。
 896samples/64287642bytes時点のencode31745us（うちrow2690us）で、TankTake1/MixerPour1とRock実搬入はあった。
 正式invalid封印・診断比較用途保持・finalize済み。精製成功/全物流/正式性能には読み替えない。
-Supply専用scopeではDreamTransferredVisualMessage/DreamTransferredだけの未公開batchを、
-既存0.5秒の次sampleまで保持する。通知そのもの・元時刻・ordinalは削除/変更せず、次sample indexへ結ぶ。
-入力・domain receipt・未知producer/operation・failure・event上限・AppExitは即時公開し、他scopeは不変。
+v6（`ce651f35`）では全Dream通知を保持してsnapshotを既存間隔へまとめ、186samplesまで抑えたが、
+real73.234568079/virtual193.924290605で4096event上限へ達した。4099eventsのうち3833が実Sleeping Dream通知。
+Tank/Mixer完成・TankTake1/MixerPour1・Rock5搬入はあったが精製未達。invalid封印・174993408bytes診断保持・finalize済み。
+供給だけを扱うv2ではsource contractとraw headerにexact
+`event_contract={"id":"m2-supply-events-v1","excluded_producers":["DreamTransferredVisualMessage"]}`を宣言する。
+検証済みSupply preview sessionから固定導出し、任意producerの除外を外部JSONで選択できない。
+このscopeだけobserverのDream readerを最初から購読せず、製品側の生成・他reader・他scopeは変更しない。
+v1のcoalescingは撤去し、対象eventの即時公開を元に戻す。input・施工・水・solid・精製・未知eventは除外しない。
+独立verifierはv2scope/source/headerの完全一致を要求し、旧scope、契約欠損/変更、Dream producer/operation混入を拒否する。
+この証拠からDream移送・休憩lifecycle・全世界の完全履歴を証明できない。旧v1 invalidは履歴のまま維持する。
 1200samples/4096events/完成JSON64MiBと待機上限は変更しない。
 
 自然施工は別の `m2-mixer-candidate-completion` / `m2-candidate-completion` /

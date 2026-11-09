@@ -113,6 +113,25 @@ def worldgen_fixture():
 
 
 class SupplyTests(unittest.TestCase):
+    def test_exact_supply_event_subscription_and_rejected_mixing(self):
+        raw = dict(scope=supply.SCOPE, event_contract=copy.deepcopy(supply.EVENT_CONTRACT), events=[])
+        contract = dict(scope=supply.SCOPE, event_contract=copy.deepcopy(supply.EVENT_CONTRACT))
+        supply.check_event_contract(raw, contract)
+        for mutate in (
+            lambda r, c: r.pop("event_contract"),
+            lambda r, c: c.pop("event_contract"),
+            lambda r, c: r.update(scope="ordinary-m2-tank-candidate-supply-v1"),
+            lambda r, c: c.update(scope="ordinary-m2-tank-candidate-supply-v1"),
+            lambda r, c: r["event_contract"].update(id="foreign"),
+            lambda r, c: c["event_contract"]["excluded_producers"].append("ordinary-tank-take-branch-v1"),
+            lambda r, c: r["events"].append(dict(producer="DreamTransferredVisualMessage", operation="other")),
+            lambda r, c: r["events"].append(dict(producer="unknown", operation="DreamTransferred")),
+        ):
+            r, c = copy.deepcopy(raw), copy.deepcopy(contract)
+            mutate(r, c)
+            with self.subTest(mutate=mutate), self.assertRaises(RuntimeError):
+                supply.check_event_contract(r, c)
+
     def test_exact_natural_world_and_missing_or_foreign_prerequisites(self):
         for field, replacement in (("seed", 20260914), ("seed", True), ("attempt", True),
                                    ("attempt", 1), ("fallback", 0), ("fallback", True),

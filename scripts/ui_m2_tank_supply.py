@@ -18,12 +18,14 @@ CHECKPOINTS = (*tank.CHECKPOINTS, "m2-supply-mixer-placed", "m2-supply-mixer-com
 session_setting, check_view = tank.session_setting, tank.check_view
 WORLDGEN = dict(seed=42, attempt=0, fallback=False,
                 layout_sha256="d8eff05ae2b6c56d8bbfa39570c6ce6e7174aae0c69f2c5ab53527add5dcff72")
+EVENT_CONTRACT = dict(id="m2-supply-events-v1", excluded_producers=["DreamTransferredVisualMessage"])
 
 
 def source_contract(repo, source, codec):
     return dict(tank.source_contract(repo, source, codec, profile=(CASE, SCOPE)),
                 mixer_presentation="base-assets", material_supply="ordinary-auto-gather",
-                supply_verifier_sha256=pipeline.digest(Path(__file__).read_bytes()), worldgen=copy.deepcopy(WORLDGEN))
+                supply_verifier_sha256=pipeline.digest(Path(__file__).read_bytes()), worldgen=copy.deepcopy(WORLDGEN),
+                event_contract=copy.deepcopy(EVENT_CONTRACT))
 
 
 def planned_contract(args, repo):
@@ -298,6 +300,7 @@ def check_tail_inputs(raw, entries, client, inputs):
 
 
 def verify(raw, entries, client, inputs, contract):
+    check_event_contract(raw, contract)
     native.require(contract.get("case") == CASE and contract.get("scope") == raw.get("scope") == SCOPE
                    and contract.get("mixer_presentation") == "base-assets" and contract.get("material_supply") == "ordinary-auto-gather"
                    and contract.get("supply_speed") == "Super" and [e["case"] for e in entries] == list(CHECKPOINTS),
@@ -407,3 +410,13 @@ def verify(raw, entries, client, inputs, contract):
     native.require(len(roots) == 1 and type(roots[0].get("tank_water_count")) is int
                    and 0 <= roots[0]["tank_water_count"] <= 50, "Supply final Tank inventory missing")
     tank.check_completed_consumers(raw, final, contract, water_count=roots[0]["tank_water_count"])
+
+
+def check_event_contract(raw, contract):
+    """Supply is not a Dream campaign; the exclusion must be declared, never inferred."""
+    native.require(raw.get("scope") == contract.get("scope") == SCOPE
+                   and pipeline.exact_json(raw.get("event_contract"), EVENT_CONTRACT)
+                   and pipeline.exact_json(contract.get("event_contract"), EVENT_CONTRACT)
+                   and all(e.get("producer") != "DreamTransferredVisualMessage"
+                           and e.get("operation") != "DreamTransferred" for e in raw.get("events", [])),
+                   "Supply scope/event subscription differs")
