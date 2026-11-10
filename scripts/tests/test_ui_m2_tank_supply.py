@@ -210,10 +210,10 @@ class SupplyTests(unittest.TestCase):
         actions = supply.check_tail_inputs(raw,entries,client,inputs)
         for sample in raw["samples"]:
             sample.update(self.full_fixture())
-        supply.check_full_setup(raw,actions[8:],"tank",["storage","second"])
-        raw["samples"][12]["m2_context"]["items"][-1]["resource"] = "Water"
+        supply.check_full_setup(raw,actions[len(supply.workload.KEYS):],"tank",["storage","second"])
+        raw["samples"][14]["m2_context"]["items"][-1]["resource"] = "Water"
         with self.assertRaisesRegex(RuntimeError,"not held"):
-            supply.check_full_setup(raw,actions[8:],"tank",["storage","second"])
+            supply.check_full_setup(raw,actions[len(supply.workload.KEYS):],"tank",["storage","second"])
 
     def test_motion_budget_is_supply_only_and_bounded(self):
         client = dict(nonce="b"*32,pid=40,window=50)
@@ -223,9 +223,9 @@ class SupplyTests(unittest.TestCase):
         supply.planning.check_transport(moves(16),client,0)
         with self.assertRaises(RuntimeError):
             supply.planning.check_transport(moves(17),client,0)
-        supply.planning.check_transport(moves(28),client,0,motion_cap=supply.MOTION_CAP)
+        supply.planning.check_transport(moves(30),client,0,motion_cap=supply.MOTION_CAP)
         with self.assertRaises(RuntimeError):
-            supply.planning.check_transport(moves(29),client,0,motion_cap=supply.MOTION_CAP)
+            supply.planning.check_transport(moves(31),client,0,motion_cap=supply.MOTION_CAP)
         for cap in (True,0,161):
             with self.assertRaises(RuntimeError):
                 supply.planning.check_transport(moves(1),client,0,motion_cap=cap)

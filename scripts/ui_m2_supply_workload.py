@@ -4,8 +4,9 @@ from scripts import ui_m2_tank_completion as tank
 
 native, planning, pipeline = tank.native, tank.planning, tank.pipeline
 KEYS = ["menu:ToggleOrders", "menu:SelectAreaTask", "supply-area-drag", "Escape",
-        "menu:ToggleArchitect", "menu:SelectFloorPlace", "supply-floor-drag", "Escape"]
-CONTRACT = "ordinary-area-floor20-v1"
+        "menu:ToggleArchitect", "menu:SetTimeSpeed(Normal)", "menu:SelectFloorPlace",
+        "supply-floor-drag", "menu:SetTimeSpeed(Paused)", "Escape"]
+CONTRACT = "ordinary-area-floor20-v2"
 
 
 def inventory(ctx):
@@ -78,7 +79,8 @@ def drag(driver, key):
     driver.send(point=tuple(round(x*dpi) for x in points[0]))
     before, first = copy.deepcopy(driver.last), len(driver.events)
     native.require(before.get("pointer_over_ui") is False and before.get("world_input_captured") is False
-                   and before.get("paused") is True, "Supply gesture is captured or unpaused")
+                   and before.get("paused") is (key == "supply-area-drag"),
+                   "Supply gesture capture/time precondition differs")
     mode = "AreaSelection(None)" if key == "supply-area-drag" else "FloorPlace(None)"
     native.require(context(before)["task_mode"] == mode, "Supply gesture mode differs")
     driver.send(button=1, pressed=True)
@@ -114,7 +116,7 @@ def check_gesture(action, rows, samples):
     ctx = context(before)
     native.require(pipeline.exact_json({k:context(after)[k] for k in ("anchor","cells","min","max")},
                    {k:ctx[k] for k in ("anchor","cells","min","max")})
-                   and before.get("paused") is after.get("paused") is True
+                   and before.get("paused") is after.get("paused") is (key == "supply-area-drag")
                    and not before.get("pointer_over_ui") and not before.get("world_input_captured"),
                    "Supply gesture subject/capture differs")
     native.require(ctx["task_mode"] == ("AreaSelection(None)" if key == "supply-area-drag" else "FloorPlace(None)"),
@@ -132,8 +134,8 @@ def check_gesture(action, rows, samples):
 
 
 def verify(raw, actions):
-    native.require([a["key"] for a in actions[:8]] == KEYS, "Supply workload inputs differ")
-    area, floor = actions[2], actions[6]
+    native.require([a["key"] for a in actions[:len(KEYS)]] == KEYS, "Supply workload inputs differ")
+    area, floor = actions[2], actions[7]
     baseline = context(area["before"])
     selected = area["before"]["selected"]
     native.require(type(selected) is int and len([f for f in baseline["familiars"] if f["bits"] == selected

@@ -22,8 +22,8 @@ WORLDGEN = dict(seed=42, attempt=0, fallback=False,
 EVENT_CONTRACT = dict(id="m2-supply-events-v1", excluded_producers=["DreamTransferredVisualMessage"])
 SETUP = "ordinary-tank-full-returned-buckets-v2"
 REFINEMENT_POLICY = "first-tank-origin-after-complete-prefix-v1"
-# Existing twenty-move bound plus eight declared area/floor prerequisite moves.
-MOTION_CAP = 28
+# Existing twenty-move bound plus ten declared area/floor/time prerequisite moves.
+MOTION_CAP = 30
 
 
 def source_contract(repo, source, codec):
@@ -454,8 +454,8 @@ def check_tail_inputs(raw, entries, client, inputs):
                    and raw_claimed == {e["event_index"] for e in raw["events"]
                        if e.get("producer") in ("KeyboardInput", "MouseButtonInput")
                        and e["real_seconds"] > tank.context(lower["value"])["real_seconds"]}, "Supply unclaimed input")
-    for lo, hi, group in ((entries[2], entries[3], expected[:16]), (entries[3], entries[4], expected[16:18]),
-                          (entries[4], entries[5], expected[18:])):
+    for lo, hi, group in ((entries[2], entries[3], expected[:18]), (entries[3], entries[4], expected[18:20]),
+                          (entries[4], entries[5], expected[20:])):
         selected = [a for a in actions if lo["last_step"] < a["first_step"] <= hi["last_step"]]
         native.require([a["key"] for a in selected] == group and all(a["last_step"] <= hi["last_step"]
                        and lo["value"]["frame"] <= a["before"]["frame"] < a["after"]["frame"] < hi["value"]["frame"]
@@ -540,7 +540,7 @@ def verify(raw, entries, client, inputs, contract):
                        and e.get("outcome",{}).get("kind") == "Tank"]
     native.require(len(tank_placements) == 2 and len(bucket_ids) == 5, "Supply Tank companions/buckets missing")
     children = tank_placements[1]["outcome"]["companion_owners"]
-    check_full_setup(raw, actions[8:], tank_complete["owner"], children)
+    check_full_setup(raw, actions[len(workload.KEYS):], tank_complete["owner"], children)
     initial_children = {e["entity"]:e for e in samples[tank_complete["sample_index"]]["companion_context"]["storages"]
                         if e["entity"] in children}
     for sample in samples:

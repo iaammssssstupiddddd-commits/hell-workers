@@ -17,41 +17,41 @@ def inventory(*, area=False, floor=False):
 def prepend_workload(raw, entries, client, inputs):
     """Insert actual typed controls and endpoint samples before Full setup."""
     for row in inputs:
-        row["step"] = str(int(row["step"])+18)
-        row["pre_frame"] += 1000
-        row["post_frame"] += 1000
+        row["step"] = str(int(row["step"])+22)
+        row["pre_frame"] += 2000
+        row["post_frame"] += 2000
         if action := row.get("tank_completion_action"):
-            action["first_step"] += 18
-            action["last_step"] += 18
+            action["first_step"] += 22
+            action["last_step"] += 22
             for value in (action["before"],action["after"]):
-                value["frame"] += 1000
-                value["m2_planning"]["real_seconds"] += 10
+                value["frame"] += 2000
+                value["m2_planning"]["real_seconds"] += 20
     for entry in entries[3:]:
-        entry["last_step"] += 18
-        entry["value"]["frame"] += 1000
-        entry["value"]["m2_planning"]["real_seconds"] += 10
+        entry["last_step"] += 22
+        entry["value"]["frame"] += 2000
+        entry["value"]["m2_planning"]["real_seconds"] += 20
     for sample in raw["samples"][1:]:
-        sample["sample_index"] += 10
-        sample["real_seconds"] += 10
+        sample["sample_index"] += 12
+        sample["real_seconds"] += 20
     for event in raw["events"]:
-        event["sample_index"] += 10
-        event["real_seconds"] += 10
+        event["sample_index"] += 12
+        event["real_seconds"] += 20
     prefix, samples, events = [], [], []
     for index,key in enumerate(workload.KEYS):
         time = float(index+2)
         before = copy.deepcopy(entries[2]["value"])
-        ctx = inventory(area=index>2, floor=index>6)
+        ctx = inventory(area=index>2, floor=index>7)
         ctx.update(points=[[400.,400.],[500.,500.]],
                    task_mode="AreaSelection(None)" if index == 2 else "FloorPlace(None)")
-        before.update(frame=int(time*100),paused=True,selected=12,cursor=[400.,400.],
+        before.update(frame=int(time*100),paused=index not in (6,7,8),selected=12,cursor=[400.,400.],
                       pointer_over_ui=False,world_input_captured=False)
         before["m2_planning"].update(real_seconds=time,supply_workload=ctx)
         before["controls"][key] = dict(fully_visible=True,interaction="Hovered")
         after = copy.deepcopy(before)
-        after.update(frame=before["frame"]+30)
+        after.update(frame=before["frame"]+30,paused=index not in (5,6,7))
         after["m2_planning"]["real_seconds"] += .3
-        if index in (2,6):
-            after["m2_planning"]["supply_workload"] = dict(ctx, **{k:v for k,v in inventory(area=True,floor=index==6).items()})
+        if index in (2,7):
+            after["m2_planning"]["supply_workload"] = dict(ctx, **{k:v for k,v in inventory(area=True,floor=index==7).items()})
         first = len(prefix)+1
         dragging = key.startswith("supply-")
         for offset,pressed in enumerate((True,False)):
@@ -67,7 +67,7 @@ def prepend_workload(raw, entries, client, inputs):
                 observed_hover={key:"Pressed" if pressed else "Hovered"},**field))
             sample = copy.deepcopy(raw["samples"][0])
             sample.update(sample_index=len(samples)+1,real_seconds=time+.1*(offset+1),
-                          paused=True,relative_speed=1.,cursor_position=point,dpi=1.)
+                          paused=after["paused"],relative_speed=1.,cursor_position=point,dpi=1.)
             # Menu pairs may share one sample; gestures retain both endpoints.
             if dragging or offset == 0:
                 samples.append(sample)
@@ -122,17 +122,17 @@ class WorkloadTests(unittest.TestCase):
         raw,entries,client,inputs = input_fixture()
         actions = [r["tank_completion_action"] for r in inputs if "tank_completion_action" in r]
         area_end = workload.tank.context(actions[2]["after"])["real_seconds"]
-        floor_end = workload.tank.context(actions[6]["after"])["real_seconds"]
+        floor_end = workload.tank.context(actions[7]["after"])["real_seconds"]
         # Include the exact after snapshots in the ordinary observer stream.
         raw = dict(events=[dict(producer="MouseButtonInput",state="Released",sample_index=i,
                                real_seconds=workload.tank.context(actions[a]["after"])["real_seconds"]-.05)
-                           for a,i in ((2,3),(6,6))],
+                           for a,i in ((2,3),(7,6))],
                    samples=[dict(real_seconds=t,m2_context=dict(supply_workload=inventory(
             area=t>=area_end,floor=t>=floor_end))) for t in (0.,2.,4.,area_end,7.,8.,floor_end,20.)])
         return raw,actions
 
     def test_commit_before_actual_release_is_rejected_without_changing_after(self):
-        for action_index,raw_index in ((2,3),(6,6)):
+        for action_index,raw_index in ((2,3),(7,6)):
             raw,actions = self.verification_fixture()
             # The state is still after UI before, but ahead of the actual input.
             raw["events"][0 if action_index==2 else 1]["sample_index"] = raw_index+1
