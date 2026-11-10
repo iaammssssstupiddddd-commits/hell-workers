@@ -329,9 +329,27 @@ assignment arbitrationが新しいrequest/workerを追加しない。既存in-fl
   ただしTank由来の全量搬入・その水での精製には未到達であり、この実機結果を全工程passと扱わない。
 - StasisMudは`can_store_in_stockpile()`で通常Stockpile対象外。保管場所追加案は実行前に棄却した。
   既存の搬出先は床/壁の建設需要で、実猫車積載がMixerのmud在庫を減らす。
-  先行River水5個を使い切ってから最初のTank由来精製まで進めるには、累計Mud30に対して出力容量10なので
-  最低20個の搬出需要が必要（床20tileなら骨40/泥20）。実TaskArea、骨採取/猫車経路、施工phaseも別途成立が必要。
+  先行満水bucketがn杯なら、次のTank由来精製までに最低max(0,25n-5)個の搬出需要が必要。
+  正式Supply v6は普通床45tile（骨90/泥45）、実Full停止境界のexact5bucket返却・非所持を照合し、
+  n3以上はMixer配置前に拒否する。実TaskArea、骨採取/猫車経路、施工phaseも別途成立が必要。
   本修正はこれらをseedしたり、容量/精製recipe/資源保管ruleを変えて試験を通さない。
+- 最終fresh `tak14-tank-mixer-supply-20261110-v22` は登録済み独立verify・seal/finalizeで**pass**。
+  対象HEAD `b65fff9191732045160d45110a3b7f72e2e61ad6`、native source
+  `34050f734b234ed62409f4ba85b0326c59181ee88e3202ed587c922ddb79e5f6`、harness
+  `796f644ee2e92bcb74fa1fd60b12cfdae5b814c3ce4a63039a9740464716ca45`。
+  1920×1080/UI scale1、X11、Intel Arc MTL/Vulkanの通常入力でTank施工・満水・Mixer施工・固体搬入を確認。
+  TankTake312（sample426、実Water5個）→MixerPour320（sample427、全量5個）→
+  RefineCommit360/369の同一item/owner源流を全prefixで検査した。6画像を目視、WARN/ERROR0。
+  実handlerの容量回復・満水再取得、取消/欠損先の非消費、予約解放、同pass競合回帰と
+  default/profiling全test・Clippy0、Help/変更別CI・独立read-only reviewも通過した。
+- 実機中に見つかったspeech expiryとEntity Listのdeferred二重削除も各所有者で修正し、
+  実Bevy警告を再現する回帰を追加。一時Despawn診断は撤去済み。旧invalid結果は成功へ変更しない。
+  v21は満水bucket再利用の`needs_fill=false`を旧verifierが誤拒否したためinvalid。
+  raw投入枝はstrict boolを検査し、Supplyの全MixerPourをRiverFill/TankTakeの源流に照合する。
+  専用Tank pairはtrueを要求し、再利用だけでTank由来の給水完了を証明しない。
+- このpassは数量保存と限定通常lifecycleの技術受入である。Mixer表示はbase assetのままであり、
+  独立アート採否、正式性能/Memory matrix、全対象のproduction promotion/releaseやTAK-14全体完了を意味しない。
+  完了した水量修正の一時計画と診断jobは、比較利用者を解除して整理する。候補原本・codec・通常Cargo cacheは別の継続用途を保持する。
 
 
 #### 自動精製のactivity集計
