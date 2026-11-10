@@ -315,6 +315,25 @@ assignment arbitrationが新しいrequest/workerを追加しない。既存in-fl
 - Tankからの取水は5個と経路`Found`が揃ってから確定する。`Deferred`は保留、到達不能/不足は非消費の中断とし、部分量をBooleanの`BucketWater`へ変換しない。Mixer投入も5個全量を格納できる場合だけ確定する。
 - 移動中に容量が不足した場合は、水入りバケツを保持して既存のretryable中断/自動返却へ戻す。部分投入して空バケツへ変換したり、精製可能なworkerを容量待ちで拘束しない。同一Execute呼出しの取水ID・変換済みbucket・投入予定量は一時claimで保護し、deferred Commandsによる二重消費/容量超過を防ぐ。
 
+#### 数量保存修正の検証（2026-11-10）
+
+- 修正commit `8ba10ec6951164abeedbc1d77a0236fb1b0ec5dd`。実handler6件、割当2件、需要1件の回帰、
+  `dev.py check`、変更別CI（contracts/tooling/rust）、通常/profiling Clippy警告0、Help exact snapshot、
+  変更Rustのrust-analyzerエラー/警告0、独立read-only reviewを確認した。
+- 変更別CIのbaseは`b29d7c143bdc346c52b620f7f0bc74135490b444`、検証sourceは
+  `fad4dbe9dd3837aa3943a19b0e2ade42fc47405e07fd4f415fa4db9f63f1f386`。
+- fresh通常入力試験`tak14-tank-mixer-supply-20261110-v11`（native source
+  `22b4b05df1d6429a0693e31f53d31fd197f870c99313c38e9ae8b14a7f0cbff0`）は**invalid**。
+  River由来の水入りバケツから5個を投入し、実精製2回でMud10/Water3になった後、製品満杯で停止した。
+  Tank50を維持し、TankTakeも追加MixerPourも発生せず、旧v10の部分投入は起きなかった。
+  ただしTank由来の全量搬入・その水での精製には未到達であり、この実機結果を全工程passと扱わない。
+- StasisMudは`can_store_in_stockpile()`で通常Stockpile対象外。保管場所追加案は実行前に棄却した。
+  既存の搬出先は床/壁の建設需要で、実猫車積載がMixerのmud在庫を減らす。
+  先行River水5個を使い切ってから最初のTank由来精製まで進めるには、累計Mud30に対して出力容量10なので
+  最低20個の搬出需要が必要（床20tileなら骨40/泥20）。実TaskArea、骨採取/猫車経路、施工phaseも別途成立が必要。
+  本修正はこれらをseedしたり、容量/精製recipe/資源保管ruleを変えて試験を通さない。
+
+
 #### 自動精製のactivity集計
 
 - `RefineActivityIndex`はSoulごとの直前`AssignedTask::Refine`寄与を保持し、mixer別のassigned countと

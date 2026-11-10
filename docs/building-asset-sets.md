@@ -1165,3 +1165,7 @@ Boolean水入りバケツを全杯5個に統一し、取水/投入を全量だ�
 これは上記asset-only変更のNo impact判断とは別の`Update required`で、既存Helpとsnapshotへ反映する。
 旧sourceのv10で観測した5個取水→2個投入はinvalidの診断証拠として保持し、修正後sourceの成功へ読み替えない。
 fresh sourceの通常入力native結果と独立reviewが揃うまでは、この修正も実機受入済みとは扱わない。
+修正commit `8ba10ec6`のfresh Supply v11は部分投入を起こさず、製品Mud10満杯でWater3のまま停止してinvalid。
+全量保存の実handler/割当/需要回帰と品質gateは通過したが、Tank由来の投入・精製の全工程証拠は未達である。
+通常StockpileはStasisMudを受け入れないため、その追加を搬出解決と扱わない。
+次の通常入力campaignには正規の床/壁需要・TaskArea・材料/猫車経路を明示し、旧試験を再解釈せずfresh subjectで確認する。

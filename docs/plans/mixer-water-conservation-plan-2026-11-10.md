@@ -44,14 +44,14 @@ branchは同目的 `codex/tak14-non-bridge-release`、基点 `b29d7c143bdc346c52
 
 ### M1: 再現と数量修正
 
-- [ ] 空き0/2/5、Tank水0/1/4/5、満水bucket再取得、全量投入と拒否を実handlerで回帰。
+- [x] 空き0/2/5、Tank水0/1/4/5、満水bucket再取得、全量投入と拒否を実handlerで回帰。
 - [ ] 後から容量増加、材料不足、取消/対象消失、予約cleanup、同frame複数投入/取出しを検証。
-- [ ] producer/resolverを全量単位へ揃え、workerを無期限に拘束しない。
+- [x] producer/resolverを全量単位へ揃え、workerを無期限に拘束しない。
 
 ### M2: 検証と文書
 
-- [ ] Help実影響判断と必要なprovider/coverage/snapshot、仕様/不変条件を同期。
-- [ ] dev check、Clippy警告0、変更別CI、rust-analyzer、exact独立read-only review。
+- [x] Help実影響判断と必要なprovider/coverage/snapshot、仕様/不変条件を同期。
+- [x] dev check、Clippy警告0、変更別CI、rust-analyzer、exact独立read-only review。
 - [ ] native Skill/primary validationによるfresh通常給水、厳密な全prefixとlossless leg検査。
 
 ### M3: 終了
@@ -75,6 +75,16 @@ v10原本181051392bytesはTAK-14所有、consumerは `M2 real partial Mixer pour
 修正比較終了後にconsumerをreleaseして不要jobを整理する。候補/codec/通常Cargo cacheは継続用途を保つ。
 結果正本は `docs/logistics.md`、`docs/invariants.md`、`docs/tasks.md`、`docs/building-asset-sets.md`。
 
+実装commitは `8ba10ec6951164abeedbc1d77a0236fb1b0ec5dd`。コード/Help/文書の独立reviewと
+全品質gateは通過。実handlerのDeferred維持、欠損/異種/非Mixer/部分amount拒否、予約解放、
+次pass再取得、同Tank/同Mixer/同bucket異Mixerの競合を含む。
+fresh v11（203984896bytes）は製品Mud10満杯でWater3のまま停止してinvalid、正式seal/finalize/storage pass。
+旧5→2損失は起きなかったが、Tank由来の投入/精製は未到達なのでnative完了欄はチェックしない。
+v11 consumerは `M2 ordinary output destination prerequisite comparison`。
+Stockpile案はStasisMud保管禁止により実行前棄却し、試作コードも全撤去した。
+正規の床/壁の需要を使う次campaignには、最低泥20（床20tileなら骨40）、実TaskArea、
+採取/搬出猫車の到達・施工phaseを読取り照合してから通常入力だけで作る。未確認の成立を推測しない。
+
 ## 8. ロールバック
 
 本修正単位。未確認の並行変更、凍結subject、旧invalidを上書きしない。
@@ -95,3 +105,4 @@ v10原本181051392bytesはTAK-14所有、consumerは `M2 real partial Mixer pour
 | 日付 | 変更者 | 内容 |
 | --- | --- | --- |
 | 2026-11-10 | Codex | 実5→2損失に対する初版 |
+| 2026-11-10 | Codex | 数量保存修正・品質gate通過、v11出力満杯の未達と正規搬出前提を記録 |
