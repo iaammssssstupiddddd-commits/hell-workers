@@ -33,9 +33,19 @@ mod validation;
 
 pub use loader::{BuildingAssetLoadPolicy, BuildingAssetSetLoader};
 #[cfg(feature = "profiling")]
+pub(crate) fn snapshot_m2_observations(
+    world: &mut bevy::prelude::World,
+) -> Result<serde_json::Value, String> {
+    observations_m2::snapshot(world)
+}
+#[cfg(feature = "profiling")]
 pub(crate) use observations_rest::snapshot as snapshot_rest_observations;
 #[cfg(feature = "profiling")]
 pub(crate) use observations_spa::snapshot as snapshot_spa_observations;
+#[cfg(feature = "profiling")]
+pub(crate) use ordinary_art::m2_persistence_enabled;
+#[cfg(all(test, feature = "profiling"))]
+pub(crate) use ordinary_art::m2_persistence_test_session;
 #[cfg(feature = "profiling")]
 pub(crate) use ordinary_art::m5_kind_for_case;
 #[cfg(feature = "profiling")]

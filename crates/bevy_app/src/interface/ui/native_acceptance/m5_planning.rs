@@ -55,6 +55,7 @@ fn case_kind(case: &str) -> Option<BuildingType> {
         "m2-tank-candidate-completion"
             | "m2-tank-candidate-inflow"
             | "m2-tank-candidate-full"
+            | "m2-tank-candidate-persistence"
             | "m2-tank-candidate-supply"
     ) {
         return Some(BuildingType::Tank);

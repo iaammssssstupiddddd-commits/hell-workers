@@ -353,6 +353,18 @@ stays unchanged, then only the ordinary 4x button and Paused are used. Raw speed
 is 1 before the switch and 4 afterwards, including while paused. Preserve failed
 Normal attempts; this proves neither Normal-time filling nor performance.
 
+The separate `--case m2-tank-candidate-persistence` uses that exact continuous
+construction/Full prefix and waits for all five real buckets to return unheld to
+the two owned storages. It then drives F5/Manual1 save and F9/Manual1 selection
+and confirmation through the existing catalogs. Its explicit persistence scope
+records the actual committed M2 inventory and applied entity map; no materials,
+tasks, water, world state or save bytes are seeded or repaired. Verify the saved
+file hash/bytes, exact catalog session and input pairs, epoch change, complete
+typed Tank/storage/Water/bucket bijection, both inventory directions, and every
+paused tail sample. Wait for rebuilt same-candidate Full rendering before the
+loaded capture. The original Full verifier still rejects this scope; a passing
+persistence recipe is not Memory, performance, independent art or release approval.
+
 For already approved candidate or release assets, the joint helper supports a
 feedback-only dev build. Keep the same mutable workspace and cache; an uncommitted
 source revision is allowed. Plan/run/verify still bind the current HEAD, source,

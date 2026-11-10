@@ -361,6 +361,16 @@ raw observerは`Last`の`SaveLoadApplySet`後にdrainし、同じframeの新worl
 これらは診断記録であり、player通知・Reflect/save schema・world mutationや判定には使用しない。
 byte hashと選択mapだけで全world canonical state、全inventory、正式asset/release受入を証明しない。
 
+Tank候補の専用`m2-tank-candidate-persistence` sessionでは、同じ実commitに非保存の`m2_context`と
+独立の`m2_entity_remap`を追加する。他のscopeのreceipt形状は変えない。実load mapからTank、
+BucketStorage、Water、BucketEmpty/Waterを選択し、loaded target一意・全選択entityの完全被覆と
+5,120件上限を要求する。欠損/重複/成分の曖昧性、load中のscope変更、未採取mapは成功receiptにしない。
+commit時のlogical snapshotは描画準備完了を意味せず、独立UI verifierが実F5/F9のManual1入力、
+container hash/bytes、施工時の2 storage ID、満水50 Waterと戻った未保持bucket5個の正逆関係、
+typed bijection、epoch境界を挟む全paused raw、復元後に再生成された同候補のFull表示を別に照合する。
+実行中taskの継続や修復、save schema変更、アート/数値/性能/正式release承認はこの診断の権限外である。
+実装・fixture検証の成功だけでactual-window受入済みとは扱わない。
+
 2026-11-07の`tak14-durable-receipts-feedback-20261107-v1`では、通常UIのManual slot 1で
 save sample70/epoch0からload sample76/epoch1へ進み、両receiptと実containerの
 SHA-256 `664f920bbd449367244366423899e57ff8c55ade077e4d153ef969d07ae37cda`、

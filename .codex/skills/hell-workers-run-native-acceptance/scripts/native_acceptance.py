@@ -118,6 +118,7 @@ NATIVE_HARNESS_FILES = (
     "scripts/ui_m2_tank_supply.py",
     "scripts/ui_m2_supply_workload.py",
     "scripts/ui_m2_tank_full.py",
+    "scripts/ui_m2_tank_persistence.py",
     "scripts/building_water_transfers.py",
     "scripts/building_m2_ui_acceptance.py",
     ".codex/skills/hell-workers-run-native-acceptance/scripts/ui_terrain_materials.py",

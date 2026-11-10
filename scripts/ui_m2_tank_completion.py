@@ -17,7 +17,10 @@ FULL_CASE = "m2-tank-candidate-full"
 FULL_SCOPE = "ordinary-m2-tank-candidate-full-v1"
 SUPPLY_CASE = "m2-tank-candidate-supply"
 SUPPLY_SCOPE = "ordinary-m2-tank-candidate-supply-v6"
-PROFILES = ((CASE, SCOPE), (INFLOW_CASE, INFLOW_SCOPE), (FULL_CASE, FULL_SCOPE), (SUPPLY_CASE, SUPPLY_SCOPE))
+PERSISTENCE_CASE = "m2-tank-candidate-persistence"
+PERSISTENCE_SCOPE = "ordinary-m2-tank-candidate-persistence-v1"
+PROFILES = ((CASE, SCOPE), (INFLOW_CASE, INFLOW_SCOPE), (FULL_CASE, FULL_SCOPE), (SUPPLY_CASE, SUPPLY_SCOPE),
+            (PERSISTENCE_CASE, PERSISTENCE_SCOPE))
 CHECKPOINTS = tuple("m2-tank-completion-" + phase for phase in ("empty", "placed", "completed"))
 
 
@@ -38,7 +41,8 @@ def source_contract(repo, source, codec, *, profile=(CASE, SCOPE)):
                 numeric_verifiers=pipeline.numeric_verifier_inventory(),
                 base_assets_sha256=planning.art.asset_view_fingerprint(repo),
                 verifier_sha256=pipeline.digest(Path(__file__).read_bytes()),
-                **(dict(supply_speed="Super") if profile in ((FULL_CASE, FULL_SCOPE), (SUPPLY_CASE, SUPPLY_SCOPE)) else {}))
+                **(dict(supply_speed="Super") if profile in ((FULL_CASE, FULL_SCOPE), (SUPPLY_CASE, SUPPLY_SCOPE),
+                                                            (PERSISTENCE_CASE, PERSISTENCE_SCOPE)) else {}))
 
 
 def planned_contract(args, repo):
@@ -301,7 +305,7 @@ def check_completion(raw, entries, client, *, raw_scope=SCOPE):
                    and all(after["value"]["frame"] > before["value"]["frame"]
                            and after["last_step"] > before["last_step"]
                            for before, after in zip(entries, entries[1:])), "completion target/epoch/order differs")
-    native.require(raw_scope in (SCOPE, INFLOW_SCOPE, FULL_SCOPE, SUPPLY_SCOPE) and raw.get("scope") == raw_scope
+    native.require(raw_scope in (SCOPE, INFLOW_SCOPE, FULL_SCOPE, SUPPLY_SCOPE, PERSISTENCE_SCOPE) and raw.get("scope") == raw_scope
                    and raw.get("schema_version") == 2 and raw.get("failure") is None
                    and raw.get("nonce") == client["nonce"] and raw.get("process_id") == client["pid"]
                    and all(raw.get(key) is False for key in ("accepted", "performance_evidence", "promotion_authority")),

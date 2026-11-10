@@ -63,6 +63,7 @@ fn validate(session: &Session, root: &Path, nonce: &str, case: &str) -> Result<(
         "m2-tank-candidate-completion"
         | "m2-tank-candidate-inflow"
         | "m2-tank-candidate-full"
+        | "m2-tank-candidate-persistence"
         | "m2-tank-candidate-supply" => {
             session.identity.authority == BuildingAssetAuthority::IsolatedCandidate
                 && session.identity.kind == BuildingAssetKind::Tank
@@ -135,6 +136,9 @@ fn validate(session: &Session, root: &Path, nonce: &str, case: &str) -> Result<(
 }
 
 pub(super) fn scope(world: &World) -> &'static str {
+    if m2_persistence_enabled(world) {
+        return "ordinary-m2-tank-candidate-persistence-v1";
+    }
     if world
         .get_resource::<Session>()
         .is_some_and(|session| session.mode == "m2-tank-candidate-supply")
@@ -199,6 +203,30 @@ pub(super) fn scope(world: &World) -> &'static str {
         CANDIDATE_SCOPE
     } else {
         SCOPE
+    }
+}
+
+pub(crate) fn m2_persistence_enabled(world: &World) -> bool {
+    world.get_resource::<Session>().is_some_and(|session| {
+        session.mode == "m2-tank-candidate-persistence"
+            && session.identity.kind == BuildingAssetKind::Tank
+            && session.identity.authority == BuildingAssetAuthority::IsolatedCandidate
+    })
+}
+
+#[cfg(test)]
+pub(crate) fn m2_persistence_test_session() -> impl Resource {
+    Session {
+        mode: "m2-tank-candidate-persistence".into(),
+        identity: BuildingAssetSetIdentity {
+            kind: BuildingAssetKind::Tank,
+            generation: 1,
+            authority: BuildingAssetAuthority::IsolatedCandidate,
+            manifest_sha256: "a".repeat(64),
+        },
+        locator: "manifests/building-tank-v1.buildingset".into(),
+        nonce: "b".repeat(32),
+        output: PathBuf::from("/unused/persistence/production-cancellation.json"),
     }
 }
 
@@ -342,6 +370,7 @@ pub(super) fn snapshot(world: &mut World) -> Result<Value, String> {
                 "m2-tank-candidate-completion"
                     | "m2-tank-candidate-inflow"
                     | "m2-tank-candidate-full"
+                    | "m2-tank-candidate-persistence"
                     | "m2-tank-candidate-supply"
             ) =>
         {
@@ -448,6 +477,47 @@ mod tests {
             assert!(validate(&wrong, root, &wrong.nonce, "m2-tank-candidate-completion").is_err());
         }
         let mut world = World::new();
+        let mut persistence = session.clone();
+        persistence.mode = "m2-tank-candidate-persistence".into();
+        validate(
+            &persistence,
+            root,
+            &persistence.nonce,
+            "m2-tank-candidate-persistence",
+        )
+        .unwrap();
+        assert!(
+            validate(
+                &persistence,
+                root,
+                &persistence.nonce,
+                "m2-tank-candidate-full"
+            )
+            .is_err()
+        );
+        assert!(
+            validate(
+                &session,
+                root,
+                &session.nonce,
+                "m2-tank-candidate-persistence"
+            )
+            .is_err()
+        );
+        assert!(!m2_persistence_enabled(&world));
+        world.insert_resource(persistence.clone());
+        assert!(m2_persistence_enabled(&world));
+        assert_eq!(scope(&world), "ordinary-m2-tank-candidate-persistence-v1");
+        for authority in [
+            BuildingAssetAuthority::ArtPreview,
+            BuildingAssetAuthority::ReleaseApproved,
+        ] {
+            let mut wrong = persistence.clone();
+            wrong.identity.authority = authority;
+            assert!(validate(&wrong, root, &wrong.nonce, "m2-tank-candidate-persistence").is_err());
+            world.insert_resource(wrong);
+            assert!(!m2_persistence_enabled(&world));
+        }
         let mut inflow = session.clone();
         let mut full = session.clone();
         let mut supply = session.clone();
@@ -490,6 +560,7 @@ mod tests {
         assert_eq!(scope(&world), "ordinary-m2-tank-candidate-inflow-v1");
         world.insert_resource(session);
         assert_eq!(scope(&world), "ordinary-m2-tank-candidate-completion-v1");
+        assert!(!m2_persistence_enabled(&world));
     }
 
     #[test]

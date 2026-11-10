@@ -8,7 +8,8 @@ CASE, SCOPE = construction.INFLOW_CASE, construction.INFLOW_SCOPE
 CHECKPOINTS = (*construction.CHECKPOINTS, "m2-tank-inflow")
 FULL_CASE, FULL_SCOPE = construction.FULL_CASE, construction.FULL_SCOPE
 FULL_CHECKPOINTS = (*construction.CHECKPOINTS, "m2-tank-full")
-PROFILES = ((CASE, SCOPE), (FULL_CASE, FULL_SCOPE))
+PERSISTENCE_PROFILE = (construction.PERSISTENCE_CASE, construction.PERSISTENCE_SCOPE)
+PROFILES = ((CASE, SCOPE), (FULL_CASE, FULL_SCOPE), PERSISTENCE_PROFILE)
 prepare_view = construction.prepare_view
 check_view = construction.check_view
 session_setting = construction.session_setting
@@ -45,15 +46,30 @@ def check_observation(case, value):
 
 def exercise(driver, contract):
     native.require((contract.get("case"),contract.get("scope")) in PROFILES, "Tank supply exercise profile differs")
-    full = contract["case"] == FULL_CASE
+    full = contract["case"] in (FULL_CASE, PERSISTENCE_PROFILE[0])
     native.require(contract.get("supply_speed") == "Super" if full else "supply_speed" not in contract,
                    "Tank supply speed contract differs")
     construction.exercise(driver, contract)
     construction.capture_action(driver, "menu:SetTimeSpeed(Super)" if full else "menu:SetTimeSpeed(Normal)")
     def supplied(value):
         roots = construction.context(value).get("consumers", {}).get("roots", [])
-        return len(roots) == 1 and type(roots[0].get("tank_water_count")) is int and (
+        ready = len(roots) == 1 and type(roots[0].get("tank_water_count")) is int and (
             roots[0]["tank_water_count"] == 50 if full else roots[0]["tank_water_count"] > 0)
+        if not ready or contract["case"] != PERSISTENCE_PROFILE[0]:
+            return ready
+        from scripts import ui_m2_tank_persistence as persistence
+        path = driver.root / "production-cancellation.json"
+        if not path.is_file():
+            return False
+        raw = native.read_json(path)
+        native.require(raw.get("failure") is None and raw.get("nonce") == value["nonce"]
+                       and raw.get("process_id") == value["pid"], "Tank persistence collector failed")
+        if not raw.get("samples"):
+            return False
+        sample = raw["samples"][-1]
+        return (sample.get("world_epoch") == value["world_epoch"]
+                and 0 <= construction.context(value)["real_seconds"] - sample["real_seconds"] <= 1
+                and persistence.returned(sample.get("m2_context", {})))
     driver.last = driver.wait(supplied, after=driver.last["frame"], timeout=180)
     construction.capture_action(driver, "menu:SetTimeSpeed(Paused)")
     driver.capture((FULL_CHECKPOINTS if full else CHECKPOINTS)[-1])
@@ -138,10 +154,10 @@ def check_tail_inputs(raw, entries, client, inputs, *, supply_speed="Normal"):
 
 
 def verify(raw, entries, client, inputs, contract, *, profile=(CASE, SCOPE)):
-    checkpoints = FULL_CHECKPOINTS if profile == (FULL_CASE,FULL_SCOPE) else CHECKPOINTS
+    checkpoints = FULL_CHECKPOINTS if profile in ((FULL_CASE,FULL_SCOPE), PERSISTENCE_PROFILE) else CHECKPOINTS
     native.require(profile in PROFILES and contract.get("case") == profile[0] and contract.get("scope") == profile[1]
                    and raw.get("scope") == profile[1] and [e["case"] for e in entries] == list(checkpoints), "Tank inflow profile differs")
-    full = profile == (FULL_CASE,FULL_SCOPE)
+    full = profile in ((FULL_CASE,FULL_SCOPE), PERSISTENCE_PROFILE)
     native.require(contract.get("supply_speed") == "Super" if full else "supply_speed" not in contract,
                    "Tank supply speed contract differs")
     samples, events = raw["samples"], raw["events"]
@@ -254,7 +270,7 @@ def verify(raw, entries, client, inputs, contract, *, profile=(CASE, SCOPE)):
     count = ctx["consumers"]["roots"][0]["tank_water_count"]
     native.require(count == len(produced) and count <= 50, "Tank inflow capture water count differs")
     construction.check_completed_consumers(raw, final, contract, water_count=count)
-    if profile == (FULL_CASE, FULL_SCOPE):
+    if full:
         check_river_fill_chain(raw)
 
 
