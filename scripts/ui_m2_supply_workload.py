@@ -6,7 +6,14 @@ native, planning, pipeline = tank.native, tank.planning, tank.pipeline
 KEYS = ["menu:ToggleOrders", "menu:SelectAreaTask", "supply-area-drag", "Escape",
         "menu:ToggleArchitect", "menu:SetTimeSpeed(Normal)", "menu:SelectFloorPlace",
         "supply-floor-drag", "menu:SetTimeSpeed(Paused)"]
-CONTRACT = "ordinary-area-floor20-v3"
+CONTRACT = "ordinary-area-floor45-surplus-bound-v4"
+COLUMNS, ROWS = 9, 5
+TILES = COLUMNS * ROWS
+
+
+def required_export(full_buckets):
+    native.require(type(full_buckets) is int and 0 <= full_buckets <= 5, "Supply surplus bucket count differs")
+    return max(0, full_buckets * 5 * 5 + 5 - 10)
 
 
 def inventory(ctx):
@@ -25,7 +32,7 @@ def inventory(ctx):
                        "Supply Familiar identity/area differs")
     native.require(len({f["bits"] for f in ctx["familiars"]}) == len(ctx["familiars"]), "Supply Familiar bits reused")
     for row in ctx["sites"]:
-        native.require(all(type(row.get(k)) is int and 0 <= row[k] <= 20 for k in ("total","reinforced","poured"))
+        native.require(all(type(row.get(k)) is int and 0 <= row[k] <= TILES for k in ("total","reinforced","poured"))
                        and all(isinstance(row.get(k),list) and len(row[k]) == 2
                                and all(planning.finite(v) for v in row[k]) for k in ("min","max","material_center"))
                        and isinstance(row.get("phase"),str), "Supply site counters/geometry differ")
@@ -44,7 +51,7 @@ def context(value):
     native.require(isinstance(anchor, list) and len(anchor) == 2 and all(type(x) is int for x in anchor),
                    "Supply floor anchor missing")
     x, y = anchor
-    native.require(ctx.get("cells") == [[x+dx, y+dy] for dy in range(4) for dx in range(5)],
+    native.require(ctx.get("cells") == [[x+dx, y+dy] for dy in range(ROWS) for dx in range(COLUMNS)],
                    "Supply floor footprint differs")
     native.require(all(isinstance(ctx.get(k), list) and len(ctx[k]) == 2
                        and all(planning.finite(v) for v in ctx[k]) for k in ("min", "max"))
@@ -62,10 +69,10 @@ def active(ctx, selected):
 
 
 def placed(ctx):
-    return (len(ctx["sites"]) == 1 and ctx["sites"][0]["total"] == 20
+    return (len(ctx["sites"]) == 1 and ctx["sites"][0]["total"] == TILES
             and ctx["sites"][0]["min"] == ctx["min"] and ctx["sites"][0]["max"] == ctx["max"]
-            and len(ctx["tiles"]) == 20 and {tuple(t["grid"]) for t in ctx["tiles"]} == {tuple(p) for p in ctx["cells"]}
-            and len({t["entity"] for t in ctx["tiles"]}) == 20
+            and len(ctx["tiles"]) == TILES and {tuple(t["grid"]) for t in ctx["tiles"]} == {tuple(p) for p in ctx["cells"]}
+            and len({t["entity"] for t in ctx["tiles"]}) == TILES
             and all(t["site"] == ctx["sites"][0]["entity"] for t in ctx["tiles"]))
 
 
@@ -130,7 +137,7 @@ def check_gesture(action, rows, samples):
     if key == "supply-area-drag":
         native.require(active(context(after),before["selected"]), "Supply area did not commit to selected Familiar")
     else:
-        native.require(placed(context(after)), "Supply floor did not commit exact twenty tiles")
+        native.require(placed(context(after)), "Supply floor did not commit exact forty-five tiles")
 
 
 def verify(raw, actions):
@@ -174,8 +181,8 @@ def verify(raw, actions):
                                and {tuple(t["grid"]):t["entity"] for t in ctx["tiles"]} == tile_ids,
                                "Supply floor site/tiles replaced or reverted")
             else:
-                native.require(not ctx["sites"] and not ctx["tiles"] and len(ctx["completed"]) == 20
-                               and len({c["entity"] for c in ctx["completed"]}) == 20
+                native.require(not ctx["sites"] and not ctx["tiles"] and len(ctx["completed"]) == TILES
+                               and len({c["entity"] for c in ctx["completed"]}) == TILES
                                and all(c.get("valid") is True for c in ctx["completed"])
                                and {tuple(c["grid"]) for c in ctx["completed"]} == set(tile_ids),
                                "Supply floor site/tiles replaced or partially missing")

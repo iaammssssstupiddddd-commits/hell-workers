@@ -107,6 +107,14 @@ v14は通常床へ骨40を搬入・20補強しPouringへ進み、実泥搬出、
 通常のセリフ文言・表示期間・操作・gameplay結果を変えない内部cleanup修正としてHelp No impact。
 修正後の警告なしfresh受入は未達のまま保持する。
 
+修正commit `84996231` のv15はWARN/ERROR0だったが、Full停止境界で実満水bucketが2個返却されていた。
+その2杯が正規優先度で再利用され、床20消費後にMud10/Water4で停止、TankTake0のためinvalid。
+先行満水n杯は25n Mudを生み、次のTank由来精製5と出力容量10を考えると最低搬出量はmax(0,25n-5)。
+次のscope v6/driver契約v4は普通床45tile（9x5、Bone90/Mud45）とし、実Full停止Released境界の
+exact5bucket全返却・非所持・進行中採水なし、Mixer配置まで同じ所有/型を検査し、実nから需要充足を判定する。
+n3以上など需要不足ならMixer配置press前に明示拒否し、後から床追加/時間延長/成功精製の選び直しはしない。
+配置validatorの45採用/除外0、実90Bone搬入・45補強・搬出・Tank由来精製は新subjectで確認する。
+
 ## 8. ロールバック
 
 本修正単位。未確認の並行変更、凍結subject、旧invalidを上書きしない。

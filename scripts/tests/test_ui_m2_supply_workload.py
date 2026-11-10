@@ -5,10 +5,10 @@ from scripts import ui_m2_supply_workload as workload
 
 
 def inventory(*, area=False, floor=False):
-    cells = [[40+x, 40+y] for y in range(4) for x in range(5)]
-    bounds = dict(min=[0., 0.], max=[160., 128.])
+    cells = [[40+x, 40+y] for y in range(workload.ROWS) for x in range(workload.COLUMNS)]
+    bounds = dict(min=[0., 0.], max=[288., 160.])
     return dict(anchor=[40,40], cells=cells, **bounds, overflow=False,
-                sites=[dict(entity="site", total=20, reinforced=0,poured=0,material_center=[80.,64.],phase="Reinforcing", **bounds)] if floor else [],
+                sites=[dict(entity="site", total=workload.TILES, reinforced=0,poured=0,material_center=[80.,64.],phase="Reinforcing", **bounds)] if floor else [],
                 tiles=[dict(entity=f"tile-{i}", site="site", grid=grid,bones=0,mud=0,state="WaitingBones") for i,grid in enumerate(cells)] if floor else [],
                 completed=[], familiars=[dict(entity="familiar", bits=12, command="Patrol" if area else "Idle",
                                               area=bounds if area else None)])

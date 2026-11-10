@@ -3,6 +3,7 @@ use super::*;
 use crate::interface::selection::placement_geometry::{
     bucket_storage_geometry, live_building_geometry,
 };
+use crate::world::map::WorldMapRef;
 use hw_core::{
     area::TaskArea,
     constants::{MAP_HEIGHT, MAP_WIDTH, TILE_SIZE},
@@ -13,21 +14,25 @@ use hw_jobs::{
     construction::{FloorConstructionSite, FloorTileBlueprint},
 };
 use hw_world::{WorldMap, Yard};
+use std::collections::HashSet;
 
 #[derive(Resource)]
 struct Target((i32, i32));
+
+const COLUMNS: i32 = 9;
+const ROWS: i32 = 5;
 
 fn bounds(anchor: (i32, i32)) -> TaskArea {
     let half = Vec2::splat(TILE_SIZE * 0.5);
     TaskArea::from_points(
         WorldMap::grid_to_world(anchor.0, anchor.1) - half,
-        WorldMap::grid_to_world(anchor.0 + 4, anchor.1 + 3) + half,
+        WorldMap::grid_to_world(anchor.0 + COLUMNS - 1, anchor.1 + ROWS - 1) + half,
     )
 }
 
 fn cells(anchor: (i32, i32)) -> Vec<(i32, i32)> {
-    (0..4)
-        .flat_map(|dy| (0..5).map(move |dx| (anchor.0 + dx, anchor.1 + dy)))
+    (0..ROWS)
+        .flat_map(|dy| (0..COLUMNS).map(move |dx| (anchor.0 + dx, anchor.1 + dy)))
         .collect()
 }
 
@@ -37,21 +42,31 @@ fn choose(
     reserved: &[(i32, i32)],
     mixer: (i32, i32),
 ) -> Option<(i32, i32)> {
-    (1..MAP_WIDTH - 5)
-        .flat_map(|x| (1..MAP_HEIGHT - 4).map(move |y| (x, y)))
+    let empty = HashSet::new();
+    (1..MAP_WIDTH - COLUMNS)
+        .flat_map(|x| (1..MAP_HEIGHT - ROWS).map(move |y| (x, y)))
         .filter(|&(x, y)| (x - mixer.0).abs() + (y - mixer.1).abs() <= 12)
         .filter(|&anchor| {
-            cells(anchor).iter().all(|&grid| {
-                map.is_walkable(grid.0, grid.1)
-                    && !map.has_building(grid)
-                    && !map.has_stockpile(grid)
-                    && yards
-                        .iter()
-                        .any(|yard| yard.contains(WorldMap::grid_to_world(grid.0, grid.1)))
-                    && reserved
-                        .iter()
-                        .all(|r| (r.0 - grid.0).abs().max((r.1 - grid.1).abs()) >= 2)
-            })
+            let plan = hw_ui::selection::build_area_placement_plan(
+                anchor,
+                (anchor.0 + COLUMNS - 1, anchor.1 + ROWS - 1),
+                hw_ui::selection::validate_area_size(COLUMNS, ROWS),
+                |grid| {
+                    hw_ui::selection::validate_floor_tile(&WorldMapRef(map), grid, &empty, &empty)
+                },
+            );
+            plan.total_tile_count == 45
+                && plan.valid_tiles.len() == 45
+                && plan.first_reject.is_none()
+                && cells(anchor).iter().all(|&grid| {
+                    map.is_walkable(grid.0, grid.1)
+                        && yards
+                            .iter()
+                            .any(|yard| yard.contains(WorldMap::grid_to_world(grid.0, grid.1)))
+                        && reserved
+                            .iter()
+                            .all(|r| (r.0 - grid.0).abs().max((r.1 - grid.1).abs()) >= 2)
+                })
         })
         .min_by_key(|&(x, y)| ((x - mixer.0).abs() + (y - mixer.1).abs(), x, y))
 }
@@ -88,7 +103,7 @@ pub(super) fn prepare(world: &mut World, tank: (i32, i32), mixer: (i32, i32), ya
         "supply workload requires the same unique Yard"
     );
     let anchor = choose(map, &owners, &reserved, mixer)
-        .expect("supply needs a legal twenty-tile ordinary floor target");
+        .expect("supply needs a legal forty-five-tile ordinary floor target");
     world.insert_resource(Target(anchor));
 }
 
@@ -171,7 +186,7 @@ pub(super) fn snapshot(world: &mut World) -> Value {
 mod tests {
     use super::*;
     #[test]
-    fn supply_floor_target_is_twenty_legal_tiles_without_mutation_or_reserved_overlap() {
+    fn supply_floor_target_is_forty_five_legal_tiles_without_mutation_or_reserved_overlap() {
         let map = WorldMap::default();
         let area = bounds((40, 40));
         let yards = [Yard {
@@ -181,7 +196,7 @@ mod tests {
         let reserved = [(40, 40), (41, 40), (40, 41), (41, 41)];
         let anchor = choose(&map, &yards, &reserved, (40, 40)).unwrap();
         let grids = cells(anchor);
-        assert_eq!(grids.len(), 20);
+        assert_eq!(grids.len(), 45);
         assert!(grids.iter().all(|p| !reserved.contains(p)));
         assert!(map.buildings.is_empty());
         assert!(choose(&map, &[], &reserved, (40, 40)).is_none());
@@ -194,5 +209,44 @@ mod tests {
             WorldMap::snap_to_grid_edge(area.max() - Vec2::splat(2.)),
             area.max()
         );
+    }
+
+    #[test]
+    fn supply_seed_has_a_canonical_unfiltered_forty_five_tile_floor() {
+        let layout = hw_world::generate_world_layout(42);
+        let mut map = WorldMap {
+            tiles: layout.terrain_tiles.clone(),
+            ..Default::default()
+        };
+        for &grid in layout
+            .initial_tree_positions
+            .iter()
+            .chain(&layout.initial_rock_positions)
+        {
+            if map
+                .pos_to_idx(grid.0, grid.1)
+                .and_then(|i| map.terrain_at_idx(i))
+                .is_some_and(|t| t.is_walkable())
+            {
+                map.add_grid_obstacle(grid);
+            }
+        }
+        map.register_completed_building_footprint(
+            BuildingType::WheelbarrowParking,
+            Entity::PLACEHOLDER,
+            layout.anchors.wheelbarrow_parking.iter_cells(),
+        );
+        let yard = Yard {
+            min: WorldMap::grid_to_world(layout.anchors.yard.min_x, layout.anchors.yard.min_y),
+            max: WorldMap::grid_to_world(layout.anchors.yard.max_x, layout.anchors.yard.max_y),
+        };
+        let mut reserved =
+            live_building_geometry(&map, BuildingType::Tank, (70, 50)).occupied_grids;
+        reserved
+            .extend(live_building_geometry(&map, BuildingType::MudMixer, (71, 48)).occupied_grids);
+        reserved.extend(bucket_storage_geometry((72, 50)).occupied_grids);
+        let anchor =
+            choose(&map, &[yard], &reserved, (71, 48)).expect("actual seed must admit all45 tiles");
+        assert_eq!(cells(anchor).len(), 45);
     }
 }

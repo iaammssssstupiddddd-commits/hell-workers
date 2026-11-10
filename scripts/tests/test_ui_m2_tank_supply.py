@@ -164,6 +164,7 @@ class SupplyTests(unittest.TestCase):
                                          stored_items=[f"bucket-{i}" for i in range(5)]),
                                     dict(entity="second", belongs_to="tank", pending_blueprint=None,
                                          stockpile=dict(resource=None,capacity=10),stored_items=None)], inventory_holders=[])
+        ctx["bucket_actors"] = []
         ctx["items"] += [dict(entity=f"bucket-{i}", resource="BucketEmpty", belongs_to="tank", stored_in="storage",
                                loaded_in=None, delivering_to=None, stored_by_mixer=None) for i in range(5)]
         return dict(m2_context=ctx)
@@ -230,6 +231,34 @@ class SupplyTests(unittest.TestCase):
             with self.assertRaises(RuntimeError):
                 supply.planning.check_transport(moves(1),client,0,motion_cap=cap)
 
+    def test_actual_full_surplus_is_bound_to_finite_output_demand(self):
+        self.assertEqual([supply.workload.required_export(n) for n in range(6)], [0,20,45,70,95,120])
+        for count in range(6):
+            sample = self.full_fixture()
+            sample["paused"] = True
+            buckets = [r for r in sample["m2_context"]["items"] if r.get("belongs_to") == "tank"]
+            for row in buckets[:count]:
+                row["resource"] = "BucketWater"
+            if count <= 2:
+                self.assertEqual(supply.check_output_budget([sample],"tank"),count)
+            else:
+                with self.assertRaisesRegex(RuntimeError,"insufficient"):
+                    supply.check_output_budget([sample],"tank")
+        for mutate in (
+            lambda s:s["m2_context"]["bucket_actors"].append(dict(phase="Filling")),
+            lambda s:s.update(paused=False),
+            lambda s:s["m2_context"]["items"][-1].update(resource="BucketWater"),
+        ):
+            before = self.full_fixture()
+            before["paused"] = True
+            after = copy.deepcopy(before)
+            mutate(after)
+            with self.subTest(mutate=mutate),self.assertRaises(RuntimeError):
+                supply.check_output_budget([before,after],"tank")
+        for bad in (True,-1,6,1.0):
+            with self.assertRaises(RuntimeError):
+                supply.workload.required_export(bad)
+
     def test_exact_supply_event_subscription_and_rejected_mixing(self):
         raw = dict(scope=supply.SCOPE, event_contract=copy.deepcopy(supply.EVENT_CONTRACT), events=[])
         contract = dict(scope=supply.SCOPE, event_contract=copy.deepcopy(supply.EVENT_CONTRACT))
@@ -242,6 +271,7 @@ class SupplyTests(unittest.TestCase):
             lambda r, c: r.update(scope="ordinary-m2-tank-candidate-supply-v2"),
             lambda r, c: r.update(scope="ordinary-m2-tank-candidate-supply-v3"),
             lambda r, c: r.update(scope="ordinary-m2-tank-candidate-supply-v4"),
+            lambda r, c: r.update(scope="ordinary-m2-tank-candidate-supply-v5"),
             lambda r, c: r["event_contract"].update(id="foreign"),
             lambda r, c: c["event_contract"]["excluded_producers"].append("ordinary-tank-take-branch-v1"),
             lambda r, c: r["events"].append(dict(producer="DreamTransferredVisualMessage", operation="other")),

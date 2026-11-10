@@ -151,6 +151,38 @@ def check_full_setup(raw, actions, owner, children):
     native.require(samples and until - samples[-1]["real_seconds"] <= 1
                    and all(s.get("paused") is True and full_setup_ready(s, owner, children) for s in samples),
                    "Supply Full setup not held before Mixer placement")
+    check_output_budget(samples, owner)
+    placement = next(a for a in actions if a["key"] == "mixer-placement")
+    lo,hi = (tank.context(placement[k])["real_seconds"] for k in ("before","after"))
+    presses = [e for e in raw["events"] if e.get("producer") == "MouseButtonInput"
+               and e.get("state") == "Pressed" and lo < e["real_seconds"] <= hi]
+    native.require(len(presses) == 1, "Supply demand placement boundary missing")
+    stable = raw["samples"][first:presses[0]["sample_index"]]
+    native.require(stable and all(full_setup_ready(s,owner,children) for s in stable),
+                   "Supply returned inventory changed before Mixer placement")
+    check_output_budget(stable,owner,require_paused=False)
+
+
+def check_output_budget(samples, owner, *, require_paused=True):
+    """Demand bound from the actual paused Full-release sample, never a picked later witness."""
+    native.require(samples, "Supply Full demand boundary missing")
+    states = []
+    for sample in samples:
+        ctx = sample["m2_context"]
+        native.require(type(sample.get("paused")) is bool and (not require_paused or sample["paused"])
+                       and ctx.get("bucket_actors") == [],
+                       "Supply demand has pending bucket transport")
+        rows = [r for r in ctx["items"] if r.get("belongs_to") == owner
+                and r.get("resource") in ("BucketEmpty","BucketWater")]
+        native.require(len(rows) == 5 and len({r["entity"] for r in rows}) == 5,
+                       "Supply demand lacks the exact returned five buckets")
+        state = sorted((r["entity"],r["resource"],r.get("stored_in")) for r in rows)
+        states.append(state)
+        count = sum(r["resource"] == "BucketWater" for r in rows)
+        native.require(workload.required_export(count) <= workload.TILES,
+                       "Supply ordinary floor demand is insufficient for actual surplus filled buckets")
+    native.require(all(s == states[0] for s in states), "Supply surplus ownership/type changed while paused")
+    return sum(resource == "BucketWater" for _,resource,_ in states[0])
 
 
 def check_world_action(value, baseline):
@@ -218,8 +250,37 @@ def exercise(driver, contract):
 
     driver.last = driver.wait(full, after=driver.last["frame"], timeout=180)
     tank.capture_action(driver, "menu:SetTimeSpeed(Paused)")
+    paused_action = next(row["tank_completion_action"] for row in reversed(driver.events)
+                         if row.get("tank_completion_action",{}).get("key") == "menu:SetTimeSpeed(Paused)")
+
+    def budget_ready(value):
+        raw = native.read_json(driver.root / "production-cancellation.json")
+        native.require(raw.get("failure") is None and raw.get("nonce") == value["nonce"]
+                       and raw.get("process_id") == value["pid"], "Supply demand raw owner differs")
+        start,end = (tank.context(paused_action[k])["real_seconds"] for k in ("before","after"))
+        released = [e for e in raw.get("events",[]) if e.get("producer") == "MouseButtonInput"
+                    and e.get("state") == "Released" and start < e.get("real_seconds",-1) <= end]
+        if len(released) != 1 or not raw.get("samples") or raw["samples"][-1]["real_seconds"] < end:
+            return False
+        samples = [s for s in raw["samples"][released[0]["sample_index"]:] if s["real_seconds"] <= end]
+        native.require(samples and all(full_setup_ready(s,owner,children) for s in samples),
+                       "Supply Full demand boundary lost its returned inventory")
+        check_output_budget(samples,owner)
+        return True
+
+    driver.last = driver.wait(budget_ready,after=driver.last["frame"],timeout=10)
     for key in ("menu:SetTimeSpeed(Normal)", "menu:ToggleArchitect", "menu:SelectBuild(MudMixer)"):
         tank.capture_action(driver, key)
+    raw = native.read_json(driver.root / "production-cancellation.json")
+    start,end = (tank.context(paused_action[k])["real_seconds"] for k in ("before","after"))
+    released = [e for e in raw["events"] if e.get("producer") == "MouseButtonInput"
+                and e.get("state") == "Released" and start < e["real_seconds"] <= end]
+    native.require(len(released) == 1 and raw.get("failure") is None and raw.get("nonce") == driver.last["nonce"]
+                   and raw.get("process_id") == driver.last["pid"], "Supply demand pre-placement owner differs")
+    stable = raw["samples"][released[0]["sample_index"]:]
+    native.require(stable and all(full_setup_ready(s,owner,children) for s in stable),
+                   "Supply returned inventory changed before Mixer press")
+    check_output_budget(stable,owner,require_paused=False)
     place_mixer(driver, baseline)
     driver.last = driver.wait(lambda v: len(context(v)["blueprints"]) == 1, after=driver.last["frame"])
     tank.capture_action(driver, "Escape")
