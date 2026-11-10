@@ -11,6 +11,7 @@ from scripts import ui_m2_completion as mixer
 from scripts import ui_m2_tank_inflow as inflow
 from scripts import building_water_transfers as water
 from scripts import building_production_lifecycle as lifecycle
+from scripts import ui_m2_supply_workload as workload
 
 native, pipeline, planning = tank.native, tank.pipeline, tank.planning
 CASE, SCOPE = tank.SUPPLY_CASE, tank.SUPPLY_SCOPE
@@ -21,8 +22,8 @@ WORLDGEN = dict(seed=42, attempt=0, fallback=False,
 EVENT_CONTRACT = dict(id="m2-supply-events-v1", excluded_producers=["DreamTransferredVisualMessage"])
 SETUP = "ordinary-tank-full-returned-buckets-v2"
 REFINEMENT_POLICY = "first-tank-origin-after-complete-prefix-v1"
-# Nineteen declared pointer moves plus the optional developer-panel minimize.
-MOTION_CAP = 20
+# Existing twenty-move bound plus eight declared area/floor prerequisite moves.
+MOTION_CAP = 28
 
 
 def source_contract(repo, source, codec):
@@ -30,7 +31,8 @@ def source_contract(repo, source, codec):
                 mixer_presentation="base-assets", material_supply="ordinary-auto-gather",
                 supply_verifier_sha256=pipeline.digest(Path(__file__).read_bytes()), worldgen=copy.deepcopy(WORLDGEN),
                 event_contract=copy.deepcopy(EVENT_CONTRACT), setup=SETUP, motion_cap=MOTION_CAP,
-                refinement_policy=REFINEMENT_POLICY)
+                refinement_policy=REFINEMENT_POLICY, workload=workload.CONTRACT,
+                workload_verifier_sha256=pipeline.digest(Path(workload.__file__).read_bytes()))
 
 
 def planned_contract(args, repo):
@@ -198,6 +200,7 @@ def exercise(driver, contract):
                    and contract.get("refinement_policy") == REFINEMENT_POLICY, "Supply exercise differs")
     baseline = copy.deepcopy(context(driver.last))
     tank.exercise(driver, contract)
+    workload.exercise(driver)
     owner = tank.context(driver.last)["consumers"]["roots"][0]["owner"]
     prior_raw = native.read_json(driver.root / "production-cancellation.json")
     placements = [e for e in prior_raw.get("events", []) if e.get("producer") == "ordinary-building-placement-branch-v1"
@@ -379,7 +382,7 @@ def check_tail_inputs(raw, entries, client, inputs):
     lower, upper = entries[2], entries[-1]
     tail = inputs[lower["last_step"]:]
     actions = [row["tank_completion_action"] for row in tail if "tank_completion_action" in row]
-    expected = ["menu:SetTimeSpeed(Super)", "menu:SetTimeSpeed(Paused)",
+    expected = [*workload.KEYS, "menu:SetTimeSpeed(Super)", "menu:SetTimeSpeed(Paused)",
                 "menu:SetTimeSpeed(Normal)", "menu:ToggleArchitect", "menu:SelectBuild(MudMixer)",
                 "mixer-placement", "Escape", "menu:SetTimeSpeed(Paused)", "menu:SetTimeSpeed(Super)",
                 "menu:SetTimeSpeed(Paused)", "menu:SetTimeSpeed(Super)", "menu:SetTimeSpeed(Paused)"]
@@ -391,7 +394,8 @@ def check_tail_inputs(raw, entries, client, inputs):
         for value in (before, after):
             check_worldgen(value)
         first, last = action["first_step"], action["last_step"]
-        native.require(type(first) is int and type(last) is int and last == first + 1
+        dragging = key in ("supply-area-drag", "supply-floor-drag")
+        native.require(type(first) is int and type(last) is int and last == first + (2 if dragging else 1)
                        and lower["last_step"] < first < last <= upper["last_step"] == len(inputs)
                        and not claimed.intersection((first, last)) and inputs[first-1].get("tank_completion_action") == action,
                        "Supply sent pair missing or reused")
@@ -403,7 +407,7 @@ def check_tail_inputs(raw, entries, client, inputs):
                            for v in (before, after) for k in ("pid", "world_epoch", "primary_window"))
                        and all(v.get("nonce") == client["nonce"] for v in (before, after)), "Supply action owner/clock differs")
         keyboard = key == "Escape"
-        sent = inputs[first-1:last]
+        sent = [row for row in inputs[first-1:last] if row.get("button") is not None or row.get("key") is not None]
         native.require([r.get("pressed") for r in sent] == [True, False]
                        and all(type(r.get("pressed")) is bool and before["frame"] <= r["pre_frame"] < r["post_frame"] <= after["frame"]
                                and (r.get("key") == "Escape" and r.get("button") is None if keyboard else
@@ -420,13 +424,21 @@ def check_tail_inputs(raw, entries, client, inputs):
                                 if keyboard else event.get("producer") == "MouseButtonInput" and event.get("button") == "Left"),
                            "Supply raw input ownership differs")
             raw_claimed.add(event["event_index"])
-            if not keyboard:
+            if not keyboard and not dragging:
                 cursor, dpi = sample.get("cursor_position"), sample.get("dpi")
                 native.require(isinstance(cursor, list) and len(cursor) == 2 and planning.finite(dpi) and dpi > 0
                                and dpi == before.get("scale_factor")
                                and all(planning.finite(a) and abs(a*dpi-b) <= 2 for a,b in zip(cursor, before["cursor"], strict=True)),
                                "Supply raw cursor differs")
-        if key == "mixer-placement":
+        if dragging:
+            motion = inputs[first]
+            point = [round(x*before["scale_factor"]) for x in workload.context(before)["points"][1]]
+            native.require(motion.get("point") == point and motion.get("observed_left_pressed") is True
+                           and sent[0]["post_frame"] <= motion["pre_frame"] < motion["post_frame"] <= sent[1]["pre_frame"]
+                           and before["frame"] <= motion["pre_frame"] < motion["post_frame"] <= after["frame"],
+                           "Supply drag middle motion is unbound or not held")
+            workload.check_gesture(action, rows, raw["samples"])
+        elif key == "mixer-placement":
             check_world_action(before, context(lower["value"]))
         elif not keyboard:
             control = before["controls"].get(key, {})
@@ -442,8 +454,8 @@ def check_tail_inputs(raw, entries, client, inputs):
                    and raw_claimed == {e["event_index"] for e in raw["events"]
                        if e.get("producer") in ("KeyboardInput", "MouseButtonInput")
                        and e["real_seconds"] > tank.context(lower["value"])["real_seconds"]}, "Supply unclaimed input")
-    for lo, hi, group in ((entries[2], entries[3], expected[:8]), (entries[3], entries[4], expected[8:10]),
-                          (entries[4], entries[5], expected[10:])):
+    for lo, hi, group in ((entries[2], entries[3], expected[:16]), (entries[3], entries[4], expected[16:18]),
+                          (entries[4], entries[5], expected[18:])):
         selected = [a for a in actions if lo["last_step"] < a["first_step"] <= hi["last_step"]]
         native.require([a["key"] for a in selected] == group and all(a["last_step"] <= hi["last_step"]
                        and lo["value"]["frame"] <= a["before"]["frame"] < a["after"]["frame"] < hi["value"]["frame"]
@@ -468,7 +480,10 @@ def verify(raw, entries, client, inputs, contract):
     native.require(pipeline.exact_json(contract.get("worldgen"), WORLDGEN), "Supply world contract differs")
     native.require(contract.get("setup") == SETUP and type(contract.get("motion_cap")) is int
                    and contract["motion_cap"] == MOTION_CAP
-                   and contract.get("refinement_policy") == REFINEMENT_POLICY, "Supply setup/input budget differs")
+                   and contract.get("refinement_policy") == REFINEMENT_POLICY
+                   and contract.get("workload") == workload.CONTRACT
+                   and contract.get("workload_verifier_sha256") == pipeline.digest(Path(workload.__file__).read_bytes()),
+                   "Supply setup/input budget differs")
     samples, events = raw["samples"], raw["events"]
     epoch, window = entries[0]["value"]["world_epoch"], entries[0]["value"]["primary_window"]
     native.require(0 < len(samples) <= 1200 and len(events) < 4096
@@ -494,6 +509,7 @@ def verify(raw, entries, client, inputs, contract):
     native.require(all(a["last_step"] < b["last_step"] and a["value"]["frame"] < b["value"]["frame"]
                        for a,b in zip(entries,entries[1:])), "Supply checkpoint order differs")
     actions = check_tail_inputs(raw, entries, client, inputs)
+    workload.verify(raw, actions)
     cutoff = max(s["sample_index"] for s in samples if s["real_seconds"] <= tank.context(actions[0]["before"])["real_seconds"])
     prefix = dict(raw, samples=samples[:cutoff+1], events=[e for e in events if e["sample_index"] <= cutoff])
     tank.verify(prefix, entries[:3], client, inputs[:entries[2]["last_step"]], contract, profile=(CASE,SCOPE))
@@ -524,7 +540,7 @@ def verify(raw, entries, client, inputs, contract):
                        and e.get("outcome",{}).get("kind") == "Tank"]
     native.require(len(tank_placements) == 2 and len(bucket_ids) == 5, "Supply Tank companions/buckets missing")
     children = tank_placements[1]["outcome"]["companion_owners"]
-    check_full_setup(raw, actions, tank_complete["owner"], children)
+    check_full_setup(raw, actions[8:], tank_complete["owner"], children)
     initial_children = {e["entity"]:e for e in samples[tank_complete["sample_index"]]["companion_context"]["storages"]
                         if e["entity"] in children}
     for sample in samples:

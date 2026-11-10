@@ -28,6 +28,7 @@ mod progress_bars;
 mod refactor_rows;
 mod rest_area_planning;
 mod spa_planning;
+pub(crate) mod supply_workload;
 mod supply_worldgen;
 mod terrain_materials;
 

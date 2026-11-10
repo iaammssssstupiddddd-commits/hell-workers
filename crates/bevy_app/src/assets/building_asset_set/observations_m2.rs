@@ -210,10 +210,12 @@ pub(super) fn snapshot(world: &mut World) -> Result<Value, String> {
     ] {
         rows.sort_by(|a, b| a["entity"].as_str().cmp(&b["entity"].as_str()));
     }
+    let supply_workload = crate::interface::ui::native_acceptance::supply_workload::raw(world);
     Ok(
         json!({"schema": 1, "mixers": mixers, "items": items, "actors": actors, "working_relations": working,
         "water_inventory_schema": 1, "tanks": tanks, "bucket_storages": bucket_storages, "bucket_actors": bucket_actors,
         "inventory_holders": inventory_holders,
+        "supply_workload": supply_workload,
         "water_transfer_receipts": false,
         "river_fill_channel": world.contains_resource::<hw_soul_ai::water_observations::TankPourReceipts>(),
         "mixer_water_channel": world.contains_resource::<hw_soul_ai::water_observations::TankPourReceipts>(),

@@ -16,7 +16,7 @@ INFLOW_SCOPE = "ordinary-m2-tank-candidate-inflow-v1"
 FULL_CASE = "m2-tank-candidate-full"
 FULL_SCOPE = "ordinary-m2-tank-candidate-full-v1"
 SUPPLY_CASE = "m2-tank-candidate-supply"
-SUPPLY_SCOPE = "ordinary-m2-tank-candidate-supply-v4"
+SUPPLY_SCOPE = "ordinary-m2-tank-candidate-supply-v5"
 PROFILES = ((CASE, SCOPE), (INFLOW_CASE, INFLOW_SCOPE), (FULL_CASE, FULL_SCOPE), (SUPPLY_CASE, SUPPLY_SCOPE))
 CHECKPOINTS = tuple("m2-tank-completion-" + phase for phase in ("empty", "placed", "completed"))
 

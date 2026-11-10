@@ -144,7 +144,8 @@ def input_fixture():
     raw["samples"][1:1] = prefix_samples
     for index,event in enumerate(raw["events"]):
         event["event_index"] = index
-    return raw,entries,client,inputs
+    from scripts.tests.test_ui_m2_supply_workload import prepend_workload
+    return prepend_workload(raw,entries,client,inputs)
 
 
 def worldgen_fixture():
@@ -209,10 +210,10 @@ class SupplyTests(unittest.TestCase):
         actions = supply.check_tail_inputs(raw,entries,client,inputs)
         for sample in raw["samples"]:
             sample.update(self.full_fixture())
-        supply.check_full_setup(raw,actions,"tank",["storage","second"])
-        raw["samples"][2]["m2_context"]["items"][-1]["resource"] = "Water"
+        supply.check_full_setup(raw,actions[8:],"tank",["storage","second"])
+        raw["samples"][12]["m2_context"]["items"][-1]["resource"] = "Water"
         with self.assertRaisesRegex(RuntimeError,"not held"):
-            supply.check_full_setup(raw,actions,"tank",["storage","second"])
+            supply.check_full_setup(raw,actions[8:],"tank",["storage","second"])
 
     def test_motion_budget_is_supply_only_and_bounded(self):
         client = dict(nonce="b"*32,pid=40,window=50)
@@ -222,9 +223,9 @@ class SupplyTests(unittest.TestCase):
         supply.planning.check_transport(moves(16),client,0)
         with self.assertRaises(RuntimeError):
             supply.planning.check_transport(moves(17),client,0)
-        supply.planning.check_transport(moves(20),client,0,motion_cap=supply.MOTION_CAP)
+        supply.planning.check_transport(moves(28),client,0,motion_cap=supply.MOTION_CAP)
         with self.assertRaises(RuntimeError):
-            supply.planning.check_transport(moves(21),client,0,motion_cap=supply.MOTION_CAP)
+            supply.planning.check_transport(moves(29),client,0,motion_cap=supply.MOTION_CAP)
         for cap in (True,0,161):
             with self.assertRaises(RuntimeError):
                 supply.planning.check_transport(moves(1),client,0,motion_cap=cap)
@@ -240,6 +241,7 @@ class SupplyTests(unittest.TestCase):
             lambda r, c: c.update(scope="ordinary-m2-tank-candidate-supply-v1"),
             lambda r, c: r.update(scope="ordinary-m2-tank-candidate-supply-v2"),
             lambda r, c: r.update(scope="ordinary-m2-tank-candidate-supply-v3"),
+            lambda r, c: r.update(scope="ordinary-m2-tank-candidate-supply-v4"),
             lambda r, c: r["event_contract"].update(id="foreign"),
             lambda r, c: c["event_contract"]["excluded_producers"].append("ordinary-tank-take-branch-v1"),
             lambda r, c: r["events"].append(dict(producer="DreamTransferredVisualMessage", operation="other")),

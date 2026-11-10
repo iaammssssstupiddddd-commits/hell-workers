@@ -85,6 +85,15 @@ Stockpile案はStasisMud保管禁止により実行前棄却し、試作コー�
 正規の床/壁の需要を使う次campaignには、最低泥20（床20tileなら骨40）、実TaskArea、
 採取/搬出猫車の到達・施工phaseを読取り照合してから通常入力だけで作る。未確認の成立を推測しない。
 
+追加campaignはscope `ordinary-m2-tank-candidate-supply-v5`。Tank完成後の停止中にOrdersから
+実Familiarの作業範囲を指定し、Architectから床20tileを通常dragで指定する。骨40・泥20の需要を
+既存の施工/採取/搬出経路へ渡す。資材・actor・task・施工予定の直接生成は行わない。
+`supply_workload`は合法な対象座標の算出と受動観測だけを持ち、実入力の前後、Patrol/TaskArea、
+同一床site/20tile、原子的な完成をrawへ拘束する。旧v4証拠は新しい前提の証明に使わない。
+今回の追加分は明示的profiling受入caseの入力driverと受動観測のみで、通常の入力/表示/成立条件/Help経路を
+変更しないためHelp No impact。水量修正本体の既存Update required判断は維持する。
+追加campaignは未実行であり、成功欄は結果確認後にだけ更新する。
+
 ## 8. ロールバック
 
 本修正単位。未確認の並行変更、凍結subject、旧invalidを上書きしない。
