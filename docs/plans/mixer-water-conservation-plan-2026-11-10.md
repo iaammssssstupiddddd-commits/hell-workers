@@ -100,6 +100,13 @@ v12は実Area/Patrol確定後、停止中の床ボタンが受理されずinvali
 162222080bytesを正式seal/retain/finalize。契約 `ordinary-area-floor20-v3` はその余分なEscapeだけを除く。
 製品の停止中allowlistは変更しない。新campaignの成功欄は結果確認後にだけ更新する。
 
+v14は通常床へ骨40を搬入・20補強しPouringへ進み、実泥搬出、TankTake5→MixerPour5→同Waterを使う
+2回のRefineCommitまで到達した。ただし勧誘直後のBevy stale-Entity警告2件でJ1が拒否し、全体はinvalid。
+6画像を確認し正式seal/retain/finalize。吹き出し置換と寿命cleanupを同tickで重ねる回帰で旧実装の警告2件を再現した。
+寿命cleanupは適用時のtyped root/期限再確認と所有ChildOf treeの一括削除へ修正し、警告の除外/抑制はしない。
+通常のセリフ文言・表示期間・操作・gameplay結果を変えない内部cleanup修正としてHelp No impact。
+修正後の警告なしfresh受入は未達のまま保持する。
+
 ## 8. ロールバック
 
 本修正単位。未確認の並行変更、凍結subject、旧invalidを上書きしない。

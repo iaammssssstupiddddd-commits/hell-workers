@@ -13,6 +13,14 @@
   roster/idle/squad由来の3 consumerも`SpeechVisualIngressSet`に入り、Actor後のtransformを読み、fixed-step auditのVisual停止条件に従います。
 - gameplay の即時副作用は対応する domain `EntityEvent` Observer に残し、SpeechPlugin に visual-only Observer を追加しません。
 
+### 吹き出しの削除所有権
+
+背景は吹き出しrootの`ChildOf`であり、寿命削除はrootの所有treeを一度だけ削除する。
+勧誘などの置換と寿命到達は同frameに起こり得るため、寿命cleanupはdeferred適用時に完全なEntity IDと
+`SpeechBubble`、期限を再照合する。先に置換/話者削除で消えたrootや、期限を更新したrootには作用しない。
+予約時の存在確認後に背景/親の個別despawnを積む方式は使わない。表示期間・優先度・文言・入力・gameplay効果は不変。
+実Recruit通知と寿命cleanupの両適用順、話者cascade、期限更新を回帰し、Bevyの実command警告も捕捉する。
+
 ### Soul (魂) のセリフ
 Soul は主に「感情」を絵文字で表現します。表示時は各感情に対応した色の **グロー（光彩）背景** が伴います。
 

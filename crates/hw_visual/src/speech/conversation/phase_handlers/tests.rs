@@ -1,47 +1,10 @@
 use super::*;
+use crate::test_log::WarningProbe;
 use bevy::ecs::{error::FallbackErrorHandler, system::RunSystemOnce};
 use bevy::time::{
     DelayedCommandQueue, TimePlugin, TimeUpdateStrategy, check_delayed_command_queues,
 };
 use std::time::Duration;
-use std::{cell::Cell, sync::Once};
-
-thread_local! {
-    static WARNINGS: Cell<usize> = const { Cell::new(0) };
-}
-
-struct WarningProbe;
-
-impl log::Log for WarningProbe {
-    fn enabled(&self, metadata: &log::Metadata<'_>) -> bool {
-        metadata.level() <= log::Level::Warn
-    }
-
-    fn log(&self, record: &log::Record<'_>) {
-        if self.enabled(record.metadata()) {
-            WARNINGS.with(|count| count.set(count.get() + 1));
-        }
-    }
-
-    fn flush(&self) {}
-}
-
-impl WarningProbe {
-    fn start() {
-        static INIT: Once = Once::new();
-        static LOGGER: WarningProbe = WarningProbe;
-        INIT.call_once(|| {
-            log::set_logger(&LOGGER).expect("unit-test warning probe must own the logger");
-            log::set_max_level(log::LevelFilter::Warn);
-        });
-        WARNINGS.with(|count| count.set(0));
-    }
-
-    fn assert_clean() {
-        WARNINGS
-            .with(|count| assert_eq!(count.get(), 0, "delayed command emitted a warning/error"));
-    }
-}
 
 fn test_world() -> World {
     WarningProbe::start();
