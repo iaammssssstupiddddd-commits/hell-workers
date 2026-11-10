@@ -5,8 +5,8 @@ from scripts import ui_m2_tank_completion as tank
 native, planning, pipeline = tank.native, tank.planning, tank.pipeline
 KEYS = ["menu:ToggleOrders", "menu:SelectAreaTask", "supply-area-drag", "Escape",
         "menu:ToggleArchitect", "menu:SetTimeSpeed(Normal)", "menu:SelectFloorPlace",
-        "supply-floor-drag", "menu:SetTimeSpeed(Paused)", "Escape"]
-CONTRACT = "ordinary-area-floor20-v2"
+        "supply-floor-drag", "menu:SetTimeSpeed(Paused)"]
+CONTRACT = "ordinary-area-floor20-v3"
 
 
 def inventory(ctx):

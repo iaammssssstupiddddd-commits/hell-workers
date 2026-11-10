@@ -211,7 +211,7 @@ class SupplyTests(unittest.TestCase):
         for sample in raw["samples"]:
             sample.update(self.full_fixture())
         supply.check_full_setup(raw,actions[len(supply.workload.KEYS):],"tank",["storage","second"])
-        raw["samples"][14]["m2_context"]["items"][-1]["resource"] = "Water"
+        raw["samples"][13]["m2_context"]["items"][-1]["resource"] = "Water"
         with self.assertRaisesRegex(RuntimeError,"not held"):
             supply.check_full_setup(raw,actions[len(supply.workload.KEYS):],"tank",["storage","second"])
 

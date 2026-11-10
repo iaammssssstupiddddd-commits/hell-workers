@@ -95,7 +95,9 @@ Stockpile案はStasisMud保管禁止により実行前棄却し、試作コー�
 変更しないためHelp No impact。水量修正本体の既存Update required判断は維持する。
 v12は実Area/Patrol確定後、停止中の床ボタンが受理されずinvalid。画面にも「停止中は利用不可」が
 表示され、床drag前に安全停止した。正式seal/finalizeし161529856bytesを操作成立条件の診断に保持する。
-次の専用driver契約 `ordinary-area-floor20-v2` は実行中の床配置と前後の実時間操作をrawへ拘束する。
+専用driverは実行中の床配置と前後の実時間操作をrawへ拘束する。v13は床20tileを実確定したが、
+停止ボタンがFloorPlaceをNoneへ戻した後の余分なEscapeがSystemMenuを開いてinvalidとなった。
+162222080bytesを正式seal/retain/finalize。契約 `ordinary-area-floor20-v3` はその余分なEscapeだけを除く。
 製品の停止中allowlistは変更しない。新campaignの成功欄は結果確認後にだけ更新する。
 
 ## 8. ロールバック

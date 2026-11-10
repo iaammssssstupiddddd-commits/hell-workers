@@ -17,24 +17,24 @@ def inventory(*, area=False, floor=False):
 def prepend_workload(raw, entries, client, inputs):
     """Insert actual typed controls and endpoint samples before Full setup."""
     for row in inputs:
-        row["step"] = str(int(row["step"])+22)
+        row["step"] = str(int(row["step"])+20)
         row["pre_frame"] += 2000
         row["post_frame"] += 2000
         if action := row.get("tank_completion_action"):
-            action["first_step"] += 22
-            action["last_step"] += 22
+            action["first_step"] += 20
+            action["last_step"] += 20
             for value in (action["before"],action["after"]):
                 value["frame"] += 2000
                 value["m2_planning"]["real_seconds"] += 20
     for entry in entries[3:]:
-        entry["last_step"] += 22
+        entry["last_step"] += 20
         entry["value"]["frame"] += 2000
         entry["value"]["m2_planning"]["real_seconds"] += 20
     for sample in raw["samples"][1:]:
-        sample["sample_index"] += 12
+        sample["sample_index"] += 11
         sample["real_seconds"] += 20
     for event in raw["events"]:
-        event["sample_index"] += 12
+        event["sample_index"] += 11
         event["real_seconds"] += 20
     prefix, samples, events = [], [], []
     for index,key in enumerate(workload.KEYS):

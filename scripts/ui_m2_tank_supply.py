@@ -454,8 +454,8 @@ def check_tail_inputs(raw, entries, client, inputs):
                    and raw_claimed == {e["event_index"] for e in raw["events"]
                        if e.get("producer") in ("KeyboardInput", "MouseButtonInput")
                        and e["real_seconds"] > tank.context(lower["value"])["real_seconds"]}, "Supply unclaimed input")
-    for lo, hi, group in ((entries[2], entries[3], expected[:18]), (entries[3], entries[4], expected[18:20]),
-                          (entries[4], entries[5], expected[20:])):
+    for lo, hi, group in ((entries[2], entries[3], expected[:17]), (entries[3], entries[4], expected[17:19]),
+                          (entries[4], entries[5], expected[19:])):
         selected = [a for a in actions if lo["last_step"] < a["first_step"] <= hi["last_step"]]
         native.require([a["key"] for a in selected] == group and all(a["last_step"] <= hi["last_step"]
                        and lo["value"]["frame"] <= a["before"]["frame"] < a["after"]["frame"] < hi["value"]["frame"]
