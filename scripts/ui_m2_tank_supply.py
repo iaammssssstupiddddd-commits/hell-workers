@@ -330,6 +330,11 @@ def check_supply_chain(raw, tank_owner, mixer_owner, *, capture_time):
                    for e in events if e.get("operation") in ("MixerPour", "RefineCommit")),
                    "Refinement occurred after its capture")
     _, classified = check_complete_prefix(events, tank_owner, mixer_owner)
+    for row in classified:
+        if row["operation"] == "MixerPour":
+            event = next(e for e in events if e["event_index"] == row["event"])
+            water.active(raw["samples"][event["sample_index"]]["m2_context"], event,
+                         {"ReturningBucket"}, event["amount"], needs_fill=row["origin"] == "TankTake")
     selected = [row for row in classified if row["operation"] == "RefineCommit" and row["origin"] == "TankTake"]
     native.require(selected, "Supply has no Tank-origin refinement")
     refine = next(e for e in events if e["event_index"] == selected[0]["event"])

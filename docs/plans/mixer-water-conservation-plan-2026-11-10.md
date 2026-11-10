@@ -142,6 +142,15 @@ full Entityとparentを診断rawで照合し、Brenda/Christopherの一覧Soul�
 一時Despawn診断と専用set/re-exportは全撤去。通常の入力・表示意味・文言・成立条件は不変のため
 本cleanupと診断撤去はHelp No impact。警告除外は行わず、fresh実機の成功欄は未達のままとする。
 
+v21（`6d314bf3`）はWARN/ERROR0、TankTake5→MixerPour5→Tank由来Refineへ到達したが、
+verifierが先行River満水bucket再利用の`needs_fill=false`を誤拒否してinvalid。旧結果は維持する。
+製品policyは満水ならfalseを正式生成する。raw投入枝はtyped bool両経路を区別して観測し、
+全prefixの各MixerPourをRiverFill/TankTakeの源流と照合してfalse/trueを一致必須にする。
+専用Tank lossless pairもtrueを維持し、偽装・欠損・型alias・部分投入を認めない。
+実再利用枝の旧検証器拒否を回帰で再現し、合成full-prefix（再利用→Tank取水）を含む37件成功。
+v21を新verifierでpassに変えず、新subjectの正式受入を別途実施する。
+通常製品の入力・成立条件・結果・文言は変えない検証器補正としてHelp No impact。
+
 ## 8. ロールバック
 
 本修正単位。未確認の並行変更、凍結subject、旧invalidを上書きしない。

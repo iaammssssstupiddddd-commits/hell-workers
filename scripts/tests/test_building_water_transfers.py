@@ -138,10 +138,32 @@ def fixture():
 
 
 class WaterTransferTests(unittest.TestCase):
+    def test_existing_full_bucket_is_raw_reuse_not_a_tank_take(self):
+        raw = fixture()
+        raw["samples"][3]["m2_context"]["bucket_actors"][0]["source"]["needs_fill"] = False
+        # A real full bucket can be reused without taking water from the Tank.
+        # Raw branch validation must not invent a Tank withdrawal for this path.
+        raw["events"] = [dict(raw["events"][1], event_index=0)]
+        lifecycle.check_raw_transitions(raw)
+        with self.assertRaises(ValueError):
+            water.check_lossless_chain(raw)
+
     def test_exact_conversion_and_lossless_chain(self):
         raw = fixture()
         lifecycle.check_raw_transitions(raw)
         water.check_lossless_chain(raw)
+
+    def test_fill_flag_is_typed_and_a_take_cannot_be_relabelled_as_reuse(self):
+        for value in (None, 0, 1, "true"):
+            raw = fixture()
+            raw["samples"][3]["m2_context"]["bucket_actors"][0]["source"]["needs_fill"] = value
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                lifecycle.check_raw_transitions(raw)
+        for index in (1, 3):
+            raw = fixture()
+            raw["samples"][index]["m2_context"]["bucket_actors"][0]["source"]["needs_fill"] = False
+            with self.subTest(index=index), self.assertRaises(ValueError):
+                water.check_lossless_chain(raw)
 
     def test_partial_or_failed_branch_is_observed_but_not_lossless_supply(self):
         for field in ("partial", "route", "return"):

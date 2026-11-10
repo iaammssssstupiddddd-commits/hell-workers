@@ -28,8 +28,10 @@ def one(rows, entity):
     return found[0]
 
 
-def active(ctx, event, phases, amount=None):
+def active(ctx, event, phases, amount=None, *, needs_fill=True):
     actor = one(ctx.get("bucket_actors", []), event["worker"])
+    source = actor.get("source")
+    observed_fill = source.get("needs_fill") if isinstance(source, dict) else None
     require(
         actor.get("is_soul") is True
         and actor.get("inventory_present") is True
@@ -46,9 +48,11 @@ def active(ctx, event, phases, amount=None):
             ),
         )
         and exact(
-            actor.get("source"),
-            dict(kind="Tank", entity=event["owner"], exists=True, needs_fill=True),
+            source,
+            dict(kind="Tank", entity=event["owner"], exists=True, needs_fill=observed_fill),
         )
+        and type(observed_fill) is bool
+        and (needs_fill is None or observed_fill is needs_fill)
         and exact(
             actor.get("destination"),
             dict(kind="Mixer", entity=event["mixer"], exists=True),
@@ -272,7 +276,10 @@ def check_receipt(event, samples, events):
                 "Mixer pour output differs",
             )
         if event["returning"]:
-            active(ctx, event, {"ReturningBucket"}, event["amount"])
+            # The product also reuses full buckets: those assignments correctly
+            # have needs_fill=False. Raw conversion is not Tank-origin proof;
+            # the complete supply ledger binds that flag to every fill cycle.
+            active(ctx, event, {"ReturningBucket"}, event["amount"], needs_fill=None)
         else:
             actor = one(after.get("actors", []), event["worker"])
             require(
@@ -318,6 +325,8 @@ def check_lossless_chain(raw):
         ]
         require(prior, "Mixer pour lacks prior Tank take")
         take = max(prior, key=lambda event: event["sample_index"])
+        active(raw["samples"][pour["sample_index"]]["m2_context"], pour,
+               {"ReturningBucket"}, pour["amount"])
         require(
             take["event_index"] not in used
             and take["route_found"] is True

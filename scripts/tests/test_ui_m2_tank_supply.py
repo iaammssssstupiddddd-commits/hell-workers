@@ -12,7 +12,7 @@ from scripts.tests import test_ui_m2_tank_completion as construction
 from scripts.tests import test_ui_m2_completion as mixer_tests
 
 
-def fixture():
+def fixture(*, reuse=False):
     samples, events = [], []
 
     def append(part_samples, part_events):
@@ -28,6 +28,21 @@ def fixture():
 
     river, river_samples = water.RiverFillTests.fixture()
     append(river_samples, [river])
+    if reuse:
+        direct = transfers.fixture()
+        direct_samples = direct["samples"][2:]
+        direct_event = dict(direct["events"][1], sample_index=1,
+                            outputs=[f"direct-{i}" for i in range(5)])
+        for sample in direct_samples:
+            ctx = sample["m2_context"]
+            ctx["bucket_actors"][0]["source"]["needs_fill"] = False
+            ctx["mixers"][0]["stored_items"] = [
+                entity.replace("poured-", "direct-") for entity in ctx["mixers"][0]["stored_items"]]
+            for item in ctx["items"]:
+                item["entity"] = item["entity"].replace("poured-", "direct-")
+        append(direct_samples, [direct_event])
+        river, river_samples = water.RiverFillTests.fixture()
+        append(river_samples, [river])
     origin, origin_samples, origin_events = water.fixture()
     for event in origin_events:
         event.update(assignment="request", target="request")
@@ -331,6 +346,24 @@ class SupplyTests(unittest.TestCase):
         proof = supply.check_supply_chain(raw, "tank", "mixer", capture_time=20.)
         self.assertEqual(set(proof), {"refine","tank_take","mixer_pour","materials","prefix"})
         self.assertEqual(len(proof["materials"]),2)
+
+    def test_prefix_origin_must_match_live_assignment_fill_flag(self):
+        raw = fixture()
+        pour = next(e for e in raw["events"] if e.get("operation") == "MixerPour")
+        raw["samples"][pour["sample_index"]]["m2_context"]["bucket_actors"][0]["source"]["needs_fill"] = False
+        lifecycle.check_raw_transitions(raw)
+        with self.assertRaisesRegex(ValueError, "live assignment"):
+            supply.check_supply_chain(raw, "tank", "mixer", capture_time=20.)
+
+    def test_complete_raw_prefix_accepts_real_reuse_then_tank_take_not_false_origin(self):
+        raw = fixture(reuse=True)
+        proof = supply.check_supply_chain(raw, "tank", "mixer", capture_time=30.)
+        pours = [row for row in proof["prefix"] if row["operation"] == "MixerPour"]
+        self.assertEqual([row["origin"] for row in pours], ["RiverFill", "TankTake"])
+        first = next(e for e in raw["events"] if e["event_index"] == pours[0]["event"])
+        raw["samples"][first["sample_index"]]["m2_context"]["bucket_actors"][0]["source"]["needs_fill"] = True
+        with self.assertRaisesRegex(ValueError, "live assignment"):
+            supply.check_supply_chain(raw, "tank", "mixer", capture_time=30.)
 
     @staticmethod
     def prefix_fixture():
