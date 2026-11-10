@@ -1,6 +1,6 @@
 //! Temporary bounded, read-only native diagnosis; remove after ownership diagnosis.
 use bevy::prelude::*;
-const LIMIT: usize = 32768;
+const LIMIT: usize = 262144;
 
 fn bounded(text: &str) -> (String, bool) {
     (
@@ -33,7 +33,7 @@ pub(super) fn trace_despawn(
         return;
     };
     info!(
-        "NATIVE_DESPAWN index={} entity={:?} parent={:?} name={:?} text2d={:?} text={:?} speech={} background={} sprite={} node={} components={:?}",
+        "NATIVE_DESPAWN index={} entity={:?} parent={:?} name={:?} text2d={:?} text={:?} speech={} background={} sprite={} node={}",
         *count,
         on.entity,
         entity.get::<ChildOf>().map(ChildOf::parent),
@@ -43,8 +43,7 @@ pub(super) fn trace_despawn(
         entity.contains::<hw_visual::speech::components::SpeechBubble>(),
         entity.contains::<hw_visual::speech::components::SpeechBubbleBackground>(),
         entity.contains::<Sprite>(),
-        entity.contains::<Node>(),
-        entity.archetype().components()
+        entity.contains::<Node>()
     );
 }
 
