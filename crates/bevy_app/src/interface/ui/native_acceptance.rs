@@ -104,7 +104,7 @@ impl NativeUiAcceptancePlugin {
 
 impl Plugin for NativeUiAcceptancePlugin {
     fn build(&self, app: &mut App) {
-        app.add_observer(lifecycle_diagnostic::trace_despawn);
+        lifecycle_diagnostic::register(app, &self.root);
         if terrain_materials::enabled() {
             terrain_materials::register(app);
         }

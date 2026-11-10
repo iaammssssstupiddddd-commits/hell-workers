@@ -57,6 +57,9 @@ struct Observations {
     published_encoding_time: std::time::Duration,
 }
 
+#[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) struct ProductionObservationSet;
+
 // Borrow the growing history instead of cloning every Value into a second
 // envelope on each publication. The wire schema, ordering and caps are unchanged.
 #[cfg(test)]
@@ -144,6 +147,7 @@ pub(super) fn configure(app: &mut App) -> Result<(), String> {
             Last,
             (finalize_cancellation_receipts, observe)
                 .chain()
+                .in_set(ProductionObservationSet)
                 .after(crate::systems::save::SaveLoadApplySet),
         );
     Ok(())
@@ -615,7 +619,107 @@ fn architect_panel_ready(world: &mut World) -> bool {
         && computed.size().y > 0.0
 }
 
+fn supply_capture_gate(
+    supply: bool,
+    prepared: bool,
+    started: bool,
+    activity: bool,
+) -> Result<bool, &'static str> {
+    if !supply {
+        return Ok(true);
+    }
+    if !started && activity {
+        return Err("supply capture prerequisite lost or input/receipt before preparation");
+    }
+    if prepared {
+        return Ok(true);
+    }
+    if started {
+        return Err("supply capture prerequisite lost or input/receipt before preparation");
+    }
+    Ok(false)
+}
+
+#[test]
+fn supply_capture_arms_after_preparation_and_never_drops_an_existing_prefix() {
+    assert_eq!(supply_capture_gate(true, false, false, false), Ok(false));
+    assert_eq!(supply_capture_gate(true, true, false, false), Ok(true));
+    assert_eq!(supply_capture_gate(true, true, true, true), Ok(true));
+    assert!(supply_capture_gate(true, false, true, false).is_err());
+    assert!(supply_capture_gate(true, false, false, true).is_err());
+    assert!(supply_capture_gate(true, true, false, true).is_err());
+    assert_eq!(supply_capture_gate(false, false, false, true), Ok(true));
+}
+
+fn pending_supply_activity(world: &World) -> bool {
+    world
+        .get_resource::<Messages<MouseButtonInput>>()
+        .is_some_and(|r| !r.is_empty())
+        || world
+            .get_resource::<CancellationReceipts>()
+            .is_some_and(|r| !r.rows.is_empty() || r.failure.is_some())
+        || world
+            .get_resource::<Messages<KeyboardInput>>()
+            .is_some_and(|r| !r.is_empty())
+        || world
+            .get_resource::<PlacementReceipts>()
+            .is_some_and(|r| !r.rows.is_empty() || r.failed)
+        || world
+            .get_resource::<BlueprintDeliveryReceipts>()
+            .is_some_and(|r| !r.rows.is_empty() || r.failure.is_some())
+        || world
+            .get_resource::<hw_soul_ai::refine_observations::RefineCommitReceipts>()
+            .is_some_and(|r| !r.rows.is_empty() || !r.materials.is_empty() || r.failure.is_some())
+        || world
+            .get_resource::<hw_soul_ai::water_observations::TankPourReceipts>()
+            .is_some_and(|r| {
+                !r.rows.is_empty()
+                    || !r.river_fills.is_empty()
+                    || !r.tank_takes.is_empty()
+                    || !r.mixer_pours.is_empty()
+                    || r.failure.is_some()
+            })
+}
+
+#[test]
+fn prearm_supply_input_and_receipt_are_rejected_without_consumption() {
+    let mut world = World::new();
+    world.init_resource::<Messages<MouseButtonInput>>();
+    world.init_resource::<PlacementReceipts>();
+    assert!(!pending_supply_activity(&world));
+    world
+        .resource_mut::<Messages<MouseButtonInput>>()
+        .write(MouseButtonInput {
+            button: MouseButton::Left,
+            state: bevy::input::ButtonState::Pressed,
+            window: Entity::PLACEHOLDER,
+        });
+    assert!(pending_supply_activity(&world));
+    assert!(supply_capture_gate(true, false, false, pending_supply_activity(&world)).is_err());
+    assert!(supply_capture_gate(true, true, false, pending_supply_activity(&world)).is_err());
+    assert_eq!(world.resource::<Messages<MouseButtonInput>>().len(), 1);
+    world.resource_mut::<Messages<MouseButtonInput>>().clear();
+    world.resource_mut::<PlacementReceipts>().failed = true;
+    assert!(pending_supply_activity(&world));
+    assert!(supply_capture_gate(true, true, false, pending_supply_activity(&world)).is_err());
+    assert!(world.resource::<PlacementReceipts>().failed);
+}
+
 fn observe(world: &mut World) {
+    // Native UI prepares this read-only target in PostUpdate before publishing
+    // input readiness. Never append null startup samples, discard a prefix, or
+    // wait again after capture has begun. Early input/critical receipts fail closed.
+    let state = world.resource::<Observations>();
+    match supply_capture_gate(
+        super::ordinary_art::scope(world) == "ordinary-m2-tank-candidate-supply-v6",
+        crate::interface::ui::native_acceptance::supply_workload::prepared(world),
+        !state.samples.is_empty() || !state.events.is_empty() || state.failure.is_some(),
+        pending_supply_activity(world),
+    ) {
+        Ok(false) => return,
+        Err(failure) => world.resource_mut::<Observations>().failure = Some(failure.into()),
+        Ok(true) => {}
+    }
     let observation_start = std::time::Instant::now();
     let state = world.resource::<Observations>();
     let encoding_before = state.samples.encoding_time() + state.events.encoding_time();

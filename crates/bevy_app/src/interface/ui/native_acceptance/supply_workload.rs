@@ -19,6 +19,10 @@ use std::collections::HashSet;
 #[derive(Resource)]
 struct Target((i32, i32));
 
+pub(crate) fn prepared(world: &World) -> bool {
+    world.contains_resource::<Target>()
+}
+
 const COLUMNS: i32 = 9;
 const ROWS: i32 = 5;
 

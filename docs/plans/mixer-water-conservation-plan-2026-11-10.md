@@ -126,6 +126,12 @@ v17はDreamTrailGhostの削除量により約27秒で4096件へ到達し、そ�
 v18は約60秒で32768件へ達し、以後の警告4件は未観測。実Full境界の満水3杯を需要guardが正しく拒否した。
 次診断は巨大なcomponent ID配列を除き、full Entity/parent/64文字Name/Text/型分類だけに短縮し、
 最大262144件へ限定する。診断を製品受入へ流用せず、採取後に撤去する条件は維持する。
+v19は警告0だったが、UI fixture frame45より前のrawにTarget未準備のnullが入り、strict verifierが拒否した。
+旧prefixを削除せずinvalidで正式終了。validated Supplyだけ準備完了前は未armとし、先行入力/critical receiptや
+開始後のTarget消失は明示失敗にする。準備後は従来どおり全prefixをindex0から記録し、他caseは変更しない。
+診断は一件ごとのINFOをやめ、最大4096件buffer・262144件total・64MiBの専用JSONLへ一括出力する。
+完全Entity/parent/frame/epoch/型情報を保持し、書込み失敗はsticky、未書出し行は消費せず、AppExitでもflushする。
+この一時診断subjectは性能/製品受入の証拠として採用しない。
 
 ## 8. ロールバック
 
