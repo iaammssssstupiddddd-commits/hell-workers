@@ -176,6 +176,7 @@ payloadのEntity参照列挙は`AssignedTask::references_entity`へ集約する�
   移動phaseでは材料を消費せず、実Unloadingの既存容量/数量判定を維持する。
 - **Sand / StasisMud**: 原則猫車必須。例外: ソース隣接 3x3 の立ち位置からドロップ閾値内なら徒歩可
 - **水搬送 (BucketTransport)**: `AssignedTask::BucketTransport(BucketTransportData)` の単一バリアントで表現。`source`（`River` / `Tank`）と `destination`（`Tank` / `Mixer`）に応じて `bucket_transport/phases/` の共通フェーズハンドラで実行される。`WorkType` は River→Tank が `GatherWater`、Tank→Mixer が `HaulWaterToMixer` として返される。
+  - Tank→Mixerは全杯5個単位。取水は経路`Found`後だけ、投入は全量が入る場合だけ確定する。部分量・容量競合は水を消費せず既存retryable中断へ進み、予約/作業関係を解放してバケツを再利用可能にする。`Deferred`は取水せず現在phaseを維持し、中断で`TaskCompleted`は通知しない。
 - **運搬先ガード**: Blueprint / construction / provisional wall / stockpile は Dropping / Unloading 直前に受入可能量を再確認し、到着時点で需要が消えた cargo を搬入先へ反映しない。
 - **精製 (Refine)**: MudMixer で Sand+Water+Rock → StasisMud×5。`mud_mixer_auto_refine_system` が `has_materials_for_refining` を確認し、`collect_all_area_owners`（Familiar TaskArea + Yard 統合）で `issued_by` を決定して `DesignationRequest` を発行する。使い魔が Idle でも Yard 経由でタスクが発行される。
 - **解体 (Deconstruct)**: runtime payloadは`order`、canonical `target`、`GoingToTarget → Dismantling { progress } → AwaitingCommit`を持つ。`AwaitingCommit`へ入ると同identityで再発行せず、Soulはtargetを直接despawnしない。root finalizerがworld epochとexact identityを再検証し、全12種の`BuildingType`とOperational Soul Spaをkind別owner transactionでcommitする。structureはmap/cache/Room/wall visual、Soul Spa/Lampはworker/request/Power/visualまで同じ終端へ含める。対象facilityが`DeconstructionPending`の間は新しい補充・返却・精製・運搬割当を作らない。

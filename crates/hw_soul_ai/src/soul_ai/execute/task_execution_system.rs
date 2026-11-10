@@ -138,6 +138,8 @@ pub fn task_execution_system(params: TaskExecutionParams) {
     let mut handler_runs = 0u32;
 
     let mut chain_shadow = super::task_execution::chain::ChainAdmissionShadow::default();
+    let mut water_claims =
+        super::task_execution::bucket_transport::claims::WaterTransferClaims::default();
     for offset in 0..task_count {
         let entity = task_round_robin.entities[(task_start + offset) % task_count];
         let Ok((
@@ -243,6 +245,7 @@ pub fn task_execution_system(params: TaskExecutionParams) {
                 path_budget: &mut res.path_budget,
                 path_search_progress,
                 chain_shadow: &mut chain_shadow,
+                water_claims: &mut water_claims,
                 queries: &mut queries,
                 world_epoch: world_epoch.get(),
                 deconstruction_commit_request: None,

@@ -110,6 +110,7 @@ pub fn handle(
             let mut found_waters = Vec::new();
             for (res_entity, _, _, res_item, stored_in, _) in ctx.queries.resource_items.iter() {
                 if res_item.0 == ResourceType::Water
+                    && !ctx.water_claims.taken.contains(&res_entity)
                     && let Some(stored) = stored_in
                     && stored.0 == tank
                 {
@@ -120,7 +121,7 @@ pub fn handle(
                 }
             }
 
-            if !found_waters.is_empty() {
+            if found_waters.len() == BUCKET_CAPACITY as usize {
                 let mixer_entity = match data.destination {
                     BucketTransportDestination::Mixer(m) => m,
                     _ => {
@@ -141,11 +142,23 @@ pub fn handle(
                 };
                 let mixer_pos = mixer_transform.translation.truncate();
                 let route = update_bucket_destination_to_adjacent(ctx, mixer_pos);
-                if matches!(route, PathSearchResult::Deferred) {
-                    return TaskHandlerControl::Continue;
+                match route {
+                    PathSearchResult::Deferred => return TaskHandlerControl::Continue,
+                    PathSearchResult::Unreachable => {
+                        return abort::abort_and_drop_bucket_mixer(
+                            commands,
+                            ctx,
+                            data.bucket,
+                            tank,
+                            mixer_entity,
+                            soul_pos,
+                        );
+                    }
+                    PathSearchResult::Found(()) => {}
                 }
 
                 let take_amount = found_waters.len() as u32;
+                ctx.water_claims.buckets.insert(data.bucket);
                 #[cfg(feature = "profiling")]
                 let receipt = ctx.env.water_observations.then(|| {
                     crate::water_observations::TankTakeReceipt {
@@ -187,6 +200,7 @@ pub fn handle(
                     }
                 });
                 for water_entity in found_waters {
+                    ctx.water_claims.taken.insert(water_entity);
                     commands.entity(water_entity).despawn();
                 }
 
@@ -219,7 +233,8 @@ pub fn handle(
                     receipt.queue(commands);
                 }
             } else {
-                // 水が尽きた
+                // A Boolean BucketWater always means a full bucket. Do not turn
+                // 1..4 Water into a bucket that pickup later reinterprets as five.
                 let mixer = match data.destination {
                     BucketTransportDestination::Mixer(m) => m,
                     _ => {

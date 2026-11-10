@@ -164,6 +164,11 @@ Mixer宛猫車の`GoingToDestination`は手運びと同じtarget-or-destination�
 Mixerの2×2中心から遠い合法な斜め終点でも`Unloading`へ進める。遠方では移動を継続し、
 `Deferred`で近いstale destinationを到着と扱わない。`Unreachable`/target消滅のcleanupと実搬入時の容量は不変。
 
+水搬送のTank取水は全杯5個と経路`Found`を要求し、Mixer投入は全5個が格納できる場合だけ行う。
+実行systemのローカル`WaterTransferClaims`が同一呼出しのWater ID/バケツ変換/投入予定量を保護する。
+容量競合時は全量の水入りバケツを残して既存retryable中断へ戻し、精製待ちworkerを拘束しない。
+`Deferred`はphase/量/予約を保持して非消費で再判定する。claimは次のsystem呼出しへ持ち越さない。
+
 ### 3.3. 解体 (Deconstruct)
 
 - `DeconstructData`はdurable order、canonical target、`GoingToTarget → Dismantling → AwaitingCommit` phaseを持つ。

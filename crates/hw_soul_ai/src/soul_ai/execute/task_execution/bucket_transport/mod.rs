@@ -1,4 +1,5 @@
 pub mod abort;
+pub(crate) mod claims;
 pub mod guards;
 pub mod helpers;
 pub mod phases;
@@ -14,6 +15,14 @@ pub fn handle_bucket_transport_task(
     data: BucketTransportData,
     commands: &mut Commands,
 ) -> TaskHandlerControl {
+    if ctx.water_claims.buckets.contains(&data.bucket) {
+        // Another actor already owns this pass's conversion. Release only this
+        // duplicate assignment; do not drop or rewrite the real holder's bucket.
+        if ctx.inventory.0 == Some(data.bucket) {
+            ctx.inventory.0 = None;
+        }
+        return ctx.abort_retryable_after_custom_cleanup(commands, "duplicate water bucket holder");
+    }
     match data.phase {
         BucketTransportPhase::GoingToBucket => {
             phases::going_to_bucket::handle(ctx, &data, commands)

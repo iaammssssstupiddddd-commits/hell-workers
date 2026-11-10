@@ -308,9 +308,12 @@ assignment arbitrationが新しいrequest/workerを追加しない。既存in-fl
     遠方/Deferredは荷下ろしせず、到達不能/消滅は既存cancelへ進む。材料増分はUnloadingだけで確定する。
 
 ### 4.4 MudMixer 水搬入 (`DeliverWaterToMixer`)
-- 水不足時に request を発行。
+- 水不足をバケツ容量（5個）で切り捨てた全杯数だけ request のslotを発行する。容量5のMixerに1〜4個残っている間は追加給水を割り当てず、残水の精製を妨げない。
 - 割り当て時に、エリア内の有効タンクと利用可能バケツを遅延解決して搬送。
+- sourceのWaterは空バケツなら5個以上を要求し、既存の水入りバケツは再利用できる。destinationは実在するMixer/Water用Stockpileとし、現在量＋（cache予約杯数＋同cycle shadow杯数）×5＋今回5が容量以下の場合だけ割り当てる。
 - 実行フェーズは内部的に `BucketTransport` の共通表現へ収束し、Tank→Mixer / River→Tank の流れを共通ハンドラで解釈する。
+- Tankからの取水は5個と経路`Found`が揃ってから確定する。`Deferred`は保留、到達不能/不足は非消費の中断とし、部分量をBooleanの`BucketWater`へ変換しない。Mixer投入も5個全量を格納できる場合だけ確定する。
+- 移動中に容量が不足した場合は、水入りバケツを保持して既存のretryable中断/自動返却へ戻す。部分投入して空バケツへ変換したり、精製可能なworkerを容量待ちで拘束しない。同一Execute呼出しの取水ID・変換済みbucket・投入予定量は一時claimで保護し、deferred Commandsによる二重消費/容量超過を防ぐ。
 
 #### 自動精製のactivity集計
 

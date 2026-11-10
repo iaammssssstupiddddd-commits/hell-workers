@@ -122,8 +122,8 @@ pub(crate) fn compute_mixer_desired_requests(
             .saturating_add(water_inflight)
             .min(water_capacity);
         let missing_water = water_capacity.saturating_sub(projected_water);
-        if missing_water > 0 {
-            let desired_slots = missing_water.div_ceil(BUCKET_CAPACITY).max(1);
+        let desired_slots = missing_water / BUCKET_CAPACITY;
+        if desired_slots > 0 {
             desired_requests.insert(
                 (mixer_entity, ResourceType::Water),
                 (fam_entity, desired_slots, mixer_pos),

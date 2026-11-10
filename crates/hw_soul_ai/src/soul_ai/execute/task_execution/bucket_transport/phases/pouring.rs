@@ -8,7 +8,7 @@ use crate::soul_ai::execute::task_execution::types::{
     BucketTransportSource,
 };
 use bevy::prelude::*;
-use hw_core::constants::{BUCKET_CAPACITY, MUD_MIXER_CAPACITY, TILE_SIZE};
+use hw_core::constants::{BUCKET_CAPACITY, TILE_SIZE};
 use hw_logistics::{ResourceItem, ResourceType};
 
 use super::super::{abort, helpers};
@@ -169,17 +169,39 @@ pub fn handle(
 
             // Mixer の容量確認
             let (current_count, capacity) = match ctx.queries.storage.stockpiles.get(mixer_entity) {
-                Ok((_, _, stockpile, Some(stored_items)))
+                Ok((_, _, stockpile, stored_items))
                     if stockpile.resource_type == Some(ResourceType::Water) =>
                 {
-                    (stored_items.len(), stockpile.capacity)
+                    (
+                        stored_items.map_or(0, |items| items.len()),
+                        stockpile.capacity,
+                    )
                 }
-                _ => (0, MUD_MIXER_CAPACITY as usize),
+                _ => {
+                    return abort::abort_and_drop_bucket_mixer(
+                        commands,
+                        ctx,
+                        data.bucket,
+                        tank,
+                        mixer_entity,
+                        soul_pos,
+                    );
+                }
             };
 
-            if current_count < capacity {
-                let available = capacity.saturating_sub(current_count) as u32;
-                let added = amount.min(available);
+            let pending = ctx
+                .water_claims
+                .deposited
+                .get(&mixer_entity)
+                .copied()
+                .unwrap_or(0);
+            if amount == BUCKET_CAPACITY
+                && capacity.saturating_sub(current_count.saturating_add(pending)) >= amount as usize
+                && ctx.queries.storage.mixers.get(mixer_entity).is_ok()
+            {
+                let added = amount;
+                ctx.water_claims.buckets.insert(data.bucket);
+                *ctx.water_claims.deposited.entry(mixer_entity).or_default() += added as usize;
                 #[cfg(feature = "profiling")]
                 let mut receipt = ctx.env.water_observations.then(|| {
                     crate::water_observations::MixerPourReceipt {
@@ -278,7 +300,8 @@ pub fn handle(
                     return result;
                 }
             } else {
-                // Mixer が満杯
+                // A capacity race must not empty a partly delivered bucket or
+                // hold the only worker indefinitely while refinement needs it.
                 return abort::abort_and_drop_bucket_mixer(
                     commands,
                     ctx,

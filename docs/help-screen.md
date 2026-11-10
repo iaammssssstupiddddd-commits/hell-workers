@@ -143,6 +143,12 @@ exact testで一致を再検証します。生成後は
 
 ## Help impact gate
 
+2026-11-10のTank→Mixer数量保存修正は`Update required`。通常の補給要求から割当、取水、投入までを
+確認し、全杯5個・投入空き待ち・容量競合時の水入りバケツ保持を既存`architect-building`へ追記した。
+新しい入力/domain variantや到達性の変更はないため、`BuildingZonesDream` manifest、Tank/MudMixerの
+Published coverage、作業一覧への水搬送coverage、stable ID/owner/shortcutは維持する。
+実handlerの不足/到達不能/Deferred/競合/再取得を回帰検証し、exact snapshotを正規生成器で更新する。
+
 2026-10-04のTAK-14製品選択統合は `Update required`。Bridgeの配置入力から
 `resolve_bridge_crossing`を通じて実地形の連続した川・2列幅・5タイル以内・南北の乾いた通行可能な岸・
 占有/保管場所/障害物を照合し、同じ結果をpreviewと施工予定のcommitで使用する。

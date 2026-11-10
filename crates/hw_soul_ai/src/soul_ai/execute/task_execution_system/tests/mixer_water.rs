@@ -126,9 +126,9 @@ fn fixture(observe: bool, pouring: bool, return_stock: bool) -> Fixture {
 }
 
 #[test]
-fn actual_tank_take_preserves_quantity_and_observes_found_unreachable_but_not_deferred() {
+fn actual_tank_take_requires_full_bucket_and_found_route_without_partial_consumption() {
     for observe in [false, true] {
-        for count in [1, 5] {
+        for count in [0, 1, 4, 5] {
             for route in ["found", "unreachable", "deferred"] {
                 let Fixture {
                     mut app,
@@ -160,7 +160,7 @@ fn actual_tank_take_preserves_quantity_and_observes_found_unreachable_but_not_de
                     app.insert_resource(RuntimePathSearchBudget::new(0));
                 }
                 app.update();
-                let taken = route != "deferred";
+                let taken = count == 5 && route == "found";
                 assert_eq!(
                     app.world().get::<ResourceItem>(bucket).unwrap().0,
                     if taken {
@@ -180,6 +180,22 @@ fn actual_tank_take_preserves_quantity_and_observes_found_unreachable_but_not_de
                         matches!(app.world().get::<AssignedTask>(worker),Some(AssignedTask::BucketTransport(d))
                 if d.amount==count && matches!(d.phase,BucketTransportPhase::GoingToDestination))
                     );
+                } else if count == 5 && route == "deferred" {
+                    assert!(matches!(app.world().get::<AssignedTask>(worker),
+                        Some(AssignedTask::BucketTransport(d))
+                        if d.amount == 0 && matches!(d.phase, BucketTransportPhase::Filling { progress: 0. })));
+                    assert_eq!(
+                        app.world().get::<Inventory>(worker).unwrap().0,
+                        Some(bucket)
+                    );
+                    assert_eq!(app.world().get::<WorkingOn>(worker).unwrap().0, request);
+                    assert_eq!(app.world().get::<DeliveringTo>(bucket).unwrap().0, mixer);
+                    assert!(
+                        app.world()
+                            .resource::<TaskNotificationReceipts>()
+                            .reservation_ops
+                            .is_empty()
+                    );
                 }
                 if observe {
                     let rows = app.world().resource::<TankPourReceipts>();
@@ -197,12 +213,13 @@ fn actual_tank_take_preserves_quantity_and_observes_found_unreachable_but_not_de
 }
 
 #[test]
-fn actual_mixer_pour_records_partial_and_return_failure_without_repair_or_completion() {
+fn actual_mixer_pour_requires_full_capacity_and_preserves_water_on_retry() {
     for observe in [false, true] {
         for available in [0, 2, 5] {
             for returning in [false, true] {
                 let Fixture {
                     mut app,
+                    tank,
                     mixer,
                     bucket,
                     worker,
@@ -219,11 +236,11 @@ fn actual_mixer_pour_records_partial_and_return_failure_without_repair_or_comple
                 app.update();
                 assert_eq!(
                     app.world().get::<StoredItems>(mixer).unwrap().len(),
-                    before + available.min(5)
+                    before + if available == 5 { 5 } else { 0 }
                 );
                 assert_eq!(
                     app.world().get::<ResourceItem>(bucket).unwrap().0,
-                    if available == 0 {
+                    if available < 5 {
                         ResourceType::BucketWater
                     } else {
                         ResourceType::BucketEmpty
@@ -235,24 +252,370 @@ fn actual_mixer_pour_records_partial_and_return_failure_without_repair_or_comple
                         .completed_domain
                         .is_empty()
                 );
-                if available > 0 && returning {
+                if available == 5 && returning {
                     assert!(
                         matches!(app.world().get::<AssignedTask>(worker),Some(AssignedTask::BucketTransport(d))
             if matches!(d.phase,BucketTransportPhase::ReturningBucket))
                     );
                 }
+                if available < 5 {
+                    assert!(matches!(
+                        app.world().get::<AssignedTask>(worker),
+                        Some(AssignedTask::None)
+                    ));
+                    assert_eq!(app.world().get::<Inventory>(worker).unwrap().0, None);
+                    assert!(app.world().get::<WorkingOn>(worker).is_none());
+                    assert!(app.world().get::<ActiveTaskIdentity>(worker).is_none());
+                    assert!(app.world().get::<DeliveringTo>(bucket).is_none());
+                    assert_eq!(app.world().get::<BelongsTo>(bucket).unwrap().0, tank);
+                    assert_eq!(
+                        app.world()
+                            .resource::<TaskNotificationReceipts>()
+                            .reservation_ops,
+                        vec![ResourceReservationOp::ReleaseMixerDestination {
+                            target: mixer,
+                            resource_type: ResourceType::Water
+                        }]
+                    );
+                }
                 if observe {
                     let rows = app.world().resource::<TankPourReceipts>();
                     assert!(rows.failure.is_none(), "{:?}", rows.failure);
-                    assert_eq!(rows.mixer_pours.len(), usize::from(available > 0));
-                    if available > 0 {
-                        assert_eq!(rows.mixer_pours[0].outputs.len(), available.min(5));
+                    assert_eq!(rows.mixer_pours.len(), usize::from(available == 5));
+                    if available == 5 {
+                        assert_eq!(rows.mixer_pours[0].outputs.len(), 5);
                         assert_eq!(rows.mixer_pours[0].returning, returning);
                     }
                 }
             }
         }
     }
+}
+
+#[test]
+fn mixer_pour_rejects_missing_wrong_target_and_noncanonical_amount_without_consuming() {
+    for case in [
+        "missing",
+        "wrong-resource",
+        "not-mixer",
+        "partial-one",
+        "partial-four",
+    ] {
+        let mut fixture = fixture(true, true, true);
+        match case {
+            "missing" => {
+                fixture.app.world_mut().despawn(fixture.mixer);
+            }
+            "wrong-resource" => {
+                fixture
+                    .app
+                    .world_mut()
+                    .get_mut::<Stockpile>(fixture.mixer)
+                    .unwrap()
+                    .resource_type = Some(ResourceType::Sand);
+            }
+            "not-mixer" => {
+                fixture
+                    .app
+                    .world_mut()
+                    .entity_mut(fixture.mixer)
+                    .remove::<MudMixerStorage>();
+            }
+            _ => {
+                let mut task = fixture
+                    .app
+                    .world_mut()
+                    .get_mut::<AssignedTask>(fixture.worker)
+                    .unwrap();
+                let AssignedTask::BucketTransport(data) = &mut *task else {
+                    panic!("expected bucket transport");
+                };
+                data.amount = if case == "partial-one" { 1 } else { 4 };
+            }
+        }
+        fixture.app.update();
+        assert_eq!(
+            fixture
+                .app
+                .world()
+                .get::<ResourceItem>(fixture.bucket)
+                .unwrap()
+                .0,
+            ResourceType::BucketWater,
+            "{case}"
+        );
+        assert_eq!(
+            fixture
+                .app
+                .world()
+                .get::<Inventory>(fixture.worker)
+                .unwrap()
+                .0,
+            None,
+            "{case}"
+        );
+        assert!(
+            matches!(
+                fixture.app.world().get::<AssignedTask>(fixture.worker),
+                Some(AssignedTask::None)
+            ),
+            "{case}"
+        );
+        assert!(
+            fixture
+                .app
+                .world()
+                .get::<DeliveringTo>(fixture.bucket)
+                .is_none(),
+            "{case}"
+        );
+        assert_eq!(
+            fixture
+                .app
+                .world()
+                .get::<BelongsTo>(fixture.bucket)
+                .unwrap()
+                .0,
+            fixture.tank
+        );
+        let rows = fixture.app.world().resource::<TankPourReceipts>();
+        assert!(rows.failure.is_none());
+        assert!(rows.mixer_pours.is_empty());
+        assert!(
+            fixture
+                .app
+                .world()
+                .resource::<TaskNotificationReceipts>()
+                .completed_domain
+                .is_empty()
+        );
+    }
+}
+
+fn add_carrier(fixture: &mut Fixture, bucket: Entity, mixer: Entity, filling: bool) -> Entity {
+    let task = AssignedTask::BucketTransport(BucketTransportData {
+        bucket,
+        source: BucketTransportSource::Tank {
+            tank: fixture.tank,
+            needs_fill: true,
+        },
+        destination: BucketTransportDestination::Mixer(mixer),
+        amount: if filling { 0 } else { 5 },
+        phase: if filling {
+            BucketTransportPhase::Filling { progress: 0. }
+        } else {
+            BucketTransportPhase::Pouring { progress: 0. }
+        },
+    });
+    let pos = fixture
+        .app
+        .world()
+        .get::<Transform>(fixture.worker)
+        .unwrap()
+        .translation;
+    let worker = spawn_task_execution_soul(fixture.app.world_mut(), task);
+    let request = fixture
+        .app
+        .world_mut()
+        .spawn(TransportRequest {
+            kind: TransportRequestKind::DeliverWaterToMixer,
+            anchor: mixer,
+            resource_type: ResourceType::Water,
+            issued_by: worker,
+            priority: TransportPriority::Normal,
+            stockpile_group: vec![],
+        })
+        .id();
+    fixture.app.world_mut().entity_mut(worker).insert((
+        Transform::from_translation(pos),
+        Inventory(Some(bucket)),
+        WorkingOn(request),
+        ActiveTaskIdentity::new(request, request, WorkType::HaulWaterToMixer),
+    ));
+    worker
+}
+
+#[test]
+fn same_pass_water_claims_prevent_double_take_pour_and_duplicate_bucket_conversion() {
+    for case in ["same-tank", "same-mixer", "same-bucket-other-mixer"] {
+        let mut fixture = fixture(true, case != "same-tank", true);
+        let bucket = if case == "same-bucket-other-mixer" {
+            fixture.bucket
+        } else {
+            fixture
+                .app
+                .world_mut()
+                .spawn((
+                    ResourceItem(if case == "same-tank" {
+                        ResourceType::BucketEmpty
+                    } else {
+                        ResourceType::BucketWater
+                    }),
+                    BelongsTo(fixture.tank),
+                    Transform::default(),
+                ))
+                .id()
+        };
+        let other_mixer = if case == "same-bucket-other-mixer" {
+            fixture
+                .app
+                .world_mut()
+                .spawn((
+                    Transform::default(),
+                    MudMixerStorage::default(),
+                    Stockpile {
+                        capacity: 5,
+                        resource_type: Some(ResourceType::Water),
+                    },
+                ))
+                .id()
+        } else {
+            fixture.mixer
+        };
+        let second = add_carrier(&mut fixture, bucket, other_mixer, case == "same-tank");
+        if case == "same-tank" {
+            for _ in 0..5 {
+                fixture.app.world_mut().spawn((
+                    ResourceItem(ResourceType::Water),
+                    StoredIn(fixture.tank),
+                    Transform::default(),
+                    Visibility::Hidden,
+                ));
+            }
+        }
+        fixture.app.update();
+        let rows = fixture.app.world().resource::<TankPourReceipts>();
+        assert!(rows.failure.is_none(), "{:?}", rows.failure);
+        if case == "same-tank" {
+            assert_eq!(rows.tank_takes.len(), 1);
+            assert_eq!(rows.tank_takes[0].inputs.len(), 5);
+            assert_eq!(
+                [fixture.worker, second]
+                    .iter()
+                    .filter(|&&w| fixture.app.world().get::<Inventory>(w).unwrap().0.is_some())
+                    .count(),
+                1
+            );
+        } else {
+            assert_eq!(rows.mixer_pours.len(), 1);
+            assert_eq!(rows.mixer_pours[0].outputs.len(), 5);
+            let mut query = fixture
+                .app
+                .world_mut()
+                .query::<(&ResourceItem, &StoredIn)>();
+            assert_eq!(
+                query
+                    .iter(fixture.app.world())
+                    .filter(|(i, s)| i.0 == ResourceType::Water
+                        && [fixture.mixer, other_mixer].contains(&s.0))
+                    .count(),
+                5
+            );
+        }
+        assert!(
+            fixture
+                .app
+                .world()
+                .resource::<TaskNotificationReceipts>()
+                .completed_domain
+                .is_empty()
+        );
+    }
+}
+
+#[test]
+fn rejected_full_bucket_can_be_picked_up_again_and_poured_on_the_next_pass() {
+    let mut fixture = fixture(true, true, true);
+    let blockers: Vec<_> = (0..3)
+        .map(|_| {
+            fixture
+                .app
+                .world_mut()
+                .spawn((
+                    ResourceItem(ResourceType::Water),
+                    StoredIn(fixture.mixer),
+                    Transform::default(),
+                ))
+                .id()
+        })
+        .collect();
+    fixture.app.update();
+    assert_eq!(
+        fixture
+            .app
+            .world()
+            .get::<ResourceItem>(fixture.bucket)
+            .unwrap()
+            .0,
+        ResourceType::BucketWater
+    );
+    assert!(matches!(
+        fixture.app.world().get::<AssignedTask>(fixture.worker),
+        Some(AssignedTask::None)
+    ));
+    for item in blockers {
+        fixture.app.world_mut().despawn(item);
+    }
+    fixture.app.world_mut().entity_mut(fixture.worker).insert((
+        AssignedTask::BucketTransport(BucketTransportData {
+            bucket: fixture.bucket,
+            source: BucketTransportSource::Tank {
+                tank: fixture.tank,
+                needs_fill: false,
+            },
+            destination: BucketTransportDestination::Mixer(fixture.mixer),
+            amount: 0,
+            phase: BucketTransportPhase::GoingToBucket,
+        }),
+        WorkingOn(fixture.request),
+        ActiveTaskIdentity::new(fixture.request, fixture.request, WorkType::HaulWaterToMixer),
+    ));
+    fixture.app.update();
+    assert!(
+        matches!(fixture.app.world().get::<AssignedTask>(fixture.worker),Some(AssignedTask::BucketTransport(d))
+        if d.amount==5 && matches!(d.phase,BucketTransportPhase::GoingToDestination))
+    );
+    let pos = fixture
+        .app
+        .world()
+        .get::<Transform>(fixture.mixer)
+        .unwrap()
+        .translation;
+    fixture
+        .app
+        .world_mut()
+        .entity_mut(fixture.worker)
+        .insert(Transform::from_translation(pos));
+    fixture.app.update();
+    fixture.app.update();
+    assert_eq!(
+        fixture
+            .app
+            .world()
+            .resource::<TankPourReceipts>()
+            .mixer_pours
+            .len(),
+        1
+    );
+    assert_eq!(
+        fixture
+            .app
+            .world()
+            .resource::<TankPourReceipts>()
+            .mixer_pours[0]
+            .outputs
+            .len(),
+        5
+    );
+    assert_eq!(
+        fixture
+            .app
+            .world()
+            .get::<ResourceItem>(fixture.bucket)
+            .unwrap()
+            .0,
+        ResourceType::BucketEmpty
+    );
 }
 
 #[test]

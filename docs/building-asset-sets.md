@@ -1159,3 +1159,9 @@ fallbackへ暗黙縮退せず起動前に拒否する。
 coverage snapshotは更新しない。候補投入は引き続き明示profiling sessionだけで、codec／export／promotion／installは
 開発用offline入口である。binding対象kindやplayer-visible契約を広げる場合は改めてHelp影響を判定する。
 将来のmanifest追加をHelpレビュー対象から漏らさないよう、`.buildingset`をruntime data分類とtestへ追加した。
+
+2026-11-10に利用者が別途許可したTank→Mixer数量保存修正はgameplayの補給成立条件を変更する。
+Boolean水入りバケツを全杯5個に統一し、取水/投入を全量だけに制限する（[物流契約](logistics.md#44-mudmixer-水搬入-deliverwatertomixer)）。
+これは上記asset-only変更のNo impact判断とは別の`Update required`で、既存Helpとsnapshotへ反映する。
+旧sourceのv10で観測した5個取水→2個投入はinvalidの診断証拠として保持し、修正後sourceの成功へ読み替えない。
+fresh sourceの通常入力native結果と独立reviewが揃うまでは、この修正も実機受入済みとは扱わない。
