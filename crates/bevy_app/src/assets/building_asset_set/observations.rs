@@ -57,9 +57,6 @@ struct Observations {
     published_encoding_time: std::time::Duration,
 }
 
-#[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub(crate) struct ProductionObservationSet;
-
 // Borrow the growing history instead of cloning every Value into a second
 // envelope on each publication. The wire schema, ordering and caps are unchanged.
 #[cfg(test)]
@@ -147,7 +144,6 @@ pub(super) fn configure(app: &mut App) -> Result<(), String> {
             Last,
             (finalize_cancellation_receipts, observe)
                 .chain()
-                .in_set(ProductionObservationSet)
                 .after(crate::systems::save::SaveLoadApplySet),
         );
     Ok(())

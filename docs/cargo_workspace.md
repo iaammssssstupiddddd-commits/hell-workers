@@ -103,6 +103,8 @@ workspace 共通の `bevy` 依存は `default-features = false` で必要 featur
 - `UiAssets` トレイトを通じてアセット（フォント・アイコン）を抽象化
 - ゲームエンティティ（DamnedSoul, Familiar 等）への直接依存を持たない
 
+`log`はdev-dependencyだけで使い、一覧同期のdeferred削除回帰が実Bevy WARN/ERRORを出さないことを検査する。runtimeの依存方向・ログ判定は変更しない。
+
 代表例（主要モジュール）:
 
 - `setup/` — `UiAssets` trait, `setup_ui` fn（UI ツリー構築。bottom_bar / submenus / panels / entity_list / time_control / dialogs / help_panel）。Modal/Help/Pause は full-viewport `UiInputCapture` root、構造 root/slot は picking-transparent にする

@@ -133,6 +133,15 @@ v19は警告0だったが、UI fixture frame45より前のrawにTarget未準備�
 完全Entity/parent/frame/epoch/型情報を保持し、書込み失敗はsticky、未書出し行は消費せず、AppExitでもflushする。
 この一時診断subjectは性能/製品受入の証拠として採用しない。
 
+v20は先頭sampleからTarget準備済みを確認したが、stale Entity警告2件でJ1 invalid。
+full Entityとparentを診断rawで照合し、Brenda/Christopherの一覧Soul行であることを確定した。
+`remove_stale_rows`の削除後、空リスト処理が未反映の`Children`から同じ行を再削除していた。
+全section削除にも同じ重複があり、実同期helperの回帰で旧実装の警告1件/2件を再現した。
+空orderの重複cleanupだけを撤去し、折りたたみresetと他ownerは維持する。UI104テスト成功、
+空hint・fold/unfold・検索0件からの復帰・他sectionの保持を含め実警告0を確認した。
+一時Despawn診断と専用set/re-exportは全撤去。通常の入力・表示意味・文言・成立条件は不変のため
+本cleanupと診断撤去はHelp No impact。警告除外は行わず、fresh実機の成功欄は未達のままとする。
+
 ## 8. ロールバック
 
 本修正単位。未確認の並行変更、凍結subject、旧invalidを上書きしない。

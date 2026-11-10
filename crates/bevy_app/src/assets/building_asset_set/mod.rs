@@ -7,8 +7,6 @@ mod loader;
 #[cfg(feature = "profiling")]
 mod observations;
 #[cfg(feature = "profiling")]
-pub(crate) use observations::ProductionObservationSet;
-#[cfg(feature = "profiling")]
 mod observations_history;
 #[cfg(feature = "profiling")]
 mod observations_m2;

@@ -66,6 +66,7 @@ P04のECS adapterは`bevy_app::systems::lighting`に置き、world/queryから�
 生成入力の検証は所有crateの`#[cfg(test)]` moduleに置く。`hw_world`と`hw_infra`は
 proptestをdev-dependencyとして利用し、pure入口を検査する。生成器のためにrootやECSへ
 逆依存せず、runtimeにproptest型・乱数源・failure保存処理を持ち込まない。
+`hw_ui`の`log` dev-dependencyも実Bevy command警告の回帰検出だけに限定し、runtime loggerやdomain依存を追加しない。
 
 複数のシステム間でデータをやり取りするための型（struct や enum）や、関数の戻り値（Result / Outcome 型）は、**「その処理の主たる責務を持つ Leaf クレート (`hw_*`)」** 側で定義し、Root 側がそれを `use` して利用する。
 

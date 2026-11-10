@@ -4,7 +4,7 @@ use crate::{components::SoulListItem, setup::UiAssets, theme::UiTheme};
 use bevy::{ecs::system::SystemParam, prelude::*};
 
 #[cfg(test)]
-mod tests;
+pub(super) mod tests;
 
 fn lookup_soul_view_model(vm: &EntityListViewModel, entity: Entity) -> Option<&SoulRowViewModel> {
     for familiar in &vm.current.familiars {

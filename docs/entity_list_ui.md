@@ -98,6 +98,7 @@ Soul名は単語が列幅を超える場合に文字単位で折り返す。長�
   - 使い魔セクションを差分同期（追加/削除/折りたたみ/ヘッダーテキスト）
   - 未所属ソウル行をキー管理で差分更新（`EntityListNodeIndex.unassigned_rows`）
   - 表示順は `replace_children` でビュー順へ再整列
+  - stale行・empty hint・削除section rootはそれぞれ一度だけ削除を予約し、空の表示順では未反映の`Children`から再削除しない。折りたたみの明示resetは別経路として維持する
   - 行の生成時に値も設定するため、構造変化フレームでは値行 system は走らせない
 - `sync_entity_list_value_rows_system`（run_if: **`needs_value_sync_only()` のみ**）
   - 生成時の`SoulRowNodes`がgender/name/fatigue/stress/dream/task icon/task labelの7 Entityを保持し、`hw_ui::list::values`がその参照で更新する。childの並び順には依存しない。生成と更新は`list/style.rs`を共有する

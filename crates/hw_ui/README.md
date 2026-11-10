@@ -161,3 +161,4 @@ ViewModelと描画cacheが一致して早期returnしても旧worldの表示を�
 ## 依存クレート
 
 - `hw_core`, `hw_jobs`, `hw_logistics`, `bevy`
+- test限定の`log`で一覧同期の実Bevy WARN/ERRORを検出する。runtime依存や警告の抑制には使わない。
