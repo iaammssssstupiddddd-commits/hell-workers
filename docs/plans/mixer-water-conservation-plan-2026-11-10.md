@@ -115,6 +115,12 @@ exact5bucket全返却・非所持・進行中採水なし、Mixer配置まで同
 n3以上など需要不足ならMixer配置press前に明示拒否し、後から床追加/時間延長/成功精製の選び直しはしない。
 配置validatorの45採用/除外0、実90Bone搬入・45補強・搬出・Tank由来精製は新subjectで確認する。
 
+`91c75e26` のv16は実45tile完成、TankTake5→MixerPour5→Tank由来の精製まで到達したが、
+03:30:07.772522Zのstale Entity2602v114警告1件でJ1 invalid。266752000bytesを正式診断保持しseal/finalizeした。
+旧speech expiry原因と同一だと推測せず、明示native pluginだけに上限4096件の一時Despawn読取記録を加え、
+full Entity・parent・Name/Text・型分類を実ログで照合する。通常製品の状態/寿命/入力/警告判定は変更しない。
+この診断コードは原因確定後に撤去し、診断subjectを製品の最終受入に流用しない。
+
 ## 8. ロールバック
 
 本修正単位。未確認の並行変更、凍結subject、旧invalidを上書きしない。

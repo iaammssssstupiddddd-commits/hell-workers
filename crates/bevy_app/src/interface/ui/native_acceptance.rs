@@ -23,6 +23,7 @@ use crate::systems::save::{SaveLoadOutcome, SaveStorageRoot};
 use crate::systems::settings::SettingsStorageRoot;
 
 mod bridge_planning;
+mod lifecycle_diagnostic;
 mod m5_planning;
 mod progress_bars;
 mod refactor_rows;
@@ -103,6 +104,7 @@ impl NativeUiAcceptancePlugin {
 
 impl Plugin for NativeUiAcceptancePlugin {
     fn build(&self, app: &mut App) {
+        app.add_observer(lifecycle_diagnostic::trace_despawn);
         if terrain_materials::enabled() {
             terrain_materials::register(app);
         }
