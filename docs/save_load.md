@@ -371,6 +371,29 @@ typed bijection、epoch境界を挟む全paused raw、復元後に再生成さ�
 実行中taskの継続や修復、save schema変更、アート/数値/性能/正式release承認はこの診断の権限外である。
 実装・fixture検証の成功だけでactual-window受入済みとは扱わない。
 
+2026-11-11の`tak14-tank-candidate-persistence-20261111-v4`で、通常施工→満水→Manual1保存/読込の
+6 owned X11画像と独立rawレビュー、登録済みverifier・sealがpassした。対象HEADは
+`166cd0569770aa48dc9f2d566d1d510b1b31d7f5`、sourceは
+`71650da734f5b600a7bb49b66f2f5ed35f119d8f2ed0ac5ff1deb71615d28554`、harnessは
+`01a19e96f6ec761e84b4cc149d8f908b7ea890a81039ec3d913c414ce5647294`。
+Intel Arc MTL/Vulkan、1920×1080、UI scale1、WARN/ERROR0を確認した。
+
+- 実保存520,844 bytesのSHA-256
+  `d75134eb19e2080cb668ecf5df4dec80121b149f899ae88aa33a6fede37e7f29`がSave/Load双方と一致。
+  実F5/F9とManual1選択/確認は同nonce/PID/windowの45入力、Save session1/Load session2へ束縛された。
+- Save sample553/epoch0からLoad sample565/epoch1へ遷移。Tank `2154v22→833v1`、実施工storage2個、
+  Water50個、BucketEmpty4個＋BucketWater1個の58件が完全・一対一remapされ、型・pose・所有・在庫の
+  正逆関係を保持した。返却された満水bucket1個をEmptyへ正規化せず、所持中bucketは0個。
+- 572 raw sample/1,256 eventの施工・10回のTankPourからのFull prefixを検証し、F5前境界から
+  最終までの27 sampleはpaused、速度4、virtual `132.220790131`固定。epochはLoad commit境界だけで変化。
+  同候補identity `6cf7e62bc7b8a9f75c31ab8eb8a036956e16e249f03b70a6e15e9757d4a5b12e`の
+  root `2051v20→2069v5`が再生成され、Full水面Y22・visible・whiteを保持した。
+
+このpassは選択Tank在庫と候補表示の停止中復元だけであり、再開後の物流/task継続、全world同値、
+Memory/性能、アート承認、正式promotion/install/releaseを含まない。初回jobは中断、v2は旧desktop busの
+入力許可不一致、v3はOS確認の期限切れであり、いずれも入力未実施/未受入の履歴を保持する。
+最終結果はここへ集約し、用途を終えた生成jobはstorage正本に従って整理する。候補原本と共有Cargo cacheは保持する。
+
 2026-11-07の`tak14-durable-receipts-feedback-20261107-v1`では、通常UIのManual slot 1で
 save sample70/epoch0からload sample76/epoch1へ進み、両receiptと実containerの
 SHA-256 `664f920bbd449367244366423899e57ff8c55ade077e4d153ef969d07ae37cda`、
