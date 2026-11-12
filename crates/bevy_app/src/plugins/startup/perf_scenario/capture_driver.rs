@@ -10,7 +10,11 @@ pub(crate) fn start_perf_capture_system(
     mut params: PerfCaptureStartParams,
     mut capture: ResMut<PerfCapture>,
     mut exit: MessageWriter<AppExit>,
+    group_art: Option<Res<crate::assets::building_asset_set::group_art::GroupArtSession>>,
 ) {
+    if group_art.is_some() {
+        return;
+    }
     if !params.config.enabled() || !matches!(capture.phase, PerfCapturePhase::WaitingForScenario) {
         return;
     }
@@ -194,7 +198,11 @@ pub(crate) fn drive_perf_capture_system(
     mut params: PerfCaptureParams,
     mut capture: ResMut<PerfCapture>,
     mut exit: MessageWriter<AppExit>,
+    group_art: Option<Res<crate::assets::building_asset_set::group_art::GroupArtSession>>,
 ) {
+    if group_art.is_some() {
+        return;
+    }
     if !params.config.enabled() || matches!(capture.phase, PerfCapturePhase::Finished) {
         return;
     }

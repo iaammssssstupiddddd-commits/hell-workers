@@ -6,7 +6,11 @@ pub mod acceptance;
 #[cfg(feature = "profiling")]
 mod candidate_comparison;
 #[cfg(feature = "profiling")]
+pub(crate) mod group_art;
+#[cfg(feature = "profiling")]
 mod group_comparison;
+#[cfg(feature = "profiling")]
+pub(crate) use group_comparison::Group as BuildingArtGroup;
 mod loader;
 #[cfg(feature = "profiling")]
 mod observations;

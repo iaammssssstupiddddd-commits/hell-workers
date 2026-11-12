@@ -159,6 +159,7 @@ fn separate(enabled: bool, static_workload: bool, present: impl Fn(&str) -> bool
     enabled
         && static_workload
         && ![
+            "HW_BUILDING_GROUP_ART_SESSION",
             "HW_BUILDING_M6_CANDIDATES",
             "HW_BUILDING_ASSET_RELEASES",
             "HW_BUILDING_ART_SESSION",
@@ -195,7 +196,7 @@ pub(super) fn configure(app: &mut App) -> Result<(), String> {
     Ok(())
 }
 
-fn request(
+pub(super) fn request(
     comparison: Res<M6Comparison>,
     server: Res<AssetServer>,
     mut pool: ResMut<BuildingAssetPool>,
@@ -215,7 +216,7 @@ fn request(
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
 
     // Synthetic identities only; no approval or release record is created.
@@ -242,7 +243,7 @@ mod tests {
         }
     }
 
-    fn fixture(group: Group) -> Declaration {
+    pub(crate) fn fixture(group: Group) -> Declaration {
         Declaration {
             group,
             fixed: group
@@ -394,6 +395,7 @@ mod tests {
             "HW_BUILDING_M6_CANDIDATES",
             "HW_BUILDING_ASSET_RELEASES",
             "HW_BUILDING_ART_SESSION",
+            "HW_BUILDING_GROUP_ART_SESSION",
             "HW_BUILDING_ORDINARY_ART_SESSION",
             "HW_BUILDING_PRODUCTION_OBSERVATIONS",
             "HW_M2_ACCEPTANCE_PROBE",

@@ -1363,3 +1363,57 @@ fn indoor_light_selection_is_exact_and_not_implicit() {
     );
     assert_eq!(super::PerfBehaviorCase::parse("unknown"), None);
 }
+
+#[cfg(feature = "profiling")]
+#[test]
+fn group_gallery_window_requires_exact_typed_session_and_small_static_scope() {
+    let mut session = crate::assets::building_asset_set::group_art::test_session();
+    for quality in ["high", "medium", "low"] {
+        for dpi in ["1", "1.5", "2"] {
+            session.quality = quality.into();
+            session.scale_factor = dpi.parse().unwrap();
+            let text = serde_json::to_string(&session).unwrap();
+            let args = [
+                "--perf-scenario",
+                "--perf-workload",
+                "building-art-static",
+                "--perf-size",
+                "small",
+                "--spawn-souls",
+                "15",
+                "--spawn-familiars",
+                "0",
+                "--perf-seed",
+                "20260920",
+                "--perf-output-dir",
+                "/unused/data",
+                "--perf-window-width",
+                "1920",
+                "--perf-window-height",
+                "1680",
+                "--perf-window-scale-factor",
+                dpi,
+                "--perf-rtt-quality",
+                quality,
+            ];
+            assert!(parse_input(&args, &[("HW_BUILDING_GROUP_ART_SESSION", &text)]).is_ok());
+            assert!(parse_input(&args, &[]).is_err());
+            let mut foreign = args;
+            foreign[2] = "gather";
+            assert!(parse_input(&foreign, &[("HW_BUILDING_GROUP_ART_SESSION", &text)]).is_err());
+            foreign = args;
+            foreign[4] = "medium";
+            assert!(parse_input(&foreign, &[("HW_BUILDING_GROUP_ART_SESSION", &text)]).is_err());
+            assert!(
+                parse_input(
+                    &args,
+                    &[
+                        ("HW_BUILDING_GROUP_ART_SESSION", &text),
+                        ("HW_BUILDING_ART_SESSION", "{}")
+                    ]
+                )
+                .is_err()
+            );
+        }
+    }
+}

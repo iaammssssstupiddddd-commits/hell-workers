@@ -17,12 +17,13 @@ use hw_jobs::{
 };
 use hw_logistics::{ResourceItem, ResourceType};
 use hw_ui::selection::{BuildingPlacementContext, validate_building_placement};
-use hw_world::{WorldMap, layout::RIVER_Y_MIN};
+use hw_world::{WorldMap, Yard, layout::RIVER_Y_MIN};
 
 #[derive(SystemParam)]
 pub(crate) struct SetupParams<'w, 's> {
     config: Res<'w, PerfScenarioConfig>,
     art_session: Option<Res<'w, BuildingArtSession>>,
+    group_art: Option<Res<'w, crate::assets::building_asset_set::group_art::GroupArtSession>>,
     state: ResMut<'w, BuildingArtStaticState>,
     commands: Commands<'w, 's>,
     world_map: WorldMapWrite<'w>,
@@ -52,7 +53,10 @@ pub(crate) fn setup_building_art_static_system(mut p: SetupParams) {
         return;
     }
     actors.sort_by_key(|entity| entity.to_bits());
-    let mut specs = layout::layout(p.config.size());
+    let mut specs = p.group_art.as_ref().map_or_else(
+        || layout::layout(p.config.size()),
+        |session| layout::group_gallery_layout(session.group()),
+    );
     if let Some(page) = p
         .art_session
         .as_ref()
@@ -76,7 +80,15 @@ pub(crate) fn setup_building_art_static_system(mut p: SetupParams) {
                     && spec.ordinal >= 2)
         });
     }
-    if let Err(reason) = validate_layout(&specs, p.world_map.as_ref(), p.config.size()) {
+    let gallery_yards = p
+        .group_art
+        .as_ref()
+        .map(|_| layout::group_gallery_yards(&specs));
+    let validation = gallery_yards.as_ref().map_or_else(
+        || validate_layout(&specs, p.world_map.as_ref(), p.config.size()),
+        |yards| validate_layout_with_yards(&specs, p.world_map.as_ref(), yards),
+    );
+    if let Err(reason) = validation {
         fail(&mut p.state, &mut p.exit, reason);
         return;
     }
@@ -99,11 +111,14 @@ pub(crate) fn setup_building_art_static_system(mut p: SetupParams) {
     initialize_camera(
         &mut camera,
         &mut controller,
-        layout::camera_frame(p.art_session.as_deref(), p.config.size()),
+        p.group_art.as_ref().map_or_else(
+            || layout::camera_frame(p.art_session.as_deref(), p.config.size()),
+            |session| layout::group_gallery_camera(session, &specs),
+        ),
     );
     p.commands
         .spawn((layout::site(), Name::new("BuildingArtStatic Site")));
-    for yard in layout::yards(p.config.size()) {
+    for yard in gallery_yards.unwrap_or_else(|| layout::yards(p.config.size())) {
         p.commands
             .spawn((yard, Name::new("BuildingArtStatic Yard")));
     }
@@ -259,8 +274,16 @@ fn validate_layout(
     map: &WorldMap,
     size: super::super::PerfScenarioSize,
 ) -> Result<(), String> {
-    let site = layout::site();
     let yards = layout::yards(size);
+    validate_layout_with_yards(specs, map, &yards)
+}
+
+fn validate_layout_with_yards(
+    specs: &[Specimen],
+    map: &WorldMap,
+    yards: &[Yard],
+) -> Result<(), String> {
+    let site = layout::site();
     let supports = specs
         .iter()
         .filter(|s| s.kind == BuildingType::Door)
@@ -673,6 +696,51 @@ mod tests {
         assert_eq!(
             app.world().get::<Transform>(camera).unwrap().scale,
             Vec3::splat(4.0)
+        );
+    }
+
+    #[test]
+    fn gallery_groups_preserve_legal_terrain_and_isolated_lamp_power_yards() {
+        let generated = hw_world::generate_world_layout(20260920);
+        let mut map = WorldMap::default();
+        for (index, &terrain) in generated.terrain_tiles.iter().enumerate() {
+            map.set_terrain_at_idx(index, terrain);
+        }
+        for group in [
+            crate::assets::building_asset_set::BuildingArtGroup::M2,
+            crate::assets::building_asset_set::BuildingArtGroup::M3,
+            crate::assets::building_asset_set::BuildingArtGroup::M5,
+        ] {
+            let specs = layout::group_gallery_layout(group);
+            let yards = layout::group_gallery_yards(&specs);
+            assert_eq!(validate_layout_with_yards(&specs, &map, &yards), Ok(()));
+            for lamp in specs.iter().filter(|s| s.kind == BuildingType::OutdoorLamp) {
+                let spa = specs
+                    .iter()
+                    .find(|s| s.kind == BuildingType::SoulSpa && s.ordinal == lamp.ordinal)
+                    .unwrap();
+                let contains = |yard: &Yard, position: Vec2| {
+                    position.x >= yard.min.x
+                        && position.x <= yard.max.x
+                        && position.y >= yard.min.y
+                        && position.y <= yard.max.y
+                };
+                assert_eq!(
+                    yards
+                        .iter()
+                        .any(|yard| contains(yard, lamp.center) && contains(yard, spa.center)),
+                    lamp.ordinal >= 2
+                );
+            }
+        }
+        // No gallery operation may change the static performance specimen contract.
+        assert_eq!(
+            layout::layout(PerfScenarioSize::Small)
+                .iter()
+                .find(|s| s.kind == BuildingType::Door)
+                .unwrap()
+                .anchor,
+            (8, 43)
         );
     }
 

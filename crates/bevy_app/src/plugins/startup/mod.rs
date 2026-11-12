@@ -195,6 +195,8 @@ impl Plugin for StartupPlugin {
                     .run_if(perf_scenario::building_art_static::should_settle_building_art_static))
                 .add_systems(PostUpdate, perf_scenario::building_art_static::inspect_building_art_static_system
                     .after(bevy::camera::visibility::VisibilitySystems::CheckVisibility))
+                .add_systems(PostUpdate, perf_scenario::building_art_static::group_gallery::observe
+                    .after(perf_scenario::building_art_static::inspect_building_art_static_system))
                 .add_systems(PostUpdate, perf_scenario::building_art_static::context::observe
                     .after(bevy::camera::visibility::VisibilitySystems::CheckVisibility))
                 .add_systems(

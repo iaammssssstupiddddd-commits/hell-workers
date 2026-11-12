@@ -504,6 +504,42 @@ def plan(args):
     return value
 
 
+def validate_authored_parts(value, observed, mode="candidate"):
+    """Bind actual parts and foreground to frozen authored production manifests."""
+    loaded = (observed["m6"]["loaded_identities"] if "loaded_identities" in observed["m6"]
+              else observed["m6"]["identities"] if mode == "candidate" else [])
+    loaded_kinds = {identity["kind"] for identity in loaded}
+    if loaded_kinds:
+        manifests = {
+            manifest["identity"]["kind"]: manifest
+            for manifest in value["assets"]["manifests"]
+        }
+        for row in observed["records"]:
+            if row["kind"] not in loaded_kinds:
+                continue
+            expected = projected_parts(manifests[row["kind"]], row)
+            if row["kind"] in art.foreground.KINDS:
+                asset_manifest = manifests[row["kind"]]
+                preview = asset_manifest["world_preview"]
+                role = "world_on" if row["kind"] == "OutdoorLamp" and row["ordinal"] % 4 >= 2 else preview["image_role"]
+                art.foreground.validate_record(row, asset_manifest["identity"], preview,
+                    {record["role"]: record for record in asset_manifest["artifacts"]}, role)
+            for actual, part in zip(row["parts"], expected, strict=True):
+                pipeline.require(
+                    all(
+                        actual[key] == part[key]
+                        for key in (
+                            "mesh_role",
+                            "translation_wu",
+                            "rotation_xyzw",
+                            "scale",
+                        )
+                    ),
+                    "M6 authored production part differs from frozen release",
+                )
+    return loaded_kinds
+
+
 def verify_case(value, item):
     instrument, size, repeat, mode = item
     session = Path(value["job_root"]) / label(item)
@@ -600,37 +636,7 @@ def verify_case(value, item):
              [binding["identity"] for binding in value["assets"]["bindings"]]),
         "paired authority/mode differs",
     )
-    loaded = (observed["m6"]["loaded_identities"] if grouped(value)
-              else observed["m6"]["identities"] if mode == "candidate" else [])
-    loaded_kinds = {identity["kind"] for identity in loaded}
-    if loaded_kinds:
-        manifests = {
-            manifest["identity"]["kind"]: manifest
-            for manifest in value["assets"]["manifests"]
-        }
-        for row in observed["records"]:
-            if row["kind"] not in loaded_kinds:
-                continue
-            expected = projected_parts(manifests[row["kind"]], row)
-            if row["kind"] in art.foreground.KINDS:
-                asset_manifest = manifests[row["kind"]]
-                preview = asset_manifest["world_preview"]
-                role = "world_on" if row["kind"] == "OutdoorLamp" and row["ordinal"] % 4 >= 2 else preview["image_role"]
-                art.foreground.validate_record(row, asset_manifest["identity"], preview,
-                    {record["role"]: record for record in asset_manifest["artifacts"]}, role)
-            for actual, part in zip(row["parts"], expected, strict=True):
-                pipeline.require(
-                    all(
-                        actual[key] == part[key]
-                        for key in (
-                            "mesh_role",
-                            "translation_wu",
-                            "rotation_xyzw",
-                            "scale",
-                        )
-                    ),
-                    "M6 authored production part differs from frozen release",
-                )
+    loaded_kinds = validate_authored_parts(value, observed, mode)
     samples, errors = read_frames(
         run / "data/frames.csv", int(validation.summary["samples"])
     )

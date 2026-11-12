@@ -1238,6 +1238,30 @@ impl PerfScenarioConfig {
         let art_session = input
             .env_text("HW_BUILDING_ART_SESSION")
             .and_then(|raw| serde_json::from_str::<serde_json::Value>(&raw).ok());
+        let group_art = input.env_text("HW_BUILDING_GROUP_ART_SESSION");
+        let static_window_contract = if group_art.is_some() {
+            group_art_window_matches(
+                group_art.as_deref(),
+                window_width,
+                window_height,
+                window_scale_factor,
+                rtt_quality,
+            )
+        } else {
+            window_width == Some(1280)
+                && window_height == Some(720)
+                && building_art_window_matches(art_session.as_ref(), window_scale_factor)
+                && building_art_quality_matches(art_session.is_some(), rtt_quality)
+        };
+        if group_art.is_some()
+            && (workload != PerfWorkload::BuildingArtStatic
+                || size != PerfScenarioSize::Small
+                || art_session.is_some())
+        {
+            return Err(PerfScenarioConfigError(
+                "group gallery requires its separate small static session".into(),
+            ));
+        }
         let rest_art_context = art_session
             .as_ref()
             .is_some_and(|session| session["variant"] == "rest-area-art-context");
@@ -1312,13 +1336,7 @@ impl PerfScenarioConfig {
                 || warmup_secs != 30.0
                 || measure_secs != 60.0
                 || output_dir.is_none()
-                || window_width != Some(1280)
-                || window_height != Some(720)
-                || !building_art_window_matches(art_session.as_ref(), window_scale_factor)
-                || !building_art_quality_matches(
-                    input.env_text("HW_BUILDING_ART_SESSION").is_some(),
-                    rtt_quality,
-                ))
+                || !static_window_contract)
         {
             return Err(PerfScenarioConfigError("building-art-static requires small/15 Souls or medium/60 Souls, zero Familiars, gpu/realtime, seed 20260920, 30s/60s, output directory, baseline policies and 1280x720/DPI-1; explicit gallery contracts alone admit DPI-1.5/2, non-high quality requires an explicit building-art session".into()));
         }
@@ -1741,6 +1759,27 @@ fn building_art_quality_matches(art_session: bool, quality: Option<RttQualityPre
                 quality,
                 Some(RttQualityPreset::Medium | RttQualityPreset::Low)
             ))
+}
+
+fn group_art_window_matches(
+    raw: Option<&str>,
+    width: Option<u32>,
+    height: Option<u32>,
+    scale: Option<f32>,
+    quality: Option<RttQualityPreset>,
+) -> bool {
+    #[cfg(feature = "profiling")]
+    {
+        raw.and_then(|raw| {
+            crate::assets::building_asset_set::group_art::GroupArtSession::parse(raw).ok()
+        })
+        .is_some_and(|session| session.window_matches(width, height, scale, quality))
+    }
+    #[cfg(not(feature = "profiling"))]
+    {
+        let _ = (raw, width, height, scale, quality);
+        false
+    }
 }
 
 fn building_art_window_matches(

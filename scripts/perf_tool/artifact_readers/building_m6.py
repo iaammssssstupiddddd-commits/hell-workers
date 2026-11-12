@@ -20,6 +20,7 @@ from ..model import Case
 CONTRACT = "building-art-m6-nine-v1"
 PRE_RELEASE_CONTRACT = "building-art-pre-release-nine-v1"
 GROUP_CONTRACT = "building-art-group-nine-v1"
+GROUP_GALLERY_CONTRACT = "building-art-group-gallery-nine-v1"
 GROUP_TARGETS = {
     "m2": ("Tank", "MudMixer"),
     "m3": ("RestArea", "SoulSpa"),
@@ -133,7 +134,34 @@ def validate_group_sidecar(value, case):
     return _validate_sidecar(value, case, pre_release=True, group=True)
 
 
-def _validate_sidecar(value, case, *, pre_release, group=False):
+def validate_group_gallery_sidecar(value, case):
+    """Gallery-only oracle. It cannot enter the performance artifact reader."""
+    require(case.size == "small", "group gallery requires N only")
+    return _validate_sidecar(value, case, pre_release=True, group=True, gallery=True)
+
+
+def gallery_records(group):
+    records = expected_records(4)
+    kinds = list(KINDS)
+    destination = {"m2": 2, "m3": 4, "m5": 7}[group]
+    kinds[7], kinds[destination] = kinds[destination], kinds[7]
+    result = []
+    for kind in kinds:
+        old_row, new_row = KINDS.index(kind), kinds.index(kind)
+        for original in records:
+            if original["kind"] != kind:
+                continue
+            row = json.loads(json.dumps(original))
+            delta = (new_row - old_row) * 5
+            row["anchor"][1] += delta
+            for tile in row["tiles"]:
+                tile[1] += delta
+            row["center"][1] += delta * 32
+            result.append(row)
+    return result
+
+
+def _validate_sidecar(value, case, *, pre_release, group=False, gallery=False):
     copies = {"small": 4, "medium": 16}[case.size]
     require(
         case
@@ -158,10 +186,10 @@ def _validate_sidecar(value, case, *, pre_release, group=False):
     require(
         type(value["schema_version"]) is int
         and value["schema_version"] == 1
-        and value["contract_id"] == (GROUP_CONTRACT if group else PRE_RELEASE_CONTRACT if pre_release else CONTRACT)
+        and value["contract_id"] == (GROUP_GALLERY_CONTRACT if gallery else GROUP_CONTRACT if group else PRE_RELEASE_CONTRACT if pre_release else CONTRACT)
         and value["evidence_kind"] == "paused-static-only"
         and value["active_simulation_evidence"] is False
-        and value["camera_scale"] == 5.0
+        and value["camera_scale"] in ((1.0, 2.0) if gallery else (5.0,))
         and type(value["stable_frames"]) is int
         and value["stable_frames"] >= 30,
         "M6 scope/readiness differs",
@@ -206,6 +234,8 @@ def _validate_sidecar(value, case, *, pre_release, group=False):
     )
     require(m6["mode"] in {"legacy-control", "candidate"}, "invalid M6 mode")
     candidate = m6["mode"] == "candidate"
+    if gallery:
+        require(candidate, "group gallery cannot use fallback control")
     if group:
         declaration = validate_group_declaration(m6["group"])
         all_bindings = [*declaration["fixed"], *declaration["candidates"]]
@@ -259,12 +289,26 @@ def _validate_sidecar(value, case, *, pre_release, group=False):
         all(type(number) is int and number > 0 for number in m6["resources"].values()),
         "invalid resources",
     )
-    expected = expected_records(copies)
+    expected = gallery_records(declaration["group"]) if gallery else expected_records(copies)
     require(len(initial["records"]) == len(expected), "owner count differs")
     foreground_entities = []
     for observed, logical in zip(initial["records"], expected, strict=True):
         present = logical["kind"] in loaded_kinds
         extras = {"parts"} if present else set()
+        if gallery:
+            extras.add("gallery_owner")
+            require(type(observed.get("gallery_owner")) is int and observed["gallery_owner"] > 0, "missing gallery owner binding")
+            if logical["kind"] in {*PARTS, "Door"}:
+                extras.add("gallery_geometry")
+                require(isinstance(observed.get("gallery_geometry"), list), "missing resident gallery geometry")
+                geometry = observed["gallery_geometry"]
+                require(len(geometry) == len(observed.get("parts", [None]))
+                    and len({p["entity"] for p in geometry}) == len(geometry), "gallery resident leaf count/identity differs")
+                for part in geometry:
+                    require(set(part) == {"entity", "mesh", "mesh_role", "visible", "local_pose", "aabb_min", "aabb_max"}
+                        and type(part["entity"]) is int and part["entity"] > 0
+                        and isinstance(part["mesh"], str) and part["mesh"]
+                        and type(part["visible"]) is bool, "gallery resident leaf fields differ")
         if present and logical["kind"] in foreground.KINDS:
             extras.update({"owner", "foreground"})
         if present and logical["kind"] in {"Tank", "MudMixer"}:

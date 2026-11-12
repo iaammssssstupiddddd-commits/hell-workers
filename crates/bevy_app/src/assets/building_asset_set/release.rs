@@ -206,6 +206,12 @@ fn validate_bindings(bindings: &[ReleaseBinding]) -> Result<(), String> {
 /// production requests are mutually exclusive so one startup cannot race two
 /// authority paths for the same kind.
 pub fn configure_building_asset_releases(app: &mut App) -> Result<(), String> {
+    if std::env::var_os("HW_BUILDING_GROUP_ART_SESSION").is_some() {
+        #[cfg(feature = "profiling")]
+        return super::group_art::configure(app);
+        #[cfg(not(feature = "profiling"))]
+        return Err("group gallery requires the profiling feature".into());
+    }
     if std::env::var_os("HW_BUILDING_GROUP_COMPARISON").is_some() {
         #[cfg(feature = "profiling")]
         return super::group_comparison::configure(app);

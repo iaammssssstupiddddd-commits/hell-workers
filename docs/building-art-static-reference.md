@@ -263,11 +263,14 @@ Mesa 26.2.6、Vulkan/X11、1280×720/DPI1/high/novsync。Capture binaryは
 | --- | ---: | ---: |
 | Capture p95 (ms) | 8.815572 / 0.221309 | 10.424465 / 0.073669 |
 | Capture p99 (ms) | 10.975053 / 0.128898 | 13.085245 / 0.746518 |
-| Memory peak live (bytes) | 補足待ち | 678,328,225 / 218,795 |
-| Memory max RSS (KiB) | 補足待ち | 1,395,984 / 30,324 |
+| Memory peak live (bytes) | 670,175,034 / 226,320 | 678,328,225 / 218,795 |
+| Memory max RSS (KiB) | 1,308,588 / 3,328 | 1,395,984 / 30,324 |
 
 原本はprimary台帳の`tak14-foundation-reference-v3-comparison`で、N Memory補足と基盤・最終累積比較が
 実際に参照する間だけ保持する。これは基盤比較や群別budgetの合格ではなく、新candidateの採否も与えない。
+N Memoryの別batchも同source/assets・同Memory binary・同N layout/adapterで3回有効となり、
+primary `8e6066f1`の登録済み補足verifierで独立pass封印/finalizeを完了した。
+補足原本は`tak14-foundation-small-memory-comparison`で同じ比較用途だけ保持する。
 
 ## 旧参照のN Memory補足
 
@@ -276,6 +279,8 @@ Mesa 26.2.6、Vulkan/X11、1280×720/DPI1/high/novsync。Capture binaryは
 その他のseed、GPU/Vulkan/X11、1280×720/DPI1/high/novsync、warmup30秒/measure60秒は同じ契約。
 primaryの`validation register`でexact argv・出力root・verifierを固定し、同じno-prompt kitty内で
 `validation execute`する。既存batchや実行結果を再送せず、Captureを含む9 runの代用にも使わない。
+N Memory補足が未完の間は校正workunitとしてevidenceとworkspace reviewを保持する。
+完成baselineとしてcomparison保持すると同repoの再ビルドは拒否されるため、補足の独立検証後に凍結する。
 
 補足の登録verifierはprimaryの`building_art_static_acceptance.py verify-memory-small
 --job-root <補足root> --reference-root <旧9run参照root>`。
@@ -284,3 +289,36 @@ primaryの`validation register`でexact argv・出力root・verifierを固定し
 N側の同じ論理layoutを要求する。Memoryはnative allocator CSVとGNU timeから再計算する。
 前後に参照原本を再照合し、欠損・変更・別source・別instrumentを拒否する。
 結果は補足3 Memoryだけのtechnical passであり、candidate増分・群性能・アート・releaseの承認を与えない。
+
+## 群別アート画面（性能計測とは別経路）
+
+`scripts/building_group_art_acceptance.py plan --group m2|m3|m5 --candidate-roots <JSON>
+--codec <binary> --repo <primary> --output <private-plan>` は、対象群と既存Doorを同時に見る
+専用galleryを計画する。先行群の正式世代・対象群の独立採用済み候補は群別性能比較と同じ
+inventory検証で固定する。primaryの`validation plan`と返されたno-prompt launcherを使う。
+単体gallery、旧8種性能比較、通常worldのlifecycleへ暗黙に振り替えない。
+
+- High/Medium/Low × DPI 1/1.5/2 × normal/farの18ケースを同一source・Capture binary・
+  不変asset viewで順次取得する。物理clientは1920×1680。`--connection-only`はHigh/DPI2/normal
+  の1ケースだけで、18ケースやアート受入の代用にならない。
+- `HW_BUILDING_GROUP_ART_SESSION`の完全なtyped契約でのみ有効。profiling feature、小型静止
+  fixture、実Soul15体、他sessionなしを要求し、通常起動や旧性能経路では拒否する。
+- Nの36棟・状態・支持物・companionを保ち、M2/M3ではDoor行を対象群直後へ交換する。
+  5tile間隔・通常地形・配置validatorは不変。Lampの実行からYardを導出してoff2列を分離する。
+  性能用の元配置・scale5・1280×720は変更しない。
+- 準備完了後、gallery内のUIだけを一度非表示にする。以後の入力・状態・camera・resident資源の
+  変化を修復しない。実camera/RTT/composite、実MeshのAABB、画像の不透明pixel範囲から
+  client上の輪郭を投影する。独立Python側でも行列・PNGのalpha範囲から再計算する。
+- 対象群とDoorの全4状態について、実owner・mesh leaf・resident mesh/画像handle・authored poseへ
+  投影shapeを結ぶ。画面端16px、normalは最短辺4px/面積64px²、farは2px/16px²、
+  3DはRTT上16texel²以上を要求する。単なるViewVisibility=trueでは受け入れない。
+- 実60フレームの安定後にnonce/PID付きprobeをfresh公開し、所有する唯一のX11 clientを撮影する。
+  probe SHA・PNG SHA・同game PID・window ID・時刻に結んだACKを一度だけ渡す。
+  実最終状態とACKの再照合後だけ正常終了し、既存30/60秒の性能タイマーへ接続しない。
+  180秒のready/ACK deadline、早期・古い・異なるPID/nonce・変更済みartifactはerrorとなる。
+- gallery専用oracleは旧performance sidecar readerから拒否する。取得結果は常に
+  accepted=false / performance_evidence=false / promotion_authority=false。
+  全画像の独立したアート判断、性能budget、正式building-art証拠、promotion/install/rollback、
+  通常起動への導入は別に完了する。
+
+本経路は実装・検証中で、18ケースの新しい実機受入完了をまだ主張しない。

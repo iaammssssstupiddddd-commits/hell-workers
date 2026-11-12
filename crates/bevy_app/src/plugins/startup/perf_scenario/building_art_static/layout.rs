@@ -5,6 +5,7 @@ use hw_jobs::BuildingType;
 use hw_world::{Site, WorldMap, Yard, layout::RIVER_Y_MIN};
 
 use super::super::PerfScenarioSize;
+use crate::assets::building_asset_set::{BuildingArtGroup, group_art::GroupArtSession};
 use crate::interface::selection::placement_geometry::building_geometry;
 
 pub(super) const CAMERA_SCALE: f32 = 5.0;
@@ -158,6 +159,78 @@ pub(super) fn layout(size: PerfScenarioSize) -> Vec<Specimen> {
             })
         })
         .collect()
+}
+
+/// Gallery-only compact framing. The performance fixture above is immutable.
+pub(super) fn group_gallery_layout(group: BuildingArtGroup) -> Vec<Specimen> {
+    let mut kinds = KINDS;
+    let door_row = match group {
+        BuildingArtGroup::M2 => 2,
+        BuildingArtGroup::M3 => 4,
+        BuildingArtGroup::M5 => 7,
+    };
+    kinds.swap(7, door_row);
+    kinds
+        .into_iter()
+        .enumerate()
+        .flat_map(|(row, kind)| {
+            (0..4).map(move |ordinal| {
+                let anchor = (8 + ordinal as i32 * 5, 8 + row as i32 * 5);
+                let geometry = building_geometry(kind, anchor, RIVER_Y_MIN);
+                Specimen {
+                    ordinal,
+                    kind,
+                    anchor,
+                    tiles: geometry.occupied_grids,
+                    center: geometry.draw_pos,
+                    spa_mask_override: None,
+                }
+            })
+        })
+        .collect()
+}
+
+pub(super) fn group_gallery_yards(specs: &[Specimen]) -> Vec<Yard> {
+    specs
+        .iter()
+        .filter(|s| s.kind == BuildingType::OutdoorLamp)
+        .flat_map(|lamp| {
+            let (x, y) = lamp.anchor;
+            let mut result = vec![Yard {
+                min: WorldMap::grid_to_world(x - 1, 5),
+                max: WorldMap::grid_to_world(x + 2, if lamp.ordinal < 2 { y - 3 } else { y + 2 }),
+            }];
+            if lamp.ordinal < 2 {
+                result.push(Yard {
+                    min: WorldMap::grid_to_world(x - 1, y - 1),
+                    max: WorldMap::grid_to_world(x + 2, y + 2),
+                });
+            }
+            result
+        })
+        .collect()
+}
+
+pub(super) fn group_gallery_visible(session: &GroupArtSession, kind: BuildingType) -> bool {
+    kind == BuildingType::Door
+        || crate::systems::visual::building_presentation::asset_kind(kind)
+            .is_some_and(|kind| session.target(kind))
+}
+
+pub(super) fn group_gallery_camera(session: &GroupArtSession, specs: &[Specimen]) -> (Vec2, f32) {
+    let selected: Vec<_> = specs
+        .iter()
+        .filter(|s| group_gallery_visible(session, s.kind))
+        .collect();
+    let min = selected
+        .iter()
+        .map(|s| s.center)
+        .fold(Vec2::splat(f32::INFINITY), Vec2::min);
+    let max = selected
+        .iter()
+        .map(|s| s.center)
+        .fold(Vec2::splat(f32::NEG_INFINITY), Vec2::max);
+    ((min + max) * 0.5, session.view.scale())
 }
 
 pub(super) fn site() -> Site {

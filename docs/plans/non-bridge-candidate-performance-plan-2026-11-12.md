@@ -104,9 +104,30 @@ Door g7は別loaderで維持する。現loader/presentation候補許可は単一
   fixed/target inventoryとloaded集合を分け、target path省略・control先読み・kind/世代/bytes driftを拒否する。
   既存全8種の独立oracleを新しい任意集合へ緩和しない。
 
+### M6-b: 正式群galleryの独立契約
+
+- [x] 単種galleryやperformance scopeを拡張せず、新しいtyped group-art sessionと独立gallery contractを追加する。
+  M2/M3/M5のexact target集合、先行ReleaseApproved集合、Door g7、nonce/PID/出力rootを拘束する。
+  通常起動、既存art/ordinary/UI/Bridge/production/performance sessionとの併用は拒否する。
+- [x] 全9種×4棟・15 Soulsと既存の論理状態・通常placement validatorを維持したart専用layoutを用意する。
+  行anchorのpitchは元の5 tileを維持する（空き間隔ではない）。TILE_SIZE=32と専用窓のDPI2論理960×840を
+  原本で照合し、元pitchでも対象群の範囲が収まるため不要な座標変更をしない。3 tile案は作業Soulとcompanionが重なる。
+  DoorはM2/M3の対象群の直後へ入替える。Lampは最終行のまま、実Lamp位置からoff controlの非重複Yardを導出する。
+  性能用layout・1280×720/DPI1/camera5は変更しない。専用1920×1680 clientとnormal/far cameraで
+  High/Medium/Low × DPI1/1.5/2の全18 caseを検証する。対象全状態とDoorの実mesh AABB／image alpha boundsを
+  実camera・RTT・DPIで投影し、UI非表示の可視領域内16 physical px margin、normalで最小辺4px/面積64px²、
+  farで最小辺2px/面積16px²、3DのRTT側でも面積16 texel²を最低とする。数値だけで画風合格にはしない。
+- [x] groupの実load集合と既存pool/part/foreground検証を共用し、gallery専用の論理layout期待値を独立oracleへ持つ。
+  旧単種/全8種/performance oracleは新gallery contractを拒否する。camera/quality/DPI/identity/状態の変化を修復しない。
+- [x] owner付きPNG capture後のnonce/PID/probe SHA付きACKを専用rootへ一度だけ渡し、実final状態と通常exit0を要求する。
+  JSONはgalleryだけで収集し、performance計測を主張しない。ACK欠損・古いnonce・変化・非zero・中断をfail closedにする。
+  1つのsource/binary・共有immutable viewの下で18子processを逐次実行し、原本/画像を全件独立確認する。
+- [ ] Help実レビュー、品質gate、拒否系テスト、独立exact review後にcommitする。
+  worst-DPIの単一接続caseはconnection-onlyとし、全matrixやreleaseの合格へ読み替えずfresh正式matrixへ進む。
+
 ### M7: 群別性能と順次導入
 
-- [ ] 旧9種参照の不足N Memoryは、旧source/helperを編集せず、既存perf CLIのN×3を別batchで測る。
+- [x] 旧9種参照の不足N Memoryは、旧source/helperを編集せず、既存perf CLIのN×3を別batchで測る。
   primaryの限定`verify-memory-small`で、固定353fc4cdの元verifier・既存6 Capture/3 Memory原本を再検証し、
   同じMemory binary、Nのlayout、実adapterとexact sourceを要求する。正式起動はprimary登録→kitty→execute、
   old成功の流用やmatrix書換えをせず、補足3 runだけの結果として扱う。
@@ -212,3 +233,11 @@ typed art sessionへ契約とDPIを渡し、Rust admission・実Windowまで同�
 | 日付 | 変更者 | 内容 |
 | --- | --- | --- |
 | 2026-11-12 | Codex main | 導入前比較を正式導入後M6から分離する計画 |
+
+### 群gallery実装のHelp実レビュー（2026-11-12、commit前）
+
+No impact。新group-artの1920×1680、UI非表示、配置と専用ACK終了はprofilingかつ明示した
+小型静止fixture・完全sessionでのみ到達し、通常起動はこのsessionを拒否する。
+既存performance配置/終了経路はsession不在時に不変。通常プレイのInputAction/UiIntent、操作、文言、
+建設・保存・世代切替の成立条件、通知・Help入口を追加/変更しない。
+新しい技術画面のpassは性能、アート、正式導入の承認を与えない。Help本文とsnapshotは変更不要。

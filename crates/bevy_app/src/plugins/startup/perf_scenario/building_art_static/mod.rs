@@ -4,6 +4,7 @@
 
 pub(crate) mod context;
 mod foreground;
+pub(crate) mod group_gallery;
 mod lamp_supply_ui;
 mod layout;
 mod m2_context;
@@ -29,6 +30,7 @@ use super::{
     PerfCapture, PerfCapturePhase, PerfScenarioConfig, PerfWorkload, fixture::PerfScenarioApplied,
 };
 use crate::assets::building_asset_set::acceptance::BuildingArtSession;
+use crate::assets::building_asset_set::group_art::GroupArtSession;
 use crate::assets::building_asset_set::{BuildingAssetKind, BuildingAssetPool, M6Comparison};
 use crate::assets::door_asset_set::{
     DoorAssetAuthority, DoorAssetReadiness, DoorAssetReadinessState, ProductionDoorAssetPool,
@@ -231,6 +233,7 @@ pub(crate) struct InspectParams<'w, 's> {
     building_pool: Res<'w, BuildingAssetPool>,
     asset_server: Option<Res<'w, AssetServer>>,
     art_session: Option<Res<'w, BuildingArtSession>>,
+    group_art: Option<Res<'w, GroupArtSession>>,
     m6: Option<Res<'w, M6Comparison>>,
     stockpiles: Query<'w, 's, &'static hw_logistics::Stockpile>,
     companions: Query<'w, 's, &'static hw_logistics::BelongsTo, With<hw_logistics::BucketStorage>>,
@@ -315,7 +318,10 @@ pub(crate) fn inspect_building_art_static_system(mut params: InspectParams) {
                 params.state.phase = Phase::Ready;
                 params.applied.workload = true;
             }
-            if params.m6.is_some() && matches!(params.capture.phase, PerfCapturePhase::Flush) {
+            if params.m6.is_some()
+                && (matches!(params.capture.phase, PerfCapturePhase::Flush)
+                    || params.group_art.is_some())
+            {
                 params.state.m6_final_evidence = Some(evidence);
             }
             params.state.stable_frames += 1;
@@ -346,6 +352,13 @@ pub(crate) fn inspect_building_art_static_system(mut params: InspectParams) {
         }
         Err(reason) => fail(&mut params.state, &mut params.exit, reason),
     }
+}
+
+fn specimen_visible(params: &InspectParams, spec: &Specimen, candidate: bool) -> bool {
+    params.group_art.as_ref().map_or_else(
+        || layout::requires_visible(params.art_session.as_deref(), candidate, spec.ordinal),
+        |session| layout::group_gallery_visible(session, spec.kind),
+    )
 }
 
 fn inspect(params: &InspectParams) -> Result<Option<Value>, String> {
@@ -397,8 +410,10 @@ fn inspect(params: &InspectParams) -> Result<Option<Value>, String> {
         .camera
         .single()
         .map_err(|_| "main camera count differs")?;
-    let (camera_center, camera_scale) =
-        layout::camera_frame(params.art_session.as_deref(), params.config.size());
+    let (camera_center, camera_scale) = params.group_art.as_ref().map_or_else(
+        || layout::camera_frame(params.art_session.as_deref(), params.config.size()),
+        |session| layout::group_gallery_camera(session, &params.state.specs),
+    );
     if camera.translation.truncate() != camera_center || camera.scale != Vec3::splat(camera_scale) {
         return Err(format!(
             "static fixture camera changed: translation={:?}, scale={:?}",
@@ -454,17 +469,18 @@ fn inspect(params: &InspectParams) -> Result<Option<Value>, String> {
     let mut active_meshes = HashSet::new();
     // Baselines keep one full checkpoint. Explicit Spa pages reobserve all
     // records; explicit M5 sessions reobserve only their four target sprites.
-    let record_mode =
-        if params.m6.is_some() && matches!(params.capture.phase, PerfCapturePhase::Flush) {
-            // The measure driver enters Flush in Update, then this PostUpdate
-            // captures the real final state before next Update writes the sidecar.
-            foreground::RecordMode::All
-        } else {
-            foreground::RecordMode::for_frame(
-                params.state.evidence.is_none(),
-                params.art_session.as_deref(),
-            )
-        };
+    let record_mode = if params.group_art.is_some()
+        || params.m6.is_some() && matches!(params.capture.phase, PerfCapturePhase::Flush)
+    {
+        // The measure driver enters Flush in Update, then this PostUpdate
+        // captures the real final state before next Update writes the sidecar.
+        foreground::RecordMode::All
+    } else {
+        foreground::RecordMode::for_frame(
+            params.state.evidence.is_none(),
+            params.art_session.as_deref(),
+        )
+    };
     let mut records = (record_mode != foreground::RecordMode::None).then(Vec::new);
     for (spec, &owner) in params.state.specs.iter().zip(&params.state.owners) {
         let (building, transform, door, water, resting, mixer, lamp) = params
@@ -567,13 +583,7 @@ fn inspect(params: &InspectParams) -> Result<Option<Value>, String> {
                     && spec.water_count() == 0
                     && candidate.mesh("water") == Some(&mesh.0);
                 if (hidden_water && visibility.get())
-                    || (!hidden_water
-                        && !visibility.get()
-                        && layout::requires_visible(
-                            params.art_session.as_deref(),
-                            true,
-                            spec.ordinal,
-                        ))
+                    || (!hidden_water && !visibility.get() && specimen_visible(params, spec, true))
                 {
                     return Ok(None);
                 }
@@ -628,8 +638,7 @@ fn inspect(params: &InspectParams) -> Result<Option<Value>, String> {
                 || &material.0 != expected_material
                 || params.meshes.get(&mesh.0).is_none()
                 || params.materials.get(&material.0).is_none()
-                || (!visibility.get()
-                    && layout::requires_visible(params.art_session.as_deref(), false, spec.ordinal))
+                || (!visibility.get() && specimen_visible(params, spec, false))
             {
                 return Ok(None);
             }
@@ -655,12 +664,7 @@ fn inspect(params: &InspectParams) -> Result<Option<Value>, String> {
                 }
             }
             if params.images.get(&sprite.image).is_none()
-                || (!visibility.get()
-                    && layout::requires_visible(
-                        params.art_session.as_deref(),
-                        candidate.is_some(),
-                        spec.ordinal,
-                    ))
+                || (!visibility.get() && specimen_visible(params, spec, candidate.is_some()))
             {
                 return Ok(None);
             }
@@ -775,6 +779,40 @@ fn inspect(params: &InspectParams) -> Result<Option<Value>, String> {
             };
             let mut record = json!({"kind": format!("{:?}", spec.kind), "ordinal": spec.ordinal,
                 "anchor": spec.anchor, "tiles": spec.tiles, "center": [spec.center.x, spec.center.y], "state": state});
+            if params.group_art.is_some() {
+                record["gallery_owner"] = json!(owner.to_bits());
+                if structural {
+                    use bevy::camera::primitives::MeshAabb;
+                    let mut geometry = Vec::new();
+                    for (entity, mesh, _, visibility) in owner_visuals {
+                        let local = params
+                            .part_transforms
+                            .get(*entity)
+                            .map_err(|_| "gallery local pose missing")?;
+                        let aabb = params
+                            .meshes
+                            .get(&mesh.0)
+                            .and_then(MeshAabb::compute_aabb)
+                            .ok_or("gallery resident mesh bounds missing")?;
+                        let role = candidate
+                            .and_then(|d| {
+                                d.manifest
+                                    .identity
+                                    .kind
+                                    .mesh_roles()
+                                    .iter()
+                                    .find(|role| d.mesh(role) == Some(&mesh.0))
+                            })
+                            .copied()
+                            .unwrap_or("door");
+                        geometry.push(json!({"entity": entity.to_bits(), "mesh": format!("{:?}", mesh.0.id()),
+                            "mesh_role": role, "visible": visibility.get(),
+                            "local_pose": {"translation": local.translation.to_array(), "rotation": local.rotation.to_array(), "scale": local.scale.to_array()},
+                            "aabb_min": Vec3::from(aabb.min()).to_array(), "aabb_max": Vec3::from(aabb.max()).to_array()}));
+                    }
+                    record["gallery_geometry"] = json!(geometry);
+                }
+            }
             if let Some(candidate) = candidate {
                 if candidate.manifest.identity.kind.mesh_roles().is_empty() {
                     record["owner"] = json!(owner.to_bits());
