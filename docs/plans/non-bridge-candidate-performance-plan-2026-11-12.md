@@ -344,3 +344,14 @@ candidate専用の開始/Move入力終了時だけのpointer parkingを追加し
 v2は最初のActive0.56秒の画像がpause境界を跨いで不採用となった。要求画像列を緩めずinvalid/finalize。
 candidate refiningだけの明示quarter-speed clockとreal6/9秒pause/resumeで撮影時間を確保し、
 実clockも独立検査する。通常/旧preview/他legを変えないためHelp No impactを維持する。
+
+### M7-c: 通常default起動の接続観測
+
+- [ ] 非空compiled defaultだけの受動selected/activeログを実装し、空/明示/専用/perfでは無効にする。
+- [ ] active/pending/failure/descriptor/residencyを区別し、既存ownerだけ観測する。生成・修復・承認しない。
+- [ ] 正規native helperでoverride/session/perfなしの実binary/asset view/owned PNG・PID・ログを固定検査する。
+- [ ] 拒否回帰、同subject品質・Help・storage・独立review後、正式inventory導入時に通常起動で確認する。
+
+Help実レビュー: 受動auditは通常の状態・入力・設定・表示・保存・通知・Helpを変更せず、ログだけを生成する。
+外側helperもactor/建物をseedせず、初期worldに実在しないconsumerを成功へしない。No impactとし、
+アート/性能/全kind通常authority storyboardは別の正式工程を維持する。

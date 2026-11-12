@@ -6,7 +6,10 @@ use std::ffi::OsStr;
 use std::path::{Component, Path};
 
 use bevy::prelude::*;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
+
+#[cfg(feature = "profiling")]
+mod audit;
 
 use super::{
     BuildingAssetAuthority, BuildingAssetKind, BuildingAssetPool, BuildingAssetRequest,
@@ -31,7 +34,7 @@ const ISOLATED_SESSION_ENVS: &[&str] = &[
     "HW_NATIVE_NOTIFICATION_ACCEPTANCE_ARTIFACT",
 ];
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 struct ReleaseBinding {
     identity: BuildingAssetSetIdentity,
@@ -302,6 +305,13 @@ pub fn configure_building_asset_releases(app: &mut App) -> Result<(), String> {
             return Ok(());
         }
     }
+    #[cfg(feature = "profiling")]
+    audit::configure(
+        app,
+        &bindings,
+        DEFAULT_RELEASES,
+        explicit.is_none() && !isolated,
+    );
     app.insert_resource(BuildingAssetReleaseBindings(bindings))
         .add_systems(Startup, request_releases);
     Ok(())

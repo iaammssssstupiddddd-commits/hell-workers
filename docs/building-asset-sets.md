@@ -33,6 +33,27 @@ M1-c候補はoffline codec／export、明示profiling候補投入、昇格・ins
 独立review、実機受入、正式asset公開、美術受入の完了ではない。
 正式assetと状態別のwater高さ・rotor軸等の制作値は、制作時に制作側と照合して確定する。
 
+### 通常起動defaultの受動audit
+
+profiling buildでも専用session/performance/明示overrideを使わない通常起動は、非空のcompiled
+inventoryを選んだ場合だけ `BUILDING_DEFAULT_RELEASE_AUDIT` JSONログを残す。
+選択元compiled_default・inventory bytes SHA・完全bindings・game PIDを一度記録する。
+実poolのactive/descriptor/依存Mesh・Image residencyが全件一致し、pending/failureがなく60frame
+継続した場合だけactiveを記録する。load failure/120秒timeout/観測上限は別の診断で、ゲームを修復・
+承認・強制終了しない。空default、明示override、専用session/performanceではこのauditを登録しない。
+
+active時には実在する通常ownerのroot/leaf identity・依存handleと2D Spriteのworld imageも記録する。
+実Building owner inventoryを先に採取し、実在3D ownerごとのroot exactly1と実在2D ownerごとの全Sprite targetを
+独立側で全件被覆する。2D targetは既存publisherと同じowner Spriteとdirect VisualLayerKind childで、
+childのSprite欠損もtargetに残す。ownerごと1件以上、owner/parent/layerの一致、重複/余剰/欠落拒否と有限capを要求する。表示consumerが欠落したownerを、world自体に存在しないkindと混同しない。
+その時点で存在しないkindを生成したり、全consumerの成功と見なしたりしない。
+`scripts/building_default_release_acceptance.py` は正規validation launcherから、専用envもperf argvも
+release overrideもない通常binaryを起動し、exact installed pointersとcompiled JSONの一致、
+所有X11/Vulkan画像・ログ・binary copy・sourceを独立照合する。private asset viewは正式install済みassetsの
+同bytesコピーだけで、locator・候補・fixtureを追加しない。admissionで読んだplanを凍結し、build前後・
+起動前・最終verify前および原本の独立verifyで完全一致を要求する。変更は別job rootや起動へ進めない。初期世界にないconsumer、全kind lifecycle、
+アート・性能・release採否はこの接続検証の対象外で、通常authority storyboard等の別証拠へ残す。
+
 ### Bridge配置の成立条件（統合候補）
 
 Bridgeの配置・完成・通行契約はasset poolの採否から独立する。配置resolverはlive地形の2列を読み、
