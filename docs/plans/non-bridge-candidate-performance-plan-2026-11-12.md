@@ -86,6 +86,13 @@ session/loader/pool、matrix/oracle、拒否系試験、測定前budgetを実装
 初回contracts/tooling/rust CI相当gateはpass（Python800・制作229・default/profiling全workspace test・
 全profiling feature check・Clippy0）。独立reviewのf32/Tank状態比較指摘は修正済み。
 最後のprovenance validator hash固定を追加し、最終差分の再検証とexact review後にcommit/nativeへ進む。
+`802d9d0f`で最終contracts/tooling/rust gate（Python801/制作229）、dev.py check、
+profiling Clippy0と独立reviewが完了した。正式Capture buildから687,149,856Bのimmutable codec
+（SHA256 `601b0fd770b29d00cef29fc47c21e8c8353f0315fad80c40812be37f0d0646ce`）を保持登録し、全8候補/Doorを再照合済み。
+初回`tak14-nine-candidate-performance-802d9d0f-20261112-v1`は出力root生成前にexit1。
+CLIが`native.activity_locked`へrepo/job_rootを渡していない不備で、測定は0回だった。
+invalid封印/finalize・root不存在を記録済み。working art CLIと同じplanからの引継ぎを追加し、
+入口回帰と変更別gate・独立review後にfresh batchへ進む。旧失敗を再送・成功化しない。
 既存のproduction runnerはnormal-development admission・ordinary-world capture/ACK・host instrument producerが
 未実装と宣言する。旧Orcaや架空receiptで補完しない。全体受入は継続中。
 

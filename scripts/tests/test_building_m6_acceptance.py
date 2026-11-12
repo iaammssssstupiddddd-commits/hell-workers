@@ -2,11 +2,13 @@
 
 import copy
 import hashlib
+import io
 import unittest
 import tempfile
 import os
 import struct
 from unittest.mock import patch
+from contextlib import redirect_stdout
 from pathlib import Path
 
 from scripts import building_m6_acceptance as m6
@@ -92,6 +94,31 @@ def reseal(value):
 
 
 class M6Tests(unittest.TestCase):
+    def test_cli_binds_frozen_repository_and_root_before_the_activity_guard(self):
+        with tempfile.TemporaryDirectory() as directory:
+            plan = Path(directory) / "plan.json"
+            m6.pipeline.put(plan, m6.pipeline.canonical({"repo": "/frozen/repo", "job_root": "/frozen/repo/target/native-acceptance/job"}))
+            with patch("sys.argv", ["building_m6_acceptance.py", "run", "--plan", str(plan)]), \
+                 patch.object(m6, "run", return_value={"status": "synthetic"}) as guarded, \
+                 redirect_stdout(io.StringIO()):
+                m6.main()
+            guarded.assert_called_once()
+            args = guarded.call_args.args[0]
+            self.assertEqual(args.repo, "/frozen/repo")
+            self.assertEqual(args.job_root, "/frozen/repo/target/native-acceptance/job")
+            self.assertEqual(args.plan, plan)
+            self.assertEqual(args.frozen_plan, m6.pipeline.read(plan))
+
+    def test_changed_plan_is_rejected_before_run_inputs_or_outputs_are_touched(self):
+        from types import SimpleNamespace
+        args = SimpleNamespace(plan=Path("/private/plan"), frozen_plan={"job_root": "/admitted"})
+        with patch.dict(os.environ, {"HW_NATIVE_ACCEPTANCE_LAUNCHED": "1"}), \
+             patch.object(m6.pipeline, "read", return_value={"job_root": "/changed"}), \
+             patch.object(m6, "check_inputs") as check:
+            with self.assertRaisesRegex(ValueError, "plan changed across activity admission"):
+                m6.run.__wrapped__(args)
+            check.assert_not_called()
+
     def test_pre_release_freezes_provenance_verifier_code_not_only_candidate_bytes(self):
         value = {"profile": m6.PRE_RELEASE_PROFILE,
                  "numeric_verifiers": m6.pipeline.numeric_verifier_inventory(),

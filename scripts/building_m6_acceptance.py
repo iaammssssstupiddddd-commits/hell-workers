@@ -722,6 +722,7 @@ def run(args):
         "use the registered no-prompt launcher",
     )
     value = pipeline.read(args.plan)
+    pipeline.require(value == args.frozen_plan, "plan changed across activity admission")
     check_inputs(value)
     repo, root = Path(value["repo"]), Path(value["job_root"])
     resources = native.resource_snapshot(repo, require_launcher=False)
@@ -811,6 +812,12 @@ def main():
     for action in ("run", "verify"):
         sub.add_parser(action).add_argument("--plan", type=Path, required=True)
     args = parser.parse_args()
+    if args.action == "run":
+        # The common activity decorator must receive the frozen repository and
+        # exact output root before it checks admission or acquires the lease.
+        value = pipeline.read(args.plan)
+        args.repo, args.job_root = value["repo"], value["job_root"]
+        args.frozen_plan = value
     result = (
         plan(args)
         if args.action == "plan"
