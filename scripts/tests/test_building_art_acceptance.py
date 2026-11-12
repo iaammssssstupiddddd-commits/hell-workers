@@ -343,6 +343,64 @@ class RecipeTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "missing"):
                 art.validate_window(root, value)
 
+    def test_gallery_dpi_contract_rejects_partial_invalid_and_context_values(self):
+        self.assertEqual(art.scale_factor({}), 1.0)
+        for dpi in art.GALLERY_SCALE_FACTORS:
+            value = {"window_contract": art.WINDOW_CONTRACT, "scale_factor": dpi}
+            command = art.game_command(Path("binary"), Path("job"), value)
+            self.assertEqual(float(command[command.index("--perf-window-scale-factor") + 1]), dpi)
+        for value in ({"scale_factor": 1}, {"window_contract": art.WINDOW_CONTRACT},
+                      {"window_contract": "foreign", "scale_factor": 1},
+                      *({"window_contract": art.WINDOW_CONTRACT, "scale_factor": n}
+                        for n in (None, True, False, "1", 0, 1.25, 3, float("nan"), float("inf")))):
+            with self.subTest(value=value), self.assertRaisesRegex(ValueError, "window contract"):
+                art.game_command(Path("binary"), Path("job"), value)
+        for variant in ("rest-area-art-context", "m2-art-context", *art.M5_CONTEXT_VARIANTS):
+            for dpi in (1.5, 2.0):
+                with self.subTest(variant=variant, dpi=dpi), self.assertRaisesRegex(ValueError, "context"):
+                    art.scale_factor({"window_contract": art.WINDOW_CONTRACT,
+                                      "scale_factor": dpi, "variant": variant})
+
+    def test_gallery_quality_dpi_checks_actual_logical_physical_rtt_and_end_state(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            write_fixture_run(root)
+            path = root / "data/window.csv"
+            with path.open(newline="") as handle:
+                original = next(csv.DictReader(handle))
+
+            def write(row):
+                with path.open("w", newline="") as handle:
+                    writer = csv.DictWriter(handle, fieldnames=list(original))
+                    writer.writeheader()
+                    writer.writerow(row)
+
+            for dpi in art.GALLERY_SCALE_FACTORS:
+                for quality, factor in (("high", 1), ("medium", .75), ("low", .5)):
+                    row = dict(original)
+                    for prefix in ("", "end_"):
+                        row.update({prefix + "scale_factor": str(dpi),
+                            prefix + "logical_width": str(1280 / dpi),
+                            prefix + "logical_height": str(720 / dpi),
+                            prefix + "rtt_quality": quality,
+                            prefix + "scene_target_width": str(int(1280 * factor)),
+                            prefix + "scene_target_height": str(int(720 * factor)),
+                            prefix + "mask_target_width": str(int(1280 * factor)),
+                            prefix + "mask_target_height": str(int(720 * factor)),
+                            prefix + "target_scale_factor": str(dpi * factor)})
+                    value = {"window_contract": art.WINDOW_CONTRACT, "scale_factor": dpi,
+                             "quality": quality, "adapter": "Test GPU"}
+                    write(row)
+                    art.validate_window(root, value)
+                    for field, bad in (("scale_factor", "1.25"), ("end_scale_factor", "1.25"),
+                            ("logical_width", "999"), ("physical_width", "999"),
+                            ("scene_target_width", "999"), ("mask_target_height", "999"),
+                            ("target_scale_factor", "999")):
+                        write({**row, field: bad})
+                        with self.subTest(dpi=dpi, quality=quality, field=field), \
+                                self.assertRaisesRegex(ValueError, "window"):
+                            art.validate_window(root, value)
+
     def test_camera_view_requires_matching_runtime_scale_and_inventory(self):
         value = {"mode": "feedback", "identity": {}, "scope": "paused-static-presentation", "view": "near"}
         probe = {"profile": art.PROFILE, "status": "ready", "mode": "feedback", "identity": {},

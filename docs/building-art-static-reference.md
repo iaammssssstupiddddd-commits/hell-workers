@@ -191,3 +191,9 @@ v4（`ea3c8077`）では最初のCapture N control/candidateが共に有効と�
 旧10種のinvalidな`9a46751a`ではない。旧参照と現在はMesaも異なるため、古い数値を直接比較しない。
 通常AIの継続生産・給水・搬出や代替active fixtureを表示移行の事前gateにはしない。
 当該群の表示・状態遷移・lifecycle・資源・性能受入を満たした群から独立に正式導入する。
+v5（`f2fdf9ea`）はN controlのp95 median/MAD 9.796273/1.290815ms、p99
+17.823617/6.172078msが事前10% MAD上限を超えたため、4N途中で正に中断した。
+登録recipeのidentityを照合したSIGINT一回と既存finallyの子process終了、exit -2を確認し、
+interrupted封印/finalize済み。Memoryは未実行、候補側の安定値で対照側の不合格を相殺しない。
+一部10秒区間への遅延集中は確認したが原因は未確定。次は並行ビルド・storage整理・worktree作成を
+避けて環境を確認し、固定予算を変更せず測定する。

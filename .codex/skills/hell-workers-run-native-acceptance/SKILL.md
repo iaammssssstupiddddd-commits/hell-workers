@@ -63,6 +63,17 @@ run the required formal gates when the revised subject is ready for acceptance.
 
 ## UI input feedback
 
+For the dedicated non-Bridge building-art gallery,
+`scripts/building_art_acceptance.py plan --variant gallery --scale-factor 1|1.5|2`
+binds an explicit window contract and DPI to the plan. Combine the declared DPI
+with `--quality high|medium|low` and `--view normal|far` as required by the target
+group's acceptance plan. Physical client/PNG extent remains 1280×720; the
+verifier checks actual DPI, logical dimensions, RTT targets and unchanged end
+state. Existing context/UI variants remain DPI1-only. A single-kind gallery or
+an accepted window contract does not prove group harmony, far-view readability,
+the full matrix, performance or independent art/release approval. Register every
+plan with the primary validation coordinator and use only its returned launcher.
+
 For Entities design revisions, `plan --input-backend none` uses the same registered
 launcher and six viewports for rendering only. It never opens a portal or sends
 input. The one-time profiling fixture hides the developer body, assigns two

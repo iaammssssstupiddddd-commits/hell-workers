@@ -1225,3 +1225,13 @@ art/release権限は維持する。fresh nativeによる接続確認と通常wor
 Intel Arc MTL/Mesa26.2.6/Vulkan/X11、6画像/21入力の原本を登録verifierと独立read-only reviewで
 照合し、pass封印/finalize済み。既存`gpu_measured_bytes`は全件null、`performance_evidence`はfalseを維持した。
 これはdevice allocator DTOの実接続確認だけで、peak・全GPUメモリ・正式性能budgetへの合格ではない。
+
+### 専用galleryのDPI契約
+
+`building_art_acceptance.py plan --variant gallery --scale-factor 1|1.5|2`は新planへ
+`window_contract=building-art-window-v1`と`scale_factor`を一緒に固定する。
+有限な数値の厳密集合だけを受け付け、bool・片方の欠損・別contract・未知DPIを拒否する。
+両fieldのない旧planだけはDPI1として解釈する。既存context/UI variantは引き続きDPI1専用である。
+物理窓とowned PNGは1280×720のまま、実Windowの開始/終了DPI、logical寸法、RTT品質と
+scene/mask target、camera viewを別々に照合する。DPIをPNG寸法へ掛けた推測値を採用しない。
+この入口の実装だけでquality/DPI全matrixや群内調和、最遠での判読性、独立art/release採否を完了とはしない。

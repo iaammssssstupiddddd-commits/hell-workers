@@ -74,6 +74,16 @@ Door g7は別loaderで維持する。現loader/presentation候補許可は単一
   既存gpu_measured_bytes:null、performance_evidence:false、正式性能oracleとrelease権限は変更しない。
 - [x] 原本API照合、Help実レビュー、変更別検証/check/Clippy、独立exact review後にcommitし、fresh nativeで接続を確認する。
 
+### M5: 正式galleryのDPI条件
+
+- [ ] `building_art_acceptance.py`のgalleryに限りDPI 1/1.5/2を明示選択できるようにする。
+  planで有限な厳密集合を検査し、argv・実Window DPI・physical extent・RTT target・owned PNGを照合する。
+  Bevyの既存physical window 1280×720は維持し、DPIを掛けた架空の画像寸法を要求しない。
+- [ ] 既存context/UI recipeはDPI1の契約を維持し、bool/欠損した新契約/非有限/未知値/actual不一致を拒否する。
+  旧planのDPI1互換と、通常起動・ゲームrule・release authorityの不変を守る。
+- [ ] Help実レビュー、変更別検証、独立exact review後、fresh actual-windowでDPI接続を確認する。
+  対象群の共通gallery、High/Medium/Low×各DPI×normal/far、群別性能・独立release採否は別に閉じる。
+
 ## 6. リスクと対策
 
 候補authorityの通常経路への漏出は、profilingと明示session・全identity検査・旧入口の拒否試験で防ぐ。
@@ -143,6 +153,14 @@ GPU DTOのfresh接続は同headのLamp候補planningで31sampleすべてavailabl
 原移行計画§7に従い、基盤・群別・最終累積比較を分離する。現在の全候補増分比較だけで3種を完了としない。
 通常AIの継続生産・給水・搬出や代替active fixtureを表示移行の事前gateへ追加しない。
 群固有の表示・状態遷移・lifecycle・性能条件を満たした群から独立導入し、全9種完成まで先行群を未releaseに留めない。
+v5（`f2fdf9ea`）はN側6測定と4N側の最初のpairを完走したが、N controlのp95 median/MADが
+9.796273/1.290815ms、p99が17.823617/6.172078msとなり、固定10% MAD上限を超えた。
+既知の不合格のままMemoryまで続けず、所有identityを照合したrecipeへ一度だけSIGINTを送った。
+既存finallyで子process群を終了し、exit -2を確認してinterrupted封印/finalize済み。Memory未実行、予算は変更しない。
+10秒区間の集計ではcontrol3の冒頭20秒に遅延が集中したが、環境要因の原因は未確定。
+次の計測中はmainのビルド・storage整理・worktree作成も並行させず、独立して進められるDPI入口を先に完成させる。
+基盤fixture-only `353fc4cd`は編集しない専用worktreeと保持用途を登録し、正規native計画まで準備済み。
+現在環境での基盤測定・不足するN Memoryは未実行であり、旧測定の合格を流用しない。
 
 ### Definition of Done
 

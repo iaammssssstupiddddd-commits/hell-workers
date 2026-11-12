@@ -42,6 +42,8 @@ MODES = {"feedback": "art_preview", "art-preview": "art_preview", "candidate": "
 PROFILE = "building-art"
 VIEWS = {"overview": 5.0, "near": 0.5, "normal": 1.0, "far": 2.0}
 QUALITIES = ("high", "medium", "low")
+WINDOW_CONTRACT = "building-art-window-v1"
+GALLERY_SCALE_FACTORS = (1.0, 1.5, 2.0)
 CONTEXT_SCOPE = "seeded-paused-art-comparison"
 SPA_PAGE_SCOPE = "paused-static-spa-mask-page"
 M5_CONTEXT_VARIANTS = ("m5-art-context", "lamp-supply-art-context")
@@ -123,6 +125,20 @@ def quality(value: dict) -> str:
     return selected
 
 
+def scale_factor(value: dict) -> float:
+    # Historical plans pin DPI1. New plans bind both fields, never a partially
+    # specified contract or a bool which compares equal to the number one.
+    if "window_contract" not in value and "scale_factor" not in value:
+        return 1.0
+    selected = value.get("scale_factor")
+    pipeline.require(value.get("window_contract") == WINDOW_CONTRACT
+        and type(selected) in (int, float) and selected in GALLERY_SCALE_FACTORS,
+        "building-art window contract/scale factor differs")
+    pipeline.require(value.get("variant", "gallery") == "gallery" or selected == 1.0,
+        "building-art context requires scale factor 1")
+    return float(selected)
+
+
 def subject(repo: Path) -> dict:
     return {"commit": native.git_subject(repo), "source": native.source_fingerprint(repo),
             "harness": native.native_harness_fingerprint(repo), "assets": asset_view_fingerprint(repo),
@@ -151,6 +167,7 @@ def check_plan(value: dict, binary: Path) -> dict:
     context_settings(value)
     page = spa_page(value)
     quality(value)
+    scale_factor(value)
     pipeline.require(value.get("view", "overview") in VIEWS, "unknown camera view")
     pipeline.require(value["kind"] != "Bridge", "Bridge requires its independent M4 recipe; nine-kind static evidence is inapplicable")
     pipeline.require(value["profile"] == PROFILE and value["mode"] in MODES, "recipe mode differs")
@@ -200,6 +217,8 @@ def plan(args) -> dict:
              "codec_sha256": pipeline.digest(args.codec.read_bytes()),
              "view": getattr(args, "view", "overview"),
              "quality": getattr(args, "quality", "high"),
+             "window_contract": WINDOW_CONTRACT,
+             "scale_factor": getattr(args, "scale_factor", 1.0),
              "variant": getattr(args, "variant", "gallery"),
              "lighting": getattr(args, "lighting", "standard"),
              "spa_mask_page": getattr(args, "spa_mask_page", None),
@@ -239,7 +258,7 @@ def game_command(binary: Path, root: Path, value: dict) -> list[str]:
         "--perf-familiar-policy", "baseline", "--perf-operation-dialog", "hidden", "--perf-dashboard", "hidden",
         "--perf-output-dir", str(root / "data"), "--perf-warmup-secs", "30", "--perf-measure-secs", "60",
         "--spawn-souls", str(actor_count(value)), "--spawn-familiars", "0", "--perf-window-width", "1280", "--perf-window-height", "720",
-        "--perf-window-scale-factor", "1", "--perf-rtt-quality", quality(value)]
+        "--perf-window-scale-factor", str(scale_factor(value)), "--perf-rtt-quality", quality(value)]
 
 
 def validate_window(root: Path, value: dict) -> None:
@@ -249,7 +268,7 @@ def validate_window(root: Path, value: dict) -> None:
     ordinary gameplay performance predicates and grant no performance authority.
     """
     window, errors = read_window(root / "data/window.csv", expect_headless=False,
-        expected_width=1280, expected_height=720, expected_scale_factor=1.0,
+        expected_width=1280, expected_height=720, expected_scale_factor=scale_factor(value),
         expected_rtt_quality=quality(value), expected_window_backend="x11",
         expected_backend="vulkan", expected_present_mode="novsync")
     pipeline.require(window is not None and not errors, "building-art window differs: " + "; ".join(errors))
@@ -749,6 +768,7 @@ def main() -> int:
     parser.add_argument("--adapter", default="Intel")
     parser.add_argument("--view", choices=tuple(VIEWS), default="overview")
     parser.add_argument("--quality", choices=QUALITIES, default="high")
+    parser.add_argument("--scale-factor", type=float, choices=GALLERY_SCALE_FACTORS, default=1.0)
     parser.add_argument("--variant", choices=("gallery", "rest-area-art-context", "m2-art-context", *M5_CONTEXT_VARIANTS), default="gallery")
     parser.add_argument("--lighting", choices=("standard", "dim"), default="standard")
     parser.add_argument("--spa-mask-page", type=int, choices=range(4))
