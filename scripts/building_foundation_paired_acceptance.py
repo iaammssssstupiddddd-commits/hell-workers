@@ -322,6 +322,7 @@ def case_result(stage, planned, case, *, finalized=False):
     case_id = static.Case("building-art-static", size, "gpu", static.SEED, 15 if size == "small" else 60, 0).identifier
     raw = parent / f"{instrument}-{size}/cases" / case_id / "run-001/data/building_resource_inventory.json"
     observed = inventory.boundaries(native.read_json(raw))
+    inventory.require_boundary_scale(observed, size)
     return {"instrumentation": instrument, "size": size, "repeat": repeat, "source": source,
         "batch": batch_id, "started_at": batch["started_at"], "finished_at": batch["finished_at"],
         "binary_sha256": checked["binary_sha256"], "session_sha256": checked["session_sha256"],
@@ -341,11 +342,15 @@ def aggregate(rows, instrument, budget):
         gap = (time(current["started_at"]) - time(previous["finished_at"])).total_seconds()
         # Size boundaries may include result checks, but still no build/workload.
         native.require(0 <= gap <= budget["max_gap_seconds"], "case overlap or excessive settlement gap")
+    resource_assessments = {}
     for source in SOURCES:
         chosen = [r for r in rows if r["source"] == source]
         native.require(len({r["binary_sha256"] for r in chosen}) == 1, "source binary drift")
         for row in chosen[1:]:
-            inventory.plateau(chosen[0]["inventory"], row["inventory"])
+            compare = inventory.legacy_boundary_growth if source == "reference" else inventory.plateau
+            assessment = compare(chosen[0]["inventory"], row["inventory"])
+            resource_assessments[source] = (assessment if source == "reference" else
+                {"global_shared_mesh_plateau": True, "totals": assessment})
     result = []
     for size in ("small", "medium"):
         chosen = [r for r in rows if r["size"] == size]
@@ -366,7 +371,7 @@ def aggregate(rows, instrument, budget):
         for key, after in summary["current"].items():
             native.require(after["median"] - summary["reference"][key]["median"] <= budget["max_delta"][key],
                            "foundation increment exceeded: " + key)
-        result.append({"size": size, "sources": summary})
+        result.append({"size": size, "sources": summary, "resource_assessments": resource_assessments})
     return result
 
 
@@ -382,6 +387,7 @@ def verify_stage(path):
     stage, planned = check_stage(path)
     cases = [case for case in matrix() if case[0] == stage["instrumentation"]]
     rows = [case_result(stage, planned, case, finalized=True) for case in cases]
+    cross_stage_resources = {}
     if stage["instrumentation"] == "memory":
         previous = verify_stage(Path(stage["prior_stage"]))
         native.require(time(rows[0]["started_at"]) > time(previous["rows"][-1]["finished_at"]),
@@ -389,12 +395,15 @@ def verify_stage(path):
         for source in SOURCES:
             before = next(r for r in previous["rows"] if r["source"] == source)
             after = next(r for r in rows if r["source"] == source)
-            inventory.plateau(before["inventory"], after["inventory"])
+            compare = inventory.legacy_boundary_growth if source == "reference" else inventory.plateau
+            assessment = compare(before["inventory"], after["inventory"])
+            cross_stage_resources[source] = assessment if source == "reference" else {"global_shared_mesh_plateau": True, "totals": assessment}
     ledger = native.read_json(storage.ledger_dir(storage.primary_for(Path(planned["repos"]["current"]))) / "ledger.json")
     require_no_interleaving(rows, ledger["batches"].values())
     return {"profile": PROFILE, "status": "pass", "instrumentation": stage["instrumentation"],
         "stage_sha256": static.sha256(path), "rows": rows,
         "aggregate": aggregate(rows, stage["instrumentation"], planned["limits"]),
+        "cross_stage_resources": cross_stage_resources,
         "accepted": False, "promotion_authority": False,
         "unverified": ["active gameplay", "GPU allocation budget", "art", "release", "final cumulative nine"]}
 

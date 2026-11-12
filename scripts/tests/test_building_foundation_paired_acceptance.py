@@ -8,7 +8,7 @@ import unittest
 from unittest.mock import patch
 
 from scripts import building_foundation_paired_acceptance as paired
-from scripts.tests.test_building_resource_inventory import boundary, snapshot
+from scripts.tests.test_building_resource_inventory import boundary, owned_snapshot
 
 
 def budget():
@@ -20,7 +20,7 @@ def rows(instrument="capture"):
     result = []
     epoch = datetime(2026, 11, 12, tzinfo=timezone.utc)
     for index, (mode, size, repeat, source) in enumerate(c for c in paired.matrix() if c[0] == instrument):
-        resources = snapshot()
+        resources = owned_snapshot(size, shared=source == "current")
         # Process-local handles differ and must not be compared across cases.
         for collection in ("meshes", "images", "materials"):
             resources[collection][0]["id"] += str(index)
@@ -38,7 +38,10 @@ def rows(instrument="capture"):
 class FoundationPairedTests(unittest.TestCase):
     def test_complete_reversed_middle_pairs_use_same_source_binaries_and_cross_process_payloads(self):
         for mode in ("capture", "memory"):
-            self.assertEqual(len(paired.aggregate(rows(mode), mode, budget())), 2)
+            result = paired.aggregate(rows(mode), mode, budget())
+            self.assertEqual(len(result), 2)
+            self.assertFalse(result[0]["resource_assessments"]["reference"]["global_shared_mesh_plateau"])
+            self.assertTrue(result[0]["resource_assessments"]["current"]["global_shared_mesh_plateau"])
         self.assertEqual([c[3] for c in paired.matrix()[:6]],
                          ["reference", "current", "current", "reference", "reference", "current"])
 
@@ -177,13 +180,13 @@ class FoundationPairedTests(unittest.TestCase):
             with self.subTest(change=change), \
                  patch.object(paired.storage, "primary_for", return_value=Path("/primary")), \
                  patch.object(paired.storage, "ledger_dir", return_value=Path("/ledger")), \
-                 patch.object(paired.native, "read_json", side_effect=[{"batches": {identifier: actual}}, boundary()]), \
+                 patch.object(paired.native, "read_json", side_effect=[{"batches": {identifier: actual}}, boundary() | {"initial": owned_snapshot(shared=True), "final": owned_snapshot(shared=True)}]), \
                  patch.object(paired.static, "verify_session", return_value=raw), \
                  patch.object(paired.static, "sha256", return_value="d"*64):
                 if change is None:
                     result = paired.case_result(stage, planned, case, finalized=True)
                     self.assertEqual(result["batch"], identifier)
-                    self.assertEqual(result["metrics"]["mesh_vertex_index_payload_bytes"], 42)
+                    self.assertEqual(result["metrics"]["mesh_vertex_index_payload_bytes"], 194)
                 else:
                     with self.assertRaises(paired.native.AcceptanceError):
                         paired.case_result(stage, planned, case, finalized=True)

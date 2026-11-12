@@ -590,3 +590,17 @@ draw call ではなくピクセルコストの観点。LOD0 (32px/tile, FHD) で
 Trellis 生成の高ポリゴンモデルを使っても fragment 面での影響は軽微。
 ポリゴン数の増加は頂点シェーダーコストに影響するが、
 50k tri × 30 インスタンス = 1.5M tri/frame は現代 GPU で問題ない。
+
+
+### Non-Bridge static resource ownership
+
+Site/Yard境界はsystem-localの強Mesh handleを1個保持し、全境界と再構築で同じ単位Rectangleを共有する。
+境界ごとのTaskAreaMaterial、色、寸法uniform、Transform scaleは個別のまま。入力・保存・配置ruleは変わらない。
+profilingのReady/Flush資源sidecar v2は全Mesh2d/Mesh3dのEntity・handle・SiteYardBoundaryVisualを区間外で記録する。
+所有rowは65,536件を上限とし、超過は切捨てず受入失敗とする。
+
+旧353fc4cd派生referenceでは境界ごとに152 bytesのquadを複製する。固定fixtureのSite1＋Yard6/24に対し、
+7/25件のexclusive所有・payload・残る資源一定を独立検証する。全resident count/bytesは除外せず差分budgetへ残す。
+旧referenceの結果には`global_shared_mesh_plateau=false`を明記し、資源補足の観測成功を性能合格へ読み替えない。
+現行sourceは例外を使わずglobal N/4N plateauを満たす必要がある。material_countはTopDownStructuralMaterialのみで、
+TaskAreaMaterialを含む全materialやGPU実allocation量を表す値ではない。

@@ -37,6 +37,20 @@ def snapshot():
     }
 
 
+def owned_snapshot(size="small", *, shared=False):
+    value = snapshot()
+    count = {"small": 7, "medium": 25}[size]
+    value.update(schema_version=2, contract_id="building-resident-payload-inventory-v2", mesh_uses=[])
+    for n in range(1 if shared else count):
+        value["meshes"].append({"id": f"boundary-{n}", "path": None, "vertex_index_payload_bytes": 152})
+    for n in range(count):
+        value["mesh_uses"].append({"entity": n, "dimension": "2d", "mesh": f"boundary-{0 if shared else n}",
+                                   "site_yard_boundary": True})
+    value["mesh_count"] = len(value["meshes"])
+    value["mesh_vertex_index_payload_bytes"] = sum(m["vertex_index_payload_bytes"] for m in value["meshes"])
+    return value
+
+
 def boundary():
     return {
         "schema_version": 1,
@@ -50,6 +64,41 @@ def boundary():
 
 
 class ResourceInventoryTests(unittest.TestCase):
+    def test_historical_duplicate_geometry_is_explicit_failure_not_current_plateau(self):
+        small, medium = owned_snapshot(), owned_snapshot("medium")
+        for data, size in [(small, "small"), (medium, "medium")]:
+            inventory.require_boundary_scale(data, size)
+        with self.assertRaises(ValueError):
+            inventory.plateau(small, medium)
+        result = inventory.legacy_boundary_growth(small, medium)
+        self.assertFalse(result["global_shared_mesh_plateau"])
+        self.assertFalse(result["accepted"])
+        self.assertEqual(result["boundary_mesh_bytes"], [1064, 3800])
+        inventory.plateau(owned_snapshot(shared=True), owned_snapshot("medium", shared=True))
+        with self.assertRaises(ValueError):
+            inventory.legacy_boundary_growth(owned_snapshot(shared=True), medium)
+
+    def test_unknown_boundary_owners_foreign_consumers_and_payload_growth_fail(self):
+        for change in ("missing", "duplicate", "foreign", "payload", "shared-growth", "scale"):
+            small, medium = owned_snapshot(), owned_snapshot("medium")
+            if change == "missing":
+                medium["mesh_uses"].pop()
+            elif change == "duplicate":
+                medium["mesh_uses"].append(medium["mesh_uses"][0])
+            elif change == "foreign":
+                medium["mesh_uses"].append({"entity": 100, "dimension": "3d", "mesh": "boundary-0", "site_yard_boundary": False})
+            elif change == "payload":
+                medium["meshes"][-1]["vertex_index_payload_bytes"] += 1
+                medium["mesh_vertex_index_payload_bytes"] += 1
+            elif change == "shared-growth":
+                medium["meshes"][0]["vertex_index_payload_bytes"] += 1
+                medium["mesh_vertex_index_payload_bytes"] += 1
+            else:
+                medium = owned_snapshot()
+            with self.subTest(change=change), self.assertRaises(ValueError):
+                inventory.require_boundary_scale(medium, "medium")
+                inventory.legacy_boundary_growth(small, medium)
+
     def test_packed_rgb9e5_uses_the_wgpu_four_byte_texel_for_a_real_3d_lut(self):
         image = snapshot()["images"][0]
         image.update(format="Rgb9e5Ufloat", dimension="D3", extent=[48, 48, 48],

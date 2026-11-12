@@ -4,6 +4,39 @@ use bevy::{mesh::Indices, prelude::*, render::render_resource::TextureDimension}
 use hw_visual::TopDownStructuralMaterial;
 use serde_json::{Value, json};
 
+type MeshUseRow = (
+    Entity,
+    Option<&'static Mesh2d>,
+    Option<&'static Mesh3d>,
+    Has<hw_visual::site_yard_visual::SiteYardBoundaryVisual>,
+);
+pub(super) type MeshUses<'w, 's> = Query<'w, 's, MeshUseRow, Or<(With<Mesh2d>, With<Mesh3d>)>>;
+
+pub(super) fn mesh_uses(query: &MeshUses) -> Vec<Value> {
+    let mut uses = Vec::new();
+    for (entity, mesh2d, mesh3d, boundary) in query.iter() {
+        for (dimension, mesh) in [
+            ("2d", mesh2d.map(|m| m.0.id())),
+            ("3d", mesh3d.map(|m| m.0.id())),
+        ] {
+            if let Some(mesh) = mesh {
+                uses.push(json!({"entity": entity.to_bits(), "dimension": dimension,
+                    "mesh": format!("{mesh:?}"), "site_yard_boundary": boundary}));
+                if uses.len() > MAX_RESOURCES {
+                    return uses; // bounded sentinel: capture rejects, never writes a truncated inventory
+                }
+            }
+        }
+    }
+    uses.sort_by_key(|row| {
+        (
+            row["entity"].as_u64(),
+            row["dimension"].as_str().map(str::to_owned),
+        )
+    });
+    uses
+}
+
 const MAX_RESOURCES: usize = 65_536;
 
 /// Observe the real post-resize scene and natural retirement before publishing
@@ -140,7 +173,11 @@ pub(super) fn capture(
     materials: &Assets<TopDownStructuralMaterial>,
     images: &Assets<Image>,
     server: &AssetServer,
+    mesh_uses: &[Value],
 ) -> Result<Value, String> {
+    if mesh_uses.len() > MAX_RESOURCES {
+        return Err("mesh ownership inventory exceeds finite cap".into());
+    }
     if [meshes.len(), materials.len(), images.len()]
         .into_iter()
         .any(|n| n > MAX_RESOURCES)
@@ -186,7 +223,8 @@ pub(super) fn capture(
         .checked_mul(materials.len())
         .ok_or("material shallow byte product overflow")?;
     Ok(
-        json!({"schema_version": 1, "contract_id": "building-resident-payload-inventory-v1",
+        json!({"schema_version": 2, "contract_id": "building-resident-payload-inventory-v2",
+        "mesh_uses": mesh_uses,
         "mesh_count": meshes.len(), "image_count": images.len(), "material_count": materials.len(),
         "mesh_vertex_index_payload_bytes": mesh_payload, "image_cpu_payload_bytes": image_cpu_payload,
         "images_without_cpu_backing": images_without_cpu,
@@ -228,6 +266,44 @@ mod tests {
         mesh::{PrimitiveTopology, VertexAttributeValues},
         render::render_resource::{Extent3d, TextureFormat},
     };
+
+    #[test]
+    fn mesh_ownership_observes_both_dimensions_and_rejects_over_cap_without_truncating_success() {
+        let mut app = App::new();
+        app.add_plugins((MinimalPlugins, bevy::asset::AssetPlugin::default()))
+            .init_asset::<Mesh>()
+            .init_asset::<Image>()
+            .init_asset::<TopDownStructuralMaterial>();
+        let mesh = app
+            .world_mut()
+            .resource_mut::<Assets<Mesh>>()
+            .add(Rectangle::default().mesh());
+        app.world_mut().spawn((
+            Mesh2d(mesh.clone()),
+            Mesh3d(mesh.clone()),
+            hw_visual::site_yard_visual::SiteYardBoundaryVisual,
+        ));
+        let mut state = bevy::ecs::system::SystemState::<MeshUses>::new(app.world_mut());
+        let uses = mesh_uses(&state.get(app.world()).unwrap());
+        assert_eq!(uses.len(), 2);
+        assert!(uses.iter().all(|row| row["site_yard_boundary"] == true));
+        assert_eq!(uses[0]["dimension"], "2d");
+        assert_eq!(uses[1]["dimension"], "3d");
+        app.world_mut()
+            .spawn_batch((0..MAX_RESOURCES).map(|_| Mesh2d(mesh.clone())));
+        let uses = mesh_uses(&state.get(app.world()).unwrap());
+        assert_eq!(uses.len(), MAX_RESOURCES + 1);
+        assert!(
+            capture(
+                app.world().resource::<Assets<Mesh>>(),
+                app.world().resource::<Assets<TopDownStructuralMaterial>>(),
+                app.world().resource::<Assets<Image>>(),
+                app.world().resource::<AssetServer>(),
+                &uses
+            )
+            .is_err()
+        );
+    }
 
     #[test]
     fn actual_vertex_index_payload_and_missing_cpu_are_distinct() {
@@ -298,6 +374,7 @@ mod tests {
                 world.resource::<Assets<TopDownStructuralMaterial>>(),
                 world.resource::<Assets<Image>>(),
                 world.resource::<AssetServer>(),
+                &[],
             )
         };
         let value = snapshot(app.world()).unwrap();

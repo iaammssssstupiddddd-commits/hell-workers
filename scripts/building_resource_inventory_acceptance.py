@@ -142,10 +142,11 @@ def observations(value):
         case = static.Case("building-art-static", size, "gpu", static.SEED, souls, 0)
         raw = session / "cases" / case.identifier / "run-001/data/building_resource_inventory.json"
         payload = oracle.boundaries(native.read_json(raw))
+        oracle.require_boundary_scale(payload, size)
         results.append({"size": size, "session_sha256": result["session_sha256"],
             "binary_sha256": result["binary_sha256"], "resource_sha256": static.sha256(raw), "inventory": payload})
     native.require(results[0]["binary_sha256"] == results[1]["binary_sha256"], "supplement binary drift")
-    plateau = oracle.plateau(results[0]["inventory"], results[1]["inventory"])
+    plateau = oracle.legacy_boundary_growth(results[0]["inventory"], results[1]["inventory"])
     check_plan(value)
     return results, plateau
 

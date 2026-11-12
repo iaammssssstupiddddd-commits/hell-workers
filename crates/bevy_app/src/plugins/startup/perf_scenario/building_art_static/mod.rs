@@ -228,6 +228,7 @@ pub(crate) struct InspectParams<'w, 's> {
     root_transforms: Query<'w, 's, (&'static Building3dVisual, &'static Transform)>,
     sprites: SpriteQuery<'w, 's>,
     foreground: foreground::ForegroundQuery<'w, 's>,
+    mesh_uses: resource_inventory::MeshUses<'w, 's>,
     meshes: Res<'w, Assets<Mesh>>,
     materials: Res<'w, Assets<TopDownStructuralMaterial>>,
     images: Res<'w, Assets<Image>>,
@@ -343,6 +344,7 @@ pub(crate) fn inspect_building_art_static_system(mut params: InspectParams) {
                             &params.materials,
                             &params.images,
                             server,
+                            &resource_inventory::mesh_uses(&params.mesh_uses),
                         )
                     }) {
                     Ok(value) => value,

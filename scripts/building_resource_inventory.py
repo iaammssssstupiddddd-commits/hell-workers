@@ -57,9 +57,11 @@ def texture_estimate(entry):
 
 
 def validate(value):
-    require(isinstance(value, dict) and set(value) == {"schema_version", "contract_id", *TOTALS,
-            "meshes", "images", "materials"} and type(value["schema_version"]) is int
-            and value["schema_version"] == 1 and value["contract_id"] == "building-resident-payload-inventory-v1",
+    version = value.get("schema_version") if isinstance(value, dict) else None
+    require(type(version) is int and version in (1, 2), "resource inventory version differs")
+    require(set(value) == {"schema_version", "contract_id", *TOTALS,
+            "meshes", "images", "materials", *({"mesh_uses"} if version == 2 else set())}
+            and value["contract_id"] == f"building-resident-payload-inventory-v{version}",
             "resource inventory contract differs")
     for field in TOTALS:
         integer(value[field], positive=field == "material_shallow_size")
@@ -90,6 +92,19 @@ def validate(value):
                                                                        for e in value["images"])
             and value["material_shallow_bytes"] == value["material_count"]*value["material_shallow_size"],
             "resource raw totals differ")
+    if version == 2:
+        uses = value["mesh_uses"]
+        require(isinstance(uses, list) and len(uses) <= CAP, "mesh use cap exceeded")
+        seen = set()
+        mesh_ids = {m["id"] for m in value["meshes"]}
+        for row in uses:
+            require(isinstance(row, dict) and set(row) == {"entity", "dimension", "mesh", "site_yard_boundary"}
+                    and row["dimension"] in ("2d", "3d") and row["mesh"] in mesh_ids
+                    and type(row["site_yard_boundary"]) is bool, "mesh ownership invalid")
+            integer(row["entity"])
+            key = row["entity"], row["dimension"]
+            require(key not in seen, "duplicate mesh owner")
+            seen.add(key)
     return value
 
 
@@ -117,3 +132,49 @@ def plateau(small, medium):
         require(descriptions(small[key]) == descriptions(medium[key]),
                 "N/4N resource payload/path multiset differs")
     return {key: small[key] for key in sorted(TOTALS)}
+
+
+def legacy_boundary_growth(small, medium):
+    """Observe, never approve, the historical Site/Yard quad duplication.
+
+    Only the old-reference supplement/paired leg may use this exception. Current
+    sources must still pass the unmodified global plateau above. Total resident
+    counts and bytes remain in raw results and budget comparisons.
+    """
+    def partition(value, expected):
+        validate(value)
+        require(value["schema_version"] == 2, "baseline ownership evidence missing")
+        uses = value["mesh_uses"]
+        boundaries = [r for r in uses if r["site_yard_boundary"]]
+        require(len(boundaries) == expected and all(r["dimension"] == "2d" for r in boundaries),
+                "baseline Site/Yard fixture boundary count differs")
+        ids = {r["mesh"] for r in boundaries}
+        require(len(ids) == expected, "historical per-boundary mesh identity differs")
+        require(not any(r["mesh"] in ids and not r["site_yard_boundary"] for r in uses),
+                "baseline boundary mesh has a foreign consumer")
+        meshes = [m for m in value["meshes"] if m["id"] in ids]
+        require(len(meshes) == expected and all(m["path"] is None and m["vertex_index_payload_bytes"] == 152
+                                              for m in meshes), "baseline boundary quad payload differs")
+        result = {k: v for k, v in value.items() if k != "mesh_uses"}
+        result.update(schema_version=1, contract_id="building-resident-payload-inventory-v1",
+                      meshes=[m for m in value["meshes"] if m["id"] not in ids],
+                      mesh_count=value["mesh_count"]-expected,
+                      mesh_vertex_index_payload_bytes=value["mesh_vertex_index_payload_bytes"]-152*expected)
+        return result
+    # Also usable between repeated same-size observations, with exact 7/25
+    # fixture identities checked by the session verifier before this function.
+    counts = [sum(r["site_yard_boundary"] for r in v.get("mesh_uses", [])) for v in (small, medium)]
+    require(all(n in (7, 25) for n in counts), "unknown baseline boundary scale")
+    shared = plateau(partition(small, counts[0]), partition(medium, counts[1]))
+    return {"global_shared_mesh_plateau": False, "known_failure": "per-boundary duplicated Site/Yard quad",
+            "boundary_instances": counts, "boundary_mesh_bytes": [n*152 for n in counts],
+            "remaining_resource_plateau": shared, "accepted": False}
+
+
+def require_boundary_scale(value, size):
+    validate(value)
+    require(size in ("small", "medium") and value["schema_version"] == 2,
+            "boundary scale ownership unavailable")
+    expected = {"small": 7, "medium": 25}[size]
+    require(sum(row["site_yard_boundary"] for row in value["mesh_uses"]) == expected,
+            "boundary ownership differs from verified fixture size")

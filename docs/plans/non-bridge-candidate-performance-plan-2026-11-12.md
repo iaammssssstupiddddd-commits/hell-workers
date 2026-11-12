@@ -512,3 +512,21 @@ rawには未対応packed LUTと、初終の匿名画像1件の退役があり、
 M7-bのMixer move v3は登録verifier、4採用画像/rawの独立確認、封印/保持/finalizeを完了。
 同identityの実MoveCompleted・owner/root/parts・`[64,0,0]`変位を確認した。
 旧v2 invalidは維持し、新passを通常AI・art・performance・releaseの承認へ読み替えない。
+
+
+### M8-e: 境界quad共有と旧基準の既知失敗
+
+v3補足はSmall/Medium両actual-window・adapter・初終一致を確認したが、N/4NのMesh85→103、
+payload120,376→123,112 bytes（18×152）でinvalid封印・診断保持・finalizeした。
+sourceではSite/Yard境界が各1 quadを生成し、fixture境界数7→25と一致する。旧rawに所有対応がないため
+個別handleの帰属確定とは主張せず、新sidecarで全Mesh2d/3dと境界markerの所有を直接記録する。
+
+- [x] primaryだけ境界quadをsystem-local強handle1つへ共有。個別material/scale/色・gameplayは維持。
+- [x] 別sourceのreferenceには受動所有観測だけ追加。旧凍結source・描画実装は変更しない。
+- [x] 旧referenceの7/25 exclusive境界quadと残る資源を分類し、全量・既知失敗をpaired結果にも保持する。
+- [ ] 拒否系・ECS・両source品質・Help/storage・exact独立reviewを閉じる。
+- [ ] fresh補足v4で実所有と初終一致を照合し、現行sourceのglobal plateauと改善量を正式pairedで確認する。
+
+No impact: 境界の表示寸法/色、入力、配置成立条件、保存、通知、Help到達経路は不変。
+旧基準の重複を許容する分類を現行側へ適用せず、候補のperformance/art/release承認を代用しない。
+M8-dのv3では初終安定まで確認したが、RTT診断markerをrun.logでは未確認。旧匿名画像の直接帰属は未確定のまま残す。
