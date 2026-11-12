@@ -9,6 +9,8 @@ mod loader;
 #[cfg(feature = "profiling")]
 mod observations;
 #[cfg(feature = "profiling")]
+mod observations_gpu;
+#[cfg(feature = "profiling")]
 mod observations_history;
 #[cfg(feature = "profiling")]
 mod observations_m2;

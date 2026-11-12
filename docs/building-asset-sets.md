@@ -1185,3 +1185,37 @@ fresh sourceの通常入力native結果と独立reviewが揃うまでは、こ�
 全量保存の実handler/割当/需要回帰と品質gateは通過したが、Tank由来の投入・精製の全工程証拠は未達である。
 通常StockpileはStasisMudを受け入れないため、その追加を搬出解決と扱わない。
 次の通常入力campaignには正規の床/壁需要・TaskArea・材料/猫車経路を明示し、旧試験を再解釈せずfresh subjectで確認する。
+
+### M5採用候補の通常入力planning（2026-11-12）
+
+`47e48c405e0b191b5b607b1650ac334fee7513bc`、source
+`0216714f9037b8873c690f45c604e500f65484ea6a0876c66dec29f4786a67dd`の4専用caseは、
+各6画像/21実入力を完了し、登録verifierによるsealと独立画像/rawレビューが成功した。
+scopeは`ordinary-m5-candidate-planning-v1`、全caseでepoch/window/PID/nonceと同Blueprintの選択を維持した。
+
+| 対象 | raw samples/events | manifest SHA256 |
+| --- | --- | --- |
+| SandPile | 30/80 | `215c4481f954c9121680ef9df85c027a586a12b23ad860c93f12721b557c4df2` |
+| BonePile | 32/73 | `c63e2100e8c03f8b1ad470b2bc8d1b6b1585c11d4bce24e80aefc657c96bf15c` |
+| WheelbarrowParking | 31/68 | `58ce2ae6981f3ae3836f1a6bb51101dca3c2fa0fb71ba40d98834d621d67de86` |
+| OutdoorLamp | 35/83 | `13a7655f0c705eef911d31ad36879769510355fe9e966a2ad980700abe9d632d` |
+
+catalogは各採用候補の画像、配置後は青い未完成Blueprint、選択後は同kind/進捗0の実InfoPanelを確認した。
+Parkingの既存ownerも同candidate画像・poseを保持した。小さい半透明ghostはBlueprintと重なるため、
+画像単独の色判別には限界があり、rawの合法/占有色・実画像・可視性との対応で評価した。
+WARN/ERROR/panicなし、Intel Arc MTL/Mesa26.2.6/Vulkan/X11。自然完成、採取/車両利用/配電、
+save/load、稼働性能、独立art再採否、promotion/install/releaseの証拠には含めない。
+
+### 通常worldのdevice allocator観測
+
+明示profiling観測sessionのsampleへ`gpu_allocator_observation`を追加する。
+Bevy0.19のmain WorldのRenderDevice/RenderAdapterInfoから、wgpu29のsafeな
+`generate_allocator_report()`を使い、Vulkan device allocatorの瞬時allocated/reserved bytes、
+allocation/block件数、実adapter/driverを`wgpu-vulkan-allocator`として記録する。
+両totalの実一覧とのchecked sum、block範囲とcapacityを検査する。device/adapter欠損、非Vulkan、
+report None、算術不整合は明示unavailableで、値を0やRSS推定へ置き換えない。
+実際の空reportだけはavailable/0とし、取得不能と区別する。
+これは全GPUメモリ、専用VRAM、peak、描画完了やGPU時間の計測ではない。
+backendのlockとreport一覧生成の観測費用を伴い、全allocation名をrawへ出さない。
+既存`gpu_measured_bytes:null`/`performance_evidence:false`、正式性能oracleのsource受付と
+art/release権限は維持する。fresh nativeによる接続確認と通常worldの正式計測producerは別工程である。

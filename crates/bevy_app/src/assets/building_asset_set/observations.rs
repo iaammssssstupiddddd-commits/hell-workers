@@ -583,6 +583,9 @@ fn snapshot(world: &mut World) -> Result<Value, String> {
         "native_peak_live_bytes": null, "rss_bytes": null,
         "application_handle_count": null});
     sample["primary_window_bits"] = json!(primary_window_bits);
+    // Separate instantaneous device-allocator telemetry; the formal metrics
+    // above remain unavailable. This does not grant performance acceptance.
+    sample["gpu_allocator_observation"] = super::observations_gpu::snapshot(world);
     sample["m2_context"] = m2_context;
     sample["relative_speed"] = json!(world.resource::<Time<Virtual>>().relative_speed());
     sample["rest_area_context"] = rest_area_context;
