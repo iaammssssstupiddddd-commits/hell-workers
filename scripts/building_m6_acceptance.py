@@ -205,6 +205,7 @@ def check_inputs(value):
         "M6 driver/codec changed",
     )
     pre_release = value["profile"] == PRE_RELEASE_PROFILE
+    check_foreground_verifier(value)
     check_candidate_verifiers(value)
     roots = value.get("candidate_roots")
     pipeline.require((roots is not None) == pre_release, "candidate roots/profile mismatch")
@@ -213,6 +214,11 @@ def check_inputs(value):
     static.check_root(repo, Path(value["job_root"]))
     if value.get("foundation") is not None:
         frozen_foundation(value)
+
+
+def check_foreground_verifier(value):
+    pipeline.require(value.get("foreground_verifier_sha256") == art.foreground.verifier_sha256(),
+                     "M6 foreground verifier changed")
 
 
 def check_candidate_verifiers(value):
@@ -314,6 +320,7 @@ def plan(args):
         "codec": str(codec),
         "codec_sha256": pipeline.digest(codec.read_bytes()),
         "driver_sha256": pipeline.digest(Path(__file__).read_bytes()),
+        "foreground_verifier_sha256": art.foreground.verifier_sha256(),
         "identity": static.identity(repo),
         "budget": budget(pipeline.read(args.budget)),
         "adapter": args.adapter,
@@ -459,6 +466,12 @@ def verify_case(value, item):
             if row["kind"] == "Door":
                 continue
             expected = projected_parts(manifests[row["kind"]], row)
+            if row["kind"] in art.foreground.KINDS:
+                manifest = manifests[row["kind"]]
+                preview = manifest["world_preview"]
+                role = "world_on" if row["kind"] == "OutdoorLamp" and row["ordinal"] % 4 >= 2 else preview["image_role"]
+                art.foreground.validate_record(row, manifest["identity"], preview,
+                    {record["role"]: record for record in manifest["artifacts"]}, role)
             for actual, part in zip(row["parts"], expected, strict=True):
                 pipeline.require(
                     all(

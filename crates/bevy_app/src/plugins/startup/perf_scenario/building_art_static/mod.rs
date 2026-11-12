@@ -25,7 +25,9 @@ use hw_world::{WorldMapRead, WorldMapWrite};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 
-use super::{PerfScenarioConfig, PerfWorkload, fixture::PerfScenarioApplied};
+use super::{
+    PerfCapture, PerfCapturePhase, PerfScenarioConfig, PerfWorkload, fixture::PerfScenarioApplied,
+};
 use crate::assets::building_asset_set::acceptance::BuildingArtSession;
 use crate::assets::building_asset_set::{BuildingAssetKind, BuildingAssetPool, M6Comparison};
 use crate::assets::door_asset_set::{
@@ -107,6 +109,8 @@ pub(crate) struct BuildingArtStaticState {
     m6_resources: Option<ResourceEvidence>,
     m6_pending_evidence: Option<Value>,
     m6_pending_frames: u64,
+    m6_foreground: HashMap<Entity, foreground::MeasuredForeground>,
+    m6_final_evidence: Option<Value>,
 }
 
 /// Observe startup without repairing it. Global asset uploads/retirements may
@@ -234,6 +238,7 @@ pub(crate) struct InspectParams<'w, 's> {
     spas: Query<'w, 's, &'static SoulSpaSite>,
     tiles: Query<'w, 's, (&'static SoulSpaTile, Option<&'static TaskWorkers>)>,
     time: Res<'w, Time<Virtual>>,
+    capture: Res<'w, PerfCapture>,
     exit: MessageWriter<'w, AppExit>,
 }
 
@@ -291,15 +296,26 @@ pub(crate) fn inspect_building_art_static_system(mut params: InspectParams) {
                 return;
             }
             if params.state.evidence.is_none() {
+                let foreground = match foreground::capture_m6(&params) {
+                    Ok(value) => value,
+                    Err(reason) => {
+                        fail(&mut params.state, &mut params.exit, reason);
+                        return;
+                    }
+                };
                 params.state.m6_pending_evidence = None;
                 params.state.m6_pending_frames = 0;
-                params.state.evidence = Some(evidence);
+                params.state.m6_foreground = foreground;
+                params.state.evidence = Some(evidence.clone());
                 params.state.art_candidate = params.art_session.is_some();
                 params.state.m6 = params.m6.is_some();
                 let resources = params.m6.as_ref().map(|_| resource_evidence(&params));
                 params.state.m6_resources = resources;
                 params.state.phase = Phase::Ready;
                 params.applied.workload = true;
+            }
+            if params.m6.is_some() && matches!(params.capture.phase, PerfCapturePhase::Flush) {
+                params.state.m6_final_evidence = Some(evidence);
             }
             params.state.stable_frames += 1;
             if params.state.stable_frames == 30
@@ -430,10 +446,17 @@ fn inspect(params: &InspectParams) -> Result<Option<Value>, String> {
     let mut active_meshes = HashSet::new();
     // Baselines keep one full checkpoint. Explicit Spa pages reobserve all
     // records; explicit M5 sessions reobserve only their four target sprites.
-    let record_mode = foreground::RecordMode::for_frame(
-        params.state.evidence.is_none(),
-        params.art_session.as_deref(),
-    );
+    let record_mode =
+        if params.m6.is_some() && matches!(params.capture.phase, PerfCapturePhase::Flush) {
+            // The measure driver enters Flush in Update, then this PostUpdate
+            // captures the real final state before next Update writes the sidecar.
+            foreground::RecordMode::All
+        } else {
+            foreground::RecordMode::for_frame(
+                params.state.evidence.is_none(),
+                params.art_session.as_deref(),
+            )
+        };
     let mut records = (record_mode != foreground::RecordMode::None).then(Vec::new);
     for (spec, &owner) in params.state.specs.iter().zip(&params.state.owners) {
         let (building, transform, door, water, resting, mixer, lamp) = params
@@ -472,6 +495,15 @@ fn inspect(params: &InspectParams) -> Result<Option<Value>, String> {
                 .flatten()
             })
         };
+        if params.state.phase == Phase::Ready
+            && params.m6.as_ref().is_some_and(|mode| mode.candidate)
+            && let Some(descriptor) =
+                candidate.filter(|set| set.manifest.identity.kind.mesh_roles().is_empty())
+        {
+            let observed = foreground::observe(params, spec, owner, descriptor)?;
+            foreground::unchanged_m6(params.state.m6_foreground.get(&owner), &observed)
+                .map_err(|reason| format!("{reason}: {:?}/{}", spec.kind, spec.ordinal))?;
+        }
         let root_count = params
             .visual_roots
             .iter()
@@ -912,6 +944,16 @@ fn resource_evidence(params: &InspectParams) -> ResourceEvidence {
 }
 
 impl BuildingArtStaticState {
+    fn final_sidecar_evidence<'a>(&'a self, initial: &'a Value) -> std::io::Result<&'a Value> {
+        if self.m6 {
+            self.m6_final_evidence
+                .as_ref()
+                .ok_or_else(|| std::io::Error::other("M6 actual final observation missing"))
+        } else {
+            Ok(initial)
+        }
+    }
+
     pub(super) fn write_sidecar(&self, config: &PerfScenarioConfig) -> std::io::Result<()> {
         if config.workload() != PerfWorkload::BuildingArtStatic {
             return Ok(());
@@ -926,10 +968,11 @@ impl BuildingArtStaticState {
             .as_ref()
             .ok_or_else(|| std::io::Error::other("missing fixture evidence"))?;
         let bytes = serde_json::to_vec(evidence)?;
+        let final_evidence = self.final_sidecar_evidence(evidence)?;
         let summary = json!({"schema_version": 1, "contract_id": if evidence.get("variant") == Some(&json!("lamp-supply-art-context")) { "lamp-supply-art-context-v1" } else if evidence.get("variant") == Some(&json!("m5-art-context")) { "m5-art-context-v1" } else if evidence.get("variant") == Some(&json!("m2-art-context")) { "m2-art-context-v1" } else if evidence.get("variant").is_some() { "rest-area-art-context-v1" } else if evidence.get("pre_release_comparison") == Some(&json!(true)) { "building-art-pre-release-nine-v1" } else if self.m6 { "building-art-m6-nine-v1" } else { "building-art-static-nine-v2" },
             "evidence_kind": if self.art_candidate { "candidate-paused-static-only" } else { "paused-static-only" }, "active_simulation_evidence": false,
             "camera_scale": evidence.get("camera_scale").unwrap_or(&json!(layout::CAMERA_SCALE)), "stable_frames": self.stable_frames,
-            "layout_sha256": hw_infra::lighting::digest_hex(&Sha256::digest(&bytes).into()), "initial": evidence, "final": evidence});
+            "layout_sha256": hw_infra::lighting::digest_hex(&Sha256::digest(&bytes).into()), "initial": evidence, "final": final_evidence});
         let directory = super::output::perf_output_directory(config);
         std::fs::create_dir_all(&directory)?;
         let file = std::fs::OpenOptions::new()
@@ -947,6 +990,22 @@ impl BuildingArtStaticState {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn m6_sidecar_requires_actual_final_instead_of_reusing_initial() {
+        let initial = json!({"records": ["initial"]});
+        let mut state = BuildingArtStaticState {
+            m6: true,
+            ..default()
+        };
+        assert!(state.final_sidecar_evidence(&initial).is_err());
+        state.m6_final_evidence = Some(json!({"records": ["observed-final"]}));
+        assert_eq!(
+            state.final_sidecar_evidence(&initial).unwrap()["records"][0],
+            "observed-final"
+        );
+        assert_ne!(state.final_sidecar_evidence(&initial).unwrap(), &initial);
+    }
 
     #[test]
     fn m6_readiness_requires_thirty_consecutive_complete_identical_observations() {

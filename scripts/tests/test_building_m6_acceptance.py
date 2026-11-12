@@ -20,9 +20,11 @@ from perf_tool.execution import fixed_environment
 
 
 def sidecar(candidate=False, copies=4):
+    bindings = {kind: {"kind": kind, "authority": "release_approved", "generation": 1,
+                       "manifest_sha256": "a" * 64} for kind in oracle.SETS}
     records = expected_records(copies)
     if candidate:
-        for row in records:
+        for index, row in enumerate(records):
             if row["kind"] == "Door":
                 continue
             row["parts"] = [
@@ -41,6 +43,26 @@ def sidecar(candidate=False, copies=4):
             ]
             if row["kind"] in {"Tank", "MudMixer"}:
                 row["root_translation_wu"] = [row["center"][0], 0.0, -row["center"][1]]
+            if row["kind"] in oracle.foreground.KINDS:
+                owner = 1000 + index * 2
+                row["owner"] = owner
+                kind = row["kind"]
+                preview = {"image_role": "world_off" if kind == "OutdoorLamp" else "world",
+                           "canvas_px": [256, 256], "canvas_wu": [64., 64.] if kind == "WheelbarrowParking" else [32., 32.],
+                           "anchor_px": [128., 128.], "representative_state": "Off" if kind == "OutdoorLamp" else "Empty"}
+                role = "world_on" if kind == "OutdoorLamp" and row["ordinal"] % 4 >= 2 else preview["image_role"]
+                owner_z = .05 if kind in {"SandPile", "BonePile"} else .12
+                pose = {"translation": [*row["center"], struct.unpack("<f", struct.pack("<f", owner_z))[0]],
+                        "rotation": [0., 0., 0., 1.], "scale": [1., 1., 1.]}
+                local = {"translation": [0., 0., 0.], "rotation": [0., 0., 0., 1.], "scale": [1., 1., 1.]}
+                row["foreground"] = {"schema": 1, "identity": bindings[kind], "descriptor": preview,
+                    "owner": owner, "entity": owner + 1, "parent": owner, "image_role": role,
+                    "artifact": {"role": "image:" + role, "path": role + ".png", "bytes": 100, "sha256": "b" * 64},
+                    "image_handle": "synthetic-image-" + kind + role, "image_matches": True,
+                    "canvas_wu": preview["canvas_wu"], "anchor": [0., 0.], "visible": True, "layers": [0],
+                    "color_srgba": [1., 1., 1., 1.], "owner_pose": pose, "local_pose": local,
+                    "global_pose": copy.deepcopy(pose), "global_matrix": oracle.foreground.matrix(pose),
+                    "parent_local_matrix": oracle.foreground.matrix(pose)}
     evidence = {
         "records": records,
         "target_count": copies * 9,
@@ -51,15 +73,7 @@ def sidecar(candidate=False, copies=4):
         "completion_effects": 0,
         "m6": {
             "mode": "candidate" if candidate else "legacy-control",
-            "identities": [
-                {
-                    "kind": kind,
-                    "authority": "release_approved",
-                    "generation": 1,
-                    "manifest_sha256": "a" * 64,
-                }
-                for kind in oracle.SETS
-            ],
+            "identities": list(bindings.values()),
             "door_identity": {
                 "asset_set_generation": 7,
                 "authority": "release_approved",
@@ -94,6 +108,44 @@ def reseal(value):
 
 
 class M6Tests(unittest.TestCase):
+    def test_foreground_dependency_is_frozen_and_missing_binding_is_rejected(self):
+        value = {"foreground_verifier_sha256": m6.art.foreground.verifier_sha256()}
+        m6.check_foreground_verifier(value)
+        for wrong in ({}, {"foreground_verifier_sha256": "a" * 64}):
+            with self.assertRaisesRegex(ValueError, "foreground verifier changed"):
+                m6.check_foreground_verifier(wrong)
+
+    def test_m6_foreground_rejects_unknown_fields_cross_owner_and_medium_lamp_role(self):
+        case = Case("building-art-static", "medium", "gpu", 20260920, 60, 0)
+        value = sidecar(True, 16)
+        oracle.validate_sidecar(value, case)
+        def target(document, kind="OutdoorLamp", ordinal=4):
+            return next(row for row in document["initial"]["records"] if row["kind"] == kind and row["ordinal"] == ordinal)
+        mutations = (
+            lambda v: target(v).update(unknown=True),
+            lambda v: target(v)["foreground"].update(unknown=True),
+            lambda v: target(v).pop("foreground"),
+            lambda v: target(v)["foreground"].update(owner=1),
+            lambda v: target(v)["foreground"].update(parent=1),
+            lambda v: target(v)["foreground"].update(layers=[1]),
+            lambda v: target(v)["foreground"].update(image_matches=False),
+            lambda v: target(v)["foreground"].update(image_role="world_on"),
+            lambda v: target(v)["foreground"].update(identity={**target(v)["foreground"]["identity"], "manifest_sha256": "b" * 64}),
+            lambda v: target(v)["foreground"]["owner_pose"]["translation"].__setitem__(2, 0.0),
+        )
+        for mutate in mutations:
+            bad = copy.deepcopy(value)
+            mutate(bad)
+            with self.assertRaises((ValueError, KeyError)):
+                oracle.validate_sidecar(reseal(bad), case)
+        bad = copy.deepcopy(value)
+        target(bad)["foreground"]["entity"] = target(bad, ordinal=0)["foreground"]["entity"]
+        with self.assertRaisesRegex(ValueError, "duplicate foreground"):
+            oracle.validate_sidecar(reseal(bad), case)
+        bad = copy.deepcopy(value)
+        bad["final"]["records"][-1]["state"]["powered"] = False
+        with self.assertRaisesRegex(ValueError, "checkpoint drift"):
+            oracle.validate_sidecar(bad, case)
     def test_cli_binds_frozen_repository_and_root_before_the_activity_guard(self):
         with tempfile.TemporaryDirectory() as directory:
             plan = Path(directory) / "plan.json"

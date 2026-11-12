@@ -154,6 +154,15 @@ M6ではtarget/資源の完全snapshotが30frame連続で一致してからworkl
 ready後の資源変化は従来どおり失敗とし、before/after値を診断へ残す。
 専用runnerは`RUST_LOG=info,wgpu=error`を要求/記録し、performance既定filterに隠れる
 実AdapterInfoを観測可能にする。親shellのlog抑制は引き継がない。
+M6 candidateのM5 foregroundは、Small16件/Medium64件の実owner・sprite・画像handle・色・canvas・
+owner/local/global pose・anchor・layer・可視性をready以降も毎frameのtyped値で照合する。
+計測区間内でforeground JSONやartifact/identity文字列を生成せず、初期とFlushの区間外で完全DTOを作る。
+最終sidecarはMeasure→Flush後のPostUpdateで取得した実最終値を要求し、初期cloneで代用しない。
+candidate側の追加typed観測費用も増分に含む保守的比較であり、純粋なrenderer費用だけとは呼ばない。
+独立oracleはM5の既知owner/foregroundをexact keyで検査し、全ordinal・一意owner/sprite・Lampの
+ordinal%4のoff/on・製品のpile/structure Z・白色・TRS・layer0・画像/artifactを照合する。
+galleryの4件契約は共通1record検証の呼出側に残し、M6の16件/64件へ暗黙拡張しない。
+runnerは独立foreground verifierのSHAをplanへ固定し、packaged manifestのdescriptor/artifactにも再照合する。
 `scripts/perf_tool/contracts/building_pre_release_budget_v1.json` は測定前の増分上限で、
 p95 +2ms、p99 +10ms、native live +64MiB、RSS +128MiB、mesh accessor +128KiB、
 image CPU +16MiB、mesh +7、image +22、material +32/shallow +64KiB、反復MADはmedianの10%以内。
@@ -168,3 +177,7 @@ GPU配分量のbudgetではない。試験結果を見て上限を緩和せず�
 初回v1はCLIのrepo/root引継ぎ欠損、v2は比較元の起動直後の資源変化でinvalid。
 v2は正常な計測window/summaryとAdapterInfoがなく、有効な性能結果は0回のままである。
 失敗を再送・成功化せず、入口と準備安定性・ログ契約を修正してfresh batchへ進む。
+v3（`47e48c40`）はcontrolとcandidateの30/60秒計測を完走し、起動直後の資源変化は再発しなかった。
+しかしcandidateはM5のowner/foreground追加DTOへ未対応のoracleに拒否され、全体はinvalid。
+計測値は診断用であり、有効なcandidate比較やbudget passへ読み替えない。継続foreground照合と
+実finalの欠落も補正対象とし、同じ候補・事前budgetの新sourceで全matrixを実施する。

@@ -45,12 +45,12 @@ Door g7は別loaderで維持する。現loader/presentation候補許可は単一
 
 ### M1: 候補比較入口
 
-- [ ] exact8 admission / 別contract / asset viewと改変拒否を実装。
-- [ ] 独立read-only review、Help実レビュー、関連テスト、check/Clippyを実施。
+- [x] exact8 admission / 別contract / asset viewと改変拒否を実装。
+- [x] 独立read-only review、Help実レビュー、関連テスト、check/Clippyを実施（入口・準備補正は下記のfresh検証へ継続）。
 
 ### M2: 実機比較
 
-- [ ] 全candidate packaged-byte/provenanceをcodecで再照合し、測定前budgetを固定。
+- [x] 全candidate packaged-byte/provenanceをcodecで再照合し、測定前budgetを固定。
 - [ ] 同subjectのCapture12・Memory12を登録launcherで実行・独立verify。
 - [ ] 失敗を修正し新subjectで再検証。成功を正式release/art承認へ読み替えない。
 
@@ -58,7 +58,21 @@ Door g7は別loaderで維持する。現loader/presentation候補許可は単一
 
 - [ ] 静止比較の結果・未検証範囲を恒久仕様へ同期。
 - [ ] 通常worldの残lifecycle/性能とguard付きpromotion/install/rollback、通常起動導入を継続。
-- [ ] 旧preview入口と分離したM5採用候補planning4caseを同じ検証subjectへ準備し、fresh実機で確認。
+- [x] 旧preview入口と分離したM5採用候補planning4caseを同じ検証subjectへ準備し、fresh実機で確認。
+
+### M4: 実測で判明したforeground検証と通常world観測基盤
+
+- [ ] M6のM5 owner/foreground既知DTOをexact key・identity・artifact・画像・親/TRS・layer・可視性まで独立検証する。
+  既存galleryの4件/Lamp ordinal契約を保持し、1record検証を共通化する。
+  M6では各kindのcopies件とordinal全域、Lamp ordinal%4の役割を要求し、validatorのhashもplanへ固定する。
+- [ ] M6 candidateのM5をSmall16/Medium64件の有界typed snapshotで毎frame照合する。
+  JSON化は初期/Flushの区間外に置き、実最終観測からfinalを作る。初期cloneをfinalの代用にしない。
+  candidate側の追加観測費用は増分に含む保守的比較と明記し、fresh pairで再測定する。
+- [ ] 未準備/初期後の画像・owner・親・pose・layer drift、偽final一致、未知key、欠損/重複、Medium Lamp役割を拒否する。
+- [ ] 通常worldのGPU観測をprofiling専用の別DTOへ追加し、device allocatorの瞬時allocated/reservedと件数・adapter/driverを記録する。
+  Bevy0.19/wgpu29のsafe APIだけを使い、欠損/非Vulkan/None/算術不整合は明示unavailableとする。
+  既存gpu_measured_bytes:null、performance_evidence:false、正式性能oracleとrelease権限は変更しない。
+- [ ] 原本API照合、Help実レビュー、変更別検証/check/Clippy、独立exact review後にcommitし、fresh nativeで接続を確認する。
 
 ## 6. リスクと対策
 
@@ -107,6 +121,17 @@ lockfileはlibc0.2.183・linux-raw-sys0.12.1も更新する。変更package vers
 Cargoが互換range内のWindows依存解決も更新した。denyのignore・監査条件は変更しない。
 同じ最終sourceで依存監査、全必要品質群と実機を再検証する。旧codecは形式検査専用の明示identityとして保持し、
 新subjectのゲームbinary/性能証拠へ流用しない。
+`d8a8b7fb`で依存修正版、`47e48c40`で準備安定性/M5候補入口を保存した。
+contracts/tooling/deps/rust全群、Python804・制作229、default/profiling全workspace tests、各feature check、
+default/profiling Clippy0、dev.py check、独立exact-source review、storage checkが成功した。
+同head/source `0216714f9037b8873c690f45c604e500f65484ea6a0876c66dec29f4786a67dd`のM5候補4caseは
+各6画像/21入力を完了し、登録verifierによるseal、独立画像/raw reviewとfinalizeが成功した。
+Sand/Bone/Parking/Lampのsample/event数は順に30/80、32/73、31/68、35/83。
+catalog/ghost/Blueprint/選択だけの限定証拠で、自然完成・利用・配電・保存・性能・releaseを証明しない。
+性能v3はcontrolとcandidateの30/60秒計測を完走し、準備直後の資源変化は再発しなかった。
+ただしcandidateのM5 owner/foreground追加DTOをM6 oracleが拒否しexit1、campaignはinvalid封印/finalize済み。
+論理state/layout値は一致しており、未知fieldを無視せず上記M4で完全検証・継続観測を補う。
+旧失敗の再封印や受入条件緩和を行わず、同じ候補/測定前budgetのfresh subjectへ進む。
 既存のproduction runnerはnormal-development admission・ordinary-world capture/ACK・host instrument producerが
 未実装と宣言する。旧Orcaや架空receiptで補完しない。全体受入は継続中。
 

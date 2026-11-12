@@ -82,6 +82,49 @@ def close(actual: list, expected: list) -> bool:
     return all(abs(a-b) <= .001 for a, b in zip(actual, expected, strict=True))
 
 
+def validate_record(record: dict, identity: dict, preview: dict, artifacts: dict, role: str) -> tuple[int, int]:
+    actual = record.get("foreground", {})
+    require(isinstance(actual, dict) and set(actual) == {
+        "schema", "identity", "descriptor", "owner", "entity", "parent", "image_role", "artifact",
+        "image_handle", "image_matches", "canvas_wu", "anchor", "visible", "layers", "color_srgba",
+        "owner_pose", "local_pose", "global_matrix", "parent_local_matrix", "global_pose"}, "record keys differ")
+    pixels = vector(preview.get("canvas_px"), 2)
+    require(all(number > 0 for number in pixels), "nonpositive canvas dimensions")
+    require(type(actual.get("schema")) is int and actual["schema"] == 1
+            and canonical(actual.get("identity")) == canonical(identity)
+            and canonical(actual.get("descriptor")) == canonical(preview),
+            "consumed identity/descriptor differs")
+    owner, entity = actual.get("owner"), actual.get("entity")
+    require(type(owner) is int and owner > 0 and type(entity) is int and entity > 0
+            and type(record.get("owner")) is int and owner == record["owner"]
+            and type(actual.get("parent")) is int and actual["parent"] == owner,
+            "parent/owner differs")
+    require(actual.get("image_role") == role
+            and canonical(actual.get("artifact")) == canonical(artifacts.get("image:" + role))
+            and actual.get("artifact") is not None and actual.get("image_matches") is True
+            and isinstance(actual.get("image_handle"), str) and actual["image_handle"],
+            "actual image role/handle differs")
+    require(canonical(actual.get("canvas_wu")) == canonical(preview["canvas_wu"])
+            and close(actual.get("anchor"), [preview["anchor_px"][0] / preview["canvas_px"][0] - .5,
+                                              .5 - preview["anchor_px"][1] / preview["canvas_px"][1]])
+            and actual.get("visible") is True and isinstance(actual.get("layers"), list)
+            and all(type(layer) is int for layer in actual["layers"]) and actual["layers"] == [0],
+            "canvas/anchor/visibility/layers differs")
+    # A finite non-white color is intentionally retained, never accepted as white.
+    color = vector(actual.get("color_srgba"), 4)
+    require(all(0 <= channel <= 1 for channel in color), "color is outside sRGBA range")
+    owner_matrix = matrix(actual.get("owner_pose"))
+    local_matrix = matrix(actual.get("local_pose"))
+    expected = product(owner_matrix, local_matrix)
+    center = vector(record.get("center"), 2)
+    require(close(actual["owner_pose"]["translation"][:2], center)
+            and close(actual.get("global_matrix"), expected)
+            and close(actual.get("parent_local_matrix"), expected)
+            and close(actual["global_matrix"], matrix(actual.get("global_pose"))),
+            "owner/local/global transform differs")
+    return owner, entity
+
+
 def validate(probe: dict, value: dict, *, context=False) -> None:
     observation = settings(value, context=context)
     if observation is None:
@@ -98,39 +141,6 @@ def validate(probe: dict, value: dict, *, context=False) -> None:
     artifacts = {artifact["role"]: artifact for artifact in observation["artifacts"]}
     identities = []
     for record in records:
-        actual = record.get("foreground", {})
-        require(type(actual.get("schema")) is int and actual["schema"] == 1
-                and canonical(actual.get("identity")) == canonical(value["identity"])
-                and canonical(actual.get("descriptor")) == canonical(preview),
-                "consumed identity/descriptor differs")
-        owner, entity = actual.get("owner"), actual.get("entity")
-        identities.extend((owner, entity))
-        require(type(owner) is int and owner > 0 and type(entity) is int and entity > 0
-                and type(record.get("owner")) is int and owner == record["owner"]
-                and type(actual.get("parent")) is int and actual["parent"] == owner,
-                "parent/owner differs")
         role = "world_on" if value["kind"] == "OutdoorLamp" and record["ordinal"] >= 2 else preview["image_role"]
-        require(actual.get("image_role") == role
-                and canonical(actual.get("artifact")) == canonical(artifacts.get("image:" + role))
-                and actual.get("artifact") is not None and actual.get("image_matches") is True
-                and isinstance(actual.get("image_handle"), str) and actual["image_handle"],
-                "actual image role/handle differs")
-        require(canonical(actual.get("canvas_wu")) == canonical(preview["canvas_wu"])
-                and close(actual.get("anchor"), [preview["anchor_px"][0] / preview["canvas_px"][0] - .5,
-                                                  .5 - preview["anchor_px"][1] / preview["canvas_px"][1]])
-                and actual.get("visible") is True and isinstance(actual.get("layers"), list)
-                and all(type(layer) is int for layer in actual["layers"]) and actual["layers"] == [0],
-                "canvas/anchor/visibility/layers differs")
-        # A finite non-white color is intentionally retained, never accepted as white.
-        color = vector(actual.get("color_srgba"), 4)
-        require(all(0 <= channel <= 1 for channel in color), "color is outside sRGBA range")
-        owner_matrix = matrix(actual.get("owner_pose"))
-        local_matrix = matrix(actual.get("local_pose"))
-        expected = product(owner_matrix, local_matrix)
-        center = vector(record.get("center"), 2)
-        require(close(actual["owner_pose"]["translation"][:2], center)
-                and close(actual.get("global_matrix"), expected)
-                and close(actual.get("parent_local_matrix"), expected)
-                and close(actual["global_matrix"], matrix(actual.get("global_pose"))),
-                "owner/local/global transform differs")
+        identities.extend(validate_record(record, value["identity"], preview, artifacts, role))
     require(len(set(identities)) == len(identities), "duplicate owner or sprite")

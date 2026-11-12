@@ -20,6 +20,123 @@ pub(super) type ForegroundQuery<'w, 's> = Query<
     With<hw_visual::layer::VisualLayerKind>,
 >;
 
+/// Bounded native values for the measured interval. No JSON or artifact/identity
+/// strings are built here; immutable descriptors are separately rechecked.
+#[derive(Clone, Debug, PartialEq)]
+pub(super) struct MeasuredForeground {
+    entity: Entity,
+    owner: Entity,
+    parent: Entity,
+    image: AssetId<Image>,
+    color: [f32; 4],
+    canvas: Option<Vec2>,
+    owner_pose: Transform,
+    local_pose: Transform,
+    global_matrix: Mat4,
+    anchor: Vec2,
+    layers: RenderLayers,
+    visible: bool,
+}
+
+pub(super) fn unchanged_m6(
+    initial: Option<&MeasuredForeground>,
+    observed: &MeasuredForeground,
+) -> Result<(), String> {
+    if initial == Some(observed) {
+        Ok(())
+    } else {
+        Err("M6 foreground typed observation changed or was not captured".into())
+    }
+}
+
+pub(super) fn observe(
+    params: &InspectParams,
+    spec: &Specimen,
+    owner: Entity,
+    descriptor: &BuildingAssetDescriptor,
+) -> Result<MeasuredForeground, String> {
+    let mut observations = params
+        .foreground
+        .iter()
+        .filter(|(_, parent, ..)| parent.parent() == owner);
+    let (entity, parent, sprite, local, global, anchor, layers, visible) = observations
+        .next()
+        .ok_or("foreground owned sprite missing")?;
+    if observations.next().is_some() {
+        return Err("foreground requires exactly one owned sprite".into());
+    }
+    let (_, owner_pose, ..) = params
+        .buildings
+        .get(owner)
+        .map_err(|_| "foreground owner disappeared")?;
+    let role = if spec.kind == BuildingType::OutdoorLamp && spec.quarter() >= 2 {
+        "world_on"
+    } else {
+        &descriptor.manifest.world_preview.image_role
+    };
+    if descriptor.image(role) != Some(&sprite.image) {
+        return Err("foreground image differs".into());
+    }
+    let color = sprite.color.to_srgba().to_f32_array();
+    let global_matrix = global.to_matrix();
+    if color.iter().any(|number| !number.is_finite())
+        || !global_matrix.abs_diff_eq(
+            GlobalTransform::from(*owner_pose)
+                .mul_transform(*local)
+                .to_matrix(),
+            0.001,
+        )
+    {
+        return Err("foreground non-finite color or parent transform differs".into());
+    }
+    Ok(MeasuredForeground {
+        entity,
+        owner,
+        parent: parent.parent(),
+        image: sprite.image.id(),
+        color,
+        canvas: sprite.custom_size,
+        owner_pose: *owner_pose,
+        local_pose: *local,
+        global_matrix,
+        anchor: anchor.map_or(Vec2::ZERO, |anchor| anchor.0),
+        layers: layers.cloned().unwrap_or_default(),
+        visible: visible.get(),
+    })
+}
+
+pub(super) fn capture_m6(
+    params: &InspectParams,
+) -> Result<HashMap<Entity, MeasuredForeground>, String> {
+    let mut result = HashMap::new();
+    if !params.m6.as_ref().is_some_and(|mode| mode.candidate) {
+        return Ok(result);
+    }
+    for (spec, &owner) in params.state.specs.iter().zip(&params.state.owners) {
+        let Some(kind) = crate::systems::visual::building_presentation::asset_kind(spec.kind)
+        else {
+            continue;
+        };
+        if !kind.mesh_roles().is_empty() {
+            continue;
+        }
+        let descriptor = params
+            .building_pool
+            .descriptor(kind)
+            .ok_or("M6 foreground descriptor disappeared")?;
+        if result
+            .insert(owner, observe(params, spec, owner, descriptor)?)
+            .is_some()
+        {
+            return Err("M6 duplicate foreground owner".into());
+        }
+    }
+    if result.len() != layout::copies(params.config.size()) * 4 {
+        return Err("M6 foreground typed inventory differs".into());
+    }
+    Ok(result)
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub(super) enum RecordMode {
     None,
@@ -201,6 +318,54 @@ pub(super) fn snapshot(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn m6_typed_monitor_rejects_late_image_owner_pose_layer_and_color_drift() {
+        let mut world = World::new();
+        let owner = world.spawn_empty().id();
+        let entity = world.spawn_empty().id();
+        let initial = MeasuredForeground {
+            entity,
+            owner,
+            parent: owner,
+            image: Handle::<Image>::default().id(),
+            color: [1.; 4],
+            canvas: Some(Vec2::splat(32.)),
+            owner_pose: Transform::IDENTITY,
+            local_pose: Transform::IDENTITY,
+            global_matrix: Mat4::IDENTITY,
+            anchor: Vec2::ZERO,
+            layers: RenderLayers::default(),
+            visible: true,
+        };
+        assert!(unchanged_m6(None, &initial).is_err());
+        assert!(unchanged_m6(Some(&initial), &initial).is_ok());
+        let mut changed = initial.clone();
+        changed.image = AssetId::Uuid {
+            uuid: bevy::asset::uuid::Uuid::from_u128(1),
+        };
+        assert!(unchanged_m6(Some(&initial), &changed).is_err());
+        changed = initial.clone();
+        changed.owner = entity;
+        assert!(unchanged_m6(Some(&initial), &changed).is_err());
+        changed = initial.clone();
+        changed.parent = entity;
+        assert!(unchanged_m6(Some(&initial), &changed).is_err());
+        changed = initial.clone();
+        changed.local_pose.translation.x = 1.;
+        assert!(unchanged_m6(Some(&initial), &changed).is_err());
+        changed = initial.clone();
+        changed.layers = RenderLayers::layer(1);
+        assert!(unchanged_m6(Some(&initial), &changed).is_err());
+        changed = initial.clone();
+        changed.color[0] = 0.5;
+        assert!(unchanged_m6(Some(&initial), &changed).is_err());
+        changed = initial.clone();
+        changed.visible = false;
+        assert!(unchanged_m6(Some(&initial), &changed).is_err());
+        assert_eq!(initial.color, [1.; 4]);
+        assert_eq!(initial.local_pose, Transform::IDENTITY);
+    }
 
     #[test]
     fn foreground_records_continue_after_initial_without_expanding_other_sessions() {

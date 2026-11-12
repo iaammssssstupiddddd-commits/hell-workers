@@ -6,6 +6,12 @@ import hashlib
 import json
 import math
 import re
+import struct
+
+try:
+    from ... import building_foreground_observation as foreground
+except ImportError:
+    import building_foreground_observation as foreground
 
 from .building_art_static import KINDS, expected_records
 from ..model import Case
@@ -180,8 +186,11 @@ def _validate_sidecar(value, case, *, pre_release):
     )
     expected = expected_records(copies)
     require(len(initial["records"]) == len(expected), "owner count differs")
+    foreground_entities = []
     for observed, logical in zip(initial["records"], expected, strict=True):
         extras = {"parts"} if candidate and logical["kind"] != "Door" else set()
+        if candidate and logical["kind"] in foreground.KINDS:
+            extras.update({"owner", "foreground"})
         if candidate and logical["kind"] in {"Tank", "MudMixer"}:
             extras.add("root_translation_wu")
             require(
@@ -195,6 +204,36 @@ def _validate_sidecar(value, case, *, pre_release):
             == canonical(logical),
             "logical state/layout differs",
         )
+        if "foreground" in extras:
+            actual = observed["foreground"]
+            require(isinstance(actual, dict), "M6 foreground object missing")
+            preview = actual.get("descriptor")
+            require(isinstance(preview, dict) and set(preview) == {
+                "anchor_px", "canvas_px", "canvas_wu", "image_role", "representative_state"},
+                "M6 foreground descriptor keys differ")
+            role = "world_on" if logical["kind"] == "OutdoorLamp" and logical["ordinal"] % 4 >= 2 else preview["image_role"]
+            identity = next(value for value in m6["identities"] if value["kind"] == logical["kind"])
+            artifact = actual.get("artifact")
+            require(isinstance(artifact, dict) and set(artifact) == {"role", "path", "bytes", "sha256"}
+                    and artifact["role"] == "image:" + role
+                    and type(artifact["bytes"]) is int and artifact["bytes"] > 0
+                    and isinstance(artifact["path"], str) and artifact["path"]
+                    and isinstance(artifact["sha256"], str) and re.fullmatch(r"[0-9a-f]{64}", artifact["sha256"]),
+                    "M6 foreground artifact fields differ")
+            foreground_entities.extend(foreground.validate_record(observed, identity, preview, {artifact["role"]: artifact}, role))
+            # Production completion uses Z_BUILDING_FLOOR for resource piles,
+            # Z_BUILDING_STRUCT for Parking/Lamp. Project the actual f32 rules.
+            owner_z = .05 if logical["kind"] in {"SandPile", "BonePile"} else .12
+            owner_pose = {"translation": [*logical["center"], struct.unpack("<f", struct.pack("<f", owner_z))[0]],
+                          "rotation": [0., 0., 0., 1.], "scale": [1., 1., 1.]}
+            local_pose = {"translation": [0., 0., 0.], "rotation": [0., 0., 0., 1.], "scale": [1., 1., 1.]}
+            require(canonical(actual["owner_pose"]) == canonical(owner_pose)
+                    and canonical(actual["local_pose"]) == canonical(local_pose)
+                    and canonical(actual["global_pose"]) == canonical(owner_pose)
+                    and canonical(actual["global_matrix"]) == canonical(foreground.matrix(owner_pose))
+                    and canonical(actual["parent_local_matrix"]) == canonical(foreground.matrix(owner_pose))
+                    and all(abs(number - 1.) <= 1e-6 for number in actual["color_srgba"][:3])
+                    and actual["color_srgba"][3] == 1., "M6 foreground static pose/color differs")
         if "parts" in extras:
             parts = observed["parts"]
             require(
@@ -235,4 +274,5 @@ def _validate_sidecar(value, case, *, pre_release):
                     type(part["visible"]) is bool and part["visible"] != hidden,
                     "part visibility differs",
                 )
+    require(len(set(foreground_entities)) == len(foreground_entities), "M6 duplicate foreground owner or sprite")
     return initial
