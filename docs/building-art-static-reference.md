@@ -409,3 +409,12 @@ real4秒のRefine入力後、6秒pauseして再開せず、既存12秒のSave/Lo
 Loadまで同epoch/部品/Virtual停止、Load後に新epoch/部品とpaused Idle/初期角度を要求する。
 画像はActive pausedと新epoch Idle pausedの両方を必要とする。旧refining v3の契約は履歴として保持する。
 通常gameplay・旧ArtPreview・moveの時間条件を変えず、性能やOS入力の証拠とは扱わない。
+
+
+candidate save-load v1（`eb42e90a`）は実Save/Load成功と非ゼロActive pause→新Idle角度0を観測したが、
+Save成功からLoadまで約0.1秒しかなく、0.1秒raw周期にSave-only prefixがなく検証器が正しく拒否した。
+exit1/invalid封印・診断用途登録・finalize済み。この部分観測を受入へ流用しない。
+`candidate-motion-quarter-speed-save-hold-v3`では候補save-loadだけ、実Save成功後に2 real秒待って
+RequestLoadを一度送る。通常／旧ArtPreviewの即時Loadは維持し、待機中のpaused/Virtual/部品は修復しない。
+厳密なraw条件と画像条件は維持する。Help No impact: 明示profilingの候補試験driverだけの変更で、
+通常の保存結果・操作・表示・通知・Help経路を変更しない。

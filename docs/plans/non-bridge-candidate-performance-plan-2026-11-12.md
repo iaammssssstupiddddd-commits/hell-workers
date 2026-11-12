@@ -388,3 +388,12 @@ N/4Nの各1回を資源量補足として検証し、旧12回の性能値の置�
 旧補足のexact-source独立review・Help・storageを通した後、資源量の有限上限を固定してから新fallbackを測る。
 時刻/Memory予算の提案（未採用）はp95 +1ms、p99 +3ms、native peak +16MiB、RSS +96MiB、
 繰返しMAD≤10%。独立判断と根拠を記録するまでcandidate測定へ進めず、結果を見て上限を広げない。
+
+
+candidate save-load v1（`eb42e90a`）は実Save/Load成功と非ゼロActive pause→新Idle角度0を観測したが、
+Save成功からLoadまで約0.1秒しかなく、0.1秒raw周期にSave-only prefixがなく検証器が正しく拒否した。
+exit1/invalid封印・診断用途登録・finalize済み。この部分観測を受入へ流用しない。
+`candidate-motion-quarter-speed-save-hold-v3`では候補save-loadだけ、実Save成功後に2 real秒待って
+RequestLoadを一度送る。通常／旧ArtPreviewの即時Loadは維持し、待機中のpaused/Virtual/部品は修復しない。
+厳密なraw条件と画像条件は維持する。Help No impact: 明示profilingの候補試験driverだけの変更で、
+通常の保存結果・操作・表示・通知・Help経路を変更しない。

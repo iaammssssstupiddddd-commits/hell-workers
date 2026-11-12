@@ -75,6 +75,16 @@ pub(super) fn drive(world: &mut World) {
                     world.write_message(UiIntent::SelectSaveCatalogSlot { slot: SaveSlotId::Manual1, session: ui.session }); lifecycle.stage = 2;
                 }
                 2 if outcomes.iter().any(|outcome| outcome.operation == SaveLoadOperation::Save) => {
+                    if super::m2_fixture::candidate_session(world) {
+                        // Preserve the actual saved world without repairing it. A short
+                        // real-time hold makes the Save-only prefix observable before Load.
+                        lifecycle.next = world.resource::<Time<Real>>().elapsed_secs_f64() + 2.0;
+                        lifecycle.stage = 7;
+                    } else {
+                        world.write_message(UiIntent::RequestLoadGame); lifecycle.stage = 3;
+                    }
+                }
+                7 if world.resource::<Time<Real>>().elapsed_secs_f64() >= lifecycle.next => {
                     world.write_message(UiIntent::RequestLoadGame); lifecycle.stage = 3;
                 }
                 3 if ui.mode == SaveCatalogMode::LoadCatalog => {
@@ -515,6 +525,81 @@ mod cursor_tests {
                     Vec2::splat(f32::NAN)
                 ));
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod save_observation_tests {
+    use super::*;
+    use std::time::Duration;
+
+    #[test]
+    fn candidate_holds_saved_pause_then_requests_load_once_legacy_is_immediate() {
+        for candidate in [false, true] {
+            let mut app = App::new();
+            app.init_resource::<Fixture>()
+                .init_resource::<Time<Real>>()
+                .init_resource::<Time<Virtual>>()
+                .init_resource::<WorldEpoch>()
+                .init_resource::<SaveCatalogUi>()
+                .add_message::<SaveLoadOutcome>()
+                .add_message::<DeconstructionCommitOutcome>()
+                .add_message::<UiIntent>()
+                .add_message::<AppExit>();
+            if candidate {
+                super::super::m2_fixture::configure_candidate_pointer(&mut app);
+            }
+            let world = app.world_mut();
+            let owner = world.spawn(Transform::from_xyz(1.0, 2.0, 3.0)).id();
+            world.resource_mut::<Fixture>().owner = Some(owner);
+            world.resource_mut::<Fixture>().since = 1.0;
+            world
+                .resource_mut::<Time<Real>>()
+                .advance_by(Duration::from_secs(14));
+            world.resource_mut::<Time<Virtual>>().pause();
+            let before_time = world.resource::<Time<Virtual>>().elapsed();
+            world.insert_resource(Lifecycle {
+                leg: "save-load".into(),
+                stage: 2,
+                ..default()
+            });
+            world.write_message(SaveLoadOutcome {
+                operation: SaveLoadOperation::Save,
+                target: "Manual slot 1".into(),
+                result: SaveLoadResult::Succeeded,
+                source: crate::systems::save::SaveLoadOutcomeSource::Manual(
+                    crate::systems::save::SaveRequestOrigin::ManualCatalog { dialog_session: 1 },
+                ),
+            });
+            let mut cursor = MessageCursor::<UiIntent>::default();
+            drive(world);
+            let count = |world: &World, cursor: &mut MessageCursor<UiIntent>| {
+                cursor
+                    .read(world.resource::<Messages<UiIntent>>())
+                    .filter(|intent| matches!(intent, UiIntent::RequestLoadGame))
+                    .count()
+            };
+            assert_eq!(count(world, &mut cursor), usize::from(!candidate));
+            world
+                .resource_mut::<Time<Real>>()
+                .advance_by(Duration::from_millis(1999));
+            drive(world);
+            assert_eq!(count(world, &mut cursor), 0);
+            world
+                .resource_mut::<Time<Real>>()
+                .advance_by(Duration::from_millis(1));
+            drive(world);
+            assert_eq!(count(world, &mut cursor), usize::from(candidate));
+            drive(world);
+            assert_eq!(count(world, &mut cursor), 0);
+            assert_eq!(world.resource::<Lifecycle>().stage, 3);
+            assert!(world.resource::<Time<Virtual>>().is_paused());
+            assert_eq!(world.resource::<Time<Virtual>>().elapsed(), before_time);
+            assert_eq!(
+                world.get::<Transform>(owner).unwrap().translation,
+                Vec3::new(1.0, 2.0, 3.0)
+            );
         }
     }
 }

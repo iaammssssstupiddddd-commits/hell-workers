@@ -68,6 +68,10 @@ struct CandidatePointer {
     after_move: bool,
 }
 
+pub(super) fn candidate_session(world: &World) -> bool {
+    world.contains_resource::<CandidatePointer>()
+}
+
 /// Candidate domain storyboards park the synthetic cursor twice at most. The
 /// real move driver retains ownership while aiming/clicking; no UI is hidden.
 pub(super) fn configure_candidate_pointer(app: &mut App) {
