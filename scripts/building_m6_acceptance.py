@@ -21,8 +21,10 @@ import shutil
 
 if __package__:
     from . import building_art_acceptance as art
+    from . import building_resource_inventory as resource_inventory
 else:
     import building_art_acceptance as art
+    import building_resource_inventory as resource_inventory
 
 native, pipeline, static = art.native, art.pipeline, art.static
 if __package__:
@@ -47,13 +49,15 @@ PRE_RELEASE_PROFILE = "building-pre-release-paired-static-v1"
 GROUP_PROFILE = "building-group-paired-static-v1"
 GROUP_BASELINE_PROFILE = "building-group-static-baseline-v1"
 GROUP_ENV = "HW_BUILDING_GROUP_COMPARISON"
+PAYLOAD_KEYS = {"mesh_vertex_index_payload_bytes", "declared_texture_payload_bytes_estimate"}
+RESOURCE_PLATEAU_KEYS = RESOURCE_KEYS | PAYLOAD_KEYS
 METRICS = {
     "p95_ms",
     "p99_ms",
     "peak_live_bytes",
     "max_rss_kib",
     "asset_mesh_accessor_bytes",
-    *RESOURCE_KEYS,
+    *RESOURCE_PLATEAU_KEYS,
 }
 
 
@@ -300,7 +304,8 @@ def check_inputs(value):
     static.require_identity(repo, value["identity"])
     pipeline.require(
         pipeline.digest(Path(__file__).read_bytes()) == value["driver_sha256"]
-        and pipeline.digest(codec.read_bytes()) == value["codec_sha256"],
+        and pipeline.digest(codec.read_bytes()) == value["codec_sha256"]
+        and value.get("resource_verifier_sha256") == pipeline.digest(Path(resource_inventory.__file__).read_bytes()),
         "M6 driver/codec changed",
     )
     pre_release = value["profile"] != PROFILE
@@ -443,6 +448,7 @@ def plan(args):
         "codec": str(codec),
         "codec_sha256": pipeline.digest(codec.read_bytes()),
         "driver_sha256": pipeline.digest(Path(__file__).read_bytes()),
+        "resource_verifier_sha256": pipeline.digest(Path(resource_inventory.__file__).read_bytes()),
         "foreground_verifier_sha256": art.foreground.verifier_sha256(),
         "identity": static.identity(repo),
         "budget": None if baseline else budget(supplied_budget["limits"] if group is not None else supplied_budget),
@@ -681,6 +687,14 @@ def verify_case(value, item):
         "stored validation/environment differs",
     )
     metrics.update(observed["m6"]["resources"])
+    payload = resource_inventory.boundaries(native.read_json(run / "data/building_resource_inventory.json"))
+    pipeline.require(all(metrics[left] == payload[right] for left, right in (
+        ("resident_mesh_count", "mesh_count"), ("resident_image_count", "image_count"),
+        ("resident_structural_material_count", "material_count"),
+        ("resident_image_cpu_bytes", "image_cpu_payload_bytes"),
+        ("structural_material_shallow_bytes", "material_shallow_bytes"))),
+        "resident resource counters differ from full payload inventory")
+    metrics.update({key: payload[key] for key in PAYLOAD_KEYS})
     loaded_paths = {record["path"] for manifest in value["assets"]["manifests"]
                     if manifest["identity"]["kind"] in loaded_kinds for record in manifest["artifacts"]}
     metrics["asset_mesh_accessor_bytes"] = sum(
@@ -751,7 +765,7 @@ def check_completed_subsets(rows, limits):
         binaries[instrument] = {r["binary_sha256"] for r in selected}
         pipeline.require(len(binaries[instrument]) == 1, "same-source pair binary drift")
         for mode in {r["mode"] for r in selected}:
-            for metric in RESOURCE_KEYS:
+            for metric in RESOURCE_PLATEAU_KEYS:
                 pipeline.require(len({r["metrics"][metric] for r in selected if r["mode"] == mode}) == 1,
                                  f"N/4N shared resources did not plateau: {mode}/{metric}")
         for size in {r["size"] for r in selected}:
@@ -820,7 +834,7 @@ def aggregate(rows, limits):
                 )
             result.append({"instrumentation": instrument, "size": size, "modes": modes})
         for mode in ("legacy-control", "candidate"):
-            for metric in RESOURCE_KEYS:
+            for metric in RESOURCE_PLATEAU_KEYS:
                 values = {
                     row["metrics"][metric] for row in selected if row["mode"] == mode
                 }

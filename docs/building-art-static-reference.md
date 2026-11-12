@@ -418,3 +418,60 @@ exit1/invalid封印・診断用途登録・finalize済み。この部分観測�
 RequestLoadを一度送る。通常／旧ArtPreviewの即時Loadは維持し、待機中のpaused/Virtual/部品は修復しない。
 厳密なraw条件と画像条件は維持する。Help No impact: 明示profilingの候補試験driverだけの変更で、
 通常の保存結果・操作・表示・通知・Help経路を変更しない。
+
+
+`8c97d605`のsave-load v2は限定成功。734 samples、Save-only20行で非ゼロActive/paused/Virtual固定、
+epoch0→1後の新owner/root/parts・Idle角度0を確認し、以後の停止と旧parts消失を照合した。
+4採用PNGを独立実見し、Vulkan WARN/ERRORなし、登録verify/seal/retain/finalize成功。
+manifest `cbdb2301e8d2d7561ddc4bd172f69b67344f92e2f50c43c1524a438ab74c6184`、
+trace `1bad6cd1f56bca4198fbb069f0c3ab622c3293d76eb388331c72e3e27fa461a0`。
+同sourceのTank move v1も限定成功。509 samples、同body/waterとlinked storage2件の移動delta `[64,0,0]`、
+Full水面Y22と移動後の固定を7採用PNG/rawで独立確認。manifest
+`ca9c0c9cabed253811d8ce9b9c6074f3a56c03c279761021cd9783b591d15e87`、
+trace `d60e21ecbbca799eb9da5852b2458670a1a792b57c2e34099d50c1771717db92`。
+2件ともrecipe exit0と子gameの正常bounded-stop（-15）を区別し、アート・性能・release承認とはしない。
+このexact旧sourceの限定結果を採用記録とし、後続sourceへ旧承認を流用しない。live旧verifierの再実行を
+保持義務にせず、raw/PNG/binaryは現在のM2 candidate state and lifecycle release review用途だけに保持する。
+
+Mixer move v1はraw移動を観測したが、startup Soul1868v0のWorkingOn/ActiveTaskIdentity警告1件でinvalid。
+通常AI自体の不具合と断定せず、後からorderのManagedByを付けるfixtureと背景assignmentの競合も調べる。
+警告拒否を維持し、新候補moveだけ`fixture-move-without-startup-familiars-v1`を明示する。
+既存spawn入力HW_SPAWN_FAMILIARS=`0`で背景Familiarを作らず、assign_orderの専用Familiar/workerの
+実ID・CommandedBy・MovePlant assignment/WorkingOn/ActiveTaskIdentity/ManagedByを観測・照合する。
+startup Soulsと通常populationは維持する。Soul0はemergency spawnが補充するため、人口0とは主張しない。
+旧ArtPreview、refining、save-load、通常起動と通常gameplayは変えない。No impactのHelp判断を維持する。
+新fixtureのpassでも、旧警告の解消や通常population下の自然AI全般の健全性を証明したとは扱わない。
+
+### 資源量の区間外観測
+
+`resource_inventory`は初期Ready公開前と、UpdateのMeasure→Flush後のPostUpdateだけで
+Mesh/Image/TopDownStructuralMaterialの実resident inventoryを採る。measurement中の追加列挙・JSON化はしない。
+初期と実最終の両方がなければ別sidecar `building_resource_inventory.json`を書かずに失敗する。
+旧static referenceのsidecarと時刻/native/RSS結果を上書きしない。
+
+Meshは実CPU vertex attribute＋u16/u32 index payloadのbytes、Imageは実CPU dataのbytesを記録する。
+MeshのCPU抽出済み・未知format・加算/乗算overflowは欠測として拒否する。
+ImageのCPU backingなしは`null`と件数で明示し、0-byte textureとは呼ばない。
+texture descriptorのformat/block/extent/mip/layer/sampleから算出したbytesは
+`declared_texture_payload_bytes_estimate`という論理推計であり、GPU allocator実測ではない。
+materialは`size_of`×resident件数のshallow bytesで、依存textureやGPU配置は含まない。
+
+初終はprocess-local handle/path/bytes全体を照合する。別processのN/4Nはhandle番号を一致させず、
+path/payload記述のmultisetと件数・bytesを比較する。generated assetの同サイズを同一geometryの証明とはしない。
+群別runnerは既存residentカウンタとこの独立inventoryを突き合わせ、mesh payload/texture descriptor推計も
+有限budgetとN/4N plateauへ加える。検証器SHAをplanへ固定し、古いbudgetや欠測のrawを受入へ流用しない。
+専用group gallery・個別アート・M2 state・通常起動へこの計測を追加しない。
+
+旧`353fc4cd`の計12回には資源bytesがないため、既存凍結環境を編集せず、同commit由来の
+`target/tak14-foundation-resources-353fc4cd`へmain所有で受動計測だけを追加する。
+変更はbuilding_art_static/mod.rsとresource_inventory.rsの2pathに限定し、旧asset bytesを一致させる。
+専用 `building_resource_inventory_acceptance.py`は旧9回＋N Memory3回の元verifierを保ち、
+新しいsource identityのN/4N各1回を30秒warmup/60秒measureで実行して資源量だけ補う。
+その新timingを旧12回へ混ぜず、同じadapter/fixture/assetと別sourceを明記する。
+補足はresource-only/accepted=false/promotion_authority=false/performance_budget_evidence=false。
+資源上限を固定する入力に過ぎず、基盤・累積・群別性能やアート/releaseの承認ではない。
+
+旧treeのidentity/harnessは、承認済みのsource-local helperをisolated/read-only Python子process
+（-I/-B）で取得・前後再照合する。primaryの現catalogを旧treeへ要求せず、不足する現19pathをコピーしない。
+2path-only・clean・元helper SHAを実行前に検査し、primary側のcontroller/oracleと全verifier harness SHAは
+別にplanへ固定する。この境界を変更したfresh helperでのみ補足を実行する。

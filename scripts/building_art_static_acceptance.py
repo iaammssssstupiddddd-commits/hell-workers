@@ -85,13 +85,14 @@ def plan(args) -> int:
     return int(bool(failures))
 
 
-def verify_session(root: Path, instrumentation: str, size: str, souls: int, frozen: dict, adapter: str) -> dict:
+def verify_session(root: Path, instrumentation: str, size: str, souls: int, frozen: dict, adapter: str, *, repeats: int = 3) -> dict:
+    native.require(type(repeats) is int and repeats in (1, 3), "unsupported reference repeat scope")
     session = root / f"{instrumentation}-{size}"
     manifest = native.read_json(session / "manifest.json")
     matrix = native.read_json(session / "matrix.json")
     case = Case("building-art-static", size, "gpu", SEED, souls, 0)
     expected_matrix = {"workload": case.workload, "sizes": [size], "renders": ["gpu"], "seed": SEED,
-                       "repeat": 3, "preflight_runs": 0, "warmup_secs": 30.0, "measure_secs": 60.0,
+                       "repeat": repeats, "preflight_runs": 0, "warmup_secs": 30.0, "measure_secs": 60.0,
                        "souls": souls, "familiars": 0, "familiar_policies": ["baseline"],
                        "operation_dialog_modes": ["hidden"], "dashboard_modes": ["hidden"],
                        "capture_kind": "frame-time", "clock_mode": "realtime", "window_width": 1280,
@@ -105,10 +106,10 @@ def verify_session(root: Path, instrumentation: str, size: str, souls: int, froz
     native.require(binary.get("instrumentation") == instrumentation and len(binary.get("sha256", "")) == 64,
                    "binary instrumentation/hash differs")
     observations = []
-    expected_runs = {f"run-{number:03d}" for number in range(1, 4)}
+    expected_runs = {f"run-{number:03d}" for number in range(1, repeats + 1)}
     case_dir = session / "cases" / case.identifier
     native.require({p.name for p in case_dir.iterdir() if p.is_dir()} == expected_runs, "run inventory differs")
-    for number in range(1, 4):
+    for number in range(1, repeats + 1):
         run = case_dir / f"run-{number:03d}"
         metadata = native.read_json(run / "run-metadata.json")
         native.require(metadata.get("case") == asdict(case) and metadata.get("returncode") == 0, "run metadata differs")

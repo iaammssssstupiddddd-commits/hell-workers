@@ -10,6 +10,7 @@ mod layout;
 mod m2_context;
 mod m5_context;
 mod m5_power;
+mod resource_inventory;
 mod seed;
 mod spa_masks;
 
@@ -104,6 +105,9 @@ pub(crate) struct BuildingArtStaticState {
     actors: Vec<Entity>,
     owners: Vec<Entity>,
     evidence: Option<Value>,
+    resources_required: bool,
+    resources_initial: Option<Value>,
+    resources_final: Option<Value>,
     stable_frames: u64,
     completion_effects_settled: bool,
     art_candidate: bool,
@@ -299,7 +303,38 @@ pub(crate) fn inspect_building_art_static_system(mut params: InspectParams) {
                 fail(&mut params.state, &mut params.exit, reason);
                 return;
             }
+            if params.m6.is_some()
+                && params.group_art.is_none()
+                && (params.state.resources_initial.is_none()
+                    || matches!(params.capture.phase, PerfCapturePhase::Flush)
+                        && params.state.resources_final.is_none())
+            {
+                let snapshot = match params
+                    .asset_server
+                    .as_deref()
+                    .ok_or_else(|| "resource inventory AssetServer missing".to_string())
+                    .and_then(|server| {
+                        resource_inventory::capture(
+                            &params.meshes,
+                            &params.materials,
+                            &params.images,
+                            server,
+                        )
+                    }) {
+                    Ok(value) => value,
+                    Err(reason) => {
+                        fail(&mut params.state, &mut params.exit, reason);
+                        return;
+                    }
+                };
+                if params.state.resources_initial.is_none() {
+                    params.state.resources_initial = Some(snapshot);
+                } else {
+                    params.state.resources_final = Some(snapshot);
+                }
+            }
             if params.state.evidence.is_none() {
+                params.state.resources_required = params.m6.is_some() && params.group_art.is_none();
                 let foreground = match foreground::capture_m6(&params) {
                     Ok(value) => value,
                     Err(reason) => {
@@ -1050,7 +1085,15 @@ impl BuildingArtStaticState {
             } else {
                 "building_art_static.json"
             }))?;
-        serde_json::to_writer_pretty(file, &summary).map_err(std::io::Error::other)
+        serde_json::to_writer_pretty(file, &summary).map_err(std::io::Error::other)?;
+        if self.resources_required {
+            resource_inventory::write_boundaries(
+                &directory,
+                self.resources_initial.as_ref(),
+                self.resources_final.as_ref(),
+            )?;
+        }
+        Ok(())
     }
 }
 

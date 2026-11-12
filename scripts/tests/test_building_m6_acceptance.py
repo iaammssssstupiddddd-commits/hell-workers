@@ -308,7 +308,13 @@ class M6Tests(unittest.TestCase):
             requested = {"HW_BUILDING_M6_MODE": "candidate", "RUST_LOG": "info,wgpu=error",
                          "BEVY_ASSET_ROOT": str(root / "asset-view"),
                          "HW_BUILDING_M6_CANDIDATES": m6.json.dumps(value["assets"]["bindings"])}
-            payloads = {"manifest.json": session_manifest,
+            from scripts.tests.test_building_resource_inventory import boundary
+            resource_boundaries = boundary()
+            observed["m6"]["resources"] = {"resident_mesh_count": 1, "resident_image_count": 1,
+                "resident_structural_material_count": 1, "resident_image_cpu_bytes": 0,
+                "structural_material_shallow_bytes": 64}
+            payloads = {"building_resource_inventory.json": resource_boundaries,
+                        "manifest.json": session_manifest,
                         "matrix.json": {"repeat": 1, "preflight_runs": 0, "warmup_secs": 30.,
                                         "measure_secs": 60., "sizes": ["small"], "renders": ["gpu"]},
                         "run-metadata.json": {"case": asdict(case), "returncode": 0,
@@ -324,6 +330,15 @@ class M6Tests(unittest.TestCase):
                  patch.object(m6, "frame_summary", return_value={"p95_ms": 1., "p99_ms": 2.}), \
                  patch.object(m6.static, "session_digest", return_value="d" * 64):
                 result = m6.verify_case(value, ("capture", "small", 1, "candidate"))
+                self.assertEqual(result["metrics"]["mesh_vertex_index_payload_bytes"], 42)
+                self.assertEqual(result["metrics"]["declared_texture_payload_bytes_estimate"], 128)
+                observed["m6"]["resources"]["resident_mesh_count"] = 2
+                with self.assertRaisesRegex(ValueError, "full payload inventory"):
+                    m6.verify_case(value, ("capture", "small", 1, "candidate"))
+                observed["m6"]["resources"]["resident_mesh_count"] = 1
+                resource_boundaries["final"]["images"][0]["id"] = "replacement"
+                with self.assertRaisesRegex(ValueError, "drifted"):
+                    m6.verify_case(value, ("capture", "small", 1, "candidate"))
             self.assertEqual(result["binary_sha256"], session_manifest["binary"]["sha256"])
 
     def test_foreground_dependency_is_frozen_and_missing_binding_is_rejected(self):

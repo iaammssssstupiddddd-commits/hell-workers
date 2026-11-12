@@ -397,3 +397,52 @@ exit1/invalid封印・診断用途登録・finalize済み。この部分観測�
 RequestLoadを一度送る。通常／旧ArtPreviewの即時Loadは維持し、待機中のpaused/Virtual/部品は修復しない。
 厳密なraw条件と画像条件は維持する。Help No impact: 明示profilingの候補試験driverだけの変更で、
 通常の保存結果・操作・表示・通知・Help経路を変更しない。
+
+
+`8c97d605`のsave-load v2は限定成功。734 samples、Save-only20行で非ゼロActive/paused/Virtual固定、
+epoch0→1後の新owner/root/parts・Idle角度0を確認し、以後の停止と旧parts消失を照合した。
+4採用PNGを独立実見し、Vulkan WARN/ERRORなし、登録verify/seal/retain/finalize成功。
+manifest `cbdb2301e8d2d7561ddc4bd172f69b67344f92e2f50c43c1524a438ab74c6184`、
+trace `1bad6cd1f56bca4198fbb069f0c3ab622c3293d76eb388331c72e3e27fa461a0`。
+同sourceのTank move v1も限定成功。509 samples、同body/waterとlinked storage2件の移動delta `[64,0,0]`、
+Full水面Y22と移動後の固定を7採用PNG/rawで独立確認。manifest
+`ca9c0c9cabed253811d8ce9b9c6074f3a56c03c279761021cd9783b591d15e87`、
+trace `d60e21ecbbca799eb9da5852b2458670a1a792b57c2e34099d50c1771717db92`。
+2件ともrecipe exit0と子gameの正常bounded-stop（-15）を区別し、アート・性能・release承認とはしない。
+このexact旧sourceの限定結果を採用記録とし、後続sourceへ旧承認を流用しない。live旧verifierの再実行を
+保持義務にせず、raw/PNG/binaryは現在のM2 candidate state and lifecycle release review用途だけに保持する。
+
+Mixer move v1はraw移動を観測したが、startup Soul1868v0のWorkingOn/ActiveTaskIdentity警告1件でinvalid。
+通常AI自体の不具合と断定せず、後からorderのManagedByを付けるfixtureと背景assignmentの競合も調べる。
+警告拒否を維持し、新候補moveだけ`fixture-move-without-startup-familiars-v1`を明示する。
+既存spawn入力HW_SPAWN_FAMILIARS=`0`で背景Familiarを作らず、assign_orderの専用Familiar/workerの
+実ID・CommandedBy・MovePlant assignment/WorkingOn/ActiveTaskIdentity/ManagedByを観測・照合する。
+startup Soulsと通常populationは維持する。Soul0はemergency spawnが補充するため、人口0とは主張しない。
+旧ArtPreview、refining、save-load、通常起動と通常gameplayは変えない。No impactのHelp判断を維持する。
+新fixtureのpassでも、旧警告の解消や通常population下の自然AI全般の健全性を証明したとは扱わない。
+
+### M8-b: 欠測資源量を明示した基盤補足と群別予算
+
+- [x] 元353fc4cd由来の別Git作業場を作成・review用途登録。旧凍結sourceは未変更。
+  通常Orca CLIは接続不能のため、mainがローカルGitで分離した。agent/旧統括は起動しない。
+  既存profiling cacheだけをreflinkし、現在の旧基盤資源補足用途と終了条件を登録した。
+- [x] 初期Ready／実Flushの区間外だけ、CPU Mesh/Image payload、明示CPU backing欠測、
+  descriptor texture bytes推計、material shallow bytesとhandle/pathを採る実装を準備。
+  primaryのRust focused5件、独立Python oracle／M6接続のfocused検査は成功。完了承認は下記のfresh品質/review後。
+- [ ] 新参照sourceの関連検証・Help/storage・exact独立review後にcommit。
+- [ ] 正規launcherでN/4N各1回を新subjectとして取得・独立検証・封印/用途/finalize。
+- [ ] 旧12回と新2回の出所を分離して資源上限を先に固定し、新fallback/groupのCapture→Memoryへ進む。
+
+新sidecarの初終は実handle集合・各count/payload全体を照合し、別processではidを除いたpath/payload multisetで
+N/4N plateauを検査する。GPU-only ImageのCPU bytes nullを0-byte textureとして扱わず、
+GPU descriptor推計をallocator実測に置き換えない。MeshのCPU抽出済み・未知format・overflowは拒否する。
+群別予算には`mesh_vertex_index_payload_bytes`と`declared_texture_payload_bytes_estimate`も明示必須とし、
+旧budgetの自動流用や結果を見た上限緩和はしない。旧reference repeat3は維持し、補足だけrepeat1を明示する。
+新helperは元reference manifestとN Memory session SHA、別sourceのdriver/source/assetsを固定する。
+Help No impact: 明示profilingのperformance観測・検証だけで、通常playerの入力・表示・保存・rule・
+通知・Help入口は変えない。compile済み既定release一覧は空のまま、未正式8種を導入済みとはしない。
+
+旧treeのidentity/harnessは、承認済みのsource-local helperをisolated/read-only Python子process
+（-I/-B）で取得・前後再照合する。primaryの現catalogを旧treeへ要求せず、不足する現19pathをコピーしない。
+2path-only・clean・元helper SHAを実行前に検査し、primary側のcontroller/oracleと全verifier harness SHAは
+別にplanへ固定する。この境界を変更したfresh helperでのみ補足を実行する。
