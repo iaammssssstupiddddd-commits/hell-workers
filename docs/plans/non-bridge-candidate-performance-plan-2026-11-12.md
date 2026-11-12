@@ -122,7 +122,7 @@ Door g7は別loaderで維持する。現loader/presentation候補許可は単一
 - [x] owner付きPNG capture後のnonce/PID/probe SHA付きACKを専用rootへ一度だけ渡し、実final状態と通常exit0を要求する。
   JSONはgalleryだけで収集し、performance計測を主張しない。ACK欠損・古いnonce・変化・非zero・中断をfail closedにする。
   1つのsource/binary・共有immutable viewの下で18子processを逐次実行し、原本/画像を全件独立確認する。
-- [ ] Help実レビュー、品質gate、拒否系テスト、独立exact review後にcommitする。
+- [x] Help実レビュー、品質gate、拒否系テスト、独立exact review後にcommitする。
   worst-DPIの単一接続caseはconnection-onlyとし、全matrixやreleaseの合格へ読み替えずfresh正式matrixへ進む。
 
 ### M6-c: 実client寸法の事前観測
@@ -133,9 +133,23 @@ Door g7は別loaderで維持する。現loader/presentation候補許可は単一
 - [x] group runnerに、同じgame PIDの唯一のX11 clientだけを読む有界なgeometry観測を追加する。
   XGetGeometryとPID/frame/window状態属性だけを使い、XTEST/EIS・入力・resize・focus操作は行わない。
   ready前から寸法変化を有限の時刻付き診断へ残し、古いwindow/PID・未知送信を採用しない。
-- [ ] OS側の寸法とproducer拒否の関係をfresh connectionで確認する。geometry診断をPNGやDPI・
+- [x] OS側の寸法とproducer拒否の関係をfresh connectionで確認する。geometry診断をPNGやDPI・
   camera・受入の代わりにはせず、1920×1680と既存投影の条件を緩めない。
-- [ ] Help No impact実レビュー、関連拒否回帰、同subject品質gate・独立review・storageを通す。
+- [x] Help No impact実レビュー、関連拒否回帰、同subject品質gate・独立review・storageを通す。
+
+### M6-d: 専用窓の装飾分離と接続feedback
+
+v2で同game PIDのclient1920×1662、frame上辺74pxを実測した。作業領域1736pxからframeを
+引いた1662pxへ縮められていた。要求1920×1680は変更しない。v2もinvalid封印/finalize済み。
+
+- [x] 完全なtyped GroupArtSessionが既にadmitされたWorldだけをframelessにする。
+  通常・旧単種・性能・UIの窓装飾は不変。実Window.decorations=falseもDTO/oracleへ拘束する。
+  native実測値付きの拒否を残し、準備後のresizeや不一致の自己修復はしない。
+- [x] 反復接続だけに`--connection-only --feedback`を追加し、既存dev.py feedbackの
+  dev/profile+profiling feature+incremental cacheを使う。clean source、同identity・ACK・画像検査は維持する。
+  feedback_only=trueを明示し、feedbackの全18caseは禁止する。正式18caseとCapture/Memory性能は
+  profiling buildで別に実施し、feedback画像を正式受入へ流用しない。
+- [ ] 関連拒否回帰、同source品質・Help No impact・独立review・storage後、fresh接続を確認する。
 
 ### M7: 群別性能と順次導入
 
@@ -253,3 +267,10 @@ No impact。新group-artの1920×1680、UI非表示、配置と専用ACK終了�
 既存performance配置/終了経路はsession不在時に不変。通常プレイのInputAction/UiIntent、操作、文言、
 建設・保存・世代切替の成立条件、通知・Help入口を追加/変更しない。
 新しい技術画面のpassは性能、アート、正式導入の承認を与えない。Help本文とsnapshotは変更不要。
+
+### Frameless/feedback変更のHelp実レビュー（2026-11-12）
+
+No impact。mainのWindow装飾は、検証済みtyped GroupArtSessionを持つprofiling Worldだけfalseとし、
+通常起動・旧gallery・性能・UIセッションでは従来trueを維持する。feedbackはconnection-onlyのhost
+build選択だけで、入力・操作・保存・gameplay・通知・Help入口を変えない。正式18case/performanceへ
+feedbackを流用しない。一般利用者向けHelp source/snapshotの更新は不要。

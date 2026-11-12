@@ -141,11 +141,13 @@ fn main() -> AppExit {
         eprintln!("Invalid building-art session: {error}");
         return AppExit::error();
     }
+    let window_decorations = bevy_app::building_art_window_decorations(app.world());
     let default_plugins = DefaultPlugins
         .set(WindowPlugin {
             primary_window: (!use_headless_runner).then(|| Window {
                 title: "Hell Workers".into(),
                 resolution: window_resolution,
+                decorations: window_decorations,
                 present_mode,
                 ..default()
             }),

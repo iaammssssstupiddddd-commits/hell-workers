@@ -84,7 +84,7 @@ def snapshot(value, session, frozen, view_root):
     dpi = session["scale_factor"]
     require(type(dpi) in (int, float) and dpi in (1, 1.5, 2), "unsupported gallery DPI")
     logical = [WIDTH / dpi, HEIGHT / dpi]
-    require(m6.pipeline.exact_json(value["window"], {"physical": [WIDTH, HEIGHT], "logical": logical, "dpi": dpi})
+    require(m6.pipeline.exact_json(value["window"], {"physical": [WIDTH, HEIGHT], "logical": logical, "dpi": dpi, "decorations": False})
             and type(value["visible_ui_nodes"]) is int and value["visible_ui_nodes"] == 0, "gallery window/UI differs")
     scale = {"high": 1.0, "medium": .75, "low": .5}[session["quality"]]
     require(m6.pipeline.exact_json(value["rtt"], {"physical": [WIDTH * scale, HEIGHT * scale], "logical": logical,

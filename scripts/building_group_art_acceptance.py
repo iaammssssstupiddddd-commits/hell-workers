@@ -32,6 +32,14 @@ def matrix(connection_only=False):
         ("high", "medium", "low"), (1.0, 1.5, 2.0), ("normal", "far")))
 
 
+def build_command(value):
+    pipeline.require(type(value["feedback_only"]) is bool and type(value["connection_only"]) is bool
+        and (not value["feedback_only"] or value["connection_only"]), "feedback is connection-only, never a formal matrix")
+    return ["python3", "scripts/dev.py", "feedback", "--build-only"] if value["feedback_only"] else [
+        "python3", "scripts/dev.py", "cargo", "--", "build", "--profile", "profiling",
+        "--no-default-features", "--features", "profiling"]
+
+
 def label(case):
     quality, dpi, view = case
     return f"{quality}-dpi{dpi:g}-{view}"
@@ -63,7 +71,8 @@ def check(value):
     repo = Path(value["repo"])
     pipeline.require(value["profile"] == PROFILE and value["status"] == "ready"
         and value["accepted"] is False and value["promotion_authority"] is False
-        and value["performance_evidence"] is False and type(value["connection_only"]) is bool,
+        and value["performance_evidence"] is False and type(value["connection_only"]) is bool
+        and type(value["feedback_only"]) is bool and (not value["feedback_only"] or value["connection_only"]),
         "invalid gallery scope")
     static.require_identity(repo, value["identity"])
     static.check_root(repo, Path(value["job_root"]))
@@ -90,7 +99,7 @@ def plan(args):
         "assets": assets, "group_declaration": m6.group_declaration(assets, args.group),
         "drivers": driver_inventory(), "numeric_verifiers": pipeline.numeric_verifier_inventory(),
         "foreground_verifier_sha256": m6.art.foreground.verifier_sha256(), "adapter": args.adapter,
-        "connection_only": args.connection_only, "cases": [list(c) for c in matrix(args.connection_only)],
+        "connection_only": args.connection_only, "feedback_only": args.feedback, "cases": [list(c) for c in matrix(args.connection_only)],
         "accepted": False, "promotion_authority": False, "performance_evidence": False}
     check(value)
     resources = native.resource_snapshot(repo, require_launcher=True)
@@ -219,12 +228,13 @@ def verify(root):
     value = manifest["plan"]
     pipeline.require(str(root) == value["job_root"] and manifest["profile"] == PROFILE
         and manifest["status"] == "pass" and manifest["accepted"] is False
-        and manifest["performance_evidence"] is False and manifest["promotion_authority"] is False,
+        and manifest["performance_evidence"] is False and manifest["promotion_authority"] is False
+        and type(manifest["feedback_only"]) is bool and manifest["feedback_only"] == value["feedback_only"],
         "gallery manifest scope differs")
     check(value)
     m6.check_view(value)
     binary = Path(manifest["binary"]["path"])
-    pipeline.require(binary == Path(value["repo"]) / "target/profiling/bevy_app"
+    pipeline.require(binary == Path(value["repo"]) / "target" / ("debug" if value["feedback_only"] else "profiling") / "bevy_app"
         and pipeline.digest(binary.read_bytes()) == manifest["binary"]["sha256"], "gallery binary changed")
     rows = [verify_case(value, case, manifest["binary"]["sha256"]) for case in value["cases"]]
     pipeline.require(rows == manifest["observations"] and len({row["adapter"] for row in rows}) == 1,
@@ -245,11 +255,11 @@ def run(args):
     native.atomic_write_json(job, state)
     try:
         env = native.cargo_environment(repo)
-        native.run_command("build", ["python3", "scripts/dev.py", "cargo", "--", "build", "--profile", "profiling",
-            "--no-default-features", "--features", "profiling"], repo=repo, env=env, log_path=root / "build.log",
+        build = build_command(value)
+        native.run_command("build", build, repo=repo, env=env, log_path=root / "build.log",
             job_file=job, state=state, timeout_seconds=3600)
         check(value)
-        binary = repo / "target/profiling/bevy_app"
+        binary = repo / "target" / ("debug" if value["feedback_only"] else "profiling") / "bevy_app"
         binary_sha = pipeline.digest(binary.read_bytes())
         m6.prepare_view(value)
         rows = []
@@ -299,7 +309,7 @@ def run(args):
         m6.check_view(value)
         manifest = {"profile": PROFILE, "status": "pass", "plan": value,
             "binary": {"path": str(binary), "sha256": binary_sha}, "observations": rows,
-            "accepted": False, "performance_evidence": False, "promotion_authority": False}
+            "accepted": False, "performance_evidence": False, "promotion_authority": False, "feedback_only": value["feedback_only"]}
         pipeline.put(root / "manifest.json", pipeline.canonical(manifest))
         pipeline.require(pipeline.exact_json(pipeline.read(args.plan), value), "gallery plan changed before verification")
         verify(root)
@@ -322,6 +332,7 @@ def main():
     p.add_argument("--job-root", type=Path)
     p.add_argument("--output", type=Path, required=True)
     p.add_argument("--connection-only", action="store_true")
+    p.add_argument("--feedback", action="store_true", help="connection-only dev cache; never formal matrix evidence")
     p = commands.add_parser("run")
     p.add_argument("--plan", type=Path, required=True)
     p = commands.add_parser("verify")

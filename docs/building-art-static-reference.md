@@ -331,3 +331,14 @@ ready前に拒否された。PNGも受入結果もなく、登録recipeのexit1�
 要求寸法1920×1680を変更せず、同game PIDの唯一のX11 clientへ、入力・focus・resizeを使わない
 有界なXGetGeometry読取を追加する。ready前から寸法変化をnonce/PID・時刻付きで有限に保存し、
 実際のOS client寸法を次のfresh試行で調べる。この診断をDPI、camera、画像、性能の証拠へ代用しない。
+
+fresh v2（`c9a9ae35`）の同game PID/window実測はclient1920×1662、
+`_NET_FRAME_EXTENTS = 0,0,74,0`。作業領域の高さ1736pxから装飾74pxが引かれ、
+要求client1680pxが縮められていた。v2もready/PNGなしのexit1をinvalid封印/finalizeした。
+完全なtyped GroupArtSessionをadmitしたWorldだけをframelessにして要求client1920×1680を維持する。
+実Window.decorations=falseをsnapshot/oracleでも要求し、通常/旧gallery/性能窓の装飾は変えない。
+
+反復接続は`--connection-only --feedback`で既存`dev.py feedback --build-only`のdev cacheを使える。
+clean source・identity・geometry・owned PNG・ACK・実finalの検査は同じで、feedback_only=trueを明示する。
+feedbackの18caseは計画/実行/verifyで拒否し、正式matrixと性能はprofiling/Capture→Memoryの
+既存経路で別に実行する。feedback画像・接続passを正式18caseやreleaseへ読み替えない。

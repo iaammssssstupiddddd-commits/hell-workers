@@ -54,7 +54,7 @@ def projected_m2(group="m2"):
     rtt = [.00125, 0, 0, 0, 0, 0, .001, 0, 0, .00125, 0, 0, 1, -1, .5, 1]
     overlay = [1/960, 0, 0, 0, 0, 1/840, 0, 0, 0, 0, .001, 0, 0, 0, .5, 1]
     composite = [1920, 0, 0, 0, 0, 1680, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
-    value = {"window": {"physical": [1920, 1680], "logical": [960., 840.], "dpi": 2.},
+    value = {"window": {"physical": [1920, 1680], "logical": [960., 840.], "dpi": 2., "decorations": False},
         "rtt": {"physical": [1920., 1680.], "logical": [960., 840.], "target_scale_factor": 2., "quality": "high"},
         "main_clip_from_world": rtt, "rtt_clip_from_world": rtt, "overlay_clip_from_world": overlay,
         "composite_world": composite, "visible_ui_nodes": 0, "records": []}
@@ -95,6 +95,19 @@ class GroupGalleryTests(unittest.TestCase):
         self.assertEqual(gallery.matrix(True), [("high", 2., "normal")])
         self.assertEqual({dpi for _, dpi, _ in gallery.matrix()}, {1., 1.5, 2.})
         self.assertEqual({view for _, _, view in gallery.matrix()}, {"normal", "far"})
+
+    def test_feedback_uses_existing_dev_workflow_and_cannot_enter_the_formal_matrix(self):
+        self.assertEqual(gallery.build_command({"feedback_only": True, "connection_only": True}),
+                         ["python3", "scripts/dev.py", "feedback", "--build-only"])
+        formal = gallery.build_command({"feedback_only": False, "connection_only": False})
+        self.assertEqual(formal[formal.index("--profile") + 1], "profiling")
+        self.assertEqual(formal[formal.index("--features") + 1], "profiling")
+        self.assertIn("--no-default-features", formal)
+        for value in ({"feedback_only": True, "connection_only": False},
+                      {"feedback_only": 1, "connection_only": True},
+                      {"feedback_only": True, "connection_only": 1}):
+            with self.assertRaises(ValueError):
+                gallery.build_command(value)
 
     def test_group_gallery_oracle_is_separate_from_every_performance_reader(self):
         case = Case("building-art-static", "small", "gpu", 20260920, 15, 0)
@@ -209,6 +222,7 @@ class GroupGalleryTests(unittest.TestCase):
             lambda v: v["rtt"].update(quality="low"),
             lambda v: v["window"]["physical"].__setitem__(0, 1920.0),
             lambda v: v["window"].update(dpi=True),
+            lambda v: v["window"].update(decorations=True),
         )
         for mutate in mutations:
             bad = copy.deepcopy(value)

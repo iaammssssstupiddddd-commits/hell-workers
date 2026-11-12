@@ -165,17 +165,22 @@ pub(super) fn collect(world: &mut World, session: &GroupArtSession) -> Result<Va
                 w.physical_height(),
                 w.scale_factor(),
                 w.size(),
+                w.decorations,
             )
         })
         .collect::<Vec<_>>();
-    let [(window_id, width, height, dpi, logical)] = windows.as_slice() else {
+    let [(window_id, width, height, dpi, logical, decorated)] = windows.as_slice() else {
         return Err("group primary window count differs".into());
     };
     if (*width, *height) != (GROUP_ART_WIDTH, GROUP_ART_HEIGHT)
         || *dpi != session.scale_factor
         || *logical != Vec2::new(*width as f32 / dpi, *height as f32 / dpi)
+        || *decorated
     {
-        return Err("group actual window/DPI differs".into());
+        return Err(format!(
+            "group actual window/DPI differs: observed={width}x{height} dpi={dpi} logical={logical:?} decorations={decorated}; expected={}x{} dpi={} decorations=false",
+            GROUP_ART_WIDTH, GROUP_ART_HEIGHT, session.scale_factor
+        ));
     }
     let ui_roots = world
         .query_filtered::<Entity, With<Node>>()
@@ -401,7 +406,7 @@ pub(super) fn collect(world: &mut World, session: &GroupArtSession) -> Result<Va
         records.push(json!({"kind": kind, "ordinal": spec.ordinal, "owner": owner.to_bits(), "physical_bounds": bounds, "shapes": shapes}));
     }
     Ok(
-        json!({"window": {"physical": [width, height], "logical": logical.to_array(), "dpi": dpi},
+        json!({"window": {"physical": [width, height], "logical": logical.to_array(), "dpi": dpi, "decorations": decorated},
         "rtt": {"physical": pixels.to_array(), "logical": rtt.camera.logical_viewport_size().map(|v| v.to_array()),
             "target_scale_factor": target_scale, "quality": quality.as_str()},
         "main_clip_from_world": main.clip().to_cols_array(), "rtt_clip_from_world": rtt.clip().to_cols_array(),
