@@ -432,6 +432,8 @@ fn observe(world: &mut World) {
             if world.resource::<Trace>().scope == CANDIDATE_SCOPE {
                 sample["storyboard_stage"] =
                     json!(world.resource::<super::m2_fixture::Fixture>().stage);
+                sample["storyboard_clock"] =
+                    json!(world.resource::<Time<Virtual>>().relative_speed());
             }
             sample
         })

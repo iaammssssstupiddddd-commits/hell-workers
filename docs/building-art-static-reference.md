@@ -393,3 +393,10 @@ invalid封印/finalize済みで、状態遷移rawや5画像を受入へ流用し
 全asset inventoryへ含めて原本と検証する。旧ArtPreview overlayは変更しない。
 新候補domain fixtureだけ、開始時とMove入力完了後に一度ずつpointerを中央モデルから離す。
 Move照準中の入力所有を変更せず、UIを隠したり継続的にpointerを上書きしない。fresh画像で再確認する。
+
+fresh v2（`e6f32aeb`）はoverlay承認検査まで進んだが、最初のActive/unpausedは約0.56秒で、
+撮影区間がpause境界を跨いだ。そのPNGは不採用となり、要求する5段階の順序画像が不足してexit1。
+invalid封印/finalizeし、承認条件や境界跨ぎ拒否は維持する。候補refiningだけ観測clockを
+Virtual 0.25倍、開始後real 6秒でpause、9秒でresumeへ明示する。材料/assignmentは従来の4秒時点。
+原本traceへ実relative_speedを記録し、専用verifierがquarter-speed契約とVirtual軸/速度を照合する。
+通常gameplay、旧ArtPreview、move/save-loadのclockは変更しない。この時間拡張は性能やOS入力の証拠でない。

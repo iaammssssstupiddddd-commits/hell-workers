@@ -340,3 +340,7 @@ M7-b初回はprivate overlayのnumeric承認欠落による既知exit1。状態r
 原本をdiagnostic保持・invalid/finalizeし、既存approval4件のexact copyと全inventory検査、
 candidate専用の開始/Move入力終了時だけのpointer parkingを追加してfresh sourceで再実行する。
 通常/旧ArtPreviewの入力・UIは変えないため、この補正もHelp No impact。
+
+v2は最初のActive0.56秒の画像がpause境界を跨いで不採用となった。要求画像列を緩めずinvalid/finalize。
+candidate refiningだけの明示quarter-speed clockとreal6/9秒pause/resumeで撮影時間を確保し、
+実clockも独立検査する。通常/旧preview/他legを変えないためHelp No impactを維持する。

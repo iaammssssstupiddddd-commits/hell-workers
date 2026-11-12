@@ -26,7 +26,7 @@ class CandidateMotionTests(unittest.TestCase):
             ("Active", True, .2, .2), ("Active", True, .2, .2),
             ("Active", False, .3, .3), ("Active", False, .4, .4),
             ("Idle", False, .5, .4), ("Idle", False, .6, .4)]):
-            sample = {"paused": paused, "virtual_seconds": clock, "storyboard_stage": index}
+            sample = {"paused": paused, "virtual_seconds": clock, "storyboard_stage": index, "storyboard_clock": 0.25}
             root = {"entity": "root", "state": f"Some(Mixer{state})", "parts": [
                 {"name": "body", "entity": "body", "pose": pose()},
                 {"name": "rotor", "entity": "rotor", "pose": pose(candidate.quaternion_step(
@@ -37,7 +37,7 @@ class CandidateMotionTests(unittest.TestCase):
         candidate.check_motion(self.rows, self.value)
 
     def test_body_motion_part_replacement_and_clock_disagreement_fail(self):
-        for change in ("body", "part", "clock", "axis"):
+        for change in ("body", "part", "clock", "axis", "relative-speed"):
             rows, value = copy.deepcopy((self.rows, self.value))
             if change == "body":
                 rows[2][1]["parts"][0]["pose"]["rotation"] = [0., 1., 0., 0.]
@@ -45,8 +45,10 @@ class CandidateMotionTests(unittest.TestCase):
                 rows[5][1]["parts"][1]["entity"] = "replacement"
             elif change == "clock":
                 rows[2][0]["virtual_seconds"] += .2
-            else:
+            elif change == "axis":
                 value["production_state"]["axis"] = [1., 0., 0.]
+            else:
+                rows[2][0]["storyboard_clock"] = 1.0
             with self.subTest(change=change), self.assertRaises(ValueError):
                 candidate.check_motion(rows, value)
 

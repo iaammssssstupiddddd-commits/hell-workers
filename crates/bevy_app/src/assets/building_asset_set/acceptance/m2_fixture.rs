@@ -246,6 +246,7 @@ type Actors<'w, 's> = Query<
 struct Drive<'w, 's> {
     fixture: ResMut<'w, Fixture>,
     lifecycle: Res<'w, super::m2_lifecycle::Lifecycle>,
+    candidate: Option<Res<'w, CandidatePointer>>,
     real: Res<'w, Time<Real>>,
     time: ResMut<'w, Time<Virtual>>,
     buildings: Query<
@@ -267,12 +268,22 @@ fn drive(mut p: Drive) {
         return;
     };
     let now = p.real.elapsed_secs_f64();
+    let candidate_refining = p.candidate.is_some()
+        && building.kind == BuildingType::MudMixer
+        && p.lifecycle.leg == "refining";
     if p.fixture.stage == 0 {
+        if candidate_refining {
+            // Observation-only clock: keep the real Active phase long enough for
+            // an owned PNG before pause. Production speed/rules stay unchanged.
+            p.time.set_relative_speed(0.25);
+        }
         p.fixture.stage = 1;
         p.fixture.since = now;
         return;
     }
     let elapsed = now - p.fixture.since;
+    let pause_at = if candidate_refining { 6.0 } else { 4.5 };
+    let resume_at = if candidate_refining { 9.0 } else { 6.5 };
     if building.kind == BuildingType::Tank {
         let amount = match p.fixture.stage {
             1 if elapsed >= 4.0 => 1,
@@ -353,11 +364,11 @@ fn drive(mut p: Drive) {
                 ));
                 p.fixture.stage = 2;
             }
-            2 if elapsed >= 4.5 => {
+            2 if elapsed >= pause_at => {
                 p.time.pause();
                 p.fixture.stage = 3;
             }
-            3 if elapsed >= 6.5 => {
+            3 if elapsed >= resume_at => {
                 p.time.unpause();
                 p.fixture.stage = 4;
             }
@@ -370,6 +381,63 @@ fn drive(mut p: Drive) {
 mod tests {
     use super::*;
     use std::time::Duration;
+
+    #[test]
+    fn candidate_refining_clock_extends_capture_phases_without_changing_legacy_timing() {
+        for candidate in [false, true] {
+            let mut app = App::new();
+            app.init_resource::<Time<Real>>()
+                .init_resource::<Time<Virtual>>()
+                .insert_resource(super::super::m2_lifecycle::Lifecycle::new(
+                    "refining".into(),
+                ))
+                .add_message::<AppExit>()
+                .add_systems(Update, drive);
+            if candidate {
+                app.init_resource::<CandidatePointer>();
+            }
+            let owner = app
+                .world_mut()
+                .spawn(Building {
+                    kind: BuildingType::MudMixer,
+                    is_provisional: false,
+                })
+                .id();
+            app.insert_resource(Fixture {
+                owner: Some(owner),
+                ..default()
+            });
+            app.world_mut()
+                .resource_mut::<Time<Real>>()
+                .advance_by(Duration::from_secs(1));
+            app.update();
+            assert_eq!(
+                app.world().resource::<Time<Virtual>>().relative_speed(),
+                if candidate { 0.25 } else { 1.0 }
+            );
+            // Seed the phase only; this regression tests clock admission/timing,
+            // while ordinary refinement remains covered by its existing tests.
+            app.world_mut().resource_mut::<Fixture>().stage = 2;
+            app.world_mut()
+                .resource_mut::<Time<Real>>()
+                .advance_by(Duration::from_secs(5));
+            app.update();
+            assert_eq!(
+                app.world().resource::<Time<Virtual>>().is_paused(),
+                !candidate
+            );
+            app.world_mut()
+                .resource_mut::<Time<Real>>()
+                .advance_by(Duration::from_secs(1));
+            app.update();
+            assert!(app.world().resource::<Time<Virtual>>().is_paused());
+            app.world_mut()
+                .resource_mut::<Time<Real>>()
+                .advance_by(Duration::from_secs(3));
+            app.update();
+            assert!(!app.world().resource::<Time<Virtual>>().is_paused());
+        }
+    }
 
     #[test]
     fn candidate_cursor_parks_once_without_hiding_ui_or_continuously_overwriting_input() {

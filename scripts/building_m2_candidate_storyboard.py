@@ -41,6 +41,7 @@ def check_plan(value):
         and value["identity"]["authority"] == "isolated_candidate"
         and value["accepted"] is False and value["promotion_authority"] is False
         and value["input_scope"] == "seeded-domain-operations"
+        and value["clock_scope"] == "candidate-refining-quarter-speed-v1"
         and type(value["duration_seconds"]) is int and 35 <= value["duration_seconds"] <= 170,
         "candidate storyboard contract differs")
     check_dependencies(value)
@@ -89,7 +90,7 @@ def plan(args):
     inputs = args.output.resolve().with_suffix(".inputs.json")
     pipeline.put(inputs, pipeline.canonical({"repo": str(repo), "kinds": {args.kind: spec}}))
     value = {"schema_version": 1, "status": "ready", "profile": PROFILE, "scope": SCOPE,
-        "input_scope": "seeded-domain-operations", "repo": str(repo), "job_root": str(root),
+        "input_scope": "seeded-domain-operations", "clock_scope": "candidate-refining-quarter-speed-v1", "repo": str(repo), "job_root": str(root),
         "subject": art.subject(repo), "runtime_plan": str(inputs), "runtime_plan_sha256": executable.digest(inputs),
         "kind": args.kind, "identity": manifest["identity"], "leg": args.leg,
         "codec": str(codec), "codec_sha256": executable.digest(codec), "parts": manifest["parts"],
@@ -132,6 +133,9 @@ def check_motion(rows, value):
     authored = {entry["name"]: entry for entry in value["parts"]}
     for sample, root in rows:
         pipeline.require(type(sample.get("storyboard_stage")) is int, "candidate stage observation missing")
+        if value["kind"] == "MudMixer" and value["leg"] == "refining" and sample["storyboard_stage"] >= 1:
+            pipeline.require(type(sample.get("storyboard_clock")) in (int, float)
+                and sample["storyboard_clock"] == 0.25, "candidate observation clock differs")
         for name, spec in authored.items():
             pose = part(root, name)["pose"]
             translation = list(spec["translation_wu"])
