@@ -6,6 +6,7 @@ use crate::plugins::startup::Building3dHandles;
 use crate::systems::visual::building3d_cleanup::{
     building_presentation_transform, structural_presentation_state,
 };
+use bevy::ecs::{entity::EntityHashSet, query::QueryState};
 use bevy::prelude::*;
 use hw_core::relationships::{StoredItems, TaskWorkers};
 use hw_core::visual_mirror::{MudMixerVisualState, StockpileVisualState};
@@ -65,6 +66,38 @@ struct GenerationMaterials {
 
 #[derive(Resource, Default)]
 pub(crate) struct EquipmentMaterials(Vec<GenerationMaterials>);
+
+type PartQuery = QueryState<(
+    &'static EquipmentPart,
+    &'static mut Visibility,
+    &'static mut MeshMaterial3d<TopDownStructuralMaterial>,
+    &'static mut Transform,
+)>;
+type SpaTileQuery = QueryState<(&'static SoulSpaTile, Option<&'static TaskWorkers>)>;
+
+/// World-specific query storage and empty scratch capacity for the synchronizer.
+/// Owner identities are recollected on every call, including while paused.
+pub struct EquipmentSyncCache {
+    roots_query: QueryState<(Entity, &'static Building3dVisual), With<EquipmentRoot>>,
+    parts_query: PartQuery,
+    spa_tiles_query: SpaTileQuery,
+    roots: Vec<(Entity, Entity)>,
+    children: Vec<Entity>,
+    seen: EntityHashSet,
+}
+
+impl FromWorld for EquipmentSyncCache {
+    fn from_world(world: &mut World) -> Self {
+        Self {
+            roots_query: world.query_filtered(),
+            parts_query: world.query(),
+            spa_tiles_query: world.query(),
+            roots: Vec::new(),
+            children: Vec::new(),
+            seen: EntityHashSet::default(),
+        }
+    }
+}
 
 pub fn spawn_equipment_root(
     commands: &mut Commands,
@@ -127,7 +160,7 @@ fn fallback_material(
     }
 }
 
-fn spa_mask(world: &mut World, owner: Entity, transform: &Transform) -> u8 {
+fn spa_mask(world: &World, owner: Entity, transform: &Transform, query: &mut SpaTileQuery) -> u8 {
     if world
         .get::<SoulSpaSite>(owner)
         .is_none_or(|site| site.phase != SoulSpaPhase::Operational)
@@ -139,7 +172,6 @@ fn spa_mask(world: &mut World, owner: Entity, transform: &Transform) -> u8 {
         transform.translation.truncate()
             - Vec2::from(shape.center_offset_tiles) * hw_core::constants::TILE_SIZE,
     );
-    let mut query = world.query::<(&SoulSpaTile, Option<&TaskWorkers>)>();
     query.iter(world).fold(0, |mask, (tile, workers)| {
         if tile.parent_site != owner || workers.is_none_or(|workers| workers.is_empty()) {
             return mask;
@@ -155,15 +187,20 @@ fn spa_mask(world: &mut World, owner: Entity, transform: &Transform) -> u8 {
 
 /// Exclusive access keeps root/leaf replacement atomic even for a late set or
 /// a newly rehydrated owner. No owner index survives world replacement.
-pub fn sync_equipment_structure(world: &mut World) {
+pub fn sync_equipment_structure(world: &mut World, mut scratch: Local<EquipmentSyncCache>) {
     world.resource_scope(|world, handles: Mut<Building3dHandles>| {
         world.resource_scope(|world, pool: Mut<BuildingAssetPool>| {
-            sync_structure(world, &handles, &pool);
+            sync_structure(world, &handles, &pool, &mut scratch);
         });
     });
 }
 
-fn sync_structure(world: &mut World, handles: &Building3dHandles, pool: &BuildingAssetPool) {
+fn sync_structure(
+    world: &mut World,
+    handles: &Building3dHandles,
+    pool: &BuildingAssetPool,
+    scratch: &mut EquipmentSyncCache,
+) {
     let delta = world.get_resource::<Time<Virtual>>().map_or(0.0, |time| {
         if time.is_paused() {
             0.0
@@ -178,14 +215,16 @@ fn sync_structure(world: &mut World, handles: &Building3dHandles, pool: &Buildin
         pool.descriptor(entry.identity.kind)
             .is_some_and(|set| set.manifest.identity == entry.identity)
     });
-    let mut roots = world.query_filtered::<(Entity, &Building3dVisual), With<EquipmentRoot>>();
-    let roots: Vec<_> = roots
-        .iter(world)
-        .map(|(entity, visual)| (entity, visual.owner))
-        .collect();
-    let mut seen = bevy::ecs::entity::EntityHashSet::default();
-    for (root, owner) in roots {
-        if !seen.insert(owner) {
+    scratch.roots.clear();
+    scratch.seen.clear();
+    scratch.roots.extend(
+        scratch
+            .roots_query
+            .iter(world)
+            .map(|(entity, visual)| (entity, visual.owner)),
+    );
+    for (root, owner) in scratch.roots.iter().copied() {
+        if !scratch.seen.insert(owner) {
             world.despawn(root);
             continue;
         }
@@ -236,11 +275,11 @@ fn sync_structure(world: &mut World, handles: &Building3dHandles, pool: &Buildin
             .get::<EquipmentRoot>(root)
             .is_some_and(|current| current.identity.as_ref() != identity);
         if replace {
-            let children: Vec<_> = world
-                .get::<Children>(root)
-                .map(|children| children.iter().collect())
-                .unwrap_or_default();
-            for child in children {
+            scratch.children.clear();
+            if let Some(children) = world.get::<Children>(root) {
+                scratch.children.extend(children.iter());
+            }
+            for child in scratch.children.iter().copied() {
                 if world.get::<EquipmentPart>(child).is_some() {
                     world.despawn(child);
                 }
@@ -332,7 +371,7 @@ fn sync_structure(world: &mut World, handles: &Building3dHandles, pool: &Buildin
             world.get_mut::<EquipmentRoot>(root).unwrap().identity = identity.cloned();
         }
         let mask = if kind == BuildingType::SoulSpa {
-            spa_mask(world, owner, &owner_transform)
+            spa_mask(world, owner, &owner_transform, &mut scratch.spa_tiles_query)
         } else {
             0
         };
@@ -353,21 +392,16 @@ fn sync_structure(world: &mut World, handles: &Building3dHandles, pool: &Buildin
                 .rem_euclid(std::f32::consts::TAU);
         }
         let rotor_angle = world.get::<EquipmentRoot>(root).unwrap().rotor_angle;
-        let children: Vec<_> = world
-            .get::<Children>(root)
-            .map(|children| children.iter().collect())
-            .unwrap_or_default();
+        scratch.children.clear();
+        if let Some(children) = world.get::<Children>(root) {
+            scratch.children.extend(children.iter());
+        }
         let constructing = world
             .get::<SoulSpaSite>(owner)
             .is_some_and(|site| site.phase == SoulSpaPhase::Constructing);
-        let mut parts = world.query::<(
-            &EquipmentPart,
-            &mut Visibility,
-            &mut MeshMaterial3d<TopDownStructuralMaterial>,
-            &mut Transform,
-        )>();
-        for child in children {
-            let Ok((part, mut visibility, mut handle, mut transform)) = parts.get_mut(world, child)
+        for child in scratch.children.iter().copied() {
+            let Ok((part, mut visibility, mut handle, mut transform)) =
+                scratch.parts_query.get_mut(world, child)
             else {
                 continue;
             };
@@ -444,5 +478,8 @@ fn sync_structure(world: &mut World, handles: &Building3dHandles, pool: &Buildin
             }
         }
     }
+    scratch.roots.clear();
+    scratch.children.clear();
+    scratch.seen.clear();
     world.insert_resource(cache);
 }

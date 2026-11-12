@@ -6,7 +6,7 @@
 | --- | --- |
 | 計画ID | non-bridge-candidate-performance-plan-2026-11-12 |
 | ステータス | In Progress |
-| 作成日 / 最終更新日 | 2026-11-12 |
+| 作成日 / 最終更新日 | 2026-11-12 / 2026-11-13 |
 | 作成者 | Codex main |
 | 関連提案 | N/A |
 | 関連Issue/PR | TAK-14 / 非橋9種正式導入の継続 |
@@ -20,7 +20,8 @@ legacy-controlと比較する。現M6は8種のReleaseApprovedを要求するた
 
 ## 2. スコープ
 
-対象はmain所有のRust profiling admission、Python matrix/oracle、拒否系テスト、実機比較。
+対象はmain所有のRust profiling admission、Python matrix/oracle、拒否系テスト、実機比較と、
+実測で増えた既存表示同期の不要な一時割当の補正。
 Bridge、既存release入口の許可緩和、ゲームルール、独立承認の作成、外部公開は対象外。
 
 ## 3. 現状とギャップ
@@ -583,3 +584,34 @@ case結果へはinstrumentation別の必須metricだけを明示射影する。�
 集計時の未知/欠測metricは明示拒否する。実際のframe_summary形状から集計までの回帰試験を加える。
 旧失敗は診断として保持し、新driver/subject/planで正式比較を行う。予算・MAD・gap・資源条件は不変。
 Help No impact: host集計だけの補正で、ゲーム入力・表示・保存・成立条件は変更しない。
+
+### M8-i: RSS予算違反と表示同期のquery再利用
+
+`f4ca05579f1e462a3a883fce86e3318154d5f0f8`のfresh v4 Capture12 caseは全体判定と独立reviewを通過。
+N/4Nのp95増分は+0.016430/+0.066045ms、p99は+0.114536/−0.039385ms。
+現sourceはMesh79・119464 bytesで全run初終とN/4Nのglobal plateauを満たした。
+Memory12 caseも個別検証は通過したが、Nの最大RSS中央値がreference1285824→current1425444KiB、
+増分139620KiBとなり、固定98304KiBを超過した。全体Memoryは不合格のまま保持する。
+N/4NのRust live peak増分は817938/42543 bytesで、保持画像157・CPU468338588 bytes等は増えていない。
+
+別の受動診断では、同じ旧binaryでもRSSが増えて新旧の大小が逆転した。
+250ms標本の既存Rust live counterとproc RSS内訳を、owned PID・出生・ELF/symbol/maps・原log phaseへ拘束した。
+startup標本Rust最大は旧900955439、新709150099 bytes、warmup匿名RSS最大は旧1216260、新1276752KiB。
+measureのRust保持量は同程度であり、標本最大から厳密startup peakやC/allocatorの所有を断定しない。
+診断成功を性能予算の合格へ流用せず、旧不合格・予算・原本を維持する。
+
+現sourceの追加一時割当はNで約171KB/693calls、4Nで約330KB/1956calls per frame。
+実経路にはrootごとのpart QueryState、Spaごとのtile QueryState、previewの毎frame query作成と
+roots/children/consumers等の新Vec/HashSetがある。候補未load・pauseでもこの同期は必要なので停止しない。
+
+- [x] Bevy0.19のworld固有LocalへQueryStateを保持し、通常iter/getで後着archetypeへ追随する。
+- [x] scratchは毎call内容をclearし、容量だけ再利用する。owner index・asset authority・状態をcacheしない。
+- [x] 既存の世代/後着/所有/ghost/Blueprint/pulse/move/catalog/slot/cleanup回帰と、
+  cache生成後の新archetype→owner全削除→別kind追加を確認する。
+- [ ] Help実経路・Rust check/Clippy/RA・変更別CI・独立review/storageを通し、同じ事前予算でfresh比較する。
+- [ ] RSS改善は実測で判断する。変化がなければ同系の調整を続けず、起動/native側の帰属調査へ戻る。
+
+全f4 batchは終了・seal・finalize済み。限定診断reviewを採用して旧sourceでのlive verifier依存を閉じ、
+原本/binaryは修正比較の具体的用途だけで保持する。新subjectへ旧passを付け替えない。
+Help No impact: root/part・2D previewの実consumer経路を確認した。入力、表示の意味/形状、状態・保存・
+世代採否・同期時点は変更せず、一時割当だけを削減する。profiling構成の表示同期18回帰とworkspace checkは成功。

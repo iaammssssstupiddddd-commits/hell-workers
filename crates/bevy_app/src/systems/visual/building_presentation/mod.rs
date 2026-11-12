@@ -12,8 +12,10 @@ use hw_jobs::BuildingType;
 
 #[cfg(feature = "profiling")]
 pub(crate) use preview::apply as apply_building_preview;
-pub use preview::sync_building_previews;
-pub use structure::{EquipmentRoot, spawn_equipment_root, sync_equipment_structure};
+pub use preview::{PreviewSyncCache, sync_building_previews};
+pub use structure::{
+    EquipmentRoot, EquipmentSyncCache, spawn_equipment_root, sync_equipment_structure,
+};
 
 #[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct BuildingPresentationSet;

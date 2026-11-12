@@ -149,6 +149,10 @@ receiptは製品に同梱する承認記録の整合性検査であり、署名�
   `invalidate_active`はidentity完全一致のactiveだけを解除し、他kind／pendingは変えない。
 - `PostUpdate`でpool poll、3D同期、2D／preview同期、`ApplyDeferred`をchainし、Transform伝播とUI prepareより
   前に完了する。後着generation、pause、新規consumerを同境界で揃える。world置換時はpoolを維持する。
+  各同期systemのworld固有`Local`でQueryStateとscratch容量を再利用する。通常`iter/get_mut`で
+  後着archetypeへ追随し、root/child/consumerの一覧と重複検査集合は毎call内容をclearする。
+  owner indexや採否/stateを保持せず、paused・candidate未loadでも同期を省略しない。
+  一時割当の削減自体をRSS予算の合格や正式asset導入と扱わない。
 - Tank／MudMixer／RestArea／SoulSpaはmeshを持たない`EquipmentRoot`とpart childを使う。
   `Building3dVisual`はrootだけに付け、partのlocal transformをworld同期で上書きしない。
   generation交換はpart集合単位、失効時は従来mesh／位置／材質／状態表示へ戻る。

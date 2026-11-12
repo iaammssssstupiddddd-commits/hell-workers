@@ -104,6 +104,79 @@ fn publish(world: &mut World, kind: BuildingAssetKind, generation: u64) -> Build
         .install_presentation_fixture(kind, generation, BuildingAssetAuthority::ReleaseApproved)
 }
 
+#[test]
+fn warmed_queries_follow_late_archetypes_and_do_not_retain_removed_owners() {
+    let mut app = app();
+    app.world_mut().resource_mut::<Time<Virtual>>().pause();
+    // Initialize the synchronizers before any of these consumer archetypes exist.
+    app.update();
+    let tank = shell(app.world_mut(), BuildingType::Tank);
+    app.update();
+    let tank_root = root(app.world_mut(), tank);
+    publish(app.world_mut(), BuildingAssetKind::Tank, 1);
+    app.update();
+    let parts = children(app.world(), tank_root);
+    assert_eq!(parts.len(), 2);
+    // Released parts add Name to the fallback leaf's archetype. The cached
+    // mutable query must discover them in the same generation-switch frame.
+    let water = parts
+        .iter()
+        .find(|&&entity| {
+            app.world()
+                .get::<Name>(entity)
+                .is_some_and(|name| name.as_str() == "water")
+        })
+        .unwrap();
+    assert_eq!(
+        app.world().get::<Visibility>(*water),
+        Some(&Visibility::Hidden)
+    );
+    app.world_mut().despawn(tank);
+    app.update();
+    assert!(app.world().get_entity(tank_root).is_err());
+    assert!(
+        parts
+            .iter()
+            .all(|&entity| app.world().get_entity(entity).is_err())
+    );
+
+    let lamp = shell(app.world_mut(), BuildingType::OutdoorLamp);
+    let lamp_leaf = children(app.world(), lamp)[0];
+    let set = publish(app.world_mut(), BuildingAssetKind::OutdoorLamp, 1);
+    app.update();
+    assert_eq!(
+        &app.world().get::<Sprite>(lamp_leaf).unwrap().image,
+        set.image("world_off").unwrap()
+    );
+    let card = app
+        .world_mut()
+        .spawn((
+            BuildingCatalogPreview(BuildingType::OutdoorLamp),
+            ImageNode::default(),
+        ))
+        .id();
+    app.update();
+    assert_eq!(
+        &app.world().get::<ImageNode>(card).unwrap().image,
+        set.image("catalog").unwrap()
+    );
+    app.world_mut().despawn(lamp);
+    app.world_mut().despawn(card);
+    app.update();
+
+    let mixer = shell(app.world_mut(), BuildingType::MudMixer);
+    app.update();
+    let mixer_root = root(app.world_mut(), mixer);
+    assert_eq!(children(app.world(), mixer_root).len(), 1);
+    assert_eq!(
+        app.world()
+            .get::<Building3dVisual>(mixer_root)
+            .unwrap()
+            .owner,
+        mixer
+    );
+}
+
 fn assert_authored_parts(world: &World, parts: &[Entity], set: &BuildingAssetDescriptor) {
     assert_eq!(parts.len(), set.manifest.parts.len());
     for (&entity, spec) in parts.iter().zip(&set.manifest.parts) {
