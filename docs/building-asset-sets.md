@@ -96,6 +96,11 @@ slugはkindのkebab-case（例: `mud-mixer`）。extensionはmeshがglb、image�
    `isolated_candidate`は`allowed_candidate`とのidentity完全一致が必要。
    `art_preview`はさらにprofiling build限定。既定policyでは両候補とも拒否する。
    `.meta`から権限を設定できず、登録後のresource変更でも既存loaderの権限は変わらない。
+   導入前の9種静止比較だけは、別の`HW_BUILDING_M6_CANDIDATES`から検査済みexact8候補の集合を
+   loader登録時に固定する。profiling/BuildingArtStatic限定で他sessionとの併用を拒否し、
+   candidate側だけpoolへの読み込みと表示を許可する。通常起動とrelease bindingの許可は広げない。
+   [静止比較契約](building-art-static-reference.md#導入前の9種混在比較)の別profile/sidecar/oracleで
+   制作validator自体のhashと全asset viewを固定し、技術passをproduction authorityへ変換しない。
 3. release receiptの実バイト数・hash・canonical形式を検査する。
    receiptはschema_version 1、manifestと同じidentity／art_approval_sha256、decision `release_approved`が必須。
 4. 全artifactを`LoadContext::read_asset_bytes`で読み、実バイト数とSHA-256を検査してからmanifestを返す。

@@ -394,6 +394,11 @@ def fixed_environment(args: argparse.Namespace) -> dict[str, str]:
         values["WGPU_ADAPTER_NAME"] = args.adapter
     if getattr(args, "building_m6_mode", None) is not None:
         values["HW_BUILDING_M6_MODE"] = args.building_m6_mode
+    if getattr(args, "building_m6_asset_root", None) is not None:
+        if "HW_BUILDING_M6_CANDIDATES" not in os.environ:
+            raise ValueError("pre-release view requires explicit candidate bindings")
+        values["BEVY_ASSET_ROOT"] = args.building_m6_asset_root
+        values["HW_BUILDING_M6_CANDIDATES"] = os.environ["HW_BUILDING_M6_CANDIDATES"]
     return values
 
 

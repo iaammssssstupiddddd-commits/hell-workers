@@ -55,6 +55,7 @@ def add_run_arguments(
     parser.add_argument("--contract", choices=sorted(CONTRACT_FILES))
     parser.add_argument("--building-m6-mode", choices=["legacy-control", "candidate"],
                         help="one member of the coordinator-owned paired M6 matrix")
+    parser.add_argument("--building-m6-asset-root", help="frozen pre-release comparison view only")
     parser.add_argument("--wall-phase", choices=["completed", "provisional", "mixed"])
     parser.add_argument(
         "--wall-presentation",

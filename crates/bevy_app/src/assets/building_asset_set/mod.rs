@@ -3,6 +3,8 @@
 
 #[cfg(feature = "profiling")]
 pub mod acceptance;
+#[cfg(feature = "profiling")]
+mod candidate_comparison;
 mod loader;
 #[cfg(feature = "profiling")]
 mod observations;

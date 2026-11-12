@@ -3,6 +3,10 @@
 import copy
 import hashlib
 import unittest
+import tempfile
+import os
+import struct
+from unittest.mock import patch
 from pathlib import Path
 
 from scripts import building_m6_acceptance as m6
@@ -10,6 +14,7 @@ from perf_tool.arguments import build_parser, validate_arguments
 from perf_tool.artifact_readers import building_m6 as oracle
 from perf_tool.artifact_readers.building_art_static import expected_records
 from perf_tool.model import Case
+from perf_tool.execution import fixed_environment
 
 
 def sidecar(candidate=False, copies=4):
@@ -87,6 +92,123 @@ def reseal(value):
 
 
 class M6Tests(unittest.TestCase):
+    def test_pre_release_freezes_provenance_verifier_code_not_only_candidate_bytes(self):
+        value = {"profile": m6.PRE_RELEASE_PROFILE,
+                 "numeric_verifiers": m6.pipeline.numeric_verifier_inventory(),
+                 "art_driver_sha256": m6.pipeline.digest(Path(m6.art.__file__).read_bytes())}
+        m6.check_candidate_verifiers(value)
+        with patch.object(m6.pipeline, "numeric_verifier_inventory", return_value={"changed.py": "a" * 64}):
+            with self.assertRaises(ValueError):
+                m6.check_candidate_verifiers(value)
+        bad = dict(value, art_driver_sha256="0" * 64)
+        with self.assertRaises(ValueError):
+            m6.check_candidate_verifiers(bad)
+        with self.assertRaises(ValueError):
+            m6.check_candidate_verifiers(dict(value, profile=m6.PROFILE))
+
+    def test_paused_parts_use_exact_f32_and_approved_tank_state(self):
+        part = {"mesh_role": "water", "translation_wu": [0, 0.6, 0],
+                "rotation_xyzw": [0, 0, 0, 1], "scale": [1, 1, 1]}
+        spa = m6.projected_parts({"parts": [part]}, {"kind": "SoulSpa"})[0]
+        expected = struct.unpack("<f", struct.pack("<f", 0.6))[0]
+        self.assertEqual(spa["translation_wu"][1], expected)
+        self.assertNotEqual(spa["translation_wu"][1], 0.6)
+        neighbor = struct.unpack("<f", struct.pack("<I", struct.unpack("<I", struct.pack("<f", 0.6))[0] + 1))[0]
+        self.assertNotEqual(spa["translation_wu"][1], neighbor)
+        manifest = {"parts": [part], "production_state": {"kind": "Tank", "partial_y_wu": 12, "full_y_wu": 22}}
+        for water, y in ((0, 12), (25, 12), (50, 22)):
+            actual = m6.projected_parts(manifest, {"kind": "Tank", "state": {"stored_water": water}})
+            self.assertEqual(actual[0]["translation_wu"], [0, y, 0])
+        self.assertEqual(part["translation_wu"], [0, 0.6, 0])
+        for number in (float("nan"), float("inf"), True):
+            invalid = copy.deepcopy(part)
+            invalid["translation_wu"][1] = number
+            with self.assertRaises(ValueError):
+                m6.projected_parts({"parts": [invalid]}, {"kind": "SoulSpa"})
+
+    def test_pre_release_view_requires_mode_and_records_explicit_candidates(self):
+        argv = m6.command(Path("/job"), m6.matrix()[0], "Intel", pre_release=True)
+        args = build_parser().parse_args(argv[2:])
+        validate_arguments(args)
+        with patch.dict(os.environ, {}, clear=True):
+            with self.assertRaises(ValueError):
+                fixed_environment(args)
+        with patch.dict(os.environ, {"HW_BUILDING_M6_CANDIDATES": "exact-bindings"}):
+            env = fixed_environment(args)
+            self.assertEqual(env["BEVY_ASSET_ROOT"], "/job/asset-view")
+            self.assertEqual(env["HW_BUILDING_M6_CANDIDATES"], "exact-bindings")
+        args.building_m6_mode = None
+        with self.assertRaises(ValueError):
+            validate_arguments(args)
+
+    def test_candidate_view_preserves_door_and_rejects_artifact_collision_or_mutation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            repo, candidate, job = root / "repo", root / "candidate", root / "job"
+            (repo / "assets/manifests").mkdir(parents=True)
+            (repo / "assets/manifests/door").write_bytes(b"unchanged-door")
+            (candidate / "manifests").mkdir(parents=True)
+            locator = m6.pipeline.locator("Tank")
+            (candidate / locator).write_bytes(b"candidate-manifest")
+            payload = b"candidate-mesh"
+            (candidate / "mesh").write_bytes(payload)
+            record = {"path": "mesh", "bytes": len(payload), "sha256": m6.pipeline.digest(payload)}
+            value = {"repo": str(repo), "job_root": str(job), "profile": m6.PRE_RELEASE_PROFILE,
+                     "assets": {"sources": [{"root": str(candidate), "kind": "Tank"}],
+                                "manifests": [{"artifacts": [record]}]}}
+            m6.prepare_view(value)
+            m6.check_view(value)
+            self.assertEqual((job / "asset-view/assets/manifests/door").read_bytes(), b"unchanged-door")
+            (job / "asset-view/assets/mesh").write_bytes(b"tampered")
+            with self.assertRaises(ValueError):
+                m6.check_view(value)
+            (repo / "assets/mesh").write_bytes(b"different-primary")
+            with self.assertRaises(ValueError):
+                m6.expected_view(value)
+
+    def test_pre_release_contract_is_exact_and_rejected_by_release_oracle(self):
+        case = Case("building-art-static", "small", "gpu", 20260920, 15, 0)
+        for candidate in (False, True):
+            value = sidecar(candidate)
+            value["contract_id"] = oracle.PRE_RELEASE_CONTRACT
+            value["initial"]["pre_release_comparison"] = True
+            for identity in value["initial"]["m6"]["identities"]:
+                identity["authority"] = "isolated_candidate"
+            reseal(value)
+            oracle.validate_pre_release_sidecar(value, case)
+            with self.assertRaises(ValueError):
+                oracle.validate_sidecar(value, case)
+            for mutation in ("release", "scope", "pool", "bridge"):
+                bad = copy.deepcopy(value)
+                if mutation == "release":
+                    bad["initial"]["m6"]["identities"][0]["authority"] = "release_approved"
+                elif mutation == "scope":
+                    bad["initial"]["pre_release_comparison"] = False
+                elif mutation == "bridge":
+                    bad["initial"]["m6"]["identities"][0]["kind"] = "Bridge"
+                else:
+                    bad["initial"]["m6"]["pool_active"] += 1
+                with self.assertRaises(ValueError):
+                    oracle.validate_pre_release_sidecar(reseal(bad), case)
+        with self.assertRaises(ValueError):
+            oracle.validate_pre_release_sidecar(sidecar(), case)
+
+    def test_candidate_inventory_rejects_incomplete_kind_map_before_codec(self):
+        for roots in ({}, {"Tank": "/candidate"}, {"Bridge": "/candidate"}):
+            with self.assertRaises(ValueError):
+                m6.inventory(Path("/repo"), Path("/codec"), roots)
+
+    def test_file_inventory_rejects_symlinks_and_tracks_changed_bytes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "asset").write_bytes(b"before")
+            before = m6.file_inventory(root)
+            (root / "asset").write_bytes(b"after")
+            self.assertNotEqual(before, m6.file_inventory(root))
+            (root / "alias").symlink_to(root / "asset")
+            with self.assertRaises(ValueError):
+                m6.file_inventory(root)
+
     def test_independent_logical_oracle_accepts_both_modes_and_densities(self):
         for candidate in (False, True):
             for size, copies in (("small", 4), ("medium", 16)):

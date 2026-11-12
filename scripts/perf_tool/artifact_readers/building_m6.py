@@ -11,6 +11,7 @@ from .building_art_static import KINDS, expected_records
 from ..model import Case
 
 CONTRACT = "building-art-m6-nine-v1"
+PRE_RELEASE_CONTRACT = "building-art-pre-release-nine-v1"
 DOOR_HASH = "4e3f9236db067772b9a60b37ea98437cb29e481f9ec9cbb4d6dcf6517374a449"
 SETS = tuple(kind for kind in KINDS if kind != "Door")
 PARTS = {
@@ -39,7 +40,7 @@ def canonical(value):
     ).encode()
 
 
-def identities(values):
+def identities(values, *, pre_release=False):
     require(
         isinstance(values, list) and len(values) == 8,
         "M6 requires eight identities plus dedicated Door",
@@ -52,7 +53,7 @@ def identities(values):
             set(value) == {"kind", "generation", "authority", "manifest_sha256"}
             and type(value["generation"]) is int
             and value["generation"] > 0
-            and value["authority"] == "release_approved"
+            and value["authority"] == ("isolated_candidate" if pre_release else "release_approved")
             and isinstance(value["manifest_sha256"], str)
             and re.fullmatch(r"[0-9a-f]{64}", value["manifest_sha256"]),
             "invalid release identity",
@@ -60,6 +61,14 @@ def identities(values):
 
 
 def validate_sidecar(value, case):
+    return _validate_sidecar(value, case, pre_release=False)
+
+
+def validate_pre_release_sidecar(value, case):
+    return _validate_sidecar(value, case, pre_release=True)
+
+
+def _validate_sidecar(value, case, *, pre_release):
     copies = {"small": 4, "medium": 16}[case.size]
     require(
         case
@@ -84,7 +93,7 @@ def validate_sidecar(value, case):
     require(
         type(value["schema_version"]) is int
         and value["schema_version"] == 1
-        and value["contract_id"] == CONTRACT
+        and value["contract_id"] == (PRE_RELEASE_CONTRACT if pre_release else CONTRACT)
         and value["evidence_kind"] == "paused-static-only"
         and value["active_simulation_evidence"] is False
         and value["camera_scale"] == 5.0
@@ -100,7 +109,7 @@ def validate_sidecar(value, case):
     )
     require(
         set(initial)
-        == {
+        == ({
             "records",
             "target_count",
             "target_structural_roots",
@@ -109,9 +118,11 @@ def validate_sidecar(value, case):
             "souls",
             "completion_effects",
             "m6",
-        },
+        } | ({"pre_release_comparison"} if pre_release else set())),
         "inventory keys differ",
     )
+    if pre_release:
+        require(initial["pre_release_comparison"] is True, "pre-release scope differs")
     m6 = initial["m6"]
     require(
         set(m6)
@@ -130,7 +141,7 @@ def validate_sidecar(value, case):
     )
     require(m6["mode"] in {"legacy-control", "candidate"}, "invalid M6 mode")
     candidate = m6["mode"] == "candidate"
-    identities(m6["identities"])
+    identities(m6["identities"], pre_release=pre_release)
     require(
         m6["door_identity"]
         == {

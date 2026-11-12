@@ -26,11 +26,19 @@ impl BuildingAssetLoadPolicy {
 #[derive(TypePath)]
 pub struct BuildingAssetSetLoader {
     policy: BuildingAssetLoadPolicy,
+    #[cfg(feature = "profiling")]
+    comparison_candidates: Vec<BuildingAssetSetIdentity>,
 }
 
 impl FromWorld for BuildingAssetSetLoader {
     fn from_world(world: &mut World) -> Self {
         Self {
+            #[cfg(feature = "profiling")]
+            comparison_candidates: world
+                .get_resource::<super::M6Comparison>()
+                .filter(|comparison| comparison.pre_release && comparison.candidate)
+                .map(|comparison| comparison.identities.clone())
+                .unwrap_or_default(),
             policy: world
                 .get_resource::<BuildingAssetLoadPolicy>()
                 .cloned()
@@ -54,7 +62,7 @@ impl AssetLoader for BuildingAssetSetLoader {
         reader.read_to_end(&mut bytes).await?;
         let manifest = decode_buildingset(&bytes)?;
         require(
-            self.policy.allows(&manifest.identity),
+            self.allows(&manifest.identity),
             "building asset authority is not enabled for this exact identity",
         )?;
         if let Some(record) = &manifest.receipt {
@@ -77,5 +85,50 @@ impl AssetLoader for BuildingAssetSetLoader {
 
     fn extensions(&self) -> &[&str] {
         &["buildingset"]
+    }
+}
+
+impl BuildingAssetSetLoader {
+    fn allows(&self, identity: &BuildingAssetSetIdentity) -> bool {
+        #[cfg(feature = "profiling")]
+        if self.comparison_candidates.contains(identity) {
+            return true;
+        }
+        self.policy.allows(identity)
+    }
+}
+
+#[cfg(all(test, feature = "profiling"))]
+mod comparison_tests {
+    use super::*;
+
+    #[test]
+    fn comparison_policy_is_captured_and_control_does_not_admit_candidates() {
+        let identity = BuildingAssetSetIdentity {
+            kind: BuildingAssetKind::Tank,
+            generation: 1,
+            authority: BuildingAssetAuthority::IsolatedCandidate,
+            manifest_sha256: "a".repeat(64),
+        };
+        let mut world = World::new();
+        let mut comparison = super::super::M6Comparison {
+            candidate: true,
+            pre_release: true,
+            identities: vec![identity.clone()],
+        };
+        world.insert_resource(comparison.clone());
+        let loader = BuildingAssetSetLoader::from_world(&mut world);
+        assert!(loader.allows(&identity));
+        comparison.candidate = false;
+        world.insert_resource(comparison.clone());
+        assert!(loader.allows(&identity));
+        assert!(!BuildingAssetSetLoader::from_world(&mut world).allows(&identity));
+        comparison.candidate = true;
+        comparison.pre_release = false;
+        world.insert_resource(comparison);
+        assert!(!BuildingAssetSetLoader::from_world(&mut world).allows(&identity));
+        let mut foreign = identity;
+        foreign.generation += 1;
+        assert!(!loader.allows(&foreign));
     }
 }

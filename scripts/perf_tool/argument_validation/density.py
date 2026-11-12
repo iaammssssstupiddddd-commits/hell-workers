@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from pathlib import Path
 
 from .common import ParsedMatrix
 
@@ -9,6 +10,9 @@ def validate_density(args: argparse.Namespace, matrix: ParsedMatrix) -> bool:
     m6 = getattr(args, "building_m6_mode", None)
     if m6 is not None and args.workload != "building-art-static":
         raise ValueError("--building-m6-mode requires building-art-static")
+    view = getattr(args, "building_m6_asset_root", None)
+    if view is not None and (m6 is None or not Path(view).is_absolute()):
+        raise ValueError("pre-release asset root requires absolute path and M6 mode")
     if args.workload == "wall-density":
         if args.wall_actual_window and args.wall_color_actual_window:
             raise ValueError("Wall actual-window profiles are mutually exclusive")

@@ -87,6 +87,8 @@ pub struct BuildingAssetPool {
     kinds: [KindPool; 9],
     #[cfg(feature = "profiling")]
     acceptance_identity: Option<BuildingAssetSetIdentity>,
+    #[cfg(feature = "profiling")]
+    comparison_identities: Vec<BuildingAssetSetIdentity>,
 }
 
 fn index(kind: BuildingAssetKind) -> usize {
@@ -160,7 +162,19 @@ impl BuildingAssetPool {
         if self.acceptance_identity.as_ref() == Some(identity) {
             return true;
         }
+        #[cfg(feature = "profiling")]
+        if self.comparison_identities.contains(identity) {
+            return true;
+        }
         false
+    }
+
+    #[cfg(feature = "profiling")]
+    pub(super) fn allow_comparison_identities(
+        &mut self,
+        identities: Vec<BuildingAssetSetIdentity>,
+    ) {
+        self.comparison_identities = identities;
     }
 
     /// The locator must be loaded through the registered policy-enforcing

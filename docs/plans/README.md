@@ -1,6 +1,6 @@
 # Plans Index
 
-`docs/plans` の文書ステータス一覧（更新日: 2026-11-11）。
+`docs/plans` の文書ステータス一覧（更新日: 2026-11-12）。
 
 ## 新規計画書の作り方
 
@@ -49,6 +49,7 @@
 | [development-workstation-blender-migration-plan-2026-07-29.md](development-workstation-blender-migration-plan-2026-07-29.md) | In Progress | 新PCへの開発環境移行と、現PCでのBlender／asset新規構築計画。 |
 | [hvac-plumbing-plan-2026-07-13.md](hvac-plumbing-plan-2026-07-13.md) | Draft | 地獄のインフラ（換気・導水・部屋認可）実装計画 |
 | [native-acceptance-resource-safety-plan-2026-08-05.md](native-acceptance-resource-safety-plan-2026-08-05.md) | Complete | tmpfs上のCargo出力を永続storageへ固定し、実機検証のRAM圧迫を防ぐ計画。 |
+| [non-bridge-candidate-performance-plan-2026-11-12.md](non-bridge-candidate-performance-plan-2026-11-12.md) | In Progress | 橋以外9種の導入前性能比較 |
 | [orca-abcd-workflow-expansion-plan-2026-09-25.md](orca-abcd-workflow-expansion-plan-2026-09-25.md) | Active — 部品実装済み。依頼全体の制御・同期・終了を横断是正中（受入gateの候補実装） | 自然文受付、状態パネル、自動loop、自己修復、A/B並列計画、統括判断によるLinear課題発行、GitHub/CI連携を段階導入する上位計画。 |
 | [orca-dispatch-submit-plan-2026-09-28.md](orca-dispatch-submit-plan-2026-09-28.md) | In Progress | Orca配車の着手確認とモデル通知競合の是正 |
 | [orca-git-review-loop-plan-2026-09-22.md](orca-git-review-loop-plan-2026-09-22.md) | In Progress（実runtimeの実装・差戻し・統合・最終reviewを受入。GitHub公開/PR自動同期と無介入cold-startは未完） | Git基点の実装・差戻し・再review・統合ループ。統括event駆動、GitHub/Linear連携、運用基盤配備の計画。 |

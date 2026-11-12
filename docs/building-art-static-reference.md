@@ -130,3 +130,33 @@ ownerはbuilding-art-migration、用途は提示結果レビューとM1-0の予�
 - Mixerは初期Refining状態を停止保持する。入力や進捗を毎frame補充・巻戻しして稼働負荷を捏造しない。
 - 不備のある稼働計測はユーザー指示で破棄した。静止参照を稼働時の性能証拠にはしないが、稼働fixtureの再実装や予算確定を表示実装の着手条件にしない。
 - Help impactは **No impact**。明示profiling CLIの検査経路だけで、通常プレイヤーの操作・成立条件・表示意味は不変。
+
+## 導入前の9種混在比較
+
+`scripts/building_m6_acceptance.py plan --candidate-roots <canonical JSON>` は
+`building-pre-release-paired-static-v1` を選ぶ。JSONはDoorを除く8種のkind→candidate rootで、
+全candidateのmanifest/dependency、制作原本、art/numeric approvalを既存codec/pipelineで検証する。
+`HW_BUILDING_M6_CANDIDATES` は明示profiling static専用で、通常起動、他のart/production session、
+Bridge、ReleaseApproved/ArtPreview混在、kind欠損/重複、canonical以外のlocatorを拒否する。
+loader登録時にexact identity集合を固定し、candidate側だけpoolへのrequestとpresentation許可を持つ。
+controlにも同じ8候補を要求するがロードしない。Door g7のlocator・依存bytesは両側で変更しない。
+
+primary assetsを変更せず、全fallback bytesと候補のimmutable artifacts/locatorsから専用viewを作る。
+入力元の全file inventoryとview、numeric validator/contract inventoryとart driverの実hashを
+実行中・独立verify時に再照合し、途中の変更を拒否する。
+sidecarは旧正式導入後M6とは別の`building-art-pre-release-nine-v1`で、旧oracleはこのcontractと
+IsolatedCandidateを受理しない。part poseはRust f32へ厳密投影し、Tank waterは数値承認済みの
+partial/full Yを論理water数から選ぶ。小数誤差の一律許容やFullとPartialの同一視はしない。
+
+Capture→Memory、各N/4N×3隣接pair（中間repeatは逆順）で計24 run、warmup30秒/measure60秒。
+`scripts/perf_tool/contracts/building_pre_release_budget_v1.json` は測定前の増分上限で、
+p95 +2ms、p99 +10ms、native live +64MiB、RSS +128MiB、mesh accessor +128KiB、
+image CPU +16MiB、mesh +7、image +22、material +32/shallow +64KiB、反復MADはmedianの10%以内。
+candidateは7GLB/22PNG（RGBA展開9,699,328B）を持つため、個数は実inventoryから固定した。
+N→4Nのresident共有資源は同じ値にplateauすることを別に要求する。これはabsolute gameplay性能や
+GPU配分量のbudgetではない。試験結果を見て上限を緩和せず、超過は原因調査と修正対象とする。
+
+導入後の旧`building-m6-paired-static-v1`は引き続き全8種ReleaseApprovedを要求する。
+どちらのstatic比較もaccepted=false/promotion_authority=false。通常world lifecycle、稼働性能、
+独立アート採否、promotion/install/rollback、通常起動への正式導入は別途完了させる。
+2026-11-12時点で新比較の実機結果は未確定。

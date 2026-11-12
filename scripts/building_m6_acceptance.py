@@ -3,6 +3,8 @@
 Requires eight real released sets plus unchanged Door g7. Missing releases fail
 planning, including legacy-control. Capture then Memory, N/4N, three adjacent
 pairs with reversed middle order. Use primary dev.py validation registration.
+Explicit --candidate-roots selects a separate pre-release profile with eight
+provenance-verified isolated candidates in an immutable copied asset view.
 """
 
 from __future__ import annotations
@@ -15,6 +17,7 @@ import os
 from pathlib import Path
 import statistics
 import struct
+import shutil
 
 if __package__:
     from . import building_art_acceptance as art
@@ -38,6 +41,7 @@ else:
     from perf_tool.model import Case  # noqa: E402
 
 PROFILE = "building-m6-paired-static-v1"
+PRE_RELEASE_PROFILE = "building-pre-release-paired-static-v1"
 METRICS = {
     "p95_ms",
     "p99_ms",
@@ -66,14 +70,17 @@ def label(case):
     return "-".join(map(str, case))
 
 
-def command(root, case, adapter):
+def command(root, case, adapter, *, pre_release=False):
     instrument, size, _repeat, mode = case
     argv = static.command(
         root, instrument, size, 15 if size == "small" else 60, adapter
     )
     argv[argv.index("--repeat") + 1] = "1"
     argv[argv.index("--output") + 1] = str(root / label(case))
-    return [*argv, "--building-m6-mode", mode]
+    argv.extend(["--building-m6-mode", mode])
+    if pre_release:
+        argv.extend(["--building-m6-asset-root", str(root / "asset-view")])
+    return argv
 
 
 def budget(value):
@@ -118,13 +125,39 @@ def mesh_accessor_bytes(payload):
     )
 
 
-def inventory(repo, codec):
+def file_inventory(root):
+    pipeline.no_symlinks(root)
+    result = {}
+    for path in sorted(root.rglob("*")):
+        pipeline.require(not path.is_symlink(), "asset inventory cannot contain symlinks")
+        if path.is_file():
+            result[str(path.relative_to(root))] = pipeline.digest(path.read_bytes())
+    return result
+
+
+def inventory(repo, codec, candidate_roots=None):
     assets = repo / "assets"
-    bindings = pipeline.release_bindings(assets, codec, "m5")
-    manifests = [
-        pipeline.load_set(assets, item["identity"]["kind"], codec)[0]
-        for item in bindings
-    ]
+    sources = []
+    if candidate_roots is None:
+        bindings = pipeline.release_bindings(assets, codec, "m5")
+        manifests = [pipeline.load_set(assets, item["identity"]["kind"], codec)[0] for item in bindings]
+        roots = {m["identity"]["kind"]: assets for m in manifests}
+    else:
+        from_types = pipeline.KINDS.keys() - {"Bridge"}
+        pipeline.require(isinstance(candidate_roots, dict) and set(candidate_roots) == from_types,
+                         "pre-release requires all eight candidate roots")
+        bindings, manifests, roots = [], [], {}
+        for kind in sorted(from_types):
+            root = Path(candidate_roots[kind])
+            pipeline.require(root.is_absolute() and root == root.resolve(), "canonical candidate root required")
+            verified = pipeline.verify_set(root, kind, codec)
+            pipeline.require(verified["identity"]["authority"] == "isolated_candidate",
+                             "pre-release rejects preview/release authority")
+            manifest = pipeline.load_set(root, kind, codec)[0]
+            manifests.append(manifest)
+            bindings.append({"identity": manifest["identity"], "locator": pipeline.locator(kind)})
+            roots[kind] = root
+            sources.append({"kind": kind, "root": str(root), "files": file_inventory(root)})
     door = pipeline.read(assets / "manifests/door-production-v1.doorset")
     pipeline.require(
         door["authority"] == "release_approved"
@@ -138,12 +171,12 @@ def inventory(repo, codec):
         "Door locator bytes differ",
     )
     records = {}
-    for record in [
-        *door["core"],
-        door["receipt"],
-        *(r for manifest in manifests for r in manifest["artifacts"]),
-    ]:
-        payload = pipeline.file_bytes(assets, record)
+    entries = [(assets, r) for r in [*door["core"], door["receipt"]]]
+    entries.extend((roots[m["identity"]["kind"]], r) for m in manifests for r in m["artifacts"])
+    for source, record in entries:
+        payload = pipeline.file_bytes(source, record)
+        if record["path"] in records:
+            pipeline.require(records[record["path"]]["sha256"] == pipeline.digest(payload), "asset path collision")
         records[record["path"]] = {
             "bytes": len(payload),
             "sha256": pipeline.digest(payload),
@@ -151,12 +184,15 @@ def inventory(repo, codec):
             if record["path"].endswith(".glb")
             else 0,
         }
-    return {"bindings": bindings, "manifests": manifests, "files": records}
+    result = {"bindings": bindings, "manifests": manifests, "files": records}
+    if candidate_roots is not None:
+        result["sources"] = sources
+    return result
 
 
 def check_inputs(value):
     pipeline.require(
-        value["profile"] == PROFILE
+        value["profile"] in {PROFILE, PRE_RELEASE_PROFILE}
         and value["accepted"] is False
         and value["promotion_authority"] is False,
         "invalid M6 scope",
@@ -168,13 +204,57 @@ def check_inputs(value):
         and pipeline.digest(codec.read_bytes()) == value["codec_sha256"],
         "M6 driver/codec changed",
     )
-    pipeline.require(
-        inventory(repo, codec) == value["assets"], "M6 release inputs changed"
-    )
+    pre_release = value["profile"] == PRE_RELEASE_PROFILE
+    check_candidate_verifiers(value)
+    roots = value.get("candidate_roots")
+    pipeline.require((roots is not None) == pre_release, "candidate roots/profile mismatch")
+    pipeline.require(inventory(repo, codec, roots) == value["assets"], "M6 asset inputs changed")
     budget(value["budget"])
     static.check_root(repo, Path(value["job_root"]))
     if value.get("foundation") is not None:
         frozen_foundation(value)
+
+
+def check_candidate_verifiers(value):
+    if value["profile"] == PRE_RELEASE_PROFILE:
+        pipeline.require(value.get("numeric_verifiers") == pipeline.numeric_verifier_inventory()
+                         and value.get("art_driver_sha256") == pipeline.digest(Path(art.__file__).read_bytes()),
+                         "pre-release provenance verifiers changed")
+    else:
+        pipeline.require("numeric_verifiers" not in value and "art_driver_sha256" not in value,
+                         "candidate verifier binding requires pre-release profile")
+
+
+def expected_view(value):
+    files = file_inventory(Path(value["repo"]) / "assets")
+    for source, manifest in zip(value["assets"]["sources"], value["assets"]["manifests"], strict=True):
+        root = Path(source["root"])
+        for record in manifest["artifacts"]:
+            path, sha = record["path"], record["sha256"]
+            pipeline.require(path not in files or files[path] == sha, "candidate artifact collides with primary")
+            files[path] = sha
+        locator = pipeline.locator(source["kind"])
+        files[locator] = pipeline.digest((root / locator).read_bytes())
+    return files
+
+
+def prepare_view(value):
+    view = Path(value["job_root"]) / "asset-view"
+    expected = expected_view(value)
+    shutil.copytree(Path(value["repo"]) / "assets", view / "assets")
+    for source, manifest in zip(value["assets"]["sources"], value["assets"]["manifests"], strict=True):
+        root = Path(source["root"])
+        for record in manifest["artifacts"]:
+            pipeline.put(pipeline.rooted(view / "assets", record["path"]), pipeline.file_bytes(root, record))
+        locator = pipeline.locator(source["kind"])
+        pipeline.put(pipeline.rooted(view / "assets", locator), (root / locator).read_bytes(), replace=True)
+    pipeline.require(file_inventory(view / "assets") == expected, "constructed candidate view differs")
+
+
+def check_view(value):
+    if value["profile"] == PRE_RELEASE_PROFILE:
+        pipeline.require(file_inventory(Path(value["job_root"]) / "asset-view/assets") == expected_view(value),
+                         "candidate view changed")
 
 
 def frozen_foundation(value):
@@ -228,20 +308,25 @@ def plan(args):
         "fresh root and external plan required",
     )
     value = {
-        "profile": PROFILE,
+        "profile": PRE_RELEASE_PROFILE if getattr(args, "candidate_roots", None) else PROFILE,
         "repo": str(repo),
         "job_root": str(root),
         "codec": str(codec),
         "codec_sha256": pipeline.digest(codec.read_bytes()),
         "driver_sha256": pipeline.digest(Path(__file__).read_bytes()),
         "identity": static.identity(repo),
-        "assets": inventory(repo, codec),
         "budget": budget(pipeline.read(args.budget)),
         "adapter": args.adapter,
         "accepted": False,
         "promotion_authority": False,
         "status": "ready",
     }
+    roots = pipeline.read(args.candidate_roots) if getattr(args, "candidate_roots", None) else None
+    if roots is not None:
+        value["candidate_roots"] = roots
+        value["numeric_verifiers"] = pipeline.numeric_verifier_inventory()
+        value["art_driver_sha256"] = pipeline.digest(Path(art.__file__).read_bytes())
+    value["assets"] = inventory(repo, codec, roots)
     pipeline.require(
         (args.foundation_baseline is None) == (args.foundation_identity is None),
         "foundation root and identity must be paired",
@@ -276,7 +361,7 @@ def plan(args):
         "--plan",
         str(args.output.resolve()),
     ]
-    value["commands"] = [command(root, case, args.adapter) for case in matrix()]
+    value["commands"] = [command(root, case, args.adapter, pre_release=roots is not None) for case in matrix()]
     pipeline.put(args.output, pipeline.canonical(value))
     return value
 
@@ -346,7 +431,18 @@ def verify_case(value, item):
     )
     pipeline.require(validation.valid, str(validation.reasons))
     sidecar = native.read_json(run / "data/building_art_static.json")
-    observed = validate_sidecar(sidecar, case)
+    if value["profile"] == PRE_RELEASE_PROFILE:
+        try:
+            from .perf_tool.artifact_readers.building_m6 import validate_pre_release_sidecar
+        except ImportError:
+            from perf_tool.artifact_readers.building_m6 import validate_pre_release_sidecar
+        observed = validate_pre_release_sidecar(sidecar, case)
+        pipeline.require(requested.get("BEVY_ASSET_ROOT") == str(Path(value["job_root"]) / "asset-view"),
+                         "pre-release view differs")
+        pipeline.require(json.loads(requested.get("HW_BUILDING_M6_CANDIDATES", "null")) == value["assets"]["bindings"],
+                         "pre-release requested identities differ")
+    else:
+        observed = validate_sidecar(sidecar, case)
     pipeline.require(
         observed["m6"]["mode"] == mode
         and observed["m6"]["identities"]
@@ -361,9 +457,7 @@ def verify_case(value, item):
         for row in observed["records"]:
             if row["kind"] == "Door":
                 continue
-            expected = sorted(
-                manifests[row["kind"]]["parts"], key=lambda part: part["mesh_role"]
-            )
+            expected = projected_parts(manifests[row["kind"]], row)
             for actual, part in zip(row["parts"], expected, strict=True):
                 pipeline.require(
                     all(
@@ -439,6 +533,27 @@ def verify_case(value, item):
         "pool_active": observed["m6"]["pool_active"],
         "target_mesh_entities": observed["m6"]["target_mesh_entities"],
     }
+
+
+def projected_parts(manifest, row):
+    """Exact authored f32 poses plus the declared paused Tank state, never epsilon."""
+    result = []
+    for authored in sorted(manifest["parts"], key=lambda part: part["mesh_role"]):
+        part = dict(authored)
+        for key, length in (("translation_wu", 3), ("rotation_xyzw", 4), ("scale", 3)):
+            numbers = part[key]
+            pipeline.require(isinstance(numbers, list) and len(numbers) == length
+                             and all(type(n) in (int, float) and math.isfinite(n) for n in numbers),
+                             "invalid authored M6 pose")
+            part[key] = [struct.unpack("<f", struct.pack("<f", n))[0] for n in numbers]
+            pipeline.require(all(math.isfinite(n) for n in part[key]), "nonfinite f32 M6 pose")
+        if row["kind"] == "Tank" and part["mesh_role"] == "water":
+            state = manifest["production_state"]
+            pipeline.require(state["kind"] == "Tank", "Tank motion contract differs")
+            y = state["full_y_wu" if row["state"]["stored_water"] >= 50 else "partial_y_wu"]
+            part["translation_wu"][1] = struct.unpack("<f", struct.pack("<f", y))[0]
+        result.append(part)
+    return result
 
 
 def aggregate(rows, limits):
@@ -520,6 +635,7 @@ def aggregate(rows, limits):
 def verify(plan_path, *, in_progress=False):
     value = pipeline.read(plan_path)
     check_inputs(value)
+    check_view(value)
     job = native.read_json(Path(value["job_root"]) / "job.json")
     pipeline.require(
         job["plan_sha256"] == pipeline.digest(plan_path.read_bytes())
@@ -528,7 +644,7 @@ def verify(plan_path, *, in_progress=False):
     )
     rows = [verify_case(value, case) for case in matrix()]
     result = {
-        "profile": PROFILE,
+        "profile": value["profile"],
         "status": "pass",
         "scope": "same-source-paused-asset-increment-only",
         "accepted": False,
@@ -612,7 +728,7 @@ def run(args):
     pipeline.require(not resources["failures"], str(resources["failures"]))
     root.mkdir(parents=True, exist_ok=False)
     state = {
-        "profile": PROFILE,
+        "profile": value["profile"],
         "status": "running",
         "pid": os.getpid(),
         "started_at": native.utc_now(),
@@ -627,9 +743,17 @@ def run(args):
             "HW_BUILDING_M6_MODE",
             "HW_M2_ACCEPTANCE_PROBE",
             "HW_BRIDGE_ACCEPTANCE_PROBE",
+            "HW_BUILDING_ASSET_RELEASES",
+            "HW_BUILDING_M6_CANDIDATES",
+            "HW_BUILDING_ORDINARY_ART_SESSION",
+            "HW_BUILDING_PRODUCTION_OBSERVATIONS",
+            "HW_NATIVE_UI_ROOT",
         ):
             environment.pop(key, None)
-        environment["HW_BUILDING_ASSET_RELEASES"] = json.dumps(
+        pre_release = value["profile"] == PRE_RELEASE_PROFILE
+        if pre_release:
+            prepare_view(value)
+        environment["HW_BUILDING_M6_CANDIDATES" if pre_release else "HW_BUILDING_ASSET_RELEASES"] = json.dumps(
             value["assets"]["bindings"]
         )
         for case in matrix():
@@ -637,9 +761,10 @@ def run(args):
                 pipeline.read(args.plan) == value, "plan changed during execution"
             )
             check_inputs(value)
+            check_view(value)
             native.run_command(
                 label(case),
-                command(root, case, value["adapter"]),
+                command(root, case, value["adapter"], pre_release=pre_release),
                 repo=repo,
                 env=environment,
                 log_path=root / (label(case) + ".log"),
@@ -676,6 +801,8 @@ def main():
     create.add_argument("--repo", type=Path, required=True)
     create.add_argument("--codec", type=Path, required=True)
     create.add_argument("--budget", type=Path, required=True)
+    create.add_argument("--candidate-roots", type=Path,
+                        help="explicit eight-kind root map; selects separate pre-release scope")
     create.add_argument("--adapter", required=True)
     create.add_argument("--job-root", type=Path)
     create.add_argument("--output", type=Path, required=True)

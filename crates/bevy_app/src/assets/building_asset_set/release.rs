@@ -36,6 +36,7 @@ struct BuildingAssetReleaseBindings(Vec<ReleaseBinding>);
 pub(crate) struct M6Comparison {
     pub candidate: bool,
     pub identities: Vec<BuildingAssetSetIdentity>,
+    pub pre_release: bool,
 }
 
 #[cfg(feature = "profiling")]
@@ -53,6 +54,7 @@ fn comparison(mode: &str, bindings: &[ReleaseBinding]) -> Result<M6Comparison, S
     };
     Ok(M6Comparison {
         candidate,
+        pre_release: false,
         identities: bindings
             .iter()
             .map(|binding| binding.identity.clone())
@@ -136,6 +138,12 @@ fn validate_bindings(bindings: &[ReleaseBinding]) -> Result<(), String> {
 /// production requests are mutually exclusive so one startup cannot race two
 /// authority paths for the same kind.
 pub fn configure_building_asset_releases(app: &mut App) -> Result<(), String> {
+    if std::env::var_os("HW_BUILDING_M6_CANDIDATES").is_some() {
+        #[cfg(feature = "profiling")]
+        return super::candidate_comparison::configure(app);
+        #[cfg(not(feature = "profiling"))]
+        return Err("candidate comparison requires the profiling feature".into());
+    }
     if std::env::var_os("HW_BUILDING_ORDINARY_ART_SESSION").is_some()
         && !cfg!(feature = "profiling")
     {
