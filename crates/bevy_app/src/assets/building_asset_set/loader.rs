@@ -36,8 +36,8 @@ impl FromWorld for BuildingAssetSetLoader {
             #[cfg(feature = "profiling")]
             comparison_candidates: world
                 .get_resource::<super::M6Comparison>()
-                .filter(|comparison| comparison.pre_release && comparison.candidate)
-                .map(|comparison| comparison.identities.clone())
+                .filter(|comparison| comparison.pre_release)
+                .map(|comparison| comparison.loaded_identities().cloned().collect())
                 .unwrap_or_default(),
             policy: world
                 .get_resource::<BuildingAssetLoadPolicy>()
@@ -114,6 +114,7 @@ mod comparison_tests {
         let mut comparison = super::super::M6Comparison {
             candidate: true,
             pre_release: true,
+            group: None,
             identities: vec![identity.clone()],
         };
         world.insert_resource(comparison.clone());

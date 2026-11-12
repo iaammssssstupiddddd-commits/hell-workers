@@ -197,3 +197,50 @@ v5（`f2fdf9ea`）はN controlのp95 median/MAD 9.796273/1.290815ms、p99
 interrupted封印/finalize済み。Memoryは未実行、候補側の安定値で対照側の不合格を相殺しない。
 一部10秒区間への遅延集中は確認したが原因は未確定。次は並行ビルド・storage整理・worktree作成を
 避けて環境を確認し、固定予算を変更せず測定する。
+
+## 群別比較と基準校正
+
+`building_m6_acceptance.py plan --group m2|m3|m5 --candidate-roots <JSON>` は、
+対象群だけを切り替える専用経路である。候補JSONは当該群だけのexact kind集合を要求する。
+M2はTank/MudMixer、M3はRestArea/SoulSpa、M5はParking/SandPile/BonePile/OutdoorLamp。
+M3の先行M2、M5の先行M2/M3は既存pipelineで検証したReleaseApproved世代へ固定する。
+先行群が未releaseなら後続群の計画を拒否し、全8候補の同時切替で代用しない。
+
+`HW_BUILDING_GROUP_COMPARISON` はprofiling staticだけの宣言であり、固定群と対象群の
+exact identity・locator・manifest artifact pathを拘束する。他sessionとの併用は拒否する。
+controlでも固定群を実ロード・表示するが、対象候補はrequestしない。対象locatorと全artifactの
+AssetServer pathを毎frame観測し、pool activation前の先行loadも拒否する。
+sidecar `building-art-group-nine-v1` は固定群を含む実loaded identity、part、foregroundを検証する。
+論理fixtureは全9種のまま、表示数だけを独立した期待値で検査する。
+
+| 群 | active set数 control→candidate | 対象mesh entity / copy | unique対象mesh |
+| --- | --- | --- | --- |
+| M2 | 0→2 | 5→7 | 2→6 |
+| M3 | 2→4 | 7→11 | 6→8 |
+| M5 | 4→8 | 11→11 | 8→8 |
+
+M5の候補側だけ、4 kind×copy数のtyped foregroundを要求する。旧8種専用oracleのidentity数を
+緩めるのではなく、群別の独立oracleへdispatchする。Door g7はすべての群と両modeで不変。
+
+まず`--baseline`、budget指定なしで`building-group-static-baseline-v1`を計画する。
+Capture/MemoryそれぞれN/4N×3のcontrolだけ計12 runで、反復MAD上限は10%固定。
+基準のpassは候補増分・群性能・releaseのpassではない。原本の独立verify後、同一sourceと
+inventoryに対する群固有の増分上限を候補計測前に確定する。比較用budget JSONは
+`{"group":"m2","baseline_plan":"/absolute/plan.json","limits":{...}}`の厳密3項目。
+limitsは既存の全metric上限・理由・MAD制約を持ち、基準よりnoise条件を緩和できない。
+全8種用budgetをそのまま群別予算として渡すことはできない。
+
+比較profile `building-group-paired-static-v1` は基準を独立verifyしてplan/result/raw inventoryを固定し、
+実行中・独立verifyでも基準12 runを再検証して保存結果とのexact一致を要求する。
+同source・群identity・実adapter/windowを照合する。基準から候補比較の終了まではsourceと
+基準原本を保持する。Capture/Memory各N/4N×3 pairの計24 runで、完成した3反復のnoise超過や
+両modeの増分超過を検出した時点で停止する。途中の実verified rowsは診断用に保存するが、
+不足matrixを部分合格にはしない。基盤参照・最終累積予算・画像採否・正式導入は別の条件である。
+
+2026-11-12の旧基盤fresh v2は、独立worktreeへGit管理外の実行時assetを配置していなかったため、
+最初のCaptureで画像とDoor manifestの欠損を検出した。有効計測0回・Memory未実行。
+exact recipeのPID出生とargvを照合した一度のSIGINTで終了し、exit -2を確認して
+interrupted封印/finalizeした。参照環境には当初tracked shader 15ファイルしか存在していなかった。
+旧試行終了後、primaryのcanonical assetsから不足220ファイルを追加し、既存ファイルは上書きせず、
+全235ファイル・139,371,685 bytesのpath/SHA-256一致を確認した。旧ソース・helperは編集していない。
+変更後のasset fingerprintで新batchを計画し、旧失敗の再実行や性能合格への読み替えはしない。

@@ -7,6 +7,7 @@ import json
 import math
 import re
 import struct
+from pathlib import PurePosixPath
 
 try:
     from ... import building_foreground_observation as foreground
@@ -18,6 +19,20 @@ from ..model import Case
 
 CONTRACT = "building-art-m6-nine-v1"
 PRE_RELEASE_CONTRACT = "building-art-pre-release-nine-v1"
+GROUP_CONTRACT = "building-art-group-nine-v1"
+GROUP_TARGETS = {
+    "m2": ("Tank", "MudMixer"),
+    "m3": ("RestArea", "SoulSpa"),
+    "m5": ("WheelbarrowParking", "SandPile", "BonePile", "OutdoorLamp"),
+}
+GROUP_FIXED = {"m2": (), "m3": GROUP_TARGETS["m2"],
+               "m5": (*GROUP_TARGETS["m2"], *GROUP_TARGETS["m3"])}
+GROUP_SLUGS = dict(zip(
+    (*GROUP_TARGETS["m2"], *GROUP_TARGETS["m3"], *GROUP_TARGETS["m5"]),
+    ("tank", "mud-mixer", "rest-area", "soul-spa", "wheelbarrow-parking", "sand-pile", "bone-pile", "outdoor-lamp"), strict=True))
+GROUP_ARTIFACT_COUNTS = {"Tank": (2, 3), "MudMixer": (2, 3), "RestArea": (1, 3),
+                         "SoulSpa": (2, 4), "WheelbarrowParking": (0, 2),
+                         "SandPile": (0, 2), "BonePile": (0, 2), "OutdoorLamp": (0, 3)}
 DOOR_HASH = "4e3f9236db067772b9a60b37ea98437cb29e481f9ec9cbb4d6dcf6517374a449"
 SETS = tuple(kind for kind in KINDS if kind != "Door")
 PARTS = {
@@ -74,7 +89,51 @@ def validate_pre_release_sidecar(value, case):
     return _validate_sidecar(value, case, pre_release=True)
 
 
-def _validate_sidecar(value, case, *, pre_release):
+def validate_group_declaration(value):
+    """Independent structural oracle; the coordinator also binds exact manifest bytes."""
+    require(isinstance(value, dict) and set(value) == {"group", "fixed", "candidates"}
+            and value["group"] in GROUP_TARGETS, "group declaration differs")
+    group = value["group"]
+    for field, kinds, authority in (("fixed", GROUP_FIXED[group], "release_approved"),
+                                     ("candidates", GROUP_TARGETS[group], "isolated_candidate")):
+        bindings = value[field]
+        require(isinstance(bindings, list) and len(bindings) == len(kinds), "group kind count differs")
+        seen = []
+        for binding in bindings:
+            require(isinstance(binding, dict) and set(binding) == {"identity", "locator", "paths"},
+                    "group binding fields differ")
+            identity = binding["identity"]
+            require(isinstance(identity, dict) and set(identity) == {"kind", "generation", "authority", "manifest_sha256"}
+                    and identity["kind"] in kinds and identity["authority"] == authority
+                    and type(identity["generation"]) is int and 0 < identity["generation"] < 2**64
+                    and isinstance(identity["manifest_sha256"], str)
+                    and re.fullmatch(r"[0-9a-f]{64}", identity["manifest_sha256"]), "group identity differs")
+            kind = identity["kind"]
+            seen.append(kind)
+            slug = GROUP_SLUGS[kind]
+            require(binding["locator"] == f"manifests/building-{slug}-v1.buildingset", "group locator differs")
+            paths = binding["paths"]
+            meshes, images = GROUP_ARTIFACT_COUNTS[kind]
+            require(isinstance(paths, list) and len(paths) == meshes + images
+                    and all(isinstance(p, str) for p in paths) and len(set(paths)) == len(paths),
+                    "group artifact path inventory differs")
+            for path in paths:
+                require(len(path.encode()) <= 512 and path.startswith(f"building_sets/{slug}/{identity['generation']}/")
+                        and not any(c in path for c in ("\\", "#", ":"))
+                        and not any(ord(c) < 32 or 127 <= ord(c) <= 159 for c in path)
+                        and all(part not in {"", ".", ".."} for part in path.split("/"))
+                        and not PurePosixPath(path).is_absolute(), "group artifact path differs")
+            require(sum(p.endswith(".glb") for p in paths) == meshes
+                    and sum(p.endswith(".png") for p in paths) == images, "group artifact types differ")
+        require(set(seen) == set(kinds) and len(set(seen)) == len(seen), "group kinds differ")
+    return value
+
+
+def validate_group_sidecar(value, case):
+    return _validate_sidecar(value, case, pre_release=True, group=True)
+
+
+def _validate_sidecar(value, case, *, pre_release, group=False):
     copies = {"small": 4, "medium": 16}[case.size]
     require(
         case
@@ -99,7 +158,7 @@ def _validate_sidecar(value, case, *, pre_release):
     require(
         type(value["schema_version"]) is int
         and value["schema_version"] == 1
-        and value["contract_id"] == (PRE_RELEASE_CONTRACT if pre_release else CONTRACT)
+        and value["contract_id"] == (GROUP_CONTRACT if group else PRE_RELEASE_CONTRACT if pre_release else CONTRACT)
         and value["evidence_kind"] == "paused-static-only"
         and value["active_simulation_evidence"] is False
         and value["camera_scale"] == 5.0
@@ -132,7 +191,7 @@ def _validate_sidecar(value, case, *, pre_release):
     m6 = initial["m6"]
     require(
         set(m6)
-        == {
+        == ({
             "mode",
             "identities",
             "door_identity",
@@ -142,12 +201,26 @@ def _validate_sidecar(value, case, *, pre_release):
             "resources",
             "gpu_allocation_bytes",
             "active_state_acceptance",
-        },
+        } | ({"group", "loaded_identities", "target_path_observations"} if group else set())),
         "M6 fields differ",
     )
     require(m6["mode"] in {"legacy-control", "candidate"}, "invalid M6 mode")
     candidate = m6["mode"] == "candidate"
-    identities(m6["identities"], pre_release=pre_release)
+    if group:
+        declaration = validate_group_declaration(m6["group"])
+        all_bindings = [*declaration["fixed"], *declaration["candidates"]]
+        loaded = [*declaration["fixed"], *(declaration["candidates"] if candidate else [])]
+        require(canonical(m6["identities"]) == canonical([b["identity"] for b in all_bindings])
+                and canonical(m6["loaded_identities"]) == canonical([b["identity"] for b in loaded]),
+                "group loaded identities differ")
+        expected_paths = [] if candidate else [{"path": path, "managed": False}
+            for binding in declaration["candidates"] for path in (binding["locator"], *binding["paths"])]
+        require(canonical(m6["target_path_observations"]) == canonical(expected_paths),
+                "group control prefetched or omitted target paths")
+        loaded_kinds = {b["identity"]["kind"] for b in loaded}
+    else:
+        identities(m6["identities"], pre_release=pre_release)
+        loaded_kinds = set(SETS) if candidate else set()
     require(
         m6["door_identity"]
         == {
@@ -165,7 +238,8 @@ def _validate_sidecar(value, case, *, pre_release):
         "target_count": copies * 9,
         "target_structural_roots": copies * 5,
         "target_foreground_owners": copies * 4,
-        "target_active_unique_meshes": 8 if candidate else 2,
+        "target_active_unique_meshes": 1 + int(any(k not in loaded_kinds for k in PARTS))
+            + sum(len(set(PARTS.get(k, []))) for k in loaded_kinds),
         "souls": copies // 4 * 15,
         "completion_effects": 0,
     }
@@ -174,8 +248,9 @@ def _validate_sidecar(value, case, *, pre_release):
             type(initial[key]) is int and initial[key] == expected, f"incorrect {key}"
         )
     for key, expected in {
-        "target_mesh_entities": copies * (11 if candidate else 5),
-        "pool_active": 8 if candidate else 0,
+        "target_mesh_entities": copies * (5 + int("Tank" in loaded_kinds)
+            + int("MudMixer" in loaded_kinds) + 4 * int("SoulSpa" in loaded_kinds)),
+        "pool_active": len(loaded_kinds),
         "pool_pending": 0,
     }.items():
         require(type(m6[key]) is int and m6[key] == expected, f"incorrect {key}")
@@ -188,10 +263,11 @@ def _validate_sidecar(value, case, *, pre_release):
     require(len(initial["records"]) == len(expected), "owner count differs")
     foreground_entities = []
     for observed, logical in zip(initial["records"], expected, strict=True):
-        extras = {"parts"} if candidate and logical["kind"] != "Door" else set()
-        if candidate and logical["kind"] in foreground.KINDS:
+        present = logical["kind"] in loaded_kinds
+        extras = {"parts"} if present else set()
+        if present and logical["kind"] in foreground.KINDS:
             extras.update({"owner", "foreground"})
-        if candidate and logical["kind"] in {"Tank", "MudMixer"}:
+        if present and logical["kind"] in {"Tank", "MudMixer"}:
             extras.add("root_translation_wu")
             require(
                 observed["root_translation_wu"]

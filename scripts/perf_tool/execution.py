@@ -398,10 +398,11 @@ def fixed_environment(args: argparse.Namespace) -> dict[str, str]:
         # actual renderer identity observable regardless of the parent shell.
         values["RUST_LOG"] = "info,wgpu=error"
     if getattr(args, "building_m6_asset_root", None) is not None:
-        if "HW_BUILDING_M6_CANDIDATES" not in os.environ:
+        declarations = [key for key in ("HW_BUILDING_M6_CANDIDATES", "HW_BUILDING_GROUP_COMPARISON") if key in os.environ]
+        if len(declarations) != 1:
             raise ValueError("pre-release view requires explicit candidate bindings")
         values["BEVY_ASSET_ROOT"] = args.building_m6_asset_root
-        values["HW_BUILDING_M6_CANDIDATES"] = os.environ["HW_BUILDING_M6_CANDIDATES"]
+        values[declarations[0]] = os.environ[declarations[0]]
     return values
 
 

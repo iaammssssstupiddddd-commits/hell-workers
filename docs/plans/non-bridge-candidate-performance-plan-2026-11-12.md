@@ -76,16 +76,40 @@ Door g7は別loaderで維持する。現loader/presentation候補許可は単一
 
 ### M5: 正式galleryのDPI条件
 
-- [ ] `building_art_acceptance.py`のgalleryに限りDPI 1/1.5/2を明示選択できるようにする。
+- [x] `building_art_acceptance.py`のgalleryに限りDPI 1/1.5/2を明示選択できるようにする。
   planで有限な厳密集合を検査し、argv・実Window DPI・physical extent・RTT target・owned PNGを照合する。
   Bevyの既存physical window 1280×720は維持し、DPIを掛けた架空の画像寸法を要求しない。
-- [ ] 既存context/UI recipeはDPI1の契約を維持し、bool/欠損した新契約/非有限/未知値/actual不一致を拒否する。
+- [x] 既存context/UI recipeはDPI1の契約を維持し、bool/欠損した新契約/非有限/未知値/actual不一致を拒否する。
   旧planのDPI1互換と、通常起動・ゲームrule・release authorityの不変を守る。
-- [ ] Rustのstatic configとtyped art sessionでも同じ契約・requested DPIを照合する。
+- [x] Rustのstatic configとtyped art sessionでも同じ契約・requested DPIを照合する。
   新fieldは任意の対として旧sessionを保ち、新契約があれば完全なtyped sessionとgallery範囲を要求する。
   通常性能fixture、Spa page、context/UI、非profilingはDPI1のままにし、宣言とargvの不一致を起動前に拒否する。
-- [ ] Help実レビュー、変更別検証、独立exact review後、fresh actual-windowでDPI接続を確認する。
+- [x] Help実レビュー、変更別検証、独立exact review後、fresh actual-windowでDPI接続を確認する。
   対象群の共通gallery、High/Medium/Low×各DPI×normal/far、群別性能・独立release採否は別に閉じる。
+
+### M6: 群別の厳密なload集合
+
+- [ ] 専用`building-group-paired-static-v1`とtyped `HW_BUILDING_GROUP_COMPARISON`を追加する。
+  groupはM2/M3/M5だけ、fixedは先行群のReleaseApproved 0/2/4種、targetは当該群のIsolatedCandidate 2/2/4種。
+  canonical locator・identity・凍結artifact pathを検査し、Bridge、重複、集合欠損、authority混在を拒否する。
+- [ ] 既存M6の全8種modeと通常releaseの2/4/8 guardを維持する。
+  `M6Comparison`へ群別の実load集合を加え、request・loader snapshot・pool許可を同じ集合から導出する。
+  controlにもfixedをloadし、targetのrequestと先読みはせず、AssetServerのactive path IDで検査する。
+- [ ] presentation検証をmode全体のboolからkindごとの完全identity一致へ変える。
+  pool数0→2/2→4/4→8、mesh entity/copies 5→7/7→11/11→11、unique target mesh2→6/6→8/8→8を要求する。
+  M5 foreground監視はM5 candidateだけ4×copiesで、fixed M2/M3のpart検査もcontrol側へ残す。
+- [ ] Pythonのview・manifest/provenance・oracle・group別contractと初期/実final照合を接続する。
+  fixed/target inventoryとloaded集合を分け、target path省略・control先読み・kind/世代/bytes driftを拒否する。
+  既存全8種の独立oracleを新しい任意集合へ緩和しない。
+
+### M7: 群別性能と順次導入
+
+- [ ] 安定したcontrol baselineを取得し、群別の全metric有限budgetと根拠をcandidate測定前に固定・独立reviewする。
+  全8種budgetを盲目的に流用せず、target実inventory、共有資源plateauとbaselineを用いる。
+- [ ] N/4N、Capture→Memory、3隣接pair・中間順序反転、30/60秒を維持する。
+  部分集合の既知noise/budget不合格は早期に検出し、未知結果や旧passを再利用しない。
+- [ ] 正式group galleryと当該群の残lifecycle証拠を揃え、独立release decisionからguard付きpromotion/install/rollbackへ進む。
+  M2を先に正式導入し、M3、M5へ進む。最後に既定起動・Door監査・9種累積と文書/Help/storageを閉じる。
 
 ## 6. リスクと対策
 
@@ -168,6 +192,8 @@ v5（`f2fdf9ea`）はN側6測定と4N側の最初のpairを完走したが、N c
 `bff4440e`のDPI1.5試行はRustのstatic configのDPI1制限で描画前に拒否された。
 probe/PNGはなくinvalid封印/finalize済み。Python入口だけの完成を実機接続と扱わず、
 typed art sessionへ契約とDPIを渡し、Rust admission・実Windowまで同じ拘束を接続してfresh試行へ進む。
+`cffd9fe3`のfresh DPI1.5接続は同sourceの実窓・PNG・rawを独立reviewし、登録verifierのpass封印/finalizeも成功した。
+これはTank単種High/normalの接続確認だけであり、残る正式群gallery・性能・releaseはM6/M7へ進める。
 
 ### Definition of Done
 

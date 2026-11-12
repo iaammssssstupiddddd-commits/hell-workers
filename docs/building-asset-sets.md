@@ -1238,4 +1238,10 @@ scene/mask target、camera viewを別々に照合する。DPIをPNG寸法へ掛�
 新planはtyped `HW_BUILDING_ART_SESSION`にもwindow contractとDPIの対を渡す。
 Rust static configは完全なsessionを読み、requested DPIとの一致を要求する。1.5/2はgalleryだけで、
 context・Spa mask page・通常性能fixtureはDPI1のまま。新契約のsessionは実static workloadへ限定する。
-初回`bff4440e`のDPI1.5試行はこのRust接続前に描画前拒否となり、invalid封印済み。実機成功は未確定である。
+初回`bff4440e`のDPI1.5試行はこのRust接続前に描画前拒否となり、invalid封印済み。この初回では実機接続を証明していない。
+接続補正`cffd9fe3`のfresh試行は登録verifier・独立画像/raw review・pass封印/finalizeを完了した。
+実Windowは開始/終了DPI1.5、physical1280×720、logical853.333313×480、High RTT1280×720。
+Empty/Partial/FullのTank候補を確認し、WARN/ERROR/panicはない。winitの推定DPI2ログは実観測値と区別した。
+source `fac859ddd7bb861d43a21bafa98671c83daf8945c0be8934ffb6745421472bfe`、
+manifest `95b7a072aafc12cbffcbba2609ec4d05b5df7678ceb2838bf2ff8d311f1de752`。
+別fallback群の上端は一部clipされており、群内調和・正式全matrix・性能・releaseの証明にはしない。

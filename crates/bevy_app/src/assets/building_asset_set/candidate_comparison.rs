@@ -61,6 +61,7 @@ fn validate(raw: &str, mode: &str) -> Result<(Vec<Binding>, M6Comparison), Strin
     let comparison = M6Comparison {
         candidate,
         pre_release: true,
+        group: None,
         identities: bindings.iter().map(|b| b.identity.clone()).collect(),
     };
     Ok((bindings, comparison))
@@ -71,6 +72,7 @@ fn separate_workload(enabled: bool, static_workload: bool, present: impl Fn(&str
         && static_workload
         && ![
             "HW_BUILDING_ASSET_RELEASES",
+            "HW_BUILDING_GROUP_COMPARISON",
             "HW_BUILDING_ART_SESSION",
             "HW_BUILDING_ORDINARY_ART_SESSION",
             "HW_BUILDING_PRODUCTION_OBSERVATIONS",
@@ -127,6 +129,7 @@ mod tests {
         assert!(!separate_workload(true, false, |_| false));
         for conflict in [
             "HW_BUILDING_ASSET_RELEASES",
+            "HW_BUILDING_GROUP_COMPARISON",
             "HW_BUILDING_ART_SESSION",
             "HW_BUILDING_ORDINARY_ART_SESSION",
             "HW_BUILDING_PRODUCTION_OBSERVATIONS",

@@ -229,6 +229,7 @@ pub(crate) struct InspectParams<'w, 's> {
     door_material: Res<'w, ProductionDoorMaterialPool>,
     door_readiness: Res<'w, DoorAssetReadiness>,
     building_pool: Res<'w, BuildingAssetPool>,
+    asset_server: Option<Res<'w, AssetServer>>,
     art_session: Option<Res<'w, BuildingArtSession>>,
     m6: Option<Res<'w, M6Comparison>>,
     stockpiles: Query<'w, 's, &'static hw_logistics::Stockpile>,
@@ -359,15 +360,22 @@ fn inspect(params: &InspectParams) -> Result<Option<Value>, String> {
                 "M6 cannot mix Bridge or art-preview authority into nine-kind evidence".into(),
             );
         }
-        let expected = if m6.candidate { 8 } else { 0 };
+        if !m6.candidate && m6.group.is_some() {
+            let server = params
+                .asset_server
+                .as_ref()
+                .ok_or("group comparison AssetServer missing")?;
+            if let Some(path) = m6.prefetched_target_path(server) {
+                return Err(format!("group control prefetched target asset: {path}"));
+            }
+        }
+        let expected = m6.loaded_identities().count();
         if params.building_pool.generation_counts() != (expected, 0) {
             return Ok(None);
         }
-        if m6.candidate {
-            for identity in &m6.identities {
-                if params.building_pool.active(identity.kind) != Some(identity) {
-                    return Ok(None);
-                }
+        for identity in m6.loaded_identities() {
+            if params.building_pool.active(identity.kind) != Some(identity) {
+                return Ok(None);
             }
         }
     }
@@ -484,8 +492,9 @@ fn inspect(params: &InspectParams) -> Result<Option<Value>, String> {
                 | BuildingType::OutdoorLamp
         );
         let owner_visuals = visuals.get(&owner).map(Vec::as_slice).unwrap_or_default();
-        let candidate = if params.m6.as_ref().is_some_and(|m6| m6.candidate) {
+        let candidate = if let Some(m6) = params.m6.as_ref() {
             crate::systems::visual::building_presentation::asset_kind(spec.kind)
+                .filter(|kind| m6.loads_kind(*kind))
                 .and_then(|kind| params.building_pool.descriptor(kind))
         } else {
             params.art_session.as_ref().and_then(|session| {
@@ -496,7 +505,7 @@ fn inspect(params: &InspectParams) -> Result<Option<Value>, String> {
             })
         };
         if params.state.phase == Phase::Ready
-            && params.m6.as_ref().is_some_and(|mode| mode.candidate)
+            && params.m6.is_some()
             && let Some(descriptor) =
                 candidate.filter(|set| set.manifest.identity.kind.mesh_roles().is_empty())
         {
@@ -868,10 +877,11 @@ fn inspect(params: &InspectParams) -> Result<Option<Value>, String> {
             records.push(record);
         }
     }
-    if params.art_session.is_none()
-        && !params.m6.as_ref().is_some_and(|m6| m6.candidate)
-        && active_meshes.len() != 2
-    {
+    if let Some(m6) = params.m6.as_ref() {
+        if active_meshes.len() != m6.unique_target_meshes() {
+            return Err("comparison target mesh inventory differs".into());
+        }
+    } else if params.art_session.is_none() && active_meshes.len() != 2 {
         return Err("legacy shared mesh count differs".into());
     }
     let resources = params.m6.as_ref().map(|_| resource_evidence(params));
@@ -914,7 +924,7 @@ fn inspect(params: &InspectParams) -> Result<Option<Value>, String> {
                 "authority": door_assets.identity.authority,
                 "manifest_sha256": door_assets.identity.manifest_sha256,
             },
-            "target_mesh_entities": copies * if m6.candidate { 11 } else { 5 },
+            "target_mesh_entities": copies * m6.mesh_entities_per_copy(),
             "pool_active": params.building_pool.generation_counts().0,
             "pool_pending": params.building_pool.generation_counts().1,
             "resources": resources,
@@ -923,6 +933,25 @@ fn inspect(params: &InspectParams) -> Result<Option<Value>, String> {
         });
         if m6.pre_release {
             evidence["pre_release_comparison"] = json!(true);
+        }
+        if let Some(group) = m6.group.as_ref() {
+            evidence["m6"]["group"] = json!(group);
+            evidence["m6"]["loaded_identities"] = json!(m6.loaded_identities().collect::<Vec<_>>());
+            evidence["m6"]["target_path_observations"] = if m6.candidate {
+                json!([])
+            } else {
+                let server = params
+                    .asset_server
+                    .as_ref()
+                    .ok_or("group comparison AssetServer missing")?;
+                json!(
+                    group
+                        .target_paths()
+                        .map(|path| json!({"path": path,
+                    "managed": server.get_path_id(bevy::asset::AssetPath::parse(path)).is_some()}))
+                        .collect::<Vec<_>>()
+                )
+            };
         }
     }
     Ok(Some(evidence))
@@ -969,7 +998,7 @@ impl BuildingArtStaticState {
             .ok_or_else(|| std::io::Error::other("missing fixture evidence"))?;
         let bytes = serde_json::to_vec(evidence)?;
         let final_evidence = self.final_sidecar_evidence(evidence)?;
-        let summary = json!({"schema_version": 1, "contract_id": if evidence.get("variant") == Some(&json!("lamp-supply-art-context")) { "lamp-supply-art-context-v1" } else if evidence.get("variant") == Some(&json!("m5-art-context")) { "m5-art-context-v1" } else if evidence.get("variant") == Some(&json!("m2-art-context")) { "m2-art-context-v1" } else if evidence.get("variant").is_some() { "rest-area-art-context-v1" } else if evidence.get("pre_release_comparison") == Some(&json!(true)) { "building-art-pre-release-nine-v1" } else if self.m6 { "building-art-m6-nine-v1" } else { "building-art-static-nine-v2" },
+        let summary = json!({"schema_version": 1, "contract_id": if evidence.get("variant") == Some(&json!("lamp-supply-art-context")) { "lamp-supply-art-context-v1" } else if evidence.get("variant") == Some(&json!("m5-art-context")) { "m5-art-context-v1" } else if evidence.get("variant") == Some(&json!("m2-art-context")) { "m2-art-context-v1" } else if evidence.get("variant").is_some() { "rest-area-art-context-v1" } else if evidence.get("m6").and_then(|m6| m6.get("group")).is_some() { "building-art-group-nine-v1" } else if evidence.get("pre_release_comparison") == Some(&json!(true)) { "building-art-pre-release-nine-v1" } else if self.m6 { "building-art-m6-nine-v1" } else { "building-art-static-nine-v2" },
             "evidence_kind": if self.art_candidate { "candidate-paused-static-only" } else { "paused-static-only" }, "active_simulation_evidence": false,
             "camera_scale": evidence.get("camera_scale").unwrap_or(&json!(layout::CAMERA_SCALE)), "stable_frames": self.stable_frames,
             "layout_sha256": hw_infra::lighting::digest_hex(&Sha256::digest(&bytes).into()), "initial": evidence, "final": final_evidence});

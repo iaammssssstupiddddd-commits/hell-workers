@@ -37,6 +37,60 @@ pub(crate) struct M6Comparison {
     pub candidate: bool,
     pub identities: Vec<BuildingAssetSetIdentity>,
     pub pre_release: bool,
+    pub group: Option<super::group_comparison::Declaration>,
+}
+
+#[cfg(feature = "profiling")]
+impl M6Comparison {
+    pub(crate) fn loaded_identities(&self) -> impl Iterator<Item = &BuildingAssetSetIdentity> {
+        self.identities.iter().filter(|id| {
+            self.group
+                .as_ref()
+                .map_or(self.candidate, |group| group.loads(id, self.candidate))
+        })
+    }
+
+    pub(crate) fn loads_kind(&self, kind: BuildingAssetKind) -> bool {
+        self.loaded_identities()
+            .any(|identity| identity.kind == kind)
+    }
+
+    pub(crate) fn mesh_entities_per_copy(&self) -> usize {
+        5 + usize::from(self.loads_kind(BuildingAssetKind::Tank))
+            + usize::from(self.loads_kind(BuildingAssetKind::MudMixer))
+            + 4 * usize::from(self.loads_kind(BuildingAssetKind::SoulSpa))
+    }
+
+    pub(crate) fn unique_target_meshes(&self) -> usize {
+        let structural = [
+            BuildingAssetKind::Tank,
+            BuildingAssetKind::MudMixer,
+            BuildingAssetKind::RestArea,
+            BuildingAssetKind::SoulSpa,
+        ];
+        1 + usize::from(structural.iter().any(|kind| !self.loads_kind(*kind)))
+            + self
+                .loaded_identities()
+                .map(|id| id.kind.mesh_roles().len())
+                .sum::<usize>()
+    }
+
+    pub(crate) fn foreground_kinds(&self) -> usize {
+        self.loaded_identities()
+            .filter(|id| id.kind.mesh_roles().is_empty())
+            .count()
+    }
+
+    pub(crate) fn prefetched_target_path(&self, server: &AssetServer) -> Option<&str> {
+        if self.candidate {
+            return None;
+        }
+        self.group.as_ref()?.target_paths().find(|path| {
+            server
+                .get_path_id(bevy::asset::AssetPath::parse(path))
+                .is_some()
+        })
+    }
 }
 
 #[cfg(feature = "profiling")]
@@ -55,6 +109,7 @@ fn comparison(mode: &str, bindings: &[ReleaseBinding]) -> Result<M6Comparison, S
     Ok(M6Comparison {
         candidate,
         pre_release: false,
+        group: None,
         identities: bindings
             .iter()
             .map(|binding| binding.identity.clone())
@@ -138,6 +193,12 @@ fn validate_bindings(bindings: &[ReleaseBinding]) -> Result<(), String> {
 /// production requests are mutually exclusive so one startup cannot race two
 /// authority paths for the same kind.
 pub fn configure_building_asset_releases(app: &mut App) -> Result<(), String> {
+    if std::env::var_os("HW_BUILDING_GROUP_COMPARISON").is_some() {
+        #[cfg(feature = "profiling")]
+        return super::group_comparison::configure(app);
+        #[cfg(not(feature = "profiling"))]
+        return Err("group comparison requires the profiling feature".into());
+    }
     if std::env::var_os("HW_BUILDING_M6_CANDIDATES").is_some() {
         #[cfg(feature = "profiling")]
         return super::candidate_comparison::configure(app);

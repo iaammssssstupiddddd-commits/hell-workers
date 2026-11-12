@@ -109,15 +109,15 @@ pub(super) fn capture_m6(
     params: &InspectParams,
 ) -> Result<HashMap<Entity, MeasuredForeground>, String> {
     let mut result = HashMap::new();
-    if !params.m6.as_ref().is_some_and(|mode| mode.candidate) {
+    let Some(comparison) = params.m6.as_ref() else {
         return Ok(result);
-    }
+    };
     for (spec, &owner) in params.state.specs.iter().zip(&params.state.owners) {
         let Some(kind) = crate::systems::visual::building_presentation::asset_kind(spec.kind)
         else {
             continue;
         };
-        if !kind.mesh_roles().is_empty() {
+        if !kind.mesh_roles().is_empty() || !comparison.loads_kind(kind) {
             continue;
         }
         let descriptor = params
@@ -131,7 +131,7 @@ pub(super) fn capture_m6(
             return Err("M6 duplicate foreground owner".into());
         }
     }
-    if result.len() != layout::copies(params.config.size()) * 4 {
+    if result.len() != layout::copies(params.config.size()) * comparison.foreground_kinds() {
         return Err("M6 foreground typed inventory differs".into());
     }
     Ok(result)

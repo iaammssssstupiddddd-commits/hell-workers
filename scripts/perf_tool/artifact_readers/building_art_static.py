@@ -63,6 +63,10 @@ def read_building_art_static(data_dir: Path, *, expected_case: Case) -> tuple[di
     try:
         value = json.loads((data_dir / "building_art_static.json").read_text(),
                            object_pairs_hook=unique_object, parse_constant=reject_constant)
+        if isinstance(value, dict) and value.get("contract_id") == "building-art-group-nine-v1":
+            from .building_m6 import validate_group_sidecar
+            validate_group_sidecar(value, expected_case)
+            return value, []
         if isinstance(value, dict) and value.get("contract_id") == "building-art-pre-release-nine-v1":
             from .building_m6 import validate_pre_release_sidecar
             validate_pre_release_sidecar(value, expected_case)

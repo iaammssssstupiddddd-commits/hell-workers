@@ -110,7 +110,176 @@ def reseal(value):
     return value
 
 
+def group_sidecar(group, candidate, copies=4):
+    """Synthetic full-nine fixture; only the declared group's prefix is active."""
+    value = sidecar(candidate=True, copies=copies)
+    value["contract_id"] = oracle.GROUP_CONTRACT
+    initial, declaration = value["initial"], {"group": group, "fixed": [], "candidates": []}
+    for field, kinds, authority in (("fixed", oracle.GROUP_FIXED[group], "release_approved"),
+                                     ("candidates", oracle.GROUP_TARGETS[group], "isolated_candidate")):
+        for kind in kinds:
+            slug = oracle.GROUP_SLUGS[kind]
+            meshes, images = oracle.GROUP_ARTIFACT_COUNTS[kind]
+            declaration[field].append({"identity": {"kind": kind, "generation": 1,
+                "authority": authority, "manifest_sha256": "a" * 64},
+                "locator": f"manifests/building-{slug}-v1.buildingset",
+                "paths": [*(f"building_sets/{slug}/1/{i}.glb" for i in range(meshes)),
+                          *(f"building_sets/{slug}/1/{i}.png" for i in range(images))]})
+    all_bindings = [*declaration["fixed"], *declaration["candidates"]]
+    loaded = [*declaration["fixed"], *(declaration["candidates"] if candidate else [])]
+    loaded_by_kind = {b["identity"]["kind"]: b["identity"] for b in loaded}
+    for row in initial["records"]:
+        if row["kind"] not in loaded_by_kind:
+            for field in ("parts", "root_translation_wu", "owner", "foreground"):
+                row.pop(field, None)
+        elif "foreground" in row:
+            row["foreground"]["identity"] = loaded_by_kind[row["kind"]]
+    counts = {"m2": ([0, 2], [5, 7], [2, 6]), "m3": ([2, 4], [7, 11], [6, 8]),
+              "m5": ([4, 8], [11, 11], [8, 8])}[group]
+    initial["pre_release_comparison"] = True
+    initial["target_active_unique_meshes"] = counts[2][int(candidate)]
+    initial["m6"].update(group=declaration, mode="candidate" if candidate else "legacy-control",
+        identities=[b["identity"] for b in all_bindings], loaded_identities=[b["identity"] for b in loaded],
+        target_mesh_entities=copies * counts[1][int(candidate)], pool_active=counts[0][int(candidate)],
+        target_path_observations=[] if candidate else [{"path": path, "managed": False}
+            for b in declaration["candidates"] for path in (b["locator"], *b["paths"])])
+    return reseal(value)
+
+
 class M6Tests(unittest.TestCase):
+    def test_exact_group_modes_and_densities_keep_legacy_contracts_separate(self):
+        for group in ("m2", "m3", "m5"):
+            for candidate in (False, True):
+                for size, copies, souls in (("small", 4, 15), ("medium", 16, 60)):
+                    value = group_sidecar(group, candidate, copies)
+                    case = Case("building-art-static", size, "gpu", 20260920, souls, 0)
+                    oracle.validate_group_sidecar(value, case)
+                    for legacy in (oracle.validate_sidecar, oracle.validate_pre_release_sidecar):
+                        with self.assertRaises(ValueError):
+                            legacy(value, case)
+
+    def test_group_control_checks_fixed_parts_and_refuses_target_prefetch_or_omission(self):
+        case = Case("building-art-static", "small", "gpu", 20260920, 15, 0)
+        original = group_sidecar("m3", False)
+        mutations = (
+            lambda v: v["initial"]["m6"]["target_path_observations"][0].update(managed=True),
+            lambda v: v["initial"]["m6"]["target_path_observations"].pop(),
+            lambda v: v["initial"]["m6"]["group"]["candidates"][0]["paths"].pop(),
+            lambda v: v["initial"]["m6"]["group"]["fixed"][0]["identity"].update(authority="isolated_candidate"),
+            lambda v: v["initial"]["m6"]["loaded_identities"].__setitem__(0,
+                {**v["initial"]["m6"]["loaded_identities"][0], "generation": True}),
+            lambda v: next(r for r in v["initial"]["records"] if r["kind"] == "Tank")["parts"].pop(),
+            lambda v: next(r for r in v["initial"]["records"] if r["kind"] == "SandPile").update(parts=[]),
+            lambda v: v["initial"]["m6"].update(pool_active=0),
+        )
+        for mutation in mutations:
+            value = copy.deepcopy(original)
+            mutation(value)
+            with self.assertRaises(ValueError):
+                oracle.validate_group_sidecar(reseal(value), case)
+
+    def test_group_dispatch_preserves_strict_reader_and_environment_scope(self):
+        from perf_tool.artifact_readers.building_art_static import read_building_art_static
+        case = Case("building-art-static", "small", "gpu", 20260920, 15, 0)
+        value = group_sidecar("m2", False)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "building_art_static.json").write_text(m6.json.dumps(value))
+            self.assertEqual(read_building_art_static(root, expected_case=case)[1], [])
+        args = build_parser().parse_args(m6.command(Path("/job"), m6.matrix()[0], "Intel", pre_release=True)[2:])
+        declaration = m6.json.dumps(value["initial"]["m6"]["group"])
+        with patch.dict(os.environ, {m6.GROUP_ENV: declaration}, clear=True):
+            self.assertEqual(fixed_environment(args)[m6.GROUP_ENV], declaration)
+            with patch.dict(os.environ, {"HW_BUILDING_M6_CANDIDATES": "[]"}):
+                with self.assertRaises(ValueError):
+                    fixed_environment(args)
+        with self.assertRaisesRegex(ValueError, "exact group"):
+            m6.inventory(Path("/repo"), Path("/codec"), {}, "m2")
+
+    def test_control_calibration_and_early_failure_never_create_a_candidate_result(self):
+        cases = m6.matrix(baseline=True)
+        self.assertEqual(len(cases), 12)
+        self.assertEqual({case[3] for case in cases}, {"legacy-control"})
+        rows = [{"instrumentation": instrument, "size": size, "repeat": repeat, "mode": mode,
+                 "binary_sha256": instrument, "adapter": {}, "window": {},
+                 "metrics": dict.fromkeys(m6.METRICS, 100)} for instrument, size, repeat, mode in cases]
+        self.assertEqual(len(m6.aggregate_baseline(rows)), 4)
+        with self.assertRaises(ValueError):
+            m6.aggregate_baseline(rows[:-1])
+        wrong = copy.deepcopy(rows)
+        wrong[0]["mode"] = "candidate"
+        with self.assertRaises(ValueError):
+            m6.aggregate_baseline(wrong)
+        subset = copy.deepcopy(rows[:3])
+        for row, duration in zip(subset, (1, 10, 20), strict=True):
+            row["metrics"]["p95_ms"] = duration
+        m6.check_completed_subsets(subset[:2], None)
+        with self.assertRaisesRegex(ValueError, "noise budget"):
+            m6.check_completed_subsets(subset, None)
+
+    def test_group_budget_requires_verified_same_source_baseline_and_frozen_bytes(self):
+        declaration = group_sidecar("m2", False)["initial"]["m6"]["group"]
+        identity = {"subject_commit": "a" * 40, "source_fingerprint": "b" * 64}
+        value = {"profile": m6.GROUP_PROFILE, "group": "m2", "identity": identity,
+                 "group_declaration": declaration}
+        limits = {"max_delta": dict.fromkeys(m6.METRICS, 100), "max_relative_mad": .1, "reason": "synthetic"}
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "baseline"
+            root.mkdir()
+            plan = Path(directory) / "baseline-plan.json"
+            baseline = {"profile": m6.GROUP_BASELINE_PROFILE, "identity": identity,
+                        "group_declaration": declaration, "baseline_max_relative_mad": .1,
+                        "job_root": str(root)}
+            result = {"rows": [{"adapter": {"name": "synthetic"}, "window": {"width": 1280}}]}
+            m6.pipeline.put(plan, m6.pipeline.canonical(baseline))
+            m6.pipeline.put(root / "result.json", m6.pipeline.canonical(result))
+            (root / "data.bin").write_bytes(b"frozen synthetic data")
+            envelope = {"group": "m2", "baseline_plan": str(plan), "limits": limits}
+            with patch.object(m6, "verify", return_value=result) as verified:
+                reference = m6.group_budget_reference(value, envelope)
+                verified.assert_called_once_with(plan)
+                for bad in (limits, {**envelope, "group": "m3"},
+                            {**envelope, "limits": {**limits, "max_relative_mad": .2}}):
+                    with self.assertRaises(ValueError):
+                        m6.group_budget_reference(value, bad)
+            bound = {**value, "baseline_reference": reference, "budget": limits}
+            with patch.object(m6, "verify", return_value=result) as verified:
+                m6.check_baseline_reference(bound)
+                verified.assert_called_once_with(plan)
+                with self.assertRaisesRegex(ValueError, "noise gate"):
+                    m6.check_baseline_reference({**bound, "budget": {**limits, "max_relative_mad": .2}})
+            with patch.object(m6, "verify", side_effect=ValueError("incomplete baseline matrix")):
+                with self.assertRaisesRegex(ValueError, "incomplete baseline matrix"):
+                    m6.check_baseline_reference(bound)
+            with patch.object(m6, "verify", return_value={**result, "status": "foreign"}):
+                with self.assertRaisesRegex(ValueError, "independently verified"):
+                    m6.check_baseline_reference(bound)
+            for change in ({**identity, "source_fingerprint": "c" * 64},
+                           {**identity, "subject_commit": "d" * 40}):
+                with self.assertRaisesRegex(ValueError, "another source"):
+                    m6.check_baseline_reference({**bound, "identity": change})
+            with patch.object(m6, "verify", return_value=result):
+                with self.assertRaisesRegex(ValueError, "environment"):
+                    m6.check_baseline_reference({**bound, "baseline_reference": {**reference, "adapter": {}}})
+            (root / "data.bin").write_bytes(b"mutated")
+            with self.assertRaisesRegex(ValueError, "changed"):
+                m6.check_baseline_reference(bound)
+        with self.assertRaisesRegex(ValueError, "profile mismatch"):
+            m6.check_baseline_reference({"profile": m6.PRE_RELEASE_PROFILE, "baseline_reference": {}})
+
+    def test_completed_pair_rejects_increment_before_later_sizes_or_memory(self):
+        rows = [{"instrumentation": "capture", "size": "small", "repeat": repeat,
+                 "mode": mode, "binary_sha256": "capture", "adapter": {}, "window": {},
+                 "metrics": dict.fromkeys(m6.METRICS, 100)}
+                for repeat in (1, 2, 3) for mode in ("legacy-control", "candidate")]
+        for row in rows:
+            if row["mode"] == "candidate":
+                row["metrics"]["p95_ms"] = 103
+        limits = {"max_delta": dict.fromkeys(m6.METRICS, 2), "max_relative_mad": .1}
+        m6.check_completed_subsets(rows[:-1], limits)
+        with self.assertRaisesRegex(ValueError, "budget exceeded: capture/small/p95_ms"):
+            m6.check_completed_subsets(rows, limits)
+
     def test_candidate_foreground_keeps_session_binary_identity(self):
         """Exercise the whole case verifier after an M5 asset manifest is inspected."""
         case = Case("building-art-static", "small", "gpu", 20260920, 15, 0)

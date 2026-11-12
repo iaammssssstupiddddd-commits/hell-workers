@@ -27,14 +27,16 @@ else:
 native, pipeline, static = art.native, art.pipeline, art.static
 if __package__:
     from .perf_tool.artifact_readers.building_m6 import (  # noqa: E402
-        DOOR_HASH, RESOURCE_KEYS, validate_sidecar,
+        DOOR_HASH, RESOURCE_KEYS, GROUP_TARGETS, GROUP_FIXED, validate_group_declaration,
+        validate_group_sidecar, validate_sidecar,
     )
     from .perf_tool.artifacts import frame_summary, read_frames, validate_run  # noqa: E402
     from .perf_tool.execution import read_native_memory, read_resource_usage  # noqa: E402
     from .perf_tool.model import Case  # noqa: E402
 else:
     from perf_tool.artifact_readers.building_m6 import (  # noqa: E402
-        DOOR_HASH, RESOURCE_KEYS, validate_sidecar,
+        DOOR_HASH, RESOURCE_KEYS, GROUP_TARGETS, GROUP_FIXED, validate_group_declaration,
+        validate_group_sidecar, validate_sidecar,
     )
     from perf_tool.artifacts import frame_summary, read_frames, validate_run  # noqa: E402
     from perf_tool.execution import read_native_memory, read_resource_usage  # noqa: E402
@@ -42,6 +44,9 @@ else:
 
 PROFILE = "building-m6-paired-static-v1"
 PRE_RELEASE_PROFILE = "building-pre-release-paired-static-v1"
+GROUP_PROFILE = "building-group-paired-static-v1"
+GROUP_BASELINE_PROFILE = "building-group-static-baseline-v1"
+GROUP_ENV = "HW_BUILDING_GROUP_COMPARISON"
 METRICS = {
     "p95_ms",
     "p99_ms",
@@ -52,8 +57,8 @@ METRICS = {
 }
 
 
-def matrix():
-    return [
+def matrix(*, baseline=False):
+    cases = [
         (instrument, size, repeat, mode)
         for instrument in ("capture", "memory")
         for size in ("small", "medium")
@@ -64,6 +69,11 @@ def matrix():
             else ("legacy-control", "candidate")
         )
     ]
+    return [case for case in cases if case[3] == "legacy-control"] if baseline else cases
+
+
+def grouped(value):
+    return value["profile"] in {GROUP_PROFILE, GROUP_BASELINE_PROFILE}
 
 
 def label(case):
@@ -135,7 +145,9 @@ def file_inventory(root):
     return result
 
 
-def inventory(repo, codec, candidate_roots=None):
+def inventory(repo, codec, candidate_roots=None, group=None):
+    if group is not None:
+        return group_inventory(repo, codec, candidate_roots, group)
     assets = repo / "assets"
     sources = []
     if candidate_roots is None:
@@ -158,6 +170,93 @@ def inventory(repo, codec, candidate_roots=None):
             bindings.append({"identity": manifest["identity"], "locator": pipeline.locator(kind)})
             roots[kind] = root
             sources.append({"kind": kind, "root": str(root), "files": file_inventory(root)})
+    return assemble_inventory(assets, bindings, manifests, roots, sources if candidate_roots is not None else None)
+
+
+def group_inventory(repo, codec, candidate_roots, group):
+    pipeline.require(group in GROUP_TARGETS and isinstance(candidate_roots, dict)
+                     and set(candidate_roots) == set(GROUP_TARGETS[group]), "exact group candidate roots required")
+    assets = repo / "assets"
+    bindings = [] if group == "m2" else pipeline.release_bindings(assets, codec, "m2" if group == "m3" else "m3")
+    manifests, roots, sources = [], {}, []
+    for kind in (*GROUP_FIXED[group], *GROUP_TARGETS[group]):
+        fixed = kind in GROUP_FIXED[group]
+        root = assets if fixed else Path(candidate_roots[kind])
+        pipeline.require(root.is_absolute() and root == root.resolve(), "canonical group source root required")
+        verified = pipeline.verify_set(root, kind, codec)
+        authority = "release_approved" if fixed else "isolated_candidate"
+        pipeline.require(verified["identity"]["authority"] == authority, "group source authority differs")
+        manifest = pipeline.load_set(root, kind, codec)[0]
+        if fixed:
+            pipeline.require(next(b["identity"] for b in bindings if b["identity"]["kind"] == kind)
+                             == manifest["identity"], "fixed group pointer identity differs")
+        else:
+            bindings.append({"identity": manifest["identity"], "locator": pipeline.locator(kind)})
+        manifests.append(manifest)
+        roots[kind] = root
+        sources.append({"kind": kind, "root": str(root), "files": file_inventory(root)})
+    return assemble_inventory(assets, bindings, manifests, roots, sources)
+
+
+def group_declaration(assets, group):
+    value = {"group": group, "fixed": [], "candidates": []}
+    for binding, manifest in zip(assets["bindings"], assets["manifests"], strict=True):
+        pipeline.require(binding["identity"] == manifest["identity"]
+                         and binding["locator"] == pipeline.locator(manifest["identity"]["kind"]),
+                         "group binding/manifest differs")
+        field = "fixed" if manifest["identity"]["authority"] == "release_approved" else "candidates"
+        value[field].append({**binding, "paths": sorted(r["path"] for r in manifest["artifacts"])})
+    return validate_group_declaration(value)
+
+
+def group_budget_reference(value, envelope):
+    pipeline.require(isinstance(envelope, dict) and set(envelope) == {"group", "baseline_plan", "limits"}
+                     and envelope["group"] == value["group"], "group-specific budget envelope required")
+    path = Path(envelope["baseline_plan"])
+    pipeline.require(path.is_absolute() and path == path.resolve(), "canonical group baseline plan required")
+    baseline = pipeline.read(path)
+    pipeline.require(baseline["profile"] == GROUP_BASELINE_PROFILE
+                     and pipeline.exact_json(baseline["identity"], value["identity"])
+                     and pipeline.exact_json(baseline["group_declaration"], value["group_declaration"]),
+                     "group budget requires the same-source same-inventory control baseline")
+    result = verify(path)
+    pipeline.require(envelope["limits"]["max_relative_mad"] <= baseline["baseline_max_relative_mad"],
+                     "group budget cannot loosen the calibrated noise gate")
+    root = Path(baseline["job_root"])
+    return {"plan": str(path), "plan_sha256": pipeline.digest(path.read_bytes()), "root": str(root),
+            "result_sha256": pipeline.digest((root / "result.json").read_bytes()), "files": file_inventory(root),
+            "adapter": result["rows"][0]["adapter"], "window": result["rows"][0]["window"]}
+
+
+def check_baseline_reference(value):
+    required = value["profile"] == GROUP_PROFILE
+    pipeline.require(("baseline_reference" in value) == required, "baseline reference/profile mismatch")
+    if not required:
+        return
+    reference = value["baseline_reference"]
+    pipeline.require(set(reference) == {"plan", "plan_sha256", "root", "result_sha256", "files", "adapter", "window"},
+                     "baseline reference fields differ")
+    path, root = Path(reference["plan"]), Path(reference["root"])
+    pipeline.require(path.is_absolute() and path == path.resolve() and root.is_absolute() and root == root.resolve()
+                     and pipeline.digest(path.read_bytes()) == reference["plan_sha256"]
+                     and pipeline.digest((root / "result.json").read_bytes()) == reference["result_sha256"]
+                     and file_inventory(root) == reference["files"], "frozen group baseline changed")
+    baseline = pipeline.read(path)
+    result = native.read_json(root / "result.json")
+    pipeline.require(baseline["profile"] == GROUP_BASELINE_PROFILE and baseline["job_root"] == str(root)
+                     and pipeline.exact_json(baseline["identity"], value["identity"])
+                     and pipeline.exact_json(baseline["group_declaration"], value["group_declaration"]),
+                     "baseline reference belongs to another source/group")
+    pipeline.require(pipeline.exact_json(verify(path), result),
+                     "baseline result differs from independently verified evidence")
+    pipeline.require(value["budget"]["max_relative_mad"] <= baseline["baseline_max_relative_mad"],
+                     "group budget cannot loosen the calibrated noise gate")
+    pipeline.require(pipeline.exact_json(reference["adapter"], result["rows"][0]["adapter"])
+                     and pipeline.exact_json(reference["window"], result["rows"][0]["window"]),
+                     "baseline environment reference differs")
+
+
+def assemble_inventory(assets, bindings, manifests, roots, sources):
     door = pipeline.read(assets / "manifests/door-production-v1.doorset")
     pipeline.require(
         door["authority"] == "release_approved"
@@ -185,14 +284,14 @@ def inventory(repo, codec, candidate_roots=None):
             else 0,
         }
     result = {"bindings": bindings, "manifests": manifests, "files": records}
-    if candidate_roots is not None:
+    if sources is not None:
         result["sources"] = sources
     return result
 
 
 def check_inputs(value):
     pipeline.require(
-        value["profile"] in {PROFILE, PRE_RELEASE_PROFILE}
+        value["profile"] in {PROFILE, PRE_RELEASE_PROFILE, GROUP_PROFILE, GROUP_BASELINE_PROFILE}
         and value["accepted"] is False
         and value["promotion_authority"] is False,
         "invalid M6 scope",
@@ -204,13 +303,27 @@ def check_inputs(value):
         and pipeline.digest(codec.read_bytes()) == value["codec_sha256"],
         "M6 driver/codec changed",
     )
-    pre_release = value["profile"] == PRE_RELEASE_PROFILE
+    pre_release = value["profile"] != PROFILE
     check_foreground_verifier(value)
     check_candidate_verifiers(value)
     roots = value.get("candidate_roots")
     pipeline.require((roots is not None) == pre_release, "candidate roots/profile mismatch")
-    pipeline.require(inventory(repo, codec, roots) == value["assets"], "M6 asset inputs changed")
-    budget(value["budget"])
+    is_group = grouped(value)
+    pipeline.require(("group" in value) == is_group and ("group_declaration" in value) == is_group,
+                     "group fields/profile mismatch")
+    pipeline.require(inventory(repo, codec, roots, value.get("group")) == value["assets"], "M6 asset inputs changed")
+    if is_group:
+        pipeline.require(pipeline.exact_json(value["group_declaration"], group_declaration(value["assets"], value["group"])),
+                         "group declaration differs from frozen manifests")
+    baseline = value["profile"] == GROUP_BASELINE_PROFILE
+    pipeline.require(("baseline_max_relative_mad" in value) == baseline, "baseline noise/profile mismatch")
+    if baseline:
+        pipeline.require(value["budget"] is None and type(value["baseline_max_relative_mad"]) is float
+                         and value["baseline_max_relative_mad"] == .1 and value.get("foundation") is None,
+                         "baseline is control calibration only, not an increment budget")
+    else:
+        budget(value["budget"])
+    check_baseline_reference(value)
     static.check_root(repo, Path(value["job_root"]))
     if value.get("foundation") is not None:
         frozen_foundation(value)
@@ -222,7 +335,7 @@ def check_foreground_verifier(value):
 
 
 def check_candidate_verifiers(value):
-    if value["profile"] == PRE_RELEASE_PROFILE:
+    if value["profile"] != PROFILE:
         pipeline.require(value.get("numeric_verifiers") == pipeline.numeric_verifier_inventory()
                          and value.get("art_driver_sha256") == pipeline.digest(Path(art.__file__).read_bytes()),
                          "pre-release provenance verifiers changed")
@@ -258,7 +371,7 @@ def prepare_view(value):
 
 
 def check_view(value):
-    if value["profile"] == PRE_RELEASE_PROFILE:
+    if value["profile"] != PROFILE:
         pipeline.require(file_inventory(Path(value["job_root"]) / "asset-view/assets") == expected_view(value),
                          "candidate view changed")
 
@@ -313,8 +426,18 @@ def plan(args):
         not root.exists() and not args.output.resolve().is_relative_to(root),
         "fresh root and external plan required",
     )
+    baseline = getattr(args, "baseline", False)
+    pipeline.require(not baseline or (getattr(args, "group", None) is not None and args.budget is None),
+                     "baseline requires a group and no candidate increment budget")
+    pipeline.require(baseline or args.budget is not None, "comparison requires a complete candidate increment budget")
+    supplied_budget = None if baseline else pipeline.read(args.budget)
+    group = getattr(args, "group", None)
+    if group is not None and not baseline:
+        pipeline.require(isinstance(supplied_budget, dict)
+                         and set(supplied_budget) == {"group", "baseline_plan", "limits"},
+                         "group-specific budget envelope required")
     value = {
-        "profile": PRE_RELEASE_PROFILE if getattr(args, "candidate_roots", None) else PROFILE,
+        "profile": GROUP_BASELINE_PROFILE if baseline else GROUP_PROFILE if getattr(args, "group", None) else PRE_RELEASE_PROFILE if getattr(args, "candidate_roots", None) else PROFILE,
         "repo": str(repo),
         "job_root": str(root),
         "codec": str(codec),
@@ -322,7 +445,7 @@ def plan(args):
         "driver_sha256": pipeline.digest(Path(__file__).read_bytes()),
         "foreground_verifier_sha256": art.foreground.verifier_sha256(),
         "identity": static.identity(repo),
-        "budget": budget(pipeline.read(args.budget)),
+        "budget": None if baseline else budget(supplied_budget["limits"] if group is not None else supplied_budget),
         "adapter": args.adapter,
         "accepted": False,
         "promotion_authority": False,
@@ -333,23 +456,31 @@ def plan(args):
         value["candidate_roots"] = roots
         value["numeric_verifiers"] = pipeline.numeric_verifier_inventory()
         value["art_driver_sha256"] = pipeline.digest(Path(art.__file__).read_bytes())
-    value["assets"] = inventory(repo, codec, roots)
+    pipeline.require(group is None or roots is not None, "group comparison requires explicit candidate roots")
+    value["assets"] = inventory(repo, codec, roots, group)
+    if group is not None:
+        value["group"] = group
+        value["group_declaration"] = group_declaration(value["assets"], group)
+    if baseline:
+        value["baseline_max_relative_mad"] = .1
+    elif group is not None:
+        value["baseline_reference"] = group_budget_reference(value, supplied_budget)
     pipeline.require(
         (args.foundation_baseline is None) == (args.foundation_identity is None),
         "foundation root and identity must be paired",
     )
     value["foundation"] = None
     if args.foundation_baseline is not None:
-        baseline = args.foundation_baseline.resolve()
+        baseline_root = args.foundation_baseline.resolve()
         value["foundation"] = {
-            "root": str(baseline),
+            "root": str(baseline_root),
             "identity": pipeline.read(args.foundation_identity),
             "manifest_sha256": pipeline.digest(
-                (baseline / "manifest.json").read_bytes()
+                (baseline_root / "manifest.json").read_bytes()
             ),
         }
-        baseline, manifest = frozen_foundation(value)
-        art.verify_frozen_static(baseline, manifest, value["foundation"]["identity"])
+        baseline_root, manifest = frozen_foundation(value)
+        art.verify_frozen_static(baseline_root, manifest, value["foundation"]["identity"])
     check_inputs(value)
     resources = native.resource_snapshot(repo, require_launcher=True)
     pipeline.require(not resources["failures"], str(resources["failures"]))
@@ -368,7 +499,7 @@ def plan(args):
         "--plan",
         str(args.output.resolve()),
     ]
-    value["commands"] = [command(root, case, args.adapter, pre_release=roots is not None) for case in matrix()]
+    value["commands"] = [command(root, case, args.adapter, pre_release=roots is not None) for case in matrix(baseline=baseline)]
     pipeline.put(args.output, pipeline.canonical(value))
     return value
 
@@ -438,32 +569,47 @@ def verify_case(value, item):
         expected_rtt_quality="high",
     )
     pipeline.require(validation.valid, str(validation.reasons))
+    if value["profile"] == GROUP_PROFILE:
+        reference = value["baseline_reference"]
+        pipeline.require(validation.adapter == reference["adapter"] and validation.window == reference["window"],
+                         "group calibration/comparison environment drift")
     sidecar = native.read_json(run / "data/building_art_static.json")
-    if value["profile"] == PRE_RELEASE_PROFILE:
+    if value["profile"] != PROFILE:
         try:
             from .perf_tool.artifact_readers.building_m6 import validate_pre_release_sidecar
         except ImportError:
             from perf_tool.artifact_readers.building_m6 import validate_pre_release_sidecar
-        observed = validate_pre_release_sidecar(sidecar, case)
+        observed = (validate_group_sidecar(sidecar, case) if grouped(value)
+                    else validate_pre_release_sidecar(sidecar, case))
         pipeline.require(requested.get("BEVY_ASSET_ROOT") == str(Path(value["job_root"]) / "asset-view"),
                          "pre-release view differs")
-        pipeline.require(json.loads(requested.get("HW_BUILDING_M6_CANDIDATES", "null")) == value["assets"]["bindings"],
-                         "pre-release requested identities differ")
+        if grouped(value):
+            pipeline.require("HW_BUILDING_M6_CANDIDATES" not in requested
+                and pipeline.exact_json(json.loads(requested.get(GROUP_ENV, "null")), value["group_declaration"])
+                and pipeline.exact_json(observed["m6"]["group"], value["group_declaration"]),
+                "group requested/frozen manifest declaration differs")
+        else:
+            pipeline.require(GROUP_ENV not in requested
+                and json.loads(requested.get("HW_BUILDING_M6_CANDIDATES", "null")) == value["assets"]["bindings"],
+                "pre-release requested identities differ")
     else:
         observed = validate_sidecar(sidecar, case)
     pipeline.require(
         observed["m6"]["mode"] == mode
-        and observed["m6"]["identities"]
-        == [binding["identity"] for binding in value["assets"]["bindings"]],
+        and pipeline.exact_json(observed["m6"]["identities"],
+             [binding["identity"] for binding in value["assets"]["bindings"]]),
         "paired authority/mode differs",
     )
-    if mode == "candidate":
+    loaded = (observed["m6"]["loaded_identities"] if grouped(value)
+              else observed["m6"]["identities"] if mode == "candidate" else [])
+    loaded_kinds = {identity["kind"] for identity in loaded}
+    if loaded_kinds:
         manifests = {
             manifest["identity"]["kind"]: manifest
             for manifest in value["assets"]["manifests"]
         }
         for row in observed["records"]:
-            if row["kind"] == "Door":
+            if row["kind"] not in loaded_kinds:
                 continue
             expected = projected_parts(manifests[row["kind"]], row)
             if row["kind"] in art.foreground.KINDS:
@@ -529,10 +675,12 @@ def verify_case(value, item):
         "stored validation/environment differs",
     )
     metrics.update(observed["m6"]["resources"])
+    loaded_paths = {record["path"] for manifest in value["assets"]["manifests"]
+                    if manifest["identity"]["kind"] in loaded_kinds for record in manifest["artifacts"]}
     metrics["asset_mesh_accessor_bytes"] = sum(
         record["mesh_accessor_payload_bytes"]
         for path, record in value["assets"]["files"].items()
-        if mode == "candidate" or path.startswith("door_sets/")
+        if path in loaded_paths or path.startswith("door_sets/")
     )
     return {
         "instrumentation": instrument,
@@ -570,6 +718,61 @@ def projected_parts(manifest, row):
     return result
 
 
+def mode_summary(rows, max_relative_mad):
+    pipeline.require(sorted(row["repeat"] for row in rows) == [1, 2, 3], "three distinct repeats required")
+    keys = set(rows[0]["metrics"])
+    pipeline.require(all(set(row["metrics"]) == keys for row in rows), "metric inventory drift")
+    result = {}
+    for metric in rows[0]["metrics"]:
+        values = [row["metrics"][metric] for row in rows]
+        pipeline.require(all(type(n) in (int, float) and math.isfinite(n) and n >= 0 for n in values), "invalid metric")
+        median = statistics.median(values)
+        mad = statistics.median(abs(n - median) for n in values)
+        pipeline.require(mad <= median * max_relative_mad, f"noise budget exceeded: {metric}")
+        result[metric] = {"median": median, "mad": mad}
+    return result
+
+
+def check_completed_subsets(rows, limits):
+    """Fail early on already conclusive real rows; never report a partial pass."""
+    pipeline.require(rows and all(row["adapter"] == rows[0]["adapter"] and row["window"] == rows[0]["window"]
+                                 for row in rows), "Capture/Memory environment drift")
+    keys = [(r["instrumentation"], r["size"], r["repeat"], r["mode"]) for r in rows]
+    pipeline.require(len(set(keys)) == len(keys), "duplicate verified case")
+    binaries = {}
+    for instrument in {r["instrumentation"] for r in rows}:
+        selected = [r for r in rows if r["instrumentation"] == instrument]
+        binaries[instrument] = {r["binary_sha256"] for r in selected}
+        pipeline.require(len(binaries[instrument]) == 1, "same-source pair binary drift")
+        for mode in {r["mode"] for r in selected}:
+            for metric in RESOURCE_KEYS:
+                pipeline.require(len({r["metrics"][metric] for r in selected if r["mode"] == mode}) == 1,
+                                 f"N/4N shared resources did not plateau: {mode}/{metric}")
+        for size in {r["size"] for r in selected}:
+            summaries = {}
+            for mode in {r["mode"] for r in selected if r["size"] == size}:
+                subset = [r for r in selected if r["size"] == size and r["mode"] == mode]
+                pipeline.require(len(subset) <= 3, "too many verified repeats")
+                if len(subset) == 3:
+                    summaries[mode] = mode_summary(subset, .1 if limits is None else limits["max_relative_mad"])
+            if limits is not None and set(summaries) == {"legacy-control", "candidate"}:
+                for metric, after in summaries["candidate"].items():
+                    pipeline.require(after["median"] - summaries["legacy-control"][metric]["median"] <= limits["max_delta"][metric],
+                                     f"M6 budget exceeded: {instrument}/{size}/{metric}")
+    if set(binaries) == {"capture", "memory"}:
+        pipeline.require(binaries["capture"] != binaries["memory"], "Capture/Memory binary not separated")
+
+
+def aggregate_baseline(rows):
+    pipeline.require(sorted((r["instrumentation"], r["size"], r["repeat"], r["mode"]) for r in rows)
+                     == sorted(matrix(baseline=True)), "complete control-only baseline matrix required")
+    check_completed_subsets(rows, None)
+    return [{"instrumentation": instrument, "size": size,
+             "modes": {"legacy-control": mode_summary(
+                 [r for r in rows if r["instrumentation"] == instrument and r["size"] == size], .1)}}
+            for instrument in ("capture", "memory") for size in ("small", "medium")]
+
+
 def aggregate(rows, limits):
     result = []
     pipeline.require(
@@ -602,27 +805,7 @@ def aggregate(rows, limits):
                     for row in selected
                     if row["size"] == size and row["mode"] == mode
                 ]
-                pipeline.require(
-                    sorted(row["repeat"] for row in group) == [1, 2, 3],
-                    "three distinct repeats required",
-                )
-                modes[mode] = {}
-                for metric in group[0]["metrics"]:
-                    values = [row["metrics"][metric] for row in group]
-                    pipeline.require(
-                        all(
-                            type(n) in (int, float) and math.isfinite(n) and n >= 0
-                            for n in values
-                        ),
-                        "invalid metric",
-                    )
-                    median = statistics.median(values)
-                    mad = statistics.median(abs(n - median) for n in values)
-                    pipeline.require(
-                        mad <= median * limits["max_relative_mad"],
-                        f"noise budget exceeded: {metric}",
-                    )
-                    modes[mode][metric] = {"median": median, "mad": mad}
+                modes[mode] = mode_summary(group, limits["max_relative_mad"])
             for metric, after in modes["candidate"].items():
                 pipeline.require(
                     after["median"] - modes["legacy-control"][metric]["median"]
@@ -656,18 +839,19 @@ def verify(plan_path, *, in_progress=False):
         and job["status"] == ("running" if in_progress else "valid"),
         "plan changed or job did not finish",
     )
-    rows = [verify_case(value, case) for case in matrix()]
+    baseline = value["profile"] == GROUP_BASELINE_PROFILE
+    rows = [verify_case(value, case) for case in matrix(baseline=baseline)]
     result = {
         "profile": value["profile"],
         "status": "pass",
-        "scope": "same-source-paused-asset-increment-only",
+        "scope": "same-source-group-control-baseline-only" if baseline else "same-source-paused-group-increment-only" if grouped(value) else "same-source-paused-asset-increment-only",
         "accepted": False,
         "promotion_authority": False,
         "source": value["identity"],
-        "capture_runs": 12,
-        "memory_runs": 12,
+        "capture_runs": 6 if baseline else 12,
+        "memory_runs": 6 if baseline else 12,
         "rows": rows,
-        "aggregate": aggregate(rows, value["budget"]),
+        "aggregate": aggregate_baseline(rows) if baseline else aggregate(rows, value["budget"]),
         "unverified": [
             "separate-source M1-0 cumulative cost",
             "active state/lifecycle",
@@ -675,6 +859,11 @@ def verify(plan_path, *, in_progress=False):
             "release",
         ],
     }
+    if grouped(value):
+        result["group"] = value["group"]
+        result["group_declaration"] = value["group_declaration"]
+    if baseline:
+        result["unverified"].insert(0, "candidate increment and group performance acceptance")
     if value.get("foundation") is not None:
         baseline, manifest = frozen_foundation(value)
         historical = art.verify_frozen_static(
@@ -760,18 +949,23 @@ def run(args):
             "HW_BRIDGE_ACCEPTANCE_PROBE",
             "HW_BUILDING_ASSET_RELEASES",
             "HW_BUILDING_M6_CANDIDATES",
+            GROUP_ENV,
             "HW_BUILDING_ORDINARY_ART_SESSION",
             "HW_BUILDING_PRODUCTION_OBSERVATIONS",
             "HW_NATIVE_UI_ROOT",
         ):
             environment.pop(key, None)
-        pre_release = value["profile"] == PRE_RELEASE_PROFILE
+        pre_release = value["profile"] != PROFILE
         if pre_release:
             prepare_view(value)
-        environment["HW_BUILDING_M6_CANDIDATES" if pre_release else "HW_BUILDING_ASSET_RELEASES"] = json.dumps(
-            value["assets"]["bindings"]
-        )
-        for case in matrix():
+        if grouped(value):
+            environment[GROUP_ENV] = json.dumps(value["group_declaration"])
+        else:
+            environment["HW_BUILDING_M6_CANDIDATES" if pre_release else "HW_BUILDING_ASSET_RELEASES"] = json.dumps(
+                value["assets"]["bindings"]
+            )
+        rows = []
+        for case in matrix(baseline=value["profile"] == GROUP_BASELINE_PROFILE):
             pipeline.require(
                 pipeline.read(args.plan) == value, "plan changed during execution"
             )
@@ -787,7 +981,9 @@ def run(args):
                 state=state,
                 timeout_seconds=3600,
             )
-            verify_case(value, case)
+            rows.append(verify_case(value, case))
+            native.atomic_write_json(root / "verified_rows.json", rows)
+            check_completed_subsets(rows, value["budget"])
         result = verify(args.plan, in_progress=True)
         native.atomic_write_json(root / "result.json", result)
         native.update_state(
@@ -815,9 +1011,13 @@ def main():
     create = sub.add_parser("plan")
     create.add_argument("--repo", type=Path, required=True)
     create.add_argument("--codec", type=Path, required=True)
-    create.add_argument("--budget", type=Path, required=True)
+    create.add_argument("--budget", type=Path)
     create.add_argument("--candidate-roots", type=Path,
-                        help="explicit eight-kind root map; selects separate pre-release scope")
+                        help="explicit candidate root map: eight kinds by default or only the --group targets")
+    create.add_argument("--group", choices=tuple(GROUP_TARGETS),
+                        help="compare only this isolated candidate group against the fixed prior releases")
+    create.add_argument("--baseline", action="store_true",
+                        help="group control calibration only; requires no increment budget and never runs candidate")
     create.add_argument("--adapter", required=True)
     create.add_argument("--job-root", type=Path)
     create.add_argument("--output", type=Path, required=True)
