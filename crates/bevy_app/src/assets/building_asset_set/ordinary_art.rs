@@ -19,15 +19,28 @@ pub(super) const SPA_CANDIDATE_SCOPE: &str = "ordinary-spa-candidate-occupied-v1
 const SPA_RESUMED_SCOPE: &str = "ordinary-spa-candidate-resumed-v1";
 const SPA_LOADED_SCOPE: &str = "ordinary-spa-candidate-load-v1";
 const M5_SCOPE: &str = "ordinary-m5-art-planning-v1";
+const M5_CANDIDATE_SCOPE: &str = "ordinary-m5-candidate-planning-v1";
 const M2_PLANNING_SCOPE: &str = "ordinary-m2-candidate-planning-v1";
 const M2_COMPLETION_SCOPE: &str = "ordinary-m2-candidate-completion-v1";
 
+fn m5_candidate_case(case: &str) -> bool {
+    matches!(
+        case,
+        "m5-sand-candidate-planning"
+            | "m5-bone-candidate-planning"
+            | "m5-parking-candidate-planning"
+            | "m5-lamp-candidate-planning"
+    )
+}
+
 pub(crate) fn m5_kind_for_case(case: &str) -> Option<BuildingAssetKind> {
     match case {
-        "m5-sand-planning" => Some(BuildingAssetKind::SandPile),
-        "m5-bone-planning" => Some(BuildingAssetKind::BonePile),
-        "m5-parking-planning" => Some(BuildingAssetKind::WheelbarrowParking),
-        "m5-lamp-planning" => Some(BuildingAssetKind::OutdoorLamp),
+        "m5-sand-planning" | "m5-sand-candidate-planning" => Some(BuildingAssetKind::SandPile),
+        "m5-bone-planning" | "m5-bone-candidate-planning" => Some(BuildingAssetKind::BonePile),
+        "m5-parking-planning" | "m5-parking-candidate-planning" => {
+            Some(BuildingAssetKind::WheelbarrowParking)
+        }
+        "m5-lamp-planning" | "m5-lamp-candidate-planning" => Some(BuildingAssetKind::OutdoorLamp),
         _ => None,
     }
 }
@@ -81,6 +94,12 @@ fn validate(session: &Session, root: &Path, nonce: &str, case: &str) -> Result<(
         }
         "m5-feedback" => {
             session.identity.authority == BuildingAssetAuthority::ArtPreview
+                && !m5_candidate_case(case)
+                && m5_kind_for_case(case) == Some(session.identity.kind)
+        }
+        "m5-candidate-planning" => {
+            session.identity.authority == BuildingAssetAuthority::IsolatedCandidate
+                && m5_candidate_case(case)
                 && m5_kind_for_case(case) == Some(session.identity.kind)
         }
         "feedback" => {
@@ -136,6 +155,12 @@ fn validate(session: &Session, root: &Path, nonce: &str, case: &str) -> Result<(
 }
 
 pub(super) fn scope(world: &World) -> &'static str {
+    if world
+        .get_resource::<Session>()
+        .is_some_and(|session| session.mode == "m5-candidate-planning")
+    {
+        return M5_CANDIDATE_SCOPE;
+    }
     if m2_persistence_enabled(world) {
         return "ordinary-m2-tank-candidate-persistence-v1";
     }
@@ -311,7 +336,7 @@ pub(super) fn snapshot(world: &mut World) -> Result<Value, String> {
     }
     if matches!(
         session.mode.as_str(),
-        "m5-feedback" | "m2-candidate-planning"
+        "m5-feedback" | "m5-candidate-planning" | "m2-candidate-planning"
     ) {
         return super::ordinary_m5::snapshot(world, &session.identity);
     }
@@ -798,6 +823,62 @@ mod tests {
         assert_eq!(scope(app.world()), SCOPE);
         app.insert_resource(good);
         assert_eq!(scope(app.world()), CANDIDATE_SCOPE);
+    }
+
+    #[test]
+    fn m5_candidates_require_their_own_case_mode_authority_and_scope() {
+        let root = Path::new("/private/session");
+        for case in [
+            "m5-sand-candidate-planning",
+            "m5-bone-candidate-planning",
+            "m5-parking-candidate-planning",
+            "m5-lamp-candidate-planning",
+        ] {
+            let kind = m5_kind_for_case(case).unwrap();
+            let mut input = value();
+            input["mode"] = json!("m5-candidate-planning");
+            input["identity"]["kind"] = json!(kind);
+            input["identity"]["authority"] = json!("isolated_candidate");
+            input["locator"] = json!(format!("manifests/building-{}-v1.buildingset", kind.slug()));
+            let good: Session = serde_json::from_value(input.clone()).unwrap();
+            validate(&good, root, &"b".repeat(32), case).unwrap();
+            let mut preview = good.clone();
+            preview.mode = "m5-feedback".into();
+            preview.identity.authority = BuildingAssetAuthority::ArtPreview;
+            assert!(validate(&preview, root, &"b".repeat(32), case).is_err());
+            assert!(
+                validate(
+                    &preview,
+                    root,
+                    &"b".repeat(32),
+                    &case.replace("-candidate", "")
+                )
+                .is_ok()
+            );
+            let mut app = App::new();
+            app.insert_resource(good.clone());
+            assert_eq!(scope(app.world()), M5_CANDIDATE_SCOPE);
+            assert!(
+                validate(
+                    &good,
+                    root,
+                    &"b".repeat(32),
+                    &case.replace("-candidate", "")
+                )
+                .is_err()
+            );
+            for (path, value) in [
+                ("/mode", json!("m5-feedback")),
+                ("/identity/authority", json!("art_preview")),
+                ("/identity/authority", json!("release_approved")),
+                ("/identity/kind", json!("Bridge")),
+            ] {
+                let mut bad = input.clone();
+                *bad.pointer_mut(path).unwrap() = value;
+                let bad: Session = serde_json::from_value(bad).unwrap();
+                assert!(validate(&bad, root, &"b".repeat(32), case).is_err());
+            }
+        }
     }
 
     #[test]

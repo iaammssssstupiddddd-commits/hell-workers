@@ -310,6 +310,19 @@ an event or seed materials/tasks to obtain evidence. Inspect every image. This i
 not completed lifecycle, pulse evidence when absent, power, vehicle/gathering,
 art/numeric approval, performance, promotion or release acceptance.
 
+For adopted M5 candidates, use the separate `m5-sand-candidate-planning`,
+`m5-bone-candidate-planning`, `m5-parking-candidate-planning` or
+`m5-lamp-candidate-planning` case with `--smoke --input-backend portal-eis`,
+`--m5-art-source <approved-isolated-candidate>` and immutable `--art-codec`.
+These cases require packaged art/numeric provenance and freeze the numeric
+validator inventory and shared art driver hash. The dedicated candidate mode
+and scope reject the old preview case/authority and vice versa. Preserve the
+same real catalog/ghost/single Blueprint/occupied rejection/selection inputs,
+initial Parking inventory and no-completion guards. Inspect every owned PNG.
+This is adopted-candidate planning evidence only, not natural completion,
+power, vehicle use, save/load, performance, promotion or release approval.
+Do not reinterpret old ArtPreview jobs as candidate evidence.
+
 Use `--case rest-area-candidate-lifecycle --smoke --input-backend portal`
 with `--rest-area-art-source <approved-isolated-candidate>` and `--art-codec`
 for adopted RestArea bytes in ordinary natural construction, usage, occupied

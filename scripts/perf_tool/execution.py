@@ -394,6 +394,9 @@ def fixed_environment(args: argparse.Namespace) -> dict[str, str]:
         values["WGPU_ADAPTER_NAME"] = args.adapter
     if getattr(args, "building_m6_mode", None) is not None:
         values["HW_BUILDING_M6_MODE"] = args.building_m6_mode
+        # The game's performance default suppresses adapter INFO. Keep the
+        # actual renderer identity observable regardless of the parent shell.
+        values["RUST_LOG"] = "info,wgpu=error"
     if getattr(args, "building_m6_asset_root", None) is not None:
         if "HW_BUILDING_M6_CANDIDATES" not in os.environ:
             raise ValueError("pre-release view requires explicit candidate bindings")

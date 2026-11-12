@@ -65,7 +65,7 @@ def observation(adopted, phase, time):
 
 
 def campaign(adopted):
-    raw = {"scope": m5.SCOPE, "schema_version": 2, "failure": None, "nonce": "b" * 32, "process_id": 40,
+    raw = {"scope": adopted["scope"], "schema_version": 2, "failure": None, "nonce": "b" * 32, "process_id": 40,
            "accepted": False, "performance_evidence": False, "promotion_authority": False, "samples": [], "events": []}
     entries, inputs = [], []
     select = f"menu:SelectBuild({adopted['identity']['kind']})"
@@ -184,6 +184,34 @@ class M5PlanningTests(unittest.TestCase):
                     with self.subTest(phase=phase), self.assertRaises(RuntimeError):
                         m5.capture_action(driver, key, world=True, contract=adopted, baseline=baseline)
                 self.assertEqual(driver.events, [])
+
+    def test_candidates_use_closed_case_scope_and_provenance_without_preview_aliases(self):
+        for case, kind in m5.CANDIDATE_KINDS.items():
+            adopted = contract(kind)
+            adopted.update(case=case, scope=m5.CANDIDATE_SCOPE,
+                           numeric_verifiers=m5.pipeline.numeric_verifier_inventory(),
+                           art_driver_sha256=m5.pipeline.digest(Path(m5.art.__file__).read_bytes()))
+            adopted["identity"]["authority"] = "isolated_candidate"
+            evidence = campaign(adopted)
+            m5.verify(*evidence, adopted)
+            for value in (m5.SCOPE, "ordinary-rest-candidate-lifecycle-v1"):
+                bad = copy.deepcopy(evidence)
+                bad[0]["scope"] = value
+                with self.assertRaises(RuntimeError):
+                    m5.verify(*bad, adopted)
+            for authority in ("art_preview", "release_approved"):
+                bad = copy.deepcopy(adopted)
+                bad["identity"]["authority"] = authority
+                with self.assertRaises(RuntimeError):
+                    m5.verify(*evidence, bad)
+            bad = copy.deepcopy(adopted)
+            bad["numeric_verifiers"] = {}
+            with self.assertRaises(RuntimeError):
+                m5.verify(*evidence, bad)
+            bad = copy.deepcopy(adopted)
+            bad["art_driver_sha256"] = "0" * 64
+            with self.assertRaises(RuntimeError):
+                m5.verify(*evidence, bad)
 
     def test_four_positive_synthetic_campaigns(self):
         for kind in m5.KINDS.values():

@@ -408,6 +408,7 @@ def verify_case(value, item):
     pipeline.require(
         requested.get("HW_BUILDING_M6_MODE") == mode, "requested M6 mode differs"
     )
+    pipeline.require(requested.get("RUST_LOG") == "info,wgpu=error", "M6 renderer logging differs")
     pipeline.require(
         metadata["case"] == asdict(case) and metadata["returncode"] == 0,
         "run identity differs",

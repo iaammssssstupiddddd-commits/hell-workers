@@ -748,7 +748,7 @@ def verify_root(root):
                         "ordinary adopted Tank companion placement, Wood delivery and natural construction only; no water supply, full lifecycle, performance or release" if manifest.get("case") == tank_completion.CASE else
                         "ordinary adopted Mixer candidate Wood delivery and natural construction with body/rotor consumption only; no refinement, full lifecycle, performance or release" if manifest.get("case") == m2_completion.CASE else
                         "ordinary adopted Mixer candidate planning consumers and one Blueprint input only; no completed lifecycle, art decision, performance or release" if manifest.get("case") in m2.KINDS else
-                        "ordinary M5 ArtPreview catalog, legal/occupied ghost, Blueprint/pulse and same-owner inspection only; no completion, art approval, power, performance or release" if manifest.get("case") in m5.KINDS else
+                        "ordinary M5 exact-case source catalog, legal/occupied ghost, Blueprint/pulse and same-owner inspection only; no completion, new art approval, power, performance or release" if manifest.get("case") in m5.KINDS else
                         "ordinary isolated-candidate SoulSpa load of historical occupied-save input, current remap/reset/reassignment, Normal consumption and observed departure only; no current construction/domain end receipt/performance/release authority" if manifest.get("case") == spa_loaded.CASE else
                         "ordinary isolated-candidate SoulSpa occupied restoration, remapped former-worker reassignment, measured consumption and observed Dream-floor departure; no domain end receipt/performance/release authority" if manifest.get("case") == spa_resumed.CASE else
                         "ordinary isolated-candidate SoulSpa body/four-slot consumers and occupied durable restoration/runtime reset; not resumed assignment/performance/release acceptance" if manifest.get("case") == spa_art.CASE else
@@ -1033,7 +1033,7 @@ def main():
             child.add_argument("--rest-area-art-source", help="explicit RestArea ArtPreview, or approved isolated candidate only in candidate-lifecycle; no new approval")
             child.add_argument("--soul-spa-art-source", help="approved isolated SoulSpa candidate only in its occupied-save case; no new approval")
             child.add_argument("--spa-resume-source", help="verified occupied-save job as immutable historical input in loaded-use only")
-            child.add_argument("--m5-art-source", help="one exact M5 ArtPreview in dedicated ordinary planning case; no approval")
+            child.add_argument("--m5-art-source", help="one exact M5 source in its dedicated preview or adopted-candidate planning case; no approval")
             child.add_argument("--m2-art-source", help="one adopted Mixer isolated candidate in its dedicated ordinary planning case; no release")
             child.add_argument("--art-codec", help="frozen already-built codec for the ArtPreview input")
         if command == "run":

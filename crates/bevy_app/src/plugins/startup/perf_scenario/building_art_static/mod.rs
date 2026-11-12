@@ -105,6 +105,26 @@ pub(crate) struct BuildingArtStaticState {
     art_candidate: bool,
     m6: bool,
     m6_resources: Option<ResourceEvidence>,
+    m6_pending_evidence: Option<Value>,
+    m6_pending_frames: u64,
+}
+
+/// Observe startup without repairing it. Global asset uploads/retirements may
+/// still be settling after the target first becomes visible. Publish M6 ready
+/// only after thirty consecutive identical complete snapshots.
+fn m6_readiness(state: &mut BuildingArtStaticState, evidence: Option<&Value>) -> bool {
+    let Some(evidence) = evidence else {
+        state.m6_pending_evidence = None;
+        state.m6_pending_frames = 0;
+        return false;
+    };
+    if state.m6_pending_evidence.as_ref() == Some(evidence) {
+        state.m6_pending_frames += 1;
+    } else {
+        state.m6_pending_evidence = Some(evidence.clone());
+        state.m6_pending_frames = 1;
+    }
+    state.m6_pending_frames >= 30
 }
 
 #[derive(Clone, PartialEq, Eq, serde::Serialize)]
@@ -233,6 +253,9 @@ pub(crate) fn inspect_building_art_static_system(mut params: InspectParams) {
     }
     match inspect(&params) {
         Ok(None) => {
+            if params.m6.is_some() && params.state.phase == Phase::Seeded {
+                m6_readiness(&mut params.state, None);
+            }
             if params.state.phase == Phase::Ready {
                 fail(
                     &mut params.state,
@@ -242,6 +265,12 @@ pub(crate) fn inspect_building_art_static_system(mut params: InspectParams) {
             }
         }
         Ok(Some(evidence)) => {
+            if params.m6.is_some()
+                && params.state.phase == Phase::Seeded
+                && !m6_readiness(&mut params.state, Some(&evidence))
+            {
+                return;
+            }
             if params
                 .art_session
                 .as_ref()
@@ -262,6 +291,8 @@ pub(crate) fn inspect_building_art_static_system(mut params: InspectParams) {
                 return;
             }
             if params.state.evidence.is_none() {
+                params.state.m6_pending_evidence = None;
+                params.state.m6_pending_frames = 0;
                 params.state.evidence = Some(evidence);
                 params.state.art_candidate = params.art_session.is_some();
                 params.state.m6 = params.m6.is_some();
@@ -815,7 +846,11 @@ fn inspect(params: &InspectParams) -> Result<Option<Value>, String> {
     if let Some(initial) = params.state.m6_resources.as_ref()
         && resources.as_ref() != Some(initial)
     {
-        return Err("M6 resident resource inventory changed after readiness".into());
+        return Err(format!(
+            "M6 resident resource inventory changed after readiness: initial={} observed={}",
+            json!(initial),
+            json!(resources)
+        ));
     }
     let Some(records) = records else {
         return Ok(Some(Value::Null));
@@ -912,6 +947,30 @@ impl BuildingArtStaticState {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn m6_readiness_requires_thirty_consecutive_complete_identical_observations() {
+        let mut state = BuildingArtStaticState::default();
+        let initial = json!({"m6": {"resources": {"resident_image_count": 10}}});
+        let settled = json!({"m6": {"resources": {"resident_image_count": 11}}});
+        for _ in 0..29 {
+            assert!(!m6_readiness(&mut state, Some(&initial)));
+        }
+        assert!(m6_readiness(&mut state, Some(&initial)));
+        assert!(!m6_readiness(&mut state, Some(&settled)));
+        assert_eq!(state.m6_pending_frames, 1);
+        for _ in 0..28 {
+            assert!(!m6_readiness(&mut state, Some(&settled)));
+        }
+        assert!(m6_readiness(&mut state, Some(&settled)));
+        assert!(!m6_readiness(&mut state, None));
+        assert_eq!(state.m6_pending_frames, 0);
+        assert!(state.m6_pending_evidence.is_none());
+        assert!(!m6_readiness(&mut state, Some(&settled)));
+        assert_eq!(state.m6_pending_frames, 1);
+        assert!(state.evidence.is_none());
+        assert_eq!(state.phase, Phase::Inactive);
+    }
     use hw_visual::blueprint::{BuildingBounceEffect, CompletionText};
     use hw_visual::floating_text::FloatingText;
 

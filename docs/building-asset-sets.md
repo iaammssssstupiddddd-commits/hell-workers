@@ -570,6 +570,17 @@ pulseは既存writerがBuilding状態で作った場合だけ存在し、それ�
 このfeedbackはaccepted/performance/promotion=falseであり、完成/採取/車両入出庫/通電/保存、
 世代切替/cleanup、独立art/numeric decision、正式candidate/releaseや通常起動への公開を証明しない。
 
+採用済み4候補には別の`m5-sand-candidate-planning`、`m5-bone-candidate-planning`、
+`m5-parking-candidate-planning`、`m5-lamp-candidate-planning`を使う。
+mode `m5-candidate-planning` / scope `ordinary-m5-candidate-planning-v1`だけが
+IsolatedCandidateを許可し、旧ArtPreviewの4case/mode/scopeと相互に代用できない。
+packaged art/numeric approval・原本・全依存を再照合し、numeric validator inventoryと
+共有art driverの実SHAをsource contractへ固定する。旧previewへこのmetadataを持ち込めない。
+通常生成worldのcatalog/ghost/実Blueprint/占有拒否/同owner inspectionと既存Parking保持を
+同じ入力guardで確認する。新完成ownerの出現は引き続き拒否する。
+これは候補の通常入力・表示経路の技術受入だけで、自然施工以降のlifecycle、通電/入出庫、
+性能、正式promotion/install/releaseを成功とする入口ではない。fresh実機結果は未確定。
+
 #### 採否前のRestArea ordinary art feedback
 
 通常UI helperの`plan --case rest-area-lifecycle --smoke --input-backend portal`へ

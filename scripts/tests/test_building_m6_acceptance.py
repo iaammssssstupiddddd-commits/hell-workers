@@ -160,10 +160,11 @@ class M6Tests(unittest.TestCase):
         with patch.dict(os.environ, {}, clear=True):
             with self.assertRaises(ValueError):
                 fixed_environment(args)
-        with patch.dict(os.environ, {"HW_BUILDING_M6_CANDIDATES": "exact-bindings"}):
+        with patch.dict(os.environ, {"HW_BUILDING_M6_CANDIDATES": "exact-bindings", "RUST_LOG": "error"}):
             env = fixed_environment(args)
             self.assertEqual(env["BEVY_ASSET_ROOT"], "/job/asset-view")
             self.assertEqual(env["HW_BUILDING_M6_CANDIDATES"], "exact-bindings")
+            self.assertEqual(env["RUST_LOG"], "info,wgpu=error")
         args.building_m6_mode = None
         with self.assertRaises(ValueError):
             validate_arguments(args)

@@ -149,6 +149,11 @@ IsolatedCandidateを受理しない。part poseはRust f32へ厳密投影し、T
 partial/full Yを論理water数から選ぶ。小数誤差の一律許容やFullとPartialの同一視はしない。
 
 Capture→Memory、各N/4N×3隣接pair（中間repeatは逆順）で計24 run、warmup30秒/measure60秒。
+M6ではtarget/資源の完全snapshotが30frame連続で一致してからworkloadをreadyにする。
+準備中の欠損や変化では安定回数を0/1から数え直すだけで、worldや資源を修復しない。
+ready後の資源変化は従来どおり失敗とし、before/after値を診断へ残す。
+専用runnerは`RUST_LOG=info,wgpu=error`を要求/記録し、performance既定filterに隠れる
+実AdapterInfoを観測可能にする。親shellのlog抑制は引き継がない。
 `scripts/perf_tool/contracts/building_pre_release_budget_v1.json` は測定前の増分上限で、
 p95 +2ms、p99 +10ms、native live +64MiB、RSS +128MiB、mesh accessor +128KiB、
 image CPU +16MiB、mesh +7、image +22、material +32/shallow +64KiB、反復MADはmedianの10%以内。
@@ -160,3 +165,6 @@ GPU配分量のbudgetではない。試験結果を見て上限を緩和せず�
 どちらのstatic比較もaccepted=false/promotion_authority=false。通常world lifecycle、稼働性能、
 独立アート採否、promotion/install/rollback、通常起動への正式導入は別途完了させる。
 2026-11-12時点で新比較の実機結果は未確定。
+初回v1はCLIのrepo/root引継ぎ欠損、v2は比較元の起動直後の資源変化でinvalid。
+v2は正常な計測window/summaryとAdapterInfoがなく、有効な性能結果は0回のままである。
+失敗を再送・成功化せず、入口と準備安定性・ログ契約を修正してfresh batchへ進む。

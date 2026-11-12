@@ -58,6 +58,7 @@ Door g7は別loaderで維持する。現loader/presentation候補許可は単一
 
 - [ ] 静止比較の結果・未検証範囲を恒久仕様へ同期。
 - [ ] 通常worldの残lifecycle/性能とguard付きpromotion/install/rollback、通常起動導入を継続。
+- [ ] 旧preview入口と分離したM5採用候補planning4caseを同じ検証subjectへ準備し、fresh実機で確認。
 
 ## 6. リスクと対策
 
@@ -93,6 +94,19 @@ profiling Clippy0と独立reviewが完了した。正式Capture buildから687,1
 CLIが`native.activity_locked`へrepo/job_rootを渡していない不備で、測定は0回だった。
 invalid封印/finalize・root不存在を記録済み。working art CLIと同じplanからの引継ぎを追加し、
 入口回帰と変更別gate・独立review後にfresh batchへ進む。旧失敗を再送・成功化しない。
+入口修正`15d35daf`のv2はゲーム起動まで進んだが、最初のcontrolで常駐資源変化を検出してexit1。
+初回snapshotでReadyを公開する実装であり、AdapterInfoも既定performance filterに抑制されていた。
+有効計測0回・invalid封印/finalize、jobは新しい起動安定性比較だけのdiagnostic用途に保持した。
+次はM6の30連続安定観測→Readyと明示ログ、after-ready変化の値付き拒否を実装して再検証する。
+再ビルドをまとめるため、独立draft reviewと合成10testを終えたM5採用候補planning4caseもこの段階へ反映する。
+旧preview/generation/入力/完成拒否は維持し、適用後のRust/Python・Help/Skill/docs・固定reviewを新たに実施する。
+配布Skill正本の同期後、full gateの依存監査で既存rustix1.1.3への
+[RUSTSEC-2026-0486](https://rustsec.org/advisories/RUSTSEC-2026-0486.html)を検出した。
+公開修正版1.1.6へ限定更新し、同版の必須制約`libc ^0.2.182` / `linux-raw-sys ^0.12`に伴って
+lockfileはlibc0.2.183・linux-raw-sys0.12.1も更新する。変更package versionはこの3件だけで、
+Cargoが互換range内のWindows依存解決も更新した。denyのignore・監査条件は変更しない。
+同じ最終sourceで依存監査、全必要品質群と実機を再検証する。旧codecは形式検査専用の明示identityとして保持し、
+新subjectのゲームbinary/性能証拠へ流用しない。
 既存のproduction runnerはnormal-development admission・ordinary-world capture/ACK・host instrument producerが
 未実装と宣言する。旧Orcaや架空receiptで補完しない。全体受入は継続中。
 

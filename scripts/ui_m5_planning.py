@@ -11,8 +11,24 @@ from scripts import building_art_acceptance as art
 
 native, pipeline = art.native, art.pipeline
 SCOPE = "ordinary-m5-art-planning-v1"
-KINDS = {"m5-sand-planning": "SandPile", "m5-bone-planning": "BonePile",
+PREVIEW_KINDS = {"m5-sand-planning": "SandPile", "m5-bone-planning": "BonePile",
          "m5-parking-planning": "WheelbarrowParking", "m5-lamp-planning": "OutdoorLamp"}
+CANDIDATE_SCOPE = "ordinary-m5-candidate-planning-v1"
+CANDIDATE_KINDS = {case.replace("-planning", "-candidate-planning"): kind
+                   for case, kind in PREVIEW_KINDS.items()}
+KINDS = {**PREVIEW_KINDS, **CANDIDATE_KINDS}
+
+
+def case_scope(case):
+    native.require(case in KINDS, "M5 dedicated case required")
+    return CANDIDATE_SCOPE if case in CANDIDATE_KINDS else SCOPE
+
+
+def case_authority(case):
+    case_scope(case)
+    return "isolated_candidate" if case in CANDIDATE_KINDS else "art_preview"
+
+
 CHECKPOINTS = tuple("m5-" + phase for phase in ("empty", "catalog", "legal", "placed", "illegal", "selected"))
 
 
@@ -38,14 +54,18 @@ def source_contract(repo, source, codec, case):
     kind = KINDS[case]
     pipeline.verify_set(source, kind, codec)
     manifest, text, receipt = pipeline.load_set(source, kind, codec)
-    native.require(manifest["identity"]["authority"] == "art_preview" and receipt is None,
-                   "M5 planning admits ArtPreview only, not candidate or release")
-    return {"scope": SCOPE, "case": case, "source_root": str(source), "codec": str(codec),
+    native.require(manifest["identity"]["authority"] == case_authority(case) and receipt is None,
+                   "M5 planning authority must match its explicit case")
+    result = {"scope": case_scope(case), "case": case, "source_root": str(source), "codec": str(codec),
             "codec_sha256": pipeline.digest(codec.read_bytes()), "identity": manifest["identity"],
             "manifest_sha256": pipeline.digest(text.encode()), "artifacts": manifest["artifacts"],
             "world": manifest["world_preview"], "catalog": manifest["catalog_preview"],
             "base_assets_sha256": art.asset_view_fingerprint(repo),
             "verifier_sha256": pipeline.digest(Path(__file__).read_bytes())}
+    if case in CANDIDATE_KINDS:
+        result["numeric_verifiers"] = pipeline.numeric_verifier_inventory()
+        result["art_driver_sha256"] = pipeline.digest(Path(art.__file__).read_bytes())
+    return result
 
 
 def planned_contract(args, repo):
@@ -97,7 +117,10 @@ def check_view(repo, view, contract):
 
 
 def session_setting(directory, nonce, contract):
-    return json.dumps({"mode": "m5-feedback", "identity": contract["identity"],
+    case = contract["case"]
+    native.require(contract["scope"] == case_scope(case)
+                   and contract["identity"]["authority"] == case_authority(case), "M5 session scope differs")
+    return json.dumps({"mode": "m5-candidate-planning" if case in CANDIDATE_KINDS else "m5-feedback", "identity": contract["identity"],
                        "locator": pipeline.locator(contract["identity"]["kind"]), "nonce": nonce,
                        "output": str(directory / "production-cancellation.json")})
 
@@ -334,10 +357,17 @@ def check_transport(inputs, client, epoch):
 
 def verify(raw, entries, client, inputs, contract):
     from scripts import building_production_lifecycle as lifecycle
-    native.require(contract.get("scope") == SCOPE and contract.get("case") in KINDS
-                   and contract["identity"].get("kind") == KINDS[contract["case"]]
-                   and contract["identity"].get("authority") == "art_preview", "M5 admission differs")
-    native.require(raw.get("scope") == SCOPE and raw.get("schema_version") == 2 and raw.get("failure") is None
+    case = contract.get("case")
+    native.require(case in KINDS and contract.get("scope") == case_scope(case)
+                   and contract["identity"].get("kind") == KINDS[case]
+                   and contract["identity"].get("authority") == case_authority(case), "M5 admission differs")
+    if case in CANDIDATE_KINDS:
+        native.require(contract.get("numeric_verifiers") == pipeline.numeric_verifier_inventory()
+                       and contract.get("art_driver_sha256") == pipeline.digest(Path(art.__file__).read_bytes()),
+                       "M5 candidate numeric verifiers changed")
+    else:
+        native.require("numeric_verifiers" not in contract and "art_driver_sha256" not in contract, "M5 candidate metadata in preview case")
+    native.require(raw.get("scope") == case_scope(case) and raw.get("schema_version") == 2 and raw.get("failure") is None
                    and raw.get("nonce") == client["nonce"] and raw.get("process_id") == client["pid"]
                    and all(raw.get(key) is False for key in ("accepted", "performance_evidence", "promotion_authority")), "M5 raw owner/scope/authority differs")
     samples = raw.get("samples", [])
