@@ -20,6 +20,13 @@ else:
 art, pipeline, native, m2 = shared.art, shared.pipeline, shared.native, shared.m2
 PROFILE = "building-m2-candidate-storyboard-v1"
 SCOPE = "m2-candidate-seeded-storyboard-only"
+MOVE_ACTORS = "fixture-move-without-startup-familiars-v1"
+
+
+def actor_scope(leg):
+    return MOVE_ACTORS if leg == "move-success" else "ordinary-startup-actors"
+
+
 CASES = {"Tank": {"move-success"}, "MudMixer": {"refining", "save-load", "move-success"}}
 
 
@@ -41,6 +48,7 @@ def check_plan(value):
         and value["identity"]["authority"] == "isolated_candidate"
         and value["accepted"] is False and value["promotion_authority"] is False
         and value["input_scope"] == "seeded-domain-operations"
+        and value["actor_scope"] == actor_scope(value["leg"])
         and value["clock_scope"] == "candidate-motion-quarter-speed-save-hold-v3"
         and type(value["duration_seconds"]) is int and 35 <= value["duration_seconds"] <= 170,
         "candidate storyboard contract differs")
@@ -90,7 +98,7 @@ def plan(args):
     inputs = args.output.resolve().with_suffix(".inputs.json")
     pipeline.put(inputs, pipeline.canonical({"repo": str(repo), "kinds": {args.kind: spec}}))
     value = {"schema_version": 1, "status": "ready", "profile": PROFILE, "scope": SCOPE,
-        "input_scope": "seeded-domain-operations", "clock_scope": "candidate-motion-quarter-speed-save-hold-v3", "repo": str(repo), "job_root": str(root),
+        "input_scope": "seeded-domain-operations", "actor_scope": actor_scope(args.leg), "clock_scope": "candidate-motion-quarter-speed-save-hold-v3", "repo": str(repo), "job_root": str(root),
         "subject": art.subject(repo), "runtime_plan": str(inputs), "runtime_plan_sha256": executable.digest(inputs),
         "kind": args.kind, "identity": manifest["identity"], "leg": args.leg,
         "codec": str(codec), "codec_sha256": executable.digest(codec), "parts": manifest["parts"],
@@ -251,6 +259,8 @@ def check_trace(trace, value, nonce, pid):
                 and all(type(n) in (int, float) and math.isfinite(n) for n in rotation)
                 and abs(sum(n*n for n in rotation)-1) < 0.001, "candidate quaternion invalid")
     check_motion(rows, value)
+    if value["leg"] == "move-success":
+        check_move_actors(trace["samples"])
     if value["kind"] == "Tank" and value["leg"] == "move-success":
         first, final = rows[0][0], rows[-1][0]
         owners = [next(owner["pose"]["translation"] for owner in sample["owners"]
@@ -261,6 +271,38 @@ def check_trace(trace, value, nonce, pid):
         pipeline.require(len(initial) == 2 and initial.keys() == moved.keys()
             and all(near(moved[key], [x+d for x, d in zip(position, delta, strict=True)])
                     for key, position in initial.items()), "Tank linked companions did not follow the same move")
+
+
+def check_move_actors(samples):
+    observed = []
+    assigned = False
+    for sample in samples:
+        actors = sample.get("storyboard_move_actors")
+        pipeline.require(isinstance(actors, dict) and set(actors) == {"familiars", "workers"},
+                         "candidate move actor inventory missing")
+        families, workers = actors["familiars"], actors["workers"]
+        pipeline.require(isinstance(families, list) and len(families) <= 1
+            and isinstance(workers, list) and len(workers) <= 1,
+            "candidate move background Familiar/worker differs")
+        pipeline.require(not workers or len(families) == 1, "candidate move worker has no fixture Familiar")
+        if families:
+            pipeline.require(families[0]["name"] == "M2 lifecycle Familiar", "foreign move Familiar")
+            observed.append((families[0]["entity"], tuple(worker["entity"] for worker in workers)))
+        for worker in workers:
+            pipeline.require(worker["commander"] == families[0]["entity"], "foreign move commander")
+            task = worker.get("move_task")
+            if task is not None:
+                identity = worker.get("identity") or {}
+                pipeline.require(task["building"] == sample["fixture_owner"]
+                    and worker.get("working_on") == identity.get("target") == task["assignment"]
+                    and identity.get("assignment") == task["assignment"]
+                    and identity.get("work_type") == "Move"
+                    and task["manager"] == families[0]["entity"], "candidate move assignment ownership differs")
+                assigned = True
+    pipeline.require(samples[0]["storyboard_move_actors"] == {"familiars": [], "workers": []}
+        and assigned and observed and len(set(observed)) == 1 and len(observed[-1][1]) == 1
+        and len(samples[-1]["storyboard_move_actors"]["workers"]) == 1,
+        "candidate move did not use one stable fixture Familiar/worker")
 
 
 def check_capture_interval(samples, shot):
@@ -338,7 +380,11 @@ def check_binary(result, root, value):
 
 
 def probe_environment(value):
-    return {"HW_M2_CANDIDATE_STORYBOARD": "1"}
+    result = {"HW_M2_CANDIDATE_STORYBOARD": "1"}
+    if value["leg"] == "move-success":
+        pipeline.require(value["actor_scope"] == MOVE_ACTORS, "candidate move actor scope differs")
+        result["HW_SPAWN_FAMILIARS"] = "0"
+    return result
 
 
 def runtime_mode(value):

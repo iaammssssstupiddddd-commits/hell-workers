@@ -169,6 +169,55 @@ class CandidateMotionTests(unittest.TestCase):
             candidate.check_state_checkpoints(shots[:3] + shots[4:], self.value | {"identity": {"kind": "MudMixer"}})
 
 
+class CandidateMoveActorTests(unittest.TestCase):
+    def rows(self):
+        family = {"entity": "familiar", "name": "M2 lifecycle Familiar"}
+        worker = {"entity": "worker", "commander": "familiar", "move_task": None,
+                  "working_on": None, "identity": None}
+        task = worker | {"move_task": {"assignment": "order", "building": "owner", "manager": "familiar"},
+                         "working_on": "order", "identity": {"assignment": "order", "target": "order", "work_type": "Move"}}
+        return [{"fixture_owner": "owner", "storyboard_move_actors": {"familiars": [], "workers": []}},
+                {"fixture_owner": "owner", "storyboard_move_actors": {"familiars": [family], "workers": [task]}},
+                {"fixture_owner": "owner", "storyboard_move_actors": {"familiars": [family], "workers": [worker]}}]
+
+    def test_exact_move_fixture_has_no_startup_familiars_and_one_owned_assignment(self):
+        candidate.check_move_actors(self.rows())
+        self.assertEqual(candidate.probe_environment({"leg": "move-success", "actor_scope": candidate.MOVE_ACTORS}),
+                         {"HW_M2_CANDIDATE_STORYBOARD": "1", "HW_SPAWN_FAMILIARS": "0"})
+        for leg in ("refining", "save-load"):
+            self.assertEqual(candidate.probe_environment({"leg": leg}), {"HW_M2_CANDIDATE_STORYBOARD": "1"})
+        with self.assertRaises(ValueError):
+            candidate.probe_environment({"leg": "move-success", "actor_scope": "ordinary-startup-actors"})
+
+    def test_foreign_actor_assignment_and_unobserved_move_are_rejected(self):
+        for change in ("startup", "familiar", "worker", "commander", "manager", "target", "assignment", "owner", "building-as-target", "no-move"):
+            rows = copy.deepcopy(self.rows())
+            actors = rows[1]["storyboard_move_actors"]
+            worker = actors["workers"][0]
+            if change == "startup":
+                rows[0]["storyboard_move_actors"] = copy.deepcopy(actors)
+            elif change == "familiar":
+                actors["familiars"][0]["name"] = "foreign"
+            elif change == "worker":
+                rows[-1]["storyboard_move_actors"]["workers"][0]["entity"] = "replacement"
+            elif change == "commander":
+                worker["commander"] = "foreign"
+            elif change == "manager":
+                worker["move_task"]["manager"] = "foreign"
+            elif change == "target":
+                worker["identity"]["target"] = "foreign"
+            elif change == "assignment":
+                worker["identity"]["assignment"] = "foreign"
+            elif change == "owner":
+                worker["move_task"]["building"] = "foreign"
+            elif change == "building-as-target":
+                worker["working_on"] = worker["identity"]["target"] = "owner"
+            else:
+                worker["move_task"] = None
+            with self.subTest(change=change), self.assertRaises(ValueError):
+                candidate.check_move_actors(rows)
+
+
 class CandidateBoundaryTests(unittest.TestCase):
     def test_legacy_scope_cannot_accept_candidate_or_unknown_scope(self):
         value = {"identity": {"authority": "isolated_candidate"}}

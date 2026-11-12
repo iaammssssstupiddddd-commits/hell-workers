@@ -169,6 +169,50 @@ fn push_capped<T>(values: &mut Vec<T>, value: T) -> Result<(), String> {
     Ok(())
 }
 
+fn candidate_move_actors(world: &mut World) -> Result<Value, String> {
+    use hw_core::familiar::Familiar;
+    use hw_core::relationships::{CommandedBy, ManagedBy, WorkingOn};
+    use hw_jobs::{ActiveTaskIdentity, AssignedTask};
+    let familiars = world
+        .query::<(Entity, &Familiar)>()
+        .iter(world)
+        .map(|(entity, familiar)| (entity, familiar.name.clone()))
+        .take(2)
+        .collect::<Vec<_>>();
+    if familiars.len() > 1 {
+        return Err("candidate move has background Familiars".into());
+    }
+    let mut workers = Vec::new();
+    for (entity, commander, task, identity, working) in world
+        .query::<(
+            Entity,
+            &CommandedBy,
+            Option<&AssignedTask>,
+            Option<&ActiveTaskIdentity>,
+            Option<&WorkingOn>,
+        )>()
+        .iter(world)
+    {
+        let move_task = match task {
+            Some(AssignedTask::MovePlant(data)) => Some(json!({
+                "assignment": format!("{:?}", data.task_entity), "building": format!("{:?}", data.building),
+                "manager": world.get::<ManagedBy>(data.task_entity).map(|manager| format!("{:?}", manager.0))
+            })),
+            _ => None,
+        };
+        workers.push(json!({"entity": format!("{entity:?}"), "commander": format!("{:?}", commander.0),
+            "move_task": move_task, "working_on": working.map(|working| format!("{:?}", working.0)),
+            "identity": identity.map(|identity| json!({"assignment": format!("{:?}", identity.assignment_entity),
+                "target": format!("{:?}", identity.current_target_entity), "work_type": format!("{:?}", identity.current_work_type)}))}));
+        if workers.len() > 1 {
+            return Err("candidate move has multiple fixture workers".into());
+        }
+    }
+    Ok(
+        json!({"familiars": familiars.iter().map(|(entity, name)| json!({"entity": format!("{entity:?}"), "name": name})).collect::<Vec<_>>(), "workers": workers}),
+    )
+}
+
 fn snapshot(world: &mut World) -> Result<Value, String> {
     let fixture_owner = world
         .get_resource::<super::m2_fixture::Fixture>()
@@ -428,14 +472,17 @@ fn observe(world: &mut World) {
     } else if trace.samples.len() >= SAMPLE_CAP {
         Err("M2 sample cap reached; use separate bounded lifecycle legs".to_string())
     } else {
-        snapshot(world).map(|mut sample| {
+        snapshot(world).and_then(|mut sample| {
             if world.resource::<Trace>().scope == CANDIDATE_SCOPE {
                 sample["storyboard_stage"] =
                     json!(world.resource::<super::m2_fixture::Fixture>().stage);
                 sample["storyboard_clock"] =
                     json!(world.resource::<Time<Virtual>>().relative_speed());
+                if world.resource::<super::m2_lifecycle::Lifecycle>().leg == "move-success" {
+                    sample["storyboard_move_actors"] = candidate_move_actors(world)?;
+                }
             }
-            sample
+            Ok(sample)
         })
     };
     let failure = result.as_ref().err().cloned();
