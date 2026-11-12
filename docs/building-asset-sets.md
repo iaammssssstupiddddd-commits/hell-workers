@@ -1219,3 +1219,9 @@ report None、算術不整合は明示unavailableで、値を0やRSS推定へ置
 backendのlockとreport一覧生成の観測費用を伴い、全allocation名をrawへ出さない。
 既存`gpu_measured_bytes:null`/`performance_evidence:false`、正式性能oracleのsource受付と
 art/release権限は維持する。fresh nativeによる接続確認と通常worldの正式計測producerは別工程である。
+
+`ea3c8077`の採用候補Lamp planning接続試験では31sample全件でavailableを確認した。
+最終sampleはallocated 771,944,984B / reserved 1,543,503,872B、allocation 521件 / block 12件。
+Intel Arc MTL/Mesa26.2.6/Vulkan/X11、6画像/21入力の原本を登録verifierと独立read-only reviewで
+照合し、pass封印/finalize済み。既存`gpu_measured_bytes`は全件null、`performance_evidence`はfalseを維持した。
+これはdevice allocator DTOの実接続確認だけで、peak・全GPUメモリ・正式性能budgetへの合格ではない。

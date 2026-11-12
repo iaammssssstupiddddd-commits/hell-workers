@@ -467,11 +467,11 @@ def verify_case(value, item):
                 continue
             expected = projected_parts(manifests[row["kind"]], row)
             if row["kind"] in art.foreground.KINDS:
-                manifest = manifests[row["kind"]]
-                preview = manifest["world_preview"]
+                asset_manifest = manifests[row["kind"]]
+                preview = asset_manifest["world_preview"]
                 role = "world_on" if row["kind"] == "OutdoorLamp" and row["ordinal"] % 4 >= 2 else preview["image_role"]
-                art.foreground.validate_record(row, manifest["identity"], preview,
-                    {record["role"]: record for record in manifest["artifacts"]}, role)
+                art.foreground.validate_record(row, asset_manifest["identity"], preview,
+                    {record["role"]: record for record in asset_manifest["artifacts"]}, role)
             for actual, part in zip(row["parts"], expected, strict=True):
                 pipeline.require(
                     all(

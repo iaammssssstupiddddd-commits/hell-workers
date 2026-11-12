@@ -7,6 +7,9 @@ import unittest
 import tempfile
 import os
 import struct
+import importlib
+from dataclasses import asdict
+from types import SimpleNamespace
 from unittest.mock import patch
 from contextlib import redirect_stdout
 from pathlib import Path
@@ -108,6 +111,52 @@ def reseal(value):
 
 
 class M6Tests(unittest.TestCase):
+    def test_candidate_foreground_keeps_session_binary_identity(self):
+        """Exercise the whole case verifier after an M5 asset manifest is inspected."""
+        case = Case("building-art-static", "small", "gpu", 20260920, 15, 0)
+        observed = sidecar(candidate=True)["initial"]
+        row = next(r for r in observed["records"] if r["kind"] == "OutdoorLamp")
+        observed["records"] = [row]
+        asset = {"identity": row["foreground"]["identity"], "parts": [],
+                 "world_preview": row["foreground"]["descriptor"],
+                 "artifacts": [row["foreground"]["artifact"]]}
+        frozen = {"subject_commit": "a" * 40, "source_fingerprint": "b" * 64}
+        session_manifest = {"status": "valid", "git": {"commit": frozen["subject_commit"], "dirty_paths": []},
+                            "source": {"fingerprint_start": frozen["source_fingerprint"],
+                                       "fingerprint_end": frozen["source_fingerprint"], "unchanged": True},
+                            "binary": {"instrumentation": "capture", "sha256": "c" * 64}}
+        validation = SimpleNamespace(valid=True, reasons=[], summary={"samples": 1},
+                                     adapter={"name": "synthetic"}, window={}, to_json=lambda: {})
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            session = root / "capture-small-1-candidate"
+            run = session / "cases" / case.identifier / "run-001"
+            run.mkdir(parents=True)
+            value = {"job_root": str(root), "profile": m6.PRE_RELEASE_PROFILE, "identity": frozen,
+                     "adapter": "synthetic", "assets": {"bindings": [{"identity": asset["identity"]}],
+                     "manifests": [asset], "files": {}}}
+            observed["m6"]["identities"] = [asset["identity"]]
+            requested = {"HW_BUILDING_M6_MODE": "candidate", "RUST_LOG": "info,wgpu=error",
+                         "BEVY_ASSET_ROOT": str(root / "asset-view"),
+                         "HW_BUILDING_M6_CANDIDATES": m6.json.dumps(value["assets"]["bindings"])}
+            payloads = {"manifest.json": session_manifest,
+                        "matrix.json": {"repeat": 1, "preflight_runs": 0, "warmup_secs": 30.,
+                                        "measure_secs": 60., "sizes": ["small"], "renders": ["gpu"]},
+                        "run-metadata.json": {"case": asdict(case), "returncode": 0,
+                                              "actual_adapter": validation.adapter, "actual_window": {},
+                                              "runtime_data_cleaned": True},
+                        "requested-environment.json": requested,
+                        "building_art_static.json": {"stable_frames": 1}, "validation.json": {}}
+            with patch.object(m6.native, "read_json", side_effect=lambda p: payloads[p.name]), \
+                 patch.object(m6, "validate_run", return_value=validation), \
+                 patch.object(importlib.import_module("scripts.perf_tool.artifact_readers.building_m6"),
+                              "validate_pre_release_sidecar", return_value=observed), \
+                 patch.object(m6, "read_frames", return_value=([1], [])), \
+                 patch.object(m6, "frame_summary", return_value={"p95_ms": 1., "p99_ms": 2.}), \
+                 patch.object(m6.static, "session_digest", return_value="d" * 64):
+                result = m6.verify_case(value, ("capture", "small", 1, "candidate"))
+            self.assertEqual(result["binary_sha256"], session_manifest["binary"]["sha256"])
+
     def test_foreground_dependency_is_frozen_and_missing_binding_is_rejected(self):
         value = {"foreground_verifier_sha256": m6.art.foreground.verifier_sha256()}
         m6.check_foreground_verifier(value)

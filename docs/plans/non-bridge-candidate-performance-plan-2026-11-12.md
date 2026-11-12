@@ -62,17 +62,17 @@ Door g7は別loaderで維持する。現loader/presentation候補許可は単一
 
 ### M4: 実測で判明したforeground検証と通常world観測基盤
 
-- [ ] M6のM5 owner/foreground既知DTOをexact key・identity・artifact・画像・親/TRS・layer・可視性まで独立検証する。
+- [x] M6のM5 owner/foreground既知DTOをexact key・identity・artifact・画像・親/TRS・layer・可視性まで独立検証する。
   既存galleryの4件/Lamp ordinal契約を保持し、1record検証を共通化する。
   M6では各kindのcopies件とordinal全域、Lamp ordinal%4の役割を要求し、validatorのhashもplanへ固定する。
-- [ ] M6 candidateのM5をSmall16/Medium64件の有界typed snapshotで毎frame照合する。
+- [x] M6 candidateのM5をSmall16/Medium64件の有界typed snapshotで毎frame照合する。
   JSON化は初期/Flushの区間外に置き、実最終観測からfinalを作る。初期cloneをfinalの代用にしない。
   candidate側の追加観測費用は増分に含む保守的比較と明記し、fresh pairで再測定する。
-- [ ] 未準備/初期後の画像・owner・親・pose・layer drift、偽final一致、未知key、欠損/重複、Medium Lamp役割を拒否する。
-- [ ] 通常worldのGPU観測をprofiling専用の別DTOへ追加し、device allocatorの瞬時allocated/reservedと件数・adapter/driverを記録する。
+- [x] 未準備/初期後の画像・owner・親・pose・layer drift、偽final一致、未知key、欠損/重複、Medium Lamp役割を拒否する。
+- [x] 通常worldのGPU観測をprofiling専用の別DTOへ追加し、device allocatorの瞬時allocated/reservedと件数・adapter/driverを記録する。
   Bevy0.19/wgpu29のsafe APIだけを使い、欠損/非Vulkan/None/算術不整合は明示unavailableとする。
   既存gpu_measured_bytes:null、performance_evidence:false、正式性能oracleとrelease権限は変更しない。
-- [ ] 原本API照合、Help実レビュー、変更別検証/check/Clippy、独立exact review後にcommitし、fresh nativeで接続を確認する。
+- [x] 原本API照合、Help実レビュー、変更別検証/check/Clippy、独立exact review後にcommitし、fresh nativeで接続を確認する。
 
 ## 6. リスクと対策
 
@@ -134,6 +134,15 @@ catalog/ghost/Blueprint/選択だけの限定証拠で、自然完成・利用�
 旧失敗の再封印や受入条件緩和を行わず、同じ候補/測定前budgetのfresh subjectへ進む。
 既存のproduction runnerはnormal-development admission・ordinary-world capture/ACK・host instrument producerが
 未実装と宣言する。旧Orcaや架空receiptで補完しない。全体受入は継続中。
+`ea3c8077`のfresh v4は最初のCapture control/candidateを完走し、foregroundと実finalも検証されたが、
+asset manifestがsession manifest変数を上書きしてbinary取得に失敗した。invalid封印/finalize済み。
+参照の分離と全case verifier回帰で修正し、既存rawは診断比較だけに使う。
+GPU DTOのfresh接続は同headのLamp候補planningで31sampleすべてavailableとなり、独立画像/raw reviewとsealが成功した。
+この接続試験は正式性能受入ではない。
+
+原移行計画§7に従い、基盤・群別・最終累積比較を分離する。現在の全候補増分比較だけで3種を完了としない。
+通常AIの継続生産・給水・搬出や代替active fixtureを表示移行の事前gateへ追加しない。
+群固有の表示・状態遷移・lifecycle・性能条件を満たした群から独立導入し、全9種完成まで先行群を未releaseに留めない。
 
 ### Definition of Done
 

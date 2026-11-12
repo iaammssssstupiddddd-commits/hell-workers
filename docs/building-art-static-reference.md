@@ -181,3 +181,13 @@ v3（`47e48c40`）はcontrolとcandidateの30/60秒計測を完走し、起動�
 しかしcandidateはM5のowner/foreground追加DTOへ未対応のoracleに拒否され、全体はinvalid。
 計測値は診断用であり、有効なcandidate比較やbudget passへ読み替えない。継続foreground照合と
 実finalの欠落も補正対象とし、同じ候補・事前budgetの新sourceで全matrixを実施する。
+v4（`ea3c8077`）では最初のCapture N control/candidateが共に有効となり、M5の継続foreground・
+実final検査を通過した。その後のcampaign verifierがasset manifestでsession manifest変数を
+上書きし、binary識別子の抽出で停止した。全体はinvalid封印/finalize済みで、Memoryは未実行。
+参照変数の分離とcase verifier全体を通す回帰を追加し、旧結果を合格化せずfresh matrixで確認する。
+
+この同source比較は基盤・群別・最終累積比較の代用ではない。群別では対象群だけを切り替え、
+他群を同じ世代で固定する。基盤の出発点は有効な9種fixtureの`353fc4cd`であり、
+旧10種のinvalidな`9a46751a`ではない。旧参照と現在はMesaも異なるため、古い数値を直接比較しない。
+通常AIの継続生産・給水・搬出や代替active fixtureを表示移行の事前gateにはしない。
+当該群の表示・状態遷移・lifecycle・資源・性能受入を満たした群から独立に正式導入する。
