@@ -17,6 +17,7 @@ import re
 import secrets
 import shutil
 import subprocess
+import sys
 import time
 
 if __package__:
@@ -88,7 +89,11 @@ def plan(args):
     return value
 
 
-def check_trace(trace, value, nonce, pid):
+def check_trace(trace, value, nonce, pid, *, scope="m2-feedback-observations-only"):
+    pipeline.require(scope in ("m2-feedback-observations-only", "m2-candidate-seeded-storyboard-only")
+                     and value["identity"]["authority"] == (
+                         "art_preview" if scope == "m2-feedback-observations-only" else "isolated_candidate"),
+                     "trace scope/authority differs")
     binding = m2.numeric_binding(value["identity"]["kind"], value)
     pipeline.require(trace.get("numeric_candidate_sha256", m2.NUMERIC_SHA256)
                      == binding["numeric_candidate_sha256"], "trace numeric revision differs")
@@ -98,7 +103,7 @@ def check_trace(trace, value, nonce, pid):
                      and re.fullmatch(r"[0-9a-f]{32}", nonce) is not None, "invalid trace process/session")
     pipeline.require(isinstance(trace, dict) and type(trace.get("schema_version")) is int
                      and trace["schema_version"] == 1
-                     and trace.get("scope") == "m2-feedback-observations-only"
+                     and trace.get("scope") == scope
                      and trace.get("leg") == value["leg"]
                      and trace.get("identity") == value["identity"] and trace.get("nonce") == nonce
                      and type(trace.get("process_id")) is int and trace["process_id"] == pid
@@ -278,10 +283,13 @@ def check_interaction(samples, owned, value):
 
 
 def checkpoint_key(sample):
-    return [sample.get("fixture_owner_exists"), sample.get("camera_scale"), sample.get("play_mode"),
+    key = [sample.get("fixture_owner_exists"), sample.get("camera_scale"), sample.get("play_mode"),
             sorted(root.get("state", "") for root in sample["roots"]),
             sorted(consumer["role"] for consumer in sample["consumers"] if consumer.get("visible") is True),
             sample["paused"]]
+    if "storyboard_stage" in sample:
+        key.extend([sample["storyboard_stage"], sample.get("destination_owner"), sample.get("world_epoch")])
+    return key
 
 
 def check_capture_interval(samples, shot):
@@ -303,7 +311,7 @@ def check_capture_interval(samples, shot):
 
 def check_capture_prefix(before, after):
     pipeline.require(all(before.get(key) == after.get(key)
-                         for key in ("nonce", "process_id", "identity", "leg"))
+                         for key in ("nonce", "process_id", "identity", "leg", "scope"))
                      and after["samples"][:len(before["samples"])] == before["samples"],
                      "capture trace prefix/session changed")
 
@@ -441,31 +449,30 @@ def check_asset_view(repo, view, manifest, text):
     pipeline.require(inventory(view / "assets") == expected, "private asset view differs from frozen inputs")
 
 
-def verify(root):
+def verify_contract(root, contract):
     root = pipeline.no_symlinks(root)
     result = pipeline.read(root / "manifest.json")
     value = result["plan"]
-    runtime = check_plan(value)
-    pipeline.require(Path(value["job_root"]) == root and result["profile"] == PROFILE
-                     and result["scope"] == SCOPE and result["status"] == "pass"
+    contract.check_binary(result, root, value)
+    runtime = contract.check_plan(value)
+    pipeline.require(Path(value["job_root"]) == root and result["profile"] == contract.PROFILE
+                     and result["scope"] == contract.SCOPE and result["status"] == "pass"
                      and result["accepted"] is False and result["promotion_authority"] is False
-                     and value["driver_sha256"] == pipeline.digest(Path(__file__).read_bytes()), "native result differs")
+                     and value["driver_sha256"] == pipeline.digest(Path(contract.__file__).read_bytes()), "native result differs")
     pipeline.require(result["termination"] == "bounded-stop" and result["exit_code"] in (0, -15),
                      "unexpected process termination")
-    binary = pipeline.no_symlinks(Path(result["binary"]["path"]))
-    pipeline.require(binary == Path(value["repo"]) / "target/debug/bevy_app"
-                     and pipeline.digest(binary.read_bytes()) == result["binary"]["sha256"], "native binary changed")
+    binary = Path(result["binary"]["path"])
     trace_path = root / "probe.m2-trace.json"
     captured_path = root / "captured-trace.json"
     for path, key in ((trace_path, "trace_sha256"), (captured_path, "captured_trace_sha256"),
                       (root / "actual-window.log", "log_sha256"), (root / "build.log", "build_log_sha256")):
         pipeline.require(pipeline.digest(pipeline.no_symlinks(path).read_bytes()) == result[key], "native artifact changed")
     trace, captured = m2.read_json(trace_path), m2.read_json(captured_path)
-    check_trace(trace, value, result["nonce"], result["pid"])
-    check_trace(captured, value, result["nonce"], result["pid"])
+    contract.check_trace(trace, value, result["nonce"], result["pid"])
+    contract.check_trace(captured, value, result["nonce"], result["pid"])
     pipeline.require(trace["samples"][:len(captured["samples"])] == captured["samples"], "capture trace is not a run prefix")
     screenshot = result["screenshot"]
-    check_capture_interval(trace["samples"], screenshot)
+    contract.check_capture_interval(trace["samples"], screenshot)
     image = pipeline.rooted(root, screenshot["path"])
     check_capture_pixels(image)
     pipeline.require(screenshot["capture_scope"] == "owned-x11-client"
@@ -480,7 +487,7 @@ def verify(root):
         image = pipeline.rooted(root, shot["path"])
         check_capture_pixels(image)
         index = shot["sample_index"]
-        check_capture_interval(trace["samples"], shot)
+        contract.check_capture_interval(trace["samples"], shot)
         pipeline.require(type(index) is int and previous_index < index < len(trace["samples"])
                          and shot["key"] == checkpoint_key(trace["samples"][index])
                          and shot["window_pid"] == result["pid"] and shot["capture_scope"] == "owned-x11-client"
@@ -489,7 +496,7 @@ def verify(root):
         previous_index = index
     if value["leg"] == "world-near-far":
         pipeline.require({1.0, 2.5} <= {shot["key"][1] for shot in checkpoints}, "near/far client captures missing")
-    check_state_checkpoints(checkpoints, value)
+    contract.check_state_checkpoints(checkpoints, value)
     log = (root / "actual-window.log").read_text()
     check_renderer_record(log, value["adapter"], result.get("renderer"))
     # Re-read the private runtime asset overlay as well as its prepared source.
@@ -498,32 +505,57 @@ def verify(root):
     pipeline.require(manifest["identity"] == value["identity"]
                      and pipeline.digest(text.encode()) == spec["manifest_sha256"], "loaded asset overlay changed")
     check_asset_view(Path(value["repo"]), root / "asset-view", manifest, text)
-    pipeline.require(result["inventory"] == m2.inspect(Path(value["runtime_plan"]), value["kind"], trace_path),
+    pipeline.require(result["inventory"] == contract.inspect(Path(value["runtime_plan"]), value["kind"], trace_path),
                      "observation inventory changed")
-    check_plan(value)
+    contract.check_plan(value)
     pipeline.require(pipeline.digest(binary.read_bytes()) == result["binary"]["sha256"]
                      and result == pipeline.read(root / "manifest.json"), "native inputs changed during verification")
     return result
 
 
-@native.activity_locked
-def run(args):
+def check_binary(result, root, value):
+    binary = pipeline.no_symlinks(Path(result["binary"]["path"]))
+    pipeline.require(binary == Path(value["repo"]) / "target/debug/bevy_app"
+                     and pipeline.digest(binary.read_bytes()) == result["binary"]["sha256"], "native binary changed")
+
+
+def prepare_binary(binary, root):
+    return binary
+
+
+def probe_environment(value):
+    return {}
+
+
+def runtime_mode(value):
+    return "feedback"
+
+
+def inspect(plan_path, kind, trace_path):
+    return m2.inspect(plan_path, kind, trace_path)
+
+
+def verify(root):
+    return verify_contract(root, sys.modules[__name__])
+
+
+def run_contract(args, contract):
     pipeline.require(os.environ.get("HW_NATIVE_ACCEPTANCE_LAUNCHED") == "1", "use registered no-prompt launcher")
     value = pipeline.read(args.plan)
-    runtime = check_plan(value)
-    pipeline.require(value["driver_sha256"] == pipeline.digest(Path(__file__).read_bytes()), "native driver changed")
+    runtime = contract.check_plan(value)
+    pipeline.require(value["driver_sha256"] == pipeline.digest(Path(contract.__file__).read_bytes()), "native driver changed")
     repo, root = Path(value["repo"]), Path(value["job_root"])
     root.mkdir(parents=True, exist_ok=False)
     job = root / "job.json"
-    state = {"status": "running", "profile": PROFILE, "pid": os.getpid(),
+    state = {"status": "running", "profile": contract.PROFILE, "pid": os.getpid(),
              "started_at": native.utc_now(), "heartbeat_at": native.utc_now()}
     native.atomic_write_json(job, state)
     try:
         env = native.cargo_environment(repo)
         native.run_command("build", ["python3", "scripts/dev.py", "feedback", "--build-only"],
             repo=repo, env=env, log_path=root / "build.log", job_file=job, state=state, timeout_seconds=3600)
-        binary = repo / "target/debug/bevy_app"
-        check_plan(value)
+        binary = contract.prepare_binary(repo / "target/debug/bevy_app", root)
+        contract.check_plan(value)
         binary_hash = pipeline.digest(binary.read_bytes())
         view = root / "asset-view"
         shutil.copytree(repo / "assets", view / "assets")
@@ -540,10 +572,11 @@ def run(args):
         nonce = secrets.token_hex(16)
         env.update({"BEVY_ASSET_ROOT": str(view), "HW_WINDOW_BACKEND": "x11", "HW_PRESENT_MODE": "novsync",
             **adapter_environment(value["adapter"]), "WINIT_X11_SCALE_FACTOR": "1",
+            **contract.probe_environment(value),
             "HW_M2_ACCEPTANCE_PROBE": "1", "HW_M2_ACCEPTANCE_LEG": value["leg"],
             "HW_M2_ACCEPTANCE_REVISION": m2.numeric_binding(value["kind"], value)["revision"],
             "HW_BUILDING_ART_SESSION": json.dumps({
-                "mode": "feedback", "identity": value["identity"], "locator": locator,
+                "mode": contract.runtime_mode(value), "identity": value["identity"], "locator": locator,
                 "nonce": nonce, "status_path": str(root / "probe.json")})})
         native.admit_stage_start("actual-window", state=state, job_file=job)
         screenshot = None
@@ -572,19 +605,19 @@ def run(args):
                                 capture_root = root / "checkpoints" / str(capture_attempts)
                                 capture_attempts += 1
                                 capture_root.mkdir(parents=True, exist_ok=True)
-                                shot, _ = capture_observed_interval(capture_root, process.pid, trace_path, current)
+                                shot, _ = contract.capture_observed_interval(capture_root, process.pid, trace_path, current)
                                 if shot is not None:
                                     shot.update(path=str((capture_root / shot["path"]).relative_to(root)))
                                     checkpoints.append(shot)
                                     captured_keys.add(key_text)
                     if screenshot is None and time.monotonic() - started >= value["duration_seconds"] - 2:
                         trace = m2.read_json(root / "probe.m2-trace.json")
-                        check_trace(trace, value, nonce, process.pid)
+                        contract.check_trace(trace, value, nonce, process.pid)
                         pipeline.require(final_capture_attempts < 8, "final capture attempt cap exceeded")
                         final_root = root / "final-captures" / str(final_capture_attempts)
                         final_capture_attempts += 1
                         final_root.mkdir(parents=True, exist_ok=False)
-                        screenshot, after = capture_observed_interval(
+                        screenshot, after = contract.capture_observed_interval(
                             final_root, process.pid, root / "probe.m2-trace.json", trace)
                         if screenshot is not None:
                             screenshot["path"] = str((final_root / screenshot["path"]).relative_to(root))
@@ -594,9 +627,9 @@ def run(args):
             finally:
                 native.stop_command_process(process)
         pipeline.require(screenshot is not None and process.returncode in (0, -15), "native bounded stop/capture failed")
-        check_plan(value)
+        contract.check_plan(value)
         pipeline.require(pipeline.digest(binary.read_bytes()) == binary_hash, "binary changed during run")
-        result = {"schema_version": 1, "profile": PROFILE, "scope": SCOPE, "status": "pass",
+        result = {"schema_version": 1, "profile": contract.PROFILE, "scope": contract.SCOPE, "status": "pass",
             "plan": value, "nonce": nonce, "pid": process.pid, "termination": "bounded-stop",
             "exit_code": process.returncode, "screenshot": screenshot,
             "checkpoints": checkpoints,
@@ -606,17 +639,22 @@ def run(args):
             "log_sha256": pipeline.digest((root / "actual-window.log").read_bytes()),
             "build_log_sha256": pipeline.digest((root / "build.log").read_bytes()),
             "binary": {"path": str(binary), "sha256": binary_hash},
-            "inventory": m2.inspect(Path(value["runtime_plan"]), value["kind"], root / "probe.m2-trace.json"),
+            "inventory": contract.inspect(Path(value["runtime_plan"]), value["kind"], root / "probe.m2-trace.json"),
             "accepted": False, "promotion_authority": False,
             "not_covered": ["input outcome verdict", "all lifecycle legs", "numeric freeze", "art approval",
                             "performance budget", "candidate approval", "formal release"]}
         pipeline.put(root / "manifest.json", pipeline.canonical(result))
-        verify(root)
+        contract.verify(root)
         native.update_state(job, state, status="valid", child_pid=None, completed_at=native.utc_now())
         return result
     except Exception as error:
         native.update_state(job, state, status="invalid", child_pid=None, failure=str(error))
         raise
+
+
+@native.activity_locked
+def run(args):
+    return run_contract(args, sys.modules[__name__])
 
 
 def main():

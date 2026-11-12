@@ -4,7 +4,7 @@
 use super::BuildingArtSession;
 use crate::assets::building_asset_set::snapshot_io::{require_fresh_output, write_observation};
 use crate::assets::building_asset_set::{
-    BuildingAssetAuthority, BuildingAssetKind, BuildingAssetPool,
+    BuildingAssetAuthority, BuildingAssetKind, BuildingAssetPool, BuildingAssetSetIdentity,
 };
 use crate::systems::visual::building_presentation::EquipmentRoot;
 use crate::systems::visual::placement_ghost::{PlacementGhost, PlacementPartnerGhost};
@@ -14,7 +14,7 @@ use hw_jobs::{Blueprint, Building, BuildingType, MovePlantTask};
 use hw_ui::components::BuildingCatalogPreview;
 use hw_visual::{Building3dVisual, StructuralPresentationState};
 use serde_json::{Value, json};
-use std::path::PathBuf;
+use std::{ffi::OsStr, path::PathBuf};
 
 const SAMPLE_CAP: usize = 1800;
 const ENTITY_CAP: usize = 128;
@@ -31,6 +31,9 @@ fn numeric_candidate(kind: BuildingAssetKind, revision: &str) -> Result<&'static
 
 #[derive(Resource)]
 struct Trace {
+    scope: &'static str,
+    identity: BuildingAssetSetIdentity,
+    nonce: String,
     leg: String,
     numeric_sha256: &'static str,
     path: PathBuf,
@@ -38,12 +41,41 @@ struct Trace {
     samples: Vec<Value>,
 }
 
-pub(super) fn configure(app: &mut App, session: &BuildingArtSession) -> Result<(), String> {
-    let Ok(value) = std::env::var("HW_M2_ACCEPTANCE_PROBE") else {
-        return Ok(());
-    };
-    if value != "1"
-        || session.mode != "feedback"
+const FEEDBACK_SCOPE: &str = "m2-feedback-observations-only";
+const CANDIDATE_SCOPE: &str = "m2-candidate-seeded-storyboard-only";
+
+fn trace_scope(
+    session: &BuildingArtSession,
+    probe: Option<&OsStr>,
+    storyboard: Option<&OsStr>,
+    leg: Option<&str>,
+    ui_case: bool,
+) -> Result<Option<&'static str>, String> {
+    if probe.is_none() && storyboard.is_none() {
+        return Ok(None);
+    }
+    if probe != Some(OsStr::new("1")) {
+        return Err("M2 probe requires exact explicit PROBE=1".into());
+    }
+    if let Some(flag) = storyboard {
+        if flag != OsStr::new("1")
+            || session.mode != "candidate"
+            || session.identity.authority != BuildingAssetAuthority::IsolatedCandidate
+            || ui_case
+            || !matches!(
+                (session.identity.kind, leg),
+                (BuildingAssetKind::Tank, Some("move-success"))
+                    | (
+                        BuildingAssetKind::MudMixer,
+                        Some("refining" | "save-load" | "move-success")
+                    )
+            )
+        {
+            return Err("candidate storyboard requires exact candidate authority and a separate M2 domain leg".into());
+        }
+        return Ok(Some(CANDIDATE_SCOPE));
+    }
+    if session.mode != "feedback"
         || session.identity.authority != BuildingAssetAuthority::ArtPreview
         || !matches!(
             session.identity.kind,
@@ -54,6 +86,23 @@ pub(super) fn configure(app: &mut App, session: &BuildingArtSession) -> Result<(
             "M2 probe requires an explicit Tank/MudMixer feedback ArtPreview session".into(),
         );
     }
+    Ok(Some(FEEDBACK_SCOPE))
+}
+
+pub(super) fn configure(app: &mut App, session: &BuildingArtSession) -> Result<(), String> {
+    let probe = std::env::var_os("HW_M2_ACCEPTANCE_PROBE");
+    let storyboard = std::env::var_os("HW_M2_CANDIDATE_STORYBOARD");
+    let leg = std::env::var("HW_M2_ACCEPTANCE_LEG").ok();
+    let Some(scope) = trace_scope(
+        session,
+        probe.as_deref(),
+        storyboard.as_deref(),
+        leg.as_deref(),
+        std::env::var_os("HW_NATIVE_UI_CASE").is_some(),
+    )?
+    else {
+        return Ok(());
+    };
     let path = session.status_path.with_extension("m2-trace.json");
     let revision = match std::env::var("HW_M2_ACCEPTANCE_REVISION") {
         Ok(value) => value,
@@ -68,6 +117,9 @@ pub(super) fn configure(app: &mut App, session: &BuildingArtSession) -> Result<(
         super::m2_fixture::configure(app, session.identity.kind)?;
     }
     app.insert_resource(Trace {
+        scope,
+        identity: session.identity.clone(),
+        nonce: session.nonce.clone(),
         leg: std::env::var("HW_M2_ACCEPTANCE_LEG").map_err(|_| "M2 leg missing")?,
         numeric_sha256,
         path,
@@ -353,10 +405,33 @@ fn observe(world: &mut World) {
     if now < world.resource::<Trace>().next_sample {
         return;
     }
-    let result = if world.resource::<Trace>().samples.len() >= SAMPLE_CAP {
+    let trace = world.resource::<Trace>();
+    let session = world.resource::<BuildingArtSession>();
+    let binding_matches = trace.identity == session.identity
+        && trace.nonce == session.nonce
+        && match trace.scope {
+            FEEDBACK_SCOPE => {
+                session.mode == "feedback"
+                    && session.identity.authority == BuildingAssetAuthority::ArtPreview
+            }
+            CANDIDATE_SCOPE => {
+                session.mode == "candidate"
+                    && session.identity.authority == BuildingAssetAuthority::IsolatedCandidate
+            }
+            _ => false,
+        };
+    let result = if !binding_matches {
+        Err("M2 trace session identity/scope changed".to_string())
+    } else if trace.samples.len() >= SAMPLE_CAP {
         Err("M2 sample cap reached; use separate bounded lifecycle legs".to_string())
     } else {
-        snapshot(world)
+        snapshot(world).map(|mut sample| {
+            if world.resource::<Trace>().scope == CANDIDATE_SCOPE {
+                sample["storyboard_stage"] =
+                    json!(world.resource::<super::m2_fixture::Fixture>().stage);
+            }
+            sample
+        })
     };
     let failure = result.as_ref().err().cloned();
     let session = world.resource::<BuildingArtSession>();
@@ -390,7 +465,7 @@ fn observe(world: &mut World) {
         trace.path.clone()
     };
     let session = world.resource::<BuildingArtSession>();
-    let record = json!({"schema_version": 1, "scope": "m2-feedback-observations-only",
+    let record = json!({"schema_version": 1, "scope": world.resource::<Trace>().scope,
         "leg": world.resource::<Trace>().leg,
         "process_id": std::process::id(),
         "identity": session.identity, "nonce": session.nonce, "failure": failure,
@@ -419,6 +494,63 @@ fn observe(world: &mut World) {
 mod tests {
     use super::*;
     use crate::assets::building_asset_set::BuildingAssetSetIdentity;
+
+    #[test]
+    fn candidate_storyboard_cannot_relabel_feedback_or_add_unreviewed_legs() {
+        let mut world = world();
+        let mut session = world.resource_mut::<BuildingArtSession>();
+        let one = Some(OsStr::new("1"));
+        assert_eq!(
+            trace_scope(&session, one, None, Some("water"), false).unwrap(),
+            Some(FEEDBACK_SCOPE)
+        );
+        assert!(trace_scope(&session, one, one, Some("move-success"), false).is_err());
+        session.mode = "candidate".into();
+        session.identity.authority = BuildingAssetAuthority::IsolatedCandidate;
+        for kind in [BuildingAssetKind::Tank, BuildingAssetKind::MudMixer] {
+            session.identity.kind = kind;
+            for leg in [
+                "move-success",
+                "refining",
+                "save-load",
+                "water",
+                "placement",
+                "",
+                "deconstruct",
+            ] {
+                let allowed = leg == "move-success"
+                    || kind == BuildingAssetKind::MudMixer
+                        && matches!(leg, "refining" | "save-load");
+                assert_eq!(
+                    trace_scope(&session, one, one, Some(leg), false).is_ok(),
+                    allowed
+                );
+            }
+        }
+        for (probe, flag) in [
+            (None, one),
+            (one, Some(OsStr::new("0"))),
+            (Some(OsStr::new("")), one),
+        ] {
+            assert!(trace_scope(&session, probe, flag, Some("move-success"), false).is_err());
+        }
+        assert!(trace_scope(&session, one, one, Some("move-success"), true).is_err());
+        assert!(trace_scope(&session, one, None, Some("move-success"), false).is_err());
+        session.identity.kind = BuildingAssetKind::RestArea;
+        assert!(trace_scope(&session, one, one, Some("move-success"), false).is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn candidate_storyboard_rejects_non_utf8_flags() {
+        use std::os::unix::ffi::OsStrExt;
+        let world = world();
+        let session = world.resource::<BuildingArtSession>();
+        let invalid = Some(OsStr::from_bytes(&[0xff]));
+        let one = Some(OsStr::new("1"));
+        assert!(trace_scope(session, invalid, one, Some("move-success"), false).is_err());
+        assert!(trace_scope(session, one, invalid, Some("move-success"), false).is_err());
+    }
 
     #[test]
     fn numeric_revision_is_explicit_and_kind_bounded() {
@@ -477,6 +609,14 @@ mod tests {
     fn world() -> World {
         let mut world = World::new();
         world.insert_resource(Trace {
+            scope: FEEDBACK_SCOPE,
+            identity: BuildingAssetSetIdentity {
+                kind: BuildingAssetKind::Tank,
+                generation: 1,
+                authority: BuildingAssetAuthority::ArtPreview,
+                manifest_sha256: "a".repeat(64),
+            },
+            nonce: "a".repeat(32),
             leg: "water".into(),
             numeric_sha256: NUMERIC_SHA256,
             path: PathBuf::from("/unused/m2-trace.json"),

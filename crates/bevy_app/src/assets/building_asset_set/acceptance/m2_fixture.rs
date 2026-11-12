@@ -29,7 +29,7 @@ use hw_world::{
 pub(super) struct Fixture {
     pub owner: Option<Entity>,
     anchor: Option<(i32, i32)>,
-    stage: u8,
+    pub(super) stage: u8,
     pub since: f64,
 }
 

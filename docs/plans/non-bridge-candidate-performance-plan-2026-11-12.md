@@ -324,3 +324,14 @@ feedbackは従来の共有debug cache、旧契約は固定の共有cacheのlive�
 実際の各群導入時には正式receiptから一覧を更新し、通常起動表示と同subjectのHelp影響を再確認する。
 アート・数値・性能・正式releaseの承認はこの配線で与えない。
 既定JSONだけの変更もHelp gateのproduction対象に追加し、一覧更新を古いNo impactへ便乗させない。
+
+### M7-b: M2 candidateの不足state/lifecycle表示
+
+- [ ] 旧ArtPreview受付を維持し、新candidate専用scopeでMixer refining/save-loadとTank/Mixer moveだけをadmitする。
+- [ ] exact provenance/driver/source、所有PNG、body/rotor TRS・Virtual回転・pause/Idle、Load reset/cleanupとcompanion moveを独立検査する。
+- [ ] 旧/新scope混同、flag/authority/UI混在、body/clock/axis/parts/撮影順序の拒否試験を通す。
+- [ ] Help/品質/storage/独立review後に同subjectの4本を実行し、既存Tank persistence/constructionと合わせてM2独立採否へ渡す。
+
+Help実レビュー: 新しい明示profiling候補sessionでのみ既存domain fixtureとread-only observerを使う。
+通常起動では有効化されず、既存input/UiIntent、gameplay保存/移動/生産rule、通常ラベル/通知/Help入口は不変。
+No impactとし、プレイヤーHelp source/snapshotは変更しない。技術storyboardは独立アートやreleaseを承認しない。

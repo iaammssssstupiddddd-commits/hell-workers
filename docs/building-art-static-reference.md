@@ -362,3 +362,26 @@ owned PNGは`5593ad64454b3c28edc9ebe6b1f47764fe2141c0bfb0fcb6253c4237f724d545`�
 昇格直前のcandidate画像原本を独立に再検証できる。source/assets/driver固定を解除するものではない。
 コピーは現在の正式採否・比較が実際に使う間だけ用途と実測bytesを登録し、終了時に整理する。
 feedbackは既存debug cacheを使い、この正式コピーやMemory性能の証拠へ読み替えない。
+
+### M2採用候補の限定domain storyboard
+
+`scripts/building_m2_candidate_storyboard.py` は既存候補の不足表示だけを補う別契約である。
+Mixerのrefining、paused save/load、Tank/Mixer各move-successの4本に限定する。
+`HW_M2_CANDIDATE_STORYBOARD=1` と既存PROBE=1、candidate mode、IsolatedCandidate、
+対象kind/legの組合せを一緒に要求し、旧feedback/ArtPreviewやnative UI caseとの混在を拒否する。
+旧scopeを上書きせず、新trace scopeを設定時に固定してsession identity/nonceのdriftを拒否する。
+
+既存domain fixtureで合法な施工入力、材料と実Soul assignment、Save/Load intent、Move入力を用意する。
+通常consumerが作る実owner/root/part、実epoch・処理結果・足元、実依存handleとPNGを観測する。
+これはseeded-domain-operationsであり、OS入力到達性や継続AI物流の証明ではない。
+実行はprimary validationの登録launcherだけを使い、同source・candidate provenance・独立numeric契約・
+codec・driverを固定し、debug/profiling feature buildからjob内read-only executableへ固定して起動する。
+
+bodyのauthored TRS、rotorのpivot/scaleと承認axis/speedに沿うVirtual clock回転、pause/Idleでの停止、
+再開後の進行、同owner/part、Load後の新root/parts・paused Idle角度0、Tank companionの同一移動を
+独立に照合する。Idle終了時は最終角度を保持し、Load時だけ初期角度へ戻る既存runtime契約を維持する。
+phase/epoch/destinationを撮影keyに含め、pause後の再開やMove後の画像を開始前の画像へ置き換えない。
+実機は未実行であり、実装・unit passを表示受入やアート/性能/正式release承認へ読み替えない。
+数値validator/contract JSONの完全inventoryをcodec実行前と検証終了時に照合する。
+全観測rowで3D layerを、採用PNGの全capture intervalでbody/rotor/可視水面の実ViewVisibilityを要求する。
+Emptyの非表示水面だけは許す。移動中の画面外観測を失敗にせず、その区間の画像は採用せず理由付きで残す。
