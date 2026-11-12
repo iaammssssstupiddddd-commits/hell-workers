@@ -151,6 +151,32 @@ v2で同game PIDのclient1920×1662、frame上辺74pxを実測した。作業領
   profiling buildで別に実施し、feedback画像を正式受入へ流用しない。
 - [ ] 関連拒否回帰、同source品質・Help No impact・独立review・storage後、fresh接続を確認する。
 
+### M6-e: 正式Capture実行binaryの独立保持
+
+Memory buildは共有target/profiling/bevy_appを上書きする。一方、正式candidateの昇格時には
+画像原本のverifierが実行binaryのSHAを再検査する。guard解除や旧binaryの復元で迂回しない。
+
+- [x] build直後、正式group/個別artだけjob内の固定binaryパスへ上書き不可でコピーする。
+  source/copy/sourceのSHA一致、通常ファイル・非symlink・canonical job root・実行属性を検証し、
+  そのコピー自体を起動/codec照合/manifest参照する。feedbackは既存debug cacheを継続する。
+- [x] verifyはjob内固定パスとSHAへ束縛し、共有targetがMemoryへ変わっても原本を再検証できる。
+  source/assets/verifier固定は維持する。旧契約を黙って新契約へ変換しない。
+- [ ] owner/用途/実測bytes付きで正式採否の現在の利用者だけ保持し、採否/比較終了後はコピーも整理する。
+  同source校正→候補測定の継続workunitはevidence用途で保持し、不要な共有target依存を作らない。
+- [ ] source中途変更、既存destination、symlink、SHA不一致、Memory後のcopy検証を回帰し、
+  Help No impact、同source gate、独立reviewとstorage後に正式matrixへ渡す。
+
+### M7-a: 通常起動の既定release inventory
+
+- [ ] 既存ReleaseBinding/validate_bindings/request_releasesを再利用し、compile時の既定JSONを選択する。
+  実release/独立decision/guard install完了までは空配列を維持し、authorityを新しく作らない。
+- [ ] 明示envは完全置換し、非UTF8/空文字/不正JSONを未指定へ読み替えない。専用sessionと
+  enabled performanceでは既定を混入させず、profilingでも通常起動は既定を使う。
+- [ ] 非空defaultは既存完全集合・ReleaseApproved・canonical locatorの検査を必ず通す。
+  rollbackは旧locatorと対応する旧binary/default inventoryを一組で復旧する。
+- [ ] 空request0、明示優先、専用/性能分離、candidate/preview/不正locator拒否、Help・品質・
+  独立reviewを終え、独立release判断後にpipeline.bindingsの正規出力だけをdataへ採用する。
+
 ### M7: 群別性能と順次導入
 
 - [x] 旧9種参照の不足N Memoryは、旧source/helperを編集せず、既存perf CLIのN×3を別batchで測る。
@@ -274,3 +300,18 @@ No impact。mainのWindow装飾は、検証済みtyped GroupArtSessionを持つp
 通常起動・旧gallery・性能・UIセッションでは従来trueを維持する。feedbackはconnection-onlyのhost
 build選択だけで、入力・操作・保存・gameplay・通知・Help入口を変えない。正式18case/performanceへ
 feedbackを流用しない。一般利用者向けHelp source/snapshotの更新は不要。
+
+### Frameless接続の限定結果（2026-11-12）
+
+`1a235c6b`のHigh/DPI2/normal connection-only feedbackはactual1920×1680・decorations=falseを確認。
+Tank/Mixer/Door各4、計12 ownerのgeometry、owned PNG、PID/nonce/probe→ACK→実final、exit0を独立照合した。
+stable60→158、Intel Arc/Mesa26.2.6/Vulkan、WARN/ERRORなし。登録verifierでpass封印/finalize済み。
+manifest85efe7b102b1affd6694cac8425012942f971b1b9c8ed80c9e848ddd241df176。
+feedback_only/connection_only=trueで、正式18case・性能・美術採否・releaseの完了ではない。
+
+### 正式実行binary保持のHelp実レビュー（2026-11-12）
+
+No impact。正式art/groupのhost runnerが、実際にbuildした同bytesの実行binaryをjob内へ固定して
+そのコピーを起動・検証する。ゲームのコード/設定/入力/表示/保存/通知/Help経路は変えない。
+feedbackは従来の共有debug cache、旧契約は固定の共有cacheのlive検証を維持する。
+任意pathのcodec実行前にpath/権限/SHAを検証し、通常起動の配布authorityや承認は作成しない。

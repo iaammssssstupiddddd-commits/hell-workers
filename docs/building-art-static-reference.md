@@ -342,3 +342,23 @@ fresh v2（`c9a9ae35`）の同game PID/window実測はclient1920×1662、
 clean source・identity・geometry・owned PNG・ACK・実finalの検査は同じで、feedback_only=trueを明示する。
 feedbackの18caseは計画/実行/verifyで拒否し、正式matrixと性能はprofiling/Capture→Memoryの
 既存経路で別に実行する。feedback画像・接続passを正式18caseやreleaseへ読み替えない。
+
+`1a235c6b`のfresh connection-only feedbackは、同game PIDのactual1920×1680/DPI2・
+decorations=false、Tank/Mixer/Door各4件、UI Node表示0、stable60→158、実final不変とexit0を確認した。
+owned PNGは`5593ad64454b3c28edc9ebe6b1f47764fe2141c0bfb0fcb6253c4237f724d545`、manifestは
+`85efe7b102b1affd6694cac8425012942f971b1b9c8ed80c9e848ddd241df176`。
+原本の独立CLI verifyによるpass封印/finalizeと、実画像・rawの独立read-only確認を完了した。
+この結果は窓・撮影・照合の接続だけで、formal18caseや性能・アート/releaseの承認ではない。
+
+### 正式画像の実行binary寿命
+
+正式groupと個別building-artの新planは、Capture build直後の実行binaryをjob内
+`binary/bevy_app`へ上書き不可でコピーする。source/copy/sourceのSHA一致を確認し、
+そのコピー自体を実行・codec照合・manifest参照する。verifyはcanonical job内固定パス、
+非symlink・read-only実行属性・SHAへ拘束する。新しい個別art planはsnapshot契約/verifier SHAも固定する。
+旧契約を新しいコピーの結果へ書き換えず、旧planは元の共有binaryのlive検証を引き続き要求する。
+
+これにより、同sourceのMemory buildで共有`target/profiling/bevy_app`が変わっても、
+昇格直前のcandidate画像原本を独立に再検証できる。source/assets/driver固定を解除するものではない。
+コピーは現在の正式採否・比較が実際に使う間だけ用途と実測bytesを登録し、終了時に整理する。
+feedbackは既存debug cacheを使い、この正式コピーやMemory性能の証拠へ読み替えない。

@@ -29,11 +29,13 @@ import native_acceptance as native  # noqa: E402
 from wall_density_acceptance import asset_view_fingerprint  # noqa: E402
 if __package__:
     from . import building_foreground_observation as foreground  # noqa: E402
+    from . import building_native_executable as executable  # noqa: E402
     from . import building_m5_context_observation as m5_context  # noqa: E402
     from . import building_art_static_acceptance as static  # noqa: E402
     from .perf_tool.artifacts import read_window  # noqa: E402
 else:
     import building_foreground_observation as foreground  # noqa: E402
+    import building_native_executable as executable  # noqa: E402
     import building_m5_context_observation as m5_context  # noqa: E402
     import building_art_static_acceptance as static  # noqa: E402
     from perf_tool.artifacts import read_window  # noqa: E402
@@ -162,6 +164,9 @@ def check_numeric_verifiers(value: dict) -> None:
 
 
 def check_plan(value: dict, binary: Path) -> dict:
+    if "executable_snapshot" in value:
+        pipeline.require(value["mode"] != "feedback" and value["executable_snapshot"] == {
+            "contract": executable.CONTRACT, "verifier_sha256": executable.verifier_sha256()}, "executable snapshot contract changed")
     check_numeric_verifiers(value)
     foreground_settings = foreground.settings(value, context=value.get("variant") in M5_CONTEXT_VARIANTS)
     context_settings(value)
@@ -225,6 +230,8 @@ def plan(args) -> dict:
              "lamp_supply_target": getattr(args, "lamp_supply_target", None),
              "scope": m5_context.LAMP_UI_SCOPE if getattr(args, "variant", "gallery") == "lamp-supply-art-context" else CONTEXT_SCOPE if getattr(args, "variant", "gallery") in ("rest-area-art-context", "m2-art-context", "m5-art-context") else SPA_PAGE_SCOPE if getattr(args, "spa_mask_page", None) is not None else "paused-static-presentation", "promotion_authority": False,
              "feedback_only": args.mode == "feedback"}
+    if args.mode != "feedback":
+        value["executable_snapshot"] = {"contract": executable.CONTRACT, "verifier_sha256": executable.verifier_sha256()}
     if value["variant"] in ("rest-area-art-context", "m2-art-context", *M5_CONTEXT_VARIANTS):
         value["context_preview"] = context_preview(manifest)
     if value["variant"] == "m2-art-context":
@@ -579,8 +586,11 @@ def verify(root: Path) -> dict:
     result = pipeline.read(root / "manifest.json")
     value = result["plan"]
     binary = Path(result["binary"]["path"])
+    if "executable_snapshot" in value:
+        executable.validate(binary, root, result["binary"]["sha256"])
+    else:
+        executable.validate_cache(binary, Path(value["repo"]), value["mode"] == "feedback", result["binary"]["sha256"])
     check_plan(value, binary)
-    pipeline.require(pipeline.digest(binary.read_bytes()) == result["binary"]["sha256"], "native binary changed")
     pipeline.require(result["profile"] == PROFILE and result["status"] == "pass"
                      and result["mode"] == value["mode"] and result["identity"] == value["identity"]
                      and result["feedback_only"] == (value["mode"] == "feedback")
@@ -629,6 +639,8 @@ def run(args) -> dict:
         native.run_command("build", build, repo=repo, env=environment, log_path=root / "build.log",
                            job_file=job, state=state, timeout_seconds=3600)
         binary = repo / "target" / ("debug" if feedback else "profiling") / "bevy_app"
+        if "executable_snapshot" in value:
+            binary = executable.freeze(binary, root)
         check_plan(value, binary)
         # An exact full base asset view is copied. No missing asset is invented
         # as a baseline and no production asset directory is modified.

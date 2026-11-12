@@ -17,10 +17,12 @@ if __package__:
     from . import building_m6_acceptance as m6
     from . import building_group_art_observation as oracle
     from . import building_group_art_window as window_probe
+    from . import building_native_executable as executable
 else:
     import building_m6_acceptance as m6
     import building_group_art_observation as oracle
     import building_group_art_window as window_probe
+    import building_native_executable as executable
 
 native, pipeline, static = m6.native, m6.pipeline, m6.static
 PROFILE = oracle.PROFILE
@@ -63,7 +65,7 @@ def read_artifact(path):
 
 
 def driver_inventory():
-    paths = (Path(__file__), Path(oracle.__file__), Path(m6.__file__), Path(m6.art.__file__), Path(window_probe.__file__))
+    paths = (Path(__file__), Path(oracle.__file__), Path(m6.__file__), Path(m6.art.__file__), Path(window_probe.__file__), Path(executable.__file__))
     return {p.name: pipeline.digest(p.read_bytes()) for p in paths}
 
 
@@ -234,8 +236,10 @@ def verify(root):
     check(value)
     m6.check_view(value)
     binary = Path(manifest["binary"]["path"])
-    pipeline.require(binary == Path(value["repo"]) / "target" / ("debug" if value["feedback_only"] else "profiling") / "bevy_app"
-        and pipeline.digest(binary.read_bytes()) == manifest["binary"]["sha256"], "gallery binary changed")
+    if value["feedback_only"]:
+        executable.validate_cache(binary, Path(value["repo"]), True, manifest["binary"]["sha256"])
+    else:
+        executable.validate(binary, root, manifest["binary"]["sha256"])
     rows = [verify_case(value, case, manifest["binary"]["sha256"]) for case in value["cases"]]
     pipeline.require(rows == manifest["observations"] and len({row["adapter"] for row in rows}) == 1,
         "gallery matrix actual environment differs")
@@ -260,6 +264,8 @@ def run(args):
             job_file=job, state=state, timeout_seconds=3600)
         check(value)
         binary = repo / "target" / ("debug" if value["feedback_only"] else "profiling") / "bevy_app"
+        if not value["feedback_only"]:
+            binary = executable.freeze(binary, root)
         binary_sha = pipeline.digest(binary.read_bytes())
         m6.prepare_view(value)
         rows = []
