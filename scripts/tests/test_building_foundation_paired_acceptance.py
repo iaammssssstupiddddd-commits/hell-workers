@@ -104,7 +104,7 @@ class FoundationPairedTests(unittest.TestCase):
         value = {"job_root": "/primary/target/native-acceptance/paired", "adapter": "Intel"}
         stage = {"binaries": {"current": {"path": "/primary/target/native-acceptance/paired/capture-current/binary/bevy_app"}}}
         argv = paired.command(value, stage, ("capture", "small", 2, "current"))
-        self.assertEqual(argv[:3], ["python3", "scripts/perf.py", "run"])
+        self.assertEqual(argv[:5], ["env", "RUST_LOG=info,wgpu=error", "python3", "scripts/perf.py", "run"])
         self.assertEqual(argv[argv.index("--repeat")+1], "1")
         self.assertEqual(argv[-3:], ["--skip-build", "--binary", stage["binaries"]["current"]["path"]])
         self.assertNotIn("--building-m6-mode", argv)

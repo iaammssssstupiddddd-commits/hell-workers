@@ -166,7 +166,8 @@ def command(planned, stage, case):
     parent = Path(planned["job_root"]) / label(case)
     argv = static.command(parent, instrument, size, 15 if size == "small" else 60, planned["adapter"])
     argv[argv.index("--repeat") + 1] = "1"
-    return argv + ["--building-static-single-leg", "--skip-build", "--binary", stage["binaries"][source]["path"]]
+    return ["env", "RUST_LOG=info,wgpu=error", *argv, "--building-static-single-leg",
+            "--skip-build", "--binary", stage["binaries"][source]["path"]]
 
 
 def time(value):

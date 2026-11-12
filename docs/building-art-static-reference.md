@@ -536,3 +536,19 @@ trace `aa3e9f54ae29d233ad3fcec264fa2730903dd2340d92466c7e5615141d045d05`。
 資源補足v1（分離参照`dfc6b431`）は旧CLIがrepeat1を拒否し、build/windowの前に終了した。
 driver exit1／child perf exit2をinvalid封印・診断保持・finalizeした。欠測をpassへ読み替えず、
 明示single-leg入口を新しい分離参照sourceへ含めたfresh batchでのみ再実施する。
+
+資源補足v2（`cbf3a238`）はSmall game自体return0だったが、INFO filterのためrun.logにadapter/backendが
+現れずinvalidとなった。Window側の自己報告を代用品にせず、補足driverと各paired caseのexact envに
+`RUST_LOG=info,wgpu=error`を固定する。WARN/ERROR拒否と独立log照合は維持する。
+rawには`Rgb9e5Ufloat`/D3/48³のLUT（442,368 bytes）があり、wgpu-types29の
+`block_copy_size=4`に従って独立oracleの明示format表へ加える。未知formatを汎用値で通さない。
+
+v2の初終には匿名Rgba8Unorm/2560×1440/14,745,600 bytesの画像1件の退役もあった。
+labelは旧rawにないため、これをRTT由来だったと確定したとは扱わない。RttRuntimeの再生成と
+camera/compositeの参照切替後の自然退役を、fresh試行で明示的に確認する。
+両sourceのperformance fixtureは初期採取前だけ、現在のRTT画像が要求寸法・runtime viewport・
+scale1・D2/Rgba8Unorm・正しいscene labelに一致し、同labelの別handleがresidentでなくなるまでReadyを待つ。
+待機時とReady時にactive/旧handle・label・extentを一度記録する。producerが旧画像をremoveしたり、
+新しい強参照を保持して退役を妨げたりしない。区間開始後は待機・再Ready化せず、従来の初終drift拒否を保つ。
+この待機はJSON列挙・計測中処理ではなくpre-warm setupで、個別art/group gallery・M2・通常起動には追加しない。
+v2の原本はinvalid封印・診断保持・finalize済みであり、部分的な時間値を予算合格へ読み替えない。

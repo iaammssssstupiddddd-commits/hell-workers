@@ -14,6 +14,7 @@ FORMATS = {
     "Bgra8Unorm": 4, "Bgra8UnormSrgb": 4, "R16Float": 2, "Rg16Float": 4,
     "Rgba16Float": 8, "R32Float": 4, "Rg32Float": 8, "Rgba32Float": 16,
     "Depth16Unorm": 2, "Depth32Float": 4,
+    "Rgb9e5Ufloat": 4,
 }
 TOTALS = {"mesh_count", "image_count", "material_count", "mesh_vertex_index_payload_bytes",
           "image_cpu_payload_bytes", "images_without_cpu_backing", "declared_texture_payload_bytes_estimate",

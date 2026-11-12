@@ -181,6 +181,7 @@ def run(args):
              "started_at": native.utc_now(), "heartbeat_at": native.utc_now()}
     put(job, state)
     env = native.cargo_environment(repo)
+    env["RUST_LOG"] = "info,wgpu=error"
     try:
         binary = None
         for size, souls in CASES:

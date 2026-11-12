@@ -50,6 +50,16 @@ def boundary():
 
 
 class ResourceInventoryTests(unittest.TestCase):
+    def test_packed_rgb9e5_uses_the_wgpu_four_byte_texel_for_a_real_3d_lut(self):
+        image = snapshot()["images"][0]
+        image.update(format="Rgb9e5Ufloat", dimension="D3", extent=[48, 48, 48],
+                     cpu_payload_bytes=442368, declared_texture_payload_bytes_estimate=442368)
+        self.assertEqual(inventory.texture_estimate(image), 442368)
+        image["mip_levels"] = 2
+        self.assertEqual(inventory.texture_estimate(image), (48**3 + 24**3)*4)
+        image["format"] = "UnknownPackedFormat"
+        with self.assertRaises(ValueError):
+            inventory.texture_estimate(image)
     def test_cpu_none_is_explicit_and_only_descriptor_is_estimated(self):
         value = inventory.boundaries(boundary())
         self.assertEqual(value["image_cpu_payload_bytes"], 0)

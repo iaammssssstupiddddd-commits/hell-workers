@@ -108,6 +108,7 @@ pub(crate) struct BuildingArtStaticState {
     resources_required: bool,
     resources_initial: Option<Value>,
     resources_final: Option<Value>,
+    resources_rtt_wait_logged: bool,
     stable_frames: u64,
     completion_effects_settled: bool,
     art_candidate: bool,
@@ -247,6 +248,7 @@ pub(crate) struct InspectParams<'w, 's> {
     tiles: Query<'w, 's, (&'static SoulSpaTile, Option<&'static TaskWorkers>)>,
     time: Res<'w, Time<Virtual>>,
     capture: Res<'w, PerfCapture>,
+    rtt: Option<Res<'w, crate::plugins::startup::RttRuntime>>,
     exit: MessageWriter<'w, AppExit>,
 }
 
@@ -262,6 +264,28 @@ pub(crate) fn inspect_building_art_static_system(mut params: InspectParams) {
         || params.config.workload() != PerfWorkload::BuildingArtStatic
         || !matches!(params.state.phase, Phase::Seeded | Phase::Ready)
     {
+        return;
+    }
+    if params.state.phase == Phase::Seeded
+        && params.art_session.is_none()
+        && params.group_art.is_none()
+        && !resource_inventory::rtt_ready(
+            &params.images,
+            params.rtt.as_deref(),
+            params.config.requested_window_size(),
+        )
+    {
+        if !params.state.resources_rtt_wait_logged {
+            info!(
+                "BUILDING_RESOURCE_RTT_WAIT: {}",
+                resource_inventory::rtt_observation(
+                    &params.images,
+                    params.rtt.as_deref(),
+                    params.config.requested_window_size()
+                )
+            );
+            params.state.resources_rtt_wait_logged = true;
+        }
         return;
     }
     match inspect(&params) {
@@ -328,6 +352,14 @@ pub(crate) fn inspect_building_art_static_system(mut params: InspectParams) {
                     }
                 };
                 if params.state.resources_initial.is_none() {
+                    info!(
+                        "BUILDING_RESOURCE_RTT_READY: {}",
+                        resource_inventory::rtt_observation(
+                            &params.images,
+                            params.rtt.as_deref(),
+                            params.config.requested_window_size()
+                        )
+                    );
                     params.state.resources_initial = Some(snapshot);
                 } else {
                     params.state.resources_final = Some(snapshot);

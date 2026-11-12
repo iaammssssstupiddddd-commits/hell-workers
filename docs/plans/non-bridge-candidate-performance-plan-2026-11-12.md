@@ -493,6 +493,22 @@ driver exit1/child exit2をinvalid封印・診断用途登録・finalize済み�
 - [ ] exact独立review・関連CI/Help/storage後に両sourceをcommitし、fresh資源補足へ進む。
 - [ ] 基盤pairedの全24case・隣接反転・3対・事前budgetを維持して実行する。
 
+### M8-e: 実測で見つかった初期資源とrenderer log
+
+補足v2は実ゲームreturn0でも、adapter INFO欠落によりperf verifierがinvalidを返した。
+rawには未対応packed LUTと、初終の匿名画像1件の退役があり、両方を診断用途として保持・精算した。
+初終不一致を許容せず、待機フレーム数の調整でも埋めない。
+
+- [x] 補足recipeとpaired exact argvへrenderer INFOのenvを固定し、log検証を維持する。
+- [x] 一次APIで確認したRgb9e5Ufloat=4 bytes/voxelだけを独立oracleへ明示追加し、48³/mipの回帰を追加。
+- [x] 両sourceへ同じ受動RTT Ready条件を実装。active targetの実descriptor/viewportと旧scene自然退役を待つ。
+  強参照追加・画像削除・計測中の再Ready化は行わない。初回待機/Readyのlabel/handle/extentを残す。
+- [x] primaryの自然drop処理を含むRust7件、Python拒否/packed形式を含むfocused28件成功。
+- [ ] exact独立review・両source関連CI/Help/storage後にcommitし、fresh v3で因果と初終/N4Nを確認する。
+
+旧匿名画像は寸法だけでRTTと断定しない。新gateの実際の待機理由と結果をfresh raw/logで確認し、
+同じ変化が残ればこの仮説を打ち切って実ownerを調査する。v2の時間値は性能合格へ使わない。
+
 M7-bのMixer move v3は登録verifier、4採用画像/rawの独立確認、封印/保持/finalizeを完了。
 同identityの実MoveCompleted・owner/root/parts・`[64,0,0]`変位を確認した。
 旧v2 invalidは維持し、新passを通常AI・art・performance・releaseの承認へ読み替えない。

@@ -6,6 +6,57 @@ use serde_json::{Value, json};
 
 const MAX_RESOURCES: usize = 65_536;
 
+/// Observe the real post-resize scene and natural retirement before publishing
+/// Ready. Never remove a texture or hold a new strong handle to make it pass.
+pub(super) fn rtt_ready(
+    images: &Assets<Image>,
+    runtime: Option<&crate::plugins::startup::RttRuntime>,
+    expected: Option<(u32, u32)>,
+) -> bool {
+    let (Some(runtime), Some((width, height))) = (runtime, expected) else {
+        return false;
+    };
+    let Some(active) = images.get(&runtime.scene) else {
+        return false;
+    };
+    let descriptor = &active.texture_descriptor;
+    descriptor.label == Some("hell-workers-rtt-scene")
+        && descriptor.format == bevy::render::render_resource::TextureFormat::Rgba8Unorm
+        && descriptor.dimension == TextureDimension::D2
+        && descriptor.size.width == width
+        && descriptor.size.height == height
+        && descriptor.size.depth_or_array_layers == 1
+        && descriptor.mip_level_count == 1
+        && descriptor.sample_count == 1
+        && runtime.viewport.width == width
+        && runtime.viewport.height == height
+        && runtime.target_scale_factor == 1.0
+        && !images.iter().any(|(id, image)| {
+            image.texture_descriptor.label == Some("hell-workers-rtt-scene")
+                && id != runtime.scene.id()
+        })
+}
+
+/// Only used once on startup wait, and once at the initial boundary. Label and
+/// extent distinguish a real old scene from an unrelated same-sized image.
+pub(super) fn rtt_observation(
+    images: &Assets<Image>,
+    runtime: Option<&crate::plugins::startup::RttRuntime>,
+    expected: Option<(u32, u32)>,
+) -> Value {
+    let describe = |id, image: &Image| {
+        let d = &image.texture_descriptor;
+        json!({"id": format!("{id:?}"), "label": d.label, "format": format!("{:?}", d.format),
+            "extent": [d.size.width, d.size.height, d.size.depth_or_array_layers]})
+    };
+    json!({"expected_extent": expected,
+        "viewport": runtime.map(|r| [r.viewport.width, r.viewport.height]),
+        "target_scale_factor": runtime.map(|r| r.target_scale_factor),
+        "active": runtime.and_then(|r| images.get(&r.scene).map(|image| describe(r.scene.id(), image))),
+        "resident_scenes": images.iter().filter(|(_, image)| image.texture_descriptor.label == Some("hell-workers-rtt-scene"))
+            .take(32).map(|(id, image)| describe(id, image)).collect::<Vec<_>>()})
+}
+
 fn add(total: &mut usize, bytes: usize) -> Result<(), String> {
     *total = total
         .checked_add(bytes)
@@ -311,5 +362,121 @@ mod tests {
             RenderAssetUsages::default(),
         );
         assert!(texture_bytes(&image).is_err());
+    }
+    #[test]
+    fn rtt_readiness_waits_for_natural_old_scene_retirement_without_retaining_it() {
+        use crate::plugins::startup::{RttRuntime, RttViewportSize};
+        let mut app = App::new();
+        app.add_plugins((MinimalPlugins, bevy::asset::AssetPlugin::default()))
+            .init_asset::<Image>();
+        let runtime = {
+            let mut images = app.world_mut().resource_mut::<Assets<Image>>();
+            let mut runtime = RttRuntime::new(
+                RttViewportSize {
+                    width: 256,
+                    height: 144,
+                },
+                1.0,
+                &mut images,
+            );
+            runtime.recreate(
+                RttViewportSize {
+                    width: 128,
+                    height: 72,
+                },
+                1.0,
+                &mut images,
+            );
+            runtime
+        };
+        app.insert_resource(runtime);
+        // Ready inspection does not delete the old asset itself or create a new
+        // strong handle. Bevy's normal dropped-handle processing must retire it.
+        assert!(!rtt_ready(
+            app.world().resource::<Assets<Image>>(),
+            Some(app.world().resource::<RttRuntime>()),
+            Some((128, 72))
+        ));
+        let observation = rtt_observation(
+            app.world().resource::<Assets<Image>>(),
+            Some(app.world().resource::<RttRuntime>()),
+            Some((128, 72)),
+        );
+        assert_eq!(observation["resident_scenes"].as_array().unwrap().len(), 2);
+        for _ in 0..3 {
+            app.update();
+        }
+        assert!(rtt_ready(
+            app.world().resource::<Assets<Image>>(),
+            Some(app.world().resource::<RttRuntime>()),
+            Some((128, 72))
+        ));
+    }
+
+    #[test]
+    fn rtt_readiness_requires_exact_active_target_and_waits_for_same_sized_old_generation() {
+        use crate::plugins::startup::{RttRuntime, RttViewportSize};
+        let mut images = Assets::<Image>::default();
+        let mut runtime = RttRuntime::new(
+            RttViewportSize {
+                width: 128,
+                height: 72,
+            },
+            1.0,
+            &mut images,
+        );
+        assert!(rtt_ready(&images, Some(&runtime), Some((128, 72))));
+        assert!(!rtt_ready(&images, None, Some((128, 72))));
+        assert!(!rtt_ready(&images, Some(&runtime), None));
+        assert!(!rtt_ready(&images, Some(&runtime), Some((256, 144))));
+        runtime.target_scale_factor = 2.0;
+        assert!(!rtt_ready(&images, Some(&runtime), Some((128, 72))));
+        runtime.target_scale_factor = 1.0;
+        runtime.viewport.width = 129;
+        assert!(!rtt_ready(&images, Some(&runtime), Some((128, 72))));
+        runtime.viewport.width = 128;
+        images
+            .get_mut(&runtime.scene)
+            .unwrap()
+            .texture_descriptor
+            .label = None;
+        assert!(!rtt_ready(&images, Some(&runtime), Some((128, 72))));
+        images
+            .get_mut(&runtime.scene)
+            .unwrap()
+            .texture_descriptor
+            .label = Some("hell-workers-rtt-scene");
+        images
+            .get_mut(&runtime.scene)
+            .unwrap()
+            .texture_descriptor
+            .format = TextureFormat::Rgba8UnormSrgb;
+        assert!(!rtt_ready(&images, Some(&runtime), Some((128, 72))));
+        images
+            .get_mut(&runtime.scene)
+            .unwrap()
+            .texture_descriptor
+            .format = TextureFormat::Rgba8Unorm;
+        let old = runtime.scene.clone();
+        runtime.recreate(
+            RttViewportSize {
+                width: 128,
+                height: 72,
+            },
+            1.0,
+            &mut images,
+        );
+        assert!(!rtt_ready(&images, Some(&runtime), Some((128, 72))));
+        images.remove(old.id());
+        let unrelated = images.add(Image::new_target_texture(
+            256,
+            144,
+            TextureFormat::Rgba8Unorm,
+            None,
+        ));
+        assert!(images.get(&unrelated).is_some());
+        assert!(rtt_ready(&images, Some(&runtime), Some((128, 72))));
+        images.remove(runtime.scene.id());
+        assert!(!rtt_ready(&images, Some(&runtime), Some((128, 72))));
     }
 }
