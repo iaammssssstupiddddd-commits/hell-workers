@@ -460,11 +460,14 @@ materialは`size_of`×resident件数のshallow bytesで、依存textureやGPU配
 path/payload記述のmultisetと件数・bytesを比較する。generated assetの同サイズを同一geometryの証明とはしない。
 群別runnerは既存residentカウンタとこの独立inventoryを突き合わせ、mesh payload/texture descriptor推計も
 有限budgetとN/4N plateauへ加える。検証器SHAをplanへ固定し、古いbudgetや欠測のrawを受入へ流用しない。
-専用group gallery・個別アート・M2 state・通常起動へこの計測を追加しない。
+plain-static performanceにも同じ初終採取器を接続する。条件は明示BuildingArtStatic workloadかつ
+art_session/group_artなしであり、専用group gallery・個別アート・M2 state・通常起動へは追加しない。
 
 旧`353fc4cd`の計12回には資源bytesがないため、既存凍結環境を編集せず、同commit由来の
 `target/tak14-foundation-resources-353fc4cd`へmain所有で受動計測だけを追加する。
-変更はbuilding_art_static/mod.rsとresource_inventory.rsの2pathに限定し、旧asset bytesを一致させる。
+描画変更はbuilding_art_static/mod.rsとresource_inventory.rsの受動計測2pathに限定し、旧asset bytesを一致させる。
+単発legの引数受付にはperf_tool/arguments.py、argument_validation/density.pyと拒否系test1件だけを加える。
+旧凍結treeのCLIは変更せず、新参照のsource identityとして明示する。
 専用 `building_resource_inventory_acceptance.py`は旧9回＋N Memory3回の元verifierを保ち、
 新しいsource identityのN/4N各1回を30秒warmup/60秒measureで実行して資源量だけ補う。
 その新timingを旧12回へ混ぜず、同じadapter/fixture/assetと別sourceを明記する。
@@ -473,7 +476,7 @@ path/payload記述のmultisetと件数・bytesを比較する。generated asset�
 
 旧treeのidentity/harnessは、承認済みのsource-local helperをisolated/read-only Python子process
 （-I/-B）で取得・前後再照合する。primaryの現catalogを旧treeへ要求せず、不足する現19pathをコピーしない。
-2path-only・clean・元helper SHAを実行前に検査し、primary側のcontroller/oracleと全verifier harness SHAは
+受動2path＋CLI2path＋拒否系testのexact scope・clean・元helper SHAを実行前に検査し、primary側のcontroller/oracleと全verifier harness SHAは
 別にplanへ固定する。この境界を変更したfresh helperでのみ補足を実行する。
 
 candidate Mixer move v2（`c6653c69`）は背景Familiar0→専用Familiar/worker各1と実移動を観測し、
@@ -490,3 +493,46 @@ refining v1/v2のoverlay欠落・撮影時間の調査は、v3の独立成功を
 2件のdiagnostic consumerを正式解除し、全assetがprimary/元候補と一致・使用processなしを確認して
 exact2jobを復元可能なTrashへ移した。作業場の実測削減は2,451,869,696 bytes。
 失敗履歴はinvalidのまま保持し、物理空き増加を意味しない。元候補・v3証拠・codec・Cargo cacheは保全した。
+
+### 基盤の隣接・順序反転比較
+
+旧12回と後日取得する新12回の集計だけでは、移行計画§7の「各対照」の隣接条件を満たさない。
+旧12回は校正入力として維持し、353＋受動inventoryの別identityと現plain-fallbackを新たに対にする。
+両者の9種fixture、asset bytes、seed、adapter、画面条件を一致させ、共通の区間外採取器を使う。
+観測用inventoryが保持するメモリも含む比較であり、元353の無観測性能とは称さない。
+
+`scripts/building_foundation_paired_acceptance.py`はplan、guard付きbuild準備、verifyを扱い、ゲームを起動しない。
+資源補足の実測後、新controlの測定前に全指標の有限増分、MAD上限10%以下、精算gapを固定する。
+全24caseはCapture→Memory、各N/4N、3対で旧→新、新→旧、旧→新の順。
+mainは既存primary coordinatorで各caseをexact repo/root/argvへ一度ずつ登録し、返されたlauncherで
+実行、独立verify/seal、保持用途、finalizeまで精算してから次へ進む。親子batch例外を追加しない。
+`prepare-build`／`prepare-case`はread-onlyで従来のkitty planを返し、必ず
+`dev.py validation plan --spec ... -- <prepare argv>`で包む。prepare自体はbuildもゲーム起動も行わない。
+単発processは明示`--building-static-single-leg`を使う。flagなしは従来のrepeat3、flagありだけrepeat1とし、
+M6 mode/asset-root、別workload、RtT契約との混在を拒否する。seed/actors/画面/GPU/Capture/Memory/30+60秒/
+hidden条件は従来分岐を共用する。単発legを反復受入へ読み替えず、全24caseを最終verifierで要求する。
+二つのsourceのactivity lockを共通Git lockと誤認せず、同時実行や別buildをmainが行わない。
+
+Capture前に両sourceのCaptureをsource別の正式build batchとして登録し、正規feature/profileで
+buildして同じexclusive lease内でimmutable binaryを固定する。recipe/source/plan/log/binaryのreceiptを
+台帳のexact command/verify argv・登録時file SHA・成功exitへ束縛し、独立封印/finalize後にstageへ採用する。
+同一binaryを二つのsourceとして提出すること、単に正しいpathへ別binaryをコピーすることは拒否する。
+Capture全12caseの精算後にMemoryを同様にbuildし、元planとCapture stageのSHAへ連結する。
+各perf CLIの`--binary/--skip-build`はpair内の再buildを避けるためだけに使い、admissionを省略しない。
+pair間で許すのはinput/hash照合、raw検証、seal/retain/finalizeだけで、別workload/buildを挟まない。
+各caseの登録済みverify argvとstage file SHAへplan/budgetを連結し、測定後の予算書換えを拒否する。
+検証器は台帳の実source/command/root/exit/時刻/終了結果とraw全体、完全な順序・gap・反転、
+source別binary固定、同fixture/環境、N/4N payload plateau、事前budgetを再照合する。
+期間前から実行中だった別validationも含め、実行区間の重なりを拒否する。
+静止基盤の成功も、稼働gameplay、GPU allocator予算、アート、正式release、最終9種累積受入の代用ではない。
+
+Mixer move v3（`f4a38159`）は694 samples、epoch0、同owner/root/partsを保持し、delta `[64,0,0]`。
+実MoveCompletedは1件で、order/target、専用worker/Familiar、ownerが一致した。
+4枚の採用画像とrawを独立read-only確認し、Vulkan WARN/ERRORなし、登録verifier pass・封印/finalize済み。
+manifest `8c96ba8c7af3a969e053a68bcd93444a28d8c986f5b95997052f35e9824778fc`、
+trace `aa3e9f54ae29d233ad3fcec264fa2730903dd2340d92466c7e5615141d045d05`。
+これはseeded move-onlyの技術証拠で、通常AI全般・アート・性能・releaseの承認ではない。
+
+資源補足v1（分離参照`dfc6b431`）は旧CLIがrepeat1を拒否し、build/windowの前に終了した。
+driver exit1／child perf exit2をinvalid封印・診断保持・finalizeした。欠測をpassへ読み替えず、
+明示single-leg入口を新しい分離参照sourceへ含めたfresh batchでのみ再実施する。

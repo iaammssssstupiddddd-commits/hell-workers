@@ -53,6 +53,8 @@ def add_run_arguments(
         ],
     )
     parser.add_argument("--contract", choices=sorted(CONTRACT_FILES))
+    parser.add_argument("--building-static-single-leg", action="store_true",
+                        help="one registered static comparison/resource leg; not a complete repeated acceptance")
     parser.add_argument("--building-m6-mode", choices=["legacy-control", "candidate"],
                         help="one member of the coordinator-owned paired M6 matrix")
     parser.add_argument("--building-m6-asset-root", help="frozen pre-release comparison view only")

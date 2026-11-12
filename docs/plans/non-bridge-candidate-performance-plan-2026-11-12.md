@@ -444,7 +444,7 @@ Help No impact: 明示profilingのperformance観測・検証だけで、通常pl
 
 旧treeのidentity/harnessは、承認済みのsource-local helperをisolated/read-only Python子process
 （-I/-B）で取得・前後再照合する。primaryの現catalogを旧treeへ要求せず、不足する現19pathをコピーしない。
-2path-only・clean・元helper SHAを実行前に検査し、primary側のcontroller/oracleと全verifier harness SHAは
+受動2path＋CLI2path＋拒否系testのexact scope・clean・元helper SHAを実行前に検査し、primary側のcontroller/oracleと全verifier harness SHAは
 別にplanへ固定する。この境界を変更したfresh helperでのみ補足を実行する。
 
 ### M7-b追補: 短いMoveの完了identity
@@ -459,3 +459,40 @@ Mixer move v2は新しい背景Familiar0の条件で警告なし・実移動あ�
 refiningの旧v1/v2はv3で原因を解消・採用済みのためdiagnostic用途を正式解除した。
 唯一asset・使用process・残consumerなしを確認したexact2rootのみTrashへ移動し、
 作業場から2,451,869,696 allocated bytesを削減。原本/最新証拠/codec/cacheは保持し、物理空き量とは区別する。
+
+### M8-c: 基盤対照の時間的な隣接条件
+
+- [x] canonical計画§7は別source対照にも適用されると独立read-only照合。旧12runを校正へ分離する。
+- [x] primaryのplain-static performanceへ、M6と同じReady/Flush初終inventoryを接続する。
+  art_session/group_artと通常起動は除外し、測定中の列挙・JSON化を追加しない。
+- [ ] ゲーム非起動plan/guard付きbuild準備/verifierと拒否系試験をexact品質検証・独立read-only review後にcommitする。
+- [ ] 資源補足後、新control測定前に全有限budgetとMAD/gapを独立照合して固定する。
+- [ ] 既存分離referenceとprimaryのCapture両binaryを事前固定し、N/4N×3対を隣接/中間反転で実行する。
+- [ ] Capture全12caseの正式精算後にMemoryをbuild/bindし、同じ契約の12caseを実行する。
+- [ ] 台帳とrawによる順序/環境/identity/binary/payload/budgetの独立検証を閉じ、群別導入へ継続する。
+
+各caseは既存coordinatorのexact repo/root登録とlauncherを使い、次のcaseまでに封印/用途/finalizeする。
+単一batchへ別repoを混ぜず、親子batchやactivity FD継承の例外を作らない。
+二段階planは元source/assets/budget/matrixを不変とし、Memoryで条件や閾値を変更できない。
+pair間は照合と精算だけ、別build/測定は禁止。No impact: profiling診断だけでplayerの契約は不変。
+source別buildも正式batchとし、同lease内のimmutable copyとexact recipe/source/plan/log/hash receiptを
+成功ledgerへ束縛する。同一binaryの別source偽装を拒否し、Memory build開始前からCapture完了を要求する。
+登録時のcase verifier/stage SHAへ予算を固定し、事後変更や期間前から重なった別試験も拒否する。
+prepare-build/prepare-caseの標準kitty planを既存validation planで包み、返されたcoordinator launcherだけを実行する。
+
+### M8-d: source-local CLIの単発leg契約
+
+資源補足v1は旧CLIのrepeat3必須条件により、repeat1が実機起動前に拒否された。
+driver exit1/child exit2をinvalid封印・診断用途登録・finalize済み。旧凍結353と旧12runは保持する。
+新参照の受動Rust2pathに加え、perf_tool/arguments.py、argument_validation/density.py、
+拒否系test1件だけをmain所有のreview対象へ追加する。描画・ゲームルール・既存guardは変更しない。
+
+- [x] 明示`--building-static-single-leg`を両sourceへ実装。flagなしrepeat3、flagありrepeat1を区別する。
+- [x] 別workload/command、M6/asset-root/RtT混在、時間/seed/actors/画面/hidden逸脱を拒否する。
+- [x] 両sourceのfocused拒否検査と実CLI dry-run成功。単発自体の受入権限は与えない。
+- [ ] exact独立review・関連CI/Help/storage後に両sourceをcommitし、fresh資源補足へ進む。
+- [ ] 基盤pairedの全24case・隣接反転・3対・事前budgetを維持して実行する。
+
+M7-bのMixer move v3は登録verifier、4採用画像/rawの独立確認、封印/保持/finalizeを完了。
+同identityの実MoveCompleted・owner/root/parts・`[64,0,0]`変位を確認した。
+旧v2 invalidは維持し、新passを通常AI・art・performance・releaseの承認へ読み替えない。

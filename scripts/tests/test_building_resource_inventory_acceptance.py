@@ -10,7 +10,7 @@ from scripts import building_resource_inventory_acceptance as supplement
 
 
 class ResourceSupplementTests(unittest.TestCase):
-    def test_origin_requires_distinct_committed_source_with_only_two_passive_paths(self):
+    def test_origin_requires_distinct_committed_source_with_bounded_passive_and_cli_paths(self):
         def command(paths, ancestor=0):
             return [SimpleNamespace(stdout="\n".join(paths)), SimpleNamespace(returncode=ancestor)]
         with patch.object(supplement.subprocess, "run", side_effect=command(supplement.ALLOWED)), \

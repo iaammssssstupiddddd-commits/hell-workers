@@ -26,7 +26,9 @@ native = static.native
 PROFILE = "building-foundation-resource-supplement-v1"
 BASE = static.REFERENCE_COMMIT
 MODULE = "crates/bevy_app/src/plugins/startup/perf_scenario/building_art_static/"
-ALLOWED = {MODULE + "mod.rs", MODULE + "resource_inventory.rs"}
+ALLOWED = {MODULE + "mod.rs", MODULE + "resource_inventory.rs",
+           "scripts/perf_tool/arguments.py", "scripts/perf_tool/argument_validation/density.py",
+           "scripts/tests/test_building_static_single_leg.py"}
 CASES = (("small", 15), ("medium", 60))
 
 
@@ -186,6 +188,7 @@ def run(args):
             native.require(native.read_json(args.plan) == value, "resource plan changed")
             argv = static.command(root, "capture", size, souls, value["adapter"])
             argv[argv.index("--repeat") + 1] = "1"
+            argv.append("--building-static-single-leg")
             native.run_command(f"capture-{size}", argv, repo=repo, env=env,
                 log_path=root / f"capture-{size}.log", job_file=job, state=state, timeout_seconds=3600)
             actual = repo / "target/profiling/bevy_app"

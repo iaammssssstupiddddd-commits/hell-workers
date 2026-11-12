@@ -303,7 +303,7 @@ pub(crate) fn inspect_building_art_static_system(mut params: InspectParams) {
                 fail(&mut params.state, &mut params.exit, reason);
                 return;
             }
-            if params.m6.is_some()
+            if params.art_session.is_none()
                 && params.group_art.is_none()
                 && (params.state.resources_initial.is_none()
                     || matches!(params.capture.phase, PerfCapturePhase::Flush)
@@ -334,7 +334,8 @@ pub(crate) fn inspect_building_art_static_system(mut params: InspectParams) {
                 }
             }
             if params.state.evidence.is_none() {
-                params.state.resources_required = params.m6.is_some() && params.group_art.is_none();
+                params.state.resources_required =
+                    params.art_session.is_none() && params.group_art.is_none();
                 let foreground = match foreground::capture_m6(&params) {
                     Ok(value) => value,
                     Err(reason) => {

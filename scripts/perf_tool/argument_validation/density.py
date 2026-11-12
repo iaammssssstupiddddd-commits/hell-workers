@@ -8,6 +8,11 @@ from .common import ParsedMatrix
 
 def validate_density(args: argparse.Namespace, matrix: ParsedMatrix) -> bool:
     m6 = getattr(args, "building_m6_mode", None)
+    single_leg = getattr(args, "building_static_single_leg", False)
+    if single_leg and (args.workload != "building-art-static" or m6 is not None
+                       or getattr(args, "building_m6_asset_root", None) is not None
+                       or matrix.selected_rtt_light):
+        raise ValueError("--building-static-single-leg requires plain building-art-static without M6/asset-root/RtT contracts")
     if m6 is not None and args.workload != "building-art-static":
         raise ValueError("--building-m6-mode requires building-art-static")
     view = getattr(args, "building_m6_asset_root", None)
@@ -191,7 +196,7 @@ def validate_density(args: argparse.Namespace, matrix: ParsedMatrix) -> bool:
             or matrix.sizes not in (["small"], ["medium"])
             or matrix.renders != ["gpu"]
             or args.instrumentation not in {"capture", "memory"}
-            or args.seed != 20_260_920 or args.repeat != (1 if m6 else 3) or args.preflight_runs != 0
+            or args.seed != 20_260_920 or args.repeat != (1 if m6 or single_leg else 3) or args.preflight_runs != 0
             or args.warmup_secs != 30.0 or args.measure_secs != 60.0
             or args.window_backend != "x11" or args.backend != "vulkan"
             or args.present_mode != "novsync"
@@ -202,6 +207,6 @@ def validate_density(args: argparse.Namespace, matrix: ParsedMatrix) -> bool:
             or matrix.dashboard_modes != ["hidden"] or args.familiars != 0
             or args.souls != (15 if matrix.sizes == ["small"] else 60)
         ):
-            raise ValueError("building-art-static requires one size (small/15 Souls or medium/60 Souls), zero Familiars, GPU Capture|Memory, seed 20260920, three 30/60s runs without preflight, X11/Vulkan/novsync/1280x720/high/DPI-1 and baseline hidden UI")
+            raise ValueError("building-art-static requires one size (small/15 Souls or medium/60 Souls), zero Familiars, GPU Capture|Memory, seed 20260920, three runs by default or one explicitly selected static/M6 leg, 30/60s without preflight, X11/Vulkan/novsync/1280x720/high/DPI-1 and baseline hidden UI")
         return True
     return False
