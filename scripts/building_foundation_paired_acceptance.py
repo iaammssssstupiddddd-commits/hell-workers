@@ -9,10 +9,11 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 import json
 import math
 import os
+import re
 from pathlib import Path
 import statistics
 
@@ -415,12 +416,113 @@ def aggregate(rows, instrument, budget):
     return result
 
 
-def require_no_interleaving(rows, batches):
+def _boot_boundary():
+    # Positive machine-lifetime evidence, not PID absence. Never supplied by a
+    # CLI or saved document. Both reads must describe the same current boot.
+    boot_path = Path("/proc/sys/kernel/random/boot_id")
+    try:
+        boot = boot_path.read_text().strip()
+        btime = next(line.split()[1] for line in Path("/proc/stat").read_text().splitlines()
+                     if line.startswith("btime "))
+        native.require(boot == boot_path.read_text().strip(), "kernel boot changed during observation")
+        require_boot = re.fullmatch(r"[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}", boot)
+        native.require(require_boot is not None and btime.isdigit(), "kernel boot boundary unavailable")
+        return {"boot_id": boot, "started_at": datetime.fromtimestamp(int(btime), timezone.utc).isoformat()}
+    except (OSError, StopIteration, ValueError) as error:
+        raise native.AcceptanceError("kernel boot boundary unavailable") from error
+
+
+def _closed_registration_path(batch, history):
+    """Prove the current coordinator's complete register/seal/close WAL path."""
+    native.require(batch.get("coordinator_sha256") == storage.digest(Path(storage.__file__))
+        and isinstance(history, list), "closed registration transition evidence unavailable")
+    bid = batch["id"]
+    pattern = re.compile(r"^(?:register|start|child started|execution ended|seal started|seal failed|recorded verification result|finalize|recover) "
+                         + re.escape(bid) + r"(?:$|;|:)")
+    events = [row for row in history if isinstance(row, dict) and isinstance(row.get("action"), str)
+              and pattern.search(row["action"])]
+    expected = [f"register {bid}", f"seal started {bid}",
+                f"recorded verification result {bid}; no archive required", f"finalize {bid}: {batch['result']}"]
+    native.require([row["action"] for row in events] == expected, "closed registration lifecycle differs")
+    stamps = [time(row["at"]) for row in events]
+    native.require(time(batch["created_at"]) <= stamps[0] <= stamps[1] <= time(batch["verified_at"])
+        <= stamps[2] <= time(batch["finalized_at"]) <= stamps[3], "closed registration event order differs")
+    return stamps[-1], events
+
+
+def _activity_end_upper_bound(batch, history=None):
+    started = batch.get("started_at")
+    native.require(started is not None or batch.get("phase") == "finalized",
+                   "validation start boundary is unknown")
+    lower = time(started if started is not None else batch["created_at"])
+    if batch.get("finished_at") is not None:
+        native.require(started is not None, "command finish has no start boundary")
+        end = time(batch["finished_at"])
+        native.require(end >= lower, "validation end precedes its start")
+        return end, {"basis": "finished_at"}
+    native.require(batch.get("phase") == "finalized" and batch.get("verified_at") and batch.get("finalized_at"),
+                   "validation closure boundary is unknown")
+    code = batch.get("exit_code")
+    if started is None:
+        native.require(batch.get("result") in {"invalid", "abandoned"} and code is None,
+                       "missing-time history has inconsistent closure")
+        basis = "closed_missing_execution_times_upper_bound"
+    else:
+        native.require(batch.get("result") in {"invalid", "interrupted", "abandoned"}
+            and type(code) is int and -64 <= code <= 255 and code != 0,
+            "closed history lacks a known non-success exit")
+        basis = "finalized_at_upper_bound"
+    verified, end = time(batch["verified_at"]), time(batch["finalized_at"])
+    native.require(lower <= verified <= end, "closed validation timestamp order differs")
+    native.require("process_identity" in batch, "closed history ownership is missing")
+    audit = {"basis": basis, "start_lower_bound": lower.isoformat(),
+             "start_lower_bound_basis": "started_at" if started is not None else "created_at"}
+    if "child_identity" not in batch:
+        native.require(started is None and "child_pid" not in batch and batch["process_identity"] is None,
+                       "closed history child ownership is missing")
+        if batch.get("coordinator_sha256") == storage.digest(Path(storage.__file__)):
+            end, events = _closed_registration_path(batch, history)
+            audit.update(basis="closed_registration_seal_path_upper_bound", transition_receipts=events)
+        else:
+            # A machine-local, terminal closure before the current boot cannot
+            # authorize later execution; the reboot ends any unpublished orphan.
+            boot = _boot_boundary()
+            native.require(end <= time(boot["started_at"]), "missing-owner closure is not bounded by an older boot")
+            end = time(boot["started_at"])
+            audit.update(basis="closed_preboot_missing_child_upper_bound", kernel_boot=boot)
+        return end, audit
+    identities = [batch[key] for key in ("process_identity", "child_identity") if batch[key] is not None]
+    if identities:
+        boot = _boot_boundary()
+        for identity in identities:
+            native.require(isinstance(identity, str) and re.fullmatch(
+                r"[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}:[1-9][0-9]*", identity) is not None
+                and identity.split(":")[0] != boot["boot_id"], "closed history has an unresolved current owner")
+        end = max(end, time(boot["started_at"]))
+        audit.update(basis="different_boot_owner_upper_bound", kernel_boot=boot,
+                     historical_identities=identities)
+    return end, audit
+
+
+def require_no_interleaving(rows, batches, *, history=None):
     start, end = time(rows[0]["started_at"]), time(rows[-1]["finished_at"])
     allowed = {r["batch"] for r in rows}
-    native.require(not any(b["id"] not in allowed and b.get("started_at")
-        and time(b["started_at"]) <= end and (not b.get("finished_at") or time(b["finished_at"]) >= start)
-        for b in batches), "other validation interleaved")
+    closures = []
+    for batch in batches:
+        if batch["id"] in allowed:
+            continue
+        if batch.get("started_at") is not None and time(batch["started_at"]) > end:
+            continue
+        upper, audit = _activity_end_upper_bound(batch, history)
+        lower = time(batch["started_at"] if batch.get("started_at") is not None else batch["created_at"])
+        if lower > end:
+            continue
+        native.require(upper < start, "other validation interleaved: " + batch["id"])
+        if audit["basis"] != "finished_at":
+            closures.append({"batch": batch["id"], "end_upper_bound": upper.isoformat(),
+                             "historical_result": batch["result"], **audit})
+    return {"started_at": rows[0]["started_at"], "finished_at": rows[-1]["finished_at"],
+            "closed_history_bounds": sorted(closures, key=lambda row: row["batch"])}
 
 
 def verify_stage(path):
@@ -439,11 +541,11 @@ def verify_stage(path):
             assessment = compare(before["inventory"], after["inventory"])
             cross_stage_resources[source] = assessment if source == "reference" else {"global_shared_mesh_plateau": True, "totals": assessment}
     ledger = native.read_json(storage.ledger_dir(storage.primary_for(Path(planned["repos"]["current"]))) / "ledger.json")
-    require_no_interleaving(rows, ledger["batches"].values())
+    interleaving = require_no_interleaving(rows, ledger["batches"].values(), history=ledger.get("history"))
     return {"profile": PROFILE, "status": "pass", "instrumentation": stage["instrumentation"],
         "stage_sha256": static.sha256(path), "rows": rows,
         "aggregate": aggregate(rows, stage["instrumentation"], planned["limits"]),
-        "cross_stage_resources": cross_stage_resources,
+        "cross_stage_resources": cross_stage_resources, "interleaving_audit": interleaving,
         "accepted": False, "promotion_authority": False,
         "unverified": ["active gameplay", "GPU allocation budget", "art", "release", "final cumulative nine"]}
 

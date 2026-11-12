@@ -272,6 +272,103 @@ class FoundationPairedTests(unittest.TestCase):
                     with self.assertRaises(paired.native.AcceptanceError):
                         paired.case_result(stage, planned, case, finalized=True)
 
+    def test_formal_closed_history_is_a_conservative_upper_bound_never_a_fake_finish(self):
+        rows = [{"batch": "owned", "started_at": "2026-11-12T01:00:00+00:00",
+                 "finished_at": "2026-11-12T02:00:00+00:00"}]
+        closed = {"id": "historical-interrupted", "phase": "finalized", "result": "interrupted", "exit_code": 130,
+                  "started_at": "2026-11-10T00:00:00+00:00", "finished_at": None,
+                  "verified_at": "2026-11-11T00:00:00+00:00", "finalized_at": "2026-11-11T01:00:00+00:00",
+                  "process_identity": None, "child_identity": None}
+        original = copy.deepcopy(closed)
+        result = paired.require_no_interleaving(rows, [closed])
+        self.assertEqual(closed, original)
+        self.assertEqual(result["closed_history_bounds"][0], {
+            "batch": closed["id"], "end_upper_bound": closed["finalized_at"],
+            "basis": "finalized_at_upper_bound", "historical_result": "interrupted",
+            "start_lower_bound": closed["started_at"], "start_lower_bound_basis": "started_at"})
+        for change in ({"phase": "running"}, {"phase": "sealing"}, {"phase": "needs-finalize"},
+                       {"result": "unknown"}, {"result": "pass"}, {"exit_code": None}, {"exit_code": False},
+                       {"exit_code": 0}, {"exit_code": 999},
+                       {"process_identity": "live-owner"}, {"child_identity": "live-child"},
+                       {"verified_at": None}, {"finalized_at": None},
+                       {"finalized_at": "2026-11-12T01:30:00+00:00"},
+                       {"finalized_at": "2026-11-10T01:00:00+00:00"},
+                       {"finished_at": "2026-11-09T00:00:00+00:00"}):
+            with self.subTest(change=change), patch.object(paired, "_boot_boundary", return_value={"boot_id": "a"*36, "started_at": "2026-11-11T00:00:00+00:00"}), self.assertRaises(paired.native.AcceptanceError):
+                paired.require_no_interleaving(rows, [closed | change])
+
+        for key in ("process_identity", "child_identity"):
+            missing = {k: v for k, v in closed.items() if k != key}
+            with self.subTest(missing=key), self.assertRaises(paired.native.AcceptanceError):
+                paired.require_no_interleaving(rows, [missing])
+        with self.assertRaises(ValueError):
+            paired.require_no_interleaving(rows, [closed | {"finished_at": ""}])
+
+    def test_missing_start_only_allows_formally_closed_missing_time_history(self):
+        rows = [{"batch": "owned", "started_at": "2026-11-12T01:00:00+00:00", "finished_at": "2026-11-12T02:00:00+00:00"}]
+        closed = {"id": "unstarted", "phase": "finalized", "result": "abandoned", "exit_code": None,
+                  "created_at": "2026-11-10T00:00:00+00:00", "verified_at": "2026-11-10T01:00:00+00:00",
+                  "finalized_at": "2026-11-10T02:00:00+00:00", "process_identity": None, "child_identity": None}
+        result = paired.require_no_interleaving(rows, [closed])
+        self.assertEqual(result["closed_history_bounds"][0]["basis"], "closed_missing_execution_times_upper_bound")
+        for change in ({"phase": "registered"}, {"phase": "running"}, {"phase": "needs-finalize"}, {"phase": "unknown"},
+                       {"result": "pass"}, {"exit_code": 130}, {"verified_at": None}, {"finalized_at": None}):
+            with self.subTest(change=change), self.assertRaises(paired.native.AcceptanceError):
+                paired.require_no_interleaving(rows, [closed | change])
+
+    def test_old_boot_is_positive_owner_end_bound_and_current_or_unknown_owner_still_fails(self):
+        rows = [{"batch": "owned", "started_at": "2026-11-12T01:00:00+00:00", "finished_at": "2026-11-12T02:00:00+00:00"}]
+        old = "11111111-1111-1111-1111-111111111111"
+        current = "22222222-2222-2222-2222-222222222222"
+        closed = {"id": "old-owner", "phase": "finalized", "result": "abandoned", "exit_code": None,
+                  "created_at": "2026-09-27T00:00:00+00:00", "verified_at": "2026-09-27T01:00:00+00:00",
+                  "finalized_at": "2026-09-27T02:00:00+00:00", "process_identity": None, "child_pid": 123, "child_identity": old+":123"}
+        boot = {"boot_id": current, "started_at": "2026-11-11T00:00:00+00:00"}
+        original = copy.deepcopy(closed)
+        with patch.object(paired, "_boot_boundary", return_value=boot):
+            audit = paired.require_no_interleaving(rows, [closed])["closed_history_bounds"][0]
+            self.assertEqual(audit["basis"], "different_boot_owner_upper_bound")
+            self.assertEqual(audit["end_upper_bound"], boot["started_at"])
+            self.assertEqual(closed, original)
+            for identity in (current+":123", "not-a-birth-identity", old+":0"):
+                with self.subTest(identity=identity), self.assertRaises(paired.native.AcceptanceError):
+                    paired.require_no_interleaving(rows, [closed | {"child_identity": identity}])
+        for missing in ("child_identity", "process_identity"):
+            with self.subTest(missing=missing), self.assertRaises(paired.native.AcceptanceError):
+                paired.require_no_interleaving(rows, [{k:v for k,v in closed.items() if k!=missing}])
+        with patch.object(paired, "_boot_boundary", return_value=boot | {"started_at": "2026-11-12T01:30:00+00:00"}), self.assertRaises(paired.native.AcceptanceError):
+            paired.require_no_interleaving(rows, [closed])
+        with patch.object(paired, "_boot_boundary", side_effect=paired.native.AcceptanceError("unavailable")), self.assertRaises(paired.native.AcceptanceError):
+            paired.require_no_interleaving(rows, [closed])
+
+    def test_missing_child_record_needs_current_closed_wal_or_positive_preboot_boundary(self):
+        rows = [{"batch": "owned", "started_at": "2026-11-12T01:00:00+00:00", "finished_at": "2026-11-12T02:00:00+00:00"}]
+        closed = {"id": "no-child-record", "phase": "finalized", "result": "abandoned", "exit_code": None,
+                  "created_at": "2026-11-10T00:00:00+00:00", "verified_at": "2026-11-10T01:00:00+00:00",
+                  "finalized_at": "2026-11-10T02:00:00+00:00", "process_identity": None, "coordinator_sha256": "current"}
+        events = [{"action": action, "at": at} for action, at in [
+            ("register no-child-record", "2026-11-10T00:01:00+00:00"),
+            ("seal started no-child-record", "2026-11-10T00:59:00+00:00"),
+            ("recorded verification result no-child-record; no archive required", "2026-11-10T01:01:00+00:00"),
+            ("finalize no-child-record: abandoned", "2026-11-10T02:01:00+00:00")]]
+        with patch.object(paired.storage, "digest", return_value="current"):
+            audit = paired.require_no_interleaving(rows, [closed], history=events)["closed_history_bounds"][0]
+            self.assertEqual(audit["basis"], "closed_registration_seal_path_upper_bound")
+            self.assertEqual(audit["end_upper_bound"], events[-1]["at"])
+            for history in (None, events[:-1], events[::-1], events+[{'action':'start no-child-record','at':'2026-11-10T00:30:00+00:00'}]):
+                with self.subTest(history=history), self.assertRaises(paired.native.AcceptanceError):
+                    paired.require_no_interleaving(rows, [closed], history=history)
+            with self.assertRaises(paired.native.AcceptanceError):
+                paired.require_no_interleaving(rows, [closed | {"child_pid":123}], history=events)
+            legacy = closed | {"coordinator_sha256":"old"}
+            boot = {"boot_id":"22222222-2222-2222-2222-222222222222", "started_at":"2026-11-11T00:00:00+00:00"}
+            with patch.object(paired, "_boot_boundary", return_value=boot):
+                audit = paired.require_no_interleaving(rows, [legacy])["closed_history_bounds"][0]
+                self.assertEqual(audit["basis"], "closed_preboot_missing_child_upper_bound")
+                self.assertEqual(audit["end_upper_bound"], boot["started_at"])
+            with patch.object(paired, "_boot_boundary", return_value=boot | {"started_at":"2026-11-09T00:00:00+00:00"}), self.assertRaises(paired.native.AcceptanceError):
+                paired.require_no_interleaving(rows, [legacy])
+
     def test_overlap_includes_other_validation_started_before_stage_and_still_running(self):
         data = [{"batch": "owned", "started_at": "2026-11-12T01:00:00+00:00",
                  "finished_at": "2026-11-12T02:00:00+00:00"}]
@@ -279,7 +376,7 @@ class FoundationPairedTests(unittest.TestCase):
                   "finished_at": "2026-11-12T00:59:59+00:00"}
         paired.require_no_interleaving(data, [before])
         for end in (None, "2026-11-12T01:01:00+00:00", "2026-11-12T03:00:00+00:00"):
-            with self.subTest(end=end), self.assertRaisesRegex(paired.native.AcceptanceError, "interleaved"):
+            with self.subTest(end=end), self.assertRaises(paired.native.AcceptanceError):
                 paired.require_no_interleaving(data, [before | {"finished_at": end}])
 
     def test_stage_requires_guarded_build_receipts_and_distinct_source_binaries(self):

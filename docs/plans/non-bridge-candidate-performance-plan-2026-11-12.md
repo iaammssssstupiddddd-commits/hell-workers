@@ -545,3 +545,31 @@ privateなproofは完全verifyで作り、stage/path/plan SHAへ拘束する。C
 standalone build verifyは完全検証を維持する。Memory最終結果でも同じproofから全cross-stage比較を行う。
 新helper/新計画へ既存receiptを書き換えず、同じCargo cacheからfresh build batchを正規に拘束し直す。
 予算・MAD・gap・原本検証・art/release条件は変更しない。Help No impact（host検証処理のみ）。
+
+
+### M8-g: 古い精算済み履歴の終了上限
+
+v2のCapture12 caseは個別verify/seal/finalizeまで成功したが、全体判定は旧3件のfinished_at欠落で
+`other validation interleaved`として失敗した。旧2件は9月26日、1件は11月11日に正式精算済みで、
+verified_at/finalized_atは今回の開始前、owner/child identityは解除済み。Memoryは未実行。
+旧12runを新しいdriverへ流用せず、失敗を診断用途で保持し、補正後のfresh plan/subjectへ進む。
+
+command終了時刻があれば従来どおり使用する。欠ける場合だけ、既知の非成功result・非zero integer exit・verified→finalizedの
+時刻整合・キーが存在して明示Noneの解除済みidentityを持つ正式finalized履歴について、finalized_atを保守的な終了上限として扱う。
+本来の終了時刻は作らず台帳も書換えない。今回interval内までの上限、unknown、非finalized、live identity、
+欠測/逆順の時刻は引き続き拒否する。除外した履歴と上限の出所はstage結果にも残す。
+予算・180秒gap・生データ・独立検証の条件は不変。Help No impact（hostの履歴判定のみ）。
+
+
+開始時刻の欠測も一律除外しない。実行時刻が欠測の正式精算済み非成功履歴だけ、登録created_atを開始下限とし、
+exit未設定・検証/精算時刻・ownershipを別契約で確認する。exit欠測だけで未起動とは断定しない。未精算/unknownの開始欠測は拒否する。
+9月の1件にはold-boot child identityが残るため、現在kernelのboot ID/btimeを二重読取りし、全nonnull identityが
+別bootと証明できるときだけ、max(正式精算時刻, 現boot開始)を保守的終了上限にする。PID不在から推測しない。
+同boot/不正identity/boot観測欠測は拒否し、boot証拠と旧identityもauditへ記録する。
+
+
+開始/child記録がない正式精算済み履歴も発見した。欠測を無条件に除外せず、古いcoordinatorの履歴は
+正式closeが現boot前であることとkernel境界を要求してboot時刻を終了上限にする。現coordinatorの履歴は
+完全なregister→seal→result→finalizeの保存transition（追加のstart/child/recoverがない）と時刻整合を要求する。
+後者の上限はfinalize保存event時刻。child PIDだけが残る不整合や不完全WALは拒否する。
+いずれも実終了時刻や未起動を断定せず、保守的区間と正の根拠をauditへ残す。
