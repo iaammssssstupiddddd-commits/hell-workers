@@ -325,3 +325,9 @@ inventory検証で固定する。primaryの`validation plan`と返されたno-pr
   通常起動への導入は別に完了する。
 
 本経路は実装・検証中で、18ケースの新しい実機受入完了をまだ主張しない。
+
+初回group connection（`ae32c940`）はHigh/DPI2のX11/Vulkan起動後、実window/DPI不一致で
+ready前に拒否された。PNGも受入結果もなく、登録recipeのexit1を照合してinvalid封印/finalizeした。
+要求寸法1920×1680を変更せず、同game PIDの唯一のX11 clientへ、入力・focus・resizeを使わない
+有界なXGetGeometry読取を追加する。ready前から寸法変化をnonce/PID・時刻付きで有限に保存し、
+実際のOS client寸法を次のfresh試行で調べる。この診断をDPI、camera、画像、性能の証拠へ代用しない。

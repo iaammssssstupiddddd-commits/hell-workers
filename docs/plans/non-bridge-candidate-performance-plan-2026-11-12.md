@@ -125,6 +125,18 @@ Door g7は別loaderで維持する。現loader/presentation候補許可は単一
 - [ ] Help実レビュー、品質gate、拒否系テスト、独立exact review後にcommitする。
   worst-DPIの単一接続caseはconnection-onlyとし、全matrixやreleaseの合格へ読み替えずfresh正式matrixへ進む。
 
+### M6-c: 実client寸法の事前観測
+
+初回group connection（ae32c940）はbuild後のX11/Vulkan起動で、producerの実window/DPI検査に
+拒否された。ready/PNGなし、exit1、invalid封印/finalize済み。要求値を変えたり同試行を再送しない。
+
+- [x] group runnerに、同じgame PIDの唯一のX11 clientだけを読む有界なgeometry観測を追加する。
+  XGetGeometryとPID/frame/window状態属性だけを使い、XTEST/EIS・入力・resize・focus操作は行わない。
+  ready前から寸法変化を有限の時刻付き診断へ残し、古いwindow/PID・未知送信を採用しない。
+- [ ] OS側の寸法とproducer拒否の関係をfresh connectionで確認する。geometry診断をPNGやDPI・
+  camera・受入の代わりにはせず、1920×1680と既存投影の条件を緩めない。
+- [ ] Help No impact実レビュー、関連拒否回帰、同subject品質gate・独立review・storageを通す。
+
 ### M7: 群別性能と順次導入
 
 - [x] 旧9種参照の不足N Memoryは、旧source/helperを編集せず、既存perf CLIのN×3を別batchで測る。

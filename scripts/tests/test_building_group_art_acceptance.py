@@ -3,7 +3,8 @@ import copy
 import io
 import itertools
 from contextlib import redirect_stdout
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
+from types import SimpleNamespace
 import json
 from pathlib import Path
 import tempfile
@@ -257,6 +258,58 @@ class GroupGalleryTests(unittest.TestCase):
                              ([[100, 100], [1905, 200]], "normal")):
             with self.assertRaises(ValueError):
                 observation.area(points, view)
+
+
+class GroupWindowReadbackTests(unittest.TestCase):
+    def test_owner_is_checked_before_opening_the_display(self):
+        with patch.object(gallery.window_probe.subprocess, "run", return_value=SimpleNamespace(returncode=0, stdout="_NET_WM_PID(CARDINAL) = 999")), \
+             patch.object(gallery.window_probe.ctypes, "CDLL") as library:
+            with self.assertRaisesRegex(ValueError, "owner changed"):
+                gallery.window_probe.client_geometry("0x123", 123)
+            library.assert_not_called()
+        for window, pid in (("0x0", 123), ("desktop", 123), ("0x123", True)):
+            with self.assertRaises(ValueError):
+                gallery.window_probe.client_geometry(window, pid)
+
+    def test_readback_keeps_actual_size_instead_of_substituting_requested_size(self):
+        library = MagicMock()
+        library.XOpenDisplay.return_value = 42
+        def geometry(*args):
+            args[5]._obj.value = 1920
+            args[6]._obj.value = 1624
+            args[8]._obj.value = 24
+            return 1
+        library.XGetGeometry.side_effect = geometry
+        with patch.object(gallery.window_probe.subprocess, "run", return_value=SimpleNamespace(returncode=0, stdout="_NET_WM_PID(CARDINAL) = 123")), \
+             patch.object(gallery.window_probe.ctypes, "CDLL", return_value=library):
+            value = gallery.window_probe.client_geometry("0x123", 123)
+        self.assertEqual(value["physical"], [1920, 1624])
+        library.XCloseDisplay.assert_called_once_with(42)
+        for mutate in (lambda v: v.update(pid=123.), lambda v: v["physical"].__setitem__(0, True),
+                       lambda v: v["physical"].__setitem__(1, 0), lambda v: v.update(window_id="0x999")):
+            bad = copy.deepcopy(value)
+            mutate(bad)
+            with self.assertRaises(ValueError):
+                gallery.window_probe.validate(bad, "0x123", 123)
+
+    def test_geometry_history_is_bounded_and_pid_nonce_bound_without_input(self):
+        geometry = {"window_id": "0x123", "pid": 123, "physical": [1920, 1624], "depth": 24, "wm_properties": "_NET_WM_PID(CARDINAL) = 123"}
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            with patch.object(gallery.native, "x11_client_windows_for_process_tree", return_value=[("0x123", 123)]), \
+                 patch.object(gallery.native, "run_bounded_capture_tool", return_value=SimpleNamespace(returncode=0, stdout=json.dumps(geometry), stderr="")):
+                gallery.observe_window(root, 123, "a" * 32)
+                gallery.observe_window(root, 123, "a" * 32)
+                value = gallery.read_artifact(root / "window-observations.json")
+                self.assertEqual(len(value["observations"]), 1)
+                self.assertEqual(value["observations"][0]["geometry"], geometry)
+                with self.assertRaisesRegex(ValueError, "foreign window"):
+                    gallery.observe_window(root, 123, "b" * 32)
+            with patch.object(gallery.native, "x11_client_windows_for_process_tree", return_value=[("0x123", 999)]), \
+                 patch.object(gallery.native, "run_bounded_capture_tool") as call:
+                with self.assertRaises(ValueError):
+                    gallery.observe_window(root, 123, "a" * 32)
+                call.assert_not_called()
 
 
 if __name__ == "__main__":

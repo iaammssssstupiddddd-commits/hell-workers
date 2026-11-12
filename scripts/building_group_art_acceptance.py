@@ -10,14 +10,17 @@ import re
 import secrets
 import shutil
 import subprocess
+import sys
 import time
 
 if __package__:
     from . import building_m6_acceptance as m6
     from . import building_group_art_observation as oracle
+    from . import building_group_art_window as window_probe
 else:
     import building_m6_acceptance as m6
     import building_group_art_observation as oracle
+    import building_group_art_window as window_probe
 
 native, pipeline, static = m6.native, m6.pipeline, m6.static
 PROFILE = oracle.PROFILE
@@ -52,7 +55,7 @@ def read_artifact(path):
 
 
 def driver_inventory():
-    paths = (Path(__file__), Path(oracle.__file__), Path(m6.__file__), Path(m6.art.__file__))
+    paths = (Path(__file__), Path(oracle.__file__), Path(m6.__file__), Path(m6.art.__file__), Path(window_probe.__file__))
     return {p.name: pipeline.digest(p.read_bytes()) for p in paths}
 
 
@@ -148,6 +151,27 @@ def capture(root, pid):
     pipeline.require(native.validate_png_structure(payload) == (oracle.WIDTH, oracle.HEIGHT), "group capture extent differs")
     return {"path": path.name, "sha256": pipeline.digest(payload), "window_id": window,
         "window_pid": owner, "capture_scope": "owned-x11-client", "captured_at_unix_ms": time.time_ns() // 1_000_000}
+
+
+def observe_window(root, pid, nonce):
+    clients = native.x11_client_windows_for_process_tree(pid)
+    if not clients:
+        return
+    pipeline.require(len(clients) == 1 and clients[0][1] == pid, "group geometry requires one exact game client")
+    window, _ = clients[0]
+    result = native.run_bounded_capture_tool([sys.executable, str(Path(window_probe.__file__).resolve()),
+        "--window", window, "--pid", str(pid)], label="owned group client geometry", timeout_seconds=3)
+    pipeline.require(result.returncode == 0, "owned group geometry failed: " + result.stderr[-1000:])
+    geometry = json.loads(result.stdout)
+    window_probe.validate(geometry, window, pid)
+    path = root / "window-observations.json"
+    history = read_artifact(path) if path.exists() else {"nonce": nonce, "pid": pid, "observations": []}
+    pipeline.require(history["nonce"] == nonce and history["pid"] == pid, "foreign window geometry history")
+    previous = history["observations"][-1] if history["observations"] else None
+    if previous is None or previous["geometry"] != geometry:
+        pipeline.require(len(history["observations"]) < 64, "group window geometry did not stabilize")
+        history["observations"].append({"at_unix_ms": time.time_ns() // 1_000_000, "geometry": geometry})
+        native.atomic_write_json(path, history)
 
 
 def verify_case(value, case, binary_sha):
@@ -247,6 +271,8 @@ def run(args):
                 native.update_state(job, state, child_pid=process.pid, current_stage=label(case))
                 try:
                     while process.poll() is None:
+                        if screenshot is None:
+                            observe_window(case_root, process.pid, nonce)
                         if screenshot is None and (case_root / "probe.json").exists():
                             probe = read_artifact(case_root / "probe.json")
                             pipeline.require(probe["pid"] == process.pid and probe["session"] == declaration
