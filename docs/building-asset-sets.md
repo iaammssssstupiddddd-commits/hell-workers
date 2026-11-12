@@ -1235,3 +1235,7 @@ Intel Arc MTL/Mesa26.2.6/Vulkan/X11、6画像/21入力の原本を登録verifier
 物理窓とowned PNGは1280×720のまま、実Windowの開始/終了DPI、logical寸法、RTT品質と
 scene/mask target、camera viewを別々に照合する。DPIをPNG寸法へ掛けた推測値を採用しない。
 この入口の実装だけでquality/DPI全matrixや群内調和、最遠での判読性、独立art/release採否を完了とはしない。
+新planはtyped `HW_BUILDING_ART_SESSION`にもwindow contractとDPIの対を渡す。
+Rust static configは完全なsessionを読み、requested DPIとの一致を要求する。1.5/2はgalleryだけで、
+context・Spa mask page・通常性能fixtureはDPI1のまま。新契約のsessionは実static workloadへ限定する。
+初回`bff4440e`のDPI1.5試行はこのRust接続前に描画前拒否となり、invalid封印済み。実機成功は未確定である。

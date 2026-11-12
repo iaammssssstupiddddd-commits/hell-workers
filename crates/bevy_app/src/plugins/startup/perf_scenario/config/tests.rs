@@ -179,6 +179,79 @@ fn building_art_static_rejects_wrong_population_clock_and_measurement_contract()
 
 #[cfg(feature = "profiling")]
 #[test]
+fn building_gallery_dpi_requires_a_full_matching_session_contract() {
+    let args = [
+        "--perf-scenario",
+        "--perf-workload",
+        "building-art-static",
+        "--perf-size",
+        "small",
+        "--spawn-souls",
+        "15",
+        "--spawn-familiars",
+        "0",
+        "--perf-seed",
+        "20260920",
+        "--perf-output-dir",
+        "/tmp/unused-gallery-window-test",
+        "--perf-window-width",
+        "1280",
+        "--perf-window-height",
+        "720",
+        "--perf-window-scale-factor",
+        "1.5",
+        "--perf-rtt-quality",
+        "high",
+    ];
+    let raw = serde_json::json!({"mode": "candidate", "identity": {"kind": "Tank",
+        "authority": "isolated_candidate", "generation": 1, "manifest_sha256": "a".repeat(64)},
+        "locator": "manifests/building-tank-v1.buildingset", "nonce": "a".repeat(32),
+        "status_path": "/tmp/unused-gallery-window-test/probe.json", "variant": "gallery",
+        "window_contract": "building-art-window-v1", "scale_factor": 1.5});
+    assert!(parse_input(&args, &[]).is_err());
+    assert!(parse_input(&args, &[("HW_BUILDING_ART_SESSION", "{}")]).is_err());
+    for (dpi, argument) in [(1.0, "1"), (1.5, "1.5"), (2.0, "2")] {
+        let mut value = raw.clone();
+        value["scale_factor"] = serde_json::json!(dpi);
+        let text = value.to_string();
+        let mut actual = args;
+        let scale_index = actual
+            .iter()
+            .position(|flag| *flag == "--perf-window-scale-factor")
+            .unwrap()
+            + 1;
+        actual[scale_index] = argument;
+        let result = parse_input(&actual, &[("HW_BUILDING_ART_SESSION", &text)]);
+        assert!(result.is_ok(), "DPI {dpi}: {:?}", result.err());
+    }
+    for (key, bad) in [
+        ("window_contract", serde_json::json!("foreign")),
+        ("window_contract", serde_json::Value::Null),
+        ("scale_factor", serde_json::json!(true)),
+        ("scale_factor", serde_json::json!(1)),
+        ("scale_factor", serde_json::json!(1.25)),
+        ("scale_factor", serde_json::Value::Null),
+        ("identity", serde_json::Value::Null),
+        ("variant", serde_json::json!("rest-area-art-context")),
+        ("spa_mask_page", serde_json::json!(0)),
+        ("unknown", serde_json::json!(true)),
+    ] {
+        let mut value = raw.clone();
+        value[key] = bad;
+        assert!(
+            parse_input(&args, &[("HW_BUILDING_ART_SESSION", &value.to_string())]).is_err(),
+            "{key}"
+        );
+    }
+    for key in ["window_contract", "scale_factor"] {
+        let mut value = raw.clone();
+        value.as_object_mut().unwrap().remove(key);
+        assert!(parse_input(&args, &[("HW_BUILDING_ART_SESSION", &value.to_string())]).is_err());
+    }
+}
+
+#[cfg(feature = "profiling")]
+#[test]
 fn dashboard_fixture_opens_the_management_shell_for_visible_modes_test() {
     use super::super::fixture::{PerfScenarioApplied, setup_perf_ui_mode_if_enabled};
     use bevy::prelude::*;

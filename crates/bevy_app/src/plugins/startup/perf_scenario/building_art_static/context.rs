@@ -874,6 +874,8 @@ mod tests {
             lighting: BuildingArtLighting::Standard,
             spa_mask_page: None,
             lamp_supply_target: None,
+            window_contract: None,
+            scale_factor: None,
         });
         world.insert_resource(pool);
         world.init_resource::<ContextState>();

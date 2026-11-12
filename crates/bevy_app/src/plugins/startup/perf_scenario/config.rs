@@ -1314,13 +1314,13 @@ impl PerfScenarioConfig {
                 || output_dir.is_none()
                 || window_width != Some(1280)
                 || window_height != Some(720)
-                || window_scale_factor != Some(1.0)
+                || !building_art_window_matches(art_session.as_ref(), window_scale_factor)
                 || !building_art_quality_matches(
                     input.env_text("HW_BUILDING_ART_SESSION").is_some(),
                     rtt_quality,
                 ))
         {
-            return Err(PerfScenarioConfigError("building-art-static requires small/15 Souls or medium/60 Souls, zero Familiars, gpu/realtime, seed 20260920, 30s/60s, output directory, baseline policies and 1280x720/DPI-1; non-high quality requires an explicit building-art session".into()));
+            return Err(PerfScenarioConfigError("building-art-static requires small/15 Souls or medium/60 Souls, zero Familiars, gpu/realtime, seed 20260920, 30s/60s, output directory, baseline policies and 1280x720/DPI-1; explicit gallery contracts alone admit DPI-1.5/2, non-high quality requires an explicit building-art session".into()));
         }
         #[cfg(feature = "profiling-renderdoc")]
         if renderdoc_capture
@@ -1741,6 +1741,35 @@ fn building_art_quality_matches(art_session: bool, quality: Option<RttQualityPre
                 quality,
                 Some(RttQualityPreset::Medium | RttQualityPreset::Low)
             ))
+}
+
+fn building_art_window_matches(
+    session: Option<&serde_json::Value>,
+    requested: Option<f32>,
+) -> bool {
+    let declared = session.is_some_and(|value| {
+        value.get("window_contract").is_some() || value.get("scale_factor").is_some()
+    });
+    if !declared {
+        return requested == Some(1.0);
+    }
+    #[cfg(feature = "profiling")]
+    {
+        session
+            .filter(|value| {
+                value.get("window_contract").is_some_and(|v| !v.is_null())
+                    && value.get("scale_factor").is_some_and(|v| !v.is_null())
+            })
+            .and_then(|value| {
+                serde_json::from_value::<
+                    crate::assets::building_asset_set::acceptance::BuildingArtSession,
+                >(value.clone())
+                .ok()
+            })
+            .is_some_and(|session| session.window_matches(requested))
+    }
+    #[cfg(not(feature = "profiling"))]
+    false
 }
 
 fn wall_density_window_contract_matches(

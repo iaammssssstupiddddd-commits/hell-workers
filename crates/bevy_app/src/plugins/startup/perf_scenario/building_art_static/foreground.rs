@@ -386,6 +386,8 @@ mod tests {
             lighting: default(),
             spa_mask_page: None,
             lamp_supply_target: None,
+            window_contract: None,
+            scale_factor: None,
         };
         let initial = RecordMode::for_frame(true, Some(&session));
         assert_eq!(initial, RecordMode::All);

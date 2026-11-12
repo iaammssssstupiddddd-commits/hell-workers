@@ -81,6 +81,9 @@ Door g7は別loaderで維持する。現loader/presentation候補許可は単一
   Bevyの既存physical window 1280×720は維持し、DPIを掛けた架空の画像寸法を要求しない。
 - [ ] 既存context/UI recipeはDPI1の契約を維持し、bool/欠損した新契約/非有限/未知値/actual不一致を拒否する。
   旧planのDPI1互換と、通常起動・ゲームrule・release authorityの不変を守る。
+- [ ] Rustのstatic configとtyped art sessionでも同じ契約・requested DPIを照合する。
+  新fieldは任意の対として旧sessionを保ち、新契約があれば完全なtyped sessionとgallery範囲を要求する。
+  通常性能fixture、Spa page、context/UI、非profilingはDPI1のままにし、宣言とargvの不一致を起動前に拒否する。
 - [ ] Help実レビュー、変更別検証、独立exact review後、fresh actual-windowでDPI接続を確認する。
   対象群の共通gallery、High/Medium/Low×各DPI×normal/far、群別性能・独立release採否は別に閉じる。
 
@@ -161,6 +164,10 @@ v5（`f2fdf9ea`）はN側6測定と4N側の最初のpairを完走したが、N c
 次の計測中はmainのビルド・storage整理・worktree作成も並行させず、独立して進められるDPI入口を先に完成させる。
 基盤fixture-only `353fc4cd`は編集しない専用worktreeと保持用途を登録し、正規native計画まで準備済み。
 現在環境での基盤測定・不足するN Memoryは未実行であり、旧測定の合格を流用しない。
+未起動の基盤実行計画はprimary storage gate前にabandoned/finalizeし、workspaceの比較用途だけを継続保持した。
+`bff4440e`のDPI1.5試行はRustのstatic configのDPI1制限で描画前に拒否された。
+probe/PNGはなくinvalid封印/finalize済み。Python入口だけの完成を実機接続と扱わず、
+typed art sessionへ契約とDPIを渡し、Rust admission・実Windowまで同じ拘束を接続してfresh試行へ進む。
 
 ### Definition of Done
 

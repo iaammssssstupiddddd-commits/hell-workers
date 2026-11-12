@@ -361,6 +361,18 @@ class RecipeTests(unittest.TestCase):
                     art.scale_factor({"window_contract": art.WINDOW_CONTRACT,
                                       "scale_factor": dpi, "variant": variant})
 
+    def test_gallery_dpi_is_bound_into_the_game_session_with_legacy_compatibility(self):
+        base = {"kind": "Tank", "mode": "candidate", "adapter": "Intel", "identity": {}}
+        for dpi in art.GALLERY_SCALE_FACTORS:
+            value = {**base, "window_contract": art.WINDOW_CONTRACT, "scale_factor": dpi}
+            env = art.game_environment({}, Path("view"), value, "nonce", Path("job"))
+            session = json.loads(env["HW_BUILDING_ART_SESSION"])
+            self.assertEqual(session["window_contract"], art.WINDOW_CONTRACT)
+            self.assertEqual(session["scale_factor"], dpi)
+        old = json.loads(art.game_environment({}, Path("view"), base, "nonce", Path("job"))["HW_BUILDING_ART_SESSION"])
+        self.assertNotIn("window_contract", old)
+        self.assertNotIn("scale_factor", old)
+
     def test_gallery_quality_dpi_checks_actual_logical_physical_rtt_and_end_state(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

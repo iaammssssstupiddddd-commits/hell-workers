@@ -282,14 +282,17 @@ def game_environment(environment: dict, view: Path, value: dict, nonce: str, roo
     for key in list(environment):
         if key.startswith(("HW_BUILDING_ART", "HW_WALL", "HW_DOOR", "HW_DISABLE_", "HW_PERF_")):
             del environment[key]
-    environment.update({"BEVY_ASSET_ROOT": str(view), "HW_WINDOW_BACKEND": "x11", "HW_PRESENT_MODE": "novsync",
-        "WGPU_BACKEND": "vulkan", "WGPU_ADAPTER_NAME": value["adapter"], "RUST_LOG": "info,wgpu=error",
-        "HW_BUILDING_ART_SESSION": json.dumps({"mode": value["mode"], "identity": value["identity"],
+    session = {"mode": value["mode"], "identity": value["identity"],
             "locator": pipeline.locator(value["kind"]), "nonce": nonce, "view": value.get("view", "overview"),
             "variant": value.get("variant", "gallery"), "lighting": value.get("lighting", "standard"),
             "spa_mask_page": value.get("spa_mask_page"),
             "lamp_supply_target": value.get("lamp_supply_target"),
-            "status_path": str(root / "probe.json")})})
+            "status_path": str(root / "probe.json")}
+    if "window_contract" in value or "scale_factor" in value:
+        session.update(window_contract=WINDOW_CONTRACT, scale_factor=scale_factor(value))
+    environment.update({"BEVY_ASSET_ROOT": str(view), "HW_WINDOW_BACKEND": "x11", "HW_PRESENT_MODE": "novsync",
+        "WGPU_BACKEND": "vulkan", "WGPU_ADAPTER_NAME": value["adapter"], "RUST_LOG": "info,wgpu=error",
+        "HW_BUILDING_ART_SESSION": json.dumps(session)})
     return environment
 
 

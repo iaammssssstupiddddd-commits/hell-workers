@@ -48,6 +48,10 @@ pub struct BuildingArtSession {
     pub spa_mask_page: Option<u8>,
     #[serde(default)]
     pub lamp_supply_target: Option<u8>,
+    #[serde(default)]
+    pub window_contract: Option<String>,
+    #[serde(default)]
+    pub scale_factor: Option<f32>,
 }
 
 /// Separate seeded comparison; never an ordinary-world or release recipe.
@@ -71,6 +75,22 @@ pub enum BuildingArtLighting {
 }
 
 impl BuildingArtSession {
+    pub(crate) fn window_matches(&self, requested: Option<f32>) -> bool {
+        match (&self.window_contract, self.scale_factor) {
+            (None, None) => requested == Some(1.0),
+            (Some(contract), Some(scale)) => {
+                contract == "building-art-window-v1"
+                    && matches!(scale, 1.0 | 1.5 | 2.0)
+                    && requested == Some(scale)
+                    && (scale == 1.0
+                        || (self.variant == BuildingArtVariant::Gallery
+                            && self.spa_mask_page.is_none()
+                            && self.lamp_supply_target.is_none()))
+            }
+            _ => false,
+        }
+    }
+
     pub fn is_rest_context(&self) -> bool {
         self.variant == BuildingArtVariant::RestAreaArtContext
     }
@@ -95,6 +115,9 @@ impl BuildingArtSession {
     }
 
     fn validate_context(&self, present: impl Fn(&str) -> bool) -> Result<(), String> {
+        if !self.window_matches(self.scale_factor.or(Some(1.0))) {
+            return Err("building-art window contract/scale factor differs".into());
+        }
         if self.lamp_supply_target.is_some() && !self.is_lamp_supply_context() {
             return Err("Lamp UI target requires its separate rendering-only context".into());
         }
@@ -251,6 +274,16 @@ pub fn configure_building_art(app: &mut App) -> Result<(), String> {
     };
     let session: BuildingArtSession = serde_json::from_str(&value).map_err(|e| e.to_string())?;
     session.validate_context(|key| std::env::var_os(key).is_some())?;
+    if session.window_contract.is_some() || session.scale_factor.is_some() {
+        use crate::plugins::startup::{PerfScenarioConfig, PerfWorkload};
+        let config = PerfScenarioConfig::try_from_process().map_err(|e| e.to_string())?;
+        if !config.enabled()
+            || config.workload() != PerfWorkload::BuildingArtStatic
+            || !session.window_matches(config.requested_window_scale_factor())
+        {
+            return Err("building-art window contract requires the matching static fixture".into());
+        }
+    }
     let authority = match session.mode.as_str() {
         "feedback" | "art-preview" => BuildingAssetAuthority::ArtPreview,
         "candidate" => BuildingAssetAuthority::IsolatedCandidate,

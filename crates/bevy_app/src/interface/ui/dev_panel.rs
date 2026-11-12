@@ -98,6 +98,8 @@ mod tests {
             lighting: Default::default(),
             spa_mask_page: None,
             lamp_supply_target: None,
+            window_contract: None,
+            scale_factor: None,
         });
         app.update();
         assert_eq!(
