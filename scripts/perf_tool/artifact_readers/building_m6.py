@@ -116,7 +116,7 @@ def validate_group_declaration(value):
             paths = binding["paths"]
             meshes, images = GROUP_ARTIFACT_COUNTS[kind]
             require(isinstance(paths, list) and len(paths) == meshes + images
-                    and all(isinstance(p, str) for p in paths) and len(set(paths)) == len(paths),
+                    and all(isinstance(p, str) for p in paths),
                     "group artifact path inventory differs")
             for path in paths:
                 require(len(path.encode()) <= 512 and path.startswith(f"building_sets/{slug}/{identity['generation']}/")

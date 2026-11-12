@@ -208,6 +208,9 @@ M3の先行M2、M5の先行M2/M3は既存pipelineで検証したReleaseApproved�
 
 `HW_BUILDING_GROUP_COMPARISON` はprofiling staticだけの宣言であり、固定群と対象群の
 exact identity・locator・manifest artifact pathを拘束する。他sessionとの併用は拒否する。
+path列はmanifestのroleごとのartifactを保持する。world preview/catalogのように同じ
+content-addressed PNGを共有するroleを重複pathとして拒否せず、全role数・拡張子別数・世代配下と
+独立検証済みmanifestから生成したexact列を照合する。AssetServer検索も両modeで同じrole列を消費する。
 controlでも固定群を実ロード・表示するが、対象候補はrequestしない。対象locatorと全artifactの
 AssetServer pathを毎frame観測し、pool activation前の先行loadも拒否する。
 両modeで同じ順序・全target pathの検索を実行し、controlだけmanagedを拒否する。

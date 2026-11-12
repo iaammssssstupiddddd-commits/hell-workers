@@ -116,6 +116,16 @@ class GroupGalleryTests(unittest.TestCase):
                 with self.assertRaises((ValueError, KeyError)):
                     oracle.validate_group_gallery_sidecar(reseal(bad), case)
 
+    def test_content_addressed_role_aliases_keep_exact_artifact_count(self):
+        declaration = group_sidecar("m2", True)["initial"]["m6"]["group"]
+        binding = declaration["candidates"][0]
+        images = [i for i, path in enumerate(binding["paths"]) if path.endswith(".png")]
+        binding["paths"][images[2]] = binding["paths"][images[1]]
+        oracle.validate_group_declaration(declaration)
+        binding["paths"].pop()
+        with self.assertRaises(ValueError):
+            oracle.validate_group_declaration(declaration)
+
     def test_gallery_reordering_does_not_change_performance_positions(self):
         m2 = oracle.gallery_records("m2")
         self.assertEqual(next(r["anchor"] for r in m2 if r["kind"] == "Door"), [8, 18])

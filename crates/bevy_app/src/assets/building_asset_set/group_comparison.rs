@@ -1,5 +1,4 @@
 //! Explicit group-only profiling admission. No ordinary startup or release authority.
-use std::collections::HashSet;
 use std::path::{Component, Path};
 
 use bevy::prelude::*;
@@ -65,7 +64,6 @@ impl Binding {
                 .all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase())
             && self.locator == format!("manifests/building-{}-v1.buildingset", id.kind.slug())
             && self.paths.len() == id.kind.mesh_roles().len() + id.kind.image_roles().len()
-            && self.paths.iter().collect::<HashSet<_>>().len() == self.paths.len()
             && self.paths.iter().all(|path| {
                 path.len() <= 512
                     && path.starts_with(&prefix)
@@ -294,6 +292,31 @@ pub(crate) mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn content_addressed_images_may_share_bytes_across_distinct_manifest_roles() {
+        let mut declaration = fixture(Group::M2);
+        let images = declaration.candidates[0]
+            .paths
+            .iter()
+            .enumerate()
+            .filter(|(_, p)| p.ends_with(".png"))
+            .map(|(i, _)| i)
+            .collect::<Vec<_>>();
+        declaration.candidates[0].paths[images[2]] =
+            declaration.candidates[0].paths[images[1]].clone();
+        assert!(declaration.validate().is_ok());
+        let raw = serde_json::to_string(&declaration).unwrap();
+        let comparison = parse(&raw, "legacy-control").unwrap();
+        let mut visits = Vec::new();
+        comparison.prefetched_target_path_with(|p| {
+            visits.push(p.to_owned());
+            false
+        });
+        assert_eq!(visits, declaration.target_paths().collect::<Vec<_>>());
+        declaration.candidates[0].paths.pop();
+        assert!(declaration.validate().is_err());
     }
 
     #[test]
