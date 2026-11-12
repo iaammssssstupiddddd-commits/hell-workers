@@ -268,11 +268,11 @@ fn drive(mut p: Drive) {
         return;
     };
     let now = p.real.elapsed_secs_f64();
-    let candidate_refining = p.candidate.is_some()
+    let candidate_motion = p.candidate.is_some()
         && building.kind == BuildingType::MudMixer
-        && p.lifecycle.leg == "refining";
+        && matches!(p.lifecycle.leg.as_str(), "refining" | "save-load");
     if p.fixture.stage == 0 {
-        if candidate_refining {
+        if candidate_motion {
             // Observation-only clock: keep the real Active phase long enough for
             // an owned PNG before pause. Production speed/rules stay unchanged.
             p.time.set_relative_speed(0.25);
@@ -282,8 +282,8 @@ fn drive(mut p: Drive) {
         return;
     }
     let elapsed = now - p.fixture.since;
-    let pause_at = if candidate_refining { 6.0 } else { 4.5 };
-    let resume_at = if candidate_refining { 9.0 } else { 6.5 };
+    let pause_at = if candidate_motion { 6.0 } else { 4.5 };
+    let resume_at = if candidate_motion { 9.0 } else { 6.5 };
     if building.kind == BuildingType::Tank {
         let amount = match p.fixture.stage {
             1 if elapsed >= 4.0 => 1,
@@ -308,7 +308,9 @@ fn drive(mut p: Drive) {
             ));
         }
         p.fixture.stage += 1;
-    } else if building.kind == BuildingType::MudMixer && p.lifecycle.leg == "refining" {
+    } else if building.kind == BuildingType::MudMixer
+        && (p.lifecycle.leg == "refining" || candidate_motion)
+    {
         match p.fixture.stage {
             1 if elapsed >= 4.0 => {
                 let actor = p
@@ -368,7 +370,7 @@ fn drive(mut p: Drive) {
                 p.time.pause();
                 p.fixture.stage = 3;
             }
-            3 if elapsed >= resume_at => {
+            3 if elapsed >= resume_at && p.lifecycle.leg == "refining" => {
                 p.time.unpause();
                 p.fixture.stage = 4;
             }
@@ -440,6 +442,51 @@ mod tests {
     }
 
     #[test]
+    fn candidate_save_load_pauses_nonzero_motion_without_resuming_before_save() {
+        let mut app = App::new();
+        app.init_resource::<Time<Real>>()
+            .init_resource::<Time<Virtual>>()
+            .init_resource::<CandidatePointer>()
+            .insert_resource(super::super::m2_lifecycle::Lifecycle::new(
+                "save-load".into(),
+            ))
+            .add_message::<AppExit>()
+            .add_systems(Update, drive);
+        let owner = app
+            .world_mut()
+            .spawn(Building {
+                kind: BuildingType::MudMixer,
+                is_provisional: false,
+            })
+            .id();
+        app.insert_resource(Fixture {
+            owner: Some(owner),
+            ..default()
+        });
+        app.world_mut()
+            .resource_mut::<Time<Real>>()
+            .advance_by(Duration::from_secs(1));
+        app.update();
+        assert_eq!(
+            app.world().resource::<Time<Virtual>>().relative_speed(),
+            0.25
+        );
+        // Assignment/production are exercised separately. Start immediately after input seed.
+        app.world_mut().resource_mut::<Fixture>().stage = 2;
+        app.world_mut()
+            .resource_mut::<Time<Real>>()
+            .advance_by(Duration::from_secs(6));
+        app.update();
+        assert!(app.world().resource::<Time<Virtual>>().is_paused());
+        app.world_mut()
+            .resource_mut::<Time<Real>>()
+            .advance_by(Duration::from_secs(20));
+        app.update();
+        assert!(app.world().resource::<Time<Virtual>>().is_paused());
+        assert_eq!(app.world().resource::<Fixture>().stage, 3);
+    }
+
+    #[test]
     fn candidate_cursor_parks_once_without_hiding_ui_or_continuously_overwriting_input() {
         let mut app = App::new();
         let owner = app.world_mut().spawn_empty().id();
@@ -475,16 +522,24 @@ mod tests {
     }
 
     #[test]
-    fn only_refining_leg_injects_mixer_inputs_tasks_and_pause() {
-        for leg in [
-            "deconstruct",
-            "save-load",
-            "placement",
-            "catalog",
-            "world-near-far",
-            "move-success",
-            "move-reject-cancel",
-            "refining",
+    fn only_admitted_motion_legs_inject_mixer_inputs_tasks_and_pause() {
+        for (candidate, leg) in [
+            (false, "deconstruct"),
+            (false, "save-load"),
+            (false, "placement"),
+            (false, "catalog"),
+            (false, "world-near-far"),
+            (false, "move-success"),
+            (false, "move-reject-cancel"),
+            (false, "refining"),
+            (true, "deconstruct"),
+            (true, "save-load"),
+            (true, "placement"),
+            (true, "catalog"),
+            (true, "world-near-far"),
+            (true, "move-success"),
+            (true, "move-reject-cancel"),
+            (true, "refining"),
         ] {
             let mut app = App::new();
             app.init_resource::<Time<Real>>()
@@ -492,6 +547,9 @@ mod tests {
                 .insert_resource(super::super::m2_lifecycle::Lifecycle::new(leg.into()))
                 .add_message::<AppExit>()
                 .add_systems(Update, drive);
+            if candidate {
+                app.init_resource::<CandidatePointer>();
+            }
             let owner = app
                 .world_mut()
                 .spawn((
@@ -527,7 +585,7 @@ mod tests {
                 .resource_mut::<Time<Real>>()
                 .advance_by(Duration::from_secs(5));
             app.update();
-            let refining = leg == "refining";
+            let refining = leg == "refining" || (candidate && leg == "save-load");
             let storage = app.world().get::<MudMixerStorage>(owner).unwrap();
             assert_eq!(
                 (storage.sand, storage.rock, storage.mud),
@@ -571,7 +629,7 @@ mod tests {
             assert_eq!(water_count, usize::from(refining), "{leg}");
             app.world_mut()
                 .resource_mut::<Time<Real>>()
-                .advance_by(Duration::from_secs(1));
+                .advance_by(Duration::from_secs(2));
             app.update();
             assert_eq!(
                 app.world().resource::<Time<Virtual>>().is_paused(),
@@ -580,10 +638,11 @@ mod tests {
             );
             app.world_mut()
                 .resource_mut::<Time<Real>>()
-                .advance_by(Duration::from_secs(2));
+                .advance_by(Duration::from_secs(3));
             app.update();
-            assert!(
-                !app.world().resource::<Time<Virtual>>().is_paused(),
+            assert_eq!(
+                app.world().resource::<Time<Virtual>>().is_paused(),
+                candidate && leg == "save-load",
                 "{leg}"
             );
         }

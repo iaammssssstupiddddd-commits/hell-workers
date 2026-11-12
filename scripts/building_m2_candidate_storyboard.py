@@ -41,7 +41,7 @@ def check_plan(value):
         and value["identity"]["authority"] == "isolated_candidate"
         and value["accepted"] is False and value["promotion_authority"] is False
         and value["input_scope"] == "seeded-domain-operations"
-        and value["clock_scope"] == "candidate-refining-quarter-speed-v1"
+        and value["clock_scope"] == "candidate-motion-quarter-speed-v2"
         and type(value["duration_seconds"]) is int and 35 <= value["duration_seconds"] <= 170,
         "candidate storyboard contract differs")
     check_dependencies(value)
@@ -90,7 +90,7 @@ def plan(args):
     inputs = args.output.resolve().with_suffix(".inputs.json")
     pipeline.put(inputs, pipeline.canonical({"repo": str(repo), "kinds": {args.kind: spec}}))
     value = {"schema_version": 1, "status": "ready", "profile": PROFILE, "scope": SCOPE,
-        "input_scope": "seeded-domain-operations", "clock_scope": "candidate-refining-quarter-speed-v1", "repo": str(repo), "job_root": str(root),
+        "input_scope": "seeded-domain-operations", "clock_scope": "candidate-motion-quarter-speed-v2", "repo": str(repo), "job_root": str(root),
         "subject": art.subject(repo), "runtime_plan": str(inputs), "runtime_plan_sha256": executable.digest(inputs),
         "kind": args.kind, "identity": manifest["identity"], "leg": args.leg,
         "codec": str(codec), "codec_sha256": executable.digest(codec), "parts": manifest["parts"],
@@ -133,7 +133,7 @@ def check_motion(rows, value):
     authored = {entry["name"]: entry for entry in value["parts"]}
     for sample, root in rows:
         pipeline.require(type(sample.get("storyboard_stage")) is int, "candidate stage observation missing")
-        if value["kind"] == "MudMixer" and value["leg"] == "refining" and sample["storyboard_stage"] >= 1:
+        if value["kind"] == "MudMixer" and value["leg"] in {"refining", "save-load"} and sample["storyboard_stage"] >= 1:
             pipeline.require(type(sample.get("storyboard_clock")) in (int, float)
                 and sample["storyboard_clock"] == 0.25, "candidate observation clock differs")
         for name, spec in authored.items():
@@ -175,12 +175,59 @@ def check_motion(rows, value):
             and len({tuple(part(root, name)["entity"] for name in ("body", "rotor")) for _, root in rows}) == 1,
             "candidate refining replaced its owned parts")
     if value["leg"] == "save-load":
-        first = rows[0][1]
-        final = rows[-1][1]
-        pipeline.require(final["state"] == "Some(MixerIdle)" and rows[-1][0]["paused"]
-            and near(part(final, "rotor")["pose"]["rotation"], authored["rotor"]["rotation_xyzw"])
-            and final["entity"] != first["entity"]
-            and {p["entity"] for p in final["parts"]}.isdisjoint(p["entity"] for p in first["parts"]),
+        check_saved_reset(rows, authored)
+
+
+def events(sample):
+    return [(event.get("operation"), event.get("result"))
+            for event in (sample.get("lifecycle") or {}).get("events", [])]
+
+
+def owned_entities(sample, root):
+    return (sample.get("fixture_owner"), root["entity"],
+            tuple((leaf["name"], leaf["entity"]) for leaf in sorted(root["parts"], key=lambda p: p["name"])))
+
+
+def check_saved_reset(rows, authored):
+    pipeline.require(all(type(row.get("world_epoch")) is int for row, _ in rows),
+                     "candidate save/load epoch must be an integer")
+    saved = [i for i, (sample, _) in enumerate(rows)
+             if events(sample) == [("Save", "Succeeded")]]
+    pipeline.require(saved, "candidate saved-state observation missing")
+    index = saved[0]
+    sample, previous = rows[index]
+    initial = rows[0][1]
+    rotation = part(previous, "rotor")["pose"]["rotation"]
+    pipeline.require(sample["paused"] and previous["state"] == "Some(MixerActive)"
+        and previous["entity"] == initial["entity"]
+        and not near(rotation, authored["rotor"]["rotation_xyzw"])
+        and not near(rotation, [-n for n in authored["rotor"]["rotation_xyzw"]]),
+        "saved candidate must be active, paused and have nonzero rotation")
+    loaded = [i for i, (row, _) in enumerate(rows)
+              if events(row) == [("Save", "Succeeded"), ("Load", "Succeeded")]]
+    pipeline.require(loaded and loaded[0] > index, "candidate load outcome observation missing")
+    for row, root in rows[:loaded[0]]:
+        pipeline.require(row["world_epoch"] == sample["world_epoch"]
+            and owned_entities(row, root) == owned_entities(sample, previous),
+            "candidate owner/root/parts changed before load")
+    for row, root in rows[index:loaded[0]]:
+        pipeline.require(row["paused"] and row["virtual_seconds"] == sample["virtual_seconds"]
+            and root["state"] == "Some(MixerActive)"
+            and near(part(root, "rotor")["pose"]["rotation"], rotation),
+            "saved candidate resumed or changed before load")
+    first_loaded, loaded_root = rows[loaded[0]]
+    old_entities = {previous["entity"], *(leaf["entity"] for leaf in previous["parts"])}
+    pipeline.require(first_loaded["world_epoch"] == sample["world_epoch"] + 1
+        and first_loaded["fixture_owner"] != sample["fixture_owner"]
+        and old_entities.isdisjoint({loaded_root["entity"], *(p["entity"] for p in loaded_root["parts"])}),
+        "candidate load did not create one new world and fresh owned parts")
+    for row, final in rows[loaded[0]:]:
+        pipeline.require(events(row) == [("Save", "Succeeded"), ("Load", "Succeeded")]
+            and row["world_epoch"] == first_loaded["world_epoch"] and row["paused"]
+            and row["virtual_seconds"] == first_loaded["virtual_seconds"]
+            and owned_entities(row, final) == owned_entities(first_loaded, loaded_root)
+            and final["state"] == "Some(MixerIdle)"
+            and near(part(final, "rotor")["pose"]["rotation"], authored["rotor"]["rotation_xyzw"]),
             "loaded candidate Idle/reset/part cleanup differs")
 
 
@@ -251,6 +298,13 @@ def check_state_checkpoints(shots, value):
             if index < len(sequence) and sequence[index][0] in shot["key"][3] and sequence[index][1] is shot["key"][5]:
                 index += 1
         pipeline.require(index == len(sequence), "candidate pause/resume/Idle capture sequence missing")
+    if value["kind"] == "MudMixer" and value["leg"] == "save-load":
+        active = [i for i, shot in enumerate(shots)
+                  if "Some(MixerActive)" in shot["key"][3] and shot["key"][5] is True]
+        pipeline.require(active and any("Some(MixerIdle)" in shot["key"][3]
+            and shot["key"][5] is True and len(shot["key"]) == 9
+            and shot["key"][8] > shots[active[0]]["key"][8]
+            for shot in shots[active[0]+1:]), "candidate paused saved/load-reset captures missing")
 
 
 PROVENANCE_FILES = (

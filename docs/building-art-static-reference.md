@@ -400,3 +400,12 @@ invalid封印/finalizeし、承認条件や境界跨ぎ拒否は維持する。�
 Virtual 0.25倍、開始後real 6秒でpause、9秒でresumeへ明示する。材料/assignmentは従来の4秒時点。
 原本traceへ実relative_speedを記録し、専用verifierがquarter-speed契約とVirtual軸/速度を照合する。
 通常gameplay、旧ArtPreview、move/save-loadのclockは変更しない。この時間拡張は性能やOS入力の証拠でない。
+
+candidate refining v3（`4a92da02`）は5段階raw/画像の限定独立検査とseal/finalizeに成功した。
+初期Idleには完成通知が重なる。アート・性能・release承認ではない。
+後続save-loadはIdle→Idleだけではreset証拠にならないため、候補専用に同じ0.25倍clockで
+real4秒のRefine入力後、6秒pauseして再開せず、既存12秒のSave/Load経路を使う。
+`candidate-motion-quarter-speed-v2`では、成功Saveだけのprefixに非ゼロ角度/Active/paused、
+Loadまで同epoch/部品/Virtual停止、Load後に新epoch/部品とpaused Idle/初期角度を要求する。
+画像はActive pausedと新epoch Idle pausedの両方を必要とする。旧refining v3の契約は履歴として保持する。
+通常gameplay・旧ArtPreview・moveの時間条件を変えず、性能やOS入力の証拠とは扱わない。

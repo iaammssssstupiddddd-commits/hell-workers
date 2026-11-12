@@ -355,3 +355,36 @@ candidate refiningだけの明示quarter-speed clockとreal6/9秒pause/resumeで
 Help実レビュー: 受動auditは通常の状態・入力・設定・表示・保存・通知・Helpを変更せず、ログだけを生成する。
 外側helperもactor/建物をseedせず、初期worldに実在しないconsumerを成功へしない。No impactとし、
 アート/性能/全kind通常authority storyboardは別の正式工程を維持する。
+
+### M7-b追補: 回転した状態からの保存／読込
+
+`4a92da02`のcandidate refining v3は限定成功。386 samplesと5枚の所有窓PNGで
+Idle→Active→Active paused→Active resumed→Idle、同owner/root/2 parts、Virtual 0.25倍、
+72組の回転差分（承認axis/speedとの最大成分誤差約1.23e-7）を独立確認した。
+manifest `92b8c75391beb3d347e5bd97cb8830329c505cef81d6ca789b0d7b4c10295dab`、
+trace `3dfce3a45dfad5a8b630960258eb730edcf27cd74e89f705f316d07512dbd1e9`。
+Intel Arc/Vulkan、WARN/ERRORなし。登録verifier・封印・finalize済み。
+初回Idle画像にはConstruction Complete textが重なるため、无遮挡アート承認とはしない。
+具体的consumer `M2 candidate state and lifecycle release review`の終了までv3を保持する。
+
+未実行のsave-loadは旧fixtureのままだとIdle角度0の保存となり、角度resetを証明できない。
+候補専用save-loadだけ同じquarter clock/real4秒の材料・Refine入力、6秒pauseを使い、resumeしない。
+既存real12秒のSave/Load操作を維持し、成功Saveだけのraw prefixがActive/paused/非ゼロであること、
+Loadまで同epoch/parts/Virtual停止、Load後は新epoch/root/parts・paused Idle/角度0を必須にする。
+画像もActive paused→新epoch Idle pausedを要求する。通常プレイ・旧ArtPreview・move timingは不変。
+この契約は`candidate-motion-quarter-speed-v2`であり、v3の旧refining契約を上書きしない。
+Help実レビューNo impact: 明示profiling候補のseeded試験と検証器だけの変更で、通常の操作・文言・
+保存／移動／生産rule・通知・Helpへの到達性は不変。
+
+### M8-a追補: 旧基盤の資源量を補う独立観測（実装前）
+
+旧`353fc4cd`のCapture/Memory計12回はtiming/native/RSS baselineとして保持するが、
+Mesh/Image/materialのresident payload bytesを記録していない。PNG・source accessor bytesから推定して埋めない。
+旧凍結source/cacheは変更せず、同commitから独立した資源観測用subjectを用意する。
+追加は受動inventoryと境界出力だけに限定し、初期Ready後と測定終了後の二時点で採取する。
+N/4Nの各1回を資源量補足として検証し、旧12回の性能値の置換や同一subjectとの偽装をしない。
+新fallback側にも同じ定義を用い、実Mesh vertex/index payload、Image CPU payload、material shallow bytesと
+各resident件数、root/part件数を比較する。GPU allocationやnative heap実測と混同しない。
+旧補足のexact-source独立review・Help・storageを通した後、資源量の有限上限を固定してから新fallbackを測る。
+時刻/Memory予算の提案（未採用）はp95 +1ms、p99 +3ms、native peak +16MiB、RSS +96MiB、
+繰返しMAD≤10%。独立判断と根拠を記録するまでcandidate測定へ進めず、結果を見て上限を広げない。

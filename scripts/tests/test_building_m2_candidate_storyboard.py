@@ -59,26 +59,105 @@ class CandidateMotionTests(unittest.TestCase):
             with self.subTest(index=index), self.assertRaises(ValueError):
                 candidate.check_motion(rows, self.value)
 
-    def test_load_requires_new_parts_paused_idle_and_reset_angle(self):
-        value = {**self.value, "leg": "save-load"}
-        rows = [copy.deepcopy(self.rows[0]), copy.deepcopy(self.rows[0])]
-        rows[1][0]["paused"] = True
-        rows[1][1]["entity"] = "new-root"
-        for leaf in rows[1][1]["parts"]:
+    def saved_rows(self):
+        rows = copy.deepcopy(self.rows[:5])
+        for sample, _ in rows:
+            sample.update(world_epoch=0, fixture_owner="owner", lifecycle={"events": []})
+        rows[4][0]["lifecycle"]["events"] = [{"operation": "Save", "result": "Succeeded"}]
+        loaded = copy.deepcopy(rows[0])
+        loaded[0].update(paused=True, world_epoch=1, fixture_owner="new-owner", virtual_seconds=0., lifecycle={"events": [
+            {"operation": "Save", "result": "Succeeded"}, {"operation": "Load", "result": "Succeeded"}]})
+        loaded[1]["entity"] = "new-root"
+        for leaf in loaded[1]["parts"]:
             leaf["entity"] = "new-" + leaf["entity"]
+        rows.extend([copy.deepcopy(rows[4]), loaded, copy.deepcopy(loaded)])
+        return rows
+
+    def test_load_requires_saved_nonzero_active_pause_and_new_idle_parts(self):
+        value = {**self.value, "leg": "save-load"}
+        rows = self.saved_rows()
         candidate.check_motion(rows, value)
-        for change in ("pause", "root", "part", "rotation"):
+        for change in ("pause", "root", "part", "rotation", "saved-idle", "saved-zero",
+                       "save-outcome", "load-outcome", "epoch", "resume", "virtual", "clock"):
             invalid = copy.deepcopy(rows)
             if change == "pause":
-                invalid[1][0]["paused"] = False
+                invalid[-1][0]["paused"] = False
             elif change == "root":
-                invalid[1][1]["entity"] = "root"
+                invalid[-1][1]["entity"] = "root"
             elif change == "part":
-                invalid[1][1]["parts"][0]["entity"] = "body"
+                invalid[-1][1]["parts"][0]["entity"] = "body"
+            elif change == "rotation":
+                invalid[-1][1]["parts"][1]["pose"]["rotation"] = [0., 1., 0., 0.]
+            elif change == "saved-idle":
+                invalid[4][1]["state"] = "Some(MixerIdle)"
+            elif change == "saved-zero":
+                for row in invalid[:-1]:
+                    row[1]["parts"][1]["pose"]["rotation"] = [0., 0., 0., 1.]
+                # Exercise saved-state predicate independently of movement speed.
+                with self.assertRaisesRegex(ValueError, "nonzero"):
+                    candidate.check_saved_reset(invalid, {p["name"]: p for p in value["parts"]})
+                continue
+            elif change == "save-outcome":
+                for row in invalid[:-1]:
+                    row[0]["lifecycle"]["events"] = []
+            elif change == "load-outcome":
+                invalid[-1][0]["lifecycle"]["events"].pop()
+            elif change == "epoch":
+                invalid[-1][0]["world_epoch"] = 0
+            elif change == "resume":
+                invalid[5][0]["paused"] = False
+            elif change == "virtual":
+                invalid[5][0]["virtual_seconds"] += .1
             else:
-                invalid[1][1]["parts"][1]["pose"]["rotation"] = [0., 1., 0., 0.]
+                invalid[4][0]["storyboard_clock"] = 1.
             with self.subTest(change=change), self.assertRaises(ValueError):
                 candidate.check_motion(invalid, value)
+
+    def test_saved_and_loaded_tail_ownership_epoch_and_pause_are_fixed(self):
+        for change in ("saved-part", "saved-owner", "loaded-part", "loaded-root", "loaded-owner",
+                       "loaded-epoch", "bool-epoch", "loaded-virtual", "skipped-epoch"):
+            rows = self.saved_rows()
+            if change == "saved-part":
+                rows[5][1]["parts"][0]["entity"] = "transient-body"
+            elif change == "saved-owner":
+                rows[5][0]["fixture_owner"] = "transient-owner"
+            elif change == "loaded-part":
+                rows[-1][1]["parts"][0]["entity"] = "another-body"
+            elif change == "loaded-root":
+                rows[-1][1]["entity"] = "another-root"
+            elif change == "loaded-owner":
+                rows[-1][0]["fixture_owner"] = "another-owner"
+            elif change == "loaded-epoch":
+                rows[-1][0]["world_epoch"] = 2
+            elif change == "bool-epoch":
+                rows[3][0]["world_epoch"] = False
+            elif change == "loaded-virtual":
+                rows[-1][0]["virtual_seconds"] += .1
+            else:
+                for row in rows[-2:]:
+                    row[0]["world_epoch"] = 2
+            with self.subTest(change=change), self.assertRaises(ValueError):
+                candidate.check_motion(rows, {**self.value, "leg": "save-load"})
+
+    def test_idle_to_idle_load_does_not_prove_reset(self):
+        rows = self.saved_rows()
+        for _, root in rows:
+            root["state"] = "Some(MixerIdle)"
+            root["parts"][1]["pose"]["rotation"] = [0., 0., 0., 1.]
+        with self.assertRaisesRegex(ValueError, "nonzero"):
+            candidate.check_motion(rows, {**self.value, "leg": "save-load"})
+
+    def test_load_images_require_active_pause_then_new_epoch_idle_pause(self):
+        def shot(state, epoch):
+            return {"key": [True, 1., "Normal", [f"Some(Mixer{state})"], [], True, 3, None, epoch]}
+        value = self.value | {"leg": "save-load", "identity": {"kind": "MudMixer"}}
+        initial = {"key": [True, 1., "Normal", ["Some(MixerIdle)"], [], False, 1, None, 0]}
+        shots = [initial, shot("Active", 0), shot("Idle", 1)]
+        candidate.check_state_checkpoints(shots, value)
+        for invalid in ([initial, shot("Idle", 1)], [initial, shot("Active", 0), shot("Idle", 0)],
+                        [initial, shot("Idle", 1), shot("Active", 0)]):
+            with self.assertRaises(ValueError):
+                candidate.check_state_checkpoints(invalid, value)
 
     def test_refining_captures_must_show_resume_after_pause(self):
         def shot(state, paused):
