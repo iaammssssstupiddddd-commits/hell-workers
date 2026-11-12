@@ -315,3 +315,12 @@ No impact。正式art/groupのhost runnerが、実際にbuildした同bytesの�
 そのコピーを起動・検証する。ゲームのコード/設定/入力/表示/保存/通知/Help経路は変えない。
 feedbackは従来の共有debug cache、旧契約は固定の共有cacheのlive検証を維持する。
 任意pathのcodec実行前にpath/権限/SHAを検証し、通常起動の配布authorityや承認は作成しない。
+
+### 既定release接続の実装とHelp判断（2026-11-12）
+
+空のcompiled inventoryを既存ReleaseApproved admission/Startup requestへ接続する。
+明示overrideの非UTF-8/空/不正を拒否し、専用受入・有効performanceでは暗黙一覧を選ばない。
+現一覧は空なので通常の入力・表示・保存・通知・成立条件・Help入口は不変、今回はNo impact。
+実際の各群導入時には正式receiptから一覧を更新し、通常起動表示と同subjectのHelp影響を再確認する。
+アート・数値・性能・正式releaseの承認はこの配線で与えない。
+既定JSONだけの変更もHelp gateのproduction対象に追加し、一覧更新を古いNo impactへ便乗させない。

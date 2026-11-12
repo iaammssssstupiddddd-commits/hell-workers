@@ -74,7 +74,11 @@ def is_production_path(path: str) -> bool:
     if not parts:
         return False
 
-    if path in {"Cargo.toml", "Cargo.lock"}:
+    if path in {
+        "Cargo.toml",
+        "Cargo.lock",
+        "crates/bevy_app/src/assets/building_asset_set/default_release_bindings.json",
+    }:
         return True
     # Local dependency patches can change player behavior without touching a
     # first-party crate. Keep their source/build changes inside the review gate.

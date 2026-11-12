@@ -8,10 +8,18 @@
 
 `.buildingset` のschema、authority、依存ファイルの実バイト数とSHA-256を検査する。
 `StartupPlugin` はasset型・policy resource・loaderを登録し、`VisualPlugin`はkind単位のpoolと
-表示更新systemを登録する。通常起動はrelease binding未指定ならlocatorを選択せず、読み込み要求も
-発行しない。`HW_BUILDING_ASSET_RELEASES`を明示した起動だけが、M2の2件、M3を加えた4件、
-M5を加えた8件、Bridgeを加えた9件の完全な組を、各kind 1件の
-`release_approved` identityとcanonical locatorで要求する。
+表示更新systemを登録する。通常起動はコンパイル済み
+`default_release_bindings.json`の完全なrelease組を、既存poolへ要求する。
+現在この一覧は空であり、正式導入前の8種は引き続きfallback表示となる。
+独立release承認・promotion/install後に `building_asset_pipeline.py bindings` のexact出力を採用して初めて
+既定起動へ反映する。一覧は起動時の文書/外部JSON読取りではなくbinaryへ組み込む。
+`HW_BUILDING_ASSET_RELEASES`を明示した場合は一覧全体を置換し、空文字・空配列・非UTF-8・不正JSONを
+既定値へ縮退させず拒否する。既定/明示ともM2の2件、M3を加えた4件、M5を加えた8件、
+将来Bridgeを加えた9件の完全な組、各kind 1件の`release_approved` identityとcanonical locatorだけを許す。
+候補/群gallery/ordinary art/M2/native UI・save/load・deconstruct・notification/production観測、
+および有効なperformance sessionでは暗黙一覧を選ばず、専用sessionの明示入力を維持する。
+profiling featureだけを有効にした通常起動は既定値を使う。
+rollbackでは既存locator/receiptと対応する旧binaryの一覧を同時に復元し、別世代の混在を導入しない。
 既存Wall／Doorのloaderと表示経路は継続する。Bridgeのschema・pool接続は実装済みだが、
 正式asset導入と固有lifecycle/native受入は別工程であり、実装だけでは承認しない。
 
