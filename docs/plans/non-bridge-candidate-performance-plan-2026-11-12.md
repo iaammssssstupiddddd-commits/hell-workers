@@ -446,3 +446,16 @@ Help No impact: 明示profilingのperformance観測・検証だけで、通常pl
 （-I/-B）で取得・前後再照合する。primaryの現catalogを旧treeへ要求せず、不足する現19pathをコピーしない。
 2path-only・clean・元helper SHAを実行前に検査し、primary側のcontroller/oracleと全verifier harness SHAは
 別にplanへ固定する。この境界を変更したfresh helperでのみ補足を実行する。
+
+### M7-b追補: 短いMoveの完了identity
+
+Mixer move v2は新しい背景Familiar0の条件で警告なし・実移動ありだったが、0.1秒周期で
+瞬時のMove assignmentを取得できずinvalid封印/finalizeした。周期だけのpredicateを実完了identityで補う。
+候補のみ実orderを保持し、既存OnTaskCompletedの受動receiptをactor/owner/order/map/deltaへ結ぶ。
+完了receiptをfixtureから発行せず、任意worker/別order/重複/欠測を拒否する。新scopeでfresh試行を行う。
+既存の通常gameplay、警告拒否、撮影条件は不変で、Helpへの追加影響はない。
+旧基盤資源の分離workspace関連テストはこのM2補正と独立して正規Cargo guardで逐次検証する。
+
+refiningの旧v1/v2はv3で原因を解消・採用済みのためdiagnostic用途を正式解除した。
+唯一asset・使用process・残consumerなしを確認したexact2rootのみTrashへ移動し、
+作業場から2,451,869,696 allocated bytesを削減。原本/最新証拠/codec/cacheは保持し、物理空き量とは区別する。

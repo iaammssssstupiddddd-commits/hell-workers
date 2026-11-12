@@ -75,10 +75,12 @@ pub(super) fn candidate_session(world: &World) -> bool {
 /// Candidate domain storyboards park the synthetic cursor twice at most. The
 /// real move driver retains ownership while aiming/clicking; no UI is hidden.
 pub(super) fn configure_candidate_pointer(app: &mut App) {
-    app.init_resource::<CandidatePointer>().add_systems(
-        PreUpdate,
-        park_candidate_pointer.after(super::m2_lifecycle::drive),
-    );
+    app.init_resource::<CandidatePointer>()
+        .add_observer(super::m2_lifecycle::observe_candidate_move_completed)
+        .add_systems(
+            PreUpdate,
+            park_candidate_pointer.after(super::m2_lifecycle::drive),
+        );
 }
 
 fn park_candidate_pointer(

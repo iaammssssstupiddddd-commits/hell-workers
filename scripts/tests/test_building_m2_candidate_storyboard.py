@@ -178,7 +178,9 @@ class CandidateMoveActorTests(unittest.TestCase):
                          "working_on": "order", "identity": {"assignment": "order", "target": "order", "work_type": "Move"}}
         return [{"fixture_owner": "owner", "storyboard_move_actors": {"familiars": [], "workers": []}},
                 {"fixture_owner": "owner", "storyboard_move_actors": {"familiars": [family], "workers": [task]}},
-                {"fixture_owner": "owner", "storyboard_move_actors": {"familiars": [family], "workers": [worker]}}]
+                {"fixture_owner": "owner", "storyboard_move_actors": {"familiars": [family], "workers": [worker]},
+                 "lifecycle": {"move_order": "order", "events": [{"operation": "MoveCompleted", "worker": "worker",
+                     "familiar": "familiar", "assignment": "order", "target": "order", "work_type": "Move", "owner": "owner"}]}}]
 
     def test_exact_move_fixture_has_no_startup_familiars_and_one_owned_assignment(self):
         candidate.check_move_actors(self.rows())
@@ -190,7 +192,7 @@ class CandidateMoveActorTests(unittest.TestCase):
             candidate.probe_environment({"leg": "move-success", "actor_scope": "ordinary-startup-actors"})
 
     def test_foreign_actor_assignment_and_unobserved_move_are_rejected(self):
-        for change in ("startup", "familiar", "worker", "commander", "manager", "target", "assignment", "owner", "building-as-target", "no-move"):
+        for change in ("startup", "familiar", "worker", "commander", "manager", "target", "assignment", "owner", "building-as-target", "no-receipt"):
             rows = copy.deepcopy(self.rows())
             actors = rows[1]["storyboard_move_actors"]
             worker = actors["workers"][0]
@@ -213,9 +215,23 @@ class CandidateMoveActorTests(unittest.TestCase):
             elif change == "building-as-target":
                 worker["working_on"] = worker["identity"]["target"] = "owner"
             else:
-                worker["move_task"] = None
+                rows[-1]["lifecycle"]["events"] = []
             with self.subTest(change=change), self.assertRaises(ValueError):
                 candidate.check_move_actors(rows)
+
+    def test_short_move_needs_real_completion_not_periodic_assignment(self):
+        rows = self.rows()
+        rows[1]["storyboard_move_actors"]["workers"][0].update(move_task=None, working_on=None, identity=None)
+        candidate.check_move_actors(rows)
+        for key in ("worker", "familiar", "assignment", "target", "work_type", "owner"):
+            wrong = copy.deepcopy(rows)
+            wrong[-1]["lifecycle"]["events"][0][key] = "foreign"
+            with self.subTest(key=key), self.assertRaises(ValueError):
+                candidate.check_move_actors(wrong)
+        wrong = copy.deepcopy(rows)
+        wrong[-1]["lifecycle"]["events"] *= 2
+        with self.assertRaises(ValueError):
+            candidate.check_move_actors(wrong)
 
 
 class CandidateBoundaryTests(unittest.TestCase):

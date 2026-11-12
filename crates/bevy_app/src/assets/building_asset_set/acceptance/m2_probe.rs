@@ -404,6 +404,7 @@ fn snapshot(world: &mut World) -> Result<Value, String> {
         "destination_anchor": destination,
         "companions": companions,
         "lifecycle": world.get_resource::<super::m2_lifecycle::Lifecycle>().map(|lifecycle| json!({"leg": lifecycle.leg, "events": lifecycle.events,
+            "move_order": lifecycle.move_order.map(|order| format!("{order:?}")),
             "placement_blueprint": lifecycle.placement_blueprint.map(|owner| format!("{owner:?}")),
             "pulse_observation_complete": lifecycle.pulse_observation_complete})),
         "owners": owners.into_iter().map(|(entity, pose)| json!({"entity": format!("{entity:?}"),

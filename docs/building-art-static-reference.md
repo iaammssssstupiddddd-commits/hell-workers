@@ -475,3 +475,18 @@ path/payload記述のmultisetと件数・bytesを比較する。generated asset�
 （-I/-B）で取得・前後再照合する。primaryの現catalogを旧treeへ要求せず、不足する現19pathをコピーしない。
 2path-only・clean・元helper SHAを実行前に検査し、primary側のcontroller/oracleと全verifier harness SHAは
 別にplanへ固定する。この境界を変更したfresh helperでのみ補足を実行する。
+
+candidate Mixer move v2（`c6653c69`）は背景Familiar0→専用Familiar/worker各1と実移動を観測し、
+WARN/ERRORは出なかったが、短いMove assignmentが0.1秒周期の間に完了してサンプルに残らずinvalid。
+その失敗は封印・診断保持・finalize済み。periodic taskの不在を捏造で埋めたり旧試行をpassへ変えない。
+`fixture-move-without-startup-familiars-completion-v2`では、stage6で実MovePlantTaskのorderを記録し、
+既存productionのtyped OnTaskCompletedを受動observerで保持する。実worker/order/target/WorkTypeと
+同時点のCommandedBy/fixture ownerを、安定したactor inventoryと実移動map/delta/partsへ束縛する。
+短いtaskでもproduction完了identityを1件必須とし、別order/actor・重複完了・未観測は拒否する。
+periodic Moveがある場合のWorkingOn/identity/ManagedBy一致も維持する。fixtureが完了通知を生成せず、
+通常production、旧ArtPreview、refining/save-loadを変えない。Help No impactを維持する。
+
+refining v1/v2のoverlay欠落・撮影時間の調査は、v3の独立成功を仕様へ採用したため終了した。
+2件のdiagnostic consumerを正式解除し、全assetがprimary/元候補と一致・使用processなしを確認して
+exact2jobを復元可能なTrashへ移した。作業場の実測削減は2,451,869,696 bytes。
+失敗履歴はinvalidのまま保持し、物理空き増加を意味しない。元候補・v3証拠・codec・Cargo cacheは保全した。

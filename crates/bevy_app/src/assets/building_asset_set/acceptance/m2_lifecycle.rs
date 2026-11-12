@@ -32,6 +32,7 @@ pub(super) struct Lifecycle {
     cursor: MessageCursor<SaveLoadOutcome>,
     commits: MessageCursor<DeconstructionCommitOutcome>,
     pub events: Vec<Value>,
+    pub move_order: Option<Entity>,
 }
 
 impl Lifecycle {
@@ -115,6 +116,30 @@ pub(super) fn drive(world: &mut World) {
             interaction(world, &mut lifecycle, owner);
         }
     });
+}
+
+/// A completion notification retains the production assignment identity even
+/// when the entire Move happened between two periodic presentation snapshots.
+pub(super) fn observe_candidate_move_completed(
+    event: On<hw_core::events::OnTaskCompleted>,
+    mut lifecycle: ResMut<Lifecycle>,
+    fixture: Res<Fixture>,
+    commanders: Query<&CommandedBy>,
+    mut exit: MessageWriter<AppExit>,
+) {
+    if lifecycle.leg != "move-success" || lifecycle.move_order != Some(event.assignment_entity) {
+        return;
+    }
+    if lifecycle.events.len() >= 16 {
+        error!("candidate Move completion observation cap exceeded");
+        exit.write(AppExit::error());
+        return;
+    }
+    lifecycle.events.push(json!({"operation": "MoveCompleted", "worker": format!("{:?}", event.entity),
+        "assignment": format!("{:?}", event.assignment_entity), "target": format!("{:?}", event.current_target_entity),
+        "work_type": format!("{:?}", event.current_work_type),
+        "familiar": commanders.get(event.entity).ok().map(|commander| format!("{:?}", commander.0)),
+        "owner": fixture.owner.map(|owner| format!("{owner:?}"))}));
 }
 
 fn aim(world: &mut World, position: Vec2) -> bool {
@@ -465,6 +490,9 @@ fn interaction(world: &mut World, driver: &mut Lifecycle, owner: Entity) {
                         .unwrap()
                         .translation
                         .truncate();
+                    if super::m2_fixture::candidate_session(world) {
+                        driver.move_order = Some(task);
+                    }
                     assign_order(world, task, position);
                     driver.stage = 9;
                 }
@@ -601,5 +629,49 @@ mod save_observation_tests {
                 Vec3::new(1.0, 2.0, 3.0)
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod move_completion_observation_tests {
+    use super::*;
+
+    #[test]
+    fn actual_typed_completion_retains_short_move_identity_without_repairing_worker() {
+        let mut app = App::new();
+        app.init_resource::<Fixture>().add_message::<AppExit>();
+        super::super::m2_fixture::configure_candidate_pointer(&mut app);
+        let world = app.world_mut();
+        let owner = world.spawn_empty().id();
+        let order = world.spawn_empty().id();
+        let familiar = world.spawn_empty().id();
+        let worker = world
+            .spawn((CommandedBy(familiar), AssignedTask::None))
+            .id();
+        world.resource_mut::<Fixture>().owner = Some(owner);
+        world.insert_resource(Lifecycle {
+            leg: "move-success".into(),
+            move_order: Some(order),
+            ..default()
+        });
+        let foreign = world.spawn_empty().id();
+        for assignment in [foreign, order] {
+            world.trigger(hw_core::events::OnTaskCompleted {
+                entity: worker,
+                assignment_entity: assignment,
+                current_target_entity: assignment,
+                current_work_type: hw_jobs::WorkType::Move,
+            });
+        }
+        let events = &world.resource::<Lifecycle>().events;
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0]["assignment"], format!("{order:?}"));
+        assert_eq!(events[0]["worker"], format!("{worker:?}"));
+        assert_eq!(events[0]["owner"], format!("{owner:?}"));
+        assert_eq!(events[0]["familiar"], format!("{familiar:?}"));
+        assert!(matches!(
+            world.get::<AssignedTask>(worker),
+            Some(AssignedTask::None)
+        ));
     }
 }

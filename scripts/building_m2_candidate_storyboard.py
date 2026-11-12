@@ -20,7 +20,7 @@ else:
 art, pipeline, native, m2 = shared.art, shared.pipeline, shared.native, shared.m2
 PROFILE = "building-m2-candidate-storyboard-v1"
 SCOPE = "m2-candidate-seeded-storyboard-only"
-MOVE_ACTORS = "fixture-move-without-startup-familiars-v1"
+MOVE_ACTORS = "fixture-move-without-startup-familiars-completion-v2"
 
 
 def actor_scope(leg):
@@ -275,7 +275,6 @@ def check_trace(trace, value, nonce, pid):
 
 def check_move_actors(samples):
     observed = []
-    assigned = False
     for sample in samples:
         actors = sample.get("storyboard_move_actors")
         pipeline.require(isinstance(actors, dict) and set(actors) == {"familiars", "workers"},
@@ -298,11 +297,20 @@ def check_move_actors(samples):
                     and identity.get("assignment") == task["assignment"]
                     and identity.get("work_type") == "Move"
                     and task["manager"] == families[0]["entity"], "candidate move assignment ownership differs")
-                assigned = True
     pipeline.require(samples[0]["storyboard_move_actors"] == {"familiars": [], "workers": []}
-        and assigned and observed and len(set(observed)) == 1 and len(observed[-1][1]) == 1
+        and observed and len(set(observed)) == 1 and len(observed[-1][1]) == 1
         and len(samples[-1]["storyboard_move_actors"]["workers"]) == 1,
         "candidate move did not use one stable fixture Familiar/worker")
+    lifecycle = samples[-1].get("lifecycle") or {}
+    completed = [event for event in lifecycle.get("events", []) if event.get("operation") == "MoveCompleted"]
+    order = lifecycle.get("move_order")
+    pipeline.require(isinstance(order, str) and order and len(completed) == 1,
+                     "candidate production Move completion receipt missing/duplicated")
+    event = completed[0]
+    pipeline.require(event.get("assignment") == event.get("target") == order
+        and event.get("work_type") == "Move" and event.get("owner") == samples[-1]["fixture_owner"]
+        and event.get("worker") == observed[-1][1][0] and event.get("familiar") == observed[-1][0],
+        "candidate production Move completion ownership differs")
 
 
 def check_capture_interval(samples, shot):
