@@ -8,6 +8,8 @@ from __future__ import annotations
 import argparse
 import os
 import statistics
+import json
+import subprocess
 import sys
 from dataclasses import asdict
 from pathlib import Path
@@ -28,6 +30,8 @@ else:
 PROFILE = "building-art-static-nine-reference-v2"
 MATRIX = (("capture", "small", 15), ("capture", "medium", 60), ("memory", "medium", 60))
 SEED = 20260920
+REFERENCE_COMMIT = "353fc4cd85b7eaf88737ec36bafa909841289f08"
+REFERENCE_DRIVER_SHA256 = "52dfa0c03db51022d561627061eaf62b7c572605f22607bcc0c7f623f75f0c64"
 
 
 def command(root: Path, instrumentation: str, size: str, souls: int, adapter: str) -> list[str]:
@@ -163,6 +167,63 @@ def verify(root: Path) -> dict:
             "capture_runs": 6, "memory_runs": 3, "active_simulation": "not-measured", "sessions": sessions}
 
 
+def verify_reference_parent(root: Path) -> tuple[dict, dict]:
+    """Use the immutable reference's own verifier; never patch its old matrix."""
+    manifest = native.read_json(root / "manifest.json")
+    native.require(manifest.get("profile") == PROFILE and manifest.get("status") == "pass"
+                   and manifest["identity"]["subject_commit"] == REFERENCE_COMMIT,
+                   "supplement requires the accepted nine-kind reference source")
+    repo = native.validate_repo(manifest["repo"])
+    check_root(repo, root)
+    driver = repo / "scripts/building_art_static_acceptance.py"
+    native.require(sha256(driver) == REFERENCE_DRIVER_SHA256
+                   == manifest["identity"]["driver_sha256"], "original reference verifier changed")
+    result = subprocess.run([sys.executable, str(driver), "verify", "--job-root", str(root)],
+                            capture_output=True, text=True, check=False, timeout=120)
+    native.require(result.returncode == 0, "original reference verification failed: " + result.stderr[-2000:])
+    verified = json.loads(result.stdout)
+    native.require(verified.get("status") == "pass" and verified.get("profile") == PROFILE
+                   and verified.get("subject_commit") == REFERENCE_COMMIT
+                   and verified.get("capture_runs") == 6 and verified.get("memory_runs") == 3
+                   and verified.get("sessions") == manifest["sessions"], "original reference result differs")
+    return manifest, verified
+
+
+def require_memory_supplement_binding(parent: dict, supplement: dict) -> None:
+    capture = next(row for row in parent["sessions"]
+                   if (row["instrumentation"], row["size"]) == ("capture", "small"))
+    memory = next(row for row in parent["sessions"]
+                  if (row["instrumentation"], row["size"]) == ("memory", "medium"))
+    native.require(supplement["instrumentation"] == "memory" and supplement["size"] == "small"
+                   and [row["run"] for row in supplement["observations"]] == [1, 2, 3]
+                   and supplement["binary_sha256"] == memory["binary_sha256"] != capture["binary_sha256"],
+                   "supplement must reuse the exact reference Memory binary")
+    expected = capture["observations"][0]
+    native.require(all(row["adapter"] == expected["adapter"]
+                       for session in parent["sessions"] + [supplement] for row in session["observations"])
+                   and all(row["layout_sha256"] == expected["layout_sha256"]
+                           for row in supplement["observations"]),
+                   "supplement reference adapter or N fixture differs")
+
+
+def verify_memory_small(root: Path, reference: Path) -> dict:
+    native.require(root != reference, "supplement must have its own fresh batch root")
+    manifest, parent = verify_reference_parent(reference)
+    repo = native.validate_repo(manifest["repo"])
+    check_root(repo, root)
+    supplement = verify_session(root, "memory", "small", 15, manifest["identity"], manifest["adapter"])
+    require_memory_supplement_binding(parent, supplement)
+    # Recheck the frozen parent after consuming the supplementary raw files.
+    final_manifest, final_parent = verify_reference_parent(reference)
+    native.require(final_manifest == manifest and final_parent == parent, "reference changed during supplement verification")
+    return {"status": "pass", "profile": "building-art-static-nine-small-memory-v1",
+            "accepted": False, "promotion_authority": False, "capture_runs": 0, "memory_runs": 3,
+            "source": manifest["identity"], "reference_root": str(reference),
+            "reference_manifest_sha256": sha256(reference / "manifest.json"),
+            "verifier_sha256": sha256(Path(__file__)), "session": supplement,
+            "unverified": ["candidate increment", "group performance acceptance", "art", "release"]}
+
+
 @native.activity_locked
 def run(args) -> int:
     native.require(os.environ.get("HW_NATIVE_ACCEPTANCE_LAUNCHED") == "1", "use the planned direct kitty launcher")
@@ -201,7 +262,7 @@ def run(args) -> int:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
-    for name in ("plan", "run", "status", "verify"):
+    for name in ("plan", "run", "status", "verify", "verify-memory-small"):
         command_parser = commands.add_parser(name)
         command_parser.add_argument("--job-root", required=name != "plan")
         if name in {"plan", "run"}:
@@ -210,12 +271,17 @@ def main() -> int:
         if name == "run":
             for key in ("subject-commit", "source-fingerprint", "harness-fingerprint", "asset-view-fingerprint", "driver-sha256"):
                 command_parser.add_argument("--" + key, required=True)
+        if name == "verify-memory-small":
+            command_parser.add_argument("--reference-root", required=True)
     args = parser.parse_args()
     if args.command == "plan":
         return plan(args)
     if args.command == "run":
         return run(args)
     root = Path(args.job_root).resolve()
+    if args.command == "verify-memory-small":
+        native.print_json(verify_memory_small(root, Path(args.reference_root).resolve()))
+        return 0
     if args.command == "verify":
         native.print_json(verify(root))
         return 0

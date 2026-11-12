@@ -82,14 +82,27 @@ impl M6Comparison {
     }
 
     pub(crate) fn prefetched_target_path(&self, server: &AssetServer) -> Option<&str> {
-        if self.candidate {
-            return None;
-        }
-        self.group.as_ref()?.target_paths().find(|path| {
+        self.prefetched_target_path_with(|path| {
             server
                 .get_path_id(bevy::asset::AssetPath::parse(path))
                 .is_some()
         })
+    }
+
+    pub(super) fn prefetched_target_path_with(
+        &self,
+        mut managed: impl FnMut(&str) -> bool,
+    ) -> Option<&str> {
+        let mut prefetched = None;
+        // Consume every lookup in both modes, including when one path is managed.
+        // Control-only observer work would understate the measured asset increment.
+        for path in self.group.as_ref()?.target_paths() {
+            let present = managed(path);
+            if !self.candidate && present && prefetched.is_none() {
+                prefetched = Some(path);
+            }
+        }
+        prefetched
     }
 }
 

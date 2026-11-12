@@ -89,21 +89,27 @@ Door g7は別loaderで維持する。現loader/presentation候補許可は単一
 
 ### M6: 群別の厳密なload集合
 
-- [ ] 専用`building-group-paired-static-v1`とtyped `HW_BUILDING_GROUP_COMPARISON`を追加する。
+- [x] 専用`building-group-paired-static-v1`とtyped `HW_BUILDING_GROUP_COMPARISON`を追加する。
   groupはM2/M3/M5だけ、fixedは先行群のReleaseApproved 0/2/4種、targetは当該群のIsolatedCandidate 2/2/4種。
   canonical locator・identity・凍結artifact pathを検査し、Bridge、重複、集合欠損、authority混在を拒否する。
-- [ ] 既存M6の全8種modeと通常releaseの2/4/8 guardを維持する。
+- [x] 既存M6の全8種modeと通常releaseの2/4/8 guardを維持する。
   `M6Comparison`へ群別の実load集合を加え、request・loader snapshot・pool許可を同じ集合から導出する。
   controlにもfixedをloadし、targetのrequestと先読みはせず、AssetServerのactive path IDで検査する。
-- [ ] presentation検証をmode全体のboolからkindごとの完全identity一致へ変える。
+  受入性能をcontrolの追加観測費用で小さく見せないよう、両modeで同順序・全target pathを検索する。
+  controlだけmanagedを拒否し、candidateは従来のpool/identity/consumer検証を維持する。
+- [x] presentation検証をmode全体のboolからkindごとの完全identity一致へ変える。
   pool数0→2/2→4/4→8、mesh entity/copies 5→7/7→11/11→11、unique target mesh2→6/6→8/8→8を要求する。
   M5 foreground監視はM5 candidateだけ4×copiesで、fixed M2/M3のpart検査もcontrol側へ残す。
-- [ ] Pythonのview・manifest/provenance・oracle・group別contractと初期/実final照合を接続する。
+- [x] Pythonのview・manifest/provenance・oracle・group別contractと初期/実final照合を接続する。
   fixed/target inventoryとloaded集合を分け、target path省略・control先読み・kind/世代/bytes driftを拒否する。
   既存全8種の独立oracleを新しい任意集合へ緩和しない。
 
 ### M7: 群別性能と順次導入
 
+- [ ] 旧9種参照の不足N Memoryは、旧source/helperを編集せず、既存perf CLIのN×3を別batchで測る。
+  primaryの限定`verify-memory-small`で、固定353fc4cdの元verifier・既存6 Capture/3 Memory原本を再検証し、
+  同じMemory binary、Nのlayout、実adapterとexact sourceを要求する。正式起動はprimary登録→kitty→execute、
+  old成功の流用やmatrix書換えをせず、補足3 runだけの結果として扱う。
 - [ ] 安定したcontrol baselineを取得し、群別の全metric有限budgetと根拠をcandidate測定前に固定・独立reviewする。
   全8種budgetを盲目的に流用せず、target実inventory、共有資源plateauとbaselineを用いる。
 - [ ] N/4N、Capture→Memory、3隣接pair・中間順序反転、30/60秒を維持する。

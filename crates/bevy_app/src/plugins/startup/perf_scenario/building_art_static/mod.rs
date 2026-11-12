@@ -360,7 +360,7 @@ fn inspect(params: &InspectParams) -> Result<Option<Value>, String> {
                 "M6 cannot mix Bridge or art-preview authority into nine-kind evidence".into(),
             );
         }
-        if !m6.candidate && m6.group.is_some() {
+        if m6.group.is_some() {
             let server = params
                 .asset_server
                 .as_ref()

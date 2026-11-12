@@ -132,6 +132,74 @@ class BuildingArtStaticTests(unittest.TestCase):
 
 
 class NativeStaticReferenceTests(unittest.TestCase):
+    def test_memory_supplement_requires_exact_binary_adapter_fixture_and_three_runs(self):
+        # Synthetic provenance only, not a native measurement or approval.
+        def observation(n, layout):
+            return {"run": n, "adapter": {"name": "synthetic"}, "layout_sha256": layout}
+        capture = {"instrumentation": "capture", "size": "small", "binary_sha256": "a" * 64,
+                   "observations": [observation(n, "n") for n in (1, 2, 3)]}
+        memory = {"instrumentation": "memory", "size": "medium", "binary_sha256": "b" * 64,
+                  "observations": [observation(n, "4n") for n in (1, 2, 3)]}
+        parent = {"sessions": [capture, memory]}
+        supplement = {**memory, "size": "small", "observations": copy.deepcopy(capture["observations"])}
+        acceptance.require_memory_supplement_binding(parent, supplement)
+        for change in ({"binary_sha256": "a" * 64}, {"binary_sha256": "c" * 64},
+                       {"instrumentation": "capture"}, {"size": "medium"}, {"observations": []}):
+            with self.subTest(change=change), self.assertRaises(acceptance.native.AcceptanceError):
+                acceptance.require_memory_supplement_binding(parent, {**supplement, **change})
+        for field, invalid in (("adapter", {"name": "foreign"}), ("layout_sha256", "foreign")):
+            changed = copy.deepcopy(supplement)
+            changed["observations"][1][field] = invalid
+            with self.assertRaisesRegex(acceptance.native.AcceptanceError, "adapter or N fixture"):
+                acceptance.require_memory_supplement_binding(parent, changed)
+
+    def test_memory_supplement_rejects_foreign_parent_before_running_any_verifier(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            manifest = {"profile": acceptance.PROFILE, "status": "pass",
+                        "identity": {"subject_commit": "0" * 40}}
+            (root / "manifest.json").write_text(json.dumps(manifest))
+            with patch.object(acceptance.subprocess, "run") as process:
+                with self.assertRaisesRegex(acceptance.native.AcceptanceError, "accepted nine-kind"):
+                    acceptance.verify_reference_parent(root)
+                process.assert_not_called()
+            manifest["identity"]["subject_commit"] = acceptance.REFERENCE_COMMIT
+            manifest["identity"]["driver_sha256"] = "0" * 64
+            manifest["repo"] = str(root)
+            (root / "manifest.json").write_text(json.dumps(manifest))
+            with patch.object(acceptance.native, "validate_repo", return_value=root), \
+                 patch.object(acceptance, "check_root"), \
+                 patch.object(acceptance, "sha256", return_value="0" * 64), \
+                 patch.object(acceptance.subprocess, "run") as process:
+                with self.assertRaisesRegex(acceptance.native.AcceptanceError, "verifier changed"):
+                    acceptance.verify_reference_parent(root)
+                process.assert_not_called()
+
+    def test_memory_supplement_rechecks_the_parent_and_cannot_replace_it(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            reference, supplement = root / "parent", root / "supplement"
+            reference.mkdir()
+            (reference / "manifest.json").write_text("{}")
+            manifest = {"repo": str(root), "identity": {}, "adapter": "synthetic"}
+            parent = {"synthetic": True}
+            with patch.object(acceptance, "verify_reference_parent", return_value=(manifest, parent)) as verified, \
+                 patch.object(acceptance.native, "validate_repo", return_value=root), \
+                 patch.object(acceptance, "check_root"), \
+                 patch.object(acceptance, "verify_session", return_value={}) as session, \
+                 patch.object(acceptance, "require_memory_supplement_binding"):
+                result = acceptance.verify_memory_small(supplement, reference)
+                self.assertEqual(verified.call_count, 2)
+                session.assert_called_once_with(supplement, "memory", "small", 15, {}, "synthetic")
+                self.assertEqual(result["memory_runs"], 3)
+                self.assertFalse(result["accepted"])
+                self.assertFalse(result["promotion_authority"])
+                verified.side_effect = [(manifest, parent), (manifest, {"changed": True})]
+                with self.assertRaisesRegex(acceptance.native.AcceptanceError, "changed during"):
+                    acceptance.verify_memory_small(supplement, reference)
+            with self.assertRaisesRegex(acceptance.native.AcceptanceError, "own fresh batch"):
+                acceptance.verify_memory_small(reference, reference)
+
     def test_launcher_matrix_uses_public_guarded_runner(self):
         for instrumentation, size, souls in acceptance.MATRIX:
             argv = acceptance.command(Path("/reference"), instrumentation, size, souls, "Intel")

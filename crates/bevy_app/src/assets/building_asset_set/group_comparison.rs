@@ -341,6 +341,23 @@ mod tests {
     }
 
     #[test]
+    fn both_modes_consume_the_same_full_target_path_observation() {
+        let declaration = fixture(Group::M2);
+        let expected: Vec<_> = declaration.target_paths().collect();
+        let raw = serde_json::to_string(&declaration).unwrap();
+        for mode in ["legacy-control", "candidate"] {
+            let comparison = parse(&raw, mode).unwrap();
+            let mut visited = Vec::new();
+            let prefetched = comparison.prefetched_target_path_with(|path| {
+                visited.push(path.to_owned());
+                true
+            });
+            assert_eq!(visited, expected);
+            assert_eq!(prefetched, (!comparison.candidate).then_some(expected[0]));
+        }
+    }
+
+    #[test]
     fn any_target_path_started_in_control_is_detected_before_pool_activation() {
         let declaration = fixture(Group::M2);
         let raw = serde_json::to_string(&declaration).unwrap();

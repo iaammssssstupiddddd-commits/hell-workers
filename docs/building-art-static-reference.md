@@ -210,6 +210,8 @@ M3の先行M2、M5の先行M2/M3は既存pipelineで検証したReleaseApproved�
 exact identity・locator・manifest artifact pathを拘束する。他sessionとの併用は拒否する。
 controlでも固定群を実ロード・表示するが、対象候補はrequestしない。対象locatorと全artifactの
 AssetServer pathを毎frame観測し、pool activation前の先行loadも拒否する。
+両modeで同じ順序・全target pathの検索を実行し、controlだけmanagedを拒否する。
+controlだけの観測費用で候補増分を小さく見せず、candidateのpool/identity検証も維持する。
 sidecar `building-art-group-nine-v1` は固定群を含む実loaded identity、part、foregroundを検証する。
 論理fixtureは全9種のまま、表示数だけを独立した期待値で検査する。
 
@@ -244,3 +246,41 @@ interrupted封印/finalizeした。参照環境には当初tracked shader 15フ�
 旧試行終了後、primaryのcanonical assetsから不足220ファイルを追加し、既存ファイルは上書きせず、
 全235ファイル・139,371,685 bytesのpath/SHA-256一致を確認した。旧ソース・helperは編集していない。
 変更後のasset fingerprintで新batchを計画し、旧失敗の再実行や性能合格への読み替えはしない。
+
+### 現在環境での参照再取得（2026-11-12）
+
+fresh v3は同Git subject `353fc4cd85b7eaf88737ec36bafa909841289f08`、source
+`d4824ae0782fcdedbac0cb576b23f8271f11f21a91922313a1178fc1a09b288e`、asset view
+`95a4526096f2857275fc783013bf8cbe7bf38687a3e9bb05f004c195a8abc624`で9 runすべて有効。
+元の登録済みverifierによる独立pass封印とfinalizeを完了した。実環境はIntel Arc (MTL)、
+Mesa 26.2.6、Vulkan/X11、1280×720/DPI1/high/novsync。Capture binaryは
+`75e332871cd9e66e9c756202bef46621dee6b785152091d00241f5c245e43490`、Memoryは
+`b2fadfda50293f1cbf46b56333cc46394f571d6d7ee1b6937333a6f13ee32736`。
+
+各3回の中央値 / MAD。旧Mesa環境の数値を直接対照にせず、現在環境の校正用入力とする。
+
+| 指標 | N=36 | 4N=144 |
+| --- | ---: | ---: |
+| Capture p95 (ms) | 8.815572 / 0.221309 | 10.424465 / 0.073669 |
+| Capture p99 (ms) | 10.975053 / 0.128898 | 13.085245 / 0.746518 |
+| Memory peak live (bytes) | 補足待ち | 678,328,225 / 218,795 |
+| Memory max RSS (KiB) | 補足待ち | 1,395,984 / 30,324 |
+
+原本はprimary台帳の`tak14-foundation-reference-v3-comparison`で、N Memory補足と基盤・最終累積比較が
+実際に参照する間だけ保持する。これは基盤比較や群別budgetの合格ではなく、新candidateの採否も与えない。
+
+## 旧参照のN Memory補足
+
+旧353fc4cdの専用runnerはMemory 4Nだけを持つ。ソースやそのmatrixを変更せず、同worktreeの
+既存`perf.py run`で`building-art-static` / small / souls15 / repeat3 / Memoryを別batchへ実行する。
+その他のseed、GPU/Vulkan/X11、1280×720/DPI1/high/novsync、warmup30秒/measure60秒は同じ契約。
+primaryの`validation register`でexact argv・出力root・verifierを固定し、同じno-prompt kitty内で
+`validation execute`する。既存batchや実行結果を再送せず、Captureを含む9 runの代用にも使わない。
+
+補足の登録verifierはprimaryの`building_art_static_acceptance.py verify-memory-small
+--job-root <補足root> --reference-root <旧9run参照root>`。
+旧353fc4cdの元verifier SHAを固定し、その元CLIで参照6 Capture/3 Memoryとsource/assetsを再検証する。
+補足3 runは独立raw検証に加え、参照Memoryと同じbinary、Captureとは異なるbinary、同一adapter、
+N側の同じ論理layoutを要求する。Memoryはnative allocator CSVとGNU timeから再計算する。
+前後に参照原本を再照合し、欠損・変更・別source・別instrumentを拒否する。
+結果は補足3 Memoryだけのtechnical passであり、candidate増分・群性能・アート・releaseの承認を与えない。
