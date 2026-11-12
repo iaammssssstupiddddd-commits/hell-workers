@@ -35,6 +35,10 @@ pub(super) struct Lifecycle {
 }
 
 impl Lifecycle {
+    pub(super) fn pointer_input_complete(&self) -> bool {
+        self.leg == "move-success" && self.stage >= 9
+    }
+
     pub(super) fn new(leg: String) -> Self {
         Self { leg, ..default() }
     }

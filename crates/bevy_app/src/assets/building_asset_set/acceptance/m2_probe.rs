@@ -115,6 +115,9 @@ pub(super) fn configure(app: &mut App, session: &BuildingArtSession) -> Result<(
         super::m2_ui::configure(app, session, &case)?;
     } else {
         super::m2_fixture::configure(app, session.identity.kind)?;
+        if scope == CANDIDATE_SCOPE {
+            super::m2_fixture::configure_candidate_pointer(app);
+        }
     }
     app.insert_resource(Trace {
         scope,

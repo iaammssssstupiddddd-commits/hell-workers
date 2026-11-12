@@ -249,6 +249,28 @@ def check_state_checkpoints(shots, value):
         pipeline.require(index == len(sequence), "candidate pause/resume/Idle capture sequence missing")
 
 
+PROVENANCE_FILES = (
+    "provenance/source", "provenance/geometry.json",
+    "provenance/art-approval.json", "provenance/numeric-approval.json",
+)
+
+
+def provenance_inventory(source):
+    return {relative: executable.digest(pipeline.rooted(source, relative)) for relative in PROVENANCE_FILES}
+
+
+def prepare_overlay(assets, source):
+    expected = provenance_inventory(source)
+    for relative in PROVENANCE_FILES:
+        pipeline.put(pipeline.rooted(assets, relative), pipeline.rooted(source, relative).read_bytes())
+    pipeline.require(provenance_inventory(assets) == expected == provenance_inventory(source),
+                     "candidate overlay approval provenance changed")
+
+
+def verify_overlay(repo, view, manifest, text, source):
+    shared.check_asset_view(repo, view, manifest, text, extra_inventory=provenance_inventory(source))
+
+
 def prepare_binary(binary, root):
     return executable.freeze(binary, root)
 

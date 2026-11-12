@@ -335,3 +335,8 @@ feedbackは従来の共有debug cache、旧契約は固定の共有cacheのlive�
 Help実レビュー: 新しい明示profiling候補sessionでのみ既存domain fixtureとread-only observerを使う。
 通常起動では有効化されず、既存input/UiIntent、gameplay保存/移動/生産rule、通常ラベル/通知/Help入口は不変。
 No impactとし、プレイヤーHelp source/snapshotは変更しない。技術storyboardは独立アートやreleaseを承認しない。
+
+M7-b初回はprivate overlayのnumeric承認欠落による既知exit1。状態rawは進行したが受入ではない。
+原本をdiagnostic保持・invalid/finalizeし、既存approval4件のexact copyと全inventory検査、
+candidate専用の開始/Move入力終了時だけのpointer parkingを追加してfresh sourceで再実行する。
+通常/旧ArtPreviewの入力・UIは変えないため、この補正もHelp No impact。

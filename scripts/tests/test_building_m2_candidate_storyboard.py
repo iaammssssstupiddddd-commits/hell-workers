@@ -147,6 +147,33 @@ class CandidateBoundaryTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "hidden|render layer"):
             candidate.check_capture_interval(changed, shot | {"key": legacy.checkpoint_key(changed[0])})
 
+    def test_candidate_overlay_copies_exact_approvals_and_rejects_missing_or_changed_bytes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source, repo, view = root / "source", root / "repo", root / "view"
+            (repo / "assets").mkdir(parents=True)
+            assets = view / "assets"
+            for relative in candidate.PROVENANCE_FILES:
+                path = source / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(relative.encode())
+            locator = candidate.pipeline.locator("Tank")
+            candidate.pipeline.put(assets / locator, b"{}")
+            candidate.prepare_overlay(assets, source)
+            self.assertEqual(candidate.provenance_inventory(assets), candidate.provenance_inventory(source))
+            manifest = {"identity": {"kind": "Tank"}, "artifacts": []}
+            candidate.verify_overlay(repo, view, manifest, "{}", source)
+            approval = assets / "provenance/numeric-approval.json"
+            original = approval.read_bytes()
+            approval.write_bytes(b"changed approval")
+            with self.assertRaises(ValueError):
+                candidate.verify_overlay(repo, view, manifest, "{}", source)
+            approval.unlink()
+            with self.assertRaises(ValueError):
+                candidate.verify_overlay(repo, view, manifest, "{}", source)
+            approval.write_bytes(original)
+            candidate.verify_overlay(repo, view, manifest, "{}", source)
+
     def test_candidate_copy_is_validated_before_codec_or_plan(self):
         with patch.object(candidate.shared.pipeline, "no_symlinks", side_effect=lambda p: p), \
              patch.object(candidate.shared.pipeline, "read", return_value={"plan": {}, "binary": {"path": "/foreign", "sha256": "a"*64}}), \

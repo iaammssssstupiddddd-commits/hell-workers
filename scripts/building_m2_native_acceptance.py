@@ -435,7 +435,7 @@ def check_renderer_record(log, adapter, recorded):
     pipeline.require(recorded == check_renderer(log, adapter), "recorded renderer differs from native log")
 
 
-def check_asset_view(repo, view, manifest, text):
+def check_asset_view(repo, view, manifest, text, *, extra_inventory=None):
     def inventory(root):
         result = {}
         for path in pipeline.no_symlinks(root).rglob("*"):
@@ -446,6 +446,7 @@ def check_asset_view(repo, view, manifest, text):
     expected = inventory(repo / "assets")
     expected.update({item["path"]: item["sha256"] for item in manifest["artifacts"]})
     expected[pipeline.locator(manifest["identity"]["kind"])] = pipeline.digest(text.encode())
+    expected.update(extra_inventory or {})
     pipeline.require(inventory(view / "assets") == expected, "private asset view differs from frozen inputs")
 
 
@@ -504,7 +505,7 @@ def verify_contract(root, contract):
     spec = runtime["kinds"][value["kind"]]
     pipeline.require(manifest["identity"] == value["identity"]
                      and pipeline.digest(text.encode()) == spec["manifest_sha256"], "loaded asset overlay changed")
-    check_asset_view(Path(value["repo"]), root / "asset-view", manifest, text)
+    contract.verify_overlay(Path(value["repo"]), root / "asset-view", manifest, text, Path(spec["source_root"]))
     pipeline.require(result["inventory"] == contract.inspect(Path(value["runtime_plan"]), value["kind"], trace_path),
                      "observation inventory changed")
     contract.check_plan(value)
@@ -517,6 +518,15 @@ def check_binary(result, root, value):
     binary = pipeline.no_symlinks(Path(result["binary"]["path"]))
     pipeline.require(binary == Path(value["repo"]) / "target/debug/bevy_app"
                      and pipeline.digest(binary.read_bytes()) == result["binary"]["sha256"], "native binary changed")
+
+
+def prepare_overlay(assets, source):
+    # Legacy ArtPreview has no numeric/art provenance consumed from the overlay.
+    return None
+
+
+def verify_overlay(repo, view, manifest, text, source):
+    check_asset_view(repo, view, manifest, text)
 
 
 def prepare_binary(binary, root):
@@ -566,6 +576,7 @@ def run_contract(args, contract):
             pipeline.put(pipeline.rooted(view / "assets", artifact["path"]), pipeline.file_bytes(source, artifact))
         locator = pipeline.locator(value["kind"])
         pipeline.put(pipeline.rooted(view / "assets", locator), pipeline.rooted(source, locator).read_bytes(), replace=True)
+        contract.prepare_overlay(view / "assets", source)
         for key in list(env):
             if key.startswith(("HW_BUILDING_ART", "HW_M2", "HW_WALL", "HW_DOOR", "HW_DISABLE_", "HW_PERF_")):
                 del env[key]

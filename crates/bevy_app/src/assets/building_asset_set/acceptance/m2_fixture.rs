@@ -62,6 +62,44 @@ pub(super) fn configure(app: &mut App, kind: BuildingAssetKind) -> Result<(), St
     Ok(())
 }
 
+#[derive(Resource, Default)]
+struct CandidatePointer {
+    initial: bool,
+    after_move: bool,
+}
+
+/// Candidate domain storyboards park the synthetic cursor twice at most. The
+/// real move driver retains ownership while aiming/clicking; no UI is hidden.
+pub(super) fn configure_candidate_pointer(app: &mut App) {
+    app.init_resource::<CandidatePointer>().add_systems(
+        PreUpdate,
+        park_candidate_pointer.after(super::m2_lifecycle::drive),
+    );
+}
+
+fn park_candidate_pointer(
+    fixture: Res<Fixture>,
+    lifecycle: Res<super::m2_lifecycle::Lifecycle>,
+    mut parked: ResMut<CandidatePointer>,
+    mut windows: Query<&mut Window, With<bevy::window::PrimaryWindow>>,
+) {
+    if fixture.owner.is_none() {
+        return;
+    }
+    let initial = !parked.initial;
+    let after_move = lifecycle.pointer_input_complete() && !parked.after_move;
+    if !initial && !after_move {
+        return;
+    }
+    let Ok(mut window) = windows.single_mut() else {
+        return;
+    };
+    let away = Vec2::new(window.width() * 0.8, window.height() * 0.7);
+    window.set_cursor_position(Some(away));
+    parked.initial = true;
+    parked.after_move |= after_move;
+}
+
 /// UI art feedback reuses only legal construction setup. Never register the old
 /// real-time injection/unpause or lifecycle drivers in this separate recipe.
 pub(super) fn configure_ui(app: &mut App) {
@@ -332,6 +370,41 @@ fn drive(mut p: Drive) {
 mod tests {
     use super::*;
     use std::time::Duration;
+
+    #[test]
+    fn candidate_cursor_parks_once_without_hiding_ui_or_continuously_overwriting_input() {
+        let mut app = App::new();
+        let owner = app.world_mut().spawn_empty().id();
+        let window = app
+            .world_mut()
+            .spawn((Window::default(), bevy::window::PrimaryWindow))
+            .id();
+        app.insert_resource(Fixture {
+            owner: Some(owner),
+            ..default()
+        })
+        .insert_resource(super::super::m2_lifecycle::Lifecycle::new(
+            "refining".into(),
+        ))
+        .init_resource::<CandidatePointer>()
+        .add_systems(Update, park_candidate_pointer);
+        app.update();
+        let actual = app.world().get::<Window>(window).unwrap();
+        assert_eq!(
+            actual.cursor_position(),
+            Some(Vec2::new(actual.width() * 0.8, actual.height() * 0.7))
+        );
+        let manual = Vec2::new(200.0, 250.0);
+        app.world_mut()
+            .get_mut::<Window>(window)
+            .unwrap()
+            .set_cursor_position(Some(manual));
+        app.update();
+        assert_eq!(
+            app.world().get::<Window>(window).unwrap().cursor_position(),
+            Some(manual)
+        );
+    }
 
     #[test]
     fn only_refining_leg_injects_mixer_inputs_tasks_and_pause() {

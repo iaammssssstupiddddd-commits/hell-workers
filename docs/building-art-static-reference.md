@@ -385,3 +385,11 @@ phase/epoch/destinationを撮影keyに含め、pause後の再開やMove後の画
 数値validator/contract JSONの完全inventoryをcodec実行前と検証終了時に照合する。
 全観測rowで3D layerを、採用PNGの全capture intervalでbody/rotor/可視水面の実ViewVisibilityを要求する。
 Emptyの非表示水面だけは許す。移動中の画面外観測を失敗にせず、その区間の画像は採用せず理由付きで残す。
+
+`59b42cb4`の初回candidate refiningは、実traceでIdle→Active→pause→再開→Idleまで進んだが、
+最終overlay codec検証で`provenance/numeric-approval.json`欠落を検出しexit1となった。
+invalid封印/finalize済みで、状態遷移rawや5画像を受入へ流用しない。Hover/Move表示のモデル重なりも画像で確認した。
+修正では候補sourceのsource/geometry/art/numeric承認4ファイルをbyte同一でprivate overlayへ引継ぎ、
+全asset inventoryへ含めて原本と検証する。旧ArtPreview overlayは変更しない。
+新候補domain fixtureだけ、開始時とMove入力完了後に一度ずつpointerを中央モデルから離す。
+Move照準中の入力所有を変更せず、UIを隠したり継続的にpointerを上書きしない。fresh画像で再確認する。
