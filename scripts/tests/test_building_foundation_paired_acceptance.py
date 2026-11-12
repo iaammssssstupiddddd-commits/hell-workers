@@ -36,6 +36,87 @@ def rows(instrument="capture"):
 
 
 class FoundationPairedTests(unittest.TestCase):
+    def test_capture_proof_is_local_and_rejects_foreign_paths_plans_and_changed_hashes(self):
+        proof = paired._CaptureProof(Path("/capture"), "c"*64, Path("/plan"), "p"*64,
+                                     {"instrumentation": "capture", "stage_sha256": "c"*64})
+        def sha(path):
+            return "c"*64 if path == Path("/capture") else "p"*64
+        with patch.object(paired.static, "sha256", side_effect=sha):
+            self.assertEqual(paired._capture_result(proof, Path("/capture"), Path("/plan")), proof.result)
+            for cached, stage, plan in [(None, "/capture", "/plan"), (proof.__dict__, "/capture", "/plan"),
+                                        (proof, "/foreign", "/plan"), (proof, "/capture", "/foreign")]:
+                with self.subTest(stage=stage, plan=plan), self.assertRaises(paired.native.AcceptanceError):
+                    paired._capture_result(cached, Path(stage), Path(plan))
+        with patch.object(paired.static, "sha256", return_value="changed"), self.assertRaises(paired.native.AcceptanceError):
+            paired._capture_result(proof, Path("/capture"), Path("/plan"))
+
+    def test_proof_is_created_only_from_full_verification_each_time(self):
+        result = {"instrumentation": "capture", "stage_sha256": "c"*64}
+        with patch.object(paired, "verify_stage", return_value=result) as verify, \
+             patch.object(paired.native, "read_json", return_value={"plan": "/plan", "plan_sha256": "p"*64}), \
+             patch.object(paired.static, "sha256", side_effect=lambda path: "c"*64 if path == Path("/capture") else "p"*64):
+            first = paired._verified_capture(Path("/capture"), Path("/plan"))
+            second = paired._verified_capture(Path("/capture"), Path("/plan"))
+            self.assertIsNot(first, second)
+            self.assertEqual(verify.call_count, 2)
+        with patch.object(paired, "verify_stage", side_effect=ValueError("raw failed")), self.assertRaises(ValueError):
+            paired._verified_capture(Path("/capture"), Path("/plan"))
+
+    def test_memory_stage_verifies_capture_once_then_checks_both_build_receipts(self):
+        stage = {"profile": paired.PROFILE, "stage_path": "/memory", "plan": "/plan", "plan_sha256": "p"*64,
+                 "instrumentation": "memory", "prior_stage": "/capture", "prior_stage_sha256": "c"*64,
+                 "created_at": "2026-11-12T02:00:00+00:00",
+                 "binaries": {source: {"path": "/root/"+source, "sha256": letter*64}
+                              for source, letter in (("reference", "r"), ("current", "s"))}}
+        old = {"binaries": {source: {"sha256": letter*64} for source, letter in (("reference", "a"), ("current", "b"))}}
+        planned = {"job_root": "/root"}
+        proof = paired._CaptureProof(Path("/capture"), "c"*64, Path("/plan"), "p"*64,
+            {"instrumentation": "capture", "stage_sha256": "c"*64,
+             "rows": [{"finished_at": "2026-11-12T00:00:00+00:00"}]})
+        documents = {"/memory": stage, "/plan": planned, "/capture": old}
+        def receipt(_plan, source, *_args, **kwargs):
+            self.assertIs(kwargs["captured"], proof)
+            self.assertTrue(kwargs["finalized"])
+            return {"binary": stage["binaries"][source], "build_finished_at": "2026-11-12T01:00:00+00:00"}
+        with patch.object(paired.native, "read_json", side_effect=lambda path: documents[str(path)]), \
+             patch.object(paired.static, "sha256", side_effect=lambda path: "c"*64 if path == Path("/capture") else "p"*64), \
+             patch.object(paired, "check_plan"), patch.object(paired.executable, "validate"), \
+             patch.object(paired, "_verified_capture", return_value=proof) as verified, \
+             patch.object(paired, "_verify_build", side_effect=receipt) as builds:
+            paired.check_stage(Path("/memory"))
+            verified.assert_called_once_with(Path("/capture"), Path("/plan"))
+            self.assertEqual(builds.call_count, 2)
+
+    def test_standalone_memory_build_verifier_still_fully_checks_capture(self):
+        proof = object()
+        with patch.object(paired, "_verified_capture", return_value=proof) as verify, \
+             patch.object(paired, "_verify_build", return_value={"checked": True}) as receipt:
+            self.assertEqual(paired.verify_build(Path("/plan"), "current", "memory", Path("/capture")), {"checked": True})
+            verify.assert_called_once_with(Path("/capture"), Path("/plan"))
+            self.assertIs(receipt.call_args.kwargs["captured"], proof)
+
+    def test_memory_result_reuses_same_call_proof_without_dropping_cross_stage_checks(self):
+        data = rows("memory")
+        previous = {"instrumentation": "capture", "stage_sha256": "c"*64,
+                    "rows": [{"source": source, "finished_at": "2026-11-11T23:00:00+00:00",
+                              "inventory": owned_snapshot(shared=source=="current")} for source in paired.SOURCES]}
+        proof = paired._CaptureProof(Path("/capture"), "c"*64, Path("/plan"), "p"*64, previous)
+        stage = {"instrumentation": "memory", "prior_stage": "/capture", "plan": "/plan"}
+        planned = {"repos": {"current": "/primary"}, "limits": budget()}
+        with patch.object(paired, "_check_stage", return_value=(stage, planned, proof)), \
+             patch.object(paired, "case_result", side_effect=data), \
+             patch.object(paired.static, "sha256", side_effect=lambda path: "c"*64 if path == Path("/capture") else "p"*64), \
+             patch.object(paired.storage, "primary_for", return_value=Path("/primary")), \
+             patch.object(paired.storage, "ledger_dir", return_value=Path("/ledger")), \
+             patch.object(paired.native, "read_json", return_value={"batches": {}}), \
+             patch.object(paired, "require_no_interleaving"):
+            result = paired.verify_stage(Path("/memory"))
+            self.assertFalse(result["cross_stage_resources"]["reference"]["global_shared_mesh_plateau"])
+            self.assertTrue(result["cross_stage_resources"]["current"]["global_shared_mesh_plateau"])
+            data[0]["inventory"]["images"][0]["path"] = "changed"
+            with patch.object(paired, "case_result", side_effect=data), self.assertRaises(ValueError):
+                paired.verify_stage(Path("/memory"))
+
     def test_complete_reversed_middle_pairs_use_same_source_binaries_and_cross_process_payloads(self):
         for mode in ("capture", "memory"):
             result = paired.aggregate(rows(mode), mode, budget())
@@ -223,7 +304,7 @@ class FoundationPairedTests(unittest.TestCase):
                  patch.object(paired.native, "read_json", side_effect=[actual, planned]), \
                  patch.object(paired.static, "sha256", return_value="p"*64), \
                  patch.object(paired, "check_plan"), patch.object(paired.executable, "validate"), \
-                 patch.object(paired, "verify_build", side_effect=receipts):
+                 patch.object(paired, "_verify_build", side_effect=receipts):
                 if change is None:
                     paired.check_stage(Path("/private/stage"))
                 else:

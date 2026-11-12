@@ -8,6 +8,7 @@ No admission exception, nested batch, art or release authority is provided here.
 from __future__ import annotations
 
 import argparse
+from dataclasses import dataclass
 from datetime import datetime
 import json
 import math
@@ -105,7 +106,41 @@ def plan(args):
     return value
 
 
+@dataclass(frozen=True)
+class _CaptureProof:
+    stage_path: Path
+    stage_sha256: str
+    plan_path: Path
+    plan_sha256: str
+    result: dict
+
+
+def _verified_capture(path, plan_path):
+    # Only constructed from a full verifier result in this call. Never read a
+    # cached result from a document, CLI argument, previous process or next case.
+    result = verify_stage(path)
+    value = native.read_json(path)
+    proof = _CaptureProof(path.resolve(), static.sha256(path), Path(value["plan"]).resolve(),
+                          value["plan_sha256"], result)
+    _capture_result(proof, path, plan_path)
+    return proof
+
+
+def _capture_result(proof, path, plan_path):
+    native.require(isinstance(proof, _CaptureProof)
+        and proof.stage_path == path.resolve() and proof.plan_path == plan_path.resolve()
+        and proof.stage_sha256 == static.sha256(path) == proof.result["stage_sha256"]
+        and proof.plan_sha256 == static.sha256(plan_path)
+        and proof.result["instrumentation"] == "capture", "completed Capture proof path/plan/stage differs")
+    return proof.result
+
+
 def check_stage(path):
+    value, planned, _capture = _check_stage(path)
+    return value, planned
+
+
+def _check_stage(path):
     value = native.read_json(path)
     native.require(value.get("stage_path") == str(path.resolve()), "stage path differs")
     plan_path = Path(value["plan"])
@@ -114,29 +149,29 @@ def check_stage(path):
     check_plan(planned)
     native.require(value.get("profile") == PROFILE and value.get("instrumentation") in ("capture", "memory")
         and set(value["binaries"]) == set(SOURCES), "stage contract differs")
-    root = Path(planned["job_root"])
-    for source, binary in value["binaries"].items():
-        executable.validate(Path(binary["path"]), root / f"{value['instrumentation']}-{source}", binary["sha256"])
-        receipt = verify_build(plan_path, source, value["instrumentation"],
-                               Path(value["prior_stage"]) if value.get("prior_stage") else None, finalized=True)
-        native.require(binary == receipt["binary"], "stage binary lacks its exact guarded source build")
-        native.require(time(receipt["build_finished_at"]) < time(value["created_at"]),
-                       "both source builds must complete before stage binding")
-    native.require(len({binary["sha256"] for binary in value["binaries"].values()}) == 2,
-                   "different source binaries must not be identical")
+    prior, captured = None, None
     if value["instrumentation"] == "capture":
         native.require(value.get("prior_stage") is None, "Capture must be first")
     else:
         prior = Path(value["prior_stage"])
         native.require(static.sha256(prior) == value["prior_stage_sha256"], "Capture stage changed")
-        previous, old_plan = check_stage(prior)
-        native.require(previous["instrumentation"] == "capture" and old_plan == planned, "Memory must link the exact Capture plan")
-        capture_result = verify_stage(prior)
-        native.require(time(value["created_at"]) > time(capture_result["rows"][-1]["finished_at"]),
+        captured = _verified_capture(prior, plan_path)
+        native.require(time(value["created_at"]) > time(captured.result["rows"][-1]["finished_at"]),
                        "Memory stage was bound before Capture completed")
-        native.require(all(value["binaries"][s]["sha256"] != previous["binaries"][s]["sha256"] for s in SOURCES),
-                       "Capture/Memory executable not separated")
-    return value, planned
+        previous = native.read_json(prior)
+        native.require(all(value["binaries"][source]["sha256"] != previous["binaries"][source]["sha256"]
+                           for source in SOURCES), "Capture/Memory executable not separated")
+    root = Path(planned["job_root"])
+    for source, binary in value["binaries"].items():
+        executable.validate(Path(binary["path"]), root / f"{value['instrumentation']}-{source}", binary["sha256"])
+        receipt = _verify_build(plan_path, source, value["instrumentation"], prior,
+                                finalized=True, captured=captured)
+        native.require(binary == receipt["binary"], "stage binary lacks its exact guarded source build")
+        native.require(time(receipt["build_finished_at"]) < time(value["created_at"]),
+                       "both source builds must complete before stage binding")
+    native.require(len({binary["sha256"] for binary in value["binaries"].values()}) == 2,
+                   "different source binaries must not be identical")
+    return value, planned, captured
 
 
 def bind(args):
@@ -213,6 +248,11 @@ def cargo_command(instrument):
 
 
 def verify_build(plan_path, source, instrument, prior, *, finalized=False):
+    captured = _verified_capture(prior, plan_path) if instrument == "memory" and prior is not None else None
+    return _verify_build(plan_path, source, instrument, prior, finalized=finalized, captured=captured)
+
+
+def _verify_build(plan_path, source, instrument, prior, *, finalized, captured):
     planned = native.read_json(plan_path)
     check_plan(planned)
     native.require(source in SOURCES and instrument in ("capture", "memory"), "build scope differs")
@@ -241,10 +281,10 @@ def verify_build(plan_path, source, instrument, prior, *, finalized=False):
     if instrument == "memory":
         native.require(prior is not None and receipt["prior_stage_sha256"] == static.sha256(prior),
                        "Memory build must bind completed Capture")
-        captured = verify_stage(prior)
-        native.require(captured["instrumentation"] == "capture"
+        capture_result = _capture_result(captured, prior, plan_path)
+        native.require(capture_result["instrumentation"] == "capture"
             and native.read_json(prior)["plan_sha256"] == static.sha256(plan_path)
-            and time(batch["started_at"]) > time(captured["rows"][-1]["finished_at"]),
+            and time(batch["started_at"]) > time(capture_result["rows"][-1]["finished_at"]),
             "Memory build started before exact Capture closure")
     else:
         native.require(prior is None and receipt["prior_stage_sha256"] is None, "Capture build must be first")
@@ -384,12 +424,12 @@ def require_no_interleaving(rows, batches):
 
 
 def verify_stage(path):
-    stage, planned = check_stage(path)
+    stage, planned, captured = _check_stage(path)
     cases = [case for case in matrix() if case[0] == stage["instrumentation"]]
     rows = [case_result(stage, planned, case, finalized=True) for case in cases]
     cross_stage_resources = {}
     if stage["instrumentation"] == "memory":
-        previous = verify_stage(Path(stage["prior_stage"]))
+        previous = _capture_result(captured, Path(stage["prior_stage"]), Path(stage["plan"]))
         native.require(time(rows[0]["started_at"]) > time(previous["rows"][-1]["finished_at"]),
                        "Memory ran before Capture completed")
         for source in SOURCES:

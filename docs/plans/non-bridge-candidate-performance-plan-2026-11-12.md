@@ -530,3 +530,18 @@ sourceではSite/Yard境界が各1 quadを生成し、fixture境界数7→25と�
 No impact: 境界の表示寸法/色、入力、配置成立条件、保存、通知、Help到達経路は不変。
 旧基準の重複を許容する分類を現行側へ適用せず、候補のperformance/art/release承認を代用しない。
 M8-dのv3では初終安定まで確認したが、RTT診断markerをrun.logでは未確認。旧匿名画像の直接帰属は未確定のまま残す。
+
+
+### M8-f: 同一検証操作内のCapture証拠の共有
+
+resource v4は両sourceのうち旧referenceの2runで初終・実所有・残資源一定を独立verify/画像以外のraw読取・
+seal/保持/finalizeした。manifest `a2be883d0d8b60893a780dc127c92690c01dc0d971d0909ce0575efd1aaf3cb4`。
+旧境界7/25 quadのglobal plateau失敗は保持し、予算をcurrent測定前に固定した。
+prepared v1の両Capture buildはpass/finalizedだが、計測caseはまだ起動していない。
+
+事前のCapture check_stage実測は15.979秒。Memoryでは同じCapture全原本を複数回再検証する呼出しがあり、
+prepare＋sealで固定180秒gapへ影響するため、検証項目を保ったまま同一呼出し内だけ結果を共有する。
+privateなproofは完全verifyで作り、stage/path/plan SHAへ拘束する。CLI/保存JSON/次processからは受け取らず、
+standalone build verifyは完全検証を維持する。Memory最終結果でも同じproofから全cross-stage比較を行う。
+新helper/新計画へ既存receiptを書き換えず、同じCargo cacheからfresh build batchを正規に拘束し直す。
+予算・MAD・gap・原本検証・art/release条件は変更しない。Help No impact（host検証処理のみ）。
