@@ -36,6 +36,39 @@ def rows(instrument="capture"):
 
 
 class FoundationPairedTests(unittest.TestCase):
+    def test_real_frame_summary_diagnostics_do_not_extend_the_fixed_budget(self):
+        raw = paired.static.frame_summary([float(n) for n in range(1, 101)])
+        self.assertEqual(set(raw), {"p50_ms", "p95_ms", "p99_ms", "max_ms"})
+        data = rows()
+        for row in data:
+            row["metrics"] = paired.measured_metrics(raw, "capture") | {
+                key: row["inventory"][key] for key in paired.RESOURCE_KEYS}
+        self.assertEqual(len(paired.aggregate(data, "capture", budget())), 2)
+        self.assertEqual(paired.measured_metrics({"peak_live_bytes": 12, "max_rss_kib": 34}, "memory"),
+                         {"peak_live_bytes": 12, "max_rss_kib": 34})
+
+    def test_metric_selection_rejects_missing_invalid_and_foreign_instrumentation(self):
+        for instrument in ("capture", "memory"):
+            keys = ("p95_ms", "p99_ms") if instrument == "capture" else ("peak_live_bytes", "max_rss_kib")
+            good = dict.fromkeys(keys, 12)
+            for invalid in (None, {}, {keys[0]: 12}, {**good, keys[0]: True},
+                            {**good, keys[0]: -1}, {**good, keys[0]: float("nan")}):
+                with self.subTest(instrument=instrument, raw=invalid), self.assertRaises(paired.native.AcceptanceError):
+                    paired.measured_metrics(invalid, instrument)
+        with self.assertRaises(paired.native.AcceptanceError):
+            paired.measured_metrics({}, "foreign")
+
+    def test_aggregate_rejects_missing_or_unbudgeted_raw_metric_before_comparison(self):
+        for instrument in ("capture", "memory"):
+            for extra in (False, True):
+                data = rows(instrument)
+                if extra:
+                    data[0]["metrics"]["p50_ms"] = 1.
+                else:
+                    data[0]["metrics"].pop("p95_ms" if instrument == "capture" else "peak_live_bytes")
+                with self.subTest(instrument=instrument, extra=extra), self.assertRaises(paired.native.AcceptanceError):
+                    paired.aggregate(data, instrument, budget())
+
     def test_capture_proof_is_local_and_rejects_foreign_paths_plans_and_changed_hashes(self):
         proof = paired._CaptureProof(Path("/capture"), "c"*64, Path("/plan"), "p"*64,
                                      {"instrumentation": "capture", "stage_sha256": "c"*64})
@@ -232,7 +265,7 @@ class FoundationPairedTests(unittest.TestCase):
                                   for path in (Path(stage["stage_path"]), Path(paired.__file__).resolve())]
         observed = {"binary_sha256": "a"*64, "session_sha256": "b"*64,
                     "observations": [{"adapter": {"name": "Intel"}, "layout_sha256": "layout",
-                                      "metrics": {"p95_ms": 9., "p99_ms": 12.}}]}
+                                      "metrics": paired.static.frame_summary([9., 10., 11., 12.])}]}
         for change in (None, "repo", "command", "roots", "subject", "exit_code", "bool-exit", "phase", "result",
                        "binary", "verify-command", "stage-hash", "helper-hash"):
             actual, raw = copy.deepcopy(batch), copy.deepcopy(observed)
@@ -268,6 +301,7 @@ class FoundationPairedTests(unittest.TestCase):
                     result = paired.case_result(stage, planned, case, finalized=True)
                     self.assertEqual(result["batch"], identifier)
                     self.assertEqual(result["metrics"]["mesh_vertex_index_payload_bytes"], 194)
+                    self.assertEqual(set(result["metrics"]), paired.RESOURCE_KEYS | {"p95_ms", "p99_ms"})
                 else:
                     with self.assertRaises(paired.native.AcceptanceError):
                         paired.case_result(stage, planned, case, finalized=True)

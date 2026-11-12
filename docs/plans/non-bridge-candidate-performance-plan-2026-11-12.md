@@ -573,3 +573,13 @@ exit未設定・検証/精算時刻・ownershipを別契約で確認する。exi
 完全なregister→seal→result→finalizeの保存transition（追加のstart/child/recoverがない）と時刻整合を要求する。
 後者の上限はfinalize保存event時刻。child PIDだけが残る不整合や不完全WALは拒否する。
 いずれも実終了時刻や未起動を断定せず、保守的区間と正の根拠をauditへ残す。
+
+### M8-h: 固定予算とraw診断値の境界
+
+fresh v3 Captureは12 caseすべて個別verify/seal/finalizeまで成功したが、全体集計で
+`frame_summary`の診断値`p50_ms`にも予算を要求し、KeyErrorで停止した。Memoryは未起動。
+事前固定した予算対象はp95/p99であり、p50/maxの上限を事後追加しない。raw診断値は元artifactに残し、
+case結果へはinstrumentation別の必須metricだけを明示射影する。欠測・非有限・bool・負数と
+集計時の未知/欠測metricは明示拒否する。実際のframe_summary形状から集計までの回帰試験を加える。
+旧失敗は診断として保持し、新driver/subject/planで正式比較を行う。予算・MAD・gap・資源条件は不変。
+Help No impact: host集計だけの補正で、ゲーム入力・表示・保存・成立条件は変更しない。

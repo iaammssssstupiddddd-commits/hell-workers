@@ -369,11 +369,29 @@ def case_result(stage, planned, case, *, finalized=False):
         "binary_sha256": checked["binary_sha256"], "session_sha256": checked["session_sha256"],
         "adapter": checked["observations"][0]["adapter"], "layout_sha256": checked["observations"][0]["layout_sha256"],
         "resource_sha256": static.sha256(raw), "inventory": observed,
-        "metrics": checked["observations"][0]["metrics"] | {k: observed[k] for k in RESOURCE_KEYS}}
+        "metrics": measured_metrics(checked["observations"][0]["metrics"], instrument)
+                   | {k: observed[k] for k in RESOURCE_KEYS}}
+
+
+def measured_metrics(raw, instrument):
+    # frame_summary also returns diagnostic p50/max. The premeasurement policy
+    # deliberately budgets p95/p99; never infer new budget keys from that API.
+    native.require(instrument in ("capture", "memory"), "unknown metric instrumentation")
+    keys = {"p95_ms", "p99_ms"} if instrument == "capture" else {"peak_live_bytes", "max_rss_kib"}
+    native.require(isinstance(raw, dict) and keys <= raw.keys(), "required raw metrics missing")
+    result = {key: raw[key] for key in keys}
+    native.require(all(type(n) in (int, float) and math.isfinite(n) and n >= 0 for n in result.values()),
+                   "required raw metrics must be finite nonnegative numbers")
+    return result
 
 
 def aggregate(rows, instrument, budget):
     expected = [case for case in matrix() if case[0] == instrument]
+    required_metrics = RESOURCE_KEYS | ({"p95_ms", "p99_ms"} if instrument == "capture" else
+                                       {"peak_live_bytes", "max_rss_kib"})
+    native.require(instrument in ("capture", "memory")
+        and all(set(row["metrics"]) == required_metrics for row in rows),
+        "complete instrumentation-specific budget metrics required")
     native.require([(r["instrumentation"], r["size"], r["repeat"], r["source"]) for r in rows] == expected,
                    "complete ordered twelve-case stage required")
     native.require(all(r["adapter"] == rows[0]["adapter"] for r in rows), "adapter drift")
