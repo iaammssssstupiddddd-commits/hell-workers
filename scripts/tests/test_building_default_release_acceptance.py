@@ -197,8 +197,55 @@ class DefaultStartupTests(unittest.TestCase):
              patch.object(audit.pipeline, "numeric_verifier_inventory", return_value={}), \
              patch.object(audit.art, "validate_subject"), patch.object(audit.art, "subject", return_value={}), \
              patch.object(audit.executable, "digest", return_value="a"), \
-             patch.object(audit.pipeline, "read", return_value=[]), \
+             patch.object(audit, "read_inventory", return_value=[]), \
              patch.object(audit.pipeline, "release_bindings") as codec:
             with self.assertRaises(ValueError):
                 audit.check(value)
             codec.assert_not_called()
+
+    def test_nonempty_compiled_inventory_reaches_installed_pointer_check(self):
+        groups = (("Tank", "MudMixer"),
+                  ("Tank", "MudMixer", "RestArea", "SoulSpa"),
+                  ("Tank", "MudMixer", "RestArea", "SoulSpa", "WheelbarrowParking", "SandPile", "BonePile", "OutdoorLamp"))
+        for kinds in groups:
+            self.prepare(kinds)
+            with self.subTest(count=len(kinds)), tempfile.TemporaryDirectory() as temp:
+                repo = Path(temp)
+                inventory = repo / audit.INVENTORY
+                inventory.parent.mkdir(parents=True)
+                inventory.write_bytes(audit.pipeline.canonical(self.bindings))
+                value = {"profile": audit.PROFILE, "status": "ready", "accepted": False,
+                         "performance_evidence": False, "promotion_authority": False,
+                         "drivers": {}, "numeric_verifiers": {}, "repo": str(repo),
+                         "codec": "/codec", "subject": {}, "codec_sha256": "a",
+                         "inventory_sha256": "a", "bindings": self.bindings,
+                         "job_root": str(repo / "job"), "plan_path": str(repo / "plan.json")}
+                with patch.object(audit, "dependencies", return_value={}), \
+                     patch.object(audit.pipeline, "numeric_verifier_inventory", return_value={}), \
+                     patch.object(audit.art, "validate_subject"), \
+                     patch.object(audit.art, "subject", return_value={}), \
+                     patch.object(audit.executable, "digest", return_value="a"), \
+                     patch.object(audit.art.static, "check_root"), \
+                     patch.object(audit.pipeline, "release_bindings", return_value=self.bindings) as installed:
+                    audit.check(value)
+                    installed.assert_called_once_with(repo / "assets", Path("/codec"), {2: "m2", 4: "m3", 8: "m5"}[len(kinds)])
+                    installed.return_value = copy.deepcopy(self.bindings)
+                    installed.return_value[0]["identity"]["authority"] = "isolated_candidate"
+                    with self.assertRaisesRegex(ValueError, "installed release pointers"):
+                        audit.check(value)
+
+    def test_inventory_reader_preserves_array_shape_and_canonical_guard(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "inventory.json"
+            path.write_bytes(audit.pipeline.canonical(self.bindings))
+            self.assertEqual(audit.read_inventory(path), self.bindings)
+            # The shared metadata reader remains object-only.
+            with self.assertRaises(ValueError):
+                audit.pipeline.read(path)
+            for invalid in ({"bindings": self.bindings}, None, "bindings", 2):
+                path.write_bytes(audit.pipeline.canonical(invalid))
+                with self.assertRaises(ValueError):
+                    audit.read_inventory(path)
+            path.write_text(json.dumps(self.bindings, indent=2))
+            with self.assertRaises(ValueError):
+                audit.read_inventory(path)

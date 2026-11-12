@@ -1,1 +1,1 @@
-[]
+[{"identity":{"authority":"release_approved","generation":1,"kind":"Tank","manifest_sha256":"3ecc40fd65f2833fb95860ef31748600c0bc58369ed7dfe6afb2f4cc8b66de0c"},"locator":"manifests/building-tank-v1.buildingset"},{"identity":{"authority":"release_approved","generation":1,"kind":"MudMixer","manifest_sha256":"fe47d51a7689707575611efd6d6440534294d005e8b6a41b9d15339e28c07047"},"locator":"manifests/building-mud-mixer-v1.buildingset"}]

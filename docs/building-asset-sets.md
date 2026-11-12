@@ -10,7 +10,8 @@
 `StartupPlugin` はasset型・policy resource・loaderを登録し、`VisualPlugin`はkind単位のpoolと
 表示更新systemを登録する。通常起動はコンパイル済み
 `default_release_bindings.json`の完全なrelease組を、既存poolへ要求する。
-現在この一覧は空であり、正式導入前の8種は引き続きfallback表示となる。
+現在の一覧には独立release承認・promotion/install済みのTankとMudMixerの2件を採用した。
+RestArea/SoulSpaとM5の4種は未導入であり、引き続きfallback表示となる。
 独立release承認・promotion/install後に `building_asset_pipeline.py bindings` のexact出力を採用して初めて
 既定起動へ反映する。一覧は起動時の文書/外部JSON読取りではなくbinaryへ組み込む。
 `HW_BUILDING_ASSET_RELEASES`を明示した場合は一覧全体を置換し、空文字・空配列・非UTF-8・不正JSONを
@@ -32,6 +33,27 @@ M1-c候補はoffline codec／export、明示profiling候補投入、昇格・ins
 `codex/tak14-product-integration`へ製品sourceを選択取り込みしたが、現在は統合検証中であり、
 独立review、実機受入、正式asset公開、美術受入の完了ではない。
 正式assetと状態別のwater高さ・rotor軸等の制作値は、制作時に制作側と照合して確定する。
+
+### M2の正式世代（2026-11-13）
+
+| kind | generation | ReleaseApproved manifest SHA256 | 固定制作値 |
+| --- | --- | --- | --- |
+| Tank | 1 | `3ecc40fd65f2833fb95860ef31748600c0bc58369ed7dfe6afb2f4cc8b66de0c` | Partial Y=12、Full Y=22 world unit |
+| MudMixer | 1 | `fe47d51a7689707575611efd6d6440534294d005e8b6a41b9d15339e28c07047` | 回転軸 `[0,1,0]`、1.5707964 rad/s |
+
+正本は `~/Sync/hell-workers-assets/exports/`、runtime mirrorはprimaryの`assets/`。
+両正本transactionを先にappliedへ進め、個別正式native原本のlive検証を終えてからmirrorした。
+各rootは`transactions/building-{tank|mud-mixer}-1.json`、authority、locator、receipt、
+原本・geometry・art/numeric approvalのprovenanceを持つ。独立release decisionはcandidate identityと
+個別正式manifest digestへ拘束し、performance/group galleryの技術passから自動生成しない。
+同じ採用bytesの隔離promotion/install/初回rollbackを実行し、locator/authority不在への復帰と
+immutable payload/provenanceの保持を独立確認した。本正本のgeneration1はrollbackしていない。
+
+同sourceの群別paused比較はN/4N各3対、Capture→Memoryの全24件が固定予算内で独立承認された。
+これは通常worldの継続稼働性能や実GPU確保総量の測定ではない。旧lifecycleの限定採用履歴、
+現sourceの表示同期回帰、個別画像と群18条件を分けてrelease判断へ使用した。
+既定一覧の採用後に行う通常起動・品質確認と、残るM3/M5・累積比較は
+[継続計画](plans/non-bridge-candidate-performance-plan-2026-11-12.md)で管理する。
 
 ### 通常起動defaultの受動audit
 

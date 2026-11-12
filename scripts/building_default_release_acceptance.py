@@ -34,6 +34,14 @@ def dependencies():
             for module in (shared, executable, art)} | {Path(__file__).name: executable.digest(Path(__file__))}
 
 
+def read_inventory(path):
+    payload = pipeline.no_symlinks(path).read_bytes()
+    value = json.loads(payload)
+    pipeline.require(isinstance(value, list) and pipeline.canonical(value) == payload,
+                     "compiled inventory must be a canonical JSON array")
+    return value
+
+
 def check(value):
     pipeline.require(value["profile"] == PROFILE and value["status"] == "ready"
         and value["accepted"] is False and value["performance_evidence"] is False
@@ -45,7 +53,7 @@ def check(value):
     pipeline.require(art.subject(repo) == value["subject"]
         and executable.digest(codec) == value["codec_sha256"]
         and executable.digest(repo / INVENTORY) == value["inventory_sha256"], "normal startup subject changed")
-    bindings = pipeline.read(repo / INVENTORY)
+    bindings = read_inventory(repo / INVENTORY)
     groups = {2: "m2", 4: "m3", 8: "m5"}
     pipeline.require(isinstance(bindings, list) and len(bindings) in groups
         and pipeline.exact_json(bindings, value["bindings"])
@@ -65,7 +73,7 @@ def plan(args):
     value = {"schema_version": 1, "profile": PROFILE, "status": "ready", "repo": str(repo),
         "job_root": str(root), "plan_path": str(args.output.resolve()), "subject": art.subject(repo), "codec": str(codec),
         "codec_sha256": executable.digest(codec), "inventory_sha256": executable.digest(repo / INVENTORY),
-        "bindings": pipeline.read(repo / INVENTORY), "drivers": dependencies(),
+        "bindings": read_inventory(repo / INVENTORY), "drivers": dependencies(),
         "numeric_verifiers": pipeline.numeric_verifier_inventory(), "adapter": args.adapter,
         "accepted": False, "promotion_authority": False, "performance_evidence": False}
     shared.adapter_environment(args.adapter)

@@ -169,11 +169,11 @@ Memory buildは共有target/profiling/bevy_appを上書きする。一方、正�
 
 ### M7-a: 通常起動の既定release inventory
 
-- [ ] 既存ReleaseBinding/validate_bindings/request_releasesを再利用し、compile時の既定JSONを選択する。
+- [x] 既存ReleaseBinding/validate_bindings/request_releasesを再利用し、compile時の既定JSONを選択する。
   実release/独立decision/guard install完了までは空配列を維持し、authorityを新しく作らない。
-- [ ] 明示envは完全置換し、非UTF8/空文字/不正JSONを未指定へ読み替えない。専用sessionと
+- [x] 明示envは完全置換し、非UTF8/空文字/不正JSONを未指定へ読み替えない。専用sessionと
   enabled performanceでは既定を混入させず、profilingでも通常起動は既定を使う。
-- [ ] 非空defaultは既存完全集合・ReleaseApproved・canonical locatorの検査を必ず通す。
+- [x] 非空defaultは既存完全集合・ReleaseApproved・canonical locatorの検査を必ず通す。
   rollbackは旧locatorと対応する旧binary/default inventoryを一組で復旧する。
 - [ ] 空request0、明示優先、専用/性能分離、candidate/preview/不正locator拒否、Help・品質・
   独立reviewを終え、独立release判断後にpipeline.bindingsの正規出力だけをdataへ採用する。
@@ -608,10 +608,60 @@ roots/children/consumers等の新Vec/HashSetがある。候補未load・pauseで
 - [x] scratchは毎call内容をclearし、容量だけ再利用する。owner index・asset authority・状態をcacheしない。
 - [x] 既存の世代/後着/所有/ghost/Blueprint/pulse/move/catalog/slot/cleanup回帰と、
   cache生成後の新archetype→owner全削除→別kind追加を確認する。
-- [ ] Help実経路・Rust check/Clippy/RA・変更別CI・独立review/storageを通し、同じ事前予算でfresh比較する。
-- [ ] RSS改善は実測で判断する。変化がなければ同系の調整を続けず、起動/native側の帰属調査へ戻る。
+- [x] Help実経路・Rust check/Clippy/RA・変更別CI・独立review/storageを通し、同じ事前予算でfresh比較する。
+- [x] fresh v5で固定RSS予算への適合を確認した。変動がありquery再利用との因果改善は断定せず、同系の調整を追加しない。
 
 全f4 batchは終了・seal・finalize済み。限定診断reviewを採用して旧sourceでのlive verifier依存を閉じ、
 原本/binaryは修正比較の具体的用途だけで保持する。新subjectへ旧passを付け替えない。
 Help No impact: root/part・2D previewの実consumer経路を確認した。入力、表示の意味/形状、状態・保存・
 世代採否・同期時点は変更せず、一時割当だけを削減する。profiling構成の表示同期18回帰とworkspace checkは成功。
+
+### M9: M2の群別受入と正式導入（2026-11-13）
+
+`26368c41b1a4f2d978fe2d930864332085e07e6b`のfoundation v5全24件が固定予算内で独立承認された。
+MemoryのN/4N増分はRust peak +870004/+110403 bytes、RSS −15064/+46604KiB。
+旧f4 v4のRSS不合格は維持し、v5を旧結果の成功化やquery cacheの因果改善の証明には使わない。
+
+M2の正式個別画像2件とHigh/Medium/Low×DPI1/1.5/2×normal/farの18画像を全件確認した。
+群画像のDoor4体は全てClosedであり、開閉4状態の再証明には数えない。
+M2/Door対象の欠け・黒化・clipなし。対象外上側fallbackのclip、背景の黒横線・terrain網目は
+全9種非clipや美術完了へ読み替えず、今回の対象表示との境界を保持する。
+
+control12の原計測は成功したが、登録verifierが外部planだけを指し、storageのoutput結合guardで
+pass封印を拒否された。旧登録はinvalid/finalizedのまま、元458ファイルとsourceを変更せず、
+別のverification-only batchでplan同一copy・全原本・SHA・closureを完全再検証してpass/finalizedした。
+追加ゲーム起動や台帳補正は行わない。baseline resultは
+`b449aaf41450b9c1003bb3024aec63fc71d564c2d6b28bb98f2bcb808b59be69`、最大相対MAD1.8127%。
+以後の登録verifierはoutput root・登録plan/helper hashを前後照合して既存M6完全verifyへ渡す。
+
+独立に事前固定したM2予算はp95/p99 +1/+3ms、Rust peak +16MiB、RSS +98304KiB、MAD10%。
+sourceから数えた4 mesh/23376 payload bytes、4 image/2621440 CPU・descriptor推計bytes、
+5 structural material/2320 shallow bytesの増分だけを許す。未採用の旧静的メモのmaterial3は
+保持されるslot_on2件を落としていたため、計測前に実経路の5へ訂正した。予算の事後緩和ではない。
+JSONの非canonical書式による計画前拒否は元ファイルを保持し、数値不変のcanonical別fileへ補正した。
+この拒否では登録・plan・output・launchは発生せず、同IDの初回登録だけを進めた。
+
+paired24は全項目が上限内。result SHAは
+`c03584c46f9b46257f4f22567848672250462826da8dbe2ef9595d56634d3765`、最大相対MAD3.023%。
+
+| candidate−control中央値 | N | 4N |
+| --- | ---: | ---: |
+| p95 / p99 ms | +0.009661 / −0.016023 | +0.021492 / −0.218063 |
+| Rust live peak bytes | +2989978 | +3408954 |
+| RSS KiB | +68228 | +65172 |
+
+共有資源は初終・N/4N・Capture/Memoryで一定、増分は事前のsource見積りと完全一致した。
+CPU payload／descriptor推計を実GPU確保総量へ昇格しない。
+既存の限定lifecycle採用履歴とcurrent18表示回帰を分担し、両kindの独立release decisionを取得した。
+同decision・実candidateによる隔離promotion/install/rollback全8操作と復帰状態を独立確認し、
+本正本への両promotionを完了してからprimaryへ両installした。現在は正規bindings出力の2件を採用済み。
+
+- [x] 正式個別/group画像、control校正、事前予算、paired24、独立release判断。
+- [x] 隔離切戻し、本canonical両promotion、primary install、旧live-source検証依存の終了。
+- [ ] 既定M2一覧と通常startup auditのcanonical配列reader補正をHelp/品質/固定source reviewで確認し、通常起動を実測する。
+- [ ] M3→M5を同様に独立導入し、Door監査・累積比較・恒久仕様・計画/索引とstorageを閉じる。
+
+startup auditはobject専用の`pipeline.read`へ一覧配列を渡していたため、canonical配列専用readerへ分離した。
+共有metadata readerのguardは緩めず、2/4/8件の実readerからinstalled pointer照合へ進む正例と、
+空配列・非canonical・誤型・candidate pointerの拒否を検査する。通常startup sourceを旧art検証前に変えず、
+両canonical apply後の今回バッチへ分離した。通常consumerの意味・入力・保存・Help文言は変更しない。
