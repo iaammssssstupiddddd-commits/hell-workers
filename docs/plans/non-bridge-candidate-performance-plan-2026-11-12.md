@@ -822,3 +822,12 @@ progress0/material未完の実Blueprintを得たが、検証器がBlueprintもun
 実rawはそのとおり。ghostのunit scale/Z_SELECTION=2.0は別契約として維持する。
 検証器だけをrole別の実契約へ補正し、誤roleのscale/depthと自己整合する行列への置換も拒否回帰へ加える。
 旧v2はinvalidのまま精算・診断保持し、未実施NS/tieを合格へ足さない。品質・独立review後のfresh v3で全3caseを確認する。
+
+
+#### Door入力v3の共通Viewport wire（2026-11-13）
+
+v3もEWの4画像と通常入力を得たが、共通UI observerの`[viewport.x, viewport.y]`（Vec2、1920.0×1080.0）を
+整数専用と誤認したoracleでinvalidとなった。寸法は正しく、型条件だけを実producerへ合わせる。
+finite数値・exact1920×1080・bool/非有限/端数拒否と、物理PNG/client/windowの別検査を維持する。
+保存rawでの補正oracle診断は残りのEW検査を通ったが、旧invalidの承認や未実施NS/tieの代用にしない。
+旧v3はseal/診断保持/finalize済み。品質・独立review後のfresh v4で全3caseを確認する。

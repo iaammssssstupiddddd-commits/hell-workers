@@ -434,7 +434,7 @@ def verify_inputs(raw, actions, inputs, client, entries, case, identity):
             and value["pid"] == client["pid"]
             and value.get("nonce") == client["nonce"]
             and isinstance(value.get("viewport"), list)
-            and all(type(n) is int for n in value["viewport"])
+            and all(finite(n) for n in value["viewport"])
             and value["viewport"] == [1920, 1080]
             and type(value.get("scale_factor")) in (int, float)
             and value["scale_factor"] == 1.0

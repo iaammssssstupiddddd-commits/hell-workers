@@ -153,7 +153,7 @@ def fixture(case="door-release-east-west"):
             "world_input_captured": False,
             "pid": 123,
             "nonce": "a" * 32,
-            "viewport": [1920, 1080],
+            "viewport": [1920.0, 1080.0],
             "scale_factor": 1.0,
             "frame": int(now * 100),
         }
@@ -509,6 +509,23 @@ class DoorOracleTests(unittest.TestCase):
             values = fixture()
             values[4][-1]["value"]["door_release_planning"]["input"][key] = value
             with self.assertRaises(ValueError):
+                oracle.verify_inputs(*values)
+
+    def test_vec2_viewport_requires_exact_finite_numeric_dimensions_without_bool(self):
+        oracle.verify_inputs(*fixture())  # Real observer serializes Vec2 as floats.
+        for viewport in [
+            [1920.0, 1080.01],
+            [1920.0, True],
+            ["1920", 1080],
+            [float("nan"), 1080.0],
+            [1920.0, float("inf")],
+        ]:
+            values = fixture()
+            values[4][0]["value"]["viewport"] = viewport
+            with (
+                self.subTest(viewport=viewport),
+                self.assertRaisesRegex(ValueError, "viewport/DPI"),
+            ):
                 oracle.verify_inputs(*values)
 
     def test_snapshot_pid_nonce_dpi_and_fixture_drift_are_rejected(self):
