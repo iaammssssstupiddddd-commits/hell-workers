@@ -72,14 +72,15 @@ fn rect(points: &[Vec2]) -> Result<[f32; 4], String> {
     Ok([min.x, min.y, max.x, max.y])
 }
 
-fn require_area(points: &[Vec2], session: &GroupArtSession) -> Result<[f32; 4], String> {
+fn require_area(points: &[Vec2], session: &GalleryCaptureSession) -> Result<[f32; 4], String> {
     let bounds = rect(points)?;
-    let (side, area) =
-        if session.view == crate::assets::building_asset_set::acceptance::BuildingArtView::Normal {
-            (4.0, 64.0)
-        } else {
-            (2.0, 16.0)
-        };
+    let (side, area) = if session.view()
+        == crate::assets::building_asset_set::acceptance::BuildingArtView::Normal
+    {
+        (4.0, 64.0)
+    } else {
+        (2.0, 16.0)
+    };
     let width = bounds[2] - bounds[0];
     let height = bounds[3] - bounds[1];
     if bounds[0] < 16.0
@@ -154,7 +155,7 @@ fn owner_meshes(
         .collect()
 }
 
-pub(super) fn collect(world: &mut World, session: &GroupArtSession) -> Result<Value, String> {
+pub(super) fn collect(world: &mut World, session: &GalleryCaptureSession) -> Result<Value, String> {
     let windows = world
         .query_filtered::<(Entity, &Window), With<PrimaryWindow>>()
         .iter(world)
@@ -173,13 +174,15 @@ pub(super) fn collect(world: &mut World, session: &GroupArtSession) -> Result<Va
         return Err("group primary window count differs".into());
     };
     if (*width, *height) != (GROUP_ART_WIDTH, GROUP_ART_HEIGHT)
-        || *dpi != session.scale_factor
+        || *dpi != session.scale_factor()
         || *logical != Vec2::new(*width as f32 / dpi, *height as f32 / dpi)
         || *decorated
     {
         return Err(format!(
             "group actual window/DPI differs: observed={width}x{height} dpi={dpi} logical={logical:?} decorations={decorated}; expected={}x{} dpi={} decorations=false",
-            GROUP_ART_WIDTH, GROUP_ART_HEIGHT, session.scale_factor
+            GROUP_ART_WIDTH,
+            GROUP_ART_HEIGHT,
+            session.scale_factor()
         ));
     }
     let ui_roots = world
@@ -215,7 +218,7 @@ pub(super) fn collect(world: &mut World, session: &GroupArtSession) -> Result<Va
     );
     let target_scale = runtime.target_scale_factor;
     let scene = runtime.scene.clone();
-    if quality.as_str() != session.quality
+    if quality.as_str() != session.quality()
         || target_scale != quality.rtt_scale() * dpi
         || pixels != Vec2::new(*width as f32, *height as f32) * quality.rtt_scale()
         || rtt.camera.logical_viewport_size() != Some(*logical)

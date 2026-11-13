@@ -762,15 +762,18 @@ release identity・保存済みtransaction/provenanceは[恒久仕様](../buildi
 
 - [x] fresh個別4/group18、control校正、事前予算、paired24、4件の独立release判断。
 - [x] 隔離16操作、本canonical全4promotion、primary install、exact bindings8生成。
-- [ ] compiled8の新source品質／Help／独立exact reviewと通常startup実測。
+- [x] compiled8の新source品質／Help／独立exact reviewと通常startup実測。
 - [ ] Door監査・正式9種画面・累積比較・恒久仕様・計画/索引とstorageを閉じる。
 
 Help No impact: 今回の通常経路は承認済みM5の4世代を既存poolとworld/ghost/Blueprint/pulse/catalogへ接続するだけ。
 既存の配置・資源・駐車・配電・load再計算と失敗fallbackの意味、操作、文言、Help到達性は変えない。
 
-### M13: 残る9種の同一source受入（実装・実行前）
+### M13: 残る9種の同一source受入（実装・検証中）
 
-通常8世代の接続確認後、以下をprimaryで実装し、同じbranch・既存cache・独立read-only reviewで進める。
+`078908ea`の全4群CI・独立reviewと通常8世代接続を採用した。startup manifest SHAは
+`bdf9884c9460fdd3341aec32f0a7fc8f4309062bca3d72db5220e5ea654571c7`。初期Parking childは
+採用画像に接続し`visible=false`を保持し、全consumer表示を主張しない。旧source検証依存を閉じた後、
+以下をprimaryで実装中。同じbranch・既存cache・独立read-only reviewで進める。
 私的ドラフトや合成fixtureは製品実装・実機証拠・承認に数えない。Bridge・公開/PR・gameplay変更は含めない。
 
 - [ ] released-only全9種の通常/far画像入口を追加する。全8 ReleaseApproved＋Door g7の36 ownerを厳密照合し、

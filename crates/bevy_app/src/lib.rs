@@ -41,6 +41,7 @@ pub fn building_art_window_decorations(world: &World) -> bool {
     #[cfg(feature = "profiling")]
     {
         !world.contains_resource::<assets::building_asset_set::group_art::GroupArtSession>()
+            && !world.contains_resource::<assets::building_asset_set::gallery_capture::GalleryCaptureSession>()
     }
     #[cfg(not(feature = "profiling"))]
     {
@@ -135,6 +136,9 @@ mod group_art_window_tests {
         world.insert_resource(session);
         assert!(!building_art_window_decorations(&world));
         world.remove_resource::<assets::building_asset_set::group_art::GroupArtSession>();
+        world
+            .remove_resource::<assets::building_asset_set::gallery_capture::GalleryCaptureSession>(
+            );
         assert!(building_art_window_decorations(&world));
     }
 }

@@ -6,7 +6,11 @@ pub mod acceptance;
 #[cfg(feature = "profiling")]
 mod candidate_comparison;
 #[cfg(feature = "profiling")]
+pub(crate) mod gallery_capture;
+#[cfg(feature = "profiling")]
 pub(crate) mod group_art;
+#[cfg(feature = "profiling")]
+pub(crate) use release::gallery as release_gallery;
 #[cfg(feature = "profiling")]
 mod group_comparison;
 #[cfg(feature = "profiling")]

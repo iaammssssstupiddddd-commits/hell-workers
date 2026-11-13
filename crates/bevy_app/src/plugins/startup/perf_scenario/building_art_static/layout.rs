@@ -5,7 +5,7 @@ use hw_jobs::BuildingType;
 use hw_world::{Site, WorldMap, Yard, layout::RIVER_Y_MIN};
 
 use super::super::PerfScenarioSize;
-use crate::assets::building_asset_set::{BuildingArtGroup, group_art::GroupArtSession};
+use crate::assets::building_asset_set::{BuildingArtGroup, gallery_capture::GalleryCaptureSession};
 use crate::interface::selection::placement_geometry::building_geometry;
 
 pub(super) const CAMERA_SCALE: f32 = 5.0;
@@ -211,13 +211,16 @@ pub(super) fn group_gallery_yards(specs: &[Specimen]) -> Vec<Yard> {
         .collect()
 }
 
-pub(super) fn group_gallery_visible(session: &GroupArtSession, kind: BuildingType) -> bool {
+pub(super) fn group_gallery_visible(session: &GalleryCaptureSession, kind: BuildingType) -> bool {
     kind == BuildingType::Door
         || crate::systems::visual::building_presentation::asset_kind(kind)
             .is_some_and(|kind| session.target(kind))
 }
 
-pub(super) fn group_gallery_camera(session: &GroupArtSession, specs: &[Specimen]) -> (Vec2, f32) {
+pub(super) fn group_gallery_camera(
+    session: &GalleryCaptureSession,
+    specs: &[Specimen],
+) -> (Vec2, f32) {
     let selected: Vec<_> = specs
         .iter()
         .filter(|s| group_gallery_visible(session, s.kind))
@@ -230,7 +233,7 @@ pub(super) fn group_gallery_camera(session: &GroupArtSession, specs: &[Specimen]
         .iter()
         .map(|s| s.center)
         .fold(Vec2::splat(f32::NEG_INFINITY), Vec2::max);
-    ((min + max) * 0.5, session.view.scale())
+    ((min + max) * 0.5, session.view().scale())
 }
 
 pub(super) fn site() -> Site {

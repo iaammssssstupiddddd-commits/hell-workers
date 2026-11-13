@@ -32,6 +32,7 @@ else:
 
 native = static.native
 PROFILE = "building-foundation-adjacent-static-v1"
+CUMULATIVE_PROFILE = "building-cumulative-adjacent-static-v1"
 SOURCES = ("reference", "current")
 RESOURCE_KEYS = inventory.TOTALS - {"material_shallow_size"}
 METRICS = {"p95_ms", "p99_ms", "peak_live_bytes", "max_rss_kib", *RESOURCE_KEYS}
@@ -59,48 +60,78 @@ def limits(value):
     return value
 
 
-def drivers():
-    return {Path(module.__file__).name: static.sha256(Path(module.__file__))
-            for module in (static, supplement, inventory, executable, storage)} | {
-                Path(__file__).name: static.sha256(Path(__file__)),
-                "primary_harness": native.native_harness_fingerprint(Path(__file__).resolve().parents[1])}
+def cumulative(value):
+    native.require(value.get("profile") in {PROFILE, CUMULATIVE_PROFILE}, "unknown adjacent comparison profile")
+    return value["profile"] == CUMULATIVE_PROFILE
 
 
-def identities(repo, reference):
+def cumulative_policy():
+    # Closed repository-owned policy, never a spec-supplied module or callback.
+    if __package__:
+        from . import building_cumulative_acceptance
+    else:
+        import building_cumulative_acceptance
+    return building_cumulative_acceptance
+
+
+def entrypoint(planned):
+    return Path(cumulative_policy().__file__).resolve() if cumulative(planned) else Path(__file__).resolve()
+
+
+def drivers(profile=PROFILE):
+    native.require(profile in {PROFILE, CUMULATIVE_PROFILE}, "unknown adjacent driver profile")
+    result = {Path(module.__file__).name: static.sha256(Path(module.__file__))
+              for module in (static, supplement, inventory, executable, storage)} | {
+                  Path(__file__).name: static.sha256(Path(__file__)),
+                  "primary_harness": native.native_harness_fingerprint(Path(__file__).resolve().parents[1])}
+    return result | cumulative_policy().dependencies() if profile == CUMULATIVE_PROFILE else result
+
+
+def identities(repo, reference, profile=PROFILE):
     native.require(repo != reference and not native.git_dirty_paths(repo), "distinct clean sources required")
     result = {"reference": supplement.local_identity(reference), "current": static.identity(repo)}
-    native.require(result["reference"]["source_fingerprint"] != result["current"]["source_fingerprint"]
-        and result["reference"]["asset_view_fingerprint"] == result["current"]["asset_view_fingerprint"],
-        "foundation requires different sources and identical baseline assets")
+    native.require(profile in {PROFILE, CUMULATIVE_PROFILE}
+        and result["reference"]["source_fingerprint"] != result["current"]["source_fingerprint"],
+        "adjacent comparison requires distinct known sources")
+    if profile == PROFILE:
+        native.require(result["reference"]["asset_view_fingerprint"] == result["current"]["asset_view_fingerprint"],
+                       "foundation requires different sources and identical baseline assets")
     return result
 
 
 def check_plan(value):
-    native.require(value.get("profile") == PROFILE and value.get("accepted") is False
-        and value.get("promotion_authority") is False and value.get("drivers") == drivers()
+    is_cumulative = cumulative(value)
+    native.require(value.get("accepted") is False
+        and value.get("promotion_authority") is False and value.get("drivers") == drivers(value["profile"])
         and value.get("matrix") == [list(case) for case in matrix()], "foundation plan contract/dependencies differ")
     limits(value["limits"])
     repo, reference = native.validate_repo(value["repos"]["current"]), native.validate_repo(value["repos"]["reference"])
     static.check_root(repo, Path(value["job_root"]))
-    native.require(value["identities"] == identities(repo, reference), "foundation source/assets changed")
+    native.require(value["identities"] == identities(repo, reference, value["profile"]), "foundation source/assets changed")
+    native.require(("release" in value) == is_cumulative, "release inventory/profile differs")
+    if is_cumulative:
+        cumulative_policy().check_inputs(value)
     basis = Path(value["resource_basis"])
     native.require(static.sha256(basis / "manifest.json") == value["resource_basis_sha256"], "resource basis changed")
     verified = supplement.verify(basis)
     native.require(verified["source"] == value["identities"]["reference"], "resource basis/reference differs")
 
 
-def plan(args):
+def plan(args, *, profile=PROFILE):
     repo, reference = native.validate_repo(args.repo), native.validate_repo(args.reference_repo)
     root = args.job_root.resolve()
     static.check_root(repo, root)
     native.require(not root.exists() and not args.output.resolve().is_relative_to(root), "fresh root and external plan required")
-    value = {"profile": PROFILE, "repos": {"current": str(repo), "reference": str(reference)},
-        "job_root": str(root), "identities": identities(repo, reference), "limits": limits(native.read_json(args.budget)),
+    native.require(profile in {PROFILE, CUMULATIVE_PROFILE}, "unknown adjacent plan profile")
+    value = {"profile": profile, "repos": {"current": str(repo), "reference": str(reference)},
+        "job_root": str(root), "identities": identities(repo, reference, profile), "limits": limits(native.read_json(args.budget)),
         "resource_basis": str(args.resource_basis.resolve()),
         "resource_basis_sha256": static.sha256(args.resource_basis / "manifest.json"),
-        "drivers": drivers(), "matrix": [list(case) for case in matrix()], "adapter": args.adapter,
+        "drivers": drivers(profile), "matrix": [list(case) for case in matrix()], "adapter": args.adapter,
         "accepted": False, "promotion_authority": False,
         "adjacency": "only source/input hashing, raw verification and case seal/retain/finalize between paired runs; no build or other workload"}
+    if profile == CUMULATIVE_PROFILE:
+        value["release"] = cumulative_policy().plan_inputs(args, value)
     native.require(isinstance(value["adapter"], str) and value["adapter"].strip(), "adapter required")
     check_plan(value)
     native.atomic_write_json(args.output, value)
@@ -148,7 +179,7 @@ def _check_stage(path):
     native.require(static.sha256(plan_path) == value["plan_sha256"], "paired plan changed")
     planned = native.read_json(plan_path)
     check_plan(planned)
-    native.require(value.get("profile") == PROFILE and value.get("instrumentation") in ("capture", "memory")
+    native.require(value.get("profile") == planned["profile"] and value.get("instrumentation") in ("capture", "memory")
         and set(value["binaries"]) == set(SOURCES), "stage contract differs")
     prior, captured = None, None
     if value["instrumentation"] == "capture":
@@ -179,7 +210,7 @@ def bind(args):
     planned = native.read_json(args.plan)
     check_plan(planned)
     native.require(not args.output.exists(), "stage output must be fresh")
-    value = {"profile": PROFILE, "stage_path": str(args.output.resolve()),
+    value = {"profile": planned["profile"], "stage_path": str(args.output.resolve()),
         "plan": str(args.plan.resolve()), "plan_sha256": static.sha256(args.plan),
         "instrumentation": args.instrumentation, "created_at": native.utc_now(),
         "prior_stage": str(args.prior_stage.resolve()) if args.prior_stage else None,
@@ -198,6 +229,8 @@ def bind(args):
 
 
 def command(planned, stage, case):
+    if cumulative(planned):
+        return cumulative_policy().case_command(planned, stage, case)
     instrument, size, _repeat, source = case
     parent = Path(planned["job_root"]) / label(case)
     argv = static.command(parent, instrument, size, 15 if size == "small" else 60, planned["adapter"])
@@ -214,7 +247,7 @@ def time(value):
 
 def case_verifier(stage, planned, case):
     cases = [item for item in matrix() if item[0] == stage["instrumentation"]]
-    return ["python3", str(Path(__file__).resolve()), "verify-case", "--stage", stage["stage_path"],
+    return ["python3", str(entrypoint(planned)), "verify-case", "--stage", stage["stage_path"],
             "--index", str(cases.index(case)), "--job-root", str(Path(planned["job_root"]) / label(case))]
 
 
@@ -224,7 +257,7 @@ def pinned_file(batch, path, sha):
 
 
 def build_command(plan_path, planned, source, instrument, prior):
-    argv = ["python3", str(Path(__file__).resolve()), "build", "--plan", str(plan_path.resolve()),
+    argv = ["python3", str(entrypoint(planned)), "build", "--plan", str(plan_path.resolve()),
             "--source", source, "--instrumentation", instrument, "--repo", planned["repos"][source],
             "--job-root", str(Path(planned["job_root"]) / f"{instrument}-{source}")]
     if prior is not None:
@@ -232,11 +265,12 @@ def build_command(plan_path, planned, source, instrument, prior):
     return argv
 
 
-def prepared(repo, root, command):
+def prepared(repo, root, command, *, profile=PROFILE):
     native.require(not root.exists(), "prepared output must be fresh")
     resources = native.resource_snapshot(repo, require_launcher=True)
     native.require(not resources["failures"], str(resources["failures"]))
-    return {"profile": PROFILE, "status": "ready", "repo": str(repo), "job_root": str(root),
+    native.require(profile in {PROFILE, CUMULATIVE_PROFILE}, "unknown prepared profile")
+    return {"profile": profile, "status": "ready", "repo": str(repo), "job_root": str(root),
             "accepted": False, "promotion_authority": False, "resources": resources,
             "launcher_command": ["kitty", "--directory", str(repo), "--detach", *command]}
 
@@ -277,7 +311,7 @@ def _verify_build(plan_path, source, instrument, prior, *, finalized, captured):
         and batch["phase"] in ({"finalized"} if finalized else {"needs-finalize", "sealing", "finalized"})
         and (not finalized or batch.get("result") == "pass"), "guarded build registration/execution differs")
     pinned_file(batch, plan_path.resolve(), static.sha256(plan_path))
-    pinned_file(batch, Path(__file__).resolve(), static.sha256(Path(__file__)))
+    pinned_file(batch, entrypoint(planned), static.sha256(entrypoint(planned)))
     native.require(time(batch["started_at"]) < time(batch["finished_at"]), "build interval invalid")
     if instrument == "memory":
         native.require(prior is not None and receipt["prior_stage_sha256"] == static.sha256(prior),
@@ -313,7 +347,7 @@ def build(args):
     native.require(not root.exists(), "build root must be fresh")
     root.mkdir(parents=True)
     job = root / "job.json"
-    state = {"profile": PROFILE, "status": "running", "pid": os.getpid(), "started_at": native.utc_now()}
+    state = {"profile": planned["profile"], "status": "running", "pid": os.getpid(), "started_at": native.utc_now()}
     native.atomic_write_json(job, state)
     try:
         native.run_command("build", cargo_command(args.instrumentation), repo=repo,
@@ -322,7 +356,7 @@ def build(args):
         check_plan(planned)
         native.require(native.read_json(args.plan) == planned, "plan changed during build")
         binary = executable.freeze(repo / "target/profiling/bevy_app", root)
-        receipt = {"profile": PROFILE, "plan_sha256": static.sha256(args.plan), "source": args.source,
+        receipt = {"profile": planned["profile"], "plan_sha256": static.sha256(args.plan), "source": args.source,
             "instrumentation": args.instrumentation, "identity": planned["identities"][args.source],
             "cargo_command": cargo_command(args.instrumentation), "build_log_sha256": static.sha256(root / "build.log"),
             "prior_stage_sha256": static.sha256(args.prior_stage) if args.prior_stage else None,
@@ -354,21 +388,25 @@ def case_result(stage, planned, case, *, finalized=False):
     native.require(batch.get("verify_command") == case_verifier(stage, planned, case),
                    "registered case verifier differs")
     pinned_file(batch, Path(stage["stage_path"]), static.sha256(Path(stage["stage_path"])))
-    pinned_file(batch, Path(__file__).resolve(), static.sha256(Path(__file__)))
+    pinned_file(batch, entrypoint(planned), static.sha256(entrypoint(planned)))
     start, end = time(batch["started_at"]), time(batch["finished_at"])
     native.require(time(stage["created_at"]) < start < end, "case interval/stage order invalid")
-    checked = static.verify_session(parent, instrument, size, 15 if size == "small" else 60,
-                                    planned["identities"][source], planned["adapter"], repeats=1)
+    if cumulative(planned):
+        checked, raw, observed = cumulative_policy().case_artifacts(planned, stage, case, parent)
+    else:
+        checked = static.verify_session(parent, instrument, size, 15 if size == "small" else 60,
+                                        planned["identities"][source], planned["adapter"], repeats=1)
+        case_id = static.Case("building-art-static", size, "gpu", static.SEED, 15 if size == "small" else 60, 0).identifier
+        raw = parent / f"{instrument}-{size}/cases" / case_id / "run-001/data/building_resource_inventory.json"
+        observed = inventory.boundaries(native.read_json(raw))
     native.require(checked["binary_sha256"] == stage["binaries"][source]["sha256"], "case binary differs")
-    case_id = static.Case("building-art-static", size, "gpu", static.SEED, 15 if size == "small" else 60, 0).identifier
-    raw = parent / f"{instrument}-{size}/cases" / case_id / "run-001/data/building_resource_inventory.json"
-    observed = inventory.boundaries(native.read_json(raw))
     inventory.require_boundary_scale(observed, size)
     return {"instrumentation": instrument, "size": size, "repeat": repeat, "source": source,
         "batch": batch_id, "started_at": batch["started_at"], "finished_at": batch["finished_at"],
         "binary_sha256": checked["binary_sha256"], "session_sha256": checked["session_sha256"],
         "adapter": checked["observations"][0]["adapter"], "layout_sha256": checked["observations"][0]["layout_sha256"],
         "resource_sha256": static.sha256(raw), "inventory": observed,
+        **({"presentation_sha256": checked["presentation_sha256"]} if cumulative(planned) else {}),
         "metrics": measured_metrics(checked["observations"][0]["metrics"], instrument)
                    | {k: observed[k] for k in RESOURCE_KEYS}}
 
@@ -560,15 +598,16 @@ def verify_stage(path):
             cross_stage_resources[source] = assessment if source == "reference" else {"global_shared_mesh_plateau": True, "totals": assessment}
     ledger = native.read_json(storage.ledger_dir(storage.primary_for(Path(planned["repos"]["current"]))) / "ledger.json")
     interleaving = require_no_interleaving(rows, ledger["batches"].values(), history=ledger.get("history"))
-    return {"profile": PROFILE, "status": "pass", "instrumentation": stage["instrumentation"],
+    return {"profile": planned["profile"], "status": "pass", "instrumentation": stage["instrumentation"],
         "stage_sha256": static.sha256(path), "rows": rows,
         "aggregate": aggregate(rows, stage["instrumentation"], planned["limits"]),
         "cross_stage_resources": cross_stage_resources, "interleaving_audit": interleaving,
         "accepted": False, "promotion_authority": False,
-        "unverified": ["active gameplay", "GPU allocation budget", "art", "release", "final cumulative nine"]}
+        "unverified": ["active gameplay", "GPU allocation budget", "art", "release"]
+                      + ([] if cumulative(planned) else ["final cumulative nine"])}
 
 
-def main():
+def main(*, profile=PROFILE):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("command", choices=("plan", "prepare-build", "prepare-case", "build", "verify-build", "bind", "verify-case", "verify-stage"))
     for name in ("repo", "reference-repo", "budget", "resource-basis", "job-root", "output", "plan",
@@ -578,10 +617,18 @@ def main():
     parser.add_argument("--instrumentation", choices=("capture", "memory"))
     parser.add_argument("--source", choices=SOURCES)
     parser.add_argument("--index", type=int)
+    native.require(profile in {PROFILE, CUMULATIVE_PROFILE}, "unknown adjacent CLI profile")
+    if profile == CUMULATIVE_PROFILE:
+        parser.add_argument("--codec", type=Path)
     args = parser.parse_args()
+    for path in (args.plan, args.stage):
+        if path is not None:
+            native.require(native.read_json(path).get("profile") == profile, "CLI/plan profile differs")
     if args.command == "plan":
         native.require(all((args.repo, args.reference_repo, args.budget, args.resource_basis, args.job_root, args.output)), "plan inputs missing")
-        result = plan(args)
+        if profile == CUMULATIVE_PROFILE:
+            native.require(args.codec is not None, "released inventory codec required")
+        result = plan(args, profile=profile)
     elif args.command == "prepare-build":
         native.require(all((args.plan, args.source, args.instrumentation)), "build preparation inputs missing")
         planned = native.read_json(args.plan)
@@ -595,13 +642,13 @@ def main():
             native.require(args.prior_stage is None, "Capture build must be first")
         root = Path(planned["job_root"]) / f"{args.instrumentation}-{args.source}"
         result = prepared(Path(planned["repos"][args.source]), root,
-                          build_command(args.plan, planned, args.source, args.instrumentation, args.prior_stage))
+                          build_command(args.plan, planned, args.source, args.instrumentation, args.prior_stage), profile=planned["profile"])
     elif args.command == "prepare-case":
         native.require(args.stage is not None and type(args.index) is int and 0 <= args.index < 12, "case stage/index required")
         stage, planned = check_stage(args.stage)
         case = [case for case in matrix() if case[0] == stage["instrumentation"]][args.index]
         result = prepared(Path(planned["repos"][case[3]]), Path(planned["job_root"]) / label(case),
-                          command(planned, stage, case))
+                          command(planned, stage, case), profile=planned["profile"])
     elif args.command in ("build", "verify-build"):
         native.require(all((args.plan, args.repo, args.source, args.instrumentation, args.job_root)), "build inputs missing")
         if args.command == "build":

@@ -23,6 +23,7 @@ use crate::systems::save::{SaveLoadOutcome, SaveStorageRoot};
 use crate::systems::settings::SettingsStorageRoot;
 
 mod bridge_planning;
+mod door_release_planning;
 mod m5_planning;
 mod progress_bars;
 mod refactor_rows;
@@ -213,6 +214,10 @@ fn prepare_fixture(world: &mut World, scale: f32) {
     {
         // M2's separately admitted one-time domain fixture owns preparation.
         // Do not fall through to the generic navigation fixture below.
+        return;
+    }
+    if door_release_planning::enabled() {
+        door_release_planning::prepare(world);
         return;
     }
     if m5_planning::enabled() {
@@ -755,6 +760,9 @@ fn snapshot(world: &mut World, observer: &UiObserver) -> Value {
     );
     value["refactor_rows"] = refactor_rows::snapshot(world, viewport);
     value["bridge_planning"] = bridge_planning::snapshot(world);
+    if door_release_planning::enabled() {
+        value["door_release_planning"] = door_release_planning::snapshot(world);
+    }
     value["rest_area_planning"] = rest_area_planning::snapshot(world);
     if matches!(
         std::env::var("HW_NATIVE_UI_CASE").as_deref(),
@@ -882,6 +890,12 @@ fn observe_ui(world: &mut World) {
         }
         if observer.outcomes.len() > 32 {
             observer.outcomes.drain(..16);
+        }
+        if door_release_planning::enabled()
+            && let Err(reason) = door_release_planning::record_frame(world, &observer) {
+            error!("Door release input observation failed: {reason}");
+            world.write_message(AppExit::error());
+            return;
         }
         if observer.frame < 46 || !observer.frame.is_multiple_of(3) {
             return;

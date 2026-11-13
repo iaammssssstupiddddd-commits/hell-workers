@@ -102,7 +102,7 @@ class FoundationPairedTests(unittest.TestCase):
                  "binaries": {source: {"path": "/root/"+source, "sha256": letter*64}
                               for source, letter in (("reference", "r"), ("current", "s"))}}
         old = {"binaries": {source: {"sha256": letter*64} for source, letter in (("reference", "a"), ("current", "b"))}}
-        planned = {"job_root": "/root"}
+        planned = {"profile": paired.PROFILE, "job_root": "/root"}
         proof = paired._CaptureProof(Path("/capture"), "c"*64, Path("/plan"), "p"*64,
             {"instrumentation": "capture", "stage_sha256": "c"*64,
              "rows": [{"finished_at": "2026-11-12T00:00:00+00:00"}]})
@@ -135,7 +135,7 @@ class FoundationPairedTests(unittest.TestCase):
                               "inventory": owned_snapshot(shared=source=="current")} for source in paired.SOURCES]}
         proof = paired._CaptureProof(Path("/capture"), "c"*64, Path("/plan"), "p"*64, previous)
         stage = {"instrumentation": "memory", "prior_stage": "/capture", "plan": "/plan"}
-        planned = {"repos": {"current": "/primary"}, "limits": budget()}
+        planned = {"profile": paired.PROFILE, "repos": {"current": "/primary"}, "limits": budget()}
         with patch.object(paired, "_check_stage", return_value=(stage, planned, proof)), \
              patch.object(paired, "case_result", side_effect=data), \
              patch.object(paired.static, "sha256", side_effect=lambda path: "c"*64 if path == Path("/capture") else "p"*64), \
@@ -218,7 +218,7 @@ class FoundationPairedTests(unittest.TestCase):
                 paired.limits(value)
 
     def test_command_uses_exact_one_case_prebuilt_binary_without_changing_perf_admission(self):
-        value = {"job_root": "/primary/target/native-acceptance/paired", "adapter": "Intel"}
+        value = {"profile": paired.PROFILE, "job_root": "/primary/target/native-acceptance/paired", "adapter": "Intel"}
         stage = {"binaries": {"current": {"path": "/primary/target/native-acceptance/paired/capture-current/binary/bevy_app"}}}
         argv = paired.command(value, stage, ("capture", "small", 2, "current"))
         self.assertEqual(argv[:5], ["env", "RUST_LOG=info,wgpu=error", "python3", "scripts/perf.py", "run"])
@@ -253,7 +253,7 @@ class FoundationPairedTests(unittest.TestCase):
         case = ("capture", "small", 1, "current")
         stage = {"created_at": "2026-11-11T00:00:00+00:00", "instrumentation": "capture", "stage_path": "/private/stage",
                  "binaries": {"current": {"path": "/snapshot/binary/bevy_app", "sha256": "a"*64}}}
-        planned = {"job_root": "/primary/target/native-acceptance/comparison", "adapter": "Intel",
+        planned = {"profile": paired.PROFILE, "job_root": "/primary/target/native-acceptance/comparison", "adapter": "Intel",
                    "repos": {"current": "/primary"}, "identities": {"current": {"subject_commit": "c"*40}}}
         identifier = "comparison-" + paired.label(case)
         batch = {"id": identifier, "repo": "/primary", "roots": [planned["job_root"]+"/"+paired.label(case)],
@@ -414,7 +414,7 @@ class FoundationPairedTests(unittest.TestCase):
                 paired.require_no_interleaving(data, [before | {"finished_at": end}])
 
     def test_stage_requires_guarded_build_receipts_and_distinct_source_binaries(self):
-        planned = {"job_root": "/root"}
+        planned = {"profile": paired.PROFILE, "job_root": "/root"}
         def binary(source, sha):
             return {"path": f"/root/capture-{source}/binary/bevy_app", "sha256": sha}
         stage = {"profile": paired.PROFILE, "stage_path": "/private/stage", "plan": "/private/plan",
@@ -443,7 +443,7 @@ class FoundationPairedTests(unittest.TestCase):
                         paired.check_stage(Path("/private/stage"))
 
     def test_memory_build_cannot_create_output_without_completed_capture(self):
-        planned = {"repos": {"current": "/primary"}, "job_root": "/job"}
+        planned = {"profile": paired.PROFILE, "repos": {"current": "/primary"}, "job_root": "/job"}
         args = SimpleNamespace(plan=Path("/private/plan"), frozen_plan=planned,
                                repo=Path("/primary"), source="current", instrumentation="memory",
                                job_root=Path("/job/memory-current"), prior_stage=None)
@@ -460,7 +460,7 @@ class FoundationPairedTests(unittest.TestCase):
 
     def test_guarded_build_receipt_requires_exact_source_recipe_plan_and_successful_registration(self):
         plan_path = Path("/private/plan")
-        planned = {"repos": {"current": "/primary"}, "job_root": "/root",
+        planned = {"profile": paired.PROFILE, "repos": {"current": "/primary"}, "job_root": "/root",
                    "identities": {"current": {"subject_commit": "a"*40}}}
         command = paired.build_command(plan_path, planned, "current", "capture", None)
         verifier = command.copy()

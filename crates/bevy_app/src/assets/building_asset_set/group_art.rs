@@ -90,6 +90,7 @@ impl GroupArtSession {
 
 fn separate(present: impl Fn(&str) -> bool) -> bool {
     ![
+        "HW_BUILDING_RELEASE_GALLERY_SESSION",
         "HW_BUILDING_GROUP_COMPARISON",
         "HW_BUILDING_M6_MODE",
         "HW_BUILDING_M6_CANDIDATES",
@@ -138,7 +139,10 @@ pub(super) fn configure(app: &mut App) -> Result<(), String> {
         .resource_mut::<BuildingAssetPool>()
         .allow_comparison_identities(comparison.loaded_identities().cloned().collect());
     app.insert_resource(comparison)
-        .insert_resource(session)
+        .insert_resource(session.clone())
+        .insert_resource(super::gallery_capture::GalleryCaptureSession::Group(
+            session,
+        ))
         .add_systems(Startup, group_comparison::request);
     Ok(())
 }
@@ -206,6 +210,7 @@ mod tests {
         assert!(separate(|_| false));
         for key in [
             "HW_BUILDING_ART_SESSION",
+            "HW_BUILDING_RELEASE_GALLERY_SESSION",
             "HW_BUILDING_GROUP_COMPARISON",
             "HW_BUILDING_M6_MODE",
             "HW_NATIVE_UI_ROOT",

@@ -12,7 +12,8 @@
 `default_release_bindings.json`の完全なrelease組を、既存poolへ要求する。
 現在の一覧には独立release承認・promotion/install済みのTank、MudMixer、RestArea、SoulSpa、
 WheelbarrowParking、SandPile、BonePile、OutdoorLampの8件を採用した。
-M5を加えた新binaryの品質・通常startup確認は継続中であり、全9種受入の完了とは区別する。
+M5を加えたcompiled8は`078908ea`の全4群CI・独立reviewと通常startup確認を通過した。
+全9種の画像・Door・累積性能受入の完了とは区別する。
 独立release承認・promotion/install後に `building_asset_pipeline.py bindings` のexact出力を採用して初めて
 既定起動へ反映する。一覧は起動時の文書/外部JSON読取りではなくbinaryへ組み込む。
 `HW_BUILDING_ASSET_RELEASES`を明示した場合は一覧全体を置換し、空文字・空配列・非UTF-8・不正JSONを
@@ -110,8 +111,11 @@ Rust peakは+2492835/+3180489B、RSSは−27912/+69124KiB、最大相対MAD2.776
 既存runtime bytesは全て保持し、資源・配電・駐車・anchor・save/loadのgameplay契約を変更しない。
 
 正規`bindings --release-group m5`出力8件（SHA
-`87866aaa1734ad1445f21765053dbeb56e2e0205f383540bdf67c381a98d073a`）をcompiled一覧へ採用する。
-新sourceの品質／Help／独立review／通常startup、Door監査、正式9種画面と累積比較は継続工程である。
+`87866aaa1734ad1445f21765053dbeb56e2e0205f383540bdf67c381a98d073a`）をcompiled一覧へ採用した。
+`078908ea`で通常startup manifest SHA
+`bdf9884c9460fdd3341aec32f0a7fc8f4309062bca3d72db5220e5ea654571c7`を独立採用した。
+全8poolがactive/依存常駐、初期Parking ownerとchildの採用画像接続を確認し、`visible=false`を保持した。
+初期worldにない他consumerやParking表示成功を主張しない。Door監査・正式9種画面・累積比較は継続工程である。
 既存Door g7は別loaderのまま、Bridgeの正式導入は対象外とする。
 
 ### 通常起動defaultの受動audit
@@ -134,6 +138,27 @@ release overrideもない通常binaryを起動し、exact installed pointersとc
 同bytesコピーだけで、locator・候補・fixtureを追加しない。admissionで読んだplanを凍結し、build前後・
 起動前・最終verify前および原本の独立verifyで完全一致を要求する。変更は別job rootや起動へ進めない。初期世界にないconsumer、全kind lifecycle、
 アート・性能・release採否はこの接続検証の対象外で、通常authority storyboard等の別証拠へ残す。
+
+### 正式9種の追加受入ツール（実機受入前）
+
+`building_release_art_acceptance.py`は全8 ReleaseApprovedと既存Door g7だけを受け付ける
+独立gallery入口で、High/DPI1のnormal/farを各owned windowで観測する。
+`HW_BUILDING_RELEASE_GALLERY_SESSION`は閉じたprofiling契約であり、候補許可や通常gameplayの設定ではない。
+36 ownerのmesh/AABB・画像alpha投影を完全照合する。壁・床・Soulと実InventoryのWood携行iconは
+明示seeded contextで、自然施工・物流の証明にはしない。Floorと携行準備は未公開段階の各1回のみ。
+その後の既存30frame安定とcontext60frame安定を取り直し、probe/ACK/final公開後の修復は拒否する。
+通常group・performance側のreadinessを巻き戻す入口にはしない。
+
+`door_release_ui_acceptance.py`は既存Siteの空3×3を選び支持壁2/2/4だけを一度準備する。
+Door本体・Blueprint・施工完了を生成せず、実OS入力のcatalog・EW/NS/tie ghost・同owner Blueprintを検証する。
+producerはpre-armから毎frameの入力を保持し、hostはarm nonce/PID/epoch/frame、EIS client、実placement receiptと
+4枚のowned画像を結合する。支持壁のseam・変更・撤去・loadは既存J1 release6の別受入とする。
+
+`building_cumulative_acceptance.py`は既存adjacent比較の閉じたprofileを使い、旧referenceと正式8世代＋Doorの
+Capture/Memory各N/4N・3対を比較する。両sourceの完全raw oracleの成功後だけ固定の論理投影を比較し、
+元presentation digestを残す。codecは最初の登録と保存済みSHAの再照合を分離し、実際のrelease transactionから
+追加asset pathだけを導出する。旧計測harness・共通asset bytes・失敗履歴は変えない。
+各ツールの存在や合成fixtureの成功は、画像・実入力・性能・art/releaseの承認を与えない。
 
 ### Bridge配置の成立条件（統合候補）
 

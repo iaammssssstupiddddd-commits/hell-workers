@@ -23,7 +23,8 @@ use hw_world::{WorldMap, Yard, layout::RIVER_Y_MIN};
 pub(crate) struct SetupParams<'w, 's> {
     config: Res<'w, PerfScenarioConfig>,
     art_session: Option<Res<'w, BuildingArtSession>>,
-    group_art: Option<Res<'w, crate::assets::building_asset_set::group_art::GroupArtSession>>,
+    gallery:
+        Option<Res<'w, crate::assets::building_asset_set::gallery_capture::GalleryCaptureSession>>,
     state: ResMut<'w, BuildingArtStaticState>,
     commands: Commands<'w, 's>,
     world_map: WorldMapWrite<'w>,
@@ -53,9 +54,14 @@ pub(crate) fn setup_building_art_static_system(mut p: SetupParams) {
         return;
     }
     actors.sort_by_key(|entity| entity.to_bits());
-    let mut specs = p.group_art.as_ref().map_or_else(
+    let mut specs = p.gallery.as_ref().map_or_else(
         || layout::layout(p.config.size()),
-        |session| layout::group_gallery_layout(session.group()),
+        |session| {
+            session.group().map_or_else(
+                || layout::layout(p.config.size()),
+                layout::group_gallery_layout,
+            )
+        },
     );
     if let Some(page) = p
         .art_session
@@ -81,7 +87,7 @@ pub(crate) fn setup_building_art_static_system(mut p: SetupParams) {
         });
     }
     let gallery_yards = p
-        .group_art
+        .gallery
         .as_ref()
         .map(|_| layout::group_gallery_yards(&specs));
     let validation = gallery_yards.as_ref().map_or_else(
@@ -111,7 +117,7 @@ pub(crate) fn setup_building_art_static_system(mut p: SetupParams) {
     initialize_camera(
         &mut camera,
         &mut controller,
-        p.group_art.as_ref().map_or_else(
+        p.gallery.as_ref().map_or_else(
             || layout::camera_frame(p.art_session.as_deref(), p.config.size()),
             |session| layout::group_gallery_camera(session, &specs),
         ),

@@ -1239,7 +1239,22 @@ impl PerfScenarioConfig {
             .env_text("HW_BUILDING_ART_SESSION")
             .and_then(|raw| serde_json::from_str::<serde_json::Value>(&raw).ok());
         let group_art = input.env_text("HW_BUILDING_GROUP_ART_SESSION");
-        let static_window_contract = if group_art.is_some() {
+        let released_gallery = input.env_text("HW_BUILDING_RELEASE_GALLERY_SESSION");
+        if group_art.is_some() && released_gallery.is_some() {
+            return Err(PerfScenarioConfigError(
+                "group and released galleries are distinct sessions".into(),
+            ));
+        }
+        let gallery_requested = group_art.is_some() || released_gallery.is_some();
+        let static_window_contract = if released_gallery.is_some() {
+            released_gallery_window_matches(
+                released_gallery.as_deref(),
+                window_width,
+                window_height,
+                window_scale_factor,
+                rtt_quality,
+            )
+        } else if group_art.is_some() {
             group_art_window_matches(
                 group_art.as_deref(),
                 window_width,
@@ -1253,7 +1268,7 @@ impl PerfScenarioConfig {
                 && building_art_window_matches(art_session.as_ref(), window_scale_factor)
                 && building_art_quality_matches(art_session.is_some(), rtt_quality)
         };
-        if group_art.is_some()
+        if gallery_requested
             && (workload != PerfWorkload::BuildingArtStatic
                 || size != PerfScenarioSize::Small
                 || art_session.is_some())
@@ -1772,6 +1787,27 @@ fn group_art_window_matches(
     {
         raw.and_then(|raw| {
             crate::assets::building_asset_set::group_art::GroupArtSession::parse(raw).ok()
+        })
+        .is_some_and(|session| session.window_matches(width, height, scale, quality))
+    }
+    #[cfg(not(feature = "profiling"))]
+    {
+        let _ = (raw, width, height, scale, quality);
+        false
+    }
+}
+
+fn released_gallery_window_matches(
+    raw: Option<&str>,
+    width: Option<u32>,
+    height: Option<u32>,
+    scale: Option<f32>,
+    quality: Option<RttQualityPreset>,
+) -> bool {
+    #[cfg(feature = "profiling")]
+    {
+        raw.and_then(|raw| {
+            crate::assets::building_asset_set::release_gallery::ReleaseArtSession::parse(raw).ok()
         })
         .is_some_and(|session| session.window_matches(width, height, scale, quality))
     }

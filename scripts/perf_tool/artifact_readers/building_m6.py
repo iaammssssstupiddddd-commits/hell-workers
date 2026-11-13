@@ -21,6 +21,7 @@ CONTRACT = "building-art-m6-nine-v1"
 PRE_RELEASE_CONTRACT = "building-art-pre-release-nine-v1"
 GROUP_CONTRACT = "building-art-group-nine-v1"
 GROUP_GALLERY_CONTRACT = "building-art-group-gallery-nine-v1"
+RELEASE_GALLERY_CONTRACT = "building-art-released-gallery-nine-v1"
 GROUP_TARGETS = {
     "m2": ("Tank", "MudMixer"),
     "m3": ("RestArea", "SoulSpa"),
@@ -140,6 +141,12 @@ def validate_group_gallery_sidecar(value, case):
     return _validate_sidecar(value, case, pre_release=True, group=True, gallery=True)
 
 
+def validate_release_gallery_sidecar(value, case):
+    """Actual complete ReleaseApproved image fixture, never a performance case."""
+    require(case.size == "small", "released gallery requires N only")
+    return _validate_sidecar(value, case, pre_release=False, gallery=True, released_gallery=True)
+
+
 def gallery_records(group):
     records = expected_records(4)
     kinds = list(KINDS)
@@ -161,7 +168,9 @@ def gallery_records(group):
     return result
 
 
-def _validate_sidecar(value, case, *, pre_release, group=False, gallery=False):
+def _validate_sidecar(value, case, *, pre_release, group=False, gallery=False, released_gallery=False):
+    require(not released_gallery or (gallery and not group and not pre_release),
+            "released gallery cannot use a candidate/group authority")
     copies = {"small": 4, "medium": 16}[case.size]
     require(
         case
@@ -186,7 +195,7 @@ def _validate_sidecar(value, case, *, pre_release, group=False, gallery=False):
     require(
         type(value["schema_version"]) is int
         and value["schema_version"] == 1
-        and value["contract_id"] == (GROUP_GALLERY_CONTRACT if gallery else GROUP_CONTRACT if group else PRE_RELEASE_CONTRACT if pre_release else CONTRACT)
+        and value["contract_id"] == (RELEASE_GALLERY_CONTRACT if released_gallery else GROUP_GALLERY_CONTRACT if gallery else GROUP_CONTRACT if group else PRE_RELEASE_CONTRACT if pre_release else CONTRACT)
         and value["evidence_kind"] == "paused-static-only"
         and value["active_simulation_evidence"] is False
         and value["camera_scale"] in ((1.0, 2.0) if gallery else (5.0,))
@@ -289,7 +298,7 @@ def _validate_sidecar(value, case, *, pre_release, group=False, gallery=False):
         all(type(number) is int and number > 0 for number in m6["resources"].values()),
         "invalid resources",
     )
-    expected = gallery_records(declaration["group"]) if gallery else expected_records(copies)
+    expected = gallery_records(declaration["group"]) if gallery and group else expected_records(copies)
     require(len(initial["records"]) == len(expected), "owner count differs")
     foreground_entities = []
     for observed, logical in zip(initial["records"], expected, strict=True):

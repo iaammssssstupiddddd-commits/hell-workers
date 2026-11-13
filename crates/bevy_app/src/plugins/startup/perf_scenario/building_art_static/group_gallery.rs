@@ -1,6 +1,7 @@
 //! Owned-window group-art capture. There is no performance or release verdict.
 
 mod projection;
+mod release_context;
 
 use std::{
     io::Write,
@@ -9,9 +10,8 @@ use std::{
 };
 
 use super::*;
-use crate::assets::building_asset_set::group_art::{
-    GROUP_ART_CONTRACT, GROUP_ART_HEIGHT, GROUP_ART_WIDTH, GroupArtSession,
-};
+use crate::assets::building_asset_set::gallery_capture::GalleryCaptureSession;
+use crate::assets::building_asset_set::group_art::{GROUP_ART_HEIGHT, GROUP_ART_WIDTH};
 use serde::{Deserialize, Serialize};
 
 #[derive(Default, Resource)]
@@ -77,13 +77,13 @@ fn valid_hash(value: &str) -> bool {
 
 fn validate_ack(
     ack: &CaptureAck,
-    session: &GroupArtSession,
+    session: &GalleryCaptureSession,
     ready: &Value,
     digest: &str,
     now: u64,
 ) -> Result<(), String> {
     if ack.schema_version != 1
-        || ack.nonce != session.nonce
+        || ack.nonce != session.nonce()
         || ack.pid != std::process::id()
         || ack.probe_sha256 != digest
         || !valid_hash(&ack.png_sha256)
@@ -108,7 +108,7 @@ fn validate_ack(
 }
 
 pub(crate) fn observe(world: &mut World) {
-    let Some(session) = world.get_resource::<GroupArtSession>().cloned() else {
+    let Some(session) = world.get_resource::<GalleryCaptureSession>().cloned() else {
         return;
     };
     world.init_resource::<CaptureState>();
@@ -128,9 +128,9 @@ pub(crate) fn observe(world: &mut World) {
     }
 }
 
-fn observe_inner(world: &mut World, session: &GroupArtSession) -> Result<(), String> {
+fn observe_inner(world: &mut World, session: &GalleryCaptureSession) -> Result<(), String> {
     let directory = session
-        .status_path
+        .status_path()
         .parent()
         .ok_or("missing gallery directory")?;
     let ack_path = directory.join("capture-ack.json");
@@ -155,6 +155,20 @@ fn observe_inner(world: &mut World, session: &GroupArtSession) -> Result<(), Str
         world.resource_mut::<CaptureState>().ui_prepared = true;
         return Ok(());
     }
+    if matches!(session, GalleryCaptureSession::Released(_))
+        && world.resource::<CaptureState>().ready.is_none()
+        && !release_context::prepare(world)?
+    {
+        if ack_path.symlink_metadata().is_ok()
+            || final_path.symlink_metadata().is_ok()
+            || session.status_path().symlink_metadata().is_ok()
+        {
+            return Err(
+                "released capture artifact appeared during explicit context preparation".into(),
+            );
+        }
+        return Ok(());
+    }
     let state = world.resource::<BuildingArtStaticState>();
     if state.phase == Phase::Failed {
         return Err("group fixture failed".into());
@@ -170,14 +184,23 @@ fn observe_inner(world: &mut World, session: &GroupArtSession) -> Result<(), Str
         .m6_final_evidence
         .clone()
         .ok_or("missing actual group frame")?;
-    let snapshot = projection::collect(world, session)?;
+    let door = world
+        .resource::<ProductionDoorAssetPool>()
+        .resolved
+        .as_ref()
+        .ok_or("gallery requires resolved Door assets")?;
+    session.check_door(&door.identity)?;
+    let mut snapshot = projection::collect(world, session)?;
+    if matches!(session, GalleryCaptureSession::Released(_)) {
+        snapshot["context"] = release_context::snapshot(world)?;
+    }
     if world.resource::<CaptureState>().ready.is_none() {
-        let ready = json!({"schema_version": 1, "profile": GROUP_ART_CONTRACT,
-            "status": "ready", "nonce": session.nonce, "pid": std::process::id(),
+        let ready = json!({"schema_version": 1, "profile": session.contract(),
+            "status": "ready", "nonce": session.nonce(), "pid": std::process::id(),
             "session": session, "stable_frames": frames, "ready_at_unix_ms": now_ms()?,
             "fixture": fixture, "snapshot": snapshot, "performance_evidence": false,
             "accepted": false, "promotion_authority": false});
-        let digest = write_fresh(&session.status_path, &ready)?;
+        let digest = write_fresh(session.status_path(), &ready)?;
         let mut capture = world.resource_mut::<CaptureState>();
         capture.ready = Some(ready);
         capture.ready_sha256 = digest;
@@ -200,7 +223,7 @@ fn observe_inner(world: &mut World, session: &GroupArtSession) -> Result<(), Str
     let bytes = std::fs::read(&ack_path).map_err(|e| e.to_string())?;
     let ack: CaptureAck = serde_json::from_slice(&bytes).map_err(|e| e.to_string())?;
     validate_ack(&ack, session, &ready, &digest, now_ms()?)?;
-    if sha(&std::fs::read(&session.status_path).map_err(|e| e.to_string())?) != digest {
+    if sha(&std::fs::read(session.status_path()).map_err(|e| e.to_string())?) != digest {
         return Err("group ready probe changed before ACK".into());
     }
     let png_path = directory.join("actual-window.png");
@@ -223,8 +246,8 @@ fn observe_inner(world: &mut World, session: &GroupArtSession) -> Result<(), Str
     {
         return Err("group PNG hash/extent differs from capture ACK".into());
     }
-    let final_value = json!({"schema_version": 1, "profile": GROUP_ART_CONTRACT,
-        "status": "complete", "nonce": session.nonce, "pid": std::process::id(),
+    let final_value = json!({"schema_version": 1, "profile": session.contract(),
+        "status": "complete", "nonce": session.nonce(), "pid": std::process::id(),
         "probe_sha256": digest, "ack_sha256": sha(&bytes), "ack": ack,
         "stable_frames": frames, "completed_at_unix_ms": now_ms()?,
         "fixture": fixture, "snapshot": snapshot, "performance_evidence": false,
@@ -244,11 +267,13 @@ mod tests {
 
     #[test]
     fn ack_requires_fresh_exact_process_probe_and_capture() {
-        let session = crate::assets::building_asset_set::group_art::test_session();
+        let session = GalleryCaptureSession::Group(
+            crate::assets::building_asset_set::group_art::test_session(),
+        );
         let ready = json!({"ready_at_unix_ms": 1000});
         let mut ack = CaptureAck {
             schema_version: 1,
-            nonce: session.nonce.clone(),
+            nonce: session.nonce().to_owned(),
             pid: std::process::id(),
             probe_sha256: "b".repeat(64),
             png_sha256: "c".repeat(64),

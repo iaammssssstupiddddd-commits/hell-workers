@@ -79,6 +79,16 @@ def fixture(probe, final, group):
 
 
 def snapshot(value, session, frozen, view_root):
+    selected = (*GROUP_TARGETS[session["bindings"]["group"]], "Door")
+    return _projection_snapshot(value, session, frozen, view_root, selected)
+
+
+def released_snapshot(value, session, frozen, view_root):
+    # The only additional selection is the closed full-nine released set.
+    return _projection_snapshot(value, session, frozen, view_root, (*m6.pipeline.RELEASE_GROUPS["m5"], "Door"))
+
+
+def _projection_snapshot(value, session, frozen, view_root, selected):
     require(set(value) == {"window", "rtt", "main_clip_from_world", "rtt_clip_from_world",
             "overlay_clip_from_world", "composite_world", "visible_ui_nodes", "records"}, "gallery projection keys differ")
     dpi = session["scale_factor"]
@@ -91,7 +101,6 @@ def snapshot(value, session, frozen, view_root):
             "target_scale_factor": scale * dpi, "quality": session["quality"]}), "gallery RTT differs")
     for name in ("main_clip_from_world", "rtt_clip_from_world", "overlay_clip_from_world", "composite_world"):
         vector(value[name], 16)
-    selected = (*GROUP_TARGETS[session["bindings"]["group"]], "Door")
     expected = {(kind, ordinal) for kind in selected for ordinal in range(4)}
     rows = value["records"]
     require(isinstance(rows, list) and len(rows) == len(expected)

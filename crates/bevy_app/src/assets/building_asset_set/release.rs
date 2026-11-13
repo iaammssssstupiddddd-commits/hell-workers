@@ -10,6 +10,8 @@ use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "profiling")]
 mod audit;
+#[cfg(feature = "profiling")]
+pub(crate) mod gallery;
 
 use super::{
     BuildingAssetAuthority, BuildingAssetKind, BuildingAssetPool, BuildingAssetRequest,
@@ -246,6 +248,12 @@ fn select_bindings(
 /// compiled inventory. Dedicated acceptance and performance sessions never use
 /// implicit defaults; they retain their own admission and authority contracts.
 pub fn configure_building_asset_releases(app: &mut App) -> Result<(), String> {
+    if std::env::var_os("HW_BUILDING_RELEASE_GALLERY_SESSION").is_some() {
+        #[cfg(feature = "profiling")]
+        return gallery::configure(app);
+        #[cfg(not(feature = "profiling"))]
+        return Err("released gallery requires the profiling feature".into());
+    }
     if std::env::var_os("HW_BUILDING_GROUP_ART_SESSION").is_some() {
         #[cfg(feature = "profiling")]
         return super::group_art::configure(app);

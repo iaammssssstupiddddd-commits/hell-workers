@@ -10,7 +10,7 @@ provenance-verified isolated candidates in an immutable copied asset view.
 from __future__ import annotations
 
 import argparse
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
 import json
 import math
 import os
@@ -546,9 +546,70 @@ def validate_authored_parts(value, observed, mode="candidate"):
     return loaded_kinds
 
 
+@dataclass(frozen=True)
+class ReleasedCaseContext:
+    """A complete admitted eight-release snapshot, rederived before every use."""
+    repo: str
+    codec: str
+    codec_sha256: str
+    adapter: str
+    identity: dict
+    assets: dict
+
+
+_INITIAL_CODEC = object()
+
+
+def released_case_context(repo, codec, adapter, *, expected_codec_sha256=_INITIAL_CODEC):
+    pipeline.require(expected_codec_sha256 is _INITIAL_CODEC or (
+        type(expected_codec_sha256) is str and len(expected_codec_sha256) == 64
+        and all(c in "0123456789abcdef" for c in expected_codec_sha256)),
+        "frozen release codec requires a strict SHA256 before execution")
+    repo, codec = Path(repo), Path(codec)
+    pipeline.require(repo.is_absolute() and repo == repo.resolve()
+        and codec.is_absolute() and codec == codec.resolve() and not codec.is_symlink()
+        and not native.git_dirty_paths(repo) and isinstance(adapter, str) and adapter.strip(),
+        "clean canonical release-only context required")
+    # inventory() without candidate roots admits only all eight real released
+    # sets, exact canonical pointers, provenance and unchanged normal Door g7.
+    codec_sha256 = pipeline.digest(codec.read_bytes())
+    pipeline.require(expected_codec_sha256 is _INITIAL_CODEC or codec_sha256 == expected_codec_sha256,
+                     "frozen release codec changed before execution")
+    frozen, assets = static.identity(repo), inventory(repo, codec)
+    pipeline.require(static.identity(repo) == frozen and pipeline.digest(codec.read_bytes()) == codec_sha256,
+                     "release source/codec changed while reading")
+    return ReleasedCaseContext(str(repo), str(codec), codec_sha256, adapter, frozen, assets)
+
+
+def verify_released_case(context, item, session, binary_sha256):
+    pipeline.require(type(context) is ReleasedCaseContext
+        and pipeline.exact_json(asdict(context), asdict(released_case_context(
+            Path(context.repo), Path(context.codec), context.adapter, expected_codec_sha256=context.codec_sha256))),
+        "released case context changed or forged")
+    pipeline.require(isinstance(item, tuple) and len(item) == 4
+        and item[0] in ("capture", "memory") and item[1] in ("small", "medium")
+        and type(item[2]) is int and item[2] in (1, 2, 3) and item[3] == "candidate",
+        "released case requires exact actual-release mode")
+    session = Path(session)
+    pipeline.require(session.is_absolute() and session == session.resolve() and not session.is_symlink()
+        and session.is_relative_to(Path(context.repo) / "target/native-acceptance"),
+        "released case session must be canonical and owned")
+    value = {"profile": PROFILE, "identity": context.identity, "assets": context.assets,
+             "adapter": context.adapter}
+    result = _verify_case_artifacts(value, item, session)
+    pipeline.require(result["binary_sha256"] == binary_sha256, "released case immutable binary differs")
+    pipeline.require(pipeline.exact_json(asdict(context), asdict(released_case_context(
+        Path(context.repo), Path(context.codec), context.adapter, expected_codec_sha256=context.codec_sha256))), "release context changed during verification")
+    return result
+
+
 def verify_case(value, item):
+    return _verify_case_artifacts(value, item, Path(value["job_root"]) / label(item))
+
+
+def _verify_case_artifacts(value, item, session):
+    """Unchanged complete artifact oracle; release context is built above."""
     instrument, size, repeat, mode = item
-    session = Path(value["job_root"]) / label(item)
     manifest, config = (
         native.read_json(session / "manifest.json"),
         native.read_json(session / "matrix.json"),

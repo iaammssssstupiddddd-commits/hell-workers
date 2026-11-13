@@ -31,7 +31,7 @@ use super::{
     PerfCapture, PerfCapturePhase, PerfScenarioConfig, PerfWorkload, fixture::PerfScenarioApplied,
 };
 use crate::assets::building_asset_set::acceptance::BuildingArtSession;
-use crate::assets::building_asset_set::group_art::GroupArtSession;
+use crate::assets::building_asset_set::gallery_capture::GalleryCaptureSession;
 use crate::assets::building_asset_set::{BuildingAssetKind, BuildingAssetPool, M6Comparison};
 use crate::assets::door_asset_set::{
     DoorAssetAuthority, DoorAssetReadiness, DoorAssetReadinessState, ProductionDoorAssetPool,
@@ -239,7 +239,7 @@ pub(crate) struct InspectParams<'w, 's> {
     building_pool: Res<'w, BuildingAssetPool>,
     asset_server: Option<Res<'w, AssetServer>>,
     art_session: Option<Res<'w, BuildingArtSession>>,
-    group_art: Option<Res<'w, GroupArtSession>>,
+    gallery: Option<Res<'w, GalleryCaptureSession>>,
     m6: Option<Res<'w, M6Comparison>>,
     stockpiles: Query<'w, 's, &'static hw_logistics::Stockpile>,
     companions: Query<'w, 's, &'static hw_logistics::BelongsTo, With<hw_logistics::BucketStorage>>,
@@ -269,7 +269,7 @@ pub(crate) fn inspect_building_art_static_system(mut params: InspectParams) {
     }
     if params.state.phase == Phase::Seeded
         && params.art_session.is_none()
-        && params.group_art.is_none()
+        && params.gallery.is_none()
         && !resource_inventory::rtt_ready(
             &params.images,
             params.rtt.as_deref(),
@@ -329,7 +329,7 @@ pub(crate) fn inspect_building_art_static_system(mut params: InspectParams) {
                 return;
             }
             if params.art_session.is_none()
-                && params.group_art.is_none()
+                && params.gallery.is_none()
                 && (params.state.resources_initial.is_none()
                     || matches!(params.capture.phase, PerfCapturePhase::Flush)
                         && params.state.resources_final.is_none())
@@ -369,7 +369,7 @@ pub(crate) fn inspect_building_art_static_system(mut params: InspectParams) {
             }
             if params.state.evidence.is_none() {
                 params.state.resources_required =
-                    params.art_session.is_none() && params.group_art.is_none();
+                    params.art_session.is_none() && params.gallery.is_none();
                 let foreground = match foreground::capture_m6(&params) {
                     Ok(value) => value,
                     Err(reason) => {
@@ -390,7 +390,7 @@ pub(crate) fn inspect_building_art_static_system(mut params: InspectParams) {
             }
             if params.m6.is_some()
                 && (matches!(params.capture.phase, PerfCapturePhase::Flush)
-                    || params.group_art.is_some())
+                    || params.gallery.is_some())
             {
                 params.state.m6_final_evidence = Some(evidence);
             }
@@ -425,7 +425,7 @@ pub(crate) fn inspect_building_art_static_system(mut params: InspectParams) {
 }
 
 fn specimen_visible(params: &InspectParams, spec: &Specimen, candidate: bool) -> bool {
-    params.group_art.as_ref().map_or_else(
+    params.gallery.as_ref().map_or_else(
         || layout::requires_visible(params.art_session.as_deref(), candidate, spec.ordinal),
         |session| layout::group_gallery_visible(session, spec.kind),
     )
@@ -480,7 +480,7 @@ fn inspect(params: &InspectParams) -> Result<Option<Value>, String> {
         .camera
         .single()
         .map_err(|_| "main camera count differs")?;
-    let (camera_center, camera_scale) = params.group_art.as_ref().map_or_else(
+    let (camera_center, camera_scale) = params.gallery.as_ref().map_or_else(
         || layout::camera_frame(params.art_session.as_deref(), params.config.size()),
         |session| layout::group_gallery_camera(session, &params.state.specs),
     );
@@ -539,7 +539,7 @@ fn inspect(params: &InspectParams) -> Result<Option<Value>, String> {
     let mut active_meshes = HashSet::new();
     // Baselines keep one full checkpoint. Explicit Spa pages reobserve all
     // records; explicit M5 sessions reobserve only their four target sprites.
-    let record_mode = if params.group_art.is_some()
+    let record_mode = if params.gallery.is_some()
         || params.m6.is_some() && matches!(params.capture.phase, PerfCapturePhase::Flush)
     {
         // The measure driver enters Flush in Update, then this PostUpdate
@@ -849,7 +849,7 @@ fn inspect(params: &InspectParams) -> Result<Option<Value>, String> {
             };
             let mut record = json!({"kind": format!("{:?}", spec.kind), "ordinal": spec.ordinal,
                 "anchor": spec.anchor, "tiles": spec.tiles, "center": [spec.center.x, spec.center.y], "state": state});
-            if params.group_art.is_some() {
+            if params.gallery.is_some() {
                 record["gallery_owner"] = json!(owner.to_bits());
                 if structural {
                     use bevy::camera::primitives::MeshAabb;
