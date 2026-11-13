@@ -8,7 +8,11 @@ No admission exception, nested batch, art or release authority is provided here.
 from __future__ import annotations
 
 import argparse
+from contextlib import contextmanager
+from contextvars import ContextVar
+from copy import deepcopy
 from dataclasses import dataclass
+from functools import wraps
 from datetime import datetime, timezone
 import json
 import math
@@ -16,6 +20,7 @@ import os
 import re
 from pathlib import Path
 import statistics
+import sys
 
 if __package__:
     from . import building_art_static_acceptance as static
@@ -36,6 +41,118 @@ CUMULATIVE_PROFILE = "building-cumulative-adjacent-static-v1"
 SOURCES = ("reference", "current")
 RESOURCE_KEYS = inventory.TOTALS - {"material_shallow_size"}
 METRICS = {"p95_ms", "p99_ms", "peak_live_bytes", "max_rss_kib", *RESOURCE_KEYS}
+
+
+def _same(value, expected):
+    return json.dumps(value, sort_keys=True, allow_nan=False) == json.dumps(expected, sort_keys=True, allow_nan=False)
+
+
+def _metadata(path):
+    """Supplement full artifact oracles with an in-flight mutation boundary."""
+    path = Path(path)
+    paths = [path, *sorted(path.rglob('*'))] if path.is_dir() else [path]
+    result = {}
+    for item in paths:
+        native.require(not item.is_symlink(), "verification input symlink")
+        stat = item.stat()
+        result[str(item)] = (stat.st_dev, stat.st_ino, stat.st_mode, stat.st_size,
+                             stat.st_mtime_ns, stat.st_ctime_ns, stat.st_nlink)
+    return result
+
+
+class _Operation:
+    def __init__(self, token):
+        self.token = token
+        self.active = True
+        self.plan = None
+        self.arguments = []
+        self.context = None
+        self.context_value = None
+        self.inputs = {}
+
+    def watch(self, path):
+        path = Path(path)
+        observed = _metadata(path)
+        if path in self.inputs:
+            native.require(self.inputs[path] == observed, "verification input changed during operation")
+        else:
+            self.inputs[path] = observed
+
+    def check(self):
+        native.require(self.active, "expired verification operation")
+        for path, observed in self.inputs.items():
+            native.require(observed == _metadata(path), "verification input changed during operation")
+        if self.plan is not None:
+            native.require(all(_same(value, self.plan) for value in self.arguments), "verified plan mutated")
+            if self.context is not None:
+                native.require(_same(cumulative_policy().context_value(self.context), self.context_value),
+                               "verified release context mutated")
+
+
+_ACTIVE_OPERATION = ContextVar("building_paired_verification_operation", default=None)
+_OPERATION_TOKEN = ContextVar("building_paired_verification_token", default=None)
+
+
+def _operation():
+    value = _ACTIVE_OPERATION.get()
+    native.require(value is None and _OPERATION_TOKEN.get() is None or
+                   type(value) is _Operation and value.active and value.token is _OPERATION_TOKEN.get(),
+                   "foreign or expired verification operation")
+    return value
+
+
+@contextmanager
+def _verification_operation():
+    existing = _operation()
+    if existing is not None:
+        yield existing
+        return
+    operation = _Operation(object())
+    token = _ACTIVE_OPERATION.set(operation)
+    owner = _OPERATION_TOKEN.set(operation.token)
+    try:
+        yield operation
+        operation.check()
+        if operation.plan is not None:
+            context = _check_plan_full(operation.plan)
+            native.require(_same(cumulative_policy().context_value(context) if context is not None else None,
+                                 operation.context_value), "release context changed during operation")
+        operation.check()
+    finally:
+        operation.active = False
+        _OPERATION_TOKEN.reset(owner)
+        _ACTIVE_OPERATION.reset(token)
+
+
+def _scoped(function):
+    @wraps(function)
+    def wrapped(*args, **kwargs):
+        with _verification_operation():
+            return function(*args, **kwargs)
+    return wrapped
+
+
+def _watch(path):
+    operation = _operation()
+    if operation is not None:
+        operation.watch(path)
+
+
+def _read(path):
+    _watch(path)
+    value = native.read_json(path)
+    _watch(path)
+    return value
+
+
+def _operation_context(planned, frozen):
+    operation = _operation()
+    if operation is None:
+        return None
+    operation.check()
+    native.require(_same(operation.plan, planned) and operation.context is not None
+        and _same(operation.context_value, frozen), "foreign plan or release context")
+    return operation.context
 
 
 def matrix():
@@ -100,6 +217,21 @@ def identities(repo, reference, profile=PROFILE):
 
 
 def check_plan(value):
+    operation = _operation()
+    if operation is None:
+        return _check_plan_full(value)
+    operation.check()
+    if operation.plan is None:
+        context = _check_plan_full(value)
+        operation.plan = deepcopy(value)
+        operation.context = context
+        operation.context_value = deepcopy(cumulative_policy().context_value(context)) if context is not None else None
+    else:
+        native.require(_same(value, operation.plan), "foreign plan in verification operation")
+    operation.arguments.append(value)
+
+
+def _check_plan_full(value):
     is_cumulative = cumulative(value)
     native.require(value.get("accepted") is False
         and value.get("promotion_authority") is False and value.get("drivers") == drivers(value["profile"])
@@ -111,13 +243,13 @@ def check_plan(value):
     native.require(("release" in value) == is_cumulative, "release inventory/profile differs")
     native.require(("resource_basis_verifier" in value) == is_cumulative,
                    "historical resource verifier/profile differs")
-    if is_cumulative:
-        cumulative_policy().check_inputs(value)
+    context = cumulative_policy().check_inputs(value) if is_cumulative else None
     basis = Path(value["resource_basis"])
     native.require(static.sha256(basis / "manifest.json") == value["resource_basis_sha256"], "resource basis changed")
     verified = (cumulative_policy().verify_resource_basis(value)
                 if is_cumulative else supplement.verify(basis))
     native.require(verified["source"] == value["identities"]["reference"], "resource basis/reference differs")
+    return context
 
 
 def plan(args, *, profile=PROFILE):
@@ -127,7 +259,7 @@ def plan(args, *, profile=PROFILE):
     native.require(not root.exists() and not args.output.resolve().is_relative_to(root), "fresh root and external plan required")
     native.require(profile in {PROFILE, CUMULATIVE_PROFILE}, "unknown adjacent plan profile")
     value = {"profile": profile, "repos": {"current": str(repo), "reference": str(reference)},
-        "job_root": str(root), "identities": identities(repo, reference, profile), "limits": limits(native.read_json(args.budget)),
+        "job_root": str(root), "identities": identities(repo, reference, profile), "limits": limits(_read(args.budget)),
         "resource_basis": str(args.resource_basis.resolve()),
         "resource_basis_sha256": static.sha256(args.resource_basis / "manifest.json"),
         "drivers": drivers(profile), "matrix": [list(case) for case in matrix()], "adapter": args.adapter,
@@ -155,7 +287,7 @@ def _verified_capture(path, plan_path):
     # Only constructed from a full verifier result in this call. Never read a
     # cached result from a document, CLI argument, previous process or next case.
     result = verify_stage(path)
-    value = native.read_json(path)
+    value = _read(path)
     proof = _CaptureProof(path.resolve(), static.sha256(path), Path(value["plan"]).resolve(),
                           value["plan_sha256"], result)
     _capture_result(proof, path, plan_path)
@@ -171,17 +303,18 @@ def _capture_result(proof, path, plan_path):
     return proof.result
 
 
+@_scoped
 def check_stage(path):
     value, planned, _capture = _check_stage(path)
     return value, planned
 
 
 def _check_stage(path):
-    value = native.read_json(path)
+    value = _read(path)
     native.require(value.get("stage_path") == str(path.resolve()), "stage path differs")
     plan_path = Path(value["plan"])
     native.require(static.sha256(plan_path) == value["plan_sha256"], "paired plan changed")
-    planned = native.read_json(plan_path)
+    planned = _read(plan_path)
     check_plan(planned)
     native.require(value.get("profile") == planned["profile"] and value.get("instrumentation") in ("capture", "memory")
         and set(value["binaries"]) == set(SOURCES), "stage contract differs")
@@ -194,7 +327,7 @@ def _check_stage(path):
         captured = _verified_capture(prior, plan_path)
         native.require(time(value["created_at"]) > time(captured.result["rows"][-1]["finished_at"]),
                        "Memory stage was bound before Capture completed")
-        previous = native.read_json(prior)
+        previous = _read(prior)
         native.require(all(value["binaries"][source]["sha256"] != previous["binaries"][source]["sha256"]
                            for source in SOURCES), "Capture/Memory executable not separated")
     root = Path(planned["job_root"])
@@ -211,7 +344,7 @@ def _check_stage(path):
 
 
 def bind(args):
-    planned = native.read_json(args.plan)
+    planned = _read(args.plan)
     check_plan(planned)
     native.require(not args.output.exists(), "stage output must be fresh")
     value = {"profile": planned["profile"], "stage_path": str(args.output.resolve()),
@@ -286,23 +419,25 @@ def cargo_command(instrument):
             "profiling" if instrument == "capture" else "profiling-memory", "--locked"]
 
 
+@_scoped
 def verify_build(plan_path, source, instrument, prior, *, finalized=False):
     captured = _verified_capture(prior, plan_path) if instrument == "memory" and prior is not None else None
     return _verify_build(plan_path, source, instrument, prior, finalized=finalized, captured=captured)
 
 
 def _verify_build(plan_path, source, instrument, prior, *, finalized, captured):
-    planned = native.read_json(plan_path)
+    planned = _read(plan_path)
     check_plan(planned)
     native.require(source in SOURCES and instrument in ("capture", "memory"), "build scope differs")
     root = Path(planned["job_root"]) / f"{instrument}-{source}"
-    receipt = native.read_json(root / "manifest.json")
+    _watch(root)
+    receipt = _read(root / "manifest.json")
     native.require(receipt["plan_sha256"] == static.sha256(plan_path) and receipt["source"] == source
         and receipt["instrumentation"] == instrument and receipt["identity"] == planned["identities"][source]
         and receipt["cargo_command"] == cargo_command(instrument)
         and receipt["build_log_sha256"] == static.sha256(root / "build.log"), "build receipt differs")
     repo = Path(planned["repos"][source])
-    ledger = native.read_json(storage.ledger_dir(storage.primary_for(repo)) / "ledger.json")
+    ledger = _read(storage.ledger_dir(storage.primary_for(repo)) / "ledger.json")
     batch_id = Path(planned["job_root"]).name + "-build-" + instrument + "-" + source
     batch = ledger["batches"][batch_id]
     expected = build_command(plan_path, planned, source, instrument, prior)
@@ -322,7 +457,7 @@ def _verify_build(plan_path, source, instrument, prior, *, finalized, captured):
                        "Memory build must bind completed Capture")
         capture_result = _capture_result(captured, prior, plan_path)
         native.require(capture_result["instrumentation"] == "capture"
-            and native.read_json(prior)["plan_sha256"] == static.sha256(plan_path)
+            and _read(prior)["plan_sha256"] == static.sha256(plan_path)
             and time(batch["started_at"]) > time(capture_result["rows"][-1]["finished_at"]),
             "Memory build started before exact Capture closure")
     else:
@@ -333,7 +468,7 @@ def _verify_build(plan_path, source, instrument, prior, *, finalized, captured):
 
 @native.activity_locked
 def build(args):
-    planned = native.read_json(args.plan)
+    planned = _read(args.plan)
     native.require(planned == args.frozen_plan, "build plan changed across admission")
     check_plan(planned)
     native.require(str(Path(args.repo).resolve()) == planned["repos"][args.source]
@@ -342,7 +477,7 @@ def build(args):
     if args.instrumentation == "memory":
         native.require(args.prior_stage is not None, "Memory requires completed Capture before build")
         captured = verify_stage(args.prior_stage)
-        prior = native.read_json(args.prior_stage)
+        prior = _read(args.prior_stage)
         native.require(captured["instrumentation"] == "capture" and prior["plan_sha256"] == static.sha256(args.plan),
                        "Memory prior plan differs")
     else:
@@ -358,7 +493,7 @@ def build(args):
             env=native.cargo_environment(repo), log_path=root / "build.log", job_file=job, state=state,
             timeout_seconds=7200)
         check_plan(planned)
-        native.require(native.read_json(args.plan) == planned, "plan changed during build")
+        native.require(_read(args.plan) == planned, "plan changed during build")
         binary = executable.freeze(repo / "target/profiling/bevy_app", root)
         receipt = {"profile": planned["profile"], "plan_sha256": static.sha256(args.plan), "source": args.source,
             "instrumentation": args.instrumentation, "identity": planned["identities"][args.source],
@@ -376,10 +511,11 @@ def build(args):
 def case_result(stage, planned, case, *, finalized=False):
     instrument, size, repeat, source = case
     parent = Path(planned["job_root"]) / label(case)
+    _watch(parent)
     repo = Path(planned["repos"][source])
     # Coordinator receipts bind actual once-only launch, exact source/argv/root,
     # exit and real host interval. They are read here, never rewritten.
-    ledger = native.read_json(storage.ledger_dir(storage.primary_for(repo)) / "ledger.json")
+    ledger = _read(storage.ledger_dir(storage.primary_for(repo)) / "ledger.json")
     batch_id = Path(planned["job_root"]).name + "-" + label(case)
     batch = ledger["batches"][batch_id]
     native.require(batch["repo"] == str(repo) and batch["roots"] == [str(parent)]
@@ -402,7 +538,7 @@ def case_result(stage, planned, case, *, finalized=False):
                                         planned["identities"][source], planned["adapter"], repeats=1)
         case_id = static.Case("building-art-static", size, "gpu", static.SEED, 15 if size == "small" else 60, 0).identifier
         raw = parent / f"{instrument}-{size}/cases" / case_id / "run-001/data/building_resource_inventory.json"
-        observed = inventory.boundaries(native.read_json(raw))
+        observed = inventory.boundaries(_read(raw))
     native.require(checked["binary_sha256"] == stage["binaries"][source]["sha256"], "case binary differs")
     inventory.require_boundary_scale(observed, size)
     return {"instrumentation": instrument, "size": size, "repeat": repeat, "source": source,
@@ -585,6 +721,7 @@ def require_no_interleaving(rows, batches, *, history=None):
             "closed_history_bounds": sorted(closures, key=lambda row: row["batch"])}
 
 
+@_scoped
 def verify_stage(path):
     stage, planned, captured = _check_stage(path)
     cases = [case for case in matrix() if case[0] == stage["instrumentation"]]
@@ -600,7 +737,7 @@ def verify_stage(path):
             compare = inventory.legacy_boundary_growth if source == "reference" else inventory.plateau
             assessment = compare(before["inventory"], after["inventory"])
             cross_stage_resources[source] = assessment if source == "reference" else {"global_shared_mesh_plateau": True, "totals": assessment}
-    ledger = native.read_json(storage.ledger_dir(storage.primary_for(Path(planned["repos"]["current"]))) / "ledger.json")
+    ledger = _read(storage.ledger_dir(storage.primary_for(Path(planned["repos"]["current"]))) / "ledger.json")
     interleaving = require_no_interleaving(rows, ledger["batches"].values(), history=ledger.get("history"))
     return {"profile": planned["profile"], "status": "pass", "instrumentation": stage["instrumentation"],
         "stage_sha256": static.sha256(path), "rows": rows,
@@ -611,7 +748,7 @@ def verify_stage(path):
                       + ([] if cumulative(planned) else ["final cumulative nine"])}
 
 
-def main(*, profile=PROFILE):
+def _main(*, profile=PROFILE):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("command", choices=("plan", "prepare-build", "prepare-case", "build", "verify-build", "bind", "verify-case", "verify-stage"))
     for name in ("repo", "reference-repo", "budget", "resource-basis", "job-root", "output", "plan",
@@ -628,7 +765,7 @@ def main(*, profile=PROFILE):
     args = parser.parse_args()
     for path in (args.plan, args.stage):
         if path is not None:
-            native.require(native.read_json(path).get("profile") == profile, "CLI/plan profile differs")
+            native.require(_read(path).get("profile") == profile, "CLI/plan profile differs")
     if args.command == "plan":
         native.require(all((args.repo, args.reference_repo, args.budget, args.resource_basis, args.job_root, args.output)), "plan inputs missing")
         if profile == CUMULATIVE_PROFILE:
@@ -637,13 +774,13 @@ def main(*, profile=PROFILE):
         result = plan(args, profile=profile)
     elif args.command == "prepare-build":
         native.require(all((args.plan, args.source, args.instrumentation)), "build preparation inputs missing")
-        planned = native.read_json(args.plan)
+        planned = _read(args.plan)
         check_plan(planned)
         if args.instrumentation == "memory":
             native.require(args.prior_stage is not None, "Memory requires completed Capture")
             captured = verify_stage(args.prior_stage)
             native.require(captured["instrumentation"] == "capture"
-                and native.read_json(args.prior_stage)["plan_sha256"] == static.sha256(args.plan), "Capture plan differs")
+                and _read(args.prior_stage)["plan_sha256"] == static.sha256(args.plan), "Capture plan differs")
         else:
             native.require(args.prior_stage is None, "Capture build must be first")
         root = Path(planned["job_root"]) / f"{args.instrumentation}-{args.source}"
@@ -658,11 +795,11 @@ def main(*, profile=PROFILE):
     elif args.command in ("build", "verify-build"):
         native.require(all((args.plan, args.repo, args.source, args.instrumentation, args.job_root)), "build inputs missing")
         if args.command == "build":
-            args.frozen_plan = native.read_json(args.plan)
+            args.frozen_plan = _read(args.plan)
             result = build(args)
         else:
             result = verify_build(args.plan, args.source, args.instrumentation, args.prior_stage)
-            native.require(args.repo.resolve() == Path(native.read_json(args.plan)["repos"][args.source])
+            native.require(args.repo.resolve() == Path(_read(args.plan)["repos"][args.source])
                 and args.job_root.resolve() == Path(result["binary"]["path"]).parent.parent,
                 "verifier build source/root differs")
     elif args.command == "bind":
@@ -678,6 +815,17 @@ def main(*, profile=PROFILE):
     else:
         native.require(args.stage is not None, "stage required")
         result = verify_stage(args.stage)
+    return result
+
+
+def main(*, profile=PROFILE):
+    # A CLI case includes stage admission AND its complete case oracle. Never
+    # print success before the final live-input check. Build remains uncached.
+    if len(sys.argv) > 1 and sys.argv[1] in {"prepare-case", "verify-case", "verify-stage", "verify-build"}:
+        with _verification_operation():
+            result = _main(profile=profile)
+    else:
+        result = _main(profile=profile)
     print(json.dumps(result, sort_keys=True, allow_nan=False))
 
 

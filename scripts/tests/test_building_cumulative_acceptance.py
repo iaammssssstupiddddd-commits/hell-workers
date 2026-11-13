@@ -233,3 +233,41 @@ class FrozenCumulativeInputs(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+class OperationReleasedOracle(unittest.TestCase):
+    def test_scoped_context_keeps_complete_raw_oracle_and_all_case_calls(self):
+        context = m6.ReleasedCaseContext('/repo', '/codec', 'a'*64, 'Intel', {}, {})
+        planned = {'release': {'context': cumulative.context_value(context)}}
+        stage = {'binaries': {'current': {'sha256': 'b'*64}}}
+        sidecar = {'layout_sha256': 'original', 'initial': {
+            'records': cumulative.logical_oracle.expected_records(4), 'target_count': 36,
+            'souls': 15, 'completion_effects': 0}}
+        def read(path):
+            if path.name == 'requested-environment.json':
+                return {'HW_BUILDING_M6_MODE': 'candidate', 'RUST_LOG': 'info,wgpu=error'}
+            return sidecar
+        row = {'binary_sha256': 'b'*64, 'session_sha256': 'c'*64, 'adapter': 'Intel', 'metrics': {}}
+        with patch.object(paired, '_operation_context', return_value=context), \
+             patch.object(m6, 'released_case_context', side_effect=AssertionError('no nested re-admission')), \
+             patch.object(m6, '_verify_case_artifacts', return_value=row) as oracle, \
+             patch.object(cumulative.native, 'read_json', side_effect=read), \
+             patch.object(paired.inventory, 'boundaries', return_value={}):
+            for instrument in ('capture', 'memory'):
+                for repeat in (1, 2, 3):
+                    checked, _, _ = cumulative.case_artifacts(planned, stage,
+                        (instrument, 'small', repeat, 'current'), Path('/repo/target/native-acceptance/case'))
+                    self.assertEqual(checked['presentation_sha256'], 'original')
+            self.assertEqual(oracle.call_count, 6)
+            oracle.side_effect = ValueError('corrupt raw')
+            with self.assertRaisesRegex(ValueError, 'corrupt raw'):
+                cumulative.case_artifacts(planned, stage, ('capture', 'small', 1, 'current'),
+                                          Path('/repo/target/native-acceptance/case'))
+
+    def test_private_artifact_oracle_still_rejects_mode_owner_and_binary(self):
+        context = m6.ReleasedCaseContext('/repo', '/codec', 'a'*64, 'Intel', {}, {})
+        good = ('capture', 'small', 1, 'candidate')
+        for item, session, binary in ((('capture', 'small', 1, 'legacy-control'), '/repo/target/native-acceptance/a', 'b'),
+                                      (good, '/foreign/a', 'b'),
+                                      (good, '/repo/target/native-acceptance/a', 'wrong')):
+            with patch.object(m6, '_verify_case_artifacts', return_value={'binary_sha256': 'b'}), self.assertRaises(ValueError):
+                m6._verify_released_case_artifacts(context, item, Path(session), binary)

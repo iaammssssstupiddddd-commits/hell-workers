@@ -1,5 +1,28 @@
 # 橋以外9種の導入前性能比較
 
+## M14: 累積Memoryの精算間隔超過（2026-11-13）
+
+`8a445da2`の累積v3はCapture12の全体検証と全24件の個別検証を通したが、
+Memoryの11区間すべてが338.641171〜346.809961秒となり、固定180秒上限で全体検証が失敗した。
+時刻・台帳・予算を変更せず、累積採否は未達として保持する。
+read-only profileではMemory入力検証166.119秒のうち、同一planの完全検証6回が117.483秒を占めた。
+完全Capture検証とrelease contextの入れ子反復が、精算と次登録の両方で発生している。
+診断用の未変更rawの中央値が数値上限内であっても、隣接失敗を合格へ読み替えない。
+
+修正はhost verifierだけ。同じ公開検証操作内のprivate proofでplan/contextを共有し、
+操作の冒頭・終了で完全live source/assets/drivers/codec/basisを再照合する。
+stage/build receipt/raw依存の変更も拒否し、各caseの完全raw oracleを維持する。
+JSON/CLI・別process・別操作へproofを公開せず、永続cacheや検証済み結果の自己申告を受け付けない。
+Rust・アセット・gameplay・独立art/numeric/release判断は変更しない。
+
+- [ ] foreign/stale/mutated proofと検証中入力変更、raw破損、全case oracle回数、単独入口の完全検証を回帰する。
+- [ ] gap181秒・overlap・欠測拒否、数値・資源の従来結果を維持する。
+- [ ] Help実経路・関連CI/storage・exact独立review後にcommitする。
+- [ ] 純検証の所要時間を実測してから、同じ予算・180秒でfresh全24を実行し独立採否する。
+
+旧v3の診断に必要な原本読取りは完了した。以後はこの失敗と計測値を履歴として保持し、
+変更後sourceの合格へ流用しない。画像の新しい欠陥は観測しておらず、host修正で既採用画像を一律再撮影しない。
+
 ## メタ情報
 
 | 項目 | 値 |

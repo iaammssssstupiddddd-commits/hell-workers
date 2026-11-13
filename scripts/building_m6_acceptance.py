@@ -586,6 +586,15 @@ def verify_released_case(context, item, session, binary_sha256):
         and pipeline.exact_json(asdict(context), asdict(released_case_context(
             Path(context.repo), Path(context.codec), context.adapter, expected_codec_sha256=context.codec_sha256))),
         "released case context changed or forged")
+    result = _verify_released_case_artifacts(context, item, session, binary_sha256)
+    pipeline.require(pipeline.exact_json(asdict(context), asdict(released_case_context(
+        Path(context.repo), Path(context.codec), context.adapter, expected_codec_sha256=context.codec_sha256))), "release context changed during verification")
+    return result
+
+
+def _verify_released_case_artifacts(context, item, session, binary_sha256):
+    """Full oracle for the public fresh context or an enclosing private operation proof."""
+    pipeline.require(type(context) is ReleasedCaseContext, "foreign release context")
     pipeline.require(isinstance(item, tuple) and len(item) == 4
         and item[0] in ("capture", "memory") and item[1] in ("small", "medium")
         and type(item[2]) is int and item[2] in (1, 2, 3) and item[3] == "candidate",
@@ -598,8 +607,6 @@ def verify_released_case(context, item, session, binary_sha256):
              "adapter": context.adapter}
     result = _verify_case_artifacts(value, item, session)
     pipeline.require(result["binary_sha256"] == binary_sha256, "released case immutable binary differs")
-    pipeline.require(pipeline.exact_json(asdict(context), asdict(released_case_context(
-        Path(context.repo), Path(context.codec), context.adapter, expected_codec_sha256=context.codec_sha256))), "release context changed during verification")
     return result
 
 

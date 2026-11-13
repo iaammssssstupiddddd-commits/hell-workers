@@ -109,7 +109,7 @@ def asset_delta(reference, current, permitted):
     return sorted(extras)
 
 
-def plan_inputs(args, planned):
+def _plan_inputs(args, planned):
     repo, reference = (Path(planned['repos'][source]) for source in ('current', 'reference'))
     if 'release' in planned:
         # Saved context is never initial admission: absent/null/invalid SHA must
@@ -122,8 +122,17 @@ def plan_inputs(args, planned):
     pipeline.require(context.identity == planned['identities']['current'], 'released context source differs')
     before, after = m6.file_inventory(reference / 'assets'), m6.file_inventory(repo / 'assets')
     additions = asset_delta(before, after, release_paths(context, repo / 'assets'))
-    return {'context': asdict(context), 'reference_assets': before, 'current_assets': after,
-            'admitted_additions': additions}
+    return ({'context': asdict(context), 'reference_assets': before, 'current_assets': after,
+             'admitted_additions': additions}, context)
+
+
+def plan_inputs(args, planned):
+    return _plan_inputs(args, planned)[0]
+
+
+def context_value(context):
+    pipeline.require(type(context) is m6.ReleasedCaseContext, 'foreign release context type')
+    return asdict(context)
 
 
 def check_inputs(planned):
@@ -132,7 +141,9 @@ def check_inputs(planned):
     # never infer release authority from a performance result.
     class Inputs:
         codec = Path(value['context']['codec'])
-    pipeline.require(pipeline.exact_json(value, plan_inputs(Inputs(), planned)), 'frozen released asset boundary changed')
+    actual, context = _plan_inputs(Inputs(), planned)
+    pipeline.require(pipeline.exact_json(value, actual), 'frozen released asset boundary changed')
+    return context
 
 
 def bind_resource_verifier(args, planned):
@@ -185,12 +196,16 @@ def case_artifacts(planned, stage, case, parent):
         session = parent / f'{instrument}-{size}'
     else:
         frozen = planned['release']['context']
-        context = m6.released_case_context(Path(frozen['repo']), Path(frozen['codec']), frozen['adapter'],
-                                           expected_codec_sha256=frozen['codec_sha256'])
-        pipeline.require(pipeline.exact_json(asdict(context), frozen), 'release-only case context differs')
+        context = paired._operation_context(planned, frozen)
+        scoped = context is not None
+        if not scoped:
+            context = m6.released_case_context(Path(frozen['repo']), Path(frozen['codec']), frozen['adapter'],
+                                               expected_codec_sha256=frozen['codec_sha256'])
+        pipeline.require(pipeline.exact_json(context_value(context), frozen), 'release-only case context differs')
         item = (instrument, size, repeat, 'candidate')
         session = parent / m6.label(item)
-        row = m6.verify_released_case(context, item, session, stage['binaries'][source]['sha256'])
+        verifier = m6._verify_released_case_artifacts if scoped else m6.verify_released_case
+        row = verifier(context, item, session, stage['binaries'][source]['sha256'])
         checked = {'binary_sha256': row['binary_sha256'], 'session_sha256': row['session_sha256'],
                    'observations': [{'adapter': row['adapter'], 'metrics': row['metrics']}]}
     run = session / 'cases' / case_id / 'run-001'

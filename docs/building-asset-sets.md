@@ -188,6 +188,15 @@ ignored bytecode不在を前後照合する。current計測のsource/harnessと�
 この専用checkoutはbuild/asset導入/agent起動に使わず、累積採用後に用途終了として撤去する。
 各ツールの存在や合成fixtureの成功は、画像・実入力・性能・art/releaseの承認を与えない。
 
+累積verifierは同じ公開操作内だけのprivate plan/release-context proofを使う。
+最外操作の冒頭・終了で完全live source/assets/drivers/codec/歴史basisを照合し、
+stage・build receipt・各caseのraw入力・台帳の変更もmetadataで拒否する。
+全caseの完全raw oracleは省略しない。proofはCLI/JSONへ出さず、別操作・process間・永続cacheへ流用しない。
+単独公開verifierは毎回完全検証し、CLIは最終照合後だけ成功結果を出す。
+旧累積v3は個別24件の検証後、Memoryの精算間隔が約339〜347秒となり固定180秒で全体失敗した。
+同じplanの入れ子再検証を減らすhost修正であり、旧失敗の時刻・予算・採否を変更しない。
+修正後のfresh累積受入は未実施で、静止表示予算・アート・release判断は依然として別工程である。
+
 ### Bridge配置の成立条件（統合候補）
 
 Bridgeの配置・完成・通行契約はasset poolの採否から独立する。配置resolverはlive地形の2列を読み、

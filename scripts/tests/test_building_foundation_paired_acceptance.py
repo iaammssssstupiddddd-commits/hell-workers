@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 import copy
+from contextlib import redirect_stdout
+import io
+import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
 import unittest
+import tempfile
 from unittest.mock import patch
 
 from scripts import building_foundation_paired_acceptance as paired
@@ -36,6 +40,13 @@ def rows(instrument="capture"):
 
 
 class FoundationPairedTests(unittest.TestCase):
+    def setUp(self):
+        # These existing tests mock artifact IO; real mutation boundaries are
+        # exercised independently below with actual filesystem inputs.
+        metadata = patch.object(paired, "_metadata", return_value={})
+        metadata.start()
+        self.addCleanup(metadata.stop)
+
     def test_real_frame_summary_diagnostics_do_not_extend_the_fixed_budget(self):
         raw = paired.static.frame_summary([float(n) for n in range(1, 101)])
         self.assertEqual(set(raw), {"p50_ms", "p95_ms", "p99_ms", "max_ms"})
@@ -510,3 +521,100 @@ class FoundationPairedTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class VerificationOperationTests(unittest.TestCase):
+    def test_nested_checks_share_only_this_operation_then_fully_recheck(self):
+        plan = {"profile": paired.PROFILE, "value": 1}
+        with patch.object(paired, "_check_plan_full", return_value=None) as full:
+            for _ in range(2):
+                with paired._verification_operation():
+                    paired.check_plan(plan)
+                    with paired._verification_operation():
+                        paired.check_plan(copy.deepcopy(plan))
+                    self.assertEqual(full.call_count % 2, 1)
+            self.assertEqual(full.call_count, 4)
+            paired.check_plan(plan)
+            self.assertEqual(full.call_count, 5)
+
+    def test_mutated_or_foreign_plan_cannot_borrow_proof(self):
+        for changed in (False, 1.0, 2):
+            plan = {"profile": paired.PROFILE, "value": 1}
+            with patch.object(paired, "_check_plan_full", return_value=None), self.assertRaises(paired.native.AcceptanceError):
+                with paired._verification_operation():
+                    paired.check_plan(plan)
+                    paired.check_plan({**plan, "value": changed})
+        with patch.object(paired, "_check_plan_full", return_value=None), self.assertRaises(paired.native.AcceptanceError):
+            with paired._verification_operation():
+                plan = {"value": 1}
+                paired.check_plan(plan)
+                plan["value"] = 2
+
+    def test_foreign_json_token_and_expired_scope_are_rejected(self):
+        with paired._verification_operation() as operation:
+            pass
+        for value in ({"active": True}, operation, paired._Operation(object())):
+            token = paired._ACTIVE_OPERATION.set(value)
+            try:
+                with self.assertRaises(paired.native.AcceptanceError):
+                    paired._operation()
+            finally:
+                paired._ACTIVE_OPERATION.reset(token)
+
+    def test_metadata_detects_raw_receipt_stage_changes_and_restored_bytes(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            file = root / "raw.json"
+            file.write_text("old")
+            for mode in ("replace", "restore", "extra", "remove"):
+                file.write_text("old")
+                extra = root / "extra"
+                extra.unlink(missing_ok=True)
+                with self.assertRaises((paired.native.AcceptanceError, FileNotFoundError)):
+                    with paired._verification_operation():
+                        paired._watch(root)
+                        if mode == "replace":
+                            file.write_text("new")
+                        elif mode == "restore":
+                            file.write_text("new")
+                            file.write_text("old")
+                        elif mode == "extra":
+                            extra.write_text("new")
+                        else:
+                            file.unlink()
+
+    def test_changed_live_source_codec_driver_basis_fails_final_full_check(self):
+        for dependency in ("source", "assets", "codec", "driver", "basis"):
+            with self.subTest(dependency=dependency), patch.object(paired, "_check_plan_full",
+                    side_effect=[None, paired.native.AcceptanceError(dependency)]), self.assertRaises(paired.native.AcceptanceError):
+                with paired._verification_operation():
+                    paired.check_plan({"profile": paired.PROFILE})
+
+    def test_context_is_bound_to_operation_plan_and_immutable_values(self):
+        context = SimpleNamespace(value=1)
+        policy = SimpleNamespace(context_value=lambda c: {"value": c.value})
+        with patch.object(paired, "_check_plan_full", return_value=context), patch.object(paired, "cumulative_policy", return_value=policy):
+            with paired._verification_operation():
+                paired.check_plan({"profile": paired.CUMULATIVE_PROFILE})
+                self.assertIs(paired._operation_context({"profile": paired.CUMULATIVE_PROFILE}, {"value": 1}), context)
+                with self.assertRaises(paired.native.AcceptanceError):
+                    paired._operation_context({"profile": "foreign"}, {"value": 1})
+                with self.assertRaises(paired.native.AcceptanceError):
+                    paired._operation_context({"profile": paired.CUMULATIVE_PROFILE}, {"value": True})
+            with self.assertRaises(paired.native.AcceptanceError):
+                with paired._verification_operation():
+                    paired.check_plan({"profile": paired.CUMULATIVE_PROFILE})
+                    context.value = 2
+
+
+    def test_cli_does_not_publish_success_before_final_live_check(self):
+        def result(**_kwargs):
+            paired.check_plan({"profile": paired.PROFILE})
+            return {"status": "pass"}
+        output = io.StringIO()
+        with patch.object(sys, "argv", ["paired", "verify-stage"]), \
+             patch.object(paired, "_main", side_effect=result), \
+             patch.object(paired, "_check_plan_full", side_effect=[None, paired.native.AcceptanceError("changed")]), \
+             redirect_stdout(output), self.assertRaises(paired.native.AcceptanceError):
+            paired.main()
+        self.assertEqual(output.getvalue(), "")
