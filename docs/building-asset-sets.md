@@ -10,8 +10,8 @@
 `StartupPlugin` はasset型・policy resource・loaderを登録し、`VisualPlugin`はkind単位のpoolと
 表示更新systemを登録する。通常起動はコンパイル済み
 `default_release_bindings.json`の完全なrelease組を、既存poolへ要求する。
-現在の一覧には独立release承認・promotion/install済みのTankとMudMixerの2件を採用した。
-RestArea/SoulSpaとM5の4種は未導入であり、引き続きfallback表示となる。
+現在の一覧には独立release承認・promotion/install済みのTank、MudMixer、RestArea、SoulSpaの4件を採用した。
+M5の4種は未導入であり、引き続きfallback表示となる。
 独立release承認・promotion/install後に `building_asset_pipeline.py bindings` のexact出力を採用して初めて
 既定起動へ反映する。一覧は起動時の文書/外部JSON読取りではなくbinaryへ組み込む。
 `HW_BUILDING_ASSET_RELEASES`を明示した場合は一覧全体を置換し、空文字・空配列・非UTF-8・不正JSONを
@@ -52,8 +52,34 @@ immutable payload/provenanceの保持を独立確認した。本正本のgenerat
 同sourceの群別paused比較はN/4N各3対、Capture→Memoryの全24件が固定予算内で独立承認された。
 これは通常worldの継続稼働性能や実GPU確保総量の測定ではない。旧lifecycleの限定採用履歴、
 現sourceの表示同期回帰、個別画像と群18条件を分けてrelease判断へ使用した。
-既定一覧の採用後に行う通常起動・品質確認と、残るM3/M5・累積比較は
+M2の通常起動は`14d9c813`のowned実機でcompiled_default選択・2pool activeと依存residentを確認し、
+独立review・変更別CIを通過した。初期worldの対象ownerは空であり、全consumer表示の証明ではない。
+残るM3/M5・累積比較は
 [継続計画](plans/non-bridge-candidate-performance-plan-2026-11-12.md)で管理する。
+
+### M3の正式世代（2026-11-13）
+
+| kind | generation | ReleaseApproved manifest SHA256 |
+| --- | --- | --- |
+| RestArea | 1 | `2c9ab0e7b36d19550c619773a8e0aceb69bf5d1c55ea3ac86c11974eefa80add` |
+| SoulSpa | 2 | `cbce26f0fa8342b0b9101b5bc6da4c08d8f535535fd3d1d27a3238ced80bcdf1` |
+
+M2と同じ正本へ両promotionを完了してからprimaryへinstallし、正規`bindings --release-group m3`の
+exact4件をcompiled inventoryへ採用した。正本・runtimeは各transaction、authority、locator、receiptと
+原本・geometry・art/numeric approvalのprovenanceを保持する。隔離された同bytesの8操作で、
+両promotion→両install→両rollback→両mirror rollbackと初回preimageへの復帰を独立確認した。
+本正本をrollbackして再applyしたものではない。
+
+`14d9c813`で正式個別2画像と群18条件を確認し、既存の限定lifecycle採用履歴・現表示回帰、
+独立に固定した群別予算とCapture→Memoryの24試験を合わせ、個別manifestに拘束した独立release判断を得た。
+計測result SHAは`738e31ae69f1d32f9d40654ff111f9dbec5ef913dfa316bd1b28d176921dcd2f`。
+N/4Nのp95増分は+0.145793/+0.014279ms、p99は+0.268455/+0.289262ms、
+Rust peakは+4041624/+4932072B、RSSは+13208/+41852KiB、最大相対MAD2.923%。
+Mesh+3/41816B、Image+7/4194304 CPU・descriptor推計B、material+4/1856 shallow Bは
+事前見積りと一致し、初終・N/4N・instrument間で共有資源がplateauした。
+通常worldの継続稼働性能や実GPU確保総量の合格には読み替えない。
+RestAreaの利用・Dream・cooldown、SoulSpaの4区画/利用枠・worker状態・save/load契約は変更しない。
+compiled4の新sourceでの品質・通常startup接続は継続計画で別に確認する。
 
 ### 通常起動defaultの受動audit
 

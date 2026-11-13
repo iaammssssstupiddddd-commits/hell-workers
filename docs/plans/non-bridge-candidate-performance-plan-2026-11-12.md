@@ -658,10 +658,47 @@ CPU payload／descriptor推計を実GPU確保総量へ昇格しない。
 
 - [x] 正式個別/group画像、control校正、事前予算、paired24、独立release判断。
 - [x] 隔離切戻し、本canonical両promotion、primary install、旧live-source検証依存の終了。
-- [ ] 既定M2一覧と通常startup auditのcanonical配列reader補正をHelp/品質/固定source reviewで確認し、通常起動を実測する。
+- [x] 既定M2一覧と通常startup auditのcanonical配列reader補正をHelp/品質/固定source reviewで確認し、通常起動を実測する。
 - [ ] M3→M5を同様に独立導入し、Door監査・累積比較・恒久仕様・計画/索引とstorageを閉じる。
 
 startup auditはobject専用の`pipeline.read`へ一覧配列を渡していたため、canonical配列専用readerへ分離した。
 共有metadata readerのguardは緩めず、2/4/8件の実readerからinstalled pointer照合へ進む正例と、
 空配列・非canonical・誤型・candidate pointerの拒否を検査する。通常startup sourceを旧art検証前に変えず、
 両canonical apply後の今回バッチへ分離した。通常consumerの意味・入力・保存・Help文言は変更しない。
+
+
+### M10: M3の群別受入と正式導入（2026-11-13）
+
+`14d9c813`のM2固定2世代とM3候補2世代で、正式個別2件と群18条件を全画像確認した。
+RestAreaの屋根/入口/柱とoccupants0/1/5/0、SoulSpaの4区画/worker mask0/1/3/15は一致する。
+SoulがSpaの一部を覆うことを未遮蔽と報告しない。Low/farでもkindの輪郭は保つが細部の読取りは保証しない。
+群の投影対象はM3+Door12体で、DoorはClosedのみ。非対象M2の下端clipを全9種の合格へ流用しない。
+
+control12の校正は全件成功、最大MAD1.2453%。測定前のsource見積りで3mesh/41816B、
+7image/4194304B、保持opaque+slot_onを両種分含む4material/1856Bを固定した。
+p95/p99 +1/+3ms、Rust peak +16MiB、RSS +98304KiB、MAD10%の方針はM2と同じ。
+校正後も数値・理由を変更せず独立採用したbudget SHAは
+`1fae2c16dec7b70fae8d1cb6052f938856536d6fa78a85745fe2eed1831a54cf`。
+paired24は事前予算内で、全原本・登録verify/pass/finalizeとresult exact一致を独立確認した。
+result SHAは`738e31ae69f1d32f9d40654ff111f9dbec5ef913dfa316bd1b28d176921dcd2f`。
+
+| candidate−control中央値 | N | 4N |
+| --- | --- | --- |
+| p95 / p99 ms | +0.145793 / +0.268455 | +0.014279 / +0.289262 |
+| Rust live peak bytes | +4041624 | +4932072 |
+| RSS KiB | +13208 | +41852 |
+
+最大相対MAD2.922596%、全資源増分は見積りどおりでN/4N・初終・Capture/Memoryのplateauも成立した。
+旧sourceの通常lifecycle限定証拠を履歴として採用し、現sourceの表示同期回帰・個別/group画像と合わせて
+独立release判断を取得した。通常継続AI性能や全GPUメモリの合格は主張しない。
+隔離8操作と初回preimage復帰を独立確認し、本正本への両promotionを先に完了してからprimaryへinstallした。
+当14d9sourceの個別art原本を両applyで再検証後、旧live-source検証依存を閉じた。
+
+- [x] 正式個別/group画像、control校正、事前予算、paired24、独立release判断。
+- [x] 隔離切戻し、本canonical両promotion、primary install、exact bindings4採用。
+- [ ] compiled4の新source品質／Help／独立reviewと通常startup実測。
+- [ ] M5の4種を同じ手順で導入し、Door入力監査・正式9種画面・累積比較と全体受入を閉じる。
+
+Help No impact: 今回の通常経路は採用済みRestArea/SoulSpaのvisual世代を既存poolへ要求するだけ。
+利用枠・Dream・施工・save/load・配置・入力・文言・Help到達性と失敗fallbackの意味は不変であり、
+Help manifest/provider/coverage/snapshotを変更しない。全9種の完了ではない。

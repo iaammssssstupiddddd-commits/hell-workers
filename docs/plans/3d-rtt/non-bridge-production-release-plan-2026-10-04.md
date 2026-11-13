@@ -15,11 +15,11 @@
 
 ### 現在の判断（2026-11-13）
 
-M2のTank/MudMixerは独立art/numeric採用、現sourceの正式個別画像・群18条件、
-群別Capture/Memory24比較と独立release判断を完了し、正本への両promotionとprimary installを実施した。
-採用ReleaseApproved identityと復旧契約は[asset仕様](../../building-asset-sets.md#m2の正式世代2026-11-13)へ集約する。
-compile時の2件一覧を採用し、通常起動・品質・Help確認を進行中。
-M3/M5の6種、Door監査、全9種の累積比較と最終受入は未完であり、そのまま継続する。
+M2のTank/MudMixerは正式導入と`14d9c813`の通常startup／品質／Help確認まで完了した。
+M3のRestArea/SoulSpaも正式個別・群18画像、固定予算によるCapture/Memory24比較、独立release判断、
+隔離切戻しを完了し、正本への両promotion後にprimary installした。compiled4一覧の品質・通常startup確認へ進む。
+採用identityと復旧契約は[asset仕様](../../building-asset-sets.md#m3の正式世代2026-11-13)へ集約する。
+M5の4種、Door監査、全9種の累積比較と最終受入は未完であり、そのまま継続する。
 旧試行の照会・未完記述は各subject時点の履歴であり、利用者の追加確認待ちではない。
 
 ### 判断履歴（2026-11-09）
