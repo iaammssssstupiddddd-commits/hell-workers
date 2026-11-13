@@ -702,3 +702,30 @@ result SHAは`738e31ae69f1d32f9d40654ff111f9dbec5ef913dfa316bd1b28d176921dcd2f`�
 Help No impact: 今回の通常経路は採用済みRestArea/SoulSpaのvisual世代を既存poolへ要求するだけ。
 利用枠・Dream・施工・save/load・配置・入力・文言・Help到達性と失敗fallbackの意味は不変であり、
 Help manifest/provider/coverage/snapshotを変更しない。全9種の完了ではない。
+
+### M11: M5群galleryの対象外frustum culling境界
+
+`eebb55c5`のM5個別4件は原画像・rawの独立確認と正式verifyを通過した。
+群18条件の最初のnormal/far DPI1は成功したが、DPI1.5 normalのhost検証が
+`part visibility differs`で停止し、群batchはinvalid封印・用途付き保持・finalizeした。
+rawの対象M5+Doorは表示され、非対象の固定Tank/Mixerだけがfrustum外となっていた。
+Rust producerは既に`specimen_visible`で対象kindだけの描画可視性を要求しているが、
+Python側は全固定kindの実`ViewVisibility`までtrueと要求していた。
+
+- [x] 群galleryだけ、非対象fixedの実描画可視性をtrue/falseのまま保存・検査し、描画を保証しない。
+  Empty Tankのwater hidden、対象群の全part可視、通常performanceと全9種releaseの条件は維持する。
+- [x] resident geometryとpartのrole/pose/実可視性を一対一に照合し、未知・欠測・不一致を拒否する。
+- [ ] 実失敗に相当するM5非対象Tank/Mixer culling、対象hidden拒否、Empty water表示拒否、
+  通常performanceの不変を回帰検証し、Help・品質・独立exact reviewを通す。
+- [ ] 旧4個別画像は当source時点の限定採用履歴にし、修正後のfresh4個別＋群18を完了する。
+  旧invalidをpassにせず、camera/DPIや画像・性能予算の条件を緩めない。
+
+対象pathは`scripts/perf_tool/artifact_readers/building_m6.py`と群gallery test。
+製品の入力・runtime表示・gameplay・save・Help契約は変更しないhost検証補正である。
+
+補正の関連45 testは成功。合成DTOのpartとgeometryがPythonの同じlistを共有していたため、
+実JSONと同じ独立配列へfixtureを修正し、pose片側だけの改変が確実に拒否されるようにした。
+個別module実行時の`PYTHONPATH=scripts`不足は起動設定を訂正し、製品コードでimport経路を緩めていない。
+対象外の未load fallbackには候補part DTO自体がないため、新しい一対一照合を捏造せず、
+既存のfallback/owner/geometryと対象投影の契約を保持する。Doorの実可視性は別に厳密確認する。
+Help No impact: 変更は群画像のhost側観測検証だけであり、通常表示・入力・保存・gameplay・文言は不変。

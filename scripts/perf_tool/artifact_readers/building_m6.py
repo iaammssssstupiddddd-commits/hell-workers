@@ -309,6 +309,20 @@ def _validate_sidecar(value, case, *, pre_release, group=False, gallery=False):
                         and type(part["entity"]) is int and part["entity"] > 0
                         and isinstance(part["mesh"], str) and part["mesh"]
                         and type(part["visible"]) is bool, "gallery resident leaf fields differ")
+                    require(isinstance(part["local_pose"], dict)
+                        and set(part["local_pose"]) == {"translation", "rotation", "scale"},
+                        "gallery resident local pose fields differ")
+                if "parts" in observed:
+                    projected = [{"mesh_role": part["mesh_role"],
+                        "translation_wu": part["local_pose"]["translation"],
+                        "rotation_xyzw": part["local_pose"]["rotation"],
+                        "scale": part["local_pose"]["scale"], "visible": part["visible"]}
+                        for part in geometry]
+                    require(sorted(map(canonical, projected)) == sorted(map(canonical, observed["parts"])),
+                            "gallery resident geometry/part binding differs")
+                elif logical["kind"] == "Door":
+                    require(all(part["visible"] for part in geometry),
+                            "gallery Door must remain visible")
         if present and logical["kind"] in foreground.KINDS:
             extras.update({"owner", "foreground"})
         if present and logical["kind"] in {"Tank", "MudMixer"}:
@@ -390,8 +404,16 @@ def _validate_sidecar(value, case, *, pre_release, group=False, gallery=False):
                     and part["mesh_role"] == "water"
                     and logical["state"]["stored_water"] == 0
                 )
+                # This is actual ViewVisibility, including frustum culling.
+                # A group image guarantees its targets and Door, not earlier
+                # fixed groups outside its viewport. Never normalize the raw
+                # flag or borrow this exception for performance/full-nine art.
+                cullable_fixed = gallery and group and logical["kind"] in {
+                    binding["identity"]["kind"] for binding in declaration["fixed"]
+                }
                 require(
-                    type(part["visible"]) is bool and part["visible"] != hidden,
+                    type(part["visible"]) is bool
+                    and (not part["visible"] if hidden else part["visible"] or cullable_fixed),
                     "part visibility differs",
                 )
     require(len(set(foreground_entities)) == len(foreground_entities), "M6 duplicate foreground owner or sprite")

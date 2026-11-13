@@ -12,7 +12,7 @@ import unittest
 
 from scripts import building_group_art_acceptance as gallery
 from scripts import building_group_art_observation as observation
-from scripts.tests.test_building_m6_acceptance import group_sidecar, reseal
+from scripts.tests.test_building_m6_acceptance import group_sidecar, reseal, sidecar
 from perf_tool.artifact_readers import building_m6 as oracle
 from perf_tool.artifact_readers.building_art_static import read_building_art_static
 from perf_tool.model import Case
@@ -40,7 +40,9 @@ def gallery_sidecar(group="m2"):
     value["initial"]["records"] = records
     value["contract_id"] = oracle.GROUP_GALLERY_CONTRACT
     value["camera_scale"] = 1.
-    return reseal(value)
+    # Real JSON has independent part/geometry arrays. Do not let test-only
+    # shared Python list references silently mutate both witnesses at once.
+    return reseal(json.loads(json.dumps(value)))
 
 
 def projected_m2(group="m2"):
@@ -89,6 +91,75 @@ def projected_m2(group="m2"):
 
 
 class GroupGalleryTests(unittest.TestCase):
+    def test_m5_fixed_structural_culling_is_preserved_in_both_actual_snapshots(self):
+        value = gallery_sidecar("m5")
+        for row in value["initial"]["records"]:
+            if row["kind"] in ("Tank", "MudMixer"):
+                for part in row["parts"]:
+                    part["visible"] = False
+                for geometry in row["gallery_geometry"]:
+                    geometry["visible"] = False
+        value = reseal(value)
+        observed = oracle.validate_group_gallery_sidecar(value, Case("building-art-static", "small", "gpu", 20260920, 15, 0))
+        self.assertEqual(observed, value["initial"])
+        self.assertEqual(value["initial"], value["final"])
+        self.assertTrue(all(part["visible"] is False for row in observed["records"]
+            if row["kind"] in ("Tank", "MudMixer") for part in row["parts"]))
+
+    def test_group_target_and_empty_water_visibility_remain_strict(self):
+        case = Case("building-art-static", "small", "gpu", 20260920, 15, 0)
+        for group, kind, ordinal, role, visible in (
+            ("m2", "Tank", 1, "water", False),
+            ("m3", "RestArea", 0, "body", False),
+            ("m5", "Tank", 0, "water", True),
+        ):
+            with self.subTest(group=group, kind=kind, role=role):
+                value = gallery_sidecar(group)
+                row = next(r for r in value["initial"]["records"] if r["kind"] == kind and r["ordinal"] == ordinal)
+                next(p for p in row["parts"] if p["mesh_role"] == role)["visible"] = visible
+                next(p for p in row["gallery_geometry"] if p["mesh_role"] == role)["visible"] = visible
+                with self.assertRaisesRegex(ValueError, "part visibility differs"):
+                    oracle.validate_group_gallery_sidecar(reseal(value), case)
+
+    def test_fixed_geometry_visibility_must_match_its_part_without_bool_aliases(self):
+        case = Case("building-art-static", "small", "gpu", 20260920, 15, 0)
+        for actual in (False, 0, None):
+            with self.subTest(actual=actual):
+                value = gallery_sidecar("m5")
+                row = next(r for r in value["initial"]["records"] if r["kind"] == "MudMixer")
+                row["parts"][0]["visible"] = actual
+                with self.assertRaises(ValueError):
+                    oracle.validate_group_gallery_sidecar(reseal(value), case)
+
+    def test_fixed_geometry_requires_one_to_one_role_pose_and_part_coverage(self):
+        case = Case("building-art-static", "small", "gpu", 20260920, 15, 0)
+        mutations = (
+            lambda row: row["gallery_geometry"][0].update(mesh_role="foreign"),
+            lambda row: row["gallery_geometry"][0]["local_pose"]["translation"].__setitem__(0, 17.),
+            lambda row: row["gallery_geometry"][0]["local_pose"].update(extra=True),
+            lambda row: row["gallery_geometry"].pop(),
+        )
+        for mutate in mutations:
+            value = gallery_sidecar("m5")
+            row = next(r for r in value["initial"]["records"] if r["kind"] == "MudMixer")
+            mutate(row)
+            with self.assertRaises(ValueError):
+                oracle.validate_group_gallery_sidecar(reseal(value), case)
+
+    def test_door_and_performance_cannot_borrow_fixed_gallery_culling(self):
+        case = Case("building-art-static", "small", "gpu", 20260920, 15, 0)
+        value = gallery_sidecar("m5")
+        row = next(r for r in value["initial"]["records"] if r["kind"] == "Door")
+        row["gallery_geometry"][0]["visible"] = False
+        with self.assertRaisesRegex(ValueError, "Door must remain visible"):
+            oracle.validate_group_gallery_sidecar(reseal(value), case)
+        for value, validator in ((sidecar(True), oracle.validate_sidecar),
+                                 (group_sidecar("m5", True), oracle.validate_group_sidecar)):
+            row = next(r for r in value["initial"]["records"] if r["kind"] == "MudMixer")
+            row["parts"][0]["visible"] = False
+            with self.assertRaisesRegex(ValueError, "part visibility differs"):
+                validator(reseal(value), case)
+
     def test_exact_matrix_and_connection_only_are_distinct(self):
         self.assertEqual(len(gallery.matrix()), 18)
         self.assertEqual(len(set(gallery.matrix())), 18)
