@@ -148,6 +148,12 @@ release overrideもない通常binaryを起動し、exact installed pointersとc
 明示seeded contextで、自然施工・物流の証明にはしない。Floorと携行準備は未公開段階の各1回のみ。
 その後の既存30frame安定とcontext60frame安定を取り直し、probe/ACK/final公開後の修復は拒否する。
 通常group・performance側のreadinessを巻き戻す入口にはしない。
+専用のFloor witnessは唯一のowner・非provisional kind・pose・独立floor層の一致を検査し、
+Transform欠損も含む全Building inventoryでcore/support＋当該1件だけを許す。通常group・performanceは
+従来core/support数のままで、任意のFloorや余剰ownerを除外しない。
+追加Soulは既存生成systemへ通常messageを送る。生成resolverのradius5先頭走査が宣言した対象cellへ
+到達するrequestを送信前に検証し、生成後にも実位置・idle task・空Inventory・無関係を照合する。
+terrainや既存Soulを動かさず、生成規則を変更しない。
 
 `door_release_ui_acceptance.py`は既存Siteの空3×3を選び支持壁2/2/4だけを一度準備する。
 Door本体・Blueprint・施工完了を生成せず、実OS入力のcatalog・EW/NS/tie ghost・同owner Blueprintを検証する。

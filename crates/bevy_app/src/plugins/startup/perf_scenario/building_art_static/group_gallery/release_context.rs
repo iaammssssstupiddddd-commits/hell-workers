@@ -9,6 +9,61 @@ use hw_jobs::{AssignedTask, Building, BuildingType};
 use hw_logistics::{Inventory, ResourceItem, ResourceType};
 use hw_world::WorldMap;
 
+/// The one extra context Floor remains part of the complete building inventory.
+/// Its identity can never exempt another Floor or another capture profile.
+#[derive(Resource)]
+pub(in super::super) struct FloorInventory {
+    owner: Entity,
+    grid: (i32, i32),
+}
+
+impl FloorInventory {
+    pub(in super::super) fn owner(&self) -> Entity {
+        self.owner
+    }
+
+    pub(in super::super) fn extra_count(
+        &self,
+        gallery: Option<&GalleryCaptureSession>,
+        building: Option<(&Building, &Transform)>,
+        map: &WorldMap,
+        core_owners: &[Entity],
+        observed_buildings: usize,
+        expected_core: usize,
+    ) -> Result<usize, String> {
+        let Some((building, pose)) = building else {
+            return Err("declared context Floor is missing from the complete inventory".into());
+        };
+        if !matches!(gallery, Some(GalleryCaptureSession::Released(_)))
+            || building.kind != BuildingType::Floor
+            || building.is_provisional
+            || pose.translation.truncate() != WorldMap::grid_to_world(self.grid.0, self.grid.1)
+            || map.floor_entity(self.grid) != Some(self.owner)
+            || core_owners.contains(&self.owner)
+            || observed_buildings != expected_core + 1
+        {
+            return Err("declared context Floor identity, layer, pose or scope changed".into());
+        }
+        Ok(1)
+    }
+}
+
+fn carrier_spawn_request(map: &WorldMap, target: (i32, i32)) -> Result<Vec2, String> {
+    // The ordinary Soul factory scans a radius-five square lexicographically;
+    // even a walkable request center is not its preferred spawn cell. Declare
+    // a request whose first actual candidate is the desired empty context cell.
+    // Keep the existing spawn system and validate its real resolver before send.
+    let request = (target.0 + 5, target.1 + 5);
+    if !map.is_walkable(target.0, target.1)
+        || map.has_building(target)
+        || map.has_stockpile(target)
+        || hw_world::find_nearby_walkable_grid(request, map, 5) != target
+    {
+        return Err("ordinary Soul spawn resolver cannot reach the declared context cell".into());
+    }
+    Ok(WorldMap::grid_to_world(request.0, request.1))
+}
+
 #[derive(Clone, Resource)]
 struct Context {
     original_souls: Vec<Entity>,
@@ -119,6 +174,7 @@ fn initialize(world: &mut World) -> Result<(), String> {
     {
         return Err("released context requires its declared empty legal cells".into());
     }
+    let carrier_request = carrier_spawn_request(map, carrier_grid)?;
     let walls = door
         .supports()
         .into_iter()
@@ -161,8 +217,12 @@ fn initialize(world: &mut World) -> Result<(), String> {
         &[(floor, floor_grid)],
     );
     world.write_message(crate::entities::damned_soul::DamnedSoulSpawnEvent {
-        position: WorldMap::grid_to_world(carrier_grid.0, carrier_grid.1),
+        position: carrier_request,
         simulation_random_key: None,
+    });
+    world.insert_resource(FloorInventory {
+        owner: floor,
+        grid: floor_grid,
     });
     world.insert_resource(Context {
         original_souls,
@@ -571,6 +631,188 @@ mod tests {
             ..default()
         });
         (world, root)
+    }
+
+    #[test]
+    fn ordinary_carrier_spawn_request_uses_real_radius_scan_without_moving_the_world() {
+        let mut map = WorldMap::default();
+        let target = (11, 34);
+        assert_ne!(hw_world::find_nearby_walkable_grid(target, &map, 5), target);
+        let before = map.obstacle_version;
+        let request = carrier_spawn_request(&map, target).unwrap();
+        assert_eq!(WorldMap::world_to_grid(request), (16, 39));
+        assert_eq!(
+            hw_world::find_nearby_walkable_grid(WorldMap::world_to_grid(request), &map, 5),
+            target
+        );
+        assert_eq!(map.obstacle_version, before);
+        let owner = World::new().spawn_empty().id();
+        map.set_building(target, owner);
+        assert!(carrier_spawn_request(&map, target).is_err());
+        assert_eq!(map.building_entity(target), Some(owner));
+    }
+
+    #[test]
+    fn context_floor_exception_is_bound_to_exact_owner_layer_pose_and_released_profile() {
+        let (world, root) = world();
+        let gallery = world.resource::<GalleryCaptureSession>();
+        let owner = Entity::from_bits(200);
+        let other = Entity::from_bits(201);
+        let grid = (10, 43);
+        let witness = FloorInventory { owner, grid };
+        let mut map = WorldMap::default();
+        map.set_floor(grid, owner);
+        let floor = Building {
+            kind: BuildingType::Floor,
+            is_provisional: false,
+        };
+        let pose =
+            Transform::from_translation(WorldMap::grid_to_world(grid.0, grid.1).extend(0.01));
+        assert_eq!(
+            witness
+                .extra_count(Some(gallery), Some((&floor, &pose)), &map, &[other], 14, 13)
+                .unwrap(),
+            1
+        );
+        assert!(
+            witness
+                .extra_count(None, Some((&floor, &pose)), &map, &[other], 14, 13)
+                .is_err()
+        );
+        assert!(
+            witness
+                .extra_count(Some(gallery), None, &map, &[other], 14, 13)
+                .is_err()
+        );
+        assert!(
+            witness
+                .extra_count(Some(gallery), Some((&floor, &pose)), &map, &[owner], 14, 13)
+                .is_err()
+        );
+        let wrong_pose = Transform::default();
+        assert!(
+            witness
+                .extra_count(
+                    Some(gallery),
+                    Some((&floor, &wrong_pose)),
+                    &map,
+                    &[other],
+                    14,
+                    13
+                )
+                .is_err()
+        );
+        for building in [
+            Building {
+                kind: BuildingType::Wall,
+                is_provisional: false,
+            },
+            Building {
+                kind: BuildingType::Floor,
+                is_provisional: true,
+            },
+        ] {
+            assert!(
+                witness
+                    .extra_count(
+                        Some(gallery),
+                        Some((&building, &pose)),
+                        &map,
+                        &[other],
+                        14,
+                        13
+                    )
+                    .is_err()
+            );
+        }
+        map.set_floor(grid, other);
+        assert!(
+            witness
+                .extra_count(Some(gallery), Some((&floor, &pose)), &map, &[other], 14, 13)
+                .is_err()
+        );
+        std::fs::remove_dir(root).unwrap();
+    }
+
+    #[test]
+    fn complete_world_building_inventory_rejects_an_extra_or_transformless_floor() {
+        let (mut world, root) = world();
+        let grid = (10, 43);
+        let pose =
+            Transform::from_translation(WorldMap::grid_to_world(grid.0, grid.1).extend(0.01));
+        let floor = Building {
+            kind: BuildingType::Floor,
+            is_provisional: false,
+        };
+        let owner = world
+            .spawn((
+                Building {
+                    kind: BuildingType::Floor,
+                    is_provisional: false,
+                },
+                pose,
+            ))
+            .id();
+        let witness = FloorInventory { owner, grid };
+        let mut map = WorldMap::default();
+        map.set_floor(grid, owner);
+        let core = (0..13)
+            .map(|_| {
+                world
+                    .spawn((
+                        Building {
+                            kind: BuildingType::Wall,
+                            is_provisional: false,
+                        },
+                        Transform::default(),
+                    ))
+                    .id()
+            })
+            .collect::<Vec<_>>();
+        let mut inventory = world.query_filtered::<Entity, With<Building>>();
+        let count = inventory.iter(&world).count();
+        let gallery = world.resource::<GalleryCaptureSession>();
+        assert_eq!(
+            witness
+                .extra_count(Some(gallery), Some((&floor, &pose)), &map, &core, count, 13)
+                .unwrap(),
+            1
+        );
+        let foreign = world
+            .spawn(Building {
+                kind: BuildingType::Floor,
+                is_provisional: false,
+            })
+            .id();
+        let count = inventory.iter(&world).count();
+        assert!(world.get::<Transform>(foreign).is_none());
+        assert!(
+            witness
+                .extra_count(
+                    Some(world.resource::<GalleryCaptureSession>()),
+                    Some((&floor, &pose)),
+                    &map,
+                    &core,
+                    count,
+                    13
+                )
+                .is_err()
+        );
+        world.entity_mut(foreign).insert(Transform::default());
+        assert!(
+            witness
+                .extra_count(
+                    Some(world.resource::<GalleryCaptureSession>()),
+                    Some((&floor, &pose)),
+                    &map,
+                    &core,
+                    inventory.iter(&world).count(),
+                    13
+                )
+                .is_err()
+        );
+        assert!(world.get::<Building>(foreign).is_some());
+        std::fs::remove_dir(root).unwrap();
     }
 
     #[test]

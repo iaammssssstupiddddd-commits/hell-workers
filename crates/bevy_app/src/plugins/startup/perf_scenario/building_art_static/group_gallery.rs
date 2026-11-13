@@ -2,6 +2,7 @@
 
 mod projection;
 mod release_context;
+pub(super) use release_context::FloorInventory as ReleasedFloorInventory;
 
 use std::{
     io::Write,

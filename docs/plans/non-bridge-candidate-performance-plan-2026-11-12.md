@@ -790,3 +790,14 @@ Help No impact: 今回の通常経路は承認済みM5の4世代を既存poolと
 - [ ] 新Rust/Pythonの拒否系、check/Clippy警告0・rust-analyzer、Help実経路、同subject CI・storage、exact code reviewを実施する。
 - [ ] fresh実機と独立画像/性能reviewを終え、恒久仕様と最終Help判断を同期する。完了した本計画のlifecycle・索引と
   用途終了した生成物だけの整理を行う。Bridge以外9種の全体受入を部分成功に読み替えず確認する。
+
+
+#### M13実機準備で確定した前提補正（2026-11-13）
+
+- v1はWall schema2をbuilding v1専用readerへ渡してplan段階で拒否された。batch/launch/rootは未作成。
+  既存J1の正式Wall/Door validatorへ委譲し、共有readerを緩めず実diskの拒否回帰・CI・独立reviewを通した。
+- fresh v2は正式build後、追加Floorを旧core/support数が数えない点と、通常Soul生成が合法centerより先に
+  radius5の左下cellから探索する点でinvalidとなった。PNG/probeなし、失敗をseal/診断保持/finalize済み。
+- 補正はReleased gallery専用のexact Floor witnessと全Building列挙、実spawn resolverによる送信requestの
+  事前導出だけとする。既存worldや生成規則を動かさず、実生成位置の事後確認・余剰/欠損拒否も維持する。
+  他group/通常performanceのcountを単純に+1せず、旧invalidをpassへ変更しない。品質・独立review後のfresh v3で確認する。

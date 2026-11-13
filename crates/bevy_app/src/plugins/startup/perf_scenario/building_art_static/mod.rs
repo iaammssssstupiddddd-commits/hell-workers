@@ -220,6 +220,7 @@ pub(crate) struct InspectParams<'w, 's> {
     applied: ResMut<'w, PerfScenarioApplied>,
     world_map: WorldMapRead<'w>,
     buildings: BuildingQuery<'w, 's>,
+    building_inventory: Query<'w, 's, Entity, With<Building>>,
     visuals: VisualQuery<'w, 's>,
     part_transforms: Query<'w, 's, &'static Transform>,
     part_names: Query<'w, 's, &'static Name>,
@@ -240,6 +241,7 @@ pub(crate) struct InspectParams<'w, 's> {
     asset_server: Option<Res<'w, AssetServer>>,
     art_session: Option<Res<'w, BuildingArtSession>>,
     gallery: Option<Res<'w, GalleryCaptureSession>>,
+    release_floor: Option<Res<'w, group_gallery::ReleasedFloorInventory>>,
     m6: Option<Res<'w, M6Comparison>>,
     stockpiles: Query<'w, 's, &'static hw_logistics::Stockpile>,
     companions: Query<'w, 's, &'static hw_logistics::BelongsTo, With<hw_logistics::BucketStorage>>,
@@ -514,7 +516,23 @@ fn inspect(params: &InspectParams) -> Result<Option<Value>, String> {
         return Err("M6 requires the unchanged approved Door g7 identity".into());
     }
     let copies = layout::copies(params.config.size());
-    if params.buildings.iter().count() != copies * 13 || params.state.owners.len() != copies * 9 {
+    // Count every Building, including malformed foreign owners without a pose.
+    let observed_buildings = params.building_inventory.iter().count();
+    let extra_floor = params.release_floor.as_ref().map_or(Ok(0), |floor| {
+        floor.extra_count(
+            params.gallery.as_deref(),
+            params
+                .buildings
+                .get(floor.owner())
+                .ok()
+                .map(|(building, pose, ..)| (building, pose)),
+            params.world_map.as_ref(),
+            &params.state.owners,
+            observed_buildings,
+            copies * 13,
+        )
+    })?;
+    if observed_buildings != copies * 13 + extra_floor || params.state.owners.len() != copies * 9 {
         return Err("target/support building inventory differs".into());
     }
     let mut visuals = HashMap::<Entity, Vec<_>>::new();
