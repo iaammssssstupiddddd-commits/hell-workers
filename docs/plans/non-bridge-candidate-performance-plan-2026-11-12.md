@@ -696,7 +696,7 @@ result SHAは`738e31ae69f1d32f9d40654ff111f9dbec5ef913dfa316bd1b28d176921dcd2f`�
 
 - [x] 正式個別/group画像、control校正、事前予算、paired24、独立release判断。
 - [x] 隔離切戻し、本canonical両promotion、primary install、exact bindings4採用。
-- [ ] compiled4の新source品質／Help／独立reviewと通常startup実測。
+- [x] compiled4の新source品質／Help／独立reviewと通常startup実測。
 - [ ] M5の4種を同じ手順で導入し、Door入力監査・正式9種画面・累積比較と全体受入を閉じる。
 
 Help No impact: 今回の通常経路は採用済みRestArea/SoulSpaのvisual世代を既存poolへ要求するだけ。
@@ -715,9 +715,9 @@ Python側は全固定kindの実`ViewVisibility`までtrueと要求していた�
 - [x] 群galleryだけ、非対象fixedの実描画可視性をtrue/falseのまま保存・検査し、描画を保証しない。
   Empty Tankのwater hidden、対象群の全part可視、通常performanceと全9種releaseの条件は維持する。
 - [x] resident geometryとpartのrole/pose/実可視性を一対一に照合し、未知・欠測・不一致を拒否する。
-- [ ] 実失敗に相当するM5非対象Tank/Mixer culling、対象hidden拒否、Empty water表示拒否、
+- [x] 実失敗に相当するM5非対象Tank/Mixer culling、対象hidden拒否、Empty water表示拒否、
   通常performanceの不変を回帰検証し、Help・品質・独立exact reviewを通す。
-- [ ] 旧4個別画像は当source時点の限定採用履歴にし、修正後のfresh4個別＋群18を完了する。
+- [x] 旧4個別画像は当source時点の限定採用履歴にし、修正後のfresh4個別＋群18を完了する。
   旧invalidをpassにせず、camera/DPIや画像・性能予算の条件を緩めない。
 
 対象pathは`scripts/perf_tool/artifact_readers/building_m6.py`と群gallery test。
@@ -729,3 +729,61 @@ Python側は全固定kindの実`ViewVisibility`までtrueと要求していた�
 対象外の未load fallbackには候補part DTO自体がないため、新しい一対一照合を捏造せず、
 既存のfallback/owner/geometryと対象投影の契約を保持する。Doorの実可視性は別に厳密確認する。
 Help No impact: 変更は群画像のhost側観測検証だけであり、通常表示・入力・保存・gameplay・文言は不変。
+
+
+### M12: M5の群別受入と正式導入（2026-11-13）
+
+修正した`2b3828df`で個別4画像と群18条件をfresh実行し、主担当・独立reviewerが原画像を確認した。
+Parkingの枠・支柱、Sand/Boneの専用画像、Lampの実off2/on2とworld_off/on identityは一致する。
+群の投影対象はM5+Door20体、DoorはClosedのみ。非対象M2/M3の画面外部分を全9種の合格にしない。
+背景の既存黒横線・地形網目やLow/farの細線の弱さを未発生と記録しない。
+旧v1の4個別＋invalid群の生成物5rootは、比較採用後に正規consumer解除・所有確認をしてTrashへ移動した。
+workspace allocated 4175511552Bを整理したが、Trashを含む物理空き増分とは扱わない。
+原本・正本・現行v2・codec・Cargo cacheを保持し、旧invalidをpassへ変更していない。
+
+control12は最大MAD1.97156926%、固定M2/M3の4世代のみactive、M5の13 target pathは全てunmanaged。
+測定前の9 PNG×256²×RGBA8=2359296B、追加mesh/material/accessor0という見積りと、
+p95/p99 +1/+3ms、Rust +16MiB、RSS +98304KiB、MAD10%の有限policyを独立採用した。
+数値・理由は校正後も変更せず、budget SHAは
+`827b76fc340eedc08853ad710789dea41370cec3454071fbf5383f5a9401201d`。
+候補paired24は全12指標で予算内、共有資源plateau、最大MAD2.776806%。
+result SHAは`e95fbb0f64aced13cc8f4c19469dbc5489f9a34498ef3cfcf2ff0c6ed6f0bca5`。
+
+| candidate−control中央値 | N | 4N |
+| --- | --- | --- |
+| p95 / p99 ms | +0.159012 / −0.013465 | +0.051943 / +0.066670 |
+| Rust live peak bytes | +2492835 | +3180489 |
+| RSS KiB | −27912 | +69124 |
+
+全4候補の独立release decision後、隔離16操作で初回pointer/locator不在への復帰を確認し、
+本canonicalの全4applyをprimary変更前に完了した。各applyは当2b sourceの個別原本を再verifyし、
+旧live-art/source依存の採用終了後にprimaryへinstallした。既存runtime bytesは全て不変。
+release identity・保存済みtransaction/provenanceは[恒久仕様](../building-asset-sets.md#m5の正式世代2026-11-13)へ集約する。
+
+- [x] fresh個別4/group18、control校正、事前予算、paired24、4件の独立release判断。
+- [x] 隔離16操作、本canonical全4promotion、primary install、exact bindings8生成。
+- [ ] compiled8の新source品質／Help／独立exact reviewと通常startup実測。
+- [ ] Door監査・正式9種画面・累積比較・恒久仕様・計画/索引とstorageを閉じる。
+
+Help No impact: 今回の通常経路は承認済みM5の4世代を既存poolとworld/ghost/Blueprint/pulse/catalogへ接続するだけ。
+既存の配置・資源・駐車・配電・load再計算と失敗fallbackの意味、操作、文言、Help到達性は変えない。
+
+### M13: 残る9種の同一source受入（実装・実行前）
+
+通常8世代の接続確認後、以下をprimaryで実装し、同じbranch・既存cache・独立read-only reviewで進める。
+私的ドラフトや合成fixtureは製品実装・実機証拠・承認に数えない。Bridge・公開/PR・gameplay変更は含めない。
+
+- [ ] released-only全9種の通常/far画像入口を追加する。全8 ReleaseApproved＋Door g7の36 ownerを厳密照合し、
+  既存group/candidate許可を流用しない。壁・床・Soul・実InventoryのWood携行iconは明示seeded contextとして
+  15 core＋追加1 Soulを別記する。全対象のmesh/AABB・image alpha投影とowned PNGを独立確認する。
+  公開前のFloor/held-item準備だけを各1回に制限し、その間の旧readiness証拠を破棄して既存安定待ちを取り直す。
+  probe/ACK/final公開後、通常group、performanceでの再Ready化は拒否する。
+- [ ] Doorの専用3caseで既存Siteの空3×3と支持壁2/2/4だけを一度準備し、実OS入力によるcatalog/EW/NS/tie ghostと
+  同owner Blueprintを照合する。pre-armから毎frameの実入力を保持し、nonce/PID/window/epoch/frame/実placement receiptを
+  結合する。架空の施工・pulse・自然物流を生成せず、既存J1 release6でseam・支持変更・lifecycleを別確認する。
+- [ ] 旧referenceと正式8世代の累積24比較adapterを追加する。各sourceの完全raw oracleが通った後だけ
+  明示的な論理結果を比較する。codec/driver/source/binary、変更可能asset path、旧参考側の既知費用と全失敗を保全し、
+  任意callback・計測harness変更・未観測項目の削除を許可しない。全12指標の事前予算と環境を独立採用する。
+- [ ] 新Rust/Pythonの拒否系、check/Clippy警告0・rust-analyzer、Help実経路、同subject CI・storage、exact code reviewを実施する。
+- [ ] fresh実機と独立画像/性能reviewを終え、恒久仕様と最終Help判断を同期する。完了した本計画のlifecycle・索引と
+  用途終了した生成物だけの整理を行う。Bridge以外9種の全体受入を部分成功に読み替えず確認する。

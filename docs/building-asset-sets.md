@@ -10,8 +10,9 @@
 `StartupPlugin` はasset型・policy resource・loaderを登録し、`VisualPlugin`はkind単位のpoolと
 表示更新systemを登録する。通常起動はコンパイル済み
 `default_release_bindings.json`の完全なrelease組を、既存poolへ要求する。
-現在の一覧には独立release承認・promotion/install済みのTank、MudMixer、RestArea、SoulSpaの4件を採用した。
-M5の4種は未導入であり、引き続きfallback表示となる。
+現在の一覧には独立release承認・promotion/install済みのTank、MudMixer、RestArea、SoulSpa、
+WheelbarrowParking、SandPile、BonePile、OutdoorLampの8件を採用した。
+M5を加えた新binaryの品質・通常startup確認は継続中であり、全9種受入の完了とは区別する。
 独立release承認・promotion/install後に `building_asset_pipeline.py bindings` のexact出力を採用して初めて
 既定起動へ反映する。一覧は起動時の文書/外部JSON読取りではなくbinaryへ組み込む。
 `HW_BUILDING_ASSET_RELEASES`を明示した場合は一覧全体を置換し、空文字・空配列・非UTF-8・不正JSONを
@@ -30,8 +31,8 @@ pendingをactiveへ切り替える。M1-bではactive descriptorを3D設備、2D
 Blueprint、pulse、カタログへ公開する。通常consumerは`release_approved`だけを許可する。
 M1-c候補はoffline codec／export、明示profiling候補投入、昇格・install・復旧・切戻しを追加した。
 これはTAK-14候補の実装契約である。2026-10-04に通常Orcaのprimary由来の
-`codex/tak14-product-integration`へ製品sourceを選択取り込みしたが、現在は統合検証中であり、
-独立review、実機受入、正式asset公開、美術受入の完了ではない。
+`codex/tak14-product-integration`へ製品sourceを選択取り込みした履歴がある。
+その統合事実だけでは独立review、実機受入、正式asset公開、美術受入の完了を意味しない。
 正式assetと状態別のwater高さ・rotor軸等の制作値は、制作時に制作側と照合して確定する。
 
 ### M2の正式世代（2026-11-13）
@@ -54,7 +55,7 @@ immutable payload/provenanceの保持を独立確認した。本正本のgenerat
 現sourceの表示同期回帰、個別画像と群18条件を分けてrelease判断へ使用した。
 M2の通常起動は`14d9c813`のowned実機でcompiled_default選択・2pool activeと依存residentを確認し、
 独立review・変更別CIを通過した。初期worldの対象ownerは空であり、全consumer表示の証明ではない。
-残るM3/M5・累積比較は
+群の導入進捗、残るDoor監査・正式9種画面・累積比較は
 [継続計画](plans/non-bridge-candidate-performance-plan-2026-11-12.md)で管理する。
 
 ### M3の正式世代（2026-11-13）
@@ -79,7 +80,39 @@ Mesh+3/41816B、Image+7/4194304 CPU・descriptor推計B、material+4/1856 shallo
 事前見積りと一致し、初終・N/4N・instrument間で共有資源がplateauした。
 通常worldの継続稼働性能や実GPU確保総量の合格には読み替えない。
 RestAreaの利用・Dream・cooldown、SoulSpaの4区画/利用枠・worker状態・save/load契約は変更しない。
-compiled4の新sourceでの品質・通常startup接続は継続計画で別に確認する。
+compiled4は`eebb55c5`の全4群CI・Clippy警告0・独立exact reviewと通常startup確認を通過した。
+startup manifest SHAは`70e1371a58a89046d1fdf368f65ac4cff0cfe2e65df4cd8860a45e5052d9d6a3`。
+compiled_defaultの4pool active/依存常駐を確認したが、初期対象ownerは空で全consumer表示の証明ではない。
+
+### M5の正式世代（2026-11-13）
+
+| kind | generation | ReleaseApproved manifest SHA256 |
+| --- | --- | --- |
+| WheelbarrowParking | 2 | `a0a848dafecdbb9fd88acb1dc244e3ea4eee0c6c4148a6901c6df41276344e21` |
+| SandPile | 1 | `3ca9f5523b1009b70da32052e9b52a6e5b2c07a9637dc42449aff13837fb0a66` |
+| BonePile | 1 | `e94b7740741eaf349d2dfa6b5217d160796519b1c24ad5689f86cc63af5c6bc1` |
+| OutdoorLamp | 1 | `26b2f804e2e34c72d0d37ada6aa873ecd79abf7af83fc5618377f7b98b25a370` |
+
+`2b3828df`のfresh個別4画像・群18条件と、planning履歴／現表示同期回帰、
+独立numeric/art採用と固定予算の性能比較を合わせ、4件それぞれに独立release判断を得た。
+control12の最大MADは1.9716%。候補比較前に理由・12指標を変更せず採用した予算SHAは
+`827b76fc340eedc08853ad710789dea41370cec3454071fbf5383f5a9401201d`。
+paired24 result SHAは`e95fbb0f64aced13cc8f4c19469dbc5489f9a34498ef3cfcf2ff0c6ed6f0bca5`。
+N/4Nのp95増分は+0.159012/+0.051943ms、p99は−0.013465/+0.066670ms、
+Rust peakは+2492835/+3180489B、RSSは−27912/+69124KiB、最大相対MAD2.776806%。
+追加は9枚の256² RGBA8画像、2359296 CPU・descriptor推計Bで、追加Mesh/material/accessorは0。
+全共有資源は初終・N/4N・Capture/Memory間でplateauした。通常継続AI・全GPU確保総量の合格とはしない。
+
+隔離16操作（全4promotion→全4install→全4canonical rollback→全4mirror rollback）で
+初回preimage不在への復帰、payload・4provenance・receipt・journalを独立確認した。
+その後、凍結sourceのまま本正本へ全4promotionを完了し、各applyの個別art原本検証を終えてから
+旧live-source依存を閉じ、primaryへ4件をinstallした。本正本の世代をrollback/reapplyしていない。
+既存runtime bytesは全て保持し、資源・配電・駐車・anchor・save/loadのgameplay契約を変更しない。
+
+正規`bindings --release-group m5`出力8件（SHA
+`87866aaa1734ad1445f21765053dbeb56e2e0205f383540bdf67c381a98d073a`）をcompiled一覧へ採用する。
+新sourceの品質／Help／独立review／通常startup、Door監査、正式9種画面と累積比較は継続工程である。
+既存Door g7は別loaderのまま、Bridgeの正式導入は対象外とする。
 
 ### 通常起動defaultの受動audit
 
