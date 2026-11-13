@@ -48,7 +48,8 @@ def check(value):
         and type(value["schema_version"]) is int
         and value["schema_version"] == 1
         and value["status"] == "ready"
-        and value["cases"] == list(oracle.CASES)
+        and value["case"] in oracle.CASES
+        and value["cases"] == [value["case"]]
         and all(
             value[k] is False
             for k in ("accepted", "promotion_authority", "performance_evidence")
@@ -91,7 +92,8 @@ def plan(args):
         "normal_inventory": identities,
         "asset_fingerprint": art.asset_view_fingerprint(repo),
         "drivers": hashes(),
-        "cases": list(oracle.CASES),
+        "case": args.case,
+        "cases": [args.case],
         "portal_consent_file": str(args.portal_consent_file.resolve()),
         "accepted": False,
         "promotion_authority": False,
@@ -333,6 +335,8 @@ def verify(root):
         str(root) == value["job_root"]
         and manifest["profile"] == PROFILE
         and manifest["status"] == "pass"
+        and manifest["case"] == value["case"]
+        and manifest["world_scope"] == "one-independent-native-world"
         and all(
             manifest[k] is False
             for k in ("accepted", "promotion_authority", "performance_evidence")
@@ -342,10 +346,9 @@ def verify(root):
     binary = Path(manifest["binary"]["path"])
     executable.validate(binary, root, manifest["binary"]["sha256"])
     pipeline.require(
-        [r["case"] for r in manifest["sessions"]] == list(oracle.CASES)
-        and [r["directory"] for r in manifest["sessions"]]
-        == [f"case-{i}" for i in range(3)],
-        "Door three-case matrix incomplete",
+        [r["case"] for r in manifest["sessions"]] == value["cases"]
+        and [r["directory"] for r in manifest["sessions"]] == ["case-0"],
+        "Door declared one-case batch incomplete",
     )
     portal_sessions = [
         read(root / row["directory"] / "input-client.json")["portal_session"]
@@ -366,6 +369,67 @@ def verify(root):
         "Door saved observation differs",
     )
     return manifest
+
+
+def verify_group(roots):
+    """Recompute three complete original batches; never combine partial failures."""
+    pipeline.require(
+        len(roots) == 3
+        and len(set(roots)) == 3
+        and all(
+            root.is_absolute() and root == root.resolve() and not root.is_symlink()
+            for root in roots
+        ),
+        "three distinct canonical Door roots required",
+    )
+    manifests = [verify(root) for root in roots]
+    pipeline.require(
+        [m["case"] for m in manifests] == list(oracle.CASES),
+        "Door group must contain EW, NS and tie exactly once in order",
+    )
+    first = manifests[0]
+    for manifest in manifests:
+        pipeline.require(
+            all(
+                pipeline.exact_json(manifest["plan"][field], first["plan"][field])
+                for field in (
+                    "identity",
+                    "normal_inventory",
+                    "asset_fingerprint",
+                    "drivers",
+                )
+            )
+            and manifest["binary"]["sha256"] == first["binary"]["sha256"],
+            "Door group source, normal inventory, driver or binary differs",
+        )
+    sessions = [m["sessions"][0] for m in manifests]
+    pipeline.require(
+        all(len({row[field] for row in sessions}) == 3 for field in ("pid", "nonce"))
+        and len({m["portal_session"] for m in manifests}) == 3,
+        "Door independent worlds/processes/nonces/sessions must be distinct",
+    )
+    return {
+        "profile": PROFILE + "-three-case-summary-v1",
+        "status": "pass",
+        "world_scope": "three-independent-native-worlds",
+        "identity": first["plan"]["identity"],
+        "normal_inventory": first["plan"]["normal_inventory"],
+        "binary_sha256": first["binary"]["sha256"],
+        "cases": [
+            {
+                "case": m["case"],
+                "root": str(root),
+                "manifest_sha256": pipeline.digest(
+                    (root / "manifest.json").read_bytes()
+                ),
+                "observations": m["observations"],
+            }
+            for root, m in zip(roots, manifests, strict=True)
+        ],
+        "accepted": False,
+        "promotion_authority": False,
+        "performance_evidence": False,
+    }
 
 
 @native.activity_locked
@@ -516,6 +580,8 @@ def run(args):
             "status": "pass",
             "plan": value,
             "binary": {"path": str(binary), "sha256": binary_sha},
+            "case": value["case"],
+            "world_scope": "one-independent-native-world",
             "sessions": sessions,
             "observations": observations,
             "portal_session": portal.session,
@@ -545,6 +611,7 @@ def main():
     commands = parser.add_subparsers(dest="action", required=True)
     p = commands.add_parser("plan")
     p.add_argument("--repo", type=Path, required=True)
+    p.add_argument("--case", choices=tuple(oracle.CASES), required=True)
     p.add_argument("--job-root", type=Path, required=True)
     p.add_argument("--output", type=Path, required=True)
     p.add_argument("--portal-consent-file", type=Path, required=True)
@@ -552,6 +619,8 @@ def main():
     p.add_argument("--plan", type=Path, required=True)
     p = commands.add_parser("verify")
     p.add_argument("--root", type=Path, required=True)
+    p = commands.add_parser("verify-group")
+    p.add_argument("--roots", type=Path, nargs=3, required=True)
     args = parser.parse_args()
     if args.action == "run":
         args.frozen_plan = read(args.plan)
@@ -562,6 +631,8 @@ def main():
         if args.action == "plan"
         else run(args)
         if args.action == "run"
+        else verify_group(args.roots)
+        if args.action == "verify-group"
         else verify(args.root)
     )
     print(json.dumps(result, sort_keys=True))

@@ -831,3 +831,15 @@ v3もEWの4画像と通常入力を得たが、共通UI observerの`[viewport.x,
 finite数値・exact1920×1080・bool/非有限/端数拒否と、物理PNG/client/windowの別検査を維持する。
 保存rawでの補正oracle診断は残りのEW検査を通ったが、旧invalidの承認や未実施NS/tieの代用にしない。
 旧v3はseal/診断保持/finalize済み。品質・独立review後のfresh v4で全3caseを確認する。
+
+
+#### Door入力v4のEIS接続寿命（2026-11-13）
+
+v4はEWを完全verifyした後、NSの開始時に同じPortalSessionへの再ConnectToEISが
+`Session is already connected`で拒否され、batch全体をinvalidとして精算・診断保持した。
+NS入力は未送信、旧EW部分結果を全3caseの合格へ流用しない。
+既存ライブラリ/guardを変更せず、閉じた必須`--case`を持つ3個の正規one-case batchへ分割する。
+各helper processが1 PortalSession/ConnectToEISを終了し、完全verify/seal/保持/finalize後にだけ次へ進む。
+既存opt-in同意journalを通常の後続jobとしてconsume/rotationし、未知/失敗sessionを再送しない。
+新`verify-group`は全3原本を完全再検証し、同source/binary/normal世代と固有PID/nonce/sessionを照合する。
+3独立worldであることを明記し、単一worldでの継続操作に読み替えない。fresh v5から確認する。

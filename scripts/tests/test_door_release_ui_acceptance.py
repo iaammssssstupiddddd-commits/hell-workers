@@ -172,5 +172,108 @@ class DoorHostTests(unittest.TestCase):
                 self.verify()
 
 
+class DoorIndependentBatchGroupTests(unittest.TestCase):
+    """Group boundary only; full per-case disk/raw oracle is tested above."""
+
+    def setUp(self):
+        from unittest.mock import patch
+
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.roots = [Path(self.temp.name) / f"world-{i}" for i in range(3)]
+        self.manifests = {}
+        for i, (root, case) in enumerate(
+            zip(self.roots, host.oracle.CASES, strict=True)
+        ):
+            root.mkdir()
+            (root / "manifest.json").write_bytes(b"synthetic group boundary fixture\n")
+            self.manifests[root] = {
+                "case": case,
+                "plan": {
+                    "identity": {"source": "a" * 64},
+                    "normal_inventory": {"door": IDENTITY},
+                    "asset_fingerprint": "b" * 64,
+                    "drivers": {"driver": "c" * 64},
+                },
+                "binary": {"sha256": "d" * 64},
+                "portal_session": f"/independent/{i}",
+                "sessions": [{"pid": 100 + i, "nonce": f"{i:032x}"}],
+                "observations": [case],
+            }
+        self.verifier = patch.object(
+            host, "verify", side_effect=lambda root: self.manifests[root]
+        ).start()
+        self.addCleanup(patch.stopall)
+
+    def test_group_recomputes_every_case_and_reports_three_independent_worlds(self):
+        result = host.verify_group(self.roots)
+        self.assertEqual(self.verifier.call_count, 3)
+        self.assertEqual([c["case"] for c in result["cases"]], list(host.oracle.CASES))
+        self.assertEqual(result["world_scope"], "three-independent-native-worlds")
+        self.assertIs(result["accepted"], False)
+        self.assertIs(result["promotion_authority"], False)
+
+    def test_group_rejects_duplicate_missing_or_reordered_cases(self):
+        for roots in [self.roots[:2], [self.roots[0]] * 3, list(reversed(self.roots))]:
+            with self.subTest(roots=roots), self.assertRaises(ValueError):
+                host.verify_group(roots)
+        self.manifests[self.roots[1]]["case"] = list(host.oracle.CASES)[0]
+        with self.assertRaisesRegex(ValueError, "exactly once"):
+            host.verify_group(self.roots)
+
+    def test_group_rejects_foreign_subject_inventory_driver_or_binary(self):
+        for field in ["identity", "normal_inventory", "asset_fingerprint", "drivers"]:
+            old = self.manifests[self.roots[1]]["plan"][field]
+            self.manifests[self.roots[1]]["plan"][field] = {"foreign": True}
+            with (
+                self.subTest(field=field),
+                self.assertRaisesRegex(ValueError, "source, normal inventory"),
+            ):
+                host.verify_group(self.roots)
+            self.manifests[self.roots[1]]["plan"][field] = old
+        self.manifests[self.roots[1]]["binary"]["sha256"] = "e" * 64
+        with self.assertRaisesRegex(ValueError, "binary differs"):
+            host.verify_group(self.roots)
+
+    def test_group_rejects_reused_process_nonce_or_portal_session(self):
+        for field in ["pid", "nonce"]:
+            old = self.manifests[self.roots[1]]["sessions"][0][field]
+            self.manifests[self.roots[1]]["sessions"][0][field] = self.manifests[
+                self.roots[0]
+            ]["sessions"][0][field]
+            with (
+                self.subTest(field=field),
+                self.assertRaisesRegex(ValueError, "must be distinct"),
+            ):
+                host.verify_group(self.roots)
+            self.manifests[self.roots[1]]["sessions"][0][field] = old
+        self.manifests[self.roots[1]]["portal_session"] = self.manifests[self.roots[0]][
+            "portal_session"
+        ]
+        with self.assertRaisesRegex(ValueError, "must be distinct"):
+            host.verify_group(self.roots)
+
+    def test_closed_case_plan_rejects_legacy_whole_matrix_and_unknown_case(self):
+        for case, cases in [
+            ("door-release-east-west", list(host.oracle.CASES)),
+            ("arbitrary-command", ["arbitrary-command"]),
+        ]:
+            value = {
+                "profile": host.PROFILE,
+                "schema_version": 1,
+                "status": "ready",
+                "case": case,
+                "cases": cases,
+                "accepted": False,
+                "promotion_authority": False,
+                "performance_evidence": False,
+            }
+            with (
+                self.subTest(case=case),
+                self.assertRaisesRegex(ValueError, "scope differs"),
+            ):
+                host.check(value)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -167,6 +167,11 @@ ghostのunit scale・Z_SELECTION=2.0をghostへ別々に拘束し、実world/loc
 共通UI観測のviewportはVec2の有限数値としてexact1920×1080を検証し、bool・非有限・端数差を拒否する。
 物理PNG/window/clientの寸法検査は別に維持する。
 支持壁のseam・変更・撤去・loadは既存J1 release6の別受入とする。
+各`--case`はEW/NS/tieの閉じた必須enumで、別々の正規batch/helper processが1 game/window・1 PortalSession・
+1 ConnectToEISだけを所有する。前caseの完全verify/seal/保持/finalize後にだけ次を登録し、失敗や不明結果では停止する。
+既存opt-in同意journalのconsume/成功時rotationだけを使い、revoked/unknown sessionへ再接続しない。
+`verify-group`は順序付き3原本の完全verifyと同一source/binary/normal inventory、固有PID/nonce/sessionを照合する。
+これは3個の独立worldの確認であり、単一worldや単一入力sessionの継続とは主張しない。
 
 `building_cumulative_acceptance.py`は既存adjacent比較の閉じたprofileを使い、旧referenceと正式8世代＋Doorの
 Capture/Memory各N/4N・3対を比較する。両sourceの完全raw oracleの成功後だけ固定の論理投影を比較し、
