@@ -158,7 +158,11 @@ terrainや既存Soulを動かさず、生成規則を変更しない。
 `door_release_ui_acceptance.py`は既存Siteの空3×3を選び支持壁2/2/4だけを一度準備する。
 Door本体・Blueprint・施工完了を生成せず、実OS入力のcatalog・EW/NS/tie ghost・同owner Blueprintを検証する。
 producerはpre-armから毎frameの入力を保持し、hostはarm nonce/PID/epoch/frame、EIS client、実placement receiptと
-4枚のowned画像を結合する。支持壁のseam・変更・撤去・loadは既存J1 release6の別受入とする。
+4枚のowned画像を結合する。停止中のSelectBuild/配置禁止は維持し、empty/catalogをPauseで撮影後、
+既存Normalボタン→Door選択→ghost→実配置→Escape→既存Pauseボタンの順に操作する。
+各操作の前後Pause状態、時間ボタンの実Pressed ACK、全入力prefixを照合し、resume前からpause後ACKまでを
+20 real秒以内に制限する。最終Blueprintは再Pause後のprogress0/material未完を要求し、自然施工を主張しない。
+支持壁のseam・変更・撤去・loadは既存J1 release6の別受入とする。
 
 `building_cumulative_acceptance.py`は既存adjacent比較の閉じたprofileを使い、旧referenceと正式8世代＋Doorの
 Capture/Memory各N/4N・3対を比較する。両sourceの完全raw oracleの成功後だけ固定の論理投影を比較し、

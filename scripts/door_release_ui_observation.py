@@ -99,7 +99,7 @@ def context(value, case, identity):
         and type(v["world_epoch"]) is int
         and v["world_epoch"] == value["world_epoch"]
         and finite(v["real_seconds"])
-        and value["paused"] is True,
+        and type(value["paused"]) is bool,
         "Door window/epoch/clock/pause differs",
     )
     anchor = v["anchor"]
@@ -332,6 +332,9 @@ def checkpoint(phase, value, case, identity):
             and 0 <= rect[1] < rect[3] <= 1080,
             "Door catalog clipped",
         )
+    require(
+        value["paused"] is (phase != "ghost"), "Door checkpoint pause protocol differs"
+    )
     if phase == "ghost":
         require(
             v["play_mode"] == "BuildingPlace"
@@ -503,8 +506,16 @@ def verify_inputs(raw, actions, inputs, client, entries, case, identity):
     require(
         labels
         in (
-            ["architect", "select-door", "placement", "escape"],
-            ["dev-minimize", "architect", "select-door", "placement", "escape"],
+            ["architect", "resume", "select-door", "placement", "escape", "pause"],
+            [
+                "dev-minimize",
+                "architect",
+                "resume",
+                "select-door",
+                "placement",
+                "escape",
+                "pause",
+            ],
         ),
         "Door action sequence differs",
     )
@@ -515,7 +526,22 @@ def verify_inputs(raw, actions, inputs, client, entries, case, identity):
     )
     require(
         all(
-            type(e.get("frame")) is int
+            set(e)
+            == {
+                "producer",
+                "frame",
+                "real_seconds",
+                "world_epoch",
+                "window",
+                "window_debug",
+                "state",
+            }
+            | (
+                {"key", "repeat"}
+                if e.get("producer") == "KeyboardInput"
+                else {"button"}
+            )
+            and type(e.get("frame")) is int
             and raw["arm_frame"] <= e["frame"] <= raw["frame"]
             and type(e.get("world_epoch")) is int
             and e["world_epoch"] == epoch
@@ -558,6 +584,19 @@ def verify_inputs(raw, actions, inputs, client, entries, case, identity):
             "Door action state/clock differs",
         )
         previous = after["real_seconds"]
+        expected_pause = {
+            "dev-minimize": (True, True),
+            "architect": (True, True),
+            "resume": (True, False),
+            "select-door": (False, False),
+            "placement": (False, False),
+            "escape": (False, False),
+            "pause": (False, True),
+        }[action["label"]]
+        require(
+            (action["before"]["paused"], action["after"]["paused"]) == expected_pause,
+            "Door action violates the existing pause boundary",
+        )
         require(
             type(action["first_step"]) is int
             and type(action["last_step"]) is int
@@ -605,11 +644,19 @@ def verify_inputs(raw, actions, inputs, client, entries, case, identity):
             ),
             "Door gesture transport differs",
         )
-        if action["label"] in ("dev-minimize", "architect", "select-door"):
+        if action["label"] in (
+            "dev-minimize",
+            "architect",
+            "select-door",
+            "resume",
+            "pause",
+        ):
             key = {
                 "dev-minimize": "dev-minimize",
                 "architect": "menu:ToggleArchitect",
                 "select-door": "menu:SelectBuild(Door)",
+                "resume": "menu:SetTimeSpeed(Normal)",
+                "pause": "menu:SetTimeSpeed(Paused)",
             }[action["label"]]
             require(
                 gestures[0].get("observed_hover", {}).get(key) == "Pressed",
@@ -634,7 +681,15 @@ def verify_inputs(raw, actions, inputs, client, entries, case, identity):
     # input counts and ordered screenshots alone do not prove that causality.
     by_label = {action["label"]: action for action in actions}
     architect, select = by_label["architect"], by_label["select-door"]
-    place, escape_action = by_label["placement"], by_label["escape"]
+    place, pause_action = by_label["placement"], by_label["pause"]
+    resume_action = by_label["resume"]
+    require(
+        0
+        < pause_action["after"]["door_release_planning"]["real_seconds"]
+        - resume_action["before"]["door_release_planning"]["real_seconds"]
+        <= 20.0,
+        "Door ordinary running interval exceeds the declared twenty-second cap",
+    )
     first_press = next(
         step
         for step in range(place["first_step"], place["last_step"] + 1)
@@ -644,13 +699,13 @@ def verify_inputs(raw, actions, inputs, client, entries, case, identity):
         0,
         architect["last_step"],
         first_press - 1,
-        escape_action["last_step"],
+        pause_action["last_step"],
     ]
     bounds = [
         (None, actions[0]["before"]),
-        (architect["after"], select["before"]),
+        (architect["after"], resume_action["before"]),
         (select["after"], place["before"]),
-        (escape_action["after"], None),
+        (pause_action["after"], None),
     ]
     for entry, last_step, (lower, upper) in zip(
         entries, expected_steps, bounds, strict=True

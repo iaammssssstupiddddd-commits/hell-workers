@@ -182,7 +182,19 @@ def action(driver, label, actions, *, key=None, point=False):
         pipeline.require(raw["failure"] is None, "Door actual input journal failed")
         lo = before["door_release_planning"]["real_seconds"]
         hi = value["door_release_planning"]["real_seconds"]
-        return len([e for e in raw["events"] if lo < e["real_seconds"] <= hi]) == 2
+        pair = len([e for e in raw["events"] if lo < e["real_seconds"] <= hi]) == 2
+        observed = value["door_release_planning"]
+        applied = {
+            "dev-minimize": "text-field:DevPoc" not in value["controls"],
+            "architect": value["menu_state"] == "Architect",
+            "resume": value["paused"] is False,
+            "select-door": observed["play_mode"] == "BuildingPlace"
+            and observed["build_kind"] == "Door",
+            "placement": len(observed["blueprints"]) == 1,
+            "escape": observed["play_mode"] == "Normal",
+            "pause": value["paused"] is True,
+        }[label]
+        return pair and applied
 
     driver.last = driver.wait(flushed, after=driver.last["frame"])
     actions.append(
@@ -200,13 +212,17 @@ def action(driver, label, actions, *, key=None, point=False):
 def exercise(driver, case, identity):
     arm(driver)
     actions = []
+
     def validate(phase, value):
         return oracle.checkpoint(phase, value, case, identity)
+
     driver.capture("empty", validate=validate)
     if "text-field:DevPoc" in driver.last["controls"]:
         action(driver, "dev-minimize", actions, key="dev-minimize")
     action(driver, "architect", actions, key="menu:ToggleArchitect")
     driver.capture("catalog", validate=validate)
+    # Existing SelectBuild and placement boundaries reject paused input.
+    action(driver, "resume", actions, key="menu:SetTimeSpeed(Normal)")
     action(driver, "select-door", actions, key="menu:SelectBuild(Door)")
     # Motion belongs to the next actual placement action's transport interval.
     first = len(driver.events) + 1
@@ -217,6 +233,7 @@ def exercise(driver, case, identity):
     actions[-1]["first_step"] = first
     native.atomic_write_json(driver.root / "actions.json", {"actions": actions})
     action(driver, "escape", actions)
+    action(driver, "pause", actions, key="menu:SetTimeSpeed(Paused)")
     driver.last = driver.wait(
         lambda v: not v["door_release_planning"]["ghosts"], after=driver.last["frame"]
     )

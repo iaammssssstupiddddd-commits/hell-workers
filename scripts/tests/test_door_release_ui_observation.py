@@ -148,7 +148,7 @@ def fixture(case="door-release-east-west"):
             "door_release_planning": v,
             "primary_window": 5,
             "world_epoch": 0,
-            "paused": True,
+            "paused": phase != "ghost",
             "pointer_over_ui": False,
             "world_input_captured": False,
             "pid": 123,
@@ -160,7 +160,7 @@ def fixture(case="door-release-east-west"):
 
     entries = [
         {"case": phase, "value": observation(phase, now)}
-        for phase, now in zip(oracle.CHECKPOINTS, [1.0, 2.5, 4.0, 6.5], strict=True)
+        for phase, now in zip(oracle.CHECKPOINTS, [1.0, 2.5, 5.0, 8.0], strict=True)
     ]
     client = {"nonce": "a" * 32, "pid": 123, "window": 291}
     events = []
@@ -168,9 +168,11 @@ def fixture(case="door-release-east-west"):
     actions = []
     spec = [
         ("architect", "empty", 1.0, "catalog", 2.0),
-        ("select-door", "catalog", 2.5, "ghost", 3.5),
-        ("placement", "ghost", 4.0, "blueprint", 5.0),
-        ("escape", "blueprint", 5.0, "blueprint", 6.0),
+        ("resume", "catalog", 2.5, "catalog", 3.0),
+        ("select-door", "catalog", 3.0, "ghost", 4.0),
+        ("placement", "ghost", 5.0, "blueprint", 6.0),
+        ("escape", "blueprint", 6.0, "blueprint", 6.5),
+        ("pause", "blueprint", 6.5, "blueprint", 7.0),
     ]
     for label, phase, lo, after, hi in spec:
         first = len(inputs) + 1
@@ -198,13 +200,14 @@ def fixture(case="door-release-east-west"):
             gesture["key" if label == "escape" else "button"] = (
                 "Escape" if label == "escape" else 1
             )
-            if pressed and label in ("architect", "select-door"):
+            if pressed and label in ("architect", "select-door", "resume", "pause"):
                 gesture["observed_hover"] = {
-                    (
-                        "menu:ToggleArchitect"
-                        if label == "architect"
-                        else "menu:SelectBuild(Door)"
-                    ): "Pressed"
+                    {
+                        "architect": "menu:ToggleArchitect",
+                        "select-door": "menu:SelectBuild(Door)",
+                        "resume": "menu:SetTimeSpeed(Normal)",
+                        "pause": "menu:SetTimeSpeed(Paused)",
+                    }[label]: "Pressed"
                 }
             inputs.append(gesture)
             event = {
@@ -224,13 +227,22 @@ def fixture(case="door-release-east-west"):
                 else {"button": "Left"}
             )
             events.append(event)
+        before, after_value = observation(phase, lo), observation(after, hi)
+        before["paused"], after_value["paused"] = {
+            "architect": (True, True),
+            "resume": (True, False),
+            "select-door": (False, False),
+            "placement": (False, False),
+            "escape": (False, False),
+            "pause": (False, True),
+        }[label]
         actions.append(
             {
                 "label": label,
                 "first_step": first,
                 "last_step": len(inputs),
-                "before": observation(phase, lo),
-                "after": observation(after, hi),
+                "before": before,
+                "after": after_value,
             }
         )
     by_label = {action["label"]: action for action in actions}
@@ -238,14 +250,14 @@ def fixture(case="door-release-east-west"):
         0,
         by_label["architect"]["last_step"],
         by_label["placement"]["first_step"],
-        by_label["escape"]["last_step"],
+        by_label["pause"]["last_step"],
     ]
     for entry, step in zip(entries, prefix, strict=True):
         entry["last_step"] = step
     receipt = {
         "producer": "ordinary-building-placement-branch-v1",
         "operation": "PlacementOutcome",
-        "real_seconds": 4.2,
+        "real_seconds": 5.2,
         "window": "5v0",
         "world_epoch": 0,
         "outcome": {
@@ -261,8 +273,8 @@ def fixture(case="door-release-east-west"):
         "scope": oracle.SCOPE,
         "nonce": client["nonce"],
         "pid": 123,
-        "frame": 700,
-        "real_seconds": 7.0,
+        "frame": 850,
+        "real_seconds": 8.5,
         "world_epoch": 0,
         "arm_frame": 90,
         "events": events,
@@ -333,6 +345,46 @@ class DoorOracleTests(unittest.TestCase):
                 self.assertRaisesRegex(ValueError, "causal action"),
             ):
                 oracle.verify_inputs(*values)
+
+    def test_paused_selection_cannot_borrow_a_pressed_ui_ack(self):
+        values = fixture()
+        action = next(row for row in values[1] if row["label"] == "select-door")
+        action["before"]["paused"] = True
+        action["after"]["paused"] = True
+        with self.assertRaisesRegex(ValueError, "existing pause boundary"):
+            oracle.verify_inputs(*values)
+
+    def test_resume_pause_actions_cannot_be_omitted_or_use_foreign_controls(self):
+        for label in ["resume", "pause"]:
+            values = fixture()
+            values[1] = [action for action in values[1] if action["label"] != label]
+            with self.assertRaisesRegex(ValueError, "action sequence"):
+                oracle.verify_inputs(*values)
+            values = fixture()
+            action = next(action for action in values[1] if action["label"] == label)
+            values[2][action["first_step"]]["observed_hover"] = {
+                "menu:SelectBuild(Door)": "Pressed"
+            }
+            with self.assertRaisesRegex(ValueError, "control press ACK"):
+                oracle.verify_inputs(*values)
+
+    def test_honest_but_overlong_running_interval_is_rejected_before_acceptance(self):
+        values = fixture()
+
+        def stretch(value):
+            if isinstance(value, dict):
+                for key, child in value.items():
+                    if key in ("frame", "pre_frame", "post_frame", "real_seconds"):
+                        value[key] = child * 10
+                    else:
+                        stretch(child)
+            elif isinstance(value, list):
+                for child in value:
+                    stretch(child)
+
+        stretch(values)
+        with self.assertRaisesRegex(ValueError, "twenty-second"):
+            oracle.verify_inputs(*values)
 
     def test_actual_receipt_must_bind_the_single_press_and_same_blueprint(self):
         for key, value in [

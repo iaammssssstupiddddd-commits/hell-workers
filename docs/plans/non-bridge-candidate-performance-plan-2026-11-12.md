@@ -801,3 +801,14 @@ Help No impact: 今回の通常経路は承認済みM5の4世代を既存poolと
 - 補正はReleased gallery専用のexact Floor witnessと全Building列挙、実spawn resolverによる送信requestの
   事前導出だけとする。既存worldや生成規則を動かさず、実生成位置の事後確認・余剰/欠損拒否も維持する。
   他group/通常performanceのcountを単純に+1せず、旧invalidをpassへ変更しない。品質・独立review後のfresh v3で確認する。
+
+
+#### Door入力v1の既存Pause境界（2026-11-13）
+
+Door v1は既存入力許可を再利用しempty/catalog原本を取得したが、停止中にSelectBuildが実仕様どおり拒否され、
+ghost検査でinvalidとなった。world配置は未送信、Blueprint/receiptなし。失敗をseal/診断保持/finalizeした。
+`UiIntent::allowed_while_paused`とroot consumerを確認し、製品guardを変えずhost手順だけを補正する。
+closed sequenceはoptional dev-minimize、architect、Normal、select-door、placement、Escape、Pause。
+empty/catalogは停止、ghost/配置は通常実行、最後は再停止とし、全実入力・ACK・frame/時計・causal prefixを照合する。
+通常実行区間はresume前からpause後ACKまで20 real秒以内、最終Blueprintはprogress0/material未完を維持する。
+実機・品質・独立review前に合格や施工成立へ読み替えない。fresh v2で全3caseを確認する。
