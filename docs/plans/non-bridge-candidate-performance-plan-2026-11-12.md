@@ -859,3 +859,14 @@ Released galleryの未公開HeldItem準備で、既存sync_inventory_item_visual
 通常Visual systemによるicon生成を待ち、Spriteを捏造したり通常Logic/停止ruleを変更しない。
 公開後や二度目の準備では同期を再実行せず、driftを拒否する。旧v3をpassへ読み替えず、
 品質・Help・独立exact reviewを経たfresh v4で改めて確認する。
+
+
+#### J1正式合同v1のrendererログ（2026-11-13）
+
+正式gallery v4はnormal/farの全36対象とWall/Floor/Soul/実Wood iconを原画像・rawで独立採用した。
+`29e58ebf`でのJ1 release v1は3固定監査と6場面の取得後、AdapterInfoの原ログ欠測でinvalidとなった。
+失敗を封印・診断保持・finalize済み。6枚があることだけで正式受入へ変更しない。
+J1の子環境だけが親のsuppressive RUST_LOGを継承しており、infoの実adapter証拠を失う。
+既存self-testへerror継承を加えてRED再現し、他の正式helperと同じ`info,wgpu=error`を子環境へ固定する。
+missing/foreign/non-Vulkan/WARNの拒否は維持し、ログから実adapterを確認する条件を緩めない。
+Rust/入力/表示/asset/計測手順を変更せず、品質・Help・独立review後のfresh J1 v2で確認する。

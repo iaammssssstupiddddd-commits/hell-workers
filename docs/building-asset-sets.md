@@ -169,6 +169,8 @@ ghostのunit scale・Z_SELECTION=2.0をghostへ別々に拘束し、実world/loc
 共通UI観測のviewportはVec2の有限数値としてexact1920×1080を検証し、bool・非有限・端数差を拒否する。
 物理PNG/window/clientの寸法検査は別に維持する。
 支持壁のseam・変更・撤去・loadは既存J1 release6の別受入とする。
+J1のゲーム子環境は`RUST_LOG=info,wgpu=error`を固定し、親の抑止filterで実AdapterInfoを欠測させない。
+独立verifierは原ログの単一adapter・Vulkan・WARN/ERRORなしを引き続き要求する。
 各`--case`はEW/NS/tieの閉じた必須enumで、別々の正規batch/helper processが1 game/window・1 PortalSession・
 1 ConnectToEISだけを所有する。前caseの完全verify/seal/保持/finalize後にだけ次を登録し、失敗や不明結果では停止する。
 既存opt-in同意journalのconsume/成功時rotationだけを使い、revoked/unknown sessionへ再接続しない。
