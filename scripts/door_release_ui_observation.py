@@ -278,8 +278,13 @@ def check_sprite(row, *, blueprint=False, pulse=False, anchor=None):
         require(
             row["parent"] is None
             and row["rotation"] == [0.0, 0.0, 0.0, 1.0]
-            and row["scale"] == [1.0, 1.0, 1.0],
-            "Door preview rotation/scale differs",
+            # The ordinary Blueprint scale animation is 0.9 + 0.1*progress;
+            # this audit requires progress exactly zero. Ghosts remain unit scale.
+            and all(
+                abs(axis - (0.9 if blueprint else 1.0)) <= 1e-6 for axis in row["scale"]
+            )
+            and abs(row["position"][2] - (0.2 if blueprint else 2.0)) <= 1e-6,
+            "Door preview rotation/scale/depth differs",
         )
         require(
             anchor is not None

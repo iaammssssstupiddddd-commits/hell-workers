@@ -812,3 +812,13 @@ closed sequenceはoptional dev-minimize、architect、Normal、select-door、pla
 empty/catalogは停止、ghost/配置は通常実行、最後は再停止とし、全実入力・ACK・frame/時計・causal prefixを照合する。
 通常実行区間はresume前からpause後ACKまで20 real秒以内、最終Blueprintはprogress0/material未完を維持する。
 実機・品質・独立review前に合格や施工成立へ読み替えない。fresh v2で全3caseを確認する。
+
+
+#### Door入力v2の既存Blueprint pose（2026-11-13）
+
+v2ではEWの通常選択・実placement・Escape・再Pauseが成立し、通常実行区間は2.445641 real秒だった。
+progress0/material未完の実Blueprintを得たが、検証器がBlueprintもunit scaleと誤認してinvalidとなった。
+既存`hw_visual::blueprint_scale_animation_system`は0.9+0.1×progress、placement rootはZ_AURA=0.2であり、
+実rawはそのとおり。ghostのunit scale/Z_SELECTION=2.0は別契約として維持する。
+検証器だけをrole別の実契約へ補正し、誤roleのscale/depthと自己整合する行列への置換も拒否回帰へ加える。
+旧v2はinvalidのまま精算・診断保持し、未実施NS/tieを合格へ足さない。品質・独立review後のfresh v3で全3caseを確認する。

@@ -64,9 +64,9 @@ def fixture(case="door-release-east-west"):
 
     def sprite(blueprint):
         pose = {
-            "translation": [16.0, 16.0, 0.5],
+            "translation": [16.0, 16.0, 0.2 if blueprint else 2.0],
             "rotation": [0.0, 0.0, 0.0, 1.0],
-            "scale": [1.0, 1.0, 1.0],
+            "scale": [0.9, 0.9, 0.9] if blueprint else [1.0, 1.0, 1.0],
         }
         return {
             "entity": 999 if blueprint else 998,
@@ -449,6 +449,52 @@ class DoorOracleTests(unittest.TestCase):
             values[4][2]["value"]["door_release_planning"]["ghosts"][0][key] = value
             with self.assertRaises(ValueError):
                 oracle.verify_inputs(*values)
+
+    def test_ghost_and_zero_progress_blueprint_keep_their_distinct_scale_and_depth(
+        self,
+    ):
+        for index, field, bad_value in [
+            (2, "scale", [0.9, 0.9, 0.9]),
+            (3, "scale", [1.0, 1.0, 1.0]),
+            (3, "scale", [0.9, 0.9, 1.0]),
+            (2, "position", [16.0, 16.0, 0.2]),
+            (3, "position", [16.0, 16.0, 2.0]),
+        ]:
+            values = fixture()
+            context = values[4][index]["value"]["door_release_planning"]
+            sprite = (
+                context["ghosts"][0]
+                if index == 2
+                else context["blueprints"][0]["sprite"]
+            )
+            sprite[field] = bad_value
+            sprite["global_matrix"] = oracle.art.foreground.matrix(
+                {
+                    "translation": sprite["position"],
+                    "rotation": sprite["rotation"],
+                    "scale": sprite["scale"],
+                }
+            )
+            with (
+                self.subTest(index=index, field=field),
+                self.assertRaisesRegex(ValueError, "scale/depth"),
+            ):
+                oracle.verify_inputs(*values)
+        values = fixture()
+        values[4][-1]["value"]["door_release_planning"]["blueprints"][0]["sprite"][
+            "scale"
+        ] = [0.8999999761581421] * 3
+        pose = values[4][-1]["value"]["door_release_planning"]["blueprints"][0][
+            "sprite"
+        ]
+        pose["global_matrix"] = oracle.art.foreground.matrix(
+            {
+                "translation": pose["position"],
+                "rotation": pose["rotation"],
+                "scale": pose["scale"],
+            }
+        )
+        oracle.verify_inputs(*values)
 
     def test_blueprint_sprite_must_be_the_same_actual_blueprint_entity(self):
         values = fixture()

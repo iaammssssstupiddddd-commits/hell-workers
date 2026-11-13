@@ -162,6 +162,8 @@ producerはpre-armから毎frameの入力を保持し、hostはarm nonce/PID/epo
 既存Normalボタン→Door選択→ghost→実配置→Escape→既存Pauseボタンの順に操作する。
 各操作の前後Pause状態、時間ボタンの実Pressed ACK、全入力prefixを照合し、resume前からpause後ACKまでを
 20 real秒以内に制限する。最終Blueprintは再Pause後のprogress0/material未完を要求し、自然施工を主張しない。
+既存`blueprint_scale_animation_system`のprogress0 scale0.9・Z_AURA=0.2をBlueprintへ、
+ghostのunit scale・Z_SELECTION=2.0をghostへ別々に拘束し、実world/local行列も照合する。
 支持壁のseam・変更・撤去・loadは既存J1 release6の別受入とする。
 
 `building_cumulative_acceptance.py`は既存adjacent比較の閉じたprofileを使い、旧referenceと正式8世代＋Doorの
