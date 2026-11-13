@@ -41,6 +41,8 @@ rootのKTX2回帰testは実decoderの正常境界・window超過拒否・truncat
 全13 memberは内部ゲームcrateとして`publish = false`です。自前licenseはこのmetadataから推測しません。
 rootが版を管理する`proptest`は`hw_world`と`hw_infra`のdev-dependencyだけに追加し、
 `std` featureのみでpure property testを実行します。通常runtimeの依存方向は変えません。
+rootの`winit` dev-dependencyは、既存lockの0.30.12をdefault featuresなしで直接参照する。
+実`RawWinitWindowEvent`を作るpause回帰fixture専用で、runtimeのwindow/backend feature選択はBevyが所有する。
 `dev.py deps`は内部crateのlicense判定だけを除外し、外部normal/build/devとoptional依存を監査します。
 内部crate間の直接依存は各`Cargo.toml`を正本とし、現在は次の通りです。
 

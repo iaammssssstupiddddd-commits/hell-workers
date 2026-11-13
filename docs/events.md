@@ -10,6 +10,22 @@ rootでbufferを所有する`Message`は`crates/bevy_app/src/plugins/messages.rs
 
 ---
 
+## ウィンドウのフレーム所有メッセージ
+
+Bevy 0.19の`TimePlugin`は`FixedPostUpdate`の通知を受けてglobal message registryを更新する。
+`Time<Virtual>`の停止中はfixed scheduleが進まず、Winitが発行し続けるbufferまで蓄積するため、
+root `MessagesPlugin`の`First`で`MessageUpdateSystems`より前に
+`RawWinitWindowEvent`・`WindowEvent`・`RequestRedraw`だけを通常の二重buffer規則で更新する。
+条件はVirtual timeがpausedかつregistryが`Waiting`の場合だけ。`Ready` / `Always`では通常更新に任せ、
+存在しないwindow resourceは生成しない。登録はBevy側のownerに残し、root message inventoryへ追加しない。
+これらのconsumerはframe内の入力・window adapterとapp update後のrunnerであり、fixed consumerは持たない。
+個々のOS redrawが必ず3型すべてを発行するという契約ではない。
+
+gameplay要求、型付きKeyboard/Mouse等の入力buffer、global registryの状態は変更しない。
+停止中のdomain message保持と再開後のFixedUpdate配送を維持する。
+実TimePluginを使う回帰でframe readerの一度だけの受信、bounded buffer、通常更新との二重回転防止、
+domain再開配送、headlessでのoptional resource非生成を確認する。
+
 ## 0. ドメイン要求
 
 | Message | 定義 / 登録owner | Producer | Consumer / Timing | 契約 |

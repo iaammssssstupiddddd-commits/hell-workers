@@ -8,6 +8,8 @@ use hw_core::events::{
 };
 use hw_core::jobs::WorkType;
 
+mod paused_window;
+
 macro_rules! assert_root_messages_registered {
         ($app:expr; $($message:ty),+ $(,)?) => {
             $(

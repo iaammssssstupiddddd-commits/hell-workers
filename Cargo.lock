@@ -475,6 +475,7 @@ dependencies = [
  "sha2",
  "wgpu",
  "wgpu-core",
+ "winit",
 ]
 
 [[package]]

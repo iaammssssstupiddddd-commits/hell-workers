@@ -1,5 +1,23 @@
 # 橋以外9種の導入前性能比較
 
+## M15: 停止中のwindow buffer蓄積（2026-11-13）
+
+M14は`adb4c605`で実装・関連検証・Help No impact・独立review済み。
+累積v4の公開検証はCapture 40.688122秒、Memory 44.866098秒、隣接間隔は最大110.240169秒で180秒内。
+Capture12は合格したが、Memory NのRust live peak差21,430,227 bytesは固定16,777,216 bytesを超えた。
+旧Memory失敗とrawを保持し、予算緩和や既存passへの読み替えは行わない。
+
+rawの計測中1,400,832 bytes reallocはWinitの`forward_bevy_events`に到達した。
+Bevy 0.19の実TimePluginを使う10,000 frameのCPU再現では、停止中にwindow bufferが10,000件残り、
+限定maintenanceで1件に収まった。これは全21MB差の説明や性能受入の完了を意味しない。
+修正は通常runtimeのframe/runner所有3型だけで、pausedかつregistry Waiting時に通常二重bufferを更新する。
+global Always化、gameplay/型付き入力の破棄、時間・操作・アセット・独立承認の変更は行わない。
+
+- [x] 実TimePlugin/MessagesPluginの5回帰（bounded、frame reader、Ready/Always、domain再開、headless）成功。
+- [ ] 恒久仕様・実Help経路・check/Clippy/変更別CI・storage・exact独立reviewを完了しcommit。
+- [ ] 新しいclean sourceで固定予算のfresh Capture12→Memory12と代表pause/入力/再開の実機回帰を実施。
+- [ ] 9種採否・復旧情報・制作原本・恒久文書・不要検証環境の整理を完了。
+
 ## M14: 累積Memoryの精算間隔超過（2026-11-13）
 
 `8a445da2`の累積v3はCapture12の全体検証と全24件の個別検証を通したが、
@@ -15,9 +33,9 @@ stage/build receipt/raw依存の変更も拒否し、各caseの完全raw oracle�
 JSON/CLI・別process・別操作へproofを公開せず、永続cacheや検証済み結果の自己申告を受け付けない。
 Rust・アセット・gameplay・独立art/numeric/release判断は変更しない。
 
-- [ ] foreign/stale/mutated proofと検証中入力変更、raw破損、全case oracle回数、単独入口の完全検証を回帰する。
-- [ ] gap181秒・overlap・欠測拒否、数値・資源の従来結果を維持する。
-- [ ] Help実経路・関連CI/storage・exact独立review後にcommitする。
+- [x] foreign/stale/mutated proofと検証中入力変更、raw破損、全case oracle回数、単独入口の完全検証を回帰する。
+- [x] gap181秒・overlap・欠測拒否、数値・資源の従来結果を維持する。
+- [x] Help実経路・関連CI/storage・exact独立review後にcommitする。
 - [ ] 純検証の所要時間を実測してから、同じ予算・180秒でfresh全24を実行し独立採否する。
 
 旧v3の診断に必要な原本読取りは完了した。以後はこの失敗と計測値を履歴として保持し、

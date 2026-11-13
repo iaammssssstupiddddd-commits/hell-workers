@@ -68,6 +68,9 @@ proptestをdev-dependencyとして利用し、pure入口を検査する。生成
 逆依存せず、runtimeにproptest型・乱数源・failure保存処理を持ち込まない。
 `hw_ui`の`log` dev-dependencyも実Bevy command警告の回帰検出だけに限定し、runtime loggerやdomain依存を追加しない。
 
+rootの`winit` dev-dependencyはwindow messageの実型fixture専用とする。
+window frame bufferの停止中maintenanceはApp Shellの責務であり、leafへwindow依存やdomain clock変更を持ち込まない。
+
 複数のシステム間でデータをやり取りするための型（struct や enum）や、関数の戻り値（Result / Outcome 型）は、**「その処理の主たる責務を持つ Leaf クレート (`hw_*`)」** 側で定義し、Root 側がそれを `use` して利用する。
 
 *   **パターン A (基盤型):** `hw_core` へ配置（例: `PlayMode`, `ResourceType`, 共有 Event / Relationship）。

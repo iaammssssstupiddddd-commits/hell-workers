@@ -235,6 +235,11 @@ PreUpdateで差分更新し、停止直前の変更とworld置換後の選択を
 既存未配属designationのManagedBy/Priorityまでで、actor座標は動かさない。新規採取は既存Designation/TaskSlots/ManagedBy/workerを上書きしない。
 Door requestは単一のPostUpdate ownerでdoor/mapを更新してからLastのsaveに渡す。表示更新より先に適用し、Light Fieldは次Updateで再構築する。
 
+停止中も描画とwindow処理は継続する。root `MessagesPlugin`は`First`で、registryが`Waiting`のときだけ
+フレーム所有のwindow 3型を更新し、既読メッセージの無制限蓄積を防ぐ。
+通常のglobal更新やgameplay・型付き入力の保持、pause中の操作allowlistは変更しない。
+対象と順序の正本は[イベントカタログ](events.md#ウィンドウのフレーム所有メッセージ)を参照。
+
 ## 任意の操作ガイド
 
 Helpの「操作ガイドを開始」はHelpとシステムメニューを閉じ、それぞれが所有するpauseだけを解除する。
