@@ -15,6 +15,116 @@ from PIL import Image
 from scripts import building_release_art_acceptance as host
 
 
+class ReleasedWallInventoryTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.repo = Path(self.temp.name)
+        for kind, generation, schema, roles in [
+            ("wall", 13, 2, host.joint.wall_art.FORMWORK_PREVIEW_ROLES),
+            (
+                "door",
+                7,
+                1,
+                (
+                    "mesh:closed",
+                    "mesh:open",
+                    "mesh:locked",
+                    "texture:albedo",
+                    "preview:ew",
+                    "preview:ns",
+                ),
+            ),
+        ]:
+            identity = {
+                "asset_set_id": kind + "-production-v1",
+                "asset_set_generation": generation,
+                "manifest_sha256": ("a" if kind == "wall" else "b") * 64,
+            }
+            records = []
+            for index, role in enumerate(roles):
+                rel = f"{kind}_sets/{generation}/core/{index}.bin"
+                payload = (kind + role).encode()
+                self.put_asset(rel, payload)
+                records.append(
+                    {
+                        "role": role,
+                        "path": rel,
+                        "bytes": len(payload),
+                        "sha256": host.pipeline.digest(payload),
+                    }
+                )
+            receipt_rel = f"{kind}_sets/{generation}/authority/promotion-receipt.json"
+            receipt = host.joint.canonical_bytes(
+                {"schema_version": 1, **identity, "new_active": identity}
+            )
+            self.put_asset(receipt_rel, receipt)
+            manifest = {
+                "schema_version": schema,
+                **identity,
+                "authority": "release_approved",
+                "review_status": "art_approved",
+                "core": records,
+                "receipt": {
+                    "path": receipt_rel,
+                    "bytes": len(receipt),
+                    "sha256": host.pipeline.digest(receipt),
+                },
+            }
+            if kind == "wall":
+                manifest.update(normal_decision="rejected", candidate_normal=None)
+            self.put_asset(
+                f"manifests/{kind}-production-v1.{kind}set",
+                host.joint.canonical_bytes(manifest),
+            )
+
+    def put_asset(self, rel, payload):
+        path = self.repo / "assets" / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(payload)
+
+    def test_normal_wall_v2_and_door_v1_reach_full_release_validator(self):
+        self.assertEqual(
+            host.wall_inventory(self.repo),
+            {
+                "asset_set_generation": 13,
+                "authority": "release_approved",
+                "manifest_sha256": "a" * 64,
+            },
+        )
+
+    def test_wrong_wall_schema_authority_or_normal_contract_is_rejected(self):
+        locator = self.repo / "assets/manifests/wall-production-v1.wallset"
+        original = host.read_artifact(locator)
+        for key, value in [
+            ("schema_version", 1),
+            ("authority", "isolated_candidate"),
+            ("review_status", "pending"),
+            ("asset_set_generation", True),
+            ("normal_decision", "approved"),
+        ]:
+            changed = copy.deepcopy(original)
+            changed[key] = value
+            locator.write_bytes(host.joint.canonical_bytes(changed))
+            with self.subTest(key=key), self.assertRaises(host.native.AcceptanceError):
+                host.wall_inventory(self.repo)
+        locator.write_bytes(host.joint.canonical_bytes(original))
+
+    def test_full_validator_rejects_changed_core_and_receipt_bytes(self):
+        locator = self.repo / "assets/manifests/wall-production-v1.wallset"
+        manifest = host.read_artifact(locator)
+        for record in [manifest["core"][0], manifest["receipt"]]:
+            path = self.repo / "assets" / record["path"]
+            original = path.read_bytes()
+            path.write_bytes(b"changed")
+            with (
+                self.subTest(path=record["path"]),
+                self.assertRaises(host.native.AcceptanceError),
+            ):
+                host.wall_inventory(self.repo)
+            path.write_bytes(original)
+
+
 class ReleasedTransportTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()

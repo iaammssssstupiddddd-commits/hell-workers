@@ -24,6 +24,8 @@ else:
     import building_group_art_window as window_probe
     import building_native_executable as executable
 
+import wall_door_joint_acceptance as joint
+
 native, pipeline, static = m6.native, m6.pipeline, m6.static
 PROFILE = oracle.PROFILE
 ENV = "HW_BUILDING_RELEASE_GALLERY_SESSION"
@@ -88,28 +90,20 @@ def driver_inventory():
         Path(window_probe.__file__),
         Path(executable.__file__),
         Path(oracle.common.__file__),
+        Path(joint.__file__),
     )
     return {p.name: pipeline.digest(p.read_bytes()) for p in paths}
 
 
 def wall_inventory(repo):
-    root = repo / "assets"
-    path = root / "manifests/wall-production-v1.wallset"
-    manifest = pipeline.read(path)
-    pipeline.require(
-        manifest["authority"] == "release_approved"
-        and manifest["review_status"] == "art_approved"
-        and type(manifest["asset_set_generation"]) is int
-        and manifest["asset_set_generation"] > 0,
-        "released gallery requires the normal reviewed Wall generation",
-    )
-    for record in [*manifest["core"], manifest["receipt"]]:
-        pipeline.file_bytes(root, record)
-    identity = {
-        key: manifest[key]
+    # Wall's existing schema is v2; the building pipeline's v1 object reader
+    # cannot admit it. Reuse the full normal Wall/Door identity, core, canonical
+    # locator and promotion-receipt validator; never relax the shared reader.
+    identities = joint.release_identities(repo)
+    return {
+        key: identities["wall"][key]
         for key in ("asset_set_generation", "authority", "manifest_sha256")
     }
-    return identity
 
 
 def check(value):
