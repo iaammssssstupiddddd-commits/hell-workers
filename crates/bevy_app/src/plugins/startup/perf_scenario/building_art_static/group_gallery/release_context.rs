@@ -4,6 +4,7 @@
 //! construction, hauling, or running simulation is claimed.
 use super::*;
 use bevy::camera::{primitives::MeshAabb, visibility::RenderLayers};
+use bevy::ecs::system::RunSystemOnce;
 use hw_core::soul::DamnedSoul;
 use hw_jobs::{AssignedTask, Building, BuildingType};
 use hw_logistics::{Inventory, ResourceItem, ResourceType};
@@ -298,6 +299,13 @@ fn initialize_inventory(world: &mut World, state: &Context) -> Result<bool, Stri
     );
     queue.apply(world);
     world.entity_mut(carrier).insert(inventory);
+    // Logic is intentionally paused in this storyboard. Seed the real mirror
+    // once after the real pickup, before any probe is published; do not resume
+    // simulation or manufacture a carrying Sprite. The ordinary visual systems
+    // create and position the icon from this mirror on subsequent frames.
+    world
+        .run_system_once(hw_logistics::visual_sync::sync_inventory_item_visual_system)
+        .map_err(|error| format!("context inventory mirror preparation failed: {error}"))?;
     let mut context = world.resource_mut::<Context>();
     context.carrier = Some(carrier);
     context.item = Some(item);
@@ -631,6 +639,71 @@ mod tests {
             ..default()
         });
         (world, root)
+    }
+
+    #[test]
+    fn unpublished_pickup_prepares_actual_mirror_while_paused_once() {
+        use hw_core::visual_mirror::logistics::InventoryItemVisual;
+        let (mut world, root) = world();
+        let original = world.resource::<BuildingArtStaticState>().actors[0];
+        world.entity_mut(original).insert(DamnedSoul::default());
+        world.insert_resource(Time::<Virtual>::default());
+        world.resource_mut::<Time<Virtual>>().pause();
+        begin_preparation(&mut world, PreparationStep::Floor).unwrap();
+        let grid = (11, 34);
+        let carrier = world
+            .spawn((
+                DamnedSoul::default(),
+                Transform::from_translation(WorldMap::grid_to_world(grid.0, grid.1).extend(0.0)),
+                Inventory::default(),
+                InventoryItemVisual::default(),
+                AssignedTask::None,
+            ))
+            .id();
+        let state = Context {
+            original_souls: vec![original],
+            floor: original,
+            floor_grid: (10, 43),
+            walls: Vec::new(),
+            carrier_grid: grid,
+            carrier: None,
+            item: None,
+            stable: 0,
+            pending: None,
+        };
+        world.insert_resource(state.clone());
+        assert!(initialize_inventory(&mut world, &state).unwrap());
+        let item = world.resource::<Context>().item.unwrap();
+        assert_eq!(world.get::<Inventory>(carrier).unwrap().0, Some(item));
+        assert_eq!(
+            world.get::<ResourceItem>(item).unwrap().0,
+            ResourceType::Wood
+        );
+        assert_eq!(world.get::<Visibility>(item), Some(&Visibility::Hidden));
+        assert_eq!(
+            world
+                .get::<InventoryItemVisual>(carrier)
+                .unwrap()
+                .resource_type,
+            Some(ResourceType::Wood)
+        );
+        assert!(world.resource::<Time<Virtual>>().is_paused());
+        // A later drift is a failure, never an opportunity to replay preparation.
+        world
+            .get_mut::<InventoryItemVisual>(carrier)
+            .unwrap()
+            .resource_type = None;
+        let prepared = world.resource::<Context>().clone();
+        assert!(initialize_inventory(&mut world, &prepared).is_err());
+        assert_eq!(
+            world
+                .get::<InventoryItemVisual>(carrier)
+                .unwrap()
+                .resource_type,
+            None
+        );
+        assert_eq!(world.query::<&ResourceItem>().iter(&world).count(), 1);
+        std::fs::remove_dir(root).unwrap();
     }
 
     #[test]

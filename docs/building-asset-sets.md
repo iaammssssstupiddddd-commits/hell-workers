@@ -154,6 +154,8 @@ Transform欠損も含む全Building inventoryでcore/support＋当該1件だけ�
 追加Soulは既存生成systemへ通常messageを送る。生成resolverのradius5先頭走査が宣言した対象cellへ
 到達するrequestを送信前に検証し、生成後にも実位置・idle task・空Inventory・無関係を照合する。
 terrainや既存Soulを動かさず、生成規則を変更しない。
+停止中は通常LogicのInventory mirror同期も止まるため、未公開の実pickup直後に既存同期systemを一度だけ呼ぶ。
+携行Sprite自体は通常Visual systemへ任せ、公開後や重複準備での再同期・修復は許さない。
 
 `door_release_ui_acceptance.py`は既存Siteの空3×3を選び支持壁2/2/4だけを一度準備する。
 Door本体・Blueprint・施工完了を生成せず、実OS入力のcatalog・EW/NS/tie ghost・同owner Blueprintを検証する。

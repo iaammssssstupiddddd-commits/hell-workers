@@ -843,3 +843,19 @@ NS入力は未送信、旧EW部分結果を全3caseの合格へ流用しない�
 既存opt-in同意journalを通常の後続jobとしてconsume/rotationし、未知/失敗sessionを再送しない。
 新`verify-group`は全3原本を完全再検証し、同source/binary/normal世代と固有PID/nonce/sessionを照合する。
 3独立worldであることを明記し、単一worldでの継続操作に読み替えない。fresh v5から確認する。
+
+
+#### 正式gallery v3の停止中Inventory mirror（2026-11-13）
+
+Door v5は3個の独立worldで全原本verify・12画像の主担当/独立reviewを通過し、
+EW/tieはEastWest、NSはNorthSouth、実placement後の同owner未施工Blueprintを確認した。
+各batchはpass封印・用途保持・finalize済み。施工・pulse・seam・load・性能はこの結果から主張しない。
+
+正式gallery v3は新profiling build成功後、初回normalのprobe/PNGなしで約180秒後に終了し、
+invalid封印・診断保持・finalizeした。同batchを再送しない。
+既存Logic setはVirtual Time停止中に動かず、試験準備の実pickup後もInventoryItemVisualがNoneのままになる。
+実Worldの回帰testで、InventoryのWoodとhidden itemが成立してもmirrorだけが欠けることをRED再現した。
+Released galleryの未公開HeldItem準備で、既存sync_inventory_item_visual_systemを一度だけ呼ぶ。
+通常Visual systemによるicon生成を待ち、Spriteを捏造したり通常Logic/停止ruleを変更しない。
+公開後や二度目の準備では同期を再実行せず、driftを拒否する。旧v3をpassへ読み替えず、
+品質・Help・独立exact reviewを経たfresh v4で改めて確認する。
