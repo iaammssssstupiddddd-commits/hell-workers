@@ -4,7 +4,49 @@
 [移行計画](plans/3d-rtt/non-wall-floor-building-art-migration-plan-2026-09-19.md)を正本とする。
 本書はroot `bevy_app::assets::building_asset_set` が所有する入力境界を記す。
 
-## 実装範囲（M1-c候補）
+## 2026-11-13 非橋9種の正式導入・受入
+
+Tank、MudMixer、RestArea、SoulSpa、WheelbarrowParking、SandPile、BonePile、OutdoorLampは、
+個別の独立numeric/art/release判断、隔離promotion/install/rollback rehearsal、本正本へのpromotionとinstallを完了した。
+通常binaryの`default_release_bindings.json`はこの8件を使用し、既存Door g7を合わせた9種を採用する。
+Bridgeの正式asset・専用lifecycle・通過・性能受入は別工程のままで、全10種の完了を主張しない。
+
+| kind | generation | ReleaseApproved manifest SHA-256 |
+| --- | ---: | --- |
+| Tank | 1 | `3ecc40fd65f2833fb95860ef31748600c0bc58369ed7dfe6afb2f4cc8b66de0c` |
+| MudMixer | 1 | `fe47d51a7689707575611efd6d6440534294d005e8b6a41b9d15339e28c07047` |
+| RestArea | 1 | `2c9ab0e7b36d19550c619773a8e0aceb69bf5d1c55ea3ac86c11974eefa80add` |
+| SoulSpa | 2 | `cbce26f0fa8342b0b9101b5bc6da4c08d8f535535fd3d1d27a3238ced80bcdf1` |
+| WheelbarrowParking | 2 | `a0a848dafecdbb9fd88acb1dc244e3ea4eee0c6c4148a6901c6df41276344e21` |
+| SandPile | 1 | `3ca9f5523b1009b70da32052e9b52a6e5b2c07a9637dc42449aff13837fb0a66` |
+| BonePile | 1 | `e94b7740741eaf349d2dfa6b5217d160796519b1c24ad5689f86cc63af5c6bc1` |
+| OutdoorLamp | 1 | `26b2f804e2e34c72d0d37ada6aa873ecd79abf7af83fc5618377f7b98b25a370` |
+| Door（既存経路） | 7 | `4e3f9236db067772b9a60b37ea98437cb29e481f9ec9cbb4d6dcf6517374a449` |
+
+既定8件のinventory SHAは`87866aaa1734ad1445f21765053dbeb56e2e0205f383540bdf67c381a98d073a`。
+支持物は既存Wall g13を維持する。M2/M3/M5の通常startup auditを群ごとに採用済みで、
+初期worldに存在しないownerを生成・表示済みと扱わない。groupごとの通常lifecycleとアート採否は
+以下の個別記録が所有し、静止画像だけから自然施工・全物流の追加成功を推論しない。
+
+最終受入は、正式9種galleryのHigh/DPI1・normal/far（36 ownerとWall/Floor/Soul/実携行icon）、
+Door EW/NS/tieの3独立worldでのcatalog/ghost/実配置Blueprint、J1の支持壁変更・撤去復元・paused loadを
+それぞれ原raw・所有window画像と独立verifierで採用した。galleryとJ1の明示seeded contextは自然施工の証明ではない。
+`65117e02`、runtime source `cfae3fced24f254a3249222539bf9b4b07ea7943e20a476bf1adfa83b848f31f`で
+fresh Capture12→Memory12の固定予算比較と、代表EWのpause/input/resume回帰も独立採用した。
+性能の数値と測定範囲は[性能仕様](rendering-performance.md#非橋9種の最終累積静止性能受入2026-11-13)、
+採用画面は[制作仕様](building-art-direction.md#非橋9種の採用画面2026-11-13)を参照。
+
+復旧はcanonical exportsのjournal/pointer/locator/receipt/payload/provenanceを正本とする。
+8件すべてで、製品側へ保全したexact codec `601b0fd770b29d00cef29fc47c21e8c8353f0315fad80c40812be37f0d0646ce`を使い
+`recover`は`applied`、`rollback`は`planned`を`--apply`なしで確認した。
+実rollback/reapplyや新たなpromotionは行っていない。初回導入の旧authority不在へのrollback契約を維持する。
+終了済みtransactionは元candidate jobを復旧依存とせず、正本の検証とcodec SHAを引き続き要求する。
+原本とcodecの配置は[アセット運用](assets_workflow.md#非橋9種の制作原本と復旧情報)を参照。
+
+以降の段階別履歴にある「未完」「保持中」はその記録時点の結果であり、現在の非橋9種の採否は本節を正本とする。
+旧invalid・未測定の結果をpassへ変更せず、用途終了後の原本pathを将来の実行義務にも扱わない。
+
+## runtime契約
 
 `.buildingset` のschema、authority、依存ファイルの実バイト数とSHA-256を検査する。
 `StartupPlugin` はasset型・policy resource・loaderを登録し、`VisualPlugin`はkind単位のpoolと
@@ -13,7 +55,7 @@
 現在の一覧には独立release承認・promotion/install済みのTank、MudMixer、RestArea、SoulSpa、
 WheelbarrowParking、SandPile、BonePile、OutdoorLampの8件を採用した。
 M5を加えたcompiled8は`078908ea`の全4群CI・独立reviewと通常startup確認を通過した。
-全9種の画像・Door・累積性能受入の完了とは区別する。
+後続の正式9種画像・Door・累積性能受入も上記の最終採否で完了した。
 独立release承認・promotion/install後に `building_asset_pipeline.py bindings` のexact出力を採用して初めて
 既定起動へ反映する。一覧は起動時の文書/外部JSON読取りではなくbinaryへ組み込む。
 `HW_BUILDING_ASSET_RELEASES`を明示した場合は一覧全体を置換し、空文字・空配列・非UTF-8・不正JSONを
@@ -57,7 +99,7 @@ immutable payload/provenanceの保持を独立確認した。本正本のgenerat
 M2の通常起動は`14d9c813`のowned実機でcompiled_default選択・2pool activeと依存residentを確認し、
 独立review・変更別CIを通過した。初期worldの対象ownerは空であり、全consumer表示の証明ではない。
 群の導入進捗、残るDoor監査・正式9種画面・累積比較は
-[継続計画](plans/non-bridge-candidate-performance-plan-2026-11-12.md)で管理する。
+[最終累積性能結果](rendering-performance.md#非橋9種の最終累積静止性能受入2026-11-13)で管理する。
 
 ### M3の正式世代（2026-11-13）
 
@@ -115,7 +157,7 @@ Rust peakは+2492835/+3180489B、RSSは−27912/+69124KiB、最大相対MAD2.776
 `078908ea`で通常startup manifest SHA
 `bdf9884c9460fdd3341aec32f0a7fc8f4309062bca3d72db5220e5ea654571c7`を独立採用した。
 全8poolがactive/依存常駐、初期Parking ownerとchildの採用画像接続を確認し、`visible=false`を保持した。
-初期worldにない他consumerやParking表示成功を主張しない。Door監査・正式9種画面・累積比較は継続工程である。
+初期worldにない他consumerやParking表示成功を主張しない。当時の後続だったDoor監査・正式9種画面・累積比較は上記最終採否で完了した。
 既存Door g7は別loaderのまま、Bridgeの正式導入は対象外とする。
 
 ### 通常起動defaultの受動audit
@@ -139,7 +181,7 @@ release overrideもない通常binaryを起動し、exact installed pointersとc
 起動前・最終verify前および原本の独立verifyで完全一致を要求する。変更は別job rootや起動へ進めない。初期世界にないconsumer、全kind lifecycle、
 アート・性能・release採否はこの接続検証の対象外で、通常authority storyboard等の別証拠へ残す。
 
-### 正式9種の追加受入ツール（実機受入前）
+### 正式9種の受入ツール契約
 
 `building_release_art_acceptance.py`は全8 ReleaseApprovedと既存Door g7だけを受け付ける
 独立gallery入口で、High/DPI1のnormal/farを各owned windowで観測する。
@@ -195,7 +237,9 @@ stage・build receipt・各caseのraw入力・台帳の変更もmetadataで拒�
 単独公開verifierは毎回完全検証し、CLIは最終照合後だけ成功結果を出す。
 旧累積v3は個別24件の検証後、Memoryの精算間隔が約339〜347秒となり固定180秒で全体失敗した。
 同じplanの入れ子再検証を減らすhost修正であり、旧失敗の時刻・予算・採否を変更しない。
-修正後のfresh累積受入は未実施で、静止表示予算・アート・release判断は依然として別工程である。
+修正後v4は間隔条件を満たしたがMemory N差21,430,227 bytesが16MiB予算を超過した。
+停止中のwindow buffer蓄積を実TimePluginで再現し、通常runtimeのframe/runner所有3型だけを補正した。
+修正後v5は固定予算のCapture12/Memory12を通過した。旧v3/v4失敗とart/releaseの独立判断は維持する。
 
 ### Bridge配置の成立条件（統合候補）
 
@@ -437,7 +481,7 @@ Mixer自身にIdle/Active文言は追加しない。canonical承認と原本/geo
 回転速度の実f32値は1.5707963705062866で、manifest/承認JSONはruntime codecの正規表記1.5707964を使う。
 全精度decimalの旧承認からは出力前のstrict比較で拒否されており、新承認digestでfresh候補を生成した。
 数値を丸めて検証条件を緩めたのではない。独立監査・承認digest・失敗/成功と整理の履歴は
-[現行導入計画](plans/3d-rtt/non-bridge-production-release-plan-2026-10-04.md)に記録する。
+[現在の正式導入・受入記録](building-asset-sets.md#2026-11-13-非橋9種の正式導入受入)に記録する。
 
 別の通常世界入口 `m2-mixer-candidate-planning` はmode `m2-candidate-planning` /
 scope `ordinary-m2-candidate-planning-v1` に限定し、採用済みMudMixer IsolatedCandidateだけを許可する。

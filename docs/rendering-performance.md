@@ -604,3 +604,42 @@ profilingのReady/Flush資源sidecar v2は全Mesh2d/Mesh3dのEntity・handle・S
 旧referenceの結果には`global_shared_mesh_plateau=false`を明記し、資源補足の観測成功を性能合格へ読み替えない。
 現行sourceは例外を使わずglobal N/4N plateauを満たす必要がある。material_countはTopDownStructuralMaterialのみで、
 TaskAreaMaterialを含む全materialやGPU実allocation量を表す値ではない。
+
+## 非橋9種の最終累積静止性能受入（2026-11-13）
+
+正式8世代＋Door g7のN36棟／4N144棟を、旧foundationと同一adapterで隣接比較した。
+各source・規模3回、中間組を逆順、30秒warmup＋60秒計測、Capture12→Memory12の逐次実行。
+Vulkan/X11、1280×720、DPI1、RtT High、novsync、Virtual Time停止を固定した。
+sourceは`65117e02e4f8ac18a81f1ea81c250d4070ec0879`、runtime fingerprintは
+`cfae3fced24f254a3249222539bf9b4b07ea7943e20a476bf1adfa83b848f31f`。
+Intel Arc（MTL）/Mesa26.2.6の実adapterを原ログで照合した。
+
+| current−referenceの中央値差 | N | 4N | 事前固定上限 |
+| --- | ---: | ---: | ---: |
+| p95 | +0.223686ms | +0.417161ms | +1ms |
+| p99 | +0.444841ms | +1.246457ms | +3ms |
+| Rust live peak | +8,434,057B | +8,976,466B | +16,777,216B |
+| process RSS | +18,964KiB | +36,100KiB | +98,304KiB |
+
+最大relative MADは1.626447%（上限10%）、最大精算／隣接間隔110.236433秒（上限180秒）。
+全24原本、build4件、Capture/Memoryの資源一致を独立再検証した。
+currentの共有meshは86個・vertex/index payload184,656B、image177個・CPU payload477,513,628B、
+descriptor見積477,693,884B、CPU backingなし5個、structural material24個・shallow11,136BでN/4N間も安定した。
+12指標の固定予算は、mesh数+7／payload+65,192B、image数+20／CPU・descriptor各+9,175,040B、
+material数+9／shallow+4,176B、非CPU image増加0を含む。
+旧referenceのSite/Yard境界quad重複とglobal plateau falseは既知失敗のまま保持し、数値を書き換えていない。
+
+予算SHA `bcc3eb709c42a5a775f558edb38be314c0855f120d301a8e1db2c9d0c741de89`、
+plan SHA `2b89535a46487b4d3c6d9b540bd9fe90db36b842a1667176798870903de445e4`、
+最終Memory結果SHA `f7c4524b66b70420f0c17a41dc9f28c9cf1a31166cb2a1408fa17a05bf073e12`。
+独立公開verifierの結果は保存集計とJSON全体で一致した。
+
+旧v3はMemory隣接間隔339〜347秒で失敗、host検証の同操作内proof共有後のv4は
+Memory N差21,430,227Bで不合格だった。実allocator stackとTimePlugin再現から停止中のwindow buffer蓄積を確認し、
+`First`でpaused＋Waiting時だけframe所有3型を二重buffer更新する修正を加えた（[イベント仕様](events.md#ウィンドウのフレーム所有メッセージ)）。
+全21MB差の単独原因を証明したとはせず、固定予算のfresh v5で採否をやり直した。旧失敗はpassへ変えない。
+修正後の通常UIによるpause→resume→Door選択・配置→pauseも原raw・4画像で独立採用した。
+
+これは混在する静止表示の受入で、active AIの累積性能、GPU allocation総量、Bridge、
+追加のart/numeric/release権限を証明しない。画像CPU/descriptor費用をGPU実確保量へ読み替えない。
+終了した比較の原本依存は閉じ、採用数値を本節に集約し、用途のないraw・binary copy・専用worktreeを整理する。

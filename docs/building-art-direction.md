@@ -208,3 +208,17 @@ root pose、lit/opaque白色材質とalbedo、roughness=1/metallic=0/reflectance
 active slotだけ白倍率とslot_emissive画像を持ち、body/inactiveは黒倍率・発光画像なしであることを要求する。
 readiness後のsnapshot変化は修復せず拒否する。scope `paused-static-spa-mask-page` はseeded静止状態の
 技術検査であり、自然な入退所・Save/Load・性能・正式releaseを承認するものではない。
+
+## 非橋9種の採用画面（2026-11-13）
+
+正式8世代と既存Door g7を、High/DPI1のnormal/farで独立採用した。
+36 ownerとWall/Floor/Soul/実Inventory携行iconの調和を確認した画面であり、自然施工の画像ではない。
+近景の部材・状態と通常距離の外形を優先し、farで細線が小さくなることは既知の表示限界として採用する。
+SoulSpaの四区画の見た目は利用者の採用判断を維持する。未採用の旧prototypeを正式世代へ混ぜない。
+
+![正式9種のnormal表示](design/building-art/released-nine-normal.png)
+
+![正式9種のfar表示](design/building-art/released-nine-far.png)
+
+DoorのEW/NS/tie・実入力preview/BlueprintとJ1の支持壁変更・loadは別の原本で確認した。
+最終状態・世代・性能と復旧の正本は[asset仕様](building-asset-sets.md#2026-11-13-非橋9種の正式導入受入)。

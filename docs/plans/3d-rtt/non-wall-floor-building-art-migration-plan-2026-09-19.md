@@ -7,17 +7,28 @@
 | 計画ID | `non-wall-floor-building-art-migration-plan-2026-09-19` |
 | ステータス | `In Progress` |
 | 作成日 | `2026-09-19` |
-| 最終更新日 | `2026-11-09` |
+| 最終更新日 | `2026-11-13` |
 | 作成者 | `Codex` |
 | 関連提案 | `N/A`（ユーザー依頼による計画） |
 | 関連Issue/PR | `N/A` |
 | 制作仕様 | [building-art-direction.md](../../building-art-direction.md) |
 | 調査基点 | 初稿: `94ccdf23`。自己レビュー: `43ca0cb1`の計画と現行実装（文書変更のみ） |
 
+## 2026-11-13 現在の採否
+
+利用者が継続を指定した**Bridge以外9種**は、個別のart/numeric/release・通常lifecycle、
+正式8種のpromotion/installと既存Door監査、9種normal/far画面、固定予算のCapture12/Memory12を採用した。
+実行時修正`65117e02`の代表pause/input/resume回帰も独立採用済み。現行のidentity・数値・既知範囲・復旧先は
+[asset仕様](../../building-asset-sets.md#2026-11-13-非橋9種の正式導入受入)と[性能仕様](../../rendering-performance.md#非橋9種の最終累積静止性能受入2026-11-13)を正本とする。
+
+本書の全10種完了条件は**未完**のまま。Bridge固有の地形・配置・通過・asset・lifecycle・art・性能受入は
+今回の採用から除外し、先行9種の成功で代替しない。以下の段階記録と保持pathは記録当時の履歴として読み、
+終了済みjobの再起動・永続保持を求める指示にはしない。非橋用の一時計画2件は恒久仕様へ集約して終了する。
+
 本書は全10種の移行順、制作物、表示接続、受入条件を所有する。M0の制作・検査toolingと先行無地原本を実装済み。
 M1-0のnativeでBridgeと現行川生成の不整合を検出した。ユーザー判断により橋は別途解決し、残る9種を先行する。
 Door catalogの既存preview接続と、新設備8種のmanifest／依存バイト検証loaderを実装。
-新設備のruntime表示接続・正式baseline完了・ゲーム内アート受入は未実施。
+初稿時点ではruntime表示接続・正式baseline・ゲーム内アート受入は未実施だった。現行の非橋9種採否は上記節を参照。
 個別意匠の最終判断はゲーム内の候補画像で行い、本計画の作成をアート受入やreleaseとして扱わない。
 
 自己レビューでは、全種の美術数値を先行2種の試作だけで決める前提を撤回し、共通契約と群別の確定点を分離した。
@@ -26,7 +37,7 @@ role別GLB、active/pendingの切替、再利用ghostのanchor復元、移動依
 
 ## 1. 目的
 
-### 2026-11-09 進行中: Tank自然施工の専用検証
+### 2026-11-09時点の履歴: Tank自然施工の専用検証
 
 `m2-tank-candidate-completion`を実装し、本体/付属保管場所の実二段入力、Wood2個の通常搬入、
 Build完了、親子/map移管、完成時の専用空バケツ5個を別scopeで照合する。通常起動は変更しない。

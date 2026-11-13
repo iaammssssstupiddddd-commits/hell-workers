@@ -422,3 +422,33 @@ ownerはTAK-14制作引継ぎ、用途は候補選定・独立アート/数値�
 
 Wall asset-set v2の厳密な配布管理は、manifest allowlistとgeneration / receipt付きpromotion経路で扱う。
 legacy assetで公開先を外部storageへ切り替える場合も、`assets/`への既存反映フローは維持する。
+
+## 非橋9種の制作原本と復旧情報
+
+2026-11-13に、監査したauthoring22組・198ファイルを`source/buildings/authoring/<kind>/<source-sha>/`へ
+相対pathを維持して保全し、全bytes SHAを照合した。`source-inventory.json`はsource/geometry/albedo/emission/
+paint reportと実Git上のgenerator履歴を対応付ける。古い未採用variantは未採用のまま残す。
+別の旧importにある候補原本・対応export入力342ファイル（8,772,673B）は`source/buildings/legacy-prototypes/`へ保全した。
+追加監査で見つかった未採用Blend3件と対応47ファイルも同libraryへ保全し、legacy inventoryは計389件となった。
+22組の198件と合わせた全587ファイルのSHA/bytesを独立照合した。
+nativeの実画面、ログ、asset-viewを原本libraryへ一括archiveしていない。
+
+現在の8設備releaseの復旧用exact codecは
+`source/tooling/building-asset-codec-601b0fd770b29d00cef29fc47c21e8c8353f0315fad80c40812be37f0d0646ce/bevy_app`。
+canonical `exports/`のjournal・authority pointer・locator・receipt・payload・provenanceとセットで保持する。
+8件すべてのrecover=applied／rollback=plannedを`--apply`なしで確認した。
+このcodecを最新ゲームbinaryへ暗黙に置き換えない。現行世代の廃止・検証済み復旧経路への移行後にだけ保持を解除する。
+通常runtimeはrepo内のinstall済みmirrorを読み、source libraryや検証jobを必要としない。
+
+### 受入後の検証環境整理（2026-11-13）
+
+採用結果を恒久仕様へ集約し、旧比較・診断のlive source再検証用途を明示終了した。
+終了した保持371件のconsumerを正規coordinatorで解除し、検証job/旧import等252 rootをTrashへ、
+tmpfsの使い捨て診断tool1件を削除した。専用Git作業場6件も撤去した。
+通常削除で止まったread-only複製は、終了済み対象のdirectory保護だけを戻し、残存sourceを回収可能に保全した。
+force、branch削除、Orca台帳直接編集は行わず、全branch参照、primary、通常Cargo cacheと無関係な作業場を残した。
+
+対象pathのallocated合計は117,233,041,408Bから0B。Trashを用いたため物理空きが同量増えたとは主張しない。
+primary storage checkはpass（allocated 378,184,093,696B、未分類legacy0、未終了batch0）。
+587原本・採用normal/far画像・canonical exportsと復旧codecは別の現在用途として保持する。
+旧jobのpath/hashを、再起動指示や永続archive義務へ解釈しない。

@@ -399,3 +399,11 @@ exact sRGB transferを使います。dirty diagnostic artifactは正式証跡へ
 - この構成は一般scene品質を検査します。Soulの製品表示はshared-pool billboardと
   P02 / P08 actual-window evidenceを正本とし、GLB clip / face atlasはrelease gateでは
   ありません。
+
+## 非橋9種の制作原本の引継ぎ
+
+採用済み設備と未採用prototypeのeditable原本を、[アセット運用](assets_workflow.md#非橋9種の制作原本と復旧情報)のsource libraryへ集約した。
+`.blend`だけに縮小せず、albedo/emissionとgeometry・paint reportも相対pathごと保存する。
+OCIO設定とgeneratorの実Git履歴を維持し、report中のhashや技術passをart/release承認へ読み替えない。
+旧prototype2版のgenerator hashは現Git履歴で未回収のためsource inventoryに明記し、旧自動生成の厳密再現は主張しない。
+その版のBlend/texture bytesは保全済みで、現行8正式世代のauthorityや復旧検証を変更しない。
