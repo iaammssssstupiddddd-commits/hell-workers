@@ -870,3 +870,28 @@ J1の子環境だけが親のsuppressive RUST_LOGを継承しており、infoの
 既存self-testへerror継承を加えてRED再現し、他の正式helperと同じ`info,wgpu=error`を子環境へ固定する。
 missing/foreign/non-Vulkan/WARNの拒否は維持し、ログから実adapterを確認する条件を緩めない。
 Rust/入力/表示/asset/計測手順を変更せず、品質・Help・独立review後のfresh J1 v2で確認する。
+
+
+#### 累積比較の歴史資源verifier境界（2026-11-13、実装前計画）
+
+累積v1は最初のplan照合で旧資源補足のprimary verifier harness357cと、J1ログ補正後のdaedeaの不一致により拒否された。
+plan/root/batch/launch/計測は未作成。queue開始markerと拒否を保持し、同送信は再実行しない。
+旧資源原本・5実行module・旧referenceは不変であり、基準値・予算を更新して通さない。
+
+- [ ] 承認済み`29e58ebfbc052c35c1a2eed6f6fa172989276b1b`のsource-only専用worktreeを、
+  現在必要な旧verifier実行用途として保持する。build・asset配置・agent起動はしない。
+- [ ] 旧basis root/manifest SHA、固定entrypoint、5module実SHA、旧harness、clean commit・同Git所有を前後照合する。
+  isolated read-only子processで元の`verify(original_basis_root)`を実行し、旧12run＋補足2runの完全raw検証を維持する。
+- [ ] current累積planへ歴史verifierのrepo/commit/entry SHA/harness/basis SHAを固定し、
+  current source/harness/driverと分離する。foundation既存profile・元supplement verifierは変更しない。
+- [ ] catalog/module/commit/entry/basis差替え、子nonzero/不正結果、検証中変更を拒否回帰で検証する。
+  実旧原本での完全verify、Help・変更別CI・独立exact review後、fresh累積v2へ進む。
+- [ ] 既採用予算の数値・理由、旧global_shared_mesh_plateau=false/accepted=falseを維持する。
+  全比較採用後に専用source-only worktreeを正規consumer解除・clean/所有確認のうえ撤去する。
+
+
+当境界の実装後、元の資源原本を実child verifierで完全再検証した。旧12run＋補足2runが通り、
+7/25境界mesh・1064/3800B、global_shared_mesh_plateau=false、accepted=falseを維持した。
+現行測定はまだ開始していない。source-only保全は34893824 allocated Bで、新Cargo cache/asset mirrorはない。
+49件の関連回帰は成功。history source/catalog/module/entry/owner/ignored bytecode/child出力/検証中変更を拒否する。
+品質・独立review・fresh v2の実測前に性能合格とはしない。

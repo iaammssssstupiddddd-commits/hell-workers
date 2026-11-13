@@ -181,6 +181,11 @@ J1のゲーム子環境は`RUST_LOG=info,wgpu=error`を固定し、親の抑止f
 Capture/Memory各N/4N・3対を比較する。両sourceの完全raw oracleの成功後だけ固定の論理投影を比較し、
 元presentation digestを残す。codecは最初の登録と保存済みSHAの再照合を分離し、実際のrelease transactionから
 追加asset pathだけを導出する。旧計測harness・共通asset bytes・失敗履歴は変えない。
+累積比較の旧資源補足は、承認済み`29e58ebf`のsource-only verifierから元の`verify()`をisolated子processで実行する。
+原basis root/manifest SHA、固定commit・entrypoint、5module実SHAと旧harness、同Git所有・clean/read-only・
+ignored bytecode不在を前後照合する。current計測のsource/harnessとは別にplanへ固定し、旧12run＋補足2runを
+完全再検証する。旧共有mesh失敗・accepted=falseと固定予算は維持し、任意module/commandやcatalog置換を許可しない。
+この専用checkoutはbuild/asset導入/agent起動に使わず、累積採用後に用途終了として撤去する。
 各ツールの存在や合成fixtureの成功は、画像・実入力・性能・art/releaseの承認を与えない。
 
 ### Bridge配置の成立条件（統合候補）

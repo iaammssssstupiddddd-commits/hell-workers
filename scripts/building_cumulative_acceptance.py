@@ -12,11 +12,13 @@ from pathlib import Path
 if __package__:
     from . import building_foundation_paired_acceptance as paired
     from . import building_m6_acceptance as m6
+    from . import building_historical_resource_verifier as historical
     from .perf_tool.artifact_readers import building_m6 as release_oracle
     from .perf_tool.artifact_readers import building_art_static as logical_oracle
 else:
     import building_foundation_paired_acceptance as paired
     import building_m6_acceptance as m6
+    import building_historical_resource_verifier as historical
     from perf_tool.artifact_readers import building_m6 as release_oracle
     from perf_tool.artifact_readers import building_art_static as logical_oracle
 
@@ -34,7 +36,7 @@ EXCLUDED_ENV = (
 
 
 def dependencies():
-    modules = (m6, release_oracle, logical_oracle, m6.art, pipeline)
+    modules = (m6, release_oracle, logical_oracle, m6.art, pipeline, historical)
     return {Path(module.__file__).name: static.sha256(Path(module.__file__)) for module in modules} | {
         Path(__file__).name: static.sha256(Path(__file__)),
         'numeric_verifiers': pipeline.numeric_verifier_inventory(),
@@ -131,6 +133,17 @@ def check_inputs(planned):
     class Inputs:
         codec = Path(value['context']['codec'])
     pipeline.require(pipeline.exact_json(value, plan_inputs(Inputs(), planned)), 'frozen released asset boundary changed')
+
+
+def bind_resource_verifier(args, planned):
+    pipeline.require(args.resource_verifier_repo is not None, 'frozen resource verifier source required')
+    return historical.bind(args.resource_verifier_repo, Path(planned['resource_basis']),
+                           Path(planned['repos']['current']))
+
+
+def verify_resource_basis(planned):
+    return historical.verify(planned['resource_basis_verifier'], Path(planned['resource_basis']),
+                             Path(planned['repos']['current']))
 
 
 def case_command(planned, stage, case):

@@ -109,11 +109,14 @@ def check_plan(value):
     static.check_root(repo, Path(value["job_root"]))
     native.require(value["identities"] == identities(repo, reference, value["profile"]), "foundation source/assets changed")
     native.require(("release" in value) == is_cumulative, "release inventory/profile differs")
+    native.require(("resource_basis_verifier" in value) == is_cumulative,
+                   "historical resource verifier/profile differs")
     if is_cumulative:
         cumulative_policy().check_inputs(value)
     basis = Path(value["resource_basis"])
     native.require(static.sha256(basis / "manifest.json") == value["resource_basis_sha256"], "resource basis changed")
-    verified = supplement.verify(basis)
+    verified = (cumulative_policy().verify_resource_basis(value)
+                if is_cumulative else supplement.verify(basis))
     native.require(verified["source"] == value["identities"]["reference"], "resource basis/reference differs")
 
 
@@ -132,6 +135,7 @@ def plan(args, *, profile=PROFILE):
         "adjacency": "only source/input hashing, raw verification and case seal/retain/finalize between paired runs; no build or other workload"}
     if profile == CUMULATIVE_PROFILE:
         value["release"] = cumulative_policy().plan_inputs(args, value)
+        value["resource_basis_verifier"] = cumulative_policy().bind_resource_verifier(args, value)
     native.require(isinstance(value["adapter"], str) and value["adapter"].strip(), "adapter required")
     check_plan(value)
     native.atomic_write_json(args.output, value)
@@ -620,6 +624,7 @@ def main(*, profile=PROFILE):
     native.require(profile in {PROFILE, CUMULATIVE_PROFILE}, "unknown adjacent CLI profile")
     if profile == CUMULATIVE_PROFILE:
         parser.add_argument("--codec", type=Path)
+        parser.add_argument("--resource-verifier-repo", type=Path)
     args = parser.parse_args()
     for path in (args.plan, args.stage):
         if path is not None:
@@ -628,6 +633,7 @@ def main(*, profile=PROFILE):
         native.require(all((args.repo, args.reference_repo, args.budget, args.resource_basis, args.job_root, args.output)), "plan inputs missing")
         if profile == CUMULATIVE_PROFILE:
             native.require(args.codec is not None, "released inventory codec required")
+            native.require(args.resource_verifier_repo is not None, "frozen resource verifier source required")
         result = plan(args, profile=profile)
     elif args.command == "prepare-build":
         native.require(all((args.plan, args.source, args.instrumentation)), "build preparation inputs missing")

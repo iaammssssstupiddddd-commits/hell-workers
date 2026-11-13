@@ -1,5 +1,6 @@
 """Rejection tests for released adjacent comparison, applied with its implementation."""
 import copy
+from contextlib import ExitStack
 from dataclasses import replace
 import json
 from pathlib import Path
@@ -86,6 +87,58 @@ class ReleasedCodecBoundary(unittest.TestCase):
 
 
 class FrozenCumulativeInputs(unittest.TestCase):
+    def test_historical_verifier_is_explicit_and_only_the_cumulative_profile_uses_it(self):
+        planned = {'profile': paired.PROFILE, 'accepted': False, 'promotion_authority': False,
+                   'drivers': {}, 'matrix': [list(case) for case in paired.matrix()],
+                   'limits': {'max_delta': dict.fromkeys(paired.METRICS, 0),
+                              'max_relative_mad': .1, 'max_gap_seconds': 180, 'reason': 'premeasurement fixture'},
+                   'repos': {'current': '/current', 'reference': '/reference'},
+                   'job_root': '/current/target/comparison', 'identities': {'reference': {'old': True}},
+                   'resource_basis': '/basis', 'resource_basis_sha256': 'fixed'}
+        with ExitStack() as stack:
+            for obj, name, kwargs in (
+                (paired, 'drivers', {'return_value': {}}),
+                (paired.native, 'validate_repo', {'side_effect': Path}),
+                (paired.static, 'check_root', {}),
+                (paired, 'identities', {'return_value': planned['identities']}),
+                (paired.static, 'sha256', {'return_value': 'fixed'}),
+                (cumulative, 'check_inputs', {}),
+            ):
+                stack.enter_context(patch.object(obj, name, **kwargs))
+            direct = stack.enter_context(patch.object(paired.supplement, 'verify', return_value={'source': {'old': True}}))
+            frozen = stack.enter_context(patch.object(cumulative, 'verify_resource_basis', return_value={'source': {'old': True}}))
+            paired.check_plan(planned)
+            direct.assert_called_once_with(Path('/basis'))
+            frozen.assert_not_called()
+            direct.reset_mock()
+            planned.update(profile=paired.CUMULATIVE_PROFILE, release={})
+            with self.assertRaisesRegex(paired.native.AcceptanceError, 'historical resource verifier/profile'):
+                paired.check_plan(planned)
+            direct.assert_not_called()
+            frozen.assert_not_called()
+            planned['resource_basis_verifier'] = {'fixture': 'explicit binding'}
+            paired.check_plan(planned)
+            frozen.assert_called_once_with(planned)
+            direct.assert_not_called()
+            planned.pop('release')
+            planned['profile'] = paired.PROFILE
+            with self.assertRaisesRegex(paired.native.AcceptanceError, 'historical resource verifier/profile'):
+                paired.check_plan(planned)
+
+    def test_missing_historical_source_fails_before_binding_or_cli_plan(self):
+        args = type('Args', (), {'resource_verifier_repo': None})()
+        with patch.object(cumulative.historical, 'bind') as bind:
+            with self.assertRaisesRegex(ValueError, 'frozen resource verifier source'):
+                cumulative.bind_resource_verifier(args, {})
+            bind.assert_not_called()
+        argv = ['cumulative', 'plan', '--repo', '/current', '--reference-repo', '/reference',
+                '--budget', '/budget', '--resource-basis', '/basis', '--job-root', '/root',
+                '--output', '/plan', '--codec', '/codec']
+        with patch('sys.argv', argv), patch.object(paired, 'plan') as plan:
+            with self.assertRaisesRegex(paired.native.AcceptanceError, 'frozen resource verifier source'):
+                paired.main(profile=paired.CUMULATIVE_PROFILE)
+            plan.assert_not_called()
+
     def test_saved_context_missing_sha_is_not_initial_admission(self):
         planned = {'repos': {'current': '/current', 'reference': '/reference'}, 'adapter': 'Intel',
                    'release': {'context': {'codec': '/codec'}}}
