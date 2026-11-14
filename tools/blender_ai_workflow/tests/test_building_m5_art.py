@@ -27,7 +27,6 @@ class M5ArtTests(unittest.TestCase):
         for kind, expected in {
             "SandPile": "44dbd1b7ca87502887771cb0db829f7183925b0be4c9f048638e65747608fca8",
             "BonePile": "2483a20c8e9bde63a85e63b511434d4f339d9075688263b48fd0e974f9581226",
-            "OutdoorLamp": "a8958577a785ccde040cfbe1a311bf7dac56c24740acdbe66923fb064aa86592",
         }.items():
             self.assertEqual(hashlib.sha256(art.render(kind)).hexdigest(), expected)
 
@@ -76,30 +75,25 @@ class M5ArtTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 art.path(name)
 
-    def test_lamp_readable_cage_preserves_anchor_margin_and_only_interior_changes(self):
+    def test_tall_work_light_keeps_ground_anchor_and_only_head_changes(self):
         from PIL import Image, ImageChops
+        value, spec = art.contract("OutdoorLamp")
+        self.assertEqual(value["anchor_px"], [128, 208])
+        self.assertEqual(spec["canvas_wu"], [64, 64])
         with Image.open(io.BytesIO(art.render("OutdoorLamp"))) as off, \
                 Image.open(io.BytesIO(art.render("OutdoorLamp", on=True))) as on:
             bounds = off.getchannel("A").getbbox()
-            self.assertGreaterEqual(bounds[1], 8)
-            self.assertGreaterEqual(bounds[2] - bounds[0], 108)
-            self.assertLessEqual(bounds[3], 145)
-            # Changes are enclosed inside the iron rim, above the support.
-            difference = ImageChops.difference(off.convert("RGB"), on.convert("RGB"))
-            changed = difference.getbbox()
-            self.assertTrue(80 <= changed[0] < changed[2] <= 176)
-            self.assertTrue(15 <= changed[1] < changed[3] <= 75)
-            self.assertGreaterEqual(changed[3] - changed[1], 30)
-            # Background stays visible between iron and light; the bone joint
-            # and long shaft remain separate from the two illuminated panels.
-            self.assertEqual(off.getpixel((96, 36))[3], 0)
-            self.assertEqual(off.getpixel((158, 36))[3], 0)
-            self.assertEqual(off.getpixel((128, 88))[3], 255)
-            self.assertEqual(off.getpixel((128, 104))[3], 255)
-            # A broad unlit center bar separates the two illuminated panels.
-            self.assertEqual(off.getpixel((128, 40)), on.getpixel((128, 40)))
-            self.assertNotEqual(off.getpixel((106, 40)), on.getpixel((106, 40)))
-            self.assertNotEqual(off.getpixel((150, 40)), on.getpixel((150, 40)))
+            self.assertGreater(bounds[1], 10)
+            self.assertLess(bounds[3], 256)
+            self.assertGreater(bounds[3]-bounds[1], 180)
+            self.assertEqual(off.getchannel("A").tobytes(), on.getchannel("A").tobytes())
+            changed = ImageChops.difference(off.convert("RGB"), on.convert("RGB")).getbbox()
+            self.assertTrue(90 <= changed[0] < changed[2] <= 166)
+            self.assertTrue(20 <= changed[1] < changed[3] <= 50)
+            # The pole and tripod extend far below the head without lighting up.
+            for point in ((128, 100), (128, 160), (128, 180)):
+                self.assertEqual(off.getpixel(point)[3], 255)
+                self.assertEqual(off.getpixel(point), on.getpixel(point))
 
 
 if __name__ == "__main__":

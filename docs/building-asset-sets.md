@@ -46,6 +46,30 @@ fresh Capture12→Memory12の固定予算比較と、代表EWのpause/input/resu
 以降の段階別履歴にある「未完」「保持中」はその記録時点の結果であり、現在の非橋9種の採否は本節を正本とする。
 旧invalid・未測定の結果をpassへ変更せず、用途終了後の原本pathを将来の実行義務にも扱わない。
 
+## 2026-11-14 外観改訂の入力契約
+
+以下は導入後フィードバックの改訂仕様であり、上記release表の世代を自動更新するものではない。
+新候補には別のexact art/numeric判断、正式candidate検証、promotion/installと既定binding更新を必要とする。
+
+- Tankは実形状・水位・実照明を維持し、構造材uniformの`indoor_light_params.w`へ0.82を設定して
+  法線を上向きへ混合する。幾何形状による陰影を弱め、他kindの値は0とする。
+  Blenderの候補previewにも同じworld-up混合を用い、catalogだけ古い強い陰影を残さない。
+- Mixerの`building-m2-v3.numeric-candidate.json`は、傾斜55度の開口ドラム、架台、車輪を定義する。
+  全部材に共通yaw −32度を適用し、rotorはその姿勢にlocal Y回転を合成する。
+  実part quaternionとsweepの姿勢を照合し、全静的8部材との連続回転範囲の非交差を検査する。
+  実精製時だけ進むVirtual clock、pause/idleでの保持、load時の角度0という契約は維持する。
+- M3 v2のRestAreaは閉じた布壁・全面屋根・入口カーテンを持つ。入所者の論理状態は変更せず、
+  独立Soulビルボードへowner Visibilityを同期する。Dream粒子は従来の利用人数に対応する。
+- M5 v2のLampはworld canvas 64×64wu／anchor `[128,208]`、catalog中心 `[128,128]`を使用する。
+  高いポールと頂部投光器を描き、on/offでalpha silhouetteを変えない。
+  論理1tile占有、選択footprint、配電・需要・照射範囲は変更しない。
+- M3/M5 numeric verifierは旧v1原本と新v2原本を区別し、既存の正式世代の検証互換を維持する。
+
+RestAreaの静止art contextは対象descriptorの実resident mesh/imageとconsumer handleを記録する。
+`exact-rest-area-resident-dependencies`／`global_pool_evidence=false`を独立verifierも要求する。
+無関係なUI atlasの遅延追加を対象建物の変化と扱わず、対象依存の欠落とready後の
+part/material/pose/visibility変化は引き続き拒否する。global poolや性能の受入証拠ではない。
+
 ## runtime契約
 
 `.buildingset` のschema、authority、依存ファイルの実バイト数とSHA-256を検査する。

@@ -651,14 +651,11 @@ fn snapshot(world: &mut World) -> Result<Option<Value>, String> {
     {
         return Err("context directional light inventory/settings differ".into());
     }
-    let resources = if m2 {
-        let Some(resources) = super::m2_context::resident_assets(world, &descriptor) else {
-            return Ok(None);
-        };
-        resources
-    } else {
-        json!({"meshes": world.resource::<Assets<Mesh>>().len(), "images": world.resource::<Assets<Image>>().len(),
-            "materials": world.resource::<Assets<TopDownStructuralMaterial>>().len()})
+    // Font atlases and other UI images can arrive after fixture readiness.
+    // Freeze the exact admitted building dependencies, not that unrelated pool.
+    // All owner/part/material/pose observations remain immutable after readiness.
+    let Some(resources) = super::m2_context::resident_assets(world, &descriptor) else {
+        return Ok(None);
     };
     Ok(Some(
         json!({"variant": variant, "lighting": lighting, "scope": SCOPE,

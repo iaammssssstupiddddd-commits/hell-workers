@@ -14,11 +14,15 @@ KINDS = frozenset(("WheelbarrowParking", "SandPile", "BonePile", "OutdoorLamp"))
 def numeric_contract(payload: bytes, kind: str) -> dict:
     require(kind in KINDS, "numeric geometry kind is not M5")
     geometry = json.loads(payload, object_pairs_hook=unique_object)
-    # Version 1 is a fixed proposal, not permission to choose new numeric values.
-    require(canonical(geometry) == canonical(json.loads(CONTRACT.read_bytes())),
+    # Both historical and revised proposals stay exact. Supporting a revision
+    # never upgrades its preview or numeric/art authority.
+    identifier = geometry.get("contract_id")
+    require(identifier in {"building-m5-v1", "building-m5-v2"}, "unknown M5 proposal")
+    proposal = CONTRACT if identifier == "building-m5-v1" else CONTRACT.with_name("building-m5-v2.contract.json")
+    require(canonical(geometry) == canonical(json.loads(proposal.read_bytes())),
             "M5 geometry proposal differs")
     spec = geometry["kinds"][kind]
-    return {"kind": kind, "canvas_px": geometry["canvas_px"], "anchor_px": geometry["anchor_px"],
+    return {"kind": kind, "canvas_px": geometry["canvas_px"], "anchor_px": spec.get("anchor_px", geometry["anchor_px"]),
             "catalog_margin_px": geometry["catalog_margin_px"], "world_roles": spec["world_roles"],
             "canvas_wu": spec["canvas_wu"], "representative_state": spec["representative_state"]}
 
@@ -42,8 +46,9 @@ def validate(approval: dict, preview: dict, art_digest: str, geometry: bytes, ma
     # canonical representation, not authoring JSON's incidental int spelling.
     for key in ("canvas_wu", "anchor_px"):
         common[key] = [float(value) for value in common[key]]
+    card = {**common, "anchor_px": [float(x)/2 for x in numeric["canvas_px"]]}
     require(canonical(manifest["world_preview"]) == canonical({"image_role": numeric["world_roles"][0], **common})
-            and canonical(manifest["catalog_preview"]) == canonical({"image_role": "catalog", **common})
+            and canonical(manifest["catalog_preview"]) == canonical({"image_role": "catalog", **card})
             and manifest["parts"] == [] and manifest.get("production_state") is None,
             "M5 manifest geometry differs from numeric decision")
     require([entry["role"] for entry in manifest["artifacts"]]

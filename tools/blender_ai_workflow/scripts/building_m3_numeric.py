@@ -50,7 +50,10 @@ def shape(value: object, template: object) -> None:
 def numeric_contract(payload: bytes, kind: str) -> dict:
     require(kind in KINDS, "numeric geometry kind is not M3")
     geometry = json.loads(payload, object_pairs_hook=unique_object)
-    template = json.loads(CONTRACT.read_bytes())
+    revision = geometry.get("revision", 1)
+    require(type(revision) is int and revision in (1, 2), "unsupported M3 revision")
+    template_path = CONTRACT if revision == 1 else CONTRACT.with_name("building-m3-v2.geometry.json")
+    template = json.loads(template_path.read_bytes())
     shape(geometry, template)
     require(type(geometry["schema_version"]) is int and geometry["schema_version"] == 1,
             "unsupported M3 geometry schema")

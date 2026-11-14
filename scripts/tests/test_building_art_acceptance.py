@@ -71,6 +71,14 @@ class RecipeTests(unittest.TestCase):
             "ordinary_input_evidence": False, "lifecycle_evidence": False, "records": states}
         return value, probe
 
+    def test_construction_mixer_revision_is_exactly_pinned_without_granting_authority(self):
+        path = art.ROOT / "tools/blender_ai_workflow/fixtures/building-m2-v3.numeric-candidate.json"
+        digest = art.pipeline.digest(path.read_bytes())
+        self.assertIn(digest, art.M2_NUMERIC["MudMixer"])
+        self.assertNotIn(digest, art.M2_NUMERIC["Tank"])
+        value, _ = self.m2_context("MudMixer")
+        self.assertFalse(value["promotion_authority"])
+
     def test_m2_context_has_separate_kind_mode_population_and_view_admission(self):
         for kind, population in (("Tank", 8), ("MudMixer", 10)):
             value, probe = self.m2_context(kind)
@@ -204,10 +212,12 @@ class RecipeTests(unittest.TestCase):
                     "owner_screen": [200., 200.], "composite_screen": [200., 200.], "preview_offset_wu": [0., -160.],
                     "preview": {"entity": 300 + index, "descriptor": descriptor, "artifact": artifact,
                                 "canvas_wu": [128., 128.], "anchor": [0., -.0625], "visible": True, "screen_anchor": [200., 360.]},
-                    "parts": [{"visible": True, "material_values": dict.fromkeys(
+                    "parts": [{"role": "body", "mesh": "mesh:body", "visible": True, "material_values": dict.fromkeys(
                         ("white", "opaque", "lit", "emissive_black", "emissive_texture_absent"), True)}], "walls": [
                         {"owner": 400 + index * 2 + side, "grid": [index * 5, y], "visuals": [{"visible": True, "layers": [1, 5]}]}
                         for side, y in enumerate((17, 20))]} for index in range(4)]
+        for record in records:
+            record["preview"]["image"] = "image:world_preview"
         fixture = {"variant": value["variant"], "lighting": "standard", "scope": art.CONTEXT_SCOPE,
                    "identity": value["identity"], "target_count": 4, "wall_count": 8, "preview_count": 4,
                    "souls": 6, "view": "normal", "camera_scale": 1., "records": records,
@@ -215,6 +225,9 @@ class RecipeTests(unittest.TestCase):
                    "ambient": [{"brightness": 500.}], "directional": [
                        {"primary": True, "extra": False, "illuminance": 12000., "shadows": True},
                        {"primary": False, "extra": True, "illuminance": 0., "shadows": False}]}
+        fixture["resources"] = {"scope": "exact-rest-area-resident-dependencies", "global_pool_evidence": False,
+            "meshes": [{"role": "body", "handle": "mesh:body"}],
+            "images": [{"role": role, "handle": "image:"+role} for role in ("albedo", "world_preview", "catalog")]}
         probe = {"profile": art.PROFILE, "status": "ready", "mode": "feedback", "identity": value["identity"],
                  "nonce": "a" * 32, "scope": art.CONTEXT_SCOPE, "stable_frames": 30, "view": "normal",
                  "camera_scale": 1., "variant": value["variant"], "lighting": "standard", "fixture": fixture}
@@ -241,6 +254,19 @@ class RecipeTests(unittest.TestCase):
         # A context's four owners can never pass the old 36-owner gallery check.
         with self.assertRaises(ValueError):
             art.validate_probe(probe, {**value, "variant": "gallery", "lighting": "standard"}, probe["nonce"])
+
+    def test_rest_context_rejects_missing_or_foreign_owned_dependencies(self):
+        value, probe = self.context()
+        art.validate_probe(probe, value, probe["nonce"])
+        for key in ("meshes", "images"):
+            altered = copy.deepcopy(probe)
+            altered["fixture"]["resources"][key].pop()
+            with self.assertRaises(ValueError):
+                art.validate_probe(altered, value, probe["nonce"])
+        altered = copy.deepcopy(probe)
+        altered["fixture"]["records"][0]["parts"][0]["mesh"] = "foreign"
+        with self.assertRaises(ValueError):
+            art.validate_probe(altered, value, probe["nonce"])
 
     def test_manifest_image_artifact_namespace_is_exact_and_unique(self):
         value, _ = self.context()

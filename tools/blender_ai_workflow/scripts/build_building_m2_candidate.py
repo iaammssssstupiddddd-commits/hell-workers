@@ -174,7 +174,7 @@ def main():
     parser.add_argument("kind", choices=tuple(PILOTS))
     parser.add_argument("--name", required=True)
     parser.add_argument("--stage", choices=("planes", "strokes"), default="strokes")
-    parser.add_argument("--revision", choices=("v1", "v2"), default="v1")
+    parser.add_argument("--revision", choices=("v1", "v2", "v3"), default="v1")
     parser.add_argument("--generation", type=int)
     parser.add_argument("--destination", type=Path)
     parser.add_argument("--codec", type=Path)

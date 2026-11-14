@@ -14,7 +14,7 @@ from pathlib import Path
 
 import build_building_clay as clay
 import building_asset_pipeline as pipeline
-from building_clay_geometry import FIXTURES, PILOTS, load_pilot
+from building_clay_geometry import drum_sweep, FIXTURES, PILOTS, load_pilot
 from validate_building_clay_glb import validate
 from validate_wall_glb import accessor_values, read_glb
 
@@ -39,6 +39,8 @@ def state_geometry(kind: str, output: Path, revision: str = "v1") -> dict:
             states[state] = {"visible": value["water_visible"], "water_y_wu": height,
                              "surface_bounds_y_wu": [minimum, maximum]}
         return {"roles": roles, "states": states}
+    if revision == "v3":
+        return {"roles": roles, "rotor_sweep": drum_sweep(points, contract)}
     # Maximum radius of a linear triangle lies at a vertex, so this bounds the
     # complete continuous revolution, rather than just sampled degree poses.
     radius = max(math.hypot(point[0], point[2]) for point in points)
@@ -92,7 +94,7 @@ def recipe(kind: str, generation: int, source: Path, revision: str = "v1") -> di
             "source": record("source.blend"), "geometry_contract": record("geometry.json"),
             "artifacts": artifacts, "parts": [
                 {"name": role, "mesh_role": role, "material_role": "opaque_albedo",
-                 "translation_wu": spec["translation_wu"], "rotation_xyzw": [0, 0, 0, 1],
+                 "translation_wu": spec["translation_wu"], "rotation_xyzw": spec.get("rotation_xyzw", [0, 0, 0, 1]),
                  "scale": [1, 1, 1]} for role, spec in contract["roles"].items()],
             "world_preview": preview, "catalog_preview": catalog}
 

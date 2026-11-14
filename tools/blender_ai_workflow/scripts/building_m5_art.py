@@ -84,34 +84,21 @@ def render(kind: str, *, on: bool = False) -> bytes:
             line([(a[0]+dx*0.2, a[1]+dz*0.2, 0.6+index*0.45),
                   (a[0]+dx*0.75, a[1]+dz*0.75, 0.6+index*0.45)], (126, 119, 98), 2)
     else:
-        # A separate bent bone carries an open iron cage. Earlier near/normal
-        # captures showed a solid shade and a short pale leg, so the background
-        # must remain visible between the heavy bars, not merely darkened.
-        plane([(-3.2, 0, 0), (-3.8, 0, 2), (-2.8, 0, 5), (-3.4, 0, 7),
-               (-1.2, 0, 9), (-1.1, 0, 12), (-2.1, 0, 14), (1.8, 0, 14),
-               (2.4, 0, 11), (1.3, 0, 8), (2.6, 0, 6), (1.8, 0, 3),
-               (3, 0, 1), (2.2, 0, 0)], (164, 153, 123))
-        # Broad knuckles interrupt the shaft silhouette at its two bends.
-        for cx, height, radius in ((-1.6, 8, 2.6), (0.7, 12, 2.1)):
-            plane([(cx+radius*math.cos(i*math.tau/12), 0,
-                    height+radius*0.62*math.sin(i*math.tau/12))
-                   for i in range(12)], (190, 180, 145))
-        line([(-2.6, 0, 3), (-2.4, 0, 5), (-1.3, 0, 7)], (119, 111, 93), 3)
-        line([(0.9, 0, 10), (0.2, 0, 12.5)], (119, 111, 93), 3)
-        # The small core changes state. Rims, outer bars and the central spine
-        # are separate opaque strokes; the gaps are truly transparent.
-        for left, right in ((-3.7, -1.7), (1.7, 3.7)):
-            plane([(left, 0, 15.3), (right, 0, 15.3),
-                   (right*0.88, 0, 22.7), (left*0.88, 0, 22.7)],
-                  (207, 137, 192) if on else (75, 61, 76))
-        for x0, x1 in ((-6.8, -5.2), (5.2, 6.8)):
-            plane([(x0, 0, 14.3), (x1, 0, 14.3),
-                   (x1*0.84, 0, 24), (x0*0.84, 0, 24)], (52, 57, 59))
-        line([(0, 0, 14.2), (0, 0, 24)], (52, 57, 59), 8)
-        line([(-6.7, 0, 14.3), (6.7, 0, 14.3)], (146, 115, 79), 7)
-        line([(-5.7, 0, 23.8), (5.7, 0, 23.8)], (146, 115, 79), 7)
-        plane([(-5.7, 0, 24), (0, 0, 25), (5.7, 0, 24)], (52, 57, 59))
-        plane([(-4, -2, 0), (4, -2, 0), (3.5, 2, 0), (-3.7, 2, 0)], (124, 113, 94))
+        # Tripod feet sit on the original logical anchor, never on the lamp head.
+        for x, z in ((-11, 7), (11, 7), (0, -10)):
+            line([(0, 0, 17), (x, z, 0)], (54, 58, 57), 7)
+            line([(x-2, z, 0), (x+2, z, 0)], (114, 106, 85), 4)
+        # Two telescoping steel sections and a conspicuous height-lock collar.
+        plane([(-1.5, 0, 10), (1.5, 0, 10), (1.5, 0, 43), (-1.5, 0, 43)], (93, 94, 85))
+        plane([(-1, 0, 40), (1, 0, 40), (1, 0, 67), (-1, 0, 67)], (156, 153, 130))
+        line([(-2.6, 0, 40), (2.6, 0, 40)], (160, 116, 58), 6)
+        line([(2, 0, 6), (3.2, 0, 29), (2.4, 0, 53), (3.5, 0, 67)], (44, 47, 45), 2)
+        # U-bracket and a broad rectangular high-mounted work-light housing.
+        line([(-8, 0, 69), (-8, 0, 63), (8, 0, 63), (8, 0, 69)], (81, 75, 65), 5)
+        plane([(-10, 0, 65), (10, 0, 65), (10, 0, 77), (-10, 0, 77)], (55, 58, 56))
+        plane([(-8, 0, 67), (8, 0, 67), (8, 0, 75), (-8, 0, 75)],
+              (246, 221, 155) if on else (138, 143, 132))
+        line([(-8, 0, 75), (8, 0, 75)], (173, 151, 108), 2)
     output = io.BytesIO()
     image.save(output, format="PNG")
     return output.getvalue()

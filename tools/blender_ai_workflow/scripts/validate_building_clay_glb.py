@@ -84,7 +84,7 @@ def main() -> None:
     parser.add_argument("input", type=Path)
     parser.add_argument("kind", choices=("Tank", "MudMixer"))
     parser.add_argument("role")
-    parser.add_argument("--revision", choices=("v1", "v2"), default="v1")
+    parser.add_argument("--revision", choices=("v1", "v2", "v3"), default="v1")
     parser.add_argument("--report", type=Path)
     args = parser.parse_args()
     result = validate(args.input, args.kind, args.role, args.revision)

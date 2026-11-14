@@ -23,6 +23,37 @@ else:
 
 
 class M2ArtTests(unittest.TestCase):
+    def test_v3_construction_drum_has_true_mouth_tilt_and_continuous_clearance(self):
+        from building_clay_geometry import load_pilot, drum_sweep
+        from validate_building_numeric_candidate import validate
+        numeric, _ = numeric_contract("MudMixer", "v3")
+        self.assertFalse(validate(numeric)["numeric_freeze"])
+        contract = load_pilot("MudMixer", "v3")
+        meshes = candidate_geometry("MudMixer", "v3")
+        self.assertEqual(set(meshes), {"body", "rotor"})
+        self.assertLessEqual(sum(len(g.faces) for g in meshes.values()), 256)
+        sweep = drum_sweep(meshes["rotor"].vertices, contract)
+        self.assertGreater(sweep["frame_clearance_y_wu"], 4)
+        self.assertGreater(sweep["support_clearance_x_wu"], 1)
+        self.assertGreater(sweep["rotation_xyzw"][0], 0.4)
+        invalid = copy.deepcopy(contract)
+        invalid["roles"]["rotor"]["translation_wu"][1] = 8
+        with self.assertRaisesRegex(ValueError, "intersects frame"):
+            drum_sweep(meshes["rotor"].vertices, invalid)
+        self.assertEqual(len(sweep["static_component_clearances_wu"]), 8)
+        invalid = copy.deepcopy(contract)
+        invalid["roles"]["rotor"]["rotation_xyzw"] = [0, 0, 0, 1]
+        with self.assertRaisesRegex(ValueError, "quaternion"):
+            drum_sweep(meshes["rotor"].vertices, invalid)
+        invalid = copy.deepcopy(contract)
+        invalid["construction"]["body_boxes"][4] = {"center": [0, 25, 0], "size": [3, 3, 3]}
+        with self.assertRaisesRegex(ValueError, "static component"):
+            drum_sweep(meshes["rotor"].vertices, invalid)
+        layout = face_layout("MudMixer", "v3")
+        self.assertEqual(len(layout["rotor"]), len(meshes["rotor"].faces))
+        with tempfile.TemporaryDirectory() as directory:
+            paint("MudMixer", Path(directory)/"albedo.png", revision="v3")
+
     def test_v2_mud_surface_has_own_uv_and_not_wood_floor_paint(self):
         numeric, sha256 = numeric_contract("MudMixer", "v2")
         self.assertEqual(numeric.name, "building-m2-v2.numeric-candidate.json")

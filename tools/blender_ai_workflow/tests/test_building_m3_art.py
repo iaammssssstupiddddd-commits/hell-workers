@@ -83,14 +83,16 @@ class M3ArtTests(unittest.TestCase):
                 self.assertTrue(all(planes.getpixel(p)[3] == strokes.getpixel(p)[3] for p in pixels))
             self.assertEqual(missing, [], "bone grain must reach every upper thin UV face")
 
-    def test_restarea_entry_is_recessed_without_changing_ground_envelope(self):
+    def test_restarea_closed_roof_and_curtain_preserve_ground_envelope(self):
         _, spec = art.contract("RestArea")
-        self.assertEqual(spec["roof"]["front_z_profile"], [29, 12, 6, 12, 29])
+        self.assertEqual(spec["roof"]["front_z_profile"], [29, 29, 29, 29, 29])
         body = art.geometry("RestArea")["body"]
         self.assertEqual(list(body.bounds()), spec["body_bounds_wu"])
         front = [v for face, surface in zip(body.faces, body.surfaces, strict=True)
                  if surface == "cloth:canopy" for v in (body.vertices[i] for i in face)]
-        self.assertEqual(max(z for x, _, z in front if x == 0), 6)
+        self.assertEqual(max(z for x, _, z in front if x == 0), 29)
+        self.assertEqual(len(spec["walls"]), 6)
+        self.assertEqual(spec["walls"][-1], {"center": [0, 14, 23], "size": [14, 28, 1]})
         self.assertEqual(spec["posts"]["x"], [-25, 25])
         self.assertEqual(spec["posts"]["z"], [-24, 24])
 

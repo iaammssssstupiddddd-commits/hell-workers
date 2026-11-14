@@ -17,7 +17,7 @@ from pathlib import Path
 import building_asset_pipeline as pipeline
 from workflow_common import asset_root
 
-CONTRACT = Path(__file__).resolve().parents[1] / "fixtures/building-m5-v1.contract.json"
+CONTRACT = Path(__file__).resolve().parents[1] / "fixtures/building-m5-v2.contract.json"
 KINDS = ("WheelbarrowParking", "SandPile", "BonePile", "OutdoorLamp")
 ISOLATED_JOBS = Path(__file__).resolve().parents[3] / "target/native-acceptance"
 
@@ -26,6 +26,8 @@ def contract(kind):
     pipeline.require(kind in KINDS, "unsupported M5 kind")
     value = json.loads(CONTRACT.read_bytes())
     spec = value["kinds"][kind]
+    if "anchor_px" in spec:
+        value = {**value, "anchor_px": spec["anchor_px"]}
     inherited = pipeline.KINDS[kind]
     pipeline.require(inherited["presentation"] == value["presentation"] == "Foreground2d"
                      and inherited["mesh_roles"] == []
@@ -93,7 +95,7 @@ def previews(kind):
     value, spec = contract(kind)
     common = {"canvas_px": value["canvas_px"], "canvas_wu": spec["canvas_wu"],
               "anchor_px": value["anchor_px"], "representative_state": spec["representative_state"]}
-    return ({"image_role": spec["world_roles"][0], **common}, {"image_role": "catalog", **common})
+    return ({"image_role": spec["world_roles"][0], **common}, {"image_role": "catalog", **common, "anchor_px": [x/2 for x in value["canvas_px"]]})
 
 
 def recipe(kind, generation, source):

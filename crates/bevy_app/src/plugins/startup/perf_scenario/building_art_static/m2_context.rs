@@ -23,10 +23,13 @@ pub(super) fn resident_assets(
         world.resource::<Assets<Image>>().get(handle)?;
         images.push(json!({"role": role, "handle": format!("{:?}", handle.id())}));
     }
-    Some(
-        json!({"scope": "exact-m2-resident-dependencies", "meshes": meshes, "images": images,
-        "global_pool_evidence": false}),
-    )
+    let scope = if set.manifest.identity.kind == BuildingAssetKind::RestArea {
+        "exact-rest-area-resident-dependencies"
+    } else {
+        "exact-m2-resident-dependencies"
+    };
+    Some(json!({"scope": scope, "meshes": meshes, "images": images,
+        "global_pool_evidence": false}))
 }
 
 fn tank_state(world: &mut World, owner: Entity, expected: usize) -> Result<Value, String> {
@@ -223,53 +226,55 @@ mod tests {
     use super::*;
 
     #[test]
-    fn m2_residency_ignores_unrelated_assets_but_rejects_missing_owned_dependencies() {
-        let mut pool = BuildingAssetPool::default();
-        let set = pool.install_presentation_fixture(
-            BuildingAssetKind::Tank,
-            1,
-            crate::assets::building_asset_set::BuildingAssetAuthority::ArtPreview,
-        );
-        let mut world = World::new();
-        world.init_resource::<Assets<Mesh>>();
-        world.init_resource::<Assets<Image>>();
-        for role in set.manifest.identity.kind.mesh_roles() {
-            world
-                .resource_mut::<Assets<Mesh>>()
-                .insert(
-                    set.mesh(role).unwrap().id(),
-                    Cuboid::new(1.0, 1.0, 1.0).into(),
-                )
-                .unwrap();
-        }
-        for role in set.manifest.identity.kind.image_roles() {
-            world
-                .resource_mut::<Assets<Image>>()
-                .insert(set.image(role).unwrap().id(), Image::default())
-                .unwrap();
-        }
-        let initial = resident_assets(&world, &set).unwrap();
-        let unrelated = world.resource_mut::<Assets<Image>>().add(Image::default());
-        assert_eq!(resident_assets(&world, &set), Some(initial.clone()));
-        world.resource_mut::<Assets<Image>>().remove(unrelated.id());
-        assert_eq!(resident_assets(&world, &set), Some(initial.clone()));
-        for role in set.manifest.identity.kind.image_roles() {
-            let handle = set.image(role).unwrap();
-            let asset = world
-                .resource_mut::<Assets<Image>>()
-                .remove(handle.id())
-                .unwrap();
-            assert!(resident_assets(&world, &set).is_none());
-            assert!(world.resource::<Assets<Image>>().get(handle).is_none());
-            world
-                .resource_mut::<Assets<Image>>()
-                .insert(handle.id(), asset)
-                .unwrap();
+    fn context_residency_ignores_unrelated_assets_but_rejects_missing_owned_dependencies() {
+        for kind in [BuildingAssetKind::Tank, BuildingAssetKind::RestArea] {
+            let mut pool = BuildingAssetPool::default();
+            let set = pool.install_presentation_fixture(
+                kind,
+                1,
+                crate::assets::building_asset_set::BuildingAssetAuthority::ArtPreview,
+            );
+            let mut world = World::new();
+            world.init_resource::<Assets<Mesh>>();
+            world.init_resource::<Assets<Image>>();
+            for role in set.manifest.identity.kind.mesh_roles() {
+                world
+                    .resource_mut::<Assets<Mesh>>()
+                    .insert(
+                        set.mesh(role).unwrap().id(),
+                        Cuboid::new(1.0, 1.0, 1.0).into(),
+                    )
+                    .unwrap();
+            }
+            for role in set.manifest.identity.kind.image_roles() {
+                world
+                    .resource_mut::<Assets<Image>>()
+                    .insert(set.image(role).unwrap().id(), Image::default())
+                    .unwrap();
+            }
+            let initial = resident_assets(&world, &set).unwrap();
+            let unrelated = world.resource_mut::<Assets<Image>>().add(Image::default());
             assert_eq!(resident_assets(&world, &set), Some(initial.clone()));
+            world.resource_mut::<Assets<Image>>().remove(unrelated.id());
+            assert_eq!(resident_assets(&world, &set), Some(initial.clone()));
+            for role in set.manifest.identity.kind.image_roles() {
+                let handle = set.image(role).unwrap();
+                let asset = world
+                    .resource_mut::<Assets<Image>>()
+                    .remove(handle.id())
+                    .unwrap();
+                assert!(resident_assets(&world, &set).is_none());
+                assert!(world.resource::<Assets<Image>>().get(handle).is_none());
+                world
+                    .resource_mut::<Assets<Image>>()
+                    .insert(handle.id(), asset)
+                    .unwrap();
+                assert_eq!(resident_assets(&world, &set), Some(initial.clone()));
+            }
+            let handle = set.mesh("body").unwrap();
+            world.resource_mut::<Assets<Mesh>>().remove(handle.id());
+            assert!(resident_assets(&world, &set).is_none());
         }
-        let handle = set.mesh("body").unwrap();
-        world.resource_mut::<Assets<Mesh>>().remove(handle.id());
-        assert!(resident_assets(&world, &set).is_none());
     }
 
     #[test]

@@ -31,7 +31,8 @@ NUMERIC_KINDS = {"Tank", "MudMixer", *building_m3_numeric.KINDS, *building_m5_nu
 NUMERIC_VERIFIER_FILES = (
     "scripts/building_asset_pipeline.py", "scripts/building_m3_numeric.py", "scripts/building_m5_numeric.py",
     "fixtures/building-art-v1.contract.json", "fixtures/building-m3-v1.geometry.json",
-    "fixtures/building-m5-v1.contract.json",
+    "fixtures/building-m5-v1.contract.json", "fixtures/building-m5-v2.contract.json",
+    "fixtures/building-m3-v2.geometry.json",
 )
 
 

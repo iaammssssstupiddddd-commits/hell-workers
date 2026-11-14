@@ -20,6 +20,17 @@ class M3NumericTests(unittest.TestCase):
                     "numeric_contract": numeric.numeric_contract(payload, kind)}
         return payload, preview, approval
 
+    def test_closed_rest_shelter_revision_is_separate_from_historical_proposal(self):
+        old = numeric.numeric_contract(numeric.CONTRACT.read_bytes(), "RestArea")
+        raw = numeric.CONTRACT.with_name("building-m3-v2.geometry.json").read_bytes()
+        revised = numeric.numeric_contract(raw, "RestArea")
+        self.assertNotIn("walls", old["geometry"])
+        self.assertEqual(len(revised["geometry"]["walls"]), 6)
+        wrong = json.loads(raw)
+        wrong["revision"] = 3
+        with self.assertRaises(ValueError):
+            numeric.numeric_contract(json.dumps(wrong).encode(), "RestArea")
+
     def test_exact_kind_specific_values_and_original_are_required(self):
         for kind in sorted(numeric.KINDS):
             payload, preview, approval = self.fixture(kind)

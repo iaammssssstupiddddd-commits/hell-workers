@@ -26,7 +26,7 @@ def main():
     parser.add_argument("kind", choices=tuple(PILOTS))
     parser.add_argument("--name", required=True)
     parser.add_argument("--stage", choices=("planes", "strokes"), required=True)
-    parser.add_argument("--revision", choices=("v1", "v2"), default="v1")
+    parser.add_argument("--revision", choices=("v1", "v2", "v3"), default="v1")
     args = parser.parse_args(script_arguments())
     import re
     require(re.fullmatch(r"[a-z0-9][a-z0-9-]{0,79}", args.name) is not None, "unsafe name")
@@ -58,6 +58,22 @@ def main():
     shader.inputs["Roughness"].default_value = 1
     shader.inputs["Metallic"].default_value = 0
     shader.inputs["Specular IOR Level"].default_value = 0
+    if args.kind == "Tank":
+        # Match the runtime Tank-only painterly normal mix in world-up space.
+        # Exported GLB keeps real geometry/normals; these nodes author previews.
+        geometry_normal = material.node_tree.nodes.new("ShaderNodeNewGeometry")
+        weight = material.node_tree.nodes.new("ShaderNodeVectorMath")
+        weight.operation = "MULTIPLY"
+        weight.inputs[1].default_value = (0.18, 0.18, 0.18)
+        upward = material.node_tree.nodes.new("ShaderNodeVectorMath")
+        upward.operation = "ADD"
+        upward.inputs[1].default_value = (0, 0, 0.82)
+        normalized = material.node_tree.nodes.new("ShaderNodeVectorMath")
+        normalized.operation = "NORMALIZE"
+        material.node_tree.links.new(geometry_normal.outputs["Normal"], weight.inputs[0])
+        material.node_tree.links.new(weight.outputs[0], upward.inputs[0])
+        material.node_tree.links.new(upward.outputs[0], normalized.inputs[0])
+        material.node_tree.links.new(normalized.outputs[0], shader.inputs["Normal"])
     texture = material.node_tree.nodes.new("ShaderNodeTexImage")
     texture.image = atlas
     material.node_tree.links.new(texture.outputs["Color"], shader.inputs["Base Color"])
@@ -85,6 +101,8 @@ def main():
     for role, obj in objects.items():
         x, y, z = contract["roles"][role]["translation_wu"]
         obj.location = (x / 32, -z / 32, y / 32)
+        if args.revision == "v3" and role == "body":
+            obj.rotation_euler.z = contract["construction"]["yaw_radians"]
     states = (("Empty", "Partial", "Full") if args.kind == "Tank"
               else ("IdleAngleZero", "QuarterTurn", "HalfTurn", "DiagonalPose"))
     renders = {}
@@ -94,7 +112,15 @@ def main():
             objects["water"].hide_render = not spec["water_visible"]
             objects["water"].location.z = spec["water_y_wu"] / 32
         else:
-            objects["rotor"].rotation_euler.z = (0, math.pi / 2, math.pi, math.pi / 4)[index]
+            if args.revision == "v3":
+                from mathutils import Quaternion
+                objects["rotor"].rotation_mode = "QUATERNION"
+                tilt = Quaternion((1, 0, 0), contract["construction"]["tilt_radians"])
+                spin = Quaternion((0, 0, 1), (0, math.pi / 2, math.pi, math.pi / 4)[index])
+                yaw = Quaternion((0, 0, 1), contract["construction"]["yaw_radians"])
+                objects["rotor"].rotation_quaternion = yaw @ tilt @ spin
+            else:
+                objects["rotor"].rotation_euler.z = (0, math.pi / 2, math.pi, math.pi / 4)[index]
         bpy.context.view_layer.update()
         projection = check_projection(objects, contract["preview"])
         path = output / f"{state}.png"

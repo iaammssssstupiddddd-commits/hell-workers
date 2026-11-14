@@ -16,16 +16,20 @@ NUMERIC = FIXTURES / "building-m2-v1.numeric-candidate.json"
 NUMERIC_SHA256 = "1b913ea0784bf6815a6c46ed0396dafc6ebcdcfc107370bc569aa875775d949d"
 NUMERIC_V2 = FIXTURES / "building-m2-v2.numeric-candidate.json"
 NUMERIC_V2_SHA256 = "aba63ac343e11ed4fa758deffaf36b9139145333ca5d61fd26c3e3dd513153c8"
+NUMERIC_V3 = FIXTURES / "building-m2-v3.numeric-candidate.json"
+NUMERIC_V3_SHA256 = "a49f198c2a28c163cfc31c2f503406095328e329a9774e274bea632d342e6783"
 ATLAS_SIZE = 512
 CELL = 32
 GUTTER = 4
 
 
 def numeric_contract(kind, revision="v1"):
-    require(revision == "v1" or (kind == "MudMixer" and revision == "v2"),
+    require(revision == "v1" or (kind == "MudMixer" and revision in {"v2", "v3"}),
             "unknown M2 art revision")
     path, expected = ((NUMERIC_V2, NUMERIC_V2_SHA256) if revision == "v2"
                       else (NUMERIC, NUMERIC_SHA256))
+    if revision == "v3":
+        path, expected = NUMERIC_V3, NUMERIC_V3_SHA256
     require(hashlib.sha256(path.read_bytes()).hexdigest() == expected,
             "numeric proposal changed: independent revision required")
     validate(path)
@@ -135,7 +139,12 @@ def paint(kind, path, stage="strokes", revision="v1"):
             # The twelve triangles of the Tank floor are one continuous wood
             # surface: cell-dependent colors would form a spurious star.
             if kind == "MudMixer":
-                base = mud_mixer_plane(role, surface)
+                if revision == "v3":
+                    label = surface.split(":")[0]
+                    base = {"frame": (81, 87, 82), "wheel": (46, 48, 45),
+                            "drum": (185, 126, 68), "vane": (105, 85, 58)}[label]
+                else:
+                    base = mud_mixer_plane(role, surface)
             else:
                 tone = (1.0 if role == "water" else
                         0.96 if surface == "vessel:band4" else 0.96 + 0.035 * ((cell % 3) - 1))
@@ -160,6 +169,10 @@ def paint(kind, path, stage="strokes", revision="v1"):
                                    [(-10, 8), (-2, 9), (8, 7), (15, 8)]]:
                         brush.line([project_xz(points, polygon, *point) for point in stroke],
                                    fill=(*light, 255), width=1)
+            elif kind == "MudMixer" and revision == "v3":
+                if surface.startswith("drum:"):
+                    brush.line([(x+8, y+13), (x+15, y+12), (x+23, y+14)],
+                               fill=(*dark, 255), width=1)
             elif kind == "Tank" and surface == "vessel:band4":
                 # World-aligned grain crosses the floor's triangular UV cells
                 # without a per-face fan or radial brush marks.

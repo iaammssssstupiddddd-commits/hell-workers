@@ -9,7 +9,7 @@ import math
 
 from building_clay_geometry import FIXTURES, Geometry, read_json, require
 
-CONTRACT = FIXTURES / "building-m3-v1.geometry.json"
+CONTRACT = FIXTURES / "building-m3-v2.geometry.json"
 KINDS = {"RestArea": "rest-area", "SoulSpa": "soul-spa"}
 
 
@@ -74,8 +74,11 @@ def geometry(kind):
                 width, depth = posts["width_depth_wu"]
                 body.box((x, height/2, z), (width, height, depth), "wood")
                 body.box((x, height-3, z), (5, 3, 5), "iron")
+        # Closed canvas walls and an opaque entry curtain shelter resting Souls.
+        for wall in spec["walls"]:
+            body.box(wall["center"], wall["size"], "cloth")
         # Each thick cloth strip joins its neighbours at a shared profile point.
-        # The front remains open between posts; the canopy has actual depth.
+        # The roof covers the interior; the canvas curtain marks the entrance.
         profile = spec["roof"]["x_height_profile"]
         near, far = spec["roof"]["z_edges"]
         front = spec["roof"]["front_z_profile"]

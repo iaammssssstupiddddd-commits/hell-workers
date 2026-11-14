@@ -12,7 +12,7 @@ import json
 import math
 from pathlib import Path
 
-from building_clay_geometry import FIXTURES, PILOTS, build, load_pilot, read_json, require
+from building_clay_geometry import drum_sweep, FIXTURES, PILOTS, build, load_pilot, read_json, require
 
 
 def same(actual, expected, path: str) -> None:
@@ -50,6 +50,15 @@ def expected_kind(kind: str, mixer_revision: str = "v1") -> dict:
         "world_preview": contract["preview"],
         "catalog": {"canvas_px": [256, 256], "anchor_px": [128, 128]},
     }
+    if kind == "MudMixer" and revision == "v3":
+        result["rotor_sweep"] = drum_sweep(meshes["rotor"].vertices, contract)
+        result["motion"] = {"axis": [0, 1, 0],
+                            "pivot_wu": contract["roles"]["rotor"]["translation_wu"],
+                            "rotation_xyzw": contract["roles"]["rotor"]["rotation_xyzw"],
+                            "seconds_per_revolution": 4, "clock": "Virtual",
+                            "active_requires": "Refining", "idle": "hold", "paused": "hold",
+                            "load_angle_radians": 0}
+        return result
     if kind == "Tank":
         low, high = meshes["water"].bounds()
         result["states"] = {}
@@ -132,14 +141,14 @@ def expected_kind(kind: str, mixer_revision: str = "v1") -> dict:
 def validate(candidate: Path) -> dict:
     data = read_json(candidate)
     revision = data.get("mud_mixer_revision", "v1")
-    require(revision in {"v1", "v2"}, "unknown MudMixer numeric revision")
+    require(revision in {"v1", "v2", "v3"}, "unknown MudMixer numeric revision")
     expected_status = {
         "schema_version": 1, "stage": "numeric_freeze_candidate",
         "decision": "pending_independent_review", "numeric_freeze": False,
         "runtime_published": False, "units": "world_unit",
     }
-    if revision == "v2":
-        expected_status["mud_mixer_revision"] = "v2"
+    if revision in {"v2", "v3"}:
+        expected_status["mud_mixer_revision"] = revision
     same({key: data[key] for key in expected_status},
         expected_status, "proposal status")
     same(data["kinds"], {kind: expected_kind(kind, revision) for kind in PILOTS}, "geometry")

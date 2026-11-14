@@ -52,7 +52,8 @@ M5_CONTEXT_VARIANTS = ("m5-art-context", "lamp-supply-art-context")
 M2_NUMERIC = {
     "Tank": ("1b913ea0784bf6815a6c46ed0396dafc6ebcdcfc107370bc569aa875775d949d",),
     "MudMixer": ("1b913ea0784bf6815a6c46ed0396dafc6ebcdcfc107370bc569aa875775d949d",
-                 "aba63ac343e11ed4fa758deffaf36b9139145333ca5d61fd26c3e3dd513153c8"),
+                 "aba63ac343e11ed4fa758deffaf36b9139145333ca5d61fd26c3e3dd513153c8",
+                 "a49f198c2a28c163cfc31c2f503406095328e329a9774e274bea632d342e6783"),
 }
 
 
@@ -505,6 +506,23 @@ def validate_m2_context_state(fixture: dict, value: dict, identities: list) -> N
             identities.append(soul["entity"])
 
 
+def validate_rest_context_resources(fixture: dict) -> None:
+    resources = fixture.get("resources", {})
+    pipeline.require(resources.get("scope") == "exact-rest-area-resident-dependencies"
+        and resources.get("global_pool_evidence") is False, "RestArea dependency scope differs")
+    for key, roles in (("meshes", {"body"}), ("images", {"albedo", "world_preview", "catalog"})):
+        rows = resources.get(key, [])
+        pipeline.require(isinstance(rows, list) and len(rows) == len(roles)
+            and {row.get("role") for row in rows} == roles
+            and all(isinstance(row.get("handle"), str) and row["handle"] for row in rows),
+            "RestArea owned dependency inventory differs")
+    mesh = resources["meshes"][0]["handle"]
+    preview = next(row["handle"] for row in resources["images"] if row["role"] == "world_preview")
+    pipeline.require(all(len(record["parts"]) == 1 and record["parts"][0].get("role") == "body"
+        and record["parts"][0].get("mesh") == mesh and record["preview"].get("image") == preview
+        for record in fixture["records"]), "RestArea dependency consumer differs")
+
+
 def validate_context_fixture(probe: dict, value: dict) -> None:
     """Seeded image comparison only; never issues an art/numeric decision."""
     if value.get("variant") in M5_CONTEXT_VARIANTS:
@@ -571,6 +589,8 @@ def validate_context_fixture(probe: dict, value: dict) -> None:
             and abs(preview_screen[1] - owner[1] - 160 / scale) <= .01, "context anchor correspondence differs")
     if m2:
         validate_m2_context_state(fixture, value, identities)
+    else:
+        validate_rest_context_resources(fixture)
     pipeline.require(all(type(entity) is int and entity > 0 for entity in identities)
                      and len(set(identities)) == len(identities), "context duplicate entities")
     ambient, sun = (500., 12000.) if value["lighting"] == "standard" else (100., 2400.)

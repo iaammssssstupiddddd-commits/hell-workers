@@ -33,9 +33,10 @@ class M5CandidateTests(unittest.TestCase):
             self.assertAlmostEqual((bounds[0] + bounds[2]) / 2, 128, delta=1)
         for kind in m5.KINDS:
             world, catalog = m5.previews(kind)
-            self.assertEqual(world["anchor_px"], [128, 128])
+            self.assertEqual(world["anchor_px"], [128, 208] if kind == "OutdoorLamp" else [128, 128])
+            self.assertEqual(catalog["anchor_px"], [128, 128])
             self.assertEqual(catalog["image_role"], "catalog")
-            self.assertEqual(world["canvas_wu"], [64, 64] if kind == "WheelbarrowParking" else [32, 32])
+            self.assertEqual(world["canvas_wu"], [64, 64] if kind in {"WheelbarrowParking", "OutdoorLamp"} else [32, 32])
         self.assertEqual(m5.previews("OutdoorLamp")[0]["image_role"], "world_off")
 
     def test_rejects_wrong_canvas_clipping_and_magenta(self):

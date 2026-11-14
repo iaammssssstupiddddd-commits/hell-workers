@@ -1,0 +1,227 @@
+{
+  "schema_version": 1,
+  "kind": "MudMixer",
+  "stage": "clay_draft",
+  "final_art": null,
+  "units": "world_unit",
+  "geometry_scale": 32,
+  "tolerance_wu": 0.001,
+  "preview": {
+    "canvas_px": [
+      256,
+      256
+    ],
+    "canvas_wu": [
+      96,
+      96
+    ],
+    "anchor_px": [
+      128,
+      176
+    ],
+    "representative_state": "IdleAngleZero"
+  },
+  "roles": {
+    "body": {
+      "collection": "MudMixer_Body",
+      "bounds_min_wu": [
+        -22,
+        0.0,
+        -24.0
+      ],
+      "bounds_max_wu": [
+        22,
+        27.0,
+        15.0
+      ],
+      "translation_wu": [
+        0,
+        0,
+        0
+      ],
+      "triangle_cap": 512,
+      "rotation_xyzw": [
+        0,
+        -0.27563735581699916,
+        0,
+        0.9612616959383189
+      ]
+    },
+    "rotor": {
+      "collection": "MudMixer_Rotor",
+      "bounds_min_wu": [
+        -14.0,
+        -12,
+        -14.0
+      ],
+      "bounds_max_wu": [
+        14.0,
+        14,
+        14.0
+      ],
+      "translation_wu": [
+        0,
+        25,
+        0
+      ],
+      "triangle_cap": 256,
+      "rotation_xyzw": [
+        0.4438612550554756,
+        -0.2444933206382784,
+        0.12727516680427098,
+        0.8526495378165586
+      ]
+    }
+  },
+  "construction": {
+    "body_boxes": [
+      {
+        "center": [
+          0,
+          3,
+          0
+        ],
+        "size": [
+          34,
+          6,
+          30
+        ]
+      },
+      {
+        "center": [
+          -17,
+          15,
+          0
+        ],
+        "size": [
+          3,
+          24,
+          5
+        ]
+      },
+      {
+        "center": [
+          17,
+          15,
+          0
+        ],
+        "size": [
+          3,
+          24,
+          5
+        ]
+      },
+      {
+        "center": [
+          0,
+          6,
+          9
+        ],
+        "size": [
+          40,
+          2,
+          2
+        ]
+      },
+      {
+        "center": [
+          0,
+          7,
+          -22
+        ],
+        "size": [
+          4,
+          14,
+          4
+        ]
+      },
+      {
+        "center": [
+          0,
+          1,
+          -22
+        ],
+        "size": [
+          18,
+          2,
+          4
+        ]
+      }
+    ],
+    "drum_profile": [
+      [
+        0,
+        -12
+      ],
+      [
+        9,
+        -12
+      ],
+      [
+        14,
+        -4
+      ],
+      [
+        14,
+        3
+      ],
+      [
+        7,
+        14
+      ],
+      [
+        6,
+        14
+      ],
+      [
+        11,
+        2
+      ],
+      [
+        7,
+        0
+      ],
+      [
+        0,
+        0
+      ]
+    ],
+    "tilt_radians": 0.9599310885968813,
+    "wheels": {
+      "centers": [
+        [
+          -20,
+          6,
+          9
+        ],
+        [
+          20,
+          6,
+          9
+        ]
+      ],
+      "radius": 6,
+      "half_thickness": 2,
+      "segments": 12
+    },
+    "yaw_radians": -0.5585053606381855
+  },
+  "states": {
+    "Idle": "Hold current rotor angle; load resets to zero",
+    "Active": "Advance rotor only with Refining and Virtual delta",
+    "Paused": "Hold angle"
+  },
+  "reject_if": [
+    "drum mouth unreadable",
+    "drum full sweep intersects chassis or uprights",
+    "wheels or feet float",
+    "drum pivot or tilt differs from authored parts"
+  ],
+  "final_freeze_requires": [
+    "actual-window clay approval",
+    "triangle and texture budgets",
+    "preview projection report",
+    "rotor swept volume",
+    "mud surface clearance and state interpretation"
+  ]
+}
