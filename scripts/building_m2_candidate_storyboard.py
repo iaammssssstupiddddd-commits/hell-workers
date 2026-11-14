@@ -90,14 +90,24 @@ def check_plan(value):
     return runtime
 
 
+def candidate_numeric_binding(kind, revision, numeric_sha256):
+    """Select an explicit revision; never upgrade by recognizing an artifact hash."""
+    pipeline.require(kind in CASES, "unsupported candidate numeric kind")
+    selected = revision if revision is not None else ("v1" if kind == "Tank" else "v2")
+    pipeline.require(type(selected) is str and selected in ("v1", "v2", "v3")
+                     and (kind == "MudMixer" or selected == "v1"),
+                     "unsupported explicit candidate numeric revision")
+    return m2.numeric_binding(kind, {"revision": selected, "numeric_candidate_sha256": numeric_sha256})
+
+
 def plan(args):
     repo, source, codec = native.validate_repo(str(args.repo)), args.source_root.resolve(), args.codec.resolve()
     pipeline.require(args.kind in CASES and args.leg in CASES[args.kind], "unsupported candidate case")
     root = args.job_root.resolve() if args.job_root else native.unique_job_root(repo, "building-m2-candidate")
     pipeline.require(not root.exists() and not args.output.resolve().is_relative_to(root), "fresh root/external plan required")
     manifest, text, _ = pipeline.load_set(source, args.kind, codec)
-    binding = m2.numeric_binding(args.kind, {"revision": "v1" if args.kind == "Tank" else "v2",
-        "numeric_candidate_sha256": manifest["geometry_contract_sha256"]})
+    binding = candidate_numeric_binding(args.kind, getattr(args, "revision", None),
+                                        manifest["geometry_contract_sha256"])
     spec = {"source_root": str(source), "identity": manifest["identity"],
             "manifest_sha256": pipeline.digest(text.encode()), **binding}
     inputs = args.output.resolve().with_suffix(".inputs.json")
@@ -430,6 +440,8 @@ def main():
         parser.add_argument("--"+name, type=Path)
     parser.add_argument("--kind", choices=tuple(CASES))
     parser.add_argument("--leg")
+    parser.add_argument("--revision", choices=("v1", "v2", "v3"),
+                        help="explicit numeric revision; omitted keeps Tank v1 / Mixer v2")
     parser.add_argument("--adapter")
     parser.add_argument("--duration-seconds", type=int, default=60)
     args = parser.parse_args()

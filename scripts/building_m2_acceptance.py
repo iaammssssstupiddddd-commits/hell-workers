@@ -221,7 +221,7 @@ def main():
     create = sub.add_parser("plan")
     create.add_argument("--tank-runtime", type=Path, required=True)
     create.add_argument("--mixer-runtime", type=Path, required=True)
-    create.add_argument("--mixer-revision", choices=("v1", "v2"), default="v1",
+    create.add_argument("--mixer-revision", choices=("v1", "v2", "v3"), default="v1",
                         help="Explicit unapproved MudMixer numeric revision; Tank remains v1")
     create.add_argument("--codec", type=Path, required=True)
     create.add_argument("--subject-sha256", required=True)

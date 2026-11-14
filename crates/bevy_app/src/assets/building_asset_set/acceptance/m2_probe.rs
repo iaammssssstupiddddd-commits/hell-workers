@@ -20,11 +20,13 @@ const SAMPLE_CAP: usize = 1800;
 const ENTITY_CAP: usize = 128;
 const NUMERIC_SHA256: &str = "1b913ea0784bf6815a6c46ed0396dafc6ebcdcfc107370bc569aa875775d949d";
 const NUMERIC_V2_SHA256: &str = "aba63ac343e11ed4fa758deffaf36b9139145333ca5d61fd26c3e3dd513153c8";
+const NUMERIC_V3_SHA256: &str = "a49f198c2a28c163cfc31c2f503406095328e329a9774e274bea632d342e6783";
 
 fn numeric_candidate(kind: BuildingAssetKind, revision: &str) -> Result<&'static str, String> {
     match (kind, revision) {
         (BuildingAssetKind::Tank | BuildingAssetKind::MudMixer, "v1") => Ok(NUMERIC_SHA256),
         (BuildingAssetKind::MudMixer, "v2") => Ok(NUMERIC_V2_SHA256),
+        (BuildingAssetKind::MudMixer, "v3") => Ok(NUMERIC_V3_SHA256),
         _ => Err("unsupported M2 kind/numeric revision".into()),
     }
 }
@@ -609,6 +611,9 @@ mod tests {
 
     #[test]
     fn numeric_revision_is_explicit_and_kind_bounded() {
+        use hw_infra::lighting::digest_hex;
+        use sha2::{Digest, Sha256};
+
         assert_eq!(
             numeric_candidate(BuildingAssetKind::Tank, "v1").unwrap(),
             NUMERIC_SHA256
@@ -621,9 +626,22 @@ mod tests {
             numeric_candidate(BuildingAssetKind::MudMixer, "v2").unwrap(),
             NUMERIC_V2_SHA256
         );
+        assert_eq!(
+            numeric_candidate(BuildingAssetKind::MudMixer, "v3").unwrap(),
+            NUMERIC_V3_SHA256
+        );
+        let fixture = include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/blender_ai_workflow/fixtures/building-m2-v3.numeric-candidate.json"
+        ));
+        assert_eq!(
+            digest_hex(&Sha256::digest(fixture).into()),
+            NUMERIC_V3_SHA256
+        );
         for (kind, revision) in [
             (BuildingAssetKind::Tank, "v2"),
-            (BuildingAssetKind::MudMixer, "v3"),
+            (BuildingAssetKind::Tank, "v3"),
+            (BuildingAssetKind::MudMixer, "v4"),
             (BuildingAssetKind::MudMixer, ""),
             (BuildingAssetKind::RestArea, "v1"),
         ] {

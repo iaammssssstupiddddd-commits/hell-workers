@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import math
 import unittest
 import tempfile
 from pathlib import Path
@@ -32,6 +33,44 @@ class CandidateMotionTests(unittest.TestCase):
                 {"name": "rotor", "entity": "rotor", "pose": pose(candidate.quaternion_step(
                     [0., 0., 0., 1.], [0., 1., 0.], angle))}]}
             self.rows.append((sample, root))
+
+    def test_v3_is_explicit_and_cannot_be_inferred_or_bound_to_old_geometry(self):
+        v1 = candidate.m2.numeric_contract("Tank", "v1")[1]
+        v2 = candidate.m2.numeric_contract("MudMixer", "v2")[1]
+        v3 = candidate.m2.numeric_contract("MudMixer", "v3")[1]
+        self.assertEqual(candidate.candidate_numeric_binding("Tank", None, v1)["revision"], "v1")
+        self.assertEqual(candidate.candidate_numeric_binding("MudMixer", None, v2)["revision"], "v2")
+        self.assertEqual(candidate.candidate_numeric_binding("MudMixer", "v3", v3),
+                         {"revision": "v3", "numeric_candidate_sha256": v3})
+        for kind, revision, sha in (("MudMixer", None, v3), ("MudMixer", "v3", v2),
+                                    ("Tank", "v3", v3), ("MudMixer", "v4", v3),
+                                    ("MudMixer", False, v3), ("RestArea", "v3", v3)):
+            with self.subTest(kind=kind, revision=revision), self.assertRaises(ValueError):
+                candidate.candidate_numeric_binding(kind, revision, sha)
+
+    def test_tilted_v3_rotor_uses_local_axis_and_preserves_the_authored_pivot(self):
+        authored = candidate.quaternion_step([0.,0.,0.,1.], [0.,1.,0.], -.55850536)
+        authored = candidate.quaternion_step(authored, [1.,0.,0.], .95993109)
+        value, rows = copy.deepcopy((self.value, self.rows))
+        value["parts"][1].update(rotation_xyzw=authored, translation_wu=[0.,25.,0.])
+        for angle, (_, root) in zip((0.,.1,.2,.2,.2,.3,.4,.4,.4), rows, strict=True):
+            rotor = candidate.part(root, "rotor")
+            rotor["pose"]["translation"] = [0.,25.,0.]
+            rotor["pose"]["rotation"] = candidate.quaternion_step(authored,[0.,1.,0.],angle)
+        candidate.check_motion(rows, value)
+        wrong = copy.deepcopy(rows)
+        # World-Y left multiplication is a different motion when the authored
+        # drum is tilted; the oracle must reject that old upright shortcut.
+        x,y,z,w=authored
+        for angle, (_,root) in zip((0.,.1,.2,.2,.2,.3,.4,.4,.4),wrong,strict=True):
+            sine,cosine=math.sin(angle/2),math.cos(angle/2)
+            candidate.part(root,"rotor")["pose"]["rotation"]=[cosine*x+sine*z,cosine*y+sine*w,cosine*z-sine*x,cosine*w-sine*y]
+        with self.assertRaises(ValueError):
+            candidate.check_motion(wrong,value)
+        wrong = copy.deepcopy(rows)
+        candidate.part(wrong[2][1], "rotor")["pose"]["translation"][1] = 26.
+        with self.assertRaises(ValueError):
+            candidate.check_motion(wrong,value)
 
     def test_approved_axis_speed_pause_resume_and_idle_hold_pass(self):
         candidate.check_motion(self.rows, self.value)

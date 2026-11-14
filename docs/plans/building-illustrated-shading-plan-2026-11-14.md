@@ -183,3 +183,18 @@ legacyの画像、geometry/alpha/anchor/高さ、頂部off/on差、論理光を�
 
 候補exportの旧呼出し1件は必須--kind不足の保存済みexit1であり、出力なしを確認してinvalid/finalizeした。
 製品のexport guardは変更せず、正しいCLIを使う別の新しい梱包batchへ進める。
+
+
+Lamp v2は`06599bac`のnormal context/far galleryを独立verify/seal/finalizeし、Dirt上でも頂部から脚まで
+追える平面的な塗装を新art/numeric判断で採用した。previewは`ef0e650cee3d73aeb445405b0c952003397c5e6edcbbdd4b6776569589130d28`。
+Rest g4/Spa g3も`b7194be5`のnormal/farと旧GLB/UV/発光画像の一致を独立採用した。
+これらは新asset identityの判断であり、最終sourceのcandidate/lifecycle/performance/releaseは未承認。
+
+## 11. 既存v3の実回転を観測できるようにする
+
+candidate storyboardがMixer v2固定、profiling traceもv3拒否だったため、現v3の回転/保存読込/moveを
+検証する入口を補う。ゲームの値や成立条件は変更せず、既存v3 SHAをMixerにだけ明示許可する。
+`--revision v3`を指定し、旧省略時Tank v1/Mixer v2、wrong SHA・Tank v3・未知版の拒否を維持する。
+一般M2 recipeの--mixer-revisionも明示v3を扱い、metadataからrevisionを推測しない。
+nonidentity yaw/tiltのlocal Y右乗算とpivot保持も回帰し、profiling test/Clippy・Help/CI/storageと固定reviewを通す。
+この観測入口はart/numeric/release authorityを追加せず、seeded storyboardをOS入力の通常lifecycle証拠と誤認しない。

@@ -379,6 +379,9 @@ SoulSpaの4 slotは同一slot meshを参照し、part側で個別transformを持
   descriptor identityへ結合する。metadata、画像、原本が変われば新しい独立採否が必要。
   RestArea通常利用/Save/LoadとSpaのoccupied/resumed/loaded受入でも同じoracleのhashとmanifest由来の
   契約を固定し、全partのmode4・atlasを要求する。Spaは別途実workersに応じた発光画像/倍率も照合する。
+  M2のprofiling traceは明示revisionと固定geometry SHAを照合する。Mixer v3はv3専用SHAだけを
+  受け付け、Tankのv2/v3や未知revisionを拒否する。candidate storyboardの--revision省略時は
+  Tank v1/Mixer v2を維持し、v3 hashを見て自動で版を切り替えない。
 
 JSONはRustの型宣言順に`serde_json::to_vec`したcompact形式＋末尾LFと完全一致させる。
 未知field、別順序、余分な空白は拒否する。SHA-256は小文字hex64桁。

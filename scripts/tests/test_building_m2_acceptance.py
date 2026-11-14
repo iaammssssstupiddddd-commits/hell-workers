@@ -240,19 +240,19 @@ class RuntimeIntegrityTests(unittest.TestCase):
             self.verify()
 
     def test_plan_propagates_explicit_mixer_revision_without_authority(self):
-        self.set_revision("MudMixer", "v2")
-        args = SimpleNamespace(repo=str(self.root), subject_sha256=self.subject["source"],
-                               tank_runtime=self.root / "Tank", mixer_runtime=self.root / "MudMixer",
-                               mixer_revision="v2", codec=self.codec, output=self.root / "new-plan.json")
-        with patch.object(m2, "frozen_subject", return_value=self.subject), \
-                patch.object(m2, "candidate_geometry") as geometry, patch.object(m2.pipeline, "codec"):
-            result = m2.plan(args)
-        self.assertEqual(result["kinds"]["MudMixer"]["revision"], "v2")
-        self.assertEqual(result["kinds"]["Tank"]["revision"], "v1")
-        geometry.assert_any_call("MudMixer", "v2")
-        self.assertFalse(result["accepted"])
-        self.assertTrue(all(value is None for value in result["independent_gates"].values()))
-
+        for revision in ("v2", "v3"):
+            self.set_revision("MudMixer", revision)
+            args = SimpleNamespace(repo=str(self.root), subject_sha256=self.subject["source"],
+                                   tank_runtime=self.root / "Tank", mixer_runtime=self.root / "MudMixer",
+                                   mixer_revision=revision, codec=self.codec, output=self.root / f"new-plan-{revision}.json")
+            with patch.object(m2, "frozen_subject", return_value=self.subject), \
+                    patch.object(m2, "candidate_geometry") as geometry, patch.object(m2.pipeline, "codec"):
+                result = m2.plan(args)
+            self.assertEqual(result["kinds"]["MudMixer"]["revision"], revision)
+            self.assertEqual(result["kinds"]["Tank"]["revision"], "v1")
+            geometry.assert_any_call("MudMixer", revision)
+            self.assertFalse(result["accepted"])
+            self.assertTrue(all(value is None for value in result["independent_gates"].values()))
     def test_native_recipe_cannot_admit_a_mismatched_v2_proposal(self):
         from scripts import building_m2_native_acceptance as recipe
 
