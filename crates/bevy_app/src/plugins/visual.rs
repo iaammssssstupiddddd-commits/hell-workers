@@ -421,7 +421,7 @@ fn apply_rtt_extra_directional_light_toggle_system(
 }
 
 type SceneObjectQuery<'w, 's> =
-    Query<'w, 's, Entity, Or<(With<Building3dVisual>, With<ActorBillboard3d>)>>;
+    Query<'w, 's, Entity, (With<Building3dVisual>, Without<ActorBillboard3d>)>;
 
 /// 地形と main scene object を個別に隠して、RtT 固定費の内訳を切り分ける。
 fn apply_rtt_scene_content_toggle_system(
@@ -451,6 +451,8 @@ fn apply_rtt_scene_content_toggle_system(
     for entity in &q_scene_objects {
         commands.entity(entity).insert(scene_object_visibility);
     }
+    // Actor billboards compose this toggle with their owner's visibility in
+    // sync_actor_billboard_visibility_system; do not overwrite resting Souls.
 }
 
 #[cfg(test)]
@@ -471,6 +473,97 @@ mod tests {
 
     fn trace_door_presentation(mut trace: ResMut<ScheduleTrace>) {
         trace.0.push("door-presentation");
+    }
+
+    #[test]
+    fn scene_toggle_and_owner_visibility_have_one_billboard_writer() {
+        use crate::entities::damned_soul::DamnedSoul;
+
+        let mut app = App::new();
+        app.insert_resource(crate::RenderPerfToggles::gpu_baseline())
+            .add_systems(
+                Update,
+                (
+                    apply_rtt_scene_content_toggle_system,
+                    sync_actor_billboard_visibility_system,
+                ),
+            );
+        let resting = app
+            .world_mut()
+            .spawn((DamnedSoul::default(), Visibility::Hidden))
+            .id();
+        let awake = app
+            .world_mut()
+            .spawn((DamnedSoul::default(), Visibility::Visible))
+            .id();
+        let hidden = app
+            .world_mut()
+            .spawn((ActorBillboard3d { owner: resting }, Visibility::Visible))
+            .id();
+        let visible = app
+            .world_mut()
+            .spawn((ActorBillboard3d { owner: awake }, Visibility::Inherited))
+            .id();
+        app.update();
+        assert_eq!(
+            *app.world().get::<Visibility>(hidden).unwrap(),
+            Visibility::Hidden
+        );
+        assert_eq!(
+            *app.world().get::<Visibility>(visible).unwrap(),
+            Visibility::Visible
+        );
+
+        app.world_mut()
+            .resource_mut::<crate::RenderPerfToggles>()
+            .scene_objects_enabled = false;
+        for _ in 0..3 {
+            app.update();
+            assert_eq!(
+                *app.world().get::<Visibility>(hidden).unwrap(),
+                Visibility::Hidden
+            );
+            assert_eq!(
+                *app.world().get::<Visibility>(visible).unwrap(),
+                Visibility::Hidden
+            );
+        }
+        app.world_mut()
+            .resource_mut::<crate::RenderPerfToggles>()
+            .scene_objects_enabled = true;
+        app.update();
+        assert_eq!(
+            *app.world().get::<Visibility>(hidden).unwrap(),
+            Visibility::Hidden
+        );
+        assert_eq!(
+            *app.world().get::<Visibility>(visible).unwrap(),
+            Visibility::Visible
+        );
+
+        {
+            let mut toggles = app.world_mut().resource_mut::<crate::RenderPerfToggles>();
+            toggles.terrain_enabled = false;
+            toggles.directional_light_enabled = false;
+            toggles.extra_directional_light_enabled = true;
+        }
+        app.update();
+        assert_eq!(
+            *app.world().get::<Visibility>(hidden).unwrap(),
+            Visibility::Hidden
+        );
+        assert_eq!(
+            *app.world().get::<Visibility>(visible).unwrap(),
+            Visibility::Visible
+        );
+        app.world_mut()
+            .entity_mut(resting)
+            .insert(Visibility::Visible);
+        app.update();
+        assert_eq!(
+            *app.world().get::<Visibility>(hidden).unwrap(),
+            Visibility::Visible
+        );
     }
 
     #[test]

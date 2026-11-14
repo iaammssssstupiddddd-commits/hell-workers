@@ -100,14 +100,19 @@ pub fn cleanup_actor_billboard_system(
 /// Billboards are independent XZ-plane entities, so owner visibility cannot
 /// propagate through ChildOf. In particular, RestingIn hides the logical Soul.
 pub fn sync_actor_billboard_visibility_system(
+    perf_toggles: Res<crate::RenderPerfToggles>,
     owners: Query<&Visibility, (With<DamnedSoul>, Without<ActorBillboard3d>)>,
     mut billboards: Query<(&ActorBillboard3d, &mut Visibility), Without<DamnedSoul>>,
 ) {
     for (billboard, mut visibility) in &mut billboards {
-        let next = owners
-            .get(billboard.owner)
-            .copied()
-            .unwrap_or(Visibility::Hidden);
+        let next = if perf_toggles.scene_objects_enabled {
+            owners
+                .get(billboard.owner)
+                .copied()
+                .unwrap_or(Visibility::Hidden)
+        } else {
+            Visibility::Hidden
+        };
         if *visibility != next {
             *visibility = next;
         }
@@ -253,6 +258,7 @@ mod tests {
     #[test]
     fn independent_billboard_follows_rest_entry_exit_and_owner_removal() {
         let mut app = App::new();
+        app.insert_resource(crate::RenderPerfToggles::gpu_baseline());
         app.add_systems(Update, sync_actor_billboard_visibility_system);
         let owner = app
             .world_mut()
