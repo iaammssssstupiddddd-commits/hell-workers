@@ -3,6 +3,91 @@ use hw_energy::{SoulSpaConstructionCancelResult, SoulSpaPhase, SoulSpaSlotsChang
 use hw_jobs::{BuildingType, GeneratePowerData, GeneratePowerPhase, WorkType};
 
 #[test]
+fn spa_service_snapshot_reads_actual_threshold_and_preserves_missing_ownership() {
+    let mut world = World::new();
+    let controller = world
+        .spawn((
+            Familiar::default(),
+            FamiliarOperation {
+                fatigue_threshold: 0.37,
+                ..default()
+            },
+        ))
+        .id();
+    let worker = world
+        .spawn((DamnedSoul::default(), CommandedBy(controller)))
+        .id();
+    let first = snapshot(&mut world).unwrap();
+    assert_eq!(
+        first["souls"][0]["service"],
+        json!({
+        "controller": format!("{controller:?}"), "controller_bits": controller.to_bits(),
+        "controller_is_familiar": true, "release_fatigue_threshold": 0.37_f32})
+    );
+    assert_eq!(world.get::<CommandedBy>(worker).unwrap().0, controller);
+    world.entity_mut(controller).remove::<FamiliarOperation>();
+    assert!(
+        snapshot(&mut world).unwrap()["souls"][0]["service"]["release_fatigue_threshold"].is_null()
+    );
+    world.entity_mut(controller).insert(FamiliarOperation {
+        fatigue_threshold: f32::NAN,
+        ..default()
+    });
+    assert!(snapshot(&mut world).is_err());
+    world.entity_mut(worker).remove::<CommandedBy>();
+    assert!(snapshot(&mut world).unwrap()["souls"][0]["service"].is_null());
+}
+
+#[test]
+fn spa_service_events_read_actual_request_and_outcome_once_without_applying_them() {
+    use hw_core::events::ReleaseReason;
+    let mut world = World::new();
+    world.init_resource::<WorldEpoch>();
+    world.init_resource::<Messages<SquadManagementRequest>>();
+    world.init_resource::<Messages<OnReleasedFromService>>();
+    let controller = world
+        .spawn((
+            Familiar::default(),
+            FamiliarOperation {
+                fatigue_threshold: 0.37,
+                ..default()
+            },
+        ))
+        .id();
+    let worker = world
+        .spawn((DamnedSoul::default(), CommandedBy(controller)))
+        .id();
+    world
+        .resource_mut::<Messages<SquadManagementRequest>>()
+        .write(SquadManagementRequest {
+            familiar_entity: controller,
+            operation: SquadManagementOperation::ReleaseMember {
+                soul_entity: worker,
+                reason: ReleaseReason::Fatigued,
+            },
+        });
+    world
+        .resource_mut::<Messages<OnReleasedFromService>>()
+        .write(OnReleasedFromService { entity: worker });
+    let mut cursor = Events::default();
+    let first = cursor.read(&world, 7, 4.).unwrap();
+    assert_eq!(first.len(), 2);
+    assert_eq!(first[0]["reason"], "Fatigued");
+    assert_eq!(first[0]["controller_bits"], controller.to_bits());
+    assert_eq!(first[0]["release_fatigue_threshold"], json!(0.37_f32));
+    assert_eq!(first[1]["producer"], "OnReleasedFromService");
+    for row in &first {
+        assert_eq!(row["worker"], format!("{worker:?}"));
+        assert_eq!(row["sample_index"], 7);
+        assert_eq!(row["real_seconds"], 4.);
+        assert_eq!(row["world_epoch"], 0);
+    }
+    assert!(cursor.read(&world, 8, 5.).unwrap().is_empty());
+    assert_eq!(Events::default().read(&world, 7, 4.).unwrap(), first);
+    assert_eq!(world.get::<CommandedBy>(worker).unwrap().0, controller);
+}
+
+#[test]
 fn spa_clock_speed_is_passive_and_missing_time_is_not_inferred() {
     let mut world = World::new();
     assert!(snapshot(&mut world).unwrap()["relative_speed"].is_null());

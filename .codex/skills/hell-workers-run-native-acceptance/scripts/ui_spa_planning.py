@@ -170,7 +170,7 @@ def check_mapping(before, after, mapping):
 
 
 def check_raw_session(raw, client, *, raw_scope="production-raw-observations-v1"):
-    native.require(raw_scope in ("production-raw-observations-v1", "ordinary-spa-candidate-occupied-v1", "ordinary-spa-candidate-resumed-v1", "ordinary-spa-candidate-load-v1"),
+    native.require(raw_scope in ("production-raw-observations-v1", "ordinary-spa-candidate-occupied-v1", "ordinary-spa-candidate-resumed-v1", "ordinary-spa-candidate-load-v1", "ordinary-spa-candidate-load-v2"),
                    "unsupported Spa raw scope")
     native.require(raw.get("scope") == raw_scope and raw.get("schema_version") == 2
                    and raw.get("failure") is None and raw.get("nonce") == client["nonce"]

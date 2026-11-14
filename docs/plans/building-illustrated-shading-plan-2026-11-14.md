@@ -225,3 +225,18 @@ pausedの実観測まで有界待機してからactionを記録する。timeout�
 遅延commit、早い終端、世代飛越し、foreign owner/window、未commit・未close・非pausedを回帰する。
 この変更は試験producerと拒否試験だけであり、プレイヤーの入力、保存形式、成功/失敗結果、Helpは不変（No impact）。
 旧v1の原本は修正比較にだけ保持し、新subject・新batchでloaded-useを再検証する。
+
+## 14. 自然な疲労退出を実要求と解除結果へ束縛する
+
+`49f48945`のloaded-use v2は入力/Load/追加Dream消費を通過したが、Dream-floor専用oracleでexit1となった。
+直前sampleはDream17.2674/fatigue0.80162でGenerating、次sampleはtask/WorkingOnなしだった。
+これは実FamiliarOperationの疲労解放と整合するが、設定や解除receipt未収集の旧rawだけから原因確定しない。
+invalidとして原本を保持し、ゲームのDream・疲労・AI・解除条件は変更しない。
+
+profiling観測へ実CommandedBy/controller/閾値と、実ReleaseMember/Fatigued要求・OnReleasedFromServiceを追加する。
+loaded-caseだけscopeを`ordinary-spa-candidate-load-v2`へ更新し、自然退出を厳密に検証する。
+直前Generatingの実閾値超過、隣接sample、唯一の同controller/閾値/epoch要求と結果、時刻順、
+全関係解除を必要とする。読取時刻を決定時刻へ読み替えない。旧resumed-caseのDream-floorは維持する。
+通常worldへ状態をseedせず、上限を緩めず、結果からworkerを選び直さない。
+Help判断はNo impact。profiling専用の受動記録と独立verifierだけが変わり、通常の入力、AI、保存、表示文言、
+失敗結果とHelp到達性は不変である。独立review/変更別検証後、新subjectのfresh nativeへ進める。

@@ -22,7 +22,7 @@ SCOPE = "ordinary-spa-candidate-occupied-v1"
 RESUMED_CASE = "soul-spa-candidate-resumed-use"
 RESUMED_SCOPE = "ordinary-spa-candidate-resumed-v1"
 LOADED_CASE = "soul-spa-candidate-loaded-use"
-LOADED_SCOPE = "ordinary-spa-candidate-load-v1"
+LOADED_SCOPE = "ordinary-spa-candidate-load-v2"
 
 
 def case_scope(case):
@@ -53,6 +53,7 @@ def source_contract(repo, source_root, codec, *, case=CASE, resume_source=None):
         from scripts import ui_spa_loaded_use as loaded
         result["resume_input"] = loaded.origin_contract(repo, Path(resume_source), result)
         result["loaded_verifier_sha256"] = pipeline.digest(Path(loaded.__file__).read_bytes())
+        result["service_departure_verifier_sha256"] = pipeline.digest(Path(__file__).with_name("ui_spa_service_departure.py").read_bytes())
     return result
 
 

@@ -79,6 +79,39 @@ def campaign(save):
 
 
 class LoadedSpaTests(unittest.TestCase):
+    def test_loaded_natural_service_departure_is_explicit_and_keeps_legacy_dream_floor(self):
+        with tempfile.TemporaryDirectory() as directory:
+            save = Path(directory) / "saves/manual-1.scn.ron"
+            save.parent.mkdir()
+            raw, entries, client, inputs, contract = campaign(save)
+            saved = contract["resume_input"]["saved"]
+            lookup = loaded.resumed.resumed_workers(saved, loaded.spa.context(entries[1]["value"]), raw["events"])
+            former = {lookup[key] for key in loaded.spa.generating(saved)}
+            worker = sorted(former.intersection(loaded.spa.measurement_workers(loaded.spa.context(entries[2]["value"]))))[0]
+            before, after = next((a, b) for a, b in zip(raw["samples"], raw["samples"][1:])
+                                 if worker in loaded.spa.generating(a["spa_context"])
+                                 and worker not in loaded.spa.generating(b["spa_context"])
+                                 and a["real_seconds"] > entries[-2]["value"]["spa_planning"]["real_seconds"])
+            previous = next(s for s in before["spa_context"]["souls"] if s["entity"] == worker)
+            previous.update(dream=18., fatigue=.71, service={"controller": "familiar", "controller_bits": 42,
+                            "controller_is_familiar": True, "release_fatigue_threshold": .7})
+            next(s for s in after["spa_context"]["souls"] if s["entity"] == worker)["service"] = None
+            common = {"worker": worker, "sample_index": after["sample_index"],
+                      "real_seconds": after["real_seconds"], "world_epoch": after["world_epoch"]}
+            raw["events"].extend([
+                {**common, **previous["service"], "producer": "SquadManagementRequest",
+                 "operation": "SoulServiceReleaseRequested", "reason": "Fatigued"},
+                {**common, "producer": "OnReleasedFromService", "operation": "SoulServiceReleased"}])
+            raw["events"].sort(key=lambda row: row["real_seconds"])
+            for index, event in enumerate(raw["events"]):
+                event["event_index"] = index
+            loaded.verify(raw, entries, client, save, inputs, contract)
+            with self.assertRaisesRegex(RuntimeError, "Dream-floor"):
+                loaded.resumed.verify_tail(raw, entries, client, inputs, saved, loaded_index=1, speeds=(4, 1, 4))
+            raw["events"].append({**common, "operation": "SoulSpaSlotsChange"})
+            with self.assertRaises(RuntimeError):
+                loaded.verify(raw, entries, client, save, inputs, contract)
+
     def test_load_action_waits_for_world_commit_without_repeating_input(self):
         with tempfile.TemporaryDirectory() as directory:
             save = Path(directory) / "saves/manual-1.scn.ron"

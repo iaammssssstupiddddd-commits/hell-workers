@@ -1,7 +1,10 @@
 //! Passive, bounded SoulSpa domain witnesses; no seeding, normalization or authority.
 use bevy::{ecs::message::MessageCursor, prelude::*};
 use hw_core::{
-    relationships::{TaskWorkers, WorkingOn},
+    WorldEpoch,
+    events::{OnReleasedFromService, SquadManagementOperation, SquadManagementRequest},
+    familiar::{Familiar, FamiliarOperation},
+    relationships::{CommandedBy, TaskWorkers, WorkingOn},
     soul::DamnedSoul,
 };
 use hw_energy::{
@@ -16,6 +19,16 @@ use serde_json::{Value, json};
 const SITE_LIMIT: usize = 512;
 const TILE_LIMIT: usize = SITE_LIMIT * 4;
 const SOUL_LIMIT: usize = 128;
+
+fn release_threshold(world: &World, controller: Entity) -> Result<Option<f32>, String> {
+    let value = world
+        .get::<FamiliarOperation>(controller)
+        .map(FamiliarOperation::release_fatigue_threshold);
+    if value.is_some_and(|value| !value.is_finite()) {
+        return Err("Spa observation contains non-finite service threshold".into());
+    }
+    Ok(value)
+}
 
 fn pose(world: &World, entity: Entity) -> Result<Value, String> {
     let Some(pose) = world.get::<Transform>(entity) else {
@@ -106,8 +119,18 @@ pub(crate) fn snapshot(world: &mut World) -> Result<Value, String> {
         } else {
             None
         };
+        let service = world
+            .get::<CommandedBy>(entity)
+            .map(|service| {
+                Ok::<_, String>(json!({"controller": format!("{:?}", service.0),
+                "controller_bits": service.0.to_bits(),
+                "controller_is_familiar": world.get::<Familiar>(service.0).is_some(),
+                "release_fatigue_threshold": release_threshold(world, service.0)?}))
+            })
+            .transpose()?;
         souls.push(json!({"entity": format!("{entity:?}"), "entity_bits": entity.to_bits(),
             "dream": soul.dream, "fatigue": soul.fatigue, "stress": soul.stress, "pose": pose(world, entity)?,
+            "service": service,
             "working_on": world.get::<WorkingOn>(entity).map(|working| format!("{:?}", working.0)),
             "task": task.map(|task| format!("{task:?}")), "generate_power": generating}));
     }
@@ -173,6 +196,8 @@ pub(crate) fn snapshot(world: &mut World) -> Result<Value, String> {
 pub(super) struct Events {
     cancellations: MessageCursor<SoulSpaConstructionCancelOutcome>,
     slots: MessageCursor<SoulSpaSlotsChangeOutcome>,
+    release_requests: MessageCursor<SquadManagementRequest>,
+    releases: MessageCursor<OnReleasedFromService>,
 }
 
 impl Events {
@@ -212,6 +237,33 @@ impl Events {
                 rows.push(json!({"producer": "SoulSpaSlotsChangeOutcome", "operation": "SoulSpaSlotsChange",
                     "owner": format!("{:?}", event.target), "result": format!("{:?}", event.status),
                     "applied": applied, "sample_index": index, "real_seconds": now}));
+            }
+        }
+        if let Some(messages) = world.get_resource::<Messages<SquadManagementRequest>>() {
+            for event in self.release_requests.read(messages).take(4097) {
+                if let SquadManagementOperation::ReleaseMember {
+                    soul_entity,
+                    reason,
+                } = &event.operation
+                {
+                    rows.push(json!({"producer": "SquadManagementRequest", "operation": "SoulServiceReleaseRequested",
+                        "worker": format!("{soul_entity:?}"), "controller": format!("{:?}", event.familiar_entity),
+                        "controller_bits": event.familiar_entity.to_bits(), "reason": format!("{reason:?}"),
+                        "controller_is_familiar": world.get::<Familiar>(event.familiar_entity).is_some(),
+                        "release_fatigue_threshold": release_threshold(world, event.familiar_entity)?,
+                        "world_epoch": world.get_resource::<WorldEpoch>().map(|epoch| epoch.get()),
+                        "sample_index": index, "real_seconds": now}));
+                }
+            }
+        }
+        if let Some(messages) = world.get_resource::<Messages<OnReleasedFromService>>() {
+            for event in self.releases.read(messages).take(4097) {
+                rows.push(
+                    json!({"producer": "OnReleasedFromService", "operation": "SoulServiceReleased",
+                    "worker": format!("{:?}", event.entity),
+                    "world_epoch": world.get_resource::<WorldEpoch>().map(|epoch| epoch.get()),
+                    "sample_index": index, "real_seconds": now}),
+                );
             }
         }
         if rows.len() > 4096 {

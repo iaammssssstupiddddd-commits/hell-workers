@@ -199,7 +199,7 @@ def verify(raw, entries, client, save_path, inputs, contract):
                        "Spa paused import continuity differs")
     native.require(occupied.exact(receipt.get("spa_context"), loaded), "Spa load commit/reset capture differs")
     art.check_consumers(raw, entries, contract, start=1)
-    resumed.verify_tail(raw, entries, client, inputs, saved, loaded_index=1, speeds=(4, 1, 4))
+    resumed.verify_tail(raw, entries, client, inputs, saved, loaded_index=1, speeds=(4, 1, 4), natural_service=True)
 
 
 def confirm_load(driver):

@@ -58,7 +58,7 @@ def verify(raw, entries, client, save_path, inputs, contract):
     verify_tail(raw, entries, client, inputs, spa.context(entries[5]["value"]), loaded_index=6)
 
 
-def verify_tail(raw, entries, client, inputs, saved, *, loaded_index, speeds=(4, 4, 4)):
+def verify_tail(raw, entries, client, inputs, saved, *, loaded_index, speeds=(4, 4, 4), natural_service=False):
     """Only the current Load and its continuation, never historical construction."""
     values = [entry["value"] for entry in entries]
     loaded = spa.context(values[loaded_index])
@@ -146,10 +146,17 @@ def verify_tail(raw, entries, client, inputs, saved, *, loaded_index, speeds=(4,
         following = next((s for s in after["spa_context"]["souls"] if s["entity"] == worker), None)
         if previous and following and following.get("generate_power") is None:
             departures.append((previous, before, after))
-    native.require(departures and 0 <= departures[0][0]["dream"] <= 10.5
+    native.require(len(departures) == 1
                    and snapshots[-2]["sample_index"] < departures[0][2]["sample_index"] <= snapshots[-1]["sample_index"]
                    and not departures[0][1]["paused"] and not departures[0][2]["paused"],
-                   "Spa departure has no observed unpaused Dream-floor transition")
+                   "Spa departure has no unique observed unpaused transition")
+    previous, before, after = departures[0]
+    if natural_service and previous["dream"] > 10.5:
+        from scripts import ui_spa_service_departure
+        ui_spa_service_departure.verify(raw, worker, previous, before, after)
+    else:
+        native.require(0 <= previous["dream"] <= 10.5,
+                       "Spa departure has no observed unpaused Dream-floor transition")
 
 
 def exercise(driver):

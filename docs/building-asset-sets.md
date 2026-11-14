@@ -1454,13 +1454,22 @@ albedoとemissive画像を、同checkpointの実4tile TaskWorkers maskへ照合�
 2026-11-08の全工程case v1は退出前に上限へ達してinvalidであり、受入成功へ読み替えない。
 
 全工程の固定上限に収まらない場合も上限を緩めず、`soul-spa-candidate-loaded-use`を別subjectの
-fresh jobとして使う。`candidate-loaded` mode / `ordinary-spa-candidate-load-v1` scopeは検証済み
+fresh jobとして使う。`candidate-loaded` mode / `ordinary-spa-candidate-load-v2` scopeは検証済み
 occupied jobの原本・7画像・raw/input/checkpoint・候補依存hashを固定し、実Manual1だけを新sessionへ
 コピーする。過去施工を現sourceの証明に数えず、今回の通常F9/選択/確定の唯一Loadと保存時Soulから
 今回のremapを検査する。初期worldと保存worldのanchor/footprint/draw_pos不一致は拒否する。
 停止中reset→自然再割当（Super）→追加消費（Normal、3–15 virtual秒）→自然解除（Super）の5画像で、
 実window/epoch/入力対・構造・発光・Dream消費と関係解除を検証する。Save/資材・worker・Dream seedなし。
 480秒/1200sample・入力上限を維持し、historical入力と今回の限定結果を分離する。正式release/性能は別条件。
+
+v2は自然退出をDream不足だけに限定しない。profiling observerが実CommandedBy/controller、
+FamiliarOperationの実release疲労閾値と、SquadManagementRequestのReleaseMember/Fatigued、
+OnReleasedFromServiceを受動的に記録する。時刻/indexは観測時点であり、決定/apply時刻を捏造しない。
+request→outcomeのevent indexは各cursorの収録順であり、独立したdomain実行順の証明ではない。
+疲労退出は直前Generating sampleの実閾値超過と同controller/閾値、隣接sampleに束縛した唯一の要求/結果、
+同epochと時刻順、実service/task/WorkingOn/TaskWorkers解除を全て要求する。既定値0.8の推測、
+receipt欠落・再利用、別controller、slot取消、未知理由では受け入れない。旧resumed-caseのDream-floor条件、
+historical originと旧v1の結果は保持し、v2をDream-floor到達証拠とは呼ばない。
 
 2026-11-08のloaded-use v1（source `a0f2c5ce1a4f76245c0734a6c370bb2f5238791232bf89908c55620d5554ca40`）は
 5画像/rawの独立reviewと登録verifierを通過した。保存時1849v0→今回854v1、同tile2349v1で
