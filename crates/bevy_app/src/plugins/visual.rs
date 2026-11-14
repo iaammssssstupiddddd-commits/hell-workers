@@ -22,6 +22,7 @@ use crate::systems::lighting::IndoorLightingRebuildSet;
 use crate::systems::logistics::{resource_count_display_system, resource_stack_display_system};
 use crate::systems::visual::actor_billboard::{
     cleanup_actor_billboard_system, register_actor_billboard_system, sync_actor_billboard_system,
+    sync_actor_billboard_visibility_system,
 };
 use crate::systems::visual::building3d_cleanup::{
     DoorPresentationSyncSet, cleanup_building_3d_visuals_system, sync_building_3d_transform_system,
@@ -308,6 +309,7 @@ impl Plugin for VisualPlugin {
                     .after(sync_soul_anim_visual_state_system)
                     .run_if(render3d_sync_enabled),
                 cleanup_actor_billboard_system,
+                sync_actor_billboard_visibility_system,
                 register_actor_billboard_system,
             )
                 .in_set(GameSystemSet::Visual),

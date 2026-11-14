@@ -105,6 +105,39 @@ fn publish(world: &mut World, kind: BuildingAssetKind, generation: u64) -> Build
 }
 
 #[test]
+fn tank_painterly_shading_keeps_lighting_and_other_buildings_geometric() {
+    for (kind, asset_kind) in [
+        (BuildingType::Tank, BuildingAssetKind::Tank),
+        (BuildingType::MudMixer, BuildingAssetKind::MudMixer),
+        (BuildingType::RestArea, BuildingAssetKind::RestArea),
+    ] {
+        let mut app = app();
+        let owner = shell(app.world_mut(), kind);
+        publish(app.world_mut(), asset_kind, 1);
+        app.update();
+        let visual = root(app.world_mut(), owner);
+        for child in children(app.world(), visual) {
+            let handle = app
+                .world()
+                .get::<MeshMaterial3d<TopDownStructuralMaterial>>(child)
+                .unwrap();
+            let material = app
+                .world()
+                .resource::<Assets<TopDownStructuralMaterial>>()
+                .get(&handle.0)
+                .unwrap();
+            assert!(!material.base.unlit);
+            let flatten = material.extension.uniforms.indoor_light_params.w;
+            if kind == BuildingType::Tank {
+                assert!((0.8..1.0).contains(&flatten));
+            } else {
+                assert_eq!(flatten, 0.0);
+            }
+        }
+    }
+}
+
+#[test]
 fn warmed_queries_follow_late_archetypes_and_do_not_retain_removed_owners() {
     let mut app = app();
     app.world_mut().resource_mut::<Time<Virtual>>().pause();

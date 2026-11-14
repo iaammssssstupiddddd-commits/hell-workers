@@ -40,6 +40,10 @@ fn fragment(
     structural_discard(in.world_position.xyz);
 
     var pbr_input = pbr_input_from_standard_material(in, is_front);
+    // Keep real light/shadow response while reducing the faceted, cylindrical
+    // shading on the illustrated Tank. Other structural materials retain zero.
+    let flatten = clamp(structural_material.indoor_light_params.w, 0.0, 1.0);
+    pbr_input.N = normalize(mix(pbr_input.N, vec3<f32>(0.0, 1.0, 0.0), flatten));
     pbr_input.material.base_color =
         alpha_discard(pbr_input.material, pbr_input.material.base_color);
 
