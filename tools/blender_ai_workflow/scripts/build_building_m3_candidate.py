@@ -14,6 +14,8 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+from building_infernal_style import STYLE
+
 import building_asset_pipeline as pipeline
 from building_clay_geometry import FIXTURES, read_json, require
 from building_m3_art import CONTRACT, KINDS, contract, face_layout, geometry, paint, parts, states
@@ -22,7 +24,7 @@ from validate_wall_glb import accessor_values, exact_identity_node, index_values
 from workflow_common import asset_root, require_within, write_json_atomic
 
 WORKFLOW = FIXTURES.parent
-SOURCES = ("building_m3_art.py", "create_building_m3_scene.py", "building_clay_geometry.py",
+SOURCES = ("building_m3_art.py", "create_building_m3_scene.py", "building_clay_geometry.py", "building_infernal_style.py",
            "create_building_clay_scene.py", "build_building_m3_candidate.py", "build_building_m2_candidate.py",
            "validate_building_m2_indexed_faces.py")
 
@@ -69,6 +71,7 @@ def verify(kind, name):
     data = read_json(report)
     require(data["schema_version"] == 1 and data["kind"] == kind
             and data["evidence_kind"] == "unapproved_m3_production_proposal"
+            and data.get("art_style") == (STYLE if kind == "RestArea" else "legacy")
             and data["geometry_contract_sha256"] == digest(CONTRACT)
             and all(data[k] is False for k in ("numeric_freeze", "art_approved", "runtime_published")),
             "wrong report or approval claim")
@@ -79,7 +82,7 @@ def verify(kind, name):
             and data["preview"] == spec["preview"], "layout/parts/projection drift")
     atlas_names = ["albedo"] + (["slot_emissive"] if kind == "SoulSpa" else [])
     with tempfile.TemporaryDirectory() as directory:
-        paint(kind, Path(directory), data["stage"])
+        paint(kind, Path(directory), data["stage"], style=STYLE if kind == "RestArea" else "legacy")
         for role in atlas_names:
             path = output / f"{role}.png"
             require(data[f"{role}_sha256"] == digest(path), "atlas hash drift")
@@ -131,7 +134,7 @@ def build_bundle(kind, name, stage):
     blend, output, report, reports = paths(kind, name)
     require(not any(path.exists() for path in (blend, output, report, reports)), "use fresh output name")
     output.mkdir(parents=True)
-    paint(kind, output, stage)
+    paint(kind, output, stage, style=STYLE if kind == "RestArea" else "legacy")
     env = dict(os.environ, BLENDER_SAFE_NO_NETWORK="1", OCIO=str(FIXTURES / "wall-calibration-v2.ocio"))
     subprocess.run([str(WORKFLOW / "bin/blender-safe"), "--background", "--factory-startup",
                     "--python-exit-code", "2", "--python", str(WORKFLOW / "scripts/create_building_m3_scene.py"),

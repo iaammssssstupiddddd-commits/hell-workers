@@ -9,6 +9,8 @@ from __future__ import annotations
 import hashlib
 import math
 
+import building_infernal_style as infernal
+
 from building_clay_geometry import FIXTURES, build, load_pilot, require
 from validate_building_numeric_candidate import validate
 
@@ -115,12 +117,13 @@ def mud_mixer_plane(role, surface):
     return (163, 112, 68)  # overhead wooden crossbeam
 
 
-def paint(kind, path, stage="strokes", revision="v1"):
+def paint(kind, path, stage="strokes", revision="v1", *, style="legacy"):
     # Pillow is already part of the workflow; Blender invokes this via the host
     # preparation entrypoint, so its bundled Python does not need Pillow.
     from PIL import Image, ImageDraw, ImageFilter
 
     require(stage in ("planes", "strokes"), "unknown art stage")
+    require(style in ("legacy", infernal.STYLE), "unknown paint style")
     image = Image.new("RGBA", (ATLAS_SIZE, ATLAS_SIZE), (40, 35, 30, 255))
     draw = ImageDraw.Draw(image)
     palettes = {"Tank": {"body": (173, 105, 69), "water": (64, 157, 169)}}
@@ -149,6 +152,15 @@ def paint(kind, path, stage="strokes", revision="v1"):
                 tone = (1.0 if role == "water" else
                         0.96 if surface == "vessel:band4" else 0.96 + 0.035 * ((cell % 3) - 1))
                 base = tuple(round(channel * tone) for channel in palettes[kind][role])
+            if style == infernal.STYLE:
+                if kind == "Tank":
+                    material = infernal.WATER if role == "water" else infernal.WOOD
+                    base = tuple(round(c * tone) for c in material)
+                elif revision == "v3":
+                    base = {"frame": infernal.IRON, "wheel": infernal.WHEEL,
+                            "drum": infernal.DRUM, "vane": (87, 74, 71)}[label]
+                else:
+                    base = tuple(round(c * 0.7) for c in base)
             draw.rectangle((x, y, x + CELL - 1, y + CELL - 1), fill=(*base, 255))
             if stage == "planes":
                 continue
@@ -205,13 +217,13 @@ def paint(kind, path, stage="strokes", revision="v1"):
                                    (top_right[0]+dx, top_right[1]+dy),
                                    (bottom_right[0]+dx, bottom_right[1]+dy),
                                    (bottom_left[0]-dx, bottom_left[1]-dy)),
-                                  fill=(78, 76, 70, 255))
+                                  fill=(*(infernal.IRON if style == infernal.STYLE else (78, 76, 70)), 255))
                     left = along(polygon[0], polygon[3], fraction)
                     right = along(polygon[1], polygon[2], fraction)
                     for spot in (0.24, 0.76):
                         center = tuple(left[i] * (1-spot) + right[i] * spot for i in range(2))
                         brush.ellipse((center[0]-1, center[1]-1, center[0]+1, center[1]+1),
-                                      fill=(132, 78, 53, 255))
+                                      fill=(*(infernal.RUST if style == infernal.STYLE else (132, 78, 53)), 255))
                 mask = mask.filter(ImageFilter.MaxFilter(5))
             elif kind == "Tank" and surface == "vessel:band3":
                 # The inside wall has upright grain, unlike the horizontal
@@ -241,6 +253,21 @@ def paint(kind, path, stage="strokes", revision="v1"):
                     yy = y + 8 + stroke * 6 + (cell % 2)
                     brush.line([(x + 7, yy), (x + 15, yy - 1), (x + 25, yy)],
                                fill=(*(light if stroke % 2 == 0 else dark), 255), width=1)
+            if style == infernal.STYLE and role != "water":
+                # Paint wear on material surfaces; never bake face lighting or
+                # a black border around every UV island.
+                if kind == "MudMixer" and surface in {"drum:band1", "drum:band2"}:
+                    if cell % 3 == 0:
+                        brush.polygon([(x+8,y+11),(x+19,y+9),(x+23,y+16),(x+14,y+19)],
+                                      fill=(*infernal.RUST,255))
+                    brush.line([(x+8,y+21),(x+14,y+19),(x+23,y+20)],
+                               fill=(*infernal.INK,255),width=1)
+                elif kind == "Tank" and surface == "vessel:band1" and cell % 3 == 0:
+                    a,b,_c,d = polygon
+                    def plank(u,v):
+                        return tuple(a[i]+u*(b[i]-a[i])+v*(d[i]-a[i]) for i in range(2))
+                    brush.line([plank(.14,.12),plank(.19,.46),plank(.13,.88)],
+                               fill=(*infernal.INK,255),width=1)
             image.paste(layer, (0, 0), mask)
     image.save(path)
     return layout

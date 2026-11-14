@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import math
 
+import building_infernal_style as infernal
+
 from building_clay_geometry import FIXTURES, Geometry, read_json, require
 
 CONTRACT = FIXTURES / "building-m3-v2.geometry.json"
@@ -139,9 +141,10 @@ def face_layout(kind):
     return result
 
 
-def paint(kind, output, stage):
+def paint(kind, output, stage, *, style="legacy"):
     from PIL import Image, ImageDraw
     require(stage in ("clay", "planes", "strokes"), "unknown paint stage")
+    require(style in ("legacy", infernal.STYLE), "unknown paint style")
     value, spec = contract(kind)
     size, cell = value["atlas"]["size_px"], value["atlas"]["cell_px"]
     image = Image.new("RGBA", (size, size), (65, 59, 52, 255))
@@ -154,6 +157,9 @@ def paint(kind, output, stage):
             x, y = (index % (size//cell))*cell, (index//(size//cell))*cell
             material = face["surface"].split(":")[0]
             base = (125, 125, 125) if stage == "clay" else spec["palette"][material]
+            if style == infernal.STYLE and kind == "RestArea" and stage != "clay":
+                base = {"cloth": infernal.CLOTH, "wood": infernal.WOOD,
+                        "iron": infernal.IRON}[material]
             # No camera lighting or shadows baked into albedo.
             draw.rectangle((x, y, x+cell-1, y+cell-1), fill=(*base, 255))
             if stage == "strokes":
@@ -182,8 +188,10 @@ def paint(kind, output, stage):
 
                     patch = [(-25, -17), (-12, -18), (-11, -3), (-24, -4)]
                     brush.polygon([pixel(*p) for p in patch],
-                                  fill=(*tuple(min(255, c+24) for c in base), 255))
-                    seam = (*tuple(round(c*0.66) for c in base), 255)
+                                  fill=(*(infernal.CLOTH_PATCH if style == infernal.STYLE else
+                                          tuple(min(255, c+24) for c in base)), 255))
+                    seam = (*(infernal.SEAM if style == infernal.STYLE else
+                              tuple(round(c*0.66) for c in base)), 255)
                     # Two continuous joins and one broad fold are drawn in
                     # world coordinates, so their marks cross UV islands
                     # without turning each cloth face into a timber panel.
@@ -197,6 +205,16 @@ def paint(kind, output, stage):
                     for world_x in range(-28, 30, 6):
                         brush.line([pixel(world_x, 8), pixel(world_x+2, 12)],
                                    fill=seam, width=2)
+                elif material == "cloth" and style == infernal.STYLE:
+                    # Opaque entry curtain and wall hems, aligned with each
+                    # actual quad rather than the atlas grid.
+                    a,b,_c,d = face["polygon_px"]
+                    def cloth_point(u,v):
+                        return tuple(a[i]+u*(b[i]-a[i])+v*(d[i]-a[i]) for i in range(2))
+                    brush.line([cloth_point(.14,.1),cloth_point(.18,.5),cloth_point(.14,.9)],
+                               fill=(*infernal.SEAM,255),width=1)
+                    brush.polygon([cloth_point(u,v) for u,v in ((.5,.3),(.78,.28),(.8,.61),(.52,.64))],
+                                  fill=(*infernal.CLOTH_PATCH,255))
                 elif material == "wood":
                     for offset in (10, 21):
                         brush.line([(x+6, y+offset), (x+16, y+offset-1), (x+25, y+offset)],

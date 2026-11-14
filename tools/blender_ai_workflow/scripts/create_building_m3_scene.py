@@ -8,6 +8,7 @@ from pathlib import Path
 import bpy
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from building_infernal_style import STYLE
 from building_clay_geometry import require
 from building_m3_art import CONTRACT, KINDS, contract, face_layout, geometry, parts, states
 from create_building_clay_scene import check_projection, configure_camera, digest
@@ -133,10 +134,11 @@ def main():
     write_json_atomic(report, {
         "schema_version": 1, "kind": args.kind, "stage": args.stage,
         "evidence_kind": "unapproved_m3_production_proposal",
+        "art_style": STYLE if args.kind == "RestArea" else "legacy",
         "numeric_freeze": False, "art_approved": False, "runtime_published": False,
         "geometry_contract_sha256": digest(CONTRACT), "blend_sha256": digest(blend), "ocio": ocio,
         "sources": {name: digest(scripts / name) for name in (
-            "building_m3_art.py", "create_building_m3_scene.py", "building_clay_geometry.py",
+            "building_m3_art.py", "create_building_m3_scene.py", "building_clay_geometry.py", "building_infernal_style.py",
             "create_building_clay_scene.py", "build_building_m3_candidate.py", "build_building_m2_candidate.py",
             "validate_building_m2_indexed_faces.py")},
         "face_layout": layout, "parts": parts(args.kind), "preview": spec["preview"],

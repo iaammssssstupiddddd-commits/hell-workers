@@ -10,15 +10,17 @@ import io
 import math
 from pathlib import Path
 
+import building_infernal_style as infernal
 import building_asset_pipeline as pipeline
 from build_building_m5_candidate import KINDS, contract, originals, staged
 from workflow_common import asset_root
 
 
-def render(kind: str, *, on: bool = False) -> bytes:
+def render(kind: str, *, on: bool = False, style: str = "legacy") -> bytes:
     from PIL import Image, ImageDraw
     value, spec = contract(kind)
     pipeline.require(not on or kind == "OutdoorLamp", "only Lamp has an on state")
+    pipeline.require(style == "legacy" or (style == infernal.STYLE and kind == "OutdoorLamp"), "unsupported paint style")
     image = Image.new("RGBA", tuple(value["canvas_px"]))
     draw = ImageDraw.Draw(image)
     scale = value["canvas_px"][0] / spec["canvas_wu"][0]
@@ -28,7 +30,8 @@ def render(kind: str, *, on: bool = False) -> bytes:
         return (round(ax+x*scale), round(ay+(z-0.6*height)*scale))
 
     def plane(vertices, color):
-        draw.polygon([point(*p) for p in vertices], fill=(*color, 255))
+        draw.polygon([point(*p) for p in vertices], fill=(*color, 255),
+                     outline=(*infernal.INK, 255) if style == infernal.STYLE else None)
 
     def line(vertices, color, width=1):
         draw.line([point(*p) for p in vertices], fill=(*color, 255), width=width)
@@ -86,19 +89,25 @@ def render(kind: str, *, on: bool = False) -> bytes:
     else:
         # Tripod feet sit on the original logical anchor, never on the lamp head.
         for x, z in ((-11, 7), (11, 7), (0, -10)):
-            line([(0, 0, 17), (x, z, 0)], (54, 58, 57), 7)
-            line([(x-2, z, 0), (x+2, z, 0)], (114, 106, 85), 4)
+            line([(0, 0, 17), (x, z, 0)], (infernal.IRON if style == infernal.STYLE else (54, 58, 57)), 7)
+            line([(x-2, z, 0), (x+2, z, 0)], (infernal.WORN_EDGE if style == infernal.STYLE else (114, 106, 85)), 4)
         # Two telescoping steel sections and a conspicuous height-lock collar.
-        plane([(-1.5, 0, 10), (1.5, 0, 10), (1.5, 0, 43), (-1.5, 0, 43)], (93, 94, 85))
-        plane([(-1, 0, 40), (1, 0, 40), (1, 0, 67), (-1, 0, 67)], (156, 153, 130))
-        line([(-2.6, 0, 40), (2.6, 0, 40)], (160, 116, 58), 6)
-        line([(2, 0, 6), (3.2, 0, 29), (2.4, 0, 53), (3.5, 0, 67)], (44, 47, 45), 2)
+        plane([(-1.5, 0, 10), (1.5, 0, 10), (1.5, 0, 43), (-1.5, 0, 43)], ((98, 85, 89) if style == infernal.STYLE else (93, 94, 85)))
+        plane([(-1, 0, 40), (1, 0, 40), (1, 0, 67), (-1, 0, 67)], ((146, 129, 119) if style == infernal.STYLE else (156, 153, 130)))
+        line([(-2.6, 0, 40), (2.6, 0, 40)], (infernal.RUST if style == infernal.STYLE else (160, 116, 58)), 6)
+        line([(2, 0, 6), (3.2, 0, 29), (2.4, 0, 53), (3.5, 0, 67)], (infernal.INK if style == infernal.STYLE else (44, 47, 45)), 2)
         # U-bracket and a broad rectangular high-mounted work-light housing.
-        line([(-8, 0, 69), (-8, 0, 63), (8, 0, 63), (8, 0, 69)], (81, 75, 65), 5)
-        plane([(-10, 0, 65), (10, 0, 65), (10, 0, 77), (-10, 0, 77)], (55, 58, 56))
+        line([(-8, 0, 69), (-8, 0, 63), (8, 0, 63), (8, 0, 69)], (infernal.RUST if style == infernal.STYLE else (81, 75, 65)), 5)
+        plane([(-10, 0, 65), (10, 0, 65), (10, 0, 77), (-10, 0, 77)], (infernal.IRON if style == infernal.STYLE else (55, 58, 56)))
         plane([(-8, 0, 67), (8, 0, 67), (8, 0, 75), (-8, 0, 75)],
-              (246, 221, 155) if on else (138, 143, 132))
-        line([(-8, 0, 75), (8, 0, 75)], (173, 151, 108), 2)
+              (infernal.LAMP_GLASS_ON if style == infernal.STYLE else (246, 221, 155)) if on else (infernal.LAMP_GLASS_OFF if style == infernal.STYLE else (138, 143, 132)))
+        line([(-8, 0, 75), (8, 0, 75)], (infernal.WORN_EDGE if style == infernal.STYLE else (173, 151, 108)), 2)
+        if style == infernal.STYLE:
+            silhouette = image.getchannel("A")
+            # Worn pole and rusted housing; no new geometry, emission, or alpha.
+            line([(-9, 0, 66), (-4, 0, 66), (-2, 0, 68)], infernal.RUST, 3)
+            line([(0.4, 0, 44), (0.1, 0, 53), (0.5, 0, 59)], infernal.WORN_EDGE, 1)
+            image.putalpha(silhouette)
     output = io.BytesIO()
     image.save(output, format="PNG")
     return output.getvalue()
@@ -115,7 +124,7 @@ def build(name: str) -> dict:
     pipeline.require(not root.exists(), "use a fresh candidate name")
     for kind in KINDS:
         _, spec = contract(kind)
-        payloads = {role: render(kind, on=role == "world_on") for role in spec["world_roles"]}
+        payloads = {role: render(kind, on=role == "world_on", style=infernal.STYLE if kind == "OutdoorLamp" else "legacy") for role in spec["world_roles"]}
         originals(kind, payloads)
         for role, payload in payloads.items():
             pipeline.put(root / kind / (role+".png"), payload)
@@ -131,12 +140,14 @@ def verify(name: str) -> dict:
         _, spec = contract(kind)
         payloads = {role: pipeline.rooted(root, kind+"/"+role+".png").read_bytes() for role in spec["world_roles"]}
         originals(kind, payloads)
-        pipeline.require(all(payload == render(kind, on=role == "world_on")
+        pipeline.require(all(payload == render(kind, on=role == "world_on", style=infernal.STYLE if kind == "OutdoorLamp" else "legacy")
                              for role, payload in payloads.items()), "candidate pixels or generator drift")
         inventory[kind] = {role: pipeline.record(kind+"/"+role+".png", payload)
                            for role, payload in payloads.items()}
     result = {"schema_version": 1, "scope": "unapproved-fixed-canvas-raster-proposal",
             "generator_sha256": pipeline.digest(Path(__file__).read_bytes()),
+            "style_sha256": pipeline.digest(Path(infernal.__file__).read_bytes()),
+            "lamp_style": infernal.STYLE,
             "inventory": inventory, "art_approved": False, "runtime_published": False}
     report = root / "proposal.json"
     if report.exists():

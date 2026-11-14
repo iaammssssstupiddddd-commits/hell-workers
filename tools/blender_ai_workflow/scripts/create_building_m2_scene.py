@@ -13,6 +13,7 @@ from pathlib import Path
 import bpy
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from building_infernal_style import STYLE
 
 from building_clay_geometry import PILOTS, load_pilot, require
 from building_m2_art import candidate_geometry, face_layout, numeric_contract
@@ -132,11 +133,11 @@ def main():
         "schema_version": 1, "kind": args.kind, "stage": args.stage,
         "evidence_kind": "unapproved_m2_paint_candidate",
         "numeric_candidate_sha256": numeric_sha256,
-        "revision": args.revision,
+        "revision": args.revision, "art_style": STYLE,
         "numeric_freeze": False, "art_approved": False, "runtime_published": False,
         "ocio": ocio, "blend_sha256": digest(blend),
         "sources": {name: digest(scripts / name) for name in (
-            "create_building_m2_scene.py", "building_m2_art.py", "building_clay_geometry.py",
+            "create_building_m2_scene.py", "building_m2_art.py", "building_clay_geometry.py", "building_infernal_style.py",
             "create_building_clay_scene.py", "validate_building_numeric_candidate.py",
             "validate_building_m2_indexed_faces.py")},
         "albedo_sha256": digest(output / "albedo.png"),

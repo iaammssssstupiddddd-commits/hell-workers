@@ -17,6 +17,8 @@ from pathlib import Path
 
 from PIL import Image
 
+from building_infernal_style import STYLE
+
 import building_asset_pipeline as pipeline
 from building_clay_geometry import FIXTURES, PILOTS, load_pilot, read_json, require
 from building_m2_art import candidate_geometry, face_layout, numeric_contract, paint
@@ -51,13 +53,14 @@ def verify(kind, name, revision="v1"):
     require(data["schema_version"] == 1 and data["kind"] == kind
             and data["evidence_kind"] == "unapproved_m2_paint_candidate"
             and data.get("revision", "v1") == revision
+            and data.get("art_style") == STYLE
             and data["numeric_candidate_sha256"] == numeric_sha256,
             "candidate report identity mismatch")
     require(all(data[key] is False for key in ("numeric_freeze", "art_approved", "runtime_published")),
             "candidate report cannot grant approval")
     require(data["blend_sha256"] == digest(blend) and data["ocio"]["fallback"] is False,
             "source/OCIO mismatch")
-    sources = ("create_building_m2_scene.py", "building_m2_art.py", "building_clay_geometry.py",
+    sources = ("create_building_m2_scene.py", "building_m2_art.py", "building_clay_geometry.py", "building_infernal_style.py",
                "create_building_clay_scene.py", "validate_building_numeric_candidate.py",
                "validate_building_m2_indexed_faces.py")
     require(data["sources"] == {source: digest(WORKFLOW / "scripts" / source) for source in sources},
@@ -70,7 +73,7 @@ def verify(kind, name, revision="v1"):
     # inferred from the fact that deterministic pixels match their authoring code.
     with tempfile.TemporaryDirectory() as directory:
         expected = Path(directory) / "albedo.png"
-        paint(kind, expected, data["stage"], revision)
+        paint(kind, expected, data["stage"], revision, style=STYLE)
         with Image.open(expected) as a, Image.open(output / "albedo.png") as b:
             require(a.size == b.size == (512, 512) and b.mode == "RGBA"
                     and a.tobytes() == b.tobytes(), "atlas pixels differ")
@@ -122,7 +125,7 @@ def build_bundle(kind, name, stage, revision="v1"):
     require(not any(path.exists() for path in (blend, output, report, reports)), "use fresh output name")
     candidate_geometry(kind, revision)
     output.mkdir(parents=True)
-    paint(kind, output / "albedo.png", stage, revision)
+    paint(kind, output / "albedo.png", stage, revision, style=STYLE)
     env = dict(os.environ, BLENDER_SAFE_NO_NETWORK="1", OCIO=str(FIXTURES / "wall-calibration-v2.ocio"))
     subprocess.run([str(WORKFLOW / "bin/blender-safe"), "--background", "--factory-startup",
                     "--python-exit-code", "2", "--python",
