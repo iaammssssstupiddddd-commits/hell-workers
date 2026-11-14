@@ -14,6 +14,99 @@ use hw_visual::{Building3dVisual, TopDownStructuralMaterial};
 
 mod mixed;
 
+#[test]
+fn admitted_body_paint_uses_world_preview_only_and_rollback_restores_the_legacy_material() {
+    use hw_core::relationships::StoredIn;
+    use hw_core::visual_mirror::StockpileVisualState;
+    let mut app = app();
+    let owner = shell(app.world_mut(), BuildingType::Tank);
+    app.world_mut()
+        .entity_mut(owner)
+        .insert(StockpileVisualState { capacity: 2 });
+    let set = app
+        .world_mut()
+        .resource_mut::<BuildingAssetPool>()
+        .install_body_paint_fixture(4);
+    let mut body_material = None;
+    for count in 0..=2 {
+        if count > 0 {
+            app.world_mut().spawn(StoredIn(owner));
+        }
+        app.update();
+        let visual = root(app.world_mut(), owner);
+        for part in children(app.world(), visual) {
+            let name = app.world().get::<Name>(part).unwrap().as_str();
+            let handle = app
+                .world()
+                .get::<MeshMaterial3d<TopDownStructuralMaterial>>(part)
+                .unwrap()
+                .0
+                .clone();
+            let material = app
+                .world()
+                .resource::<Assets<TopDownStructuralMaterial>>()
+                .get(&handle)
+                .unwrap();
+            assert!(!material.base.unlit);
+            if name == "body" {
+                assert_eq!(
+                    material.base.base_color_texture.as_ref(),
+                    set.image("world_preview")
+                );
+                assert_eq!(material.extension.uniforms.indoor_light_params.w, 3.);
+                assert_eq!(
+                    material.extension.uniforms.shadow_style_params,
+                    Vec4::new(64., 64., 0.5, 0.75)
+                );
+                assert_eq!(
+                    material.extension.uniforms.shadow_style_tint,
+                    Vec4::new(0.125, 0.09375, 0.078125, 1.)
+                );
+                if let Some(previous) = &body_material {
+                    assert_eq!(previous, &handle);
+                }
+                body_material = Some(handle);
+            } else {
+                assert_eq!(name, "water");
+                assert_eq!(
+                    material.base.base_color_texture.as_ref(),
+                    set.image("albedo")
+                );
+                assert_eq!(material.extension.uniforms.indoor_light_params.w, 0.82);
+                assert_ne!(Some(&handle), body_material.as_ref());
+                assert_eq!(
+                    app.world().get::<Visibility>(part),
+                    Some(&if count == 0 {
+                        Visibility::Hidden
+                    } else {
+                        Visibility::Inherited
+                    })
+                );
+            }
+        }
+    }
+    let legacy = publish(app.world_mut(), BuildingAssetKind::Tank, 3);
+    app.update();
+    let visual = root(app.world_mut(), owner);
+    for part in children(app.world(), visual) {
+        let handle = &app
+            .world()
+            .get::<MeshMaterial3d<TopDownStructuralMaterial>>(part)
+            .unwrap()
+            .0;
+        let material = app
+            .world()
+            .resource::<Assets<TopDownStructuralMaterial>>()
+            .get(handle)
+            .unwrap();
+        assert_eq!(material.extension.uniforms.indoor_light_params.w, 0.82);
+        assert_eq!(
+            material.base.base_color_texture.as_ref(),
+            legacy.image("albedo")
+        );
+    }
+}
+
 fn app() -> App {
     let mut app = App::new();
     app.add_plugins((MinimalPlugins, AssetPlugin::default(), TransformPlugin))

@@ -157,6 +157,15 @@ body専用materialと水面を分離し、Emptyはbody、Partial/Fullは実水�
 実imageのdecoded hashと材質mode/投影値をowner/mesh/poseへ結合して観測する。
 現段階は閉じた静止試作であり、通常プレイへの導入・move/Actor前後・性能受入は未完である。
 
+通常版への接続はTank限定の`body_paint_projection/world_preview_v1`から実装する。
+元g3の編集可能bundleを不変入力にし、新しい手描き画像を既存geometry由来の透明maskへ収める。
+`build_tank_illustration_candidate.py`は新stagingに原画・mask・設定・recipeを作り、
+Blender sourceへ画像と設定をpackする。独立auditはmesh/UV/transformが元sourceと同じであることも確認する。
+既存の安全launcherを直接使用し、network分離とFlatpakのapp/runtime deployment固定を保つ。
+監査前後で原本・recipe・producer・launcherとdeploymentを再照合し、途中差替えを拒否する。
+準備・auditはsource検証だけであり、旧paint reportや承認を新画像の採否として流用しない。
+previewは透明のまま、bodyだけopaqueな面として実形状の深度・遮蔽を使う。
+
 下図は現Tankの投影と旧2D原画の筆致を参照した未採用paint候補であり、
 実機画像・状態接続・numeric/art/release承認を意味しない。現行assetは上書きしていない。
 

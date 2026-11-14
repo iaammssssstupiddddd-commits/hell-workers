@@ -17,9 +17,11 @@ import time
 if __package__:
     from . import building_m2_native_acceptance as shared
     from . import building_native_executable as executable
+    from . import building_body_paint_observation as body_paint
 else:
     import building_m2_native_acceptance as shared
     import building_native_executable as executable
+    import building_body_paint_observation as body_paint
 
 art, pipeline, native = shared.art, shared.pipeline, shared.native
 PROFILE = "building-default-release-startup-v1"
@@ -31,7 +33,7 @@ EXCLUDED_ENV = ("HW_BUILDING_", "HW_M2_", "HW_BRIDGE_", "HW_PERF_", "HW_WALL", "
 
 def dependencies():
     return {Path(module.__file__).name: executable.digest(Path(module.__file__))
-            for module in (shared, executable, art)} | {Path(__file__).name: executable.digest(Path(__file__))}
+            for module in (shared, executable, art, body_paint)} | {Path(__file__).name: executable.digest(Path(__file__))}
 
 
 def read_inventory(path):
@@ -59,6 +61,13 @@ def check(value):
         and pipeline.exact_json(bindings, value["bindings"])
         and pipeline.exact_json(bindings, pipeline.release_bindings(repo / "assets", codec, groups[len(bindings)])),
         "compiled inventory must equal the complete installed release pointers")
+    expected_paint = {}
+    for binding in bindings:
+        manifest, _, _ = pipeline.load_set(repo / "assets", binding["identity"]["kind"], codec)
+        if fields := body_paint.fields(manifest):
+            expected_paint[binding["identity"]["kind"]] = fields
+    pipeline.require(pipeline.exact_json(value.get("body_paint_contracts", {}), expected_paint),
+                     "compiled body paint contract changed")
     art.static.check_root(repo, Path(value["job_root"]))
     pipeline.require(Path(value["plan_path"]).is_absolute()
         and not Path(value["plan_path"]).is_relative_to(Path(value["job_root"])), "startup plan must remain outside the owned job")
@@ -76,6 +85,11 @@ def plan(args):
         "bindings": read_inventory(repo / INVENTORY), "drivers": dependencies(),
         "numeric_verifiers": pipeline.numeric_verifier_inventory(), "adapter": args.adapter,
         "accepted": False, "promotion_authority": False, "performance_evidence": False}
+    value["body_paint_contracts"] = {}
+    for binding in value["bindings"]:
+        manifest, _, _ = pipeline.load_set(repo / "assets", binding["identity"]["kind"], codec)
+        if fields := body_paint.fields(manifest):
+            value["body_paint_contracts"][binding["identity"]["kind"]] = fields
     shared.adapter_environment(args.adapter)
     check(value)
     resources = native.resource_snapshot(repo, require_launcher=True)
@@ -167,10 +181,13 @@ def check_records(rows, value, pid):
         pipeline.require(sorted(leaf["name"] for leaf in root["parts"]) == sorted(names), "normal leaf names differ")
         generation = pool_by_kind[root["kind"]]
         meshes = {item["role"]: item["handle"] for item in generation["meshes"]}
-        albedo = next(item["handle"] for item in generation["images"] if item["role"] == "albedo")
+        image_handles = {item["role"]: item["handle"] for item in generation["images"]}
         for leaf in root["parts"]:
             role = "slot" if root["kind"] == "SoulSpa" and leaf["name"].startswith("slot") else leaf["name"]
-            pipeline.require(leaf["mesh"] == meshes[role] and leaf["albedo"] == albedo,
+            expected_image = body_paint.expected_texture(
+                {"identity": by_kind[root["kind"]], **value.get("body_paint_contracts", {}).get(root["kind"], {})},
+                leaf["name"], image_handles, leaf.get("body_paint"))
+            pipeline.require(leaf["mesh"] == meshes[role] and leaf["albedo"] == expected_image,
                              "normal leaf uses fallback/foreign dependency")
             pipeline.require(leaf["parent"] == root["entity"] and leaf["mesh_resident"] is True
                 and leaf["albedo_resident"] is True, "normal existing leaf is not resident/owned")

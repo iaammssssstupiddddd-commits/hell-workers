@@ -171,6 +171,7 @@ fn consumers(world: &mut World, bindings: &[ReleaseBinding]) -> Result<Value, St
                 "mesh": mesh.map(|h| format!("{:?}", h.0.id())),
                 "mesh_resident": mesh.is_some_and(|h| world.get_resource::<Assets<Mesh>>().is_some_and(|m| m.get(&h.0).is_some())),
                 "albedo": image.map(|h| format!("{:?}", h.id())),
+                "body_paint": material.map(crate::systems::visual::building_presentation::body_paint_snapshot),
                 "albedo_resident": image.is_some_and(|h| world.get_resource::<Assets<Image>>().is_some_and(|m| m.get(h).is_some())),
                 "visible": world.get::<ViewVisibility>(part).is_some_and(|v| v.get())})
         }).collect();

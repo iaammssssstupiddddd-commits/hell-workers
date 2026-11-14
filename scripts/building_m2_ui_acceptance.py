@@ -20,6 +20,7 @@ if not __package__:
 
 from scripts import building_art_acceptance as art
 from scripts import building_m2_native_acceptance as interactive
+from scripts import building_body_paint_observation as body_paint
 import ui_usability_acceptance as ui
 
 native, pipeline = art.native, art.pipeline
@@ -124,7 +125,8 @@ def source_contract(repo, source, codec, case):
     return {"scope": SCOPE, "identity": manifest["identity"], "manifest_sha256": pipeline.digest(text.encode()),
             "source_root": str(source), "codec": str(codec), "codec_sha256": ui.sha256(codec),
             "geometry_sha256": manifest["geometry_contract_sha256"], "artifacts": manifest["artifacts"],
-            "parts": manifest["parts"],
+            "parts": manifest["parts"], **body_paint.fields(manifest),
+            "body_paint_verifier_sha256": body_paint.verifier_sha256(),
             "base_assets": art.asset_view_fingerprint(repo)}
 
 
@@ -296,10 +298,12 @@ def check_trace(raw, plan_value, before, after):
         pipeline.require(sorted(part["name"] for part in parts) == sorted(expected_names), "M2 UI actual part inventory differs")
         for part in parts:
             material = part.get("material")
+            expected_image = body_paint.expected_texture(plan_value["input"], part["name"], row["descriptor_handles"],
+                                                         (material or {}).get("body_paint"))
             pipeline.require(part.get("mesh_resident") is True and part.get("layer_3d") is True
                              and part.get("mesh_handle") == row["descriptor_handles"]["meshes"][part["name"]]
                              and part.get("visible") is (not (case == "m2-ui-tank-empty" and part["name"] == "water"))
-                             and isinstance(material, dict) and material.get("albedo") == row["descriptor_handles"]["albedo"]
+                             and isinstance(material, dict) and material.get("albedo") == expected_image
                              and material.get("albedo_resident") is True
                              and isinstance(material.get("albedo"), str) and material.get("opaque") is True
                              and material.get("lit") is True, "M2 UI missing/foreign production mesh/material")

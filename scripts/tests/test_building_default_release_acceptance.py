@@ -115,6 +115,7 @@ class DefaultStartupTests(unittest.TestCase):
             rows[1]["detail"]["consumers"]["sprites"] = sprites
             with self.subTest(roles=roles):
                 audit.check_records(rows, self.value, 42)
+
             for change in ("missing", "duplicate", "extra", "target0"):
                 invalid = copy.deepcopy(rows)
                 consumers = invalid[1]["detail"]["consumers"]
@@ -136,6 +137,31 @@ class DefaultStartupTests(unittest.TestCase):
                     child[field] = value
                     with self.subTest(roles=roles, field=field), self.assertRaises(ValueError):
                         audit.check_records(invalid, self.value, 42)
+
+    def test_projected_body_requires_actual_uniforms_and_keeps_water_on_atlas(self):
+        preview = {"image_role": "world_preview", "canvas_wu": [96, 96],
+                   "canvas_px": [256, 256], "anchor_px": [128, 160]}
+        self.value["body_paint_contracts"] = {"Tank": {"body_paint_contract": {
+            "projection": {"method": "world_preview_v1", "matte_linear_rgb": [.125, .09375, .078125]},
+            "world_preview": preview}}}
+        witness = {"mode": 3., "canvas": [96, 96, .5, .625],
+                   "matte": [.125, .09375, .078125, 1.], "standard": True}
+        root = {"entity": "root", "owner": "owner", "kind": "Tank", "owner_kind": "Tank",
+                "owner_exists": True, "identity": self.bindings[0]["identity"], "expected": self.bindings[0]["identity"],
+                "parts": [{"entity": name, "name": name, "parent": "root", "mesh": "Tank"+name,
+                           "albedo": "Tankworld_preview" if name == "body" else "Tankalbedo",
+                           "body_paint": witness if name == "body" else {"mode": .82},
+                           "mesh_resident": True, "albedo_resident": True} for name in ("body", "water")]}
+        consumers = self.rows[1]["detail"]["consumers"]
+        consumers["owners"] = [{"entity": "owner", "kind": "Tank"}]
+        consumers["roots"] = [root]
+        audit.check_records(self.rows, self.value, 42)
+        for name, field, value in (("body", "albedo", "Tankalbedo"), ("water", "albedo", "Tankworld_preview"),
+                                   ("body", "body_paint", None), ("water", "body_paint", witness)):
+            rows = copy.deepcopy(self.rows)
+            next(p for p in rows[1]["detail"]["consumers"]["roots"][0]["parts"] if p["name"] == name)[field] = value
+            with self.subTest(name=name, field=field), self.assertRaises(ValueError):
+                audit.check_records(rows, self.value, 42)
 
     def test_plan_change_around_admission_creates_no_root_build_or_launch(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -226,6 +252,7 @@ class DefaultStartupTests(unittest.TestCase):
                      patch.object(audit.art, "subject", return_value={}), \
                      patch.object(audit.executable, "digest", return_value="a"), \
                      patch.object(audit.art.static, "check_root"), \
+                     patch.object(audit.pipeline, "load_set", return_value=({}, "", None)), \
                      patch.object(audit.pipeline, "release_bindings", return_value=self.bindings) as installed:
                     audit.check(value)
                     installed.assert_called_once_with(repo / "assets", Path("/codec"), {2: "m2", 4: "m3", 8: "m5"}[len(kinds)])

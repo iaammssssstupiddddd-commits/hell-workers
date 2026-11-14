@@ -237,6 +237,7 @@ fn snapshot(world: &mut World) -> Result<Value, String> {
     let descriptor_handles = descriptor.map(|set| json!({
         "meshes": set.manifest.identity.kind.mesh_roles().iter().map(|role| (role.to_string(), json!(set.mesh(role).map(|mesh| format!("{:?}", mesh.id()))))).collect::<serde_json::Map<_, _>>(),
         "albedo": set.image("albedo").map(|image| format!("{:?}", image.id()))
+        ,"world_preview": set.image("world_preview").map(|image| format!("{:?}", image.id()))
     }));
     let mut owners = Vec::new();
     let mut query = world.query::<(Entity, &Building, &Transform)>();
@@ -277,6 +278,7 @@ fn snapshot(world: &mut World) -> Result<Value, String> {
                         "visible": world.get::<ViewVisibility>(part).is_some_and(|visible| visible.get()),
                         "layer_3d": world.get::<bevy::camera::visibility::RenderLayers>(part).is_some_and(|layers| layers.iter().any(|layer| layer == hw_core::constants::LAYER_3D)),
                         "material": material.map(|material| json!({"albedo": material.base.base_color_texture.as_ref().map(|image| format!("{:?}", image.id())),
+                            "body_paint": crate::systems::visual::building_presentation::body_paint_snapshot(material),
                             "albedo_resident": material.base.base_color_texture.as_ref().is_some_and(|image| world.resource::<Assets<Image>>().get(image).is_some()),
                             "opaque": material.base.alpha_mode == AlphaMode::Opaque, "lit": !material.base.unlit,
                             "color": material.base.base_color.to_srgba().to_f32_array()})),

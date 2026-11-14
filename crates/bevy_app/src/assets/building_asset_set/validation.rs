@@ -230,6 +230,27 @@ fn validate_manifest(manifest: &BuildingAssetSetManifest) -> Result<(), Building
     validate_production_state(manifest)?;
     validate_preview(&manifest.world_preview, kind, false)?;
     validate_preview(&manifest.catalog_preview, kind, true)?;
+    if let Some(BuildingBodyPaintProjection::WorldPreviewV1 { matte_linear_rgb }) =
+        manifest.body_paint_projection
+    {
+        require(
+            kind == BuildingAssetKind::Tank,
+            "world preview body paint is Tank-only",
+        )?;
+        require(
+            matte_linear_rgb
+                .iter()
+                .all(|v| v.is_finite() && (0.0..=1.0).contains(v)),
+            "invalid body paint matte",
+        )?;
+        let body = &manifest.parts[0];
+        require(
+            body.translation_wu == [0.; 3]
+                && body.rotation_xyzw == [0., 0., 0., 1.]
+                && body.scale == [1.; 3],
+            "body paint requires a canonical body at the Root origin",
+        )?;
+    }
     match identity.authority {
         BuildingAssetAuthority::ArtPreview => require(
             manifest.art_approval_sha256.is_none() && manifest.receipt.is_none(),

@@ -424,6 +424,7 @@ pub(super) fn snapshot(world: &mut World) -> Result<Value, String> {
                 "mesh": world.get::<Mesh3d>(part).map(|mesh| format!("{:?}", mesh.id())),
                 "material": material.map(|material| format!("{:?}", material.0.id())),
                 "albedo": texture.map(|texture| format!("{:?}", texture.id())),
+                "body_paint": material_value.map(crate::systems::visual::building_presentation::body_paint_snapshot),
                 "material_values": material_value.map(|material| json!({
                     "base_color_srgba": material.base.base_color.to_srgba().to_f32_array(),
                     "white": material.base.base_color == Color::WHITE,

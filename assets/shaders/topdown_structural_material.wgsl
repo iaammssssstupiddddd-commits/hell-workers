@@ -41,7 +41,8 @@ fn fragment(
 ) -> FragmentOutput {
     structural_discard(in.world_position.xyz);
 
-    let projected = structural_material.indoor_light_params.w == 2.0;
+    let projected_preview = structural_material.indoor_light_params.w == 3.0;
+    let projected = structural_material.indoor_light_params.w == 2.0 || projected_preview;
     var paint_in = in;
 #ifdef VERTEX_UVS_A
     if projected {
@@ -50,7 +51,14 @@ fn fragment(
         let model = get_world_from_local(in.instance_index);
         let scale = max(length(model[0].xyz), 0.00001);
         let relative = (in.world_position.xyz - model[3].xyz) / scale;
-        let plane = (view_bindings::view.view_from_world * vec4<f32>(relative, 0.0)).xy;
+        var plane = (view_bindings::view.view_from_world * vec4<f32>(relative, 0.0)).xy;
+        if projected_preview {
+            // world_preview uses simulation-plane units, including the RtT
+            // composite's vertical compensation. Apply that factor once here.
+            let camera = view_bindings::view.view_from_world;
+            let ground_gain = length(vec2<f32>(camera[0].y, camera[2].y));
+            plane.y /= max(ground_gain, 0.00001);
+        }
         let projection = structural_material.shadow_style_params;
         paint_in.uv = projection.zw + vec2<f32>(plane.x, -plane.y) / projection.xy;
     }

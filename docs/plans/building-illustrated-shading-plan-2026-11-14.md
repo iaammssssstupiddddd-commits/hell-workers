@@ -17,9 +17,10 @@ g3の材色変更でも3D感が強いという利用者の観測を制約にす�
 
 ## 2. スコープ
 
-非橋設備の構造材質とDoorのopt-in shaderを変更する。骨・布・錆・木の色面、実状態・emission、
-alpha・depth・施工clip・光と遮蔽の成立を保つ。Wall/Floor/Bridge、foreground Sprite、
-ゲーム論理・形状・manifest世代・asset authorityは変更しない。
+非橋設備の表現方式を段階的に変更する。骨・布・錆・木の色面、実状態・emission、
+alpha・depth・施工clip・光と遮蔽の成立を保つ。Wall/Floor/Bridgeとゲーム論理は対象外。
+最初の照明試作では世代を変えなかったが、画像投影の正式導入では§8に従い新世代と独立採否を要求する。
+Tank付属Spriteの計画tint修正は§7の確定原因に限定し、選択・保管・搬送を維持する。
 
 ## 3. 現状とギャップ
 
@@ -104,3 +105,28 @@ decoded manifestから水面画像を解決するよう修正する。source/ide
 Emptyではx696–760/y1408–1440となり、問題の(728,1432)に重なる。
 MainCamera order2がRtT合成order1の後に描くためであり、原画や投影値は調整しない。
 通常Visual phaseへ完成Tankの計画tint正規化を追加し、旧保存・撤去preview復帰・Pending不変を検証する。
+
+## 8. Tankから通常版へ接続する
+
+v3（`8da324ef`）のnormal/farと8付属Spriteの実RGBAゼロを独立verify/sealで確認し、
+独立目視でも黄色帯の消失と手描き方向を採用した。静止pilotの方向採用であり正式releaseではない。
+
+- [x] Tank限定のoptional `body_paint_projection`を追加し、省略した旧manifest/receipt bytesを維持する。
+  `world_preview_v1`方式とmatteだけを持ち、body・world_preview参照に限定する。
+  canvas/anchorは既存previewから導出し、RtT合成の縦補正をshaderで一度だけ適用する。
+- [x] 新しい手描きworld_previewを透明のままbodyとpreviewで共有し、bodyだけopaque matte合成する。
+  GLB・albedo・水位12/22・partsを保持し、body専用materialと水面を共用しない。
+- [ ] 保存済みg3編集可能原本bundleをSHA固定で新stagingへ読み、新paint・mask・設定・producerを記録する。
+  元bundle/canonical/旧復旧codecを変更せず、新sourceと新codecを別identityで保存する。
+  producerは既存blender-safeを直接使用し、networkを分離する。launcher/Flatpak executableと
+  app/runtimeのref・deployment commit・location・metadataを固定し、外部audit前後に再照合する。
+  base/source/recipe/report/producer/packerの監査中差替えも拒否する。
+- [ ] 新preview identityに独立art/numericを束縛し、候補実機・配置previewの輪郭・move/遮蔽と性能を確認する。
+- [ ] 新generationの正式promotion/install/rollbackを既存guardで行い、既定binding・恒久仕様を同期する。
+
+他設備は部品構成と状態を個別に扱う。特にMixer rotorへ固定した完成図を貼って回転を失わせず、
+Spaの実利用slot/emissionとRestAreaの入所Soul非表示を維持する。Tankの静止passを流用しない。
+
+この正式接続コードのHelp判断はNo impact。producer→manifest→pool→Tank body materialと既存
+preview consumerを照合し、画像/描線以外の操作・水量状態・施工・配置・移動・保存・fallback・文言・
+Help到達性は変わらない。付属SpriteのHelp更新は`8da324ef`のまま維持する。

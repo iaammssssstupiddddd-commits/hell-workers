@@ -95,6 +95,7 @@ pub(super) fn fixture(
         world_preview: preview(kind.world_preview_role()),
         catalog_preview: preview("catalog"),
         receipt: None,
+        body_paint_projection: None,
         numeric_approval_sha256: (authority != BuildingAssetAuthority::ArtPreview
             && matches!(
                 kind,
@@ -137,6 +138,67 @@ pub(super) fn receipt_bytes(manifest: &BuildingAssetSetManifest) -> Vec<u8> {
         numeric_approval_sha256: manifest.numeric_approval_sha256.clone(),
     })
     .unwrap()
+}
+
+#[test]
+fn body_projection_preserves_exact_old_generation_manifest_and_receipt_bytes() {
+    let bytes = include_bytes!("testdata/tank-g3.buildingset");
+    let manifest = decode_buildingset(bytes).unwrap();
+    assert!(manifest.body_paint_projection.is_none());
+    assert_eq!(canonical(&manifest).unwrap(), bytes);
+    let receipt = include_bytes!("testdata/tank-g3-receipt.json");
+    validate_receipt(&manifest, receipt).unwrap();
+    assert_eq!(
+        canonical(&serde_json::from_slice::<BuildingPromotionReceipt>(receipt).unwrap()).unwrap(),
+        receipt
+    );
+}
+
+#[test]
+fn body_projection_is_identity_bound_and_rejects_other_kinds_pose_and_matte() {
+    let mut manifest = fixture(BuildingAssetKind::Tank, BuildingAssetAuthority::ArtPreview);
+    let old = manifest.identity.clone();
+    manifest.body_paint_projection = Some(BuildingBodyPaintProjection::WorldPreviewV1 {
+        matte_linear_rgb: [0.125, 0.09375, 0.078125],
+    });
+    seal(&mut manifest);
+    assert_ne!(old, manifest.identity);
+    assert_eq!(
+        decode_buildingset(&canonical(&manifest).unwrap()).unwrap(),
+        manifest
+    );
+    let mut bad = manifest.clone();
+    bad.parts[0].translation_wu[1] = 1.;
+    seal(&mut bad);
+    assert!(decode_buildingset(&canonical(&bad).unwrap()).is_err());
+    for matte in [[-0.1, 0., 0.], [0., 1.1, 0.]] {
+        let mut bad = manifest.clone();
+        bad.body_paint_projection = Some(BuildingBodyPaintProjection::WorldPreviewV1 {
+            matte_linear_rgb: matte,
+        });
+        seal(&mut bad);
+        assert!(decode_buildingset(&canonical(&bad).unwrap()).is_err());
+    }
+    for kind in BuildingAssetKind::ALL
+        .into_iter()
+        .filter(|k| *k != BuildingAssetKind::Tank)
+    {
+        let mut bad = fixture(kind, BuildingAssetAuthority::ArtPreview);
+        bad.body_paint_projection = manifest.body_paint_projection;
+        seal(&mut bad);
+        assert!(
+            decode_buildingset(&canonical(&bad).unwrap()).is_err(),
+            "{kind:?}"
+        );
+    }
+    let text = String::from_utf8(canonical(&manifest).unwrap()).unwrap();
+    assert!(
+        decode_buildingset(
+            text.replace("world_preview_v1", "arbitrary_image")
+                .as_bytes()
+        )
+        .is_err()
+    );
 }
 
 pub(super) fn seal(manifest: &mut BuildingAssetSetManifest) {

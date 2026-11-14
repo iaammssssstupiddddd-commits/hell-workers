@@ -350,6 +350,28 @@ impl BuildingAssetPool {
             .map(|set| &set.identity)
     }
 
+    #[cfg(test)]
+    pub(crate) fn install_body_paint_fixture(
+        &mut self,
+        generation: u64,
+    ) -> BuildingAssetDescriptor {
+        let kind = BuildingAssetKind::Tank;
+        self.install_presentation_fixture(
+            kind,
+            generation,
+            super::BuildingAssetAuthority::ReleaseApproved,
+        );
+        let active = self.kinds[index(kind)].active.as_mut().unwrap();
+        let descriptor = active.descriptor.as_mut().unwrap();
+        descriptor.manifest.body_paint_projection =
+            Some(super::BuildingBodyPaintProjection::WorldPreviewV1 {
+                matte_linear_rgb: [0.125, 0.09375, 0.078125],
+            });
+        super::tests::seal(&mut descriptor.manifest);
+        active.identity = descriptor.manifest.identity.clone();
+        descriptor.clone()
+    }
+
     pub fn failure(&self, kind: BuildingAssetKind) -> Option<&BuildingAssetPoolFailure> {
         self.kinds[index(kind)].failure.as_ref()
     }

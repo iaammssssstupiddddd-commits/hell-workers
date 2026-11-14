@@ -61,9 +61,53 @@ struct GenerationMaterials {
     identity: BuildingAssetSetIdentity,
     opaque: Handle<TopDownStructuralMaterial>,
     tank_partial_water: Option<Handle<TopDownStructuralMaterial>>,
-    #[cfg(feature = "profiling")]
     tank_paint_body: Option<Handle<TopDownStructuralMaterial>>,
     slot_on: Handle<TopDownStructuralMaterial>,
+}
+
+/// Passive material facts shared by native observers; this never admits a set.
+#[cfg(feature = "profiling")]
+pub(crate) fn body_paint_snapshot(material: &TopDownStructuralMaterial) -> serde_json::Value {
+    let base = &material.base;
+    serde_json::json!({
+        "mode": material.extension.uniforms.indoor_light_params.w,
+        "canvas": material.extension.uniforms.shadow_style_params.to_array(),
+        "matte": material.extension.uniforms.shadow_style_tint.to_array(),
+        "standard": base.base_color == Color::WHITE && !base.unlit
+            && base.alpha_mode == AlphaMode::Opaque && base.emissive == LinearRgba::BLACK
+            && base.emissive_texture.is_none() && base.normal_map_texture.is_none()
+            && base.occlusion_texture.is_none() && base.metallic_roughness_texture.is_none()
+            && base.perceptual_roughness == 1.0 && base.reflectance == 0.0 && base.metallic == 0.0
+    })
+}
+
+#[cfg(feature = "profiling")]
+pub(crate) fn body_paint_material_matches(
+    material: &TopDownStructuralMaterial,
+    descriptor: &crate::assets::building_asset_set::BuildingAssetDescriptor,
+) -> bool {
+    let Some(projection) = descriptor.manifest.body_paint_projection else {
+        return false;
+    };
+    let (canvas, matte) = projection.uniforms(&descriptor.manifest.world_preview);
+    let base = &material.base;
+    base.base_color_texture.as_ref()
+        == descriptor.image(&descriptor.manifest.world_preview.image_role)
+        && base.base_color_texture.is_some()
+        && base.base_color == Color::WHITE
+        && !base.unlit
+        && base.alpha_mode == AlphaMode::Opaque
+        && base.emissive == LinearRgba::BLACK
+        && base.emissive_texture.is_none()
+        && base.normal_map_texture.is_none()
+        && base.occlusion_texture.is_none()
+        && base.metallic_roughness_texture.is_none()
+        && base.perceptual_roughness == 1.0
+        && base.reflectance == 0.0
+        && base.metallic == 0.0
+        && material.extension.uniforms.indoor_light_params.w == 3.0
+        && material.extension.uniforms.shadow_style_params == canvas
+        && material.extension.uniforms.shadow_style_tint == matte
 }
 
 #[derive(Resource, Default)]
@@ -312,24 +356,36 @@ fn sync_structure(
                         } else {
                             0.0
                         };
-                    #[cfg(feature = "profiling")]
-                    let tank_paint_body = pilot.map(|(image, paint)| {
+                    let tank_paint_body = set.manifest.body_paint_projection.map(|projection| {
                         let mut body = material.clone();
-                        body.base.base_color_texture = Some(image);
-                        body.extension.uniforms.indoor_light_params.w = 2.0;
-                        body.extension.uniforms.shadow_style_params = Vec4::new(
-                            paint.canvas_wu[0],
-                            paint.canvas_wu[1],
-                            paint.anchor_uv[0],
-                            paint.anchor_uv[1],
-                        );
-                        body.extension.uniforms.shadow_style_tint = Vec4::new(
-                            paint.matte_linear_rgb[0],
-                            paint.matte_linear_rgb[1],
-                            paint.matte_linear_rgb[2],
-                            1.0,
-                        );
+                        body.base.base_color_texture =
+                            set.image(&set.manifest.world_preview.image_role).cloned();
+                        body.extension.uniforms.indoor_light_params.w = 3.0;
+                        let (canvas, matte) = projection.uniforms(&set.manifest.world_preview);
+                        body.extension.uniforms.shadow_style_params = canvas;
+                        body.extension.uniforms.shadow_style_tint = matte;
                         assets.add(body)
+                    });
+                    #[cfg(feature = "profiling")]
+                    let tank_paint_body = tank_paint_body.or_else(|| {
+                        pilot.map(|(image, paint)| {
+                            let mut body = material.clone();
+                            body.base.base_color_texture = Some(image);
+                            body.extension.uniforms.indoor_light_params.w = 2.0;
+                            body.extension.uniforms.shadow_style_params = Vec4::new(
+                                paint.canvas_wu[0],
+                                paint.canvas_wu[1],
+                                paint.anchor_uv[0],
+                                paint.anchor_uv[1],
+                            );
+                            body.extension.uniforms.shadow_style_tint = Vec4::new(
+                                paint.matte_linear_rgb[0],
+                                paint.matte_linear_rgb[1],
+                                paint.matte_linear_rgb[2],
+                                1.0,
+                            );
+                            assets.add(body)
+                        })
                     });
                     let opaque = assets.add(material.clone());
                     // The lower water surface sits in the vessel's shade. A
@@ -357,7 +413,6 @@ fn sync_structure(
                         identity: set.manifest.identity.clone(),
                         opaque,
                         tank_partial_water,
-                        #[cfg(feature = "profiling")]
                         tank_paint_body,
                         slot_on,
                     });
@@ -502,7 +557,6 @@ fn sync_structure(
                 } else if active {
                     material.slot_on.clone()
                 } else {
-                    #[cfg(feature = "profiling")]
                     if kind == BuildingType::Tank
                         && part.name == "body"
                         && let Some(paint) = material.tank_paint_body.as_ref()
@@ -511,8 +565,6 @@ fn sync_structure(
                     } else {
                         material.opaque.clone()
                     }
-                    #[cfg(not(feature = "profiling"))]
-                    material.opaque.clone()
                 }
             } else {
                 fallback_material(kind, state, handles)

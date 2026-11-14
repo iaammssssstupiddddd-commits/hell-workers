@@ -38,6 +38,47 @@ def fixture_codec(_binary, operation, text, receipt=None):
 
 
 class PipelineTests(unittest.TestCase):
+    def body_paint_recipe(self):
+        self.candidate("Tank")
+        source = self.root / "author-Tank-1"
+        path = source / "recipe.json"
+        value = pipeline.read(path)
+        value["body_paint_projection"] = {"method": "world_preview_v1",
+                                         "matte_linear_rgb": [0.125, 0.09375, 0.078125]}
+        path.write_bytes(pipeline.canonical(value))
+        return source, path, value
+
+    def test_body_paint_metadata_survives_codec_without_borrowing_old_art_approval(self):
+        source, recipe, value = self.body_paint_recipe()
+        output = self.root / "body-paint-preview"
+        pipeline.export(recipe, source, output, self.binary, authority="art_preview")
+        decoded = pipeline.read(output / pipeline.locator("Tank"))
+        self.assertEqual(decoded["body_paint_projection"], value["body_paint_projection"])
+        self.assertEqual([r["role"] for r in decoded["artifacts"]], [r["role"] for r in value["artifacts"]])
+        self.assertIsNone(decoded["art_approval_sha256"])
+        rejected = self.root / "unreviewed-projection"
+        with self.assertRaises(ValueError):
+            pipeline.export(recipe, source, rejected, self.binary, authority="isolated_candidate",
+                            approval_path=source / "art-approval.json",
+                            numeric_approval_path=source / "numeric-approval.json")
+        self.assertFalse(rejected.exists())
+
+    def test_codec_cannot_drop_projection_or_accept_null_as_an_opt_in(self):
+        source, recipe, value = self.body_paint_recipe()
+        def dropping(binary, operation, text, receipt=None):
+            manifest = json.loads(text)
+            manifest.pop("body_paint_projection", None)
+            return fixture_codec(binary, operation, json.dumps(manifest), receipt)
+        rejected = self.root / "dropped-projection"
+        with patch.object(pipeline, "codec", side_effect=dropping), self.assertRaises(ValueError):
+            pipeline.export(recipe, source, rejected, self.binary, authority="art_preview")
+        self.assertFalse(rejected.exists())
+        value["body_paint_projection"] = None
+        recipe.write_bytes(pipeline.canonical(value))
+        with self.assertRaises(ValueError):
+            pipeline.export(recipe, source, rejected, self.binary, authority="art_preview")
+        self.assertFalse(rejected.exists())
+
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)

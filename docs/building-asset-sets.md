@@ -358,6 +358,19 @@ SoulSpaの4 slotは同一slot meshを参照し、part側で個別transformを持
   production_stateとこのhashはmanifest内容hashに含まれる。安全な数値範囲を満たすだけでは独立採否にならない。
   optional fieldは未指定時にserializeから省略し、全art_previewとBridgeの既存canonical bytesを維持する。
   M3/M5はproduction_stateを持たず、保存・利用・Dreamのgameplay数値は変更しない。
+- `body_paint_projection`は任意のTank専用契約で、未指定時は従来材質・canonical bytesを維持する。
+  現方式は`method: world_preview_v1`と有限な0〜1の`matte_linear_rgb`だけを持つ。
+  bodyのlocal origin・単位scale・既定姿勢を要求し、別kindや任意画像経路を許さない。
+  既存の透明`world_preview`をbody専用albedoにも使い、canvas/anchorは同previewから導出する。
+  画像role・常駐枚数は増やさず、水面の通常albedo・状態材質・production_stateは分離する。
+  structural shader mode3が固定TopDown cameraのview平面へRtT合成と同じ縦補正を一度適用し、
+  body側だけalphaをmatteへ合成する。PNGのalphaはpreview/ghost/catalogのために保持する。
+  設定もmanifest digestへ入り、新previewへのart/numeric判断・候補実機・releaseが必要である。
+  decodeやcodecの成功はその判断の代わりにならない。mode2は別の閉じたprofiling試作を維持する。
+  通常起動・ordinary Tank・seeded UI/moveの受入observerは実textureとmode/canvas/matteを出力し、
+  hostが同じcodec-verified manifestから期待値を導出する。画像だけ一致する通常UVや別投影を許さず、
+  waterと旧世代は従来atlas/mode0.82を維持する。共通oracleのhashも各planへ拘束する。
+  専用body materialは1個増えるため、画像枚数不変を資源増分ゼロと読み替えない。
 
 JSONはRustの型宣言順に`serde_json::to_vec`したcompact形式＋末尾LFと完全一致させる。
 未知field、別順序、余分な空白は拒否する。SHA-256は小文字hex64桁。

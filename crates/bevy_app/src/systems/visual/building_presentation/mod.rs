@@ -4,6 +4,11 @@
 mod preview;
 mod structure;
 
+#[cfg(feature = "profiling")]
+pub(crate) use structure::body_paint_material_matches;
+#[cfg(feature = "profiling")]
+pub(crate) use structure::body_paint_snapshot;
+
 use crate::assets::building_asset_set::{
     BuildingAssetDescriptor, BuildingAssetKind, BuildingAssetPool, BuildingAssetSetManifest,
 };

@@ -688,9 +688,15 @@ fn inspect(params: &InspectParams) -> Result<Option<Value>, String> {
                             && candidate.mesh("body") == Some(&mesh.0)
                         {
                             !pilot.body_material_matches(material)
+                        } else if candidate.manifest.body_paint_projection.is_some()
+                            && candidate.mesh("body") == Some(&mesh.0)
+                        {
+                            !crate::systems::visual::building_presentation::body_paint_material_matches(material, candidate)
                         } else {
                             material.base.base_color_texture.as_ref() != candidate.image("albedo")
-                                || material.extension.uniforms.indoor_light_params.w == 2.0
+                                || material.extension.uniforms.indoor_light_params.w >= 2.0
+                                || candidate.manifest.body_paint_projection.is_some()
+                                    && material.extension.uniforms.indoor_light_params.w != 0.82
                         }
                     })
                 {

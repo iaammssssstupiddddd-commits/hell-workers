@@ -13,9 +13,11 @@ import sys
 if __package__:
     from . import building_m2_native_acceptance as shared
     from . import building_native_executable as executable
+    from . import building_body_paint_observation as body_paint
 else:
     import building_m2_native_acceptance as shared
     import building_native_executable as executable
+    import building_body_paint_observation as body_paint
 
 art, pipeline, native, m2 = shared.art, shared.pipeline, shared.native, shared.m2
 PROFILE = "building-m2-candidate-storyboard-v1"
@@ -32,7 +34,7 @@ CASES = {"Tank": {"move-success"}, "MudMixer": {"refining", "save-load", "move-s
 
 def drivers():
     return {Path(module.__file__).name: executable.digest(Path(module.__file__))
-            for module in (sys.modules[__name__], shared, m2, executable)}
+            for module in (sys.modules[__name__], shared, m2, executable, body_paint)}
 
 
 def check_dependencies(value):
@@ -79,6 +81,8 @@ def check_plan(value):
         and m2.numeric_binding(value["kind"], spec) == binding
         and manifest["parts"] == value["parts"] and manifest.get("production_state") == value["production_state"],
         "candidate manifest/numeric/production state differs")
+    pipeline.require(pipeline.exact_json(value.get("body_paint_contract"), body_paint.fields(manifest).get("body_paint_contract")),
+                     "candidate body paint contract differs")
     check_dependencies(value)
     pipeline.require(art.subject(repo) == value["subject"]
         and executable.digest(codec) == value["codec_sha256"], "candidate inputs changed while checking")
@@ -102,7 +106,7 @@ def plan(args):
         "subject": art.subject(repo), "runtime_plan": str(inputs), "runtime_plan_sha256": executable.digest(inputs),
         "kind": args.kind, "identity": manifest["identity"], "leg": args.leg,
         "codec": str(codec), "codec_sha256": executable.digest(codec), "parts": manifest["parts"],
-        "production_state": manifest["production_state"], **binding,
+        "production_state": manifest["production_state"], **binding, **body_paint.fields(manifest),
         "duration_seconds": args.duration_seconds, "adapter": args.adapter, "drivers": drivers(),
         "numeric_verifiers": pipeline.numeric_verifier_inventory(),
         "driver_sha256": executable.digest(Path(__file__)), "accepted": False, "promotion_authority": False}
@@ -249,9 +253,10 @@ def check_trace(trace, value, nonce, pid):
         pipeline.require(root.get("identity") == value["identity"], "candidate presentation identity differs")
         for leaf in root["parts"]:
             material = leaf.get("material") or {}
+            expected_image = body_paint.expected_texture(value, leaf["name"], handles, material.get("body_paint"))
             pipeline.require(leaf.get("parent") == root["entity"] and leaf.get("mesh_resident") is True and leaf.get("layer_3d") is True
                 and leaf.get("mesh_handle") == handles.get("meshes", {}).get(leaf["name"])
-                and material.get("albedo_resident") is True and material.get("albedo") == handles.get("albedo")
+                and material.get("albedo_resident") is True and material.get("albedo") == expected_image
                 and material.get("opaque") is True and material.get("lit") is True,
                 "candidate part/dependency residency differs")
             rotation = leaf.get("pose", {}).get("rotation")

@@ -7,6 +7,7 @@ import math
 from pathlib import Path
 from scripts import ui_m2_planning as planning
 from scripts import ui_spa_candidate_art as spa
+from scripts import building_body_paint_observation as body_paint
 
 native, pipeline = planning.native, planning.pipeline
 CASE = "m2-tank-candidate-completion"
@@ -41,6 +42,7 @@ def source_contract(repo, source, codec, *, profile=(CASE, SCOPE)):
                 numeric_verifiers=pipeline.numeric_verifier_inventory(),
                 base_assets_sha256=planning.art.asset_view_fingerprint(repo),
                 verifier_sha256=pipeline.digest(Path(__file__).read_bytes()),
+                body_paint_verifier_sha256=body_paint.verifier_sha256(), **body_paint.fields(manifest),
                 **(dict(supply_speed="Super") if profile in ((FULL_CASE, FULL_SCOPE), (SUPPLY_CASE, SUPPLY_SCOPE),
                                                             (PERSISTENCE_CASE, PERSISTENCE_SCOPE)) else {}))
 
@@ -572,10 +574,11 @@ def check_completed_consumers(raw, value, contract, *, water_count=0):
         native.require(len(parts) == len(declared) == 2 and [part.get("name") for part in parts] == [part["name"] for part in declared],
                        "Tank completed body/water inventory differs")
         for part, authored in zip(parts, declared, strict=True):
+            expected_image = body_paint.expected_texture(contract, part["name"], descriptor, part.get("body_paint"))
             native.require(part.get("parent") == roots[0]["entity"] and part.get("visible") is (part.get("name") != "water" or water_count > 0)
                            and isinstance(part.get("material"), str) and part["material"]
                            and isinstance(descriptor.get("albedo"), str) and descriptor["albedo"]
-                           and part.get("albedo") == descriptor["albedo"]
+                           and part.get("albedo") == expected_image
                            and isinstance(descriptor.get("meshes", {}).get(authored["mesh_role"]), str)
                            and part.get("mesh") == descriptor["meshes"][authored["mesh_role"]], "Tank completed mesh/material differs")
             for key, authored_key in (("translation", "translation_wu"), ("rotation", "rotation_xyzw"), ("scale", "scale")):
