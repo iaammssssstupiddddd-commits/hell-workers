@@ -15,6 +15,90 @@ use hw_visual::{Building3dVisual, TopDownStructuralMaterial};
 mod mixed;
 
 #[test]
+fn admitted_uv_ink_keeps_one_atlas_on_moving_parts_and_restores_legacy_shading() {
+    let mut app = app();
+    app.insert_resource(bevy::time::TimeUpdateStrategy::ManualDuration(
+        std::time::Duration::from_millis(100),
+    ));
+    let owner = shell(app.world_mut(), BuildingType::MudMixer);
+    app.world_mut()
+        .entity_mut(owner)
+        .insert(MudMixerVisualState { is_active: true });
+    app.update();
+    let set = app
+        .world_mut()
+        .resource_mut::<BuildingAssetPool>()
+        .install_surface_paint_fixture(BuildingAssetKind::MudMixer, 4);
+    app.update();
+    let visual = root(app.world_mut(), owner);
+    let parts = children(app.world(), visual);
+    let initial: Vec<_> = parts
+        .iter()
+        .map(|part| *app.world().get::<Transform>(*part).unwrap())
+        .collect();
+    let material_handles: Vec<_> = parts
+        .iter()
+        .map(|part| {
+            app.world()
+                .get::<MeshMaterial3d<TopDownStructuralMaterial>>(*part)
+                .unwrap()
+                .0
+                .clone()
+        })
+        .collect();
+    assert_eq!(material_handles[0], material_handles[1]);
+    app.update();
+    assert_eq!(app.world().get::<Transform>(parts[0]), Some(&initial[0]));
+    assert_ne!(
+        app.world().get::<Transform>(parts[1]).unwrap().rotation,
+        initial[1].rotation
+    );
+    for part in &parts {
+        let handle = &app
+            .world()
+            .get::<MeshMaterial3d<TopDownStructuralMaterial>>(*part)
+            .unwrap()
+            .0;
+        assert_eq!(handle, &material_handles[0]);
+        let material = app
+            .world()
+            .resource::<Assets<TopDownStructuralMaterial>>()
+            .get(handle)
+            .unwrap();
+        assert_eq!(
+            material.base.base_color_texture.as_ref(),
+            set.image("albedo")
+        );
+        assert_eq!(material.extension.uniforms.indoor_light_params.w, 4.);
+        assert!(!material.base.unlit);
+    }
+    app.world_mut().resource_mut::<Time<Virtual>>().pause();
+    app.update();
+    let held = *app.world().get::<Transform>(parts[1]).unwrap();
+    app.update();
+    assert_eq!(app.world().get::<Transform>(parts[1]), Some(&held));
+    let legacy = publish(app.world_mut(), BuildingAssetKind::MudMixer, 3);
+    app.update();
+    for part in children(app.world(), visual) {
+        let handle = &app
+            .world()
+            .get::<MeshMaterial3d<TopDownStructuralMaterial>>(part)
+            .unwrap()
+            .0;
+        let material = app
+            .world()
+            .resource::<Assets<TopDownStructuralMaterial>>()
+            .get(handle)
+            .unwrap();
+        assert_eq!(material.extension.uniforms.indoor_light_params.w, 0.);
+        assert_eq!(
+            material.base.base_color_texture.as_ref(),
+            legacy.image("albedo")
+        );
+    }
+}
+
+#[test]
 fn admitted_body_paint_uses_world_preview_only_and_rollback_restores_the_legacy_material() {
     use hw_core::relationships::StoredIn;
     use hw_core::visual_mirror::StockpileVisualState;

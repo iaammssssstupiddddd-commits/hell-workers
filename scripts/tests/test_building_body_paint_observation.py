@@ -6,6 +6,44 @@ from scripts import building_body_paint_observation as paint
 
 
 class BodyPaintTests(unittest.TestCase):
+    def test_uv_ink_requires_declared_parts_and_actual_flat_atlas_material(self):
+        contract = {
+            "identity": {"kind": "MudMixer"},
+            "surface_paint_contract": {"method": "uv_ink_v1"},
+        }
+        handles, witness = {"albedo": "atlas"}, {"mode": 4.0, "ink_base": True}
+        for part in ("body", "rotor"):
+            self.assertEqual(
+                paint.expected_texture(contract, part, handles, witness), "atlas"
+            )
+        for changed in (
+            {"mode": 0.0, "ink_base": True},
+            {"mode": 3.0, "ink_base": True},
+            {"mode": 4.0, "ink_base": False},
+            None,
+        ):
+            with self.assertRaises(ValueError):
+                paint.expected_texture(contract, "rotor", handles, changed)
+        for part in ("water", "foreign"):
+            with self.assertRaises(ValueError):
+                paint.expected_texture(contract, part, handles, witness)
+        for method in (
+            {},
+            {"method": "arbitrary"},
+            {"method": "uv_ink_v1", "extra": True},
+        ):
+            with self.assertRaises(ValueError):
+                paint.expected_texture(
+                    contract | {"surface_paint_contract": method},
+                    "body",
+                    handles,
+                    witness,
+                )
+        with self.assertRaises(ValueError):
+            paint.expected_texture(
+                contract | {"identity": {"kind": "Tank"}}, "body", handles, witness
+            )
+
     def test_exact_material_and_water_separation(self):
         contract, witness, handles = self.fixture()
         self.assertEqual(

@@ -96,6 +96,7 @@ pub(super) fn fixture(
         catalog_preview: preview("catalog"),
         receipt: None,
         body_paint_projection: None,
+        surface_paint: None,
         numeric_approval_sha256: (authority != BuildingAssetAuthority::ArtPreview
             && matches!(
                 kind,
@@ -152,6 +153,46 @@ fn body_projection_preserves_exact_old_generation_manifest_and_receipt_bytes() {
         canonical(&serde_json::from_slice::<BuildingPromotionReceipt>(receipt).unwrap()).unwrap(),
         receipt
     );
+}
+
+#[test]
+fn uv_ink_is_identity_bound_and_rejects_foreign_kind_method_and_fields() {
+    for kind in BuildingAssetKind::ALL {
+        let mut manifest = fixture(kind, BuildingAssetAuthority::ArtPreview);
+        let previous = manifest.identity.clone();
+        manifest.surface_paint = Some(BuildingSurfacePaint {
+            method: BuildingSurfacePaintMethod::UvInkV1,
+        });
+        seal(&mut manifest);
+        assert_ne!(previous, manifest.identity);
+        let decoded = decode_buildingset(&canonical(&manifest).unwrap());
+        assert_eq!(
+            decoded.is_ok(),
+            matches!(
+                kind,
+                BuildingAssetKind::MudMixer
+                    | BuildingAssetKind::RestArea
+                    | BuildingAssetKind::SoulSpa
+            ),
+            "{kind:?}"
+        );
+    }
+    for input in [
+        r#"{"method":"camera_space"}"#,
+        r#"{"method":true}"#,
+        r#"{"method":"uv_ink_v1","command":"arbitrary"}"#,
+    ] {
+        assert!(serde_json::from_str::<BuildingSurfacePaint>(input).is_err());
+    }
+}
+
+#[test]
+fn uv_ink_omission_preserves_the_previously_reviewed_tank_g4_bytes() {
+    let bytes = include_bytes!("testdata/tank-g4-art-preview.buildingset");
+    let manifest = decode_buildingset(bytes).unwrap();
+    assert!(manifest.surface_paint.is_none());
+    assert!(manifest.body_paint_projection.is_some());
+    assert_eq!(canonical(&manifest).unwrap(), bytes);
 }
 
 #[test]

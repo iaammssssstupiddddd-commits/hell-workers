@@ -18,7 +18,7 @@ def finite(value):
 
 def fields(manifest):
     projection = manifest.get("body_paint_projection")
-    return (
+    result = (
         {}
         if projection is None
         else {
@@ -28,6 +28,10 @@ def fields(manifest):
             }
         }
     )
+    surface = manifest.get("surface_paint")
+    if surface is not None:
+        result["surface_paint_contract"] = surface
+    return result
 
 
 def verifier_sha256():
@@ -37,6 +41,32 @@ def verifier_sha256():
 def expected_texture(contract, part, handles, witness):
     """Return one exact image handle; legacy consumers keep their existing checks."""
     paint = contract.get("body_paint_contract")
+    surface = contract.get("surface_paint_contract")
+    if surface is not None:
+        kind = contract["identity"]["kind"]
+        names = {
+            "MudMixer": ("body", "rotor"),
+            "RestArea": ("body",),
+            "SoulSpa": ("body", "slot0", "slot1", "slot2", "slot3"),
+        }
+        require(
+            kind in names
+            and part in names[kind]
+            and surface == {"method": "uv_ink_v1"}
+            and paint is None,
+            "UV ink requires its closed kind/method/part contract",
+        )
+        require(
+            isinstance(witness, dict)
+            and witness.get("mode") == 4.0
+            and witness.get("ink_base") is True,
+            "actual UV ink material differs",
+        )
+        require(
+            isinstance(handles.get("albedo"), str) and handles["albedo"],
+            "UV ink atlas handle missing",
+        )
+        return handles["albedo"]
     if paint is None:
         if witness is not None:
             mode = witness.get("mode")

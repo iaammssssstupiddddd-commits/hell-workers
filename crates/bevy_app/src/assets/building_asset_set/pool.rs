@@ -375,6 +375,27 @@ impl BuildingAssetPool {
     pub fn failure(&self, kind: BuildingAssetKind) -> Option<&BuildingAssetPoolFailure> {
         self.kinds[index(kind)].failure.as_ref()
     }
+
+    #[cfg(test)]
+    pub(crate) fn install_surface_paint_fixture(
+        &mut self,
+        kind: BuildingAssetKind,
+        generation: u64,
+    ) -> BuildingAssetDescriptor {
+        self.install_presentation_fixture(
+            kind,
+            generation,
+            super::BuildingAssetAuthority::ReleaseApproved,
+        );
+        let active = self.kinds[index(kind)].active.as_mut().unwrap();
+        let descriptor = active.descriptor.as_mut().unwrap();
+        descriptor.manifest.surface_paint = Some(super::BuildingSurfacePaint {
+            method: super::BuildingSurfacePaintMethod::UvInkV1,
+        });
+        super::tests::seal(&mut descriptor.manifest);
+        active.identity = descriptor.manifest.identity.clone();
+        descriptor.clone()
+    }
 }
 
 #[cfg(test)]

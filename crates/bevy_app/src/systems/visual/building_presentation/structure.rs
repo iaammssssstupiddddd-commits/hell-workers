@@ -67,12 +67,38 @@ struct GenerationMaterials {
 
 /// Passive material facts shared by native observers; this never admits a set.
 #[cfg(feature = "profiling")]
+fn ink_base_matches(base: &StandardMaterial) -> bool {
+    base.base_color == Color::WHITE
+        && !base.unlit
+        && base.alpha_mode == AlphaMode::Opaque
+        && base.normal_map_texture.is_none()
+        && base.occlusion_texture.is_none()
+        && base.metallic_roughness_texture.is_none()
+        && base.perceptual_roughness == 1.0
+        && base.reflectance == 0.0
+        && base.metallic == 0.0
+}
+
+#[cfg(feature = "profiling")]
+pub(crate) fn surface_paint_material_matches(
+    material: &TopDownStructuralMaterial,
+    descriptor: &crate::assets::building_asset_set::BuildingAssetDescriptor,
+) -> bool {
+    descriptor.manifest.surface_paint.is_some()
+        && material.extension.uniforms.indoor_light_params.w == 4.0
+        && ink_base_matches(&material.base)
+        && material.base.base_color_texture.is_some()
+        && material.base.base_color_texture.as_ref() == descriptor.image("albedo")
+}
+
+#[cfg(feature = "profiling")]
 pub(crate) fn body_paint_snapshot(material: &TopDownStructuralMaterial) -> serde_json::Value {
     let base = &material.base;
     serde_json::json!({
         "mode": material.extension.uniforms.indoor_light_params.w,
         "canvas": material.extension.uniforms.shadow_style_params.to_array(),
         "matte": material.extension.uniforms.shadow_style_tint.to_array(),
+        "ink_base": ink_base_matches(base),
         "standard": base.base_color == Color::WHITE && !base.unlit
             && base.alpha_mode == AlphaMode::Opaque && base.emissive == LinearRgba::BLACK
             && base.emissive_texture.is_none() && base.normal_map_texture.is_none()
@@ -353,6 +379,8 @@ fn sync_structure(
                     material.extension.uniforms.indoor_light_params.w =
                         if kind == BuildingType::Tank {
                             0.82
+                        } else if set.manifest.surface_paint.is_some() {
+                            4.0
                         } else {
                             0.0
                         };

@@ -197,7 +197,7 @@ def export(recipe_path: Path, source_root: Path, destination: Path, binary: Path
     """Package existing per-part GLB/PNG exports; do not invent geometry or art."""
     require(authority in {"art_preview", "isolated_candidate"}, "export cannot grant release authority")
     recipe = read(recipe_path)
-    optional = {"body_paint_projection"} if "body_paint_projection" in recipe else set()
+    optional = {"body_paint_projection", "surface_paint"} & set(recipe)
     require(set(recipe) == {"schema_version", "kind", "generation", "source", "geometry_contract", "artifacts",
                            "parts", "world_preview", "catalog_preview"} | optional and recipe["schema_version"] == 1,
             "export recipe fields differ")
@@ -220,13 +220,13 @@ def export(recipe_path: Path, source_root: Path, destination: Path, binary: Path
         "geometry_contract_sha256": digest(geometry), "art_approval_sha256": None,
         "artifacts": artifacts, "parts": recipe["parts"], "world_preview": recipe["world_preview"],
         "catalog_preview": recipe["catalog_preview"], "receipt": None}
-    if optional:
-        require(isinstance(recipe["body_paint_projection"], dict), "body paint projection must be explicit")
-        manifest["body_paint_projection"] = recipe["body_paint_projection"]
+    for field in optional:
+        require(isinstance(recipe[field], dict), "paint method must be explicit")
+        manifest[field] = recipe[field]
     preview = codec(binary, "seal", json.dumps(manifest))["manifest"]
-    if optional:
-        require(exact_json(json.loads(preview).get("body_paint_projection"), recipe["body_paint_projection"]),
-                "runtime codec did not preserve the body paint projection")
+    for field in optional:
+        require(exact_json(json.loads(preview).get(field), recipe[field]),
+                "runtime codec did not preserve the paint method")
     if authority == "isolated_candidate":
         require(approval_path is not None, "candidate requires separate art approval")
         approval = read(approval_path)

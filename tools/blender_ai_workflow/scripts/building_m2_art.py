@@ -118,6 +118,10 @@ def mud_mixer_plane(role, surface):
 
 
 def paint(kind, path, stage="strokes", revision="v1", *, style="legacy"):
+    if style == "illustrated-v1":
+        require(kind == "MudMixer" and revision == "v3", "UV ink requires the construction Mixer")
+        from building_mixer_uv_ink import paint as paint_ink
+        return paint_ink(path, stage)
     # Pillow is already part of the workflow; Blender invokes this via the host
     # preparation entrypoint, so its bundled Python does not need Pillow.
     from PIL import Image, ImageDraw, ImageFilter

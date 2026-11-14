@@ -1,6 +1,7 @@
 """Material colors for new infernal-v1 paint; no geometry or runtime authority."""
 
 STYLE = "infernal-v1"
+ILLUSTRATED_STYLE = "illustrated-v1"
 INK = (34, 28, 36)
 WOOD = (94, 82, 79)
 WATER = (66, 87, 90)

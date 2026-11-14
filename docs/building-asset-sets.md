@@ -371,6 +371,12 @@ SoulSpaの4 slotは同一slot meshを参照し、part側で個別transformを持
   hostが同じcodec-verified manifestから期待値を導出する。画像だけ一致する通常UVや別投影を許さず、
   waterと旧世代は従来atlas/mode0.82を維持する。共通oracleのhashも各planへ拘束する。
   専用body materialは1個増えるため、画像枚数不変を資源増分ゼロと読み替えない。
+- `surface_paint`は`method: uv_ink_v1`だけを持つoptional契約で、Mixer/RestArea/SoulSpaの既存part集合に限定する。
+  Tankの投影とは併用せず、旧manifestとTank g4では省略してcanonical bytesを維持する。
+  mode4は既存albedo/UVを使い、描線をrotor等の部品へ固定する。diffuseの参照normalを上向きにし、
+  geometryのnormal/depth/実影biasは保持する。emission/alpha/post処理を重複適用しない。
+  追加画像roleや専用materialは増やさず、通常observerは実mode4・atlas handle・非反射のbase値を
+  descriptor identityへ結合する。metadata、画像、原本が変われば新しい独立採否が必要。
 
 JSONはRustの型宣言順に`serde_json::to_vec`したcompact形式＋末尾LFと完全一致させる。
 未知field、別順序、余分な空白は拒否する。SHA-256は小文字hex64桁。

@@ -181,6 +181,21 @@ pub struct BuildingAssetSetManifest {
     /// Optional, identity-bound Tank body illustration. Old sets omit this.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub body_paint_projection: Option<BuildingBodyPaintProjection>,
+    /// Object-attached ink/color in the existing atlas, separate from Tank projection.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub surface_paint: Option<BuildingSurfacePaint>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct BuildingSurfacePaint {
+    pub method: BuildingSurfacePaintMethod,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum BuildingSurfacePaintMethod {
+    #[serde(rename = "uv_ink_v1")]
+    UvInkV1,
 }
 
 /// One closed production method; this is not an arbitrary image/material route.

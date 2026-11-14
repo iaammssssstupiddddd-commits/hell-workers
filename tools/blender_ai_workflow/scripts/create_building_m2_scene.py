@@ -13,7 +13,7 @@ from pathlib import Path
 import bpy
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from building_infernal_style import STYLE
+from building_infernal_style import STYLE, ILLUSTRATED_STYLE
 
 from building_clay_geometry import PILOTS, load_pilot, require
 from building_m2_art import candidate_geometry, face_layout, numeric_contract
@@ -28,7 +28,10 @@ def main():
     parser.add_argument("--name", required=True)
     parser.add_argument("--stage", choices=("planes", "strokes"), required=True)
     parser.add_argument("--revision", choices=("v1", "v2", "v3"), default="v1")
+    parser.add_argument("--style", choices=(STYLE, ILLUSTRATED_STYLE), default=STYLE)
     args = parser.parse_args(script_arguments())
+    require(args.style != ILLUSTRATED_STYLE or args.kind == "MudMixer" and args.revision == "v3",
+            "illustrated UV source requires construction Mixer v3")
     import re
     require(re.fullmatch(r"[a-z0-9][a-z0-9-]{0,79}", args.name) is not None, "unsafe name")
     root = asset_root() / "staging"
@@ -59,6 +62,13 @@ def main():
     shader.inputs["Roughness"].default_value = 1
     shader.inputs["Metallic"].default_value = 0
     shader.inputs["Specular IOR Level"].default_value = 0
+    if args.style == ILLUSTRATED_STYLE:
+        # Change only the diffuse reference, not geometry/UV or role transforms.
+        normal = material.node_tree.nodes.new("ShaderNodeVectorMath")
+        normal.operation = "ADD"
+        normal.inputs[0].default_value = (0, 0, 1)
+        normal.inputs[1].default_value = (0, 0, 0)
+        material.node_tree.links.new(normal.outputs["Vector"], shader.inputs["Normal"])
     if args.kind == "Tank":
         # Match the runtime Tank-only painterly normal mix in world-up space.
         # Exported GLB keeps real geometry/normals; these nodes author previews.
@@ -106,6 +116,8 @@ def main():
             obj.rotation_euler.z = contract["construction"]["yaw_radians"]
     states = (("Empty", "Partial", "Full") if args.kind == "Tank"
               else ("IdleAngleZero", "QuarterTurn", "HalfTurn", "DiagonalPose"))
+    if args.style == ILLUSTRATED_STYLE:
+        states += ("ThreeQuarterTurn",)
     renders = {}
     for index, state in enumerate(states):
         if args.kind == "Tank":
@@ -117,7 +129,7 @@ def main():
                 from mathutils import Quaternion
                 objects["rotor"].rotation_mode = "QUATERNION"
                 tilt = Quaternion((1, 0, 0), contract["construction"]["tilt_radians"])
-                spin = Quaternion((0, 0, 1), (0, math.pi / 2, math.pi, math.pi / 4)[index])
+                spin = Quaternion((0, 0, 1), (0, math.pi / 2, math.pi, math.pi / 4, 3 * math.pi / 2)[index])
                 yaw = Quaternion((0, 0, 1), contract["construction"]["yaw_radians"])
                 objects["rotor"].rotation_quaternion = yaw @ tilt @ spin
             else:
@@ -133,13 +145,14 @@ def main():
         "schema_version": 1, "kind": args.kind, "stage": args.stage,
         "evidence_kind": "unapproved_m2_paint_candidate",
         "numeric_candidate_sha256": numeric_sha256,
-        "revision": args.revision, "art_style": STYLE,
+        "revision": args.revision, "art_style": args.style,
         "numeric_freeze": False, "art_approved": False, "runtime_published": False,
         "ocio": ocio, "blend_sha256": digest(blend),
         "sources": {name: digest(scripts / name) for name in (
             "create_building_m2_scene.py", "building_m2_art.py", "building_clay_geometry.py", "building_infernal_style.py",
             "create_building_clay_scene.py", "validate_building_numeric_candidate.py",
-            "validate_building_m2_indexed_faces.py")},
+            "validate_building_m2_indexed_faces.py", *(
+                ("building_mixer_uv_ink.py",) if args.style == ILLUSTRATED_STYLE else ()))},
         "albedo_sha256": digest(output / "albedo.png"),
         "renders": renders, "preview": contract["preview"], "face_layout": layout,
         "excludes": ["active simulation", "native", "art acceptance", "formal release"],

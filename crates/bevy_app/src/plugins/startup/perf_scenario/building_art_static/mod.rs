@@ -688,6 +688,8 @@ fn inspect(params: &InspectParams) -> Result<Option<Value>, String> {
                             && candidate.mesh("body") == Some(&mesh.0)
                         {
                             !pilot.body_material_matches(material)
+                        } else if candidate.manifest.surface_paint.is_some() {
+                            !crate::systems::visual::building_presentation::surface_paint_material_matches(material, candidate)
                         } else if candidate.manifest.body_paint_projection.is_some()
                             && candidate.mesh("body") == Some(&mesh.0)
                         {

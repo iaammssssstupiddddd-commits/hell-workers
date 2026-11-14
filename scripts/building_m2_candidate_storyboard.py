@@ -81,8 +81,9 @@ def check_plan(value):
         and m2.numeric_binding(value["kind"], spec) == binding
         and manifest["parts"] == value["parts"] and manifest.get("production_state") == value["production_state"],
         "candidate manifest/numeric/production state differs")
-    pipeline.require(pipeline.exact_json(value.get("body_paint_contract"), body_paint.fields(manifest).get("body_paint_contract")),
-                     "candidate body paint contract differs")
+    pipeline.require(all(pipeline.exact_json(value.get(key), body_paint.fields(manifest).get(key))
+                         for key in ("body_paint_contract", "surface_paint_contract")),
+                     "candidate paint contract differs")
     check_dependencies(value)
     pipeline.require(art.subject(repo) == value["subject"]
         and executable.digest(codec) == value["codec_sha256"], "candidate inputs changed while checking")

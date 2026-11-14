@@ -428,12 +428,19 @@ fn snapshot(world: &mut World) -> Result<Option<Value>, String> {
             };
             let painted_body =
                 descriptor.manifest.body_paint_projection.is_some() && part.name == "body";
-            if painted_body
-                && !crate::systems::visual::building_presentation::body_paint_material_matches(
+            let uv_ink = descriptor.manifest.surface_paint.is_some();
+            if uv_ink
+                && !crate::systems::visual::building_presentation::surface_paint_material_matches(
                     material_asset,
                     &descriptor,
                 )
+                || painted_body
+                    && !crate::systems::visual::building_presentation::body_paint_material_matches(
+                        material_asset,
+                        &descriptor,
+                    )
                 || !painted_body
+                    && !uv_ink
                     && (material_asset.base.base_color_texture.as_ref()
                         != descriptor.image("albedo")
                         || material_asset.extension.uniforms.indoor_light_params.w >= 2.0)

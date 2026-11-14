@@ -8,6 +8,8 @@ mod structure;
 pub(crate) use structure::body_paint_material_matches;
 #[cfg(feature = "profiling")]
 pub(crate) use structure::body_paint_snapshot;
+#[cfg(feature = "profiling")]
+pub(crate) use structure::surface_paint_material_matches;
 
 use crate::assets::building_asset_set::{
     BuildingAssetDescriptor, BuildingAssetKind, BuildingAssetPool, BuildingAssetSetManifest,

@@ -38,6 +38,29 @@ def fixture_codec(_binary, operation, text, receipt=None):
 
 
 class PipelineTests(unittest.TestCase):
+    def test_uv_ink_survives_export_and_rejects_old_art_approval_and_dropping_codec(self):
+        self.candidate("MudMixer")
+        source = self.root / "author-MudMixer-1"
+        recipe = source / "recipe.json"
+        value = pipeline.read(recipe)
+        value["surface_paint"] = {"method": "uv_ink_v1"}
+        recipe.write_bytes(pipeline.canonical(value))
+        output = self.root / "uv-ink-preview"
+        pipeline.export(recipe, source, output, self.binary, authority="art_preview")
+        decoded = pipeline.read(output / pipeline.locator("MudMixer"))
+        self.assertEqual(decoded["surface_paint"], value["surface_paint"])
+        rejected = self.root / "unreviewed-uv-ink"
+        with self.assertRaises(ValueError):
+            pipeline.export(recipe, source, rejected, self.binary, authority="isolated_candidate",
+                            approval_path=source / "art-approval.json", numeric_approval_path=source / "numeric-approval.json")
+        self.assertFalse(rejected.exists())
+        def dropping(binary, operation, text, receipt=None):
+            manifest = json.loads(text); manifest.pop("surface_paint", None)
+            return fixture_codec(binary, operation, json.dumps(manifest), receipt)
+        with patch.object(pipeline, "codec", side_effect=dropping), self.assertRaises(ValueError):
+            pipeline.export(recipe, source, rejected, self.binary, authority="art_preview")
+        self.assertFalse(rejected.exists())
+
     def body_paint_recipe(self):
         self.candidate("Tank")
         source = self.root / "author-Tank-1"

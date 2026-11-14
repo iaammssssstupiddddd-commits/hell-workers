@@ -230,6 +230,19 @@ fn validate_manifest(manifest: &BuildingAssetSetManifest) -> Result<(), Building
     validate_production_state(manifest)?;
     validate_preview(&manifest.world_preview, kind, false)?;
     validate_preview(&manifest.catalog_preview, kind, true)?;
+    if let Some(surface) = manifest.surface_paint {
+        match surface.method {
+            BuildingSurfacePaintMethod::UvInkV1 => require(
+                matches!(
+                    kind,
+                    BuildingAssetKind::MudMixer
+                        | BuildingAssetKind::RestArea
+                        | BuildingAssetKind::SoulSpa
+                ) && manifest.body_paint_projection.is_none(),
+                "UV ink is limited to Mixer/RestArea/Spa parts, separate from Tank projection",
+            )?,
+        }
+    }
     if let Some(BuildingBodyPaintProjection::WorldPreviewV1 { matte_linear_rgb }) =
         manifest.body_paint_projection
     {

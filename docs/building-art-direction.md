@@ -166,6 +166,13 @@ Blender sourceへ画像と設定をpackする。独立auditはmesh/UV/transform�
 準備・auditはsource検証だけであり、旧paint reportや承認を新画像の採否として流用しない。
 previewは透明のまま、bodyだけopaqueな面として実形状の深度・遮蔽を使う。
 
+回転するMixerにはカメラ固定の完成図を使わず、既存M2 v3のUVへobject-localの描線を割り当てる。
+`illustrated-v1`の新atlasは、local Y軸に沿う円筒の継ぎ目・傷・非対称な摩耗印をface-cellの
+gutterまで連続に描く。triangleごとの黒枠や面法線由来の陰は焼き込まない。
+`surface_paint/uv_ink_v1`はこの画像を主とするmode4へ明示接続し、通常の影・遮蔽・状態を保つ。
+Blender sourceと0/quarter/half/three-quarterのpreviewも新atlasで作り、旧sourceや承認は上書きしない。
+現段階は未承認候補の制作経路であり、実機の回転・遠景・独立採否・releaseを省略しない。
+
 下図は現Tankの投影と旧2D原画の筆致を参照した未採用paint候補であり、
 実機画像・状態接続・numeric/art/release承認を意味しない。現行assetは上書きしていない。
 

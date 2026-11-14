@@ -17,8 +17,10 @@ g3の材色変更でも3D感が強いという利用者の観測を制約にす�
 
 ## 2. スコープ
 
-非橋設備の表現方式を段階的に変更する。骨・布・錆・木の色面、実状態・emission、
+指摘されたTank/MudMixer/RestArea/OutdoorLamp/SoulSpaの表現方式を段階的に変更し、
+非橋9種の混在・性能で最終確認する。骨・布・錆・木の色面、実状態・emission、
 alpha・depth・施工clip・光と遮蔽の成立を保つ。Wall/Floor/Bridgeとゲーム論理は対象外。
+Doorと他の小物3種は既存成果を保ち、混在時の統一感と退行を確認する。
 最初の照明試作では世代を変えなかったが、画像投影の正式導入では§8に従い新世代と独立採否を要求する。
 Tank付属Spriteの計画tint修正は§7の確定原因に限定し、選択・保管・搬送を維持する。
 
@@ -116,12 +118,13 @@ v3（`8da324ef`）のnormal/farと8付属Spriteの実RGBAゼロを独立verify/s
   canvas/anchorは既存previewから導出し、RtT合成の縦補正をshaderで一度だけ適用する。
 - [x] 新しい手描きworld_previewを透明のままbodyとpreviewで共有し、bodyだけopaque matte合成する。
   GLB・albedo・水位12/22・partsを保持し、body専用materialと水面を共用しない。
-- [ ] 保存済みg3編集可能原本bundleをSHA固定で新stagingへ読み、新paint・mask・設定・producerを記録する。
+- [x] 保存済みg3編集可能原本bundleをSHA固定で新stagingへ読み、新paint・mask・設定・producerを記録する。
   元bundle/canonical/旧復旧codecを変更せず、新sourceと新codecを別identityで保存する。
   producerは既存blender-safeを直接使用し、networkを分離する。launcher/Flatpak executableと
   app/runtimeのref・deployment commit・location・metadataを固定し、外部audit前後に再照合する。
   base/source/recipe/report/producer/packerの監査中差替えも拒否する。
-- [ ] 新preview identityに独立art/numericを束縛し、候補実機・配置previewの輪郭・move/遮蔽と性能を確認する。
+- [x] 新preview identityへ独立art/numericを束縛する。
+- [ ] 候補実機・配置previewの輪郭・move/遮蔽と性能を確認する。
 - [ ] 新generationの正式promotion/install/rollbackを既存guardで行い、既定binding・恒久仕様を同期する。
 
 他設備は部品構成と状態を個別に扱う。特にMixer rotorへ固定した完成図を貼って回転を失わせず、
@@ -130,3 +133,24 @@ Spaの実利用slot/emissionとRestAreaの入所Soul非表示を維持する。T
 この正式接続コードのHelp判断はNo impact。producer→manifest→pool→Tank body materialと既存
 preview consumerを照合し、画像/描線以外の操作・水量状態・施工・配置・移動・保存・fallback・文言・
 Help到達性は変わらない。付属SpriteのHelp更新は`8da324ef`のまま維持する。
+
+`d3b9d4b7`のTank g4はnormal/farのclean-source ArtPreviewを独立verify/seal/finalizeし、
+別途の画像・形状レビューでartと水位12/22を採用した。ArtPreviewは`de153240ebd8d5d306a3740365b2f1704db67f5f53de8abc148ffd61c39fdf36`、
+新しい隔離candidateは`b8f6087f99c641995eb733052f1906efdf9e3acf4fa92c85a4bce2ee113bf661`。
+geometry/UV/GLBはg3不変。新source・mask/paint/config・承認原本は別stagingに保持する。
+通常起動はまだg3であり、candidateのlifecycle/性能/releaseは未承認。
+最後の9種受入は他設備の表現が揃ったsourceでまとめ、見た目調整の各反復で全性能matrixを繰り返さない。
+
+## 9. 回転するMixerは部品に描線を固定する
+
+カメラ固定の完成図をrotorへ投影すると回転の見た目を失うため、既存M2 v3のUVとlocal Y軸を使う。
+新しい512px atlasへ円筒の継ぎ目・傷・非対称な摩耗印を描き、既存face-cellのgutterまで連続に埋める。
+triangle/UV島を一枚ずつ黒枠にする方法と、面法線由来の明暗をalbedoへ焼く方法は使わない。
+
+- [ ] identityに拘束した閉じた`surface_paint/uv_ink_v1`と、通常observerの実mode/texture検査を追加する。
+- [ ] 既存編集可能原本と数値契約を保持し、新atlas・world-up diffuse・4姿勢previewを新規制作する。
+- [ ] body固定、rotorの描線追従、normal/far、pause/resume/load/move、preview整合を実機で確認する。
+- [ ] 採用時だけ新art/numeric/candidateへ進み、最終sourceの混在9種・性能・切戻し・正式導入を閉じる。
+
+投影Tankのmode3と旧None経路は変更しない。UV方式はalbedoを主役にし、
+照明参照normalだけを固定する。実geometryのnormal/depth/影bias、emission、alpha、post処理は保持する。

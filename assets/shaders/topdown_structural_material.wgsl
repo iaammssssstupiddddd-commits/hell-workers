@@ -43,6 +43,7 @@ fn fragment(
 
     let projected_preview = structural_material.indoor_light_params.w == 3.0;
     let projected = structural_material.indoor_light_params.w == 2.0 || projected_preview;
+    let uv_ink = structural_material.indoor_light_params.w == 4.0;
     var paint_in = in;
 #ifdef VERTEX_UVS_A
     if projected {
@@ -73,7 +74,9 @@ fn fragment(
     }
     // Keep real light/shadow response while reducing the faceted, cylindrical
     // shading on the illustrated Tank. Other structural materials retain zero.
-    let flatten = select(clamp(structural_material.indoor_light_params.w, 0.0, 1.0), 1.0, projected);
+    // Only the diffuse-lighting reference normal changes. The actual normal
+    // still owns depth, shadow casting and receiver bias; UV ink follows mesh motion.
+    let flatten = select(clamp(structural_material.indoor_light_params.w, 0.0, 1.0), 1.0, projected || uv_ink);
     pbr_input.N = normalize(mix(pbr_input.N, vec3<f32>(0.0, 1.0, 0.0), flatten));
     pbr_input.material.base_color =
         alpha_discard(pbr_input.material, pbr_input.material.base_color);
@@ -81,7 +84,7 @@ fn fragment(
     var out: FragmentOutput;
     if (pbr_input.material.flags & pbr_types::STANDARD_MATERIAL_FLAGS_UNLIT_BIT) == 0u {
         out.color = apply_pbr_lighting(pbr_input);
-        if !projected {
+        if !projected && !uv_ink {
         out.color = vec4<f32>(
             apply_directional_shadow_style(
                 pbr_input,
