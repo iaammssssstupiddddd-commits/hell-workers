@@ -87,3 +87,9 @@ material mode=2とRoot相対のcamera投影を使い、初終の実image bytes/m
 通常sessionとの混在、別Tank世代、body/water共用、foreign image、image未load・変更を拒否する。
 Help判断はNo impact。入口はprofiling専用で通常起動から到達せず、材質pilot以外の操作・状態・保存・
 失敗理由・Help reachabilityを変えない。正式導入時は実プレイヤー経路を改めて照合する。
+
+2026-11-15のpilot v1はnormalのowned X11/Vulkan画像と実mode=2材質まで取得したが、
+検証器がRust codecのbuildingsetをPython canonical metadataとして読んだためexit=1/invalidで封印した。
+farは未実行でありpassへ読み替えない。検証器は既にcodecと全asset bytesへ拘束されたplan内の
+decoded manifestから水面画像を解決するよう修正する。source/identity/assetの再照合は維持する。
+このgalleryの画像寸法は1920×1680、DPI1であり、通常ゲームのviewport受入とは別である。

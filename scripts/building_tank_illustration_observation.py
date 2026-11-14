@@ -52,7 +52,7 @@ def matrix_pose(matrix, translation):
     )
 
 
-def validate_witness(witness, session, fixture, view_root, projection):
+def validate_witness(witness, session, fixture, view_root, projection, manifests):
     paint = session["paint"]
     base = session["gallery"]
     require(
@@ -76,9 +76,17 @@ def validate_witness(witness, session, fixture, view_root, projection):
     tank = next(
         b["identity"] for b in base["bindings"] if b["identity"]["kind"] == "Tank"
     )
-    manifest = m6.pipeline.read(
-        view_root / "assets/manifests/building-tank-v1.buildingset"
+    # Production .buildingset bytes are sealed by the Rust codec, whose key
+    # order is intentionally not Python's sorted canonical metadata order.
+    # The parent verifier has already rechecked these exact decoded manifests
+    # against the codec and every immutable asset-view byte. Do not reinterpret
+    # the runtime wire format as a Python metadata file.
+    matching = [m for m in manifests if m["identity"]["kind"] == "Tank"]
+    require(
+        len(matching) == 1 and m6.pipeline.exact_json(matching[0]["identity"], tank),
+        "pilot frozen Tank manifest identity differs",
     )
+    manifest = matching[0]
     atlas = next(
         a["path"] for a in manifest["artifacts"] if a["role"] == "image:albedo"
     )
@@ -432,4 +440,11 @@ def validate(probe, final, session, value, view_root):
     common.released_snapshot(
         {k: projection[k] for k in released.PROJECTION_KEYS}, base, frozen, view_root
     )
-    validate_witness(projection["tank_paint"], session, frozen, view_root, projection)
+    validate_witness(
+        projection["tank_paint"],
+        session,
+        frozen,
+        view_root,
+        projection,
+        value["assets"]["manifests"],
+    )

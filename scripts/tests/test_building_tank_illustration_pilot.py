@@ -1,6 +1,7 @@
 """Closed pilot rejection tests; these are not native/art acceptance evidence."""
 
 import copy
+import json
 from pathlib import Path
 import tempfile
 import unittest
@@ -49,17 +50,22 @@ class PilotWitnessTests(unittest.TestCase):
         self.paint, prepared = pilot.prepare_paint(self.paint_path.resolve())
         (assets / "pilot/tank-body.png").write_bytes(prepared)
         Image.new("RGBA", (2, 2), (66, 87, 90, 255)).save(assets / "water.png")
-        (assets / "manifests/building-tank-v1.buildingset").write_bytes(
-            pilot.pipeline.canonical(
-                {"artifacts": [{"role": "image:albedo", "path": "water.png"}]}
-            )
-        )
         identity = {
             "kind": "Tank",
             "generation": 3,
             "authority": "release_approved",
             "manifest_sha256": "3eb6285f60f837280e3d97604ce055e0c651cfa80d2dd95c0937c86f27fd4ba2",
         }
+        self.manifests = [
+            {
+                "identity": identity.copy(),
+                "artifacts": [{"role": "image:albedo", "path": "water.png"}],
+            }
+        ]
+        # The valid codec wire key order need not equal Python canonical order.
+        (assets / "manifests/building-tank-v1.buildingset").write_text(
+            json.dumps(self.manifests[0])
+        )
         self.session = {
             "schema_version": 1,
             "contract_id": pilot.PROFILE,
@@ -192,10 +198,16 @@ class PilotWitnessTests(unittest.TestCase):
             self.fixture,
             self.view,
             self.projection,
+            self.manifests,
         )
 
     def test_real_white_rounding_and_all_three_water_states_are_accepted(self):
         self.validate()
+
+    def test_only_exact_frozen_codec_manifest_identity_supplies_water_image(self):
+        self.manifests[0]["identity"]["generation"] = 2
+        with self.assertRaises(ValueError):
+            self.validate()
 
     def test_wrong_owner_root_origin_identity_and_duplicate_part_are_rejected(self):
         mutations = [
