@@ -206,18 +206,37 @@ fn main() -> AppExit {
     app.run()
 }
 
-/// Bound GNU malloc arenas before Bevy creates its worker pools. This applies
-/// equally to ordinary games and profiling; it does not replace the allocator
-/// or reclaim arenas/allocations created before main.
+/// Set the same GNU allocation policy before ordinary/profiling worker startup.
+/// Fix the mmap threshold at 128 KiB instead of adapting to transient allocations.
+/// Freed mmap-backed buffers can return to the OS; existing allocations are not reclaimed.
 #[cfg(all(target_os = "linux", target_env = "gnu"))]
 fn configure_native_allocator() -> Result<(), &'static str> {
-    // SAFETY: mallopt accepts integer settings and retains no pointers. This is
-    // called once on the main thread before App/worker initialization.
-    let applied = unsafe { libc::mallopt(libc::M_ARENA_MAX, 2) };
-    if applied != 1 {
-        return Err("glibc rejected arena limit 2");
-    }
+    apply_native_allocator_settings(|parameter, value| {
+        // SAFETY: these fixed mallopt options retain no pointers. Called once
+        // on the main thread before App/worker initialization.
+        unsafe { libc::mallopt(parameter, value) }
+    })?;
     eprintln!("Native allocator startup: glibc arena limit=2 applied");
+    eprintln!("Native allocator startup: glibc mmap threshold=131072 applied");
+    Ok(())
+}
+
+#[cfg(all(target_os = "linux", target_env = "gnu"))]
+fn apply_native_allocator_settings(
+    mut apply: impl FnMut(i32, i32) -> i32,
+) -> Result<(), &'static str> {
+    for (parameter, value, failure) in [
+        (libc::M_ARENA_MAX, 2, "glibc rejected arena limit 2"),
+        (
+            libc::M_MMAP_THRESHOLD,
+            128 * 1024,
+            "glibc rejected mmap threshold 131072",
+        ),
+    ] {
+        if apply(parameter, value) != 1 {
+            return Err(failure);
+        }
+    }
     Ok(())
 }
 
@@ -392,6 +411,51 @@ fn select_present_mode() -> PresentMode {
 mod tests {
     use super::*;
     use bevy::winit::UpdateMode;
+
+    #[cfg(all(target_os = "linux", target_env = "gnu"))]
+    #[test]
+    fn native_allocator_requires_both_settings_before_startup() {
+        let mut calls = Vec::new();
+        assert_eq!(
+            apply_native_allocator_settings(|parameter, value| {
+                calls.push((parameter, value));
+                1
+            }),
+            Ok(())
+        );
+        assert_eq!(
+            calls,
+            [(libc::M_ARENA_MAX, 2), (libc::M_MMAP_THRESHOLD, 131_072)]
+        );
+    }
+
+    #[cfg(all(target_os = "linux", target_env = "gnu"))]
+    #[test]
+    fn native_allocator_stops_if_arena_setting_is_rejected() {
+        let mut calls = 0;
+        assert_eq!(
+            apply_native_allocator_settings(|_, _| {
+                calls += 1;
+                0
+            }),
+            Err("glibc rejected arena limit 2")
+        );
+        assert_eq!(calls, 1);
+    }
+
+    #[cfg(all(target_os = "linux", target_env = "gnu"))]
+    #[test]
+    fn native_allocator_rejects_partial_policy_application() {
+        let mut calls = 0;
+        assert_eq!(
+            apply_native_allocator_settings(|parameter, _| {
+                calls += 1;
+                i32::from(parameter == libc::M_ARENA_MAX)
+            }),
+            Err("glibc rejected mmap threshold 131072")
+        );
+        assert_eq!(calls, 2);
+    }
 
     #[test]
     fn native_profile_matrix_only_allows_the_validated_m2_ui_pair() {
