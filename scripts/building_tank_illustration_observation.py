@@ -65,6 +65,7 @@ def validate_witness(witness, session, fixture, view_root, projection, manifests
             "paint_image",
             "water_image",
             "owners",
+            "companion_overlays",
         }
         and witness["profile"] == PROFILE
         and all(
@@ -136,6 +137,46 @@ def validate_witness(witness, session, fixture, view_root, projection, manifests
             "pilot decoded image differs",
         )
     records = {r["gallery_owner"]: r for r in fixture["records"] if r["kind"] == "Tank"}
+    overlays = witness["companion_overlays"]
+    require(
+        isinstance(overlays, list) and len(overlays) == 8,
+        "pilot companion overlay coverage differs",
+    )
+    for overlay in overlays:
+        require(
+            set(overlay) == {"entity", "owner", "color", "center", "canvas", "layers"},
+            "pilot companion overlay fields differ",
+        )
+        released.entity(overlay["entity"])
+        released.entity(overlay["owner"])
+        vector(overlay["color"], 4)
+        vector(overlay["center"], 3)
+        require(
+            overlay["owner"] in records
+            and overlay["color"] == [0.0, 0.0, 0.0, 0.0]
+            and overlay["canvas"] == [32.0, 32.0]
+            and type(overlay["layers"]) is list
+            and all(type(n) is int for n in overlay["layers"])
+            and overlay["layers"] == [0]
+            and abs(overlay["center"][2] - 0.01) < 1e-6,
+            "completed Tank companion planning tint or hit geometry differs",
+        )
+    require(
+        len({o["entity"] for o in overlays}) == 8,
+        "pilot companion overlay entities repeated",
+    )
+    for owner, record in records.items():
+        attached = [o for o in overlays if o["owner"] == owner]
+        anchor = record["anchor"]
+        expected = {
+            ((x - 49.5) * 32.0, (anchor[1] + 2 - 49.5) * 32.0)
+            for x in (anchor[0], anchor[0] + 1)
+        }
+        require(
+            len(attached) == 2
+            and {tuple(o["center"][:2]) for o in attached} == expected,
+            "pilot actual companion ownership/position differs",
+        )
     rows = witness["owners"]
     edges = projection["tank_paint_hierarchy"]
     geometry_ids = {
@@ -323,6 +364,7 @@ def validate_witness(witness, session, fixture, view_root, projection, manifests
         not (roots & set(records))
         and not (roots & entities)
         and not (entities & set(records))
+        and not ({o["entity"] for o in overlays} & (roots | entities | set(records)))
         and len(body_materials) == 1
         and not (body_materials & water_materials)
         and all(len(ids) == 1 for ids in meshes.values())

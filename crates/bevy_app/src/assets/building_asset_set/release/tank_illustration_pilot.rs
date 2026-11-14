@@ -397,9 +397,22 @@ pub(crate) fn witness(world: &mut World) -> Result<Option<serde_json::Value>, St
             "root_pose": pose(transform), "root_global": world.get::<GlobalTransform>(root).ok_or("pilot root global missing")?.to_matrix().to_cols_array(), "parts": parts}));
     }
     rows.sort_by_key(|r| r["owner"].as_u64().unwrap_or_default());
+    let mut overlays: Vec<_> = world
+        .query::<(Entity, &hw_logistics::BelongsTo, &Sprite, &GlobalTransform, &hw_logistics::BucketStorage)>()
+        .iter(world)
+        .filter(|(_, owner, _, _, _)| world.get::<Building>(owner.0).is_some_and(|b| b.kind == BuildingType::Tank))
+        .map(|(entity, owner, sprite, global, _)| serde_json::json!({
+            "entity": entity.to_bits(), "owner": owner.0.to_bits(),
+            "color": sprite.color.to_srgba().to_f32_array(),
+            "center": global.translation().to_array(),
+            "canvas": sprite.custom_size.map(|size| size.to_array()),
+            "layers": world.get::<bevy::camera::visibility::RenderLayers>(entity).cloned().unwrap_or_default().iter().collect::<Vec<_>>()
+        }))
+        .collect();
+    overlays.sort_by_key(|r| r["entity"].as_u64().unwrap_or_default());
     Ok(Some(
         serde_json::json!({"profile": CONTRACT, "accepted": false, "promotion_authority": false, "performance_evidence": false,
-        "paint_image": image_witness(world, &pilot.image)?, "water_image": image_witness(world, &water_texture)?, "owners": rows}),
+        "paint_image": image_witness(world, &pilot.image)?, "water_image": image_witness(world, &water_texture)?, "owners": rows, "companion_overlays": overlays}),
     ))
 }
 

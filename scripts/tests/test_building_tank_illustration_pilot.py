@@ -94,10 +94,12 @@ class PilotWitnessTests(unittest.TestCase):
             "paint_image": image("paint", "pilot/tank-body.png"),
             "water_image": image("water", "water.png"),
             "owners": [],
+            "companion_overlays": [],
         }
         self.fixture = {"records": []}
         for i, count in enumerate([0, 5, 25, 50]):
-            origin = [i * 160.0, 0.0, 0.0]
+            anchor = [8 + i * 5, 8]
+            origin = [(anchor[0] - 49.5) * 32.0, 0.0, -(anchor[1] - 49.5) * 32.0]
             owner = 100 + i
             self.fixture["records"].append(
                 {
@@ -105,7 +107,23 @@ class PilotWitnessTests(unittest.TestCase):
                     "gallery_owner": owner,
                     "center": [origin[0], -origin[2]],
                     "state": {"stored_water": count},
+                    "anchor": anchor,
                 }
+            )
+            self.witness["companion_overlays"].extend(
+                {
+                    "entity": 2000 + i * 2 + j,
+                    "owner": owner,
+                    "color": [0.0, 0.0, 0.0, 0.0],
+                    "center": [
+                        (anchor[0] + j - 49.5) * 32.0,
+                        (anchor[1] + 2 - 49.5) * 32.0,
+                        0.01,
+                    ],
+                    "canvas": [32.0, 32.0],
+                    "layers": [0],
+                }
+                for j in range(2)
             )
             parts = []
             for role in ["body", "water"]:
@@ -208,6 +226,24 @@ class PilotWitnessTests(unittest.TestCase):
         self.manifests[0]["identity"]["generation"] = 2
         with self.assertRaises(ValueError):
             self.validate()
+
+    def test_companion_tint_owner_position_and_coverage_are_observed(self):
+        for key, value in [
+            ("color", [1.0, 1.0, 0.0, 0.2]),
+            ("owner", 999),
+            ("center", [0.0, 0.0, 0.01]),
+            ("canvas", [64.0, 32.0]),
+            ("layers", [False]),
+            ("entity", 1000),
+        ]:
+            w = copy.deepcopy(self.witness)
+            w["companion_overlays"][0][key] = value
+            with self.subTest(key=key), self.assertRaises(ValueError):
+                self.validate(w)
+        w = copy.deepcopy(self.witness)
+        w["companion_overlays"].pop()
+        with self.assertRaises(ValueError):
+            self.validate(w)
 
     def test_wrong_owner_root_origin_identity_and_duplicate_part_are_rejected(self):
         mutations = [

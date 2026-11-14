@@ -143,6 +143,11 @@ exact testで一致を再検証します。生成後は
 
 ## Help impact gate
 
+2026-11-15のTank付属置き場の背景修正は`Update required`。完成後の黄色計画背景を消し、
+選択・保管範囲・搬送と撤去previewの赤・橙を維持する旨を既存`architect-building`へ追加する。
+新操作・coverage分類・stable IDは変更しない。画像投影pilotそのものはprofiling専用であり、
+通常Helpの到達性を変えない。
+
 2026-11-10のTank→Mixer数量保存修正は`Update required`。通常の補給要求から割当、取水、投入までを
 確認し、全杯5個・投入空き待ち・容量競合時の水入りバケツ保持を既存`architect-building`へ追記した。
 新しい入力/domain variantや到達性の変更はないため、`BuildingZonesDream` manifest、Tank/MudMixerの

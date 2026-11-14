@@ -116,6 +116,7 @@ impl Plugin for VisualPlugin {
                 crate::systems::visual::building_presentation::poll_building_assets,
                 crate::systems::visual::building_presentation::sync_equipment_structure,
                 crate::systems::visual::building_presentation::sync_building_previews,
+                crate::systems::visual::tank_companion::clear_completed_tank_planning_tint,
                 ApplyDeferred,
             )
                 .chain()

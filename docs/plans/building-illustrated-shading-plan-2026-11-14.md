@@ -93,3 +93,14 @@ Help判断はNo impact。入口はprofiling専用で通常起動から到達せ�
 farは未実行でありpassへ読み替えない。検証器は既にcodecと全asset bytesへ拘束されたplan内の
 decoded manifestから水面画像を解決するよう修正する。source/identity/assetの再照合は維持する。
 このgalleryの画像寸法は1920×1680、DPI1であり、通常ゲームのviewport受入とは別である。
+
+修正後`7c92ebe0`のpilot v2はnormal/farとも登録済み独立verifyとsealが成功した。
+実mode=2、256px paint、Root/part/material/ChildOfの一致、Empty0/Partial25/Full50×2を確認した。
+独立目視は手描きの輪郭・木板・帯の線と遠景のEmpty対水面の差を認め、方式の方向だけを採用した。
+完成art/numeric/release/通常lifecycle/性能は未承認である。
+
+黄土色の上縁はpaint未被覆と仮定したが、その仮説は実geometry投影のcoverage検査で否定された。
+全17889texelがpaintのalpha>=128に入る。実cameraで付属BucketStorageの黄色2D Spriteを投影すると、
+Emptyではx696–760/y1408–1440となり、問題の(728,1432)に重なる。
+MainCamera order2がRtT合成order1の後に描くためであり、原画や投影値は調整しない。
+通常Visual phaseへ完成Tankの計画tint正規化を追加し、旧保存・撤去preview復帰・Pending不変を検証する。
