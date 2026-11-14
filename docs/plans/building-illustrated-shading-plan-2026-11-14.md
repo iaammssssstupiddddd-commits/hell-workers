@@ -209,3 +209,19 @@ TankPilot・legacy fallback・single-kindの既存wireは維持し、group fixed
 plan・cumulative・公開released-case contextへ新oracleのhashを含め、測定中のframe処理は増やさない。
 この変更はprofiling観測/開発検証のみであり、通常ゲームの操作・状態・保存・Help到達性は不変（No impact）。
 旧静止passを最終9種や性能受入へ流用せず、新subjectで原本rawから検証する。
+
+## 13. 通常Loadの非同期commitまで入力記録を閉じない
+
+`5f27623f`で5候補gallery、Spa全16mask、Tank/Mixer storyboard、Restの通常利用・保存読込、
+Spaの通常施工・占有保存読込を独立verify/seal/finalizeした。これらは明示候補の限定証拠であり、
+通常既定bindingの変更・性能・正式releaseは未完である。
+
+続くSpa loaded-use v1は読込後の利用・自然退去まで到達したが、独立raw検査でexit1となり、
+invalidとして封印した。ConfirmLoadのrelease ACK時点ではUIがepoch0、同時刻のraw sampleは
+DurableLoad後のepoch1だった。試験producerがclick記録を早く閉じた原因であり、ゲームの値は変更しない。
+ConfirmLoadだけは既存のhover/press/releaseを1回送り、同nonce/PID/window・epoch+1・catalog Closed・
+pausedの実観測まで有界待機してからactionを記録する。timeoutは記録確定も再送もしない。
+共有raw入力verifier、window/key/epochとstep範囲の厳密検査は保持する。
+遅延commit、早い終端、世代飛越し、foreign owner/window、未commit・未close・非pausedを回帰する。
+この変更は試験producerと拒否試験だけであり、プレイヤーの入力、保存形式、成功/失敗結果、Helpは不変（No impact）。
+旧v1の原本は修正比較にだけ保持し、新subject・新batchでloaded-useを再検証する。

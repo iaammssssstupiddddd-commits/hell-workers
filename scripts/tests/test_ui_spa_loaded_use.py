@@ -79,13 +79,79 @@ def campaign(save):
 
 
 class LoadedSpaTests(unittest.TestCase):
+    def test_load_action_waits_for_world_commit_without_repeating_input(self):
+        with tempfile.TemporaryDirectory() as directory:
+            save = Path(directory) / "saves/manual-1.scn.ron"
+            save.parent.mkdir()
+            _, _, _, inputs, _ = campaign(save)
+            source = next(row["spa_action"] for row in inputs
+                          if row.get("spa_action", {}).get("key", "").startswith("menu:ConfirmLoadCatalogSlot "))
+            key = source["key"]
+
+            class Driver:
+                def __init__(self, changed=None):
+                    self.root = Path(directory)
+                    self.events = []
+                    self.last = copy.deepcopy(source["before"])
+                    self.last.update(controls={key: {"interaction": "None"}}, catalog="LoadConfirmation",
+                                     mouse_left_pressed=False, world_input_captured=False,
+                                     pointer_over_ui=True, viewport=[1920, 1080], menu_state="Closed")
+                    self.changed = changed
+                    self.waits = []
+
+                def point(self, target):
+                    self.asserted_target = target
+                    return [10., 10.]
+
+                def send(self, **event):
+                    self.events.append(event)
+                    self.last["frame"] += 1
+                    self.last["spa_planning"]["real_seconds"] += .1
+                    self.last["controls"][key]["interaction"] = "Pressed" if event.get("pressed") else "Hovered"
+
+                def wait(self, predicate, *, after, timeout):
+                    self.waits.append((after, timeout))
+                    # Release was acknowledged in the old world. The catalog
+                    # stays open for a further observation before load commits.
+                    for epoch, catalog in ((0, "LoadConfirmation"), (1, "Closed")):
+                        value = copy.deepcopy(self.last)
+                        value.update(frame=after + epoch + 1, world_epoch=epoch, catalog=catalog)
+                        value["spa_planning"]["real_seconds"] += epoch + 1
+                        if self.changed:
+                            self.changed(value)
+                        if predicate(value):
+                            return value
+                    raise loaded.native.AcceptanceError("synthetic load timeout; never resend")
+
+            driver = Driver()
+            loaded.confirm_load(driver)
+            self.assertEqual(driver.asserted_target, key)
+            self.assertEqual(driver.events[:1], [{"point": [10., 10.]}])
+            self.assertEqual([{k: v for k, v in row.items() if k != "spa_action"}
+                              for row in driver.events[1:]],
+                             [{"button": 1, "pressed": True}, {"button": 1, "pressed": False}])
+            action = driver.events[1]["spa_action"]
+            self.assertEqual((action["first_step"], action["last_step"]), (2, 3))
+            self.assertEqual((action["before"]["world_epoch"], action["after"]["world_epoch"]), (0, 1))
+            self.assertEqual(driver.waits, [(source["before"]["frame"] + 3, 60)])
+
+            for field, value in (("world_epoch", 0), ("world_epoch", 2), ("nonce", "foreign"),
+                                 ("pid", -1), ("primary_window", -1), ("catalog", "LoadConfirmation"),
+                                 ("paused", False)):
+                with self.subTest(field=field, value=value):
+                    driver = Driver(lambda observed: observed.update({field: value}))
+                    with self.assertRaises(loaded.native.AcceptanceError):
+                        loaded.confirm_load(driver)
+                    self.assertEqual(len(driver.events), 3)
+                    self.assertFalse(any("spa_action" in row for row in driver.events))
+
     def test_loaded_continuation_and_refusals(self):
         with tempfile.TemporaryDirectory() as directory:
             save = Path(directory) / "saves/manual-1.scn.ron"
             save.parent.mkdir()
             raw, entries, client, inputs, contract = campaign(save)
             loaded.verify(raw, entries, client, save, inputs, contract)
-            for change in ("save", "receipt", "remap", "reset", "epoch", "target", "speed", "input", "phase", "raw-speed", "dream", "departure", "future-commit", "late-index", "slot", "dialog"):
+            for change in ("save", "receipt", "remap", "reset", "epoch", "target", "speed", "input", "phase", "raw-speed", "dream", "departure", "future-commit", "late-index", "slot", "dialog", "early-action-close"):
                 r, e, c, i, k = copy.deepcopy((raw, entries, client, inputs, contract))
                 receipt = next(v for v in r["events"] if v.get("operation") == "DurableLoad")
                 if change == "save":
@@ -116,6 +182,9 @@ class LoadedSpaTests(unittest.TestCase):
                     receipt["real_seconds"] = e[1]["value"]["spa_planning"]["real_seconds"] + 1
                 elif change == "late-index":
                     receipt["sample_index"] = len(r["samples"]) - 1
+                elif change == "early-action-close":
+                    next(row["spa_action"] for row in i
+                         if row.get("spa_action", {}).get("key", "").startswith("menu:ConfirmLoadCatalogSlot "))["after"]["world_epoch"] = 0
                 elif change in ("slot", "dialog"):
                     action = i[2]["spa_action"]
                     old = action["key"]

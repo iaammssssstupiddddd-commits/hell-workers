@@ -202,6 +202,30 @@ def verify(raw, entries, client, save_path, inputs, contract):
     resumed.verify_tail(raw, entries, client, inputs, saved, loaded_index=1, speeds=(4, 1, 4))
 
 
+def confirm_load(driver):
+    key = spa.catalog_control(driver, "ConfirmLoadCatalogSlot")
+    driver.send(point=driver.point(key))
+    native.require(driver.last["controls"].get(key, {}).get("interaction") == "Hovered",
+                   "Spa load target moved or is occluded; no press sent")
+    before, first = spa.input_context(driver.last, key), len(driver.events)
+    driver.send(button=1, pressed=True)
+    native.require(driver.last["controls"].get(key, {}).get("interaction") == "Pressed",
+                   "Spa load target press missing")
+    driver.send(button=1, pressed=False)
+
+    def committed(value):
+        native.require(all(value[k] == before[k] for k in ("nonce", "pid", "primary_window"))
+                       and value["world_epoch"] in (before["world_epoch"], before["world_epoch"] + 1),
+                       "Spa load action owner/epoch differs")
+        return value["world_epoch"] == before["world_epoch"] + 1 and value["catalog"] == "Closed"
+
+    # Release ACK can precede the asynchronous world replacement. Close the
+    # action only at its observed commit; never resend or relabel raw samples.
+    driver.last = driver.wait(committed, after=driver.last["frame"], timeout=60)
+    native.require(driver.last.get("paused") is True, "Spa ordinary load unexpectedly resumed")
+    spa.record_action(driver, key, first, before)
+
+
 def exercise(driver, contract):
     driver.capture(CHECKPOINTS[0])
     native.require(all(driver.last["spa_planning"][key] == contract["resume_input"]["planning"][key]
@@ -209,10 +233,7 @@ def exercise(driver, contract):
     spa.tap(driver, "F9")
     driver.last = driver.wait(lambda v: any(k.startswith("menu:SelectLoadCatalogSlot") for k in v["controls"]), after=driver.last["frame"])
     spa.click(driver, spa.catalog_control(driver, "SelectLoadCatalogSlot"))
-    epoch = driver.last["world_epoch"]
-    spa.click(driver, spa.catalog_control(driver, "ConfirmLoadCatalogSlot"))
-    driver.last = driver.wait(lambda v: v["world_epoch"] == epoch + 1 and v["catalog"] == "Closed", after=driver.last["frame"], timeout=60)
-    native.require(driver.last.get("paused") is True, "Spa ordinary load unexpectedly resumed")
+    confirm_load(driver)
     check_observation(CHECKPOINTS[1], driver.last)
     driver.capture(CHECKPOINTS[1])
     raw = native.read_json(driver.root / "production-cancellation.json")
