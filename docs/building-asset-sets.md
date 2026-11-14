@@ -93,9 +93,10 @@ SoulSpa g2、Parking g2、SandPile/BonePile g1、Door g7、Wall g13は変更し�
 画面は[制作仕様](building-art-direction.md#外観改訂後の9種の採用画面2026-11-14)、比較範囲と事前予算は[性能仕様](rendering-performance.md#外観改訂9種の静止asset増分受入2026-11-14)を正本とする。
 Helpは実経路を再確認してNo impact。操作・成立条件・休息/精製/電力・保存形式は変更しない。
 
-- Tankは実形状・水位・実照明を維持し、構造材uniformの`indoor_light_params.w`へ0.82を設定して
-  法線を上向きへ混合する。幾何形状による陰影を弱め、他kindの値は0とする。
-  Blenderの候補previewにも同じworld-up混合を用い、catalogだけ古い強い陰影を残さない。
+- Tank専用の法線0.82混合は、[設備の挿絵描画方式](building-art-direction.md#設備の挿絵描画方式)へ置き換えた。
+  `indoor_light_params.w`は0=PBR／1=illustrationのmodeであり、補間率として使わない。
+  Tank/MudMixer/RestArea/SoulSpaの世代ごとのopaque・水位・発光材質と正式Doorへ限定し、Bridgeは0を保つ。
+  g2/g3のBlender previewは旧world-up混合で制作した履歴を持つ。今回のruntime illustrationとは別経路で、PNGは再生成していない。
 - Mixerの`building-m2-v3.numeric-candidate.json`は、傾斜55度の開口ドラム、架台、車輪を定義する。
   全部材に共通yaw −32度を適用し、rotorはその姿勢にlocal Y回転を合成する。
   実part quaternionとsweepの姿勢を照合し、全静的8部材との連続回転範囲の非交差を検査する。

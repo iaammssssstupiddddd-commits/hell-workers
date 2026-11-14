@@ -18,8 +18,15 @@ pub struct TopDownStructuralUniform {
     /// `x`: blur radius in shadow texels, `yzw`: reserved.
     pub shadow_style_blur: Vec4,
     /// `x`: tile size, `y`: local-light gain, `z`: enabled,
-    /// `w`: painterly normal flattening (0 = geometric, 1 = upward).
+    /// `w`: lighting mode (0 = geometric PBR, 1 = albedo-first illustration).
     pub indoor_light_params: Vec4,
+}
+
+impl TopDownStructuralUniform {
+    /// Opt in per consumer; shared Wall/Floor/Bridge materials remain PBR.
+    pub fn use_illustrated_lighting(&mut self) {
+        self.indoor_light_params.w = 1.0;
+    }
 }
 
 impl Default for TopDownStructuralUniform {
