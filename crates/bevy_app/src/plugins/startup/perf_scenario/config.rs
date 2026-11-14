@@ -1240,13 +1240,28 @@ impl PerfScenarioConfig {
             .and_then(|raw| serde_json::from_str::<serde_json::Value>(&raw).ok());
         let group_art = input.env_text("HW_BUILDING_GROUP_ART_SESSION");
         let released_gallery = input.env_text("HW_BUILDING_RELEASE_GALLERY_SESSION");
+        let tank_pilot = input.env_text("HW_BUILDING_TANK_ILLUSTRATION_PILOT");
+        if tank_pilot.is_some() && (group_art.is_some() || released_gallery.is_some()) {
+            return Err(PerfScenarioConfigError(
+                "Tank pilot is a distinct session".into(),
+            ));
+        }
         if group_art.is_some() && released_gallery.is_some() {
             return Err(PerfScenarioConfigError(
                 "group and released galleries are distinct sessions".into(),
             ));
         }
-        let gallery_requested = group_art.is_some() || released_gallery.is_some();
-        let static_window_contract = if released_gallery.is_some() {
+        let gallery_requested =
+            group_art.is_some() || released_gallery.is_some() || tank_pilot.is_some();
+        let static_window_contract = if tank_pilot.is_some() {
+            tank_pilot_window_matches(
+                tank_pilot.as_deref(),
+                window_width,
+                window_height,
+                window_scale_factor,
+                rtt_quality,
+            )
+        } else if released_gallery.is_some() {
             released_gallery_window_matches(
                 released_gallery.as_deref(),
                 window_width,
@@ -1808,6 +1823,27 @@ fn released_gallery_window_matches(
     {
         raw.and_then(|raw| {
             crate::assets::building_asset_set::release_gallery::ReleaseArtSession::parse(raw).ok()
+        })
+        .is_some_and(|session| session.window_matches(width, height, scale, quality))
+    }
+    #[cfg(not(feature = "profiling"))]
+    {
+        let _ = (raw, width, height, scale, quality);
+        false
+    }
+}
+
+fn tank_pilot_window_matches(
+    raw: Option<&str>,
+    width: Option<u32>,
+    height: Option<u32>,
+    scale: Option<f32>,
+    quality: Option<RttQualityPreset>,
+) -> bool {
+    #[cfg(feature = "profiling")]
+    {
+        raw.and_then(|raw| {
+            crate::assets::building_asset_set::tank_illustration_pilot::TankIllustrationPilot::parse(raw).ok()
         })
         .is_some_and(|session| session.window_matches(width, height, scale, quality))
     }

@@ -6,7 +6,7 @@
 | --- | --- |
 | 計画ID | building-illustrated-shading-2026-11-14 |
 | ステータス | In Progress |
-| 作成日 / 最終更新日 | 2026-11-14 |
+| 作成日 / 最終更新日 | 2026-11-14 / 2026-11-15 |
 | 作成者 | Codex |
 | 関連Issue | TAK-14 導入後のシェーダーフィードバック |
 
@@ -47,10 +47,10 @@ body専用materialを追加し、Emptyではbody、Partial/Fullでは既存の�
 - [x] normal/farの実機比較を行い、外観はchanges_requestedとして不採用にした。
 - [x] 通常PBRとTank0.82を元のbytesへ戻し、打切り理由を恒久仕様へ記録した。
 
-### 次の画像投影pilot（未実装）
+### 次の画像投影pilot（実装・検証中）
 
-- [ ] exact identity/mesh/paint/投影を束縛するprofiling専用入口・planと拒否試験を作る。
-- [ ] body専用projected material、water分離、ownerから実materialへの初終witnessを実装する。
+- [x] exact identity/mesh/paint/投影を束縛するprofiling専用入口・planと拒否試験を作る。
+- [x] body専用projected material、water分離、ownerから実materialへの初終witnessを実装する。
 - [ ] normal/far・0/Partial/Full・Actor/Wall前後・別位置/moveで原画と投影の成立を比較する。
 - [ ] 独立外観採用後、正式schema/role・他設備への展開と変更別性能・Help/CI/storageを閉じる。
 - [ ] 採用方式を恒久仕様へ集約後、この一時計画と不要な検証出力を整理する。
@@ -78,3 +78,12 @@ source/binary・nonce/owned windowをpinする。normal/released gallery/M6/cand
 owner→Root→body/water→実material→mode/texture/path/digest/local/global poseを初終で観測し、
 declared値のechoだけを証拠にしない。paintのalphaをgeometryの穴にせず、無効RGBや黒縁を拒否する。
 0/Partial/Full、normal/far、別owner/move後、Actor前後を閉じた比較で確認してから正式schema/roleへ導入する。
+
+専用入口は`HW_BUILDING_TANK_ILLUSTRATION_PILOT`、契約は`building-tank-illustration-pilot-v1`。
+`scripts/building_tank_illustration_pilot.py plan/run/verify`がsource/driver/assetとowned windowを束縛する。
+最初の静止比較は4位置・Empty/Partial/Fullのnormal/farだけを確認し、move/Actor前後や性能を証明しない。
+元paintは変更せず、opaqueな木色へalpha合成した後256pxへ縮小し、透明RGBの黒縁と高周波の縮小を避ける。
+material mode=2とRoot相対のcamera投影を使い、初終の実image bytes/materialと既存geometry観測をentityで結合する。
+通常sessionとの混在、別Tank世代、body/water共用、foreign image、image未load・変更を拒否する。
+Help判断はNo impact。入口はprofiling専用で通常起動から到達せず、材質pilot以外の操作・状態・保存・
+失敗理由・Help reachabilityを変えない。正式導入時は実プレイヤー経路を改めて照合する。

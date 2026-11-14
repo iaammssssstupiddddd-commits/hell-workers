@@ -151,6 +151,12 @@ body専用materialと水面を分離し、Emptyはbody、Partial/Fullは実水�
 正式gallery・通常build・M6とは分けたprofiling専用pilotと実material witnessを先に作り、
 外観が有効と確認される前に全設備へ展開したり性能matrixへ進めたりしない。
 
+試作入口は`HW_BUILDING_TANK_ILLUSTRATION_PILOT`で、通常assetの権限やgallery契約とは分離する。
+主担当用`building_tank_illustration_pilot.py`がnormal/farの専用plan/run/verifyを持つ。
+256pxへ縮小したopaque paintをbody専用materialで使い、既存water atlas・水位・状態は保持する。
+実imageのdecoded hashと材質mode/投影値をowner/mesh/poseへ結合して観測する。
+現段階は閉じた静止試作であり、通常プレイへの導入・move/Actor前後・性能受入は未完である。
+
 下図は現Tankの投影と旧2D原画の筆致を参照した未採用paint候補であり、
 実機画像・状態接続・numeric/art/release承認を意味しない。現行assetは上書きしていない。
 

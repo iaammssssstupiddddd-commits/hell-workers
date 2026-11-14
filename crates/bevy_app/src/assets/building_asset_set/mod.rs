@@ -12,6 +12,8 @@ pub(crate) mod group_art;
 #[cfg(feature = "profiling")]
 pub(crate) use release::gallery as release_gallery;
 #[cfg(feature = "profiling")]
+pub(crate) use release::tank_illustration_pilot;
+#[cfg(feature = "profiling")]
 mod group_comparison;
 #[cfg(feature = "profiling")]
 pub(crate) use group_comparison::Group as BuildingArtGroup;

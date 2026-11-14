@@ -12,6 +12,8 @@ use serde::{Deserialize, Serialize};
 mod audit;
 #[cfg(feature = "profiling")]
 pub(crate) mod gallery;
+#[cfg(feature = "profiling")]
+pub(crate) mod tank_illustration_pilot;
 
 use super::{
     BuildingAssetAuthority, BuildingAssetKind, BuildingAssetPool, BuildingAssetRequest,
@@ -248,6 +250,12 @@ fn select_bindings(
 /// compiled inventory. Dedicated acceptance and performance sessions never use
 /// implicit defaults; they retain their own admission and authority contracts.
 pub fn configure_building_asset_releases(app: &mut App) -> Result<(), String> {
+    if std::env::var_os("HW_BUILDING_TANK_ILLUSTRATION_PILOT").is_some() {
+        #[cfg(feature = "profiling")]
+        return tank_illustration_pilot::configure(app);
+        #[cfg(not(feature = "profiling"))]
+        return Err("Tank illustration pilot requires profiling".into());
+    }
     if std::env::var_os("HW_BUILDING_RELEASE_GALLERY_SESSION").is_some() {
         #[cfg(feature = "profiling")]
         return gallery::configure(app);

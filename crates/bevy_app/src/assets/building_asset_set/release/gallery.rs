@@ -28,7 +28,7 @@ pub(crate) struct ReleasedDoorIdentity {
 pub(crate) struct ReleaseArtSession {
     pub schema_version: u8,
     pub contract_id: String,
-    bindings: Vec<ReleaseBinding>,
+    pub(super) bindings: Vec<ReleaseBinding>,
     pub door_identity: ReleasedDoorIdentity,
     pub nonce: String,
     pub status_path: PathBuf,

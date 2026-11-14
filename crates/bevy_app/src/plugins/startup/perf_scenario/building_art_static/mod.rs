@@ -241,6 +241,8 @@ pub(crate) struct InspectParams<'w, 's> {
     asset_server: Option<Res<'w, AssetServer>>,
     art_session: Option<Res<'w, BuildingArtSession>>,
     gallery: Option<Res<'w, GalleryCaptureSession>>,
+    tank_pilot:
+        Option<Res<'w, crate::assets::building_asset_set::tank_illustration_pilot::TankPilotPaint>>,
     release_floor: Option<Res<'w, group_gallery::ReleasedFloorInventory>>,
     m6: Option<Res<'w, M6Comparison>>,
     stockpiles: Query<'w, 's, &'static hw_logistics::Stockpile>,
@@ -434,6 +436,27 @@ fn specimen_visible(params: &InspectParams, spec: &Specimen, candidate: bool) ->
 }
 
 fn inspect(params: &InspectParams) -> Result<Option<Value>, String> {
+    if params.tank_pilot.is_some()
+        && !params
+            .gallery
+            .as_ref()
+            .is_some_and(|g| matches!(g.as_ref(), GalleryCaptureSession::TankPilot(_)))
+    {
+        return Err("pilot material resource mixed into another profile".into());
+    }
+    if params
+        .gallery
+        .as_ref()
+        .is_some_and(|g| matches!(g.as_ref(), GalleryCaptureSession::TankPilot(_)))
+        && params.tank_pilot.is_none()
+    {
+        return Err("pilot paint was not requested at Startup".into());
+    }
+    if let Some(pilot) = params.tank_pilot.as_ref()
+        && !pilot.ready(&params.images)?
+    {
+        return Ok(None);
+    }
     if let Some(m6) = params.m6.as_ref() {
         if params.art_session.is_some()
             || params
@@ -660,7 +683,15 @@ fn inspect(params: &InspectParams) -> Result<Option<Value>, String> {
                     .any(|role| candidate.mesh(role) == Some(&mesh.0))
                     || params.meshes.get(&mesh.0).is_none()
                     || params.materials.get(&material.0).is_none_or(|material| {
-                        material.base.base_color_texture.as_ref() != candidate.image("albedo")
+                        if let Some(pilot) = params.tank_pilot.as_ref()
+                            && candidate.manifest.identity.kind == BuildingAssetKind::Tank
+                            && candidate.mesh("body") == Some(&mesh.0)
+                        {
+                            !pilot.body_material_matches(material)
+                        } else {
+                            material.base.base_color_texture.as_ref() != candidate.image("albedo")
+                                || material.extension.uniforms.indoor_light_params.w == 2.0
+                        }
                     })
                 {
                     return Ok(None);

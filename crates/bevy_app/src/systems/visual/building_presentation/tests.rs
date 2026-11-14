@@ -1507,3 +1507,84 @@ fn bridge_consumers_share_generation_fallback_bounce_and_owner_cleanup() {
         assert!(app.world().get_entity(entity).is_err());
     }
 }
+
+#[test]
+#[cfg(feature = "profiling")]
+fn tank_pilot_body_material_does_not_replace_partial_or_full_water() {
+    use crate::assets::building_asset_set::{
+        gallery_capture::GalleryCaptureSession,
+        tank_illustration_pilot::{TankIllustrationPilot, TankPilotPaint},
+    };
+    use hw_core::relationships::StoredIn;
+    use hw_core::visual_mirror::StockpileVisualState;
+    let mut app = app();
+    let owner = shell(app.world_mut(), BuildingType::Tank);
+    app.world_mut()
+        .entity_mut(owner)
+        .insert(StockpileVisualState { capacity: 2 });
+    let set = publish(app.world_mut(), BuildingAssetKind::Tank, 3);
+    // The World fixture has a synthetic manifest identity; public admission of
+    // the real g3 identity is tested separately by the closed session parser.
+    let mut gallery =
+        serde_json::to_value(crate::assets::building_asset_set::release_gallery::test_session())
+            .unwrap();
+    gallery["bindings"][0]["identity"] = serde_json::to_value(&set.manifest.identity).unwrap();
+    let session:TankIllustrationPilot=serde_json::from_value(serde_json::json!({"schema_version":1,"contract_id":"building-tank-illustration-pilot-v1","gallery":gallery,"paint":{"path":"pilot/tank-body.png","png_sha256":"a".repeat(64),"rgba_sha256":"b".repeat(64),"dimensions":[256,256],"canvas_wu":[96.,96.],"anchor_uv":[0.5,0.625],"matte_linear_rgb":[0.125,0.09375,0.078125],"body_glb_sha256":"d14c32ac93d23db22d3158b0b02b202377d4e48c9326e26b18d8c6a001f2cf28"}})).unwrap();
+    let image = app
+        .world_mut()
+        .resource_mut::<Assets<Image>>()
+        .add(Image::default());
+    app.insert_resource(GalleryCaptureSession::TankPilot(session.clone()))
+        .insert_resource(TankPilotPaint {
+            session,
+            image: image.clone(),
+        });
+    let mut body_handle = None;
+    for count in 0..=2 {
+        if count > 0 {
+            app.world_mut().spawn(StoredIn(owner));
+        }
+        app.update();
+        let visual = root(app.world_mut(), owner);
+        let parts = children(app.world(), visual);
+        assert_eq!(parts.len(), 2);
+        for part in parts {
+            let name = app.world().get::<Name>(part).unwrap().as_str();
+            let handle = &app
+                .world()
+                .get::<MeshMaterial3d<TopDownStructuralMaterial>>(part)
+                .unwrap()
+                .0;
+            let material = app
+                .world()
+                .resource::<Assets<TopDownStructuralMaterial>>()
+                .get(handle)
+                .unwrap();
+            if name == "body" {
+                assert_eq!(material.extension.uniforms.indoor_light_params.w, 2.);
+                assert_eq!(material.base.base_color_texture.as_ref(), Some(&image));
+                if let Some(old) = body_handle.as_ref() {
+                    assert_eq!(old, handle);
+                } else {
+                    body_handle = Some(handle.clone());
+                }
+            } else {
+                assert_eq!(name, "water");
+                assert_eq!(material.extension.uniforms.indoor_light_params.w, 0.82);
+                assert_eq!(
+                    material.base.base_color_texture.as_ref(),
+                    set.image("albedo")
+                );
+                assert_ne!(Some(handle), body_handle.as_ref());
+                assert_eq!(
+                    app.world().get::<Visibility>(part),
+                    Some(&if count == 0 {
+                        Visibility::Hidden
+                    } else {
+                        Visibility::Inherited
+                    })
+                );
+            }
+        }
+    }
+}

@@ -195,6 +195,16 @@ fn observe_inner(world: &mut World, session: &GalleryCaptureSession) -> Result<(
     if matches!(session, GalleryCaptureSession::Released(_)) {
         snapshot["context"] = release_context::snapshot(world)?;
     }
+    if matches!(session, GalleryCaptureSession::TankPilot(_)) {
+        let Some(paint) =
+            crate::assets::building_asset_set::tank_illustration_pilot::witness(world)?
+        else {
+            return Ok(());
+        };
+        snapshot["tank_paint"] = paint;
+        snapshot["tank_paint_hierarchy"] =
+            crate::assets::building_asset_set::tank_illustration_pilot::hierarchy(world);
+    }
     if world.resource::<CaptureState>().ready.is_none() {
         let ready = json!({"schema_version": 1, "profile": session.contract(),
             "status": "ready", "nonce": session.nonce(), "pid": std::process::id(),

@@ -61,6 +61,8 @@ struct GenerationMaterials {
     identity: BuildingAssetSetIdentity,
     opaque: Handle<TopDownStructuralMaterial>,
     tank_partial_water: Option<Handle<TopDownStructuralMaterial>>,
+    #[cfg(feature = "profiling")]
+    tank_paint_body: Option<Handle<TopDownStructuralMaterial>>,
     slot_on: Handle<TopDownStructuralMaterial>,
 }
 
@@ -290,6 +292,11 @@ fn sync_structure(
                     .iter()
                     .any(|entry| &entry.identity == identity.unwrap())
                 {
+                    #[cfg(feature = "profiling")]
+                    let pilot = (kind == BuildingType::Tank).then(|| world.get_resource::<crate::assets::building_asset_set::tank_illustration_pilot::TankPilotPaint>()).flatten()
+                        .filter(|pilot| pilot.matches_identity(&set.manifest.identity)
+                            && world.get_resource::<crate::assets::building_asset_set::gallery_capture::GalleryCaptureSession>().is_some_and(|session| matches!(session, crate::assets::building_asset_set::gallery_capture::GalleryCaptureSession::TankPilot(_))))
+                        .map(|pilot| (pilot.image.clone(), pilot.session.paint.clone()));
                     let mut assets = world.resource_mut::<Assets<TopDownStructuralMaterial>>();
                     let mut material = assets
                         .get(&handles.equipment_material)
@@ -305,6 +312,25 @@ fn sync_structure(
                         } else {
                             0.0
                         };
+                    #[cfg(feature = "profiling")]
+                    let tank_paint_body = pilot.map(|(image, paint)| {
+                        let mut body = material.clone();
+                        body.base.base_color_texture = Some(image);
+                        body.extension.uniforms.indoor_light_params.w = 2.0;
+                        body.extension.uniforms.shadow_style_params = Vec4::new(
+                            paint.canvas_wu[0],
+                            paint.canvas_wu[1],
+                            paint.anchor_uv[0],
+                            paint.anchor_uv[1],
+                        );
+                        body.extension.uniforms.shadow_style_tint = Vec4::new(
+                            paint.matte_linear_rgb[0],
+                            paint.matte_linear_rgb[1],
+                            paint.matte_linear_rgb[2],
+                            1.0,
+                        );
+                        assets.add(body)
+                    });
                     let opaque = assets.add(material.clone());
                     // The lower water surface sits in the vessel's shade. A
                     // bounded tint makes Partial distinguishable from Full in
@@ -331,6 +357,8 @@ fn sync_structure(
                         identity: set.manifest.identity.clone(),
                         opaque,
                         tank_partial_water,
+                        #[cfg(feature = "profiling")]
+                        tank_paint_body,
                         slot_on,
                     });
                 }
@@ -474,6 +502,16 @@ fn sync_structure(
                 } else if active {
                     material.slot_on.clone()
                 } else {
+                    #[cfg(feature = "profiling")]
+                    if kind == BuildingType::Tank
+                        && part.name == "body"
+                        && let Some(paint) = material.tank_paint_body.as_ref()
+                    {
+                        paint.clone()
+                    } else {
+                        material.opaque.clone()
+                    }
+                    #[cfg(not(feature = "profiling"))]
                     material.opaque.clone()
                 }
             } else {
