@@ -682,3 +682,47 @@ Rust liveにも変化があるため、空きarenaだけの寄与やdriver固有
 この工程はゲーム・build・計測を再実行していない。独立検証receipt SHA `d99d646d19d5b963a9b847fa9cd0a7991739b2ea15e67a64096fce71dd917044`。
 このgateはactive AI、自然施工・lifecycle、GPU実allocation総量、Bridge、アートやreleaseの追加承認を含まない。
 新4件のアート・数値・releaseは別の独立判断、導入後の実画面は[制作仕様](building-art-direction.md#外観改訂後の9種の採用画面2026-11-14)が所有する。
+
+## 世界観統一後の9種の静止asset増分受入（2026-11-14）
+
+4件g3と既存4件＋Door g7をclean `f6b2236a06365623bbb8cd4f010defb65f2d5bd0`で測定した。
+runtime fingerprintは`cc8b2943c7e8fbab40a455a8dc1379f19e259d94bc96343a8d27e708788347ae`、
+asset fingerprintは`61552e8d9b787388f9f8024e55941bede5bb5d36720144e9a86d0e73f0a82217`。
+同sourceのlegacy-controlに対するpaused asset増分であり、g2対g3の直接比較ではない。
+N36／4N144、各3対・中央対逆順、30秒warmup＋60秒計測、Capture12→Memory12。
+Intel Arc MTL／Mesa26.2.6／Vulkan／X11、1280×720、DPI1、High、novsyncを固定した。
+
+Linux/GNUの通常・profiling共通でApp/worker前にarena2とmmap閾値131072Bを適用し、両戻り値を検査する。
+codecと他OS/非GNUは除外する。診断用malloc環境変数を測定commandへ渡していない。
+通常galleryログでも両適用を確認した。起動operatorの環境記録はHEADへ拘束したもので、PID環境の直接証明とは区別する。
+この方針は既存確保の回収や全native/GPU allocationの上限を保証しない。
+
+| candidate−legacy-controlの中央値差 | N | 4N | 変更していない事前上限 |
+| --- | ---: | ---: | ---: |
+| p95 | +0.148092ms | +0.254558ms | +1ms |
+| p99 | −0.011175ms | +0.582130ms | +3ms |
+| Rust live peak | +10,251,461B | +11,389,947B | +16,777,216B |
+| process RSS | +59,268KiB | +36,648KiB | +98,304KiB |
+
+最大relative MADは3.025643%（上限10%）。共有mesh7／accessor・vertex-index各85,976B、
+image20／CPU・descriptor各9,175,040B、structural material9／shallow4,176Bの増分とN/4N plateauを確認した。
+全24試行の初終資源集合・所有window・adapterを公開verifierで再計算し、独立reviewで採用した。
+事前予算SHAは`9372fc4066091b95a7a5e0acd3220b84811e079ef36bace5aa6ebce3b60b1f51`、
+plan SHAは`3dc7a7201add0b2012ed3977533bf6840b059a1e81d31706f7a000454316d293`、
+測定result SHAは`8c350164a7c1c0b1ef7596c74b08c1e6c92790cde4399829104f914b5b08f135`。
+
+旧`e1f4566c`のv1は18試行でMemory/NのRSS差101,412KiBが98,304KiBを超えinvalid、4N Memoryは未実施である。
+全malloc環境を排した同期対照でmode間Anon差の符号が反転し、候補固有の正の差という仮説は不支持だった。
+事前固定した同binary各mode一回のmmap閾値131072B感度診断では、warmup-first/measure-lastの全4端点で
+Anonが減り、resident集合は同一、Rust/File差は小さかった。これは探索的n=1であり、freeheap所有量や原因の分離、
+性能合格には用いない。通常mainを補正した新sourceで固定予算の全24試行をfresh実行した。
+
+新測定v2はexit0・raw passだが、登録wrapper argvに必須のliteral `verify`がなく、封印前guardで拒否された。
+元batch `tak14-worldstyle-released-performance-20261114-v2`は登録不備invalidとして精算し、passへ変更しない。
+fresh検証専用`tak14-worldstyle-performance-verification-20261114-v1`で全423入力ファイル、source、binary、plan、
+元invalid ledgerを前後固定し、公開verifierの全result完全一致を実行時・封印時の両方で確認した。
+ゲーム・build・計測の再送はない。独立検証receipt SHAは
+`140255642d334d31ba2a11fb32f10b404bb41468d7abf2b60136070c382c4724`。
+旧失敗・登録不備は履歴として維持し、完了後のraw再検証を目的とする保持は終了する。
+本gateはactive AI、自然施工・lifecycle、GPU実allocation総量、Bridge、追加のart/release承認を含まない。
+アート・数値・releaseは別の独立採用、normal/farの[現行画面](building-art-direction.md#世界観に合わせた現行9種の画面2026-11-14)は別証拠である。

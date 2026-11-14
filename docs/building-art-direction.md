@@ -209,6 +209,31 @@ active slotだけ白倍率とslot_emissive画像を持ち、body/inactiveは黒�
 readiness後のsnapshot変化は修復せず拒否する。scope `paused-static-spa-mask-page` はseeded静止状態の
 技術検査であり、自然な入退所・Save/Load・性能・正式releaseを承認するものではない。
 
+## 世界観に合わせた現行9種の画面（2026-11-14）
+
+Tank・MudMixer・RestArea・OutdoorLampをgeneration 3へ改訂した。黒ずんだ木、マットな錆鉄、
+くすんだ骨色、煤けた補修布を素材ごとに描き分け、継ぎ目と用途を読む箇所へ線を絞った。
+新品の木肌や金属色を抑え、紫は既存の状態・発光に必要な場所へ限定する。
+Tankの弱い陰影、建設現場型Mixerのドラム・架台・車輪、閉じたRestArea、頂部投光器を持つLampの形は保つ。
+RestArea入所Soulの非表示、SoulSpaの黄色い網の除去と骨・紫の四区画も維持する。
+
+`infernal-v1`はM2、M3 RestArea、M5 OutdoorLampの候補生成へ明示指定する。
+共通paletteと材質別描線は`tools/blender_ai_workflow/scripts/building_infernal_style.py`が所有し、
+legacy paintの既定値を残して旧原本を再現できる。GLB全bytes・UV・部品・状態・寸法・anchor、
+PNG寸法・alphaは旧g2と同一で、geometryの追加や全体tint、共通の紫glowは導入しない。
+
+独立したart・numeric・release判断とg2復帰試験後、4件を正式導入した。
+clean `f6b2236a06365623bbb8cd4f010defb65f2d5bd0`の既定bindingでHigh/DPI1、normal/far各36 ownerを確認し、
+実画面を独立採用した。PNGはowned X11 clientの原本で、seeded静止galleryである。
+自然施工や新しいlifecycle受入を意味しない。旧g2の画像・判断は次節の履歴として保持する。
+
+![世界観へ統一した9種の通常表示](design/building-art/world-style-nine-normal-20261114.png)
+
+![世界観へ統一した9種の遠景表示](design/building-art/world-style-nine-far-20261114.png)
+
+現行identityは[asset仕様](building-asset-sets.md#2026-11-14-世界観統一の現行正式世代)、
+24試行の性能範囲は[性能仕様](rendering-performance.md#世界観統一後の9種の静止asset増分受入2026-11-14)を参照。
+
 ## 外観改訂後の9種の採用画面（2026-11-14）
 
 新Tank/MudMixer/RestArea/OutdoorLamp g2と既存5種を、`a77f4104`の既定compiled bindingで表示した。
@@ -222,7 +247,7 @@ Obj診断トグルと入所者非表示の競合は、単一writerの合成と2s
 
 ![外観改訂9種のfar表示](design/building-art/visual-feedback-nine-far-20261114.png)
 
-現行identityと復旧は[asset仕様](building-asset-sets.md#2026-11-14-外観改訂の入力契約)、
+当時のidentityと復旧は[asset仕様](building-asset-sets.md#2026-11-14-外観改訂の入力契約)、
 新しい静止asset増分性能は[性能仕様](rendering-performance.md#外観改訂9種の静止asset増分受入2026-11-14)を参照。
 
 ## 非橋9種の採用画面（2026-11-13）

@@ -4,7 +4,7 @@
 [移行計画](plans/3d-rtt/non-wall-floor-building-art-migration-plan-2026-09-19.md)を正本とする。
 本書はroot `bevy_app::assets::building_asset_set` が所有する入力境界を記す。
 
-現行の外観改訂は[2026-11-14の正式世代](#2026-11-14-外観改訂の入力契約)を参照。
+現行の外観は[世界観統一の正式世代](#2026-11-14-世界観統一の現行正式世代)を参照。
 以下の2026-11-13表と測定は初回導入時点の履歴であり、新世代の測定を代用しない。
 
 ## 2026-11-13 非橋9種の正式導入・受入
@@ -48,6 +48,30 @@ fresh Capture12→Memory12の固定予算比較と、代表EWのpause/input/resu
 
 以降の段階別履歴にある「未完」「保持中」はその記録時点の結果である。初回9種の採否は本節、現行の改訂世代は次節を正本とする。
 旧invalid・未測定の結果をpassへ変更せず、用途終了後の原本pathを将来の実行義務にも扱わない。
+
+## 2026-11-14 世界観統一の現行正式世代
+
+前節までの導入契約を維持して、Tank/MudMixer/RestArea/OutdoorLampの塗りを世界観へ合わせた。
+各候補の独立art・numeric・release判断、正式candidate実機検証、正本promotionとprimary installを完了した。
+g2→g3→g2の隔離rehearsalはcanonical/runtime計16操作、旧47ファイル・pointer・locatorの完全byte復帰を確認した。
+旧g1/g2、promotion/install/rollback journalとauthorityはcanonical正本に保全する。
+
+| kind | generation | ReleaseApproved manifest SHA-256 |
+| --- | ---: | --- |
+| Tank | 3 | `3eb6285f60f837280e3d97604ce055e0c651cfa80d2dd95c0937c86f27fd4ba2` |
+| MudMixer | 3 | `b210b605ade0a9af504e61851c293c198ea135cd6b66dfb61392eabb4dfedf1b` |
+| RestArea | 3 | `db0414d7f7ccbf8acc5252b56570b7f09d0e1255f19d675edfcb386d29225c0f` |
+| OutdoorLamp | 3 | `eea867a1a2df037fee05b96ab6d255a7d503c57d67b92e2b09baa5e899cd9a7f` |
+
+完全8件binding SHAは`6e570f1da79e87079418701115c11bbc03c1a83097208c1b63ea84f5cf1ed43a`。
+SoulSpa g2、Parking g2、SandPile/BonePile g1、Door g7、Wall g13は変更しない。Bridgeは今回の対象外。
+塗り生成コードは`790d2e733502219c4a6c5e6b0a5a649c477aae68`、既定bindingは`e1f4566c`で採用した。
+GNU startup補正後の実機subjectは`f6b2236a06365623bbb8cd4f010defb65f2d5bd0`、runtime fingerprintは
+`cc8b2943c7e8fbab40a455a8dc1379f19e259d94bc96343a8d27e708788347ae`、asset fingerprintは
+`61552e8d9b787388f9f8024e55941bede5bb5d36720144e9a86d0e73f0a82217`。
+Help実レビューはNo impact。塗りとallocator内部方針だけを改訂し、操作、文言、成立条件、状態、保存形式は変えない。
+[現行画面](building-art-direction.md#世界観に合わせた現行9種の画面2026-11-14)と
+[静止性能の範囲・結果](rendering-performance.md#世界観統一後の9種の静止asset増分受入2026-11-14)を別々に採用する。
 
 ## 2026-11-14 外観改訂の入力契約
 
