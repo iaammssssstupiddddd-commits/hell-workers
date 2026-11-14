@@ -173,3 +173,13 @@ local Y軸/毎秒1.5707964radを独立採用した。previewは`5d3a40b9364b3850
 この制作・検証拡張のHelp判断はNo impact。明示候補の制作から既存manifest/pool/表示・状態材質まで追い、
 操作・前提・利用/休息/Dream/発電・保存・失敗結果・文言・Help到達性を変更していない。
 新しい見た目の採否と正式導入は別工程であり、候補の技術passで通常版の変更を完了とは扱わない。
+
+
+Lamp v1のnormal contextとfar galleryは技術passだが、独立art reviewはchanges_requested。
+Dirt上でポール/三脚が埋もれ、緑地では残るため、alpha欠損ではなくcontrast不足と切り分けた。
+新styleだけポール断面を同一塗装色へ揃え、既存脚alpha内へ同色の塗装線を入れる。
+legacyの画像、geometry/alpha/anchor/高さ、頂部off/on差、論理光を維持し、新subject/v2原本で再比較する。
+旧v1へart/numeric承認は出さず、技術passと不採用を履歴として保つ。
+
+候補exportの旧呼出し1件は必須--kind不足の保存済みexit1であり、出力なしを確認してinvalid/finalizeした。
+製品のexport guardは変更せず、正しいCLIを使う別の新しい梱包batchへ進める。

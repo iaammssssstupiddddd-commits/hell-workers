@@ -15,6 +15,10 @@ import building_asset_pipeline as pipeline
 from build_building_m5_candidate import KINDS, contract, originals, staged
 from workflow_common import asset_root
 
+# A single weathered coating, shared across pole sections and the tripod.
+# This is a diffuse paint color, never a camera-facing highlight or emission.
+LAMP_PAINTED_METAL = (138, 123, 134)
+
 
 def render(kind: str, *, on: bool = False, style: str = "legacy") -> bytes:
     from PIL import Image, ImageDraw
@@ -93,10 +97,12 @@ def render(kind: str, *, on: bool = False, style: str = "legacy") -> bytes:
         # Tripod feet sit on the original logical anchor, never on the lamp head.
         for x, z in ((-11, 7), (11, 7), (0, -10)):
             line([(0, 0, 17), (x, z, 0)], (infernal.IRON if ink_style else (54, 58, 57)), 7)
+            if illustrated:
+                line([(0, 0, 17), (x, z, 0)], LAMP_PAINTED_METAL, 5)
             line([(x-2, z, 0), (x+2, z, 0)], ((infernal.RUST if illustrated else infernal.WORN_EDGE) if ink_style else (114, 106, 85)), 4)
         # Two telescoping steel sections and a conspicuous height-lock collar.
-        plane([(-1.5, 0, 10), (1.5, 0, 10), (1.5, 0, 43), (-1.5, 0, 43)], ((infernal.IRON if illustrated else (98, 85, 89)) if ink_style else (93, 94, 85)))
-        plane([(-1, 0, 40), (1, 0, 40), (1, 0, 67), (-1, 0, 67)], ((infernal.IRON if illustrated else (146, 129, 119)) if ink_style else (156, 153, 130)))
+        plane([(-1.5, 0, 10), (1.5, 0, 10), (1.5, 0, 43), (-1.5, 0, 43)], ((LAMP_PAINTED_METAL if illustrated else (98, 85, 89)) if ink_style else (93, 94, 85)))
+        plane([(-1, 0, 40), (1, 0, 40), (1, 0, 67), (-1, 0, 67)], ((LAMP_PAINTED_METAL if illustrated else (146, 129, 119)) if ink_style else (156, 153, 130)))
         line([(-2.6, 0, 40), (2.6, 0, 40)], (infernal.RUST if ink_style else (160, 116, 58)), 6)
         line([(2, 0, 6), (3.2, 0, 29), (2.4, 0, 53), (3.5, 0, 67)], (infernal.INK if ink_style else (44, 47, 45)), 2)
         # U-bracket and a broad rectangular high-mounted work-light housing.

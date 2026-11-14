@@ -47,6 +47,29 @@ class LampInkTests(unittest.TestCase):
             },
         )
 
+    def test_pole_sections_share_flat_coating_and_the_tripod_keeps_painted_contrast(
+        self,
+    ):
+        with (
+            Image.open(
+                io.BytesIO(art.render("OutdoorLamp", style="illustrated-v1"))
+            ) as new,
+            Image.open(
+                io.BytesIO(art.render("OutdoorLamp", style="infernal-v1"))
+            ) as old,
+        ):
+            # Pixel locations are inside the lower and upper pole, away from
+            # its physical rust scar/collar/cable and any edge outline.
+            self.assertEqual(new.getpixel((130, 160)), new.getpixel((130, 88)))
+            self.assertGreater(
+                sum(new.getpixel((130, 160))[:3]), sum(old.getpixel((130, 160))[:3])
+            )
+            # Midpoint of the right leg: a diffuse coating within its original
+            # silhouette, providing contrast without a glow or a larger foot.
+            self.assertGreater(
+                sum(new.getpixel((150, 202))[:3]), sum(old.getpixel((150, 202))[:3])
+            )
+
     def test_illustration_is_closed_to_lamp_and_invalid_states_are_rejected(self):
         for kind in ("SandPile", "BonePile", "WheelbarrowParking"):
             with self.assertRaises(ValueError):

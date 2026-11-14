@@ -187,6 +187,9 @@ Spaの発光atlasは既存producerの全bytesを維持し、利用中の区画�
 OutdoorLampは既存Foreground2dを維持し、3D材質を追加しない。
 `building_m5_art.py --lamp-style illustrated-v1`はポールの明るい面塗りを抑え、物の継ぎ目へ描線を置く。
 高い光源・三脚・off/onの全alphaとanchorを保持し、点灯状態・配電・論理光へ影響させない。
+最初のillustrated候補は暗いDirt上で脚とポールの連続した輪郭が読みにくく、native normal/farの
+独立art reviewで不採用にした。各断面を同じ煤けた灰紫の塗装色へ揃え、既存alpha内の脚にも
+塗装線を通して接地までのcontrastを保つ。面別ハイライトや発光輪郭は加えない。
 M3/Lampの新原本・実機採否・新世代の正式導入は現在進行中である。
 
 下図は現Tankの投影と旧2D原画の筆致を参照した未採用paint候補であり、
