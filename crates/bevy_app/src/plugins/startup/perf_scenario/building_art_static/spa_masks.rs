@@ -16,6 +16,29 @@ pub(super) fn observe_part(
     owner: Entity,
     entity: Entity,
 ) -> Result<Value, String> {
+    observe(params, specimen, set, owner, entity, true)
+}
+
+pub(super) fn observe_resident(
+    params: &InspectParams,
+    specimen: &Specimen,
+    set: &BuildingAssetDescriptor,
+    owner: Entity,
+    entity: Entity,
+) -> Result<Value, String> {
+    // M6 validates the actual visibility separately, including fixed groups
+    // outside a group gallery viewport. Keep mask-page visibility strict.
+    observe(params, specimen, set, owner, entity, false)
+}
+
+fn observe(
+    params: &InspectParams,
+    specimen: &Specimen,
+    set: &BuildingAssetDescriptor,
+    owner: Entity,
+    entity: Entity,
+    require_visible: bool,
+) -> Result<Value, String> {
     let name = params
         .part_names
         .get(entity)
@@ -70,7 +93,7 @@ pub(super) fn observe_part(
             .rotation
             .abs_diff_eq(Quat::from_array(part.rotation_xyzw), 0.001)
         || !pose.scale.abs_diff_eq(Vec3::from_array(part.scale), 0.001)
-        || !visible.get()
+        || (require_visible && !visible.get())
         || !material_matches(
             value,
             set.image("albedo"),

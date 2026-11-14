@@ -11,8 +11,10 @@ from pathlib import PurePosixPath
 
 try:
     from ... import building_foreground_observation as foreground
+    from ... import building_resident_observation as resident
 except ImportError:
     import building_foreground_observation as foreground
+    import building_resident_observation as resident
 
 from .building_art_static import KINDS, expected_records
 from ..model import Case
@@ -438,9 +440,15 @@ def _validate_sidecar(
     )
     require(len(initial["records"]) == len(expected), "owner count differs")
     foreground_entities = []
+    resident_entities = []
+    descriptors_by_kind = {}
+    loaded_by_kind = {identity["kind"]: identity for identity in m6.get("loaded_identities", m6["identities"])}
     for observed, logical in zip(initial["records"], expected, strict=True):
         present = logical["kind"] in loaded_kinds
         extras = {"parts"} if present else set()
+        resident_required = present and logical["kind"] in resident.ROLES and not tank_pilot
+        if resident_required:
+            extras.add("owner")
         if gallery:
             extras.add("gallery_owner")
             require(
@@ -498,7 +506,8 @@ def _validate_sidecar(
                     ]
                     require(
                         sorted(map(canonical, projected))
-                        == sorted(map(canonical, observed["parts"])),
+                        == sorted(canonical({key: part[key] for key in ("mesh_role", "translation_wu", "rotation_xyzw", "scale", "visible")})
+                                  for part in observed["parts"]),
                         "gallery resident geometry/part binding differs",
                     )
                 elif logical["kind"] == "Door":
@@ -608,7 +617,7 @@ def _validate_sidecar(
                         "rotation_xyzw",
                         "scale",
                         "visible",
-                    },
+                    } | ({"resident"} if resident_required else set()),
                     "part fields differ",
                 )
                 for key, length in (
@@ -648,8 +657,17 @@ def _validate_sidecar(
                     ),
                     "part visibility differs",
                 )
+        if resident_required:
+            resident_entities.extend(resident.validate_shape(observed, loaded_by_kind[logical["kind"]]))
+            first = observed["parts"][0]["resident"]
+            descriptor = {key: first[key] for key in ("meshes", "images")}
+            previous = descriptors_by_kind.setdefault(logical["kind"], descriptor)
+            require(canonical(descriptor) == canonical(previous), "M6 cross-owner descriptor drift")
+    require(len(resident_entities) == len(set(resident_entities)), "M6 duplicate resident owner/root/part")
     require(
         len(set(foreground_entities)) == len(foreground_entities),
         "M6 duplicate foreground owner or sprite",
     )
+    all_entities = [*resident_entities, *foreground_entities]
+    require(len(all_entities) == len(set(all_entities)), "M6 shared structural/foreground entity")
     return initial

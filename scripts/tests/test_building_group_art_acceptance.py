@@ -13,6 +13,7 @@ import unittest
 from scripts import building_group_art_acceptance as gallery
 from scripts import building_group_art_observation as observation
 from scripts.tests.test_building_m6_acceptance import group_sidecar, reseal, sidecar
+from scripts.tests.resident_fixture import bind as bind_resident
 from perf_tool.artifact_readers import building_m6 as oracle
 from perf_tool.artifact_readers.building_art_static import read_building_art_static
 from perf_tool.model import Case
@@ -36,6 +37,9 @@ def gallery_sidecar(group="m2"):
                 "aabb_min": [0, 0, 0], "aabb_max": [1, 1, 1]}
                 for i, p in enumerate(row.get("parts", [{"mesh_role": "door", "visible": True,
                     "translation_wu": [row["center"][0], 16., -row["center"][1]], "rotation_xyzw": [0, 0, 0, 1], "scale": [1, 1, 1]}]))]
+        if row["kind"] in oracle.resident.ROLES and "parts" in row:
+            identity = next(i for i in value["initial"]["m6"]["loaded_identities"] if i["kind"] == row["kind"])
+            bind_resident(row, identity, len(records))
         records.append(row)
     value["initial"]["records"] = records
     value["contract_id"] = oracle.GROUP_GALLERY_CONTRACT

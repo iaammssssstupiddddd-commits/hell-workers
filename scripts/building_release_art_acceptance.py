@@ -141,7 +141,8 @@ def check(value):
         and pipeline.digest(codec.read_bytes()) == value["codec_sha256"]
         and driver_inventory() == value["drivers"]
         and value["numeric_verifiers"] == pipeline.numeric_verifier_inventory()
-        and value["foreground_verifier_sha256"] == m6.art.foreground.verifier_sha256(),
+        and value["foreground_verifier_sha256"] == m6.art.foreground.verifier_sha256()
+        and pipeline.exact_json(value.get("resident_verifiers"), m6.resident.dependencies()),
         "released gallery verifier/codec changed",
     )
     pipeline.require(
@@ -185,6 +186,7 @@ def plan(args):
         "drivers": driver_inventory(),
         "numeric_verifiers": pipeline.numeric_verifier_inventory(),
         "foreground_verifier_sha256": m6.art.foreground.verifier_sha256(),
+        "resident_verifiers": m6.resident.dependencies(),
         "adapter": args.adapter,
         "cases": [list(c) for c in matrix()],
         "accepted": False,

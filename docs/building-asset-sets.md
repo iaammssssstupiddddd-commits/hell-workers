@@ -383,6 +383,14 @@ SoulSpaの4 slotは同一slot meshを参照し、part側で個別transformを持
   受け付け、Tankのv2/v3や未知revisionを拒否する。candidate storyboardの--revision省略時は
   Tank v1/Mixer v2を維持し、v3 hashを見て自動で版を切り替えない。
 
+M6・group gallery・released-nineは、loadedなTank/Mixer/Rest/Spaの各partについて実owner→Root→part、
+Rootのobserved identity/pose、descriptorのmesh/image handle、実materialとpaint uniformを初終だけ記録する。
+独立oracleは同kindの全ownerでdescriptor mapが一致し、named partのpose・mode3/4・textureが
+凍結manifestへ対応することを照合する。Spaはbody/四slotの実worker maskと発光handleも要求する。
+固定groupの画面外cullingだけは既存契約を維持し、対象group・全9・性能の可視要件を緩めない。
+この記録は測定frame loopでは作らず、性能値やart/release承認を自己申告しない。
+resident/body-paint検証器はplanと公開released-case contextへhash拘束し、変更時はraw検証前に拒否する。
+
 JSONはRustの型宣言順に`serde_json::to_vec`したcompact形式＋末尾LFと完全一致させる。
 未知field、別順序、余分な空白は拒否する。SHA-256は小文字hex64桁。
 manifest_sha256は、identity内の同fieldを空文字にし、receiptをnullにしたmanifestを

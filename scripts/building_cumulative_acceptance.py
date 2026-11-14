@@ -40,6 +40,7 @@ def dependencies():
     return {Path(module.__file__).name: static.sha256(Path(module.__file__)) for module in modules} | {
         Path(__file__).name: static.sha256(Path(__file__)),
         'numeric_verifiers': pipeline.numeric_verifier_inventory(),
+        'resident_verifiers': m6.resident.dependencies(),
     }
 
 

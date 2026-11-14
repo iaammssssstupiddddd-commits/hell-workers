@@ -10,6 +10,7 @@ mod layout;
 mod m2_context;
 mod m5_context;
 mod m5_power;
+mod resident;
 mod resource_inventory;
 mod seed;
 mod spa_masks;
@@ -941,6 +942,9 @@ fn inspect(params: &InspectParams) -> Result<Option<Value>, String> {
                 }
             }
             if let Some(candidate) = candidate {
+                if params.m6.is_some() && params.tank_pilot.is_none() && structural {
+                    record["owner"] = json!(owner.to_bits());
+                }
                 if candidate.manifest.identity.kind.mesh_roles().is_empty() {
                     record["owner"] = json!(owner.to_bits());
                     record["foreground"] = foreground::snapshot(params, spec, owner, candidate)?;
@@ -1016,11 +1020,18 @@ fn inspect(params: &InspectParams) -> Result<Option<Value>, String> {
                         .iter()
                         .find(|role| candidate.mesh(role) == Some(&mesh.0))
                         .ok_or("unknown candidate mesh role")?;
-                    parts.push(
-                        json!({"mesh_role": role, "translation_wu": local.translation.to_array(),
+                    let mut part = json!({"mesh_role": role, "translation_wu": local.translation.to_array(),
                         "rotation_xyzw": local.rotation.to_array(), "scale": local.scale.to_array(),
-                        "visible": visibility.get()}),
-                    );
+                        "visible": visibility.get()});
+                    if params.m6.is_some() && params.tank_pilot.is_none() && structural {
+                        part["resident"] =
+                            match resident::observe(params, spec, candidate, owner, *entity) {
+                                Ok(observed) => observed,
+                                Err(_) if params.state.phase == Phase::Seeded => return Ok(None),
+                                Err(reason) => return Err(reason),
+                            };
+                    }
+                    parts.push(part);
                 }
                 parts.sort_by_key(|part| part["mesh_role"].as_str().unwrap().to_owned());
                 if params

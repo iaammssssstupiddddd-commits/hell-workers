@@ -8,6 +8,7 @@ from pathlib import Path
 from PIL import Image
 from scripts import building_release_art_observation as oracle
 from scripts.tests.test_building_m6_acceptance import sidecar
+from scripts.tests.resident_fixture import bind as bind_resident
 from scripts.tests.test_building_release_art_context import fixture as context_fixture
 
 
@@ -25,7 +26,8 @@ def full_fixture(view):
             "identity": next(
                 i for i in frozen["m6"]["identities"] if i["kind"] == kind
             ),
-            "parts": [{k: v for k, v in p.items() if k != "visible"} for p in parts],
+            "parts": [dict({k: v for k, v in p.items() if k not in {"visible", "resident"}},
+                           **({"name": p["resident"]["name"]} if "resident" in p else {})) for p in parts],
             "production_state": {
                 "kind": "Tank",
                 "partial_y_wu": 12.0,
@@ -62,7 +64,7 @@ def full_fixture(view):
             )
             expected = m6.projected_parts(manifest, row)
             row["parts"] = [
-                dict(p, visible=actual["visible"])
+                dict({k: v for k, v in p.items() if k != "name"}, visible=actual["visible"])
                 for p, actual in zip(expected, row["parts"], strict=True)
             ]
         if row["kind"] in {*m6.art.foreground.KINDS}:
@@ -99,6 +101,8 @@ def full_fixture(view):
                 }
                 for i, p in enumerate(parts)
             ]
+        if row["kind"] in m6.resident.ROLES:
+            bind_resident(row, manifest["identity"], index)
     main = [
         1 / 960,
         0,

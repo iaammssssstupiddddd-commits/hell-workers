@@ -193,10 +193,14 @@ def context(value, projection, frozen, expected_wall):
         "context declared cells differ",
     )
     targets = {row["gallery_owner"] for row in frozen["records"]}
+    residents = {part["resident"][key] for row in frozen["records"]
+                for part in row.get("parts", []) if "resident" in part
+                for key in ("root", "entity")}
+    require(not (targets | residents) & set(value["core_souls"]), "context core Soul overlaps target")
     occupied = set(value["core_souls"]) | targets
     visuals = {
         shape["entity"] for row in projection["records"] for shape in row["shapes"]
-    }
+    } | residents
     structures = value["structures"]
     require(
         isinstance(structures, list)
@@ -208,7 +212,7 @@ def context(value, projection, frozen, expected_wall):
     ]
     require(
         len(set(context_owners)) == len(context_owners)
-        and not set(context_owners) & occupied,
+        and not set(context_owners) & (occupied | residents),
         "context owner identity overlaps",
     )
     all_owners = occupied | set(context_owners)

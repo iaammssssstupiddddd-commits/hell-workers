@@ -24,6 +24,25 @@ class CompleteReleasedGalleryTests(unittest.TestCase):
         self.assertEqual(len(self.values[0]["snapshot"]["records"]), 36)
         self.verify(self.values)
 
+    def test_context_owner_mesh_item_and_core_cannot_alias_a_target_root(self):
+        for field in ("owner", "mesh", "item", "core"):
+            with self.subTest(field=field):
+                values = copy.deepcopy(self.values)
+                root = next(p["resident"]["root"] for row in values[0]["fixture"]["records"]
+                            for p in row.get("parts", []) if "resident" in p)
+                context = values[0]["snapshot"]["context"]
+                if field == "owner":
+                    context["structures"][0]["entity"] = root
+                elif field == "mesh":
+                    context["structures"][0]["visible_meshes"][0]["entity"] = root
+                elif field == "core":
+                    context["core_souls"][0] = root
+                else:
+                    context["item"] = context["icon"]["item"] = root
+                values[1]["snapshot"] = copy.deepcopy(values[0]["snapshot"])
+                with self.assertRaises(ValueError):
+                    self.verify(values)
+
     def test_runtime_envelope_must_match_exact_process_session_and_clock(self):
         for index, key, value in (
             (0, "pid", True),

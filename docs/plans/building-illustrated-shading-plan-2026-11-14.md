@@ -198,3 +198,14 @@ candidate storyboardがMixer v2固定、profiling traceもv3拒否だったた�
 一般M2 recipeの--mixer-revisionも明示v3を扱い、metadataからrevisionを推測しない。
 nonidentity yaw/tiltのlocal Y右乗算とpivot保持も回帰し、profiling test/Clippy・Help/CI/storageと固定reviewを通す。
 この観測入口はart/numeric/release authorityを追加せず、seeded storyboardをOS入力の通常lifecycle証拠と誤認しない。
+
+
+## 12. 最終比較の実材質を独立検証する
+
+Rust側のreadiness guardだけに依存せず、loadedな全structural partの実owner/root/identity/name/pose、
+mesh/material/image handleとmode3/4 uniformをM6の初終rawへ追加する。Spaの発光も実maskに拘束する。
+独立readerはdescriptorのpart間・owner間一致、named pose、他のforeground/context entityとの排他を検証する。
+TankPilot・legacy fallback・single-kindの既存wireは維持し、group fixedの実cullを偽のvisibleへ正規化しない。
+plan・cumulative・公開released-case contextへ新oracleのhashを含め、測定中のframe処理は増やさない。
+この変更はprofiling観測/開発検証のみであり、通常ゲームの操作・状態・保存・Help到達性は不変（No impact）。
+旧静止passを最終9種や性能受入へ流用せず、新subjectで原本rawから検証する。

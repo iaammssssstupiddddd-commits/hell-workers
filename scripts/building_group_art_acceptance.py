@@ -81,7 +81,8 @@ def check(value):
     codec = Path(value["codec"])
     pipeline.require(pipeline.digest(codec.read_bytes()) == value["codec_sha256"]
         and driver_inventory() == value["drivers"] and value["numeric_verifiers"] == pipeline.numeric_verifier_inventory()
-        and value["foreground_verifier_sha256"] == m6.art.foreground.verifier_sha256(), "gallery verifier/codec changed")
+        and value["foreground_verifier_sha256"] == m6.art.foreground.verifier_sha256()
+        and pipeline.exact_json(value.get("resident_verifiers"), m6.resident.dependencies()), "gallery verifier/codec changed")
     assets = m6.inventory(repo, codec, value["candidate_roots"], value["group"])
     pipeline.require(pipeline.exact_json(assets, value["assets"])
         and pipeline.exact_json(m6.group_declaration(assets, value["group"]), value["group_declaration"]), "gallery candidate inputs changed")
@@ -100,7 +101,8 @@ def plan(args):
         "identity": static.identity(repo), "group": args.group, "candidate_roots": roots,
         "assets": assets, "group_declaration": m6.group_declaration(assets, args.group),
         "drivers": driver_inventory(), "numeric_verifiers": pipeline.numeric_verifier_inventory(),
-        "foreground_verifier_sha256": m6.art.foreground.verifier_sha256(), "adapter": args.adapter,
+        "foreground_verifier_sha256": m6.art.foreground.verifier_sha256(),
+        "resident_verifiers": m6.resident.dependencies(), "adapter": args.adapter,
         "connection_only": args.connection_only, "feedback_only": args.feedback, "cases": [list(c) for c in matrix(args.connection_only)],
         "accepted": False, "promotion_authority": False, "performance_evidence": False}
     check(value)

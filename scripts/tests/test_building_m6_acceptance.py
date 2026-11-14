@@ -15,6 +15,7 @@ from contextlib import redirect_stdout
 from pathlib import Path
 
 from scripts import building_m6_acceptance as m6
+from scripts.tests.resident_fixture import bind as bind_resident
 from perf_tool.arguments import build_parser, validate_arguments
 from perf_tool.artifact_readers import building_m6 as oracle
 from perf_tool.artifact_readers.building_art_static import expected_records
@@ -66,6 +67,9 @@ def sidecar(candidate=False, copies=4):
                     "color_srgba": [1., 1., 1., 1.], "owner_pose": pose, "local_pose": local,
                     "global_pose": copy.deepcopy(pose), "global_matrix": oracle.foreground.matrix(pose),
                     "parent_local_matrix": oracle.foreground.matrix(pose)}
+        for index, row in enumerate(records):
+            if row["kind"] in m6.resident.ROLES:
+                bind_resident(row, bindings[row["kind"]], index)
     evidence = {
         "records": records,
         "target_count": copies * 9,
@@ -132,6 +136,8 @@ def group_sidecar(group, candidate, copies=4):
         if row["kind"] not in loaded_by_kind:
             for field in ("parts", "root_translation_wu", "owner", "foreground"):
                 row.pop(field, None)
+        elif row["kind"] in m6.resident.ROLES:
+            bind_resident(row, loaded_by_kind[row["kind"]], initial["records"].index(row))
         elif "foreground" in row:
             row["foreground"]["identity"] = loaded_by_kind[row["kind"]]
     counts = {"m2": ([0, 2], [5, 7], [2, 6]), "m3": ([2, 4], [7, 11], [6, 8]),
@@ -342,9 +348,11 @@ class M6Tests(unittest.TestCase):
             self.assertEqual(result["binary_sha256"], session_manifest["binary"]["sha256"])
 
     def test_foreground_dependency_is_frozen_and_missing_binding_is_rejected(self):
-        value = {"foreground_verifier_sha256": m6.art.foreground.verifier_sha256()}
+        value = {"foreground_verifier_sha256": m6.art.foreground.verifier_sha256(),
+                 "resident_verifiers": m6.resident.dependencies()}
         m6.check_foreground_verifier(value)
-        for wrong in ({}, {"foreground_verifier_sha256": "a" * 64}):
+        for wrong in ({"resident_verifiers": m6.resident.dependencies()},
+                      {**value, "foreground_verifier_sha256": "a" * 64}):
             with self.assertRaisesRegex(ValueError, "foreground verifier changed"):
                 m6.check_foreground_verifier(wrong)
 
@@ -487,6 +495,9 @@ class M6Tests(unittest.TestCase):
             value["initial"]["pre_release_comparison"] = True
             for identity in value["initial"]["m6"]["identities"]:
                 identity["authority"] = "isolated_candidate"
+            for index, row in enumerate(value["initial"]["records"]):
+                if candidate and row["kind"] in m6.resident.ROLES:
+                    bind_resident(row, next(i for i in value["initial"]["m6"]["identities"] if i["kind"] == row["kind"]), index)
             reseal(value)
             oracle.validate_pre_release_sidecar(value, case)
             with self.assertRaises(ValueError):

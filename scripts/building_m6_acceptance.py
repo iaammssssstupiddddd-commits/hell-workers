@@ -22,9 +22,11 @@ import shutil
 if __package__:
     from . import building_art_acceptance as art
     from . import building_resource_inventory as resource_inventory
+    from . import building_resident_observation as resident
 else:
     import building_art_acceptance as art
     import building_resource_inventory as resource_inventory
+    import building_resident_observation as resident
 
 native, pipeline, static = art.native, art.pipeline, art.static
 if __package__:
@@ -335,6 +337,8 @@ def check_inputs(value):
 
 
 def check_foreground_verifier(value):
+    pipeline.require(pipeline.exact_json(value.get("resident_verifiers"), resident.dependencies()),
+                     "M6 resident/paint verifier changed")
     pipeline.require(value.get("foreground_verifier_sha256") == art.foreground.verifier_sha256(),
                      "M6 foreground verifier changed")
 
@@ -450,6 +454,7 @@ def plan(args):
         "driver_sha256": pipeline.digest(Path(__file__).read_bytes()),
         "resource_verifier_sha256": pipeline.digest(Path(resource_inventory.__file__).read_bytes()),
         "foreground_verifier_sha256": art.foreground.verifier_sha256(),
+        "resident_verifiers": resident.dependencies(),
         "identity": static.identity(repo),
         "budget": None if baseline else budget(supplied_budget["limits"] if group is not None else supplied_budget),
         "adapter": args.adapter,
@@ -524,6 +529,8 @@ def validate_authored_parts(value, observed, mode="candidate"):
             if row["kind"] not in loaded_kinds:
                 continue
             expected = projected_parts(manifests[row["kind"]], row)
+            if row["kind"] in resident.ROLES:
+                resident.validate_record(manifests[row["kind"]], row, expected)
             if row["kind"] in art.foreground.KINDS:
                 asset_manifest = manifests[row["kind"]]
                 preview = asset_manifest["world_preview"]
@@ -555,6 +562,7 @@ class ReleasedCaseContext:
     adapter: str
     identity: dict
     assets: dict
+    resident_verifiers: dict
 
 
 _INITIAL_CODEC = object()
@@ -575,10 +583,12 @@ def released_case_context(repo, codec, adapter, *, expected_codec_sha256=_INITIA
     codec_sha256 = pipeline.digest(codec.read_bytes())
     pipeline.require(expected_codec_sha256 is _INITIAL_CODEC or codec_sha256 == expected_codec_sha256,
                      "frozen release codec changed before execution")
+    dependencies = resident.dependencies()
     frozen, assets = static.identity(repo), inventory(repo, codec)
-    pipeline.require(static.identity(repo) == frozen and pipeline.digest(codec.read_bytes()) == codec_sha256,
+    pipeline.require(static.identity(repo) == frozen and pipeline.digest(codec.read_bytes()) == codec_sha256
+        and pipeline.exact_json(dependencies, resident.dependencies()),
                      "release source/codec changed while reading")
-    return ReleasedCaseContext(str(repo), str(codec), codec_sha256, adapter, frozen, assets)
+    return ReleasedCaseContext(str(repo), str(codec), codec_sha256, adapter, frozen, assets, dependencies)
 
 
 def verify_released_case(context, item, session, binary_sha256):
@@ -595,6 +605,8 @@ def verify_released_case(context, item, session, binary_sha256):
 def _verify_released_case_artifacts(context, item, session, binary_sha256):
     """Full oracle for the public fresh context or an enclosing private operation proof."""
     pipeline.require(type(context) is ReleasedCaseContext, "foreign release context")
+    pipeline.require(pipeline.exact_json(context.resident_verifiers, resident.dependencies()),
+                     "released resident verifier changed before raw oracle")
     pipeline.require(isinstance(item, tuple) and len(item) == 4
         and item[0] in ("capture", "memory") and item[1] in ("small", "medium")
         and type(item[2]) is int and item[2] in (1, 2, 3) and item[3] == "candidate",

@@ -236,7 +236,7 @@ if __name__ == '__main__':
 
 class OperationReleasedOracle(unittest.TestCase):
     def test_scoped_context_keeps_complete_raw_oracle_and_all_case_calls(self):
-        context = m6.ReleasedCaseContext('/repo', '/codec', 'a'*64, 'Intel', {}, {})
+        context = m6.ReleasedCaseContext('/repo', '/codec', 'a'*64, 'Intel', {}, {}, m6.resident.dependencies())
         planned = {'release': {'context': cumulative.context_value(context)}}
         stage = {'binaries': {'current': {'sha256': 'b'*64}}}
         sidecar = {'layout_sha256': 'original', 'initial': {
@@ -264,7 +264,7 @@ class OperationReleasedOracle(unittest.TestCase):
                                           Path('/repo/target/native-acceptance/case'))
 
     def test_private_artifact_oracle_still_rejects_mode_owner_and_binary(self):
-        context = m6.ReleasedCaseContext('/repo', '/codec', 'a'*64, 'Intel', {}, {})
+        context = m6.ReleasedCaseContext('/repo', '/codec', 'a'*64, 'Intel', {}, {}, m6.resident.dependencies())
         good = ('capture', 'small', 1, 'candidate')
         for item, session, binary in ((('capture', 'small', 1, 'legacy-control'), '/repo/target/native-acceptance/a', 'b'),
                                       (good, '/foreign/a', 'b'),
