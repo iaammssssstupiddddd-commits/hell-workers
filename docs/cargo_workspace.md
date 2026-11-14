@@ -7,6 +7,7 @@
 
 - root crate (`bevy_app`) を Bevy の app shell に寄せる
 - `bevy_app` の library は共有 Resource・公開 module・root re-export・`HellWorkersGamePlugin` を所有し、binary `main.rs` は platform/backend/window の起動設定だけを持つ
+- Linux/glibcのnative binaryは起動時のarena上限設定にtarget限定の`libc`を直接使用する。domain crateや他platformには依存を追加しない。
 - 純粋ロジックや共有 model を責務ごとに別 crate へ置く
 - `python3 scripts/dev.py check` を常に green に保ちながら段階的に分割する
 

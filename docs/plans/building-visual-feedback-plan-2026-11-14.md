@@ -72,3 +72,11 @@ Tank/Mixerの通常倍率feedbackは実機pass。RestAreaの最初の試験は�
 ## Help影響の実レビュー
 
 No impact。`docs/help-screen.md`全文と既存providerを読み、通常建築→既定asset表示、RestingIn入退所/ロード→owner Visibility→独立ビルボード、Operational Spa→GeneratePower指定→表示producerを照合した。操作・成立条件・結果・文言・保存形式は不変。新しい外観・陰影と既存非表示仕様への復帰、Spaの不要な黄色い重ね表示だけを変更し、Help source/snapshotへ空変更を加えない。
+
+
+### RSS差の追加診断
+
+`32017b39`の24試行はCapture/Rust live/共有資源の増分は上限内だったが、Memory 4Nのprocess RSS中央値差139,260KiBが固定上限98,304KiBを超えたためinvalid。旧失敗をpassへ変更しない。
+同binaryの各mode1回のpassive診断とarena2介入診断を独立検証した。匿名resident量は介入で減少したが、Rust liveも変わるため、driver固有のリークや空きarenaだけを原因と断定しない。
+Linux/glibcでApp/worker初期化前に`mallopt(M_ARENA_MAX,2)`を通常起動にも適用する。codecと他platformは従来通り。
+これは環境変数による試験限定の軽量化ではなく、通常runtimeの起動policyである。戻り値を検査しログを記録する。main前のarenaを撤去する保証はなく、CPU競合の悪化もあり得るため、環境介入なしの通常実画面と固定予算のfresh Capture/Memory全matrixを通るまで未採用とする。

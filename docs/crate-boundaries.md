@@ -12,6 +12,9 @@ upstream licenseと差分の記録を保ち、ゲーム型をvendorへ追加し�
 *   `bevy_app` は App Shell として唯一プレフィックスを持たない Root クレートとする。
 *   単なる `utils` や `components` といった、特定のドメインを持たない雑多な共通クレートの新設は禁止する。
 
+Linux/glibcのmalloc起動policyはplatform所有の`bevy_app` binaryに置く。target限定の`libc`依存をleafへ流さず、
+通常起動とprofilingで同じ経路を使用する。codecのoffline入出力はこの設定を実行しない。
+
 ## 1. クレート境界の基本原則 (Crate Boundaries)
 
 *   **Leaf Crates (`hw_*`) は「Pure Domain (純粋ロジック層)」である**

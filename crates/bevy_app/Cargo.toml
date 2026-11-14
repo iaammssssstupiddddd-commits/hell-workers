@@ -28,6 +28,10 @@ wgpu-core = { workspace = true, optional = true }
 libloading = { workspace = true, optional = true }
 renderdoc-sys = { workspace = true, optional = true }
 
+# Keep GNU allocator startup policy in the platform-owning app shell only.
+[target.'cfg(all(target_os = "linux", target_env = "gnu"))'.dependencies]
+libc = "0.2.183"
+
 [dev-dependencies]
 parley = { version = "=0.9.0", default-features = false, features = ["std"] }
 winit = { version = "0.30.12", default-features = false }

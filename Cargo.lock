@@ -465,6 +465,7 @@ dependencies = [
  "hw_ui",
  "hw_visual",
  "hw_world",
+ "libc",
  "libloading 0.9.0",
  "parley",
  "rand 0.8.6",

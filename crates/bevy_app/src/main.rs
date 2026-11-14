@@ -39,6 +39,10 @@ fn main() -> AppExit {
             }
         };
     }
+    if let Err(error) = configure_native_allocator() {
+        eprintln!("Native allocator startup: {error}");
+        return AppExit::error();
+    }
     let perf_config = PerfScenarioConfig::try_from_process().unwrap_or_else(|error| {
         eprintln!("Invalid performance scenario configuration: {error}");
         std::process::exit(2);
@@ -200,6 +204,27 @@ fn main() -> AppExit {
     }
 
     app.run()
+}
+
+/// Bound GNU malloc arenas before Bevy creates its worker pools. This applies
+/// equally to ordinary games and profiling; it does not replace the allocator
+/// or reclaim arenas/allocations created before main.
+#[cfg(all(target_os = "linux", target_env = "gnu"))]
+fn configure_native_allocator() -> Result<(), &'static str> {
+    // SAFETY: mallopt accepts integer settings and retains no pointers. This is
+    // called once on the main thread before App/worker initialization.
+    let applied = unsafe { libc::mallopt(libc::M_ARENA_MAX, 2) };
+    if applied != 1 {
+        return Err("glibc rejected arena limit 2");
+    }
+    eprintln!("Native allocator startup: glibc arena limit=2 applied");
+    Ok(())
+}
+
+#[cfg(not(all(target_os = "linux", target_env = "gnu")))]
+fn configure_native_allocator() -> Result<(), &'static str> {
+    eprintln!("Native allocator startup: platform allocator unchanged");
+    Ok(())
 }
 
 // This only selects the execution route. configure_building_art still validates
