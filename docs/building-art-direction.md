@@ -126,19 +126,35 @@ M3のSoulSpa骨shaftは長辺で共通正規化した細いUV quadを持つ。�
 解像度は実際の表示面積とatlas内の配分から決める。高解像度画像であること自体を品質基準にしない。
 同種assetで模様の大きさをそろえ、拡大原図より縮小後の色面と線の残り方を優先する。
 
-## 設備の挿絵描画方式
+## 立体感を抑える方式の比較（2026-11-14）
 
-Tank・MudMixer・RestArea・SoulSpaと正式Doorの構造材質は、albedo-firstのillustration modeを使う。
-描き込んだ色面と実照明を分離し、無反射の白い上向き面で照明を評価する。幾何法線による丸み・箱の面の
-連続陰影を色面へ付けない。明度はlinear light単位で4段階に整理し、0.25未満の暗い光は連続値を保つ。
-暗所を発光のように明るくする下限や、全画面posterize・outlineは導入しない。
-実幾何法線は影のbiasに残し、depth・外形・前後関係・落ち影・施工clip・alphaは維持する。
-照明と発光には既存の露出規則を一度だけ適用し、追加shadow styleによる二重の暗化は行わない。
+上向き白面の照明参照とalbedoを分離したNPRを`d68a72c5`で試した。
+通常・遠景のowned X11/Vulkan原画像、36 owner・60frame安定・初終一致と登録済み独立verifyは成功した。
+しかし独立目視でTankの厚い縁・内側、Mixerの部品、Restの屋根面の立体感が旧画面と大きく変わらず、
+外観は不採用とした。probeには実uniform値がないため、GPUでのmode=1まで観測済みとは扱わない。
+この照明係数の仮説は打ち切り、通常経路は旧PBRとTank専用0.82混合へ戻す。
+sourceは`d68a72c59810a9ef8becf2af91e4a3162d33d9fa`、runtime fingerprintは
+`bb1b28a615fe06e8d215351745e1e1efac145fa8be9e4772dc943996af041151`。
+技術manifest SHAは`dbddb76402ae1849f412ebd82c47906dad80d02726a5caa48967ea88173c5d15`。
+保存したPNGのSHAはnormal `77656ed843026cbda0ac20a8780d43bf26221e83c2bbbf8c1f9ca427820a7caf`、
+far `1db387e1fb1ee54bb64f8cec686c3b5a794cfb0f8f8517aee469108244af1e8d`。
 
-これは形を2D画像へ置き換える方式ではない。Wall/Floor/Bridgeの従来PBRと、OutdoorLampを含むM5の
-Sprite表示は変更しない。world/catalog/ghost画像は別経路なので、シェーダーだけで再生成したと扱わない。
-通常・遠景の実画面、Tank水位、Mixer角度、Restの入所非表示、Spa発光とDoor状態を新sourceで確認する。
-既存のg3材色と採用世代は保持する。旧Tank専用の法線0.82混合は廃止する。
+
+![不採用の照明方式・通常表示](design/building-art/lighting-only-trial-normal-20261114.png)
+
+![不採用の照明方式・遠景表示](design/building-art/lighting-only-trial-far-20261114.png)
+
+次の比較はTank一種の手描きpaintを既存geometryへカメラ基準で投影し、
+画像に色面・描線、geometryにdepth・外形・遮蔽・shadowを担当させる2.5D方式とする。
+body専用materialと水面を分離し、Emptyはbody、Partial/Fullは実水面12/22WUのまま表示する。
+現GLBはflat法線であるため、NdotV/fwidth係数だけで外周inkを作る方式は選ばない。
+正式gallery・通常build・M6とは分けたprofiling専用pilotと実material witnessを先に作り、
+外観が有効と確認される前に全設備へ展開したり性能matrixへ進めたりしない。
+
+下図は現Tankの投影と旧2D原画の筆致を参照した未採用paint候補であり、
+実機画像・状態接続・numeric/art/release承認を意味しない。現行assetは上書きしていない。
+
+![未採用のTank投影paint候補](design/building-art/tank-projected-paint-candidate-20261114.png)
 
 ## 5. 光・陰・発光の分担
 

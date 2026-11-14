@@ -299,9 +299,12 @@ fn sync_structure(
                     material.base.base_color_texture = set.image("albedo").cloned();
                     material.base.emissive = LinearRgba::BLACK;
                     material.base.emissive_texture = None;
-                    if kind != BuildingType::Bridge {
-                        material.extension.uniforms.use_illustrated_lighting();
-                    }
+                    material.extension.uniforms.indoor_light_params.w =
+                        if kind == BuildingType::Tank {
+                            0.82
+                        } else {
+                            0.0
+                        };
                     let opaque = assets.add(material.clone());
                     // The lower water surface sits in the vessel's shade. A
                     // bounded tint makes Partial distinguishable from Full in

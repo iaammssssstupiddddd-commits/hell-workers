@@ -105,13 +105,11 @@ fn publish(world: &mut World, kind: BuildingAssetKind, generation: u64) -> Build
 }
 
 #[test]
-fn equipment_generations_use_illustration_except_bridge() {
+fn tank_painterly_shading_keeps_lighting_and_other_buildings_geometric() {
     for (kind, asset_kind) in [
         (BuildingType::Tank, BuildingAssetKind::Tank),
         (BuildingType::MudMixer, BuildingAssetKind::MudMixer),
         (BuildingType::RestArea, BuildingAssetKind::RestArea),
-        (BuildingType::SoulSpa, BuildingAssetKind::SoulSpa),
-        (BuildingType::Bridge, BuildingAssetKind::Bridge),
     ] {
         let mut app = app();
         let owner = shell(app.world_mut(), kind);
@@ -129,15 +127,12 @@ fn equipment_generations_use_illustration_except_bridge() {
                 .get(&handle.0)
                 .unwrap();
             assert!(!material.base.unlit);
-            let mode = material.extension.uniforms.indoor_light_params.w;
-            assert_eq!(
-                mode,
-                if kind == BuildingType::Bridge {
-                    0.0
-                } else {
-                    1.0
-                }
-            );
+            let flatten = material.extension.uniforms.indoor_light_params.w;
+            if kind == BuildingType::Tank {
+                assert!((0.8..1.0).contains(&flatten));
+            } else {
+                assert_eq!(flatten, 0.0);
+            }
         }
     }
 }
@@ -989,27 +984,6 @@ fn spa_fixed_slots_follow_all_worker_masks_and_construction_phase() {
             assert_eq!(slot != body, mask & (1 << index) != 0);
             let materials = app.world().resource::<Assets<TopDownStructuralMaterial>>();
             assert_eq!(
-                materials
-                    .get(slot)
-                    .unwrap()
-                    .extension
-                    .uniforms
-                    .indoor_light_params
-                    .w,
-                1.0
-            );
-            assert_eq!(
-                materials
-                    .get(body)
-                    .unwrap()
-                    .extension
-                    .uniforms
-                    .indoor_light_params
-                    .w,
-                1.0
-            );
-            assert!(!materials.get(slot).unwrap().base.unlit);
-            assert_eq!(
                 materials.get(slot).unwrap().base.emissive,
                 if mask & (1 << index) != 0 {
                     LinearRgba::WHITE
@@ -1098,13 +1072,6 @@ fn tank_state_changes_reuse_water_leaf_and_keep_fallback_materials() {
             .unwrap()
             .0
             .clone();
-        let material = app
-            .world()
-            .resource::<Assets<TopDownStructuralMaterial>>()
-            .get(&water_material)
-            .unwrap();
-        assert_eq!(material.extension.uniforms.indoor_light_params.w, 1.0);
-        assert!(!material.base.unlit);
         if expected == StructuralPresentationState::TankPartial {
             assert_eq!(
                 app.world()

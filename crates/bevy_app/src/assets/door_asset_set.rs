@@ -472,7 +472,6 @@ pub fn update_door_asset_readiness_system(params: DoorAssetReadinessParams) {
             let mut material =
                 make_topdown_structural_material(LinearRgba::WHITE, indoor_light.handle().clone());
             material.base.base_color_texture = Some(resolved.albedo.clone());
-            material.extension.uniforms.use_illustrated_lighting();
             materials.material = Some(structural_materials.add(material));
             materials.identity = Some(identity);
         }
