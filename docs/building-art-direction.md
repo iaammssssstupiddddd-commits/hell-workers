@@ -171,7 +171,23 @@ previewは透明のまま、bodyだけopaqueな面として実形状の深度・
 gutterまで連続に描く。triangleごとの黒枠や面法線由来の陰は焼き込まない。
 `surface_paint/uv_ink_v1`はこの画像を主とするmode4へ明示接続し、通常の影・遮蔽・状態を保つ。
 Blender sourceと0/quarter/half/three-quarterのpreviewも新atlasで作り、旧sourceや承認は上書きしない。
-現段階は未承認候補の制作経路であり、実機の回転・遠景・独立採否・releaseを省略しない。
+`8702f3fe`のMixer g4はnormal/farのArtPreview contextを独立verify/sealし、別途artと既存回転数値を採用した。
+actual mode4・atlasと元GLB/UVの一致を確認した静止比較であり、連続稼働・lifecycle・性能・正式releaseは未承認。
+新preview identityは`5d3a40b9364b38509853e0f769c4fc3ec169c39a6f2ef522e54902f25dbf953e`。
+通常起動は旧g3を維持し、最終sourceのcandidate受入を省略しない。
+
+RestArea/SoulSpaの`build_building_m3_candidate.py --style illustrated-v1`も既存UVからlocal座標へ逆変換し、
+布の継ぎはぎ・縫目、骨の長軸に沿う筋をgutterまで連続に描く。部材の幾何法線由来の明暗を焼かない。
+Blenderの確認材質はworld-up diffuseを使い、runtimeのmode4と同じ分担にする。
+RestAreaの閉じた壁・屋根と入所Soul非表示、Spaのbody/4slot・16mask・Constructing全offを維持する。
+Spaの発光atlasは既存producerの全bytesを維持し、利用中の区画だけが発光する契約を変更しない。
+制作・packagingはsandbox/toolchain、原本・コピー元/先を前後拘束し、通常host observerも全partの
+実mode4/atlas/base値をmanifestから導出して要求する。source/atlasの技術一致は新art/numeric承認ではない。
+
+OutdoorLampは既存Foreground2dを維持し、3D材質を追加しない。
+`building_m5_art.py --lamp-style illustrated-v1`はポールの明るい面塗りを抑え、物の継ぎ目へ描線を置く。
+高い光源・三脚・off/onの全alphaとanchorを保持し、点灯状態・配電・論理光へ影響させない。
+M3/Lampの新原本・実機採否・新世代の正式導入は現在進行中である。
 
 下図は現Tankの投影と旧2D原画の筆致を参照した未採用paint候補であり、
 実機画像・状態接続・numeric/art/release承認を意味しない。現行assetは上書きしていない。

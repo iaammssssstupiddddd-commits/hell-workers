@@ -13,6 +13,32 @@ art = completed.acceptance.rest_area_art
 
 
 class OrdinaryArtTests(unittest.TestCase):
+    def test_uv_ink_requires_actual_mode_and_atlas_through_save_and_load(self):
+        raw, entries, client, payload, contract = self.fixture()
+        contract["surface_paint_contract"] = {"method": "uv_ink_v1"}
+        for sample in raw["samples"]:
+            for root in sample["art_feedback"]["roots"]:
+                for part in root["parts"]:
+                    part["body_paint"] = {"mode": 4., "ink_base": True}
+        self.verify(raw, entries, client, payload, contract)
+        for attack in ("mode", "ink_base", "missing", "foreign-atlas", "undeclared"):
+            changed, adopted = copy.deepcopy((raw, contract))
+            if attack == "undeclared":
+                del adopted["surface_paint_contract"]
+            for sample in changed["samples"]:
+                for root in sample["art_feedback"]["roots"]:
+                    for part in root["parts"]:
+                        if attack == "mode":
+                            part["body_paint"]["mode"] = 0.
+                        elif attack == "ink_base":
+                            part["body_paint"]["ink_base"] = False
+                        elif attack == "missing":
+                            del part["body_paint"]
+                        elif attack == "foreign-atlas":
+                            part["albedo"] = "foreign"
+            with self.subTest(attack=attack), self.assertRaises((RuntimeError, ValueError)):
+                self.verify(changed, entries, client, payload, adopted)
+
     def test_candidate_lifecycle_has_separate_explicit_scope_and_authority(self):
         raw, entries, client, payload, contract = self.fixture()
         contract["scope"] = raw["scope"] = art.CANDIDATE_SCOPE

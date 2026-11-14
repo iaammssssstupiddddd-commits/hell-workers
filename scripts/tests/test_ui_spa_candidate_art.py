@@ -53,6 +53,40 @@ def attach(sample, value, adopted):
 
 
 class SpaCandidateArtTests(unittest.TestCase):
+    def test_uv_ink_requires_all_actual_parts_and_keeps_worker_emission_checks(self):
+        with tempfile.TemporaryDirectory() as directory:
+            save = Path(directory) / "saves/manual-1.scn.ron"
+            save.parent.mkdir()
+            raw, entries, client, inputs = fixtures.campaign_fixture(save)
+            raw["scope"] = art.SCOPE
+            adopted = contract()
+            adopted["surface_paint_contract"] = {"method": "uv_ink_v1"}
+            for entry in entries[2:]:
+                sample = art.spa.raw_checkpoint(raw, entry["value"])
+                attach(sample, entry["value"], adopted)
+                for root in sample["art_feedback"]["roots"]:
+                    for part in root["parts"]:
+                        part["body_paint"] = {"mode": 4., "ink_base": True}
+            art.verify(raw, entries, client, save, inputs, adopted)
+            for name in ("body", "slot0", "slot1", "slot2", "slot3"):
+                for attack in ("mode", "missing", "foreign-atlas", "emission"):
+                    changed = copy.deepcopy(raw)
+                    for sample in changed["samples"]:
+                        for root in sample.get("art_feedback", {}).get("roots", []):
+                            for part in root["parts"]:
+                                if part["name"] != name:
+                                    continue
+                                if attack == "mode":
+                                    part["body_paint"]["mode"] = 0.
+                                elif attack == "missing":
+                                    del part["body_paint"]
+                                elif attack == "foreign-atlas":
+                                    part["albedo"] = "foreign"
+                                else:
+                                    part["material_values"]["emissive_white"] = not part["material_values"]["emissive_white"]
+                    with self.subTest(name=name, attack=attack), self.assertRaises((RuntimeError, ValueError)):
+                        art.verify(changed, entries, client, save, inputs, adopted)
+
     def test_f32_projection_is_exact_not_a_relaxed_descriptor_comparison(self):
         adopted = contract()
         self.assertEqual(art.runtime_parts(adopted["parts"])[1]["translation_wu"][1], .6000000238418579)

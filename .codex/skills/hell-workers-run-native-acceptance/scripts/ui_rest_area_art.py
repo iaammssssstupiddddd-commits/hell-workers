@@ -9,6 +9,7 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
 from scripts import building_art_acceptance as art
+from scripts import building_body_paint_observation as paint_observation
 import ui_rest_area_usage as usage
 
 native, pipeline = art.native, art.pipeline
@@ -25,7 +26,8 @@ def source_contract(repo, source_root, codec, *, candidate=False):
     return {"scope": CANDIDATE_SCOPE if candidate else SCOPE, "source_root": str(source_root), "codec": str(codec),
             "codec_sha256": pipeline.digest(codec.read_bytes()), "identity": manifest["identity"],
             "manifest_sha256": pipeline.digest(text.encode()), "artifacts": manifest["artifacts"],
-            "parts": manifest["parts"],
+            "parts": manifest["parts"], **paint_observation.fields(manifest),
+            "body_paint_verifier_sha256": paint_observation.verifier_sha256(),
             "source_sha256": manifest["source_sha256"],
             "geometry_sha256": manifest["geometry_contract_sha256"],
             "base_assets_sha256": art.asset_view_fingerprint(repo)}
@@ -179,7 +181,8 @@ def check_consumers(raw, entries, contract):
         native.require(len(parts) == len(descriptor.get("part_names", [])) == 1
                        and [part.get("name") for part in parts] == descriptor["part_names"]
                        and all(part.get("mesh") == descriptor["body_mesh"]
-                               and part.get("albedo") == descriptor["albedo"]
+                               and part.get("albedo") == paint_observation.expected_texture(
+                                   contract, part.get("name"), descriptor, part.get("body_paint"))
                                and isinstance(part.get("material"), str) and part["material"]
                                and part.get("visible") is True for part in parts),
                        "ordinary art part mesh/material/texture differs or is hidden")

@@ -144,7 +144,10 @@ def face_layout(kind):
 def paint(kind, output, stage, *, style="legacy"):
     from PIL import Image, ImageDraw
     require(stage in ("clay", "planes", "strokes"), "unknown paint stage")
-    require(style in ("legacy", infernal.STYLE), "unknown paint style")
+    require(style in ("legacy", infernal.STYLE, infernal.ILLUSTRATED_STYLE), "unknown paint style")
+    if style == infernal.ILLUSTRATED_STYLE:
+        from building_m3_uv_ink import paint as ink_paint
+        return ink_paint(kind, output, stage)
     value, spec = contract(kind)
     size, cell = value["atlas"]["size_px"], value["atlas"]["cell_px"]
     image = Image.new("RGBA", (size, size), (65, 59, 52, 255))

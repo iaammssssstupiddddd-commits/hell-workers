@@ -9,6 +9,7 @@ import struct
 import sys
 
 from scripts import building_art_acceptance as art
+from scripts import building_body_paint_observation as paint_observation
 
 sys.path.insert(0, str(art.HELPERS))
 import ui_rest_area_art as shared  # noqa: E402
@@ -40,6 +41,8 @@ def source_contract(repo, source_root, codec, *, case=CASE, resume_source=None):
             "codec_sha256": pipeline.digest(codec.read_bytes()), "identity": manifest["identity"],
             "manifest_sha256": pipeline.digest(text.encode()), "artifacts": manifest["artifacts"],
             "parts": manifest["parts"], "relative_tiles": geometry["ordered_relative_tiles"],
+            **paint_observation.fields(manifest),
+            "body_paint_verifier_sha256": paint_observation.verifier_sha256(),
             "base_assets_sha256": art.asset_view_fingerprint(repo),
             "numeric_verifiers": pipeline.numeric_verifier_inventory(),
             "verifier_sha256": pipeline.digest(Path(__file__).read_bytes())}
@@ -174,7 +177,8 @@ def check_consumers(raw, entries, contract, *, start=2):
             active = part["name"] != "body" and bool(mask & (1 << int(part["name"][-1])))
             native.require(part.get("parent") == roots[0].get("entity") and part.get("visible") is True
                            and part.get("mesh") == descriptor["body_mesh" if part["name"] == "body" else "slot_mesh"]
-                           and part.get("albedo") == descriptor["albedo"]
+                           and part.get("albedo") == paint_observation.expected_texture(
+                               contract, part.get("name"), descriptor, part.get("body_paint"))
                            and isinstance(part.get("material"), str) and part["material"], "Spa part mesh/material/parent differs")
             for field, source in (("translation", "translation_wu"), ("rotation", "rotation_xyzw"), ("scale", "scale")):
                 pose = part.get("pose", {}).get(field)

@@ -147,10 +147,29 @@ geometry/UV/GLBはg3不変。新source・mask/paint/config・承認原本は別s
 新しい512px atlasへ円筒の継ぎ目・傷・非対称な摩耗印を描き、既存face-cellのgutterまで連続に埋める。
 triangle/UV島を一枚ずつ黒枠にする方法と、面法線由来の明暗をalbedoへ焼く方法は使わない。
 
-- [ ] identityに拘束した閉じた`surface_paint/uv_ink_v1`と、通常observerの実mode/texture検査を追加する。
-- [ ] 既存編集可能原本と数値契約を保持し、新atlas・world-up diffuse・4姿勢previewを新規制作する。
+- [x] identityに拘束した閉じた`surface_paint/uv_ink_v1`と、通常observerの実mode/texture検査を追加する。
+- [x] 既存編集可能原本と数値契約を保持し、新atlas・world-up diffuse・4姿勢previewを新規制作する。
 - [ ] body固定、rotorの描線追従、normal/far、pause/resume/load/move、preview整合を実機で確認する。
 - [ ] 採用時だけ新art/numeric/candidateへ進み、最終sourceの混在9種・性能・切戻し・正式導入を閉じる。
 
 投影Tankのmode3と旧None経路は変更しない。UV方式はalbedoを主役にし、
 照明参照normalだけを固定する。実geometryのnormal/depth/影bias、emission、alpha、post処理は保持する。
+
+
+`8702f3fe`のMixer g4はbody/rotor/geometryの旧g3全bytes一致、四主姿勢の別hashを確認した。
+normal/far contextを登録済み独立verify/seal/finalizeし、固定read-only reviewerが新artと既存の
+local Y軸/毎秒1.5707964radを独立採用した。previewは`5d3a40b9364b38509853e0f769c4fc3ec169c39a6f2ef522e54902f25dbf953e`。
+連続稼働・通常lifecycle・最終sourceのcandidate/性能/releaseは未承認であり、既定g3を維持する。
+
+## 10. 布小屋・骨の四区画・2D灯具を揃える
+
+- [x] M3へ明示illustrated-v1、固定toolchain・verify後差替え拒否、全gutterのlocal描線を実装する。
+- [x] 既存geometry/UV/part/数値を維持し、Spa発光atlasは旧producerの全bytesを保持する。
+- [x] Rest/Spaの通常hostへmanifest由来mode4/atlas/base値を要求し、既存利用/発光検査を残す。
+- [x] LampはForeground2dのままポールの立体的な明るい面を抑え、既存全alpha/anchor/点灯状態差を保持する。
+- [ ] 新原本を生成し、旧GLB/UV/発光との一致とnormal/farの見た目を独立確認する。
+- [ ] 独立art/numeric採用後、全変更種の最終source candidate/lifecycle/混在9種/性能・切戻し・正式導入を閉じる。
+
+この制作・検証拡張のHelp判断はNo impact。明示候補の制作から既存manifest/pool/表示・状態材質まで追い、
+操作・前提・利用/休息/Dream/発電・保存・失敗結果・文言・Help到達性を変更していない。
+新しい見た目の採否と正式導入は別工程であり、候補の技術passで通常版の変更を完了とは扱わない。

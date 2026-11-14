@@ -377,6 +377,8 @@ SoulSpaの4 slotは同一slot meshを参照し、part側で個別transformを持
   geometryのnormal/depth/実影biasは保持する。emission/alpha/post処理を重複適用しない。
   追加画像roleや専用materialは増やさず、通常observerは実mode4・atlas handle・非反射のbase値を
   descriptor identityへ結合する。metadata、画像、原本が変われば新しい独立採否が必要。
+  RestArea通常利用/Save/LoadとSpaのoccupied/resumed/loaded受入でも同じoracleのhashとmanifest由来の
+  契約を固定し、全partのmode4・atlasを要求する。Spaは別途実workersに応じた発光画像/倍率も照合する。
 
 JSONはRustの型宣言順に`serde_json::to_vec`したcompact形式＋末尾LFと完全一致させる。
 未知field、別順序、余分な空白は拒否する。SHA-256は小文字hex64桁。
