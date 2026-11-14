@@ -209,6 +209,22 @@ active slotだけ白倍率とslot_emissive画像を持ち、body/inactiveは黒�
 readiness後のsnapshot変化は修復せず拒否する。scope `paused-static-spa-mask-page` はseeded静止状態の
 技術検査であり、自然な入退所・Save/Load・性能・正式releaseを承認するものではない。
 
+## 外観改訂後の9種の採用画面（2026-11-14）
+
+新Tank/MudMixer/RestArea/OutdoorLamp g2と既存5種を、`a77f4104`の既定compiled bindingで表示した。
+High/DPI1・normal/farの36 ownerを独立採用。Tankは陰影を抑えた色面、Mixerは傾斜ドラム・架台・車輪、
+RestAreaは閉じた布小屋で入所Soul本体非表示、Lampは三脚・高いポール・頂部投光器となる。
+SoulSpaの四区画と稼働Soulは維持し、黄色いGeneratePower重ね表示だけを除去した。
+Obj診断トグルと入所者非表示の競合は、単一writerの合成と2system回帰testで閉じた。
+この画像はseeded静止galleryであり、自然施工の画像ではない。旧g1の参考画像は次節に残す。
+
+![外観改訂9種のnormal表示](design/building-art/visual-feedback-nine-normal-20261114.png)
+
+![外観改訂9種のfar表示](design/building-art/visual-feedback-nine-far-20261114.png)
+
+現行identityと復旧は[asset仕様](building-asset-sets.md#2026-11-14-外観改訂の入力契約)、
+新しい静止asset増分性能は[性能仕様](rendering-performance.md#外観改訂9種の静止asset増分受入2026-11-14)を参照。
+
 ## 非橋9種の採用画面（2026-11-13）
 
 正式8世代と既存Door g7を、High/DPI1のnormal/farで独立採用した。

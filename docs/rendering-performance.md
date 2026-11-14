@@ -416,7 +416,9 @@ LOD 切替閾値（hysteresis）:
 - `LOD1-lite -> LOD2`: `tile_rtt_px < 14px`
 - `LOD2 -> LOD1-lite`: `tile_rtt_px > 16px`
 
-### 建築物（現行プレースホルダー）
+### 建築物（fallback基盤）
+
+以下はfallbackの共有構造であり、正式世代の実DC数を表す表ではない。正式Wall/Doorと設備の部品・状態別handleは[asset仕様](building-asset-sets.md)を参照する。
 
 | 要素 | DC 数 | ハンドル管理 |
 |---|---|---|
@@ -425,7 +427,7 @@ LOD 切替閾値（hysteresis）:
 | 床・ドア・設備 | 各 1 | 種類ごとに 1 ハンドル |
 
 `Building3dHandles`（`startup/visual_handles.rs`）が全ハンドルを Resource として保持し、
-entity はこれを clone して参照するため、インスタンス数が増えても DC 数は変わらない。
+entity はこれを clone して参照する。正式表示のDC数はmesh・material・状態ごとの実計測で判断する。
 
 ### キャラクター（Soul）
 
@@ -643,3 +645,40 @@ Memory N差21,430,227Bで不合格だった。実allocator stackとTimePlugin再
 これは混在する静止表示の受入で、active AIの累積性能、GPU allocation総量、Bridge、
 追加のart/numeric/release権限を証明しない。画像CPU/descriptor費用をGPU実確保量へ読み替えない。
 終了した比較の原本依存は閉じ、採用数値を本節に集約し、用途のないraw・binary copy・専用worktreeを整理する。
+
+
+## 外観改訂9種の静止asset増分受入（2026-11-14）
+
+新4件のg2と既存4件＋Door g7を、clean `a77f4104d5c36d726f5444c4a096b241d95aa84f`、
+runtime fingerprint `ba6598c4d7cb83a7c49749308e199a9aedcbf89c4c0e6d1f39cc4bccd83135c0`で確認した。
+同sourceのlegacy-controlに対する静止asset増分であり、旧g1との直接比較や旧foundation比較の再実行ではない。
+N36／4N144、各3対・中央対逆順、30秒warmup＋60秒計測、Capture12→Memory12。
+Intel Arc（MTL）／Mesa26.2.6／Vulkan／X11、1280×720、DPI1、High、novsync、Virtual Time停止を固定した。
+
+Linux/glibcでは通常ゲームとprofilingの両方で、App/worker前に`mallopt(M_ARENA_MAX,2)`を適用し戻り値を検査する。
+offline codecは除外、他platformのallocatorは変更しない。main以前のarenaを撤去する保証やGPU/driver全体の上限ではない。
+通常galleryのowned processで`MALLOC_ARENA_MAX`/`GLIBC_TUNABLES`未設定とmainの適用ログを照合した。
+試験だけのenv介入は用いず、静止経路のCPU競合リスクを同じCapture予算で確認した。active-AIの競合性能は未計測。
+
+| candidate−legacy-controlの中央値差 | N | 4N | 事前固定上限 |
+| --- | ---: | ---: | ---: |
+| p95 | +0.219709ms | +0.477025ms | +1ms |
+| p99 | +0.164193ms | +0.798682ms | +3ms |
+| Rust live peak | +10,452,911B | +11,715,016B | +16,777,216B |
+| process RSS | +49,588KiB | +79,752KiB | +98,304KiB |
+
+最大relative MADは2.014612%（上限10%）。全24試行を元の公開verifierで再検証し、独立reviewで採用した。
+共有資源の増分はmesh7／vertex-index 85,976B、image20／CPU・descriptor各9,175,040B、
+structural material9／shallow4,176B。N/4Nの共有資源plateauと初終不変を維持した。
+事前予算SHA `9372fc4066091b95a7a5e0acd3220b84811e079ef36bace5aa6ebce3b60b1f51`、
+plan SHA `3fcf21176dac658c41ecdfa0544f0922bebb164983b8c0ce9a7e036c42af0144`、
+結果SHA `bf43335b9d10d9b6c18e40f8186f748d2d9a958cd76a160af15f4d43f4219bf5`。
+旧`32017b39`のv1はMemory 4NのRSS中央値差139,260KiBで固定上限98,304KiBを超え、invalidのままとした。
+同binaryの同期proc/Rust計数診断では起動からwarmupの匿名resident変動が主成分だった。arena2介入で匿名量が減少した一方、
+Rust liveにも変化があるため、空きarenaだけの寄与やdriver固有のリークとは断定しない。通常mainの上限policyを加えた新sourceをfresh全matrixで再評価した。
+旧失敗や診断を新sourceのpassへ付け替えず、使い終えたrawの依存を閉じ、結果と限界を本節へ集約する。
+測定v2は全24件のdriver gateがpassした一方、登録verifierの外部plan argvが出力rootを明示せず、登録工程はinvalidとして精算した。
+元登録をpassへ変更せず、freshな検証専用batchで公開verifierを再計算し、元result全体・全raw・source/binaryの前後一致を封印した。
+この工程はゲーム・build・計測を再実行していない。独立検証receipt SHA `d99d646d19d5b963a9b847fa9cd0a7991739b2ea15e67a64096fce71dd917044`。
+このgateはactive AI、自然施工・lifecycle、GPU実allocation総量、Bridge、アートやreleaseの追加承認を含まない。
+新4件のアート・数値・releaseは別の独立判断、導入後の実画面は[制作仕様](building-art-direction.md#外観改訂後の9種の採用画面2026-11-14)が所有する。

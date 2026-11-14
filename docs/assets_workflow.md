@@ -433,7 +433,9 @@ paint reportと実Git上のgenerator履歴を対応付ける。古い未採用va
 22組の198件と合わせた全587ファイルのSHA/bytesを独立照合した。
 nativeの実画面、ログ、asset-viewを原本libraryへ一括archiveしていない。
 2026-11-14の外観改訂では編集可能なBlend・PNG・GLB・geometry・paint reportとexact pipeline sourceを
-4組39ファイル（1,407,905B）追加した。authoringは計26組237ファイル、legacyと合わせて626原本となる。
+4組39ファイル（1,407,905B）追加した。さらに唯一の中間Blend3組27ファイルも未採用原本として保全し、
+authoringは計29組264ファイル（9,359,997B）、legacyと合わせてindex記録653原本となる。
+中間3組の当時のgenerator/fixture履歴を復元済みとは扱わず、採用authorityへ混ぜない。
 追加の前後で既存原本のSHA/bytesが不変であることを全件確認した。再生成コードはcommit `b9c2d049`へ結合する。
 新4世代のrelease判断とg1復帰情報はcanonical transactionに保持し、raw native jobへ復旧を依存させない。
 

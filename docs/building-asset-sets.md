@@ -65,7 +65,9 @@ fresh Capture12→Memory12の固定予算比較と、代表EWのpause/input/resu
 
 SoulSpa g2、Parking g2、SandPile/BonePile g1、Door g7、Wall g13は変更しない。
 完全8件binding SHAは `cc1f7a90707d6ccd07dd9ec32ea2cf681b3fe27aef38c6fdba70b542ca32c3fd`。
-この4件の正式導入は、後段の通常起動9種galleryと新asset増分性能の受入を代用しない。
+正式導入とは別に、`a77f4104`で既定9種galleryのnormal/farとCapture12→Memory12をfresh実行し、独立採用した。
+画面は[制作仕様](building-art-direction.md#外観改訂後の9種の採用画面2026-11-14)、比較範囲と事前予算は[性能仕様](rendering-performance.md#外観改訂9種の静止asset増分受入2026-11-14)を正本とする。
+Helpは実経路を再確認してNo impact。操作・成立条件・休息/精製/電力・保存形式は変更しない。
 
 - Tankは実形状・水位・実照明を維持し、構造材uniformの`indoor_light_params.w`へ0.82を設定して
   法線を上向きへ混合する。幾何形状による陰影を弱め、他kindの値は0とする。
