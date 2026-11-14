@@ -4,6 +4,9 @@
 [移行計画](plans/3d-rtt/non-wall-floor-building-art-migration-plan-2026-09-19.md)を正本とする。
 本書はroot `bevy_app::assets::building_asset_set` が所有する入力境界を記す。
 
+現行の外観改訂は[2026-11-14の正式世代](#2026-11-14-外観改訂の入力契約)を参照。
+以下の2026-11-13表と測定は初回導入時点の履歴であり、新世代の測定を代用しない。
+
 ## 2026-11-13 非橋9種の正式導入・受入
 
 Tank、MudMixer、RestArea、SoulSpa、WheelbarrowParking、SandPile、BonePile、OutdoorLampは、
@@ -43,13 +46,26 @@ fresh Capture12→Memory12の固定予算比較と、代表EWのpause/input/resu
 終了済みtransactionは元candidate jobを復旧依存とせず、正本の検証とcodec SHAを引き続き要求する。
 原本とcodecの配置は[アセット運用](assets_workflow.md#非橋9種の制作原本と復旧情報)を参照。
 
-以降の段階別履歴にある「未完」「保持中」はその記録時点の結果であり、現在の非橋9種の採否は本節を正本とする。
+以降の段階別履歴にある「未完」「保持中」はその記録時点の結果である。初回9種の採否は本節、現行の改訂世代は次節を正本とする。
 旧invalid・未測定の結果をpassへ変更せず、用途終了後の原本pathを将来の実行義務にも扱わない。
 
 ## 2026-11-14 外観改訂の入力契約
 
-以下は導入後フィードバックの改訂仕様であり、上記release表の世代を自動更新するものではない。
-新候補には別のexact art/numeric判断、正式candidate検証、promotion/installと既定binding更新を必要とする。
+導入後の5指摘に対応し、4候補それぞれで独立art/numeric/release判断とclean `b9c2d049` の正式candidate実機検証を完了した。
+隔離した現行g1からg2へのpromotion/installとg1へのrollback/mirror復帰を全16操作で確認し、
+旧47ファイルの完全なbyte復帰を独立reviewで採用した。4件すべての正本promotion後にprimaryへinstallし、
+正規`bindings --release-group m5`のexact出力を既定値へ採用した。旧g1と復旧journalは維持する。
+
+| kind | generation | ReleaseApproved manifest SHA-256 |
+| --- | ---: | --- |
+| Tank | 2 | `a3ab33385bfec3b9fd017b99749323ae71972d84cdc4bdc2be6b063c8b02cf5b` |
+| MudMixer | 2 | `1ffd005233602c5688488f019ab532c077fa7052bdc287dc7b6a1cd3f864165a` |
+| RestArea | 2 | `79dbe60d145ff5e526ae472020a8981f025147b27350e6c7f275aa6c5c3a6787` |
+| OutdoorLamp | 2 | `c539620da60cdd8b861b6e9cf7e2d0639166f8c4ad4b7a8e3ffd531eb7b8324d` |
+
+SoulSpa g2、Parking g2、SandPile/BonePile g1、Door g7、Wall g13は変更しない。
+完全8件binding SHAは `cc1f7a90707d6ccd07dd9ec32ea2cf681b3fe27aef38c6fdba70b542ca32c3fd`。
+この4件の正式導入は、後段の通常起動9種galleryと新asset増分性能の受入を代用しない。
 
 - Tankは実形状・水位・実照明を維持し、構造材uniformの`indoor_light_params.w`へ0.82を設定して
   法線を上向きへ混合する。幾何形状による陰影を弱め、他kindの値は0とする。

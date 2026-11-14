@@ -43,8 +43,8 @@ RestAreaは論理Soul本体のVisibilityを隠す既存仕様だが、独立し�
 
 - [x] Tank / MudMixer / RestArea / OutdoorLampの新候補を生成。generation2のexact preview4件を独立numeric reviewが採用可と判断。
 - [x] 実GLB、全8静的部材との連続回転分離、部品quaternion、preview/catalog anchorを検証。
-- [ ] 実機画像で5指摘と周囲の画風を照合し、独立review。
-- [ ] 新しい採用identityを正規導入し、既存世代をrollback用に維持。
+- [x] 4種のnormal/far feedbackと正式candidate画像を独立art/release reviewが採用。最終9種画面はM3で確認。
+- [x] 4件の正式g2を正規promotion/installし、既定8件bindingを更新。隔離g1→g2→g1復帰と旧47ファイルのbyte inventory不変を独立確認。
 
 ### M3: 受入と同期
 
