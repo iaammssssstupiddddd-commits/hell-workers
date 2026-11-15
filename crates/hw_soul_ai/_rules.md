@@ -10,6 +10,7 @@
 - `cleanup_commanded_souls_system`：Soul のクリーンアップ
 - `drifting_decision_system`：未管理 Soul の自然脱走遷移
 - `SoulAiCorePlugin`：このクレート内で完結するシステムの唯一の登録者
+- `profiling`の明示観測sessionだけ、手運び・猫車の実Blueprint搬入branchを受動記録する。診断のために割当・消費・chain・予約処理を変更しない
 
 ## 禁止事項（AI がやってはいけないこと）
 

@@ -15,6 +15,8 @@ use bevy::prelude::*;
 
 #[cfg(feature = "profiling")]
 pub use assets::building_asset_set::acceptance::configure_building_art;
+#[cfg(feature = "profiling")]
+pub use assets::building_asset_set::acceptance::m2_ui_pair_admitted_from_process;
 pub use assets::building_asset_set::configure_building_asset_releases;
 pub use assets::building_asset_set::project_building_asset_json;
 pub use entities::damned_soul::DamnedSoulPlugin;
@@ -32,6 +34,21 @@ pub use hw_familiar_ai::{
 };
 pub use hw_jobs::events::TaskAssignmentRequest;
 pub use plugins::game::HellWorkersGamePlugin;
+
+/// Only an admitted profiling group gallery gets a frameless fixed client.
+/// Normal gameplay, older galleries and performance windows retain decoration.
+pub fn building_art_window_decorations(world: &World) -> bool {
+    #[cfg(feature = "profiling")]
+    {
+        !world.contains_resource::<assets::building_asset_set::group_art::GroupArtSession>()
+            && !world.contains_resource::<assets::building_asset_set::gallery_capture::GalleryCaptureSession>()
+    }
+    #[cfg(not(feature = "profiling"))]
+    {
+        let _ = world;
+        true
+    }
+}
 
 /// ゲーム内のデバッグ情報の表示状態（独自実装用）
 #[derive(Resource, Default)]
@@ -101,3 +118,27 @@ fn env_flag_is_true(name: &str) -> bool {
 
 #[cfg(test)]
 pub(crate) mod test_support;
+
+#[cfg(test)]
+mod group_art_window_tests {
+    use super::*;
+
+    #[test]
+    fn ordinary_world_keeps_its_existing_window_decoration() {
+        assert!(building_art_window_decorations(&World::new()));
+    }
+
+    #[cfg(feature = "profiling")]
+    #[test]
+    fn only_the_typed_admitted_group_resource_selects_a_frameless_client() {
+        let mut world = World::new();
+        let session = assets::building_asset_set::group_art::test_session();
+        world.insert_resource(session);
+        assert!(!building_art_window_decorations(&world));
+        world.remove_resource::<assets::building_asset_set::group_art::GroupArtSession>();
+        world
+            .remove_resource::<assets::building_asset_set::gallery_capture::GalleryCaptureSession>(
+            );
+        assert!(building_art_window_decorations(&world));
+    }
+}

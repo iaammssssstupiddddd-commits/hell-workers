@@ -11,24 +11,59 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import subprocess
 import tempfile
 from pathlib import Path
 
 from PIL import Image
 
+from building_infernal_style import STYLE, ILLUSTRATED_STYLES
+
 import building_asset_pipeline as pipeline
 from building_clay_geometry import FIXTURES, PILOTS, load_pilot, read_json, require
-from building_m2_art import NUMERIC, NUMERIC_SHA256, candidate_geometry, face_layout, paint
+from building_m2_art import candidate_geometry, face_layout, numeric_contract, paint
 from prepare_building_clay_runtime import recipe, state_geometry
-from validate_wall_glb import accessor_values, read_glb
+from validate_building_m2_indexed_faces import check_indexed_faces as check_uv
 from workflow_common import asset_root, require_within, write_json_atomic
 
 WORKFLOW = FIXTURES.parent
 
 
+def illustrated_environment():
+    from build_tank_illustration_candidate import blender_environment
+    environment = blender_environment(Path('/usr/bin/flatpak'))
+    node = shutil.which('node')
+    require(node is not None, 'installed node executable required for the fixed glTF validator')
+    environment['PATH'] = '/usr/bin' + os.pathsep + str(Path(node).resolve().parent) + os.pathsep + os.defpath
+    environment.pop('NODE_OPTIONS', None)
+    environment.pop('NODE_PATH', None)
+    environment.update(OCIO=str(FIXTURES / 'wall-calibration-v2.ocio'),
+                       GLTF_VALIDATOR_ROOT=str(Path.home() / 'tools/gltf-validator'))
+    return environment
+
+
+def illustrated_toolchain():
+    from build_tank_illustration_candidate import blender_chain, SAFE_BLENDER
+    environment = illustrated_environment()
+    validator = Path(environment['GLTF_VALIDATOR_ROOT'])
+    files = [*sorted((WORKFLOW / 'scripts').glob('*.py')),
+             *sorted(path for path in FIXTURES.rglob('*') if path.is_file()),
+             *(WORKFLOW / 'bin' / name for name in ('blender-safe', 'export-staging-glb', 'gltf-validate')),
+             Path(shutil.which('node', path=environment['PATH'])).resolve(),
+             validator / 'validate.mjs', validator / 'package-lock.json',
+             *sorted(path for path in (validator / 'node_modules/gltf-validator').rglob('*') if path.is_file())]
+    return {'blender': blender_chain(SAFE_BLENDER, Path('/usr/bin/flatpak')),
+            'files': {str(pipeline.no_symlinks(path)): digest(path) for path in files}}
+
+
 def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def illustrated_outputs(blend, output, report, reports):
+    files = [blend, report, *sorted(path for root in (output, reports) for path in root.rglob('*') if path.is_file())]
+    return {str(pipeline.no_symlinks(path)): digest(path) for path in files}
 
 
 def paths(kind, name):
@@ -42,41 +77,44 @@ def paths(kind, name):
                                       ("reports", f"building-m2/{name}")))
 
 
-def check_uv(glb, geometry, faces):
-    document, binary = read_glb(glb)
-    attributes = document["meshes"][0]["primitives"][0]["attributes"]
-    positions = accessor_values(document, binary, attributes["POSITION"])
-    uvs = accessor_values(document, binary, attributes["TEXCOORD_0"])
-
-    def key(point, uv):
-        return tuple(round(value, 5) for value in (*point, *uv))
-
-    # Blender UV origin is bottom-left; the glTF exporter flips V to top-left.
-    expected = {key(geometry.vertices[index], (uv[0], 1 - uv[1]))
-                for polygon, face in zip(geometry.faces, faces, strict=True)
-                for index, uv in zip(polygon, face["uv"], strict=True)}
-    require({key(point, uv) for point, uv in zip(positions, uvs, strict=True)} == expected,
-            "exported per-face UV differs from exact numeric/atlas candidate")
-
-
-def verify(kind, name):
+def verify(kind, name, revision="v1", style=STYLE):
+    require(style in (STYLE, *ILLUSTRATED_STYLES) and (style not in ILLUSTRATED_STYLES
+            or kind == "MudMixer" and revision in {"v3", "v4", "v5", "v6"}), "unknown M2 style/kind/revision")
+    require((revision in {"v5", "v6"}) == (style in ("handpaint-v1", "weathered-v1")), "handpaint requires explicit Mixer v5/v6")
+    require(style != "weathered-v1" or kind == "MudMixer" and revision == "v6", "weathered pigment is Mixer v6 only")
+    require(revision != "v4" or style == "illustrated-v2", "v4 requires explicit revised ink")
     blend, output, report, reports = paths(kind, name)
-    geometry = candidate_geometry(kind)
-    contract = load_pilot(kind)
+    geometry = candidate_geometry(kind, revision)
+    contract = load_pilot(kind, revision)
+    numeric, numeric_sha256 = numeric_contract(kind, revision)
     data = read_json(report)
+    frozen_outputs = illustrated_outputs(blend, output, report, reports) if style in ILLUSTRATED_STYLES else None
+    if style in ILLUSTRATED_STYLES:
+        require(pipeline.exact_json(data.get('source_toolchain'), illustrated_toolchain()),
+                'illustrated source toolchain changed')
     require(data["schema_version"] == 1 and data["kind"] == kind
             and data["evidence_kind"] == "unapproved_m2_paint_candidate"
-            and data["numeric_candidate_sha256"] == NUMERIC_SHA256,
+            and data.get("revision", "v1") == revision
+            and data.get("art_style") == style
+            and data["numeric_candidate_sha256"] == numeric_sha256,
             "candidate report identity mismatch")
     require(all(data[key] is False for key in ("numeric_freeze", "art_approved", "runtime_published")),
             "candidate report cannot grant approval")
     require(data["blend_sha256"] == digest(blend) and data["ocio"]["fallback"] is False,
             "source/OCIO mismatch")
-    sources = ("create_building_m2_scene.py", "building_m2_art.py", "building_clay_geometry.py",
-               "create_building_clay_scene.py", "validate_building_numeric_candidate.py")
+    sources = ("create_building_m2_scene.py", "building_m2_art.py", "building_clay_geometry.py", "building_infernal_style.py",
+               "create_building_clay_scene.py", "validate_building_numeric_candidate.py",
+               "validate_building_m2_indexed_faces.py")
+    if style in ILLUSTRATED_STYLES:
+        sources += ("building_mixer_uv_ink.py",)
+    if style in ("handpaint-v1", "weathered-v1"):
+        from building_handpaint_materials import source_snapshot, verify_saved_sources
+        require(pipeline.exact_json(data.get("handpaint_sources"), source_snapshot()), "handpaint input snapshot differs")
+        verify_saved_sources(blend, illustrated_environment())
+        sources += ("building_handpaint_materials.py", "verify_building_handpaint_blend.py")
     require(data["sources"] == {source: digest(WORKFLOW / "scripts" / source) for source in sources},
             "candidate authoring source changed")
-    layout = face_layout(kind)
+    layout = face_layout(kind, revision)
     require(data["face_layout"] == json.loads(json.dumps(layout)), "face layout drift")
     require(data["preview"] == contract["preview"], "preview drift")
     require(data["albedo_sha256"] == digest(output / "albedo.png"), "atlas digest drift")
@@ -84,12 +122,14 @@ def verify(kind, name):
     # inferred from the fact that deterministic pixels match their authoring code.
     with tempfile.TemporaryDirectory() as directory:
         expected = Path(directory) / "albedo.png"
-        paint(kind, expected, data["stage"])
+        paint(kind, expected, data["stage"], revision, style=style)
         with Image.open(expected) as a, Image.open(output / "albedo.png") as b:
             require(a.size == b.size == (512, 512) and b.mode == "RGBA"
                     and a.tobytes() == b.tobytes(), "atlas pixels differ")
     states = (("Empty", "Partial", "Full") if kind == "Tank"
               else ("IdleAngleZero", "QuarterTurn", "HalfTurn", "DiagonalPose"))
+    if style in ILLUSTRATED_STYLES:
+        states += ("ThreeQuarterTurn",)
     require(set(data["renders"]) == set(states), "missing state render")
     preview = contract["preview"]
     width, height = preview["canvas_px"]
@@ -111,7 +151,11 @@ def verify(kind, name):
             bounds = png.getchannel("A").getbbox()
             require(bounds is not None and bounds[0] > 0 and bounds[1] > 0
                     and bounds[2] < width and bounds[3] < height, "empty/clipped preview")
-    state_bounds = state_geometry(kind, output)
+    if style in ILLUSTRATED_STYLES:
+        require(len({data["renders"][state]["sha256"] for state in
+                ("IdleAngleZero", "QuarterTurn", "HalfTurn", "ThreeQuarterTurn")}) == 4,
+                "object-attached wear mark is not visible across four rotor poses")
+    state_bounds = state_geometry(kind, output, revision)
     for role, spec in contract["roles"].items():
         glb = output / f"{role}.glb"
         export = read_json(reports / f"{role}.glb.export.json")
@@ -123,53 +167,103 @@ def verify(kind, name):
                 and export["validation"]["summary"]["errors"] == 0
                 and export["validation"]["mesh_count"] == 1, "export provenance mismatch")
         check_uv(glb, geometry[role], layout[role])
-        subprocess.run([str(WORKFLOW / "bin/gltf-validate"), str(glb)], check=True, timeout=60)
+        subprocess.run([str(WORKFLOW / "bin/gltf-validate"), str(glb)], check=True, timeout=60,
+                       **({'env': illustrated_environment()} if style in ILLUSTRATED_STYLES else {}))
+    if style in ILLUSTRATED_STYLES:
+        require(pipeline.exact_json(data['source_toolchain'], illustrated_toolchain())
+                and read_json(report) == data
+                and illustrated_outputs(blend, output, report, reports) == frozen_outputs,
+                'illustrated source changed during verification')
     return {"schema_version": 1, "kind": kind, "stage": data["stage"],
-            "evidence_kind": "candidate_technical_only", "numeric_candidate_sha256": NUMERIC_SHA256,
+            "evidence_kind": "candidate_technical_only", "numeric_candidate_sha256": numeric_sha256,
+            "revision": revision, "numeric_source": str(numeric),
             "numeric_freeze": False, "art_approved": False, "runtime_published": False,
-            "state_geometry": state_bounds}
+            "state_geometry": state_bounds,
+            **({'source_inventory': frozen_outputs, 'source_toolchain': data['source_toolchain']}
+               if style in ILLUSTRATED_STYLES else {})}
 
 
-def build_bundle(kind, name, stage):
+def build_bundle(kind, name, stage, revision="v1", style=STYLE):
+    require(style in (STYLE, *ILLUSTRATED_STYLES) and (style not in ILLUSTRATED_STYLES
+            or kind == "MudMixer" and revision in {"v3", "v4", "v5", "v6"}), "unknown M2 style/kind/revision")
+    require((revision in {"v5", "v6"}) == (style in ("handpaint-v1", "weathered-v1")), "handpaint requires explicit Mixer v5/v6")
+    require(style != "weathered-v1" or kind == "MudMixer" and revision == "v6", "weathered pigment is Mixer v6 only")
+    require(revision != "v4" or style == "illustrated-v2", "v4 requires explicit revised ink")
     blend, output, report, reports = paths(kind, name)
     require(not any(path.exists() for path in (blend, output, report, reports)), "use fresh output name")
-    candidate_geometry(kind)
+    require(style not in ("handpaint-v1", "weathered-v1") or stage == "strokes", "handpaint is a final-stroke input")
+    candidate_geometry(kind, revision)
+    frozen = illustrated_toolchain() if style in ILLUSTRATED_STYLES else None
     output.mkdir(parents=True)
-    paint(kind, output / "albedo.png", stage)
-    env = dict(os.environ, BLENDER_SAFE_NO_NETWORK="1", OCIO=str(FIXTURES / "wall-calibration-v2.ocio"))
+    paint(kind, output / "albedo.png", stage, revision, style=style)
+    env = illustrated_environment() if style in ILLUSTRATED_STYLES else dict(os.environ, BLENDER_SAFE_NO_NETWORK="1", OCIO=str(FIXTURES / "wall-calibration-v2.ocio"))
     subprocess.run([str(WORKFLOW / "bin/blender-safe"), "--background", "--factory-startup",
                     "--python-exit-code", "2", "--python",
                     str(WORKFLOW / "scripts/create_building_m2_scene.py"), "--", kind,
-                    "--name", name, "--stage", stage], check=True, timeout=180, env=env)
-    for role, spec in load_pilot(kind)["roles"].items():
+                    "--name", name, "--stage", stage, "--revision", revision, "--style", style],
+                   check=True, timeout=180, env=env)
+    for role, spec in load_pilot(kind, revision)["roles"].items():
         subprocess.run([str(WORKFLOW / "bin/export-staging-glb"), str(blend),
                         f"building-m2/{name}/{role}.glb", str(spec["triangle_cap"]),
                         "--collection", spec["collection"], "--geometry-scale", "32",
                         "--materials-mode", "placeholder"], check=True, timeout=180, env=env)
-    result = verify(kind, name)
+    if frozen is not None:
+        require(pipeline.exact_json(frozen, illustrated_toolchain()), 'illustrated toolchain changed during build')
+        data = read_json(report)
+        data['source_toolchain'] = frozen
+        write_json_atomic(report, data)
+    result = verify(kind, name, revision, style)
     write_json_atomic(reports / "bundle.json", result)
     return result
 
 
-def prepare(kind, name, generation, destination, codec):
-    result = verify(kind, name)
+def prepare(kind, name, generation, destination, codec, revision="v1", style=STYLE):
+    result = verify(kind, name, revision, style)
     require(result["stage"] == "strokes", "runtime candidate requires the final paint stage")
     destination = pipeline.no_symlinks(destination)
     require(not destination.exists(), "use fresh candidate destination")
-    blend, output, report, _ = paths(kind, name)
-    contract = load_pilot(kind)
-    files = {"source.blend": blend.read_bytes(), "geometry.json": NUMERIC.read_bytes(),
-             "paint-report.json": report.read_bytes(), "albedo.png": (output / "albedo.png").read_bytes()}
+    require((revision in {"v5", "v6"}) == (style in ("handpaint-v1", "weathered-v1")), "handpaint requires explicit Mixer v5/v6")
+    require(style != "weathered-v1" or kind == "MudMixer" and revision == "v6", "weathered pigment is Mixer v6 only")
+    require(revision != "v4" or style == "illustrated-v2", "v4 requires explicit revised ink")
+    blend, output, report, reports = paths(kind, name)
+    contract = load_pilot(kind, revision)
+    numeric, _ = numeric_contract(kind, revision)
+    def unchanged():
+        require(illustrated_outputs(blend, output, report, reports) == result['source_inventory']
+                and pipeline.exact_json(illustrated_toolchain(), result['source_toolchain']),
+                'verified illustrated inputs changed during preparation')
+    if style in ILLUSTRATED_STYLES:
+        unchanged()
+    origins = {"source.blend": blend, "geometry.json": numeric,
+               "paint-report.json": report, "albedo.png": output / "albedo.png"}
     for role in contract["roles"]:
-        files[f"{role}.glb"] = (output / f"{role}.glb").read_bytes()
+        origins[f"{role}.glb"] = output / f"{role}.glb"
     for state in read_json(report)["renders"]:
-        files[f"{state}.png"] = (output / f"{state}.png").read_bytes()
+        origins[f"{state}.png"] = output / f"{state}.png"
+    if style in ("handpaint-v1", "weathered-v1"):
+        from building_handpaint_materials import source_paths
+        origins.update(source_paths())
+    files = {name: path.read_bytes() for name, path in origins.items()}
+    if style in ILLUSTRATED_STYLES:
+        require(all(pipeline.digest(payload) == (result['numeric_candidate_sha256'] if name == 'geometry.json'
+                    else result['source_inventory'].get(str(origins[name]), result['source_toolchain'].get('files', {}).get(str(origins[name])))) for name, payload in files.items()),
+                'copied illustrated source was not verified')
+        unchanged()
     source = destination / "authoring"
     for filename, data in files.items():
         pipeline.put(pipeline.rooted(source, filename), data)
     recipe_path = destination / "recipe.json"
-    pipeline.put(recipe_path, pipeline.canonical(recipe(kind, generation, source)))
+    value = recipe(kind, generation, source, revision)
+    if style in ILLUSTRATED_STYLES:
+        value["surface_paint"] = {"method": "uv_ink_v1"}
+    pipeline.put(recipe_path, pipeline.canonical(value))
     exported = pipeline.export(recipe_path, source, destination / "runtime", codec, authority="art_preview")
+    if style in ILLUSTRATED_STYLES:
+        pipeline.verify_set(destination / 'runtime', kind, codec)
+        unchanged()
+        require({path.name: pipeline.digest(path.read_bytes()) for path in source.iterdir()}
+                == {name: pipeline.digest(data) for name, data in files.items()},
+                'prepared source copy changed around export')
     result.update(identity=exported["identity"], runtime_root=str(destination / "runtime"),
                   production_candidate=False,
                   remaining=["independent numeric freeze", "all-consumer active lifecycle native",
@@ -185,18 +279,23 @@ def main():
     parser.add_argument("kind", choices=tuple(PILOTS))
     parser.add_argument("--name", required=True)
     parser.add_argument("--stage", choices=("planes", "strokes"), default="strokes")
+    parser.add_argument("--revision", choices=("v1", "v2", "v3", "v4", "v5", "v6"), default="v1")
+    parser.add_argument("--style", choices=(STYLE, *ILLUSTRATED_STYLES), default=STYLE)
     parser.add_argument("--generation", type=int)
     parser.add_argument("--destination", type=Path)
     parser.add_argument("--codec", type=Path)
     args = parser.parse_args()
+    require(args.revision == "v1" or args.kind == "MudMixer",
+            "v2 is only an unapproved MudMixer proposal")
     if args.action == "build":
-        result = build_bundle(args.kind, args.name, args.stage)
+        result = build_bundle(args.kind, args.name, args.stage, args.revision, args.style)
     elif args.action == "verify":
-        result = verify(args.kind, args.name)
+        result = verify(args.kind, args.name, args.revision, args.style)
     else:
         require(all(value is not None for value in (args.generation, args.destination, args.codec)),
                 "prepare requires generation, destination and already-built codec")
-        result = prepare(args.kind, args.name, args.generation, args.destination, args.codec)
+        result = prepare(args.kind, args.name, args.generation, args.destination, args.codec,
+                         args.revision, args.style)
     print(json.dumps(result, indent=2, sort_keys=True))
 
 

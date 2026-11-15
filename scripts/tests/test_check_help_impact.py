@@ -33,6 +33,7 @@ class HelpImpactPathTests(unittest.TestCase):
     def test_rust_cargo_and_runtime_text_data_are_production(self) -> None:
         for path in (
             "crates/bevy_app/src/lib.rs",
+            "crates/bevy_app/src/assets/building_asset_set/default_release_bindings.json",
             "crates/bevy_app/src/input_actions/model.rs",
             "crates/hw_ui/build.rs",
             "Cargo.toml",
@@ -47,6 +48,12 @@ class HelpImpactPathTests(unittest.TestCase):
             "vendor/parley/Cargo.toml",
         ):
             self.assertTrue(check_help_impact.is_production_path(path), path)
+
+    def test_compiled_release_inventory_alone_requires_a_fresh_help_decision(self) -> None:
+        decision = check_help_impact.evaluate_batch(
+            [], ["crates/bevy_app/src/assets/building_asset_set/default_release_bindings.json"]
+        )
+        self.assertFalse(decision.passed)
 
     def test_vendored_source_requires_a_fresh_help_decision(self) -> None:
         decision = check_help_impact.evaluate_batch(

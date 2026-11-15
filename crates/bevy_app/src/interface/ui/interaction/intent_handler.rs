@@ -1375,6 +1375,168 @@ mod tests {
     }
 
     #[test]
+    fn closing_all_soul_spa_slots_preserves_both_inflight_and_generating_tasks() {
+        use hw_core::{
+            relationships::{TaskWorkers, WorkingOn},
+            soul::DamnedSoul,
+        };
+        use hw_energy::{SoulSpaPhase, SoulSpaSite, SoulSpaSlotsChangeStatus, SoulSpaTile};
+        use hw_jobs::{
+            AssignedTask, Designation, GeneratePowerData, GeneratePowerPhase, TaskSlots, WorkType,
+        };
+
+        let mut app = domain_action_app();
+        app.init_resource::<SoulSpaSlotReceipts>().add_systems(
+            Update,
+            collect_soul_spa_slot_receipts.after(handle_ui_intent),
+        );
+        let site = app
+            .world_mut()
+            .spawn(SoulSpaSite {
+                phase: SoulSpaPhase::Operational,
+                bones_delivered: 12,
+                ..default()
+            })
+            .id();
+        let mut occupants = Vec::new();
+        for (index, grid_pos) in [(0, 0), (1, 0), (0, -1), (1, -1)].into_iter().enumerate() {
+            let tile = app
+                .world_mut()
+                .spawn((
+                    SoulSpaTile {
+                        parent_site: site,
+                        grid_pos,
+                    },
+                    Designation {
+                        work_type: WorkType::GeneratePower,
+                    },
+                    TaskSlots::new(1),
+                ))
+                .id();
+            let phase = if index % 2 == 0 {
+                GeneratePowerPhase::GoingToTile
+            } else {
+                GeneratePowerPhase::Generating
+            };
+            let soul = app
+                .world_mut()
+                .spawn((
+                    DamnedSoul {
+                        dream: 37.,
+                        fatigue: 0.25,
+                        stress: 0.125,
+                        ..default()
+                    },
+                    WorkingOn(tile),
+                    AssignedTask::GeneratePower(GeneratePowerData {
+                        tile,
+                        tile_pos: Vec2::new(grid_pos.0 as f32, grid_pos.1 as f32),
+                        phase,
+                    }),
+                ))
+                .id();
+            occupants.push((soul, tile, phase, grid_pos));
+        }
+        for requested in [3, 2, 1, 0, 4] {
+            write_intent(
+                &mut app,
+                UiIntent::SetSoulSpaActiveSlots {
+                    target: site,
+                    active_slots: requested,
+                },
+            );
+            app.update();
+            let state = app.world().get::<SoulSpaSite>(site).unwrap();
+            assert_eq!(state.active_slots, requested);
+            assert_eq!(state.phase, SoulSpaPhase::Operational);
+            assert_eq!(state.bones_delivered, 12);
+            assert!(!state.has_available_slot(4));
+            assert_eq!(state.has_available_slot(0), requested > 0);
+            for &(soul, tile, expected_phase, grid_pos) in &occupants {
+                assert_eq!(app.world().get::<WorkingOn>(soul).unwrap().0, tile);
+                assert_eq!(
+                    app.world()
+                        .get::<TaskWorkers>(tile)
+                        .unwrap()
+                        .iter()
+                        .copied()
+                        .collect::<Vec<_>>(),
+                    vec![soul]
+                );
+                assert_eq!(app.world().get::<TaskSlots>(tile).unwrap().max, 1);
+                assert_eq!(
+                    app.world().get::<Designation>(tile).unwrap().work_type,
+                    WorkType::GeneratePower
+                );
+                let AssignedTask::GeneratePower(task) =
+                    app.world().get::<AssignedTask>(soul).unwrap()
+                else {
+                    panic!("slot edit replaced active task")
+                };
+                assert_eq!(task.tile, tile);
+                assert_eq!(task.phase, expected_phase);
+                assert_eq!(
+                    task.tile_pos,
+                    Vec2::new(grid_pos.0 as f32, grid_pos.1 as f32)
+                );
+                let vitals = app.world().get::<DamnedSoul>(soul).unwrap();
+                assert_eq!(
+                    (vitals.dream, vitals.fatigue, vitals.stress),
+                    (37., 0.25, 0.125)
+                );
+            }
+        }
+        let receipts = &app.world().resource::<SoulSpaSlotReceipts>().0;
+        assert_eq!(receipts.len(), 5);
+        for (receipt, requested) in receipts.iter().zip([3, 2, 1, 0, 4]) {
+            assert_eq!(receipt.target, site);
+            assert_eq!(
+                receipt.status,
+                SoulSpaSlotsChangeStatus::Applied {
+                    requested,
+                    applied: requested,
+                    clamped: false
+                }
+            );
+        }
+    }
+
+    #[test]
+    fn paused_soul_spa_slot_change_is_not_replayed_after_resume() {
+        use hw_energy::{SoulSpaPhase, SoulSpaSite};
+        let mut app = domain_action_app();
+        app.init_resource::<SoulSpaSlotReceipts>().add_systems(
+            Update,
+            collect_soul_spa_slot_receipts.after(handle_ui_intent),
+        );
+        let site = app
+            .world_mut()
+            .spawn(SoulSpaSite {
+                phase: SoulSpaPhase::Operational,
+                ..default()
+            })
+            .id();
+        app.world_mut().resource_mut::<Time<Virtual>>().pause();
+        write_intent(
+            &mut app,
+            UiIntent::SetSoulSpaActiveSlots {
+                target: site,
+                active_slots: 0,
+            },
+        );
+        for _ in 0..3 {
+            app.update();
+        }
+        app.world_mut().resource_mut::<Time<Virtual>>().unpause();
+        app.update();
+        assert_eq!(
+            app.world().get::<SoulSpaSite>(site).unwrap().active_slots,
+            4
+        );
+        assert!(app.world().resource::<SoulSpaSlotReceipts>().0.is_empty());
+    }
+
+    #[test]
     fn power_priority_intents_revalidate_target_and_never_repair_missing_policy() {
         use hw_energy::{
             PowerConsumer, PowerConsumerPolicy, PowerConsumerPolicyChangeOutcome,

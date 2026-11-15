@@ -6,6 +6,7 @@ use crate::plugins::startup::Building3dHandles;
 use crate::systems::visual::building3d_cleanup::{
     building_presentation_transform, structural_presentation_state,
 };
+use bevy::ecs::{entity::EntityHashSet, query::QueryState};
 use bevy::prelude::*;
 use hw_core::relationships::{StoredItems, TaskWorkers};
 use hw_core::visual_mirror::{MudMixerVisualState, StockpileVisualState};
@@ -21,6 +22,14 @@ pub struct EquipmentRoot {
     // Presentation-only phase: load creates a new root at angle zero. Idle and
     // pause retain the phase; generation replacement retains the owner's phase.
     rotor_angle: f32,
+}
+
+#[cfg(feature = "profiling")]
+impl EquipmentRoot {
+    /// Actual consumer generation, not the requested or merely ready identity.
+    pub(crate) fn observed_identity(&self) -> Option<&BuildingAssetSetIdentity> {
+        self.identity.as_ref()
+    }
 }
 
 // M2 clay values, checked against the authoring fixtures by the regression test.
@@ -51,11 +60,116 @@ struct EquipmentPart {
 struct GenerationMaterials {
     identity: BuildingAssetSetIdentity,
     opaque: Handle<TopDownStructuralMaterial>,
+    tank_partial_water: Option<Handle<TopDownStructuralMaterial>>,
+    tank_paint_body: Option<Handle<TopDownStructuralMaterial>>,
     slot_on: Handle<TopDownStructuralMaterial>,
+}
+
+/// Passive material facts shared by native observers; this never admits a set.
+#[cfg(feature = "profiling")]
+fn ink_base_matches(base: &StandardMaterial) -> bool {
+    base.base_color == Color::WHITE
+        && !base.unlit
+        && base.alpha_mode == AlphaMode::Opaque
+        && base.normal_map_texture.is_none()
+        && base.occlusion_texture.is_none()
+        && base.metallic_roughness_texture.is_none()
+        && base.perceptual_roughness == 1.0
+        && base.reflectance == 0.0
+        && base.metallic == 0.0
+}
+
+#[cfg(feature = "profiling")]
+pub(crate) fn surface_paint_material_matches(
+    material: &TopDownStructuralMaterial,
+    descriptor: &crate::assets::building_asset_set::BuildingAssetDescriptor,
+) -> bool {
+    descriptor.manifest.surface_paint.is_some()
+        && material.extension.uniforms.indoor_light_params.w == 4.0
+        && ink_base_matches(&material.base)
+        && material.base.base_color_texture.is_some()
+        && material.base.base_color_texture.as_ref() == descriptor.image("albedo")
+}
+
+#[cfg(feature = "profiling")]
+pub(crate) fn body_paint_snapshot(material: &TopDownStructuralMaterial) -> serde_json::Value {
+    let base = &material.base;
+    serde_json::json!({
+        "mode": material.extension.uniforms.indoor_light_params.w,
+        "canvas": material.extension.uniforms.shadow_style_params.to_array(),
+        "matte": material.extension.uniforms.shadow_style_tint.to_array(),
+        "ink_base": ink_base_matches(base),
+        "standard": base.base_color == Color::WHITE && !base.unlit
+            && base.alpha_mode == AlphaMode::Opaque && base.emissive == LinearRgba::BLACK
+            && base.emissive_texture.is_none() && base.normal_map_texture.is_none()
+            && base.occlusion_texture.is_none() && base.metallic_roughness_texture.is_none()
+            && base.perceptual_roughness == 1.0 && base.reflectance == 0.0 && base.metallic == 0.0
+    })
+}
+
+#[cfg(feature = "profiling")]
+pub(crate) fn body_paint_material_matches(
+    material: &TopDownStructuralMaterial,
+    descriptor: &crate::assets::building_asset_set::BuildingAssetDescriptor,
+) -> bool {
+    let Some(projection) = descriptor.manifest.body_paint_projection else {
+        return false;
+    };
+    let (canvas, matte) = projection.uniforms(&descriptor.manifest.world_preview);
+    let base = &material.base;
+    base.base_color_texture.as_ref()
+        == descriptor.image(&descriptor.manifest.world_preview.image_role)
+        && base.base_color_texture.is_some()
+        && base.base_color == Color::WHITE
+        && !base.unlit
+        && base.alpha_mode == AlphaMode::Opaque
+        && base.emissive == LinearRgba::BLACK
+        && base.emissive_texture.is_none()
+        && base.normal_map_texture.is_none()
+        && base.occlusion_texture.is_none()
+        && base.metallic_roughness_texture.is_none()
+        && base.perceptual_roughness == 1.0
+        && base.reflectance == 0.0
+        && base.metallic == 0.0
+        && material.extension.uniforms.indoor_light_params.w == 3.0
+        && material.extension.uniforms.shadow_style_params == canvas
+        && material.extension.uniforms.shadow_style_tint == matte
 }
 
 #[derive(Resource, Default)]
 pub(crate) struct EquipmentMaterials(Vec<GenerationMaterials>);
+
+type PartQuery = QueryState<(
+    &'static EquipmentPart,
+    &'static mut Visibility,
+    &'static mut MeshMaterial3d<TopDownStructuralMaterial>,
+    &'static mut Transform,
+)>;
+type SpaTileQuery = QueryState<(&'static SoulSpaTile, Option<&'static TaskWorkers>)>;
+
+/// World-specific query storage and empty scratch capacity for the synchronizer.
+/// Owner identities are recollected on every call, including while paused.
+pub struct EquipmentSyncCache {
+    roots_query: QueryState<(Entity, &'static Building3dVisual), With<EquipmentRoot>>,
+    parts_query: PartQuery,
+    spa_tiles_query: SpaTileQuery,
+    roots: Vec<(Entity, Entity)>,
+    children: Vec<Entity>,
+    seen: EntityHashSet,
+}
+
+impl FromWorld for EquipmentSyncCache {
+    fn from_world(world: &mut World) -> Self {
+        Self {
+            roots_query: world.query_filtered(),
+            parts_query: world.query(),
+            spa_tiles_query: world.query(),
+            roots: Vec::new(),
+            children: Vec::new(),
+            seen: EntityHashSet::default(),
+        }
+    }
+}
 
 pub fn spawn_equipment_root(
     commands: &mut Commands,
@@ -118,7 +232,7 @@ fn fallback_material(
     }
 }
 
-fn spa_mask(world: &mut World, owner: Entity, transform: &Transform) -> u8 {
+fn spa_mask(world: &World, owner: Entity, transform: &Transform, query: &mut SpaTileQuery) -> u8 {
     if world
         .get::<SoulSpaSite>(owner)
         .is_none_or(|site| site.phase != SoulSpaPhase::Operational)
@@ -130,7 +244,6 @@ fn spa_mask(world: &mut World, owner: Entity, transform: &Transform) -> u8 {
         transform.translation.truncate()
             - Vec2::from(shape.center_offset_tiles) * hw_core::constants::TILE_SIZE,
     );
-    let mut query = world.query::<(&SoulSpaTile, Option<&TaskWorkers>)>();
     query.iter(world).fold(0, |mask, (tile, workers)| {
         if tile.parent_site != owner || workers.is_none_or(|workers| workers.is_empty()) {
             return mask;
@@ -146,15 +259,20 @@ fn spa_mask(world: &mut World, owner: Entity, transform: &Transform) -> u8 {
 
 /// Exclusive access keeps root/leaf replacement atomic even for a late set or
 /// a newly rehydrated owner. No owner index survives world replacement.
-pub fn sync_equipment_structure(world: &mut World) {
+pub fn sync_equipment_structure(world: &mut World, mut scratch: Local<EquipmentSyncCache>) {
     world.resource_scope(|world, handles: Mut<Building3dHandles>| {
         world.resource_scope(|world, pool: Mut<BuildingAssetPool>| {
-            sync_structure(world, &handles, &pool);
+            sync_structure(world, &handles, &pool, &mut scratch);
         });
     });
 }
 
-fn sync_structure(world: &mut World, handles: &Building3dHandles, pool: &BuildingAssetPool) {
+fn sync_structure(
+    world: &mut World,
+    handles: &Building3dHandles,
+    pool: &BuildingAssetPool,
+    scratch: &mut EquipmentSyncCache,
+) {
     let delta = world.get_resource::<Time<Virtual>>().map_or(0.0, |time| {
         if time.is_paused() {
             0.0
@@ -169,14 +287,16 @@ fn sync_structure(world: &mut World, handles: &Building3dHandles, pool: &Buildin
         pool.descriptor(entry.identity.kind)
             .is_some_and(|set| set.manifest.identity == entry.identity)
     });
-    let mut roots = world.query_filtered::<(Entity, &Building3dVisual), With<EquipmentRoot>>();
-    let roots: Vec<_> = roots
-        .iter(world)
-        .map(|(entity, visual)| (entity, visual.owner))
-        .collect();
-    let mut seen = bevy::ecs::entity::EntityHashSet::default();
-    for (root, owner) in roots {
-        if !seen.insert(owner) {
+    scratch.roots.clear();
+    scratch.seen.clear();
+    scratch.roots.extend(
+        scratch
+            .roots_query
+            .iter(world)
+            .map(|(entity, visual)| (entity, visual.owner)),
+    );
+    for (root, owner) in scratch.roots.iter().copied() {
+        if !scratch.seen.insert(owner) {
             world.despawn(root);
             continue;
         }
@@ -227,11 +347,11 @@ fn sync_structure(world: &mut World, handles: &Building3dHandles, pool: &Buildin
             .get::<EquipmentRoot>(root)
             .is_some_and(|current| current.identity.as_ref() != identity);
         if replace {
-            let children: Vec<_> = world
-                .get::<Children>(root)
-                .map(|children| children.iter().collect())
-                .unwrap_or_default();
-            for child in children {
+            scratch.children.clear();
+            if let Some(children) = world.get::<Children>(root) {
+                scratch.children.extend(children.iter());
+            }
+            for child in scratch.children.iter().copied() {
                 if world.get::<EquipmentPart>(child).is_some() {
                     world.despawn(child);
                 }
@@ -242,6 +362,11 @@ fn sync_structure(world: &mut World, handles: &Building3dHandles, pool: &Buildin
                     .iter()
                     .any(|entry| &entry.identity == identity.unwrap())
                 {
+                    #[cfg(feature = "profiling")]
+                    let pilot = (kind == BuildingType::Tank).then(|| world.get_resource::<crate::assets::building_asset_set::tank_illustration_pilot::TankPilotPaint>()).flatten()
+                        .filter(|pilot| pilot.matches_identity(&set.manifest.identity)
+                            && world.get_resource::<crate::assets::building_asset_set::gallery_capture::GalleryCaptureSession>().is_some_and(|session| matches!(session, crate::assets::building_asset_set::gallery_capture::GalleryCaptureSession::TankPilot(_))))
+                        .map(|pilot| (pilot.image.clone(), pilot.session.paint.clone()));
                     let mut assets = world.resource_mut::<Assets<TopDownStructuralMaterial>>();
                     let mut material = assets
                         .get(&handles.equipment_material)
@@ -251,7 +376,58 @@ fn sync_structure(world: &mut World, handles: &Building3dHandles, pool: &Buildin
                     material.base.base_color_texture = set.image("albedo").cloned();
                     material.base.emissive = LinearRgba::BLACK;
                     material.base.emissive_texture = None;
+                    material.extension.uniforms.indoor_light_params.w =
+                        if kind == BuildingType::Tank {
+                            0.82
+                        } else if set.manifest.surface_paint.is_some() {
+                            4.0
+                        } else {
+                            0.0
+                        };
+                    let tank_paint_body = set.manifest.body_paint_projection.map(|projection| {
+                        let mut body = material.clone();
+                        body.base.base_color_texture =
+                            set.image(&set.manifest.world_preview.image_role).cloned();
+                        body.extension.uniforms.indoor_light_params.w = 3.0;
+                        let (canvas, matte) = projection.uniforms(&set.manifest.world_preview);
+                        body.extension.uniforms.shadow_style_params = canvas;
+                        body.extension.uniforms.shadow_style_tint = matte;
+                        assets.add(body)
+                    });
+                    #[cfg(feature = "profiling")]
+                    let tank_paint_body = tank_paint_body.or_else(|| {
+                        pilot.map(|(image, paint)| {
+                            let mut body = material.clone();
+                            body.base.base_color_texture = Some(image);
+                            body.extension.uniforms.indoor_light_params.w = 2.0;
+                            body.extension.uniforms.shadow_style_params = Vec4::new(
+                                paint.canvas_wu[0],
+                                paint.canvas_wu[1],
+                                paint.anchor_uv[0],
+                                paint.anchor_uv[1],
+                            );
+                            body.extension.uniforms.shadow_style_tint = Vec4::new(
+                                paint.matte_linear_rgb[0],
+                                paint.matte_linear_rgb[1],
+                                paint.matte_linear_rgb[2],
+                                1.0,
+                            );
+                            assets.add(body)
+                        })
+                    });
                     let opaque = assets.add(material.clone());
+                    // The lower water surface sits in the vessel's shade. A
+                    // bounded tint makes Partial distinguishable from Full in
+                    // the actual top-down view without changing water counts,
+                    // numeric heights, or the shared authored atlas.
+                    let tank_partial_water = if kind == BuildingType::Tank {
+                        material.base.base_color = Color::srgb(0.58, 0.70, 0.73);
+                        let partial = assets.add(material.clone());
+                        material.base.base_color = Color::WHITE;
+                        Some(partial)
+                    } else {
+                        None
+                    };
                     // Only active Spa slots use this material. The authored
                     // RGB mask controls surface emission, never a logical light.
                     material.base.emissive = LinearRgba::WHITE;
@@ -264,6 +440,8 @@ fn sync_structure(world: &mut World, handles: &Building3dHandles, pool: &Buildin
                     cache.0.push(GenerationMaterials {
                         identity: set.manifest.identity.clone(),
                         opaque,
+                        tank_partial_water,
+                        tank_paint_body,
                         slot_on,
                     });
                 }
@@ -310,7 +488,7 @@ fn sync_structure(world: &mut World, handles: &Building3dHandles, pool: &Buildin
             world.get_mut::<EquipmentRoot>(root).unwrap().identity = identity.cloned();
         }
         let mask = if kind == BuildingType::SoulSpa {
-            spa_mask(world, owner, &owner_transform)
+            spa_mask(world, owner, &owner_transform, &mut scratch.spa_tiles_query)
         } else {
             0
         };
@@ -331,21 +509,16 @@ fn sync_structure(world: &mut World, handles: &Building3dHandles, pool: &Buildin
                 .rem_euclid(std::f32::consts::TAU);
         }
         let rotor_angle = world.get::<EquipmentRoot>(root).unwrap().rotor_angle;
-        let children: Vec<_> = world
-            .get::<Children>(root)
-            .map(|children| children.iter().collect())
-            .unwrap_or_default();
+        scratch.children.clear();
+        if let Some(children) = world.get::<Children>(root) {
+            scratch.children.extend(children.iter());
+        }
         let constructing = world
             .get::<SoulSpaSite>(owner)
             .is_some_and(|site| site.phase == SoulSpaPhase::Constructing);
-        let mut parts = world.query::<(
-            &EquipmentPart,
-            &mut Visibility,
-            &mut MeshMaterial3d<TopDownStructuralMaterial>,
-            &mut Transform,
-        )>();
-        for child in children {
-            let Ok((part, mut visibility, mut handle, mut transform)) = parts.get_mut(world, child)
+        for child in scratch.children.iter().copied() {
+            let Ok((part, mut visibility, mut handle, mut transform)) =
+                scratch.parts_query.get_mut(world, child)
             else {
                 continue;
             };
@@ -400,10 +573,26 @@ fn sync_structure(world: &mut World, handles: &Building3dHandles, pool: &Buildin
                     .strip_prefix("slot")
                     .and_then(|index| index.parse::<u8>().ok())
                     .is_some_and(|index| index < 4 && mask & (1 << index) != 0);
-                if active {
+                if kind == BuildingType::Tank
+                    && part.name == "water"
+                    && state == StructuralPresentationState::TankPartial
+                {
+                    material
+                        .tank_partial_water
+                        .as_ref()
+                        .expect("Tank material includes its partial water tint")
+                        .clone()
+                } else if active {
                     material.slot_on.clone()
                 } else {
-                    material.opaque.clone()
+                    if kind == BuildingType::Tank
+                        && part.name == "body"
+                        && let Some(paint) = material.tank_paint_body.as_ref()
+                    {
+                        paint.clone()
+                    } else {
+                        material.opaque.clone()
+                    }
                 }
             } else {
                 fallback_material(kind, state, handles)
@@ -413,5 +602,8 @@ fn sync_structure(world: &mut World, handles: &Building3dHandles, pool: &Buildin
             }
         }
     }
+    scratch.roots.clear();
+    scratch.children.clear();
+    scratch.seen.clear();
     world.insert_resource(cache);
 }

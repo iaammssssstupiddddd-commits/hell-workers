@@ -12,6 +12,8 @@ mod format;
 mod load;
 mod metrics;
 mod native_acceptance;
+#[cfg(feature = "profiling")]
+pub(crate) mod observations;
 mod rehydrate;
 mod reset;
 mod saving;

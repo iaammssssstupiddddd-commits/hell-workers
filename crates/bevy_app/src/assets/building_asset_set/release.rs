@@ -1,15 +1,19 @@
-//! Explicit production bindings for released building asset sets.
-//!
-//! Production loading is opt-in even after a set has been promoted: the
-//! coordinator supplies an exact identity and canonical locator through
-//! `HW_BUILDING_ASSET_RELEASES`.  This keeps ordinary startup unchanged while
-//! making ReleaseApproved M2, paired M3 and complete M5 sets usable by the normal pool and
-//! presentation consumers.  No candidate or preview authority is accepted.
+//! Approved production bindings selected by an explicit override or the compiled
+//! release inventory. Empty defaults preserve fallback until guarded installation
+//! and independent release approval have supplied an exact complete group.
 
+use std::ffi::OsStr;
 use std::path::{Component, Path};
 
 use bevy::prelude::*;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
+
+#[cfg(feature = "profiling")]
+mod audit;
+#[cfg(feature = "profiling")]
+pub(crate) mod gallery;
+#[cfg(feature = "profiling")]
+pub(crate) mod tank_illustration_pilot;
 
 use super::{
     BuildingAssetAuthority, BuildingAssetKind, BuildingAssetPool, BuildingAssetRequest,
@@ -18,8 +22,23 @@ use super::{
 
 const RELEASE_ENV: &str = "HW_BUILDING_ASSET_RELEASES";
 const ART_SESSION_ENV: &str = "HW_BUILDING_ART_SESSION";
+const DEFAULT_RELEASES: &str = include_str!("default_release_bindings.json");
 
-#[derive(Debug, Clone, Deserialize)]
+// Dedicated acceptance sessions must select their own inputs. Profiling by itself
+// is not a session and must exercise the same defaults as an ordinary build.
+const ISOLATED_SESSION_ENVS: &[&str] = &[
+    ART_SESSION_ENV,
+    "HW_BUILDING_ORDINARY_ART_SESSION",
+    "HW_BUILDING_PRODUCTION_OBSERVATIONS",
+    "HW_M2_ACCEPTANCE_PROBE",
+    "HW_BRIDGE_ACCEPTANCE_PROBE",
+    "HW_NATIVE_UI_ROOT",
+    "HW_NATIVE_SAVE_LOAD_ACCEPTANCE_ARTIFACT",
+    "HW_NATIVE_DECONSTRUCTION_ACCEPTANCE_ARTIFACT",
+    "HW_NATIVE_NOTIFICATION_ACCEPTANCE_ARTIFACT",
+];
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 struct ReleaseBinding {
     identity: BuildingAssetSetIdentity,
@@ -36,6 +55,74 @@ struct BuildingAssetReleaseBindings(Vec<ReleaseBinding>);
 pub(crate) struct M6Comparison {
     pub candidate: bool,
     pub identities: Vec<BuildingAssetSetIdentity>,
+    pub pre_release: bool,
+    pub group: Option<super::group_comparison::Declaration>,
+}
+
+#[cfg(feature = "profiling")]
+impl M6Comparison {
+    pub(crate) fn loaded_identities(&self) -> impl Iterator<Item = &BuildingAssetSetIdentity> {
+        self.identities.iter().filter(|id| {
+            self.group
+                .as_ref()
+                .map_or(self.candidate, |group| group.loads(id, self.candidate))
+        })
+    }
+
+    pub(crate) fn loads_kind(&self, kind: BuildingAssetKind) -> bool {
+        self.loaded_identities()
+            .any(|identity| identity.kind == kind)
+    }
+
+    pub(crate) fn mesh_entities_per_copy(&self) -> usize {
+        5 + usize::from(self.loads_kind(BuildingAssetKind::Tank))
+            + usize::from(self.loads_kind(BuildingAssetKind::MudMixer))
+            + 4 * usize::from(self.loads_kind(BuildingAssetKind::SoulSpa))
+    }
+
+    pub(crate) fn unique_target_meshes(&self) -> usize {
+        let structural = [
+            BuildingAssetKind::Tank,
+            BuildingAssetKind::MudMixer,
+            BuildingAssetKind::RestArea,
+            BuildingAssetKind::SoulSpa,
+        ];
+        1 + usize::from(structural.iter().any(|kind| !self.loads_kind(*kind)))
+            + self
+                .loaded_identities()
+                .map(|id| id.kind.mesh_roles().len())
+                .sum::<usize>()
+    }
+
+    pub(crate) fn foreground_kinds(&self) -> usize {
+        self.loaded_identities()
+            .filter(|id| id.kind.mesh_roles().is_empty())
+            .count()
+    }
+
+    pub(crate) fn prefetched_target_path(&self, server: &AssetServer) -> Option<&str> {
+        self.prefetched_target_path_with(|path| {
+            server
+                .get_path_id(bevy::asset::AssetPath::parse(path))
+                .is_some()
+        })
+    }
+
+    pub(super) fn prefetched_target_path_with(
+        &self,
+        mut managed: impl FnMut(&str) -> bool,
+    ) -> Option<&str> {
+        let mut prefetched = None;
+        // Consume every lookup in both modes, including when one path is managed.
+        // Control-only observer work would understate the measured asset increment.
+        for path in self.group.as_ref()?.target_paths() {
+            let present = managed(path);
+            if !self.candidate && present && prefetched.is_none() {
+                prefetched = Some(path);
+            }
+        }
+        prefetched
+    }
 }
 
 #[cfg(feature = "profiling")]
@@ -53,6 +140,8 @@ fn comparison(mode: &str, bindings: &[ReleaseBinding]) -> Result<M6Comparison, S
     };
     Ok(M6Comparison {
         candidate,
+        pre_release: false,
+        group: None,
         identities: bindings
             .iter()
             .map(|binding| binding.identity.clone())
@@ -128,34 +217,101 @@ fn validate_bindings(bindings: &[ReleaseBinding]) -> Result<(), String> {
     Ok(())
 }
 
-/// Configure explicit production requests without granting approval.
-///
-/// The environment value is a JSON array of `{identity, locator}` objects,
-/// one per kind.  Missing configuration is a no-op, preserving ordinary
-/// startup and the existing fallback presentation.  Art-preview sessions and
-/// production requests are mutually exclusive so one startup cannot race two
-/// authority paths for the same kind.
+fn isolated_startup(performance: bool, present: impl Fn(&str) -> bool) -> bool {
+    performance || ISOLATED_SESSION_ENVS.iter().any(|name| present(name))
+}
+
+/// Select explicit inputs without silently falling back on malformed overrides.
+/// An empty *compiled* inventory means no production requests, not an approval.
+fn select_bindings(
+    explicit: Option<&OsStr>,
+    isolated: bool,
+    defaults: &str,
+) -> Result<Option<Vec<ReleaseBinding>>, String> {
+    let (raw, is_default) = match explicit {
+        Some(raw) => (
+            raw.to_str()
+                .ok_or("production release override must be UTF-8")?,
+            false,
+        ),
+        None if isolated => return Ok(None),
+        None => (defaults, true),
+    };
+    let bindings: Vec<ReleaseBinding> =
+        serde_json::from_str(raw).map_err(|error| error.to_string())?;
+    if is_default && bindings.is_empty() {
+        return Ok(None);
+    }
+    validate_bindings(&bindings)?;
+    Ok(Some(bindings))
+}
+
+/// Configure exact ReleaseApproved inputs. Explicit configuration replaces the
+/// compiled inventory. Dedicated acceptance and performance sessions never use
+/// implicit defaults; they retain their own admission and authority contracts.
 pub fn configure_building_asset_releases(app: &mut App) -> Result<(), String> {
+    if std::env::var_os("HW_BUILDING_TANK_ILLUSTRATION_PILOT").is_some() {
+        #[cfg(feature = "profiling")]
+        return tank_illustration_pilot::configure(app);
+        #[cfg(not(feature = "profiling"))]
+        return Err("Tank illustration pilot requires profiling".into());
+    }
+    if std::env::var_os("HW_BUILDING_RELEASE_GALLERY_SESSION").is_some() {
+        #[cfg(feature = "profiling")]
+        return gallery::configure(app);
+        #[cfg(not(feature = "profiling"))]
+        return Err("released gallery requires the profiling feature".into());
+    }
+    if std::env::var_os("HW_BUILDING_GROUP_ART_SESSION").is_some() {
+        #[cfg(feature = "profiling")]
+        return super::group_art::configure(app);
+        #[cfg(not(feature = "profiling"))]
+        return Err("group gallery requires the profiling feature".into());
+    }
+    if std::env::var_os("HW_BUILDING_GROUP_COMPARISON").is_some() {
+        #[cfg(feature = "profiling")]
+        return super::group_comparison::configure(app);
+        #[cfg(not(feature = "profiling"))]
+        return Err("group comparison requires the profiling feature".into());
+    }
+    if std::env::var_os("HW_BUILDING_M6_CANDIDATES").is_some() {
+        #[cfg(feature = "profiling")]
+        return super::candidate_comparison::configure(app);
+        #[cfg(not(feature = "profiling"))]
+        return Err("candidate comparison requires the profiling feature".into());
+    }
+    if std::env::var_os("HW_BUILDING_ORDINARY_ART_SESSION").is_some()
+        && !cfg!(feature = "profiling")
+    {
+        return Err("ordinary art feedback requires the profiling feature".into());
+    }
+    #[cfg(feature = "profiling")]
+    super::ordinary_art::configure(app)?;
     #[cfg(feature = "profiling")]
     super::observations::configure(app)?;
-    let m6 = std::env::var("HW_BUILDING_M6_MODE").ok();
+    let m6 = std::env::var_os("HW_BUILDING_M6_MODE")
+        .map(|raw| raw.into_string().map_err(|_| "M6 mode must be UTF-8"))
+        .transpose()?;
     if m6.is_some() && !cfg!(feature = "profiling") {
         return Err("M6 comparison requires the profiling feature".into());
     }
-    let Ok(raw) = std::env::var(RELEASE_ENV) else {
-        if m6.is_some() {
-            return Err("M6 comparison requires explicit release bindings even for control".into());
-        }
-        return Ok(());
-    };
-    if std::env::var_os(ART_SESSION_ENV).is_some() {
+    let explicit = std::env::var_os(RELEASE_ENV);
+    if explicit.is_some() && std::env::var_os(ART_SESSION_ENV).is_some() {
         return Err(format!(
             "{RELEASE_ENV} cannot be combined with {ART_SESSION_ENV}"
         ));
     }
-    let bindings: Vec<ReleaseBinding> =
-        serde_json::from_str(&raw).map_err(|error| error.to_string())?;
-    validate_bindings(&bindings)?;
+    if m6.is_some() && explicit.is_none() {
+        return Err("M6 comparison requires explicit release bindings even for control".into());
+    }
+    let performance = crate::plugins::startup::PerfScenarioConfig::try_from_process()
+        .map_err(|error| error.to_string())?
+        .enabled();
+    let isolated =
+        m6.is_some() || isolated_startup(performance, |name| std::env::var_os(name).is_some());
+    let Some(bindings) = select_bindings(explicit.as_deref(), isolated, DEFAULT_RELEASES)? else {
+        return Ok(());
+    };
     #[cfg(feature = "profiling")]
     if let Some(mode) = m6 {
         let config = comparison(&mode, &bindings)?;
@@ -165,6 +321,13 @@ pub fn configure_building_asset_releases(app: &mut App) -> Result<(), String> {
             return Ok(());
         }
     }
+    #[cfg(feature = "profiling")]
+    audit::configure(
+        app,
+        &bindings,
+        DEFAULT_RELEASES,
+        explicit.is_none() && !isolated,
+    );
     app.insert_resource(BuildingAssetReleaseBindings(bindings))
         .add_systems(Startup, request_releases);
     Ok(())
@@ -215,6 +378,62 @@ mod tests {
             "locator": format!("manifests/building-{slug}-v1.buildingset"),
         })
         .to_string()
+    }
+
+    #[test]
+    fn every_dedicated_session_and_performance_skip_implicit_production() {
+        assert!(!isolated_startup(false, |_| false));
+        assert!(isolated_startup(true, |_| false));
+        let m2 = format!("[{},{}]", binding("Tank"), binding("MudMixer"));
+        for key in ISOLATED_SESSION_ENVS {
+            let isolated = isolated_startup(false, |name| name == *key);
+            assert!(isolated, "{key}");
+            assert!(select_bindings(None, isolated, &m2).unwrap().is_none());
+        }
+    }
+
+    #[test]
+    fn empty_defaults_issue_no_requests_and_explicit_inputs_replace_defaults() {
+        assert!(select_bindings(None, false, "[]").unwrap().is_none());
+        let m2 = format!("[{},{}]", binding("Tank"), binding("MudMixer"));
+        let defaults = select_bindings(None, false, &m2).unwrap().unwrap();
+        assert_eq!(defaults.len(), 2);
+        assert!(select_bindings(None, true, &m2).unwrap().is_none());
+        // An explicit override is validated even in isolated sessions. The caller
+        // still enforces each session's existing mutual exclusion rules.
+        let explicit = select_bindings(Some(OsStr::new(&m2)), true, "invalid default")
+            .unwrap()
+            .unwrap();
+        assert_eq!(explicit[0].identity, defaults[0].identity);
+        for invalid in ["", "[]", "null", "not json"] {
+            assert!(select_bindings(Some(OsStr::new(invalid)), false, &m2).is_err());
+        }
+    }
+
+    #[test]
+    fn default_inventory_cannot_admit_candidates_or_noncanonical_locators() {
+        let m2 = format!("[{},{}]", binding("Tank"), binding("MudMixer"));
+        for invalid in [
+            m2.replace("release_approved", "isolated_candidate"),
+            m2.replace("release_approved", "art_preview"),
+            m2.replace("manifests/building-tank", "elsewhere/building-tank"),
+        ] {
+            assert!(select_bindings(None, false, &invalid).is_err());
+        }
+        let compiled: Vec<ReleaseBinding> = serde_json::from_str(DEFAULT_RELEASES).unwrap();
+        if !compiled.is_empty() {
+            validate_bindings(&compiled).unwrap();
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn non_utf8_override_never_silently_selects_defaults() {
+        use std::os::unix::ffi::OsStrExt;
+        let invalid = OsStr::from_bytes(&[0xff]);
+        for isolated in [false, true] {
+            assert!(select_bindings(Some(invalid), isolated, "[]").is_err());
+        }
     }
 
     #[test]

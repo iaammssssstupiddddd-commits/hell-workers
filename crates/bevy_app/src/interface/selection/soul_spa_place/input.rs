@@ -81,6 +81,12 @@ pub fn soul_spa_place_input_system(
         let rejection = validation
             .rejection(anchor)
             .expect("rejected SoulSpa placement must carry a reason");
+        #[cfg(feature = "profiling")]
+        super::super::building_place::observed_outcomes::record(
+            &mut commands,
+            serde_json::json!({"kind": "SoulSpa", "grid": anchor, "status": "Rejected",
+                "reason": format!("{:?}", rejection.reason)}),
+        );
         runtime.placement_feedback.show_recent_rejection(
             rejection.reason,
             rejection.grid,
@@ -96,7 +102,7 @@ pub fn soul_spa_place_input_system(
             .map(|(g, _)| g)
     });
 
-    super::spawn::spawn_soul_spa(
+    let placed = super::spawn::spawn_soul_spa(
         &mut commands,
         &mut runtime.world_map,
         &geometry.occupied_grids,
@@ -105,6 +111,15 @@ pub fn soul_spa_place_input_system(
         &runtime.game_assets,
         &runtime.handles_3d,
     );
+    #[cfg(feature = "profiling")]
+    super::super::building_place::observed_outcomes::record(
+        &mut commands,
+        serde_json::json!({"kind": "SoulSpa", "grid": anchor, "status": "BuildingCommitted",
+            "owner": format!("{:?}", placed.0), "footprint": geometry.occupied_grids,
+            "tile_owners": placed.1.iter().map(|owner| format!("{owner:?}")).collect::<Vec<_>>()}),
+    );
+    #[cfg(not(feature = "profiling"))]
+    let _ = placed;
     runtime.placement_feedback.clear_recent_failure();
 
     p.task_context.0 = TaskMode::None;

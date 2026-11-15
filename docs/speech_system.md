@@ -13,6 +13,14 @@
   roster/idle/squad由来の3 consumerも`SpeechVisualIngressSet`に入り、Actor後のtransformを読み、fixed-step auditのVisual停止条件に従います。
 - gameplay の即時副作用は対応する domain `EntityEvent` Observer に残し、SpeechPlugin に visual-only Observer を追加しません。
 
+### 吹き出しの削除所有権
+
+背景は吹き出しrootの`ChildOf`であり、寿命削除はrootの所有treeを一度だけ削除する。
+勧誘などの置換と寿命到達は同frameに起こり得るため、寿命cleanupはdeferred適用時に完全なEntity IDと
+`SpeechBubble`、期限を再照合する。先に置換/話者削除で消えたrootや、期限を更新したrootには作用しない。
+予約時の存在確認後に背景/親の個別despawnを積む方式は使わない。表示期間・優先度・文言・入力・gameplay効果は不変。
+実Recruit通知と寿命cleanupの両適用順、話者cascade、期限更新を回帰し、Bevyの実command警告も捕捉する。
+
 ### Soul (魂) のセリフ
 Soul は主に「感情」を絵文字で表現します。表示時は各感情に対応した色の **グロー（光彩）背景** が伴います。
 
@@ -121,6 +129,7 @@ Familiar は命令や状態を「ラテン語」で表現します。表示は *
 - 発火は `TimePlugin` が `PreUpdate` に登録する `check_delayed_command_queues` が担う（アプリ側の登録は不要）
 - デフォルトクロック基準のため、ゲームのポーズ/倍速（`Time` の pause / relative_speed）に追従する
 - **発火のキャンセル手段はない**。キャンセル・リセット・上書きが必要な時限処理には使わないこと（判定基準は `docs/DEVELOPMENT.md` の該当規約を参照）
+- 遅延queueはworld replacement後も残り得る。会話cooldownの期限処理は実行時に元の完全なEntity ID（generationを含む）を再取得し、生存している場合だけmarkerを除去する。ロードやdespawnで失われたSoul、同indexの別generationには作用せず、警告も発行しない。既存のVirtual pause・速度・期限は維持する。
 - ⚠️ 同一 Soul に 0.3 秒以内へ複数のリアクション（勧誘 + 激励など）が重なった場合、両方のバブルが表示される（旧実装は後勝ち上書きだった）。発火源はいずれも離散アクションのエッジトリガーであり、意図的に許容している
 
 ---

@@ -399,3 +399,30 @@ exact sRGB transferを使います。dirty diagnostic artifactは正式証跡へ
 - この構成は一般scene品質を検査します。Soulの製品表示はshared-pool billboardと
   P02 / P08 actual-window evidenceを正本とし、GLB clip / face atlasはrelease gateでは
   ありません。
+
+## 非橋9種の制作原本の引継ぎ
+
+採用済み設備と未採用prototypeのeditable原本を、[アセット運用](assets_workflow.md#非橋9種の制作原本と復旧情報)のsource libraryへ集約した。
+`.blend`だけに縮小せず、albedo/emissionとgeometry・paint reportも相対pathごと保存する。
+OCIO設定とgeneratorの実Git履歴を維持し、report中のhashや技術passをart/release承認へ読み替えない。
+旧prototype2版のgenerator hashは現Git履歴で未回収のためsource inventoryに明記し、旧自動生成の厳密再現は主張しない。
+その版のBlend/texture bytesは保全済みで、現行8正式世代のauthorityや復旧検証を変更しない。
+
+## 建設設備の世界観palette（2026-11-14）
+
+M2 Tank/MudMixer、M3 RestArea、M5 OutdoorLampの新規候補は`infernal-v1`を明示指定する。
+`building_infernal_style.py`の共通paletteと材質別描線で、黒ずんだ木・マットな錆鉄・風化した骨・補修布を描く。
+既存producerのlegacy既定値は旧原本再現用に維持し、M3 SoulSpaとM5の他3種を暗黙に塗り替えない。
+GLB/UVとPNG寸法/alphaの不変は実byteと画素で検証し、色変更をnumeric/性能/release承認へ読み替えない。
+採用原本・exact pipeline sourceは[原本library](assets_workflow.md)へ保全し、現行4件g3は
+[正式世代](building-asset-sets.md#2026-11-14-世界観統一の現行正式世代)を参照する。
+
+
+## Mixer/Spaの明示weathered素材
+
+`weathered-v1`はMudMixer v6／SoulSpa v2のstrokesだけに使用する。
+Mixerは元の手描き素材とpacked原本を維持し、外側ドラムだけの彩度・明度を抑える。
+Spaは骨と暗い区画のdiffuse atlasだけを描き替え、emissionは旧PNGと全bytes一致させる。
+誤kind/revision/stageを生成前に拒否し、旧styleのpixel SHAも回帰で維持する。
+source verifyとpackaged-byte verifyだけを混同せず、原本→authoring copy→公開recipe→runtime manifestを
+全bytesとidentityへ結合してから独立art/numericを審査する。正式世代は[asset仕様](building-asset-sets.md)を参照。

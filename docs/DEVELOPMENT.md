@@ -726,6 +726,7 @@ python3 scripts/perf.py run \
 - `--sizes`: `small`（50/4）、`medium`（200/12）、`large`（500/30）のSoul/Familiar数を選ぶ。`--souls`と`--familiars`は組で個別上書きする。
 - `--renders cpu|gpu`: CPU-only寄りまたは3D RtT込みの固定描画条件を選ぶ。`--repeat 3`、backend、adapter、window backend、present modeを明示して比較する。
 - binary の直接起動は起動経路のデバッグ用途だけにし、最終比較には使わない。CSV、native allocator / RSS、Tracy、RenderDocの採取条件と出力形式は[performance-profiling.md](performance-profiling.md)を正本とする。
+- Linux/GNUでは通常/profiling共通のApp前経路がarena上限2とmmap閾値128KiBを設定する。診断envで通常条件を代用せず、変更時はCapture/Memoryの両方を確認する。境界は[GNU allocatorの起動設定](performance-profiling.md#gnu-allocatorの起動設定)を参照。
 
 ## トラブルシューティング
 

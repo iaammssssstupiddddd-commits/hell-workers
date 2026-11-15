@@ -97,6 +97,28 @@ pub fn cleanup_actor_billboard_system(
     }
 }
 
+/// Billboards are independent XZ-plane entities, so owner visibility cannot
+/// propagate through ChildOf. In particular, RestingIn hides the logical Soul.
+pub fn sync_actor_billboard_visibility_system(
+    perf_toggles: Res<crate::RenderPerfToggles>,
+    owners: Query<&Visibility, (With<DamnedSoul>, Without<ActorBillboard3d>)>,
+    mut billboards: Query<(&ActorBillboard3d, &mut Visibility), Without<DamnedSoul>>,
+) {
+    for (billboard, mut visibility) in &mut billboards {
+        let next = if perf_toggles.scene_objects_enabled {
+            owners
+                .get(billboard.owner)
+                .copied()
+                .unwrap_or(Visibility::Hidden)
+        } else {
+            Visibility::Hidden
+        };
+        if *visibility != next {
+            *visibility = next;
+        }
+    }
+}
+
 pub fn sync_actor_billboard_system(mut context: ActorBillboardSyncContext) {
     let Ok(camera) = context.camera.single() else {
         return;
@@ -232,6 +254,46 @@ fn apply_billboard_state(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn independent_billboard_follows_rest_entry_exit_and_owner_removal() {
+        let mut app = App::new();
+        app.insert_resource(crate::RenderPerfToggles::gpu_baseline());
+        app.add_systems(Update, sync_actor_billboard_visibility_system);
+        let owner = app
+            .world_mut()
+            .spawn((DamnedSoul::default(), Visibility::Inherited))
+            .id();
+        let billboard = app
+            .world_mut()
+            .spawn((ActorBillboard3d { owner }, Visibility::Inherited))
+            .id();
+        app.update();
+        assert_eq!(
+            app.world().get::<Visibility>(billboard),
+            Some(&Visibility::Inherited)
+        );
+        app.world_mut().entity_mut(owner).insert(Visibility::Hidden);
+        app.update();
+        assert_eq!(
+            app.world().get::<Visibility>(billboard),
+            Some(&Visibility::Hidden)
+        );
+        app.world_mut()
+            .entity_mut(owner)
+            .insert(Visibility::Visible);
+        app.update();
+        assert_eq!(
+            app.world().get::<Visibility>(billboard),
+            Some(&Visibility::Visible)
+        );
+        app.world_mut().despawn(owner);
+        app.update();
+        assert_eq!(
+            app.world().get::<Visibility>(billboard),
+            Some(&Visibility::Hidden)
+        );
+    }
 
     #[test]
     fn billboard_frame_pool_is_finite() {

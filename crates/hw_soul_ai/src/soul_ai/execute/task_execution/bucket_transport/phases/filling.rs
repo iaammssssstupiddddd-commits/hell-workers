@@ -58,6 +58,14 @@ pub fn handle(
                     BucketTransportPhase::GoingToDestination,
                 ) {
                     PathSearchResult::Found(()) => {
+                        #[cfg(feature = "profiling")]
+                        let bucket_before = ctx
+                            .queries
+                            .reservation
+                            .resources
+                            .get(data.bucket)
+                            .ok()
+                            .map(|r| r.0);
                         commands.entity(data.bucket).try_insert((
                             ResourceItem(ResourceType::BucketWater),
                             Sprite {
@@ -69,6 +77,19 @@ pub fn handle(
                         commands
                             .entity(data.bucket)
                             .try_insert(hw_core::relationships::DeliveringTo(tank_entity));
+                        #[cfg(feature = "profiling")]
+                        if ctx.env.water_observations {
+                            crate::water_observations::RiverFillReceipt {
+                                worker: ctx.soul_entity,
+                                assignment: ctx.task_identity().assignment_entity,
+                                target: ctx.task_identity().current_target_entity,
+                                tank: tank_entity,
+                                bucket: data.bucket,
+                                world_epoch: ctx.world_epoch,
+                                bucket_before,
+                            }
+                            .queue(commands);
+                        }
                     }
                     PathSearchResult::Deferred => return TaskHandlerControl::Continue,
                     PathSearchResult::Unreachable => {
@@ -89,6 +110,7 @@ pub fn handle(
             let mut found_waters = Vec::new();
             for (res_entity, _, _, res_item, stored_in, _) in ctx.queries.resource_items.iter() {
                 if res_item.0 == ResourceType::Water
+                    && !ctx.water_claims.taken.contains(&res_entity)
                     && let Some(stored) = stored_in
                     && stored.0 == tank
                 {
@@ -99,7 +121,7 @@ pub fn handle(
                 }
             }
 
-            if !found_waters.is_empty() {
+            if found_waters.len() == BUCKET_CAPACITY as usize {
                 let mixer_entity = match data.destination {
                     BucketTransportDestination::Mixer(m) => m,
                     _ => {
@@ -120,12 +142,65 @@ pub fn handle(
                 };
                 let mixer_pos = mixer_transform.translation.truncate();
                 let route = update_bucket_destination_to_adjacent(ctx, mixer_pos);
-                if matches!(route, PathSearchResult::Deferred) {
-                    return TaskHandlerControl::Continue;
+                match route {
+                    PathSearchResult::Deferred => return TaskHandlerControl::Continue,
+                    PathSearchResult::Unreachable => {
+                        return abort::abort_and_drop_bucket_mixer(
+                            commands,
+                            ctx,
+                            data.bucket,
+                            tank,
+                            mixer_entity,
+                            soul_pos,
+                        );
+                    }
+                    PathSearchResult::Found(()) => {}
                 }
 
                 let take_amount = found_waters.len() as u32;
+                ctx.water_claims.buckets.insert(data.bucket);
+                #[cfg(feature = "profiling")]
+                let receipt = ctx.env.water_observations.then(|| {
+                    crate::water_observations::TankTakeReceipt {
+                        context: crate::water_observations::TransferContext {
+                            worker: ctx.soul_entity,
+                            assignment: ctx.task_identity().assignment_entity,
+                            target: ctx.task_identity().current_target_entity,
+                            tank,
+                            mixer: mixer_entity,
+                            bucket: data.bucket,
+                            carried_before: ctx.inventory.0,
+                            world_epoch: ctx.world_epoch,
+                            work_type: ctx.task_identity().current_work_type,
+                        },
+                        bucket_before: ctx
+                            .queries
+                            .reservation
+                            .resources
+                            .get(data.bucket)
+                            .ok()
+                            .map(|r| r.0),
+                        inputs: found_waters.clone(),
+                        inputs_before: found_waters
+                            .iter()
+                            .filter_map(|&entity| {
+                                ctx.queries.resource_items.get(entity).ok().map(
+                                    |(_, _, _, item, stored, loaded)| {
+                                        crate::water_observations::WaterInputObservation {
+                                            entity,
+                                            resource: item.0,
+                                            stored_in: stored.map(|r| r.0),
+                                            loaded_in: loaded.map(|r| r.0),
+                                        }
+                                    },
+                                )
+                            })
+                            .collect(),
+                        route_found: matches!(route, PathSearchResult::Found(())),
+                    }
+                });
                 for water_entity in found_waters {
+                    ctx.water_claims.taken.insert(water_entity);
                     commands.entity(water_entity).despawn();
                 }
 
@@ -153,8 +228,13 @@ pub fn handle(
                 commands
                     .entity(data.bucket)
                     .try_insert(hw_core::relationships::DeliveringTo(mixer_entity));
+                #[cfg(feature = "profiling")]
+                if let Some(receipt) = receipt {
+                    receipt.queue(commands);
+                }
             } else {
-                // 水が尽きた
+                // A Boolean BucketWater always means a full bucket. Do not turn
+                // 1..4 Water into a bucket that pickup later reinterprets as five.
                 let mixer = match data.destination {
                     BucketTransportDestination::Mixer(m) => m,
                     _ => {

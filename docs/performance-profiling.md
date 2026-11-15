@@ -27,6 +27,20 @@ feedbackは正式計測ではなく、得られたframe time等をbaselineへ採
 
 Memory buildは`profiling-memory`限定のglobal allocator wrapperを使う。`data/memory.csv`はmeasure区間のbaseline / peak / final live bytes、alloc / dealloc bytes・calls、realloc callsを記録し、runnerが収支恒等式とaccounting error 0を必須検証する。これはRust global allocatorを通る割当だけが対象で、C / GPU / `mmap`等はGNU timeのprocess最大RSSで補完する。
 
+### GNU allocatorの起動設定
+
+Linux/GNUの通常ゲームと全profiling buildは、`main`のApp/worker初期化前で
+arena上限2とmmap閾値131072Bを`mallopt`へ設定し、両方の成功を確認して各適用ログを出す。
+一方だけの成功を起動成功にせず、codec early-returnと他OS/非GNUの従来経路は維持する。
+診断用環境変数を通常実行の前提にしない。
+
+[GNU仕様](https://sourceware.org/glibc/manual/latest/html_node/Malloc-Tunable-Parameters.html)では、
+未指定時の128KiBからの動的調整と、明示した値への固定は異なる。
+この設定はallocatorの置換や上限memoryの保証ではなく、main以前の割当を回収するものでもない。
+大きなmmap-backed bufferの解放とmmap頻度のtrade-offを含むため、変更後は同sourceのCaptureとMemoryを測る。
+Rust liveのmeasure境界と、GNU timeの起動から終了までの最大RSSを同時点の量として差し引かない。
+source変更前の失敗や、環境介入だけの探索的診断を、通常binaryの性能合格へ読み替えない。
+
 ## 標準手順
 
 最初にrunner自身の検証fixtureを実行する。

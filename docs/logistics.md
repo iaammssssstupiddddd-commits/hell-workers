@@ -96,6 +96,8 @@ Source 側のみ手動操作し、Target 側は Bevy が自動更新する（tas
 
 ### 1.6 TransportRequest
 - `TransportRequest { kind, anchor, resource_type, issued_by, priority, stockpile_group }`
+  `issued_by`とdurable `ManagedBy`はproducerが所有する同一pair。作業員割当のFamiliarを
+  request管理者へ片側だけ上書きしない（Yard依頼の委譲でも発行ownerは保持）。
 - `TransportDemand { desired_slots, inflight }`
 - `desired_slots` は request が同時に持てる worker の総 ceiling、`inflight` は既存 request に付いた
   `TaskWorkers` / lease 状態を producer が再反映した値として扱う。policy-driven Stockpile request では
@@ -121,6 +123,12 @@ Source 側のみ手動操作し、Target 側は Bevy が自動更新する（tas
   timerが直後から進む。storage/mixer等の保護relationshipが残るitemだけ停止する。
 
 ## 2. TransportRequest 基盤
+
+建設取消の`spawn_refund_items`は従来と同じitem/位置/画像/個数を生成する。
+`construction_helpers::spawn_refund_items_observed`は同じprimitiveのcallbackで実予約Entity IDを
+通知するだけで、deferred適用や取消全体の成功を保証しない。明示profiling観測のBlueprint ownerが
+そのIDを後段で検証する。未対応資源を返却済みと合成せず、通常APIはno-op callbackを使う。
+通常playerの入力、数量契約、Soul所有の予約解放、save schemaを変更しない。
 
 `TransportRequestPlugin` は以下の順で実行されます。
 
@@ -295,11 +303,54 @@ assignment arbitrationが新しいrequest/workerを追加しない。既存in-fl
   - `Loading` フェーズで生成するため搬入先への `DeliveringTo` は挿入されない（Mixer 宛の予約は `ReserveMixerDestination` op で別途管理）。
   - 採取前は`collect_amount`分、採取後は`items`分のMixer容量をactive reservation signatureに保持する。同期・中断時もbuilderと同じ数量を再構築・解放する。
   - 需要計算: `needed = MUD_MIXER_CAPACITY - current - inflight`。`inflight` には `DeliverToMixerSolid+Sand` に割り当て済みの worker 数を使用し、過剰タスク発行を防止する。
+  - 猫車の到着は`Found`になった隣接pathの実終点またはMixer中心への近接で判定する。
+    2×2の中心から斜め終点までの距離だけを見て、到着後も搬入待ちを繰り返さない。
+    遠方/Deferredは荷下ろしせず、到達不能/消滅は既存cancelへ進む。材料増分はUnloadingだけで確定する。
 
 ### 4.4 MudMixer 水搬入 (`DeliverWaterToMixer`)
-- 水不足時に request を発行。
+- 水不足をバケツ容量（5個）で切り捨てた全杯数だけ request のslotを発行する。容量5のMixerに1〜4個残っている間は追加給水を割り当てず、残水の精製を妨げない。
 - 割り当て時に、エリア内の有効タンクと利用可能バケツを遅延解決して搬送。
+- sourceのWaterは空バケツなら5個以上を要求し、既存の水入りバケツは再利用できる。destinationは実在するMixer/Water用Stockpileとし、現在量＋（cache予約杯数＋同cycle shadow杯数）×5＋今回5が容量以下の場合だけ割り当てる。
 - 実行フェーズは内部的に `BucketTransport` の共通表現へ収束し、Tank→Mixer / River→Tank の流れを共通ハンドラで解釈する。
+- Tankからの取水は5個と経路`Found`が揃ってから確定する。`Deferred`は保留、到達不能/不足は非消費の中断とし、部分量をBooleanの`BucketWater`へ変換しない。Mixer投入も5個全量を格納できる場合だけ確定する。
+- 移動中に容量が不足した場合は、水入りバケツを保持して既存のretryable中断/自動返却へ戻す。部分投入して空バケツへ変換したり、精製可能なworkerを容量待ちで拘束しない。同一Execute呼出しの取水ID・変換済みbucket・投入予定量は一時claimで保護し、deferred Commandsによる二重消費/容量超過を防ぐ。
+
+#### 数量保存修正の検証（2026-11-10）
+
+- 修正commit `8ba10ec6951164abeedbc1d77a0236fb1b0ec5dd`。実handler6件、割当2件、需要1件の回帰、
+  `dev.py check`、変更別CI（contracts/tooling/rust）、通常/profiling Clippy警告0、Help exact snapshot、
+  変更Rustのrust-analyzerエラー/警告0、独立read-only reviewを確認した。
+- 変更別CIのbaseは`b29d7c143bdc346c52b620f7f0bc74135490b444`、検証sourceは
+  `fad4dbe9dd3837aa3943a19b0e2ade42fc47405e07fd4f415fa4db9f63f1f386`。
+- fresh通常入力試験`tak14-tank-mixer-supply-20261110-v11`（native source
+  `22b4b05df1d6429a0693e31f53d31fd197f870c99313c38e9ae8b14a7f0cbff0`）は**invalid**。
+  River由来の水入りバケツから5個を投入し、実精製2回でMud10/Water3になった後、製品満杯で停止した。
+  Tank50を維持し、TankTakeも追加MixerPourも発生せず、旧v10の部分投入は起きなかった。
+  ただしTank由来の全量搬入・その水での精製には未到達であり、この実機結果を全工程passと扱わない。
+- StasisMudは`can_store_in_stockpile()`で通常Stockpile対象外。保管場所追加案は実行前に棄却した。
+  既存の搬出先は床/壁の建設需要で、実猫車積載がMixerのmud在庫を減らす。
+  先行満水bucketがn杯なら、次のTank由来精製までに最低max(0,25n-5)個の搬出需要が必要。
+  正式Supply v6は普通床45tile（骨90/泥45）、実Full停止境界のexact5bucket返却・非所持を照合し、
+  n3以上はMixer配置前に拒否する。実TaskArea、骨採取/猫車経路、施工phaseも別途成立が必要。
+  本修正はこれらをseedしたり、容量/精製recipe/資源保管ruleを変えて試験を通さない。
+- 最終fresh `tak14-tank-mixer-supply-20261110-v22` は登録済み独立verify・seal/finalizeで**pass**。
+  対象HEAD `b65fff9191732045160d45110a3b7f72e2e61ad6`、native source
+  `34050f734b234ed62409f4ba85b0326c59181ee88e3202ed587c922ddb79e5f6`、harness
+  `796f644ee2e92bcb74fa1fd60b12cfdae5b814c3ce4a63039a9740464716ca45`。
+  1920×1080/UI scale1、X11、Intel Arc MTL/Vulkanの通常入力でTank施工・満水・Mixer施工・固体搬入を確認。
+  TankTake312（sample426、実Water5個）→MixerPour320（sample427、全量5個）→
+  RefineCommit360/369の同一item/owner源流を全prefixで検査した。6画像を目視、WARN/ERROR0。
+  実handlerの容量回復・満水再取得、取消/欠損先の非消費、予約解放、同pass競合回帰と
+  default/profiling全test・Clippy0、Help/変更別CI・独立read-only reviewも通過した。
+- 実機中に見つかったspeech expiryとEntity Listのdeferred二重削除も各所有者で修正し、
+  実Bevy警告を再現する回帰を追加。一時Despawn診断は撤去済み。旧invalid結果は成功へ変更しない。
+  v21は満水bucket再利用の`needs_fill=false`を旧verifierが誤拒否したためinvalid。
+  raw投入枝はstrict boolを検査し、Supplyの全MixerPourをRiverFill/TankTakeの源流に照合する。
+  専用Tank pairはtrueを要求し、再利用だけでTank由来の給水完了を証明しない。
+- このpassは数量保存と限定通常lifecycleの技術受入である。Mixer表示はbase assetのままであり、
+  独立アート採否、正式性能/Memory matrix、全対象のproduction promotion/releaseやTAK-14全体完了を意味しない。
+  完了した水量修正の一時計画と診断jobは、比較利用者を解除して整理する。候補原本・codec・通常Cargo cacheは別の継続用途を保持する。
+
 
 #### 自動精製のactivity集計
 

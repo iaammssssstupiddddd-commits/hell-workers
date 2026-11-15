@@ -8,6 +8,7 @@
 - `Designation` / `TaskSlots` / `WorkingOn` 等タスク関連 ECS Component の型定義
 - タスク関連イベントの定義（`hw_jobs/src/events.rs`）
 - タスク状態遷移ロジックの定義（データ型レベル）
+- `profiling`限定の実Blueprint配送receipt型と消費適用後の照合。観測resourceは明示sessionだけが初期化し、ゲーム操作・承認には使用しない
 
 ## 禁止事項（AI がやってはいけないこと）
 

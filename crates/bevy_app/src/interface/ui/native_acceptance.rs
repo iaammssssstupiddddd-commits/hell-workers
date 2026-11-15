@@ -7,6 +7,7 @@ use std::{
 };
 
 use bevy::ecs::message::MessageCursor;
+use bevy::input::mouse::MouseWheel;
 use bevy::prelude::*;
 use bevy::ui_widgets::{ScrollArea, ScrollbarThumb};
 use hw_core::{GameSettings, WorldEpoch};
@@ -22,8 +23,14 @@ use crate::systems::save::{SaveLoadOutcome, SaveStorageRoot};
 use crate::systems::settings::SettingsStorageRoot;
 
 mod bridge_planning;
+mod door_release_planning;
+mod m5_planning;
 mod progress_bars;
 mod refactor_rows;
+mod rest_area_planning;
+mod spa_planning;
+pub(crate) mod supply_workload;
+mod supply_worldgen;
 mod terrain_materials;
 
 pub struct NativeUiAcceptancePlugin {
@@ -113,7 +120,10 @@ impl Plugin for NativeUiAcceptancePlugin {
                 outcomes: Vec::new(),
                 task_cursor: MessageCursor::default(),
                 task_outcomes: Vec::new(),
+                wheels: WheelObservations::default(),
             })
+            .init_resource::<NativeTooltipObservation>()
+            .init_resource::<M2UiPublished>()
             .add_systems(
                 PostUpdate,
                 observe_ui
@@ -138,14 +148,92 @@ struct UiObserver {
     outcomes: Vec<String>,
     task_cursor: MessageCursor<TaskActionOutcome>,
     task_outcomes: Vec<Value>,
+    wheels: WheelObservations,
+}
+
+#[derive(Resource, Default)]
+struct M2UiPublished(Option<Value>);
+
+pub(crate) fn m2_last_published(world: &World) -> Value {
+    world
+        .get_resource::<M2UiPublished>()
+        .and_then(|value| value.0.clone())
+        .unwrap_or(Value::Null)
+}
+
+/// A mirror of the actual tooltip reducer target, never a target selector.
+#[derive(Resource, Default)]
+pub(crate) struct NativeTooltipObservation {
+    pub(crate) target: Option<Entity>,
+    pub(crate) epoch: Option<u64>,
+}
+
+impl NativeTooltipObservation {
+    pub(crate) fn record(
+        &mut self,
+        target: Option<hw_ui::interaction::tooltip::TooltipTarget>,
+        epoch: u64,
+    ) {
+        self.target = match target {
+            Some(hw_ui::interaction::tooltip::TooltipTarget::WorldEntity(entity)) => Some(entity),
+            _ => None,
+        };
+        self.epoch = Some(epoch);
+    }
+}
+
+#[derive(Default)]
+struct WheelObservations {
+    cursor: MessageCursor<MouseWheel>,
+    events: Vec<Value>,
+    overflow: bool,
+}
+
+impl WheelObservations {
+    fn observe(&mut self, messages: &Messages<MouseWheel>, epoch: u64, frame: u64) {
+        for event in self.cursor.read(messages) {
+            if self.events.len() == 128 {
+                self.overflow = true;
+                continue;
+            }
+            self.events.push(json!({
+                "index": self.events.len(), "frame": frame, "epoch": epoch,
+                "window": event.window.to_bits(), "delta": [event.x, event.y],
+                "unit": format!("{:?}", event.unit), "phase": format!("{:?}", event.phase),
+            }));
+        }
+    }
 }
 
 fn prepare_fixture(world: &mut World, scale: f32) {
     use hw_core::familiar::FamiliarPolicy;
     use hw_jobs::{Designation, PlayerIssuedDesignation, Priority, TaskSlots, Tree};
     world.resource_mut::<GameSettings>().ui_scale = scale;
+    if std::env::var("HW_NATIVE_UI_CASE")
+        .is_ok_and(|case| crate::assets::building_asset_set::acceptance::m2_ui_case(&case))
+    {
+        // M2's separately admitted one-time domain fixture owns preparation.
+        // Do not fall through to the generic navigation fixture below.
+        return;
+    }
+    if door_release_planning::enabled() {
+        door_release_planning::prepare(world);
+        return;
+    }
+    if m5_planning::enabled() {
+        m5_planning::prepare(world);
+        return;
+    }
     if bridge_planning::enabled() {
         bridge_planning::prepare(world);
+        return;
+    }
+    if rest_area_planning::enabled() {
+        rest_area_planning::prepare(world);
+        return;
+    }
+    if spa_planning::enabled() {
+        spa_planning::prepare(world);
         return;
     }
     if terrain_materials::enabled() {
@@ -312,6 +400,9 @@ fn visible_rect(world: &World, entity: Entity, viewport: Vec2) -> Option<[f32; 4
 }
 
 fn node_key(world: &World, entity: Entity) -> Option<String> {
+    if let Some(key) = crate::interface::selection::candidates::native_scroll_key(world, entity) {
+        return Some(key);
+    }
     if let Some(item) = world.get::<SoulListItem>(entity) {
         return Some(format!("soul:{}", item.0.to_bits()));
     }
@@ -358,6 +449,9 @@ fn node_key(world: &World, entity: Entity) -> Option<String> {
         .is_some()
     {
         return Some("dev-minimize".into());
+    }
+    if let Some(key) = crate::interface::selection::candidates::native_button_key(world, entity) {
+        return Some(key);
     }
     if let Some(button) = world.get::<MenuButton>(entity) {
         let mut ancestor = Some(entity);
@@ -422,6 +516,11 @@ fn node_key(world: &World, entity: Entity) -> Option<String> {
 }
 
 fn snapshot(world: &mut World, observer: &UiObserver) -> Value {
+    let primary_window = world
+        .query_filtered::<Entity, With<bevy::window::PrimaryWindow>>()
+        .single(world)
+        .ok()
+        .map(Entity::to_bits);
     let window = world
         .query::<&Window>()
         .single(world)
@@ -435,6 +534,7 @@ fn snapshot(world: &mut World, observer: &UiObserver) -> Value {
     let cursor = window
         .physical_cursor_position()
         .map(|position| [position.x, position.y]);
+    let window_focused = window.focused;
     let mut controls = serde_json::Map::new();
     let mut query = world.query_filtered::<Entity, With<Node>>();
     for entity in query.iter(world) {
@@ -471,6 +571,7 @@ fn snapshot(world: &mut World, observer: &UiObserver) -> Value {
         .map_or(0.0, |tooltip| tooltip.fade_alpha);
     let presentation = |entity: Entity| {
         json!({
+            "entity": entity.to_bits(),
             "rect": visible_rect(world, entity, viewport),
             "stack_index": world.get::<bevy::ui::ComputedStackIndex>(entity).map(|index| index.0),
         })
@@ -484,8 +585,12 @@ fn snapshot(world: &mut World, observer: &UiObserver) -> Value {
         .query_filtered::<(Entity, &Text, &TextColor), Or<(With<TooltipHeader>, With<TooltipBody>)>>()
         .iter(world)
         .map(|(entity, text, color)| json!({
+            "entity": entity.to_bits(),
+            "root": tooltip_root(world, entity).map(Entity::to_bits),
             "text": text.0, "alpha": color.0.alpha(),
             "rect": visible_rect(world, entity, viewport),
+            "fully_visible": full_text_rect(world, entity, viewport),
+            "primary_camera": primary_ui_camera(world, entity, primary_window, viewport),
         }))
         .collect::<Vec<_>>();
     let task_rows = world.query::<&TaskListItem>().iter(world).count();
@@ -514,6 +619,26 @@ fn snapshot(world: &mut World, observer: &UiObserver) -> Value {
         .query_filtered::<(&Transform, &Projection), With<hw_ui::camera::MainCamera>>()
         .iter(world)
         .map(|(transform, projection)| format!("{transform:?}:{projection:?}"))
+        .collect::<Vec<_>>();
+    let camera_numeric = world
+        .query_filtered::<(Entity, &Transform, &Projection, &Camera, Option<&bevy::camera::RenderTarget>), With<hw_ui::camera::MainCamera>>()
+        .iter(world)
+        .map(|(entity, transform, projection, camera, target)| {
+            json!({
+                "entity": entity.to_bits(), "position": transform.translation.to_array(),
+                "scale": transform.scale.to_array(),
+                "active": camera.is_active,
+                "target_window": match target {
+                    Some(bevy::camera::RenderTarget::Window(bevy::window::WindowRef::Primary)) => primary_window,
+                    Some(bevy::camera::RenderTarget::Window(bevy::window::WindowRef::Entity(entity))) => Some(entity.to_bits()),
+                    _ => None,
+                },
+                "orthographic_scale": match projection {
+                    Projection::Orthographic(value) => Some(value.scale),
+                    _ => None,
+                },
+            })
+        })
         .collect::<Vec<_>>();
     let center = world.resource::<NotificationCenter>();
     let scene = std::env::var("HW_NATIVE_UI_LAYOUT_SCENE").unwrap_or_else(|_| "management".into());
@@ -593,6 +718,7 @@ fn snapshot(world: &mut World, observer: &UiObserver) -> Value {
         "base_scale_factor": base_scale_factor,
         "dpi_mode": if terrain_materials::enabled() { "native" } else { "viewport-override" },
         "cursor": cursor,
+        "window_focused": window_focused,
         "mouse_left_pressed": world.resource::<ButtonInput<MouseButton>>().pressed(MouseButton::Left),
         "world_input_captured": world.resource::<UiInputState>().world_input_captured,
         "pointer_over_ui": world.resource::<UiInputState>().pointer_over_ui,
@@ -604,6 +730,7 @@ fn snapshot(world: &mut World, observer: &UiObserver) -> Value {
         "task_total": world.resource::<crate::interface::ui::panels::task_list::TaskListState>().snapshot.len(),
         "history_open": center.history_open(), "history_count": center.history_count(),
         "visible_history": visible_history, "tooltip_alpha": tooltip_alpha,
+        "tooltip_roots": world.query_filtered::<Entity, With<HoverTooltip>>().iter(world).map(Entity::to_bits).collect::<Vec<_>>(),
         "tooltip_presentation": tooltip_presentation, "tooltip_text": tooltip_text,
         "mode_presentation": mode_presentation,
         "catalog": format!("{:?}", world.resource::<crate::systems::save::SaveCatalogUi>().mode),
@@ -615,8 +742,44 @@ fn snapshot(world: &mut World, observer: &UiObserver) -> Value {
         "selected": world.resource::<hw_ui::selection::SelectedEntity>().0.map(Entity::to_bits),
         "controls": controls,
     });
+    let passive_input = json!({
+        "camera_numeric": camera_numeric,
+        "primary_window": primary_window,
+        "hovered": world.resource::<hw_core::selection::HoveredEntity>().0.map(Entity::to_bits),
+        "pointer_target": world.resource::<hw_core::selection::WorldPointerTarget>().primary.map(|value| value.entity.to_bits()),
+        "tooltip_target": world.resource::<NativeTooltipObservation>().target.map(Entity::to_bits),
+        "tooltip_epoch": world.resource::<NativeTooltipObservation>().epoch,
+        "wheel_events": observer.wheels.events,
+        "wheel_overflow": observer.wheels.overflow,
+    });
+    value.as_object_mut().expect("snapshot object").extend(
+        passive_input
+            .as_object()
+            .expect("passive input object")
+            .clone(),
+    );
     value["refactor_rows"] = refactor_rows::snapshot(world, viewport);
     value["bridge_planning"] = bridge_planning::snapshot(world);
+    if door_release_planning::enabled() {
+        value["door_release_planning"] = door_release_planning::snapshot(world);
+    }
+    value["rest_area_planning"] = rest_area_planning::snapshot(world);
+    if matches!(
+        std::env::var("HW_NATIVE_UI_CASE").as_deref(),
+        Ok("m2-mixer-candidate-planning"
+            | "m2-mixer-candidate-completion"
+            | "m2-tank-candidate-completion"
+            | "m2-tank-candidate-inflow"
+            | "m2-tank-candidate-full"
+            | "m2-tank-candidate-persistence")
+            | Ok("m2-tank-candidate-supply")
+    ) {
+        value["m2_planning"] = m5_planning::snapshot(world);
+    } else {
+        value["m5_planning"] = m5_planning::snapshot(world);
+    }
+    value["m2_ui"] = crate::assets::building_asset_set::acceptance::m2_ui_snapshot(world);
+    value["spa_planning"] = spa_planning::snapshot(world);
     value["progress_bars"] = progress_bars::snapshot(world);
     value["terrain_materials"] = terrain_materials::snapshot(world, observer);
     value
@@ -624,6 +787,61 @@ fn snapshot(world: &mut World, observer: &UiObserver) -> Value {
         .expect("snapshot object")
         .extend(layout.as_object().expect("layout object").clone());
     value
+}
+
+fn full_text_rect(world: &World, entity: Entity, viewport: Vec2) -> bool {
+    let Some(node) = world.get::<ComputedNode>(entity) else {
+        return false;
+    };
+    let Some(transform) = world.get::<UiGlobalTransform>(entity) else {
+        return false;
+    };
+    let Some(rect) = visible_rect(world, entity, viewport) else {
+        return false;
+    };
+    let min = transform.translation - node.size() * 0.5;
+    let max = transform.translation + node.size() * 0.5;
+    [min.x, min.y, max.x, max.y]
+        .iter()
+        .zip(rect)
+        .all(|(expected, actual)| {
+            expected.is_finite() && actual.is_finite() && (*expected - actual).abs() <= 0.01
+        })
+}
+
+fn tooltip_root(world: &World, entity: Entity) -> Option<Entity> {
+    let mut current = Some(entity);
+    for _ in 0..128 {
+        let entity = current?;
+        if world.get::<HoverTooltip>(entity).is_some() {
+            return Some(entity);
+        }
+        current = world.get::<ChildOf>(entity).map(ChildOf::parent);
+    }
+    None
+}
+
+fn primary_ui_camera(world: &World, entity: Entity, primary: Option<u64>, viewport: Vec2) -> bool {
+    use bevy::{camera::RenderTarget, window::WindowRef};
+    let Some(camera_entity) = world
+        .get::<ComputedUiTargetCamera>(entity)
+        .and_then(ComputedUiTargetCamera::get)
+    else {
+        return false;
+    };
+    let Some(camera) = world.get::<Camera>(camera_entity) else {
+        return false;
+    };
+    camera.is_active
+        && camera.viewport.is_none()
+        && camera.physical_viewport_size() == Some(viewport.as_uvec2())
+        && match world.get::<RenderTarget>(camera_entity) {
+            Some(RenderTarget::Window(WindowRef::Primary)) => primary.is_some(),
+            Some(RenderTarget::Window(WindowRef::Entity(target))) => {
+                Some(target.to_bits()) == primary
+            }
+            _ => false,
+        }
 }
 
 fn observe_ui(world: &mut World) {
@@ -656,6 +874,11 @@ fn observe_ui(world: &mut World) {
             .collect();
         observer.outcomes.extend(outcomes);
         let frame = observer.frame;
+        observer.wheels.observe(
+            world.resource::<Messages<MouseWheel>>(),
+            world.resource::<WorldEpoch>().get(),
+            frame,
+        );
         let task_outcomes = observer.task_cursor.read(world.resource::<Messages<TaskActionOutcome>>())
             .map(|outcome| json!({"entity": outcome.entity.to_bits(),
                 "action": format!("{:?}", outcome.action), "result": format!("{:?}", outcome.result),
@@ -668,10 +891,19 @@ fn observe_ui(world: &mut World) {
         if observer.outcomes.len() > 32 {
             observer.outcomes.drain(..16);
         }
+        if door_release_planning::enabled()
+            && let Err(reason) = door_release_planning::record_frame(world, &observer) {
+            error!("Door release input observation failed: {reason}");
+            world.write_message(AppExit::error());
+            return;
+        }
         if observer.frame < 46 || !observer.frame.is_multiple_of(3) {
             return;
         }
         let value = snapshot(world, &observer);
+        if std::env::var("HW_NATIVE_UI_CASE").is_ok_and(|case| crate::assets::building_asset_set::acceptance::m2_ui_case(&case)) {
+            world.resource_mut::<M2UiPublished>().0 = Some(value.clone());
+        }
         let temporary = observer.root.join("observed.tmp");
         let result = fs::write(&temporary, value.to_string())
             .and_then(|()| fs::rename(&temporary, observer.root.join("observed.json")));
@@ -680,4 +912,88 @@ fn observe_ui(world: &mut World) {
             world.write_message(AppExit::error());
         }
     });
+}
+
+#[cfg(test)]
+mod passive_input_tests {
+    use super::*;
+    use bevy::input::{mouse::MouseScrollUnit, touch::TouchPhase};
+    use hw_ui::interaction::tooltip::TooltipTarget;
+
+    #[test]
+    fn tooltip_mirror_clears_foreign_ui_targets_and_records_current_epoch() {
+        let entity = World::new().spawn_empty().id();
+        let mut observation = NativeTooltipObservation::default();
+        assert!(observation.epoch.is_none());
+        observation.record(Some(TooltipTarget::WorldEntity(entity)), 2);
+        assert_eq!(observation.target, Some(entity));
+        assert_eq!(observation.epoch, Some(2));
+        for target in [
+            Some(TooltipTarget::UiButton(entity)),
+            Some(TooltipTarget::PlacementFailure),
+            None,
+        ] {
+            observation.record(target, 3);
+            assert!(observation.target.is_none());
+            assert_eq!(observation.epoch, Some(3));
+        }
+    }
+
+    #[test]
+    fn wheel_cursor_observes_exact_messages_without_consuming_other_readers() {
+        let window = World::new().spawn(Window::default()).id();
+        let event = MouseWheel {
+            unit: MouseScrollUnit::Line,
+            x: 0.0,
+            y: -1.0,
+            window,
+            phase: TouchPhase::Moved,
+        };
+        let mut messages = Messages::default();
+        messages.write(event);
+        let mut observation = WheelObservations::default();
+        observation.observe(&messages, 4, 10);
+        observation.observe(&messages, 4, 11);
+        assert_eq!(observation.events.len(), 1);
+        assert_eq!(
+            observation.events[0],
+            json!({"index": 0, "frame": 10, "epoch": 4,
+            "window": window.to_bits(), "delta": [0.0, -1.0], "unit": "Line", "phase": "Moved"})
+        );
+        let mut other = MessageCursor::default();
+        assert_eq!(
+            other.read(&messages).copied().collect::<Vec<_>>(),
+            vec![event]
+        );
+        messages.write(MouseWheel {
+            unit: MouseScrollUnit::Pixel,
+            x: 2.0,
+            ..event
+        });
+        observation.observe(&messages, 5, 12);
+        assert_eq!(observation.events[1]["unit"], "Pixel");
+        assert_eq!(observation.events[1]["epoch"], 5);
+    }
+
+    #[test]
+    fn wheel_observation_cap_is_sticky_and_does_not_silently_drop_overflow() {
+        let mut messages = Messages::default();
+        let window = World::new().spawn(Window::default()).id();
+        for _ in 0..129 {
+            messages.write(MouseWheel {
+                unit: MouseScrollUnit::Line,
+                x: 0.0,
+                y: -1.0,
+                window,
+                phase: TouchPhase::Moved,
+            });
+        }
+        let mut observation = WheelObservations::default();
+        observation.observe(&messages, 0, 1);
+        assert_eq!(observation.events.len(), 128);
+        assert!(observation.overflow);
+        observation.observe(&messages, 1, 2);
+        assert!(observation.overflow);
+        assert_eq!(observation.events[127]["index"], 127);
+    }
 }

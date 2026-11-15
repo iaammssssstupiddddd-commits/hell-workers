@@ -3,6 +3,10 @@ use bevy::prelude::*;
 use hw_core::constants::*;
 use hw_core::ecs::drain_removed;
 
+#[cfg(test)]
+#[path = "update_tests.rs"]
+mod tests;
+
 type AddedBubbleQuery<'w, 's> = Query<'w, 's, &'static SpeechBubble, Added<SpeechBubble>>;
 type BubbleMutQuery<'w, 's> = Query<'w, 's, (Entity, &'static mut SpeechBubble)>;
 
@@ -17,14 +21,17 @@ pub fn update_speech_bubbles(
         bubble.elapsed += time.delta_secs();
 
         if bubble.elapsed >= bubble.duration {
-            if let Some(bg) = bubble.background
-                && let Ok(mut cmd) = commands.get_entity(bg)
-            {
-                cmd.despawn();
-            }
-            if let Ok(mut cmd) = commands.get_entity(entity) {
-                cmd.despawn();
-            }
+            // Recruitment may replace this bubble before deferred commands
+            // apply. Recheck the typed owner at that boundary, then remove its
+            // whole ChildOf tree once; never queue a separate child deletion.
+            commands.queue(move |world: &mut World| {
+                if world
+                    .get::<SpeechBubble>(entity)
+                    .is_some_and(|current| current.elapsed >= current.duration)
+                {
+                    world.despawn(entity);
+                }
+            });
             continue;
         }
 

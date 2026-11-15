@@ -3,6 +3,7 @@ use crate::app_contexts::{BuildContext, CompanionPlacementState, MoveContext, Ta
 use crate::assets::GameAssets;
 use crate::assets::building_asset_set::{BuildingAssetDescriptor, BuildingAssetPool};
 use crate::systems::visual::placement_ghost::{PlacementGhost, PlacementPartnerGhost};
+use bevy::ecs::query::QueryState;
 use bevy::prelude::*;
 use bevy::sprite::Anchor;
 use hw_core::game_state::{PlayMode, TaskMode};
@@ -20,7 +21,44 @@ struct SpriteFallback {
     anchor: Anchor,
 }
 
-fn apply(
+type BuildingQuery = QueryState<(
+    Entity,
+    &'static Building,
+    Option<&'static PoweredVisualState>,
+    Option<&'static Children>,
+)>;
+type BlueprintQuery = QueryState<(Entity, &'static Blueprint, Option<&'static BlueprintVisual>)>;
+
+/// Per-world query storage; scratch entity lists are empty between calls.
+pub struct PreviewSyncCache {
+    buildings: BuildingQuery,
+    blueprints: BlueprintQuery,
+    destinations: QueryState<(Entity, &'static MovePlantTask)>,
+    ghosts: QueryState<Entity, With<PlacementGhost>>,
+    partners: QueryState<Entity, With<PlacementPartnerGhost>>,
+    cards: QueryState<(&'static BuildingCatalogPreview, &'static mut ImageNode)>,
+    consumers: Vec<(Entity, BuildingType, Option<bool>)>,
+    overlays: Vec<(Entity, Entity, BuildingType)>,
+    entities: Vec<Entity>,
+}
+
+impl FromWorld for PreviewSyncCache {
+    fn from_world(world: &mut World) -> Self {
+        Self {
+            buildings: world.query(),
+            blueprints: world.query(),
+            destinations: world.query(),
+            ghosts: world.query_filtered(),
+            partners: world.query_filtered(),
+            cards: world.query(),
+            consumers: Vec::new(),
+            overlays: Vec::new(),
+            entities: Vec::new(),
+        }
+    }
+}
+
+pub(crate) fn apply(
     world: &mut World,
     entity: Entity,
     set: Option<&BuildingAssetDescriptor>,
@@ -124,60 +162,60 @@ fn ghost_kind(world: &World) -> Option<BuildingType> {
 /// Runs after the legacy preview writers, including Door. A reused ghost always
 /// gets the current mode's baseline before applying a descriptor, so an old
 /// production anchor cannot leak into a bucket, Wall, or other non-target.
-pub fn sync_building_previews(world: &mut World) {
+pub fn sync_building_previews(world: &mut World, mut scratch: Local<PreviewSyncCache>) {
     world.resource_scope(|world, pool: Mut<BuildingAssetPool>| {
         world.resource_scope(|world, assets: Mut<GameAssets>| {
-            sync_previews(world, &pool, &assets);
+            sync_previews(world, &pool, &assets, &mut scratch);
         });
     });
 }
 
-fn sync_previews(world: &mut World, pool: &BuildingAssetPool, assets: &GameAssets) {
-    let mut consumers = Vec::new();
-    let mut overlays = Vec::new();
-    let mut buildings = world.query::<(
-        Entity,
-        &Building,
-        Option<&PoweredVisualState>,
-        Option<&Children>,
-    )>();
-    for (entity, building, power, children) in buildings.iter(world) {
+fn sync_previews(
+    world: &mut World,
+    pool: &BuildingAssetPool,
+    assets: &GameAssets,
+    scratch: &mut PreviewSyncCache,
+) {
+    scratch.consumers.clear();
+    scratch.overlays.clear();
+    scratch.entities.clear();
+    for (entity, building, power, children) in scratch.buildings.iter(world) {
         if asset_kind(building.kind).is_some_and(|kind| kind.mesh_roles().is_empty()) {
             let powered = (building.kind == BuildingType::OutdoorLamp)
                 .then_some(power.is_some_and(|power| power.is_powered));
             if world.get::<Sprite>(entity).is_some() {
-                consumers.push((entity, building.kind, powered));
+                scratch.consumers.push((entity, building.kind, powered));
             }
             for child in children.into_iter().flat_map(|children| children.iter()) {
                 if world
                     .get::<hw_visual::layer::VisualLayerKind>(child)
                     .is_some()
                 {
-                    consumers.push((child, building.kind, powered));
+                    scratch.consumers.push((child, building.kind, powered));
                 }
             }
         }
     }
-    let mut blueprints = world.query::<(Entity, &Blueprint, Option<&BlueprintVisual>)>();
-    for (entity, blueprint, visual) in blueprints.iter(world) {
+    for (entity, blueprint, visual) in scratch.blueprints.iter(world) {
         if asset_kind(blueprint.kind).is_none() {
             continue;
         }
-        consumers.push((entity, blueprint.kind, None));
+        scratch.consumers.push((entity, blueprint.kind, None));
         if let Some(overlay) = visual.and_then(|visual| visual.pulse_overlay) {
-            overlays.push((overlay.entity, entity, blueprint.kind));
+            scratch
+                .overlays
+                .push((overlay.entity, entity, blueprint.kind));
         }
     }
-    let mut destinations = world.query::<(Entity, &MovePlantTask)>();
-    for (entity, task) in destinations.iter(world) {
+    for (entity, task) in scratch.destinations.iter(world) {
         if let Some(building) = world.get::<Building>(task.building) {
-            consumers.push((entity, building.kind, None));
+            scratch.consumers.push((entity, building.kind, None));
         }
     }
-    for (entity, kind, powered) in consumers {
+    for (entity, kind, powered) in scratch.consumers.iter().copied() {
         apply(world, entity, production(pool, kind), powered);
     }
-    for (overlay, parent, kind) in overlays {
+    for (overlay, parent, kind) in scratch.overlays.iter().copied() {
         let set = production(pool, kind);
         // Pulse children can be created after the parent already uses a set.
         // Their copied sprite is not a fallback; inherit the parent's baseline.
@@ -190,9 +228,8 @@ fn sync_previews(world: &mut World, pool: &BuildingAssetPool, assets: &GameAsset
         apply(world, overlay, set, None);
     }
     let current_kind = ghost_kind(world);
-    let mut ghosts = world.query_filtered::<Entity, With<PlacementGhost>>();
-    let ghosts: Vec<_> = ghosts.iter(world).collect();
-    for entity in ghosts {
+    scratch.entities.extend(scratch.ghosts.iter(world));
+    for entity in scratch.entities.iter().copied() {
         if current_kind == Some(BuildingType::Door) {
             // Door owns its final sprite. Release our old fallback handles only.
             world.entity_mut(entity).remove::<SpriteFallback>();
@@ -216,14 +253,13 @@ fn sync_previews(world: &mut World, pool: &BuildingAssetPool, assets: &GameAsset
             sprite.custom_size = Some(Vec2::new(2.0, 1.0) * hw_core::constants::TILE_SIZE);
         }
     }
-    let mut partners = world.query_filtered::<Entity, With<PlacementPartnerGhost>>();
-    let partners: Vec<_> = partners.iter(world).collect();
-    for entity in partners {
+    scratch.entities.clear();
+    scratch.entities.extend(scratch.partners.iter(world));
+    for entity in scratch.entities.iter().copied() {
         // Both placement and move partner ghosts represent the Tank parent.
         apply(world, entity, production(pool, BuildingType::Tank), None);
     }
-    let mut cards = world.query::<(&BuildingCatalogPreview, &mut ImageNode)>();
-    for (preview, mut node) in cards.iter_mut(world) {
+    for (preview, mut node) in scratch.cards.iter_mut(world) {
         if asset_kind(preview.0).is_none() {
             continue;
         }
@@ -234,4 +270,7 @@ fn sync_previews(world: &mut World, pool: &BuildingAssetPool, assets: &GameAsset
             node.image = image.clone();
         }
     }
+    scratch.consumers.clear();
+    scratch.overlays.clear();
+    scratch.entities.clear();
 }

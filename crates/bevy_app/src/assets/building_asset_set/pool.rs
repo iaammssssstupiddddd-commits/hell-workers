@@ -87,6 +87,8 @@ pub struct BuildingAssetPool {
     kinds: [KindPool; 9],
     #[cfg(feature = "profiling")]
     acceptance_identity: Option<BuildingAssetSetIdentity>,
+    #[cfg(feature = "profiling")]
+    comparison_identities: Vec<BuildingAssetSetIdentity>,
 }
 
 fn index(kind: BuildingAssetKind) -> usize {
@@ -160,7 +162,19 @@ impl BuildingAssetPool {
         if self.acceptance_identity.as_ref() == Some(identity) {
             return true;
         }
+        #[cfg(feature = "profiling")]
+        if self.comparison_identities.contains(identity) {
+            return true;
+        }
         false
+    }
+
+    #[cfg(feature = "profiling")]
+    pub(super) fn allow_comparison_identities(
+        &mut self,
+        identities: Vec<BuildingAssetSetIdentity>,
+    ) {
+        self.comparison_identities = identities;
     }
 
     /// The locator must be loaded through the registered policy-enforcing
@@ -336,8 +350,51 @@ impl BuildingAssetPool {
             .map(|set| &set.identity)
     }
 
+    #[cfg(test)]
+    pub(crate) fn install_body_paint_fixture(
+        &mut self,
+        generation: u64,
+    ) -> BuildingAssetDescriptor {
+        let kind = BuildingAssetKind::Tank;
+        self.install_presentation_fixture(
+            kind,
+            generation,
+            super::BuildingAssetAuthority::ReleaseApproved,
+        );
+        let active = self.kinds[index(kind)].active.as_mut().unwrap();
+        let descriptor = active.descriptor.as_mut().unwrap();
+        descriptor.manifest.body_paint_projection =
+            Some(super::BuildingBodyPaintProjection::WorldPreviewV1 {
+                matte_linear_rgb: [0.125, 0.09375, 0.078125],
+            });
+        super::tests::seal(&mut descriptor.manifest);
+        active.identity = descriptor.manifest.identity.clone();
+        descriptor.clone()
+    }
+
     pub fn failure(&self, kind: BuildingAssetKind) -> Option<&BuildingAssetPoolFailure> {
         self.kinds[index(kind)].failure.as_ref()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn install_surface_paint_fixture(
+        &mut self,
+        kind: BuildingAssetKind,
+        generation: u64,
+    ) -> BuildingAssetDescriptor {
+        self.install_presentation_fixture(
+            kind,
+            generation,
+            super::BuildingAssetAuthority::ReleaseApproved,
+        );
+        let active = self.kinds[index(kind)].active.as_mut().unwrap();
+        let descriptor = active.descriptor.as_mut().unwrap();
+        descriptor.manifest.surface_paint = Some(super::BuildingSurfacePaint {
+            method: super::BuildingSurfacePaintMethod::UvInkV1,
+        });
+        super::tests::seal(&mut descriptor.manifest);
+        active.identity = descriptor.manifest.identity.clone();
+        descriptor.clone()
     }
 }
 

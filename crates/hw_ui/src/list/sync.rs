@@ -13,6 +13,9 @@ use crate::theme::UiTheme;
 use bevy::prelude::*;
 use std::collections::{HashMap, HashSet};
 
+#[cfg(test)]
+mod tests;
+
 fn remove_stale_rows<V>(
     commands: &mut Commands,
     row_map: &mut HashMap<Entity, Entity>,
@@ -30,18 +33,10 @@ fn remove_stale_rows<V>(
     }
 }
 
-fn apply_row_order(
-    commands: &mut Commands,
-    q_children: &Query<&Children>,
-    container: Entity,
-    ordered_rows: Vec<Entity>,
-    clear_if_empty: bool,
-) {
-    if ordered_rows.is_empty() {
-        if clear_if_empty {
-            clear_children(commands, q_children, container);
-        }
-    } else {
+fn apply_row_order(commands: &mut Commands, container: Entity, ordered_rows: Vec<Entity>) {
+    // Stale rows and empty hints already have explicit deletion owners. An
+    // empty order must not delete their still-visible, deferred Children again.
+    if !ordered_rows.is_empty() {
         commands.entity(container).replace_children(&ordered_rows);
     }
 }
@@ -159,13 +154,7 @@ fn sync_familiar_member_rows(
         .filter_map(|vm| member_rows.get(&vm.entity).copied())
         .collect();
 
-    apply_row_order(
-        commands,
-        q_children,
-        nodes.members_container,
-        ordered_rows,
-        true,
-    );
+    apply_row_order(commands, nodes.members_container, ordered_rows);
 }
 
 pub struct FamiliarSectionCtx<'a> {
@@ -280,15 +269,9 @@ pub fn sync_familiar_sections(
                 .map(|nodes| nodes.root)
         })
         .collect();
-    if ordered_sections.is_empty() {
-        if q_children
-            .get(fam_container_entity)
-            .map(|children| !children.is_empty())
-            .unwrap_or(false)
-        {
-            clear_children(commands, q_children, fam_container_entity);
-        }
-    } else {
+    // Removed section roots above own their complete ChildOf trees. Do not
+    // queue a second removal from the pre-apply container snapshot when empty.
+    if !ordered_sections.is_empty() {
         let needs_reorder = q_children
             .get(fam_container_entity)
             .map(|children| {
@@ -408,11 +391,5 @@ pub fn sync_unassigned_souls(
         .iter()
         .filter_map(|vm| node_index.unassigned_rows.get(&vm.entity).copied())
         .collect();
-    apply_row_order(
-        commands,
-        q_children,
-        unassigned_content_entity,
-        ordered_rows,
-        false,
-    );
+    apply_row_order(commands, unassigned_content_entity, ordered_rows);
 }

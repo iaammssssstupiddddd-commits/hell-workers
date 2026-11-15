@@ -24,11 +24,15 @@ class CollectionTests(unittest.TestCase):
                 versions.append(evidence.pipeline.canonical(version))
             plan = {"driver": {"sha256": evidence.pipeline.digest(Path(collection.__file__).read_bytes())},
                     "input_transport_sha256": evidence.pipeline.digest(
-                        Path(collection.__file__).with_name("native_ui_input.py").read_bytes())}
+                        Path(collection.__file__).with_name("native_ui_input.py").read_bytes()),
+                    "portal_transport_sha256": evidence.pipeline.digest(
+                        Path(collection.__file__).with_name("native_ui_portal.py").read_bytes())}
             adapter = Mock()
             transport = Mock(held_buttons=set(), held_keys=set())
+            portal = Mock(ready=True, granted_devices=3, persistence="saved",
+                          session="/org/freedesktop/portal/desktop/session/test")
 
-            def input_transport(window, pid, parent, nonce, callback):
+            def input_transport(window, pid, parent, nonce, callback, *, portal):
                 transport.send.side_effect = lambda step, sent_nonce, **action: callback(
                     {"step": step, "nonce": sent_nonce, "pid": pid, "window": window, **action})
                 return transport
@@ -37,6 +41,7 @@ class CollectionTests(unittest.TestCase):
                 root = Path(temp)
                 raw_path, plan_path, output = root / "raw.json", root / "plan.json", root / "result"
                 binding["raw_observations_path"] = str(raw_path)
+                plan["repo"] = str(root)
                 plan_path.write_bytes(evidence.pipeline.canonical(plan))
                 def check_plan(value, *, registration_adapter=None):
                     self.assertIs(registration_adapter, adapter)
@@ -45,7 +50,8 @@ class CollectionTests(unittest.TestCase):
                 with patch.object(evidence, "check_plan", side_effect=check_plan) as checker, \
                         patch.object(collection, "session_binding") as binder, \
                         patch.object(collection, "check_process"), \
-                        patch.object(collection, "X11Input", side_effect=input_transport), \
+                        patch.object(collection, "PortalSession", return_value=portal), \
+                        patch.object(collection, "PortalX11Input", side_effect=input_transport), \
                         patch.object(collection, "bounded_read", side_effect=[
                             evidence.pipeline.canonical(plan), versions[0], versions[0], versions[1], versions[1], versions[2]]):
                     if reject_terminal:
@@ -59,6 +65,7 @@ class CollectionTests(unittest.TestCase):
                     self.assertIs(binder.call_args.kwargs["registration_adapter"], adapter)
                     self.assertEqual(binder.call_args.kwargs["instrument"], "Memory")
                 transport.close.assert_called_once()
+                portal.close.assert_called_once()
                 self.assertEqual((output / "trace.json").exists(), not reject_terminal)
                 log = evidence.json_bytes((output / "action-log.json").read_bytes())
                 self.assertEqual(log["failure"], "terminal subject changed" if reject_terminal else None)
@@ -129,7 +136,10 @@ class CollectionTests(unittest.TestCase):
                             {"type": "observed", "step": step["id"], "after": i + 1}])
         for i, row in enumerate(records):
             row.update(ordinal=i, at_ns=i + 1)
-        log = {"session": binding, "steps": steps, "records": records, "failure": None, "promotion_authority": False}
+        log = {"session": binding, "steps": steps, "records": records, "failure": None,
+               "portal_grant": {"granted_devices": 3, "persistence": "saved",
+                                "session": "/org/freedesktop/portal/desktop/session/test"},
+               "promotion_authority": False}
         return binding, steps, raw, log
 
     def transition_fixture(self):
@@ -184,6 +194,15 @@ class CollectionTests(unittest.TestCase):
         trace = collection.normalize(raw, binding, "a" * 64)
         self.assertEqual(trace["events"], raw["events"])
         self.assertEqual(collection.verify_action_records(log, raw), [(0, 1), (1, 2)])
+        for key, value in (("granted_devices", 1), ("granted_devices", -1),
+                           ("granted_devices", True),
+                           ("persistence", "disabled"), ("session", "/foreign")):
+            with self.subTest(portal_field=key), self.assertRaisesRegex(ValueError, "portal grant"):
+                changed = copy.deepcopy(log)
+                changed["portal_grant"][key] = value
+                collection.verify_action_records(changed, raw)
+        with self.assertRaisesRegex(ValueError, "portal grant"):
+            collection.verify_action_records({**log, "portal_grant": None}, raw)
         evidence.bind_lifecycle_observations(trace, raw)
         self.assertNotIn("witnesses", trace)
         self.assertNotIn("identity", trace)
@@ -191,6 +210,25 @@ class CollectionTests(unittest.TestCase):
         trace["samples"][0]["owners"].append("synthetic")
         with self.assertRaises(ValueError):
             evidence.bind_lifecycle_observations(trace, raw)
+
+    def test_raw_keyboard_message_is_input_only_and_payload_is_strict(self):
+        binding, _, raw, _ = self.fixture()
+        raw["events"].append({"event_index": 2, "sample_index": 2,
+                              "producer": "KeyboardInput", "operation": "KeyboardInput",
+                              "key": "F12", "state": "Pressed", "repeat": False,
+                              "window": "68v0", "real_seconds": 2.0})
+        collection.raw_record(evidence.pipeline.canonical(raw), binding)
+        trace = collection.normalize(raw, binding, "a" * 64)
+        with self.assertRaisesRegex(ValueError, "domain/state witness"):
+            lifecycle.check_domain_witness({"owner": "owner", "before": 1, "after": 2,
+                                            "domain_event_indices": [2]}, trace)
+        for key, replacement in (("producer", None), ("operation", "BuildingCompleted"),
+                                 ("key", ""), ("state", "Unknown"), ("repeat", 1),
+                                 ("window", "")):
+            with self.subTest(key=key, replacement=replacement), self.assertRaises(ValueError):
+                changed = copy.deepcopy(raw)
+                changed["events"][2][key] = replacement
+                collection.raw_record(evidence.pipeline.canonical(changed), binding)
 
     def test_generated_plan_session_and_result_admission_contract(self):
         from scripts.tests.test_building_production_acceptance import ProductionAcceptanceTests
@@ -250,6 +288,8 @@ class CollectionTests(unittest.TestCase):
             self.assertEqual(set(plan), evidence.SPEC_KEYS | evidence.GENERATED_KEYS)
             self.assertFalse(plan["launchable"])
             self.assertFalse(plan["promotion_authority"])
+            with self.assertRaisesRegex(ValueError, "portal transport changed"):
+                evidence.check_plan({**plan, "portal_transport_sha256": "0" * 64})
             plan_path = root / "plan.json"
             plan_path.write_bytes(evidence.pipeline.canonical(plan))
             plan_hash = evidence.pipeline.digest(plan_path.read_bytes())
@@ -398,7 +438,8 @@ class CollectionTests(unittest.TestCase):
     def test_process_failure_never_constructs_input_transport(self):
         binding, steps, _, _ = self.fixture()
         plan = {"driver": {"sha256": evidence.pipeline.digest(Path(collection.__file__).read_bytes())},
-                "input_transport_sha256": evidence.pipeline.digest(Path(collection.__file__).with_name("native_ui_input.py").read_bytes())}
+                "input_transport_sha256": evidence.pipeline.digest(Path(collection.__file__).with_name("native_ui_input.py").read_bytes()),
+                "portal_transport_sha256": evidence.pipeline.digest(Path(collection.__file__).with_name("native_ui_portal.py").read_bytes())}
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             plan_path = root / "plan.json"
@@ -406,13 +447,44 @@ class CollectionTests(unittest.TestCase):
             binding["raw_observations_path"] = str(root / "missing")
             with patch.object(evidence, "check_plan"), patch.object(collection, "session_binding"), \
                  patch.object(collection, "check_process", side_effect=ProcessLookupError("gone")), \
-                 patch.object(collection, "X11Input") as transport:
+                 patch.object(collection, "PortalSession") as portal, \
+                 patch.object(collection, "PortalX11Input") as transport:
                 with self.assertRaises(ProcessLookupError):
                     collection.collect(plan_path, binding, {}, steps, root / "missing", root / "result")
                 transport.assert_not_called()
+                portal.assert_not_called()
             log = evidence.json_bytes((root / "result/action-log.json").read_bytes())
             self.assertEqual(log["failure"], "gone")
             self.assertFalse((root / "result/trace.json").exists())
+
+    def test_missing_portal_grant_records_failure_without_sending_input(self):
+        binding, steps, raw, _ = self.fixture()
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            plan = {"repo": str(root),
+                    "driver": {"sha256": evidence.pipeline.digest(Path(collection.__file__).read_bytes())},
+                    "input_transport_sha256": evidence.pipeline.digest(
+                        Path(collection.__file__).with_name("native_ui_input.py").read_bytes()),
+                    "portal_transport_sha256": evidence.pipeline.digest(
+                        Path(collection.__file__).with_name("native_ui_portal.py").read_bytes())}
+            plan_path, raw_path, output = root / "plan.json", root / "raw.json", root / "result"
+            plan_path.write_bytes(evidence.pipeline.canonical(plan))
+            raw_path.write_bytes(evidence.pipeline.canonical(raw))
+            binding["raw_observations_path"] = str(raw_path)
+            portal = Mock(ready=False, granted_devices=0)
+            transport = Mock(held_buttons=set(), held_keys=set())
+            with patch.object(evidence, "check_plan"), patch.object(collection, "session_binding"), \
+                    patch.object(collection, "check_process"), \
+                    patch.object(collection, "PortalSession", return_value=portal), \
+                    patch.object(collection, "PortalX11Input", return_value=transport):
+                with self.assertRaisesRegex(ValueError, "portal keyboard/pointer grant missing"):
+                    collection.collect(plan_path, binding, {}, steps, raw_path, output)
+            transport.send.assert_not_called()
+            transport.close.assert_called_once()
+            portal.close.assert_called_once()
+            log = evidence.json_bytes((output / "action-log.json").read_bytes())
+            self.assertEqual(log["failure"], "portal keyboard/pointer grant missing")
+            self.assertFalse((output / "trace.json").exists())
 
     def test_focus_loss_and_timeout_close_transport_without_resending(self):
         for reason in ("focus", "timeout"):
@@ -420,21 +492,28 @@ class CollectionTests(unittest.TestCase):
             raw["samples"] = raw["samples"][:1]
             raw["events"] = []
             plan = {"driver": {"sha256": evidence.pipeline.digest(Path(collection.__file__).read_bytes())},
-                    "input_transport_sha256": evidence.pipeline.digest(Path(collection.__file__).with_name("native_ui_input.py").read_bytes())}
+                    "input_transport_sha256": evidence.pipeline.digest(Path(collection.__file__).with_name("native_ui_input.py").read_bytes()),
+                    "portal_transport_sha256": evidence.pipeline.digest(Path(collection.__file__).with_name("native_ui_portal.py").read_bytes())}
             transport = Mock(held_buttons={1}, held_keys=set())
+            portal = Mock(ready=True, granted_devices=3, persistence="saved",
+                          session="/org/freedesktop/portal/desktop/session/test")
             if reason == "focus":
                 transport._check_focus.side_effect = [None, RuntimeError("lost focus")]
             with self.subTest(reason=reason), tempfile.TemporaryDirectory() as temp:
                 root = Path(temp)
+                plan["repo"] = str(root)
                 (root / "plan.json").write_bytes(evidence.pipeline.canonical(plan))
                 (root / "raw.json").write_bytes(evidence.pipeline.canonical(raw))
                 binding["raw_observations_path"] = str(root / "raw.json")
                 with patch.object(evidence, "check_plan"), patch.object(collection, "session_binding"), \
-                     patch.object(collection, "check_process"), patch.object(collection, "X11Input", return_value=transport), \
+                     patch.object(collection, "check_process"), \
+                     patch.object(collection, "PortalSession", return_value=portal), \
+                     patch.object(collection, "PortalX11Input", return_value=transport), \
                      patch.object(collection.time, "monotonic", side_effect=[0, 0, 0, 0, 2]):
                     with self.assertRaises((ValueError, RuntimeError)):
                         collection.collect(root / "plan.json", binding, {}, steps, root / "raw.json", root / "result")
                 transport.send.assert_called_once()
                 transport.close.assert_called_once()
+                portal.close.assert_called_once()
                 self.assertFalse((root / "result/trace.json").exists())
                 self.assertIsNotNone(evidence.json_bytes((root / "result/action-log.json").read_bytes())["failure"])

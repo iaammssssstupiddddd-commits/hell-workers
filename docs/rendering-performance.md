@@ -416,7 +416,9 @@ LOD 切替閾値（hysteresis）:
 - `LOD1-lite -> LOD2`: `tile_rtt_px < 14px`
 - `LOD2 -> LOD1-lite`: `tile_rtt_px > 16px`
 
-### 建築物（現行プレースホルダー）
+### 建築物（fallback基盤）
+
+以下はfallbackの共有構造であり、正式世代の実DC数を表す表ではない。正式Wall/Doorと設備の部品・状態別handleは[asset仕様](building-asset-sets.md)を参照する。
 
 | 要素 | DC 数 | ハンドル管理 |
 |---|---|---|
@@ -425,7 +427,7 @@ LOD 切替閾値（hysteresis）:
 | 床・ドア・設備 | 各 1 | 種類ごとに 1 ハンドル |
 
 `Building3dHandles`（`startup/visual_handles.rs`）が全ハンドルを Resource として保持し、
-entity はこれを clone して参照するため、インスタンス数が増えても DC 数は変わらない。
+entity はこれを clone して参照する。正式表示のDC数はmesh・material・状態ごとの実計測で判断する。
 
 ### キャラクター（Soul）
 
@@ -590,3 +592,225 @@ draw call ではなくピクセルコストの観点。LOD0 (32px/tile, FHD) で
 Trellis 生成の高ポリゴンモデルを使っても fragment 面での影響は軽微。
 ポリゴン数の増加は頂点シェーダーコストに影響するが、
 50k tri × 30 インスタンス = 1.5M tri/frame は現代 GPU で問題ない。
+
+
+### Non-Bridge static resource ownership
+
+Site/Yard境界はsystem-localの強Mesh handleを1個保持し、全境界と再構築で同じ単位Rectangleを共有する。
+境界ごとのTaskAreaMaterial、色、寸法uniform、Transform scaleは個別のまま。入力・保存・配置ruleは変わらない。
+profilingのReady/Flush資源sidecar v2は全Mesh2d/Mesh3dのEntity・handle・SiteYardBoundaryVisualを区間外で記録する。
+所有rowは65,536件を上限とし、超過は切捨てず受入失敗とする。
+
+旧353fc4cd派生referenceでは境界ごとに152 bytesのquadを複製する。固定fixtureのSite1＋Yard6/24に対し、
+7/25件のexclusive所有・payload・残る資源一定を独立検証する。全resident count/bytesは除外せず差分budgetへ残す。
+旧referenceの結果には`global_shared_mesh_plateau=false`を明記し、資源補足の観測成功を性能合格へ読み替えない。
+現行sourceは例外を使わずglobal N/4N plateauを満たす必要がある。material_countはTopDownStructuralMaterialのみで、
+TaskAreaMaterialを含む全materialやGPU実allocation量を表す値ではない。
+
+## 非橋9種の最終累積静止性能受入（2026-11-13）
+
+正式8世代＋Door g7のN36棟／4N144棟を、旧foundationと同一adapterで隣接比較した。
+各source・規模3回、中間組を逆順、30秒warmup＋60秒計測、Capture12→Memory12の逐次実行。
+Vulkan/X11、1280×720、DPI1、RtT High、novsync、Virtual Time停止を固定した。
+sourceは`65117e02e4f8ac18a81f1ea81c250d4070ec0879`、runtime fingerprintは
+`cfae3fced24f254a3249222539bf9b4b07ea7943e20a476bf1adfa83b848f31f`。
+Intel Arc（MTL）/Mesa26.2.6の実adapterを原ログで照合した。
+
+| current−referenceの中央値差 | N | 4N | 事前固定上限 |
+| --- | ---: | ---: | ---: |
+| p95 | +0.223686ms | +0.417161ms | +1ms |
+| p99 | +0.444841ms | +1.246457ms | +3ms |
+| Rust live peak | +8,434,057B | +8,976,466B | +16,777,216B |
+| process RSS | +18,964KiB | +36,100KiB | +98,304KiB |
+
+最大relative MADは1.626447%（上限10%）、最大精算／隣接間隔110.236433秒（上限180秒）。
+全24原本、build4件、Capture/Memoryの資源一致を独立再検証した。
+currentの共有meshは86個・vertex/index payload184,656B、image177個・CPU payload477,513,628B、
+descriptor見積477,693,884B、CPU backingなし5個、structural material24個・shallow11,136BでN/4N間も安定した。
+12指標の固定予算は、mesh数+7／payload+65,192B、image数+20／CPU・descriptor各+9,175,040B、
+material数+9／shallow+4,176B、非CPU image増加0を含む。
+旧referenceのSite/Yard境界quad重複とglobal plateau falseは既知失敗のまま保持し、数値を書き換えていない。
+
+予算SHA `bcc3eb709c42a5a775f558edb38be314c0855f120d301a8e1db2c9d0c741de89`、
+plan SHA `2b89535a46487b4d3c6d9b540bd9fe90db36b842a1667176798870903de445e4`、
+最終Memory結果SHA `f7c4524b66b70420f0c17a41dc9f28c9cf1a31166cb2a1408fa17a05bf073e12`。
+独立公開verifierの結果は保存集計とJSON全体で一致した。
+
+旧v3はMemory隣接間隔339〜347秒で失敗、host検証の同操作内proof共有後のv4は
+Memory N差21,430,227Bで不合格だった。実allocator stackとTimePlugin再現から停止中のwindow buffer蓄積を確認し、
+`First`でpaused＋Waiting時だけframe所有3型を二重buffer更新する修正を加えた（[イベント仕様](events.md#ウィンドウのフレーム所有メッセージ)）。
+全21MB差の単独原因を証明したとはせず、固定予算のfresh v5で採否をやり直した。旧失敗はpassへ変えない。
+修正後の通常UIによるpause→resume→Door選択・配置→pauseも原raw・4画像で独立採用した。
+
+これは混在する静止表示の受入で、active AIの累積性能、GPU allocation総量、Bridge、
+追加のart/numeric/release権限を証明しない。画像CPU/descriptor費用をGPU実確保量へ読み替えない。
+終了した比較の原本依存は閉じ、採用数値を本節に集約し、用途のないraw・binary copy・専用worktreeを整理する。
+
+
+## 外観改訂9種の静止asset増分受入（2026-11-14）
+
+新4件のg2と既存4件＋Door g7を、clean `a77f4104d5c36d726f5444c4a096b241d95aa84f`、
+runtime fingerprint `ba6598c4d7cb83a7c49749308e199a9aedcbf89c4c0e6d1f39cc4bccd83135c0`で確認した。
+同sourceのlegacy-controlに対する静止asset増分であり、旧g1との直接比較や旧foundation比較の再実行ではない。
+N36／4N144、各3対・中央対逆順、30秒warmup＋60秒計測、Capture12→Memory12。
+Intel Arc（MTL）／Mesa26.2.6／Vulkan／X11、1280×720、DPI1、High、novsync、Virtual Time停止を固定した。
+
+Linux/glibcでは通常ゲームとprofilingの両方で、App/worker前に`mallopt(M_ARENA_MAX,2)`を適用し戻り値を検査する。
+offline codecは除外、他platformのallocatorは変更しない。main以前のarenaを撤去する保証やGPU/driver全体の上限ではない。
+通常galleryのowned processで`MALLOC_ARENA_MAX`/`GLIBC_TUNABLES`未設定とmainの適用ログを照合した。
+試験だけのenv介入は用いず、静止経路のCPU競合リスクを同じCapture予算で確認した。active-AIの競合性能は未計測。
+
+| candidate−legacy-controlの中央値差 | N | 4N | 事前固定上限 |
+| --- | ---: | ---: | ---: |
+| p95 | +0.219709ms | +0.477025ms | +1ms |
+| p99 | +0.164193ms | +0.798682ms | +3ms |
+| Rust live peak | +10,452,911B | +11,715,016B | +16,777,216B |
+| process RSS | +49,588KiB | +79,752KiB | +98,304KiB |
+
+最大relative MADは2.014612%（上限10%）。全24試行を元の公開verifierで再検証し、独立reviewで採用した。
+共有資源の増分はmesh7／vertex-index 85,976B、image20／CPU・descriptor各9,175,040B、
+structural material9／shallow4,176B。N/4Nの共有資源plateauと初終不変を維持した。
+事前予算SHA `9372fc4066091b95a7a5e0acd3220b84811e079ef36bace5aa6ebce3b60b1f51`、
+plan SHA `3fcf21176dac658c41ecdfa0544f0922bebb164983b8c0ce9a7e036c42af0144`、
+結果SHA `bf43335b9d10d9b6c18e40f8186f748d2d9a958cd76a160af15f4d43f4219bf5`。
+旧`32017b39`のv1はMemory 4NのRSS中央値差139,260KiBで固定上限98,304KiBを超え、invalidのままとした。
+同binaryの同期proc/Rust計数診断では起動からwarmupの匿名resident変動が主成分だった。arena2介入で匿名量が減少した一方、
+Rust liveにも変化があるため、空きarenaだけの寄与やdriver固有のリークとは断定しない。通常mainの上限policyを加えた新sourceをfresh全matrixで再評価した。
+旧失敗や診断を新sourceのpassへ付け替えず、使い終えたrawの依存を閉じ、結果と限界を本節へ集約する。
+測定v2は全24件のdriver gateがpassした一方、登録verifierの外部plan argvが出力rootを明示せず、登録工程はinvalidとして精算した。
+元登録をpassへ変更せず、freshな検証専用batchで公開verifierを再計算し、元result全体・全raw・source/binaryの前後一致を封印した。
+この工程はゲーム・build・計測を再実行していない。独立検証receipt SHA `d99d646d19d5b963a9b847fa9cd0a7991739b2ea15e67a64096fce71dd917044`。
+このgateはactive AI、自然施工・lifecycle、GPU実allocation総量、Bridge、アートやreleaseの追加承認を含まない。
+新4件のアート・数値・releaseは別の独立判断、導入後の実画面は[制作仕様](building-art-direction.md#外観改訂後の9種の採用画面2026-11-14)が所有する。
+
+## 世界観統一後の9種の静止asset増分受入（2026-11-14）
+
+4件g3と既存4件＋Door g7をclean `f6b2236a06365623bbb8cd4f010defb65f2d5bd0`で測定した。
+runtime fingerprintは`cc8b2943c7e8fbab40a455a8dc1379f19e259d94bc96343a8d27e708788347ae`、
+asset fingerprintは`61552e8d9b787388f9f8024e55941bede5bb5d36720144e9a86d0e73f0a82217`。
+同sourceのlegacy-controlに対するpaused asset増分であり、g2対g3の直接比較ではない。
+N36／4N144、各3対・中央対逆順、30秒warmup＋60秒計測、Capture12→Memory12。
+Intel Arc MTL／Mesa26.2.6／Vulkan／X11、1280×720、DPI1、High、novsyncを固定した。
+
+Linux/GNUの通常・profiling共通でApp/worker前にarena2とmmap閾値131072Bを適用し、両戻り値を検査する。
+codecと他OS/非GNUは除外する。診断用malloc環境変数を測定commandへ渡していない。
+通常galleryログでも両適用を確認した。起動operatorの環境記録はHEADへ拘束したもので、PID環境の直接証明とは区別する。
+この方針は既存確保の回収や全native/GPU allocationの上限を保証しない。
+
+| candidate−legacy-controlの中央値差 | N | 4N | 変更していない事前上限 |
+| --- | ---: | ---: | ---: |
+| p95 | +0.148092ms | +0.254558ms | +1ms |
+| p99 | −0.011175ms | +0.582130ms | +3ms |
+| Rust live peak | +10,251,461B | +11,389,947B | +16,777,216B |
+| process RSS | +59,268KiB | +36,648KiB | +98,304KiB |
+
+最大relative MADは3.025643%（上限10%）。共有mesh7／accessor・vertex-index各85,976B、
+image20／CPU・descriptor各9,175,040B、structural material9／shallow4,176Bの増分とN/4N plateauを確認した。
+全24試行の初終資源集合・所有window・adapterを公開verifierで再計算し、独立reviewで採用した。
+事前予算SHAは`9372fc4066091b95a7a5e0acd3220b84811e079ef36bace5aa6ebce3b60b1f51`、
+plan SHAは`3dc7a7201add0b2012ed3977533bf6840b059a1e81d31706f7a000454316d293`、
+測定result SHAは`8c350164a7c1c0b1ef7596c74b08c1e6c92790cde4399829104f914b5b08f135`。
+
+旧`e1f4566c`のv1は18試行でMemory/NのRSS差101,412KiBが98,304KiBを超えinvalid、4N Memoryは未実施である。
+全malloc環境を排した同期対照でmode間Anon差の符号が反転し、候補固有の正の差という仮説は不支持だった。
+事前固定した同binary各mode一回のmmap閾値131072B感度診断では、warmup-first/measure-lastの全4端点で
+Anonが減り、resident集合は同一、Rust/File差は小さかった。これは探索的n=1であり、freeheap所有量や原因の分離、
+性能合格には用いない。通常mainを補正した新sourceで固定予算の全24試行をfresh実行した。
+
+新測定v2はexit0・raw passだが、登録wrapper argvに必須のliteral `verify`がなく、封印前guardで拒否された。
+元batch `tak14-worldstyle-released-performance-20261114-v2`は登録不備invalidとして精算し、passへ変更しない。
+fresh検証専用`tak14-worldstyle-performance-verification-20261114-v1`で全423入力ファイル、source、binary、plan、
+元invalid ledgerを前後固定し、公開verifierの全result完全一致を実行時・封印時の両方で確認した。
+ゲーム・build・計測の再送はない。独立検証receipt SHAは
+`140255642d334d31ba2a11fb32f10b404bb41468d7abf2b60136070c382c4724`。
+旧失敗・登録不備は履歴として維持し、完了後のraw再検証を目的とする保持は終了する。
+本gateはactive AI、自然施工・lifecycle、GPU実allocation総量、Bridge、追加のart/release承認を含まない。
+アート・数値・releaseは別の独立採用、normal/farの[現行画面](building-art-direction.md#世界観に合わせた現行9種の画面2026-11-14)は別証拠である。
+
+## 面塗り方式の9種の静止asset増分受入（2026-11-15）
+
+Tank g4、MudMixer g4、RestArea g4、SoulSpa g3、OutdoorLamp g4と固定3件・Door g7を、
+clean `19e608ace4c34169b4e7a1f8c00c1213ad256b3b`で測定した。
+runtime fingerprintは`70e8448d55efd2c7fefe1c626f66dcb6697485d8f36b84ef4590edc8374feefc`、
+asset viewは`00f0aad0ad0baf9b0f6fc401334d3da5c75f6fc9a69c2533b5dbdebc487f7c9d`。
+同sourceのlegacy-controlに対するpaused asset増分であり、旧g3との直接比較やM1-0累積基盤比較ではない。
+N36／4N144、各3対・中央対逆順、30秒warmup＋60秒計測、Capture12→Memory12を逐次実行した。
+Intel Arc MTL／Mesa26.2.6／Vulkan／X11、1280×720、DPI1、High、novsyncを固定し、
+通常GNU起動と共通のarena2・mmap閾値131072Bを維持した。測定中にbuild/testやcleanupは並行しない。
+
+| candidate−legacy-controlの中央値差 | N | 4N | 事前固定上限 |
+| --- | ---: | ---: | ---: |
+| p95 | +0.010170ms | +0.356957ms | +1ms |
+| p99 | −0.155218ms | +1.224150ms | +3ms |
+| Rust live peak | +10,518,094B | +12,819,304B | +16,777,216B |
+| process RSS | +16,904KiB | +35,420KiB | +98,304KiB |
+
+最大relative MADは1.554321%（上限10%）。共有資源増分はmesh7／accessor・vertex-index各85,976B、
+image20／CPU・descriptor各9,175,040B、structural material10／shallow4,640B。
+Tankのbody独立材質を含む10材質を測定前に予算へ明示した。N/4N plateau・初終不変と、
+実owner→Root→part/pose/material/imageのmode3/4、water分離・Spa実mask発光を原本から検証した。
+独立reviewでも24行と集計を再導出し、計1,200のcandidate resident partsを含め指摘なく採用した。
+これらのlogical payload・shallow値はGPU実allocation総量やdriver/native全体の計数ではない。
+
+事前予算SHAは`934cbeb12e92157bcea4a026808cf56a418914f0674a0a87742c433274f61187`、
+plan SHAは`3012bef4be0ff175705ed367038d688f133b02888a9dd52a3f635e5cd4b6d9ac`、
+result SHAは`458c2af6e020344dd5d95696a510ff4d52f318bdc89e2c89757a89a68cc35b12`。
+全24試行は登録済み独立verifierでpass・封印・finalizeした。自動resultの`accepted=false`と
+`promotion_authority=false`はアート・release・依頼全体の承認を付与しない境界であり、技術判定の`status=pass`と区別する。
+active AI、自然施工/lifecycle、別sourceの基盤累積、Bridgeは本gateへ含めない。
+個別art/numeric/releaseと通常入力の利用/保存読込は[asset仕様](building-asset-sets.md#2026-11-15-面塗り方式の正式世代)、
+導入後normal/farは[制作仕様](building-art-direction.md#面塗り方式と採用画面2026-11-15)を参照する。
+
+## ミキサーと休憩所改訂後の9種静止性能（2026-11-15）
+
+Mixer/Rest g5と不変の他7種をclean `fd5cd6891df3e964a897ebf65263561f47bd9ae9`で測定した。
+runtime fingerprintは`2f8b8213a6fa722569dc14104a8966526105bd580de6aba924bab56cf0fa764f`、
+asset viewは`dd908b92aeffdeaa180e4ba0f9562ae511945077fdcc7839f94b3df221245fd9`。
+同sourceのlegacy-controlに対するpaused asset増分であり、旧g4との直接比較ではない。
+N36／4N144、各3対・中央対逆順、30秒warmup＋60秒計測、Capture12→Memory12を逐次実行した。
+Intel Arc MTL／Mesa26.2.6／Vulkan／X11、1280×720、DPI1、High、effective immediateを固定した。
+通常GNU起動と共通のarena2・mmap閾値131072Bを維持し、測定中の別build/test・cleanupは行っていない。
+
+| candidate−legacy-controlの中央値差 | N | 4N | 事前固定上限 |
+| --- | ---: | ---: | ---: |
+| p95 | +0.216960ms | +0.278871ms | +1ms |
+| p99 | +0.227884ms | +1.167469ms | +3ms |
+| Rust live peak | +10,613,111B | +12,793,695B | +16,777,216B |
+| process RSS | +18,356KiB | +332KiB | +98,304KiB |
+
+最大relative MADは1.474796%（上限10%）。共有資源増分はmesh7／accessor・vertex-index各92,184B、
+image20／CPU・descriptor各9,175,040B、structural material10／shallow4,640Bで、N/4Nのplateauと初終不変を確認した。
+新geometryのpayload92,184Bは測定前に独立採用した。画像は512²×5＋256²×15のRGBA8相当であり、
+1枚の高解像度textureへ読み替えない。時間・Rust live・RSS・MADの旧予算は緩めていない。
+全24試行のraw/window/adapter/binaryと実owner→root/part/material/image、同世代のpoolを公開verifierで照合し、
+登録済みのroot-bound adapterは同verifierを実行するだけで、閾値や受入範囲を変更しない。
+独立レビューで全24行、Memory/RSS、初終集合、plateau、candidate計1,200 partsを再照合し、静止増分を採用した。
+
+採用済みの[事前固定予算JSON](design/building-art/mixer-rest-installed-nine-budget-20261115.json)を正本へ保存した。
+元の承認ファイルと全bytesが一致し、再検証時も同じ12項目の上限を使う。
+予算SHAは`ccb5a7061a7d9258a596d127e874465824844a328c4cdd593d3dc7973a542323`、
+plan SHAは`585ab57f454fcf1765a649279e63c812d319d27d805cb0c500cb9210c53835b8`、
+result SHAは`3ba1b85bbe06b44fb2e3a0f27765c42bc01b5534145d2bf9ff5ee5ef12d8d77c`。
+全24試行は登録済み独立verifyでpass・seal・finalize・storage check済み。
+自動resultのaccepted/promotion_authority=falseは追加のart/release/依頼全体承認を付与しない境界を維持する。
+これはlogical payload/shallow量とRust allocator/RSSの比較であり、GPU/driver/native allocation総量ではない。
+active AI、自然施工/lifecycle、別sourceのM1-0基盤累積、Bridgeは本gateへ含めない。
+個別art/numeric/release・通常起動は[asset仕様](building-asset-sets.md#2026-11-15-ミキサーと休憩所の判読性改訂)、
+normal/farは[採用画面](building-art-direction.md#ミキサーと休憩所の判読性改訂後の画面2026-11-15)へ分離する。
+
+
+## Mixer彩度とSpa骨表現のpixel-only改訂（2026-11-15）
+
+Mixer g6／Spa g4は拡散色だけの改訂である。実body/rotorとbody/slotの全GLB bytesがそれぞれ
+直前g5/g3と同一で、UV・parts・寸法・mode4・状態と512² RGBA/alpha255を維持する。
+Spaのslot_emissive PNGは全bytes同一である。Mixerのfresh Dirt実画面でも同世代のresident mesh2／image role3を照合した。
+導入後`be34b349`で全9種の実owner/root/part/material/imageと初終不変を照合し、通常startupでも
+8poolのactual handle共有を確認した。旧8manifestと新8manifestの全parts/projection/state/geometry、
+GLB全bytes、PNG寸法/alpha面を実比較し、双方mesh7・image20・論理decoded RGBA 9,175,040Bで一致した。
+Spa emissionは全bytes一致。これは建物依存の論理payloadと実resident/shared handleの確認で、
+world全体の画像数・全GPU/driver/native allocationの比較ではない。
+独立parity result SHAは`b0fe0e6815763d4ecea8e67f7f95a3502bb5af71c187bf4ca0e2101ab7e18a4a`。
+
+この改訂では新しい24試行の時間・Memory/RSS計測を行っていない。
+直前節の`fd5cd689`での計測はそのexact subjectの履歴として残し、g6/g4の測定済みpassへ読み替えない。
+geometry・shader・容量が変わる場合は、必要な固定予算と性能gateを新subjectで実行する。

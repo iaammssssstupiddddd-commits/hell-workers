@@ -156,6 +156,19 @@ Soul 本体画像は、Idle 状態だけでなくイベントでも一時差し�
 - **プロセス**: アイテムへ移動 → `Inventory(Option<Entity>)`へ拾い上げる → 備蓄場所へ移動 → 配置してslotを空にする。
 - **搬入後チェーン（haul chain）**: Blueprint / FloorSite / WallSite への搬入完了直後に `find_chain_opportunity` が呼ばれ、スロットに空きがあれば同一 Soul が Build / ReinforceFloor / PourFloor / FrameWall / CoatWall へ即移行する（tasks.md §7.3 参照）。
 
+搬入成功の診断は`profiling`かつ明示観測resourceがある場合だけ有効。
+手運び・猫車の実Blueprint材料増分と消費itemを共有のbounded receiptへ送り、
+root observerが受動収集する。通常のAI割当・疲労・chain・予約解除・建設速度は変えない。
+
+Mixer宛猫車の`GoingToDestination`は手運びと同じtarget-or-destination判定を、隣接経路`Found`後に使う。
+Mixerの2×2中心から遠い合法な斜め終点でも`Unloading`へ進める。遠方では移動を継続し、
+`Deferred`で近いstale destinationを到着と扱わない。`Unreachable`/target消滅のcleanupと実搬入時の容量は不変。
+
+水搬送のTank取水は全杯5個と経路`Found`を要求し、Mixer投入は全5個が格納できる場合だけ行う。
+実行systemのローカル`WaterTransferClaims`が同一呼出しのWater ID/バケツ変換/投入予定量を保護する。
+容量競合時は全量の水入りバケツを残して既存retryable中断へ戻し、精製待ちworkerを拘束しない。
+`Deferred`はphase/量/予約を保持して非消費で再判定する。claimは次のsystem呼出しへ持ち越さない。
+
 ### 3.3. 解体 (Deconstruct)
 
 - `DeconstructData`はdurable order、canonical target、`GoingToTarget → Dismantling → AwaitingCommit` phaseを持つ。
@@ -174,7 +187,7 @@ Soul 本体画像は、Idle 状態だけでなくイベントでも一時差し�
 
 タスク系 Relationship（`CommandedBy` / `WorkingOn`）と携行品`Inventory`の書き込み元・削除元は **tasks.md §2** を参照。
 
-- `ParticipatingIn(spot)` ← Soul / `GatheringParticipants` ← GatheringSpot: 集会参加状態。`idle_behavior_decision` が insert、集会終了・タスク割り当て時に remove。
+- `ParticipatingIn(spot)` ← Soul / `GatheringParticipants` ← GatheringSpot: 集会参加状態。Decideの参加/到着requestをExecuteが適用し、deferred適用時にもSoulとspotの存続を確認してinsertする。消滅済みrequestは休憩関係/Visibility/参加・到着通知も変更しない。集会終了・タスク割り当て時にremoveする。
 - 休憩所関連 (`RestingIn`, `RestAreaOccupants` 等): 詳細は [rest_area_system.md](rest_area_system.md) を参照。
 
 ## 5. 移動と制御 (Movement & Control)
@@ -279,6 +292,10 @@ availability revisionを進め、`NoSafeRecovery` blockerをroot transaction自�
 `FloorConstructionSite` / `WallConstructionSite` は `hw_jobs::construction` 所有に移り、root の `crates/bevy_app/src/systems/jobs/*/components.rs` は re-export shell になっている。
 
 #### タスク終了 API（M2）
+
+割当applyはSoulの`CommandedBy`を委譲Familiarへ接続する一方、搬送依頼の`ManagedBy`は
+実`TransportRequest.issued_by`へ維持する。Yard発行のrequestをFamiliarへ片側移譲しない。
+非搬送taskの既存引き継ぎ、`WorkingOn`／`ActiveTaskIdentity`の同frame適用は不変である。
 
 ハンドラは `TaskExecutionContext`（`context/execution.rs`）の終了 API で Soul 割り当てを解除する。`clear_task_and_path` と `remove::<WorkingOn>` の手書き組み合わせは禁止（`chain.rs` の `WorkingOn` 付け替えのみ例外）。
 

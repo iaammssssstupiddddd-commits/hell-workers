@@ -266,6 +266,13 @@ GoingToBucket フェーズで `routing::transition_to_destination` を呼び出�
 `amount == 0` のまま GoingToDestination に遷移すると、`going_to_destination.rs` が空バケツと判断して
 タンクへの再充填ループを引き起こす。
 
+`BucketWater`は常に1杯5個を表す。Tank→Mixerで1〜4個だけを取り出して水入りにしたり、
+空き分だけを投入して空バケツにしてはならない。取水は5個＋経路`Found`、投入は実在する
+Water用Mixerに5個分の空きがある場合だけ確定する。`Deferred`は取水・予約解除をせず保留する。
+容量競合/消滅/非正規amountは水を変換せず既存retryable中断へ戻し、所有元の水入りバケツを残す。
+実行systemの1呼出しだけ有効なWater ID/bucket/投入量claimでdeferred Commandsの二重変換を防ぐ。
+claimは保存せず、次呼出しでは実状態から再判定する。新しい水量componentやsave schemaは追加しない。
+
 ### I-L6: Site 内の建築需要は PairedYard を owner 候補に含める
 Blueprint / WallConstruction の producer は `Site.bounds()` を `PairedYard` の owner 範囲として扱う。
 Familiar が Idle で TaskArea owner が存在しなくても、Site 内の建築不足 request を無音で消失させてはならない。

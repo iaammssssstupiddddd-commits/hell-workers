@@ -1,4 +1,7 @@
+use bevy::ecs::message::MessageUpdateSystems;
 use bevy::prelude::*;
+
+mod paused_window;
 
 use crate::entities::damned_soul::DamnedSoulSpawnEvent;
 use crate::entities::familiar::FamiliarSpawnEvent;
@@ -107,6 +110,10 @@ pub struct MessagesPlugin;
 impl Plugin for MessagesPlugin {
     fn build(&self, app: &mut App) {
         root_message_types!(add_root_messages, app);
+        app.add_systems(
+            First,
+            paused_window::update_paused_window_messages.before(MessageUpdateSystems),
+        );
         crate::systems::save::register_load_reset_hook(app, "root-messages", clear_root_messages);
     }
 }

@@ -263,6 +263,9 @@ def clean_environment(
     environment.update(
         {
             "BEVY_ASSET_ROOT": str(repo),
+            # The renderer's actual AdapterInfo is INFO. An inherited warn/error
+            # filter must not silently erase the evidence required by verify.
+            "RUST_LOG": "info,wgpu=error",
             "HW_WINDOW_BACKEND": "x11",
             "HW_PRESENT_MODE": "novsync",
             "WGPU_BACKEND": "vulkan",
@@ -796,14 +799,18 @@ def self_test_release() -> None:
             locators[kind] = (locator, payload)
         identities = release_identities(repo)
         native.require(set(identities) == {"wall", "door"}, "J1 release fixture inventory differs")
-        with mock.patch.object(native, "cargo_environment", return_value={key: "inherited" for key in ENV_KEYS}):
+        with mock.patch.object(native, "cargo_environment", return_value={**{key: "inherited" for key in ENV_KEYS}, "RUST_LOG": "error"}):
             environment = clean_environment(repo, "Intel", identities, repo / "status", repo / "ack", "a" * 32)
+            native.require(environment.get("RUST_LOG") == "info,wgpu=error",
+                           "J1 inherited a suppressive renderer log filter")
             native.require(environment.get("HW_WALL_DOOR_JOINT_RELEASE") == "1"
                            and not any(key.startswith(("HW_WALL_CANDIDATE", "HW_DOOR_CANDIDATE", "HW_WALL_ART_PREVIEW", "HW_DOOR_ART_PREVIEW")) for key in environment),
                            "J1 release inherited a candidate or art-preview opt-in")
             candidate = copy.deepcopy(identities)
             candidate["wall"]["authority"] = "isolated_candidate"
             environment = clean_environment(repo, "Intel", candidate, repo / "status", repo / "ack", "a" * 32)
+            native.require(environment.get("RUST_LOG") == "info,wgpu=error",
+                           "J1 candidate did not preserve renderer log evidence")
             native.require("HW_WALL_DOOR_JOINT_RELEASE" not in environment
                            and environment.get("HW_WALL_CANDIDATE") == environment.get("HW_DOOR_CANDIDATE") == "1",
                            "J1 candidate inherited release selection")
@@ -849,6 +856,20 @@ def self_test_release() -> None:
                 raise native.AcceptanceError("J1 release accepted rehashed receipt for another asset")
             receipt.write_bytes(saved_receipt)
             locator.write_bytes(canonical_bytes(original))
+        log = repo / "adapter-evidence.log"
+        evidence = 'INFO bevy_render::renderer: AdapterInfo { name: "Intel Arc", backend: Vulkan }\n'
+        log.write_text(evidence)
+        native.require(verify_game_log(log, "Intel") == {"name": "Intel Arc", "backend": "Vulkan"},
+                       "J1 actual renderer evidence fixture differs")
+        for invalid in ("", evidence.replace("Intel", "Nvidia"),
+                        evidence.replace("Vulkan", "Gl"), evidence + "WARN actual warning\n"):
+            log.write_text(invalid)
+            try:
+                verify_game_log(log, "Intel")
+            except native.AcceptanceError:
+                pass
+            else:
+                raise native.AcceptanceError("J1 accepted missing/foreign/non-Vulkan/warning evidence")
         actual_root = Path(__file__).resolve().parents[4]
         for relative in native.NATIVE_HARNESS_FILES:
             target = repo / relative

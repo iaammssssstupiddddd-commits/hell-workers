@@ -27,8 +27,39 @@ type RestAreaEntities<'w, 's> = Query<
 pub struct RestAreaCheckQueries<'w, 's> {
     pub q_rest_reserved: Query<'w, 's, &'static RestAreaReservedFor>,
     pub q_rest_cooldown: Query<'w, 's, &'static RestAreaCooldown>,
-    pub q_participating: Query<'w, 's, (), With<ParticipatingIn>>,
     pub q_rest_areas: RestAreaEntities<'w, 's>,
+}
+
+fn set_soul_visibility(world: &mut World, soul: Entity, visibility: Visibility) {
+    if world.get::<DamnedSoul>(soul).is_some()
+        && let Some(mut current) = world.get_mut::<Visibility>(soul)
+    {
+        *current = visibility;
+    }
+}
+
+fn queue_idle_gathering_join(commands: &mut Commands, soul: Entity, spot: Entity, arrived: bool) {
+    commands.queue(move |world: &mut World| {
+        // A different Execute command can retire the target after Decide (or
+        // after this system runs). Keep relation, visibility and notifications
+        // together behind the live-target check at command application time.
+        if world.get_entity(spot).is_err() {
+            return;
+        }
+        let Ok(mut entity) = world.get_entity_mut(soul) else {
+            return;
+        };
+        entity.remove::<(RestingIn, RestAreaReservedFor)>();
+        entity.insert(ParticipatingIn(spot));
+        set_soul_visibility(world, soul, Visibility::Visible);
+        world.write_message(OnGatheringParticipated {
+            entity: soul,
+            spot_entity: spot,
+        });
+        if arrived {
+            world.write_message(OnGatheringJoined { entity: soul });
+        }
+    });
 }
 
 /// アイドル行動の適用システム (Execute Phase)
@@ -41,7 +72,6 @@ pub fn idle_behavior_apply_system(
     mut request_reader: MessageReader<IdleBehaviorRequest>,
     mut q_idle: Query<&mut IdleState>,
     mut q_path: Query<&mut Path>,
-    mut q_visibility: Query<&mut Visibility, With<DamnedSoul>>,
     rest_queries: RestAreaCheckQueries,
 ) {
     let mut pending_rest_reservations: HashMap<Entity, usize> = HashMap::new();
@@ -49,40 +79,13 @@ pub fn idle_behavior_apply_system(
     for request in request_reader.read() {
         match &request.operation {
             IdleBehaviorOperation::JoinGathering { spot_entity } => {
-                commands
-                    .entity(request.entity)
-                    .remove::<(RestingIn, RestAreaReservedFor)>();
-                if let Ok(mut visibility) = q_visibility.get_mut(request.entity) {
-                    *visibility = Visibility::Visible;
-                }
-                commands
-                    .entity(request.entity)
-                    .insert(ParticipatingIn(*spot_entity));
-                commands.write_message(OnGatheringParticipated {
-                    entity: request.entity,
-                    spot_entity: *spot_entity,
-                });
+                queue_idle_gathering_join(&mut commands, request.entity, *spot_entity, false);
             }
             IdleBehaviorOperation::LeaveGathering { spot_entity: _ } => {
                 commands.entity(request.entity).remove::<ParticipatingIn>();
             }
             IdleBehaviorOperation::ArriveAtGathering { spot_entity } => {
-                commands
-                    .entity(request.entity)
-                    .remove::<(RestingIn, RestAreaReservedFor)>();
-                if let Ok(mut visibility) = q_visibility.get_mut(request.entity) {
-                    *visibility = Visibility::Visible;
-                }
-                commands
-                    .entity(request.entity)
-                    .insert(ParticipatingIn(*spot_entity));
-                commands.write_message(OnGatheringParticipated {
-                    entity: request.entity,
-                    spot_entity: *spot_entity,
-                });
-                commands.write_message(OnGatheringJoined {
-                    entity: request.entity,
-                });
+                queue_idle_gathering_join(&mut commands, request.entity, *spot_entity, true);
             }
             IdleBehaviorOperation::ReserveRestArea { rest_area_entity } => {
                 let cooldown_active = rest_queries
@@ -174,18 +177,18 @@ pub fn idle_behavior_apply_system(
                 }
                 *pending_rest_entries.entry(*rest_area_entity).or_insert(0) += 1;
 
-                if rest_queries.q_participating.get(request.entity).is_ok() {
-                    commands.entity(request.entity).remove::<ParticipatingIn>();
-                }
+                // A preceding request can have queued a join in this batch.
+                commands.entity(request.entity).remove::<ParticipatingIn>();
 
                 commands.entity(request.entity).remove::<RestAreaCooldown>();
                 commands
                     .entity(request.entity)
                     .remove::<RestAreaReservedFor>()
                     .insert(RestingIn(*rest_area_entity));
-                if let Ok(mut visibility) = q_visibility.get_mut(request.entity) {
-                    *visibility = Visibility::Hidden;
-                }
+                let soul = request.entity;
+                commands.queue(move |world: &mut World| {
+                    set_soul_visibility(world, soul, Visibility::Hidden);
+                });
 
                 if let Ok(mut idle) = q_idle.get_mut(request.entity) {
                     idle.behavior = IdleBehavior::Resting;
@@ -206,9 +209,10 @@ pub fn idle_behavior_apply_system(
                 commands.entity(request.entity).insert(RestAreaCooldown {
                     remaining_secs: REST_AREA_RECRUIT_COOLDOWN_SECS,
                 });
-                if let Ok(mut visibility) = q_visibility.get_mut(request.entity) {
-                    *visibility = Visibility::Visible;
-                }
+                let soul = request.entity;
+                commands.queue(move |world: &mut World| {
+                    set_soul_visibility(world, soul, Visibility::Visible);
+                });
 
                 if let Ok(mut idle) = q_idle.get_mut(request.entity) {
                     if matches!(
@@ -232,6 +236,116 @@ pub fn idle_behavior_apply_system(
 mod tests {
     use super::*;
     use hw_core::events::{IdleBehaviorOperation, IdleBehaviorRequest};
+
+    #[test]
+    fn gathering_and_rest_requests_preserve_command_order_and_visibility() {
+        for arrived in [false, true] {
+            for join_first in [false, true] {
+                let mut app = App::new();
+                app.add_plugins(MinimalPlugins)
+                    .add_message::<IdleBehaviorRequest>()
+                    .add_message::<OnGatheringJoined>()
+                    .add_message::<OnGatheringParticipated>()
+                    .add_systems(Update, (idle_behavior_apply_system, ApplyDeferred).chain());
+                let rest_area = app.world_mut().spawn(RestArea { capacity: 2 }).id();
+                let spot = app.world_mut().spawn_empty().id();
+                let soul = app
+                    .world_mut()
+                    .spawn((DamnedSoul::default(), Visibility::Visible))
+                    .id();
+                let join = if arrived {
+                    IdleBehaviorOperation::ArriveAtGathering { spot_entity: spot }
+                } else {
+                    IdleBehaviorOperation::JoinGathering { spot_entity: spot }
+                };
+                let enter = IdleBehaviorOperation::EnterRestArea {
+                    rest_area_entity: rest_area,
+                };
+                for operation in if join_first {
+                    [join, enter]
+                } else {
+                    [enter, join]
+                } {
+                    app.world_mut().write_message(IdleBehaviorRequest {
+                        entity: soul,
+                        operation,
+                    });
+                }
+                app.update();
+                assert_eq!(app.world().get::<RestingIn>(soul).is_some(), join_first);
+                assert_eq!(
+                    app.world().get::<ParticipatingIn>(soul).is_some(),
+                    !join_first
+                );
+                assert_eq!(
+                    app.world().get::<Visibility>(soul),
+                    Some(if join_first {
+                        &Visibility::Hidden
+                    } else {
+                        &Visibility::Visible
+                    })
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn gathering_join_rechecks_both_entities_when_commands_are_applied() {
+        for arrived in [false, true] {
+            for missing in [None, Some("spot"), Some("soul")] {
+                let mut world = World::new();
+                world.init_resource::<Messages<OnGatheringJoined>>();
+                world.init_resource::<Messages<OnGatheringParticipated>>();
+                let rest_area = world.spawn(RestArea { capacity: 2 }).id();
+                let soul = world
+                    .spawn((
+                        DamnedSoul::default(),
+                        Visibility::Hidden,
+                        RestingIn(rest_area),
+                    ))
+                    .id();
+                let spot = world.spawn_empty().id();
+                let mut queue = bevy::ecs::world::CommandQueue::default();
+                {
+                    let mut commands = Commands::new(&mut queue, &world);
+                    // Simulate a target/source retiring in another Execute
+                    // command before this already-decided join is applied.
+                    if let Some(missing) = missing {
+                        commands
+                            .entity(if missing == "spot" { spot } else { soul })
+                            .despawn();
+                    }
+                    queue_idle_gathering_join(&mut commands, soul, spot, arrived);
+                }
+                queue.apply(&mut world);
+
+                let valid = missing.is_none();
+                assert_eq!(
+                    world.resource::<Messages<OnGatheringParticipated>>().len(),
+                    usize::from(valid)
+                );
+                assert_eq!(
+                    world.resource::<Messages<OnGatheringJoined>>().len(),
+                    usize::from(valid && arrived)
+                );
+                if missing != Some("soul") {
+                    assert_eq!(
+                        world.get::<ParticipatingIn>(soul).map(|p| p.0),
+                        valid.then_some(spot)
+                    );
+                    assert_eq!(world.get::<RestingIn>(soul).is_some(), !valid);
+                    assert_eq!(
+                        world.get::<Visibility>(soul),
+                        Some(if valid {
+                            &Visibility::Visible
+                        } else {
+                            &Visibility::Hidden
+                        })
+                    );
+                }
+            }
+        }
+    }
 
     #[test]
     fn pending_rest_area_rejects_queued_reserve_and_enter_operations() {

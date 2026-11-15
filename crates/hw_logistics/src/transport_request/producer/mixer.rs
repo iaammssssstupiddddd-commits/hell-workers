@@ -93,6 +93,56 @@ mod tests {
     use hw_world::Yard;
 
     #[test]
+    fn mixer_water_requests_only_whole_buckets_without_binding_workers_to_partial_space() {
+        for current in 0..=5 {
+            let mut app = App::new();
+            app.add_plugins(MinimalPlugins)
+                .init_resource::<SharedResourceCache>()
+                .init_resource::<CachedActiveFamiliars>()
+                .init_resource::<CachedActiveYards>()
+                .add_systems(Update, mud_mixer_auto_haul_system);
+            let yard = app.world_mut().spawn_empty().id();
+            app.world_mut()
+                .resource_mut::<CachedActiveYards>()
+                .data
+                .push((
+                    yard,
+                    Yard {
+                        min: Vec2::splat(-100.),
+                        max: Vec2::splat(100.),
+                    },
+                ));
+            let mixer = app
+                .world_mut()
+                .spawn((
+                    Transform::default(),
+                    MudMixerStorage::default(),
+                    Stockpile {
+                        capacity: 5,
+                        resource_type: Some(ResourceType::Water),
+                    },
+                ))
+                .id();
+            for _ in 0..current {
+                app.world_mut().spawn((
+                    crate::ResourceItem(ResourceType::Water),
+                    hw_core::relationships::StoredIn(mixer),
+                ));
+            }
+            app.update();
+            let mut query = app.world_mut().query::<&TransportRequest>();
+            assert_eq!(
+                query
+                    .iter(app.world())
+                    .filter(|r| r.kind
+                        == crate::transport_request::TransportRequestKind::DeliverWaterToMixer)
+                    .count(),
+                usize::from(current == 0)
+            );
+        }
+    }
+
+    #[test]
     fn pending_mixer_produces_no_delivery_requests_while_live_mixer_does() {
         let mut app = App::new();
         app.add_plugins(MinimalPlugins)

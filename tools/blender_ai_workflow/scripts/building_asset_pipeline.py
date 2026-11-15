@@ -17,6 +17,9 @@ import subprocess
 import sys
 from typing import Callable
 
+import building_m3_numeric
+import building_m5_numeric
+
 try:
     import fcntl
 except ImportError:
@@ -24,6 +27,13 @@ except ImportError:
 
 CONTRACT = Path(__file__).resolve().parents[1] / "fixtures/building-art-v1.contract.json"
 KINDS = json.loads(CONTRACT.read_bytes())["kinds"]
+NUMERIC_KINDS = {"Tank", "MudMixer", *building_m3_numeric.KINDS, *building_m5_numeric.KINDS}
+NUMERIC_VERIFIER_FILES = (
+    "scripts/building_asset_pipeline.py", "scripts/building_m3_numeric.py", "scripts/building_m5_numeric.py",
+    "fixtures/building-art-v1.contract.json", "fixtures/building-m3-v1.geometry.json",
+    "fixtures/building-m5-v1.contract.json", "fixtures/building-m5-v2.contract.json",
+    "fixtures/building-m3-v2.geometry.json",
+)
 
 
 def require(condition: bool, reason: str) -> None:
@@ -37,6 +47,28 @@ def canonical(value: object) -> bytes:
 
 def digest(payload: bytes) -> str:
     return hashlib.sha256(payload).hexdigest()
+
+
+def numeric_verifier_inventory() -> dict:
+    """Bind external tooling not covered by the game/native harness fingerprint."""
+    root = Path(__file__).resolve().parents[1]
+    return {relative: digest(rooted(root, relative).read_bytes()) for relative in NUMERIC_VERIFIER_FILES}
+
+
+def exact_json(value: object, expected: object) -> bool:
+    """JSON identities distinguish integers from floats and booleans."""
+    return canonical(value) == canonical(expected)
+
+
+def check_art_approval(approval: dict, preview_identity: dict) -> None:
+    require(exact_json(approval, {"schema_version": 1, "decision": "building_art_approved",
+                                 "art_preview_identity": preview_identity}), "art approval identity differs")
+
+
+def check_release_approval(approval: dict, candidate_identity: dict, evidence_digest: str) -> None:
+    require(exact_json(approval, {"schema_version": 1, "decision": "building_release_approved",
+                                 "candidate_identity": candidate_identity, "evidence_sha256": evidence_digest}),
+            "release approval/evidence binding differs")
 
 
 def no_symlinks(path: Path) -> Path:
@@ -152,7 +184,7 @@ def release_bindings(asset_root: Path, binary: Path, group: str = "m2") -> list[
         active = pointer(asset_root, kind)
         require(active is not None, f"{kind} has no active release authority")
         manifest, _text, _receipt = load_set(asset_root, kind, binary)
-        require(manifest["identity"] == active["identity"]
+        require(exact_json(manifest["identity"], active["identity"])
                 and manifest["identity"]["authority"] == "release_approved",
                 f"{kind} authority pointer/locator is not release approved")
         result.append({"identity": manifest["identity"], "locator": locator(kind)})
@@ -165,8 +197,9 @@ def export(recipe_path: Path, source_root: Path, destination: Path, binary: Path
     """Package existing per-part GLB/PNG exports; do not invent geometry or art."""
     require(authority in {"art_preview", "isolated_candidate"}, "export cannot grant release authority")
     recipe = read(recipe_path)
+    optional = {"body_paint_projection", "surface_paint"} & set(recipe)
     require(set(recipe) == {"schema_version", "kind", "generation", "source", "geometry_contract", "artifacts",
-                           "parts", "world_preview", "catalog_preview"} and recipe["schema_version"] == 1,
+                           "parts", "world_preview", "catalog_preview"} | optional and recipe["schema_version"] == 1,
             "export recipe fields differ")
     ident = identity(recipe["kind"], recipe["generation"], "art_preview")
     kind = KINDS[ident["kind"]]
@@ -187,12 +220,17 @@ def export(recipe_path: Path, source_root: Path, destination: Path, binary: Path
         "geometry_contract_sha256": digest(geometry), "art_approval_sha256": None,
         "artifacts": artifacts, "parts": recipe["parts"], "world_preview": recipe["world_preview"],
         "catalog_preview": recipe["catalog_preview"], "receipt": None}
+    for field in optional:
+        require(isinstance(recipe[field], dict), "paint method must be explicit")
+        manifest[field] = recipe[field]
     preview = codec(binary, "seal", json.dumps(manifest))["manifest"]
+    for field in optional:
+        require(exact_json(json.loads(preview).get(field), recipe[field]),
+                "runtime codec did not preserve the paint method")
     if authority == "isolated_candidate":
         require(approval_path is not None, "candidate requires separate art approval")
         approval = read(approval_path)
-        require(approval == {"schema_version": 1, "decision": "building_art_approved",
-                            "art_preview_identity": json.loads(preview)["identity"]}, "art approval identity differs")
+        check_art_approval(approval, json.loads(preview)["identity"])
         manifest["identity"]["authority"] = authority
         approval_bytes = canonical(approval)
         manifest["art_approval_sha256"] = digest(approval_bytes)
@@ -205,14 +243,32 @@ def export(recipe_path: Path, source_root: Path, destination: Path, binary: Path
             numeric_bytes = canonical(numeric)
             manifest["numeric_approval_sha256"] = digest(numeric_bytes)
             files["provenance/numeric-approval.json"] = numeric_bytes
+        elif ident["kind"] in building_m3_numeric.KINDS:
+            require(numeric_approval_path is not None, "M3 candidate requires separate numeric approval")
+            numeric = read(numeric_approval_path)
+            building_m3_numeric.validate(numeric, json.loads(preview)["identity"], digest(approval_bytes), geometry)
+            numeric_bytes = canonical(numeric)
+            manifest["numeric_approval_sha256"] = digest(numeric_bytes)
+            files["provenance/numeric-approval.json"] = numeric_bytes
+        elif ident["kind"] in building_m5_numeric.KINDS:
+            require(numeric_approval_path is not None, "M5 candidate requires separate numeric approval")
+            numeric = read(numeric_approval_path)
+            building_m5_numeric.validate(numeric, json.loads(preview)["identity"], digest(approval_bytes), geometry,
+                                         json.loads(preview))
+            numeric_bytes = canonical(numeric)
+            manifest["numeric_approval_sha256"] = digest(numeric_bytes)
+            files["provenance/numeric-approval.json"] = numeric_bytes
         else:
-            require(numeric_approval_path is None, "numeric approval is M2-only")
+            require(numeric_approval_path is None, "numeric approval is M2/M3/M5-only")
     else:
         require(approval_path is None and numeric_approval_path is None, "art preview cannot claim approval")
     projection = codec(binary, "seal", json.dumps(manifest))["manifest"]
     if "production_state" in manifest:
         require(json.loads(projection)["production_state"] == manifest["production_state"],
                 "numeric approval values are not preserved by the runtime codec")
+    if "numeric_approval_sha256" in manifest:
+        require(json.loads(projection).get("numeric_approval_sha256") == manifest["numeric_approval_sha256"],
+                "numeric approval digest is not preserved by the runtime codec")
     files[locator(ident["kind"])] = projection.encode()
     files["provenance/source"] = source
     files["provenance/geometry.json"] = geometry
@@ -231,12 +287,20 @@ def approved_numeric_state(approval: dict, preview_identity: dict, art_digest: s
         "schema_version", "decision", "art_preview_identity", "art_approval_sha256", "production_state"}
         and type(approval["schema_version"]) is int and approval["schema_version"] == 1
         and approval["decision"] == "building_numeric_approved"
-        and approval["art_preview_identity"] == preview_identity
+        and exact_json(approval["art_preview_identity"], preview_identity)
         and preview_identity["authority"] == "art_preview"
         and approval["art_approval_sha256"] == art_digest, "numeric approval preview/art binding differs")
     state = approval["production_state"]
     require(isinstance(state, dict) and state.get("kind") == preview_identity["kind"]
             and state["kind"] in {"Tank", "MudMixer"}, "numeric approval kind differs")
+    if state["kind"] == "Tank":
+        require(set(state) == {"kind", "partial_y_wu", "full_y_wu"}, "numeric state fields differ")
+        numbers = [state["partial_y_wu"], state["full_y_wu"]]
+    else:
+        require(set(state) == {"kind", "axis", "radians_per_second"}
+                and isinstance(state["axis"], list) and len(state["axis"]) == 3, "numeric state fields differ")
+        numbers = [*state["axis"], state["radians_per_second"]]
+    require(all(type(number) in (int, float) for number in numbers), "numeric values cannot be boolean aliases")
     # The runtime codec remains the authority for f32 finiteness/ranges/axis.
     # This function neither chooses values nor creates a decision.
     canonical(state)
@@ -251,18 +315,34 @@ def preview_projection(manifest: dict, binary: Path) -> dict:
     return json.loads(codec(binary, "seal", json.dumps(preview))["manifest"])
 
 
+def candidate_projection(manifest: dict, binary: Path) -> tuple[dict, str]:
+    """Reconstruct a candidate identity from a validated release, not a journal claim."""
+    require(manifest["identity"]["authority"] == "release_approved", "candidate projection requires release")
+    candidate = {**manifest, "identity": {**manifest["identity"], "authority": "isolated_candidate"},
+                 "receipt": None}
+    text = codec(binary, "seal", json.dumps(candidate))["manifest"]
+    return json.loads(text), text
+
+
 def check_numeric_provenance(root: Path, manifest: dict, binary: Path) -> None:
-    if manifest["identity"]["kind"] not in {"Tank", "MudMixer"} or manifest["identity"]["authority"] == "art_preview":
+    if manifest["identity"]["kind"] not in NUMERIC_KINDS or manifest["identity"]["authority"] == "art_preview":
         return
     numeric = read(rooted(root, "provenance/numeric-approval.json"))
     require(digest(canonical(numeric)) == manifest.get("numeric_approval_sha256"), "numeric approval digest differs")
     art = read(rooted(root, "provenance/art-approval.json"))
     require(digest(canonical(art)) == manifest["art_approval_sha256"], "numeric provenance art digest differs")
     preview = preview_projection(manifest, binary)
-    require(art == {"schema_version": 1, "decision": "building_art_approved",
-                    "art_preview_identity": preview["identity"]}, "numeric provenance art identity differs")
-    require(approved_numeric_state(numeric, preview["identity"], manifest["art_approval_sha256"])
-            == manifest["production_state"], "approved numeric values differ")
+    check_art_approval(art, preview["identity"])
+    if manifest["identity"]["kind"] in building_m3_numeric.KINDS:
+        require(manifest.get("production_state") is None, "M3 cannot claim M2 production state")
+        building_m3_numeric.validate(numeric, preview["identity"], manifest["art_approval_sha256"],
+                                    rooted(root, "provenance/geometry.json").read_bytes())
+    elif manifest["identity"]["kind"] in building_m5_numeric.KINDS:
+        building_m5_numeric.validate(numeric, preview["identity"], manifest["art_approval_sha256"],
+                                    rooted(root, "provenance/geometry.json").read_bytes(), manifest)
+    else:
+        require(approved_numeric_state(numeric, preview["identity"], manifest["art_approval_sha256"])
+                == manifest["production_state"], "approved numeric values differ")
     for relative, field in (("provenance/source", "source_sha256"), ("provenance/geometry.json", "geometry_contract_sha256")):
         require(digest(rooted(root, relative).read_bytes()) == manifest[field], "numeric source provenance differs")
 
@@ -281,6 +361,27 @@ def load_set(root: Path, kind: str, binary: Path) -> tuple[dict, str, str | None
     return manifest, text, receipt
 
 
+def verify_set(root: Path, kind: str, binary: Path) -> dict:
+    """Read-only packaged-byte verification; never create an approval or pointer."""
+    root = no_symlinks(root)
+    manifest, text, _ = load_set(root, kind, binary)
+    ident = manifest["identity"]
+    provenance = root if ident["authority"] != "release_approved" else rooted(
+        root, f"building_sets/{KINDS[kind]['slug']}/{ident['generation']}")
+    for path, field in (("provenance/source", "source_sha256"),
+                        ("provenance/geometry.json", "geometry_contract_sha256")):
+        require(digest(rooted(provenance, path).read_bytes()) == manifest[field],
+                "packaged source provenance differs")
+    if ident["authority"] != "art_preview":
+        approval_path = rooted(provenance, "provenance/art-approval.json")
+        approval = approval_path.read_bytes()
+        require(digest(approval) == manifest["art_approval_sha256"], "packaged art approval digest differs")
+        check_art_approval(read(approval_path), preview_projection(manifest, binary)["identity"])
+    return {"status": "verified", "scope": "packaged-byte-validity-only",
+            "identity": ident, "manifest_file_sha256": digest(text.encode()),
+            "artifact_count": len(manifest["artifacts"]), "promotion_authority": False}
+
+
 def pointer(root: Path, kind: str) -> dict | None:
     path = rooted(root, f"authority/building-{KINDS[kind]['slug']}.json")
     return read(path) if path.exists() else None
@@ -295,9 +396,7 @@ def plan(source_root: Path, asset_root: Path, kind: str, binary: Path) -> dict:
     approval = rooted(source_root, "provenance/art-approval.json").read_bytes()
     require(digest(approval) == candidate["art_approval_sha256"], "candidate art approval hash differs")
     expected_preview = preview_projection(candidate, binary)
-    require(read(source_root / "provenance/art-approval.json") == {
-        "schema_version": 1, "decision": "building_art_approved", "art_preview_identity": expected_preview["identity"]},
-        "candidate art approval identity differs")
+    check_art_approval(read(source_root / "provenance/art-approval.json"), expected_preview["identity"])
     for relative, field in (("provenance/source", "source_sha256"), ("provenance/geometry.json", "geometry_contract_sha256")):
         require(digest(rooted(source_root, relative).read_bytes()) == candidate[field], "source provenance differs")
     require(candidate["export_sha256"] == digest(canonical(candidate["artifacts"])), "export inventory identity differs")
@@ -314,7 +413,7 @@ def plan(source_root: Path, asset_root: Path, kind: str, binary: Path) -> dict:
     current = pointer(asset_root, kind)
     if current:
         active, _, _ = load_set(asset_root, kind, binary)
-        require(current["identity"] == active["identity"], "active pointer/locator differs")
+        require(exact_json(current["identity"], active["identity"]), "active pointer/locator differs")
         require(generation > current["identity"]["generation"], "generation must increase")
     else:
         require(not rooted(asset_root, locator(kind)).exists(), "unowned runtime locator")
@@ -343,16 +442,12 @@ def checked_plan(path: Path, binary: Path, *, source_required: bool = True) -> d
     else:
         projection = value["projection"]
         codec(binary, "validate", projection["manifest"], projection["receipt"])
-        candidate = json.loads(projection["manifest"])
-        candidate["identity"]["authority"] = "isolated_candidate"
-        candidate["receipt"] = None
-        text = codec(binary, "seal", json.dumps(candidate))["manifest"]
-        candidate = json.loads(text)
+        candidate, text = candidate_projection(json.loads(projection["manifest"]), binary)
         for entry in candidate["artifacts"]:
             file_bytes(root, entry)
         provenance = rooted(root,
             f"building_sets/{KINDS[value['kind']]['slug']}/{candidate['identity']['generation']}")
-    require(candidate["identity"] == value["candidate_identity"]
+    require(exact_json(candidate["identity"], value["candidate_identity"])
             and candidate["identity"]["authority"] == "isolated_candidate"
             and digest(text.encode()) == value["candidate_sha256"], "planned candidate changed")
     require(digest(rooted(provenance, "provenance/art-approval.json").read_bytes()) == candidate["art_approval_sha256"],
@@ -410,26 +505,25 @@ def apply(path: Path, binary: Path, evidence_path: Path, approval_path: Path,
     evidence, approval = read(evidence_path), read(approval_path)
     require(evidence.get("schema_version") == 1 and evidence.get("profile") == "building-art"
             and evidence.get("mode") == "candidate" and evidence.get("status") == "pass"
-            and evidence.get("identity") == value["candidate_identity"]
+            and exact_json(evidence.get("identity"), value["candidate_identity"])
             and evidence.get("feedback_only") is False, "formal candidate evidence differs")
-    require(approval == {"schema_version": 1, "decision": "building_release_approved",
-                        "candidate_identity": value["candidate_identity"], "evidence_sha256": digest(evidence_path.read_bytes())},
-            "release approval/evidence binding differs")
+    check_release_approval(approval, value["candidate_identity"], digest(evidence_path.read_bytes()))
     projected = json.loads(value["projection"]["manifest"])
     new = {"schema_version": 1, "identity": projected["identity"], "plan_sha256": digest(path.read_bytes()),
            "evidence_sha256": digest(evidence_path.read_bytes()), "approval_sha256": digest(approval_path.read_bytes())}
     journal_path = transaction_path(root, value)
     if not journal_path.exists():
-        require(verify_candidate_evidence(evidence_path) == evidence, "raw candidate evidence verification differs")
-        require(plan(source, root, kind, binary) == value, "plan no longer matches its source/active preimage")
+        require(exact_json(verify_candidate_evidence(evidence_path), evidence), "raw candidate evidence verification differs")
+        require(exact_json(plan(source, root, kind, binary), value), "plan no longer matches its source/active preimage")
     journal = {"schema_version": 1, "plan_sha256": digest(path.read_bytes()), "previous": value["previous"],
                "previous_locator": value["previous_locator"], "new": new,
                "evidence": evidence, "approval": approval, "plan": value, "state": "applying"}
     if journal_path.exists():
         saved = read(journal_path)
-        require(saved == {**journal, "state": saved["state"]}, "transaction journal differs")
+        require(exact_json(saved, {**journal, "state": saved["state"]}), "transaction journal differs")
         require(saved["state"] in {"applying", "applied"}, "rolled-back transaction cannot be reapplied")
-    require(pointer(root, kind) in (value["previous"], new), "active authority changed")
+    active_authority = pointer(root, kind)
+    require(any(exact_json(active_authority, expected) for expected in (value["previous"], new)), "active authority changed")
     current_locator = rooted(root, locator(kind))
     require((current_locator.read_text() if current_locator.exists() else None)
             in (value["previous_locator"], value["projection"]["manifest"]), "runtime locator changed")
@@ -438,7 +532,7 @@ def apply(path: Path, binary: Path, evidence_path: Path, approval_path: Path,
     generation_prefix = f"building_sets/{KINDS[kind]['slug']}/{projected['identity']['generation']}"
     for relative in ("provenance/source", "provenance/geometry.json", "provenance/art-approval.json"):
         files[f"{generation_prefix}/{relative}"] = rooted(source, relative).read_bytes()
-    if kind in {"Tank", "MudMixer"}:
+    if kind in NUMERIC_KINDS:
         files[f"{generation_prefix}/provenance/numeric-approval.json"] = rooted(source, "provenance/numeric-approval.json").read_bytes()
     for relative, payload in files.items():
         target = rooted(root, relative)
@@ -469,10 +563,10 @@ def recover(path: Path, binary: Path, *, execute: bool) -> dict:
     journal = read(journal_path)
     require(journal["plan_sha256"] == digest(path.read_bytes()), "recovery plan binding differs")
     if journal["state"] == "rolled_back":
-        require(pointer(root, value["kind"]) == value["previous"], "rollback authority changed")
+        require(exact_json(pointer(root, value["kind"]), value["previous"]), "rollback authority changed")
         return {"status": "rolled_back"}
     if journal["state"] == "applied":
-        require(pointer(root, value["kind"]) == journal["new"]
+        require(exact_json(pointer(root, value["kind"]), journal["new"])
                 and rooted(root, locator(value["kind"])).read_text() == value["projection"]["manifest"],
                 "completed transaction authority/locator differs")
         return {"status": "applied", "identity": journal["new"]["identity"]}
@@ -492,10 +586,11 @@ def rollback(path: Path, binary: Path, *, execute: bool) -> dict:
     root, kind = Path(value["asset_root"]), value["kind"]
     journal_path = transaction_path(root, value)
     journal = read(journal_path)
-    require(journal["plan_sha256"] == digest(path.read_bytes()) and journal["previous"] == value["previous"]
+    require(journal["plan_sha256"] == digest(path.read_bytes()) and exact_json(journal["previous"], value["previous"])
             and journal["previous_locator"] == value["previous_locator"], "rollback snapshot binding differs")
     require(journal["state"] in {"applied", "rolling_back", "rolled_back"}, "recover incomplete apply before rollback")
-    require(pointer(root, kind) in (journal["new"], value["previous"]), "rollback current authority differs")
+    active_authority = pointer(root, kind)
+    require(any(exact_json(active_authority, expected) for expected in (journal["new"], value["previous"])), "rollback current authority differs")
     target = rooted(root, locator(kind))
     require((target.read_text() if target.exists() else None)
             in (value["projection"]["manifest"], value["previous_locator"]), "rollback locator differs")
@@ -503,7 +598,7 @@ def rollback(path: Path, binary: Path, *, execute: bool) -> dict:
         old = json.loads(value["previous_locator"])
         receipt = file_bytes(root, old["receipt"]).decode()
         codec(binary, "validate", value["previous_locator"], receipt)
-        require(old["identity"] == value["previous"]["identity"], "rollback previous identity differs")
+        require(exact_json(old["identity"], value["previous"]["identity"]), "rollback previous identity differs")
         for entry in old["artifacts"]:
             file_bytes(root, entry)
     if not execute:
@@ -529,12 +624,12 @@ def install(source: Path, destination: Path, kind: str, binary: Path, *, execute
     source, destination = no_symlinks(source), no_symlinks(destination)
     require(not source.is_relative_to(destination) and not destination.is_relative_to(source), "install roots must be disjoint")
     active, old = pointer(source, kind), pointer(destination, kind)
-    if allow_rollback and old != active:
+    if allow_rollback and not exact_json(old, active):
         require(old is not None, "mirror rollback has no installed preimage")
         rollback_journal = read(rooted(source,
             f"transactions/building-{KINDS[kind]['slug']}-{old['identity']['generation']}.json"))
-        require(rollback_journal["state"] == "rolled_back" and rollback_journal["new"] == old
-                and rollback_journal["previous"] == active
+        require(rollback_journal["state"] == "rolled_back" and exact_json(rollback_journal["new"], old)
+                and exact_json(rollback_journal["previous"], active)
                 and digest(canonical(rollback_journal["plan"])) == old["plan_sha256"],
                 "mirror rollback is not authorized by the canonical transaction")
     if allow_rollback and active is None:
@@ -543,7 +638,7 @@ def install(source: Path, destination: Path, kind: str, binary: Path, *, execute
             return {"status": "rolled_back"}
         if rooted(destination, locator(kind)).exists():
             current, _, _ = load_set(destination, kind, binary)
-            require(current["identity"] == old["identity"], "mirror rollback locator/authority differs")
+            require(exact_json(current["identity"], old["identity"]), "mirror rollback locator/authority differs")
         if execute:
             for relative in (locator(kind), f"authority/building-{KINDS[kind]['slug']}.json"):
                 target = rooted(destination, relative)
@@ -552,19 +647,21 @@ def install(source: Path, destination: Path, kind: str, binary: Path, *, execute
         return {"status": "rolled_back" if execute else "planned"}
     manifest, text, receipt = load_set(source, kind, binary)
     require(manifest["identity"]["authority"] == "release_approved", "install requires release authority")
-    require(active is not None and active["identity"] == manifest["identity"], "install active identity differs")
+    require(active is not None and exact_json(active["identity"], manifest["identity"]), "install active identity differs")
     journal_relative = f"transactions/building-{KINDS[kind]['slug']}-{manifest['identity']['generation']}.json"
     journal = read(rooted(source, journal_relative))
-    require(journal["state"] == "applied" and journal["new"] == active
+    candidate, candidate_text = candidate_projection(manifest, binary)
+    require(journal["state"] == "applied" and exact_json(journal["new"], active)
+            and exact_json(journal["plan"]["candidate_identity"], candidate["identity"])
+            and journal["plan"]["candidate_sha256"] == digest(candidate_text.encode())
+            and exact_json(journal["evidence"].get("identity"), candidate["identity"])
             and digest(canonical(journal["plan"])) == active["plan_sha256"]
             and journal["plan"]["projection"] == {"manifest": text, "receipt": receipt}
             and digest(canonical(journal["approval"])) == active["approval_sha256"]
             and digest(canonical(journal["evidence"])) == active["evidence_sha256"], "install receipt/transaction binding differs")
-    require(journal["approval"] == {"schema_version": 1, "decision": "building_release_approved",
-        "candidate_identity": journal["plan"]["candidate_identity"], "evidence_sha256": active["evidence_sha256"]},
-        "install release approval differs")
+    check_release_approval(journal["approval"], candidate["identity"], active["evidence_sha256"])
     files = {r["path"]: file_bytes(source, r) for r in [*manifest["artifacts"], manifest["receipt"]]}
-    if kind in {"Tank", "MudMixer"}:
+    if kind in NUMERIC_KINDS:
         prefix = f"building_sets/{KINDS[kind]['slug']}/{manifest['identity']['generation']}/provenance"
         for name in ("source", "geometry.json", "art-approval.json", "numeric-approval.json"):
             files[f"{prefix}/{name}"] = rooted(source, f"{prefix}/{name}").read_bytes()
@@ -574,13 +671,13 @@ def install(source: Path, destination: Path, kind: str, binary: Path, *, execute
         require(not target.exists() or target.read_bytes() == payload, "immutable mirror differs")
     authority = f"authority/building-{KINDS[kind]['slug']}.json"
     if old is not None:
-        require(allow_rollback or old == active or old["identity"]["generation"] < manifest["identity"]["generation"], "mirror generation regression")
+        require(allow_rollback or exact_json(old, active) or old["identity"]["generation"] < manifest["identity"]["generation"], "mirror generation regression")
     rooted(destination, locator(kind))
     rooted(destination, authority)
     if execute:
         for relative, payload in files.items():
             put(rooted(destination, relative), payload)
-        require(pointer(source, kind) == active and pointer(destination, kind) == old, "mirror authority changed")
+        require(exact_json(pointer(source, kind), active) and exact_json(pointer(destination, kind), old), "mirror authority changed")
         put(rooted(destination, authority), canonical(active), replace=True)
         put(rooted(destination, locator(kind)), text.encode(), replace=True)
     return {"status": "installed" if execute else "planned", "identity": manifest["identity"]}
@@ -588,7 +685,7 @@ def install(source: Path, destination: Path, kind: str, binary: Path, *, execute
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("export", "plan", "apply", "recover", "rollback", "install", "bindings"))
+    parser.add_argument("command", choices=("verify", "export", "plan", "apply", "recover", "rollback", "install", "bindings"))
     parser.add_argument("--kind", choices=tuple(KINDS))
     parser.add_argument("--release-group", choices=tuple(RELEASE_GROUPS), default="m2")
     parser.add_argument("--codec", type=Path, required=True)
@@ -598,7 +695,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--apply", action="store_true")
     parser.add_argument("--rollback", action="store_true", help="mirror an explicitly rolled-back canonical transaction")
     args = parser.parse_args(argv)
-    if args.command == "bindings":
+    if args.command == "verify":
+        require(args.kind is not None and args.source_root is not None, "verify needs --kind/source-root")
+        require(not args.apply and not args.rollback and not any((args.recipe, args.asset_root, args.output,
+                args.plan, args.evidence, args.approval, args.numeric_approval)), "verify is read-only")
+        result = verify_set(args.source_root, args.kind, args.codec)
+    elif args.command == "bindings":
         require(args.asset_root and args.codec, "bindings needs --asset-root/--codec")
         result = release_bindings(args.asset_root, args.codec, args.release_group)
     elif args.command == "export":

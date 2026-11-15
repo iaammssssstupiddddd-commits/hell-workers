@@ -386,6 +386,8 @@ pub fn handle(
             }
         }
         WheelbarrowDestination::Blueprint(blueprint_entity) => {
+            #[cfg(feature = "profiling")]
+            let assignment = ctx.task_identity().assignment_entity;
             if let Ok((_, mut blueprint, _)) =
                 ctx.queries.storage.blueprints.get_mut(blueprint_entity)
             {
@@ -397,8 +399,31 @@ pub fn handle(
                         continue;
                     }
 
+                    #[cfg(feature = "profiling")]
+                    let before_count = blueprint
+                        .delivered_materials
+                        .get(res_type)
+                        .copied()
+                        .unwrap_or(0);
                     blueprint.deliver_material(*res_type, 1);
                     if try_despawn_item(commands, *item_entity) {
+                        #[cfg(feature = "profiling")]
+                        if ctx.env.delivery_observations {
+                            hw_jobs::delivery_observations::BlueprintDeliveryReceipt {
+                                worker: ctx.soul_entity,
+                                assignment,
+                                owner: blueprint_entity,
+                                item: *item_entity,
+                                world_epoch: ctx.world_epoch,
+                                kind: blueprint.kind,
+                                resource: *res_type,
+                                before_count,
+                                after_count: blueprint.delivered_materials[res_type],
+                                footprint: blueprint.occupied_grids.clone(),
+                                wheelbarrow: true,
+                            }
+                            .queue(commands);
+                        }
                         delivered_items.insert(*item_entity);
                         destination_store_count += 1;
                         unloaded_count += 1;
@@ -420,14 +445,42 @@ pub fn handle(
             entity: mixer_entity,
             resource_type,
         } => {
+            #[cfg(feature = "profiling")]
+            let receipts: HashMap<_, _> = if ctx.env.refine_observations {
+                item_types
+                    .iter()
+                    .map(|&(item, actual)| {
+                        (
+                            item,
+                            crate::refine_observations::MixerMaterialReceipt::capture(
+                                ctx,
+                                mixer_entity,
+                                item,
+                                actual.unwrap_or(resource_type),
+                                Some(data.wheelbarrow),
+                            ),
+                        )
+                    })
+                    .collect()
+            } else {
+                HashMap::new()
+            };
             if let Ok((_, mut storage, _)) = ctx.queries.storage.mixers.get_mut(mixer_entity) {
                 for (item_entity, res_type_opt) in &item_types {
                     let res_type = (*res_type_opt).unwrap_or(resource_type);
+                    #[cfg(feature = "profiling")]
+                    let before = [storage.sand, storage.rock, storage.mud];
 
                     if storage.add_material(res_type) {
                         if try_despawn_item(commands, *item_entity) {
                             delivered_items.insert(*item_entity);
                             unloaded_count += 1;
+                        }
+                        #[cfg(feature = "profiling")]
+                        if let Some(mut receipt) = receipts.get(item_entity).cloned() {
+                            receipt.before = before;
+                            receipt.after = [storage.sand, storage.rock, storage.mud];
+                            receipt.queue(commands);
                         }
                     } else if let Ok(mut item_commands) = commands.get_entity(*item_entity) {
                         item_commands.try_remove::<LoadedIn>();

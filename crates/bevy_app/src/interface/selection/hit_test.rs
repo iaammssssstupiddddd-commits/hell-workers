@@ -27,6 +27,51 @@ const OBJECT_SNAP_PX: f32 = 8.0;
 const RESOURCE_SNAP_PX: f32 = 8.0;
 const MAX_SNAP_PX: f32 = 12.0;
 
+/// Passive profiling probe of the ordinary resolver, never a selection override.
+#[cfg(feature = "profiling")]
+pub(crate) fn native_direct_owner_point(
+    world: &mut World,
+    owner: Entity,
+    points: &[Vec2],
+) -> Option<(Vec2, Vec2, usize)> {
+    use bevy::ecs::system::SystemState;
+    if points.is_empty() || points.len() > 5 || points.iter().any(|point| !point.is_finite()) {
+        return None;
+    }
+    let (camera, transform) = {
+        let mut cameras = world.query_filtered::<(&Camera, &GlobalTransform), With<MainCamera>>();
+        let (camera, transform) = cameras.single(world).ok()?;
+        (camera.clone(), *transform)
+    };
+    if !camera.is_active {
+        return None;
+    }
+    let selected = world
+        .get_resource::<hw_core::selection::SelectedEntity>()
+        .and_then(|selected| selected.0);
+    let mut state = SystemState::<SelectionResolver>::new(world);
+    let resolver = state.get(world).ok()?;
+    let mut overlapping = None;
+    for &point in points {
+        let screen = camera
+            .world_to_viewport(&transform, point.extend(0.0))
+            .ok()?;
+        let candidates = resolver.resolve(screen, point, &camera, &transform, selected);
+        let rank = candidates.iter().position(|candidate| {
+            candidate.entity == owner
+                && candidate.class == SelectionTargetClass::Object
+                && candidate.hit == SelectionHitKind::Direct
+        });
+        if let Some(rank) = rank {
+            if rank == 0 {
+                return Some((point, screen, rank));
+            }
+            overlapping.get_or_insert((point, screen, rank));
+        }
+    }
+    overlapping
+}
+
 type ActorQuery<'w, 's, Marker> = Query<
     'w,
     's,
@@ -503,6 +548,104 @@ fn stable_entity_key(entity: Entity) -> (u32, u32) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(feature = "profiling")]
+    #[test]
+    fn passive_owner_point_probe_refuses_missing_camera_and_invalid_requests() {
+        let mut world = World::new();
+        let owner = world.spawn_empty().id();
+        let before = world.entities().len();
+        for points in [
+            vec![],
+            vec![Vec2::NAN],
+            vec![Vec2::ZERO; 6],
+            vec![Vec2::ZERO],
+        ] {
+            assert!(native_direct_owner_point(&mut world, owner, &points).is_none());
+        }
+        assert_eq!(world.entities().len(), before);
+        assert!(!world.contains_resource::<hw_core::selection::SelectedEntity>());
+    }
+
+    #[cfg(feature = "profiling")]
+    #[test]
+    fn passive_owner_point_uses_normal_ranking_without_changing_selection_or_ownership() {
+        use bevy::camera::{ComputedCameraValues, RenderTargetInfo};
+        let mut world = World::new();
+        world.init_resource::<WorldMap>();
+        world.init_resource::<FamiliarSpatialGrid>();
+        world.init_resource::<SpatialGrid>();
+        world.init_resource::<ResourceSpatialGrid>();
+        world.init_resource::<StockpileSpatialGrid>();
+        world.init_resource::<SelectableObstacleSpatialGrid>();
+        let camera = world
+            .spawn((
+                MainCamera,
+                Camera {
+                    computed: ComputedCameraValues {
+                        clip_from_view: Mat4::orthographic_rh(-960., 960., -540., 540., 0., 2000.),
+                        target_info: Some(RenderTargetInfo {
+                            physical_size: UVec2::new(1920, 1080),
+                            scale_factor: 1.,
+                        }),
+                        ..default()
+                    },
+                    ..default()
+                },
+                GlobalTransform::from_translation(Vec3::new(672., 0., 1000.)),
+            ))
+            .id();
+        let owner = world
+            .spawn((
+                Building {
+                    kind: BuildingType::SoulSpa,
+                    is_provisional: false,
+                },
+                Transform::from_xyz(672., 0., 0.12),
+            ))
+            .id();
+        let cells = [(70, 50), (71, 50), (70, 49), (71, 49)];
+        for grid in cells {
+            world.resource_mut::<WorldMap>().set_building(grid, owner);
+        }
+        let occupied = WorldMap::grid_to_world(70, 50);
+        let free = WorldMap::grid_to_world(71, 50);
+        let soul = world
+            .spawn((
+                DamnedSoul::default(),
+                Transform::from_translation(occupied.extend(1.)),
+                Visibility::Visible,
+            ))
+            .id();
+        world.resource_mut::<SpatialGrid>().insert(soul, occupied);
+        world.insert_resource(hw_core::selection::SelectedEntity(Some(soul)));
+        let before = world.resource::<WorldMap>().snapshot_owner(owner);
+        let count = world.entities().len();
+        let (point, _, rank) = native_direct_owner_point(&mut world, owner, &[occupied]).unwrap();
+        assert_eq!(point, occupied);
+        assert_eq!(rank, 1);
+        let (point, screen, rank) =
+            native_direct_owner_point(&mut world, owner, &[occupied, free]).unwrap();
+        assert_eq!(rank, 0);
+        assert_eq!(point, free);
+        assert!(screen.distance(Vec2::new(976., 524.)) < 0.001);
+        assert_eq!(
+            world.resource::<hw_core::selection::SelectedEntity>().0,
+            Some(soul)
+        );
+        assert_eq!(
+            world
+                .resource::<WorldMap>()
+                .snapshot_owner(owner)
+                .building_grids,
+            before.building_grids
+        );
+        assert_eq!(world.entities().len(), count);
+        let foreign = world.spawn_empty().id();
+        assert!(native_direct_owner_point(&mut world, foreign, &[free]).is_none());
+        world.get_mut::<Camera>(camera).unwrap().is_active = false;
+        assert!(native_direct_owner_point(&mut world, owner, &[free]).is_none());
+    }
 
     #[test]
     fn canonical_owner_cells_cover_a_bridge_without_center_radius_guessing() {

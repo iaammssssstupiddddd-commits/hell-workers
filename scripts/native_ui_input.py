@@ -204,7 +204,9 @@ class X11Input:
             width, height = self.client_size()
             if (not pointer["same_screen"] or not (0 <= pointer["client"][0] < width
                                                     and 0 <= pointer["client"][1] < height)):
-                raise InputRejected("pointer left the owned client before button press")
+                raise InputRejected(f"pointer left the owned client before button press: "
+                                    f"window={self.window:#x}, owner_pid={self.owner_pid}, "
+                                    f"client_size={[width, height]}, pointer={pointer!r}")
         if point is not None:
             width, height = self.client_size()
             if (len(point) != 2 or any(type(value) is not int for value in point)

@@ -33,9 +33,10 @@ class M5CandidateTests(unittest.TestCase):
             self.assertAlmostEqual((bounds[0] + bounds[2]) / 2, 128, delta=1)
         for kind in m5.KINDS:
             world, catalog = m5.previews(kind)
-            self.assertEqual(world["anchor_px"], [128, 128])
+            self.assertEqual(world["anchor_px"], [128, 208] if kind == "OutdoorLamp" else [128, 128])
+            self.assertEqual(catalog["anchor_px"], [128, 128])
             self.assertEqual(catalog["image_role"], "catalog")
-            self.assertEqual(world["canvas_wu"], [64, 64] if kind == "WheelbarrowParking" else [32, 32])
+            self.assertEqual(world["canvas_wu"], [64, 64] if kind in {"WheelbarrowParking", "OutdoorLamp"} else [32, 32])
         self.assertEqual(m5.previews("OutdoorLamp")[0]["image_role"], "world_off")
 
     def test_rejects_wrong_canvas_clipping_and_magenta(self):
@@ -83,6 +84,31 @@ class M5CandidateTests(unittest.TestCase):
             self.assertFalse(result["runtime_published"])
             with self.assertRaisesRegex(ValueError, "fresh"):
                 m5.prepare("WheelbarrowParking", source, "parking-v1", 2, root / "codec")
+
+    def test_isolated_output_is_fresh_separate_and_preserves_originals(self):
+        with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, {"HELL_WORKERS_ASSET_ROOT": directory}):
+            root = Path(directory)
+            source = root / "staging/originals/bones"
+            source.mkdir(parents=True)
+            payload = png()
+            (source / "world.png").write_bytes(payload)
+            output = root / "isolated-job"
+            with patch.object(m5, "ISOLATED_JOBS", root), patch.object(m5.pipeline, "export", return_value={"identity": {"authority": "art_preview"}}):
+                with patch.object(m5, "verify") as verify:
+                    m5.prepare("BonePile", source, "bones-v1", 1, root / "codec", output)
+                    verify.assert_called_once_with("BonePile", output / "runtime", root / "codec", isolated=True)
+            self.assertEqual((output / "authoring/world.png").read_bytes(), payload)
+            self.assertEqual((source / "world.png").read_bytes(), payload)
+            for forbidden in (output, source / "child", source.parent):
+                with self.assertRaisesRegex(ValueError, "fresh separate"):
+                    m5.prepare("BonePile", source, "bones-v1", 1, root / "codec", forbidden)
+            with self.assertRaises(ValueError):
+                m5.prepare("BonePile", source, "../bad", 1, root / "codec", root / "other")
+            with self.assertRaisesRegex(ValueError, "native-acceptance"):
+                m5.prepare("BonePile", source, "bones-v1", 1, root / "codec", root / "unregistered-job")
+            product = Path(m5.__file__).resolve().parents[3] / "assets/new-unapproved-test-set"
+            with self.assertRaisesRegex(ValueError, "product assets"):
+                m5.prepare("BonePile", source, "bones-v1", 1, root / "codec", product)
 
     def test_release_bindings_require_every_explicit_m5_authority(self):
         with tempfile.TemporaryDirectory() as directory:

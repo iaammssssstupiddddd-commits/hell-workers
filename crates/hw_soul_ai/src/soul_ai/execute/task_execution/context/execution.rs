@@ -63,6 +63,12 @@ pub struct TaskExecEnv<'a> {
     pub time: &'a Time,
     pub world_map: &'a WorldMap,
     pub breakdown: Option<&'a StressBreakdown>,
+    #[cfg(feature = "profiling")]
+    pub delivery_observations: bool,
+    #[cfg(feature = "profiling")]
+    pub refine_observations: bool,
+    #[cfg(feature = "profiling")]
+    pub water_observations: bool,
 }
 
 /// タスク実行の基本コンテキスト
@@ -85,6 +91,8 @@ pub struct TaskExecutionContext<'a, 'w, 's> {
     pub(crate) path_search_progress: &'a mut TaskPathSearchProgress,
     pub(crate) chain_shadow:
         &'a mut crate::soul_ai::execute::task_execution::chain::ChainAdmissionShadow,
+    pub(crate) water_claims:
+        &'a mut crate::soul_ai::execute::task_execution::bucket_transport::claims::WaterTransferClaims,
     pub queries: &'a mut TaskQueries<'w, 's>,
     pub world_epoch: u64,
     pub(crate) deconstruction_commit_request: Option<DeconstructionCommitRequest>,

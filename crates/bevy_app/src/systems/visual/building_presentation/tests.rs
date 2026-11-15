@@ -14,6 +14,183 @@ use hw_visual::{Building3dVisual, TopDownStructuralMaterial};
 
 mod mixed;
 
+#[test]
+fn admitted_uv_ink_keeps_one_atlas_on_moving_parts_and_restores_legacy_shading() {
+    let mut app = app();
+    app.insert_resource(bevy::time::TimeUpdateStrategy::ManualDuration(
+        std::time::Duration::from_millis(100),
+    ));
+    let owner = shell(app.world_mut(), BuildingType::MudMixer);
+    app.world_mut()
+        .entity_mut(owner)
+        .insert(MudMixerVisualState { is_active: true });
+    app.update();
+    let set = app
+        .world_mut()
+        .resource_mut::<BuildingAssetPool>()
+        .install_surface_paint_fixture(BuildingAssetKind::MudMixer, 4);
+    app.update();
+    let visual = root(app.world_mut(), owner);
+    let parts = children(app.world(), visual);
+    let initial: Vec<_> = parts
+        .iter()
+        .map(|part| *app.world().get::<Transform>(*part).unwrap())
+        .collect();
+    let material_handles: Vec<_> = parts
+        .iter()
+        .map(|part| {
+            app.world()
+                .get::<MeshMaterial3d<TopDownStructuralMaterial>>(*part)
+                .unwrap()
+                .0
+                .clone()
+        })
+        .collect();
+    assert_eq!(material_handles[0], material_handles[1]);
+    app.update();
+    assert_eq!(app.world().get::<Transform>(parts[0]), Some(&initial[0]));
+    assert_ne!(
+        app.world().get::<Transform>(parts[1]).unwrap().rotation,
+        initial[1].rotation
+    );
+    for part in &parts {
+        let handle = &app
+            .world()
+            .get::<MeshMaterial3d<TopDownStructuralMaterial>>(*part)
+            .unwrap()
+            .0;
+        assert_eq!(handle, &material_handles[0]);
+        let material = app
+            .world()
+            .resource::<Assets<TopDownStructuralMaterial>>()
+            .get(handle)
+            .unwrap();
+        assert_eq!(
+            material.base.base_color_texture.as_ref(),
+            set.image("albedo")
+        );
+        assert_eq!(material.extension.uniforms.indoor_light_params.w, 4.);
+        assert!(!material.base.unlit);
+    }
+    app.world_mut().resource_mut::<Time<Virtual>>().pause();
+    app.update();
+    let held = *app.world().get::<Transform>(parts[1]).unwrap();
+    app.update();
+    assert_eq!(app.world().get::<Transform>(parts[1]), Some(&held));
+    let legacy = publish(app.world_mut(), BuildingAssetKind::MudMixer, 3);
+    app.update();
+    for part in children(app.world(), visual) {
+        let handle = &app
+            .world()
+            .get::<MeshMaterial3d<TopDownStructuralMaterial>>(part)
+            .unwrap()
+            .0;
+        let material = app
+            .world()
+            .resource::<Assets<TopDownStructuralMaterial>>()
+            .get(handle)
+            .unwrap();
+        assert_eq!(material.extension.uniforms.indoor_light_params.w, 0.);
+        assert_eq!(
+            material.base.base_color_texture.as_ref(),
+            legacy.image("albedo")
+        );
+    }
+}
+
+#[test]
+fn admitted_body_paint_uses_world_preview_only_and_rollback_restores_the_legacy_material() {
+    use hw_core::relationships::StoredIn;
+    use hw_core::visual_mirror::StockpileVisualState;
+    let mut app = app();
+    let owner = shell(app.world_mut(), BuildingType::Tank);
+    app.world_mut()
+        .entity_mut(owner)
+        .insert(StockpileVisualState { capacity: 2 });
+    let set = app
+        .world_mut()
+        .resource_mut::<BuildingAssetPool>()
+        .install_body_paint_fixture(4);
+    let mut body_material = None;
+    for count in 0..=2 {
+        if count > 0 {
+            app.world_mut().spawn(StoredIn(owner));
+        }
+        app.update();
+        let visual = root(app.world_mut(), owner);
+        for part in children(app.world(), visual) {
+            let name = app.world().get::<Name>(part).unwrap().as_str();
+            let handle = app
+                .world()
+                .get::<MeshMaterial3d<TopDownStructuralMaterial>>(part)
+                .unwrap()
+                .0
+                .clone();
+            let material = app
+                .world()
+                .resource::<Assets<TopDownStructuralMaterial>>()
+                .get(&handle)
+                .unwrap();
+            assert!(!material.base.unlit);
+            if name == "body" {
+                assert_eq!(
+                    material.base.base_color_texture.as_ref(),
+                    set.image("world_preview")
+                );
+                assert_eq!(material.extension.uniforms.indoor_light_params.w, 3.);
+                assert_eq!(
+                    material.extension.uniforms.shadow_style_params,
+                    Vec4::new(64., 64., 0.5, 0.75)
+                );
+                assert_eq!(
+                    material.extension.uniforms.shadow_style_tint,
+                    Vec4::new(0.125, 0.09375, 0.078125, 1.)
+                );
+                if let Some(previous) = &body_material {
+                    assert_eq!(previous, &handle);
+                }
+                body_material = Some(handle);
+            } else {
+                assert_eq!(name, "water");
+                assert_eq!(
+                    material.base.base_color_texture.as_ref(),
+                    set.image("albedo")
+                );
+                assert_eq!(material.extension.uniforms.indoor_light_params.w, 0.82);
+                assert_ne!(Some(&handle), body_material.as_ref());
+                assert_eq!(
+                    app.world().get::<Visibility>(part),
+                    Some(&if count == 0 {
+                        Visibility::Hidden
+                    } else {
+                        Visibility::Inherited
+                    })
+                );
+            }
+        }
+    }
+    let legacy = publish(app.world_mut(), BuildingAssetKind::Tank, 3);
+    app.update();
+    let visual = root(app.world_mut(), owner);
+    for part in children(app.world(), visual) {
+        let handle = &app
+            .world()
+            .get::<MeshMaterial3d<TopDownStructuralMaterial>>(part)
+            .unwrap()
+            .0;
+        let material = app
+            .world()
+            .resource::<Assets<TopDownStructuralMaterial>>()
+            .get(handle)
+            .unwrap();
+        assert_eq!(material.extension.uniforms.indoor_light_params.w, 0.82);
+        assert_eq!(
+            material.base.base_color_texture.as_ref(),
+            legacy.image("albedo")
+        );
+    }
+}
+
 fn app() -> App {
     let mut app = App::new();
     app.add_plugins((MinimalPlugins, AssetPlugin::default(), TransformPlugin))
@@ -102,6 +279,112 @@ fn publish(world: &mut World, kind: BuildingAssetKind, generation: u64) -> Build
     world
         .resource_mut::<BuildingAssetPool>()
         .install_presentation_fixture(kind, generation, BuildingAssetAuthority::ReleaseApproved)
+}
+
+#[test]
+fn tank_painterly_shading_keeps_lighting_and_other_buildings_geometric() {
+    for (kind, asset_kind) in [
+        (BuildingType::Tank, BuildingAssetKind::Tank),
+        (BuildingType::MudMixer, BuildingAssetKind::MudMixer),
+        (BuildingType::RestArea, BuildingAssetKind::RestArea),
+    ] {
+        let mut app = app();
+        let owner = shell(app.world_mut(), kind);
+        publish(app.world_mut(), asset_kind, 1);
+        app.update();
+        let visual = root(app.world_mut(), owner);
+        for child in children(app.world(), visual) {
+            let handle = app
+                .world()
+                .get::<MeshMaterial3d<TopDownStructuralMaterial>>(child)
+                .unwrap();
+            let material = app
+                .world()
+                .resource::<Assets<TopDownStructuralMaterial>>()
+                .get(&handle.0)
+                .unwrap();
+            assert!(!material.base.unlit);
+            let flatten = material.extension.uniforms.indoor_light_params.w;
+            if kind == BuildingType::Tank {
+                assert!((0.8..1.0).contains(&flatten));
+            } else {
+                assert_eq!(flatten, 0.0);
+            }
+        }
+    }
+}
+
+#[test]
+fn warmed_queries_follow_late_archetypes_and_do_not_retain_removed_owners() {
+    let mut app = app();
+    app.world_mut().resource_mut::<Time<Virtual>>().pause();
+    // Initialize the synchronizers before any of these consumer archetypes exist.
+    app.update();
+    let tank = shell(app.world_mut(), BuildingType::Tank);
+    app.update();
+    let tank_root = root(app.world_mut(), tank);
+    publish(app.world_mut(), BuildingAssetKind::Tank, 1);
+    app.update();
+    let parts = children(app.world(), tank_root);
+    assert_eq!(parts.len(), 2);
+    // Released parts add Name to the fallback leaf's archetype. The cached
+    // mutable query must discover them in the same generation-switch frame.
+    let water = parts
+        .iter()
+        .find(|&&entity| {
+            app.world()
+                .get::<Name>(entity)
+                .is_some_and(|name| name.as_str() == "water")
+        })
+        .unwrap();
+    assert_eq!(
+        app.world().get::<Visibility>(*water),
+        Some(&Visibility::Hidden)
+    );
+    app.world_mut().despawn(tank);
+    app.update();
+    assert!(app.world().get_entity(tank_root).is_err());
+    assert!(
+        parts
+            .iter()
+            .all(|&entity| app.world().get_entity(entity).is_err())
+    );
+
+    let lamp = shell(app.world_mut(), BuildingType::OutdoorLamp);
+    let lamp_leaf = children(app.world(), lamp)[0];
+    let set = publish(app.world_mut(), BuildingAssetKind::OutdoorLamp, 1);
+    app.update();
+    assert_eq!(
+        &app.world().get::<Sprite>(lamp_leaf).unwrap().image,
+        set.image("world_off").unwrap()
+    );
+    let card = app
+        .world_mut()
+        .spawn((
+            BuildingCatalogPreview(BuildingType::OutdoorLamp),
+            ImageNode::default(),
+        ))
+        .id();
+    app.update();
+    assert_eq!(
+        &app.world().get::<ImageNode>(card).unwrap().image,
+        set.image("catalog").unwrap()
+    );
+    app.world_mut().despawn(lamp);
+    app.world_mut().despawn(card);
+    app.update();
+
+    let mixer = shell(app.world_mut(), BuildingType::MudMixer);
+    app.update();
+    let mixer_root = root(app.world_mut(), mixer);
+    assert_eq!(children(app.world(), mixer_root).len(), 1);
+    assert_eq!(
+        app.world()
+            .get::<Building3dVisual>(mixer_root)
+            .unwrap()
+            .owner,
+        mixer
+    );
 }
 
 fn assert_authored_parts(world: &World, parts: &[Entity], set: &BuildingAssetDescriptor) {
@@ -947,6 +1230,8 @@ fn tank_state_changes_reuse_water_leaf_and_keep_fallback_materials() {
         "/../../tools/blender_ai_workflow/fixtures/building-tank-v1.geometry.json"
     )))
     .unwrap();
+    let mut partial_material = None;
+    let mut full_material = None;
     for expected in [
         StructuralPresentationState::TankPartial,
         StructuralPresentationState::TankFull,
@@ -958,6 +1243,36 @@ fn tank_state_changes_reuse_water_leaf_and_keep_fallback_materials() {
             Some(&expected)
         );
         assert_eq!(children(app.world(), visual), parts);
+        let water_material = app
+            .world()
+            .get::<MeshMaterial3d<TopDownStructuralMaterial>>(parts[1])
+            .unwrap()
+            .0
+            .clone();
+        if expected == StructuralPresentationState::TankPartial {
+            assert_eq!(
+                app.world()
+                    .resource::<Assets<TopDownStructuralMaterial>>()
+                    .get(&water_material)
+                    .unwrap()
+                    .base
+                    .base_color,
+                Color::srgb(0.58, 0.70, 0.73)
+            );
+            partial_material = Some(water_material);
+        } else {
+            assert_eq!(
+                app.world()
+                    .resource::<Assets<TopDownStructuralMaterial>>()
+                    .get(&water_material)
+                    .unwrap()
+                    .base
+                    .base_color,
+                Color::WHITE
+            );
+            assert_ne!(Some(water_material.clone()), partial_material);
+            full_material = Some(water_material);
+        }
         assert_eq!(
             app.world().get::<Visibility>(parts[1]),
             Some(&Visibility::Inherited)
@@ -980,6 +1295,10 @@ fn tank_state_changes_reuse_water_leaf_and_keep_fallback_materials() {
         .get_mut::<StockpileVisualState>(owner)
         .unwrap()
         .capacity = 0;
+    let material_count = app
+        .world()
+        .resource::<Assets<TopDownStructuralMaterial>>()
+        .len();
     app.update();
     assert_eq!(children(app.world(), visual), parts);
     assert_eq!(
@@ -994,11 +1313,29 @@ fn tank_state_changes_reuse_water_leaf_and_keep_fallback_materials() {
             .y,
         12.0
     );
+    assert_eq!(
+        app.world()
+            .get::<MeshMaterial3d<TopDownStructuralMaterial>>(parts[1])
+            .map(|material| material.0.clone()),
+        partial_material
+    );
     app.world_mut()
         .get_mut::<StockpileVisualState>(owner)
         .unwrap()
         .capacity = 2;
     app.update();
+    assert_eq!(
+        app.world()
+            .get::<MeshMaterial3d<TopDownStructuralMaterial>>(parts[1])
+            .map(|material| material.0.clone()),
+        full_material
+    );
+    assert_eq!(
+        app.world()
+            .resource::<Assets<TopDownStructuralMaterial>>()
+            .len(),
+        material_count
+    );
     app.world_mut()
         .resource_mut::<BuildingAssetPool>()
         .invalidate_active(&set.manifest.identity);
@@ -1345,5 +1682,86 @@ fn bridge_consumers_share_generation_fallback_bounce_and_owner_cleanup() {
     app.update();
     for entity in [visual, fallback_part, pulse] {
         assert!(app.world().get_entity(entity).is_err());
+    }
+}
+
+#[test]
+#[cfg(feature = "profiling")]
+fn tank_pilot_body_material_does_not_replace_partial_or_full_water() {
+    use crate::assets::building_asset_set::{
+        gallery_capture::GalleryCaptureSession,
+        tank_illustration_pilot::{TankIllustrationPilot, TankPilotPaint},
+    };
+    use hw_core::relationships::StoredIn;
+    use hw_core::visual_mirror::StockpileVisualState;
+    let mut app = app();
+    let owner = shell(app.world_mut(), BuildingType::Tank);
+    app.world_mut()
+        .entity_mut(owner)
+        .insert(StockpileVisualState { capacity: 2 });
+    let set = publish(app.world_mut(), BuildingAssetKind::Tank, 3);
+    // The World fixture has a synthetic manifest identity; public admission of
+    // the real g3 identity is tested separately by the closed session parser.
+    let mut gallery =
+        serde_json::to_value(crate::assets::building_asset_set::release_gallery::test_session())
+            .unwrap();
+    gallery["bindings"][0]["identity"] = serde_json::to_value(&set.manifest.identity).unwrap();
+    let session:TankIllustrationPilot=serde_json::from_value(serde_json::json!({"schema_version":1,"contract_id":"building-tank-illustration-pilot-v1","gallery":gallery,"paint":{"path":"pilot/tank-body.png","png_sha256":"a".repeat(64),"rgba_sha256":"b".repeat(64),"dimensions":[256,256],"canvas_wu":[96.,96.],"anchor_uv":[0.5,0.625],"matte_linear_rgb":[0.125,0.09375,0.078125],"body_glb_sha256":"d14c32ac93d23db22d3158b0b02b202377d4e48c9326e26b18d8c6a001f2cf28"}})).unwrap();
+    let image = app
+        .world_mut()
+        .resource_mut::<Assets<Image>>()
+        .add(Image::default());
+    app.insert_resource(GalleryCaptureSession::TankPilot(session.clone()))
+        .insert_resource(TankPilotPaint {
+            session,
+            image: image.clone(),
+        });
+    let mut body_handle = None;
+    for count in 0..=2 {
+        if count > 0 {
+            app.world_mut().spawn(StoredIn(owner));
+        }
+        app.update();
+        let visual = root(app.world_mut(), owner);
+        let parts = children(app.world(), visual);
+        assert_eq!(parts.len(), 2);
+        for part in parts {
+            let name = app.world().get::<Name>(part).unwrap().as_str();
+            let handle = &app
+                .world()
+                .get::<MeshMaterial3d<TopDownStructuralMaterial>>(part)
+                .unwrap()
+                .0;
+            let material = app
+                .world()
+                .resource::<Assets<TopDownStructuralMaterial>>()
+                .get(handle)
+                .unwrap();
+            if name == "body" {
+                assert_eq!(material.extension.uniforms.indoor_light_params.w, 2.);
+                assert_eq!(material.base.base_color_texture.as_ref(), Some(&image));
+                if let Some(old) = body_handle.as_ref() {
+                    assert_eq!(old, handle);
+                } else {
+                    body_handle = Some(handle.clone());
+                }
+            } else {
+                assert_eq!(name, "water");
+                assert_eq!(material.extension.uniforms.indoor_light_params.w, 0.82);
+                assert_eq!(
+                    material.base.base_color_texture.as_ref(),
+                    set.image("albedo")
+                );
+                assert_ne!(Some(handle), body_handle.as_ref());
+                assert_eq!(
+                    app.world().get::<Visibility>(part),
+                    Some(&if count == 0 {
+                        Visibility::Hidden
+                    } else {
+                        Visibility::Inherited
+                    })
+                );
+            }
+        }
     }
 }

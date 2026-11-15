@@ -2,7 +2,10 @@
 
 use super::super::cancel;
 use crate::soul_ai::execute::task_execution::{
-    common::{NavOutcome, is_near_blueprint, navigate_to_pos, update_destination_to_blueprint},
+    common::{
+        NavOutcome, is_near_blueprint, is_near_target_or_dest, navigate_to_pos,
+        update_destination_to_blueprint, update_task_destination_to_adjacent,
+    },
     context::{TaskExecutionContext, TaskHandlerControl},
     types::{AssignedTask, HaulWithWheelbarrowData, HaulWithWheelbarrowPhase},
 };
@@ -131,10 +134,16 @@ pub fn handle(
             };
 
             let mixer_pos = mixer_transform.translation.truncate();
-            match navigation_progress(navigate_to_pos(ctx, mixer_pos, soul_pos, ctx.env.world_map))
-            {
-                Ok(progress) => progress,
-                Err(control) => return control,
+            // A 2x2 Mixer center can be farther than the interaction radius
+            // from its legal diagonal path endpoint. Match hand delivery's
+            // target-or-destination policy, only after a successful search.
+            match update_task_destination_to_adjacent(ctx, mixer_pos) {
+                PathSearchResult::Found(()) => (
+                    true,
+                    is_near_target_or_dest(soul_pos, mixer_pos, ctx.dest.0),
+                ),
+                PathSearchResult::Deferred => return TaskHandlerControl::Continue,
+                PathSearchResult::Unreachable => (false, false),
             }
         }
     };

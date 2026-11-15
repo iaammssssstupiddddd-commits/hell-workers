@@ -27,6 +27,11 @@ Bevy 0.19 の Relationship は **Source 側を操作すれば Target 側が自�
 
 `TaskWorkers` は `WorkingOn` source だけを正本とし、target を直接 remove してはならない。最後の source が外れると Bevy は空の `TaskWorkers` 自体を削除するため、`TransportRequestPlugin` は Soul AI `Execute` の後に source command と Relationship 内部 command を順に適用してから removal を読む。現存する worker なし `TransportRequest` は同じ `Update` で `Pending` に戻り、次の Logic frame で再割り当て候補になる。
 
+搬送依頼のdurable `ManagedBy` は `TransportRequest.issued_by` と一致させる。
+Yard発行依頼をFamiliarが委譲しても、Soulの`CommandedBy`と依頼のownerは別である。
+割当applyは実deferred適用時のrequest issuerを保持し、非搬送taskだけ従来どおりFamiliarへ引き継ぐ。
+save candidateの発行者／owner一致・Relationship対称性の拒否検査は緩和しない。
+
 ### 2.2 手動管理コンポーネント
 
 | コンポーネント | 書き込み元 | 読み取り元 | 非自明な挙動 |
@@ -165,8 +170,13 @@ payloadのEntity参照列挙は`AssignedTask::references_entity`へ集約する�
 - **採取**: 木=Wood×5、岩=Rock×10ドロップ。Sand/BonePile/砂タイル/河川は無限ソース（即時完了）
 - **運搬 (Haul)**: GoingToSource → Picking → GoingToDestination → Dropping
 - **猫車運搬 (HaulWithWheelbarrow)**: GoingToParking → PickingUpWheelbarrow → GoingToSource → Loading → GoingToDestination → Unloading → ReturningWheelbarrow
+- Mixer宛の猫車は、隣接経路が`Found`のときだけ建物中心または選定した実終点への近接で`Unloading`へ進む。
+  2×2footprintの斜め終点を中心距離だけで拒否しない。`Deferred`は荷下ろし/解除せず、
+  `Unreachable`と対象消滅は従来の積載物drop・予約解放を伴うretryable cleanupを通す。
+  移動phaseでは材料を消費せず、実Unloadingの既存容量/数量判定を維持する。
 - **Sand / StasisMud**: 原則猫車必須。例外: ソース隣接 3x3 の立ち位置からドロップ閾値内なら徒歩可
 - **水搬送 (BucketTransport)**: `AssignedTask::BucketTransport(BucketTransportData)` の単一バリアントで表現。`source`（`River` / `Tank`）と `destination`（`Tank` / `Mixer`）に応じて `bucket_transport/phases/` の共通フェーズハンドラで実行される。`WorkType` は River→Tank が `GatherWater`、Tank→Mixer が `HaulWaterToMixer` として返される。
+  - Tank→Mixerは全杯5個単位。取水は経路`Found`後だけ、投入は全量が入る場合だけ確定する。部分量・容量競合は水を消費せず既存retryable中断へ進み、予約/作業関係を解放してバケツを再利用可能にする。`Deferred`は取水せず現在phaseを維持し、中断で`TaskCompleted`は通知しない。
 - **運搬先ガード**: Blueprint / construction / provisional wall / stockpile は Dropping / Unloading 直前に受入可能量を再確認し、到着時点で需要が消えた cargo を搬入先へ反映しない。
 - **精製 (Refine)**: MudMixer で Sand+Water+Rock → StasisMud×5。`mud_mixer_auto_refine_system` が `has_materials_for_refining` を確認し、`collect_all_area_owners`（Familiar TaskArea + Yard 統合）で `issued_by` を決定して `DesignationRequest` を発行する。使い魔が Idle でも Yard 経由でタスクが発行される。
 - **解体 (Deconstruct)**: runtime payloadは`order`、canonical `target`、`GoingToTarget → Dismantling { progress } → AwaitingCommit`を持つ。`AwaitingCommit`へ入ると同identityで再発行せず、Soulはtargetを直接despawnしない。root finalizerがworld epochとexact identityを再検証し、全12種の`BuildingType`とOperational Soul Spaをkind別owner transactionでcommitする。structureはmap/cache/Room/wall visual、Soul Spa/Lampはworker/request/Power/visualまで同じ終端へ含める。対象facilityが`DeconstructionPending`の間は新しい補充・返却・精製・運搬割当を作らない。
@@ -174,6 +184,11 @@ payloadのEntity参照列挙は`AssignedTask::references_entity`へ集約する�
 - **⚠️ 消滅**: 地面に放置された Sand / StasisMud は **5秒で消滅**（LoadedIn / StoredIn / DeliveringTo / StoredByMixer のいずれかがあれば維持）
 
 ### 4.4 完了・放棄 (Completion / Abandonment)
+
+明示production観測sessionの`profiling`構成では、手運び・猫車のBlueprint搬入成功branchが
+`hw_jobs::delivery_observations`へ実消費receiptを送る。deferred適用後のitem消滅、owner・epoch・
+材料増分を照合してから記録し、失敗・4096件上限超過は観測失敗とする。
+これは既存搬入・chain・予約・正常完了通知を変更せず、建設完了や全予約清算を証明しない。
 
 タスク実行の終了は `TaskExecutionContext` の終了 API 経由で行う（`context/execution.rs`）:
 
@@ -326,6 +341,12 @@ Blueprint / FloorSite / WallSite への搬入完了直後、`chain::find_chain_o
 キャンセルは owner 別 lifecycle へルーティングする。generic manual designation、manual transport、Blueprint、
 Floor / Wall site の cleanup を汎用 despawn へ統合しない。Pause / Modal capture 中の intent は読み捨てず typed 拒否として
 drain し、capture 解除後に遅延適用しない。
+
+明示production観測sessionではBlueprint取消の実返却IDとowner cleanupを別queueで追跡する。
+`TaskActionOutcome::CancellationRequested`やdespawnだけでは完了とせず、actorのpayload/
+WorkingOn/ActiveTaskIdentity等が元owner/requestを参照する間は観測を保留する。
+記録名は`BlueprintCancellationApplied / OwnerCleanupApplied`で、全予約/inventory清算や
+正式lifecycleの`CancelConstruction / Committed`へ読み替えない。観測器は解除を実行しない。
 
 Constructing Soul Spaの`DeliverToSoulSpa`行は`TransportRequest.kind`、Bone、anchor、
 `TargetSoulSpaSite`が同じlive siteを指す場合だけcancel可能にする。Task Dashboardはrequestを直接despawnせず

@@ -8,6 +8,7 @@
 - `SpeechPlugin`：スピーチシステムの登録（会話・Typewriter・定期感情表現）
 - Familiar / Soul の視覚フィードバックシステム（`familiar_idle_visual_apply_system`, `max_soul_visual_system`）
 - `SpeechHandles`, `TaskAreaMaterial` 等のビジュアル専用 Resource の管理
+- Soulを参照する遅延処理は、発火時に完全なEntity IDの生存を照合する。load/despawn後の旧参照を無条件のEntityCommandsへ渡さない
 
 ## 禁止事項（AI がやってはいけないこと）
 

@@ -6,11 +6,61 @@ import hashlib
 import json
 import math
 import re
+import struct
+from pathlib import PurePosixPath
+
+try:
+    from ... import building_foreground_observation as foreground
+    from ... import building_resident_observation as resident
+except ImportError:
+    import building_foreground_observation as foreground
+    import building_resident_observation as resident
 
 from .building_art_static import KINDS, expected_records
 from ..model import Case
 
 CONTRACT = "building-art-m6-nine-v1"
+PRE_RELEASE_CONTRACT = "building-art-pre-release-nine-v1"
+GROUP_CONTRACT = "building-art-group-nine-v1"
+GROUP_GALLERY_CONTRACT = "building-art-group-gallery-nine-v1"
+RELEASE_GALLERY_CONTRACT = "building-art-released-gallery-nine-v1"
+TANK_PILOT_CONTRACT = "building-art-tank-paint-pilot-nine-v1"
+GROUP_TARGETS = {
+    "m2": ("Tank", "MudMixer"),
+    "m3": ("RestArea", "SoulSpa"),
+    "m5": ("WheelbarrowParking", "SandPile", "BonePile", "OutdoorLamp"),
+}
+GROUP_FIXED = {
+    "m2": (),
+    "m3": GROUP_TARGETS["m2"],
+    "m5": (*GROUP_TARGETS["m2"], *GROUP_TARGETS["m3"]),
+}
+GROUP_SLUGS = dict(
+    zip(
+        (*GROUP_TARGETS["m2"], *GROUP_TARGETS["m3"], *GROUP_TARGETS["m5"]),
+        (
+            "tank",
+            "mud-mixer",
+            "rest-area",
+            "soul-spa",
+            "wheelbarrow-parking",
+            "sand-pile",
+            "bone-pile",
+            "outdoor-lamp",
+        ),
+        strict=True,
+    )
+)
+GROUP_ARTIFACT_COUNTS = {
+    "Tank": (2, 3),
+    "MudMixer": (2, 3),
+    "RestArea": (1, 3),
+    "SoulSpa": (2, 4),
+    "WheelbarrowParking": (0, 2),
+    "SandPile": (0, 2),
+    "BonePile": (0, 2),
+    "OutdoorLamp": (0, 3),
+}
 DOOR_HASH = "4e3f9236db067772b9a60b37ea98437cb29e481f9ec9cbb4d6dcf6517374a449"
 SETS = tuple(kind for kind in KINDS if kind != "Door")
 PARTS = {
@@ -39,7 +89,7 @@ def canonical(value):
     ).encode()
 
 
-def identities(values):
+def identities(values, *, pre_release=False):
     require(
         isinstance(values, list) and len(values) == 8,
         "M6 requires eight identities plus dedicated Door",
@@ -52,7 +102,8 @@ def identities(values):
             set(value) == {"kind", "generation", "authority", "manifest_sha256"}
             and type(value["generation"]) is int
             and value["generation"] > 0
-            and value["authority"] == "release_approved"
+            and value["authority"]
+            == ("isolated_candidate" if pre_release else "release_approved")
             and isinstance(value["manifest_sha256"], str)
             and re.fullmatch(r"[0-9a-f]{64}", value["manifest_sha256"]),
             "invalid release identity",
@@ -60,6 +111,156 @@ def identities(values):
 
 
 def validate_sidecar(value, case):
+    return _validate_sidecar(value, case, pre_release=False)
+
+
+def validate_pre_release_sidecar(value, case):
+    return _validate_sidecar(value, case, pre_release=True)
+
+
+def validate_group_declaration(value):
+    """Independent structural oracle; the coordinator also binds exact manifest bytes."""
+    require(
+        isinstance(value, dict)
+        and set(value) == {"group", "fixed", "candidates"}
+        and value["group"] in GROUP_TARGETS,
+        "group declaration differs",
+    )
+    group = value["group"]
+    for field, kinds, authority in (
+        ("fixed", GROUP_FIXED[group], "release_approved"),
+        ("candidates", GROUP_TARGETS[group], "isolated_candidate"),
+    ):
+        bindings = value[field]
+        require(
+            isinstance(bindings, list) and len(bindings) == len(kinds),
+            "group kind count differs",
+        )
+        seen = []
+        for binding in bindings:
+            require(
+                isinstance(binding, dict)
+                and set(binding) == {"identity", "locator", "paths"},
+                "group binding fields differ",
+            )
+            identity = binding["identity"]
+            require(
+                isinstance(identity, dict)
+                and set(identity)
+                == {"kind", "generation", "authority", "manifest_sha256"}
+                and identity["kind"] in kinds
+                and identity["authority"] == authority
+                and type(identity["generation"]) is int
+                and 0 < identity["generation"] < 2**64
+                and isinstance(identity["manifest_sha256"], str)
+                and re.fullmatch(r"[0-9a-f]{64}", identity["manifest_sha256"]),
+                "group identity differs",
+            )
+            kind = identity["kind"]
+            seen.append(kind)
+            slug = GROUP_SLUGS[kind]
+            require(
+                binding["locator"] == f"manifests/building-{slug}-v1.buildingset",
+                "group locator differs",
+            )
+            paths = binding["paths"]
+            meshes, images = GROUP_ARTIFACT_COUNTS[kind]
+            require(
+                isinstance(paths, list)
+                and len(paths) == meshes + images
+                and all(isinstance(p, str) for p in paths),
+                "group artifact path inventory differs",
+            )
+            for path in paths:
+                require(
+                    len(path.encode()) <= 512
+                    and path.startswith(
+                        f"building_sets/{slug}/{identity['generation']}/"
+                    )
+                    and not any(c in path for c in ("\\", "#", ":"))
+                    and not any(ord(c) < 32 or 127 <= ord(c) <= 159 for c in path)
+                    and all(part not in {"", ".", ".."} for part in path.split("/"))
+                    and not PurePosixPath(path).is_absolute(),
+                    "group artifact path differs",
+                )
+            require(
+                sum(p.endswith(".glb") for p in paths) == meshes
+                and sum(p.endswith(".png") for p in paths) == images,
+                "group artifact types differ",
+            )
+        require(
+            set(seen) == set(kinds) and len(set(seen)) == len(seen),
+            "group kinds differ",
+        )
+    return value
+
+
+def validate_group_sidecar(value, case):
+    return _validate_sidecar(value, case, pre_release=True, group=True)
+
+
+def validate_group_gallery_sidecar(value, case):
+    """Gallery-only oracle. It cannot enter the performance artifact reader."""
+    require(case.size == "small", "group gallery requires N only")
+    return _validate_sidecar(value, case, pre_release=True, group=True, gallery=True)
+
+
+def validate_release_gallery_sidecar(value, case):
+    """Actual complete ReleaseApproved image fixture, never a performance case."""
+    require(case.size == "small", "released gallery requires N only")
+    return _validate_sidecar(
+        value, case, pre_release=False, gallery=True, released_gallery=True
+    )
+
+
+def validate_tank_pilot_sidecar(value, case):
+    """Geometry-only pilot oracle; never accepted by released/performance readers."""
+    require(case.size == "small", "Tank pilot requires N only")
+    return _validate_sidecar(
+        value, case, pre_release=False, gallery=True, tank_pilot=True
+    )
+
+
+def gallery_records(group):
+    records = expected_records(4)
+    kinds = list(KINDS)
+    destination = {"m2": 2, "m3": 4, "m5": 7}[group]
+    kinds[7], kinds[destination] = kinds[destination], kinds[7]
+    result = []
+    for kind in kinds:
+        old_row, new_row = KINDS.index(kind), kinds.index(kind)
+        for original in records:
+            if original["kind"] != kind:
+                continue
+            row = json.loads(json.dumps(original))
+            delta = (new_row - old_row) * 5
+            row["anchor"][1] += delta
+            for tile in row["tiles"]:
+                tile[1] += delta
+            row["center"][1] += delta * 32
+            result.append(row)
+    return result
+
+
+def _validate_sidecar(
+    value,
+    case,
+    *,
+    pre_release,
+    group=False,
+    gallery=False,
+    released_gallery=False,
+    tank_pilot=False,
+):
+    require(
+        not tank_pilot
+        or (gallery and not group and not pre_release and not released_gallery),
+        "pilot cannot mix authority contracts",
+    )
+    require(
+        not released_gallery or (gallery and not group and not pre_release),
+        "released gallery cannot use a candidate/group authority",
+    )
     copies = {"small": 4, "medium": 16}[case.size]
     require(
         case
@@ -84,10 +285,23 @@ def validate_sidecar(value, case):
     require(
         type(value["schema_version"]) is int
         and value["schema_version"] == 1
-        and value["contract_id"] == CONTRACT
+        and value["contract_id"]
+        == (
+            TANK_PILOT_CONTRACT
+            if tank_pilot
+            else RELEASE_GALLERY_CONTRACT
+            if released_gallery
+            else GROUP_GALLERY_CONTRACT
+            if gallery
+            else GROUP_CONTRACT
+            if group
+            else PRE_RELEASE_CONTRACT
+            if pre_release
+            else CONTRACT
+        )
         and value["evidence_kind"] == "paused-static-only"
         and value["active_simulation_evidence"] is False
-        and value["camera_scale"] == 5.0
+        and value["camera_scale"] in ((1.0, 2.0) if gallery else (5.0,))
         and type(value["stable_frames"]) is int
         and value["stable_frames"] >= 30,
         "M6 scope/readiness differs",
@@ -100,37 +314,81 @@ def validate_sidecar(value, case):
     )
     require(
         set(initial)
-        == {
-            "records",
-            "target_count",
-            "target_structural_roots",
-            "target_foreground_owners",
-            "target_active_unique_meshes",
-            "souls",
-            "completion_effects",
-            "m6",
-        },
+        == (
+            {
+                "records",
+                "target_count",
+                "target_structural_roots",
+                "target_foreground_owners",
+                "target_active_unique_meshes",
+                "souls",
+                "completion_effects",
+                "m6",
+            }
+            | ({"pre_release_comparison"} if pre_release else set())
+        ),
         "inventory keys differ",
     )
+    if pre_release:
+        require(initial["pre_release_comparison"] is True, "pre-release scope differs")
     m6 = initial["m6"]
     require(
         set(m6)
-        == {
-            "mode",
-            "identities",
-            "door_identity",
-            "target_mesh_entities",
-            "pool_active",
-            "pool_pending",
-            "resources",
-            "gpu_allocation_bytes",
-            "active_state_acceptance",
-        },
+        == (
+            {
+                "mode",
+                "identities",
+                "door_identity",
+                "target_mesh_entities",
+                "pool_active",
+                "pool_pending",
+                "resources",
+                "gpu_allocation_bytes",
+                "active_state_acceptance",
+            }
+            | (
+                {"group", "loaded_identities", "target_path_observations"}
+                if group
+                else set()
+            )
+        ),
         "M6 fields differ",
     )
     require(m6["mode"] in {"legacy-control", "candidate"}, "invalid M6 mode")
     candidate = m6["mode"] == "candidate"
-    identities(m6["identities"])
+    if gallery:
+        require(candidate, "group gallery cannot use fallback control")
+    if group:
+        declaration = validate_group_declaration(m6["group"])
+        all_bindings = [*declaration["fixed"], *declaration["candidates"]]
+        loaded = [
+            *declaration["fixed"],
+            *(declaration["candidates"] if candidate else []),
+        ]
+        require(
+            canonical(m6["identities"])
+            == canonical([b["identity"] for b in all_bindings])
+            and canonical(m6["loaded_identities"])
+            == canonical([b["identity"] for b in loaded]),
+            "group loaded identities differ",
+        )
+        expected_paths = (
+            []
+            if candidate
+            else [
+                {"path": path, "managed": False}
+                for binding in declaration["candidates"]
+                for path in (binding["locator"], *binding["paths"])
+            ]
+        )
+        require(
+            canonical(m6["target_path_observations"]) == canonical(expected_paths),
+            "group control prefetched or omitted target paths",
+        )
+        loaded_kinds = {b["identity"]["kind"] for b in loaded}
+    else:
+        identities(m6["identities"], pre_release=pre_release)
+        loaded_kinds = set(SETS) if candidate else set()
     require(
         m6["door_identity"]
         == {
@@ -148,7 +406,9 @@ def validate_sidecar(value, case):
         "target_count": copies * 9,
         "target_structural_roots": copies * 5,
         "target_foreground_owners": copies * 4,
-        "target_active_unique_meshes": 8 if candidate else 2,
+        "target_active_unique_meshes": 1
+        + int(any(k not in loaded_kinds for k in PARTS))
+        + sum(len(set(PARTS.get(k, []))) for k in loaded_kinds),
         "souls": copies // 4 * 15,
         "completion_effects": 0,
     }
@@ -157,8 +417,14 @@ def validate_sidecar(value, case):
             type(initial[key]) is int and initial[key] == expected, f"incorrect {key}"
         )
     for key, expected in {
-        "target_mesh_entities": copies * (11 if candidate else 5),
-        "pool_active": 8 if candidate else 0,
+        "target_mesh_entities": copies
+        * (
+            5
+            + int("Tank" in loaded_kinds)
+            + int("MudMixer" in loaded_kinds)
+            + 4 * int("SoulSpa" in loaded_kinds)
+        ),
+        "pool_active": len(loaded_kinds),
         "pool_pending": 0,
     }.items():
         require(type(m6[key]) is int and m6[key] == expected, f"incorrect {key}")
@@ -167,11 +433,91 @@ def validate_sidecar(value, case):
         all(type(number) is int and number > 0 for number in m6["resources"].values()),
         "invalid resources",
     )
-    expected = expected_records(copies)
+    expected = (
+        gallery_records(declaration["group"])
+        if gallery and group
+        else expected_records(copies)
+    )
     require(len(initial["records"]) == len(expected), "owner count differs")
+    foreground_entities = []
+    resident_entities = []
+    descriptors_by_kind = {}
+    loaded_by_kind = {identity["kind"]: identity for identity in m6.get("loaded_identities", m6["identities"])}
     for observed, logical in zip(initial["records"], expected, strict=True):
-        extras = {"parts"} if candidate and logical["kind"] != "Door" else set()
-        if candidate and logical["kind"] in {"Tank", "MudMixer"}:
+        present = logical["kind"] in loaded_kinds
+        extras = {"parts"} if present else set()
+        resident_required = present and logical["kind"] in resident.ROLES and not tank_pilot
+        if resident_required:
+            extras.add("owner")
+        if gallery:
+            extras.add("gallery_owner")
+            require(
+                type(observed.get("gallery_owner")) is int
+                and observed["gallery_owner"] > 0,
+                "missing gallery owner binding",
+            )
+            if logical["kind"] in {*PARTS, "Door"}:
+                extras.add("gallery_geometry")
+                require(
+                    isinstance(observed.get("gallery_geometry"), list),
+                    "missing resident gallery geometry",
+                )
+                geometry = observed["gallery_geometry"]
+                require(
+                    len(geometry) == len(observed.get("parts", [None]))
+                    and len({p["entity"] for p in geometry}) == len(geometry),
+                    "gallery resident leaf count/identity differs",
+                )
+                for part in geometry:
+                    require(
+                        set(part)
+                        == {
+                            "entity",
+                            "mesh",
+                            "mesh_role",
+                            "visible",
+                            "local_pose",
+                            "aabb_min",
+                            "aabb_max",
+                        }
+                        and type(part["entity"]) is int
+                        and part["entity"] > 0
+                        and isinstance(part["mesh"], str)
+                        and part["mesh"]
+                        and type(part["visible"]) is bool,
+                        "gallery resident leaf fields differ",
+                    )
+                    require(
+                        isinstance(part["local_pose"], dict)
+                        and set(part["local_pose"])
+                        == {"translation", "rotation", "scale"},
+                        "gallery resident local pose fields differ",
+                    )
+                if "parts" in observed:
+                    projected = [
+                        {
+                            "mesh_role": part["mesh_role"],
+                            "translation_wu": part["local_pose"]["translation"],
+                            "rotation_xyzw": part["local_pose"]["rotation"],
+                            "scale": part["local_pose"]["scale"],
+                            "visible": part["visible"],
+                        }
+                        for part in geometry
+                    ]
+                    require(
+                        sorted(map(canonical, projected))
+                        == sorted(canonical({key: part[key] for key in ("mesh_role", "translation_wu", "rotation_xyzw", "scale", "visible")})
+                                  for part in observed["parts"]),
+                        "gallery resident geometry/part binding differs",
+                    )
+                elif logical["kind"] == "Door":
+                    require(
+                        all(part["visible"] for part in geometry),
+                        "gallery Door must remain visible",
+                    )
+        if present and logical["kind"] in foreground.KINDS:
+            extras.update({"owner", "foreground"})
+        if present and logical["kind"] in {"Tank", "MudMixer"}:
             extras.add("root_translation_wu")
             require(
                 observed["root_translation_wu"]
@@ -184,6 +530,78 @@ def validate_sidecar(value, case):
             == canonical(logical),
             "logical state/layout differs",
         )
+        if "foreground" in extras:
+            actual = observed["foreground"]
+            require(isinstance(actual, dict), "M6 foreground object missing")
+            preview = actual.get("descriptor")
+            require(
+                isinstance(preview, dict)
+                and set(preview)
+                == {
+                    "anchor_px",
+                    "canvas_px",
+                    "canvas_wu",
+                    "image_role",
+                    "representative_state",
+                },
+                "M6 foreground descriptor keys differ",
+            )
+            role = (
+                "world_on"
+                if logical["kind"] == "OutdoorLamp" and logical["ordinal"] % 4 >= 2
+                else preview["image_role"]
+            )
+            identity = next(
+                value for value in m6["identities"] if value["kind"] == logical["kind"]
+            )
+            artifact = actual.get("artifact")
+            require(
+                isinstance(artifact, dict)
+                and set(artifact) == {"role", "path", "bytes", "sha256"}
+                and artifact["role"] == "image:" + role
+                and type(artifact["bytes"]) is int
+                and artifact["bytes"] > 0
+                and isinstance(artifact["path"], str)
+                and artifact["path"]
+                and isinstance(artifact["sha256"], str)
+                and re.fullmatch(r"[0-9a-f]{64}", artifact["sha256"]),
+                "M6 foreground artifact fields differ",
+            )
+            foreground_entities.extend(
+                foreground.validate_record(
+                    observed, identity, preview, {artifact["role"]: artifact}, role
+                )
+            )
+            # Production completion uses Z_BUILDING_FLOOR for resource piles,
+            # Z_BUILDING_STRUCT for Parking/Lamp. Project the actual f32 rules.
+            owner_z = 0.05 if logical["kind"] in {"SandPile", "BonePile"} else 0.12
+            owner_pose = {
+                "translation": [
+                    *logical["center"],
+                    struct.unpack("<f", struct.pack("<f", owner_z))[0],
+                ],
+                "rotation": [0.0, 0.0, 0.0, 1.0],
+                "scale": [1.0, 1.0, 1.0],
+            }
+            local_pose = {
+                "translation": [0.0, 0.0, 0.0],
+                "rotation": [0.0, 0.0, 0.0, 1.0],
+                "scale": [1.0, 1.0, 1.0],
+            }
+            require(
+                canonical(actual["owner_pose"]) == canonical(owner_pose)
+                and canonical(actual["local_pose"]) == canonical(local_pose)
+                and canonical(actual["global_pose"]) == canonical(owner_pose)
+                and canonical(actual["global_matrix"])
+                == canonical(foreground.matrix(owner_pose))
+                and canonical(actual["parent_local_matrix"])
+                == canonical(foreground.matrix(owner_pose))
+                and all(
+                    abs(number - 1.0) <= 1e-6 for number in actual["color_srgba"][:3]
+                )
+                and actual["color_srgba"][3] == 1.0,
+                "M6 foreground static pose/color differs",
+            )
         if "parts" in extras:
             parts = observed["parts"]
             require(
@@ -199,7 +617,7 @@ def validate_sidecar(value, case):
                         "rotation_xyzw",
                         "scale",
                         "visible",
-                    },
+                    } | ({"resident"} if resident_required else set()),
                     "part fields differ",
                 )
                 for key, length in (
@@ -220,8 +638,36 @@ def validate_sidecar(value, case):
                     and part["mesh_role"] == "water"
                     and logical["state"]["stored_water"] == 0
                 )
+                # This is actual ViewVisibility, including frustum culling.
+                # A group image guarantees its targets and Door, not earlier
+                # fixed groups outside its viewport. Never normalize the raw
+                # flag or borrow this exception for performance/full-nine art.
+                cullable_fixed = (
+                    gallery
+                    and group
+                    and logical["kind"]
+                    in {binding["identity"]["kind"] for binding in declaration["fixed"]}
+                )
                 require(
-                    type(part["visible"]) is bool and part["visible"] != hidden,
+                    type(part["visible"]) is bool
+                    and (
+                        not part["visible"]
+                        if hidden
+                        else part["visible"] or cullable_fixed
+                    ),
                     "part visibility differs",
                 )
+        if resident_required:
+            resident_entities.extend(resident.validate_shape(observed, loaded_by_kind[logical["kind"]]))
+            first = observed["parts"][0]["resident"]
+            descriptor = {key: first[key] for key in ("meshes", "images")}
+            previous = descriptors_by_kind.setdefault(logical["kind"], descriptor)
+            require(canonical(descriptor) == canonical(previous), "M6 cross-owner descriptor drift")
+    require(len(resident_entities) == len(set(resident_entities)), "M6 duplicate resident owner/root/part")
+    require(
+        len(set(foreground_entities)) == len(foreground_entities),
+        "M6 duplicate foreground owner or sprite",
+    )
+    all_entities = [*resident_entities, *foreground_entities]
+    require(len(all_entities) == len(set(all_entities)), "M6 shared structural/foreground entity")
     return initial

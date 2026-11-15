@@ -1,0 +1,475 @@
+//! Passive M5 sprite observations. A non-white tint is evidence, not repaired here.
+
+use super::*;
+use crate::assets::building_asset_set::BuildingAssetDescriptor;
+use bevy::{camera::visibility::RenderLayers, sprite::Anchor};
+
+pub(super) type ForegroundQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static ChildOf,
+        &'static Sprite,
+        &'static Transform,
+        &'static GlobalTransform,
+        Option<&'static Anchor>,
+        Option<&'static RenderLayers>,
+        &'static ViewVisibility,
+    ),
+    With<hw_visual::layer::VisualLayerKind>,
+>;
+
+/// Bounded native values for the measured interval. No JSON or artifact/identity
+/// strings are built here; immutable descriptors are separately rechecked.
+#[derive(Clone, Debug, PartialEq)]
+pub(super) struct MeasuredForeground {
+    entity: Entity,
+    owner: Entity,
+    parent: Entity,
+    image: AssetId<Image>,
+    color: [f32; 4],
+    canvas: Option<Vec2>,
+    owner_pose: Transform,
+    local_pose: Transform,
+    global_matrix: Mat4,
+    anchor: Vec2,
+    layers: RenderLayers,
+    visible: bool,
+}
+
+pub(super) fn unchanged_m6(
+    initial: Option<&MeasuredForeground>,
+    observed: &MeasuredForeground,
+) -> Result<(), String> {
+    if initial == Some(observed) {
+        Ok(())
+    } else {
+        Err("M6 foreground typed observation changed or was not captured".into())
+    }
+}
+
+pub(super) fn observe(
+    params: &InspectParams,
+    spec: &Specimen,
+    owner: Entity,
+    descriptor: &BuildingAssetDescriptor,
+) -> Result<MeasuredForeground, String> {
+    let mut observations = params
+        .foreground
+        .iter()
+        .filter(|(_, parent, ..)| parent.parent() == owner);
+    let (entity, parent, sprite, local, global, anchor, layers, visible) = observations
+        .next()
+        .ok_or("foreground owned sprite missing")?;
+    if observations.next().is_some() {
+        return Err("foreground requires exactly one owned sprite".into());
+    }
+    let (_, owner_pose, ..) = params
+        .buildings
+        .get(owner)
+        .map_err(|_| "foreground owner disappeared")?;
+    let role = if spec.kind == BuildingType::OutdoorLamp && spec.quarter() >= 2 {
+        "world_on"
+    } else {
+        &descriptor.manifest.world_preview.image_role
+    };
+    if descriptor.image(role) != Some(&sprite.image) {
+        return Err("foreground image differs".into());
+    }
+    let color = sprite.color.to_srgba().to_f32_array();
+    let global_matrix = global.to_matrix();
+    if color.iter().any(|number| !number.is_finite())
+        || !global_matrix.abs_diff_eq(
+            GlobalTransform::from(*owner_pose)
+                .mul_transform(*local)
+                .to_matrix(),
+            0.001,
+        )
+    {
+        return Err("foreground non-finite color or parent transform differs".into());
+    }
+    Ok(MeasuredForeground {
+        entity,
+        owner,
+        parent: parent.parent(),
+        image: sprite.image.id(),
+        color,
+        canvas: sprite.custom_size,
+        owner_pose: *owner_pose,
+        local_pose: *local,
+        global_matrix,
+        anchor: anchor.map_or(Vec2::ZERO, |anchor| anchor.0),
+        layers: layers.cloned().unwrap_or_default(),
+        visible: visible.get(),
+    })
+}
+
+pub(super) fn capture_m6(
+    params: &InspectParams,
+) -> Result<HashMap<Entity, MeasuredForeground>, String> {
+    let mut result = HashMap::new();
+    let Some(comparison) = params.m6.as_ref() else {
+        return Ok(result);
+    };
+    for (spec, &owner) in params.state.specs.iter().zip(&params.state.owners) {
+        let Some(kind) = crate::systems::visual::building_presentation::asset_kind(spec.kind)
+        else {
+            continue;
+        };
+        if !kind.mesh_roles().is_empty() || !comparison.loads_kind(kind) {
+            continue;
+        }
+        let descriptor = params
+            .building_pool
+            .descriptor(kind)
+            .ok_or("M6 foreground descriptor disappeared")?;
+        if result
+            .insert(owner, observe(params, spec, owner, descriptor)?)
+            .is_some()
+        {
+            return Err("M6 duplicate foreground owner".into());
+        }
+    }
+    if result.len() != layout::copies(params.config.size()) * comparison.foreground_kinds() {
+        return Err("M6 foreground typed inventory differs".into());
+    }
+    Ok(result)
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub(super) enum RecordMode {
+    None,
+    All,
+    Foreground,
+}
+
+impl RecordMode {
+    pub(super) fn for_frame(initial: bool, session: Option<&BuildingArtSession>) -> Self {
+        if initial || session.is_some_and(|session| session.spa_mask_page.is_some()) {
+            Self::All
+        } else if session.is_some_and(|session| session.identity.kind.mesh_roles().is_empty()) {
+            Self::Foreground
+        } else {
+            Self::None
+        }
+    }
+
+    pub(super) fn includes(&self, foreground_candidate: bool) -> bool {
+        match self {
+            Self::None => false,
+            Self::All => true,
+            Self::Foreground => foreground_candidate,
+        }
+    }
+}
+
+pub(super) fn unchanged(initial: Option<&Value>, current: &Value) -> Result<(), String> {
+    let Some(initial) = initial else {
+        return Ok(());
+    };
+    let sprites = |value: &Value| {
+        value["records"].as_array().map(|records| {
+            records
+                .iter()
+                .filter(|record| record.get("foreground").is_some())
+                .cloned()
+                .collect::<Vec<_>>()
+        })
+    };
+    let before = sprites(initial);
+    let after = sprites(current);
+    if initial["foreground_schema"] != json!(1)
+        || current["foreground_schema"] != json!(1)
+        || before.as_ref().is_none_or(|records| records.len() != 4)
+        || after != before
+    {
+        let before = json!({"foreground_schema": initial["foreground_schema"], "records": before});
+        let after = json!({"foreground_schema": current["foreground_schema"], "records": after});
+        let difference = first_difference(&before, &after, "fixture".into())
+            .unwrap_or_else(|| "foreground schema/inventory invalid".into());
+        return Err(format!(
+            "foreground measured sprite changed after readiness: {difference}"
+        ));
+    }
+    Ok(())
+}
+
+fn first_difference(before: &Value, after: &Value, path: String) -> Option<String> {
+    if before == after {
+        return None;
+    }
+    match (before, after) {
+        (Value::Object(left), Value::Object(right)) => {
+            let keys = left
+                .keys()
+                .chain(right.keys())
+                .collect::<std::collections::BTreeSet<_>>();
+            for key in keys {
+                if let Some(difference) =
+                    first_difference(&before[key], &after[key], format!("{path}.{key}"))
+                {
+                    return Some(difference);
+                }
+            }
+        }
+        (Value::Array(left), Value::Array(right)) if left.len() == right.len() => {
+            for (index, (left, right)) in left.iter().zip(right).enumerate() {
+                if let Some(difference) = first_difference(left, right, format!("{path}[{index}]"))
+                {
+                    return Some(difference);
+                }
+            }
+        }
+        _ => {}
+    }
+    let bounded = |value: &Value| value.to_string().chars().take(512).collect::<String>();
+    Some(format!(
+        "{path}: before={} after={}",
+        bounded(before),
+        bounded(after)
+    ))
+}
+
+fn pose(value: &Transform) -> Value {
+    json!({"translation": value.translation.to_array(), "rotation": value.rotation.to_array(),
+        "scale": value.scale.to_array()})
+}
+
+pub(super) fn measured_values(
+    sprite: &Sprite,
+    owner_pose: &Transform,
+    local: &Transform,
+    global: &GlobalTransform,
+) -> Result<Value, String> {
+    let expected_global = GlobalTransform::from(*owner_pose).mul_transform(*local);
+    let color = sprite.color.to_srgba().to_f32_array();
+    if color.iter().any(|value| !value.is_finite())
+        || !global
+            .to_matrix()
+            .abs_diff_eq(expected_global.to_matrix(), 0.001)
+    {
+        return Err("foreground non-finite color or parent transform differs".into());
+    }
+    Ok(
+        json!({"color_srgba": color, "canvas_wu": sprite.custom_size.map(|size| size.to_array()),
+        "owner_pose": pose(owner_pose), "local_pose": pose(local),
+        "global_pose": pose(&global.compute_transform()),
+        "global_matrix": global.to_matrix().to_cols_array(),
+        "parent_local_matrix": expected_global.to_matrix().to_cols_array()}),
+    )
+}
+
+pub(super) fn snapshot(
+    params: &InspectParams,
+    spec: &Specimen,
+    owner: Entity,
+    descriptor: &BuildingAssetDescriptor,
+) -> Result<Value, String> {
+    let observations = params
+        .foreground
+        .iter()
+        .filter(|(_, parent, ..)| parent.parent() == owner)
+        .collect::<Vec<_>>();
+    let [(entity, parent, sprite, local, global, anchor, layers, visible)] =
+        observations.as_slice()
+    else {
+        return Err("foreground requires exactly one owned sprite".into());
+    };
+    let (_, owner_pose, ..) = params
+        .buildings
+        .get(owner)
+        .map_err(|_| "foreground owner disappeared")?;
+    let role = if spec.kind == BuildingType::OutdoorLamp && spec.quarter() >= 2 {
+        "world_on"
+    } else {
+        &descriptor.manifest.world_preview.image_role
+    };
+    let artifact_role = format!("image:{role}");
+    let artifacts = descriptor
+        .manifest
+        .artifacts
+        .iter()
+        .filter(|artifact| artifact.role == artifact_role)
+        .collect::<Vec<_>>();
+    let [artifact] = artifacts.as_slice() else {
+        return Err("foreground requires one exact image artifact".into());
+    };
+    // Preserve the actual color/pose instead of normalizing a suspected tint or Z.
+    if descriptor.image(role) != Some(&sprite.image) {
+        return Err("foreground image differs".into());
+    }
+    let mut value = measured_values(sprite, owner_pose, local, global)?;
+    value.as_object_mut().expect("measured object").extend(
+        json!({"schema": 1, "owner": owner.to_bits(), "entity": entity.to_bits(),
+        "parent": parent.parent().to_bits(), "identity": descriptor.manifest.identity,
+        "descriptor": descriptor.manifest.world_preview, "image_role": role, "artifact": artifact,
+        "image_handle": format!("{:?}", sprite.image.id()), "image_matches": true,
+        "anchor": anchor.map_or(Vec2::ZERO, |anchor| anchor.0).to_array(),
+        "layers": layers.map_or_else(|| vec![0], |layers| layers.iter().collect::<Vec<_>>()),
+        "visible": visible.get()})
+        .as_object()
+        .expect("metadata object")
+        .clone(),
+    );
+    Ok(value)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn m6_typed_monitor_rejects_late_image_owner_pose_layer_and_color_drift() {
+        let mut world = World::new();
+        let owner = world.spawn_empty().id();
+        let entity = world.spawn_empty().id();
+        let initial = MeasuredForeground {
+            entity,
+            owner,
+            parent: owner,
+            image: Handle::<Image>::default().id(),
+            color: [1.; 4],
+            canvas: Some(Vec2::splat(32.)),
+            owner_pose: Transform::IDENTITY,
+            local_pose: Transform::IDENTITY,
+            global_matrix: Mat4::IDENTITY,
+            anchor: Vec2::ZERO,
+            layers: RenderLayers::default(),
+            visible: true,
+        };
+        assert!(unchanged_m6(None, &initial).is_err());
+        assert!(unchanged_m6(Some(&initial), &initial).is_ok());
+        let mut changed = initial.clone();
+        changed.image = AssetId::Uuid {
+            uuid: bevy::asset::uuid::Uuid::from_u128(1),
+        };
+        assert!(unchanged_m6(Some(&initial), &changed).is_err());
+        changed = initial.clone();
+        changed.owner = entity;
+        assert!(unchanged_m6(Some(&initial), &changed).is_err());
+        changed = initial.clone();
+        changed.parent = entity;
+        assert!(unchanged_m6(Some(&initial), &changed).is_err());
+        changed = initial.clone();
+        changed.local_pose.translation.x = 1.;
+        assert!(unchanged_m6(Some(&initial), &changed).is_err());
+        changed = initial.clone();
+        changed.layers = RenderLayers::layer(1);
+        assert!(unchanged_m6(Some(&initial), &changed).is_err());
+        changed = initial.clone();
+        changed.color[0] = 0.5;
+        assert!(unchanged_m6(Some(&initial), &changed).is_err());
+        changed = initial.clone();
+        changed.visible = false;
+        assert!(unchanged_m6(Some(&initial), &changed).is_err());
+        assert_eq!(initial.color, [1.; 4]);
+        assert_eq!(initial.local_pose, Transform::IDENTITY);
+    }
+
+    #[test]
+    fn foreground_records_continue_after_initial_without_expanding_other_sessions() {
+        use crate::assets::building_asset_set::{BuildingAssetAuthority, BuildingAssetSetIdentity};
+        let mut session = BuildingArtSession {
+            mode: "feedback".into(),
+            identity: BuildingAssetSetIdentity {
+                kind: BuildingAssetKind::WheelbarrowParking,
+                authority: BuildingAssetAuthority::ArtPreview,
+                generation: 1,
+                manifest_sha256: "a".repeat(64),
+            },
+            locator: "unused-test-locator".into(),
+            status_path: "/tmp/unused-test-status".into(),
+            nonce: "a".repeat(32),
+            view: default(),
+            variant: default(),
+            lighting: default(),
+            spa_mask_page: None,
+            lamp_supply_target: None,
+            window_contract: None,
+            scale_factor: None,
+        };
+        let initial = RecordMode::for_frame(true, Some(&session));
+        assert_eq!(initial, RecordMode::All);
+        assert!(initial.includes(false));
+        let next = RecordMode::for_frame(false, Some(&session));
+        assert_eq!(next, RecordMode::Foreground);
+        assert!(next.includes(true));
+        assert!(!next.includes(false));
+        assert_eq!(RecordMode::for_frame(false, None), RecordMode::None);
+        session.identity.kind = BuildingAssetKind::RestArea;
+        assert_eq!(
+            RecordMode::for_frame(false, Some(&session)),
+            RecordMode::None
+        );
+        session.identity.kind = BuildingAssetKind::SoulSpa;
+        session.spa_mask_page = Some(0);
+        assert_eq!(
+            RecordMode::for_frame(false, Some(&session)),
+            RecordMode::All
+        );
+    }
+
+    #[test]
+    fn passive_sprite_drift_is_rejected_not_repaired() {
+        let initial = json!({"foreground_schema": 1, "records": (0..4).map(|owner|
+            json!({"owner": owner, "foreground": {"color_srgba": [0.2, 0.8, 0.1, 1.0]}})).collect::<Vec<_>>()});
+        assert!(unchanged(None, &initial).is_ok());
+        assert!(unchanged(Some(&initial), &initial).is_ok());
+        let mut changed = initial.clone();
+        changed["records"][0]["foreground"]["color_srgba"] = json!([1.0, 1.0, 1.0, 1.0]);
+        let error = unchanged(Some(&initial), &changed).unwrap_err();
+        assert!(error.contains("fixture.records[0].foreground.color_srgba[0]"));
+        assert!(error.contains("before=0.2 after=1.0"));
+        assert_ne!(initial, changed);
+        changed["records"] = json!([]);
+        assert!(unchanged(Some(&initial), &changed).is_err());
+    }
+
+    #[test]
+    fn passive_sprite_diagnostic_ignores_unrelated_fixture_records() {
+        let initial = json!({"foreground_schema": 1, "records": [
+            {"kind": "Tank", "unrelated": 1},
+            {"owner": 1, "foreground": {"color": 0.2}},
+            {"owner": 2, "foreground": {"color": 0.2}},
+            {"owner": 3, "foreground": {"color": 0.2}},
+            {"owner": 4, "foreground": {"color": 0.2}}]});
+        let mut current = initial.clone();
+        current["records"][0]["unrelated"] = json!(999);
+        assert!(unchanged(Some(&initial), &current).is_ok());
+        current["records"][1]["foreground"]["color"] = json!(0.8);
+        let reason = unchanged(Some(&initial), &current).unwrap_err();
+        assert!(reason.contains("fixture.records[0].foreground.color"));
+        assert!(reason.contains("before=0.2 after=0.8"));
+        assert!(!reason.contains("unrelated"));
+    }
+
+    #[test]
+    fn passive_sprite_snapshot_keeps_color_alpha_and_parent_local_pose() {
+        let sprite = Sprite {
+            color: Color::srgba(0.2, 0.8, 0.1, 0.4),
+            custom_size: Some(Vec2::splat(64.0)),
+            ..default()
+        };
+        let owner = Transform::from_xyz(32.0, 64.0, 0.12);
+        let local = Transform::from_xyz(0.0, 0.0, 0.01);
+        let global = GlobalTransform::from(owner).mul_transform(local);
+        let observed = measured_values(&sprite, &owner, &local, &global).unwrap();
+        assert_eq!(
+            observed["color_srgba"],
+            json!(sprite.color.to_srgba().to_f32_array())
+        );
+        assert_eq!(sprite.color, Color::srgba(0.2, 0.8, 0.1, 0.4));
+        assert_eq!(
+            observed["owner_pose"]["translation"],
+            json!(owner.translation.to_array())
+        );
+        assert_eq!(observed["global_matrix"], observed["parent_local_matrix"]);
+        assert!(measured_values(&sprite, &owner, &local, &GlobalTransform::IDENTITY).is_err());
+        let invalid = Sprite {
+            color: Color::srgba(f32::NAN, 1.0, 1.0, 1.0),
+            ..default()
+        };
+        assert!(measured_values(&invalid, &owner, &local, &global).is_err());
+    }
+}

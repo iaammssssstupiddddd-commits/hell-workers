@@ -17,7 +17,11 @@ pub struct TopDownStructuralUniform {
     pub shadow_style_tint: Vec4,
     /// `x`: blur radius in shadow texels, `yzw`: reserved.
     pub shadow_style_blur: Vec4,
-    /// `x`: tile size, `y`: local-light gain, `z`: enabled, `w`: reserved.
+    /// `x`: tile size, `y`: local-light gain, `z`: enabled,
+    /// `w`: normal flattening [0,1]; 2 is the closed view-space pilot,
+    /// 3 is admitted world-preview body paint with RtT vertical compensation;
+    /// 4 is object-attached UV ink with a flat diffuse reference normal.
+    /// Projection modes use shadow_style_params as canvas/anchor and tint as matte.
     pub indoor_light_params: Vec4,
 }
 

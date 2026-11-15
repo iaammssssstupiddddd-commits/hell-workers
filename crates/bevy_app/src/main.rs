@@ -39,11 +39,23 @@ fn main() -> AppExit {
             }
         };
     }
+    if let Err(error) = configure_native_allocator() {
+        eprintln!("Native allocator startup: {error}");
+        return AppExit::error();
+    }
     let perf_config = PerfScenarioConfig::try_from_process().unwrap_or_else(|error| {
         eprintln!("Invalid performance scenario configuration: {error}");
         std::process::exit(2);
     });
     let m2_probe = env::var_os("HW_M2_ACCEPTANCE_PROBE");
+    if !ordinary_art_entry_allowed(
+        cfg!(feature = "profiling"),
+        env::var_os("HW_BUILDING_ORDINARY_ART_SESSION").is_some(),
+        perf_config.enabled(),
+    ) {
+        eprintln!("Ordinary art feedback requires profiling without a performance fixture.");
+        return AppExit::error();
+    }
     if !building_art_entry_allowed(
         cfg!(feature = "profiling"),
         env::var_os("HW_BUILDING_ART_SESSION").is_some(),
@@ -95,17 +107,18 @@ fn main() -> AppExit {
         eprintln!("Native acceptance cannot be combined with a performance scenario.");
         std::process::exit(2);
     }
-    let native_acceptance_count = [
+    #[cfg(feature = "profiling")]
+    let m2_ui_pair = bevy_app::m2_ui_pair_admitted_from_process();
+    #[cfg(not(feature = "profiling"))]
+    let m2_ui_pair = false;
+    let native_profiles = [
         native_acceptance_plugin.is_some(),
         native_deconstruction_plugin.is_some(),
         native_notification_plugin.is_some(),
         native_ui_enabled,
         m2_probe.is_some(),
-    ]
-    .into_iter()
-    .filter(|enabled| *enabled)
-    .count();
-    if native_acceptance_count > 1 {
+    ];
+    if !native_profiles_allowed(native_profiles, m2_ui_pair) {
         eprintln!("Native acceptance profiles cannot run together.");
         std::process::exit(2);
     }
@@ -132,11 +145,13 @@ fn main() -> AppExit {
         eprintln!("Invalid building-art session: {error}");
         return AppExit::error();
     }
+    let window_decorations = bevy_app::building_art_window_decorations(app.world());
     let default_plugins = DefaultPlugins
         .set(WindowPlugin {
             primary_window: (!use_headless_runner).then(|| Window {
                 title: "Hell Workers".into(),
                 resolution: window_resolution,
+                decorations: window_decorations,
                 present_mode,
                 ..default()
             }),
@@ -191,9 +206,60 @@ fn main() -> AppExit {
     app.run()
 }
 
+/// Set the same GNU allocation policy before ordinary/profiling worker startup.
+/// Fix the mmap threshold at 128 KiB instead of adapting to transient allocations.
+/// Freed mmap-backed buffers can return to the OS; existing allocations are not reclaimed.
+#[cfg(all(target_os = "linux", target_env = "gnu"))]
+fn configure_native_allocator() -> Result<(), &'static str> {
+    apply_native_allocator_settings(|parameter, value| {
+        // SAFETY: these fixed mallopt options retain no pointers. Called once
+        // on the main thread before App/worker initialization.
+        unsafe { libc::mallopt(parameter, value) }
+    })?;
+    eprintln!("Native allocator startup: glibc arena limit=2 applied");
+    eprintln!("Native allocator startup: glibc mmap threshold=131072 applied");
+    Ok(())
+}
+
+#[cfg(all(target_os = "linux", target_env = "gnu"))]
+fn apply_native_allocator_settings(
+    mut apply: impl FnMut(i32, i32) -> i32,
+) -> Result<(), &'static str> {
+    for (parameter, value, failure) in [
+        (libc::M_ARENA_MAX, 2, "glibc rejected arena limit 2"),
+        (
+            libc::M_MMAP_THRESHOLD,
+            128 * 1024,
+            "glibc rejected mmap threshold 131072",
+        ),
+    ] {
+        if apply(parameter, value) != 1 {
+            return Err(failure);
+        }
+    }
+    Ok(())
+}
+
+#[cfg(not(all(target_os = "linux", target_env = "gnu")))]
+fn configure_native_allocator() -> Result<(), &'static str> {
+    eprintln!("Native allocator startup: platform allocator unchanged");
+    Ok(())
+}
+
 // This only selects the execution route. configure_building_art still validates
 // the full session, and m2_probe restricts interactive admission to feedback
 // ArtPreview Tank/MudMixer identities before any load request is registered.
+fn ordinary_art_entry_allowed(profiling: bool, session: bool, perf_enabled: bool) -> bool {
+    !session || (profiling && !perf_enabled)
+}
+
+// The only paired profile is the explicitly admitted M2 UI observer/probe.
+// Third profiles and arbitrary UI/probe combinations remain forbidden.
+fn native_profiles_allowed(profiles: [bool; 5], m2_ui_pair: bool) -> bool {
+    profiles.into_iter().filter(|enabled| *enabled).count() <= 1
+        || (m2_ui_pair && profiles == [false, false, false, true, true])
+}
+
 fn building_art_entry_allowed(
     profiling: bool,
     session: bool,
@@ -345,6 +411,78 @@ fn select_present_mode() -> PresentMode {
 mod tests {
     use super::*;
     use bevy::winit::UpdateMode;
+
+    #[cfg(all(target_os = "linux", target_env = "gnu"))]
+    #[test]
+    fn native_allocator_requires_both_settings_before_startup() {
+        let mut calls = Vec::new();
+        assert_eq!(
+            apply_native_allocator_settings(|parameter, value| {
+                calls.push((parameter, value));
+                1
+            }),
+            Ok(())
+        );
+        assert_eq!(
+            calls,
+            [(libc::M_ARENA_MAX, 2), (libc::M_MMAP_THRESHOLD, 131_072)]
+        );
+    }
+
+    #[cfg(all(target_os = "linux", target_env = "gnu"))]
+    #[test]
+    fn native_allocator_stops_if_arena_setting_is_rejected() {
+        let mut calls = 0;
+        assert_eq!(
+            apply_native_allocator_settings(|_, _| {
+                calls += 1;
+                0
+            }),
+            Err("glibc rejected arena limit 2")
+        );
+        assert_eq!(calls, 1);
+    }
+
+    #[cfg(all(target_os = "linux", target_env = "gnu"))]
+    #[test]
+    fn native_allocator_rejects_partial_policy_application() {
+        let mut calls = 0;
+        assert_eq!(
+            apply_native_allocator_settings(|parameter, _| {
+                calls += 1;
+                i32::from(parameter == libc::M_ARENA_MAX)
+            }),
+            Err("glibc rejected mmap threshold 131072")
+        );
+        assert_eq!(calls, 2);
+    }
+
+    #[test]
+    fn native_profile_matrix_only_allows_the_validated_m2_ui_pair() {
+        for mask in 0_u32..32 {
+            let profiles = std::array::from_fn(|bit| mask & (1 << bit) != 0);
+            for admitted in [false, true] {
+                assert_eq!(
+                    native_profiles_allowed(profiles, admitted),
+                    mask.count_ones() <= 1 || (mask == 24 && admitted),
+                    "mask={mask} admitted={admitted}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn ordinary_art_never_enters_a_nonprofiling_or_performance_process() {
+        for profiling in [false, true] {
+            for perf in [false, true] {
+                assert!(ordinary_art_entry_allowed(profiling, false, perf));
+                assert_eq!(
+                    ordinary_art_entry_allowed(profiling, true, perf),
+                    profiling && !perf
+                );
+            }
+        }
+    }
 
     #[test]
     fn building_art_entry_separates_interactive_and_static_evidence() {

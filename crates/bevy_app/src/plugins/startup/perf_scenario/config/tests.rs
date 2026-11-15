@@ -51,6 +51,107 @@ fn building_art_static_rejects_wrong_population_clock_and_measurement_contract()
         assert!(config.keeps_virtual_time_paused_during_capture());
         assert!(config.uses_isolated_density_world());
         assert_eq!(config.soul_count().to_string(), souls);
+        let mut context_args = args.clone();
+        let population = context_args
+            .iter()
+            .position(|&arg| arg == "--spawn-souls")
+            .unwrap();
+        context_args[population + 1] = "6";
+        assert!(parse_input(&context_args, &[]).is_err());
+        let context = [(
+            "HW_BUILDING_ART_SESSION",
+            "{\"variant\":\"rest-area-art-context\"}",
+        )];
+        assert_eq!(
+            parse_input(&context_args, &context).is_ok(),
+            size == "small"
+        );
+        assert!(parse_input(&args, &context).is_err());
+        context_args[population + 1] = "8";
+        let m5_context = [(
+            "HW_BUILDING_ART_SESSION",
+            "{\"variant\":\"m5-art-context\"}",
+        )];
+        assert_eq!(
+            parse_input(&context_args, &m5_context).is_ok(),
+            size == "small"
+        );
+        assert!(parse_input(&context_args, &[]).is_err());
+        assert!(parse_input(&context_args, &context).is_err());
+        assert!(parse_input(&args, &m5_context).is_err());
+        context_args[population + 1] = "14";
+        let lamp_context = [(
+            "HW_BUILDING_ART_SESSION",
+            "{\"variant\":\"m5-art-context\",\"identity\":{\"kind\":\"OutdoorLamp\"}}",
+        )];
+        assert_eq!(
+            parse_input(&context_args, &lamp_context).is_ok(),
+            size == "small"
+        );
+        assert!(parse_input(&context_args, &m5_context).is_err());
+        let lamp_ui_context = [(
+            "HW_BUILDING_ART_SESSION",
+            "{\"variant\":\"lamp-supply-art-context\",\"identity\":{\"kind\":\"OutdoorLamp\"}}",
+        )];
+        assert_eq!(
+            parse_input(&context_args, &lamp_ui_context).is_ok(),
+            size == "small"
+        );
+        assert!(parse_input(&context_args, &[]).is_err());
+        context_args[population + 1] = "8";
+        assert!(parse_input(&context_args, &lamp_context).is_err());
+        assert!(parse_input(&context_args, &lamp_ui_context).is_err());
+        let foreign_lamp_ui = [(
+            "HW_BUILDING_ART_SESSION",
+            "{\"variant\":\"lamp-supply-art-context\",\"identity\":{\"kind\":\"SandPile\"}}",
+        )];
+        assert!(parse_input(&context_args, &foreign_lamp_ui).is_err());
+        for (kind, expected) in [("Tank", "8"), ("MudMixer", "10")] {
+            let session =
+                format!("{{\"variant\":\"m2-art-context\",\"identity\":{{\"kind\":\"{kind}\"}}}}");
+            context_args[population + 1] = expected;
+            assert_eq!(
+                parse_input(&context_args, &[("HW_BUILDING_ART_SESSION", &session)]).is_ok(),
+                size == "small"
+            );
+            assert!(parse_input(&context_args, &[]).is_err());
+            context_args[population + 1] = "15";
+            assert!(parse_input(&context_args, &[("HW_BUILDING_ART_SESSION", &session)]).is_err());
+        }
+        for (page, count) in [12, 16, 16, 20].into_iter().enumerate() {
+            let session = format!("{{\"spa_mask_page\":{page}}}");
+            let count = count.to_string();
+            let mut page_args = args.clone();
+            page_args[population + 1] = &count;
+            assert_eq!(
+                parse_input(&page_args, &[("HW_BUILDING_ART_SESSION", &session)]).is_ok(),
+                size == "small"
+            );
+            assert!(parse_input(&args, &[("HW_BUILDING_ART_SESSION", &session)]).is_err());
+        }
+        for invalid in ["true", "1.0", "-1", "4"] {
+            let session = format!("{{\"spa_mask_page\":{invalid}}}");
+            assert!(parse_input(&args, &[("HW_BUILDING_ART_SESSION", &session)]).is_err());
+        }
+        assert!(
+            parse_input(
+                &args,
+                &[("HW_BUILDING_ART_SESSION", "{\"spa_mask_page\":null}")]
+            )
+            .is_ok()
+        );
+        // Parser admission does not approve an asset: configure_building_art
+        // subsequently validates the full explicit session and exact identity.
+        for quality in ["medium", "low"] {
+            let mut art_args = args.clone();
+            let index = art_args
+                .iter()
+                .position(|&arg| arg == "--perf-rtt-quality")
+                .unwrap();
+            art_args[index + 1] = quality;
+            assert!(parse_input(&art_args, &[]).is_err());
+            assert!(parse_input(&art_args, &[("HW_BUILDING_ART_SESSION", "{}")]).is_ok());
+        }
         for (flag, bad) in [
             ("--spawn-souls", "0"),
             ("--spawn-familiars", "1"),
@@ -73,6 +174,79 @@ fn building_art_static_rejects_wrong_population_clock_and_measurement_contract()
             invalid.extend(extra);
             assert!(parse_input(&invalid, &[]).is_err(), "{extra:?}");
         }
+    }
+}
+
+#[cfg(feature = "profiling")]
+#[test]
+fn building_gallery_dpi_requires_a_full_matching_session_contract() {
+    let args = [
+        "--perf-scenario",
+        "--perf-workload",
+        "building-art-static",
+        "--perf-size",
+        "small",
+        "--spawn-souls",
+        "15",
+        "--spawn-familiars",
+        "0",
+        "--perf-seed",
+        "20260920",
+        "--perf-output-dir",
+        "/tmp/unused-gallery-window-test",
+        "--perf-window-width",
+        "1280",
+        "--perf-window-height",
+        "720",
+        "--perf-window-scale-factor",
+        "1.5",
+        "--perf-rtt-quality",
+        "high",
+    ];
+    let raw = serde_json::json!({"mode": "candidate", "identity": {"kind": "Tank",
+        "authority": "isolated_candidate", "generation": 1, "manifest_sha256": "a".repeat(64)},
+        "locator": "manifests/building-tank-v1.buildingset", "nonce": "a".repeat(32),
+        "status_path": "/tmp/unused-gallery-window-test/probe.json", "variant": "gallery",
+        "window_contract": "building-art-window-v1", "scale_factor": 1.5});
+    assert!(parse_input(&args, &[]).is_err());
+    assert!(parse_input(&args, &[("HW_BUILDING_ART_SESSION", "{}")]).is_err());
+    for (dpi, argument) in [(1.0, "1"), (1.5, "1.5"), (2.0, "2")] {
+        let mut value = raw.clone();
+        value["scale_factor"] = serde_json::json!(dpi);
+        let text = value.to_string();
+        let mut actual = args;
+        let scale_index = actual
+            .iter()
+            .position(|flag| *flag == "--perf-window-scale-factor")
+            .unwrap()
+            + 1;
+        actual[scale_index] = argument;
+        let result = parse_input(&actual, &[("HW_BUILDING_ART_SESSION", &text)]);
+        assert!(result.is_ok(), "DPI {dpi}: {:?}", result.err());
+    }
+    for (key, bad) in [
+        ("window_contract", serde_json::json!("foreign")),
+        ("window_contract", serde_json::Value::Null),
+        ("scale_factor", serde_json::json!(true)),
+        ("scale_factor", serde_json::json!(1)),
+        ("scale_factor", serde_json::json!(1.25)),
+        ("scale_factor", serde_json::Value::Null),
+        ("identity", serde_json::Value::Null),
+        ("variant", serde_json::json!("rest-area-art-context")),
+        ("spa_mask_page", serde_json::json!(0)),
+        ("unknown", serde_json::json!(true)),
+    ] {
+        let mut value = raw.clone();
+        value[key] = bad;
+        assert!(
+            parse_input(&args, &[("HW_BUILDING_ART_SESSION", &value.to_string())]).is_err(),
+            "{key}"
+        );
+    }
+    for key in ["window_contract", "scale_factor"] {
+        let mut value = raw.clone();
+        value.as_object_mut().unwrap().remove(key);
+        assert!(parse_input(&args, &[("HW_BUILDING_ART_SESSION", &value.to_string())]).is_err());
     }
 }
 
@@ -1188,4 +1362,160 @@ fn indoor_light_selection_is_exact_and_not_implicit() {
         Some(super::PerfBehaviorCase::LoadRecoveryFailedV1)
     );
     assert_eq!(super::PerfBehaviorCase::parse("unknown"), None);
+}
+
+#[cfg(feature = "profiling")]
+#[test]
+fn group_gallery_window_requires_exact_typed_session_and_small_static_scope() {
+    let mut session = crate::assets::building_asset_set::group_art::test_session();
+    for quality in ["high", "medium", "low"] {
+        for dpi in ["1", "1.5", "2"] {
+            session.quality = quality.into();
+            session.scale_factor = dpi.parse().unwrap();
+            let text = serde_json::to_string(&session).unwrap();
+            let args = [
+                "--perf-scenario",
+                "--perf-workload",
+                "building-art-static",
+                "--perf-size",
+                "small",
+                "--spawn-souls",
+                "15",
+                "--spawn-familiars",
+                "0",
+                "--perf-seed",
+                "20260920",
+                "--perf-output-dir",
+                "/unused/data",
+                "--perf-window-width",
+                "1920",
+                "--perf-window-height",
+                "1680",
+                "--perf-window-scale-factor",
+                dpi,
+                "--perf-rtt-quality",
+                quality,
+            ];
+            assert!(parse_input(&args, &[("HW_BUILDING_GROUP_ART_SESSION", &text)]).is_ok());
+            assert!(parse_input(&args, &[]).is_err());
+            let mut foreign = args;
+            foreign[2] = "gather";
+            assert!(parse_input(&foreign, &[("HW_BUILDING_GROUP_ART_SESSION", &text)]).is_err());
+            foreign = args;
+            foreign[4] = "medium";
+            assert!(parse_input(&foreign, &[("HW_BUILDING_GROUP_ART_SESSION", &text)]).is_err());
+            assert!(
+                parse_input(
+                    &args,
+                    &[
+                        ("HW_BUILDING_GROUP_ART_SESSION", &text),
+                        ("HW_BUILDING_ART_SESSION", "{}")
+                    ]
+                )
+                .is_err()
+            );
+        }
+    }
+}
+
+#[test]
+fn alternate_art_seed_requires_explicit_typed_mixer_feedback_context() {
+    let args = [
+        "--perf-scenario",
+        "--perf-workload",
+        "building-art-static",
+        "--perf-size",
+        "small",
+        "--spawn-souls",
+        "10",
+        "--spawn-familiars",
+        "0",
+        "--perf-seed",
+        "42",
+        "--perf-output-dir",
+        "/unused/data",
+        "--perf-window-width",
+        "1280",
+        "--perf-window-height",
+        "720",
+        "--perf-window-scale-factor",
+        "1",
+        "--perf-rtt-quality",
+        "high",
+    ];
+    let session = serde_json::json!({"mode":"feedback", "variant":"m2-art-context",
+        "identity":{"kind":"MudMixer","generation":5,"authority":"art_preview",
+            "manifest_sha256":"a".repeat(64)},
+        "locator":"manifests/building-mud-mixer-v1.buildingset",
+        "status_path":"/unused/probe.json", "nonce":"a".repeat(32), "view":"normal"});
+    let text = session.to_string();
+    let marker = "HW_BUILDING_ART_FEEDBACK_WORLD_SEED";
+    let environment = [("HW_BUILDING_ART_SESSION", text.as_str()), (marker, "42")];
+    assert_eq!(
+        parse_input(&args, &environment).is_ok(),
+        cfg!(feature = "profiling")
+    );
+    assert!(parse_input(&args, &[]).is_err());
+    assert!(parse_input(&args, &environment[..1]).is_err());
+    for declared in ["43", "042", "-1", "true", "18446744073709551616"] {
+        assert!(
+            parse_input(
+                &args,
+                &[("HW_BUILDING_ART_SESSION", &text), (marker, declared)]
+            )
+            .is_err()
+        );
+    }
+    for (pointer, value) in [
+        ("/mode", serde_json::json!("candidate")),
+        ("/variant", serde_json::json!("gallery")),
+        ("/identity/kind", serde_json::json!("Tank")),
+        (
+            "/identity/authority",
+            serde_json::json!("isolated_candidate"),
+        ),
+        ("/view", serde_json::json!("overview")),
+        ("/spa_mask_page", serde_json::json!(0)),
+    ] {
+        let mut foreign = session.clone();
+        if pointer == "/spa_mask_page" {
+            foreign["spa_mask_page"] = value;
+        } else {
+            *foreign.pointer_mut(pointer).unwrap() = value;
+        }
+        assert!(
+            parse_input(
+                &args,
+                &[
+                    ("HW_BUILDING_ART_SESSION", &foreign.to_string()),
+                    (marker, "42")
+                ]
+            )
+            .is_err()
+        );
+    }
+    for forbidden in [
+        "HW_BUILDING_M6_MODE",
+        "HW_BUILDING_ASSET_RELEASES",
+        "HW_M2_ACCEPTANCE_PROBE",
+        "HW_NATIVE_UI_ROOT",
+    ] {
+        assert!(
+            parse_input(
+                &args,
+                &[
+                    ("HW_BUILDING_ART_SESSION", &text),
+                    (marker, "42"),
+                    (forbidden, "1")
+                ]
+            )
+            .is_err()
+        );
+    }
+    let mut wrong = args;
+    wrong[4] = "medium";
+    assert!(parse_input(&wrong, &environment).is_err());
+    wrong = args;
+    wrong[10] = "20260920";
+    assert!(parse_input(&wrong, &environment).is_err());
 }

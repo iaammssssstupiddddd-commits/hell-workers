@@ -28,6 +28,13 @@ pub struct TaskExecResources<'w, 's> {
     pf_context: Local<'s, PathfindingContext>,
     path_budget: ResMut<'w, RuntimePathSearchBudget>,
     world_epoch: Option<Res<'w, WorldEpoch>>,
+    #[cfg(feature = "profiling")]
+    delivery_observations:
+        Option<Res<'w, hw_jobs::delivery_observations::BlueprintDeliveryReceipts>>,
+    #[cfg(feature = "profiling")]
+    refine_observations: Option<Res<'w, crate::refine_observations::RefineCommitReceipts>>,
+    #[cfg(feature = "profiling")]
+    water_observations: Option<Res<'w, crate::water_observations::TankPourReceipts>>,
     deconstruction_commit_writer: MessageWriter<'w, DeconstructionCommitRequest>,
     path_search_progress: Local<'s, EpochLocal<TaskPathSearchProgress>>,
     task_round_robin: Local<'s, EpochLocal<TaskExecutionRoundRobin>>,
@@ -131,6 +138,8 @@ pub fn task_execution_system(params: TaskExecutionParams) {
     let mut handler_runs = 0u32;
 
     let mut chain_shadow = super::task_execution::chain::ChainAdmissionShadow::default();
+    let mut water_claims =
+        super::task_execution::bucket_transport::claims::WaterTransferClaims::default();
     for offset in 0..task_count {
         let entity = task_round_robin.entities[(task_start + offset) % task_count];
         let Ok((
@@ -236,6 +245,7 @@ pub fn task_execution_system(params: TaskExecutionParams) {
                 path_budget: &mut res.path_budget,
                 path_search_progress,
                 chain_shadow: &mut chain_shadow,
+                water_claims: &mut water_claims,
                 queries: &mut queries,
                 world_epoch: world_epoch.get(),
                 deconstruction_commit_request: None,
@@ -244,6 +254,12 @@ pub fn task_execution_system(params: TaskExecutionParams) {
                     time: res.time.as_ref(),
                     world_map: res.world_map.as_ref(),
                     breakdown: breakdown_opt,
+                    #[cfg(feature = "profiling")]
+                    delivery_observations: res.delivery_observations.is_some(),
+                    #[cfg(feature = "profiling")]
+                    refine_observations: res.refine_observations.is_some(),
+                    #[cfg(feature = "profiling")]
+                    water_observations: res.water_observations.is_some(),
                 },
                 end_state: default(),
             };

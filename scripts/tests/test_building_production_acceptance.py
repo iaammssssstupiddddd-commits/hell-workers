@@ -2,6 +2,8 @@
 import copy
 import json
 from pathlib import Path
+import subprocess
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -11,6 +13,132 @@ from scripts import building_production_lifecycle as lifecycle
 
 
 class ProductionAcceptanceTests(unittest.TestCase):
+    def delivery_raw(self):
+        event = {"producer": "ordinary-blueprint-delivery-branch-v1", "operation": "MaterialDelivery",
+                 "result": "Committed", "sample_index": 1, "event_index": 0, "real_seconds": 1.5,
+                 "worker": "worker", "assignment": "request", "owner": "blueprint", "item": "wood-item",
+                 "world_epoch": 0, "kind": "RestArea", "resource": "Wood", "before_count": 0,
+                 "after_count": 1, "footprint": [[3, 4]], "wheelbarrow": False}
+        samples = [{"sample_index": index, "real_seconds": index + 1.0, "world_epoch": 0,
+                    **{category: [] for category in lifecycle.TRANSITION_CATEGORIES},
+                    "actors": [{"entity": "worker"}]} for index in range(2)]
+        for index, sample in enumerate(samples):
+            sample["blueprints"] = [{"entity": "blueprint", "kind": "RestArea", "footprint": [[3, 4]],
+                                     "delivered_materials": {"Wood": index}}]
+        delta = {"producer": "production_snapshot_delta", "operation": "StateTransition",
+                 "sample_index": 1, "before_sample_index": 0, "event_index": 1,
+                 "real_seconds": 2.0, "category": "blueprints", "entity": "blueprint",
+                 "before": copy.deepcopy(samples[0]["blueprints"][0]),
+                 "after": copy.deepcopy(samples[1]["blueprints"][0])}
+        return {"schema_version": 2, "transition_contract": "indexed-state-delta-v1",
+                "samples": samples, "events": [event, delta]}
+
+    def test_typed_delivery_branch_binds_owner_actor_and_single_consumed_item(self):
+        raw = self.delivery_raw()
+        lifecycle.check_raw_transitions(raw)
+        lifecycle.check_domain_witness({"before": 0, "after": 1, "owner": "blueprint",
+            "events": [0], "domain_event_indices": [0]}, raw)
+        for change in ({"before_count": True}, {"after_count": True}, {"after_count": 2},
+                       {"before_count": -1}, {"world_epoch": True}, {"world_epoch": 1},
+                       {"real_seconds": float("nan")}, {"real_seconds": 3},
+                       {"worker": "foreign"}, {"owner": "foreign"}, {"item": "worker"},
+                       {"kind": "Tank"}, {"kind": "Unknown"}, {"resource": "Bone"},
+                       {"resource": "Unknown"}, {"footprint": []},
+                       {"footprint": [[3, 4], [3, 4]]}, {"wheelbarrow": 1},
+                       {"result": "Inferred"}, {"operation": "BuildWork"}, {"accepted": True}):
+            bad = copy.deepcopy(raw)
+            bad["events"][0].update(change)
+            with self.subTest(change=change), self.assertRaises(ValueError):
+                lifecycle.check_raw_transitions(bad)
+        raw["samples"][1]["items"] = [{"entity": "wood-item"}]
+        with self.assertRaises(ValueError):
+            lifecycle.check_raw_transitions(raw)
+
+    def test_repeated_items_and_discontinuous_delivery_cannot_be_committed(self):
+        for change in ({}, {"item": "second-item", "before_count": 0, "after_count": 1}):
+            raw = self.delivery_raw()
+            raw["events"].append({**raw["events"][0], "event_index": 2, **change})
+            with self.subTest(change=change), self.assertRaises(ValueError):
+                lifecycle.check_raw_transitions(raw)
+
+    def test_same_frame_wheelbarrow_deliveries_keep_distinct_items_and_exact_counts(self):
+        raw = self.delivery_raw()
+        raw["samples"][1]["blueprints"][0]["delivered_materials"]["Wood"] = 2
+        raw["events"][1]["after"]["delivered_materials"]["Wood"] = 2
+        raw["events"][0]["wheelbarrow"] = True
+        raw["events"].append({**raw["events"][0], "event_index": 2, "item": "second-item",
+                               "before_count": 1, "after_count": 2})
+        lifecycle.check_raw_transitions(raw)
+
+    def placement_raw(self, outcome):
+        samples = [{"sample_index": index, "real_seconds": index + 1.0,
+                    "primary_window": "68v0", "world_epoch": 0,
+                    **{category: [] for category in lifecycle.TRANSITION_CATEGORIES}} for index in range(2)]
+        event = {"producer": "ordinary-building-placement-branch-v1", "operation": "PlacementOutcome",
+                 "sample_index": 1, "event_index": 0, "real_seconds": 1.5,
+                 "window": "68v0", "world_epoch": 0, "outcome": outcome}
+        return {"schema_version": 2, "transition_contract": "indexed-state-delta-v1", "samples": samples, "events": [event]}
+
+    def test_placement_branch_diagnostics_do_not_become_lifecycle_witnesses(self):
+        footprint = [[3, 4], [4, 4], [3, 5], [4, 5]]
+        cases = [
+            {"kind": "Tank", "status": "CompanionPending"},
+            {"kind": "Tank", "status": "Rejected", "reason": "OutsideSite"},
+            {"kind": "Tank", "status": "CompanionRejected", "reason": "TooFarFromParent"},
+            {"kind": "Tank", "status": "CompanionRolledBack", "reason": "OccupiedByBuilding", "rolled_back_owner": "1v0"},
+            {"kind": "Tank", "status": "CompanionCommitted", "owner": "1v0", "footprint": footprint, "companion_owners": ["2v0"]},
+            {"kind": "MudMixer", "status": "BlueprintCommitted", "owner": "1v0", "footprint": footprint},
+            {"kind": "SoulSpa", "status": "BuildingCommitted", "owner": "1v0", "footprint": footprint,
+             "tile_owners": ["2v0", "3v0", "4v0", "5v0"]},
+        ]
+        for case in cases:
+            raw = self.placement_raw(case | {"grid": [3, 4]})
+            with self.subTest(case=case):
+                lifecycle.check_raw_transitions(raw)
+                with self.assertRaises(ValueError):
+                    lifecycle.check_domain_witness({"before": 0, "after": 1, "owner": "1v0",
+                        "events": [0], "domain_event_indices": [0]}, raw)
+
+    def test_placement_branch_context_and_payload_relabeling_fail_closed(self):
+        original = self.placement_raw({"kind": "Tank", "status": "CompanionPending", "grid": [3, 4]})
+        for change in ({"world_epoch": 1}, {"world_epoch": True}, {"window": "foreign"},
+                       {"real_seconds": float("inf")}, {"real_seconds": float("nan")},
+                       {"real_seconds": True}, {"sample_index": True}, {"sample_index": 2},
+                       {"operation": "Placement"}, {"accepted": True}):
+            raw = copy.deepcopy(original)
+            raw["events"][0].update(change)
+            with self.subTest(change=change), self.assertRaises(ValueError):
+                lifecycle.check_raw_transitions(raw)
+        for change in ({"kind": "Bridge"}, {"kind": []}, {"status": "Committed"}, {"status": []},
+                       {"grid": [True, 4]}, {"owner": "invented"}, {"promotion_authority": True}):
+            raw = copy.deepcopy(original)
+            raw["events"][0]["outcome"].update(change)
+            with self.subTest(change=change), self.assertRaises(ValueError):
+                lifecycle.check_raw_transitions(raw)
+
+    def test_placement_commits_require_exact_kind_and_child_inventory(self):
+        original = self.placement_raw({"kind": "SoulSpa", "status": "BuildingCommitted", "grid": [3, 4],
+            "owner": "1v0", "footprint": [[3, 4], [4, 4], [3, 5], [4, 5]], "tile_owners": ["2v0", "3v0", "4v0", "5v0"]})
+        for change in ({"kind": "Tank"}, {"tile_owners": ["2v0"]},
+                       {"tile_owners": ["2v0", "3v0", "4v0", "4v0"]},
+                       {"tile_owners": ["1v0", "3v0", "4v0", "5v0"]}, {"owner": ""},
+                       {"footprint": [[3, 4]]}, {"footprint": [[3, 4]] * 4}):
+            raw = copy.deepcopy(original)
+            raw["events"][0]["outcome"].update(change)
+            with self.subTest(change=change), self.assertRaises(ValueError):
+                lifecycle.check_raw_transitions(raw)
+
+    def test_raw_mouse_messages_remain_input_not_placement_results(self):
+        raw = self.placement_raw({})
+        event = {"producer": "MouseButtonInput", "operation": "MouseButtonInput", "state": "Pressed", "button": "Left",
+                 "sample_index": 1, "event_index": 0, "real_seconds": 1.5, "window": "68v0"}
+        raw["events"] = [event]
+        lifecycle.check_raw_transitions(raw)
+        for change in ({"result": "Committed"}, {"window": "foreign"}, {"button": "Invented"},
+                       {"button": "Other(65536)"}, {"sample_index": True}, {"real_seconds": float("inf")}):
+            with self.subTest(change=change), self.assertRaises(ValueError):
+                lifecycle.check_raw_transitions(raw | {"events": [event | change]})
+
     def test_memory_lifecycle_uses_the_same_domain_predicates_as_capture(self):
         trace = {"scope": "production-normal-world-observations-v1", "leg": "placement",
                  "samples": [{"identity": {}, "real_seconds": float(i)} for i in (0, 1)]}
@@ -452,6 +580,63 @@ class ProductionAcceptanceTests(unittest.TestCase):
         self.assertEqual(len(lifecycle.BRIDGE_CASES["cleanup"]), 10)
         with self.assertRaises(ValueError):
             lifecycle.verify(None, [], {"scope": "bridge"}, "unused", set())
+
+    def test_non_bridge_scope_preserves_all_nine_and_cumulative_contract(self):
+        nine = production.GROUPS["non-bridge"]
+        self.assertEqual(nine, tuple(kind for kind in production.GROUPS["full"] if kind != "Bridge"))
+        self.assertEqual(len(nine), 9)
+        self.assertIn("Door", nine)
+        self.assertEqual(production.CUMULATIVE_SCOPES, {"full", "non-bridge"})
+        self.assertEqual(production.STRUCTURE_COUNTS["non-bridge"], (5, 11))
+        self.assertEqual(production.STRUCTURE_COUNTS["full"], (6, 12))
+        for kind in nine:
+            self.assertIn(kind, lifecycle.LEGS)
+        with self.assertRaises(ValueError):
+            lifecycle.verify(None, [], {"scope": "non-bridge"}, "unused", set())
+
+    def test_non_bridge_runner_requires_every_nine_kind_leg_in_both_instruments(self):
+        from scripts import building_production_native_acceptance as runner
+        rows = runner.expected_sessions({"scope": "non-bridge"})
+        for instrument in ("Capture", "Memory"):
+            actual = {(row["kind"], row["leg"]) for row in rows
+                      if row["purpose"] == "lifecycle" and row["instrument"] == instrument}
+            expected = {(kind, leg) for kind in production.GROUPS["non-bridge"]
+                        for leg in lifecycle.LEGS[kind]}
+            self.assertEqual(actual, expected)
+        self.assertFalse(any(row.get("kind") == "Bridge" for row in rows))
+        self.assertEqual([(row["instrument"], row["size"], row["repeat"], row["mode"])
+                          for row in rows if row["purpose"] == "performance"], production.matrix())
+
+    def test_isolated_package_release_inventory_reaches_door_verifier(self):
+        # A fresh interpreter must not inherit a preceding test's sys.path or
+        # standalone perf_tool modules. Only the repo package root is added.
+        program = '''
+import sys
+from pathlib import Path
+from unittest.mock import patch
+sys.path.insert(0, sys.argv[1])
+from scripts import building_production_acceptance as p
+door = {"generation": 7}
+text = "fixture manifest"
+releases = {}
+for kind in p.GROUPS["non-bridge"]:
+    if kind == "Door":
+        releases[kind] = {"inventory_sha256": p.pipeline.digest(p.pipeline.canonical(door))}
+    else:
+        releases[kind] = {"root": ".", "identity": {"kind": kind, "authority": "release_approved"},
+                          "manifest_file_sha256": p.pipeline.digest(text.encode())}
+def loaded(root, kind, codec):
+    return {"identity": releases[kind]["identity"]}, text, None
+with patch.object(p.pipeline, "load_set", side_effect=loaded), \\
+     patch("scripts.building_m6_acceptance.inventory", return_value=door) as inventory:
+    p.release_inventory({"scope": "non-bridge", "repo": sys.argv[1],
+                         "codec": {"path": "test-codec"}, "releases": releases})
+    inventory.assert_called_once_with(Path(sys.argv[1]), Path("test-codec"))
+'''
+        result = subprocess.run([sys.executable, "-I", "-c", program,
+                                 str(Path(__file__).resolve().parents[2])],
+                                text=True, capture_output=True, timeout=30)
+        self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_registry_contract_never_claims_launch_or_promotion_authority(self):
         for scope in production.GROUPS:

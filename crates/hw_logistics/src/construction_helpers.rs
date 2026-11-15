@@ -24,6 +24,20 @@ pub fn spawn_refund_items(
     resource_type: ResourceType,
     amount: u32,
 ) {
+    spawn_refund_items_observed(commands, handles, center, resource_type, amount, |_| {});
+}
+
+/// Uses the same refund path and reports each actual reserved entity ID.
+/// The callback observes queued spawns; it does not establish that deferred
+/// commands or the rest of the owner's cancellation have completed.
+pub fn spawn_refund_items_observed(
+    commands: &mut Commands,
+    handles: &ResourceItemVisualHandles,
+    center: Vec2,
+    resource_type: ResourceType,
+    amount: u32,
+    mut spawned: impl FnMut(Entity),
+) {
     if amount == 0 {
         return;
     }
@@ -49,19 +63,22 @@ pub fn spawn_refund_items(
         let row = (i / columns) as f32;
         let offset_x = (col - (columns as f32 - 1.0) * 0.5) * (TILE_SIZE * 0.18);
         let offset_y = row * (TILE_SIZE * 0.18);
-        commands.spawn((
-            ResourceItem(resource_type),
-            Sprite {
-                image: image.clone(),
-                custom_size: Some(Vec2::splat(TILE_SIZE * 0.5)),
-                ..default()
-            },
-            Transform::from_translation(Vec3::new(
-                center.x + offset_x,
-                center.y + offset_y,
-                Z_ITEM_PICKUP,
-            )),
-            Name::new(name),
-        ));
+        let entity = commands
+            .spawn((
+                ResourceItem(resource_type),
+                Sprite {
+                    image: image.clone(),
+                    custom_size: Some(Vec2::splat(TILE_SIZE * 0.5)),
+                    ..default()
+                },
+                Transform::from_translation(Vec3::new(
+                    center.x + offset_x,
+                    center.y + offset_y,
+                    Z_ITEM_PICKUP,
+                )),
+                Name::new(name),
+            ))
+            .id();
+        spawned(entity);
     }
 }

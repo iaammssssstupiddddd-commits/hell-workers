@@ -1,5 +1,7 @@
 pub mod construction;
 pub mod deconstruction;
+#[cfg(feature = "profiling")]
+pub mod delivery_observations;
 pub mod diagnostics;
 pub mod events;
 pub mod lifecycle;

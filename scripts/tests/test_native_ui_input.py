@@ -69,10 +69,12 @@ class NativeUiInputTests(unittest.TestCase):
 
     def test_pointer_outside_client_rejects_press_but_allows_cleanup_release(self):
         bridge = self.bridge()
-        bridge.client_pointer.return_value = {"same_screen": True, "client": [-1, 10]}
-        with self.assertRaises(InputRejected):
+        bridge.client_pointer.return_value = {"same_screen": True, "client": [-1, 10], "root": [99, 110], "mask": 0}
+        with self.assertRaisesRegex(InputRejected, r"window=0x64, owner_pid=200, client_size=\[100, 100\].*'client': \[-1, 10\].*'root': \[99, 110\]"):
             bridge.send("press", "test-run", button=1, pressed=True)
         bridge.xtest.XTestFakeButtonEvent.assert_not_called()
+        bridge.record.assert_not_called()
+        self.assertNotIn("press", bridge.sent)
         bridge.send("release", "test-run", button=1, pressed=False)
         bridge.xtest.XTestFakeButtonEvent.assert_called_once_with(1, 1, 0, 0)
 

@@ -57,6 +57,12 @@ Logic の次回同期へ委ねてはならない。
 
 ### 資材要件
 
+完成したTankに属するBucketStorageは、黄色の計画用背景だけをVisual phaseで透明化する。
+Spriteの寸法・位置とStockpile/BucketStorage/BelongsToは保ち、footprint選択・バケツ表示・搬送は変えない。
+旧保存から再生成された黄色背景や保管範囲の撤去previewを解除した背景も同じ規則で正規化する。
+未完成のPending、通常保管範囲、別施設、撤去中の赤・橙は維持する。
+従来はMainCameraの2D背景がRtT合成後に描かれ、Tankの背面上縁を黄緑に染めていた。
+
 | BuildingType | 必要資材 |
 |:---|:---|
 | Wall | 木材 × 1 + StasisMud × 1（建築開始は木材のみで可能） |

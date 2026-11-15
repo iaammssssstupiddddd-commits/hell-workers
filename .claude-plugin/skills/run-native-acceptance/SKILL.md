@@ -63,6 +63,17 @@ run the required formal gates when the revised subject is ready for acceptance.
 
 ## UI input feedback
 
+For the dedicated non-Bridge building-art gallery,
+`scripts/building_art_acceptance.py plan --variant gallery --scale-factor 1|1.5|2`
+binds an explicit window contract and DPI to the plan. Combine the declared DPI
+with `--quality high|medium|low` and `--view normal|far` as required by the target
+group's acceptance plan. Physical client/PNG extent remains 1280×720; the
+verifier checks actual DPI, logical dimensions, RTT targets and unchanged end
+state. Existing context/UI variants remain DPI1-only. A single-kind gallery or
+an accepted window contract does not prove group harmony, far-view readability,
+the full matrix, performance or independent art/release approval. Register every
+plan with the primary validation coordinator and use only its returned launcher.
+
 For Entities design revisions, `plan --input-backend none` uses the same registered
 launcher and six viewports for rendering only. It never opens a portal or sends
 input. The one-time profiling fixture hides the developer body, assigns two
@@ -204,7 +215,179 @@ cancellation receipt plus restoration of the original terrain/walkability.
 This is planning feedback only, not completed construction, passage, deconstruction,
 Memory/performance, art/numeric approval or release acceptance.
 
+Select `--case soul-spa-slots --smoke --input-backend portal` for the ordinary
+SoulSpa natural construction/usage prefix followed by actual site selection and
+four existing information-panel slot buttons (4 to zero). Only camera and pause
+are prepared; materials, actors, assignments and completion are never injected.
+The verifier binds each applied outcome to the exact owner, input and raw sample,
+then requires the same generating Soul and unchanged task admission identities
+through a bounded 3–15 virtual-second zero-slot leg. Already dispatched
+GoingToTile tasks may arrive; they are counted before acquiring WorkingOn.
+An overlapping selection uses only the existing revision/epoch-bound candidate
+picker, never repeated blind world clicks. Missing selection or any timeout fails
+closed. The whole-session and raw caps remain unchanged. This is limited slot
+feedback, not occupied persistence, natural exit, art, performance or release.
+Before the world click, the profiling observer evaluates at most the four owned
+tile centers and site center through the unchanged ordinary SelectionResolver.
+It prefers a point where that exact owner is the first Direct Object target.
+If the owner is a lower-ranked Direct Object, one world click must latch its real
+revision/epoch-bound picker inventory. At most eight actual downward wheel pairs
+may expose its fully visible row. Each pair requires one new MouseWheel witness,
+same owned client/list/inventory, increasing ScrollPosition and unchanged camera,
+selection and paused world. No progress, drift, overflow or missing owner stops
+without retry. No eligible Direct Object point means no press; ranking is unchanged.
+Only this case uses the next fresh exact input observation instead of waiting
+three additional frame indices after every motion/button. Cursor and press ACK,
+ownership, nonce, raw pairs, timeout and the 480-second session cap are unchanged;
+the input client binds this policy. Every initially generating Soul must satisfy
+the existing safe usage-window preconditions before any slot input is sent.
+
+Select `--case soul-spa-occupied-save --smoke --input-backend portal` for the
+ordinary natural construction/usage prefix and a paused Manual1 save/load.
+The explicit verifier binds bytes, request/session, raw input, epoch and actual
+Soul/Spa remaps. Previously generating Souls retain durable vitals/pose; runtime
+tasks and WorkingOn/TaskWorkers must be reset, not relabeled as continued work.
+The paused energy pipeline may retain saved derived output pending a normal
+Logic rebuild. Preserve the exact recorded value: never normalize it to zero
+or infer continued generation from it. Every raw sample through capture must
+preserve the declared durable/reset projections. Missing maps, foreign Soul,
+transient mutation, extra input or clock advance fails closed. This case proves
+only occupied durable restoration, not resumed assignment, exit, art, performance
+or release. The existing empty Operational case still rejects occupants.
+
+Use `--case soul-spa-candidate-occupied-save --smoke --input-backend portal-eis`
+with `--soul-spa-art-source <approved-isolated-candidate>` and `--art-codec`
+for the same seven ordinary checkpoints with adopted SoulSpa bytes. The explicit
+candidate scope binds packaged art/numeric provenance, codec, validator bytes,
+base assets, body/four-slot mesh and pose, and actual worker-driven emission.
+Loaded runtime-worker reset must extinguish the corresponding slots; retained
+derived output is still not continued generation. Old fallback/ArtPreview cases
+cannot borrow this admission. Inspect every owned image and independently verify
+the raw before seal. This neither grants new approval nor proves resumed
+assignment, natural exit, performance, promotion/install or release.
+The existing absolute EIS transport retains exact region/scale, owner and cursor
+ACK checks; it does not enable scroll or resend input. The explicit `portal`
+Notify transport remains selectable, but a failed motion is not retried or
+corrected with an empirical offset. Use a fresh registered subject for changes.
+
+Use the separate `--case soul-spa-candidate-resumed-use` with the same explicit
+candidate/codec/EIS options for the seven occupied-save checkpoints plus three
+post-load captures. Its own candidate-resumed mode/scope retains the old prefix
+verifier, then uses only the ordinary 4x speed button to observe a remapped former
+occupant's reassignment, additional Dream consumption and Dream-floor-adjacent
+worker cleanup. No Soul/task/Dream is seeded. The complete input/raw/owner/epoch
+chain and actual worker-driven candidate emission are checked. The 480-second
+session and raw caps are unchanged; a timeout is invalid, not automatic retry.
+The observed state departure is not an uncollected domain-end receipt or proof
+that all workers departed. Performance and release remain separate.
+
+When that full campaign exceeds its fixed deadline, use the explicitly separate
+`--case soul-spa-candidate-loaded-use --spa-resume-source <verified-occupied-job>`
+with the same candidate/codec/EIS options. Hash and independently revalidate the
+historical seven-checkpoint input, copy its exact Manual1 bytes into a fresh
+session, and use only F9 / slot selection / confirmation. The old construction
+is historical input evidence, not proof for today's source. Five current owned
+captures cover empty startup, loaded/reset, reassigned, Normal-speed consumption
+and departure. Saved worker IDs bind through this Load's maps, never old loaded
+IDs. Super/Paused, Normal/Paused, Super/Paused are the only six further actions.
+The target/world footprint, imported bytes, source and actual candidate parts
+remain exact. No Save, task/vital seed, numerical/art decision or release is
+added. Keep 480 seconds, 1200 samples and 3–15 virtual seconds for measurement;
+a failed full campaign remains invalid and is not resumed by this new job.
+
+Select `--case rest-area-planning --smoke --input-backend portal` for ordinary
+RestArea reservation, Manual1 Save/Load and two-stage Task Dashboard cancellation.
+Preparation only centers the camera and pauses time. The case also enables the
+read-only production observer with its process nonce and binds the raw hash to
+the session manifest. Verification requires the loaded blueprint's exact numeric
+and debug Entity IDs, world epoch, pre-cancel snapshot, applied owner-cleanup
+observation and empty owner/map tombstone. This zero-delivered-material case
+does not prove partial-material refunds, full reservation/inventory cleanup,
+completed art, performance or release authority. Missing producer output fails
+closed; do not synthesize it from `CancellationRequested` or disappearance.
+
+For an M5 ArtPreview, select `--case m5-sand-planning|m5-bone-planning|m5-parking-planning|m5-lamp-planning`
+with `--smoke --input-backend portal-eis --m5-art-source <exact-preview> --art-codec <codec>`.
+The separate ordinary-m5-art-planning-v1 scope prepares only camera and pause in
+the generated world. Six owned captures bind empty/catalog/legal ghost/single
+Blueprint/occupied ghost/same-Blueprint inspection to real input, exact image
+consumers and source. Existing construction tint/scale remain intact; a pulse
+exists only if natural construction actually reached Building.
+Initial same-kind generated buildings are preserved in a bounded owner/pose
+inventory; keep their exact world consumers distinct from the new Blueprint.
+Reject missing/replaced/moved initial owners or any extra completed owner.
+Preserve input ACK, phase/clock/owner, original press/receipt and Last flush guards; do not resend
+an event or seed materials/tasks to obtain evidence. Inspect every image. This is
+not completed lifecycle, pulse evidence when absent, power, vehicle/gathering,
+art/numeric approval, performance, promotion or release acceptance.
+
+For adopted M5 candidates, use the separate `m5-sand-candidate-planning`,
+`m5-bone-candidate-planning`, `m5-parking-candidate-planning` or
+`m5-lamp-candidate-planning` case with `--smoke --input-backend portal-eis`,
+`--m5-art-source <approved-isolated-candidate>` and immutable `--art-codec`.
+These cases require packaged art/numeric provenance and freeze the numeric
+validator inventory and shared art driver hash. The dedicated candidate mode
+and scope reject the old preview case/authority and vice versa. Preserve the
+same real catalog/ghost/single Blueprint/occupied rejection/selection inputs,
+initial Parking inventory and no-completion guards. Inspect every owned PNG.
+This is adopted-candidate planning evidence only, not natural completion,
+power, vehicle use, save/load, performance, promotion or release approval.
+Do not reinterpret old ArtPreview jobs as candidate evidence.
+
+Use `--case rest-area-candidate-lifecycle --smoke --input-backend portal`
+with `--rest-area-art-source <approved-isolated-candidate>` and `--art-codec`
+for adopted RestArea bytes in ordinary natural construction, usage, occupied
+Manual1 save/load and natural exit/cooldown feedback. This explicit case requires
+packaged art/numeric provenance and exact dependency bytes. It has a separate
+candidate mode/scope; old preview feedback still rejects candidate authority.
+No default asset locator, release/promotion or gameplay rule is changed. Keep
+source, codec and overlay frozen through verification and inspect every image.
+Technical lifecycle feedback is not performance or release approval.
+
+Use the separate `--case rest-area-refund --smoke --input-backend portal` case
+to wait up to 90 seconds for real Wood delivery before Save/Load and cancellation.
+It adds a delivered checkpoint, requires unchanged material counts/progress after
+load, and binds exact distinct refund Entity IDs, kinds and counts to those
+materials. It never grants materials or completes/assigns work. Missing delivery,
+completed construction or a missing/mismatched refund fails closed. This remains
+limited feedback, not full reservation/inventory cleanup or art/release approval.
+
 ## Wall/Door feedback storyboard
+
+For adopted Tank natural construction, use the dedicated
+`--case m2-tank-candidate-completion --smoke --input-backend portal-eis`
+with `--m2-art-source <approved-isolated-candidate>` and an immutable `--art-codec`.
+Only camera/pause are prepared. Two real world clicks must first enter companion
+pending, then commit the parent and two BucketStorage cells. Verify actual Wood2,
+Build completion, same-child ownership promotion, initial five dedicated buckets
+and the Empty candidate body/water state. Inspect all three owned PNGs.
+The separately scoped `--case m2-tank-candidate-inflow` retains that same-process
+construction prefix, then uses Normal/Paused only to observe actual TankPour
+receipts and a fourth water-state capture. Bind every produced Water Entity to
+the exact worker/assignment/bucket, current Tank inventory and water part state.
+Never inject water or normalize concurrent pours. These cases do not prove the
+River fill branch, all supply/refinement, full renderer chain, performance or release.
+Use the separate `--case m2-tank-candidate-full` with the same candidate/codec/EIS
+options for natural filling to exactly fifty Water items and the Full water part.
+It keeps the same ordinary-construction prefix, requires ten distinct five-Water
+pour output sets, and uses its own scope/checkpoint. The 180-second wait and raw
+sample/event/session caps are unchanged; timeout or partial filling is invalid.
+The Full source contract explicitly requires `supply_speed=Super`: construction
+stays unchanged, then only the ordinary 4x button and Paused are used. Raw speed
+is 1 before the switch and 4 afterwards, including while paused. Preserve failed
+Normal attempts; this proves neither Normal-time filling nor performance.
+
+The separate `--case m2-tank-candidate-persistence` uses that exact continuous
+construction/Full prefix and waits for all five real buckets to return unheld to
+the two owned storages. It then drives F5/Manual1 save and F9/Manual1 selection
+and confirmation through the existing catalogs. Its explicit persistence scope
+records the actual committed M2 inventory and applied entity map; no materials,
+tasks, water, world state or save bytes are seeded or repaired. Verify the saved
+file hash/bytes, exact catalog session and input pairs, epoch change, complete
+typed Tank/storage/Water/bucket bijection, both inventory directions, and every
+paused tail sample. Wait for rebuilt same-candidate Full rendering before the
+loaded capture. The original Full verifier still rejects this scope; a passing
+persistence recipe is not Memory, performance, independent art or release approval.
 
 For already approved candidate or release assets, the joint helper supports a
 feedback-only dev build. Keep the same mutable workspace and cache; an uncommitted
@@ -235,6 +418,34 @@ Do not treat it as formal J1, performance, quality/DPI matrix or art approval.
 For formal J1, remove `--feedback` and use the existing clean-subject recipe.
 
 ## Run the Task Dashboard recipe
+
+For the non-Bridge M5 ArtPreview comparison, wrap
+`python3 scripts/building_art_acceptance.py plan --variant m5-art-context --view normal`
+with the primary validation coordinator and the exact source/codec options.
+This explicit feedback/art-preview-only scope seeds four target buildings, eight
+front/back Walls, eight idle Souls and four descriptor previews once. It preserves
+generated terrain and rejects pre-existing Soul work/relations rather than clearing
+them. Lamp alone retains two source Spas and six extra generating Souls from the
+gallery's explicit setup (including Dream100), not ordinary construction or natural
+assignment evidence. Its separate fourteen-Soul/fourteen-building inventory binds
+tile/worker inverse relations, actual output, Yard/grid generators/consumers and
+unpowered control isolation. It never overrides the powered visual mirror.
+After setup the observer is passive. The independent verifier binds actual
+foreground and preview images, terrain/footprints, renderer root/local/global poses,
+materials/layers, RTT camera and 30 stable frames to the same subject. Inspect the
+owned PNG for actual overlap: recorded geometry alone does not prove correct depth
+order or readability. This is not ordinary placement/selection input, power or
+lifecycle, art/numeric adoption, performance or promotion/release evidence.
+
+For the separate Lamp UI art complement, use
+`--variant lamp-supply-art-context --lamp-supply-target 0|2 --view normal|overview`
+in feedback mode. It reuses that seeded graph and sets selection once; production
+inspection renders the real kind and supply text. The passive observer binds the
+selected/unpinned/model/grid owner, actual supply, fully visible Text rectangles,
+DPI/window and stable foreground to the exact subject. It never injects Text,
+supply state or subsequent repair. Capture off/on at both views through separate
+registered jobs. This proves only seeded, no-input rendering readability; it does
+not prove OS selection, natural supply, lifecycle, performance or approval.
 
 From the repository root, generate a fresh, non-mutating plan:
 
@@ -993,7 +1204,7 @@ pass because individual runs happened to finish.
 After changing the Skill or helper, run:
 
 ```bash
-python3 -m unittest scripts.tests.test_ui_usability_acceptance scripts.tests.test_rtt_light_closure_verify
+python3 -m unittest scripts.tests.test_ui_usability_acceptance scripts.tests.test_ui_m5_planning scripts.tests.test_ui_spa_occupied_save scripts.tests.test_ui_spa_candidate_art scripts.tests.test_ui_spa_resumed_use scripts.tests.test_ui_spa_loaded_use scripts.tests.test_rtt_light_closure_verify
 PYTHONDONTWRITEBYTECODE=1 python3 \
   .codex/skills/hell-workers-run-native-acceptance/scripts/native_acceptance.py \
   self-test

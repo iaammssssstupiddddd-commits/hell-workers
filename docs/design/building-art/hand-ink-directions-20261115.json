@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "scope": "New hand-drawn style directions after user rejection; not game screenshots, candidates, numeric or production authority.",
+  "images": [
+    {
+      "path": "mixer-hand-ink-direction-20261115.png",
+      "sha256": "54e79b29579b56a57f8713bdf9a27c930abc6ec75938d533903616105ca6bcec",
+      "status": "unapproved_style_direction",
+      "tool": "built-in image_gen",
+      "runtime_installed": false,
+      "numeric_approved": false,
+      "release_approved": false
+    },
+    {
+      "path": "rest-hand-ink-direction-20261115.png",
+      "sha256": "3744ff90bf0bede85c4a14e5f0b9a0ca7dc67cbc1610b6057461e1438569f646",
+      "status": "unapproved_style_direction",
+      "tool": "built-in image_gen",
+      "runtime_installed": false,
+      "numeric_approved": false,
+      "release_approved": false
+    }
+  ]
+}

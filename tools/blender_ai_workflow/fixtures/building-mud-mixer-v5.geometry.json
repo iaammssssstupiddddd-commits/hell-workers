@@ -1,0 +1,254 @@
+{
+  "schema_version": 1,
+  "kind": "MudMixer",
+  "stage": "clay_draft",
+  "final_art": null,
+  "units": "world_unit",
+  "geometry_scale": 32,
+  "tolerance_wu": 0.001,
+  "preview": {
+    "canvas_px": [
+      256,
+      256
+    ],
+    "canvas_wu": [
+      96,
+      96
+    ],
+    "anchor_px": [
+      128,
+      176
+    ],
+    "representative_state": "IdleAngleZero"
+  },
+  "roles": {
+    "body": {
+      "collection": "MudMixer_Body",
+      "bounds_min_wu": [
+        -22,
+        0.0,
+        -24.0
+      ],
+      "bounds_max_wu": [
+        22,
+        27.0,
+        15.0
+      ],
+      "translation_wu": [
+        0,
+        0,
+        0
+      ],
+      "triangle_cap": 512,
+      "rotation_xyzw": [
+        0,
+        -0.5372996083468239,
+        0,
+        0.8433914458128857
+      ]
+    },
+    "rotor": {
+      "collection": "MudMixer_Rotor",
+      "bounds_min_wu": [
+        -14.0,
+        -16,
+        -14.0
+      ],
+      "bounds_max_wu": [
+        14.0,
+        14,
+        14.0
+      ],
+      "translation_wu": [
+        0,
+        25,
+        0
+      ],
+      "triangle_cap": 256,
+      "rotation_xyzw": [
+        0.38943483051839023,
+        -0.4765905732660485,
+        0.24809734904587277,
+        0.7480973490458728
+      ]
+    }
+  },
+  "construction": {
+    "body_boxes": [
+      {
+        "center": [
+          -13,
+          2.25,
+          -3
+        ],
+        "size": [
+          3,
+          4.5,
+          36
+        ]
+      },
+      {
+        "center": [
+          -17,
+          15,
+          0
+        ],
+        "size": [
+          3,
+          24,
+          5
+        ]
+      },
+      {
+        "center": [
+          17,
+          15,
+          0
+        ],
+        "size": [
+          3,
+          24,
+          5
+        ]
+      },
+      {
+        "center": [
+          13,
+          2.25,
+          -3
+        ],
+        "size": [
+          3,
+          4.5,
+          36
+        ]
+      },
+      {
+        "center": [
+          0,
+          6,
+          9
+        ],
+        "size": [
+          40,
+          2,
+          2
+        ]
+      },
+      {
+        "center": [
+          0,
+          7,
+          -22
+        ],
+        "size": [
+          4,
+          14,
+          4
+        ]
+      },
+      {
+        "center": [
+          0,
+          1,
+          -22
+        ],
+        "size": [
+          18,
+          2,
+          4
+        ]
+      },
+      {
+        "center": [
+          0,
+          2.25,
+          -14
+        ],
+        "size": [
+          28,
+          3,
+          3
+        ]
+      }
+    ],
+    "drum_profile": [
+      [
+        0,
+        -16
+      ],
+      [
+        9,
+        -16
+      ],
+      [
+        14,
+        -4
+      ],
+      [
+        14,
+        3
+      ],
+      [
+        7,
+        14
+      ],
+      [
+        6,
+        14
+      ],
+      [
+        11,
+        2
+      ],
+      [
+        7,
+        0
+      ],
+      [
+        0,
+        0
+      ]
+    ],
+    "tilt_radians": 0.9599310885968813,
+    "wheels": {
+      "centers": [
+        [
+          -20,
+          6,
+          9
+        ],
+        [
+          20,
+          6,
+          9
+        ]
+      ],
+      "radius": 6,
+      "half_thickness": 2,
+      "segments": 12
+    },
+    "yaw_radians": -1.1344640137963142,
+    "outlined_members": true
+  },
+  "states": {
+    "Idle": "Hold current rotor angle; load resets to zero",
+    "Active": "Advance rotor only with Refining and Virtual delta",
+    "Paused": "Hold angle"
+  },
+  "reject_if": [
+    "drum mouth unreadable",
+    "drum full sweep intersects chassis or uprights",
+    "wheels or feet float",
+    "drum pivot or tilt differs from authored parts",
+    "chassis reads as a solid slab instead of separate site-frame rails",
+    "drum mouth and tapered body do not read separately at normal zoom"
+  ],
+  "final_freeze_requires": [
+    "actual-window clay approval",
+    "triangle and texture budgets",
+    "preview projection report",
+    "rotor swept volume",
+    "mud surface clearance and state interpretation"
+  ]
+}

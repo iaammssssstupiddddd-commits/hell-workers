@@ -1235,11 +1235,124 @@ impl PerfScenarioConfig {
                     .to_string(),
             ));
         }
+        let art_session = input
+            .env_text("HW_BUILDING_ART_SESSION")
+            .and_then(|raw| serde_json::from_str::<serde_json::Value>(&raw).ok());
+        let group_art = input.env_text("HW_BUILDING_GROUP_ART_SESSION");
+        let released_gallery = input.env_text("HW_BUILDING_RELEASE_GALLERY_SESSION");
+        let tank_pilot = input.env_text("HW_BUILDING_TANK_ILLUSTRATION_PILOT");
+        if tank_pilot.is_some() && (group_art.is_some() || released_gallery.is_some()) {
+            return Err(PerfScenarioConfigError(
+                "Tank pilot is a distinct session".into(),
+            ));
+        }
+        if group_art.is_some() && released_gallery.is_some() {
+            return Err(PerfScenarioConfigError(
+                "group and released galleries are distinct sessions".into(),
+            ));
+        }
+        let gallery_requested =
+            group_art.is_some() || released_gallery.is_some() || tank_pilot.is_some();
+        let static_window_contract = if tank_pilot.is_some() {
+            tank_pilot_window_matches(
+                tank_pilot.as_deref(),
+                window_width,
+                window_height,
+                window_scale_factor,
+                rtt_quality,
+            )
+        } else if released_gallery.is_some() {
+            released_gallery_window_matches(
+                released_gallery.as_deref(),
+                window_width,
+                window_height,
+                window_scale_factor,
+                rtt_quality,
+            )
+        } else if group_art.is_some() {
+            group_art_window_matches(
+                group_art.as_deref(),
+                window_width,
+                window_height,
+                window_scale_factor,
+                rtt_quality,
+            )
+        } else {
+            window_width == Some(1280)
+                && window_height == Some(720)
+                && building_art_window_matches(art_session.as_ref(), window_scale_factor)
+                && building_art_quality_matches(art_session.is_some(), rtt_quality)
+        };
+        if gallery_requested
+            && (workload != PerfWorkload::BuildingArtStatic
+                || size != PerfScenarioSize::Small
+                || art_session.is_some())
+        {
+            return Err(PerfScenarioConfigError(
+                "group gallery requires its separate small static session".into(),
+            ));
+        }
+        let rest_art_context = art_session
+            .as_ref()
+            .is_some_and(|session| session["variant"] == "rest-area-art-context");
+        let m2_art_context = art_session.as_ref().filter(|session| {
+            session["variant"] == "m2-art-context"
+                && matches!(
+                    session["identity"]["kind"].as_str(),
+                    Some("Tank" | "MudMixer")
+                )
+        });
+        let m5_art_context = art_session.as_ref().is_some_and(|session| {
+            session["variant"] == "m5-art-context"
+                || (session["variant"] == "lamp-supply-art-context"
+                    && session["identity"]["kind"] == "OutdoorLamp")
+        });
+        let spa_mask_page = art_session
+            .as_ref()
+            .and_then(|session| session.get("spa_mask_page"))
+            .filter(|page| !page.is_null())
+            .map(|page| {
+                page.as_u64()
+                    .filter(|page| *page < 4)
+                    .ok_or_else(|| PerfScenarioConfigError("unknown Spa mask page".into()))
+            })
+            .transpose()?;
+        if (rest_art_context
+            || m2_art_context.is_some()
+            || m5_art_context
+            || spa_mask_page.is_some())
+            && (workload != PerfWorkload::BuildingArtStatic || size != PerfScenarioSize::Small)
+        {
+            return Err(PerfScenarioConfigError(
+                "art context/page requires the small static fixture".into(),
+            ));
+        }
         if workload == PerfWorkload::BuildingArtStatic
             && (!matches!(size, PerfScenarioSize::Small | PerfScenarioSize::Medium)
                 || render_mode != PerfRenderMode::Gpu
                 || soul_count
-                    != if size == PerfScenarioSize::Small {
+                    != if rest_art_context {
+                        6
+                    } else if let Some(session) = m2_art_context {
+                        if session["identity"]["kind"] == "MudMixer" {
+                            10
+                        } else {
+                            8
+                        }
+                    } else if m5_art_context {
+                        if art_session
+                            .as_ref()
+                            .is_some_and(|session| session["identity"]["kind"] == "OutdoorLamp")
+                        {
+                            14
+                        } else {
+                            8
+                        }
+                    } else if let Some(page) = spa_mask_page {
+                        8 + (0..4u64)
+                            .map(|ordinal| (page * 4 + ordinal).count_ones())
+                            .sum::<u32>()
+                    } else if size == PerfScenarioSize::Small {
                         15
                     } else {
                         60
@@ -1249,16 +1362,13 @@ impl PerfScenarioConfig {
                 || !matches!(operation_dialog_mode, PerfOperationDialogMode::Hidden)
                 || !matches!(dashboard_mode, PerfDashboardMode::Hidden)
                 || !matches!(clock_mode, PerfClockMode::Realtime)
-                || master_seed != 20_260_920
+                || !building_art_seed_matches(input, art_session.as_ref(), master_seed)
                 || warmup_secs != 30.0
                 || measure_secs != 60.0
                 || output_dir.is_none()
-                || window_width != Some(1280)
-                || window_height != Some(720)
-                || window_scale_factor != Some(1.0)
-                || rtt_quality != Some(RttQualityPreset::High))
+                || !static_window_contract)
         {
-            return Err(PerfScenarioConfigError("building-art-static requires small/15 Souls or medium/60 Souls, zero Familiars, gpu/realtime, seed 20260920, 30s/60s, output directory, baseline policies and 1280x720/high/DPI-1".into()));
+            return Err(PerfScenarioConfigError("building-art-static requires small/15 Souls or medium/60 Souls, zero Familiars, gpu/realtime, seed 20260920 (or explicit Mixer feedback terrain context), 30s/60s, output directory, baseline policies and 1280x720/DPI-1; explicit gallery contracts alone admit DPI-1.5/2, non-high quality requires an explicit building-art session".into()));
         }
         #[cfg(feature = "profiling-renderdoc")]
         if renderdoc_capture
@@ -1668,6 +1778,150 @@ const fn wall_actual_window_phase_matches(
         && (matches!(phase, Some(PerfWallPhase::Completed))
             || (art_preview && matches!(phase, Some(PerfWallPhase::Provisional)))
             || (formwork_acceptance && matches!(phase, Some(PerfWallPhase::Mixed))))
+}
+
+// Static performance references stay high-only. Explicit art sessions are
+// independently admitted by configure_building_art and grant no release authority.
+fn building_art_quality_matches(art_session: bool, quality: Option<RttQualityPreset>) -> bool {
+    quality == Some(RttQualityPreset::High)
+        || (art_session
+            && matches!(
+                quality,
+                Some(RttQualityPreset::Medium | RttQualityPreset::Low)
+            ))
+}
+
+fn group_art_window_matches(
+    raw: Option<&str>,
+    width: Option<u32>,
+    height: Option<u32>,
+    scale: Option<f32>,
+    quality: Option<RttQualityPreset>,
+) -> bool {
+    #[cfg(feature = "profiling")]
+    {
+        raw.and_then(|raw| {
+            crate::assets::building_asset_set::group_art::GroupArtSession::parse(raw).ok()
+        })
+        .is_some_and(|session| session.window_matches(width, height, scale, quality))
+    }
+    #[cfg(not(feature = "profiling"))]
+    {
+        let _ = (raw, width, height, scale, quality);
+        false
+    }
+}
+
+fn released_gallery_window_matches(
+    raw: Option<&str>,
+    width: Option<u32>,
+    height: Option<u32>,
+    scale: Option<f32>,
+    quality: Option<RttQualityPreset>,
+) -> bool {
+    #[cfg(feature = "profiling")]
+    {
+        raw.and_then(|raw| {
+            crate::assets::building_asset_set::release_gallery::ReleaseArtSession::parse(raw).ok()
+        })
+        .is_some_and(|session| session.window_matches(width, height, scale, quality))
+    }
+    #[cfg(not(feature = "profiling"))]
+    {
+        let _ = (raw, width, height, scale, quality);
+        false
+    }
+}
+
+fn tank_pilot_window_matches(
+    raw: Option<&str>,
+    width: Option<u32>,
+    height: Option<u32>,
+    scale: Option<f32>,
+    quality: Option<RttQualityPreset>,
+) -> bool {
+    #[cfg(feature = "profiling")]
+    {
+        raw.and_then(|raw| {
+            crate::assets::building_asset_set::tank_illustration_pilot::TankIllustrationPilot::parse(raw).ok()
+        })
+        .is_some_and(|session| session.window_matches(width, height, scale, quality))
+    }
+    #[cfg(not(feature = "profiling"))]
+    {
+        let _ = (raw, width, height, scale, quality);
+        false
+    }
+}
+
+// Alternate terrain is feedback-only. Formal/static and ordinary sessions keep
+// their fixed seed; startup still validates the entire ArtPreview context.
+fn building_art_seed_matches(
+    input: &PerfConfigInput<'_>,
+    session: Option<&serde_json::Value>,
+    seed: u64,
+) -> bool {
+    let Some(declared) = input.env_os("HW_BUILDING_ART_FEEDBACK_WORLD_SEED") else {
+        return seed == 20_260_920;
+    };
+    let Ok(declared) = declared.into_string() else {
+        return false;
+    };
+    #[cfg(feature = "profiling")]
+    {
+        use crate::assets::building_asset_set::{BuildingAssetAuthority, BuildingAssetKind};
+        session
+            .and_then(|value| {
+                serde_json::from_value::<
+                    crate::assets::building_asset_set::acceptance::BuildingArtSession,
+                >(value.clone())
+                .ok()
+            })
+            .is_some_and(|session| {
+                declared == seed.to_string()
+                    && session.mode == "feedback"
+                    && session.is_m2_context()
+                    && session.identity.kind == BuildingAssetKind::MudMixer
+                    && session.identity.authority == BuildingAssetAuthority::ArtPreview
+                    && session
+                        .validate_context(|key| input.env_text(key).is_some())
+                        .is_ok()
+            })
+    }
+    #[cfg(not(feature = "profiling"))]
+    {
+        let _ = (declared, session);
+        false
+    }
+}
+
+fn building_art_window_matches(
+    session: Option<&serde_json::Value>,
+    requested: Option<f32>,
+) -> bool {
+    let declared = session.is_some_and(|value| {
+        value.get("window_contract").is_some() || value.get("scale_factor").is_some()
+    });
+    if !declared {
+        return requested == Some(1.0);
+    }
+    #[cfg(feature = "profiling")]
+    {
+        session
+            .filter(|value| {
+                value.get("window_contract").is_some_and(|v| !v.is_null())
+                    && value.get("scale_factor").is_some_and(|v| !v.is_null())
+            })
+            .and_then(|value| {
+                serde_json::from_value::<
+                    crate::assets::building_asset_set::acceptance::BuildingArtSession,
+                >(value.clone())
+                .ok()
+            })
+            .is_some_and(|session| session.window_matches(requested))
+    }
+    #[cfg(not(feature = "profiling"))]
+    false
 }
 
 fn wall_density_window_contract_matches(

@@ -1,0 +1,388 @@
+{
+  "schema_version": 1,
+  "stage": "unapproved_m3_production_proposal",
+  "units": "world_unit",
+  "geometry_scale": 32,
+  "numeric_freeze": false,
+  "art_approved": false,
+  "runtime_published": false,
+  "tolerance_wu": 0.001,
+  "ordered_relative_tiles": [
+    [
+      0,
+      0
+    ],
+    [
+      1,
+      0
+    ],
+    [
+      0,
+      -1
+    ],
+    [
+      1,
+      -1
+    ]
+  ],
+  "center_offset_tiles": [
+    0.5,
+    -0.5
+  ],
+  "slot_emissive_multiplier_linear": [
+    1,
+    1,
+    1
+  ],
+  "atlas": {
+    "size_px": 512,
+    "cell_px": 32,
+    "gutter_px": 4
+  },
+  "RestArea": {
+    "preview": {
+      "canvas_px": [
+        256,
+        256
+      ],
+      "canvas_wu": [
+        144,
+        144
+      ],
+      "anchor_px": [
+        128,
+        144
+      ],
+      "representative_state": "Empty"
+    },
+    "roles": {
+      "body": {
+        "collection": "RestArea_Body",
+        "triangle_cap": 320
+      }
+    },
+    "posts": {
+      "x": [
+        -25,
+        25
+      ],
+      "z": [
+        -24,
+        24
+      ],
+      "width_depth_wu": [
+        4,
+        4
+      ],
+      "bindings_z": [],
+      "heights_wu": [
+        [
+          33.5,
+          32
+        ],
+        [
+          32.5,
+          32.5
+        ]
+      ],
+      "lean_top_xz": [
+        [
+          [
+            0.75,
+            -0.5
+          ],
+          [
+            -0.6,
+            0.4
+          ]
+        ],
+        [
+          [
+            -0.7,
+            0.4
+          ],
+          [
+            0.5,
+            -0.5
+          ]
+        ]
+      ],
+      "painted_binding_y_wu": [
+        27.5,
+        29.5
+      ]
+    },
+    "roof": {
+      "x_profile": [
+        -31,
+        -25,
+        0,
+        25,
+        31
+      ],
+      "z_rows": [
+        -29,
+        -24,
+        0,
+        24
+      ],
+      "front_z_profile": [
+        29,
+        28,
+        25.5,
+        28,
+        29
+      ],
+      "height_grid": [
+        [
+          27,
+          32,
+          60,
+          31,
+          27
+        ],
+        [
+          28,
+          33,
+          62,
+          32,
+          28
+        ],
+        [
+          27,
+          30,
+          57,
+          29.5,
+          26.5
+        ],
+        [
+          28,
+          31.5,
+          60,
+          32,
+          27.5
+        ],
+        [
+          26,
+          30,
+          58.5,
+          30.5,
+          26
+        ]
+      ],
+      "thickness_wu": 1.5
+    },
+    "palette": {
+      "wood": [
+        83,
+        66,
+        54
+      ],
+      "cloth": [
+        177,
+        153,
+        123
+      ],
+      "iron": [
+        85,
+        79,
+        70
+      ]
+    },
+    "body_bounds_wu": [
+      [
+        -31,
+        0,
+        -29
+      ],
+      [
+        31,
+        64,
+        29
+      ]
+    ],
+    "reject_if": [
+      "occupants visible through walls or roof",
+      "entrance unreadable at normal zoom",
+      "reservation represented as occupancy",
+      "roof reads as cardboard rather than supported sagging fabric",
+      "closed entry curtain and eaves are not legible at normal zoom"
+    ],
+    "enclosure": {
+      "half_x_wu": 23,
+      "half_z_wu": 22,
+      "roof_overlap_wu": 0.25,
+      "floor_y_wu": 0
+    },
+    "curved_cloth_pigment": true,
+    "steep_tent_pigment": true,
+    "ridge_supports": [
+      {
+        "center": [
+          0,
+          32,
+          -24
+        ],
+        "size": [
+          3.5,
+          64,
+          3.5
+        ]
+      },
+      {
+        "center": [
+          0,
+          30.625,
+          18
+        ],
+        "size": [
+          3.5,
+          61.25,
+          3.5
+        ]
+      }
+    ]
+  },
+  "SoulSpa": {
+    "preview": {
+      "canvas_px": [
+        256,
+        256
+      ],
+      "canvas_wu": [
+        96,
+        96
+      ],
+      "anchor_px": [
+        128,
+        144
+      ],
+      "representative_state": "OperationalMaskZero"
+    },
+    "roles": {
+      "body": {
+        "collection": "SoulSpa_Body",
+        "triangle_cap": 640
+      },
+      "slot": {
+        "collection": "SoulSpa_Slot",
+        "triangle_cap": 64
+      }
+    },
+    "bone_segments": [
+      [
+        [
+          -29,
+          4,
+          -29
+        ],
+        [
+          29,
+          4,
+          -29
+        ]
+      ],
+      [
+        [
+          -29,
+          4,
+          29
+        ],
+        [
+          -29,
+          4,
+          -29
+        ]
+      ],
+      [
+        [
+          29,
+          4,
+          -29
+        ],
+        [
+          29,
+          4,
+          29
+        ]
+      ],
+      [
+        [
+          -29,
+          4,
+          29
+        ],
+        [
+          -20,
+          4,
+          29
+        ]
+      ],
+      [
+        [
+          20,
+          4,
+          29
+        ],
+        [
+          29,
+          4,
+          29
+        ]
+      ],
+      [
+        [
+          0,
+          3,
+          -27
+        ],
+        [
+          0,
+          3,
+          27
+        ]
+      ],
+      [
+        [
+          -27,
+          3,
+          0
+        ],
+        [
+          27,
+          3,
+          0
+        ]
+      ]
+    ],
+    "bone_radius_wu": 2.5,
+    "slot_radius_wu": 11,
+    "slot_half_thickness_wu": 0.3,
+    "slot_height_wu": 0.6,
+    "palette": {
+      "bone": [
+        159,
+        147,
+        120
+      ],
+      "slot": [
+        74,
+        63,
+        80
+      ],
+      "emissive": [
+        153,
+        79,
+        191
+      ]
+    },
+    "reject_if": [
+      "four cells do not read separately",
+      "slot centers differ from durable tile coordinates",
+      "rim hides walking Souls",
+      "inactive body or slots emit",
+      "active_slots or entity order controls emission"
+    ]
+  },
+  "revision": 8
+}

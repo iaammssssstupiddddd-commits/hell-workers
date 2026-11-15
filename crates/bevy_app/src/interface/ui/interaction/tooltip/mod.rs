@@ -51,6 +51,9 @@ impl TooltipContentRenderer for TooltipRenderer {
 
 #[derive(SystemParam)]
 pub(crate) struct TooltipStateInput<'w, 's> {
+    #[cfg(feature = "profiling")]
+    pub native_observation:
+        Option<ResMut<'w, crate::interface::ui::native_acceptance::NativeTooltipObservation>>,
     pub ui_scale: Option<Res<'w, UiScale>>,
     pub real_time: Res<'w, Time<Real>>,
     pub hovered: Res<'w, crate::interface::selection::HoveredEntity>,
@@ -85,6 +88,8 @@ pub(crate) fn hover_tooltip_system(
     mut runtime: Local<EpochLocal<TooltipRuntimeState>>,
 ) {
     let TooltipStateInput {
+        #[cfg(feature = "profiling")]
+        mut native_observation,
         ui_scale,
         real_time,
         hovered,
@@ -120,4 +125,8 @@ pub(crate) fn hover_tooltip_system(
         },
         runtime.get_mut(*world_epoch),
     );
+    #[cfg(feature = "profiling")]
+    if let Some(observation) = native_observation.as_mut() {
+        observation.record(runtime.get_mut(*world_epoch).target, world_epoch.get());
+    }
 }

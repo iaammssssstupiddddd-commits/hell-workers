@@ -15,3 +15,6 @@ hw_core = { path = "../hw_core" }
 hw_spatial = { path = "../hw_spatial" }
 hw_world = { path = "../hw_world" }
 rand = { workspace = true }
+
+[dev-dependencies]
+log = "0.4"

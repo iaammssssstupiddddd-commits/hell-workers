@@ -7,17 +7,28 @@
 | 計画ID | `non-wall-floor-building-art-migration-plan-2026-09-19` |
 | ステータス | `In Progress` |
 | 作成日 | `2026-09-19` |
-| 最終更新日 | `2026-09-21` |
+| 最終更新日 | `2026-11-13` |
 | 作成者 | `Codex` |
 | 関連提案 | `N/A`（ユーザー依頼による計画） |
 | 関連Issue/PR | `N/A` |
 | 制作仕様 | [building-art-direction.md](../../building-art-direction.md) |
 | 調査基点 | 初稿: `94ccdf23`。自己レビュー: `43ca0cb1`の計画と現行実装（文書変更のみ） |
 
+## 2026-11-13 現在の採否
+
+利用者が継続を指定した**Bridge以外9種**は、個別のart/numeric/release・通常lifecycle、
+正式8種のpromotion/installと既存Door監査、9種normal/far画面、固定予算のCapture12/Memory12を採用した。
+実行時修正`65117e02`の代表pause/input/resume回帰も独立採用済み。現行のidentity・数値・既知範囲・復旧先は
+[asset仕様](../../building-asset-sets.md#2026-11-13-非橋9種の正式導入受入)と[性能仕様](../../rendering-performance.md#非橋9種の最終累積静止性能受入2026-11-13)を正本とする。
+
+本書の全10種完了条件は**未完**のまま。Bridge固有の地形・配置・通過・asset・lifecycle・art・性能受入は
+今回の採用から除外し、先行9種の成功で代替しない。以下の段階記録と保持pathは記録当時の履歴として読み、
+終了済みjobの再起動・永続保持を求める指示にはしない。非橋用の一時計画2件は恒久仕様へ集約して終了する。
+
 本書は全10種の移行順、制作物、表示接続、受入条件を所有する。M0の制作・検査toolingと先行無地原本を実装済み。
 M1-0のnativeでBridgeと現行川生成の不整合を検出した。ユーザー判断により橋は別途解決し、残る9種を先行する。
 Door catalogの既存preview接続と、新設備8種のmanifest／依存バイト検証loaderを実装。
-新設備のruntime表示接続・正式baseline完了・ゲーム内アート受入は未実施。
+初稿時点ではruntime表示接続・正式baseline・ゲーム内アート受入は未実施だった。現行の非橋9種採否は上記節を参照。
 個別意匠の最終判断はゲーム内の候補画像で行い、本計画の作成をアート受入やreleaseとして扱わない。
 
 自己レビューでは、全種の美術数値を先行2種の試作だけで決める前提を撤回し、共通契約と群別の確定点を分離した。
@@ -25,6 +36,50 @@ role別GLB、active/pendingの切替、再利用ghostのanchor復元、移動依
 基盤自体の性能比較を具体化した。実装済みfixture/toolは§9に記載し、それ以外の新しい型・recipe名は実装予定である。
 
 ## 1. 目的
+
+### 2026-11-09時点の履歴: Tank自然施工の専用検証
+
+`m2-tank-candidate-completion`を実装し、本体/付属保管場所の実二段入力、Wood2個の通常搬入、
+Build完了、親子/map移管、完成時の専用空バケツ5個を別scopeで照合する。通常起動は変更しない。
+`0a51f1b3`の実機は限定成功、3画像/rawと採用候補bytesを独立確認・封印・finalize/storage pass済み。
+rootは `target/native-acceptance/tak14-tank-candidate-completion-20261109-v1`（161787904 bytes）、
+ownerはTAK-14、consumerは採用Tankの親子施工と後続水運搬との比較。入力raw/3画像/元候補とcodecを
+比較・修正・正式採否まで保持し、その用途終了後に整理する。原本・既存candidateは保全する。
+この工程だけで通常供給、Mixer精製、残る9種の全体releaseを完了としない。
+次は専用 `m2-tank-candidate-inflow` で通常の実TankPourと水量表示を確認する。
+新root `target/native-acceptance/tak14-tank-candidate-inflow-20261109-v1`、owner/consumer/終了条件は同じTank比較用途。
+v1は周期観測に一瞬のPouringを要求した検証器が拒否しinvalid封印・診断保全・finalize済み。
+実注水receiptのない成功は許可せず、直前の同依頼/運搬bucketを照合する補正後に
+fresh root `target/native-acceptance/tak14-tank-candidate-inflow-20261109-v2`で再確認した。
+`aba57f91`で通常施工から実注水5個と同Tank在庫/Partial水面表示が限定成功。4画像/rawの独立review、
+登録verifier、封印、用途登録、finalize/storage passまで完了。最新job170229760 bytesはFull/Mixer供給比較用に保持。
+旧v1の診断は閉じて正式release後167124992 bytesをゴミ箱へ移した。invalid履歴は保持し、旧passへの読み替えはない。
+River取水branch、Tank→Mixer供給/自然精製、残る通常lifecycle/性能/正式releaseは未達のまま。
+`0cf63187`の `m2-tank-candidate-full` は通常施工後の10回の実注水でWater50個とFull Y22/whiteを限定確認した。
+4画像/rawの確認、登録verifier、封印、用途登録、finalize/storage pass済み。rootは
+`target/native-acceptance/tak14-tank-candidate-full-20261109-v1`、ownerはTAK-14、consumerはFull水量/表示と
+後続Mixer供給の比較。元候補/codec/最新evidenceを保全し、同比較・feedback終了後に用途のないjobを整理する。
+job186470400 bytesを同比較用途で保持。待機180秒やraw/input上限は増やさず、461 samples/899 eventsで成功した。
+川取水receiptと全物流は別途必要。初期Woodは5個なので、将来Tank2＋Mixer4を同worldで施工する際は
+通常の伐採指定で追加木材を得る。Rockも通常採掘で実itemを得る必要があり、資材注入で代替しない。
+次工程のRiverFillは実Filling branchの型変更後だけ受動記録する。Found以外は成功記録を出さず、
+実handlerで観測有無の同値を検査する。川地点への到達・Tank→Mixer取出し/投入・固体搬入は別の観測が必要で、
+新sourceの通常world実機と物流全体の受入は未実施のまま保持する。
+この追加の実機確認はfresh root `target/native-acceptance/tak14-tank-candidate-full-20261109-v2`で行い、
+ownerはTAK-14、consumerはRiverFill→TankPourの相関とFull→Mixer供給比較。sourceを封印まで固定し、
+成功時は最新比較用途、失敗時は具体的原因の診断用途だけ保持する。旧v1のpassを新条件に流用しない。
+v2はNormalで40/50のまま180秒に達しinvalid封印・診断保全・finalize済み。11実汲水/8注水を観測し、
+最後の運搬も継続中だった。後続は必須supply_speed=Superの明示contractで施工後だけ既存4xボタンを使う。
+Normal条件の失敗を成功へ変えず、180/480秒やraw上限も維持する。fresh rootは
+`target/native-acceptance/tak14-tank-candidate-full-20261109-v3`、owner/consumer/保持終了条件は同じ限定比較。
+`b152108d`のv3はSuper条件で限定成功。実汲水10→実注水10→一意Water50、Full Y22/white、
+全4所有窓画像とrawを独立確認。最終Pause後の末尾も停止/速度4/仮想時刻固定を照合し、
+登録verifier・封印・finalize/storage pass済み。186478592 bytesの最新jobを次のMixer供給比較用に保持する。
+旧施工単独v1/Full v1/Normal未達v2は用途終了で正式解除し、計534450176 bytesをゴミ箱へ移動（回収可能）。
+失敗はinvalidのまま、採用原本/候補/codec/Partial比較入力は保全。repo内実測allocatedは
+322425606144→321891155968 bytesとなった。Trashはfilesystem上の回収可能保全であり、物理空き増加の主張ではない。
+次は実Tank取出し/Mixer注水とSand/Rock搬入の受動receiptを補い、通常伐採/採掘による材料確保と
+自然精製を別の同subjectキャンペーンへ接続する。全9種の通常起動切替・性能・release完了にはしない。
 
 - 解決したい課題: 壁・床以外の建築物で、用途・状態が読める形状と手描き表現を統一し、完成表示から各previewまで整合させる。
 - 到達したい状態: モデルが外形・開口・可動部を、テクスチャが手描きの線・材質・色面を担当し、全対象が同じ世界の設備として読める。

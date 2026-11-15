@@ -4,7 +4,7 @@
 use super::BuildingArtSession;
 use crate::assets::building_asset_set::snapshot_io::{require_fresh_output, write_observation};
 use crate::assets::building_asset_set::{
-    BuildingAssetAuthority, BuildingAssetKind, BuildingAssetPool,
+    BuildingAssetAuthority, BuildingAssetKind, BuildingAssetPool, BuildingAssetSetIdentity,
 };
 use crate::systems::visual::building_presentation::EquipmentRoot;
 use crate::systems::visual::placement_ghost::{PlacementGhost, PlacementPartnerGhost};
@@ -14,26 +14,73 @@ use hw_jobs::{Blueprint, Building, BuildingType, MovePlantTask};
 use hw_ui::components::BuildingCatalogPreview;
 use hw_visual::{Building3dVisual, StructuralPresentationState};
 use serde_json::{Value, json};
-use std::path::PathBuf;
+use std::{ffi::OsStr, path::PathBuf};
 
 const SAMPLE_CAP: usize = 1800;
 const ENTITY_CAP: usize = 128;
 const NUMERIC_SHA256: &str = "1b913ea0784bf6815a6c46ed0396dafc6ebcdcfc107370bc569aa875775d949d";
+const NUMERIC_V2_SHA256: &str = "aba63ac343e11ed4fa758deffaf36b9139145333ca5d61fd26c3e3dd513153c8";
+const NUMERIC_V3_SHA256: &str = "a49f198c2a28c163cfc31c2f503406095328e329a9774e274bea632d342e6783";
+
+const NUMERIC_V6_SHA256: &str = "4319fd7a6b4c809c1cb54046bda293b6c2e7a062537026e0b4991c61b5233828";
+
+fn numeric_candidate(kind: BuildingAssetKind, revision: &str) -> Result<&'static str, String> {
+    match (kind, revision) {
+        (BuildingAssetKind::Tank | BuildingAssetKind::MudMixer, "v1") => Ok(NUMERIC_SHA256),
+        (BuildingAssetKind::MudMixer, "v2") => Ok(NUMERIC_V2_SHA256),
+        (BuildingAssetKind::MudMixer, "v3") => Ok(NUMERIC_V3_SHA256),
+        (BuildingAssetKind::MudMixer, "v6") => Ok(NUMERIC_V6_SHA256),
+        _ => Err("unsupported M2 kind/numeric revision".into()),
+    }
+}
 
 #[derive(Resource)]
 struct Trace {
+    scope: &'static str,
+    identity: BuildingAssetSetIdentity,
+    nonce: String,
+    leg: String,
+    numeric_sha256: &'static str,
     path: PathBuf,
     next_sample: f64,
-    next_write: f64,
     samples: Vec<Value>,
 }
 
-pub(super) fn configure(app: &mut App, session: &BuildingArtSession) -> Result<(), String> {
-    let Ok(value) = std::env::var("HW_M2_ACCEPTANCE_PROBE") else {
-        return Ok(());
-    };
-    if value != "1"
-        || session.mode != "feedback"
+const FEEDBACK_SCOPE: &str = "m2-feedback-observations-only";
+const CANDIDATE_SCOPE: &str = "m2-candidate-seeded-storyboard-only";
+
+fn trace_scope(
+    session: &BuildingArtSession,
+    probe: Option<&OsStr>,
+    storyboard: Option<&OsStr>,
+    leg: Option<&str>,
+    ui_case: bool,
+) -> Result<Option<&'static str>, String> {
+    if probe.is_none() && storyboard.is_none() {
+        return Ok(None);
+    }
+    if probe != Some(OsStr::new("1")) {
+        return Err("M2 probe requires exact explicit PROBE=1".into());
+    }
+    if let Some(flag) = storyboard {
+        if flag != OsStr::new("1")
+            || session.mode != "candidate"
+            || session.identity.authority != BuildingAssetAuthority::IsolatedCandidate
+            || ui_case
+            || !matches!(
+                (session.identity.kind, leg),
+                (BuildingAssetKind::Tank, Some("move-success"))
+                    | (
+                        BuildingAssetKind::MudMixer,
+                        Some("refining" | "save-load" | "move-success")
+                    )
+            )
+        {
+            return Err("candidate storyboard requires exact candidate authority and a separate M2 domain leg".into());
+        }
+        return Ok(Some(CANDIDATE_SCOPE));
+    }
+    if session.mode != "feedback"
         || session.identity.authority != BuildingAssetAuthority::ArtPreview
         || !matches!(
             session.identity.kind,
@@ -44,13 +91,47 @@ pub(super) fn configure(app: &mut App, session: &BuildingArtSession) -> Result<(
             "M2 probe requires an explicit Tank/MudMixer feedback ArtPreview session".into(),
         );
     }
+    Ok(Some(FEEDBACK_SCOPE))
+}
+
+pub(super) fn configure(app: &mut App, session: &BuildingArtSession) -> Result<(), String> {
+    let probe = std::env::var_os("HW_M2_ACCEPTANCE_PROBE");
+    let storyboard = std::env::var_os("HW_M2_CANDIDATE_STORYBOARD");
+    let leg = std::env::var("HW_M2_ACCEPTANCE_LEG").ok();
+    let Some(scope) = trace_scope(
+        session,
+        probe.as_deref(),
+        storyboard.as_deref(),
+        leg.as_deref(),
+        std::env::var_os("HW_NATIVE_UI_CASE").is_some(),
+    )?
+    else {
+        return Ok(());
+    };
     let path = session.status_path.with_extension("m2-trace.json");
+    let revision = match std::env::var("HW_M2_ACCEPTANCE_REVISION") {
+        Ok(value) => value,
+        Err(std::env::VarError::NotPresent) => "v1".into(),
+        Err(error) => return Err(format!("invalid M2 numeric revision: {error}")),
+    };
+    let numeric_sha256 = numeric_candidate(session.identity.kind, &revision)?;
     require_fresh_output(&path).map_err(|e| format!("use a fresh M2 trace path: {e}"))?;
-    super::m2_fixture::configure(app, session.identity.kind)?;
+    if let Ok(case) = std::env::var("HW_NATIVE_UI_CASE") {
+        super::m2_ui::configure(app, session, &case)?;
+    } else {
+        super::m2_fixture::configure(app, session.identity.kind)?;
+        if scope == CANDIDATE_SCOPE {
+            super::m2_fixture::configure_candidate_pointer(app);
+        }
+    }
     app.insert_resource(Trace {
+        scope,
+        identity: session.identity.clone(),
+        nonce: session.nonce.clone(),
+        leg: std::env::var("HW_M2_ACCEPTANCE_LEG").map_err(|_| "M2 leg missing")?,
+        numeric_sha256,
         path,
         next_sample: 0.0,
-        next_write: 0.0,
         samples: Vec::new(),
     })
     .add_systems(Last, observe);
@@ -93,6 +174,50 @@ fn push_capped<T>(values: &mut Vec<T>, value: T) -> Result<(), String> {
     Ok(())
 }
 
+fn candidate_move_actors(world: &mut World) -> Result<Value, String> {
+    use hw_core::familiar::Familiar;
+    use hw_core::relationships::{CommandedBy, ManagedBy, WorkingOn};
+    use hw_jobs::{ActiveTaskIdentity, AssignedTask};
+    let familiars = world
+        .query::<(Entity, &Familiar)>()
+        .iter(world)
+        .map(|(entity, familiar)| (entity, familiar.name.clone()))
+        .take(2)
+        .collect::<Vec<_>>();
+    if familiars.len() > 1 {
+        return Err("candidate move has background Familiars".into());
+    }
+    let mut workers = Vec::new();
+    for (entity, commander, task, identity, working) in world
+        .query::<(
+            Entity,
+            &CommandedBy,
+            Option<&AssignedTask>,
+            Option<&ActiveTaskIdentity>,
+            Option<&WorkingOn>,
+        )>()
+        .iter(world)
+    {
+        let move_task = match task {
+            Some(AssignedTask::MovePlant(data)) => Some(json!({
+                "assignment": format!("{:?}", data.task_entity), "building": format!("{:?}", data.building),
+                "manager": world.get::<ManagedBy>(data.task_entity).map(|manager| format!("{:?}", manager.0))
+            })),
+            _ => None,
+        };
+        workers.push(json!({"entity": format!("{entity:?}"), "commander": format!("{:?}", commander.0),
+            "move_task": move_task, "working_on": working.map(|working| format!("{:?}", working.0)),
+            "identity": identity.map(|identity| json!({"assignment": format!("{:?}", identity.assignment_entity),
+                "target": format!("{:?}", identity.current_target_entity), "work_type": format!("{:?}", identity.current_work_type)}))}));
+        if workers.len() > 1 {
+            return Err("candidate move has multiple fixture workers".into());
+        }
+    }
+    Ok(
+        json!({"familiars": familiars.iter().map(|(entity, name)| json!({"entity": format!("{entity:?}"), "name": name})).collect::<Vec<_>>(), "workers": workers}),
+    )
+}
+
 fn snapshot(world: &mut World) -> Result<Value, String> {
     let fixture_owner = world
         .get_resource::<super::m2_fixture::Fixture>()
@@ -106,13 +231,19 @@ fn snapshot(world: &mut World) -> Result<Value, String> {
     let pool = world.resource::<BuildingAssetPool>();
     let identity = pool.active(session.identity.kind).cloned();
     let descriptor = pool.descriptor(session.identity.kind);
-    if descriptor.is_some_and(|set| set.manifest.geometry_contract_sha256 != NUMERIC_SHA256) {
+    let numeric_sha256 = world.resource::<Trace>().numeric_sha256;
+    if descriptor.is_some_and(|set| set.manifest.geometry_contract_sha256 != numeric_sha256) {
         return Err("M2 probe descriptor does not bind the exact numeric candidate".into());
     }
     let expected_images = descriptor.map(|set| {
         json!({"world": format!("{:?}", set.image(&set.manifest.world_preview.image_role)),
                "catalog": format!("{:?}", set.image(&set.manifest.catalog_preview.image_role))})
     });
+    let descriptor_handles = descriptor.map(|set| json!({
+        "meshes": set.manifest.identity.kind.mesh_roles().iter().map(|role| (role.to_string(), json!(set.mesh(role).map(|mesh| format!("{:?}", mesh.id()))))).collect::<serde_json::Map<_, _>>(),
+        "albedo": set.image("albedo").map(|image| format!("{:?}", image.id()))
+        ,"world_preview": set.image("world_preview").map(|image| format!("{:?}", image.id()))
+    }));
     let mut owners = Vec::new();
     let mut query = world.query::<(Entity, &Building, &Transform)>();
     for (entity, building, transform) in query.iter(world) {
@@ -137,12 +268,25 @@ fn snapshot(world: &mut World) -> Result<Value, String> {
                 .flat_map(|c| c.iter())
                 .take(17)
                 .map(|part| {
+                    let material = world.get::<MeshMaterial3d<hw_visual::TopDownStructuralMaterial>>(part)
+                        .and_then(|handle| world.resource::<Assets<hw_visual::TopDownStructuralMaterial>>().get(&handle.0));
                     json!({
                         "entity": format!("{part:?}"),
+                        "parent": world.get::<ChildOf>(part).map(|parent| format!("{:?}", parent.parent())),
+                        "global_matrix": world.get::<GlobalTransform>(part).map(|global| global.to_matrix().to_cols_array()),
                         "name": world.get::<Name>(part).map(Name::as_str),
                         "pose": world.get::<Transform>(part).map(pose),
                         "visibility": format!("{:?}", world.get::<Visibility>(part)),
                         "mesh": format!("{:?}", world.get::<Mesh3d>(part)),
+                        "mesh_handle": world.get::<Mesh3d>(part).map(|mesh| format!("{:?}", mesh.0.id())),
+                        "mesh_resident": world.get::<Mesh3d>(part).is_some_and(|mesh| world.resource::<Assets<Mesh>>().get(&mesh.0).is_some()),
+                        "visible": world.get::<ViewVisibility>(part).is_some_and(|visible| visible.get()),
+                        "layer_3d": world.get::<bevy::camera::visibility::RenderLayers>(part).is_some_and(|layers| layers.iter().any(|layer| layer == hw_core::constants::LAYER_3D)),
+                        "material": material.map(|material| json!({"albedo": material.base.base_color_texture.as_ref().map(|image| format!("{:?}", image.id())),
+                            "body_paint": crate::systems::visual::building_presentation::body_paint_snapshot(material),
+                            "albedo_resident": material.base.base_color_texture.as_ref().is_some_and(|image| world.resource::<Assets<Image>>().get(image).is_some()),
+                            "opaque": material.base.alpha_mode == AlphaMode::Opaque, "lit": !material.base.unlit,
+                            "color": material.base.base_color.to_srgba().to_f32_array()})),
                     })
                 })
                 .collect();
@@ -152,6 +296,9 @@ fn snapshot(world: &mut World) -> Result<Value, String> {
             push_capped(
                 &mut roots,
                 json!({"entity": format!("{entity:?}"),
+                "identity": world.get::<EquipmentRoot>(entity).and_then(EquipmentRoot::observed_identity),
+                "parent": world.get::<ChildOf>(entity).map(|parent| format!("{:?}", parent.parent())),
+                "global_matrix": world.get::<GlobalTransform>(entity).map(|global| global.to_matrix().to_cols_array()),
                 "owner": format!("{:?}", visual.owner), "owner_exists": world.get_entity(visual.owner).is_ok(),
                 "pose": pose(transform), "state": format!("{state:?}"), "parts": parts}),
             )?;
@@ -251,7 +398,10 @@ fn snapshot(world: &mut World) -> Result<Value, String> {
         "virtual_seconds": world.resource::<Time<Virtual>>().elapsed_secs_f64(),
         "paused": world.resource::<Time<Virtual>>().is_paused(),
         "identity": identity, "expected_images": expected_images,
+        "descriptor_handles": descriptor_handles,
+        "ui_art_observed": crate::interface::ui::native_acceptance::m2_last_published(world),
         "fixture_owner": fixture_owner.map(|owner| format!("{owner:?}")),
+        "fixture_owner_bits": fixture_owner.map(Entity::to_bits),
         "fixture_owner_exists": fixture_owner.is_some_and(|owner| world.get_entity(owner).is_ok()),
         "world_epoch": world.get_resource::<hw_core::WorldEpoch>().map(|epoch| epoch.get()),
         "camera_scale": camera_scale,
@@ -261,6 +411,7 @@ fn snapshot(world: &mut World) -> Result<Value, String> {
         "destination_anchor": destination,
         "companions": companions,
         "lifecycle": world.get_resource::<super::m2_lifecycle::Lifecycle>().map(|lifecycle| json!({"leg": lifecycle.leg, "events": lifecycle.events,
+            "move_order": lifecycle.move_order.map(|order| format!("{order:?}")),
             "placement_blueprint": lifecycle.placement_blueprint.map(|owner| format!("{owner:?}")),
             "pulse_observation_complete": lifecycle.pulse_observation_complete})),
         "owners": owners.into_iter().map(|(entity, pose)| json!({"entity": format!("{entity:?}"),
@@ -309,28 +460,57 @@ fn observe(world: &mut World) {
     if now < world.resource::<Trace>().next_sample {
         return;
     }
-    let result = if world.resource::<Trace>().samples.len() >= SAMPLE_CAP {
+    let trace = world.resource::<Trace>();
+    let session = world.resource::<BuildingArtSession>();
+    let binding_matches = trace.identity == session.identity
+        && trace.nonce == session.nonce
+        && match trace.scope {
+            FEEDBACK_SCOPE => {
+                session.mode == "feedback"
+                    && session.identity.authority == BuildingAssetAuthority::ArtPreview
+            }
+            CANDIDATE_SCOPE => {
+                session.mode == "candidate"
+                    && session.identity.authority == BuildingAssetAuthority::IsolatedCandidate
+            }
+            _ => false,
+        };
+    let result = if !binding_matches {
+        Err("M2 trace session identity/scope changed".to_string())
+    } else if trace.samples.len() >= SAMPLE_CAP {
         Err("M2 sample cap reached; use separate bounded lifecycle legs".to_string())
     } else {
-        snapshot(world)
+        snapshot(world).and_then(|mut sample| {
+            if world.resource::<Trace>().scope == CANDIDATE_SCOPE {
+                sample["storyboard_stage"] =
+                    json!(world.resource::<super::m2_fixture::Fixture>().stage);
+                sample["storyboard_clock"] =
+                    json!(world.resource::<Time<Virtual>>().relative_speed());
+                if world.resource::<super::m2_lifecycle::Lifecycle>().leg == "move-success" {
+                    sample["storyboard_move_actors"] = candidate_move_actors(world)?;
+                }
+            }
+            Ok(sample)
+        })
     };
     let failure = result.as_ref().err().cloned();
     let session = world.resource::<BuildingArtSession>();
     let identity = json!(session.identity);
     let kind = format!("{:?}", session.identity.kind);
-    if let Some(mut driver) = world.get_resource_mut::<super::m2_lifecycle::Lifecycle>() {
-        if driver.leg == "placement" && !driver.pulse_observation_complete {
-            let observed = result.as_ref().is_ok_and(|sample| {
-                sample["identity"] == identity
-                    && driver
-                        .placement_blueprint
-                        .is_some_and(|owner| placement_pulse_observed(sample, owner, &kind))
-            });
-            if observed {
-                driver.pulse_observed_since.get_or_insert(now);
-            } else {
-                driver.pulse_observed_since = None;
-            }
+    if let Some(mut driver) = world.get_resource_mut::<super::m2_lifecycle::Lifecycle>()
+        && driver.leg == "placement"
+        && !driver.pulse_observation_complete
+    {
+        let observed = result.as_ref().is_ok_and(|sample| {
+            sample["identity"] == identity
+                && driver
+                    .placement_blueprint
+                    .is_some_and(|owner| placement_pulse_observed(sample, owner, &kind))
+        });
+        if observed {
+            driver.pulse_observed_since.get_or_insert(now);
+        } else {
+            driver.pulse_observed_since = None;
         }
     }
     let path = {
@@ -339,17 +519,17 @@ fn observe(world: &mut World) {
         if let Ok(sample) = result {
             trace.samples.push(sample);
         }
-        if now < trace.next_write && failure.is_none() {
-            return;
-        }
-        trace.next_write = now + 1.0;
+        // Publish each bounded diagnostic sample. A one-second publication
+        // delay can hide the fixture's shorter active/pause capture intervals.
+        // This observer remains disabled for performance measurements.
         trace.path.clone()
     };
     let session = world.resource::<BuildingArtSession>();
-    let record = json!({"schema_version": 1, "scope": "m2-feedback-observations-only",
-        "leg": world.resource::<super::m2_lifecycle::Lifecycle>().leg,
+    let record = json!({"schema_version": 1, "scope": world.resource::<Trace>().scope,
+        "leg": world.resource::<Trace>().leg,
         "process_id": std::process::id(),
         "identity": session.identity, "nonce": session.nonce, "failure": failure,
+        "numeric_candidate_sha256": world.resource::<Trace>().numeric_sha256,
         "accepted": false, "performance_evidence": false,
         "samples": world.resource::<Trace>().samples});
     let write = serde_json::to_vec(&record)
@@ -374,6 +554,114 @@ fn observe(world: &mut World) {
 mod tests {
     use super::*;
     use crate::assets::building_asset_set::BuildingAssetSetIdentity;
+
+    #[test]
+    fn candidate_storyboard_cannot_relabel_feedback_or_add_unreviewed_legs() {
+        let mut world = world();
+        let mut session = world.resource_mut::<BuildingArtSession>();
+        let one = Some(OsStr::new("1"));
+        assert_eq!(
+            trace_scope(&session, one, None, Some("water"), false).unwrap(),
+            Some(FEEDBACK_SCOPE)
+        );
+        assert!(trace_scope(&session, one, one, Some("move-success"), false).is_err());
+        session.mode = "candidate".into();
+        session.identity.authority = BuildingAssetAuthority::IsolatedCandidate;
+        for kind in [BuildingAssetKind::Tank, BuildingAssetKind::MudMixer] {
+            session.identity.kind = kind;
+            for leg in [
+                "move-success",
+                "refining",
+                "save-load",
+                "water",
+                "placement",
+                "",
+                "deconstruct",
+            ] {
+                let allowed = leg == "move-success"
+                    || kind == BuildingAssetKind::MudMixer
+                        && matches!(leg, "refining" | "save-load");
+                assert_eq!(
+                    trace_scope(&session, one, one, Some(leg), false).is_ok(),
+                    allowed
+                );
+            }
+        }
+        for (probe, flag) in [
+            (None, one),
+            (one, Some(OsStr::new("0"))),
+            (Some(OsStr::new("")), one),
+        ] {
+            assert!(trace_scope(&session, probe, flag, Some("move-success"), false).is_err());
+        }
+        assert!(trace_scope(&session, one, one, Some("move-success"), true).is_err());
+        assert!(trace_scope(&session, one, None, Some("move-success"), false).is_err());
+        session.identity.kind = BuildingAssetKind::RestArea;
+        assert!(trace_scope(&session, one, one, Some("move-success"), false).is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn candidate_storyboard_rejects_non_utf8_flags() {
+        use std::os::unix::ffi::OsStrExt;
+        let world = world();
+        let session = world.resource::<BuildingArtSession>();
+        let invalid = Some(OsStr::from_bytes(&[0xff]));
+        let one = Some(OsStr::new("1"));
+        assert!(trace_scope(session, invalid, one, Some("move-success"), false).is_err());
+        assert!(trace_scope(session, one, invalid, Some("move-success"), false).is_err());
+    }
+
+    #[test]
+    fn numeric_revision_is_explicit_and_kind_bounded() {
+        use hw_infra::lighting::digest_hex;
+        use sha2::{Digest, Sha256};
+
+        assert_eq!(
+            numeric_candidate(BuildingAssetKind::Tank, "v1").unwrap(),
+            NUMERIC_SHA256
+        );
+        assert_eq!(
+            numeric_candidate(BuildingAssetKind::MudMixer, "v1").unwrap(),
+            NUMERIC_SHA256
+        );
+        assert_eq!(
+            numeric_candidate(BuildingAssetKind::MudMixer, "v2").unwrap(),
+            NUMERIC_V2_SHA256
+        );
+        assert_eq!(
+            numeric_candidate(BuildingAssetKind::MudMixer, "v3").unwrap(),
+            NUMERIC_V3_SHA256
+        );
+        let fixture = include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/blender_ai_workflow/fixtures/building-m2-v3.numeric-candidate.json"
+        ));
+        assert_eq!(
+            digest_hex(&Sha256::digest(fixture).into()),
+            NUMERIC_V3_SHA256
+        );
+        let fixture_v6 = include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/blender_ai_workflow/fixtures/building-m2-v6.numeric-candidate.json"
+        ));
+        assert_eq!(
+            numeric_candidate(BuildingAssetKind::MudMixer, "v6").unwrap(),
+            digest_hex(&Sha256::digest(fixture_v6).into())
+        );
+        for (kind, revision) in [
+            (BuildingAssetKind::Tank, "v2"),
+            (BuildingAssetKind::Tank, "v3"),
+            (BuildingAssetKind::Tank, "v6"),
+            (BuildingAssetKind::MudMixer, "v5"),
+            (BuildingAssetKind::MudMixer, "v7"),
+            (BuildingAssetKind::MudMixer, "v4"),
+            (BuildingAssetKind::MudMixer, ""),
+            (BuildingAssetKind::RestArea, "v1"),
+        ] {
+            assert!(numeric_candidate(kind, revision).is_err());
+        }
+    }
 
     #[test]
     fn pulse_ack_requires_both_visible_candidate_consumers_on_the_placement_owner() {
@@ -407,6 +695,21 @@ mod tests {
 
     fn world() -> World {
         let mut world = World::new();
+        world.insert_resource(Trace {
+            scope: FEEDBACK_SCOPE,
+            identity: BuildingAssetSetIdentity {
+                kind: BuildingAssetKind::Tank,
+                generation: 1,
+                authority: BuildingAssetAuthority::ArtPreview,
+                manifest_sha256: "a".repeat(64),
+            },
+            nonce: "a".repeat(32),
+            leg: "water".into(),
+            numeric_sha256: NUMERIC_SHA256,
+            path: PathBuf::from("/unused/m2-trace.json"),
+            next_sample: 0.0,
+            samples: Vec::new(),
+        });
         world.insert_resource(BuildingArtSession {
             mode: "feedback".into(),
             identity: BuildingAssetSetIdentity {
@@ -418,6 +721,13 @@ mod tests {
             locator: "manifests/building-tank-v1.buildingset".into(),
             status_path: PathBuf::from("/unused/m2-probe-test.json"),
             nonce: "a".repeat(32),
+            view: crate::assets::building_asset_set::acceptance::BuildingArtView::Overview,
+            variant: Default::default(),
+            lighting: Default::default(),
+            spa_mask_page: None,
+            lamp_supply_target: None,
+            window_contract: None,
+            scale_factor: None,
         });
         world.init_resource::<BuildingAssetPool>();
         world.init_resource::<Time<Real>>();
@@ -474,5 +784,37 @@ mod tests {
             ));
         }
         assert!(snapshot(&mut world).unwrap_err().contains("cap exceeded"));
+    }
+
+    #[test]
+    fn every_due_sample_is_published_without_one_second_lag() {
+        let mut world = world();
+        world.insert_resource(super::super::m2_lifecycle::Lifecycle::new("water".into()));
+        let output = std::env::temp_dir().join(format!(
+            "hw-m2-publish-{}-{}.json",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        world.resource_mut::<Trace>().path = output.clone();
+        observe(&mut world);
+        let first = std::fs::read(&output).unwrap();
+        world
+            .resource_mut::<Time<Real>>()
+            .advance_by(std::time::Duration::from_millis(50));
+        observe(&mut world);
+        assert_eq!(std::fs::read(&output).unwrap(), first);
+        world
+            .resource_mut::<Time<Real>>()
+            .advance_by(std::time::Duration::from_millis(60));
+        observe(&mut world);
+        let published: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&output).unwrap()).unwrap();
+        assert_eq!(published["samples"].as_array().unwrap().len(), 2);
+        assert_eq!(published["accepted"], false);
+        assert_eq!(published["performance_evidence"], false);
+        std::fs::remove_file(output).unwrap();
     }
 }

@@ -44,6 +44,13 @@ graph TD
     Core --> Obs
 ```
 
+## 停止中のwindow message更新
+
+root `MessagesPlugin`は`First`の`MessageUpdateSystems`より前に、pausedかつregistryが`Waiting`の場合だけ
+frame/runner所有のwindow 3型を更新する。domain/fixed messageの保持は変更しない。
+対象・登録owner・拒否条件は[イベントカタログ](events.md#ウィンドウのフレーム所有メッセージ)、
+player操作とpause所有権は[状態仕様](state.md#時間停止とシステムメニュー)を正本とする。
+
 ## 主要なデータフロー: タスク割り当て
 1.  **Designation / Request**: 手動指定、または Auto-Haul システムが **request エンティティ**（アンカー位置）に `Designation` + `TransportRequest` を付与。運搬系は M3〜M7 で request 化済み。
 2.  **Spatial Grid**: `DesignationSpatialGrid` と `TransportRequestSpatialGrid` などでタスク候補を空間検索。`GameSystemSet::Spatial` で毎フレーム実行されるが、グリッド本体は **Change Detection（`Added` / `Changed<Transform>` / `RemovedComponents`）による差分更新**であり、全クリア・全件再挿入（フル同期）は行わない（詳細は下記「空間グリッド一覧」）。

@@ -73,6 +73,10 @@
 6. `scripts/sync_external_assets.py --dry-run` で差分を確認してから `assets/` へ反映する。
 7. ゲーム内またはvisual testで確認する。
 
+M5の変更対象外画像の回帰fixtureは、PNG圧縮bytesではなく、RGBA形式・寸法と全画素のhashを
+照合する。同じ画素でも圧縮実装でPNG bytesが変わり得るためであり、正式assetのidentity、
+provenance、promotion/install receiptのexact file hash検証は引き続き維持する。
+
 Blender AI編集、品質gate、MCPの安全境界は
 [`blender-setup.md`](blender-setup.md) を参照する。
 
@@ -422,3 +426,366 @@ ownerはTAK-14制作引継ぎ、用途は候補選定・独立アート/数値�
 
 Wall asset-set v2の厳密な配布管理は、manifest allowlistとgeneration / receipt付きpromotion経路で扱う。
 legacy assetで公開先を外部storageへ切り替える場合も、`assets/`への既存反映フローは維持する。
+
+## 非橋9種の制作原本と復旧情報
+
+2026-11-13に、監査したauthoring22組・198ファイルを`source/buildings/authoring/<kind>/<source-sha>/`へ
+相対pathを維持して保全し、全bytes SHAを照合した。`source-inventory.json`はsource/geometry/albedo/emission/
+paint reportと実Git上のgenerator履歴を対応付ける。古い未採用variantは未採用のまま残す。
+別の旧importにある候補原本・対応export入力342ファイル（8,772,673B）は`source/buildings/legacy-prototypes/`へ保全した。
+追加監査で見つかった未採用Blend3件と対応47ファイルも同libraryへ保全し、legacy inventoryは計389件となった。
+22組の198件と合わせた全587ファイルのSHA/bytesを独立照合した。
+nativeの実画面、ログ、asset-viewを原本libraryへ一括archiveしていない。
+2026-11-14の外観改訂では編集可能なBlend・PNG・GLB・geometry・paint reportとexact pipeline sourceを
+4組39ファイル（1,407,905B）追加した。さらに唯一の中間Blend3組27ファイルも未採用原本として保全し、
+authoringは計29組264ファイル（9,359,997B）、legacyと合わせてindex記録653原本となる。
+中間3組の当時のgenerator/fixture履歴を復元済みとは扱わず、採用authorityへ混ぜない。
+追加の前後で既存原本のSHA/bytesが不変であることを全件確認した。再生成コードはcommit `b9c2d049`へ結合する。
+新4世代のrelease判断とg1復帰情報はcanonical transactionに保持し、raw native jobへ復旧を依存させない。
+
+同日の世界観統一では新しい4組39ファイル（1,404,395B）を追加し、authoringは33組303ファイル
+（10,764,392B）、legacy389件と合わせて692原本となった。直前29組264ファイルのSHA/bytesを全件維持した。
+新しい塗りのpipelineはcommit `790d2e733502219c4a6c5e6b0a5a649c477aae68`へ結合する。
+新g3と旧g2/g1のauthority、receipt、journalを正本に保ち、g2へのcanonical/runtime復帰16操作と47旧fileの
+完全byte復帰を独立採用した。未採用の中間原本はrelease authorityへ混ぜない。
+
+2026-11-15の面塗り改訂では、実promotion sourceと一致する編集可能原本を5組63ファイル
+（5,013,680B）追加した。Blend/元paint/mask/projection設定・atlas・GLB・geometry・paint report・recipeを
+保持し、直前33組303ファイルは全SHA/bytes不変。authoringは38組366ファイル（15,778,072B）、
+legacy389件と合わせて755原本となる。generator referenceはexact Git bytesへ照合した再制作参照であり、
+再生成を実行済みと主張したり、source libraryの存在からproduction authorityを推測したりしない。
+authorityは引き続きcanonical exportsの正式pointer/journalが所有する。
+
+さらに未採用Lamp初案の6ファイル（22,617B）を別bundleへ保全した。
+Dirt上のcontrast不足によるart不採用で、numeric/release/production authorityを与えない。
+authoringは39組372ファイル（15,800,689B）、legacy389件を含め761原本となった。
+旧366ファイル・generator履歴は全SHA不変。索引SHAは
+`bebd84b9b5b1148ea56eb668398fd164550ce7e2b844a83b6008298eeda5aca9`。
+
+ミキサー/休憩所の判読性改訂では、15組139ファイル（61,710,125B）を追加保全した。
+最終採用原本と不採用の中間案を区別し、全unique Blend、対応PNG/GLB/recipe/reportを含む。
+手描きの元PNG3枚は最終Blendへpackし、保存後の再openで元bytesを再検証した。
+直前39組372件・generator履歴は不変。authoringは54組511件（77,510,814B）、legacy389件と合わせ900原本。
+索引SHAは`50d912f456784364c02ad9b10d02bd9c89b17c33aa391a0ba4e573c7a322ea88`。
+原本の保存は採用権限を与えず、g5の正式authorityとg4復帰情報はcanonical journalが所有する。
+
+今回のg5/g4/g3を扱う復旧用exact codecは
+`source/tooling/building-asset-codec-25019e2c074f0e3ef6576de339d404b93d345f32597c986f5725e4cc073f75e3/bevy_app`。
+mode3/4を読める同bytesを導入・検証で使用し、製品のrelease recovery用途として保持する。
+旧世代の復旧用codecと原本は置換・削除しない。
+
+初回8設備releaseの復旧用exact codecは
+`source/tooling/building-asset-codec-601b0fd770b29d00cef29fc47c21e8c8353f0315fad80c40812be37f0d0646ce/bevy_app`。
+canonical `exports/`のjournal・authority pointer・locator・receipt・payload・provenanceとセットで保持する。
+初回導入時に8件すべてのrecover=applied／rollback=plannedを`--apply`なしで確認した。
+このcodecを最新ゲームbinaryへ暗黙に置き換えない。現行世代の廃止・検証済み復旧経路への移行後にだけ保持を解除する。
+通常runtimeはrepo内のinstall済みmirrorを読み、source libraryや検証jobを必要としない。
+現行8件についてcanonical journalから計画を再構成し、元plan SHA/codecと一致するrecover=applied／
+rollback=plannedをexecute=Falseで再確認した。これは読取り確認であり、今回の追加の実rollback試験ではない。
+finished transactionの復旧はcanonical payload/provenance/receiptを使い、旧stagingやnative jobを必要としない。
+
+### 受入後の検証環境整理（2026-11-13）
+
+採用結果を恒久仕様へ集約し、旧比較・診断のlive source再検証用途を明示終了した。
+終了した保持371件のconsumerを正規coordinatorで解除し、検証job/旧import等252 rootをTrashへ、
+tmpfsの使い捨て診断tool1件を削除した。専用Git作業場6件も撤去した。
+通常削除で止まったread-only複製は、終了済み対象のdirectory保護だけを戻し、残存sourceを回収可能に保全した。
+force、branch削除、Orca台帳直接編集は行わず、全branch参照、primary、通常Cargo cacheと無関係な作業場を残した。
+
+対象pathのallocated合計は117,233,041,408Bから0B。Trashを用いたため物理空きが同量増えたとは主張しない。
+primary storage checkはpass（allocated 378,184,093,696B、未分類legacy0、未終了batch0）。
+587原本・採用normal/far画像・canonical exportsと復旧codecは別の現在用途として保持する。
+旧jobのpath/hashを、再起動指示や永続archive義務へ解釈しない。
+
+### 面塗り改訂の検証環境整理（2026-11-15）
+
+通常startup・採用gallery・全24静止試行の独立受入後、今回のconsumer 69件を正規coordinatorで解除し、
+用途が終わったnative 39 rootとstaging/一時codec 27 pathを削除した。directoryの書込保護だけを戻し、
+payload hardlinkのmodeは変更していない。primary本体・通常Cargo cache・他のconsumerは残した。
+新codecのrelease recovery consumerは維持し、原本761件、canonical、runtime、復旧codec、採用画像を含む
+1,454ファイル（1,305,329,844B）は整理前後のSHA/bytes完全一致だった。
+
+対象のallocated合計は23,040,221,184Bから0B。filesystem空きは461,808,979,968Bから466,457,591,808Bへ
+4,648,611,840B増加した。Btrfs共有extent・圧縮があるため、pathのdu差を空き増加量へ読み替えない。
+整理後のprimary storage checkはpass（allocated 415,704,735,744B、未分類legacy0、未終了batch0）。
+旧invalidの結果metadataは台帳へ保ち、rawや旧pathの存在を復旧条件にしない。
+一時計画は恒久仕様への集約後に削除し、docs/plansとproposalsの両索引を再確認した。
+
+撤去pathは次のとおり（相対名は各prefix直下、再実行commandではない）。
+
+<details>
+<summary>primary target/native-acceptance/ 以下の39 root</summary>
+
+```text
+tak14-illustrated-canonical-five-20261115-v1
+tak14-illustrated-five-rehearsal-20261115-v1
+tak14-illustrated-formal-mudmixer-20261115-v1
+tak14-illustrated-formal-mudmixer-20261115-v2
+tak14-illustrated-formal-outdoorlamp-20261115-v1
+tak14-illustrated-formal-outdoorlamp-20261115-v2
+tak14-illustrated-formal-restarea-20261115-v1
+tak14-illustrated-formal-restarea-20261115-v2
+tak14-illustrated-formal-soulspa-20261115-v1
+tak14-illustrated-formal-soulspa-20261115-v2
+tak14-illustrated-formal-tank-20261115-v1
+tak14-illustrated-formal-tank-20261115-v2
+tak14-illustrated-installed-performance-20261115-v1
+tak14-illustrated-normal-default-20261115-v1
+tak14-illustrated-released-gallery-20261115-v1
+tak14-illustrated-rest-lifecycle-20261115-v1
+tak14-illustrated-spa-loaded-use-20261115-v4
+tak14-illustrated-spa-mask-page-0-20261115-v1
+tak14-illustrated-spa-mask-page-1-20261115-v1
+tak14-illustrated-spa-mask-page-2-20261115-v1
+tak14-illustrated-spa-mask-page-3-20261115-v1
+tak14-illustrated-spa-occupied-save-20261115-v1
+tak14-illustrated-story-mixer-move-success-20261115-v1
+tak14-illustrated-story-mixer-refining-20261115-v1
+tak14-illustrated-story-mixer-save-load-20261115-v1
+tak14-illustrated-story-tank-move-success-20261115-v1
+tak14-lamp-ink-art-normal-20261115-v1
+tak14-lamp-ink-art-normal-20261115-v2
+tak14-lamp-ink-gallery-far-20261115-v1
+tak14-lamp-ink-gallery-far-20261115-v2
+tak14-mixer-ink-context-far-20261115-v1
+tak14-mixer-ink-context-normal-20261115-v1
+tak14-rest-ink-art-far-20261115-v1
+tak14-rest-ink-art-normal-20261115-v1
+tak14-spa-ink-art-far-20261115-v1
+tak14-spa-ink-art-normal-20261115-v1
+tak14-tank-worldpaint-art-far-20261115-v1
+tak14-tank-worldpaint-art-normal-20261115-v1
+tak14-tank-worldpaint-context-normal-20261115-v1
+```
+
+</details>
+
+<details>
+<summary>Sync/hell-workers-assets/ 以下の27 path</summary>
+
+```text
+source/tooling/building-asset-codec-3294fd017c4e9fcbe593b2f9d08956f4290bf38c7b6eb11ba9ae91d79253f49c
+staging/blend/tak14-mixer-ink-20261115-v1.blend
+staging/blend/tak14-rest-ink-source-20261115-v1.blend
+staging/blend/tak14-spa-ink-source-20261115-v1.blend
+staging/exports/building-m2/tak14-mixer-ink-20261115-v1
+staging/exports/building-m3/tak14-rest-ink-source-20261115-v1
+staging/exports/building-m3/tak14-spa-ink-source-20261115-v1
+staging/exports/building-m5-art/tak14-lamp-ink-source-20261115-v1
+staging/exports/building-m5-art/tak14-lamp-ink-source-20261115-v2
+staging/exports/building-m5/tak14-lamp-ink-preview-20261115-v1
+staging/exports/building-m5/tak14-lamp-ink-preview-20261115-v2
+staging/exports/tak14-illustrated-candidates-20261115-v2/lamp
+staging/exports/tak14-illustrated-candidates-20261115-v2/mixer
+staging/exports/tak14-illustrated-candidates-20261115-v2/rest
+staging/exports/tak14-illustrated-candidates-20261115-v2/spa
+staging/exports/tak14-illustrated-candidates-20261115-v2/tank
+staging/exports/tak14-mixer-ink-preview-20261115-v1
+staging/exports/tak14-rest-ink-preview-20261115-v1
+staging/exports/tak14-spa-ink-preview-20261115-v1
+staging/exports/tak14-tank-worldpaint-g4-20261115-v1
+staging/exports/tak14-unchanged-m5-candidates-20261115-v1
+staging/reports/building-m2/tak14-mixer-ink-20261115-v1
+staging/reports/building-m3/tak14-rest-ink-source-20261115-v1
+staging/reports/building-m3/tak14-spa-ink-source-20261115-v1
+staging/reports/tak14-mixer-ink-20261115-v1.json
+staging/reports/tak14-rest-ink-source-20261115-v1.json
+staging/reports/tak14-spa-ink-source-20261115-v1.json
+```
+
+</details>
+
+## ミキサーと休憩所改訂の整理完了（2026-11-15）
+
+新g5の独立art/numeric/release、旧g4への隔離復帰、通常startupと9種normal/far、固定24性能、
+最終結果の独立reviewと全4群CIを完了し、consumer `Mixer/Rest readability 2026-11-15`を正式に91件解除した。
+終了した比較・診断・candidate包装・native raw・binary copyの89 exact pathを撤去した。
+primaryは継続開発consumer、codec25019e2cはrelease recovery consumerを維持し、今回consumerだけを解除した。
+原本library、canonical exports、primary assets、通常Cargo cacheは処分していない。
+採用した[固定性能予算の全JSON](design/building-art/mixer-rest-installed-nine-budget-20261115.json)も、承認時と同じSHA/bytesで正本へ保存した。
+
+| 測定 | bytes |
+| --- | ---: |
+| 対象89pathの処分前allocated合計 | 15,709,356,032 |
+| 対象89pathの処分後残存 | 0 |
+| 同filesystemの空き容量・前 | 461,741,346,816 |
+| 同filesystemの空き容量・後 | 465,098,366,976 |
+| 実際の空き容量増分 | 3,357,020,160 |
+
+Btrfsの共有extent・圧縮を含むため、path別allocated合計と実filesystem解放量は同一ではない。
+書込保護された検証コピーで一度停止したが、成功済みの91用途解除を再送せず、
+既に撤去した12pathと残る77pathを照合した。終了済みコピーのdirectory552件だけowner-writeを戻して完了し、
+元fileや原本・正本の権限は変更していない。
+
+処分後にも900原本を固定index/SHA/bytesへ全件照合し、旧g4と新g5、採用PNG、codec、
+今回の変更対象外489fileが不変であることを確認した。
+両kindの`recover=applied`と`rollback=planned`を`--apply`なしで再確認し、
+完了transactionが撤去済みcandidate/native jobを復旧依存にしないことを確認した。
+旧invalid結果は履歴のまま維持し、全rawを将来再検証するためのarchiveは作成しない。
+primary coordinatorのreconcile/checkはpass、未分類legacy0、本primaryの未完batch0で終了した。
+
+<details>
+<summary>今回撤去したexact path（89件）</summary>
+
+primary `/home/satotakumi/projects/hell-workers/` からの相対path:
+
+```text
+target/native-acceptance/tak14-mixer-handpaint-far-20261115-v3
+target/native-acceptance/tak14-mixer-handpaint-normal-20261115-v3
+target/native-acceptance/tak14-mixer-packed-candidate-normal-20261115-v1
+target/native-acceptance/tak14-mixer-packed-context-20261115-v1
+target/native-acceptance/tak14-mixer-packed-dirt-context-20261115-v1
+target/native-acceptance/tak14-mixer-packed-dirt-context-20261115-v2
+target/native-acceptance/tak14-mixer-packed-dirt-context-20261115-v3
+target/native-acceptance/tak14-mixer-packed-dirt-context-20261115-v4
+target/native-acceptance/tak14-mixer-packed-dirt-context-20261115-v5
+target/native-acceptance/tak14-mixer-packed-far-20261115-v1
+target/native-acceptance/tak14-mixer-packed-move-success-20261115-v1
+target/native-acceptance/tak14-mixer-packed-normal-20261115-v1
+target/native-acceptance/tak14-mixer-packed-refining-20261115-v1
+target/native-acceptance/tak14-mixer-packed-save-load-20261115-v1
+target/native-acceptance/tak14-rest-packed-candidate-normal-20261115-v1
+target/native-acceptance/tak14-rest-packed-far-20261115-v1
+target/native-acceptance/tak14-rest-packed-lifecycle-20261115-v1
+target/native-acceptance/tak14-rest-packed-lifecycle-20261115-v2
+target/native-acceptance/tak14-rest-packed-normal-20261115-v1
+target/native-acceptance/tak14-rest-tent-far-20261115-v3
+target/native-acceptance/tak14-rest-tent-normal-20261115-v3
+target/native-acceptance/tak14-mixer-rest-installed-art-20261115-v1
+target/native-acceptance/tak14-mixer-rest-installed-startup-20261115-v1
+target/native-acceptance/tak14-mixer-rest-installed-performance-20261115-v1
+```
+
+asset library `/home/satotakumi/Sync/hell-workers-assets/` からの相対path:
+
+```text
+staging/blend/tak14-mixer-handpaint-20261115-v1.blend
+staging/reports/tak14-mixer-handpaint-20261115-v1.json
+staging/exports/building-m2/tak14-mixer-handpaint-20261115-v1
+staging/reports/building-m2/tak14-mixer-handpaint-20261115-v1
+staging/blend/tak14-mixer-handpaint-20261115-v2.blend
+staging/reports/tak14-mixer-handpaint-20261115-v2.json
+staging/exports/building-m2/tak14-mixer-handpaint-20261115-v2
+staging/reports/building-m2/tak14-mixer-handpaint-20261115-v2
+staging/blend/tak14-mixer-handpaint-20261115-v3.blend
+staging/reports/tak14-mixer-handpaint-20261115-v3.json
+staging/exports/building-m2/tak14-mixer-handpaint-20261115-v3
+staging/reports/building-m2/tak14-mixer-handpaint-20261115-v3
+staging/exports/tak14-mixer-handpaint-preview-20261115-v3
+staging/blend/tak14-mixer-handpaint-packed-20261115-v1.blend
+staging/reports/tak14-mixer-handpaint-packed-20261115-v1.json
+staging/exports/building-m2/tak14-mixer-handpaint-packed-20261115-v1
+staging/reports/building-m2/tak14-mixer-handpaint-packed-20261115-v1
+staging/exports/tak14-mixer-packed-candidate-20261115-v1
+staging/exports/tak14-mixer-packed-preview-20261115-v1
+staging/blend/tak14-mixer-readable-20261115-v2.blend
+staging/reports/tak14-mixer-readable-20261115-v2.json
+staging/exports/building-m2/tak14-mixer-readable-20261115-v2
+staging/reports/building-m2/tak14-mixer-readable-20261115-v2
+staging/blend/tak14-mixer-readable-20261115-v3.blend
+staging/reports/tak14-mixer-readable-20261115-v3.json
+staging/exports/building-m2/tak14-mixer-readable-20261115-v3
+staging/reports/building-m2/tak14-mixer-readable-20261115-v3
+staging/recovery/tak14-mixer-rest-g5-20261115-v1
+staging/blend/tak14-rest-handpaint-20261115-v1.blend
+staging/reports/tak14-rest-handpaint-20261115-v1.json
+staging/exports/building-m3/tak14-rest-handpaint-20261115-v1
+staging/reports/building-m3/tak14-rest-handpaint-20261115-v1
+staging/blend/tak14-rest-handpaint-20261115-v2.blend
+staging/reports/tak14-rest-handpaint-20261115-v2.json
+staging/exports/building-m3/tak14-rest-handpaint-20261115-v2
+staging/reports/building-m3/tak14-rest-handpaint-20261115-v2
+staging/blend/tak14-rest-handpaint-20261115-v3.blend
+staging/reports/tak14-rest-handpaint-20261115-v3.json
+staging/exports/building-m3/tak14-rest-handpaint-20261115-v3
+staging/reports/building-m3/tak14-rest-handpaint-20261115-v3
+staging/blend/tak14-rest-tent-packed-20261115-v1.blend
+staging/reports/tak14-rest-tent-packed-20261115-v1.json
+staging/exports/building-m3/tak14-rest-tent-packed-20261115-v1
+staging/reports/building-m3/tak14-rest-tent-packed-20261115-v1
+staging/exports/tak14-rest-packed-candidate-20261115-v1
+staging/exports/tak14-rest-packed-preview-20261115-v1
+staging/blend/tak14-rest-readable-20261115-v2.blend
+staging/reports/tak14-rest-readable-20261115-v2.json
+staging/exports/building-m3/tak14-rest-readable-20261115-v2
+staging/reports/building-m3/tak14-rest-readable-20261115-v2
+staging/blend/tak14-rest-readable-20261115-v3.blend
+staging/reports/tak14-rest-readable-20261115-v3.json
+staging/exports/building-m3/tak14-rest-readable-20261115-v3
+staging/reports/building-m3/tak14-rest-readable-20261115-v3
+staging/blend/tak14-rest-tent-ink-20261115-v2.blend
+staging/reports/tak14-rest-tent-ink-20261115-v2.json
+staging/exports/building-m3/tak14-rest-tent-ink-20261115-v2
+staging/reports/building-m3/tak14-rest-tent-ink-20261115-v2
+staging/blend/tak14-rest-tent-ink-20261115-v3.blend
+staging/reports/tak14-rest-tent-ink-20261115-v3.json
+staging/exports/building-m3/tak14-rest-tent-ink-20261115-v3
+staging/reports/building-m3/tak14-rest-tent-ink-20261115-v3
+staging/exports/tak14-rest-tent-preview-20261115-v3
+staging/blend/tak14-rest-tent-shape-20261115-v1.blend
+staging/exports/building-m3/tak14-rest-tent-shape-20261115-v1
+```
+
+</details>
+
+
+## Mixer彩度とSpa骨表現の原本追加（2026-11-15）
+
+新しい2組44files（19,463,778B）をauthoring libraryへ追加した。Blend、元PNG/GLB、geometry、
+recipeとpaint report、Mixerのpacked素材入力を含み、generator hashは実Git履歴へ結合した。
+既存54組511filesを全hash/bytes照合して維持し、authoringは56組555files（96,974,592B）、
+legacy389件と合わせて944原本となる。新index SHAは
+`c98ba57874918b90555732175ac9645d43e3b5ca3e1120ad844ff6466d9ea796`。
+原本保全自体はart/release authorityを付与しない。
+
+Mixer g6／Spa g4の正式authorityと旧g5/g3への復旧はcanonical exportsとruntime mirrorの
+世代別payload/provenance/receipt/journalが所有する。exact codec `25019e2c…75e3`を継続使用し、
+旧原本・codec・復旧情報を置換しない。終了したraw検証jobとstagingコピーの整理は次節を参照。
+
+
+## Mixer彩度とSpa骨表現改訂の整理完了（2026-11-15）
+
+導入後の通常startup・全9種normal/far・resident parityの独立採用と、全4群CIを完了した。
+CIはHEAD `abd7f5f89a5f26ac25efa586d1c91325e1423ffe`、base `25989dbbb0105188868c81d6d765dc67efcc275a`、
+source `fb058e40d22f15b0c6768de264b8f009465a173d9ae6742c0cc847acc4584726`で成功した。
+その後の変更は完了記録と索引だけで、変更別contracts gateの対象とする。
+
+具体planの独立レビュー後、consumer `Mixer/Spa visual feedback 2026-11-15`を26holdで正式解除し、
+用途が終わった24root・4,696filesの重複コピーを削除した。処分file/dir inventoryを実行直前に再照合し、
+追加unique fileとsymlinkを拒否するguardと回帰testを維持した。copy内の216directoryだけowner-writeを復元し、file chmodは行っていない。
+944原本とindex、canonical全263files・runtime全498files・全codec3filesのinventoryは前後で不変。
+新旧世代のpayload/provenance/journal、採用2画像と既定bindingを再照合した。primaryと通常Cargo cache、
+制作原本library、canonical exports、runtime mirror、復旧codecは保持する。
+
+対象rootの処分前du単純和は7,524,122,624B。filesystem availableの観測増分はprimary側・asset root側とも
+1,669,910,528Bで、両観測点を合算しない。共有extent等を含むduとavailableの差を同じ値とは扱わない。
+全24pathの不存在、当該consumerの残存0、正規reconcileとprimary storage check PASSを確認した。
+
+削除したexact pathは以下。`primary`はrepo root、`asset root`は`HELL_WORKERS_ASSET_ROOT`を表す。
+
+| 基点 | 削除したpath |
+| --- | --- |
+| primary | `target/native-acceptance/tak14-mixer-spa-weathered-binding-20261115-v1` |
+| primary | `target/native-acceptance/tak14-mixer-spa-weathered-binding-20261115-v2` |
+| primary | `target/native-acceptance/tak14-mixer-spa-weathered-installed-art-20261115-v1` |
+| primary | `target/native-acceptance/tak14-mixer-spa-weathered-installed-startup-20261115-v1` |
+| asset root | `staging/recovery/tak14-mixer-spa-weathered-20261115-v1` |
+| asset root | `staging/exports/tak14-mixer-weathered-candidate-20261115-v2` |
+| primary | `target/native-acceptance/tak14-mixer-weathered-candidate-normal-20261115-v1` |
+| primary | `target/native-acceptance/tak14-mixer-weathered-dirt-20261115-v1` |
+| primary | `target/native-acceptance/tak14-mixer-weathered-far-20261115-v1` |
+| primary | `target/native-acceptance/tak14-mixer-weathered-normal-20261115-v1` |
+| asset root | `staging/exports/building-m2/tak14-mixer-weathered-preview-20261115-v1` |
+| asset root | `staging/blend/tak14-mixer-weathered-source-20261115-v1.blend` |
+| asset root | `staging/reports/tak14-mixer-weathered-source-20261115-v1.json` |
+| asset root | `staging/exports/building-m2/tak14-mixer-weathered-source-20261115-v1` |
+| asset root | `staging/reports/building-m2/tak14-mixer-weathered-source-20261115-v1` |
+| asset root | `staging/exports/tak14-spa-weathered-candidate-20261115-v1` |
+| primary | `target/native-acceptance/tak14-spa-weathered-candidate-normal-20261115-v1` |
+| primary | `target/native-acceptance/tak14-spa-weathered-far-20261115-v1` |
+| primary | `target/native-acceptance/tak14-spa-weathered-normal-20261115-v1` |
+| asset root | `staging/exports/building-m3/tak14-spa-weathered-preview-20261115-v1` |
+| asset root | `staging/blend/tak14-spa-weathered-source-20261115-v1.blend` |
+| asset root | `staging/reports/tak14-spa-weathered-source-20261115-v1.json` |
+| asset root | `staging/exports/building-m3/tak14-spa-weathered-source-20261115-v1` |
+| asset root | `staging/reports/building-m3/tak14-spa-weathered-source-20261115-v1` |

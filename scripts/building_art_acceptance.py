@@ -9,7 +9,9 @@ cost comparison consumes two separately frozen static-reference jobs.
 from __future__ import annotations
 
 import argparse
+import csv
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -26,10 +28,143 @@ sys.path.insert(0, str(HELPERS))
 import building_asset_pipeline as pipeline  # noqa: E402
 import native_acceptance as native  # noqa: E402
 from wall_density_acceptance import asset_view_fingerprint  # noqa: E402
-import building_art_static_acceptance as static  # noqa: E402
+if __package__:
+    from . import building_foreground_observation as foreground  # noqa: E402
+    from . import building_native_executable as executable  # noqa: E402
+    from . import building_m5_context_observation as m5_context  # noqa: E402
+    from . import building_art_static_acceptance as static  # noqa: E402
+    from .perf_tool.artifacts import read_window  # noqa: E402
+else:
+    import building_foreground_observation as foreground  # noqa: E402
+    import building_native_executable as executable  # noqa: E402
+    import building_m5_context_observation as m5_context  # noqa: E402
+    import building_art_static_acceptance as static  # noqa: E402
+    from perf_tool.artifacts import read_window  # noqa: E402
 
 MODES = {"feedback": "art_preview", "art-preview": "art_preview", "candidate": "isolated_candidate"}
 PROFILE = "building-art"
+VIEWS = {"overview": 5.0, "near": 0.5, "normal": 1.0, "far": 2.0}
+QUALITIES = ("high", "medium", "low")
+WINDOW_CONTRACT = "building-art-window-v1"
+GALLERY_SCALE_FACTORS = (1.0, 1.5, 2.0)
+CONTEXT_SCOPE = "seeded-paused-art-comparison"
+SPA_PAGE_SCOPE = "paused-static-spa-mask-page"
+M5_CONTEXT_VARIANTS = ("m5-art-context", "lamp-supply-art-context")
+M2_NUMERIC = {
+    "Tank": ("1b913ea0784bf6815a6c46ed0396dafc6ebcdcfc107370bc569aa875775d949d",),
+    "MudMixer": ("1b913ea0784bf6815a6c46ed0396dafc6ebcdcfc107370bc569aa875775d949d",
+                 "aba63ac343e11ed4fa758deffaf36b9139145333ca5d61fd26c3e3dd513153c8",
+                 "a49f198c2a28c163cfc31c2f503406095328e329a9774e274bea632d342e6783",
+                 "4319fd7a6b4c809c1cb54046bda293b6c2e7a062537026e0b4991c61b5233828"),
+}
+
+
+def world_seed(value: dict) -> int:
+    seed=value.get("world_seed",static.SEED)
+    pipeline.require(type(seed) is int and 0<=seed<2**64,"invalid exact world seed")
+    pipeline.require(seed==static.SEED or (value.get("kind")=="MudMixer"
+        and value.get("variant")=="m2-art-context" and value.get("mode")=="feedback"),
+        "nondefault world seed requires the explicit Mixer feedback context")
+    return seed
+
+
+def seed_evidence(root: Path,value: dict) -> dict:
+    seed=world_seed(value)
+    log=(root/"actual-window.log").read_bytes()
+    summary=(root/"data/summary.csv").read_bytes()
+    matches=re.findall(r"(?m)^PERF_SCENARIO: seed=([0-9]+)(?:\s|$)",log.decode())
+    reader=csv.DictReader(summary.decode().splitlines())
+    pipeline.require(reader.fieldnames is not None and reader.fieldnames.count("seed")==1,
+                     "world seed summary header differs")
+    rows=list(reader)
+    pipeline.require(matches==[str(seed)] and len(rows)==1 and rows[0]["seed"]==str(seed),
+                     "actual world seed log/summary differs")
+    return {"seed":seed,"log_sha256":pipeline.digest(log),"summary_sha256":pipeline.digest(summary)}
+
+
+def spa_page(value: dict) -> int | None:
+    page = value.get("spa_mask_page")
+    if page is None:
+        return None
+    pipeline.require(type(page) is int and 0 <= page < 4
+        and value.get("kind") == "SoulSpa" and value.get("mode") == "candidate"
+        and value.get("identity", {}).get("authority") == "isolated_candidate"
+        and value.get("variant", "gallery") == "gallery"
+        and value.get("lighting", "standard") == "standard"
+        and value.get("view") in ("near", "normal", "far")
+        and value.get("scope") == SPA_PAGE_SCOPE and value.get("promotion_authority") is False,
+        "Spa page requires exact isolated-candidate gallery scope")
+    return page
+
+
+def actor_count(value: dict) -> int:
+    if value.get("variant") == "m2-art-context":
+        context_settings(value)
+        return 10 if value["kind"] == "MudMixer" else 8
+    if value.get("variant") in M5_CONTEXT_VARIANTS:
+        context_settings(value)
+        return 14 if value["kind"] == "OutdoorLamp" else 8
+    page = spa_page(value)
+    if page is not None:
+        return 8 + sum(mask.bit_count() for mask in range(page * 4, page * 4 + 4))
+    return 6 if context_settings(value) else 15
+
+
+def context_preview(manifest: dict) -> dict:
+    preview = manifest["world_preview"]
+    artifacts = [entry for entry in manifest["artifacts"] if entry["role"] == "image:" + preview["image_role"]]
+    pipeline.require(len(artifacts) == 1, "context requires one exact image: preview artifact")
+    return {"descriptor": preview, "artifact": artifacts[0]}
+
+
+def context_settings(value: dict) -> bool:
+    variant = value.get("variant", "gallery")
+    lighting = value.get("lighting", "standard")
+    pipeline.require(variant in ("gallery", "rest-area-art-context", "m2-art-context", *M5_CONTEXT_VARIANTS)
+                     and lighting in ("standard", "dim"), "unknown art variant/lighting")
+    pipeline.require(variant == "lamp-supply-art-context" or value.get("lamp_supply_target") is None,
+                     "Lamp UI target requires its separate context")
+    if variant in M5_CONTEXT_VARIANTS:
+        m5_context.settings(value)
+        return True
+    if variant == "m2-art-context":
+        pipeline.require(value.get("kind") in ("Tank", "MudMixer")
+            and value.get("mode") == "feedback" and value.get("view") in ("normal", "far")
+            and value.get("identity", {}).get("authority") == "art_preview"
+            and value.get("context_mesh_verifier_sha256") == m5_context.verifier_sha256()
+            and value.get("spa_mask_page") is None and value.get("scope") == CONTEXT_SCOPE
+            and value.get("promotion_authority") is False, "M2 context authority/view/scope differs")
+        return True
+    if variant == "gallery":
+        pipeline.require(lighting == "standard", "gallery lighting cannot change")
+        return False
+    pipeline.require(value.get("kind") == "RestArea"
+        and value.get("mode") in ("feedback", "art-preview")
+        and value.get("view") in ("near", "normal", "far")
+        and value.get("identity", {}).get("authority") == "art_preview"
+        and value.get("scope") == CONTEXT_SCOPE
+        and value.get("promotion_authority") is False, "context authority/view/scope differs")
+    return True
+
+
+def quality(value: dict) -> str:
+    selected = value.get("quality", "high")
+    pipeline.require(selected in QUALITIES, "unknown building-art quality")
+    return selected
+
+
+def scale_factor(value: dict) -> float:
+    # Historical plans pin DPI1. New plans bind both fields, never a partially
+    # specified contract or a bool which compares equal to the number one.
+    if "window_contract" not in value and "scale_factor" not in value:
+        return 1.0
+    selected = value.get("scale_factor")
+    pipeline.require(value.get("window_contract") == WINDOW_CONTRACT
+        and type(selected) in (int, float) and selected in GALLERY_SCALE_FACTORS,
+        "building-art window contract/scale factor differs")
+    pipeline.require(value.get("variant", "gallery") == "gallery" or selected == 1.0,
+        "building-art context requires scale factor 1")
+    return float(selected)
 
 
 def subject(repo: Path) -> dict:
@@ -46,7 +181,26 @@ def validate_subject(value: dict, *, feedback: bool) -> None:
     pipeline.require(feedback or value["dirty"] == [], "non-feedback requires a clean source")
 
 
+def check_numeric_verifiers(value: dict) -> None:
+    if value.get("kind") in pipeline.building_m5_numeric.KINDS and value.get("mode") == "candidate":
+        pipeline.require(pipeline.exact_json(value.get("numeric_verifiers"), pipeline.numeric_verifier_inventory()),
+                         "M5 numeric verifier inventory changed or missing")
+    else:
+        pipeline.require("numeric_verifiers" not in value, "numeric verifier inventory requires M5 candidate")
+
+
 def check_plan(value: dict, binary: Path) -> dict:
+    world_seed(value)
+    if "executable_snapshot" in value:
+        pipeline.require(value["mode"] != "feedback" and value["executable_snapshot"] == {
+            "contract": executable.CONTRACT, "verifier_sha256": executable.verifier_sha256()}, "executable snapshot contract changed")
+    check_numeric_verifiers(value)
+    foreground_settings = foreground.settings(value, context=value.get("variant") in M5_CONTEXT_VARIANTS)
+    context_settings(value)
+    page = spa_page(value)
+    quality(value)
+    scale_factor(value)
+    pipeline.require(value.get("view", "overview") in VIEWS, "unknown camera view")
     pipeline.require(value["kind"] != "Bridge", "Bridge requires its independent M4 recipe; nine-kind static evidence is inapplicable")
     pipeline.require(value["profile"] == PROFILE and value["mode"] in MODES, "recipe mode differs")
     repo = native.validate_repo(value["repo"])
@@ -58,6 +212,21 @@ def check_plan(value: dict, binary: Path) -> dict:
     pipeline.require(manifest["identity"] == value["identity"]
                      and pipeline.digest(text.encode()) == value["manifest_sha256"]
                      and manifest["identity"]["authority"] == MODES[value["mode"]], "candidate identity/authority changed")
+    if foreground_settings is not None:
+        pipeline.require(foreground.canonical(foreground_settings) == foreground.canonical(foreground.descriptor(manifest)),
+                         "foreground source descriptor changed")
+    if context_settings(value):
+        pipeline.require(value.get("context_preview") == context_preview(manifest),
+            "context preview differs from exact source manifest")
+    if value.get("variant") == "m2-art-context":
+        pipeline.require(pipeline.exact_json(value.get("context_parts"), manifest["parts"]),
+                         "M2 context parts differ from exact source manifest")
+        pipeline.require(value.get("context_geometry_sha256") == manifest["geometry_contract_sha256"]
+            and manifest["geometry_contract_sha256"] in M2_NUMERIC[value["kind"]],
+            "M2 context numeric contract is unsupported or changed")
+    if page is not None:
+        pipeline.require(pipeline.canonical(value.get("spa_parts")) == pipeline.canonical(manifest["parts"]),
+                         "Spa page parts differ from exact source manifest")
     if value["mode"] == "candidate":
         # Reuse promotion's art approval/provenance checks without approving or
         # installing the set. This target is only a read-only planning namespace.
@@ -73,13 +242,38 @@ def plan(args) -> dict:
     static.check_root(repo, root)
     pipeline.require(not root.exists(), "recipe job root already exists")
     manifest, text, _ = pipeline.load_set(args.source_root, args.kind, args.codec)
-    value = {"schema_version": 1, "profile": PROFILE, "mode": args.mode, "repo": str(repo),
+    value = {"schema_version": 1, "status": "ready", "profile": PROFILE, "mode": args.mode, "repo": str(repo),
              "kind": args.kind, "source_root": str(args.source_root.absolute()), "job_root": str(root),
              "subject": frozen, "identity": manifest["identity"], "manifest_sha256": pipeline.digest(text.encode()),
              "adapter": args.adapter, "codec": str(args.codec.absolute()),
              "codec_sha256": pipeline.digest(args.codec.read_bytes()),
-             "scope": "paused-static-presentation", "promotion_authority": False,
+             "view": getattr(args, "view", "overview"),
+             "quality": getattr(args, "quality", "high"),
+             "world_seed": static.SEED if getattr(args,"world_seed",None) is None else args.world_seed,
+             "window_contract": WINDOW_CONTRACT,
+             "scale_factor": getattr(args, "scale_factor", 1.0),
+             "variant": getattr(args, "variant", "gallery"),
+             "lighting": getattr(args, "lighting", "standard"),
+             "spa_mask_page": getattr(args, "spa_mask_page", None),
+             "lamp_supply_target": getattr(args, "lamp_supply_target", None),
+             "scope": m5_context.LAMP_UI_SCOPE if getattr(args, "variant", "gallery") == "lamp-supply-art-context" else CONTEXT_SCOPE if getattr(args, "variant", "gallery") in ("rest-area-art-context", "m2-art-context", "m5-art-context") else SPA_PAGE_SCOPE if getattr(args, "spa_mask_page", None) is not None else "paused-static-presentation", "promotion_authority": False,
              "feedback_only": args.mode == "feedback"}
+    if args.mode != "feedback":
+        value["executable_snapshot"] = {"contract": executable.CONTRACT, "verifier_sha256": executable.verifier_sha256()}
+    if value["variant"] in ("rest-area-art-context", "m2-art-context", *M5_CONTEXT_VARIANTS):
+        value["context_preview"] = context_preview(manifest)
+    if value["variant"] == "m2-art-context":
+        value["context_parts"] = manifest["parts"]
+        value["context_geometry_sha256"] = manifest["geometry_contract_sha256"]
+        value["context_mesh_verifier_sha256"] = m5_context.verifier_sha256()
+    if value["variant"] in M5_CONTEXT_VARIANTS:
+        value["m5_context_verifier_sha256"] = m5_context.verifier_sha256()
+    if value["kind"] in foreground.KINDS and value["variant"] in ("gallery", *M5_CONTEXT_VARIANTS):
+        value["foreground_observation"] = foreground.descriptor(manifest)
+    if value["kind"] in pipeline.building_m5_numeric.KINDS and value["mode"] == "candidate":
+        value["numeric_verifiers"] = pipeline.numeric_verifier_inventory()
+    if spa_page(value) is not None:
+        value["spa_parts"] = manifest["parts"]
     check_plan(value, args.codec)
     resources = native.resource_snapshot(repo, require_launcher=True)
     pipeline.require(not resources["failures"], str(resources["failures"]))
@@ -92,13 +286,52 @@ def plan(args) -> dict:
     return value
 
 
-def game_command(binary: Path, root: Path) -> list[str]:
-    return [str(binary), "--perf-scenario", "--perf-seed", str(static.SEED), "--perf-size", "small",
+def game_command(binary: Path, root: Path, value: dict) -> list[str]:
+    context_settings(value)
+    return [str(binary), "--perf-scenario", "--perf-seed", str(world_seed(value)), "--perf-size", "small",
         "--perf-workload", "building-art-static", "--perf-render", "gpu", "--perf-clock", "realtime",
         "--perf-familiar-policy", "baseline", "--perf-operation-dialog", "hidden", "--perf-dashboard", "hidden",
         "--perf-output-dir", str(root / "data"), "--perf-warmup-secs", "30", "--perf-measure-secs", "60",
-        "--spawn-souls", "15", "--spawn-familiars", "0", "--perf-window-width", "1280", "--perf-window-height", "720",
-        "--perf-window-scale-factor", "1", "--perf-rtt-quality", "high"]
+        "--spawn-souls", str(actor_count(value)), "--spawn-familiars", "0", "--perf-window-width", "1280", "--perf-window-height", "720",
+        "--perf-window-scale-factor", str(scale_factor(value)), "--perf-rtt-quality", quality(value)]
+
+
+def validate_window(root: Path, value: dict) -> None:
+    """Check actual quality/target dimensions, not just the requested argv.
+
+    This reuses the window-only validator: paused art fixtures cannot satisfy
+    ordinary gameplay performance predicates and grant no performance authority.
+    """
+    window, errors = read_window(root / "data/window.csv", expect_headless=False,
+        expected_width=1280, expected_height=720, expected_scale_factor=scale_factor(value),
+        expected_rtt_quality=quality(value), expected_window_backend="x11",
+        expected_backend="vulkan", expected_present_mode="novsync")
+    pipeline.require(window is not None and not errors, "building-art window differs: " + "; ".join(errors))
+    pipeline.require(value["adapter"].casefold() in window["adapter_name"].casefold(),
+                     "building-art window adapter differs")
+
+
+def game_environment(environment: dict, view: Path, value: dict, nonce: str, root: Path) -> dict:
+    """Child-only controls: preserve required INFO-level adapter evidence."""
+    environment = environment.copy()
+    for key in list(environment):
+        if key.startswith(("HW_BUILDING_ART", "HW_WALL", "HW_DOOR", "HW_DISABLE_", "HW_PERF_")):
+            del environment[key]
+    session = {"mode": value["mode"], "identity": value["identity"],
+            "locator": pipeline.locator(value["kind"]), "nonce": nonce, "view": value.get("view", "overview"),
+            "variant": value.get("variant", "gallery"), "lighting": value.get("lighting", "standard"),
+            "spa_mask_page": value.get("spa_mask_page"),
+            "lamp_supply_target": value.get("lamp_supply_target"),
+            "status_path": str(root / "probe.json")}
+    if "window_contract" in value or "scale_factor" in value:
+        session.update(window_contract=WINDOW_CONTRACT, scale_factor=scale_factor(value))
+    if world_seed(value) != static.SEED:
+        environment["HW_BUILDING_ART_FEEDBACK_WORLD_SEED"] = str(world_seed(value))
+    environment.update({"BEVY_ASSET_ROOT": str(view), "HW_WINDOW_BACKEND": "x11", "HW_PRESENT_MODE": "novsync",
+        "HELL_WORKERS_WORLDGEN_SEED": str(world_seed(value)),
+        "WGPU_BACKEND": "vulkan", "WGPU_ADAPTER_NAME": value["adapter"], "RUST_LOG": "info,wgpu=error",
+        "HW_BUILDING_ART_SESSION": json.dumps(session)})
+    return environment
 
 
 def capture(root: Path, pid: int) -> dict | None:
@@ -123,15 +356,291 @@ def validate_probe(probe: dict, value: dict, nonce: str) -> None:
         and probe.get("nonce") == nonce and probe.get("scope") == value["scope"]
         and type(probe.get("stable_frames")) is int and probe["stable_frames"] >= 30,
         "building-art runtime acknowledgement differs")
-    pipeline.require(probe["fixture"]["target_count"] == 36, "building-art fixture inventory differs")
+    if context_settings(value):
+        validate_context_fixture(probe, value)
+    else:
+        pipeline.require(probe["fixture"]["target_count"] == 36, "building-art fixture inventory differs")
+        if spa_page(value) is not None:
+            validate_spa_page(probe, value)
+    view = value.get("view", "overview")
+    foreground.validate(probe, value, context=value.get("variant") in M5_CONTEXT_VARIANTS)
+    pipeline.require(view in VIEWS and probe.get("view", "overview") == view,
+                     "building-art camera view differs")
+    if "view" in value:
+        pipeline.require(probe.get("camera_scale") == VIEWS[view]
+                         and probe["fixture"].get("view") == view
+                         and probe["fixture"].get("camera_scale") == VIEWS[view],
+                         "building-art camera scale differs")
+
+
+def validate_spa_page(probe: dict, value: dict) -> None:
+    page = spa_page(value)
+    fixture = probe["fixture"]
+    pipeline.require(type(probe.get("spa_mask_page")) is int and probe["spa_mask_page"] == page
+        and type(fixture.get("spa_mask_page")) is int and fixture["spa_mask_page"] == page
+        and fixture.get("scope") == SPA_PAGE_SCOPE and fixture.get("souls") == actor_count(value),
+        "Spa page/actor evidence differs")
+    records = [record for record in fixture["records"] if record["kind"] == "SoulSpa"]
+    kinds = {"Tank", "MudMixer", "RestArea", "SoulSpa", "WheelbarrowParking", "SandPile", "BonePile", "Door", "OutdoorLamp"}
+    pipeline.require(len(fixture["records"]) == 36 and {record["kind"] for record in fixture["records"]} == kinds
+        and all(sorted(record["ordinal"] for record in fixture["records"] if record["kind"] == kind) == list(range(4)) for kind in kinds),
+        "Spa page full gallery inventory differs")
+    pipeline.require(len(records) == 4 and sorted(record["ordinal"] for record in records) == list(range(4)),
+                     "Spa page owner ordinals differ")
+    expected = {part["name"]: part for part in value["spa_parts"]}
+    pipeline.require(set(expected) == {"body", "slot0", "slot1", "slot2", "slot3"}, "Spa descriptor names differ")
+    entities = []
+    for record in records:
+        entities.extend([record.get("owner"), record.get("root")])
+        pipeline.require(pipeline.canonical(record.get("root_identity")) == pipeline.canonical(value["identity"]),
+                         "Spa consumed root generation differs")
+        center = record.get("center")
+        pipeline.require(isinstance(center, list) and len(center) == 2
+            and all(type(v) in (int, float) and math.isfinite(v) for v in center), "Spa center differs")
+        for field, wanted in (("root_translation_wu", [center[0], 0, -center[1]]),
+                              ("root_rotation_xyzw", [0, 0, 0, 1]), ("root_scale", [1, 1, 1])):
+            actual = record.get(field)
+            pipeline.require(isinstance(actual, list) and len(actual) == len(wanted)
+                and all(type(a) in (int, float) and math.isfinite(a) and abs(a-b) <= .001
+                        for a, b in zip(actual, wanted, strict=True)), "Spa actual root pose differs")
+        mask = page * 4 + record["ordinal"]
+        pipeline.require(type(record["state"].get("mask")) is int and record["state"]["mask"] == mask
+            and record["state"].get("operational") is True, "Spa actual tile mask differs")
+        parts = record["parts"]
+        pipeline.require(len(parts) == 5 and {part.get("name") for part in parts} == set(expected), "Spa actual part names differ")
+        for part in parts:
+            entities.append(part.get("entity"))
+            original = expected[part["name"]]
+            active = part["name"] != "body" and bool(mask & (1 << int(part["name"][-1])))
+            pipeline.require(part.get("mesh_role") == original["mesh_role"]
+                and type(part.get("parent")) is int and part["parent"] == record["root"]
+                and part.get("material_role") == original["material_role"]
+                and part.get("visible") is True and part.get("slot_active") is active
+                and part.get("emissive_white") is active and part.get("emissive_black") is (not active)
+                and part.get("emissive_texture_matches") is True and part.get("white_opaque_lit") is True,
+                "Spa actual material/mask differs")
+            for field in ("translation_wu", "rotation_xyzw", "scale"):
+                actual = part.get(field)
+                pipeline.require(isinstance(actual, list) and len(actual) == len(original[field])
+                    and all(type(a) in (int, float) and math.isfinite(a) and abs(a-b) <= .001
+                            for a, b in zip(actual, original[field], strict=True)), "Spa actual part pose differs")
+            pipeline.require(all(type(part.get(field)) in (int, float) and part[field] == expected_value
+                for field, expected_value in (("roughness", 1), ("metallic", 0), ("reflectance", 0)))
+                and isinstance(part.get("material_values"), str) and part["material_values"], "Spa actual material values differ")
+    pipeline.require(all(type(entity) is int and entity >= 0 for entity in entities)
+        and len(set(entities)) == len(entities), "Spa owner/root/part identities overlap or are missing")
+
+
+def m2_vector(actual, expected) -> bool:
+    return (isinstance(actual, list) and len(actual) == len(expected)
+        and all(type(a) in (float, int) and math.isfinite(a) and abs(a - b) <= .00001
+                for a, b in zip(actual, expected, strict=True)))
+
+
+def validate_m2_context_parts(record: dict, value: dict, ordinal: int) -> None:
+    originals = value["context_parts"]
+    parts = record["parts"]
+    pipeline.require(len(parts) == len(originals) == 2, "M2 context part inventory differs")
+    expected_roles = {"body", "water"} if value["kind"] == "Tank" else {"body", "rotor"}
+    root = foreground.matrix(record["root_transform"])
+    pipeline.require(m2_vector(record["root_transform"]["rotation"], [0., 0., 0., 1.])
+        and m2_vector(record["root_transform"]["scale"], [1., 1., 1.]), "M2 root pose differs")
+    pipeline.require({part.get("name") for part in originals} == expected_roles
+        and len({part["mesh_role"] for part in originals}) == 2, "M2 context original roles differ")
+    for original in originals:
+        matching = [part for part in parts if part.get("role") == original["mesh_role"]]
+        pipeline.require(len(matching) == 1, "M2 context duplicate/missing part")
+        part = matching[0]
+        water = value["kind"] == "Tank" and original["name"] == "water"
+        position = original["translation_wu"].copy()
+        if water:
+            position[1] = 22. if ordinal >= 2 else 12.
+        color = [.58, .70, .73, 1.] if water and ordinal == 1 else [1., 1., 1., 1.]
+        pipeline.require(part.get("visible") is (not water or ordinal > 0)
+            and m2_vector(part.get("transform", {}).get("translation"), position)
+            and m2_vector(part.get("transform", {}).get("rotation"), original["rotation_xyzw"])
+            and m2_vector(part.get("transform", {}).get("scale"), original["scale"])
+            and m2_vector(part.get("material_values", {}).get("color_srgba"), color)
+            and all(type(part["material_values"].get(key)) in (int, float) and part["material_values"][key] == expected
+                    for key, expected in (("roughness", 1), ("reflectance", 0), ("metallic", 0))),
+            "M2 context state-specific pose/visibility/material differs")
+        pipeline.require(m2_vector(part.get("global_matrix"), foreground.product(root, foreground.matrix(part["transform"]))),
+                         "M2 part global transform differs")
+
+
+def validate_m2_context_state(fixture: dict, value: dict, identities: list) -> None:
+    state = fixture.get("m2_state", {})
+    resources = fixture.get("resources", {})
+    pipeline.require(resources.get("scope") == "exact-m2-resident-dependencies"
+        and resources.get("global_pool_evidence") is False, "M2 resident dependency scope differs")
+    for key, roles in (("meshes", [part["mesh_role"] for part in value["context_parts"]]),
+                       ("images", ["albedo", "world_preview", "catalog"])):
+        entries = resources.get(key, [])
+        pipeline.require(isinstance(entries, list) and len(entries) == len(roles)
+            and {row.get("role") for row in entries} == set(roles)
+            and all(isinstance(row.get("handle"), str) and row["handle"] for row in entries),
+            "M2 resident dependency inventory differs")
+    meshes = {row["role"]: row["handle"] for row in resources["meshes"]}
+    for record in fixture["records"]:
+        pipeline.require(all(part.get("mesh") == meshes.get(part.get("role")) for part in record["parts"])
+            and record["preview"].get("image") == next(row["handle"] for row in resources["images"] if row["role"] == "world_preview"),
+            "M2 resident dependency consumer differs")
+    workers = 2 if value["kind"] == "MudMixer" else 0
+    pipeline.require(state.get("idle_souls") == 8 and state.get("source_workers") == workers
+        and type(state.get("idle_souls")) is int and type(state.get("source_workers")) is int
+        and fixture.get("geometry_contract_sha256") == value.get("context_geometry_sha256")
+        and value.get("context_geometry_sha256") in M2_NUMERIC[value["kind"]]
+        and state.get("ordinary_input_evidence") is False and state.get("lifecycle_evidence") is False
+        and len(state.get("records", [])) == 4, "M2 context state scope/inventory differs")
+    for ordinal, (actual, record) in enumerate(zip(state["records"], fixture["records"], strict=True)):
+        identities.extend(part.get("entity") for part in record["parts"])
+        pipeline.require(type(actual.get("ordinal")) is int and actual.get("ordinal") == ordinal and actual.get("owner") == record["owner"]
+            and len(actual.get("souls", [])) == 2, "M2 context state owner differs")
+        domain = actual.get("state", {})
+        if value["kind"] == "Tank":
+            pipeline.require(pipeline.exact_json({key: domain.get(key) for key in ("stored_water", "capacity")},
+                    {"stored_water": (0, 25, 50, 50)[ordinal], "capacity": 50})
+                and isinstance(domain.get("water_items"), list) and len(domain["water_items"]) == domain["stored_water"],
+                "M2 context actual water differs")
+            identities.extend(domain["water_items"])
+        else:
+            pipeline.require(domain.get("refining") is (ordinal >= 2)
+                and len(domain.get("workers", [])) == int(ordinal >= 2), "M2 context Refining differs")
+            for worker in domain["workers"]:
+                pipeline.require(type(worker.get("entity")) is int
+                    and all(type(worker.get(key)) is int and worker[key] == record["owner"]
+                            for key in ("mixer", "working_on", "assignment", "target"))
+                    and worker.get("work_type") == "Refine" and worker.get("phase") == "Refining"
+                    and type(worker.get("progress")) in (float, int) and worker["progress"] == 0,
+                    "M2 context worker task binding differs")
+                identities.append(worker["entity"])
+        for soul, side in zip(actual["souls"], (-1., 1.), strict=True):
+            meshes = soul.get("meshes", [])
+            pipeline.require(type(soul.get("side")) in (int, float) and soul.get("side") == side and len(meshes) == 1
+                and meshes[0].get("visible") is True and meshes[0].get("owner") == soul.get("entity")
+                and 1 in meshes[0].get("layers", []) and len(meshes[0].get("global_matrix", [])) == 16,
+                "M2 context overlap Soul renderer differs")
+            ground = soul.get("ground", [])
+            pipeline.require(isinstance(ground, list) and len(ground) == 2
+                and all(type(n) in (int, float) and math.isfinite(n) for n in ground),
+                "M2 context Soul position differs")
+            root = record["root_transform"]["translation"]
+            pipeline.require(m2_vector(ground, [root[0], -root[2] + side * 12.])
+                and m2_vector(meshes[0].get("root_pose", {}).get("translation"), [ground[0], 17.6, -ground[1]]),
+                "M2 context Soul owner/render position differs")
+            scale = foreground.vector(meshes[0]["root_pose"]["scale"], 3)
+            pipeline.require(scale[0] in (-1., 1.) and scale[1:] == [1., 1.], "M2 Soul scale differs")
+            expected_pose = {"translation": [ground[0], 17.6, -ground[1]],
+                "rotation": fixture["rtt_camera"]["transform"]["rotation"], "scale": scale}
+            identities.extend(m5_context.meshes(meshes, soul["entity"], expected_pose, actor=True))
+            identities.append(soul["entity"])
+
+
+def validate_rest_context_resources(fixture: dict) -> None:
+    resources = fixture.get("resources", {})
+    pipeline.require(resources.get("scope") == "exact-rest-area-resident-dependencies"
+        and resources.get("global_pool_evidence") is False, "RestArea dependency scope differs")
+    for key, roles in (("meshes", {"body"}), ("images", {"albedo", "world_preview", "catalog"})):
+        rows = resources.get(key, [])
+        pipeline.require(isinstance(rows, list) and len(rows) == len(roles)
+            and {row.get("role") for row in rows} == roles
+            and all(isinstance(row.get("handle"), str) and row["handle"] for row in rows),
+            "RestArea owned dependency inventory differs")
+    mesh = resources["meshes"][0]["handle"]
+    preview = next(row["handle"] for row in resources["images"] if row["role"] == "world_preview")
+    pipeline.require(all(len(record["parts"]) == 1 and record["parts"][0].get("role") == "body"
+        and record["parts"][0].get("mesh") == mesh and record["preview"].get("image") == preview
+        for record in fixture["records"]), "RestArea dependency consumer differs")
+
+
+def validate_context_fixture(probe: dict, value: dict) -> None:
+    """Seeded image comparison only; never issues an art/numeric decision."""
+    if value.get("variant") in M5_CONTEXT_VARIANTS:
+        m5_context.validate(probe, value)
+        return
+    fixture = probe["fixture"]
+    m2 = value.get("variant") == "m2-art-context"
+    pipeline.require(probe.get("variant") == fixture.get("variant") == value.get("variant")
+        and value.get("variant") in ("rest-area-art-context", "m2-art-context")
+        and probe.get("lighting") == fixture.get("lighting") == value["lighting"]
+        and fixture.get("scope") == CONTEXT_SCOPE and fixture.get("identity") == value["identity"]
+        and all(fixture.get(key) is False for key in ("accepted", "performance_evidence", "promotion_authority")),
+        "context identity/authority differs")
+    pipeline.require(all(type(fixture.get(key)) is int and fixture[key] == count for key, count in
+        (("target_count", 4), ("wall_count", 8), ("preview_count", 4), ("souls", actor_count(value))))
+        and len(fixture.get("records", [])) == 4, "context inventory differs")
+    identities = []
+    occupied = set()
+    def point(raw):
+        pipeline.require(isinstance(raw, list) and len(raw) == 2
+            and all(type(number) in (int, float) and math.isfinite(number) for number in raw)
+            and 0 <= raw[0] <= 1280 and 0 <= raw[1] <= 720, "context projection is non-finite/offscreen")
+        return raw
+    for ordinal, record in enumerate(fixture["records"]):
+        pipeline.require(record.get("ordinal") == ordinal and (m2 or record.get("occupants") == (0, 1, 5, 0)[ordinal])
+            and len(record.get("tiles", [])) == 4 and len(record.get("walls", [])) == 2
+            and len(record.get("parts", [])) > 0, "context specimen differs")
+        for tile in record["tiles"]:
+            pipeline.require(len(tile) == 2 and all(type(number) is int for number in tile)
+                and tuple(tile) not in occupied, "context footprint overlaps")
+            occupied.add(tuple(tile))
+        preview = record["preview"]
+        descriptor = preview["descriptor"]
+        artifact = preview["artifact"]
+        pipeline.require({"descriptor": descriptor, "artifact": artifact} == value["context_preview"]
+            and descriptor["image_role"] == "world_preview" and artifact["role"] == "image:world_preview"
+            and re.fullmatch(r"[0-9a-f]{64}", artifact["sha256"]) is not None
+            and preview["canvas_wu"] == descriptor["canvas_wu"]
+            and preview["anchor"] == [descriptor["anchor_px"][0] / descriptor["canvas_px"][0] - .5,
+                                      .5 - descriptor["anchor_px"][1] / descriptor["canvas_px"][1]]
+            and preview["visible"] is True, "context descriptor preview differs")
+        identities.extend([record["owner"], record["root"], preview["entity"]])
+        identities.extend(wall["owner"] for wall in record["walls"])
+        if m2:
+            validate_m2_context_parts(record, value, ordinal)
+        pipeline.require(all((m2 or part["visible"] is True) and all(part["material_values"].get(key) is True
+            for key in (("opaque", "lit", "emissive_black", "emissive_texture_absent") if m2 else ("white", "opaque", "lit", "emissive_black", "emissive_texture_absent")))
+            for part in record["parts"]), "context part hidden or material differs")
+        lower, upper = record["walls"]
+        ys = [tile[1] for tile in record["tiles"]]
+        pipeline.require(lower["grid"][1] < min(ys) and upper["grid"][1] > max(ys)
+            and all(len(wall["visuals"]) == 1 and wall["visuals"][0]["visible"] is True
+                    and 1 in wall["visuals"][0]["layers"] for wall in (lower, upper)), "context wall ordering differs")
+        for wall in record["walls"]:
+            pipeline.require(tuple(wall["grid"]) not in occupied, "context wall overlaps")
+            occupied.add(tuple(wall["grid"]))
+        owner = point(record["owner_screen"])
+        completed = point(record["composite_screen"])
+        preview_screen = point(preview["screen_anchor"])
+        scale = VIEWS[value["view"]]
+        pipeline.require(record["preview_offset_wu"] == [0., -160.]
+            and all(abs(a - b) <= 1 for a, b in zip(owner, completed, strict=True))
+            and abs(preview_screen[0] - owner[0]) <= .01
+            and abs(preview_screen[1] - owner[1] - 160 / scale) <= .01, "context anchor correspondence differs")
+    if m2:
+        validate_m2_context_state(fixture, value, identities)
+    else:
+        validate_rest_context_resources(fixture)
+    pipeline.require(all(type(entity) is int and entity > 0 for entity in identities)
+                     and len(set(identities)) == len(identities), "context duplicate entities")
+    ambient, sun = (500., 12000.) if value["lighting"] == "standard" else (100., 2400.)
+    pipeline.require(len(fixture["ambient"]) == 1 and fixture["ambient"][0]["brightness"] == ambient
+        and len(fixture["directional"]) == 2
+        and sum(light["primary"] is True and light["illuminance"] == sun and light["shadows"] is True
+                for light in fixture["directional"]) == 1
+        and sum(light["extra"] is True and light["illuminance"] == 0 and light["shadows"] is False
+                for light in fixture["directional"]) == 1, "context actual lights differ")
 
 
 def verify(root: Path) -> dict:
     result = pipeline.read(root / "manifest.json")
     value = result["plan"]
     binary = Path(result["binary"]["path"])
+    if "executable_snapshot" in value:
+        executable.validate(binary, root, result["binary"]["sha256"])
+    else:
+        executable.validate_cache(binary, Path(value["repo"]), value["mode"] == "feedback", result["binary"]["sha256"])
     check_plan(value, binary)
-    pipeline.require(pipeline.digest(binary.read_bytes()) == result["binary"]["sha256"], "native binary changed")
     pipeline.require(result["profile"] == PROFILE and result["status"] == "pass"
                      and result["mode"] == value["mode"] and result["identity"] == value["identity"]
                      and result["feedback_only"] == (value["mode"] == "feedback")
@@ -146,7 +655,13 @@ def verify(root: Path) -> dict:
     pipeline.require(sidecar["evidence_kind"] == "candidate-paused-static-only"
                      and sidecar["initial"] == sidecar["final"] == probe["fixture"]
                      and sidecar["stable_frames"] >= 30, "candidate fixture did not remain stable")
+    if context_settings(value):
+        pipeline.require(sidecar.get("contract_id") == ("lamp-supply-art-context-v1" if value.get("variant") == "lamp-supply-art-context" else "m5-art-context-v1" if value.get("variant") == "m5-art-context" else "m2-art-context-v1" if value.get("variant") == "m2-art-context" else "rest-area-art-context-v1"), "context sidecar contract differs")
+    # Older plans remain high-only; their recorded raw window is checked too.
+    validate_window(root, value)
     log = (root / "actual-window.log").read_text()
+    if "world_seed" in value:
+        pipeline.require(result.get("world_seed_evidence")==seed_evidence(root,value),"world seed evidence changed")
     pipeline.require(not re.search(r"\b(?:WARN|ERROR)\b|bevy_ecs::error::handler", log), "native log contains warning/error")
     adapters = re.findall(r'AdapterInfo \{ name: "([^"]+)".*?backend: ([A-Za-z0-9_]+)', log)
     pipeline.require(len(adapters) == 1 and value["adapter"].casefold() in adapters[0][0].casefold()
@@ -176,6 +691,8 @@ def run(args) -> dict:
         native.run_command("build", build, repo=repo, env=environment, log_path=root / "build.log",
                            job_file=job, state=state, timeout_seconds=3600)
         binary = repo / "target" / ("debug" if feedback else "profiling") / "bevy_app"
+        if "executable_snapshot" in value:
+            binary = executable.freeze(binary, root)
         check_plan(value, binary)
         # An exact full base asset view is copied. No missing asset is invented
         # as a baseline and no production asset directory is modified.
@@ -188,18 +705,12 @@ def run(args) -> dict:
         pipeline.put(pipeline.rooted(view / "assets", pipeline.locator(value["kind"])),
                      pipeline.rooted(Path(value["source_root"]), pipeline.locator(value["kind"])).read_bytes(), replace=True)
         nonce = secrets.token_hex(16)
-        for key in list(environment):
-            if key.startswith(("HW_BUILDING_ART", "HW_WALL", "HW_DOOR", "HW_DISABLE_", "HW_PERF_")):
-                del environment[key]
-        environment.update({"BEVY_ASSET_ROOT": str(view), "HW_WINDOW_BACKEND": "x11", "HW_PRESENT_MODE": "novsync",
-            "WGPU_BACKEND": "vulkan", "WGPU_ADAPTER_NAME": value["adapter"],
-            "HW_BUILDING_ART_SESSION": json.dumps({"mode": value["mode"], "identity": value["identity"],
-                "locator": pipeline.locator(value["kind"]), "nonce": nonce, "status_path": str(root / "probe.json")})})
+        environment = game_environment(environment, view, value, nonce, root)
         native.admit_stage_start("actual-window", state=state, job_file=job)
         screenshot = None
         deadline = time.monotonic() + 300
         with (root / "actual-window.log").open("w") as log:
-            process = subprocess.Popen(game_command(binary, root), cwd=repo, env=environment,
+            process = subprocess.Popen(game_command(binary, root, value), cwd=repo, env=environment,
                 stdout=log, stderr=subprocess.STDOUT, start_new_session=True,
                 pass_fds=native.activity_pass_fds(environment))
             native.update_state(job, state, child_pid=process.pid, current_stage="actual-window")
@@ -223,6 +734,8 @@ def run(args) -> dict:
             "probe": json.loads((root / "probe.json").read_bytes()), "screenshot": screenshot,
             "binary": {"path": str(binary), "sha256": pipeline.digest(binary.read_bytes())},
             "not_covered": ["active-simulation", "all-kind-states", "all-preview-consumers", "lifecycle", "performance-budget", "art-approval"]}
+        if "world_seed" in value:
+            result["world_seed_evidence"]=seed_evidence(root,value)
         pipeline.put(root / "manifest.json", pipeline.canonical(result))
         verify(root)
         native.update_state(job, state, status="valid", child_pid=None, completed_at=native.utc_now())
@@ -322,6 +835,14 @@ def main() -> int:
     parser.add_argument("--kind", choices=tuple(pipeline.KINDS))
     parser.add_argument("--mode", choices=tuple(MODES))
     parser.add_argument("--adapter", default="Intel")
+    parser.add_argument("--world-seed",type=int,help="Explicit natural-world seed; nondefault is Mixer feedback context only")
+    parser.add_argument("--view", choices=tuple(VIEWS), default="overview")
+    parser.add_argument("--quality", choices=QUALITIES, default="high")
+    parser.add_argument("--scale-factor", type=float, choices=GALLERY_SCALE_FACTORS, default=1.0)
+    parser.add_argument("--variant", choices=("gallery", "rest-area-art-context", "m2-art-context", *M5_CONTEXT_VARIANTS), default="gallery")
+    parser.add_argument("--lighting", choices=("standard", "dim"), default="standard")
+    parser.add_argument("--spa-mask-page", type=int, choices=range(4))
+    parser.add_argument("--lamp-supply-target", type=int, choices=(0, 2))
     args = parser.parse_args()
     if args.command == "plan":
         pipeline.require(all((args.repo, args.source_root, args.codec, args.kind, args.mode)), "incomplete recipe inputs")

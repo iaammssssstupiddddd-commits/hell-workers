@@ -10,6 +10,22 @@ rootでbufferを所有する`Message`は`crates/bevy_app/src/plugins/messages.rs
 
 ---
 
+## ウィンドウのフレーム所有メッセージ
+
+Bevy 0.19の`TimePlugin`は`FixedPostUpdate`の通知を受けてglobal message registryを更新する。
+`Time<Virtual>`の停止中はfixed scheduleが進まず、Winitが発行し続けるbufferまで蓄積するため、
+root `MessagesPlugin`の`First`で`MessageUpdateSystems`より前に
+`RawWinitWindowEvent`・`WindowEvent`・`RequestRedraw`だけを通常の二重buffer規則で更新する。
+条件はVirtual timeがpausedかつregistryが`Waiting`の場合だけ。`Ready` / `Always`では通常更新に任せ、
+存在しないwindow resourceは生成しない。登録はBevy側のownerに残し、root message inventoryへ追加しない。
+これらのconsumerはframe内の入力・window adapterとapp update後のrunnerであり、fixed consumerは持たない。
+個々のOS redrawが必ず3型すべてを発行するという契約ではない。
+
+gameplay要求、型付きKeyboard/Mouse等の入力buffer、global registryの状態は変更しない。
+停止中のdomain message保持と再開後のFixedUpdate配送を維持する。
+実TimePluginを使う回帰でframe readerの一度だけの受信、bounded buffer、通常更新との二重回転防止、
+domain再開配送、headlessでのoptional resource非生成を確認する。
+
 ## 0. ドメイン要求
 
 | Message | 定義 / 登録owner | Producer | Consumer / Timing | 契約 |
@@ -100,6 +116,58 @@ dual 通知の Producer は `publish_*` helper を使う。
 ---
 
 ## 3. イベント使用上のルール
+
+### profiling-onlyの配置観測（Messageではない）
+
+`building_place::observed_outcomes::PlacementReceipts`は明示production観測sessionだけが登録する
+最大4096件の診断queueである。通常UIのBlueprint分岐、Tank companion分岐、SoulSpa spawn分岐が
+実際に返した結果を`Commands::queue`経由で記録し、production raw observerが`Last`でdrainして
+`PlacementOutcome`へsample indexを付ける。player通知／domain requestを追加するものではない。
+Tank pendingは成功とせず、実親子IDsのcommit、拒否、rollbackを区別する。
+time／primary window／world epochはdeferred command適用時、sample indexはraw観測時であり、
+click時点との原子性やraw event順による因果関係を保証しない。entity実在／occupancyと
+原MouseButtonInputの照合は別途必要で、入力やstate差分から成功を作らない。
+sessionなしではresourceを作らず、overflowまたはcontext欠損をraw failureへ伝播する。
+完成、材料配送、refund、移動、保存bytes、正式asset/release受入を証明するqueueではない。
+
+### profiling-onlyのBlueprint取消観測（Messageではない）
+
+`blueprint_cancellation::observations::CancellationReceipts`も明示production観測sessionだけで登録する。
+domain ownerが既存refund primitiveのcallbackから実spawn予定IDを記録し、owner despawn後の
+deferred commandで有界pending queueへ渡す。`Last`のread-only finalizerが実refund Entity/型/個数、
+owner/request/storage/mapの除去、stored itemの解放、関連actorの参照解除を確認したものだけを
+`BlueprintCancellationApplied / OwnerCleanupApplied`としてraw observerへ渡す。
+transaction indexはsession内で単調増加し、world epoch相違・欠損・上限超過はraw failure。
+pending最大64件・各identity一覧最大4096件・総transaction最大4096件、300回のLast待機でも
+状態が揃わなければ失敗とし、観測器がcleanupを代行しない。
+これは`CancelConstruction / Committed`ではない。予約cache/inventory全体の清算、SoulSpa専用取消、
+player入力との因果、正式asset/lifecycle受入は別条件として残す。Bridge/Wall/Floorは対象外。
+
+### profiling-onlyのBlueprint実搬入観測（Messageではない）
+
+`hw_jobs::delivery_observations::BlueprintDeliveryReceipts`は明示production観測sessionだけが登録する。
+`hw_soul_ai`の手運び搬入成功branch（chain有／無）とwheelbarrowのBlueprint搬入成功branchが、
+既存の材料加算の前後量とworker/assignment/item/owner/epoch/footprintを記録する。
+既存item消費commandより後のqueueで実item消失、worker生存、同epoch、owner kind/footprint、
+実量が増分1以上を保持することを確認してからreceiptへ渡す。材料加算・疲労・chain・予約解除は変更しない。
+総4096件のcapはdrainしても戻さず、context欠損／未消費／上限超過はraw failureとする。
+root raw adapterが`Last`でdrainし`ordinary-blueprint-delivery-branch-v1 / MaterialDelivery / Committed`
+へsample indexを付ける。verifierは実owner/actor/sampleの整合、直前raw量からの連続性、
+各増分1とepoch内の同item二重消費を検証する。host認証や入力因果はJSONが自己付与しない。
+Floor/Wall/SoulSpa専用site搬入、BuildWork、予約全清算、正式art/performance/releaseは別条件。
+通常起動や明示resourceなしではreceiptを作らず、player-facing通知や要求のinventoryは増えない。
+
+### profiling-onlyの保存/読込commit観測（Messageではない）
+
+`bevy_app::systems::save::observations::DurableReceipts`は明示production観測sessionだけに存在する。
+directory sync済みatomic-save成功と、実read bytesに束縛されたnormal-load成功transactionからのみ、
+`ordinary-save-commit-v1 / DurableSave`、`ordinary-load-commit-v1 / DurableLoad`を記録する。
+slot/source・epoch・時刻・実RestArea/Soul snapshotと、streamed/read containerのSHA-256/長さを持ち、
+loadは実EntityHashMapの全Soul/RestArea remapを保持する。失敗・rollback・recovery-onlyは成功にしない。
+pending1件、未drain8件、選択map640件、元map65,536件、container64MiBのcapと、欠損/重複/
+request/epoch不一致をfail-closedにし、raw observerが`Last::SaveLoadApplySet`後にdrainしてsample indexを付ける。
+runtime-onlyの診断であり、新規Message/player通知/保存型ではない。canonical全world一致・
+全inventory・入力因果・host承認・正式releaseは別途照合する。詳細は[save_load.md](save_load.md)。
 
 ### R-E1: Request の可視化時点は ApplyDeferred と system set で決まる
 `Commands::write_message()` と component 操作は次の `ApplyDeferred` まで他 system から見えない。

@@ -7,6 +7,7 @@
 
 - root crate (`bevy_app`) を Bevy の app shell に寄せる
 - `bevy_app` の library は共有 Resource・公開 module・root re-export・`HellWorkersGamePlugin` を所有し、binary `main.rs` は platform/backend/window の起動設定だけを持つ
+- Linux/glibcのnative binaryは起動時のarena上限設定にtarget限定の`libc`を直接使用する。domain crateや他platformには依存を追加しない。
 - 純粋ロジックや共有 model を責務ごとに別 crate へ置く
 - `python3 scripts/dev.py check` を常に green に保ちながら段階的に分割する
 
@@ -34,9 +35,15 @@ root `Cargo.toml`は`members = ["crates/*"]`、`default-members = ["crates/bevy_
 `vendor/parley`はmemberからexcludeし、Parley0.9の日本語辞書対応のみをbackportする外部patchです。
 rootのdependency回帰testは同じParley0.9/stdをdev-dependencyで直接検査します。
 詳細・除去条件は[フォント仕様](fonts.md)と[patch記録](../vendor/parley/PATCH.md)を参照してください。
+`vendor/bevy_image`もmemberからexcludeする外部patchです。公式Bevy 0.19.0のRust source/APIと
+featureを保持し、`zstd_rust`のoptional decoder依存だけを`ruzstd` 0.9.1以上へ更新します。
+rootのKTX2回帰testは実decoderの正常境界・window超過拒否・truncated拒否を検査します。
+出典hash・license・実差分と除去条件は[patch記録](../vendor/bevy_image/PATCH.md)を参照してください。
 全13 memberは内部ゲームcrateとして`publish = false`です。自前licenseはこのmetadataから推測しません。
 rootが版を管理する`proptest`は`hw_world`と`hw_infra`のdev-dependencyだけに追加し、
 `std` featureのみでpure property testを実行します。通常runtimeの依存方向は変えません。
+rootの`winit` dev-dependencyは、既存lockの0.30.12をdefault featuresなしで直接参照する。
+実`RawWinitWindowEvent`を作るpause回帰fixture専用で、runtimeのwindow/backend feature選択はBevyが所有する。
 `dev.py deps`は内部crateのlicense判定だけを除外し、外部normal/build/devとoptional依存を監査します。
 内部crate間の直接依存は各`Cargo.toml`を正本とし、現在は次の通りです。
 
@@ -98,6 +105,8 @@ workspace 共通の `bevy` 依存は `default-features = false` で必要 featur
 - UI ノード生成・更新ロジックおよびウィジェット/レイアウトの本体を集約
 - `UiAssets` トレイトを通じてアセット（フォント・アイコン）を抽象化
 - ゲームエンティティ（DamnedSoul, Familiar 等）への直接依存を持たない
+
+`log`はdev-dependencyだけで使い、一覧同期のdeferred削除回帰が実Bevy WARN/ERRORを出さないことを検査する。runtimeの依存方向・ログ判定は変更しない。
 
 代表例（主要モジュール）:
 

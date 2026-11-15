@@ -5,15 +5,28 @@ use crate::systems::jobs::{Designation, WorkType};
 use bevy::prelude::*;
 use hw_core::constants::TILE_SIZE;
 
-pub fn designation_visual_system(
-    mut commands: Commands,
-    q_designated: Query<
-        (Entity, &Transform, &Designation, Option<&Visibility>),
-        Changed<Designation>,
-    >,
-) {
-    for (entity, transform, designation, visibility_opt) in q_designated.iter() {
+type DesignatedVisualQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static Transform,
+        &'static Designation,
+        Option<&'static Visibility>,
+        Option<&'static hw_energy::SoulSpaTile>,
+    ),
+    Changed<Designation>,
+>;
+
+pub fn designation_visual_system(mut commands: Commands, q_designated: DesignatedVisualQuery) {
+    for (entity, transform, designation, visibility_opt, spa_tile) in q_designated.iter() {
         if visibility_opt == Some(&Visibility::Hidden) {
+            continue;
+        }
+        // Operational Spa slots already have their own occupancy/emission
+        // presentation. Keep their GeneratePower jobs, without painting the
+        // old golden task squares over the four-cell building artwork.
+        if spa_tile.is_some() && designation.work_type == WorkType::GeneratePower {
             continue;
         }
 
@@ -71,5 +84,63 @@ pub fn familiar_command_visual_system(
         if sprite.color != desired_color {
             sprite.color = desired_color;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn spa_power_jobs_keep_designation_without_yellow_overlay() {
+        let mut app = App::new();
+        app.add_systems(Update, designation_visual_system);
+        let site = app.world_mut().spawn_empty().id();
+        let tile = app
+            .world_mut()
+            .spawn((
+                hw_energy::SoulSpaTile {
+                    parent_site: site,
+                    grid_pos: (0, 0),
+                },
+                Designation {
+                    work_type: WorkType::GeneratePower,
+                },
+                Transform::default(),
+            ))
+            .id();
+        let other = app
+            .world_mut()
+            .spawn((
+                Designation {
+                    work_type: WorkType::GeneratePower,
+                },
+                Transform::default(),
+            ))
+            .id();
+        app.update();
+        let indicators: Vec<_> = app
+            .world_mut()
+            .query::<&DesignationIndicator>()
+            .iter(app.world())
+            .map(|indicator| indicator.0)
+            .collect();
+        assert_eq!(indicators, vec![other]);
+        assert_eq!(
+            app.world().get::<Designation>(tile).unwrap().work_type,
+            WorkType::GeneratePower
+        );
+        // Re-activation and save/load reconstruction both insert Designation.
+        app.world_mut().entity_mut(tile).insert(Designation {
+            work_type: WorkType::GeneratePower,
+        });
+        app.update();
+        assert_eq!(
+            app.world_mut()
+                .query::<&DesignationIndicator>()
+                .iter(app.world())
+                .count(),
+            1
+        );
     }
 }

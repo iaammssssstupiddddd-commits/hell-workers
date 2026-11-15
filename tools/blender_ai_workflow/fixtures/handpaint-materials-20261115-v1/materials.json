@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "scope": "unapproved_handpaint_material_inputs",
+  "tool": "built-in image_gen",
+  "art_approved": false,
+  "numeric_approved": false,
+  "release_approved": false,
+  "images": [
+    {
+      "name": "drum",
+      "path": "drum.png",
+      "sha256": "15b4629276b5af2c04ac0a06f0729ab892b7d26272e0bdc8f4cf5517021476cc",
+      "bytes": 3109251,
+      "size": [
+        1254,
+        1254
+      ],
+      "prompt": "Create a single seamless horizontally wrapping hand-painted texture sheet for the outside of a rusty iron cement mixer drum. Flat 2D unwrapped material, NOT an object illustration. Rough loose black ink and dry-brush grain, muted rusty brick red with large weathered ochre patches, a few bold broken black construction seams. A narrow dark worn rim stripe along the top and bottom. Broad asymmetrical scrape on one side. Left and right edges match seamlessly; no vertical edge border. No directional light, highlights, cast shadows, perspective, gradients imitating a cylinder, text, bolts as separate objects, gears, icons, or background scene. The whole square is opaque material, no transparent gaps. Designed to be readable when wrapped on a small game drum. Hell Workers rough ink illustration style, tactile but sparse."
+    },
+    {
+      "name": "iron",
+      "path": "iron.png",
+      "sha256": "09f04c8ee23bab1835fb8ed260ceb3ce64390d37b7b4f3f11adbf3dee1c91eb9",
+      "bytes": 2575644,
+      "size": [
+        1254,
+        1254
+      ],
+      "prompt": "Create a single seamless square hand-painted dark weathered iron material texture for narrow chassis rails, posts and wheel hubs of a grim construction-site mixer. Flat material sheet, NOT an object illustration. Strong hand-ink illustration language with dry grain, charcoal gray steel, a few broad desaturated rusty brown scuffs and muted pale worn marks. Sparse purposeful ink scratches; no tiny busy noise. No directional lighting, bevel highlights, cast shadows, perspective, text, icons, geometry, borders, or objects. Opaque edge to edge. Suitable for small 2.5D hand-drawn game props."
+    },
+    {
+      "name": "canvas",
+      "path": "canvas.png",
+      "sha256": "571710b8b1619a45e017bfd4021086fef752a0d547a8741bfdb2d510a8d7b1eb",
+      "bytes": 2690976,
+      "size": [
+        1254,
+        1254
+      ],
+      "prompt": "Create a single seamless square hand-painted worn canvas cloth material texture for a small enclosed construction-site rest tent in a grim whimsical game. Flat 2D material sheet, NOT a tent illustration. Muted dusty warm gray-brown canvas with restrained cool mauve cloth, dry brush grain, one large irregular ochre cloth repair patch stitched on with a few thick loose black stitches, two broad wobbly black sewn joins. Plenty of quiet flat cloth area; no photoreal fine weave. No directional lighting, smooth shading, cast shadows, perspective, folds pretending to be a 3D object, letters, labels, glyphs, icons, poles or background. No rectangular frame; seamless edges in both directions. Opaque full square. Rough hand-drawn ink and broad matte color planes."
+    }
+  ]
+}

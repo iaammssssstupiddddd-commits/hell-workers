@@ -151,7 +151,11 @@ pub(super) fn save_world_system(world: &mut World) -> SaveLoadResult {
     }
 
     match commit.outcome {
-        AtomicCommitOutcome::Committed => SaveLoadResult::Succeeded,
+        AtomicCommitOutcome::Committed => {
+            #[cfg(feature = "profiling")]
+            super::observations::saved(world, SaveHeader::current(master_seed), &body);
+            SaveLoadResult::Succeeded
+        }
         AtomicCommitOutcome::CommittedDurabilityUncertain => {
             SaveLoadResult::Failed(SaveLoadFailureKind::CommittedDurabilityUncertain)
         }

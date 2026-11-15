@@ -71,6 +71,24 @@ MEASUREMENT_HARNESS_FILES = (
     ".codex/skills/hell-workers-run-native-acceptance/scripts/ui_refactor_rows.py",
     ".codex/skills/hell-workers-run-native-acceptance/scripts/ui_progress_bars.py",
     ".codex/skills/hell-workers-run-native-acceptance/scripts/ui_bridge_planning.py",
+    ".codex/skills/hell-workers-run-native-acceptance/scripts/ui_rest_area_planning.py",
+    ".codex/skills/hell-workers-run-native-acceptance/scripts/ui_rest_area_usage.py",
+    ".codex/skills/hell-workers-run-native-acceptance/scripts/ui_rest_area_art.py",
+    ".codex/skills/hell-workers-run-native-acceptance/scripts/ui_rest_area_maxzoom.py",
+    ".codex/skills/hell-workers-run-native-acceptance/scripts/ui_spa_planning.py",
+    ".codex/skills/hell-workers-run-native-acceptance/scripts/ui_spa_occupied_save.py",
+    "scripts/native_ui_eis.py",
+    "scripts/ui_m5_planning.py",
+    "scripts/ui_m2_planning.py",
+    "scripts/ui_m2_completion.py",
+    "scripts/ui_m2_tank_completion.py",
+    "scripts/ui_m2_tank_inflow.py",
+    "scripts/ui_m2_tank_supply.py",
+    "scripts/ui_m2_supply_workload.py",
+    "scripts/ui_m2_tank_full.py",
+    "scripts/ui_m2_tank_persistence.py",
+    "scripts/building_water_transfers.py",
+    "scripts/building_m2_ui_acceptance.py",
     ".codex/skills/hell-workers-run-native-acceptance/scripts/ui_terrain_materials.py",
     ".codex/skills/hell-workers-run-native-acceptance/scripts/rtt_light_closure_verify.py",
     "scripts/native_ui_input.py",
@@ -376,6 +394,15 @@ def fixed_environment(args: argparse.Namespace) -> dict[str, str]:
         values["WGPU_ADAPTER_NAME"] = args.adapter
     if getattr(args, "building_m6_mode", None) is not None:
         values["HW_BUILDING_M6_MODE"] = args.building_m6_mode
+        # The game's performance default suppresses adapter INFO. Keep the
+        # actual renderer identity observable regardless of the parent shell.
+        values["RUST_LOG"] = "info,wgpu=error"
+    if getattr(args, "building_m6_asset_root", None) is not None:
+        declarations = [key for key in ("HW_BUILDING_M6_CANDIDATES", "HW_BUILDING_GROUP_COMPARISON") if key in os.environ]
+        if len(declarations) != 1:
+            raise ValueError("pre-release view requires explicit candidate bindings")
+        values["BEVY_ASSET_ROOT"] = args.building_m6_asset_root
+        values[declarations[0]] = os.environ[declarations[0]]
     return values
 
 

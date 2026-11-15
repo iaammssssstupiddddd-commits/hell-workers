@@ -6,6 +6,22 @@
 [assets_workflow.md](assets_workflow.md) を参照する。
 本書の定義は新規制作の基準であり、個別モデルの実装済み・目視受入済みを意味しない。
 
+2026-11-15の5設備は、以下の役割分担を新しい正式assetへ接続した。
+Tankは手描きの色面をbodyへ投影し、動くMixerとM3設備は各モデルのUVに沿う描線を部品へ固定する。
+world-up diffuseを使い、元geometryはdepth・遮蔽・影biasを担当する。実emission・alpha・post処理は維持する。
+Lampは2Dのまま、面別ハイライトを抑えた塗装と高いポール・三脚を使う。
+個別art/numeric/release採否と導入は[現行世代](building-asset-sets.md#2026-11-15-ミキサーと休憩所の判読性改訂)を正本とし、
+導入後の9種画面は本書、静止性能は[性能仕様](rendering-performance.md#ミキサーと休憩所改訂後の9種静止性能2026-11-15)を参照する。
+以下の過去の画像・結果はそれぞれの日付の履歴である。
+
+2026-11-15の追加フィードバックで、利用者はMixerの現行アートを不採用、RestAreaを判読困難と評価した。
+配色だけの案は採用せず、長いドラム・架台・車輪を分けたMixerと、棟・支柱・閉じた入口が読めるRestへ改訂した。
+両g5は新しい独立art/numeric/release審査と復元試験を通過し、正式導入した。
+MixerはDirt上の実モデルの車輪・架台を追加比較し、下段のdescriptor画像と混同しない。
+Restは入所Soulを描かない閉鎖shellのまま、急な布テント断面を使う。
+導入後の9種画像は次節、性能は[測定結果](rendering-performance.md#ミキサーと休憩所改訂後の9種静止性能2026-11-15)を参照。
+以下の既存画像は旧世代の履歴であり、新しいinstalled subjectの受入を代用しない。
+
 ## 1. 目指す画面
 
 **用途と組み立て方が分かる立体を、手描きの線と大きな色面で描く。**
@@ -111,15 +127,81 @@ texture-baked lineworkは面に描く線であり、任意の姿勢の外周へ�
 
 ### UVと画像の作り方
 
-- 側面、上面、断面、内側を意味のある面として展開する。正面用の完成イラストを箱全体へ投影しない。
+- 側面、上面、断面、内側を意味のある面として展開する。Tankの明示投影方式を除き、正面用の完成イラストを箱全体へ投影しない。
 - 木目は部材の長手方向へ、断面は断面へ割り当てる。上面へ側面の板列や石積みを引き伸ばさない。
 - 同じ素材・同じ役割の面はtexel密度をそろえる。細長い面への圧縮で線だけが極端に太くなる配置を避ける。
 - 同じ模様の共有は許すが、ミラーで木目・文字・状態表示の意味が変わる面は分ける。
 - UV境界にはfilter用の余白を用意し、縮小表示で別素材の色や黒線が流れ込まないことを確認する。
 - 画像生成を使う場合も、素材面の絵と建物の完成図を分ける。albedo素材にはカメラ遠近、背景、落ち影、光沢を描き込ませない。
 
+M3のSoulSpa骨shaftは長辺で共通正規化した細いUV quadを持つ。描線はatlas cellの固定座標ではなく、
+実quadの両端edgeを補間した長軸内側へ置き、polygon mask後にも上向き各面へ残ることを画素回帰で確認する。
+これは描線の到達性だけの保証であり、通常縮尺で骨として読めることや美術採用はfresh実機画像で別途判断する。
+骨の形状・色・slot配置・emissiveやgameplay契約はこの補正で変えない。
+
 解像度は実際の表示面積とatlas内の配分から決める。高解像度画像であること自体を品質基準にしない。
 同種assetで模様の大きさをそろえ、拡大原図より縮小後の色面と線の残り方を優先する。
+
+## ミキサーと休憩所の判読性改訂後の画面（2026-11-15）
+
+長い傾斜ドラム・架台・車輪を分けたMixer g5、棟・支柱・閉じた幕を持つRest g5を正式導入した。
+手描き素材を部品local UVへ固定し、実回転に追従する。Restの論理4区画・入所Soul非表示は維持する。
+同じ画面の他7種・Wall/Floor/Soul/実携行icon、通常／遠景の判読を独立採用した。
+
+clean `fd5cd6891df3e964a897ebf65263561f47bd9ae9`、High/DPI1のowned X11原画像である。
+各36owner・40 loaded parts、実g5 mesh/image/material、Tankの水面分離とmode3、Mixer/Rest/Spaのmode4、
+Spaの実mask発光を照合した。seeded静止比較であり、自然施工・active AI性能の画像ではない。
+通常起動・Rest自然利用・Mixer状態試験・性能は、それぞれ別証拠として[asset仕様](building-asset-sets.md#2026-11-15-ミキサーと休憩所の判読性改訂)へ結ぶ。
+
+![ミキサーと休憩所改訂後の9種・通常表示](design/building-art/mixer-rest-nine-normal-20261115.png)
+
+![ミキサーと休憩所改訂後の9種・遠景表示](design/building-art/mixer-rest-nine-far-20261115.png)
+
+原画像SHAはnormal `16b24855d086dc852b08074ab73dd958f1b94f6972be76bbaac63f2bf56a6ee9`、
+far `da0c16ec9c904b76b64a69e4936d15a76e03520bfc8add00eb27ea08e262a202`。
+gallery manifestは`9ba1adef3b76c39cf1e48abee04c4872bcb649342160837ac2659e3642a9e606`。
+制作時の[Mixer基準画](design/building-art/mixer-hand-ink-direction-20261115.png)と
+[Rest基準画](design/building-art/rest-hand-ink-direction-20261115.png)は方向を検討した参考であり、
+実機画像や独立art/numeric/release承認の代替ではない。
+
+## 面塗り方式と採用画面（2026-11-15）
+
+照明係数だけを変える方式は、通常・遠景の実機比較で厚い縁や屋根の立体感を十分に抑えられず不採用とした。
+その仮説を打ち切り、画面で読む色面・描線と、geometryが担当する深度・遮蔽を分離した。
+
+- **Tank**: `body_paint_projection/world_preview_v1`から手描きpaintをbody専用のmode3材質へ投影する。
+  元GLB・UV・部品を保持し、透明previewとbodyのopaque matte合成を使い分ける。
+  canvas/anchorはpreviewから導出し、RtTの縦補正は一度だけ行う。
+  waterは別材質で旧0.82混合と実水位12/22WUを保ち、Empty/Partial/Fullを区別する。
+- **MudMixer**: `surface_paint/uv_ink_v1`のmode4で元UVへobject-localな継ぎ目・傷・摩耗印を固定する。
+  傾斜ドラムが回る際も描線が部品と一緒に動き、固定架台へ完成図を投影しない。
+  local Y回転・pivot・pause/load/moveの既存契約を保つ。
+- **RestArea / SoulSpa**: mode4のUV描線を使う。布の縫目、骨の長軸に沿う筋をgutterまで連続に描き、
+  面法線由来の陰やtriangleごとの黒枠を焼き込まない。Restの閉じた小屋と入所Soul非表示、
+  Spaの四区画・実worker-slotだけの発光を保つ。黄色いGeneratePower重ね表示は使わない。
+- **OutdoorLamp**: Foreground2dを維持する。高いポール・三脚・頂部投光器を、面別ハイライトを抑えた
+  煤けた灰紫の塗装で読む。初案はDirt上で脚が埋もれたため不採用とし、既存alpha内の塗装線で連続した輪郭を回復した。
+  off/onの状態差・alpha・anchor・配電・論理光の契約は保持する。
+
+mode3/4のdiffuse参照はworld-upへ固定する。実geometryのnormalはdepth・遮蔽・shadow biasに残し、
+emission・alpha・post処理を一度だけ適用する。全画面のposterize、輪郭用の追加renderer、設備専用光源は加えない。
+この方式はmaterial uniformと実image/mesh/poseの結合を観測でき、単なる画像の差替え確認で終えない。
+新原本にはpaint/mask/設定/recipeを含め、元GLB/UV・旧authorityを上書きしない。
+
+clean `19e608ace4c34169b4e7a1f8c00c1213ad256b3b`の通常既定bindingで、High/DPI1・normal/far各36 ownerを確認した。
+owned X11/Vulkanの原画像であり、9種とWall/Floor/Soul/携行iconの混在、Tank body mode3、水面の分離、
+Mixer/Rest/Spaのmode4、実maskに応じた発光とresident handleを独立確認した。
+この画面はseeded静止galleryであり、自然施工・active AI性能の画像ではない。
+個別のart/numeric/release判断、通常入力の利用・保存読込、静止性能は別々の証拠で判断する。
+
+![面塗り方式の9種・通常表示](design/building-art/illustrated-nine-normal-20261115.png)
+
+![面塗り方式の9種・遠景表示](design/building-art/illustrated-nine-far-20261115.png)
+
+原画像SHA-256はnormal `a48607d386842672be289804d9e33e05ba3bc85f242141905b02ab0a846b63a3`、
+far `e4021d2cd3a1f5c1ace3ec8b07bba14d4b30e156da8a18303a928f7c726b2358`。
+gallery manifestは`e2c260daae222317cbe1dae69692f354c235ae5567c801dc55872beaa54897ad`。
+過去の照明試作画像や未採用のTank原画は比較履歴であり、現行releaseや新たな承認を意味しない。
 
 ## 5. 光・陰・発光の分担
 
@@ -145,8 +227,8 @@ roughness=1、metallic=0、reflectance=0を起点とし、Blenderの確認用材
 | 対象 | モデル | テクスチャ | 状態・照明 |
 | --- | --- | --- | --- |
 | タンク | 歪んだ桶、厚い縁、内壁、独立した水面 | 木目、鉄帯の錆、弱い継ぎ目、水面の筆跡 | 水位を既存の空／途中／満杯と対応させる。桶の影は照明に任せる |
-| ミキサー | 固定槽と架台、独立した攪拌部 | 木・鉄・泥の色面、主要な接合線 | 実精製中だけ攪拌部が動く。予約・搬入中は稼働と見なさない |
-| 休憩所 | 屋根のたわみ、支柱、入口 | 継ぎはぎ、縫い目、少数の皺 | 現行の利用者・Dream表示と対応する。布へ利用中の光を固定で描かない |
+| ミキサー | 建設現場用の傾斜した回転ドラム、架台、車輪 | 錆鉄の広い色面、主要な接合線 | 実精製中だけドラムが動く。予約・搬入中は稼働と見なさない |
+| 休憩所 | 内部を覆う屋根と布壁、支柱、入口のカーテン | 継ぎはぎ、縫い目、少数の皺 | 入所者を表示しない。既存のDream表示を維持し、布へ利用中の光を固定で描かない |
 | Soul Spa | 4区画を読める低い骨の構造 | 骨の筋、紋様、区画の境界 | 設定上限ではなく実稼働区画へ発光を対応させる |
 
 2D小物も外形・部材・筆跡の情報階層を共有する。2D画像には最終的な陰影を描けるが、
@@ -175,3 +257,106 @@ roughness=1、metallic=0、reflectance=0を起点とし、Blenderの確認用材
 無地で主要構造が読めない場合は形状を、模様追加後に読めなくなる場合はUV・線の密度を、
 照明を入れて潰れる場合は焼き込んだ陰と材質・光の整合を見直す。
 Blender上の見栄えだけを最終合格とせず、個別導入時のゲーム内受入は既定のnative acceptance手順に従う。
+
+### RestAreaの限定art-context比較
+
+`scripts/building_art_acceptance.py --variant rest-area-art-context --view near|normal|far`
+はArtPreviewのRestAreaだけを扱う明示profiling場面であり、既定の36体galleryやM6とは別契約である。
+既存factoryで完成させた4体（利用者0/1/5/0）、占有footprint外の上下各1壁、同descriptorを
+通常previewと同じhandle/canvas/Anchor適用関数へ渡した4画像を一度だけ配置する。
+previewの基準点は完成ownerからworld Y=-160に並置し、実Camera2d・RtT target・縦補正済み
+compositeの完成接地点と既知offsetを照合する。輪郭や縮尺の美術採否は撮影後の独立判断を要する。
+
+`--lighting standard|dim` は既存PBR Ambientのbrightness 500/100と主Directionalの
+illuminance 12000/2400を比較し、追加Directionalは0/影なしのままとする。実光源・影・材質・
+camera/layers・壁depth・画像role/hash・Anchor/custom_sizeとresident inventoryを観測し、
+readiness後の変化は補正せず拒否する。通常起動、通常入力ghost、既存LightField実装は変更しない。
+証拠scopeは `seeded-paused-art-comparison`、accepted/performance/promotion=false。
+この場面の技術passだけでは通常照明環境全体、通常利用/lifecycle、独立art/numeric、releaseを承認しない。
+
+### SoulSpaの全16区画mask検査
+
+同helperの `--mode candidate --kind SoulSpa --spa-mask-page 0|1|2|3` は、独立art/numeric決定を
+持つisolated_candidateだけの明示small galleryである。standard照明とnear/normal/farを使い、
+4標本へmask `[4p,4p+1,4p+2,4p+3]` を一度だけseedする。他種の8人にmaskのpopcountを加えた
+12/16/16/20人を要求し、未指定のgallery（mask 0/1/3/15・15人）やM6・通常起動を変更しない。
+実tileのworkersから計算したmask、消費されたexact世代、body/slot0〜3の名前・mesh・local pose・
+root pose、lit/opaque白色材質とalbedo、roughness=1/metallic=0/reflectance=0を照合する。
+active slotだけ白倍率とslot_emissive画像を持ち、body/inactiveは黒倍率・発光画像なしであることを要求する。
+readiness後のsnapshot変化は修復せず拒否する。scope `paused-static-spa-mask-page` はseeded静止状態の
+技術検査であり、自然な入退所・Save/Load・性能・正式releaseを承認するものではない。
+
+## 世界観に合わせた現行9種の画面（2026-11-14）
+
+Tank・MudMixer・RestArea・OutdoorLampをgeneration 3へ改訂した。黒ずんだ木、マットな錆鉄、
+くすんだ骨色、煤けた補修布を素材ごとに描き分け、継ぎ目と用途を読む箇所へ線を絞った。
+新品の木肌や金属色を抑え、紫は既存の状態・発光に必要な場所へ限定する。
+Tankの弱い陰影、建設現場型Mixerのドラム・架台・車輪、閉じたRestArea、頂部投光器を持つLampの形は保つ。
+RestArea入所Soulの非表示、SoulSpaの黄色い網の除去と骨・紫の四区画も維持する。
+
+`infernal-v1`はM2、M3 RestArea、M5 OutdoorLampの候補生成へ明示指定する。
+共通paletteと材質別描線は`tools/blender_ai_workflow/scripts/building_infernal_style.py`が所有し、
+legacy paintの既定値を残して旧原本を再現できる。GLB全bytes・UV・部品・状態・寸法・anchor、
+PNG寸法・alphaは旧g2と同一で、geometryの追加や全体tint、共通の紫glowは導入しない。
+
+独立したart・numeric・release判断とg2復帰試験後、4件を正式導入した。
+clean `f6b2236a06365623bbb8cd4f010defb65f2d5bd0`の既定bindingでHigh/DPI1、normal/far各36 ownerを確認し、
+実画面を独立採用した。PNGはowned X11 clientの原本で、seeded静止galleryである。
+自然施工や新しいlifecycle受入を意味しない。旧g2の画像・判断は次節の履歴として保持する。
+
+![世界観へ統一した9種の通常表示](design/building-art/world-style-nine-normal-20261114.png)
+
+![世界観へ統一した9種の遠景表示](design/building-art/world-style-nine-far-20261114.png)
+
+現行identityは[asset仕様](building-asset-sets.md#2026-11-14-世界観統一の現行正式世代)、
+24試行の性能範囲は[性能仕様](rendering-performance.md#世界観統一後の9種の静止asset増分受入2026-11-14)を参照。
+
+## 外観改訂後の9種の採用画面（2026-11-14）
+
+新Tank/MudMixer/RestArea/OutdoorLamp g2と既存5種を、`a77f4104`の既定compiled bindingで表示した。
+High/DPI1・normal/farの36 ownerを独立採用。Tankは陰影を抑えた色面、Mixerは傾斜ドラム・架台・車輪、
+RestAreaは閉じた布小屋で入所Soul本体非表示、Lampは三脚・高いポール・頂部投光器となる。
+SoulSpaの四区画と稼働Soulは維持し、黄色いGeneratePower重ね表示だけを除去した。
+Obj診断トグルと入所者非表示の競合は、単一writerの合成と2system回帰testで閉じた。
+この画像はseeded静止galleryであり、自然施工の画像ではない。旧g1の参考画像は次節に残す。
+
+![外観改訂9種のnormal表示](design/building-art/visual-feedback-nine-normal-20261114.png)
+
+![外観改訂9種のfar表示](design/building-art/visual-feedback-nine-far-20261114.png)
+
+当時のidentityと復旧は[asset仕様](building-asset-sets.md#2026-11-14-外観改訂の入力契約)、
+新しい静止asset増分性能は[性能仕様](rendering-performance.md#外観改訂9種の静止asset増分受入2026-11-14)を参照。
+
+## 非橋9種の採用画面（2026-11-13）
+
+正式8世代と既存Door g7を、High/DPI1のnormal/farで独立採用した。
+36 ownerとWall/Floor/Soul/実Inventory携行iconの調和を確認した画面であり、自然施工の画像ではない。
+近景の部材・状態と通常距離の外形を優先し、farで細線が小さくなることは既知の表示限界として採用する。
+SoulSpaの四区画の見た目は利用者の採用判断を維持する。未採用の旧prototypeを正式世代へ混ぜない。
+
+![正式9種のnormal表示](design/building-art/released-nine-normal.png)
+
+![正式9種のfar表示](design/building-art/released-nine-far.png)
+
+DoorのEW/NS/tie・実入力preview/BlueprintとJ1の支持壁変更・loadは別の原本で確認した。
+最終状態・世代・性能と復旧の正本は[asset仕様](building-asset-sets.md#2026-11-13-非橋9種の正式導入受入)。
+
+## ミキサーの彩度とSpaの骨表現（2026-11-15）
+
+追加フィードバックにより明示`weathered-v1`を制作し、独立art/numeric/release審査後にMixer g6／Spa g4を正式導入した。
+Mixerはv6のdrum外面だけ、元の筆跡の明度変化を維持して彩度と明るさを抑える。
+口・溶接線・架台・車輪と全shape/UVを維持し、画面全体や他設備へtintを加えない。
+SoulSpaはv2の骨枠の外周・節・皮質と、暗い四区画の面・控えめな紋様を描き分ける。
+発光atlasは旧出力と完全byte一致を要求し、実worker-slotによる発光だけを維持する。
+明示styleはMixer v6／Spa v2 strokesだけへ適用し、RestArea・Tank・旧revision・planesを拒否する。
+旧styleのatlas pixel SHAを回帰で固定し、新sourceのart/numeric/releaseを別に審査する。
+通常/遠景とMixerの実Dirt背景を新ArtPreviewで採用し、formal candidate実画面も独立審査した。
+導入後clean `be34b3490c48e93165987fdfbbfa617c63f3702f`の既定bindingで、全9種のHigh/DPI1・通常/遠景を独立採用した。
+1920×1680のowned X11 client原画像で、36ownerと40resident building parts、Doorの状態を別契約で照合する。
+Mixerの低彩度ドラム、Spaの骨周縁と暗い四区画、他7種・Wall/Floor/Soul/携行iconとの調和を確認した。
+これはseeded静止表示であり、自然施工/利用や新しい性能測定の証拠へは昇格しない。
+
+![低彩度Mixerと骨枠Spaを導入した9種の通常表示](design/building-art/mixer-spa-weathered-nine-normal-20261115.png)
+
+![低彩度Mixerと骨枠Spaを導入した9種の遠景表示](design/building-art/mixer-spa-weathered-nine-far-20261115.png)
+Help影響はNo impact。authoring入口だけを追加し、現行の入力・UI文言・gameplay・保存・Help到達性は不変。

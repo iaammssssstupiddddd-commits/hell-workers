@@ -6,7 +6,7 @@ edition = "2024"
 
 [features]
 default = []
-profiling = ["hw_core/profiling"]
+profiling = ["hw_core/profiling", "hw_jobs/profiling"]
 
 [dependencies]
 bevy         = { workspace = true }

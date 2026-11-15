@@ -2,8 +2,18 @@
 //! Production factories and domain projections run during setup only; inspection
 //! never repairs a specimen once measurement readiness has been published.
 
+pub(crate) mod context;
+mod foreground;
+pub(crate) mod group_gallery;
+mod lamp_supply_ui;
 mod layout;
+mod m2_context;
+mod m5_context;
+mod m5_power;
+mod resident;
+mod resource_inventory;
 mod seed;
+mod spa_masks;
 
 use std::collections::{HashMap, HashSet};
 
@@ -18,8 +28,11 @@ use hw_world::{WorldMapRead, WorldMapWrite};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 
-use super::{PerfScenarioConfig, PerfWorkload, fixture::PerfScenarioApplied};
+use super::{
+    PerfCapture, PerfCapturePhase, PerfScenarioConfig, PerfWorkload, fixture::PerfScenarioApplied,
+};
 use crate::assets::building_asset_set::acceptance::BuildingArtSession;
+use crate::assets::building_asset_set::gallery_capture::GalleryCaptureSession;
 use crate::assets::building_asset_set::{BuildingAssetKind, BuildingAssetPool, M6Comparison};
 use crate::assets::door_asset_set::{
     DoorAssetAuthority, DoorAssetReadiness, DoorAssetReadinessState, ProductionDoorAssetPool,
@@ -42,6 +55,7 @@ pub(crate) fn settle_refine_visuals(world: &mut World) {
         .run_system_cached(hw_jobs::visual_sync::sync_mud_mixer_active_system)
         .expect("profiling setup has the production visual resources");
     settle_completion_effects(world);
+    context::prepare(world);
 }
 
 /// A paused reference must not retain the factories' one-shot completion text
@@ -92,11 +106,37 @@ pub(crate) struct BuildingArtStaticState {
     actors: Vec<Entity>,
     owners: Vec<Entity>,
     evidence: Option<Value>,
+    resources_required: bool,
+    resources_initial: Option<Value>,
+    resources_final: Option<Value>,
+    resources_rtt_wait_logged: bool,
     stable_frames: u64,
     completion_effects_settled: bool,
     art_candidate: bool,
     m6: bool,
     m6_resources: Option<ResourceEvidence>,
+    m6_pending_evidence: Option<Value>,
+    m6_pending_frames: u64,
+    m6_foreground: HashMap<Entity, foreground::MeasuredForeground>,
+    m6_final_evidence: Option<Value>,
+}
+
+/// Observe startup without repairing it. Global asset uploads/retirements may
+/// still be settling after the target first becomes visible. Publish M6 ready
+/// only after thirty consecutive identical complete snapshots.
+fn m6_readiness(state: &mut BuildingArtStaticState, evidence: Option<&Value>) -> bool {
+    let Some(evidence) = evidence else {
+        state.m6_pending_evidence = None;
+        state.m6_pending_frames = 0;
+        return false;
+    };
+    if state.m6_pending_evidence.as_ref() == Some(evidence) {
+        state.m6_pending_frames += 1;
+    } else {
+        state.m6_pending_evidence = Some(evidence.clone());
+        state.m6_pending_frames = 1;
+    }
+    state.m6_pending_frames >= 30
 }
 
 #[derive(Clone, PartialEq, Eq, serde::Serialize)]
@@ -149,6 +189,15 @@ type VisualQuery<'w, 's> = Query<
         &'static ViewVisibility,
     ),
 >;
+type EquipmentRootQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static Building3dVisual,
+        &'static crate::systems::visual::building_presentation::EquipmentRoot,
+    ),
+>;
 type SpriteQuery<'w, 's> = Query<
     'w,
     's,
@@ -172,11 +221,16 @@ pub(crate) struct InspectParams<'w, 's> {
     applied: ResMut<'w, PerfScenarioApplied>,
     world_map: WorldMapRead<'w>,
     buildings: BuildingQuery<'w, 's>,
+    building_inventory: Query<'w, 's, Entity, With<Building>>,
     visuals: VisualQuery<'w, 's>,
     part_transforms: Query<'w, 's, &'static Transform>,
+    part_names: Query<'w, 's, &'static Name>,
+    equipment_roots: EquipmentRootQuery<'w, 's>,
     visual_roots: Query<'w, 's, &'static Building3dVisual>,
     root_transforms: Query<'w, 's, (&'static Building3dVisual, &'static Transform)>,
     sprites: SpriteQuery<'w, 's>,
+    foreground: foreground::ForegroundQuery<'w, 's>,
+    mesh_uses: resource_inventory::MeshUses<'w, 's>,
     meshes: Res<'w, Assets<Mesh>>,
     materials: Res<'w, Assets<TopDownStructuralMaterial>>,
     images: Res<'w, Assets<Image>>,
@@ -185,7 +239,12 @@ pub(crate) struct InspectParams<'w, 's> {
     door_material: Res<'w, ProductionDoorMaterialPool>,
     door_readiness: Res<'w, DoorAssetReadiness>,
     building_pool: Res<'w, BuildingAssetPool>,
+    asset_server: Option<Res<'w, AssetServer>>,
     art_session: Option<Res<'w, BuildingArtSession>>,
+    gallery: Option<Res<'w, GalleryCaptureSession>>,
+    tank_pilot:
+        Option<Res<'w, crate::assets::building_asset_set::tank_illustration_pilot::TankPilotPaint>>,
+    release_floor: Option<Res<'w, group_gallery::ReleasedFloorInventory>>,
     m6: Option<Res<'w, M6Comparison>>,
     stockpiles: Query<'w, 's, &'static hw_logistics::Stockpile>,
     companions: Query<'w, 's, &'static hw_logistics::BelongsTo, With<hw_logistics::BucketStorage>>,
@@ -194,18 +253,52 @@ pub(crate) struct InspectParams<'w, 's> {
     spas: Query<'w, 's, &'static SoulSpaSite>,
     tiles: Query<'w, 's, (&'static SoulSpaTile, Option<&'static TaskWorkers>)>,
     time: Res<'w, Time<Virtual>>,
+    capture: Res<'w, PerfCapture>,
+    rtt: Option<Res<'w, crate::plugins::startup::RttRuntime>>,
     exit: MessageWriter<'w, AppExit>,
 }
 
 pub(crate) fn inspect_building_art_static_system(mut params: InspectParams) {
+    if params
+        .art_session
+        .as_ref()
+        .is_some_and(|session| session.is_context())
+    {
+        return;
+    }
     if !params.config.enabled()
         || params.config.workload() != PerfWorkload::BuildingArtStatic
         || !matches!(params.state.phase, Phase::Seeded | Phase::Ready)
     {
         return;
     }
+    if params.state.phase == Phase::Seeded
+        && params.art_session.is_none()
+        && params.gallery.is_none()
+        && !resource_inventory::rtt_ready(
+            &params.images,
+            params.rtt.as_deref(),
+            params.config.requested_window_size(),
+        )
+    {
+        if !params.state.resources_rtt_wait_logged {
+            info!(
+                "BUILDING_RESOURCE_RTT_WAIT: {}",
+                resource_inventory::rtt_observation(
+                    &params.images,
+                    params.rtt.as_deref(),
+                    params.config.requested_window_size()
+                )
+            );
+            params.state.resources_rtt_wait_logged = true;
+        }
+        return;
+    }
     match inspect(&params) {
         Ok(None) => {
+            if params.m6.is_some() && params.state.phase == Phase::Seeded {
+                m6_readiness(&mut params.state, None);
+            }
             if params.state.phase == Phase::Ready {
                 fail(
                     &mut params.state,
@@ -215,14 +308,96 @@ pub(crate) fn inspect_building_art_static_system(mut params: InspectParams) {
             }
         }
         Ok(Some(evidence)) => {
+            if params.m6.is_some()
+                && params.state.phase == Phase::Seeded
+                && !m6_readiness(&mut params.state, Some(&evidence))
+            {
+                return;
+            }
+            if params
+                .art_session
+                .as_ref()
+                .is_some_and(|session| session.identity.kind.mesh_roles().is_empty())
+                && let Err(reason) =
+                    foreground::unchanged(params.state.evidence.as_ref(), &evidence)
+            {
+                fail(&mut params.state, &mut params.exit, reason);
+                return;
+            }
+            if params
+                .art_session
+                .as_ref()
+                .is_some_and(|session| session.spa_mask_page.is_some())
+                && let Err(reason) = spa_masks::unchanged(params.state.evidence.as_ref(), &evidence)
+            {
+                fail(&mut params.state, &mut params.exit, reason);
+                return;
+            }
+            if params.art_session.is_none()
+                && params.gallery.is_none()
+                && (params.state.resources_initial.is_none()
+                    || matches!(params.capture.phase, PerfCapturePhase::Flush)
+                        && params.state.resources_final.is_none())
+            {
+                let snapshot = match params
+                    .asset_server
+                    .as_deref()
+                    .ok_or_else(|| "resource inventory AssetServer missing".to_string())
+                    .and_then(|server| {
+                        resource_inventory::capture(
+                            &params.meshes,
+                            &params.materials,
+                            &params.images,
+                            server,
+                            &resource_inventory::mesh_uses(&params.mesh_uses),
+                        )
+                    }) {
+                    Ok(value) => value,
+                    Err(reason) => {
+                        fail(&mut params.state, &mut params.exit, reason);
+                        return;
+                    }
+                };
+                if params.state.resources_initial.is_none() {
+                    info!(
+                        "BUILDING_RESOURCE_RTT_READY: {}",
+                        resource_inventory::rtt_observation(
+                            &params.images,
+                            params.rtt.as_deref(),
+                            params.config.requested_window_size()
+                        )
+                    );
+                    params.state.resources_initial = Some(snapshot);
+                } else {
+                    params.state.resources_final = Some(snapshot);
+                }
+            }
             if params.state.evidence.is_none() {
-                params.state.evidence = Some(evidence);
+                params.state.resources_required =
+                    params.art_session.is_none() && params.gallery.is_none();
+                let foreground = match foreground::capture_m6(&params) {
+                    Ok(value) => value,
+                    Err(reason) => {
+                        fail(&mut params.state, &mut params.exit, reason);
+                        return;
+                    }
+                };
+                params.state.m6_pending_evidence = None;
+                params.state.m6_pending_frames = 0;
+                params.state.m6_foreground = foreground;
+                params.state.evidence = Some(evidence.clone());
                 params.state.art_candidate = params.art_session.is_some();
                 params.state.m6 = params.m6.is_some();
                 let resources = params.m6.as_ref().map(|_| resource_evidence(&params));
                 params.state.m6_resources = resources;
                 params.state.phase = Phase::Ready;
                 params.applied.workload = true;
+            }
+            if params.m6.is_some()
+                && (matches!(params.capture.phase, PerfCapturePhase::Flush)
+                    || params.gallery.is_some())
+            {
+                params.state.m6_final_evidence = Some(evidence);
             }
             params.state.stable_frames += 1;
             if params.state.stable_frames == 30
@@ -231,7 +406,9 @@ pub(crate) fn inspect_building_art_static_system(mut params: InspectParams) {
                 let status = json!({"schema_version": 1, "profile": "building-art",
                     "mode": session.mode, "identity": session.identity, "nonce": session.nonce,
                     "status": "ready", "stable_frames": params.state.stable_frames,
-                    "fixture": params.state.evidence, "scope": "paused-static-presentation"});
+                    "fixture": params.state.evidence, "view": session.view,
+                    "camera_scale": session.view.scale(), "spa_mask_page": session.spa_mask_page,
+                    "scope": if session.spa_mask_page.is_some() { "paused-static-spa-mask-page" } else { "paused-static-presentation" }});
                 let write = || -> Result<(), Box<dyn std::error::Error>> {
                     let temporary = session.status_path.with_extension("tmp");
                     let file = std::fs::OpenOptions::new()
@@ -252,7 +429,35 @@ pub(crate) fn inspect_building_art_static_system(mut params: InspectParams) {
     }
 }
 
+fn specimen_visible(params: &InspectParams, spec: &Specimen, candidate: bool) -> bool {
+    params.gallery.as_ref().map_or_else(
+        || layout::requires_visible(params.art_session.as_deref(), candidate, spec.ordinal),
+        |session| layout::group_gallery_visible(session, spec.kind),
+    )
+}
+
 fn inspect(params: &InspectParams) -> Result<Option<Value>, String> {
+    if params.tank_pilot.is_some()
+        && !params
+            .gallery
+            .as_ref()
+            .is_some_and(|g| matches!(g.as_ref(), GalleryCaptureSession::TankPilot(_)))
+    {
+        return Err("pilot material resource mixed into another profile".into());
+    }
+    if params
+        .gallery
+        .as_ref()
+        .is_some_and(|g| matches!(g.as_ref(), GalleryCaptureSession::TankPilot(_)))
+        && params.tank_pilot.is_none()
+    {
+        return Err("pilot paint was not requested at Startup".into());
+    }
+    if let Some(pilot) = params.tank_pilot.as_ref()
+        && !pilot.ready(&params.images)?
+    {
+        return Ok(None);
+    }
     if let Some(m6) = params.m6.as_ref() {
         if params.art_session.is_some()
             || params
@@ -264,15 +469,22 @@ fn inspect(params: &InspectParams) -> Result<Option<Value>, String> {
                 "M6 cannot mix Bridge or art-preview authority into nine-kind evidence".into(),
             );
         }
-        let expected = if m6.candidate { 8 } else { 0 };
+        if m6.group.is_some() {
+            let server = params
+                .asset_server
+                .as_ref()
+                .ok_or("group comparison AssetServer missing")?;
+            if let Some(path) = m6.prefetched_target_path(server) {
+                return Err(format!("group control prefetched target asset: {path}"));
+            }
+        }
+        let expected = m6.loaded_identities().count();
         if params.building_pool.generation_counts() != (expected, 0) {
             return Ok(None);
         }
-        if m6.candidate {
-            for identity in &m6.identities {
-                if params.building_pool.active(identity.kind) != Some(identity) {
-                    return Ok(None);
-                }
+        for identity in m6.loaded_identities() {
+            if params.building_pool.active(identity.kind) != Some(identity) {
+                return Ok(None);
             }
         }
     }
@@ -294,9 +506,11 @@ fn inspect(params: &InspectParams) -> Result<Option<Value>, String> {
         .camera
         .single()
         .map_err(|_| "main camera count differs")?;
-    if camera.translation.truncate() != hw_world::WorldMap::grid_to_world(46, 37)
-        || camera.scale != Vec3::splat(layout::CAMERA_SCALE)
-    {
+    let (camera_center, camera_scale) = params.gallery.as_ref().map_or_else(
+        || layout::camera_frame(params.art_session.as_deref(), params.config.size()),
+        |session| layout::group_gallery_camera(session, &params.state.specs),
+    );
+    if camera.translation.truncate() != camera_center || camera.scale != Vec3::splat(camera_scale) {
         return Err(format!(
             "static fixture camera changed: translation={:?}, scale={:?}",
             camera.translation, camera.scale
@@ -326,7 +540,23 @@ fn inspect(params: &InspectParams) -> Result<Option<Value>, String> {
         return Err("M6 requires the unchanged approved Door g7 identity".into());
     }
     let copies = layout::copies(params.config.size());
-    if params.buildings.iter().count() != copies * 13 || params.state.owners.len() != copies * 9 {
+    // Count every Building, including malformed foreign owners without a pose.
+    let observed_buildings = params.building_inventory.iter().count();
+    let extra_floor = params.release_floor.as_ref().map_or(Ok(0), |floor| {
+        floor.extra_count(
+            params.gallery.as_deref(),
+            params
+                .buildings
+                .get(floor.owner())
+                .ok()
+                .map(|(building, pose, ..)| (building, pose)),
+            params.world_map.as_ref(),
+            &params.state.owners,
+            observed_buildings,
+            copies * 13,
+        )
+    })?;
+    if observed_buildings != copies * 13 + extra_floor || params.state.owners.len() != copies * 9 {
         return Err("target/support building inventory differs".into());
     }
     let mut visuals = HashMap::<Entity, Vec<_>>::new();
@@ -349,8 +579,21 @@ fn inspect(params: &InspectParams) -> Result<Option<Value>, String> {
             .push((sprite, visibility));
     }
     let mut active_meshes = HashSet::new();
-    // Full JSON is allocated only for the initial checkpoint, never per frame.
-    let mut records = params.state.evidence.is_none().then(Vec::new);
+    // Baselines keep one full checkpoint. Explicit Spa pages reobserve all
+    // records; explicit M5 sessions reobserve only their four target sprites.
+    let record_mode = if params.gallery.is_some()
+        || params.m6.is_some() && matches!(params.capture.phase, PerfCapturePhase::Flush)
+    {
+        // The measure driver enters Flush in Update, then this PostUpdate
+        // captures the real final state before next Update writes the sidecar.
+        foreground::RecordMode::All
+    } else {
+        foreground::RecordMode::for_frame(
+            params.state.evidence.is_none(),
+            params.art_session.as_deref(),
+        )
+    };
+    let mut records = (record_mode != foreground::RecordMode::None).then(Vec::new);
     for (spec, &owner) in params.state.specs.iter().zip(&params.state.owners) {
         let (building, transform, door, water, resting, mixer, lamp) = params
             .buildings
@@ -377,8 +620,9 @@ fn inspect(params: &InspectParams) -> Result<Option<Value>, String> {
                 | BuildingType::OutdoorLamp
         );
         let owner_visuals = visuals.get(&owner).map(Vec::as_slice).unwrap_or_default();
-        let candidate = if params.m6.as_ref().is_some_and(|m6| m6.candidate) {
+        let candidate = if let Some(m6) = params.m6.as_ref() {
             crate::systems::visual::building_presentation::asset_kind(spec.kind)
+                .filter(|kind| m6.loads_kind(*kind))
                 .and_then(|kind| params.building_pool.descriptor(kind))
         } else {
             params.art_session.as_ref().and_then(|session| {
@@ -388,6 +632,15 @@ fn inspect(params: &InspectParams) -> Result<Option<Value>, String> {
                 .flatten()
             })
         };
+        if params.state.phase == Phase::Ready
+            && params.m6.is_some()
+            && let Some(descriptor) =
+                candidate.filter(|set| set.manifest.identity.kind.mesh_roles().is_empty())
+        {
+            let observed = foreground::observe(params, spec, owner, descriptor)?;
+            foreground::unchanged_m6(params.state.m6_foreground.get(&owner), &observed)
+                .map_err(|reason| format!("{reason}: {:?}/{}", spec.kind, spec.ordinal))?;
+        }
         let root_count = params
             .visual_roots
             .iter()
@@ -431,7 +684,23 @@ fn inspect(params: &InspectParams) -> Result<Option<Value>, String> {
                     .any(|role| candidate.mesh(role) == Some(&mesh.0))
                     || params.meshes.get(&mesh.0).is_none()
                     || params.materials.get(&material.0).is_none_or(|material| {
-                        material.base.base_color_texture.as_ref() != candidate.image("albedo")
+                        if let Some(pilot) = params.tank_pilot.as_ref()
+                            && candidate.manifest.identity.kind == BuildingAssetKind::Tank
+                            && candidate.mesh("body") == Some(&mesh.0)
+                        {
+                            !pilot.body_material_matches(material)
+                        } else if candidate.manifest.surface_paint.is_some() {
+                            !crate::systems::visual::building_presentation::surface_paint_material_matches(material, candidate)
+                        } else if candidate.manifest.body_paint_projection.is_some()
+                            && candidate.mesh("body") == Some(&mesh.0)
+                        {
+                            !crate::systems::visual::building_presentation::body_paint_material_matches(material, candidate)
+                        } else {
+                            material.base.base_color_texture.as_ref() != candidate.image("albedo")
+                                || material.extension.uniforms.indoor_light_params.w >= 2.0
+                                || candidate.manifest.body_paint_projection.is_some()
+                                    && material.extension.uniforms.indoor_light_params.w != 0.82
+                        }
                     })
                 {
                     return Ok(None);
@@ -441,7 +710,9 @@ fn inspect(params: &InspectParams) -> Result<Option<Value>, String> {
                 let hidden_water = candidate.manifest.identity.kind == BuildingAssetKind::Tank
                     && spec.water_count() == 0
                     && candidate.mesh("water") == Some(&mesh.0);
-                if visibility.get() == hidden_water {
+                if (hidden_water && visibility.get())
+                    || (!hidden_water && !visibility.get() && specimen_visible(params, spec, true))
+                {
                     return Ok(None);
                 }
                 let local = params
@@ -495,7 +766,7 @@ fn inspect(params: &InspectParams) -> Result<Option<Value>, String> {
                 || &material.0 != expected_material
                 || params.meshes.get(&mesh.0).is_none()
                 || params.materials.get(&material.0).is_none()
-                || !visibility.get()
+                || (!visibility.get() && specimen_visible(params, spec, false))
             {
                 return Ok(None);
             }
@@ -520,7 +791,9 @@ fn inspect(params: &InspectParams) -> Result<Option<Value>, String> {
                     return Ok(None);
                 }
             }
-            if params.images.get(&sprite.image).is_none() || !visibility.get() {
+            if params.images.get(&sprite.image).is_none()
+                || (!visibility.get() && specimen_visible(params, spec, candidate.is_some()))
+            {
                 return Ok(None);
             }
         }
@@ -616,6 +889,13 @@ fn inspect(params: &InspectParams) -> Result<Option<Value>, String> {
             _ => {}
         };
         if let Some(records) = records.as_mut() {
+            if !record_mode.includes(
+                candidate.is_some_and(|candidate| {
+                    candidate.manifest.identity.kind.mesh_roles().is_empty()
+                }),
+            ) {
+                continue;
+            }
             let state = match spec.kind {
                 BuildingType::Tank => json!({"stored_water": spec.water_count(), "capacity": 50}),
                 BuildingType::MudMixer => json!({"refining": spec.quarter() >= 2}),
@@ -627,7 +907,81 @@ fn inspect(params: &InspectParams) -> Result<Option<Value>, String> {
             };
             let mut record = json!({"kind": format!("{:?}", spec.kind), "ordinal": spec.ordinal,
                 "anchor": spec.anchor, "tiles": spec.tiles, "center": [spec.center.x, spec.center.y], "state": state});
+            if params.gallery.is_some() {
+                record["gallery_owner"] = json!(owner.to_bits());
+                if structural {
+                    use bevy::camera::primitives::MeshAabb;
+                    let mut geometry = Vec::new();
+                    for (entity, mesh, _, visibility) in owner_visuals {
+                        let local = params
+                            .part_transforms
+                            .get(*entity)
+                            .map_err(|_| "gallery local pose missing")?;
+                        let aabb = params
+                            .meshes
+                            .get(&mesh.0)
+                            .and_then(MeshAabb::compute_aabb)
+                            .ok_or("gallery resident mesh bounds missing")?;
+                        let role = candidate
+                            .and_then(|d| {
+                                d.manifest
+                                    .identity
+                                    .kind
+                                    .mesh_roles()
+                                    .iter()
+                                    .find(|role| d.mesh(role) == Some(&mesh.0))
+                            })
+                            .copied()
+                            .unwrap_or("door");
+                        geometry.push(json!({"entity": entity.to_bits(), "mesh": format!("{:?}", mesh.0.id()),
+                            "mesh_role": role, "visible": visibility.get(),
+                            "local_pose": {"translation": local.translation.to_array(), "rotation": local.rotation.to_array(), "scale": local.scale.to_array()},
+                            "aabb_min": Vec3::from(aabb.min()).to_array(), "aabb_max": Vec3::from(aabb.max()).to_array()}));
+                    }
+                    record["gallery_geometry"] = json!(geometry);
+                }
+            }
             if let Some(candidate) = candidate {
+                if params.m6.is_some() && params.tank_pilot.is_none() && structural {
+                    record["owner"] = json!(owner.to_bits());
+                }
+                if candidate.manifest.identity.kind.mesh_roles().is_empty() {
+                    record["owner"] = json!(owner.to_bits());
+                    record["foreground"] = foreground::snapshot(params, spec, owner, candidate)?;
+                }
+                if params
+                    .art_session
+                    .as_ref()
+                    .is_some_and(|session| session.spa_mask_page.is_some())
+                    && spec.kind == BuildingType::SoulSpa
+                {
+                    let roots = params
+                        .equipment_roots
+                        .iter()
+                        .filter(|(_, visual, _)| visual.owner == owner)
+                        .collect::<Vec<_>>();
+                    let (_, pose) = params
+                        .root_transforms
+                        .iter()
+                        .find(|(visual, _)| visual.owner == owner)
+                        .ok_or("Spa actual root missing")?;
+                    if roots.len() != 1
+                        || roots[0].2.observed_identity() != Some(&candidate.manifest.identity)
+                        || !pose
+                            .translation
+                            .abs_diff_eq(Vec3::new(spec.center.x, 0.0, -spec.center.y), 0.001)
+                        || !pose.rotation.abs_diff_eq(Quat::IDENTITY, 0.001)
+                        || !pose.scale.abs_diff_eq(Vec3::ONE, 0.001)
+                    {
+                        return Ok(None);
+                    }
+                    record["owner"] = json!(owner.to_bits());
+                    record["root"] = json!(roots[0].0.to_bits());
+                    record["root_identity"] = json!(roots[0].2.observed_identity());
+                    record["root_translation_wu"] = json!(pose.translation.to_array());
+                    record["root_rotation_xyzw"] = json!(pose.rotation.to_array());
+                    record["root_scale"] = json!(pose.scale.to_array());
+                }
                 if matches!(
                     candidate.manifest.identity.kind,
                     BuildingAssetKind::Tank | BuildingAssetKind::MudMixer
@@ -641,6 +995,19 @@ fn inspect(params: &InspectParams) -> Result<Option<Value>, String> {
                 }
                 let mut parts = Vec::new();
                 for (entity, mesh, _, visibility) in owner_visuals {
+                    if params
+                        .art_session
+                        .as_ref()
+                        .is_some_and(|session| session.spa_mask_page.is_some())
+                        && spec.kind == BuildingType::SoulSpa
+                    {
+                        match spa_masks::observe_part(params, spec, candidate, owner, *entity) {
+                            Ok(part) => parts.push(part),
+                            Err(_) if params.state.phase == Phase::Seeded => return Ok(None),
+                            Err(reason) => return Err(reason),
+                        }
+                        continue;
+                    }
                     let local = params
                         .part_transforms
                         .get(*entity)
@@ -653,29 +1020,55 @@ fn inspect(params: &InspectParams) -> Result<Option<Value>, String> {
                         .iter()
                         .find(|role| candidate.mesh(role) == Some(&mesh.0))
                         .ok_or("unknown candidate mesh role")?;
-                    parts.push(
-                        json!({"mesh_role": role, "translation_wu": local.translation.to_array(),
+                    let mut part = json!({"mesh_role": role, "translation_wu": local.translation.to_array(),
                         "rotation_xyzw": local.rotation.to_array(), "scale": local.scale.to_array(),
-                        "visible": visibility.get()}),
-                    );
+                        "visible": visibility.get()});
+                    if params.m6.is_some() && params.tank_pilot.is_none() && structural {
+                        part["resident"] =
+                            match resident::observe(params, spec, candidate, owner, *entity) {
+                                Ok(observed) => observed,
+                                Err(_) if params.state.phase == Phase::Seeded => return Ok(None),
+                                Err(reason) => return Err(reason),
+                            };
+                    }
+                    parts.push(part);
                 }
                 parts.sort_by_key(|part| part["mesh_role"].as_str().unwrap().to_owned());
+                if params
+                    .art_session
+                    .as_ref()
+                    .is_some_and(|session| session.spa_mask_page.is_some())
+                    && spec.kind == BuildingType::SoulSpa
+                {
+                    let names = parts
+                        .iter()
+                        .filter_map(|part| part["name"].as_str())
+                        .collect::<HashSet<_>>();
+                    if names != HashSet::from(["body", "slot0", "slot1", "slot2", "slot3"]) {
+                        return Err("Spa mask page part inventory differs".into());
+                    }
+                }
                 record["parts"] = json!(parts);
             }
             records.push(record);
         }
     }
-    if params.art_session.is_none()
-        && !params.m6.as_ref().is_some_and(|m6| m6.candidate)
-        && active_meshes.len() != 2
-    {
+    if let Some(m6) = params.m6.as_ref() {
+        if active_meshes.len() != m6.unique_target_meshes() {
+            return Err("comparison target mesh inventory differs".into());
+        }
+    } else if params.art_session.is_none() && active_meshes.len() != 2 {
         return Err("legacy shared mesh count differs".into());
     }
     let resources = params.m6.as_ref().map(|_| resource_evidence(params));
     if let Some(initial) = params.state.m6_resources.as_ref()
         && resources.as_ref() != Some(initial)
     {
-        return Err("M6 resident resource inventory changed after readiness".into());
+        return Err(format!(
+            "M6 resident resource inventory changed after readiness: initial={} observed={}",
+            json!(initial),
+            json!(resources)
+        ));
     }
     let Some(records) = records else {
         return Ok(Some(Value::Null));
@@ -684,6 +1077,18 @@ fn inspect(params: &InspectParams) -> Result<Option<Value>, String> {
         "target_structural_roots": layout::copies(params.config.size()) * 5,
         "target_foreground_owners": layout::copies(params.config.size()) * 4,
         "target_active_unique_meshes": active_meshes.len(), "souls": params.state.actors.len(), "completion_effects": 0});
+    if let Some(session) = params.art_session.as_ref() {
+        if session.identity.kind.mesh_roles().is_empty() {
+            evidence["foreground_schema"] = json!(1);
+        }
+        evidence["view"] = json!(session.view);
+        evidence["camera_scale"] = json!(camera_scale);
+        evidence["camera_center"] = json!([camera_center.x, camera_center.y]);
+        if let Some(page) = session.spa_mask_page {
+            evidence["spa_mask_page"] = json!(page);
+            evidence["scope"] = json!("paused-static-spa-mask-page");
+        }
+    }
     if let Some(m6) = params.m6.as_ref() {
         // CPU image payload is decoded storage, never compressed PNG or GPU allocation.
         // GLB payload bytes are separately inventoried by the offline helper.
@@ -695,13 +1100,35 @@ fn inspect(params: &InspectParams) -> Result<Option<Value>, String> {
                 "authority": door_assets.identity.authority,
                 "manifest_sha256": door_assets.identity.manifest_sha256,
             },
-            "target_mesh_entities": copies * if m6.candidate { 11 } else { 5 },
+            "target_mesh_entities": copies * m6.mesh_entities_per_copy(),
             "pool_active": params.building_pool.generation_counts().0,
             "pool_pending": params.building_pool.generation_counts().1,
             "resources": resources,
             "gpu_allocation_bytes": null,
             "active_state_acceptance": false,
         });
+        if m6.pre_release {
+            evidence["pre_release_comparison"] = json!(true);
+        }
+        if let Some(group) = m6.group.as_ref() {
+            evidence["m6"]["group"] = json!(group);
+            evidence["m6"]["loaded_identities"] = json!(m6.loaded_identities().collect::<Vec<_>>());
+            evidence["m6"]["target_path_observations"] = if m6.candidate {
+                json!([])
+            } else {
+                let server = params
+                    .asset_server
+                    .as_ref()
+                    .ok_or("group comparison AssetServer missing")?;
+                json!(
+                    group
+                        .target_paths()
+                        .map(|path| json!({"path": path,
+                    "managed": server.get_path_id(bevy::asset::AssetPath::parse(path)).is_some()}))
+                        .collect::<Vec<_>>()
+                )
+            };
+        }
     }
     Ok(Some(evidence))
 }
@@ -722,6 +1149,16 @@ fn resource_evidence(params: &InspectParams) -> ResourceEvidence {
 }
 
 impl BuildingArtStaticState {
+    fn final_sidecar_evidence<'a>(&'a self, initial: &'a Value) -> std::io::Result<&'a Value> {
+        if self.m6 {
+            self.m6_final_evidence
+                .as_ref()
+                .ok_or_else(|| std::io::Error::other("M6 actual final observation missing"))
+        } else {
+            Ok(initial)
+        }
+    }
+
     pub(super) fn write_sidecar(&self, config: &PerfScenarioConfig) -> std::io::Result<()> {
         if config.workload() != PerfWorkload::BuildingArtStatic {
             return Ok(());
@@ -736,10 +1173,11 @@ impl BuildingArtStaticState {
             .as_ref()
             .ok_or_else(|| std::io::Error::other("missing fixture evidence"))?;
         let bytes = serde_json::to_vec(evidence)?;
-        let summary = json!({"schema_version": 1, "contract_id": if self.m6 { "building-art-m6-nine-v1" } else { "building-art-static-nine-v2" },
+        let final_evidence = self.final_sidecar_evidence(evidence)?;
+        let summary = json!({"schema_version": 1, "contract_id": if evidence.get("variant") == Some(&json!("lamp-supply-art-context")) { "lamp-supply-art-context-v1" } else if evidence.get("variant") == Some(&json!("m5-art-context")) { "m5-art-context-v1" } else if evidence.get("variant") == Some(&json!("m2-art-context")) { "m2-art-context-v1" } else if evidence.get("variant").is_some() { "rest-area-art-context-v1" } else if evidence.get("m6").and_then(|m6| m6.get("group")).is_some() { "building-art-group-nine-v1" } else if evidence.get("pre_release_comparison") == Some(&json!(true)) { "building-art-pre-release-nine-v1" } else if self.m6 { "building-art-m6-nine-v1" } else { "building-art-static-nine-v2" },
             "evidence_kind": if self.art_candidate { "candidate-paused-static-only" } else { "paused-static-only" }, "active_simulation_evidence": false,
-            "camera_scale": layout::CAMERA_SCALE, "stable_frames": self.stable_frames,
-            "layout_sha256": hw_infra::lighting::digest_hex(&Sha256::digest(&bytes).into()), "initial": evidence, "final": evidence});
+            "camera_scale": evidence.get("camera_scale").unwrap_or(&json!(layout::CAMERA_SCALE)), "stable_frames": self.stable_frames,
+            "layout_sha256": hw_infra::lighting::digest_hex(&Sha256::digest(&bytes).into()), "initial": evidence, "final": final_evidence});
         let directory = super::output::perf_output_directory(config);
         std::fs::create_dir_all(&directory)?;
         let file = std::fs::OpenOptions::new()
@@ -750,13 +1188,61 @@ impl BuildingArtStaticState {
             } else {
                 "building_art_static.json"
             }))?;
-        serde_json::to_writer_pretty(file, &summary).map_err(std::io::Error::other)
+        serde_json::to_writer_pretty(file, &summary).map_err(std::io::Error::other)?;
+        if self.resources_required {
+            resource_inventory::write_boundaries(
+                &directory,
+                self.resources_initial.as_ref(),
+                self.resources_final.as_ref(),
+            )?;
+        }
+        Ok(())
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn m6_sidecar_requires_actual_final_instead_of_reusing_initial() {
+        let initial = json!({"records": ["initial"]});
+        let mut state = BuildingArtStaticState {
+            m6: true,
+            ..default()
+        };
+        assert!(state.final_sidecar_evidence(&initial).is_err());
+        state.m6_final_evidence = Some(json!({"records": ["observed-final"]}));
+        assert_eq!(
+            state.final_sidecar_evidence(&initial).unwrap()["records"][0],
+            "observed-final"
+        );
+        assert_ne!(state.final_sidecar_evidence(&initial).unwrap(), &initial);
+    }
+
+    #[test]
+    fn m6_readiness_requires_thirty_consecutive_complete_identical_observations() {
+        let mut state = BuildingArtStaticState::default();
+        let initial = json!({"m6": {"resources": {"resident_image_count": 10}}});
+        let settled = json!({"m6": {"resources": {"resident_image_count": 11}}});
+        for _ in 0..29 {
+            assert!(!m6_readiness(&mut state, Some(&initial)));
+        }
+        assert!(m6_readiness(&mut state, Some(&initial)));
+        assert!(!m6_readiness(&mut state, Some(&settled)));
+        assert_eq!(state.m6_pending_frames, 1);
+        for _ in 0..28 {
+            assert!(!m6_readiness(&mut state, Some(&settled)));
+        }
+        assert!(m6_readiness(&mut state, Some(&settled)));
+        assert!(!m6_readiness(&mut state, None));
+        assert_eq!(state.m6_pending_frames, 0);
+        assert!(state.m6_pending_evidence.is_none());
+        assert!(!m6_readiness(&mut state, Some(&settled)));
+        assert_eq!(state.m6_pending_frames, 1);
+        assert!(state.evidence.is_none());
+        assert_eq!(state.phase, Phase::Inactive);
+    }
     use hw_visual::blueprint::{BuildingBounceEffect, CompletionText};
     use hw_visual::floating_text::FloatingText;
 

@@ -1,6 +1,7 @@
 """Independent native-recipe rejection coverage without starting a process."""
 
 import copy
+import json
 from argparse import Namespace
 from pathlib import Path
 import tempfile
@@ -52,6 +53,164 @@ class NativeRecipeTests(unittest.TestCase):
         recipe.check_trace(self.trace, self.value, self.nonce, 42)
         self.assertEqual(self.trace, before)
         self.assertFalse(self.trace["accepted"])
+
+    def test_capture_interval_binds_fresh_prefix_without_mutation(self):
+        after = copy.deepcopy(self.trace)
+        for sample in after["samples"]:
+            sample["roots"][0]["state"] = "Some(TankEmpty)"
+        before = {**after, "samples": after["samples"][:1]}
+        original = copy.deepcopy((before, after))
+        shot = recipe.bind_capture(before, after, {"path": "image.png"})
+        self.assertEqual((shot["sample_index"], shot["sample_end_index"]), (0, 2))
+        recipe.check_capture_interval(after["samples"], shot)
+        self.assertEqual((before, after), original)
+        for mutation in (
+            lambda trace: trace.update(nonce="c" * 32),
+            lambda trace: trace.update(process_id=99),
+            lambda trace: trace.update(samples=trace["samples"][:1]),
+            lambda trace: trace["samples"][0].update(real_seconds=0.9),
+            lambda trace: trace["samples"][1].update(paused=True),
+            lambda trace: trace["samples"][1].update(fixture_owner="other"),
+            lambda trace: trace["samples"][1].update(identity=None),
+            lambda trace: trace["samples"][1].update(world_epoch=2),
+            lambda trace: trace["samples"][1]["roots"][0].update(owner="other"),
+            lambda trace: trace["samples"][1]["roots"][0].update(state="Some(TankFull)"),
+        ):
+            changed = copy.deepcopy(after)
+            mutation(changed)
+            with self.subTest(mutation=mutation), self.assertRaises(ValueError):
+                recipe.bind_capture(before, changed, {"path": "image.png"})
+
+    def test_capture_interval_rejects_legacy_missing_or_invalid_indices(self):
+        for start, end in ((0, None), (0, 0), (-1, 2), (0, 3), (True, 2), (0, False)):
+            with self.subTest(start=start, end=end), self.assertRaises(ValueError):
+                recipe.check_capture_interval(self.trace["samples"], {
+                    "sample_index": start, "sample_end_index": end,
+                    "key": recipe.checkpoint_key(self.trace["samples"][0])})
+
+    def test_rejected_then_successful_capture_preserves_original_pixels_and_reason(self):
+        stable = copy.deepcopy(self.trace)
+        for row in stable["samples"]:
+            row["roots"][0]["state"] = "Some(TankEmpty)"
+        before = {**stable, "samples": stable["samples"][:1]}
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            trace_path = root / "trace.json"
+            def capture(path, pid):
+                recipe.pipeline.put(path / "actual-window.png", path.name.encode())
+                return {"path": "actual-window.png", "window_pid": pid}
+            trace_path.write_text(json.dumps(self.trace))
+            rejected = root / "0"
+            with patch.object(recipe.art, "capture", side_effect=capture), \
+                 patch.object(recipe, "check_capture_pixels"):
+                shot, _ = recipe.capture_observed_interval(rejected, 42, trace_path, before)
+                self.assertIsNone(shot)
+                trace_path.write_text(json.dumps(stable))
+                accepted = root / "1"
+                shot, after = recipe.capture_observed_interval(accepted, 42, trace_path, before)
+                self.assertEqual(shot["sample_end_index"], 2)
+                self.assertEqual(after, stable)
+            self.assertEqual((rejected / "actual-window.png").read_bytes(), b"0")
+            self.assertEqual((accepted / "actual-window.png").read_bytes(), b"1")
+            record = json.loads((rejected / "rejected.json").read_text())
+            self.assertEqual(record["reason"], "state/owner changed during capture")
+            self.assertEqual((record["sample_index"], record["sample_end_index"]), (0, 2))
+            self.assertFalse((accepted / "rejected.json").exists())
+
+    def test_capture_waits_for_fresh_raw_but_times_out_without_fabricating_it(self):
+        stable = copy.deepcopy(self.trace)
+        for row in stable["samples"]:
+            row["roots"][0]["state"] = "Some(TankEmpty)"
+        before = {**stable, "samples": stable["samples"][:1]}
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            with patch.object(recipe.art, "capture", return_value={"path": "image.png"}), \
+                 patch.object(recipe, "check_capture_pixels"), \
+                 patch.object(recipe.m2, "read_json", side_effect=[before, stable]), \
+                 patch.object(recipe.time, "sleep") as sleep:
+                shot, after = recipe.capture_observed_interval(root / "fresh", 42, root / "trace", before)
+                self.assertEqual(shot["sample_end_index"], 2)
+                self.assertEqual(after, stable)
+                sleep.assert_called_once_with(0.05)
+            with patch.object(recipe.art, "capture", return_value={"path": "image.png"}), \
+                 patch.object(recipe.m2, "read_json", return_value=before), \
+                 patch.object(recipe.time, "monotonic", side_effect=[0.0, 2.0]):
+                shot, after = recipe.capture_observed_interval(root / "stale", 42, root / "trace", before)
+                self.assertIsNone(shot)
+                self.assertEqual(after, before)
+                record = json.loads((root / "stale/rejected.json").read_text())
+                self.assertEqual(record["reason"], "capture interval missing/stale")
+
+    def test_blank_viewport_is_rejected_even_with_visible_edge_ui(self):
+        from PIL import Image, ImageDraw
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "image.png"
+            image = Image.new("RGB", (1280, 720), (26, 26, 26))
+            draw = ImageDraw.Draw(image)
+            draw.rectangle((10, 10, 320, 50), fill="white")
+            draw.rectangle((10, 665, 650, 708), fill="white")
+            draw.line((464, 0, 464, 471), fill="cyan")
+            image.save(path)
+            with self.assertRaisesRegex(ValueError, "blank central viewport"):
+                recipe.check_capture_pixels(path)
+            draw.rectangle((620, 330, 660, 370), fill="brown")
+            image.save(path)
+            recipe.check_capture_pixels(path)
+            image.crop((0, 0, 640, 360)).save(path)
+            with self.assertRaisesRegex(ValueError, "dimensions differ"):
+                recipe.check_capture_pixels(path)
+
+    def test_blank_capture_preserves_pixels_and_is_not_accepted(self):
+        stable = copy.deepcopy(self.trace)
+        for row in stable["samples"]:
+            row["roots"][0]["state"] = "Some(TankEmpty)"
+        before = {**stable, "samples": stable["samples"][:1]}
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            with patch.object(recipe.art, "capture", return_value={"path": "image.png"}), \
+                 patch.object(recipe.m2, "read_json", return_value=stable), \
+                 patch.object(recipe, "check_capture_pixels", side_effect=ValueError("blank central viewport")):
+                shot, after = recipe.capture_observed_interval(root, 42, root / "trace", before)
+            self.assertIsNone(shot)
+            self.assertEqual(after, stable)
+            self.assertEqual(json.loads((root / "rejected.json").read_text())["reason"], "blank central viewport")
+
+    def test_capture_wait_never_hides_foreign_or_rewritten_intermediate_snapshot(self):
+        before = {**self.trace, "samples": self.trace["samples"][:1]}
+        for mutation in (lambda trace: trace.update(nonce="c" * 32),
+                         lambda trace: trace.update(process_id=99),
+                         lambda trace: trace["samples"][0].update(real_seconds=0.9)):
+            damaged = copy.deepcopy(before)
+            mutation(damaged)
+            for reads in ([damaged, self.trace], [before, damaged, self.trace]):
+                with self.subTest(reads=reads), \
+                     patch.object(recipe.art, "capture", return_value={"path": "image.png"}), \
+                     patch.object(recipe.m2, "read_json", side_effect=reads) as read, \
+                     patch.object(recipe.time, "sleep"), self.assertRaisesRegex(ValueError, "prefix/session changed"):
+                    recipe.capture_observed_interval(Path("unused"), 42, Path("trace"), before)
+                self.assertEqual(read.call_count, len(reads) - 1)
+
+    def test_v2_trace_requires_the_explicit_numeric_proposal(self):
+        identity = {**self.identity, "kind": "MudMixer"}
+        binding = recipe.m2.numeric_binding("MudMixer", {
+            "revision": "v2", "numeric_candidate_sha256": recipe.m2.numeric_contract("MudMixer", "v2")[1]})
+        value = {"identity": identity, "leg": "refining", **binding}
+        trace = copy.deepcopy(self.trace)
+        trace.update(identity=identity, leg="refining")
+        for sample in trace["samples"]:
+            sample["identity"] = identity
+        for digest in (None, recipe.m2.NUMERIC_SHA256, "a" * 64):
+            changed = copy.deepcopy(trace)
+            if digest is not None:
+                changed["numeric_candidate_sha256"] = digest
+            with self.subTest(digest=digest), self.assertRaisesRegex(ValueError, "numeric revision"):
+                recipe.check_trace(changed, value, self.nonce, 42)
+        trace["numeric_candidate_sha256"] = binding["numeric_candidate_sha256"]
+        with patch.object(recipe, "check_owned_states"):
+            recipe.check_trace(trace, value, self.nonce, 42)
+        self.assertFalse(trace["accepted"])
+        self.assertFalse(trace["performance_evidence"])
 
     def test_mixer_requires_owned_pause_resume_motion_and_overlap(self):
         value = {"identity": {**self.identity, "kind": "MudMixer"}, "leg": "refining"}
@@ -272,7 +431,8 @@ class NativeRecipeTests(unittest.TestCase):
         for selector in ("Intel", "iNtEl", name):
             with self.subTest(selector=selector):
                 self.assertEqual(recipe.adapter_environment(selector),
-                                 {"WGPU_BACKEND": "vulkan", "WGPU_ADAPTER_NAME": selector})
+                                 {"WGPU_BACKEND": "vulkan", "WGPU_ADAPTER_NAME": selector,
+                                  "RUST_LOG": "info,wgpu=error"})
                 record = recipe.check_renderer(log, selector)
                 self.assertEqual(record, {"selector": selector, "name": name, "backend": "Vulkan"})
                 recipe.check_renderer_record(log, selector, record)

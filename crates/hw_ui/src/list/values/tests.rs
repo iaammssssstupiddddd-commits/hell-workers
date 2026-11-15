@@ -3,7 +3,7 @@ use super::super::spawn::spawn_soul_list_item_entity;
 use super::*;
 
 #[derive(Resource)]
-struct TestAssets {
+pub(in crate::list) struct TestAssets {
     font: Handle<Font>,
     images: [Handle<Image>; 14],
 }

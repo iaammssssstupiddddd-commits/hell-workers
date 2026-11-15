@@ -17,11 +17,14 @@ use hw_jobs::{
 };
 use hw_logistics::{ResourceItem, ResourceType};
 use hw_ui::selection::{BuildingPlacementContext, validate_building_placement};
-use hw_world::{WorldMap, layout::RIVER_Y_MIN};
+use hw_world::{WorldMap, Yard, layout::RIVER_Y_MIN};
 
 #[derive(SystemParam)]
 pub(crate) struct SetupParams<'w, 's> {
     config: Res<'w, PerfScenarioConfig>,
+    art_session: Option<Res<'w, BuildingArtSession>>,
+    gallery:
+        Option<Res<'w, crate::assets::building_asset_set::gallery_capture::GalleryCaptureSession>>,
     state: ResMut<'w, BuildingArtStaticState>,
     commands: Commands<'w, 's>,
     world_map: WorldMapWrite<'w>,
@@ -51,8 +54,55 @@ pub(crate) fn setup_building_art_static_system(mut p: SetupParams) {
         return;
     }
     actors.sort_by_key(|entity| entity.to_bits());
-    let specs = layout::layout(p.config.size());
-    if let Err(reason) = validate_layout(&specs, p.world_map.as_ref(), p.config.size()) {
+    let mut specs = p.gallery.as_ref().map_or_else(
+        || layout::layout(p.config.size()),
+        |session| {
+            session.group().map_or_else(
+                || layout::layout(p.config.size()),
+                layout::group_gallery_layout,
+            )
+        },
+    );
+    if let Some(page) = p
+        .art_session
+        .as_ref()
+        .and_then(|session| session.spa_mask_page)
+        && let Err(reason) = layout::apply_spa_mask_page(&mut specs, page)
+    {
+        fail(&mut p.state, &mut p.exit, reason);
+        return;
+    }
+    if let Some(session) = p
+        .art_session
+        .as_ref()
+        .filter(|session| session.is_context())
+    {
+        specs.retain(|spec| {
+            crate::systems::visual::building_presentation::asset_kind(spec.kind)
+                == Some(session.identity.kind)
+                || (session.is_m5_context()
+                    && session.identity.kind == BuildingAssetKind::OutdoorLamp
+                    && spec.kind == BuildingType::SoulSpa
+                    && spec.ordinal >= 2)
+        });
+    }
+    let gallery_yards = p
+        .gallery
+        .as_ref()
+        .map(|_| layout::group_gallery_yards(&specs));
+    let validation = gallery_yards.as_ref().map_or_else(
+        || validate_layout(&specs, p.world_map.as_ref(), p.config.size()),
+        |yards| validate_layout_with_yards(&specs, p.world_map.as_ref(), yards),
+    );
+    if let Err(reason) = validation {
+        fail(&mut p.state, &mut p.exit, reason);
+        return;
+    }
+    if p.art_session
+        .as_ref()
+        .is_some_and(|session| session.is_context())
+        && let Err(reason) = super::context::validate_layout(&specs, p.world_map.as_ref())
+    {
         fail(&mut p.state, &mut p.exit, reason);
         return;
     }
@@ -64,12 +114,54 @@ pub(crate) fn setup_building_art_static_system(mut p: SetupParams) {
         );
         return;
     };
-    initialize_camera(&mut camera, &mut controller);
+    initialize_camera(
+        &mut camera,
+        &mut controller,
+        p.gallery.as_ref().map_or_else(
+            || layout::camera_frame(p.art_session.as_deref(), p.config.size()),
+            |session| layout::group_gallery_camera(session, &specs),
+        ),
+    );
     p.commands
         .spawn((layout::site(), Name::new("BuildingArtStatic Site")));
-    for yard in layout::yards(p.config.size()) {
+    for yard in gallery_yards.unwrap_or_else(|| layout::yards(p.config.size())) {
         p.commands
             .spawn((yard, Name::new("BuildingArtStatic Yard")));
+    }
+    if p.art_session
+        .as_ref()
+        .is_some_and(|session| session.is_context())
+    {
+        for spec in &specs {
+            if p.art_session.as_ref().is_some_and(|session| {
+                session.is_m5_context()
+                    && crate::systems::visual::building_presentation::asset_kind(spec.kind)
+                        != Some(session.identity.kind)
+            }) {
+                continue;
+            }
+            for grid in super::context::wall_grids(spec) {
+                if !p.world_map.as_ref().is_walkable(grid.0, grid.1)
+                    || p.world_map.as_ref().has_building(grid)
+                    || p.world_map.as_ref().has_stockpile(grid)
+                {
+                    fail(
+                        &mut p.state,
+                        &mut p.exit,
+                        "occupied context wall grid".into(),
+                    );
+                    return;
+                }
+                let wall = crate::systems::jobs::wall_construction::spawn_wall_shell(
+                    &mut p.commands,
+                    &p.handles,
+                    grid,
+                    false,
+                );
+                p.world_map
+                    .register_completed_building_footprint(BuildingType::Wall, wall, [grid]);
+            }
+        }
     }
     // Both support walls and their floors use existing completion factories.
     for spec in specs.iter().filter(|s| s.kind == BuildingType::Door) {
@@ -170,14 +262,17 @@ fn operational_spa_state() -> SoulSpaSite {
     }
 }
 
-fn initialize_camera(camera: &mut Transform, controller: &mut PanCamera) {
-    let center = WorldMap::grid_to_world(46, 37);
+fn initialize_camera(
+    camera: &mut Transform,
+    controller: &mut PanCamera,
+    (center, scale): (Vec2, f32),
+) {
     camera.translation.x = center.x;
     camera.translation.y = center.y;
     // Bevy 0.19 writes all scale axes from zoom_factor even without input.
     // Seed both once; never overwrite later input to conceal camera drift.
-    controller.zoom_factor = layout::CAMERA_SCALE;
-    camera.scale = Vec3::splat(layout::CAMERA_SCALE);
+    controller.zoom_factor = scale;
+    camera.scale = Vec3::splat(scale);
 }
 
 fn validate_layout(
@@ -185,8 +280,16 @@ fn validate_layout(
     map: &WorldMap,
     size: super::super::PerfScenarioSize,
 ) -> Result<(), String> {
-    let site = layout::site();
     let yards = layout::yards(size);
+    validate_layout_with_yards(specs, map, &yards)
+}
+
+fn validate_layout_with_yards(
+    specs: &[Specimen],
+    map: &WorldMap,
+    yards: &[Yard],
+) -> Result<(), String> {
+    let site = layout::site();
     let supports = specs
         .iter()
         .filter(|s| s.kind == BuildingType::Door)
@@ -250,14 +353,19 @@ type SeedActors<'w, 's> = Query<
     ),
 >;
 
+type ActorRelations<'w, 's> =
+    Query<'w, 's, (), Or<(With<WorkingOn>, With<RestingIn>, With<ActiveTaskIdentity>)>>;
+
 #[derive(SystemParam)]
 pub(crate) struct SeedParams<'w, 's> {
+    art_session: Option<Res<'w, BuildingArtSession>>,
     state: ResMut<'w, BuildingArtStaticState>,
     world_map: WorldMapRead<'w>,
     commands: Commands<'w, 's>,
     buildings: Query<'w, 's, &'static Building>,
     tiles: Query<'w, 's, (Entity, &'static SoulSpaTile)>,
     actors: SeedActors<'w, 's>,
+    actor_relations: ActorRelations<'w, 's>,
     exit: MessageWriter<'w, AppExit>,
 }
 
@@ -373,6 +481,19 @@ pub(crate) fn seed_building_art_static_system(mut p: SeedParams) {
                 );
                 return;
             };
+            if p.art_session
+                .as_ref()
+                .is_some_and(|session| session.is_m5_context() || session.is_m2_context())
+                && (!matches!(*assigned, AssignedTask::None)
+                    || p.actor_relations.get(actor).is_ok())
+            {
+                fail(
+                    &mut p.state,
+                    &mut p.exit,
+                    "M5 source cannot replace an existing Soul task or relation".into(),
+                );
+                return;
+            }
             soul.dream = 100.0;
             soul.fatigue = 0.0;
             soul.stress = 0.0;
@@ -397,6 +518,77 @@ pub(crate) fn seed_building_art_static_system(mut p: SeedParams) {
                     WorkingOn(target),
                     ActiveTaskIdentity::new(target, target, work),
                 ));
+            }
+        }
+    }
+    if p.art_session
+        .as_ref()
+        .is_some_and(|session| session.is_m5_context() || session.is_m2_context())
+    {
+        let m2 = p
+            .art_session
+            .as_ref()
+            .is_some_and(|session| session.is_m2_context());
+        let source_workers = if m2 {
+            usize::from(
+                p.art_session
+                    .as_ref()
+                    .is_some_and(|session| session.identity.kind == BuildingAssetKind::MudMixer),
+            ) * 2
+        } else if p
+            .art_session
+            .as_ref()
+            .is_some_and(|session| session.identity.kind == BuildingAssetKind::OutdoorLamp)
+        {
+            6
+        } else {
+            0
+        };
+        if actor_index != source_workers
+            || p.state.actors.len() != 8 + source_workers
+            || specs.len() != 4 + usize::from(!m2 && source_workers > 0) * 2
+        {
+            fail(
+                &mut p.state,
+                &mut p.exit,
+                "M5 context requires eight idle Souls plus its declared source workers".into(),
+            );
+            return;
+        }
+        for spec in &specs {
+            if crate::systems::visual::building_presentation::asset_kind(spec.kind)
+                != p.art_session.as_ref().map(|session| session.identity.kind)
+            {
+                continue;
+            }
+            for side in [-1.0, 1.0] {
+                let actor = p.state.actors[actor_index];
+                actor_index += 1;
+                let Ok((_, mut transform, mut destination, mut path, assigned, mut idle)) =
+                    p.actors.get_mut(actor)
+                else {
+                    fail(
+                        &mut p.state,
+                        &mut p.exit,
+                        "M5 context Soul shell missing".into(),
+                    );
+                    return;
+                };
+                if !matches!(*assigned, AssignedTask::None) || p.actor_relations.get(actor).is_ok()
+                {
+                    fail(
+                        &mut p.state,
+                        &mut p.exit,
+                        "M5 context cannot replace an existing Soul task or relation".into(),
+                    );
+                    return;
+                }
+                let point = spec.center + Vec2::Y * (side * 12.0);
+                transform.translation.x = point.x;
+                transform.translation.y = point.y;
+                destination.0 = point;
+                *path = Path::default();
+                *idle = IdleState::default();
             }
         }
     }
@@ -487,7 +679,11 @@ mod tests {
             let world = app.world_mut();
             let mut query = world.query::<(&mut Transform, &mut PanCamera)>();
             let (mut transform, mut controller) = query.single_mut(world).unwrap();
-            initialize_camera(&mut transform, &mut controller);
+            initialize_camera(
+                &mut transform,
+                &mut controller,
+                layout::camera_frame(None, crate::plugins::startup::PerfScenarioSize::Small),
+            );
         }
         for _ in 0..3 {
             app.update();
@@ -506,6 +702,51 @@ mod tests {
         assert_eq!(
             app.world().get::<Transform>(camera).unwrap().scale,
             Vec3::splat(4.0)
+        );
+    }
+
+    #[test]
+    fn gallery_groups_preserve_legal_terrain_and_isolated_lamp_power_yards() {
+        let generated = hw_world::generate_world_layout(20260920);
+        let mut map = WorldMap::default();
+        for (index, &terrain) in generated.terrain_tiles.iter().enumerate() {
+            map.set_terrain_at_idx(index, terrain);
+        }
+        for group in [
+            crate::assets::building_asset_set::BuildingArtGroup::M2,
+            crate::assets::building_asset_set::BuildingArtGroup::M3,
+            crate::assets::building_asset_set::BuildingArtGroup::M5,
+        ] {
+            let specs = layout::group_gallery_layout(group);
+            let yards = layout::group_gallery_yards(&specs);
+            assert_eq!(validate_layout_with_yards(&specs, &map, &yards), Ok(()));
+            for lamp in specs.iter().filter(|s| s.kind == BuildingType::OutdoorLamp) {
+                let spa = specs
+                    .iter()
+                    .find(|s| s.kind == BuildingType::SoulSpa && s.ordinal == lamp.ordinal)
+                    .unwrap();
+                let contains = |yard: &Yard, position: Vec2| {
+                    position.x >= yard.min.x
+                        && position.x <= yard.max.x
+                        && position.y >= yard.min.y
+                        && position.y <= yard.max.y
+                };
+                assert_eq!(
+                    yards
+                        .iter()
+                        .any(|yard| contains(yard, lamp.center) && contains(yard, spa.center)),
+                    lamp.ordinal >= 2
+                );
+            }
+        }
+        // No gallery operation may change the static performance specimen contract.
+        assert_eq!(
+            layout::layout(PerfScenarioSize::Small)
+                .iter()
+                .find(|s| s.kind == BuildingType::Door)
+                .unwrap()
+                .anchor,
+            (8, 43)
         );
     }
 

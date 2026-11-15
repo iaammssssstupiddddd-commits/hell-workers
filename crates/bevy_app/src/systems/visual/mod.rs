@@ -12,6 +12,7 @@ pub mod camera_sync;
 pub mod door_preview;
 pub mod placement_ghost;
 pub mod soul_animation;
+pub(crate) mod tank_companion;
 pub mod task_area_visual;
 pub mod terrain_lod;
 pub mod terrain_material;

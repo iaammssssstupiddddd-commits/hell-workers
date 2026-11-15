@@ -32,6 +32,10 @@ dashboard blocker は両方の current/complete snapshot が揃う場合だけ�
 
 外部ownerがexact taskを終了する場合は`prepare_owner_task_terminals`でbatch全体のidentity・task・runtime contextを先に検証し、成功したrequestだけを`terminalize_exact_tasks`へ渡す。deconstructionとSoul Spa cancellationはこのcrate-owned preflightを共有する。
 
+`profiling` は `hw_core/profiling` と `hw_jobs/profiling` を有効にする。明示的な観測 resource がある場合だけ、
+手運び・猫車の Blueprint 搬入成功分岐から資材消費 receipt を記録する。予約や搬入先、建設への遷移は変更せず、
+配送記録を建設完了・キャンセル全体・アートや正式 release の承認として扱わない。
+
 ## ⚠️ unassign_task の契約
 
 タスクを中断・放棄・完了する**全経路**で `soul_ai::helpers::work::unassign_task` を呼ぶこと。

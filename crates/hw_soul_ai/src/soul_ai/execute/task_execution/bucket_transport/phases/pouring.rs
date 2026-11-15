@@ -8,7 +8,7 @@ use crate::soul_ai::execute::task_execution::types::{
     BucketTransportSource,
 };
 use bevy::prelude::*;
-use hw_core::constants::{BUCKET_CAPACITY, MUD_MIXER_CAPACITY, TILE_SIZE};
+use hw_core::constants::{BUCKET_CAPACITY, TILE_SIZE};
 use hw_logistics::{ResourceItem, ResourceType};
 
 use super::super::{abort, helpers};
@@ -43,6 +43,18 @@ pub fn handle(
                     );
                 }
 
+                #[cfg(feature = "profiling")]
+                let bucket_before = ctx
+                    .queries
+                    .reservation
+                    .resources
+                    .get(data.bucket)
+                    .ok()
+                    .map(|item| item.0);
+                #[cfg(feature = "profiling")]
+                let assignment = ctx.task_identity().assignment_entity;
+                #[cfg(feature = "profiling")]
+                let mut outputs = Vec::new();
                 commands
                     .entity(data.bucket)
                     .try_insert(ResourceItem(ResourceType::BucketEmpty));
@@ -53,24 +65,48 @@ pub fn handle(
                 });
 
                 for _ in 0..BUCKET_CAPACITY {
-                    commands.spawn((
-                        ResourceItem(ResourceType::Water),
-                        hw_core::relationships::StoredIn(tank_entity),
-                        Visibility::Hidden,
-                        Transform::default(),
-                    ));
+                    let _water = commands
+                        .spawn((
+                            ResourceItem(ResourceType::Water),
+                            hw_core::relationships::StoredIn(tank_entity),
+                            Visibility::Hidden,
+                            Transform::default(),
+                        ))
+                        .id();
+                    #[cfg(feature = "profiling")]
+                    if ctx.env.water_observations {
+                        outputs.push(_water);
+                    }
                 }
 
                 commands
                     .entity(data.bucket)
                     .remove::<hw_core::relationships::DeliveringTo>();
 
-                return helpers::drop_bucket_for_auto_haul(
+                let result = helpers::drop_bucket_for_auto_haul(
                     commands,
                     ctx,
                     data.bucket,
                     ctx.env.world_map,
                 );
+                #[cfg(feature = "profiling")]
+                if ctx.env.water_observations {
+                    crate::water_observations::TankPourReceipt {
+                        worker: ctx.soul_entity,
+                        assignment,
+                        target: ctx.task_identity().current_target_entity,
+                        gather_water: ctx.task_identity().current_work_type
+                            == hw_jobs::WorkType::GatherWater,
+                        tank: tank_entity,
+                        bucket: data.bucket,
+                        world_epoch: ctx.world_epoch,
+                        bucket_before,
+                        river_source: matches!(data.source, BucketTransportSource::River),
+                        outputs,
+                    }
+                    .queue(commands);
+                }
+                return result;
             } else {
                 *ctx.task = AssignedTask::BucketTransport(BucketTransportData {
                     phase: BucketTransportPhase::Pouring {
@@ -133,25 +169,81 @@ pub fn handle(
 
             // Mixer の容量確認
             let (current_count, capacity) = match ctx.queries.storage.stockpiles.get(mixer_entity) {
-                Ok((_, _, stockpile, Some(stored_items)))
+                Ok((_, _, stockpile, stored_items))
                     if stockpile.resource_type == Some(ResourceType::Water) =>
                 {
-                    (stored_items.len(), stockpile.capacity)
+                    (
+                        stored_items.map_or(0, |items| items.len()),
+                        stockpile.capacity,
+                    )
                 }
-                _ => (0, MUD_MIXER_CAPACITY as usize),
+                _ => {
+                    return abort::abort_and_drop_bucket_mixer(
+                        commands,
+                        ctx,
+                        data.bucket,
+                        tank,
+                        mixer_entity,
+                        soul_pos,
+                    );
+                }
             };
 
-            if current_count < capacity {
-                let available = capacity.saturating_sub(current_count) as u32;
-                let added = amount.min(available);
+            let pending = ctx
+                .water_claims
+                .deposited
+                .get(&mixer_entity)
+                .copied()
+                .unwrap_or(0);
+            if amount == BUCKET_CAPACITY
+                && capacity.saturating_sub(current_count.saturating_add(pending)) >= amount as usize
+                && ctx.queries.storage.mixers.get(mixer_entity).is_ok()
+            {
+                let added = amount;
+                ctx.water_claims.buckets.insert(data.bucket);
+                *ctx.water_claims.deposited.entry(mixer_entity).or_default() += added as usize;
+                #[cfg(feature = "profiling")]
+                let mut receipt = ctx.env.water_observations.then(|| {
+                    crate::water_observations::MixerPourReceipt {
+                        context: crate::water_observations::TransferContext {
+                            worker: ctx.soul_entity,
+                            assignment: ctx.task_identity().assignment_entity,
+                            target: ctx.task_identity().current_target_entity,
+                            tank,
+                            mixer: mixer_entity,
+                            bucket: data.bucket,
+                            carried_before: ctx.inventory.0,
+                            world_epoch: ctx.world_epoch,
+                            work_type: ctx.task_identity().current_work_type,
+                        },
+                        bucket_before: ctx
+                            .queries
+                            .reservation
+                            .resources
+                            .get(data.bucket)
+                            .ok()
+                            .map(|r| r.0),
+                        amount,
+                        before_count: current_count,
+                        capacity,
+                        outputs: Vec::new(),
+                        returning: false,
+                    }
+                });
 
                 for _ in 0..added {
-                    commands.spawn((
-                        ResourceItem(ResourceType::Water),
-                        hw_core::relationships::StoredIn(mixer_entity),
-                        Visibility::Hidden,
-                        Transform::default(),
-                    ));
+                    let _water = commands
+                        .spawn((
+                            ResourceItem(ResourceType::Water),
+                            hw_core::relationships::StoredIn(mixer_entity),
+                            Visibility::Hidden,
+                            Transform::default(),
+                        ))
+                        .id();
+                    #[cfg(feature = "profiling")]
+                    if let Some(receipt) = &mut receipt {
+                        receipt.outputs.push(_water);
+                    }
                 }
 
                 debug!(
@@ -191,13 +283,25 @@ pub fn handle(
                         ..data.clone()
                     });
                     update_destination_if_needed(&mut ctx.dest, pos, &mut ctx.path);
+                    #[cfg(feature = "profiling")]
+                    if let Some(mut receipt) = receipt {
+                        receipt.returning = true;
+                        receipt.queue(commands);
+                    }
                 } else {
                     drop_item(commands, ctx.soul_entity, data.bucket, soul_pos);
                     ctx.inventory.0 = None;
-                    return ctx.abort_retryable(commands, "bucket transport no return position");
+                    let result =
+                        ctx.abort_retryable(commands, "bucket transport no return position");
+                    #[cfg(feature = "profiling")]
+                    if let Some(receipt) = receipt {
+                        receipt.queue(commands);
+                    }
+                    return result;
                 }
             } else {
-                // Mixer が満杯
+                // A capacity race must not empty a partly delivered bucket or
+                // hold the only worker indefinitely while refinement needs it.
                 return abort::abort_and_drop_bucket_mixer(
                     commands,
                     ctx,

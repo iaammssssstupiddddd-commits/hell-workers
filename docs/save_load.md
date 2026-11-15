@@ -341,6 +341,67 @@ rebuild systemが観測できる。
 `PlayerIssuedDesignation` と `Priority` は durable なので load 後も許可された manual task の capability を復元するが、
 marker のない legacy / auto task を「auto marker が消えた manual task」と推測してはならず read-only とする。
 
+## 明示profiling sessionの保存/読込診断
+
+通常の保存形式・成否・復旧・terminal `SaveLoadOutcome` は変更しない。
+`HW_BUILDING_PRODUCTION_OBSERVATIONS`で明示したprofiling sessionだけが、非保存の
+`observations::DurableReceipts`を登録する。atomic saveがdirectory syncまで成功した分岐で、
+実際にstreamしたheader/body全bytesのSHA-256と長さ、requestのslot/source、epoch/実時刻と
+read-only RestArea/Soul snapshotを`DurableSave`へ記録する。durability uncertainは成功receiptにしない。
+
+normal loadは実際にreadしたcontainer bytesを同じrequestへ束縛し、成功transactionの最終flush後に
+`write_to_world_with`が返した実EntityHashMapから全Soul/RestAreaのsaved→loaded IDを採取する。
+呼出元が成功を確認し、同requestとepochの1世代遷移を照合してからだけ`DurableLoad`を発行する。
+rollback・recovery-only・失敗からこの成功receiptを生成せず、未完mapを次のloadへ持ち越さない。
+名前一致や近い座標をremapの代わりにはしない。
+
+pending loadは1件、未drain receiptは8件、選択mapは640件、元mapは65,536件、containerは64MiBを
+上限とし、欠損・重複・request/epoch不一致・上限超過は観測失敗へ伝播する。
+raw observerは`Last`の`SaveLoadApplySet`後にdrainし、同じframeの新world sampleへ結ぶ。
+これらは診断記録であり、player通知・Reflect/save schema・world mutationや判定には使用しない。
+byte hashと選択mapだけで全world canonical state、全inventory、正式asset/release受入を証明しない。
+
+Tank候補の専用`m2-tank-candidate-persistence` sessionでは、同じ実commitに非保存の`m2_context`と
+独立の`m2_entity_remap`を追加する。他のscopeのreceipt形状は変えない。実load mapからTank、
+BucketStorage、Water、BucketEmpty/Waterを選択し、loaded target一意・全選択entityの完全被覆と
+5,120件上限を要求する。欠損/重複/成分の曖昧性、load中のscope変更、未採取mapは成功receiptにしない。
+commit時のlogical snapshotは描画準備完了を意味せず、独立UI verifierが実F5/F9のManual1入力、
+container hash/bytes、施工時の2 storage ID、満水50 Waterと戻った未保持bucket5個の正逆関係、
+typed bijection、epoch境界を挟む全paused raw、復元後に再生成された同候補のFull表示を別に照合する。
+実行中taskの継続や修復、save schema変更、アート/数値/性能/正式release承認はこの診断の権限外である。
+実装・fixture検証の成功だけでactual-window受入済みとは扱わない。
+
+2026-11-11の`tak14-tank-candidate-persistence-20261111-v4`で、通常施工→満水→Manual1保存/読込の
+6 owned X11画像と独立rawレビュー、登録済みverifier・sealがpassした。対象HEADは
+`166cd0569770aa48dc9f2d566d1d510b1b31d7f5`、sourceは
+`71650da734f5b600a7bb49b66f2f5ed35f119d8f2ed0ac5ff1deb71615d28554`、harnessは
+`01a19e96f6ec761e84b4cc149d8f908b7ea890a81039ec3d913c414ce5647294`。
+Intel Arc MTL/Vulkan、1920×1080、UI scale1、WARN/ERROR0を確認した。
+
+- 実保存520,844 bytesのSHA-256
+  `d75134eb19e2080cb668ecf5df4dec80121b149f899ae88aa33a6fede37e7f29`がSave/Load双方と一致。
+  実F5/F9とManual1選択/確認は同nonce/PID/windowの45入力、Save session1/Load session2へ束縛された。
+- Save sample553/epoch0からLoad sample565/epoch1へ遷移。Tank `2154v22→833v1`、実施工storage2個、
+  Water50個、BucketEmpty4個＋BucketWater1個の58件が完全・一対一remapされ、型・pose・所有・在庫の
+  正逆関係を保持した。返却された満水bucket1個をEmptyへ正規化せず、所持中bucketは0個。
+- 572 raw sample/1,256 eventの施工・10回のTankPourからのFull prefixを検証し、F5前境界から
+  最終までの27 sampleはpaused、速度4、virtual `132.220790131`固定。epochはLoad commit境界だけで変化。
+  同候補identity `6cf7e62bc7b8a9f75c31ab8eb8a036956e16e249f03b70a6e15e9757d4a5b12e`の
+  root `2051v20→2069v5`が再生成され、Full水面Y22・visible・whiteを保持した。
+
+このpassは選択Tank在庫と候補表示の停止中復元だけであり、再開後の物流/task継続、全world同値、
+Memory/性能、アート承認、正式promotion/install/releaseを含まない。初回jobは中断、v2は旧desktop busの
+入力許可不一致、v3はOS確認の期限切れであり、いずれも入力未実施/未受入の履歴を保持する。
+最終結果はここへ集約し、用途を終えた生成jobはstorage正本に従って整理する。候補原本と共有Cargo cacheは保持する。
+
+2026-11-07の`tak14-durable-receipts-feedback-20261107-v1`では、通常UIのManual slot 1で
+save sample70/epoch0からload sample76/epoch1へ進み、両receiptと実containerの
+SHA-256 `664f920bbd449367244366423899e57ff8c55ade077e4d153ef969d07ae37cda`、
+499,109 bytesが一致した。独立read-only確認で20 Soulの実map、ID以外の収集状態とPool一致を確認。
+6 owned画像と登録済みrefund verifierもpass。ただし新receipt項目は独立手動読取の限定結果で、
+既存verifierの自動受入範囲ではない。保存時はBlueprintのためRestArea ownerは0件であり、
+完成したRestAreaの利用中save/loadと全world canonical一致は未受入。
+
 ## Rehydrate（ロード後の shell 再付与）
 
 セーブが復元するのはschema allow-listの simulation 状態のみで、spawn 関数がその場で挿入する

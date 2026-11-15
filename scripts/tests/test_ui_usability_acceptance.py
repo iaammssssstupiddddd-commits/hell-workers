@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib
 import copy
+import json
 from pathlib import Path
 import sys
 import tempfile
@@ -12,6 +13,67 @@ from unittest.mock import Mock, patch
 HELPER_DIR = Path(__file__).resolve().parents[2] / ".codex/skills/hell-workers-run-native-acceptance/scripts"
 sys.path.insert(0, str(HELPER_DIR))
 acceptance = importlib.import_module("ui_usability_acceptance")
+
+
+class DynamicTargetClickTests(unittest.TestCase):
+    KEY = "menu:Workspace(OpenEntities)"
+
+    def driver(self, rect):
+        driver = acceptance.Driver.__new__(acceptance.Driver)
+        driver.last = {"cursor": None, "controls": {
+            self.KEY: {"rect": rect, "fully_visible": True, "interaction": "None"}}}
+        driver.send = Mock()
+        return driver
+
+    def test_moved_target_is_reacquired_before_press(self):
+        driver = self.driver([1448, 16, 1564, 48])
+        points = []
+
+        def send(**event):
+            if "point" in event:
+                point = event["point"]
+                points.append(point)
+                driver.last["cursor"] = point
+                driver.last["controls"][self.KEY]["rect"] = [1515, 16, 1631, 48]
+                driver.last["controls"][self.KEY]["interaction"] = (
+                    "Hovered" if point == (1573, 32) else "None")
+            elif event.get("pressed"):
+                driver.last["controls"][self.KEY]["interaction"] = "Pressed"
+
+        driver.send.side_effect = send
+        acceptance.Driver.click(driver, self.KEY)
+        self.assertEqual(points, [(1506, 32), (1573, 32)])
+        self.assertEqual(driver.send.call_count, 4)
+        self.assertEqual(driver.send.call_args_list[2].kwargs,
+                         {"button": 1, "pressed": True})
+
+    def test_occluded_target_is_not_pressed(self):
+        driver = self.driver([1515, 16, 1631, 48])
+
+        def send(**event):
+            driver.last["cursor"] = event["point"]
+
+        driver.send.side_effect = send
+        with self.assertRaisesRegex(acceptance.native.AcceptanceError, "occluded"):
+            acceptance.Driver.click(driver, self.KEY)
+        driver.send.assert_called_once_with(point=(1573, 32))
+
+    def test_unstable_target_is_bounded_without_press(self):
+        driver = self.driver([0, 16, 100, 48])
+        points = []
+
+        def send(**event):
+            point = event["point"]
+            points.append(point)
+            driver.last["cursor"] = point
+            driver.last["controls"][self.KEY]["rect"] = [point[0] + 1, 16,
+                                                          point[0] + 101, 48]
+
+        driver.send.side_effect = send
+        with self.assertRaisesRegex(acceptance.native.AcceptanceError, "stable hover"):
+            acceptance.Driver.click(driver, self.KEY)
+        self.assertEqual(len(points), 3)
+        self.assertEqual(driver.send.call_count, 3)
 
 
 class BridgePlanningEvidenceTests(unittest.TestCase):
@@ -104,6 +166,130 @@ class BridgePlanningEvidenceTests(unittest.TestCase):
                 acceptance.bridge_planning.check_sequence(entries)
 
 
+class RestAreaPlanningEvidenceTests(unittest.TestCase):
+    def cancellation(self):
+        return {"scope": "production-raw-observations-v1", "schema_version": 2,
+                "failure": None, "nonce": "ordinary-cancel", "process_id": 123,
+                "accepted": False, "performance_evidence": False, "promotion_authority": False,
+                "samples": [{"world_epoch": 2, "blueprints": [{"entity": "7v1", "entity_bits": 30,
+                             "kind": "RestArea", "footprint": [[40, 40], [41, 40], [40, 41], [41, 41]],
+                             "progress": 0, "delivered_materials": {}}]},
+                            {"world_epoch": 2, "blueprints": [], "owner_layers": [{"entity": "7v1",
+                             "exists": False, "building_grids": [], "floor_grids": [], "door_grids": [],
+                             "bridge_grids": [], "stockpile_grids": []}]}],
+                "events": [{"operation": "BlueprintCancellationApplied", "producer": "blueprint_cancellation_system",
+                            "result": "OwnerCleanupApplied", "kind": "RestArea", "owner": "7v1", "owner_bits": 30,
+                            "world_epoch": 2, "sample_index": 1,
+                            "footprint": [[40, 40], [41, 40], [40, 41], [41, 41]],
+                            "footprint_walkability": [True] * 4,
+                            "refund_items": [], "delivered_materials": [],
+                            "released_actors": [], "closed_requests": [], "removed_storages": [], "released_items": []}]}
+
+    def test_applied_cancellation_is_bound_without_granting_lifecycle_authority(self):
+        acceptance.rest_area_planning.check_cancellation(self.cancellation(), self.entries(),
+                                                       {"nonce": "ordinary-cancel", "pid": 123})
+
+    def test_foreign_or_missing_cancellation_observation_is_rejected(self):
+        mutations = (
+            lambda raw: raw.update(nonce="foreign"),
+            lambda raw: raw.update(process_id=124),
+            lambda raw: raw.update(accepted=True),
+            lambda raw: raw.update(performance_evidence=True),
+            lambda raw: raw.update(promotion_authority=True),
+            lambda raw: raw.update(failure="overflow"),
+            lambda raw: raw.update(events=[]),
+            lambda raw: raw["events"].append(copy.deepcopy(raw["events"][0])),
+            lambda raw: raw["events"][0].update(producer="TaskActionOutcome"),
+            lambda raw: raw["events"][0].update(result="CancellationRequested"),
+            lambda raw: raw["events"][0].update(owner_bits=20),
+            lambda raw: raw["events"][0].update(owner_bits=30.0),
+            lambda raw: raw["events"][0].update(world_epoch=1),
+            lambda raw: raw["events"][0].update(sample_index=-1),
+            lambda raw: raw["events"][0].update(sample_index=True),
+            lambda raw: raw["events"][0].update(refund_items=[{"kind": "Wood", "count": 1}]),
+            lambda raw: raw["events"][0].update(released_actors=["7v1", "7v1"]),
+            lambda raw: raw["samples"][0].update(world_epoch=1),
+            lambda raw: raw["samples"][1].update(blueprints=[{"entity": "7v1"}]),
+            lambda raw: raw["samples"][1].pop("blueprints"),
+            lambda raw: raw["samples"][1].pop("owner_layers"),
+            lambda raw: raw["samples"][1]["owner_layers"][0].update(stockpile_grids=[[40, 40]]),
+        )
+        for mutate in mutations:
+            raw = self.cancellation()
+            mutate(raw)
+            with self.subTest(mutation=mutate), self.assertRaises(RuntimeError):
+                acceptance.rest_area_planning.check_cancellation(raw, self.entries(),
+                                                               {"nonce": "ordinary-cancel", "pid": 123})
+
+    def test_helper_is_bound_to_all_native_harness_inventories(self):
+        from scripts.perf_tool import execution, renderdoc_capture
+        relative = ".codex/skills/hell-workers-run-native-acceptance/scripts/ui_rest_area_planning.py"
+        for inventory in (acceptance.native.NATIVE_HARNESS_FILES,
+                          execution.MEASUREMENT_HARNESS_FILES,
+                          renderdoc_capture.MEASUREMENT_HARNESS_FILES):
+            self.assertIn(relative, inventory)
+
+    def entries(self):
+        footprint = [[40, 40], [41, 40], [40, 41], [41, 41]]
+        entries = []
+        for index, case in enumerate(acceptance.rest_area_planning.CHECKPOINTS):
+            entity = 20 if index < 3 else 30
+            occupied = 0 < index < 4
+            cells = [{"grid": grid, "walkable": not occupied,
+                      "owner": entity if occupied else None} for grid in footprint]
+            value = {"frame": 100 + 10 * index, "world_epoch": 1 if index < 3 else 2,
+                     "save_outcomes": ["Save:Succeeded"] if index == 2 else ["Load:Succeeded"] if index == 3 else [],
+                     "task_outcomes": [{"entity": 30, "action": "Cancel", "result": "CancellationRequested",
+                                        "epoch": 2, "frame": 135}] if index == 4 else [],
+                     "rest_area_planning": {"anchor": [40, 40], "footprint": footprint,
+                                            "draw_pos": [20.0, 20.0], "legal": not occupied,
+                                            "cells": cells, "buildings": [],
+                                            "blueprints": [{"entity": entity, "footprint": footprint,
+                                                            "progress": 0, "materials_complete": False}]
+                                            if occupied else []}}
+            entries.append({"case": case, "last_step": index * 5, "value": value})
+        return entries
+
+    def test_exact_ordinary_reservation_save_load_and_cancel(self):
+        acceptance.rest_area_planning.check_sequence(self.entries())
+        self.assertEqual(acceptance.session_matrix("rest-area-planning", True),
+                         [("rest-area-planning", *acceptance.VIEWPORTS[0])])
+
+    def test_missing_or_fabricated_rest_area_evidence_is_rejected(self):
+        def malformed_footprint(entries):
+            for entry in entries:
+                evidence = entry["value"]["rest_area_planning"]
+                evidence["footprint"][3] = [42, 41]
+                evidence["cells"][3]["grid"] = [42, 41]
+                for blueprint in evidence["blueprints"]:
+                    blueprint["footprint"][3] = [42, 41]
+
+        def changed_saved_entity(entries):
+            evidence = entries[2]["value"]["rest_area_planning"]
+            evidence["blueprints"][0]["entity"] = 25
+            for cell in evidence["cells"]:
+                cell["owner"] = 25
+
+        mutations = (
+            lambda entries: entries.pop(),
+            malformed_footprint,
+            lambda entries: entries[1]["value"]["rest_area_planning"]["blueprints"][0].update(progress=1),
+            lambda entries: entries[2]["value"].update(save_outcomes=[]),
+            lambda entries: entries[3]["value"].update(world_epoch=1),
+            lambda entries: entries[3]["value"]["rest_area_planning"]["blueprints"][0].update(entity=20),
+            changed_saved_entity,
+            lambda entries: entries[4]["value"]["rest_area_planning"]["cells"][0].update(owner=30),
+            lambda entries: entries[4]["value"].update(task_outcomes=[]),
+            lambda entries: entries[4]["value"]["task_outcomes"][0].update(epoch=1),
+            lambda entries: entries[4].update(last_step=0),
+        )
+        for mutation in mutations:
+            entries = self.entries()
+            mutation(entries)
+            with self.subTest(mutation=mutation), self.assertRaises(RuntimeError):
+                acceptance.rest_area_planning.check_sequence(entries)
+
+
 class VendoredSourceIdentityTests(unittest.TestCase):
     def test_all_native_fingerprints_include_vendored_dependency_changes(self):
         from scripts.perf_tool import execution, renderdoc_capture
@@ -131,7 +317,178 @@ class VendoredSourceIdentityTests(unittest.TestCase):
                 self.assertTrue(all(old != new for old, new in zip(before, after)))
 
 
+class RestAreaRefundEvidenceTests(unittest.TestCase):
+    def test_refund_navigation_stays_paused_until_cancel_detail_is_ready(self):
+        driver = Mock()
+        action = "task-action:7:Cancel(RestArea)"
+        driver.last = {"frame": 40, "paused": True, "controls": {action: {}},
+                       "rest_area_planning": {"blueprints": [{"entity": 7}]}}
+        events = []
+        def click(key):
+            events.append((key, driver.last["paused"]))
+            if key == action:
+                driver.last["rest_area_planning"]["blueprints"] = []
+        def wait(predicate, **kwargs):
+            self.assertTrue(predicate(driver.last))
+            return driver.last
+        def pause(value, paused):
+            events.append(("pause", paused))
+            value.last["paused"] = paused
+        driver.click.side_effect = click
+        driver.wait.side_effect = wait
+        with patch.object(acceptance.rest_area_planning, "set_refund_paused", side_effect=pause):
+            acceptance.rest_area_planning.cancel_loaded(driver, refund=True)
+        self.assertEqual(events, [("menu:Workspace(OpenEntities)", True),
+            ("tab:TaskList", True), ("task:7", True), ("pause", False),
+            (action, False), (action, False)])
+
+    def test_explicit_pause_control_waits_for_real_state_and_never_resends(self):
+        for paused, control in ((True, "Paused"), (False, "Normal")):
+            driver = Mock()
+            driver.last = {"frame": 10, "paused": not paused}
+            def wait(predicate, *, after):
+                self.assertEqual(after, 10)
+                self.assertFalse(predicate({"paused": not paused}))
+                value = {"frame": 20, "paused": paused}
+                self.assertTrue(predicate(value))
+                return value
+            driver.wait.side_effect = wait
+            acceptance.rest_area_planning.set_refund_paused(driver, paused)
+            driver.click.assert_called_once_with(f"menu:SetTimeSpeed({control})")
+            driver.key.assert_not_called()
+            acceptance.rest_area_planning.set_refund_paused(driver, paused)
+            driver.click.assert_called_once()
+            driver.last["paused"] = not paused
+            driver.click.reset_mock()
+            driver.wait.side_effect = RuntimeError("state transition absent")
+            with self.assertRaises(RuntimeError):
+                acceptance.rest_area_planning.set_refund_paused(driver, paused)
+            driver.click.assert_called_once_with(f"menu:SetTimeSpeed({control})")
+
+    def entries(self):
+        entries = RestAreaPlanningEvidenceTests().entries()
+        delivered = copy.deepcopy(entries[1])
+        delivered["case"] = "rest-area-delivered"
+        entries.insert(2, delivered)
+        for index, entry in enumerate(entries):
+            entry["case"] = entry["case"].replace("rest-area-", "rest-area-refund-")
+            entry["last_step"] = index * 5
+            entry["value"]["frame"] = 100 + 10 * index
+            if 2 <= index <= 4:
+                entry["value"]["rest_area_planning"]["blueprints"][0]["delivered_materials"] = {"Wood": 2}
+        entries[-1]["value"]["task_outcomes"][0]["frame"] = 145
+        return entries
+
+    def raw(self):
+        raw = RestAreaPlanningEvidenceTests().cancellation()
+        raw["samples"][0]["blueprints"][0]["delivered_materials"] = {"Wood": 2}
+        raw["events"][0].update(delivered_materials=[{"kind": "Wood", "count": 2}],
+            refund_items=[{"entity": "8v1", "kind": "Wood", "count": 1},
+                          {"entity": "9v1", "kind": "Wood", "count": 1}])
+        return raw
+
+    def test_real_nonzero_materials_bind_loaded_owner_and_exact_refund_ids(self):
+        acceptance.rest_area_planning.check_sequence(self.entries(), refund=True)
+        acceptance.rest_area_planning.check_cancellation(self.raw(), self.entries(),
+            {"nonce": "ordinary-cancel", "pid": 123}, refund=True)
+        self.assertEqual(acceptance.session_matrix("rest-area-refund", True),
+                         [("rest-area-refund", *acceptance.VIEWPORTS[0])])
+
+    def test_refund_rejects_missing_duplicate_foreign_or_relabelled_items(self):
+        mutations = (
+            lambda raw: raw["events"][0].update(refund_items=[]),
+            lambda raw: raw["events"][0]["refund_items"].pop(),
+            lambda raw: raw["events"][0]["refund_items"][1].update(entity="8v1"),
+            lambda raw: raw["events"][0]["refund_items"][0].update(kind="Bone"),
+            lambda raw: raw["events"][0]["refund_items"][0].update(count=True),
+            lambda raw: raw["events"][0]["refund_items"][0].update(entity="7v1"),
+            lambda raw: raw["events"][0].update(released_items=["8v1"]),
+            lambda raw: raw["events"][0].update(delivered_materials=[{"kind": "Wood", "count": 1}]),
+            lambda raw: raw["samples"][0]["blueprints"][0].update(delivered_materials={}),
+        )
+        for mutate in mutations:
+            raw = self.raw()
+            mutate(raw)
+            with self.subTest(mutation=mutate), self.assertRaises(RuntimeError):
+                acceptance.rest_area_planning.check_cancellation(raw, self.entries(),
+                    {"nonce": "ordinary-cancel", "pid": 123}, refund=True)
+
+    def test_additional_ordinary_delivery_requires_exact_terminal_raw_history(self):
+        raw, entries = self.raw(), self.entries()
+        latest = copy.deepcopy(raw["samples"][0])
+        latest["blueprints"][0].update(delivered_materials={"Wood": 3}, progress=0.2)
+        raw["samples"].insert(1, latest)
+        raw["events"][0].update(sample_index=2, delivered_materials=[{"kind": "Wood", "count": 3}])
+        raw["events"][0]["refund_items"].append({"entity": "10v1", "kind": "Wood", "count": 1})
+        acceptance.rest_area_planning.check_cancellation(raw, entries,
+            {"nonce": "ordinary-cancel", "pid": 123}, refund=True)
+        mutations = (
+            lambda value: value["samples"][1]["blueprints"][0].update(delivered_materials={"Wood": 2}),
+            lambda value: value["samples"][0]["blueprints"][0].update(delivered_materials={"Wood": 4}),
+            lambda value: value["samples"][1]["blueprints"][0].update(delivered_materials={"Wood": True}),
+            lambda value: value["samples"][1]["blueprints"][0].update(delivered_materials={"Wood": 3, "Bone": 1}),
+            lambda value: value["samples"][1]["blueprints"][0].update(progress=1),
+            lambda value: value["samples"][1]["blueprints"][0].update(entity_bits=31),
+        )
+        for mutate in mutations:
+            changed = copy.deepcopy(raw)
+            mutate(changed)
+            with self.subTest(mutation=mutate), self.assertRaises(RuntimeError):
+                acceptance.rest_area_planning.check_cancellation(changed, entries,
+                    {"nonce": "ordinary-cancel", "pid": 123}, refund=True)
+
+    def test_refund_rejects_absent_or_changed_materials_and_completed_blueprint(self):
+        for value in ({}, {"Wood": 0}, {"Wood": True}, {"Wood": 6}, {"Bone": 2}):
+            entries = self.entries()
+            entries[2]["value"]["rest_area_planning"]["blueprints"][0]["delivered_materials"] = value
+            with self.subTest(materials=value), self.assertRaises(RuntimeError):
+                acceptance.rest_area_planning.check_sequence(entries, refund=True)
+        for field, value in (("progress", 1), ("progress", float("nan")),
+                             ("delivered_materials", {"Wood": 3})):
+            entries = self.entries()
+            entries[4]["value"]["rest_area_planning"]["blueprints"][0][field] = value
+            with self.subTest(field=field, value=value), self.assertRaises(RuntimeError):
+                acceptance.rest_area_planning.check_sequence(entries, refund=True)
+
+    def test_boolean_delivered_count_is_not_one_unit_of_wood(self):
+        raw, entries = self.raw(), self.entries()
+        for entry in entries[2:5]:
+            entry["value"]["rest_area_planning"]["blueprints"][0]["delivered_materials"] = {"Wood": 1}
+        raw["samples"][0]["blueprints"][0]["delivered_materials"] = {"Wood": 1}
+        raw["events"][0]["refund_items"].pop()
+        raw["events"][0]["delivered_materials"][0]["count"] = True
+        with self.assertRaises(RuntimeError):
+            acceptance.rest_area_planning.check_cancellation(raw, entries,
+                {"nonce": "ordinary-cancel", "pid": 123}, refund=True)
+
+    def test_delivery_checkpoint_cannot_change_owner_epoch_or_site(self):
+        def owner(value):
+            evidence = value["rest_area_planning"]
+            evidence["blueprints"][0]["entity"] = 99
+            for cell in evidence["cells"]:
+                cell["owner"] = 99
+        def site(value):
+            evidence = value["rest_area_planning"]
+            evidence["anchor"] = [42, 40]
+            footprint = [[42, 40], [43, 40], [42, 41], [43, 41]]
+            evidence["footprint"] = footprint
+            evidence["blueprints"][0]["footprint"] = footprint
+            for cell, grid in zip(evidence["cells"], footprint):
+                cell["grid"] = grid
+        for mutate in (owner, site, lambda value: value.update(world_epoch=3),
+                       lambda value: value["rest_area_planning"].update(draw_pos=[21.0, 20.0])):
+            entries = self.entries()
+            mutate(entries[2]["value"])
+            with self.subTest(mutation=mutate), self.assertRaises(RuntimeError):
+                acceptance.rest_area_planning.check_sequence(entries, refund=True)
+
+
 class RuntimeLogEvidenceTests(unittest.TestCase):
+    def test_cancellation_environment_builds_exact_process_bound_raw_setting(self):
+        setting = acceptance.cancellation_observation_setting(Path("/owned/viewport-0"), "fresh-nonce")
+        self.assertEqual(json.loads(setting), {"nonce": "fresh-nonce",
+            "output": "/owned/viewport-0/production-cancellation.json", "admitted_identities": []})
+
     def test_parent_log_filter_cannot_hide_renderer_evidence(self):
         for inherited in ("warn", "off", "bevy_app=info"):
             with self.subTest(inherited=inherited), patch.object(
@@ -144,6 +501,24 @@ class RuntimeLogEvidenceTests(unittest.TestCase):
 
 
 class KeyboardTapTests(unittest.TestCase):
+    def test_fresh_ack_keeps_exact_target_and_waits_for_a_new_observation(self):
+        for fresh, lower in ((False, 13), (True, 10)):
+            driver = acceptance.Driver.__new__(acceptance.Driver)
+            driver.nonce, driver.events = "owned", []
+            driver.last = {"frame": 10}
+            driver.fresh_ack = fresh
+            driver.input = Mock()
+            driver.acknowledge_events = Mock()
+            def wait(predicate, *, after):
+                self.assertEqual(after, lower)
+                self.assertFalse(predicate({"cursor": [101, 110]}))
+                self.assertTrue(predicate({"cursor": [100, 100]}))
+                return {"frame": lower + 3, "cursor": [100, 100]}
+            driver.wait = Mock(side_effect=wait)
+            driver.send(point=(100, 100))
+            driver.input.send.assert_called_once_with("1", "owned", point=(100, 100))
+            self.assertGreater(driver.last["frame"], lower)
+
     def test_release_precedes_slow_observer_acknowledgement(self):
         driver = acceptance.Driver.__new__(acceptance.Driver)
         driver.nonce, driver.events, driver.root = "owned", [], Path("unused")

@@ -95,8 +95,20 @@ pub(super) fn fixture(
         world_preview: preview(kind.world_preview_role()),
         catalog_preview: preview("catalog"),
         receipt: None,
+        body_paint_projection: None,
+        surface_paint: None,
         numeric_approval_sha256: (authority != BuildingAssetAuthority::ArtPreview
-            && matches!(kind, BuildingAssetKind::Tank | BuildingAssetKind::MudMixer))
+            && matches!(
+                kind,
+                BuildingAssetKind::Tank
+                    | BuildingAssetKind::MudMixer
+                    | BuildingAssetKind::RestArea
+                    | BuildingAssetKind::SoulSpa
+                    | BuildingAssetKind::WheelbarrowParking
+                    | BuildingAssetKind::SandPile
+                    | BuildingAssetKind::BonePile
+                    | BuildingAssetKind::OutdoorLamp
+            ))
         .then(|| "e".repeat(64)),
         production_state: if authority == BuildingAssetAuthority::ArtPreview {
             None
@@ -127,6 +139,107 @@ pub(super) fn receipt_bytes(manifest: &BuildingAssetSetManifest) -> Vec<u8> {
         numeric_approval_sha256: manifest.numeric_approval_sha256.clone(),
     })
     .unwrap()
+}
+
+#[test]
+fn body_projection_preserves_exact_old_generation_manifest_and_receipt_bytes() {
+    let bytes = include_bytes!("testdata/tank-g3.buildingset");
+    let manifest = decode_buildingset(bytes).unwrap();
+    assert!(manifest.body_paint_projection.is_none());
+    assert_eq!(canonical(&manifest).unwrap(), bytes);
+    let receipt = include_bytes!("testdata/tank-g3-receipt.json");
+    validate_receipt(&manifest, receipt).unwrap();
+    assert_eq!(
+        canonical(&serde_json::from_slice::<BuildingPromotionReceipt>(receipt).unwrap()).unwrap(),
+        receipt
+    );
+}
+
+#[test]
+fn uv_ink_is_identity_bound_and_rejects_foreign_kind_method_and_fields() {
+    for kind in BuildingAssetKind::ALL {
+        let mut manifest = fixture(kind, BuildingAssetAuthority::ArtPreview);
+        let previous = manifest.identity.clone();
+        manifest.surface_paint = Some(BuildingSurfacePaint {
+            method: BuildingSurfacePaintMethod::UvInkV1,
+        });
+        seal(&mut manifest);
+        assert_ne!(previous, manifest.identity);
+        let decoded = decode_buildingset(&canonical(&manifest).unwrap());
+        assert_eq!(
+            decoded.is_ok(),
+            matches!(
+                kind,
+                BuildingAssetKind::MudMixer
+                    | BuildingAssetKind::RestArea
+                    | BuildingAssetKind::SoulSpa
+            ),
+            "{kind:?}"
+        );
+    }
+    for input in [
+        r#"{"method":"camera_space"}"#,
+        r#"{"method":true}"#,
+        r#"{"method":"uv_ink_v1","command":"arbitrary"}"#,
+    ] {
+        assert!(serde_json::from_str::<BuildingSurfacePaint>(input).is_err());
+    }
+}
+
+#[test]
+fn uv_ink_omission_preserves_the_previously_reviewed_tank_g4_bytes() {
+    let bytes = include_bytes!("testdata/tank-g4-art-preview.buildingset");
+    let manifest = decode_buildingset(bytes).unwrap();
+    assert!(manifest.surface_paint.is_none());
+    assert!(manifest.body_paint_projection.is_some());
+    assert_eq!(canonical(&manifest).unwrap(), bytes);
+}
+
+#[test]
+fn body_projection_is_identity_bound_and_rejects_other_kinds_pose_and_matte() {
+    let mut manifest = fixture(BuildingAssetKind::Tank, BuildingAssetAuthority::ArtPreview);
+    let old = manifest.identity.clone();
+    manifest.body_paint_projection = Some(BuildingBodyPaintProjection::WorldPreviewV1 {
+        matte_linear_rgb: [0.125, 0.09375, 0.078125],
+    });
+    seal(&mut manifest);
+    assert_ne!(old, manifest.identity);
+    assert_eq!(
+        decode_buildingset(&canonical(&manifest).unwrap()).unwrap(),
+        manifest
+    );
+    let mut bad = manifest.clone();
+    bad.parts[0].translation_wu[1] = 1.;
+    seal(&mut bad);
+    assert!(decode_buildingset(&canonical(&bad).unwrap()).is_err());
+    for matte in [[-0.1, 0., 0.], [0., 1.1, 0.]] {
+        let mut bad = manifest.clone();
+        bad.body_paint_projection = Some(BuildingBodyPaintProjection::WorldPreviewV1 {
+            matte_linear_rgb: matte,
+        });
+        seal(&mut bad);
+        assert!(decode_buildingset(&canonical(&bad).unwrap()).is_err());
+    }
+    for kind in BuildingAssetKind::ALL
+        .into_iter()
+        .filter(|k| *k != BuildingAssetKind::Tank)
+    {
+        let mut bad = fixture(kind, BuildingAssetAuthority::ArtPreview);
+        bad.body_paint_projection = manifest.body_paint_projection;
+        seal(&mut bad);
+        assert!(
+            decode_buildingset(&canonical(&bad).unwrap()).is_err(),
+            "{kind:?}"
+        );
+    }
+    let text = String::from_utf8(canonical(&manifest).unwrap()).unwrap();
+    assert!(
+        decode_buildingset(
+            text.replace("world_preview_v1", "arbitrary_image")
+                .as_bytes()
+        )
+        .is_err()
+    );
 }
 
 pub(super) fn seal(manifest: &mut BuildingAssetSetManifest) {
@@ -512,7 +625,16 @@ fn production_state_is_required_typed_bounded_and_bound_to_manifest_identity() {
 
 #[test]
 fn numeric_approval_is_required_hash_bound_and_retained_by_release_projection() {
-    for kind in [BuildingAssetKind::Tank, BuildingAssetKind::MudMixer] {
+    for kind in [
+        BuildingAssetKind::Tank,
+        BuildingAssetKind::MudMixer,
+        BuildingAssetKind::RestArea,
+        BuildingAssetKind::SoulSpa,
+        BuildingAssetKind::WheelbarrowParking,
+        BuildingAssetKind::SandPile,
+        BuildingAssetKind::BonePile,
+        BuildingAssetKind::OutdoorLamp,
+    ] {
         let candidate = fixture(kind, BuildingAssetAuthority::IsolatedCandidate);
         for invalid in [None, Some("invalid".into())] {
             let mut changed = candidate.clone();
@@ -550,7 +672,7 @@ fn numeric_approval_is_required_hash_bound_and_retained_by_release_projection() 
 }
 
 #[test]
-fn numeric_provenance_is_omitted_for_existing_drafts_and_non_m2() {
+fn numeric_provenance_is_omitted_for_existing_drafts_and_bridge() {
     for (kind, authority) in [
         (BuildingAssetKind::Tank, BuildingAssetAuthority::ArtPreview),
         (
@@ -559,6 +681,14 @@ fn numeric_provenance_is_omitted_for_existing_drafts_and_non_m2() {
         ),
         (
             BuildingAssetKind::RestArea,
+            BuildingAssetAuthority::ArtPreview,
+        ),
+        (
+            BuildingAssetKind::SoulSpa,
+            BuildingAssetAuthority::ArtPreview,
+        ),
+        (
+            BuildingAssetKind::Bridge,
             BuildingAssetAuthority::ReleaseApproved,
         ),
     ] {

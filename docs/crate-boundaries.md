@@ -12,6 +12,9 @@ upstream licenseと差分の記録を保ち、ゲーム型をvendorへ追加し�
 *   `bevy_app` は App Shell として唯一プレフィックスを持たない Root クレートとする。
 *   単なる `utils` や `components` といった、特定のドメインを持たない雑多な共通クレートの新設は禁止する。
 
+Linux/glibcのmalloc起動policyはplatform所有の`bevy_app` binaryに置く。target限定の`libc`依存をleafへ流さず、
+通常起動とprofilingで同じ経路を使用する。codecのoffline入出力はこの設定を実行しない。
+
 ## 1. クレート境界の基本原則 (Crate Boundaries)
 
 *   **Leaf Crates (`hw_*`) は「Pure Domain (純粋ロジック層)」である**
@@ -66,6 +69,10 @@ P04のECS adapterは`bevy_app::systems::lighting`に置き、world/queryから�
 生成入力の検証は所有crateの`#[cfg(test)]` moduleに置く。`hw_world`と`hw_infra`は
 proptestをdev-dependencyとして利用し、pure入口を検査する。生成器のためにrootやECSへ
 逆依存せず、runtimeにproptest型・乱数源・failure保存処理を持ち込まない。
+`hw_ui`の`log` dev-dependencyも実Bevy command警告の回帰検出だけに限定し、runtime loggerやdomain依存を追加しない。
+
+rootの`winit` dev-dependencyはwindow messageの実型fixture専用とする。
+window frame bufferの停止中maintenanceはApp Shellの責務であり、leafへwindow依存やdomain clock変更を持ち込まない。
 
 複数のシステム間でデータをやり取りするための型（struct や enum）や、関数の戻り値（Result / Outcome 型）は、**「その処理の主たる責務を持つ Leaf クレート (`hw_*`)」** 側で定義し、Root 側がそれを `use` して利用する。
 

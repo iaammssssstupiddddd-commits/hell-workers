@@ -5,6 +5,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from scripts import building_m2_acceptance as m2
@@ -73,6 +74,35 @@ class M2AcceptanceTests(unittest.TestCase):
         self.trace["schema_version"] = 2
         with self.assertRaisesRegex(ValueError, "unsupported observation schema"):
             self.inspect()
+
+    def test_inventory_uses_the_same_revision_rejection(self):
+        self.plan["kinds"]["Tank"]["revision"] = "v2"
+        with self.assertRaisesRegex(ValueError, "revision"):
+            self.inspect()
+
+    def test_inventory_cannot_attribute_a_v1_trace_to_v2(self):
+        self.identity["kind"] = "MudMixer"
+        digest = m2.numeric_contract("MudMixer", "v2")[1]
+        self.plan["kinds"] = {"MudMixer": {"identity": self.identity,
+                              "revision": "v2", "numeric_candidate_sha256": digest}}
+        self.trace["identity"] = self.identity
+        for sample in self.trace["samples"]:
+            sample["identity"] = self.identity
+        with tempfile.TemporaryDirectory() as directory:
+            plan, trace = Path(directory) / "plan.json", Path(directory) / "trace.json"
+            plan.write_bytes(m2.pipeline.canonical(self.plan))
+            for declared in (None, m2.NUMERIC_SHA256, "a" * 64, digest):
+                changed = copy.deepcopy(self.trace)
+                if declared is not None:
+                    changed["numeric_candidate_sha256"] = declared
+                trace.write_text(json.dumps(changed))
+                if declared == digest:
+                    result = m2.inspect(plan, "MudMixer", trace)
+                    self.assertEqual(result["numeric_candidate"]["numeric_candidate_sha256"], digest)
+                    self.assertFalse(result["accepted"])
+                else:
+                    with self.assertRaisesRegex(ValueError, "numeric revision"):
+                        m2.inspect(plan, "MudMixer", trace)
 
 
 class RuntimeIntegrityTests(unittest.TestCase):
@@ -146,6 +176,96 @@ class RuntimeIntegrityTests(unittest.TestCase):
         self.plan_path.write_bytes(m2.pipeline.canonical(self.value))
         with self.assertRaisesRegex(ValueError, "approval"):
             self.verify()
+
+
+    def set_revision(self, kind, revision, *, update_manifest=True, update_provenance=True):
+        path, digest = m2.numeric_contract(kind, revision)
+        spec = self.value["kinds"][kind]
+        spec.update(revision=revision, numeric_candidate_sha256=digest)
+        root = Path(spec["source_root"])
+        if update_manifest:
+            manifest_path = root / m2.pipeline.locator(kind)
+            manifest = json.loads(manifest_path.read_text())
+            manifest["geometry_contract_sha256"] = digest
+            text = json.dumps(manifest)
+            manifest_path.write_text(text)
+            spec["manifest_sha256"] = m2.pipeline.digest(text.encode())
+        if update_provenance:
+            (root / "provenance/geometry.json").write_bytes(path.read_bytes())
+        self.plan_path.write_bytes(m2.pipeline.canonical(self.value))
+
+    def test_legacy_and_explicit_v2_have_exact_per_kind_proposals(self):
+        legacy = self.verify()
+        for kind in ("Tank", "MudMixer"):
+            self.assertEqual(legacy["numeric_candidates"][kind],
+                             {"revision": "v1", "numeric_candidate_sha256": m2.NUMERIC_SHA256})
+        self.set_revision("Tank", "v1")
+        self.set_revision("MudMixer", "v2")
+        result = self.verify()
+        self.assertEqual(result["numeric_candidates"]["MudMixer"],
+                         {"revision": "v2", "numeric_candidate_sha256": m2.numeric_contract("MudMixer", "v2")[1]})
+        self.assertEqual(result["numeric_candidates"]["Tank"]["revision"], "v1")
+        self.assertFalse(result["accepted"])
+        self.assertFalse(result["numeric_freeze"])
+        self.assertFalse(result["runtime_published"])
+
+    def test_v2_requires_explicit_matching_hash_and_revision(self):
+        original = copy.deepcopy(self.value)
+        for kind, revision, digest in (
+            ("MudMixer", None, m2.NUMERIC_SHA256),
+            ("MudMixer", 2, m2.NUMERIC_SHA256),
+            ("MudMixer", "v3", m2.NUMERIC_SHA256),
+            ("Tank", "v2", m2.NUMERIC_SHA256),
+            ("MudMixer", "v2", None),
+            ("MudMixer", "v2", m2.NUMERIC_SHA256),
+            ("MudMixer", "v1", m2.numeric_contract("MudMixer", "v2")[1]),
+        ):
+            with self.subTest(kind=kind, revision=revision, digest=digest):
+                self.value = copy.deepcopy(original)
+                self.value["kinds"][kind]["revision"] = revision
+                if digest is not None:
+                    self.value["kinds"][kind]["numeric_candidate_sha256"] = digest
+                self.plan_path.write_bytes(m2.pipeline.canonical(self.value))
+                with self.assertRaises(ValueError):
+                    self.verify()
+
+    def test_v2_rejects_manifest_only_or_provenance_only_binding(self):
+        self.set_revision("MudMixer", "v2", update_manifest=False)
+        with self.assertRaisesRegex(ValueError, "numeric binding"):
+            self.verify()
+        self.set_revision("MudMixer", "v2")
+        legacy, _ = m2.numeric_contract("MudMixer", "v1")
+        (self.root / "MudMixer/provenance/geometry.json").write_bytes(legacy.read_bytes())
+        with self.assertRaisesRegex(ValueError, "provenance"):
+            self.verify()
+
+    def test_plan_propagates_explicit_mixer_revision_without_authority(self):
+        for revision in ("v2", "v3"):
+            self.set_revision("MudMixer", revision)
+            args = SimpleNamespace(repo=str(self.root), subject_sha256=self.subject["source"],
+                                   tank_runtime=self.root / "Tank", mixer_runtime=self.root / "MudMixer",
+                                   mixer_revision=revision, codec=self.codec, output=self.root / f"new-plan-{revision}.json")
+            with patch.object(m2, "frozen_subject", return_value=self.subject), \
+                    patch.object(m2, "candidate_geometry") as geometry, patch.object(m2.pipeline, "codec"):
+                result = m2.plan(args)
+            self.assertEqual(result["kinds"]["MudMixer"]["revision"], revision)
+            self.assertEqual(result["kinds"]["Tank"]["revision"], "v1")
+            geometry.assert_any_call("MudMixer", revision)
+            self.assertFalse(result["accepted"])
+            self.assertTrue(all(value is None for value in result["independent_gates"].values()))
+    def test_native_recipe_cannot_admit_a_mismatched_v2_proposal(self):
+        from scripts import building_m2_native_acceptance as recipe
+
+        self.set_revision("MudMixer", "v2", update_manifest=False)
+        value = {"status": "ready", "profile": recipe.PROFILE, "scope": recipe.SCOPE,
+                 "kind": "MudMixer", "leg": "refining", "duration_seconds": 60,
+                 "accepted": False, "promotion_authority": False, "adapter": "Intel",
+                 "runtime_plan": str(self.plan_path),
+                 "runtime_plan_sha256": m2.pipeline.digest(self.plan_path.read_bytes())}
+        with patch.object(m2, "frozen_subject", return_value=self.subject), \
+                patch.object(m2, "candidate_geometry"), patch.object(m2.pipeline, "codec"):
+            with self.assertRaisesRegex(ValueError, "numeric binding"):
+                recipe.check_plan(value)
 
 
 if __name__ == "__main__":
