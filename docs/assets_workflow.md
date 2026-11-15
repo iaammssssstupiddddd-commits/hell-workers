@@ -736,4 +736,52 @@ legacy389件と合わせて944原本となる。新index SHAは
 
 Mixer g6／Spa g4の正式authorityと旧g5/g3への復旧はcanonical exportsとruntime mirrorの
 世代別payload/provenance/receipt/journalが所有する。exact codec `25019e2c…75e3`を継続使用し、
-旧原本・codec・復旧情報を置換しない。raw検証jobは導入後の最終レビュー用途だけ保持中である。
+旧原本・codec・復旧情報を置換しない。終了したraw検証jobとstagingコピーの整理は次節を参照。
+
+
+## Mixer彩度とSpa骨表現改訂の整理完了（2026-11-15）
+
+導入後の通常startup・全9種normal/far・resident parityの独立採用と、全4群CIを完了した。
+CIはHEAD `abd7f5f89a5f26ac25efa586d1c91325e1423ffe`、base `25989dbbb0105188868c81d6d765dc67efcc275a`、
+source `fb058e40d22f15b0c6768de264b8f009465a173d9ae6742c0cc847acc4584726`で成功した。
+その後の変更は完了記録と索引だけで、変更別contracts gateの対象とする。
+
+具体planの独立レビュー後、consumer `Mixer/Spa visual feedback 2026-11-15`を26holdで正式解除し、
+用途が終わった24root・4,696filesの重複コピーを削除した。処分file/dir inventoryを実行直前に再照合し、
+追加unique fileとsymlinkを拒否するguardと回帰testを維持した。copy内の216directoryだけowner-writeを復元し、file chmodは行っていない。
+944原本とindex、canonical全263files・runtime全498files・全codec3filesのinventoryは前後で不変。
+新旧世代のpayload/provenance/journal、採用2画像と既定bindingを再照合した。primaryと通常Cargo cache、
+制作原本library、canonical exports、runtime mirror、復旧codecは保持する。
+
+対象rootの処分前du単純和は7,524,122,624B。filesystem availableの観測増分はprimary側・asset root側とも
+1,669,910,528Bで、両観測点を合算しない。共有extent等を含むduとavailableの差を同じ値とは扱わない。
+全24pathの不存在、当該consumerの残存0、正規reconcileとprimary storage check PASSを確認した。
+
+削除したexact pathは以下。`primary`はrepo root、`asset root`は`HELL_WORKERS_ASSET_ROOT`を表す。
+
+| 基点 | 削除したpath |
+| --- | --- |
+| primary | `target/native-acceptance/tak14-mixer-spa-weathered-binding-20261115-v1` |
+| primary | `target/native-acceptance/tak14-mixer-spa-weathered-binding-20261115-v2` |
+| primary | `target/native-acceptance/tak14-mixer-spa-weathered-installed-art-20261115-v1` |
+| primary | `target/native-acceptance/tak14-mixer-spa-weathered-installed-startup-20261115-v1` |
+| asset root | `staging/recovery/tak14-mixer-spa-weathered-20261115-v1` |
+| asset root | `staging/exports/tak14-mixer-weathered-candidate-20261115-v2` |
+| primary | `target/native-acceptance/tak14-mixer-weathered-candidate-normal-20261115-v1` |
+| primary | `target/native-acceptance/tak14-mixer-weathered-dirt-20261115-v1` |
+| primary | `target/native-acceptance/tak14-mixer-weathered-far-20261115-v1` |
+| primary | `target/native-acceptance/tak14-mixer-weathered-normal-20261115-v1` |
+| asset root | `staging/exports/building-m2/tak14-mixer-weathered-preview-20261115-v1` |
+| asset root | `staging/blend/tak14-mixer-weathered-source-20261115-v1.blend` |
+| asset root | `staging/reports/tak14-mixer-weathered-source-20261115-v1.json` |
+| asset root | `staging/exports/building-m2/tak14-mixer-weathered-source-20261115-v1` |
+| asset root | `staging/reports/building-m2/tak14-mixer-weathered-source-20261115-v1` |
+| asset root | `staging/exports/tak14-spa-weathered-candidate-20261115-v1` |
+| primary | `target/native-acceptance/tak14-spa-weathered-candidate-normal-20261115-v1` |
+| primary | `target/native-acceptance/tak14-spa-weathered-far-20261115-v1` |
+| primary | `target/native-acceptance/tak14-spa-weathered-normal-20261115-v1` |
+| asset root | `staging/exports/building-m3/tak14-spa-weathered-preview-20261115-v1` |
+| asset root | `staging/blend/tak14-spa-weathered-source-20261115-v1.blend` |
+| asset root | `staging/reports/tak14-spa-weathered-source-20261115-v1.json` |
+| asset root | `staging/exports/building-m3/tak14-spa-weathered-source-20261115-v1` |
+| asset root | `staging/reports/building-m3/tak14-spa-weathered-source-20261115-v1` |

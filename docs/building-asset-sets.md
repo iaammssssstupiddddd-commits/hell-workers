@@ -41,7 +41,8 @@ startup manifest SHAは`b8ea592d7ca6d9d831f1fef64a36b2a7b9640daa31284212a3b00fac
 gallery manifest SHAは`6df7ca24c336572a470727cdafd69b5c02aa70a62b40d3c3891bc4b73f875a09`。
 [採用画面](building-art-direction.md#ミキサーの彩度とspaの骨表現2026-11-15)と
 [資源parityと未測定範囲](rendering-performance.md#mixer彩度とspa骨表現のpixel-only改訂2026-11-15)を参照する。
-今回を新しい性能計測や自然lifecycle受入として報告しない。最終CI/reviewと検証コピー整理を続ける。
+今回を新しい性能計測や自然lifecycle受入として報告しない。全4群CI・独立reviewを終え、
+[原本保全と検証コピー整理](assets_workflow.md#mixer彩度とspa骨表現改訂の整理完了2026-11-15)を完了した。
 
 ## 2026-11-15 ミキサーと休憩所の判読性改訂
 
