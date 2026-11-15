@@ -7,11 +7,11 @@
 本書の定義は新規制作の基準であり、個別モデルの実装済み・目視受入済みを意味しない。
 
 2026-11-15の5設備は、以下の役割分担を新しい正式assetへ接続した。
-Tankは手描きの色面をbodyへ投影し、動くMixerとM3設備は元UVに沿う描線を部品へ固定する。
+Tankは手描きの色面をbodyへ投影し、動くMixerとM3設備は各モデルのUVに沿う描線を部品へ固定する。
 world-up diffuseを使い、元geometryはdepth・遮蔽・影biasを担当する。実emission・alpha・post処理は維持する。
 Lampは2Dのまま、面別ハイライトを抑えた塗装と高いポール・三脚を使う。
 個別art/numeric/release採否と導入は[現行世代](building-asset-sets.md#2026-11-15-ミキサーと休憩所の判読性改訂)を正本とし、
-導入後の9種画面は本書、静止性能は[性能仕様](rendering-performance.md#面塗り方式の9種の静止asset増分受入2026-11-15)を参照する。
+導入後の9種画面は本書、静止性能は[性能仕様](rendering-performance.md#ミキサーと休憩所改訂後の9種静止性能2026-11-15)を参照する。
 以下の過去の画像・結果はそれぞれの日付の履歴である。
 
 2026-11-15の追加フィードバックで、利用者はMixerの現行アートを不採用、RestAreaを判読困難と評価した。
@@ -19,7 +19,7 @@ Lampは2Dのまま、面別ハイライトを抑えた塗装と高いポール�
 両g5は新しい独立art/numeric/release審査と復元試験を通過し、正式導入した。
 MixerはDirt上の実モデルの車輪・架台を追加比較し、下段のdescriptor画像と混同しない。
 Restは入所Soulを描かない閉鎖shellのまま、急な布テント断面を使う。
-[判読性修正計画](plans/mixer-rest-readability-plan-2026-11-15.md)で導入後の9種画像と性能を確認中。
+導入後の9種画像は次節、性能は[測定結果](rendering-performance.md#ミキサーと休憩所改訂後の9種静止性能2026-11-15)を参照。
 以下の既存画像は旧世代の履歴であり、新しいinstalled subjectの受入を代用しない。
 
 ## 1. 目指す画面
@@ -141,6 +141,28 @@ M3のSoulSpa骨shaftは長辺で共通正規化した細いUV quadを持つ。�
 
 解像度は実際の表示面積とatlas内の配分から決める。高解像度画像であること自体を品質基準にしない。
 同種assetで模様の大きさをそろえ、拡大原図より縮小後の色面と線の残り方を優先する。
+
+## ミキサーと休憩所の判読性改訂後の画面（2026-11-15）
+
+長い傾斜ドラム・架台・車輪を分けたMixer g5、棟・支柱・閉じた幕を持つRest g5を正式導入した。
+手描き素材を部品local UVへ固定し、実回転に追従する。Restの論理4区画・入所Soul非表示は維持する。
+同じ画面の他7種・Wall/Floor/Soul/実携行icon、通常／遠景の判読を独立採用した。
+
+clean `fd5cd6891df3e964a897ebf65263561f47bd9ae9`、High/DPI1のowned X11原画像である。
+各36owner・40 loaded parts、実g5 mesh/image/material、Tankの水面分離とmode3、Mixer/Rest/Spaのmode4、
+Spaの実mask発光を照合した。seeded静止比較であり、自然施工・active AI性能の画像ではない。
+通常起動・Rest自然利用・Mixer状態試験・性能は、それぞれ別証拠として[asset仕様](building-asset-sets.md#2026-11-15-ミキサーと休憩所の判読性改訂)へ結ぶ。
+
+![ミキサーと休憩所改訂後の9種・通常表示](design/building-art/mixer-rest-nine-normal-20261115.png)
+
+![ミキサーと休憩所改訂後の9種・遠景表示](design/building-art/mixer-rest-nine-far-20261115.png)
+
+原画像SHAはnormal `16b24855d086dc852b08074ab73dd958f1b94f6972be76bbaac63f2bf56a6ee9`、
+far `da0c16ec9c904b76b64a69e4936d15a76e03520bfc8add00eb27ea08e262a202`。
+gallery manifestは`9ba1adef3b76c39cf1e48abee04c4872bcb649342160837ac2659e3642a9e606`。
+制作時の[Mixer基準画](design/building-art/mixer-hand-ink-direction-20261115.png)と
+[Rest基準画](design/building-art/rest-hand-ink-direction-20261115.png)は方向を検討した参考であり、
+実機画像や独立art/numeric/release承認の代替ではない。
 
 ## 面塗り方式と採用画面（2026-11-15）
 

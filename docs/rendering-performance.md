@@ -760,3 +760,38 @@ result SHAは`458c2af6e020344dd5d95696a510ff4d52f318bdc89e2c89757a89a68cc35b12`�
 active AI、自然施工/lifecycle、別sourceの基盤累積、Bridgeは本gateへ含めない。
 個別art/numeric/releaseと通常入力の利用/保存読込は[asset仕様](building-asset-sets.md#2026-11-15-面塗り方式の正式世代)、
 導入後normal/farは[制作仕様](building-art-direction.md#面塗り方式と採用画面2026-11-15)を参照する。
+
+## ミキサーと休憩所改訂後の9種静止性能（2026-11-15）
+
+Mixer/Rest g5と不変の他7種をclean `fd5cd6891df3e964a897ebf65263561f47bd9ae9`で測定した。
+runtime fingerprintは`2f8b8213a6fa722569dc14104a8966526105bd580de6aba924bab56cf0fa764f`、
+asset viewは`dd908b92aeffdeaa180e4ba0f9562ae511945077fdcc7839f94b3df221245fd9`。
+同sourceのlegacy-controlに対するpaused asset増分であり、旧g4との直接比較ではない。
+N36／4N144、各3対・中央対逆順、30秒warmup＋60秒計測、Capture12→Memory12を逐次実行した。
+Intel Arc MTL／Mesa26.2.6／Vulkan／X11、1280×720、DPI1、High、effective immediateを固定した。
+通常GNU起動と共通のarena2・mmap閾値131072Bを維持し、測定中の別build/test・cleanupは行っていない。
+
+| candidate−legacy-controlの中央値差 | N | 4N | 事前固定上限 |
+| --- | ---: | ---: | ---: |
+| p95 | +0.216960ms | +0.278871ms | +1ms |
+| p99 | +0.227884ms | +1.167469ms | +3ms |
+| Rust live peak | +10,613,111B | +12,793,695B | +16,777,216B |
+| process RSS | +18,356KiB | +332KiB | +98,304KiB |
+
+最大relative MADは1.474796%（上限10%）。共有資源増分はmesh7／accessor・vertex-index各92,184B、
+image20／CPU・descriptor各9,175,040B、structural material10／shallow4,640Bで、N/4Nのplateauと初終不変を確認した。
+新geometryのpayload92,184Bは測定前に独立採用した。画像は512²×5＋256²×15のRGBA8相当であり、
+1枚の高解像度textureへ読み替えない。時間・Rust live・RSS・MADの旧予算は緩めていない。
+全24試行のraw/window/adapter/binaryと実owner→root/part/material/image、同世代のpoolを公開verifierで照合し、
+登録済みのroot-bound adapterは同verifierを実行するだけで、閾値や受入範囲を変更しない。
+独立レビューで全24行、Memory/RSS、初終集合、plateau、candidate計1,200 partsを再照合し、静止増分を採用した。
+
+事前予算SHAは`ccb5a7061a7d9258a596d127e874465824844a328c4cdd593d3dc7973a542323`、
+plan SHAは`585ab57f454fcf1765a649279e63c812d319d27d805cb0c500cb9210c53835b8`、
+result SHAは`3ba1b85bbe06b44fb2e3a0f27765c42bc01b5534145d2bf9ff5ee5ef12d8d77c`。
+全24試行は登録済み独立verifyでpass・seal・finalize・storage check済み。
+自動resultのaccepted/promotion_authority=falseは追加のart/release/依頼全体承認を付与しない境界を維持する。
+これはlogical payload/shallow量とRust allocator/RSSの比較であり、GPU/driver/native allocation総量ではない。
+active AI、自然施工/lifecycle、別sourceのM1-0基盤累積、Bridgeは本gateへ含めない。
+個別art/numeric/release・通常起動は[asset仕様](building-asset-sets.md#2026-11-15-ミキサーと休憩所の判読性改訂)、
+normal/farは[採用画面](building-art-direction.md#ミキサーと休憩所の判読性改訂後の画面2026-11-15)へ分離する。

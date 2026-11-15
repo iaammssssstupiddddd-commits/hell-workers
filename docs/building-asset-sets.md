@@ -35,8 +35,48 @@ Restの論理4区画・center offset・入所Soul非表示・Dreamと保存契�
 224tri、上限64WU、preview canvas144WUで、world/catalog双方のcropを拒否検査する。
 Help実経路はNo impact。既定binding→loader/pool→world/catalog/previewの外観だけを変更し、
 入力・成立条件・精製/休息の意味・文言・保存形式・Help到達性は変更しない。
-**導入後の通常startup・9種normal/farと固定24試行の性能確認はこれから実施する。**
-旧sourceや候補のpassを、新しいinstalled subjectの成功へ流用しない。
+導入後のclean `fd5cd6891df3e964a897ebf65263561f47bd9ae9`で、通常startupと9種normal/farを独立採用した。
+compiled_defaultから8poolすべてのexpected/active/descriptor・依存residentが一致し、pending/failureなし。
+通常startupは初期worldのParking1owner・nonvisible spriteだけを観測し、建物を生成していない。
+9種の表示は別のseeded galleryの各36owner・40 loaded partsで照合し、自然施工の画像とは扱わない。
+startup manifest SHAは`43730dbaf10c1bf2543fc5f357827e12ca48a5c546bb4bb39d279e74fa77d526`、
+gallery manifest SHAは`9ba1adef3b76c39cf1e48abee04c4872bcb649342160837ac2659e3642a9e606`。
+同headの固定Capture12→Memory12は全24試行が予算内で独立verify・seal・finalize済み。
+独立レビューでも24行・raw counter・candidate計1,200 partsと集計を再照合して採用した。
+最終文書reviewと用途終了consumerの整理を行って、本改訂を閉じる。
+[採用画面](building-art-direction.md#ミキサーと休憩所の判読性改訂後の画面2026-11-15)と
+[静止性能の範囲・結果](rendering-performance.md#ミキサーと休憩所改訂後の9種静止性能2026-11-15)を参照する。
+旧sourceや候補のpassを、このinstalled subjectの成功へ流用していない。
+
+### 手描き原本と形状検査の境界
+
+`handpaint-v1`はfixtureの不透明PNG素材3枚（drum/iron/canvas）を、物体localの部品UVへ割り当てる。
+元PNGの寸法/SHA/生成promptをmaterials.jsonへ固定し、recipe/toolchain fingerprintにも含める。
+完成図のカメラ投影で可動部を平面化せず、ドラムの長手線と一つのwrap seamは実回転へ追従する。
+最終Blendは3素材Imageとsnapshot Textにfake userを付け、保存後safe Blenderのno-network/autoexec無効で
+再openし、packed bytes/SHA/寸法/名前/保持flag/重複を検査する。reload/unpack/saveは行わず、
+前後のBlend・素材・inspector bytesを照合する。sidecarだけ存在する状態をself-contained原本と認めない。
+実GLBのposition/UV検査はBlender/GLTFのFloat32格納順でexpectedを構築してから既存比較を行う。
+round境界に合わせた許容幅拡大やindexed face/winding/privacy検査の削除はしない。
+
+### Mixerの自然地形feedbackと状態検証
+
+`building_art_acceptance.py --world-seed`の非既定値は、MudMixer/feedback/ArtPreviewの
+明示M2 context normal/farだけに限定する。planの厳密uint64、--perf-seed、専用env marker、
+実PERFログとsummary.csvのseedを全て束縛する。通常起動・candidate/gallery/M6/UI・他kindは拒否し、
+地形を書き換えない。別seedがDirtとなる保証はなく、画像で実modelと下段descriptor previewを区別する。
+M2の新v6もkind/numeric SHA/revisionをplan→child→traceで明示照合する。リストの末尾からrevisionを推測しない。
+Refining/pause/load/moveのseeded probeは通常施工や自然供給、性能を承認しない。
+
+Rest自然利用runnerはreadyで選んだ同SoulをOS pause前に固定し、pause後にready閾値Dream>=2を再要求しない。
+その時点の同identity/Hidden/RestingIn、paused、Dream>0.5を要求し、actual paused値をdrain起点とする。
+独立verifierの同Soulの0.5以上の実減少、raw/epoch/time/visibility、保存復元と退室条件は不変。
+Soul置換・退出・不足時は入力再送せず停止する。通常ゲームのDream値や入退所条件は変更しない。
+
+配色だけの初案・円盤状Mixer・浅い矩形屋根のRestは、不採用のまま制作原本へ保全した。
+初期のFloat32境界照合、packed素材の保存欠落、専用seedのruntime拒否、Rest pause後の閾値再評価で
+失敗した試行を成功へ変更していない。原因を恒久補正したfresh source/jobで取り直し、
+旧invalidの結果は台帳履歴に維持する。完了後のrawを永久再検証するための保持は要求しない。
 
 ## 2026-11-15 面塗り方式の正式世代
 
