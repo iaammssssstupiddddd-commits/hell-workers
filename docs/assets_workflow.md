@@ -458,7 +458,14 @@ authoringは39組372ファイル（15,800,689B）、legacy389件を含め761原�
 旧366ファイル・generator履歴は全SHA不変。索引SHAは
 `bebd84b9b5b1148ea56eb668398fd164550ce7e2b844a83b6008298eeda5aca9`。
 
-今回のg4/g3を扱う復旧用exact codecは
+ミキサー/休憩所の判読性改訂では、15組139ファイル（61,710,125B）を追加保全した。
+最終採用原本と不採用の中間案を区別し、全unique Blend、対応PNG/GLB/recipe/reportを含む。
+手描きの元PNG3枚は最終Blendへpackし、保存後の再openで元bytesを再検証した。
+直前39組372件・generator履歴は不変。authoringは54組511件（77,510,814B）、legacy389件と合わせ900原本。
+索引SHAは`50d912f456784364c02ad9b10d02bd9c89b17c33aa391a0ba4e573c7a322ea88`。
+原本の保存は採用権限を与えず、g5の正式authorityとg4復帰情報はcanonical journalが所有する。
+
+今回のg5/g4/g3を扱う復旧用exact codecは
 `source/tooling/building-asset-codec-25019e2c074f0e3ef6576de339d404b93d345f32597c986f5725e4cc073f75e3/bevy_app`。
 mode3/4を読める同bytesを導入・検証で使用し、製品のrelease recovery用途として保持する。
 旧世代の復旧用codecと原本は置換・削除しない。

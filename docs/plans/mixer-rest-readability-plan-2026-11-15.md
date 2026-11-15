@@ -45,12 +45,12 @@ Restは棟/軒、布の大きな継ぎはぎ、専用の暗い入口と枠・垂
 - [x] 原画像/原本/generatorとshader経路を照合し、独立read-only調査を行う。
 - [x] 新styleと拒否/旧再現/UV回転/部材判読性の回帰を実装する。
 - [x] `37dc337c`のHelp No impact、contracts/tooling CI、storage、独立コードreviewを通した。
-- [ ] 以下のgeometry試作にも新しい回帰と独立reviewを通す。
+- [x] 以下のgeometry試作にも新しい回帰と独立reviewを通す。
 
 ### M2: 実画面の用途判読性
 
-- [ ] 新しい隔離原本を生成し、normal/far・Mixer四姿勢を独立比較する。
-- [ ] 屋根が入口を隠す場合は新geometryを採用前に別numeric reviewする。
+- [x] 新しい隔離原本を生成し、normal/far・Mixer四姿勢を独立比較する。
+- [x] 屋根が入口を隠す場合は新geometryを採用前に別numeric reviewする。
 - [ ] 改訂した画像を利用者へ提示し、新しいart判断へ結合する。
 
 ### M3: 採用と終了
@@ -252,3 +252,10 @@ Rest g5は独立artとnumericを別々に承認し、隔離candidate 26ad5b25…
 ready時のSoulをpause前に固定し、paused時は同identity・在室・正の0.5超drain余地を要求する。
 独立verifierの同Soul0.5以上の実減少、全raw/epoch/time/visibility/保存復元/退室条件は変更しない。
 置換・退室・余地不足は入力を再送せず拒否する。fresh試験で全lifecycleを取り直す。
+
+### g5の独立採用と正式導入
+
+Mixer v6とRest v8のpacked原本を別のart/numeric/release判断へ結合した。
+MixerのGrass/Dirt輪郭とRefining/pause/load/move、Restの通常施工・同Soulの利用/Dream/保存読込/退出を確認。
+隔離4→5→4の全旧24file復帰を独立採用し、両canonical promotion→両install→2件だけの既定binding改訂を行った。
+制作原本は54組511件＋legacy389件へ集約済み。最終installed9画像、通常startup、固定24性能、最終review/整理は未完。

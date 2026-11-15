@@ -10,13 +10,17 @@
 Tankは手描きの色面をbodyへ投影し、動くMixerとM3設備は元UVに沿う描線を部品へ固定する。
 world-up diffuseを使い、元geometryはdepth・遮蔽・影biasを担当する。実emission・alpha・post処理は維持する。
 Lampは2Dのまま、面別ハイライトを抑えた塗装と高いポール・三脚を使う。
-個別art/numeric/release採否と導入は[現行世代](building-asset-sets.md#2026-11-15-面塗り方式の正式世代)を正本とし、
+個別art/numeric/release採否と導入は[現行世代](building-asset-sets.md#2026-11-15-ミキサーと休憩所の判読性改訂)を正本とし、
 導入後の9種画面は本書、静止性能は[性能仕様](rendering-performance.md#面塗り方式の9種の静止asset増分受入2026-11-15)を参照する。
 以下の過去の画像・結果はそれぞれの日付の履歴である。
 
 2026-11-15の追加フィードバックで、利用者はMixerの現行アートを不採用、RestAreaを判読困難と評価した。
-この2件の外観採否を再開し、[判読性修正計画](plans/mixer-rest-readability-plan-2026-11-15.md)で新しい図柄を比較する。
-以下の既存画像・正式導入の記録は維持するが、この指摘の解決や新図柄の承認として流用しない。
+配色だけの案は採用せず、長いドラム・架台・車輪を分けたMixerと、棟・支柱・閉じた入口が読めるRestへ改訂した。
+両g5は新しい独立art/numeric/release審査と復元試験を通過し、正式導入した。
+MixerはDirt上の実モデルの車輪・架台を追加比較し、下段のdescriptor画像と混同しない。
+Restは入所Soulを描かない閉鎖shellのまま、急な布テント断面を使う。
+[判読性修正計画](plans/mixer-rest-readability-plan-2026-11-15.md)で導入後の9種画像と性能を確認中。
+以下の既存画像は旧世代の履歴であり、新しいinstalled subjectの受入を代用しない。
 
 ## 1. 目指す画面
 

@@ -4,12 +4,39 @@
 [移行計画](plans/3d-rtt/non-wall-floor-building-art-migration-plan-2026-09-19.md)を正本とする。
 本書はroot `bevy_app::assets::building_asset_set` が所有する入力境界を記す。
 
-現行の導入状態は[面塗り方式の正式世代](#2026-11-15-面塗り方式の正式世代)を参照。
+現行の導入状態は[ミキサーと休憩所の判読性改訂](#2026-11-15-ミキサーと休憩所の判読性改訂)を参照。
 以下の過去の表と測定は各導入時点の履歴であり、新世代の測定を代用しない。
 
-現行Mixer/RestAreaの外観は、追加の利用者フィードバックを受けて再設計中である。
-既定g4と旧receiptは保全し、新しい明示previewから採否を取り直す。
-履歴の技術検証・正式導入を、未解消の外観指摘への承認として扱わない。
+## 2026-11-15 ミキサーと休憩所の判読性改訂
+
+利用者のMixer不採用・RestArea判読困難という評価を受け、配色だけの修正を打ち切り、
+長い傾斜ドラムと独立架台・車輪、急な棟と閉じた幕を持つ布テントへ形状を改訂した。
+新しいhandpaint-v1素材は部品local UVへ固定する。mode4/world-up diffuse、実depth/遮蔽は維持する。
+
+| kind | generation | ReleaseApproved manifest SHA-256 |
+| --- | ---: | --- |
+| MudMixer | 5 | `3fc89664c3011bd27becd1a2691ceb913809112524f3b26ea4d5ad31a9375f7d` |
+| RestArea | 5 | `1821679b7a2261bc2b16649d221f806d344848e280b0078fb6f04578098e2658` |
+
+独立art/numeric/release判断をexact identityへ結合し、`8ea7ede6c6b3e273a743184959ea614f070b4e97`の
+formal candidate nativeを両種で確認した。MixerはGrassと実Dirt上で支持部・車輪を比較し、
+Refining、Idle/pause、Save/Load、moveを別storyboardで確認した。moveはroot/partを保持して新ownerへ
+再接続し、Loadはepoch/rootを置換してangle0へ戻る。local Y、実f32速度1.5707964rad/sは不変。
+Restは通常入力の施工・利用・Dream消費・保存読込・退出・cleanupを同Soulへ結合した。
+利用者の新しい採用回答を推測せず、これらは独立レビューの採用判断として記録する。
+
+隔離canonical/runtimeの4→5→4 proofは各12旧file、locator/pointerの完全byte復帰を確認した。
+完全journalを独立照合し、result SHAは`e8c458d88b05be3f9d1f06bc93482757b7d82f7ca1950dd7a93d1e306fce81a0`。
+その後、両canonical promotionをrepo変更より先に実行し、正規installでprimaryへ反映した。
+完全8件のcompiled binding SHAは`2904a8f202e28f3d0637043c6b2a17ade81df9f9bbacaa7c4b65a7876860d1da`。
+他6設備・Door g7・Wall g13は不変、Bridgeは対象外。旧g4のpayload/承認/復旧journalは保全する。
+
+Restの論理4区画・center offset・入所Soul非表示・Dreamと保存契約は維持する。新しい実屋根/閉鎖shellは
+224tri、上限64WU、preview canvas144WUで、world/catalog双方のcropを拒否検査する。
+Help実経路はNo impact。既定binding→loader/pool→world/catalog/previewの外観だけを変更し、
+入力・成立条件・精製/休息の意味・文言・保存形式・Help到達性は変更しない。
+**導入後の通常startup・9種normal/farと固定24試行の性能確認はこれから実施する。**
+旧sourceや候補のpassを、新しいinstalled subjectの成功へ流用しない。
 
 ## 2026-11-15 面塗り方式の正式世代
 
