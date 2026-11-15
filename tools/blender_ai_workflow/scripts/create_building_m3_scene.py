@@ -45,11 +45,11 @@ def main():
     parser.add_argument("kind", choices=tuple(KINDS))
     parser.add_argument("--name", required=True)
     parser.add_argument("--stage", choices=("clay", "planes", "strokes"), required=True)
-    parser.add_argument("--revision", choices=("v2", "v3"), default="v2")
+    parser.add_argument("--revision", choices=("v2", "v3", "v4"), default="v2")
     parser.add_argument("--style", choices=("legacy", STYLE, *ILLUSTRATED_STYLES))
     args = parser.parse_args(script_arguments())
     style = args.style or (STYLE if args.kind == "RestArea" else "legacy")
-    require(style not in (STYLE, "illustrated-v2") or args.kind == "RestArea",
+    require(style not in (STYLE, "illustrated-v2", "handpaint-v1") or args.kind == "RestArea",
             "this style is RestArea-only")
     require(re.fullmatch(r"[a-z0-9][a-z0-9-]{0,79}", args.name) is not None, "unsafe name")
     root = asset_root() / "staging"
@@ -60,6 +60,7 @@ def main():
     expected = {"albedo.png", "slot_emissive.png"} if args.kind == "SoulSpa" else {"albedo.png"}
     require(output.is_dir() and {p.name for p in output.iterdir()} == expected, "prepare only M3 atlases")
     _, spec = contract(args.kind, args.revision)
+    require((args.revision == "v4") == (style == "handpaint-v1"), "handpaint requires explicit Rest v4")
     require(args.revision != "v3" or style == "illustrated-v2", "M3 v3 requires revised ink")
     ocio = resolve_ocio_evidence()
     require(not ocio["fallback"], "explicit OCIO required")
@@ -95,6 +96,10 @@ def main():
         obj = bpy.data.objects.new(name, mesh)
         collection.objects.link(obj)
         objects[role] = obj
+    handpaint_sources = None
+    if style == "handpaint-v1":
+        from building_handpaint_materials import pack_in_blend
+        handpaint_sources = pack_in_blend()
     # Identity role collections are saved before presentation-only instances/camera.
     bpy.ops.wm.save_as_mainfile(filepath=str(blend), check_existing=False)
     configure_camera(spec["preview"])
@@ -147,13 +152,15 @@ def main():
         "schema_version": 1, "kind": args.kind, "stage": args.stage,
         "evidence_kind": "unapproved_m3_production_proposal",
         "art_style": style,
+        **({"handpaint_sources": handpaint_sources} if style == "handpaint-v1" else {}),
         "numeric_freeze": False, "art_approved": False, "runtime_published": False,
         "geometry_contract_sha256": digest(contract_path(args.kind, args.revision)), "blend_sha256": digest(blend), "ocio": ocio,
         "sources": {name: digest(scripts / name) for name in (
             "building_m3_art.py", "create_building_m3_scene.py", "building_clay_geometry.py", "building_infernal_style.py",
             "create_building_clay_scene.py", "build_building_m3_candidate.py", "build_building_m2_candidate.py",
             "validate_building_m2_indexed_faces.py",
-            *(("building_m3_uv_ink.py", "building_mixer_uv_ink.py") if style in ILLUSTRATED_STYLES else ()))},
+            *(("building_m3_uv_ink.py", "building_mixer_uv_ink.py") if style in ILLUSTRATED_STYLES else ()),
+            *(("building_handpaint_materials.py",) if style == "handpaint-v1" else ()))},
         "face_layout": layout, "parts": parts(args.kind, args.revision), "preview": spec["preview"],
         "renders": renders, "catalog_sha256": digest(output / "catalog.png"), "catalog_projection": catalog_projection,
         "albedo_sha256": digest(output / "albedo.png"),

@@ -34,7 +34,7 @@ def read_json(path: Path) -> dict:
 
 def load_pilot(kind: str, revision: str = "v1") -> dict:
     require(kind in PILOTS, "only Tank and MudMixer have clay drafts")
-    require(revision == "v1" or (kind == "MudMixer" and revision in {"v2", "v3", "v4"}),
+    require(revision == "v1" or (kind == "MudMixer" and revision in {"v2", "v3", "v4", "v5"}),
             "unknown clay geometry revision")
     contract = read_json(FIXTURES / f"building-{PILOTS[kind]}-{revision}.geometry.json")
     require(contract["schema_version"] == 1 and contract["kind"] == kind, "pilot identity differs")
@@ -99,8 +99,9 @@ class Geometry:
 def construction_mixer(config):
     """A tilted open drum on a wheeled site frame; axis stays drum-local Y."""
     body, drum = Geometry(), Geometry()
-    for box in config["body_boxes"]:
-        body.box(box["center"], box["size"], "frame")
+    for index, box in enumerate(config["body_boxes"]):
+        label = f"frame{index}" if config.get("outlined_members") else "frame"
+        body.box(box["center"], box["size"], label)
     wheels = config["wheels"]
     for cx, cy, cz in wheels["centers"]:
         wheel = Geometry()

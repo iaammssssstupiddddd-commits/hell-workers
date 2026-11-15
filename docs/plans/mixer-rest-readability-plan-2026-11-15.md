@@ -116,3 +116,29 @@ Restは明示v3（Rest限定、Spa不変）へ連続したたわみ屋根と閉�
 576頂点中1点のUは元double `0.5202349856035131`、実f32は`0.520235002040863`で、旧round5のkeyが分かれた。
 expectedへ実出力と同じf32格納→V反転→f32格納を適用すると576件全一致した。
 許容幅やface privacy/windingを変えず、expectedの型変換順序を補正する。旧失敗をpassへ変更せずfresh sourceで再生成する。
+
+### 手描き原画を基準に再設計する
+
+形状改訂の原画像も独立外観reviewはchanges requested。Mixerの中央の抜けは改善したが胴が円盤状、
+Restの入口は改善したが屋根は硬い板状に見える。これらを採用せず、実機の技術passで解決扱いにしない。
+新しい手描き基準画をbuilt-in image_genで作成し、原本bytesを保存した。
+
+- [Mixerの手描き基準画](../design/building-art/mixer-hand-ink-direction-20261115.png)
+- [Restの手描き基準画](../design/building-art/rest-hand-ink-direction-20261115.png)
+
+いずれもゲーム実画面・numeric/art/release承認ではない。旧原本・既定bindingを保持する。
+次は静的部分へこの線と色面を結合し、Mixer可動部は回転に追従するUVを保つ制作経路を組む。
+Tankで採用した画像とgeometryの分担を参照し、動く部品へカメラ固定絵を貼って動きを失わせない。
+
+### 明示handpaint-v1の制作経路
+
+部品を含む2方向画像からの投影は裏面/開口の未被覆や他部品混入を起こすため、その方式は採らない。
+built-in image_genで「物体や陰影を含まない」不透明な錆鉄・灰鉄・布の素材面を作り、固定SHA/寸法/元promptと共に
+`tools/blender_ai_workflow/fixtures/handpaint-materials-20261115-v1/`へ保存した。これ自体に採用権限はない。
+ドラムは物体localの円周/長さへ連続に割当て、一つの明示溶接線でwrapを閉じる。静的部材のinkは物理部材の縁へ置き、
+UV島やtriangulationへ枠を描かない。屋根/幕は布の面に結合し、元画像のalphaで穴を開けない。
+全入力はtoolchain hashへ入り、source.blendへ画像とsnapshotをpackし、authoring bundleにも元PNG/manifestをcopyする。
+
+Mixer v5は長い側胴とyaw -65度（軸/支点/tilt/4秒回転は維持）、Rest v4は四隅を上げ中央を下げた連続布屋根、
+傾いた木柱と閉じた幕を明示numeric提案へ分離した。Restは実304tri、提案cap320、旧と同じ外接bounds。
+旧版/他kindへの暗黙適用は拒否する。5件の素材/拒否/実atlas/回転/形状回帰はpass、独立reviewと実画面は未実施。

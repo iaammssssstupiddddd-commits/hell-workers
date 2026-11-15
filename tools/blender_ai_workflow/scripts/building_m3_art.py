@@ -13,13 +13,14 @@ from building_clay_geometry import FIXTURES, Geometry, read_json, require
 
 CONTRACT = FIXTURES / "building-m3-v2.geometry.json"
 CONTRACT_V3 = FIXTURES / "building-m3-v3.geometry.json"
+CONTRACT_V4 = FIXTURES / "building-m3-v4.geometry.json"
 KINDS = {"RestArea": "rest-area", "SoulSpa": "soul-spa"}
 
 
 def contract_path(kind, revision="v2"):
-    require(revision in ("v2", "v3") and (revision != "v3" or kind == "RestArea"),
+    require(revision in ("v2", "v3", "v4") and (revision == "v2" or kind == "RestArea"),
             "M3 v3 is an explicit RestArea-only geometry proposal")
-    return CONTRACT_V3 if revision == "v3" else CONTRACT
+    return {"v2": CONTRACT, "v3": CONTRACT_V3, "v4": CONTRACT_V4}[revision]
 
 
 def contract(kind, revision="v2"):
@@ -73,23 +74,33 @@ def geometry(kind, revision="v2"):
     body = Geometry()
     if kind == "RestArea":
         posts = spec["posts"]
-        profile = spec["roof"]["x_height_profile"]
-        for x in posts["x"]:
-            left, right = next((a, b) for a, b in zip(profile, profile[1:]) if a[0] <= x <= b[0])
-            height = left[1] + (right[1] - left[1]) * (x - left[0]) / (right[0] - left[0])
-            # Slight embed meets the sloping cloth; supports never float below it.
-            height += 0.5
-            for z in posts["z"]:
+        profile = spec["roof"].get("x_height_profile")
+        for xi, x in enumerate(posts["x"]):
+            if revision != "v4":
+                left, right = next((a, b) for a, b in zip(profile, profile[1:]) if a[0] <= x <= b[0])
+                height = left[1] + (right[1] - left[1]) * (x - left[0]) / (right[0] - left[0]) + 0.5
+            for zi, z in enumerate(posts["z"]):
+                if revision == "v4":
+                    height = posts["heights_wu"][xi][zi]
                 width, depth = posts["width_depth_wu"]
+                start=len(body.vertices)
                 body.box((x, height/2, z), (width, height, depth), "wood")
+                lean=posts.get("lean_top_xz")
+                if lean is not None:
+                    dx,dz=lean[xi][zi]
+                    for vertex in range(start+4,start+8):
+                        vx,vy,vz=body.vertices[vertex];body.vertices[vertex]=(vx+dx,vy,vz+dz)
+                else:dx,dz=0,0
                 if z in posts.get("bindings_z", posts["z"]):
-                    body.box((x, height-3, z), (5, 3, 5), "iron")
+                    body.box((x+dx*(height-3)/height, height-3, z+dz*(height-3)/height), (5, 3, 5), "iron")
         # Closed canvas walls and an opaque entry curtain shelter resting Souls.
         for wall in spec["walls"]:
             body.box(wall["center"], wall["size"], "cloth")
-        if revision == "v3":
+        if revision in ("v3", "v4"):
             draped_roof(body, spec["roof"])
             folded_curtain(body, spec["curtain"])
+            if revision == "v4":
+                require(all(abs(a-b)<=0.001 for actual, expected in zip(body.bounds(), spec["body_bounds_wu"], strict=True) for a,b in zip(actual,expected,strict=True)), "Rest bounds differ from numeric proposal")
             return {"body": body}
         # Each thick cloth strip joins its neighbours at a shared profile point.
         # The roof covers the interior; the canvas curtain marks the entrance.
@@ -159,6 +170,10 @@ def paint(kind, output, stage, *, style="legacy", revision="v2"):
             "M3 v3 requires explicit revised RestArea ink")
     require(stage in ("clay", "planes", "strokes"), "unknown paint stage")
     require(style in ("legacy", infernal.STYLE, *infernal.ILLUSTRATED_STYLES), "unknown paint style")
+    require((revision == "v4") == (style == infernal.HANDPAINT_STYLE), "handpaint requires explicit Rest v4")
+    if style == infernal.HANDPAINT_STYLE:
+        from building_handpaint_materials import paint as handpaint
+        return handpaint(kind, output / "albedo.png", stage, revision)
     if style in infernal.ILLUSTRATED_STYLES:
         require(style != infernal.READABLE_STYLE or kind == "RestArea", "revised ink is RestArea-only")
         from building_m3_uv_ink import paint as ink_paint
@@ -268,30 +283,31 @@ def states(kind):
 
 def draped_roof(body, roof):
     """Closed continuous canopy; shared grid avoids solid internal strip walls."""
-    profile, front = roof["x_height_profile"], roof["front_z_profile"]
-    count = len(profile)
+    old_profile = roof.get("x_height_profile")
+    xs = roof.get("x_profile") or [p[0] for p in old_profile]
+    count = len(xs)
+    rows = len(roof["z_rows"])+1 if "height_grid" in roof else 3
     start = len(body.vertices)
     for layer in (0, 1):
-        for i, (x, height) in enumerate(profile):
-            for row, z in enumerate((roof["z_edges"][0], 0, front[i])):
-                y = height - (roof["longitudinal_sag_wu"] if row == 1 else 0)
-                body.vertices.append((x, y + layer*roof["thickness_wu"], z))
-    def vertex(layer, column, row):
-        return start + layer*count*3 + column*3 + row
+        for i, x in enumerate(xs):
+            zs = [*roof["z_rows"], roof["front_z_profile"][i]] if "height_grid" in roof else [roof["z_edges"][0],0,roof["front_z_profile"][i]]
+            for row,z in enumerate(zs):
+                y = roof["height_grid"][row][i] if "height_grid" in roof else old_profile[i][1] - (roof["longitudinal_sag_wu"] if row==1 else 0)
+                body.vertices.append((x,y+layer*roof["thickness_wu"],z))
+    def vertex(layer,column,row):
+        return start+layer*count*rows+column*rows+row
     def panel(indices):
-        # A sagged quad can be non-planar. Triangulate before UV projection so
-        # every texel is mapped to its actual triangle, including gutter samples.
-        body.face([indices[0], indices[1], indices[2]], "cloth:canopy")
-        body.face([indices[0], indices[2], indices[3]], "cloth:canopy")
+        body.face([indices[0],indices[1],indices[2]],"cloth:canopy")
+        body.face([indices[0],indices[2],indices[3]],"cloth:canopy")
     for i in range(count-1):
-        for row in range(2):
+        for row in range(rows-1):
             panel([vertex(1,i,row),vertex(1,i,row+1),vertex(1,i+1,row+1),vertex(1,i+1,row)])
             panel([vertex(0,i,row),vertex(0,i+1,row),vertex(0,i+1,row+1),vertex(0,i,row+1)])
-        for row in (0,2):
+        for row in (0,rows-1):
             indices=[vertex(0,i,row),vertex(1,i,row),vertex(1,i+1,row),vertex(0,i+1,row)]
             panel(indices if row==0 else list(reversed(indices)))
     for i in (0,count-1):
-        for row in range(2):
+        for row in range(rows-1):
             indices=[vertex(0,i,row),vertex(0,i,row+1),vertex(1,i,row+1),vertex(1,i,row)]
             panel(indices if i==0 else list(reversed(indices)))
 

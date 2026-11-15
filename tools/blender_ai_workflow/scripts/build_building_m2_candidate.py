@@ -79,7 +79,8 @@ def paths(kind, name):
 
 def verify(kind, name, revision="v1", style=STYLE):
     require(style in (STYLE, *ILLUSTRATED_STYLES) and (style not in ILLUSTRATED_STYLES
-            or kind == "MudMixer" and revision in {"v3", "v4"}), "unknown M2 style/kind/revision")
+            or kind == "MudMixer" and revision in {"v3", "v4", "v5"}), "unknown M2 style/kind/revision")
+    require((revision == "v5") == (style == "handpaint-v1"), "handpaint requires explicit Mixer v5")
     require(revision != "v4" or style == "illustrated-v2", "v4 requires explicit revised ink")
     blend, output, report, reports = paths(kind, name)
     geometry = candidate_geometry(kind, revision)
@@ -105,6 +106,10 @@ def verify(kind, name, revision="v1", style=STYLE):
                "validate_building_m2_indexed_faces.py")
     if style in ILLUSTRATED_STYLES:
         sources += ("building_mixer_uv_ink.py",)
+    if style == "handpaint-v1":
+        from building_handpaint_materials import source_snapshot
+        require(pipeline.exact_json(data.get("handpaint_sources"), source_snapshot()), "handpaint input snapshot differs")
+        sources += ("building_handpaint_materials.py",)
     require(data["sources"] == {source: digest(WORKFLOW / "scripts" / source) for source in sources},
             "candidate authoring source changed")
     layout = face_layout(kind, revision)
@@ -178,10 +183,12 @@ def verify(kind, name, revision="v1", style=STYLE):
 
 def build_bundle(kind, name, stage, revision="v1", style=STYLE):
     require(style in (STYLE, *ILLUSTRATED_STYLES) and (style not in ILLUSTRATED_STYLES
-            or kind == "MudMixer" and revision in {"v3", "v4"}), "unknown M2 style/kind/revision")
+            or kind == "MudMixer" and revision in {"v3", "v4", "v5"}), "unknown M2 style/kind/revision")
+    require((revision == "v5") == (style == "handpaint-v1"), "handpaint requires explicit Mixer v5")
     require(revision != "v4" or style == "illustrated-v2", "v4 requires explicit revised ink")
     blend, output, report, reports = paths(kind, name)
     require(not any(path.exists() for path in (blend, output, report, reports)), "use fresh output name")
+    require(style != "handpaint-v1" or stage == "strokes", "handpaint is a final-stroke input")
     candidate_geometry(kind, revision)
     frozen = illustrated_toolchain() if style in ILLUSTRATED_STYLES else None
     output.mkdir(parents=True)
@@ -212,6 +219,7 @@ def prepare(kind, name, generation, destination, codec, revision="v1", style=STY
     require(result["stage"] == "strokes", "runtime candidate requires the final paint stage")
     destination = pipeline.no_symlinks(destination)
     require(not destination.exists(), "use fresh candidate destination")
+    require((revision == "v5") == (style == "handpaint-v1"), "handpaint requires explicit Mixer v5")
     require(revision != "v4" or style == "illustrated-v2", "v4 requires explicit revised ink")
     blend, output, report, reports = paths(kind, name)
     contract = load_pilot(kind, revision)
@@ -228,10 +236,13 @@ def prepare(kind, name, generation, destination, codec, revision="v1", style=STY
         origins[f"{role}.glb"] = output / f"{role}.glb"
     for state in read_json(report)["renders"]:
         origins[f"{state}.png"] = output / f"{state}.png"
+    if style == "handpaint-v1":
+        from building_handpaint_materials import source_paths
+        origins.update(source_paths())
     files = {name: path.read_bytes() for name, path in origins.items()}
     if style in ILLUSTRATED_STYLES:
         require(all(pipeline.digest(payload) == (result['numeric_candidate_sha256'] if name == 'geometry.json'
-                    else result['source_inventory'][str(origins[name])]) for name, payload in files.items()),
+                    else result['source_inventory'].get(str(origins[name]), result['source_toolchain'].get('files', {}).get(str(origins[name])))) for name, payload in files.items()),
                 'copied illustrated source was not verified')
         unchanged()
     source = destination / "authoring"
@@ -264,7 +275,7 @@ def main():
     parser.add_argument("kind", choices=tuple(PILOTS))
     parser.add_argument("--name", required=True)
     parser.add_argument("--stage", choices=("planes", "strokes"), default="strokes")
-    parser.add_argument("--revision", choices=("v1", "v2", "v3", "v4"), default="v1")
+    parser.add_argument("--revision", choices=("v1", "v2", "v3", "v4", "v5"), default="v1")
     parser.add_argument("--style", choices=(STYLE, *ILLUSTRATED_STYLES), default=STYLE)
     parser.add_argument("--generation", type=int)
     parser.add_argument("--destination", type=Path)

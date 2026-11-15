@@ -22,13 +22,15 @@ NUMERIC_V3 = FIXTURES / "building-m2-v3.numeric-candidate.json"
 NUMERIC_V3_SHA256 = "a49f198c2a28c163cfc31c2f503406095328e329a9774e274bea632d342e6783"
 NUMERIC_V4 = FIXTURES / "building-m2-v4.numeric-candidate.json"
 NUMERIC_V4_SHA256 = "e51f9d87047619f8f587ffa5ade46e6e692a0d95d4a28158be469e7664788818"
+NUMERIC_V5 = FIXTURES / "building-m2-v5.numeric-candidate.json"
+NUMERIC_V5_SHA256 = "7f65f5139ac1fec5f9288ac3d1625945fc4b604f00d3de0fb355b3dafc67132b"
 ATLAS_SIZE = 512
 CELL = 32
 GUTTER = 4
 
 
 def numeric_contract(kind, revision="v1"):
-    require(revision == "v1" or (kind == "MudMixer" and revision in {"v2", "v3", "v4"}),
+    require(revision == "v1" or (kind == "MudMixer" and revision in {"v2", "v3", "v4", "v5"}),
             "unknown M2 art revision")
     path, expected = ((NUMERIC_V2, NUMERIC_V2_SHA256) if revision == "v2"
                       else (NUMERIC, NUMERIC_SHA256))
@@ -36,6 +38,8 @@ def numeric_contract(kind, revision="v1"):
         path, expected = NUMERIC_V3, NUMERIC_V3_SHA256
     if revision == "v4":
         path, expected = NUMERIC_V4, NUMERIC_V4_SHA256
+    if revision == "v5":
+        path, expected = NUMERIC_V5, NUMERIC_V5_SHA256
     require(hashlib.sha256(path.read_bytes()).hexdigest() == expected,
             "numeric proposal changed: independent revision required")
     validate(path)
@@ -122,6 +126,9 @@ def mud_mixer_plane(role, surface):
 
 
 def paint(kind, path, stage="strokes", revision="v1", *, style="legacy"):
+    if style == infernal.HANDPAINT_STYLE:
+        from building_handpaint_materials import paint as handpaint
+        return handpaint(kind, path, stage, revision)
     if style in infernal.ILLUSTRATED_STYLES:
         require(kind == "MudMixer" and revision in {"v3", "v4"}, "UV ink requires the construction Mixer")
         from building_mixer_uv_ink import paint as paint_ink

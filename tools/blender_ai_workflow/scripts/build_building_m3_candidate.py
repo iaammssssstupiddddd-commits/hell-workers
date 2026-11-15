@@ -68,7 +68,7 @@ def verify_mesh(path, mesh, spec, layout):
 def selected_style(kind, style):
     value = style or (STYLE if kind == "RestArea" else "legacy")
     require(value in ("legacy", STYLE, *ILLUSTRATED_STYLES)
-            and (value not in (STYLE, "illustrated-v2") or kind == "RestArea"), "unknown M3 style/kind")
+            and (value not in (STYLE, "illustrated-v2", "handpaint-v1") or kind == "RestArea"), "unknown M3 style/kind")
     return value
 
 
@@ -77,6 +77,7 @@ def verify(kind, name, style=None, revision="v2"):
     blend, output, report, reports = paths(kind, name)
     value, spec = contract(kind, revision)
     style = selected_style(kind, style)
+    require((revision == "v4") == (style == "handpaint-v1"), "handpaint requires explicit Rest v4")
     require(revision != "v3" or style == "illustrated-v2", "M3 v3 requires revised ink")
     data = read_json(report)
     frozen_outputs = illustrated_outputs(blend, output, report, reports) if style in ILLUSTRATED_STYLES else None
@@ -91,7 +92,11 @@ def verify(kind, name, style=None, revision="v2"):
             "wrong report or approval claim")
     require(data["blend_sha256"] == digest(blend) and data["ocio"]["fallback"] is False, "source/OCIO drift")
     require(data["sources"] == {s: digest(WORKFLOW / "scripts" / s) for s in
-            SOURCES + (("building_m3_uv_ink.py", "building_mixer_uv_ink.py") if style in ILLUSTRATED_STYLES else ())}, "generator drift")
+            SOURCES + (("building_m3_uv_ink.py", "building_mixer_uv_ink.py") if style in ILLUSTRATED_STYLES else ())
+            + (("building_handpaint_materials.py",) if style == "handpaint-v1" else ())}, "generator drift")
+    if style == "handpaint-v1":
+        from building_handpaint_materials import source_snapshot
+        require(pipeline.exact_json(data.get("handpaint_sources"), source_snapshot()), "handpaint input snapshot differs")
     layout = face_layout(kind, revision)
     require(data["face_layout"] == json.loads(json.dumps(layout)) and data["parts"] == parts(kind, revision)
             and data["preview"] == spec["preview"], "layout/parts/projection drift")
@@ -156,9 +161,11 @@ def verify(kind, name, style=None, revision="v2"):
 def build_bundle(kind, name, stage, style=None, revision="v2"):
     style = selected_style(kind, style)
     contract(kind, revision)
+    require((revision == "v4") == (style == "handpaint-v1"), "handpaint requires explicit Rest v4")
     require(revision != "v3" or style == "illustrated-v2", "M3 v3 requires revised ink")
     blend, output, report, reports = paths(kind, name)
     require(not any(path.exists() for path in (blend, output, report, reports)), "use fresh output name")
+    require(style != "handpaint-v1" or stage == "strokes", "handpaint is a final-stroke input")
     frozen = illustrated_toolchain() if style in ILLUSTRATED_STYLES else None
     output.mkdir(parents=True)
     paint(kind, output, stage, style=style, revision=revision)
@@ -203,6 +210,7 @@ def recipe(kind, generation, source, revision="v2"):
 def prepare(kind, name, generation, destination, codec, style=None, revision="v2"):
     style = selected_style(kind, style)
     contract(kind, revision)
+    require((revision == "v4") == (style == "handpaint-v1"), "handpaint requires explicit Rest v4")
     require(revision != "v3" or style == "illustrated-v2", "M3 v3 requires revised ink")
     result = verify(kind, name, style, revision)
     require(result["stage"] == "strokes", "runtime packaging requires final stroke proposal")
@@ -223,9 +231,13 @@ def prepare(kind, name, generation, destination, codec, style=None, revision="v2
     files.update({name: (output / name).read_bytes() for name in names})
     origins = {"source.blend": blend, "geometry.json": contract_path(kind, revision), "paint-report.json": report,
                **{name: output / name for name in names}}
+    if style == "handpaint-v1":
+        from building_handpaint_materials import source_paths
+        origins.update(source_paths())
+        files.update({name: path.read_bytes() for name,path in source_paths().items()})
     if style in ILLUSTRATED_STYLES:
         require(all(pipeline.digest(payload) == (result["geometry_contract_sha256"] if name == "geometry.json"
-                    else result["source_inventory"][str(origins[name])]) for name, payload in files.items()),
+                    else result["source_inventory"].get(str(origins[name]), result["source_toolchain"].get("files", {}).get(str(origins[name])))) for name, payload in files.items()),
                 "copied illustrated source was not verified")
         unchanged()
     source = destination / "authoring"
@@ -256,7 +268,7 @@ def main():
     parser.add_argument("kind", choices=tuple(KINDS))
     parser.add_argument("--name", required=True)
     parser.add_argument("--stage", choices=("clay", "planes", "strokes"), default="clay")
-    parser.add_argument("--revision", choices=("v2", "v3"), default="v2")
+    parser.add_argument("--revision", choices=("v2", "v3", "v4"), default="v2")
     parser.add_argument("--style", choices=("legacy", STYLE, *ILLUSTRATED_STYLES))
     parser.add_argument("--generation", type=int)
     parser.add_argument("--destination", type=Path)
