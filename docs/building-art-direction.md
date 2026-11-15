@@ -340,3 +340,15 @@ SoulSpaの四区画の見た目は利用者の採用判断を維持する。未�
 
 DoorのEW/NS/tie・実入力preview/BlueprintとJ1の支持壁変更・loadは別の原本で確認した。
 最終状態・世代・性能と復旧の正本は[asset仕様](building-asset-sets.md#2026-11-13-非橋9種の正式導入受入)。
+
+## ミキサーの彩度とSpaの骨表現の候補（2026-11-15）
+
+追加フィードバックにより明示`weathered-v1`を制作中。既定の正式世代はまだ変更しない。
+Mixerはv6のdrum外面だけ、元の筆跡の明度変化を維持して彩度と明るさを抑える。
+口・溶接線・架台・車輪と全shape/UVを維持し、画面全体や他設備へtintを加えない。
+SoulSpaはv2の骨枠の外周・節・皮質と、暗い四区画の面・控えめな紋様を描き分ける。
+発光atlasは旧出力と完全byte一致を要求し、実worker-slotによる発光だけを維持する。
+明示styleはMixer v6／Spa v2 strokesだけへ適用し、RestArea・Tank・旧revision・planesを拒否する。
+旧styleのatlas pixel SHAを回帰で固定し、新sourceのart/numeric/releaseを別に審査する。
+現段階は実装・生成準備で、実機採用・正式導入の承認ではない。
+Help影響はNo impact。authoring入口だけを追加し、現行の入力・UI文言・gameplay・保存・Help到達性は不変。

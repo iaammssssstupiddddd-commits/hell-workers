@@ -13,6 +13,13 @@ from building_mixer_uv_ink import local_point
 
 
 def color(kind, role, surface, point, *, stage="strokes", spec=None, style=palette.ILLUSTRATED_STYLE):
+    if style == palette.WEATHERED_STYLE:
+        if kind != "SoulSpa" or stage != "strokes":
+            raise ValueError("weathered bone pigment requires SoulSpa strokes")
+        if spec is None:
+            from building_m3_art import contract
+            _, spec = contract(kind)
+        return weathered_spa_color(role, surface, point, spec)
     if style == palette.READABLE_STYLE:
         if kind != "RestArea":
             raise ValueError("revised ink is RestArea-only")
@@ -91,8 +98,9 @@ def paint(kind, output, stage, *, style=palette.ILLUSTRATED_STYLE, revision="v2"
     from building_m3_art import contract, geometry, face_layout, paint as legacy_paint
 
     if (stage not in ("clay", "planes", "strokes")
-            or style not in palette.ILLUSTRATED_STYLES
-            or style == palette.READABLE_STYLE and kind != "RestArea"):
+            or style not in (palette.ILLUSTRATED_STYLE, palette.READABLE_STYLE, palette.WEATHERED_STYLE)
+            or style == palette.READABLE_STYLE and kind != "RestArea"
+            or style == palette.WEATHERED_STYLE and (kind != "SoulSpa" or revision != "v2" or stage != "strokes")):
         raise ValueError("unknown M3 ink stage")
     # The original producer remains the only author of the emission mask.
     # Its bytes are unchanged; the new pass replaces only the diffuse atlas.
@@ -119,6 +127,52 @@ def paint(kind, output, stage, *, style=palette.ILLUSTRATED_STYLE, revision="v2"
                         kind, role, face["surface"], point, stage=stage, spec=spec, style=style
                     )
     image.save(output / "albedo.png")
+
+
+def weathered_spa_color(role, surface, point, spec):
+    """Bone joints and recessed ritual pads; actual occupancy owns emission."""
+    x, _y, z = point
+    ink = (47, 38, 47)
+    if role == "slot" and surface.startswith("slot:"):
+        radius = spec["slot_radius_wu"]
+        r = math.hypot(x, z) / radius
+        # The raised edge is pigment on the existing disk, not new geometry.
+        if r > .89:
+            base = (122, 109, 115)
+        elif .73 < r < .82:
+            base = (84, 66, 88)
+        else:
+            base = (48, 40, 54)
+        # A quiet, broken inner ring and one broad notch identify each pad.
+        # No emissive pixels, active-count input or baked Soul silhouettes.
+        angle = math.atan2(z, x)
+        if .42 < r < .52 and math.cos(3 * angle + .3) > -.35:
+            base = (101, 86, 106)
+        if abs(x) < .65 and -8 < z < -4:
+            base = (132, 118, 130)
+        return (*base, 255)
+    if role != "body" or not surface.startswith("bone:"):
+        raise ValueError("unknown weathered Spa surface")
+    coordinates = []
+    for a, b in spec["bone_segments"]:
+        dx, dz = b[0] - a[0], b[2] - a[2]
+        length = math.hypot(dx, dz)
+        t = ((x - a[0]) * dx + (z - a[2]) * dz) / (length * length)
+        nearest = max(0, min(1, t))
+        across = (-(x - a[0]) * dz + (z - a[2]) * dx) / length
+        distance = (x - a[0] - nearest * dx) ** 2 + (z - a[2] - nearest * dz) ** 2
+        coordinates.append((distance, t, across, length))
+    _, t, across, length = min(coordinates)
+    taper = 1 - .37 * min(1, max(0, min(t, 1 - t)) / .18)
+    radius = spec["bone_radius_wu"] * taper
+    base = (186, 172, 145)
+    if abs(across) > radius * .72:
+        base = ink
+    elif min(abs(t - .15), abs(t - .85)) * length < .65:
+        base = (100, 84, 82)
+    elif .22 < t < .78 and abs(across - .22 * math.sin(t * 15)) < .22:
+        base = (114, 94, 89)
+    return (*base, 255)
 
 
 def readable_rest_color(surface, point, *, stage="strokes"):

@@ -80,7 +80,8 @@ def paths(kind, name):
 def verify(kind, name, revision="v1", style=STYLE):
     require(style in (STYLE, *ILLUSTRATED_STYLES) and (style not in ILLUSTRATED_STYLES
             or kind == "MudMixer" and revision in {"v3", "v4", "v5", "v6"}), "unknown M2 style/kind/revision")
-    require((revision in {"v5", "v6"}) == (style == "handpaint-v1"), "handpaint requires explicit Mixer v5/v6")
+    require((revision in {"v5", "v6"}) == (style in ("handpaint-v1", "weathered-v1")), "handpaint requires explicit Mixer v5/v6")
+    require(style != "weathered-v1" or kind == "MudMixer" and revision == "v6", "weathered pigment is Mixer v6 only")
     require(revision != "v4" or style == "illustrated-v2", "v4 requires explicit revised ink")
     blend, output, report, reports = paths(kind, name)
     geometry = candidate_geometry(kind, revision)
@@ -106,7 +107,7 @@ def verify(kind, name, revision="v1", style=STYLE):
                "validate_building_m2_indexed_faces.py")
     if style in ILLUSTRATED_STYLES:
         sources += ("building_mixer_uv_ink.py",)
-    if style == "handpaint-v1":
+    if style in ("handpaint-v1", "weathered-v1"):
         from building_handpaint_materials import source_snapshot, verify_saved_sources
         require(pipeline.exact_json(data.get("handpaint_sources"), source_snapshot()), "handpaint input snapshot differs")
         verify_saved_sources(blend, illustrated_environment())
@@ -185,11 +186,12 @@ def verify(kind, name, revision="v1", style=STYLE):
 def build_bundle(kind, name, stage, revision="v1", style=STYLE):
     require(style in (STYLE, *ILLUSTRATED_STYLES) and (style not in ILLUSTRATED_STYLES
             or kind == "MudMixer" and revision in {"v3", "v4", "v5", "v6"}), "unknown M2 style/kind/revision")
-    require((revision in {"v5", "v6"}) == (style == "handpaint-v1"), "handpaint requires explicit Mixer v5/v6")
+    require((revision in {"v5", "v6"}) == (style in ("handpaint-v1", "weathered-v1")), "handpaint requires explicit Mixer v5/v6")
+    require(style != "weathered-v1" or kind == "MudMixer" and revision == "v6", "weathered pigment is Mixer v6 only")
     require(revision != "v4" or style == "illustrated-v2", "v4 requires explicit revised ink")
     blend, output, report, reports = paths(kind, name)
     require(not any(path.exists() for path in (blend, output, report, reports)), "use fresh output name")
-    require(style != "handpaint-v1" or stage == "strokes", "handpaint is a final-stroke input")
+    require(style not in ("handpaint-v1", "weathered-v1") or stage == "strokes", "handpaint is a final-stroke input")
     candidate_geometry(kind, revision)
     frozen = illustrated_toolchain() if style in ILLUSTRATED_STYLES else None
     output.mkdir(parents=True)
@@ -220,7 +222,8 @@ def prepare(kind, name, generation, destination, codec, revision="v1", style=STY
     require(result["stage"] == "strokes", "runtime candidate requires the final paint stage")
     destination = pipeline.no_symlinks(destination)
     require(not destination.exists(), "use fresh candidate destination")
-    require((revision in {"v5", "v6"}) == (style == "handpaint-v1"), "handpaint requires explicit Mixer v5/v6")
+    require((revision in {"v5", "v6"}) == (style in ("handpaint-v1", "weathered-v1")), "handpaint requires explicit Mixer v5/v6")
+    require(style != "weathered-v1" or kind == "MudMixer" and revision == "v6", "weathered pigment is Mixer v6 only")
     require(revision != "v4" or style == "illustrated-v2", "v4 requires explicit revised ink")
     blend, output, report, reports = paths(kind, name)
     contract = load_pilot(kind, revision)
@@ -237,7 +240,7 @@ def prepare(kind, name, generation, destination, codec, revision="v1", style=STY
         origins[f"{role}.glb"] = output / f"{role}.glb"
     for state in read_json(report)["renders"]:
         origins[f"{state}.png"] = output / f"{state}.png"
-    if style == "handpaint-v1":
+    if style in ("handpaint-v1", "weathered-v1"):
         from building_handpaint_materials import source_paths
         origins.update(source_paths())
     files = {name: path.read_bytes() for name, path in origins.items()}

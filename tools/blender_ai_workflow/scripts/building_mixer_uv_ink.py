@@ -81,7 +81,7 @@ def paint(path, stage="strokes", *, style=STYLE, revision="v3"):
     # Lazy import avoids changing the existing infernal painter's dependency path.
     from building_m2_art import ATLAS_SIZE, CELL, candidate_geometry, face_layout
 
-    if (stage not in ("planes", "strokes") or style not in palette.ILLUSTRATED_STYLES or revision not in ("v3", "v4")
+    if (stage not in ("planes", "strokes") or style not in (palette.ILLUSTRATED_STYLE, palette.READABLE_STYLE) or revision not in ("v3", "v4")
             or revision == "v4" and style != palette.READABLE_STYLE):
         raise ValueError("unknown Mixer ink stage")
     image = Image.new("RGBA", (ATLAS_SIZE, ATLAS_SIZE), (*palette.INK, 255))

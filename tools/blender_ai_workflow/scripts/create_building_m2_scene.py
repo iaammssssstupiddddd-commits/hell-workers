@@ -43,7 +43,8 @@ def main():
             "prepare only the atlas before candidate scene creation")
     geometries, layout = (candidate_geometry(args.kind, args.revision),
                           face_layout(args.kind, args.revision))
-    require((args.revision in {"v5", "v6"}) == (args.style == "handpaint-v1"), "handpaint requires explicit Mixer v5/v6")
+    require((args.revision in {"v5", "v6"}) == (args.style in ("handpaint-v1", "weathered-v1")), "handpaint requires explicit Mixer v5/v6")
+    require(args.style != "weathered-v1" or args.kind == "MudMixer" and args.revision == "v6", "weathered pigment is Mixer v6 only")
     require(args.revision != "v4" or args.style == "illustrated-v2", "v4 requires revised ink")
     contract = load_pilot(args.kind, args.revision)
     _, numeric_sha256 = numeric_contract(args.kind, args.revision)
@@ -109,7 +110,7 @@ def main():
         collection.objects.link(obj)
         objects[role] = obj
     handpaint_sources = None
-    if args.style == "handpaint-v1":
+    if args.style in ("handpaint-v1", "weathered-v1"):
         from building_handpaint_materials import pack_in_blend
         handpaint_sources = pack_in_blend()
     # Role exports see identity nodes; review transforms are never baked twice.
@@ -152,7 +153,7 @@ def main():
         "evidence_kind": "unapproved_m2_paint_candidate",
         "numeric_candidate_sha256": numeric_sha256,
         "revision": args.revision, "art_style": args.style,
-        **({"handpaint_sources": handpaint_sources} if args.style == "handpaint-v1" else {}),
+        **({"handpaint_sources": handpaint_sources} if args.style in ("handpaint-v1", "weathered-v1") else {}),
         "numeric_freeze": False, "art_approved": False, "runtime_published": False,
         "ocio": ocio, "blend_sha256": digest(blend),
         "sources": {name: digest(scripts / name) for name in (
@@ -160,7 +161,7 @@ def main():
             "create_building_clay_scene.py", "validate_building_numeric_candidate.py",
             "validate_building_m2_indexed_faces.py", *(
                 ("building_mixer_uv_ink.py",) if args.style in ILLUSTRATED_STYLES else ()),
-            *(("building_handpaint_materials.py", "verify_building_handpaint_blend.py") if args.style == "handpaint-v1" else ()))},
+            *(("building_handpaint_materials.py", "verify_building_handpaint_blend.py") if args.style in ("handpaint-v1", "weathered-v1") else ()))},
         "albedo_sha256": digest(output / "albedo.png"),
         "renders": renders, "preview": contract["preview"], "face_layout": layout,
         "excludes": ["active simulation", "native", "art acceptance", "formal release"],

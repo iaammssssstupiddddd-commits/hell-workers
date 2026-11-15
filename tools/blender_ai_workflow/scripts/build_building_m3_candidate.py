@@ -68,7 +68,8 @@ def verify_mesh(path, mesh, spec, layout):
 def selected_style(kind, style):
     value = style or (STYLE if kind == "RestArea" else "legacy")
     require(value in ("legacy", STYLE, *ILLUSTRATED_STYLES)
-            and (value not in (STYLE, "illustrated-v2", "handpaint-v1") or kind == "RestArea"), "unknown M3 style/kind")
+            and (value not in (STYLE, "illustrated-v2", "handpaint-v1") or kind == "RestArea")
+            and (value != "weathered-v1" or kind == "SoulSpa"), "unknown M3 style/kind")
     return value
 
 
@@ -161,6 +162,7 @@ def verify(kind, name, style=None, revision="v2"):
 
 def build_bundle(kind, name, stage, style=None, revision="v2"):
     style = selected_style(kind, style)
+    require(style != "weathered-v1" or stage == "strokes", "weathered Spa requires final strokes")
     contract(kind, revision)
     require((revision in ("v4", "v5", "v6", "v7", "v8")) == (style == "handpaint-v1"), "handpaint requires explicit Rest v4/v5/v6/v7")
     require(revision != "v3" or style == "illustrated-v2", "M3 v3 requires revised ink")

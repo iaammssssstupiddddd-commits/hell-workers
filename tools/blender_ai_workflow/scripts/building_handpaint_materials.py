@@ -70,7 +70,14 @@ def sample(image,u,v,*,wrap=False):
     return tuple(round((1-ty)*((1-tx)*a[i]+tx*b[i])+ty*((1-tx)*c[i]+tx*d[i])) for i in range(3))
 
 
-def mixer_color(role,surface,point,spec,images):
+def muted_drum_pigment(rgb):
+    """Retain the painted value variation with quiet, soot-worn pigment."""
+    value = .299 * rgb[0] + .587 * rgb[1] + .114 * rgb[2]
+    return tuple(round(.88 * (value + .22 * (channel - value))) for channel in rgb)
+
+
+def mixer_color(role,surface,point,spec,images,*,style=STYLE):
+    require(style in (STYLE, "weathered-v1"), "unknown handpaint pigment style")
     x,y,z=point;label,side=surface.split(":",1)
     ink=(31,26,31)
     if role=="rotor" and label=="drum":
@@ -84,6 +91,8 @@ def mixer_color(role,surface,point,spec,images):
                 base=sample(images["iron"],.2,u,wrap=True)
                 return (*(ink if math.hypot(x,z)>8.3 else base),255)
             base=sample(images["drum"],axial,u)
+            if style == "weathered-v1":
+                base = muted_drum_pigment(base)
             if min(u,1-u)<.007:base=ink
             return (*base,255)
         if band>=5:
@@ -209,9 +218,11 @@ def rest_color(surface,point,spec,images):
     return (*base,255)
 
 
-def paint(kind,path,stage,revision):
+def paint(kind,path,stage,revision,*,style=STYLE):
     from PIL import Image
     from building_mixer_uv_ink import local_point
+    require(style == STYLE or (style == "weathered-v1" and kind == "MudMixer" and revision == "v6"),
+            "weathered handpaint is explicit Mixer v6 only")
     require((stage=="strokes" or (kind=="RestArea" and revision in ("v7","v8") and stage=="planes"))
             and ((kind=="MudMixer" and revision in ("v5","v6")) or (kind=="RestArea" and revision in ("v4","v5","v6","v7","v8"))),"handpaint requires explicit geometry/stroke or Rest v7 shape-only stage")
     if kind=="MudMixer":
@@ -233,7 +244,7 @@ def paint(kind,path,stage,revision):
                         color=(150,150,150) if face["surface"]=="cloth:canopy" else (55,55,55) if face["surface"].startswith("wood:") else (98,98,98)
                         pixels[px,py]=(*color,255)
                     else:
-                        pixels[px,py]=mixer_color(role,face["surface"],point,spec,images) if kind=="MudMixer" else rest_color(face["surface"],point,spec,images)
+                        pixels[px,py]=mixer_color(role,face["surface"],point,spec,images,style=style) if kind=="MudMixer" else rest_color(face["surface"],point,spec,images)
     image.save(path)
     for source in images.values():source.close()
     require(source_snapshot()==snapshot,"paint sources changed during atlas bake")

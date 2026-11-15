@@ -51,6 +51,8 @@ def main():
     style = args.style or (STYLE if args.kind == "RestArea" else "legacy")
     require(style not in (STYLE, "illustrated-v2", "handpaint-v1") or args.kind == "RestArea",
             "this style is RestArea-only")
+    require(style != "weathered-v1" or args.kind == "SoulSpa" and args.revision == "v2" and args.stage == "strokes",
+            "weathered Spa requires explicit SoulSpa v2 strokes")
     require(re.fullmatch(r"[a-z0-9][a-z0-9-]{0,79}", args.name) is not None, "unsafe name")
     root = asset_root() / "staging"
     blend = staging_path(root / "blend" / f"{args.name}.blend", "blend")

@@ -130,9 +130,9 @@ def mud_mixer_plane(role, surface):
 
 
 def paint(kind, path, stage="strokes", revision="v1", *, style="legacy"):
-    if style == infernal.HANDPAINT_STYLE:
+    if style in (infernal.HANDPAINT_STYLE, infernal.WEATHERED_STYLE):
         from building_handpaint_materials import paint as handpaint
-        return handpaint(kind, path, stage, revision)
+        return handpaint(kind, path, stage, revision, style=style)
     if style in infernal.ILLUSTRATED_STYLES:
         require(kind == "MudMixer" and revision in {"v3", "v4"}, "UV ink requires the construction Mixer")
         from building_mixer_uv_ink import paint as paint_ink
