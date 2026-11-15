@@ -26,8 +26,29 @@ apply/install/rollback/mirror全20操作、正本promotionとprimary installを�
 Parking g2、SandPile/BonePile g1、Door g7、Wall g13は従来の正式identityを維持する。Bridgeは対象外。
 Tankのbodyとwater材質は分離し、水位12/22、Mixerのlocal Y回転、Rest入所Soul非表示、
 Spaの実4tile workerに応じた発光、Lampの点灯・配電・anchor契約を保持する。
-通常startup、導入後9種normal/farとCapture12→Memory12の最終性能受入は、この時点では未完である。
-個別release・installの成功を全体受入や性能合格として扱わない。
+導入後のclean `19e608ace4c34169b4e7a1f8c00c1213ad256b3b`で通常startup、9種normal/far、
+Capture12→Memory12の固定予算による静止asset増分を確認した。通常startupはcompiled_default選択と
+8poolのactive/descriptor/依存residentが一致し、pending/failureなし。実ownerはParking1件で、
+画像はresidentだがそのspriteは非表示だったため、9種の表示確認へは数えない。
+9種の表示は別の36 owner galleryで実root/part/mesh/material/image/poseを照合した。
+[採用画面](building-art-direction.md#面塗り方式と採用画面2026-11-15)と
+[性能結果・限界](rendering-performance.md#面塗り方式の9種の静止asset増分受入2026-11-15)を正本とする。
+startup manifestは`e604cbaec9c39886ef0516bfe17823acb038efcb1077475e43fde21b3602ce0d`。
+
+最終候補の受入は個別の独立art/numeric/release判断を保持する。`5f27623f`でTankの水位とmove、
+Mixerの実v3姿勢・pause/load/move、Spa全16mask、Restの通常施工・利用・保存読込・退出を確認した。
+seeded storyboardとOS入力の通常lifecycleを区別し、これらを導入後sourceの性能測定へ流用しない。
+`95510469`のSpa loaded-use v4は占有保存からremapした同Soulについて、Normalの3.556136993仮想秒で
+Dreamが1.778066635減少し、217 Operational samplesでmode4/atlas/実worker-slot発光の不一致が0だった。
+隣接sample214→215の疲労0.8013988 > 実閾値0.8000000119、唯一の同controller/epochの
+ReleaseMember/Fatigued要求とOnReleasedFromService、task/WorkingOn/TaskWorkers解除を照合した。
+要求の読取・観測順を決定瞬間へ読み替えず、Dream-floor到達や全員退出は主張しない。
+loaded-use manifestは`96c35527c344c23b71a23392ad722cf17d2b3751d9329f30dce7787c5cca9f2a`。
+
+旧loaded-use v1は非同期Load commitより早く入力記録を閉じ、v2はDream-floor専用oracle、
+v3は閾値超過を直前sampleだけに限定した観測不備でinvalidとなった。ConfirmLoadの実epoch/Closed/paused待機、
+実解除receipt、有限な前後疲労pairの厳密閾値超過へ補正し、ゲーム条件や許容幅は変更していない。
+旧invalid記録は維持し、診断終了後の重複jobは撤去する。非橋9種の今回の表現改訂は導入済みで、Bridgeは別工程とする。
 
 Help実レビューはNo impact。既定bindingから通常loader/pool/表示へ追い、塗り・描線の変更以外に、
 入力、成立条件、休息/Dream/精製/電力、保存形式、失敗結果、文言、Help到達性の変更はない。

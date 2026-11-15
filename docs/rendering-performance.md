@@ -726,3 +726,37 @@ fresh検証専用`tak14-worldstyle-performance-verification-20261114-v1`で全42
 旧失敗・登録不備は履歴として維持し、完了後のraw再検証を目的とする保持は終了する。
 本gateはactive AI、自然施工・lifecycle、GPU実allocation総量、Bridge、追加のart/release承認を含まない。
 アート・数値・releaseは別の独立採用、normal/farの[現行画面](building-art-direction.md#世界観に合わせた現行9種の画面2026-11-14)は別証拠である。
+
+## 面塗り方式の9種の静止asset増分受入（2026-11-15）
+
+Tank g4、MudMixer g4、RestArea g4、SoulSpa g3、OutdoorLamp g4と固定3件・Door g7を、
+clean `19e608ace4c34169b4e7a1f8c00c1213ad256b3b`で測定した。
+runtime fingerprintは`70e8448d55efd2c7fefe1c626f66dcb6697485d8f36b84ef4590edc8374feefc`、
+asset viewは`00f0aad0ad0baf9b0f6fc401334d3da5c75f6fc9a69c2533b5dbdebc487f7c9d`。
+同sourceのlegacy-controlに対するpaused asset増分であり、旧g3との直接比較やM1-0累積基盤比較ではない。
+N36／4N144、各3対・中央対逆順、30秒warmup＋60秒計測、Capture12→Memory12を逐次実行した。
+Intel Arc MTL／Mesa26.2.6／Vulkan／X11、1280×720、DPI1、High、novsyncを固定し、
+通常GNU起動と共通のarena2・mmap閾値131072Bを維持した。測定中にbuild/testやcleanupは並行しない。
+
+| candidate−legacy-controlの中央値差 | N | 4N | 事前固定上限 |
+| --- | ---: | ---: | ---: |
+| p95 | +0.010170ms | +0.356957ms | +1ms |
+| p99 | −0.155218ms | +1.224150ms | +3ms |
+| Rust live peak | +10,518,094B | +12,819,304B | +16,777,216B |
+| process RSS | +16,904KiB | +35,420KiB | +98,304KiB |
+
+最大relative MADは1.554321%（上限10%）。共有資源増分はmesh7／accessor・vertex-index各85,976B、
+image20／CPU・descriptor各9,175,040B、structural material10／shallow4,640B。
+Tankのbody独立材質を含む10材質を測定前に予算へ明示した。N/4N plateau・初終不変と、
+実owner→Root→part/pose/material/imageのmode3/4、water分離・Spa実mask発光を原本から検証した。
+独立reviewでも24行と集計を再導出し、計1,200のcandidate resident partsを含め指摘なく採用した。
+これらのlogical payload・shallow値はGPU実allocation総量やdriver/native全体の計数ではない。
+
+事前予算SHAは`934cbeb12e92157bcea4a026808cf56a418914f0674a0a87742c433274f61187`、
+plan SHAは`3012bef4be0ff175705ed367038d688f133b02888a9dd52a3f635e5cd4b6d9ac`、
+result SHAは`458c2af6e020344dd5d95696a510ff4d52f318bdc89e2c89757a89a68cc35b12`。
+全24試行は登録済み独立verifierでpass・封印・finalizeした。自動resultの`accepted=false`と
+`promotion_authority=false`はアート・release・依頼全体の承認を付与しない境界であり、技術判定の`status=pass`と区別する。
+active AI、自然施工/lifecycle、別sourceの基盤累積、Bridgeは本gateへ含めない。
+個別art/numeric/releaseと通常入力の利用/保存読込は[asset仕様](building-asset-sets.md#2026-11-15-面塗り方式の正式世代)、
+導入後normal/farは[制作仕様](building-art-direction.md#面塗り方式と採用画面2026-11-15)を参照する。

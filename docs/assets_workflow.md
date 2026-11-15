@@ -452,6 +452,12 @@ legacy389件と合わせて755原本となる。generator referenceはexact Git 
 再生成を実行済みと主張したり、source libraryの存在からproduction authorityを推測したりしない。
 authorityは引き続きcanonical exportsの正式pointer/journalが所有する。
 
+さらに未採用Lamp初案の6ファイル（22,617B）を別bundleへ保全した。
+Dirt上のcontrast不足によるart不採用で、numeric/release/production authorityを与えない。
+authoringは39組372ファイル（15,800,689B）、legacy389件を含め761原本となった。
+旧366ファイル・generator履歴は全SHA不変。索引SHAは
+`bebd84b9b5b1148ea56eb668398fd164550ce7e2b844a83b6008298eeda5aca9`。
+
 今回のg4/g3を扱う復旧用exact codecは
 `source/tooling/building-asset-codec-25019e2c074f0e3ef6576de339d404b93d345f32597c986f5725e4cc073f75e3/bevy_app`。
 mode3/4を読める同bytesを導入・検証で使用し、製品のrelease recovery用途として保持する。
@@ -463,6 +469,9 @@ canonical `exports/`のjournal・authority pointer・locator・receipt・payload
 初回導入時に8件すべてのrecover=applied／rollback=plannedを`--apply`なしで確認した。
 このcodecを最新ゲームbinaryへ暗黙に置き換えない。現行世代の廃止・検証済み復旧経路への移行後にだけ保持を解除する。
 通常runtimeはrepo内のinstall済みmirrorを読み、source libraryや検証jobを必要としない。
+現行8件についてcanonical journalから計画を再構成し、元plan SHA/codecと一致するrecover=applied／
+rollback=plannedをexecute=Falseで再確認した。これは読取り確認であり、今回の追加の実rollback試験ではない。
+finished transactionの復旧はcanonical payload/provenance/receiptを使い、旧stagingやnative jobを必要としない。
 
 ### 受入後の検証環境整理（2026-11-13）
 
@@ -476,3 +485,101 @@ force、branch削除、Orca台帳直接編集は行わず、全branch参照、pr
 primary storage checkはpass（allocated 378,184,093,696B、未分類legacy0、未終了batch0）。
 587原本・採用normal/far画像・canonical exportsと復旧codecは別の現在用途として保持する。
 旧jobのpath/hashを、再起動指示や永続archive義務へ解釈しない。
+
+### 面塗り改訂の検証環境整理（2026-11-15）
+
+通常startup・採用gallery・全24静止試行の独立受入後、今回のconsumer 69件を正規coordinatorで解除し、
+用途が終わったnative 39 rootとstaging/一時codec 27 pathを削除した。directoryの書込保護だけを戻し、
+payload hardlinkのmodeは変更していない。primary本体・通常Cargo cache・他のconsumerは残した。
+新codecのrelease recovery consumerは維持し、原本761件、canonical、runtime、復旧codec、採用画像を含む
+1,454ファイル（1,305,329,844B）は整理前後のSHA/bytes完全一致だった。
+
+対象のallocated合計は23,040,221,184Bから0B。filesystem空きは461,808,979,968Bから466,457,591,808Bへ
+4,648,611,840B増加した。Btrfs共有extent・圧縮があるため、pathのdu差を空き増加量へ読み替えない。
+整理後のprimary storage checkはpass（allocated 415,704,735,744B、未分類legacy0、未終了batch0）。
+旧invalidの結果metadataは台帳へ保ち、rawや旧pathの存在を復旧条件にしない。
+一時計画は恒久仕様への集約後に削除し、docs/plansとproposalsの両索引を再確認した。
+
+撤去pathは次のとおり（相対名は各prefix直下、再実行commandではない）。
+
+<details>
+<summary>primary target/native-acceptance/ 以下の39 root</summary>
+
+```text
+tak14-illustrated-canonical-five-20261115-v1
+tak14-illustrated-five-rehearsal-20261115-v1
+tak14-illustrated-formal-mudmixer-20261115-v1
+tak14-illustrated-formal-mudmixer-20261115-v2
+tak14-illustrated-formal-outdoorlamp-20261115-v1
+tak14-illustrated-formal-outdoorlamp-20261115-v2
+tak14-illustrated-formal-restarea-20261115-v1
+tak14-illustrated-formal-restarea-20261115-v2
+tak14-illustrated-formal-soulspa-20261115-v1
+tak14-illustrated-formal-soulspa-20261115-v2
+tak14-illustrated-formal-tank-20261115-v1
+tak14-illustrated-formal-tank-20261115-v2
+tak14-illustrated-installed-performance-20261115-v1
+tak14-illustrated-normal-default-20261115-v1
+tak14-illustrated-released-gallery-20261115-v1
+tak14-illustrated-rest-lifecycle-20261115-v1
+tak14-illustrated-spa-loaded-use-20261115-v4
+tak14-illustrated-spa-mask-page-0-20261115-v1
+tak14-illustrated-spa-mask-page-1-20261115-v1
+tak14-illustrated-spa-mask-page-2-20261115-v1
+tak14-illustrated-spa-mask-page-3-20261115-v1
+tak14-illustrated-spa-occupied-save-20261115-v1
+tak14-illustrated-story-mixer-move-success-20261115-v1
+tak14-illustrated-story-mixer-refining-20261115-v1
+tak14-illustrated-story-mixer-save-load-20261115-v1
+tak14-illustrated-story-tank-move-success-20261115-v1
+tak14-lamp-ink-art-normal-20261115-v1
+tak14-lamp-ink-art-normal-20261115-v2
+tak14-lamp-ink-gallery-far-20261115-v1
+tak14-lamp-ink-gallery-far-20261115-v2
+tak14-mixer-ink-context-far-20261115-v1
+tak14-mixer-ink-context-normal-20261115-v1
+tak14-rest-ink-art-far-20261115-v1
+tak14-rest-ink-art-normal-20261115-v1
+tak14-spa-ink-art-far-20261115-v1
+tak14-spa-ink-art-normal-20261115-v1
+tak14-tank-worldpaint-art-far-20261115-v1
+tak14-tank-worldpaint-art-normal-20261115-v1
+tak14-tank-worldpaint-context-normal-20261115-v1
+```
+
+</details>
+
+<details>
+<summary>Sync/hell-workers-assets/ 以下の27 path</summary>
+
+```text
+source/tooling/building-asset-codec-3294fd017c4e9fcbe593b2f9d08956f4290bf38c7b6eb11ba9ae91d79253f49c
+staging/blend/tak14-mixer-ink-20261115-v1.blend
+staging/blend/tak14-rest-ink-source-20261115-v1.blend
+staging/blend/tak14-spa-ink-source-20261115-v1.blend
+staging/exports/building-m2/tak14-mixer-ink-20261115-v1
+staging/exports/building-m3/tak14-rest-ink-source-20261115-v1
+staging/exports/building-m3/tak14-spa-ink-source-20261115-v1
+staging/exports/building-m5-art/tak14-lamp-ink-source-20261115-v1
+staging/exports/building-m5-art/tak14-lamp-ink-source-20261115-v2
+staging/exports/building-m5/tak14-lamp-ink-preview-20261115-v1
+staging/exports/building-m5/tak14-lamp-ink-preview-20261115-v2
+staging/exports/tak14-illustrated-candidates-20261115-v2/lamp
+staging/exports/tak14-illustrated-candidates-20261115-v2/mixer
+staging/exports/tak14-illustrated-candidates-20261115-v2/rest
+staging/exports/tak14-illustrated-candidates-20261115-v2/spa
+staging/exports/tak14-illustrated-candidates-20261115-v2/tank
+staging/exports/tak14-mixer-ink-preview-20261115-v1
+staging/exports/tak14-rest-ink-preview-20261115-v1
+staging/exports/tak14-spa-ink-preview-20261115-v1
+staging/exports/tak14-tank-worldpaint-g4-20261115-v1
+staging/exports/tak14-unchanged-m5-candidates-20261115-v1
+staging/reports/building-m2/tak14-mixer-ink-20261115-v1
+staging/reports/building-m3/tak14-rest-ink-source-20261115-v1
+staging/reports/building-m3/tak14-spa-ink-source-20261115-v1
+staging/reports/tak14-mixer-ink-20261115-v1.json
+staging/reports/tak14-rest-ink-source-20261115-v1.json
+staging/reports/tak14-spa-ink-source-20261115-v1.json
+```
+
+</details>

@@ -11,7 +11,8 @@ Tankは手描きの色面をbodyへ投影し、動くMixerとM3設備は元UVに
 world-up diffuseを使い、元geometryはdepth・遮蔽・影biasを担当する。実emission・alpha・post処理は維持する。
 Lampは2Dのまま、面別ハイライトを抑えた塗装と高いポール・三脚を使う。
 個別art/numeric/release採否と導入は[現行世代](building-asset-sets.md#2026-11-15-面塗り方式の正式世代)を正本とし、
-導入後の9種画面・性能の最終受入とは分ける。以下の過去の画像・結果はそれぞれの日付の履歴である。
+導入後の9種画面は本書、静止性能は[性能仕様](rendering-performance.md#面塗り方式の9種の静止asset増分受入2026-11-15)を参照する。
+以下の過去の画像・結果はそれぞれの日付の履歴である。
 
 ## 1. 目指す画面
 
@@ -118,7 +119,7 @@ texture-baked lineworkは面に描く線であり、任意の姿勢の外周へ�
 
 ### UVと画像の作り方
 
-- 側面、上面、断面、内側を意味のある面として展開する。正面用の完成イラストを箱全体へ投影しない。
+- 側面、上面、断面、内側を意味のある面として展開する。Tankの明示投影方式を除き、正面用の完成イラストを箱全体へ投影しない。
 - 木目は部材の長手方向へ、断面は断面へ割り当てる。上面へ側面の板列や石積みを引き伸ばさない。
 - 同じ素材・同じ役割の面はtexel密度をそろえる。細長い面への圧縮で線だけが極端に太くなる配置を避ける。
 - 同じ模様の共有は許すが、ミラーで木目・文字・状態表示の意味が変わる面は分ける。
@@ -133,76 +134,44 @@ M3のSoulSpa骨shaftは長辺で共通正規化した細いUV quadを持つ。�
 解像度は実際の表示面積とatlas内の配分から決める。高解像度画像であること自体を品質基準にしない。
 同種assetで模様の大きさをそろえ、拡大原図より縮小後の色面と線の残り方を優先する。
 
-## 立体感を抑える方式の比較（2026-11-14）
+## 面塗り方式と採用画面（2026-11-15）
 
-上向き白面の照明参照とalbedoを分離したNPRを`d68a72c5`で試した。
-通常・遠景のowned X11/Vulkan原画像、36 owner・60frame安定・初終一致と登録済み独立verifyは成功した。
-しかし独立目視でTankの厚い縁・内側、Mixerの部品、Restの屋根面の立体感が旧画面と大きく変わらず、
-外観は不採用とした。probeには実uniform値がないため、GPUでのmode=1まで観測済みとは扱わない。
-この照明係数の仮説は打ち切り、通常経路は旧PBRとTank専用0.82混合へ戻す。
-sourceは`d68a72c59810a9ef8becf2af91e4a3162d33d9fa`、runtime fingerprintは
-`bb1b28a615fe06e8d215351745e1e1efac145fa8be9e4772dc943996af041151`。
-技術manifest SHAは`dbddb76402ae1849f412ebd82c47906dad80d02726a5caa48967ea88173c5d15`。
-保存したPNGのSHAはnormal `77656ed843026cbda0ac20a8780d43bf26221e83c2bbbf8c1f9ca427820a7caf`、
-far `1db387e1fb1ee54bb64f8cec686c3b5a794cfb0f8f8517aee469108244af1e8d`。
+照明係数だけを変える方式は、通常・遠景の実機比較で厚い縁や屋根の立体感を十分に抑えられず不採用とした。
+その仮説を打ち切り、画面で読む色面・描線と、geometryが担当する深度・遮蔽を分離した。
 
+- **Tank**: `body_paint_projection/world_preview_v1`から手描きpaintをbody専用のmode3材質へ投影する。
+  元GLB・UV・部品を保持し、透明previewとbodyのopaque matte合成を使い分ける。
+  canvas/anchorはpreviewから導出し、RtTの縦補正は一度だけ行う。
+  waterは別材質で旧0.82混合と実水位12/22WUを保ち、Empty/Partial/Fullを区別する。
+- **MudMixer**: `surface_paint/uv_ink_v1`のmode4で元UVへobject-localな継ぎ目・傷・摩耗印を固定する。
+  傾斜ドラムが回る際も描線が部品と一緒に動き、固定架台へ完成図を投影しない。
+  local Y回転・pivot・pause/load/moveの既存契約を保つ。
+- **RestArea / SoulSpa**: mode4のUV描線を使う。布の縫目、骨の長軸に沿う筋をgutterまで連続に描き、
+  面法線由来の陰やtriangleごとの黒枠を焼き込まない。Restの閉じた小屋と入所Soul非表示、
+  Spaの四区画・実worker-slotだけの発光を保つ。黄色いGeneratePower重ね表示は使わない。
+- **OutdoorLamp**: Foreground2dを維持する。高いポール・三脚・頂部投光器を、面別ハイライトを抑えた
+  煤けた灰紫の塗装で読む。初案はDirt上で脚が埋もれたため不採用とし、既存alpha内の塗装線で連続した輪郭を回復した。
+  off/onの状態差・alpha・anchor・配電・論理光の契約は保持する。
 
-![不採用の照明方式・通常表示](design/building-art/lighting-only-trial-normal-20261114.png)
+mode3/4のdiffuse参照はworld-upへ固定する。実geometryのnormalはdepth・遮蔽・shadow biasに残し、
+emission・alpha・post処理を一度だけ適用する。全画面のposterize、輪郭用の追加renderer、設備専用光源は加えない。
+この方式はmaterial uniformと実image/mesh/poseの結合を観測でき、単なる画像の差替え確認で終えない。
+新原本にはpaint/mask/設定/recipeを含め、元GLB/UV・旧authorityを上書きしない。
 
-![不採用の照明方式・遠景表示](design/building-art/lighting-only-trial-far-20261114.png)
+clean `19e608ace4c34169b4e7a1f8c00c1213ad256b3b`の通常既定bindingで、High/DPI1・normal/far各36 ownerを確認した。
+owned X11/Vulkanの原画像であり、9種とWall/Floor/Soul/携行iconの混在、Tank body mode3、水面の分離、
+Mixer/Rest/Spaのmode4、実maskに応じた発光とresident handleを独立確認した。
+この画面はseeded静止galleryであり、自然施工・active AI性能の画像ではない。
+個別のart/numeric/release判断、通常入力の利用・保存読込、静止性能は別々の証拠で判断する。
 
-次の比較はTank一種の手描きpaintを既存geometryへカメラ基準で投影し、
-画像に色面・描線、geometryにdepth・外形・遮蔽・shadowを担当させる2.5D方式とする。
-body専用materialと水面を分離し、Emptyはbody、Partial/Fullは実水面12/22WUのまま表示する。
-現GLBはflat法線であるため、NdotV/fwidth係数だけで外周inkを作る方式は選ばない。
-正式gallery・通常build・M6とは分けたprofiling専用pilotと実material witnessを先に作り、
-外観が有効と確認される前に全設備へ展開したり性能matrixへ進めたりしない。
+![面塗り方式の9種・通常表示](design/building-art/illustrated-nine-normal-20261115.png)
 
-試作入口は`HW_BUILDING_TANK_ILLUSTRATION_PILOT`で、通常assetの権限やgallery契約とは分離する。
-主担当用`building_tank_illustration_pilot.py`がnormal/farの専用plan/run/verifyを持つ。
-256pxへ縮小したopaque paintをbody専用materialで使い、既存water atlas・水位・状態は保持する。
-実imageのdecoded hashと材質mode/投影値をowner/mesh/poseへ結合して観測する。
-現段階は閉じた静止試作であり、通常プレイへの導入・move/Actor前後・性能受入は未完である。
+![面塗り方式の9種・遠景表示](design/building-art/illustrated-nine-far-20261115.png)
 
-通常版への接続はTank限定の`body_paint_projection/world_preview_v1`から実装する。
-元g3の編集可能bundleを不変入力にし、新しい手描き画像を既存geometry由来の透明maskへ収める。
-`build_tank_illustration_candidate.py`は新stagingに原画・mask・設定・recipeを作り、
-Blender sourceへ画像と設定をpackする。独立auditはmesh/UV/transformが元sourceと同じであることも確認する。
-既存の安全launcherを直接使用し、network分離とFlatpakのapp/runtime deployment固定を保つ。
-監査前後で原本・recipe・producer・launcherとdeploymentを再照合し、途中差替えを拒否する。
-準備・auditはsource検証だけであり、旧paint reportや承認を新画像の採否として流用しない。
-previewは透明のまま、bodyだけopaqueな面として実形状の深度・遮蔽を使う。
-
-回転するMixerにはカメラ固定の完成図を使わず、既存M2 v3のUVへobject-localの描線を割り当てる。
-`illustrated-v1`の新atlasは、local Y軸に沿う円筒の継ぎ目・傷・非対称な摩耗印をface-cellの
-gutterまで連続に描く。triangleごとの黒枠や面法線由来の陰は焼き込まない。
-`surface_paint/uv_ink_v1`はこの画像を主とするmode4へ明示接続し、通常の影・遮蔽・状態を保つ。
-Blender sourceと0/quarter/half/three-quarterのpreviewも新atlasで作り、旧sourceや承認は上書きしない。
-`8702f3fe`のMixer g4はnormal/farのArtPreview contextを独立verify/sealし、別途artと既存回転数値を採用した。
-actual mode4・atlasと元GLB/UVの一致を確認した静止比較であり、連続稼働・lifecycle・性能・正式releaseは未承認。
-新preview identityは`5d3a40b9364b38509853e0f769c4fc3ec169c39a6f2ef522e54902f25dbf953e`。
-通常起動は旧g3を維持し、最終sourceのcandidate受入を省略しない。
-
-RestArea/SoulSpaの`build_building_m3_candidate.py --style illustrated-v1`も既存UVからlocal座標へ逆変換し、
-布の継ぎはぎ・縫目、骨の長軸に沿う筋をgutterまで連続に描く。部材の幾何法線由来の明暗を焼かない。
-Blenderの確認材質はworld-up diffuseを使い、runtimeのmode4と同じ分担にする。
-RestAreaの閉じた壁・屋根と入所Soul非表示、Spaのbody/4slot・16mask・Constructing全offを維持する。
-Spaの発光atlasは既存producerの全bytesを維持し、利用中の区画だけが発光する契約を変更しない。
-制作・packagingはsandbox/toolchain、原本・コピー元/先を前後拘束し、通常host observerも全partの
-実mode4/atlas/base値をmanifestから導出して要求する。source/atlasの技術一致は新art/numeric承認ではない。
-
-OutdoorLampは既存Foreground2dを維持し、3D材質を追加しない。
-`building_m5_art.py --lamp-style illustrated-v1`はポールの明るい面塗りを抑え、物の継ぎ目へ描線を置く。
-高い光源・三脚・off/onの全alphaとanchorを保持し、点灯状態・配電・論理光へ影響させない。
-最初のillustrated候補は暗いDirt上で脚とポールの連続した輪郭が読みにくく、native normal/farの
-独立art reviewで不採用にした。各断面を同じ煤けた灰紫の塗装色へ揃え、既存alpha内の脚にも
-塗装線を通して接地までのcontrastを保つ。面別ハイライトや発光輪郭は加えない。
-M3/Lampの新原本・実機採否・新世代の正式導入は現在進行中である。
-
-下図は現Tankの投影と旧2D原画の筆致を参照した未採用paint候補であり、
-実機画像・状態接続・numeric/art/release承認を意味しない。現行assetは上書きしていない。
-
-![未採用のTank投影paint候補](design/building-art/tank-projected-paint-candidate-20261114.png)
+原画像SHA-256はnormal `a48607d386842672be289804d9e33e05ba3bc85f242141905b02ab0a846b63a3`、
+far `e4021d2cd3a1f5c1ace3ec8b07bba14d4b30e156da8a18303a928f7c726b2358`。
+gallery manifestは`e2c260daae222317cbe1dae69692f354c235ae5567c801dc55872beaa54897ad`。
+過去の照明試作画像や未採用のTank原画は比較履歴であり、現行releaseや新たな承認を意味しない。
 
 ## 5. 光・陰・発光の分担
 
