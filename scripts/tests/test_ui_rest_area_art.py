@@ -91,7 +91,7 @@ class OrdinaryArtTests(unittest.TestCase):
 
     def test_arrival_wait_is_bounded_and_requires_a_real_occupant(self):
         driver = MagicMock()
-        state = {"frame": 10, "rest_area_planning": {"buildings": [99]}}
+        state = {"frame": 10, "paused": True, "rest_area_planning": {"buildings": [99]}}
         driver.last = state
         driver.checkpoints = [{"value": state}]
         row = {"entity": "soul", "dream": 2.5}

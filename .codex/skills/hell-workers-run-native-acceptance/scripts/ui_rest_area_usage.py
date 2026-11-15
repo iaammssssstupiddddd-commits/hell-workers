@@ -119,10 +119,17 @@ def exercise(driver):
                               # actual occupant predicate; Driver still caps the
                               # complete session at 480 wall seconds.
                               after=driver.last["frame"], timeout=240)
+    ready = [row for _, row in candidates(context(driver.last), bits) if row["dream"] >= 2]
+    native.require(ready, "ready rest occupant disappeared before pause input")
+    entity = ready[0]["entity"]
     planning.set_refund_paused(driver, True)
     driver.capture(CHECKPOINTS[-2])
-    _, soul = next((owner, row) for owner, row in candidates(context(driver.last), bits) if row["dream"] >= 2)
-    entity, initial = soul["entity"], soul["dream"]
+    # OS pause/capture spans rendered frames. Pin the observed Soul instead of
+    # applying the pre-pause readiness threshold again after natural transfer.
+    paused = [row for _, row in candidates(context(driver.last), bits) if row["entity"] == entity]
+    native.require(driver.last["paused"] is True and len(paused) == 1 and paused[0]["dream"] > 0.5,
+                   "ready rest occupant was replaced/exited or lacks a positive drain margin")
+    initial = paused[0]["dream"]
     wait_for_raw_checkpoint(driver, bits, entity)
     planning.set_refund_paused(driver, False)
     driver.last = driver.wait(lambda value: any(row["entity"] == entity and row["dream"] <= initial - 0.5

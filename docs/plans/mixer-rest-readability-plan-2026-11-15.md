@@ -240,3 +240,15 @@ hostのみのseed42比較は起動前に既存Rust固定seed guardが拒否し�
 他種・candidate・gallery・M6・UI・未知sessionには適用しない。通常起動・正式性能参照は従来seedに固定したまま。
 Pythonは非既定の限定contextだけにmarkerを渡し、既定seedへ戻した場合はforeign markerを消去する。
 これは自然生成地形の比較補足であり、地形上書き・art/numeric/release承認ではない。
+
+
+### Dirt補足・Rest自然利用試験の実測補正
+
+seed42 contextは成功し独立verify・用途retain・finalize済み。ただし下段はdescriptor previewで、上段が実model。
+実modelのDirt境界にSoulが重なるため、独立artはMixerのDirt判読holdを維持。別の自然seedで補い、原画は変更しない。
+Rest g5は独立artとnumericを別々に承認し、隔離candidate 26ad5b25…へ包装・独立verify済み。正式導入は未実施。
+自然建設・hidden occupant開始まで進んだが、runnerがpause後もready threshold Dream>=2を再適用してStopIterationとなった。
+実paused値は同Soulの1.899998664855957で、通常transferによる減少だった。旧試験をinvalid保存・診断保持・finalizeした。
+ready時のSoulをpause前に固定し、paused時は同identity・在室・正の0.5超drain余地を要求する。
+独立verifierの同Soul0.5以上の実減少、全raw/epoch/time/visibility/保存復元/退室条件は変更しない。
+置換・退室・余地不足は入力を再送せず拒否する。fresh試験で全lifecycleを取り直す。

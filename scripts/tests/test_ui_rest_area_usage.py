@@ -14,6 +14,62 @@ usage = base.acceptance.rest_area_usage
 
 
 class OrdinaryRestUsageTests(unittest.TestCase):
+    def test_runner_pins_ready_soul_across_real_pause_drain_without_retry(self):
+        _, entries, _ = self.fixture()
+        for attack in ("none", "exited", "replacement", "insufficient"):
+            ready = copy.deepcopy(entries[3]["value"])
+            ready["paused"] = False
+            ready["rest_area_planning"]["rest_area_usage"]["souls"][0]["dream"] = 2.05
+            occupied = copy.deepcopy(ready)
+            occupied["paused"] = True
+            state = occupied["rest_area_planning"]["rest_area_usage"]
+            state["souls"][0]["dream"] = 1.9
+            if attack == "exited":
+                state["owners"][0]["occupants"] = []
+                state["souls"][0]["resting_in"] = None
+            elif attack == "replacement":
+                state["owners"][0]["occupants"] = ["foreign"]
+                state["souls"][0]["entity"] = "foreign"
+            elif attack == "insufficient":
+                state["souls"][0]["dream"] = 0.5
+            drained = copy.deepcopy(occupied)
+            drained["rest_area_planning"]["rest_area_usage"]["souls"][0]["dream"] = 1.3
+            driver = SimpleNamespace(last=copy.deepcopy(entries[2]["value"]), checkpoints=[])
+            waits, inputs = [], []
+
+            def wait(predicate, *, after, timeout):
+                value = ready if not waits else drained
+                waits.append(timeout)
+                self.assertTrue(predicate(value))
+                return value
+
+            def pause(target, paused):
+                inputs.append(paused)
+                if paused:
+                    target.last = copy.deepcopy(occupied if inputs.count(True) == 1 else drained)
+                else:
+                    target.last["paused"] = False
+
+            def capture(case):
+                driver.checkpoints.append({"case": case, "value": copy.deepcopy(driver.last)})
+
+            driver.wait, driver.capture = wait, capture
+            with self.subTest(attack=attack), patch.object(usage.planning, "exercise"), \
+                    patch.object(usage.planning, "set_refund_paused", side_effect=pause), \
+                    patch.object(usage, "wait_for_raw_checkpoint") as raw:
+                if attack == "none":
+                    usage.exercise(driver)
+                    self.assertEqual(waits, [240, 15])
+                    self.assertEqual(inputs, [False, True, False, True])
+                    self.assertEqual([c["case"] for c in driver.checkpoints], list(usage.CHECKPOINTS[-2:]))
+                    self.assertEqual([call.args[2] for call in raw.call_args_list], ["worker", "worker"])
+                else:
+                    with self.assertRaises(usage.native.AcceptanceError):
+                        usage.exercise(driver)
+                    self.assertEqual(waits, [240])
+                    self.assertEqual(inputs, [False, True])
+                    raw.assert_not_called()
+
     def test_capture_waits_for_raw_writer_without_relaxing_binding_or_sending_input(self):
         raw, entries, _ = self.fixture()
         stale = copy.deepcopy(raw)
