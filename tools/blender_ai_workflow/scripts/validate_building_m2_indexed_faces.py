@@ -42,8 +42,11 @@ def _check_faces(glb, geometry, faces, allowed_sides, label):
             # existing five-decimal key. UVs are stored as f32 in Blender, then
             # glTF flips V and stores f32 again. Rounding the original double
             # first can place one valid value on the opposite key boundary.
-            # Position matching and the rounding width remain unchanged.
-            entry = key(geometry.vertices[vertex],
+            # Positions also enter Blender/glTF Float32 storage. The /32 and
+            # *32 authoring/export scale is a binary exponent change, so its
+            # stored world position is f32(source), including clipped roof
+            # fractions. Keep the key width and indexed topology checks.
+            entry = key(tuple(f32(value) for value in geometry.vertices[vertex]),
                         (f32(uv[0]), f32(1.0 - f32(uv[1]))))
             require(entry not in expected, f"{label} candidate face UV cell is not private")
             expected[entry] = (face_index, corner)

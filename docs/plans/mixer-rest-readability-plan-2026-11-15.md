@@ -196,3 +196,12 @@ Restの制作修正で同じMixerを作り直す必要はなく、固定assetを
   process envへ渡す。traceも同bindingを検証する。これらはart/numeric/性能/releaseの承認ではない。
 - focused Pythonは78件成功、v8を含む7件の形状／投影回帰も成功。Rustは実fixture SHA照合とTank/未知revision拒否を追加。
   Helpは実consumerを再確認しNo impact。profiler検証入口のみで通常player controls、logic、text、Help reachabilityは不変。
+
+### fractional geometryのFloat32照合
+
+Rest v8はcatalogを含む原画の方向を独立評価で承認（正式artではない）。生成はGLB位置照合でinvalid。
+clipped ceilingの4頂点がdouble34.241666667と実Float32 34.24166488647461でround5境界を跨いだ。
+実572position/UV集合は位置もFloat32表現へ合わせると差0で、全indexed face／winding／perimeterもread-only診断で一致。
+位置もBlender/GLTF Float32 storage（/32→*32は二進指数変更）へ変換してから既存round5を適用する。
+許容誤差・face私有性・index／winding判定を拡大しない。実GLB Float32 accessorを読む境界正例と実位置変更の拒否を追加した。
+旧batchはinvalid封印・診断retain・finalizeし、次はfresh名のsourceで生成する。
