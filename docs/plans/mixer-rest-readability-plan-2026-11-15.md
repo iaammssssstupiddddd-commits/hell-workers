@@ -205,3 +205,19 @@ clipped ceilingの4頂点がdouble34.241666667と実Float32 34.24166488647461で
 位置もBlender/GLTF Float32 storage（/32→*32は二進指数変更）へ変換してから既存round5を適用する。
 許容誤差・face私有性・index／winding判定を拡大しない。実GLB Float32 accessorを読む境界正例と実位置変更の拒否を追加した。
 旧batchはinvalid封印・診断retain・finalizeし、次はfresh名のsourceで生成する。
+
+### 実機の外観方向と制作原本の再保存
+
+- `cb8deb1b`の2種ArtPreview g5 normal/far 4batchはactual-windowを独立verify／用途retain／finalize済み。
+  独立原画評価でもMixerの横長ドラム・台車、Restの山型屋根・幕・柱は通常／遠景で読み分けられる方向と判断した。
+  MixerのDirt上の支持台はまだ十分な比較がないため、修正後fresh contextで補う。正式art/numeric/releaseではない。
+- 原本点検で、3つの未使用Image IDがsaved blendから落ちていた実欠陥を確認。
+  Zstd解凍後のM2 855041B／Rest741020Bにはatlas PNG1枚とsnapshot Textだけがあり、3つのImage名と元PNGbytesはなかった。
+  原素材はtracked fixtureと各authoring sidecarに保全済みで、消失はない。旧technical passは変更しない。
+- 3Imageとsnapshot Textへfake userを明示し、safe Blender（no-network／autoexec無効）で保存済みblendを再openして
+  exact Image名・重複・寸法・保持flag・packed dataのbytes/SHA・snapshot Textを読む検査を追加する。
+  外部PNGやdecode済pixelで代用せず、reload／unpack／saveをしない。呼出し前後のblend／素材／inspectorと
+  外側のtoolchain／report／出力inventoryを照合する。新inspectorもsource指紋に含める。
+- focused回帰2件はpacked欠落／別bytes／重複／寸法／保持／snapshot改変、外部fileだけの偽陽性と、
+  readback中のblend・素材・script変異、欠損／重複receipt・nonzeroを拒否する。
+  実保存→再openはfresh source生成で確認する。source SHA／identityが変わるためfresh包装・nativeも再取得する。

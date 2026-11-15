@@ -107,9 +107,10 @@ def verify(kind, name, revision="v1", style=STYLE):
     if style in ILLUSTRATED_STYLES:
         sources += ("building_mixer_uv_ink.py",)
     if style == "handpaint-v1":
-        from building_handpaint_materials import source_snapshot
+        from building_handpaint_materials import source_snapshot, verify_saved_sources
         require(pipeline.exact_json(data.get("handpaint_sources"), source_snapshot()), "handpaint input snapshot differs")
-        sources += ("building_handpaint_materials.py",)
+        verify_saved_sources(blend, illustrated_environment())
+        sources += ("building_handpaint_materials.py", "verify_building_handpaint_blend.py")
     require(data["sources"] == {source: digest(WORKFLOW / "scripts" / source) for source in sources},
             "candidate authoring source changed")
     layout = face_layout(kind, revision)

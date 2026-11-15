@@ -160,7 +160,7 @@ def main():
             "create_building_clay_scene.py", "validate_building_numeric_candidate.py",
             "validate_building_m2_indexed_faces.py", *(
                 ("building_mixer_uv_ink.py",) if args.style in ILLUSTRATED_STYLES else ()),
-            *(("building_handpaint_materials.py",) if args.style == "handpaint-v1" else ()))},
+            *(("building_handpaint_materials.py", "verify_building_handpaint_blend.py") if args.style == "handpaint-v1" else ()))},
         "albedo_sha256": digest(output / "albedo.png"),
         "renders": renders, "preview": contract["preview"], "face_layout": layout,
         "excludes": ["active simulation", "native", "art acceptance", "formal release"],

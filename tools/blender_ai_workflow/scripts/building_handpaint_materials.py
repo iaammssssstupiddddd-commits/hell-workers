@@ -14,6 +14,7 @@ from building_clay_geometry import FIXTURES, read_json, require
 STYLE = "handpaint-v1"
 SOURCE_ROOT = FIXTURES / "handpaint-materials-20261115-v1"
 SOURCE_MANIFEST_SHA256 = "3eb8c2cacd85475d34e21b614f031b63b0274387db873969206999040c691ed9"
+BLEND_INSPECTOR = Path(__file__).with_name("verify_building_handpaint_blend.py")
 
 
 def source_snapshot():
@@ -247,8 +248,57 @@ def pack_in_blend():
     for name,row in snapshot["images"].items():
         image=bpy.data.images.load(str(SOURCE_ROOT/row["path"]))
         image.name="HW_Handpaint_"+name
+        image.use_fake_user=True
         image.pack()
     text=bpy.data.texts.new("HW_Handpaint_Sources.json")
+    text.use_fake_user=True
     text.write(json.dumps(snapshot,sort_keys=True))
     require(source_snapshot()==snapshot,"paint inputs changed during pack")
     return snapshot
+
+
+def check_packed_sources(images,texts,snapshot):
+    """Validate saved data IDs and raw embedded bytes, never external pixels."""
+    import json
+    named=[image for image in images if image.name.startswith("HW_Handpaint_")]
+    expected={"HW_Handpaint_"+name for name in snapshot["images"]}
+    require(len(named)==len(expected) and {image.name for image in named}==expected,
+            "saved handpaint Image names are missing or duplicated")
+    by_name={image.name:image for image in named}
+    for name,row in snapshot["images"].items():
+        image=by_name["HW_Handpaint_"+name];packed=image.packed_file
+        require(image.use_fake_user is True and list(image.size)==row["size"]
+                and packed is not None, "saved handpaint Image is not retained/packed")
+        data=bytes(packed.data)
+        require(packed.size==len(data)==row["bytes"] and hashlib.sha256(data).hexdigest()==row["sha256"],
+                "saved handpaint packed bytes differ")
+    text=texts.get("HW_Handpaint_Sources.json")
+    require(text is not None and text.use_fake_user is True
+            and text.as_string()==json.dumps(snapshot,sort_keys=True),
+            "saved handpaint source snapshot differs")
+
+
+def verify_saved_sources(blend,environment):
+    """Reopen the actual saved file with the safe no-network Blender launcher."""
+    import json
+    import subprocess
+    blend=Path(blend)
+    require(environment.get("BLENDER_SAFE_NO_NETWORK")=="1","saved blend readback requires no-network mode")
+    require(blend.is_file() and not blend.is_symlink() and blend==blend.resolve(),"noncanonical saved blend")
+    require(not BLEND_INSPECTOR.is_symlink(),"handpaint inspector symlink")
+    before=hashlib.sha256(blend.read_bytes()).hexdigest();snapshot=source_snapshot()
+    script_before=hashlib.sha256(BLEND_INSPECTOR.read_bytes()).hexdigest()
+    marker="HW_HANDPAINT_BLEND_JSON:"
+    completed=subprocess.run([str(FIXTURES.parent/"bin/blender-safe"),"--background","--disable-autoexec",
+        str(blend),"--python-exit-code","2","--python",str(BLEND_INSPECTOR),"--","--blend",str(blend)],
+        stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,timeout=120,check=False,env=environment)
+    require(hashlib.sha256(blend.read_bytes()).hexdigest()==before and source_snapshot()==snapshot
+            and hashlib.sha256(BLEND_INSPECTOR.read_bytes()).hexdigest()==script_before,
+            "saved blend/materials/inspector changed during readback")
+    require(completed.returncode==0,"saved handpaint readback failed: "+completed.stderr[-2000:]+completed.stdout[-2000:])
+    lines=[line[len(marker):] for line in completed.stdout.splitlines() if line.startswith(marker)]
+    require(len(lines)==1,"saved handpaint readback receipt missing or duplicate")
+    result=json.loads(lines[0])
+    require(result=={"contract":"building-handpaint-saved-sources-v1","blend_sha256":before,"sources":snapshot},
+            "saved handpaint readback receipt differs")
+    return result

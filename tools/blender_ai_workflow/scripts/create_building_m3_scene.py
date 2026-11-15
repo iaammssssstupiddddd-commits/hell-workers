@@ -160,7 +160,7 @@ def main():
             "create_building_clay_scene.py", "build_building_m3_candidate.py", "build_building_m2_candidate.py",
             "validate_building_m2_indexed_faces.py",
             *(("building_m3_uv_ink.py", "building_mixer_uv_ink.py") if style in ILLUSTRATED_STYLES else ()),
-            *(("building_handpaint_materials.py",) if style == "handpaint-v1" else ()))},
+            *(("building_handpaint_materials.py", "verify_building_handpaint_blend.py") if style == "handpaint-v1" else ()))},
         "face_layout": layout, "parts": parts(args.kind, args.revision), "preview": spec["preview"],
         "renders": renders, "catalog_sha256": digest(output / "catalog.png"), "catalog_projection": catalog_projection,
         "albedo_sha256": digest(output / "albedo.png"),

@@ -93,10 +93,11 @@ def verify(kind, name, style=None, revision="v2"):
     require(data["blend_sha256"] == digest(blend) and data["ocio"]["fallback"] is False, "source/OCIO drift")
     require(data["sources"] == {s: digest(WORKFLOW / "scripts" / s) for s in
             SOURCES + (("building_m3_uv_ink.py", "building_mixer_uv_ink.py") if style in ILLUSTRATED_STYLES else ())
-            + (("building_handpaint_materials.py",) if style == "handpaint-v1" else ())}, "generator drift")
+            + (("building_handpaint_materials.py", "verify_building_handpaint_blend.py") if style == "handpaint-v1" else ())}, "generator drift")
     if style == "handpaint-v1":
-        from building_handpaint_materials import source_snapshot
+        from building_handpaint_materials import source_snapshot, verify_saved_sources
         require(pipeline.exact_json(data.get("handpaint_sources"), source_snapshot()), "handpaint input snapshot differs")
+        verify_saved_sources(blend, illustrated_environment())
     layout = face_layout(kind, revision)
     require(data["face_layout"] == json.loads(json.dumps(layout)) and data["parts"] == parts(kind, revision)
             and data["preview"] == spec["preview"], "layout/parts/projection drift")
