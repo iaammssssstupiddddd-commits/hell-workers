@@ -11,7 +11,7 @@ def fixture():
         "release_fatigue_threshold": .7}}
     before = {"world_epoch": 3, "sample_index": 9, "real_seconds": 1.}
     after = {"world_epoch": 3, "sample_index": 10, "real_seconds": 1.1,
-             "spa_context": {"souls": [{"entity": "soul", "service": None, "task": "None",
+             "spa_context": {"souls": [{"entity": "soul", "fatigue": .65, "service": None, "task": "None",
                                         "generate_power": None, "working_on": None}]}}
     raw = {"events": [
         {"producer": "SquadManagementRequest", "operation": "SoulServiceReleaseRequested",
@@ -23,6 +23,16 @@ def fixture():
 
 
 class ServiceDepartureTests(unittest.TestCase):
+    def test_same_frame_crossing_requires_a_real_positive_endpoint_not_tolerance(self):
+        raw, previous, before, after = fixture()
+        previous["fatigue"] = .69
+        after["spa_context"]["souls"][0]["fatigue"] = .71
+        service.verify(raw, "soul", previous, before, after)
+        for fatigue in (.7, .69, True, float("nan"), -1., 1.01):
+            after["spa_context"]["souls"][0]["fatigue"] = fatigue
+            with self.subTest(fatigue=fatigue), self.assertRaises(RuntimeError):
+                service.verify(raw, "soul", previous, before, after)
+
     def test_actual_nondefault_threshold_and_receipt_refusals(self):
         raw, previous, before, after = fixture()
         service.verify(raw, "soul", previous, before, after)

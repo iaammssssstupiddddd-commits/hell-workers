@@ -11,10 +11,11 @@ def verify(raw, worker, previous, before, after):
                    and service["controller_bits"] >= 0 and service.get("controller_is_familiar") is True,
                    "Spa departure service owner missing")
     threshold = service.get("release_fatigue_threshold")
-    native.require(spa.finite(threshold) and 0 <= threshold <= 1
-                   and spa.finite(previous.get("fatigue")) and threshold < previous["fatigue"] <= 1,
-                   "Spa departure did not exceed the observed service threshold")
     ending = next((s for s in after["spa_context"]["souls"] if s["entity"] == worker), None)
+    native.require(spa.finite(threshold) and 0 <= threshold <= 1 and ending is not None
+                   and all(spa.finite(s.get("fatigue")) and 0 <= s["fatigue"] <= 1 for s in (previous, ending))
+                   and max(previous["fatigue"], ending["fatigue"]) > threshold,
+                   "Spa departure did not exceed the observed service threshold")
     native.require(ending is not None and "service" in ending and ending["service"] is None
                    and ending.get("task") == "None" and ending.get("generate_power") is None
                    and ending.get("working_on") is None,

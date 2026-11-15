@@ -235,8 +235,14 @@ invalidとして原本を保持し、ゲームのDream・疲労・AI・解除条
 
 profiling観測へ実CommandedBy/controller/閾値と、実ReleaseMember/Fatigued要求・OnReleasedFromServiceを追加する。
 loaded-caseだけscopeを`ordinary-spa-candidate-load-v2`へ更新し、自然退出を厳密に検証する。
-直前Generatingの実閾値超過、隣接sample、唯一の同controller/閾値/epoch要求と結果、時刻順、
+Generating→解除の隣接pairの実閾値超過、唯一の同controller/閾値/epoch要求と結果、観測時刻順、
 全関係解除を必要とする。読取時刻を決定時刻へ読み替えない。旧resumed-caseのDream-floorは維持する。
 通常worldへ状態をseedせず、上限を緩めず、結果からworkerを選び直さない。
 Help判断はNo impact。profiling専用の受動記録と独立verifierだけが変わり、通常の入力、AI、保存、表示文言、
 失敗結果とHelp到達性は不変である。独立review/変更別検証後、新subjectのfresh nativeへ進める。
+
+`6af21b22`のloaded-use v3は実要求/結果を捕捉したが、直前sampleだけの閾値検査でinvalidとなった。
+sample191はfatigue0.783226、同一フレームで解除したsample192は0.802512、実閾値は0.8000000119だった。
+前後pairの両fatigueを有限な0～1で検査し、少なくとも片方の厳密な閾値超過を要求する。
+許容幅を足さず、両端とも閾値以下なら拒否する。実receipt・同controller/epoch・隣接性・全解除を維持し、
+区間内の決定瞬間は証明しない。v3原本を修正せず保持し、補正版は新subject・fresh jobで確認する。

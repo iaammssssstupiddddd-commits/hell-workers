@@ -1466,10 +1466,13 @@ v2は自然退出をDream不足だけに限定しない。profiling observerが�
 FamiliarOperationの実release疲労閾値と、SquadManagementRequestのReleaseMember/Fatigued、
 OnReleasedFromServiceを受動的に記録する。時刻/indexは観測時点であり、決定/apply時刻を捏造しない。
 request→outcomeのevent indexは各cursorの収録順であり、独立したdomain実行順の証明ではない。
-疲労退出は直前Generating sampleの実閾値超過と同controller/閾値、隣接sampleに束縛した唯一の要求/結果、
+疲労退出はGenerating→解除の隣接pairの両fatigueを有限な0～1として検査し、少なくとも片方の実閾値超過と
+同controller/閾値、隣接sampleに束縛した唯一の要求/結果、
 同epochと時刻順、実service/task/WorkingOn/TaskWorkers解除を全て要求する。既定値0.8の推測、
 receipt欠落・再利用、別controller、slot取消、未知理由では受け入れない。旧resumed-caseのDream-floor条件、
 historical originと旧v1の結果は保持し、v2をDream-floor到達証拠とは呼ばない。
+閾値超過と解除が同フレーム内に収まる場合も、実際の超過値なしには受け入れない。
+超過の決定瞬間は未観測であり、この相関証拠から正確なdomain実行時刻を主張しない。
 
 2026-11-08のloaded-use v1（source `a0f2c5ce1a4f76245c0734a6c370bb2f5238791232bf89908c55620d5554ca40`）は
 5画像/rawの独立reviewと登録verifierを通過した。保存時1849v0→今回854v1、同tile2349v1で
