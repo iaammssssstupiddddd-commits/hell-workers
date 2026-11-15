@@ -14,7 +14,11 @@ import building_infernal_style as palette
 STYLE = "illustrated-v1"
 
 
-def color(role, surface, point):
+def color(role, surface, point, *, style=STYLE):
+    if style == palette.READABLE_STYLE:
+        return readable_color(role, surface, point)
+    if style != STYLE:
+        raise ValueError("unknown Mixer ink style")
     x, y, z = point
     label = surface.split(":", 1)[0]
     if role == "rotor" and label == "drum":
@@ -73,11 +77,11 @@ def local_point(pixel, polygon, points):
     return tuple(p[i] + u * (q[i] - p[i]) + v * (r[i] - p[i]) for i in range(3))
 
 
-def paint(path, stage="strokes"):
+def paint(path, stage="strokes", *, style=STYLE):
     # Lazy import avoids changing the existing infernal painter's dependency path.
     from building_m2_art import ATLAS_SIZE, CELL, candidate_geometry, face_layout
 
-    if stage not in ("planes", "strokes"):
+    if stage not in ("planes", "strokes") or style not in palette.ILLUSTRATED_STYLES:
         raise ValueError("unknown Mixer ink stage")
     image = Image.new("RGBA", (ATLAS_SIZE, ATLAS_SIZE), (*palette.INK, 255))
     pixels = image.load()
@@ -94,9 +98,65 @@ def paint(path, stage="strokes"):
                         (px + 0.5, py + 0.5), face["polygon_px"], points
                     )
                     pixels[px, py] = (
-                        color(role, face["surface"], point)
+                        color(role, face["surface"], point, style=style)
                         if stage == "strokes"
                         else (*(palette.DRUM if role == "rotor" else palette.IRON), 255)
                     )
     image.save(path)
     return layout
+
+
+def readable_color(role, surface, point):
+    """Broad sheet-metal joins and worn paint attached to the physical part.
+
+    No face-normal bands, polygon outlines, holes, lighting or runtime state are
+    painted here. The mouth, frame rails and wheel hubs use distinct materials.
+    """
+    x, y, z = point
+    label = surface.split(":", 1)[0]
+    ink, steel, red, rust, wear = (32, 28, 33), (104, 96, 92), (119, 62, 59), (145, 92, 66), (159, 138, 107)
+    if role == "rotor" and label == "drum":
+        band = int(surface.split(":")[1].removeprefix("band"))
+        angle = math.atan2(z, x)
+        if band >= 5:
+            base = (42, 34, 37)  # actual cavity: no bright necklace around it
+        elif band == 4:
+            base = wear if math.sin(angle + .4) > .65 else ink
+        else:
+            # Two large irregular areas of rust/red paint, rather than tiny noise.
+            patch = math.sin(angle * 2 + .22 * math.sin(y * .38)) + .035 * y
+            base = rust if patch > .48 else red
+            seam = -3.6 + .22 * math.sin(3 * angle) + .1 * math.sin(7 * angle)
+            if abs(y - seam) < .65 or (band == 3 and y > 12.8):
+                base = ink
+            # A single broken repair seam and chalk scrape remain visibly
+            # asymmetric in all four rotation poses; they follow drum-local UV.
+            if math.cos(angle + 1.8 + .04 * math.sin(y)) > .995 and -9 < y < 8:
+                base = ink
+            if math.cos(angle - .55) > .965 and -1.8 < y < 3.4:
+                base = wear
+    elif role == "rotor" and label == "vane":
+        base = (76, 67, 64)
+    elif role == "body" and label == "wheel":
+        radius = math.hypot(y - 6, z - 9)
+        base = ink if radius > 4.6 or radius < 1.3 else (111, 99, 90)
+        if abs(radius - 3.8) < .4:
+            base = (62, 54, 55)
+    elif role == "body" and label == "frame":
+        base = steel
+        # Rails, base plate and upright joints are distinct painted components,
+        # not simulated gaps through the unchanged solid chassis geometry.
+        if y < 6.1:
+            base = (67, 58, 62) if abs(x) < 12 and abs(z) < 12 else steel
+            if abs(abs(x) - 13.3) < .65 and abs(z) < 14:
+                base = ink
+        elif abs(x) > 14:
+            if abs(z) > 1.6:
+                base = ink
+            elif 20 < y < 24:
+                base = rust
+        elif z < -18:
+            base = (133, 113, 91)
+    else:
+        raise ValueError("unknown Mixer local ink surface")
+    return (*base, 255)

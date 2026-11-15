@@ -12,7 +12,13 @@ import building_infernal_style as palette
 from building_mixer_uv_ink import local_point
 
 
-def color(kind, role, surface, point, *, stage="strokes", spec=None):
+def color(kind, role, surface, point, *, stage="strokes", spec=None, style=palette.ILLUSTRATED_STYLE):
+    if style == palette.READABLE_STYLE:
+        if kind != "RestArea":
+            raise ValueError("revised ink is RestArea-only")
+        return readable_rest_color(surface, point, stage=stage)
+    if style != palette.ILLUSTRATED_STYLE:
+        raise ValueError("unknown M3 ink style")
     if spec is None:
         from building_m3_art import contract
 
@@ -81,10 +87,12 @@ def color(kind, role, surface, point, *, stage="strokes", spec=None):
     return (*(min(255, max(0, round(c + variation))) for c in base), 255)
 
 
-def paint(kind, output, stage):
+def paint(kind, output, stage, *, style=palette.ILLUSTRATED_STYLE):
     from building_m3_art import contract, geometry, face_layout, paint as legacy_paint
 
-    if stage not in ("clay", "planes", "strokes"):
+    if (stage not in ("clay", "planes", "strokes")
+            or style not in palette.ILLUSTRATED_STYLES
+            or style == palette.READABLE_STYLE and kind != "RestArea"):
         raise ValueError("unknown M3 ink stage")
     # The original producer remains the only author of the emission mask.
     # Its bytes are unchanged; the new pass replaces only the diffuse atlas.
@@ -107,6 +115,55 @@ def paint(kind, output, stage):
                         (px + 0.5, py + 0.5), face["polygon_px"], points
                     )
                     pixels[px, py] = color(
-                        kind, role, face["surface"], point, stage=stage, spec=spec
+                        kind, role, face["surface"], point, stage=stage, spec=spec, style=style
                     )
     image.save(output / "albedo.png")
+
+
+def readable_rest_color(surface, point, *, stage="strokes"):
+    """Roof, sheltered walls and a closed entry curtain read as separate areas."""
+    if stage == "clay":
+        return (125, 125, 125, 255)
+    x, y, z = point
+    material = surface.split(":", 1)[0]
+    ink, hem, roof = (39, 31, 36), (67, 51, 48), (132, 113, 93)
+    if material == "cloth" and surface == "cloth:canopy":
+        base = roof
+        if stage == "strokes":
+            # One broad cloth repair, a continuous ridge and an irregular hem.
+            if -26 < x < -11 and -20 + .08*x < z < -1 + .08*x:
+                base = (156, 127, 97)
+            if abs(x + .18*math.sin(z*.3)) < .7:
+                base = ink
+            elif 1.5 < x < 3.2:
+                base = (159, 138, 113)
+            if abs(x) > 29.7 or abs(z) > 27.8:
+                base = hem
+            if abs(z + 14 + .55*math.sin(x*.2)) < .45:
+                base = hem
+    elif material == "cloth":
+        # The physical centre curtain sits at z=23, in front of the enclosed
+        # interior. Its dark, opaque folds never expose a resting Soul.
+        entry = z > 21 and abs(x) < 7.2
+        base = (53, 43, 51) if entry else (90, 73, 79)
+        if stage == "strokes":
+            if entry:
+                if abs(x) > 5.4 or y > 25.5:
+                    base = (145, 121, 94)
+                elif abs(x - .3*math.sin(y*.4)) < .6:
+                    base = ink
+                elif 2.4 < abs(x) < 3.3:
+                    base = (109, 88, 89)
+                if 12.7 < y < 14 and abs(x) > 3.3:
+                    base = (164, 141, 107)  # curtain tie, not an occupancy lamp
+            elif y < 2 or abs(abs(x) - 8) < .55 and z > 24:
+                base = ink
+    elif material == "wood":
+        base = (107, 87, 73)
+        if stage == "strokes" and abs(math.sin(x*1.1 + z*.8 + .07*math.sin(y*.3))) < .12:
+            base = ink
+    elif material == "iron":
+        base = (74, 58, 57)
+    else:
+        raise ValueError("unknown RestArea local ink material")
+    return (*base, 255)

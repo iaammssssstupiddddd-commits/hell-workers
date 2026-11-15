@@ -18,7 +18,7 @@ from pathlib import Path
 
 from PIL import Image
 
-from building_infernal_style import STYLE, ILLUSTRATED_STYLE
+from building_infernal_style import STYLE, ILLUSTRATED_STYLES
 
 import building_asset_pipeline as pipeline
 from building_clay_geometry import FIXTURES, PILOTS, load_pilot, read_json, require
@@ -78,15 +78,15 @@ def paths(kind, name):
 
 
 def verify(kind, name, revision="v1", style=STYLE):
-    require(style in (STYLE, ILLUSTRATED_STYLE) and (style != ILLUSTRATED_STYLE
+    require(style in (STYLE, *ILLUSTRATED_STYLES) and (style not in ILLUSTRATED_STYLES
             or kind == "MudMixer" and revision == "v3"), "unknown M2 style/kind/revision")
     blend, output, report, reports = paths(kind, name)
     geometry = candidate_geometry(kind, revision)
     contract = load_pilot(kind, revision)
     numeric, numeric_sha256 = numeric_contract(kind, revision)
     data = read_json(report)
-    frozen_outputs = illustrated_outputs(blend, output, report, reports) if style == ILLUSTRATED_STYLE else None
-    if style == ILLUSTRATED_STYLE:
+    frozen_outputs = illustrated_outputs(blend, output, report, reports) if style in ILLUSTRATED_STYLES else None
+    if style in ILLUSTRATED_STYLES:
         require(pipeline.exact_json(data.get('source_toolchain'), illustrated_toolchain()),
                 'illustrated source toolchain changed')
     require(data["schema_version"] == 1 and data["kind"] == kind
@@ -102,7 +102,7 @@ def verify(kind, name, revision="v1", style=STYLE):
     sources = ("create_building_m2_scene.py", "building_m2_art.py", "building_clay_geometry.py", "building_infernal_style.py",
                "create_building_clay_scene.py", "validate_building_numeric_candidate.py",
                "validate_building_m2_indexed_faces.py")
-    if style == ILLUSTRATED_STYLE:
+    if style in ILLUSTRATED_STYLES:
         sources += ("building_mixer_uv_ink.py",)
     require(data["sources"] == {source: digest(WORKFLOW / "scripts" / source) for source in sources},
             "candidate authoring source changed")
@@ -120,7 +120,7 @@ def verify(kind, name, revision="v1", style=STYLE):
                     and a.tobytes() == b.tobytes(), "atlas pixels differ")
     states = (("Empty", "Partial", "Full") if kind == "Tank"
               else ("IdleAngleZero", "QuarterTurn", "HalfTurn", "DiagonalPose"))
-    if style == ILLUSTRATED_STYLE:
+    if style in ILLUSTRATED_STYLES:
         states += ("ThreeQuarterTurn",)
     require(set(data["renders"]) == set(states), "missing state render")
     preview = contract["preview"]
@@ -143,7 +143,7 @@ def verify(kind, name, revision="v1", style=STYLE):
             bounds = png.getchannel("A").getbbox()
             require(bounds is not None and bounds[0] > 0 and bounds[1] > 0
                     and bounds[2] < width and bounds[3] < height, "empty/clipped preview")
-    if style == ILLUSTRATED_STYLE:
+    if style in ILLUSTRATED_STYLES:
         require(len({data["renders"][state]["sha256"] for state in
                 ("IdleAngleZero", "QuarterTurn", "HalfTurn", "ThreeQuarterTurn")}) == 4,
                 "object-attached wear mark is not visible across four rotor poses")
@@ -160,8 +160,8 @@ def verify(kind, name, revision="v1", style=STYLE):
                 and export["validation"]["mesh_count"] == 1, "export provenance mismatch")
         check_uv(glb, geometry[role], layout[role])
         subprocess.run([str(WORKFLOW / "bin/gltf-validate"), str(glb)], check=True, timeout=60,
-                       **({'env': illustrated_environment()} if style == ILLUSTRATED_STYLE else {}))
-    if style == ILLUSTRATED_STYLE:
+                       **({'env': illustrated_environment()} if style in ILLUSTRATED_STYLES else {}))
+    if style in ILLUSTRATED_STYLES:
         require(pipeline.exact_json(data['source_toolchain'], illustrated_toolchain())
                 and read_json(report) == data
                 and illustrated_outputs(blend, output, report, reports) == frozen_outputs,
@@ -172,19 +172,19 @@ def verify(kind, name, revision="v1", style=STYLE):
             "numeric_freeze": False, "art_approved": False, "runtime_published": False,
             "state_geometry": state_bounds,
             **({'source_inventory': frozen_outputs, 'source_toolchain': data['source_toolchain']}
-               if style == ILLUSTRATED_STYLE else {})}
+               if style in ILLUSTRATED_STYLES else {})}
 
 
 def build_bundle(kind, name, stage, revision="v1", style=STYLE):
-    require(style in (STYLE, ILLUSTRATED_STYLE) and (style != ILLUSTRATED_STYLE
+    require(style in (STYLE, *ILLUSTRATED_STYLES) and (style not in ILLUSTRATED_STYLES
             or kind == "MudMixer" and revision == "v3"), "unknown M2 style/kind/revision")
     blend, output, report, reports = paths(kind, name)
     require(not any(path.exists() for path in (blend, output, report, reports)), "use fresh output name")
     candidate_geometry(kind, revision)
-    frozen = illustrated_toolchain() if style == ILLUSTRATED_STYLE else None
+    frozen = illustrated_toolchain() if style in ILLUSTRATED_STYLES else None
     output.mkdir(parents=True)
     paint(kind, output / "albedo.png", stage, revision, style=style)
-    env = illustrated_environment() if style == ILLUSTRATED_STYLE else dict(os.environ, BLENDER_SAFE_NO_NETWORK="1", OCIO=str(FIXTURES / "wall-calibration-v2.ocio"))
+    env = illustrated_environment() if style in ILLUSTRATED_STYLES else dict(os.environ, BLENDER_SAFE_NO_NETWORK="1", OCIO=str(FIXTURES / "wall-calibration-v2.ocio"))
     subprocess.run([str(WORKFLOW / "bin/blender-safe"), "--background", "--factory-startup",
                     "--python-exit-code", "2", "--python",
                     str(WORKFLOW / "scripts/create_building_m2_scene.py"), "--", kind,
@@ -217,7 +217,7 @@ def prepare(kind, name, generation, destination, codec, revision="v1", style=STY
         require(illustrated_outputs(blend, output, report, reports) == result['source_inventory']
                 and pipeline.exact_json(illustrated_toolchain(), result['source_toolchain']),
                 'verified illustrated inputs changed during preparation')
-    if style == ILLUSTRATED_STYLE:
+    if style in ILLUSTRATED_STYLES:
         unchanged()
     origins = {"source.blend": blend, "geometry.json": numeric,
                "paint-report.json": report, "albedo.png": output / "albedo.png"}
@@ -226,7 +226,7 @@ def prepare(kind, name, generation, destination, codec, revision="v1", style=STY
     for state in read_json(report)["renders"]:
         origins[f"{state}.png"] = output / f"{state}.png"
     files = {name: path.read_bytes() for name, path in origins.items()}
-    if style == ILLUSTRATED_STYLE:
+    if style in ILLUSTRATED_STYLES:
         require(all(pipeline.digest(payload) == (result['numeric_candidate_sha256'] if name == 'geometry.json'
                     else result['source_inventory'][str(origins[name])]) for name, payload in files.items()),
                 'copied illustrated source was not verified')
@@ -236,11 +236,11 @@ def prepare(kind, name, generation, destination, codec, revision="v1", style=STY
         pipeline.put(pipeline.rooted(source, filename), data)
     recipe_path = destination / "recipe.json"
     value = recipe(kind, generation, source, revision)
-    if style == ILLUSTRATED_STYLE:
+    if style in ILLUSTRATED_STYLES:
         value["surface_paint"] = {"method": "uv_ink_v1"}
     pipeline.put(recipe_path, pipeline.canonical(value))
     exported = pipeline.export(recipe_path, source, destination / "runtime", codec, authority="art_preview")
-    if style == ILLUSTRATED_STYLE:
+    if style in ILLUSTRATED_STYLES:
         pipeline.verify_set(destination / 'runtime', kind, codec)
         unchanged()
         require({path.name: pipeline.digest(path.read_bytes()) for path in source.iterdir()}
@@ -262,7 +262,7 @@ def main():
     parser.add_argument("--name", required=True)
     parser.add_argument("--stage", choices=("planes", "strokes"), default="strokes")
     parser.add_argument("--revision", choices=("v1", "v2", "v3"), default="v1")
-    parser.add_argument("--style", choices=(STYLE, ILLUSTRATED_STYLE), default=STYLE)
+    parser.add_argument("--style", choices=(STYLE, *ILLUSTRATED_STYLES), default=STYLE)
     parser.add_argument("--generation", type=int)
     parser.add_argument("--destination", type=Path)
     parser.add_argument("--codec", type=Path)

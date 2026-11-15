@@ -13,7 +13,7 @@ from pathlib import Path
 import bpy
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from building_infernal_style import STYLE, ILLUSTRATED_STYLE
+from building_infernal_style import STYLE, ILLUSTRATED_STYLES
 
 from building_clay_geometry import PILOTS, load_pilot, require
 from building_m2_art import candidate_geometry, face_layout, numeric_contract
@@ -28,9 +28,9 @@ def main():
     parser.add_argument("--name", required=True)
     parser.add_argument("--stage", choices=("planes", "strokes"), required=True)
     parser.add_argument("--revision", choices=("v1", "v2", "v3"), default="v1")
-    parser.add_argument("--style", choices=(STYLE, ILLUSTRATED_STYLE), default=STYLE)
+    parser.add_argument("--style", choices=(STYLE, *ILLUSTRATED_STYLES), default=STYLE)
     args = parser.parse_args(script_arguments())
-    require(args.style != ILLUSTRATED_STYLE or args.kind == "MudMixer" and args.revision == "v3",
+    require(args.style not in ILLUSTRATED_STYLES or args.kind == "MudMixer" and args.revision == "v3",
             "illustrated UV source requires construction Mixer v3")
     import re
     require(re.fullmatch(r"[a-z0-9][a-z0-9-]{0,79}", args.name) is not None, "unsafe name")
@@ -62,7 +62,7 @@ def main():
     shader.inputs["Roughness"].default_value = 1
     shader.inputs["Metallic"].default_value = 0
     shader.inputs["Specular IOR Level"].default_value = 0
-    if args.style == ILLUSTRATED_STYLE:
+    if args.style in ILLUSTRATED_STYLES:
         # Change only the diffuse reference, not geometry/UV or role transforms.
         normal = material.node_tree.nodes.new("ShaderNodeVectorMath")
         normal.operation = "ADD"
@@ -116,7 +116,7 @@ def main():
             obj.rotation_euler.z = contract["construction"]["yaw_radians"]
     states = (("Empty", "Partial", "Full") if args.kind == "Tank"
               else ("IdleAngleZero", "QuarterTurn", "HalfTurn", "DiagonalPose"))
-    if args.style == ILLUSTRATED_STYLE:
+    if args.style in ILLUSTRATED_STYLES:
         states += ("ThreeQuarterTurn",)
     renders = {}
     for index, state in enumerate(states):
@@ -152,7 +152,7 @@ def main():
             "create_building_m2_scene.py", "building_m2_art.py", "building_clay_geometry.py", "building_infernal_style.py",
             "create_building_clay_scene.py", "validate_building_numeric_candidate.py",
             "validate_building_m2_indexed_faces.py", *(
-                ("building_mixer_uv_ink.py",) if args.style == ILLUSTRATED_STYLE else ()))},
+                ("building_mixer_uv_ink.py",) if args.style in ILLUSTRATED_STYLES else ()))},
         "albedo_sha256": digest(output / "albedo.png"),
         "renders": renders, "preview": contract["preview"], "face_layout": layout,
         "excludes": ["active simulation", "native", "art acceptance", "formal release"],

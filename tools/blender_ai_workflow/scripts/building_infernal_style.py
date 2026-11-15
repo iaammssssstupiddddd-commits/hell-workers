@@ -2,6 +2,8 @@
 
 STYLE = "infernal-v1"
 ILLUSTRATED_STYLE = "illustrated-v1"
+READABLE_STYLE = "illustrated-v2"
+ILLUSTRATED_STYLES = (ILLUSTRATED_STYLE, READABLE_STYLE)
 INK = (34, 28, 36)
 WOOD = (94, 82, 79)
 WATER = (66, 87, 90)

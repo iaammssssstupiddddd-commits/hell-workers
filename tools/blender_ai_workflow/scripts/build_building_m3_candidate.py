@@ -14,7 +14,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from building_infernal_style import STYLE, ILLUSTRATED_STYLE
+from building_infernal_style import STYLE, ILLUSTRATED_STYLES
 from build_building_m2_candidate import illustrated_environment, illustrated_toolchain, illustrated_outputs
 
 import building_asset_pipeline as pipeline
@@ -67,8 +67,8 @@ def verify_mesh(path, mesh, spec, layout):
 
 def selected_style(kind, style):
     value = style or (STYLE if kind == "RestArea" else "legacy")
-    require(value in ("legacy", STYLE, ILLUSTRATED_STYLE)
-            and (value != STYLE or kind == "RestArea"), "unknown M3 style/kind")
+    require(value in ("legacy", STYLE, *ILLUSTRATED_STYLES)
+            and (value not in (STYLE, "illustrated-v2") or kind == "RestArea"), "unknown M3 style/kind")
     return value
 
 
@@ -78,8 +78,8 @@ def verify(kind, name, style=None):
     value, spec = contract(kind)
     style = selected_style(kind, style)
     data = read_json(report)
-    frozen_outputs = illustrated_outputs(blend, output, report, reports) if style == ILLUSTRATED_STYLE else None
-    if style == ILLUSTRATED_STYLE:
+    frozen_outputs = illustrated_outputs(blend, output, report, reports) if style in ILLUSTRATED_STYLES else None
+    if style in ILLUSTRATED_STYLES:
         require(pipeline.exact_json(data.get("source_toolchain"), illustrated_toolchain()),
                 "illustrated source toolchain changed")
     require(data["schema_version"] == 1 and data["kind"] == kind
@@ -90,7 +90,7 @@ def verify(kind, name, style=None):
             "wrong report or approval claim")
     require(data["blend_sha256"] == digest(blend) and data["ocio"]["fallback"] is False, "source/OCIO drift")
     require(data["sources"] == {s: digest(WORKFLOW / "scripts" / s) for s in
-            SOURCES + (("building_m3_uv_ink.py", "building_mixer_uv_ink.py") if style == ILLUSTRATED_STYLE else ())}, "generator drift")
+            SOURCES + (("building_m3_uv_ink.py", "building_mixer_uv_ink.py") if style in ILLUSTRATED_STYLES else ())}, "generator drift")
     layout = face_layout(kind)
     require(data["face_layout"] == json.loads(json.dumps(layout)) and data["parts"] == parts(kind)
             and data["preview"] == spec["preview"], "layout/parts/projection drift")
@@ -139,8 +139,8 @@ def verify(kind, name, style=None):
                 and export["validation"]["summary"]["errors"] == 0, "export provenance drift")
         inventory[role] = verify_mesh(path, mesh, spec["roles"][role], layout[role])
         subprocess.run([str(WORKFLOW / "bin/gltf-validate"), str(path)], check=True, timeout=60,
-                       **({"env": illustrated_environment()} if style == ILLUSTRATED_STYLE else {}))
-    if style == ILLUSTRATED_STYLE:
+                       **({"env": illustrated_environment()} if style in ILLUSTRATED_STYLES else {}))
+    if style in ILLUSTRATED_STYLES:
         require(pipeline.exact_json(data["source_toolchain"], illustrated_toolchain())
                 and read_json(report) == data
                 and illustrated_outputs(blend, output, report, reports) == frozen_outputs,
@@ -149,17 +149,17 @@ def verify(kind, name, style=None):
             "geometry_contract_sha256": digest(CONTRACT), "inventory": inventory,
             "art_approved": False, "runtime_published": False,
             **({"source_inventory": frozen_outputs, "source_toolchain": data["source_toolchain"]}
-               if style == ILLUSTRATED_STYLE else {})}
+               if style in ILLUSTRATED_STYLES else {})}
 
 
 def build_bundle(kind, name, stage, style=None):
     style = selected_style(kind, style)
     blend, output, report, reports = paths(kind, name)
     require(not any(path.exists() for path in (blend, output, report, reports)), "use fresh output name")
-    frozen = illustrated_toolchain() if style == ILLUSTRATED_STYLE else None
+    frozen = illustrated_toolchain() if style in ILLUSTRATED_STYLES else None
     output.mkdir(parents=True)
     paint(kind, output, stage, style=style)
-    env = illustrated_environment() if style == ILLUSTRATED_STYLE else dict(os.environ, BLENDER_SAFE_NO_NETWORK="1", OCIO=str(FIXTURES / "wall-calibration-v2.ocio"))
+    env = illustrated_environment() if style in ILLUSTRATED_STYLES else dict(os.environ, BLENDER_SAFE_NO_NETWORK="1", OCIO=str(FIXTURES / "wall-calibration-v2.ocio"))
     subprocess.run([str(WORKFLOW / "bin/blender-safe"), "--background", "--factory-startup",
                     "--python-exit-code", "2", "--python", str(WORKFLOW / "scripts/create_building_m3_scene.py"),
                     "--", kind, "--name", name, "--stage", stage, "--style", style], check=True, timeout=600, env=env)
@@ -208,7 +208,7 @@ def prepare(kind, name, generation, destination, codec, style=None):
         require(illustrated_outputs(blend, output, report, reports) == result["source_inventory"]
                 and pipeline.exact_json(illustrated_toolchain(), result["source_toolchain"]),
                 "verified illustrated inputs changed during preparation")
-    if style == ILLUSTRATED_STYLE:
+    if style in ILLUSTRATED_STYLES:
         unchanged()
     _, spec = contract(kind)
     files = {"source.blend": blend.read_bytes(), "geometry.json": CONTRACT.read_bytes(), "paint-report.json": report.read_bytes()}
@@ -218,7 +218,7 @@ def prepare(kind, name, generation, destination, codec, style=None):
     files.update({name: (output / name).read_bytes() for name in names})
     origins = {"source.blend": blend, "geometry.json": CONTRACT, "paint-report.json": report,
                **{name: output / name for name in names}}
-    if style == ILLUSTRATED_STYLE:
+    if style in ILLUSTRATED_STYLES:
         require(all(pipeline.digest(payload) == (result["geometry_contract_sha256"] if name == "geometry.json"
                     else result["source_inventory"][str(origins[name])]) for name, payload in files.items()),
                 "copied illustrated source was not verified")
@@ -228,11 +228,11 @@ def prepare(kind, name, generation, destination, codec, style=None):
         pipeline.put(pipeline.rooted(source, filename), data)
     recipe_path = destination / "recipe.json"
     value = recipe(kind, generation, source)
-    if style == ILLUSTRATED_STYLE:
+    if style in ILLUSTRATED_STYLES:
         value["surface_paint"] = {"method": "uv_ink_v1"}
     pipeline.put(recipe_path, pipeline.canonical(value))
     exported = pipeline.export(recipe_path, source, destination / "runtime", codec, authority="art_preview")
-    if style == ILLUSTRATED_STYLE:
+    if style in ILLUSTRATED_STYLES:
         pipeline.verify_set(destination / "runtime", kind, codec)
         unchanged()
         require({path.name: pipeline.digest(path.read_bytes()) for path in source.iterdir()}
@@ -251,7 +251,7 @@ def main():
     parser.add_argument("kind", choices=tuple(KINDS))
     parser.add_argument("--name", required=True)
     parser.add_argument("--stage", choices=("clay", "planes", "strokes"), default="clay")
-    parser.add_argument("--style", choices=("legacy", STYLE, ILLUSTRATED_STYLE))
+    parser.add_argument("--style", choices=("legacy", STYLE, *ILLUSTRATED_STYLES))
     parser.add_argument("--generation", type=int)
     parser.add_argument("--destination", type=Path)
     parser.add_argument("--codec", type=Path)
