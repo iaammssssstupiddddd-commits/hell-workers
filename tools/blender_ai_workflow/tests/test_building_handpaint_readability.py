@@ -44,6 +44,20 @@ def triangles(mesh,select):
 
 
 class HandpaintReadabilityTests(unittest.TestCase):
+    def test_curved_cloth_revision_preserves_the_closed_geometry_and_opaque_source_domain(self):
+        old=m3.geometry('RestArea','v5')['body'];new=m3.geometry('RestArea','v6')['body']
+        self.assertEqual(old.vertices,new.vertices)
+        self.assertEqual(old.faces,new.faces)
+        self.assertEqual(old.surfaces,new.surfaces)
+        self.assertEqual(m3.face_layout('RestArea','v5'),m3.face_layout('RestArea','v6'))
+        numeric.numeric_contract(m3.CONTRACT_V6.read_bytes(),'RestArea')
+        with self.assertRaises(ValueError):numeric.numeric_contract(m3.CONTRACT_V6.read_bytes(),'SoulSpa')
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp)
+            m3.paint('RestArea',root,'strokes',revision='v6',style='handpaint-v1')
+            with Image.open(root/'albedo.png') as image:
+                self.assertEqual(image.getchannel('A').getextrema(),(255,255))
+
     def test_mixer_side_is_long_in_actual_projection_with_clear_sweep_and_unchanged_clock(self):
         spec=clay.load_pilot('MudMixer','v6');old=clay.load_pilot('MudMixer','v5');c=spec['construction']
         profile=c['drum_profile'];radius=max(r for r,_ in profile);length=max(y for _,y in profile)-min(y for _,y in profile)

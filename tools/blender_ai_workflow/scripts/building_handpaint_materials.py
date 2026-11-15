@@ -126,7 +126,19 @@ def rest_color(surface,point,spec,images):
         enclosed="enclosure" in spec
         u,v=(x+31)/62,(z+29)/58
         base=sample(images["canvas"],u*.48 if enclosed else u,v*.48 if enclosed else v)
-        if enclosed:
+        if spec.get("curved_cloth_pigment"):
+            # A quiet, stitch-free crop and two separated, broken curves: no
+            # central knot or full-width cross which reads as wrapped cargo.
+            base=sample(images["canvas"],.04+.34*u,.36+.24*v)
+            t=(z+24)/19
+            if 0<t<1:fold=abs(x-(-25+18*t**.7))
+            else:
+                t=(z+3)/27
+                fold=abs(x-(9+16*t**1.5)) if 0<t<1 else 100
+            if fold<.35 and (.08<t<.28 or .45<t<.68):base=ink
+            elif fold<3.3:
+                base=tuple(round(c*(.76+.24*fold/3.3)) for c in base)
+        elif enclosed:
             # Sparse corner-to-sag strokes describe the continuous cloth, not
             # triangulation/UV cells. Quiet pigment keeps the door dominant.
             spread=25*min(1,abs(z+8)/(16 if z<-8 else 32))
@@ -137,10 +149,19 @@ def rest_color(surface,point,spec,images):
         if min(x+31,31-x,z+29,front-z)<.65+.12*math.sin(x*.4):base=ink
     elif surface=="cloth:entry":
         base=tuple(round(c*.83) for c in sample(images["canvas"],.04+.2*(x+23)/46,.3+.25*y/40))
-        centre=abs(x-.25*math.sin(y*.25))
-        fold=abs(abs(x)-11-.65*math.sin(y*.12))
-        if centre<.65 or fold<.35 or y<1.1:base=ink
-        elif fold<1.6:base=tuple(round(c*.72) for c in base)
+        if spec.get("curved_cloth_pigment"):
+            centre=abs(x-.22*math.sin(y*.2));edge=abs(abs(x)-10)
+            factor=1.06 if abs(x)<10 else .66
+            base=tuple(round(c*factor) for c in base)
+            fold=abs(abs(x)-(5+.8*math.sin(y*.09)))
+            if centre<.4 or edge<.55 or y<1:base=ink
+            elif fold<.3 and 12<y<25:base=ink
+            elif fold<2:base=tuple(round(c*(.72+.28*fold/2)) for c in base)
+        else:
+            centre=abs(x-.25*math.sin(y*.25))
+            fold=abs(abs(x)-11-.65*math.sin(y*.12))
+            if centre<.65 or fold<.35 or y<1.1:base=ink
+            elif fold<1.6:base=tuple(round(c*.72) for c in base)
     elif surface.startswith("cloth:curtain"):
         base=sample(images["canvas"],.04+.2*(x+8)/16,.3+.25*y/26)
         hem=interpolate(x,spec["curtain"]["x_profile"],spec["curtain"]["bottom_y_profile"])
@@ -152,6 +173,18 @@ def rest_color(surface,point,spec,images):
     elif material=="wood":
         base=tuple(round(c*m) for c,m in zip(sample(images["iron"],(x+z+64)/128,y/48),(1.13,.95,.86),strict=True))
         if abs(math.sin(x*1.2+z*.9+.12*math.sin(y*.2)))<.15:base=ink
+        if spec.get("curved_cloth_pigment"):
+            raw=sample(images["iron"],(x+z+64)/128,y/48)
+            base=tuple(round(.45*c+.55*t) for c,t in zip(raw,(130,105,82),strict=True))
+            posts=spec["posts"]
+            candidates=[]
+            for xi,cx in enumerate(posts["x"]):
+                for zi,cz in enumerate(posts["z"]):
+                    h=posts["heights_wu"][xi][zi];dx,dz=posts["lean_top_xz"][xi][zi]
+                    candidates.append((abs(x-cx-dx*y/h)+abs(z-cz-dz*y/h),cx+dx*y/h,cz+dz*y/h,h))
+            _,cx,cz,h=min(candidates)
+            across=z-cz if surface.endswith((":left",":right")) else x-cx
+            if min(2-abs(across),y,h-y)<.32 or abs(across-.18*math.sin(y*.24))<.13:base=ink
         if "enclosure" in spec and abs(z-24)<3:
             low,high=spec["posts"]["painted_binding_y_wu"]
             if low<y<high:base=(112,96,76)
@@ -164,7 +197,7 @@ def rest_color(surface,point,spec,images):
 def paint(kind,path,stage,revision):
     from PIL import Image
     from building_mixer_uv_ink import local_point
-    require(stage=="strokes" and ((kind=="MudMixer" and revision in ("v5","v6")) or (kind=="RestArea" and revision in ("v4","v5"))),"handpaint requires explicit new geometry/stroke stage")
+    require(stage=="strokes" and ((kind=="MudMixer" and revision in ("v5","v6")) or (kind=="RestArea" and revision in ("v4","v5","v6"))),"handpaint requires explicit new geometry/stroke stage")
     if kind=="MudMixer":
         from building_m2_art import candidate_geometry,face_layout
         from building_clay_geometry import load_pilot

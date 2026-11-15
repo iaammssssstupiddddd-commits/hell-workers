@@ -161,3 +161,12 @@ Mixer v5は長い側胴とyaw -65度（軸/支点/tilt/4秒回転は維持）、
   実投影の入口高さ、Mixer側胴の投影長・sweep、旧clockと支点、誤kind/styleの起動前拒否を確認した。
   actual-window、独立art/numeric、candidate・release・既定切替は未実施／未承認。
 - Helpは再度実経路を確認しNo impact。新proposalは明示的authoring選択だけで、通常起動bindingとplayer操作／機能／文言／保存／Help到達性は不変。
+
+### 屋根図柄の再評価
+
+新Mixer v6は全5姿勢の独立原画比較で現場ミキサーとしての方向を承認、実機通常／遠景は未確認。
+Rest v5は入口面積と被覆を改善したが、対称X線＋横縫い線が荷物に見えるため原画art不採用。
+新Rest v6は閉mesh・bounds・UV・numeric構成を維持し、素材のstitch-free領域と離れた2本の曲線へ変更する。
+中央の閉じ目／左右の幕の折れ・暗い側壁・輪郭のある木柱を分離する。旧proposalは変更しない。
+未起動のMixer ArtPreview包装v2はchild／root不存在を照合してabandoned→finalize。未知操作の再送ではない。
+両種を次の同一clean sourceで新規生成・独立検証し、その後actual-windowへ進む。
