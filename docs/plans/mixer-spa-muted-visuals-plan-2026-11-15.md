@@ -38,9 +38,9 @@ Spaは骨の節と外周を暗線/骨色で分け、区画は暗い面と控え�
 
 ## 5. マイルストーン
 
-- [ ] 明示styleの生成/検証/拒否条件と旧出力再現を実装する。
-- [ ] 新原本とArtPreviewを生成し、通常/遠景・Mixer回転・Spa状態を独立審査する。
-- [ ] 新しいart/numeric/release、復元確認、正式install/既定接続を行う。
+- [x] 明示styleの生成/検証/拒否条件と旧出力再現を実装する。
+- [x] 新原本とArtPreviewを生成し、通常/遠景・Mixer Dirt・Spa静止状態を独立審査する。回転契約は新numericとgeometry/state不変で確認し、fresh回転測定とは扱わない。
+- [x] 新しいart/numeric/release、復元確認、正式install/既定接続を行う。
 - [ ] 導入後の実画面・通常startup、Help、変更別CI、storage、仕様/原本同期を完了する。
 
 ## 6. 検証
@@ -62,5 +62,6 @@ owner Codex、consumer Mixer/Spa visual feedback 2026-11-15。primaryと既存Ca
 
 ## 8. 引継ぎ
 
-現状は調査済み、実装開始。未配車・未生成・旧binding維持。
+実装・独立art/numeric/release・原本保全・復元試験・canonical promotion/installと既定binding更新まで完了。
+導入後のfresh startup/gallery・CI・最終review・cleanupを継続する。
 旧統括/Run/helperは起動しない。承認・技術pass・利用者の採用判断を混同しない。

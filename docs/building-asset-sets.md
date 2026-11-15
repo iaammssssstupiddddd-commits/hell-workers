@@ -4,8 +4,36 @@
 [移行計画](plans/3d-rtt/non-wall-floor-building-art-migration-plan-2026-09-19.md)を正本とする。
 本書はroot `bevy_app::assets::building_asset_set` が所有する入力境界を記す。
 
-現行の導入状態は[ミキサーと休憩所の判読性改訂](#2026-11-15-ミキサーと休憩所の判読性改訂)を参照。
+現行の導入状態は[Mixerの彩度とSpaの骨表現改訂](#2026-11-15-mixerの彩度とspaの骨表現改訂)を参照。
 以下の過去の表と測定は各導入時点の履歴であり、新世代の測定を代用しない。
+
+## 2026-11-15 Mixerの彩度とSpaの骨表現改訂
+
+利用者の追加フィードバックを受け、明示`weathered-v1`でMixerのドラム外面だけを低彩度化し、
+Spaの骨周縁・節と暗い四区画を描き分けた。形状、UV、部品、mode4、精製clock、区画と発光の契約は維持する。
+
+| kind | generation | ReleaseApproved manifest SHA-256 |
+| --- | ---: | --- |
+| MudMixer | 6 | `8bf86b281fbb73592ff5cbd1dd531cee908fd6e7aef780706d4fa874dd21be6c` |
+| SoulSpa | 4 | `bedab69bb3f6c4dd526f6953144c5fd5bad8a7e76ebb8cb760d9cdae472bb2cc` |
+
+clean `594d46a9b7724e11ba413647a6a17c325af6ace3`で新原本とArtPreviewを結合し、
+通常/遠景、Mixerの実Dirt背景、formal candidateの原画像を独立審査した。
+新しいart/numeric/release決定を各exact identityへ結合し、旧承認を流用していない。
+formal candidate evidence SHAはMixer `4245973e72ac01f13f3a08b6ff36e88245acb313f2eb12a2e066e3e850f9fe81`、
+Spa `d0b3d97d4a8daf3ba3ffb4b866d446bb4383352188cb3e6559b31bccb68348da`。
+
+隔離canonical/runtimeでMixer 5→6→5、Spa 3→4→3を実行し、旧26filesとpointer/locatorの完全byte復帰、
+新payload/provenanceと4journal全文を独立照合した。result SHAは
+`c81928220ccd217bc73999d712dabd3469918631b20df92998db21a771844777`。
+両canonical promotionをrepo変更前に完了してから正規installし、compiled bindingの2件だけを更新した。
+完全8件のbinding SHAは`7f416dc1a260ade9faa18cbae3ea06d9d9d6627a58cfa296767a25158f2b37cb`。
+RestAreaを含む他6設備・Door g7・Wall g13は不変、Bridgeは対象外。旧世代と復旧情報を保全する。
+
+Help実経路はNo impact。既定binding→loader/pool→world/catalog/previewの外観だけを変更し、
+入力・UI文言・精製/発電/休息の成立条件、保存とHelp到達性は変わらない。
+導入後のfresh通常startupと全9種gallery・resident parity、最終CI/review/storageは継続検証中。
+今回を新しい性能計測や自然lifecycle受入として報告しない。
 
 ## 2026-11-15 ミキサーと休憩所の判読性改訂
 

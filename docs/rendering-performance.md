@@ -797,3 +797,15 @@ result SHAは`3ba1b85bbe06b44fb2e3a0f27765c42bc01b5534145d2bf9ff5ee5ef12d8d77c`�
 active AI、自然施工/lifecycle、別sourceのM1-0基盤累積、Bridgeは本gateへ含めない。
 個別art/numeric/release・通常起動は[asset仕様](building-asset-sets.md#2026-11-15-ミキサーと休憩所の判読性改訂)、
 normal/farは[採用画面](building-art-direction.md#ミキサーと休憩所の判読性改訂後の画面2026-11-15)へ分離する。
+
+
+## Mixer彩度とSpa骨表現のpixel-only改訂（2026-11-15）
+
+Mixer g6／Spa g4は拡散色だけの改訂である。実body/rotorとbody/slotの全GLB bytesがそれぞれ
+直前g5/g3と同一で、UV・parts・寸法・mode4・状態と512² RGBA/alpha255を維持する。
+Spaのslot_emissive PNGは全bytes同一である。Mixerのfresh Dirt実画面でも同世代のresident mesh2／image role3を照合した。
+導入後の全9種の実owner/root/part/material/imageと共有依存のparityは継続検証中。
+
+この改訂では新しい24試行の時間・Memory/RSS計測を行っていない。
+直前節の`fd5cd689`での計測はそのexact subjectの履歴として残し、g6/g4の測定済みpassへ読み替えない。
+geometry・shader・容量が変わる場合は、必要な固定予算と性能gateを新subjectで実行する。

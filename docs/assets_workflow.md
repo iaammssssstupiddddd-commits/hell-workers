@@ -723,3 +723,17 @@ staging/exports/building-m3/tak14-rest-tent-shape-20261115-v1
 ```
 
 </details>
+
+
+## Mixer彩度とSpa骨表現の原本追加（2026-11-15）
+
+新しい2組44files（19,463,778B）をauthoring libraryへ追加した。Blend、元PNG/GLB、geometry、
+recipeとpaint report、Mixerのpacked素材入力を含み、generator hashは実Git履歴へ結合した。
+既存54組511filesを全hash/bytes照合して維持し、authoringは56組555files（96,974,592B）、
+legacy389件と合わせて944原本となる。新index SHAは
+`c98ba57874918b90555732175ac9645d43e3b5ca3e1120ad844ff6466d9ea796`。
+原本保全自体はart/release authorityを付与しない。
+
+Mixer g6／Spa g4の正式authorityと旧g5/g3への復旧はcanonical exportsとruntime mirrorの
+世代別payload/provenance/receipt/journalが所有する。exact codec `25019e2c…75e3`を継続使用し、
+旧原本・codec・復旧情報を置換しない。raw検証jobは導入後の最終レビュー用途だけ保持中である。

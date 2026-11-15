@@ -416,3 +416,13 @@ M2 Tank/MudMixer、M3 RestArea、M5 OutdoorLampの新規候補は`infernal-v1`�
 GLB/UVとPNG寸法/alphaの不変は実byteと画素で検証し、色変更をnumeric/性能/release承認へ読み替えない。
 採用原本・exact pipeline sourceは[原本library](assets_workflow.md)へ保全し、現行4件g3は
 [正式世代](building-asset-sets.md#2026-11-14-世界観統一の現行正式世代)を参照する。
+
+
+## Mixer/Spaの明示weathered素材
+
+`weathered-v1`はMudMixer v6／SoulSpa v2のstrokesだけに使用する。
+Mixerは元の手描き素材とpacked原本を維持し、外側ドラムだけの彩度・明度を抑える。
+Spaは骨と暗い区画のdiffuse atlasだけを描き替え、emissionは旧PNGと全bytes一致させる。
+誤kind/revision/stageを生成前に拒否し、旧styleのpixel SHAも回帰で維持する。
+source verifyとpackaged-byte verifyだけを混同せず、原本→authoring copy→公開recipe→runtime manifestを
+全bytesとidentityへ結合してから独立art/numericを審査する。正式世代は[asset仕様](building-asset-sets.md)を参照。
