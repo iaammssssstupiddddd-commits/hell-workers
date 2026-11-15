@@ -182,3 +182,17 @@ actual meshは224tri／320cap、174UV cells、preview全頂点はx66–190／y12
 planesはprepareのstrokes guardで拒否し、ArtPreview／候補／正式導入にはできない。
 Mixer v6は原画方向承認後、独立検証したArtPreview g5 manifest `a05c5fb9bc2424cd83429c2cbb4a479d760be80a508e583edae3cdd885f4a09c`へ固定済み。
 Restの制作修正で同じMixerを作り直す必要はなく、固定assetを現在のclean製品sourceに載せて別途実機確認する。
+
+### 単色形状とcatalog投影／Mixer試験経路
+
+- Rest v7の単色形状は独立原画比較で布テントとして次へ進める評価。生成自体はinvalidとして記録した。
+  world anchor y144の上端12.2pxは収まるが、catalog anchor y128では−3.8pxとなり、既存の頂点crop guardで停止する。
+  元batch・Empty画像・blendを診断用途に保持し、成功へ読み替えない。
+- Rest v8はv7と全vertex/faceが同一で、preview canvasだけ144WUへ広げる新未承認proposal。
+  worldとcatalogの両anchorで全頂点の4px以上の余白を確認する。旧128WUに対する失敗も回帰で保持し、guardは緩めない。
+- Mixer v6用のprofiling専用M2 probeに固定numeric SHAを明示追加し、既存candidate/storyboard/context/UI経路を接続する。
+  v4/v5や未知revisionを包括許可しない。Tank v1／既存storyboard Mixer v2の既定は維持する。
+  UI側の「SHAリスト末尾ならv2」という推測は撤去し、planへ明示revisionを保存、kind/SHAを共通bindingで再検証して
+  process envへ渡す。traceも同bindingを検証する。これらはart/numeric/性能/releaseの承認ではない。
+- focused Pythonは78件成功、v8を含む7件の形状／投影回帰も成功。Rustは実fixture SHA照合とTank/未知revision拒否を追加。
+  Helpは実consumerを再確認しNo impact。profiler検証入口のみで通常player controls、logic、text、Help reachabilityは不変。

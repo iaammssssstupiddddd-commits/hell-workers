@@ -77,7 +77,7 @@ def verify(kind, name, style=None, revision="v2"):
     blend, output, report, reports = paths(kind, name)
     value, spec = contract(kind, revision)
     style = selected_style(kind, style)
-    require((revision in ("v4", "v5", "v6", "v7")) == (style == "handpaint-v1"), "handpaint requires explicit Rest v4/v5/v6/v7")
+    require((revision in ("v4", "v5", "v6", "v7", "v8")) == (style == "handpaint-v1"), "handpaint requires explicit Rest v4/v5/v6/v7")
     require(revision != "v3" or style == "illustrated-v2", "M3 v3 requires revised ink")
     data = read_json(report)
     frozen_outputs = illustrated_outputs(blend, output, report, reports) if style in ILLUSTRATED_STYLES else None
@@ -161,12 +161,12 @@ def verify(kind, name, style=None, revision="v2"):
 def build_bundle(kind, name, stage, style=None, revision="v2"):
     style = selected_style(kind, style)
     contract(kind, revision)
-    require((revision in ("v4", "v5", "v6", "v7")) == (style == "handpaint-v1"), "handpaint requires explicit Rest v4/v5/v6/v7")
+    require((revision in ("v4", "v5", "v6", "v7", "v8")) == (style == "handpaint-v1"), "handpaint requires explicit Rest v4/v5/v6/v7")
     require(revision != "v3" or style == "illustrated-v2", "M3 v3 requires revised ink")
     blend, output, report, reports = paths(kind, name)
     require(not any(path.exists() for path in (blend, output, report, reports)), "use fresh output name")
     require(style != "handpaint-v1" or stage == "strokes"
-            or (kind == "RestArea" and revision == "v7" and stage == "planes"),
+            or (kind == "RestArea" and revision in ("v7", "v8") and stage == "planes"),
             "handpaint planes require the explicit Rest v7 shape-only proposal")
     frozen = illustrated_toolchain() if style in ILLUSTRATED_STYLES else None
     output.mkdir(parents=True)
@@ -212,7 +212,7 @@ def recipe(kind, generation, source, revision="v2"):
 def prepare(kind, name, generation, destination, codec, style=None, revision="v2"):
     style = selected_style(kind, style)
     contract(kind, revision)
-    require((revision in ("v4", "v5", "v6", "v7")) == (style == "handpaint-v1"), "handpaint requires explicit Rest v4/v5/v6/v7")
+    require((revision in ("v4", "v5", "v6", "v7", "v8")) == (style == "handpaint-v1"), "handpaint requires explicit Rest v4/v5/v6/v7")
     require(revision != "v3" or style == "illustrated-v2", "M3 v3 requires revised ink")
     result = verify(kind, name, style, revision)
     require(result["stage"] == "strokes", "runtime packaging requires final stroke proposal")
@@ -270,7 +270,7 @@ def main():
     parser.add_argument("kind", choices=tuple(KINDS))
     parser.add_argument("--name", required=True)
     parser.add_argument("--stage", choices=("clay", "planes", "strokes"), default="clay")
-    parser.add_argument("--revision", choices=("v2", "v3", "v4", "v5", "v6", "v7"), default="v2")
+    parser.add_argument("--revision", choices=("v2", "v3", "v4", "v5", "v6", "v7", "v8"), default="v2")
     parser.add_argument("--style", choices=("legacy", STYLE, *ILLUSTRATED_STYLES))
     parser.add_argument("--generation", type=int)
     parser.add_argument("--destination", type=Path)

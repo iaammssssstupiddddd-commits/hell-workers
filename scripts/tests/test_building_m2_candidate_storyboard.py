@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import json
 import math
 import unittest
 import tempfile
@@ -42,15 +43,34 @@ class CandidateMotionTests(unittest.TestCase):
         self.assertEqual(candidate.candidate_numeric_binding("MudMixer", None, v2)["revision"], "v2")
         self.assertEqual(candidate.candidate_numeric_binding("MudMixer", "v3", v3),
                          {"revision": "v3", "numeric_candidate_sha256": v3})
+        v6 = candidate.m2.numeric_contract("MudMixer", "v6")[1]
+        self.assertEqual(candidate.candidate_numeric_binding("MudMixer", "v6", v6),
+                         {"revision": "v6", "numeric_candidate_sha256": v6})
         for kind, revision, sha in (("MudMixer", None, v3), ("MudMixer", "v3", v2),
                                     ("Tank", "v3", v3), ("MudMixer", "v4", v3),
-                                    ("MudMixer", False, v3), ("RestArea", "v3", v3)):
+                                    ("MudMixer", False, v3), ("RestArea", "v3", v3),
+                                    ("MudMixer",None,v6),("MudMixer","v6",v3),("Tank","v6",v6),
+                                    ("MudMixer",False,v6),("MudMixer","v7",v6)):
             with self.subTest(kind=kind, revision=revision), self.assertRaises(ValueError):
                 candidate.candidate_numeric_binding(kind, revision, sha)
 
     def test_tilted_v3_rotor_uses_local_axis_and_preserves_the_authored_pivot(self):
         authored = candidate.quaternion_step([0.,0.,0.,1.], [0.,1.,0.], -.55850536)
         authored = candidate.quaternion_step(authored, [1.,0.,0.], .95993109)
+        self.check_tilted_motion(authored)
+
+    def test_v6_authored_yaw_and_tilt_preserve_local_axis_and_pivot(self):
+        path,_=candidate.m2.numeric_contract("MudMixer","v6")
+        spec=json.loads(path.read_bytes())["kinds"]["MudMixer"]
+        authored=spec["motion"]["rotation_xyzw"]
+        geometry=json.loads(path.with_name(spec["geometry_file"]).read_bytes())
+        body_rotation=geometry["roles"]["body"]["rotation_xyzw"]
+        self.value["parts"][0]["rotation_xyzw"]=body_rotation
+        for _,root in self.rows:
+            candidate.part(root,"body")["pose"]["rotation"]=body_rotation
+        self.check_tilted_motion(authored)
+
+    def check_tilted_motion(self,authored):
         value, rows = copy.deepcopy((self.value, self.rows))
         value["parts"][1].update(rotation_xyzw=authored, translation_wu=[0.,25.,0.])
         for angle, (_, root) in zip((0.,.1,.2,.2,.2,.3,.4,.4,.4), rows, strict=True):

@@ -21,6 +21,7 @@ if not __package__:
 from scripts import building_art_acceptance as art
 from scripts import building_m2_native_acceptance as interactive
 from scripts import building_body_paint_observation as body_paint
+from scripts import building_m2_acceptance as m2
 import ui_usability_acceptance as ui
 
 native, pipeline = art.native, art.pipeline
@@ -114,7 +115,7 @@ def check_observation(case, value, identity):
     return ctx
 
 
-def source_contract(repo, source, codec, case):
+def source_contract(repo, source, codec, case, revision=None):
     pipeline.require(case in CASES, "unknown M2 UI case")
     source, codec = pipeline.no_symlinks(source), pipeline.no_symlinks(codec)
     kind = CASES[case][0]
@@ -122,12 +123,21 @@ def source_contract(repo, source, codec, case):
     manifest, text, receipt = pipeline.load_set(source, kind, codec)
     pipeline.require(manifest["identity"]["authority"] == "art_preview" and receipt is None
                      and manifest["geometry_contract_sha256"] in art.M2_NUMERIC[kind], "M2 UI requires the exact preview/numeric source")
+    binding=m2.numeric_binding(kind, {"revision": "v1" if revision is None else revision,
+                                    "numeric_candidate_sha256": manifest["geometry_contract_sha256"]})
     return {"scope": SCOPE, "identity": manifest["identity"], "manifest_sha256": pipeline.digest(text.encode()),
             "source_root": str(source), "codec": str(codec), "codec_sha256": ui.sha256(codec),
-            "geometry_sha256": manifest["geometry_contract_sha256"], "artifacts": manifest["artifacts"],
+            "geometry_sha256": manifest["geometry_contract_sha256"], "revision": binding["revision"], "artifacts": manifest["artifacts"],
             "parts": manifest["parts"], **body_paint.fields(manifest),
             "body_paint_verifier_sha256": body_paint.verifier_sha256(),
             "base_assets": art.asset_view_fingerprint(repo)}
+
+
+def acceptance_revision(value):
+    source=value["input"]
+    return m2.numeric_binding(CASES[value["case"]][0],
+        {"revision":source.get("revision","v1"),
+         "numeric_candidate_sha256":source["geometry_sha256"]})["revision"]
 
 
 def session_setting(value, root, nonce):
@@ -143,7 +153,7 @@ def check_plan(value):
                      and value["driver_sha256"] == ui.sha256(Path(__file__))
                      and pipeline.exact_json(art.subject(repo), value["subject"])
                      and pipeline.exact_json(source_contract(repo, Path(value["input"]["source_root"]),
-                         Path(value["input"]["codec"]), value["case"]), value["input"]), "M2 UI frozen plan changed")
+                         Path(value["input"]["codec"]), value["case"], value["input"].get("revision")), value["input"]), "M2 UI frozen plan changed")
     art.static.check_root(repo, Path(value["job_root"]))
     return repo
 
@@ -156,7 +166,7 @@ def plan(args):
     resources = native.resource_snapshot(repo, require_launcher=True)
     pipeline.require(not resources["failures"], str(resources["failures"]))
     value = {"profile": PROFILE, "scope": SCOPE, "status": "ready", "repo": str(repo), "job_root": str(root),
-             "case": args.case, "input": source_contract(repo, args.source_root, args.codec, args.case),
+             "case": args.case, "input": source_contract(repo, args.source_root, args.codec, args.case, getattr(args,"revision",None)),
              "subject": art.subject(repo), "driver_sha256": ui.sha256(Path(__file__)),
              "portal_consent_file": str(args.portal_consent_file.absolute()), "promotion_authority": False,
              "resources": resources}
@@ -231,6 +241,7 @@ def verify(root):
 
 
 def check_trace(raw, plan_value, before, after):
+    acceptance_revision(plan_value)
     identity, case = plan_value["input"]["identity"], plan_value["case"]
     pipeline.require(raw.get("scope") == "m2-feedback-observations-only" and raw.get("leg") == "ui-art"
                      and raw.get("failure") is None and raw.get("accepted") is False
@@ -356,7 +367,7 @@ def run(args):
             "HW_NATIVE_UI_ROOT": str(directory), "HW_NATIVE_UI_NONCE": nonce, "HW_NATIVE_UI_CASE": value["case"],
             "HW_NATIVE_UI_WIDTH": "1920", "HW_NATIVE_UI_HEIGHT": "1080", "HW_NATIVE_UI_SCALE": "1",
             "HW_M2_ACCEPTANCE_PROBE": "1", "HW_M2_ACCEPTANCE_LEG": "ui-art",
-            "HW_M2_ACCEPTANCE_REVISION": "v2" if value["input"]["geometry_sha256"] == art.M2_NUMERIC["MudMixer"][-1] else "v1",
+            "HW_M2_ACCEPTANCE_REVISION": acceptance_revision(value),
             "HW_BUILDING_ART_SESSION": session_setting(value, root, nonce)})
         def heartbeat(method):
             state.update(current_stage=f"portal-{method}", heartbeat_at=native.utc_now())
@@ -429,6 +440,8 @@ def main():
     parser.add_argument("--source-root", type=Path)
     parser.add_argument("--codec", type=Path)
     parser.add_argument("--case", choices=CASES)
+    parser.add_argument("--revision", choices=("v1","v2","v3","v6"),
+                        help="Explicit numeric revision; omission retains v1, never inferred from a SHA")
     parser.add_argument("--job-root", type=Path)
     parser.add_argument("--portal-consent-file", type=Path)
     parser.add_argument("--output", type=Path)

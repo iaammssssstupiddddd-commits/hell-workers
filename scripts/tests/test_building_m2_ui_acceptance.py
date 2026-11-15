@@ -112,7 +112,7 @@ class M2UiTests(unittest.TestCase):
         value = observed()
         parts = [{"name": name, "translation_wu": [0., 0., 0.], "rotation_xyzw": [0., 0., 0., 1.], "scale": [1.] * 3}
                  for name in ("body", "water")]
-        plan = {"case": "m2-ui-tank-partial", "input": {"identity": value["m2_ui"]["identity"], "parts": parts, "geometry_sha256": "c" * 64}}
+        plan = {"case": "m2-ui-tank-partial", "input": {"identity": value["m2_ui"]["identity"], "parts": parts, "geometry_sha256": recipe.m2.NUMERIC_SHA256}}
         rows = []
         root_pose = {"translation": [0., 0., 0.], "rotation": [0., 0., 0., 1.], "scale": [1.] * 3}
         root_matrix = recipe.art.foreground.matrix(root_pose)
@@ -135,11 +135,27 @@ class M2UiTests(unittest.TestCase):
                                     "pose": root_pose, "global_matrix": root_matrix, "owner_exists": True, "state": "Some(TankPartial)", "parts": rendered}],
                          "descriptor_handles": {"meshes": {"body": "body", "water": "water"}, "albedo": "image"}})
         raw = {"scope": "m2-feedback-observations-only", "leg": "ui-art", "failure": None, "accepted": False,
-               "numeric_candidate_sha256": "c" * 64,
+               "numeric_candidate_sha256": recipe.m2.NUMERIC_SHA256,
                "performance_evidence": False, "identity": value["m2_ui"]["identity"], "nonce": value["nonce"], "process_id": 10, "samples": rows}
         before, after = copy.deepcopy(value), copy.deepcopy(value)
         before["frame"], after["frame"] = 95, 105
         return raw, plan, before, after
+
+    def test_ui_revision_is_explicit_kind_bounded_and_not_inferred_from_catalog_order(self):
+        sha=recipe.m2.numeric_contract('MudMixer','v6')[1]
+        value={'case':'m2-ui-mixer-refining','input':{'revision':'v6','geometry_sha256':sha}}
+        self.assertEqual(recipe.acceptance_revision(value),'v6')
+        for revision,digest,case in ((None,sha,value['case']),('v6','0'*64,value['case']),
+                                    ('v6',sha,'m2-ui-tank-full'),(True,sha,value['case']),
+                                    ('v7',sha,value['case'])):
+            changed=copy.deepcopy(value)
+            changed['case']=case
+            changed['input']={'geometry_sha256':digest}
+            if revision is not None:
+                changed['input']['revision']=revision
+            with self.assertRaises(ValueError):
+                recipe.acceptance_revision(changed)
+        self.assertEqual(recipe.acceptance_revision({'case':'m2-ui-tank-empty','input':{'geometry_sha256':recipe.m2.NUMERIC_SHA256}}),'v1')
 
     def test_last_trace_binds_actual_production_parts_and_never_mutates(self):
         raw, plan, before, after = self.trace_fixture()

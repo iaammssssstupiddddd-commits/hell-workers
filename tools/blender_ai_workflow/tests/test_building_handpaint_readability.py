@@ -45,6 +45,17 @@ def triangles(mesh,select):
 
 
 class HandpaintReadabilityTests(unittest.TestCase):
+    def test_tent_v8_contains_every_vertex_in_both_world_and_centered_catalog_canvases(self):
+        old=m3.geometry('RestArea','v7')['body'];mesh=m3.geometry('RestArea','v8')['body']
+        self.assertEqual(old.vertices,mesh.vertices);self.assertEqual(old.faces,mesh.faces)
+        _,spec=m3.contract('RestArea','v8');preview=spec['preview']
+        scale=preview['canvas_px'][0]/preview['canvas_wu'][0]
+        for ax,ay in (preview['anchor_px'],[128,128]):
+            pixels=[(ax+scale*x,ay+scale*(z-.6*y)) for x,y,z in mesh.vertices]
+            self.assertTrue(all(4<c<252 for point in pixels for c in point))
+        self.assertLess(min(128+2*(z-.6*y) for x,y,z in old.vertices),0)
+        numeric.numeric_contract(m3.CONTRACT_V8.read_bytes(),'RestArea')
+        with self.assertRaises(ValueError):numeric.numeric_contract(m3.CONTRACT_V8.read_bytes(),'SoulSpa')
     def test_steep_tent_has_a_visible_gable_closed_coverage_and_full_preview_margin(self):
         mesh=m3.geometry('RestArea','v7')['body'];_,spec=m3.contract('RestArea','v7')
         self.assertEqual(mesh.bounds()[1][1],64)

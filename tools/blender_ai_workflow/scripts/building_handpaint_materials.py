@@ -211,8 +211,8 @@ def rest_color(surface,point,spec,images):
 def paint(kind,path,stage,revision):
     from PIL import Image
     from building_mixer_uv_ink import local_point
-    require((stage=="strokes" or (kind=="RestArea" and revision=="v7" and stage=="planes"))
-            and ((kind=="MudMixer" and revision in ("v5","v6")) or (kind=="RestArea" and revision in ("v4","v5","v6","v7"))),"handpaint requires explicit geometry/stroke or Rest v7 shape-only stage")
+    require((stage=="strokes" or (kind=="RestArea" and revision in ("v7","v8") and stage=="planes"))
+            and ((kind=="MudMixer" and revision in ("v5","v6")) or (kind=="RestArea" and revision in ("v4","v5","v6","v7","v8"))),"handpaint requires explicit geometry/stroke or Rest v7 shape-only stage")
     if kind=="MudMixer":
         from building_m2_art import candidate_geometry,face_layout
         from building_clay_geometry import load_pilot

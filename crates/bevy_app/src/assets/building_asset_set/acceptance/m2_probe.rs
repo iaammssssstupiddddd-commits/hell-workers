@@ -22,11 +22,14 @@ const NUMERIC_SHA256: &str = "1b913ea0784bf6815a6c46ed0396dafc6ebcdcfc107370bc56
 const NUMERIC_V2_SHA256: &str = "aba63ac343e11ed4fa758deffaf36b9139145333ca5d61fd26c3e3dd513153c8";
 const NUMERIC_V3_SHA256: &str = "a49f198c2a28c163cfc31c2f503406095328e329a9774e274bea632d342e6783";
 
+const NUMERIC_V6_SHA256: &str = "4319fd7a6b4c809c1cb54046bda293b6c2e7a062537026e0b4991c61b5233828";
+
 fn numeric_candidate(kind: BuildingAssetKind, revision: &str) -> Result<&'static str, String> {
     match (kind, revision) {
         (BuildingAssetKind::Tank | BuildingAssetKind::MudMixer, "v1") => Ok(NUMERIC_SHA256),
         (BuildingAssetKind::MudMixer, "v2") => Ok(NUMERIC_V2_SHA256),
         (BuildingAssetKind::MudMixer, "v3") => Ok(NUMERIC_V3_SHA256),
+        (BuildingAssetKind::MudMixer, "v6") => Ok(NUMERIC_V6_SHA256),
         _ => Err("unsupported M2 kind/numeric revision".into()),
     }
 }
@@ -638,9 +641,20 @@ mod tests {
             digest_hex(&Sha256::digest(fixture).into()),
             NUMERIC_V3_SHA256
         );
+        let fixture_v6 = include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/blender_ai_workflow/fixtures/building-m2-v6.numeric-candidate.json"
+        ));
+        assert_eq!(
+            numeric_candidate(BuildingAssetKind::MudMixer, "v6").unwrap(),
+            digest_hex(&Sha256::digest(fixture_v6).into())
+        );
         for (kind, revision) in [
             (BuildingAssetKind::Tank, "v2"),
             (BuildingAssetKind::Tank, "v3"),
+            (BuildingAssetKind::Tank, "v6"),
+            (BuildingAssetKind::MudMixer, "v5"),
+            (BuildingAssetKind::MudMixer, "v7"),
             (BuildingAssetKind::MudMixer, "v4"),
             (BuildingAssetKind::MudMixer, ""),
             (BuildingAssetKind::RestArea, "v1"),

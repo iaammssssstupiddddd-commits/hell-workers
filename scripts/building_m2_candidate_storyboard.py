@@ -94,7 +94,7 @@ def candidate_numeric_binding(kind, revision, numeric_sha256):
     """Select an explicit revision; never upgrade by recognizing an artifact hash."""
     pipeline.require(kind in CASES, "unsupported candidate numeric kind")
     selected = revision if revision is not None else ("v1" if kind == "Tank" else "v2")
-    pipeline.require(type(selected) is str and selected in ("v1", "v2", "v3")
+    pipeline.require(type(selected) is str and selected in ("v1", "v2", "v3", "v6")
                      and (kind == "MudMixer" or selected == "v1"),
                      "unsupported explicit candidate numeric revision")
     return m2.numeric_binding(kind, {"revision": selected, "numeric_candidate_sha256": numeric_sha256})
@@ -440,7 +440,7 @@ def main():
         parser.add_argument("--"+name, type=Path)
     parser.add_argument("--kind", choices=tuple(CASES))
     parser.add_argument("--leg")
-    parser.add_argument("--revision", choices=("v1", "v2", "v3"),
+    parser.add_argument("--revision", choices=("v1", "v2", "v3", "v6"),
                         help="explicit numeric revision; omitted keeps Tank v1 / Mixer v2")
     parser.add_argument("--adapter")
     parser.add_argument("--duration-seconds", type=int, default=60)
