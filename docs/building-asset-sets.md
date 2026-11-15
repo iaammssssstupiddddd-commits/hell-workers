@@ -43,7 +43,7 @@ startup manifest SHAは`43730dbaf10c1bf2543fc5f357827e12ca48a5c546bb4bb39d279e74
 gallery manifest SHAは`9ba1adef3b76c39cf1e48abee04c4872bcb649342160837ac2659e3642a9e606`。
 同headの固定Capture12→Memory12は全24試行が予算内で独立verify・seal・finalize済み。
 独立レビューでも24行・raw counter・candidate計1,200 partsと集計を再照合して採用した。
-最終文書reviewと用途終了consumerの整理を行って、本改訂を閉じる。
+最終文書review・全4群CI後に用途終了consumerを整理し、[原本・復旧の保持とstorage終了](assets_workflow.md#ミキサーと休憩所改訂の整理完了2026-11-15)まで完了した。
 [採用画面](building-art-direction.md#ミキサーと休憩所の判読性改訂後の画面2026-11-15)と
 [静止性能の範囲・結果](rendering-performance.md#ミキサーと休憩所改訂後の9種静止性能2026-11-15)を参照する。
 旧sourceや候補のpassを、このinstalled subjectの成功へ流用していない。

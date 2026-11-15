@@ -786,7 +786,9 @@ image20／CPU・descriptor各9,175,040B、structural material10／shallow4,640B�
 登録済みのroot-bound adapterは同verifierを実行するだけで、閾値や受入範囲を変更しない。
 独立レビューで全24行、Memory/RSS、初終集合、plateau、candidate計1,200 partsを再照合し、静止増分を採用した。
 
-事前予算SHAは`ccb5a7061a7d9258a596d127e874465824844a328c4cdd593d3dc7973a542323`、
+採用済みの[事前固定予算JSON](design/building-art/mixer-rest-installed-nine-budget-20261115.json)を正本へ保存した。
+元の承認ファイルと全bytesが一致し、再検証時も同じ12項目の上限を使う。
+予算SHAは`ccb5a7061a7d9258a596d127e874465824844a328c4cdd593d3dc7973a542323`、
 plan SHAは`585ab57f454fcf1765a649279e63c812d319d27d805cb0c500cb9210c53835b8`、
 result SHAは`3ba1b85bbe06b44fb2e3a0f27765c42bc01b5534145d2bf9ff5ee5ef12d8d77c`。
 全24試行は登録済み独立verifyでpass・seal・finalize・storage check済み。

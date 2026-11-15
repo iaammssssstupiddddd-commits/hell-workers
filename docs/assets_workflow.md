@@ -590,3 +590,136 @@ staging/reports/tak14-spa-ink-source-20261115-v1.json
 ```
 
 </details>
+
+## ミキサーと休憩所改訂の整理完了（2026-11-15）
+
+新g5の独立art/numeric/release、旧g4への隔離復帰、通常startupと9種normal/far、固定24性能、
+最終結果の独立reviewと全4群CIを完了し、consumer `Mixer/Rest readability 2026-11-15`を正式に91件解除した。
+終了した比較・診断・candidate包装・native raw・binary copyの89 exact pathを撤去した。
+primaryは継続開発consumer、codec25019e2cはrelease recovery consumerを維持し、今回consumerだけを解除した。
+原本library、canonical exports、primary assets、通常Cargo cacheは処分していない。
+採用した[固定性能予算の全JSON](design/building-art/mixer-rest-installed-nine-budget-20261115.json)も、承認時と同じSHA/bytesで正本へ保存した。
+
+| 測定 | bytes |
+| --- | ---: |
+| 対象89pathの処分前allocated合計 | 15,709,356,032 |
+| 対象89pathの処分後残存 | 0 |
+| 同filesystemの空き容量・前 | 461,741,346,816 |
+| 同filesystemの空き容量・後 | 465,098,366,976 |
+| 実際の空き容量増分 | 3,357,020,160 |
+
+Btrfsの共有extent・圧縮を含むため、path別allocated合計と実filesystem解放量は同一ではない。
+書込保護された検証コピーで一度停止したが、成功済みの91用途解除を再送せず、
+既に撤去した12pathと残る77pathを照合した。終了済みコピーのdirectory552件だけowner-writeを戻して完了し、
+元fileや原本・正本の権限は変更していない。
+
+処分後にも900原本を固定index/SHA/bytesへ全件照合し、旧g4と新g5、採用PNG、codec、
+今回の変更対象外489fileが不変であることを確認した。
+両kindの`recover=applied`と`rollback=planned`を`--apply`なしで再確認し、
+完了transactionが撤去済みcandidate/native jobを復旧依存にしないことを確認した。
+旧invalid結果は履歴のまま維持し、全rawを将来再検証するためのarchiveは作成しない。
+primary coordinatorのreconcile/checkはpass、未分類legacy0、本primaryの未完batch0で終了した。
+
+<details>
+<summary>今回撤去したexact path（89件）</summary>
+
+primary `/home/satotakumi/projects/hell-workers/` からの相対path:
+
+```text
+target/native-acceptance/tak14-mixer-handpaint-far-20261115-v3
+target/native-acceptance/tak14-mixer-handpaint-normal-20261115-v3
+target/native-acceptance/tak14-mixer-packed-candidate-normal-20261115-v1
+target/native-acceptance/tak14-mixer-packed-context-20261115-v1
+target/native-acceptance/tak14-mixer-packed-dirt-context-20261115-v1
+target/native-acceptance/tak14-mixer-packed-dirt-context-20261115-v2
+target/native-acceptance/tak14-mixer-packed-dirt-context-20261115-v3
+target/native-acceptance/tak14-mixer-packed-dirt-context-20261115-v4
+target/native-acceptance/tak14-mixer-packed-dirt-context-20261115-v5
+target/native-acceptance/tak14-mixer-packed-far-20261115-v1
+target/native-acceptance/tak14-mixer-packed-move-success-20261115-v1
+target/native-acceptance/tak14-mixer-packed-normal-20261115-v1
+target/native-acceptance/tak14-mixer-packed-refining-20261115-v1
+target/native-acceptance/tak14-mixer-packed-save-load-20261115-v1
+target/native-acceptance/tak14-rest-packed-candidate-normal-20261115-v1
+target/native-acceptance/tak14-rest-packed-far-20261115-v1
+target/native-acceptance/tak14-rest-packed-lifecycle-20261115-v1
+target/native-acceptance/tak14-rest-packed-lifecycle-20261115-v2
+target/native-acceptance/tak14-rest-packed-normal-20261115-v1
+target/native-acceptance/tak14-rest-tent-far-20261115-v3
+target/native-acceptance/tak14-rest-tent-normal-20261115-v3
+target/native-acceptance/tak14-mixer-rest-installed-art-20261115-v1
+target/native-acceptance/tak14-mixer-rest-installed-startup-20261115-v1
+target/native-acceptance/tak14-mixer-rest-installed-performance-20261115-v1
+```
+
+asset library `/home/satotakumi/Sync/hell-workers-assets/` からの相対path:
+
+```text
+staging/blend/tak14-mixer-handpaint-20261115-v1.blend
+staging/reports/tak14-mixer-handpaint-20261115-v1.json
+staging/exports/building-m2/tak14-mixer-handpaint-20261115-v1
+staging/reports/building-m2/tak14-mixer-handpaint-20261115-v1
+staging/blend/tak14-mixer-handpaint-20261115-v2.blend
+staging/reports/tak14-mixer-handpaint-20261115-v2.json
+staging/exports/building-m2/tak14-mixer-handpaint-20261115-v2
+staging/reports/building-m2/tak14-mixer-handpaint-20261115-v2
+staging/blend/tak14-mixer-handpaint-20261115-v3.blend
+staging/reports/tak14-mixer-handpaint-20261115-v3.json
+staging/exports/building-m2/tak14-mixer-handpaint-20261115-v3
+staging/reports/building-m2/tak14-mixer-handpaint-20261115-v3
+staging/exports/tak14-mixer-handpaint-preview-20261115-v3
+staging/blend/tak14-mixer-handpaint-packed-20261115-v1.blend
+staging/reports/tak14-mixer-handpaint-packed-20261115-v1.json
+staging/exports/building-m2/tak14-mixer-handpaint-packed-20261115-v1
+staging/reports/building-m2/tak14-mixer-handpaint-packed-20261115-v1
+staging/exports/tak14-mixer-packed-candidate-20261115-v1
+staging/exports/tak14-mixer-packed-preview-20261115-v1
+staging/blend/tak14-mixer-readable-20261115-v2.blend
+staging/reports/tak14-mixer-readable-20261115-v2.json
+staging/exports/building-m2/tak14-mixer-readable-20261115-v2
+staging/reports/building-m2/tak14-mixer-readable-20261115-v2
+staging/blend/tak14-mixer-readable-20261115-v3.blend
+staging/reports/tak14-mixer-readable-20261115-v3.json
+staging/exports/building-m2/tak14-mixer-readable-20261115-v3
+staging/reports/building-m2/tak14-mixer-readable-20261115-v3
+staging/recovery/tak14-mixer-rest-g5-20261115-v1
+staging/blend/tak14-rest-handpaint-20261115-v1.blend
+staging/reports/tak14-rest-handpaint-20261115-v1.json
+staging/exports/building-m3/tak14-rest-handpaint-20261115-v1
+staging/reports/building-m3/tak14-rest-handpaint-20261115-v1
+staging/blend/tak14-rest-handpaint-20261115-v2.blend
+staging/reports/tak14-rest-handpaint-20261115-v2.json
+staging/exports/building-m3/tak14-rest-handpaint-20261115-v2
+staging/reports/building-m3/tak14-rest-handpaint-20261115-v2
+staging/blend/tak14-rest-handpaint-20261115-v3.blend
+staging/reports/tak14-rest-handpaint-20261115-v3.json
+staging/exports/building-m3/tak14-rest-handpaint-20261115-v3
+staging/reports/building-m3/tak14-rest-handpaint-20261115-v3
+staging/blend/tak14-rest-tent-packed-20261115-v1.blend
+staging/reports/tak14-rest-tent-packed-20261115-v1.json
+staging/exports/building-m3/tak14-rest-tent-packed-20261115-v1
+staging/reports/building-m3/tak14-rest-tent-packed-20261115-v1
+staging/exports/tak14-rest-packed-candidate-20261115-v1
+staging/exports/tak14-rest-packed-preview-20261115-v1
+staging/blend/tak14-rest-readable-20261115-v2.blend
+staging/reports/tak14-rest-readable-20261115-v2.json
+staging/exports/building-m3/tak14-rest-readable-20261115-v2
+staging/reports/building-m3/tak14-rest-readable-20261115-v2
+staging/blend/tak14-rest-readable-20261115-v3.blend
+staging/reports/tak14-rest-readable-20261115-v3.json
+staging/exports/building-m3/tak14-rest-readable-20261115-v3
+staging/reports/building-m3/tak14-rest-readable-20261115-v3
+staging/blend/tak14-rest-tent-ink-20261115-v2.blend
+staging/reports/tak14-rest-tent-ink-20261115-v2.json
+staging/exports/building-m3/tak14-rest-tent-ink-20261115-v2
+staging/reports/building-m3/tak14-rest-tent-ink-20261115-v2
+staging/blend/tak14-rest-tent-ink-20261115-v3.blend
+staging/reports/tak14-rest-tent-ink-20261115-v3.json
+staging/exports/building-m3/tak14-rest-tent-ink-20261115-v3
+staging/reports/building-m3/tak14-rest-tent-ink-20261115-v3
+staging/exports/tak14-rest-tent-preview-20261115-v3
+staging/blend/tak14-rest-tent-shape-20261115-v1.blend
+staging/exports/building-m3/tak14-rest-tent-shape-20261115-v1
+```
+
+</details>
