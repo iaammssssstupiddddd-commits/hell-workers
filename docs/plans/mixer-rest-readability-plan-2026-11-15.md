@@ -221,3 +221,12 @@ clipped ceilingの4頂点がdouble34.241666667と実Float32 34.24166488647461で
 - focused回帰2件はpacked欠落／別bytes／重複／寸法／保持／snapshot改変、外部fileだけの偽陽性と、
   readback中のblend・素材・script変異、欠損／重複receipt・nonzeroを拒否する。
   実保存→再openはfresh source生成で確認する。source SHA／identityが変わるためfresh包装・nativeも再取得する。
+
+### 自然生成seedを束縛するDirt補足
+
+保持修正後の2種g5（Mixer b941fe6a…／Rest f5f13a71…）で4つのfresh normal/far実機を独立verify・retain・finalize済み。
+M2 contextも成功したが、既定seedの固定anchorは全てGrassだった。Dirtを確認済みにしない。
+`building_art_acceptance.py --world-seed`を追加し、非既定値はMudMixerの明示feedback M2 contextだけに限定する。
+厳密uint64、plan→argv `--perf-seed`→child env→実PERFログ／summary.csv seedを結合し、両raw hashも結果へ固定する。
+旧planは従来seedを維持。地形の書換え、Rust変更、任意command許可、art／性能authorityは追加しない。
+別seedがDirtとなる保証はなく、合法supportと実画像のDirtは別に確認する。focused33件成功、採否は未完了。

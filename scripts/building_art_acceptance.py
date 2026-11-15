@@ -9,6 +9,7 @@ cost comparison consumes two separately frozen static-reference jobs.
 from __future__ import annotations
 
 import argparse
+import csv
 import json
 import math
 import os
@@ -56,6 +57,29 @@ M2_NUMERIC = {
                  "a49f198c2a28c163cfc31c2f503406095328e329a9774e274bea632d342e6783",
                  "4319fd7a6b4c809c1cb54046bda293b6c2e7a062537026e0b4991c61b5233828"),
 }
+
+
+def world_seed(value: dict) -> int:
+    seed=value.get("world_seed",static.SEED)
+    pipeline.require(type(seed) is int and 0<=seed<2**64,"invalid exact world seed")
+    pipeline.require(seed==static.SEED or (value.get("kind")=="MudMixer"
+        and value.get("variant")=="m2-art-context" and value.get("mode")=="feedback"),
+        "nondefault world seed requires the explicit Mixer feedback context")
+    return seed
+
+
+def seed_evidence(root: Path,value: dict) -> dict:
+    seed=world_seed(value)
+    log=(root/"actual-window.log").read_bytes()
+    summary=(root/"data/summary.csv").read_bytes()
+    matches=re.findall(r"(?m)^PERF_SCENARIO: seed=([0-9]+)(?:\s|$)",log.decode())
+    reader=csv.DictReader(summary.decode().splitlines())
+    pipeline.require(reader.fieldnames is not None and reader.fieldnames.count("seed")==1,
+                     "world seed summary header differs")
+    rows=list(reader)
+    pipeline.require(matches==[str(seed)] and len(rows)==1 and rows[0]["seed"]==str(seed),
+                     "actual world seed log/summary differs")
+    return {"seed":seed,"log_sha256":pipeline.digest(log),"summary_sha256":pipeline.digest(summary)}
 
 
 def spa_page(value: dict) -> int | None:
@@ -166,6 +190,7 @@ def check_numeric_verifiers(value: dict) -> None:
 
 
 def check_plan(value: dict, binary: Path) -> dict:
+    world_seed(value)
     if "executable_snapshot" in value:
         pipeline.require(value["mode"] != "feedback" and value["executable_snapshot"] == {
             "contract": executable.CONTRACT, "verifier_sha256": executable.verifier_sha256()}, "executable snapshot contract changed")
@@ -224,6 +249,7 @@ def plan(args) -> dict:
              "codec_sha256": pipeline.digest(args.codec.read_bytes()),
              "view": getattr(args, "view", "overview"),
              "quality": getattr(args, "quality", "high"),
+             "world_seed": static.SEED if getattr(args,"world_seed",None) is None else args.world_seed,
              "window_contract": WINDOW_CONTRACT,
              "scale_factor": getattr(args, "scale_factor", 1.0),
              "variant": getattr(args, "variant", "gallery"),
@@ -262,7 +288,7 @@ def plan(args) -> dict:
 
 def game_command(binary: Path, root: Path, value: dict) -> list[str]:
     context_settings(value)
-    return [str(binary), "--perf-scenario", "--perf-seed", str(static.SEED), "--perf-size", "small",
+    return [str(binary), "--perf-scenario", "--perf-seed", str(world_seed(value)), "--perf-size", "small",
         "--perf-workload", "building-art-static", "--perf-render", "gpu", "--perf-clock", "realtime",
         "--perf-familiar-policy", "baseline", "--perf-operation-dialog", "hidden", "--perf-dashboard", "hidden",
         "--perf-output-dir", str(root / "data"), "--perf-warmup-secs", "30", "--perf-measure-secs", "60",
@@ -300,6 +326,7 @@ def game_environment(environment: dict, view: Path, value: dict, nonce: str, roo
     if "window_contract" in value or "scale_factor" in value:
         session.update(window_contract=WINDOW_CONTRACT, scale_factor=scale_factor(value))
     environment.update({"BEVY_ASSET_ROOT": str(view), "HW_WINDOW_BACKEND": "x11", "HW_PRESENT_MODE": "novsync",
+        "HELL_WORKERS_WORLDGEN_SEED": str(world_seed(value)),
         "WGPU_BACKEND": "vulkan", "WGPU_ADAPTER_NAME": value["adapter"], "RUST_LOG": "info,wgpu=error",
         "HW_BUILDING_ART_SESSION": json.dumps(session)})
     return environment
@@ -631,6 +658,8 @@ def verify(root: Path) -> dict:
     # Older plans remain high-only; their recorded raw window is checked too.
     validate_window(root, value)
     log = (root / "actual-window.log").read_text()
+    if "world_seed" in value:
+        pipeline.require(result.get("world_seed_evidence")==seed_evidence(root,value),"world seed evidence changed")
     pipeline.require(not re.search(r"\b(?:WARN|ERROR)\b|bevy_ecs::error::handler", log), "native log contains warning/error")
     adapters = re.findall(r'AdapterInfo \{ name: "([^"]+)".*?backend: ([A-Za-z0-9_]+)', log)
     pipeline.require(len(adapters) == 1 and value["adapter"].casefold() in adapters[0][0].casefold()
@@ -703,6 +732,8 @@ def run(args) -> dict:
             "probe": json.loads((root / "probe.json").read_bytes()), "screenshot": screenshot,
             "binary": {"path": str(binary), "sha256": pipeline.digest(binary.read_bytes())},
             "not_covered": ["active-simulation", "all-kind-states", "all-preview-consumers", "lifecycle", "performance-budget", "art-approval"]}
+        if "world_seed" in value:
+            result["world_seed_evidence"]=seed_evidence(root,value)
         pipeline.put(root / "manifest.json", pipeline.canonical(result))
         verify(root)
         native.update_state(job, state, status="valid", child_pid=None, completed_at=native.utc_now())
@@ -802,6 +833,7 @@ def main() -> int:
     parser.add_argument("--kind", choices=tuple(pipeline.KINDS))
     parser.add_argument("--mode", choices=tuple(MODES))
     parser.add_argument("--adapter", default="Intel")
+    parser.add_argument("--world-seed",type=int,help="Explicit natural-world seed; nondefault is Mixer feedback context only")
     parser.add_argument("--view", choices=tuple(VIEWS), default="overview")
     parser.add_argument("--quality", choices=QUALITIES, default="high")
     parser.add_argument("--scale-factor", type=float, choices=GALLERY_SCALE_FACTORS, default=1.0)
