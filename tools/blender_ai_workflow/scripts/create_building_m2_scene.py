@@ -27,10 +27,10 @@ def main():
     parser.add_argument("kind", choices=tuple(PILOTS))
     parser.add_argument("--name", required=True)
     parser.add_argument("--stage", choices=("planes", "strokes"), required=True)
-    parser.add_argument("--revision", choices=("v1", "v2", "v3"), default="v1")
+    parser.add_argument("--revision", choices=("v1", "v2", "v3", "v4"), default="v1")
     parser.add_argument("--style", choices=(STYLE, *ILLUSTRATED_STYLES), default=STYLE)
     args = parser.parse_args(script_arguments())
-    require(args.style not in ILLUSTRATED_STYLES or args.kind == "MudMixer" and args.revision == "v3",
+    require(args.style not in ILLUSTRATED_STYLES or args.kind == "MudMixer" and args.revision in {"v3", "v4"},
             "illustrated UV source requires construction Mixer v3")
     import re
     require(re.fullmatch(r"[a-z0-9][a-z0-9-]{0,79}", args.name) is not None, "unsafe name")
@@ -43,6 +43,7 @@ def main():
             "prepare only the atlas before candidate scene creation")
     geometries, layout = (candidate_geometry(args.kind, args.revision),
                           face_layout(args.kind, args.revision))
+    require(args.revision != "v4" or args.style == "illustrated-v2", "v4 requires revised ink")
     contract = load_pilot(args.kind, args.revision)
     _, numeric_sha256 = numeric_contract(args.kind, args.revision)
     ocio = resolve_ocio_evidence()
@@ -112,7 +113,7 @@ def main():
     for role, obj in objects.items():
         x, y, z = contract["roles"][role]["translation_wu"]
         obj.location = (x / 32, -z / 32, y / 32)
-        if args.revision == "v3" and role == "body":
+        if args.revision in {"v3", "v4"} and role == "body":
             obj.rotation_euler.z = contract["construction"]["yaw_radians"]
     states = (("Empty", "Partial", "Full") if args.kind == "Tank"
               else ("IdleAngleZero", "QuarterTurn", "HalfTurn", "DiagonalPose"))
@@ -125,7 +126,7 @@ def main():
             objects["water"].hide_render = not spec["water_visible"]
             objects["water"].location.z = spec["water_y_wu"] / 32
         else:
-            if args.revision == "v3":
+            if args.revision in {"v3", "v4"}:
                 from mathutils import Quaternion
                 objects["rotor"].rotation_mode = "QUATERNION"
                 tilt = Quaternion((1, 0, 0), contract["construction"]["tilt_radians"])

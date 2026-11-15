@@ -39,7 +39,7 @@ def state_geometry(kind: str, output: Path, revision: str = "v1") -> dict:
             states[state] = {"visible": value["water_visible"], "water_y_wu": height,
                              "surface_bounds_y_wu": [minimum, maximum]}
         return {"roles": roles, "states": states}
-    if revision == "v3":
+    if revision in {"v3", "v4"}:
         return {"roles": roles, "rotor_sweep": drum_sweep(points, contract)}
     # Maximum radius of a linear triangle lies at a vertex, so this bounds the
     # complete continuous revolution, rather than just sampled degree poses.

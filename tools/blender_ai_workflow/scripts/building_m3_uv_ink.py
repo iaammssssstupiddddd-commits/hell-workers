@@ -87,7 +87,7 @@ def color(kind, role, surface, point, *, stage="strokes", spec=None, style=palet
     return (*(min(255, max(0, round(c + variation))) for c in base), 255)
 
 
-def paint(kind, output, stage, *, style=palette.ILLUSTRATED_STYLE):
+def paint(kind, output, stage, *, style=palette.ILLUSTRATED_STYLE, revision="v2"):
     from building_m3_art import contract, geometry, face_layout, paint as legacy_paint
 
     if (stage not in ("clay", "planes", "strokes")
@@ -96,13 +96,14 @@ def paint(kind, output, stage, *, style=palette.ILLUSTRATED_STYLE):
         raise ValueError("unknown M3 ink stage")
     # The original producer remains the only author of the emission mask.
     # Its bytes are unchanged; the new pass replaces only the diffuse atlas.
-    legacy_paint(kind, output, stage, style="legacy")
-    value, spec = contract(kind)
+    if kind == "SoulSpa":
+        legacy_paint(kind, output, stage, style="legacy", revision=revision)
+    value, spec = contract(kind, revision)
     size, cell = value["atlas"]["size_px"], value["atlas"]["cell_px"]
     image = Image.new("RGBA", (size, size), (*palette.INK, 255))
     pixels = image.load()
-    meshes = geometry(kind)
-    for role, faces in face_layout(kind).items():
+    meshes = geometry(kind, revision)
+    for role, faces in face_layout(kind, revision).items():
         for face, indices in zip(faces, meshes[role].faces, strict=True):
             x0, y0 = (
                 (face["cell"] % (size // cell)) * cell,
@@ -144,7 +145,7 @@ def readable_rest_color(surface, point, *, stage="strokes"):
     elif material == "cloth":
         # The physical centre curtain sits at z=23, in front of the enclosed
         # interior. Its dark, opaque folds never expose a resting Soul.
-        entry = z > 21 and abs(x) < 7.2
+        entry = surface.startswith("cloth:curtain") or z > 21 and abs(x) < 7.2
         base = (53, 43, 51) if entry else (90, 73, 79)
         if stage == "strokes":
             if entry:

@@ -79,7 +79,8 @@ def paths(kind, name):
 
 def verify(kind, name, revision="v1", style=STYLE):
     require(style in (STYLE, *ILLUSTRATED_STYLES) and (style not in ILLUSTRATED_STYLES
-            or kind == "MudMixer" and revision == "v3"), "unknown M2 style/kind/revision")
+            or kind == "MudMixer" and revision in {"v3", "v4"}), "unknown M2 style/kind/revision")
+    require(revision != "v4" or style == "illustrated-v2", "v4 requires explicit revised ink")
     blend, output, report, reports = paths(kind, name)
     geometry = candidate_geometry(kind, revision)
     contract = load_pilot(kind, revision)
@@ -177,7 +178,8 @@ def verify(kind, name, revision="v1", style=STYLE):
 
 def build_bundle(kind, name, stage, revision="v1", style=STYLE):
     require(style in (STYLE, *ILLUSTRATED_STYLES) and (style not in ILLUSTRATED_STYLES
-            or kind == "MudMixer" and revision == "v3"), "unknown M2 style/kind/revision")
+            or kind == "MudMixer" and revision in {"v3", "v4"}), "unknown M2 style/kind/revision")
+    require(revision != "v4" or style == "illustrated-v2", "v4 requires explicit revised ink")
     blend, output, report, reports = paths(kind, name)
     require(not any(path.exists() for path in (blend, output, report, reports)), "use fresh output name")
     candidate_geometry(kind, revision)
@@ -210,6 +212,7 @@ def prepare(kind, name, generation, destination, codec, revision="v1", style=STY
     require(result["stage"] == "strokes", "runtime candidate requires the final paint stage")
     destination = pipeline.no_symlinks(destination)
     require(not destination.exists(), "use fresh candidate destination")
+    require(revision != "v4" or style == "illustrated-v2", "v4 requires explicit revised ink")
     blend, output, report, reports = paths(kind, name)
     contract = load_pilot(kind, revision)
     numeric, _ = numeric_contract(kind, revision)
@@ -261,7 +264,7 @@ def main():
     parser.add_argument("kind", choices=tuple(PILOTS))
     parser.add_argument("--name", required=True)
     parser.add_argument("--stage", choices=("planes", "strokes"), default="strokes")
-    parser.add_argument("--revision", choices=("v1", "v2", "v3"), default="v1")
+    parser.add_argument("--revision", choices=("v1", "v2", "v3", "v4"), default="v1")
     parser.add_argument("--style", choices=(STYLE, *ILLUSTRATED_STYLES), default=STYLE)
     parser.add_argument("--generation", type=int)
     parser.add_argument("--destination", type=Path)

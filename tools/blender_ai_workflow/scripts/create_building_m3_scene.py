@@ -10,7 +10,7 @@ import bpy
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from building_infernal_style import STYLE, ILLUSTRATED_STYLES
 from building_clay_geometry import require
-from building_m3_art import CONTRACT, KINDS, contract, face_layout, geometry, parts, states
+from building_m3_art import KINDS, contract, contract_path, face_layout, geometry, parts, states
 from create_building_clay_scene import check_projection, configure_camera, digest
 from render_color_calibration import resolve_ocio_evidence
 from workflow_common import asset_root, script_arguments, staging_path, write_json_atomic
@@ -45,6 +45,7 @@ def main():
     parser.add_argument("kind", choices=tuple(KINDS))
     parser.add_argument("--name", required=True)
     parser.add_argument("--stage", choices=("clay", "planes", "strokes"), required=True)
+    parser.add_argument("--revision", choices=("v2", "v3"), default="v2")
     parser.add_argument("--style", choices=("legacy", STYLE, *ILLUSTRATED_STYLES))
     args = parser.parse_args(script_arguments())
     style = args.style or (STYLE if args.kind == "RestArea" else "legacy")
@@ -58,7 +59,8 @@ def main():
     require(not blend.exists() and not report.exists(), "use fresh outputs")
     expected = {"albedo.png", "slot_emissive.png"} if args.kind == "SoulSpa" else {"albedo.png"}
     require(output.is_dir() and {p.name for p in output.iterdir()} == expected, "prepare only M3 atlases")
-    _, spec = contract(args.kind)
+    _, spec = contract(args.kind, args.revision)
+    require(args.revision != "v3" or style == "illustrated-v2", "M3 v3 requires revised ink")
     ocio = resolve_ocio_evidence()
     require(not ocio["fallback"], "explicit OCIO required")
     bpy.ops.object.select_all(action="SELECT")
@@ -76,9 +78,9 @@ def main():
         emission = bpy.data.images.load(str(output / "slot_emissive.png"))
         emission.pack()
         on = material("M3SlotOn", albedo, emission, illustrated=style in ILLUSTRATED_STYLES)
-    layout = face_layout(args.kind)
+    layout = face_layout(args.kind, args.revision)
     objects = {}
-    for role, mesh_data in geometry(args.kind).items():
+    for role, mesh_data in geometry(args.kind, args.revision).items():
         name = spec["roles"][role]["collection"]
         collection = bpy.data.collections.new(name)
         scene.collection.children.link(collection)
@@ -99,7 +101,7 @@ def main():
     displayed = {"body": objects["body"]}
     if args.kind == "SoulSpa":
         objects["slot"].hide_render = True
-        for part in parts(args.kind)[1:]:
+        for part in parts(args.kind, args.revision)[1:]:
             obj = bpy.data.objects.new(part["name"], objects["slot"].data)
             scene.collection.objects.link(obj)
             x, y, z = part["translation_wu"]
@@ -146,13 +148,13 @@ def main():
         "evidence_kind": "unapproved_m3_production_proposal",
         "art_style": style,
         "numeric_freeze": False, "art_approved": False, "runtime_published": False,
-        "geometry_contract_sha256": digest(CONTRACT), "blend_sha256": digest(blend), "ocio": ocio,
+        "geometry_contract_sha256": digest(contract_path(args.kind, args.revision)), "blend_sha256": digest(blend), "ocio": ocio,
         "sources": {name: digest(scripts / name) for name in (
             "building_m3_art.py", "create_building_m3_scene.py", "building_clay_geometry.py", "building_infernal_style.py",
             "create_building_clay_scene.py", "build_building_m3_candidate.py", "build_building_m2_candidate.py",
             "validate_building_m2_indexed_faces.py",
             *(("building_m3_uv_ink.py", "building_mixer_uv_ink.py") if style in ILLUSTRATED_STYLES else ()))},
-        "face_layout": layout, "parts": parts(args.kind), "preview": spec["preview"],
+        "face_layout": layout, "parts": parts(args.kind, args.revision), "preview": spec["preview"],
         "renders": renders, "catalog_sha256": digest(output / "catalog.png"), "catalog_projection": catalog_projection,
         "albedo_sha256": digest(output / "albedo.png"),
         "slot_emissive_sha256": digest(output / "slot_emissive.png") if on else None,

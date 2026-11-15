@@ -77,16 +77,17 @@ def local_point(pixel, polygon, points):
     return tuple(p[i] + u * (q[i] - p[i]) + v * (r[i] - p[i]) for i in range(3))
 
 
-def paint(path, stage="strokes", *, style=STYLE):
+def paint(path, stage="strokes", *, style=STYLE, revision="v3"):
     # Lazy import avoids changing the existing infernal painter's dependency path.
     from building_m2_art import ATLAS_SIZE, CELL, candidate_geometry, face_layout
 
-    if stage not in ("planes", "strokes") or style not in palette.ILLUSTRATED_STYLES:
+    if (stage not in ("planes", "strokes") or style not in palette.ILLUSTRATED_STYLES or revision not in ("v3", "v4")
+            or revision == "v4" and style != palette.READABLE_STYLE):
         raise ValueError("unknown Mixer ink stage")
     image = Image.new("RGBA", (ATLAS_SIZE, ATLAS_SIZE), (*palette.INK, 255))
     pixels = image.load()
-    layout = face_layout("MudMixer", "v3")
-    geometries = candidate_geometry("MudMixer", "v3")
+    layout = face_layout("MudMixer", revision)
+    geometries = candidate_geometry("MudMixer", revision)
     for role, faces in layout.items():
         mesh = geometries[role]
         for face, indices in zip(faces, mesh.faces, strict=True):

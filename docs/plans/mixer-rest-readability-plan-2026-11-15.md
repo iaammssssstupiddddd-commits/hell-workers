@@ -43,8 +43,9 @@ Restは棟/軒、布の大きな継ぎはぎ、専用の暗い入口と枠・垂
 ### M1: 図柄の修正と比較準備
 
 - [x] 原画像/原本/generatorとshader経路を照合し、独立read-only調査を行う。
-- [ ] 新styleと拒否/旧再現/UV回転/部材判読性の回帰を実装する。
-- [ ] Help実レビュー、変更別CI、storage、独立コードreviewを通す。
+- [x] 新styleと拒否/旧再現/UV回転/部材判読性の回帰を実装する。
+- [x] `37dc337c`のHelp No impact、contracts/tooling CI、storage、独立コードreviewを通した。
+- [ ] 以下のgeometry試作にも新しい回帰と独立reviewを通す。
 
 ### M2: 実画面の用途判読性
 
@@ -93,3 +94,18 @@ primaryと既存Cargo cacheをこのフィードバック単位で維持し、�
 | 日付 | 変更者 | 内容 |
 | --- | --- | --- |
 | 2026-11-15 | Codex | 利用者フィードバックに基づき2種の判読性修正を開始 |
+
+### 配色比較の結果と次の形状試作
+
+`37dc337c`のillustrated-v2原本は2種ともsource/GLB/UV/atlas/toolchainの登録済み独立verifyとfinalizeに成功した。
+しかし独立外観reviewは両方ともchanges requested。Mixerの支持部と口の色分離、Rest入口の暗色化は改善したが、
+Mixerの大きな板台座と円盤状の見え、Rest屋根の本/厚紙状の外形が残った。技術passをart採用へ変更しない。
+通常画面へ公開せず、同系統の色調整はここで打ち切る。
+
+Mixerは明示v4へ細い二本の実レールと支持脚を作り、共有yawだけを新しい数値候補へ分離する。
+local Y軸・pivot・55度tilt・4秒/回転・Refining条件は維持する。連続全周sweepを新bodyへ再検査する。
+Restは明示v3（Rest限定、Spa不変）へ連続したたわみ屋根と閉じた波打つカーテンを作る。
+旧v2 fixture/原本/採否は保持し、新numeric/art採用は別に取り直す。
+
+旧最初の生成wrapperは登録後・未起動reviewでassert guardを指摘され、child/出力なしを確認してabandoned/finalizeした。
+通常if/raiseへ修正した別wrapperをPYTHONOPTIMIZE0/1/2で拒否確認し、fresh v2出力を生成した。旧登録は再送していない。

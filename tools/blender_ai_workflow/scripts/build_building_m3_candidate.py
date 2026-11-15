@@ -19,7 +19,7 @@ from build_building_m2_candidate import illustrated_environment, illustrated_too
 
 import building_asset_pipeline as pipeline
 from building_clay_geometry import FIXTURES, read_json, require
-from building_m3_art import CONTRACT, KINDS, contract, face_layout, geometry, paint, parts, states
+from building_m3_art import KINDS, contract, contract_path, face_layout, geometry, paint, parts, states
 from validate_building_m2_indexed_faces import check_m3_indexed_faces as check_uv
 from validate_wall_glb import accessor_values, exact_identity_node, index_values, read_glb
 from workflow_common import asset_root, require_within, write_json_atomic
@@ -72,11 +72,12 @@ def selected_style(kind, style):
     return value
 
 
-def verify(kind, name, style=None):
+def verify(kind, name, style=None, revision="v2"):
     from PIL import Image
     blend, output, report, reports = paths(kind, name)
-    value, spec = contract(kind)
+    value, spec = contract(kind, revision)
     style = selected_style(kind, style)
+    require(revision != "v3" or style == "illustrated-v2", "M3 v3 requires revised ink")
     data = read_json(report)
     frozen_outputs = illustrated_outputs(blend, output, report, reports) if style in ILLUSTRATED_STYLES else None
     if style in ILLUSTRATED_STYLES:
@@ -85,18 +86,18 @@ def verify(kind, name, style=None):
     require(data["schema_version"] == 1 and data["kind"] == kind
             and data["evidence_kind"] == "unapproved_m3_production_proposal"
             and data.get("art_style") == style
-            and data["geometry_contract_sha256"] == digest(CONTRACT)
+            and data["geometry_contract_sha256"] == digest(contract_path(kind, revision))
             and all(data[k] is False for k in ("numeric_freeze", "art_approved", "runtime_published")),
             "wrong report or approval claim")
     require(data["blend_sha256"] == digest(blend) and data["ocio"]["fallback"] is False, "source/OCIO drift")
     require(data["sources"] == {s: digest(WORKFLOW / "scripts" / s) for s in
             SOURCES + (("building_m3_uv_ink.py", "building_mixer_uv_ink.py") if style in ILLUSTRATED_STYLES else ())}, "generator drift")
-    layout = face_layout(kind)
-    require(data["face_layout"] == json.loads(json.dumps(layout)) and data["parts"] == parts(kind)
+    layout = face_layout(kind, revision)
+    require(data["face_layout"] == json.loads(json.dumps(layout)) and data["parts"] == parts(kind, revision)
             and data["preview"] == spec["preview"], "layout/parts/projection drift")
     atlas_names = ["albedo"] + (["slot_emissive"] if kind == "SoulSpa" else [])
     with tempfile.TemporaryDirectory() as directory:
-        paint(kind, Path(directory), data["stage"], style=style)
+        paint(kind, Path(directory), data["stage"], style=style, revision=revision)
         for role in atlas_names:
             path = output / f"{role}.png"
             require(data[f"{role}_sha256"] == digest(path), "atlas hash drift")
@@ -129,7 +130,7 @@ def verify(kind, name, style=None):
                     and bounds[0] > 0 and bounds[1] > 0 and bounds[2] < image.width
                     and bounds[3] < image.height, "empty/clipped preview")
     inventory = {}
-    for role, mesh in geometry(kind).items():
+    for role, mesh in geometry(kind, revision).items():
         path = output / f"{role}.glb"
         export = read_json(reports / f"{role}.glb.export.json")
         require(export["status"] == "exported" and export["sha256"] == digest(path)
@@ -146,24 +147,26 @@ def verify(kind, name, style=None):
                 and illustrated_outputs(blend, output, report, reports) == frozen_outputs,
                 "illustrated source changed during verification")
     return {"schema_version": 1, "kind": kind, "stage": data["stage"], "scope": "m3-technical-only",
-            "geometry_contract_sha256": digest(CONTRACT), "inventory": inventory,
+            "geometry_contract_sha256": digest(contract_path(kind, revision)), "inventory": inventory,
             "art_approved": False, "runtime_published": False,
             **({"source_inventory": frozen_outputs, "source_toolchain": data["source_toolchain"]}
                if style in ILLUSTRATED_STYLES else {})}
 
 
-def build_bundle(kind, name, stage, style=None):
+def build_bundle(kind, name, stage, style=None, revision="v2"):
     style = selected_style(kind, style)
+    contract(kind, revision)
+    require(revision != "v3" or style == "illustrated-v2", "M3 v3 requires revised ink")
     blend, output, report, reports = paths(kind, name)
     require(not any(path.exists() for path in (blend, output, report, reports)), "use fresh output name")
     frozen = illustrated_toolchain() if style in ILLUSTRATED_STYLES else None
     output.mkdir(parents=True)
-    paint(kind, output, stage, style=style)
+    paint(kind, output, stage, style=style, revision=revision)
     env = illustrated_environment() if style in ILLUSTRATED_STYLES else dict(os.environ, BLENDER_SAFE_NO_NETWORK="1", OCIO=str(FIXTURES / "wall-calibration-v2.ocio"))
     subprocess.run([str(WORKFLOW / "bin/blender-safe"), "--background", "--factory-startup",
                     "--python-exit-code", "2", "--python", str(WORKFLOW / "scripts/create_building_m3_scene.py"),
-                    "--", kind, "--name", name, "--stage", stage, "--style", style], check=True, timeout=600, env=env)
-    _, spec = contract(kind)
+                    "--", kind, "--name", name, "--stage", stage, "--style", style, "--revision", revision], check=True, timeout=600, env=env)
+    _, spec = contract(kind, revision)
     for role, role_spec in spec["roles"].items():
         subprocess.run([str(WORKFLOW / "bin/export-staging-glb"), str(blend), f"building-m3/{name}/{role}.glb",
                         str(role_spec["triangle_cap"]), "--collection", role_spec["collection"],
@@ -173,13 +176,13 @@ def build_bundle(kind, name, stage, style=None):
         data = read_json(report)
         data["source_toolchain"] = frozen
         write_json_atomic(report, data)
-    result = verify(kind, name, style)
+    result = verify(kind, name, style, revision)
     write_json_atomic(reports / "bundle.json", result)
     return result
 
 
-def recipe(kind, generation, source):
-    _, spec = contract(kind)
+def recipe(kind, generation, source, revision="v2"):
+    _, spec = contract(kind, revision)
     pipeline.identity(kind, generation, "art_preview")
     def record(name):
         return pipeline.record(name, (source / name).read_bytes())
@@ -192,14 +195,16 @@ def recipe(kind, generation, source):
     artifacts.extend({"role": "image:" + role, **record(name)} for role, name in images)
     return {"schema_version": 1, "kind": kind, "generation": generation,
             "source": record("source.blend"), "geometry_contract": record("geometry.json"),
-            "artifacts": artifacts, "parts": parts(kind),
+            "artifacts": artifacts, "parts": parts(kind, revision),
             "world_preview": {"image_role": "world_preview", **spec["preview"]},
             "catalog_preview": {"image_role": "catalog", **spec["preview"], "anchor_px": [128, 128]}}
 
 
-def prepare(kind, name, generation, destination, codec, style=None):
+def prepare(kind, name, generation, destination, codec, style=None, revision="v2"):
     style = selected_style(kind, style)
-    result = verify(kind, name, style)
+    contract(kind, revision)
+    require(revision != "v3" or style == "illustrated-v2", "M3 v3 requires revised ink")
+    result = verify(kind, name, style, revision)
     require(result["stage"] == "strokes", "runtime packaging requires final stroke proposal")
     destination = pipeline.no_symlinks(destination)
     require(not destination.exists(), "use fresh runtime destination")
@@ -210,13 +215,13 @@ def prepare(kind, name, generation, destination, codec, style=None):
                 "verified illustrated inputs changed during preparation")
     if style in ILLUSTRATED_STYLES:
         unchanged()
-    _, spec = contract(kind)
-    files = {"source.blend": blend.read_bytes(), "geometry.json": CONTRACT.read_bytes(), "paint-report.json": report.read_bytes()}
+    _, spec = contract(kind, revision)
+    files = {"source.blend": blend.read_bytes(), "geometry.json": contract_path(kind, revision).read_bytes(), "paint-report.json": report.read_bytes()}
     names = [f"{role}.glb" for role in spec["roles"]] + [f"{state}.png" for state in states(kind)] + ["albedo.png", "catalog.png"]
     if kind == "SoulSpa":
         names.append("slot_emissive.png")
     files.update({name: (output / name).read_bytes() for name in names})
-    origins = {"source.blend": blend, "geometry.json": CONTRACT, "paint-report.json": report,
+    origins = {"source.blend": blend, "geometry.json": contract_path(kind, revision), "paint-report.json": report,
                **{name: output / name for name in names}}
     if style in ILLUSTRATED_STYLES:
         require(all(pipeline.digest(payload) == (result["geometry_contract_sha256"] if name == "geometry.json"
@@ -227,7 +232,7 @@ def prepare(kind, name, generation, destination, codec, style=None):
     for filename, data in files.items():
         pipeline.put(pipeline.rooted(source, filename), data)
     recipe_path = destination / "recipe.json"
-    value = recipe(kind, generation, source)
+    value = recipe(kind, generation, source, revision)
     if style in ILLUSTRATED_STYLES:
         value["surface_paint"] = {"method": "uv_ink_v1"}
     pipeline.put(recipe_path, pipeline.canonical(value))
@@ -251,18 +256,19 @@ def main():
     parser.add_argument("kind", choices=tuple(KINDS))
     parser.add_argument("--name", required=True)
     parser.add_argument("--stage", choices=("clay", "planes", "strokes"), default="clay")
+    parser.add_argument("--revision", choices=("v2", "v3"), default="v2")
     parser.add_argument("--style", choices=("legacy", STYLE, *ILLUSTRATED_STYLES))
     parser.add_argument("--generation", type=int)
     parser.add_argument("--destination", type=Path)
     parser.add_argument("--codec", type=Path)
     args = parser.parse_args()
     if args.action == "build":
-        result = build_bundle(args.kind, args.name, args.stage, args.style)
+        result = build_bundle(args.kind, args.name, args.stage, args.style, args.revision)
     elif args.action == "verify":
-        result = verify(args.kind, args.name, args.style)
+        result = verify(args.kind, args.name, args.style, args.revision)
     else:
         require(all(v is not None for v in (args.generation, args.destination, args.codec)), "missing prepare arguments")
-        result = prepare(args.kind, args.name, args.generation, args.destination, args.codec, args.style)
+        result = prepare(args.kind, args.name, args.generation, args.destination, args.codec, args.style, args.revision)
     print(json.dumps(result, indent=2, sort_keys=True))
 
 

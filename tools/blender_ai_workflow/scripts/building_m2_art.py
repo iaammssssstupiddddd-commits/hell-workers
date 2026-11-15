@@ -20,18 +20,22 @@ NUMERIC_V2 = FIXTURES / "building-m2-v2.numeric-candidate.json"
 NUMERIC_V2_SHA256 = "aba63ac343e11ed4fa758deffaf36b9139145333ca5d61fd26c3e3dd513153c8"
 NUMERIC_V3 = FIXTURES / "building-m2-v3.numeric-candidate.json"
 NUMERIC_V3_SHA256 = "a49f198c2a28c163cfc31c2f503406095328e329a9774e274bea632d342e6783"
+NUMERIC_V4 = FIXTURES / "building-m2-v4.numeric-candidate.json"
+NUMERIC_V4_SHA256 = "e51f9d87047619f8f587ffa5ade46e6e692a0d95d4a28158be469e7664788818"
 ATLAS_SIZE = 512
 CELL = 32
 GUTTER = 4
 
 
 def numeric_contract(kind, revision="v1"):
-    require(revision == "v1" or (kind == "MudMixer" and revision in {"v2", "v3"}),
+    require(revision == "v1" or (kind == "MudMixer" and revision in {"v2", "v3", "v4"}),
             "unknown M2 art revision")
     path, expected = ((NUMERIC_V2, NUMERIC_V2_SHA256) if revision == "v2"
                       else (NUMERIC, NUMERIC_SHA256))
     if revision == "v3":
         path, expected = NUMERIC_V3, NUMERIC_V3_SHA256
+    if revision == "v4":
+        path, expected = NUMERIC_V4, NUMERIC_V4_SHA256
     require(hashlib.sha256(path.read_bytes()).hexdigest() == expected,
             "numeric proposal changed: independent revision required")
     validate(path)
@@ -119,9 +123,10 @@ def mud_mixer_plane(role, surface):
 
 def paint(kind, path, stage="strokes", revision="v1", *, style="legacy"):
     if style in infernal.ILLUSTRATED_STYLES:
-        require(kind == "MudMixer" and revision == "v3", "UV ink requires the construction Mixer")
+        require(kind == "MudMixer" and revision in {"v3", "v4"}, "UV ink requires the construction Mixer")
         from building_mixer_uv_ink import paint as paint_ink
-        return paint_ink(path, stage, style=style)
+        require(revision != "v4" or style == infernal.READABLE_STYLE, "v4 requires revised ink")
+        return paint_ink(path, stage, style=style, revision=revision)
     # Pillow is already part of the workflow; Blender invokes this via the host
     # preparation entrypoint, so its bundled Python does not need Pillow.
     from PIL import Image, ImageDraw, ImageFilter

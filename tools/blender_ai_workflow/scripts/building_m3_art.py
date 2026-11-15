@@ -12,11 +12,18 @@ import building_infernal_style as infernal
 from building_clay_geometry import FIXTURES, Geometry, read_json, require
 
 CONTRACT = FIXTURES / "building-m3-v2.geometry.json"
+CONTRACT_V3 = FIXTURES / "building-m3-v3.geometry.json"
 KINDS = {"RestArea": "rest-area", "SoulSpa": "soul-spa"}
 
 
-def contract(kind):
-    value = read_json(CONTRACT)
+def contract_path(kind, revision="v2"):
+    require(revision in ("v2", "v3") and (revision != "v3" or kind == "RestArea"),
+            "M3 v3 is an explicit RestArea-only geometry proposal")
+    return CONTRACT_V3 if revision == "v3" else CONTRACT
+
+
+def contract(kind, revision="v2"):
+    value = read_json(contract_path(kind, revision))
     require(kind in KINDS and value["schema_version"] == 1
             and value["stage"] == "unapproved_m3_production_proposal", "wrong M3 fixture")
     require(all(value[key] is False for key in ("numeric_freeze", "art_approved", "runtime_published")),
@@ -27,8 +34,8 @@ def contract(kind):
     return value, value[kind]
 
 
-def parts(kind):
-    value, spec = contract(kind)
+def parts(kind, revision="v2"):
+    value, spec = contract(kind, revision)
     result = [{"name": "body", "mesh_role": "body", "material_role": "opaque_albedo",
                "translation_wu": [0, 0, 0], "rotation_xyzw": [0, 0, 0, 1], "scale": [1, 1, 1]}]
     if kind == "SoulSpa":
@@ -61,8 +68,8 @@ def bone(geometry, a, b, radius):
     geometry.face([start + 24 + i for i in reversed(range(8))], "bone:end")
 
 
-def geometry(kind):
-    _, spec = contract(kind)
+def geometry(kind, revision="v2"):
+    _, spec = contract(kind, revision)
     body = Geometry()
     if kind == "RestArea":
         posts = spec["posts"]
@@ -75,10 +82,15 @@ def geometry(kind):
             for z in posts["z"]:
                 width, depth = posts["width_depth_wu"]
                 body.box((x, height/2, z), (width, height, depth), "wood")
-                body.box((x, height-3, z), (5, 3, 5), "iron")
+                if z in posts.get("bindings_z", posts["z"]):
+                    body.box((x, height-3, z), (5, 3, 5), "iron")
         # Closed canvas walls and an opaque entry curtain shelter resting Souls.
         for wall in spec["walls"]:
             body.box(wall["center"], wall["size"], "cloth")
+        if revision == "v3":
+            draped_roof(body, spec["roof"])
+            folded_curtain(body, spec["curtain"])
+            return {"body": body}
         # Each thick cloth strip joins its neighbours at a shared profile point.
         # The roof covers the interior; the canvas curtain marks the entrance.
         profile = spec["roof"]["x_height_profile"]
@@ -108,12 +120,12 @@ def geometry(kind):
     return {"body": body, "slot": slot}
 
 
-def face_layout(kind):
-    value, _ = contract(kind)
+def face_layout(kind, revision="v2"):
+    value, _ = contract(kind, revision)
     atlas = value["atlas"]
     size, cell, gutter = atlas["size_px"], atlas["cell_px"], atlas["gutter_px"]
     result, index = {}, 0
-    for role, mesh in geometry(kind).items():
+    for role, mesh in geometry(kind, revision).items():
         result[role] = []
         for face, surface in zip(mesh.faces, mesh.surfaces, strict=True):
             points = [mesh.vertices[i] for i in face]
@@ -141,21 +153,23 @@ def face_layout(kind):
     return result
 
 
-def paint(kind, output, stage, *, style="legacy"):
+def paint(kind, output, stage, *, style="legacy", revision="v2"):
     from PIL import Image, ImageDraw
+    require(revision != "v3" or kind == "RestArea" and style == infernal.READABLE_STYLE,
+            "M3 v3 requires explicit revised RestArea ink")
     require(stage in ("clay", "planes", "strokes"), "unknown paint stage")
     require(style in ("legacy", infernal.STYLE, *infernal.ILLUSTRATED_STYLES), "unknown paint style")
     if style in infernal.ILLUSTRATED_STYLES:
         require(style != infernal.READABLE_STYLE or kind == "RestArea", "revised ink is RestArea-only")
         from building_m3_uv_ink import paint as ink_paint
-        return ink_paint(kind, output, stage, style=style)
-    value, spec = contract(kind)
+        return ink_paint(kind, output, stage, style=style, revision=revision)
+    value, spec = contract(kind, revision)
     size, cell = value["atlas"]["size_px"], value["atlas"]["cell_px"]
     image = Image.new("RGBA", (size, size), (65, 59, 52, 255))
     emission = Image.new("RGBA", (size, size), (0, 0, 0, 255))
     draw, glow = ImageDraw.Draw(image), ImageDraw.Draw(emission)
-    meshes = geometry(kind)
-    for role, faces in face_layout(kind).items():
+    meshes = geometry(kind, revision)
+    for role, faces in face_layout(kind, revision).items():
         for face, indices in zip(faces, meshes[role].faces, strict=True):
             index = face["cell"]
             x, y = (index % (size//cell))*cell, (index//(size//cell))*cell
@@ -250,3 +264,55 @@ def paint(kind, output, stage, *, style="legacy"):
 
 def states(kind):
     return ["Empty"] if kind == "RestArea" else ["Constructing"] + [f"Mask{i:02d}" for i in range(16)]
+
+
+def draped_roof(body, roof):
+    """Closed continuous canopy; shared grid avoids solid internal strip walls."""
+    profile, front = roof["x_height_profile"], roof["front_z_profile"]
+    count = len(profile)
+    start = len(body.vertices)
+    for layer in (0, 1):
+        for i, (x, height) in enumerate(profile):
+            for row, z in enumerate((roof["z_edges"][0], 0, front[i])):
+                y = height - (roof["longitudinal_sag_wu"] if row == 1 else 0)
+                body.vertices.append((x, y + layer*roof["thickness_wu"], z))
+    def vertex(layer, column, row):
+        return start + layer*count*3 + column*3 + row
+    def panel(indices):
+        # A sagged quad can be non-planar. Triangulate before UV projection so
+        # every texel is mapped to its actual triangle, including gutter samples.
+        body.face([indices[0], indices[1], indices[2]], "cloth:canopy")
+        body.face([indices[0], indices[2], indices[3]], "cloth:canopy")
+    for i in range(count-1):
+        for row in range(2):
+            panel([vertex(1,i,row),vertex(1,i,row+1),vertex(1,i+1,row+1),vertex(1,i+1,row)])
+            panel([vertex(0,i,row),vertex(0,i+1,row),vertex(0,i+1,row+1),vertex(0,i,row+1)])
+        for row in (0,2):
+            indices=[vertex(0,i,row),vertex(1,i,row),vertex(1,i+1,row),vertex(0,i+1,row)]
+            panel(indices if row==0 else list(reversed(indices)))
+    for i in (0,count-1):
+        for row in range(2):
+            indices=[vertex(0,i,row),vertex(0,i,row+1),vertex(1,i,row+1),vertex(1,i,row)]
+            panel(indices if i==0 else list(reversed(indices)))
+
+
+def folded_curtain(body, spec):
+    """Opaque, closed cloth volume with a wavy fold and uneven hem."""
+    xs = spec["x_profile"]
+    start = len(body.vertices)
+    for layer in (0,1):
+        for i,x in enumerate(xs):
+            z=spec["z_profile"][i] + (layer-.5)*spec["thickness_wu"]
+            for y in (spec["bottom_y_profile"][i],spec["top_y_profile"][i]):
+                body.vertices.append((x,y,z))
+    def vertex(layer,column,row):
+        return start+layer*len(xs)*2+column*2+row
+    for i in range(len(xs)-1):
+        body.face([vertex(1,i,0),vertex(1,i+1,0),vertex(1,i+1,1),vertex(1,i,1)],"cloth:curtain")
+        body.face([vertex(0,i,1),vertex(0,i+1,1),vertex(0,i+1,0),vertex(0,i,0)],"cloth:curtain")
+        for row in (0,1):
+            indices=[vertex(0,i,row),vertex(0,i+1,row),vertex(1,i+1,row),vertex(1,i,row)]
+            body.face(indices if row==0 else list(reversed(indices)),"cloth:curtain")
+    for i in (0,len(xs)-1):
+        indices=[vertex(0,i,0),vertex(1,i,0),vertex(1,i,1),vertex(0,i,1)]
+        body.face(indices if i==0 else list(reversed(indices)),"cloth:curtain")

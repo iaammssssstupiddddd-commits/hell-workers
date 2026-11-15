@@ -34,7 +34,7 @@ def read_json(path: Path) -> dict:
 
 def load_pilot(kind: str, revision: str = "v1") -> dict:
     require(kind in PILOTS, "only Tank and MudMixer have clay drafts")
-    require(revision == "v1" or (kind == "MudMixer" and revision in {"v2", "v3"}),
+    require(revision == "v1" or (kind == "MudMixer" and revision in {"v2", "v3", "v4"}),
             "unknown clay geometry revision")
     contract = read_json(FIXTURES / f"building-{PILOTS[kind]}-{revision}.geometry.json")
     require(contract["schema_version"] == 1 and contract["kind"] == kind, "pilot identity differs")
