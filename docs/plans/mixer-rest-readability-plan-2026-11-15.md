@@ -109,3 +109,10 @@ Restは明示v3（Rest限定、Spa不変）へ連続したたわみ屋根と閉�
 
 旧最初の生成wrapperは登録後・未起動reviewでassert guardを指摘され、child/出力なしを確認してabandoned/finalizeした。
 通常if/raiseへ修正した別wrapperをPYTHONOPTIMIZE0/1/2で拒否確認し、fresh v2出力を生成した。旧登録は再送していない。
+
+### Rest v3のUV照合補正
+
+`aa053470`のRest v3はGLTF検査0errorsで出力されたが、indexed UVの照合でexit1となりinvalid/finalizeした。
+576頂点中1点のUは元double `0.5202349856035131`、実f32は`0.520235002040863`で、旧round5のkeyが分かれた。
+expectedへ実出力と同じf32格納→V反転→f32格納を適用すると576件全一致した。
+許容幅やface privacy/windingを変えず、expectedの型変換順序を補正する。旧失敗をpassへ変更せずfresh sourceで再生成する。

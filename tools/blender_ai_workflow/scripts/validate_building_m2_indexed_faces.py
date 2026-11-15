@@ -1,6 +1,7 @@
 """Check indexed candidate faces with separate bounded M2/M3 face contracts."""
 
 from collections import Counter, defaultdict
+import struct
 
 from building_clay_geometry import require
 from validate_wall_glb import accessor_values, index_values, read_glb
@@ -29,12 +30,21 @@ def _check_faces(glb, geometry, faces, allowed_sides, label):
     def key(point, uv):
         return tuple(round(value, 5) for value in (*point, *uv))
 
+    def f32(value):
+        return struct.unpack("<f", struct.pack("<f", value))[0]
+
     expected = {}
     for face_index, (polygon, face) in enumerate(zip(geometry.faces, faces, strict=True)):
         require(len(polygon) in allowed_sides, f"{label} candidate polygon has unsupported sides")
         for corner, (vertex, uv) in enumerate(zip(polygon, face["uv"], strict=True)):
             # Blender UV origin is bottom-left; glTF exports top-left V.
-            entry = key(geometry.vertices[vertex], (uv[0], 1 - uv[1]))
+            # Match the exported Float32 representation before applying the
+            # existing five-decimal key. UVs are stored as f32 in Blender, then
+            # glTF flips V and stores f32 again. Rounding the original double
+            # first can place one valid value on the opposite key boundary.
+            # Position matching and the rounding width remain unchanged.
+            entry = key(geometry.vertices[vertex],
+                        (f32(uv[0]), f32(1.0 - f32(uv[1]))))
             require(entry not in expected, f"{label} candidate face UV cell is not private")
             expected[entry] = (face_index, corner)
     actual = [key(point, uv) for point, uv in zip(positions, uvs, strict=True)]
