@@ -25,10 +25,15 @@ class M5ArtTests(unittest.TestCase):
                 self.assertEqual(alpha, 255)
                 self.assertGreater(0.2126*r + 0.7152*g + 0.0722*b, 120)
         for kind, expected in {
-            "SandPile": "44dbd1b7ca87502887771cb0db829f7183925b0be4c9f048638e65747608fca8",
-            "BonePile": "2483a20c8e9bde63a85e63b511434d4f339d9075688263b48fd0e974f9581226",
+            "SandPile": "123ace6367323744b1c5bc1e3debdbe8abad8b22f3b4f16b05d9a5eff2c81473",
+            "BonePile": "7506746f53505091cf5893354f728fde2a7c13679c96b6f49c75fc96e81c19cd",
         }.items():
-            self.assertEqual(hashlib.sha256(art.render(kind)).hexdigest(), expected)
+            # Compare every decoded pixel: zlib and zlib-ng may encode the same
+            # RGBA image as different PNG bytes, even with the same Pillow.
+            with self.subTest(kind=kind), Image.open(io.BytesIO(art.render(kind))) as image:
+                self.assertEqual(image.mode, "RGBA")
+                self.assertEqual(image.size, (256, 256))
+                self.assertEqual(hashlib.sha256(image.tobytes()).hexdigest(), expected)
 
     def test_staging_only_fresh_outputs_and_origin_drift_rejected(self):
         with tempfile.TemporaryDirectory() as directory:

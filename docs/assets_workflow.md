@@ -73,6 +73,10 @@
 6. `scripts/sync_external_assets.py --dry-run` で差分を確認してから `assets/` へ反映する。
 7. ゲーム内またはvisual testで確認する。
 
+M5の変更対象外画像の回帰fixtureは、PNG圧縮bytesではなく、RGBA形式・寸法と全画素のhashを
+照合する。同じ画素でも圧縮実装でPNG bytesが変わり得るためであり、正式assetのidentity、
+provenance、promotion/install receiptのexact file hash検証は引き続き維持する。
+
 Blender AI編集、品質gate、MCPの安全境界は
 [`blender-setup.md`](blender-setup.md) を参照する。
 
