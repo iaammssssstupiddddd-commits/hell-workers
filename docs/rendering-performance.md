@@ -804,7 +804,12 @@ normal/farは[採用画面](building-art-direction.md#ミキサーと休憩所�
 Mixer g6／Spa g4は拡散色だけの改訂である。実body/rotorとbody/slotの全GLB bytesがそれぞれ
 直前g5/g3と同一で、UV・parts・寸法・mode4・状態と512² RGBA/alpha255を維持する。
 Spaのslot_emissive PNGは全bytes同一である。Mixerのfresh Dirt実画面でも同世代のresident mesh2／image role3を照合した。
-導入後の全9種の実owner/root/part/material/imageと共有依存のparityは継続検証中。
+導入後`be34b349`で全9種の実owner/root/part/material/imageと初終不変を照合し、通常startupでも
+8poolのactual handle共有を確認した。旧8manifestと新8manifestの全parts/projection/state/geometry、
+GLB全bytes、PNG寸法/alpha面を実比較し、双方mesh7・image20・論理decoded RGBA 9,175,040Bで一致した。
+Spa emissionは全bytes一致。これは建物依存の論理payloadと実resident/shared handleの確認で、
+world全体の画像数・全GPU/driver/native allocationの比較ではない。
+独立parity result SHAは`b0fe0e6815763d4ecea8e67f7f95a3502bb5af71c187bf4ca0e2101ab7e18a4a`。
 
 この改訂では新しい24試行の時間・Memory/RSS計測を行っていない。
 直前節の`fd5cd689`での計測はそのexact subjectの履歴として残し、g6/g4の測定済みpassへ読み替えない。

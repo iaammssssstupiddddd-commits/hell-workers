@@ -32,8 +32,16 @@ RestAreaを含む他6設備・Door g7・Wall g13は不変、Bridgeは対象外�
 
 Help実経路はNo impact。既定binding→loader/pool→world/catalog/previewの外観だけを変更し、
 入力・UI文言・精製/発電/休息の成立条件、保存とHelp到達性は変わらない。
-導入後のfresh通常startupと全9種gallery・resident parity、最終CI/review/storageは継続検証中。
-今回を新しい性能計測や自然lifecycle受入として報告しない。
+導入後のclean `be34b3490c48e93165987fdfbbfa617c63f3702f`で通常startupと全9種galleryを独立採用した。
+通常startupはcompiled default 8件のexpected/active/descriptorとresident mesh7・image22roles/20uniqueが一致し、
+pending/failureなし。実consumerは初期Parking owner1・非表示sprite1で、建物を新規生成していない。
+別のseeded galleryはHigh/DPI1、normal/far各1920×1680、36owner・40resident building partsとDoorを照合した。
+初終snapshotと世代/owner/root/part/material/imageを検証し、通常起動の観測だけを全9種表示の証拠にしていない。
+startup manifest SHAは`b8ea592d7ca6d9d831f1fef64a36b2a7b9640daa31284212a3b00fac3d8321e0`、
+gallery manifest SHAは`6df7ca24c336572a470727cdafd69b5c02aa70a62b40d3c3891bc4b73f875a09`。
+[採用画面](building-art-direction.md#ミキサーの彩度とspaの骨表現2026-11-15)と
+[資源parityと未測定範囲](rendering-performance.md#mixer彩度とspa骨表現のpixel-only改訂2026-11-15)を参照する。
+今回を新しい性能計測や自然lifecycle受入として報告しない。最終CI/reviewと検証コピー整理を続ける。
 
 ## 2026-11-15 ミキサーと休憩所の判読性改訂
 

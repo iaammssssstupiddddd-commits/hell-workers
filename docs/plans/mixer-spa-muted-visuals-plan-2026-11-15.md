@@ -63,5 +63,6 @@ owner Codex、consumer Mixer/Spa visual feedback 2026-11-15。primaryと既存Ca
 ## 8. 引継ぎ
 
 実装・独立art/numeric/release・原本保全・復元試験・canonical promotion/installと既定binding更新まで完了。
-導入後のfresh startup/gallery・CI・最終review・cleanupを継続する。
+導入後clean be34b349のfresh startupと全9種normal/far、resident/decoded payload parityを独立採用済み。
+最終CI・source/docs review・cleanupを継続し、完了後に本計画を撤去する。
 旧統括/Run/helperは起動しない。承認・技術pass・利用者の採用判断を混同しない。

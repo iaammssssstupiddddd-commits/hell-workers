@@ -351,5 +351,12 @@ SoulSpaはv2の骨枠の外周・節・皮質と、暗い四区画の面・控�
 明示styleはMixer v6／Spa v2 strokesだけへ適用し、RestArea・Tank・旧revision・planesを拒否する。
 旧styleのatlas pixel SHAを回帰で固定し、新sourceのart/numeric/releaseを別に審査する。
 通常/遠景とMixerの実Dirt背景を新ArtPreviewで採用し、formal candidate実画面も独立審査した。
-導入後の全9種のfresh採用画面は検証中で、旧画像を新世代の画像とは扱わない。
+導入後clean `be34b3490c48e93165987fdfbbfa617c63f3702f`の既定bindingで、全9種のHigh/DPI1・通常/遠景を独立採用した。
+1920×1680のowned X11 client原画像で、36ownerと40resident building parts、Doorの状態を別契約で照合する。
+Mixerの低彩度ドラム、Spaの骨周縁と暗い四区画、他7種・Wall/Floor/Soul/携行iconとの調和を確認した。
+これはseeded静止表示であり、自然施工/利用や新しい性能測定の証拠へは昇格しない。
+
+![低彩度Mixerと骨枠Spaを導入した9種の通常表示](design/building-art/mixer-spa-weathered-nine-normal-20261115.png)
+
+![低彩度Mixerと骨枠Spaを導入した9種の遠景表示](design/building-art/mixer-spa-weathered-nine-far-20261115.png)
 Help影響はNo impact。authoring入口だけを追加し、現行の入力・UI文言・gameplay・保存・Help到達性は不変。
