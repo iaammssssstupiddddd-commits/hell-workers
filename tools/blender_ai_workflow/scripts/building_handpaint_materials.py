@@ -74,6 +74,17 @@ def mixer_color(role,surface,point,spec,images):
     ink=(31,26,31)
     if role=="rotor" and label=="drum":
         band=int(side.removeprefix("band"));angle=math.atan2(z,x);u=(angle+math.pi)/math.tau
+        if spec["construction"].get("lengthwise_pigment"):
+            axial=(y+18)/36
+            if band>=5:
+                shade=.48+.15*max(0,min(1,(y-2)/16))
+                return (*(round(c*shade) for c in sample(images["iron"],axial,u,wrap=True)),255)
+            if band==4:
+                base=sample(images["iron"],.2,u,wrap=True)
+                return (*(ink if math.hypot(x,z)>8.3 else base),255)
+            base=sample(images["drum"],axial,u)
+            if min(u,1-u)<.007:base=ink
+            return (*base,255)
         if band>=5:
             return (*(round(c*.52) for c in sample(images["iron"],u,(y+16)/30,wrap=True)),255)
         if band==4:
@@ -112,9 +123,24 @@ def interpolate(x,xs,values):
 def rest_color(surface,point,spec,images):
     x,y,z=point;material=surface.split(":",1)[0];ink=(38,29,33)
     if surface=="cloth:canopy":
-        base=sample(images["canvas"],(x+31)/62,(z+29)/58)
+        enclosed="enclosure" in spec
+        u,v=(x+31)/62,(z+29)/58
+        base=sample(images["canvas"],u*.48 if enclosed else u,v*.48 if enclosed else v)
+        if enclosed:
+            # Sparse corner-to-sag strokes describe the continuous cloth, not
+            # triangulation/UV cells. Quiet pigment keeps the door dominant.
+            spread=25*min(1,abs(z+8)/(16 if z<-8 else 32))
+            fold=abs(abs(x)-spread-.25*math.sin(z*.3))
+            if fold<.4 and abs(z+8)>3:base=ink
+            elif fold<2.4:base=tuple(round(c*.78) for c in base)
         front=interpolate(x,spec["roof"]["x_profile"],spec["roof"]["front_z_profile"])
         if min(x+31,31-x,z+29,front-z)<.65+.12*math.sin(x*.4):base=ink
+    elif surface=="cloth:entry":
+        base=tuple(round(c*.83) for c in sample(images["canvas"],.04+.2*(x+23)/46,.3+.25*y/40))
+        centre=abs(x-.25*math.sin(y*.25))
+        fold=abs(abs(x)-11-.65*math.sin(y*.12))
+        if centre<.65 or fold<.35 or y<1.1:base=ink
+        elif fold<1.6:base=tuple(round(c*.72) for c in base)
     elif surface.startswith("cloth:curtain"):
         base=sample(images["canvas"],.04+.2*(x+8)/16,.3+.25*y/26)
         hem=interpolate(x,spec["curtain"]["x_profile"],spec["curtain"]["bottom_y_profile"])
@@ -122,9 +148,13 @@ def rest_color(surface,point,spec,images):
         elif abs(abs(x)-4)<.25:base=tuple(round(c*.75) for c in base)
     elif material=="cloth":
         base=sample(images["canvas"],.05+.2*((x+z+50)/100),.3+.25*y/26)
+        if "enclosure" in spec:base=tuple(round(c*.63) for c in base)
     elif material=="wood":
         base=tuple(round(c*m) for c,m in zip(sample(images["iron"],(x+z+64)/128,y/48),(1.13,.95,.86),strict=True))
         if abs(math.sin(x*1.2+z*.9+.12*math.sin(y*.2)))<.15:base=ink
+        if "enclosure" in spec and abs(z-24)<3:
+            low,high=spec["posts"]["painted_binding_y_wu"]
+            if low<y<high:base=(112,96,76)
     elif material=="iron":
         base=sample(images["iron"],(x+32)/64,(z+32)/64)
     else:raise ValueError("unknown handpainted shelter surface")
@@ -134,7 +164,7 @@ def rest_color(surface,point,spec,images):
 def paint(kind,path,stage,revision):
     from PIL import Image
     from building_mixer_uv_ink import local_point
-    require(stage=="strokes" and ((kind=="MudMixer" and revision=="v5") or (kind=="RestArea" and revision=="v4")),"handpaint requires explicit new geometry/stroke stage")
+    require(stage=="strokes" and ((kind=="MudMixer" and revision in ("v5","v6")) or (kind=="RestArea" and revision in ("v4","v5"))),"handpaint requires explicit new geometry/stroke stage")
     if kind=="MudMixer":
         from building_m2_art import candidate_geometry,face_layout
         from building_clay_geometry import load_pilot

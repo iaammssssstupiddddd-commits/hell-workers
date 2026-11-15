@@ -14,13 +14,14 @@ from building_clay_geometry import FIXTURES, Geometry, read_json, require
 CONTRACT = FIXTURES / "building-m3-v2.geometry.json"
 CONTRACT_V3 = FIXTURES / "building-m3-v3.geometry.json"
 CONTRACT_V4 = FIXTURES / "building-m3-v4.geometry.json"
+CONTRACT_V5 = FIXTURES / "building-m3-v5.geometry.json"
 KINDS = {"RestArea": "rest-area", "SoulSpa": "soul-spa"}
 
 
 def contract_path(kind, revision="v2"):
-    require(revision in ("v2", "v3", "v4") and (revision == "v2" or kind == "RestArea"),
+    require(revision in ("v2", "v3", "v4", "v5") and (revision == "v2" or kind == "RestArea"),
             "M3 v3 is an explicit RestArea-only geometry proposal")
-    return {"v2": CONTRACT, "v3": CONTRACT_V3, "v4": CONTRACT_V4}[revision]
+    return {"v2": CONTRACT, "v3": CONTRACT_V3, "v4": CONTRACT_V4, "v5": CONTRACT_V5}[revision]
 
 
 def contract(kind, revision="v2"):
@@ -76,11 +77,11 @@ def geometry(kind, revision="v2"):
         posts = spec["posts"]
         profile = spec["roof"].get("x_height_profile")
         for xi, x in enumerate(posts["x"]):
-            if revision != "v4":
+            if revision not in ("v4", "v5"):
                 left, right = next((a, b) for a, b in zip(profile, profile[1:]) if a[0] <= x <= b[0])
                 height = left[1] + (right[1] - left[1]) * (x - left[0]) / (right[0] - left[0]) + 0.5
             for zi, z in enumerate(posts["z"]):
-                if revision == "v4":
+                if revision in ("v4", "v5"):
                     height = posts["heights_wu"][xi][zi]
                 width, depth = posts["width_depth_wu"]
                 start=len(body.vertices)
@@ -93,13 +94,19 @@ def geometry(kind, revision="v2"):
                 else:dx,dz=0,0
                 if z in posts.get("bindings_z", posts["z"]):
                     body.box((x+dx*(height-3)/height, height-3, z+dz*(height-3)/height), (5, 3, 5), "iron")
+        if revision == "v5":
+            draped_roof(body, spec["roof"])
+            closed_cloth_enclosure(body, spec)
+            require(all(abs(a-b)<=0.001 for actual, expected in zip(body.bounds(), spec["body_bounds_wu"], strict=True) for a,b in zip(actual,expected,strict=True)), "Rest bounds differ from numeric proposal")
+            require(body.triangles() <= spec["roles"]["body"]["triangle_cap"], "Rest enclosure exceeds budget")
+            return {"body": body}
         # Closed canvas walls and an opaque entry curtain shelter resting Souls.
         for wall in spec["walls"]:
             body.box(wall["center"], wall["size"], "cloth")
-        if revision in ("v3", "v4"):
+        if revision in ("v3", "v4", "v5"):
             draped_roof(body, spec["roof"])
             folded_curtain(body, spec["curtain"])
-            if revision == "v4":
+            if revision in ("v4", "v5"):
                 require(all(abs(a-b)<=0.001 for actual, expected in zip(body.bounds(), spec["body_bounds_wu"], strict=True) for a,b in zip(actual,expected,strict=True)), "Rest bounds differ from numeric proposal")
             return {"body": body}
         # Each thick cloth strip joins its neighbours at a shared profile point.
@@ -170,7 +177,7 @@ def paint(kind, output, stage, *, style="legacy", revision="v2"):
             "M3 v3 requires explicit revised RestArea ink")
     require(stage in ("clay", "planes", "strokes"), "unknown paint stage")
     require(style in ("legacy", infernal.STYLE, *infernal.ILLUSTRATED_STYLES), "unknown paint style")
-    require((revision == "v4") == (style == infernal.HANDPAINT_STYLE), "handpaint requires explicit Rest v4")
+    require((revision in ("v4", "v5")) == (style == infernal.HANDPAINT_STYLE), "handpaint requires explicit Rest v4/v5")
     if style == infernal.HANDPAINT_STYLE:
         from building_handpaint_materials import paint as handpaint
         return handpaint(kind, output / "albedo.png", stage, revision)
@@ -310,6 +317,64 @@ def draped_roof(body, roof):
         for row in range(rows-1):
             indices=[vertex(0,i,row),vertex(0,i,row+1),vertex(1,i,row+1),vertex(1,i,row)]
             panel(indices if i==0 else list(reversed(indices)))
+
+
+def closed_cloth_enclosure(body, spec):
+    """Closed opaque shelter whose ceiling overlaps the real triangulated roof.
+
+    Clip roof triangles, rather than sampling a bilinear surrogate: every top
+    point follows the authored plane, including boundary/diagonal crossings.
+    """
+    from collections import Counter
+    roof=Geometry();draped_roof(roof,spec["roof"])
+    shell=Geometry();config=spec["enclosure"]
+    overlap=config["roof_overlap_wu"];thickness=spec["roof"]["thickness_wu"]
+    require(0<overlap<thickness,"cloth ceiling must overlap inside roof")
+    vertices={}
+    def vertex(point):
+        key=tuple(round(c,9) for c in point)
+        if key not in vertices:
+            vertices[key]=len(shell.vertices);shell.vertices.append(key)
+        return vertices[key]
+    def clipped(points,axis,bound,sign):
+        result=[]
+        for a,b in zip(points,points[1:]+points[:1],strict=True):
+            ina=sign*(a[axis]-bound)<=0;inb=sign*(b[axis]-bound)<=0
+            if ina:result.append(a)
+            if ina!=inb:
+                t=(bound-a[axis])/(b[axis]-a[axis])
+                result.append(tuple(a[i]+t*(b[i]-a[i]) for i in range(3)))
+        return result
+    for face in roof.faces:
+        points=[roof.vertices[i] for i in face];a,b,c=points
+        normal_y=(b[2]-a[2])*(c[0]-a[0])-(b[0]-a[0])*(c[2]-a[2])
+        if normal_y<=0:continue
+        for axis,extent in ((0,config["half_x_wu"]),(2,config["half_z_wu"])):
+            for sign in (-1,1):
+                if points:points=clipped(points,axis,sign*extent,sign)
+        indices=list(dict.fromkeys(vertex((x,y-thickness+overlap,z)) for x,y,z in points))
+        if len(indices)<3:continue
+        # Remove zero-area intersections at a grid corner without inserting
+        # duplicate edges. The remaining polygon has the original plane/winding.
+        for i in range(1,len(indices)-1):
+            a,b,c=[shell.vertices[j] for j in (indices[0],indices[i],indices[i+1])]
+            area=(b[2]-a[2])*(c[0]-a[0])-(b[0]-a[0])*(c[2]-a[2])
+            if area>1e-8:shell.face((indices[0],indices[i],indices[i+1]),"cloth:ceiling")
+    counts=Counter(tuple(sorted((a,b))) for face in shell.faces for a,b in zip(face,face[1:]+face[:1],strict=True))
+    boundary=[(a,b) for face in shell.faces for a,b in zip(face,face[1:]+face[:1],strict=True) if counts[tuple(sorted((a,b)))]==1]
+    require(boundary and all(count in (1,2) for count in counts.values()),"cloth ceiling topology differs")
+    floor=vertex((0,config["floor_y_wu"],0))
+    for a,b in boundary:
+        p,q=shell.vertices[a],shell.vertices[b]
+        require(any(abs(p[axis]-sign*extent)<1e-8 and abs(q[axis]-sign*extent)<1e-8
+                    for axis,extent in ((0,config["half_x_wu"]),(2,config["half_z_wu"])) for sign in (-1,1)),"interior gap in cloth ceiling")
+        ga=vertex((p[0],config["floor_y_wu"],p[2]));gb=vertex((q[0],config["floor_y_wu"],q[2]))
+        entry=abs(p[2]-config["half_z_wu"])<1e-8 and abs(q[2]-config["half_z_wu"])<1e-8
+        shell.face((b,a,ga,gb),"cloth:entry" if entry else "cloth:wall")
+        shell.face((floor,gb,ga),"cloth:floor")
+    start=len(body.vertices);body.vertices.extend(shell.vertices)
+    for face,label in zip(shell.faces,shell.surfaces,strict=True):
+        body.face((start+i for i in face),label)
 
 
 def folded_curtain(body, spec):

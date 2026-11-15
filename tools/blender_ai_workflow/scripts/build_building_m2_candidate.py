@@ -79,8 +79,8 @@ def paths(kind, name):
 
 def verify(kind, name, revision="v1", style=STYLE):
     require(style in (STYLE, *ILLUSTRATED_STYLES) and (style not in ILLUSTRATED_STYLES
-            or kind == "MudMixer" and revision in {"v3", "v4", "v5"}), "unknown M2 style/kind/revision")
-    require((revision == "v5") == (style == "handpaint-v1"), "handpaint requires explicit Mixer v5")
+            or kind == "MudMixer" and revision in {"v3", "v4", "v5", "v6"}), "unknown M2 style/kind/revision")
+    require((revision in {"v5", "v6"}) == (style == "handpaint-v1"), "handpaint requires explicit Mixer v5/v6")
     require(revision != "v4" or style == "illustrated-v2", "v4 requires explicit revised ink")
     blend, output, report, reports = paths(kind, name)
     geometry = candidate_geometry(kind, revision)
@@ -183,8 +183,8 @@ def verify(kind, name, revision="v1", style=STYLE):
 
 def build_bundle(kind, name, stage, revision="v1", style=STYLE):
     require(style in (STYLE, *ILLUSTRATED_STYLES) and (style not in ILLUSTRATED_STYLES
-            or kind == "MudMixer" and revision in {"v3", "v4", "v5"}), "unknown M2 style/kind/revision")
-    require((revision == "v5") == (style == "handpaint-v1"), "handpaint requires explicit Mixer v5")
+            or kind == "MudMixer" and revision in {"v3", "v4", "v5", "v6"}), "unknown M2 style/kind/revision")
+    require((revision in {"v5", "v6"}) == (style == "handpaint-v1"), "handpaint requires explicit Mixer v5/v6")
     require(revision != "v4" or style == "illustrated-v2", "v4 requires explicit revised ink")
     blend, output, report, reports = paths(kind, name)
     require(not any(path.exists() for path in (blend, output, report, reports)), "use fresh output name")
@@ -219,7 +219,7 @@ def prepare(kind, name, generation, destination, codec, revision="v1", style=STY
     require(result["stage"] == "strokes", "runtime candidate requires the final paint stage")
     destination = pipeline.no_symlinks(destination)
     require(not destination.exists(), "use fresh candidate destination")
-    require((revision == "v5") == (style == "handpaint-v1"), "handpaint requires explicit Mixer v5")
+    require((revision in {"v5", "v6"}) == (style == "handpaint-v1"), "handpaint requires explicit Mixer v5/v6")
     require(revision != "v4" or style == "illustrated-v2", "v4 requires explicit revised ink")
     blend, output, report, reports = paths(kind, name)
     contract = load_pilot(kind, revision)
@@ -275,7 +275,7 @@ def main():
     parser.add_argument("kind", choices=tuple(PILOTS))
     parser.add_argument("--name", required=True)
     parser.add_argument("--stage", choices=("planes", "strokes"), default="strokes")
-    parser.add_argument("--revision", choices=("v1", "v2", "v3", "v4", "v5"), default="v1")
+    parser.add_argument("--revision", choices=("v1", "v2", "v3", "v4", "v5", "v6"), default="v1")
     parser.add_argument("--style", choices=(STYLE, *ILLUSTRATED_STYLES), default=STYLE)
     parser.add_argument("--generation", type=int)
     parser.add_argument("--destination", type=Path)

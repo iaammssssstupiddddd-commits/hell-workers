@@ -142,3 +142,22 @@ UV島やtriangulationへ枠を描かない。屋根/幕は布の面に結合し�
 Mixer v5は長い側胴とyaw -65度（軸/支点/tilt/4秒回転は維持）、Rest v4は四隅を上げ中央を下げた連続布屋根、
 傾いた木柱と閉じた幕を明示numeric提案へ分離した。Restは実304tri、提案cap320、旧と同じ外接bounds。
 旧版/他kindへの暗黙適用は拒否する。5件の素材/拒否/実atlas/回転/形状回帰はpass、独立reviewと実画面は未実施。
+
+### 手描き素材の初回生成からの修正
+
+- `753ee1b2`の技術checkpointはcontracts/tooling/deps/rustの変更別検証と独立読取レビューを通過した。
+  Mixer v5／Rest v4の手描きsourceはprimary登録→既定launcher→独立verify→比較用途retain→finalize済み。
+  ただし両方とも外観は不採用。Mixerは全5姿勢で円盤状、Restは入口が屋根で隠れ紙片状だった。
+- 色調整を続けず、別の明示的未承認proposal Mixer v6／Rest v5を追加する。旧fixture・原画・失敗履歴を保持する。
+  Mixerは最大径の側胴区間を18wuへ伸ばし、長36／径24、yaw −110°へ変更。
+  現cameraの投影で軸長35.68wu、径24wuとなる。支点・55°傾斜・local Y軸・Virtual/Refiningの4秒周期を維持し、
+  連続一周の全static component最小clearanceは正。手描き材質の主線を長手へ向け、周方向の帯を増やさない。
+- Restは深い切欠き案を撤回。屋根前縁を高くして入口幕の縦面を見せ、中央の低下は屋根奥に残す。
+  旧box壁と別幕はこのproposalだけ閉じた布shellに置換。実屋根三角形を外周矩形でclipしたceilingを
+  屋根下面から0.25wu重ね、ground cap／全周wallと接続する。bilinear代用面を使わない。
+  前面を閉じたentryとして描き分け、巨大な黄色補修面を避け、支持角から低い中央へ少数の大きなfoldを描く。
+  2個の金属collar geometryは木柱の描画上のbindingへ置換し、同bounds・298tri／320cap・248UV cellsに収める。
+- focused回帰4件は閉mesh／winding／positive volume、全UV頂点の逆変換、実屋根との重なり、内部から上・横のray遮蔽、
+  実投影の入口高さ、Mixer側胴の投影長・sweep、旧clockと支点、誤kind/styleの起動前拒否を確認した。
+  actual-window、独立art/numeric、candidate・release・既定切替は未実施／未承認。
+- Helpは再度実経路を確認しNo impact。新proposalは明示的authoring選択だけで、通常起動bindingとplayer操作／機能／文言／保存／Help到達性は不変。

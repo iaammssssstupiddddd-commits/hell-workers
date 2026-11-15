@@ -89,7 +89,7 @@ class ReadableGeometryTests(unittest.TestCase):
         payload=m3.CONTRACT_V3.read_bytes()
         self.assertEqual(numeric.numeric_contract(payload,'RestArea')['kind'],'RestArea')
         self.assertFalse(clay.read_json(m3.CONTRACT_V3)['numeric_freeze'])
-        for kind,revision in [('SoulSpa','v3'),('SoulSpa','v4'),('RestArea','v5')]:
+        for kind,revision in [('SoulSpa','v3'),('SoulSpa','v4'),('SoulSpa','v5'),('RestArea','v6')]:
             with self.assertRaises(ValueError):
                 m3.geometry(kind,revision)
         with self.assertRaises(ValueError):

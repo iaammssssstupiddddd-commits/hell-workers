@@ -24,13 +24,15 @@ NUMERIC_V4 = FIXTURES / "building-m2-v4.numeric-candidate.json"
 NUMERIC_V4_SHA256 = "e51f9d87047619f8f587ffa5ade46e6e692a0d95d4a28158be469e7664788818"
 NUMERIC_V5 = FIXTURES / "building-m2-v5.numeric-candidate.json"
 NUMERIC_V5_SHA256 = "7f65f5139ac1fec5f9288ac3d1625945fc4b604f00d3de0fb355b3dafc67132b"
+NUMERIC_V6 = FIXTURES / "building-m2-v6.numeric-candidate.json"
+NUMERIC_V6_SHA256 = "4319fd7a6b4c809c1cb54046bda293b6c2e7a062537026e0b4991c61b5233828"
 ATLAS_SIZE = 512
 CELL = 32
 GUTTER = 4
 
 
 def numeric_contract(kind, revision="v1"):
-    require(revision == "v1" or (kind == "MudMixer" and revision in {"v2", "v3", "v4", "v5"}),
+    require(revision == "v1" or (kind == "MudMixer" and revision in {"v2", "v3", "v4", "v5", "v6"}),
             "unknown M2 art revision")
     path, expected = ((NUMERIC_V2, NUMERIC_V2_SHA256) if revision == "v2"
                       else (NUMERIC, NUMERIC_SHA256))
@@ -40,6 +42,8 @@ def numeric_contract(kind, revision="v1"):
         path, expected = NUMERIC_V4, NUMERIC_V4_SHA256
     if revision == "v5":
         path, expected = NUMERIC_V5, NUMERIC_V5_SHA256
+    if revision == "v6":
+        path, expected = NUMERIC_V6, NUMERIC_V6_SHA256
     require(hashlib.sha256(path.read_bytes()).hexdigest() == expected,
             "numeric proposal changed: independent revision required")
     validate(path)
