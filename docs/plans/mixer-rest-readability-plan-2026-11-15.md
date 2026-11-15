@@ -230,3 +230,13 @@ M2 contextも成功したが、既定seedの固定anchorは全てGrassだった�
 厳密uint64、plan→argv `--perf-seed`→child env→実PERFログ／summary.csv seedを結合し、両raw hashも結果へ固定する。
 旧planは従来seedを維持。地形の書換え、Rust変更、任意command許可、art／性能authorityは追加しない。
 別seedがDirtとなる保証はなく、合法supportと実画像のDirtは別に確認する。focused33件成功、採否は未完了。
+
+
+### seed入力のruntime成立条件補正
+
+hostのみのseed42比較は起動前に既存Rust固定seed guardが拒否し、exit1をinvalid封印・診断retain・finalizeした。
+元の実機結果や既定seedの制約を変更しない。profiling専用の明示`HW_BUILDING_ART_FEEDBACK_WORLD_SEED`を追加し、
+厳密なseed文字列一致とtypedなMudMixer／feedback／ArtPreview／M2 context／normal-far、および既存context禁止入力を照合する。
+他種・candidate・gallery・M6・UI・未知sessionには適用しない。通常起動・正式性能参照は従来seedに固定したまま。
+Pythonは非既定の限定contextだけにmarkerを渡し、既定seedへ戻した場合はforeign markerを消去する。
+これは自然生成地形の比較補足であり、地形上書き・art/numeric/release承認ではない。

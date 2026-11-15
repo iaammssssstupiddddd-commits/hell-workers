@@ -1,4 +1,5 @@
 """Explicit natural generation inputs, not a terrain mutation or art approval."""
+import json
 from pathlib import Path
 import tempfile
 import unittest
@@ -34,6 +35,11 @@ class WorldSeedTests(unittest.TestCase):
         env=art.game_environment({'HW_PERF_SEED':'999','HELL_WORKERS_WORLDGEN_SEED':'999'},Path('/view'),value,'nonce',Path('/job'))
         self.assertNotIn('HW_PERF_SEED',env)
         self.assertEqual(env['HELL_WORKERS_WORLDGEN_SEED'],'42')
+        self.assertEqual(env['HW_BUILDING_ART_FEEDBACK_WORLD_SEED'],'42')
+        value['world_seed']=art.static.SEED
+        env=art.game_environment(env,Path('/view'),value,'nonce',Path('/job'))
+        self.assertNotIn('HW_BUILDING_ART_FEEDBACK_WORLD_SEED',env)
+        self.assertEqual(json.loads(env['HW_BUILDING_ART_SESSION'])['mode'],'feedback')
 
     def test_actual_log_and_single_summary_row_must_agree_and_remain_hash_bound(self):
         with tempfile.TemporaryDirectory() as temp:

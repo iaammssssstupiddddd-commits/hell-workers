@@ -1417,3 +1417,105 @@ fn group_gallery_window_requires_exact_typed_session_and_small_static_scope() {
         }
     }
 }
+
+#[test]
+fn alternate_art_seed_requires_explicit_typed_mixer_feedback_context() {
+    let args = [
+        "--perf-scenario",
+        "--perf-workload",
+        "building-art-static",
+        "--perf-size",
+        "small",
+        "--spawn-souls",
+        "10",
+        "--spawn-familiars",
+        "0",
+        "--perf-seed",
+        "42",
+        "--perf-output-dir",
+        "/unused/data",
+        "--perf-window-width",
+        "1280",
+        "--perf-window-height",
+        "720",
+        "--perf-window-scale-factor",
+        "1",
+        "--perf-rtt-quality",
+        "high",
+    ];
+    let session = serde_json::json!({"mode":"feedback", "variant":"m2-art-context",
+        "identity":{"kind":"MudMixer","generation":5,"authority":"art_preview",
+            "manifest_sha256":"a".repeat(64)},
+        "locator":"manifests/building-mud-mixer-v1.buildingset",
+        "status_path":"/unused/probe.json", "nonce":"a".repeat(32), "view":"normal"});
+    let text = session.to_string();
+    let marker = "HW_BUILDING_ART_FEEDBACK_WORLD_SEED";
+    let environment = [("HW_BUILDING_ART_SESSION", text.as_str()), (marker, "42")];
+    assert_eq!(
+        parse_input(&args, &environment).is_ok(),
+        cfg!(feature = "profiling")
+    );
+    assert!(parse_input(&args, &[]).is_err());
+    assert!(parse_input(&args, &environment[..1]).is_err());
+    for declared in ["43", "042", "-1", "true", "18446744073709551616"] {
+        assert!(
+            parse_input(
+                &args,
+                &[("HW_BUILDING_ART_SESSION", &text), (marker, declared)]
+            )
+            .is_err()
+        );
+    }
+    for (pointer, value) in [
+        ("/mode", serde_json::json!("candidate")),
+        ("/variant", serde_json::json!("gallery")),
+        ("/identity/kind", serde_json::json!("Tank")),
+        (
+            "/identity/authority",
+            serde_json::json!("isolated_candidate"),
+        ),
+        ("/view", serde_json::json!("overview")),
+        ("/spa_mask_page", serde_json::json!(0)),
+    ] {
+        let mut foreign = session.clone();
+        if pointer == "/spa_mask_page" {
+            foreign["spa_mask_page"] = value;
+        } else {
+            *foreign.pointer_mut(pointer).unwrap() = value;
+        }
+        assert!(
+            parse_input(
+                &args,
+                &[
+                    ("HW_BUILDING_ART_SESSION", &foreign.to_string()),
+                    (marker, "42")
+                ]
+            )
+            .is_err()
+        );
+    }
+    for forbidden in [
+        "HW_BUILDING_M6_MODE",
+        "HW_BUILDING_ASSET_RELEASES",
+        "HW_M2_ACCEPTANCE_PROBE",
+        "HW_NATIVE_UI_ROOT",
+    ] {
+        assert!(
+            parse_input(
+                &args,
+                &[
+                    ("HW_BUILDING_ART_SESSION", &text),
+                    (marker, "42"),
+                    (forbidden, "1")
+                ]
+            )
+            .is_err()
+        );
+    }
+    let mut wrong = args;
+    wrong[4] = "medium";
+    assert!(parse_input(&wrong, &environment).is_err());
+    wrong = args;
+    wrong[10] = "20260920";
+    assert!(parse_input(&wrong, &environment).is_err());
+}

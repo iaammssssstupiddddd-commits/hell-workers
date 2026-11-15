@@ -1362,13 +1362,13 @@ impl PerfScenarioConfig {
                 || !matches!(operation_dialog_mode, PerfOperationDialogMode::Hidden)
                 || !matches!(dashboard_mode, PerfDashboardMode::Hidden)
                 || !matches!(clock_mode, PerfClockMode::Realtime)
-                || master_seed != 20_260_920
+                || !building_art_seed_matches(input, art_session.as_ref(), master_seed)
                 || warmup_secs != 30.0
                 || measure_secs != 60.0
                 || output_dir.is_none()
                 || !static_window_contract)
         {
-            return Err(PerfScenarioConfigError("building-art-static requires small/15 Souls or medium/60 Souls, zero Familiars, gpu/realtime, seed 20260920, 30s/60s, output directory, baseline policies and 1280x720/DPI-1; explicit gallery contracts alone admit DPI-1.5/2, non-high quality requires an explicit building-art session".into()));
+            return Err(PerfScenarioConfigError("building-art-static requires small/15 Souls or medium/60 Souls, zero Familiars, gpu/realtime, seed 20260920 (or explicit Mixer feedback terrain context), 30s/60s, output directory, baseline policies and 1280x720/DPI-1; explicit gallery contracts alone admit DPI-1.5/2, non-high quality requires an explicit building-art session".into()));
         }
         #[cfg(feature = "profiling-renderdoc")]
         if renderdoc_capture
@@ -1850,6 +1850,47 @@ fn tank_pilot_window_matches(
     #[cfg(not(feature = "profiling"))]
     {
         let _ = (raw, width, height, scale, quality);
+        false
+    }
+}
+
+// Alternate terrain is feedback-only. Formal/static and ordinary sessions keep
+// their fixed seed; startup still validates the entire ArtPreview context.
+fn building_art_seed_matches(
+    input: &PerfConfigInput<'_>,
+    session: Option<&serde_json::Value>,
+    seed: u64,
+) -> bool {
+    let Some(declared) = input.env_os("HW_BUILDING_ART_FEEDBACK_WORLD_SEED") else {
+        return seed == 20_260_920;
+    };
+    let Ok(declared) = declared.into_string() else {
+        return false;
+    };
+    #[cfg(feature = "profiling")]
+    {
+        use crate::assets::building_asset_set::{BuildingAssetAuthority, BuildingAssetKind};
+        session
+            .and_then(|value| {
+                serde_json::from_value::<
+                    crate::assets::building_asset_set::acceptance::BuildingArtSession,
+                >(value.clone())
+                .ok()
+            })
+            .is_some_and(|session| {
+                declared == seed.to_string()
+                    && session.mode == "feedback"
+                    && session.is_m2_context()
+                    && session.identity.kind == BuildingAssetKind::MudMixer
+                    && session.identity.authority == BuildingAssetAuthority::ArtPreview
+                    && session
+                        .validate_context(|key| input.env_text(key).is_some())
+                        .is_ok()
+            })
+    }
+    #[cfg(not(feature = "profiling"))]
+    {
+        let _ = (declared, session);
         false
     }
 }

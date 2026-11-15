@@ -325,6 +325,8 @@ def game_environment(environment: dict, view: Path, value: dict, nonce: str, roo
             "status_path": str(root / "probe.json")}
     if "window_contract" in value or "scale_factor" in value:
         session.update(window_contract=WINDOW_CONTRACT, scale_factor=scale_factor(value))
+    if world_seed(value) != static.SEED:
+        environment["HW_BUILDING_ART_FEEDBACK_WORLD_SEED"] = str(world_seed(value))
     environment.update({"BEVY_ASSET_ROOT": str(view), "HW_WINDOW_BACKEND": "x11", "HW_PRESENT_MODE": "novsync",
         "HELL_WORKERS_WORLDGEN_SEED": str(world_seed(value)),
         "WGPU_BACKEND": "vulkan", "WGPU_ADAPTER_NAME": value["adapter"], "RUST_LOG": "info,wgpu=error",

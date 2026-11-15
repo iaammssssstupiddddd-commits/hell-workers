@@ -114,7 +114,7 @@ impl BuildingArtSession {
         self.is_rest_context() || self.is_m2_context() || self.is_m5_context()
     }
 
-    fn validate_context(&self, present: impl Fn(&str) -> bool) -> Result<(), String> {
+    pub(crate) fn validate_context(&self, present: impl Fn(&str) -> bool) -> Result<(), String> {
         if !self.window_matches(self.scale_factor.or(Some(1.0))) {
             return Err("building-art window contract/scale factor differs".into());
         }
