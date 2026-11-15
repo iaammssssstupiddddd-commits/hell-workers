@@ -246,3 +246,22 @@ sample191はfatigue0.783226、同一フレームで解除したsample192は0.802
 前後pairの両fatigueを有限な0～1で検査し、少なくとも片方の厳密な閾値超過を要求する。
 許容幅を足さず、両端とも閾値以下なら拒否する。実receipt・同controller/epoch・隣接性・全解除を維持し、
 区間内の決定瞬間は証明しない。v3原本を修正せず保持し、補正版は新subject・fresh jobで確認する。
+
+## 15. 正式導入と残る最終受入
+
+`95510469`のloaded-use v4は5画像・実raw・remap・Normalで3.556136993仮想秒のDream消費と
+実疲労解除要求/結果を独立採用した。217 Operational samplesでmode4/atlas/worker-slot発光の不一致は0。
+Dream-floor到達や全員退出は主張しない。診断を終えたv1/v2/v3は正式consumerを解除して重複jobを整理し、
+invalid台帳・本書の原因記録・採用v4・occupied保存入力は維持した（直前台帳計測535,437,312Bを整理）。
+
+- [x] 同sourceの5件formal candidateを独立verify/seal/finalizeし、個別release判断へexactに束縛した。
+- [x] 隔離5種20操作で旧bytes復帰・新immutable payload保持を独立採用した。
+- [x] guard付き正本promotion・primary install・完全8件の既定binding更新を完了した。
+- [x] 新5組63ファイルの編集可能原本を正本libraryへ追加し、旧303原本を全SHA不変で保持した。
+- [ ] clean installed subjectの通常startup・9種normal/farを実機確認する。
+- [ ] 事前固定budgetでCapture12→Memory12の性能比較を独立採用する。
+- [ ] 最終結果・画面・復旧情報を恒久仕様へ集約し、この一時計画と用途終了の検証出力を整理する。
+
+現時点はinstalled-pending-native-acceptance。新binding SHAは
+`bb13a5874db5eda2deba329e0f923736c2297b7ba7965232d0e815b4e1dc8a90`。
+Help実経路はNo impactであり、通常の操作・状態・保存・文言の契約を変えない。

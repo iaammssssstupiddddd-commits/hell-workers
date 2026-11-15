@@ -445,10 +445,22 @@ authoringは計29組264ファイル（9,359,997B）、legacyと合わせてindex
 新g3と旧g2/g1のauthority、receipt、journalを正本に保ち、g2へのcanonical/runtime復帰16操作と47旧fileの
 完全byte復帰を独立採用した。未採用の中間原本はrelease authorityへ混ぜない。
 
-現在の8設備releaseの復旧用exact codecは
+2026-11-15の面塗り改訂では、実promotion sourceと一致する編集可能原本を5組63ファイル
+（5,013,680B）追加した。Blend/元paint/mask/projection設定・atlas・GLB・geometry・paint report・recipeを
+保持し、直前33組303ファイルは全SHA/bytes不変。authoringは38組366ファイル（15,778,072B）、
+legacy389件と合わせて755原本となる。generator referenceはexact Git bytesへ照合した再制作参照であり、
+再生成を実行済みと主張したり、source libraryの存在からproduction authorityを推測したりしない。
+authorityは引き続きcanonical exportsの正式pointer/journalが所有する。
+
+今回のg4/g3を扱う復旧用exact codecは
+`source/tooling/building-asset-codec-25019e2c074f0e3ef6576de339d404b93d345f32597c986f5725e4cc073f75e3/bevy_app`。
+mode3/4を読める同bytesを導入・検証で使用し、製品のrelease recovery用途として保持する。
+旧世代の復旧用codecと原本は置換・削除しない。
+
+初回8設備releaseの復旧用exact codecは
 `source/tooling/building-asset-codec-601b0fd770b29d00cef29fc47c21e8c8353f0315fad80c40812be37f0d0646ce/bevy_app`。
 canonical `exports/`のjournal・authority pointer・locator・receipt・payload・provenanceとセットで保持する。
-8件すべてのrecover=applied／rollback=plannedを`--apply`なしで確認した。
+初回導入時に8件すべてのrecover=applied／rollback=plannedを`--apply`なしで確認した。
 このcodecを最新ゲームbinaryへ暗黙に置き換えない。現行世代の廃止・検証済み復旧経路への移行後にだけ保持を解除する。
 通常runtimeはrepo内のinstall済みmirrorを読み、source libraryや検証jobを必要としない。
 

@@ -4,8 +4,34 @@
 [移行計画](plans/3d-rtt/non-wall-floor-building-art-migration-plan-2026-09-19.md)を正本とする。
 本書はroot `bevy_app::assets::building_asset_set` が所有する入力境界を記す。
 
-現行の外観は[世界観統一の正式世代](#2026-11-14-世界観統一の現行正式世代)を参照。
-以下の2026-11-13表と測定は初回導入時点の履歴であり、新世代の測定を代用しない。
+現行の導入状態は[面塗り方式の正式世代](#2026-11-15-面塗り方式の正式世代)を参照。
+以下の過去の表と測定は各導入時点の履歴であり、新世代の測定を代用しない。
+
+## 2026-11-15 面塗り方式の正式世代
+
+Tankの画像投影、MudMixer/RestArea/SoulSpaのUV描線、OutdoorLampの平面的な塗装を正式導入した。
+clean `95510469`の5件のformal candidateと個別の独立release判断、隔離canonical/runtimeの
+apply/install/rollback/mirror全20操作、正本promotionとprimary installを完了した。
+旧世代・payload・receipt・journal・復旧経路は保全し、他のkindのauthorityを変更していない。
+
+| kind | generation | ReleaseApproved manifest SHA-256 |
+| --- | ---: | --- |
+| Tank | 4 | `f452eefadd39c9a5b250fb928838356ffd071eec69fdfbdfe0d65e5538e6af61` |
+| MudMixer | 4 | `d7e9dcad44bee187563d71592fc87169378b5a8024228310776200a794dfc24b` |
+| RestArea | 4 | `b4210b1ce95ae96eccb72ce40b26dd7561904243b877c2028ab4a23379578662` |
+| SoulSpa | 3 | `9a5b970fb1f03b37ab69dda6efc1f222f25d5660610b75c123c3be077ab4f9e1` |
+| OutdoorLamp | 4 | `c1694bc1e986126e3579b5da34a8ff0a8562d549ecc02bc2f7571bb31c120d3d` |
+
+完全8件binding SHAは`bb13a5874db5eda2deba329e0f923736c2297b7ba7965232d0e815b4e1dc8a90`。
+Parking g2、SandPile/BonePile g1、Door g7、Wall g13は従来の正式identityを維持する。Bridgeは対象外。
+Tankのbodyとwater材質は分離し、水位12/22、Mixerのlocal Y回転、Rest入所Soul非表示、
+Spaの実4tile workerに応じた発光、Lampの点灯・配電・anchor契約を保持する。
+通常startup、導入後9種normal/farとCapture12→Memory12の最終性能受入は、この時点では未完である。
+個別release・installの成功を全体受入や性能合格として扱わない。
+
+Help実レビューはNo impact。既定bindingから通常loader/pool/表示へ追い、塗り・描線の変更以外に、
+入力、成立条件、休息/Dream/精製/電力、保存形式、失敗結果、文言、Help到達性の変更はない。
+制作原本とexact新codecの保全は[アセット運用](assets_workflow.md#非橋9種の制作原本と復旧情報)を参照。
 
 ## 2026-11-13 非橋9種の正式導入・受入
 
