@@ -126,7 +126,16 @@ def rest_color(surface,point,spec,images):
         enclosed="enclosure" in spec
         u,v=(x+31)/62,(z+29)/58
         base=sample(images["canvas"],u*.48 if enclosed else u,v*.48 if enclosed else v)
-        if spec.get("curved_cloth_pigment"):
+        if spec.get("steep_tent_pigment"):
+            base=sample(images["canvas"],.04+.34*u,.36+.24*v)
+            # Broad painted planes, without restoring facet/PBR shading.
+            factor=.98 if x<0 else .83
+            base=tuple(round(c*factor) for c in base)
+            fold=abs(abs(x)-(24-8*math.sin((z+29)/58*math.pi)))
+            if fold<.3 and (-22<z<-12 or 5<z<16):base=ink
+            elif fold<2.8:base=tuple(round(c*(.78+.22*fold/2.8)) for c in base)
+            if abs(x)<.35:base=ink
+        elif spec.get("curved_cloth_pigment"):
             # A quiet, stitch-free crop and two separated, broken curves: no
             # central knot or full-width cross which reads as wrapped cargo.
             base=sample(images["canvas"],.04+.34*u,.36+.24*v)
@@ -181,10 +190,15 @@ def rest_color(surface,point,spec,images):
             for xi,cx in enumerate(posts["x"]):
                 for zi,cz in enumerate(posts["z"]):
                     h=posts["heights_wu"][xi][zi];dx,dz=posts["lean_top_xz"][xi][zi]
-                    candidates.append((abs(x-cx-dx*y/h)+abs(z-cz-dz*y/h),cx+dx*y/h,cz+dz*y/h,h))
-            _,cx,cz,h=min(candidates)
-            across=z-cz if surface.endswith((":left",":right")) else x-cx
-            if min(2-abs(across),y,h-y)<.32 or abs(across-.18*math.sin(y*.24))<.13:base=ink
+                    width,depth=posts["width_depth_wu"]
+                    candidates.append((abs(x-cx-dx*y/h)+abs(z-cz-dz*y/h),cx+dx*y/h,cz+dz*y/h,h,width/2,depth/2))
+            for support in spec.get("ridge_supports",[]):
+                cx,_,cz=support["center"];h=support["size"][1]
+                width,_,depth=support["size"]
+                candidates.append((abs(x-cx)+abs(z-cz),cx,cz,h,width/2,depth/2))
+            _,cx,cz,h,half_x,half_z=min(candidates)
+            across,half=(z-cz,half_z) if surface.endswith((":left",":right")) else (x-cx,half_x)
+            if min(half-abs(across),y,h-y)<.32 or abs(across-.18*math.sin(y*.24))<.13:base=ink
         if "enclosure" in spec and abs(z-24)<3:
             low,high=spec["posts"]["painted_binding_y_wu"]
             if low<y<high:base=(112,96,76)
@@ -197,7 +211,8 @@ def rest_color(surface,point,spec,images):
 def paint(kind,path,stage,revision):
     from PIL import Image
     from building_mixer_uv_ink import local_point
-    require(stage=="strokes" and ((kind=="MudMixer" and revision in ("v5","v6")) or (kind=="RestArea" and revision in ("v4","v5","v6"))),"handpaint requires explicit new geometry/stroke stage")
+    require((stage=="strokes" or (kind=="RestArea" and revision=="v7" and stage=="planes"))
+            and ((kind=="MudMixer" and revision in ("v5","v6")) or (kind=="RestArea" and revision in ("v4","v5","v6","v7"))),"handpaint requires explicit geometry/stroke or Rest v7 shape-only stage")
     if kind=="MudMixer":
         from building_m2_art import candidate_geometry,face_layout
         from building_clay_geometry import load_pilot
@@ -205,7 +220,7 @@ def paint(kind,path,stage,revision):
     else:
         from building_m3_art import geometry,face_layout,contract
         meshes=geometry(kind,revision);layout=face_layout(kind,revision);_,spec=contract(kind,revision)
-    images,snapshot=load_sources();image=Image.new("RGBA",(512,512),(38,29,33,255));pixels=image.load()
+    images,snapshot=load_sources();image=Image.new("RGBA",(512,512),(55,55,55,255) if stage=="planes" else (38,29,33,255));pixels=image.load()
     for role,faces in layout.items():
         mesh=meshes[role]
         for face,indices in zip(faces,mesh.faces,strict=True):
@@ -213,7 +228,11 @@ def paint(kind,path,stage,revision):
             for py in range(y0,y0+32):
                 for px in range(x0,x0+32):
                     point=local_point((px+.5,py+.5),face["polygon_px"],points)
-                    pixels[px,py]=mixer_color(role,face["surface"],point,spec,images) if kind=="MudMixer" else rest_color(face["surface"],point,spec,images)
+                    if stage=="planes":
+                        color=(150,150,150) if face["surface"]=="cloth:canopy" else (55,55,55) if face["surface"].startswith("wood:") else (98,98,98)
+                        pixels[px,py]=(*color,255)
+                    else:
+                        pixels[px,py]=mixer_color(role,face["surface"],point,spec,images) if kind=="MudMixer" else rest_color(face["surface"],point,spec,images)
     image.save(path)
     for source in images.values():source.close()
     require(source_snapshot()==snapshot,"paint sources changed during atlas bake")

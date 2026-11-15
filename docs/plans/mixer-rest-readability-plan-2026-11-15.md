@@ -170,3 +170,15 @@ Rest v5は入口面積と被覆を改善したが、対称X線＋横縫い線が
 中央の閉じ目／左右の幕の折れ・暗い側壁・輪郭のある木柱を分離する。旧proposalは変更しない。
 未起動のMixer ArtPreview包装v2はchild／root不存在を照合してabandoned→finalize。未知操作の再送ではない。
 両種を次の同一clean sourceで新規生成・独立検証し、その後actual-windowへ進む。
+
+### 四角い屋根の仮説の打切り
+
+Rest v6も原画比較で「布の看板」という輪郭が残り、独立art reviewはchanges_requested。
+四隅高・中央低の形状はこれ以上調整せず、明示Rest v7で急な布テント断面へ転換する。
+旧v2の浅い切妻（隆起10wu）の再利用ではなく、側高26–33／中央ridge57–62wuと前後の実支柱を持たせる。
+新しい高さ上限64wuは未承認numeric proposalとして扱い、旧bounds承認を流用しない。論理4区画・閉鎖shell・Soul非表示は維持。
+actual meshは224tri／320cap、174UV cells、preview全頂点はx66–190／y12.2–196pxで、256px canvasに余白を持つ。
+新revisionだけshape-onlyのplanes出力を許可し、実原画で山型・支柱・正面幕を先に確認する。
+planesはprepareのstrokes guardで拒否し、ArtPreview／候補／正式導入にはできない。
+Mixer v6は原画方向承認後、独立検証したArtPreview g5 manifest `a05c5fb9bc2424cd83429c2cbb4a479d760be80a508e583edae3cdd885f4a09c`へ固定済み。
+Restの制作修正で同じMixerを作り直す必要はなく、固定assetを現在のclean製品sourceに載せて別途実機確認する。

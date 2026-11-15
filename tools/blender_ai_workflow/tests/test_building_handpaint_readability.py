@@ -14,6 +14,7 @@ import building_clay_geometry as clay
 import building_m2_art as m2
 import building_m3_art as m3
 import building_m3_numeric as numeric
+import building_handpaint_materials as hand
 import build_building_m2_candidate as mixer_builder
 import build_building_m3_candidate as rest_builder
 from building_mixer_uv_ink import local_point
@@ -44,6 +45,48 @@ def triangles(mesh,select):
 
 
 class HandpaintReadabilityTests(unittest.TestCase):
+    def test_steep_tent_has_a_visible_gable_closed_coverage_and_full_preview_margin(self):
+        mesh=m3.geometry('RestArea','v7')['body'];_,spec=m3.contract('RestArea','v7')
+        self.assertEqual(mesh.bounds()[1][1],64)
+        self.assertLessEqual(mesh.triangles(),320)
+        self.assertLessEqual(len(m3.face_layout('RestArea','v7')['body']),256)
+        pixels=[(128+2*x,144+2*(z-.6*y)) for x,y,z in mesh.vertices]
+        self.assertTrue(all(4<coordinate<252 for point in pixels for coordinate in point))
+        roof=triangles(mesh,lambda s:s=='cloth:canopy')
+        front_ridge=max(z-.6*y for tri in roof for x,y,z in tri if abs(x)<1 and z>25)
+        front_eave=min(z-.6*y for tri in roof for x,y,z in tri if abs(x)>30 and z>28)
+        self.assertGreater(front_eave-front_ridge,18)
+        for select in (lambda s:s=='cloth:canopy',lambda s:s.startswith('cloth:') and s!='cloth:canopy'):
+            edges=Counter((a,b) for face,label in zip(mesh.faces,mesh.surfaces,strict=True) if select(label)
+                          for a,b in zip(face,face[1:]+face[:1],strict=True))
+            self.assertTrue(all(count==1 and edges[(b,a)]==1 for (a,b),count in edges.items()))
+        shell=triangles(mesh,lambda s:s.startswith('cloth:') and s!='cloth:canopy')
+        for x in (-16,0,16):
+            for z in (-16,0,16):
+                for direction in ((0,1,0),(1,0,0),(-1,0,0),(0,0,1),(0,0,-1)):
+                    self.assertTrue(ray((x,20,z),direction,shell))
+        for face,indices in zip(m3.face_layout('RestArea','v7')['body'],mesh.faces,strict=True):
+            points=[mesh.vertices[i] for i in indices]
+            for pixel,expected in zip(face['polygon_px'],points,strict=True):
+                self.assertTrue(all(abs(a-b)<1e-7 for a,b in zip(local_point(pixel,face['polygon_px'],points),expected,strict=True)))
+        self.assertEqual(spec['enclosure']['roof_overlap_wu'],.25)
+        images,_=hand.load_sources()
+        try:
+            # Interior of the real central support face must retain wood, not
+            # be mistaken for a point 25wu outside a corner post's perimeter.
+            self.assertNotEqual(hand.rest_color('wood:front',(1,20,-25.75),spec,images),(38,29,33,255))
+        finally:
+            for image in images.values():image.close()
+        numeric.numeric_contract(m3.CONTRACT_V7.read_bytes(),'RestArea')
+        with self.assertRaises(ValueError):numeric.numeric_contract(m3.CONTRACT_V7.read_bytes(),'SoulSpa')
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp);m3.paint('RestArea',root,'planes',revision='v7',style='handpaint-v1')
+            with Image.open(root/'albedo.png') as image:
+                self.assertTrue(all(r==g==b and a==255 for r,g,b,a in image.get_flattened_data()))
+            with patch.object(rest_builder,'verify',return_value={'stage':'planes'}):
+                with self.assertRaises(ValueError):rest_builder.prepare('RestArea','shape-only',5,root/'runtime',root/'codec','handpaint-v1','v7')
+            self.assertFalse((root/'runtime').exists())
+
     def test_curved_cloth_revision_preserves_the_closed_geometry_and_opaque_source_domain(self):
         old=m3.geometry('RestArea','v5')['body'];new=m3.geometry('RestArea','v6')['body']
         self.assertEqual(old.vertices,new.vertices)

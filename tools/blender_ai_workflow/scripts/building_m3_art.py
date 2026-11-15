@@ -16,13 +16,14 @@ CONTRACT_V3 = FIXTURES / "building-m3-v3.geometry.json"
 CONTRACT_V4 = FIXTURES / "building-m3-v4.geometry.json"
 CONTRACT_V5 = FIXTURES / "building-m3-v5.geometry.json"
 CONTRACT_V6 = FIXTURES / "building-m3-v6.geometry.json"
+CONTRACT_V7 = FIXTURES / "building-m3-v7.geometry.json"
 KINDS = {"RestArea": "rest-area", "SoulSpa": "soul-spa"}
 
 
 def contract_path(kind, revision="v2"):
-    require(revision in ("v2", "v3", "v4", "v5", "v6") and (revision == "v2" or kind == "RestArea"),
+    require(revision in ("v2", "v3", "v4", "v5", "v6", "v7") and (revision == "v2" or kind == "RestArea"),
             "M3 v3 is an explicit RestArea-only geometry proposal")
-    return {"v2": CONTRACT, "v3": CONTRACT_V3, "v4": CONTRACT_V4, "v5": CONTRACT_V5, "v6": CONTRACT_V6}[revision]
+    return {"v2": CONTRACT, "v3": CONTRACT_V3, "v4": CONTRACT_V4, "v5": CONTRACT_V5, "v6": CONTRACT_V6, "v7": CONTRACT_V7}[revision]
 
 
 def contract(kind, revision="v2"):
@@ -78,11 +79,11 @@ def geometry(kind, revision="v2"):
         posts = spec["posts"]
         profile = spec["roof"].get("x_height_profile")
         for xi, x in enumerate(posts["x"]):
-            if revision not in ("v4", "v5", "v6"):
+            if revision not in ("v4", "v5", "v6", "v7"):
                 left, right = next((a, b) for a, b in zip(profile, profile[1:]) if a[0] <= x <= b[0])
                 height = left[1] + (right[1] - left[1]) * (x - left[0]) / (right[0] - left[0]) + 0.5
             for zi, z in enumerate(posts["z"]):
-                if revision in ("v4", "v5", "v6"):
+                if revision in ("v4", "v5", "v6", "v7"):
                     height = posts["heights_wu"][xi][zi]
                 width, depth = posts["width_depth_wu"]
                 start=len(body.vertices)
@@ -95,7 +96,9 @@ def geometry(kind, revision="v2"):
                 else:dx,dz=0,0
                 if z in posts.get("bindings_z", posts["z"]):
                     body.box((x+dx*(height-3)/height, height-3, z+dz*(height-3)/height), (5, 3, 5), "iron")
-        if revision in ("v5", "v6"):
+        if revision in ("v5", "v6", "v7"):
+            for support in spec.get("ridge_supports",[]):
+                body.box(support["center"], support["size"], "wood")
             draped_roof(body, spec["roof"])
             closed_cloth_enclosure(body, spec)
             require(all(abs(a-b)<=0.001 for actual, expected in zip(body.bounds(), spec["body_bounds_wu"], strict=True) for a,b in zip(actual,expected,strict=True)), "Rest bounds differ from numeric proposal")
@@ -104,10 +107,10 @@ def geometry(kind, revision="v2"):
         # Closed canvas walls and an opaque entry curtain shelter resting Souls.
         for wall in spec["walls"]:
             body.box(wall["center"], wall["size"], "cloth")
-        if revision in ("v3", "v4", "v5", "v6"):
+        if revision in ("v3", "v4", "v5", "v6", "v7"):
             draped_roof(body, spec["roof"])
             folded_curtain(body, spec["curtain"])
-            if revision in ("v4", "v5", "v6"):
+            if revision in ("v4", "v5", "v6", "v7"):
                 require(all(abs(a-b)<=0.001 for actual, expected in zip(body.bounds(), spec["body_bounds_wu"], strict=True) for a,b in zip(actual,expected,strict=True)), "Rest bounds differ from numeric proposal")
             return {"body": body}
         # Each thick cloth strip joins its neighbours at a shared profile point.
@@ -178,7 +181,7 @@ def paint(kind, output, stage, *, style="legacy", revision="v2"):
             "M3 v3 requires explicit revised RestArea ink")
     require(stage in ("clay", "planes", "strokes"), "unknown paint stage")
     require(style in ("legacy", infernal.STYLE, *infernal.ILLUSTRATED_STYLES), "unknown paint style")
-    require((revision in ("v4", "v5", "v6")) == (style == infernal.HANDPAINT_STYLE), "handpaint requires explicit Rest v4/v5/v6")
+    require((revision in ("v4", "v5", "v6", "v7")) == (style == infernal.HANDPAINT_STYLE), "handpaint requires explicit Rest v4/v5/v6/v7")
     if style == infernal.HANDPAINT_STYLE:
         from building_handpaint_materials import paint as handpaint
         return handpaint(kind, output / "albedo.png", stage, revision)

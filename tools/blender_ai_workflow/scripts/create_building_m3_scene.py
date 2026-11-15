@@ -45,7 +45,7 @@ def main():
     parser.add_argument("kind", choices=tuple(KINDS))
     parser.add_argument("--name", required=True)
     parser.add_argument("--stage", choices=("clay", "planes", "strokes"), required=True)
-    parser.add_argument("--revision", choices=("v2", "v3", "v4", "v5", "v6"), default="v2")
+    parser.add_argument("--revision", choices=("v2", "v3", "v4", "v5", "v6", "v7"), default="v2")
     parser.add_argument("--style", choices=("legacy", STYLE, *ILLUSTRATED_STYLES))
     args = parser.parse_args(script_arguments())
     style = args.style or (STYLE if args.kind == "RestArea" else "legacy")
@@ -60,7 +60,7 @@ def main():
     expected = {"albedo.png", "slot_emissive.png"} if args.kind == "SoulSpa" else {"albedo.png"}
     require(output.is_dir() and {p.name for p in output.iterdir()} == expected, "prepare only M3 atlases")
     _, spec = contract(args.kind, args.revision)
-    require((args.revision in ("v4", "v5", "v6")) == (style == "handpaint-v1"), "handpaint requires explicit Rest v4/v5/v6")
+    require((args.revision in ("v4", "v5", "v6", "v7")) == (style == "handpaint-v1"), "handpaint requires explicit Rest v4/v5/v6/v7")
     require(args.revision != "v3" or style == "illustrated-v2", "M3 v3 requires revised ink")
     ocio = resolve_ocio_evidence()
     require(not ocio["fallback"], "explicit OCIO required")
