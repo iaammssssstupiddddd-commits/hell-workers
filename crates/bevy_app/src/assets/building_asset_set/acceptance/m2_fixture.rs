@@ -68,8 +68,39 @@ struct CandidatePointer {
     after_move: bool,
 }
 
+/// Only an explicitly admitted ArtPreview motion observation uses this clock.
+#[derive(Resource, Default)]
+pub(super) struct FeedbackMotion {
+    pointer_parked: bool,
+}
+
 pub(super) fn candidate_session(world: &World) -> bool {
     world.contains_resource::<CandidatePointer>()
+}
+
+pub(super) fn feedback_motion_session(world: &World) -> bool {
+    world.contains_resource::<FeedbackMotion>()
+}
+
+pub(super) fn configure_feedback_motion(app: &mut App) {
+    app.init_resource::<FeedbackMotion>()
+        .add_systems(PreUpdate, park_feedback_pointer.after(drive));
+}
+
+fn park_feedback_pointer(
+    fixture: Res<Fixture>,
+    mut feedback: ResMut<FeedbackMotion>,
+    mut windows: Query<&mut Window, With<bevy::window::PrimaryWindow>>,
+) {
+    if fixture.owner.is_none() || feedback.pointer_parked {
+        return;
+    }
+    let Ok(mut window) = windows.single_mut() else {
+        return;
+    };
+    let away = Vec2::new(window.width() * 0.8, window.height() * 0.7);
+    window.set_cursor_position(Some(away));
+    feedback.pointer_parked = true;
 }
 
 /// Candidate domain storyboards park the synthetic cursor twice at most. The
@@ -253,6 +284,7 @@ struct Drive<'w, 's> {
     fixture: ResMut<'w, Fixture>,
     lifecycle: Res<'w, super::m2_lifecycle::Lifecycle>,
     candidate: Option<Res<'w, CandidatePointer>>,
+    feedback_motion: Option<Res<'w, FeedbackMotion>>,
     real: Res<'w, Time<Real>>,
     time: ResMut<'w, Time<Virtual>>,
     buildings: Query<
@@ -274,7 +306,7 @@ fn drive(mut p: Drive) {
         return;
     };
     let now = p.real.elapsed_secs_f64();
-    let candidate_motion = p.candidate.is_some()
+    let candidate_motion = (p.candidate.is_some() || p.feedback_motion.is_some())
         && building.kind == BuildingType::MudMixer
         && matches!(p.lifecycle.leg.as_str(), "refining" | "save-load");
     if p.fixture.stage == 0 {

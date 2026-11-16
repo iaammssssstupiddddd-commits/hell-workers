@@ -30,6 +30,7 @@ else:
 pipeline, native = art.pipeline, art.native
 PROFILE = "building-m2-interactive-v1"
 SCOPE = "interactive-feedback-observation-only"
+DIRTY_SCOPE = "interactive-dirty-feedback-observation-only"
 DRIVEN_LEGS = {"Tank": "water", "MudMixer": "refining"}
 LIFECYCLE_LEGS = {"save-load", "deconstruct", "placement", "catalog", "world-near-far",
                   "move-success", "move-reject-cancel", "companion"}
@@ -37,7 +38,11 @@ LIFECYCLE_LEGS = {"save-load", "deconstruct", "placement", "catalog", "world-nea
 
 def check_plan(value):
     pipeline.require(value.get("status") == "ready", "native plan is not ready")
-    pipeline.require(value["profile"] == PROFILE and value["scope"] == SCOPE
+    dirty_feedback = value.get("dirty_feedback", False)
+    pipeline.require(type(dirty_feedback) is bool and
+                     ((value["scope"] == SCOPE and dirty_feedback is False)
+                      or (value["scope"] == DIRTY_SCOPE and dirty_feedback is True)), "native feedback mode differs")
+    pipeline.require(value["profile"] == PROFILE
                      and value["kind"] in m2.KIND_LEGS and value["accepted"] is False
                      and value["promotion_authority"] is False, "wrong interactive plan")
     pipeline.require(value["leg"] in LIFECYCLE_LEGS | {DRIVEN_LEGS[value["kind"]]}
@@ -49,6 +54,8 @@ def check_plan(value):
     pipeline.require(pipeline.digest(plan_path.read_bytes()) == value["runtime_plan_sha256"], "runtime plan changed")
     result = m2.verify(plan_path)
     runtime = pipeline.read(plan_path)
+    pipeline.require(runtime.get("dirty_feedback", False) is dirty_feedback,
+                     "native and runtime feedback modes differ")
     expected_numeric = m2.numeric_binding(value["kind"], runtime["kinds"][value["kind"]])
     pipeline.require(m2.numeric_binding(value["kind"], value) == expected_numeric,
                      "native numeric revision differs")
@@ -64,6 +71,8 @@ def check_plan(value):
 def plan(args):
     runtime = pipeline.read(args.runtime_plan)
     m2.verify(args.runtime_plan)
+    pipeline.require(runtime.get("dirty_feedback", False) is False,
+                     "dirty feedback requires the separate motion observation driver")
     repo = Path(runtime["repo"])
     root = (args.job_root.absolute() if args.job_root else native.unique_job_root(repo, "building-m2-interactive"))
     pipeline.require(not root.exists(), "use a fresh native job root")
@@ -90,9 +99,14 @@ def plan(args):
 
 
 def check_trace(trace, value, nonce, pid, *, scope="m2-feedback-observations-only"):
-    pipeline.require(scope in ("m2-feedback-observations-only", "m2-candidate-seeded-storyboard-only")
+    motion = scope == "m2-dirty-feedback-motion-observations-only"
+    pipeline.require(scope in ("m2-feedback-observations-only", "m2-candidate-seeded-storyboard-only",
+                               "m2-dirty-feedback-motion-observations-only")
                      and value["identity"]["authority"] == (
-                         "art_preview" if scope == "m2-feedback-observations-only" else "isolated_candidate"),
+                         "isolated_candidate" if scope == "m2-candidate-seeded-storyboard-only" else "art_preview")
+                     and (not motion or (value.get("dirty_feedback") is True
+                          and value.get("scope") == "interactive-dirty-feedback-motion-observation-only"
+                          and value.get("kind") == "MudMixer" and value.get("leg") in ("refining", "save-load"))),
                      "trace scope/authority differs")
     binding = m2.numeric_binding(value["identity"]["kind"], value)
     pipeline.require(trace.get("numeric_candidate_sha256", m2.NUMERIC_SHA256)
@@ -457,7 +471,7 @@ def verify_contract(root, contract):
     contract.check_binary(result, root, value)
     runtime = contract.check_plan(value)
     pipeline.require(Path(value["job_root"]) == root and result["profile"] == contract.PROFILE
-                     and result["scope"] == contract.SCOPE and result["status"] == "pass"
+                     and result["scope"] == value["scope"] and result["status"] == "pass"
                      and result["accepted"] is False and result["promotion_authority"] is False
                      and value["driver_sha256"] == pipeline.digest(Path(contract.__file__).read_bytes()), "native result differs")
     pipeline.require(result["termination"] == "bounded-stop" and result["exit_code"] in (0, -15),
@@ -580,6 +594,8 @@ def run_contract(args, contract):
         for key in list(env):
             if key.startswith(("HW_BUILDING_ART", "HW_M2", "HW_WALL", "HW_DOOR", "HW_DISABLE_", "HW_PERF_")):
                 del env[key]
+        if value.get("scope") == "interactive-dirty-feedback-motion-observation-only":
+            env.pop("HW_NATIVE_UI_CASE", None)
         nonce = secrets.token_hex(16)
         env.update({"BEVY_ASSET_ROOT": str(view), "HW_WINDOW_BACKEND": "x11", "HW_PRESENT_MODE": "novsync",
             **adapter_environment(value["adapter"]), "WINIT_X11_SCALE_FACTOR": "1",
@@ -640,7 +656,7 @@ def run_contract(args, contract):
         pipeline.require(screenshot is not None and process.returncode in (0, -15), "native bounded stop/capture failed")
         contract.check_plan(value)
         pipeline.require(pipeline.digest(binary.read_bytes()) == binary_hash, "binary changed during run")
-        result = {"schema_version": 1, "profile": contract.PROFILE, "scope": contract.SCOPE, "status": "pass",
+        result = {"schema_version": 1, "profile": contract.PROFILE, "scope": value["scope"], "status": "pass",
             "plan": value, "nonce": nonce, "pid": process.pid, "termination": "bounded-stop",
             "exit_code": process.returncode, "screenshot": screenshot,
             "checkpoints": checkpoints,

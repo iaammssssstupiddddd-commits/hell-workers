@@ -9,7 +9,8 @@ use std::{
 use bevy::ecs::message::MessageCursor;
 use bevy::input::mouse::MouseWheel;
 use bevy::prelude::*;
-use bevy::ui_widgets::{ScrollArea, ScrollbarThumb};
+use bevy::ui::Pressed;
+use bevy::ui_widgets::{ScrollArea, ScrollbarThumb, SliderRange, SliderValue};
 use hw_core::{GameSettings, WorldEpoch};
 use hw_ui::components::*;
 use hw_ui::notifications::*;
@@ -27,6 +28,7 @@ mod door_release_planning;
 mod m5_planning;
 mod progress_bars;
 mod refactor_rows;
+mod refactor_stockpile;
 mod rest_area_planning;
 mod spa_planning;
 pub(crate) mod supply_workload;
@@ -236,6 +238,10 @@ fn prepare_fixture(world: &mut World, scale: f32) {
         spa_planning::prepare(world);
         return;
     }
+    if refactor_stockpile::enabled() {
+        refactor_stockpile::prepare(world);
+        return;
+    }
     if terrain_materials::enabled() {
         terrain_materials::prepare(world);
         return;
@@ -244,7 +250,10 @@ fn prepare_fixture(world: &mut World, scale: f32) {
         progress_bars::prepare(world);
         return;
     }
-    if std::env::var("HW_NATIVE_UI_CASE").as_deref() == Ok("refactor-rows") {
+    if matches!(
+        std::env::var("HW_NATIVE_UI_CASE").as_deref(),
+        Ok("refactor-rows" | "refactor-pinned-rename")
+    ) {
         refactor_rows::prepare(world);
         return;
     }
@@ -494,6 +503,9 @@ fn node_key(world: &World, entity: Entity) -> Option<String> {
     if let Some(field) = world.get::<SettingsSliderMarker>(entity) {
         return Some(format!("slider:{:?}", field.0));
     }
+    if let Some(field) = world.get::<SettingsValueText>(entity) {
+        return Some(format!("settings-value:{:?}", field.0));
+    }
     if let Some(field) = world.get::<hw_ui::widgets::text_field::TextFieldRole>(entity) {
         return Some(format!("text-field:{field:?}"));
     }
@@ -549,9 +561,13 @@ fn snapshot(world: &mut World, observer: &UiObserver) -> Value {
             let fully_visible = raw.iter().zip(rect).all(|(a, b)| (a - b).abs() <= 1.0);
             controls.insert(key, json!({"rect": rect, "unclipped_rect": raw, "fully_visible": fully_visible, "entity": entity.to_bits(),
                 "text": world.get::<Text>(entity).map(|text| &text.0),
+                "editable": world.get::<bevy::text::EditableText>(entity).map(hw_ui::widgets::text_field::editable_text_value),
                 "focused": world.resource::<bevy::input_focus::InputFocus>().get() == Some(entity),
                 "interaction": world.get::<Interaction>(entity).map(|value| format!("{value:?}")),
-                "scroll": world.get::<ScrollPosition>(entity).map(|scroll| [scroll.0.x, scroll.0.y])}));
+                "scroll": world.get::<ScrollPosition>(entity).map(|scroll| [scroll.0.x, scroll.0.y]),
+                "slider_value": world.get::<SliderValue>(entity).map(|value| value.0),
+                "slider_range": world.get::<SliderRange>(entity).map(|range| [range.start(), range.end()]),
+                "pressed": world.get::<Pressed>(entity).is_some()}));
         }
     }
     let mut visible_history = Vec::new();
@@ -705,7 +721,17 @@ fn snapshot(world: &mut World, observer: &UiObserver) -> Value {
         "catalog_rect": catalog_rect, "display_rect": display_rect, "ui_rects": ui_rects,
         "workspace_page": format!("{:?}", world.resource::<hw_ui::shell::UiShellState>().page),
         "pinned": world.resource::<crate::interface::ui::InfoPanelPinState>().entity.map(Entity::to_bits),
+        "inspection_target": world.resource::<hw_ui::models::inspection::EntityInspectionViewModel>().model.as_ref().map(|model| model.entity.to_bits()),
+        "rename_target": world.resource::<hw_ui::components::SoulRenameState>().active.as_ref().map(|active| active.target.to_bits()),
         "persistent_areas": persistent_areas,
+    });
+    let settings = world.resource::<GameSettings>();
+    let settings_values = json!({
+        "ui_scale": settings.ui_scale,
+        "camera_pan_speed": settings.camera_pan_speed,
+        "autosave_interval_minutes": settings.autosave_interval_minutes,
+        "autosave_generations": settings.autosave_generations,
+        "notification_duration_seconds": settings.notification_duration_seconds,
     });
     let mut value = json!({
         "nonce": observer.nonce, "frame": observer.frame, "pid": std::process::id(),
@@ -742,6 +768,12 @@ fn snapshot(world: &mut World, observer: &UiObserver) -> Value {
         "selected": world.resource::<hw_ui::selection::SelectedEntity>().0.map(Entity::to_bits),
         "controls": controls,
     });
+    value["mouse_right_pressed"] = json!(
+        world
+            .resource::<ButtonInput<MouseButton>>()
+            .pressed(MouseButton::Right)
+    );
+    value["settings_values"] = settings_values;
     let passive_input = json!({
         "camera_numeric": camera_numeric,
         "primary_window": primary_window,
@@ -759,6 +791,7 @@ fn snapshot(world: &mut World, observer: &UiObserver) -> Value {
             .clone(),
     );
     value["refactor_rows"] = refactor_rows::snapshot(world, viewport);
+    value["refactor_stockpile"] = refactor_stockpile::snapshot(world, viewport);
     value["bridge_planning"] = bridge_planning::snapshot(world);
     if door_release_planning::enabled() {
         value["door_release_planning"] = door_release_planning::snapshot(world);
@@ -766,7 +799,8 @@ fn snapshot(world: &mut World, observer: &UiObserver) -> Value {
     value["rest_area_planning"] = rest_area_planning::snapshot(world);
     if matches!(
         std::env::var("HW_NATIVE_UI_CASE").as_deref(),
-        Ok("m2-mixer-candidate-planning"
+        Ok("refactor-placement-ghosts"
+            | "m2-mixer-candidate-planning"
             | "m2-mixer-candidate-completion"
             | "m2-tank-candidate-completion"
             | "m2-tank-candidate-inflow"

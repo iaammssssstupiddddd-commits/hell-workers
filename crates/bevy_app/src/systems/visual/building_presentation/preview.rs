@@ -127,21 +127,6 @@ pub(crate) fn apply(
     }
 }
 
-fn fallback_image(assets: &GameAssets, kind: BuildingType) -> Handle<Image> {
-    match kind {
-        BuildingType::Wall => assets.wall_isolated.clone(),
-        BuildingType::Door => assets.door_closed.clone(),
-        BuildingType::Floor => assets.mud_floor.clone(),
-        BuildingType::Tank => assets.tank_empty.clone(),
-        BuildingType::MudMixer => assets.mud_mixer.clone(),
-        BuildingType::RestArea | BuildingType::SoulSpa => assets.rest_area.clone(),
-        BuildingType::Bridge => assets.bridge.clone(),
-        BuildingType::SandPile => assets.sand_pile.clone(),
-        BuildingType::BonePile | BuildingType::OutdoorLamp => assets.bone_pile.clone(),
-        BuildingType::WheelbarrowParking => assets.wheelbarrow_parking.clone(),
-    }
-}
-
 fn ghost_kind(world: &World) -> Option<BuildingType> {
     if world.resource::<CompanionPlacementState>().0.is_some() {
         return None;
@@ -241,7 +226,7 @@ fn sync_previews(
             .insert(Anchor::CENTER);
         if let Some(kind) = current_kind {
             if let Some(mut sprite) = world.get_mut::<Sprite>(entity) {
-                sprite.image = fallback_image(assets, kind);
+                sprite.image = assets.placement_ghost_fallback_image(kind).clone();
                 sprite.custom_size =
                     Some(crate::interface::selection::placement_geometry::building_size(kind));
             }

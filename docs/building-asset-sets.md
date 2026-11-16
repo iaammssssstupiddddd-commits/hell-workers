@@ -293,6 +293,12 @@ manifest loaderの`Loaded`は**manifestと依存バイト列の検証済み**だ
 M1-a2のpoolはGLBの先頭primitiveを`Mesh`、PNGを`Image`として要求し、依存loadとpreview寸法を確認して
 pendingをactiveへ切り替える。M1-bではactive descriptorを3D設備、2D表示、配置・移動preview、
 Blueprint、pulse、カタログへ公開する。通常consumerは`release_approved`だけを許可する。
+設備partは検証済みmanifestからdescriptor公開時に役割とpart / mesh indexへ変換し、
+同じgenerationのhandleとposeを参照する。root表示同期は材質生成、part表示の判断、
+ECSへの同値非書込みを分離し、exclusive systemとPostUpdateの順序を保つ。
+配置ghostのfallback画像はrootの`GameAssets::placement_ghost_fallback_image`が所有し、
+通常ghost writerとrelease previewが同じ表を参照する。catalog画像は別の`UiAssets::building_preview`を使う。
+Door最終表示とbucket companionの画像、previewのAnchor復帰はそれぞれ既存のwriterが所有する。
 M1-c候補はoffline codec／export、明示profiling候補投入、昇格・install・復旧・切戻しを追加した。
 これはTAK-14候補の実装契約である。2026-10-04に通常Orcaのprimary由来の
 `codex/tak14-product-integration`へ製品sourceを選択取り込みした履歴がある。
@@ -1290,7 +1296,7 @@ pending parent参照／stockpile占有、親map予約を独立照合する。Esc
 `building-production-local-equipment-feedback-eis-v2`で、`dev.py feedback --build-only`の
 profiling feature付き`target/debug/bevy_app`を利用する限定feedbackである。
 formal Capture/Memoryや性能のbinaryとは混同しない。入力は既存pointer／keyboard consentから
-一度だけConnectToEISし、`native_ui_eis.py`の単一physical monitorと一意なabsolute regionで
+一度だけConnectToEISし、`native_ui_eis.py`の単一logical-layout monitorと一意なabsolute regionで
 配送する。planはEIS transport hashも固定する。
 X11のphysical rootに対しEISのlogical region寸法が宣言scaleで一致する場合だけ、
 absolute targetを同scaleでlogical pixelへ変換する。regionから任意倍率を逆算しない。
@@ -1730,3 +1736,9 @@ Empty/Partial/FullのTank候補を確認し、WARN/ERROR/panicはない。winit�
 source `fac859ddd7bb861d43a21bafa98671c83daf8945c0be8934ffb6745421472bfe`、
 manifest `95b7a072aafc12cbffcbba2609ec4d05b5df7678ceb2838bf2ff8d311f1de752`。
 別fallback群の上端は一部clipされており、群内調和・正式全matrix・性能・releaseの証明にはしない。
+
+### 2026-11-16 設備表示の内部整理
+
+設備partは検証済みdescriptorに紐付く型付きroleで扱い、世代identity、poseとmeshの所有はdescriptorのまま維持する。配置ghostのfallback選択はroot asset adapterへ集約し、Doorの後段writer、companionとkind固有geometryは各所有者に残す。Structural materialのmodeは型付き入口から既存uniform値へ変換し、shader ABIは変更しない。
+
+実機ではseeded Tankの同一owner / rootについてfallback→正式g3→g4 pending中のg3保持→正式g4→fallbackを、各段階の画像、生の観測とACKで確認した。pendingはprofiling専用fixtureでpoolのpollを一時保留したもので、自然なロード遅延の計測ではない。旧childの消去、partial waterのpose、各generationのmeshと材質を独立照合している。別のseeded Mixer ArtPreviewでは回転・pause / resumeと、稼働中にpauseして保存した後のloadによるowner / parts再生成と角度初期化を確認した。これらは実表示の技術確認であり、OS入力、GPU解放完了、性能、artやreleaseの承認を意味しない。

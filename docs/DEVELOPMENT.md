@@ -102,6 +102,8 @@ credentialはGit外の専用0700ディレクトリ内の0600ファイル（prima
 `validation-storage/input-consent/`等）へ保持し、spec・log・Gitへtokenを転記しない。
 OSが永続許可を認めなかった場合や撤回した場合は再許可が必要であり、manifestの`saved`は
 token取得の記録だけで復元成功の実測ではない。sessionと所有window/focus/nonce/boundsの検査は維持する。
+入力transportはMutter DisplayConfigのlogical layout (`layout-mode=1`) と一致する単一monitorだけを受理する。
+physical (`2`) とlayout-mode欠落は、入力やpermission要求の前に拒否する。
 詳細と忘却・失効時の扱いはNative SkillのUI input feedbackを参照する。
 
 2026-09-13の既存cacheを使った実測では、feedback初回4.49秒、未変更再実行0.40秒、

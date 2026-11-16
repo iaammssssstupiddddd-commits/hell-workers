@@ -1,6 +1,6 @@
 """Bounded libei sender on the existing consented RemoteDesktop session.
 
-Only one unrotated physical-layout monitor is supported. Absolute coordinates
+Only one unrotated logical-layout monitor is supported. Absolute coordinates
 come from the declared EIS region, not an inferred Xwayland cursor position.
 API: https://libinput.pages.freedesktop.org/libei/api/libei_8h_source.html
 """

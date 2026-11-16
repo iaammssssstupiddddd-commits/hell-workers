@@ -139,6 +139,171 @@ def fixture():
     return raw, entries, dict(nonce="b" * 32, pid=40, window=50), inputs, contract
 
 
+class PlacementGhostObservationTests(unittest.TestCase):
+    def observation(self, case):
+        _, entries, _, _, _ = fixture()
+        value = copy.deepcopy(entries[0]["value"])
+        ctx = value["m2_planning"]
+        value["ready"], value["paused"] = True, case == "refactor-ghost-empty"
+        ctx["anchor_world"] = [0.0, 0.0]
+        ctx["point"], ctx["companion_point"] = [400.0, 400.0], [464.0, 400.0]
+        ctx["play_mode"] = ("Normal" if case in ("refactor-ghost-empty", "refactor-ghost-escaped") else
+                            "FloorPlace" if case == "refactor-ghost-wall" else "BuildingPlace")
+        value["cursor"] = [464.0, 400.0] if case == "refactor-ghost-companion" else [400.0, 400.0]
+        def sprite(entity, path, size, anchor, color, position):
+            return dict(entity=entity, path=path, size=size, anchor=anchor, resident=True, visible=True,
+                        view_visible=True, color=color, position=[*position, 1.0])
+        ghost = dict(active=m2.GHOST_TANK_ID, pending=None, failure=None,
+                     door=m2.GHOST_DOOR_ID, ghosts=[], partners=[])
+        ctx["placement_ghosts"] = ghost
+        ctx["companion_pending"] = None
+        if case == "refactor-ghost-door":
+            ctx["build_kind"] = "Door"
+            ghost["ghosts"] = [sprite(10, next(iter(m2.GHOST_DOOR_PATHS)), [64.0, 64.0], [0.0, -0.25],
+                                      [1.0, 0.2, 0.2, 0.5], [0.0, 0.0])]
+        elif case == "refactor-ghost-tank":
+            ctx["build_kind"], ctx["legal"] = "Tank", True
+            ghost["ghosts"] = [sprite(10, m2.GHOST_TANK_PATH, [96.0, 96.0], [0.0, -0.125],
+                                      [0.5, 1.0, 0.5, 0.5], [0.0, 0.0])]
+        elif case == "refactor-ghost-companion":
+            ctx["companion_pending"] = dict(parent_anchor=[5, 5], parent_kind="Tank", kind="BucketStorage",
+                                            center=[0.0, 0.0], radius=160.0, required=True)
+            ctx["cursor_grid"] = ctx["companion_grid"] = [7, 5]
+            ctx["companion_legal"] = True
+            ghost["ghosts"] = [sprite(10, "textures/items/bucket/bucket_empty.png", [64.0, 32.0], [0.0, 0.0],
+                                      [0.5, 1.0, 0.5, 0.5], [80.0, 0.0])]
+            ghost["partners"] = [sprite(11, m2.GHOST_TANK_PATH, [96.0, 96.0], [0.0, -0.125],
+                                        [0.8, 0.9, 1.0, 0.35], [0.0, 0.0])]
+        elif case == "refactor-ghost-wall":
+            ctx["task_mode"] = "WallPlace(None)"
+        return value
+
+    def test_each_stage_accepts_its_actual_sprite_contract(self):
+        for case in m2.GHOST_CHECKPOINTS:
+            with self.subTest(case=case):
+                m2.check_ghost_observation(case, self.observation(case))
+
+    def test_wrong_generation_anchor_or_pending_sprite_is_rejected(self):
+        for mutation in ("generation", "anchor", "sprite", "wall", "color", "visibility", "pending", "partner"):
+            with self.subTest(mutation=mutation):
+                case = "refactor-ghost-wall" if mutation == "wall" else "refactor-ghost-companion"
+                value = self.observation(case)
+                state = value["m2_planning"]["placement_ghosts"]
+                if mutation == "generation":
+                    state["active"] = {**m2.GHOST_TANK_ID, "generation": 3}
+                elif mutation == "anchor":
+                    state["partners"][0]["anchor"] = [0.0, 0.0]
+                elif mutation == "sprite":
+                    state["ghosts"][0]["path"] = m2.GHOST_TANK_PATH
+                elif mutation == "color":
+                    state["ghosts"][0]["color"] = [1.0, 0.2, 0.2, 0.5]
+                elif mutation == "visibility":
+                    state["partners"][0]["view_visible"] = False
+                elif mutation == "pending":
+                    value["m2_planning"]["companion_pending"]["parent_anchor"] = [8, 8]
+                elif mutation == "partner":
+                    state["partners"][0]["entity"] = state["ghosts"][0]["entity"]
+                else:
+                    value["m2_planning"]["task_mode"] = "None"
+                with self.assertRaises(m2.native.AcceptanceError):
+                    m2.check_ghost_observation(case, value)
+
+    def evidence(self):
+        client = {"nonce": "b" * 32, "pid": 40, "window": 50}
+        entries = []
+        for index, case in enumerate(m2.GHOST_CHECKPOINTS):
+            value = self.observation(case)
+            value["frame"] = 100 + 100 * index
+            entries.append(dict(case=case, value=value, last_step=0))
+        groups = [
+            ["menu:SetTimeSpeed(Normal)", "menu:ToggleArchitect", "menu:SelectBuild(Door)"],
+            ["menu:SelectBuild(Tank)"], ["placement"], ["Escape"],
+            ["menu:ToggleArchitect", "menu:SelectBuild(Wall)"],
+        ]
+        events, raw_events, samples = [], [], []
+        for lower, group in enumerate(groups):
+            for action_index, key in enumerate(group):
+                a, b = copy.deepcopy(entries[lower]["value"]), copy.deepcopy(entries[lower + 1]["value"])
+                a["frame"] = entries[lower]["value"]["frame"] + 10 + action_index * 10
+                b["frame"] = a["frame"] + 4
+                start = a["frame"] / 100.0
+                a["m2_planning"]["real_seconds"], b["m2_planning"]["real_seconds"] = start, start + 0.1
+                a["controls"] = {key: {"fully_visible": True, "interaction": "Hovered"}}
+                a["pointer_over_ui"], a["world_input_captured"] = False, False
+                if key == "placement":
+                    a["m2_planning"].update(play_mode="BuildingPlace", build_kind="Tank", legal=True,
+                                            companion_legal=True, cursor_grid=[5, 5], companion_pending=None)
+                first = len(events) + 1
+                for i, pressed in enumerate((True, False)):
+                    event = dict(step=str(len(events) + 1), nonce=client["nonce"], pid=40, window=50,
+                                 world_epoch=0, pre_frame=a["frame"] + i, post_frame=a["frame"] + i + 1,
+                                 point=None, button=None if key == "Escape" else 1,
+                                 key="Escape" if key == "Escape" else None, pressed=pressed,
+                                 observed_cursor=[400.0, 400.0],
+                                 observed_hover={key: "Pressed"} if pressed else {})
+                    events.append(event)
+                    sample_index = len(samples)
+                    time = start + (i + 1) * 0.02
+                    samples.append(dict(world_epoch=0, primary_window_bits=99, primary_window="window", real_seconds=time + 0.005))
+                    raw_events.append(dict(producer="KeyboardInput" if key == "Escape" else "MouseButtonInput",
+                                           state="Pressed" if pressed else "Released", event_index=len(raw_events),
+                                           sample_index=sample_index, real_seconds=time, window="window",
+                                           **({"key": "Escape", "repeat": False} if key == "Escape" else {"button": "Left"})))
+                    if key == "placement" and pressed:
+                        samples.append(dict(world_epoch=0, primary_window_bits=99, primary_window="window", real_seconds=start + 0.035))
+                        raw_events.append(dict(producer="ordinary-building-placement-branch-v1", operation="PlacementOutcome",
+                                               event_index=len(raw_events), sample_index=len(samples) - 1, real_seconds=start + 0.03,
+                                               window="window", world_epoch=0,
+                                               outcome=dict(kind="Tank", grid=[5, 5], status="CompanionPending")))
+                events[first - 1]["tank_completion_action"] = dict(key=key, first_step=first, last_step=len(events), before=a, after=b)
+            if lower in (0, 1, 2, 4):
+                point = [464, 400] if lower == 2 else [400, 400]
+                frame = entries[lower]["value"]["frame"] + 80
+                events.append(dict(step=str(len(events) + 1), nonce=client["nonce"], pid=40, window=50,
+                                   world_epoch=0, pre_frame=frame, post_frame=frame + 1, point=point,
+                                   button=None, key=None, pressed=None, observed_cursor=point))
+            entries[lower + 1]["last_step"] = len(events)
+        raw = dict(failure=None, nonce=client["nonce"], process_id=40, samples=samples, events=raw_events)
+        return raw, entries, client, events
+
+    def test_complete_ghost_input_and_pending_receipt_is_accepted(self):
+        m2.verify_ghosts(*self.evidence())
+
+    def test_invalid_ghost_sequence_or_receipt_is_rejected(self):
+        for mutation in ("checkpoint", "receipt_missing", "receipt_duplicate", "epoch", "pid", "anchor", "second_click", "not_cancelled", "missing_motion", "early_motion", "wrong_mode", "click_cursor"):
+            with self.subTest(mutation=mutation):
+                raw, entries, client, events = self.evidence()
+                receipt = next(r for r in raw["events"] if r["producer"] == "ordinary-building-placement-branch-v1")
+                if mutation == "checkpoint":
+                    entries[2]["last_step"] = entries[1]["last_step"]
+                elif mutation == "receipt_missing":
+                    raw["events"].remove(receipt)
+                elif mutation == "receipt_duplicate":
+                    raw["events"].append(copy.deepcopy(receipt))
+                elif mutation == "epoch":
+                    entries[3]["value"]["world_epoch"] = 1
+                elif mutation == "pid":
+                    events[0]["pid"] = 999
+                elif mutation == "anchor":
+                    receipt["outcome"]["grid"] = [6, 5]
+                elif mutation == "second_click":
+                    next(e for e in reversed(events) if "tank_completion_action" in e)["tank_completion_action"]["key"] = "placement"
+                elif mutation == "missing_motion":
+                    next(e for e in events if e.get("point") == [464, 400])["point"] = [465, 400]
+                elif mutation == "early_motion":
+                    action = next(e["tank_completion_action"] for e in events if e.get("tank_completion_action", {}).get("key") == "placement")
+                    next(e for e in events if e.get("point") == [464, 400])["pre_frame"] = action["after"]["frame"] - 1
+                elif mutation == "wrong_mode":
+                    entries[5]["value"]["m2_planning"]["play_mode"] = "Normal"
+                elif mutation == "click_cursor":
+                    action = next(e["tank_completion_action"] for e in events if e.get("tank_completion_action", {}).get("key") == "placement")
+                    events[action["first_step"] - 1]["observed_cursor"] = [900, 900]
+                else:
+                    entries[4]["value"]["m2_planning"]["placement_ghosts"]["ghosts"] = [None]
+                with self.assertRaises(m2.native.AcceptanceError):
+                    m2.verify_ghosts(raw, entries, client, events)
+
+
 class TankCompletionTests(unittest.TestCase):
     def test_exact_synthetic_companion_construction(self):
         m2.verify(*fixture())

@@ -42,6 +42,7 @@
 - **`apply_settings_system` は `Time<Virtual>` を触らない**（D9）。`default_time_speed` は Startup の `load_settings_system` で一度だけ適用する。設定 UI の Default Speed ボタンは次回起動用の値のみ更新し、現在の pause/速度は変えない。
 - **`PanCamera.enabled`** は通常 UI hover、Modal/Pause capture、text input focus、task area の左ドラッグ中に使う一時 guard 専用。area gesture は押下から release frame まで claim を維持し、残る capture / text focus / pointer claim がなくなった次 frame に既存設定どおり復帰する。永続化するのは `mouse_pan_settings.enabled` と `pan_speed` のみ。
 - **crate 境界**: `GameSettings` 型は `hw_core`。ロード/保存/intent 処理は `bevy_app`。UI spawn は `hw_ui`（`SettingsPanelInitial` DTO 経由）。
+- **設定値の境界**: スライダー範囲と離散値への変換、通知時間・保存世代の正規化は `hw_core::settings` が所有する。observerはslider値からIntentを作り、handlerは必要な値だけを正規化する。intervalの直接Intentはraw値を保持し、表示と保存で正規化する。UI倍率とカメラ速度のファイル読込はUI操作時のclampを通さない。
 - **旧settings互換**: `power_priority_enabled` / `autosave_*` に field-level `serde` default を置く。通知時間がない旧RONも4秒で読める。旧RONのUI scale、camera、debug等の値を保持したまま新fieldだけを補完し、file全体をdefaultへ戻すmigrationにはしない。
 - **電力wake-up**: `sync_power_allocation_mode_from_settings_system`はresourceの実値が変わった時だけenergy allocationをdirtyにする。UI scale等の無関係な設定変更では配電を再実行しない。
 - **widget の見た目同期**: headless widget のため見た目は自前。スライダー thumb は `sync_settings_slider_thumbs_system`、チェックマークは `sync_settings_checkmarks_system`（`Checked` の有無 → `Display`、いずれも `hw_ui/src/interaction/settings.rs`）が毎フレーム同期する。F12 は `debug_toggle_system` が `GameSettings` に加えて Debug Gizmos チェックボックスの `Checked` も直接更新する。

@@ -250,6 +250,12 @@ fn select_bindings(
 /// compiled inventory. Dedicated acceptance and performance sessions never use
 /// implicit defaults; they retain their own admission and authority contracts.
 pub fn configure_building_asset_releases(app: &mut App) -> Result<(), String> {
+    if std::env::var_os("HW_TANK_GENERATION_PROBE").is_some() {
+        #[cfg(feature = "profiling")]
+        return super::generation_probe::configure(app);
+        #[cfg(not(feature = "profiling"))]
+        return Err("Tank generation probe requires profiling".into());
+    }
     if std::env::var_os("HW_BUILDING_TANK_ILLUSTRATION_PILOT").is_some() {
         #[cfg(feature = "profiling")]
         return tank_illustration_pilot::configure(app);

@@ -85,3 +85,216 @@ pub fn resolve_assignable_deconstruction_target(
 
     Ok(target)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bevy::ecs::system::RunSystemOnce;
+    use hw_energy::{PowerConsumer, PowerGenerator, SoulSpaPhase, SoulSpaSite};
+    use hw_jobs::mud_mixer::MudMixerStorage;
+    use hw_jobs::{
+        BonePile, BridgeMarker, Building, BuildingType, DeconstructionOrder, DeconstructionPending,
+        Designation, Door, RestArea, SandPile, TargetDeconstructionRoot, TaskSlots, WorkType,
+    };
+    use hw_logistics::types::WheelbarrowParking;
+    use hw_logistics::zone::Stockpile;
+
+    fn remove_required_marker(world: &mut World, target: Entity, kind: BuildingType) -> bool {
+        let mut entity = world.entity_mut(target);
+        match kind {
+            BuildingType::Wall | BuildingType::Floor => return false,
+            BuildingType::Door => {
+                entity.remove::<Door>();
+            }
+            BuildingType::Bridge => {
+                entity.remove::<BridgeMarker>();
+            }
+            BuildingType::Tank => {
+                entity.remove::<Stockpile>();
+            }
+            BuildingType::MudMixer => {
+                entity.remove::<MudMixerStorage>();
+            }
+            BuildingType::RestArea => {
+                entity.remove::<RestArea>();
+            }
+            BuildingType::WheelbarrowParking => {
+                entity.remove::<WheelbarrowParking>();
+            }
+            BuildingType::SandPile => {
+                entity.remove::<SandPile>();
+            }
+            BuildingType::BonePile => {
+                entity.remove::<BonePile>();
+            }
+            BuildingType::SoulSpa => {
+                entity.remove::<PowerGenerator>();
+            }
+            BuildingType::OutdoorLamp => {
+                entity.remove::<PowerConsumer>();
+            }
+        }
+        true
+    }
+
+    fn target_for(world: &mut World, kind: BuildingType) -> Entity {
+        let mut entity = world.spawn((
+            Building {
+                kind,
+                is_provisional: false,
+            },
+            Transform::default(),
+        ));
+        match kind {
+            BuildingType::Wall | BuildingType::Floor => {}
+            BuildingType::Door => {
+                entity.insert(Door::default());
+            }
+            BuildingType::Bridge => {
+                entity.insert(BridgeMarker);
+            }
+            BuildingType::Tank => {
+                entity.insert(Stockpile {
+                    capacity: 50,
+                    resource_type: Some(ResourceType::Water),
+                });
+            }
+            BuildingType::MudMixer => {
+                entity.insert((
+                    Stockpile {
+                        capacity: 50,
+                        resource_type: Some(ResourceType::Water),
+                    },
+                    MudMixerStorage::default(),
+                ));
+            }
+            BuildingType::RestArea => {
+                entity.insert(RestArea { capacity: 4 });
+            }
+            BuildingType::WheelbarrowParking => {
+                entity.insert(WheelbarrowParking { capacity: 2 });
+            }
+            BuildingType::SandPile => {
+                entity.insert(SandPile);
+            }
+            BuildingType::BonePile => {
+                entity.insert(BonePile);
+            }
+            BuildingType::SoulSpa => {
+                entity.insert(SoulSpaSite {
+                    phase: SoulSpaPhase::Operational,
+                    ..default()
+                });
+            }
+            BuildingType::OutdoorLamp => {
+                entity.insert(PowerConsumer { demand: 1.0 });
+            }
+        }
+        entity.id()
+    }
+
+    fn inspect(world: &mut World, order: Entity) -> Result<Entity, CandidateRejectReason> {
+        world
+            .run_system_once(move |queries: FamiliarTaskAssignmentQueries| {
+                resolve_assignable_deconstruction_target(order, &queries, &HashSet::new())
+            })
+            .unwrap()
+    }
+
+    #[test]
+    fn every_kind_checks_live_marker_shape_before_candidate_assignment() {
+        for kind in BuildingType::ALL {
+            let mut app = App::new();
+            app.init_resource::<hw_world::WorldMap>()
+                .init_resource::<hw_logistics::SharedResourceCache>()
+                .init_resource::<hw_logistics::transport_request::WheelbarrowArbitrationDiagnostics>()
+                .add_message::<hw_core::events::ResourceReservationRequest>()
+                .add_message::<hw_jobs::events::TaskAssignmentRequest>();
+            let target = target_for(app.world_mut(), kind);
+            let order = app
+                .world_mut()
+                .spawn((
+                    DeconstructionOrder,
+                    TargetDeconstructionRoot(target),
+                    Designation {
+                        work_type: WorkType::Deconstruct,
+                    },
+                    TaskSlots::new(1),
+                ))
+                .id();
+            app.world_mut()
+                .entity_mut(target)
+                .insert(DeconstructionPending { order });
+            assert_eq!(inspect(app.world_mut(), order), Ok(target), "{kind:?}");
+            if kind == BuildingType::Tank {
+                app.world_mut()
+                    .get_mut::<Stockpile>(target)
+                    .unwrap()
+                    .resource_type = Some(ResourceType::Wood);
+                assert_eq!(
+                    inspect(app.world_mut(), order),
+                    Err(CandidateRejectReason::MalformedTask)
+                );
+                app.world_mut()
+                    .get_mut::<Stockpile>(target)
+                    .unwrap()
+                    .resource_type = Some(ResourceType::Water);
+            }
+            if kind == BuildingType::SoulSpa {
+                app.world_mut()
+                    .get_mut::<SoulSpaSite>(target)
+                    .unwrap()
+                    .phase = SoulSpaPhase::Constructing;
+                assert_eq!(
+                    inspect(app.world_mut(), order),
+                    Err(CandidateRejectReason::MalformedTask)
+                );
+                app.world_mut()
+                    .get_mut::<SoulSpaSite>(target)
+                    .unwrap()
+                    .phase = SoulSpaPhase::Operational;
+            }
+            if remove_required_marker(app.world_mut(), target, kind) {
+                assert_eq!(
+                    inspect(app.world_mut(), order),
+                    Err(CandidateRejectReason::MalformedTask),
+                    "missing marker: {kind:?}"
+                );
+                app.world_mut().despawn(target);
+                let replacement = target_for(app.world_mut(), kind);
+                app.world_mut()
+                    .entity_mut(replacement)
+                    .insert(DeconstructionPending { order });
+                app.world_mut()
+                    .entity_mut(order)
+                    .insert(TargetDeconstructionRoot(replacement));
+                assert_eq!(
+                    inspect(app.world_mut(), order),
+                    Ok(replacement),
+                    "replacement: {kind:?}"
+                );
+                if kind == BuildingType::SandPile {
+                    app.world_mut().entity_mut(replacement).insert(BonePile);
+                } else {
+                    app.world_mut().entity_mut(replacement).insert(SandPile);
+                }
+                assert_eq!(
+                    inspect(app.world_mut(), order),
+                    Err(CandidateRejectReason::MalformedTask),
+                    "extra marker: {kind:?}"
+                );
+                continue;
+            }
+            if kind == BuildingType::SandPile {
+                app.world_mut().entity_mut(target).insert(BonePile);
+            } else {
+                app.world_mut().entity_mut(target).insert(SandPile);
+            }
+            assert_eq!(
+                inspect(app.world_mut(), order),
+                Err(CandidateRejectReason::MalformedTask),
+                "{kind:?}"
+            );
+        }
+    }
+}

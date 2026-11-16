@@ -232,6 +232,82 @@ mod tests {
     }
 
     #[test]
+    fn completed_kinds_designate_only_with_consistent_markers() {
+        for kind in BuildingType::ALL {
+            for conflicting in [false, true] {
+                let mut app = app();
+                let target = super::super::preview::tests::target_for(app.world_mut(), kind);
+                if conflicting {
+                    if kind == BuildingType::SandPile {
+                        app.world_mut().entity_mut(target).insert(BonePile);
+                    } else {
+                        app.world_mut().entity_mut(target).insert(SandPile);
+                    }
+                }
+                app.world_mut()
+                    .write_message(DeconstructionDesignationRequest {
+                        request_id: 1,
+                        world_epoch: 0,
+                        hit: Some(target),
+                    });
+                app.update();
+                let results = outcomes(&app);
+                assert_eq!(results.len(), 1, "{kind:?}");
+                if conflicting {
+                    assert_eq!(
+                        results[0].result,
+                        DeconstructionDesignationResult::Rejected(
+                            DeconstructionDesignationRejectReason::CleanupUnavailable
+                        ),
+                        "{kind:?}"
+                    );
+                    assert!(app.world().get::<DeconstructionPending>(target).is_none());
+                } else {
+                    let pending = app
+                        .world()
+                        .get::<DeconstructionPending>(target)
+                        .expect("order gate");
+                    assert_ne!(pending.order, target);
+                    assert_eq!(
+                        app.world()
+                            .get::<TargetDeconstructionRoot>(pending.order)
+                            .unwrap()
+                            .0,
+                        target
+                    );
+                    assert!(
+                        matches!(results[0].result, DeconstructionDesignationResult::Designated { order, target: resolved, .. } if order == pending.order && resolved == target),
+                        "{kind:?}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn missing_transform_is_rejected_before_designation_is_created() {
+        let mut app = app();
+        let target = spawn_pile(app.world_mut(), BuildingType::SandPile, Vec2::ZERO);
+        app.world_mut().entity_mut(target).remove::<Transform>();
+        app.world_mut()
+            .write_message(DeconstructionDesignationRequest {
+                request_id: 1,
+                world_epoch: 0,
+                hit: Some(target),
+            });
+        app.update();
+        assert!(app.world().get::<DeconstructionPending>(target).is_none());
+        assert_eq!(
+            outcomes(&app)[0].result,
+            DeconstructionDesignationResult::Rejected(
+                DeconstructionDesignationRejectReason::Target(
+                    DeconstructionRejectReason::OwnerMismatch
+                )
+            )
+        );
+    }
+
+    #[test]
     fn one_click_creates_a_dedicated_order_without_overwriting_target_designation() {
         let mut app = app();
         let target = spawn_pile(app.world_mut(), BuildingType::BonePile, Vec2::splat(32.0));

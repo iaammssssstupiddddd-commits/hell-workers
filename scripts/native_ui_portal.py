@@ -85,11 +85,13 @@ class ConsentStore:
             self.fd = None
 
 
-def physical_monitor_scale(state, root_size):
-    """Fail closed outside the inspected Mutter single physical-monitor path."""
+def logical_monitor_scale(state, root_size):
+    """Admit only the inspected single-monitor logical-layout Xwayland path."""
     serial, monitors, logical, properties = state
+    # Require explicit logical mode, even though Mutter defaults a missing mode
+    # to logical; physical layout has a different EIS region contract.
     if properties.get("layout-mode") != 1 or len(logical) != 1:
-        raise InputRejected("portal motion requires one physical-layout Mutter monitor")
+        raise InputRejected("portal motion requires one logical-layout Mutter monitor")
     x, y, scale, transform, primary, members, details = logical[0]
     if (x, y, transform) != (0, 0, 0) or len(members) != 1 or not math.isfinite(scale) or scale <= 0:
         raise InputRejected("unsupported monitor origin, rotation, mirror or scale")
@@ -205,7 +207,7 @@ class PortalSession:
         state = self.bus.call_sync("org.gnome.Mutter.DisplayConfig",
             "/org/gnome/Mutter/DisplayConfig", "org.gnome.Mutter.DisplayConfig", "GetCurrentState",
             None, None, self.Gio.DBusCallFlags.NONE, 5000, None).unpack()
-        return physical_monitor_scale(state, root_size)
+        return logical_monitor_scale(state, root_size)
 
     def close(self):
         self.ready = False
@@ -250,12 +252,14 @@ class PortalX11Input(X11Input):
             raise InputRejected("pointer is not on the owned X11 screen")
         # One relative request, then the existing game observer must ACK the exact
         # client point. No correction/retry and no click after a mismatch.
-        # Mutter 50.4 meta_seat_impl_filter_relative_motion multiplies virtual
-        # relative deltas by monitor scale in physical layout. Convert once using
-        # the current, validated monitor contract, not an empirical correction.
+        # For this logical-layout Xwayland path the inspected X11 root is at
+        # physical resolution, while virtual motion uses logical coordinates.
+        # Convert once using the validated scale, not an empirical correction.
         scale = self.mapping[1]
-        self.portal.notify("NotifyPointerMotion", "dd",
-                           (x - observed["root"][0]) / scale, (y - observed["root"][1]) / scale)
+        delta = ((x - observed["root"][0]) / scale, (y - observed["root"][1]) / scale)
+        self.portal.notify("NotifyPointerMotion", "dd", *delta)
+        return {"root_before": observed["root"], "root_target": [x, y],
+                "logical_delta": list(delta), "monitor_scale": scale}
 
     def _button(self, button, pressed):
         if button in (4, 5):

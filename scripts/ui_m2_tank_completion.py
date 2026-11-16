@@ -601,3 +601,250 @@ def check_completed_consumers(raw, value, contract, *, water_count=0):
                 expected_color = [.58, .70, .73, 1.] if partial else [1., 1., 1., 1.]
                 native.require(isinstance(color, list) and len(color) == 4 and all(planning.finite(a) and abs(a-b) < 1e-5
                                for a, b in zip(color, expected_color, strict=True)), "Tank actual water tint differs")
+
+# Installed-release placement ghost feedback. This is separate from candidate
+# completion: the second click is deliberately cancelled, never committed.
+GHOST_CASE = "refactor-placement-ghosts"
+GHOST_CHECKPOINTS = tuple("refactor-ghost-" + name for name in ("empty", "door", "tank", "companion", "escaped", "wall"))
+GHOST_TANK_ID = {"kind": "Tank", "generation": 4, "authority": "release_approved",
+                 "manifest_sha256": "f452eefadd39c9a5b250fb928838356ffd071eec69fdfbdfe0d65e5538e6af61"}
+GHOST_TANK_PATH = "building_sets/tank/4/162cd094b92c0e90feb81cccd7636a400f4853ce505e40b6105c8bd389a5ebcc.png"
+GHOST_DOOR_ID = {"generation": 7, "authority": "ReleaseApproved",
+                 "manifest_sha256": "4e3f9236db067772b9a60b37ea98437cb29e481f9ec9cbb4d6dcf6517374a449"}
+GHOST_DOOR_PATHS = {"door_sets/7/textures/buildings/door/door_preview_ew.png"}
+
+
+def ghost_bindings(repo, codec):
+    path = repo / "crates/bevy_app/src/assets/building_asset_set/default_release_bindings.json"
+    bindings = json.loads(path.read_bytes())
+    native.require(isinstance(bindings, list) and len(bindings) == 8
+                   and len({row["identity"]["kind"] for row in bindings}) == 8,
+                   "installed release inventory differs")
+    native.require(pipeline.exact_json(bindings, pipeline.release_bindings(repo / "assets", codec, "m5")),
+                   "compiled bindings differ from independently validated installed releases")
+    tank = next((row for row in bindings if row["identity"]["kind"] == "Tank"), None)
+    native.require(tank and tank["identity"] == GHOST_TANK_ID, "installed Tank identity differs")
+    manifest = json.loads((repo / "assets" / tank["locator"]).read_bytes())
+    native.require(manifest["identity"] == GHOST_TANK_ID
+                   and manifest["world_preview"]["canvas_wu"] == [96.0, 96.0]
+                   and manifest["world_preview"]["anchor_px"] == [128.0, 160.0],
+                   "installed Tank preview contract differs")
+    records = [row for row in manifest["artifacts"] if row["role"] == "image:world_preview"]
+    native.require(len(records) == 1 and records[0]["path"] == GHOST_TANK_PATH,
+                   "installed Tank world image differs")
+    pipeline.file_bytes(repo / "assets", records[0])
+    return bindings
+
+
+def check_ghost_observation(case, value):
+    native.require(case in GHOST_CHECKPOINTS and value.get("ready") is True and value.get("frame", 0) > 90
+                   and value.get("paused") is (case == "refactor-ghost-empty"), "ghost checkpoint/pause differs")
+    ctx = context(value)
+    expected_mode = ("Normal" if case in ("refactor-ghost-empty", "refactor-ghost-escaped") else
+                     "FloorPlace" if case == "refactor-ghost-wall" else "BuildingPlace")
+    native.require(ctx.get("play_mode") == expected_mode, "ghost play mode differs")
+    state = ctx.get("placement_ghosts", {})
+    native.require(state.get("active") == GHOST_TANK_ID and state.get("pending") is None
+                   and state.get("failure") is None and state.get("door") == GHOST_DOOR_ID,
+                   "installed Tank/Door assets are not resident and eligible")
+    ghosts, partners = state.get("ghosts"), state.get("partners")
+    native.require(isinstance(ghosts, list) and isinstance(partners, list), "ghost inventory missing")
+    def sprite(row, paths, size, anchor, color, position):
+        native.require(isinstance(row, dict) and type(row.get("entity")) is int and row.get("path") in paths
+                       and row.get("resident") is True and row.get("visible") is True and row.get("view_visible") is True
+                       and row.get("size") == size and row.get("anchor") == anchor
+                       and isinstance(row.get("color"), list) and len(row["color"]) == 4
+                       and all(planning.finite(x) and abs(x - y) <= 0.001 for x, y in zip(row["color"], color, strict=True))
+                       and isinstance(row.get("position"), list) and len(row["position"]) == 3
+                       and all(planning.finite(x) and abs(x - y) <= 0.001 for x, y in zip(row["position"][:2], position, strict=True)),
+                       "actual ghost sprite differs")
+    native.require(ctx.get("blueprints") == [] and ctx.get("buildings") == []
+                   and ctx.get("building_inventory") == ctx.get("initial_building_inventory") == [],
+                   "cancelled placement changed owner inventory")
+    if case in ("refactor-ghost-empty", "refactor-ghost-escaped", "refactor-ghost-wall"):
+        native.require(not ghosts and not partners and ctx.get("companion_pending") is None,
+                       "ghost survived outside placement")
+    elif case == "refactor-ghost-door":
+        native.require(len(ghosts) == 1 and not partners and ctx.get("build_kind") == "Door", "Door ghost missing")
+        native.require(ctx.get("cursor_grid") == ctx["anchor"], "Door cursor grid differs")
+        sprite(ghosts[0], GHOST_DOOR_PATHS, [64.0, 64.0], [0.0, -0.25], [1.0, 0.2, 0.2, 0.5], ctx["anchor_world"])
+    elif case == "refactor-ghost-tank":
+        native.require(len(ghosts) == 1 and not partners and ctx.get("build_kind") == "Tank"
+                       and ctx.get("companion_pending") is None and ctx.get("legal") is True,
+                       "Tank ghost missing")
+        native.require(ctx.get("cursor_grid") == ctx["anchor"], "Tank cursor grid differs")
+        sprite(ghosts[0], {GHOST_TANK_PATH}, [96.0, 96.0], [0.0, -0.125], [0.5, 1.0, 0.5, 0.5], ctx["draw_pos"])
+    else:
+        native.require(len(ghosts) == 1 and len(partners) == 1 and ctx.get("companion_pending") is not None,
+                       "companion ghost pair missing")
+        x, y = ctx["anchor"]
+        native.require(ctx.get("companion_pending") == dict(parent_anchor=[x, y], parent_kind="Tank", kind="BucketStorage",
+                                                            center=ctx["draw_pos"], radius=160.0, required=True)
+                       and ctx.get("cursor_grid") == ctx.get("companion_grid") == [x + 2, y]
+                       and ctx.get("companion_legal") is True, "companion pending target differs")
+        position = [ctx["anchor_world"][0] + 80.0, ctx["anchor_world"][1]]
+        sprite(ghosts[0], {"textures/items/bucket/bucket_empty.png"}, [64.0, 32.0], [0.0, 0.0], [0.5, 1.0, 0.5, 0.5], position)
+        sprite(partners[0], {GHOST_TANK_PATH}, [96.0, 96.0], [0.0, -0.125], [0.8, 0.9, 1.0, 0.35], ctx["draw_pos"])
+        native.require(ghosts[0]["entity"] != partners[0]["entity"], "partner reused the primary ghost")
+    if case == "refactor-ghost-wall":
+        native.require(ctx.get("task_mode") == "WallPlace(None)", "Wall placement mode differs")
+
+
+def exercise_ghosts(driver):
+    if "text-field:DevPoc" in driver.last["controls"]:
+        capture_action(driver, "dev-minimize")
+    driver.last = driver.wait(lambda v: context(v).get("placement_ghosts", {}).get("active") == GHOST_TANK_ID
+                              and context(v)["placement_ghosts"].get("door") == GHOST_DOOR_ID,
+                              after=driver.last["frame"], timeout=60)
+    baseline = copy.deepcopy(context(driver.last))
+    driver.capture(GHOST_CHECKPOINTS[0])
+    capture_action(driver, "menu:SetTimeSpeed(Normal)")
+    capture_action(driver, "menu:ToggleArchitect")
+    capture_action(driver, "menu:SelectBuild(Door)")
+    def point(key):
+        value = context(driver.last)[key]
+        native.require(isinstance(value, list) and len(value) == 2 and all(planning.finite(x) for x in value),
+                       "ghost projected point missing")
+        driver.send(point=tuple(round(x * driver.last["scale_factor"]) for x in value))
+        native.require(not driver.last["pointer_over_ui"] and not driver.last["world_input_captured"], "ghost point covered")
+    point("point")
+    driver.last = driver.wait(lambda v: any(row.get("path") in GHOST_DOOR_PATHS and row.get("resident")
+                                          for row in context(v)["placement_ghosts"]["ghosts"]), after=driver.last["frame"])
+    driver.capture(GHOST_CHECKPOINTS[1])
+    if "menu:SelectBuild(Tank)" not in driver.last["controls"]:
+        capture_action(driver, "menu:ToggleArchitect")
+    capture_action(driver, "menu:SelectBuild(Tank)")
+    point("point")
+    driver.last = driver.wait(lambda v: any(row.get("path") == GHOST_TANK_PATH and row.get("resident")
+                                          for row in context(v)["placement_ghosts"]["ghosts"]), after=driver.last["frame"])
+    driver.capture(GHOST_CHECKPOINTS[2])
+    capture_action(driver, "placement", baseline=baseline)
+    driver.last = driver.wait(lambda v: context(v).get("companion_pending") is not None, after=driver.last["frame"])
+    point("companion_point")
+    driver.last = driver.wait(lambda v: len(context(v)["placement_ghosts"]["partners"]) == 1,
+                              after=driver.last["frame"])
+    driver.capture(GHOST_CHECKPOINTS[3])
+    capture_action(driver, "Escape")
+    driver.last = driver.wait(lambda v: not context(v)["placement_ghosts"]["ghosts"]
+                              and not context(v)["placement_ghosts"]["partners"], after=driver.last["frame"])
+    driver.capture(GHOST_CHECKPOINTS[4])
+    capture_action(driver, "menu:ToggleArchitect")
+    capture_action(driver, "menu:SelectBuild(Wall)")
+    point("point")
+    driver.last = driver.wait(lambda v: context(v).get("task_mode") == "WallPlace(None)", after=driver.last["frame"])
+    driver.capture(GHOST_CHECKPOINTS[5])
+
+
+def verify_ghosts(raw, entries, client, inputs):
+    from scripts import building_production_lifecycle as lifecycle
+    native.require([e["case"] for e in entries] == list(GHOST_CHECKPOINTS), "ghost checkpoint order differs")
+    for entry in entries:
+        check_ghost_observation(entry["case"], entry["value"])
+    values = [e["value"] for e in entries]
+    first = context(values[0])
+    native.require(all(v.get("nonce") == client["nonce"] and v.get("pid") == client["pid"]
+                       and context(v)["world_epoch"] == first["world_epoch"]
+                       and context(v)["cells"] == first["cells"] for v in values)
+                   and all(a["last_step"] < b["last_step"] and a["value"]["frame"] < b["value"]["frame"]
+                           for a, b in zip(entries, entries[1:])), "ghost subject, cells or checkpoint order changed")
+    native.require(context(values[2])["placement_ghosts"]["ghosts"][0]["entity"] ==
+                   context(values[3])["placement_ghosts"]["ghosts"][0]["entity"],
+                   "Tank to bucket did not reuse the primary ghost")
+    native.require(raw.get("failure") is None and raw.get("nonce") == client["nonce"]
+                   and raw.get("process_id") == client["pid"], "ghost raw owner differs")
+    planning.check_transport(inputs, client, first["world_epoch"], motion_cap=50)
+    actions = [row["tank_completion_action"] for row in inputs if "tank_completion_action" in row]
+    for lower, upper, point_key, action_key in ((0, 1, "point", "menu:SelectBuild(Door)"),
+                                                (1, 2, "point", "menu:SelectBuild(Tank)"),
+                                                (2, 3, "companion_point", "placement"),
+                                                (4, 5, "point", "menu:SelectBuild(Wall)")):
+        value = entries[upper]["value"]
+        point = context(value).get(point_key)
+        scale = value.get("scale_factor")
+        native.require(isinstance(point, list) and len(point) == 2 and all(planning.finite(x) for x in point)
+                       and planning.finite(scale) and scale > 0, "ghost target projection missing")
+        target = [round(x * scale) for x in point]
+        action = [row for row in actions if row.get("key") == action_key]
+        native.require(len(action) == 1, "ghost motion lacks its preceding action")
+        matching = [event for event in inputs[entries[lower]["last_step"]:entries[upper]["last_step"]]
+                    if event.get("point") == target and isinstance(event.get("observed_cursor"), list)
+                    and len(event["observed_cursor"]) == 2
+                    and all(abs(x - y) <= 2 for x, y in zip(event["observed_cursor"], target, strict=True))
+                    and int(event["step"]) > action[0]["last_step"]
+                    and event["pre_frame"] >= action[0]["after"]["frame"]
+                    and event["post_frame"] <= value["frame"]]
+        native.require(matching and isinstance(value.get("cursor"), list) and len(value["cursor"]) == 2
+                       and all(abs(x - y) <= 2 for x, y in zip(value["cursor"], target, strict=True)),
+                       "ghost target motion or checkpoint cursor differs")
+    keys = [a["key"] for a in actions]
+    if keys and keys[0] == "dev-minimize":
+        keys = keys[1:]
+    expected = ["menu:SetTimeSpeed(Normal)", "menu:ToggleArchitect", "menu:SelectBuild(Door)"]
+    native.require(keys[:3] == expected, "Door input sequence differs")
+    tail = keys[3:]
+    if tail and tail[0] == "menu:ToggleArchitect":
+        tail = tail[1:]
+    native.require(tail == ["menu:SelectBuild(Tank)", "placement", "Escape", "menu:ToggleArchitect", "menu:SelectBuild(Wall)"],
+                   "Tank/companion/Wall input sequence differs")
+    for key, lower, upper in (("menu:SelectBuild(Door)", 0, 1), ("menu:SelectBuild(Tank)", 1, 2),
+                              ("placement", 2, 3), ("Escape", 3, 4), ("menu:SelectBuild(Wall)", 4, 5)):
+        matching = [a for a in actions if a["key"] == key]
+        native.require(len(matching) == 1 and entries[lower]["last_step"] < matching[0]["first_step"]
+                       <= matching[0]["last_step"] <= entries[upper]["last_step"]
+                       and entries[lower]["value"]["frame"] <= matching[0]["before"]["frame"]
+                       < matching[0]["after"]["frame"] <= entries[upper]["value"]["frame"],
+                       "ghost action is outside its checkpoint interval")
+    samples, claimed, raw_claimed = raw["samples"], set(), set()
+    for action in actions:
+        key, a, b = action["key"], action["before"], action["after"]
+        first_step, last_step = action["first_step"], action["last_step"]
+        native.require(last_step == first_step + 1 and 1 <= first_step < last_step <= len(inputs)
+                       and not ({first_step, last_step} & claimed), "ghost action overlap differs")
+        claimed.update((first_step, last_step))
+        sent = inputs[first_step - 1:last_step]
+        keyboard = key == "Escape"
+        native.require([r.get("pressed") for r in sent] == [True, False]
+                       and all(a["frame"] <= r["pre_frame"] < r["post_frame"] <= b["frame"]
+                               and (r.get("key") == key if keyboard else r.get("button") == 1) for r in sent),
+                       "ghost sent input pair differs")
+        start, end = context(a)["real_seconds"], context(b)["real_seconds"]
+        rows = [r for r in raw["events"] if r.get("producer") == ("KeyboardInput" if keyboard else "MouseButtonInput")
+                and start < r.get("real_seconds", -1) <= end]
+        native.require(len(rows) == 2 and [r.get("state") for r in rows] == ["Pressed", "Released"], "ghost raw input missing")
+        for row in rows:
+            index = row.get("sample_index")
+            native.require(type(index) is int and 0 <= index < len(samples) and row.get("event_index") not in raw_claimed
+                           and samples[index].get("world_epoch") == first["world_epoch"]
+                           and samples[index].get("primary_window_bits") == a["primary_window"]
+                           and row.get("window") == samples[index].get("primary_window")
+                           and (row.get("key") == "Escape" and row.get("repeat") is False if keyboard else row.get("button") == "Left"),
+                           "ghost raw input identity differs")
+            raw_claimed.add(row["event_index"])
+        if key.startswith("menu:") or key == "dev-minimize":
+            control = a["controls"].get(key, {})
+            native.require(control.get("fully_visible") is True and control.get("interaction") == "Hovered"
+                           and sent[0].get("observed_hover", {}).get(key) == "Pressed", "ghost control press differs")
+        if key == "placement":
+            check_world_action(a, key, first)
+            cursor = a.get("cursor")
+            native.require(isinstance(cursor, list) and len(cursor) == 2
+                           and all(isinstance(r.get("observed_cursor"), list) and len(r["observed_cursor"]) == 2
+                                   and all(abs(x - y) <= 2 for x, y in zip(r["observed_cursor"], cursor, strict=True))
+                                   for r in sent), "Tank click cursor differs from the acknowledged target")
+    native.require(all(i + 1 in claimed for i, row in enumerate(inputs) if row.get("button") is not None or row.get("key") is not None)
+                   and raw_claimed == {r["event_index"] for r in raw["events"] if r.get("producer") in ("KeyboardInput", "MouseButtonInput")},
+                   "ghost unclaimed input")
+    receipts = [row for row in raw["events"] if row.get("producer") == "ordinary-building-placement-branch-v1"]
+    native.require(len(receipts) == 1, "ghost pending receipt missing or committed")
+    lifecycle.check_placement_receipt(receipts[0], samples)
+    native.require(receipts[0]["outcome"] == {"kind": "Tank", "grid": first["anchor"], "status": "CompanionPending"},
+                   "Tank first click did not remain pending")
+    placement = next(a for a in actions if a["key"] == "placement")
+    pressed = [row for row in raw["events"] if row.get("producer") == "MouseButtonInput"
+               and row.get("state") == "Pressed"
+               and context(placement["before"])["real_seconds"] < row.get("real_seconds", -1)
+               <= context(placement["after"])["real_seconds"]]
+    native.require(len(pressed) == 1 and pressed[0]["real_seconds"] <= receipts[0]["real_seconds"]
+                   <= context(placement["after"])["real_seconds"]
+                   and pressed[0]["sample_index"] <= receipts[0]["sample_index"],
+                   "pending receipt is outside actual click")

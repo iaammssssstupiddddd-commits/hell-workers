@@ -118,6 +118,22 @@ input; `--input-backend none` is rejected. The latter verifies successful Save/L
 outcomes and cancellation receipts for the exact loaded blueprint and wall tile.
 Both remain UI feedback evidence, not allocator or performance acceptance.
 
+Select `--case refactor-stockpile-target --smoke --input-backend portal` for two
+seeded stockpile cells. Real world selection and Clear All input must change only
+the visible target; the independent verifier binds typed target, pointer receipts,
+policy state and five owned-client images. `refactor-spa-occupied-slots` separately
+seeds an Operational Spa and one real Soul, then uses actual UI input to close its
+slots and observe bounded worker retention. It does not prove natural assignment.
+
+For seeded equipment feedback, `scripts/building_tank_generation_feedback.py`
+observes the installed Tank g3/g4 transition and fallback on one owner/root. An
+isolated profiling hold delays pool publication so pending g4 with unchanged g3
+can be captured; it does not measure natural asset-loading latency.
+`scripts/building_m2_dirty_feedback_motion.py` separately observes a frozen dirty
+ArtPreview Mixer runtime plan through refining or save/load. Both are bounded,
+coordinator-registered observations; inspect every image and retain no release,
+performance or OS-input authority from them.
+
 Select `--case refactor-suite --smoke --input-backend portal` to run rows then
 progress bars with one build and one live portal session. Each game process has
 its own fixture, nonce, input log and checkpoint set. Verification requires both
@@ -179,10 +195,11 @@ viewports; a revoked session is never silently reopened. Each event still checks
 the owned X11 client's focus,
 PID and bounds. Relative motion is sent once and must match the game observer's
 exact target before a click; coordinate mismatch stops the run without correction.
-This backend requires PyGObject and a single, unrotated Mutter monitor in physical
-layout. Its current mode must match the X11 root dimensions. Relative deltas are
-divided by the queried monitor scale because Mutter scales virtual relative motion
-in physical layout. A changed monitor serial/scale fails closed. This backend does
+This backend requires PyGObject and a single, unrotated Mutter monitor in logical
+layout (`layout-mode=1`). Its physical mode must match the X11 root dimensions.
+On this supported Xwayland path, relative deltas are converted from root pixels
+to logical coordinates using the queried monitor scale. Physical layout is not
+admitted. A changed monitor serial/scale fails closed. This backend does
 not use EIS or XTest as a fallback.
 Request WM activation of the PID-owned game before consent to present its parent.
 Do not require X11 keyboard focus before the portal request: the compositor may

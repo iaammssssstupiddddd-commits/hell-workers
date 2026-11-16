@@ -47,6 +47,21 @@ struct KindPool {
     failure: Option<BuildingAssetPoolFailure>,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum BuildingPartRole {
+    Body,
+    Water,
+    Rotor,
+    SpaSlot(u8),
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct BuildingPartBinding {
+    pub role: BuildingPartRole,
+    pub part_index: usize,
+    mesh_index: usize,
+}
+
 /// Immutable, fully resident generation shared by every presentation consumer.
 /// Handles and metadata are published together, never from a pending manifest.
 #[derive(Clone)]
@@ -54,9 +69,60 @@ pub struct BuildingAssetDescriptor {
     pub manifest: BuildingAssetSetManifest,
     meshes: Vec<Handle<Mesh>>,
     images: Vec<Handle<Image>>,
+    parts: Vec<BuildingPartBinding>,
 }
 
 impl BuildingAssetDescriptor {
+    fn new(
+        manifest: BuildingAssetSetManifest,
+        meshes: Vec<Handle<Mesh>>,
+        images: Vec<Handle<Image>>,
+    ) -> Self {
+        let parts = manifest
+            .parts
+            .iter()
+            .enumerate()
+            .map(|(part_index, part)| {
+                let role = match part.name.as_str() {
+                    "body" => BuildingPartRole::Body,
+                    "water" => BuildingPartRole::Water,
+                    "rotor" => BuildingPartRole::Rotor,
+                    "slot0" => BuildingPartRole::SpaSlot(0),
+                    "slot1" => BuildingPartRole::SpaSlot(1),
+                    "slot2" => BuildingPartRole::SpaSlot(2),
+                    "slot3" => BuildingPartRole::SpaSlot(3),
+                    _ => unreachable!("validated part name"),
+                };
+                let mesh_index = manifest
+                    .identity
+                    .kind
+                    .mesh_roles()
+                    .iter()
+                    .position(|role| *role == part.mesh_role)
+                    .expect("validated part mesh role");
+                BuildingPartBinding {
+                    role,
+                    part_index,
+                    mesh_index,
+                }
+            })
+            .collect();
+        Self {
+            manifest,
+            meshes,
+            images,
+            parts,
+        }
+    }
+
+    pub(crate) fn parts(&self) -> &[BuildingPartBinding] {
+        &self.parts
+    }
+
+    pub(crate) fn part_mesh(&self, binding: BuildingPartBinding) -> &Handle<Mesh> {
+        &self.meshes[binding.mesh_index]
+    }
+
     pub fn mesh(&self, role: &str) -> Option<&Handle<Mesh>> {
         self.manifest
             .identity
@@ -86,6 +152,8 @@ impl BuildingAssetDescriptor {
 pub struct BuildingAssetPool {
     kinds: [KindPool; 9],
     #[cfg(feature = "profiling")]
+    publication_held: bool,
+    #[cfg(feature = "profiling")]
     acceptance_identity: Option<BuildingAssetSetIdentity>,
     #[cfg(feature = "profiling")]
     comparison_identities: Vec<BuildingAssetSetIdentity>,
@@ -106,6 +174,10 @@ fn index(kind: BuildingAssetKind) -> usize {
 }
 
 impl BuildingAssetPool {
+    #[cfg(feature = "profiling")]
+    pub(super) fn hold_publication(&mut self, held: bool) {
+        self.publication_held = held;
+    }
     #[cfg(feature = "profiling")]
     pub(crate) fn active_identities(&self) -> Vec<&BuildingAssetSetIdentity> {
         self.kinds
@@ -212,6 +284,10 @@ impl BuildingAssetPool {
         meshes: &Assets<Mesh>,
         images: &Assets<Image>,
     ) {
+        #[cfg(feature = "profiling")]
+        if self.publication_held {
+            return;
+        }
         for pool in &mut self.kinds {
             // Explicit asset removal / reload failure invalidates the whole set.
             // Never publish a preview while its geometry is no longer resident.
@@ -228,15 +304,15 @@ impl BuildingAssetPool {
                 Ok(true) => {
                     let manifest = manifests.get(&pending.manifest).expect("ready manifest");
                     let roles = pending.roles.as_ref().expect("ready typed roles");
-                    pending.descriptor = Some(BuildingAssetDescriptor {
-                        manifest: manifest.clone(),
-                        meshes: roles.meshes.clone(),
-                        images: roles
+                    pending.descriptor = Some(BuildingAssetDescriptor::new(
+                        manifest.clone(),
+                        roles.meshes.clone(),
+                        roles
                             .images
                             .iter()
                             .map(|(handle, _)| handle.clone())
                             .collect(),
-                    });
+                    ));
                     pool.active = Some(pending);
                     pool.failure = None;
                 }
@@ -329,11 +405,7 @@ impl BuildingAssetPool {
                 .into()
             })
             .collect();
-        let descriptor = BuildingAssetDescriptor {
-            manifest,
-            meshes,
-            images,
-        };
+        let descriptor = BuildingAssetDescriptor::new(manifest, meshes, images);
         self.kinds[index(kind)].active = Some(Generation {
             identity: descriptor.manifest.identity.clone(),
             manifest: Handle::default(),

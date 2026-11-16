@@ -34,6 +34,59 @@ pub struct InfoPanelNodeQueries<'w, 's> {
     pub q_menu_button: Query<'w, 's, &'static mut MenuButton>,
 }
 
+#[derive(Debug, PartialEq, Eq)]
+struct InfoPanelSections {
+    soul: bool,
+    stockpile: bool,
+    spa: bool,
+    rename: bool,
+    header: Option<bool>,
+}
+
+impl InfoPanelSections {
+    fn from_model(model: Option<&InfoPanelViewModel>, renaming: bool) -> Self {
+        let soul = matches!(model, Some(InfoPanelViewModel::Soul(_)));
+        Self {
+            soul,
+            stockpile: matches!(model, Some(InfoPanelViewModel::Stockpile(_))),
+            spa: matches!(model, Some(InfoPanelViewModel::SoulSpa(_))),
+            rename: soul && renaming,
+            header: model.map(|_| !(soul && renaming)),
+        }
+    }
+
+    fn apply(&self, nodes: &InfoPanelNodes, q_node: &mut Query<&mut Node>) {
+        let display = |visible| {
+            if visible {
+                Display::Flex
+            } else {
+                Display::None
+            }
+        };
+        set_node_display(
+            nodes.stockpile.stockpile_group,
+            q_node,
+            display(self.stockpile),
+        );
+        set_node_display(nodes.soul_spa.soul_spa_group, q_node, display(self.spa));
+        set_node_display(nodes.common.rename_button, q_node, display(self.soul));
+        set_node_display(
+            nodes.common.rename_field_container,
+            q_node,
+            display(self.rename),
+        );
+        set_display_slot(
+            nodes,
+            q_node,
+            UiSlot::InfoPanelStatsGroup,
+            display(self.soul),
+        );
+        if let Some(header) = self.header {
+            set_display_slot(nodes, q_node, UiSlot::Header, display(header));
+        }
+    }
+}
+
 fn entity_for_slot(info_nodes: &InfoPanelNodes, slot: UiSlot) -> Option<Entity> {
     match slot {
         UiSlot::InfoPanelRoot => info_nodes.common.root,
@@ -298,6 +351,425 @@ fn update_gender_icon<A: UiAssets>(
     }
 }
 
+fn render_soul_section<A: UiAssets + Resource>(
+    soul: &super::model::SoulInfoViewModel,
+    res: &InfoPanelRes<A>,
+    queries: &mut InfoPanelNodeQueries,
+) {
+    set_text_slot(
+        &res.info_nodes,
+        &mut queries.q_text,
+        UiSlot::Header,
+        &soul.header,
+    );
+    set_text_slot(
+        &res.info_nodes,
+        &mut queries.q_text,
+        UiSlot::StatMotivation,
+        &soul.motivation,
+    );
+    set_text_slot(
+        &res.info_nodes,
+        &mut queries.q_text,
+        UiSlot::StatStress,
+        &soul.stress,
+    );
+    set_text_slot(
+        &res.info_nodes,
+        &mut queries.q_text,
+        UiSlot::StatFatigue,
+        &soul.fatigue,
+    );
+    set_text_slot(
+        &res.info_nodes,
+        &mut queries.q_text,
+        UiSlot::StatDream,
+        &soul.dream,
+    );
+    set_text_slot(
+        &res.info_nodes,
+        &mut queries.q_text,
+        UiSlot::TaskText,
+        &soul.task,
+    );
+    set_text_slot(
+        &res.info_nodes,
+        &mut queries.q_text,
+        UiSlot::InventoryText,
+        &soul.inventory,
+    );
+    set_text_slot(
+        &res.info_nodes,
+        &mut queries.q_text,
+        UiSlot::CommonText,
+        &soul.common,
+    );
+    update_gender_icon(
+        &res.info_nodes,
+        &mut queries.q_gender,
+        &mut queries.q_node,
+        &*res.game_assets,
+        soul.gender,
+    );
+}
+
+fn render_stockpile_section<A: UiAssets + Resource>(
+    stockpile: &super::model::StockpileInfoViewModel,
+    res: &InfoPanelRes<A>,
+    queries: &mut InfoPanelNodeQueries,
+) {
+    set_text_slot(
+        &res.info_nodes,
+        &mut queries.q_text,
+        UiSlot::Header,
+        &stockpile.header,
+    );
+    set_text_slot(
+        &res.info_nodes,
+        &mut queries.q_text,
+        UiSlot::CommonText,
+        &stockpile.common,
+    );
+    update_gender_icon(
+        &res.info_nodes,
+        &mut queries.q_gender,
+        &mut queries.q_node,
+        &*res.game_assets,
+        None,
+    );
+
+    let state_label = match stockpile.state {
+        StockpilePolicyState::Accepting => "Accepting",
+        StockpilePolicyState::TargetReached => "Target Reached",
+        StockpilePolicyState::Draining => "Draining",
+        StockpilePolicyState::Disabled => "Disabled",
+    };
+    let resource_label = stockpile
+        .current_resource
+        .map(|resource| resource.display_name().to_string())
+        .unwrap_or_else(|| "Empty".to_string());
+    set_text_entity(
+        res.info_nodes.stockpile.stockpile_state,
+        &mut queries.q_text,
+        &format!("State: {state_label}"),
+    );
+    set_text_entity(
+        res.info_nodes.stockpile.stockpile_current,
+        &mut queries.q_text,
+        &format!(
+            "Stored: {}/{} ({resource_label}) | Incoming: {}",
+            stockpile.current_amount, stockpile.capacity, stockpile.incoming_amount
+        ),
+    );
+    set_text_entity(
+        res.info_nodes.stockpile.stockpile_acceptance_summary,
+        &mut queries.q_text,
+        &stockpile_acceptance_summary(stockpile.acceptance),
+    );
+    set_text_entity(
+        res.info_nodes.stockpile.stockpile_target_text,
+        &mut queries.q_text,
+        &format!("Target: {}/{}", stockpile.target_amount, stockpile.capacity),
+    );
+    set_text_entity(
+        res.info_nodes.stockpile.stockpile_priority_text,
+        &mut queries.q_text,
+        &format!("Inbound Priority: {:?} (cycle)", stockpile.inbound_priority),
+    );
+    let export_label =
+        if stockpile.state == StockpilePolicyState::Draining && !stockpile.allow_export {
+            "Export: Off (Draining override)"
+        } else if stockpile.allow_export {
+            "Export: On"
+        } else {
+            "Export: Off"
+        };
+    set_text_entity(
+        res.info_nodes.stockpile.stockpile_export_text,
+        &mut queries.q_text,
+        export_label,
+    );
+
+    let single = StockpilePolicyEditTarget::Single(stockpile.entity);
+    set_menu_action(
+        res.info_nodes.stockpile.stockpile_acceptance_all_button,
+        &mut queries.q_menu_button,
+        MenuAction::ApplyStockpilePolicy {
+            target: single,
+            patch: StockpilePolicyPatch {
+                acceptance: Some(StockpileAcceptance::Any),
+                ..default()
+            },
+        },
+    );
+    set_menu_action(
+        res.info_nodes.stockpile.stockpile_acceptance_none_button,
+        &mut queries.q_menu_button,
+        MenuAction::ApplyStockpilePolicy {
+            target: single,
+            patch: StockpilePolicyPatch {
+                acceptance: Some(StockpileAcceptance::none()),
+                ..default()
+            },
+        },
+    );
+    for row in &res.info_nodes.stockpile.stockpile_acceptance_rows {
+        set_text_entity(
+            Some(row.text),
+            &mut queries.q_text,
+            &stockpile_acceptance_row_label(stockpile.acceptance, row.resource_type),
+        );
+        set_menu_action(
+            Some(row.button),
+            &mut queries.q_menu_button,
+            MenuAction::ApplyStockpilePolicy {
+                target: single,
+                patch: StockpilePolicyPatch {
+                    acceptance: Some(stockpile.acceptance.with_resource(
+                        row.resource_type,
+                        !stockpile.acceptance.accepts(row.resource_type),
+                    )),
+                    ..default()
+                },
+            },
+        );
+    }
+    set_menu_action(
+        res.info_nodes.stockpile.stockpile_target_decrease_button,
+        &mut queries.q_menu_button,
+        MenuAction::ApplyStockpilePolicy {
+            target: single,
+            patch: StockpilePolicyPatch {
+                target_amount: Some(stockpile.target_amount.saturating_sub(1)),
+                ..default()
+            },
+        },
+    );
+    set_menu_action(
+        res.info_nodes.stockpile.stockpile_target_increase_button,
+        &mut queries.q_menu_button,
+        MenuAction::ApplyStockpilePolicy {
+            target: single,
+            patch: StockpilePolicyPatch {
+                target_amount: Some(
+                    stockpile
+                        .target_amount
+                        .saturating_add(1)
+                        .min(stockpile.capacity),
+                ),
+                ..default()
+            },
+        },
+    );
+    set_menu_action(
+        res.info_nodes.stockpile.stockpile_priority_button,
+        &mut queries.q_menu_button,
+        MenuAction::ApplyStockpilePolicy {
+            target: single,
+            patch: StockpilePolicyPatch {
+                inbound_priority: Some(next_stockpile_priority(stockpile.inbound_priority)),
+                ..default()
+            },
+        },
+    );
+    set_menu_action(
+        res.info_nodes.stockpile.stockpile_export_button,
+        &mut queries.q_menu_button,
+        MenuAction::ApplyStockpilePolicy {
+            target: single,
+            patch: StockpilePolicyPatch {
+                allow_export: Some(!stockpile.allow_export),
+                ..default()
+            },
+        },
+    );
+    set_menu_action(
+        res.info_nodes.stockpile.stockpile_area_button,
+        &mut queries.q_menu_button,
+        MenuAction::BeginStockpilePolicyRangeEdit {
+            patch: StockpilePolicyPatch {
+                acceptance: Some(stockpile.acceptance),
+                inbound_priority: Some(stockpile.inbound_priority),
+                target_amount: Some(stockpile.target_amount),
+                allow_export: Some(stockpile.allow_export),
+            },
+        },
+    );
+}
+
+fn render_soul_spa_section<A: UiAssets + Resource>(
+    soul_spa: &super::model::SoulSpaInfoViewModel,
+    res: &InfoPanelRes<A>,
+    queries: &mut InfoPanelNodeQueries,
+) {
+    set_text_slot(
+        &res.info_nodes,
+        &mut queries.q_text,
+        UiSlot::Header,
+        &soul_spa.header,
+    );
+    set_text_slot(
+        &res.info_nodes,
+        &mut queries.q_text,
+        UiSlot::CommonText,
+        &soul_spa.common,
+    );
+    update_gender_icon(
+        &res.info_nodes,
+        &mut queries.q_gender,
+        &mut queries.q_node,
+        &*res.game_assets,
+        None,
+    );
+
+    let status = soul_spa_status_label(soul_spa);
+    set_text_entity(
+        res.info_nodes.soul_spa.soul_spa_status,
+        &mut queries.q_text,
+        &status,
+    );
+    set_node_display(
+        res.info_nodes.soul_spa.soul_spa_output,
+        &mut queries.q_node,
+        if soul_spa.operational {
+            Display::Flex
+        } else {
+            Display::None
+        },
+    );
+    set_text_entity(
+        res.info_nodes.soul_spa.soul_spa_output,
+        &mut queries.q_text,
+        &format!("Output: {:.1}W", soul_spa.output_watts),
+    );
+    set_text_entity(
+        res.info_nodes.soul_spa.soul_spa_slots_text,
+        &mut queries.q_text,
+        &format!(
+            "Active slots: {}/{}",
+            soul_spa.active_slots, soul_spa.max_active_slots
+        ),
+    );
+    set_node_display(
+        res.info_nodes.soul_spa.soul_spa_controls,
+        &mut queries.q_node,
+        if soul_spa.operational {
+            Display::Flex
+        } else {
+            Display::None
+        },
+    );
+    set_menu_action(
+        res.info_nodes.soul_spa.soul_spa_slots_decrease_button,
+        &mut queries.q_menu_button,
+        MenuAction::SetSoulSpaActiveSlots {
+            target: soul_spa.entity,
+            active_slots: soul_spa.active_slots.saturating_sub(1),
+        },
+    );
+    set_menu_action(
+        res.info_nodes.soul_spa.soul_spa_slots_increase_button,
+        &mut queries.q_menu_button,
+        MenuAction::SetSoulSpaActiveSlots {
+            target: soul_spa.entity,
+            active_slots: soul_spa
+                .active_slots
+                .saturating_add(1)
+                .min(soul_spa.max_active_slots),
+        },
+    );
+    set_node_display(
+        res.info_nodes.soul_spa.soul_spa_cancel_button,
+        &mut queries.q_node,
+        if soul_spa.operational {
+            Display::None
+        } else {
+            Display::Flex
+        },
+    );
+    set_menu_action(
+        res.info_nodes.soul_spa.soul_spa_cancel_button,
+        &mut queries.q_menu_button,
+        MenuAction::CancelSoulSpaConstruction {
+            source_task: None,
+            target: soul_spa.entity,
+        },
+    );
+}
+
+fn render_power_section<A: UiAssets + Resource>(
+    power: &super::model::PowerInfoViewModel,
+    res: &InfoPanelRes<A>,
+    queries: &mut InfoPanelNodeQueries,
+) {
+    set_text_slot(
+        &res.info_nodes,
+        &mut queries.q_text,
+        UiSlot::Header,
+        &power.header,
+    );
+    set_text_slot(
+        &res.info_nodes,
+        &mut queries.q_text,
+        UiSlot::CommonText,
+        &power.common,
+    );
+    update_gender_icon(
+        &res.info_nodes,
+        &mut queries.q_gender,
+        &mut queries.q_node,
+        &*res.game_assets,
+        None,
+    );
+}
+
+fn render_simple_section<A: UiAssets + Resource>(
+    simple: &super::model::SimpleInfoViewModel,
+    res: &InfoPanelRes<A>,
+    queries: &mut InfoPanelNodeQueries,
+) {
+    set_text_slot(
+        &res.info_nodes,
+        &mut queries.q_text,
+        UiSlot::Header,
+        &simple.header,
+    );
+    set_text_slot(
+        &res.info_nodes,
+        &mut queries.q_text,
+        UiSlot::CommonText,
+        &simple.common,
+    );
+    update_gender_icon(
+        &res.info_nodes,
+        &mut queries.q_gender,
+        &mut queries.q_node,
+        &*res.game_assets,
+        None,
+    );
+    set_text_slot(
+        &res.info_nodes,
+        &mut queries.q_text,
+        UiSlot::StatMotivation,
+        "",
+    );
+    set_text_slot(&res.info_nodes, &mut queries.q_text, UiSlot::StatStress, "");
+    set_text_slot(
+        &res.info_nodes,
+        &mut queries.q_text,
+        UiSlot::StatFatigue,
+        "",
+    );
+    set_text_slot(&res.info_nodes, &mut queries.q_text, UiSlot::StatDream, "");
+    set_text_slot(&res.info_nodes, &mut queries.q_text, UiSlot::TaskText, "");
+    set_text_slot(
+        &res.info_nodes,
+        &mut queries.q_text,
+        UiSlot::InventoryText,
+        "",
+    );
+}
+
 pub fn info_panel_system<A: UiAssets + Resource>(
     res: InfoPanelRes<A>,
     _selected: Res<SelectedEntity>,
@@ -404,599 +876,22 @@ pub fn info_panel_system<A: UiAssets + Resource>(
         &mut queries.q_menu_button,
     );
 
+    InfoPanelSections::from_model(next_model.as_ref(), rename_target.is_some())
+        .apply(&res.info_nodes, &mut queries.q_node);
+
     match &next_model {
-        Some(InfoPanelViewModel::Soul(soul)) => {
-            set_node_display(
-                res.info_nodes.stockpile.stockpile_group,
-                &mut queries.q_node,
-                Display::None,
-            );
-            set_node_display(
-                res.info_nodes.soul_spa.soul_spa_group,
-                &mut queries.q_node,
-                Display::None,
-            );
-            let renaming = rename_state
-                .active
-                .is_some_and(|active| active.target == soul.entity);
-            set_node_display(
-                res.info_nodes.common.rename_button,
-                &mut queries.q_node,
-                Display::Flex,
-            );
-            set_node_display(
-                res.info_nodes.common.rename_field_container,
-                &mut queries.q_node,
-                if renaming {
-                    Display::Flex
-                } else {
-                    Display::None
-                },
-            );
-            set_display_slot(
-                &res.info_nodes,
-                &mut queries.q_node,
-                UiSlot::InfoPanelStatsGroup,
-                Display::Flex,
-            );
-            set_display_slot(
-                &res.info_nodes,
-                &mut queries.q_node,
-                UiSlot::Header,
-                if renaming {
-                    Display::None
-                } else {
-                    Display::Flex
-                },
-            );
-            set_text_slot(
-                &res.info_nodes,
-                &mut queries.q_text,
-                UiSlot::Header,
-                &soul.header,
-            );
-            set_text_slot(
-                &res.info_nodes,
-                &mut queries.q_text,
-                UiSlot::StatMotivation,
-                &soul.motivation,
-            );
-            set_text_slot(
-                &res.info_nodes,
-                &mut queries.q_text,
-                UiSlot::StatStress,
-                &soul.stress,
-            );
-            set_text_slot(
-                &res.info_nodes,
-                &mut queries.q_text,
-                UiSlot::StatFatigue,
-                &soul.fatigue,
-            );
-            set_text_slot(
-                &res.info_nodes,
-                &mut queries.q_text,
-                UiSlot::StatDream,
-                &soul.dream,
-            );
-            set_text_slot(
-                &res.info_nodes,
-                &mut queries.q_text,
-                UiSlot::TaskText,
-                &soul.task,
-            );
-            set_text_slot(
-                &res.info_nodes,
-                &mut queries.q_text,
-                UiSlot::InventoryText,
-                &soul.inventory,
-            );
-            set_text_slot(
-                &res.info_nodes,
-                &mut queries.q_text,
-                UiSlot::CommonText,
-                &soul.common,
-            );
-            update_gender_icon(
-                &res.info_nodes,
-                &mut queries.q_gender,
-                &mut queries.q_node,
-                &*res.game_assets,
-                soul.gender,
-            );
-        }
+        Some(InfoPanelViewModel::Soul(soul)) => render_soul_section(soul, &res, &mut queries),
         Some(InfoPanelViewModel::Stockpile(stockpile)) => {
-            set_node_display(
-                res.info_nodes.soul_spa.soul_spa_group,
-                &mut queries.q_node,
-                Display::None,
-            );
-            set_node_display(
-                res.info_nodes.common.rename_button,
-                &mut queries.q_node,
-                Display::None,
-            );
-            set_node_display(
-                res.info_nodes.common.rename_field_container,
-                &mut queries.q_node,
-                Display::None,
-            );
-            set_display_slot(
-                &res.info_nodes,
-                &mut queries.q_node,
-                UiSlot::InfoPanelStatsGroup,
-                Display::None,
-            );
-            set_node_display(
-                res.info_nodes.stockpile.stockpile_group,
-                &mut queries.q_node,
-                Display::Flex,
-            );
-            set_display_slot(
-                &res.info_nodes,
-                &mut queries.q_node,
-                UiSlot::Header,
-                Display::Flex,
-            );
-            set_text_slot(
-                &res.info_nodes,
-                &mut queries.q_text,
-                UiSlot::Header,
-                &stockpile.header,
-            );
-            set_text_slot(
-                &res.info_nodes,
-                &mut queries.q_text,
-                UiSlot::CommonText,
-                &stockpile.common,
-            );
-            update_gender_icon(
-                &res.info_nodes,
-                &mut queries.q_gender,
-                &mut queries.q_node,
-                &*res.game_assets,
-                None,
-            );
-
-            let state_label = match stockpile.state {
-                StockpilePolicyState::Accepting => "Accepting",
-                StockpilePolicyState::TargetReached => "Target Reached",
-                StockpilePolicyState::Draining => "Draining",
-                StockpilePolicyState::Disabled => "Disabled",
-            };
-            let resource_label = stockpile
-                .current_resource
-                .map(|resource| resource.display_name().to_string())
-                .unwrap_or_else(|| "Empty".to_string());
-            set_text_entity(
-                res.info_nodes.stockpile.stockpile_state,
-                &mut queries.q_text,
-                &format!("State: {state_label}"),
-            );
-            set_text_entity(
-                res.info_nodes.stockpile.stockpile_current,
-                &mut queries.q_text,
-                &format!(
-                    "Stored: {}/{} ({resource_label}) | Incoming: {}",
-                    stockpile.current_amount, stockpile.capacity, stockpile.incoming_amount
-                ),
-            );
-            set_text_entity(
-                res.info_nodes.stockpile.stockpile_acceptance_summary,
-                &mut queries.q_text,
-                &stockpile_acceptance_summary(stockpile.acceptance),
-            );
-            set_text_entity(
-                res.info_nodes.stockpile.stockpile_target_text,
-                &mut queries.q_text,
-                &format!("Target: {}/{}", stockpile.target_amount, stockpile.capacity),
-            );
-            set_text_entity(
-                res.info_nodes.stockpile.stockpile_priority_text,
-                &mut queries.q_text,
-                &format!("Inbound Priority: {:?} (cycle)", stockpile.inbound_priority),
-            );
-            let export_label =
-                if stockpile.state == StockpilePolicyState::Draining && !stockpile.allow_export {
-                    "Export: Off (Draining override)"
-                } else if stockpile.allow_export {
-                    "Export: On"
-                } else {
-                    "Export: Off"
-                };
-            set_text_entity(
-                res.info_nodes.stockpile.stockpile_export_text,
-                &mut queries.q_text,
-                export_label,
-            );
-
-            let single = StockpilePolicyEditTarget::Single(stockpile.entity);
-            set_menu_action(
-                res.info_nodes.stockpile.stockpile_acceptance_all_button,
-                &mut queries.q_menu_button,
-                MenuAction::ApplyStockpilePolicy {
-                    target: single,
-                    patch: StockpilePolicyPatch {
-                        acceptance: Some(StockpileAcceptance::Any),
-                        ..default()
-                    },
-                },
-            );
-            set_menu_action(
-                res.info_nodes.stockpile.stockpile_acceptance_none_button,
-                &mut queries.q_menu_button,
-                MenuAction::ApplyStockpilePolicy {
-                    target: single,
-                    patch: StockpilePolicyPatch {
-                        acceptance: Some(StockpileAcceptance::none()),
-                        ..default()
-                    },
-                },
-            );
-            for row in &res.info_nodes.stockpile.stockpile_acceptance_rows {
-                set_text_entity(
-                    Some(row.text),
-                    &mut queries.q_text,
-                    &stockpile_acceptance_row_label(stockpile.acceptance, row.resource_type),
-                );
-                set_menu_action(
-                    Some(row.button),
-                    &mut queries.q_menu_button,
-                    MenuAction::ApplyStockpilePolicy {
-                        target: single,
-                        patch: StockpilePolicyPatch {
-                            acceptance: Some(stockpile.acceptance.with_resource(
-                                row.resource_type,
-                                !stockpile.acceptance.accepts(row.resource_type),
-                            )),
-                            ..default()
-                        },
-                    },
-                );
-            }
-            set_menu_action(
-                res.info_nodes.stockpile.stockpile_target_decrease_button,
-                &mut queries.q_menu_button,
-                MenuAction::ApplyStockpilePolicy {
-                    target: single,
-                    patch: StockpilePolicyPatch {
-                        target_amount: Some(stockpile.target_amount.saturating_sub(1)),
-                        ..default()
-                    },
-                },
-            );
-            set_menu_action(
-                res.info_nodes.stockpile.stockpile_target_increase_button,
-                &mut queries.q_menu_button,
-                MenuAction::ApplyStockpilePolicy {
-                    target: single,
-                    patch: StockpilePolicyPatch {
-                        target_amount: Some(
-                            stockpile
-                                .target_amount
-                                .saturating_add(1)
-                                .min(stockpile.capacity),
-                        ),
-                        ..default()
-                    },
-                },
-            );
-            set_menu_action(
-                res.info_nodes.stockpile.stockpile_priority_button,
-                &mut queries.q_menu_button,
-                MenuAction::ApplyStockpilePolicy {
-                    target: single,
-                    patch: StockpilePolicyPatch {
-                        inbound_priority: Some(next_stockpile_priority(stockpile.inbound_priority)),
-                        ..default()
-                    },
-                },
-            );
-            set_menu_action(
-                res.info_nodes.stockpile.stockpile_export_button,
-                &mut queries.q_menu_button,
-                MenuAction::ApplyStockpilePolicy {
-                    target: single,
-                    patch: StockpilePolicyPatch {
-                        allow_export: Some(!stockpile.allow_export),
-                        ..default()
-                    },
-                },
-            );
-            set_menu_action(
-                res.info_nodes.stockpile.stockpile_area_button,
-                &mut queries.q_menu_button,
-                MenuAction::BeginStockpilePolicyRangeEdit {
-                    patch: StockpilePolicyPatch {
-                        acceptance: Some(stockpile.acceptance),
-                        inbound_priority: Some(stockpile.inbound_priority),
-                        target_amount: Some(stockpile.target_amount),
-                        allow_export: Some(stockpile.allow_export),
-                    },
-                },
-            );
+            render_stockpile_section(stockpile, &res, &mut queries)
         }
         Some(InfoPanelViewModel::SoulSpa(soul_spa)) => {
-            set_node_display(
-                res.info_nodes.stockpile.stockpile_group,
-                &mut queries.q_node,
-                Display::None,
-            );
-            set_node_display(
-                res.info_nodes.soul_spa.soul_spa_group,
-                &mut queries.q_node,
-                Display::Flex,
-            );
-            set_node_display(
-                res.info_nodes.common.rename_button,
-                &mut queries.q_node,
-                Display::None,
-            );
-            set_node_display(
-                res.info_nodes.common.rename_field_container,
-                &mut queries.q_node,
-                Display::None,
-            );
-            set_display_slot(
-                &res.info_nodes,
-                &mut queries.q_node,
-                UiSlot::InfoPanelStatsGroup,
-                Display::None,
-            );
-            set_display_slot(
-                &res.info_nodes,
-                &mut queries.q_node,
-                UiSlot::Header,
-                Display::Flex,
-            );
-            set_text_slot(
-                &res.info_nodes,
-                &mut queries.q_text,
-                UiSlot::Header,
-                &soul_spa.header,
-            );
-            set_text_slot(
-                &res.info_nodes,
-                &mut queries.q_text,
-                UiSlot::CommonText,
-                &soul_spa.common,
-            );
-            update_gender_icon(
-                &res.info_nodes,
-                &mut queries.q_gender,
-                &mut queries.q_node,
-                &*res.game_assets,
-                None,
-            );
-
-            let status = soul_spa_status_label(soul_spa);
-            set_text_entity(
-                res.info_nodes.soul_spa.soul_spa_status,
-                &mut queries.q_text,
-                &status,
-            );
-            set_node_display(
-                res.info_nodes.soul_spa.soul_spa_output,
-                &mut queries.q_node,
-                if soul_spa.operational {
-                    Display::Flex
-                } else {
-                    Display::None
-                },
-            );
-            set_text_entity(
-                res.info_nodes.soul_spa.soul_spa_output,
-                &mut queries.q_text,
-                &format!("Output: {:.1}W", soul_spa.output_watts),
-            );
-            set_text_entity(
-                res.info_nodes.soul_spa.soul_spa_slots_text,
-                &mut queries.q_text,
-                &format!(
-                    "Active slots: {}/{}",
-                    soul_spa.active_slots, soul_spa.max_active_slots
-                ),
-            );
-            set_node_display(
-                res.info_nodes.soul_spa.soul_spa_controls,
-                &mut queries.q_node,
-                if soul_spa.operational {
-                    Display::Flex
-                } else {
-                    Display::None
-                },
-            );
-            set_menu_action(
-                res.info_nodes.soul_spa.soul_spa_slots_decrease_button,
-                &mut queries.q_menu_button,
-                MenuAction::SetSoulSpaActiveSlots {
-                    target: soul_spa.entity,
-                    active_slots: soul_spa.active_slots.saturating_sub(1),
-                },
-            );
-            set_menu_action(
-                res.info_nodes.soul_spa.soul_spa_slots_increase_button,
-                &mut queries.q_menu_button,
-                MenuAction::SetSoulSpaActiveSlots {
-                    target: soul_spa.entity,
-                    active_slots: soul_spa
-                        .active_slots
-                        .saturating_add(1)
-                        .min(soul_spa.max_active_slots),
-                },
-            );
-            set_node_display(
-                res.info_nodes.soul_spa.soul_spa_cancel_button,
-                &mut queries.q_node,
-                if soul_spa.operational {
-                    Display::None
-                } else {
-                    Display::Flex
-                },
-            );
-            set_menu_action(
-                res.info_nodes.soul_spa.soul_spa_cancel_button,
-                &mut queries.q_menu_button,
-                MenuAction::CancelSoulSpaConstruction {
-                    source_task: None,
-                    target: soul_spa.entity,
-                },
-            );
+            render_soul_spa_section(soul_spa, &res, &mut queries)
         }
-        Some(InfoPanelViewModel::Power(power)) => {
-            set_node_display(
-                res.info_nodes.stockpile.stockpile_group,
-                &mut queries.q_node,
-                Display::None,
-            );
-            set_node_display(
-                res.info_nodes.soul_spa.soul_spa_group,
-                &mut queries.q_node,
-                Display::None,
-            );
-            set_node_display(
-                res.info_nodes.common.rename_button,
-                &mut queries.q_node,
-                Display::None,
-            );
-            set_node_display(
-                res.info_nodes.common.rename_field_container,
-                &mut queries.q_node,
-                Display::None,
-            );
-            set_display_slot(
-                &res.info_nodes,
-                &mut queries.q_node,
-                UiSlot::InfoPanelStatsGroup,
-                Display::None,
-            );
-            set_display_slot(
-                &res.info_nodes,
-                &mut queries.q_node,
-                UiSlot::Header,
-                Display::Flex,
-            );
-            set_text_slot(
-                &res.info_nodes,
-                &mut queries.q_text,
-                UiSlot::Header,
-                &power.header,
-            );
-            set_text_slot(
-                &res.info_nodes,
-                &mut queries.q_text,
-                UiSlot::CommonText,
-                &power.common,
-            );
-            update_gender_icon(
-                &res.info_nodes,
-                &mut queries.q_gender,
-                &mut queries.q_node,
-                &*res.game_assets,
-                None,
-            );
-        }
+        Some(InfoPanelViewModel::Power(power)) => render_power_section(power, &res, &mut queries),
         Some(InfoPanelViewModel::Simple(simple)) => {
-            set_display_slot(
-                &res.info_nodes,
-                &mut queries.q_node,
-                UiSlot::Header,
-                Display::Flex,
-            );
-            set_node_display(
-                res.info_nodes.stockpile.stockpile_group,
-                &mut queries.q_node,
-                Display::None,
-            );
-            set_node_display(
-                res.info_nodes.soul_spa.soul_spa_group,
-                &mut queries.q_node,
-                Display::None,
-            );
-            set_node_display(
-                res.info_nodes.common.rename_button,
-                &mut queries.q_node,
-                Display::None,
-            );
-            set_node_display(
-                res.info_nodes.common.rename_field_container,
-                &mut queries.q_node,
-                Display::None,
-            );
-            set_display_slot(
-                &res.info_nodes,
-                &mut queries.q_node,
-                UiSlot::InfoPanelStatsGroup,
-                Display::None,
-            );
-            set_text_slot(
-                &res.info_nodes,
-                &mut queries.q_text,
-                UiSlot::Header,
-                &simple.header,
-            );
-            set_text_slot(
-                &res.info_nodes,
-                &mut queries.q_text,
-                UiSlot::CommonText,
-                &simple.common,
-            );
-            update_gender_icon(
-                &res.info_nodes,
-                &mut queries.q_gender,
-                &mut queries.q_node,
-                &*res.game_assets,
-                None,
-            );
-            set_text_slot(
-                &res.info_nodes,
-                &mut queries.q_text,
-                UiSlot::StatMotivation,
-                "",
-            );
-            set_text_slot(&res.info_nodes, &mut queries.q_text, UiSlot::StatStress, "");
-            set_text_slot(
-                &res.info_nodes,
-                &mut queries.q_text,
-                UiSlot::StatFatigue,
-                "",
-            );
-            set_text_slot(&res.info_nodes, &mut queries.q_text, UiSlot::StatDream, "");
-            set_text_slot(&res.info_nodes, &mut queries.q_text, UiSlot::TaskText, "");
-            set_text_slot(
-                &res.info_nodes,
-                &mut queries.q_text,
-                UiSlot::InventoryText,
-                "",
-            );
+            render_simple_section(simple, &res, &mut queries)
         }
         None => {
-            set_node_display(
-                res.info_nodes.stockpile.stockpile_group,
-                &mut queries.q_node,
-                Display::None,
-            );
-            set_node_display(
-                res.info_nodes.soul_spa.soul_spa_group,
-                &mut queries.q_node,
-                Display::None,
-            );
-            set_node_display(
-                res.info_nodes.common.rename_button,
-                &mut queries.q_node,
-                Display::None,
-            );
-            set_node_display(
-                res.info_nodes.common.rename_field_container,
-                &mut queries.q_node,
-                Display::None,
-            );
-            set_display_slot(
-                &res.info_nodes,
-                &mut queries.q_node,
-                UiSlot::InfoPanelStatsGroup,
-                Display::None,
-            );
             update_gender_icon(
                 &res.info_nodes,
                 &mut queries.q_gender,
@@ -1040,6 +935,139 @@ mod tests {
             &mut registry,
             &mut nodes,
         );
+    }
+
+    #[test]
+    fn switching_details_preserves_section_visibility_and_current_actions() {
+        use crate::models::inspection::{
+            EntityInspectionModel, SoulInspectionFields, SoulSpaInspectionFields,
+            StockpileInspectionFields,
+        };
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins)
+            .init_resource::<TestAssets>()
+            .init_resource::<crate::theme::UiTheme>()
+            .init_resource::<InfoPanelNodes>()
+            .init_resource::<crate::components::UiNodeRegistry>()
+            .init_resource::<EntityInspectionViewModel>()
+            .init_resource::<SelectedEntity>()
+            .init_resource::<InfoPanelPinState>()
+            .init_resource::<InfoPanelState>()
+            .init_resource::<SoulRenameState>()
+            .add_systems(Startup, spawn_test_panel)
+            .add_systems(Update, info_panel_system::<TestAssets>);
+        let target = app.world_mut().spawn_empty().id();
+        let base = EntityInspectionModel {
+            entity: target,
+            header: "Target".into(),
+            common_text: "Common".into(),
+            tooltip_lines: vec![],
+            soul: None,
+            familiar_has_area: None,
+            stockpile: None,
+            soul_spa: None,
+            power: None,
+        };
+        let mut soul = base.clone();
+        soul.entity = app.world_mut().spawn_empty().id();
+        soul.soul = Some(SoulInspectionFields {
+            gender: None,
+            motivation: "m".into(),
+            stress: "s".into(),
+            fatigue: "f".into(),
+            dream: "d".into(),
+            task: "t".into(),
+            inventory: "i".into(),
+            common: "c".into(),
+        });
+        let mut stockpile = base.clone();
+        stockpile.entity = app.world_mut().spawn_empty().id();
+        stockpile.stockpile = Some(StockpileInspectionFields {
+            state: StockpilePolicyState::Accepting,
+            current_amount: 0,
+            incoming_amount: 0,
+            capacity: 10,
+            current_resource: None,
+            acceptance: StockpileAcceptance::Any,
+            inbound_priority: hw_logistics::transport_request::TransportPriority::Normal,
+            target_amount: 10,
+            allow_export: true,
+        });
+        let mut spa = base.clone();
+        spa.entity = app.world_mut().spawn_empty().id();
+        spa.soul_spa = Some(SoulSpaInspectionFields {
+            operational: true,
+            bones_delivered: 20,
+            bones_required: 20,
+            occupied_slots: 0,
+            active_slots: 4,
+            max_active_slots: 4,
+            output_watts: 0.0,
+        });
+        let power = PowerInspectionFields {
+            role: PowerInspectionRole::Generator,
+            grid: None,
+            allocation_mode: None,
+            generation_watts: None,
+            total_demand_watts: None,
+            served_demand_watts: None,
+            reserve_watts: None,
+            deficit_watts: None,
+            consumer_count: None,
+            supplied_count: None,
+            shed_count: None,
+            invalid_count: None,
+            shed_order_labels: vec![],
+            demand_watts: None,
+            priority: None,
+            supply_state: None,
+        };
+        let mut spa_power = spa.clone();
+        spa_power.power = Some(power.clone());
+        let mut power_only = base.clone();
+        power_only.entity = app.world_mut().spawn_empty().id();
+        power_only.power = Some(power);
+        let steps = [
+            (Some(soul), [true, false, false, false]),
+            (Some(stockpile), [false, true, false, false]),
+            (Some(spa_power), [false, false, true, true]),
+            (Some(spa), [false, false, true, false]),
+            (Some(power_only), [false, false, false, true]),
+            (Some(base), [false, false, false, false]),
+            (None, [false, false, false, false]),
+        ];
+        for (model, expected) in steps.iter().chain(steps.iter().rev()) {
+            app.world_mut()
+                .resource_mut::<EntityInspectionViewModel>()
+                .model = model.clone();
+            app.update();
+            let nodes = app.world().resource::<InfoPanelNodes>();
+            let current_target = model.as_ref().map(|value| value.entity);
+            let groups = [
+                nodes.common.stats_group,
+                nodes.stockpile.stockpile_group,
+                nodes.soul_spa.soul_spa_group,
+                nodes.power.power_group,
+            ];
+            for (entity, visible) in groups.into_iter().zip(expected) {
+                assert_eq!(
+                    app.world().get::<Node>(entity.unwrap()).unwrap().display == Display::Flex,
+                    *visible
+                );
+            }
+            if expected[1] {
+                let button = nodes.stockpile.stockpile_acceptance_all_button.unwrap();
+                assert!(
+                    matches!(app.world().get::<MenuButton>(button).unwrap().0, MenuAction::ApplyStockpilePolicy { target: StockpilePolicyEditTarget::Single(entity), .. } if Some(entity) == current_target)
+                );
+            }
+            if expected[2] {
+                let button = nodes.soul_spa.soul_spa_slots_decrease_button.unwrap();
+                assert!(
+                    matches!(app.world().get::<MenuButton>(button).unwrap().0, MenuAction::SetSoulSpaActiveSlots { target: entity, .. } if Some(entity) == current_target)
+                );
+            }
+        }
     }
 
     #[test]

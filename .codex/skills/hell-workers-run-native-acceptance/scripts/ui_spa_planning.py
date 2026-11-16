@@ -324,6 +324,7 @@ def input_context(value, key=None):
         "mouse_left_pressed", "world_input_captured", "pointer_over_ui", "spa_planning", "viewport", "menu_state")}
     result["control"] = copy.deepcopy(value["controls"].get(key)) if key else None
     result["selected"] = value.get("selected")
+    result["inspection_target"] = value.get("inspection_target")
     return result
 
 

@@ -52,7 +52,8 @@ fn building_inventory(world: &mut World, kind: BuildingType) -> Vec<Value> {
 fn case_kind(case: &str) -> Option<BuildingType> {
     if matches!(
         case,
-        "m2-tank-candidate-completion"
+        "refactor-placement-ghosts"
+            | "m2-tank-candidate-completion"
             | "m2-tank-candidate-inflow"
             | "m2-tank-candidate-full"
             | "m2-tank-candidate-persistence"
@@ -109,11 +110,18 @@ fn legal_anchor(
     sites: &[Site],
     yards: &[Yard],
     kind: BuildingType,
+    empty_neighbors: bool,
 ) -> Option<(i32, i32)> {
     (1..MAP_WIDTH - 2)
         .flat_map(|x| (1..MAP_HEIGHT - 2).map(move |y| (x, y)))
         .filter(|&anchor| validate(map, sites, yards, kind, anchor).can_place)
         .filter(|&(x, y)| kind != BuildingType::Tank || companion_legal(map, (x, y)))
+        .filter(|&(x, y)| {
+            !empty_neighbors
+                || [(x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1)]
+                    .into_iter()
+                    .all(|grid| map.building_entity(grid).is_none())
+        })
         .min_by_key(|&(x, y)| (x - MAP_WIDTH / 2).abs() + (y - MAP_HEIGHT / 2).abs())
 }
 
@@ -166,8 +174,16 @@ pub(super) fn prepare(world: &mut World) {
         .iter(world)
         .cloned()
         .collect::<Vec<_>>();
-    let anchor = legal_anchor(world.resource::<WorldMap>(), &sites, &yards, kind)
-        .expect("generated world must contain a legal M5 anchor");
+    let ghost_case =
+        std::env::var("HW_NATIVE_UI_CASE").as_deref() == Ok("refactor-placement-ghosts");
+    let anchor = legal_anchor(
+        world.resource::<WorldMap>(),
+        &sites,
+        &yards,
+        kind,
+        ghost_case,
+    )
+    .expect("generated world must contain a legal M5 anchor");
     let center = live_building_geometry(world.resource::<WorldMap>(), kind, anchor).draw_pos;
     for mut transform in world
         .query_filtered::<&mut Transform, With<hw_ui::camera::MainCamera>>()
@@ -215,12 +231,67 @@ pub(super) fn snapshot(world: &mut World) -> Value {
         .get_resource::<SupplyMixerTarget>()
         .map(|target| target.anchor);
     let mut value = snapshot_at(world, kind, anchor, initial_building_inventory);
+    if std::env::var("HW_NATIVE_UI_CASE").as_deref() == Ok("refactor-placement-ghosts") {
+        value["placement_ghosts"] = placement_ghosts(world);
+    }
     if let Some(mixer) = mixer {
         value["supply_mixer"] = snapshot_at(world, BuildingType::MudMixer, mixer, Vec::new());
         value["supply_worldgen"] = super::supply_worldgen::snapshot(world);
         value["supply_workload"] = super::supply_workload::snapshot(world);
     }
     value
+}
+
+fn placement_ghosts(world: &mut World) -> Value {
+    use crate::assets::building_asset_set::{BuildingAssetKind, BuildingAssetPool};
+    use crate::assets::door_asset_set::{DoorAssetReadiness, DoorAssetReadinessState};
+    use crate::systems::visual::placement_ghost::{PlacementGhost, PlacementPartnerGhost};
+    use bevy::sprite::Anchor;
+
+    let ghosts: Vec<_> = world
+        .query_filtered::<Entity, With<PlacementGhost>>()
+        .iter(world)
+        .take(3)
+        .collect();
+    let partners: Vec<_> = world
+        .query_filtered::<Entity, With<PlacementPartnerGhost>>()
+        .iter(world)
+        .take(3)
+        .collect();
+    let sprite = |entity: Entity| {
+        let sprite = world.get::<Sprite>(entity)?;
+        let anchor = world.get::<Anchor>(entity)?;
+        let transform = world.get::<Transform>(entity)?;
+        let server = world.resource::<AssetServer>();
+        let path = server
+            .get_path(sprite.image.id())
+            .map(|path| path.path().to_string_lossy().into_owned());
+        Some(json!({
+            "entity": entity.to_bits(), "image": format!("{:?}", sprite.image.id()), "path": path,
+            "resident": world.resource::<Assets<Image>>().get(&sprite.image).is_some(),
+            "size": sprite.custom_size.map(|size| size.to_array()), "anchor": anchor.0.to_array(),
+            "color": sprite.color.to_srgba().to_f32_array(), "position": transform.translation.to_array(),
+            "visible": world.get::<InheritedVisibility>(entity).is_some_and(|visibility| visibility.get()),
+            "view_visible": world.get::<ViewVisibility>(entity).is_some_and(|visibility| visibility.get()),
+        }))
+    };
+    let pool = world.resource::<BuildingAssetPool>();
+    let active = pool.active(BuildingAssetKind::Tank);
+    let pending = pool.pending(BuildingAssetKind::Tank);
+    let failure = pool.failure(BuildingAssetKind::Tank);
+    let door = match &world.resource::<DoorAssetReadiness>().state {
+        DoorAssetReadinessState::Eligible(identity) => Some(json!({
+            "generation": identity.asset_set_generation,
+            "authority": format!("{:?}", identity.authority),
+            "manifest_sha256": identity.manifest_sha256,
+        })),
+        _ => None,
+    };
+    json!({
+        "active": active, "pending": pending, "failure": failure.map(|failure| format!("{failure:?}")), "door": door,
+        "ghosts": ghosts.into_iter().map(sprite).collect::<Vec<_>>(),
+        "partners": partners.into_iter().map(sprite).collect::<Vec<_>>(),
+    })
 }
 
 fn snapshot_at(
@@ -320,6 +391,8 @@ fn snapshot_at(
         "cursor_grid": cursor_grid, "primary_window": window_entity.to_bits(),
         "world_epoch": world.resource::<hw_core::WorldEpoch>().get(),
         "play_mode": format!("{:?}", world.resource::<State<hw_core::game_state::PlayMode>>().get()),
+        "task_mode": format!("{:?}", world.resource::<crate::app_contexts::TaskContext>().0),
+        "anchor_world": point.to_array(),
         "build_kind": world.resource::<crate::app_contexts::BuildContext>().0.map(|kind| format!("{kind:?}")),
         "camera": {"entity": camera_entity.to_bits(), "primary": true, "viewport": window.physical_size().to_array()},
         "legal": validation.can_place, "reject_reason": validation.reject_reason.map(|reason| format!("{reason:?}")),

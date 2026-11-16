@@ -213,6 +213,7 @@ class X11Input:
                     or not (0 <= point[0] < width and 0 <= point[1] < height)):
                 raise InputRejected("input point falls outside the owned client")
         self.sent.add(step)
+        motion = None
         if point is not None:
             x, y = ctypes.c_int(), ctypes.c_int()
             child = ctypes.c_ulong()
@@ -220,7 +221,7 @@ class X11Input:
             if not self.x11.XTranslateCoordinates(self.display, self.window, root, *point,
                                                   ctypes.byref(x), ctypes.byref(y), ctypes.byref(child)):
                 raise InputRejected("could not resolve client input coordinates")
-            self._motion(x.value, y.value)
+            motion = self._motion(x.value, y.value)
         if button is not None:
             self._button(button, bool(pressed))
             (self.held_buttons.add if pressed else self.held_buttons.discard)(button)
@@ -231,9 +232,12 @@ class X11Input:
             self._key(code, bool(pressed))
             (self.held_keys.add if pressed else self.held_keys.discard)(code)
         self.x11.XSync(self.display, 0)
-        self.record({"step": step, "nonce": nonce, "window": self.window, "pid": self.owner_pid,
-                     "point": point, "button": button, "pressed": pressed, "key": key,
-                     "x11_pointer": self.client_pointer()})
+        event = {"step": step, "nonce": nonce, "window": self.window, "pid": self.owner_pid,
+                 "point": point, "button": button, "pressed": pressed, "key": key,
+                 "x11_pointer": self.client_pointer()}
+        if motion is not None:
+            event["motion"] = motion
+        self.record(event)
 
     def resize(self, step: str, nonce: str, width: int, height: int) -> None:
         if nonce != self.nonce or not step or step in self.sent:

@@ -8,6 +8,8 @@ mod candidate_comparison;
 #[cfg(feature = "profiling")]
 pub(crate) mod gallery_capture;
 #[cfg(feature = "profiling")]
+mod generation_probe;
+#[cfg(feature = "profiling")]
 pub(crate) mod group_art;
 #[cfg(feature = "profiling")]
 pub(crate) use release::gallery as release_gallery;
@@ -70,6 +72,7 @@ pub(crate) fn snapshot_ordinary_art(
 ) -> Result<serde_json::Value, String> {
     ordinary_art::snapshot(world)
 }
+pub(crate) use pool::BuildingPartRole;
 pub use pool::{BuildingAssetDescriptor, BuildingAssetPool};
 pub use projection::project_building_asset_json;
 #[cfg(feature = "profiling")]

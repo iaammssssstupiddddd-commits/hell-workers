@@ -50,14 +50,56 @@ impl Default for GameSettings {
 
 /// Allowed autosave intervals (active real-time minutes).
 pub const AUTOSAVE_INTERVAL_MINUTES: [u32; 4] = [5, 10, 20, 30];
+pub const UI_SCALE_RANGE: (f32, f32) = (0.85, 1.25);
+pub const CAMERA_PAN_SPEED_RANGE: (f32, f32) = (200.0, 1000.0);
+pub const AUTOSAVE_INTERVAL_SLIDER_RANGE: (f32, f32) = (0.0, 3.0);
+pub const AUTOSAVE_GENERATIONS_MIN: u8 = 1;
+pub const AUTOSAVE_GENERATIONS_MAX: u8 = 5;
+pub const AUTOSAVE_GENERATIONS_SLIDER_RANGE: (f32, f32) = (
+    AUTOSAVE_GENERATIONS_MIN as f32,
+    AUTOSAVE_GENERATIONS_MAX as f32,
+);
+pub const NOTIFICATION_DURATION_SLIDER_RANGE: (f32, f32) = (0.0, 2.0);
+
+pub fn autosave_interval_from_slider(value: f32) -> u32 {
+    let index = value.round().clamp(
+        AUTOSAVE_INTERVAL_SLIDER_RANGE.0,
+        AUTOSAVE_INTERVAL_SLIDER_RANGE.1,
+    ) as usize;
+    AUTOSAVE_INTERVAL_MINUTES[index]
+}
+
+pub fn autosave_generations_from_slider(value: f32) -> u8 {
+    value.round().clamp(
+        AUTOSAVE_GENERATIONS_SLIDER_RANGE.0,
+        AUTOSAVE_GENERATIONS_SLIDER_RANGE.1,
+    ) as u8
+}
+
+pub fn notification_duration_from_slider(value: f32) -> u8 {
+    (value.round().clamp(
+        NOTIFICATION_DURATION_SLIDER_RANGE.0,
+        NOTIFICATION_DURATION_SLIDER_RANGE.1,
+    ) as u8
+        + 1)
+        * 4
+}
+
+pub const fn normalize_notification_duration(value: u8) -> u8 {
+    match value {
+        8 => 8,
+        12 => 12,
+        _ => 4,
+    }
+}
+
+pub fn normalize_autosave_generations(value: u8) -> u8 {
+    value.clamp(AUTOSAVE_GENERATIONS_MIN, AUTOSAVE_GENERATIONS_MAX)
+}
 
 impl GameSettings {
     pub fn normalized_notification_duration_seconds(&self) -> u8 {
-        match self.notification_duration_seconds {
-            8 => 8,
-            12 => 12,
-            _ => 4,
-        }
+        normalize_notification_duration(self.notification_duration_seconds)
     }
 
     pub fn notification_duration_slider_value(&self) -> f32 {
@@ -74,7 +116,7 @@ impl GameSettings {
     }
 
     pub fn normalized_autosave_generations(&self) -> u8 {
-        self.autosave_generations.clamp(1, 5)
+        normalize_autosave_generations(self.autosave_generations)
     }
 
     pub fn autosave_interval_slider_value(&self) -> f32 {
@@ -86,8 +128,7 @@ impl GameSettings {
     }
 
     pub fn set_autosave_interval_from_slider(&mut self, value: f32) {
-        let index = value.round().clamp(0.0, 3.0) as usize;
-        self.autosave_interval_minutes = AUTOSAVE_INTERVAL_MINUTES[index];
+        self.autosave_interval_minutes = autosave_interval_from_slider(value);
     }
 
     pub fn autosave_generations_slider_value(&self) -> f32 {
@@ -95,6 +136,32 @@ impl GameSettings {
     }
 
     pub fn set_autosave_generations_from_slider(&mut self, value: f32) {
-        self.autosave_generations = value.round().clamp(1.0, 5.0) as u8;
+        self.autosave_generations = autosave_generations_from_slider(value);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn discrete_slider_inputs_keep_existing_rounding_and_nonfinite_values() {
+        for (input, interval, generations, duration) in [
+            (f32::NEG_INFINITY, 5, 1, 4),
+            (0.49, 5, 1, 4),
+            (0.5, 10, 1, 8),
+            (1.5, 20, 2, 12),
+            (2.0, 20, 2, 12),
+            (2.5, 30, 3, 12),
+            (3.0, 30, 3, 12),
+            (4.0, 30, 4, 12),
+            (5.0, 30, 5, 12),
+            (f32::INFINITY, 30, 5, 12),
+            (f32::NAN, 5, 0, 4),
+        ] {
+            assert_eq!(autosave_interval_from_slider(input), interval);
+            assert_eq!(autosave_generations_from_slider(input), generations);
+            assert_eq!(notification_duration_from_slider(input), duration);
+        }
     }
 }

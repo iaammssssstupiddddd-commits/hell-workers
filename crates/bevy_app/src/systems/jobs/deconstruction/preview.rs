@@ -250,8 +250,139 @@ fn set_preview(preview: &mut DeconstructionHoverPreview, next: DeconstructionHov
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
+    use bevy::ecs::system::RunSystemOnce;
+
+    fn inspect(world: &mut World, target: Entity) -> DeconstructionHoverStatus {
+        world
+            .run_system_once(move |queries: DeconstructionPreviewQueries| {
+                classify_hover_target(
+                    target,
+                    &queries.q_buildings,
+                    &queries.q_markers,
+                    &queries.q_power,
+                    &queries.q_construction_roles,
+                    &queries.q_move_tasks,
+                    &queries.q_assigned_tasks,
+                )
+            })
+            .unwrap()
+    }
+
+    pub(crate) fn target_for(world: &mut World, kind: BuildingType) -> Entity {
+        let mut entity = world.spawn((
+            Building {
+                kind,
+                is_provisional: false,
+            },
+            Transform::default(),
+        ));
+        match kind {
+            BuildingType::Wall | BuildingType::Floor => {}
+            BuildingType::Door => {
+                entity.insert(Door::default());
+            }
+            BuildingType::Bridge => {
+                entity.insert(BridgeMarker);
+            }
+            BuildingType::Tank => {
+                entity.insert(Stockpile {
+                    capacity: 50,
+                    resource_type: Some(ResourceType::Water),
+                });
+            }
+            BuildingType::MudMixer => {
+                entity.insert((
+                    Stockpile {
+                        capacity: 50,
+                        resource_type: Some(ResourceType::Water),
+                    },
+                    MudMixerStorage::default(),
+                ));
+            }
+            BuildingType::RestArea => {
+                entity.insert(RestArea { capacity: 4 });
+            }
+            BuildingType::WheelbarrowParking => {
+                entity.insert(WheelbarrowParking { capacity: 2 });
+            }
+            BuildingType::SandPile => {
+                entity.insert(SandPile);
+            }
+            BuildingType::BonePile => {
+                entity.insert(BonePile);
+            }
+            BuildingType::SoulSpa => {
+                entity.insert(SoulSpaSite {
+                    phase: SoulSpaPhase::Operational,
+                    ..default()
+                });
+            }
+            BuildingType::OutdoorLamp => {
+                entity.insert(PowerConsumer { demand: 1.0 });
+            }
+        }
+        entity.id()
+    }
+
+    #[test]
+    fn every_completed_kind_requires_its_own_consistent_marker_shape() {
+        for kind in BuildingType::ALL {
+            let mut world = World::new();
+            let target = target_for(&mut world, kind);
+            assert_eq!(
+                inspect(&mut world, target),
+                DeconstructionHoverStatus::Available { target, kind }
+            );
+            if kind == BuildingType::SandPile {
+                world.entity_mut(target).insert(BonePile);
+            } else {
+                world.entity_mut(target).insert(SandPile);
+            }
+            assert_eq!(
+                inspect(&mut world, target),
+                DeconstructionHoverStatus::Rejected {
+                    target: Some(target),
+                    kind: Some(kind),
+                    reason: DeconstructionDesignationRejectReason::CleanupUnavailable,
+                }
+            );
+        }
+    }
+
+    #[test]
+    fn preview_keeps_transform_optional_but_rejects_missing_facility_facts() {
+        let mut world = World::new();
+        let target = target_for(&mut world, BuildingType::Tank);
+        world.entity_mut(target).remove::<Transform>();
+        assert_eq!(
+            inspect(&mut world, target),
+            DeconstructionHoverStatus::Available {
+                target,
+                kind: BuildingType::Tank
+            }
+        );
+        world.get_mut::<Stockpile>(target).unwrap().resource_type = Some(ResourceType::Wood);
+        assert_eq!(
+            inspect(&mut world, target),
+            DeconstructionHoverStatus::Rejected {
+                target: Some(target),
+                kind: Some(BuildingType::Tank),
+                reason: DeconstructionDesignationRejectReason::CleanupUnavailable,
+            }
+        );
+        let spa = target_for(&mut world, BuildingType::SoulSpa);
+        world.get_mut::<SoulSpaSite>(spa).unwrap().phase = SoulSpaPhase::Constructing;
+        assert_eq!(
+            inspect(&mut world, spa),
+            DeconstructionHoverStatus::Rejected {
+                target: Some(spa),
+                kind: Some(BuildingType::SoulSpa),
+                reason: DeconstructionDesignationRejectReason::CleanupUnavailable,
+            }
+        );
+    }
 
     #[test]
     fn rejected_target_keeps_the_canonical_entity_and_typed_reason() {

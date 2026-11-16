@@ -33,11 +33,17 @@ pub fn handle(
             true
         }
         UiIntent::SetUiScale(value) => {
-            settings.ui_scale = value.clamp(0.85, 1.25);
+            settings.ui_scale = value.clamp(
+                hw_core::settings::UI_SCALE_RANGE.0,
+                hw_core::settings::UI_SCALE_RANGE.1,
+            );
             false
         }
         UiIntent::SetCameraPanSpeed(value) => {
-            settings.camera_pan_speed = value.clamp(200.0, 1000.0);
+            settings.camera_pan_speed = value.clamp(
+                hw_core::settings::CAMERA_PAN_SPEED_RANGE.0,
+                hw_core::settings::CAMERA_PAN_SPEED_RANGE.1,
+            );
             false
         }
         UiIntent::SetCameraMousePanEnabled(enabled) => {
@@ -70,15 +76,13 @@ pub fn handle(
             false
         }
         UiIntent::SetNotificationDuration(seconds) => {
-            settings.notification_duration_seconds = match seconds {
-                8 => 8,
-                12 => 12,
-                _ => 4,
-            };
+            settings.notification_duration_seconds =
+                hw_core::settings::normalize_notification_duration(seconds);
             false
         }
         UiIntent::SetAutosaveGenerations(generations) => {
-            settings.autosave_generations = generations.clamp(1, 5);
+            settings.autosave_generations =
+                hw_core::settings::normalize_autosave_generations(generations);
             false
         }
         _ => false,
@@ -121,5 +125,35 @@ mod tests {
 
         assert_eq!(menu_state, MenuState::Settings);
         assert!(input_focus.get().is_none());
+    }
+
+    #[test]
+    fn direct_setting_intents_preserve_entry_specific_normalization() {
+        let mut settings = GameSettings::default();
+        let mut menu = MenuState::Hidden;
+        let mut debug = DebugVisible::default();
+        let mut gizmos = GizmoConfigStore::default();
+        let mut focus = InputFocus::default();
+        let mut apply = |intent| {
+            handle(
+                intent,
+                &mut settings,
+                &mut menu,
+                &mut debug,
+                &mut gizmos,
+                &mut focus,
+            );
+        };
+        apply(UiIntent::SetAutosaveIntervalMinutes(17));
+        apply(UiIntent::SetAutosaveGenerations(0));
+        apply(UiIntent::SetNotificationDuration(7));
+        apply(UiIntent::SetUiScale(f32::NAN));
+        apply(UiIntent::SetCameraPanSpeed(f32::INFINITY));
+        assert_eq!(settings.autosave_interval_minutes, 17);
+        assert_eq!(settings.normalized_autosave_interval_minutes(), 20);
+        assert_eq!(settings.autosave_generations, 1);
+        assert_eq!(settings.notification_duration_seconds, 4);
+        assert!(settings.ui_scale.is_nan());
+        assert_eq!(settings.camera_pan_speed, 1000.0);
     }
 }
