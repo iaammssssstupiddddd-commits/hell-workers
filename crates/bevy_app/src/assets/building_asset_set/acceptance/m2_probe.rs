@@ -47,6 +47,7 @@ struct Trace {
 }
 
 const FEEDBACK_SCOPE: &str = "m2-feedback-observations-only";
+const FEEDBACK_MOTION_SCOPE: &str = "m2-dirty-feedback-motion-observations-only";
 const CANDIDATE_SCOPE: &str = "m2-candidate-seeded-storyboard-only";
 
 fn trace_scope(
@@ -94,18 +95,48 @@ fn trace_scope(
     Ok(Some(FEEDBACK_SCOPE))
 }
 
+fn feedback_motion_scope(
+    session: &BuildingArtSession,
+    scope: Option<&'static str>,
+    motion: Option<&OsStr>,
+    storyboard: Option<&OsStr>,
+    leg: Option<&str>,
+    ui_case: bool,
+) -> Result<Option<&'static str>, String> {
+    let Some(flag) = motion else { return Ok(scope) };
+    if flag != OsStr::new("1")
+        || scope != Some(FEEDBACK_SCOPE)
+        || storyboard.is_some()
+        || session.identity.kind != BuildingAssetKind::MudMixer
+        || !matches!(leg, Some("refining" | "save-load"))
+        || ui_case
+    {
+        return Err("dirty feedback motion requires an isolated Mixer ArtPreview leg".into());
+    }
+    Ok(Some(FEEDBACK_MOTION_SCOPE))
+}
+
 pub(super) fn configure(app: &mut App, session: &BuildingArtSession) -> Result<(), String> {
     let probe = std::env::var_os("HW_M2_ACCEPTANCE_PROBE");
     let storyboard = std::env::var_os("HW_M2_CANDIDATE_STORYBOARD");
     let leg = std::env::var("HW_M2_ACCEPTANCE_LEG").ok();
-    let Some(scope) = trace_scope(
+    let scope = trace_scope(
         session,
         probe.as_deref(),
         storyboard.as_deref(),
         leg.as_deref(),
         std::env::var_os("HW_NATIVE_UI_CASE").is_some(),
-    )?
-    else {
+    )?;
+    let motion = std::env::var_os("HW_M2_DIRTY_FEEDBACK_MOTION");
+    let scope = feedback_motion_scope(
+        session,
+        scope,
+        motion.as_deref(),
+        storyboard.as_deref(),
+        leg.as_deref(),
+        std::env::var_os("HW_NATIVE_UI_CASE").is_some(),
+    )?;
+    let Some(scope) = scope else {
         return Ok(());
     };
     let path = session.status_path.with_extension("m2-trace.json");
@@ -119,6 +150,9 @@ pub(super) fn configure(app: &mut App, session: &BuildingArtSession) -> Result<(
     if let Ok(case) = std::env::var("HW_NATIVE_UI_CASE") {
         super::m2_ui::configure(app, session, &case)?;
     } else {
+        if scope == FEEDBACK_MOTION_SCOPE {
+            super::m2_fixture::configure_feedback_motion(app);
+        }
         super::m2_fixture::configure(app, session.identity.kind)?;
         if scope == CANDIDATE_SCOPE {
             super::m2_fixture::configure_candidate_pointer(app);
@@ -465,7 +499,7 @@ fn observe(world: &mut World) {
     let binding_matches = trace.identity == session.identity
         && trace.nonce == session.nonce
         && match trace.scope {
-            FEEDBACK_SCOPE => {
+            FEEDBACK_SCOPE | FEEDBACK_MOTION_SCOPE => {
                 session.mode == "feedback"
                     && session.identity.authority == BuildingAssetAuthority::ArtPreview
             }
@@ -481,7 +515,10 @@ fn observe(world: &mut World) {
         Err("M2 sample cap reached; use separate bounded lifecycle legs".to_string())
     } else {
         snapshot(world).and_then(|mut sample| {
-            if world.resource::<Trace>().scope == CANDIDATE_SCOPE {
+            if matches!(
+                world.resource::<Trace>().scope,
+                CANDIDATE_SCOPE | FEEDBACK_MOTION_SCOPE
+            ) {
                 sample["storyboard_stage"] =
                     json!(world.resource::<super::m2_fixture::Fixture>().stage);
                 sample["storyboard_clock"] =
@@ -554,6 +591,78 @@ fn observe(world: &mut World) {
 mod tests {
     use super::*;
     use crate::assets::building_asset_set::BuildingAssetSetIdentity;
+
+    #[test]
+    fn dirty_motion_requires_explicit_isolated_mixer_feedback() {
+        let mut world = world();
+        let mut session = world.resource_mut::<BuildingArtSession>();
+        session.identity.kind = BuildingAssetKind::MudMixer;
+        let one = Some(OsStr::new("1"));
+        for leg in ["refining", "save-load"] {
+            assert_eq!(
+                feedback_motion_scope(&session, Some(FEEDBACK_SCOPE), one, None, Some(leg), false)
+                    .unwrap(),
+                Some(FEEDBACK_MOTION_SCOPE)
+            );
+        }
+        assert!(feedback_motion_scope(&session, None, one, None, Some("refining"), false).is_err());
+        assert!(
+            feedback_motion_scope(
+                &session,
+                Some(FEEDBACK_SCOPE),
+                Some(OsStr::new("0")),
+                None,
+                Some("refining"),
+                false
+            )
+            .is_err()
+        );
+        assert!(
+            feedback_motion_scope(
+                &session,
+                Some(FEEDBACK_SCOPE),
+                one,
+                one,
+                Some("refining"),
+                false
+            )
+            .is_err()
+        );
+        assert!(
+            feedback_motion_scope(
+                &session,
+                Some(FEEDBACK_SCOPE),
+                one,
+                None,
+                Some("water"),
+                false
+            )
+            .is_err()
+        );
+        assert!(
+            feedback_motion_scope(
+                &session,
+                Some(FEEDBACK_SCOPE),
+                one,
+                None,
+                Some("refining"),
+                true
+            )
+            .is_err()
+        );
+        session.identity.kind = BuildingAssetKind::Tank;
+        assert!(
+            feedback_motion_scope(
+                &session,
+                Some(FEEDBACK_SCOPE),
+                one,
+                None,
+                Some("refining"),
+                false
+            )
+            .is_err()
+        );
+    }
 
     #[test]
     fn candidate_storyboard_cannot_relabel_feedback_or_add_unreviewed_legs() {

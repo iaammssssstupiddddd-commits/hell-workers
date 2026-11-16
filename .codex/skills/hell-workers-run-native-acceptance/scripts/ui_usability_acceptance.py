@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import copy
 from datetime import UTC, datetime
 import hashlib
 import json
@@ -41,16 +42,31 @@ from scripts import ui_m2_tank_inflow as tank_inflow
 from scripts import ui_m2_tank_full as tank_full
 from scripts import ui_m2_tank_supply as tank_supply
 from scripts import ui_m2_tank_persistence as tank_persistence
+from scripts import ui_refactor_stockpile as stockpile_target
+from scripts import ui_refactor_spa_slots as refactor_spa
 
 PROFILE = "ui-usability-feedback"
+SETTINGS_CASE = "refactor-settings-sliders"
+SETTINGS_CHECKPOINTS = ("settings-initial", "settings-scale", "settings-camera",
+                        "settings-notification", "settings-interval", "settings-generations",
+                        "settings-closed-refactor", "settings-reopened-scale", "settings-reopened-camera",
+                        "settings-reopened-notification", "settings-reopened-interval", "settings-reopened-generations")
+SETTINGS_DRAGS = (
+    ("UiScale", "ui_scale", 1.25, "125%"),
+    ("CameraPanSpeed", "camera_pan_speed", 1000.0, "1000 ワールド単位/秒"),
+    ("NotificationDuration", "notification_duration_seconds", 12, "12 秒"),
+    ("AutosaveInterval", "autosave_interval_minutes", 30, "30 分"),
+    ("AutosaveGenerations", "autosave_generations", 5, "5 世代"),
+)
 CHECKPOINTS = ("tasks", "last-page", "minimized", "restored", "entities",
                "paused-tooltip", "settings", "settings-scrolled", "settings-closed",
                "history", "history-oldest", "history-closed", "guide", "guide-closed")
 VIEWPORTS = ((1920, 1080, 1.0), (1280, 720, 1.25), (1280, 720, 0.85),
              (1280, 720, 1.0), (1920, 1080, 0.85), (1920, 1080, 1.25))
-CASES = ("navigation", "refactor-rows", "progress-bars", "terrain-materials", "refactor-suite",
+CASES = ("navigation", "refactor-rows", "refactor-pinned-rename", "progress-bars", "terrain-materials", "refactor-suite",
          "bridge-planning", "soul-spa-planning", "soul-spa-completion", "soul-spa-usage", "soul-spa-persistence", "soul-spa-slots", "soul-spa-occupied-save", "rest-area-planning", "rest-area-refund", "rest-area-completion", "rest-area-usage", "rest-area-exit", "rest-area-save", "rest-area-lifecycle", "rest-area-maxzoom", "rest-area-candidate-lifecycle")
-SPA_CASES = ("soul-spa-planning", "soul-spa-completion", "soul-spa-usage", "soul-spa-persistence", "soul-spa-slots", "soul-spa-occupied-save", spa_art.CASE, spa_resumed.CASE, spa_loaded.CASE)
+CASES += (SETTINGS_CASE, tank_completion.GHOST_CASE, stockpile_target.CASE, refactor_spa.CASE)
+SPA_CASES = (refactor_spa.CASE, "soul-spa-planning", "soul-spa-completion", "soul-spa-usage", "soul-spa-persistence", "soul-spa-slots", "soul-spa-occupied-save", spa_art.CASE, spa_resumed.CASE, spa_loaded.CASE)
 SPA_ART_CASES = (spa_art.CASE, spa_resumed.CASE, spa_loaded.CASE)
 CASES += SPA_ART_CASES
 CASES += tuple(m5.KINDS)
@@ -89,6 +105,7 @@ def planned_art(args, repo):
 
 def session_matrix(case, smoke):
     native.require(case in CASES, "unsupported UI case")
+    native.require(case != SETTINGS_CASE or smoke, "settings drag case requires the default smoke viewport")
     cases = ("refactor-rows", "progress-bars") if case == "refactor-suite" else (case,)
     return [(item, *viewport) for item in cases for viewport in (VIEWPORTS[:1] if smoke else VIEWPORTS)]
 
@@ -110,6 +127,12 @@ def sha256(path: Path) -> str:
 
 
 def check_observation(case: str, value: dict) -> None:
+    if case in tank_completion.GHOST_CHECKPOINTS:
+        tank_completion.check_ghost_observation(case, value)
+        return
+    if case in SETTINGS_CHECKPOINTS:
+        check_settings_observation(case, value)
+        return
     native.require(value["ready"] and value["frame"] > 90, "fixture is not ready")
     native.require(value["task_rows"] <= 20, "task resident row limit exceeded")
     if case in tank_persistence.CHECKPOINTS[-2:]:
@@ -142,6 +165,9 @@ def check_observation(case: str, value: dict) -> None:
     if case in spa_occupied.CHECKPOINTS[-2:]:
         spa_occupied.check_observation(case, value)
         return
+    if case in refactor_spa.CHECKPOINTS:
+        refactor_spa.check_observation(case, value)
+        return
     if case in spa_planning.SLOTS_CHECKPOINTS[-2:]:
         spa_planning.check_slots_observation(case, value)
         return
@@ -173,6 +199,12 @@ def check_observation(case: str, value: dict) -> None:
     if case in (*rest_area_usage.EXIT_CHECKPOINTS[3:], *rest_area_usage.SAVE_CHECKPOINTS[5:],
                 rest_area_usage.LIFECYCLE_CHECKPOINTS[-1]):
         rest_area_usage.check_observation(case, value)
+        return
+    if case in stockpile_target.CHECKPOINTS:
+        stockpile_target.check_observation(case, value)
+        return
+    if case in refactor_rows.PIN_CHECKPOINTS:
+        refactor_rows.check_pin_observation(case, value)
         return
     if case in refactor_rows.CHECKPOINTS:
         refactor_rows.check_observation(case, value)
@@ -381,6 +413,7 @@ class Driver:
             if path.is_file():
                 value = native.read_json(path)
                 native.require(value["nonce"] == self.nonce and value["pid"] == self.process.pid, "stale observer")
+                self.latest_observation = value
                 if value["frame"] > after and predicate(value):
                     return value
             time.sleep(0.05)
@@ -399,8 +432,29 @@ class Driver:
                 return value["cursor"] is not None and all(abs(a - b) <= 2 for a, b in zip(value["cursor"], event["point"]))
             if event.get("button") == 1:
                 return value["mouse_left_pressed"] == event["pressed"] or (event["pressed"] and value["world_input_captured"])
+            if event.get("button") == 3:
+                return value["mouse_right_pressed"] == event["pressed"]
             return True
-        self.last = self.wait(acknowledged, after=self.last["frame"] + (0 if getattr(self, "fresh_ack", False) else 3))
+        try:
+            self.last = self.wait(acknowledged, after=self.last["frame"] + (0 if getattr(self, "fresh_ack", False) else 3))
+        except native.AcceptanceError:
+            if event.get("point") is not None:
+                try:
+                    failure = {
+                        "event": self.events[-1], "pre_frame": self.last["frame"],
+                        "x11_pointer_after_wait": self.input.client_pointer(),
+                        "last_observation": {key: getattr(self, "latest_observation", {}).get(key)
+                                             for key in ("nonce", "pid", "frame", "cursor", "world_epoch")},
+                    }
+                    if isinstance(self.input, (PortalX11Input, PortalEisInput)):
+                        try:
+                            failure["monitor_mapping_after_wait"] = self.input.portal.motion_mapping(self.input.root_size())
+                        except Exception:
+                            failure["monitor_mapping_after_wait"] = None
+                    native.atomic_write_json(self.root / "failed-input.json", failure)
+                except Exception:
+                    pass  # Preserve the original failure, including unknown input outcomes.
+            raise
         self.acknowledge_events(self.events[-1:])
 
     def acknowledge_events(self, events):
@@ -408,8 +462,13 @@ class Driver:
             event["post_frame"] = self.last["frame"]
             event["observed_cursor"] = self.last["cursor"]
             event["observed_left_pressed"] = self.last["mouse_left_pressed"]
+            event["observed_right_pressed"] = self.last["mouse_right_pressed"]
             event["observed_hover"] = {key: value["interaction"] for key, value in self.last["controls"].items()
                                        if value["interaction"] in ("Hovered", "Pressed")}
+            event["observed_hover_entities"] = {key: value.get("entity") for key, value in self.last["controls"].items()
+                                                if value["interaction"] in ("Hovered", "Pressed")}
+            event["observed_hover_rects"] = {key: value.get("rect") for key, value in self.last["controls"].items()
+                                             if value["interaction"] in ("Hovered", "Pressed")}
         native.atomic_write_json(self.root / "events.json", {"events": self.events})
 
     def point(self, key):
@@ -547,8 +606,158 @@ def check_input_client(manifest, session, client):
                            "suite did not share one portal session")
     if manifest["input_backend"] == "portal-eis":
         rest_area_art.check_eis_client(client, scroll=manifest.get("case") == "rest-area-maxzoom")
-    if session.get("case", manifest.get("case")) == "refactor-rows":
+    if session.get("case", manifest.get("case")) in ("refactor-rows", "refactor-pinned-rename"):
         native.require(client.get("xmodifiers") == "@im=local", "row text input requires child-local XIM")
+
+
+def check_settings_observation(case, value):
+    native.require(value.get("ready") is True and value.get("frame", 0) > 90
+                   and case in SETTINGS_CHECKPOINTS and value.get("paused") is True,
+                   "settings checkpoint or pause differs")
+    settings = value.get("settings_values")
+    native.require(isinstance(settings, dict), "settings values missing")
+    stage = SETTINGS_CHECKPOINTS.index(case)
+    expected = {"ui_scale": 1.0, "camera_pan_speed": 500.0,
+                "notification_duration_seconds": 4, "autosave_interval_minutes": 10,
+                "autosave_generations": 3}
+    for index, (_, key, target, _) in enumerate(SETTINGS_DRAGS, start=1):
+        if stage >= index:
+            expected[key] = target
+    native.require(all(type(settings.get(key)) in (int, float)
+                       and abs(settings[key] - expected_value) < 0.001
+                       for key, expected_value in expected.items()), "settings applied values differ")
+    controls = value.get("controls", {})
+    if case == "settings-closed-refactor":
+        native.require("menu:CloseSettings" not in controls, "settings remained open")
+        return
+    native.require("menu:CloseSettings" in controls, "settings is not open")
+    if 1 <= stage <= len(SETTINGS_DRAGS) or stage >= 7:
+        field, _, target, label = SETTINGS_DRAGS[stage - 1 if stage <= 5 else stage - 7]
+        slider = controls.get("slider:" + field, {})
+        label_node = controls.get("settings-value:" + field, {})
+        native.require(slider.get("fully_visible") is True
+                       and type(slider.get("slider_value")) in (int, float)
+                       and slider.get("pressed") is False
+                       and label_node.get("text") == label
+                       and label_node.get("fully_visible") is True,
+                       "settings slider, label or release differs")
+        expected_slider = {"UiScale": 1.25, "CameraPanSpeed": 1000.0,
+                           "NotificationDuration": 2.0, "AutosaveInterval": 3.0,
+                           "AutosaveGenerations": 5.0}[field]
+        native.require(abs(slider["slider_value"] - expected_slider) < 0.001,
+                       "settings slider value differs")
+
+
+def settings_drag(driver, field, setting, target):
+    key = "slider:" + field
+    control = driver.last["controls"].get(key)
+    native.require(control and control.get("fully_visible") is True, "slider missing or clipped")
+    rect = control["rect"]
+    start = (round(rect[0] + (rect[2] - rect[0]) * .15), round((rect[1] + rect[3]) / 2))
+    end = (min(round(driver.last["viewport"][0]) - 2, round(rect[2] + (rect[2] - rect[0]))), start[1])
+    driver.send(point=start)
+    before = copy.deepcopy(driver.last)
+    first = len(driver.events)
+    entity = before["controls"][key]["entity"]
+    driver.send(button=1, pressed=True)
+    held = copy.deepcopy(driver.last)
+    native.require(held["controls"].get(key, {}).get("entity") == entity
+                   and held["controls"][key].get("pressed") is True,
+                   "slider did not receive press")
+    driver.send(point=end)
+    driver.send(button=1, pressed=False)
+    driver.last = driver.wait(lambda value: abs(value["settings_values"][setting] - target) < .001
+                              and value["controls"].get(key, {}).get("pressed") is False,
+                              after=driver.last["frame"], timeout=15)
+    driver.events[first]["settings_drag"] = {"field": field, "entity": entity,
+        "first_step": first + 1, "last_step": len(driver.events), "before": before,
+        "held": held, "after": copy.deepcopy(driver.last)}
+    native.atomic_write_json(driver.root / "events.json", {"events": driver.events})
+
+
+def exercise_settings(driver):
+    if "text-field:DevPoc" in driver.last["controls"]:
+        driver.click("dev-minimize")
+        driver.last = driver.wait(lambda value: "text-field:DevPoc" not in value["controls"], after=driver.last["frame"])
+    # Opening the actual system menu pauses the game; avoid relying on a
+    # separate shortcut before the pointer-input scenario under test.
+    driver.click("menu:ToggleSystemMenu")
+    driver.last = driver.wait(lambda value: value["paused"], after=driver.last["frame"])
+    driver.click("pause-menu:ToggleSettings")
+    driver.capture(SETTINGS_CHECKPOINTS[0])
+    for index, (field, setting, target, _) in enumerate(SETTINGS_DRAGS):
+        if index == 3:
+            driver.scroll("scroll:Settings Scroll Area", 12)
+        settings_drag(driver, field, setting, target)
+        driver.capture(SETTINGS_CHECKPOINTS[index + 1])
+    driver.click("menu:CloseSettings")
+    driver.capture("settings-closed-refactor")
+    driver.click("pause-menu:ToggleSettings")
+    driver.send(point=driver.point("scroll:Settings Scroll Area"))
+    for _ in range(12):
+        driver.send(button=4, pressed=True)
+        driver.send(button=4, pressed=False)
+    for index, (field, _, _, _) in enumerate(SETTINGS_DRAGS):
+        for _ in range(20):
+            control = driver.last["controls"].get("slider:" + field, {})
+            label = driver.last["controls"].get("settings-value:" + field, {})
+            if control.get("fully_visible") and label.get("fully_visible"):
+                break
+            driver.scroll("scroll:Settings Scroll Area", 1)
+        else:
+            raise native.AcceptanceError("reopened settings slider or label is not visible")
+        driver.capture(SETTINGS_CHECKPOINTS[index + 7])
+
+
+def verify_settings_sequence(entries, events):
+    native.require([entry["case"] for entry in entries] == list(SETTINGS_CHECKPOINTS),
+                   "settings checkpoint sequence differs")
+    actions = [(index, event["settings_drag"]) for index, event in enumerate(events) if "settings_drag" in event]
+    native.require(len(actions) == len(SETTINGS_DRAGS), "settings drag count differs")
+    for (index, action), (field, setting, target, _) in zip(actions, SETTINGS_DRAGS, strict=True):
+        native.require(action.get("field") == field and action.get("first_step") == index + 1
+                       and action.get("last_step") == index + 3 and index + 2 < len(events),
+                       "settings drag binding differs")
+        press, move, release = events[index:index + 3]
+        native.require(press.get("button") == 1 and press.get("pressed") is True
+                       and move.get("point") is not None and release.get("button") == 1
+                       and release.get("pressed") is False, "settings drag input differs")
+        before, held, after = (action[name] for name in ("before", "held", "after"))
+        key = "slider:" + field
+        rect = before["controls"][key]["rect"]
+        start = [round(rect[0] + (rect[2] - rect[0]) * .15), round((rect[1] + rect[3]) / 2)]
+        end = [min(round(before["viewport"][0]) - 2, round(rect[2] + (rect[2] - rect[0]))), start[1]]
+        previous = entries[SETTINGS_DRAGS.index((field, setting, target, _))]
+        following = entries[SETTINGS_DRAGS.index((field, setting, target, _)) + 1]
+        native.require(index > 0 and events[index - 1].get("point") == start
+                       and isinstance(before.get("cursor"), list) and len(before["cursor"]) == 2
+                       and isinstance(move.get("observed_cursor"), list) and len(move["observed_cursor"]) == 2
+                       and isinstance(release.get("observed_cursor"), list) and len(release["observed_cursor"]) == 2
+                       and all(abs(a - b) <= 2 for a, b in zip(before["cursor"], start))
+                       and move.get("point") == end
+                       and move.get("observed_left_pressed") is True
+                       and release.get("observed_left_pressed") is False
+                       and all(abs(a - b) <= 2 for a, b in zip(move["observed_cursor"], end))
+                       and all(abs(a - b) <= 2 for a, b in zip(release["observed_cursor"], end))
+                       and before["frame"] == press["pre_frame"]
+                       and held["frame"] == press["post_frame"]
+                       and held["frame"] == move["pre_frame"]
+                       and move["post_frame"] == release["pre_frame"]
+                       and release["post_frame"] <= after["frame"]
+                       and previous["last_step"] < index + 1 <= index + 3 <= following["last_step"]
+                       and previous["value"]["frame"] < before["frame"] < after["frame"] < following["value"]["frame"]
+                       and all(snapshot["nonce"] == press["nonce"] and snapshot["pid"] == press["pid"]
+                               for snapshot in (before, held, after)),
+                       "settings drag input and observations are not bound")
+        native.require(before["controls"][key]["entity"] == action["entity"]
+                       and held["controls"][key]["entity"] == action["entity"]
+                       and held["controls"][key]["pressed"] is True
+                       and after["controls"][key]["entity"] == action["entity"]
+                       and after["controls"][key]["pressed"] is False
+                       and before["frame"] < held["frame"] < after["frame"]
+                       and before["world_epoch"] == held["world_epoch"] == after["world_epoch"]
+                       and abs(after["settings_values"][setting] - target) < .001,
+                       "settings drag observation differs")
 
 
 def verify_root(root):
@@ -602,6 +811,17 @@ def verify_root(root):
         events = native.read_json(directory / "events.json")["events"]
         client = native.read_json(directory / "input-client.json")
         check_input_client(manifest, session, client)
+        if case == tank_completion.GHOST_CASE:
+            raw_path = directory / "production-cancellation.json"
+            release = manifest.get("ghost_release")
+            native.require(isinstance(release, dict) and sha256(Path(release["codec"])) == release["codec_sha256"]
+                           and sha256(raw_path) == session.get("cancellation_sha256")
+                           and release["bindings"] == tank_completion.ghost_bindings(repo, Path(release["codec"]))
+                           and release["door"] == joint.release_identities(repo)["door"]
+                           and release["verification_inputs"] == rest_area_art.pipeline.numeric_verifier_inventory()
+                           and release["lifecycle_sha256"] == sha256(repo / "scripts/building_production_lifecycle.py"),
+                           "ghost release/raw changed")
+            tank_completion.verify_ghosts(native.read_json(raw_path), entries, client, events)
         if case in COMPLETION_CASES:
             raw_path = directory / "production-cancellation.json"
             native.require(sha256(raw_path) == session.get("cancellation_sha256"), "Mixer completion raw changed")
@@ -624,6 +844,8 @@ def verify_root(root):
             elif case == "soul-spa-occupied-save":
                 spa_occupied.verify(native.read_json(raw_path), entries, client,
                                     directory / "saves" / "manual-1.scn.ron", events)
+            elif case == refactor_spa.CASE:
+                refactor_spa.verify(native.read_json(raw_path), entries, client, events)
             elif case == "soul-spa-slots":
                 spa_planning.verify_slots(native.read_json(raw_path), entries, client, events)
             elif case == "soul-spa-persistence":
@@ -663,12 +885,17 @@ def verify_root(root):
                 rest_area_planning.check_cancellation(native.read_json(raw_path), entries, client,
                                                       refund=case == "rest-area-refund")
         native.require(case == "navigation" or not layout_only, "refactor case requires actual input")
-        expected_checkpoints = (completion_recipe(case).CHECKPOINTS if case in COMPLETION_CASES else
+        expected_checkpoints = (SETTINGS_CHECKPOINTS if case == SETTINGS_CASE else
+                                completion_recipe(case).CHECKPOINTS if case in COMPLETION_CASES else
                                 planning_recipe(case).CHECKPOINTS if case in PLANNING_CASES else
+                                stockpile_target.CHECKPOINTS if case == stockpile_target.CASE else
                                 refactor_rows.CHECKPOINTS if case == "refactor-rows" else
+                                refactor_rows.PIN_CHECKPOINTS if case == "refactor-pinned-rename" else
+                                tank_completion.GHOST_CHECKPOINTS if case == tank_completion.GHOST_CASE else
                                 spa_loaded.CHECKPOINTS if case == spa_loaded.CASE else
                                 spa_resumed.CHECKPOINTS if case == spa_resumed.CASE else
                                 spa_occupied.CHECKPOINTS if case in ("soul-spa-occupied-save", spa_art.CASE) else
+                                refactor_spa.CHECKPOINTS if case == refactor_spa.CASE else
                                 spa_planning.SLOTS_CHECKPOINTS if case == "soul-spa-slots" else
                                 spa_planning.PERSISTENCE_CHECKPOINTS if case == "soul-spa-persistence" else
                                 spa_planning.USAGE_CHECKPOINTS if case == "soul-spa-usage" else
@@ -701,20 +928,32 @@ def verify_root(root):
                 native.require(value.get("menu_state") == ("Zones" if manifest.get("layout_menu") else "Architect" if scene == "build" else "Hidden"),
                                "layout menu fixture differs")
             expected_size = terrain_materials.SIZES[item["case"]] if case == "terrain-materials" else [width, height]
+            expected_scale = (1.0 if item["case"] == "settings-initial" else 1.25) if case == SETTINGS_CASE else scale
             native.require(value["nonce"] == session["nonce"] and value["viewport"] == expected_size
-                           and abs(value["ui_scale"] - scale) < 0.001, "viewport/nonce differs")
+                           and abs(value["ui_scale"] - expected_scale) < 0.001, "viewport/nonce differs")
             native.require(item["pid"] == value["pid"] and item["capture_scope"] == "x11-client-window", "capture scope differs")
             image = directory / item["screenshot"]
             native.require(image.parent == directory and sha256(image) == item["sha256"], "screenshot changed")
             native.require(list(native.validate_png_structure(image.read_bytes())) == expected_size, "image dimensions differ")
         native.require(sha256(directory / "game.log") == session["log_sha256"], "game log changed")
         joint.verify_game_log(directory / "game.log", "Intel")
+        if case == SETTINGS_CASE:
+            verify_settings_sequence(entries, events)
+            continue
         if case == "terrain-materials":
             terrain_materials.verify_sequence(directory, entries, events)
+            continue
+        if case == stockpile_target.CASE:
+            stockpile_target.check_sequence(entries, events, client)
             continue
         if case == "refactor-rows":
             refactor_rows.check_sequence(entries)
             continue
+        if case == "refactor-pinned-rename":
+            refactor_rows.check_pin_sequence(entries, events, client)
+            continue
+        if case == tank_completion.GHOST_CASE:
+            continue  # Dedicated raw/domain verification ran above.
         if case == "progress-bars":
             progress_bars.check_sequence(entries)
             continue
@@ -741,6 +980,7 @@ def verify_root(root):
         joint.verify_game_log(directory / "game.log", "Intel")
     return {"status": "valid", "profile": PROFILE, "sessions": len(expected),
             "coverage": f"{manifest.get('layout_scene', 'management')} rendering only; no input evidence" if layout_only else
+                        "five settings sliders changed through actual pointer drags and retained when reopening the settings panel" if manifest.get("case") == SETTINGS_CASE else
                         "ordinary adopted Full Tank, five returned buckets and exact Manual1 save/load remap plus rebuilt candidate rendering only; no Memory, performance, art approval or release authority" if manifest.get("case") == tank_persistence.CASE else
                         "ordinary Tank candidate and base-presentation Mixer construction, one exact River-to-Tank-to-Mixer refinement leg only; no whole lifecycle, performance, Mixer art or release authority" if manifest.get("case") == tank_supply.CASE else
                         "ordinary adopted Tank construction and actual pours to capacity fifty with Full water presentation only; no River-fill, Mixer supply, performance or release" if manifest.get("case") == tank_full.CASE else
@@ -753,6 +993,7 @@ def verify_root(root):
                         "ordinary isolated-candidate SoulSpa occupied restoration, remapped former-worker reassignment, measured consumption and observed Dream-floor departure; no domain end receipt/performance/release authority" if manifest.get("case") == spa_resumed.CASE else
                         "ordinary isolated-candidate SoulSpa body/four-slot consumers and occupied durable restoration/runtime reset; not resumed assignment/performance/release acceptance" if manifest.get("case") == spa_art.CASE else
                         "ordinary occupied SoulSpa paused save/load durable identity and runtime reset only; no resumed assignment/art/performance/release acceptance" if manifest.get("case") == "soul-spa-occupied-save" else
+                        "seeded occupied SoulSpa slot changes and bounded non-eviction; no natural assignment, persistence, art or performance acceptance" if manifest.get("case") == refactor_spa.CASE else
                         "ordinary SoulSpa occupied 4-to-zero slot changes and bounded non-eviction only; no occupied persistence/art/performance/release acceptance" if manifest.get("case") == "soul-spa-slots" else
                         "ordinary empty Operational SoulSpa exact-byte save/load and durable remapping only; no occupied persistence/art/performance/release acceptance" if manifest.get("case") == "soul-spa-persistence" else
                         "ordinary SoulSpa natural construction, generating worker and Dream consumption only; no art/performance/release acceptance" if manifest.get("case") == "soul-spa-usage" else
@@ -762,6 +1003,8 @@ def verify_root(root):
                         "task labels, rename, search/fold and four progress callers with save/load/cancellation" if manifest.get("case") == "refactor-suite" else
                         "three visible terrain LODs, diagnostic normal prepass, Scene resize and restore" if manifest.get("case") == "terrain-materials" else
                         "task labels, rename, search and fold feedback" if manifest.get("case") == "refactor-rows" else
+                        "pinned target, selection change and rename feedback" if manifest.get("case") == "refactor-pinned-rename" else
+                        "installed release Door/Tank ghost, companion cancellation and Wall selection" if manifest.get("case") == tank_completion.GHOST_CASE else
                         "four progress callers, simulation completion, save/load and cancellation feedback" if manifest.get("case") == "progress-bars" else
                         "ordinary generated-world Bridge placement, reservation save/load and cancellation only" if manifest.get("case") == "bridge-planning" else
                         "ordinary RestArea completion, admission and positive Dream transfer; not art/numeric/performance/release acceptance" if manifest.get("case") == "rest-area-usage" else
@@ -782,14 +1025,26 @@ def game_environment(repo):
     return environment
 
 
-def cancellation_observation_setting(directory, nonce):
+def cancellation_observation_setting(directory, nonce, admitted_identities=None):
     return json.dumps({"nonce": nonce, "output": str(directory / "production-cancellation.json"),
-                       "admitted_identities": []})
+                       "admitted_identities": admitted_identities or []})
 
 
 def plan(args):
     repo = native.validate_repo(args.repo)
     art_contract = planned_art(args, repo)
+    ghost_release = None
+    if args.case == tank_completion.GHOST_CASE:
+        native.require(args.smoke and args.input_backend == "portal" and art_contract is None and args.release_codec,
+                       "ghost case requires portal smoke and an installed-release codec")
+        codec = rest_area_art.pipeline.no_symlinks(Path(args.release_codec))
+        ghost_release = {"codec": str(codec), "codec_sha256": sha256(codec),
+                         "bindings": tank_completion.ghost_bindings(repo, codec),
+                         "door": joint.release_identities(repo)["door"],
+                         "verification_inputs": rest_area_art.pipeline.numeric_verifier_inventory(),
+                         "lifecycle_sha256": sha256(repo / "scripts/building_production_lifecycle.py")}
+    else:
+        native.require(not args.release_codec, "release codec is only for the installed ghost case")
     native.require(args.input_backend != "portal-eis" or art_contract is not None, "EIS is limited to ordinary art feedback")
     native.require(args.case == "navigation" or args.input_backend != "none", "refactor case requires actual input")
     native.require(not args.portal_consent_file or args.input_backend in ("portal", "portal-eis"),
@@ -806,6 +1061,8 @@ def plan(args):
                "--case", args.case,
                "--layout-scene", args.layout_scene,
                *(["--portal-consent-file", args.portal_consent_file] if args.portal_consent_file else []),
+               *(["--release-codec", ghost_release["codec"], "--release-codec-sha256", ghost_release["codec_sha256"],
+                   "--release-contract-sha256", hashlib.sha256(json.dumps(ghost_release, sort_keys=True).encode()).hexdigest()] if ghost_release else []),
                *(["--spa-resume-source", art_contract["resume_input"]["root"]] if args.case == spa_loaded.CASE else []),
                *(["--m2-art-source" if args.case in (*m2.KINDS, *COMPLETION_CASES) else "--m5-art-source" if args.case in m5.KINDS else "--soul-spa-art-source" if args.case in SPA_ART_CASES else "--rest-area-art-source", art_contract["source_root"], "--art-codec", art_contract["codec"],
                   "--art-contract-sha256", rest_area_art.contract_digest(art_contract)] if art_contract else []),
@@ -823,7 +1080,22 @@ def plan(args):
 def run(args):
     repo, root = native.validate_repo(args.repo), Path(args.job_root).resolve()
     art_contract = planned_art(args, repo)
+    ghost_release = None
+    if args.case == tank_completion.GHOST_CASE:
+        native.require(args.smoke and args.input_backend == "portal" and art_contract is None and args.release_codec,
+                       "ghost case requires portal smoke and an installed-release codec")
+        codec = rest_area_art.pipeline.no_symlinks(Path(args.release_codec))
+        ghost_release = {"codec": str(codec), "codec_sha256": sha256(codec),
+                         "bindings": tank_completion.ghost_bindings(repo, codec),
+                         "door": joint.release_identities(repo)["door"],
+                         "verification_inputs": rest_area_art.pipeline.numeric_verifier_inventory(),
+                         "lifecycle_sha256": sha256(repo / "scripts/building_production_lifecycle.py")}
+    else:
+        native.require(not args.release_codec, "release codec is only for the installed ghost case")
     native.require(args.input_backend != "portal-eis" or art_contract is not None, "EIS is limited to ordinary art feedback")
+    native.require(ghost_release is None or (args.release_codec_sha256 == ghost_release["codec_sha256"]
+                   and args.release_contract_sha256 == hashlib.sha256(json.dumps(ghost_release, sort_keys=True).encode()).hexdigest()),
+                   "ghost release contract changed")
     native.require(art_contract is None or getattr(args, "art_contract_sha256", None),
                    "ordinary art run requires the frozen plan digest")
     native.require(not args.portal_consent_file or args.input_backend in ("portal", "portal-eis"),
@@ -871,6 +1143,11 @@ def run(args):
             environment["HW_NATIVE_UI_CASE"] = case
             if case == tank_supply.CASE:
                 environment["HELL_WORKERS_WORLDGEN_SEED"] = str(art_contract["worldgen"]["seed"])
+            if case == tank_completion.GHOST_CASE:
+                bindings = ghost_release["bindings"]
+                environment["HW_BUILDING_ASSET_RELEASES"] = json.dumps(bindings)
+                environment["HW_BUILDING_PRODUCTION_OBSERVATIONS"] = cancellation_observation_setting(
+                    directory, nonce, [row["identity"] for row in bindings])
             if case in COMPLETION_CASES:
                 view = completion_recipe(case).prepare_view(repo, directory, art_contract)
                 environment["BEVY_ASSET_ROOT"] = str(view)
@@ -895,7 +1172,7 @@ def run(args):
                     environment["HW_BUILDING_ORDINARY_ART_SESSION"] = rest_area_art.session_setting(directory, nonce, art_contract)
                 else:
                     environment["HW_BUILDING_PRODUCTION_OBSERVATIONS"] = cancellation_observation_setting(directory, nonce)
-            if case == "refactor-rows":
+            if case in ("refactor-rows", "refactor-pinned-rename"):
                 # Use winit's local XIM backend for this ASCII rename/search case.
                 # Keep the desktop's IME and every other process unchanged.
                 environment["XMODIFIERS"] = "@im=local"
@@ -916,18 +1193,26 @@ def run(args):
                 try:
                     driver = Driver(process, directory, nonce, state, job_file, portal,
                                     layout_only=args.input_backend == "none", eis=args.input_backend == "portal-eis",
-                                    scroll=case == "rest-area-maxzoom", fresh_ack=case == "soul-spa-slots")
+                                    scroll=case == "rest-area-maxzoom", fresh_ack=case in ("soul-spa-slots", refactor_spa.CASE))
                     if art_contract is not None:
                         rest_area_art.wait_ready(driver, art_contract)
                     state["current_stage"] = "ui-input"
                     if args.input_backend == "none":
                         driver.capture("entities")
+                    elif case == SETTINGS_CASE:
+                        exercise_settings(driver)
+                    elif case == tank_completion.GHOST_CASE:
+                        tank_completion.exercise_ghosts(driver)
                     elif case in COMPLETION_CASES:
                         completion_recipe(case).exercise(driver, art_contract)
                     elif case in PLANNING_CASES:
                         planning_recipe(case).exercise(driver, art_contract)
+                    elif case == stockpile_target.CASE:
+                        stockpile_target.exercise(driver)
                     elif case == "refactor-rows":
                         refactor_rows.exercise(driver)
+                    elif case == "refactor-pinned-rename":
+                        refactor_rows.exercise_pin(driver)
                     elif case == "progress-bars":
                         progress_bars.exercise(driver)
                     elif case == "bridge-planning":
@@ -946,6 +1231,8 @@ def run(args):
                         spa_resumed.exercise(driver)
                     elif case in ("soul-spa-occupied-save", spa_art.CASE):
                         spa_occupied.exercise(driver)
+                    elif case == refactor_spa.CASE:
+                        refactor_spa.exercise(driver)
                     elif case == "soul-spa-slots":
                         spa_planning.exercise_slots(driver)
                     elif case == "rest-area-maxzoom":
@@ -986,7 +1273,7 @@ def run(args):
                         state["child_pid"] = None
             joint.verify_game_log(directory / "game.log", "Intel")
             session = {"case": case, "directory": directory.name, "nonce": nonce, "log_sha256": sha256(directory / "game.log")}
-            if case in PLANNING_CASES or case in COMPLETION_CASES:
+            if case in PLANNING_CASES or case in COMPLETION_CASES or case == tank_completion.GHOST_CASE:
                 session["cancellation_sha256"] = sha256(directory / "production-cancellation.json")
             if case in SPA_CASES:
                 session["cancellation_sha256"] = sha256(directory / "production-cancellation.json")
@@ -1000,6 +1287,7 @@ def run(args):
             "portal_persistence": portal.persistence if portal else "disabled",
             "case": args.case,
             "ordinary_art": art_contract,
+            "ghost_release": ghost_release,
             "layout_menu": args.layout_menu,
             "layout_scene": args.layout_scene,
             "subject_commit": args.subject_commit, "source_fingerprint": args.source_fingerprint,
@@ -1036,8 +1324,11 @@ def main():
             child.add_argument("--m5-art-source", help="one exact M5 source in its dedicated preview or adopted-candidate planning case; no approval")
             child.add_argument("--m2-art-source", help="one adopted Mixer isolated candidate in its dedicated ordinary planning case; no release")
             child.add_argument("--art-codec", help="frozen already-built codec for the ArtPreview input")
+            child.add_argument("--release-codec", help="frozen codec for installed release ghost verification")
         if command == "run":
             child.add_argument("--art-contract-sha256")
+            child.add_argument("--release-codec-sha256")
+            child.add_argument("--release-contract-sha256")
         if command == "run":
             for option in ("subject-commit", "source-fingerprint", "harness-fingerprint"):
                 child.add_argument(f"--{option}", required=True)

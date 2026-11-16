@@ -124,16 +124,15 @@ fn on_settings_slider_value_change(
     let intent = match marker.0 {
         SettingsField::UiScale => UiIntent::SetUiScale(change.value),
         SettingsField::CameraPanSpeed => UiIntent::SetCameraPanSpeed(change.value),
-        SettingsField::AutosaveInterval => {
-            let index = change.value.round().clamp(0.0, 3.0) as usize;
-            UiIntent::SetAutosaveIntervalMinutes(hw_core::AUTOSAVE_INTERVAL_MINUTES[index])
-        }
-        SettingsField::NotificationDuration => {
-            UiIntent::SetNotificationDuration((change.value.round().clamp(0.0, 2.0) as u8 + 1) * 4)
-        }
-        SettingsField::AutosaveGenerations => {
-            UiIntent::SetAutosaveGenerations(change.value.round().clamp(1.0, 5.0) as u8)
-        }
+        SettingsField::AutosaveInterval => UiIntent::SetAutosaveIntervalMinutes(
+            hw_core::settings::autosave_interval_from_slider(change.value),
+        ),
+        SettingsField::NotificationDuration => UiIntent::SetNotificationDuration(
+            hw_core::settings::notification_duration_from_slider(change.value),
+        ),
+        SettingsField::AutosaveGenerations => UiIntent::SetAutosaveGenerations(
+            hw_core::settings::autosave_generations_from_slider(change.value),
+        ),
         _ => return,
     };
     intents.write(intent);
@@ -223,6 +222,59 @@ fn update_notification_duration(
 #[cfg(test)]
 mod value_tests {
     use super::*;
+
+    #[test]
+    fn slider_observer_emits_discrete_intents_for_each_marker() {
+        use bevy::ecs::message::MessageCursor;
+
+        let mut app = crate::test_support::minimal_app();
+        app.add_message::<UiIntent>()
+            .add_observer(on_settings_slider_value_change);
+        let mut cursor = MessageCursor::<UiIntent>::default();
+        for (field, value, expected) in [
+            (
+                SettingsField::AutosaveInterval,
+                1.5,
+                UiIntent::SetAutosaveIntervalMinutes(20),
+            ),
+            (
+                SettingsField::AutosaveGenerations,
+                f32::NAN,
+                UiIntent::SetAutosaveGenerations(0),
+            ),
+            (
+                SettingsField::NotificationDuration,
+                f32::INFINITY,
+                UiIntent::SetNotificationDuration(12),
+            ),
+        ] {
+            let source = app.world_mut().spawn(SettingsSliderMarker(field)).id();
+            app.world_mut().commands().trigger(ValueChange {
+                source,
+                value,
+                is_final: true,
+            });
+            app.world_mut().flush();
+            let messages = app.world().resource::<Messages<UiIntent>>();
+            assert_eq!(
+                cursor.read(messages).copied().collect::<Vec<_>>(),
+                vec![expected]
+            );
+        }
+        let source = app.world_mut().spawn_empty().id();
+        app.world_mut().commands().trigger(ValueChange {
+            source,
+            value: 1.0,
+            is_final: true,
+        });
+        app.world_mut().flush();
+        assert_eq!(
+            cursor
+                .read(app.world().resource::<Messages<UiIntent>>())
+                .count(),
+            0
+        );
+    }
 
     #[test]
     fn settings_values_show_applied_units_and_normalized_autosave_values() {

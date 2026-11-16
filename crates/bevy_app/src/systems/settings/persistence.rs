@@ -244,6 +244,23 @@ mod tests {
     }
 
     #[test]
+    fn file_roundtrip_preserves_raw_ui_ranges_and_normalizes_discrete_values() {
+        let settings = GameSettings {
+            ui_scale: 2.0,
+            camera_pan_speed: 1500.0,
+            autosave_interval_minutes: 17,
+            autosave_generations: 0,
+            ..default()
+        };
+        let body = ron::to_string(&GameSettingsFile::from(settings)).unwrap();
+        let loaded: GameSettings = ron::from_str::<GameSettingsFile>(&body).unwrap().into();
+        assert_eq!(loaded.ui_scale, 2.0);
+        assert_eq!(loaded.camera_pan_speed, 1500.0);
+        assert_eq!(loaded.autosave_interval_minutes, 20);
+        assert_eq!(loaded.autosave_generations, 1);
+    }
+
+    #[test]
     fn injected_storage_root_keeps_settings_io_out_of_the_working_directory() {
         let nonce = SystemTime::now()
             .duration_since(UNIX_EPOCH)

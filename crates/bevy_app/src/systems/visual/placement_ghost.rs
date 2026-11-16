@@ -314,20 +314,9 @@ pub fn placement_ghost_system(
     let texture = if companion_kind == Some(CompanionPlacementKind::BucketStorage) {
         game_assets.bucket_empty.clone()
     } else {
-        match building_type {
-            BuildingType::Wall => game_assets.wall_isolated.clone(),
-            BuildingType::Door => game_assets.door_closed.clone(),
-            BuildingType::Floor => game_assets.mud_floor.clone(),
-            BuildingType::Tank => game_assets.tank_empty.clone(),
-            BuildingType::MudMixer => game_assets.mud_mixer.clone(),
-            BuildingType::RestArea => game_assets.rest_area.clone(),
-            BuildingType::Bridge => game_assets.bridge.clone(),
-            BuildingType::SandPile => game_assets.sand_pile.clone(),
-            BuildingType::BonePile => game_assets.bone_pile.clone(),
-            BuildingType::WheelbarrowParking => game_assets.wheelbarrow_parking.clone(),
-            BuildingType::SoulSpa => game_assets.rest_area.clone(),
-            BuildingType::OutdoorLamp => game_assets.bone_pile.clone(),
-        }
+        game_assets
+            .placement_ghost_fallback_image(building_type)
+            .clone()
     };
 
     // 色（半透明 + 緑/赤判定）

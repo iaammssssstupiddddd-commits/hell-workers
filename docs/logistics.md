@@ -573,6 +573,11 @@ Designation、ManagedBy、TaskSlots、Priority、target marker、TransportReques
 対象外である。target別queryは`With<TTarget> OR Added<TransportRequest>`へ絞り、通常frameで他kindを全走査せず、
 新規・rehydrate直後のtarget欠落だけを修復できる。
 
+共通helperはQueryのtupleを名前付きborrowed viewへ変換し、通常とStockpileの共通componentを
+headerとruntimeの2段で差分更新する。その間にrequest固有値とreceiver tierを更新する。
+disable時の`inflight: None`はDemand無変更、Stockpileのworkerなしdisableは0へ補完する。
+committed / duplicate処理はactive更新を通さず、既存workerを保持する。
+
 `profiling` buildでは、logistics crate所有producerのdeferred command適用後に通常collectorを実行し、root所有の`SoulSpa`だけは既存energy pipeline内の専用`ApplyDeferred`後に専用collectorを実行する。両collectorはkindを分担するため二重計上せず、`observer_runs`は通常collectorの1回/frameを正本とする。producerを別setへ重複所属させたりcross-set edgeを追加したりしないため、production scheduleの既存chainを変えない。各collectorは`TransportRequest`のAdded / changed-existing change tickを種別ごとに累積し、前frameのproducer-owned component snapshotから`spawn`、欠落componentの修復、semantic update、disable update、同値write、change tickなしのsteady observationへ分類する。manual requestは自動producerの観測対象から除外する。component削除は現frameの`Ref<T>`だけでは検出できないため、snapshotからの存在差で判定する。
 
 collectorは通常producerのfield ownerではなく、component内容も変更しない。各producerへ共有`ResMut`を追加せず、`construction` / `task-dashboard`のframe-time artifactは`transport_request_changes.csv` schema v2へmeasure区間だけを出力する。warm-up終端のresetは累積counterだけを消し、比較元snapshotは保持するため、既存requestをmeasure開始時のspawnとして誤計上しない。通常buildにはcollector/resource/sidecarを登録せず、全件snapshot走査も行わない。

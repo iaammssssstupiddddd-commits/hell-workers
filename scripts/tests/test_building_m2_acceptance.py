@@ -177,6 +177,34 @@ class RuntimeIntegrityTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "approval"):
             self.verify()
 
+    def test_dirty_feedback_is_explicit_and_dependencies_are_frozen(self):
+        self.value.update(scope="m2-dirty-feedback-plan-not-acceptance", dirty_feedback=True,
+                          feedback_dependencies={"driver": "original"})
+        self.plan_path.write_bytes(m2.pipeline.canonical(self.value))
+        with patch.object(m2, "feedback_dependencies", return_value={"driver": "original"}):
+            self.assertEqual(self.verify()["status"], "pass")
+        with patch.object(m2, "feedback_dependencies", return_value={"driver": "changed"}):
+            with self.assertRaisesRegex(ValueError, "tooling changed"):
+                self.verify()
+        for scope, flag in (("m2-feedback-plan-not-acceptance", True),
+                            ("m2-dirty-feedback-plan-not-acceptance", False),
+                            ("m2-dirty-feedback-plan-not-acceptance", 1)):
+            self.value.update(scope=scope, dirty_feedback=flag)
+            self.plan_path.write_bytes(m2.pipeline.canonical(self.value))
+            with self.assertRaisesRegex(ValueError, "subject mode"):
+                self.verify()
+
+    def test_dirty_feedback_inventory_rejects_symlinked_directories(self):
+        for name in ("scripts", "fixtures"):
+            directory = self.root / "tools/blender_ai_workflow" / name
+            directory.mkdir(parents=True)
+            (directory / "fixture.json").write_text("{}")
+        m2.feedback_dependencies(self.root)
+        (self.root / "tools/blender_ai_workflow/scripts/link").symlink_to(
+            self.root / "tools/blender_ai_workflow/fixtures", target_is_directory=True)
+        with self.assertRaises(ValueError):
+            m2.feedback_dependencies(self.root)
+
 
     def set_revision(self, kind, revision, *, update_manifest=True, update_provenance=True):
         path, digest = m2.numeric_contract(kind, revision)

@@ -5,6 +5,28 @@ pub mod building_asset_set;
 pub mod door_asset_set;
 pub mod wall_asset_set;
 
+impl GameAssets {
+    /// Baseline for world placement ghosts, distinct from catalog artwork.
+    pub(crate) fn placement_ghost_fallback_image(
+        &self,
+        kind: hw_jobs::BuildingType,
+    ) -> &Handle<Image> {
+        use hw_jobs::BuildingType;
+        match kind {
+            BuildingType::Wall => &self.wall_isolated,
+            BuildingType::Door => &self.door_closed,
+            BuildingType::Floor => &self.mud_floor,
+            BuildingType::Tank => &self.tank_empty,
+            BuildingType::MudMixer => &self.mud_mixer,
+            BuildingType::RestArea | BuildingType::SoulSpa => &self.rest_area,
+            BuildingType::Bridge => &self.bridge,
+            BuildingType::SandPile => &self.sand_pile,
+            BuildingType::BonePile | BuildingType::OutdoorLamp => &self.bone_pile,
+            BuildingType::WheelbarrowParking => &self.wheelbarrow_parking,
+        }
+    }
+}
+
 impl UiAssets for GameAssets {
     fn building_preview(&self, kind: hw_jobs::BuildingType) -> &Handle<Image> {
         use hw_jobs::BuildingType;

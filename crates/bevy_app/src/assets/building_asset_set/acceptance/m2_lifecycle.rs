@@ -76,7 +76,9 @@ pub(super) fn drive(world: &mut World) {
                     world.write_message(UiIntent::SelectSaveCatalogSlot { slot: SaveSlotId::Manual1, session: ui.session }); lifecycle.stage = 2;
                 }
                 2 if outcomes.iter().any(|outcome| outcome.operation == SaveLoadOperation::Save) => {
-                    if super::m2_fixture::candidate_session(world) {
+                    if super::m2_fixture::candidate_session(world)
+                        || super::m2_fixture::feedback_motion_session(world)
+                    {
                         // Preserve the actual saved world without repairing it. A short
                         // real-time hold makes the Save-only prefix observable before Load.
                         lifecycle.next = world.resource::<Time<Real>>().elapsed_secs_f64() + 2.0;

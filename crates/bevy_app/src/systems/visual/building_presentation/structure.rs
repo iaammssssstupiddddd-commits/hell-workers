@@ -1,6 +1,7 @@
 use super::production;
 use crate::assets::building_asset_set::{
-    BuildingAssetAuthority, BuildingAssetPool, BuildingAssetSetIdentity, BuildingProductionState,
+    BuildingAssetAuthority, BuildingAssetPool, BuildingAssetSetIdentity, BuildingPartRole,
+    BuildingProductionState,
 };
 use crate::plugins::startup::Building3dHandles;
 use crate::systems::visual::building3d_cleanup::{
@@ -12,6 +13,7 @@ use hw_core::relationships::{StoredItems, TaskWorkers};
 use hw_core::visual_mirror::{MudMixerVisualState, StockpileVisualState};
 use hw_energy::{SoulSpaPhase, SoulSpaSite, SoulSpaTile};
 use hw_jobs::{Building, BuildingType};
+use hw_visual::material::topdown_structural_material::StructuralSurfaceMode;
 use hw_visual::{Building3dVisual, StructuralPresentationState, TopDownStructuralMaterial};
 
 /// Only this independent root follows the logical owner's world transform.
@@ -52,8 +54,12 @@ fn clay_motion_allowed(pool: &BuildingAssetPool, identity: &BuildingAssetSetIden
 /// includes Visibility so state synchronization does not depend on renderer
 /// plugins registering additional required components for Mesh3d.
 #[derive(Component)]
-struct EquipmentPart {
-    name: String,
+enum EquipmentPart {
+    Fallback,
+    Bound {
+        role: BuildingPartRole,
+        part_index: usize,
+    },
 }
 
 #[derive(Clone)]
@@ -191,9 +197,7 @@ pub fn spawn_equipment_root(
         ))
         .with_children(|parent| {
             parent.spawn((
-                EquipmentPart {
-                    name: "fallback".into(),
-                },
+                EquipmentPart::Fallback,
                 Mesh3d(fallback_mesh(kind, handles)),
                 MeshMaterial3d(fallback_material(
                     kind,
@@ -265,6 +269,192 @@ pub fn sync_equipment_structure(world: &mut World, mut scratch: Local<EquipmentS
             sync_structure(world, &handles, &pool, &mut scratch);
         });
     });
+}
+
+fn build_generation_materials(
+    world: &mut World,
+    handles: &Building3dHandles,
+    set: &crate::assets::building_asset_set::BuildingAssetDescriptor,
+    kind: BuildingType,
+) -> GenerationMaterials {
+    #[cfg(feature = "profiling")]
+    let pilot = (kind == BuildingType::Tank).then(|| world.get_resource::<crate::assets::building_asset_set::tank_illustration_pilot::TankPilotPaint>()).flatten()
+        .filter(|pilot| pilot.matches_identity(&set.manifest.identity)
+            && world.get_resource::<crate::assets::building_asset_set::gallery_capture::GalleryCaptureSession>().is_some_and(|session| matches!(session, crate::assets::building_asset_set::gallery_capture::GalleryCaptureSession::TankPilot(_))))
+        .map(|pilot| (pilot.image.clone(), pilot.session.paint.clone()));
+    let mut assets = world.resource_mut::<Assets<TopDownStructuralMaterial>>();
+    let mut material = assets
+        .get(&handles.equipment_material)
+        .expect("equipment material initialized")
+        .clone();
+    material.base.base_color = Color::WHITE;
+    material.base.base_color_texture = set.image("albedo").cloned();
+    material.base.emissive = LinearRgba::BLACK;
+    material.base.emissive_texture = None;
+    let shadow = material.extension.uniforms.shadow_style();
+    let surface = if kind == BuildingType::Tank {
+        StructuralSurfaceMode::Lit { flatten: 0.82 }
+    } else if set.manifest.surface_paint.is_some() {
+        StructuralSurfaceMode::UvInk
+    } else {
+        StructuralSurfaceMode::Lit { flatten: 0.0 }
+    };
+    material
+        .extension
+        .uniforms
+        .set_surface_mode(surface, shadow);
+    let tank_paint_body = set.manifest.body_paint_projection.map(|projection| {
+        let mut body = material.clone();
+        body.base.base_color_texture = set.image(&set.manifest.world_preview.image_role).cloned();
+        let (canvas, matte) = projection.uniforms(&set.manifest.world_preview);
+        body.extension.uniforms.set_surface_mode(
+            StructuralSurfaceMode::PreviewProjection { canvas, matte },
+            shadow,
+        );
+        assets.add(body)
+    });
+    #[cfg(feature = "profiling")]
+    let tank_paint_body = tank_paint_body.or_else(|| {
+        pilot.map(|(image, paint)| {
+            let mut body = material.clone();
+            body.base.base_color_texture = Some(image);
+            let canvas = Vec4::new(
+                paint.canvas_wu[0],
+                paint.canvas_wu[1],
+                paint.anchor_uv[0],
+                paint.anchor_uv[1],
+            );
+            let matte = Vec4::new(
+                paint.matte_linear_rgb[0],
+                paint.matte_linear_rgb[1],
+                paint.matte_linear_rgb[2],
+                1.0,
+            );
+            body.extension.uniforms.set_surface_mode(
+                StructuralSurfaceMode::PilotProjection { canvas, matte },
+                shadow,
+            );
+            assets.add(body)
+        })
+    });
+    let opaque = assets.add(material.clone());
+    // The lower water surface sits in the vessel's shade. A
+    // bounded tint makes Partial distinguishable from Full in
+    // the actual top-down view without changing water counts,
+    // numeric heights, or the shared authored atlas.
+    let tank_partial_water = if kind == BuildingType::Tank {
+        material.base.base_color = Color::srgb(0.58, 0.70, 0.73);
+        let partial = assets.add(material.clone());
+        material.base.base_color = Color::WHITE;
+        Some(partial)
+    } else {
+        None
+    };
+    // Only active Spa slots use this material. The authored
+    // RGB mask controls surface emission, never a logical light.
+    material.base.emissive = LinearRgba::WHITE;
+    material.base.emissive_texture = set.image("slot_emissive").cloned();
+    let slot_on = if kind == BuildingType::Bridge {
+        opaque.clone()
+    } else {
+        assets.add(material)
+    };
+    GenerationMaterials {
+        identity: set.manifest.identity.clone(),
+        opaque,
+        tank_partial_water,
+        tank_paint_body,
+        slot_on,
+    }
+}
+
+struct PartAppearanceInput<'a> {
+    kind: BuildingType,
+    state: StructuralPresentationState,
+    motion: Option<BuildingProductionState>,
+    role: Option<BuildingPartRole>,
+    spec: Option<&'a crate::assets::building_asset_set::BuildingAssetPart>,
+    material: Option<&'a GenerationMaterials>,
+    handles: &'a Building3dHandles,
+    rotor_angle: f32,
+    mask: u8,
+    constructing: bool,
+}
+
+struct PartAppearance {
+    height: Option<f32>,
+    rotation: Option<Quat>,
+    visibility: Visibility,
+    material: Handle<TopDownStructuralMaterial>,
+}
+
+fn decide_part_appearance(input: PartAppearanceInput<'_>) -> PartAppearance {
+    let height = match (input.spec, input.role, input.motion) {
+        (
+            Some(_),
+            Some(BuildingPartRole::Water),
+            Some(BuildingProductionState::Tank {
+                partial_y_wu,
+                full_y_wu,
+            }),
+        ) => Some(if input.state == StructuralPresentationState::TankFull {
+            full_y_wu
+        } else {
+            partial_y_wu
+        }),
+        _ => None,
+    };
+    let rotation = match (input.spec, input.role, input.motion) {
+        (
+            Some(spec),
+            Some(BuildingPartRole::Rotor),
+            Some(BuildingProductionState::MudMixer { axis, .. }),
+        ) => Some(
+            Quat::from_array(spec.rotation_xyzw)
+                * Quat::from_axis_angle(Vec3::from_array(axis), input.rotor_angle),
+        ),
+        _ => None,
+    };
+    let visibility = if input.kind == BuildingType::Tank
+        && input.role == Some(BuildingPartRole::Water)
+        && input.state == StructuralPresentationState::TankEmpty
+    {
+        Visibility::Hidden
+    } else {
+        Visibility::Inherited
+    };
+    let material = if input.constructing {
+        input.handles.equipment_material.clone()
+    } else if let Some(material) = input.material {
+        let active = matches!(input.role, Some(BuildingPartRole::SpaSlot(index)) if index < 4 && input.mask & (1 << index) != 0);
+        if input.kind == BuildingType::Tank
+            && input.role == Some(BuildingPartRole::Water)
+            && input.state == StructuralPresentationState::TankPartial
+        {
+            material
+                .tank_partial_water
+                .as_ref()
+                .expect("Tank material includes its partial water tint")
+                .clone()
+        } else if active {
+            material.slot_on.clone()
+        } else if input.kind == BuildingType::Tank
+            && input.role == Some(BuildingPartRole::Body)
+            && let Some(paint) = material.tank_paint_body.as_ref()
+        {
+            paint.clone()
+        } else {
+            material.opaque.clone()
+        }
+    } else {
+        fallback_material(input.kind, input.state, input.handles)
+    };
+    PartAppearance {
+        height,
+        rotation,
+        visibility,
+        material,
+    }
 }
 
 fn sync_structure(
@@ -362,106 +552,25 @@ fn sync_structure(
                     .iter()
                     .any(|entry| &entry.identity == identity.unwrap())
                 {
-                    #[cfg(feature = "profiling")]
-                    let pilot = (kind == BuildingType::Tank).then(|| world.get_resource::<crate::assets::building_asset_set::tank_illustration_pilot::TankPilotPaint>()).flatten()
-                        .filter(|pilot| pilot.matches_identity(&set.manifest.identity)
-                            && world.get_resource::<crate::assets::building_asset_set::gallery_capture::GalleryCaptureSession>().is_some_and(|session| matches!(session, crate::assets::building_asset_set::gallery_capture::GalleryCaptureSession::TankPilot(_))))
-                        .map(|pilot| (pilot.image.clone(), pilot.session.paint.clone()));
-                    let mut assets = world.resource_mut::<Assets<TopDownStructuralMaterial>>();
-                    let mut material = assets
-                        .get(&handles.equipment_material)
-                        .expect("equipment material initialized")
-                        .clone();
-                    material.base.base_color = Color::WHITE;
-                    material.base.base_color_texture = set.image("albedo").cloned();
-                    material.base.emissive = LinearRgba::BLACK;
-                    material.base.emissive_texture = None;
-                    material.extension.uniforms.indoor_light_params.w =
-                        if kind == BuildingType::Tank {
-                            0.82
-                        } else if set.manifest.surface_paint.is_some() {
-                            4.0
-                        } else {
-                            0.0
-                        };
-                    let tank_paint_body = set.manifest.body_paint_projection.map(|projection| {
-                        let mut body = material.clone();
-                        body.base.base_color_texture =
-                            set.image(&set.manifest.world_preview.image_role).cloned();
-                        body.extension.uniforms.indoor_light_params.w = 3.0;
-                        let (canvas, matte) = projection.uniforms(&set.manifest.world_preview);
-                        body.extension.uniforms.shadow_style_params = canvas;
-                        body.extension.uniforms.shadow_style_tint = matte;
-                        assets.add(body)
-                    });
-                    #[cfg(feature = "profiling")]
-                    let tank_paint_body = tank_paint_body.or_else(|| {
-                        pilot.map(|(image, paint)| {
-                            let mut body = material.clone();
-                            body.base.base_color_texture = Some(image);
-                            body.extension.uniforms.indoor_light_params.w = 2.0;
-                            body.extension.uniforms.shadow_style_params = Vec4::new(
-                                paint.canvas_wu[0],
-                                paint.canvas_wu[1],
-                                paint.anchor_uv[0],
-                                paint.anchor_uv[1],
-                            );
-                            body.extension.uniforms.shadow_style_tint = Vec4::new(
-                                paint.matte_linear_rgb[0],
-                                paint.matte_linear_rgb[1],
-                                paint.matte_linear_rgb[2],
-                                1.0,
-                            );
-                            assets.add(body)
-                        })
-                    });
-                    let opaque = assets.add(material.clone());
-                    // The lower water surface sits in the vessel's shade. A
-                    // bounded tint makes Partial distinguishable from Full in
-                    // the actual top-down view without changing water counts,
-                    // numeric heights, or the shared authored atlas.
-                    let tank_partial_water = if kind == BuildingType::Tank {
-                        material.base.base_color = Color::srgb(0.58, 0.70, 0.73);
-                        let partial = assets.add(material.clone());
-                        material.base.base_color = Color::WHITE;
-                        Some(partial)
-                    } else {
-                        None
-                    };
-                    // Only active Spa slots use this material. The authored
-                    // RGB mask controls surface emission, never a logical light.
-                    material.base.emissive = LinearRgba::WHITE;
-                    material.base.emissive_texture = set.image("slot_emissive").cloned();
-                    let slot_on = if kind == BuildingType::Bridge {
-                        opaque.clone()
-                    } else {
-                        assets.add(material)
-                    };
-                    cache.0.push(GenerationMaterials {
-                        identity: set.manifest.identity.clone(),
-                        opaque,
-                        tank_partial_water,
-                        tank_paint_body,
-                        slot_on,
-                    });
+                    cache
+                        .0
+                        .push(build_generation_materials(world, handles, set, kind));
                 }
                 let material = cache
                     .0
                     .iter()
                     .find(|entry| &entry.identity == identity.unwrap())
                     .unwrap();
-                for part in &set.manifest.parts {
+                for binding in set.parts().iter().copied() {
+                    let part = &set.manifest.parts[binding.part_index];
                     world.spawn((
                         ChildOf(root),
-                        EquipmentPart {
-                            name: part.name.clone(),
+                        EquipmentPart::Bound {
+                            role: binding.role,
+                            part_index: binding.part_index,
                         },
                         Name::new(part.name.clone()),
-                        Mesh3d(
-                            set.mesh(&part.mesh_role)
-                                .expect("validated mesh role")
-                                .clone(),
-                        ),
+                        Mesh3d(set.part_mesh(binding).clone()),
                         MeshMaterial3d(material.opaque.clone()),
                         Transform {
                             translation: Vec3::from_array(part.translation_wu),
@@ -475,9 +584,7 @@ fn sync_structure(
             } else {
                 world.spawn((
                     ChildOf(root),
-                    EquipmentPart {
-                        name: "fallback".into(),
-                    },
+                    EquipmentPart::Fallback,
                     Mesh3d(fallback_mesh(kind, handles)),
                     MeshMaterial3d(fallback_material(kind, state, handles)),
                     Transform::IDENTITY,
@@ -522,83 +629,40 @@ fn sync_structure(
             else {
                 continue;
             };
-            if let Some(spec) = descriptor.and_then(|set| {
-                set.manifest
-                    .parts
-                    .iter()
-                    .find(|spec| spec.name == part.name)
-            }) {
-                if let Some(BuildingProductionState::Tank {
-                    partial_y_wu,
-                    full_y_wu,
-                }) = motion
-                    && part.name == "water"
-                {
-                    let y = if state == StructuralPresentationState::TankFull {
-                        full_y_wu
-                    } else {
-                        partial_y_wu
-                    };
-                    if transform.translation.y != y {
-                        transform.translation.y = y;
-                    }
-                } else if let Some(BuildingProductionState::MudMixer { axis, .. }) = motion
-                    && part.name == "rotor"
-                {
-                    // The role origin is the shaft pivot; the fixed trough and
-                    // frame are never rotated. Preserve the authored local pose.
-                    let rotation = Quat::from_array(spec.rotation_xyzw)
-                        * Quat::from_axis_angle(Vec3::from_array(axis), rotor_angle);
-                    if transform.rotation != rotation {
-                        transform.rotation = rotation;
-                    }
-                }
-            }
-            let next_visibility = if kind == BuildingType::Tank
-                && part.name == "water"
-                && state == StructuralPresentationState::TankEmpty
+            let (role, spec) = match part {
+                EquipmentPart::Fallback => (None, None),
+                EquipmentPart::Bound { role, part_index } => (
+                    Some(*role),
+                    descriptor.and_then(|set| set.manifest.parts.get(*part_index)),
+                ),
+            };
+            let next = decide_part_appearance(PartAppearanceInput {
+                kind,
+                state,
+                motion,
+                role,
+                spec,
+                material,
+                handles,
+                rotor_angle,
+                mask,
+                constructing,
+            });
+            if let Some(height) = next.height
+                && transform.translation.y != height
             {
-                Visibility::Hidden
-            } else {
-                Visibility::Inherited
-            };
-            if *visibility != next_visibility {
-                *visibility = next_visibility;
+                transform.translation.y = height;
             }
-            let next_material = if constructing {
-                handles.equipment_material.clone()
-            } else if let Some(material) = material {
-                let active = part
-                    .name
-                    .strip_prefix("slot")
-                    .and_then(|index| index.parse::<u8>().ok())
-                    .is_some_and(|index| index < 4 && mask & (1 << index) != 0);
-                if kind == BuildingType::Tank
-                    && part.name == "water"
-                    && state == StructuralPresentationState::TankPartial
-                {
-                    material
-                        .tank_partial_water
-                        .as_ref()
-                        .expect("Tank material includes its partial water tint")
-                        .clone()
-                } else if active {
-                    material.slot_on.clone()
-                } else {
-                    if kind == BuildingType::Tank
-                        && part.name == "body"
-                        && let Some(paint) = material.tank_paint_body.as_ref()
-                    {
-                        paint.clone()
-                    } else {
-                        material.opaque.clone()
-                    }
-                }
-            } else {
-                fallback_material(kind, state, handles)
-            };
-            if handle.0 != next_material {
-                handle.0 = next_material;
+            if let Some(rotation) = next.rotation
+                && transform.rotation != rotation
+            {
+                transform.rotation = rotation;
+            }
+            if *visibility != next.visibility {
+                *visibility = next.visibility;
+            }
+            if handle.0 != next.material {
+                handle.0 = next.material;
             }
         }
     }

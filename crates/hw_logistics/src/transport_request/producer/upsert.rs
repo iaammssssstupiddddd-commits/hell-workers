@@ -1,5 +1,6 @@
 //! Producer upsert/cleanup 共通化ヘルパー
 
+use bevy::ecs::system::EntityCommands;
 use bevy::prelude::*;
 use std::collections::HashMap;
 use std::hash::Hash;
@@ -55,18 +56,12 @@ pub struct RequestSlotSnapshot<'a> {
 
 impl<'a> RequestSlotSnapshot<'a> {
     pub fn from_runtime(current: ExistingRequestRuntime<'a>) -> Self {
-        Self {
-            slots: current.4,
-            demand: current.6,
-            state: current.7,
-        }
+        RequestRuntimeView::from(current).slot_snapshot()
     }
     pub fn from_stockpile_runtime(current: ExistingStockpileRequestRuntime<'a>) -> Self {
-        Self {
-            slots: current.4,
-            demand: current.7,
-            state: current.8,
-        }
+        StockpileRequestRuntimeView::from(current)
+            .common
+            .slot_snapshot()
     }
 }
 
@@ -115,6 +110,169 @@ pub type ExistingRequestRuntime<'a> = (
     Option<&'a TransportPolicy>,
 );
 
+#[derive(Clone, Copy)]
+struct RequestRuntimeView<'a> {
+    transform: Option<&'a Transform>,
+    visibility: Option<&'a Visibility>,
+    designation: Option<&'a Designation>,
+    managed_by: Option<&'a ManagedBy>,
+    slots: Option<&'a TaskSlots>,
+    priority: Option<&'a Priority>,
+    demand: Option<&'a TransportDemand>,
+    state: Option<&'a TransportRequestState>,
+    policy: Option<&'a TransportPolicy>,
+}
+
+impl<'a> From<ExistingRequestRuntime<'a>> for RequestRuntimeView<'a> {
+    fn from(value: ExistingRequestRuntime<'a>) -> Self {
+        let (
+            transform,
+            visibility,
+            designation,
+            managed_by,
+            slots,
+            priority,
+            demand,
+            state,
+            policy,
+        ) = value;
+        Self {
+            transform,
+            visibility,
+            designation,
+            managed_by,
+            slots,
+            priority,
+            demand,
+            state,
+            policy,
+        }
+    }
+}
+
+impl<'a> RequestRuntimeView<'a> {
+    fn slot_snapshot(self) -> RequestSlotSnapshot<'a> {
+        RequestSlotSnapshot {
+            slots: self.slots,
+            demand: self.demand,
+            state: self.state,
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+struct StockpileRequestRuntimeView<'a> {
+    common: RequestRuntimeView<'a>,
+    receiver_tier: Option<&'a ReceiverPolicyTier>,
+}
+
+impl<'a> From<ExistingStockpileRequestRuntime<'a>> for StockpileRequestRuntimeView<'a> {
+    fn from(value: ExistingStockpileRequestRuntime<'a>) -> Self {
+        let (
+            transform,
+            visibility,
+            designation,
+            managed_by,
+            slots,
+            priority,
+            receiver_tier,
+            demand,
+            state,
+            policy,
+        ) = value;
+        Self {
+            common: (
+                transform,
+                visibility,
+                designation,
+                managed_by,
+                slots,
+                priority,
+                demand,
+                state,
+                policy,
+            )
+                .into(),
+            receiver_tier,
+        }
+    }
+}
+
+struct CommonRequestSpec {
+    site_pos: Vec2,
+    issued_by: Entity,
+    slots: u32,
+    priority: u32,
+    work_type: WorkType,
+    inflight: u32,
+    state: TransportRequestState,
+}
+
+fn update_common_header(
+    entity: &mut EntityCommands<'_>,
+    current: RequestRuntimeView<'_>,
+    desired: &CommonRequestSpec,
+) {
+    let transform = Transform::from_xyz(desired.site_pos.x, desired.site_pos.y, 0.0);
+    if current.transform.is_none_or(|value| {
+        value.translation != transform.translation
+            || value.rotation != transform.rotation
+            || value.scale != transform.scale
+    }) {
+        entity.try_insert(transform);
+    }
+    if current
+        .visibility
+        .is_none_or(|value| *value != Visibility::Hidden)
+    {
+        entity.try_insert(Visibility::Hidden);
+    }
+    if current
+        .designation
+        .is_none_or(|value| value.work_type != desired.work_type)
+    {
+        entity.try_insert(Designation {
+            work_type: desired.work_type,
+        });
+    }
+    if current
+        .managed_by
+        .is_none_or(|value| value.0 != desired.issued_by)
+    {
+        entity.try_insert(ManagedBy(desired.issued_by));
+    }
+    if current.slots.is_none_or(|value| value.max != desired.slots) {
+        entity.try_insert(TaskSlots::new(desired.slots));
+    }
+    if current
+        .priority
+        .is_none_or(|value| value.0 != desired.priority)
+    {
+        entity.try_insert(Priority(desired.priority));
+    }
+}
+
+fn update_common_runtime(
+    entity: &mut EntityCommands<'_>,
+    current: RequestRuntimeView<'_>,
+    desired: &CommonRequestSpec,
+) {
+    if current.demand.is_none_or(|value| {
+        value.desired_slots != desired.slots || value.inflight != desired.inflight
+    }) {
+        entity.try_insert(TransportDemand {
+            desired_slots: desired.slots,
+            inflight: desired.inflight,
+        });
+    }
+    if current.state.is_none_or(|value| *value != desired.state) {
+        entity.try_insert(desired.state);
+    }
+    if current.policy.is_none_or(|value| !policy_is_default(value)) {
+        entity.try_insert(TransportPolicy::default());
+    }
+}
+
 /// Desired producer-owned values for a request that already exists.
 pub struct SemanticRequestSpec {
     pub key: (Entity, ResourceType),
@@ -154,36 +312,19 @@ pub fn update_request_runtime_if_needed(
     current: ExistingRequestRuntime<'_>,
     desired: SemanticRequestSpec,
 ) {
-    let (transform, visibility, designation, managed_by, slots, priority, demand, state, policy) =
-        current;
+    let current = RequestRuntimeView::from(current);
     let desired_slots = desired.slots.resolve(desired.inflight as usize);
-    let desired_transform = Transform::from_xyz(desired.site_pos.x, desired.site_pos.y, 0.0);
+    let common = CommonRequestSpec {
+        site_pos: desired.site_pos,
+        issued_by: desired.issued_by,
+        slots: desired_slots,
+        priority: desired.priority,
+        work_type: desired.work_type,
+        inflight: desired.inflight,
+        state: desired.state,
+    };
     let mut entity_commands = commands.entity(request_entity);
-
-    if transform.is_none_or(|current| {
-        current.translation != desired_transform.translation
-            || current.rotation != desired_transform.rotation
-            || current.scale != desired_transform.scale
-    }) {
-        entity_commands.try_insert(desired_transform);
-    }
-    if visibility.is_none_or(|current| *current != Visibility::Hidden) {
-        entity_commands.try_insert(Visibility::Hidden);
-    }
-    if designation.is_none_or(|current| current.work_type != desired.work_type) {
-        entity_commands.try_insert(Designation {
-            work_type: desired.work_type,
-        });
-    }
-    if managed_by.is_none_or(|current| current.0 != desired.issued_by) {
-        entity_commands.try_insert(ManagedBy(desired.issued_by));
-    }
-    if slots.is_none_or(|current| current.max != desired_slots) {
-        entity_commands.try_insert(TaskSlots::new(desired_slots));
-    }
-    if priority.is_none_or(|current| current.0 != desired.priority) {
-        entity_commands.try_insert(Priority(desired.priority));
-    }
+    update_common_header(&mut entity_commands, current, &common);
     if !request_matches(current_request, &desired) {
         entity_commands.try_insert(TransportRequest {
             kind: desired.kind,
@@ -194,20 +335,7 @@ pub fn update_request_runtime_if_needed(
             stockpile_group: Vec::new(),
         });
     }
-    if demand.is_none_or(|current| {
-        current.desired_slots != desired_slots || current.inflight != desired.inflight
-    }) {
-        entity_commands.try_insert(TransportDemand {
-            desired_slots,
-            inflight: desired.inflight,
-        });
-    }
-    if state.is_none_or(|current| *current != desired.state) {
-        entity_commands.try_insert(desired.state);
-    }
-    if policy.is_none_or(|current| !policy_is_default(current)) {
-        entity_commands.try_insert(TransportPolicy::default());
-    }
+    update_common_runtime(&mut entity_commands, current, &common);
 }
 
 /// Removes activation components, and optionally reconciles demand, only when they differ.
@@ -218,19 +346,21 @@ pub fn disable_request_if_needed(
     current: ExistingRequestRuntime<'_>,
     inflight: Option<u32>,
 ) {
-    let (_, _, designation, _, slots, priority, demand, _, _) = current;
+    let current = RequestRuntimeView::from(current);
     let mut entity_commands = commands.entity(request_entity);
-    if designation.is_some() {
+    if current.designation.is_some() {
         entity_commands.try_remove::<Designation>();
     }
-    if slots.is_some() {
+    if current.slots.is_some() {
         entity_commands.try_remove::<TaskSlots>();
     }
-    if priority.is_some() {
+    if current.priority.is_some() {
         entity_commands.try_remove::<Priority>();
     }
     if let Some(inflight) = inflight
-        && demand.is_none_or(|current| current.desired_slots != 0 || current.inflight != inflight)
+        && current
+            .demand
+            .is_none_or(|current| current.desired_slots != 0 || current.inflight != inflight)
     {
         entity_commands.try_insert(TransportDemand {
             desired_slots: 0,
@@ -307,48 +437,21 @@ fn update_stockpile_request_if_needed(
     desired: &StockpileRequestSpec<'_>,
     workers: usize,
 ) {
-    let (
-        transform,
-        visibility,
-        designation,
-        managed_by,
-        slots,
-        priority,
-        receiver_tier,
-        demand,
-        state,
-        policy,
-    ) = current;
+    let current = StockpileRequestRuntimeView::from(current);
     let desired_slots = desired.slots.resolve(workers);
     let inflight = super::to_u32_saturating(workers);
-    let desired_transform = Transform::from_xyz(desired.site_pos.x, desired.site_pos.y, 0.0);
     let desired_state = request_state_for_workers(workers);
+    let common = CommonRequestSpec {
+        site_pos: desired.site_pos,
+        issued_by: desired.issued_by,
+        slots: desired_slots,
+        priority: desired.job_priority,
+        work_type: desired.work_type,
+        inflight,
+        state: desired_state,
+    };
     let mut entity_commands = commands.entity(entity);
-
-    if transform.is_none_or(|current| {
-        current.translation != desired_transform.translation
-            || current.rotation != desired_transform.rotation
-            || current.scale != desired_transform.scale
-    }) {
-        entity_commands.try_insert(desired_transform);
-    }
-    if visibility.is_none_or(|current| *current != Visibility::Hidden) {
-        entity_commands.try_insert(Visibility::Hidden);
-    }
-    if designation.is_none_or(|current| current.work_type != desired.work_type) {
-        entity_commands.try_insert(Designation {
-            work_type: desired.work_type,
-        });
-    }
-    if managed_by.is_none_or(|current| current.0 != desired.issued_by) {
-        entity_commands.try_insert(ManagedBy(desired.issued_by));
-    }
-    if slots.is_none_or(|current| current.max != desired_slots) {
-        entity_commands.try_insert(TaskSlots::new(desired_slots));
-    }
-    if priority.is_none_or(|current| current.0 != desired.job_priority) {
-        entity_commands.try_insert(Priority(desired.job_priority));
-    }
+    update_common_header(&mut entity_commands, current.common, &common);
     if !stockpile_request_matches(current_request, desired) {
         entity_commands.try_insert(TransportRequest {
             kind: desired.kind,
@@ -359,23 +462,13 @@ fn update_stockpile_request_if_needed(
             stockpile_group: desired.stockpile_group.to_vec(),
         });
     }
-    if receiver_tier.is_none_or(|current| current.0 != desired.receiver_policy_tier) {
+    if current
+        .receiver_tier
+        .is_none_or(|current| current.0 != desired.receiver_policy_tier)
+    {
         entity_commands.try_insert(ReceiverPolicyTier(desired.receiver_policy_tier));
     }
-    if demand.is_none_or(|current| {
-        current.desired_slots != desired_slots || current.inflight != inflight
-    }) {
-        entity_commands.try_insert(TransportDemand {
-            desired_slots,
-            inflight,
-        });
-    }
-    if state.is_none_or(|current| *current != desired_state) {
-        entity_commands.try_insert(desired_state);
-    }
-    if policy.is_none_or(|current| !policy_is_default(current)) {
-        entity_commands.try_insert(TransportPolicy::default());
-    }
+    update_common_runtime(&mut entity_commands, current.common, &common);
 }
 
 fn cap_committed_request_if_needed(
@@ -411,21 +504,25 @@ fn disable_workerless_stockpile_request_if_needed(
     entity: Entity,
     current: ExistingStockpileRequestRuntime<'_>,
 ) {
-    let (_, _, designation, _, slots, priority, receiver_tier, demand, _, _) = current;
+    let current = StockpileRequestRuntimeView::from(current);
     let mut entity_commands = commands.entity(entity);
-    if designation.is_some() {
+    if current.common.designation.is_some() {
         entity_commands.try_remove::<Designation>();
     }
-    if slots.is_some() {
+    if current.common.slots.is_some() {
         entity_commands.try_remove::<TaskSlots>();
     }
-    if priority.is_some() {
+    if current.common.priority.is_some() {
         entity_commands.try_remove::<Priority>();
     }
-    if receiver_tier.is_some() {
+    if current.receiver_tier.is_some() {
         entity_commands.try_remove::<ReceiverPolicyTier>();
     }
-    if demand.is_none_or(|current| current.desired_slots != 0 || current.inflight != 0) {
+    if current
+        .common
+        .demand
+        .is_none_or(|current| current.desired_slots != 0 || current.inflight != 0)
+    {
         entity_commands.try_insert(TransportDemand {
             desired_slots: 0,
             inflight: 0,
@@ -841,6 +938,79 @@ mod tests {
     }
 
     #[test]
+    fn active_reconciliation_repairs_missing_components_and_owner_relationship() {
+        for stockpile in [false, true] {
+            let mut app = if stockpile {
+                stockpile_fixture()
+            } else {
+                fixture()
+            };
+            let request = app.world().resource::<RequestFixture>().request;
+            let owner = app.world().resource::<RequestFixture>().owner;
+            app.world_mut()
+                .entity_mut(request)
+                .remove::<(Visibility, ManagedBy, TransportPolicy)>();
+            if stockpile {
+                app.add_systems(Update, reconcile_active_stockpile_request);
+            } else {
+                app.add_systems(Update, reconcile_active_request);
+            }
+            app.update();
+            assert_eq!(
+                app.world().get::<Visibility>(request),
+                Some(&Visibility::Hidden)
+            );
+            assert_eq!(app.world().get::<ManagedBy>(request).unwrap().0, owner);
+            assert!(
+                app.world()
+                    .get::<hw_core::relationships::ManagedTasks>(owner)
+                    .unwrap()
+                    .contains(request)
+            );
+            assert!(app.world().get::<TransportPolicy>(request).is_some());
+            app.world_mut().clear_trackers();
+            app.update();
+            let entity = app.world().entity(request);
+            assert!(!entity.get_ref::<Visibility>().unwrap().is_changed());
+            assert!(!entity.get_ref::<ManagedBy>().unwrap().is_changed());
+            assert!(!entity.get_ref::<TransportPolicy>().unwrap().is_changed());
+        }
+    }
+
+    #[test]
+    fn active_reconciliation_repairs_only_changed_priority() {
+        for stockpile in [false, true] {
+            let mut app = if stockpile {
+                stockpile_fixture()
+            } else {
+                fixture()
+            };
+            let request = app.world().resource::<RequestFixture>().request;
+            app.world_mut().entity_mut(request).insert(Priority(99));
+            if stockpile {
+                app.add_systems(Update, reconcile_active_stockpile_request);
+            } else {
+                app.add_systems(Update, reconcile_active_request);
+            }
+            app.world_mut().clear_trackers();
+            app.update();
+            let entity = app.world().entity(request);
+            assert_eq!(
+                entity.get::<Priority>().unwrap().0,
+                if stockpile { 0 } else { 3 }
+            );
+            assert!(!entity.get_ref::<TransportRequest>().unwrap().is_changed());
+            assert!(!entity.get_ref::<TransportDemand>().unwrap().is_changed());
+            assert!(
+                !entity
+                    .get_ref::<TransportRequestState>()
+                    .unwrap()
+                    .is_changed()
+            );
+        }
+    }
+
+    #[test]
     fn second_active_reconciliation_does_not_dirty_owned_components() {
         let mut app = fixture();
         app.add_systems(Update, reconcile_active_request);
@@ -851,6 +1021,7 @@ mod tests {
         let request_entity = app.world().resource::<RequestFixture>().request;
         let request = app.world().entity(request_entity);
         assert!(!request.get_ref::<Transform>().unwrap().is_changed());
+        assert!(!request.get_ref::<Visibility>().unwrap().is_changed());
         assert!(!request.get_ref::<Designation>().unwrap().is_changed());
         assert!(!request.get_ref::<ManagedBy>().unwrap().is_changed());
         assert!(!request.get_ref::<TaskSlots>().unwrap().is_changed());
@@ -895,6 +1066,7 @@ mod tests {
         let request_entity = app.world().resource::<RequestFixture>().request;
         let request = app.world().entity(request_entity);
         assert!(!request.get_ref::<Transform>().unwrap().is_changed());
+        assert!(!request.get_ref::<Visibility>().unwrap().is_changed());
         assert!(!request.get_ref::<Designation>().unwrap().is_changed());
         assert!(!request.get_ref::<ManagedBy>().unwrap().is_changed());
         assert!(!request.get_ref::<TaskSlots>().unwrap().is_changed());

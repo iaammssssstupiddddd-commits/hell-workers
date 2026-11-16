@@ -676,6 +676,100 @@ mod tests {
             .id()
     }
 
+    fn remove_required_marker(world: &mut World, target: Entity, kind: BuildingType) -> bool {
+        let mut entity = world.entity_mut(target);
+        match kind {
+            BuildingType::Wall | BuildingType::Floor => return false,
+            BuildingType::Door => {
+                entity.remove::<Door>();
+            }
+            BuildingType::Bridge => {
+                entity.remove::<BridgeMarker>();
+            }
+            BuildingType::Tank => {
+                entity.remove::<Stockpile>();
+            }
+            BuildingType::MudMixer => {
+                entity.remove::<MudMixerStorage>();
+            }
+            BuildingType::RestArea => {
+                entity.remove::<RestArea>();
+            }
+            BuildingType::WheelbarrowParking => {
+                entity.remove::<WheelbarrowParking>();
+            }
+            BuildingType::SandPile => {
+                entity.remove::<SandPile>();
+            }
+            BuildingType::BonePile => {
+                entity.remove::<BonePile>();
+            }
+            BuildingType::SoulSpa => {
+                entity.remove::<PowerGenerator>();
+            }
+            BuildingType::OutdoorLamp => {
+                entity.remove::<PowerConsumer>();
+            }
+        }
+        true
+    }
+
+    fn target_for(world: &mut World, kind: BuildingType) -> Entity {
+        let mut entity = world.spawn((
+            Building {
+                kind,
+                is_provisional: false,
+            },
+            Transform::default(),
+        ));
+        match kind {
+            BuildingType::Wall | BuildingType::Floor => {}
+            BuildingType::Door => {
+                entity.insert(Door::default());
+            }
+            BuildingType::Bridge => {
+                entity.insert(BridgeMarker);
+            }
+            BuildingType::Tank => {
+                entity.insert(Stockpile {
+                    capacity: 50,
+                    resource_type: Some(ResourceType::Water),
+                });
+            }
+            BuildingType::MudMixer => {
+                entity.insert((
+                    Stockpile {
+                        capacity: 50,
+                        resource_type: Some(ResourceType::Water),
+                    },
+                    MudMixerStorage::default(),
+                ));
+            }
+            BuildingType::RestArea => {
+                entity.insert(RestArea { capacity: 4 });
+            }
+            BuildingType::WheelbarrowParking => {
+                entity.insert(WheelbarrowParking { capacity: 2 });
+            }
+            BuildingType::SandPile => {
+                entity.insert(SandPile);
+            }
+            BuildingType::BonePile => {
+                entity.insert(BonePile);
+            }
+            BuildingType::SoulSpa => {
+                entity.insert(SoulSpaSite {
+                    phase: SoulSpaPhase::Operational,
+                    ..default()
+                });
+            }
+            BuildingType::OutdoorLamp => {
+                entity.insert(PowerConsumer { demand: 1.0 });
+            }
+        }
+        entity.id()
+    }
+
     fn spawn_deconstruction_order(app: &mut App) -> (Entity, Entity) {
         let target = app
             .world_mut()
@@ -812,6 +906,99 @@ mod tests {
                     .get::<TaskWorkers>(order)
                     .is_none_or(TaskWorkers::is_empty)
             );
+        }
+    }
+
+    #[test]
+    fn every_kind_rechecks_live_marker_shape_when_applying_assignment() {
+        for kind in BuildingType::ALL {
+            for mutation in 0..5 {
+                let mut app = assignment_test_app();
+                let familiar = app.world_mut().spawn_empty().id();
+                let worker = spawn_idle_worker(&mut app);
+                let target = target_for(app.world_mut(), kind);
+                let order = app
+                    .world_mut()
+                    .spawn((
+                        DeconstructionOrder,
+                        TargetDeconstructionRoot(target),
+                        Designation {
+                            work_type: WorkType::Deconstruct,
+                        },
+                        TaskSlots::new(1),
+                    ))
+                    .id();
+                app.world_mut()
+                    .entity_mut(target)
+                    .insert(DeconstructionPending { order });
+                app.world_mut()
+                    .write_message(deconstruction_request(familiar, worker, order, target));
+                let rejected = match mutation {
+                    0 => false,
+                    1 => {
+                        if kind == BuildingType::SandPile {
+                            app.world_mut().entity_mut(target).insert(BonePile);
+                        } else {
+                            app.world_mut().entity_mut(target).insert(SandPile);
+                        }
+                        true
+                    }
+                    2 => remove_required_marker(app.world_mut(), target, kind),
+                    3 if kind == BuildingType::Tank => {
+                        app.world_mut()
+                            .get_mut::<Stockpile>(target)
+                            .unwrap()
+                            .resource_type = Some(ResourceType::Wood);
+                        true
+                    }
+                    4 if kind == BuildingType::SoulSpa => {
+                        app.world_mut()
+                            .get_mut::<SoulSpaSite>(target)
+                            .unwrap()
+                            .phase = SoulSpaPhase::Constructing;
+                        true
+                    }
+                    _ => false,
+                };
+                app.update();
+                if rejected {
+                    assert!(
+                        matches!(
+                            app.world().get::<AssignedTask>(worker),
+                            Some(AssignedTask::None)
+                        ),
+                        "{kind:?}"
+                    );
+                    assert!(app.world().get::<WorkingOn>(worker).is_none(), "{kind:?}");
+                    assert!(
+                        app.world().get::<ActiveTaskIdentity>(worker).is_none(),
+                        "{kind:?}"
+                    );
+                    assert!(
+                        app.world()
+                            .get::<TaskWorkers>(order)
+                            .is_none_or(TaskWorkers::is_empty),
+                        "{kind:?}"
+                    );
+                } else {
+                    assert!(
+                        matches!(app.world().get::<AssignedTask>(worker), Some(AssignedTask::Deconstruct(data)) if data.order == order && data.target == target),
+                        "{kind:?}"
+                    );
+                    assert_eq!(
+                        app.world().get::<WorkingOn>(worker).map(|value| value.0),
+                        Some(order),
+                        "{kind:?}"
+                    );
+                    assert_eq!(
+                        app.world()
+                            .get::<ActiveTaskIdentity>(worker)
+                            .map(|value| value.assignment_entity),
+                        Some(order),
+                        "{kind:?}"
+                    );
+                }
+            }
         }
     }
 

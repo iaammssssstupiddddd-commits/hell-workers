@@ -42,16 +42,31 @@ KIND_LEGS = {
 }
 
 
-def frozen_subject(repo):
+def frozen_subject(repo, *, feedback=False):
     if __package__:
         from . import building_art_acceptance as art
     else:
         import building_art_acceptance as art
     repo = art.native.validate_repo(str(repo))
     value = art.subject(repo)
-    art.validate_subject(value, feedback=False)
+    art.validate_subject(value, feedback=feedback)
     value["m2_driver"] = pipeline.digest(Path(__file__).read_bytes())
     return value
+
+
+def feedback_dependencies(repo):
+    """Freeze tooling outside the normal native subject for explicit dirty feedback."""
+    roots = (repo / "tools/blender_ai_workflow/scripts", repo / "tools/blender_ai_workflow/fixtures")
+    paths = []
+    for root in roots:
+        pipeline.require(pipeline.no_symlinks(root).is_dir(), "feedback tooling root missing")
+        entries = sorted(root.rglob("*"))
+        for path in entries:
+            pipeline.no_symlinks(path)
+        selected = [path for path in entries if path.is_file() and path.suffix in (".py", ".json")]
+        pipeline.require(selected, "feedback tooling inventory differs")
+        paths.extend(selected)
+    return {str(path.relative_to(repo)): pipeline.digest(path.read_bytes()) for path in paths}
 
 
 def numeric_binding(kind, spec):
@@ -69,14 +84,24 @@ def numeric_binding(kind, spec):
 def verify(plan_path):
     """Re-read both prepared runtime sets, provenance, codec and frozen source."""
     value = pipeline.read(plan_path)
-    pipeline.require(value["scope"] == "m2-feedback-plan-not-acceptance"
+    scope = value.get("scope")
+    dirty_feedback = value.get("dirty_feedback", False)
+    pipeline.require(type(dirty_feedback) is bool and
+                     ((scope == "m2-feedback-plan-not-acceptance" and dirty_feedback is False)
+                      or (scope == "m2-dirty-feedback-plan-not-acceptance" and dirty_feedback is True)),
+                     "feedback subject mode differs")
+    pipeline.require(scope in ("m2-feedback-plan-not-acceptance", "m2-dirty-feedback-plan-not-acceptance")
                      and value["numeric_candidate_sha256"] == NUMERIC_SHA256
                      and value["accepted"] is False and value["runtime_published"] is False,
                      "wrong runtime plan or approval claim")
     pipeline.require(value["independent_gates"] and all(gate is None for gate in value["independent_gates"].values())
                      and value["performance"]["accepted"] is False,
                      "runtime integrity verification cannot adopt approval claims")
-    pipeline.require(value["subject"] == frozen_subject(Path(value["repo"]))
+    repo = Path(value["repo"])
+    pipeline.require((not dirty_feedback and "feedback_dependencies" not in value)
+                     or (dirty_feedback and value.get("feedback_dependencies") == feedback_dependencies(repo)),
+                     "feedback tooling changed")
+    pipeline.require(value["subject"] == frozen_subject(repo, feedback=dirty_feedback)
                      and value["source_sha256"] == value["subject"]["source"], "frozen subject changed")
     codec = pipeline.no_symlinks(Path(value["codec"]))
     pipeline.require(pipeline.digest(codec.read_bytes()) == value["codec_sha256"], "codec changed")
@@ -103,7 +128,8 @@ def verify(plan_path):
         identities[kind] = manifest["identity"]
         numeric_candidates[kind] = binding
     # Detect changes while the external codec and artifact readers were running.
-    pipeline.require(value["subject"] == frozen_subject(Path(value["repo"]))
+    pipeline.require(value["subject"] == frozen_subject(repo, feedback=dirty_feedback)
+                     and (not dirty_feedback or value["feedback_dependencies"] == feedback_dependencies(repo))
                      and pipeline.digest(codec.read_bytes()) == value["codec_sha256"]
                      and value == pipeline.read(plan_path), "inputs changed during runtime verification")
     return {"schema_version": 1, "status": "pass", "scope": "m2-prepared-runtime-integrity-only",
@@ -117,7 +143,9 @@ def plan(args):
     pipeline.require(re.fullmatch(r"[0-9a-f]{64}", args.subject_sha256) is not None,
                      "use the coordinator frozen source fingerprint")
     repo = Path(args.repo).absolute()
-    subject = frozen_subject(repo)
+    dirty_feedback = getattr(args, "dirty_feedback", False)
+    pipeline.require(type(dirty_feedback) is bool, "dirty feedback mode must be explicit")
+    subject = frozen_subject(repo, feedback=dirty_feedback)
     pipeline.require(subject["source"] == args.subject_sha256, "supplied source fingerprint differs")
     kinds = {}
     for kind, root in (("Tank", args.tank_runtime), ("MudMixer", args.mixer_runtime)):
@@ -165,6 +193,10 @@ def plan(args):
             "promotion", "install", "rollback", "formal_release")},
         "accepted": False, "runtime_published": False,
     }
+    if dirty_feedback:
+        result["scope"] = "m2-dirty-feedback-plan-not-acceptance"
+        result["dirty_feedback"] = True
+        result["feedback_dependencies"] = feedback_dependencies(repo)
     pipeline.put(args.output, pipeline.canonical(result))
     verify(args.output)
     return result
@@ -179,6 +211,7 @@ def inspect(plan_path, kind, trace_path):
     pipeline.require(isinstance(trace, dict) and type(trace.get("schema_version")) is int
                      and trace["schema_version"] == 1, "unsupported observation schema")
     pipeline.require(value["scope"] == "m2-feedback-plan-not-acceptance"
+                     and value.get("dirty_feedback", False) is False
                      and value["numeric_candidate_sha256"] == NUMERIC_SHA256, "wrong plan")
     binding = numeric_binding(kind, value["kinds"][kind])
     pipeline.require(trace.get("numeric_candidate_sha256", NUMERIC_SHA256)
@@ -228,6 +261,8 @@ def main():
                         help="Explicit unapproved MudMixer numeric revision; Tank remains v1")
     create.add_argument("--codec", type=Path, required=True)
     create.add_argument("--subject-sha256", required=True)
+    create.add_argument("--dirty-feedback", action="store_true",
+                        help="bind the complete current dirty subject for observation only")
     create.add_argument("--output", type=Path, required=True)
     create.add_argument("--repo", type=Path, default=ROOT)
     check = sub.add_parser("verify")

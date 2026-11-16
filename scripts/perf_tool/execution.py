@@ -82,6 +82,8 @@ MEASUREMENT_HARNESS_FILES = (
     "scripts/ui_m2_planning.py",
     "scripts/ui_m2_completion.py",
     "scripts/ui_m2_tank_completion.py",
+    "scripts/ui_refactor_stockpile.py",
+    "scripts/ui_refactor_spa_slots.py",
     "scripts/ui_m2_tank_inflow.py",
     "scripts/ui_m2_tank_supply.py",
     "scripts/ui_m2_supply_workload.py",

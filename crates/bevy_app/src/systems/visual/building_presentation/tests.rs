@@ -714,6 +714,62 @@ fn mixer_refining_stop_pause_resume_only_rotates_the_existing_rotor() {
 }
 
 #[test]
+fn unpaused_mixer_generation_switch_holds_angle_then_advances_once() {
+    let mut app = app();
+    app.insert_resource(bevy::time::TimeUpdateStrategy::ManualDuration(
+        std::time::Duration::from_millis(100),
+    ));
+    let owner = shell(app.world_mut(), BuildingType::MudMixer);
+    app.world_mut()
+        .entity_mut(owner)
+        .insert(MudMixerVisualState { is_active: true });
+    publish(app.world_mut(), BuildingAssetKind::MudMixer, 1);
+    app.update();
+    let visual = root(app.world_mut(), owner);
+    let original = children(app.world(), visual);
+    app.update();
+    let body = *app.world().get::<Transform>(original[0]).unwrap();
+    let rotor = *app.world().get::<Transform>(original[1]).unwrap();
+    assert_ne!(rotor.rotation, Quat::IDENTITY);
+    assert!(app.world().resource::<Time<Virtual>>().delta_secs() > 0.0);
+    assert!(!app.world().resource::<Time<Virtual>>().is_paused());
+
+    let next = publish(app.world_mut(), BuildingAssetKind::MudMixer, 2);
+    app.update();
+    assert_eq!(root(app.world_mut(), owner), visual);
+    let replacement = children(app.world(), visual);
+    assert_eq!(replacement.len(), 2);
+    assert!(
+        original
+            .iter()
+            .all(|part| app.world().get_entity(*part).is_err())
+    );
+    for (part, role) in replacement.iter().zip(["body", "rotor"]) {
+        assert_eq!(
+            &app.world().get::<Mesh3d>(*part).unwrap().0,
+            next.mesh(role).unwrap()
+        );
+    }
+    assert_eq!(app.world().get::<Transform>(replacement[0]), Some(&body));
+    assert_eq!(app.world().get::<Transform>(replacement[1]), Some(&rotor));
+    assert!(app.world().resource::<Time<Virtual>>().delta_secs() > 0.0);
+    assert!(!app.world().resource::<Time<Virtual>>().is_paused());
+
+    app.update();
+    assert_eq!(children(app.world(), visual), replacement);
+    assert_eq!(app.world().get::<Transform>(replacement[0]), Some(&body));
+    let advanced = app.world().get::<Transform>(replacement[1]).unwrap();
+    let delta = app.world().resource::<Time<Virtual>>().delta_secs();
+    assert!(delta > 0.0);
+    assert_eq!(advanced.translation, rotor.translation);
+    assert_eq!(advanced.scale, rotor.scale);
+    assert!(advanced.rotation.abs_diff_eq(
+        rotor.rotation * Quat::from_axis_angle(Vec3::Z, 0.7 * delta),
+        1e-5
+    ));
+}
+
+#[test]
 fn world_blueprint_pulse_destination_and_open_catalog_use_same_generation() {
     for (kind, asset_kind) in [
         (

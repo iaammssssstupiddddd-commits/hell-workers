@@ -15,6 +15,116 @@ sys.path.insert(0, str(HELPER_DIR))
 acceptance = importlib.import_module("ui_usability_acceptance")
 
 
+class PinnedRenameEvidenceTests(unittest.TestCase):
+    def evidence(self):
+        rows = acceptance.refactor_rows
+        client = {"pid": 123, "window": 99}
+        entries = []
+        for index, case in enumerate(rows.PIN_CHECKPOINTS):
+            applied = case in ("pin-rename-applied", "pin-cleared")
+            a = {"entity": 11, "name": "renamed" if applied else "RefactorDeconstruct", "world_point": [5, 5]}
+            b = {"entity": 22, "name": "RefactorPower"}
+            selected = 11 if index < 3 else 22
+            pinned = None if index < 2 or case == "pin-cleared" else 11
+            target = 22 if case in ("pin-edit-abandoned", "pin-cleared") else 11
+            shown = b["name"] if target == 22 else a["name"]
+            controls = {} if case == "pin-rename-active" else {"text:inspection-header": {"fully_visible": True, "text": shown}}
+            if case == "pin-context":
+                controls["menu:InspectEntity(11v0)"] = {}
+            if case == "pin-rename-active":
+                controls["text-field:SoulRename { target: 11v0 }"] = {
+                    "fully_visible": True, "focused": True, "editable": "draft"}
+            value = {"paused": True, "world_epoch": 7, "frame": 100 + index * 100,
+                     "nonce": "owned", "pid": 123, "inspector_rect": [1, 2, 3, 4],
+                     "selected": selected, "pinned": pinned, "inspection_target": target,
+                     "rename_target": 11 if case == "pin-rename-active" else None,
+                     "context_menus": 1 if case == "pin-context" else 0, "controls": controls,
+                     "refactor_rows": {"souls": {"deconstruct": a, "power": b, "bucket": {}}}}
+            entries.append({"case": case, "last_step": 0, "value": value})
+        events = []
+        def event(**kwargs):
+            record = {"step": str(len(events) + 1), "nonce": "owned", "pid": 123, "window": 99,
+                      "world_epoch": 7, **kwargs}
+            events.append(record)
+        event(pre_frame=90, post_frame=91)
+        entries[0]["last_step"] = len(events)
+        for i, pressed in enumerate((True, False)):
+            event(button=3, pressed=pressed, observed_right_pressed=pressed, observed_cursor=[5, 5],
+                  pre_frame=110 + i, post_frame=111 + i)
+        entries[1]["last_step"] = len(events)
+        groups = [
+            ["menu:InspectEntity(11v0)"],
+            ["menu:Workspace(OpenEntities)", "soul:22"],
+            ["soul-rename", "keys:d,r,a,f,t"],
+            ["menu:Workspace(InspectSelection)"],
+            ["menu:Workspace(Back)", "soul-rename", "keys:r,e,n,a,m,e,d", "keys:Return"],
+            ["menu:ClearInspectPin"],
+        ]
+        for lower, group in enumerate(groups, start=1):
+            frame = entries[lower]["value"]["frame"] + 1
+            for key in group:
+                before = {"nonce": "owned", "pid": 123, "world_epoch": 7,
+                          "frame": frame, "controls": {}}
+                first = len(events) + 1
+                if key.startswith("keys:"):
+                    for letter in key[5:].split(","):
+                        for pressed in (True, False):
+                            event(key=letter, pressed=pressed, pre_frame=frame, post_frame=frame + 1)
+                        frame += 1
+                else:
+                    before["controls"][key] = {"fully_visible": True, "entity": 1234, "rect": [0, 0, 10, 10]}
+                    event(observed_hover={key: "Hovered"}, observed_hover_entities={key: 1234},
+                          observed_hover_rects={key: [0, 0, 10, 10]}, observed_cursor=[5, 5],
+                          pre_frame=frame, post_frame=frame + 1)
+                    frame += 1
+                    for pressed in (True, False):
+                        event(button=1, pressed=pressed, observed_hover={key: "Pressed"} if pressed else {},
+                              observed_hover_entities={key: 1234} if pressed else {}, observed_cursor=[5, 5],
+                              pre_frame=frame, post_frame=frame + 1)
+                        frame += 1
+                after = {"nonce": "owned", "pid": 123, "world_epoch": 7, "frame": frame}
+                events[-1]["pin_action"] = {"key": key, "first": first, "last": len(events),
+                                            "before": before, "after": after}
+            entries[lower + 1]["last_step"] = len(events)
+        return entries, events, client
+
+    def test_correct_pin_and_rename_evidence_is_accepted(self):
+        entries, events, client = self.evidence()
+        acceptance.refactor_rows.check_pin_sequence(entries, events, client)
+
+    def test_wrong_target_or_input_is_rejected(self):
+        for mutation in ("rename_target", "wrong_name", "release", "early_commit", "missing_draft", "wrong_header", "action", "cursor", "event_pid", "right_cursor", "frame_order", "extra_input"):
+            with self.subTest(mutation=mutation):
+                entries, events, client = self.evidence()
+                if mutation == "rename_target":
+                    entries[4]["value"]["rename_target"] = 22
+                elif mutation == "wrong_name":
+                    entries[6]["value"]["refactor_rows"]["souls"]["power"]["name"] = "renamed"
+                elif mutation == "release":
+                    next(e for e in events if e.get("button") == 3 and not e["pressed"])["pressed"] = True
+                elif mutation == "early_commit":
+                    entries[5]["value"]["refactor_rows"]["souls"]["deconstruct"]["name"] = "draft"
+                elif mutation == "missing_draft":
+                    entries[4]["value"]["controls"]["text-field:SoulRename { target: 11v0 }"]["editable"] = ""
+                elif mutation == "wrong_header":
+                    entries[3]["value"]["controls"]["text:inspection-header"]["text"] = "RefactorPower"
+                elif mutation == "action":
+                    next(e for e in events if e.get("pin_action"))["pin_action"]["key"] = "wrong"
+                elif mutation == "cursor":
+                    next(e for e in events if e.get("button") == 1 and e["pressed"])["observed_cursor"] = [20, 20]
+                elif mutation == "event_pid":
+                    next(e for e in events if e.get("button") == 1 and e["pressed"])["pid"] = 999
+                elif mutation == "right_cursor":
+                    next(e for e in events if e.get("button") == 3)["observed_cursor"] = []
+                elif mutation == "frame_order":
+                    actions = [e["pin_action"] for e in events if "pin_action" in e]
+                    actions[2]["before"]["frame"] = actions[1]["before"]["frame"]
+                else:
+                    events[3]["key"] = "Return"
+                with self.assertRaises(acceptance.native.AcceptanceError):
+                    acceptance.refactor_rows.check_pin_sequence(entries, events, client)
+
+
 class DynamicTargetClickTests(unittest.TestCase):
     KEY = "menu:Workspace(OpenEntities)"
 
@@ -501,6 +611,51 @@ class RuntimeLogEvidenceTests(unittest.TestCase):
 
 
 class KeyboardTapTests(unittest.TestCase):
+    def test_motion_timeout_records_final_pointer_without_resending(self):
+        driver = acceptance.Driver.__new__(acceptance.Driver)
+        driver.nonce, driver.events, driver.root = "owned", [], Path("/owned")
+        driver.last = {"frame": 10}
+        driver.input = Mock()
+        driver.input.client_pointer.return_value = {"root": [25, 35], "same_screen": True}
+        def send(step, nonce, **event):
+            driver.events.append({"step": step, "nonce": nonce, "pid": 91,
+                                  "pre_frame": 10, **event})
+        driver.input.send.side_effect = send
+        driver.wait = Mock(side_effect=acceptance.native.AcceptanceError("timeout"))
+        with patch.object(acceptance.native, "atomic_write_json") as write:
+            with self.assertRaisesRegex(acceptance.native.AcceptanceError, "timeout"):
+                driver.send(point=(100, 100))
+        driver.input.send.assert_called_once_with("1", "owned", point=(100, 100))
+        driver.input.client_pointer.assert_called_once_with()
+        self.assertEqual(write.call_args.args[0], Path("/owned/failed-input.json"))
+        self.assertEqual(write.call_args.args[1]["event"]["pid"], 91)
+        self.assertEqual(write.call_args.args[1]["x11_pointer_after_wait"]["root"], [25, 35])
+
+    def test_portal_timeout_records_latest_owned_observation_and_monitor(self):
+        driver = acceptance.Driver.__new__(acceptance.Driver)
+        driver.nonce, driver.events, driver.root = "owned", [], Path("/owned")
+        driver.last = {"frame": 10}
+        driver.latest_observation = {"nonce": "owned", "pid": 91, "frame": 20,
+                                     "cursor": None, "world_epoch": 3}
+        driver.input = acceptance.PortalX11Input.__new__(acceptance.PortalX11Input)
+        driver.input.portal = Mock()
+        driver.input.portal.motion_mapping.return_value = (5, 2.0)
+        driver.input.root_size = Mock(return_value=(2880, 1800))
+        driver.input.client_pointer = Mock(return_value={"root": [25, 35]})
+        def send(step, nonce, **event):
+            driver.events.append({"step": step, "nonce": nonce, "pid": 91,
+                                  "pre_frame": 10, **event})
+        driver.input.send = Mock(side_effect=send)
+        driver.wait = Mock(side_effect=acceptance.native.AcceptanceError("timeout"))
+        with patch.object(acceptance.native, "atomic_write_json") as write:
+            with self.assertRaises(acceptance.native.AcceptanceError):
+                driver.send(point=(100, 100))
+        failure = write.call_args.args[1]
+        self.assertEqual(failure["pre_frame"], 10)
+        self.assertEqual(failure["last_observation"]["frame"], 20)
+        self.assertEqual(failure["monitor_mapping_after_wait"], (5, 2.0))
+        driver.input.send.assert_called_once()
+
     def test_fresh_ack_keeps_exact_target_and_waits_for_a_new_observation(self):
         for fresh, lower in ((False, 13), (True, 10)):
             driver = acceptance.Driver.__new__(acceptance.Driver)
@@ -522,7 +677,8 @@ class KeyboardTapTests(unittest.TestCase):
     def test_release_precedes_slow_observer_acknowledgement(self):
         driver = acceptance.Driver.__new__(acceptance.Driver)
         driver.nonce, driver.events, driver.root = "owned", [], Path("unused")
-        driver.last = {"frame": 10, "cursor": None, "mouse_left_pressed": False, "controls": {}}
+        driver.last = {"frame": 10, "cursor": None, "mouse_left_pressed": False,
+                       "mouse_right_pressed": False, "controls": {}}
         def send(step, nonce, **event):
             self.assertEqual(nonce, "owned")
             driver.events.append({"step": step, "pre_frame": 10, **event})
@@ -966,6 +1122,109 @@ class EntitiesRenderTests(unittest.TestCase):
             {"text": "Familiar (2/2)", "rect": [40, 200, 200, 230]}]}
         with self.assertRaisesRegex(RuntimeError, "render fixture"):
             acceptance.check_entities_render(value)
+
+
+
+
+class RefactorSettingsEvidenceTests(unittest.TestCase):
+    def sample(self, case, field, value, label):
+        return {
+            "ready": True, "frame": 120, "paused": True,
+            "settings_values": {"ui_scale": 1.25, "camera_pan_speed": 1000.0,
+                                "notification_duration_seconds": 12,
+                                "autosave_interval_minutes": 30, "autosave_generations": 5},
+            "controls": {
+                "menu:CloseSettings": {},
+                "slider:" + field: {"fully_visible": True, "slider_value": value,
+                                     "pressed": False},
+                "settings-value:" + field: {"fully_visible": True, "text": label},
+            },
+        }
+
+    def test_reopened_sliders_require_expected_widget_values_and_labels(self):
+        cases = [("settings-reopened-scale", "UiScale", 1.25, "125%"),
+                 ("settings-reopened-camera", "CameraPanSpeed", 1000.0, "1000 ワールド単位/秒"),
+                 ("settings-reopened-notification", "NotificationDuration", 2.0, "12 秒"),
+                 ("settings-reopened-interval", "AutosaveInterval", 3.0, "30 分"),
+                 ("settings-reopened-generations", "AutosaveGenerations", 5.0, "5 世代")]
+        for case, field, slider_value, label in cases:
+            with self.subTest(field=field):
+                value = self.sample(case, field, slider_value, label)
+                acceptance.check_settings_observation(case, value)
+                for key, name, replacement in [
+                    ("slider:" + field, "slider_value", slider_value - 0.1),
+                    ("slider:" + field, "pressed", True),
+                    ("settings-value:" + field, "text", "stale"),
+                    ("settings-value:" + field, "fully_visible", False),
+                ]:
+                    damaged = copy.deepcopy(value)
+                    damaged["controls"][key][name] = replacement
+                    with self.assertRaises(acceptance.native.AcceptanceError):
+                        acceptance.check_settings_observation(case, damaged)
+
+    def test_settings_case_requires_default_single_smoke_viewport(self):
+        self.assertEqual(acceptance.session_matrix(acceptance.SETTINGS_CASE, True),
+                         [(acceptance.SETTINGS_CASE, 1920, 1080, 1.0)])
+        with self.assertRaises(acceptance.native.AcceptanceError):
+            acceptance.session_matrix(acceptance.SETTINGS_CASE, False)
+
+    def drag_evidence(self):
+        entries = [{"case": "settings-initial", "last_step": 0, "value": {"frame": 100}}]
+        events = []
+        cases = [
+            ("settings-scale", "UiScale", "ui_scale", 1.25),
+            ("settings-camera", "CameraPanSpeed", "camera_pan_speed", 1000.0),
+            ("settings-notification", "NotificationDuration", "notification_duration_seconds", 12),
+            ("settings-interval", "AutosaveInterval", "autosave_interval_minutes", 30),
+            ("settings-generations", "AutosaveGenerations", "autosave_generations", 5),
+        ]
+        for index, (case, field, setting, target) in enumerate(cases):
+            entity = 40 + index
+            frame = 111 + 100 * index
+            before = {"frame": frame, "nonce": "session", "pid": 101, "world_epoch": 2,
+                      "cursor": [130, 116], "viewport": [1920, 1080],
+                      "controls": {"slider:" + field: {"entity": entity, "rect": [100, 100, 300, 132], "pressed": False}},
+                      "settings_values": {setting: 0}}
+            held = copy.deepcopy(before)
+            held["frame"] = frame + 1
+            held["controls"]["slider:" + field]["pressed"] = True
+            after = copy.deepcopy(before)
+            after["frame"] = frame + 4
+            after["settings_values"][setting] = target
+            action = {"field": field, "entity": entity, "first_step": len(events) + 2,
+                      "last_step": len(events) + 4, "before": before, "held": held, "after": after}
+            events.extend([
+                {"point": [130, 116]},
+                {"button": 1, "pressed": True, "nonce": "session", "pid": 101,
+                 "pre_frame": frame, "post_frame": frame + 1, "settings_drag": action},
+                {"point": [500, 116], "observed_cursor": [500, 116], "observed_left_pressed": True,
+                 "pre_frame": frame + 1, "post_frame": frame + 2},
+                {"button": 1, "pressed": False, "observed_cursor": [500, 116],
+                 "observed_left_pressed": False, "pre_frame": frame + 2, "post_frame": frame + 3},
+            ])
+            entries.append({"case": case, "last_step": len(events), "value": {"frame": frame + 79}})
+        for case in ("settings-closed-refactor", "settings-reopened-scale", "settings-reopened-camera",
+                     "settings-reopened-notification", "settings-reopened-interval", "settings-reopened-generations"):
+            entries.append({"case": case})
+        return entries, events
+
+    def test_drag_evidence_rejects_unbound_input_and_observations(self):
+        entries, events = self.drag_evidence()
+        acceptance.verify_settings_sequence(entries, events)
+        mutations = [
+            lambda xs: xs[2].update(point=[501, 116]),
+            lambda xs: xs[2].update(observed_left_pressed=False),
+            lambda xs: xs[3].update(observed_cursor=[400, 116]),
+            lambda xs: xs[1]["settings_drag"]["held"].update(nonce="stale"),
+            lambda xs: xs[1]["settings_drag"]["after"].update(frame=1000),
+            lambda xs: xs[1]["settings_drag"].update(entity=999),
+        ]
+        for mutation in mutations:
+            with self.subTest(mutation=mutation):
+                damaged = copy.deepcopy(events)
+                mutation(damaged)
+                with self.assertRaises(acceptance.native.AcceptanceError):
+                    acceptance.verify_settings_sequence(entries, damaged)
 
 
 if __name__ == "__main__":

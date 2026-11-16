@@ -7,6 +7,13 @@ use hw_world::{WorldMap, zones::Yard};
 #[derive(Resource)]
 struct Target((i32, i32));
 
+#[derive(Resource)]
+struct SeededOccupation {
+    owner: Entity,
+    tile: Entity,
+    worker: Entity,
+}
+
 pub(super) fn enabled() -> bool {
     matches!(
         std::env::var("HW_NATIVE_UI_CASE").as_deref(),
@@ -18,7 +25,8 @@ pub(super) fn enabled() -> bool {
             | "soul-spa-candidate-occupied-save"
             | "soul-spa-candidate-resumed-use"
             | "soul-spa-candidate-loaded-use"
-            | "soul-spa-slots")
+            | "soul-spa-slots"
+            | "refactor-spa-occupied-slots")
     )
 }
 
@@ -58,6 +66,100 @@ pub(super) fn prepare(world: &mut World) {
     }
     world.insert_resource(Target(anchor));
     world.resource_mut::<Time<Virtual>>().pause();
+    if std::env::var("HW_NATIVE_UI_CASE").as_deref() == Ok("refactor-spa-occupied-slots") {
+        prepare_occupied_site(world, anchor);
+    }
+}
+
+fn prepare_occupied_site(world: &mut World, anchor: (i32, i32)) {
+    use crate::assets::GameAssets;
+    use crate::interface::selection::soul_spa_place::spawn_soul_spa;
+    use crate::plugins::startup::Building3dHandles;
+    use crate::world::map::WorldMapWrite;
+    use bevy::ecs::system::RunSystemOnce;
+    use hw_core::relationships::{CommandedBy, WorkingOn};
+    use hw_core::soul::{DamnedSoul, Destination, IdleState, Path};
+    use hw_energy::{SoulSpaPhase, SoulSpaSite};
+    use hw_jobs::{
+        ActiveTaskIdentity, AssignedTask, Designation, GeneratePowerData, GeneratePowerPhase,
+        TaskSlots, WorkType,
+    };
+
+    let geometry = validate_soul_spa_placement(world.resource::<WorldMap>(), anchor, true).0;
+    let (owner, tiles) = world
+        .run_system_once_with(
+            |In((grids, center)): In<(Vec<(i32, i32)>, Vec2)>,
+             mut commands: Commands,
+             mut map: WorldMapWrite,
+             assets: Res<GameAssets>,
+             handles: Res<Building3dHandles>| {
+                spawn_soul_spa(
+                    &mut commands,
+                    &mut map,
+                    &grids,
+                    center,
+                    None,
+                    &assets,
+                    &handles,
+                )
+            },
+            (geometry.occupied_grids, geometry.draw_pos),
+        )
+        .expect("Spa fixture spawn");
+    let site = SoulSpaSite::default();
+    world.entity_mut(owner).insert(SoulSpaSite {
+        phase: SoulSpaPhase::Operational,
+        bones_delivered: site.bones_required,
+        ..site
+    });
+    for &tile in &tiles {
+        world.entity_mut(tile).insert((
+            Designation {
+                work_type: WorkType::GeneratePower,
+            },
+            TaskSlots::new(1),
+        ));
+    }
+    let actor = world
+        .query::<(Entity, &DamnedSoul, &AssignedTask)>()
+        .iter(world)
+        .find_map(|(entity, _, task)| matches!(task, AssignedTask::None).then_some(entity))
+        .expect("Spa fixture requires an idle real Soul");
+    for mut policy in world
+        .query::<&mut hw_core::familiar::FamiliarPolicy>()
+        .iter_mut(world)
+    {
+        policy.set_all_allowed(false);
+    }
+    let tile = tiles[0];
+    let pos = world
+        .get::<Transform>(tile)
+        .expect("Spa tile transform")
+        .translation
+        .truncate();
+    let mut soul = world.get_mut::<DamnedSoul>(actor).expect("Soul fixture");
+    soul.dream = 100.0;
+    soul.fatigue = 0.0;
+    soul.stress = 0.0;
+    world.entity_mut(actor).remove::<CommandedBy>();
+    world.entity_mut(actor).insert((
+        Transform::from_translation(pos.extend(0.0)),
+        Destination(pos),
+        Path::default(),
+        IdleState::default(),
+        AssignedTask::GeneratePower(GeneratePowerData {
+            tile,
+            tile_pos: pos,
+            phase: GeneratePowerPhase::Generating,
+        }),
+        ActiveTaskIdentity::new(tile, tile, WorkType::GeneratePower),
+        WorkingOn(tile),
+    ));
+    world.insert_resource(SeededOccupation {
+        owner,
+        tile,
+        worker: actor,
+    });
 }
 
 pub(super) fn snapshot(world: &mut World) -> Value {
@@ -90,8 +192,10 @@ pub(super) fn snapshot(world: &mut World) -> Value {
         })
         .collect();
     let owner = map.building_entity(geometry.occupied_grids[0]);
-    let selection_target = if std::env::var("HW_NATIVE_UI_CASE").as_deref() == Ok("soul-spa-slots")
-        && world.resource::<Time<Virtual>>().is_paused()
+    let selection_target = if matches!(
+        std::env::var("HW_NATIVE_UI_CASE").as_deref(),
+        Ok("soul-spa-slots" | "refactor-spa-occupied-slots")
+    ) && world.resource::<Time<Virtual>>().is_paused()
     {
         owner
             .filter(|owner| {
@@ -116,7 +220,9 @@ pub(super) fn snapshot(world: &mut World) -> Value {
     } else {
         None
     };
-    json!({"anchor": anchor, "footprint": geometry.occupied_grids, "draw_pos": geometry.draw_pos.to_array(),
+    let seeded = world.get_resource::<SeededOccupation>().map(|seed| json!({
+        "owner": seed.owner.to_bits(), "tile": seed.tile.to_bits(), "worker": seed.worker.to_bits()}));
+    json!({"anchor": anchor, "footprint": geometry.occupied_grids, "draw_pos": geometry.draw_pos.to_array(), "seeded": seeded,
         "real_seconds": world.resource::<Time<Real>>().elapsed_secs_f64(),
         "virtual_seconds": world.resource::<Time<Virtual>>().elapsed_secs_f64(),
         "task_mode": format!("{:?}", world.resource::<crate::app_contexts::TaskContext>().0),

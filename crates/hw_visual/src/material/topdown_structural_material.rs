@@ -25,6 +25,43 @@ pub struct TopDownStructuralUniform {
     pub indoor_light_params: Vec4,
 }
 
+/// CPU-side meaning of the existing packed surface mode; the GPU ABI is unchanged.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum StructuralSurfaceMode {
+    Lit { flatten: f32 },
+    PilotProjection { canvas: Vec4, matte: Vec4 },
+    PreviewProjection { canvas: Vec4, matte: Vec4 },
+    UvInk,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct StructuralShadowStyle {
+    pub params: Vec4,
+    pub tint: Vec4,
+}
+
+impl TopDownStructuralUniform {
+    pub fn shadow_style(&self) -> StructuralShadowStyle {
+        StructuralShadowStyle {
+            params: self.shadow_style_params,
+            tint: self.shadow_style_tint,
+        }
+    }
+
+    /// Projection reuses the shadow fields, so callers must supply the original style.
+    pub fn set_surface_mode(&mut self, mode: StructuralSurfaceMode, shadow: StructuralShadowStyle) {
+        let (encoded, params, tint) = match mode {
+            StructuralSurfaceMode::Lit { flatten } => (flatten, shadow.params, shadow.tint),
+            StructuralSurfaceMode::PilotProjection { canvas, matte } => (2.0, canvas, matte),
+            StructuralSurfaceMode::PreviewProjection { canvas, matte } => (3.0, canvas, matte),
+            StructuralSurfaceMode::UvInk => (4.0, shadow.params, shadow.tint),
+        };
+        self.indoor_light_params.w = encoded;
+        self.shadow_style_params = params;
+        self.shadow_style_tint = tint;
+    }
+}
+
 impl Default for TopDownStructuralUniform {
     fn default() -> Self {
         Self {
@@ -92,4 +129,57 @@ pub fn with_topdown_alpha_mode(
 ) -> TopDownStructuralMaterial {
     material.base.alpha_mode = alpha_mode;
     material
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn surface_modes_preserve_unrelated_fields_and_restore_original_shadow() {
+        let mut uniform = TopDownStructuralUniform {
+            build_progress: 0.37,
+            wall_height: 42.0,
+            shadow_style_params: Vec4::new(0.1, 0.2, 0.3, 0.4),
+            shadow_style_tint: Vec4::new(0.5, 0.6, 0.7, 0.8),
+            shadow_style_blur: Vec4::splat(0.9),
+            indoor_light_params: Vec4::new(10.0, 2.0, 1.0, 0.0),
+        };
+        let shadow = uniform.shadow_style();
+        let canvas = Vec4::new(100.0, 120.0, 0.4, 0.6);
+        let matte = Vec4::new(0.2, 0.3, 0.4, 1.0);
+        for (mode, expected, projected) in [
+            (StructuralSurfaceMode::Lit { flatten: 0.0 }, 0.0, false),
+            (StructuralSurfaceMode::Lit { flatten: 0.82 }, 0.82, false),
+            (
+                StructuralSurfaceMode::PilotProjection { canvas, matte },
+                2.0,
+                true,
+            ),
+            (
+                StructuralSurfaceMode::PreviewProjection { canvas, matte },
+                3.0,
+                true,
+            ),
+            (StructuralSurfaceMode::UvInk, 4.0, false),
+            (StructuralSurfaceMode::Lit { flatten: 0.0 }, 0.0, false),
+        ] {
+            uniform.set_surface_mode(mode, shadow);
+            assert_eq!(
+                uniform.indoor_light_params,
+                Vec4::new(10.0, 2.0, 1.0, expected)
+            );
+            assert_eq!(
+                uniform.shadow_style_params,
+                if projected { canvas } else { shadow.params }
+            );
+            assert_eq!(
+                uniform.shadow_style_tint,
+                if projected { matte } else { shadow.tint }
+            );
+            assert_eq!(uniform.shadow_style_blur, Vec4::splat(0.9));
+            assert_eq!(uniform.build_progress, 0.37);
+            assert_eq!(uniform.wall_height, 42.0);
+        }
+    }
 }
