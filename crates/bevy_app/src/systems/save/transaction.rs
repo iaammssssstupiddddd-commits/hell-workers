@@ -47,10 +47,17 @@ pub(super) fn preflight_dynamic_world(
     Ok(staging)
 }
 
+#[derive(Clone, Copy, Debug)]
+pub(super) enum CandidateSource {
+    Incoming,
+    Rollback,
+    Recovery,
+}
+
 #[derive(Debug)]
 pub(super) enum CommitError {
     Rejected {
-        candidate: &'static str,
+        candidate: CandidateSource,
         cause: String,
     },
     RecoveryModeRequired,
@@ -68,7 +75,7 @@ impl fmt::Display for CommitError {
         match self {
             Self::Rejected { candidate, cause } => write!(
                 formatter,
-                "{candidate} candidate was rejected before live replacement: {cause}"
+                "{candidate:?} candidate was rejected before live replacement: {cause}"
             ),
             Self::RecoveryModeRequired => write!(
                 formatter,
@@ -120,9 +127,14 @@ fn replace_persisted_world_with_post_write(
     if recovery_mode(world) != SaveRecoveryMode::Healthy {
         return Err(CommitError::RecoveryModeRequired);
     }
-    validate_dynamic_candidate(incoming, type_registry, plan, "incoming")?;
+    validate_dynamic_candidate(incoming, type_registry, plan, CandidateSource::Incoming)?;
     let rollback_snapshot = capture_persisted_world(world, type_registry);
-    validate_dynamic_candidate(&rollback_snapshot, type_registry, plan, "rollback")?;
+    validate_dynamic_candidate(
+        &rollback_snapshot,
+        type_registry,
+        plan,
+        CandidateSource::Rollback,
+    )?;
 
     run_load_resets(world);
     profiling_duplicate_reset(world);
@@ -180,7 +192,7 @@ fn replace_recovery_only_world_with_post_write(
     if recovery_mode(world) != SaveRecoveryMode::RecoveryFailed {
         return Err(CommitError::RecoveryModeRequired);
     }
-    validate_dynamic_candidate(incoming, type_registry, plan, "recovery")?;
+    validate_dynamic_candidate(incoming, type_registry, plan, CandidateSource::Recovery)?;
 
     run_load_resets(world);
     clear_rehydrate_presentation(world);
@@ -257,11 +269,11 @@ fn native_recovery_only_post_write_fault(world: &mut World) -> Result<(), String
         .map_or(Ok(()), |reason| Err(reason.to_owned()))
 }
 
-fn validate_dynamic_candidate(
+pub(super) fn validate_dynamic_candidate(
     dynamic_world: &DynamicWorld,
     type_registry: &TypeRegistry,
     plan: &ResolvedRehydratePlan,
-    candidate: &'static str,
+    candidate: CandidateSource,
 ) -> Result<(), CommitError> {
     validate_persisted_world(dynamic_world).map_err(|error| CommitError::Rejected {
         candidate,
@@ -1246,7 +1258,7 @@ mod tests {
         assert!(matches!(
             result,
             Err(CommitError::Rejected {
-                candidate: "incoming",
+                candidate: CandidateSource::Incoming,
                 ..
             })
         ));
@@ -1554,6 +1566,7 @@ mod tests {
             .insert_resource(DispatchedSaveLoadRequest(Some(SaveLoadRequest::Load {
                 origin: LoadRequestOrigin::NormalCatalog { dialog_session: 8 },
                 slot: SaveSlotId::Manual1,
+                expected_revision: None,
             })));
         observations::begin_load(live.world_mut(), &bytes);
         let type_registry = live.world().resource::<AppTypeRegistry>().clone();
@@ -1990,7 +2003,7 @@ mod tests {
         assert!(matches!(
             result,
             Err(CommitError::Rejected {
-                candidate: "incoming",
+                candidate: CandidateSource::Incoming,
                 ref cause,
             }) if cause.contains("roster contains 2")
         ));
@@ -2078,7 +2091,7 @@ mod tests {
         assert!(matches!(
             result,
             Err(CommitError::Rejected {
-                candidate: "rollback",
+                candidate: CandidateSource::Rollback,
                 ..
             })
         ));

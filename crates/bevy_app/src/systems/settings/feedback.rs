@@ -6,10 +6,11 @@ use hw_ui::notifications::{
     UserFacingNotification,
 };
 
-use super::persistence::{SettingsStorageRoot, save_settings_to_disk};
+use super::persistence::{SettingsPersistence, SettingsSaveOutcome, SettingsStorageRoot};
 
 #[derive(Resource, Default)]
 pub(crate) struct SettingsSaveState {
+    pub(super) persistence: SettingsPersistence,
     next_attempt: u64,
     pending_retry: Option<u64>,
 }
@@ -31,8 +32,8 @@ impl SettingsSaveFeedback<'_> {
         let was_retry = self.state.pending_retry.take().is_some();
         self.state.next_attempt = self.state.next_attempt.wrapping_add(1).max(1);
         self.center.retain_settings_retry_attempt(None);
-        match save_settings_to_disk(root, settings) {
-            Ok(()) if was_retry => {
+        match self.state.persistence.save(root, settings) {
+            Ok(SettingsSaveOutcome::Saved) if was_retry => {
                 self.notifications.write(UserFacingNotification::new(
                     "settings-save-restored",
                     NotificationSeverity::Success,
@@ -41,7 +42,18 @@ impl SettingsSaveFeedback<'_> {
                     NotificationRetention::Important,
                 ));
             }
-            Ok(()) => {}
+            Ok(SettingsSaveOutcome::DurabilityUncertain) => {
+                let attempt = self.state.next_attempt;
+                self.state.pending_retry = Some(attempt);
+                self.notifications.write(UserFacingNotification::new(
+                    "settings-save-durability-uncertain",
+                    NotificationSeverity::Warning,
+                    "設定の保存を確認できませんでした",
+                    "設定ファイルは更新されました。ディスクへの反映を確認するには再試行してください。",
+                    NotificationRetention::Important,
+                ).with_action(NotificationAction::RetrySettingsSave { attempt }));
+            }
+            Ok(_) => {}
             Err(error) => {
                 warn!("Failed to save settings: {error}");
                 let attempt = self.state.next_attempt;
@@ -61,7 +73,9 @@ pub(crate) fn update_settings_save_status(
     state: Res<SettingsSaveState>,
     mut labels: Query<&mut Text, With<hw_ui::components::SettingsSaveStatusText>>,
 ) {
-    let label = if state.pending_retry.is_some() {
+    let label = if state.pending_retry.is_some() && state.persistence.durability_pending {
+        "設定ファイルは更新済みです。ディスクへの反映を確認するには再試行してください。"
+    } else if state.pending_retry.is_some() {
         "変更は反映済み・次回用は未保存です。通知履歴、またはこの画面を閉じて再保存できます。"
     } else {
         "変更は画面を閉じると保存されます。"

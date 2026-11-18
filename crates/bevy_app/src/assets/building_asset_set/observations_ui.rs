@@ -273,6 +273,7 @@ mod tests {
             mode: crate::systems::save::SaveCatalogMode::SaveCatalog,
             session: 7,
             selected: None,
+            load_revision: None,
         });
         world.init_resource::<crate::systems::save::SaveStorageRoot>();
         world.spawn((

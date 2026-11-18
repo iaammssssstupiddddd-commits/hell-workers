@@ -180,7 +180,6 @@ impl Plugin for LogicPlugin {
                 deconstruction_designation_system,
                 deconstruction_hover_preview_system,
                 zone_placement_system.run_if(in_state(PlayMode::TaskDesignation)),
-                zone_removal_system.run_if(in_state(PlayMode::TaskDesignation)),
             )
                 .chain()
                 .before(SoulAiSystemSet::Perceive)
@@ -195,6 +194,15 @@ impl Plugin for LogicPlugin {
                 .after(task_area_selection_system)
                 .before(SoulAiSystemSet::Perceive)
                 .in_set(GameSystemSet::Logic),
+        )
+        .add_systems(
+            Update,
+            zone_removal_system
+                .run_if(in_state(PlayMode::TaskDesignation))
+                .after(GameSystemSet::Input)
+                .after(zone_placement_system)
+                .before(SoulAiSystemSet::Perceive)
+                .before(TransportRequestSet::Perceive),
         )
         // グループB: maintenance / spawn 系（独立。Bevy scheduler が競合を自動調停）
         .add_systems(

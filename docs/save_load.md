@@ -4,6 +4,8 @@ Hell Workers のシミュレーション状態を RON ファイルへ保存し�
 
 ## 操作
 
+通常起動で再開可能なv1スロットを検出すると「保存から再開」が開きます。「新規ゲーム」で新しい世界を始めるか、手動保存・自動保存から再開するスロットを選びます。待機中は世界を進めず、手動保存と自動保存も実行しません。スロットの版や本文を検査し、失敗した場合は一覧に戻ります。
+
 | 入力 | 動作 |
 | --- | --- |
 | **F5** / Pause メニュー「Save Game」 | Save catalog を開き、手動スロット 1〜3 へ保存 |
@@ -23,9 +25,7 @@ shortcut は発火しない。catalog / 確認は overlay priority の最上位�
 occupied slotの選択後はslot一覧を確認本文へ切り替える。対象slot名と上書き/現在world置換の
 結果を表示し、固定footerにBackとConfirmを置く。Confirmは元のslot行と別の領域にあり、
 slot行の再クリックを確定として扱わない。空の手動slotは従来どおり直接保存する。
-確認のowner/session/capabilityとone-shot requestを既存ownerで検証する。保存のrevision照合は
-request時のcatalog revisionと書込直前の状態を比較するもので、確認表示時のsnapshot固定や
-Load requestへのrevision条件を追加したものではない。
+確認のowner/session/capabilityとone-shot requestを既存ownerで検証する。ロードの版は確認画面を開いた時点で固定し、実際に本文を読んだファイルと照合する。差替え時は選択のやり直しを通知する。本文異常は読み込んだスロットの版に記録する。
 
 ## アーキテクチャ
 
@@ -94,13 +94,13 @@ UI buttonもkeyboardも同じ `UiIntent` handlerを通る。`SaveCatalogUi`とdi
 ## 終端結果とプレイヤー通知
 
 `SaveLoadState` は `Idle / Pending(SaveLoadRequest)` の一回限りのtriggerであり、成功・失敗を保持しない。
-requestはsaveならorigin・slot・期待revision、loadならnormal/recovery catalog origin・slotを不可分に持つ。
+requestはsaveならorigin・slot・期待revision、loadならnormal/recovery catalog origin・slot・確認時の版を不可分に持つ。
 `RecoveryCatalog` originはforeground recovery catalog ownerだけが作り、通常F9やraw `UiIntent` payloadから
 構築できない。dispatcherは要求を実行する前に`Idle`へ戻し、save / loadの返り値から
 `SaveLoadOutcome { operation, target, result, source }`を要求ごとに1件だけ書く。
 
 `SaveLoadFailureKind`はserialize/write/read/format/schema/seed/rollbackに加え、overwrite confirmation、
-commit durability uncertainty、request rejectionを分類する。raw OS error、RON error、絶対pathは既存ログだけに残す。
+commit durability uncertainty、request rejectionを分類する。復旧用コピーの不整合による適用前の中止と、選択したファイルの差替えにも個別の結果を使う。raw OS error、RON error、絶対pathは既存ログだけに残す。
 outcomeの`target`はrequest slotのplayer-safe labelであり、絶対pathをUIへ渡さない。
 
 root UI adapterはmanual/load outcomeを`Important`な`UserFacingNotification`へ変換する。autosave成功だけは
@@ -505,11 +505,9 @@ enum キー（`ResourceType` 等）は `enum_hash` があるため問題ない�
 
 ## Worldgen seed ガード
 
-地形チャンク等のビジュアルは起動時に `GeneratedWorldLayoutResource` の seed から生成され、
-セーブ body には含まれない。v1 は external header の `worldgen_seed` を現在の session と
-**body deserialize 前に照合**する。不一致ならロードを中止し、
-`HELL_WORKERS_WORLDGEN_SEED=<saved>` で起動し直すようエラーログで案内する。
-magic 無し v0 だけは、deserialize 後に body 内 `SavedWorldgenSeed` を読む互換経路を使う。
+起動時の再開はv1のヘッダーからseedを取得し、本文を隔離Worldで検査してから同じseedの地形を用意する。復元結果が確定してから地形表示とゲームUIを作る。再開では初期Soul・Familiar・資源の新規生成を省く。計測シナリオと有効な `HELL_WORKERS_WORLDGEN_SEED` 指定は直接起動する。
+
+ゲーム開始後のロードは、v1の `worldgen_seed` を現在の世界と本文deserialize前に照合する。別seedの保存は起動画面で選択できる。magicのないv0は従来のロード操作で、本文内の `SavedWorldgenSeed` を読む。
 
 ## Phase A（タスク正規化）
 

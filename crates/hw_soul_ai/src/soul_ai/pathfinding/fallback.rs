@@ -9,60 +9,12 @@ use hw_world::{
     find_path_with_budget,
 };
 
+use crate::soul_ai::decide::idle_behavior::rest_area::rest_area_adjacent_candidates;
 use crate::soul_ai::execute::task_execution::AssignedTask;
 use crate::soul_ai::execute::task_execution::context::TaskUnassignQueries;
 use crate::soul_ai::helpers::work::{SoulDropCtx, unassign_task};
 
 use super::PathCooldown;
-
-/// rest area の中心から占有グリッド 4 マスを返す。
-fn rest_area_occupied_grids_from_center(center: Vec2) -> [(i32, i32); 4] {
-    let top_right = WorldMap::world_to_grid(center);
-    [
-        (top_right.0 - 1, top_right.1 - 1),
-        (top_right.0, top_right.1 - 1),
-        (top_right.0 - 1, top_right.1),
-        (top_right.0, top_right.1),
-    ]
-}
-
-/// rest area 周辺の歩行可能候補グリッドを現在位置からの距離順で返す。
-fn rest_area_adjacent_candidates(
-    center: Vec2,
-    current_pos: Vec2,
-    world_map: &WorldMap,
-) -> Vec<(i32, i32)> {
-    let occupied = rest_area_occupied_grids_from_center(center);
-    let directions: [(i32, i32); 8] = [
-        (0, 1),
-        (0, -1),
-        (1, 0),
-        (-1, 0),
-        (1, 1),
-        (1, -1),
-        (-1, 1),
-        (-1, -1),
-    ];
-
-    let mut candidates: Vec<(i32, i32)> = occupied
-        .iter()
-        .flat_map(|&(gx, gy)| directions.iter().map(move |&(dx, dy)| (gx + dx, gy + dy)))
-        .filter(|grid| !occupied.contains(grid))
-        .filter(|&(gx, gy)| world_map.is_walkable(gx, gy))
-        .collect();
-
-    candidates.sort_unstable();
-    candidates.dedup();
-    candidates.sort_by(|a, b| {
-        let a_pos = WorldMap::grid_to_world(a.0, a.1);
-        let b_pos = WorldMap::grid_to_world(b.0, b.1);
-        a_pos
-            .distance_squared(current_pos)
-            .partial_cmp(&b_pos.distance_squared(current_pos))
-            .unwrap_or(std::cmp::Ordering::Equal)
-    });
-    candidates
-}
 
 /// `try_rest_area_fallback_path` へのソウルのグリッド位置情報。
 pub(super) struct SoulGridPos {

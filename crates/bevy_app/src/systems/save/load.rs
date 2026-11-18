@@ -14,6 +14,8 @@
 //! スナップショットとして保存されるため）。
 
 use std::fmt;
+use std::fs::File;
+use std::io::{self, Read};
 use std::path::Path;
 
 use bevy::ecs::reflect::AppTypeRegistry;
@@ -24,6 +26,9 @@ use bevy_world_serialization::serde::WorldDeserializer;
 
 use crate::world::map::GeneratedWorldLayoutResource;
 
+use super::catalog::{SaveCatalog, SaveFileRevision, save_revision};
+use super::{DispatchedSaveLoadRequest, SaveLoadRequest};
+
 use super::format::{SaveFormat, SaveFormatError, decode_save_file};
 use super::rehydrate::ResolvedRehydratePlan;
 use super::schema::{
@@ -31,9 +36,11 @@ use super::schema::{
     validate_persisted_world,
 };
 use super::state::{SaveLoadFailureKind, SaveLoadResult, SavePath, SavedWorldgenSeed};
-use super::transaction::{CommitError, replace_persisted_world, replace_recovery_only_world};
+use super::transaction::{
+    CandidateSource, CommitError, replace_persisted_world, replace_recovery_only_world,
+};
 
-struct PreparedLoad {
+pub(crate) struct PreparedLoad {
     format: SaveFormat,
     dynamic_world: DynamicWorld,
 }
@@ -79,7 +86,8 @@ impl From<SaveFormatError> for LoadPreparationError {
 
 #[derive(Debug)]
 enum LoadExecutionError {
-    Read(std::io::Error),
+    Read(io::Error),
+    SelectionChanged,
     Preparation(LoadPreparationError),
     MissingPrerequisite(&'static str),
     RehydratePrerequisite(String),
@@ -93,6 +101,7 @@ impl LoadExecutionError {
                 SaveLoadFailureKind::LoadNotFound
             }
             Self::Read(_) => SaveLoadFailureKind::LoadRead,
+            Self::SelectionChanged => SaveLoadFailureKind::LoadSelectionChanged,
             Self::Preparation(LoadPreparationError::Format(
                 SaveFormatError::UnsupportedVersion { .. },
             )) => SaveLoadFailureKind::UnsupportedFormat,
@@ -115,6 +124,10 @@ impl LoadExecutionError {
 
 pub(super) const fn commit_failure_kind(error: &CommitError) -> SaveLoadFailureKind {
     match error {
+        CommitError::Rejected {
+            candidate: CandidateSource::Rollback,
+            ..
+        } => SaveLoadFailureKind::RollbackSnapshotInvalid,
         CommitError::Rejected { .. } => SaveLoadFailureKind::InvalidData,
         CommitError::RecoveryModeRequired => SaveLoadFailureKind::RecoveryFailed,
         CommitError::Recovered { .. } => SaveLoadFailureKind::ApplyRecovered,
@@ -125,6 +138,7 @@ pub(super) const fn commit_failure_kind(error: &CommitError) -> SaveLoadFailureK
 impl fmt::Display for LoadExecutionError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::SelectionChanged => formatter.write_str("save changed before loading"),
             Self::Read(error) => write!(formatter, "save file read failed: {error}"),
             Self::Preparation(error) => error.fmt(formatter),
             Self::MissingPrerequisite(resource) => {
@@ -157,7 +171,37 @@ enum LoadCommitMode {
 
 fn load_world_with_mode(world: &mut World, mode: LoadCommitMode) -> SaveLoadResult {
     let save_path = world.resource::<SavePath>().as_path().to_path_buf();
-    match execute_load(world, &save_path, mode) {
+    let request = world
+        .get_resource::<DispatchedSaveLoadRequest>()
+        .and_then(|request| request.0.clone());
+    let expected = match &request {
+        Some(SaveLoadRequest::Load {
+            expected_revision, ..
+        }) => expected_revision.as_ref(),
+        _ => None,
+    };
+    let mut read_revision = None;
+    let result = read_save_file(&save_path, expected).and_then(|(bytes, revision)| {
+        read_revision = Some(revision);
+        let contents = String::from_utf8(bytes).map_err(|error| {
+            LoadExecutionError::Preparation(LoadPreparationError::BodySyntax(error.to_string()))
+        })?;
+        execute_load(world, &contents, mode)
+    });
+    if let Some(SaveLoadRequest::Load { slot, .. }) = request
+        && let Some(mut catalog) = world.get_resource_mut::<SaveCatalog>()
+    {
+        match (&result, read_revision) {
+            (Ok(_), _) => catalog.clear_body_invalid(slot),
+            (Err(error), Some(revision))
+                if error.failure_kind() == SaveLoadFailureKind::InvalidData =>
+            {
+                catalog.mark_body_invalid(slot, revision);
+            }
+            _ => {}
+        }
+    }
+    match result {
         Ok(format) => {
             let format = match format {
                 SaveFormat::LegacyV0 => "legacy v0",
@@ -182,13 +226,21 @@ fn load_world_with_mode(world: &mut World, mode: LoadCommitMode) -> SaveLoadResu
 
 fn execute_load(
     world: &mut World,
-    save_path: &Path,
+    contents: &str,
     mode: LoadCommitMode,
 ) -> Result<SaveFormat, LoadExecutionError> {
-    let contents = read_save_file(save_path).map_err(LoadExecutionError::Read)?;
     let prepared =
-        prepare_load_from_str(world, &contents).map_err(LoadExecutionError::Preparation)?;
+        prepare_load_from_str(world, contents).map_err(LoadExecutionError::Preparation)?;
 
+    apply_prepared_load(world, prepared, mode, Some(contents))
+}
+
+fn apply_prepared_load(
+    world: &mut World,
+    prepared: PreparedLoad,
+    mode: LoadCommitMode,
+    _dispatched_contents: Option<&str>,
+) -> Result<SaveFormat, LoadExecutionError> {
     let type_registry = world.get_resource::<AppTypeRegistry>().cloned().ok_or(
         LoadExecutionError::MissingPrerequisite(std::any::type_name::<AppTypeRegistry>()),
     )?;
@@ -203,8 +255,10 @@ fn execute_load(
         .map_err(LoadExecutionError::RehydratePrerequisite)?;
 
     #[cfg(feature = "profiling")]
-    if matches!(mode, LoadCommitMode::Normal) {
-        super::observations::begin_load(world, &contents);
+    if matches!(mode, LoadCommitMode::Normal)
+        && let Some(contents) = _dispatched_contents
+    {
+        super::observations::begin_load(world, contents);
     }
     let registry = type_registry.read();
     let commit_result = match mode {
@@ -217,7 +271,7 @@ fn execute_load(
     };
     drop(registry);
     #[cfg(feature = "profiling")]
-    if matches!(mode, LoadCommitMode::Normal) {
+    if matches!(mode, LoadCommitMode::Normal) && _dispatched_contents.is_some() {
         super::observations::finish_load(world, commit_result.is_ok());
     }
     commit_result.map_err(LoadExecutionError::Commit)?;
@@ -225,8 +279,78 @@ fn execute_load(
     Ok(prepared.format)
 }
 
-fn read_save_file(path: &Path) -> std::io::Result<String> {
-    std::fs::read_to_string(path)
+pub(crate) fn prepare_startup_load(
+    world: &World,
+    path: &Path,
+    revision: &SaveFileRevision,
+    seed: u64,
+) -> Result<PreparedLoad, SaveLoadFailureKind> {
+    let result = (|| {
+        let (bytes, _) = read_save_file(path, Some(revision))?;
+        let contents = String::from_utf8(bytes).map_err(|error| {
+            LoadExecutionError::Preparation(LoadPreparationError::BodySyntax(error.to_string()))
+        })?;
+        let prepared = prepare_load_with_seed(world, &contents, Some(seed))
+            .map_err(LoadExecutionError::Preparation)?;
+        if !matches!(prepared.format, SaveFormat::V1(_)) {
+            return Err(LoadExecutionError::SelectionChanged);
+        }
+        let registry = world.resource::<AppTypeRegistry>().read();
+        let plan = world.resource::<ResolvedRehydratePlan>();
+        super::transaction::validate_dynamic_candidate(
+            &prepared.dynamic_world,
+            &registry,
+            plan,
+            CandidateSource::Incoming,
+        )
+        .map_err(LoadExecutionError::Commit)?;
+        Ok(prepared)
+    })();
+    result.map_err(|error| {
+        warn!("Startup load preflight failed: {error}");
+        error.failure_kind()
+    })
+}
+
+pub(crate) fn apply_startup_load(
+    world: &mut World,
+    prepared: PreparedLoad,
+) -> Result<(), SaveLoadFailureKind> {
+    apply_prepared_load(world, prepared, LoadCommitMode::Normal, None)
+        .map(|_| ())
+        .map_err(|error| {
+            warn!("Startup load failed: {error}");
+            error.failure_kind()
+        })
+}
+
+fn read_save_file(
+    path: &Path,
+    expected: Option<&SaveFileRevision>,
+) -> Result<(Vec<u8>, SaveFileRevision), LoadExecutionError> {
+    let read = (|| -> io::Result<_> {
+        let mut file = File::open(path)?;
+        let before = file.metadata()?;
+        let mut bytes = Vec::new();
+        file.read_to_end(&mut bytes)?;
+        let after = file.metadata()?;
+        Ok((bytes, before, after))
+    })();
+    let (bytes, before, after) = read.map_err(|error| {
+        if expected.is_some() && error.kind() == io::ErrorKind::NotFound {
+            LoadExecutionError::SelectionChanged
+        } else {
+            LoadExecutionError::Read(error)
+        }
+    })?;
+    let revision = save_revision(&after, &bytes);
+    if revision != save_revision(&before, &bytes)
+        || revision.length != bytes.len() as u64
+        || expected.is_some_and(|expected| *expected != revision)
+    {
+        return Err(LoadExecutionError::SelectionChanged);
+    }
+    Ok((bytes, revision))
 }
 
 /// Validates the external format and seed guard before DynamicWorld parsing.
@@ -234,10 +358,18 @@ fn prepare_load_from_str(
     world: &World,
     contents: &str,
 ) -> Result<PreparedLoad, LoadPreparationError> {
+    prepare_load_with_seed(world, contents, None)
+}
+
+fn prepare_load_with_seed(
+    world: &World,
+    contents: &str,
+    explicit_seed: Option<u64>,
+) -> Result<PreparedLoad, LoadPreparationError> {
     let decoded = decode_save_file(contents)?;
     let format = decoded.format;
     if let SaveFormat::V1(header) = format {
-        validate_worldgen_seed(world, header.worldgen_seed)?;
+        validate_worldgen_seed(world, header.worldgen_seed, explicit_seed)?;
     }
 
     let type_registry = world.get_resource::<AppTypeRegistry>().cloned().ok_or(
@@ -262,7 +394,7 @@ fn prepare_load_from_str(
 
     if format == SaveFormat::LegacyV0 {
         match extract_saved_worldgen_seed(&dynamic_world) {
-            Some(saved_seed) => validate_worldgen_seed(world, saved_seed)?,
+            Some(saved_seed) => validate_worldgen_seed(world, saved_seed, explicit_seed)?,
             None => warn!(
                 "Save file has no worldgen seed (legacy v0); terrain visuals may not match the loaded WorldMap"
             ),
@@ -280,13 +412,20 @@ fn prepare_load_from_str(
     })
 }
 
-fn validate_worldgen_seed(world: &World, saved_seed: u64) -> Result<(), LoadPreparationError> {
-    let current_seed = world
-        .get_resource::<GeneratedWorldLayoutResource>()
+fn validate_worldgen_seed(
+    world: &World,
+    saved_seed: u64,
+    explicit_seed: Option<u64>,
+) -> Result<(), LoadPreparationError> {
+    let current_seed = explicit_seed
+        .or_else(|| {
+            world
+                .get_resource::<GeneratedWorldLayoutResource>()
+                .map(|layout| layout.master_seed)
+        })
         .ok_or(LoadPreparationError::MissingPrerequisite(
             std::any::type_name::<GeneratedWorldLayoutResource>(),
-        ))?
-        .master_seed;
+        ))?;
     if saved_seed == current_seed {
         Ok(())
     } else {
@@ -400,6 +539,46 @@ mod tests {
         world.insert_resource(PopulationManager::default());
         world.insert_resource(WorldMap::default());
         app
+    }
+
+    #[test]
+    fn startup_preflights_selected_seed_and_rejects_a_replaced_version_test() {
+        let mut app = legacy_loader_test_app();
+        app.init_resource::<ResolvedRehydratePlan>();
+        app.world_mut()
+            .remove_resource::<GeneratedWorldLayoutResource>();
+        app.world_mut().resource_mut::<GameTime>().seconds = 123.0;
+        let world = app.world();
+        let registry = world.resource::<AppTypeRegistry>().read();
+        let body = build_persisted_world(world, &registry, std::iter::empty())
+            .serialize(&registry)
+            .unwrap();
+        drop(registry);
+
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let path = std::env::temp_dir().join(format!(
+            "hw-startup-snapshot-{}-{nonce}.ron",
+            std::process::id()
+        ));
+        std::fs::write(&path, encode_save_file(SaveHeader::current(101), &body)).unwrap();
+        let revision = super::super::catalog::read_save_file_revision(&path).unwrap();
+        let prepared = prepare_startup_load(world, &path, &revision, 101).unwrap();
+        assert!(matches!(
+            prepare_startup_load(world, &path, &revision, 42),
+            Err(SaveLoadFailureKind::SeedMismatch)
+        ));
+        std::fs::write(&path, encode_save_file(SaveHeader::current(202), &body)).unwrap();
+        assert!(matches!(
+            prepare_startup_load(world, &path, &revision, 101),
+            Err(SaveLoadFailureKind::LoadSelectionChanged)
+        ));
+        app.world_mut().resource_mut::<GameTime>().seconds = 0.0;
+        apply_startup_load(app.world_mut(), prepared).unwrap();
+        assert_eq!(app.world().resource::<GameTime>().seconds, 123.0);
+        std::fs::remove_file(path).unwrap();
     }
 
     fn legacy_body_with_reserved_for_task(app: &mut App) -> String {
@@ -586,7 +765,7 @@ mod tests {
         );
         assert_eq!(
             classified(LoadExecutionError::Commit(CommitError::Rejected {
-                candidate: "incoming",
+                candidate: CandidateSource::Incoming,
                 cause: "raw preflight details".to_owned(),
             })),
             SaveLoadFailureKind::InvalidData

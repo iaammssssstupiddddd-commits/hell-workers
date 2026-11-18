@@ -106,6 +106,7 @@ pub(super) fn run_load_resets(world: &mut World) {
 
 /// Resets root-owned selection and input contexts.
 pub(crate) fn reset_root_interaction_state(world: &mut World) {
+    crate::systems::command::zone_placement::removal_preview::reset_removal_preview(world);
     reset_existing_resource::<SelectedEntity>(world);
     reset_existing_resource::<HoveredEntity>(world);
     reset_existing_resource::<BuildContext>(world);

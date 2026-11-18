@@ -8,7 +8,9 @@ mod perf_render_environment;
 mod perf_scenario;
 mod rtt_composite;
 mod rtt_setup;
+mod startup_resume;
 mod startup_systems;
+pub(crate) use startup_resume::gameplay_ready;
 mod visual_handles;
 
 #[cfg(test)]
@@ -30,24 +32,20 @@ pub use rtt_setup::{
 };
 pub use visual_handles::{Building3dHandles, SoulBillboardHandles, Terrain3dHandles};
 
-use crate::world::map::{build_terrain_feature_map, build_terrain_id_map, spawn_boundary_meshes};
 use bevy::asset::AssetApp;
 #[cfg(feature = "profiling")]
 use perf_scenario::{
     PerfScenarioApplied, PerfScenarioSet, setup_perf_scenario_if_enabled,
     setup_perf_scenario_runtime_if_enabled, setup_perf_ui_mode_if_enabled,
 };
-use startup_systems::{
-    initial_resource_spawner_timed, initialize_gizmo_config, populate_resource_spatial_grid, setup,
-    spawn_entities, spawn_familiar_wrapper, spawn_map_timed, spawn_terrain_chunks_timed,
-};
+use startup_systems::{initialize_gizmo_config, setup};
 
 use crate::app_contexts::{
     BuildContext, CompanionPlacementState, MoveContext, MovePlacementState, TaskContext,
     ZoneContext,
 };
 use crate::interface::selection::{HoveredEntity, SelectedEntity};
-use crate::interface::ui::{MenuState, setup_ui};
+use crate::interface::ui::MenuState;
 #[cfg(feature = "profiling")]
 use crate::systems::GameSystemSet;
 use crate::systems::logistics::{ResourceCountDisplayTimer, ResourceLabels, ResourceStackIndex};
@@ -107,22 +105,17 @@ impl Plugin for StartupPlugin {
             .add_systems(
                 PostStartup,
                 (
-                    build_terrain_feature_map,
-                    build_terrain_id_map,
                     crate::systems::visual::indoor_light_texture::init_indoor_light_texture_system,
                     visual_handles::init_visual_handles,
-                    spawn_map_timed,
-                    spawn_terrain_chunks_timed,
-                    spawn_boundary_meshes,
-                    initial_resource_spawner_timed,
-                    spawn_entities,
-                    spawn_familiar_wrapper,
-                    setup_ui,
-                    crate::interface::ui::dev_panel::spawn_dev_panel_system,
-                    populate_resource_spatial_grid,
-                    rtt_composite::spawn_rtt_composite_sprite,
+                    startup_resume::begin_startup,
+                    startup_resume::finish_startup.run_if(gameplay_ready),
                 )
                     .chain(),
+            )
+            .add_systems(
+                Last,
+                startup_resume::accept_startup_choice
+                    .before(crate::systems::save::SaveLoadApplySet),
             )
             .add_systems(
                 Update,
@@ -202,8 +195,8 @@ impl Plugin for StartupPlugin {
                 .add_systems(
                     PostStartup,
                     setup_perf_scenario_if_enabled
-                        .after(spawn_familiar_wrapper)
-                        .before(setup_ui)
+                        .after(startup_resume::begin_startup)
+                        .before(startup_resume::finish_startup)
                         .run_if(perf_scenario::is_not_pure_field_core),
                 )
                 .configure_sets(

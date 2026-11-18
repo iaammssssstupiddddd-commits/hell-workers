@@ -12,6 +12,8 @@ Hover、左クリック、右クリックは `interface/selection/hit_test.rs` �
 - コンテキストメニューが開いているときのEscは`CloseContextMenu`としてmenuと古いopen要求だけを消去し、Familiarの命令やactive modeを変更しません。Helpなど最前面overlayがある場合は、そのoverlayのEscを優先します。
 - UI capture、入力欄、modal、selection suppression中のworld操作は受理しません。
 
+床・壁配置と保管範囲の削除では、HUDの上、地図座標を取得できない場所、一時停止中に離すと未確定のドラッグを解除する。押し続けたままHUDを通過するとプレビューを隠し、地図に戻ったときに同じ始点から再表示する。 一時停止で配置モードを終了するときは、始点と床・壁の資材プレビューも破棄する。
+
 ## 候補と形状
 
 候補順位はDirect Familiar、Soul、地面上Resource、Building系、Task Area、Snapped各対象、完成Floorの順です。

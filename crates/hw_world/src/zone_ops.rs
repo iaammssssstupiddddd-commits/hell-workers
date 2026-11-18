@@ -1,7 +1,7 @@
 //! Zone 操作に関する純粋なアルゴリズム helper。
 //! `Query` / `Commands` に依存せず、`WorldMap` と domain 型のみを扱う。
 
-use std::collections::{HashSet, VecDeque};
+use std::collections::HashMap;
 
 use hw_core::area::AreaBounds;
 
@@ -9,98 +9,87 @@ use crate::coords::world_to_grid;
 use crate::map::WorldMap;
 use crate::zones::{Site, Yard};
 
-type TileVecPair = (Vec<(i32, i32)>, Vec<(i32, i32)>);
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct StockpileRemovalCell {
+    pub grid: (i32, i32),
+    pub entity: bevy::prelude::Entity,
+    pub yard: bevy::prelude::Entity,
+}
 
-// ---------------------------------------------------------------------------
-// Removal targets
-// ---------------------------------------------------------------------------
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct StockpileRemovalTargets {
+    pub direct: Vec<StockpileRemovalCell>,
+    pub fragments: Vec<StockpileRemovalCell>,
+}
 
-/// 削除対象タイルと、それによって発生する孤立フラグメントを特定する。
-///
-/// 戻り値: `(直接削除対象, 孤立フラグメント削除対象)`
-pub fn identify_removal_targets(world_map: &WorldMap, area: &AreaBounds) -> TileVecPair {
-    let min_grid = WorldMap::world_to_grid(area.min + bevy::math::Vec2::splat(0.1));
-    let max_grid = WorldMap::world_to_grid(area.max - bevy::math::Vec2::splat(0.1));
+impl StockpileRemovalTargets {
+    pub fn cells(&self) -> impl Iterator<Item = &StockpileRemovalCell> {
+        self.direct.iter().chain(&self.fragments)
+    }
+}
 
-    let mut direct_removal = Vec::new();
-    let mut remaining_candidates = HashSet::new();
-
-    for (&grid, _) in world_map.stockpile_entries() {
-        if grid.0 >= min_grid.0
-            && grid.0 <= max_grid.0
-            && grid.1 >= min_grid.1
-            && grid.1 <= max_grid.1
-        {
-            direct_removal.push(grid);
-        } else {
-            remaining_candidates.insert(grid);
+fn take_component(
+    start: (i32, i32),
+    yard: bevy::prelude::Entity,
+    remaining: &mut HashMap<(i32, i32), StockpileRemovalCell>,
+) -> Vec<StockpileRemovalCell> {
+    let mut component = vec![remaining.remove(&start).expect("component start exists")];
+    let mut head = 0;
+    while head < component.len() {
+        let (x, y) = component[head].grid;
+        head += 1;
+        for grid in [(x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1)] {
+            if remaining.get(&grid).is_some_and(|cell| cell.yard == yard) {
+                component.extend(remaining.remove(&grid));
+            }
         }
     }
+    component
+}
 
-    if direct_removal.is_empty() {
-        return (Vec::new(), Vec::new());
+/// Finds direct removals and detached fragments per original, same-Yard component.
+pub fn identify_removal_targets(
+    cells: impl IntoIterator<Item = StockpileRemovalCell>,
+    area: &AreaBounds,
+) -> StockpileRemovalTargets {
+    let min = WorldMap::world_to_grid(area.min + bevy::math::Vec2::splat(0.1));
+    let max = WorldMap::world_to_grid(area.max - bevy::math::Vec2::splat(0.1));
+    let inside = |(x, y): (i32, i32)| x >= min.0 && x <= max.0 && y >= min.1 && y <= max.1;
+
+    let mut remaining = HashMap::new();
+    let mut targets = StockpileRemovalTargets::default();
+    for cell in cells {
+        if inside(cell.grid) {
+            targets.direct.push(cell);
+        }
+        remaining.insert(cell.grid, cell);
     }
 
-    // 残存候補の連結成分分析 (Flood Fill)
-    let mut visited = HashSet::new();
-    let mut clusters: Vec<Vec<(i32, i32)>> = Vec::new();
-
-    for &start_node in &remaining_candidates {
-        if visited.contains(&start_node) {
+    for &cell in &targets.direct {
+        if !remaining.contains_key(&cell.grid) {
             continue;
         }
-
-        let mut cluster = Vec::new();
-        let mut queue = VecDeque::new();
-        queue.push_back(start_node);
-        visited.insert(start_node);
-
-        while let Some(current) = queue.pop_front() {
-            cluster.push(current);
-
-            let neighbors = [
-                (current.0 + 1, current.1),
-                (current.0 - 1, current.1),
-                (current.0, current.1 + 1),
-                (current.0, current.1 - 1),
-            ];
-
-            for neighbor in neighbors {
-                if remaining_candidates.contains(&neighbor) && visited.insert(neighbor) {
-                    queue.push_back(neighbor);
-                }
+        let original = take_component(cell.grid, cell.yard, &mut remaining);
+        let mut survivors: HashMap<_, _> = original
+            .into_iter()
+            .filter(|cell| !inside(cell.grid))
+            .map(|cell| (cell.grid, cell))
+            .collect();
+        let mut keep = Vec::<StockpileRemovalCell>::new();
+        while let Some(&start) = survivors.keys().next() {
+            let mut fragment = take_component(start, cell.yard, &mut survivors);
+            let rank = |cells: &[StockpileRemovalCell]| {
+                (cells.len(), cells.iter().map(|cell| cell.grid).min())
+            };
+            if rank(&fragment) > rank(&keep) {
+                std::mem::swap(&mut keep, &mut fragment);
             }
-        }
-        clusters.push(cluster);
-    }
-
-    if clusters.is_empty() {
-        return (direct_removal, Vec::new());
-    }
-
-    // 最大クラスタ以外をフラグメントとして削除対象に追加（タイブレーカー: 最小座標）
-    let max_cluster_index = clusters
-        .iter()
-        .enumerate()
-        .max_by(|(_, a), (_, b)| match a.len().cmp(&b.len()) {
-            std::cmp::Ordering::Equal => {
-                let min_a = a.iter().min().expect("cluster is non-empty");
-                let min_b = b.iter().min().expect("cluster is non-empty");
-                min_a.cmp(min_b)
-            }
-            other => other,
-        })
-        .map(|(i, _)| i)
-        .expect("clusters is non-empty: checked above");
-
-    let mut fragment_removal = Vec::new();
-    for (i, cluster) in clusters.iter().enumerate() {
-        if i != max_cluster_index {
-            fragment_removal.extend(cluster);
+            targets.fragments.extend(fragment);
         }
     }
-
-    (direct_removal, fragment_removal)
+    targets.direct.sort_unstable();
+    targets.fragments.sort_unstable();
+    targets
 }
 
 // ---------------------------------------------------------------------------
@@ -143,4 +132,60 @@ pub fn expand_yard_area(yard: &Yard, drag_area: &AreaBounds) -> AreaBounds {
         yard.max.y.max(drag_area.max.y),
     );
     AreaBounds { min, max }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bevy::prelude::*;
+    use hw_core::constants::TILE_SIZE;
+
+    fn cell_area(x: i32, y: i32) -> AreaBounds {
+        let center = WorldMap::grid_to_world(x, y);
+        let half = Vec2::splat(TILE_SIZE * 0.5);
+        AreaBounds::new(center - half, center + half)
+    }
+
+    #[test]
+    fn removing_an_end_keeps_every_untouched_component_test() {
+        let mut world = World::new();
+        let yard = world.spawn_empty().id();
+        let other_yard = world.spawn_empty().id();
+        let mut cell = |x, y, yard| StockpileRemovalCell {
+            grid: (x, y),
+            entity: world.spawn_empty().id(),
+            yard,
+        };
+        let end = cell(10, 10, yard);
+        let cells = [
+            end,
+            cell(11, 10, yard),
+            cell(12, 10, yard),
+            cell(13, 10, yard),
+            cell(14, 10, other_yard),
+            cell(15, 10, other_yard),
+            cell(21, 20, yard),
+            cell(22, 20, yard),
+        ];
+        let result = identify_removal_targets(cells, &cell_area(10, 10));
+        assert_eq!(result.direct, [end]);
+        assert!(result.fragments.is_empty());
+    }
+
+    #[test]
+    fn equally_sized_fragments_keep_the_larger_minimum_grid_test() {
+        let mut world = World::new();
+        let yard = world.spawn_empty().id();
+        let cells: Vec<_> = (10..=14)
+            .rev()
+            .map(|x| StockpileRemovalCell {
+                grid: (x, 10),
+                entity: world.spawn_empty().id(),
+                yard,
+            })
+            .collect();
+        let result = identify_removal_targets(cells.iter().copied(), &cell_area(12, 10));
+        assert_eq!(result.direct, [cells[2]]);
+        assert_eq!(result.fragments, [cells[4], cells[3]]);
+    }
 }

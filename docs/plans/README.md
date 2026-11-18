@@ -1,6 +1,6 @@
 # Plans Index
 
-`docs/plans` の文書ステータス一覧（更新日: 2026-11-16）。
+`docs/plans` の文書ステータス一覧（更新日: 2026-11-18）。
 
 ## 新規計画書の作り方
 
@@ -122,6 +122,7 @@
 | [archive/task-execution-refactor-plan-2026-07-07.md](archive/task-execution-refactor-plan-2026-07-07.md) | Archived | task_execution リファクタリング計画（コンテキスト集約・完了/中断区別・ログ降格・boundary.rs 分割） |
 | [archive/text-input-ui-plan-2026-07-05.md](archive/text-input-ui-plan-2026-07-05.md) | Archived | テキスト入力 UI — EditableText + clipboard 実装計画 |
 | [archive/wall-surface-uv-plan-2026-09-12.md](archive/wall-surface-uv-plan-2026-09-12.md) | Archived | 本設壁の側面UV・上面断面修正 |
+| [refactor/archived/implementation-improvement-plan-2026-11-18.md](refactor/archived/implementation-improvement-plan-2026-11-18.md) | Archived | 保管範囲の削除・セーブ再開・作業割当を中心とした実装改善計画 |
 | [refactor/archived/refactor-r01-construction-navigation-plan-2026-09-18.md](refactor/archived/refactor-r01-construction-navigation-plan-2026-09-18.md) | Archived | 到達不能な建設タスクが旧Destinationへの近接から作業開始判定へ進める分岐を解消するの計画。 |
 | [refactor/archived/refactor-r02-gather-haul-chain-plan-2026-09-18.md](refactor/archived/refactor-r02-gather-haul-chain-plan-2026-09-18.md) | Archived | 採集後の連続搬送が通常割当と異なるsource claim・予約・搬入先受理を使う入口差を解消するの計画。 |
 | [refactor/archived/refactor-r03-worldmap-owner-release-plan-2026-09-18.md](refactor/archived/refactor-r03-worldmap-owner-release-plan-2026-09-18.md) | Archived | owner不一致でもraw障害物を消すrelease APIと、無変更を保証するclear APIの契約差を解消するの計画。 |

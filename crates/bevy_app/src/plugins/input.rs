@@ -50,7 +50,10 @@ impl Plugin for InputPlugin {
         app.init_resource::<bevy::input_focus::InputFocus>();
         app.add_systems(
             Update,
-            modal_focus::navigate_modal.in_set(InputResolutionSet::Consume),
+            (
+                modal_focus::navigate_modal.in_set(InputResolutionSet::Consume),
+                modal_focus::navigate_modal.run_if(not(crate::plugins::startup::gameplay_ready)),
+            ),
         );
         app.add_systems(
             PostUpdate,

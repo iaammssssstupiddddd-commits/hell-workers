@@ -942,10 +942,11 @@ enum DescriptiveSurface {
     SoulAssignment,
     SoulRename,
     Notifications,
+    StartupSaveChoice,
 }
 
 impl DescriptiveSurface {
-    const ALL: [Self; 8] = [
+    const ALL: [Self; 9] = [
         Self::GettingStartedFirstSteps,
         Self::CameraPanZoom,
         Self::HelpPauseBehavior,
@@ -954,6 +955,7 @@ impl DescriptiveSurface {
         Self::SoulAssignment,
         Self::SoulRename,
         Self::Notifications,
+        Self::StartupSaveChoice,
     ];
 
     const fn as_str(self) -> &'static str {
@@ -966,6 +968,7 @@ impl DescriptiveSurface {
             Self::SoulAssignment => "descriptive::soul-assignment",
             Self::SoulRename => "descriptive::soul-rename",
             Self::Notifications => "descriptive::notifications",
+            Self::StartupSaveChoice => "descriptive::startup-save-choice",
         }
     }
 }
@@ -980,6 +983,7 @@ const fn descriptive_surface_coverage(surface: DescriptiveSurface) -> SurfaceCov
         DescriptiveSurface::SoulAssignment => published("soul-assignment"),
         DescriptiveSurface::SoulRename => published("soul-rename"),
         DescriptiveSurface::Notifications => published("notifications"),
+        DescriptiveSurface::StartupSaveChoice => published("save-load"),
     }
 }
 

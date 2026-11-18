@@ -88,7 +88,9 @@ recovery catalogのoriginを持つ。recovery originはrollback失敗後のforeg
 | `LoadNotFound` | 対象が存在しない | Warning |
 | `LoadRead` | その他の読込I/O失敗 | Error |
 | `UnsupportedFormat` | 非対応のheader version | Error |
-| `InvalidData` | header/body/deserialize/schema/preflightが無効 | Error |
+| `InvalidData` | 入力のheader/body/deserialize/schema/preflightが無効 | Error |
+| `RollbackSnapshotInvalid` | 現在の世界の復旧用コピーを検査できず、置換前に中止 | Error |
+| `LoadSelectionChanged` | 選択したスロットの版が変わり、再選択が必要 | Warning |
 | `SeedMismatch` | 現セッションと保存worldのseedが異なる | Error |
 | `MissingPrerequisite` | registry、asset、rehydrate前提が不足 | Error |
 | `ApplyRecovered` | live apply失敗後、旧worldのrollbackに成功 | Warning |

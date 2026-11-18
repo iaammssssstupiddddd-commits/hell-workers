@@ -80,7 +80,12 @@ pub(crate) fn handle(intent: UiIntent, ui: &mut IntentUiQueries, settings: &Game
             if !entry.capabilities.can_load {
                 return;
             }
-            let _ = begin_load_confirm(&mut ui.save_catalog_ui, slot, session);
+            let _ = begin_load_confirm(
+                &mut ui.save_catalog_ui,
+                slot,
+                session,
+                entry.revision.clone(),
+            );
         }
         UiIntent::ConfirmLoadCatalogSlot { slot, session } => {
             let _ = request_catalog_load(

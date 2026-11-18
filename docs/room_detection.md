@@ -15,6 +15,8 @@ Roomデータは将来の温度・モラル・部屋品質バフ等の基盤に�
 - `crates/hw_world::world_replace`: world replacement時にruntime-onlyのRoom root／overlayを除去し、lookup・detection・validation resourceを初期化するidempotent resetを所有する。
 - `crates/bevy_app/src/plugins/logic.rs` / `plugins/visual.rs`: `hw_world`のsystemとload reset hookを直接登録し、cross-domain orderingだけを所有する。旧`systems/room/*` shellは存在しない。
 
+扉の開閉と施錠は通行・遮光・扉表示を更新します。外周の構造が同じならRoomと境界表示を保持します。外壁の撤去や建物の移動は構造を再検出します。
+
 ## 2. Room の成立条件
 
 以下を **すべて** 満たす連続床タイルの集合が Room として認識されます。

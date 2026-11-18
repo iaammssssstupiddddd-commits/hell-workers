@@ -625,6 +625,16 @@ fn notification_from_outcome(outcome: &SaveLoadOutcome) -> UserFacingNotificatio
             "Invalid save data",
             format!("{target} is invalid or damaged."),
         ),
+        SaveLoadResult::Failed(SaveLoadFailureKind::RollbackSnapshotInvalid) => (
+            NotificationSeverity::Error,
+            "Current world could not be backed up",
+            format!("Loading {target} was cancelled before replacing the current world."),
+        ),
+        SaveLoadResult::Failed(SaveLoadFailureKind::LoadSelectionChanged) => (
+            NotificationSeverity::Warning,
+            "Save selection changed",
+            format!("{target} changed on disk. Select the slot again."),
+        ),
         SaveLoadResult::Failed(SaveLoadFailureKind::SeedMismatch) => (
             NotificationSeverity::Error,
             "World seed mismatch",
@@ -716,13 +726,15 @@ fn safe_target(target: &str) -> &str {
 mod tests {
     use super::*;
 
-    const FAILURES: [SaveLoadFailureKind; 13] = [
+    const FAILURES: [SaveLoadFailureKind; 15] = [
         SaveLoadFailureKind::SaveSerialize,
         SaveLoadFailureKind::SaveWrite,
         SaveLoadFailureKind::LoadNotFound,
         SaveLoadFailureKind::LoadRead,
         SaveLoadFailureKind::UnsupportedFormat,
         SaveLoadFailureKind::InvalidData,
+        SaveLoadFailureKind::RollbackSnapshotInvalid,
+        SaveLoadFailureKind::LoadSelectionChanged,
         SaveLoadFailureKind::SeedMismatch,
         SaveLoadFailureKind::MissingPrerequisite,
         SaveLoadFailureKind::ApplyRecovered,

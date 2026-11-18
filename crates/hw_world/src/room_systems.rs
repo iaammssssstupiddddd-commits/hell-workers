@@ -27,8 +27,6 @@ type ChangedBuildingQuery<'w, 's> = Query<
     &'static Transform,
     (With<Building>, Or<(Changed<Building>, Changed<Transform>)>),
 >;
-type ChangedDoorQuery<'w, 's> =
-    Query<'w, 's, &'static Transform, (With<Door>, Or<(Changed<Door>, Changed<Transform>)>)>;
 type ChangedRoomsQuery<'w, 's> = Query<
     'w,
     's,
@@ -218,19 +216,13 @@ pub fn collect_building_tiles(
 // dirty_mark: Building / Door の変化を RoomDetectionState に伝えるシステム群
 // ---------------------------------------------------------------------------
 
-/// Building / Door の Changed イベントからダーティタイルをマークする。
+/// 建物の構造・位置変更からダーティタイルをマークする。
 /// Add/Remove は Observer (on_building_added 等) が担うため、ここでは Changed のみ処理する。
 pub fn mark_room_dirty_from_building_changes_system(
     mut detection_state: ResMut<RoomDetectionState>,
     q_changed_buildings: ChangedBuildingQuery,
-    q_changed_doors: ChangedDoorQuery,
 ) {
     for transform in q_changed_buildings.iter() {
-        let grid = WorldMap::world_to_grid(transform.translation.truncate());
-        detection_state.mark_dirty(grid);
-    }
-
-    for transform in q_changed_doors.iter() {
         let grid = WorldMap::world_to_grid(transform.translation.truncate());
         detection_state.mark_dirty(grid);
     }
@@ -410,5 +402,105 @@ pub fn sync_room_overlay_tiles_system(
                 }
             }
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use hw_jobs::{BuildingType, DoorState};
+
+    fn spawn_room(world: &mut World, x_offset: i32) -> (Entity, Entity) {
+        let mut door = Entity::PLACEHOLDER;
+        let mut wall = Entity::PLACEHOLDER;
+        for x in 0..5 {
+            for y in 0..5 {
+                let kind = match (x, y) {
+                    (0, 2) => BuildingType::Door,
+                    (0 | 4, _) | (_, 0 | 4) => BuildingType::Wall,
+                    _ => BuildingType::Floor,
+                };
+                let mut entity = world.spawn((
+                    Building {
+                        kind,
+                        is_provisional: false,
+                    },
+                    Transform::from_translation(
+                        WorldMap::grid_to_world(x_offset + x, y + 10).extend(0.0),
+                    ),
+                ));
+                if kind == BuildingType::Door {
+                    entity.insert(Door::default());
+                    door = entity.id();
+                } else if (x, y) == (4, 2) {
+                    wall = entity.id();
+                }
+            }
+        }
+        (door, wall)
+    }
+
+    fn presentation(world: &mut World) -> (HashSet<Entity>, HashSet<Entity>) {
+        (
+            world
+                .query_filtered::<Entity, With<Room>>()
+                .iter(world)
+                .collect(),
+            world
+                .query_filtered::<Entity, With<RoomOverlayTile>>()
+                .iter(world)
+                .collect(),
+        )
+    }
+
+    #[test]
+    fn changing_door_state_preserves_room_and_overlay_entities_test() {
+        let mut app = App::new();
+        app.init_resource::<Time>()
+            .init_resource::<RoomDetectionState>()
+            .init_resource::<RoomValidationState>()
+            .init_resource::<RoomTileLookup>()
+            .init_resource::<RoomBoundaryLookup>()
+            .add_observer(on_building_removed)
+            .add_systems(
+                Update,
+                (
+                    mark_room_dirty_from_building_changes_system,
+                    validate_rooms_system,
+                    detect_rooms_system,
+                    sync_room_overlay_tiles_system,
+                )
+                    .chain(),
+            );
+        let (door, wall) = spawn_room(app.world_mut(), 10);
+        spawn_room(app.world_mut(), 25);
+        let step = |app: &mut App| {
+            app.world_mut()
+                .resource_mut::<Time>()
+                .advance_by(std::time::Duration::from_millis(600));
+            app.update();
+        };
+        step(&mut app);
+        let original = presentation(app.world_mut());
+        assert_eq!(original.0.len(), 2);
+        assert!(!original.1.is_empty());
+        let boundaries = app.world().resource::<RoomBoundaryLookup>();
+        for grid in [(14, 12), (10, 12), (25, 12)] {
+            assert_eq!(boundaries.rooms_at(grid).len(), 1);
+        }
+        step(&mut app);
+        assert_eq!(presentation(app.world_mut()), original);
+        for state in [DoorState::Open, DoorState::Closed, DoorState::Locked] {
+            app.world_mut().get_mut::<Door>(door).unwrap().state = state;
+            step(&mut app);
+            assert_eq!(presentation(app.world_mut()), original, "{state:?}");
+        }
+        app.world_mut().despawn(wall);
+        step(&mut app);
+        assert_eq!(presentation(app.world_mut()).0.len(), 1);
+        let boundaries = app.world().resource::<RoomBoundaryLookup>();
+        assert!(boundaries.rooms_at((14, 12)).is_empty());
+        assert!(boundaries.rooms_at((10, 12)).is_empty());
+        assert_eq!(boundaries.rooms_at((25, 12)).len(), 1);
     }
 }
