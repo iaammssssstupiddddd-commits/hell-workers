@@ -3,13 +3,13 @@
 //! F5 / F9 は catalog modal を開き、operation と slot を束ねた one-shot request を
 //! `Last::SaveLoadApplySet` で適用する（`docs/save_load.md` 参照）。
 
-mod atomic_file;
+pub(crate) mod atomic_file;
 pub(crate) mod autosave;
 pub(crate) mod catalog;
 mod catalog_present;
 pub(crate) mod catalog_ui;
 mod format;
-mod load;
+pub(crate) mod load;
 mod metrics;
 mod native_acceptance;
 #[cfg(feature = "profiling")]
@@ -93,7 +93,12 @@ impl Plugin for SavePlugin {
         register_load_reset_hook(app, "save-load-outcomes", clear_save_load_outcomes);
 
         app.configure_sets(Last, SaveLoadApplySet.after(SettingsPersistenceSet));
-        app.add_systems(Last, save_load_apply_system.in_set(SaveLoadApplySet));
+        app.add_systems(
+            Last,
+            save_load_apply_system
+                .in_set(SaveLoadApplySet)
+                .run_if(crate::plugins::startup::gameplay_ready),
+        );
     }
 
     fn finish(&self, app: &mut App) {
@@ -181,10 +186,6 @@ fn save_load_apply_with(
     if let Some(mut catalog) = world.get_resource_mut::<SaveCatalog>() {
         match (&request, result) {
             (
-                SaveLoadRequest::Load { slot, .. },
-                SaveLoadResult::Failed(SaveLoadFailureKind::InvalidData),
-            ) => catalog.mark_body_invalid(*slot),
-            (
                 SaveLoadRequest::Save { slot, .. },
                 SaveLoadResult::Succeeded
                 | SaveLoadResult::Failed(SaveLoadFailureKind::CommittedDurabilityUncertain),
@@ -231,6 +232,7 @@ pub fn normal_load_request(slot: SaveSlotId, dialog_session: u64) -> SaveLoadReq
     SaveLoadRequest::Load {
         origin: LoadRequestOrigin::NormalCatalog { dialog_session },
         slot,
+        expected_revision: None,
     }
 }
 
@@ -239,6 +241,7 @@ pub fn recovery_load_request(slot: SaveSlotId, dialog_session: u64) -> SaveLoadR
     SaveLoadRequest::Load {
         origin: LoadRequestOrigin::RecoveryCatalog { dialog_session },
         slot,
+        expected_revision: None,
     }
 }
 

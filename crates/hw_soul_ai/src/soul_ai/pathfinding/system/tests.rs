@@ -336,6 +336,69 @@ fn unreachable_task_destination_unassigns_and_releases_its_reservation() {
 }
 
 #[test]
+fn rest_path_budget_defers_without_releasing_the_reservation() {
+    let mut app = App::new();
+    app.add_plugins(MinimalPlugins)
+        .init_resource::<WorldMap>()
+        .insert_resource(RuntimePathSearchBudget::new(0))
+        .init_resource::<SharedResourceCache>()
+        .add_message::<ResourceReservationRequest>()
+        .add_systems(Update, pathfinding_system);
+    #[cfg(feature = "profiling")]
+    app.init_resource::<RuntimePathDeferMetrics>();
+
+    let start = WorldMap::grid_to_world(10, 10);
+    let entrance = WorldMap::grid_to_world(18, 10);
+    let area = app
+        .world_mut()
+        .spawn((
+            hw_jobs::RestArea { capacity: 1 },
+            Transform::from_translation(WorldMap::grid_to_world(20, 10).extend(0.0)),
+        ))
+        .id();
+    let soul = app
+        .world_mut()
+        .spawn((
+            Transform::from_translation(start.extend(0.0)),
+            DamnedSoul::default(),
+            Destination(entrance),
+            Path::default(),
+            AssignedTask::None,
+            IdleState {
+                behavior: hw_core::soul::IdleBehavior::GoingToRest,
+                ..default()
+            },
+            hw_core::relationships::RestAreaReservedFor(area),
+        ))
+        .id();
+
+    app.update();
+    assert!(app.world().get::<Path>(soul).unwrap().waypoints.is_empty());
+    assert_eq!(app.world().get::<Destination>(soul).unwrap().0, entrance);
+    assert_eq!(
+        app.world()
+            .get::<hw_core::relationships::RestAreaReservedFor>(soul)
+            .unwrap()
+            .0,
+        area
+    );
+
+    app.insert_resource(RuntimePathSearchBudget::new(2));
+    app.update();
+    assert_eq!(
+        app.world().get::<Path>(soul).unwrap().waypoints.last(),
+        Some(&entrance)
+    );
+    assert_eq!(
+        app.world()
+            .get::<hw_core::relationships::RestAreaReservedFor>(soul)
+            .unwrap()
+            .0,
+        area
+    );
+}
+
+#[test]
 fn exhausted_core_budget_defers_task_pathfinding_without_unassigning() {
     let mut blocked_map = WorldMap::default();
     for y in 0..MAP_HEIGHT {

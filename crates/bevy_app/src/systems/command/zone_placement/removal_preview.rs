@@ -1,96 +1,74 @@
-use crate::world::map::WorldMap;
 use bevy::prelude::*;
-use hw_world::identify_removal_targets;
+use hw_core::WorldEpoch;
+use hw_core::game_state::TaskModeZoneType;
+use hw_world::StockpileRemovalTargets;
 use hw_world::zones::AreaBounds;
-use std::collections::HashSet;
+
+#[derive(PartialEq)]
+pub(super) struct RemovalPreview {
+    pub epoch: WorldEpoch,
+    pub kind: TaskModeZoneType,
+    pub start: Vec2,
+    pub area: AreaBounds,
+    pub targets: StockpileRemovalTargets,
+}
 
 #[derive(Default, Resource)]
 pub struct ZoneRemovalPreviewState {
-    direct: HashSet<(i32, i32)>,
-    fragments: HashSet<(i32, i32)>,
+    pub(super) displayed: Option<RemovalPreview>,
+    original_colors: Vec<(Entity, Color)>,
 }
 
 impl ZoneRemovalPreviewState {
     pub(crate) fn is_active(&self) -> bool {
-        !self.direct.is_empty() || !self.fragments.is_empty()
-    }
-
-    pub(crate) fn clear(&mut self) {
-        self.direct.clear();
-        self.fragments.clear();
+        self.displayed.is_some()
     }
 }
 
-pub(crate) fn update_removal_preview(
-    world_map: &WorldMap,
-    area: &AreaBounds,
+pub(super) fn update_removal_preview(
+    preview: RemovalPreview,
     q_sprites: &mut Query<&mut Sprite>,
     state: &mut ZoneRemovalPreviewState,
 ) {
-    let (direct, fragments) = identify_removal_targets(world_map, area);
-    let next_direct: HashSet<(i32, i32)> = direct.into_iter().collect();
-    let next_fragments: HashSet<(i32, i32)> = fragments.into_iter().collect();
-
-    let prev_direct = state.direct.clone();
-    let prev_fragments = state.fragments.clone();
-
-    for grid in prev_direct.difference(&next_direct) {
-        if !next_fragments.contains(grid) {
-            set_stockpile_color(world_map, q_sprites, grid, stockpile_default_color());
+    if state.displayed.as_ref() == Some(&preview) {
+        return;
+    }
+    clear_removal_preview(q_sprites, state);
+    let direct_color = Color::srgba(1.0, 0.2, 0.2, 0.4);
+    let fragment_color = Color::srgba(1.0, 0.6, 0.0, 0.4);
+    for (cells, color) in [
+        (&preview.targets.direct, direct_color),
+        (&preview.targets.fragments, fragment_color),
+    ] {
+        for cell in cells {
+            if let Ok(mut sprite) = q_sprites.get_mut(cell.entity) {
+                state.original_colors.push((cell.entity, sprite.color));
+                sprite.color = color;
+            }
         }
     }
-
-    for grid in prev_fragments.difference(&next_fragments) {
-        if !next_direct.contains(grid) {
-            set_stockpile_color(world_map, q_sprites, grid, stockpile_default_color());
-        }
-    }
-
-    for grid in next_direct.difference(&state.direct) {
-        set_stockpile_color(world_map, q_sprites, grid, stockpile_removal_color());
-    }
-
-    for grid in next_fragments.difference(&state.fragments) {
-        set_stockpile_color(world_map, q_sprites, grid, stockpile_fragment_color());
-    }
-
-    state.direct = next_direct;
-    state.fragments = next_fragments;
+    state.displayed = Some(preview);
 }
 
 pub(crate) fn clear_removal_preview(
-    world_map: &WorldMap,
     q_sprites: &mut Query<&mut Sprite>,
     state: &mut ZoneRemovalPreviewState,
 ) {
-    for grid in state.direct.iter().chain(state.fragments.iter()) {
-        set_stockpile_color(world_map, q_sprites, grid, stockpile_default_color());
-    }
-
-    state.clear();
-}
-
-fn set_stockpile_color(
-    world_map: &WorldMap,
-    q_sprites: &mut Query<&mut Sprite>,
-    grid: &(i32, i32),
-    color: Color,
-) {
-    if let Some(entity) = world_map.stockpile_entity(*grid)
-        && let Ok(mut sprite) = q_sprites.get_mut(entity)
-    {
-        sprite.color = color;
+    state.displayed = None;
+    for (entity, color) in state.original_colors.drain(..) {
+        if let Ok(mut sprite) = q_sprites.get_mut(entity) {
+            sprite.color = color;
+        }
     }
 }
 
-fn stockpile_default_color() -> Color {
-    Color::srgba(1.0, 1.0, 0.0, 0.2)
-}
-
-fn stockpile_removal_color() -> Color {
-    Color::srgba(1.0, 0.2, 0.2, 0.4)
-}
-
-fn stockpile_fragment_color() -> Color {
-    Color::srgba(1.0, 0.6, 0.0, 0.4)
+pub(crate) fn reset_removal_preview(world: &mut World) {
+    if let Some(mut state) = world.get_resource_mut::<ZoneRemovalPreviewState>() {
+        let old = std::mem::take(&mut *state);
+        for (entity, color) in old.original_colors {
+            if let Some(mut sprite) = world.get_mut::<Sprite>(entity) {
+                sprite.color = color;
+            }
+        }
+    }
 }

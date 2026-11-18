@@ -181,7 +181,7 @@ pub struct SaveCatalog {
     dirty: bool,
     last_scan_bytes: usize,
     last_scan_entry_count: usize,
-    body_invalid_slots: Vec<SaveSlotId>,
+    body_invalid_slots: Vec<(SaveSlotId, SaveFileRevision)>,
     scanned_generation_limit: Option<u8>,
 }
 
@@ -200,20 +200,15 @@ impl SaveCatalog {
 
     /// Records a failed full-body validation without putting runtime state in
     /// the save file or world snapshot.
-    pub fn mark_body_invalid(&mut self, slot: SaveSlotId) {
-        if !self.body_invalid_slots.contains(&slot) {
-            self.body_invalid_slots.push(slot);
-        }
+    pub(super) fn mark_body_invalid(&mut self, slot: SaveSlotId, revision: SaveFileRevision) {
+        self.clear_body_invalid(slot);
+        self.body_invalid_slots.push((slot, revision));
         self.mark_dirty();
     }
 
     pub fn clear_body_invalid(&mut self, slot: SaveSlotId) {
         self.body_invalid_slots
-            .retain(|candidate| *candidate != slot);
-    }
-
-    pub fn body_invalid_slots(&self) -> &[SaveSlotId] {
-        &self.body_invalid_slots
+            .retain(|(candidate, _)| *candidate != slot);
     }
 
     pub fn needs_refresh(&self, generations: AutosaveGenerationLimit) -> bool {
@@ -238,9 +233,9 @@ impl SaveCatalog {
     pub fn replace_entries(&mut self, entries: Vec<SaveCatalogEntry>, bytes_read: usize) {
         self.last_scan_entry_count = entries.len();
         self.last_scan_bytes = bytes_read;
-        self.body_invalid_slots.retain(|slot| {
+        self.body_invalid_slots.retain(|(slot, revision)| {
             entries.iter().any(|entry| {
-                entry.slot == *slot && entry.revision.exists && entry.content.allows_load()
+                entry.slot == *slot && entry.revision == *revision && entry.content.allows_load()
             })
         });
         self.entries = entries;
@@ -343,7 +338,7 @@ pub fn scan_save_catalog(
     root: &SaveStorageRoot,
     expected_worldgen_seed: Option<u64>,
     generations: AutosaveGenerationLimit,
-    previous_body_invalid: &[SaveSlotId],
+    previous_body_invalid: &[(SaveSlotId, SaveFileRevision)],
 ) -> (Vec<SaveCatalogEntry>, CatalogScanCounters) {
     let mut entries = Vec::with_capacity(9);
     let mut bytes_read = 0usize;
@@ -387,12 +382,11 @@ pub fn refresh_save_catalog(
     generations: AutosaveGenerationLimit,
 ) {
     let _ = super::atomic_file::cleanup_crash_temp_files(root.as_path());
-    let previous_body_invalid = catalog.body_invalid_slots().to_vec();
     let (entries, counters) = scan_save_catalog(
         root,
         expected_worldgen_seed,
         generations,
-        &previous_body_invalid,
+        &catalog.body_invalid_slots,
     );
     catalog.replace_entries(entries, counters.bytes_read);
     catalog.scanned_generation_limit = Some(generations.clamped());
@@ -430,49 +424,28 @@ pub fn inspect_save_file(
     path: &Path,
     expected_worldgen_seed: Option<u64>,
 ) -> Result<(SaveFileRevision, SaveHeaderStatus, usize, bool), std::io::Error> {
-    if !path.exists() {
-        return Ok((
-            SaveFileRevision::absent(),
-            SaveHeaderStatus::Empty,
-            0,
-            false,
-        ));
-    }
-    if path.is_dir() {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::IsADirectory,
-            "save slot path is a directory",
-        ));
-    }
-    let metadata = fs::metadata(path)?;
-    if metadata.len() == 0 {
-        return Ok((
-            SaveFileRevision {
-                exists: true,
-                length: 0,
-                modified: metadata.modified().ok(),
-                file_identity: file_identity_from_metadata(&metadata),
-                prefix_fingerprint: 0,
-            },
-            SaveHeaderStatus::Empty,
-            0,
-            metadata.modified().is_err(),
-        ));
-    }
-    let mut file = File::open(path)?;
-    let mut buffer = vec![0_u8; SAVE_HEADER_INSPECT_LIMIT_BYTES];
-    let bytes_read = file.read(&mut buffer)?;
-    buffer.truncate(bytes_read);
+    let mut file = match File::open(path) {
+        Ok(file) => file,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return Ok((
+                SaveFileRevision::absent(),
+                SaveHeaderStatus::Empty,
+                0,
+                false,
+            ));
+        }
+        Err(error) => return Err(error),
+    };
+    let metadata = file.metadata()?;
+    let mut buffer = Vec::new();
+    (&mut file)
+        .take(SAVE_HEADER_INSPECT_LIMIT_BYTES as u64)
+        .read_to_end(&mut buffer)?;
+    let bytes_read = buffer.len();
     let prefix = String::from_utf8_lossy(&buffer);
     let inspected = inspect_save_prefix(&prefix, bytes_read, expected_worldgen_seed);
     Ok((
-        SaveFileRevision {
-            exists: true,
-            length: metadata.len(),
-            modified: metadata.modified().ok(),
-            file_identity: file_identity_from_metadata(&metadata),
-            prefix_fingerprint: fingerprint_bytes(&buffer),
-        },
+        save_revision(&metadata, &buffer),
         inspected.status,
         bytes_read,
         metadata.modified().is_err(),
@@ -484,7 +457,7 @@ fn inspect_slot(
     slot: SaveSlotId,
     expected_worldgen_seed: Option<u64>,
     generations: AutosaveGenerationLimit,
-    previous_body_invalid: &[SaveSlotId],
+    previous_body_invalid: &[(SaveSlotId, SaveFileRevision)],
 ) -> (SaveCatalogEntry, usize) {
     let path = root.resolve(slot);
     match inspect_save_file(&path, expected_worldgen_seed) {
@@ -506,7 +479,11 @@ fn inspect_slot(
                 );
             }
             let mut content = SaveContentStatus::from_header(header_status);
-            if previous_body_invalid.contains(&slot) && content.allows_load() {
+            if previous_body_invalid
+                .iter()
+                .any(|(id, old)| *id == slot && *old == revision)
+                && content.allows_load()
+            {
                 content = SaveContentStatus::BodyInvalid;
             }
             let mut capabilities = slot_capabilities(slot, content, generations);
@@ -551,6 +528,21 @@ fn inspect_slot(
     }
 }
 
+pub(super) fn save_revision(metadata: &fs::Metadata, bytes: &[u8]) -> SaveFileRevision {
+    let prefix = &bytes[..bytes.len().min(SAVE_HEADER_INSPECT_LIMIT_BYTES)];
+    SaveFileRevision {
+        exists: true,
+        length: metadata.len(),
+        modified: metadata.modified().ok(),
+        file_identity: file_identity_from_metadata(metadata),
+        prefix_fingerprint: if prefix.is_empty() {
+            0
+        } else {
+            fingerprint_bytes(prefix)
+        },
+    }
+}
+
 fn fingerprint_bytes(bytes: &[u8]) -> u64 {
     let mut hasher = DefaultHasher::new();
     bytes.hash(&mut hasher);
@@ -592,6 +584,49 @@ mod tests {
         ));
         fs::create_dir_all(&path).unwrap();
         SaveStorageRoot::new(path)
+    }
+
+    #[test]
+    fn invalid_body_marker_belongs_to_the_read_revision_test() {
+        let root = unique_root();
+        let slot = SaveSlotId::Manual1;
+        let path = root.resolve(slot);
+        fs::write(&path, encode_save_file(SaveHeader::current(1), "bad body")).unwrap();
+        let revision = read_save_file_revision(&path).unwrap();
+        let mut catalog = SaveCatalog::default();
+        catalog.mark_body_invalid(slot, revision.clone());
+        refresh_save_catalog(&mut catalog, &root, Some(1), AutosaveGenerationLimit(3));
+        assert_eq!(
+            catalog.entry(slot).unwrap().content,
+            SaveContentStatus::BodyInvalid
+        );
+        fs::write(
+            &path,
+            encode_save_file(SaveHeader::current(1), "replacement body"),
+        )
+        .unwrap();
+        // The failed read can still finish after the replacement is visible on disk.
+        catalog.mark_body_invalid(slot, revision.clone());
+        refresh_save_catalog(&mut catalog, &root, Some(1), AutosaveGenerationLimit(3));
+        assert_ne!(catalog.entry(slot).unwrap().revision, revision);
+        assert_eq!(
+            catalog.entry(slot).unwrap().content,
+            SaveContentStatus::CurrentV1 { worldgen_seed: 1 }
+        );
+        let replacement = catalog.entry(slot).unwrap().revision.clone();
+        catalog.mark_body_invalid(slot, replacement);
+        refresh_save_catalog(&mut catalog, &root, Some(1), AutosaveGenerationLimit(3));
+        assert_eq!(
+            catalog.entry(slot).unwrap().content,
+            SaveContentStatus::BodyInvalid
+        );
+        catalog.clear_body_invalid(slot);
+        refresh_save_catalog(&mut catalog, &root, Some(1), AutosaveGenerationLimit(3));
+        assert_eq!(
+            catalog.entry(slot).unwrap().content,
+            SaveContentStatus::CurrentV1 { worldgen_seed: 1 }
+        );
+        fs::remove_dir_all(root.as_path()).unwrap();
     }
 
     #[test]

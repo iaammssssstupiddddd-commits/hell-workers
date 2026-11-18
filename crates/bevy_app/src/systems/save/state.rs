@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 use bevy::prelude::*;
 use hw_core::SaveSlotId;
 
-use super::catalog::SaveExpectedTarget;
+use super::catalog::{SaveExpectedTarget, SaveFileRevision};
 
 /// 互換用の旧単一セーブパス定数。legacy default slot の canonical 名と一致する。
 pub const SAVE_FILE_PATH: &str = "saves/world.scn.ron";
@@ -110,6 +110,7 @@ pub enum SaveLoadRequest {
     Load {
         origin: LoadRequestOrigin,
         slot: SaveSlotId,
+        expected_revision: Option<SaveFileRevision>,
     },
 }
 
@@ -317,6 +318,8 @@ pub enum SaveLoadFailureKind {
     LoadRead,
     UnsupportedFormat,
     InvalidData,
+    LoadSelectionChanged,
+    RollbackSnapshotInvalid,
     SeedMismatch,
     MissingPrerequisite,
     ApplyRecovered,
@@ -335,6 +338,8 @@ impl SaveLoadFailureKind {
             Self::LoadRead => "load_read",
             Self::UnsupportedFormat => "unsupported_format",
             Self::InvalidData => "invalid_data",
+            Self::LoadSelectionChanged => "load_selection_changed",
+            Self::RollbackSnapshotInvalid => "rollback_snapshot_invalid",
             Self::SeedMismatch => "seed_mismatch",
             Self::MissingPrerequisite => "missing_prerequisite",
             Self::ApplyRecovered => "apply_recovered",
@@ -419,6 +424,7 @@ mod tests {
         assert!(!state.try_set(SaveLoadRequest::Load {
             origin: LoadRequestOrigin::NormalCatalog { dialog_session: 4 },
             slot: SaveSlotId::Manual1,
+            expected_revision: None,
         }));
         let taken = state.take_request().unwrap();
         assert_eq!(taken.slot(), SaveSlotId::Manual2);

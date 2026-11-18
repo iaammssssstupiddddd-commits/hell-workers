@@ -178,7 +178,8 @@ fn configure_game_system_sets(app: &mut App) {
             GameSystemSet::Visual,
             GameSystemSet::Interface,
         )
-            .chain(),
+            .chain()
+            .run_if(crate::plugins::startup::gameplay_ready),
     );
 }
 

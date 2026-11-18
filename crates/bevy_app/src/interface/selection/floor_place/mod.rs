@@ -152,7 +152,8 @@ pub fn floor_placement_system(
 #[derive(SystemParam)]
 pub struct FloorPlacePreviewContext<'w, 's> {
     pub summary: ResMut<'w, FloorPlacementPreview>,
-    pub task_context: Res<'w, TaskContext>,
+    pub task_context: ResMut<'w, TaskContext>,
+    pub time: Res<'w, Time<Virtual>>,
     pub placement_feedback: ResMut<'w, PlacementFeedbackState>,
     pub q_existing_floor_tiles: Query<'w, 's, &'static FloorTileBlueprint>,
     pub q_floor_buildings: Query<'w, 's, (&'static Building, &'static Transform)>,
@@ -164,12 +165,6 @@ pub fn floor_placement_preview_system(
     mut context: FloorPlacePreviewContext,
     world_map: crate::world::map::WorldMapRead,
 ) {
-    if input.ui_input_state.world_input_blocked() {
-        if context.summary.0.is_some() {
-            context.summary.0 = None;
-        }
-        return;
-    }
     let (is_floor_mode, start_pos) = match context.task_context.0 {
         TaskMode::FloorPlace(Some(start)) => (true, start),
         TaskMode::WallPlace(Some(start)) => (false, start),
@@ -180,10 +175,25 @@ pub fn floor_placement_preview_system(
             return;
         }
     };
-    let Some(world_pos) = hw_ui::camera::world_cursor_pos(&input.q_window, &input.q_camera) else {
+
+    let can_use_world = !context.time.is_paused() && !input.ui_input_state.world_input_blocked();
+    let cursor = can_use_world
+        .then(|| hw_ui::camera::world_cursor_pos(&input.q_window, &input.q_camera))
+        .flatten();
+    let held = input.buttons.pressed(MouseButton::Left);
+    let released = input.buttons.just_released(MouseButton::Left);
+    if !held && (!released || cursor.is_none()) {
+        context.task_context.0 = if is_floor_mode {
+            TaskMode::FloorPlace(None)
+        } else {
+            TaskMode::WallPlace(None)
+        };
+    }
+    let Some(world_pos) = cursor.filter(|_| held || released) else {
         if context.summary.0.is_some() {
             context.summary.0 = None;
         }
+        context.placement_feedback.live = None;
         return;
     };
     let snapped_pos = WorldMap::snap_to_grid_edge(world_pos);
@@ -224,6 +234,195 @@ pub fn floor_placement_preview_system(
 #[cfg(test)]
 mod summary_tests {
     use super::*;
+    #[test]
+    fn obstructed_floor_and_wall_release_consumes_drag_test() {
+        use bevy::camera::{ComputedCameraValues, RenderTargetInfo};
+
+        for mode in [
+            TaskMode::FloorPlace as fn(Option<Vec2>) -> TaskMode,
+            TaskMode::WallPlace,
+        ] {
+            let mut app = App::new();
+            app.init_resource::<ButtonInput<MouseButton>>()
+                .init_resource::<Time<Virtual>>()
+                .init_resource::<WorldMap>()
+                .init_resource::<PlacementFeedbackState>()
+                .init_resource::<crate::DebugInstantBuild>()
+                .init_resource::<UiInputState>()
+                .insert_resource(TaskContext(mode(Some(Vec2::ZERO))))
+                .insert_resource(FloorPlacementPreview(Some("old preview".to_owned())))
+                .add_systems(Update, floor_placement_preview_system);
+            let mut window = Window {
+                resolution: (100, 100).into(),
+                ..default()
+            };
+            window.set_cursor_position(Some(Vec2::splat(50.0)));
+            app.world_mut().spawn((window, PrimaryWindow));
+            app.world_mut().spawn((
+                MainCamera,
+                Camera {
+                    computed: ComputedCameraValues {
+                        clip_from_view: Mat4::IDENTITY,
+                        target_info: Some(RenderTargetInfo {
+                            physical_size: UVec2::splat(100),
+                            scale_factor: 1.0,
+                        }),
+                        ..default()
+                    },
+                    ..default()
+                },
+                GlobalTransform::IDENTITY,
+            ));
+
+            app.world_mut()
+                .resource_mut::<UiInputState>()
+                .pointer_over_ui = true;
+            let mut buttons = app.world_mut().resource_mut::<ButtonInput<MouseButton>>();
+            buttons.press(MouseButton::Left);
+            buttons.release(MouseButton::Left);
+            app.update();
+            assert_eq!(app.world().resource::<TaskContext>().0, mode(None));
+            assert!(app.world().resource::<FloorPlacementPreview>().0.is_none());
+            assert!(
+                app.world()
+                    .resource::<PlacementFeedbackState>()
+                    .live
+                    .is_none()
+            );
+            assert_eq!(
+                app.world_mut()
+                    .query::<&FloorTileBlueprint>()
+                    .iter(app.world())
+                    .count(),
+                0
+            );
+        }
+    }
+
+    #[test]
+    fn valid_drag_commits_floor_and_wall_sites_with_matching_occupancy() {
+        use bevy::camera::{ComputedCameraValues, RenderTargetInfo};
+        use hw_jobs::construction::{
+            FloorConstructionSite, WallConstructionSite, WallTileBlueprint,
+        };
+
+        let tile = (30, 30);
+        let center = WorldMap::grid_to_world(tile.0, tile.1);
+        for floor in [true, false] {
+            let mode = if floor {
+                TaskMode::FloorPlace as fn(Option<Vec2>) -> TaskMode
+            } else {
+                TaskMode::WallPlace
+            };
+            let mut app = App::new();
+            app.init_resource::<ButtonInput<MouseButton>>()
+                .init_resource::<Time<Real>>()
+                .init_resource::<Time<Virtual>>()
+                .init_resource::<WorldMap>()
+                .init_resource::<NextState<PlayMode>>()
+                .init_resource::<FloorPlacementPreview>()
+                .init_resource::<PlacementFeedbackState>()
+                .init_resource::<crate::DebugInstantBuild>()
+                .init_resource::<UiInputState>()
+                .insert_resource(crate::test_support::empty_building_3d_handles())
+                .insert_resource(TaskContext(mode(None)))
+                .add_systems(
+                    Update,
+                    (floor_placement_preview_system, floor_placement_system).chain(),
+                );
+
+            let mut window = Window {
+                resolution: (100, 100).into(),
+                ..default()
+            };
+            window.set_cursor_position(Some(Vec2::new(25.0, 75.0)));
+            let window = app.world_mut().spawn((window, PrimaryWindow)).id();
+            app.world_mut().spawn((
+                MainCamera,
+                Camera {
+                    computed: ComputedCameraValues {
+                        clip_from_view: Mat4::from_scale(Vec3::new(1.0 / 32.0, 1.0 / 32.0, 1.0)),
+                        target_info: Some(RenderTargetInfo {
+                            physical_size: UVec2::splat(100),
+                            scale_factor: 1.0,
+                        }),
+                        ..default()
+                    },
+                    ..default()
+                },
+                GlobalTransform::from_translation(center.extend(0.0)),
+            ));
+            if !floor {
+                let floor = app
+                    .world_mut()
+                    .spawn((
+                        Building {
+                            kind: hw_jobs::BuildingType::Floor,
+                            is_provisional: false,
+                        },
+                        Transform::from_translation(center.extend(0.0)),
+                    ))
+                    .id();
+                app.world_mut()
+                    .resource_mut::<WorldMap>()
+                    .set_floor(tile, floor);
+            }
+
+            app.world_mut()
+                .resource_mut::<ButtonInput<MouseButton>>()
+                .press(MouseButton::Left);
+            app.update();
+            assert!(matches!(
+                app.world().resource::<TaskContext>().0,
+                TaskMode::FloorPlace(Some(_)) | TaskMode::WallPlace(Some(_))
+            ));
+            app.world_mut()
+                .get_mut::<Window>(window)
+                .unwrap()
+                .set_cursor_position(Some(if floor {
+                    Vec2::new(75.0, 25.0)
+                } else {
+                    Vec2::new(75.0, 75.0)
+                }));
+            app.world_mut()
+                .resource_mut::<ButtonInput<MouseButton>>()
+                .clear();
+            app.update();
+            assert!(app.world().resource::<FloorPlacementPreview>().0.is_some());
+            app.world_mut()
+                .resource_mut::<ButtonInput<MouseButton>>()
+                .release(MouseButton::Left);
+            app.update();
+            assert_eq!(app.world().resource::<TaskContext>().0, mode(None));
+
+            let world = app.world_mut();
+            if floor {
+                let site = world
+                    .query_filtered::<Entity, With<FloorConstructionSite>>()
+                    .single(world)
+                    .unwrap();
+                let blueprint = world.query::<&FloorTileBlueprint>().single(world).unwrap();
+                assert_eq!(blueprint.grid_pos, tile);
+                assert_eq!(blueprint.parent_site, site);
+                assert!(world.resource::<WorldMap>().floor_entity(tile).is_none());
+                assert!(!world.resource::<WorldMap>().has_building(tile));
+            } else {
+                let site = world
+                    .query_filtered::<Entity, With<WallConstructionSite>>()
+                    .single(world)
+                    .unwrap();
+                let blueprint = world.query::<&WallTileBlueprint>().single(world).unwrap();
+                assert_eq!(blueprint.grid_pos, tile);
+                assert_eq!(blueprint.parent_site, site);
+                assert_eq!(
+                    world.resource::<WorldMap>().building_entity(tile),
+                    Some(site)
+                );
+                assert!(world.resource::<WorldMap>().floor_entity(tile).is_some());
+            }
+        }
+    }
+
     #[test]
     fn floor_and_wall_costs_count_only_adopted_tiles() {
         let plan = hw_ui::selection::AreaPlacementPlan {

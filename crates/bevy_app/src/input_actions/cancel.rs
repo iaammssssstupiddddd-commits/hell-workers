@@ -12,12 +12,12 @@ use crate::app_contexts::{
 };
 use crate::entities::damned_soul::Destination;
 use crate::entities::familiar::{ActiveCommand, Familiar};
+use crate::interface::selection::FloorPlacementPreview;
 use crate::interface::selection::building_move::clear_move_states;
 use crate::systems::command::StockpilePolicyRangeEditState;
 use crate::systems::command::zone_placement::ZoneRemovalPreviewState;
 use crate::systems::command::zone_placement::plan::ZonePlacementPreview;
 use crate::systems::command::zone_placement::removal_preview::clear_removal_preview;
-use crate::world::map::WorldMap;
 
 /// All mutable owner state that must be cleared together when an active mode ends.
 #[derive(SystemParam)]
@@ -34,8 +34,8 @@ pub struct ActiveModeCleanupParams<'w, 's> {
     pub(crate) area_edit_session: ResMut<'w, AreaEditSession>,
     zone_removal_preview: ResMut<'w, ZoneRemovalPreviewState>,
     zone_placement_preview: Option<ResMut<'w, ZonePlacementPreview>>,
+    floor_placement_preview: Option<ResMut<'w, FloorPlacementPreview>>,
     stockpile_policy_range: Option<ResMut<'w, StockpilePolicyRangeEditState>>,
-    world_map: Res<'w, WorldMap>,
     q_familiar_state:
         Query<'w, 's, (&'static mut ActiveCommand, &'static mut Destination), With<Familiar>>,
     q_sprites: Query<'w, 's, &'static mut Sprite>,
@@ -111,11 +111,7 @@ impl ActiveModeCleanupParams<'_, '_> {
 
         self.area_edit_session.dream_planting_preview_seed = None;
         if self.zone_removal_preview.is_active() {
-            clear_removal_preview(
-                &self.world_map,
-                &mut self.q_sprites,
-                &mut self.zone_removal_preview,
-            );
+            clear_removal_preview(&mut self.q_sprites, &mut self.zone_removal_preview);
         }
     }
 
@@ -124,16 +120,15 @@ impl ActiveModeCleanupParams<'_, '_> {
         if let Some(preview) = self.zone_placement_preview.as_mut() {
             preview.0 = None;
         }
+        if let Some(preview) = self.floor_placement_preview.as_mut() {
+            preview.0 = None;
+        }
         self.area_edit_session.dream_planting_preview_seed = None;
         if let Some(range_state) = self.stockpile_policy_range.as_mut() {
             range_state.patch = None;
         }
 
-        clear_removal_preview(
-            &self.world_map,
-            &mut self.q_sprites,
-            &mut self.zone_removal_preview,
-        );
+        clear_removal_preview(&mut self.q_sprites, &mut self.zone_removal_preview);
         clear_move_states(
             &mut self.move_context,
             &mut self.move_placement_state,
@@ -186,7 +181,6 @@ mod tests {
             .init_resource::<AreaEditSession>()
             .init_resource::<ZoneRemovalPreviewState>()
             .init_resource::<StockpilePolicyRangeEditState>()
-            .init_resource::<WorldMap>()
             .add_systems(Update, cancel_or_close_input_action_system);
         app.world_mut()
             .resource_mut::<ResolvedInputFrame>()
@@ -274,6 +268,23 @@ mod tests {
             *app.world().resource::<NextState<PlayMode>>(),
             NextState::Pending(PlayMode::Normal)
         ));
+    }
+
+    #[test]
+    fn cancel_active_mode_clears_floor_and_wall_drag_summary() {
+        for mode in [
+            TaskMode::FloorPlace(Some(Vec2::ZERO)),
+            TaskMode::WallPlace(Some(Vec2::ZERO)),
+        ] {
+            let mut app = cleanup_app(InputAction::CancelActiveMode);
+            app.insert_resource(TaskContext(mode))
+                .insert_resource(FloorPlacementPreview(Some("material summary".to_owned())));
+
+            app.update();
+
+            assert_eq!(app.world().resource::<TaskContext>().0, TaskMode::None);
+            assert!(app.world().resource::<FloorPlacementPreview>().0.is_none());
+        }
     }
 
     #[test]

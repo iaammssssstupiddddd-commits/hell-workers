@@ -8,8 +8,7 @@ use crate::plugins::startup::{PerfScenarioConfig, PerfScenarioRandomStreams};
 use crate::systems::logistics::{ResourceItem, initial_resource_spawner};
 use crate::systems::visual::camera_sync::topdown_camera_rotation;
 use crate::world::map::{
-    GeneratedWorldLayoutResource, WorldMapRead, WorldMapWrite,
-    prepare_generated_world_layout_resource, spawn_map, spawn_terrain_chunks,
+    GeneratedWorldLayoutResource, WorldMapRead, WorldMapWrite, spawn_map, spawn_terrain_chunks,
 };
 use crate::world::regrowth::{RegrowthManager, configure_regrowth_from_generated_layout};
 use bevy::camera::visibility::RenderLayers;
@@ -75,20 +74,10 @@ pub(super) fn setup(
     q_window: Query<&Window, With<PrimaryWindow>>,
     quality: Res<QualitySettings>,
     perf_toggles: Res<crate::RenderPerfToggles>,
-    perf_config: Res<PerfScenarioConfig>,
 ) {
     // 4096 は GPU コスト・VRAM 消費が過大なため 2048 に下げる。
     // shadow 品質プリセット化は別タスク（docs/plans/shadow-map-size-2026-04-10.md 参照）。
     commands.insert_resource(DirectionalLightShadowMap { size: 2048 });
-    let generated_layout = prepare_generated_world_layout_resource(&perf_config);
-    info!(
-        "BEVY_STARTUP: Prepared worldgen layout (seed={}, attempt={}, fallback={})",
-        generated_layout.master_seed,
-        generated_layout.layout.generation_attempt,
-        generated_layout.layout.used_fallback
-    );
-    commands.insert_resource(generated_layout);
-
     // --- RtT オフスクリーンテクスチャ生成 ---
     let runtime = rtt_setup::initialize_rtt_runtime(q_window.single().ok(), *quality, &mut images);
     let rtt_target = runtime.scene_render_target();

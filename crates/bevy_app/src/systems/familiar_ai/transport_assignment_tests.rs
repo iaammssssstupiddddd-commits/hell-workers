@@ -485,3 +485,200 @@ fn initial_wheelbarrows_can_be_reassigned_after_transport_interruption() {
         );
     }
 }
+
+#[test]
+fn single_item_blueprint_haul_can_claim_wood_across_the_map_test() {
+    for (target, source) in [
+        ((5, 5), (95, 95)),
+        ((5, 95), (95, 5)),
+        ((95, 5), (5, 95)),
+        ((95, 95), (5, 5)),
+    ] {
+        verify_wood_haul(target, source, WoodAvailability::Distant);
+    }
+    verify_wood_haul((5, 5), (95, 95), WoodAvailability::Nearby);
+    verify_wood_haul((5, 5), (95, 95), WoodAvailability::Unavailable);
+}
+
+enum WoodAvailability {
+    Distant,
+    Nearby,
+    Unavailable,
+}
+
+fn verify_wood_haul(target: (i32, i32), source: (i32, i32), availability: WoodAvailability) {
+    let (mut app, _, _, [mixer_task, blueprint_task]) = transport_fixture();
+    let world = app.world_mut();
+    world.despawn(mixer_task);
+    let blueprint = world
+        .get::<TransportRequest>(blueprint_task)
+        .unwrap()
+        .anchor;
+    let target = WorldMap::grid_to_world(target.0, target.1);
+    let source = WorldMap::grid_to_world(source.0, source.1);
+    for entity in [blueprint, blueprint_task] {
+        world.get_mut::<Transform>(entity).unwrap().translation = target.extend(0.0);
+    }
+    let mut recipe = world.get_mut::<Blueprint>(blueprint).unwrap();
+    recipe.required_materials = [(ResourceType::Wood, 1)].into();
+    world
+        .get_mut::<TransportRequest>(blueprint_task)
+        .unwrap()
+        .resource_type = ResourceType::Wood;
+    world
+        .get_mut::<TransportDemand>(blueprint_task)
+        .unwrap()
+        .desired_slots = 1;
+    let souls: Vec<_> = world
+        .query_filtered::<Entity, With<DamnedSoul>>()
+        .iter(world)
+        .collect();
+    world.despawn(souls[1]);
+    world.get_mut::<Transform>(souls[0]).unwrap().translation = target.extend(0.0);
+    let wheelbarrows: Vec<_> = world
+        .query_filtered::<Entity, With<Wheelbarrow>>()
+        .iter(world)
+        .collect();
+    for entity in wheelbarrows {
+        world.despawn(entity);
+    }
+    let spawn_wood = |world: &mut World, position: Vec2| {
+        let entity = world
+            .spawn((
+                ResourceItem(ResourceType::Wood),
+                Visibility::Visible,
+                Transform::from_translation(position.extend(0.0)),
+            ))
+            .id();
+        world
+            .resource_mut::<ResourceSpatialGrid>()
+            .insert(entity, position);
+        entity
+    };
+    let distant = spawn_wood(world, source);
+    let owner = world.spawn_empty().id();
+    world.entity_mut(distant).insert(BelongsTo(owner));
+    let near = target + Vec2::X * TILE_SIZE * 4.0;
+    let (favored, pre_reserved) = match availability {
+        WoodAvailability::Distant => (Some(distant), None),
+        WoodAvailability::Nearby => (Some(spawn_wood(world, near)), None),
+        WoodAvailability::Unavailable => {
+            let reserved = spawn_wood(world, near);
+            let other_blueprint = world.spawn_empty().id();
+            world.spawn(AssignedTask::HaulToBlueprint(
+                hw_jobs::HaulToBlueprintData {
+                    item: reserved,
+                    blueprint: other_blueprint,
+                    phase: default(),
+                },
+            ));
+            world
+                .entity_mut(distant)
+                .insert(hw_core::relationships::StoredIn(owner));
+            (None, Some(reserved))
+        }
+    };
+
+    app.update();
+
+    let task = app.world().get::<AssignedTask>(souls[0]).unwrap();
+    let Some(favored) = favored else {
+        assert!(matches!(task, AssignedTask::None), "{task:?}");
+        assert_eq!(
+            app.world()
+                .resource::<SharedResourceCache>()
+                .get_source_reservation(pre_reserved.unwrap()),
+            1
+        );
+        return;
+    };
+    assert!(
+        matches!(task, AssignedTask::HaulToBlueprint(data) if data.item == favored && data.blueprint == blueprint),
+        "{task:?}"
+    );
+    app.update();
+    assert_eq!(
+        app.world()
+            .resource::<SharedResourceCache>()
+            .get_source_reservation(favored),
+        1
+    );
+}
+
+#[test]
+fn construction_cart_can_collect_mud_across_the_map() {
+    use hw_jobs::construction::{FloorConstructionSite, FloorTileBlueprint, FloorTileState};
+
+    let (mut app, _, _, [mixer_task, floor_task]) = transport_fixture();
+    let world = app.world_mut();
+    world.despawn(mixer_task);
+    let old_blueprint = world.get::<TransportRequest>(floor_task).unwrap().anchor;
+    world.despawn(old_blueprint);
+    let site_grid = (5, 5);
+    let site_pos = WorldMap::grid_to_world(site_grid.0, site_grid.1);
+    let mud_pos = WorldMap::grid_to_world(95, 95);
+    let area = crate::systems::command::TaskArea::from_points(site_pos, site_pos);
+    let site = world
+        .spawn((
+            FloorConstructionSite::new(area, site_pos, 1),
+            Transform::from_translation(site_pos.extend(0.0)),
+        ))
+        .id();
+    let mut tile = FloorTileBlueprint::new(site, site_grid);
+    tile.state = FloorTileState::WaitingMud;
+    let tile = world.spawn(tile).id();
+    world
+        .resource_mut::<TileSiteIndex>()
+        .floor_tiles_by_site
+        .entry(site)
+        .or_default()
+        .push(tile);
+    let mut request = world.get_mut::<TransportRequest>(floor_task).unwrap();
+    request.kind = TransportRequestKind::DeliverToFloorConstruction;
+    request.anchor = site;
+    world.get_mut::<Transform>(floor_task).unwrap().translation = site_pos.extend(0.0);
+    world
+        .get_mut::<TransportDemand>(floor_task)
+        .unwrap()
+        .desired_slots = 1;
+    let souls: Vec<_> = world
+        .query_filtered::<Entity, With<DamnedSoul>>()
+        .iter(world)
+        .collect();
+    world.despawn(souls[1]);
+    world.get_mut::<Transform>(souls[0]).unwrap().translation = site_pos.extend(0.0);
+    let carts: Vec<_> = world
+        .query_filtered::<Entity, With<Wheelbarrow>>()
+        .iter(world)
+        .collect();
+    world.despawn(carts[1]);
+    world.get_mut::<Transform>(carts[0]).unwrap().translation = mud_pos.extend(0.0);
+    let old_mud: Vec<_> = world
+        .query::<(Entity, &ResourceItem)>()
+        .iter(world)
+        .filter_map(|(entity, item)| (item.0 == ResourceType::StasisMud).then_some(entity))
+        .collect();
+    for entity in old_mud {
+        world.despawn(entity);
+    }
+    let mud = world
+        .spawn((
+            ResourceItem(ResourceType::StasisMud),
+            Visibility::Visible,
+            Transform::from_translation(mud_pos.extend(0.0)),
+        ))
+        .id();
+    world
+        .resource_mut::<ResourceSpatialGrid>()
+        .insert(mud, mud_pos);
+
+    app.update();
+
+    let task = app.world().get::<AssignedTask>(souls[0]).unwrap();
+    assert!(
+        matches!(task, AssignedTask::HaulWithWheelbarrow(data)
+        if data.wheelbarrow == carts[0] && data.items.contains(&mud)
+            && data.destination == hw_core::logistics::WheelbarrowDestination::Stockpile(site)),
+        "{task:?}"
+    );
+}

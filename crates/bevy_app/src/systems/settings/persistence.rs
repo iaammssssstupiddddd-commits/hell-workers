@@ -2,7 +2,14 @@ use bevy::prelude::*;
 use hw_core::GameSettings;
 use hw_core::game_state::TimeSpeed;
 use serde::{Deserialize, Serialize};
+use std::fs;
+use std::io::{self, Write};
 use std::path::{Path, PathBuf};
+
+use crate::systems::save::atomic_file::{
+    AtomicCommitMode, AtomicCommitOutcome, AtomicWriteError, sync_parent_directory,
+    write_file_atomic_timed,
+};
 
 pub const DEFAULT_SETTINGS_STORAGE_ROOT: &str = "settings";
 const SETTINGS_FILE_NAME: &str = "settings.ron";
@@ -144,49 +151,345 @@ impl From<TimeSpeedFile> for TimeSpeed {
     }
 }
 
-pub fn load_settings_from_disk(root: &SettingsStorageRoot) -> GameSettings {
-    let path = root.settings_file();
-    match std::fs::read_to_string(&path) {
-        Ok(contents) => match ron::from_str::<GameSettingsFile>(&contents) {
-            Ok(file) => {
-                info!("Loaded settings from {}", path.display());
-                file.into()
+#[derive(Default)]
+enum SettingsOriginal {
+    #[default]
+    Missing,
+    Readable {
+        bytes: Vec<u8>,
+        valid: bool,
+    },
+    Unreadable,
+}
+
+#[derive(Default)]
+pub(crate) struct SettingsPersistence {
+    original: SettingsOriginal,
+    baseline: Option<String>,
+    pub(super) durability_pending: bool,
+    backup: Option<PathBuf>,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum SettingsSaveOutcome {
+    Unchanged,
+    Saved,
+    DurabilityUncertain,
+}
+
+impl SettingsPersistence {
+    pub(crate) fn load(root: &SettingsStorageRoot) -> (GameSettings, Self) {
+        let path = root.settings_file();
+        let (settings, original) = match fs::read(&path) {
+            Ok(bytes) => {
+                let parsed = ron::de::from_bytes::<GameSettingsFile>(&bytes);
+                if let Err(error) = &parsed {
+                    warn!(
+                        "Failed to parse {}: {error}. Using defaults.",
+                        path.display()
+                    );
+                }
+                let valid = parsed.is_ok();
+                let settings = parsed.map(GameSettings::from).unwrap_or_default();
+                (settings, SettingsOriginal::Readable { bytes, valid })
             }
-            Err(err) => {
-                warn!("Failed to parse {}: {err}. Using defaults.", path.display());
-                GameSettings::default()
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {
+                (GameSettings::default(), SettingsOriginal::Missing)
             }
-        },
-        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
-            info!(
-                "Settings file not found at {}. Using defaults.",
-                path.display()
-            );
-            GameSettings::default()
+            Err(error) => {
+                warn!(
+                    "Failed to read {}: {error}. Using defaults.",
+                    path.display()
+                );
+                (GameSettings::default(), SettingsOriginal::Unreadable)
+            }
+        };
+        let baseline = encode(&settings).ok();
+        (
+            settings,
+            Self {
+                original,
+                baseline,
+                ..Self::default()
+            },
+        )
+    }
+
+    pub(crate) fn save(
+        &mut self,
+        root: &SettingsStorageRoot,
+        settings: &GameSettings,
+    ) -> Result<SettingsSaveOutcome, String> {
+        let contents = encode(settings)?;
+        let path = root.settings_file();
+        if self.baseline.as_ref() == Some(&contents)
+            && !matches!(self.original, SettingsOriginal::Missing)
+        {
+            if self.durability_pending {
+                if let SettingsOriginal::Readable { bytes, .. } = &self.original {
+                    check_original(&path, bytes).map_err(|error| error.to_string())?;
+                }
+                if sync_parent_directory(&path).is_err() {
+                    return Ok(SettingsSaveOutcome::DurabilityUncertain);
+                }
+                self.durability_pending = false;
+                return Ok(SettingsSaveOutcome::Saved);
+            }
+            return Ok(SettingsSaveOutcome::Unchanged);
         }
-        Err(err) => {
-            warn!("Failed to read {}: {err}. Using defaults.", path.display());
-            GameSettings::default()
+
+        if matches!(self.original, SettingsOriginal::Unreadable) {
+            let bytes = fs::read(&path).map_err(|error| error.to_string())?;
+            self.original = SettingsOriginal::Readable {
+                bytes,
+                valid: false,
+            };
         }
+
+        let expected = match &self.original {
+            SettingsOriginal::Readable { bytes, valid } => {
+                check_original(&path, bytes).map_err(|error| error.to_string())?;
+                if !valid
+                    && !self.backup.as_ref().is_some_and(|backup| {
+                        fs::read(backup).is_ok_and(|original| original == *bytes)
+                    })
+                {
+                    self.backup = Some(backup_original(root, bytes)?);
+                }
+                Some(bytes.as_slice())
+            }
+            SettingsOriginal::Missing => None,
+            SettingsOriginal::Unreadable => unreachable!("original must be read before saving"),
+        };
+        let mode = if expected.is_some() {
+            AtomicCommitMode::Replace
+        } else {
+            AtomicCommitMode::NoReplace
+        };
+        let outcome = write_file_atomic_timed(
+            &path,
+            mode,
+            |file| file.write_all(contents.as_bytes()),
+            || expected.map_or(Ok(()), |bytes| check_original(&path, bytes)),
+        )
+        .map_err(|error| error.to_string())?
+        .outcome;
+
+        self.original = SettingsOriginal::Readable {
+            bytes: contents.as_bytes().to_vec(),
+            valid: true,
+        };
+        self.baseline = Some(contents);
+        self.backup = None;
+        self.durability_pending = outcome == AtomicCommitOutcome::CommittedDurabilityUncertain;
+        Ok(if self.durability_pending {
+            SettingsSaveOutcome::DurabilityUncertain
+        } else {
+            SettingsSaveOutcome::Saved
+        })
     }
 }
 
-pub fn save_settings_to_disk(
-    root: &SettingsStorageRoot,
-    settings: &GameSettings,
-) -> Result<(), String> {
-    std::fs::create_dir_all(root.as_path()).map_err(|err| err.to_string())?;
-    let file: GameSettingsFile = settings.clone().into();
-    let contents = ron::ser::to_string_pretty(&file, ron::ser::PrettyConfig::default())
-        .map_err(|err| err.to_string())?;
-    std::fs::write(root.settings_file(), contents).map_err(|err| err.to_string())
+fn encode(settings: &GameSettings) -> Result<String, String> {
+    let file = GameSettingsFile::from(settings.clone());
+    ron::ser::to_string_pretty(&file, ron::ser::PrettyConfig::default())
+        .map_err(|error| error.to_string())
+}
+
+fn check_original(path: &Path, expected: &[u8]) -> io::Result<()> {
+    if fs::read(path)? != expected {
+        return Err(io::Error::other("settings changed on disk before saving"));
+    }
+    Ok(())
+}
+
+fn backup_original(root: &SettingsStorageRoot, bytes: &[u8]) -> Result<PathBuf, String> {
+    for index in 0..128 {
+        let path = root.as_path().join(format!(
+            "settings.ron.backup.{}.{index}",
+            std::process::id()
+        ));
+        match write_file_atomic_timed(
+            &path,
+            AtomicCommitMode::NoReplace,
+            |file| file.write_all(bytes),
+            || Ok(()),
+        ) {
+            Ok(result) if result.outcome == AtomicCommitOutcome::Committed => return Ok(path),
+            Ok(_) => return Err("settings backup durability is uncertain".to_owned()),
+            Err(AtomicWriteError::TargetExists) => continue,
+            Err(error) => return Err(error.to_string()),
+        }
+    }
+    Err("could not reserve a settings backup name".to_owned())
+}
+
+#[cfg(test)]
+pub(crate) fn load_settings_from_disk(root: &SettingsStorageRoot) -> GameSettings {
+    SettingsPersistence::load(root).0
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::systems::save::atomic_file::faults::{Point, on};
     use std::fs;
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn new_root() -> SettingsStorageRoot {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = SettingsStorageRoot::new(std::env::temp_dir().join(format!(
+            "hw-settings-preserve-{}-{nonce}",
+            std::process::id(),
+        )));
+        fs::create_dir_all(root.as_path()).unwrap();
+        root
+    }
+
+    #[test]
+    fn unreadable_settings_are_preserved_until_edited_and_backed_up_test() {
+        for original in [b"(broken:".as_slice(), b"bad RON \xff"] {
+            verify_corrupt_settings_round_trip(original);
+        }
+    }
+
+    fn verify_corrupt_settings_round_trip(original: &[u8]) {
+        let root = new_root();
+        fs::write(root.settings_file(), original).unwrap();
+        let (mut settings, mut persistence) = SettingsPersistence::load(&root);
+        for _ in 0..2 {
+            assert_eq!(
+                persistence.save(&root, &settings).unwrap(),
+                SettingsSaveOutcome::Unchanged
+            );
+            assert_eq!(fs::read(root.settings_file()).unwrap(), original);
+        }
+        let collision = root
+            .as_path()
+            .join(format!("settings.ron.backup.{}.0", std::process::id()));
+        fs::write(&collision, b"previous backup").unwrap();
+        settings.ui_scale = 0.85;
+        assert_eq!(
+            persistence.save(&root, &settings).unwrap(),
+            SettingsSaveOutcome::Saved
+        );
+        let backup = root
+            .as_path()
+            .join(format!("settings.ron.backup.{}.1", std::process::id()));
+        assert_eq!(fs::read(collision).unwrap(), b"previous backup");
+        assert_eq!(fs::read(backup).unwrap(), original);
+        assert_eq!(SettingsPersistence::load(&root).0.ui_scale, 0.85);
+        fs::remove_dir_all(root.as_path()).unwrap();
+    }
+
+    #[test]
+    fn read_backup_write_and_directory_sync_failures_preserve_the_correct_version() {
+        let root = new_root();
+        let path = root.settings_file();
+        let original = b"(invalid original";
+        fs::write(&path, original).unwrap();
+        let held = root.as_path().join("original");
+        fs::rename(&path, &held).unwrap();
+        fs::create_dir(&path).unwrap();
+        let (mut settings, mut persistence) = SettingsPersistence::load(&root);
+        assert!(matches!(persistence.original, SettingsOriginal::Unreadable));
+        settings.ui_scale = 1.20;
+        assert!(persistence.save(&root, &settings).is_err());
+        assert_eq!(fs::read(&held).unwrap(), original);
+        fs::remove_dir(&path).unwrap();
+        fs::rename(held, &path).unwrap();
+
+        let backup = |index| {
+            root.as_path().join(format!(
+                "settings.ron.backup.{}.{index}",
+                std::process::id()
+            ))
+        };
+        let result = on(&backup(0), Point::SyncParent, || {
+            persistence.save(&root, &settings)
+        });
+        assert!(result.is_err());
+        assert_eq!(fs::read(&path).unwrap(), original);
+        assert_eq!(fs::read(backup(0)).unwrap(), original);
+
+        let result = on(&path, Point::Write, || persistence.save(&root, &settings));
+        assert!(result.is_err());
+        assert_eq!(fs::read(&path).unwrap(), original);
+        assert_eq!(fs::read(backup(1)).unwrap(), original);
+
+        let result = on(&path, Point::SyncParent, || {
+            persistence.save(&root, &settings)
+        });
+        assert_eq!(result.unwrap(), SettingsSaveOutcome::DurabilityUncertain);
+        assert!(persistence.durability_pending);
+        assert_eq!(SettingsPersistence::load(&root).0.ui_scale, 1.20);
+        assert_eq!(
+            persistence.save(&root, &settings).unwrap(),
+            SettingsSaveOutcome::Saved
+        );
+        assert!(!persistence.durability_pending);
+        assert!(!backup(2).exists());
+        fs::remove_dir_all(root.as_path()).unwrap();
+    }
+
+    #[test]
+    fn close_and_quit_do_not_rewrite_corrupt_settings() {
+        use crate::systems::settings::feedback::{SettingsSaveFeedback, SettingsSaveState};
+        use crate::systems::settings::{load_settings_system, save_settings_on_app_exit_system};
+        use hw_ui::components::UiInputState;
+        use hw_ui::notifications::{NotificationCenter, UserFacingNotification};
+
+        fn close_settings(
+            root: Res<SettingsStorageRoot>,
+            settings: Res<GameSettings>,
+            mut feedback: SettingsSaveFeedback,
+        ) {
+            feedback.save_current(&root, &settings);
+        }
+
+        for original in [b"(broken:".as_slice(), b"bad RON \xff"] {
+            let root = new_root();
+            let path = root.settings_file();
+            fs::write(&path, original).unwrap();
+            let mut app = App::new();
+            app.insert_resource(root.clone())
+                .init_resource::<Time<Virtual>>()
+                .init_resource::<SettingsSaveState>()
+                .init_resource::<UiInputState>()
+                .init_resource::<NotificationCenter>()
+                .add_message::<AppExit>()
+                .add_message::<UserFacingNotification>();
+            let world = app.world_mut();
+            world.run_system_cached(load_settings_system).unwrap();
+            world.run_system_cached(close_settings).unwrap();
+            world.write_message(AppExit::Success);
+            world
+                .run_system_cached(save_settings_on_app_exit_system)
+                .unwrap();
+            assert_eq!(fs::read(&path).unwrap(), original);
+
+            world.resource_mut::<GameSettings>().ui_scale = 1.20;
+            on(&path, Point::SyncParent, || {
+                world.run_system_cached(close_settings).unwrap()
+            });
+            assert_eq!(SettingsPersistence::load(&root).0.ui_scale, 1.20);
+            let notification = world
+                .resource::<Messages<UserFacingNotification>>()
+                .iter_current_update_messages()
+                .find(|message| message.key.as_str() == "settings-save-durability-uncertain")
+                .expect("uncertain commit must offer a retry");
+            assert!(matches!(
+                notification.action,
+                Some(hw_ui::notifications::NotificationAction::RetrySettingsSave { .. })
+            ));
+            world.run_system_cached(close_settings).unwrap();
+            assert_eq!(fs::read_dir(root.as_path()).unwrap().count(), 2);
+            fs::remove_dir_all(root.as_path()).unwrap();
+        }
+    }
 
     #[test]
     fn notification_duration_round_trips_and_invalid_values_use_default() {
@@ -275,7 +578,9 @@ mod tests {
             ..default()
         };
 
-        save_settings_to_disk(&root, &settings).expect("isolated settings write must succeed");
+        SettingsPersistence::default()
+            .save(&root, &settings)
+            .expect("isolated settings write must succeed");
 
         assert!(root.settings_file().is_file());
         assert!(load_settings_from_disk(&root).autosave_enabled);

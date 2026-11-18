@@ -1,7 +1,7 @@
 //! Platform atomic save commit: temp write, file sync, no-replace / replace, directory sync.
 
 use std::fs::{self, File, OpenOptions};
-use std::io::{self};
+use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant, SystemTime};
@@ -74,11 +74,27 @@ pub(crate) fn write_save_container_atomic_timed(
     body: &str,
     mode: AtomicCommitMode,
 ) -> Result<AtomicSaveResult, AtomicWriteError> {
+    write_file_atomic_timed(
+        target,
+        mode,
+        |file| write_container(header, body, file),
+        || Ok(()),
+    )
+}
+
+pub(crate) fn write_file_atomic_timed(
+    target: &Path,
+    mode: AtomicCommitMode,
+    write: impl FnOnce(&mut File) -> io::Result<()>,
+    recheck: impl FnOnce() -> io::Result<()>,
+) -> Result<AtomicSaveResult, AtomicWriteError> {
     let write_started = Instant::now();
     let (temporary_path, mut file) =
         create_temporary_save_file(target).map_err(AtomicWriteError::Io)?;
     let write_result = (|| -> io::Result<()> {
-        write_container(header, body, &mut file)?;
+        #[cfg(test)]
+        faults::check(target, faults::Point::Write)?;
+        write(&mut file)?;
         file.sync_all()
     })();
     drop(file);
@@ -90,7 +106,10 @@ pub(crate) fn write_save_container_atomic_timed(
     let write_file_sync_ns = elapsed_nanos(write_started.elapsed());
 
     let commit_started = Instant::now();
-    let commit = match commit_temporary_file(&temporary_path, target, mode) {
+    let commit = match recheck()
+        .map_err(AtomicWriteError::Io)
+        .and_then(|()| commit_temporary_file(&temporary_path, target, mode))
+    {
         Ok(outcome) => outcome,
         Err(error) => {
             let _ = fs::remove_file(&temporary_path);
@@ -114,6 +133,46 @@ pub(crate) fn write_save_container_atomic_timed(
             commit_directory_sync_ns: elapsed_nanos(commit_started.elapsed()),
         },
     })
+}
+
+#[cfg(test)]
+pub(crate) mod faults {
+    use std::cell::RefCell;
+    use std::io;
+    use std::path::{Path, PathBuf};
+
+    #[derive(Clone, Copy, PartialEq, Eq)]
+    pub(crate) enum Point {
+        Write,
+        SyncParent,
+    }
+
+    thread_local! {
+        static FAILURE: RefCell<Option<(PathBuf, Point)>> = const { RefCell::new(None) };
+    }
+
+    pub(crate) fn on<T>(path: &Path, point: Point, run: impl FnOnce() -> T) -> T {
+        struct Restore(Option<(PathBuf, Point)>);
+        impl Drop for Restore {
+            fn drop(&mut self) {
+                FAILURE.with(|failure| failure.replace(self.0.take()));
+            }
+        }
+        let _restore = Restore(FAILURE.with(|failure| failure.replace(Some((path.into(), point)))));
+        run()
+    }
+
+    pub(super) fn check(path: &Path, point: Point) -> io::Result<()> {
+        if FAILURE.with_borrow(|failure| {
+            failure
+                .as_ref()
+                .is_some_and(|(target, when)| target == path && *when == point)
+        }) {
+            Err(io::Error::other("injected atomic file failure"))
+        } else {
+            Ok(())
+        }
+    }
 }
 
 fn elapsed_nanos(duration: Duration) -> u64 {
@@ -169,7 +228,9 @@ fn is_unsupported_link(error: &io::Error) -> bool {
     ) || error.raw_os_error() == Some(95) // EOPNOTSUPP / EPERM variants
 }
 
-fn sync_parent_directory(target: &Path) -> io::Result<()> {
+pub(crate) fn sync_parent_directory(target: &Path) -> io::Result<()> {
+    #[cfg(test)]
+    faults::check(target, faults::Point::SyncParent)?;
     let parent = target
         .parent()
         .filter(|parent| !parent.as_os_str().is_empty())

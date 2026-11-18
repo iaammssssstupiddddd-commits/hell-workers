@@ -112,6 +112,8 @@ feature/owner、およびstable surface ID、Published target、Excluded reason�
 完全一致で承認します。空白だけの変更やtest内の期待値変更では承認できません。固定copyも
 `build_help_panel_chrome()`でrootから注入するため、`hw_ui`側に未承認のプレイヤー文言を置きません。
 
+通常起動の保存選択は `descriptive::startup-save-choice` を `save-load` へ公開し、新規開始とv1再開、差替えや本文異常時の再選択を説明します。床・壁ドラッグの取消と保管範囲解除の対象は、既存の建築・ゾーンのHelp本文で扱います。
+
 ## 機能追加・変更時の更新手順
 
 player-facing featureを追加する場合は、同じ変更バッチで次を行います。
@@ -142,6 +144,8 @@ exact testで一致を再検証します。生成後は
 ある証拠として流用してはいけません。
 
 ## Help impact gate
+
+床・壁の泥搬送に対角の資材が入る修正は `Update required`。使い魔の通常の割当経路で、近傍に候補がないときに猫車が遠くの泥を集荷することを確認し、既存の `architect-building` に説明を追加した。操作入口、入力割当、stable ID、coverage分類は既存の定義を使う。
 
 2026-11-15のTank付属置き場の背景修正は`Update required`。完成後の黄色計画背景を消し、
 選択・保管範囲・搬送と撤去previewの赤・橙を維持する旨を既存`architect-building`へ追加する。

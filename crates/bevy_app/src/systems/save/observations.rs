@@ -302,6 +302,7 @@ mod tests {
         world.insert_resource(DispatchedSaveLoadRequest(Some(SaveLoadRequest::Load {
             origin: LoadRequestOrigin::NormalCatalog { dialog_session: 4 },
             slot: SaveSlotId::Manual1,
+            expected_revision: None,
         })));
         world
     }
@@ -600,6 +601,7 @@ mod tests {
                         Some(SaveLoadRequest::Load {
                             origin: LoadRequestOrigin::RecoveryCatalog { dialog_session: 4 },
                             slot: SaveSlotId::Manual1,
+                            expected_revision: None,
                         })
                 }
             }

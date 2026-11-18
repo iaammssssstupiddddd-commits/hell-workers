@@ -72,7 +72,7 @@ pub use tree_planting::DreamTreePlantingPlan;
 pub use world_masks::{BitGrid, WorldMasks};
 pub use world_replace::reset_for_world_replace;
 pub use zone_ops::{
-    area_tile_size, expand_yard_area, identify_removal_targets, rectangles_overlap,
-    rectangles_overlap_site,
+    StockpileRemovalCell, StockpileRemovalTargets, area_tile_size, expand_yard_area,
+    identify_removal_targets, rectangles_overlap, rectangles_overlap_site,
 };
 pub use zones::{PairedSite, PairedYard, Site, Yard};

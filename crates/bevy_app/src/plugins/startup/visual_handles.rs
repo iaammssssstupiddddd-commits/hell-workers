@@ -108,8 +108,8 @@ pub struct InitVisualHandlesParams<'w, 's> {
     terrain_surface_materials: ResMut<'w, Assets<TerrainSurfaceMaterial>>,
     terrain_surface_materials_lod1_lite: ResMut<'w, Assets<TerrainSurfaceMaterialLod1Lite>>,
     terrain_surface_materials_lod2: ResMut<'w, Assets<TerrainSurfaceMaterialLod2>>,
-    terrain_feature_map: Res<'w, TerrainFeatureMap>,
-    terrain_id_map: Res<'w, TerrainIdMap>,
+    terrain_feature_map: Option<Res<'w, TerrainFeatureMap>>,
+    terrain_id_map: Option<Res<'w, TerrainIdMap>>,
     indoor_light_texture: Res<'w, IndoorLightTexture>,
     asset_server: Res<'w, AssetServer>,
 }
@@ -120,8 +120,11 @@ pub fn init_visual_handles(mut params: InitVisualHandlesParams) {
     let meshes = &mut params.meshes;
     let materials = &mut params.materials;
     let structural_materials = &mut params.structural_materials;
-    let feature_map_handle = params.terrain_feature_map.image.clone();
-    let terrain_id_map_handle = params.terrain_id_map.image.clone();
+    let feature_map_handle = params
+        .terrain_feature_map
+        .as_ref()
+        .map(|map| map.image.clone());
+    let terrain_id_map_handle = params.terrain_id_map.as_ref().map(|map| map.image.clone());
     commands.insert_resource(TerrainSurfaceLutImageHandle(
         game_assets.terrain_feature_lut.clone(),
     ));
@@ -361,8 +364,8 @@ pub fn init_visual_handles(mut params: InitVisualHandlesParams) {
     // --- 地形 3D ハンドル ---
     let terrain_ext = TerrainSurfaceMaterialExt {
         uniforms: TerrainSurfaceUniform::default(),
-        terrain_id_map: Some(terrain_id_map_handle.clone()),
-        terrain_feature_map: Some(feature_map_handle.clone()),
+        terrain_id_map: terrain_id_map_handle.clone(),
+        terrain_feature_map: feature_map_handle.clone(),
         grass_albedo: Some(game_assets.grass.clone()),
         dirt_albedo: Some(game_assets.dirt.clone()),
         sand_albedo: Some(game_assets.sand.clone()),
@@ -390,8 +393,8 @@ pub fn init_visual_handles(mut params: InitVisualHandlesParams) {
             .add(make_terrain_surface_material_lod1_lite(
                 TerrainSurfaceMaterialExtLod1Lite {
                     uniforms: TerrainSurfaceUniform::default(),
-                    terrain_id_map: Some(terrain_id_map_handle.clone()),
-                    terrain_feature_map: Some(feature_map_handle.clone()),
+                    terrain_id_map: terrain_id_map_handle.clone(),
+                    terrain_feature_map: feature_map_handle.clone(),
                     grass_albedo: Some(game_assets.grass.clone()),
                     dirt_albedo: Some(game_assets.dirt.clone()),
                     sand_albedo: Some(game_assets.sand.clone()),
@@ -411,8 +414,8 @@ pub fn init_visual_handles(mut params: InitVisualHandlesParams) {
             .add(make_terrain_surface_material_lod2(
                 TerrainSurfaceMaterialExtLod2 {
                     uniforms: TerrainSurfaceUniform::default(),
-                    terrain_id_map: Some(terrain_id_map_handle),
-                    terrain_feature_map: Some(feature_map_handle),
+                    terrain_id_map: terrain_id_map_handle,
+                    terrain_feature_map: feature_map_handle,
                     grass_albedo: Some(game_assets.grass.clone()),
                     dirt_albedo: Some(game_assets.dirt.clone()),
                     sand_albedo: Some(game_assets.sand.clone()),
@@ -430,4 +433,33 @@ pub fn init_visual_handles(mut params: InitVisualHandlesParams) {
         lod1_lite: terrain_surface_lod1_lite,
         lod2: terrain_surface_lod2,
     });
+}
+
+/// Terrain materials are shared across startup choices. Bind the adopted world's maps once.
+pub(super) fn bind_terrain_maps(
+    maps: (Res<TerrainIdMap>, Res<TerrainFeatureMap>),
+    handles: Res<Terrain3dHandles>,
+    mut lod1: ResMut<Assets<TerrainSurfaceMaterial>>,
+    mut lite: ResMut<Assets<TerrainSurfaceMaterialLod1Lite>>,
+    mut lod2: ResMut<Assets<TerrainSurfaceMaterialLod2>>,
+) {
+    let (id, feature) = maps;
+    let primary = &mut lod1
+        .get_mut(&handles.lod1)
+        .expect("startup terrain material")
+        .extension;
+    primary.terrain_id_map = Some(id.image.clone());
+    primary.terrain_feature_map = Some(feature.image.clone());
+    let lite = &mut lite
+        .get_mut(&handles.lod1_lite)
+        .expect("startup terrain lite material")
+        .extension;
+    lite.terrain_id_map = Some(id.image.clone());
+    lite.terrain_feature_map = Some(feature.image.clone());
+    let distant = &mut lod2
+        .get_mut(&handles.lod2)
+        .expect("startup terrain LOD2 material")
+        .extension;
+    distant.terrain_id_map = Some(id.image.clone());
+    distant.terrain_feature_map = Some(feature.image.clone());
 }

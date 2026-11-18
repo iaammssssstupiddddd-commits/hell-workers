@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use hw_core::constants::{MAP_HEIGHT, MAP_WIDTH, TILE_SIZE};
 use hw_core::logistics::ResourceType;
 use hw_logistics::stockpile_owner_accepts_item;
 use hw_spatial::{ResourceSpatialGrid, SpatialGridOps};
@@ -102,6 +103,10 @@ fn is_valid_ground_source<'w, 's>(
     Some(transform.translation.truncate())
 }
 
+fn whole_map_radius() -> f32 {
+    TILE_SIZE * (MAP_WIDTH as f32).hypot(MAP_HEIGHT as f32)
+}
+
 fn nearest_ground_source_with_grid<'w, 's>(
     resource_type: ResourceType,
     target_pos: Vec2,
@@ -110,13 +115,12 @@ fn nearest_ground_source_with_grid<'w, 's>(
     resource_grid: &ResourceSpatialGrid,
     owner_filter: Option<Option<Entity>>,
 ) -> Option<(Entity, Vec2)> {
-    let max_map_tiles = hw_core::constants::MAP_WIDTH.max(hw_core::constants::MAP_HEIGHT) as f32;
     let search_radii = [
-        hw_core::constants::TILE_SIZE * 10.0,
-        hw_core::constants::TILE_SIZE * 20.0,
-        hw_core::constants::TILE_SIZE * 40.0,
-        hw_core::constants::TILE_SIZE * 80.0,
-        hw_core::constants::TILE_SIZE * max_map_tiles,
+        TILE_SIZE * 10.0,
+        TILE_SIZE * 20.0,
+        TILE_SIZE * 40.0,
+        TILE_SIZE * 80.0,
+        whole_map_radius(),
     ];
 
     for radius in search_radii {
@@ -301,7 +305,7 @@ pub fn collect_nearby_items_for_wheelbarrow(
         queries,
         shadow,
         resource_grid,
-        Some(hw_core::constants::TILE_SIZE * 10.0),
+        Some(TILE_SIZE * 10.0),
     )
 }
 
@@ -334,10 +338,7 @@ fn collect_items_for_wheelbarrow_in_radius(
     search_radius: Option<f32>,
 ) -> Vec<(Entity, Vec2)> {
     mark_source_selector_call();
-    let radius = search_radius.unwrap_or(
-        hw_core::constants::TILE_SIZE
-            * hw_core::constants::MAP_WIDTH.max(hw_core::constants::MAP_HEIGHT) as f32,
-    );
+    let radius = search_radius.unwrap_or_else(whole_map_radius);
     let search_radius_sq = radius * radius;
     let mut nearby_entities = Vec::new();
     resource_grid.get_nearby_in_radius_into(center_pos, radius, &mut nearby_entities);

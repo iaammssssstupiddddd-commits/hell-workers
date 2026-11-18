@@ -96,6 +96,7 @@ pub(crate) struct IdleDecisionContext<'w, 's> {
     clock: Res<'w, SlowSimulationClock>,
     request_writer: MessageWriter<'w, IdleBehaviorRequest>,
     world_map: Res<'w, WorldMap>,
+    connectivity: ResMut<'w, hw_world::WalkabilityConnectivityCache>,
     local: IdleLocalState<'s>,
     gathering: IdleGatheringQueries<'w, 's>,
     souls: IdleDecisionSoulQuery<'w, 's>,
@@ -118,6 +119,7 @@ pub(crate) fn idle_behavior_decision_system(context: IdleDecisionContext) {
         clock,
         mut request_writer,
         world_map,
+        mut connectivity,
         mut local,
         gathering: gq,
         souls: mut query,
@@ -179,6 +181,11 @@ pub(crate) fn idle_behavior_decision_system(context: IdleDecisionContext) {
             continue;
         }
 
+        // The rest update system owns the occupied slot and its timer.
+        if resting_in.is_some() {
+            continue;
+        }
+
         #[cfg(feature = "profiling")]
         if let Some(metrics) = metrics.as_mut() {
             metrics.idle_decisions = metrics.idle_decisions.saturating_add(1);
@@ -216,7 +223,7 @@ pub(crate) fn idle_behavior_decision_system(context: IdleDecisionContext) {
             .map(|cooldown| cooldown.remaining_secs > f32::EPSILON)
             .unwrap_or(false);
 
-        if rest_cooldown_active && resting_in.is_none() {
+        if rest_cooldown_active {
             if reserved_rest_area.is_some() {
                 request_writer.write(IdleBehaviorRequest {
                     entity,
@@ -237,137 +244,84 @@ pub(crate) fn idle_behavior_decision_system(context: IdleDecisionContext) {
 
         if matches!(
             idle.behavior,
-            IdleBehavior::Resting | IdleBehavior::GoingToRest
-        ) && resting_in.is_none()
-            && !rest_cooldown_active
-        {
-            // 予約が無い GoingToRest は不整合。停止しやすいため通常アイドルへ戻す。
-            if reserved_rest_area.is_none() {
-                idle.behavior = IdleBehavior::Wandering;
-                path.waypoints.clear();
-                path.current_index = 0;
-                dest.0 = current_pos;
-            } else {
-                let rest_area_target = resolve_rest_area_target(
-                    reserved_rest_area,
-                    dest.0,
-                    current_pos,
-                    &gq.q_rest_areas,
-                    &local.pending_rest_reservations,
-                );
-
-                if let Some((rest_area_entity, rest_area_pos)) = rest_area_target {
-                    let just_reserved = if reserved_rest_area != Some(rest_area_entity) {
-                        request_writer.write(IdleBehaviorRequest {
-                            entity,
-                            operation: IdleBehaviorOperation::ReserveRestArea { rest_area_entity },
-                        });
-                        *local
-                            .pending_rest_reservations
-                            .entry(rest_area_entity)
-                            .or_insert(0) += 1;
-                        true
-                    } else {
-                        false
-                    };
-
-                    if rest_decision::process_resting_or_going_to_rest(
-                        rest_decision::RestDecisionCtx {
-                            entity,
-                            rest_area_target: Some((rest_area_entity, rest_area_pos)),
-                            participating_in,
-                            current_pos,
-                            just_reserved,
-                        },
-                        rest_decision::RestMoveState {
-                            idle: &mut idle,
-                            dest: &mut dest,
-                            path: &mut path,
-                        },
-                        world_map.as_ref(),
-                        &mut request_writer,
-                    ) {
-                        continue;
-                    }
-                } else {
-                    if reserved_rest_area.is_some() {
-                        request_writer.write(IdleBehaviorRequest {
-                            entity,
-                            operation: IdleBehaviorOperation::ReleaseRestArea,
-                        });
-                    }
-                    idle.behavior = IdleBehavior::Wandering;
-                }
-            }
-        }
-
-        if matches!(
-            idle.behavior,
             IdleBehavior::Escaping | IdleBehavior::Drifting
         ) {
             continue;
         }
 
+        let continuing = reserved_rest_area.is_some()
+            && matches!(
+                idle.behavior,
+                IdleBehavior::Resting | IdleBehavior::GoingToRest
+            );
         let wants_rest_area = soul.dream > 0.0
-            && !rest_cooldown_active
             && (soul.laziness > LAZINESS_THRESHOLD_MID
                 || soul.fatigue > FATIGUE_IDLE_THRESHOLD * 0.5
                 || soul.stress > ESCAPE_STRESS_THRESHOLD
                 || idle.total_idle_time > IDLE_TIME_TO_GATHERING * 0.3);
 
-        if wants_rest_area {
-            let rest_area_target = resolve_rest_area_target(
+        let rest_area_target = if !rest_cooldown_active && (continuing || wants_rest_area) {
+            resolve_rest_area_target(
                 reserved_rest_area,
-                current_pos,
+                if continuing { dest.0 } else { current_pos },
                 current_pos,
                 &gq.q_rest_areas,
                 &local.pending_rest_reservations,
-            );
-
-            if let Some((rest_area_entity, rest_area_pos)) = rest_area_target {
-                let just_reserved = if reserved_rest_area != Some(rest_area_entity) {
+                world_map.as_ref(),
+                &mut connectivity,
+            )
+        } else {
+            None
+        };
+        if let Some((rest_area_entity, entry)) = rest_area_target {
+            let just_reserved = reserved_rest_area != Some(rest_area_entity);
+            if just_reserved {
+                if reserved_rest_area.is_some() {
                     request_writer.write(IdleBehaviorRequest {
                         entity,
-                        operation: IdleBehaviorOperation::ReserveRestArea { rest_area_entity },
+                        operation: IdleBehaviorOperation::ReleaseRestArea,
                     });
-                    *local
-                        .pending_rest_reservations
-                        .entry(rest_area_entity)
-                        .or_insert(0) += 1;
-                    true
-                } else {
-                    false
-                };
-
-                if rest_decision::process_wants_rest_area(
-                    rest_decision::RestDecisionCtx {
-                        entity,
-                        rest_area_target: Some((rest_area_entity, rest_area_pos)),
-                        participating_in,
-                        current_pos,
-                        just_reserved,
-                    },
-                    rest_decision::RestMoveState {
-                        idle: &mut idle,
-                        dest: &mut dest,
-                        path: &mut path,
-                    },
-                    world_map.as_ref(),
-                    &mut request_writer,
-                ) {
-                    continue;
                 }
-            } else if reserved_rest_area.is_some() {
                 request_writer.write(IdleBehaviorRequest {
                     entity,
-                    operation: IdleBehaviorOperation::ReleaseRestArea,
+                    operation: IdleBehaviorOperation::ReserveRestArea { rest_area_entity },
                 });
+                *local
+                    .pending_rest_reservations
+                    .entry(rest_area_entity)
+                    .or_insert(0) += 1;
             }
-        } else if reserved_rest_area.is_some() {
+            rest_decision::process_rest_target(
+                rest_decision::RestDecisionCtx {
+                    entity,
+                    rest_area_target: (rest_area_entity, entry),
+                    participating_in,
+                    current_pos,
+                    just_reserved,
+                },
+                rest_decision::RestMoveState {
+                    idle: &mut idle,
+                    dest: &mut dest,
+                    path: &mut path,
+                },
+                &mut request_writer,
+            );
+            continue;
+        }
+        if reserved_rest_area.is_some() && !rest_cooldown_active {
             request_writer.write(IdleBehaviorRequest {
                 entity,
                 operation: IdleBehaviorOperation::ReleaseRestArea,
             });
+        }
+        if matches!(
+            idle.behavior,
+            IdleBehavior::Resting | IdleBehavior::GoingToRest
+        ) {
+            idle.behavior = IdleBehavior::Wandering;
+            path.waypoints.clear();
+            path.current_index = 0;
+            dest.0 = current_pos;
         }
 
         idle.total_idle_time += dt;

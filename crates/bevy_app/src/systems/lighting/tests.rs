@@ -808,6 +808,81 @@ fn manual_door_request_is_consumed_while_virtual_time_is_paused() {
 }
 
 #[test]
+fn door_transitions_publish_matching_light_and_passability() {
+    let mut app = lighting_app();
+    let lamp_grid = (10, 10);
+    let door_grid = (11, 10);
+    let target = (12, 10);
+    publish_indoor_tile(&mut app, target);
+    app.world_mut().spawn((
+        Building {
+            kind: BuildingType::OutdoorLamp,
+            is_provisional: false,
+        },
+        Transform::from_translation(WorldMap::grid_to_world(lamp_grid.0, lamp_grid.1).extend(0.0)),
+        RadialLightEmitter::outdoor_lamp(lamp_grid),
+        PowerSupplyState::Supplied,
+    ));
+    let door = app
+        .world_mut()
+        .spawn((
+            Building {
+                kind: BuildingType::Door,
+                is_provisional: false,
+            },
+            Door {
+                state: DoorState::Open,
+            },
+            Transform::from_translation(
+                WorldMap::grid_to_world(door_grid.0, door_grid.1).extend(0.0),
+            ),
+        ))
+        .id();
+    app.world_mut()
+        .resource_mut::<WorldMap>()
+        .register_door(door_grid, door, DoorState::Open);
+
+    let assert_state = |app: &App, state: DoorState, walkable, lit| {
+        let world = app.world();
+        assert_eq!(world.get::<Door>(door).unwrap().state, state);
+        assert_eq!(
+            world
+                .resource::<WorldMap>()
+                .is_walkable(door_grid.0, door_grid.1),
+            walkable
+        );
+        let runtime = world.resource::<IndoorLightRuntime>();
+        let snapshot = runtime
+            .snapshot()
+            .expect("lighting field must be available");
+        let luminance = snapshot
+            .sample_luminance(LightGridPos::new(target.0, target.1))
+            .unwrap();
+        assert_eq!(luminance > 0, lit, "{state:?}");
+    };
+    app.update();
+    assert_state(&app, DoorState::Open, true, true);
+
+    for state in [DoorState::Locked, DoorState::Closed] {
+        app.world_mut()
+            .write_message(DoorLockToggleRequest { owner: door });
+        app.update();
+        // The manual mutation runs in PostUpdate; the next Update publishes the field.
+        app.update();
+        assert_state(&app, state, state != DoorState::Locked, false);
+    }
+
+    app.world_mut().get_mut::<Door>(door).unwrap().state = DoorState::Open;
+    app.world_mut().resource_mut::<WorldMap>().set_door_state(
+        door_grid.0,
+        door_grid.1,
+        DoorState::Open,
+    );
+    app.update();
+    assert_state(&app, DoorState::Open, true, true);
+}
+
+#[test]
 fn invalid_manual_door_requests_are_consumed_once_with_reason_metrics() {
     let mut app = lighting_app();
     let invalid = app.world_mut().spawn_empty().id();

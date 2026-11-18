@@ -30,6 +30,10 @@ Hell-Workers の物流は、`TransportRequest` を中心にした自動発行 + 
   指す場合だけその item の予約を所有する `CommittedInbound` として扱う。通常セルでは owner 互換性も再確認し、
   policy を持たない特殊 storage は既存専用規則を維持する。
 
+#### 保管範囲の解除
+
+通常のYard所属セルだけを対象にする。同じYard内で最初からつながっていた範囲ごとに、ドラッグの内側と、分断後の最大片から外れたセルを表示する。解放時に矩形・セル・所有者を再照合し、表示と一致した場合にその集合を解除する。Tankの付属セルと、離れた保管場所は維持する。
+
 #### Policy editing
 
 - `StockpilePolicy` を持つ通常セルは、格納済み `ResourceItem` と同じ座標でもセル側を優先して選択・検査できる。
@@ -552,7 +556,7 @@ WheelbarrowLease {
 - **付与**: 仲裁システム（Arbitrate フェーズ）が `WheelbarrowLease` を insert。
 - **消費**: `assign_haul` は13種の`TransportRequestKind`をprivateなexhaustive dispatchへ一度だけ通し、対応routeだけが既存handlerへ進む。`BatchWheelbarrow`と専用外側routeを持つMixer/Water系は従来どおりこの入口で拒否する。lease を使うrouteは`HaulWithWheelbarrow`タスクを発行し、割り当て後は request の state が Pending でなくなるため、次フレームの仲裁で自動的に対象外。
 
-Floor / WallのStasisMud搬入は共通のpure selectorを使う。需要と猫車容量の小さい方を上限にし、nearby収集が空の場合だけunbounded fallbackへ進み、候補順・重心・猫車選択と`Stockpile(site)` destinationを共通化する。FloorのBone fallbackとWallのWood選択は各routeが所有する。
+床・壁のStasisMud搬入では、まず施工場所から半径10タイルで候補を集める。候補が空の場合は、マップの対角長まで検索して角同士の搬送にも対応する。需要と猫車容量の小さい方を上限にし、候補順・重心・猫車選択と`Stockpile(site)`の搬入先を共通化する。床のBoneのフォールバックと壁のWoodの選択は、各経路が受け持つ。
 
 解体時のMudMixer volatile inventory回収は`hw_logistics::deconstruction::volatile_recovery`がsand優先・mud item順・候補容量のpure配賦を返す。root transactionはlive snapshotを組み立て、配賦不能ならworldを変更せず拒否し、成功時だけ再検証済みplanを適用する。
 - **失効/無効化**: 仲裁システムが毎フレーム `lease_until < now`、手押し車消失、有効 item 数不足をチェックして remove。

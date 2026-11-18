@@ -4,7 +4,8 @@ use bevy::prelude::*;
 use hw_core::SaveSlotId;
 
 use super::catalog::{
-    AutosaveGenerationLimit, SaveCatalog, SaveExpectedTarget, SaveStorageRoot, refresh_save_catalog,
+    AutosaveGenerationLimit, SaveCatalog, SaveExpectedTarget, SaveFileRevision, SaveStorageRoot,
+    refresh_save_catalog,
 };
 use super::saving::expected_target_from_revision;
 use super::state::{
@@ -37,6 +38,7 @@ pub struct SaveCatalogUi {
     pub mode: SaveCatalogMode,
     pub selected: Option<SaveSlotId>,
     pub session: u64,
+    pub load_revision: Option<SaveFileRevision>,
 }
 
 impl SaveCatalogUi {
@@ -68,6 +70,7 @@ pub(crate) fn open_save_catalog(
     ui.session = session.bump();
     ui.mode = SaveCatalogMode::SaveCatalog;
     ui.selected = None;
+    ui.load_revision = None;
     refresh_save_catalog(catalog, root, worldgen_seed, generations);
 }
 
@@ -87,6 +90,7 @@ pub(crate) fn open_load_catalog(
         SaveCatalogMode::LoadCatalog
     };
     ui.selected = None;
+    ui.load_revision = None;
     refresh_save_catalog(catalog, root, worldgen_seed, generations);
 }
 
@@ -139,7 +143,12 @@ pub(crate) fn begin_overwrite_confirm(
     true
 }
 
-pub(crate) fn begin_load_confirm(ui: &mut SaveCatalogUi, slot: SaveSlotId, session: u64) -> bool {
+pub(crate) fn begin_load_confirm(
+    ui: &mut SaveCatalogUi,
+    slot: SaveSlotId,
+    session: u64,
+    revision: SaveFileRevision,
+) -> bool {
     if !ui.owns_session(session) {
         return false;
     }
@@ -152,6 +161,7 @@ pub(crate) fn begin_load_confirm(ui: &mut SaveCatalogUi, slot: SaveSlotId, sessi
     let recovery = matches!(ui.mode, SaveCatalogMode::RecoveryLoadCatalog);
     ui.selected = Some(slot);
     ui.mode = SaveCatalogMode::LoadConfirm { slot, recovery };
+    ui.load_revision = Some(revision);
     true
 }
 
@@ -167,6 +177,7 @@ pub(crate) fn cancel_confirm(ui: &mut SaveCatalogUi, session: u64) -> bool {
         } => SaveCatalogMode::LoadCatalog,
         _ => return false,
     };
+    ui.load_revision = None;
     true
 }
 
@@ -265,14 +276,21 @@ pub(crate) fn request_catalog_load(
         },
     };
 
-    state.try_set(SaveLoadRequest::Load { origin, slot })
+    let Some(revision) = ui.load_revision.clone() else {
+        return false;
+    };
+    state.try_set(SaveLoadRequest::Load {
+        origin,
+        slot,
+        expected_revision: Some(revision),
+    })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::systems::save::catalog::{
-        SaveCatalogEntry, SaveContentStatus, SaveFileRevision, SaveSlotCapabilities,
+        SaveCatalogEntry, SaveContentStatus, SaveSlotCapabilities,
     };
     use hw_core::SaveSlotRole;
 
@@ -324,6 +342,7 @@ mod tests {
             mode: SaveCatalogMode::SaveCatalog,
             selected: None,
             session: 7,
+            load_revision: None,
         };
         let mut state = SaveLoadState::Idle;
         assert!(request_manual_save_for_slot(
@@ -349,8 +368,14 @@ mod tests {
             mode: SaveCatalogMode::LoadCatalog,
             selected: None,
             session: 7,
+            load_revision: None,
         };
-        assert!(begin_load_confirm(&mut normal, SaveSlotId::Manual1, 7));
+        assert!(begin_load_confirm(
+            &mut normal,
+            SaveSlotId::Manual1,
+            7,
+            loadable_manual_entry(SaveSlotId::Manual1).revision
+        ));
         assert!(matches!(
             normal.mode,
             SaveCatalogMode::LoadConfirm {
@@ -365,8 +390,14 @@ mod tests {
             mode: SaveCatalogMode::RecoveryLoadCatalog,
             selected: None,
             session: 8,
+            load_revision: None,
         };
-        assert!(begin_load_confirm(&mut recovery, SaveSlotId::Manual1, 8));
+        assert!(begin_load_confirm(
+            &mut recovery,
+            SaveSlotId::Manual1,
+            8,
+            loadable_manual_entry(SaveSlotId::Manual1).revision
+        ));
         assert!(matches!(
             recovery.mode,
             SaveCatalogMode::LoadConfirm { recovery: true, .. }
@@ -387,6 +418,7 @@ mod tests {
             },
             selected: Some(SaveSlotId::Manual1),
             session: 3,
+            load_revision: Some(loadable_manual_entry(SaveSlotId::Manual1).revision),
         };
         assert!(!request_catalog_load(
             &mut state,

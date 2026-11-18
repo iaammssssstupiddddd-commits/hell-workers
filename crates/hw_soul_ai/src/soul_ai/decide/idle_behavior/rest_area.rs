@@ -8,7 +8,7 @@ use hw_core::constants::TILE_SIZE;
 use hw_core::relationships::{RestAreaOccupants, RestAreaReservations};
 use hw_jobs::{DeconstructionPending, RestArea};
 use hw_world::WorldMap;
-use hw_world::coords::{grid_to_world, world_to_grid};
+use hw_world::coords::world_to_grid;
 
 pub const REST_AREA_ARRIVAL_RADIUS: f32 = TILE_SIZE;
 
@@ -42,11 +42,13 @@ pub type RestAreasQuery<'w, 's> = Query<
     ),
 >;
 
-pub fn find_nearest_available_rest_area(
+pub(crate) fn find_nearest_available_rest_area<T>(
     pos: Vec2,
     q_rest_areas: &RestAreasQuery,
     pending_reservations: &HashMap<Entity, usize>,
-) -> Option<(Entity, Vec2)> {
+    resolve_entry: impl FnMut(Vec2) -> Option<T>,
+) -> Option<(Entity, T)> {
+    let mut resolve_entry = resolve_entry;
     q_rest_areas
         .iter()
         .filter(
@@ -61,18 +63,17 @@ pub fn find_nearest_available_rest_area(
                     )
             },
         )
-        .min_by(|a, b| {
-            a.1.translation
-                .truncate()
-                .distance_squared(pos)
-                .partial_cmp(&b.1.translation.truncate().distance_squared(pos))
-                .unwrap_or(std::cmp::Ordering::Equal)
+        .filter_map(|(entity, transform, ..)| {
+            let center = transform.translation.truncate();
+            resolve_entry(center).map(|entry| (entity, entry, center.distance_squared(pos)))
         })
-        .map(|(entity, transform, _, _, _, _)| (entity, transform.translation.truncate()))
+        .min_by(|a, b| a.2.total_cmp(&b.2))
+        .map(|(entity, entry, _)| (entity, entry))
 }
 
+/// rest area の中心から占有グリッド 4 マスを返す。
 fn rest_area_occupied_grids_from_center(center: Vec2) -> [(i32, i32); 4] {
-    let top_right = world_to_grid(center);
+    let top_right = WorldMap::world_to_grid(center);
     [
         (top_right.0 - 1, top_right.1 - 1),
         (top_right.0, top_right.1 - 1),
@@ -81,15 +82,13 @@ fn rest_area_occupied_grids_from_center(center: Vec2) -> [(i32, i32); 4] {
     ]
 }
 
-/// 休憩所に最も近い歩行可能な隣接タイルを返す
-pub fn nearest_walkable_adjacent_to_rest_area(
-    soul_pos: Vec2,
-    rest_area_center: Vec2,
+/// rest area 周辺の歩行可能候補グリッドを現在位置からの距離順で返す。
+pub(crate) fn rest_area_adjacent_candidates(
+    center: Vec2,
+    current_pos: Vec2,
     world_map: &WorldMap,
-) -> Vec2 {
-    let occupied = rest_area_occupied_grids_from_center(rest_area_center);
-    let mut best_pos = rest_area_center;
-    let mut best_dist = f32::MAX;
+) -> Vec<(i32, i32)> {
+    let occupied = rest_area_occupied_grids_from_center(center);
     let directions: [(i32, i32); 8] = [
         (0, 1),
         (0, -1),
@@ -100,21 +99,25 @@ pub fn nearest_walkable_adjacent_to_rest_area(
         (-1, 1),
         (-1, -1),
     ];
-    for &(gx, gy) in &occupied {
-        for &(dx, dy) in &directions {
-            let (nx, ny) = (gx + dx, gy + dy);
-            if occupied.contains(&(nx, ny)) || !world_map.is_walkable(nx, ny) {
-                continue;
-            }
-            let pos = grid_to_world(nx, ny);
-            let dist = soul_pos.distance_squared(pos);
-            if dist < best_dist {
-                best_pos = pos;
-                best_dist = dist;
-            }
-        }
-    }
-    best_pos
+
+    let mut candidates: Vec<(i32, i32)> = occupied
+        .iter()
+        .flat_map(|&(gx, gy)| directions.iter().map(move |&(dx, dy)| (gx + dx, gy + dy)))
+        .filter(|grid| !occupied.contains(grid))
+        .filter(|&(gx, gy)| world_map.is_walkable(gx, gy))
+        .collect();
+
+    candidates.sort_unstable();
+    candidates.dedup();
+    candidates.sort_by(|a, b| {
+        let a_pos = WorldMap::grid_to_world(a.0, a.1);
+        let b_pos = WorldMap::grid_to_world(b.0, b.1);
+        a_pos
+            .distance_squared(current_pos)
+            .partial_cmp(&b_pos.distance_squared(current_pos))
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    candidates
 }
 
 pub fn has_arrived_at_rest_area(current_pos: Vec2, rest_area_center: Vec2) -> bool {
@@ -139,7 +142,7 @@ mod tests {
 
     fn select_nearest(q_rest_areas: RestAreasQuery, mut selected: ResMut<SelectedRestArea>) {
         selected.0 =
-            find_nearest_available_rest_area(Vec2::ZERO, &q_rest_areas, &HashMap::default())
+            find_nearest_available_rest_area(Vec2::ZERO, &q_rest_areas, &HashMap::default(), Some)
                 .map(|(entity, _)| entity);
     }
 

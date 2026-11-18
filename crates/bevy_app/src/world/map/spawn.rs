@@ -10,7 +10,7 @@ use hw_world::{GeneratedWorldLayout, generate_world_layout, grid_to_world};
 
 use super::WorldMapWrite;
 
-const WORLDGEN_SEED_ENV: &str = "HELL_WORKERS_WORLDGEN_SEED";
+pub(crate) const WORLDGEN_SEED_ENV: &str = "HELL_WORKERS_WORLDGEN_SEED";
 
 /// 地形描画 chunk のサイズ（タイル数/辺）
 const CHUNK_TILES: i32 = 16;
@@ -55,6 +55,10 @@ pub fn prepare_generated_world_layout_resource(
     perf_config: &PerfScenarioConfig,
 ) -> GeneratedWorldLayoutResource {
     let master_seed = resolve_worldgen_seed(perf_config);
+    generated_world_layout_for_seed(master_seed)
+}
+
+pub(crate) fn generated_world_layout_for_seed(master_seed: u64) -> GeneratedWorldLayoutResource {
     let layout = generate_world_layout(master_seed);
     GeneratedWorldLayoutResource {
         master_seed,

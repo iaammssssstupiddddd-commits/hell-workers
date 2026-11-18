@@ -12,6 +12,7 @@ pub use spawn::{
     GeneratedWorldLayoutResource, TerrainChunk, prepare_generated_world_layout_resource,
     resolve_worldgen_seed, spawn_map, spawn_terrain_chunks,
 };
+pub(crate) use spawn::{WORLDGEN_SEED_ENV, generated_world_layout_for_seed};
 pub(crate) use terrain_metadata::terrain_type_to_id_byte;
 pub use terrain_metadata::{
     TerrainFeatureMap, TerrainIdMap, build_terrain_feature_map, build_terrain_id_map,

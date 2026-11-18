@@ -15,7 +15,7 @@ use crate::interface::ui::interaction::handle_ui_intent;
 use crate::plugins::startup::PerfScenarioConfig;
 use crate::systems::GameSystemSet;
 use apply::apply_default_time_speed;
-use persistence::{load_settings_from_disk, save_settings_to_disk};
+use persistence::{SettingsPersistence, SettingsSaveOutcome};
 
 pub use persistence::{DEFAULT_SETTINGS_STORAGE_ROOT, SettingsStorageRoot};
 
@@ -73,10 +73,12 @@ impl Plugin for SettingsPlugin {
 fn load_settings_system(
     mut commands: Commands,
     mut time: ResMut<Time<Virtual>>,
+    mut state: ResMut<feedback::SettingsSaveState>,
     settings_root: Res<SettingsStorageRoot>,
     perf_config: Option<Res<PerfScenarioConfig>>,
 ) {
-    let settings = load_settings_from_disk(&settings_root);
+    let (settings, persistence) = SettingsPersistence::load(&settings_root);
+    state.persistence = persistence;
     if let Some(config) = perf_config.filter(|config| config.enabled()) {
         // 計測はローカルの settings.ron にある一時停止・倍速設定の影響を受けない。
         time.set_relative_speed(1.0);
@@ -96,6 +98,7 @@ fn load_settings_system(
 
 fn save_settings_on_app_exit_system(
     mut exit: MessageReader<AppExit>,
+    mut state: ResMut<feedback::SettingsSaveState>,
     settings: Res<GameSettings>,
     settings_root: Res<SettingsStorageRoot>,
     perf_config: Option<Res<PerfScenarioConfig>>,
@@ -107,8 +110,12 @@ fn save_settings_on_app_exit_system(
         return;
     }
 
-    if let Err(err) = save_settings_to_disk(&settings_root, &settings) {
-        warn!("Failed to save settings on exit: {err}");
+    match state.persistence.save(&settings_root, &settings) {
+        Ok(SettingsSaveOutcome::DurabilityUncertain) => {
+            warn!("Settings were replaced on exit; durability is uncertain")
+        }
+        Err(error) => warn!("Failed to save settings on exit: {error}"),
+        Ok(_) => {}
     }
 }
 
