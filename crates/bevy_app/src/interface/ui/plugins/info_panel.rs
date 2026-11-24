@@ -86,6 +86,7 @@ fn register_ui_info_panel_plugin_systems(app: &mut App) {
     app.init_resource::<InfoPanelState>();
     app.init_resource::<hw_ui::shell::UiShellState>();
     app.init_gizmo_group::<crate::interface::ui::world_first::overlays::WorldViewGizmos>();
+    app.init_gizmo_group::<crate::interface::ui::waterworks::ContractDistrictGizmos>();
     app.add_systems(
         Update,
         (

@@ -842,7 +842,7 @@ fn m5_consumers_follow_generation(kind: BuildingType, asset_kind: BuildingAssetK
             Sprite::from_image(fallback.clone()),
         ))
         .id();
-    app.world_mut().resource_mut::<BuildContext>().0 = Some(kind);
+    app.world_mut().resource_mut::<BuildContext>().kind = Some(kind);
     app.world_mut().resource_mut::<Time<Virtual>>().pause();
     app.update();
     assert_eq!(app.world().get::<Sprite>(sprite).unwrap().image, fallback);
@@ -948,7 +948,7 @@ fn m2_exact_preview_generation_reaches_ghost_companion_blueprint_pulse_move_and_
             .world_mut()
             .spawn((BuildingCatalogPreview(kind), ImageNode::default()))
             .id();
-        app.world_mut().resource_mut::<BuildContext>().0 = Some(kind);
+        app.world_mut().resource_mut::<BuildContext>().kind = Some(kind);
         app.world_mut().resource_mut::<Time<Virtual>>().pause();
         let mut retired = Vec::new();
         for generation in [1, 2] {
@@ -1026,13 +1026,13 @@ fn reused_door_equipment_wall_ghost_restores_geometry_and_candidate_stays_privat
         ))
         .id();
     publish(app.world_mut(), BuildingAssetKind::Tank, 1);
-    app.world_mut().resource_mut::<BuildContext>().0 = Some(BuildingType::Tank);
+    app.world_mut().resource_mut::<BuildContext>().kind = Some(BuildingType::Tank);
     app.update();
     assert_eq!(
         app.world().get::<Anchor>(ghost),
         Some(&Anchor(Vec2::new(0.0, -0.25)))
     );
-    app.world_mut().resource_mut::<BuildContext>().0 = Some(BuildingType::Wall);
+    app.world_mut().resource_mut::<BuildContext>().kind = Some(BuildingType::Wall);
     app.update();
     assert_eq!(app.world().get::<Anchor>(ghost), Some(&Anchor::CENTER));
     assert_eq!(
@@ -1046,7 +1046,7 @@ fn reused_door_equipment_wall_ghost_restores_geometry_and_candidate_stays_privat
             2,
             BuildingAssetAuthority::IsolatedCandidate,
         );
-    app.world_mut().resource_mut::<BuildContext>().0 = Some(BuildingType::Tank);
+    app.world_mut().resource_mut::<BuildContext>().kind = Some(BuildingType::Tank);
     app.update();
     assert_eq!(app.world().get::<Anchor>(ghost), Some(&Anchor::CENTER));
     assert_eq!(
@@ -1487,9 +1487,9 @@ fn m3_consumers_generations_and_owner_cleanup_preserve_logical_state() {
             .world_mut()
             .spawn((BuildingCatalogPreview(kind), ImageNode::default()))
             .id();
-        app.world_mut().resource_mut::<BuildContext>().0 = Some(kind);
+        app.world_mut().resource_mut::<BuildContext>().kind = Some(kind);
         if kind == BuildingType::SoulSpa {
-            app.world_mut().resource_mut::<BuildContext>().0 = None;
+            app.world_mut().resource_mut::<BuildContext>().kind = None;
             app.world_mut().resource_mut::<TaskContext>().0 =
                 hw_core::game_state::TaskMode::SoulSpaPlace(None);
         }
@@ -1641,7 +1641,7 @@ fn bridge_consumers_share_generation_fallback_bounce_and_owner_cleanup() {
         .world_mut()
         .spawn((BuildingCatalogPreview(kind), ImageNode::default()))
         .id();
-    app.world_mut().resource_mut::<BuildContext>().0 = Some(kind);
+    app.world_mut().resource_mut::<BuildContext>().kind = Some(kind);
     app.world_mut().resource_mut::<Time<Virtual>>().pause();
     app.update();
     assert_eq!(

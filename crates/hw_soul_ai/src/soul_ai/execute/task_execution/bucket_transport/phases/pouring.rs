@@ -34,7 +34,15 @@ pub fn handle(
             let new_progress = progress + 1.0;
 
             if new_progress >= 1.0 {
-                if !super::super::guards::tank_can_accept_full_bucket(ctx, tank_entity) {
+                let full_bucket = ctx
+                    .queries
+                    .reservation
+                    .resources
+                    .get(data.bucket)
+                    .is_ok_and(|item| item.0 == ResourceType::BucketWater);
+                if !full_bucket
+                    || !super::super::guards::tank_can_accept_full_bucket(ctx, tank_entity)
+                {
                     return helpers::drop_bucket_for_auto_haul(
                         commands,
                         ctx,
@@ -83,6 +91,7 @@ pub fn handle(
                     .entity(data.bucket)
                     .remove::<hw_core::relationships::DeliveringTo>();
 
+                commands.trigger(hw_jobs::events::TankWaterDelivered { tank: tank_entity });
                 let result = helpers::drop_bucket_for_auto_haul(
                     commands,
                     ctx,

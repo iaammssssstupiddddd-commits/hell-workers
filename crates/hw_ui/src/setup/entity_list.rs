@@ -318,6 +318,7 @@ pub fn spawn_entity_list_panel(
             },
             TaskListBody,
         ));
+        crate::waterworks::spawn(parent, game_assets, theme);
     });
 }
 
@@ -347,6 +348,14 @@ fn spawn_left_panel_tab_bar(
                 theme,
                 "仕事",
                 LeftPanelMode::TaskList,
+                false,
+            );
+            spawn_left_panel_tab_button(
+                row,
+                game_assets,
+                theme,
+                "契約",
+                LeftPanelMode::Contracts,
                 false,
             );
         });
@@ -413,7 +422,8 @@ mod tests {
         app.update();
         let scroll = app
             .world_mut()
-            .query_filtered::<Entity, With<ScrollArea>>()
+            .query_filtered::<Entity, (With<ScrollArea>, Without<crate::waterworks::ContractBody>)>(
+            )
             .single(app.world())
             .expect("one scroll area, no nested unassigned scroller");
         assert!(app.world().get::<EntityListScrollArea>(scroll).is_some());

@@ -34,6 +34,7 @@ pub enum PlacementRejectReason {
     NoDoorAdjacentWall,
     NotInSite,
     NotInYard,
+    OutsideContractDistrict,
     AlreadyHasFloorBlueprint,
     AlreadyHasCompletedFloor,
     NoCompletedFloor,
@@ -43,7 +44,7 @@ pub enum PlacementRejectReason {
 }
 
 impl PlacementRejectReason {
-    pub const ALL: [Self; 14] = [
+    pub const ALL: [Self; 15] = [
         Self::NotWalkable,
         Self::OccupiedByBuilding,
         Self::OccupiedByStockpile,
@@ -52,6 +53,7 @@ impl PlacementRejectReason {
         Self::NoDoorAdjacentWall,
         Self::NotInSite,
         Self::NotInYard,
+        Self::OutsideContractDistrict,
         Self::AlreadyHasFloorBlueprint,
         Self::AlreadyHasCompletedFloor,
         Self::NoCompletedFloor,
@@ -76,6 +78,9 @@ impl PlacementRejectReason {
             }
             Self::NotInSite => {
                 format!("Tile ({},{}) is not inside a construction site", gx, gy)
+            }
+            Self::OutsideContractDistrict => {
+                format!("({gx}, {gy}) は第一工区の外です。本体と置場を工区内に配置してください")
             }
             Self::NotInYard => format!("Tile ({},{}) is not inside a yard", gx, gy),
             Self::AlreadyHasFloorBlueprint => {

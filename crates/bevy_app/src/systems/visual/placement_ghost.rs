@@ -207,7 +207,7 @@ pub fn placement_ghost_system(
     }
 
     let companion_kind = companion_state.0.as_ref().map(|state| state.kind);
-    let building_type_opt = build_context.0;
+    let building_type_opt = build_context.kind;
     if companion_kind != Some(CompanionPlacementKind::BucketStorage) && building_type_opt.is_none()
     {
         for (entity, _, _) in q_ghost.iter() {
@@ -305,6 +305,14 @@ pub fn placement_ghost_system(
             },
         };
         validate_building_placement(&ctx, building_type, grid_pos, &geometry)
+    };
+    let validation = if let Some(district) = build_context.contract_district
+        && let bounds = district.validate(&geometry.occupied_grids)
+        && !bounds.can_place
+    {
+        bounds
+    } else {
+        validation
     };
     placement_feedback.set_live_building_validation(&validation, grid_pos);
     let can_place = validation.can_place;

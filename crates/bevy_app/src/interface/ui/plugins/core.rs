@@ -25,6 +25,7 @@ pub fn ui_core_plugin() -> UiCorePlugin {
 }
 
 fn register_ui_core_plugin_systems(app: &mut App) {
+    app.add_systems(Update, game_time_system.in_set(GameSystemSet::Spatial));
     app.init_resource::<crate::interface::ui::work_guide::WorkGuide>();
     app.add_systems(
         Update,
@@ -45,6 +46,24 @@ fn register_ui_core_plugin_systems(app: &mut App) {
             .after(handle_ui_intent)
             .in_set(GameSystemSet::Interface),
     );
+    use crate::interface::ui::waterworks as card;
+    use crate::systems::waterworks as contract;
+    app.init_resource::<card::ContractOverlay>()
+        .add_observer(contract::inspect_delivery)
+        .add_systems(
+            Update,
+            (
+                contract::release_moved_target,
+                card::finish_placement,
+                card::present,
+                card::draw,
+            )
+                .chain()
+                .after(handle_ui_intent)
+                .after(game_time_system)
+                .in_set(GameSystemSet::Interface),
+        );
+    crate::systems::save::register_load_reset_hook(app, "waterworks-overlay", card::reset);
     configure_placement_feedback_sets(app);
     app.init_resource::<StockpilePolicyRangeEditState>();
     app.init_resource::<crate::interface::selection::FloorPlacementPreview>();
@@ -146,7 +165,7 @@ fn register_ui_core_plugin_systems(app: &mut App) {
             crate::interface::ui::context_menu_system,
             crate::interface::ui::task_summary_ui_system,
             crate::interface::ui::update_operation_dialog_system,
-            game_time_system,
+            crate::systems::time::display_game_clock,
             crate::interface::ui::update_fps_display_system,
             crate::interface::ui::update_dream_pool_display_system,
             crate::interface::ui::update_dream_loss_popup_ui_system,

@@ -32,6 +32,9 @@ pub(crate) struct IntentSettingsCtx<'w> {
 
 #[derive(SystemParam)]
 pub(crate) struct IntentAuxCtx<'w, 's> {
+    contracts: Query<'w, 's, &'static crate::systems::waterworks::WaterworksContract>,
+    targets: Query<'w, 's, (), With<crate::systems::waterworks::WaterworksTarget>>,
+    overlay: Option<ResMut<'w, crate::interface::ui::waterworks::ContractOverlay>>,
     guide: Option<ResMut<'w, crate::interface::ui::work_guide::WorkGuide>>,
     epoch: Option<Res<'w, hw_core::WorldEpoch>>,
     settings: IntentSettingsCtx<'w>,
@@ -125,6 +128,60 @@ pub(crate) fn handle_ui_intent(
                         selection_ctx.info_panel_pin.entity,
                     );
                     workspace_action_applied = true;
+                }
+                false
+            }
+            UiIntent::AcceptWaterworks
+            | UiIntent::PlaceWaterworks
+            | UiIntent::ClaimWaterworks
+            | UiIntent::ViewWaterworksTasks
+            | UiIntent::ToggleContractDistrict => {
+                if !aux_ctx.shell.contract_visible()
+                    || aux_ctx.help.pending.overlay().is_some()
+                    || ui_queries.ui_input.world_input_captured
+                    || selection_ctx.resolved_frame.pointer_selection_suppressed()
+                {
+                    continue;
+                }
+                let mut mode = action_contexts.p0();
+                match intent {
+                    UiIntent::ViewWaterworksTasks => aux_ctx.shell.view_tasks(),
+                    UiIntent::ToggleContractDistrict => {
+                        if let Some(layer) = &mut aux_ctx.overlay {
+                            layer.0 = !layer.0;
+                        }
+                    }
+                    UiIntent::AcceptWaterworks => {
+                        mode.cleanup
+                            .commands
+                            .queue(crate::systems::waterworks::accept);
+                    }
+                    UiIntent::ClaimWaterworks => {
+                        mode.cleanup
+                            .commands
+                            .queue(crate::systems::waterworks::claim);
+                    }
+                    UiIntent::PlaceWaterworks => {
+                        if let Ok(contract) = aux_ctx.contracts.single()
+                            && contract.outcome
+                                == crate::systems::waterworks::ContractOutcome::Active
+                            && aux_ctx.targets.is_empty()
+                        {
+                            handlers::handle_mode_select(
+                                UiIntent::SelectBuild(hw_jobs::BuildingType::Tank),
+                                &mut mode,
+                                &mut selection_ctx,
+                                &familiar_queries,
+                            );
+                            mode.cleanup.build_context.contract_district = Some(contract.district);
+                            aux_ctx.shell.apply(
+                                hw_ui::shell::WorkspaceAction::Close,
+                                selection_ctx.selected_entity.0,
+                                selection_ctx.info_panel_pin.entity,
+                            );
+                        }
+                    }
+                    _ => unreachable!(),
                 }
                 false
             }
@@ -652,6 +709,51 @@ mod tests {
             );
         app.update();
         app
+    }
+
+    #[test]
+    fn waterworks_intents_require_a_visible_card_and_discard_paused_acceptance() {
+        use crate::systems::waterworks::WaterworksContract;
+        use hw_ui::{
+            components::LeftPanelMode,
+            shell::{UiShellState, WorkspaceAction},
+        };
+        let mut app = domain_action_app();
+        app.init_resource::<UiShellState>()
+            .init_resource::<LeftPanelMode>()
+            .init_resource::<hw_core::GameTime>()
+            .insert_resource(crate::world::map::GeneratedWorldLayoutResource {
+                master_seed: 42,
+                layout: hw_world::GeneratedWorldLayout::stub(42),
+            });
+        write_intent(&mut app, UiIntent::AcceptWaterworks);
+        app.update();
+        let count = |world: &mut World| world.query::<&WaterworksContract>().iter(world).count();
+        assert_eq!(count(app.world_mut()), 0);
+        app.world_mut().resource_mut::<UiShellState>().apply(
+            WorkspaceAction::OpenEntities,
+            None,
+            None,
+        );
+        *app.world_mut().resource_mut::<LeftPanelMode>() = LeftPanelMode::Contracts;
+        app.world_mut().resource_mut::<Time<Virtual>>().pause();
+        write_intent(&mut app, UiIntent::AcceptWaterworks);
+        app.update();
+        app.world_mut().resource_mut::<Time<Virtual>>().unpause();
+        app.update();
+        assert_eq!(count(app.world_mut()), 0);
+        write_intent(&mut app, UiIntent::AcceptWaterworks);
+        write_intent(&mut app, UiIntent::AcceptWaterworks);
+        app.update();
+        assert_eq!(count(app.world_mut()), 1);
+        write_intent(&mut app, UiIntent::PlaceWaterworks);
+        app.update();
+        assert!(
+            app.world()
+                .resource::<BuildContext>()
+                .contract_district
+                .is_some()
+        );
     }
 
     fn write_intent(app: &mut App, intent: UiIntent) {
@@ -1958,7 +2060,7 @@ mod tests {
     fn move_plant_intent_is_consumed_once() {
         let mut app = domain_action_app();
         let plant = spawn_building(&mut app, BuildingType::MudMixer);
-        app.world_mut().resource_mut::<BuildContext>().0 = Some(BuildingType::Wall);
+        app.world_mut().resource_mut::<BuildContext>().kind = Some(BuildingType::Wall);
         app.world_mut().resource_mut::<TaskContext>().0 = TaskMode::DesignateChop(None);
         *app.world_mut().resource_mut::<MenuState>() = MenuState::Architect;
         write_intent(&mut app, UiIntent::MovePlantBuilding(plant));
@@ -1967,7 +2069,7 @@ mod tests {
 
         assert_eq!(app.world().resource::<SelectedEntity>().0, Some(plant));
         assert_eq!(app.world().resource::<MoveContext>().0, Some(plant));
-        assert!(app.world().resource::<BuildContext>().0.is_none());
+        assert!(app.world().resource::<BuildContext>().kind.is_none());
         assert_eq!(app.world().resource::<TaskContext>().0, TaskMode::None);
         assert_eq!(*app.world().resource::<MenuState>(), MenuState::Hidden);
         assert!(matches!(
@@ -1988,14 +2090,14 @@ mod tests {
     fn move_action_cleanup_precedes_mode_and_menu_update() {
         let mut app = domain_action_app();
         let plant = spawn_building(&mut app, BuildingType::Tank);
-        app.world_mut().resource_mut::<BuildContext>().0 = Some(BuildingType::Tank);
+        app.world_mut().resource_mut::<BuildContext>().kind = Some(BuildingType::Tank);
         app.world_mut().resource_mut::<TaskContext>().0 = TaskMode::FloorPlace(Some(Vec2::ZERO));
         *app.world_mut().resource_mut::<MenuState>() = MenuState::Architect;
         write_intent(&mut app, UiIntent::MovePlantBuilding(plant));
 
         app.update();
 
-        assert!(app.world().resource::<BuildContext>().0.is_none());
+        assert!(app.world().resource::<BuildContext>().kind.is_none());
         assert_eq!(app.world().resource::<TaskContext>().0, TaskMode::None);
         assert_eq!(*app.world().resource::<MenuState>(), MenuState::Hidden);
         assert_eq!(app.world().resource::<SelectedEntity>().0, Some(plant));

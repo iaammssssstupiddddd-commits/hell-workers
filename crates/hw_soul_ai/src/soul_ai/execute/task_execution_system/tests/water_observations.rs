@@ -124,9 +124,20 @@ fn real_river_fill_changes_only_the_carried_bucket_with_optional_observer() {
 
 #[test]
 fn real_tank_pour_branch_keeps_gameplay_identical_with_and_without_observer() {
-    for observe in [false, true] {
+    #[derive(Resource, Default)]
+    struct Delivered(Vec<(Entity, usize)>);
+    for (observe, full) in [(false, true), (true, true), (false, false)] {
         let mut app = task_execution_test_app();
-        app.init_resource::<WorldEpoch>();
+        app.init_resource::<WorldEpoch>()
+            .init_resource::<Delivered>()
+            .add_observer(
+                |delivery: On<hw_jobs::events::TankWaterDelivered>,
+                 stored: Query<&hw_core::relationships::StoredItems>,
+                 mut delivered: ResMut<Delivered>| {
+                    let count = stored.get(delivery.tank).map_or(0, |items| items.len());
+                    delivered.0.push((delivery.tank, count));
+                },
+            );
         if observe {
             app.init_resource::<TankPourReceipts>();
         }
@@ -147,7 +158,11 @@ fn real_tank_pour_branch_keeps_gameplay_identical_with_and_without_observer() {
         let bucket = app
             .world_mut()
             .spawn((
-                ResourceItem(ResourceType::BucketWater),
+                ResourceItem(if full {
+                    ResourceType::BucketWater
+                } else {
+                    ResourceType::BucketEmpty
+                }),
                 Transform::default(),
             ))
             .id();
@@ -183,6 +198,16 @@ fn real_tank_pour_branch_keeps_gameplay_identical_with_and_without_observer() {
             ResourceType::BucketEmpty
         );
         assert_eq!(app.world().get::<Inventory>(worker).unwrap().0, None);
+        if !full {
+            assert!(app.world().resource::<Delivered>().0.is_empty());
+            assert!(
+                app.world()
+                    .get::<hw_core::relationships::StoredItems>(tank)
+                    .is_none()
+            );
+            continue;
+        }
+        assert_eq!(app.world().resource::<Delivered>().0, vec![(tank, 5)]);
         let items = app
             .world()
             .get::<hw_core::relationships::StoredItems>(tank)

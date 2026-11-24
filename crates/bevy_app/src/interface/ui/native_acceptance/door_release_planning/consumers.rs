@@ -199,7 +199,7 @@ pub(super) fn snapshot(world: &mut World) -> Result<Value, String> {
         "anchor_owner":anchor_owner,"walkable":walkable,"catalog":catalog,"ghosts":ghosts,"blueprints":blueprints,
         "building_inventory":inventory,"primary_window":window_id.to_bits(),"world_epoch":world.resource::<WorldEpoch>().get(),
         "play_mode":format!("{:?}",world.resource::<State<hw_core::game_state::PlayMode>>().get()),
-        "build_kind":world.resource::<crate::app_contexts::BuildContext>().0.map(|kind|format!("{kind:?}")),
+        "build_kind":world.resource::<crate::app_contexts::BuildContext>().kind.map(|kind|format!("{kind:?}")),
         "real_seconds":world.resource::<Time<Real>>().elapsed_secs_f64(),"input":input::snapshot(world),
         "promotion_authority":false,"performance_evidence":false,"natural_construction_evidence":false}))
 }

@@ -109,7 +109,7 @@ pub(super) fn snapshot(
             sprites.push(sprite(world, pulse, owner, "pulse")?);
         }
     }
-    if world.resource::<crate::app_contexts::BuildContext>().0 == Some(kind)
+    if world.resource::<crate::app_contexts::BuildContext>().kind == Some(kind)
         && *world
             .resource::<State<hw_core::game_state::PlayMode>>()
             .get()

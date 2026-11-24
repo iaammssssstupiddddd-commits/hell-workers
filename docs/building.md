@@ -280,8 +280,9 @@ releaseで最新条件を再検証し、直前の表示と一致しなければ�
 一部の建物は、親Blueprint配置直後に companion 配置フローへ遷移します。
 
 - **Tank**:
-  - `BucketStorage`（1x2）を即時配置するまで companion モードを継続します。
+  - `BucketStorage`（横2×縦1）を即時配置するまで companion モードを継続します。
   - 親の `Tank` Blueprint は companion 配置が完了するまで確定しません（未確定状態では建築予約しない）。
+  - 「管理 → 契約」からの配置は本体と置場の両方を工区内に制限する。「建てる」から配置したタンクや既設のタンクも、本体と所有する置場が工区内にあれば契約の対象になる。最初に受注後の水1杯を受けたタンクで検収する。
   - 親位置の1クリック目も共通 validator で再検証し、成功時だけ companion モードへ進む。同じ anchor で直後に生じる
     parent footprint との自己干渉理由は、カーソルが別 grid へ動くまで live feedback blocker が抑止する。
   - `Esc` でキャンセルした場合は、親Blueprintと未確定 companion をまとめて取り消します。

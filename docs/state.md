@@ -24,7 +24,7 @@ Normal ↔ TaskDesignation（作業を指示／範囲を設定/Esc）。Zone配�
 
 | リソース | 型 | 用途 |
 |----------|-----|------|
-| `BuildContext` | `Option<BuildingType>` | 配置する建物の種類 |
+| `BuildContext` | `kind`・`contract_district` | 配置する建物の種類。契約からのタンク配置では、受注時の工区で本体と置場の全セルを検査する。Esc・通常ツール選択・ロードで解除する。 |
 | `MoveContext` | `Option<Entity>` | 移動対象の建物エンティティ |
 | `MovePlacementState` | `Option<PendingMovePlacement>` | BuildingMove中の移動先一次確定（Tank companion再指定待ち） |
 | `CompanionPlacementState` | `Option<CompanionPlacement>` | companion配置中の親アンカー・有効半径 |

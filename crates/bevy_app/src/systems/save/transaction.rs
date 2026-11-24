@@ -1352,7 +1352,18 @@ mod tests {
 
     #[test]
     fn injected_post_write_failure_restores_the_persisted_snapshot() {
+        use crate::systems::waterworks::{ContractDistrict, ContractOutcome, WaterworksContract};
         let mut live = app_with_save_schema();
+        let mut record = WaterworksContract::new(
+            ContractDistrict {
+                min: IVec2::splat(2),
+                max: IVec2::splat(8),
+            },
+            0.,
+        );
+        record.designation = 1;
+        record.outcome = ContractOutcome::Paid { at: 1., reward: 40 };
+        live.world_mut().spawn(record);
         insert_persisted_resources(live.world_mut(), 1.0);
         let familiar = live.world_mut().spawn(Familiar::default()).id();
         live.world_mut()
@@ -1406,6 +1417,14 @@ mod tests {
 
         assert!(matches!(result, Err(CommitError::Recovered { .. })));
         assert_eq!(finalize_count, 1);
+        assert_eq!(
+            live.world_mut()
+                .query::<&WaterworksContract>()
+                .single(live.world())
+                .unwrap()
+                .outcome,
+            record.outcome
+        );
         assert_eq!(live.world().resource::<GameTime>().seconds, 1.0);
 
         let souls: Vec<_> = live

@@ -18,6 +18,7 @@ pub enum LeftPanelMode {
     #[default]
     EntityList,
     TaskList,
+    Contracts,
 }
 
 // ============================================================

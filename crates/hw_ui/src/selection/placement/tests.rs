@@ -293,7 +293,7 @@ fn bucket_storage_rejects_parent_footprint_overlap_during_preview() {
 
 #[test]
 fn every_reject_reason_has_non_empty_display_text() {
-    assert_eq!(PlacementRejectReason::ALL.len(), 14);
+    assert_eq!(PlacementRejectReason::ALL.len(), 15);
     for reason in PlacementRejectReason::ALL {
         assert!(!reason.message(3, 4).trim().is_empty());
     }

@@ -67,6 +67,9 @@ use hw_logistics::{BelongsTo, Inventory, PendingBelongsToBlueprint, ResourceItem
 use hw_world::{TerrainType, WorldMap};
 
 use super::state::SavedWorldgenSeed;
+use crate::systems::waterworks::{
+    ContractDistrict, ContractOutcome, WaterworksContract, WaterworksTarget,
+};
 
 macro_rules! for_each_persisted_resource {
     ($callback:ident) => {
@@ -79,8 +82,10 @@ macro_rules! for_each_persisted_resource {
 
 macro_rules! for_each_persisted_component {
     ($callback:ident) => {
+        $callback!(WaterworksContract);
         $callback!(DamnedSoul);
         $callback!(IdleState);
+        $callback!(WaterworksTarget);
         $callback!(DreamState);
         $callback!(StressBreakdown);
         $callback!(RestAreaCooldown);
@@ -213,6 +218,8 @@ macro_rules! for_each_reflect_dependency {
     ($callback:ident) => {
         $callback!(IdleBehavior);
         $callback!(GatheringBehavior);
+        $callback!(ContractDistrict);
+        $callback!(ContractOutcome);
         $callback!(DreamQuality);
         $callback!(DriftPhase);
         $callback!(DriftEdge);
@@ -248,6 +255,7 @@ macro_rules! for_each_reflect_dependency {
 
 macro_rules! for_each_root_marker {
     ($callback:ident) => {
+        $callback!(WaterworksContract);
         $callback!(DamnedSoul);
         $callback!(Familiar);
         $callback!(Designation);

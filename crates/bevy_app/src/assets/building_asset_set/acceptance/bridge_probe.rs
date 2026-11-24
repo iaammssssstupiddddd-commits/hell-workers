@@ -164,7 +164,7 @@ pub(crate) fn snapshot(world: &mut World) -> Result<Value, String> {
             .is_some()
             && world
                 .get_resource::<crate::app_contexts::BuildContext>()
-                .is_some_and(|context| context.0 == Some(BuildingType::Bridge));
+                .is_some_and(|context| context.kind == Some(BuildingType::Bridge));
         if ghost || blueprint_owner.is_some() {
             consumers.push(json!({"entity": format!("{entity:?}"),
                 "role": if ghost { "ghost" } else if blueprint_owner == Some(entity) { "blueprint" } else { "pulse" },

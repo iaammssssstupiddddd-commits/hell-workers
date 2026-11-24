@@ -209,7 +209,7 @@ owner cancellationはAI phase外の`TaskOwnerCancellationSet::Cancel → Flush`�
 - **時間倍率**: 1実時間秒 = 1ゲーム内分（60倍速）
 - `Time<Virtual>` を使用するためポーズ中は進まない
 - 時間経過イベントには `game_time.day` の変化を監視する（例: 木再生は1日1回）
-- `game_time_system`（時刻計算 + ClockText 更新）は `bevy_app/src/systems/time.rs` に残留。`ClockText`（`hw_ui` 型）への依存があるため Leaf に移動不可。
+- `game_time_system` は `Spatial` でゲーム時計を進める。後続の `Logic` / `Actor` で発生した給水、`Interface` の受注・検収表示、フレーム末の保存は同じ時刻を使う。`display_game_clock` が `Interface` で時計ラベルを更新する。
 - `GameTime` の正規 public path は `hw_core::GameTime`。`bevy_app/src/systems/time.rs` は system 実装のみを持ち、型の pass-through re-export は持たない。
 
 ## セーブ/ロード (SavePlugin)

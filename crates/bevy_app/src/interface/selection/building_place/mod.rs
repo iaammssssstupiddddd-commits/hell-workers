@@ -47,8 +47,11 @@ pub struct BuildingStateQueries<'w, 's> {
 }
 
 #[derive(SystemParam)]
-pub struct BuildPlaceState<'w> {
-    pub build_context: Res<'w, BuildContext>,
+pub struct BuildPlaceState<'w, 's> {
+    pub build_context: ResMut<'w, BuildContext>,
+    contracts: Query<'w, 's, &'static mut crate::systems::waterworks::WaterworksContract>,
+    targets: Query<'w, 's, (), With<crate::systems::waterworks::WaterworksTarget>>,
+    next_mode: ResMut<'w, NextState<hw_core::game_state::PlayMode>>,
     pub companion_state: ResMut<'w, CompanionPlacementState>,
     pub game_assets: Res<'w, GameAssets>,
     pub real_time: Res<'w, Time<Real>>,
@@ -104,6 +107,26 @@ pub fn blueprint_placement(
         q_yards: &queries.q_yards,
     };
 
+    if let Some(district) = state.build_context.contract_district {
+        if !state.targets.is_empty()
+            || !state.contracts.single().is_ok_and(|record| {
+                record.outcome == crate::systems::waterworks::ContractOutcome::Active
+                    && record.district == district
+            })
+        {
+            return;
+        }
+        let geometry = if state.companion_state.0.is_some() {
+            super::placement_geometry::bucket_storage_geometry(grid)
+        } else {
+            super::placement_geometry::live_building_geometry(&world_map, BuildingType::Tank, grid)
+        };
+        if let Some(rejection) = district.validate(&geometry.occupied_grids).rejection(grid) {
+            record_placement_outcome(&mut state.placement_feedback, Err(rejection), grid, now);
+            return;
+        }
+    }
+
     // companion 配置中は通常建築を抑止
     if let Some(result) = handle_companion_flow(
         &mut state.companion_state,
@@ -114,11 +137,24 @@ pub fn blueprint_placement(
         world_pos,
         grid,
     ) {
-        record_placement_outcome(&mut state.placement_feedback, result, grid, now);
+        if let Ok(entity) = result
+            && state.build_context.contract_district.is_some()
+            && let Ok(mut contract) = state.contracts.single_mut()
+        {
+            contract.designation = contract.designation.checked_add(1).unwrap_or(1);
+            commands
+                .entity(entity)
+                .insert(crate::systems::waterworks::WaterworksTarget(
+                    contract.designation,
+                ));
+            *state.build_context = BuildContext::default();
+            state.next_mode.set(hw_core::game_state::PlayMode::Normal);
+        }
+        record_placement_outcome(&mut state.placement_feedback, result.map(|_| ()), grid, now);
         return;
     }
 
-    let Some(building_type) = state.build_context.0 else {
+    let Some(building_type) = state.build_context.kind else {
         return;
     };
     let spawn_pos = building_spawn_pos(building_type, grid, RIVER_Y_MIN);

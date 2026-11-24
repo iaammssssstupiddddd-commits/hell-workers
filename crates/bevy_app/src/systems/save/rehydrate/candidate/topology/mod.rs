@@ -13,6 +13,7 @@ pub(super) use energy::validate_energy_links;
 pub(super) use world_map::validate_world_map_candidate;
 
 pub(super) fn validate(candidate: &World) -> Result<(), String> {
+    crate::systems::waterworks::validate_candidate(candidate)?;
     world_map::validate_world_map_candidate(candidate)?;
     construction::validate_construction_links(candidate)?;
     energy::validate_energy_links(candidate)?;

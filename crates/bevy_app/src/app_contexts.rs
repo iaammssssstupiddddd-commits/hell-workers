@@ -5,7 +5,10 @@ use bevy::prelude::*;
 
 /// 建物配置モード時の詳細コンテキスト
 #[derive(Resource, Default)]
-pub struct BuildContext(pub Option<BuildingType>);
+pub struct BuildContext {
+    pub kind: Option<BuildingType>,
+    pub(crate) contract_district: Option<crate::systems::waterworks::ContractDistrict>,
+}
 
 /// 建物移動モード時の詳細コンテキスト
 #[derive(Resource, Default)]

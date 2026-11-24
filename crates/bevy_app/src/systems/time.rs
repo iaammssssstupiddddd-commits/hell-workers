@@ -2,11 +2,7 @@ use bevy::prelude::*;
 use hw_core::GameTime;
 use hw_ui::components::ClockText;
 
-pub fn game_time_system(
-    time: Res<Time<Virtual>>,
-    mut game_time: ResMut<GameTime>,
-    mut q_clock: Query<&mut Text, With<ClockText>>,
-) {
+pub fn game_time_system(time: Res<Time<Virtual>>, mut game_time: ResMut<GameTime>) {
     // 1秒(実時間) = 1分(ゲーム中) に調整 (60倍速)
     game_time.seconds += time.delta_secs() * 60.0;
 
@@ -17,7 +13,12 @@ pub fn game_time_system(
     game_time.hour = total_hours % 24;
 
     game_time.day = (total_hours / 24) + 1;
+}
 
+pub fn display_game_clock(
+    game_time: Res<GameTime>,
+    mut q_clock: Query<&mut Text, With<ClockText>>,
+) {
     if let Ok(mut text) = q_clock.single_mut() {
         text.0 = format!(
             "Day {}, {:02}:{:02}",

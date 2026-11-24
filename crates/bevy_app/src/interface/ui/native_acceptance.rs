@@ -34,6 +34,7 @@ mod spa_planning;
 pub(crate) mod supply_workload;
 mod supply_worldgen;
 mod terrain_materials;
+mod waterworks_playtest;
 
 pub struct NativeUiAcceptancePlugin {
     root: PathBuf,
@@ -106,6 +107,9 @@ impl NativeUiAcceptancePlugin {
 
 impl Plugin for NativeUiAcceptancePlugin {
     fn build(&self, app: &mut App) {
+        if waterworks_playtest::enabled() {
+            waterworks_playtest::register(app);
+        }
         if terrain_materials::enabled() {
             terrain_materials::register(app);
         }
@@ -220,6 +224,10 @@ fn prepare_fixture(world: &mut World, scale: f32) {
     }
     if door_release_planning::enabled() {
         door_release_planning::prepare(world);
+        return;
+    }
+    if waterworks_playtest::enabled() {
+        waterworks_playtest::prepare(world);
         return;
     }
     if m5_planning::enabled() {
@@ -409,6 +417,15 @@ fn visible_rect(world: &World, entity: Entity, viewport: Vec2) -> Option<[f32; 4
 }
 
 fn node_key(world: &World, entity: Entity) -> Option<String> {
+    if let Some(surface) = world.get::<hw_ui::waterworks::ContractDescription>(entity) {
+        return Some(
+            match surface {
+                hw_ui::waterworks::ContractDescription::Todo => "text:contract-todo",
+                hw_ui::waterworks::ContractDescription::Card => "text:contract-card",
+            }
+            .into(),
+        );
+    }
     if let Some(key) = crate::interface::selection::candidates::native_scroll_key(world, entity) {
         return Some(key);
     }
@@ -792,6 +809,9 @@ fn snapshot(world: &mut World, observer: &UiObserver) -> Value {
     );
     value["refactor_rows"] = refactor_rows::snapshot(world, viewport);
     value["refactor_stockpile"] = refactor_stockpile::snapshot(world, viewport);
+    if waterworks_playtest::enabled() {
+        value["waterworks"] = waterworks_playtest::snapshot(world);
+    }
     value["bridge_planning"] = bridge_planning::snapshot(world);
     if door_release_planning::enabled() {
         value["door_release_planning"] = door_release_planning::snapshot(world);

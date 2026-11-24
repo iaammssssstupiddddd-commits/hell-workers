@@ -11,5 +11,6 @@ pub mod soul_ai;
 pub mod time;
 pub(crate) mod ui_domain_commit;
 pub mod visual;
+pub(crate) mod waterworks;
 
 pub use hw_core::system_sets::GameSystemSet;
