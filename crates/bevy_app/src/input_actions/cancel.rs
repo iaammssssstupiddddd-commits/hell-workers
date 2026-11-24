@@ -60,7 +60,7 @@ impl ActiveModeCleanupParams<'_, '_> {
                 NextState::Pending(mode) | NextState::PendingIfNeq(mode)
                     if mode != &PlayMode::Normal
             )
-            || self.build_context.0.is_some()
+            || self.build_context.kind.is_some()
             || self.move_context.0.is_some()
             || self.move_placement_state.0.is_some()
             || self.zone_context.0.is_some()
@@ -134,7 +134,7 @@ impl ActiveModeCleanupParams<'_, '_> {
             &mut self.move_placement_state,
             &mut self.companion_state,
         );
-        self.build_context.0 = None;
+        *self.build_context = BuildContext::default();
         self.zone_context.0 = None;
         self.task_context.0 = TaskMode::None;
         *self.menu_state = MenuState::Hidden;
@@ -214,7 +214,7 @@ mod tests {
             original_command: FamiliarCommand::Idle,
             drag_start: Vec2::ZERO,
         });
-        app.world_mut().resource_mut::<BuildContext>().0 =
+        app.world_mut().resource_mut::<BuildContext>().kind =
             Some(crate::systems::jobs::BuildingType::Tank);
         app.world_mut().resource_mut::<MoveContext>().0 = Some(familiar);
         app.world_mut().resource_mut::<MovePlacementState>().0 = Some(PendingMovePlacement {

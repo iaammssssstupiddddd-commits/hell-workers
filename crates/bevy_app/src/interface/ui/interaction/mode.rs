@@ -23,7 +23,7 @@ pub(super) fn toggle_menu_and_reset_mode(
         target
     };
 
-    build_context.0 = None;
+    *build_context = BuildContext::default();
     zone_context.0 = None;
     if clear_task_context {
         task_context.0 = TaskMode::None;
@@ -39,7 +39,7 @@ pub(super) fn set_build_mode(
     task_context: &mut TaskContext,
 ) {
     if kind == BuildingType::Wall {
-        build_context.0 = None;
+        *build_context = BuildContext::default();
         zone_context.0 = None;
         task_context.0 = TaskMode::WallPlace(None);
         next_play_mode.set(PlayMode::FloorPlace);
@@ -48,7 +48,10 @@ pub(super) fn set_build_mode(
 
     zone_context.0 = None;
     task_context.0 = TaskMode::None;
-    build_context.0 = Some(kind);
+    *build_context = BuildContext {
+        kind: Some(kind),
+        ..default()
+    };
     next_play_mode.set(PlayMode::BuildingPlace);
 }
 
@@ -58,7 +61,7 @@ pub(super) fn set_floor_place_mode(
     zone_context: &mut ZoneContext,
     task_context: &mut TaskContext,
 ) {
-    build_context.0 = None;
+    *build_context = BuildContext::default();
     zone_context.0 = None;
     task_context.0 = TaskMode::FloorPlace(None);
     next_play_mode.set(PlayMode::FloorPlace);
@@ -71,7 +74,7 @@ pub(super) fn set_zone_mode(
     zone_context: &mut ZoneContext,
     task_context: &mut TaskContext,
 ) {
-    build_context.0 = None;
+    *build_context = BuildContext::default();
     zone_context.0 = Some(kind);
     task_context.0 = TaskMode::ZonePlacement(to_task_mode_zone_type(kind), None);
     next_play_mode.set(PlayMode::TaskDesignation);
@@ -84,7 +87,7 @@ pub(super) fn set_zone_removal_mode(
     zone_context: &mut ZoneContext,
     task_context: &mut TaskContext,
 ) {
-    build_context.0 = None;
+    *build_context = BuildContext::default();
     zone_context.0 = Some(kind); // 削除モードでも一応セットしておく
     task_context.0 = TaskMode::ZoneRemoval(to_task_mode_zone_type(kind), None);
     next_play_mode.set(PlayMode::TaskDesignation);
@@ -97,7 +100,7 @@ pub(super) fn set_task_mode(
     zone_context: &mut ZoneContext,
     task_context: &mut TaskContext,
 ) {
-    build_context.0 = None;
+    *build_context = BuildContext::default();
     zone_context.0 = None;
     task_context.0 = mode;
     next_play_mode.set(PlayMode::TaskDesignation);
@@ -110,7 +113,7 @@ pub(super) fn set_area_task_mode(
     task_context: &mut TaskContext,
 ) {
     let mode = TaskMode::AreaSelection(None);
-    build_context.0 = None;
+    *build_context = BuildContext::default();
     zone_context.0 = None;
     task_context.0 = mode;
     next_play_mode.set(PlayMode::TaskDesignation);
@@ -171,7 +174,7 @@ pub(super) fn build_mode_text(ctx: ModeCtxRefs, info: ModeDisplayInfo) -> String
             if ctx.companion_state.0.is_some() {
                 return "バケツ置き場を配置 · 水タンクの付属設備".into();
             }
-            let kind = ctx.build_context.0;
+            let kind = ctx.build_context.kind;
             kind.map(|kind| {
                 let (name, role) = hw_ui::catalog::building_copy(kind);
                 format!("{name}を配置 · {role}")
@@ -259,6 +262,6 @@ mod tests {
             task_context.0,
             TaskMode::ZonePlacement(hw_core::game_state::TaskModeZoneType::Stockpile, None)
         );
-        assert!(build_context.0.is_none());
+        assert!(build_context.kind.is_none());
     }
 }

@@ -202,10 +202,14 @@ fn gameplay_pan_camera() -> PanCamera {
 
 pub(super) fn initialize_gizmo_config(mut config_store: ResMut<GizmoConfigStore>) {
     for (group, config, _) in config_store.iter_mut() {
-        config.enabled = *group
-            == std::any::TypeId::of::<crate::interface::ui::world_first::overlays::WorldViewGizmos>(
-            );
-        config.line.width = 1.0;
+        let district = *group
+            == std::any::TypeId::of::<crate::interface::ui::waterworks::ContractDistrictGizmos>();
+        config.enabled = district
+            || *group
+                == std::any::TypeId::of::<
+                    crate::interface::ui::world_first::overlays::WorldViewGizmos,
+                >();
+        config.line.width = if district { 4.0 } else { 1.0 };
     }
 }
 

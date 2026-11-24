@@ -139,7 +139,7 @@ fn ghost_kind(world: &World) -> Option<BuildingType> {
             .resource::<MoveContext>()
             .0
             .and_then(|owner| world.get::<Building>(owner).map(|building| building.kind)),
-        PlayMode::BuildingPlace => world.resource::<BuildContext>().0,
+        PlayMode::BuildingPlace => world.resource::<BuildContext>().kind,
         _ => None,
     }
 }

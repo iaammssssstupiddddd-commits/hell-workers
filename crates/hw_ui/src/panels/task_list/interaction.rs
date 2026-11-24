@@ -104,10 +104,16 @@ pub fn left_panel_tab_system(
 type LeftPanelVisibilityQuery<'w, 's> = Query<
     'w,
     's,
-    (&'static mut Node, Has<TaskListBody>, Has<EntityListPanel>),
+    (
+        &'static mut Node,
+        Has<TaskListBody>,
+        Has<crate::waterworks::ContractBody>,
+        Has<EntityListPanel>,
+    ),
     Or<(
         With<EntityListBody>,
         With<TaskListBody>,
+        With<crate::waterworks::ContractBody>,
         With<EntityListSearchRow>,
         With<EntityListPanel>,
     )>,
@@ -138,7 +144,7 @@ pub fn left_panel_visibility_system(
     {
         return;
     }
-    for (mut node, is_tasks, is_panel) in &mut nodes {
+    for (mut node, is_tasks, is_contract, is_panel) in &mut nodes {
         if is_panel {
             let width = Val::Px(if *mode == LeftPanelMode::EntityList {
                 theme.sizes.entity_list_panel_width
@@ -151,7 +157,9 @@ pub fn left_panel_visibility_system(
             continue;
         }
         let visible = !minimized.minimized
-            && if is_tasks {
+            && if is_contract {
+                *mode == LeftPanelMode::Contracts
+            } else if is_tasks {
                 *mode == LeftPanelMode::TaskList
             } else {
                 entities_visible
@@ -260,6 +268,10 @@ mod tests {
             .spawn((Node::default(), EntityListBody))
             .id();
         let tasks = app.world_mut().spawn((Node::default(), TaskListBody)).id();
+        let contract = app
+            .world_mut()
+            .spawn((Node::default(), crate::waterworks::ContractBody))
+            .id();
         let search = app
             .world_mut()
             .spawn((Node::default(), EntityListSearchRow))
@@ -272,6 +284,13 @@ mod tests {
                 Display::Flex,
                 Display::None,
             ),
+            (
+                LeftPanelMode::Contracts,
+                false,
+                Display::None,
+                Display::None,
+            ),
+            (LeftPanelMode::Contracts, true, Display::None, Display::None),
             (LeftPanelMode::TaskList, false, Display::None, Display::Flex),
             (LeftPanelMode::TaskList, true, Display::None, Display::None),
             (
@@ -302,6 +321,14 @@ mod tests {
                 } else {
                     480.0
                 })
+            );
+            assert_eq!(
+                app.world().get::<Node>(contract).unwrap().display,
+                if mode == LeftPanelMode::Contracts && !minimized {
+                    Display::Flex
+                } else {
+                    Display::None
+                }
             );
             assert_eq!(
                 app.world().get::<Node>(entities).unwrap().display,

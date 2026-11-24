@@ -10,7 +10,7 @@ use hw_ui::selection::{PlacementRejectReason, PlacementTileRejection};
 use super::super::placement_geometry::building_occupied_grids;
 
 /// Handles the companion placement flow when `companion_state` is active.
-/// Returns `true` if the flow consumed the click (caller should `return`).
+/// On the second click, returns the committed blueprint or the rejected tile.
 pub(super) fn handle_companion_flow(
     companion_state: &mut CompanionPlacementState,
     commands: &mut Commands,
@@ -19,7 +19,7 @@ pub(super) fn handle_companion_flow(
     pq: &PlacementQueries<'_, '_, '_>,
     world_pos: Vec2,
     grid: (i32, i32),
-) -> Option<Result<(), PlacementTileRejection>> {
+) -> Option<Result<Entity, PlacementTileRejection>> {
     let active = companion_state.0.clone()?;
 
     if world_pos.distance(active.center) > active.radius {
@@ -79,7 +79,7 @@ pub(super) fn handle_companion_flow(
                     #[cfg(not(feature = "profiling"))]
                     let _ = (footprint, storage_entities);
                     companion_state.0 = None;
-                    Some(Ok(()))
+                    Some(Ok(parent_blueprint))
                 }
                 Err(rejection) => {
                     // 親Blueprintの確定に成功したが companion が置けない場合は巻き戻す

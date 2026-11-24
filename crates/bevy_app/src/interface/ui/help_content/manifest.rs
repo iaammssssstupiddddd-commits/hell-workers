@@ -82,6 +82,13 @@ player_help_features! {
         topic_order: 10,
         provider: providers::getting_started::getting_started
     },
+    FirstWaterworks => {
+        id: "first-waterworks",
+        owner: RootOnboarding,
+        section_order: 10,
+        topic_order: 20,
+        provider: providers::getting_started::waterworks
+    },
     CameraAndSelection => {
         id: "camera-selection",
         owner: InputAndCamera,

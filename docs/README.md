@@ -2,6 +2,11 @@
 
 本プロジェクトの各機能や仕様に関する詳細ドキュメントです。
 
+## ゲームの開発ロードマップ
+
+- [罪人大楼の第一工区](plans/gameplay-roadmap-plan-2026-11-24.md) — 休息所の次に給水所を請け負う試遊版を起点に、Dreamの布告、換気・導水、使い魔の昇格の優先順と受入条件を示す提案。
+- [最初の試遊版「第一工区の給水所」](plans/first-waterworks-contract-plan-2026-11-24.md) — 契約書の入口、工区と対象タンクの指定、初回給水の検収、Dream受領、保存再開の機能一覧と受入シナリオ。
+
 ## 魂と使い魔 (Entities & AI)
 - [soul_ai.md](soul_ai.md): 魂（Damned Soul）の自律行動、疲労、ストレスに関する仕様。
 - [familiar_ai.md](familiar_ai.md): 使い魔（Familiar）の指揮、リクルート、タスク管理。

@@ -243,6 +243,9 @@ pub fn setup_ui<F, G>(
         overlay_slot,
         &mut ui_nodes,
     );
+    commands.entity(right_slot).with_children(|parent| {
+        crate::waterworks::spawn_todo(parent, game_assets, theme);
+    });
     entity_list::spawn_entity_list_panel(&mut commands, game_assets, theme, left_slot);
     time_control::spawn_time_control(
         &mut commands,

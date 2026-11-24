@@ -561,7 +561,7 @@ fn snapshot(world: &mut World) -> Result<Value, String> {
         "play_mode": modes["play_mode"],
         "task_mode": modes["task_mode"],
         "selected_building": world.get_resource::<crate::app_contexts::BuildContext>()
-            .and_then(|context| context.0).map(|kind| format!("{kind:?}")),
+            .and_then(|context| context.kind).map(|kind| format!("{kind:?}")),
         "architect_panel_ready": architect_panel_ready,
         "architect_cards": architect_cards,
         "world_epoch": world.get_resource::<WorldEpoch>().map(|epoch| epoch.get()),

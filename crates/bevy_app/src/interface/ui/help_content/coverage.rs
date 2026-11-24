@@ -279,6 +279,11 @@ coverage_table! {
         "ui-intent::workspace-close" => tuple(Workspace(hw_ui::shell::WorkspaceAction::Close)) => published("entity-list-selection"),
         "ui-intent::world-view" => tuple(SetWorldView(_)) => published("world-selection"),
         "ui-intent::help-close" => unit(CloseHelp) => chrome(HelpChromeSlot::Close),
+        "ui-intent::waterworks-accept" => unit(AcceptWaterworks) => published("first-waterworks"),
+        "ui-intent::waterworks-place" => unit(PlaceWaterworks) => published("first-waterworks"),
+        "ui-intent::waterworks-claim" => unit(ClaimWaterworks) => published("first-waterworks"),
+        "ui-intent::waterworks-tasks" => unit(ViewWaterworksTasks) => published("first-waterworks"),
+        "ui-intent::waterworks-map" => unit(ToggleContractDistrict) => published("first-waterworks"),
         "ui-intent::guide-start" => unit(StartWorkGuide) => published("getting-started-work-loop"),
         "ui-intent::guide-end" => unit(EndWorkGuide) => published("getting-started-work-loop"),
         "ui-intent::help-topic-select" => tuple(SelectHelpTopic(_)) => internal(),
@@ -934,6 +939,7 @@ coverage_table! {
 /// exhaustive enum tables above or one of these explicit descriptive surfaces.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum DescriptiveSurface {
+    WaterworksTodo,
     GettingStartedFirstSteps,
     CameraPanZoom,
     HelpPauseBehavior,
@@ -946,7 +952,8 @@ enum DescriptiveSurface {
 }
 
 impl DescriptiveSurface {
-    const ALL: [Self; 9] = [
+    const ALL: [Self; 10] = [
+        Self::WaterworksTodo,
         Self::GettingStartedFirstSteps,
         Self::CameraPanZoom,
         Self::HelpPauseBehavior,
@@ -960,6 +967,7 @@ impl DescriptiveSurface {
 
     const fn as_str(self) -> &'static str {
         match self {
+            Self::WaterworksTodo => "descriptive::waterworks-todo",
             Self::GettingStartedFirstSteps => "descriptive::getting-started-first-steps",
             Self::CameraPanZoom => "descriptive::camera-pan-zoom",
             Self::HelpPauseBehavior => "descriptive::help-pause-behavior",
@@ -975,6 +983,7 @@ impl DescriptiveSurface {
 
 const fn descriptive_surface_coverage(surface: DescriptiveSurface) -> SurfaceCoverage {
     match surface {
+        DescriptiveSurface::WaterworksTodo => published("first-waterworks"),
         DescriptiveSurface::GettingStartedFirstSteps => published("getting-started-first-steps"),
         DescriptiveSurface::CameraPanZoom => published("camera-pan-zoom"),
         DescriptiveSurface::HelpPauseBehavior => published("help-pause-behavior"),

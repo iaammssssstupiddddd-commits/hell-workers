@@ -24,6 +24,11 @@ pub enum UiIntent {
         opener: Option<Entity>,
     },
     CloseHelp,
+    AcceptWaterworks,
+    PlaceWaterworks,
+    ClaimWaterworks,
+    ToggleContractDistrict,
+    ViewWaterworksTasks,
     StartWorkGuide,
     EndWorkGuide,
     SelectHelpTopic(HelpTopicId),
@@ -157,7 +162,10 @@ impl UiIntent {
                 target: StockpilePolicyEditTarget::Single(_),
                 ..
             } => true,
-            Self::SelectTaskMode(_)
+            Self::AcceptWaterworks
+            | Self::PlaceWaterworks
+            | Self::ClaimWaterworks
+            | Self::SelectTaskMode(_)
             | Self::SelectBuild(_)
             | Self::SelectFloorPlace
             | Self::SelectZone(_)
@@ -178,7 +186,9 @@ impl UiIntent {
             | Self::ConfirmSoulSpaConstructionCancel { .. }
             | Self::AdjustTaskPriority { .. }
             | Self::CancelTask { .. } => false,
-            Self::Workspace(_)
+            Self::ToggleContractDistrict
+            | Self::ViewWaterworksTasks
+            | Self::Workspace(_)
             | Self::SetWorldView(_)
             | Self::StartWorkGuide
             | Self::EndWorkGuide

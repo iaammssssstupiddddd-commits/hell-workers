@@ -24,6 +24,20 @@ pub(crate) struct WorkspaceIntentContext<'w> {
 }
 
 impl WorkspaceIntentContext<'_> {
+    pub(crate) fn contract_visible(&self) -> bool {
+        self.shell.as_ref().is_some_and(|s| s.management_open())
+            && self.mode.as_deref() == Some(&LeftPanelMode::Contracts)
+            && !self.minimized.as_ref().is_some_and(|m| m.minimized)
+    }
+    pub(crate) fn view_tasks(&mut self) {
+        if let Some(mode) = &mut self.mode {
+            **mode = LeftPanelMode::TaskList;
+        }
+        if let Some(dirty) = &mut self.dirty {
+            dirty.mark_list();
+        }
+    }
+
     pub(crate) fn set_world_view(
         &mut self,
         view: hw_ui::world_view::WorldView,

@@ -143,7 +143,13 @@ pub(super) fn handle_pressed_action(
         MenuAction::ToggleSystemMenu => {
             ui_intents.write(UiIntent::ToggleSystemMenu);
         }
-        MenuAction::StartWorkGuide | MenuAction::EndWorkGuide => {
+        MenuAction::AcceptWaterworks
+        | MenuAction::PlaceWaterworks
+        | MenuAction::ClaimWaterworks
+        | MenuAction::ViewWaterworksTasks
+        | MenuAction::ToggleContractDistrict
+        | MenuAction::StartWorkGuide
+        | MenuAction::EndWorkGuide => {
             ui_intents.write(action);
         }
         MenuAction::SaveGame => {

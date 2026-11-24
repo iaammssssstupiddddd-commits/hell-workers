@@ -1330,6 +1330,126 @@ mod tests {
     }
 
     #[test]
+    fn waterworks_round_trip_restores_stage_target_clock_and_balance() {
+        use crate::systems::waterworks::*;
+        use bevy::ecs::entity::EntityHashMap;
+        let district = ContractDistrict {
+            min: IVec2::splat(30),
+            max: IVec2::splat(40),
+        };
+        for (stage, designation) in [
+            (0, 0),
+            (1, 0),
+            (2, 1),
+            (3, 1),
+            (4, 1),
+            (5, 1),
+            (4, 0),
+            (5, 0),
+        ] {
+            let mut source = legacy_loader_test_app();
+            let w = source.world_mut();
+            w.resource_mut::<GameTime>().seconds = 1000.;
+            w.resource_mut::<DreamPool>().points = if stage == 5 { 50. } else { 10. };
+            let mut contract = WaterworksContract::new(district, 900.);
+            contract.designation = designation;
+            contract.outcome = match stage {
+                4 => ContractOutcome::Inspected {
+                    at: 990.,
+                    reward: 40,
+                },
+                5 => ContractOutcome::Paid {
+                    at: 990.,
+                    reward: 40,
+                },
+                _ => ContractOutcome::Active,
+            };
+            if stage != 0 {
+                w.spawn(contract);
+            }
+            if stage == 2 || stage == 3 {
+                let footprint = vec![(32, 32), (32, 33), (33, 32), (33, 33)];
+                let center = WorldMap::grid_to_world(32, 32)
+                    + Vec2::splat(hw_core::constants::TILE_SIZE * 0.5);
+                let mut target = w.spawn((
+                    WaterworksTarget(1),
+                    Transform::from_translation(center.extend(0.)),
+                ));
+                if stage == 2 {
+                    target.insert(hw_jobs::Blueprint::new(
+                        BuildingType::Tank,
+                        footprint.clone(),
+                    ));
+                } else {
+                    target.insert((
+                        Building {
+                            kind: BuildingType::Tank,
+                            ..default()
+                        },
+                        Stockpile {
+                            capacity: 50,
+                            resource_type: Some(hw_logistics::ResourceType::Water),
+                        },
+                    ));
+                }
+                let id = target.id();
+                for cell in footprint {
+                    w.resource_mut::<WorldMap>().set_building(cell, id);
+                }
+                for x in [34, 35] {
+                    let mut storage = w.spawn((
+                        stockpile(10),
+                        Transform::from_translation(WorldMap::grid_to_world(x, 32).extend(0.)),
+                    ));
+                    if stage == 2 {
+                        storage.insert(hw_logistics::PendingBelongsToBlueprint(id));
+                    } else {
+                        storage.insert(BelongsTo(id));
+                    }
+                }
+            }
+            let registry = w.resource::<AppTypeRegistry>().clone();
+            let registry = registry.read();
+            let ids = collect_persisted_entities(w);
+            let body = build_persisted_world(w, &registry, ids.into_iter())
+                .serialize(&registry)
+                .unwrap();
+            let prepared =
+                prepare_load_from_str(w, &encode_save_file(SaveHeader::current(42), &body))
+                    .unwrap();
+            let mut loaded = World::new();
+            loaded.spawn_empty();
+            let mut remap = EntityHashMap::default();
+            prepared
+                .dynamic_world
+                .write_to_world_with(&mut loaded, &mut remap, &registry)
+                .unwrap();
+            validate_candidate(&loaded).unwrap();
+            assert_eq!(
+                loaded.resource::<DreamPool>().points,
+                if stage == 5 { 50. } else { 10. }
+            );
+            assert_eq!(
+                loaded
+                    .query::<&WaterworksContract>()
+                    .single(&loaded)
+                    .ok()
+                    .map(|c| (c.outcome, c.deadline, c.district, c.designation)),
+                (stage != 0).then_some((
+                    contract.outcome,
+                    contract.deadline,
+                    district,
+                    designation
+                ))
+            );
+            assert_eq!(
+                loaded.query::<&WaterworksTarget>().iter(&loaded).count(),
+                usize::from(stage == 2 || stage == 3)
+            );
+        }
+    }
+
+    #[test]
     fn missing_familiar_settings_migrate_from_serialized_v0_and_v1_rosters() {
         use bevy::ecs::entity::EntityHashMap;
 

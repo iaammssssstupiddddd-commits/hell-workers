@@ -85,7 +85,7 @@ pub(super) fn enabled() -> bool {
         .is_some()
 }
 
-fn validate(
+pub(super) fn validate(
     map: &WorldMap,
     sites: &[Site],
     yards: &[Yard],
@@ -125,7 +125,7 @@ fn legal_anchor(
         .min_by_key(|&(x, y)| (x - MAP_WIDTH / 2).abs() + (y - MAP_HEIGHT / 2).abs())
 }
 
-fn companion_legal(map: &WorldMap, anchor: (i32, i32)) -> bool {
+pub(super) fn companion_legal(map: &WorldMap, anchor: (i32, i32)) -> bool {
     hw_ui::selection::validate_bucket_storage_placement(
         &WorldMapRef(map),
         &bucket_storage_geometry((anchor.0 + 2, anchor.1)),
@@ -393,7 +393,7 @@ fn snapshot_at(
         "play_mode": format!("{:?}", world.resource::<State<hw_core::game_state::PlayMode>>().get()),
         "task_mode": format!("{:?}", world.resource::<crate::app_contexts::TaskContext>().0),
         "anchor_world": point.to_array(),
-        "build_kind": world.resource::<crate::app_contexts::BuildContext>().0.map(|kind| format!("{kind:?}")),
+        "build_kind": world.resource::<crate::app_contexts::BuildContext>().kind.map(|kind| format!("{kind:?}")),
         "camera": {"entity": camera_entity.to_bits(), "primary": true, "viewport": window.physical_size().to_array()},
         "legal": validation.can_place, "reject_reason": validation.reject_reason.map(|reason| format!("{reason:?}")),
         "cells": cells, "blueprints": blueprints, "buildings": buildings,

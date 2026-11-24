@@ -171,7 +171,7 @@ pub fn sync_door_preview_system(mut params: DoorPreviewParams) {
         }
     }
 
-    if params.build_context.0 != Some(BuildingType::Door) {
+    if params.build_context.kind != Some(BuildingType::Door) {
         return;
     }
     for (transform, mut sprite, mut anchor) in &mut params.ghosts {
@@ -285,7 +285,10 @@ mod tests {
             .init_resource::<DoorAssetReadiness>()
             .init_resource::<WallTopologyIndex>()
             .init_resource::<WallConnectionDirty>()
-            .insert_resource(BuildContext(Some(BuildingType::Door)))
+            .insert_resource(BuildContext {
+                kind: Some(BuildingType::Door),
+                ..default()
+            })
             .insert_resource(crate::test_support::empty_wall_visual_handles())
             .insert_resource(ProductionDoorAssetPool {
                 manifest: default(),

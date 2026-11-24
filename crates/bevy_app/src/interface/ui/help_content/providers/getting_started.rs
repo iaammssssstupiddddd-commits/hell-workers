@@ -50,3 +50,25 @@ pub(crate) fn getting_started() -> Result<HelpContribution, super::super::HelpCa
         ),
     })
 }
+
+pub(crate) fn waterworks() -> Result<HelpContribution, super::super::HelpCatalogError> {
+    Ok(HelpContribution {
+        feature: PlayerFeatureId::FirstWaterworks,
+        owner: HelpOwnerId::RootOnboarding,
+        section_id: HelpSectionId::new("getting-started"),
+        section_title: "はじめに",
+        topic: HelpTopic::new(
+            HelpTopicId::new("waterworks-contract"),
+            "第一工区の給水所",
+            [HelpEntry::new(
+                HelpEntryId::new("first-waterworks"),
+                "第一工区の給水所",
+                [
+                    "「管理」→「契約」で王の依頼を開きます。ガイドをスキップしても受注できます。「工区を表示／隠す」で初期Yardの金色の枠を確認できます。短い目盛のある側が工区内です。停止中は閲覧できます。受注・配置・報酬受領は再開後に行います。",
+                    "受注すると地図に契約ToDoが表示されます。通常の「建てる」または契約書からタンクを配置できます。本体と横2マスのバケツ置場が工区内にある既設タンクも使えます。新設時は木材2個を搬入し、施工してください。",
+                    "受注後、対象のいずれかに満杯のバケツ1杯（5単位）が届くと検収されます。給水待ちのときは使い魔の担当範囲と取水の許可を確認してください。受注からゲーム内12時間以内なら40 Dream、遅延時は20 Dreamを「管理」→「契約」で一度受領できます。受領後はToDoが地図から消え、結果は契約書に残ります。",
+                ],
+            )],
+        ),
+    })
+}

@@ -95,7 +95,7 @@ fn construction_instruction(
     blueprints: &Query<(&hw_jobs::Blueprint, &Transform)>,
 ) -> String {
     if guide.building_completed {
-        return "8/8 休息所が完成\n採取→建築予定→資材搬入→施工を確認できました。完成した休息所を選ぶと役割を確認できます。ガイドを閉じて続けてください。".into();
+        return "8/8 休息所が完成\n採取→建築予定→資材搬入→施工を確認できました。完成した休息所を選ぶと役割を確認できます。ガイドを閉じ、「管理」→「契約」から王の給水所を受注できます。".into();
     }
     if guide
         .building_target

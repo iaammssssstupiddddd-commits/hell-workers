@@ -15,6 +15,7 @@ pub mod plugins;
 pub mod presentation;
 pub mod setup;
 pub mod vignette;
+pub(crate) mod waterworks;
 pub(crate) mod work_guide;
 pub(crate) mod world_first;
 

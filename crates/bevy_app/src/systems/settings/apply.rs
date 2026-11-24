@@ -34,6 +34,9 @@ pub fn sync_debug_gizmos(
     for (group, config, _) in config_store.iter_mut() {
         config.enabled = enabled
             || *group
+                == std::any::TypeId::of::<crate::interface::ui::waterworks::ContractDistrictGizmos>(
+                )
+            || *group
                 == std::any::TypeId::of::<
                     crate::interface::ui::world_first::overlays::WorldViewGizmos,
                 >();

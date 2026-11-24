@@ -76,6 +76,9 @@ fn commit_completed_building(world: &mut World, entity: Entity) -> bool {
         let mut commands = Commands::new(&mut queue, world);
         let building =
             spawn::spawn_completed_building(&mut commands, bp, transform, assets, handles);
+        if let Some(tag) = world.get::<crate::systems::waterworks::WaterworksTarget>(entity) {
+            commands.entity(building).insert(*tag);
+        }
         map.complete_owned_building_footprint(
             entity,
             building,

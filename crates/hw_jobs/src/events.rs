@@ -4,6 +4,12 @@ use bevy::prelude::*;
 use hw_core::events::ResourceReservationOp;
 use hw_core::jobs::WorkType;
 
+/// A full bucket of water was deposited into this tank.
+#[derive(Event)]
+pub struct TankWaterDelivered {
+    pub tank: Entity,
+}
+
 /// 魂がタスクに割り当てられた（実行要求）
 #[derive(Message, Debug, Clone)]
 pub struct TaskAssignmentRequest {

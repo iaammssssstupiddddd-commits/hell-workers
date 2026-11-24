@@ -42,6 +42,7 @@ from scripts import ui_m2_tank_inflow as tank_inflow
 from scripts import ui_m2_tank_full as tank_full
 from scripts import ui_m2_tank_supply as tank_supply
 from scripts import ui_m2_tank_persistence as tank_persistence
+from scripts import ui_first_waterworks as waterworks
 from scripts import ui_refactor_stockpile as stockpile_target
 from scripts import ui_refactor_spa_slots as refactor_spa
 
@@ -65,7 +66,7 @@ VIEWPORTS = ((1920, 1080, 1.0), (1280, 720, 1.25), (1280, 720, 0.85),
              (1280, 720, 1.0), (1920, 1080, 0.85), (1920, 1080, 1.25))
 CASES = ("navigation", "refactor-rows", "refactor-pinned-rename", "progress-bars", "terrain-materials", "refactor-suite",
          "bridge-planning", "soul-spa-planning", "soul-spa-completion", "soul-spa-usage", "soul-spa-persistence", "soul-spa-slots", "soul-spa-occupied-save", "rest-area-planning", "rest-area-refund", "rest-area-completion", "rest-area-usage", "rest-area-exit", "rest-area-save", "rest-area-lifecycle", "rest-area-maxzoom", "rest-area-candidate-lifecycle")
-CASES += (SETTINGS_CASE, tank_completion.GHOST_CASE, stockpile_target.CASE, refactor_spa.CASE)
+CASES += (waterworks.CASE, SETTINGS_CASE, tank_completion.GHOST_CASE, stockpile_target.CASE, refactor_spa.CASE)
 SPA_CASES = (refactor_spa.CASE, "soul-spa-planning", "soul-spa-completion", "soul-spa-usage", "soul-spa-persistence", "soul-spa-slots", "soul-spa-occupied-save", spa_art.CASE, spa_resumed.CASE, spa_loaded.CASE)
 SPA_ART_CASES = (spa_art.CASE, spa_resumed.CASE, spa_loaded.CASE)
 CASES += SPA_ART_CASES
@@ -199,6 +200,9 @@ def check_observation(case: str, value: dict) -> None:
     if case in (*rest_area_usage.EXIT_CHECKPOINTS[3:], *rest_area_usage.SAVE_CHECKPOINTS[5:],
                 rest_area_usage.LIFECYCLE_CHECKPOINTS[-1]):
         rest_area_usage.check_observation(case, value)
+        return
+    if case in waterworks.CHECKPOINTS:
+        waterworks.check_observation(case, value)
         return
     if case in stockpile_target.CHECKPOINTS:
         stockpile_target.check_observation(case, value)
@@ -888,6 +892,7 @@ def verify_root(root):
         expected_checkpoints = (SETTINGS_CHECKPOINTS if case == SETTINGS_CASE else
                                 completion_recipe(case).CHECKPOINTS if case in COMPLETION_CASES else
                                 planning_recipe(case).CHECKPOINTS if case in PLANNING_CASES else
+                                waterworks.CHECKPOINTS if case == waterworks.CASE else
                                 stockpile_target.CHECKPOINTS if case == stockpile_target.CASE else
                                 refactor_rows.CHECKPOINTS if case == "refactor-rows" else
                                 refactor_rows.PIN_CHECKPOINTS if case == "refactor-pinned-rename" else
@@ -943,6 +948,9 @@ def verify_root(root):
         if case == "terrain-materials":
             terrain_materials.verify_sequence(directory, entries, events)
             continue
+        if case == waterworks.CASE:
+            waterworks.check_sequence(entries, events, client)
+            continue
         if case == stockpile_target.CASE:
             stockpile_target.check_sequence(entries, events, client)
             continue
@@ -980,6 +988,7 @@ def verify_root(root):
         joint.verify_game_log(directory / "game.log", "Intel")
     return {"status": "valid", "profile": PROFILE, "sessions": len(expected),
             "coverage": f"{manifest.get('layout_scene', 'management')} rendering only; no input evidence" if layout_only else
+                        "Waterworks contract at two initial Yard sites, ordinary construction, water delivery and claim" if manifest.get("case") == waterworks.CASE else
                         "five settings sliders changed through actual pointer drags and retained when reopening the settings panel" if manifest.get("case") == SETTINGS_CASE else
                         "ordinary adopted Full Tank, five returned buckets and exact Manual1 save/load remap plus rebuilt candidate rendering only; no Memory, performance, art approval or release authority" if manifest.get("case") == tank_persistence.CASE else
                         "ordinary Tank candidate and base-presentation Mixer construction, one exact River-to-Tank-to-Mixer refinement leg only; no whole lifecycle, performance, Mixer art or release authority" if manifest.get("case") == tank_supply.CASE else
@@ -1207,6 +1216,8 @@ def run(args):
                         completion_recipe(case).exercise(driver, art_contract)
                     elif case in PLANNING_CASES:
                         planning_recipe(case).exercise(driver, art_contract)
+                    elif case == waterworks.CASE:
+                        waterworks.exercise(driver)
                     elif case == stockpile_target.CASE:
                         stockpile_target.exercise(driver)
                     elif case == "refactor-rows":

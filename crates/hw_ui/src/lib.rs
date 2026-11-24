@@ -20,6 +20,7 @@ pub mod power;
 pub mod setup;
 pub mod shell;
 pub mod text_input_intents;
+pub mod waterworks;
 pub use text_input_intents::TextInputIntent;
 pub mod theme;
 pub mod widgets;

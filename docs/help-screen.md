@@ -239,3 +239,7 @@ catalog validation・sentinel fixture・exact approval snapshotに含める。St
 地図中心UIの管理/表示/戻る操作は既存stable entryへ公開する。WorkspaceActionはvariantごとにcoverageを持ち、WorkspaceBackはcanonical Esc bindingを使う。人数と要対応の意味、固定と一時詳細の区別、補助表示の凡例はproviderの実装経路と照合する。
 
 作業範囲の小型編集欄と使い魔詳細の入口は `Update required`。`area-edit` を維持して左クリック→詳細→指定/変更、明示対象、停止中/capture条件、詳細操作の開閉、tooltipの無効理由、適用後の終了を掲載する。`SelectAreaTaskFor` と `FinishAreaEdit` は同entryへPublished登録し、対象同一性・拒否・適用範囲保持・受理releaseと折りたたみをbehavior testで検証する。
+
+## 給水所契約のHelp
+
+「はじめに → 第一工区の給水所」に常設の入口、金色の境界と目盛、地図上の契約ToDo、通常建築・既設タンクでの給水、検収と受領・復元を掲載する。地図ToDoの説明は `descriptive::waterworks-todo` から同じ項目を参照する。契約書の受注・配置・工区表示・仕事一覧・受領の5操作は、公開項目 `first-waterworks` に対応する。操作ガイド最終段も「管理 → 契約」を案内する。
