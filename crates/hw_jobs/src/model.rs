@@ -218,10 +218,25 @@ pub struct Building {
     pub is_provisional: bool,
 }
 
+impl Building {
+    pub fn is_completed_wall(&self) -> bool {
+        self.kind == BuildingType::Wall && !self.is_provisional
+    }
+}
+
 /// The completed wall retained as a room boundary while this blueprint is built.
 #[derive(Component, Reflect)]
 #[reflect(Component)]
 pub struct VentRetrofitWall(#[entities] pub Entity);
+
+impl VentRetrofitWall {
+    /// A vent retrofit replaces exactly one completed wall at the blueprint's cell.
+    pub fn matches_source(blueprint: &Blueprint, wall: &Building, wall_grid: (i32, i32)) -> bool {
+        blueprint.kind == BuildingType::ScreamingVent
+            && wall.is_completed_wall()
+            && blueprint.occupied_grids.as_slice() == [wall_grid]
+    }
+}
 
 /// Prevents demolition of the original wall until its retrofit is completed or cancelled.
 #[derive(Component, Default, Reflect)]
