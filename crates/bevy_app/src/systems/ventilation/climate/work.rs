@@ -73,13 +73,11 @@ impl AirWork {
         }
         #[cfg(feature = "profiling")]
         if fixed_occupants && svc.layout.rooms.len() == 256 {
-            // Give both timed arms the same eight occupants at each HVAC tick.
-            // Actor AI, movement and rendering still run in the actual world.
-            loads.clear();
-            for actor in 0..8 {
-                let i = (actor * 31 + (ledger.tick / 12) as usize) % svc.layout.rooms.len();
-                loads.push((i, svc.room_tiles[i][0], [0.24, 0.04, 0.045]));
-            }
+            super::measurement::set_occupancy(
+                loads,
+                ledger.tick,
+                &svc.room_tiles[..svc.layout.rooms.len()],
+            );
         }
         for &(i, p) in &svc.emitters {
             loads.push((i, p, [0.4, 0.08, 0.09]));
@@ -318,28 +316,15 @@ impl AirWork {
                 + op.recovery * intake[i].min(exhaust[i]) * (v[0] - outside[0]);
         }
         #[cfg(feature = "profiling")]
-        {
-            use super::super::perf::cpu_time_ns;
-            let tick = ledger.tick;
-            let start = timing.as_ref().map(|_| cpu_time_ns(false));
-            let reference = tape.map(|t| t.frame(tick));
-            let sources = reference.map(|(sources, _)| sources).unwrap_or(sources);
-            solver.step(tick, outside, values, sources);
-            if let Some((_, expected)) = reference {
-                assert!(
-                    values
-                        .iter()
-                        .flatten()
-                        .zip(expected.iter().flatten())
-                        .all(|(&a, &b)| (a - b).abs() <= 1e-9 * (1. + b.abs())),
-                    "reference climate diverged at tick {tick}"
-                );
-            }
-            if let (Some(t), Some(stages)) = (start, timing) {
-                stages.checked += u64::from(reference.is_some());
-                stages.step += cpu_time_ns(false) - t;
-            }
-        }
+        super::measurement::measured_transport(
+            solver,
+            ledger.tick,
+            outside,
+            values,
+            sources,
+            timing,
+            tape,
+        );
         #[cfg(not(feature = "profiling"))]
         solver.step(ledger.tick, outside, values, sources);
         for (z, air) in ledger.zones.iter_mut().zip(values.iter_mut()) {

@@ -1,4 +1,6 @@
 //! Durable room air and fixed-step HVAC operation. Layout and numerical factors are derived.
+#[cfg(feature = "profiling")]
+mod measurement;
 mod work;
 use super::services::{Grid, Services};
 use bevy::ecs::system::SystemParam;
@@ -331,52 +333,7 @@ pub(crate) fn advance(
     #[cfg(feature = "profiling")]
     if let Some((mut probe, start)) = timing {
         let cost = super::perf::cpu_time_ns(false) - start;
-        probe.climate_cpu_ns += cost;
-        if fresh && services.volumes.len() == 256 {
-            probe.climate_build_ns = cost;
-        }
-        let stages = cache.timing.as_ref().unwrap();
-        probe.climate_prepare_ns += stages.prepare;
-        probe.climate_step_ns += stages.step;
-        probe.climate_publish_ns += stages.publish;
-        probe.input_ns += stages.input;
-        probe.rooms_written += stages.rooms_written;
-        probe.vents_written += stages.vents_written;
-        probe.groups_changed += stages.groups_changed;
-        probe.publish_allocations += stages.publish_allocations;
-        probe.publish_bytes += stages.publish_bytes;
-        probe.wind = stages.wind;
-        probe.inspected_net = stages.inspected_net;
-        probe.synced_fans = stages.supplied;
-        probe.high_fans = stages.high_fans;
-        probe.exterior_net_abs = stages.exterior_net_abs;
-        probe.checked_steps += stages.checked;
-        probe.actual_mode = cache.factors.as_ref().unwrap().mode();
-        probe.climate_tick = ledger.tick;
-        if probe.pinned_vent.is_some() && steps > 0 && (130..330).contains(&ledger.tick) {
-            let (rates, flows) = cache.factors.as_ref().unwrap().readings();
-            let trace = &mut probe.publication_trace;
-            trace.extend_from_slice(&ledger.tick.to_le_bytes());
-            for (z, rate) in ledger.zones.iter().zip(rates) {
-                for value in
-                    z.air
-                        .into_iter()
-                        .chain([rate.supplied(), rate.outdoor_in, rate.transfer_in])
-                {
-                    trace.extend_from_slice(&value.to_le_bytes());
-                }
-                trace.extend([
-                    z.boost as u8,
-                    z.thermal as u8,
-                    u8::from(z.sanction == Some(true)),
-                    rate.state() as u8,
-                ]);
-            }
-            for f in flows {
-                trace.extend_from_slice(&f.net.to_le_bytes());
-            }
-        }
-        probe.climate_zones = ledger.zones.len();
+        probe.observe_step(cost, ledger, &cache, fresh, steps > 0);
     }
     if stored.is_none() {
         commands.spawn(initial);
