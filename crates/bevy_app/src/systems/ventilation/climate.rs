@@ -1,11 +1,11 @@
 //! Durable room air and fixed-step HVAC operation. Layout and numerical factors are derived.
+mod work;
 use super::services::{Grid, Services};
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use hw_infra::air_transport::{Fields, saturation, weather};
-use hw_infra::ventilation::{AirBoundary, VentilationState};
-use hw_jobs::Equipment;
 use std::collections::{HashMap, HashSet};
+use work::AirWork;
 
 #[derive(Reflect, Clone, Default)]
 pub(crate) struct AirZone {
@@ -380,33 +380,6 @@ pub(crate) fn advance(
     }
 }
 
-#[derive(Default, Clone)]
-struct Operation {
-    rejected_heat: f64,
-    heat: f64,
-    humidify: f64,
-    dry: f64,
-    filters: f64,
-    recovery: f64,
-    basin: bool,
-    water: bool,
-}
-
-#[derive(Default)]
-struct AirWork {
-    values: Vec<Fields>,
-    sources: Vec<Fields>,
-    loads: Vec<(usize, Grid, Fields)>,
-    drives: Vec<f64>,
-    removal: Vec<f64>,
-    ops: Vec<Operation>,
-    intake: Vec<f64>,
-    exhaust: Vec<f64>,
-    previous: Vec<f64>,
-    supplied: HashSet<usize>,
-    capture: HashMap<(usize, Grid), f64>,
-}
-
 fn evaluate(
     commands: &mut Commands,
     inputs: &AirInputs,
@@ -416,375 +389,152 @@ fn evaluate(
     (outside, wind): (Fields, f64),
     (integrate, live): (bool, bool),
 ) {
-    let layout = &svc.layout;
-    let n = layout.floors.len();
     #[cfg(feature = "profiling")]
     let input_start = cache
         .timing
         .as_ref()
         .map(|_| super::perf::cpu_time_ns(false));
-    let AirWork {
-        values,
-        sources,
-        loads,
-        drives,
-        removal,
-        ops,
-        intake,
-        exhaust,
-        previous,
-        supplied,
-        capture,
-    } = &mut cache.work;
-    values.clear();
-    values.extend(ledger.zones.iter().map(|z| z.air));
-    let powered = |e| {
-        inputs
-            .power
-            .get(e)
-            .is_ok_and(|p| *p == hw_energy::PowerSupplyState::Supplied)
-    };
-    supplied.clear();
-    supplied.extend(
-        svc.devices
-            .iter()
-            .filter(|d| d.kind == Equipment::Intake && powered(d.entity))
-            .flat_map(|d| d.pipes.iter().copied()),
+    cache.work.collect_inputs(
+        inputs,
+        svc,
+        ledger,
+        #[cfg(feature = "profiling")]
+        cache.inspected_port.is_some(),
     );
-    sources.clear();
-    sources.resize(n, [0.; 3]);
-    loads.clear();
-    for pose in &inputs.souls {
-        let grid = hw_world::WorldMap::world_to_grid(pose.translation.xy());
-        if let Some(&i) = svc.zones.get(&grid) {
-            loads.push((i, grid, [0.24, 0.04, 0.045]));
-        }
-    }
-    #[cfg(feature = "profiling")]
-    if cache.inspected_port.is_some() && layout.rooms.len() == 256 {
-        // Give both timed arms the same eight occupants at each HVAC tick.
-        // Actor AI, movement and rendering still run in the actual world.
-        loads.clear();
-        for actor in 0..8 {
-            let i = (actor * 31 + (ledger.tick / 12) as usize) % layout.rooms.len();
-            loads.push((i, svc.room_tiles[i][0], [0.24, 0.04, 0.045]));
-        }
-    }
-    for &(i, p) in &svc.emitters {
-        loads.push((i, p, [0.4, 0.08, 0.09]));
-    }
     if integrate {
         for zone in &mut ledger.zones {
             zone.update_controls(outside);
         }
     }
-    let openings = &svc.ports;
-    drives.clear();
-    drives.resize(openings.len(), 0.);
-    ops.clear();
-    ops.resize(n, Operation::default());
-    for d in &svc.devices {
+    cache.work.operate_devices(
+        commands,
+        inputs,
+        svc,
+        ledger,
+        outside,
         #[cfg(feature = "profiling")]
-        if matches!(d.kind, Equipment::SupplyFan | Equipment::ExhaustFan)
-            && d.terminal.is_some()
-            && powered(d.entity)
-            && let Some(t) = &mut cache.timing
-        {
-            t.supplied += 1;
-            t.high_fans += usize::from(inputs.settings.get(d.entity).is_ok_and(|s| s.0 == 2));
-        }
-        let water = d.pipes.iter().any(|id| supplied.contains(id));
-        let on = d.kind.demand() == 0.0 || powered(d.entity);
-        let mut state = if on {
-            "稼働可能"
-        } else {
-            "給電待ち（工区の対応Yardと配電を確認）"
-        };
-        if let Some(i) = d.room {
-            let z = &ledger.zones[i];
-            let demand = match d.kind {
-                Equipment::SupplyFan | Equipment::ExhaustFan | Equipment::Hood
-                    if d.terminal.is_some() =>
-                {
-                    let command = inputs.settings.get(d.entity).copied().unwrap_or_default();
-                    d.kind.demand() * (command.drive(z.boost) as f32 / 0.85)
-                }
-                Equipment::HeatPump if z.thermal == 0 || !d.condenser => 0.10,
-                _ => d.kind.demand(),
-            };
-            if inputs
-                .consumers
-                .get(d.entity)
-                .is_ok_and(|c| (c.demand - demand).abs() > 1e-4_f32)
-            {
-                let target = d.entity;
-                commands.queue(move |world: &mut World| {
-                    if let Some(mut c) = world.get_mut::<hw_energy::PowerConsumer>(target) {
-                        c.demand = demand;
-                    }
-                });
-            }
-            let op = &mut ops[i];
-            match d.kind {
-                Equipment::SupplyFan
-                | Equipment::ExhaustFan
-                | Equipment::Hood
-                | Equipment::Chimney => {
-                    if let Some((j, length)) = d.terminal {
-                        if on {
-                            let setting =
-                                inputs.settings.get(d.entity).copied().unwrap_or_default();
-                            let drive = match d.kind {
-                                Equipment::Chimney => chimney_drive(z.air[0] - outside[0]),
-                                Equipment::SupplyFan => setting.drive(z.boost),
-                                _ => -setting.drive(z.boost),
-                            };
-                            if matches!(openings[j].b, AirBoundary::Outdoor { .. }) {
-                                drives[j] += drive / (1.0 + 0.20 * length as f64);
-                            }
-                            state = "外壁の風穴に接続";
-                        }
-                    } else {
-                        state = "屋外端末なし（風穴まで風道を接続）";
-                    }
-                }
-                Equipment::Basin => {
-                    op.basin = true;
-                    op.water |= water;
-                    state = if water {
-                        "給水・排泥中"
-                    } else {
-                        "断水・停止"
-                    };
-                }
-                Equipment::Filter if on => {
-                    op.filters += 0.65;
-                    state = "循環ろ過中";
-                }
-                Equipment::HeatPump => {
-                    if !d.condenser {
-                        state = "直近の屋外に室外機が必要";
-                    } else if on {
-                        op.heat += f64::from(z.thermal) * 3.0;
-                        if z.thermal != 0 {
-                            op.rejected_heat += 1.0 - f64::from(z.thermal) * 3.0;
-                        }
-                        state = match z.thermal {
-                            -1 => "冷房中（除熱と消費電力を屋外へ放熱）",
-                            1 => "暖房中",
-                            _ => "設定温度内・待機",
-                        };
-                    }
-                }
-                Equipment::Humidifier | Equipment::Dehumidifier => {
-                    if !water {
-                        state = "給排水接続待ち";
-                    } else if on {
-                        let rh = z.air[1] / saturation(z.air[0]);
-                        if d.kind == Equipment::Humidifier && below(rh, 0.40) {
-                            op.humidify += 0.25;
-                            state = "加湿中";
-                        } else if d.kind == Equipment::Dehumidifier && above(rh, 0.60) {
-                            op.dry += 0.25;
-                            state = "除湿・排水中";
-                        } else {
-                            state = "設定湿度内・待機";
-                        }
-                    }
-                }
-                Equipment::Recuperator => {
-                    op.recovery = 0.6;
-                    state = "給排気の顕熱を回収";
-                }
-                _ => {}
-            }
-        } else if d.kind.indoor() {
-            state = "成立した部屋の床が必要";
-        } else if d.kind == Equipment::OutdoorUnit && !layout.is_outside(d.grid) {
-            state = "屋外への排熱経路なし";
-        }
-        if !inputs.current.get(d.entity).is_ok_and(|r| r.0 == state) {
-            commands.entity(d.entity).try_insert(DeviceReading(state));
-        }
-    }
-    #[cfg(feature = "profiling")]
-    let prepare_start = cache
-        .timing
-        .as_ref()
-        .map(|_| super::perf::cpu_time_ns(false));
-    let solver = cache.factors.get_or_insert_with(|| {
-        super::solver::Solver::new(
-            svc,
-            openings,
-            &mut cache.patterns,
-            #[cfg(feature = "profiling")]
-            cache.mode,
-            #[cfg(feature = "profiling")]
-            cache.tape.as_ref(),
-        )
-    });
-    removal.clear();
-    removal.extend(ops.iter().map(|op| op.filters));
-    let changed = solver.update(ledger.tick, wind, drives, removal, svc, openings);
-    #[cfg(feature = "profiling")]
-    let publish_start = prepare_start.map(|t| {
-        let now = super::perf::cpu_time_ns(false);
-        let stages = cache.timing.as_mut().unwrap();
-        stages.input += t - input_start.unwrap();
-        stages.wind = wind;
-        stages.prepare += now - t;
-        now
-    });
+        cache.timing.as_mut(),
+    );
+    cache.update_airflow(
+        commands,
+        svc,
+        ledger.tick,
+        wind,
+        #[cfg(feature = "profiling")]
+        input_start,
+    );
+    let solver = cache.factors.as_mut().expect("airflow solver initialized");
     let (_, flows) = solver.readings();
-    #[cfg(feature = "profiling")]
-    if let Some((timing, i)) = cache.timing.as_mut().zip(cache.inspected_port) {
-        timing.inspected_net = flows[i].net;
-    }
-    if changed {
-        #[cfg(feature = "profiling-memory")]
-        if publish_start.is_some() {
-            hw_core::profiling_alloc_scope::begin();
-        }
+    cache.work.collect_sources(
+        inputs,
+        svc,
+        flows,
         #[cfg(feature = "profiling")]
-        let full = cache.full_publication;
-        #[cfg(not(feature = "profiling"))]
-        let full = false;
-        let counts = super::publication::publish(solver, svc, commands, full);
-        #[cfg(not(feature = "profiling"))]
-        let _ = counts;
-        #[cfg(feature = "profiling")]
-        if let Some(s) = &mut cache.timing {
-            s.rooms_written += counts.0;
-            s.vents_written += counts.1;
-            s.groups_changed += counts.2;
-            #[cfg(feature = "profiling-memory")]
-            {
-                let allocation = hw_core::profiling_alloc_scope::end();
-                s.publish_allocations += allocation.calls;
-                s.publish_bytes += allocation.bytes;
-            }
-        }
-    }
-    #[cfg(feature = "profiling")]
-    if let Some(t) = publish_start {
-        cache.timing.as_mut().unwrap().publish += super::perf::cpu_time_ns(false) - t;
-    }
-    intake.clear();
-    exhaust.clear();
-    intake.resize(n, 0.);
-    exhaust.resize(n, 0.);
-    for (p, flow) in openings.iter().zip(flows) {
-        if matches!(p.b, AirBoundary::Outdoor { .. }) {
-            intake[p.a] += (-flow.net).max(0.0);
-            exhaust[p.a] += flow.net.max(0.0);
-            #[cfg(feature = "profiling")]
-            if let Some(stages) = &mut cache.timing {
-                stages.exterior_net_abs += flow.net.abs();
-            }
-        }
-    }
-    capture.clear();
-    for d in &svc.devices {
-        if d.kind == Equipment::Hood
-            && powered(d.entity)
-            && let (Some(i), Some((j, _))) = (d.room, d.terminal)
-        {
-            let fraction = flows[j].net.clamp(0.0, 1.0) * 0.8;
-            for tile in std::iter::once(d.grid).chain(super::services::neighbors(d.grid)) {
-                let entry = capture.entry((i, tile)).or_default();
-                *entry = entry.max(fraction);
-            }
-        }
-    }
-    for &(i, p, load) in loads.iter() {
-        sources[i][0] += load[0];
-        sources[i][1] += load[1];
-        sources[i][2] += load[2] * (1.0 - capture.get(&(i, p)).copied().unwrap_or(0.0));
-    }
-    previous.clear();
-    previous.extend(values.iter().map(|v| v[2]));
+        cache.timing.as_mut(),
+    );
     if integrate {
-        for (i, op) in ops.iter().enumerate() {
-            let volume = svc.volumes[i].max(1) as f64;
-            let v = values[i];
-            // Limit each local sink to stored mass; recovery transfers sensible heat only.
-            let dry = op.dry.min(v[1] * volume);
-            sources[i][1] += op.humidify - dry;
-            sources[i][0] += op.heat
-                + 2.45 * (dry - op.humidify)
-                + op.recovery * intake[i].min(exhaust[i]) * (v[0] - outside[0]);
-        }
+        cache.work.integrate(
+            svc,
+            ledger,
+            solver,
+            outside,
+            #[cfg(feature = "profiling")]
+            cache.timing.as_mut(),
+            #[cfg(feature = "profiling")]
+            cache.tape.as_deref(),
+        );
+    }
+    let (rates, _) = solver.readings();
+    cache.work.publish_rooms(
+        commands,
+        inputs,
+        ledger,
+        svc.layout.rooms.iter().copied().zip(rates),
+        outside,
+        live,
+    );
+}
+
+impl AirRuntime {
+    fn update_airflow(
+        &mut self,
+        commands: &mut Commands,
+        svc: &Services,
+        tick: u64,
+        wind: f64,
+        #[cfg(feature = "profiling")] input_start: Option<u64>,
+    ) {
+        let openings = &svc.ports;
         #[cfg(feature = "profiling")]
-        let start = cache
+        let prepare_start = self
             .timing
             .as_ref()
             .map(|_| super::perf::cpu_time_ns(false));
+        let solver = self.factors.get_or_insert_with(|| {
+            super::solver::Solver::new(
+                svc,
+                openings,
+                &mut self.patterns,
+                #[cfg(feature = "profiling")]
+                self.mode,
+                #[cfg(feature = "profiling")]
+                self.tape.as_ref(),
+            )
+        });
+        let (drives, removal) = self.work.flow_inputs();
+        let changed = solver.update(tick, wind, drives, removal, svc, openings);
         #[cfg(feature = "profiling")]
-        let comparison = cache.tape.as_ref().map(|t| t.frame(ledger.tick));
+        let publish_start = prepare_start.map(|t| {
+            let now = super::perf::cpu_time_ns(false);
+            let stages = self.timing.as_mut().unwrap();
+            stages.input += t - input_start.unwrap();
+            stages.wind = wind;
+            stages.prepare += now - t;
+            now
+        });
         #[cfg(feature = "profiling")]
-        let sources = comparison.map(|(sources, _)| sources).unwrap_or(sources);
-        #[cfg(not(feature = "profiling"))]
-        let sources = sources.as_slice();
-        solver.step(ledger.tick, outside, values, sources);
+        let (_, flows) = solver.readings();
         #[cfg(feature = "profiling")]
-        if let Some((_, expected)) = comparison {
-            assert!(
-                values
-                    .iter()
-                    .flatten()
-                    .zip(expected.iter().flatten())
-                    .all(|(&a, &b)| (a - b).abs() <= 1e-9 * (1. + b.abs())),
-                "reference climate diverged at tick {}",
-                ledger.tick
-            );
-            cache.timing.as_mut().unwrap().checked += 1;
+        if let Some((timing, i)) = self.timing.as_mut().zip(self.inspected_port) {
+            timing.inspected_net = flows[i].net;
+        }
+        if changed {
+            #[cfg(feature = "profiling-memory")]
+            if publish_start.is_some() {
+                hw_core::profiling_alloc_scope::begin();
+            }
+            #[cfg(feature = "profiling")]
+            let full = self.full_publication;
+            #[cfg(not(feature = "profiling"))]
+            let full = false;
+            let counts = super::publication::publish(solver, svc, commands, full);
+            #[cfg(not(feature = "profiling"))]
+            let _ = counts;
+            #[cfg(feature = "profiling")]
+            if let Some(s) = &mut self.timing {
+                s.rooms_written += counts.0;
+                s.vents_written += counts.1;
+                s.groups_changed += counts.2;
+                #[cfg(feature = "profiling-memory")]
+                {
+                    let allocation = hw_core::profiling_alloc_scope::end();
+                    s.publish_allocations += allocation.calls;
+                    s.publish_bytes += allocation.bytes;
+                }
+            }
         }
         #[cfg(feature = "profiling")]
-        if let Some(t) = start {
-            cache.timing.as_mut().unwrap().step += super::perf::cpu_time_ns(false) - t;
-        }
-        for (z, air) in ledger.zones.iter_mut().zip(values.iter_mut()) {
-            let condensate = (air[1] - saturation(air[0])).max(0.0);
-            air[1] -= condensate;
-            air[0] += condensate * 2.45 / 1.5;
-            z.air = *air;
+        if let Some(t) = publish_start {
+            self.timing.as_mut().unwrap().publish += super::perf::cpu_time_ns(false) - t;
         }
     }
-    let (rates, _) = solver.readings();
-    for (i, &entity) in layout.rooms.iter().enumerate() {
-        let op = &ops[i];
-        let sanction = op.water && rates[i].state() == VentilationState::Ventilated;
-        let zone = &mut ledger.zones[i];
-        if live && sanction && zone.sanction == Some(false) {
-            if let Some(assets) = inputs.assets.as_ref() {
-                let (x, y) = zone.tiles[zone.tiles.len() / 2];
-                hw_visual::floating_text::spawn_floating_text(
-                    commands,
-                    "認可",
-                    hw_world::WorldMap::grid_to_world(x, y)
-                        .extend(hw_core::constants::Z_FLOATING_TEXT),
-                    hw_visual::floating_text::FloatingTextConfig {
-                        initial_color: Color::srgb(0.5, 1.0, 0.72),
-                        ..default()
-                    },
-                    None,
-                    assets.font_ui.clone(),
-                );
-            }
-            zone.stamp_until = ledger.tick.saturating_add(5);
-        }
-        zone.sanction = Some(sanction);
-        commands.entity(entity).try_insert(RoomClimate {
-            granted: sanction && ledger.tick < zone.stamp_until,
-            rejected_heat: op.rejected_heat,
-            air: values[i],
-            outdoor: outside,
-            trend: values[i][2] - previous[i],
-            basin: op.basin,
-            water: op.water,
-            sanctioned: sanction,
-            boost: zone.boost,
-        });
+}
+
+impl AirInputs<'_, '_> {
+    fn powered(&self, entity: Entity) -> bool {
+        self.power
+            .get(entity)
+            .is_ok_and(|p| *p == hw_energy::PowerSupplyState::Supplied)
     }
 }
 
@@ -793,7 +543,7 @@ mod tests {
     use super::*;
     use crate::systems::ventilation::{RoomVentilation, update_room_ventilation};
     use bevy::ecs::system::RunSystemOnce;
-    use hw_jobs::{Building, BuildingType};
+    use hw_jobs::{Building, BuildingType, Equipment};
     use hw_world::room_detection::{RoomBounds, RoomTileSignature};
     use hw_world::{Room, RoomDetectionState, WorldMap};
 
@@ -926,6 +676,7 @@ mod tests {
             .collect();
         let ventilated = w.get::<RoomVentilation>(room).unwrap().0.supplied();
         assert!(w.get::<RoomClimate>(room).unwrap().sanctioned);
+        let air_before_pause = w.get::<RoomClimate>(room).unwrap().air;
         w.entity_mut(fan).insert(PowerSupplyState::Disconnected);
         w.run_system_with(step, 0.0).unwrap();
         assert!(w.get::<RoomVentilation>(room).unwrap().0.supplied() < ventilated);
@@ -949,6 +700,9 @@ mod tests {
         w.entity_mut(intake).insert(PowerSupplyState::Disconnected);
         w.run_system_with(step, 0.0).unwrap();
         assert!(!w.get::<RoomClimate>(room).unwrap().sanctioned);
+        let paused = w.query::<&AirLedger>().single(&w).unwrap();
+        assert_eq!((paused.tick, paused.remainder), (0, 0.25));
+        assert_eq!(w.get::<RoomClimate>(room).unwrap().air, air_before_pause);
         w.run_system_with(step, 0.75).unwrap();
         let ledger = w.query::<&AirLedger>().single(&w).unwrap();
         assert_eq!((ledger.tick, ledger.remainder), (1, 0.0));
