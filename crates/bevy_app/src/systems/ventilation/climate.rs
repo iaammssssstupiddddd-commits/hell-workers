@@ -269,7 +269,8 @@ pub(crate) fn advance(
         {
             cache.inspected_port = probe.as_ref().and_then(|p| p.pinned_vent).and_then(|e| {
                 services
-                    .vent_entities
+                    .vents
+                    .entities
                     .iter()
                     .position(|(entity, _)| *entity == e)
             });
@@ -278,7 +279,9 @@ pub(crate) fn advance(
             cache.tape = probe
                 .as_ref()
                 .filter(|p| {
-                    p.use_tape && services.volumes.len() == 256 && services.ports.len() == 512
+                    p.use_tape
+                        && services.volumes.len() == 256
+                        && services.vents.openings.len() == 512
                 })
                 .map(|_| std::sync::Arc::new(super::replay::Trajectory::load(services)));
         }
@@ -464,7 +467,7 @@ impl AirRuntime {
         wind: f64,
         #[cfg(feature = "profiling")] input_start: Option<u64>,
     ) {
-        let openings = &svc.ports;
+        let openings = &svc.vents.openings;
         #[cfg(feature = "profiling")]
         let prepare_start = self
             .timing
@@ -628,6 +631,53 @@ mod tests {
             }
         }
         (room, vents)
+    }
+
+    #[test]
+    fn inactive_grates_do_not_shift_active_flow_indices_after_rebuild() {
+        use crate::systems::ventilation::VentReading;
+        let mut world = World::new();
+        world.init_resource::<RoomDetectionState>();
+        let (_, room_vents) = fixture_room(&mut world, 20);
+        let (_, other_vents) = fixture_room(&mut world, 40);
+        // Sorted by cell, an inactive grate falls between the two grates of each room.
+        let inactive =
+            [22, 42].map(|x| fixture_building(&mut world, BuildingType::ScreamingVent, x, 15));
+        let update = world.register_system(update_room_ventilation);
+        let step = world.register_system(advance);
+        let assert_pair = |w: &World, grates: &[Entity]| {
+            let [west, east] = [grates[0], grates[1]].map(|e| {
+                let VentReading::Passage { flow, .. } = w.get::<VentReading>(e).unwrap() else {
+                    panic!("expected connected exterior grate")
+                };
+                flow.net
+            });
+            assert!(west < 0.0 && east > 0.0);
+            assert!((west + east).abs() < 1e-9);
+        };
+        world.run_system(update).unwrap();
+        assert_pair(&world, &room_vents);
+        assert_pair(&world, &other_vents);
+        world.run_system_with(step, 0.0).unwrap();
+        for e in inactive {
+            assert_eq!(world.get::<VentReading>(e), Some(&VentReading::Unconnected));
+        }
+        // With the first west opening removed, the other room's dense indices change.
+        world.despawn(room_vents[0]);
+        world.resource_mut::<RoomDetectionState>().geometry_revision += 1;
+        world.run_system(update).unwrap();
+        assert_pair(&world, &other_vents);
+        world.run_system_with(step, 1.0).unwrap();
+        assert_pair(&world, &other_vents);
+        let replacement = fixture_building(&mut world, BuildingType::ScreamingVent, 20, 21);
+        world.resource_mut::<RoomDetectionState>().geometry_revision += 1;
+        world.run_system(update).unwrap();
+        world.run_system_with(step, 0.0).unwrap();
+        assert_pair(&world, &[replacement, room_vents[1]]);
+        assert_pair(&world, &other_vents);
+        for e in inactive {
+            assert_eq!(world.get::<VentReading>(e), Some(&VentReading::Unconnected));
+        }
     }
 
     #[test]

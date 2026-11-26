@@ -132,34 +132,33 @@ pub(crate) fn update_room_ventilation(
     }
     *previous_revision = Some(revision);
     let layout = Layout::build(rooms.iter().map(|(e, r, _)| (e, r)), buildings.iter());
-    let active: Vec<_> = layout
-        .ports
-        .iter()
-        .filter_map(|port| port.passage.map(|p| p.opening))
-        .collect();
-    let (values, flows, _counts) = ventilation::solve_with_counts(&layout.floors, &active);
+    let vents = services::ConnectedVents::from_layout(&layout);
+    let (values, flows, _counts) = ventilation::solve_with_counts(&layout.floors, &vents.openings);
     for (&e, value) in layout.rooms.iter().zip(values) {
         let value = RoomVentilation(value);
         if rooms.get(e).is_ok_and(|(_, _, v)| v != Some(&value)) {
             commands.entity(e).insert(value);
         }
     }
-    let mut ordered_flows = flows.iter().copied();
-    for port in &layout.ports {
-        let next = match port.passage {
-            Some(passage) => {
-                VentReading::from_flow(passage, ordered_flows.next().expect("one flow per opening"))
-            }
-            None => VentReading::Unconnected,
-        };
-        if readings.get(port.entity).ok() != Some(&next) {
-            commands.entity(port.entity).try_insert(next);
+    let active_readings = vents
+        .entities
+        .iter()
+        .zip(&flows)
+        .map(|(&(entity, passage), &flow)| (entity, VentReading::from_flow(passage, flow)));
+    let inactive_readings = layout
+        .ports
+        .iter()
+        .filter(|port| port.passage.is_none())
+        .map(|port| (port.entity, VentReading::Unconnected));
+    for (entity, next) in active_readings.chain(inactive_readings) {
+        if readings.get(entity).ok() != Some(&next) {
+            commands.entity(entity).try_insert(next);
         }
     }
     #[cfg(feature = "profiling")]
     if let Some((mut p, start)) = probe {
         p.rooms = layout.rooms.len();
-        p.grates = active.len();
+        p.grates = vents.openings.len();
         p.counts = _counts;
         p.rebuilds += 1;
         p.sampled(start);
@@ -167,13 +166,14 @@ pub(crate) fn update_room_ventilation(
         if p.dimensions_requested && !layout.rooms.is_empty() {
             p.transport = Some(transport_probe::TransportProbe::new(
                 &layout.floors,
-                &active,
+                &vents.openings,
                 &flows,
             ));
         }
     }
     commands.insert_resource(services::Services::build(
         layout,
+        vents,
         rooms.iter().map(|(e, r, _)| (e, r)),
         buildings.iter(),
     ));

@@ -102,7 +102,7 @@ impl AirWork {
             supplied,
             ..
         } = self;
-        let openings = &svc.ports;
+        let openings = &svc.vents.openings;
         drives.clear();
         drives.resize(openings.len(), 0.);
         ops.clear();
@@ -240,7 +240,7 @@ impl AirWork {
         flows: &[OpeningFlow],
         #[cfg(feature = "profiling")] mut timing: Option<&mut StageTimes>,
     ) {
-        let openings = &svc.ports;
+        let openings = &svc.vents.openings;
         let n = svc.layout.floors.len();
         let Self {
             intake,
