@@ -259,7 +259,14 @@ impl EntityInspectionQuery<'_, '_> {
         };
 
         if model.header.is_empty() {
-            model.header = format!("Building: {:?}", building.kind);
+            model.header = match building.kind {
+                hw_jobs::BuildingType::Equipment(_)
+                | hw_jobs::BuildingType::Floor
+                | hw_jobs::BuildingType::ScreamingVent => {
+                    hw_ui::catalog::building_copy(building.kind).0.to_owned()
+                }
+                _ => format!("Building: {:?}", building.kind),
+            };
         }
 
         let mut building_info = format!("Building: {:?}", building.kind);

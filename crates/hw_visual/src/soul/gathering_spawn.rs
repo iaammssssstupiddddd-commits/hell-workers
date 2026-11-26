@@ -4,7 +4,7 @@
 //! hw_visual crate 内から呼び出せる独立 helper。
 
 use bevy::prelude::*;
-use hw_core::constants::{TILE_SIZE, Z_AURA, Z_ITEM};
+use hw_core::constants::{Z_AURA, Z_ITEM};
 use hw_core::gathering::{
     GATHERING_GRACE_PERIOD, GATHERING_MAX_CAPACITY, GatheringObjectType, GatheringSpot,
     GatheringVisuals, calculate_aura_size,
@@ -37,7 +37,7 @@ pub fn spawn_gathering_spot(
     let aura_entity = commands
         .spawn((
             Sprite {
-                image: handles.aura_circle.clone(),
+                image: handles.aura_ring.clone(),
                 custom_size: Some(Vec2::splat(aura_size)),
                 color: Color::srgba(0.5, 0.2, 0.8, 0.3),
                 ..default()
@@ -57,10 +57,11 @@ pub fn spawn_gathering_spot(
             .spawn((
                 Sprite {
                     image,
-                    custom_size: Some(Vec2::splat(TILE_SIZE * 1.5)),
+                    custom_size: Some(Vec2::splat(hw_core::gathering::GATHERING_OBJECT_SIZE)),
                     ..default()
                 },
                 Transform::from_xyz(center.x, center.y, Z_ITEM),
+                Visibility::Hidden,
             ))
             .id()
     });

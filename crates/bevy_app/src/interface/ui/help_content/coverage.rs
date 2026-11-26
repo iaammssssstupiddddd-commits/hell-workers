@@ -633,7 +633,22 @@ coverage_table! {
             published("architect-building")
         },
         "building-type::soul-spa" => unit(SoulSpa) => published("architect-building"),
-        "building-type::outdoor-lamp" => unit(OutdoorLamp) => published("architect-building")
+        "building-type::outdoor-lamp" => unit(OutdoorLamp) => published("architect-building"),
+        "building-type::supply-fan" => tuple(Equipment(hw_jobs::Equipment::SupplyFan)) => published("indoor-controls"),
+        "building-type::exhaust-fan" => tuple(Equipment(hw_jobs::Equipment::ExhaustFan)) => published("indoor-controls"),
+        "building-type::chimney" => tuple(Equipment(hw_jobs::Equipment::Chimney)) => published("indoor-controls"),
+        "building-type::duct" => tuple(Equipment(hw_jobs::Equipment::Duct)) => published("indoor-controls"),
+        "building-type::intake" => tuple(Equipment(hw_jobs::Equipment::Intake)) => published("indoor-services"),
+        "building-type::conduit" => tuple(Equipment(hw_jobs::Equipment::Conduit)) => published("indoor-services"),
+        "building-type::basin" => tuple(Equipment(hw_jobs::Equipment::Basin)) => published("indoor-services"),
+        "building-type::hood" => tuple(Equipment(hw_jobs::Equipment::Hood)) => published("indoor-controls"),
+        "building-type::filter" => tuple(Equipment(hw_jobs::Equipment::Filter)) => published("indoor-controls"),
+        "building-type::heat-pump" => tuple(Equipment(hw_jobs::Equipment::HeatPump)) => published("indoor-controls"),
+        "building-type::outdoor-unit" => tuple(Equipment(hw_jobs::Equipment::OutdoorUnit)) => published("indoor-controls"),
+        "building-type::humidifier" => tuple(Equipment(hw_jobs::Equipment::Humidifier)) => published("indoor-controls"),
+        "building-type::dehumidifier" => tuple(Equipment(hw_jobs::Equipment::Dehumidifier)) => published("indoor-controls"),
+        "building-type::recuperator" => tuple(Equipment(hw_jobs::Equipment::Recuperator)) => published("indoor-controls"),
+        "building-type::screaming-vent" => unit(ScreamingVent) => published("natural-ventilation")
     }
 }
 
@@ -647,6 +662,7 @@ coverage_table! {
             published("architect-building")
         },
         "building-category::plant" => unit(Plant) => published("architect-building"),
+        "building-category::infrastructure" => unit(Infrastructure) => published("indoor-services"),
         "building-category::temporary" => unit(Temporary) => published("architect-building")
     }
 }
@@ -939,6 +955,7 @@ coverage_table! {
 /// exhaustive enum tables above or one of these explicit descriptive surfaces.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum DescriptiveSurface {
+    RoomVentilation,
     WaterworksTodo,
     GettingStartedFirstSteps,
     CameraPanZoom,
@@ -952,7 +969,8 @@ enum DescriptiveSurface {
 }
 
 impl DescriptiveSurface {
-    const ALL: [Self; 10] = [
+    const ALL: [Self; 11] = [
+        Self::RoomVentilation,
         Self::WaterworksTodo,
         Self::GettingStartedFirstSteps,
         Self::CameraPanZoom,
@@ -967,6 +985,7 @@ impl DescriptiveSurface {
 
     const fn as_str(self) -> &'static str {
         match self {
+            Self::RoomVentilation => "descriptive::room-ventilation",
             Self::WaterworksTodo => "descriptive::waterworks-todo",
             Self::GettingStartedFirstSteps => "descriptive::getting-started-first-steps",
             Self::CameraPanZoom => "descriptive::camera-pan-zoom",
@@ -983,6 +1002,7 @@ impl DescriptiveSurface {
 
 const fn descriptive_surface_coverage(surface: DescriptiveSurface) -> SurfaceCoverage {
     match surface {
+        DescriptiveSurface::RoomVentilation => published("natural-ventilation"),
         DescriptiveSurface::WaterworksTodo => published("first-waterworks"),
         DescriptiveSurface::GettingStartedFirstSteps => published("getting-started-first-steps"),
         DescriptiveSurface::CameraPanZoom => published("camera-pan-zoom"),

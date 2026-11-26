@@ -52,8 +52,32 @@ type OverlayQuery<'w, 's> = Query<
 pub(crate) fn world_overlay_visibility(
     view: Res<WorldViewState>,
     selected: Res<crate::interface::selection::SelectedEntity>,
+    buildings: Query<(&hw_jobs::Building, &Transform)>,
+    floors: Option<Res<hw_world::RoomTileLookup>>,
+    boundaries: Option<Res<hw_world::RoomBoundaryLookup>>,
     mut overlays: OverlayQuery,
 ) {
+    let selected_building = selected
+        .0
+        .and_then(|e| buildings.get(e).ok())
+        .filter(|(building, _)| !building.is_provisional)
+        .map(|(building, transform)| {
+            (
+                building.kind,
+                hw_world::WorldMap::world_to_grid(transform.translation.truncate()),
+            )
+        });
+    let inspected_rooms = match selected_building {
+        Some((hw_jobs::BuildingType::ScreamingVent, grid)) => {
+            boundaries.as_deref().map(|b| b.rooms_at(grid))
+        }
+        Some((hw_jobs::BuildingType::Floor, grid)) => floors
+            .as_deref()
+            .and_then(|f| f.tile_to_room.get(&grid))
+            .map(std::slice::from_ref),
+        _ => None,
+    }
+    .unwrap_or_default();
     for (mut visibility, area, aura, boundary, parent, room) in &mut overlays {
         // Established work areas, command auras and Site/Yard borders are
         // persistent world information, independent of the optional map layer.
@@ -61,7 +85,10 @@ pub(crate) fn world_overlay_visibility(
             true
         } else {
             room && (view.effective() == WorldView::Rooms
-                || parent.is_some_and(|parent| selected.0 == Some(parent.parent())))
+                || parent.is_some_and(|parent| {
+                    selected.0 == Some(parent.parent())
+                        || inspected_rooms.contains(&parent.parent())
+                }))
         };
         let next = if visible {
             Visibility::Visible

@@ -37,7 +37,7 @@ pub(crate) fn structural_light_anchor_mesh_tag_with_direction(
     direction: u32,
 ) -> Option<MeshTag> {
     let policy = match kind {
-        BuildingType::Wall => LIGHT_ANCHOR_POLICY_WALL,
+        BuildingType::Wall | BuildingType::ScreamingVent => LIGHT_ANCHOR_POLICY_WALL,
         BuildingType::Door => LIGHT_ANCHOR_POLICY_DOOR,
         _ => return None,
     };
@@ -69,7 +69,8 @@ pub(crate) enum RenderPresentationClass {
 
 pub(crate) const fn presentation_class(kind: BuildingType) -> RenderPresentationClass {
     match kind {
-        BuildingType::Wall
+        BuildingType::ScreamingVent
+        | BuildingType::Wall
         | BuildingType::Door
         | BuildingType::Floor
         | BuildingType::Bridge
@@ -80,6 +81,7 @@ pub(crate) const fn presentation_class(kind: BuildingType) -> RenderPresentation
         BuildingType::SandPile
         | BuildingType::BonePile
         | BuildingType::WheelbarrowParking
+        | BuildingType::Equipment(_)
         | BuildingType::OutdoorLamp => RenderPresentationClass::Foreground2d,
     }
 }
@@ -125,6 +127,15 @@ pub(super) fn spawn_completed_building(
             .insert(ProvisionalWall::default());
     }
 
+    if let BuildingType::Equipment(kind) = bp.kind
+        && kind.demand() > 0.0
+    {
+        commands
+            .entity(building_entity)
+            .insert(hw_energy::PowerConsumer {
+                demand: kind.demand(),
+            });
+    }
     if bp.kind == BuildingType::Door {
         commands.entity(building_entity).insert(Door {
             state: DoorState::Closed,
@@ -164,6 +175,7 @@ pub(crate) fn attach_building_shell(
             game_assets.mud_wall_isolated.clone(),
             Vec2::splat(TILE_SIZE),
         ),
+        BuildingType::ScreamingVent => (game_assets.screaming_vent.clone(), Vec2::splat(TILE_SIZE)),
         BuildingType::Door => (game_assets.door_closed.clone(), Vec2::splat(TILE_SIZE)),
         BuildingType::Floor => (game_assets.mud_floor.clone(), Vec2::splat(TILE_SIZE)),
         BuildingType::Tank => (game_assets.tank_empty.clone(), Vec2::splat(TILE_SIZE * 2.0)),
@@ -180,9 +192,21 @@ pub(crate) fn attach_building_shell(
             Vec2::new(TILE_SIZE * 2.0, TILE_SIZE * 5.0),
         ),
         BuildingType::SoulSpa => (game_assets.rest_area.clone(), Vec2::splat(TILE_SIZE * 2.0)),
+        BuildingType::Equipment(equipment) => {
+            let shape = hw_jobs::building_shape(kind);
+            (
+                game_assets.equipment_image(equipment).clone(),
+                Vec2::from(shape.size_tiles) * TILE_SIZE * 0.8,
+            )
+        }
         BuildingType::OutdoorLamp => (game_assets.bone_pile.clone(), Vec2::splat(TILE_SIZE)),
     };
 
+    if kind == BuildingType::Equipment(hw_jobs::Equipment::Conduit) {
+        commands
+            .entity(building_entity)
+            .insert(crate::systems::ventilation::PipeDisplay);
+    }
     let class = presentation_class(kind);
     let mut owner = commands.entity(building_entity);
     owner.insert((
@@ -195,6 +219,18 @@ pub(crate) fn attach_building_shell(
 
     if class == RenderPresentationClass::Foreground2d {
         owner.with_children(|parent| {
+            if let BuildingType::Equipment(e) = kind {
+                parent.spawn((
+                    Text2d::new(e.symbol()),
+                    TextFont {
+                        font: game_assets.font_ui.clone().into(),
+                        font_size: FontSize::Px(9.0),
+                        ..default()
+                    },
+                    TextColor(Color::WHITE),
+                    Transform::from_xyz(0.0, -TILE_SIZE * 0.18, 0.2),
+                ));
+            }
             parent.spawn((
                 layer_kind,
                 Sprite {
@@ -238,7 +274,7 @@ pub(crate) fn spawn_building_3d_visual(
     }
 
     match kind {
-        BuildingType::Wall => {
+        BuildingType::Wall | BuildingType::ScreamingVent => {
             let material = if is_provisional {
                 handles_3d.wall_provisional_material.clone()
             } else {
@@ -246,7 +282,7 @@ pub(crate) fn spawn_building_3d_visual(
             };
             let transform_3d = Transform::from_xyz(pos2d.x, TILE_SIZE * 0.5, -pos2d.y);
             let owner_transform = Transform::from_xyz(pos2d.x, pos2d.y, 0.0);
-            commands.spawn((
+            let mut visual = commands.spawn((
                 Mesh3d(handles_3d.wall_mesh.clone()),
                 MeshMaterial3d(material),
                 transform_3d,
@@ -258,6 +294,19 @@ pub(crate) fn spawn_building_3d_visual(
                     .expect("Wall grid anchor fits MeshTag"),
                 Name::new(format!("Building3dVisual ({:?})", kind)),
             ));
+            if kind == BuildingType::ScreamingVent {
+                visual.with_child((
+                    Name::new("風穴の格子"),
+                    hw_visual::visual3d::VentGrate,
+                    Mesh3d(handles_3d.vent_grate_mesh.clone()),
+                    MeshMaterial3d(handles_3d.vent_material.clone()),
+                    // The production wall pivot is at half height. Mount on its cap.
+                    Transform::from_xyz(0.0, TILE_SIZE * 0.5 + 0.3, 0.0),
+                    handles_3d.render_layers.clone(),
+                    structural_light_anchor_mesh_tag(kind, &owner_transform)
+                        .expect("vent grid anchor fits MeshTag"),
+                ));
+            }
         }
         BuildingType::Door => {
             let transform_3d = Transform::from_xyz(pos2d.x, TILE_SIZE * 0.25, -pos2d.y);
@@ -301,6 +350,7 @@ pub(crate) fn spawn_building_3d_visual(
         BuildingType::SandPile
         | BuildingType::BonePile
         | BuildingType::WheelbarrowParking
+        | BuildingType::Equipment(_)
         | BuildingType::OutdoorLamp => unreachable!(),
     }
 }
@@ -319,8 +369,8 @@ mod tests {
             .count();
         let foreground = BuildingType::ALL.len() - structural;
 
-        assert_eq!(structural, 8);
-        assert_eq!(foreground, 4);
+        assert_eq!(structural, 9);
+        assert_eq!(foreground, 4 + hw_jobs::Equipment::ALL.len());
     }
 
     #[test]

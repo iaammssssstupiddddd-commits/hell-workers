@@ -102,7 +102,7 @@ mod tests {
     fn remove_required_marker(world: &mut World, target: Entity, kind: BuildingType) -> bool {
         let mut entity = world.entity_mut(target);
         match kind {
-            BuildingType::Wall | BuildingType::Floor => return false,
+            BuildingType::Wall | BuildingType::Floor | BuildingType::ScreamingVent => return false,
             BuildingType::Door => {
                 entity.remove::<Door>();
             }
@@ -130,6 +130,12 @@ mod tests {
             BuildingType::SoulSpa => {
                 entity.remove::<PowerGenerator>();
             }
+            BuildingType::Equipment(kind) => {
+                if kind.demand() == 0.0 {
+                    return false;
+                }
+                entity.remove::<PowerConsumer>();
+            }
             BuildingType::OutdoorLamp => {
                 entity.remove::<PowerConsumer>();
             }
@@ -146,7 +152,7 @@ mod tests {
             Transform::default(),
         ));
         match kind {
-            BuildingType::Wall | BuildingType::Floor => {}
+            BuildingType::Wall | BuildingType::Floor | BuildingType::ScreamingVent => {}
             BuildingType::Door => {
                 entity.insert(Door::default());
             }
@@ -185,6 +191,13 @@ mod tests {
                     phase: SoulSpaPhase::Operational,
                     ..default()
                 });
+            }
+            BuildingType::Equipment(kind) => {
+                if kind.demand() > 0.0 {
+                    entity.insert(PowerConsumer {
+                        demand: kind.demand(),
+                    });
+                }
             }
             BuildingType::OutdoorLamp => {
                 entity.insert(PowerConsumer { demand: 1.0 });

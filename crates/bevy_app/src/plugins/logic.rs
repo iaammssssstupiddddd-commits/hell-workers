@@ -256,7 +256,17 @@ impl Plugin for LogicPlugin {
                 .chain()
                 .after(dream_tree_planting_system)
                 .after(DeconstructionFinalizerSet::Finalize)
-                .in_set(GameSystemSet::Logic),
+                .in_set(GameSystemSet::PreActor),
+        )
+        .add_systems(
+            Update,
+            (
+                crate::systems::ventilation::update_room_ventilation,
+                crate::systems::ventilation::climate::elapsed
+                    .pipe(crate::systems::ventilation::climate::advance),
+            )
+                .chain()
+                .in_set(GameSystemSet::PostActor),
         )
         .add_observer(on_building_added)
         .add_observer(on_building_removed)
@@ -396,7 +406,10 @@ fn register_door_proximity_systems(app: &mut App) {
 }
 
 fn door_automation_enabled(config: Option<Res<PerfScenarioConfig>>) -> bool {
-    !config.is_some_and(|config| config.freezes_indoor_light_door_automation())
+    !config.is_some_and(|config| {
+        config.freezes_indoor_light_door_automation()
+            || config.workload().uses_ventilation_fixture() && config.enabled()
+    })
 }
 
 fn configure_task_owner_cancellation_schedule(app: &mut App) {

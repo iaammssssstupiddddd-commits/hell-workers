@@ -332,11 +332,16 @@ pub fn wall_connections_system(
         for (entity, transform, building_visual) in topology.q_all_buildings.iter() {
             let grid = matches!(
                 building_visual.kind,
-                BuildingTypeVisual::Wall | BuildingTypeVisual::Door
+                BuildingTypeVisual::Wall
+                    | BuildingTypeVisual::Door
+                    | BuildingTypeVisual::ScreamingVent
             )
             .then(|| WorldMap::world_to_grid(transform.translation.truncate()));
             index.set_building(entity, grid);
-            if building_visual.kind != BuildingTypeVisual::Wall {
+            if !matches!(
+                building_visual.kind,
+                BuildingTypeVisual::Wall | BuildingTypeVisual::ScreamingVent
+            ) {
                 commands.entity(entity).try_remove::<WallTopologyState>();
             }
         }
@@ -362,11 +367,16 @@ pub fn wall_connections_system(
         for (entity, transform, building_visual) in topology.q_changed_buildings.iter() {
             let grid = matches!(
                 building_visual.kind,
-                BuildingTypeVisual::Wall | BuildingTypeVisual::Door
+                BuildingTypeVisual::Wall
+                    | BuildingTypeVisual::Door
+                    | BuildingTypeVisual::ScreamingVent
             )
             .then(|| WorldMap::world_to_grid(transform.translation.truncate()));
             index.set_building(entity, grid);
-            if building_visual.kind != BuildingTypeVisual::Wall {
+            if !matches!(
+                building_visual.kind,
+                BuildingTypeVisual::Wall | BuildingTypeVisual::ScreamingVent
+            ) {
                 commands.entity(entity).try_remove::<WallTopologyState>();
             }
         }
@@ -413,13 +423,17 @@ pub fn wall_connections_system(
         let resolved = resolve_wall_topology(mask);
         index.resolved.insert(grid, resolved);
         for entity in index.contributors(grid) {
-            let is_plain_wall = topology.q_walls_check.get(entity).ok().is_some_and(
+            let needs_wall_shape = topology.q_walls_check.get(entity).ok().is_some_and(
                 |(building_visual_opt, blueprint_opt)| {
-                    building_visual_opt.is_some_and(|v| v.kind == BuildingTypeVisual::Wall)
-                        || blueprint_opt.is_some_and(|s| s.is_plain_wall)
+                    building_visual_opt.is_some_and(|v| {
+                        matches!(
+                            v.kind,
+                            BuildingTypeVisual::Wall | BuildingTypeVisual::ScreamingVent
+                        )
+                    }) || blueprint_opt.is_some_and(|s| s.is_plain_wall)
                 },
             );
-            if !is_plain_wall {
+            if !needs_wall_shape {
                 continue;
             }
             commands.entity(entity).try_insert(WallTopologyState {
@@ -429,6 +443,16 @@ pub fn wall_connections_system(
                 revision,
             });
 
+            // The vent inherits the wall topology for its 3D shell and keeps its own grate sprite.
+            if topology
+                .q_walls_check
+                .get(entity)
+                .is_ok_and(|(building, _)| {
+                    building.is_some_and(|v| v.kind == BuildingTypeVisual::ScreamingVent)
+                })
+            {
+                continue;
+            }
             // 完成した Building は Sprite を VisualLayerKind::Struct 子エンティティに持つ
             let mut updated = false;
             if let Ok(children) = queries.q_children.get(entity) {

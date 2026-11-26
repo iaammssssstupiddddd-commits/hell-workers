@@ -338,6 +338,8 @@ impl Plugin for StartupPlugin {
                 Update,
                 (
                     perf_scenario::drive_perf_workload_system,
+                    perf_scenario::ventilation_fixture::operate_doors
+                        .run_if(resource_exists::<perf_scenario::ventilation_fixture::Fixture>),
                     perf_scenario::drive_deconstruction_perf_workload_system,
                 )
                     .in_set(PerfScenarioSet::Driver)

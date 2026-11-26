@@ -40,6 +40,8 @@ def add_run_arguments(
         choices=[
             "gather",
             "path-door",
+            "ventilation",
+            "ventilation-dimensions",
             "construction",
             "ui-gpu",
             "task-dashboard",

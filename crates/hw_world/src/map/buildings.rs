@@ -11,6 +11,27 @@ pub struct OccupancyConflict {
 }
 
 impl WorldMap {
+    /// Gathering props can extend into neighboring cells even when their center is outdoors.
+    pub fn fits_gathering_prop(&self, center: Vec2) -> bool {
+        let half = Vec2::splat(hw_core::gathering::GATHERING_OBJECT_SIZE * 0.5);
+        let (x0, y0) = Self::world_to_grid(center - half);
+        let (x1, y1) = Self::world_to_grid(center + half);
+        (x0..=x1).all(|x| {
+            (y0..=y1).all(|y| {
+                let grid = (x, y);
+                let cell_min =
+                    Self::grid_to_world(x, y) - Vec2::splat(hw_core::constants::TILE_SIZE * 0.5);
+                cell_min.x >= center.x + half.x
+                    || cell_min.y >= center.y + half.y
+                    || (self.is_walkable(x, y)
+                        && !self.has_building(grid)
+                        && self.floor_entity(grid).is_none()
+                        && self.door_entity(x, y).is_none()
+                        && !self.has_stockpile(grid))
+            })
+        })
+    }
+
     pub fn building_entity(&self, grid: (i32, i32)) -> Option<Entity> {
         self.buildings.get(&grid).copied()
     }
@@ -115,6 +136,14 @@ impl WorldMap {
         self.buildings.iter()
     }
 
+    pub fn footprint_owner(&self, kind: BuildingType, grid: (i32, i32)) -> Option<Entity> {
+        if kind == BuildingType::Equipment(hw_jobs::Equipment::Conduit) {
+            self.conduits.get(&grid).copied()
+        } else {
+            self.building_entity(grid)
+        }
+    }
+
     pub fn reserve_building_footprint<I>(
         &mut self,
         building_type: BuildingType,
@@ -124,6 +153,11 @@ impl WorldMap {
         I: IntoIterator<Item = (i32, i32)>,
     {
         match building_type {
+            BuildingType::Equipment(hw_jobs::Equipment::Conduit) => {
+                for grid in grids {
+                    self.conduits.insert(grid, entity);
+                }
+            }
             BuildingType::Bridge => {
                 for grid in grids {
                     self.set_building(grid, entity);
@@ -154,7 +188,16 @@ impl WorldMap {
         grids: &[(i32, i32)],
         retained_obstacles: &std::collections::HashSet<(i32, i32)>,
     ) -> Result<(), OccupancyConflict> {
-        self.validate_owned_footprint(expected, grids.iter().copied())?;
+        for &grid in grids {
+            let actual = self.footprint_owner(building_type, grid);
+            if actual != Some(expected) {
+                return Err(OccupancyConflict {
+                    grid,
+                    expected,
+                    actual,
+                });
+            }
+        }
         self.register_completed_footprint(
             building_type,
             entity,
@@ -174,6 +217,11 @@ impl WorldMap {
         I: IntoIterator<Item = (i32, i32)>,
     {
         match building_type {
+            BuildingType::Equipment(hw_jobs::Equipment::Conduit) => {
+                for grid in grids {
+                    self.conduits.insert(grid, entity);
+                }
+            }
             BuildingType::Bridge => {
                 for grid in grids {
                     self.register_bridge_tile(grid, entity);
@@ -203,6 +251,23 @@ impl WorldMap {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn gathering_prop_needs_clear_ground_across_its_whole_sprite() {
+        let mut map = WorldMap::default();
+        let owner = Entity::from_bits(42);
+        let center = WorldMap::grid_to_world(12, 12);
+        assert!(map.fits_gathering_prop(center));
+        for kind in [BuildingType::Floor, BuildingType::Wall, BuildingType::Door] {
+            let mut occupied = WorldMap::default();
+            occupied.register_completed_building_footprint(kind, owner, [(13, 13)]);
+            assert!(!occupied.fits_gathering_prop(center));
+        }
+        map.add_obstacle(11, 12);
+        assert!(!map.fits_gathering_prop(center));
+        assert!(map.fits_gathering_prop(center + Vec2::X * hw_core::constants::TILE_SIZE * 0.25));
+        assert!(!map.fits_gathering_prop(WorldMap::grid_to_world(0, 0)));
+    }
 
     #[test]
     fn owned_footprint_release_is_atomic_and_mismatch_preserves_all_layers_test() {
@@ -313,5 +378,35 @@ mod tests {
         assert!(map.has_raw_obstacle(grid.0, grid.1));
         assert!(!map.is_walkable(grid.0, grid.1));
         assert_eq!(map.obstacle_version, version);
+    }
+}
+
+#[cfg(test)]
+mod conduit_tests {
+    use super::*;
+    #[test]
+    fn underground_blueprint_and_completion_preserve_wall_and_floor_ownership() {
+        let mut map = WorldMap::default();
+        let grid = (20, 20);
+        let floor = Entity::from_bits(1);
+        let wall = Entity::from_bits(2);
+        let plan = Entity::from_bits(3);
+        let pipe = Entity::from_bits(4);
+        let kind = BuildingType::Equipment(hw_jobs::Equipment::Conduit);
+        map.set_floor(grid, floor);
+        map.set_building_occupancy(grid, wall);
+        let version = map.obstacle_version;
+        map.reserve_building_footprint(kind, plan, [grid]);
+        assert!(
+            map.complete_owned_building_footprint(wall, pipe, kind, &[grid], &Default::default())
+                .is_err()
+        );
+        map.complete_owned_building_footprint(plan, pipe, kind, &[grid], &Default::default())
+            .unwrap();
+        assert_eq!(map.conduits.remove(&grid), Some(pipe));
+        assert_eq!(map.building_entity(grid), Some(wall));
+        assert_eq!(map.floor_entity(grid), Some(floor));
+        assert_eq!(map.obstacle_version, version);
+        assert!(map.has_raw_obstacle(grid.0, grid.1));
     }
 }

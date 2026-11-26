@@ -34,6 +34,7 @@ mod spa_planning;
 pub(crate) mod supply_workload;
 mod supply_worldgen;
 mod terrain_materials;
+mod ventilation;
 mod waterworks_playtest;
 
 pub struct NativeUiAcceptancePlugin {
@@ -331,6 +332,9 @@ fn prepare_fixture(world: &mut World, scale: f32) {
                 None,
                 None,
             ),
+            "ventilation" => ventilation::prepare(world, false),
+            "ventilation-open" => ventilation::prepare(world, true),
+            "ventilation-control" => ventilation::prepare_control(world),
             "normal" => {}
             _ => panic!("unsupported native UI layout scene"),
         }
@@ -344,7 +348,13 @@ fn prepare_fixture(world: &mut World, scale: f32) {
                     .insert(hw_core::relationships::CommandedBy(*familiar));
             }
         }
-        world.resource_mut::<Time<Virtual>>().pause();
+        if scene == "ventilation-control" {
+            let mut time = world.resource_mut::<Time<Virtual>>();
+            time.set_relative_speed(4.0);
+            time.unpause();
+        } else {
+            world.resource_mut::<Time<Virtual>>().pause();
+        }
     }
     for mut policy in world.query::<&mut FamiliarPolicy>().iter_mut(world) {
         policy.set_all_allowed(false);
@@ -466,6 +476,9 @@ fn node_key(world: &World, entity: Entity) -> Option<String> {
     }
     if let Some(control) = world.get::<hw_ui::area_edit::panel::AreaEditControlButton>(entity) {
         return Some(format!("area-control:{:?}", control.0));
+    }
+    if matches!(world.get::<UiSlot>(entity), Some(UiSlot::CommonText)) {
+        return Some("text:inspection-common".into());
     }
     if matches!(world.get::<UiSlot>(entity), Some(UiSlot::Header)) {
         return Some("text:inspection-header".into());
@@ -812,6 +825,19 @@ fn snapshot(world: &mut World, observer: &UiObserver) -> Value {
     if waterworks_playtest::enabled() {
         value["waterworks"] = waterworks_playtest::snapshot(world);
     }
+    if scene == "ventilation-control" {
+        let control = ventilation::control_observation(world);
+        value["ready"] = json!(observer.prepared && observer.frame > 90 && control["stage"] == 3);
+        value["hvac_control"] = control;
+        if world.contains_resource::<ventilation::ControlFixture>() {
+            value["ventilation_rooms"] = ventilation::observations(world);
+        }
+    }
+    if scene == "ventilation" || scene == "ventilation-open" {
+        value["ventilation_rooms"] = ventilation::observations(world);
+        value["visible_vent_grates"] =
+            serde_json::json!(ventilation::visible_selected_grates(world));
+    }
     value["bridge_planning"] = bridge_planning::snapshot(world);
     if door_release_planning::enabled() {
         value["door_release_planning"] = door_release_planning::snapshot(world);
@@ -921,6 +947,7 @@ fn observe_ui(world: &mut World) {
                 panel.details_expanded = true;
             }
         }
+        ventilation::observe_control(world);
         let outcomes: Vec<_> = observer
             .save_cursor
             .read(world.resource::<Messages<SaveLoadOutcome>>())

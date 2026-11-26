@@ -145,6 +145,13 @@ player_help_features! {
         topic_order: 20,
         provider: providers::orders_building_zones::building_zones_dream
     },
+    NaturalVentilation => {
+        id: "natural-ventilation",
+        owner: OrdersAndBuilding,
+        section_order: 40,
+        topic_order: 25,
+        provider: providers::orders_building_zones::natural_ventilation
+    },
     TaskDashboard => {
         id: "task-dashboard",
         owner: OrdersAndBuilding,

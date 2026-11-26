@@ -193,6 +193,18 @@ pub(crate) fn idle_behavior_decision_system(context: IdleDecisionContext) {
                 metrics.idle_spatial_target_lookups.saturating_add(1);
         }
 
+        let current_pos = transform.translation.truncate();
+        if !matches!(
+            idle.behavior,
+            IdleBehavior::GoingToRest
+                | IdleBehavior::Resting
+                | IdleBehavior::Escaping
+                | IdleBehavior::Drifting
+        ) && world_map.clear_idle_doorway(current_pos, &mut dest, &mut path)
+        {
+            continue;
+        }
+
         let (gathering_center, target_spot_entity) = resolve_gathering_target(
             participating_in,
             &gq.q_spots,
@@ -218,7 +230,6 @@ pub(crate) fn idle_behavior_decision_system(context: IdleDecisionContext) {
         }
 
         let reserved_rest_area = rest_reserved_for.map(|reserved| reserved.0);
-        let current_pos = transform.translation.truncate();
         let rest_cooldown_active = rest_cooldown
             .map(|cooldown| cooldown.remaining_secs > f32::EPSILON)
             .unwrap_or(false);
@@ -496,5 +507,71 @@ pub(crate) fn idle_behavior_decision_system(context: IdleDecisionContext) {
                 random_state: random_state.as_deref_mut(),
             },
         );
+    }
+}
+
+#[cfg(test)]
+mod doorway_tests {
+    use super::*;
+    use crate::movement::soul_movement;
+    use crate::soul_ai::helpers::query_types::NeedsIdleDecision;
+    use hw_core::soul::{AnimationState, DamnedSoul, Destination, IdleState, Path};
+    use hw_core::world::DoorState;
+
+    #[test]
+    fn sleeping_soul_on_a_door_reaches_clear_ground_via_ordinary_movement() {
+        let mut app = App::new();
+        app.init_resource::<Time>()
+            .init_resource::<WorldMap>()
+            .init_resource::<hw_core::WorldEpoch>()
+            .init_resource::<hw_world::WalkabilityConnectivityCache>()
+            .init_resource::<SlowSimulationClock>()
+            .init_resource::<GatheringSpotSpatialGrid>()
+            .init_resource::<SpatialGrid>()
+            .add_message::<IdleBehaviorRequest>()
+            .add_systems(
+                Update,
+                (idle_behavior_decision_system, soul_movement).chain(),
+            );
+        let world = app.world_mut();
+        let start = WorldMap::grid_to_world(20, 20);
+        world.resource_mut::<WorldMap>().register_door(
+            (20, 20),
+            Entity::PLACEHOLDER,
+            DoorState::Open,
+        );
+        let soul = world
+            .spawn((
+                DamnedSoul {
+                    dream: 1.0,
+                    motivation: 1.0,
+                    ..default()
+                },
+                Transform::from_translation(start.extend(0.0)),
+                Destination(start),
+                Path::default(),
+                AnimationState::default(),
+                IdleState {
+                    behavior: IdleBehavior::Sleeping,
+                    ..default()
+                },
+                hw_jobs::AssignedTask::None,
+                NeedsIdleDecision,
+            ))
+            .id();
+        world
+            .resource_mut::<Time>()
+            .advance_by(std::time::Duration::from_millis(100));
+        for _ in 0..20 {
+            app.update();
+        }
+        let position = app
+            .world()
+            .get::<Transform>(soul)
+            .unwrap()
+            .translation
+            .truncate();
+        assert_eq!(WorldMap::world_to_grid(position), (20, 21));
+        assert!(position.distance(WorldMap::grid_to_world(20, 21)) <= 1.0);
     }
 }

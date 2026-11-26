@@ -54,7 +54,7 @@ pub fn building_presentation_transform(kind: BuildingType, owner: &Transform) ->
         BuildingType::Floor => Z_BUILDING_FLOOR,
         BuildingType::Bridge => TILE_SIZE * 0.09,
         BuildingType::Door => TILE_SIZE * 0.25,
-        BuildingType::Wall => TILE_SIZE * 0.5,
+        BuildingType::Wall | BuildingType::ScreamingVent => TILE_SIZE * 0.5,
         BuildingType::Tank
         | BuildingType::MudMixer
         | BuildingType::RestArea
@@ -62,6 +62,7 @@ pub fn building_presentation_transform(kind: BuildingType, owner: &Transform) ->
         BuildingType::SandPile
         | BuildingType::BonePile
         | BuildingType::WheelbarrowParking
+        | BuildingType::Equipment(_)
         | BuildingType::OutdoorLamp => TILE_SIZE * 0.3,
     };
     Transform {
@@ -119,7 +120,10 @@ pub fn sync_building_3d_transform_system(
         let Ok((building, owner)) = owners.get(owner_entity) else {
             continue;
         };
-        if building.kind == BuildingType::Wall {
+        if matches!(
+            building.kind,
+            BuildingType::Wall | BuildingType::ScreamingVent
+        ) {
             continue;
         }
         let mut transform_query = visuals.p1();
@@ -141,7 +145,12 @@ pub fn sync_building_3d_transform_system(
 
     let changed: EntityHashMap<_> = changed_owners
         .iter()
-        .filter(|(_, building, _)| building.kind != BuildingType::Wall)
+        .filter(|(_, building, _)| {
+            !matches!(
+                building.kind,
+                BuildingType::Wall | BuildingType::ScreamingVent
+            )
+        })
         .map(|(entity, building, transform)| (entity, (building.kind, *transform)))
         .collect();
     if changed.is_empty() {

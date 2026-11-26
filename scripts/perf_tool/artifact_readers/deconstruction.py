@@ -30,7 +30,7 @@ def read_deconstruction_fixture(
     expected = {
         "initial_completed_buildings": 100,
         "final_completed_buildings": 99,
-        "building_type_count": 12,
+        "building_type_count": 27,
         "commit_requests": 1,
         "committed": 1,
         "recovery_items": 5,

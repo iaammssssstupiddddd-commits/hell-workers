@@ -32,6 +32,8 @@ use crate::world::map::{TerrainFeatureMap, TerrainIdMap};
 pub struct Building3dHandles {
     // --- 壁 ---
     pub wall_mesh: Handle<Mesh>,
+    pub vent_grate_mesh: Handle<Mesh>,
+    pub vent_material: Handle<TopDownStructuralMaterial>,
     pub wall_material: Handle<TopDownStructuralMaterial>,
     pub wall_provisional_material: Handle<TopDownStructuralMaterial>,
     // --- 床 ---
@@ -208,7 +210,7 @@ pub fn init_visual_handles(mut params: InitVisualHandlesParams) {
     });
 
     commands.insert_resource(GatheringVisualHandles {
-        aura_circle: game_assets.aura_circle.clone(),
+        aura_ring: game_assets.aura_ring.clone(),
         card_table: game_assets.gathering_card_table.clone(),
         campfire: game_assets.gathering_campfire.clone(),
         barrel: game_assets.gathering_barrel.clone(),
@@ -271,6 +273,12 @@ pub fn init_visual_handles(mut params: InitVisualHandlesParams) {
         ),
         AlphaMode::Blend,
     ));
+    let vent_material = {
+        let mut material =
+            make_topdown_structural_material(LinearRgba::WHITE, indoor_light_field.clone());
+        material.base.base_color_texture = Some(game_assets.screaming_vent.clone());
+        structural_materials.add(material)
+    };
     let floor_material = {
         let mut material = make_topdown_structural_material(
             LinearRgba::new(1.0, 1.0, 1.0, 1.0),
@@ -339,6 +347,12 @@ pub fn init_visual_handles(mut params: InitVisualHandlesParams) {
 
     commands.insert_resource(Building3dHandles {
         wall_mesh,
+        vent_grate_mesh: meshes.add(
+            Plane3d::default()
+                .mesh()
+                .size(TILE_SIZE * 0.29, TILE_SIZE * 0.29),
+        ),
+        vent_material,
         wall_material,
         wall_provisional_material,
         floor_mesh,

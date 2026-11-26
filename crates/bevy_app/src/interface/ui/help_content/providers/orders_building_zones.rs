@@ -35,7 +35,7 @@ pub(crate) fn orders_and_areas() -> Result<HelpContribution, HelpCatalogError> {
                     [
                         "「作業を指示」の「建物を解体」を選び、完成した建物をクリックします。カーソル表示で対象にできるかと、指定できない理由を確認できます。",
                         "指示は専用タスクとして「管理」の「仕事」に追加されます。優先度の変更と確認付きキャンセルができ、解体を許可した Familiar が担当します。",
-                        "カーソルには固定回収量も表示されます。Wall・Door・Tank・WheelbarrowParking は Wood×1、MudMixer・RestArea は Wood×2、Floor・OutdoorLamp は Bone×1、BonePile は Bone×5、SoulSpa は Bone×6、Bridge は Rock×3、SandPile は回収なしです。",
+                        "カーソルには固定回収量も表示されます。Wall・Door・Tank・WheelbarrowParking は Wood×1、MudMixer・RestArea は Wood×2、Floor・OutdoorLamp は Bone×1、BonePile は Bone×5、SoulSpa は Bone×6、叫びの風穴は Rock×1、Bridge は Rock×3、SandPile は回収なしです。",
                         "設備内の資材や利用中の対象を安全に退避できない間は、建物を残したまま理由付きで待機します。Wall、Door、Floor、Bridge、Operational Soul Spa、Outdoor Lamp も対象になり、通路・部屋・電力網は撤去後に再計算されます。指定結果と解体結果は通知にも表示されます。",
                     ],
                 )
@@ -68,6 +68,49 @@ pub(crate) fn orders_and_areas() -> Result<HelpContribution, HelpCatalogError> {
     })
 }
 
+pub(crate) fn natural_ventilation() -> Result<HelpContribution, HelpCatalogError> {
+    Ok(HelpContribution {
+        feature: PlayerFeatureId::NaturalVentilation,
+        owner: HelpOwnerId::OrdersAndBuilding,
+        section_id: HelpSectionId::new("orders-building-zones"),
+        section_title: "タスク・建築・ゾーン・Dream",
+        topic: HelpTopic::new(
+            HelpTopicId::new("natural-ventilation"),
+            "部屋の換気・空調・水道",
+            [
+                HelpEntry::new(
+                    HelpEntryId::new("natural-ventilation"),
+                    "叫びの風穴と自然換気",
+                    [
+                        "「建てる」→「出入口・換気」→「叫びの風穴」を選び、工事や解体をしていない完成壁を指定します。岩2個と骨1個を届けて施工すると、壁が通気孔に替わります。施工中は元の壁が部屋を囲み、取り消すとその壁を使い続けられます。",
+                        "外気はマップ外周につながる屋外から入ります。共有壁の風穴だけで閉じた二室の外気量はゼロです。外壁の開口が一つでも弱い双方向交換が起きます。西と東の外壁を共有壁の風穴で結ぶと、風向に応じて空気が両室を通り抜けます。自然換気に使える建築物は完成した風穴です。扉を開けても換気量は変わりません。",
+                        "床の「有効外気」は、屋外から入る空気と隣室から来る使用済みの空気を考慮した換気能力です。床1枚当たりの必要量は0.05です。風穴を選ぶと、外壁開口・室間通気の別、風向、接続先の状態が分かります。緑は良好、橙は不足、紫は外気交換なしです。部屋表示で全室を見比べられます。風穴を解体すると元の壁に開口ができます。",
+                    ],
+                ),
+                HelpEntry::new(
+                    HelpEntryId::new("indoor-services"),
+                    "導水管を敷いて部屋の認可を取る",
+                    [
+                        "「建てる」→「空調・水道」で取水門を選び、川に沿う横3マス、奥行き2マスの岸に置きます。取水門は、水平方向が重なり32タイル以内にある1つの工区のYardから受電します。",
+                        "骨の導水管を選んでドラッグすると壁や床の下を通せます。同じツールでShiftを押しながらなぞると管だけを取り外せます。浄化盤と稼働中の取水門を、直下または上下左右に接する管で接続します。",
+                        "部屋の床を選んで排泥と換気を確認します。排泥中かつ有効外気が必要量以上になると認可されます。断水や換気不足で認可は「未達」に戻ります。給水が復旧すると浄化盤は自動で再開します。",
+                    ],
+                ),
+                HelpEntry::new(
+                    HelpEntryId::new("indoor-controls"),
+                    "風量・清浄度・温湿度を調整する",
+                    [
+                        "室内の給気送風機・排気送風機・局所排気口は、外壁の風穴に隣接させるか、室内に風道をつなげて使います。別の風穴を通る補給経路を作ると正味の通風が生じます。溜息煙突は室内外の温度差で通風します。",
+                        "給電は対応するYardが担当します。給気送風機・排気送風機・局所排気口は、同じ種類の建築カードを選んで完成機をクリックすると、標準・省エネ・強運転を切り替えられます。重要な設備は詳細の配電優先度を上げます。標準運転では瘴気の上昇や涼しい外気に応じて増風します。床の「標準運転の増風要求」で、その部屋が増風を求めているか確認できます。",
+                        "局所排気口は隣の発生源から、循環ろ過機は室内に混ざった瘴気を取り除きます。冷暖房室内機は屋外の室外機を上下左右の距離で2タイル以内に置きます。加湿器と除湿器には給排水が必要です。熱交換器は実際の給排気がある部屋で顕熱を回収します。",
+                        "部屋の床または室内の機器の詳細で温度・湿度・瘴気の濃度と増減、排泥、認可を確認できます。外気が涼しい時間帯も、扉の開閉は換気量に影響しません。",
+                    ],
+                ),
+            ],
+        ),
+    })
+}
+
 pub(crate) fn building_zones_dream() -> Result<HelpContribution, HelpCatalogError> {
     Ok(HelpContribution {
         feature: PlayerFeatureId::BuildingZonesDream,
@@ -82,7 +125,7 @@ pub(crate) fn building_zones_dream() -> Result<HelpContribution, HelpCatalogErro
                     HelpEntryId::new("architect-building"),
                     "建てる",
                     [
-                        "「建てる」で全12種類の画像・名前・用途を一覧します。カテゴリで絞り込むこともできます。種類を選ぶとカタログを閉じ、地図上の配置へ進みます。床と壁は範囲を指定して施工予定を作ります。",
+                        "「建てる」で全27種類の画像・名前・用途を一覧します。カテゴリで絞り込むこともできます。種類を選ぶとカタログを閉じ、地図上の配置へ進みます。床と壁は範囲を指定して施工予定を作ります。",
                         "必要資源が届くと、担当可能な Soul が資材と施工場所へ移動して工程を進めます。床は養生を終えてから完成します。",
                         "床や壁の施工場所の近くに使える泥がなければ、使い魔は離れた場所も探し、猫車で搬入を割り当てます。",
                         "Mud Mixer の給水はバケツ1杯（5個）単位です。タンクに5個の水があり、投入先に1杯分の空きができてから運びます。水入りバケツはそのまま使えます。途中で空きが不足した場合は水入りのまま残し、空きができると再び搬送できます。残っている水は精製で使われます。",

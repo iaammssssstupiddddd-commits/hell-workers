@@ -3,8 +3,10 @@ use hw_jobs::BuildingType;
 
 pub const fn building_copy(kind: BuildingType) -> (&'static str, &'static str) {
     match kind {
+        BuildingType::Equipment(kind) => kind.copy(),
         BuildingType::Wall => ("壁", "部屋を囲う"),
         BuildingType::Floor => ("床", "部屋の土台"),
+        BuildingType::ScreamingVent => ("叫びの風穴", "壁から換気"),
         BuildingType::Door => ("ドア", "部屋の出入口"),
         BuildingType::Bridge => ("橋", "水辺を渡る"),
         BuildingType::Tank => ("水タンク", "水を保管する"),

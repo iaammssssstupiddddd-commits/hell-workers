@@ -8,7 +8,7 @@ use crate::soul_ai::helpers::gathering::{
 
 /// 集会猶予タイマーの減算のみを行う（Update Phase）
 pub fn gathering_grace_tick_system(
-    mut q_spots: Query<(&mut GatheringSpot, &GatheringParticipants)>,
+    mut q_spots: Query<(&mut GatheringSpot, Option<&GatheringParticipants>)>,
     update_timer: Res<GatheringUpdateTimer>,
 ) {
     if !update_timer.timer.just_finished() {
@@ -18,7 +18,7 @@ pub fn gathering_grace_tick_system(
     let dt = update_timer.timer.duration().as_secs_f32();
 
     for (mut spot, participants) in q_spots.iter_mut() {
-        if participants.len() < GATHERING_MIN_PARTICIPANTS {
+        if participants.map_or(0, GatheringParticipants::len) < GATHERING_MIN_PARTICIPANTS {
             if !spot.grace_active {
                 spot.grace_active = true;
                 spot.grace_timer = GATHERING_GRACE_PERIOD;

@@ -43,12 +43,35 @@ fn commit_completed_building(world: &mut World, entity: Entity) -> bool {
             .get::<hw_jobs::BlueprintCancelRequested>(entity)
             .is_some()
         || world.get::<Transform>(entity).is_none()
-        || world
-            .resource::<WorldMap>()
-            .validate_owned_footprint(entity, bp.occupied_grids.iter().copied())
-            .is_err()
+        || bp.occupied_grids.iter().any(|&grid| {
+            world.resource::<WorldMap>().footprint_owner(bp.kind, grid) != Some(entity)
+        })
     {
         return false;
+    }
+    let retrofit_wall = world
+        .get::<hw_jobs::model::VentRetrofitWall>(entity)
+        .map(|source| source.0);
+    if (bp.kind == hw_jobs::BuildingType::ScreamingVent) != retrofit_wall.is_some() {
+        return false;
+    }
+    if let Some(wall) = retrofit_wall {
+        let is_retained_wall = wall != entity
+            && world
+                .get::<hw_jobs::model::WallUnderRetrofit>(wall)
+                .is_some()
+            && world
+                .get::<hw_jobs::Building>(wall)
+                .is_some_and(|building| {
+                    building.kind == hw_jobs::BuildingType::Wall && !building.is_provisional
+                })
+            && world.get::<Transform>(wall).is_some_and(|source| {
+                bp.occupied_grids.as_slice()
+                    == [WorldMap::world_to_grid(source.translation.truncate())]
+            });
+        if !is_retained_wall {
+            return false;
+        }
     }
     let occupied = bp.occupied_grids.clone();
     let promoted: Vec<_> = world
@@ -110,6 +133,9 @@ fn commit_completed_building(world: &mut World, entity: Entity) -> bool {
             &mut map,
             promoted,
         );
+        if let Some(wall) = retrofit_wall {
+            commands.entity(wall).despawn();
+        }
         commands.entity(entity).despawn();
         hw_jobs::publish_building_completed(
             &mut commands,

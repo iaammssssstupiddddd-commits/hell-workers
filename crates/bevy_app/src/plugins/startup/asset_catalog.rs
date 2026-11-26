@@ -134,6 +134,17 @@ pub fn create_game_assets(asset_server: &AssetServer, images: &mut Assets<Image>
         mud_wall_end_left: asset_server.load("textures/buildings/mud_wall/mud_wall_left_end.png"),
         mud_wall_end_right: asset_server.load("textures/buildings/mud_wall/mud_wall_right_end.png"),
 
+        screaming_vent: images.add(
+            Image::from_buffer(
+                include_bytes!("../../assets/screaming_vent.png"),
+                bevy::image::ImageType::Extension("png"),
+                bevy::image::CompressedImageFormats::NONE,
+                true,
+                ImageSampler::nearest(),
+                default(),
+            )
+            .expect("embedded vent grate PNG"),
+        ),
         wall_isolated: asset_server.load("textures/buildings/wooden_wall/wall_isolated.png"),
         wall_horizontal_left: asset_server
             .load("textures/buildings/wooden_wall/wall_horizontal_left_side_connected.png"),

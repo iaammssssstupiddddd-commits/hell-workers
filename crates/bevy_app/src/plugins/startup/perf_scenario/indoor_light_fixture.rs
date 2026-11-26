@@ -60,6 +60,21 @@ pub(super) const STAGE_ID: &str = "current";
 #[cfg(test)]
 pub(super) const LANE: &str = "static";
 pub(super) const FIXTURE_ID: &str = "indoor-light-grid-v1";
+// The indoor-light benchmark compares captures against a fixed twelve-building scene.
+const SHOWCASE_BUILDING_TYPES: [BuildingType; 12] = [
+    BuildingType::Wall,
+    BuildingType::Door,
+    BuildingType::Floor,
+    BuildingType::Tank,
+    BuildingType::MudMixer,
+    BuildingType::RestArea,
+    BuildingType::Bridge,
+    BuildingType::SandPile,
+    BuildingType::BonePile,
+    BuildingType::WheelbarrowParking,
+    BuildingType::SoulSpa,
+    BuildingType::OutdoorLamp,
+];
 pub(super) const CONTRACT_SHA256: &str =
     "ba5d6bf7320426b441465df8fae42d6ff80820748ce55e0edf0dbba409dc755a";
 pub(super) const FIXTURE_SHA256: &str =
@@ -580,7 +595,9 @@ impl ShowcaseSpec {
             BuildingType::BonePile => "BonePile",
             BuildingType::WheelbarrowParking => "WheelbarrowParking",
             BuildingType::SoulSpa => "SoulSpa",
+            BuildingType::Equipment(e) => e.copy().0,
             BuildingType::OutdoorLamp => "OutdoorLamp",
+            BuildingType::ScreamingVent => "ScreamingVent",
         }
     }
 
@@ -1102,12 +1119,12 @@ pub(super) fn begin_indoor_light_fixture(
             .iter()
             .map(|entry| entry.kind)
             .collect::<Vec<_>>()
-            != BuildingType::ALL
+            != SHOWCASE_BUILDING_TYPES
     {
         fail_fixture(
             state,
             exit,
-            "all-building showcase does not enumerate BuildingType::ALL".to_string(),
+            "indoor lighting showcase differs from the frozen fixture inventory".to_string(),
         );
         return;
     }
@@ -2223,7 +2240,7 @@ fn validate_observed_fixture(
             BuildingType::SoulSpa,
         ]
     } else {
-        BuildingType::ALL.to_vec()
+        SHOWCASE_BUILDING_TYPES.to_vec()
     };
     let presentation = presentation_order
         .iter()
@@ -2238,7 +2255,7 @@ fn validate_observed_fixture(
         .collect();
 
     let mut audit_buildings = Vec::with_capacity(expected_by_kind.len());
-    for kind in BuildingType::ALL {
+    for kind in SHOWCASE_BUILDING_TYPES {
         for (ordinal, (_, anchor, building)) in expected_by_kind
             .iter()
             .filter(|(entry_kind, ..)| *entry_kind == kind)
@@ -2337,7 +2354,9 @@ fn building_type_name(kind: BuildingType) -> &'static str {
         BuildingType::BonePile => "BonePile",
         BuildingType::WheelbarrowParking => "WheelbarrowParking",
         BuildingType::SoulSpa => "SoulSpa",
+        BuildingType::Equipment(e) => e.copy().0,
         BuildingType::OutdoorLamp => "OutdoorLamp",
+        BuildingType::ScreamingVent => "ScreamingVent",
     }
 }
 
@@ -3258,7 +3277,9 @@ fn building_type_tag(kind: BuildingType) -> u8 {
         BuildingType::BonePile => 8,
         BuildingType::WheelbarrowParking => 9,
         BuildingType::SoulSpa => 10,
+        BuildingType::Equipment(e) => 13 + e as u8,
         BuildingType::OutdoorLamp => 11,
+        BuildingType::ScreamingVent => 12,
     }
 }
 
@@ -3292,7 +3313,7 @@ mod tests {
                 BuildingType::SoulSpa,
             ]
         } else {
-            BuildingType::ALL.to_vec()
+            SHOWCASE_BUILDING_TYPES.to_vec()
         };
         let presentation = presentation_order
             .into_iter()
@@ -3413,7 +3434,7 @@ mod tests {
         assert_eq!(medium.control_lamp, (82, 80));
         assert_eq!(medium.generator_count(), 3);
         assert_eq!(medium.room_boundaries().len(), 72);
-        assert_eq!(medium.showcase.len(), BuildingType::ALL.len());
+        assert_eq!(medium.showcase.len(), SHOWCASE_BUILDING_TYPES.len());
         assert_eq!(
             medium
                 .doors
@@ -3439,7 +3460,7 @@ mod tests {
         assert_eq!(large.spas.len(), 3);
         assert_eq!(large.generator_count(), 11);
         assert_eq!(large.room_boundaries().len(), 240);
-        assert_eq!(large.showcase.len(), BuildingType::ALL.len());
+        assert_eq!(large.showcase.len(), SHOWCASE_BUILDING_TYPES.len());
         assert_eq!(
             large
                 .showcase
@@ -3478,7 +3499,7 @@ mod tests {
             if size == PerfScenarioSize::Small {
                 assert_eq!(showcase_count, 0);
             } else {
-                assert_eq!(showcase_count, BuildingType::ALL.len());
+                assert_eq!(showcase_count, SHOWCASE_BUILDING_TYPES.len());
                 let bridge = rows
                     .iter()
                     .find(|row| row[1] == "showcase_building" && row[7] == "Bridge")

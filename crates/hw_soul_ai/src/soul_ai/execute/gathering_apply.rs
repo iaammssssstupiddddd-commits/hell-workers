@@ -167,6 +167,51 @@ mod tests {
     }
 
     #[test]
+    fn construction_dissolves_an_empty_gathering_and_removes_both_visuals() {
+        use crate::soul_ai::decide::gathering_mgmt::gathering_maintenance_decision;
+        use hw_core::gathering::{GatheringSpot, GatheringUpdateTimer, GatheringVisuals};
+        use hw_world::WorldMap;
+
+        let mut app = test_app();
+        app.init_resource::<WorldMap>()
+            .init_resource::<GatheringUpdateTimer>()
+            .add_message::<hw_core::events::EscapeRequest>()
+            .add_systems(
+                Update,
+                gathering_maintenance_decision.before(gathering_apply_system),
+            );
+        let world = app.world_mut();
+        let aura = world.spawn_empty().id();
+        let prop = world.spawn_empty().id();
+        let spot = world
+            .spawn((
+                GatheringSpot {
+                    center: WorldMap::grid_to_world(9, 9),
+                    ..default()
+                },
+                GatheringVisuals {
+                    aura_entity: aura,
+                    object_entity: Some(prop),
+                },
+            ))
+            .id();
+        let soul = world.spawn(ParticipatingIn(spot)).id();
+        world.entity_mut(soul).remove::<ParticipatingIn>();
+        let wall = world.spawn_empty().id();
+        world
+            .resource_mut::<WorldMap>()
+            .register_completed_building_footprint(hw_jobs::BuildingType::Wall, wall, [(10, 9)]);
+        let mut timer = world.resource_mut::<GatheringUpdateTimer>();
+        let interval = timer.timer.duration();
+        timer.timer.tick(interval);
+        app.update();
+        for entity in [aura, prop, spot] {
+            assert!(app.world().get_entity(entity).is_err());
+        }
+        assert!(app.world().get_entity(soul).is_ok());
+    }
+
+    #[test]
     fn dissolve_discards_same_batch_recruit_before_relation_insert() {
         let mut app = test_app();
         let soul = app.world_mut().spawn_empty().id();

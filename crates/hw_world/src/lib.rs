@@ -55,7 +55,6 @@ pub use room_detection::{
     RoomTileSignature, RoomTopologySignature, RoomValidationState, build_detection_input,
     detect_rooms, room_is_valid_against_input,
 };
-#[cfg(feature = "profiling")]
 pub use room_systems::detect_rooms_immediately_system;
 pub use room_systems::{
     detect_rooms_system, mark_room_dirty_from_building_changes_system, on_building_added,

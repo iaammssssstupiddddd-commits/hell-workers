@@ -22,6 +22,7 @@ type FollowingSoulsQuery<'w, 's> = Query<
 
 /// 部下が使い魔を追尾するシステム
 pub fn following_familiar_system(
+    map: Res<hw_world::WorldMap>,
     mut q_souls: FollowingSoulsQuery,
     q_familiars: Query<(&Transform, &Familiar), With<Familiar>>,
 ) {
@@ -52,6 +53,9 @@ pub fn following_familiar_system(
                     path.validated_obstacle_version = 0;
                 }
             } else {
+                if map.clear_idle_doorway(soul_pos, &mut dest, &mut path) {
+                    continue;
+                }
                 let has_active_path = path.current_index < path.waypoints.len();
                 let destination_is_current = dest.0.distance_squared(soul_pos) <= f32::EPSILON;
                 if has_active_path
@@ -78,7 +82,8 @@ mod tests {
     #[test]
     fn idle_soul_inside_command_radius_stops_at_its_current_position() {
         let mut app = App::new();
-        app.add_systems(Update, following_familiar_system);
+        app.init_resource::<hw_world::WorldMap>()
+            .add_systems(Update, following_familiar_system);
 
         let familiar_position = Vec2::ZERO;
         let familiar = app
@@ -116,5 +121,20 @@ mod tests {
         assert_eq!(path.current_index, 0);
         assert_eq!(path.planned_destination, None);
         assert_eq!(path.validated_obstacle_version, 0);
+
+        // A door completed underneath the stationary follower must wake it up, even inside command range.
+        let (x, y) = hw_world::WorldMap::world_to_grid(soul_position);
+        app.world_mut()
+            .resource_mut::<hw_world::WorldMap>()
+            .register_door(
+                (x, y),
+                Entity::PLACEHOLDER,
+                hw_core::world::DoorState::Closed,
+            );
+        app.update();
+        let exit = app.world().get::<Destination>(soul).unwrap().0;
+        assert_ne!(hw_world::WorldMap::world_to_grid(exit), (x, y));
+        app.update();
+        assert_eq!(app.world().get::<Path>(soul).unwrap().waypoints, [exit]);
     }
 }

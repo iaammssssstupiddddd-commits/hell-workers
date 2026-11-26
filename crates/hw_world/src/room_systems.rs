@@ -49,7 +49,10 @@ pub fn detect_rooms_system(
 ) {
     detection_state.cooldown.tick(time.delta());
 
-    if detection_state.dirty_tiles.is_empty() || !detection_state.cooldown.just_finished() {
+    // A paused virtual clock cannot expire a debounce. Publish structural edits on that frame.
+    if detection_state.dirty_tiles.is_empty()
+        || (!time.delta().is_zero() && !detection_state.cooldown.just_finished())
+    {
         return;
     }
 
@@ -63,10 +66,7 @@ pub fn detect_rooms_system(
     );
 }
 
-/// Profiling fixtures need the production Room adapter before virtual time is
-/// unpaused. This bypasses only the cooldown; collection, detection, lookup
-/// construction, and ECS Room spawning are shared with normal runtime.
-#[cfg(feature = "profiling")]
+/// Rebuild dirty rooms without advancing virtual time, including paused save loads.
 pub fn detect_rooms_immediately_system(
     mut commands: Commands,
     mut detection_state: ResMut<RoomDetectionState>,
@@ -150,6 +150,7 @@ fn rebuild_rooms(
     }
 
     lookup_builder.publish(room_tile_lookup, room_boundary_lookup);
+    detection_state.geometry_revision = detection_state.geometry_revision.wrapping_add(1);
     detection_state.dirty_tiles.clear();
 }
 

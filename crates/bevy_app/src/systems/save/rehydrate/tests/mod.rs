@@ -50,6 +50,8 @@ use hw_world::TerrainType;
 fn empty_building_3d_handles() -> Building3dHandles {
     Building3dHandles {
         wall_mesh: Handle::default(),
+        vent_grate_mesh: Handle::default(),
+        vent_material: Handle::default(),
         wall_material: Handle::default(),
         wall_provisional_material: Handle::default(),
         floor_mesh: Handle::default(),

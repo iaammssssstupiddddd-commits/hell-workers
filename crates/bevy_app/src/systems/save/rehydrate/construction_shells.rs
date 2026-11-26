@@ -6,7 +6,9 @@ use super::*;
 /// rehydration path be tested without constructing the full `GameAssets` catalog.
 #[derive(Default)]
 pub(super) struct BlueprintSpriteHandles {
+    equipment: std::collections::HashMap<hw_jobs::Equipment, Handle<Image>>,
     wall_isolated: Handle<Image>,
+    screaming_vent: Handle<Image>,
     door_closed: Handle<Image>,
     mud_floor: Handle<Image>,
     tank_empty: Handle<Image>,
@@ -21,6 +23,11 @@ pub(super) struct BlueprintSpriteHandles {
 impl From<&GameAssets> for BlueprintSpriteHandles {
     fn from(assets: &GameAssets) -> Self {
         Self {
+            equipment: hw_jobs::Equipment::ALL
+                .into_iter()
+                .map(|e| (e, assets.equipment_image(e).clone()))
+                .collect(),
+            screaming_vent: assets.screaming_vent.clone(),
             wall_isolated: assets.wall_isolated.clone(),
             door_closed: assets.door_closed.clone(),
             mud_floor: assets.mud_floor.clone(),
@@ -38,6 +45,8 @@ impl From<&GameAssets> for BlueprintSpriteHandles {
 impl BlueprintSpriteHandles {
     fn sprite(&self, kind: BuildingType) -> Sprite {
         let image = match kind {
+            BuildingType::Equipment(kind) => self.equipment.get(&kind).cloned().unwrap_or_default(),
+            BuildingType::ScreamingVent => self.screaming_vent.clone(),
             BuildingType::Wall => self.wall_isolated.clone(),
             BuildingType::Door => self.door_closed.clone(),
             BuildingType::Floor => self.mud_floor.clone(),

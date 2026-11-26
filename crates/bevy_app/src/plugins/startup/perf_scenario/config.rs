@@ -20,6 +20,8 @@ const DEFAULT_FIXED_AUDIT_TICKS: u64 = 128;
 pub enum PerfWorkload {
     Gather,
     PathDoor,
+    Ventilation,
+    VentilationDimensions,
     Construction,
     UiGpu,
     TaskDashboard,
@@ -33,9 +35,15 @@ pub enum PerfWorkload {
 }
 
 impl PerfWorkload {
+    pub(crate) fn uses_ventilation_fixture(self) -> bool {
+        matches!(self, Self::Ventilation | Self::VentilationDimensions)
+    }
+
     fn parse(value: &str) -> Option<Self> {
         match value {
             "gather" => Some(Self::Gather),
+            "ventilation" => Some(Self::Ventilation),
+            "ventilation-dimensions" => Some(Self::VentilationDimensions),
             "path-door" => Some(Self::PathDoor),
             "construction" => Some(Self::Construction),
             "ui-gpu" => Some(Self::UiGpu),
@@ -54,6 +62,8 @@ impl PerfWorkload {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Gather => "gather",
+            Self::Ventilation => "ventilation",
+            Self::VentilationDimensions => "ventilation-dimensions",
             Self::PathDoor => "path-door",
             Self::Construction => "construction",
             Self::UiGpu => "ui-gpu",
@@ -623,7 +633,7 @@ impl PerfScenarioConfig {
         let workload = parse_value_or_default(
             input.value("--perf-workload", "HW_PERF_WORKLOAD")?,
             "--perf-workload",
-            "gather|path-door|construction|ui-gpu|task-dashboard|dream-ui-burst|indoor-light|wall-density|door-density|building-art-static|deconstruction|save-transaction",
+            "gather|path-door|ventilation|construction|ui-gpu|task-dashboard|dream-ui-burst|indoor-light|wall-density|door-density|building-art-static|deconstruction|save-transaction",
             PerfWorkload::parse,
             PerfWorkload::Gather,
         )?;
@@ -1409,6 +1419,8 @@ impl PerfScenarioConfig {
                 joint_actual_window: wall_door_joint_actual_window,
             },
             PerfWorkload::BuildingArtStatic => ValidatedWorkload::BuildingArtStatic,
+            PerfWorkload::Ventilation => ValidatedWorkload::Ventilation,
+            PerfWorkload::VentilationDimensions => ValidatedWorkload::VentilationDimensions,
             PerfWorkload::PathDoor => ValidatedWorkload::PathDoor,
             PerfWorkload::Construction => ValidatedWorkload::Construction,
             PerfWorkload::UiGpu => ValidatedWorkload::UiGpu,

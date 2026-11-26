@@ -4,8 +4,9 @@
 
 ## ゲームの開発ロードマップ
 
-- [罪人大楼の第一工区](plans/gameplay-roadmap-plan-2026-11-24.md) — 休息所の次に給水所を請け負う試遊版を起点に、Dreamの布告、換気・導水、使い魔の昇格の優先順と受入条件を示す提案。
+- [罪人大楼の第一工区](plans/gameplay-roadmap-plan-2026-11-24.md) — 給水所に続く自然換気・泥ミキサーの生産支援・対岸への資材搬送を比較し、着手順と試遊条件を提案。
 - [最初の試遊版「第一工区の給水所」](plans/first-waterworks-contract-plan-2026-11-24.md) — 契約書の入口、工区と対象タンクの指定、初回給水の検収、Dream受領、保存再開の機能一覧と受入シナリオ。
+- [二部屋の自然換気](plans/hvac-plumbing-plan-2026-07-13.md#m1-基本換気-vertical-slice) — 共有風穴だけの密閉状態と、両外壁にも開口を設けた状態を比較する。
 
 ## 魂と使い魔 (Entities & AI)
 - [soul_ai.md](soul_ai.md): 魂（Damned Soul）の自律行動、疲労、ストレスに関する仕様。
@@ -21,6 +22,7 @@
 - [population_system.md](population_system.md): Soul人口（初期/定期スポーン、人口上限、漂流デスポーン）の仕様。
 - [save_load.md](save_load.md): シミュレーション状態の RON セーブ/ロード（F5/F9、allow-list、rehydrate、seed ガード）。
 - [room_detection.md](room_detection.md): Room 検出システム（壁・扉・床で囲まれた空間の自動認識・オーバーレイ表示）。
+- [室内空気と空調](indoor_air.md) — 現行の自然換気の計算・配置例と、送排風、瘴気、暖冷房・湿度制御の実装順。
 - [dream.md](dream.md): Dreamシステム。睡眠中の夢による通貨獲得メカニクス。
 - [state.md](state.md): ゲームの進行状態、プレイモードの遷移。
 - [settings.md](settings.md): GameSettings と settings.ron 永続化、設定画面 UI。

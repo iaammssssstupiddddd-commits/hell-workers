@@ -340,8 +340,41 @@ def check_layout_scene(value, scene):
     elif scene == "build":
         native.require(value["catalog_rect"] and not value["inspector_rect"], "build catalog is missing or overlaps details")
         cards = [key for key in value["controls"] if key.startswith("menu:SelectBuild(") or key in ("menu:SelectFloorPlace", "menu:SelectTaskMode(SoulSpaPlace(None))")]
-        native.require(len(cards) == 12, "not every build kind is visible")
+        equipment = ("SupplyFan", "ExhaustFan", "Chimney", "Duct", "Intake", "Conduit", "Basin", "Hood", "Filter", "HeatPump", "OutdoorUnit", "Humidifier", "Dehumidifier", "Recuperator")
+        expected = {f"menu:SelectBuild(Equipment({kind}))" for kind in equipment}
+        native.require(len(cards) == 27 and expected.issubset(cards) and "menu:SelectBuild(ScreamingVent)" in cards, "not every build kind is visible")
         native.require(all(value["controls"][key].get("fully_visible") for key in cards), "build card is clipped")
+    elif scene == "ventilation-control":
+        control = value.get("hvac_control", {})
+        native.require(control.get("stage") == 3 and control.get("supplied") is True
+                       and control.get("shed_tick", 0) >= 2 and control["restore_tick"] >= control["shed_tick"] + 2
+                       and control.get("demand", 0) > 1, "fan did not shed and recover at high flow")
+        rates = control.get("phase_rates", [])
+        native.require(len(rates) == 3 and all(len(pair) == 2 for pair in rates),
+                       "missing room readings during power transitions")
+        for normal, outage, restored in zip(*rates, strict=True):
+            native.require(0 < outage < normal < restored, "supply did not track loss and high-flow recovery")
+        detail = value["controls"].get("text:inspection-common", {}).get("text", "")
+        native.require(all(word in detail for word in ("外壁の風穴に接続", "強運転", "室温", "湿度", "瘴気")), "control readout missing")
+        rooms = value.get("ventilation_rooms", [])
+        native.require(len(rooms) == 2 and all(room and room["supply"] > room["need"] for room in rooms), "powered ventilation insufficient")
+    elif scene in ("ventilation", "ventilation-open"):
+        cross = scene == "ventilation-open"
+        native.require(value.get("visible_vent_grates") == 1, "selected transfer vent must have one visible grate")
+        rooms = value.get("ventilation_rooms", [])
+        native.require(len(rooms) == 2, "missing fixture room")
+        purple = [0.74, 0.45, 0.94]
+        colors = [[0.23, 0.84, 0.68], [0.98, 0.48, 0.26]] if cross else [purple, purple]
+        rates = [217 / 300, 868 / 1545] if cross else [0.0, 0.0]
+        for room, rate, need, count, rgb in zip(rooms, rates, [0.45, 0.60], [10, 12], colors, strict=True):
+            native.require(room and abs(room["supply"] - rate) < 1e-7 and room["need"] == need, "outdoor-air balance differs")
+            borders = room["visible_borders"]
+            native.require(len(borders) == count and all(all(abs(a-b) < 0.001 for a, b in zip(color, rgb, strict=True)) for color in borders), "room border count or ventilation color differs")
+        detail = value["controls"].get("text:inspection-common", {})
+        native.require(value["inspector_rect"] and detail.get("fully_visible"), "ventilation detail is clipped")
+        labels = (("外気経路あり", "通風 西→東 0.67", "西の部屋　良好", "有効外気 0.72 / 必要 0.45", "東の部屋　換気不足", "有効外気 0.56 / 必要 0.60　不足 0.04") if cross else
+                  ("外気経路なし", "西の部屋　外気交換なし", "有効外気 0.00 / 必要 0.45", "東の部屋　外気交換なし", "有効外気 0.00 / 必要 0.60"))
+        native.require(all(label in detail.get("text", "") for label in labels), "wrong air route or room diagnostic")
     elif scene == "display":
         native.require(value["display_rect"], "display page is hidden")
     else:
@@ -1326,7 +1359,7 @@ def main():
             child.add_argument("--smoke", action="store_true")
             child.add_argument("--case", choices=CASES, default="navigation")
             child.add_argument("--layout-menu", action="store_true")
-            child.add_argument("--layout-scene", choices=("management", "normal", "selection", "pinned", "build", "display", "area", "area-details"), default="management")
+            child.add_argument("--layout-scene", choices=("management", "normal", "selection", "pinned", "build", "ventilation", "ventilation-open", "ventilation-control", "display", "area", "area-details"), default="management")
             child.add_argument("--input-backend", choices=("xtest", "portal", "portal-eis", "none"), default="xtest")
             child.add_argument("--portal-consent-file", help="explicit owner-only restore-token journal; never a consent bypass")
             child.add_argument("--rest-area-art-source", help="explicit RestArea ArtPreview, or approved isolated candidate only in candidate-lifecycle; no new approval")

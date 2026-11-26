@@ -50,6 +50,8 @@ pub struct BlueprintCancellationQueries<'w, 's> {
             Option<&'static TargetBlueprint>,
         ),
     >,
+    retrofit: Query<'w, 's, &'static hw_jobs::model::VentRetrofitWall>,
+    walls: Query<'w, 's, (), With<hw_jobs::model::WallUnderRetrofit>>,
     pending: Query<'w, 's, (Entity, &'static PendingBelongsToBlueprint)>,
     stored_items: Query<'w, 's, (Entity, &'static StoredIn)>,
     #[cfg(feature = "profiling")]
@@ -159,8 +161,27 @@ pub fn blueprint_cancellation_system(
             );
         }
 
-        for &grid in &blueprint.occupied_grids {
-            world_map.clear_building_occupancy_if_owned(grid, blueprint_entity);
+        if let Ok(retrofit) = queries.retrofit.get(blueprint_entity)
+            && queries.walls.contains(retrofit.0)
+        {
+            for &grid in &blueprint.occupied_grids {
+                if world_map.building_entity(grid) == Some(blueprint_entity) {
+                    world_map.set_building_occupancy(grid, retrofit.0);
+                }
+            }
+            commands
+                .entity(retrofit.0)
+                .remove::<hw_jobs::model::WallUnderRetrofit>();
+        } else {
+            for &grid in &blueprint.occupied_grids {
+                if blueprint.kind == hw_jobs::BuildingType::Equipment(hw_jobs::Equipment::Conduit) {
+                    if world_map.conduits.get(&grid) == Some(&blueprint_entity) {
+                        world_map.conduits.remove(&grid);
+                    }
+                } else {
+                    world_map.clear_building_occupancy_if_owned(grid, blueprint_entity);
+                }
+            }
         }
         commands.entity(blueprint_entity).try_despawn();
         #[cfg(feature = "profiling")]
@@ -207,8 +228,7 @@ mod tests {
             .extend(requests.read().map(|request| request.soul_entity));
     }
 
-    #[test]
-    fn cancellation_uses_payload_and_refunds_delivered_materials_once() {
+    fn cancellation_app() -> App {
         let mut app = App::new();
         app.add_plugins(MinimalPlugins)
             .init_resource::<crate::world::map::WorldMap>()
@@ -231,6 +251,66 @@ mod tests {
                     .chain(),
             );
 
+        app
+    }
+
+    #[test]
+    fn cancelling_vent_refunds_deliveries_only_once_and_restores_wall() {
+        use crate::world::map::WorldMap;
+        let mut app = cancellation_app();
+        let grid = (20, 20);
+        let pos = WorldMap::grid_to_world(grid.0, grid.1);
+        let wall = app
+            .world_mut()
+            .spawn((
+                hw_jobs::Building {
+                    kind: BuildingType::Wall,
+                    is_provisional: false,
+                },
+                hw_jobs::model::WallUnderRetrofit,
+                Transform::from_translation(pos.extend(0.0)),
+            ))
+            .id();
+        let mut blueprint = Blueprint::new(BuildingType::ScreamingVent, vec![grid]);
+        blueprint.delivered_materials.insert(ResourceType::Rock, 1);
+        let owner = app
+            .world_mut()
+            .spawn((
+                blueprint,
+                hw_jobs::model::VentRetrofitWall(wall),
+                Transform::from_translation(pos.extend(0.0)),
+                BlueprintCancelRequested,
+            ))
+            .id();
+        app.world_mut()
+            .resource_mut::<WorldMap>()
+            .reserve_building_footprint(BuildingType::ScreamingVent, owner, [grid]);
+        app.update();
+        app.update();
+        let world = app.world_mut();
+        assert_eq!(
+            world.resource::<WorldMap>().building_entity(grid),
+            Some(wall)
+        );
+        assert!(world.get_entity(owner).is_err());
+        assert!(
+            world
+                .get::<hw_jobs::model::WallUnderRetrofit>(wall)
+                .is_none()
+        );
+        assert_eq!(
+            world
+                .query::<&hw_logistics::ResourceItem>()
+                .iter(world)
+                .map(|item| item.0)
+                .collect::<Vec<_>>(),
+            [ResourceType::Rock]
+        );
+    }
+
+    #[test]
+    fn cancellation_uses_payload_and_refunds_delivered_materials_once() {
+        let mut app = cancellation_app();
         let mut blueprint = Blueprint::new(BuildingType::Bridge, vec![(2, 3)]);
         blueprint.delivered_materials =
             HashMap::from([(ResourceType::Wood, 2), (ResourceType::Rock, 1)]);

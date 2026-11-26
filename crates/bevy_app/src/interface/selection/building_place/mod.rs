@@ -32,14 +32,54 @@ use placement::{place_building_blueprint, validate_building_blueprint_placement}
 
 #[derive(SystemParam)]
 pub struct BuildPlaceInput<'w, 's> {
+    keys: Res<'w, ButtonInput<KeyCode>>,
     pub buttons: Res<'w, ButtonInput<MouseButton>>,
     pub q_window: Query<'w, 's, &'static Window, With<bevy::window::PrimaryWindow>>,
     pub q_camera: Query<'w, 's, (&'static Camera, &'static GlobalTransform), With<MainCamera>>,
     pub ui_input_state: Res<'w, UiInputState>,
 }
 
+type DemolitionFilter = Or<(
+    With<hw_jobs::DeconstructionPending>,
+    With<hw_jobs::DeconstructionOrders>,
+)>;
+
+#[derive(SystemParam)]
+pub(crate) struct WallRetrofitEligibility<'w, 's> {
+    rooms: Option<Res<'w, hw_world::RoomTileLookup>>,
+    demolition: Query<'w, 's, (), DemolitionFilter>,
+    wall_tiles: Query<'w, 's, &'static hw_jobs::construction::WallTileBlueprint>,
+}
+
+impl WallRetrofitEligibility<'_, '_> {
+    pub(crate) fn room_check(
+        &self,
+        kind: BuildingType,
+        grid: (i32, i32),
+    ) -> Option<hw_ui::selection::PlacementValidation> {
+        use hw_ui::selection::{PlacementRejectReason, PlacementValidation};
+        (matches!(kind,BuildingType::Equipment(e) if e.indoor())
+            && !self
+                .rooms
+                .as_ref()
+                .is_some_and(|r| r.tile_to_room.contains_key(&grid)))
+        .then(|| PlacementValidation::rejected_at(PlacementRejectReason::RequiresRoomFloor, grid))
+    }
+    pub(crate) fn available(&self, owner: Option<Entity>) -> bool {
+        owner.is_some_and(|wall| {
+            !self.demolition.contains(wall)
+                && !self
+                    .wall_tiles
+                    .iter()
+                    .any(|tile| tile.spawned_wall == Some(wall))
+        })
+    }
+}
+
 #[derive(SystemParam)]
 pub struct BuildingStateQueries<'w, 's> {
+    retrofit: WallRetrofitEligibility<'w, 's>,
+    settings: Query<'w, 's, &'static crate::systems::ventilation::climate::ClimateSetting>,
     pub q_blueprints_by_entity: Query<'w, 's, &'static Blueprint>,
     pub q_sites: Query<'w, 's, &'static Site>,
     pub q_yards: Query<'w, 's, &'static Yard>,
@@ -59,6 +99,7 @@ pub struct BuildPlaceState<'w, 's> {
 }
 
 pub(super) struct PlacementQueries<'a, 'w, 's> {
+    retrofit: &'a WallRetrofitEligibility<'w, 's>,
     pub q_buildings: &'a Query<'w, 's, &'static Building>,
     pub q_blueprints_by_entity: &'a Query<'w, 's, &'static Blueprint>,
     pub q_sites: &'a Query<'w, 's, &'static Site>,
@@ -85,12 +126,21 @@ pub fn blueprint_placement(
     mut state: BuildPlaceState,
     queries: BuildingStateQueries,
     mut commands: Commands,
+    mut last_pipe: Local<Option<(i32, i32)>>,
 ) {
     if input.ui_input_state.world_input_blocked() {
+        *last_pipe = None;
         return;
     }
 
-    if !input.buttons.just_pressed(MouseButton::Left) {
+    let pipe =
+        state.build_context.kind == Some(BuildingType::Equipment(hw_jobs::Equipment::Conduit));
+    let started = input.buttons.just_pressed(MouseButton::Left);
+    let dragging_pipe = pipe && input.buttons.pressed(MouseButton::Left);
+    if started || !dragging_pipe {
+        *last_pipe = None;
+    }
+    if !(started || dragging_pipe) {
         return;
     }
 
@@ -101,12 +151,87 @@ pub fn blueprint_placement(
     let now = state.real_time.elapsed();
 
     let pq = PlacementQueries {
+        retrofit: &queries.retrofit,
         q_buildings: &queries.q_buildings,
         q_blueprints_by_entity: &queries.q_blueprints_by_entity,
         q_sites: &queries.q_sites,
         q_yards: &queries.q_yards,
     };
 
+    if pipe {
+        let start = last_pipe.unwrap_or(grid);
+        if *last_pipe == Some(grid) {
+            return;
+        }
+        *last_pipe = Some(grid);
+        let erase =
+            input.keys.pressed(KeyCode::ShiftLeft) || input.keys.pressed(KeyCode::ShiftRight);
+        let kind = BuildingType::Equipment(hw_jobs::Equipment::Conduit);
+        let mut tile = start;
+        loop {
+            if erase {
+                if let Some(&target) = world_map.conduits.get(&tile) {
+                    if queries.q_blueprints_by_entity.get(target).is_ok() {
+                        commands
+                            .entity(target)
+                            .try_insert(hw_jobs::BlueprintCancelRequested);
+                    } else if queries
+                        .q_buildings
+                        .get(target)
+                        .is_ok_and(|b| b.kind == kind)
+                    {
+                        world_map.conduits.remove(&tile);
+                        commands.entity(target).try_despawn();
+                    }
+                }
+            } else if !world_map.conduits.contains_key(&tile) {
+                let result = place_building_blueprint(
+                    &mut commands,
+                    &mut world_map,
+                    &state.game_assets,
+                    kind,
+                    tile,
+                    &pq,
+                );
+                record_placement_outcome(
+                    &mut state.placement_feedback,
+                    result.map(|_| ()),
+                    tile,
+                    now,
+                );
+            }
+            if tile == grid {
+                break;
+            }
+            if tile.0 != grid.0 {
+                tile.0 += (grid.0 - tile.0).signum();
+            } else {
+                tile.1 += (grid.1 - tile.1).signum();
+            }
+        }
+        return;
+    }
+    if let Some(
+        kind @ BuildingType::Equipment(
+            hw_jobs::Equipment::SupplyFan
+            | hw_jobs::Equipment::ExhaustFan
+            | hw_jobs::Equipment::Hood,
+        ),
+    ) = state.build_context.kind
+        && let Some(target) = world_map.building_entity(grid)
+        && queries
+            .q_buildings
+            .get(target)
+            .is_ok_and(|b| b.kind == kind && !b.is_provisional)
+    {
+        let setting = queries.settings.get(target).copied().unwrap_or_default();
+        commands
+            .entity(target)
+            .insert(crate::systems::ventilation::climate::ClimateSetting(
+                (setting.0 + 1) % 3,
+            ));
+        return;
+    }
     if let Some(district) = state.build_context.contract_district {
         if !state.targets.is_empty()
             || !state.contracts.single().is_ok_and(|record| {

@@ -6,6 +6,9 @@ use crate::constants::*;
 // 定数
 // ============================================================
 
+/// Width and height of the gathering prop footprint in world units.
+pub const GATHERING_OBJECT_SIZE: f32 = TILE_SIZE * 1.5;
+
 /// 集会発生までの基本待機時間 (秒)
 pub const GATHERING_SPAWN_BASE_TIME: f32 = 10.0;
 /// 近くにいるSoul1人あたりの発生時間短縮 (秒)

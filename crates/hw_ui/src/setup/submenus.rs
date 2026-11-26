@@ -213,7 +213,8 @@ fn spawn_category_button(
     let label = match category {
         None => "すべて",
         Some(BuildingCategory::Structure) => "壁・床・橋",
-        Some(BuildingCategory::Architecture) => "出入口",
+        Some(BuildingCategory::Architecture) => "出入口・換気",
+        Some(BuildingCategory::Infrastructure) => "空調・水道",
         Some(BuildingCategory::Plant) => "生産・設備",
         Some(BuildingCategory::Temporary) => "休息・屋外",
     };
@@ -261,11 +262,11 @@ fn spawn_building_panel(
             .spawn((
                 Button,
                 Node {
-                    width: Val::Px(140.0),
+                    width: Val::Px(124.0),
                     height: Val::Px(56.0),
                     flex_shrink: 0.0,
-                    padding: UiRect::all(Val::Px(6.0)),
-                    column_gap: Val::Px(6.0),
+                    padding: UiRect::all(Val::Px(4.0)),
+                    column_gap: Val::Px(4.0),
                     align_items: AlignItems::Center,
                     border_radius: BorderRadius::all(Val::Px(4.0)),
                     ..default()
@@ -280,8 +281,8 @@ fn spawn_building_panel(
                     ImageNode::new(assets.building_preview(kind).clone()),
                     crate::components::BuildingCatalogPreview(kind),
                     Node {
-                        width: Val::Px(32.0),
-                        height: Val::Px(32.0),
+                        width: Val::Px(26.0),
+                        height: Val::Px(26.0),
                         flex_shrink: 0.0,
                         ..default()
                     },
@@ -329,7 +330,7 @@ fn spawn_architect_submenu(
         parent_entity,
         SubmenuContainerSpec {
             left: Val::Px(12.0),
-            width: Val::Px(880.0),
+            width: Val::Px(906.0),
             flex_direction: FlexDirection::Column,
             align_items: Some(AlignItems::Stretch),
             marker: ArchitectSubMenu,
@@ -451,10 +452,11 @@ fn spawn_dream_submenu(
     });
 }
 
-const ARCHITECT_CATEGORIES: [BuildingCategory; 4] = [
+const ARCHITECT_CATEGORIES: [BuildingCategory; 5] = [
     BuildingCategory::Structure,
     BuildingCategory::Architecture,
     BuildingCategory::Plant,
+    BuildingCategory::Infrastructure,
     BuildingCategory::Temporary,
 ];
 
@@ -467,6 +469,16 @@ fn architect_building_specs(
     button_color: Color,
 ) -> Vec<MenuEntrySpec<'static>> {
     match category {
+        BuildingCategory::Infrastructure => hw_jobs::Equipment::ALL
+            .into_iter()
+            .map(|kind| {
+                MenuEntrySpec::new(
+                    kind.copy().0,
+                    MenuAction::SelectBuild(BuildingType::Equipment(kind)),
+                    button_color,
+                )
+            })
+            .collect(),
         BuildingCategory::Structure => vec![
             MenuEntrySpec::new(
                 "Wall",
@@ -481,11 +493,18 @@ fn architect_building_specs(
             ),
         ],
         BuildingCategory::Architecture => {
-            vec![MenuEntrySpec::new(
-                "Door",
-                MenuAction::SelectBuild(BuildingType::Door),
-                button_color,
-            )]
+            vec![
+                MenuEntrySpec::new(
+                    "叫びの風穴",
+                    MenuAction::SelectBuild(BuildingType::ScreamingVent),
+                    button_color,
+                ),
+                MenuEntrySpec::new(
+                    "Door",
+                    MenuAction::SelectBuild(BuildingType::Door),
+                    button_color,
+                ),
+            ]
         }
         BuildingCategory::Plant => vec![
             MenuEntrySpec::new(

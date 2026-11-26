@@ -44,6 +44,8 @@ pub fn generate_task_description(wt: WorkType, entity: Entity, refs: TaskCompone
                     BuildingType::BonePile => "Construct BonePile".to_string(),
                     BuildingType::WheelbarrowParking => "Construct Parking".to_string(),
                     BuildingType::SoulSpa => "Construct Soul Spa".to_string(),
+                    BuildingType::ScreamingVent => "叫びの風穴を施工".to_string(),
+                    BuildingType::Equipment(e) => format!("{}を建築", e.copy().0),
                     BuildingType::OutdoorLamp => "Construct Outdoor Lamp".to_string(),
                 }
             } else {
@@ -127,6 +129,8 @@ const fn building_type_label(kind: BuildingType) -> &'static str {
         BuildingType::BonePile => "Bone Pile",
         BuildingType::WheelbarrowParking => "Wheelbarrow Parking",
         BuildingType::SoulSpa => "Soul Spa",
+        BuildingType::ScreamingVent => "叫びの風穴",
+        BuildingType::Equipment(e) => e.copy().0,
         BuildingType::OutdoorLamp => "Outdoor Lamp",
     }
 }

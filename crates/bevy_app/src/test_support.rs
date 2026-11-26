@@ -12,6 +12,8 @@ pub(crate) fn minimal_app() -> App {
 pub(crate) fn empty_building_3d_handles() -> crate::plugins::startup::Building3dHandles {
     crate::plugins::startup::Building3dHandles {
         wall_mesh: Handle::default(),
+        vent_grate_mesh: Handle::default(),
+        vent_material: Handle::default(),
         wall_material: Handle::default(),
         wall_provisional_material: Handle::default(),
         floor_mesh: Handle::default(),

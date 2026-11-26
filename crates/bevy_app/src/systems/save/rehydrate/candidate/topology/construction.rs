@@ -4,6 +4,7 @@ pub(in super::super) fn validate_construction_links(candidate: &World) -> Result
     let map = candidate
         .get_resource::<WorldMap>()
         .ok_or_else(|| "persisted WorldMap is missing".to_owned())?;
+    validate_vent_retrofits(candidate)?;
     let mut blueprint_grids: HashMap<Entity, HashSet<(i32, i32)>> = HashMap::new();
     let mut floor_tiles_by_site: HashMap<Entity, HashSet<(i32, i32)>> = HashMap::new();
     let mut floor_states_by_site: HashMap<Entity, Vec<FloorTileState>> = HashMap::new();
@@ -29,7 +30,7 @@ pub(in super::super) fn validate_construction_links(candidate: &World) -> Result
                         entity.id()
                     ));
                 }
-                if map.buildings.get(&grid) != Some(&entity.id()) {
+                if map.footprint_owner(blueprint.kind, grid) != Some(entity.id()) {
                     return Err(format!(
                         "Blueprint {:?} occupied grid {grid:?} is not owned by it in WorldMap.buildings",
                         entity.id()
@@ -304,6 +305,50 @@ pub(in super::super) fn validate_construction_links(candidate: &World) -> Result
                 "WorldMap.buildings grid {grid:?} points to wall construction owner {owner:?} outside its tile footprint"
             ));
         }
+    }
+    Ok(())
+}
+
+fn validate_vent_retrofits(world: &World) -> Result<(), String> {
+    use hw_jobs::model::{VentRetrofitWall, WallUnderRetrofit};
+    let mut sources = HashSet::new();
+    let mut retained = HashSet::new();
+    for entity in world.iter_entities() {
+        if entity.contains::<WallUnderRetrofit>() {
+            retained.insert(entity.id());
+        }
+        let source = entity.get::<VentRetrofitWall>();
+        let blueprint = entity.get::<Blueprint>();
+        if blueprint.is_some_and(|b| b.kind == BuildingType::ScreamingVent) != source.is_some() {
+            return Err(format!(
+                "vent retrofit source mismatch on {:?}",
+                entity.id()
+            ));
+        }
+        if let Some(source) = source {
+            let transform = world
+                .get::<Transform>(source.0)
+                .ok_or("missing retrofit wall")?;
+            let grid = WorldMap::world_to_grid(transform.translation.truncate());
+            if entity.contains::<Building>()
+                || world.get::<Blueprint>(source.0).is_some()
+                || !transform.translation.is_finite()
+                || !world
+                    .get::<Building>(source.0)
+                    .is_some_and(|b| b.kind == BuildingType::Wall && !b.is_provisional)
+                || blueprint.is_none_or(|bp| bp.occupied_grids.as_slice() != [grid])
+                || entity.get::<Transform>().is_none_or(|t| {
+                    !t.translation.is_finite()
+                        || WorldMap::world_to_grid(t.translation.truncate()) != grid
+                })
+                || !sources.insert(source.0)
+            {
+                return Err(format!("invalid retained wall for vent {:?}", entity.id()));
+            }
+        }
+    }
+    if sources != retained {
+        return Err("retained vent walls do not match their blueprints".into());
     }
     Ok(())
 }

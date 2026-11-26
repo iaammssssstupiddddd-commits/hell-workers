@@ -99,7 +99,10 @@ pub(super) fn commit_deconstruction(
                     );
                 }
             }
-            BuildingType::SoulSpa | BuildingType::OutdoorLamp => {
+            BuildingType::Equipment(hw_jobs::Equipment::Conduit) => {
+                map.conduits.retain(|_, owner| *owner != request.target);
+            }
+            BuildingType::Equipment(_) | BuildingType::SoulSpa | BuildingType::OutdoorLamp => {
                 for grid in &prepared.owner_snapshot.building_grids {
                     let cleared = map.clear_building_if_owned(*grid, request.target);
                     debug_assert!(
@@ -139,9 +142,11 @@ pub(super) fn commit_deconstruction(
     if let Some(mut room_detection) = world.get_resource_mut::<RoomDetectionState>() {
         room_detection.mark_dirty_many(dirty_grids.iter().copied());
     }
-    if matches!(prepared.kind, BuildingType::Wall | BuildingType::Door)
-        && let Some(mut wall_connections) =
-            world.get_resource_mut::<hw_visual::wall_connection::WallConnectionDirty>()
+    if matches!(
+        prepared.kind,
+        BuildingType::Wall | BuildingType::Door | BuildingType::ScreamingVent
+    ) && let Some(mut wall_connections) =
+        world.get_resource_mut::<hw_visual::wall_connection::WallConnectionDirty>()
     {
         wall_connections.mark_removed(dirty_grids.iter().copied());
     }

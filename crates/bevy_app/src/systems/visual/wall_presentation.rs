@@ -94,6 +94,30 @@ pub struct WallPresentationQueries<'w, 's> {
     removed_visuals: RemovedComponents<'w, 's, Wall3dPresentationState>,
 }
 
+/// Stretch the mounted grate only along a continuous wall cap.
+pub fn resize_vent_grates(
+    walls: Query<(&Wall3dPresentationState, &Children), Changed<Wall3dPresentationState>>,
+    mut grates: Query<&mut Transform, With<hw_visual::visual3d::VentGrate>>,
+) {
+    for (wall, children) in &walls {
+        let length = if matches!(
+            wall.topology.family,
+            WallMeshFamily::Straight | WallMeshFamily::Cross
+        ) {
+            2.0
+        } else {
+            1.0
+        };
+        for child in children.iter() {
+            if let Ok(mut grate) = grates.get_mut(child)
+                && grate.scale.z != length
+            {
+                grate.scale.z = length;
+            }
+        }
+    }
+}
+
 fn production_mesh_index(family: WallMeshFamily) -> usize {
     match family {
         WallMeshFamily::Isolated => 0,
@@ -182,7 +206,10 @@ pub fn apply_wall_presentation_system(
         let Ok((building, owner_transform, topology)) = queries.owners.get(owner_entity) else {
             continue;
         };
-        if building.kind != BuildingType::Wall {
+        if !matches!(
+            building.kind,
+            BuildingType::Wall | BuildingType::ScreamingVent
+        ) {
             continue;
         }
         let Ok((_, mut state, mut mesh, mut material, mut transform, mut mesh_tag)) =
@@ -193,14 +220,16 @@ pub fn apply_wall_presentation_system(
 
         let mut next_transform =
             building_presentation_transform(BuildingType::Wall, owner_transform);
+        if production || building.kind == BuildingType::ScreamingVent {
+            next_transform.rotation *= Quat::from_rotation_y(
+                f32::from(topology.resolved.quarter_turns_y.get()) * std::f32::consts::FRAC_PI_2,
+            );
+        }
         let (next_mesh, next_material, mode) = if production {
             let resolved = assets
                 .resolved
                 .as_ref()
                 .expect("bound production Wall assets disappeared");
-            next_transform.rotation *= Quat::from_rotation_y(
-                f32::from(topology.resolved.quarter_turns_y.get()) * std::f32::consts::FRAC_PI_2,
-            );
             let next_material = if building.is_provisional {
                 production_materials
                     .provisional

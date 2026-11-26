@@ -190,7 +190,7 @@ pub(super) fn validate_commit(
                 WorldMap::world_to_grid(transform.translation.truncate()) == anchor
             });
         let owner_is_exact = order_grid_matches
-            && target_owner_snapshot_is_exact(map, kind, &owner_snapshot, anchor);
+            && target_owner_snapshot_is_exact(map, request.target, kind, &owner_snapshot, anchor);
         if !owner_is_exact {
             return Err(CommitFailure::blocked(
                 DeconstructionCommitResult::OwnerMismatch,
@@ -288,6 +288,7 @@ pub(super) fn validate_commit(
 
 fn target_owner_snapshot_is_exact(
     map: &WorldMap,
+    target: Entity,
     kind: BuildingType,
     snapshot: &WorldMapOwnerSnapshot,
     anchor: (i32, i32),
@@ -296,9 +297,25 @@ fn target_owner_snapshot_is_exact(
         return false;
     }
 
+    if matches!(kind, BuildingType::Equipment(_))
+        && !(snapshot.floor_grids.is_empty()
+            && snapshot.door_grids.is_empty()
+            && snapshot.bridge_grids.is_empty())
+    {
+        return false;
+    }
     let exact_single = |grids: &[(i32, i32)]| grids == [anchor];
     match kind {
-        BuildingType::Wall
+        BuildingType::Equipment(hw_jobs::Equipment::Conduit) => {
+            snapshot.building_grids.is_empty() && map.conduits.get(&anchor) == Some(&target)
+        }
+        BuildingType::Equipment(hw_jobs::Equipment::Intake) => {
+            exact_rectangle(&snapshot.building_grids, 3, 2)
+                && snapshot.building_grids.contains(&anchor)
+        }
+        BuildingType::Equipment(_) => exact_single(&snapshot.building_grids),
+        BuildingType::ScreamingVent
+        | BuildingType::Wall
         | BuildingType::SandPile
         | BuildingType::BonePile
         | BuildingType::OutdoorLamp => {
@@ -432,7 +449,9 @@ pub(super) fn prepare_power_topology(
                 && world.get::<PowerConsumer>(target).is_none()
                 && snapshot.consumer_grid.is_none()
         }
-        BuildingType::OutdoorLamp => {
+        kind if kind == BuildingType::OutdoorLamp
+            || matches!(kind, BuildingType::Equipment(e) if e.demand()>0.0) =>
+        {
             world.get::<PowerConsumer>(target).is_some()
                 && world.get::<PowerGenerator>(target).is_none()
                 && snapshot.generator_grid.is_none()

@@ -311,7 +311,9 @@ pub(super) fn write_building_type(record: &mut Vec<u8>, kind: BuildingType) {
         BuildingType::BonePile => 8,
         BuildingType::WheelbarrowParking => 9,
         BuildingType::SoulSpa => 10,
+        BuildingType::Equipment(e) => 13 + e as u8,
         BuildingType::OutdoorLamp => 11,
+        BuildingType::ScreamingVent => 12,
     });
 }
 

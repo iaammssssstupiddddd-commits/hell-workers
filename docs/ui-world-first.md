@@ -44,7 +44,7 @@ Task snapshotまたはowner関係が変わった場合に再計算し、loadで�
 
 ## 建築と理解
 
-全12種類を画像・日本語名・用途付きのカードで選ぶ。カテゴリ選択は任意。
+全27種類を画像・日本語名・用途付きのカードで選ぶ。カテゴリ選択は任意。
 各画像の`BuildingCatalogPreview(BuildingType)`をrootのasset adapterが識別する。
 Doorは`DoorAssetReadiness`とresolved poolのidentityが一致する場合だけClosed EW previewを使用し、それ以外は従来の`door_closed`へ戻す。
 `PostUpdate`のreadiness確定後・UI Prepare前に同期するため、pause中、読込後着、世代切替、カード再生成にも追従する。32pxのUI枠と色を保持し、world用anchorや寸法は適用しない。他の11種の画像・操作・文言は変えない。

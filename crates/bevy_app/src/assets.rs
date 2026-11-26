@@ -14,6 +14,8 @@ impl GameAssets {
         use hw_jobs::BuildingType;
         match kind {
             BuildingType::Wall => &self.wall_isolated,
+            BuildingType::Equipment(kind) => self.equipment_image(kind),
+            BuildingType::ScreamingVent => &self.screaming_vent,
             BuildingType::Door => &self.door_closed,
             BuildingType::Floor => &self.mud_floor,
             BuildingType::Tank => &self.tank_empty,
@@ -32,6 +34,8 @@ impl UiAssets for GameAssets {
         use hw_jobs::BuildingType;
         match kind {
             BuildingType::Wall => &self.mud_wall_isolated,
+            BuildingType::Equipment(kind) => self.equipment_image(kind),
+            BuildingType::ScreamingVent => &self.screaming_vent,
             BuildingType::Door => &self.door_closed,
             BuildingType::Floor => &self.mud_floor,
             BuildingType::Tank => &self.tank_full,
@@ -159,6 +163,7 @@ pub struct GameAssets {
     pub mud_wall_end_right: Handle<Image>,
 
     // Wall connections
+    pub screaming_vent: Handle<Image>,
     pub wall_isolated: Handle<Image>,
     pub wall_horizontal_left: Handle<Image>,
     pub wall_horizontal_right: Handle<Image>,
@@ -251,4 +256,16 @@ pub struct GameAssets {
     pub font_familiar: Handle<Font>,   // Familiar吹き出し
     pub font_soul_name: Handle<Font>,  // Soul名
     pub font_soul_emoji: Handle<Font>, // Soulセリフ（絵文字）
+}
+
+impl GameAssets {
+    pub(crate) fn equipment_image(&self, kind: hw_jobs::Equipment) -> &Handle<Image> {
+        use hw_jobs::Equipment::*;
+        match kind {
+            Intake | Basin | Humidifier | Dehumidifier => &self.tank_empty,
+            Conduit | Duct => &self.icon_bone_small,
+            HeatPump | OutdoorUnit => &self.mud_mixer,
+            _ => &self.screaming_vent,
+        }
+    }
 }

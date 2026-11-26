@@ -127,6 +127,8 @@ mod renderdoc_capture;
 #[cfg(feature = "profiling")]
 mod save_transaction;
 #[cfg(feature = "profiling")]
+pub(crate) mod ventilation_fixture;
+#[cfg(feature = "profiling")]
 mod wall_actual_window;
 #[cfg(feature = "profiling")]
 mod wall_color_actual_window;
