@@ -44,10 +44,11 @@ fn is_gathering_spot_safe_from_familiars(
 
 /// 人数不足で猶予切れの集会を Dissolve 要求に変換する
 pub fn gathering_maintenance_decision(
+    map: Res<hw_world::WorldMap>,
     q_spots: Query<(
         Entity,
         &GatheringSpot,
-        &GatheringParticipants,
+        Option<&GatheringParticipants>,
         &GatheringVisuals,
     )>,
     update_timer: Res<GatheringUpdateTimer>,
@@ -58,9 +59,10 @@ pub fn gathering_maintenance_decision(
     }
 
     for (spot_entity, spot, participants, visuals) in q_spots.iter() {
-        if participants.len() < GATHERING_MIN_PARTICIPANTS
-            && spot.grace_active
-            && spot.grace_timer <= 0.0
+        if !map.fits_gathering_prop(spot.center)
+            || (participants.map_or(0, GatheringParticipants::len) < GATHERING_MIN_PARTICIPANTS
+                && spot.grace_active
+                && spot.grace_timer <= 0.0)
         {
             decide_output
                 .gathering_requests

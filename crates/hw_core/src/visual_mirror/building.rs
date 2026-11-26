@@ -18,6 +18,8 @@ pub enum BuildingTypeVisual {
     WheelbarrowParking,
     SoulSpa,
     OutdoorLamp,
+    Equipment,
+    ScreamingVent,
 }
 
 /// Mirror of `hw_jobs::Building` carrying only the data `hw_visual` needs.

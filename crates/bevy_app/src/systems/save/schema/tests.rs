@@ -1183,3 +1183,85 @@ fn persisted_world_rejects_allowed_components_without_a_root_marker() {
     assert!(error.unsupported_components.is_empty());
     assert_eq!(error.rootless_entities, vec![Entity::PLACEHOLDER]);
 }
+
+#[test]
+fn saved_air_rebuilds_factors_and_continues_the_same_partial_second() {
+    use crate::systems::ventilation::{
+        climate::{AirLedger, RoomClimate, advance},
+        update_room_ventilation,
+    };
+    use bevy::ecs::system::RunSystemOnce;
+    use hw_world::{
+        Room, RoomDetectionState,
+        room_detection::{RoomBounds, RoomTileSignature},
+    };
+
+    fn room(world: &mut World) -> Entity {
+        world.init_resource::<RoomDetectionState>();
+        let tiles = vec![(10, 10), (11, 10)];
+        let entity = world
+            .spawn(Room {
+                tile_signature: RoomTileSignature::from_tiles(&tiles),
+                tiles,
+                wall_tiles: vec![],
+                door_tiles: vec![],
+                bounds: RoomBounds::from_tile((10, 10)),
+                tile_count: 2,
+            })
+            .id();
+        world.spawn((
+            Building {
+                kind: BuildingType::MudMixer,
+                is_provisional: false,
+            },
+            Transform::from_translation(WorldMap::grid_to_world(10, 10).extend(0.)),
+        ));
+        world.run_system_once(update_room_ventilation).unwrap();
+        entity
+    }
+    let mut source = App::new();
+    register_save_types(&mut source);
+    let registry = source.world().resource::<AppTypeRegistry>().clone();
+    let registry = registry.read();
+    let w = source.world_mut();
+    let a = room(w);
+    let live = w.register_system(advance);
+    w.run_system_with(live, 31.25).unwrap();
+    let entity = w
+        .query_filtered::<Entity, With<AirLedger>>()
+        .single(w)
+        .unwrap();
+    assert!(collect_persisted_entities(w).contains(&entity));
+    let data = build_persisted_world(w, &registry, std::iter::once(entity))
+        .serialize(&registry)
+        .unwrap();
+    let mut decoder = ron::de::Deserializer::from_str(&data).unwrap();
+    let snapshot = WorldDeserializer {
+        type_registry: &registry,
+        load_from_path: &mut NoAssetLoad,
+    }
+    .deserialize(&mut decoder)
+    .unwrap();
+    let mut destination = World::new();
+    let mut map = EntityHashMap::default();
+    snapshot
+        .write_to_world_with(&mut destination, &mut map, &registry)
+        .unwrap();
+    let b = room(&mut destination);
+    let restored = destination.register_system(advance);
+    for elapsed in [0., 0.75, 28., 1., 1.] {
+        w.run_system_with(live, elapsed).unwrap();
+        destination.run_system_with(restored, elapsed).unwrap();
+        let left = w.get::<AirLedger>(entity).unwrap();
+        let right = destination.get::<AirLedger>(map[&entity]).unwrap();
+        assert_eq!(left.reflect_partial_eq(right), Some(true));
+        // A paused load republishes an instantaneous trend. Compare the
+        // displayed per-second trend after the first integrated step.
+        if elapsed > 0. {
+            assert_eq!(
+                w.get::<RoomClimate>(a).unwrap().text(),
+                destination.get::<RoomClimate>(b).unwrap().text()
+            );
+        }
+    }
+}

@@ -273,6 +273,7 @@ impl DeconstructionEligibilityFacts {
 pub const fn deconstruction_salvage(kind: BuildingType) -> DeconstructionSalvage {
     match kind {
         BuildingType::Wall => salvage_material(ResourceType::Wood, 1),
+        BuildingType::ScreamingVent => salvage_material(ResourceType::Rock, 1),
         BuildingType::Door => salvage_material(ResourceType::Wood, 1),
         BuildingType::Floor => salvage_material(ResourceType::Bone, 1),
         BuildingType::Tank => salvage_material(ResourceType::Wood, 1),
@@ -283,6 +284,7 @@ pub const fn deconstruction_salvage(kind: BuildingType) -> DeconstructionSalvage
         BuildingType::BonePile => salvage_material(ResourceType::Bone, 5),
         BuildingType::WheelbarrowParking => salvage_material(ResourceType::Wood, 1),
         BuildingType::SoulSpa => salvage_material(ResourceType::Bone, 6),
+        BuildingType::Equipment(_) => salvage_material(ResourceType::Bone, 1),
         BuildingType::OutdoorLamp => salvage_material(ResourceType::Bone, 1),
     }
 }
@@ -294,7 +296,8 @@ pub const fn deconstruction_salvage(kind: BuildingType) -> DeconstructionSalvage
 pub const fn supports_deconstruction_cleanup(kind: BuildingType) -> bool {
     matches!(
         kind,
-        BuildingType::Wall
+        BuildingType::ScreamingVent
+            | BuildingType::Wall
             | BuildingType::Door
             | BuildingType::Floor
             | BuildingType::Tank
@@ -305,6 +308,7 @@ pub const fn supports_deconstruction_cleanup(kind: BuildingType) -> bool {
             | BuildingType::BonePile
             | BuildingType::WheelbarrowParking
             | BuildingType::SoulSpa
+            | BuildingType::Equipment(_)
             | BuildingType::OutdoorLamp
     )
 }
@@ -389,7 +393,7 @@ pub const fn deconstruction_marker_matches(
         !markers.operational_soul_spa && !markers.power_consumer && !markers.power_generator;
     let plain = no_pile && no_facility && no_structure && no_energy;
     match kind {
-        BuildingType::Wall | BuildingType::Floor => plain,
+        BuildingType::ScreamingVent | BuildingType::Wall | BuildingType::Floor => plain,
         BuildingType::Door => {
             markers.door && no_pile && no_facility && no_energy && !markers.bridge
         }
@@ -445,6 +449,13 @@ pub const fn deconstruction_marker_matches(
                 && no_pile
                 && no_facility
                 && no_structure
+        }
+        BuildingType::Equipment(kind) => {
+            no_pile
+                && no_facility
+                && no_structure
+                && !markers.power_generator
+                && markers.power_consumer == (kind.demand() > 0.0)
         }
         BuildingType::OutdoorLamp => {
             markers.power_consumer
@@ -504,7 +515,8 @@ pub fn resolve_deconstruction_target(
         return Err(DeconstructionRejectReason::StaleTarget);
     }
 
-    if world.get::<Blueprint>(hit).is_some()
+    if world.get::<crate::model::WallUnderRetrofit>(hit).is_some()
+        || world.get::<Blueprint>(hit).is_some()
         || world.get::<FloorConstructionSite>(hit).is_some()
         || world.get::<WallConstructionSite>(hit).is_some()
         || world.get::<FloorTileBlueprint>(hit).is_some()
@@ -592,8 +604,18 @@ mod tests {
 
     #[test]
     fn salvage_table_is_exhaustive_and_keeps_special_cases_explicit() {
+        for e in crate::Equipment::ALL {
+            assert_eq!(
+                deconstruction_salvage(BuildingType::Equipment(e)),
+                salvage_material(ResourceType::Bone, 1)
+            );
+        }
         assert_eq!(
-            BuildingType::ALL.map(deconstruction_salvage),
+            BuildingType::ALL[..13]
+                .iter()
+                .copied()
+                .map(deconstruction_salvage)
+                .collect::<Vec<_>>(),
             [
                 salvage_material(ResourceType::Wood, 1),
                 salvage_material(ResourceType::Wood, 1),
@@ -607,6 +629,7 @@ mod tests {
                 salvage_material(ResourceType::Wood, 1),
                 salvage_material(ResourceType::Bone, 6),
                 salvage_material(ResourceType::Bone, 1),
+                salvage_material(ResourceType::Rock, 1),
             ]
         );
     }

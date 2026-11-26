@@ -26,6 +26,7 @@ pub fn gathering_spawn_system(
     mut commands: Commands,
     gathering_visual_handles: Res<GatheringVisualHandles>,
     q_initiators: GatheringInitiatorQuery,
+    map: Res<hw_world::WorldMap>,
     mut spawn_requests: MessageReader<GatheringSpawnRequest>,
 ) {
     for request in spawn_requests.read() {
@@ -56,6 +57,9 @@ pub fn gathering_spawn_system(
             continue;
         }
 
+        if !map.fits_gathering_prop(request.pos) {
+            continue;
+        }
         let spot_entity = spawn_gathering_spot(
             &mut commands,
             gathering_visual_handles.as_ref(),

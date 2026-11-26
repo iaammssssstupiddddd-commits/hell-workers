@@ -355,7 +355,9 @@ fn set_wandering_destination(
         let dx: i32 = rng.gen_range(-5..=5);
         let dy: i32 = rng.gen_range(-5..=5);
         let new_grid = (current_grid.0 + dx, current_grid.1 + dy);
-        if world_map.is_walkable(new_grid.0, new_grid.1) {
+        if world_map.is_walkable(new_grid.0, new_grid.1)
+            && world_map.door_entity(new_grid.0, new_grid.1).is_none()
+        {
             destination.0 = grid_to_world(new_grid.0, new_grid.1);
             break;
         }

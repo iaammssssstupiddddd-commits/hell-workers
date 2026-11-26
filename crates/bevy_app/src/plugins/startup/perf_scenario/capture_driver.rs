@@ -169,13 +169,20 @@ pub(crate) fn start_perf_capture_system(
             pause_virtual_time_at_capture_boundary(&mut params.virtual_time);
         } else {
             params.virtual_time.unpause();
+            if params.config.workload().uses_ventilation_fixture() {
+                crate::systems::settings::apply::apply_default_time_speed(
+                    &mut params.virtual_time,
+                    hw_core::game_state::TimeSpeed::Super,
+                );
+            }
         }
         capture.phase = PerfCapturePhase::Warmup;
         capture.elapsed_secs = 0.0;
         capture.save_transaction_kind =
             save_transaction::save_transaction_sample_kind_from_env().to_string();
         eprintln!(
-            "PERF_CAPTURE: phase=warmup virtual_speed=1.0 target_secs={}",
+            "PERF_CAPTURE: phase=warmup virtual_speed={} target_secs={}",
+            params.virtual_time.relative_speed_f64(),
             params.config.warmup_secs()
         );
     }
@@ -197,6 +204,8 @@ fn pause_virtual_time_at_capture_boundary(virtual_time: &mut Time<Virtual>) {
 pub(crate) fn drive_perf_capture_system(
     mut params: PerfCaptureParams,
     mut capture: ResMut<PerfCapture>,
+    mut air_fixture: Option<ResMut<super::ventilation_fixture::Fixture>>,
+    mut air_probe: Option<ResMut<crate::systems::ventilation::perf::AirPerf>>,
     mut exit: MessageWriter<AppExit>,
     gallery: Option<Res<crate::assets::building_asset_set::gallery_capture::GalleryCaptureSession>>,
 ) {
@@ -207,6 +216,15 @@ pub(crate) fn drive_perf_capture_system(
         return;
     }
 
+    if let (Some(fixture), Some(probe)) = (air_fixture.as_deref_mut(), air_probe.as_deref_mut()) {
+        fixture.observe(
+            &capture,
+            probe,
+            &params.config,
+            &params.time,
+            &params.real_time,
+        );
+    }
     match capture.phase {
         PerfCapturePhase::WaitingForScenario => {}
         PerfCapturePhase::ArmFixedAudit => {
@@ -344,7 +362,11 @@ pub(crate) fn drive_perf_capture_system(
                 {
                     capture.frame_times_ms.push(frame_time_ms);
                 }
-                if capture.elapsed_secs >= f64::from(params.config.measure_secs()) {
+                if capture.elapsed_secs >= f64::from(params.config.measure_secs())
+                    && (!params.config.workload().uses_ventilation_fixture()
+                        || capture.measure_virtual_secs
+                            >= 4.0 * f64::from(params.config.measure_secs()))
+                {
                     #[cfg(feature = "profiling-memory")]
                     {
                         capture.memory_measurement = crate::profiling_allocator::end_measurement();
@@ -434,6 +456,7 @@ pub(crate) fn drive_perf_capture_system(
                             warmup_checksum: warmup,
                             measure_end_checksum: measure_end,
                             samples: &capture.frame_times_ms,
+                            virtual_speed: params.time.relative_speed_f64(),
                             warmup_virtual_secs: capture.warmup_virtual_secs,
                             warmup_real_secs: capture.warmup_real_secs,
                             measure_virtual_secs: capture.measure_virtual_secs,
@@ -462,6 +485,20 @@ pub(crate) fn drive_perf_capture_system(
                     )),
                 }
             };
+            let capture_result = capture_result.and_then(|()| {
+                if params.config.workload().uses_ventilation_fixture() {
+                    air_fixture
+                        .as_deref()
+                        .ok_or_else(|| std::io::Error::other("missing ventilation fixture"))?
+                        .write(
+                            &params.config,
+                            air_probe.as_deref().ok_or_else(|| {
+                                std::io::Error::other("missing ventilation probe")
+                            })?,
+                        )?;
+                }
+                Ok(())
+            });
             let result = capture_result.and_then(|()| {
                 final_wall_density_presentation
                     .as_ref()
@@ -603,7 +640,9 @@ fn validate_realtime_indoor_light_checkpoint(
 
 #[cfg(feature = "profiling")]
 fn realtime_capture_delta_secs(params: &PerfCaptureParams<'_, '_>) -> f64 {
-    if params.config.keeps_virtual_time_paused_during_capture() {
+    if params.config.keeps_virtual_time_paused_during_capture()
+        || params.config.workload().uses_ventilation_fixture()
+    {
         params.real_time.delta_secs_f64()
     } else {
         params.time.delta_secs_f64()

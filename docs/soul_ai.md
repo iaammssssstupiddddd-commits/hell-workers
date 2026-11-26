@@ -313,3 +313,5 @@ terminal disposition は context 内部だけで保持する。`task_execution_s
 #### ログレベル（M3）
 
 `task_execution` 内のフェーズ遷移・到着・完了ログは `debug!` に統一。通常プレイでは info レベルに流れない。詳細確認は `RUST_LOG=hw_soul_ai=debug`（必要なら `hw_familiar_ai=debug` も併用）。
+
+待機中の魂は戸口を通過できる。徘徊の目的地から扉を除き、戸口に立ち止まった魂は次の待機判定で通行可能な隣接マスに歩いて退く。

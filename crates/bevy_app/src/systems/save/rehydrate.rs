@@ -548,10 +548,44 @@ pub(super) fn rehydrate_presentation_shells_for_test(world: &mut World) {
 }
 
 fn wake_domains_after_load(world: &mut World) {
-    world.init_resource::<crate::systems::energy::grid_recalc::EnergyUpdateDirty>();
+    use bevy::ecs::system::RunSystemOnce;
+    // Publish derived rooms before the first frame, even if virtual time is paused.
+    world.init_resource::<hw_world::RoomBoundaryLookup>();
+    world.init_resource::<hw_world::RoomTileLookup>();
+    world.init_resource::<hw_world::RoomDetectionState>();
     world
-        .resource_mut::<crate::systems::energy::grid_recalc::EnergyUpdateDirty>()
+        .resource_mut::<hw_world::RoomDetectionState>()
+        .mark_dirty((0, 0));
+    world
+        .run_system_once(hw_world::detect_rooms_immediately_system)
+        .expect("room rebuild");
+    world
+        .run_system_once(crate::systems::ventilation::update_room_ventilation)
+        .expect("room ventilation rebuild");
+    use crate::systems::energy::{grid_lifecycle, grid_recalc, power_output};
+    world.init_resource::<grid_recalc::EnergyUpdateDirty>();
+    world
+        .resource_mut::<grid_recalc::EnergyUpdateDirty>()
         .request_full_rebuild();
+    if world
+        .query::<&hw_jobs::Building>()
+        .iter(world)
+        .any(|b| matches!(b.kind,hw_jobs::BuildingType::Equipment(e) if e.demand()>0.0))
+    {
+        world.init_resource::<hw_energy::PowerAllocationMode>();
+        world
+            .run_system_once(grid_lifecycle::reconcile_power_grid_topology_system)
+            .expect("equipment circuit restore");
+        world
+            .run_system_once(power_output::soul_spa_power_output_system)
+            .expect("equipment generation restore");
+        world
+            .run_system_once(grid_recalc::grid_recalc_system)
+            .expect("equipment supply restore");
+    }
+    world
+        .run_system_once_with(crate::systems::ventilation::climate::advance, 0.0)
+        .expect("room climate restore");
 }
 
 fn rehydrate_shells(

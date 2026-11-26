@@ -70,6 +70,15 @@ type PowerGridTopologyQuery<'w, 's> = Query<
 
 #[derive(SystemParam)]
 pub struct PowerGridTopologyQueries<'w, 's> {
+    sites: Query<
+        'w,
+        's,
+        (
+            &'static hw_world::zones::Site,
+            &'static hw_world::zones::PairedYard,
+        ),
+    >,
+    buildings: Query<'w, 's, &'static hw_jobs::Building>,
     q_yards: Query<'w, 's, (Entity, &'static Yard)>,
     q_grids: PowerGridTopologyQuery<'w, 's>,
     q_owner_markers_without_grid: Query<'w, 's, Entity, (With<YardPowerGrid>, Without<PowerGrid>)>,
@@ -178,7 +187,30 @@ pub fn reconcile_power_grid_topology_system(
     };
 
     for (entity, transform, current) in &queries.q_consumers {
-        let desired = desired_grid_at(transform);
+        let equipment = queries.buildings.get(entity).ok().and_then(|b| {
+            if let hw_jobs::BuildingType::Equipment(kind) = b.kind {
+                Some(kind)
+            } else {
+                None
+            }
+        });
+        let desired = if let Some(kind) = equipment {
+            transform.and_then(|pose| {
+                let mut candidates = queries
+                    .sites
+                    .iter()
+                    .filter(|(s, _)| s.serves_equipment(kind, pose.translation.xy()));
+                match (candidates.next(), candidates.next()) {
+                    (Some((_, paired)), None) => canonical_grids.get(&paired.0).copied(),
+                    (None, None) if kind != hw_jobs::Equipment::Intake => {
+                        desired_grid_at(transform)
+                    }
+                    _ => None,
+                }
+            })
+        } else {
+            desired_grid_at(transform)
+        };
         let current_target = current.map(|relation| relation.0);
         let relation_is_consistent = match (current_target, desired) {
             (None, None) => true,

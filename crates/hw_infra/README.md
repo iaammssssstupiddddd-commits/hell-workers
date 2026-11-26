@@ -26,3 +26,7 @@ Run the focused tests with:
 ```bash
 python3 scripts/dev.py cargo -- test -p hw_infra
 ```
+
+The `ventilation` module balances pressure and reference contaminant transport across outdoor openings and well-mixed zones. The adapter builds these zones from rooms and the exterior envelope, connects completed ventilation grates, and publishes effective outdoor air and opening flows for inspection. Door state has no effect on airflow. Sealed components and outdoor-only single rooms use direct formulas. Connected multi-room components solve their own sparse balances. See [the indoor air model](../../docs/indoor_air.md).
+
+`air_transport` は物質・顕熱の後退オイラー輸送、熱伝達、ろ過、外気条件を扱う。保存・工区・機器の運転と表示はアプリ側で結合する。[室内空気の仕様](../../docs/indoor_air.md)

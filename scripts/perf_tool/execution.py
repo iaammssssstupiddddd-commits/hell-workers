@@ -395,6 +395,12 @@ def fixed_environment(args: argparse.Namespace) -> dict[str, str]:
         values["WGPU_BACKEND"] = args.backend
     if args.adapter:
         values["WGPU_ADAPTER_NAME"] = args.adapter
+    if getattr(args, "workload", None) in {"ventilation", "ventilation-dimensions"}:
+        for key in ("HW_VENTILATION_SOLVER", "HW_AIR_TAPE", "HW_AIR_OUTAGE", "HW_AIR_COMPARE", "HW_AIR_PUBLICATION"):
+            if key in os.environ:
+                values[key] = os.environ[key]
+        # Capture the renderer identity without adding per-actor INFO to timed frames.
+        values["RUST_LOG"] = "warn,wgpu=error,bevy_render::renderer=info"
     if getattr(args, "building_m6_mode", None) is not None:
         values["HW_BUILDING_M6_MODE"] = args.building_m6_mode
         # The game's performance default suppresses adapter INFO. Keep the
@@ -1020,6 +1026,10 @@ def run_one(
     if final_dir.exists() or temporary_dir.exists():
         raise RuntimeError(f"run directory collision: {final_dir}")
     temporary_dir.mkdir()
+    if case.workload == "ventilation" and "HW_AIR_PUBLICATION" in os.environ:
+        snapshot = cargo_resource_policy(REPO_ROOT, namespace="perf", incremental=False)
+        write_json(temporary_dir / "stage-admission.json", snapshot["memory_guard"])
+        require_cargo_memory()
     data_dir = temporary_dir / "data"
     data_dir.mkdir()
 

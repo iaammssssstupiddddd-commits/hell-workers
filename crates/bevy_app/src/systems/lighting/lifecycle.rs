@@ -68,6 +68,9 @@ pub(crate) fn validate_fixture_mount_candidate(candidate: &World) -> Result<(), 
                 anchor_grid
             )
         })?;
+        let anchor_entity = candidate
+            .get::<hw_jobs::model::VentRetrofitWall>(anchor_entity)
+            .map_or(anchor_entity, |source| source.0);
         let anchor_ref = candidate.get_entity(anchor_entity).map_err(|_| {
             format!(
                 "wall-mounted LightingFixtureMount owner {:?} references missing anchor {anchor_entity:?}",
@@ -75,7 +78,10 @@ pub(crate) fn validate_fixture_mount_candidate(candidate: &World) -> Result<(), 
             )
         })?;
         if anchor_ref.get::<Building>().is_none_or(|anchor_building| {
-            anchor_building.kind != BuildingType::Wall || anchor_building.is_provisional
+            !matches!(
+                anchor_building.kind,
+                BuildingType::Wall | BuildingType::ScreamingVent
+            ) || anchor_building.is_provisional
         }) || anchor_ref.contains::<ProvisionalWall>()
         {
             return Err(format!(

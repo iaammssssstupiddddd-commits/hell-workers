@@ -162,6 +162,8 @@ impl RoomBoundaryLookup {
 /// Runtime state for room detection scheduling and dirty-tile tracking.
 #[derive(Resource)]
 pub struct RoomDetectionState {
+    /// Increments after a structural rebuild, including edits outside recognized rooms.
+    pub geometry_revision: u64,
     pub dirty_tiles: HashSet<(i32, i32)>,
     pub cooldown: Timer,
 }
@@ -169,6 +171,7 @@ pub struct RoomDetectionState {
 impl Default for RoomDetectionState {
     fn default() -> Self {
         Self {
+            geometry_revision: 0,
             dirty_tiles: HashSet::new(),
             cooldown: Timer::from_seconds(ROOM_DETECTION_COOLDOWN_SECS, TimerMode::Repeating),
         }

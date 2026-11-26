@@ -350,8 +350,11 @@ fn spawn_structure_fixture(app: &mut App, kind: BuildingType) -> (Fixture, Vec<(
         BuildingType::Bridge => (0..5)
             .flat_map(|dy| (0..2).map(move |dx| (lower_left.0 + dx, lower_left.1 + dy)))
             .collect::<Vec<_>>(),
-        BuildingType::Wall | BuildingType::Door | BuildingType::Floor => vec![lower_left],
-        _ => unreachable!("structure fixture only supports Wall, Door, Floor, and Bridge"),
+        BuildingType::Wall
+        | BuildingType::ScreamingVent
+        | BuildingType::Door
+        | BuildingType::Floor => vec![lower_left],
+        _ => unreachable!("unsupported structure fixture"),
     };
     let position = match kind {
         BuildingType::Bridge => {
@@ -379,7 +382,7 @@ fn spawn_structure_fixture(app: &mut App, kind: BuildingType) -> (Fixture, Vec<(
         BuildingType::Bridge => {
             target.insert(BridgeMarker);
         }
-        BuildingType::Wall | BuildingType::Floor => {}
+        BuildingType::Wall | BuildingType::Floor | BuildingType::ScreamingVent => {}
         _ => unreachable!(),
     }
     let target = target.id();
@@ -402,7 +405,9 @@ fn spawn_structure_fixture(app: &mut App, kind: BuildingType) -> (Fixture, Vec<(
     {
         let mut map = app.world_mut().resource_mut::<WorldMap>();
         match kind {
-            BuildingType::Wall => map.set_building_occupancy(lower_left, target),
+            BuildingType::Wall | BuildingType::ScreamingVent => {
+                map.set_building_occupancy(lower_left, target)
+            }
             BuildingType::Door => map.register_door(lower_left, target, DoorState::Locked),
             BuildingType::Floor => map.set_floor(lower_left, target),
             BuildingType::Bridge => {
@@ -870,6 +875,7 @@ fn commit_request(fixture: Fixture, world_epoch: u64) -> DeconstructionCommitReq
 fn structure_commits_clear_exact_layers_and_place_salvage_outside_the_footprint() {
     for (kind, salvage_type, salvage_count) in [
         (BuildingType::Wall, ResourceType::Wood, 1),
+        (BuildingType::ScreamingVent, ResourceType::Rock, 1),
         (BuildingType::Door, ResourceType::Wood, 1),
         (BuildingType::Floor, ResourceType::Bone, 1),
         (BuildingType::Bridge, ResourceType::Rock, 3),
@@ -896,7 +902,7 @@ fn structure_commits_clear_exact_layers_and_place_salvage_outside_the_footprint(
         ));
         let map = app.world().resource::<WorldMap>();
         match kind {
-            BuildingType::Wall => {
+            BuildingType::Wall | BuildingType::ScreamingVent => {
                 assert_eq!(map.building_entity(footprint[0]), None);
                 assert!(!map.has_raw_obstacle(footprint[0].0, footprint[0].1));
                 assert!(map.is_walkable(footprint[0].0, footprint[0].1));

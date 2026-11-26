@@ -34,6 +34,12 @@ const BRIDGE: &[GridOffset] = &[
 
 pub const fn building_shape(kind: BuildingType) -> BuildingShape {
     match kind {
+        BuildingType::Equipment(crate::Equipment::Intake) => BuildingShape {
+            ordered_relative_tiles: &[(0, 0), (1, 0), (2, 0), (0, 1), (1, 1), (2, 1)],
+            center_offset_tiles: (1.0, 0.5),
+            size_tiles: (3.0, 2.0),
+            anchor_basis: BuildingAnchorBasis::ClickedGrid,
+        },
         BuildingType::Bridge => BuildingShape {
             ordered_relative_tiles: BRIDGE,
             center_offset_tiles: (0.5, 2.0),
@@ -56,10 +62,12 @@ pub const fn building_shape(kind: BuildingType) -> BuildingShape {
             anchor_basis: BuildingAnchorBasis::ClickedGrid,
         },
         BuildingType::Wall
+        | BuildingType::ScreamingVent
         | BuildingType::Door
         | BuildingType::Floor
         | BuildingType::SandPile
         | BuildingType::BonePile
+        | BuildingType::Equipment(_)
         | BuildingType::OutdoorLamp => BuildingShape {
             ordered_relative_tiles: SINGLE_TILE,
             center_offset_tiles: (0.0, 0.0),

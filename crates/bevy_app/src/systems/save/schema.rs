@@ -46,6 +46,7 @@ use hw_jobs::construction::{
     TargetFloorConstructionSite, TargetWallConstructionSite, WallConstructionPhase,
     WallConstructionSite, WallTileBlueprint, WallTileState,
 };
+use hw_jobs::model::{VentRetrofitWall, WallUnderRetrofit};
 use hw_jobs::mud_mixer::{MudMixerStorage, StoredByMixer, TargetMixer};
 use hw_jobs::{
     Blueprint, BonePile, BridgeMarker, Building, BuildingType, DeconstructionOrder,
@@ -67,9 +68,11 @@ use hw_logistics::{BelongsTo, Inventory, PendingBelongsToBlueprint, ResourceItem
 use hw_world::{TerrainType, WorldMap};
 
 use super::state::SavedWorldgenSeed;
+use crate::systems::ventilation::climate::{AirLedger, AirZone, ClimateSetting};
 use crate::systems::waterworks::{
     ContractDistrict, ContractOutcome, WaterworksContract, WaterworksTarget,
 };
+use hw_jobs::Equipment;
 
 macro_rules! for_each_persisted_resource {
     ($callback:ident) => {
@@ -82,10 +85,14 @@ macro_rules! for_each_persisted_resource {
 
 macro_rules! for_each_persisted_component {
     ($callback:ident) => {
+        $callback!(AirLedger);
         $callback!(WaterworksContract);
         $callback!(DamnedSoul);
         $callback!(IdleState);
+        $callback!(ClimateSetting);
         $callback!(WaterworksTarget);
+        $callback!(VentRetrofitWall);
+        $callback!(WallUnderRetrofit);
         $callback!(DreamState);
         $callback!(StressBreakdown);
         $callback!(RestAreaCooldown);
@@ -247,6 +254,8 @@ macro_rules! for_each_reflect_dependency {
         $callback!(PowerAllocationMode);
         $callback!(PowerPriority);
         $callback!(PowerShedReason);
+        $callback!(AirZone);
+        $callback!(Equipment);
         $callback!(TerrainType);
         $callback!(Gender);
         $callback!(SavedWorldgenSeed);
@@ -255,6 +264,7 @@ macro_rules! for_each_reflect_dependency {
 
 macro_rules! for_each_root_marker {
     ($callback:ident) => {
+        $callback!(AirLedger);
         $callback!(WaterworksContract);
         $callback!(DamnedSoul);
         $callback!(Familiar);

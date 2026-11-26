@@ -18,8 +18,14 @@ def check(repo: Path, *, check_images: bool = False) -> dict:
     model = (repo / "crates/hw_jobs/src/model.rs").read_text()
     all_match = re.search(r"pub const ALL: \[Self; \d+\] = \[(.*?)\];", model, re.S)
     require(all_match is not None, "BuildingType::ALL declaration unavailable; review shape audit")
-    kinds = re.findall(r"Self::(\w+)", all_match[1])
-    expected = set(contract["kinds"]) | set(contract["inherited"]) | set(contract["excluded"])
+    equipment = re.findall(r"Self::Equipment\(crate::Equipment::(\w+)\)", all_match[1])
+    catalog = (repo / "crates/hw_jobs/src/equipment.rs").read_text().split("pub const ALL:", 1)[1].split("];", 1)[0]
+    require(equipment == re.findall(r"Self::(\w+)", catalog), "equipment inventory drift")
+    kinds = re.findall(r"Self::(\w+),", all_match[1])
+    # Built-in wall fittings use the shared structural mesh and ship their own tile art.
+    embedded = {"ScreamingVent": {"shape": "single_tile"}}
+    require((repo / "crates/bevy_app/src/assets/screaming_vent.png").is_file(), "vent grate image is missing")
+    expected = set(contract["kinds"]) | set(contract["inherited"]) | set(contract["excluded"]) | set(embedded)
     require(len(kinds) == len(expected) and set(kinds) == expected, "BuildingType::ALL inventory drift")
     shapes = (repo / contract["shape_source"]).read_text()
     for name, shape in contract["shapes"].items():
@@ -28,9 +34,11 @@ def check(repo: Path, *, check_images: bool = False) -> dict:
         tiles = [[int(x), int(y)] for x, y in re.findall(r"\((-?\d+),\s*(-?\d+)\)", match[1])]
         require(tiles == shape["ordered_tiles"], f"ordered logical shape drift: {name}")
     # Audit the actual match arms, not just unused constant declarations.
+    # Remove payload alternatives before checking unit variant match arms.
+    shapes = re.sub(r"BuildingType::Equipment\(_\)\s*\|", "", shapes)
     arms = re.findall(r"((?:BuildingType::\w+\s*\|?\s*)+) => BuildingShape \{(.*?)\}", shapes, re.S)
     mapping = {kind: body for head, body in arms for kind in re.findall(r"BuildingType::(\w+)", head)}
-    for kind, spec in (contract["kinds"] | contract["inherited"]).items():
+    for kind, spec in (contract["kinds"] | contract["inherited"] | embedded).items():
         body = mapping.get(kind, "")
         shape = contract["shapes"][spec["shape"]]
         require(f'ordered_relative_tiles: {spec["shape"].upper()}' in body, f"shape assignment drift: {kind}")

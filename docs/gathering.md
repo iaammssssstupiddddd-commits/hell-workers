@@ -80,3 +80,5 @@ Soulの待機行動に基づいて自然発生的に集会所が生成され、�
 - `crates/hw_soul_ai/src/soul_ai/decide/gathering_mgmt.rs`（集会管理要求の生成）
 - `crates/hw_soul_ai/src/soul_ai/execute/gathering_spawn.rs`（発生判定と `GatheringSpawnRequest` emit）
 - `crates/bevy_app/src/systems/soul_ai/execute/gathering_spawn.rs`（visual adapter と stale request 再検証）
+
+集会の道具は幅・高さ1.5タイルの範囲が空いている屋外に置く。床・建物・扉・備蓄場所がこの範囲にかかる場合は集会を作らない。後から工事で場所が塞がった集会は次の維持判定で解散する。集会の範囲は紫の輪で表示する。

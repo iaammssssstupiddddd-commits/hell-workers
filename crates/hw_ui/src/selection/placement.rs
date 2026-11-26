@@ -32,6 +32,8 @@ pub enum PlacementRejectReason {
     OutOfBounds,
     NotRiverTile,
     NoDoorAdjacentWall,
+    NoCompletedWall,
+    RequiresRoomFloor,
     NotInSite,
     NotInYard,
     OutsideContractDistrict,
@@ -44,13 +46,15 @@ pub enum PlacementRejectReason {
 }
 
 impl PlacementRejectReason {
-    pub const ALL: [Self; 15] = [
+    pub const ALL: [Self; 17] = [
         Self::NotWalkable,
         Self::OccupiedByBuilding,
         Self::OccupiedByStockpile,
         Self::OutOfBounds,
         Self::NotRiverTile,
         Self::NoDoorAdjacentWall,
+        Self::NoCompletedWall,
+        Self::RequiresRoomFloor,
         Self::NotInSite,
         Self::NotInYard,
         Self::OutsideContractDistrict,
@@ -73,6 +77,8 @@ impl PlacementRejectReason {
             }
             Self::OutOfBounds => format!("Tile ({},{}) is out of bounds", gx, gy),
             Self::NotRiverTile => format!("Tile ({},{}) is not a river tile", gx, gy),
+            Self::RequiresRoomFloor => format!("({gx}, {gy}) に成立した部屋の完成床が必要"),
+            Self::NoCompletedWall => format!("({gx}, {gy}) の工事中でない完成壁に配置してください"),
             Self::NoDoorAdjacentWall => {
                 format!("Tile ({},{}) has no adjacent wall pair for door", gx, gy)
             }
@@ -405,6 +411,12 @@ pub struct PlacementGeometry {
 }
 
 pub trait WorldReadApi {
+    fn has_conduit(&self, _grid: (i32, i32)) -> bool {
+        false
+    }
+    fn has_floor(&self, _grid: (i32, i32)) -> bool {
+        false
+    }
     fn has_building(&self, grid: (i32, i32)) -> bool;
     fn has_stockpile(&self, grid: (i32, i32)) -> bool;
     /// Raw runtime blocker, excluding terrain walkability policy.

@@ -70,6 +70,7 @@ type ConstructionRoleFilter = Or<(
     With<WallConstructionSite>,
     With<FloorTileBlueprint>,
     With<WallTileBlueprint>,
+    With<hw_jobs::model::WallUnderRetrofit>,
 )>;
 
 #[derive(SystemParam)]
@@ -279,7 +280,7 @@ pub(crate) mod tests {
             Transform::default(),
         ));
         match kind {
-            BuildingType::Wall | BuildingType::Floor => {}
+            BuildingType::ScreamingVent | BuildingType::Wall | BuildingType::Floor => {}
             BuildingType::Door => {
                 entity.insert(Door::default());
             }
@@ -318,6 +319,13 @@ pub(crate) mod tests {
                     phase: SoulSpaPhase::Operational,
                     ..default()
                 });
+            }
+            BuildingType::Equipment(kind) => {
+                if kind.demand() > 0.0 {
+                    entity.insert(PowerConsumer {
+                        demand: kind.demand(),
+                    });
+                }
             }
             BuildingType::OutdoorLamp => {
                 entity.insert(PowerConsumer { demand: 1.0 });

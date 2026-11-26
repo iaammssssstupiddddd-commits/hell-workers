@@ -10,6 +10,8 @@ use crate::model::BuildingType;
 
 fn building_type_to_visual(kind: BuildingType) -> BuildingTypeVisual {
     match kind {
+        BuildingType::Equipment(_) => BuildingTypeVisual::Equipment,
+        BuildingType::ScreamingVent => BuildingTypeVisual::ScreamingVent,
         BuildingType::Wall => BuildingTypeVisual::Wall,
         BuildingType::Door => BuildingTypeVisual::Door,
         BuildingType::Floor => BuildingTypeVisual::Floor,

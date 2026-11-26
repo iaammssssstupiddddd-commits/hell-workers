@@ -921,6 +921,55 @@ mod tests {
             .id()
     }
 
+    #[test]
+    fn saved_vent_blueprint_remaps_its_retained_wall_and_keeps_deliveries() {
+        use hw_jobs::model::{VentRetrofitWall, WallUnderRetrofit};
+        let mut source = app_with_save_schema();
+        let world = source.world_mut();
+        insert_persisted_resources(world, 4.0);
+        let grid = (22, 24);
+        let wall = spawn_persisted_wall(world, grid, false);
+        world.entity_mut(wall).insert(WallUnderRetrofit);
+        let mut blueprint = hw_jobs::Blueprint::new(BuildingType::ScreamingVent, vec![grid]);
+        blueprint
+            .delivered_materials
+            .insert(hw_core::logistics::ResourceType::Rock, 1);
+        let owner = world
+            .spawn((
+                blueprint,
+                VentRetrofitWall(wall),
+                Transform::from_translation(WorldMap::grid_to_world(grid.0, grid.1).extend(0.0)),
+            ))
+            .id();
+        world.resource_mut::<WorldMap>().reserve_building_footprint(
+            BuildingType::ScreamingVent,
+            owner,
+            [grid],
+        );
+        let saved = capture_from_app(&mut source);
+        let registry = source.world().resource::<AppTypeRegistry>().clone();
+        let mut loaded = preflight_dynamic_world(&saved, &registry.read()).unwrap();
+        crate::systems::save::rehydrate::validate_durable_topology_candidate(&loaded).unwrap();
+        let owner = loaded.resource::<WorldMap>().building_entity(grid).unwrap();
+        let retained = loaded.get::<VentRetrofitWall>(owner).unwrap().0;
+        assert!(loaded.get::<WallUnderRetrofit>(retained).is_some());
+        assert_eq!(
+            loaded.get::<Building>(retained).unwrap().kind,
+            BuildingType::Wall
+        );
+        assert_eq!(
+            loaded
+                .get::<hw_jobs::Blueprint>(owner)
+                .unwrap()
+                .delivered_materials[&hw_core::logistics::ResourceType::Rock],
+            1
+        );
+        loaded.entity_mut(retained).remove::<WallUnderRetrofit>();
+        assert!(
+            crate::systems::save::rehydrate::validate_durable_topology_candidate(&loaded).is_err()
+        );
+    }
+
     fn wall_replacement_candidate(walls: &[((i32, i32), bool)], seconds: f32) -> DynamicWorld {
         let mut source = app_with_save_schema();
         insert_persisted_resources(source.world_mut(), seconds);

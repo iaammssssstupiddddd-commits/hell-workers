@@ -43,6 +43,8 @@ use std::collections::{HashMap, HashSet};
 pub struct WorldMap {
     pub tiles: Vec<TerrainType>,
     pub tile_entities: Vec<Option<Entity>>,
+    #[serde(default)]
+    pub conduits: HashMap<(i32, i32), Entity>,
     pub buildings: HashMap<(i32, i32), Entity>,
     /// Completed Floor ownership is stackable beneath `buildings` occupancy.
     /// Completed Floor occupancy, kept separate from ordinary building cells.
@@ -65,6 +67,7 @@ impl Default for WorldMap {
         Self {
             tiles: vec![TerrainType::Grass; size],
             tile_entities: vec![None; size],
+            conduits: HashMap::new(),
             buildings: HashMap::new(),
             floors: HashMap::new(),
             doors: HashMap::new(),
@@ -89,7 +92,11 @@ fn map_world_map_entities<M: EntityMapper>(this: &mut WorldMap, mapper: &mut M) 
     for entity in this.tile_entities.iter_mut().flatten() {
         *entity = mapper.get_mapped(*entity);
     }
-    for entity in this.buildings.values_mut() {
+    for entity in this
+        .buildings
+        .values_mut()
+        .chain(this.conduits.values_mut())
+    {
         *entity = mapper.get_mapped(*entity);
     }
     for entity in this.floors.values_mut() {

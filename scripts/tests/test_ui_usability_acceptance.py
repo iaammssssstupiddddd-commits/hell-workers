@@ -1019,7 +1019,9 @@ class TooltipEvidenceTests(unittest.TestCase):
 
 class EntitiesRenderTests(unittest.TestCase):
     def test_build_cards_must_be_fully_visible(self):
-        cards = {f"menu:SelectBuild({kind})": {"fully_visible": True} for kind in range(12)}
+        cards = {f"menu:SelectBuild({kind})": {"fully_visible": True} for kind in [*range(12), "ScreamingVent"]}
+        for kind in ("SupplyFan","ExhaustFan","Chimney","Duct","Intake","Conduit","Basin","Hood","Filter","HeatPump","OutdoorUnit","Humidifier","Dehumidifier","Recuperator"):
+            cards[f"menu:SelectBuild(Equipment({kind}))"] = {"fully_visible": True}
         value = {"layout_scene": "build", "paused": True, "controls": cards,
                  "management_rect": None, "inspector_rect": None,
                  "catalog_rect": [0, 60, 100, 90],

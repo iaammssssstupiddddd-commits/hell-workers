@@ -129,6 +129,11 @@ fn validate_order(
     }
     let ownership = map.snapshot_owner(target);
     match resolved.class {
+        DeconstructionTargetClass::Building(BuildingType::Equipment(
+            hw_jobs::Equipment::Conduit,
+        )) if map.conduits.get(&WorldMap::world_to_grid(target_position)) == Some(&target)
+            && ownership.building_grids.is_empty()
+            && ownership.floor_grids.is_empty() => {}
         DeconstructionTargetClass::Building(BuildingType::Floor)
             if ownership.floor_grids.len() != 1 || !ownership.building_grids.is_empty() =>
         {

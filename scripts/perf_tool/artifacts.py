@@ -1489,7 +1489,7 @@ def read_behavior_timeline(
 def measurement_duration_clock(workload: str) -> tuple[str, bool]:
     """Return the advancing capture clock and whether virtual time must stay frozen."""
     pauses_virtual_time = workload in {"indoor-light", "wall-density", "door-density", "building-art-static"}
-    return ("real" if pauses_virtual_time else "virtual"), pauses_virtual_time
+    return ("real" if pauses_virtual_time or workload in {"ventilation", "ventilation-dimensions"} else "virtual"), pauses_virtual_time
 
 
 def validate_run(
@@ -1911,6 +1911,26 @@ def validate_run(
                         f"{expected_case.workload} simulation is paused"
                     )
 
+    if expected_case.workload in {"ventilation", "ventilation-dimensions"} and capture_kind == "frame-time":
+        try:
+            airflow = json.loads((data_dir / "ventilation.json").read_text())
+            if expected_case.workload == "ventilation-dimensions" and (
+                "transport" not in airflow or not airflow["transport"]["ticks"]
+            ):
+                reasons.append("ventilation dimension evidence is missing")
+            group_count = {"small": 64, "medium": 16, "large": 1}[expected_case.size]
+            if (airflow["rooms"], airflow["doors"], airflow["openings"], airflow["groups"],
+                airflow["rooms_per_group"], airflow["matrix_solves_at_build"]) != (
+                256, 256, 512, group_count, 256 // group_count, 2 * group_count
+            ):
+                reasons.append("ventilation fixture topology differs from the requested layout")
+            if expected_measure_secs is not None and airflow["transitions"] != 8 * expected_measure_secs:
+                reasons.append("ventilation door transition count differs from the requested duration")
+            if summary is None or float(summary["virtual_time_speed"]) != 4:
+                reasons.append("ventilation requires 4x virtual time")
+        except (OSError, ValueError, KeyError, TypeError) as error:
+            reasons.append(f"cannot validate ventilation.json: {error}")
+
     if summary is not None and scene_roots is not None:
         try:
             expected_souls = int(summary["initial_souls"])
@@ -1919,7 +1939,7 @@ def validate_run(
             reasons.append("summary initial population is invalid for scene root validation")
         else:
             if (
-                expected_case.workload == "building-art-static"
+                expected_case.workload in {"building-art-static", "ventilation", "ventilation-dimensions"}
                 or expected_actor_billboard_presentation
                 or expected_stage in {"p02", "p03", "p04", "p05", "p06", "p07", "p08"}
             ):

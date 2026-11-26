@@ -15,6 +15,10 @@ pub struct Building3dVisual {
     pub owner: Entity,
 }
 
+/// Single grate attached to the cap of a completed vent wall.
+#[derive(Component)]
+pub struct VentGrate;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Wall3dPresentationMode {
     #[default]

@@ -919,3 +919,37 @@ PYTHONDONTWRITEBYTECODE=1 python3 scripts/perf.py run \
 
 この短縮runもworkspace target、disk temporary、adapter検証、artifact manifestを持つ。性能比較や
 正式baselineには使用しない。
+
+## 自然換気の棟配置比較
+
+`ventilation` は、実ゲームの部屋検出・建築物・換気計算を使い、各室2×2床の256室、扉256枚、風穴512個を生成する。smallは4室ずつの64棟、largeは256室が室間風穴でつながる一棟。64棟のほうが外周の壁が735マス多い。同じカメラ位置・人口・解像度でゲーム全体と換気単体をそれぞれ計測する。
+
+実時間30秒を4倍速でウォームアップし、最後の10秒間を扉静止時の対照とする。続く実時間60秒間に、仮想時間0.5秒ごとに通常の扉状態変更を1回実行する。近接による自動開閉はこのシナリオの間だけ止める。1試行は開240回・閉240回。構造確定時の換気スレッドCPU時間、定常時の同CPU時間、全スレッド合計のプロセスCPU時間、実時間のフレーム間隔を記録する。CPU時間には計時の呼び出しコストを含む。プロセスCPUは実時間で割った平均論理コア数で表す。
+
+[検証ストレージ手順](development-infra/validation-storage-workflow.md)に従って次のコマンドを登録し、実機ランチャーで実行する。出力先は新規の計測ごとに指定する。
+
+```bash
+python3 scripts/perf.py run --workload ventilation --sizes small,large --renders gpu \
+  --seed 42 --souls 8 --familiars 2 --repeat 3 --preflight-runs 0 \
+  --warmup-secs 30 --measure-secs 60 --instrumentation capture \
+  --adapter Intel --backend vulkan --window-backend x11 --present-mode novsync \
+  --window-width 1280 --window-height 720 --window-scale-factor 1 --rtt-quality high \
+  --timeout-secs 240 --output target/perf-runs/<session>
+python3 scripts/verify_ventilation_capture.py verify target/perf-runs/<session> --climate
+```
+
+検証では、各試行の実際の部屋・設備・成分数、実経過と仮想経過の比、開閉数、計測全期間での換気再構築0回を照合する。フレーム時間のp95・p99と16.67 / 33.33 / 50 ms超過フレーム数は各試行の実測値から求める。ゲーム画面の遅延には、換気以外のシミュレーション、描画、OSの待ち時間も含まれる。
+
+M7の比較では `--climate` を指定する。実ゲームの全256室で気候時計が進んだことを照合し、温度・水蒸気・瘴気を更新するスレッドのCPU時間を、仮想1秒当たりの平均と、更新したフレームのp95・最大で集計する。天候変化で気流や熱・物質輸送の係数を作り直す時間も含む。形状世代を照合するM1の時間は別の列に記録する。
+
+### 改訂解法・参照解法・結果再生の比較
+
+`scripts/ventilation_comparison.py run <絶対出力ディレクトリ>` と `verify <同じディレクトリ>` を上記と同じ台帳で登録する。受動設備を置いた二配置の発生量と輸送直後の3量を仮想時刻順に記録し、同じ負荷で3方式を各3回実行する。結果再生は測定前に各気象相の換気表示値を用意し、測定中は時刻に対応する輸送結果から通常の凝縮・制御・表示を進める。各測定で部屋順、テープのSHA、全室の輸送後の数値、気候時計、風穴・部屋・扉の数、実際のソルバーと描画環境を照合する。別枠の480仮想秒試験は気象16相を一周する。給電試験は西側の給気16台・東側の排気16台の共通電源を20仮想秒ごとに切り替え、稼働台数と風量の変化を検証する。[結果](indoor_air.md#改訂解法の実機比較2026-11-26)
+
+### 室内環境の項目数を増やす試験
+
+上記のコマンドで `--workload ventilation-dimensions` を指定し、結果の照合では `python3 scripts/verify_ventilation_capture.py verify --dimensions target/perf-runs/<session>` を使う。通常プレイからこの計測モードを起動する経路はない。
+
+各60秒の扉連続開閉中、追加項目なし、温度、水蒸気量、汚染物質濃度、水蒸気＋汚染物質、3項目同時の6条件を同一プロセスで比較する。仮想8秒ずつで切り替え、6条件の巡回ごとに開始点をずらす。条件ごとに別の初期状態を持ち、各試行で各室を仮想1秒幅で40回進める。各項目に継続的な発生源を置き、全室を毎回更新する。対照区間も同じ時刻で計時器を呼ぶ。各更新のスレッドCPU時間と、更新後に観測した実フレーム間隔を記録する。
+
+計測ビルドは構造確定時の風穴の正味流量・双方向混合量から、熱用・物質用の疎行列を一度ずつ分解する。熱は室間と屋外への壁面伝熱を含む。湿度は水蒸気量を室容積で割った絶対湿度、清浄度は外気で希釈される汚染物質1種類の濃度として扱う。検証器は別実装の反復法で各ステップの物質・熱収支を照合し、計測された全室の最終値と照合する。

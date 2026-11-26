@@ -12,6 +12,18 @@ pub struct Site {
 }
 
 impl Site {
+    /// A 3×2 intake can serve a site on either bank, within 32 tiles of the shoreline.
+    pub fn serves_equipment(&self, kind: hw_jobs::Equipment, position: Vec2) -> bool {
+        if kind != hw_jobs::Equipment::Intake {
+            return self.contains(position);
+        }
+        let tile = hw_core::constants::TILE_SIZE;
+        position.x + tile >= self.min.x
+            && position.x - tile <= self.max.x
+            && position.y + 32.5 * tile >= self.min.y
+            && position.y - 32.5 * tile <= self.max.y
+    }
+
     pub fn contains(&self, point: Vec2) -> bool {
         point.x >= self.min.x
             && point.x <= self.max.x

@@ -233,7 +233,7 @@ pub fn update_entity_inspection_view_model_system(
         model = inspected_entity.and_then(|entity| inspection.build_model(entity));
     }
 
-    room.append(model.as_mut());
+    room.append(&mut model, pin_state.entity);
     let _ = inspected_entity;
     view_model.model = model;
 }

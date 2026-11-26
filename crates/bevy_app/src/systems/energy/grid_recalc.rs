@@ -95,6 +95,10 @@ type EnergyTopologyEndpointDirtyQuery<'w, 's> = Query<
 type EnergyTopologyYardDirtyQuery<'w, 's> =
     Query<'w, 's, (), Or<(Added<Yard>, Changed<Yard>, Changed<YardPowerGrid>)>>;
 type EnergyTopologyGridDirtyQuery<'w, 's> = Query<'w, 's, (), Added<PowerGrid>>;
+type SiteConnectionChanged = Or<(
+    Changed<hw_world::zones::Site>,
+    Changed<hw_world::zones::PairedYard>,
+)>;
 type EnergyTopologyRelationDirtyQuery<'w, 's> =
     Query<'w, 's, (), Or<(Changed<GeneratesFor>, Changed<ConsumesFrom>)>>;
 type MissingPowerSupplyStateQuery<'w, 's> =
@@ -110,6 +114,9 @@ pub(crate) struct EnergyDirtySignals<'w, 's> {
     q_soul_spa_tiles: Query<'w, 's, (), With<SoulSpaTile>>,
     q_grid_inputs: EnergyGridInputDirtyQuery<'w, 's>,
     q_topology_endpoints: EnergyTopologyEndpointDirtyQuery<'w, 's>,
+    site_changes: Query<'w, 's, (), SiteConnectionChanged>,
+    removed_sites: RemovedComponents<'w, 's, hw_world::zones::Site>,
+    removed_pairs: RemovedComponents<'w, 's, hw_world::zones::PairedYard>,
     q_topology_yards: EnergyTopologyYardDirtyQuery<'w, 's>,
     q_topology_grids: EnergyTopologyGridDirtyQuery<'w, 's>,
     q_topology_relations: EnergyTopologyRelationDirtyQuery<'w, 's>,
@@ -150,7 +157,12 @@ pub(crate) fn detect_energy_update_dirty_system(
         || !signals.q_tile_workers.is_empty()
         || spa_workers_removed
         || spa_tile_removed;
-    let topology_changed = !signals.q_topology_endpoints.is_empty()
+    let site_removed = signals.removed_sites.read().count() != 0;
+    let pair_removed = signals.removed_pairs.read().count() != 0;
+    let topology_changed = site_removed
+        || pair_removed
+        || !signals.site_changes.is_empty()
+        || !signals.q_topology_endpoints.is_empty()
         || !signals.q_topology_yards.is_empty()
         || !signals.q_topology_grids.is_empty()
         || !signals.q_topology_relations.is_empty()

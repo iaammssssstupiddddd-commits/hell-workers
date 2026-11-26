@@ -37,10 +37,16 @@ fn is_wall_or_door_at(
         return false;
     };
     if let Ok(building) = q_buildings.get(entity) {
-        return matches!(building.kind, BuildingType::Wall | BuildingType::Door);
+        return matches!(
+            building.kind,
+            BuildingType::Wall | BuildingType::Door | BuildingType::ScreamingVent
+        );
     }
     if let Ok(blueprint) = q_blueprints_by_entity.get(entity) {
-        return matches!(blueprint.kind, BuildingType::Wall | BuildingType::Door);
+        return matches!(
+            blueprint.kind,
+            BuildingType::Wall | BuildingType::Door | BuildingType::ScreamingVent
+        );
     }
     false
 }
@@ -52,13 +58,23 @@ fn validate_blueprint_geometry(
     geometry: &PlacementGeometry,
     pq: &PlacementQueries<'_, '_, '_>,
 ) -> PlacementValidation {
+    if let Some(reason) = pq.retrofit.room_check(building_type, grid) {
+        return reason;
+    }
     let read_world = WorldMapRef(world_map);
     let ctx = BuildingPlacementContext {
         world: &read_world,
-        in_site: pq
-            .q_sites
-            .iter()
-            .any(|site| site.contains(geometry.draw_pos)),
+        in_site: if let BuildingType::Equipment(kind) = building_type {
+            pq.q_sites
+                .iter()
+                .filter(|s| s.serves_equipment(kind, geometry.draw_pos))
+                .count()
+                == 1
+        } else {
+            pq.q_sites
+                .iter()
+                .any(|site| site.contains(geometry.draw_pos))
+        },
         in_yard: pq
             .q_yards
             .iter()
@@ -73,6 +89,8 @@ fn validate_blueprint_geometry(
         },
         is_replaceable_wall_at: &|candidate| {
             is_replaceable_wall_at(world_map, pq.q_buildings, candidate)
+                && (building_type != BuildingType::ScreamingVent
+                    || pq.retrofit.available(world_map.building_entity(candidate)))
         },
     };
     validate_building_placement(&ctx, building_type, grid, geometry)
@@ -120,6 +138,8 @@ pub(super) fn place_building_blueprint(
     }
 
     let texture = match building_type {
+        BuildingType::Equipment(kind) => game_assets.equipment_image(kind).clone(),
+        BuildingType::ScreamingVent => game_assets.screaming_vent.clone(),
         BuildingType::Wall => game_assets.wall_isolated.clone(),
         BuildingType::Door => game_assets.door_closed.clone(),
         BuildingType::Floor => {
@@ -155,6 +175,17 @@ pub(super) fn place_building_blueprint(
         ))
         .id();
 
+    if building_type == BuildingType::ScreamingVent {
+        let wall = world_map
+            .building_entity(grid)
+            .expect("validated completed wall");
+        commands
+            .entity(entity)
+            .insert(hw_jobs::model::VentRetrofitWall(wall));
+        commands
+            .entity(wall)
+            .insert(hw_jobs::model::WallUnderRetrofit);
+    }
     world_map.reserve_building_footprint(
         building_type,
         entity,
@@ -216,12 +247,13 @@ pub(crate) fn try_place_bucket_storage_companion(
 }
 
 #[cfg(test)]
-mod bridge_tests {
+mod tests {
     use super::super::BuildingStateQueries;
     use super::*;
 
     #[derive(Resource)]
     struct Attempt {
+        kind: BuildingType,
         grid: (i32, i32),
         result: Option<PlaceBlueprintResult>,
     }
@@ -234,6 +266,7 @@ mod bridge_tests {
         mut attempt: ResMut<Attempt>,
     ) {
         let pq = PlacementQueries {
+            retrofit: &queries.retrofit,
             q_buildings: &queries.q_buildings,
             q_blueprints_by_entity: &queries.q_blueprints_by_entity,
             q_sites: &queries.q_sites,
@@ -243,10 +276,98 @@ mod bridge_tests {
             &mut commands,
             &mut map,
             &assets,
-            BuildingType::Bridge,
+            attempt.kind,
             attempt.grid,
             &pq,
         ));
+    }
+
+    fn placement_app() -> App {
+        let mut app = App::new();
+        app.add_plugins((MinimalPlugins, AssetPlugin::default()))
+            .init_asset::<Image>()
+            .init_asset::<Font>()
+            .init_asset::<Gltf>()
+            .init_asset::<WorldAsset>();
+        let server = app.world().resource::<AssetServer>().clone();
+        let assets =
+            crate::plugins::startup::create_game_assets(&server, &mut Assets::<Image>::default());
+        app.insert_resource(assets);
+        app
+    }
+
+    #[test]
+    fn vent_retrofit_uses_a_free_completed_wall_and_completes_once() {
+        use bevy::ecs::system::RunSystemOnce;
+        let mut app = placement_app();
+        app.init_resource::<WorldMap>()
+            .insert_resource(crate::test_support::empty_building_3d_handles())
+            .add_message::<hw_jobs::BuildingCompletedVisualMessage>()
+            .insert_resource(Attempt {
+                kind: BuildingType::ScreamingVent,
+                grid: (20, 20),
+                result: None,
+            });
+        let world = app.world_mut();
+        let pos = WorldMap::grid_to_world(20, 20);
+        world.spawn(hw_world::zones::Site {
+            min: pos - Vec2::splat(60.0),
+            max: pos + Vec2::splat(60.0),
+        });
+        let wall = world
+            .spawn((
+                Building {
+                    kind: BuildingType::Wall,
+                    is_provisional: true,
+                },
+                Transform::from_translation(pos.extend(0.0)),
+            ))
+            .id();
+        world
+            .resource_mut::<WorldMap>()
+            .register_completed_building_footprint(BuildingType::Wall, wall, [(20, 20)]);
+        fn place(world: &mut World) -> PlaceBlueprintResult {
+            world.run_system_once(commit).unwrap();
+            world.resource_mut::<Attempt>().result.take().unwrap()
+        }
+        assert!(place(world).is_err());
+        world.get_mut::<Building>(wall).unwrap().is_provisional = false;
+        world
+            .entity_mut(wall)
+            .insert(hw_jobs::DeconstructionPending { order: wall });
+        assert!(place(world).is_err());
+        world
+            .entity_mut(wall)
+            .remove::<hw_jobs::DeconstructionPending>();
+        let blueprint = place(world).unwrap().0;
+        assert!(place(world).is_err());
+        assert_eq!(
+            world
+                .get::<hw_jobs::model::VentRetrofitWall>(blueprint)
+                .unwrap()
+                .0,
+            wall
+        );
+        assert!(world.get::<Building>(wall).is_some());
+        let mut bp = world.get_mut::<Blueprint>(blueprint).unwrap();
+        bp.delivered_materials = bp.required_materials.clone();
+        bp.progress = 1.0;
+        world
+            .run_system_once(crate::systems::jobs::building_completion_system)
+            .unwrap();
+        world
+            .run_system_once(crate::systems::jobs::building_completion_system)
+            .unwrap();
+        assert!(world.get_entity(wall).is_err() && world.get_entity(blueprint).is_err());
+        let owner = world
+            .resource::<WorldMap>()
+            .building_entity((20, 20))
+            .unwrap();
+        assert_eq!(
+            world.get::<Building>(owner).unwrap().kind,
+            BuildingType::ScreamingVent
+        );
+        assert!(!world.resource::<WorldMap>().is_walkable(20, 20));
     }
 
     #[test]
@@ -270,18 +391,10 @@ mod bridge_tests {
             .iter()
             .map(|&(x, y)| map.is_walkable(x, y))
             .collect();
-        let mut app = App::new();
-        app.add_plugins((MinimalPlugins, AssetPlugin::default()))
-            .init_asset::<Image>()
-            .init_asset::<Font>()
-            .init_asset::<Gltf>()
-            .init_asset::<WorldAsset>();
-        let server = app.world().resource::<AssetServer>().clone();
-        let assets =
-            crate::plugins::startup::create_game_assets(&server, &mut Assets::<Image>::default());
-        app.insert_resource(assets)
-            .insert_resource(map)
+        let mut app = placement_app();
+        app.insert_resource(map)
             .insert_resource(Attempt {
+                kind: BuildingType::Bridge,
                 grid: (crossing.anchor.0, 0),
                 result: None,
             })

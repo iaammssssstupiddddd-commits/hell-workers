@@ -86,14 +86,14 @@ filter cannot suppress the required renderer AdapterInfo record. This does not
 grant adapter authority or relax the verifier. Non-tracing stderr diagnostics
 (for example ICU4X segmentation data errors) must be reported separately; a
 rendering-only verifier pass does not establish an error-free product session.
-The map-first UI also supports `--layout-scene normal|selection|pinned|build|display|area|area-details`.
+The map-first UI also supports `--layout-scene normal|selection|pinned|build|ventilation|ventilation-open|ventilation-control|display|area|area-details`.
 Area fixtures verify the compact editor and the ten disclosed actions; selection
 fixtures require the visible Familiar area entry. The details fixture completes
 its one-time expansion at frame 48, before passive observation is ready.
 The default `management` scene opens the retained roster explicitly. Each scene is
 prepared once before passive observation; the driver sends no input. The verifier
-checks the requested page, management/inspector exclusion, all 12 catalog choices
-for `build`, and the union of visible UI rectangles against the scene's occlusion
+checks the requested page, management/inspector exclusion, all 27 catalog choices
+for `build`, and the single visible wall grate, both rooms’ colored borders and the shared vent’s per-room readings for the sealed `ventilation` and cross-ventilated `ventilation-open` scenes. The `ventilation-control` fixture runs a supply fan at 4× through loss of generation and recovery at high flow. Its verifier checks the observed outage, restored demand, room rates and inspector readings. The layout checks also cover the union of visible UI rectangles against the scene's occlusion
 budget. Every image still needs visual inspection. These fixtures do not prove
 that player input reaches the page or that a construction completes.
 Add `--layout-menu` to the no-input mode to prepare an open Zones menu and verify

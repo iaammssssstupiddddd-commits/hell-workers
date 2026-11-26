@@ -188,6 +188,51 @@ where
                 return PlacementValidation::rejected_at(rejection.reason, rejection.grid);
             }
         },
+        BuildingType::Equipment(equipment) => {
+            use hw_jobs::Equipment;
+            if equipment != Equipment::Conduit
+                && !ctx.in_site
+                && (equipment == Equipment::Intake || !ctx.in_yard)
+            {
+                return PlacementValidation::rejected_at(PlacementRejectReason::NotInSite, grid);
+            }
+            for &tile in &geometry.occupied_grids {
+                let reason = if world.pos_to_idx(tile.0, tile.1).is_none() {
+                    Some(PlacementRejectReason::OutOfBounds)
+                } else if equipment == Equipment::Conduit {
+                    world
+                        .has_conduit(tile)
+                        .then_some(PlacementRejectReason::OccupiedByBuilding)
+                } else if equipment.indoor() && !world.has_floor(tile) {
+                    Some(PlacementRejectReason::RequiresRoomFloor)
+                } else {
+                    reject_for_walkable_empty_tile(world, tile)
+                };
+                if let Some(reason) = reason {
+                    return PlacementValidation::rejected_at(reason, tile);
+                }
+            }
+            if equipment == Equipment::Intake {
+                let (x, y) = grid;
+                if ![y - 1, y + 2]
+                    .into_iter()
+                    .any(|bank| (x..x + 3).all(|col| world.is_river_tile(col, bank)))
+                {
+                    return PlacementValidation::rejected_at(
+                        PlacementRejectReason::NotRiverTile,
+                        grid,
+                    );
+                }
+            }
+        }
+        BuildingType::ScreamingVent => {
+            if !(ctx.is_replaceable_wall_at)(grid) {
+                return PlacementValidation::rejected_at(
+                    PlacementRejectReason::NoCompletedWall,
+                    grid,
+                );
+            }
+        }
         BuildingType::Door => {
             let replaceable_wall = (ctx.is_replaceable_wall_at)(grid);
             if replaceable_wall {

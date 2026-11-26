@@ -67,6 +67,36 @@ pub(in super::super) fn validate_world_map_candidate(candidate: &World) -> Resul
         }
     }
 
+    let pipe = hw_jobs::BuildingType::Equipment(hw_jobs::Equipment::Conduit);
+    let mut expected = std::collections::HashMap::new();
+    let mut owners = HashSet::new();
+    for entity in candidate.iter_entities() {
+        if entity.get::<Building>().is_some_and(|b| b.kind == pipe)
+            || entity.get::<Blueprint>().is_some_and(|b| b.kind == pipe)
+        {
+            let pose = entity
+                .get::<Transform>()
+                .ok_or("導水管の座標がありません")?;
+            let grid = WorldMap::world_to_grid(pose.translation.xy());
+            validate_world_map_grid("conduits", grid)?;
+            if !pose.translation.is_finite()
+                || pose.translation.xy() != WorldMap::grid_to_world(grid.0, grid.1)
+                || entity
+                    .get::<Building>()
+                    .is_some_and(|b| b.is_provisional || entity.contains::<Blueprint>())
+            {
+                return Err("導水管のセルまたは施工状態が不正です".into());
+            }
+            if expected.insert(grid, entity.id()).is_some() {
+                return Err("導水管が重複しています".into());
+            }
+            owners.insert(entity.id());
+        }
+    }
+    if expected != map.conduits || map.buildings.values().any(|e| owners.contains(e)) {
+        return Err("導水管の所有情報が一致しません".into());
+    }
+
     for (&grid, &owner) in &map.buildings {
         validate_world_map_grid("buildings", grid)?;
         let owner_ref = candidate.get_entity(owner).map_err(|_| {

@@ -13,7 +13,7 @@ type GatheringSpotsQuery<'w, 's> = Query<
     (
         Entity,
         &'static GatheringSpot,
-        &'static GatheringParticipants,
+        Option<&'static GatheringParticipants>,
         &'static GatheringVisuals,
     ),
     Changed<GatheringSpot>,
@@ -36,7 +36,8 @@ pub fn gathering_visual_update_system(
     mut q_visuals: GatheringVisualsQuery,
 ) {
     for (_spot_entity, spot, participants, visuals) in q_spots.iter() {
-        let target_size = calculate_aura_size(participants.len());
+        let count = participants.map_or(0, GatheringParticipants::len);
+        let target_size = calculate_aura_size(count);
         let target_pos = spot.center.extend(Z_AURA);
         let target_obj_pos = spot.center.extend(Z_ITEM);
 
@@ -62,7 +63,7 @@ pub fn gathering_visual_update_system(
                 transform.translation = target_obj_pos;
             }
 
-            let target_visibility = if participants.len() < 2 {
+            let target_visibility = if count < 2 {
                 Visibility::Hidden
             } else {
                 Visibility::Inherited

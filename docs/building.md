@@ -786,3 +786,13 @@ Outdoor Lamp を選択すると以下が表示される（`append_power_consumer
 | `grid_recalc_system` | Update / Logic（dirty時、`soul_spa_power_output_system` の後） | generation/demand集計、個別配電、summaryとruntime state同期 |
 | `apply_light_recovery_effect_system` | Update / PostActor（`IndoorLightingRebuildSet`後、unpaused） | SlowSimulationClockのstepごとに各Soulのcurrent field cellを1回sampleし、明るい場合だけ回復を適用 |
 | `sync_powered_visual_system` | `GameSystemSet::Visual` | `PoweredVisualState` → スプライト色同期 |
+
+## 叫びの風穴
+
+「建てる」→「出入口・換気」で選ぶ1マスの建築物。完成済みの通常壁を選ぶと設計図を置き、岩2個・骨1個の搬入と施工を経て風穴が完成する。壁列の施工中、解体予定の壁、扉、既設の風穴には設置できない。施工中は元の壁が通行と室内外を隔て、換気は完成時に始まる。取消時には同じ壁が残り、搬入済み資材が戻る。完成した風穴の解体時は岩1個を回収し、開口した部屋を再判定する。
+
+設計図は施工元の壁を保存し、ロード時にその参照と占有タイルを検証する。完成後は通常の建物として保存する。風穴には独自の格子画像を使い、カタログ・配置プレビュー・壁上面の格子で共有する。完成した風穴は隣の壁・扉に合わせて向きを変え、格子を上面に一枚だけ表示する。直線の壁では格子を壁に沿って長くし、端や角では短くして壁の幅内に収める。外壁の風穴は屋外と室内をつなぎ、共有壁の風穴は部屋間の空気を通す。扉は開閉・施錠しても換気量に影響しない。外気とつながる場所は床・風穴の詳細で確認できる。[自然換気の配置例](indoor_air.md)
+
+## 空調・水道の設備
+
+建築カタログに14種を追加した。室内設備、河岸取水、床下配管、室外機の設置条件と、配電・風量の操作は[室内空気と空調](indoor_air.md)を参照。

@@ -663,7 +663,10 @@ fn build_input(inputs: &IndoorLightingSnapshotInputs) -> Result<CollectedInput, 
     )?;
     let mut topology = Vec::new();
     for (building, transform, provisional_marker) in inputs.buildings.iter() {
-        if building.kind != BuildingType::Wall {
+        if !matches!(
+            building.kind,
+            BuildingType::Wall | BuildingType::ScreamingVent
+        ) {
             continue;
         }
         if building.is_provisional != provisional_marker.is_some() {

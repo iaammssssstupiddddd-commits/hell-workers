@@ -45,7 +45,7 @@ use crate::systems::visual::terrain_lod::{
 use crate::systems::visual::terrain_material::terrain_metadata_sync_system;
 use crate::systems::visual::wall_presentation::{
     Wall3dVisualOwnerIndex, apply_wall_presentation_system,
-    reset_wall_presentation_for_world_replace,
+    reset_wall_presentation_for_world_replace, resize_vent_grates,
 };
 use crate::world::map::TerrainChunk;
 use hw_core::game_state::PlayMode;
@@ -189,7 +189,13 @@ impl Plugin for VisualPlugin {
 
         app.add_systems(
             Update,
-            sync_room_overlay_tiles_system.in_set(GameSystemSet::Visual),
+            (
+                sync_room_overlay_tiles_system,
+                crate::systems::ventilation::show_pipe_layer,
+                crate::systems::ventilation::color_room_borders,
+            )
+                .chain()
+                .in_set(GameSystemSet::Visual),
         );
 
         // Area indicators (app_contexts 依存のため root 残留)
@@ -290,6 +296,7 @@ impl Plugin for VisualPlugin {
             (
                 finalize_wall_production_activation_system,
                 apply_wall_presentation_system,
+                resize_vent_grates,
             )
                 .chain()
                 .in_set(WallPresentationApplySet),

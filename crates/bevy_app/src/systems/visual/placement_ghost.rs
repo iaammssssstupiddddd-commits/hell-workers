@@ -48,10 +48,16 @@ fn is_wall_or_door_at(
         return false;
     };
     if let Ok(building) = q_buildings.get(entity) {
-        return matches!(building.kind, BuildingType::Wall | BuildingType::Door);
+        return matches!(
+            building.kind,
+            BuildingType::Wall | BuildingType::Door | BuildingType::ScreamingVent
+        );
     }
     if let Ok(blueprint) = q_blueprints.get(entity) {
-        return matches!(blueprint.kind, BuildingType::Wall | BuildingType::Door);
+        return matches!(
+            blueprint.kind,
+            BuildingType::Wall | BuildingType::Door | BuildingType::ScreamingVent
+        );
     }
     false
 }
@@ -77,6 +83,7 @@ pub struct GhostInputState<'w, 's> {
 
 #[derive(SystemParam)]
 pub struct GhostValidationQueries<'w, 's> {
+    retrofit: crate::interface::selection::building_place::WallRetrofitEligibility<'w, 's>,
     pub q_buildings: Query<'w, 's, &'static Building>,
     pub q_blueprints: Query<'w, 's, &'static Blueprint>,
     pub q_sites: Query<'w, 's, &'static Site>,
@@ -103,6 +110,7 @@ pub fn placement_ghost_system(
         q_camera,
     } = input_state;
     let GhostValidationQueries {
+        retrofit,
         q_buildings,
         q_blueprints,
         q_sites,
@@ -295,16 +303,46 @@ pub fn placement_ghost_system(
     } else {
         let ctx = BuildingPlacementContext {
             world: &read_world,
-            in_site: q_sites.iter().any(|site| site.contains(geometry.draw_pos)),
+            in_site: if let BuildingType::Equipment(kind) = building_type {
+                q_sites
+                    .iter()
+                    .filter(|s| s.serves_equipment(kind, geometry.draw_pos))
+                    .count()
+                    == 1
+            } else {
+                q_sites.iter().any(|site| site.contains(geometry.draw_pos))
+            },
             in_yard: q_yards.iter().any(|yard| yard.contains(geometry.draw_pos)),
             is_wall_or_door_at: &|candidate| {
                 is_wall_or_door_at(world_map.as_ref(), &q_buildings, &q_blueprints, candidate)
             },
             is_replaceable_wall_at: &|candidate| {
                 is_replaceable_wall_at(world_map.as_ref(), &q_buildings, candidate)
+                    && (building_type != BuildingType::ScreamingVent
+                        || retrofit.available(world_map.building_entity(candidate)))
             },
         };
-        validate_building_placement(&ctx, building_type, grid_pos, &geometry)
+        let same_fan = matches!(
+            building_type,
+            BuildingType::Equipment(
+                hw_jobs::Equipment::SupplyFan
+                    | hw_jobs::Equipment::ExhaustFan
+                    | hw_jobs::Equipment::Hood
+            )
+        ) && world_map.building_entity(grid_pos).is_some_and(|e| {
+            q_buildings
+                .get(e)
+                .is_ok_and(|b| b.kind == building_type && !b.is_provisional)
+        });
+        if same_fan {
+            hw_ui::selection::PlacementValidation::ok()
+        } else {
+            retrofit
+                .room_check(building_type, grid_pos)
+                .unwrap_or_else(|| {
+                    validate_building_placement(&ctx, building_type, grid_pos, &geometry)
+                })
+        }
     };
     let validation = if let Some(district) = build_context.contract_district
         && let bounds = district.validate(&geometry.occupied_grids)

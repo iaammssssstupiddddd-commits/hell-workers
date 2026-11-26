@@ -23,6 +23,8 @@ pub enum BuildingType {
     WheelbarrowParking,
     SoulSpa,
     OutdoorLamp,
+    ScreamingVent,
+    Equipment(crate::Equipment),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -31,6 +33,7 @@ pub enum BuildingCategory {
     Architecture,
     Plant,
     Temporary,
+    Infrastructure,
 }
 
 /// How a completed building participates in room detection.
@@ -50,6 +53,7 @@ pub enum RoomDetectionRole {
 impl BuildingCategory {
     pub fn label(&self) -> &'static str {
         match self {
+            Self::Infrastructure => "Infrastructure",
             Self::Structure => "Structure",
             Self::Architecture => "Architecture",
             Self::Plant => "Plant",
@@ -59,7 +63,7 @@ impl BuildingCategory {
 }
 
 impl BuildingType {
-    pub const ALL: [Self; 12] = [
+    pub const ALL: [Self; 27] = [
         Self::Wall,
         Self::Door,
         Self::Floor,
@@ -72,6 +76,21 @@ impl BuildingType {
         Self::WheelbarrowParking,
         Self::SoulSpa,
         Self::OutdoorLamp,
+        Self::ScreamingVent,
+        Self::Equipment(crate::Equipment::SupplyFan),
+        Self::Equipment(crate::Equipment::ExhaustFan),
+        Self::Equipment(crate::Equipment::Chimney),
+        Self::Equipment(crate::Equipment::Duct),
+        Self::Equipment(crate::Equipment::Intake),
+        Self::Equipment(crate::Equipment::Conduit),
+        Self::Equipment(crate::Equipment::Basin),
+        Self::Equipment(crate::Equipment::Hood),
+        Self::Equipment(crate::Equipment::Filter),
+        Self::Equipment(crate::Equipment::HeatPump),
+        Self::Equipment(crate::Equipment::OutdoorUnit),
+        Self::Equipment(crate::Equipment::Humidifier),
+        Self::Equipment(crate::Equipment::Dehumidifier),
+        Self::Equipment(crate::Equipment::Recuperator),
     ];
 
     /// Classifies this building for room detection.
@@ -82,8 +101,10 @@ impl BuildingType {
     pub const fn room_detection_role(self, is_provisional: bool) -> RoomDetectionRole {
         match self {
             Self::Floor => RoomDetectionRole::Floor,
-            Self::Wall if is_provisional => RoomDetectionRole::FloorInvalidator,
-            Self::Wall => RoomDetectionRole::SolidBoundary,
+            Self::Wall | Self::ScreamingVent if is_provisional => {
+                RoomDetectionRole::FloorInvalidator
+            }
+            Self::Wall | Self::ScreamingVent => RoomDetectionRole::SolidBoundary,
             Self::Door => RoomDetectionRole::DoorBoundary,
             Self::Tank
             | Self::MudMixer
@@ -92,6 +113,7 @@ impl BuildingType {
             | Self::BonePile
             | Self::WheelbarrowParking
             | Self::SoulSpa
+            | Self::Equipment(_)
             | Self::OutdoorLamp => RoomDetectionRole::InteriorFixture,
             Self::Bridge => RoomDetectionRole::FloorInvalidator,
         }
@@ -105,6 +127,7 @@ impl BuildingType {
         matches!(
             self,
             Self::Wall
+                | Self::ScreamingVent
                 | Self::Door
                 | Self::Tank
                 | Self::MudMixer
@@ -122,10 +145,11 @@ impl BuildingType {
 
     pub fn category(&self) -> BuildingCategory {
         match self {
+            BuildingType::Equipment(_) => BuildingCategory::Infrastructure,
             BuildingType::Wall | BuildingType::Floor | BuildingType::Bridge => {
                 BuildingCategory::Structure
             }
-            BuildingType::Door => BuildingCategory::Architecture,
+            BuildingType::Door | BuildingType::ScreamingVent => BuildingCategory::Architecture,
             BuildingType::Tank | BuildingType::MudMixer | BuildingType::SoulSpa => {
                 BuildingCategory::Plant
             }
@@ -172,6 +196,13 @@ impl BuildingType {
                 // Soul Spa は SoulSpaSite/SoulSpaTile で直接管理するため
                 // Blueprint システムは使用しない。materials は空。
             }
+            BuildingType::ScreamingVent => {
+                materials.insert(ResourceType::Rock, 2);
+                materials.insert(ResourceType::Bone, 1);
+            }
+            BuildingType::Equipment(_) => {
+                materials.insert(ResourceType::Bone, 1);
+            }
             BuildingType::OutdoorLamp => {
                 materials.insert(ResourceType::Bone, 2);
             }
@@ -186,6 +217,16 @@ pub struct Building {
     pub kind: BuildingType,
     pub is_provisional: bool,
 }
+
+/// The completed wall retained as a room boundary while this blueprint is built.
+#[derive(Component, Reflect)]
+#[reflect(Component)]
+pub struct VentRetrofitWall(#[entities] pub Entity);
+
+/// Prevents demolition of the original wall until its retrofit is completed or cancelled.
+#[derive(Component, Default, Reflect)]
+#[reflect(Component, Default)]
+pub struct WallUnderRetrofit;
 
 #[derive(Component, Reflect, Default)]
 #[reflect(Component, Default)]

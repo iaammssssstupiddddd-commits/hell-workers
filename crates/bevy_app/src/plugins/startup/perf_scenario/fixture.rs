@@ -228,6 +228,18 @@ fn setup_perf_workload_if_needed(params: PerfWorkloadSetupParams) {
     if applied.workload || !config.enabled() {
         return;
     }
+    if config.workload().uses_ventilation_fixture() {
+        super::ventilation_fixture::spawn(
+            &mut commands,
+            &config,
+            &mut world_map,
+            &game_assets,
+            &handles_3d,
+            &mut q_main_camera,
+        );
+        applied.workload = true;
+        return;
+    }
     if config.workload() == PerfWorkload::BuildingArtStatic {
         // Own setup system uses the same pre-checkpoint ordering, with no Familiar requirement.
         return;
@@ -429,6 +441,9 @@ fn configure_perf_workload(
         }
         PerfWorkload::DoorDensity => {
             unreachable!("door-density uses the production-Door fixture pipeline")
+        }
+        PerfWorkload::Ventilation | PerfWorkload::VentilationDimensions => {
+            unreachable!("ventilation has a dedicated fixture")
         }
         PerfWorkload::BuildingArtStatic => {
             unreachable!("building-art-static owns its setup pipeline")

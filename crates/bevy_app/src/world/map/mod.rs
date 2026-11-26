@@ -32,6 +32,12 @@ pub struct Tile;
 pub struct WorldMapRef<'a>(pub &'a WorldMap);
 
 impl WorldReadApi for WorldMapRef<'_> {
+    fn has_conduit(&self, grid: (i32, i32)) -> bool {
+        self.0.conduits.contains_key(&grid)
+    }
+    fn has_floor(&self, grid: (i32, i32)) -> bool {
+        self.0.floor_entity(grid).is_some()
+    }
     fn has_building(&self, grid: (i32, i32)) -> bool {
         self.0.has_building(grid)
     }
