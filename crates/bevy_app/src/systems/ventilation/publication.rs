@@ -23,7 +23,7 @@ pub(super) fn publish(
         }
     };
     let vent = |i: usize, commands: &mut Commands| {
-        let (entity, passage) = svc.vent_entities[i];
+        let (entity, passage) = svc.vents.entities[i];
         let reading = VentReading::from_flow(passage, flows[i]);
         #[cfg(feature = "profiling")]
         let reading = if full {

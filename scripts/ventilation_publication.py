@@ -33,6 +33,9 @@ def events(samples, size, arm, seconds, profile):
             continue
         def delta(key):
             return after[key] - before[key]
+        if profile == "memory" and arm == "local":
+            require(delta("publish_allocations") == delta("publish_bytes") == 0,
+                    "component-local publication allocated during measurement")
         weather = before["wind"] != after["wind"]
         if weather:
             tick = after["climate_tick"] - int(delta("climate_tick") > 0)
@@ -151,7 +154,7 @@ def compare_pair(root, prefix):
         compare_traces(full[size], local[size])
 
 
-def verify(root, profile):
+def verify(root, profile, baseline=None):
     signatures = set()
     results = {}
     for name, arm, seconds in schedule(profile):
@@ -161,7 +164,22 @@ def verify(root, profile):
         if arm == "local":
             compare_pair(root, name.removesuffix("local"))
     require(len(signatures) == 1, "comparison changed executable, source or adapter")
-    return {"identity": signatures.pop(), "runs": results}
+    identity = signatures.pop()
+    report = {"identity": identity, "runs": results}
+    if baseline is not None:
+        reference = verify(baseline, "capture")
+        require(reference["identity"][2] == identity[2], "baseline used another graphics adapter")
+        require(reference["identity"][0] != identity[0] and reference["identity"][1] != identity[1],
+                "cross-revision comparison requires distinct sources and binaries")
+        for name, _, _ in schedule(profile):
+            previous, current = paired_paths(baseline / name), paired_paths(root / name)
+            for size in ("small", "large"):
+                compare_traces(previous[size], current[size])
+            if profile == "capture" and name.endswith("-local"):
+                maximum = results[name]["large"]["events"]["weather"]["max_cpu_ms"]
+                require(maximum <= 4.0, f"{name}: one-building weather change took {maximum:.3f} ms (limit 4 ms)")
+        report["baseline_identity"] = reference["identity"]
+    return report
 
 
 def run_suite(root, profile):
@@ -202,8 +220,11 @@ if __name__ == "__main__":
     parser.add_argument("action", choices=("run", "verify"))
     parser.add_argument("profile", choices=("capture", "memory"))
     parser.add_argument("root", type=Path)
+    parser.add_argument("--baseline", type=Path, help="compare each run to a verified baseline Capture suite")
     args = parser.parse_args()
+    if args.baseline is not None and args.action != "verify":
+        parser.error("--baseline applies to verification")
     if args.action == "run":
         run_suite(args.root.resolve(), args.profile)
     else:
-        print(json.dumps(verify(args.root.resolve(), args.profile), indent=2))
+        print(json.dumps(verify(args.root.resolve(), args.profile, args.baseline), indent=2))

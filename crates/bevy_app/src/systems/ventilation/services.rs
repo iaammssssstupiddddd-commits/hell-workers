@@ -21,11 +21,30 @@ pub(super) struct Device {
     pub condenser: bool,
 }
 
+/// Both slices use the solver's dense index. Inactive wall grates have no entry.
+pub(super) struct ConnectedVents {
+    pub openings: Vec<hw_infra::ventilation::Opening>,
+    pub entities: Vec<(Entity, Passage)>,
+}
+
+impl ConnectedVents {
+    pub fn from_layout(layout: &Layout) -> Self {
+        let (openings, entities) = layout
+            .ports
+            .iter()
+            .filter_map(|port| {
+                let passage = port.passage?;
+                Some((passage.opening, (port.entity, passage)))
+            })
+            .unzip();
+        Self { openings, entities }
+    }
+}
+
 #[derive(Resource)]
 pub(crate) struct Services {
     pub(super) layout: Layout,
-    pub(super) ports: Vec<hw_infra::ventilation::Opening>,
-    pub(super) vent_entities: Vec<(Entity, Passage)>,
+    pub(super) vents: ConnectedVents,
     pub(super) devices: Vec<Device>,
     pub(super) room_tiles: Vec<Vec<Grid>>,
     pub(super) zones: HashMap<Grid, usize>,
@@ -37,13 +56,13 @@ pub(crate) struct Services {
 impl Services {
     pub(super) fn build<'a>(
         layout: Layout,
+        vents: ConnectedVents,
         rooms: impl Iterator<Item = (Entity, &'a Room)>,
         buildings: impl Iterator<Item = (Entity, &'a Building, &'a Transform)>,
     ) -> Self {
         let by_entity: HashMap<_, _> = rooms.collect();
         let mut zones = HashMap::new();
         let mut room_tiles = Vec::new();
-        let mut walls = Vec::new();
         let mut wall_rooms: HashMap<Grid, Vec<usize>> = HashMap::new();
         for (i, e) in layout.rooms.iter().enumerate() {
             let room = by_entity[e];
@@ -57,18 +76,7 @@ impl Services {
                 wall_rooms.entry(wall).or_default().push(i);
             }
         }
-        for (wall, mut group) in wall_rooms {
-            group.sort_unstable();
-            group.dedup();
-            if group.len() == 1 && neighbors(wall).iter().any(|&p| layout.is_outside(p)) {
-                walls.push((group[0], None, 0.025));
-            }
-            for (i, &a) in group.iter().enumerate() {
-                for &b in &group[i + 1..] {
-                    walls.push((a, Some(b), 0.025));
-                }
-            }
-        }
+        let walls = heat_transfer_walls(&layout, wall_rooms);
         let mut equipment = Vec::new();
         let mut pipes = HashSet::new();
         let mut ducts = HashSet::new();
@@ -100,27 +108,9 @@ impl Services {
                 _ => {}
             }
         }
-        let mut networks = HashMap::new();
-        let mut network = 0;
-        while let Some(&start) = pipes.iter().next() {
-            pipes.remove(&start);
-            let mut queue = VecDeque::from([start]);
-            while let Some(grid) = queue.pop_front() {
-                networks.insert(grid, network);
-                for p in neighbors(grid) {
-                    if pipes.remove(&p) {
-                        queue.push_back(p);
-                    }
-                }
-            }
-            network += 1;
-        }
-        let vent_entities: Vec<_> = layout
-            .ports
-            .iter()
-            .filter_map(|p| Some((p.entity, p.passage?)))
-            .collect();
-        let active_ids: HashMap<_, _> = vent_entities
+        let networks = pipe_networks(pipes);
+        let active_ids: HashMap<_, _> = vents
+            .entities
             .iter()
             .enumerate()
             .map(|(i, &(entity, _))| (entity, i))
@@ -201,8 +191,7 @@ impl Services {
             })
             .collect();
         Self {
-            ports: vent_entities.iter().map(|(_, p)| p.opening).collect(),
-            vent_entities,
+            vents,
             layout,
             room_tiles,
             devices,
@@ -212,4 +201,40 @@ impl Services {
             volumes,
         }
     }
+}
+
+fn heat_transfer_walls(layout: &Layout, wall_rooms: HashMap<Grid, Vec<usize>>) -> Vec<Wall> {
+    let mut walls = Vec::new();
+    for (wall, mut group) in wall_rooms {
+        group.sort_unstable();
+        group.dedup();
+        if group.len() == 1 && neighbors(wall).iter().any(|&p| layout.is_outside(p)) {
+            walls.push((group[0], None, 0.025));
+        }
+        for (i, &a) in group.iter().enumerate() {
+            for &b in &group[i + 1..] {
+                walls.push((a, Some(b), 0.025));
+            }
+        }
+    }
+    walls
+}
+
+fn pipe_networks(mut pipes: HashSet<Grid>) -> HashMap<Grid, usize> {
+    let mut networks = HashMap::new();
+    let mut network = 0;
+    while let Some(&start) = pipes.iter().next() {
+        pipes.remove(&start);
+        let mut queue = VecDeque::from([start]);
+        while let Some(grid) = queue.pop_front() {
+            networks.insert(grid, network);
+            for p in neighbors(grid) {
+                if pipes.remove(&p) {
+                    queue.push_back(p);
+                }
+            }
+        }
+        network += 1;
+    }
+    networks
 }

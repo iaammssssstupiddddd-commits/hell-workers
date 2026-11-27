@@ -333,10 +333,9 @@ fn validate_vent_retrofits(world: &World) -> Result<(), String> {
             if entity.contains::<Building>()
                 || world.get::<Blueprint>(source.0).is_some()
                 || !transform.translation.is_finite()
-                || !world
-                    .get::<Building>(source.0)
-                    .is_some_and(|b| b.kind == BuildingType::Wall && !b.is_provisional)
-                || blueprint.is_none_or(|bp| bp.occupied_grids.as_slice() != [grid])
+                || !blueprint
+                    .zip(world.get::<Building>(source.0))
+                    .is_some_and(|(bp, wall)| VentRetrofitWall::matches_source(bp, wall, grid))
                 || entity.get::<Transform>().is_none_or(|t| {
                     !t.translation.is_finite()
                         || WorldMap::world_to_grid(t.translation.truncate()) != grid

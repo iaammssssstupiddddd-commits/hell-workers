@@ -23,7 +23,7 @@ fn is_replaceable_wall_at(
     world_map.building_entity(grid).is_some_and(|entity| {
         q_buildings
             .get(entity)
-            .is_ok_and(|building| building.kind == BuildingType::Wall && !building.is_provisional)
+            .is_ok_and(Building::is_completed_wall)
     })
 }
 

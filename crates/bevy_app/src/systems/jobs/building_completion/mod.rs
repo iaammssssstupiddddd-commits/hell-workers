@@ -62,13 +62,14 @@ fn commit_completed_building(world: &mut World, entity: Entity) -> bool {
                 .is_some()
             && world
                 .get::<hw_jobs::Building>(wall)
-                .is_some_and(|building| {
-                    building.kind == hw_jobs::BuildingType::Wall && !building.is_provisional
-                })
-            && world.get::<Transform>(wall).is_some_and(|source| {
-                bp.occupied_grids.as_slice()
-                    == [WorldMap::world_to_grid(source.translation.truncate())]
-            });
+                .zip(world.get::<Transform>(wall))
+                .is_some_and(|(building, transform)| {
+                    hw_jobs::model::VentRetrofitWall::matches_source(
+                        bp,
+                        building,
+                        WorldMap::world_to_grid(transform.translation.truncate()),
+                    )
+                });
         if !is_retained_wall {
             return false;
         }
