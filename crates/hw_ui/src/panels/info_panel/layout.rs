@@ -314,6 +314,7 @@ pub fn spawn_info_panel_ui(
     info_panel_nodes.common.root = Some(root);
 
     commands.entity(root).with_children(|parent| {
+        crate::waterworks::spawn_panel_report(parent, game_assets, theme);
         crate::shell::spawn_workspace_navigation(parent, game_assets, theme, true);
         parent
             .spawn(Node {

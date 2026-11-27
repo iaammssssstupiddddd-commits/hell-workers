@@ -17,6 +17,60 @@ pub enum ContractDescription {
 }
 #[derive(Component)]
 pub struct ContractControl;
+#[derive(Component)]
+pub struct ContractTitle(pub bool);
+#[derive(Component)]
+pub struct PanelDetailReport;
+#[derive(Component)]
+pub struct PanelDetailStatus;
+
+pub const REPORT_PANEL: UiIntent = UiIntent::ReportReceivingPanel {
+    target: Entity::PLACEHOLDER,
+    designation: 0,
+    epoch: 0,
+};
+
+pub(crate) fn spawn_panel_report(
+    parent: &mut ChildSpawnerCommands,
+    assets: &dyn UiAssets,
+    theme: &UiTheme,
+) {
+    parent.spawn((
+        PanelDetailStatus,
+        Text::new(""),
+        TextFont {
+            font: assets.font_ui().clone().into(),
+            font_size: font_size_rem(theme.typography.font_size_sm),
+            ..default()
+        },
+        TextColor(theme.colors.text_primary_semantic),
+        Node {
+            display: Display::None,
+            ..default()
+        },
+    ));
+    parent
+        .spawn((
+            PanelDetailReport,
+            Button,
+            MenuButton(REPORT_PANEL),
+            BackgroundColor(theme.colors.button_default),
+            Node {
+                display: Display::None,
+                padding: UiRect::all(Val::Px(6.)),
+                ..default()
+            },
+        ))
+        .with_child((
+            Text::new("受電盤の準備完了を連絡"),
+            TextFont {
+                font: assets.font_ui().clone().into(),
+                font_size: font_size_rem(theme.typography.font_size_sm),
+                ..default()
+            },
+            TextColor(theme.colors.text_primary_semantic),
+        ));
+}
 
 pub(crate) fn spawn(parent: &mut ChildSpawnerCommands, assets: &dyn UiAssets, theme: &UiTheme) {
     let font = TextFont {
@@ -42,6 +96,7 @@ pub(crate) fn spawn(parent: &mut ChildSpawnerCommands, assets: &dyn UiAssets, th
         ))
         .with_children(|card| {
             card.spawn((
+                ContractTitle(false),
                 Text::new("第一工区の給水所"),
                 font.clone(),
                 TextColor(theme.colors.text_accent_semantic),
@@ -53,6 +108,18 @@ pub(crate) fn spawn(parent: &mut ChildSpawnerCommands, assets: &dyn UiAssets, th
                 TextColor(theme.colors.text_primary_semantic),
             ));
             for (label, action) in [
+                (
+                    "川辺の夜普請を開く",
+                    UiIntent::SelectReceptionContract(true),
+                ),
+                (
+                    "第一工区の給水所を開く",
+                    UiIntent::SelectReceptionContract(false),
+                ),
+                ("A点へ", UiIntent::LocateReceivingPanel),
+                ("夜普請を受注する", UiIntent::AcceptReception),
+                ("指定盤を施工", UiIntent::PlaceReceivingPanel),
+                ("準備完了を連絡", REPORT_PANEL),
                 ("工区を表示／隠す", UiIntent::ToggleContractDistrict),
                 ("受注する", UiIntent::AcceptWaterworks),
                 ("契約用タンクを配置", UiIntent::PlaceWaterworks),
@@ -119,6 +186,7 @@ pub(crate) fn spawn_todo(
         ))
         .with_children(|panel| {
             panel.spawn((
+                ContractTitle(true),
                 Text::new("契約ToDo　第一工区の給水所"),
                 font.clone(),
                 TextColor(theme.colors.text_accent_semantic),

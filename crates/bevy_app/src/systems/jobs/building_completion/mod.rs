@@ -103,6 +103,9 @@ fn commit_completed_building(world: &mut World, entity: Entity) -> bool {
         if let Some(tag) = world.get::<crate::systems::waterworks::WaterworksTarget>(entity) {
             commands.entity(building).insert(*tag);
         }
+        if let Some(panel) = world.get::<hw_jobs::reception::ReceivingPanel>(entity) {
+            commands.entity(building).insert(*panel);
+        }
         map.complete_owned_building_footprint(
             entity,
             building,

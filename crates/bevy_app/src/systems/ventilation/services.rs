@@ -54,6 +54,29 @@ pub(crate) struct Services {
 }
 
 impl Services {
+    /// Find a supplied river intake and an indoor basin on its pipe network in this district.
+    pub(crate) fn supplied_basin(
+        &self,
+        intake_eligible: impl Fn(Entity, Grid) -> bool,
+        basin_eligible: impl Fn(Entity, Grid) -> bool,
+    ) -> Option<(Grid, Grid)> {
+        self.devices
+            .iter()
+            .filter(|d| d.kind == Equipment::Intake && intake_eligible(d.entity, d.grid))
+            .flat_map(|intake| {
+                self.devices
+                    .iter()
+                    .filter(|d| {
+                        d.kind == Equipment::Basin
+                            && d.room.is_some()
+                            && basin_eligible(d.entity, d.grid)
+                            && d.pipes.iter().any(|pipe| intake.pipes.contains(pipe))
+                    })
+                    .map(move |basin| (intake.grid, basin.grid))
+            })
+            .min()
+    }
+
     pub(super) fn build<'a>(
         layout: Layout,
         vents: ConnectedVents,

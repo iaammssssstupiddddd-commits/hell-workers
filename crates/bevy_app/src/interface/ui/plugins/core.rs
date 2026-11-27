@@ -48,7 +48,16 @@ fn register_ui_core_plugin_systems(app: &mut App) {
     );
     use crate::interface::ui::waterworks as card;
     use crate::systems::waterworks as contract;
-    app.init_resource::<card::ContractOverlay>()
+    app.init_resource::<card::ContractPage>()
+        .init_resource::<crate::systems::reception::PublishedOffer>()
+        .add_systems(
+            Update,
+            crate::systems::reception::update_supply
+                .after(crate::systems::jobs::BuildingCompletionSet)
+                .after(crate::systems::jobs::DeconstructionFinalizerSet::Finalize)
+                .in_set(GameSystemSet::Logic),
+        )
+        .init_resource::<card::ContractOverlay>()
         .add_observer(contract::inspect_delivery)
         .add_systems(
             Update,
@@ -56,7 +65,10 @@ fn register_ui_core_plugin_systems(app: &mut App) {
                 contract::release_moved_target,
                 card::finish_placement,
                 card::present,
+                crate::interface::ui::reception::present,
+                crate::interface::ui::reception::detail,
                 card::draw,
+                crate::interface::ui::reception::draw,
             )
                 .chain()
                 .after(handle_ui_intent)

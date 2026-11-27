@@ -139,6 +139,7 @@ pub(super) fn place_building_blueprint(
 
     let texture = match building_type {
         BuildingType::Equipment(kind) => game_assets.equipment_image(kind).clone(),
+        BuildingType::TemporaryReceivingPanel => game_assets.receiving_panel.clone(),
         BuildingType::ScreamingVent => game_assets.screaming_vent.clone(),
         BuildingType::Wall => game_assets.wall_isolated.clone(),
         BuildingType::Door => game_assets.door_closed.clone(),

@@ -72,3 +72,25 @@ pub(crate) fn waterworks() -> Result<HelpContribution, super::super::HelpCatalog
         ),
     })
 }
+
+pub(crate) fn reception() -> Result<HelpContribution, super::super::HelpCatalogError> {
+    Ok(HelpContribution {
+        feature: PlayerFeatureId::PowerReception,
+        owner: HelpOwnerId::RootOnboarding,
+        section_id: HelpSectionId::new("getting-started"),
+        section_title: "はじめに",
+        topic: HelpTopic::new(
+            HelpTopicId::new("power-reception-contract"),
+            "川辺の夜普請・仮設受電",
+            [HelpEntry::new(
+                HelpEntryId::new("power-reception"),
+                "指定盤で受電する",
+                [
+                    "「管理」→「契約」から川辺の夜普請を開きます。初期資材置場に受電盤と荷受け場の用地を空け、河岸の取水門から屋内の浄化盤へ給水してください。契約図でA点・容量・供給予定・期限を確認し、共有Dream 1で受注します。",
+                    "「指定盤を施工」でA点をクリックします。使い魔の班が木材2本を運び、盤を据え付けます。施工取消後は同じA点で再施工できます。",
+                    "完成盤または契約書で「準備完了を連絡」を押します。王側の引込準備が進行中なら外部供給を待ちます。両方がそろえば使用0 Wでも初回受電の日時と期限内・遅延が契約に残ります。保存と再開で日時を引き継ぎます。",
+                ],
+            )],
+        ),
+    })
+}

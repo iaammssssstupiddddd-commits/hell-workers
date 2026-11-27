@@ -16,6 +16,8 @@ entry|topic="getting-started"|id="getting-started-work-loop"|title="Familiar が
 entry|topic="getting-started"|id="getting-started-first-steps"|title="最初に確認する場所"|paragraphs=["ボタンは押してから同じボタンの上で離すと実行します。押している途中で外へ動かしたり、対象や画面が変わったりすると実行を取り消します。", "ダイアログ内ではフォーカス枠を移動してボタンを決定できます。隠れた項目・無効な項目を飛ばし、末尾から先頭へ戻ります。確認画面では戻る操作を先に選び、閉じると利用可能な呼出元へ戻ります。入力欄では文字編集を優先します。", "通常は地図を広く表示します。上部の人数または下部の「管理」から、使い魔・魂と仕事の一覧を開けます。人数は検索や折りたたみに左右されない世界全体の総数です。", "「建てる」「作業を指示」「範囲を設定」から操作を始めます。「表示」では担当範囲や保管場所などを地図で確認できます。操作中だけ次の入力と終了方法を表示します。", "対象を選ぶと右の共通枠に詳細が表示されます。管理と詳細を切り替えてもカメラの位置や倍率は変わりません。一覧から詳細へ進んだ場合は「戻る」で一覧へ復帰し、「閉じる」で地図へ戻ります。", "ヘルプは項目ごとの読書位置を覚えます。別の項目から戻ったときや閉じて開き直したときも続きから読めます。ワールドの読込ではこの履歴をリセットします。", "ヘルプの検索欄は見出しと本文を検索します。空白で区切った語はすべて一致する項目に絞り込み、結果を選ぶと該当見出しへ移動します。検索欄の Esc は検索を消して編集を終えます。", "情報パネルの「詳しく（ヘルプ）」から、Soul・保管範囲・Soul Spa・電力の説明を開けます。その他の対象では情報パネルの使い方を表示します。別のダイアログが前景にある間は開きません。"]|shortcut=Some("次の項目: Tab / 前の項目: Shift+Tab / ボタン決定: Enter / Space")
 topic|feature="first-waterworks"|owner="root-onboarding"|section="getting-started"|id="waterworks-contract"|title="第一工区の給水所"
 entry|topic="waterworks-contract"|id="first-waterworks"|title="第一工区の給水所"|paragraphs=["「管理」→「契約」で王の依頼を開きます。ガイドをスキップしても受注できます。「工区を表示／隠す」で初期Yardの金色の枠を確認できます。短い目盛のある側が工区内です。停止中は閲覧できます。受注・配置・報酬受領は再開後に行います。", "受注すると地図に契約ToDoが表示されます。通常の「建てる」または契約書からタンクを配置できます。本体と横2マスのバケツ置場が工区内にある既設タンクも使えます。新設時は木材2個を搬入し、施工してください。", "受注後、対象のいずれかに満杯のバケツ1杯（5単位）が届くと検収されます。給水待ちのときは使い魔の担当範囲と取水の許可を確認してください。受注からゲーム内12時間以内なら40 Dream、遅延時は20 Dreamを「管理」→「契約」で一度受領できます。受領後はToDoが地図から消え、結果は契約書に残ります。"]|shortcut=None
+topic|feature="power-reception"|owner="root-onboarding"|section="getting-started"|id="power-reception-contract"|title="川辺の夜普請・仮設受電"
+entry|topic="power-reception-contract"|id="power-reception"|title="指定盤で受電する"|paragraphs=["「管理」→「契約」から川辺の夜普請を開きます。初期資材置場に受電盤と荷受け場の用地を空け、河岸の取水門から屋内の浄化盤へ給水してください。契約図でA点・容量・供給予定・期限を確認し、共有Dream 1で受注します。", "「指定盤を施工」でA点をクリックします。使い魔の班が木材2本を運び、盤を据え付けます。施工取消後は同じA点で再施工できます。", "完成盤または契約書で「準備完了を連絡」を押します。王側の引込準備が進行中なら外部供給を待ちます。両方がそろえば使用0 Wでも初回受電の日時と期限内・遅延が契約に残ります。保存と再開で日時を引き継ぎます。"]|shortcut=None
 section|id="basic-controls"|title="基本操作"
 topic|feature="camera-selection"|owner="input-camera"|section="basic-controls"|id="camera-selection"|title="カメラと選択"
 entry|topic="camera-selection"|id="camera-pan-zoom"|title="カメラ移動"|paragraphs=["W / A / S / D で移動し、マウスホイールで拡大・縮小します。", "Settings で Mouse Drag Pan が有効なら、通常モードの左ドラッグ、または中ボタンドラッグでカメラを移動できます。", "中ボタンドラッグは配置・移動・範囲編集モードを維持します。左／右ボタンの操作中には開始せず、中ボタンで移動中の左／右操作は配置や選択に使いません。UI・入力欄・ダイアログへ入ると移動を終了します。", "カメラは固定のトップダウン表示です。「表示」は地図上の補助情報を切り替え、視点や倍率は変更しません。"]|shortcut=Some("W / A / S / D / Mouse Wheel")
@@ -83,6 +85,7 @@ coverage|building-type::intake|player|published:entry:indoor-services
 coverage|building-type::mud-mixer|player|published:entry:architect-building
 coverage|building-type::outdoor-lamp|player|published:entry:architect-building
 coverage|building-type::outdoor-unit|player|published:entry:indoor-controls
+coverage|building-type::receiving-panel|player|published:entry:power-reception
 coverage|building-type::recuperator|player|published:entry:indoor-controls
 coverage|building-type::rest-area|player|published:entry:architect-building
 coverage|building-type::sand-pile|player|published:entry:architect-building
@@ -313,6 +316,10 @@ coverage|ui-intent::operation-settings-dialog|player|published:entry:familiar-op
 coverage|ui-intent::operation-settings-explicit|player|published:entry:familiar-operation-policy
 coverage|ui-intent::orders-toggle|player|published:entry:orders-designation
 coverage|ui-intent::power-consumer-priority|player|published:entry:soul-energy-status
+coverage|ui-intent::reception-accept|player|published:entry:power-reception
+coverage|ui-intent::reception-locate|player|published:entry:power-reception
+coverage|ui-intent::reception-place|player|published:entry:power-reception
+coverage|ui-intent::reception-report|player|published:entry:power-reception
 coverage|ui-intent::remove-stockpile-zone|player|published:entry:zones-workflow
 coverage|ui-intent::remove-yard-zone|player|excluded:unreachable-player-flow
 coverage|ui-intent::save-catalog-close|player|published:entry:save-load
@@ -343,6 +350,7 @@ coverage|ui-intent::soul-spa-cancel-confirm|player|published:entry:soul-energy-r
 coverage|ui-intent::soul-spa-construction-cancel|player|published:entry:soul-energy-recovery
 coverage|ui-intent::stockpile-policy-range|player|published:entry:zones-workflow
 coverage|ui-intent::stockpile-policy|player|published:entry:zones-workflow
+coverage|ui-intent::switch-contract|player|published:entry:power-reception
 coverage|ui-intent::system-menu|player|published:entry:time-controls
 coverage|ui-intent::task-cancel|player|published:entry:task-dashboard-actions
 coverage|ui-intent::task-mode-area-selection|player|published:entry:area-edit

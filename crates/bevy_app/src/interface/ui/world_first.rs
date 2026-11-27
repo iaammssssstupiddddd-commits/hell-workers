@@ -24,6 +24,16 @@ pub(crate) struct WorkspaceIntentContext<'w> {
 }
 
 impl WorkspaceIntentContext<'_> {
+    pub(crate) fn inspected(
+        &self,
+        selected: Option<Entity>,
+        pin: Option<Entity>,
+    ) -> Option<Entity> {
+        self.shell
+            .as_ref()
+            .filter(|s| s.page == hw_ui::shell::WorkspacePage::Inspector)
+            .and_then(|s| s.inspected_entity(selected, pin))
+    }
     pub(crate) fn contract_visible(&self) -> bool {
         self.shell.as_ref().is_some_and(|s| s.management_open())
             && self.mode.as_deref() == Some(&LeftPanelMode::Contracts)

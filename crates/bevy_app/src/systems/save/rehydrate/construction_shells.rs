@@ -8,6 +8,7 @@ use super::*;
 pub(super) struct BlueprintSpriteHandles {
     equipment: std::collections::HashMap<hw_jobs::Equipment, Handle<Image>>,
     wall_isolated: Handle<Image>,
+    receiving_panel: Handle<Image>,
     screaming_vent: Handle<Image>,
     door_closed: Handle<Image>,
     mud_floor: Handle<Image>,
@@ -27,6 +28,7 @@ impl From<&GameAssets> for BlueprintSpriteHandles {
                 .into_iter()
                 .map(|e| (e, assets.equipment_image(e).clone()))
                 .collect(),
+            receiving_panel: assets.receiving_panel.clone(),
             screaming_vent: assets.screaming_vent.clone(),
             wall_isolated: assets.wall_isolated.clone(),
             door_closed: assets.door_closed.clone(),
@@ -46,6 +48,7 @@ impl BlueprintSpriteHandles {
     fn sprite(&self, kind: BuildingType) -> Sprite {
         let image = match kind {
             BuildingType::Equipment(kind) => self.equipment.get(&kind).cloned().unwrap_or_default(),
+            BuildingType::TemporaryReceivingPanel => self.receiving_panel.clone(),
             BuildingType::ScreamingVent => self.screaming_vent.clone(),
             BuildingType::Wall => self.wall_isolated.clone(),
             BuildingType::Door => self.door_closed.clone(),

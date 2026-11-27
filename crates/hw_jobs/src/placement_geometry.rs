@@ -68,6 +68,7 @@ pub const fn building_shape(kind: BuildingType) -> BuildingShape {
         | BuildingType::SandPile
         | BuildingType::BonePile
         | BuildingType::Equipment(_)
+        | BuildingType::TemporaryReceivingPanel
         | BuildingType::OutdoorLamp => BuildingShape {
             ordered_relative_tiles: SINGLE_TILE,
             center_offset_tiles: (0.0, 0.0),

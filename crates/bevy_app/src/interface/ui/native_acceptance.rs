@@ -27,6 +27,7 @@ mod bridge_planning;
 mod door_release_planning;
 mod m5_planning;
 mod progress_bars;
+mod reception;
 mod refactor_rows;
 mod refactor_stockpile;
 mod rest_area_planning;
@@ -225,6 +226,10 @@ fn prepare_fixture(world: &mut World, scale: f32) {
     }
     if door_release_planning::enabled() {
         door_release_planning::prepare(world);
+        return;
+    }
+    if reception::enabled() {
+        reception::prepare(world);
         return;
     }
     if waterworks_playtest::enabled() {
@@ -822,6 +827,9 @@ fn snapshot(world: &mut World, observer: &UiObserver) -> Value {
     );
     value["refactor_rows"] = refactor_rows::snapshot(world, viewport);
     value["refactor_stockpile"] = refactor_stockpile::snapshot(world, viewport);
+    if reception::enabled() {
+        value["reception"] = reception::snapshot(world);
+    }
     if waterworks_playtest::enabled() {
         value["waterworks"] = waterworks_playtest::snapshot(world);
     }

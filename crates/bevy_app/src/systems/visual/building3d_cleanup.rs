@@ -63,6 +63,7 @@ pub fn building_presentation_transform(kind: BuildingType, owner: &Transform) ->
         | BuildingType::BonePile
         | BuildingType::WheelbarrowParking
         | BuildingType::Equipment(_)
+        | BuildingType::TemporaryReceivingPanel
         | BuildingType::OutdoorLamp => TILE_SIZE * 0.3,
     };
     Transform {

@@ -272,7 +272,9 @@ impl DeconstructionEligibilityFacts {
 /// Fixed salvage table. This deliberately does not derive from construction cost.
 pub const fn deconstruction_salvage(kind: BuildingType) -> DeconstructionSalvage {
     match kind {
-        BuildingType::Wall => salvage_material(ResourceType::Wood, 1),
+        BuildingType::TemporaryReceivingPanel | BuildingType::Wall => {
+            salvage_material(ResourceType::Wood, 1)
+        }
         BuildingType::ScreamingVent => salvage_material(ResourceType::Rock, 1),
         BuildingType::Door => salvage_material(ResourceType::Wood, 1),
         BuildingType::Floor => salvage_material(ResourceType::Bone, 1),
@@ -296,7 +298,8 @@ pub const fn deconstruction_salvage(kind: BuildingType) -> DeconstructionSalvage
 pub const fn supports_deconstruction_cleanup(kind: BuildingType) -> bool {
     matches!(
         kind,
-        BuildingType::ScreamingVent
+        BuildingType::TemporaryReceivingPanel
+            | BuildingType::ScreamingVent
             | BuildingType::Wall
             | BuildingType::Door
             | BuildingType::Floor
@@ -393,7 +396,10 @@ pub const fn deconstruction_marker_matches(
         !markers.operational_soul_spa && !markers.power_consumer && !markers.power_generator;
     let plain = no_pile && no_facility && no_structure && no_energy;
     match kind {
-        BuildingType::ScreamingVent | BuildingType::Wall | BuildingType::Floor => plain,
+        BuildingType::TemporaryReceivingPanel
+        | BuildingType::ScreamingVent
+        | BuildingType::Wall
+        | BuildingType::Floor => plain,
         BuildingType::Door => {
             markers.door && no_pile && no_facility && no_energy && !markers.bridge
         }

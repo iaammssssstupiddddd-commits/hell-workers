@@ -20,13 +20,22 @@ pub(crate) struct ContractDistrictGizmos;
 #[derive(Resource, Default)]
 pub(crate) struct ContractOverlay(pub bool);
 
+#[derive(Resource, Default)]
+pub(crate) struct ContractPage {
+    pub reception: bool,
+    pub show_point: bool,
+}
+
 pub fn reset(world: &mut World) {
     world.insert_resource(ContractOverlay::default());
+    world.insert_resource(ContractPage::default());
+    world.insert_resource(crate::systems::reception::PublishedOffer::default());
 }
 
 pub fn draw(
     layer: Res<ContractOverlay>,
     tool: Res<BuildContext>,
+    page: Res<ContractPage>,
     layout: Res<GeneratedWorldLayoutResource>,
     contract: Query<&WaterworksContract>,
     camera: Query<&Projection, With<hw_ui::camera::MainCamera>>,
@@ -36,7 +45,7 @@ pub fn draw(
         && contract
             .single()
             .is_ok_and(|c| c.outcome == ContractOutcome::Active);
-    if !layer.0 && !placing_tank {
+    if !placing_tank && (page.reception || !layer.0) {
         return;
     }
     let district = contract
@@ -76,7 +85,8 @@ pub fn finish_placement(
     mut companion: ResMut<crate::app_contexts::CompanionPlacementState>,
     mut mode: ResMut<NextState<hw_core::game_state::PlayMode>>,
 ) {
-    if tool.contract_district.is_some()
+    if tool.kind == Some(BuildingType::Tank)
+        && tool.contract_district.is_some()
         && !contracts
             .single()
             .is_ok_and(|c| c.outcome == ContractOutcome::Active)
@@ -87,7 +97,7 @@ pub fn finish_placement(
     }
 }
 
-fn date(seconds: f32) -> String {
+pub(super) fn date(seconds: f32) -> String {
     let minutes = (seconds / 60.0) as u32;
     format!(
         "{}日目 {:02}:{:02}",
@@ -125,13 +135,14 @@ fn checklist(contract: &WaterworksContract, progress: StationProgress) -> String
 
 #[derive(SystemParam)]
 pub(crate) struct ContractWidgets<'w, 's> {
+    page: Res<'w, ContractPage>,
     task: Res<'w, crate::app_contexts::TaskContext>,
     text: Query<'w, 's, (&'static mut Text, &'static ContractDescription)>,
     buttons: Query<'w, 's, (&'static MenuButton, &'static mut Node), With<ContractControl>>,
     hud: Query<'w, 's, &'static mut Node, (With<ContractTodoPanel>, Without<ContractControl>)>,
 }
 
-fn show(node: &mut Mut<Node>, visible: bool) {
+pub(super) fn show(node: &mut Mut<Node>, visible: bool) {
     let display = if visible {
         Display::Flex
     } else {
@@ -203,6 +214,10 @@ pub fn present(
     mut widgets: ContractWidgets,
     mut previous: Local<Option<CardState>>,
 ) {
+    if widgets.page.reception {
+        *previous = None;
+        return;
+    }
     let record = contracts.single().ok();
     let outcome = record.map(|c| c.outcome);
     let active = outcome == Some(ContractOutcome::Active);
@@ -253,6 +268,11 @@ pub fn present(
         show(
             &mut node,
             match button.0 {
+                UiIntent::SelectReceptionContract(show_reception) => show_reception,
+                UiIntent::LocateReceivingPanel
+                | UiIntent::AcceptReception
+                | UiIntent::PlaceReceivingPanel
+                | UiIntent::ReportReceivingPanel { .. } => false,
                 UiIntent::AcceptWaterworks => record.is_none(),
                 UiIntent::PlaceWaterworks => active && stage == StationProgress::Site,
                 UiIntent::ClaimWaterworks => claimable,

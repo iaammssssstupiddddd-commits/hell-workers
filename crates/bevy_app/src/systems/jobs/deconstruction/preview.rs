@@ -280,7 +280,10 @@ pub(crate) mod tests {
             Transform::default(),
         ));
         match kind {
-            BuildingType::ScreamingVent | BuildingType::Wall | BuildingType::Floor => {}
+            BuildingType::TemporaryReceivingPanel
+            | BuildingType::ScreamingVent
+            | BuildingType::Wall
+            | BuildingType::Floor => {}
             BuildingType::Door => {
                 entity.insert(Door::default());
             }

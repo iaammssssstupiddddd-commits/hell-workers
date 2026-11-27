@@ -143,7 +143,12 @@ pub(super) fn handle_pressed_action(
         MenuAction::ToggleSystemMenu => {
             ui_intents.write(UiIntent::ToggleSystemMenu);
         }
-        MenuAction::AcceptWaterworks
+        MenuAction::SelectReceptionContract(_)
+        | MenuAction::LocateReceivingPanel
+        | MenuAction::AcceptReception
+        | MenuAction::PlaceReceivingPanel
+        | MenuAction::ReportReceivingPanel { .. }
+        | MenuAction::AcceptWaterworks
         | MenuAction::PlaceWaterworks
         | MenuAction::ClaimWaterworks
         | MenuAction::ViewWaterworksTasks

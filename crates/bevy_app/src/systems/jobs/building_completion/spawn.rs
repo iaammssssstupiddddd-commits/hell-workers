@@ -82,6 +82,7 @@ pub(crate) const fn presentation_class(kind: BuildingType) -> RenderPresentation
         | BuildingType::BonePile
         | BuildingType::WheelbarrowParking
         | BuildingType::Equipment(_)
+        | BuildingType::TemporaryReceivingPanel
         | BuildingType::OutdoorLamp => RenderPresentationClass::Foreground2d,
     }
 }
@@ -175,6 +176,9 @@ pub(crate) fn attach_building_shell(
             game_assets.mud_wall_isolated.clone(),
             Vec2::splat(TILE_SIZE),
         ),
+        BuildingType::TemporaryReceivingPanel => {
+            (game_assets.receiving_panel.clone(), Vec2::splat(TILE_SIZE))
+        }
         BuildingType::ScreamingVent => (game_assets.screaming_vent.clone(), Vec2::splat(TILE_SIZE)),
         BuildingType::Door => (game_assets.door_closed.clone(), Vec2::splat(TILE_SIZE)),
         BuildingType::Floor => (game_assets.mud_floor.clone(), Vec2::splat(TILE_SIZE)),
@@ -351,6 +355,7 @@ pub(crate) fn spawn_building_3d_visual(
         | BuildingType::BonePile
         | BuildingType::WheelbarrowParking
         | BuildingType::Equipment(_)
+        | BuildingType::TemporaryReceivingPanel
         | BuildingType::OutdoorLamp => unreachable!(),
     }
 }
@@ -370,7 +375,7 @@ mod tests {
         let foreground = BuildingType::ALL.len() - structural;
 
         assert_eq!(structural, 9);
-        assert_eq!(foreground, 4 + hw_jobs::Equipment::ALL.len());
+        assert_eq!(foreground, 5 + hw_jobs::Equipment::ALL.len());
     }
 
     #[test]

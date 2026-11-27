@@ -24,6 +24,15 @@ pub enum UiIntent {
         opener: Option<Entity>,
     },
     CloseHelp,
+    SelectReceptionContract(bool),
+    LocateReceivingPanel,
+    AcceptReception,
+    PlaceReceivingPanel,
+    ReportReceivingPanel {
+        target: Entity,
+        designation: u32,
+        epoch: u64,
+    },
     AcceptWaterworks,
     PlaceWaterworks,
     ClaimWaterworks,
@@ -162,7 +171,10 @@ impl UiIntent {
                 target: StockpilePolicyEditTarget::Single(_),
                 ..
             } => true,
-            Self::AcceptWaterworks
+            Self::AcceptReception
+            | Self::PlaceReceivingPanel
+            | Self::ReportReceivingPanel { .. }
+            | Self::AcceptWaterworks
             | Self::PlaceWaterworks
             | Self::ClaimWaterworks
             | Self::SelectTaskMode(_)
@@ -186,7 +198,9 @@ impl UiIntent {
             | Self::ConfirmSoulSpaConstructionCancel { .. }
             | Self::AdjustTaskPriority { .. }
             | Self::CancelTask { .. } => false,
-            Self::ToggleContractDistrict
+            Self::SelectReceptionContract(_)
+            | Self::LocateReceivingPanel
+            | Self::ToggleContractDistrict
             | Self::ViewWaterworksTasks
             | Self::Workspace(_)
             | Self::SetWorldView(_)

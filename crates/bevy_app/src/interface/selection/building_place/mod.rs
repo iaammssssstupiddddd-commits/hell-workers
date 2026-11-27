@@ -91,6 +91,9 @@ pub struct BuildPlaceState<'w, 's> {
     pub build_context: ResMut<'w, BuildContext>,
     contracts: Query<'w, 's, &'static mut crate::systems::waterworks::WaterworksContract>,
     targets: Query<'w, 's, (), With<crate::systems::waterworks::WaterworksTarget>>,
+    reception: Query<'w, 's, &'static mut hw_jobs::reception::ReceptionContract>,
+    contract_yard: Query<'w, 's, &'static Yard, With<hw_jobs::reception::ReceptionYard>>,
+    panels: Query<'w, 's, (), With<hw_jobs::reception::ReceivingPanel>>,
     next_mode: ResMut<'w, NextState<hw_core::game_state::PlayMode>>,
     pub companion_state: ResMut<'w, CompanionPlacementState>,
     pub game_assets: Res<'w, GameAssets>,
@@ -230,6 +233,52 @@ pub fn blueprint_placement(
             .insert(crate::systems::ventilation::climate::ClimateSetting(
                 (setting.0 + 1) % 3,
             ));
+        return;
+    }
+    if state.build_context.kind == Some(BuildingType::TemporaryReceivingPanel) {
+        let Ok(mut contract) = state.reception.single_mut() else {
+            return;
+        };
+        let Some(next) = contract.designation.checked_add(1) else {
+            return;
+        };
+        if !state.panels.is_empty() || state.build_context.contract_district.is_none() {
+            return;
+        }
+        if contract.terms.point != IVec2::from(grid)
+            || !state
+                .contract_yard
+                .single()
+                .is_ok_and(|yard| yard.contains(WorldMap::grid_to_world(grid.0, grid.1)))
+        {
+            let rejection = PlacementTileRejection {
+                reason: hw_ui::selection::PlacementRejectReason::OutsideContractDistrict,
+                grid,
+            };
+            record_placement_outcome(&mut state.placement_feedback, Err(rejection), grid, now);
+            return;
+        }
+        let result = place_building_blueprint(
+            &mut commands,
+            &mut world_map,
+            &state.game_assets,
+            BuildingType::TemporaryReceivingPanel,
+            grid,
+            &pq,
+        );
+        if let Ok((owner, _, _)) = &result {
+            contract.designation = next;
+            commands
+                .entity(*owner)
+                .insert(hw_jobs::reception::ReceivingPanel {
+                    designation: next,
+                    reported: false,
+                    live: false,
+                });
+            *state.build_context = BuildContext::default();
+            state.next_mode.set(hw_core::game_state::PlayMode::Normal);
+        }
+        record_placement_outcome(&mut state.placement_feedback, result.map(|_| ()), grid, now);
         return;
     }
     if let Some(district) = state.build_context.contract_district {

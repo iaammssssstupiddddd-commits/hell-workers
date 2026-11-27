@@ -1,6 +1,6 @@
 # Plans Index
 
-`docs/plans` の文書ステータス一覧（更新日: 2026-11-26）。
+`docs/plans` の文書ステータス一覧（更新日: 2026-11-27）。
 
 ## 新規計画書の作り方
 
@@ -60,6 +60,8 @@
 | [orca-system-hardening-plan-2026-09-29.md](orca-system-hardening-plan-2026-09-29.md) | Superseded — 独自統括を撤去し通常Orcaへ戻す方針へ変更。過去実績・未完・不成立の履歴を保持 | Orca運用基盤の恒久修正・収束計画 |
 | [orca-tak14-bounded-recovery-plan-2026-10-03.md](orca-tak14-bounded-recovery-plan-2026-10-03.md) | Superseded — M1不合格・未適用の履歴を保持。通常Orca復帰・独自統括撤去へ方針変更 | TAK-14統括の期限付き復旧計画 |
 | [orca-ui-lifecycle-plan-2026-09-23.md](orca-ui-lifecycle-plan-2026-09-23.md) | In Progress — 固定受付、実案件の実装・固定review・統合、承認後role tab整理、通常desktop起動、稼働中agentの中断・再起動復旧まで受入。新規案件の無介入cold-start計測が残る | Orca UI・受付・終了ライフサイクル統合計画 |
+| [power-reception-and-use-plan-2026-11-26.md](power-reception-and-use-plan-2026-11-26.md) | Draft | 工区の受電と電力活用の拡張計画 |
+| [power-reception-implementation-plan-2026-11-26.md](power-reception-implementation-plan-2026-11-26.md) | In Progress | 川辺の夜普請 ― 受電契約の実装計画 |
 
 ## アーカイブ計画書一覧 (`archive/` / `**/archived/`)
 

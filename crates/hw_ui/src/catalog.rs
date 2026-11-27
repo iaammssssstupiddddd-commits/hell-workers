@@ -6,6 +6,7 @@ pub const fn building_copy(kind: BuildingType) -> (&'static str, &'static str) {
         BuildingType::Equipment(kind) => kind.copy(),
         BuildingType::Wall => ("壁", "部屋を囲う"),
         BuildingType::Floor => ("床", "部屋の土台"),
+        BuildingType::TemporaryReceivingPanel => ("仮設受電盤", "契約地点で外部から受電"),
         BuildingType::ScreamingVent => ("叫びの風穴", "壁から換気"),
         BuildingType::Door => ("ドア", "部屋の出入口"),
         BuildingType::Bridge => ("橋", "水辺を渡る"),

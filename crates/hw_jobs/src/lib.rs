@@ -8,6 +8,7 @@ pub mod lifecycle;
 pub mod model;
 pub mod mud_mixer;
 pub mod placement_geometry;
+pub mod reception;
 pub mod refine_activity;
 pub mod tasks;
 pub mod visual_sync;

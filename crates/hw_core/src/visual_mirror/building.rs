@@ -20,6 +20,7 @@ pub enum BuildingTypeVisual {
     OutdoorLamp,
     Equipment,
     ScreamingVent,
+    TemporaryReceivingPanel,
 }
 
 /// Mirror of `hw_jobs::Building` carrying only the data `hw_visual` needs.

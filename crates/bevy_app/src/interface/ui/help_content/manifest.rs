@@ -82,6 +82,13 @@ player_help_features! {
         topic_order: 10,
         provider: providers::getting_started::getting_started
     },
+    PowerReception => {
+        id: "power-reception",
+        owner: RootOnboarding,
+        section_order: 10,
+        topic_order: 30,
+        provider: providers::getting_started::reception
+    },
     FirstWaterworks => {
         id: "first-waterworks",
         owner: RootOnboarding,
