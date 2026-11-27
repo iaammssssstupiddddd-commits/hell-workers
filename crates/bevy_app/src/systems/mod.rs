@@ -15,3 +15,5 @@ pub mod visual;
 pub(crate) mod waterworks;
 
 pub use hw_core::system_sets::GameSystemSet;
+
+pub(crate) mod reception;

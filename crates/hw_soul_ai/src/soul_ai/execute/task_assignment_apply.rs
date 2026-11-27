@@ -679,7 +679,10 @@ mod tests {
     fn remove_required_marker(world: &mut World, target: Entity, kind: BuildingType) -> bool {
         let mut entity = world.entity_mut(target);
         match kind {
-            BuildingType::Wall | BuildingType::Floor | BuildingType::ScreamingVent => return false,
+            BuildingType::TemporaryReceivingPanel
+            | BuildingType::Wall
+            | BuildingType::Floor
+            | BuildingType::ScreamingVent => return false,
             BuildingType::Door => {
                 entity.remove::<Door>();
             }
@@ -729,7 +732,10 @@ mod tests {
             Transform::default(),
         ));
         match kind {
-            BuildingType::Wall | BuildingType::Floor | BuildingType::ScreamingVent => {}
+            BuildingType::TemporaryReceivingPanel
+            | BuildingType::Wall
+            | BuildingType::Floor
+            | BuildingType::ScreamingVent => {}
             BuildingType::Door => {
                 entity.insert(Door::default());
             }

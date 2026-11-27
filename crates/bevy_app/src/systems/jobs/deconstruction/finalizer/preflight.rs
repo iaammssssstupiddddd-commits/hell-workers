@@ -314,7 +314,8 @@ fn target_owner_snapshot_is_exact(
                 && snapshot.building_grids.contains(&anchor)
         }
         BuildingType::Equipment(_) => exact_single(&snapshot.building_grids),
-        BuildingType::ScreamingVent
+        BuildingType::TemporaryReceivingPanel
+        | BuildingType::ScreamingVent
         | BuildingType::Wall
         | BuildingType::SandPile
         | BuildingType::BonePile

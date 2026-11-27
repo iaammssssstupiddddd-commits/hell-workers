@@ -175,7 +175,7 @@ pub use crate::UiIntent as MenuAction;
 // UIコンポーネント
 // ============================================================
 
-#[derive(Component)]
+#[derive(Component, PartialEq)]
 pub struct MenuButton(pub MenuAction);
 
 #[derive(Component)]

@@ -1450,6 +1450,92 @@ mod tests {
     }
 
     #[test]
+    fn reception_and_waterworks_round_trip_together_without_air_or_power_loads() {
+        use crate::systems::waterworks::{ContractDistrict, WaterworksContract};
+        use hw_jobs::reception::{
+            ReceivingPanel, ReceptionContract, ReceptionTerms, ReceptionYard,
+        };
+        use hw_world::{PairedSite, PairedYard, Site, Yard};
+        let mut app = legacy_loader_test_app();
+        let w = app.world_mut();
+        let t = ReceptionTerms::riverfront(
+            IVec2::new(34, 33),
+            IVec2::splat(32),
+            IVec2::splat(20),
+            IVec2::splat(23),
+            0.,
+        );
+        let pos = WorldMap::grid_to_world(t.point.x, t.point.y);
+        let yard = w.spawn((Yard { min: pos, max: pos }, ReceptionYard)).id();
+        let site = w
+            .spawn((Site { min: pos, max: pos }, PairedYard(yard)))
+            .id();
+        w.entity_mut(yard).insert(PairedSite(site));
+        let mut c = ReceptionContract::new(t, 60.);
+        c.designation = 2;
+        c.first_received_at = Some(64800.);
+        let contract = w.spawn(c).id();
+        w.spawn(WaterworksContract::new(
+            ContractDistrict {
+                min: IVec2::splat(30),
+                max: IVec2::splat(40),
+            },
+            60.,
+        ));
+        let tag = ReceivingPanel {
+            designation: 2,
+            reported: true,
+            live: true,
+        };
+        let p = w
+            .spawn((
+                Building {
+                    kind: BuildingType::TemporaryReceivingPanel,
+                    is_provisional: false,
+                },
+                Transform::from_translation(pos.extend(0.)),
+                tag,
+            ))
+            .id();
+        w.resource_mut::<WorldMap>()
+            .set_building_occupancy(t.point.into(), p);
+        w.resource_mut::<GameTime>().seconds = 65000.;
+        w.resource_mut::<DreamPool>().points = 9.;
+        let registry = w.resource::<AppTypeRegistry>().clone();
+        let registry = registry.read();
+        let roots = collect_persisted_entities(w);
+        let body = build_persisted_world(w, &registry, roots.into_iter())
+            .serialize(&registry)
+            .unwrap();
+        let prepared =
+            prepare_load_from_str(w, &encode_save_file(SaveHeader::current(42), &body)).unwrap();
+        let mut loaded = World::new();
+        loaded.spawn_empty();
+        let mut remap = bevy::ecs::entity::EntityHashMap::default();
+        prepared
+            .dynamic_world
+            .write_to_world_with(&mut loaded, &mut remap, &registry)
+            .unwrap();
+        crate::systems::reception::validate_candidate(&loaded).unwrap();
+        loaded.init_resource::<Messages<hw_ui::notifications::UserFacingNotification>>();
+        crate::systems::reception::update_supply(&mut loaded);
+        assert_eq!(loaded.get::<ReceptionContract>(remap[&contract]), Some(&c));
+        assert_eq!(loaded.get::<ReceivingPanel>(remap[&p]), Some(&tag));
+        assert!(
+            loaded
+                .query::<&WaterworksContract>()
+                .single(&loaded)
+                .is_ok()
+        );
+        assert_eq!(loaded.resource::<DreamPool>().points, 9.);
+        assert!(
+            loaded
+                .resource::<Messages<hw_ui::notifications::UserFacingNotification>>()
+                .is_empty()
+        );
+    }
+
+    #[test]
     fn missing_familiar_settings_migrate_from_serialized_v0_and_v1_rosters() {
         use bevy::ecs::entity::EntityHashMap;
 

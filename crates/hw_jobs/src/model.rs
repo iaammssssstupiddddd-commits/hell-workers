@@ -25,6 +25,7 @@ pub enum BuildingType {
     OutdoorLamp,
     ScreamingVent,
     Equipment(crate::Equipment),
+    TemporaryReceivingPanel,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -63,7 +64,7 @@ impl BuildingCategory {
 }
 
 impl BuildingType {
-    pub const ALL: [Self; 27] = [
+    pub const ALL: [Self; 28] = [
         Self::Wall,
         Self::Door,
         Self::Floor,
@@ -91,6 +92,7 @@ impl BuildingType {
         Self::Equipment(crate::Equipment::Humidifier),
         Self::Equipment(crate::Equipment::Dehumidifier),
         Self::Equipment(crate::Equipment::Recuperator),
+        Self::TemporaryReceivingPanel,
     ];
 
     /// Classifies this building for room detection.
@@ -114,6 +116,7 @@ impl BuildingType {
             | Self::WheelbarrowParking
             | Self::SoulSpa
             | Self::Equipment(_)
+            | Self::TemporaryReceivingPanel
             | Self::OutdoorLamp => RoomDetectionRole::InteriorFixture,
             Self::Bridge => RoomDetectionRole::FloorInvalidator,
         }
@@ -135,6 +138,7 @@ impl BuildingType {
                 | Self::SandPile
                 | Self::BonePile
                 | Self::WheelbarrowParking
+                | Self::TemporaryReceivingPanel
         )
     }
 
@@ -157,6 +161,7 @@ impl BuildingType {
             | BuildingType::BonePile
             | BuildingType::WheelbarrowParking
             | BuildingType::RestArea
+            | BuildingType::TemporaryReceivingPanel
             | BuildingType::OutdoorLamp => BuildingCategory::Temporary,
         }
     }
@@ -173,7 +178,7 @@ impl BuildingType {
                 materials.insert(ResourceType::Bone, 1);
             }
             BuildingType::Floor => {}
-            BuildingType::Tank => {
+            BuildingType::Tank | BuildingType::TemporaryReceivingPanel => {
                 materials.insert(ResourceType::Wood, 2);
             }
             BuildingType::MudMixer => {

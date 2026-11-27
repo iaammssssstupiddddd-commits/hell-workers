@@ -74,6 +74,8 @@ use crate::systems::waterworks::{
 };
 use hw_jobs::Equipment;
 
+use hw_jobs::reception::{ReceivingPanel, ReceptionContract, ReceptionTerms};
+
 macro_rules! for_each_persisted_resource {
     ($callback:ident) => {
         $callback!(GameTime);
@@ -87,10 +89,13 @@ macro_rules! for_each_persisted_component {
     ($callback:ident) => {
         $callback!(AirLedger);
         $callback!(WaterworksContract);
+        $callback!(ReceptionContract);
         $callback!(DamnedSoul);
         $callback!(IdleState);
         $callback!(ClimateSetting);
         $callback!(WaterworksTarget);
+        $callback!(ReceivingPanel);
+        $callback!(hw_jobs::reception::ReceptionYard);
         $callback!(VentRetrofitWall);
         $callback!(WallUnderRetrofit);
         $callback!(DreamState);
@@ -226,6 +231,7 @@ macro_rules! for_each_reflect_dependency {
         $callback!(IdleBehavior);
         $callback!(GatheringBehavior);
         $callback!(ContractDistrict);
+        $callback!(ReceptionTerms);
         $callback!(ContractOutcome);
         $callback!(DreamQuality);
         $callback!(DriftPhase);
@@ -266,6 +272,7 @@ macro_rules! for_each_root_marker {
     ($callback:ident) => {
         $callback!(AirLedger);
         $callback!(WaterworksContract);
+        $callback!(ReceptionContract);
         $callback!(DamnedSoul);
         $callback!(Familiar);
         $callback!(Designation);

@@ -87,6 +87,7 @@ pub struct GhostValidationQueries<'w, 's> {
     pub q_buildings: Query<'w, 's, &'static Building>,
     pub q_blueprints: Query<'w, 's, &'static Blueprint>,
     pub q_sites: Query<'w, 's, &'static Site>,
+    contract_yard: Query<'w, 's, &'static Yard, With<hw_jobs::reception::ReceptionYard>>,
     pub q_yards: Query<'w, 's, &'static Yard>,
 }
 
@@ -115,6 +116,7 @@ pub fn placement_ghost_system(
         q_blueprints,
         q_sites,
         q_yards,
+        contract_yard,
     } = validation_queries;
 
     let is_building_place = *play_mode.get() == PlayMode::BuildingPlace;
@@ -344,7 +346,16 @@ pub fn placement_ghost_system(
                 })
         }
     };
-    let validation = if let Some(district) = build_context.contract_district
+    let validation = if building_type == BuildingType::TemporaryReceivingPanel
+        && !contract_yard
+            .single()
+            .is_ok_and(|yard| yard.contains(geometry.draw_pos))
+    {
+        hw_ui::selection::PlacementValidation::rejected_at(
+            hw_ui::selection::PlacementRejectReason::OutsideContractDistrict,
+            grid_pos,
+        )
+    } else if let Some(district) = build_context.contract_district
         && let bounds = district.validate(&geometry.occupied_grids)
         && !bounds.can_place
     {

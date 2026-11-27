@@ -548,6 +548,7 @@ pub(super) fn rehydrate_presentation_shells_for_test(world: &mut World) {
 }
 
 fn wake_domains_after_load(world: &mut World) {
+    crate::systems::reception::update_supply(world);
     use bevy::ecs::system::RunSystemOnce;
     // Publish derived rooms before the first frame, even if virtual time is paused.
     world.init_resource::<hw_world::RoomBoundaryLookup>();

@@ -22,9 +22,13 @@ def check(repo: Path, *, check_images: bool = False) -> dict:
     catalog = (repo / "crates/hw_jobs/src/equipment.rs").read_text().split("pub const ALL:", 1)[1].split("];", 1)[0]
     require(equipment == re.findall(r"Self::(\w+)", catalog), "equipment inventory drift")
     kinds = re.findall(r"Self::(\w+),", all_match[1])
-    # Built-in wall fittings use the shared structural mesh and ship their own tile art.
-    embedded = {"ScreamingVent": {"shape": "single_tile"}}
-    require((repo / "crates/bevy_app/src/assets/screaming_vent.png").is_file(), "vent grate image is missing")
+    # These single-tile fixtures ship their sprites with the game binary.
+    embedded = {
+        "ScreamingVent": {"shape": "single_tile", "sprite": "screaming_vent.png"},
+        "TemporaryReceivingPanel": {"shape": "single_tile", "sprite": "receiving_panel.png"},
+    }
+    for kind, spec in embedded.items():
+        require((repo / "crates/bevy_app/src/assets" / spec["sprite"]).is_file(), f"missing embedded sprite: {kind}")
     expected = set(contract["kinds"]) | set(contract["inherited"]) | set(contract["excluded"]) | set(embedded)
     require(len(kinds) == len(expected) and set(kinds) == expected, "BuildingType::ALL inventory drift")
     shapes = (repo / contract["shape_source"]).read_text()

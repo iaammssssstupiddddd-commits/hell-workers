@@ -32,6 +32,10 @@ pub(crate) struct IntentSettingsCtx<'w> {
 
 #[derive(SystemParam)]
 pub(crate) struct IntentAuxCtx<'w, 's> {
+    reception: Query<'w, 's, &'static hw_jobs::reception::ReceptionContract>,
+    panel: Query<'w, 's, &'static hw_jobs::reception::ReceivingPanel, With<hw_jobs::Building>>,
+    page: Option<ResMut<'w, crate::interface::ui::waterworks::ContractPage>>,
+    offer: Option<Res<'w, crate::systems::reception::PublishedOffer>>,
     contracts: Query<'w, 's, &'static crate::systems::waterworks::WaterworksContract>,
     targets: Query<'w, 's, (), With<crate::systems::waterworks::WaterworksTarget>>,
     overlay: Option<ResMut<'w, crate::interface::ui::waterworks::ContractOverlay>>,
@@ -131,12 +135,106 @@ pub(crate) fn handle_ui_intent(
                 }
                 false
             }
+            UiIntent::SelectReceptionContract(reception) => {
+                if aux_ctx.shell.contract_visible()
+                    && aux_ctx.help.pending.overlay().is_none()
+                    && !ui_queries.ui_input.world_input_captured
+                    && !selection_ctx.resolved_frame.pointer_selection_suppressed()
+                    && let Some(page) = &mut aux_ctx.page
+                {
+                    page.reception = reception;
+                }
+                false
+            }
+            UiIntent::LocateReceivingPanel
+            | UiIntent::PlaceReceivingPanel
+            | UiIntent::AcceptReception
+            | UiIntent::ReportReceivingPanel { .. } => {
+                let card = aux_ctx.shell.contract_visible()
+                    && aux_ctx.page.as_ref().is_some_and(|p| p.reception);
+                let detail = matches!(intent,UiIntent::ReportReceivingPanel{target,..} if aux_ctx.shell.inspected(selection_ctx.selected_entity.0,selection_ctx.info_panel_pin.entity)==Some(target));
+                if !(card || detail)
+                    || aux_ctx.help.pending.overlay().is_some()
+                    || ui_queries.ui_input.world_input_captured
+                    || selection_ctx.resolved_frame.pointer_selection_suppressed()
+                {
+                    continue;
+                }
+                let mut mode = action_contexts.p0();
+                match intent {
+                    UiIntent::AcceptReception => {
+                        mode.cleanup
+                            .commands
+                            .queue(crate::systems::reception::accept);
+                    }
+                    UiIntent::LocateReceivingPanel | UiIntent::PlaceReceivingPanel => {
+                        let terms = aux_ctx
+                            .reception
+                            .single()
+                            .ok()
+                            .map(|c| c.terms)
+                            .or_else(|| aux_ctx.offer.as_ref()?.0?.ok());
+                        if let Some(terms) = terms {
+                            if intent == UiIntent::PlaceReceivingPanel {
+                                if aux_ctx.reception.single().is_err() {
+                                    continue;
+                                }
+                                handlers::handle_mode_select(
+                                    UiIntent::SelectBuild(
+                                        hw_jobs::BuildingType::TemporaryReceivingPanel,
+                                    ),
+                                    &mut mode,
+                                    &mut selection_ctx,
+                                    &familiar_queries,
+                                );
+                                mode.cleanup.build_context.contract_district =
+                                    Some(crate::systems::waterworks::ContractDistrict {
+                                        min: terms.point,
+                                        max: terms.point,
+                                    });
+                            }
+                            if let Ok(mut camera) = selection_ctx.camera.single_mut() {
+                                let at =
+                                    hw_world::WorldMap::grid_to_world(terms.point.x, terms.point.y);
+                                camera.translation.x = at.x;
+                                camera.translation.y = at.y;
+                            }
+                            if let Some(page) = &mut aux_ctx.page {
+                                page.show_point = true;
+                            }
+                            aux_ctx.shell.apply(
+                                hw_ui::shell::WorkspaceAction::Close,
+                                selection_ctx.selected_entity.0,
+                                selection_ctx.info_panel_pin.entity,
+                            );
+                        }
+                    }
+                    UiIntent::ReportReceivingPanel {
+                        target,
+                        designation,
+                        epoch,
+                    } => {
+                        if aux_ctx
+                            .panel
+                            .get(target)
+                            .is_ok_and(|p| p.designation == designation)
+                        {
+                            mode.cleanup.commands.queue(move |world: &mut World| {
+                                crate::systems::reception::report(world, target, designation, epoch)
+                            });
+                        }
+                    }
+                    _ => unreachable!(),
+                }
+                false
+            }
             UiIntent::AcceptWaterworks
             | UiIntent::PlaceWaterworks
             | UiIntent::ClaimWaterworks
             | UiIntent::ViewWaterworksTasks
             | UiIntent::ToggleContractDistrict => {
-                if !aux_ctx.shell.contract_visible()
+                if aux_ctx.page.as_ref().is_some_and(|p| p.reception)
+                    || !aux_ctx.shell.contract_visible()
                     || aux_ctx.help.pending.overlay().is_some()
                     || ui_queries.ui_input.world_input_captured
                     || selection_ctx.resolved_frame.pointer_selection_suppressed()
@@ -319,6 +417,7 @@ pub(crate) fn handle_ui_intent(
                 handlers::handle_toggle(intent, &mut action_contexts.p0());
                 false
             }
+            UiIntent::SelectBuild(hw_jobs::BuildingType::TemporaryReceivingPanel) => false,
             UiIntent::SelectBuild(_)
             | UiIntent::SelectFloorPlace
             | UiIntent::SelectZone(_)
@@ -709,6 +808,74 @@ mod tests {
             );
         app.update();
         app
+    }
+
+    #[test]
+    fn reception_report_accepts_visible_inspector_and_rejects_stale_target() {
+        use hw_jobs::reception::{
+            ReceivingPanel, ReceptionContract, ReceptionTerms, ReceptionYard,
+        };
+        use hw_ui::shell::{UiShellState, WorkspaceAction};
+        let mut app = domain_action_app();
+        app.init_resource::<UiShellState>()
+            .init_resource::<hw_core::GameTime>();
+        let w = app.world_mut();
+        let point = IVec2::new(34, 33);
+        let t = ReceptionTerms::riverfront(
+            point,
+            IVec2::splat(32),
+            IVec2::splat(6),
+            IVec2::splat(12),
+            0.,
+        );
+        let mut contract = ReceptionContract::new(t, 0.);
+        contract.designation = 1;
+        w.spawn(contract);
+        let pos = WorldMap::grid_to_world(point.x, point.y);
+        w.spawn((hw_world::Yard { min: pos, max: pos }, ReceptionYard));
+        let panel = w
+            .spawn((
+                hw_jobs::Building {
+                    kind: hw_jobs::BuildingType::TemporaryReceivingPanel,
+                    is_provisional: false,
+                },
+                Transform::from_translation(pos.extend(0.)),
+                ReceivingPanel {
+                    designation: 1,
+                    reported: false,
+                    live: false,
+                },
+            ))
+            .id();
+        w.resource_mut::<WorldMap>()
+            .set_building(point.into(), panel);
+        w.resource_mut::<SelectedEntity>().0 = Some(panel);
+        let report = UiIntent::ReportReceivingPanel {
+            target: panel,
+            designation: 1,
+            epoch: 0,
+        };
+        write_intent(&mut app, report);
+        app.update();
+        assert!(!app.world().get::<ReceivingPanel>(panel).unwrap().reported);
+        app.world_mut().resource_mut::<UiShellState>().apply(
+            WorkspaceAction::InspectSelection,
+            Some(panel),
+            None,
+        );
+        write_intent(
+            &mut app,
+            UiIntent::ReportReceivingPanel {
+                target: panel,
+                designation: 1,
+                epoch: 1,
+            },
+        );
+        app.update();
+        assert!(!app.world().get::<ReceivingPanel>(panel).unwrap().reported);
+        write_intent(&mut app, report);
+        app.update();
+        assert!(app.world().get::<ReceivingPanel>(panel).unwrap().reported);
     }
 
     #[test]

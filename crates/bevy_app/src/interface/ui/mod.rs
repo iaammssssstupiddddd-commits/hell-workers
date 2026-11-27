@@ -13,6 +13,7 @@ pub mod notifications;
 pub mod panels;
 pub mod plugins;
 pub mod presentation;
+pub(crate) mod reception;
 pub mod setup;
 pub mod vignette;
 pub(crate) mod waterworks;

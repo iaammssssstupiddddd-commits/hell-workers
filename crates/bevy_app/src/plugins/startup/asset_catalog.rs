@@ -134,6 +134,17 @@ pub fn create_game_assets(asset_server: &AssetServer, images: &mut Assets<Image>
         mud_wall_end_left: asset_server.load("textures/buildings/mud_wall/mud_wall_left_end.png"),
         mud_wall_end_right: asset_server.load("textures/buildings/mud_wall/mud_wall_right_end.png"),
 
+        receiving_panel: images.add(
+            Image::from_buffer(
+                include_bytes!("../../assets/receiving_panel.png"),
+                bevy::image::ImageType::Extension("png"),
+                bevy::image::CompressedImageFormats::NONE,
+                true,
+                ImageSampler::nearest(),
+                default(),
+            )
+            .expect("embedded receiving panel PNG"),
+        ),
         screaming_vent: images.add(
             Image::from_buffer(
                 include_bytes!("../../assets/screaming_vent.png"),

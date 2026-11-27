@@ -597,6 +597,7 @@ impl ShowcaseSpec {
             BuildingType::SoulSpa => "SoulSpa",
             BuildingType::Equipment(e) => e.copy().0,
             BuildingType::OutdoorLamp => "OutdoorLamp",
+            BuildingType::TemporaryReceivingPanel => "TemporaryReceivingPanel",
             BuildingType::ScreamingVent => "ScreamingVent",
         }
     }
@@ -2356,6 +2357,7 @@ fn building_type_name(kind: BuildingType) -> &'static str {
         BuildingType::SoulSpa => "SoulSpa",
         BuildingType::Equipment(e) => e.copy().0,
         BuildingType::OutdoorLamp => "OutdoorLamp",
+        BuildingType::TemporaryReceivingPanel => "TemporaryReceivingPanel",
         BuildingType::ScreamingVent => "ScreamingVent",
     }
 }
@@ -3280,6 +3282,7 @@ fn building_type_tag(kind: BuildingType) -> u8 {
         BuildingType::Equipment(e) => 13 + e as u8,
         BuildingType::OutdoorLamp => 11,
         BuildingType::ScreamingVent => 12,
+        BuildingType::TemporaryReceivingPanel => 27,
     }
 }
 

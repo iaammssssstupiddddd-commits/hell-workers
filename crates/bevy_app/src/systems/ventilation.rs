@@ -7,6 +7,7 @@ mod publication;
 #[cfg(feature = "profiling")]
 mod replay;
 mod services;
+pub(crate) use services::Services;
 mod solver;
 #[cfg(feature = "profiling")]
 pub(crate) mod transport_probe;

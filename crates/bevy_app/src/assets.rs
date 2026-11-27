@@ -15,6 +15,7 @@ impl GameAssets {
         match kind {
             BuildingType::Wall => &self.wall_isolated,
             BuildingType::Equipment(kind) => self.equipment_image(kind),
+            BuildingType::TemporaryReceivingPanel => &self.receiving_panel,
             BuildingType::ScreamingVent => &self.screaming_vent,
             BuildingType::Door => &self.door_closed,
             BuildingType::Floor => &self.mud_floor,
@@ -35,6 +36,7 @@ impl UiAssets for GameAssets {
         match kind {
             BuildingType::Wall => &self.mud_wall_isolated,
             BuildingType::Equipment(kind) => self.equipment_image(kind),
+            BuildingType::TemporaryReceivingPanel => &self.receiving_panel,
             BuildingType::ScreamingVent => &self.screaming_vent,
             BuildingType::Door => &self.door_closed,
             BuildingType::Floor => &self.mud_floor,
@@ -163,6 +165,7 @@ pub struct GameAssets {
     pub mud_wall_end_right: Handle<Image>,
 
     // Wall connections
+    pub receiving_panel: Handle<Image>,
     pub screaming_vent: Handle<Image>,
     pub wall_isolated: Handle<Image>,
     pub wall_horizontal_left: Handle<Image>,
